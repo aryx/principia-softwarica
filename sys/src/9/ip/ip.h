@@ -127,7 +127,7 @@ struct Ipfrag
 	ushort	foff;
 	ushort	flen;
 
-	uchar	payload[];
+	uchar	*payload;
 };
 
 #define IPFRAGSZ offsetof(Ipfrag, payload[0])

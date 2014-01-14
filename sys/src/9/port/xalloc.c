@@ -26,7 +26,7 @@ struct Xhdr
 {
 	ulong	size;
 	ulong	magix;
-	char	data[];
+	char	*data;
 };
 
 struct Xalloc
