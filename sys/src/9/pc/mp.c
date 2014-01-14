@@ -9,7 +9,8 @@
 #include "mp.h"
 #include "apbootstrap.h"
 
-#define dprint(...)	if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+//#define dprint(...)	if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+#define dprint if(mpdebug) print
 
 /* from mpacpi.c */
 Apic *bootapic;

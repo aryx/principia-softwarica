@@ -18,8 +18,9 @@
 
 #pragma	varargck argpos	eventlog	1
 
-#define dprint(...)	if(debug) eventlog(__VA_ARGS__); else USED(debug);
-#define uprint(...)	snprint(up->genbuf, sizeof up->genbuf, __VA_ARGS__);
+//#define dprint(...)	if(debug) eventlog(__VA_ARGS__); else USED(debug);
+//#define uprint(...)	snprint(up->genbuf, sizeof up->genbuf, __VA_ARGS__);
+#define dprint if(debug) eventlog
 
 enum {
 	Maxunits	= 0xff,
@@ -320,7 +321,7 @@ frameerror(Aoedev *d, Frame *f, char *s)
 static char*
 unitname(Aoedev *d)
 {
-	uprint("%d.%d", d->major, d->minor);
+	snprint(up->genbuf, sizeof up->genbuf,"%d.%d", d->major, d->minor);
 	return up->genbuf;
 }
 
@@ -759,7 +760,7 @@ unit2dev(ulong unit)
 			return d;
 		}
 	runlock(&devs);
-	uprint("unit lookup failure: %lux pc %#p", unit, getcallerpc(&unit));
+	snprint(up->genbuf, sizeof up->genbuf,"unit lookup failure: %lux pc %#p", unit, getcallerpc(&unit));
 	error(up->genbuf);
 	return nil;
 }
@@ -890,7 +891,7 @@ aoegen(Chan *c, char *, Dirtab *, int, int s, Dir *dp)
 	case Qunitdir:
 		if(s == DEVDOTDOT){
 			mkqid(&q, QID(0, Qtopdir), 0, QTDIR);
-			uprint("%uld", UNIT(c->qid));
+			snprint(up->genbuf, sizeof up->genbuf,"%uld", UNIT(c->qid));
 			devdir(c, q, up->genbuf, 0, eve, 0555, dp);
 			return 1;
 		}
@@ -912,12 +913,12 @@ aoegen(Chan *c, char *, Dirtab *, int, int s, Dir *dp)
 		d = unit2dev(i);
 		if(s >= d->ndl)
 			return -1;
-		uprint("%d", s);
+		snprint(up->genbuf, sizeof up->genbuf,"%d", s);
 		mkqid(&q, Q3(s, i, Qdevlink), 0, QTFILE);
 		devdir(c, q, up->genbuf, 0, eve, 0755, dp);
 		return 1;
 	case Qdevlink:
-		uprint("%d", s);
+		snprint(up->genbuf, sizeof up->genbuf,"%d", s);
 		mkqid(&q, Q3(s, UNIT(c->qid), Qdevlink), 0, QTFILE);
 		devdir(c, q, up->genbuf, 0, eve, 0755, dp);
 		return 1;
@@ -2212,14 +2213,14 @@ netrdaoeproc(void *v)
 		discover(0xffff, 0xff);
 	for (;;) {
 		if(!(nl->flag & Dup)) {
-			uprint("%s: netlink is down", name);
+			snprint(up->genbuf, sizeof up->genbuf,"%s: netlink is down", name);
 			error(up->genbuf);
 		}
 		if (nl->dc == nil)
 			panic("netrdaoe: nl->dc == nil");
 		b = devtab[nl->dc->type]->bread(nl->dc, 1<<16, 0);
 		if(b == nil) {
-			uprint("%s: nil read from network", name);
+			snprint(up->genbuf, sizeof up->genbuf,"%s: nil read from network", name);
 			error(up->genbuf);
 		}
 		h = (Aoehdr*)b->rp;
@@ -2254,7 +2255,7 @@ getaddr(char *path, uchar *ea)
 	char buf[2*Eaddrlen+1];
 	Chan *c;
 
-	uprint("%s/addr", path);
+	snprint(up->genbuf, sizeof up->genbuf,"%s/addr", path);
 	c = namec(up->genbuf, Aopen, OREAD, 0);
 	if(waserror()) {
 		cclose(c);

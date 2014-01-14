@@ -37,7 +37,8 @@ enum {
 	Lapicae	= 1<<11,		/* apic enable in Lapicbase */
 };
 
-#define dprint(...)	if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+//#define dprint(...)	if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+#define dprint if(mpdebug) print
 
 /* from mp.c */
 int	mpdebug;

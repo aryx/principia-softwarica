@@ -13,7 +13,7 @@
 #include "../port/netif.h"
 #include "../port/aoe.h"
 
-#define uprint(...)	snprint(up->genbuf, sizeof up->genbuf, __VA_ARGS__);
+//#define uprint(...)	snprint(up->genbuf, sizeof up->genbuf, __VA_ARGS__);
 
 enum {
 	Nctlr	= 32,
@@ -162,7 +162,7 @@ aoeidentify(Ctlr *d, SDunit *u)
 		nexterror();
 	}
 
-	uprint("%s/ident", d->path);
+	snprint(up->genbuf, sizeof up->genbuf,"%s/ident", d->path);
 	c = namec(up->genbuf, Aopen, OREAD, 0);
 	devtab[c->type]->read(c, d->ident, sizeof d->ident, 0);
 
@@ -257,7 +257,7 @@ aoeprobe(char *path, SDev *s)
 	if((p = strrchr(path, '/')) == 0)
 		error(Ebadarg);
 	*p = 0;
-	uprint("%s/ctl", path);
+	snprint(up->genbuf, sizeof up->genbuf,"%s/ctl", path);
 	*p = '/';
 
 	c = namec(up->genbuf, Aopen, OWRITE, 0);
@@ -265,14 +265,14 @@ aoeprobe(char *path, SDev *s)
 		cclose(c);
 		nexterror();
 	}
-	n = uprint("discover %s", p+1);
+	n = snprint(up->genbuf, sizeof up->genbuf,"discover %s", p+1);
 	devtab[c->type]->write(c, up->genbuf, n, 0);
 	poperror();
 	cclose(c);
 
 	for(i = 0; i < Probemax; i++){
 		tsleep(&up->sleep, return0, 0, Probeintvl);
-		uprint("%s/ident", path);
+		snprint(up->genbuf, sizeof up->genbuf,"%s/ident", path);
 		if(!waserror()) {
 			c = namec(up->genbuf, Aopen, OREAD, 0);
 			poperror();
@@ -282,7 +282,7 @@ aoeprobe(char *path, SDev *s)
 	}
 	if(i >= Probemax)
 		error(Etimedout);
-	uprint("%s/ident", path);
+	snprint(up->genbuf, sizeof up->genbuf,"%s/ident", path);
 	ctlr = newctlr(path);
 	if(ctlr == nil || s == nil && (s = malloc(sizeof *s)) == nil)
 		return nil;
@@ -392,7 +392,7 @@ aoeconnect(SDunit *u, Ctlr *c)
 	if(c->c)
 		cclose(c->c);
 	c->c = 0;
-	uprint("%s/data", c->path);
+	snprint(up->genbuf, sizeof up->genbuf,"%s/data", c->path);
 	c->c = namec(up->genbuf, Aopen, ORDWR, 0);
 	qunlock(c);
 	poperror();

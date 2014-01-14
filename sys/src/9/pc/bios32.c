@@ -5,7 +5,8 @@
 #include "fns.h"
 #include "io.h"
 
-#define VFLAG(...)	if(vflag) print(__VA_ARGS__)
+//#define VFLAG(...)	if(vflag) print(__VA_ARGS__)
+#define VFLAG if(vflag) print
 
 #define UPTR2INT(p)	((uintptr)(p))
 

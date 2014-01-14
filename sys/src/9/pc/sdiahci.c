@@ -13,9 +13,15 @@
 #include "../port/sd.h"
 #include "ahci.h"
 
-#define	dprint(...)	if(debug)	iprint(__VA_ARGS__); else USED(debug)
-#define	idprint(...)	if(prid)	iprint(__VA_ARGS__);  else USED(prid)
-#define	aprint(...)	if(datapi)	iprint(__VA_ARGS__);  else USED(datapi)
+//#define	dprint(...)	if(debug)	iprint(__VA_ARGS__); else USED(debug)
+//#define	idprint(...)	if(prid)	iprint(__VA_ARGS__);  else USED(prid)
+//#define	aprint(...)	if(datapi)	iprint(__VA_ARGS__);  else USED(datapi)
+
+#define	dprint	if(debug)	iprint
+#define	idprint	if(prid)	iprint
+#define	aprint	if(datapi)	iprint
+
+
 
 #define Tname(c)	tname[(c)->type]
 #define Intel(x)	((x)->pci->vid == Vintel)
