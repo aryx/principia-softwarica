@@ -5,3 +5,4 @@ export PATH=$PLAN9/bin:$KENCC/bin:$PATH
 export MKSHELL=$PLAN9/bin/rc
 
 export objtype=386
+export cputype=386
