@@ -140,8 +140,8 @@ main(void)
 	cpuidprint();
 	mmuinit();
 	fpsavealloc();
-	if(arch->intrinit)	/* launches other processors on an mp */
-		arch->intrinit();
+        if(arch->intrinit)	/* launches other processors on an mp */
+        	arch->intrinit();
 	timersinit();
 	mathinit();
 	kbdenable();

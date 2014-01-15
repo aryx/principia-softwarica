@@ -251,6 +251,8 @@ boot(int argc, char *argv[])
 
 	readfile("#e/cputype", cputype, sizeof(cputype));
 
+	print("booooooooting...\n");
+
 	/*
 	 *  set up usb keyboard & mouse, if any.
 	 *  starts partfs on first disk, if any, to permit nvram on usb.
