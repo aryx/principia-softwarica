@@ -294,9 +294,9 @@ panic(char *fmt, ...)
 	prflush();
 	buf[n] = '\n';
 	putstrn(buf, n+1);
-	dumpstack();
+	//dumpstack();
 
-	exit(1);
+        //	exit(1);
 }
 
 /* libmp at least contains a few calls to sysfatal; simulate with panic */
