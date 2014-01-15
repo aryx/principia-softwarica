@@ -15,7 +15,7 @@ typedef struct Rsd Rsd;
 
 struct Dsdt {				/* Differentiated System DT */
 	uchar	sdthdr[36];		/* "DSDT" + length[4] + [28] */
-	uchar	*db;			/* Definition Block */
+	uchar	db[];			/* Definition Block */
 };
 struct Facp {				/* Fixed ACPI DT */
 	uchar	sdthdr[36];		/* "FACP" + length[4] + [28] */
@@ -35,12 +35,12 @@ struct Madt {				/* Multiple APIC DT */
 	uchar	sdthdr[36];		/* "MADT" + length[4] + [28] */
 	uchar	addr[4];		/* Local APIC Address */
 	uchar	flags[4];
-	uchar	*structures;
+	uchar	structures[];
 };
 typedef struct Mcfg {			/* PCI Memory Mapped Config */
 	uchar	sdthdr[36];		/* "MCFG" + length[4] + [28] */
 	uchar	pad[8];			/* reserved */
-	Mcfgd *mcfgd;		/* descriptors */
+	Mcfgd	mcfgd[];		/* descriptors */
 } Mcfg;
 struct Mcfgd {				/* MCFG Descriptor */
 	uchar	addr[8];		/* base address */

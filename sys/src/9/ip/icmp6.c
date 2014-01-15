@@ -83,7 +83,7 @@ typedef struct NdiscC NdiscC;
 
 struct IPICMP {
 	ICMPHDR;
-	uchar	*payload;
+	uchar	payload[];
 };
 
 #define IPICMPSZ offsetof(IPICMP, payload[0])
@@ -91,7 +91,7 @@ struct IPICMP {
 struct NdiscC {
 	ICMPHDR;
 	uchar	target[IPaddrlen];
-	uchar	*payload;
+	uchar	payload[];
 };
 
 #define NDISCSZ offsetof(NdiscC, payload[0])
@@ -103,7 +103,7 @@ struct Ndpkt {
 	uchar	olen;		/* length in units of 8 octets(incl type, code),
 				 * 1 for IEEE 802 addresses */
 	uchar	lnaddr[6];	/* link-layer address */
-	uchar	*payload;
+	uchar	payload[];
 };
 
 #define NDPKTSZ offsetof(Ndpkt, payload[0])

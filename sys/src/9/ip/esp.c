@@ -51,7 +51,7 @@ struct Esphdr
 {
 	uchar	espspi[4];	/* Security parameter index */
 	uchar	espseq[4];	/* Sequence number */
-	uchar	*payload;
+	uchar	payload[];
 };
 
 /*

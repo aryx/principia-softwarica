@@ -124,7 +124,7 @@ typedef struct Fraghdr6	Fraghdr6;
 
 struct	Ip6hdr {
 	IPV6HDR;
-	uchar	*payload;
+	uchar	payload[];
 };
 
 struct	Opthdr {		/* unused */
