@@ -229,7 +229,8 @@ capwrite(Chan *c, void *va, long n, vlong)
 			error(Eshort);
 		*key++ = 0;
 
-		hmac_sha1((uchar*)from, strlen(from), (uchar*)key, strlen(key), hash, nil);
+                //		hmac_sha1((uchar*)from, strlen(from), (uchar*)key, strlen(key), hash, nil);
+                panic("TODO: hmac_sha1");
 
 		p = remcap(hash);
 		if(p == nil){
