@@ -249,7 +249,7 @@ connectlocalfossil(void)
 		}else{
 			/* set up the network so we can talk to the venti server */
 			/* this is such a crock. */
-			configip(nf, f, 0);
+			//PADconfigip(nf, f, 0);
 			setenv("venti", f[0]);
 		}
 	}
