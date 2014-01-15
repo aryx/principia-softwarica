@@ -280,7 +280,7 @@ connectlocal(void)
 	bind("#k", "/dev", MAFTER);
 	bind("#u", "/dev", MAFTER);
 	bind("#æ", "/dev", MAFTER);
-	mountusbparts();	/* make partfs partitions visible again */
+        //PAD	mountusbparts();	/* make partfs partitions visible again */
 
 	if((fd = connectlocalfossil()) < 0)
 		fd = connectlocalkfs();

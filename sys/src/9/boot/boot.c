@@ -220,7 +220,7 @@ execinit(void)
 
 	iargv[iargc] = nil;
 
-	chmod("/srv/" PARTSRV, 0600);
+	//PAD USB? chmod("/srv/" PARTSRV, 0600);
 	exec(cmd, iargv);
 	fatal(cmd);
 }
@@ -257,7 +257,7 @@ boot(int argc, char *argv[])
 	 *  set up usb keyboard & mouse, if any.
 	 *  starts partfs on first disk, if any, to permit nvram on usb.
 	 */
-	usbinit(Dontpost);
+        //PAD	usbinit(Dontpost);
 
 	mp = pickmethod(argc, argv);
 	islocal = strcmp(mp->name, "local") == 0;
@@ -272,7 +272,7 @@ boot(int argc, char *argv[])
 
 	doauth(cpuflag);	/* authentication usually changes hostowner */
 	rfork(RFNAMEG);		/* leave existing subprocs in own namespace */
-	usbinit(Post);		/* restart partfs under the new hostowner id */
+        //PAD	usbinit(Post);		/* restart partfs under the new hostowner id */
 	fd = connectroot(mp, islocal, ishybrid);
 	afd = nsinit(fd, &rsp);
 	close(fd);
