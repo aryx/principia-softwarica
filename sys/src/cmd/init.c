@@ -1,7 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <auth.h>
-#include <authsrv.h>
+//#include <authsrv.h>
 
 char*	readenv(char*);
 void	setenv(char*, char*);
@@ -78,39 +78,39 @@ main(int argc, char *argv[])
 void
 pass(int fd)
 {
-	char key[DESKEYLEN];
-	char typed[32];
-	char crypted[DESKEYLEN];
-	int i;
-
-	for(;;){
-		print("\n%s password:", systemname);
-		for(i=0; i<sizeof typed; i++){
-			if(read(0, typed+i, 1) != 1){
-				print("init: can't read password; insecure\n");
-				return;
-			}
-			if(typed[i] == '\n'){
-				typed[i] = 0;
-				break;
-			}
-		}
-		if(i == sizeof typed)
-			continue;
-		if(passtokey(crypted, typed) == 0)
-			continue;
-		seek(fd, 0, 0);
-		if(read(fd, key, DESKEYLEN) != DESKEYLEN){
-			print("init: can't read key; insecure\n");
-			return;
-		}
-		if(memcmp(crypted, key, sizeof key))
-			continue;
-		/* clean up memory */
-		memset(crypted, 0, sizeof crypted);
-		memset(key, 0, sizeof key);
-		return;
-	}
+//PAD: 	char key[DESKEYLEN];
+//PAD: 	char typed[32];
+//PAD: 	char crypted[DESKEYLEN];
+//PAD: 	int i;
+//PAD: 
+//PAD: 	for(;;){
+//PAD: 		print("\n%s password:", systemname);
+//PAD: 		for(i=0; i<sizeof typed; i++){
+//PAD: 			if(read(0, typed+i, 1) != 1){
+//PAD: 				print("init: can't read password; insecure\n");
+//PAD: 				return;
+//PAD: 			}
+//PAD: 			if(typed[i] == '\n'){
+//PAD: 				typed[i] = 0;
+//PAD: 				break;
+//PAD: 			}
+//PAD: 		}
+//PAD: 		if(i == sizeof typed)
+//PAD: 			continue;
+//PAD: 		if(passtokey(crypted, typed) == 0)
+//PAD: 			continue;
+//PAD: 		seek(fd, 0, 0);
+//PAD: 		if(read(fd, key, DESKEYLEN) != DESKEYLEN){
+//PAD: 			print("init: can't read key; insecure\n");
+//PAD: 			return;
+//PAD: 		}
+//PAD: 		if(memcmp(crypted, key, sizeof key))
+//PAD: 			continue;
+//PAD: 		/* clean up memory */
+//PAD: 		memset(crypted, 0, sizeof crypted);
+//PAD: 		memset(key, 0, sizeof key);
+//PAD: 		return;
+//PAD: 	}
 }
 
 static int gotnote;
