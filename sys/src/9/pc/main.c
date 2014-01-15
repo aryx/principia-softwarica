@@ -121,7 +121,7 @@ main(void)
 	quotefmtinstall();
 	screeninit();
 
-	print("\nPlan 9\n");
+	print("\nPlan 99999999999999\n");
 
 	trapinit0();
 	mmuinit0();
@@ -133,8 +133,8 @@ main(void)
 	confinit();
 	archinit();
 	xinit();
-	if(i8237alloc != nil)
-		i8237alloc();
+        if(i8237alloc != nil)
+        	i8237alloc();
 	trapinit();
 	printinit();
 	cpuidprint();
