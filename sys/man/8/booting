@@ -1,0 +1,234 @@
+.TH BOOTING 8
+.SH NAME
+booting \- bootstrapping procedures
+.SH SYNOPSIS
+none
+.SH DESCRIPTION
+This manual page collects the incantations required to bootstrap Plan 9 machines.
+Some of the information here is specific to the installation at Bell Labs;
+some is generic.
+.PP
+If a CPU server is up, BOOTP/DHCP and TFTP will run from there;
+if not, the necessary files and services must be available on a separate machine,
+such as a Unix system, to use these protocols for bootstrapping.
+.PP
+Be sure to read
+.IR boot (8)
+to understand what happens after the kernel is loaded.
+.SS Terminals
+To bootstrap a diskless terminal or a CPU server, a file server must be running.
+PCs can boot from a floppy disk or any FAT16 partition.
+On all the terminals, typing two control-T's followed by a lower-case
+.B r
+reboots the machine;
+other methods of rebooting are mentioned for some machines.
+.SS PCs
+To boot a PC, it is necessary to get
+.B /386/9boot
+or
+.B /386/9load
+loaded into memory.
+There are many ways to do this.  A Plan 9 boot floppy prepared by
+.B format
+(see
+.IR prep (8))
+will load
+.B 9load
+when the PC is reset or powered on.
+Other methods are described in 
+.IR 9boot (8).
+.I 9boot
+or
+.I 9load
+then locates and loads a Plan 9 kernel, using configuration information
+from the matching file in
+.B /cfg/pxe
+.RI ( 9boot )
+or the file
+.B plan9.ini
+stored in the
+.B 9fat
+configuration partition or on a DOS file system
+.RI ( 9load ).
+See 
+.IR 9boot (8)
+for details.
+.PP
+Once the kernel is booted, it behaves like the others.
+See
+.IR boot (8)
+for details.
+.SS CPU Servers
+The Plan 9 CPU servers are multi-user, so they do not request a user name
+when booting.
+On the CPU servers, typing a control-P on the console reboots the machine.
+.SS PC CPU Server
+Proceed as for the PC terminal, but load
+.B /386/9pccpu
+or
+.BR /386/9pccpudisk .
+.
+.SS MIPS Routerboard CPU Server
+Configure RouterBOOT via the serial port (115200 baud)
+to always boot from Ethernet via DHCP and TFTP, and arrange to load the ELF executable
+.B /mips/9rb
+in
+.IR ndb (6).
+.
+.SS ARM Systems
+All ARM systems are started by
+.I U-boot
+using similar commands.
+The kernels
+(and thus
+.I ndb
+.L bootf
+parameters)
+are
+.TF /arm/9beagl
+.TP
+.L /arm/9gd
+for the Marvell PXA168-based Guruplug Display
+.TP
+.L /arm/9plug
+for other Marvell Kirkwoods (Sheevaplug, Guruplug, Dreamplug, Openrd, etc.)
+.TP
+.L /arm/9beagle
+for TI OMAP3 boards (IGEPv2 from ISEE, Gumstix Overo)
+.TP
+.L /arm/9ts
+for Trimslice systems, which contain the Nvidia Tegra 2
+.TP
+.L /arm/9pi
+.TP
+.L /arm/9picpu
+for Raspberry Pis
+.PD
+.LP
+In the following,
+replace
+.I MAC
+with your board's MAC address without colons,
+in lower case
+(the format of the
+.L ether
+.I ndb
+attribute).
+If loading from a non-Plan-9
+TFTP server,
+replace
+.L %C
+with
+.BI /cfg/pxe/ MAC.
+.PP
+First, establish a
+.I /cfg/pxe
+(\c
+.IR plan9.ini )
+file for the new CPU server.
+For Kirkwood plugs,
+.IP
+.EX
+cd /cfg/pxe; cp example-kw \fIMAC
+.EE
+.PP
+and edit
+.L /cfg/pxe/\fIMAC
+to taste.
+For PXA plugs, replace
+.L kw
+with
+.LR pxa ;
+for OMAP boards, replace
+.L kw
+with
+.LR omap
+and
+be sure to edit the line for
+.L ether0
+to set
+.IP
+.EX
+ea=\fIMAC
+.EE
+.PP
+Second,
+configure
+.I U-boot
+to load the appropriate kernel and
+.I /cfg/pxe
+file at suitable addresses and start the kernel.
+For Sheevaplugs and Openrd boards,
+type this at U-boot once:
+.IP
+.EX
+setenv bootdelay 2
+# \fItype the next two lines as one\fP
+setenv bootcmd 'bootp; bootp; tftp 0x1000 %C; bootp; tftp 0x800000;
+	go 0x800000'
+saveenv
+.EE
+.PP
+For Guruplugs Displays,
+do the same but type this after
+.L "setenv bootcmd"
+instead:
+.IP
+.EX
+\&'dhcp; tftpboot; tftpboot 0x1000 %C; bootz 0x500000'
+.EE
+.PP
+For Kirkwood Guruplugs,
+type this after
+.LR "setenv bootcmd" :
+.IP
+.EX
+\&'dhcp 0x800000; tftp 0x1000 %C; go 0x800000'
+.EE
+.PP
+For IGEPv2 boards,
+type this after
+.LR "setenv bootcmd" :
+.IP
+.EX
+\&'tftp 0x80300000 %C; dhcp 0x80310000; go 0x80310000'
+.EE
+.PP
+For Gumstix Overo boards,
+type this after
+.LR "setenv bootcmd" :
+.IP
+.EX
+\&'bootp 0x80310000; bootp 0x80300000 %C; go 0x80310000'
+.EE
+.PP
+For Trimslice systems,
+type this after
+.LR "setenv bootcmd" :
+.IP
+.EX
+\&'dhcp; dhcp; tftpboot 0x410000; tftpboot 0x400000 %C; go 0x410000'
+.EE
+.PP
+For Raspberry Pis,
+.I gunzip
+the
+.B pi.uboot.sd.img.gz
+named below onto an SD card and insert that into your Pi.
+.PP
+Thereafter, the boards will automatically boot via BOOTP and TFTP
+when reset.
+.
+.SH FILES
+.B /n/sources/extra/pi.uboot.sd.img.gz
+is a compressed bootable SD card image for Raspberry Pi, uses PXE booting.
+.SH SOURCE
+.B /sys/src/boot
+.br
+.B /sys/src/9/pcboot
+.SH "SEE ALSO"
+.IR ndb (6),
+.IR 9boot (8),
+.IR boot (8),
+.IR init (8),
+.IR plan9.ini (8)
