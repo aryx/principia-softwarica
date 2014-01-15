@@ -131,8 +131,8 @@ connectroot(Method *mp, int islocal, int ishybrid)
 	if(getenv("srvold9p"))
 		fd = old9p(fd);
 	if(!islocal && !ishybrid){
-		if(cfs)
-			fd = (*cfs)(fd);
+          //PAD		if(cfs)
+          //PAD			fd = (*cfs)(fd);
 	}
 	print("version...");
 	buf[0] = '\0';
