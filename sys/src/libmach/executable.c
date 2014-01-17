@@ -57,18 +57,9 @@ typedef struct Exectable{
 	int	(*hparse)(int, Fhdr*, ExecHdr*);
 } ExecTable;
 
+//PAD: removed many archi
 extern	Mach	mmips;
-extern	Mach	mmips2le;
-extern	Mach	mmips2be;
-extern	Mach	msparc;
-extern	Mach	msparc64;
-extern	Mach	m68020;
 extern	Mach	mi386;
-extern	Mach	mamd64;
-extern	Mach	marm;
-extern	Mach	mpower;
-extern	Mach	mpower64;
-extern	Mach	malpha;
 
 ExecTable exectab[] =
 {
@@ -90,24 +81,6 @@ ExecTable exectab[] =
 		sizeof(Exec),
 		beswal,
 		adotout },
-	{ M_MAGIC,			/* Mips 4.out */
-		"mips 4k plan 9 executable BE",
-		"mips 4k plan 9 dlm BE",
-		FMIPS2BE,
-		1,
-		&mmips2be,
-		sizeof(Exec),
-		beswal,
-		adotout },
-	{ N_MAGIC,			/* Mips 0.out */
-		"mips 4k plan 9 executable LE",
-		"mips 4k plan 9 dlm LE",
-		FMIPS2LE,
-		1,
-		&mmips2le,
-		sizeof(Exec),
-		beswal,
-		adotout },
 	{ 0x160<<16,			/* Mips boot image */
 		"mips plan 9 boot image",
 		nil,
@@ -117,60 +90,6 @@ ExecTable exectab[] =
 		sizeof(struct mipsexec),
 		beswal,
 		mipsboot },
-	{ (0x160<<16)|3,		/* Mips boot image */
-		"mips 4k plan 9 boot image",
-		nil,
-		FMIPSB,
-		0,
-		&mmips2be,
-		sizeof(struct mips4kexec),
-		beswal,
-		mips4kboot },
-	{ K_MAGIC,			/* Sparc k.out */
-		"sparc plan 9 executable",
-		"sparc plan 9 dlm",
-		FSPARC,
-		1,
-		&msparc,
-		sizeof(Exec),
-		beswal,
-		adotout },
-	{ 0x01030107, 			/* Sparc boot image */
-		"sparc plan 9 boot image",
-		nil,
-		FSPARCB,
-		0,
-		&msparc,
-		sizeof(struct sparcexec),
-		beswal,
-		sparcboot },
-	{ U_MAGIC,			/* Sparc64 u.out */
-		"sparc64 plan 9 executable",
-		"sparc64 plan 9 dlm",
-		FSPARC64,
-		1,
-		&msparc64,
-		sizeof(Exec),
-		beswal,
-		adotout },
-	{ A_MAGIC,			/* 68020 2.out & boot image */
-		"68020 plan 9 executable",
-		"68020 plan 9 dlm",
-		F68020,
-		1,
-		&m68020,
-		sizeof(Exec),
-		beswal,
-		common },
-	{ 0xFEEDFACE,			/* Next boot image */
-		"next plan 9 boot image",
-		nil,
-		FNEXTB,
-		0,
-		&m68020,
-		sizeof(struct nextexec),
-		beswal,
-		nextboot },
 	{ I_MAGIC,			/* I386 8.out & boot image */
 		"386 plan 9 executable",
 		"386 plan 9 dlm",
@@ -180,33 +99,6 @@ ExecTable exectab[] =
 		sizeof(Exec),
 		beswal,
 		common },
-	{ S_MAGIC,			/* amd64 6.out & boot image */
-		"amd64 plan 9 executable",
-		"amd64 plan 9 dlm",
-		FAMD64,
-		1,
-		&mamd64,
-		sizeof(Exec)+8,
-		nil,
-		commonllp64 },
-	{ Q_MAGIC,			/* PowerPC q.out & boot image */
-		"power plan 9 executable",
-		"power plan 9 dlm",
-		FPOWER,
-		1,
-		&mpower,
-		sizeof(Exec),
-		beswal,
-		common },
-	{ T_MAGIC,			/* power64 9.out & boot image */
-		"power64 plan 9 executable",
-		"power64 plan 9 dlm",
-		FPOWER64,
-		1,
-		&mpower64,
-		sizeof(Exec)+8,
-		nil,
-		commonllp64 },
 	{ ELF_MAG,			/* any ELF */
 		"elf executable",
 		nil,
@@ -216,42 +108,6 @@ ExecTable exectab[] =
 		sizeof(Ehdr),
 		nil,
 		elfdotout },
-	{ E_MAGIC,			/* Arm 5.out and boot image */
-		"arm plan 9 executable",
-		"arm plan 9 dlm",
-		FARM,
-		1,
-		&marm,
-		sizeof(Exec),
-		beswal,
-		common },
-	{ (143<<16)|0413,		/* (Free|Net)BSD Arm */
-		"arm *bsd executable",
-		nil,
-		FARM,
-		0,
-		&marm,
-		sizeof(Exec),
-		leswal,
-		armdotout },
-	{ L_MAGIC,			/* alpha 7.out */
-		"alpha plan 9 executable",
-		"alpha plan 9 dlm",
-		FALPHA,
-		1,
-		&malpha,
-		sizeof(Exec),
-		beswal,
-		common },
-	{ 0x0700e0c3,			/* alpha boot image */
-		"alpha plan 9 boot image",
-		nil,
-		FALPHA,
-		0,
-		&malpha,
-		sizeof(Exec),
-		beswal,
-		common },
 	{ 0 },
 };
 
@@ -617,16 +473,6 @@ elf64dotout(int fd, Fhdr *fp, ExecHdr *hp)
 	switch(ep->machine) {
 	default:
 		return 0;
-	case AMD64:
-		mach = &mamd64;
-		fp->type = FAMD64;
-		fp->name = "amd64 ELF64 executable";
-		break;
-	case POWER64:
-		mach = &mpower64;
-		fp->type = FPOWER64;
-		fp->name = "power64 ELF64 executable";
-		break;
 	}
 
 	if(ep->phentsize != sizeof(P64hdr)) {
@@ -735,31 +581,6 @@ elf32dotout(int fd, Fhdr *fp, ExecHdr *hp)
 		mach = &mmips;
 		fp->type = FMIPS;
 		fp->name = "mips ELF32 executable";
-		break;
-	case SPARC64:
-		mach = &msparc64;
-		fp->type = FSPARC64;
-		fp->name = "sparc64 ELF32 executable";
-		break;
-	case POWER:
-		mach = &mpower;
-		fp->type = FPOWER;
-		fp->name = "power ELF32 executable";
-		break;
-	case POWER64:
-		mach = &mpower64;
-		fp->type = FPOWER64;
-		fp->name = "power64 ELF32 executable";
-		break;
-	case AMD64:
-		mach = &mamd64;
-		fp->type = FAMD64;
-		fp->name = "amd64 ELF32 executable";
-		break;
-	case ARM:
-		mach = &marm;
-		fp->type = FARM;
-		fp->name = "arm ELF32 executable";
 		break;
 	default:
 		return 0;
