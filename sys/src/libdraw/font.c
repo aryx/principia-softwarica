@@ -18,7 +18,7 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
 
 	if(ss){
 		sp = *ss;
-		rp = L"";
+		rp = (Rune*) L"";//PAD, otherwise error
 	}else{
 		sp = "";
 		rp = *rr;
