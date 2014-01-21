@@ -47,6 +47,8 @@ swapproc(void)
 static void
 execinit(void)
 {
+  int fd;
+
   bind_safe("#p", "/proc", MREPL);
   bind_safe("#d", "/fd", MREPL);
 
@@ -63,11 +65,15 @@ execinit(void)
   bind_safe("#i", "/dev", MAFTER);
 
 
+  // for rio
   run("/bin/ramfs", "-m", "/mnt", nil);
-
   run("/bin/mkdir", "/mnt/temp", nil);
+  run("/bin/mkdir", "/mnt/wsys", nil);
+  fd = open_safe("#c/hostowner", OWRITE);
+  print_safe(fd, "pad");
+  close(fd);
 
-  run("/boot/sh", nil);
+  run("/bin/rc", nil);
 }
 
 
