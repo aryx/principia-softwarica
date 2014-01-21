@@ -15,7 +15,6 @@ connectlocal(void)
   int fd;
   
   bind_safe("#S", "/dev", MAFTER);
-  bind_safe("#k", "/dev", MAFTER); //PAD: needed?
 
   fd = open_safe("/dev/sdC1/ctl", ORDWR);
   //TODO: use fdisk -p /dev/sdC1/data > /dev/sdC1/ctl
