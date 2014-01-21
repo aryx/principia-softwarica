@@ -19,7 +19,7 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
 	}else
 		sptr = &s;
 	if(r == nil){
-          r = (Rune*) L"";//PAD: otherwise error
+          r = L"";
 		rptr = nil;
 	}else
 		rptr = &r;

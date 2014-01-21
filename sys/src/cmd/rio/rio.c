@@ -726,11 +726,11 @@ button2menu(Window *w)
 		if(w->rawing){
 			waddraw(w, snarf, nsnarf);
 			if(snarf[nsnarf-1]!='\n' && snarf[nsnarf-1]!='\004')
-                          waddraw(w, (Rune*)/*PAD:*/ L"\n", 1);
+                          waddraw(w, L"\n", 1);
 		}else{
 			winsert(w, snarf, nsnarf, w->nr);
 			if(snarf[nsnarf-1]!='\n' && snarf[nsnarf-1]!='\004')
-				winsert(w, (Rune*)/*PAD:*/L"\n", 1, w->nr);
+				winsert(w, L"\n", 1, w->nr);
 		}
 		wsetselect(w, w->nr, w->nr);
 		wshow(w, w->nr);
