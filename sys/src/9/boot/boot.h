@@ -1,3 +1,21 @@
+/* libc equivalent */
+extern void	fatal(char*);
+extern void	warning(char*);
+extern void	run(char *file, ...);
+extern void	runv(char **argv);
+
+/* pad style */
+void bind_safe(char* old, char* new, int flag);
+int open_safe(char* path, int flag);
+void print_safe(int fd, char* str);
+void close_safe(int fd);
+
+/* main entry point */
+extern void	boot(int, char **);
+
+
+
+/* what bootpcf.c expect */
 typedef struct Method	Method;
 struct Method
 {
@@ -6,71 +24,11 @@ struct Method
 	int	(*connect)(void);
 	char	*arg;
 };
-enum
-{
-	Statsz=	256,
-	Nbarg=	16,
-};
 
-extern char*	bootdisk;		/* defined in ../$arch/boot$CONF.c */
-extern char*	rootdir;
-extern int	(*cfs)(int);
-extern int	cpuflag;
-extern char	cputype[];
-extern int	debugboot;
-extern int	fflag;
-extern int	kflag;
 extern Method	method[];		/* defined in ../$arch/boot$CONF.c */
-extern void	(*pword)(int, Method*);
-extern char	sys[];
-extern uchar	hostkey[];
-extern uchar	statbuf[Statsz];
-extern int	bargc;
-extern char	*bargv[Nbarg];
-extern int	pcload;
-
-/* libc equivalent */
-extern void	authentication(int);
-extern int	cache(int);
-extern char*	checkkey(Method*, char*, char*);
-extern int	chmod(char *file, int mode);
-extern void	fatal(char*);
-extern void	getpasswd(char*, int);
-extern void	key(int, Method*);
-extern int	mountusbparts(void);
-extern int	outin(char*, char*, int);
-extern int	plumb(char*, char*, int*, char*);
-extern int	readfile(char*, char*, int);
-extern int	readparts(void);
-extern long	readn(int, void*, long);
-extern void	run(char *file, ...);
-extern void	runv(char **argv);
-extern int	sendmsg(int, char*);
-extern void	setenv(char*, char*);
-extern void	settime(int, int, char*);
-extern void	srvcreate(char*, int);
-extern void	usbinit(int post);
-extern void	warning(char*);
-extern int	writefile(char*, char*, int);
-extern void	boot(int, char **);
-extern void	doauthenticate(int, Method*);
-extern int		old9p(int);
-extern int	parsefields(char*, char**, int, char*);
+extern char*	bootdisk;		/* defined in ../$arch/boot$CONF.c */
 
 /* methods */
-extern void	configtcp(Method*);
-extern int	connecttcp(void);
-
 extern void	configlocal(Method*);
 extern int	connectlocal(void);
 
-extern void	configpaq(Method*);
-extern int	connectpaq(void);
-
-extern void	configembed(Method*);
-extern int	connectembed(void);
-
-extern void	configip(int, char**, int);
-
-/* hack for passing authentication address */
-extern char	*authaddr;
