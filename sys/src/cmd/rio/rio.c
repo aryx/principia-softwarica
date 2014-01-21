@@ -124,10 +124,11 @@ threadmain(int argc, char *argv[])
 	Image *i;
 	Rectangle r;
 
-	if(strstr(argv[0], ".out") == nil){
-		menu3str[Exit] = nil;
-		Hidden--;
-	}
+        //PAD: let's keep the Exit option!
+	//PAD: if(strstr(argv[0], ".out") == nil){
+	//PAD: 	menu3str[Exit] = nil;
+	//PAD: 	Hidden--;
+	//PAD: }
 	initstr = nil;
 	kbdin = nil;
 	maxtab = 0;
