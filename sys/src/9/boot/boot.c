@@ -67,7 +67,7 @@ execinit(void)
 
   // for rio
   run("/bin/ramfs", "-m", "/mnt", nil);
-  run("/bin/mkdir", "/mnt/temp", nil);
+  run("/bin/mkdir", "/mnt/temp", nil); // see thread(2), used to create pipes
   run("/bin/mkdir", "/mnt/wsys", nil);
   fd = open_safe("#c/hostowner", OWRITE);
   print_safe(fd, "pad");
