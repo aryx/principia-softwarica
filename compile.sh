@@ -1,6 +1,6 @@
 #!/bin/sh
 
-source ~/plan9/env.sh
+source env.sh
 cd sys/src
 mk all
 cd cmd
