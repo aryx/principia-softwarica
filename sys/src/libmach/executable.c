@@ -60,6 +60,7 @@ typedef struct Exectable{
 //PAD: removed many archi
 extern	Mach	mmips;
 extern	Mach	mi386;
+extern	Mach	marm;
 
 ExecTable exectab[] =
 {
@@ -108,6 +109,16 @@ ExecTable exectab[] =
 		sizeof(Ehdr),
 		nil,
 		elfdotout },
+	{ E_MAGIC,			/* Arm 5.out and boot image */
+		"arm plan 9 executable",
+		"arm plan 9 dlm",
+		FARM,
+		1,
+		&marm,
+		sizeof(Exec),
+		beswal,
+		common },
+
 	{ 0 },
 };
 
@@ -581,6 +592,11 @@ elf32dotout(int fd, Fhdr *fp, ExecHdr *hp)
 		mach = &mmips;
 		fp->type = FMIPS;
 		fp->name = "mips ELF32 executable";
+		break;
+	case ARM:
+		mach = &marm;
+		fp->type = FARM;
+		fp->name = "arm ELF32 executable";
 		break;
 	default:
 		return 0;
