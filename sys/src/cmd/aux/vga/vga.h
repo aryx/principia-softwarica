@@ -196,49 +196,10 @@ typedef struct Vga {
 	void*	private;
 } Vga;
 
-/* 3dfx.c */
-extern Ctlr tdfx;
-extern Ctlr tdfxhwgc;
-
-/* ark2000pv.c */
-extern Ctlr ark2000pv;
-extern Ctlr ark2000pvhwgc;
-
-/* att20c49x.c */
-extern Ctlr att20c490;
-extern Ctlr att20c491;
-extern Ctlr att20c492;
-
-/* att21c498.c */
-extern uchar attdaci(uchar);
-extern void attdaco(uchar, uchar);
-extern Ctlr att21c498;
-
-/* bt485.c */
-extern uchar bt485i(uchar);
-extern void bt485o(uchar, uchar);
-extern Ctlr bt485;
-
-/* ch9294.c */
-extern Ctlr ch9294;
-
 /* clgd542x.c */
 extern void clgd54xxclock(Vga*, Ctlr*);
 extern Ctlr clgd542x;
 extern Ctlr clgd542xhwgc;
-
-/* clgd546x.c */
-extern Ctlr clgd546x;
-extern Ctlr clgd546xhwgc;
-
-/* ct65540.c */
-extern Ctlr ct65540;
-extern Ctlr ct65545;
-extern Ctlr ct65545hwgc;
-
-/* cyber938x.c */
-extern Ctlr cyber938x;
-extern Ctlr cyber938xhwgc;
 
 /* data.c */
 extern int cflag;
@@ -257,32 +218,6 @@ extern void error(char*, ...);
 extern void trace(char*, ...);
 extern int vflag, Vflag;
 
-/* et4000.c */
-extern Ctlr et4000;
-
-/* et4000hwgc.c */
-extern Ctlr et4000hwgc;
-
-/* hiqvideo.c */
-extern Ctlr hiqvideo;
-extern Ctlr hiqvideohwgc;
-
-/* i81x.c */
-extern Ctlr i81x;
-extern Ctlr i81xhwgc;
-
-/* ibm8514.c */
-extern Ctlr ibm8514;
-
-/* icd2061a.c */
-extern Ctlr icd2061a;
-
-/* ics2494.c */
-extern Ctlr ics2494;
-extern Ctlr ics2494a;
-
-/* ics534x.c */
-extern Ctlr ics534x;
 
 /* io.c */
 extern uchar inportb(long);
@@ -303,38 +238,12 @@ extern void printflag(ulong);
 extern void setpalette(int, int, int, int);
 extern int curprintindex;
 
-/* mach32.c */
-extern Ctlr mach32;
-
-/* mach64.c */
-extern Ctlr mach64;
-
-/* mach64xx.c */
-extern Ctlr mach64xx;
-extern Ctlr mach64xxhwgc;
-
 /* main.c */
 extern char* chanstr[];
 extern void resyncinit(Vga*, Ctlr*, ulong, ulong);
 extern void sequencer(Vga*, int);
 extern void main(int, char*[]);
 Biobuf stdout;
-
-/* mga2164w.c */
-extern Ctlr mga2164w;
-extern Ctlr mga2164whwgc;
-
-/* neomagic.c */
-extern Ctlr neomagic;
-extern Ctlr neomagichwgc;
-
-/* nvidia.c */
-extern Ctlr nvidia;
-extern Ctlr nvidiahwgc;
-
-/* radeon.c */
-extern Ctlr radeon;
-extern Ctlr radeonhwgc;
 
 /* palette.c */
 extern Ctlr palette;
@@ -351,68 +260,6 @@ extern void pcicfgw32(Pcidev*, int, int);
 extern void pcihinv(Pcidev*);
 extern Pcidev* pcimatch(Pcidev*, int, int);
 
-/* rgb524.c */
-extern Ctlr rgb524;
-
-/* rgb524mn.c */
-extern uchar (*rgb524mnxi)(Vga*, int);
-extern void (*rgb524mnxo)(Vga*, int, uchar);
-extern Ctlr rgb524mn;
-
-/* s3801.c */
-extern Ctlr s3801;
-extern Ctlr s3805;
-
-/* s3928.c */
-extern Ctlr s3928;
-
-/* s3clock.c */
-extern Ctlr s3clock;
-
-/* s3generic.c */
-extern Ctlr s3generic;
-
-/* s3hwgc.c */
-extern Ctlr bt485hwgc;
-extern Ctlr rgb524hwgc;
-extern Ctlr s3hwgc;
-extern Ctlr tvp3020hwgc;
-extern Ctlr tvp3026hwgc;
-
-/* sc15025.c */
-extern Ctlr sc15025;
-
-/* stg1702.c */
-extern Ctlr stg1702;
-
-/* t2r4.c */
-extern Ctlr t2r4;
-extern Ctlr t2r4hwgc;
-
-/* trio64.c */
-extern void trio64clock(Vga*, Ctlr*);
-extern Ctlr trio64;
-
-/* tvp3020.c */
-extern uchar tvp3020i(uchar);
-extern uchar tvp3020xi(uchar);
-extern void tvp3020o(uchar, uchar);
-extern void tvp3020xo(uchar, uchar);
-extern Ctlr tvp3020;
-
-/* tvp3025.c */
-extern Ctlr tvp3025;
-
-/* tvp3025clock.c */
-extern Ctlr tvp3025clock;
-
-/* tvp3026.c */
-extern uchar tvp3026xi(uchar);
-extern void tvp3026xo(uchar, uchar);
-extern Ctlr tvp3026;
-
-/* tvp3026clock.c */
-extern Ctlr tvp3026clock;
 
 /* vga.c */
 extern uchar vgai(long);
@@ -427,29 +274,6 @@ extern Ctlr softhwgc;	/* has to go somewhere */
 extern int dbvesa(Vga*);
 extern Mode *dbvesamode(char*);
 extern void vesatextmode(void);
-
-/* virge.c */
-extern Ctlr virge;
-
-/* vision864.c */
-extern Ctlr vision864;
-
-/* vision964.c */
-extern Ctlr vision964;
-
-/* vision968.c */
-extern Ctlr vision968;
-
-/* vmware.c */
-extern Ctlr vmware;
-extern Ctlr vmwarehwgc;
-
-/* w30c516.c */
-extern Ctlr w30c516;
-
-/* mga4xx.c */
-extern Ctlr mga4xx;
-extern Ctlr mga4xxhwgc;
 
 #pragma	varargck	argpos	error	1
 #pragma	varargck	argpos	trace	1
