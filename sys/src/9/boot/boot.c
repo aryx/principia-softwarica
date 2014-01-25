@@ -67,7 +67,6 @@ execinit(void)
   run("/bin/aux/vga", "-l", "1024x768x8", nil);
   bind_safe("#i", "/dev", MAFTER);
 
-
   // for rio
   run("/bin/ramfs", "-m", "/mnt", nil);
   run("/bin/mkdir", "/mnt/temp", nil); // see thread(2), used to create pipes
@@ -75,6 +74,10 @@ execinit(void)
   fd = open_safe("#c/hostowner", OWRITE);
   print_safe(fd, "pad");
   close(fd);
+
+  // network
+  bind_safe("#I", "/net", MREPL);
+  bind_safe("#l0", "/net", MAFTER);
 
   run("/bin/rc", nil);
 }
