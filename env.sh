@@ -9,4 +9,5 @@ export MKSHELL=$PLAN9/bin/rc
 PATH=$PATH:.
 
 export objtype=386
+#export objtype=arm
 export cputype=386
