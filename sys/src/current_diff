@@ -1,0 +1,5266 @@
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9: bcm
+Only in ./9/boot: Makefile
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/boot/aux.c /Volumes/Plan 9 - Dec 29/sys/src/9/boot/aux.c
+--- ./9/boot/aux.c	2014-01-20 15:58:02.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/boot/aux.c	2013-06-27 14:49:32.000000000 -0700
+@@ -2,6 +2,57 @@
+ #include <libc.h>
+ #include <../boot/boot.h>
+ 
++/*
++int
++plumb(char *dir, char *dest, int *efd, char *here)
++{
++	char buf[128];
++	char name[128];
++	int n;
++
++	sprint(name, "%s/clone", dir);
++	efd[0] = open(name, ORDWR);
++	if(efd[0] < 0)
++		return -1;
++	n = read(efd[0], buf, sizeof(buf)-1);
++	if(n < 0){
++		close(efd[0]);
++		return -1;
++	}
++	buf[n] = 0;
++	sprint(name, "%s/%s/data", dir, buf);
++	if(here){
++		sprint(buf, "announce %s", here);
++		if(sendmsg(efd[0], buf) < 0){
++			close(efd[0]);
++			return -1;
++		}
++	}
++	sprint(buf, "connect %s", dest);
++	if(sendmsg(efd[0], buf) < 0){
++		close(efd[0]);
++		return -1;
++	}
++	efd[1] = open(name, ORDWR);
++	if(efd[1] < 0){
++		close(efd[0]);
++		return -1;
++	}
++	return efd[1];
++}
++
++int
++sendmsg(int fd, char *msg)
++{
++	int n;
++
++	n = strlen(msg);
++	if(write(fd, msg, n) != n)
++		return -1;
++	return 0;
++}
++ */
++
+ void
+ warning(char *s)
+ {
+@@ -25,55 +76,109 @@ fatal(char *s)
+ 	exits(msg);			/* this will trigger a panic */
+ }
+ 
+-void
+-runv(char **argv)
++int
++readfile(char *name, char *buf, int len)
+ {
+-  int i, pid;
++	int f, n;
+   
+-  switch(pid = fork()){
+-  case -1:
+-    fatal("fork");
+-  case 0:
+-    exec(argv[0], argv);
+-    fatal(smprint("can't exec %s: %r", argv[0]));
+-  default:
+-    while ((i = waitpid()) != pid && i != -1)
+-      ;
+-    if(i == -1)
+-      fatal(smprint("wait failed running %s", argv[0]));
+-  }
++	buf[0] = 0;
++	f = open(name, OREAD);
++	if(f < 0)
++		return -1;
++	n = read(f, buf, len-1);
++	if(n >= 0)
++		buf[n] = 0;
++	close(f);
++	return 0;
+ }
+ 
+-void
+-run(char *file, ...)
++int
++writefile(char *name, char *buf, int len)
+ {
+-  runv(&file);
++	int f, n;
++
++	f = open(name, OWRITE);
++	if(f < 0)
++		return -1;
++	n = write(f, buf, len);
++	close(f);
++	return (n != len) ? -1 : 0;
+ }
+ 
++void
++setenv(char *name, char *val)
++{
++	int f;
++	char ename[64];
+ 
+-void bind_safe(char* old, char* new, int flag) {
+-  if(bind(old, new, flag) < 0)
+-    fatal("bind");
++	snprint(ename, sizeof ename, "#e/%s", name);
++	f = create(ename, 1, 0666);
++	if(f < 0){
++		fprint(2, "create %s: %r\n", ename);
+   return;
++	}
++	write(f, val, strlen(val));
++	close(f);
+ }
+ 
+-int open_safe(char* path, int flag) {
+-  int fd;
+-  if((fd = open(path, flag)) < 0) {
+-    fatal("open");
+-  }
+-  return fd;
++void
++srvcreate(char *name, int fd)
++{
++	char *srvname;
++	int f;
++	char buf[64];
++
++	srvname = strrchr(name, '/');
++	if(srvname)
++		srvname++;
++	else
++		srvname = name;
++
++	snprint(buf, sizeof buf, "#s/%s", srvname);
++	f = create(buf, 1, 0666);
++	if(f < 0)
++		fatal(buf);
++	sprint(buf, "%d", fd);
++	if(write(f, buf, strlen(buf)) != strlen(buf))
++		fatal("write");
++	close(f);
+ }
+ 
+-void print_safe(int fd, char* str) {
+-  if(write(fd, str, strlen(str)) < 0) {
+-    fatal("print");
+-  };
+-  return;
++void
++catchint(void *a, char *note)
++{
++	USED(a);
++	if(strcmp(note, "alarm") == 0)
++		noted(NCONT);
++	noted(NDFLT);
+ }
+ 
+-void close_safe(int fd) {
+-  if(close(fd) < 0) {
+-    fatal("close");
++int
++outin(char *prompt, char *def, int len)
++{
++	int n;
++	char buf[256];
++
++	if(len >= sizeof buf)
++		len = sizeof(buf)-1;
++
++	if(cpuflag){
++		notify(catchint);
++		alarm(15*1000);
++	}
++	print("%s[%s]: ", prompt, *def ? def : "no default");
++	memset(buf, 0, sizeof buf);
++	n = read(0, buf, len);
++	if(cpuflag){
++		alarm(0);
++		notify(0);
++	}
++
++	if(n < 0)
++		return 1;
++	if(n > 1){
++		buf[n-1] = 0;
++		strcpy(def, buf);
+   }
++	return n;
+ }
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/boot/boot.c /Volumes/Plan 9 - Dec 29/sys/src/9/boot/boot.c
+--- ./9/boot/boot.c	2014-01-20 16:13:18.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/boot/boot.c	2013-12-05 13:50:15.000000000 -0800
+@@ -1,7 +1,32 @@
+ #include <u.h>
+ #include <libc.h>
++#include <auth.h>
++#include <fcall.h>
+ #include "../boot/boot.h"
+ 
++#define PARTSRV "partfs.sdXX"
++
++enum {
++	Dontpost,
++	Post,
++};
++
++char	cputype[64];
++char	sys[2*64];
++char 	reply[256];
++int	printcol;
++int	mflag;
++int	fflag;
++int	kflag;
++int	debugboot;
++
++char	*bargv[Nbarg];
++int	bargc;
++
++static void	swapproc(void);
++static Method	*rootserver(char*);
++static void	kbmap(void);
++
+ /*
+  * we should inherit the standard fds all referring to /dev/cons,
+  * but we're being paranoid.
+@@ -12,6 +37,7 @@ opencons(void)
+   close(0);
+   close(1);
+   close(2);
++	bind("#c", "/dev", MBEFORE);
+   open("/dev/cons", OREAD);
+   open("/dev/cons", OWRITE);
+   open("/dev/cons", OWRITE);
+@@ -30,68 +56,385 @@ bindenvsrv(void)
+ }
+ 
+ static void
+-swapproc(void)
++debuginit(int argc, char **argv)
+ {
+ 	int fd;
+ 
+-	fd = open("#c/swap", OWRITE);
+-	if(fd < 0){
+-		warning("opening #c/swap");
+-		return;
+-	}
+-	if(write(fd, "start", 5) <= 0)
+-		warning("starting swap kproc");
+-	close(fd);
++	if(getenv("debugboot"))
++		debugboot = 1;
++#ifdef DEBUG
++	print("argc=%d\n", argc);
++	for(fd = 0; fd < argc; fd++)
++		print("%#p %s ", argv[fd], argv[fd]);
++	print("\n");
++#endif	/* DEBUG */
++	SET(fd);
++	USED(argc, argv, fd);
+ }
+ 
++/*
++ * read disk partition tables here so that readnvram via factotum
++ * can see them.  ideally we would have this information in
++ * environment variables before attaching #S, which would then
++ * parse them and create partitions.
++ */
+ static void
+-execinit(void)
++partinit(void)
+ {
+-  bind_safe("#p", "/proc", MREPL);
+-  bind_safe("#d", "/fd", MREPL);
++	char *rdparts;
+ 
+-  bind_safe("/root", "/", MAFTER|MCREATE);
+-  bind_safe("/386/bin", "/bin", MREPL);
+-  bind_safe("/rc/bin", "/bin", MAFTER);
++	rdparts = getenv("readparts");
++	if(rdparts)
++		readparts();
++	free(rdparts);
++}
+ 
+-  bind_safe("#v", "/dev", MAFTER);
+-  bind_safe("#m", "/dev", MAFTER);
+-  bind_safe("#P", "/dev", MAFTER);
++/*
++ *  pick a method and initialize it
++ */
++static Method *
++pickmethod(int argc, char **argv)
++{
++	Method *mp;
+ 
+-  run("/bin/aux/mouse", "ps2", nil);
+-  run("/bin/aux/vga", "-l", "640x480x8", nil);
+-  bind_safe("#i", "/dev", MAFTER);
++	if(method[0].name == nil)
++		fatal("no boot methods");
++	mp = rootserver(argc ? *argv : 0);
++	(*mp->config)(mp);
++	return mp;
++}
+ 
++/*
++ *  authentication agent
++ *  sets hostowner, creating an auth discontinuity
++ */
++static void
++doauth(int cpuflag)
++{
++	if(debugboot)
++		fprint(2, "auth...");
++	authentication(cpuflag);
++}
+ 
+-  run("/bin/ramfs", "-m", "/mnt", nil);
++/*
++ *  connect to the root file system
++ */
++static int
++connectroot(Method *mp, int islocal, int ishybrid)
++{
++	int fd, n;
++	char buf[32];
+ 
+-  run("/bin/mkdir", "/mnt/temp", nil);
++	fd = (*mp->connect)();
++	if(fd < 0)
++		fatal("can't connect to file server");
++	if(getenv("srvold9p"))
++		fd = old9p(fd);
++	if(!islocal && !ishybrid){
++		if(cfs)
++			fd = (*cfs)(fd);
++	}
++	print("version...");
++	buf[0] = '\0';
++	n = fversion(fd, 0, buf, sizeof buf);
++	if(n < 0)
++		fatal("can't init 9P");
++	srvcreate("boot", fd);
++	return fd;
++}
+ 
+-  run("/boot/sh", nil);
++/*
++ *  create the name space, mount the root fs
++ */
++static int
++nsinit(int fd, char **rspp)
++{
++	int afd;
++	char *rp, *rsp;
++	AuthInfo *ai;
++	static char rootbuf[64];
++
++	if(bind("/", "/", MREPL) < 0)
++		fatal("bind /");
++	rp = getenv("rootspec");
++	if(rp == nil)
++		rp = "";
++	
++	afd = fauth(fd, rp);
++	if(afd >= 0){
++		ai = auth_proxy(afd, auth_getkey, "proto=p9any role=client");
++		if(ai == nil)
++			print("authentication failed (%r), trying mount anyways\n");
++	}
++	if(mount(fd, afd, "/root", MREPL|MCREATE, rp) < 0)
++		fatal("mount /");
++	rsp = rp;
++	rp = getenv("rootdir");
++	if(rp == nil)
++		rp = rootdir;
++	if(bind(rp, "/", MAFTER|MCREATE) < 0){
++		if(strncmp(rp, "/root", 5) == 0){
++			fprint(2, "boot: couldn't bind $rootdir=%s to root: %r\n", rp);
++			fatal("second bind /");
++		}
++		snprint(rootbuf, sizeof rootbuf, "/root/%s", rp);
++		rp = rootbuf;
++		if(bind(rp, "/", MAFTER|MCREATE) < 0){
++			fprint(2, "boot: couldn't bind $rootdir=%s to root: %r\n", rp);
++			if(strcmp(rootbuf, "/root//plan9") != 0)
++				fatal("second bind /");
++			/* undo installer's work */
++			fprint(2, "**** warning: remove rootdir=/plan9 "
++				"entry from plan9.ini\n");
++			rp = "/root";
++			if(bind(rp, "/", MAFTER|MCREATE) < 0)
++				fatal("second bind /");
++		}
++	}
++	setenv("rootdir", rp);
++	*rspp = rsp;
++	return afd;
+ }
+ 
++static void
++execinit(void)
++{
++	int iargc;
++	char *cmd, cmdbuf[64], *iargv[16];
++
++	/* exec init */
++	cmd = getenv("init");
++	if(cmd == nil){
++		sprint(cmdbuf, "/%s/init -%s%s", cputype,
++			cpuflag ? "c" : "t", mflag ? "m" : "");
++		cmd = cmdbuf;
++	}
++	iargc = tokenize(cmd, iargv, nelem(iargv)-1);
++	cmd = iargv[0];
++
++	/* make iargv[0] basename(iargv[0]) */
++	if(iargv[0] = strrchr(iargv[0], '/'))
++		iargv[0]++;
++	else
++		iargv[0] = cmd;
++
++	iargv[iargc] = nil;
++
++	chmod("/srv/" PARTSRV, 0600);
++	exec(cmd, iargv);
++	fatal(cmd);
++}
+ 
+ void
+ boot(int argc, char *argv[])
+ {
+-  USED(argc);
+-  USED(argv);
++	int fd, afd, islocal, ishybrid;
++	char *rsp;
++	Method *mp;
+ 
+   fmtinstall('r', errfmt);
+-
+-  //At this point we should have #/ and #c setup by the kernel init0
+-
+   opencons();
+   bindenvsrv();
++	debuginit(argc, argv);
+ 
+-  print("booooooooting...\n");
+-
+-  rfork(RFNAMEG);
++	ARGBEGIN{
++	case 'k':
++		kflag = 1;
++		break;
++	case 'm':
++		mflag = 1;
++		break;
++	case 'f':
++		fflag = 1;
++		break;
++	}ARGEND
++
++	readfile("#e/cputype", cputype, sizeof(cputype));
++
++	/*
++	 *  set up usb keyboard & mouse, if any.
++	 *  starts partfs on first disk, if any, to permit nvram on usb.
++	 */
++	usbinit(Dontpost);
+ 
+-  connectlocal();
++	mp = pickmethod(argc, argv);
++	islocal = strcmp(mp->name, "local") == 0;
++	ishybrid = strcmp(mp->name, "hybrid") == 0;
++
++	kbmap();			/*  load keymap if it's there. */
++
++	/* don't trigger aoe until the network has been configured */
++	bind("#æ", "/dev", MAFTER);	/* nvram could be here */
++	bind("#S", "/dev", MAFTER);	/* nvram could be here */
++	partinit();
++
++	doauth(cpuflag);	/* authentication usually changes hostowner */
++	rfork(RFNAMEG);		/* leave existing subprocs in own namespace */
++	usbinit(Post);		/* restart partfs under the new hostowner id */
++	fd = connectroot(mp, islocal, ishybrid);
++	afd = nsinit(fd, &rsp);
++	close(fd);
+ 
++	settime(islocal, afd, rsp);
++	if(afd > 0)
++		close(afd);
+   swapproc();
+   execinit();
+-
+   exits("failed to exec init");
+ }
++
++static Method*
++findmethod(char *a)
++{
++	Method *mp;
++	int i, j;
++	char *cp;
++
++	if((i = strlen(a)) == 0)
++		return nil;
++	cp = strchr(a, '!');
++	if(cp)
++		i = cp - a;
++	for(mp = method; mp->name; mp++){
++		j = strlen(mp->name);
++		if(j > i)
++			j = i;
++		if(strncmp(a, mp->name, j) == 0)
++			break;
++	}
++	if(mp->name)
++		return mp;
++	return nil;
++}
++
++/*
++ *  ask user from whence cometh the root file system
++ */
++static Method*
++rootserver(char *arg)
++{
++	char prompt[256];
++	Method *mp;
++	char *cp;
++	int n;
++
++	/* look for required reply */
++	readfile("#e/nobootprompt", reply, sizeof(reply));
++	if(reply[0]){
++		mp = findmethod(reply);
++		if(mp)
++			goto HaveMethod;
++		print("boot method %s not found\n", reply);
++		reply[0] = 0;
++	}
++
++	/* make list of methods */
++	mp = method;
++	n = sprint(prompt, "root is from (%s", mp->name);
++	for(mp++; mp->name; mp++)
++		n += sprint(prompt+n, ", %s", mp->name);
++	sprint(prompt+n, ")");
++
++	/* create default reply */
++	readfile("#e/bootargs", reply, sizeof(reply));
++	if(reply[0] == 0 && arg != 0)
++		strcpy(reply, arg);
++	if(reply[0]){
++		mp = findmethod(reply);
++		if(mp == 0)
++			reply[0] = 0;
++	}
++	if(reply[0] == 0)
++		strcpy(reply, method->name);
++
++	/* parse replies */
++	do{
++		outin(prompt, reply, sizeof(reply));
++		mp = findmethod(reply);
++	}while(mp == nil);
++
++HaveMethod:
++	bargc = tokenize(reply, bargv, Nbarg-2);
++	bargv[bargc] = nil;
++	cp = strchr(reply, '!');
++	if(cp)
++		strcpy(sys, cp+1);
++	return mp;
++}
++
++static void
++swapproc(void)
++{
++	int fd;
++
++	fd = open("#c/swap", OWRITE);
++	if(fd < 0){
++		warning("opening #c/swap");
++		return;
++	}
++	if(write(fd, "start", 5) <= 0)
++		warning("starting swap kproc");
++	close(fd);
++}
++
++int
++old9p(int fd)
++{
++	int p[2];
++
++	if(pipe(p) < 0)
++		fatal("pipe");
++
++	print("srvold9p...");
++	switch(fork()) {
++	case -1:
++		fatal("rfork srvold9p");
++	case 0:
++		dup(fd, 1);
++		close(fd);
++		dup(p[0], 0);
++		close(p[0]);
++		close(p[1]);
++		execl("/srvold9p", "srvold9p", "-s", 0);
++		fatal("exec srvold9p");
++	default:
++		close(fd);
++		close(p[0]);
++	}
++	return p[1];
++}
++
++static void
++kbmap(void)
++{
++	char *f;
++	int n, in, out;
++	char buf[1024];
++
++	f = getenv("kbmap");
++	if(f == nil)
++		return;
++	if(bind("#κ", "/dev", MAFTER) < 0){
++		warning("can't bind #κ");
++		return;
++	}
++
++	in = open(f, OREAD);
++	if(in < 0){
++		warning("can't open kbd map");
++		return;
++	}
++	out = open("/dev/kbmap", OWRITE);
++	if(out < 0) {
++		warning("can't open /dev/kbmap");
++		close(in);
++		return;
++	}
++	while((n = read(in, buf, sizeof(buf))) > 0)
++		if(write(out, buf, n) != n){
++			warning("write to /dev/kbmap failed");
++			break;
++		}
++	close(in);
++	close(out);
++}
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/boot/boot.h /Volumes/Plan 9 - Dec 29/sys/src/9/boot/boot.h
+--- ./9/boot/boot.h	2014-01-20 15:57:22.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/boot/boot.h	2012-08-15 14:26:08.000000000 -0700
+@@ -1,21 +1,3 @@
+-/* libc equivalent */
+-extern void	fatal(char*);
+-extern void	warning(char*);
+-extern void	run(char *file, ...);
+-extern void	runv(char **argv);
+-
+-/* pad style */
+-void bind_safe(char* old, char* new, int flag);
+-int open_safe(char* path, int flag);
+-void print_safe(int fd, char* str);
+-void close_safe(int fd);
+-
+-/* main entry point */
+-extern void	boot(int, char **);
+-
+-
+-
+-/* what bootpcf.c expect */
+ typedef struct Method	Method;
+ struct Method
+ {
+@@ -24,11 +6,71 @@ struct Method
+ 	int	(*connect)(void);
+ 	char	*arg;
+ };
++enum
++{
++	Statsz=	256,
++	Nbarg=	16,
++};
+ 
+-extern Method	method[];		/* defined in ../$arch/boot$CONF.c */
+ extern char*	bootdisk;		/* defined in ../$arch/boot$CONF.c */
++extern char*	rootdir;
++extern int	(*cfs)(int);
++extern int	cpuflag;
++extern char	cputype[];
++extern int	debugboot;
++extern int	fflag;
++extern int	kflag;
++extern Method	method[];		/* defined in ../$arch/boot$CONF.c */
++extern void	(*pword)(int, Method*);
++extern char	sys[];
++extern uchar	hostkey[];
++extern uchar	statbuf[Statsz];
++extern int	bargc;
++extern char	*bargv[Nbarg];
++extern int	pcload;
++
++/* libc equivalent */
++extern void	authentication(int);
++extern int	cache(int);
++extern char*	checkkey(Method*, char*, char*);
++extern int	chmod(char *file, int mode);
++extern void	fatal(char*);
++extern void	getpasswd(char*, int);
++extern void	key(int, Method*);
++extern int	mountusbparts(void);
++extern int	outin(char*, char*, int);
++extern int	plumb(char*, char*, int*, char*);
++extern int	readfile(char*, char*, int);
++extern int	readparts(void);
++extern long	readn(int, void*, long);
++extern void	run(char *file, ...);
++extern void	runv(char **argv);
++extern int	sendmsg(int, char*);
++extern void	setenv(char*, char*);
++extern void	settime(int, int, char*);
++extern void	srvcreate(char*, int);
++extern void	usbinit(int post);
++extern void	warning(char*);
++extern int	writefile(char*, char*, int);
++extern void	boot(int, char **);
++extern void	doauthenticate(int, Method*);
++extern int		old9p(int);
++extern int	parsefields(char*, char**, int, char*);
+ 
+ /* methods */
++extern void	configtcp(Method*);
++extern int	connecttcp(void);
++
+ extern void	configlocal(Method*);
+ extern int	connectlocal(void);
+ 
++extern void	configpaq(Method*);
++extern int	connectpaq(void);
++
++extern void	configembed(Method*);
++extern int	connectembed(void);
++
++extern void	configip(int, char**, int);
++
++/* hack for passing authentication address */
++extern char	*authaddr;
+Only in ./9/boot: boot.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: bootauth.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: bootcache.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: bootip.c
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/boot/bootmkfile /Volumes/Plan 9 - Dec 29/sys/src/9/boot/bootmkfile
+--- ./9/boot/bootmkfile	2014-01-20 13:28:33.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/boot/bootmkfile	2012-08-15 14:26:08.000000000 -0700
+@@ -1,18 +1,25 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ BOOTDIR=../boot
+ BOOTLIB=$BOOTDIR/libboot.a$O
+ 
+ BOOTFILES=\
++	bootauth.$O\
+         aux.$O\
+ 	boot.$O\
++	bootcache.$O\
++	bootip.$O\
+ 	local.$O\
++	embed.$O\
++	settime.$O\
++	paq.$O\
++	parts.$O\
++	printstub.$O\
++	usb.$O\
+ 
+ $BOOTLIB(%.$O):N:	%.$O
+ 
+ $BOOTLIB:	${BOOTFILES:%=$BOOTLIB(%)}
+ 	names=`{membername $newprereq}
+-	iar vu $BOOTLIB $names
++	ar vu $BOOTLIB $names
+ 	rm $names
+ 
+ $BOOTFILES:	$BOOTDIR/boot.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: doauthenticate.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: embed.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: getpasswd.c
+Binary files ./9/boot/libboot.a8 and /Volumes/Plan 9 - Dec 29/sys/src/9/boot/libboot.a8 differ
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/boot/local.c /Volumes/Plan 9 - Dec 29/sys/src/9/boot/local.c
+--- ./9/boot/local.c	2014-01-20 15:54:17.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/boot/local.c	2011-05-13 15:49:17.000000000 -0700
+@@ -2,29 +2,287 @@
+ #include <libc.h>
+ #include <../boot/boot.h>
+ 
++static char diskname[64];
++static char *disk;
++static char **args;
++
+ void
+ configlocal(Method *mp)
+ {
+-  USED(mp);
++	char *p, *inibootdisk;
++	int n;
++
++	inibootdisk = getenv("bootdisk");
++	if(*sys == '/' || *sys == '#'){
++		/*
++		 *  if the user specifies the disk in the boot cmd or
++		 * 'root is from' prompt, use it
++		 */
++		disk = sys;
++	} else if(strncmp(argv0, "dksc(0,", 7) == 0){
++		/*
++		 *  on many mips arg0 of the boot command specifies the
++		 *  scsi logical unit number
++		 */
++		p = strchr(argv0, ',');
++		n = strtoul(p+1, 0, 10);
++		sprint(diskname, "#w%d/sd%dfs", n, n);
++		disk = diskname;
++	} else if(mp->arg){
++		/*
++		 *  a default is optionally supplied when the kernel is made
++		 */
++		disk = mp->arg;
++	} else if(inibootdisk != nil && *inibootdisk)
++		/* plan9.ini overrides default from config file */
++		disk = inibootdisk;
++	else if(bootdisk != nil && *bootdisk){
++		/*
++		 *  an environment variable from a pc's plan9.ini or
++		 *  from the mips nvram or generated by the kernel
++		 *  is the last resort.
++		 */
++		disk = bootdisk;
++	}
++
++	/* if we've decided on one, pass it on to all programs */
++	if(disk) {
++		bootdisk = disk;
++		setenv("bootdisk", bootdisk);
++	}
++}
++
++int
++connectlocalkfs(void)
++{
++	int i, pid, fd, p[2];
++	char partition[64];
++	char *dev;
++	char **arg, **argp;
++	Dir *d;
++
++	if(stat("/boot/kfs", statbuf, sizeof statbuf) < 0)
++		return -1;
++
++	dev = disk ? disk : bootdisk;
++	snprint(partition, sizeof partition, "%sfs", dev);
++	fd = open(partition, OREAD);
++	if(fd < 0){
++		strcpy(partition, dev);
++		fd = open(partition, OREAD);
++		if(fd < 0)
++			return -1;
++	}
++	/*
++	 * can't do this check -- might be some other server posing as kfs.
++	 *
++	memset(buf, 0, sizeof buf);
++	pread(fd, buf, 512, 0);
++	close(fd);
++	if(memcmp(buf+256, "kfs wren device\n", 16) != 0){
++		if(strstr(partition, "/fs"))
++			print("no kfs file system found on %s\n", partition);
++		return -1;
++	}
++	 *
++	 */
++	d = dirfstat(fd);
++	close(fd);
++	if(d == nil)
++		return -1;
++	if(d->mode&DMDIR){
++		free(d);
++		return -1;
++	}
++	free(d);
++
++	print("kfs...");
++	if(pipe(p)<0)
++		fatal("pipe");
++	switch(pid = fork()){
++	case -1:
++		fatal("fork");
++	case 0:
++		arg = malloc((bargc+5)*sizeof(char*));
++		argp = arg;
++		*argp++ = "kfs";
++		*argp++ = "-f";
++		*argp++ = partition;
++		*argp++ = "-s";
++		for(i=1; i<bargc; i++)
++			*argp++ = bargv[i];
++		*argp = 0;
++
++		dup(p[0], 0);
++		dup(p[1], 1);
++		close(p[0]);
++		close(p[1]);
++		exec("/boot/kfs", arg);
++		fatal("can't exec kfs");
++	default:
++		break;
++	}
++	for(;;){
++		if((i = waitpid()) == -1)
++			fatal("waitpid for kfs failed");
++		if(i == pid)
++			break;
++	}
++
++	close(p[1]);
++	return p[0];
++}
++
++void
++runv(char **argv)
++{
++	int i, pid;
++
++	switch(pid = fork()){
++	case -1:
++		fatal("fork");
++	case 0:
++		exec(argv[0], argv);
++		fatal(smprint("can't exec %s: %r", argv[0]));
++	default:
++		while ((i = waitpid()) != pid && i != -1)
++			;
++		if(i == -1)
++			fatal(smprint("wait failed running %s", argv[0]));
++	}
+ }
+ 
++void
++run(char *file, ...)
++{
++	runv(&file);
++}
++
++static int
++print1(int fd, char *s)
++{
++	return write(fd, s, strlen(s));
++}
++
++void
++configloopback(void)
++{
++	int fd;
++
++	if((fd = open("/net/ipifc/clone", ORDWR)) < 0){
++		bind("#I", "/net", MAFTER);
++		if((fd = open("/net/ipifc/clone", ORDWR)) < 0)
++			fatal("open /net/ipifc/clone for loopback");
++	}
++	if(print1(fd, "bind loopback /dev/null") < 0
++	|| print1(fd, "add 127.0.0.1 255.255.255.255") < 0)
++		fatal("write /net/ipifc/clone for loopback");
++}
+ 
+ int
+-connectlocal(void)
++connectlocalfossil(void)
+ {
+   int fd;
++	char *venti, *f[32], *p;
++	int nf;
++	char partition[128], buf[512];
++	char *dev;
+   
+-  bind_safe("#S", "/dev", MAFTER);
+-  bind_safe("#k", "/dev", MAFTER); //PAD: needed?
++	if(stat("/boot/fossil", statbuf, sizeof statbuf) < 0)
++		return -1;
+ 
+-  fd = open_safe("/dev/sdC1/ctl", ORDWR);
+-  //TODO: use fdisk -p /dev/sdC1/data > /dev/sdC1/ctl
+-  //for sdC0: #prep -p /dev/sdC1/plan9 > /dev/sdC1/ctl
+-  print_safe(fd, "part dos 1 1000063");
+-  close_safe(fd);
++	/* look for fossil partition */
++	dev = disk ? disk : bootdisk;
++	snprint(partition, sizeof partition, "%sfossil", dev);
++	fd = open(partition, OREAD);
++	if(fd < 0){
++		strcpy(partition, dev);
++		fd = open(partition, OREAD);
++		if(fd < 0)
++			return -1;
++	}
++	memset(buf, 0, sizeof buf);
++	pread(fd, buf, 512, 127*1024);
++	close(fd);
++	if(memcmp(buf, "fossil config\n", 14) != 0){
++		if(strstr(partition, "/fossil"))
++			print("no fossil config found on %s\n", partition);
++		return -1;
++	}
++
++	settime(1, -1, nil);
++
++	/* make venti available.  give it 20% of free memory. */
++	if((venti = getenv("venti")) && (nf = tokenize(venti, f, nelem(f)))){
++		if((fd = open(f[0], OREAD)) >= 0){
++			print("venti...");
++			memset(buf, 0, sizeof buf);
++			pread(fd, buf, 512, 248*1024);
++			close(fd);
++			if(memcmp(buf, "venti config\n", 13) != 0){
++				print("no venti config found on %s\n", f[0]);
++				return -1;
++			}
++			if(stat("/boot/venti", statbuf, sizeof statbuf) < 0){
++				print("/boot/venti does not exist\n");
++				return -1;
++			}
++			switch(nf){
++			case 1:
++				f[1] = "tcp!127.1!17034";
++			case 2:
++				f[2] = "tcp!127.1!8000";
++			}
++			configloopback();
++			run("/boot/venti", "-m", "20", "-c", f[0],
++				"-a", f[1], "-h", f[2], nil);
++			/*
++			 * If the announce address is tcp!*!foo, then set
++			 * $venti to tcp!127.1!foo instead, which is actually dialable.
++			 */
++			if((p = strstr(f[1], "!*!")) != 0){
++				*p = 0;
++				snprint(buf, sizeof buf, "%s!127.1!%s", f[1], p+3);
++				f[1] = buf;
++			}
++			setenv("venti", f[1]);
++		}else{
++			/* set up the network so we can talk to the venti server */
++			/* this is such a crock. */
++			configip(nf, f, 0);
++			setenv("venti", f[0]);
++		}
++	}
++
++	/* start fossil.  give it 20% of free memory. */
++	print("fossil(%s)...", partition);
++	run("/boot/fossil", "-m", "20", "-f", partition,
++		"-c", "srv -A fboot", "-c", "srv -p fscons", nil);
++	fd = open("#s/fboot", ORDWR);
++	if(fd < 0){
++		warning("open #s/fboot");
++		return -1;
++	}
++	remove("#s/fboot");  /* we'll repost fd as #s/boot after fversion(fd) */
++	return fd;
++}
++
++int
++connectlocal(void)
++{
++	int fd;
+ 
+-  run("/boot/dossrv", nil);
+-  run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC1/dos", nil);
++	if(bind("#c", "/dev", MREPL) < 0)
++		fatal("bind #c");
++	if(bind("#p", "/proc", MREPL) < 0)
++		fatal("bind #p");
++	bind("#S", "/dev", MAFTER);
++	bind("#k", "/dev", MAFTER);
++	bind("#u", "/dev", MAFTER);
++	bind("#æ", "/dev", MAFTER);
++	mountusbparts();	/* make partfs partitions visible again */
+   
+-  return 0;
++	if((fd = connectlocalfossil()) < 0)
++		fd = connectlocalkfs();
++	return fd;
+ }
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/boot/mkboot /Volumes/Plan 9 - Dec 29/sys/src/9/boot/mkboot
+--- ./9/boot/mkboot	2014-01-15 12:18:18.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/boot/mkboot	2007-02-15 22:45:07.000000000 -0800
+@@ -85,3 +85,17 @@ awk '
+ 		  print "}"
+ 		}
+ ' $1
++
++#
++#  configure in a cache file system if a 
++# /386/bin/root appears in the bootdir section.
++#
++../port/mkextract bootdir 0 $* | awk '
++	BEGIN			{ cfs = 0 }
++	$1 ~ "bin/cfs$"	{ cfs = 1 }
++	END			{ if(cfs)
++					print "int (*cfs)(int) = cache;"
++				  else
++					print "int (*cfs)(int) = 0;"
++				}
++	'
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: nopsession.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: paq.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: parts.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: printstub.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: sac.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: settime.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: testboot.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/boot: usb.c
+Only in ./9/ip: arp.c.clang2
+Only in ./9/ip: chandial.c.clang2
+Only in ./9/ip: devip.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/ip: eipconvtest.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/ip: esp.c
+Only in ./9/ip: ethermedium.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/ip: gre.c
+Only in ./9/ip: icmp.c.clang2
+Only in ./9/ip: icmp6.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/ip: igmp.c
+Only in ./9/ip: inferno.c.clang2
+Only in ./9/ip: ip.c.clang2
+Only in ./9/ip: ip.h.clang2
+Only in ./9/ip: ipaux.c.clang2
+Only in ./9/ip: ipifc.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/ip: ipmux.c
+Only in ./9/ip: iproute.c.clang2
+Only in ./9/ip: ipv6.c.clang2
+Only in ./9/ip: ipv6.h.clang2
+Only in ./9/ip: loopbackmedium.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/ip: netdevmedium.c
+Only in ./9/ip: netlog.c.clang2
+Only in ./9/ip: nullmedium.c.clang2
+Only in ./9/ip: pktmedium.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/ip: ptclbsum.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/ip: rudp.c
+Only in ./9/ip: tcp.c.clang2
+Only in ./9/ip: udp.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9: kw
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/mkfile /Volumes/Plan 9 - Dec 29/sys/src/9/mkfile
+--- ./9/mkfile	2014-01-15 14:49:09.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/mkfile	2013-08-02 16:57:51.000000000 -0700
+@@ -1,22 +1,36 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ ARCH=\
++	bcm\
++	kw\
++	mtx\
++	omap\
+ 	pc\
++	ppc\
++	rb\
++	teg2\
+ 
+ all:V:
+ 	for(i in $ARCH)@{
+ 		cd $i
+ 		mk
+ 	}
++	# build pc boots last
++	@{ cd pc; mk clean }
++	@{ cd pcboot; mk }
++pcboot:V:
++	@{ cd pc; mk clean }
++	@{ cd pcboot; mk }
+ 
+ installall install:V:
+ 	for(i in $ARCH) @{
+ 		cd $i
+ 		mk $target
+ 	}
++	@{ cd pc; mk clean }
++	@{ cd pcboot; mk install }
++	@{ cd pc; mk clean }
+ 
+ clean:V:
+-	for(i in $ARCH) @{
++	for(i in $ARCH pcboot) @{
+ 		cd $i
+ 		mk clean
+ 	}
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9: mtx
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9: omap
+Only in ./9/pc: 9pcf
+Only in ./9/pc: Makefile
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: a100p.cp
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ahci.h
+Only in ./9/pc: alarm.8
+Only in ./9/pc: alloc.8
+Only in ./9/pc: allocb.8
+Only in ./9/pc: apbootstrap.8
+Only in ./9/pc: apbootstrap.h
+Only in ./9/pc: apbootstrap.h.clang2
+Only in ./9/pc: apbootstrap.out
+Only in ./9/pc: apic.8
+Only in ./9/pc: apic.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: apm.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: apmjump.s
+Only in ./9/pc: archmp.8
+Only in ./9/pc: archmp.c.clang2
+Only in ./9/pc: arp.8
+Only in ./9/pc: audio.h.clang2
+Only in ./9/pc: auth.8
+Only in ./9/pc: bios32.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/pc/bios32.c /Volumes/Plan 9 - Dec 29/sys/src/9/pc/bios32.c
+--- ./9/pc/bios32.c	2014-01-14 12:50:17.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/pc/bios32.c	2011-10-10 13:47:52.000000000 -0700
+@@ -5,8 +5,7 @@
+ #include "fns.h"
+ #include "io.h"
+ 
+-//#define VFLAG(...)	if(vflag) print(__VA_ARGS__)
+-#define VFLAG if(vflag) print
++#define VFLAG(...)	if(vflag) print(__VA_ARGS__)
+ 
+ #define UPTR2INT(p)	((uintptr)(p))
+ 
+Only in ./9/pc: bios32.c.clang2
+Only in ./9/pc: bootpcf.8
+Only in ./9/pc: bootpcf.c
+Only in ./9/pc: bootpcf.c.clang2
+Only in ./9/pc: bootpcf.out
+Only in ./9/pc: cache.8
+Only in ./9/pc: cga.8
+Only in ./9/pc: cga.c.clang2
+Only in ./9/pc: chan.8
+Only in ./9/pc: chandial.8
+Only in ./9/pc: cis.8
+Only in ./9/pc: compile.sh
+Only in ./9/pc: dat.h.clang2
+Only in ./9/pc: dev.8
+Only in ./9/pc: devarch.8
+Only in ./9/pc: devarch.c.clang2
+Only in ./9/pc: devaudio.8
+Only in ./9/pc: devcap.8
+Only in ./9/pc: devcons.8
+Only in ./9/pc: devdraw.8
+Only in ./9/pc: devdup.8
+Only in ./9/pc: devenv.8
+Only in ./9/pc: devether.8
+Only in ./9/pc: devether.c.clang2
+Only in ./9/pc: devfloppy.8
+Only in ./9/pc: devfloppy.c.clang2
+Only in ./9/pc: devfs.8
+Only in ./9/pc: devi82365.8
+Only in ./9/pc: devi82365.c.clang2
+Only in ./9/pc: devip.8
+Only in ./9/pc: devkbin.8
+Only in ./9/pc: devkbmap.8
+Only in ./9/pc: devkprof.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: devlm78.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: devlml.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: devlml.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: devlpt.c
+Only in ./9/pc: devmnt.8
+Only in ./9/pc: devmouse.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: devpccard.c
+Only in ./9/pc: devpipe.8
+Only in ./9/pc: devpnp.8
+Only in ./9/pc: devproc.8
+Only in ./9/pc: devroot.8
+Only in ./9/pc: devrtc.8
+Only in ./9/pc: devrtc.c.clang2
+Only in ./9/pc: devsd.8
+Only in ./9/pc: devsrv.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: devtv.c
+Only in ./9/pc: devuart.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: devusb.c
+Only in ./9/pc: devvga.8
+Only in ./9/pc: devvga.c.clang2
+Only in ./9/pc: dma.8
+Only in ./9/pc: dma.c.clang2
+Only in ./9/pc: edf.8
+Only in ./9/pc: errstr.h
+Only in ./9/pc: errstr.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether2000.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether2114x.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether589.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether79c970.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether8003.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether8139.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether8169.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether82543gc.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether82557.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether82563.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether82598.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether83815.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether8390.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ether8390.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: etherdp83820.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: etherec2t.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: etherelnk3.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: etherga620.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: etherga620fw.h
+Only in ./9/pc: etherif.h.clang2
+Only in ./9/pc: etherigbe.8
+Only in ./9/pc: etherigbe.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: etherm10g.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: etherm10g2k.i
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: etherm10g4k.i
+Only in ./9/pc: ethermedium.8
+Only in ./9/pc: ethermii.8
+Only in ./9/pc: ethermii.c.clang2
+Only in ./9/pc: ethermii.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ethersink.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ethersmc.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ethervgbe.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ethervt6102.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: ethervt6105m.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: etherwavelan.c
+Only in ./9/pc: fault.8
+Only in ./9/pc: floppy.h.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/pc/fns.h /Volumes/Plan 9 - Dec 29/sys/src/9/pc/fns.h
+--- ./9/pc/fns.h	2014-01-14 15:55:28.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/pc/fns.h	2013-06-13 14:01:35.000000000 -0700
+@@ -200,5 +200,3 @@ int	xchgw(ushort*, int);
+ 
+ #define L16GET(p)	(((p)[1]<<8)|(p)[0])
+ #define L32GET(p)	(((u32int)L16GET((p)+2)<<16)|L16GET(p))
+-
+-void loop();
+Only in ./9/pc: fns.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: hcwAMC.h
+Only in ./9/pc: i8253.8
+Only in ./9/pc: i8253.c.clang2
+Only in ./9/pc: i8259.8
+Only in ./9/pc: i8259.c.clang2
+Only in ./9/pc: icmp.8
+Only in ./9/pc: icmp6.8
+Only in ./9/pc: inferno.8
+Only in ./9/pc: init.h
+Only in ./9/pc: init.h.clang2
+Only in ./9/pc: init.out
+Only in ./9/pc: init9.8
+Only in ./9/pc: init9.c.clang2
+Only in ./9/pc: initcode.8
+Only in ./9/pc: io.h.clang2
+Only in ./9/pc: ip.8
+Only in ./9/pc: ipaux.8
+Only in ./9/pc: ipifc.8
+Only in ./9/pc: iproute.8
+Only in ./9/pc: ipv6.8
+Only in ./9/pc: kbd.8
+Only in ./9/pc: kbd.c.clang2
+Only in ./9/pc: l.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/pc/l.s /Volumes/Plan 9 - Dec 29/sys/src/9/pc/l.s
+--- ./9/pc/l.s	2014-01-14 15:26:26.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/pc/l.s	2013-05-28 13:52:06.000000000 -0700
+@@ -49,39 +49,13 @@ TEXT _multibootheader(SB), $0
+ 	LONG	$_startKADDR-KZERO(SB)		/* load_addr */
+ 	LONG	$edata-KZERO(SB)		/* load_end_addr */
+ 	LONG	$end-KZERO(SB)			/* bss_end_addr */
+-	LONG	$_multibootentry-KZERO(SB)		/* entry_addr */
++	LONG	$_startKADDR-KZERO(SB)		/* entry_addr */
+ 	LONG	$0				/* mode_type */
+ 	LONG	$0				/* width */
+ 	LONG	$0				/* height */
+ 	LONG	$0				/* depth */
+ 
+ /* 
+- * the kernel expects the data segment to be page-aligned
+- * multiboot bootloaders put the data segment right behind text
+- */
+-TEXT _multibootentry(SB), $0
+-	MOVL	$etext-KZERO(SB), SI
+-	MOVL	SI, DI
+-	ADDL	$0xfff, DI
+-	ANDL	$~0xfff, DI
+-	MOVL	$edata-KZERO(SB), CX
+-	SUBL	DI, CX
+-	ADDL	CX, SI
+-	ADDL	CX, DI
+-	STD
+-	REP; MOVSB
+-	CLD
+-	ADDL	$KZERO, BX
+-	MOVL	BX, multiboot-KZERO(SB)
+-	MOVL	$_startPADDR(SB), AX
+-	ANDL	$~KZERO, AX
+-	JMP*	AX
+-
+-/* multiboot structure pointer */
+-TEXT multiboot(SB), $0
+-	LONG	$0
+-
+-/*
+  * In protected mode with paging turned off and segment registers setup
+  * to linear map all memory. Entered via a jump to PADDR(entry),
+  * the physical address of the virtual kernel entry point of KADDR(entry).
+Only in ./9/pc: latin1.8
+Only in ./9/pc: loopbackmedium.8
+Only in ./9/pc: main.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/pc/main.c /Volumes/Plan 9 - Dec 29/sys/src/9/pc/main.c
+--- ./9/pc/main.c	2014-01-17 23:29:18.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/pc/main.c	2013-07-25 15:28:23.000000000 -0700
+@@ -13,11 +13,6 @@
+ 
+ Mach *m;
+ 
+-void loop() {
+-  while(1) {
+-  }
+-}
+-
+ /*
+  * Where configuration info is left for the loaded programme.
+  * This will turn into a structure as more is done by the boot loader
+@@ -49,22 +44,6 @@ options(void)
+ {
+ 	long i, n;
+ 	char *cp, *line[MAXCONF], *p, *q;
+-	ulong *m, l;
+-	extern ulong *multiboot;
+-
+-	if(multiboot != nil){
+-		cp = BOOTARGS;
+-		*cp = 0;
+-		if((*multiboot & 8) != 0 && multiboot[5] > 0){
+-			m = KADDR(multiboot[6]);
+-			l = m[1] - m[0];
+-			m = KADDR(m[0]);
+-			if(l >= BOOTARGSLEN)
+-				l = BOOTARGSLEN - 1;
+-			memmove(cp, m, l);
+-			cp[l] = 0;
+-		}
+-	}
+ 
+ 	/*
+ 	 *  parse configuration args from dos file plan9.ini
+@@ -121,7 +100,7 @@ main(void)
+ 	quotefmtinstall();
+ 	screeninit();
+ 
+-	print("\nPlan 99999999999999\n");
++	print("\nPlan 9\n");
+ 
+ 	trapinit0();
+ 	mmuinit0();
+Only in ./9/pc: main.c.clang2
+Only in ./9/pc: mem.h.8
+Only in ./9/pc: memory.8
+Only in ./9/pc: memory.c.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/pc/mkfile /Volumes/Plan 9 - Dec 29/sys/src/9/pc/mkfile
+--- ./9/pc/mkfile	2014-01-15 12:59:57.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/pc/mkfile	2012-04-16 20:31:35.000000000 -0700
+@@ -1,7 +1,8 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+-CONF=pcf
+-CONFLIST=pcf
++CONF=pc
++CONFLIST=pc pccpu pcf pcdisk # pccpuf pcauth
++CRAPLIST=pccd pcflop
++EXTRACOPIES=
++#EXTRACOPIES=lookout boundary	# copy to these servers on install
+ 
+ objtype=386
+ </$objtype/mkfile
+@@ -60,13 +61,13 @@ OBJ=\
+ 	$DEVS\
+ 	$PORT\
+ 
+-#pad: the order matters!
+ LIB=\
+ 	/$objtype/lib/libmemlayer.a\
+ 	/$objtype/lib/libmemdraw.a\
+ 	/$objtype/lib/libdraw.a\
+ 	/$objtype/lib/libip.a\
+ 	/$objtype/lib/libc.a\
++	/$objtype/lib/libsec.a\
+ 	/$objtype/lib/libmp.a\
+ 
+ ETHER=`{echo devether.c ether*.c | sed 's/\.c/.'$O'/g'}
+@@ -76,32 +77,50 @@ SDEV=`{echo devsd.c sd*.c | sed 's/\.c/.
+ $p$CONF:	$CONF.c $OBJ $LIB
+ 	$CC $CFLAGS '-DKERNDATE='`{date -n} $CONF.c
+ 	$LD -o $target -T$KTZERO -l $OBJ $CONF.$O $LIB
+-	ksize $target
++	size $target
+ 
+ # don't strip the gzipped kernels -- too frustrating when that's all you have!
+ $p%.gz:D:	$p%
+ 	gzip -9 <$p$stem >$p$stem.gz
+ 
+ 
++# pcflop and pccd need all the space they can get
++9pcflop.gz:D: 9pcflop
++	strip -o /fd/1 9pcflop | gzip -9 >9pcflop.gz
++
++9pccd.gz:D: 9pccd
++	strip -o /fd/1 9pccd | gzip -9 >9pccd.gz
++
++
+ install:V:	$p$CONF
+ 	cp $p$CONF /$objtype/
++	for(i in $EXTRACOPIES)
++		import $i / /n/$i && cp $p$CONF /n/$i/$objtype/
+ 
+ <../boot/bootmkfile
+ <../port/portmkfile
+ <|../port/mkbootrules $CONF
+ 
+-#PAD: todo should be done via 'mk depend'
+ $ETHER: 			etherif.h ../port/netif.h
++ether8003.$O ether8390.$O:	ether8390.h
+ $VGA mouse.$O:			screen.h /sys/include/memdraw.h
+-$SDEV:				../port/sd.h
+ devfloppy.$O: 			floppy.h
+ archmp.$O mp.$O:		apbootstrap.h
+ apic.$O archmp.$O mp.$O:	mp.h
++$SDEV:				../port/sd.h
++sd53c8xx.$O:			sd53c8xx.i
++sdiahci.$O:			ahci.h
++devaoe.$O sdaoe.$O:		../port/aoe.h
+ main.$O:			init.h reboot.h
++wavelan.$O:			wavelan.c ../pc/wavelan.c ../pc/wavelan.h
++etherwavelan.$O:		etherwavelan.c ../pc/wavelan.h
++devusb.$O usbuhci.$O usbohci.$O usbehci.$O: ../port/usb.h
+ trap.$O:			/sys/include/tos.h
++uartaxp.$O:			uartaxp.i
++etherm10g.$O:			etherm10g2k.i etherm10g4k.i
+ 
+ init.h:D:		../port/initcode.c init9.c
+-	$CC $CFLAGS ../port/initcode.c
++	$CC ../port/initcode.c
+ 	$CC init9.c
+ 	$LD -l -R1 -s -o init.out init9.$O initcode.$O /386/lib/libc.a
+ 	{echo 'uchar initcode[]={'
+@@ -125,14 +144,15 @@ apbootstrap.h:	apbootstrap.s mem.h
+ 		sed -e '1,2d' -e 's/^[0-9a-f]+ //' -e 's/ ([0-9a-f][0-9a-f])/0x\1,/g'
+ 	 echo '};'} > $target
+ 
++sd53c8xx.i:	sd53c8xx.n
++	aux/na $prereq > $target
+ 
+-
+-%.clean:V:
+-	rm -f $stem.c [9bz]$stem [9bz]$stem.gz reboot.h apbootstrap.h init.h
+-#boot$stem.* 
+-
+-
+-
++uartaxp.i:	a100p.cp
++	{echo 'static uchar uartaxpcp[] = {'
++	 xd -1x $prereq |
++		sed -e 's/^[0-9a-f]+ //' -e '/^$/d' -e 's/ ([0-9a-f][0-9a-f])/0x\1,/g'
++	 echo '};'
++	} > $target
+ 
+ acid:V:
+ 	8c -a -w -I. i8253.c>acid
+@@ -153,3 +173,20 @@ acid:V:
+ 	}
+ 	exit 0
+ 
++checkdist:VQ:
++	for(i in pcdisk pcflop)
++	for(j in checkvga checkether)
++		mk $i.$j
++
++%.clean:V:
++	rm -f $stem.c [9bz]$stem [9bz]$stem.gz boot$stem.* reboot.h apbootstrap.h init.h
++
++# testing
++9load:D: /usr/rsc/boot/$O.load 9pcload
++	cat $prereq >$target
++
++9load.flp: 9load
++	disk/format -b /386/pbs -df $target $prereq
++
++$p$CONF.flp: /386/9load plan9.ini $p$CONF.gz
++	disk/format -b /386/pbs -df $target $prereq
+Only in ./9/pc: mmu.8
+Only in ./9/pc: mmu.c.clang2
+Only in ./9/pc: mouse.8
+Only in ./9/pc: mouse.c.clang2
+Only in ./9/pc: mp.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/pc/mp.c /Volumes/Plan 9 - Dec 29/sys/src/9/pc/mp.c
+--- ./9/pc/mp.c	2014-01-14 12:51:05.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/pc/mp.c	2013-06-13 14:01:42.000000000 -0700
+@@ -9,8 +9,7 @@
+ #include "mp.h"
+ #include "apbootstrap.h"
+ 
+-//#define dprint(...)	if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+-#define dprint if(mpdebug) print
++#define dprint(...)	if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+ 
+ /* from mpacpi.c */
+ Apic *bootapic;
+Only in ./9/pc: mp.c.clang2
+Only in ./9/pc: mp.h.clang2
+Only in ./9/pc: mpacpi.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/pc/mpacpi.c /Volumes/Plan 9 - Dec 29/sys/src/9/pc/mpacpi.c
+--- ./9/pc/mpacpi.c	2014-01-14 13:06:47.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/pc/mpacpi.c	2012-08-23 16:18:02.000000000 -0700
+@@ -37,8 +37,7 @@ enum {
+ 	Lapicae	= 1<<11,		/* apic enable in Lapicbase */
+ };
+ 
+-//#define dprint(...)	if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+-#define dprint if(mpdebug) print
++#define dprint(...)	if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+ 
+ /* from mp.c */
+ int	mpdebug;
+Only in ./9/pc: mpacpi.c.clang2
+Only in ./9/pc: mpacpi.h.clang2
+Only in ./9/pc: mtrr.8
+Only in ./9/pc: mtrr.c.clang2
+Only in ./9/pc: netif.8
+Only in ./9/pc: netlog.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: nomtrr.c
+Only in ./9/pc: nullmedium.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: nv_dma.h
+Only in ./9/pc: page.8
+Only in ./9/pc: parse.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pc
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pcauth
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pccd
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pccpu
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pccpuf
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pcdisk
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/pc/pcf /Volumes/Plan 9 - Dec 29/sys/src/9/pc/pcf
+--- ./9/pc/pcf	2014-01-20 14:05:33.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/pc/pcf	2012-08-17 14:44:56.000000000 -0700
+@@ -1,4 +1,4 @@
+-# pcf - pc terminal with fossil root
++# pcf - pc terminal with fossil root and maybe venti block store
+ dev
+ 	root
+ 	cons
+@@ -11,6 +11,8 @@ dev
+ 	srv
+ 	dup
+ 	rtc
++	ssl
++	tls
+ 	cap
+ 	kprof
+ 	fs
+@@ -26,64 +28,117 @@ dev
+ 
+ 	sd
+ 	floppy		dma
++	aoe
++	lpt
+ 
+ 	audio		dma
++	pccard
+ 	i82365		cis
+ 	uart
++	usb
+ 
+ link
+ 	realmode
++	devpccard
+ 	devi82365
++	apm		apmjump
+ 
++# order of ethernet drivers should match that in ../pcboot/boot so that
++# devices are detected in the same order by bootstraps and kernels
++# and thus given the same controller numbers.
++	ether2000	ether8390
++	ether2114x	pci
++	ether589	etherelnk3
++	ether79c970	pci
++	ether8003	ether8390
++	ether8139	pci
++	ether8169	pci ethermii
++	ether82543gc	pci
++	ether82557	pci
++	ether82563	pci
++	ether83815	pci
++	etherdp83820	pci
++	etherec2t	ether8390
++	etherelnk3	pci
++	etherga620	pci
+ 	etherigbe	pci ethermii
++	ethervgbe	pci ethermii
++	ethervt6102	pci ethermii
++	ethervt6105m	pci ethermii
++	ethersink
++	ethersmc	devi82365 cis
++	etherwavelan	wavelan devi82365 cis pci
+ 
+ 	ethermedium
++	pcmciamodem
++	netdevmedium
+ 	loopbackmedium
+ 
++	usbuhci
++	usbohci
++	usbehci		usbehcipc
++
+ misc
+ 	archmp		mp apic mpacpi
+ 	mtrr
+ 
+ 	sdata		pci sdscsi
++	sd53c8xx	pci sdscsi
++	sdmylex		pci sdscsi
++	sdiahci		pci sdscsi
++	sdaoe
+ 
+ 	uarti8250
+-	vgavesa
+-
+ 	uartpci		pci
+-	uartisa
++
++	vga3dfx		+cur
++	vgaark2000pv	+cur
++	vgabt485	=cur
++	vgaclgd542x	+cur
++	vgaclgd546x	+cur
++	vgact65545	+cur
++	vgacyber938x	+cur
++	vgaet4000	+cur
++	vgahiqvideo	+cur
++	vgai81x		+cur
++	vgamach64xx	+cur
++	vgamga2164w	+cur
++	vgamga4xx	+cur
++	vganeomagic	+cur
++	vganvidia	+cur
++	vgaradeon	+cur
++	vgargb524	=cur
++	vgas3		+cur vgasavage
++	vgat2r4		+cur
++	vgatvp3020	=cur
++	vgatvp3026	=cur
++	vgavesa
++	vgavmware	+cur
+ 
+ ip
+ 	tcp
+ 	udp
++	rudp
+ 	ipifc
+ 	icmp
+ 	icmp6
+-
++	gre
++	ipmux
++	esp
+ 
+ port
+ 	int cpuserver = 0;
+ 
+ boot boot #S/sdC0/
++	tcp
+ 	local
+ 
+-#pad: can also put the 'boot' behind sh to bypass the default boot program
+ bootdir
+ 	boot$CONF.out boot
+-	/386/bin/sh
+-	/386/bin/ls
+-	/386/bin/cat
+-	/386/bin/echo
+-	/386/bin/mkdir
+-	/386/bin/rm
+-	/386/bin/ramfs
+-	/386/bin/bind
+-	/386/bin/mount
+-	/386/bin/disk/fdisk
+-	/386/bin/disk/prep
+-	/386/bin/dossrv
+-	/386/bin/fossil
+-	/386/bin/pad
+-#	/386/bin/rc
+-#	/386/bin/disk/format
+-#	/386/bin/9660srv
+-#	/386/bin/ipconfig
++	/386/bin/ip/ipconfig
++	/386/bin/auth/factotum
++	/386/bin/fossil/fossil
++	/386/bin/venti/venti
++	/386/bin/usb/usbd
++# needed to boot from a usb key and use its fossil
++	/386/bin/disk/partfs
+Only in ./9/pc: pcf.8
+Only in ./9/pc: pcf.c
+Only in ./9/pc: pcf.c.clang2
+Only in ./9/pc: pcf.root.8
+Only in ./9/pc: pcf.root.s
+Only in ./9/pc: pcf.rootc.8
+Only in ./9/pc: pcf.rootc.c
+Only in ./9/pc: pcf.rootc.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pcflop
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pcfs
+Only in ./9/pc: pci.8
+Only in ./9/pc: pci.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pcmciamodem.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: pcmkfile
+Only in ./9/pc: pgrp.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: piix4smbus.c
+Only in ./9/pc: pktmedium.8
+Only in ./9/pc: plan9l.8
+Only in ./9/pc: portclock.8
+Only in ./9/pc: print.8
+Only in ./9/pc: proc.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: psaux.c
+Only in ./9/pc: ptclbsum386.8
+Only in ./9/pc: qio.8
+Only in ./9/pc: qlock.8
+Only in ./9/pc: random.8
+Only in ./9/pc: rdb.8
+Only in ./9/pc: realmode.8
+Only in ./9/pc: realmode.c.clang2
+Only in ./9/pc: reboot.h
+Only in ./9/pc: reboot.h.clang2
+Only in ./9/pc: reboot.out
+Only in ./9/pc: rebootcmd.8
+Only in ./9/pc: rebootcode.8
+Only in ./9/pc: screen.8
+Only in ./9/pc: screen.c.clang2
+Only in ./9/pc: screen.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: sd53c8xx.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: sd53c8xx.i
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: sd53c8xx.n
+Only in ./9/pc: sdata.8
+Only in ./9/pc: sdata.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: sdiahci.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: sdmv50xx.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: sdmylex.c
+Only in ./9/pc: sdscsi.8
+Only in ./9/pc: segment.8
+Only in ./9/pc: swap.8
+Only in ./9/pc: syscallfmt.8
+Only in ./9/pc: sysfile.8
+Only in ./9/pc: sysproc.8
+Only in ./9/pc: taslock.8
+Only in ./9/pc: tcp.8
+Only in ./9/pc: tod.8
+Only in ./9/pc: trap.8
+Only in ./9/pc: trap.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: uartaxp.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: uartaxp.i
+Only in ./9/pc: uarti8250.8
+Only in ./9/pc: uarti8250.c.clang2
+Only in ./9/pc: uartisa.8
+Only in ./9/pc: uartisa.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: uartox.c
+Only in ./9/pc: uartpci.8
+Only in ./9/pc: uartpci.c.clang2
+Only in ./9/pc: udp.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: uncached.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: usbehci.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: usbehcipc.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: usbohci.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: usbuhci.c
+Only in ./9/pc: vga.8
+Only in ./9/pc: vga.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vga3dfx.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgaark2000pv.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgabt485.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgaclgd542x.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgaclgd546x.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgact65545.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgacyber938x.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgaet4000.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgahiqvideo.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgai81x.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgamach64xx.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgamga2164w.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgamga4xx.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vganeomagic.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vganvidia.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgaradeon.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgargb524.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgas3.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgasavage.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgat2r4.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgatvp3020.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgatvp3026.c
+Only in ./9/pc: vgavesa.8
+Only in ./9/pc: vgavesa.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: vgavmware.c
+Only in ./9/pc: vgax.8
+Only in ./9/pc: vgax.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: wavelan.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: wavelan.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/pc: x86watchdog.c
+Only in ./9/pc: xalloc.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9: pcboot
+Only in ./9/port: alarm.c.clang2
+Only in ./9/port: alloc.c.clang2
+Only in ./9/port: allocb.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: aoe.h
+Only in ./9/port: auth.c.clang2
+Only in ./9/port: cache.c.clang2
+Only in ./9/port: chan.c.clang2
+Only in ./9/port: cis.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: debugalloc.c
+Only in ./9/port: dev.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: devaoe.c
+Only in ./9/port: devaudio.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: devbridge.c
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/port/devcap.c /Volumes/Plan 9 - Dec 29/sys/src/9/port/devcap.c
+--- ./9/port/devcap.c	2014-01-15 12:55:57.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/port/devcap.c	2013-06-13 14:25:24.000000000 -0700
+@@ -229,8 +229,7 @@ capwrite(Chan *c, void *va, long n, vlon
+ 			error(Eshort);
+ 		*key++ = 0;
+ 
+-                //		hmac_sha1((uchar*)from, strlen(from), (uchar*)key, strlen(key), hash, nil);
+-                panic("TODO: hmac_sha1");
++		hmac_sha1((uchar*)from, strlen(from), (uchar*)key, strlen(key), hash, nil);
+ 
+ 		p = remcap(hash);
+ 		if(p == nil){
+Only in ./9/port: devcap.c.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/port/devcons.c /Volumes/Plan 9 - Dec 29/sys/src/9/port/devcons.c
+--- ./9/port/devcons.c	2014-01-14 17:02:02.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/port/devcons.c	2013-07-18 23:22:41.000000000 -0700
+@@ -294,9 +294,9 @@ panic(char *fmt, ...)
+ 	prflush();
+ 	buf[n] = '\n';
+ 	putstrn(buf, n+1);
+-	//dumpstack();
++	dumpstack();
+ 
+-        //	exit(1);
++	exit(1);
+ }
+ 
+ /* libmp at least contains a few calls to sysfatal; simulate with panic */
+Only in ./9/port: devcons.c.clang2
+Only in ./9/port: devdraw.c.clang2
+Only in ./9/port: devdup.c.clang2
+Only in ./9/port: devenv.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: devflash.c
+Only in ./9/port: devfs.c.clang2
+Only in ./9/port: devkbin.c.clang2
+Only in ./9/port: devkbmap.c.clang2
+Only in ./9/port: devkprof.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: devloopback.c
+Only in ./9/port: devmnt.c.clang2
+Only in ./9/port: devmouse.c.clang2
+Only in ./9/port: devpipe.c.clang2
+Only in ./9/port: devpnp.c.clang2
+Only in ./9/port: devproc.c.clang2
+Only in ./9/port: devroot.c.clang2
+Only in ./9/port: devsd.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: devsdp.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: devsegment.c
+Only in ./9/port: devsrv.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: devssl.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: devtls.c
+Only in ./9/port: devuart.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: devwd.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: ecc.c
+Only in ./9/port: edf.c.clang2
+Only in ./9/port: edf.h.clang2
+Only in ./9/port: error.h.clang2
+Only in ./9/port: fault.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: flashif.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: fpi.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: fpi.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: fpimem.c
+Only in ./9/port: initcode.c.clang2
+Only in ./9/port: latin1.c.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/port/latin1.h /Volumes/Plan 9 - Dec 29/sys/src/9/port/latin1.h
+--- ./9/port/latin1.h	2014-01-14 14:40:46.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/port/latin1.h	2007-07-18 14:43:05.000000000 -0700
+@@ -0,0 +1,100 @@
++	" ", " i",	L"␣ı",
++	"!~", "-=~",	L"≄≇≉",
++	"!", "!<=>?bmp",	L"¡≮≠≯‽⊄∉⊅",
++	"\"*", "IUiu",	L"ΪΫϊϋ",
++	"\"", "\"AEIOUYaeiouy",	L"¨ÄËÏÖÜŸäëïöüÿ",
++	"$*", "fhk",	L"ϕϑϰ",
++	"$", "BEFHILMRVaefglopv",	L"ℬℰℱℋℐℒℳℛƲɑℯƒℊℓℴ℘ʋ",
++	"\'\"", "Uu",	L"Ǘǘ",
++	"\'", "\'ACEILNORSUYZacegilnorsuyz",	L"´ÁĆÉÍĹŃÓŔŚÚÝŹáćéģíĺńóŕśúýź",
++	"*", "*ABCDEFGHIKLMNOPQRSTUWXYZabcdefghiklmnopqrstuwxyz",	L"∗ΑΒΞΔΕΦΓΘΙΚΛΜΝΟΠΨΡΣΤΥΩΧΗΖαβξδεφγθικλμνοπψρστυωχηζ",
++	"+", "-O",	L"±⊕",
++	",", ",ACEGIKLNORSTUacegiklnorstu",	L"¸ĄÇĘĢĮĶĻŅǪŖŞŢŲąçęģįķļņǫŗşţų",
++	"-*", "l",	L"ƛ",
++	"-", "+-2:>DGHILOTZbdghiltuz~",	L"∓­ƻ÷→ÐǤĦƗŁ⊖ŦƵƀðǥℏɨłŧʉƶ≂",
++	".", ".CEGILOZceglz",	L"·ĊĖĠİĿ⊙Żċėġŀż",
++	"/", "Oo",	L"Øø",
++	"1", ".234568",	L"․½⅓¼⅕⅙⅛",
++	"2", "-.35",	L"ƻ‥⅔⅖",
++	"3", ".458",	L"…¾⅗⅜",
++	"4", "5",	L"⅘",
++	"5", "68",	L"⅚⅝",
++	"7", "8",	L"⅞",
++	":", "()-=",	L"☹☺÷≔",
++	"<!", "=~",	L"≨⋦",
++	"<", "-<=>~",	L"←«≤≶≲",
++	"=", ":<=>OV",	L"≕⋜≡⋝⊜⇒",
++	">!", "=~",	L"≩⋧",
++	">", "<=>~",	L"≷≥»≳",
++	"?", "!?",	L"‽¿",
++	"@\'", "\'",	L"ъ",
++	"@@", "\'EKSTYZekstyz",	L"ьЕКСТЫЗекстыз",
++	"@C", "Hh",	L"ЧЧ",
++	"@E", "Hh",	L"ЭЭ",
++	"@K", "Hh",	L"ХХ",
++	"@S", "CHch",	L"ЩШЩШ",
++	"@T", "Ss",	L"ЦЦ",
++	"@Y", "AEOUaeou",	L"ЯЕЁЮЯЕЁЮ",
++	"@Z", "Hh",	L"ЖЖ",
++	"@c", "h",	L"ч",
++	"@e", "h",	L"э",
++	"@k", "h",	L"х",
++	"@s", "ch",	L"щш",
++	"@t", "s",	L"ц",
++	"@y", "aeou",	L"яеёю",
++	"@z", "h",	L"ж",
++	"@", "ABDFGIJLMNOPRUVXabdfgijlmnopruvx",	L"АБДФГИЙЛМНОПРУВХабдфгийлмнопрувх",
++	"A", "E",	L"Æ",
++	"C", "ACU",	L"⋂ℂ⋃",
++	"Dv", "Zz",	L"Ǆǅ",
++	"D", "-e",	L"Ð∆",
++	"G", "-",	L"Ǥ",
++	"H", "-H",	L"Ħℍ",
++	"I", "-J",	L"ƗĲ",
++	"L", "&-Jj|",	L"⋀ŁǇǈ⋁",
++	"M", "#48bs",	L"♮♩♪♭♯",
++	"N", "JNj",	L"Ǌℕǋ",
++	"O", "*+-./=EIcoprx",	L"⊛⊕⊖⊙⊘⊜ŒƢ©⊚℗®⊗",
++	"P", "P",	L"ℙ",
++	"Q", "Q",	L"ℚ",
++	"R", "R",	L"ℝ",
++	"S", "123S",	L"¹²³§",
++	"T", "-u",	L"Ŧ⊨",
++	"V", "=",	L"⇐",
++	"Y", "R",	L"Ʀ",
++	"Z", "-ACSZ",	L"Ƶℤ",
++	"^", "ACEGHIJOSUWYaceghijosuwy",	L"ÂĈÊĜĤÎĴÔŜÛŴŶâĉêĝĥîĵôŝûŵŷ",
++	"_\"", "AUau",	L"ǞǕǟǖ",
++	"_,", "Oo",	L"Ǭǭ",
++	"_.", "Aa",	L"Ǡǡ",
++	"_", "AEIOU_aeiou",	L"ĀĒĪŌŪ¯āēīōū",
++	"`\"", "Uu",	L"Ǜǜ",
++	"`", "AEIOUaeiou",	L"ÀÈÌÒÙàèìòù",
++	"a", "ben",	L"↔æ∠",
++	"b", "()+-0123456789=bknpqru",	L"₍₎₊₋₀₁₂₃₄₅₆₇₈₉₌♝♚♞♟♛♜•",
++	"c", "$Oagu",	L"¢©∩≅∪",
++	"dv", "z",	L"ǆ",
++	"d", "-adegz",	L"ð↓‡°†ʣ",
++	"e", "$lmns",	L"€⋯—–∅",
++	"f", "a",	L"∀",
++	"g", "$-r",	L"¤ǥ∇",
++	"h", "-v",	L"ℏƕ",
++	"i", "-bfjps",	L"ɨ⊆∞ĳ⊇∫",
++	"l", "\"$&\'-jz|",	L"“£∧‘łǉ⋄∨",
++	"m", "iou",	L"µ∈×",
++	"n", "jo",	L"ǌ¬",
++	"o", "AOUaeiu",	L"Å⊚Ůåœƣů",
++	"p", "Odgrt",	L"℗∂¶∏∝",
++	"r", "\"\'O",	L"”’®",
++	"s", "()+-0123456789=abnoprstu",	L"⁽⁾⁺⁻⁰ⁱ⁲⁳⁴⁵⁶⁷⁸⁹⁼ª⊂ⁿº⊃√ß∍∑",
++	"t", "-efmsu",	L"ŧ∃∴™ς⊢",
++	"u", "-AEGIOUaegiou",	L"ʉĂĔĞĬŎŬ↑ĕğĭŏŭ",
++	"v\"", "Uu",	L"Ǚǚ",
++	"v", "ACDEGIKLNORSTUZacdegijklnorstuz",	L"ǍČĎĚǦǏǨĽŇǑŘŠŤǓŽǎčďěǧǐǰǩľňǒřšťǔž",
++	"w", "bknpqr",	L"♗♔♘♙♕♖",
++	"x", "O",	L"⊗",
++	"y", "$",	L"¥",
++	"z", "-",	L"ƶ",
++	"|", "Pp|",	L"Þþ¦",
++	"~!", "=",	L"≆",
++	"~", "-=AINOUainou~",	L"≃≅ÃĨÑÕŨãĩñõũ≈",
+Only in ./9/port: lib.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: log.c
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/port/mkroot /Volumes/Plan 9 - Dec 29/sys/src/9/port/mkroot
+--- ./9/port/mkroot	2014-01-14 13:12:58.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/port/mkroot	2002-12-12 20:22:14.000000000 -0800
+@@ -11,5 +11,5 @@ cp $1 $2.out
+ t=`{file $2.out}
+ if(~ $"t *executable*)
+ 	strip $2.out
+-data2s $2 < $2.out > $2.root.s
++aux/data2s $2 < $2.out > $2.root.s
+ echo mkroot $* done
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/port/mkrootall /Volumes/Plan 9 - Dec 29/sys/src/9/port/mkrootall
+--- ./9/port/mkrootall	2014-01-14 13:13:28.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/port/mkrootall	2007-10-03 09:55:40.000000000 -0700
+@@ -26,6 +26,6 @@ while(! ~ $#* 0){
+ 	# do not strip venti - it uses its own symbols
+ 	if(~ $"t *executable* && ! ~ $name venti)
+ 		strip $tmp
+-	data2s $cname < $tmp
++	aux/data2s $cname < $tmp
+ }
+ exit 0
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: mul64fract.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: nandecc.h
+Only in ./9/port: netif.c.clang2
+Only in ./9/port: netif.h.clang2
+Only in ./9/port: page.c.clang2
+Only in ./9/port: parse.c.clang2
+Only in ./9/port: pgrp.c.clang2
+Only in ./9/port: portclock.c.clang2
+Only in ./9/port: portdat.h.clang2
+Only in ./9/port: portfns.h.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./9/port/portmkfile /Volumes/Plan 9 - Dec 29/sys/src/9/port/portmkfile
+--- ./9/port/portmkfile	2014-01-15 11:49:29.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/9/port/portmkfile	2013-02-13 12:18:57.000000000 -0800
+@@ -1,5 +1,3 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ PORTFILES=`{../port/mkfilelist ../port}
+ ^($PORTFILES)\.$O:R:	'../port/\1.c'
+ 	$CC $CFLAGS -I. ../port/$stem1.c
+@@ -14,6 +12,15 @@ IPFILES=`{../port/mkfilelist ../ip}
+ %.$O:	%.c
+ 	$CC $CFLAGS $stem.c
+ 
++%.acid:	%.c
++	$CC $CFLAGS -a $stem.c >$stem.acid
++
++%.acid:	../ip/%.c
++	$CC $CFLAGS -a -I.  ../ip/$stem.c >$stem.acid
++
++%.acid:	../port/%.c
++	$CC $CFLAGS -a -I. ../port/$stem.c >$stem.acid
++
+ installall:V:
+ 	for(i in $CONFLIST)
+ 		mk 'CONF='$i install
+@@ -23,8 +30,8 @@ all:V:
+ 		mk 'CONF='$i
+ 
+ clean:V:
+-	rm -f *.[$OS] *.root.s *.rootc.c init.h conf.h reboot.h reboot.list *.out *.m errstr.h
+-	for(i in $CONFLIST)
++	rm -f *.[$OS] *.root.s *.rootc.c cfs.h fs.h init.h conf.h reboot.h reboot.list *.out *.m errstr.h
++	for(i in $CONFLIST $CRAPLIST)
+ 		mk $i.clean
+ 
+ %.clean:V:
+@@ -55,9 +60,7 @@ errstr.h:	../port/mkerrstr ../port/error
+ 	rc ../port/mkerrstr > errstr.h
+ 
+ ../port/latin1.h:	/lib/keyboard
+-	#mklatinkbd /lib/keyboard > ../port/latin1.h
+-        touch ../port/latin1.h
+-
++	aux/mklatinkbd /lib/keyboard > ../port/latin1.h
+ 
+ %.db:		main.$O
+ 	$CC -s$stem main.c | dbfmt > $stem.db
+@@ -90,14 +93,5 @@ devproc.$O edf.$O proc.$O: /sys/include/
+ boot$CONF.out: $CONF print.$O $BOOTDIR/boot.c $BOOTLIB
+ 	$BOOTDIR/mkboot $CONF > boot$CONF.c
+ 	$CC $CFLAGS boot$CONF.c
+-	$LD -o boot$CONF.out boot$CONF.$O $BOOTLIB
+-
+-%.acid:	%.c
+-	$CC $CFLAGS -a $stem.c >$stem.acid
+-
+-%.acid:	../ip/%.c
+-	$CC $CFLAGS -a -I.  ../ip/$stem.c >$stem.acid
+-
+-%.acid:	../port/%.c
+-	$CC $CFLAGS -a -I. ../port/$stem.c >$stem.acid
+-
++	$CC $CFLAGS ../boot/printstub.c
++	$LD -o boot$CONF.out boot$CONF.$O $BOOTLIB printstub.$O
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: portusbehci.h
+Only in ./9/port: print.c.clang2
+Only in ./9/port: proc.c.clang2
+Only in ./9/port: qio.c.clang2
+Only in ./9/port: qlock.c.clang2
+Only in ./9/port: random.c.clang2
+Only in ./9/port: rdb.c.clang2
+Only in ./9/port: rebootcmd.c.clang2
+Only in ./9/port: sd.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: sdaoe.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: sdmmc.c
+Only in ./9/port: sdscsi.c.clang2
+Only in ./9/port: segment.c.clang2
+Only in ./9/port: swap.c.clang2
+Only in ./9/port: syscallfmt.c.clang2
+Only in ./9/port: sysfile.c.clang2
+Only in ./9/port: sysproc.c.clang2
+Only in ./9/port: systab.h.clang2
+Only in ./9/port: taslock.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: thwack.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: thwack.h
+Only in ./9/port: tod.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: ucalloc.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: ucallocb.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: unthwack.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: usb.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9/port: usbehci.c
+Only in ./9/port: xalloc.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9: ppc
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9: rb
+Only in /Volumes/Plan 9 - Dec 29/sys/src/9: teg2
+Only in .: Makefile
+Only in .: PFFF_DB.marshall
+Only in .: TAGS
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: ape
+Only in /Volumes/Plan 9 - Dec 29/sys/src/boot/pc: pbsdebug.s
+Only in /Volumes/Plan 9 - Dec 29/sys/src/boot/pc: pbslba.s
+Only in /Volumes/Plan 9 - Dec 29/sys/src/boot/pc: pbslbadebug.s
+Only in /Volumes/Plan 9 - Dec 29/sys/src/boot/pc: pbsraw.s
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: 5a
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: 5c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: 5i
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: 5l
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: 6a
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: 6c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: 6l
+Only in ./cmd: 8._cp
+Only in ./cmd: 8.ar
+Only in ./cmd: 8.basename
+Only in ./cmd: 8.bind
+Only in ./cmd: 8.cal
+Only in ./cmd: 8.cat
+Only in ./cmd: 8.chgrp
+Only in ./cmd: 8.chmod
+Only in ./cmd: 8.cp
+Only in ./cmd: 8.date
+Only in ./cmd: 8.dd
+Only in ./cmd: 8.du
+Only in ./cmd: 8.echo
+Only in ./cmd: 8.file
+Only in ./cmd: 8.iconv
+Only in ./cmd: 8.init
+Only in ./cmd: 8.kbmap
+Only in ./cmd: 8.kprof
+Only in ./cmd: 8.ktrace
+Only in ./cmd: 8.ls
+Only in ./cmd: 8.mc
+Only in ./cmd: 8.mkdir
+Only in ./cmd: 8.mntgen
+Only in ./cmd: 8.mount
+Only in ./cmd: 8.mv
+Only in ./cmd: 8.nm
+Only in ./cmd: 8.ns
+Only in ./cmd: 8.prof
+Only in ./cmd: 8.ps
+Only in ./cmd: 8.pwd
+Only in ./cmd: 8.ramfs
+Only in ./cmd: 8.ratrace
+Only in ./cmd: 8.rm
+Only in ./cmd: 8.sed
+Only in ./cmd: 8.sh
+Only in ./cmd: 8.size
+Only in ./cmd: 8.sleep
+Only in ./cmd: 8.stats
+Only in ./cmd: 8.strip
+Only in ./cmd: 8.swap
+Only in ./cmd: 8.tail
+Only in ./cmd: 8.tar
+Only in ./cmd: 8.test
+Only in ./cmd: 8.touch
+Only in ./cmd: 8.tr
+Only in ./cmd: 8.trace
+Only in ./cmd: 8.unicode
+Only in ./cmd: 8.unmount
+Only in ./cmd: 8.xd
+Only in ./cmd: 8.yacc
+Only in ./cmd/8a: 8.out
+Only in ./cmd/8a: a.h.clang2
+Only in ./cmd/8a: a.y.clang2
+Only in ./cmd/8a: lex.8
+Only in ./cmd/8a: lex.c.clang2
+Only in ./cmd/8a: y.debug
+Only in ./cmd/8a: y.debug.clang2
+Only in ./cmd/8a: y.tab.8
+Only in ./cmd/8a: y.tab.c
+Only in ./cmd/8a: y.tab.h
+Only in ./cmd/8a: y.tab.h.clang2
+Only in ./cmd/8c: 8.out
+Only in ./cmd/8c: 8.out.h.clang2
+Only in ./cmd/8c: cgen.8
+Only in ./cmd/8c: cgen.c.clang2
+Only in ./cmd/8c: cgen64.8
+Only in ./cmd/8c: cgen64.c.clang2
+Only in ./cmd/8c: div.8
+Only in ./cmd/8c: div.c.clang2
+Only in ./cmd/8c: enam.8
+Only in ./cmd/8c: enam.c.clang2
+Only in ./cmd/8c: gc.h.clang2
+Only in ./cmd/8c: list.8
+Only in ./cmd/8c: list.c.clang2
+Only in ./cmd/8c: machcap.8
+Only in ./cmd/8c: machcap.c.clang2
+Only in ./cmd/8c: mul.8
+Only in ./cmd/8c: mul.c.clang2
+Only in ./cmd/8c: peep.8
+Only in ./cmd/8c: peep.c.clang2
+Only in ./cmd/8c: pgen.8
+Only in ./cmd/8c: pswt.8
+Only in ./cmd/8c: reg.8
+Only in ./cmd/8c: reg.c.clang2
+Only in ./cmd/8c: sgen.8
+Only in ./cmd/8c: sgen.c.clang2
+Only in ./cmd/8c: swt.8
+Only in ./cmd/8c: swt.c.clang2
+Only in ./cmd/8c: txt.8
+Only in ./cmd/8c: txt.c.clang2
+Only in ./cmd/8l: 8.out
+Only in ./cmd/8l: asm.8
+Only in ./cmd/8l: asm.c.clang2
+Only in ./cmd/8l: compat.8
+Only in ./cmd/8l: compat.c.clang2
+Only in ./cmd/8l: elf.8
+Only in ./cmd/8l: elf.c.clang2
+Only in ./cmd/8l: elf.h.clang2
+Only in ./cmd/8l: enam.8
+Only in ./cmd/8l: l.h.clang2
+Only in ./cmd/8l: list.8
+Only in ./cmd/8l: list.c.clang2
+Only in ./cmd/8l: obj.8
+Only in ./cmd/8l: obj.c.clang2
+Only in ./cmd/8l: optab.8
+Only in ./cmd/8l: optab.c.clang2
+Only in ./cmd/8l: pass.8
+Only in ./cmd/8l: pass.c.clang2
+Only in ./cmd/8l: span.8
+Only in ./cmd/8l: span.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: 9660srv
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: 9nfs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: aan.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: abaco
+Only in ./cmd/acid: 8.out
+Only in ./cmd/acid: acid.h.clang2
+Only in ./cmd/acid: builtin.8
+Only in ./cmd/acid: builtin.c.clang2
+Only in ./cmd/acid: dbg.y.clang2
+Only in ./cmd/acid: dot.8
+Only in ./cmd/acid: dot.c.clang2
+Only in ./cmd/acid: exec.8
+Only in ./cmd/acid: exec.c.clang2
+Only in ./cmd/acid: expr.8
+Only in ./cmd/acid: expr.c.clang2
+Only in ./cmd/acid: lex.8
+Only in ./cmd/acid: lex.c.clang2
+Only in ./cmd/acid: list.8
+Only in ./cmd/acid: list.c.clang2
+Only in ./cmd/acid: main.8
+Only in ./cmd/acid: main.c.clang2
+Only in ./cmd/acid: print.8
+Only in ./cmd/acid: print.c.clang2
+Only in ./cmd/acid: proc.8
+Only in ./cmd/acid: proc.c.clang2
+Only in ./cmd/acid: util.8
+Only in ./cmd/acid: util.c.clang2
+Only in ./cmd/acid: y.tab.8
+Only in ./cmd/acid: y.tab.c
+Only in ./cmd/acid: y.tab.h
+Only in ./cmd/acid: y.tab.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: acme
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: aquarela
+Only in ./cmd: ar.8
+Only in ./cmd: ar.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: archfs.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ascii.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: astro
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: auth
+Only in ./cmd/aux: 8.data2s
+Only in ./cmd/aux: 8.mouse
+Only in ./cmd/aux: 8.reboot
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: 8prefix.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: 9pcon.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: accupoint.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: acidleak.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: antiword
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: apm.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: astarld.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: cddb.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: clog.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: consolefs.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: conswdir.c
+Only in ./cmd/aux: data2s.8
+Only in ./cmd/aux: data2s.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: depend.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: disksim.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: flashfs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: getflags.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: gps
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: lines.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: lis
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: listen.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: listen1.c
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./cmd/aux/mkfile /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux/mkfile
+--- ./cmd/aux/mkfile	2014-01-19 12:03:15.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux/mkfile	2012-08-16 15:50:45.000000000 -0700
+@@ -1,13 +1,42 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ </$objtype/mkfile
+ 
+-#TODO: consolefs? depend? mouse? reboot? searchfs? statusbar
+-#LESS: mklatinkbd
+ TARG=\
++	8prefix\
++	9pcon\
++	accupoint\
++	acidleak\
++	apm\
++	astarld\
++	cddb\
++	clog\
++	consolefs\
+ 	data2s\
+-	reboot\
++	depend\
++	disksim\
++	getflags\
++	lines\
++	listen\
++	listen1\
++	mklatinkbd\
++	ms2\
++	msexceltables\
++	mswordstrings\
+         mouse\
++	nfsmount\
++	olefs\
++	pcmcia\
++	portmap\
++	rdwr\
++	reboot\
++	searchfs\
++	statusbar\
++	stub\
++	timesync\
++	trampoline\
++	usage\
++	watchdog\
++	write\
++	zerotrunc\
+ 
+ BIN=/$objtype/bin/aux
+ 
+@@ -19,13 +48,17 @@ UPDATE=\
+ 
+ </sys/src/cmd/mkmany
+ 
+-DIRS=vga\
++DIRS=mnihongo\
++	flashfs\
++	gps\
++	na\
++	vga
+ 
+ all:V:	$DIRS
+ 
+ $DIRS:V:
+ 	for (i in $DIRS) @{
+-		echo DIR: cmd/aux/$i
++		echo mk $i
+ 		cd $i
+ 		mk all
+ 	}
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: mklatinkbd.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: mnihongo
+Only in ./cmd/aux: mouse.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: ms2.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: msexceltables.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: mswordstrings.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: na
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: nfsmount.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: olefs.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: pcmcia.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: portmap.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: rdwr.c
+Only in ./cmd/aux: reboot.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: searchfs.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: statusbar.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: stub.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: timesync.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: trampoline.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: unlock
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: usage.c
+Only in ./cmd/aux/vga: 3dfx.8
+Only in ./cmd/aux/vga: 8.out
+Only in ./cmd/aux/vga: ark2000pv.8
+Only in ./cmd/aux/vga: att20c49x.8
+Only in ./cmd/aux/vga: att21c498.8
+Only in ./cmd/aux/vga: bt485.8
+Only in ./cmd/aux/vga: ch9294.8
+Only in ./cmd/aux/vga: clgd542x.8
+Only in ./cmd/aux/vga: clgd546x.8
+Only in ./cmd/aux/vga: ct65540.8
+Only in ./cmd/aux/vga: cyber938x.8
+Only in ./cmd/aux/vga: data.8
+Only in ./cmd/aux/vga: db.8
+Only in ./cmd/aux/vga: error.8
+Only in ./cmd/aux/vga: et4000.8
+Only in ./cmd/aux/vga: et4000hwgc.8
+Only in ./cmd/aux/vga: hiqvideo.8
+Only in ./cmd/aux/vga: i81x.8
+Only in ./cmd/aux/vga: ibm8514.8
+Only in ./cmd/aux/vga: icd2061a.8
+Only in ./cmd/aux/vga: ics2494.8
+Only in ./cmd/aux/vga: ics534x.8
+Only in ./cmd/aux/vga: io.8
+Only in ./cmd/aux/vga: mach32.8
+Only in ./cmd/aux/vga: mach64.8
+Only in ./cmd/aux/vga: mach64xx.8
+Only in ./cmd/aux/vga: main.8
+Only in ./cmd/aux/vga: mga2164w.8
+Only in ./cmd/aux/vga: mga4xx.8
+Only in ./cmd/aux/vga: neomagic.8
+Only in ./cmd/aux/vga: nvidia.8
+Only in ./cmd/aux/vga: palette.8
+Only in ./cmd/aux/vga: pci.8
+Only in ./cmd/aux/vga: radeon.8
+Only in ./cmd/aux/vga: rgb524.8
+Only in ./cmd/aux/vga: rgb524mn.8
+Only in ./cmd/aux/vga: s3801.8
+Only in ./cmd/aux/vga: s3928.8
+Only in ./cmd/aux/vga: s3clock.8
+Only in ./cmd/aux/vga: s3generic.8
+Only in ./cmd/aux/vga: s3hwgc.8
+Only in ./cmd/aux/vga: sc15025.8
+Only in ./cmd/aux/vga: stg1702.8
+Only in ./cmd/aux/vga: t2r4.8
+Only in ./cmd/aux/vga: trio64.8
+Only in ./cmd/aux/vga: tvp3020.8
+Only in ./cmd/aux/vga: tvp3025.8
+Only in ./cmd/aux/vga: tvp3025clock.8
+Only in ./cmd/aux/vga: tvp3026.8
+Only in ./cmd/aux/vga: tvp3026clock.8
+Only in ./cmd/aux/vga: vesa.8
+Only in ./cmd/aux/vga: vesadb.8
+Only in ./cmd/aux/vga: vga.8
+Only in ./cmd/aux/vga: virge.8
+Only in ./cmd/aux/vga: vision864.8
+Only in ./cmd/aux/vga: vision964.8
+Only in ./cmd/aux/vga: vision968.8
+Only in ./cmd/aux/vga: vmware.8
+Only in ./cmd/aux/vga: w30c516.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: watchdog.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: write.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/aux: zerotrunc.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: awd.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: awk
+Only in ./cmd: basename.8
+Only in ./cmd: basename.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: bc.y
+Only in ./cmd: bind.8
+Only in ./cmd: bind.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: bsplit.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: bzip2
+Only in ./cmd: cal.8
+Only in ./cmd: cal.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: calendar.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: calls.c
+Only in ./cmd: cat.8
+Only in ./cmd: cat.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cb
+Only in ./cmd/cc: acid.8
+Only in ./cmd/cc: acid.c.clang2
+Only in ./cmd/cc: bits.8
+Only in ./cmd/cc: bits.c.clang2
+Only in ./cmd/cc: cc.a8
+Only in ./cmd/cc: cc.h.clang2
+Only in ./cmd/cc: cc.y.clang2
+Only in ./cmd/cc: com.8
+Only in ./cmd/cc: com.c.clang2
+Only in ./cmd/cc: com64.8
+Only in ./cmd/cc: com64.c.clang2
+Only in ./cmd/cc: compat.8
+Only in ./cmd/cc: compat.c.clang2
+Only in ./cmd/cc: compat.clang2
+Only in ./cmd/cc: dcl.8
+Only in ./cmd/cc: dcl.c.clang2
+Only in ./cmd/cc: dpchk.8
+Only in ./cmd/cc: dpchk.c.clang2
+Only in ./cmd/cc: funct.8
+Only in ./cmd/cc: funct.c.clang2
+Only in ./cmd/cc: lex.8
+Only in ./cmd/cc: lex.c.clang2
+Only in ./cmd/cc: lexbody.clang2
+Only in ./cmd/cc: mac.8
+Only in ./cmd/cc: macbody.clang2
+Only in ./cmd/cc: omachcap.8
+Only in ./cmd/cc: omachcap.c.clang2
+Only in ./cmd/cc: pgen.c.clang2
+Only in ./cmd/cc: pickle.8
+Only in ./cmd/cc: pickle.c.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./cmd/cc/pswt.c /Volumes/Plan 9 - Dec 29/sys/src/cmd/cc/pswt.c
+--- ./cmd/cc/pswt.c	2014-01-16 22:49:50.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/cmd/cc/pswt.c	2013-04-23 16:19:31.000000000 -0700
+@@ -110,14 +110,14 @@ doswit(Node *n)
+ 			q++;
+ 		}
+ 		qsort(iql,  q-iql, sizeof(C1), swcmp);
+-                //if(0){for(int k=0; k<(q-iql); k++)print("nh=%ld k=%d h=%#llux l=%#llux lab=%ld\n", nh, k, (vlong)iqh[nh].val,  (vlong)iql[k].val, iql[k].label);}
++if(0){for(int k=0; k<(q-iql); k++)print("nh=%ld k=%d h=%#llux l=%#llux lab=%ld\n", nh, k, (vlong)iqh[nh].val,  (vlong)iql[k].val, iql[k].label);}
+ 		iqh[nh].label = pc;
+ 		nh++;
+ 		swit1(iql, q-iql, def, vr[0]);
+ 		i = j;
+ 	}
+ 	patch(hsb, pc);
+-        //if(0){for(int k=0; k<nh; k++)print("k*=%d h=%#llux lab=%ld\n", k, (vlong)iqh[k].val,  iqh[k].label);}
++if(0){for(int k=0; k<nh; k++)print("k*=%d h=%#llux lab=%ld\n", k, (vlong)iqh[k].val,  iqh[k].label);}
+ 	swit1(iqh, nh, def, vr[1]);
+ }
+ 
+Only in ./cmd/cc: pswt.c.clang2
+Only in ./cmd/cc: scon.8
+Only in ./cmd/cc: scon.c.clang2
+Only in ./cmd/cc: sub.8
+Only in ./cmd/cc: sub.c.clang2
+Only in ./cmd/cc: y.tab.8
+Only in ./cmd/cc: y.tab.c
+Only in ./cmd/cc: y.tab.h
+Only in ./cmd/cc: y.tab.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cdfs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cec
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cfs
+Only in ./cmd: chgrp.8
+Only in ./cmd: chgrp.c.clang2
+Only in ./cmd: chmod.8
+Only in ./cmd: chmod.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cifs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cleanname.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: clock.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cmp.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: col.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: colors.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: comm.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: compress
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: con
+Only in ./cmd: cp.8
+Only in ./cmd: cp.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cpp
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cpu.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: crop.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: cwfs
+Only in ./cmd: date.8
+Only in ./cmd: date.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: db
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: dc.c
+Only in ./cmd: dd.8
+Only in ./cmd: dd.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: deroff.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: dial
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: dict
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: diff
+Only in ./cmd/disk: 8.format
+Only in ./cmd/disk: 8.mbr
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk: 9660
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk: exsort.c
+Only in ./cmd/disk: format.8
+Only in ./cmd/disk: format.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk: kfs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk: kfscmd.c
+Only in ./cmd/disk: mbr.8
+Only in ./cmd/disk: mbr.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk: mkext.c
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./cmd/disk/mkfile /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk/mkfile
+--- ./cmd/disk/mkfile	2014-01-19 11:51:25.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk/mkfile	2012-06-15 14:48:50.000000000 -0700
+@@ -1,11 +1,16 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ </$objtype/mkfile
+ 
+-TARG=	format\
++TARG=exsort\
++	format\
++	kfscmd\
+ 	mbr\
++	mkext\
++	mkfs\
++	partfs\
+ 
+ DIRS=\
++	9660\
++	kfs\
+ 	prep\
+ 
+ OFILES=
+@@ -23,7 +28,7 @@ UPDATE=\
+ 
+ all:V:	all-kfs
+ 
+-install:V:	install-kfs
++install:V:	install-kfs ksync
+ 
+ clean:V:	clean-kfs
+ 
+@@ -34,9 +39,10 @@ installall:V:	installall-kfs
+ %-kfs:V:
+ 	for(i in $DIRS) @{
+ 		cd $i
+-                echo DIR: cmd/disk/$i
+ 		mk $MKFLAGS $stem
+ 	}
+-        echo DIR: cmd/disk
++
++ksync:
++	touch $BIN/ksync
+ 
+ $O.format: /$objtype/lib/libdisk.a
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk: mkfs.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk: partfs.c
+Only in ./cmd/disk/prep: 8.fdisk
+Only in ./cmd/disk/prep: 8.prep
+Only in ./cmd/disk/prep: calc.y.clang2
+Only in ./cmd/disk/prep: edit.8
+Only in ./cmd/disk/prep: edit.c.clang2
+Only in ./cmd/disk/prep: edit.h.clang2
+Only in ./cmd/disk/prep: fdisk.8
+Only in ./cmd/disk/prep: fdisk.c.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./cmd/disk/prep/mkfile /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk/prep/mkfile
+--- ./cmd/disk/prep/mkfile	2014-01-17 12:25:59.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk/prep/mkfile	2002-05-26 14:56:40.000000000 -0700
+@@ -1,5 +1,3 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ </$objtype/mkfile
+ 
+ TARG=fdisk prep
+Only in ./cmd/disk/prep: prep.8
+Only in ./cmd/disk/prep: prep.c.clang2
+Only in ./cmd/disk/prep: y.tab.8
+Only in ./cmd/disk/prep: y.tab.c
+Only in ./cmd/disk/prep: y.tab.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd/disk: rd9660.c
+Only in ./cmd/dossrv: 8.out
+Only in ./cmd/dossrv: chat.8
+Only in ./cmd/dossrv: chat.c.clang2
+Only in ./cmd/dossrv: dat.h.clang2
+Only in ./cmd/dossrv: devio.8
+Only in ./cmd/dossrv: devio.c.clang2
+Only in ./cmd/dossrv: dosfs.8
+Only in ./cmd/dossrv: dosfs.c.clang2
+Only in ./cmd/dossrv: dosfs.h.clang2
+Only in ./cmd/dossrv: dossubs.8
+Only in ./cmd/dossrv: dossubs.c.clang2
+Only in ./cmd/dossrv: errstr.h.clang2
+Only in ./cmd/dossrv: fns.h.clang2
+Only in ./cmd/dossrv: iotrack.8
+Only in ./cmd/dossrv: iotrack.c.clang2
+Only in ./cmd/dossrv: iotrack.h.clang2
+Only in ./cmd/dossrv: lock.8
+Only in ./cmd/dossrv: lock.c.clang2
+Only in ./cmd/dossrv: xfile.8
+Only in ./cmd/dossrv: xfile.c.clang2
+Only in ./cmd/dossrv: xfssrv.8
+Only in ./cmd/dossrv: xfssrv.c.clang2
+Only in ./cmd: du.8
+Only in ./cmd: du.c.clang2
+Only in ./cmd: echo.8
+Only in ./cmd: echo.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ecp.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ed.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: eqn
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: execnet
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: exportfs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ext2srv
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: faces
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: factor.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: fax
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: fcp.c
+Only in ./cmd: file.8
+Only in ./cmd: file.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: fmt.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: fortune.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: fossil
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: freq.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: getmap.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: grap
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: graph
+Only in ./cmd/grep: 8.out
+Only in ./cmd/grep: comp.8
+Only in ./cmd/grep: comp.c.clang2
+Only in ./cmd/grep: grep.h.clang2
+Only in ./cmd/grep: grep.y.clang2
+Only in ./cmd/grep: main.8
+Only in ./cmd/grep: main.c.clang2
+Only in ./cmd/grep: sub.8
+Only in ./cmd/grep: sub.c.clang2
+Only in ./cmd/grep: y.tab.8
+Only in ./cmd/grep: y.tab.c
+Only in ./cmd/grep: y.tab.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: gs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: gview.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: gzip
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: hget.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: histogram.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: history.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: hoc
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: html2ms.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: htmlfmt
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: htmlroff
+Only in ./cmd: iconv.8
+Only in ./cmd: iconv.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: idiff.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: import.c
+Only in ./cmd: init.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./cmd/init.c /Volumes/Plan 9 - Dec 29/sys/src/cmd/init.c
+--- ./cmd/init.c	2014-01-15 15:00:34.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/cmd/init.c	2011-06-14 11:16:12.000000000 -0700
+@@ -1,7 +1,7 @@
+ #include <u.h>
+ #include <libc.h>
+ #include <auth.h>
+-//#include <authsrv.h>
++#include <authsrv.h>
+ 
+ char*	readenv(char*);
+ void	setenv(char*, char*);
+@@ -78,39 +78,39 @@ main(int argc, char *argv[])
+ void
+ pass(int fd)
+ {
+-//PAD: 	char key[DESKEYLEN];
+-//PAD: 	char typed[32];
+-//PAD: 	char crypted[DESKEYLEN];
+-//PAD: 	int i;
+-//PAD: 
+-//PAD: 	for(;;){
+-//PAD: 		print("\n%s password:", systemname);
+-//PAD: 		for(i=0; i<sizeof typed; i++){
+-//PAD: 			if(read(0, typed+i, 1) != 1){
+-//PAD: 				print("init: can't read password; insecure\n");
+-//PAD: 				return;
+-//PAD: 			}
+-//PAD: 			if(typed[i] == '\n'){
+-//PAD: 				typed[i] = 0;
+-//PAD: 				break;
+-//PAD: 			}
+-//PAD: 		}
+-//PAD: 		if(i == sizeof typed)
+-//PAD: 			continue;
+-//PAD: 		if(passtokey(crypted, typed) == 0)
+-//PAD: 			continue;
+-//PAD: 		seek(fd, 0, 0);
+-//PAD: 		if(read(fd, key, DESKEYLEN) != DESKEYLEN){
+-//PAD: 			print("init: can't read key; insecure\n");
+-//PAD: 			return;
+-//PAD: 		}
+-//PAD: 		if(memcmp(crypted, key, sizeof key))
+-//PAD: 			continue;
+-//PAD: 		/* clean up memory */
+-//PAD: 		memset(crypted, 0, sizeof crypted);
+-//PAD: 		memset(key, 0, sizeof key);
+-//PAD: 		return;
+-//PAD: 	}
++	char key[DESKEYLEN];
++	char typed[32];
++	char crypted[DESKEYLEN];
++	int i;
++
++	for(;;){
++		print("\n%s password:", systemname);
++		for(i=0; i<sizeof typed; i++){
++			if(read(0, typed+i, 1) != 1){
++				print("init: can't read password; insecure\n");
++				return;
++			}
++			if(typed[i] == '\n'){
++				typed[i] = 0;
++				break;
++			}
++		}
++		if(i == sizeof typed)
++			continue;
++		if(passtokey(crypted, typed) == 0)
++			continue;
++		seek(fd, 0, 0);
++		if(read(fd, key, DESKEYLEN) != DESKEYLEN){
++			print("init: can't read key; insecure\n");
++			return;
++		}
++		if(memcmp(crypted, key, sizeof key))
++			continue;
++		/* clean up memory */
++		memset(crypted, 0, sizeof crypted);
++		memset(key, 0, sizeof key);
++		return;
++	}
+ }
+ 
+ static int gotnote;
+Only in ./cmd: init.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: iostats
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ip
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: join.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: jpg
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ka
+Only in ./cmd: kbmap.8
+Only in ./cmd: kbmap.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: kc
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ki
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: kl
+Only in ./cmd: kprof.8
+Only in ./cmd: kprof.c.clang2
+Only in ./cmd: ktrace.8
+Only in ./cmd: ktrace.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: lens.c
+Only in ./cmd/lex: 8.out
+Only in ./cmd/lex: header.8
+Only in ./cmd/lex: header.c.clang2
+Only in ./cmd/lex: ldefs.h.clang2
+Only in ./cmd/lex: lmain.8
+Only in ./cmd/lex: lmain.c.clang2
+Only in ./cmd/lex: parser.y.clang2
+Only in ./cmd/lex: sub1.8
+Only in ./cmd/lex: sub1.c.clang2
+Only in ./cmd/lex: sub2.8
+Only in ./cmd/lex: sub2.c.clang2
+Only in ./cmd/lex: y.tab.8
+Only in ./cmd/lex: y.tab.c
+Only in ./cmd/lex: y.tab.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: lnfs.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: lock.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: look.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: lp
+Only in ./cmd: ls.8
+Only in ./cmd: ls.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: map
+Only in ./cmd: mc.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: md5sum.c
+Only in ./cmd/mk: 8.out
+Only in ./cmd/mk: arc.8
+Only in ./cmd/mk: arc.c.clang2
+Only in ./cmd/mk: archive.8
+Only in ./cmd/mk: archive.c.clang2
+Only in ./cmd/mk: bufblock.8
+Only in ./cmd/mk: bufblock.c.clang2
+Only in ./cmd/mk: env.8
+Only in ./cmd/mk: env.c.clang2
+Only in ./cmd/mk: file.8
+Only in ./cmd/mk: file.c.clang2
+Only in ./cmd/mk: fns.h.clang2
+Only in ./cmd/mk: graph.8
+Only in ./cmd/mk: graph.c.clang2
+Only in ./cmd/mk: job.8
+Only in ./cmd/mk: job.c.clang2
+Only in ./cmd/mk: lex.8
+Only in ./cmd/mk: lex.c.clang2
+Only in ./cmd/mk: main.8
+Only in ./cmd/mk: main.c.clang2
+Only in ./cmd/mk: match.8
+Only in ./cmd/mk: match.c.clang2
+Only in ./cmd/mk: mk.8
+Only in ./cmd/mk: mk.c.clang2
+Only in ./cmd/mk: mk.h.clang2
+Only in ./cmd/mk: parse.8
+Only in ./cmd/mk: parse.c.clang2
+Only in ./cmd/mk: plan9.8
+Only in ./cmd/mk: plan9.c.clang2
+Only in ./cmd/mk: rc.8
+Only in ./cmd/mk: rc.c.clang2
+Only in ./cmd/mk: recipe.8
+Only in ./cmd/mk: recipe.c.clang2
+Only in ./cmd/mk: rule.8
+Only in ./cmd/mk: rule.c.clang2
+Only in ./cmd/mk: run.8
+Only in ./cmd/mk: run.c.clang2
+Only in ./cmd/mk: shprint.8
+Only in ./cmd/mk: shprint.c.clang2
+Only in ./cmd/mk: symtab.8
+Only in ./cmd/mk: symtab.c.clang2
+Only in ./cmd/mk: var.8
+Only in ./cmd/mk: var.c.clang2
+Only in ./cmd/mk: varsub.8
+Only in ./cmd/mk: varsub.c.clang2
+Only in ./cmd/mk: word.8
+Only in ./cmd/mk: word.c.clang2
+Only in ./cmd: mkdir.8
+Only in ./cmd: mkdir.c.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./cmd/mkfile /Volumes/Plan 9 - Dec 29/sys/src/cmd/mkfile
+--- ./cmd/mkfile	2014-01-19 11:51:10.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/cmd/mkfile	2007-05-06 14:38:02.000000000 -0700
+@@ -1,35 +1,46 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ </$objtype/mkfile
+ 
+ TARG=`{ls *.[cy] | sed '/\.tab\.c$/d;s/..$//'}
+ HFILES=/$objtype/include/u.h /sys/include/libc.h /sys/include/bio.h
+ BIN=/$objtype/bin
+ PROGS=${TARG:%=$O.%}
++LDFLAGS=
+ YFLAGS=-d
+ 
+-NOMK=awk
++NOTSYS=sml|dup|.+\..+
++BUGGERED=unix|postscript
++OUTOFDATE=old
++
++NOMK=$NOTSYS|$BUGGERED|$OUTOFDATE
+ 
+ cpuobjtype=`{sed -n 's/^O=//p' /$cputype/mkfile}
+ DIRS=`{ls -l | sed '/^d/!d; s/.* //; /^('$NOMK')$/d'}
++APEDIRS=awk bzip2 compress cvs eqn grap gs links-ape lp pic postscript spin \
++	tex troff
+ 
+ none:VQ:
+ 	echo usage: mk cmds, dirs, all, install, installall, '$O'.cmd, cmd.install, or cmd.installall
+ 
+ cmds:V:	$PROGS
+ 
++ape:V: $APE
++	for(i in $APEDIRS) @{
++		cd $i
++		echo mk $i
++		mk $MKFLAGS all
++	}
++
+ dirs:V:
+ 	for(i in cc $DIRS) @{
+ 		cd $i
+-		echo DIR: cmd/$i
++		echo mk $i
+ 		mk $MKFLAGS all
+ 	}
+ 
+ all:V:	$PROGS dirs
+ 
+-#PAD: put $LDFLAGS and have weird behavior => I've removed it
+ ^([$OS])\.(.*):R:	\2.\1
+-	$stem1^l -o $target $stem2.$stem1
++	$stem1^l $LDFLAGS -o $target $stem2.$stem1
+ 
+ .*\.[$OS]:R:	$HFILES
+ 
+@@ -99,9 +110,15 @@ installall:V:
+ %.acid: %.$O $HFILES
+ 	$CC $CFLAGS -a $stem.c >$target
+ 
++(bc|units).c:R:	\1.tab.c
++	mv $stem1.tab.c $stem1.c
++
+ $BIN/init:	$O.init
+ 	cp $prereq /$objtype/init
+ 
++$O.cj:	cj.$O
++	$LD $LDFLAGS -o $O.cj cj.$O /$objtype/lib/libjpg.a
++
+ %.update:V:
+ 	update $stem.c /386/bin/$stem
+ 
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./cmd/mkmany /Volumes/Plan 9 - Dec 29/sys/src/cmd/mkmany
+--- ./cmd/mkmany	2014-01-17 12:27:33.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/cmd/mkmany	2011-03-17 16:40:20.000000000 -0700
+@@ -1,7 +1,6 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ PROGS=${TARG:%=$O.%}
+ MANFILES=${TARG:%=%.man}
++LDFLAGS=
+ YFLAGS=-d
+ 
+ none:VQ:
+@@ -10,7 +9,7 @@ none:VQ:
+ all:V:	$PROGS
+ 
+ $O.%:	%.$O $OFILES $LIB
+-	$LD -o $target $prereq
++	$LD $LDFLAGS -o $target $prereq
+ 
+ %.$O:	$HFILES		# don't combine with following %.$O rules
+ 
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./cmd/mksyslib /Volumes/Plan 9 - Dec 29/sys/src/cmd/mksyslib
+--- ./cmd/mksyslib	2014-01-16 23:01:15.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/cmd/mksyslib	2005-12-12 04:22:17.000000000 -0800
+@@ -1,5 +1,3 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ AFLAGS=
+ 
+ all:V:	$LIB
+@@ -16,7 +14,7 @@ $LIB:V:	$OFILES			# force archive even w
+ 	$CC $CFLAGS $stem.c
+ 
+ %.$O:	%.s
+-	$AS $stem.s
++	$AS $AFLAGS $stem.s
+ 
+ install:V: $LIB
+ 
+Only in ./cmd: mntgen.8
+Only in ./cmd: mount.8
+Only in ./cmd: mount.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ms2html.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: mtime.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: mug.c
+Only in ./cmd: mv.8
+Only in ./cmd: mv.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ndb
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: netstat.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: news.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: nfs.c
+Only in ./cmd: nm.8
+Only in ./cmd: nm.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: nntpfs.c
+Only in ./cmd: ns.8
+Only in ./cmd: ns.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: p.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: page
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: paqfs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: pbd.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: pcc.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: pic
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: pipefile.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: plot
+Only in ./cmd/plumb: 8.plumb
+Only in ./cmd/plumb: 8.plumber
+Only in ./cmd/plumb: fsys.8
+Only in ./cmd/plumb: match.8
+Only in ./cmd/plumb: plumb.8
+Only in ./cmd/plumb: plumber.8
+Only in ./cmd/plumb: rules.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: postscript
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: pr.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: primes.c
+Only in ./cmd: prof.8
+Only in ./cmd: prof.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: proof
+Only in ./cmd: ps.8
+Only in ./cmd: ps.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: pump.c
+Only in ./cmd: pwd.8
+Only in ./cmd: pwd.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: qa
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: qc
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: qi
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ql
+Only in ./cmd: ramfs.8
+Only in ./cmd: ramfs.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ratfs
+Only in ./cmd: ratrace.8
+Only in ./cmd/rc: 8.out
+Only in ./cmd/rc: code.8
+Only in ./cmd/rc: code.c.clang2
+Only in ./cmd/rc: exec.8
+Only in ./cmd/rc: exec.c.clang2
+Only in ./cmd/rc: exec.h.clang2
+Only in ./cmd/rc: fns.h.clang2
+Only in ./cmd/rc: getflags.8
+Only in ./cmd/rc: getflags.c.clang2
+Only in ./cmd/rc: getflags.h.clang2
+Only in ./cmd/rc: glob.8
+Only in ./cmd/rc: glob.c.clang2
+Only in ./cmd/rc: havefork.8
+Only in ./cmd/rc: havefork.c.clang2
+Only in ./cmd/rc: here.8
+Only in ./cmd/rc: here.c.clang2
+Only in ./cmd/rc: io.8
+Only in ./cmd/rc: io.c.clang2
+Only in ./cmd/rc: io.h.clang2
+Only in ./cmd/rc: lex.8
+Only in ./cmd/rc: lex.c.clang2
+Only in ./cmd/rc: pcmd.8
+Only in ./cmd/rc: pcmd.c.clang2
+Only in ./cmd/rc: pfnc.8
+Only in ./cmd/rc: pfnc.c.clang2
+Only in ./cmd/rc: plan9.8
+Only in ./cmd/rc: plan9.c.clang2
+Only in ./cmd/rc: rc.h.clang2
+Only in ./cmd/rc: simple.8
+Only in ./cmd/rc: simple.c.clang2
+Only in ./cmd/rc: subr.8
+Only in ./cmd/rc: subr.c.clang2
+Only in ./cmd/rc: syn.y.clang2
+Only in ./cmd/rc: trap.8
+Only in ./cmd/rc: trap.c.clang2
+Only in ./cmd/rc: tree.8
+Only in ./cmd/rc: tree.c.clang2
+Only in ./cmd/rc: var.8
+Only in ./cmd/rc: var.c.clang2
+Only in ./cmd/rc: x.tab.h
+Only in ./cmd/rc: x.tab.h.clang2
+Only in ./cmd/rc: y.tab.8
+Only in ./cmd/rc: y.tab.c
+Only in ./cmd/rc: y.tab.h
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: rdbfs.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: read.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: replica
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: resample.c
+Only in ./cmd/rio: 8.out
+Only in ./cmd/rio: dat.h.clang2
+Only in ./cmd/rio: data.8
+Only in ./cmd/rio: data.c.clang2
+Only in ./cmd/rio: fns.h.clang2
+Only in ./cmd/rio: fsys.8
+Only in ./cmd/rio: fsys.c.clang2
+Only in ./cmd/rio: rio.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./cmd/rio/rio.c /Volumes/Plan 9 - Dec 29/sys/src/cmd/rio/rio.c
+--- ./cmd/rio/rio.c	2014-01-20 16:48:49.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/cmd/rio/rio.c	2009-05-04 10:20:55.000000000 -0700
+@@ -124,10 +124,10 @@ threadmain(int argc, char *argv[])
+ 	Image *i;
+ 	Rectangle r;
+ 
+-	//if(strstr(argv[0], ".out") == nil){
+-	//	menu3str[Exit] = nil;
+-	//	Hidden--;
+-	//}
++	if(strstr(argv[0], ".out") == nil){
++		menu3str[Exit] = nil;
++		Hidden--;
++	}
+ 	initstr = nil;
+ 	kbdin = nil;
+ 	maxtab = 0;
+Only in ./cmd/rio: rio.c.clang2
+Only in ./cmd/rio: scrl.8
+Only in ./cmd/rio: scrl.c.clang2
+Only in ./cmd/rio: time.8
+Only in ./cmd/rio: time.c.clang2
+Only in ./cmd/rio: util.8
+Only in ./cmd/rio: util.c.clang2
+Only in ./cmd/rio: wctl.8
+Only in ./cmd/rio: wctl.c.clang2
+Only in ./cmd/rio: wind.8
+Only in ./cmd/rio: wind.c.clang2
+Only in ./cmd/rio: xfid.8
+Only in ./cmd/rio: xfid.c.clang2
+Only in ./cmd: rm.8
+Only in ./cmd: rm.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: rx.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: sam
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: samterm
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: scat
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: screenlock.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: scuzz
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: seconds.c
+Only in ./cmd: sed.8
+Only in ./cmd: sed.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: seq.c
+Only in ./cmd: sh.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: sh.C
+Only in ./cmd: sh.c
+Only in ./cmd: sh.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: sha1sum.c
+Only in ./cmd: size.8
+Only in ./cmd: size.c.clang2
+Only in ./cmd: sleep.8
+Only in ./cmd: sleep.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: snap
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: sort.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: spell
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: spin
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: split.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: srv.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: srvfs.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: srvold9p
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ssh1
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: ssh2
+Only in ./cmd: stats.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: strings.c
+Only in ./cmd: strip.8
+Only in ./cmd: strip.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: sum.c
+Only in ./cmd: swap.8
+Only in ./cmd/syscall: 8.out
+Only in ./cmd/syscall: syscall.8
+Only in ./cmd/syscall: syscall.c.clang2
+Only in ./cmd/syscall: tab.h
+Only in ./cmd/syscall: tab.h.clang2
+Only in ./cmd: tail.8
+Only in ./cmd: tail.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: tapefs
+Only in ./cmd: tar.8
+Only in ./cmd: tar.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: tarsplit
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: tbl
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: tcs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: tee.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: telco
+Only in ./cmd: test.8
+Only in ./cmd: test.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: time.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: tlsclient.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: tlssrv.c
+Only in ./cmd: touch.8
+Only in ./cmd: touch.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: tprof.c
+Only in ./cmd: tr.8
+Only in ./cmd: tr.c.clang2
+Only in ./cmd: trace.8
+Only in ./cmd: trace.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: troff
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: troff2html
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: tweak.c
+Only in ./cmd: unicode.8
+Only in ./cmd: unicode.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: uniq.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: units.y
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: unix
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: unlnfs.c
+Only in ./cmd: unmount.8
+Only in ./cmd: unmount.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: upas
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: usb
+Only in ./cmd/va: 8.out
+Only in ./cmd/va: a.h.clang2
+Only in ./cmd/va: a.y.clang2
+Only in ./cmd/va: lex.8
+Only in ./cmd/va: lex.c.clang2
+Only in ./cmd/va: y.debug
+Only in ./cmd/va: y.debug.clang2
+Only in ./cmd/va: y.tab.8
+Only in ./cmd/va: y.tab.c
+Only in ./cmd/va: y.tab.h
+Only in ./cmd/va: y.tab.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: vac
+Only in ./cmd/vc: 8.out
+Only in ./cmd/vc: cgen.8
+Only in ./cmd/vc: cgen.c.clang2
+Only in ./cmd/vc: enam.8
+Only in ./cmd/vc: enam.c.clang2
+Only in ./cmd/vc: gc.h.clang2
+Only in ./cmd/vc: list.8
+Only in ./cmd/vc: list.c.clang2
+Only in ./cmd/vc: mul.8
+Only in ./cmd/vc: mul.c.clang2
+Only in ./cmd/vc: peep.8
+Only in ./cmd/vc: peep.c.clang2
+Only in ./cmd/vc: pgen.8
+Only in ./cmd/vc: pswt.8
+Only in ./cmd/vc: reg.8
+Only in ./cmd/vc: reg.c.clang2
+Only in ./cmd/vc: sgen.8
+Only in ./cmd/vc: sgen.c.clang2
+Only in ./cmd/vc: swt.8
+Only in ./cmd/vc: swt.c.clang2
+Only in ./cmd/vc: txt.8
+Only in ./cmd/vc: txt.c.clang2
+Only in ./cmd/vc: v.out.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: venti
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: vi
+Only in ./cmd/vl: 8.out
+Only in ./cmd/vl: asm.8
+Only in ./cmd/vl: asm.c.clang2
+Only in ./cmd/vl: compat.8
+Only in ./cmd/vl: compat.c.clang2
+Only in ./cmd/vl: elf.8
+Only in ./cmd/vl: enam.8
+Only in ./cmd/vl: l.h.clang2
+Only in ./cmd/vl: list.8
+Only in ./cmd/vl: list.c.clang2
+Only in ./cmd/vl: noop.8
+Only in ./cmd/vl: noop.c.clang2
+Only in ./cmd/vl: obj.8
+Only in ./cmd/vl: obj.c.clang2
+Only in ./cmd/vl: optab.8
+Only in ./cmd/vl: optab.c.clang2
+Only in ./cmd/vl: pass.8
+Only in ./cmd/vl: pass.c.clang2
+Only in ./cmd/vl: sched.8
+Only in ./cmd/vl: sched.c.clang2
+Only in ./cmd/vl: span.8
+Only in ./cmd/vl: span.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: vnc
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: vt
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: wc.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: webcookies.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: webfs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: webfsget.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: wikifs
+Only in /Volumes/Plan 9 - Dec 29/sys/src/cmd: winwatch.c
+Only in ./cmd: xd.8
+Only in ./cmd: xd.c.clang2
+Only in ./cmd: yacc.8
+Only in ./cmd: yacc.c.clang2
+Only in .: compile_commands.json
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: games
+Only in .: graph_code.marshall
+Only in .: graph_code.marshall.opti
+Only in .: include
+Only in .: layer_bottomup.json
+Only in .: layer_graphcode_stats.json
+Only in .: layer_topdown.json
+Only in ./lib9p: auth.8
+Only in ./lib9p: auth.c.clang2
+Only in ./lib9p: dirread.8
+Only in ./lib9p: dirread.c.clang2
+Only in ./lib9p: fid.8
+Only in ./lib9p: fid.c.clang2
+Only in ./lib9p: file.8
+Only in ./lib9p: file.c.clang2
+Only in ./lib9p: intmap.8
+Only in ./lib9p: intmap.c.clang2
+Only in ./lib9p: listen.8
+Only in ./lib9p: listen.c.clang2
+Only in ./lib9p: mem.8
+Only in ./lib9p: mem.c.clang2
+Only in ./lib9p: parse.8
+Only in ./lib9p: parse.c.clang2
+Only in ./lib9p: post.8
+Only in ./lib9p: post.c.clang2
+Only in ./lib9p: req.8
+Only in ./lib9p: req.c.clang2
+Only in ./lib9p: rfork.8
+Only in ./lib9p: rfork.c.clang2
+Only in ./lib9p: srv.8
+Only in ./lib9p: srv.c.clang2
+Only in ./lib9p: thread.8
+Only in ./lib9p: thread.c.clang2
+Only in ./lib9p: uid.8
+Only in ./lib9p: uid.c.clang2
+Only in ./lib9p: util.8
+Only in ./lib9p: util.c.clang2
+Only in ./libString: s_alloc.8
+Only in ./libString: s_alloc.c.clang2
+Only in ./libString: s_append.8
+Only in ./libString: s_append.c.clang2
+Only in ./libString: s_array.8
+Only in ./libString: s_array.c.clang2
+Only in ./libString: s_copy.8
+Only in ./libString: s_copy.c.clang2
+Only in ./libString: s_getline.8
+Only in ./libString: s_getline.c.clang2
+Only in ./libString: s_grow.8
+Only in ./libString: s_grow.c.clang2
+Only in ./libString: s_memappend.8
+Only in ./libString: s_memappend.c.clang2
+Only in ./libString: s_nappend.8
+Only in ./libString: s_nappend.c.clang2
+Only in ./libString: s_parse.8
+Only in ./libString: s_parse.c.clang2
+Only in ./libString: s_putc.8
+Only in ./libString: s_putc.c.clang2
+Only in ./libString: s_rdinstack.8
+Only in ./libString: s_rdinstack.c.clang2
+Only in ./libString: s_read.8
+Only in ./libString: s_read.c.clang2
+Only in ./libString: s_read_line.8
+Only in ./libString: s_read_line.c.clang2
+Only in ./libString: s_reset.8
+Only in ./libString: s_reset.c.clang2
+Only in ./libString: s_terminate.8
+Only in ./libString: s_terminate.c.clang2
+Only in ./libString: s_tolower.8
+Only in ./libString: s_tolower.c.clang2
+Only in ./libString: s_unique.8
+Only in ./libString: s_unique.c.clang2
+Only in ./libauth: amount.8
+Only in ./libauth: amount.c.clang2
+Only in ./libauth: amount_getkey.8
+Only in ./libauth: amount_getkey.c.clang2
+Only in ./libauth: attr.8
+Only in ./libauth: attr.c.clang2
+Only in ./libauth: auth_attr.8
+Only in ./libauth: auth_attr.c.clang2
+Only in ./libauth: auth_challenge.8
+Only in ./libauth: auth_challenge.c.clang2
+Only in ./libauth: auth_chuid.8
+Only in ./libauth: auth_chuid.c.clang2
+Only in ./libauth: auth_getkey.8
+Only in ./libauth: auth_getkey.c.clang2
+Only in ./libauth: auth_getuserpasswd.8
+Only in ./libauth: auth_getuserpasswd.c.clang2
+Only in ./libauth: auth_proxy.8
+Only in ./libauth: auth_proxy.c.clang2
+Only in ./libauth: auth_respond.8
+Only in ./libauth: auth_respond.c.clang2
+Only in ./libauth: auth_rpc.8
+Only in ./libauth: auth_rpc.c.clang2
+Only in ./libauth: auth_userpasswd.8
+Only in ./libauth: auth_userpasswd.c.clang2
+Only in ./libauth: auth_wep.8
+Only in ./libauth: auth_wep.c.clang2
+Only in ./libauth: authlocal.h.clang2
+Only in ./libauth: login.8
+Only in ./libauth: login.c.clang2
+Only in ./libauth: newns.8
+Only in ./libauth: newns.c.clang2
+Only in ./libauth: noworld.8
+Only in ./libauth: noworld.c.clang2
+Only in ./libauthsrv: _asgetticket.8
+Only in ./libauthsrv: _asgetticket.c.clang2
+Only in ./libauthsrv: _asrdresp.8
+Only in ./libauthsrv: _asrdresp.c.clang2
+Only in ./libauthsrv: authdial.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./libauthsrv/authdial.c /Volumes/Plan 9 - Dec 29/sys/src/libauthsrv/authdial.c
+--- ./libauthsrv/authdial.c	2014-01-16 21:07:53.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/libauthsrv/authdial.c	2007-10-18 12:50:14.000000000 -0700
+@@ -2,35 +2,35 @@
+ #include <libc.h>
+ #include <authsrv.h>
+ #include <bio.h>
+-//PAD #include <ndb.h>
++#include <ndb.h>
+ 
+ int
+ authdial(char *netroot, char *dom)
+ {
+-//PAD: 	char *p;
+-//PAD: 	int rv;
+-//PAD: 
+-//PAD: 	if(dom == nil)
+-//PAD: 		/* look for one relative to my machine */
+-//PAD: 		return dial(netmkaddr("$auth", netroot, "ticket"), 0, 0, 0);
+-//PAD: 
+-//PAD: 	/* look up an auth server in an authentication domain */
+-//PAD: 	p = csgetvalue(netroot, "authdom", dom, "auth", nil);
+-//PAD: 
+-//PAD: 	/* if that didn't work, just try the IP domain */
+-//PAD: 	if(p == nil)
+-//PAD: 		p = csgetvalue(netroot, "dom", dom, "auth", nil);
+-//PAD: 	/*
+-//PAD: 	 * if that didn't work, try p9auth.$dom.  this is very helpful if
+-//PAD: 	 * you can't edit /lib/ndb.
+-//PAD: 	 */
+-//PAD: 	if(p == nil)
+-//PAD: 		p = smprint("p9auth.%s", dom);
+-//PAD: 	if(p == nil){			/* should no longer ever happen */
+-//PAD: 		werrstr("no auth server found for %s", dom);
+-//PAD: 		return -1;
+-//PAD: 	}
+-//PAD: 	rv = dial(netmkaddr(p, netroot, "ticket"), 0, 0, 0);
+-//PAD: 	free(p);
+-//PAD: 	return rv;
++	char *p;
++	int rv;
++
++	if(dom == nil)
++		/* look for one relative to my machine */
++		return dial(netmkaddr("$auth", netroot, "ticket"), 0, 0, 0);
++
++	/* look up an auth server in an authentication domain */
++	p = csgetvalue(netroot, "authdom", dom, "auth", nil);
++
++	/* if that didn't work, just try the IP domain */
++	if(p == nil)
++		p = csgetvalue(netroot, "dom", dom, "auth", nil);
++	/*
++	 * if that didn't work, try p9auth.$dom.  this is very helpful if
++	 * you can't edit /lib/ndb.
++	 */
++	if(p == nil)
++		p = smprint("p9auth.%s", dom);
++	if(p == nil){			/* should no longer ever happen */
++		werrstr("no auth server found for %s", dom);
++		return -1;
++	}
++	rv = dial(netmkaddr(p, netroot, "ticket"), 0, 0, 0);
++	free(p);
++	return rv;
+ }
+Only in ./libauthsrv: authdial.c.clang2
+Only in ./libauthsrv: convA2M.8
+Only in ./libauthsrv: convA2M.c.clang2
+Only in ./libauthsrv: convM2A.8
+Only in ./libauthsrv: convM2A.c.clang2
+Only in ./libauthsrv: convM2PR.8
+Only in ./libauthsrv: convM2PR.c.clang2
+Only in ./libauthsrv: convM2T.8
+Only in ./libauthsrv: convM2T.c.clang2
+Only in ./libauthsrv: convM2TR.8
+Only in ./libauthsrv: convM2TR.c.clang2
+Only in ./libauthsrv: convPR2M.8
+Only in ./libauthsrv: convPR2M.c.clang2
+Only in ./libauthsrv: convT2M.8
+Only in ./libauthsrv: convT2M.c.clang2
+Only in ./libauthsrv: convTR2M.8
+Only in ./libauthsrv: convTR2M.c.clang2
+Only in ./libauthsrv: nvcsum.8
+Only in ./libauthsrv: nvcsum.c.clang2
+Only in ./libauthsrv: opasstokey.8
+Only in ./libauthsrv: opasstokey.c.clang2
+Only in ./libauthsrv: passtokey.8
+Only in ./libauthsrv: passtokey.c.clang2
+Only in ./libauthsrv: readnvram.8
+Only in ./libauthsrv: readnvram.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libavl
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libbin
+Only in ./libbio: bbuffered.8
+Only in ./libbio: bbuffered.c.clang2
+Only in ./libbio: bfildes.8
+Only in ./libbio: bfildes.c.clang2
+Only in ./libbio: bflush.8
+Only in ./libbio: bflush.c.clang2
+Only in ./libbio: bgetc.8
+Only in ./libbio: bgetc.c.clang2
+Only in ./libbio: bgetd.8
+Only in ./libbio: bgetd.c.clang2
+Only in ./libbio: bgetrune.8
+Only in ./libbio: bgetrune.c.clang2
+Only in ./libbio: binit.8
+Only in ./libbio: binit.c.clang2
+Only in ./libbio: boffset.8
+Only in ./libbio: boffset.c.clang2
+Only in ./libbio: bprint.8
+Only in ./libbio: bprint.c.clang2
+Only in ./libbio: bputc.8
+Only in ./libbio: bputc.c.clang2
+Only in ./libbio: bputrune.8
+Only in ./libbio: bputrune.c.clang2
+Only in ./libbio: brdline.8
+Only in ./libbio: brdline.c.clang2
+Only in ./libbio: brdstr.8
+Only in ./libbio: brdstr.c.clang2
+Only in ./libbio: bread.8
+Only in ./libbio: bread.c.clang2
+Only in ./libbio: bseek.8
+Only in ./libbio: bseek.c.clang2
+Only in ./libbio: bvprint.8
+Only in ./libbio: bvprint.c.clang2
+Only in ./libbio: bwrite.8
+Only in ./libbio: bwrite.c.clang2
+Only in ./libc/386: argv0.8
+Only in ./libc/386: atom.8
+Only in ./libc/386: cycles.8
+Only in ./libc/386: getcallerpc.8
+Only in ./libc/386: getfcr.8
+Only in ./libc/386: main9.8
+Only in ./libc/386: main9p.8
+Only in ./libc/386: memccpy.8
+Only in ./libc/386: memchr.8
+Only in ./libc/386: memcmp.8
+Only in ./libc/386: memcpy.8
+Only in ./libc/386: memmove.8
+Only in ./libc/386: memset.8
+Only in ./libc/386: muldiv.8
+Only in ./libc/386: notejmp.8
+Only in ./libc/386: notejmp.c.clang2
+Only in ./libc/386: setjmp.8
+Only in ./libc/386: sqrt.8
+Only in ./libc/386: strcat.8
+Only in ./libc/386: strchr.8
+Only in ./libc/386: strcpy.8
+Only in ./libc/386: strlen.8
+Only in ./libc/386: tas.8
+Only in ./libc/386: vlop.8
+Only in ./libc/386: vlrt.8
+Only in ./libc/386: vlrt.c.clang2
+Only in ./libc/9sys: abort.8
+Only in ./libc/9sys: abort.c.clang2
+Only in ./libc/9sys: access.8
+Only in ./libc/9sys: access.c.clang2
+Only in ./libc/9sys: announce.8
+Only in ./libc/9sys: announce.c.clang2
+Only in ./libc/9sys: convD2M.8
+Only in ./libc/9sys: convD2M.c.clang2
+Only in ./libc/9sys: convM2D.8
+Only in ./libc/9sys: convM2D.c.clang2
+Only in ./libc/9sys: convM2S.8
+Only in ./libc/9sys: convM2S.c.clang2
+Only in ./libc/9sys: convS2M.8
+Only in ./libc/9sys: convS2M.c.clang2
+Only in ./libc/9sys: cputime.8
+Only in ./libc/9sys: cputime.c.clang2
+Only in ./libc/9sys: ctime.8
+Only in ./libc/9sys: ctime.c.clang2
+Only in ./libc/9sys: dial.8
+Only in ./libc/9sys: dial.c.clang2
+Only in ./libc/9sys: dirfstat.8
+Only in ./libc/9sys: dirfstat.c.clang2
+Only in ./libc/9sys: dirfwstat.8
+Only in ./libc/9sys: dirfwstat.c.clang2
+Only in ./libc/9sys: dirmodefmt.8
+Only in ./libc/9sys: dirmodefmt.c.clang2
+Only in ./libc/9sys: dirread.8
+Only in ./libc/9sys: dirread.c.clang2
+Only in ./libc/9sys: dirstat.8
+Only in ./libc/9sys: dirstat.c.clang2
+Only in ./libc/9sys: dirwstat.8
+Only in ./libc/9sys: dirwstat.c.clang2
+Only in ./libc/9sys: fcallfmt.8
+Only in ./libc/9sys: fcallfmt.c.clang2
+Only in ./libc/9sys: fork.8
+Only in ./libc/9sys: fork.c.clang2
+Only in ./libc/9sys: getenv.8
+Only in ./libc/9sys: getenv.c.clang2
+Only in ./libc/9sys: getnetconninfo.8
+Only in ./libc/9sys: getnetconninfo.c.clang2
+Only in ./libc/9sys: getpid.8
+Only in ./libc/9sys: getpid.c.clang2
+Only in ./libc/9sys: getppid.8
+Only in ./libc/9sys: getppid.c.clang2
+Only in ./libc/9sys: getwd.8
+Only in ./libc/9sys: getwd.c.clang2
+Only in ./libc/9sys: iounit.8
+Only in ./libc/9sys: iounit.c.clang2
+Only in ./libc/9sys: nsec.8
+Only in ./libc/9sys: nsec.c.clang2
+Only in ./libc/9sys: nulldir.8
+Only in ./libc/9sys: nulldir.c.clang2
+Only in ./libc/9sys: postnote.8
+Only in ./libc/9sys: postnote.c.clang2
+Only in ./libc/9sys: privalloc.8
+Only in ./libc/9sys: privalloc.c.clang2
+Only in ./libc/9sys: pushssl.8
+Only in ./libc/9sys: pushssl.c.clang2
+Only in ./libc/9sys: pushtls.8
+Only in ./libc/9sys: pushtls.c.clang2
+Only in ./libc/9sys: putenv.8
+Only in ./libc/9sys: putenv.c.clang2
+Only in ./libc/9sys: qlock.8
+Only in ./libc/9sys: qlock.c.clang2
+Only in ./libc/9sys: read.8
+Only in ./libc/9sys: read.c.clang2
+Only in ./libc/9sys: read9pmsg.8
+Only in ./libc/9sys: read9pmsg.c.clang2
+Only in ./libc/9sys: readv.8
+Only in ./libc/9sys: readv.c.clang2
+Only in ./libc/9sys: rerrstr.8
+Only in ./libc/9sys: rerrstr.c.clang2
+Only in ./libc/9sys: sbrk.8
+Only in ./libc/9sys: sbrk.c.clang2
+Only in ./libc/9sys: setnetmtpt.8
+Only in ./libc/9sys: setnetmtpt.c.clang2
+Only in ./libc/9sys: sysfatal.8
+Only in ./libc/9sys: sysfatal.c.clang2
+Only in ./libc/9sys: syslog.8
+Only in ./libc/9sys: syslog.c.clang2
+Only in ./libc/9sys: sysname.8
+Only in ./libc/9sys: sysname.c.clang2
+Only in ./libc/9sys: time.8
+Only in ./libc/9sys: time.c.clang2
+Only in ./libc/9sys: times.8
+Only in ./libc/9sys: times.c.clang2
+Only in ./libc/9sys: tm2sec.8
+Only in ./libc/9sys: tm2sec.c.clang2
+Only in ./libc/9sys: truerand.8
+Only in ./libc/9sys: truerand.c.clang2
+Only in ./libc/9sys: wait.8
+Only in ./libc/9sys: wait.c.clang2
+Only in ./libc/9sys: waitpid.8
+Only in ./libc/9sys: waitpid.c.clang2
+Only in ./libc/9sys: werrstr.8
+Only in ./libc/9sys: werrstr.c.clang2
+Only in ./libc/9sys: write.8
+Only in ./libc/9sys: write.c.clang2
+Only in ./libc/9sys: writev.8
+Only in ./libc/9sys: writev.c.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./libc/9syscall/mkfile /Volumes/Plan 9 - Dec 29/sys/src/libc/9syscall/mkfile
+--- ./libc/9syscall/mkfile	2014-01-15 14:14:08.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/libc/9syscall/mkfile	2013-04-09 07:21:15.000000000 -0700
+@@ -1,5 +1,3 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ NPROC=1
+ </$objtype/mkfile
+ 
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libc: arm
+Only in ./libc/fmt: dofmt.8
+Only in ./libc/fmt: dofmt.c.clang2
+Only in ./libc/fmt: dorfmt.8
+Only in ./libc/fmt: dorfmt.c.clang2
+Only in ./libc/fmt: errfmt.8
+Only in ./libc/fmt: errfmt.c.clang2
+Only in ./libc/fmt: fltfmt.8
+Only in ./libc/fmt: fltfmt.c.clang2
+Only in ./libc/fmt: fmt.8
+Only in ./libc/fmt: fmt.c.clang2
+Only in ./libc/fmt: fmtdef.h.clang2
+Only in ./libc/fmt: fmtfd.8
+Only in ./libc/fmt: fmtfd.c.clang2
+Only in ./libc/fmt: fmtlock.8
+Only in ./libc/fmt: fmtlock.c.clang2
+Only in ./libc/fmt: fmtprint.8
+Only in ./libc/fmt: fmtprint.c.clang2
+Only in ./libc/fmt: fmtquote.8
+Only in ./libc/fmt: fmtquote.c.clang2
+Only in ./libc/fmt: fmtrune.8
+Only in ./libc/fmt: fmtrune.c.clang2
+Only in ./libc/fmt: fmtstr.8
+Only in ./libc/fmt: fmtstr.c.clang2
+Only in ./libc/fmt: fmtvprint.8
+Only in ./libc/fmt: fmtvprint.c.clang2
+Only in ./libc/fmt: fprint.8
+Only in ./libc/fmt: fprint.c.clang2
+Only in ./libc/fmt: print.8
+Only in ./libc/fmt: print.c.clang2
+Only in ./libc/fmt: runefmtstr.8
+Only in ./libc/fmt: runefmtstr.c.clang2
+Only in ./libc/fmt: runeseprint.8
+Only in ./libc/fmt: runeseprint.c.clang2
+Only in ./libc/fmt: runesmprint.8
+Only in ./libc/fmt: runesmprint.c.clang2
+Only in ./libc/fmt: runesnprint.8
+Only in ./libc/fmt: runesnprint.c.clang2
+Only in ./libc/fmt: runesprint.8
+Only in ./libc/fmt: runesprint.c.clang2
+Only in ./libc/fmt: runevseprint.8
+Only in ./libc/fmt: runevseprint.c.clang2
+Only in ./libc/fmt: runevsmprint.8
+Only in ./libc/fmt: runevsmprint.c.clang2
+Only in ./libc/fmt: runevsnprint.8
+Only in ./libc/fmt: runevsnprint.c.clang2
+Only in ./libc/fmt: seprint.8
+Only in ./libc/fmt: seprint.c.clang2
+Only in ./libc/fmt: smprint.8
+Only in ./libc/fmt: smprint.c.clang2
+Only in ./libc/fmt: snprint.8
+Only in ./libc/fmt: snprint.c.clang2
+Only in ./libc/fmt: sprint.8
+Only in ./libc/fmt: sprint.c.clang2
+Only in ./libc/fmt: vfprint.8
+Only in ./libc/fmt: vfprint.c.clang2
+Only in ./libc/fmt: vseprint.8
+Only in ./libc/fmt: vseprint.c.clang2
+Only in ./libc/fmt: vsmprint.8
+Only in ./libc/fmt: vsmprint.c.clang2
+Only in ./libc/fmt: vsnprint.8
+Only in ./libc/fmt: vsnprint.c.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./libc/mkfile /Volumes/Plan 9 - Dec 29/sys/src/libc/mkfile
+--- ./libc/mkfile	2014-01-17 15:13:51.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/libc/mkfile	2012-09-28 15:30:10.000000000 -0700
+@@ -1,5 +1,3 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ </$objtype/mkfile
+ 
+ PORTDIRS=9sys 9syscall fmt port
+@@ -8,7 +6,7 @@ OLDCPUS=sparc
+ 
+ all install:V:
+ 	for(i in $PORTDIRS $objtype)@{
+-		echo DIR: libc/$i
++		echo $i
+ 		cd $i
+ 		mk $MKFLAGS install
+ 	}
+Only in ./libc/port: _assert.8
+Only in ./libc/port: _assert.c.clang2
+Only in ./libc/port: abs.8
+Only in ./libc/port: abs.c.clang2
+Only in ./libc/port: asin.8
+Only in ./libc/port: asin.c.clang2
+Only in ./libc/port: atan.8
+Only in ./libc/port: atan.c.clang2
+Only in ./libc/port: atan2.8
+Only in ./libc/port: atan2.c.clang2
+Only in ./libc/port: atexit.8
+Only in ./libc/port: atexit.c.clang2
+Only in ./libc/port: atnotify.8
+Only in ./libc/port: atnotify.c.clang2
+Only in ./libc/port: atof.8
+Only in ./libc/port: atof.c.clang2
+Only in ./libc/port: atol.8
+Only in ./libc/port: atol.c.clang2
+Only in ./libc/port: atoll.8
+Only in ./libc/port: atoll.c.clang2
+Only in ./libc/port: charstod.8
+Only in ./libc/port: charstod.c.clang2
+Only in ./libc/port: cistrcmp.8
+Only in ./libc/port: cistrcmp.c.clang2
+Only in ./libc/port: cistrncmp.8
+Only in ./libc/port: cistrncmp.c.clang2
+Only in ./libc/port: cistrstr.8
+Only in ./libc/port: cistrstr.c.clang2
+Only in ./libc/port: cleanname.8
+Only in ./libc/port: cleanname.c.clang2
+Only in ./libc/port: crypt.8
+Only in ./libc/port: crypt.c.clang2
+Only in ./libc/port: ctype.8
+Only in ./libc/port: ctype.c.clang2
+Only in ./libc/port: encodefmt.8
+Only in ./libc/port: encodefmt.c.clang2
+Only in ./libc/port: execl.8
+Only in ./libc/port: execl.c.clang2
+Only in ./libc/port: exp.8
+Only in ./libc/port: exp.c.clang2
+Only in ./libc/port: fabs.8
+Only in ./libc/port: fabs.c.clang2
+Only in ./libc/port: floor.8
+Only in ./libc/port: floor.c.clang2
+Only in ./libc/port: fmod.8
+Only in ./libc/port: fmod.c.clang2
+Only in ./libc/port: frand.8
+Only in ./libc/port: frand.c.clang2
+Only in ./libc/port: frexp.8
+Only in ./libc/port: frexp.c.clang2
+Only in ./libc/port: getfields.8
+Only in ./libc/port: getfields.c.clang2
+Only in ./libc/port: getuser.8
+Only in ./libc/port: getuser.c.clang2
+Only in ./libc/port: hangup.8
+Only in ./libc/port: hangup.c.clang2
+Only in ./libc/port: hypot.8
+Only in ./libc/port: hypot.c.clang2
+Only in ./libc/port: lnrand.8
+Only in ./libc/port: lnrand.c.clang2
+Only in ./libc/port: lock.8
+Only in ./libc/port: lock.c.clang2
+Only in ./libc/port: log.8
+Only in ./libc/port: log.c.clang2
+Only in ./libc/port: lrand.8
+Only in ./libc/port: lrand.c.clang2
+Only in ./libc/port: malloc.8
+Only in ./libc/port: malloc.c.clang2
+Only in ./libc/port: mktemp.8
+Only in ./libc/port: mktemp.c.clang2
+Only in ./libc/port: nan.8
+Only in ./libc/port: nan.c.clang2
+Only in ./libc/port: needsrcquote.8
+Only in ./libc/port: needsrcquote.c.clang2
+Only in ./libc/port: netcrypt.8
+Only in ./libc/port: netcrypt.c.clang2
+Only in ./libc/port: netmkaddr.8
+Only in ./libc/port: netmkaddr.c.clang2
+Only in ./libc/port: nrand.8
+Only in ./libc/port: nrand.c.clang2
+Only in ./libc/port: ntruerand.8
+Only in ./libc/port: ntruerand.c.clang2
+Only in ./libc/port: perror.8
+Only in ./libc/port: perror.c.clang2
+Only in ./libc/port: pool.8
+Only in ./libc/port: pool.c.clang2
+Only in ./libc/port: pow.8
+Only in ./libc/port: pow.c.clang2
+Only in ./libc/port: pow10.8
+Only in ./libc/port: pow10.c.clang2
+Only in ./libc/port: profile.8
+Only in ./libc/port: profile.c.clang2
+Only in ./libc/port: qsort.8
+Only in ./libc/port: qsort.c.clang2
+Only in ./libc/port: quote.8
+Only in ./libc/port: quote.c.clang2
+Only in ./libc/port: rand.8
+Only in ./libc/port: rand.c.clang2
+Only in ./libc/port: readn.8
+Only in ./libc/port: readn.c.clang2
+Only in ./libc/port: rune.8
+Only in ./libc/port: rune.c.clang2
+Only in ./libc/port: runebase.8
+Only in ./libc/port: runebase.c.clang2
+Only in ./libc/port: runebsearch.8
+Only in ./libc/port: runebsearch.c.clang2
+Only in ./libc/port: runestrcat.8
+Only in ./libc/port: runestrcat.c.clang2
+Only in ./libc/port: runestrchr.8
+Only in ./libc/port: runestrchr.c.clang2
+Only in ./libc/port: runestrcmp.8
+Only in ./libc/port: runestrcmp.c.clang2
+Only in ./libc/port: runestrcpy.8
+Only in ./libc/port: runestrcpy.c.clang2
+Only in ./libc/port: runestrdup.8
+Only in ./libc/port: runestrdup.c.clang2
+Only in ./libc/port: runestrecpy.8
+Only in ./libc/port: runestrecpy.c.clang2
+Only in ./libc/port: runestrlen.8
+Only in ./libc/port: runestrlen.c.clang2
+Only in ./libc/port: runestrncat.8
+Only in ./libc/port: runestrncat.c.clang2
+Only in ./libc/port: runestrncmp.8
+Only in ./libc/port: runestrncmp.c.clang2
+Only in ./libc/port: runestrncpy.8
+Only in ./libc/port: runestrncpy.c.clang2
+Only in ./libc/port: runestrrchr.8
+Only in ./libc/port: runestrrchr.c.clang2
+Only in ./libc/port: runestrstr.8
+Only in ./libc/port: runestrstr.c.clang2
+Only in ./libc/port: runetype.8
+Only in ./libc/port: runetype.c.clang2
+Only in ./libc/port: runetypebody-6.2.0.h.clang2
+Only in ./libc/port: sin.8
+Only in ./libc/port: sin.c.clang2
+Only in ./libc/port: sinh.8
+Only in ./libc/port: sinh.c.clang2
+Only in ./libc/port: strcmp.8
+Only in ./libc/port: strcmp.c.clang2
+Only in ./libc/port: strcspn.8
+Only in ./libc/port: strcspn.c.clang2
+Only in ./libc/port: strdup.8
+Only in ./libc/port: strdup.c.clang2
+Only in ./libc/port: strecpy.8
+Only in ./libc/port: strecpy.c.clang2
+Only in ./libc/port: strncat.8
+Only in ./libc/port: strncat.c.clang2
+Only in ./libc/port: strncmp.8
+Only in ./libc/port: strncmp.c.clang2
+Only in ./libc/port: strncpy.8
+Only in ./libc/port: strncpy.c.clang2
+Only in ./libc/port: strpbrk.8
+Only in ./libc/port: strpbrk.c.clang2
+Only in ./libc/port: strrchr.8
+Only in ./libc/port: strrchr.c.clang2
+Only in ./libc/port: strspn.8
+Only in ./libc/port: strspn.c.clang2
+Only in ./libc/port: strstr.8
+Only in ./libc/port: strstr.c.clang2
+Only in ./libc/port: strtod.8
+Only in ./libc/port: strtod.c.clang2
+Only in ./libc/port: strtok.8
+Only in ./libc/port: strtok.c.clang2
+Only in ./libc/port: strtol.8
+Only in ./libc/port: strtol.c.clang2
+Only in ./libc/port: strtoll.8
+Only in ./libc/port: strtoll.c.clang2
+Only in ./libc/port: strtoul.8
+Only in ./libc/port: strtoul.c.clang2
+Only in ./libc/port: strtoull.8
+Only in ./libc/port: strtoull.c.clang2
+Only in ./libc/port: tan.8
+Only in ./libc/port: tan.c.clang2
+Only in ./libc/port: tanh.8
+Only in ./libc/port: tanh.c.clang2
+Only in ./libc/port: tokenize.8
+Only in ./libc/port: tokenize.c.clang2
+Only in ./libc/port: toupper.8
+Only in ./libc/port: toupper.c.clang2
+Only in ./libc/port: u16.8
+Only in ./libc/port: u16.c.clang2
+Only in ./libc/port: u32.8
+Only in ./libc/port: u32.c.clang2
+Only in ./libc/port: u64.8
+Only in ./libc/port: u64.c.clang2
+Only in ./libc/port: utfecpy.8
+Only in ./libc/port: utfecpy.c.clang2
+Only in ./libc/port: utflen.8
+Only in ./libc/port: utflen.c.clang2
+Only in ./libc/port: utfnlen.8
+Only in ./libc/port: utfnlen.c.clang2
+Only in ./libc/port: utfrrune.8
+Only in ./libc/port: utfrrune.c.clang2
+Only in ./libc/port: utfrune.8
+Only in ./libc/port: utfrune.c.clang2
+Only in ./libc/port: utfutf.8
+Only in ./libc/port: utfutf.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libc: power
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libc: sparc
+Only in ./libcomplete: complete.8
+Only in ./libcomplete: complete.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libcontrol
+Only in ./libdisk: disk.8
+Only in ./libdisk: disk.c.clang2
+Only in ./libdisk: proto.8
+Only in ./libdisk: proto.c.clang2
+Only in ./libdisk: scsi.8
+Only in ./libdisk: scsi.c.clang2
+Only in ./libdraw: alloc.8
+Only in ./libdraw: alloc.c.clang2
+Only in ./libdraw: allocimagemix.8
+Only in ./libdraw: allocimagemix.c.clang2
+Only in ./libdraw: arith.8
+Only in ./libdraw: arith.c.clang2
+Only in ./libdraw: bezier.8
+Only in ./libdraw: bezier.c.clang2
+Only in ./libdraw: border.8
+Only in ./libdraw: border.c.clang2
+Only in ./libdraw: buildfont.8
+Only in ./libdraw: buildfont.c.clang2
+Only in ./libdraw: bytesperline.8
+Only in ./libdraw: bytesperline.c.clang2
+Only in ./libdraw: chan.8
+Only in ./libdraw: chan.c.clang2
+Only in ./libdraw: cloadimage.8
+Only in ./libdraw: cloadimage.c.clang2
+Only in ./libdraw: computil.8
+Only in ./libdraw: computil.c.clang2
+Only in ./libdraw: creadimage.8
+Only in ./libdraw: creadimage.c.clang2
+Only in ./libdraw: debug.8
+Only in ./libdraw: debug.c.clang2
+Only in ./libdraw: defont.8
+Only in ./libdraw: defont.c.clang2
+Only in ./libdraw: draw.8
+Only in ./libdraw: draw.c.clang2
+Only in ./libdraw: drawrepl.8
+Only in ./libdraw: drawrepl.c.clang2
+Only in ./libdraw: egetrect.8
+Only in ./libdraw: egetrect.c.clang2
+Only in ./libdraw: ellipse.8
+Only in ./libdraw: ellipse.c.clang2
+Only in ./libdraw: emenuhit.8
+Only in ./libdraw: emenuhit.c.clang2
+Only in ./libdraw: event.8
+Only in ./libdraw: event.c.clang2
+Only in ./libdraw: fmt.8
+Only in ./libdraw: fmt.c.clang2
+Only in ./libdraw: font.8
+Only in ./libdraw: font.c.clang2
+Only in ./libdraw: freesubfont.8
+Only in ./libdraw: freesubfont.c.clang2
+Only in ./libdraw: getdefont.8
+Only in ./libdraw: getdefont.c.clang2
+Only in ./libdraw: getrect.8
+Only in ./libdraw: getrect.c.clang2
+Only in ./libdraw: getsubfont.8
+Only in ./libdraw: getsubfont.c.clang2
+Only in ./libdraw: icossin.8
+Only in ./libdraw: icossin.c.clang2
+Only in ./libdraw: icossin2.8
+Only in ./libdraw: icossin2.c.clang2
+Only in ./libdraw: init.8
+Only in ./libdraw: init.c.clang2
+Only in ./libdraw: keyboard.8
+Only in ./libdraw: keyboard.c.clang2
+Only in ./libdraw: line.8
+Only in ./libdraw: line.c.clang2
+Only in ./libdraw: loadimage.8
+Only in ./libdraw: loadimage.c.clang2
+Only in ./libdraw: menuhit.8
+Only in ./libdraw: menuhit.c.clang2
+Only in ./libdraw: mkfont.8
+Only in ./libdraw: mkfont.c.clang2
+Only in ./libdraw: mouse.8
+Only in ./libdraw: mouse.c.clang2
+Only in ./libdraw: newwindow.8
+Only in ./libdraw: newwindow.c.clang2
+Only in ./libdraw: openfont.8
+Only in ./libdraw: openfont.c.clang2
+Only in ./libdraw: poly.8
+Only in ./libdraw: poly.c.clang2
+Only in ./libdraw: readcolmap.8
+Only in ./libdraw: readcolmap.c.clang2
+Only in ./libdraw: readimage.8
+Only in ./libdraw: readimage.c.clang2
+Only in ./libdraw: readsubfont.8
+Only in ./libdraw: readsubfont.c.clang2
+Only in ./libdraw: rectclip.8
+Only in ./libdraw: rectclip.c.clang2
+Only in ./libdraw: replclipr.8
+Only in ./libdraw: replclipr.c.clang2
+Only in ./libdraw: rgb.8
+Only in ./libdraw: rgb.c.clang2
+Only in ./libdraw: scroll.8
+Only in ./libdraw: scroll.c.clang2
+Only in ./libdraw: string.8
+Only in ./libdraw: string.c.clang2
+Only in ./libdraw: stringbg.8
+Only in ./libdraw: stringbg.c.clang2
+Only in ./libdraw: stringsubfont.8
+Only in ./libdraw: stringsubfont.c.clang2
+Only in ./libdraw: stringwidth.8
+Only in ./libdraw: stringwidth.c.clang2
+Only in ./libdraw: subfont.8
+Only in ./libdraw: subfont.c.clang2
+Only in ./libdraw: subfontcache.8
+Only in ./libdraw: subfontcache.c.clang2
+Only in ./libdraw: subfontname.8
+Only in ./libdraw: subfontname.c.clang2
+Only in ./libdraw: unloadimage.8
+Only in ./libdraw: unloadimage.c.clang2
+Only in ./libdraw: window.8
+Only in ./libdraw: window.c.clang2
+Only in ./libdraw: writecolmap.8
+Only in ./libdraw: writecolmap.c.clang2
+Only in ./libdraw: writeimage.8
+Only in ./libdraw: writeimage.c.clang2
+Only in ./libdraw: writesubfont.8
+Only in ./libdraw: writesubfont.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libflate
+Only in ./libframe: frbox.8
+Only in ./libframe: frbox.c.clang2
+Only in ./libframe: frdelete.8
+Only in ./libframe: frdelete.c.clang2
+Only in ./libframe: frdraw.8
+Only in ./libframe: frdraw.c.clang2
+Only in ./libframe: frinit.8
+Only in ./libframe: frinit.c.clang2
+Only in ./libframe: frinsert.8
+Only in ./libframe: frinsert.c.clang2
+Only in ./libframe: frptofchar.8
+Only in ./libframe: frptofchar.c.clang2
+Only in ./libframe: frselect.8
+Only in ./libframe: frselect.c.clang2
+Only in ./libframe: frstr.8
+Only in ./libframe: frstr.c.clang2
+Only in ./libframe: frutil.8
+Only in ./libframe: frutil.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libgeometry
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libhtml
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libhttpd
+Only in ./libip: bo.8
+Only in ./libip: bo.c.clang2
+Only in ./libip: classmask.8
+Only in ./libip: classmask.c.clang2
+Only in ./libip: eipfmt.8
+Only in ./libip: eipfmt.c.clang2
+Only in ./libip: equivip.8
+Only in ./libip: equivip.c.clang2
+Only in ./libip: ipaux.8
+Only in ./libip: ipaux.c.clang2
+Only in ./libip: myetheraddr.8
+Only in ./libip: myetheraddr.c.clang2
+Only in ./libip: myipaddr.8
+Only in ./libip: myipaddr.c.clang2
+Only in ./libip: parseether.8
+Only in ./libip: parseether.c.clang2
+Only in ./libip: parseip.8
+Only in ./libip: parseip.c.clang2
+Only in ./libip: ptclbsum.8
+Only in ./libip: ptclbsum.c.clang2
+Only in ./libip: readipifc.8
+Only in ./libip: readipifc.c.clang2
+Only in ./liblex: allprint.8
+Only in ./liblex: allprint.c.clang2
+Only in ./liblex: main.8
+Only in ./liblex: main.c.clang2
+Only in ./liblex: reject.8
+Only in ./liblex: reject.c.clang2
+Only in ./liblex: yyless.8
+Only in ./liblex: yyless.c.clang2
+Only in ./liblex: yywrap.8
+Only in ./liblex: yywrap.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 0.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 5.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 5db.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 5obj.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 6.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 68020
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 68020.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 68020db.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 68020obj.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 6c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 6obj.c
+Only in ./libmach: 8.8
+Only in ./libmach: 8.c.clang2
+Only in ./libmach: 8db.8
+Only in ./libmach: 8db.c.clang2
+Only in ./libmach: 8obj.8
+Only in ./libmach: 8obj.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 9.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 9c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: 9obj.c
+Only in ./libmach: access.8
+Only in ./libmach: access.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: alpha
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: alpha.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: alphadb.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: alphaobj.c
+Only in ./libmach: elf.h.clang2
+Only in ./libmach: executable.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./libmach/executable.c /Volumes/Plan 9 - Dec 29/sys/src/libmach/executable.c
+--- ./libmach/executable.c	2014-01-17 10:50:23.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/libmach/executable.c	2013-08-15 12:07:41.000000000 -0700
+@@ -57,9 +57,18 @@ typedef struct Exectable{
+ 	int	(*hparse)(int, Fhdr*, ExecHdr*);
+ } ExecTable;
+ 
+-//PAD: removed many archi
+ extern	Mach	mmips;
++extern	Mach	mmips2le;
++extern	Mach	mmips2be;
++extern	Mach	msparc;
++extern	Mach	msparc64;
++extern	Mach	m68020;
+ extern	Mach	mi386;
++extern	Mach	mamd64;
++extern	Mach	marm;
++extern	Mach	mpower;
++extern	Mach	mpower64;
++extern	Mach	malpha;
+ 
+ ExecTable exectab[] =
+ {
+@@ -81,6 +90,24 @@ ExecTable exectab[] =
+ 		sizeof(Exec),
+ 		beswal,
+ 		adotout },
++	{ M_MAGIC,			/* Mips 4.out */
++		"mips 4k plan 9 executable BE",
++		"mips 4k plan 9 dlm BE",
++		FMIPS2BE,
++		1,
++		&mmips2be,
++		sizeof(Exec),
++		beswal,
++		adotout },
++	{ N_MAGIC,			/* Mips 0.out */
++		"mips 4k plan 9 executable LE",
++		"mips 4k plan 9 dlm LE",
++		FMIPS2LE,
++		1,
++		&mmips2le,
++		sizeof(Exec),
++		beswal,
++		adotout },
+ 	{ 0x160<<16,			/* Mips boot image */
+ 		"mips plan 9 boot image",
+ 		nil,
+@@ -90,6 +117,60 @@ ExecTable exectab[] =
+ 		sizeof(struct mipsexec),
+ 		beswal,
+ 		mipsboot },
++	{ (0x160<<16)|3,		/* Mips boot image */
++		"mips 4k plan 9 boot image",
++		nil,
++		FMIPSB,
++		0,
++		&mmips2be,
++		sizeof(struct mips4kexec),
++		beswal,
++		mips4kboot },
++	{ K_MAGIC,			/* Sparc k.out */
++		"sparc plan 9 executable",
++		"sparc plan 9 dlm",
++		FSPARC,
++		1,
++		&msparc,
++		sizeof(Exec),
++		beswal,
++		adotout },
++	{ 0x01030107, 			/* Sparc boot image */
++		"sparc plan 9 boot image",
++		nil,
++		FSPARCB,
++		0,
++		&msparc,
++		sizeof(struct sparcexec),
++		beswal,
++		sparcboot },
++	{ U_MAGIC,			/* Sparc64 u.out */
++		"sparc64 plan 9 executable",
++		"sparc64 plan 9 dlm",
++		FSPARC64,
++		1,
++		&msparc64,
++		sizeof(Exec),
++		beswal,
++		adotout },
++	{ A_MAGIC,			/* 68020 2.out & boot image */
++		"68020 plan 9 executable",
++		"68020 plan 9 dlm",
++		F68020,
++		1,
++		&m68020,
++		sizeof(Exec),
++		beswal,
++		common },
++	{ 0xFEEDFACE,			/* Next boot image */
++		"next plan 9 boot image",
++		nil,
++		FNEXTB,
++		0,
++		&m68020,
++		sizeof(struct nextexec),
++		beswal,
++		nextboot },
+ 	{ I_MAGIC,			/* I386 8.out & boot image */
+ 		"386 plan 9 executable",
+ 		"386 plan 9 dlm",
+@@ -99,6 +180,33 @@ ExecTable exectab[] =
+ 		sizeof(Exec),
+ 		beswal,
+ 		common },
++	{ S_MAGIC,			/* amd64 6.out & boot image */
++		"amd64 plan 9 executable",
++		"amd64 plan 9 dlm",
++		FAMD64,
++		1,
++		&mamd64,
++		sizeof(Exec)+8,
++		nil,
++		commonllp64 },
++	{ Q_MAGIC,			/* PowerPC q.out & boot image */
++		"power plan 9 executable",
++		"power plan 9 dlm",
++		FPOWER,
++		1,
++		&mpower,
++		sizeof(Exec),
++		beswal,
++		common },
++	{ T_MAGIC,			/* power64 9.out & boot image */
++		"power64 plan 9 executable",
++		"power64 plan 9 dlm",
++		FPOWER64,
++		1,
++		&mpower64,
++		sizeof(Exec)+8,
++		nil,
++		commonllp64 },
+ 	{ ELF_MAG,			/* any ELF */
+ 		"elf executable",
+ 		nil,
+@@ -108,6 +216,42 @@ ExecTable exectab[] =
+ 		sizeof(Ehdr),
+ 		nil,
+ 		elfdotout },
++	{ E_MAGIC,			/* Arm 5.out and boot image */
++		"arm plan 9 executable",
++		"arm plan 9 dlm",
++		FARM,
++		1,
++		&marm,
++		sizeof(Exec),
++		beswal,
++		common },
++	{ (143<<16)|0413,		/* (Free|Net)BSD Arm */
++		"arm *bsd executable",
++		nil,
++		FARM,
++		0,
++		&marm,
++		sizeof(Exec),
++		leswal,
++		armdotout },
++	{ L_MAGIC,			/* alpha 7.out */
++		"alpha plan 9 executable",
++		"alpha plan 9 dlm",
++		FALPHA,
++		1,
++		&malpha,
++		sizeof(Exec),
++		beswal,
++		common },
++	{ 0x0700e0c3,			/* alpha boot image */
++		"alpha plan 9 boot image",
++		nil,
++		FALPHA,
++		0,
++		&malpha,
++		sizeof(Exec),
++		beswal,
++		common },
+ 	{ 0 },
+ };
+ 
+@@ -473,6 +617,16 @@ elf64dotout(int fd, Fhdr *fp, ExecHdr *h
+ 	switch(ep->machine) {
+ 	default:
+ 		return 0;
++	case AMD64:
++		mach = &mamd64;
++		fp->type = FAMD64;
++		fp->name = "amd64 ELF64 executable";
++		break;
++	case POWER64:
++		mach = &mpower64;
++		fp->type = FPOWER64;
++		fp->name = "power64 ELF64 executable";
++		break;
+ 	}
+ 
+ 	if(ep->phentsize != sizeof(P64hdr)) {
+@@ -582,6 +736,31 @@ elf32dotout(int fd, Fhdr *fp, ExecHdr *h
+ 		fp->type = FMIPS;
+ 		fp->name = "mips ELF32 executable";
+ 		break;
++	case SPARC64:
++		mach = &msparc64;
++		fp->type = FSPARC64;
++		fp->name = "sparc64 ELF32 executable";
++		break;
++	case POWER:
++		mach = &mpower;
++		fp->type = FPOWER;
++		fp->name = "power ELF32 executable";
++		break;
++	case POWER64:
++		mach = &mpower64;
++		fp->type = FPOWER64;
++		fp->name = "power64 ELF32 executable";
++		break;
++	case AMD64:
++		mach = &mamd64;
++		fp->type = FAMD64;
++		fp->name = "amd64 ELF32 executable";
++		break;
++	case ARM:
++		mach = &marm;
++		fp->type = FARM;
++		fp->name = "arm ELF32 executable";
++		break;
+ 	default:
+ 		return 0;
+ 	}
+Only in ./libmach: executable.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: k.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: kdb.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: kobj.c
+Only in ./libmach: machdata.8
+Only in ./libmach: machdata.c.clang2
+Only in ./libmach: map.8
+Only in ./libmach: map.c.clang2
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./libmach/mkfile /Volumes/Plan 9 - Dec 29/sys/src/libmach/mkfile
+--- ./libmach/mkfile	2014-01-16 22:09:33.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/libmach/mkfile	2012-09-27 11:01:07.000000000 -0700
+@@ -11,11 +11,34 @@ FILES=\
+ 	machdata\
+ 	setmach\
+ 	v\
++	k\
++	sparc64\
++	q\
++	0\
++	68020\
++	5\
++	6\
++	alpha\
+ 	8\
++	9\
+ 	vdb\
++	kdb\
++	sparc64db\
++	qdb\
++	68020db\
++	5db\
++	alphadb\
+ 	8db\
+ 	vobj\
++	kobj\
++	sparc64obj\
++	68020obj\
++	5obj\
++	6obj\
++	alphaobj\
+ 	8obj\
++	9obj\
++	qobj\
+ 	vcodas\
+ 
+ HFILES=/sys/include/mach.h elf.h obj.h
+@@ -33,5 +56,13 @@ UPDATE=mkfile\
+ 
+ CFLAGS=$CFLAGS -I/sys/src/cmd
+ 
++68020obj.$O: 68020/2.out.h
++5obj.$O: /sys/src/cmd/5c/5.out.h
++6obj.$O: /sys/src/cmd/6c/6.out.h
++alphaobj.$O: alpha/7.out.h
+ 8obj.$O: /sys/src/cmd/8c/8.out.h
++9obj.$O: 9c/9.out.h
++kobj.$O: /sys/src/cmd/kc/k.out.h
++qobj.$O: /sys/src/cmd/qc/q.out.h
++sparc64obj.$O: sparc64/u.out.h
+ vobj.$O: /sys/src/cmd/vc/v.out.h
+Only in ./libmach: obj.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./libmach/obj.c /Volumes/Plan 9 - Dec 29/sys/src/libmach/obj.c
+--- ./libmach/obj.c	2014-01-17 10:57:19.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/libmach/obj.c	2007-05-11 06:38:41.000000000 -0700
+@@ -20,12 +20,26 @@ enum
+ 	HASHMUL	= 79L,
+ };
+ 
+-int			/* in [$OS].c */
++int	_is2(char*),		/* in [$OS].c */
++	_is5(char*),
++	_is6(char*),
++	_is7(char*),
+   _is8(char*),
++	_is9(char*),
++	_isk(char*),
++	_isq(char*),
+   _isv(char*),
++	_isu(char*),
++	_read2(Biobuf*, Prog*),
++	_read5(Biobuf*, Prog*),
++	_read6(Biobuf*, Prog*),
++	_read7(Biobuf*, Prog*),
+   _read8(Biobuf*, Prog*),
+-  _readv(Biobuf*, Prog*);
+-
++	_read9(Biobuf*, Prog*),
++	_readk(Biobuf*, Prog*),
++	_readq(Biobuf*, Prog*),
++	_readv(Biobuf*, Prog*),
++	_readu(Biobuf*, Prog*);
+ 
+ typedef struct Obj	Obj;
+ typedef struct Symtab	Symtab;
+@@ -39,8 +53,16 @@ struct	Obj		/* functions to handle each 
+ 
+ static Obj	obj[] =
+ {			/* functions to identify and parse each type of obj */
++	[Obj68020]	"68020 .2",	_is2, _read2,
++	[ObjAmd64]	"amd64 .6",	_is6, _read6,
++	[ObjArm]	"arm .5",	_is5, _read5,
++	[ObjAlpha]	"alpha .7",	_is7, _read7,
+ 	[Obj386]	"386 .8",	_is8, _read8,
++	[ObjSparc]	"sparc .k",	_isk, _readk,
++	[ObjPower]	"power .q",	_isq, _readq,
+ 	[ObjMips]	"mips .v",	_isv, _readv,
++	[ObjSparc64]	"sparc64 .u",	_isu, _readu,
++	[ObjPower64]	"power64 .9",	_is9, _read9,
+ 	[Maxobjtype]	0, 0
+ };
+ 
+Only in ./libmach: obj.c.clang2
+Only in ./libmach: obj.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: q.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: qdb.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: qobj.c
+Only in ./libmach: setmach.8
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./libmach/setmach.c /Volumes/Plan 9 - Dec 29/sys/src/libmach/setmach.c
+--- ./libmach/setmach.c	2014-01-17 10:52:35.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/libmach/setmach.c	2009-10-16 07:19:07.000000000 -0700
+@@ -16,8 +16,10 @@ struct machtab
+ 	Machdata	*machdata;		/* machine functions */
+ };
+ 
+-extern	Mach		mmips, mi386;
+-extern	Machdata	mipsmach, i386mach;
++extern	Mach		mmips, msparc, m68020, mi386, mamd64,
++			marm, mmips2be, mmips2le, mpower, mpower64, malpha, msparc64;
++extern	Machdata	mipsmach, mipsmachle, sparcmach, m68020mach, i386mach,
++			armmach, mipsmach2le, powermach, alphamach, sparc64mach;
+ 
+ /*
+  *	machine selection table.  machines with native disassemblers should
+@@ -26,18 +28,60 @@ extern	Machdata	mipsmach, i386mach;
+  */
+ Machtab	machines[] =
+ {
++	{	"68020",			/*68020*/
++		F68020,
++		F68020B,
++		A68020,
++		&m68020,
++		&m68020mach,	},
++	{	"68020",			/*Next 68040 bootable*/
++		F68020,
++		FNEXTB,
++		A68020,
++		&m68020,
++		&m68020mach,	},
++	{	"mips2LE",			/*plan 9 mips2 little endian*/
++		FMIPS2LE,
++		0,
++		AMIPS,
++		&mmips2le,
++		&mipsmach2le, 	},
++	{	"mipsLE",				/*plan 9 mips little endian*/
++		FMIPSLE,
++		0,
++		AMIPS,
++		&mmips,
++		&mipsmachle, 	},
+ 	{	"mips",				/*plan 9 mips*/
+ 		FMIPS,
+ 		FMIPSB,
+ 		AMIPS,
+ 		&mmips,
+ 		&mipsmach, 	},
++	{	"mips2",			/*plan 9 mips2*/
++		FMIPS2BE,
++		FMIPSB,
++		AMIPS,
++		&mmips2be,
++		&mipsmach, 	},		/* shares debuggers with native mips */
+ 	{	"mipsco",			/*native mips - must follow plan 9*/
+ 		FMIPS,
+ 		FMIPSB,
+ 		AMIPSCO,
+ 		&mmips,
+ 		&mipsmach,	},
++	{	"sparc",			/*plan 9 sparc */
++		FSPARC,
++		FSPARCB,
++		ASPARC,
++		&msparc,
++		&sparcmach,	},
++	{	"sunsparc",			/*native sparc - must follow plan 9*/
++		FSPARC,
++		FSPARCB,
++		ASUNSPARC,
++		&msparc,
++		&sparcmach,	},
+ 	{	"386",				/*plan 9 386*/
+ 		FI386,
+ 		FI386B,
+@@ -50,6 +94,42 @@ Machtab	machines[] =
+ 		AI8086,
+ 		&mi386,
+ 		&i386mach,	},
++	{	"amd64",			/*amd64*/
++		FAMD64,
++		FAMD64B,
++		AAMD64,
++		&mamd64,
++		&i386mach,	},
++	{	"arm",				/*ARM*/
++		FARM,
++		FARMB,
++		AARM,
++		&marm,
++		&armmach,	},
++	{	"power",			/*PowerPC*/
++		FPOWER,
++		FPOWERB,
++		APOWER,
++		&mpower,
++		&powermach,	},
++	{	"power64",			/*PowerPC*/
++		FPOWER64,
++		FPOWER64B,
++		APOWER64,
++		&mpower64,
++		&powermach,	},
++	{	"alpha",			/*Alpha*/
++		FALPHA,
++		FALPHAB,
++		AALPHA,
++		&malpha,
++		&alphamach,	},
++	{	"sparc64",			/*plan 9 sparc64 */
++		FSPARC64,
++		FSPARCB,			/* XXX? */
++		ASPARC64,
++		&msparc64,
++		&sparc64mach,	},
+ 	{	0		},		/*the terminator*/
+ };
+ 
+Only in ./libmach: setmach.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: sparc64
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: sparc64.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: sparc64db.c
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmach: sparc64obj.c
+Only in ./libmach: swap.8
+Only in ./libmach: swap.c.clang2
+Only in ./libmach: sym.8
+Only in ./libmach: sym.c.clang2
+Only in ./libmach: v.8
+Only in ./libmach: v.c.clang2
+Only in ./libmach: vcodas.8
+Only in ./libmach: vcodas.c.clang2
+Only in ./libmach: vdb.8
+Only in ./libmach: vdb.c.clang2
+Only in ./libmach: vobj.8
+Only in ./libmach: vobj.c.clang2
+Only in ./libmemdraw: alloc.8
+Only in ./libmemdraw: alloc.c.clang2
+Only in ./libmemdraw: arc.8
+Only in ./libmemdraw: arc.c.clang2
+Only in ./libmemdraw: cload.8
+Only in ./libmemdraw: cload.c.clang2
+Only in ./libmemdraw: cmap.8
+Only in ./libmemdraw: cmap.c.clang2
+Only in ./libmemdraw: cread.8
+Only in ./libmemdraw: cread.c.clang2
+Only in ./libmemdraw: defont.8
+Only in ./libmemdraw: defont.c.clang2
+Only in ./libmemdraw: draw.8
+Only in ./libmemdraw: draw.c.clang2
+Only in ./libmemdraw: ellipse.8
+Only in ./libmemdraw: ellipse.c.clang2
+Only in ./libmemdraw: fillpoly.8
+Only in ./libmemdraw: fillpoly.c.clang2
+Only in ./libmemdraw: hwdraw.8
+Only in ./libmemdraw: hwdraw.c.clang2
+Only in ./libmemdraw: iprint.8
+Only in ./libmemdraw: iprint.c.clang2
+Only in ./libmemdraw: line.8
+Only in ./libmemdraw: line.c.clang2
+Only in ./libmemdraw: load.8
+Only in ./libmemdraw: load.c.clang2
+Only in ./libmemdraw: openmemsubfont.8
+Only in ./libmemdraw: openmemsubfont.c.clang2
+Only in ./libmemdraw: poly.8
+Only in ./libmemdraw: poly.c.clang2
+Only in ./libmemdraw: read.8
+Only in ./libmemdraw: read.c.clang2
+Only in ./libmemdraw: string.8
+Only in ./libmemdraw: string.c.clang2
+Only in ./libmemdraw: subfont.8
+Only in ./libmemdraw: subfont.c.clang2
+Only in ./libmemdraw: unload.8
+Only in ./libmemdraw: unload.c.clang2
+Only in ./libmemdraw: write.8
+Only in ./libmemdraw: write.c.clang2
+Only in ./libmemlayer: draw.8
+Only in ./libmemlayer: draw.c.clang2
+Only in ./libmemlayer: lalloc.8
+Only in ./libmemlayer: lalloc.c.clang2
+Only in ./libmemlayer: layerop.8
+Only in ./libmemlayer: layerop.c.clang2
+Only in ./libmemlayer: ldelete.8
+Only in ./libmemlayer: ldelete.c.clang2
+Only in ./libmemlayer: lhide.8
+Only in ./libmemlayer: lhide.c.clang2
+Only in ./libmemlayer: line.8
+Only in ./libmemlayer: line.c.clang2
+Only in ./libmemlayer: load.8
+Only in ./libmemlayer: load.c.clang2
+Only in ./libmemlayer: lorigin.8
+Only in ./libmemlayer: lorigin.c.clang2
+Only in ./libmemlayer: lsetrefresh.8
+Only in ./libmemlayer: lsetrefresh.c.clang2
+Only in ./libmemlayer: ltofront.8
+Only in ./libmemlayer: ltofront.c.clang2
+Only in ./libmemlayer: ltorear.8
+Only in ./libmemlayer: ltorear.c.clang2
+Only in ./libmemlayer: unload.8
+Only in ./libmemlayer: unload.c.clang2
+Only in ./libmp/386: mpdigdiv.8
+Only in ./libmp/386: mpvecadd.8
+Only in ./libmp/386: mpvecdigmuladd.8
+Only in ./libmp/386: mpvecdigmulsub.8
+Only in ./libmp/386: mpvecsub.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmp: arm
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./libmp/mkfile /Volumes/Plan 9 - Dec 29/sys/src/libmp/mkfile
+--- ./libmp/mkfile	2014-01-17 15:14:48.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/libmp/mkfile	2011-04-30 13:05:58.000000000 -0700
+@@ -1,5 +1,3 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ </$objtype/mkfile
+ 
+ DIRS=port $CPUS
+@@ -8,7 +6,7 @@ default:V:	all
+ 
+ install all:V:
+ 	for(i in port $objtype)@{
+-		echo DIR: libmp/$i
++		echo $i
+ 		cd $i
+ 		mk $MKFLAGS $target
+ 	}
+Only in ./libmp/port: betomp.8
+Only in ./libmp/port: betomp.c.clang2
+Only in ./libmp/port: crt.8
+Only in ./libmp/port: crt.c.clang2
+Only in ./libmp/port: letomp.8
+Only in ./libmp/port: letomp.c.clang2
+Only in ./libmp/port: mpadd.8
+Only in ./libmp/port: mpadd.c.clang2
+Only in ./libmp/port: mpaux.8
+Only in ./libmp/port: mpaux.c.clang2
+Only in ./libmp/port: mpcmp.8
+Only in ./libmp/port: mpcmp.c.clang2
+Only in ./libmp/port: mpdiv.8
+Only in ./libmp/port: mpdiv.c.clang2
+Only in ./libmp/port: mpexp.8
+Only in ./libmp/port: mpexp.c.clang2
+Only in ./libmp/port: mpextendedgcd.8
+Only in ./libmp/port: mpextendedgcd.c.clang2
+Only in ./libmp/port: mpfactorial.8
+Only in ./libmp/port: mpfactorial.c.clang2
+Only in ./libmp/port: mpfmt.8
+Only in ./libmp/port: mpfmt.c.clang2
+Only in ./libmp/port: mpinvert.8
+Only in ./libmp/port: mpinvert.c.clang2
+Only in ./libmp/port: mpleft.8
+Only in ./libmp/port: mpleft.c.clang2
+Only in ./libmp/port: mpmod.8
+Only in ./libmp/port: mpmod.c.clang2
+Only in ./libmp/port: mpmul.8
+Only in ./libmp/port: mpmul.c.clang2
+Only in ./libmp/port: mprand.8
+Only in ./libmp/port: mprand.c.clang2
+Only in ./libmp/port: mpright.8
+Only in ./libmp/port: mpright.c.clang2
+Only in ./libmp/port: mpsub.8
+Only in ./libmp/port: mpsub.c.clang2
+Only in ./libmp/port: mptobe.8
+Only in ./libmp/port: mptobe.c.clang2
+Only in ./libmp/port: mptoi.8
+Only in ./libmp/port: mptoi.c.clang2
+Only in ./libmp/port: mptole.8
+Only in ./libmp/port: mptole.c.clang2
+Only in ./libmp/port: mptoui.8
+Only in ./libmp/port: mptoui.c.clang2
+Only in ./libmp/port: mptouv.8
+Only in ./libmp/port: mptouv.c.clang2
+Only in ./libmp/port: mptov.8
+Only in ./libmp/port: mptov.c.clang2
+Only in ./libmp/port: mpveccmp.8
+Only in ./libmp/port: mpveccmp.c.clang2
+Only in ./libmp/port: strtomp.8
+Only in ./libmp/port: strtomp.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libmp: power
+Only in ./libndb: csgetval.8
+Only in ./libndb: csipinfo.8
+Only in ./libndb: dnsquery.8
+Only in ./libndb: ipattr.8
+Only in ./libndb: ndbaux.8
+Only in ./libndb: ndbcache.8
+Only in ./libndb: ndbcat.8
+Only in ./libndb: ndbconcatenate.8
+Only in ./libndb: ndbdiscard.8
+Only in ./libndb: ndbfree.8
+Only in ./libndb: ndbgetipaddr.8
+Only in ./libndb: ndbgetval.8
+Only in ./libndb: ndbhash.8
+Only in ./libndb: ndbipinfo.8
+Only in ./libndb: ndblookval.8
+Only in ./libndb: ndbopen.8
+Only in ./libndb: ndbparse.8
+Only in ./libndb: ndbreorder.8
+Only in ./libndb: ndbsubstitute.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: liboventi
+Only in ./libplumb: event.8
+Only in ./libplumb: event.c.clang2
+Only in ./libplumb: mesg.8
+Only in ./libplumb: mesg.c.clang2
+Only in ./libplumb: plumbsendtext.8
+Only in ./libplumb: plumbsendtext.c.clang2
+Only in ./libregexp: regaux.8
+Only in ./libregexp: regaux.c.clang2
+Only in ./libregexp: regcomp.8
+Only in ./libregexp: regcomp.c.clang2
+Only in ./libregexp: regcomp.h.clang2
+Only in ./libregexp: regerror.8
+Only in ./libregexp: regerror.c.clang2
+Only in ./libregexp: regexec.8
+Only in ./libregexp: regexec.c.clang2
+Only in ./libregexp: regsub.8
+Only in ./libregexp: regsub.c.clang2
+Only in ./libregexp: rregexec.8
+Only in ./libregexp: rregexec.c.clang2
+Only in ./libregexp: rregsub.8
+Only in ./libregexp: rregsub.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libscribble
+Only in ./libsec/386: md5block.8
+Only in ./libsec/386: sha1block.8
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libsec: arm
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./libsec/mkfile /Volumes/Plan 9 - Dec 29/sys/src/libsec/mkfile
+--- ./libsec/mkfile	2014-01-17 15:15:29.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/libsec/mkfile	2005-12-12 14:28:17.000000000 -0800
+@@ -1,5 +1,3 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ </$objtype/mkfile
+ 
+ DIRS=port $CPUS
+@@ -8,7 +6,7 @@ default:V:	all
+ 
+ install all:V:
+ 	for(i in port $objtype)@{
+-		echo DIR: libsec/$i
++		echo $i
+ 		cd $i
+ 		mk $MKFLAGS $target
+ 	}
+Only in ./libsec/port: aes.8
+Only in ./libsec/port: aes.c.clang2
+Only in ./libsec/port: blowfish.8
+Only in ./libsec/port: blowfish.c.clang2
+Only in ./libsec/port: decodepem.8
+Only in ./libsec/port: decodepem.c.clang2
+Only in ./libsec/port: des.8
+Only in ./libsec/port: des.c.clang2
+Only in ./libsec/port: des3CBC.8
+Only in ./libsec/port: des3CBC.c.clang2
+Only in ./libsec/port: des3ECB.8
+Only in ./libsec/port: des3ECB.c.clang2
+Only in ./libsec/port: desCBC.8
+Only in ./libsec/port: desCBC.c.clang2
+Only in ./libsec/port: desECB.8
+Only in ./libsec/port: desECB.c.clang2
+Only in ./libsec/port: desmodes.8
+Only in ./libsec/port: desmodes.c.clang2
+Only in ./libsec/port: dsaalloc.8
+Only in ./libsec/port: dsaalloc.c.clang2
+Only in ./libsec/port: dsagen.8
+Only in ./libsec/port: dsagen.c.clang2
+Only in ./libsec/port: dsaprimes.8
+Only in ./libsec/port: dsaprimes.c.clang2
+Only in ./libsec/port: dsaprivtopub.8
+Only in ./libsec/port: dsaprivtopub.c.clang2
+Only in ./libsec/port: dsasign.8
+Only in ./libsec/port: dsasign.c.clang2
+Only in ./libsec/port: dsaverify.8
+Only in ./libsec/port: dsaverify.c.clang2
+Only in ./libsec/port: egalloc.8
+Only in ./libsec/port: egalloc.c.clang2
+Only in ./libsec/port: egdecrypt.8
+Only in ./libsec/port: egdecrypt.c.clang2
+Only in ./libsec/port: egencrypt.8
+Only in ./libsec/port: egencrypt.c.clang2
+Only in ./libsec/port: eggen.8
+Only in ./libsec/port: eggen.c.clang2
+Only in ./libsec/port: egprivtopub.8
+Only in ./libsec/port: egprivtopub.c.clang2
+Only in ./libsec/port: egsign.8
+Only in ./libsec/port: egsign.c.clang2
+Only in ./libsec/port: egverify.8
+Only in ./libsec/port: egverify.c.clang2
+Only in ./libsec/port: fastrand.8
+Only in ./libsec/port: fastrand.c.clang2
+Only in ./libsec/port: genprime.8
+Only in ./libsec/port: genprime.c.clang2
+Only in ./libsec/port: genrandom.8
+Only in ./libsec/port: genrandom.c.clang2
+Only in ./libsec/port: gensafeprime.8
+Only in ./libsec/port: gensafeprime.c.clang2
+Only in ./libsec/port: genstrongprime.8
+Only in ./libsec/port: genstrongprime.c.clang2
+Only in ./libsec/port: hmac.8
+Only in ./libsec/port: hmac.c.clang2
+Only in ./libsec/port: md4.8
+Only in ./libsec/port: md4.c.clang2
+Only in ./libsec/port: md5.8
+Only in ./libsec/port: md5.c.clang2
+Only in ./libsec/port: md5pickle.8
+Only in ./libsec/port: md5pickle.c.clang2
+Only in ./libsec/port: nfastrand.8
+Only in ./libsec/port: nfastrand.c.clang2
+Only in ./libsec/port: prng.8
+Only in ./libsec/port: prng.c.clang2
+Only in ./libsec/port: probably_prime.8
+Only in ./libsec/port: probably_prime.c.clang2
+Only in ./libsec/port: rc4.8
+Only in ./libsec/port: rc4.c.clang2
+Only in ./libsec/port: readcert.8
+Only in ./libsec/port: readcert.c.clang2
+Only in ./libsec/port: rsaalloc.8
+Only in ./libsec/port: rsaalloc.c.clang2
+Only in ./libsec/port: rsadecrypt.8
+Only in ./libsec/port: rsadecrypt.c.clang2
+Only in ./libsec/port: rsaencrypt.8
+Only in ./libsec/port: rsaencrypt.c.clang2
+Only in ./libsec/port: rsafill.8
+Only in ./libsec/port: rsafill.c.clang2
+Only in ./libsec/port: rsagen.8
+Only in ./libsec/port: rsagen.c.clang2
+Only in ./libsec/port: rsaprivtopub.8
+Only in ./libsec/port: rsaprivtopub.c.clang2
+Only in ./libsec/port: sha1.8
+Only in ./libsec/port: sha1.c.clang2
+Only in ./libsec/port: sha1pickle.8
+Only in ./libsec/port: sha1pickle.c.clang2
+Only in ./libsec/port: sha2_128.8
+Only in ./libsec/port: sha2_128.c.clang2
+Only in ./libsec/port: sha2_64.8
+Only in ./libsec/port: sha2_64.c.clang2
+Only in ./libsec/port: sha2block128.8
+Only in ./libsec/port: sha2block128.c.clang2
+Only in ./libsec/port: sha2block64.8
+Only in ./libsec/port: sha2block64.c.clang2
+Only in ./libsec/port: smallprimetest.8
+Only in ./libsec/port: smallprimetest.c.clang2
+Only in ./libsec/port: thumb.8
+Only in ./libsec/port: thumb.c.clang2
+Only in ./libsec/port: tlshand.8
+Only in ./libsec/port: tlshand.c.clang2
+Only in ./libsec/port: x509.8
+Only in ./libsec/port: x509.c.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/libsec: power
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libstdio
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libsunrpc
+Only in ./libthread: 386.8
+Only in ./libthread: 386.c.clang2
+Only in ./libthread: channel.8
+Only in ./libthread: channel.c.clang2
+Only in ./libthread: chanprint.8
+Only in ./libthread: chanprint.c.clang2
+Only in ./libthread: create.8
+Only in ./libthread: create.c.clang2
+Only in ./libthread: debug.8
+Only in ./libthread: debug.c.clang2
+Only in ./libthread: dial.8
+Only in ./libthread: dial.c.clang2
+Only in ./libthread: exec.8
+Only in ./libthread: exec.c.clang2
+Only in ./libthread: exit.8
+Only in ./libthread: exit.c.clang2
+Only in ./libthread: id.8
+Only in ./libthread: id.c.clang2
+Only in ./libthread: iocall.8
+Only in ./libthread: iocall.c.clang2
+Only in ./libthread: ioclose.8
+Only in ./libthread: ioclose.c.clang2
+Only in ./libthread: iodial.8
+Only in ./libthread: iodial.c.clang2
+Only in ./libthread: ioopen.8
+Only in ./libthread: ioopen.c.clang2
+Only in ./libthread: ioproc.8
+Only in ./libthread: ioproc.c.clang2
+Only in ./libthread: ioread.8
+Only in ./libthread: ioread.c.clang2
+Only in ./libthread: ioreadn.8
+Only in ./libthread: ioreadn.c.clang2
+Only in ./libthread: iosleep.8
+Only in ./libthread: iosleep.c.clang2
+Only in ./libthread: iowrite.8
+Only in ./libthread: iowrite.c.clang2
+Only in ./libthread: kill.8
+Only in ./libthread: kill.c.clang2
+Only in ./libthread: lib.8
+Only in ./libthread: lib.c.clang2
+Only in ./libthread: main.8
+Only in ./libthread: main.c.clang2
+Only in ./libthread: note.8
+Only in ./libthread: note.c.clang2
+Only in ./libthread: ref.8
+Only in ./libthread: ref.c.clang2
+Only in ./libthread: rendez.8
+Only in ./libthread: rendez.c.clang2
+Only in ./libthread: sched.8
+Only in ./libthread: sched.c.clang2
+Only in ./libthread: threadimpl.h.clang2
+Only in /Volumes/Plan 9 - Dec 29/sys/src/: libventi
+Only in .: make_trace.txt
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./mkfile /Volumes/Plan 9 - Dec 29/sys/src/mkfile
+--- ./mkfile	2014-01-18 14:30:15.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/mkfile	2008-05-09 15:24:50.000000000 -0700
+@@ -1,57 +1,57 @@
+-MKSHELL=$PLAN9/bin/rc
+-
+ </$objtype/mkfile
+ 
+-# libs used by the kernel
+-LIBS1=\
+-	libmemlayer\
+-	libmemdraw\
+-	libdraw\
+-	libip\
+-	libc\
+-	libmp\
+-
+-# libs used by the core cmds (cc, lex, ...)
+-LIBS2=\
++LIBS=\
++	lib9p\
+ 	libString\
+-	libregexp\
+-	libbio\
+-	libthread\
+-	liblex\
+-	libmach\
+ 	libauth\
+ 	libauthsrv\
+-
+-# libs used by cmd/disk
+-LIBS3=\
++	libavl\
++	libbin\
++	libbio\
++	libc\
++	libcomplete\
++	libcontrol\
+         libdisk\
+-        lib9p\
+-        libsec\
+-
+-# libs used by rio
+-LIBS4=\
++	libdraw\
++	libflate\
+         libframe\
++	libgeometry\
++	libhtml\
++	libhttpd\
++	libip\
++	liblex\
++	libmach\
++	libmemdraw\
++	libmemlayer\
++	libmp\
++	libndb\
++	liboventi\
+         libplumb\
+-        libcomplete\
+-
+-# libs used by aux/vga/db
+-LIBS5=\
+-        libndb
++	libregexp\
++	libscribble\
++	libsec\
++	libstdio\
++	libsunrpc\
++	libthread\
++	libventi\
+ 
+ 
+-LIBS=$LIBS1 $LIBS2 $LIBS3 $LIBS4 $LIBS5
++CMDS=cmd\
++	games\
+ 
+-CMDS=cmd
++SUBSYS=ape\
++	/acme\
+ 
+ none:VQ:
+-	echo mk all, install, clean, nuke, release, cmds, kernels, or libs
++	echo mk all, install, clean, nuke, release, kernels, or libs
+ 
+ all install clean nuke:VQ:
+-	for (i in $LIBS $CMDS 9/pc) @{
++	date
++	for (i in $LIBS $SUBSYS $CMDS) @{
+ 		cd $i
+-                echo DIR: $i
+ 		mk $target
+ 	}
++	date
+ 
+ installall:V:
+ 	echo "installall not supported"
+@@ -64,29 +64,22 @@ release:V:
+ 	mk clean
+ 
+ kernels:V:
+-	for (i in 9/pc) @{
++	for (i in 9 boot) @{
+ 		cd $i
+-                echo DIR: $i
+ 		mk clean
+ 		mk install
+-	}
+-
+-cmds:V:
+-       for (i in $CMDS) @{
+-                cd $i
+                 mk clean
+-                echo DIR: $i
+-                mk cmds
+-                mk dirs
+        }
+ 
+ libs:V:
++	date
+ 	for (i in $LIBS) @{
+ 		cd $i
+-                echo DIR: $i
+ 		mk clean
+ 		mk install
++		mk clean
+ 	}
++	date
+ 
+ cleanlibs:V:
+ 	for (i in $LIBS) @{
+diff -u -p -b -B -r -x .semantic.cache -x .depend -x CVS -x .hg -x .svn -x .git -x _darcs ./mkfile.proto /Volumes/Plan 9 - Dec 29/sys/src/mkfile.proto
+--- ./mkfile.proto	2014-01-16 23:01:36.000000000 -0800
++++ /Volumes/Plan 9 - Dec 29/sys/src/mkfile.proto	2012-09-20 16:11:02.000000000 -0700
+@@ -2,16 +2,13 @@
+ # common mkfile parameters shared by all architectures
+ #
+ 
+-OS=8v
+-CPUS=386 mips
+-CFLAGS=-FTVw -I/home/pad/plan9/386/include -I/home/pad/plan9/sys/include
++OS=58qv
++CPUS=arm 386 power mips
++CFLAGS=-FTVw
+ LEX=lex
+ YACC=yacc
+ MK=/bin/mk
+ 
+-# does not seem to work though :(
+-MKSHELL=$PLAN9/bin/rc
+-
+ # recursive mk will have these set from the parent
+ # this is never what we want.  clear them
+ 
+Only in .: pfff.log
+Only in .: skip_list.txt
+Only in .: unknown_loc.clang2
