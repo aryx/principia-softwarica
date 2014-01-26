@@ -40,7 +40,7 @@ main(int argc, char **argv)
 	args = nargv + argc;
 	if(Binit(&bp, 0, OREAD) < 0)
 		sysfatal("Binit: %r");
-	Blethal(&bp, nil);
+	//PAD: Blethal(&bp, nil); only in 9front
 	atexit(dowait);
 	for(j = 0, run = 1; run; j++){
 		if(j >= procs)
