@@ -1,5 +1,5 @@
 #include	"../cc/cc.h"
-#include	"../8c/8.out.h"
+#include	"386/8.out.h"
 
 /*
  * 8c/386

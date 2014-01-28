@@ -1,5 +1,5 @@
 #include	"../cc/cc.h"
-#include	"../vc/v.out.h"
+#include	"mips/v.out.h"
 
 /*
  * vc/mips

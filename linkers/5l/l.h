@@ -1,7 +1,7 @@
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-#include	"../5c/5.out.h"
+#include	"arm/5.out.h"
 #include	"../8l/elf.h"
 
 #ifndef	EXTERN
