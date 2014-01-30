@@ -1,0 +1,1 @@
+../../../../kernel/bcm/devfakertc.c

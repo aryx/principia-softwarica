@@ -1,0 +1,1 @@
+../../../../kernel/pc/mpacpi.h
