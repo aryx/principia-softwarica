@@ -1,1 +1,1 @@
-../../../../kernel/pc/fns.h
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/core/386/fns.h

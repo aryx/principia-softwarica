@@ -1,1 +1,1 @@
-../../../../kernel/pc/devi82365.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/buses/386/devi82365.c

@@ -1,1 +1,1 @@
-../../../../kernel/pc/mouse.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/mouse/386/mouse.c

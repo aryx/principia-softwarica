@@ -1,1 +1,1 @@
-../../../../kernel/port/latin1.h
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/lib/latin1.h

@@ -1,1 +1,1 @@
-../../../../kernel/pc/kbd.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/keyboard/386/kbd.c

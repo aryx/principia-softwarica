@@ -1,1 +1,1 @@
-../../../../kernel/pc/initcode.s
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/init/386/initcode.s

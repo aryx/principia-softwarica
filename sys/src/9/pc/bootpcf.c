@@ -1,1 +1,1 @@
-../../../../kernel/pc/bootpcf.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/boot/386/bootpcf.c

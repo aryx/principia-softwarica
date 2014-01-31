@@ -1,1 +1,1 @@
-../../../../kernel/pc/audio.h
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/audio/386/audio.h

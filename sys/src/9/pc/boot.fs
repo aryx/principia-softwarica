@@ -1,1 +1,1 @@
-../../../../kernel/pc/boot.fs
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/boot/386/boot.fs

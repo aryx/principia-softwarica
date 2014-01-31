@@ -1,1 +1,1 @@
-../../../../kernel/pc/devarch.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/misc/386/devarch.c

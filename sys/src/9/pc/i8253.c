@@ -1,1 +1,1 @@
-../../../../kernel/pc/i8253.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/time/386/i8253.c

@@ -1,1 +1,1 @@
-../../../../kernel/port/chan.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/namespace/chan.c

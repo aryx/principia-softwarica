@@ -1,1 +1,1 @@
-../../../../kernel/port/mul64fract.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/lib/mul64fract.c

@@ -1,1 +1,1 @@
-../../../../kernel/pc/trap.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/interrupts/386/trap.c

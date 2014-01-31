@@ -1,1 +1,1 @@
-../../../../kernel/pc/mpacpi.h
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/power/386/mpacpi.h

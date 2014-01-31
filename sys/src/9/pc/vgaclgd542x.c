@@ -1,1 +1,1 @@
-../../../../kernel/pc/vgaclgd542x.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/screen/386/vgaclgd542x.c

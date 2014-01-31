@@ -1,1 +1,1 @@
-../../../../kernel/pc/io.h
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/misc/386/io.h

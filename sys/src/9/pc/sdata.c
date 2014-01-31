@@ -1,1 +1,1 @@
-../../../../kernel/pc/sdata.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/storage/386/sdata.c

@@ -1,1 +1,1 @@
-../../../../kernel/pc/cga.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/screen/386/cga.c

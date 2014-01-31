@@ -1,1 +1,1 @@
-../../../../kernel/pc/archmp.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/cpus/386/archmp.c

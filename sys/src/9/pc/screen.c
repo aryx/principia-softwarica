@@ -1,1 +1,1 @@
-../../../../kernel/pc/screen.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/screen/386/screen.c

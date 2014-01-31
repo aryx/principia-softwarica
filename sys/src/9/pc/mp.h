@@ -1,1 +1,1 @@
-../../../../kernel/pc/mp.h
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/cpus/mp.h

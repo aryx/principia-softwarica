@@ -1,1 +1,1 @@
-../../../../kernel/pc/vga.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/screen/386/vga.c
