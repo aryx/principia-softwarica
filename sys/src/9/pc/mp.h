@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/cpus/mp.h
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/cpus/386/mp.h
