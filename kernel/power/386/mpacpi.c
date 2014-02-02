@@ -41,10 +41,10 @@ enum {
 #define dprint if(mpdebug) print
 
 /* from mp.c */
-int	mpdebug;
-int	mpmachno;
-Apic	mpapic[MaxAPICNO+1];
-int	machno2apicno[MaxAPICNO+1];	/* inverse map: machno -> APIC ID */
+extern int	mpdebug;
+int	mpmachno; //PAD: bug? also declared in mp.c
+extern Apic	mpapic[MaxAPICNO+1];
+extern int	machno2apicno[MaxAPICNO+1];	/* inverse map: machno -> APIC ID */
 
 Apic	*bootapic;
 

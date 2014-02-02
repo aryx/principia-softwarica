@@ -174,8 +174,8 @@ enum
 	Ckbdint=	(1<<0),		/* kbd interrupt enable */
 };
 
-int mouseshifted;
-void (*kbdmouse)(int);
+extern int mouseshifted;
+extern void (*kbdmouse)(int);
 
 static Lock i8042lock;
 static uchar ccc;
