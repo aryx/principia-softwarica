@@ -105,7 +105,7 @@ enum {					/* Msr */
 	Dcd		= 0x80,		/* Data Set Ready */
 };
 
-typedef struct Ctlr {
+typedef struct CtlrUart {
 	int	io;
 	int	irq;
 	int	tbdf;

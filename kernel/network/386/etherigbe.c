@@ -449,8 +449,8 @@ enum {
 	Rbsz		= 2048,
 };
 
-typedef struct Ctlr Ctlr;
-struct Ctlr {
+typedef struct CtlrEtherIgbe Ctlr;
+struct CtlrEtherIgbe {
 	int	port;
 	Pcidev*	pcidev;
 	Ctlr*	next;

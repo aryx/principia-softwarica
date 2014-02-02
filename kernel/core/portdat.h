@@ -12,7 +12,7 @@ typedef struct Evalue	Evalue;
 typedef struct Execvals	Execvals;
 typedef struct Fgrp	Fgrp;
 typedef struct DevConf	DevConf;
-typedef struct Image	Image;
+typedef struct Image2	Image;
 typedef struct Log	Log;
 typedef struct Logflag	Logflag;
 typedef struct Mntcache Mntcache;
@@ -380,7 +380,7 @@ struct Swapalloc
 	ulong	headroom;		/* Space pager frees under highwater */
 }swapalloc;
 
-struct Image
+struct Image2
 {
 	Ref;
 	Chan	*c;			/* channel to text file */
