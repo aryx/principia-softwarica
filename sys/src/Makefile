@@ -11,8 +11,8 @@ trace:
 	mk libs > make_trace.txt
 	mk kernels >> make_trace.txt
 	mk cmds >> make_trace.txt
+	~/pfff/pfff_test -analyze_make_trace make_trace.txt > compile_commands.json
 
 clangfiles:
-	~/pfff/pfff_test -analyze_make_trace make_trace.txt > compile_commands.json
 #	~/pfff/pfff -gen_clang compile_commands.json
 #	~/pfff/pfff_test.opt -uninclude_clang
