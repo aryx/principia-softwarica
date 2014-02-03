@@ -20,7 +20,7 @@ void	cpuid(int, ulong regs[]);
 int	cpuidentify(void);
 void	cpuidprint(void);
 void	(*cycles)(uvlong*);
-void	delay(int);
+//void	delay(int); pad: already in portfns.h
 int	dmacount(int);
 int	dmadone(int);
 void	dmaend(int);
@@ -46,7 +46,7 @@ ulong	getcr0(void);
 ulong	getcr2(void);
 ulong	getcr3(void);
 ulong	getcr4(void);
-char*	getconf(char*);
+char*	(*getconf)(char*);
 void	guesscpuhz(int);
 void	halt(void);
 int	i8042auxcmd(int);
@@ -88,7 +88,7 @@ void	ioinit(void);
 int	iounused(int, int);
 int	ioalloc(int, int, int, char*);
 int	ioreserve(int, int, int, char*);
-//int	iprint(char*, ...);
+//int	iprint(char*, ...); //pad: already in portfns.h
 int	isaconfig(char*, int, ISAConf*);
 void*	kaddr(ulong);
 void	kbdenable(void);

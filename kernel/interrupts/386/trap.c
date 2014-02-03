@@ -576,7 +576,7 @@ _dumpstack(Ureg *ureg)
 }
 
 void
-dumpstack(void)
+trap_dumpstack(void)
 {
 	callwithureg(_dumpstack);
 }

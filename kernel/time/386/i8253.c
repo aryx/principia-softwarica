@@ -317,7 +317,7 @@ i8253read(uvlong *hz)
 }
 
 void
-delay(int millisecs)
+i8253_delay(int millisecs)
 {
 	if (millisecs > 10*1000)
 		iprint("delay(%d) from %#p\n", millisecs,
@@ -334,7 +334,7 @@ delay(int millisecs)
 }
 
 void
-microdelay(int microsecs)
+i8253_microdelay(int microsecs)
 {
 	if (watchdogon && m->machno == 0 && !islo())
 		for (; microsecs > Wdogms*1000; microsecs -= Wdogms*1000) {

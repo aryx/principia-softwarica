@@ -5,6 +5,3 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-Mach *m;
-Conf conf;
-

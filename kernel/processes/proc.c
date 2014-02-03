@@ -1453,7 +1453,7 @@ procctl(Proc *p)
 #include "errstr.h"
 
 void
-error(char *err)
+proc_error(char *err)
 {
 	spllo();
 
@@ -1464,7 +1464,7 @@ error(char *err)
 }
 
 void
-nexterror(void)
+proc_nexterror(void)
 {
 	gotolabel(&up->errlab[--up->nerrlab]);
 }

@@ -42,6 +42,18 @@ uchar *sp;	/* user stack of init proc */
 int delaylink;
 int idle_spin, idle_if_nproc;
 
+void		devcons__assert(char*);
+char*	main_getconf(char*);
+void		trap_dumpstack(void);
+void		proc_error(char*);
+int		devcons_iprint(char*, ...);
+int		devcons_print(char*, ...);
+void		proc_nexterror(void);
+void		devcons_panic(char*, ...);
+int		devcons_pprint(char*, ...);
+void i8253_delay(int millisecs);
+void i8253_microdelay(int microsecs);
+
 static void
 options(void)
 {
@@ -112,11 +124,24 @@ void
 main(void)
 {
 
-        panic = devcons_panic;
         iprint = devcons_iprint;
         print = devcons_print;
         pprint = devcons_pprint;
+
+        panic = devcons_panic;
         _assert = devcons__assert;
+
+        error = proc_error;
+        nexterror = proc_nexterror;
+
+        dumpstack = trap_dumpstack;
+
+        devtab = conf_devtab;
+        getconf = main_getconf;
+
+        delay = i8253_delay;
+        microdelay = i8253_microdelay;
+
 
 
 	cgapost(0);
@@ -371,7 +396,7 @@ bootargs(void *base)
 }
 
 char*
-getconf(char *name)
+main_getconf(char *name)
 {
 	int i;
 

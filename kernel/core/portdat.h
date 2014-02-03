@@ -808,7 +808,8 @@ struct Execvals {
 extern	Conf	conf;
 extern	char*	conffile;
 extern	int	cpuserver;
-extern	Dev*	devtab[];
+extern	Dev**	devtab/*[]*/;
+extern	Dev*	conf_devtab[];
 extern	char*	eve;
 extern	char	hostdomain[];
 extern	uchar	initcode[];
