@@ -5,7 +5,7 @@
 typedef struct Chain	Chain;
 typedef struct Chains	Chains;
 typedef struct Dyncode	Dyncode;
-typedef struct Huff	Huff;
+typedef struct HuffDeflate	Huff;
 typedef struct LZblock	LZblock;
 typedef struct LZstate	LZstate;
 
@@ -130,7 +130,7 @@ struct LZblock
 /*
  * huffman code table
  */
-struct Huff
+struct HuffDeflate
 {
 	short	bits;				/* length of the code */
 	ushort	encode;				/* the code */
