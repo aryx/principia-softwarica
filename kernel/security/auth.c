@@ -7,17 +7,17 @@
 
 #include	<authsrv.h>
 
-char	*eve;
+//char	*eve;
 char	hostdomain[DOMLEN];
 
-/*
- *  return true if current user is eve
- */
-int
-iseve(void)
-{
-	return strcmp(eve, up->user) == 0;
-}
+///*
+// *  return true if current user is eve
+// */
+//int
+//iseve(void)
+//{
+//	return strcmp(eve, up->user) == 0;
+//}
 
 long
 sysfversion(ulong *arg)
