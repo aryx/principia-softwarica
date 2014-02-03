@@ -21,7 +21,7 @@
 
 typedef	struct	Adr	Adr;
 typedef	struct	Prog	Prog;
-typedef	struct	Sym	Sym;
+typedef	struct	Sym8l	Sym;
 typedef	struct	Auto	Auto;
 typedef	struct	Optab	Optab;
 
@@ -75,7 +75,7 @@ struct	Auto
 	long	aoffset;
 	short	type;
 };
-struct	Sym
+struct	Sym8l
 {
 	char	*name;
 	short	type;
