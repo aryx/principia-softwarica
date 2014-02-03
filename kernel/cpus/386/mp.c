@@ -16,7 +16,7 @@
 extern Apic *bootapic;
 
 int mpdebug;
-void (*mpacpifunc)(void);
+extern void (*mpacpifunc)(void);
 
 static PCMP* mppcmp;
 static Bus* mpbus;
