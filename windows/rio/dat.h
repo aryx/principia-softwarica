@@ -34,7 +34,7 @@ typedef	struct	Consreadmesg Consreadmesg;
 typedef	struct	Conswritemesg Conswritemesg;
 typedef	struct	Stringpair Stringpair;
 typedef	struct	Dirtab Dirtab;
-typedef	struct	Fid Fid;
+typedef	struct	FidRio Fid;
 typedef	struct	Filsys Filsys;
 typedef	struct	Mouseinfo	Mouseinfo;
 typedef	struct	Mousereadmesg Mousereadmesg;
@@ -228,7 +228,7 @@ struct Dirtab
 	uint		perm;
 };
 
-struct Fid
+struct FidRio
 {
 	int		fid;
 	int		busy;
