@@ -17,7 +17,7 @@
 int	ap;
 int	ac;
 char	**av;
-char	*tmp;
+static char	*tmp;
 
 void	synbad(char *, char *);
 int	fsizep(char *);

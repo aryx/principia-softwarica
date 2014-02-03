@@ -10,7 +10,7 @@
 
 long	count;
 int	anycount;
-int	follow;
+static int	follow;
 int	file	= 0;
 char*	umsg	= "usage: tail [-n N] [-c N] [-f] [-r] [+-N[bc][fr]] [file]";
 

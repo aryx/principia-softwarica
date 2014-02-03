@@ -11,25 +11,25 @@ enum{
 	CHUNK	=	256	/* must be power of 2 */
 };
 
-char	*errs;			/* exit status */
-char	*filename;		/* current file */
-char	symname[]="__.SYMDEF";	/* table of contents file name */
-int	multifile;		/* processing multiple files */
-int	aflag;
-int	gflag;
-int	hflag;
-int	nflag;
-int	sflag;
-int	uflag;
-int	Tflag;
+static char	*errs;			/* exit status */
+static char	*filename;		/* current file */
+static char	symname[]="__.SYMDEF";	/* table of contents file name */
+static int	multifile;		/* processing multiple files */
+static int	aflag;
+static int	gflag;
+static int	hflag;
+static int	nflag;
+static int	sflag;
+static int	uflag;
+static int	Tflag;
 
-Sym	**fnames;		/* file path translation table */
-Sym	**symptr;
-int	nsym;
-Biobuf	bout;
+static Sym	**fnames;		/* file path translation table */
+static Sym	**symptr;
+static int	nsym;
+static Biobuf	bout;
 
 int	cmp(void*, void*);
-void	error(char*, ...);
+static void	error(char*, ...);
 void	execsyms(int);
 void	psym(Sym*, void*);
 void	printsyms(Sym**, long);
@@ -37,7 +37,7 @@ void	doar(Biobuf*);
 void	dofile(Biobuf*);
 void	zenter(Sym*);
 
-void
+static void
 usage(void)
 {
 	fprint(2, "usage: nm [-aghnsTu] file ...\n");
@@ -296,7 +296,7 @@ printsyms(Sym **symptr, long nsym)
 	}
 }
 
-void
+static void
 error(char *fmt, ...)
 {
 	Fmt f;

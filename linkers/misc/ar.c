@@ -124,7 +124,7 @@ void	setcom(void(*)(char*, int, char**));
 void	skip(Biobuf*, vlong);
 int	symcomp(void*, void*);
 void	trim(char*, char*, int);
-void	usage(void);
+static void	usage(void);
 void	wrerr(void);
 void	wrsym(Biobuf*, long, Arsymref*);
 
@@ -676,7 +676,7 @@ phaseerr(int offset)
 	exits("error");
 }
 
-void
+static void
 usage(void)
 {
 	fprint(2, "usage: ar [%s][%s] archive files ...\n", opt, man);

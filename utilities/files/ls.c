@@ -13,7 +13,7 @@ struct NDir
 int	errs = 0;
 int	dflag;
 int	lflag;
-int	mflag;
+static int	mflag;
 int	nflag;
 int	pflag;
 int	qflag;
