@@ -37,11 +37,12 @@ static	Channel	*cxfidfree;	/* chan(Xfid*) */
 static	char	*tsnarf;
 static	int	ntsnarf;
 
+enum { Alloc, Free, N };
+
 void
 xfidallocthread(void*)
 {
 	Xfid *x;
-	enum { Alloc, Free, N };
 	static Alt alts[N+1];
 
 	alts[Alloc].c = cxfidalloc;
@@ -343,6 +344,8 @@ xfidclose(Xfid *x)
 	filsysrespond(x->fs, x, &t, nil);
 }
 
+enum { CWdata, CWflush, NCW };
+
 void
 xfidwrite(Xfid *x)
 {
@@ -354,7 +357,6 @@ xfidwrite(Xfid *x)
 	Rune *r;
 	Conswritemesg cwm;
 	Stringpair pair;
-	enum { CWdata, CWflush, NCW };
 	Alt alts[NCW+1];
 
 	w = x->f->w;
@@ -571,6 +573,10 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 	return unloadimage(i, r, (uchar*)t, n);
 }
 
+enum { CRdata, CRflush, NCR };
+enum { MRdata, MRflush, NMR };
+enum { WCRdata, WCRflush, NWCR };
+
 void
 xfidread(Xfid *x)
 {
@@ -588,9 +594,6 @@ xfidread(Xfid *x)
 	Mousereadmesg mrm;
 	Consreadmesg cwrm;
 	Stringpair pair;
-	enum { CRdata, CRflush, NCR };
-	enum { MRdata, MRflush, NMR };
-	enum { WCRdata, WCRflush, NWCR };
 	Alt alts[NCR+1];
 
 	w = x->f->w;
