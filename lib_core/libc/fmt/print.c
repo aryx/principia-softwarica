@@ -2,7 +2,7 @@
 #include	<libc.h>
 
 int
-print(char *fmt, ...)
+libc_print(char *fmt, ...)
 {
 	int n;
 	va_list args;
@@ -12,3 +12,5 @@ print(char *fmt, ...)
 	va_end(args);
 	return n;
 }
+
+int (*print)(char *fmt, ...) = &libc_print;
