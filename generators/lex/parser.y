@@ -380,14 +380,14 @@ yylex(void)
 			case ' ':
 			case '\t':
 				if(sectbegin == TRUE){
-					cpyact();
+					lcpyact();
 					while((c=gch()) && c != '\n');
 					continue;
 				}
 				if(!funcflag)phead2();
 				funcflag = TRUE;
 				Bprint(&fout,"case %d:\n",casecount);
-				if(cpyact())
+				if(lcpyact())
 					Bprint(&fout,"break;\n");
 				while((c=gch()) && c != '\n');
 				if(peek == ' ' || peek == '\t' || sectbegin == TRUE){

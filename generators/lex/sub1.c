@@ -170,7 +170,7 @@ lookup(uchar *s, uchar **t)
 }
 
 int
-cpyact(void)
+lcpyact(void)
 { /* copy C action to the next ; or closing } */
 	int brac, c, mth;
 	int savline, sw;

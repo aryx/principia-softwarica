@@ -140,7 +140,7 @@ extern void	allprint(int);
 extern void	cclinter(int);
 extern void	cgoto(void);
 extern void	cfoll(int);
-extern int	cpyact(void);
+extern int	lcpyact(void);
 extern int	dupl(int);
 extern void	error(char *,...);
 extern void	first(int);
