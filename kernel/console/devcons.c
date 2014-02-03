@@ -208,7 +208,7 @@ putstrn(char *str, int n)
 int noprint;
 
 int
-print(char *fmt, ...)
+devcons_print(char *fmt, ...)
 {
 	int n;
 	va_list arg;
@@ -248,7 +248,7 @@ iprintcanlock(Lock *l)
 }
 
 int
-iprint(char *fmt, ...)
+devcons_iprint(char *fmt, ...)
 {
 	int n, s, locked;
 	va_list arg;
@@ -270,7 +270,7 @@ iprint(char *fmt, ...)
 }
 
 void
-panic(char *fmt, ...)
+devcons_panic(char *fmt, ...)
 {
 	int n, s;
 	va_list arg;
@@ -313,13 +313,13 @@ sysfatal(char *fmt, ...)
 }
 
 void
-_assert(char *fmt)
+devcons__assert(char *fmt)
 {
 	panic("assert failed at %#p: %s", getcallerpc(&fmt), fmt);
 }
 
 int
-pprint(char *fmt, ...)
+devcons_pprint(char *fmt, ...)
 {
 	int n;
 	Chan *c;

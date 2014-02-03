@@ -11,8 +11,6 @@
 #include	"mp.h"
 #include	<tos.h>
 
-Mach *m;
-
 void loop() {
   while(1) {
   }
@@ -36,7 +34,7 @@ enum {
 };
 
 char bootdisk[KNAMELEN];
-Conf conf;
+//Conf conf;
 char *confname[MAXCONF];
 char *confval[MAXCONF];
 int nconf;
@@ -113,7 +111,16 @@ fpsavealloc(void)
 void
 main(void)
 {
+
+        panic = devcons_panic;
+        iprint = devcons_iprint;
+        print = devcons_print;
+        pprint = devcons_pprint;
+        _assert = devcons__assert;
+
+
 	cgapost(0);
+
 	mach0init();
 	options();
 	ioinit();

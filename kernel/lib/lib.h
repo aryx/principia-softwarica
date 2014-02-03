@@ -74,7 +74,7 @@ struct Fmt{
 	int	prec;
 	ulong	flags;
 };
-extern	int	print(char*, ...);
+extern	int	(*print)(char*, ...);
 extern	char*	seprint(char*, char*, char*, ...);
 extern	char*	vseprint(char*, char*, char*, va_list);
 extern	int	snprint(char*, int, char*, ...);
