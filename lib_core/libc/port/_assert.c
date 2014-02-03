@@ -3,11 +3,14 @@
 
 void (*__assert)(char*);
 
+
 void
-_assert(char *s)
+default_assert(char *s)
 {
 	if(__assert)
 		(*__assert)(s);
 	fprint(2, "assert failed: %s\n", s);
 	abort();
 }
+
+void (*_assert)(char*) = default_assert;
