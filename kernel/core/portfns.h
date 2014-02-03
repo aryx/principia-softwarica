@@ -100,7 +100,7 @@ int		eqqid(Qid, Qid);
 void		(*error)(char*);
 long		execregs(ulong, ulong, ulong);
 void		exhausted(char*);
-void		exit(int);
+void		(*exit)(int);
 uvlong		fastticks(uvlong*);
 uvlong		fastticks2ns(uvlong);
 uvlong		fastticks2us(uvlong);

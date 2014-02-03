@@ -40,3 +40,5 @@ Dev** devtab = 0;
 Mach *m;
 Conf conf;
 char* (*getconf)(char *name) = 0;
+void (*exit)(int ispanic) = 0;
+

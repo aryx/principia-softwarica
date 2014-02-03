@@ -89,7 +89,7 @@ int	iounused(int, int);
 int	ioalloc(int, int, int, char*);
 int	ioreserve(int, int, int, char*);
 //int	iprint(char*, ...); //pad: already in portfns.h
-int	isaconfig(char*, int, ISAConf*);
+int	(*isaconfig)(char*, int, ISAConf*);
 void*	kaddr(ulong);
 void	kbdenable(void);
 void	kbdinit(void);

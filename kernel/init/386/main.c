@@ -57,6 +57,8 @@ Proc*		proc_wakeup(Rendez*);
 void		proc_sched(void);
 void		proc_ready(Proc*);
 void		proc_sleep(Rendez*, int(*)(void*), void*);
+void            main_exit(int ispanic);
+int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
 
 static void
 options(void)
@@ -151,7 +153,8 @@ main(void)
         ready = proc_ready;
         sleep = proc_sleep;
 
-
+        exit = main_exit;
+        isaconfig = main_isaconfig;
 
 	cgapost(0);
 
@@ -908,14 +911,14 @@ reboot(void *entry, void *code, ulong size)
 
 
 void
-exit(int ispanic)
+main_exit(int ispanic)
 {
 	shutdown(ispanic);
 	arch->reset();
 }
 
 int
-isaconfig(char *class, int ctlrno, ISAConf *isa)
+main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 {
 	char cc[32], *p;
 	int i;

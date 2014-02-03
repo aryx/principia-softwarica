@@ -5,3 +5,5 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
+int	(*isaconfig)(char*, int, ISAConf*) = 0;
+
