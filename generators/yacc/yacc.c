@@ -278,7 +278,7 @@ int	adb = 0;
 
 	/* storage for information about the nonterminals */
 
-int**	pres[NNONTERM+2];  	/* vector of pointers to productions yielding each nonterminal */
+static int**	pres[NNONTERM+2];  	/* vector of pointers to productions yielding each nonterminal */
 Lkset*	pfirst[NNONTERM+2];	/* vector of pointers to first sets for each nonterminal */
 int	pempty[NNONTERM+1];	/* vector of nonterminals nontrivially deriving e */
 
