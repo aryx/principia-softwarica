@@ -80,7 +80,7 @@ elf32sectab(void (*putl)(long))
 	seek(cout, HEADR+textsize+datsize+symsize, 0);
 	elf32shdr(putl, Stitext, Progbits, Salloc|Sexec, INITTEXT,
 		HEADR, textsize, 0, 0, 0x10000, 0);
-	elf32shdr(putl, Stidata, Progbits, Salloc|Swrite, INITDAT,
+	elf32shdr(putl, Stidata, Progbits, Salloc|SwriteElf, INITDAT,
 		HEADR+textsize, datsize, 0, 0, 0x10000, 0);
 	elf32shdr(putl, Stistrtab, Strtab, 1 << 5, 0,
 		HEADR+textsize+datsize+symsize+3*Shdr32sz, 14, 0, 0, 1, 0);
@@ -195,7 +195,7 @@ elf64sectab(void (*putl)(long), void (*putll)(vlong))
 	seek(cout, HEADR+textsize+datsize+symsize, 0);
 	elf64shdr(putl, putll, Stitext, Progbits, Salloc|Sexec, INITTEXT,
 		HEADR, textsize, 0, 0, 0x10000, 0);
-	elf64shdr(putl, putll, Stidata, Progbits, Salloc|Swrite, INITDAT,
+	elf64shdr(putl, putll, Stidata, Progbits, Salloc|SwriteElf, INITDAT,
 		HEADR+textsize, datsize, 0, 0, 0x10000, 0);
 	elf64shdr(putl, putll, Stistrtab, Strtab, 1 << 5, 0,
 		HEADR+textsize+datsize+symsize+3*Shdr64sz, 14, 0, 0, 1, 0);
