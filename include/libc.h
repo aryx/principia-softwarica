@@ -142,7 +142,7 @@ enum{
 	FmtFlag		= FmtByte << 1
 };
 
-extern	int	print(char*, ...);
+extern	int	(*print)(char*, ...);
 extern	char*	seprint(char*, char*, char*, ...);
 extern	char*	vseprint(char*, char*, char*, va_list);
 extern	int	snprint(char*, int, char*, ...);
@@ -344,7 +344,7 @@ enum
 	PNGROUP		= 2,
 };
 
-extern	void	_assert(char*);
+extern	void	(*_assert)(char*);
 extern	int	abs(int);
 extern	int	atexit(void(*)(void));
 extern	void	atexitdont(void(*)(void));
