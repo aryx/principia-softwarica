@@ -395,7 +395,7 @@ struct Buffer {
 	int		emskip;	/* no. of right bits to skip in *em */
 };
 
-typedef struct	Param	Param;
+typedef struct	ParamDraw	Param;
 typedef Buffer	Readfn(Param*, uchar*, int);
 typedef void	Writefn(Param*, uchar*, Buffer);
 typedef Buffer	Calcfn(Buffer, Buffer, Buffer, int, int, int);
@@ -405,7 +405,7 @@ enum {
 };
 
 /* giant rathole to customize functions with */
-struct Param {
+struct ParamDraw {
 	Readfn	*replcall;
 	Readfn	*greymaskcall;	
 	Readfn	*convreadcall;

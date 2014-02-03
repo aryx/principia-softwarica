@@ -16,14 +16,14 @@
  *   where x = b/a
  */
 
-typedef struct Param	Param;
+typedef struct ParamEllipse	Param;
 typedef struct State	State;
 
 static	void	bellipse(int, State*, Param*);
 static	void	erect(int, int, int, int, Param*);
 static	void	eline(int, int, int, int, Param*);
 
-struct Param {
+struct ParamEllipse {
 	Memimage	*dst;
 	Memimage	*src;
 	Point			c;
