@@ -32,7 +32,7 @@ typedef struct Pgrp	Pgrp;
 typedef struct Physseg	Physseg;
 typedef struct Proc	Proc;
 typedef struct Pte	Pte;
-typedef struct QLock	QLock;
+typedef struct KQLock	QLock;
 typedef struct Queue	Queue;
 typedef struct Ref	Ref;
 typedef struct Rendez	Rendez;
@@ -106,7 +106,7 @@ struct Rendez
 	Proc	*p;
 };
 
-struct QLock
+struct KQLock
 {
 	Lock	use;		/* to access Qlock structure */
 	Proc	*head;		/* next process waiting for object */
