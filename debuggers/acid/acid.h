@@ -14,7 +14,7 @@ enum
 #pragma varargck type "L"	void
 
 typedef struct Node	Node;
-typedef struct String	String;
+typedef struct StringAcid	String;
 typedef struct Lsym	Lsym;
 typedef struct List	List;
 typedef struct Store	Store;
@@ -163,7 +163,7 @@ struct Node
 };
 #define ZN	(Node*)0
 
-struct String
+struct StringAcid
 {
 	Gc;
 	char	*string;
