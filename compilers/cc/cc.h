@@ -10,7 +10,7 @@
 #endif
 
 typedef	struct	Node	Node;
-typedef	struct	Sym	Sym;
+typedef	struct	SymCc	Sym;
 typedef	struct	Type	Type;
 typedef	struct	Funct	Funct;
 typedef	struct	Decl	Decl;
@@ -70,7 +70,7 @@ struct	Node
 };
 #define	Z	((Node*)0)
 
-struct	Sym
+struct	SymCc
 {
 	Sym*	link;
 	Type*	type;

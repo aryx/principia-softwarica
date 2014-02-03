@@ -7,8 +7,8 @@
 #define	EXTERN	extern
 #endif
 
-typedef	struct	Sym	Sym;
-typedef	struct	Ref	Ref;
+typedef	struct	Sym8a	Sym;
+typedef	struct	Ref8a	Ref;
 typedef	struct	Gen	Gen;
 typedef	struct	Io	Io;
 typedef	struct	Hist	Hist;
@@ -28,7 +28,7 @@ typedef	struct	Gen2 	Gen2;
 #define	STRINGSZ	200
 #define	NMACRO		10
 
-struct	Sym
+struct	Sym8a
 {
 	Sym*	link;
 	Ref*	ref;
@@ -40,7 +40,7 @@ struct	Sym
 };
 #define	S	((Sym*)0)
 
-struct	Ref
+struct	Ref8a
 {
 	int	class;
 };
