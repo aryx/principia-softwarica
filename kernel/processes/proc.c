@@ -110,7 +110,7 @@ schedinit(void)		/* never returns */
  *  contains a copy of the guts of sched().
  */
 void
-sched(void)
+proc_sched(void)
 {
 	Proc *p;
 
@@ -407,7 +407,7 @@ dequeueproc(Schedq *rq, Proc *tp)
  *  runq for that priority.
  */
 void
-ready(Proc *p)
+proc_ready(Proc *p)
 {
 	int s, pri;
 	Schedq *rq;
@@ -759,7 +759,7 @@ procinit0(void)		/* bad planning - clashes with devproc.c */
  *  and p->r synchronized.
  */
 void
-sleep(Rendez *r, int (*f)(void*), void *arg)
+proc_sleep(Rendez *r, int (*f)(void*), void *arg)
 {
 	int s;
 	void (*pt)(Proc*, int, vlong);
@@ -886,7 +886,7 @@ tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
  *  be held simultaneously, but I'm a paranoid - presotto.
  */
 Proc*
-wakeup(Rendez *r)
+proc_wakeup(Rendez *r)
 {
 	Proc *p;
 	int s;

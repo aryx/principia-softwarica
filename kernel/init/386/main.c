@@ -33,7 +33,7 @@ enum {
 	Ustkheadroom	= sizeof(Sargs) + sizeof(uintptr) + sizeof(Tos),
 };
 
-char bootdisk[KNAMELEN];
+//char bootdisk[KNAMELEN];
 //Conf conf;
 char *confname[MAXCONF];
 char *confval[MAXCONF];
@@ -53,6 +53,10 @@ void		devcons_panic(char*, ...);
 int		devcons_pprint(char*, ...);
 void i8253_delay(int millisecs);
 void i8253_microdelay(int microsecs);
+Proc*		proc_wakeup(Rendez*);
+void		proc_sched(void);
+void		proc_ready(Proc*);
+void		proc_sleep(Rendez*, int(*)(void*), void*);
 
 static void
 options(void)
@@ -141,6 +145,11 @@ main(void)
 
         delay = i8253_delay;
         microdelay = i8253_microdelay;
+
+        wakeup = proc_wakeup;
+        sched = proc_sched;
+        ready = proc_ready;
+        sleep = proc_sleep;
 
 
 
