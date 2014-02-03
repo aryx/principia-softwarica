@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/namespace/devenv.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/files/devenv.c

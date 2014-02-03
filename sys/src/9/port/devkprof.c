@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/time/devkprof.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/processes/devkprof.c
