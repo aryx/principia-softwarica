@@ -4,8 +4,10 @@
 #include <memdraw.h>
 
 int
-iprint(char*,...)
+memdraw_iprint(char*,...)
 {
 	return -1;
 }
+
+int		(*iprint)(char*, ...) = &memdraw_iprint;
 
