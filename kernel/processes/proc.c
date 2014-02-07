@@ -1450,8 +1450,6 @@ procctl(Proc *p)
 	}
 }
 
-#include "errstr.h"
-
 void
 proc_error(char *err)
 {
