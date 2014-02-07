@@ -9,21 +9,21 @@
 // (logging, security, error)
 // todo? profiling?
 
-// devcons.c
+// console/devcons.c
 int		(*print)(char*, ...) = 0;
 int		(*iprint)(char*, ...) = 0;
 int             (*pprint)(char *fmt, ...) = 0;
 void		(*panic)(char*, ...) = 0;
 void (*_assert)(char *fmt) = 0;
 
-//trap.c
+// process/386/trap.c
 void (*dumpstack)(void) = 0;
 
-//auth.c
+// security/auth.c
 char	*eve;
 iseve(void) { return strcmp(eve, up->user) == 0; }
 
-// proc.c
+// process/proc.c
 void		(*error)(char*) = 0;
 void		(*nexterror)(void) = 0;
 
@@ -33,10 +33,10 @@ void		(*ready)(Proc*) = 0;
 void		(*sleep)(Rendez*, int(*)(void*), void*) = 0;
 
 
-// pcf.c
+// conf/pcf.c
 Dev** devtab = 0;
 
-//main.c
+// init/main.c
 Mach *m;
 Conf conf;
 char* (*getconf)(char *name) = 0;
