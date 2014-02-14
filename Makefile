@@ -10,7 +10,7 @@ compile:
 
 disk:
 	umount -f $(DISK) || echo not mounted
-	open /home/pad/dosdisk.img
+	open dosdisk.img
 	sleep 3
 	rm -rf $(DISK)/*
 	cp -a root/* $(DISK)/
@@ -18,6 +18,15 @@ disk:
 
 
 run:
+	qemu-system-i386 -smp 4 -m 256 \
+           -kernel sys/src/9/pc/9pcf \
+           -hda dosdisk.img 
+
+#-fda ~/floppy.img
+#-hda ~/plan9.raw.img
+# -cdrom plan9.iso? does not work?
+
+
 	(cd sys/src/9/pc/; make qemu)
 
 

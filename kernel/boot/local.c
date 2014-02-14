@@ -16,14 +16,14 @@ connectlocal(void)
   
   bind_safe("#S", "/dev", MAFTER);
 
-  fd = open_safe("/dev/sdC1/ctl", ORDWR);
+  fd = open_safe("/dev/sdC0/ctl", ORDWR);
   //TODO: use fdisk -p /dev/sdC1/data > /dev/sdC1/ctl
   //for sdC0: #prep -p /dev/sdC1/plan9 > /dev/sdC1/ctl
   print_safe(fd, "part dos 1 1000063");
   close_safe(fd);
 
   run("/boot/dossrv", nil);
-  run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC1/dos", nil);
+  run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC0/dos", nil);
   
   return 0;
 }
