@@ -42,7 +42,7 @@ main(int argc, char **argv)
 	exits(0);
 }
 
-touch(int nocreate, char *name)
+int touch(int nocreate, char *name)
 {
 	Dir stbuff;
 	int fd;
