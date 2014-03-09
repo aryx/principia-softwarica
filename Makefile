@@ -4,7 +4,7 @@ DISK="/Volumes/DISK Image"
 all:
 	make compile && make disk && make run
 
-#assume you have done source env.sh
+#assumes you have done source env.sh, or have a 'mk' wrapper that does that
 compile:
 	cd sys/src; mk all; cd cmd; mk install
 
