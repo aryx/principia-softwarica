@@ -373,3 +373,35 @@ kstrdup(char **p, char *s)
 	*p = t;
 	free(prev);
 }
+
+
+// was in devcons.c
+
+int
+readnum(ulong off, char *buf, ulong n, ulong val, int size)
+{
+	char tmp[64];
+
+	snprint(tmp, sizeof(tmp), "%*lud", size-1, val);
+	tmp[size-1] = ' ';
+	if(off >= size)
+		return 0;
+	if(off+n > size)
+		n = size-off;
+	memmove(buf, tmp+off, n);
+	return n;
+}
+
+int
+readstr(ulong off, char *buf, ulong n, char *str)
+{
+	int size;
+
+	size = strlen(str);
+	if(off >= size)
+		return 0;
+	if(off+n > size)
+		n = size-off;
+	memmove(buf, str+off, n);
+	return n;
+}
