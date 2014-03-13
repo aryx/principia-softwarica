@@ -93,62 +93,6 @@ isdotdot(char *p)
 	return p[0]=='.' && p[1]=='.' && p[2]=='\0';
 }
 
-long
-incref(Ref *r)
-{
-	long x;
-
-	lock(r);
-	x = ++r->ref;
-	unlock(r);
-	return x;
-}
-
-long
-decref(Ref *r)
-{
-	long x;
-
-	lock(r);
-	x = --r->ref;
-	unlock(r);
-	if(x < 0)
-		panic("decref pc=%#p", getcallerpc(&r));
-
-	return x;
-}
-
-/*
- * Rather than strncpy, which zeros the rest of the buffer, kstrcpy
- * truncates if necessary, always zero terminates, does not zero fill,
- * and puts ... at the end of the string if it's too long.  Usually used to
- * save a string in up->genbuf;
- */
-void
-kstrcpy(char *s, char *t, int ns)
-{
-	int nt;
-
-	nt = strlen(t);
-	if(nt+1 <= ns){
-		memmove(s, t, nt+1);
-		return;
-	}
-	/* too long */
-	if(ns < 4){
-		/* but very short! */
-		strncpy(s, t, ns);
-		return;
-	}
-	/* truncate with ... at character boundary (very rare case) */
-	memmove(s, t, ns-4);
-	ns -= 4;
-	s[ns] = '\0';
-	/* look for first byte of UTF-8 sequence by skipping continuation bytes */
-	while(ns>0 && (s[--ns]&0xC0)==0x80)
-		;
-	strcpy(s+ns, "...");
-}
 
 int
 emptystr(char *s)
@@ -158,31 +102,6 @@ emptystr(char *s)
 	if(s[0] == '\0')
 		return 1;
 	return 0;
-}
-
-/*
- * Atomically replace *p with copy of s
- */
-void
-kstrdup(char **p, char *s)
-{
-	int n;
-	char *t, *prev;
-
-	n = strlen(s)+1;
-	/* if it's a user, we can wait for memory; if not, something's very wrong */
-	if(up){
-		t = smalloc(n);
-		setmalloctag(t, getcallerpc(&p));
-	}else{
-		t = malloc(n);
-		if(t == nil)
-			panic("kstrdup: no memory");
-	}
-	memmove(t, s, n);
-	prev = *p;
-	*p = t;
-	free(prev);
 }
 
 static int debugstart = 1;

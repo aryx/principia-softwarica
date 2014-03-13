@@ -253,3 +253,31 @@ iunlock(Lock *l)
 		up->lastilock = nil;
 	splx(sr);
 }
+
+
+//pad: was in chan.c
+long
+incref(Ref *r)
+{
+	long x;
+
+	lock(r);
+	x = ++r->ref;
+	unlock(r);
+	return x;
+}
+
+long
+decref(Ref *r)
+{
+	long x;
+
+	lock(r);
+	x = --r->ref;
+	unlock(r);
+	if(x < 0)
+		panic("decref pc=%#p", getcallerpc(&r));
+
+	return x;
+}
+
