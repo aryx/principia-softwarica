@@ -43,25 +43,32 @@ int delaylink;
 int idle_spin, idle_if_nproc;
 
 // to avoid backward deps
-void		devcons__assert(char*);
-char*	main_getconf(char*);
-void		trap_dumpstack(void);
-void		proc_error(char*);
-int		devcons_iprint(char*, ...);
-int		devcons_print(char*, ...);
-void		proc_nexterror(void);
-void		devcons_panic(char*, ...);
-int		devcons_pprint(char*, ...);
+void devcons__assert(char*);
+char* main_getconf(char*);
+void trap_dumpstack(void);
+void proc_error(char*);
+int devcons_iprint(char*, ...);
+int devcons_print(char*, ...);
+void proc_nexterror(void);
+void devcons_panic(char*, ...);
+int devcons_pprint(char*, ...);
 void i8253_delay(int millisecs);
 void i8253_microdelay(int microsecs);
-Proc*		proc_wakeup(Rendez*);
-void		proc_sched(void);
-void		proc_ready(Proc*);
-void		proc_sleep(Rendez*, int(*)(void*), void*);
-void            main_exit(int ispanic);
+Proc* proc_wakeup(Rendez*);
+void proc_sched(void);
+void proc_ready(Proc*);
+void proc_sleep(Rendez*, int(*)(void*), void*);
+void main_exit(int ispanic);
 int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
 void nop(void);
 void proc_dumpaproc(Proc *p);
+uvlong devarch_fastticks(uvlong *hz);
+void chan_cclose(Chan *c);
+Proc* proc_proctab(int i);
+void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
+int proc_postnote(Proc *p, int dolock, char *n, int flag);
+int sysproc_return0(void*);
+void proc_pexit(char *exitstr, int freemem);
 
 static void
 options(void)
@@ -133,34 +140,55 @@ void
 main(void)
 {
 
-        iprint = devcons_iprint;
-        print = devcons_print;
-        pprint = devcons_pprint;
+  /* initial assignment made to avoid circular dependencies in codegraph */
+  iprint = devcons_iprint;
+  print = devcons_print;
+  pprint = devcons_pprint;
+  
+  panic = devcons_panic;
+  _assert = devcons__assert;
+  
+  error = proc_error;
+  nexterror = proc_nexterror;
+  
+  dumpstack = trap_dumpstack;
+  
+  devtab = conf_devtab;
+  getconf = main_getconf;
+  
+  delay = i8253_delay;
+  microdelay = i8253_microdelay;
 
-        panic = devcons_panic;
-        _assert = devcons__assert;
+  wakeup = proc_wakeup;
+  sched = proc_sched;
+  ready = proc_ready;
+  sleep = proc_sleep;
+  tsleep = proc_tsleep;
 
-        error = proc_error;
-        nexterror = proc_nexterror;
+  exit = main_exit;
+  isaconfig = main_isaconfig;
+  
+  /*
+   * On a uniprocessor, you'd think that coherence could be nop,
+   * but it can't.  We still need a barrier when using coherence() in
+   * device drivers.
+   *
+   * On VMware, it's safe (and a huge win) to set this to nop.
+   * Aux/vmware does this via the #P/archctl file.
+   */
+  coherence = nop;
+  
+  dumpaproc = proc_dumpaproc;
+  fastticks = devarch_fastticks;
+  
+  cclose = chan_cclose;
 
-        dumpstack = trap_dumpstack;
+  proctab = proc_proctab;
+  postnote = proc_postnote;
+  return0 = sysproc_return0;
+  pexit = proc_pexit;
 
-        devtab = conf_devtab;
-        getconf = main_getconf;
-
-        delay = i8253_delay;
-        microdelay = i8253_microdelay;
-
-        wakeup = proc_wakeup;
-        sched = proc_sched;
-        ready = proc_ready;
-        sleep = proc_sleep;
-
-        exit = main_exit;
-        isaconfig = main_isaconfig;
-        
-        coherence = nop;
-        dumpaproc = proc_dumpaproc;
+  /* end patch, back to original code */
 
 	cgapost(0);
 

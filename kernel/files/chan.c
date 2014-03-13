@@ -406,7 +406,7 @@ chanfree(Chan *c)
 }
 
 void
-cclose(Chan *c)
+chan_cclose(Chan *c)
 {
 	if(c->flag&CFREE)
 		panic("cclose %#p", getcallerpc(&c));

@@ -11,10 +11,23 @@ void		(*dumpaproc)(Proc*);
 
 void		(*error)(char*);
 void		(*nexterror)(void);
+
 Proc*		(*wakeup)(Rendez*);
 void		(*sched)(void);
 void		(*ready)(Proc*);
 void		(*sleep)(Rendez*, int(*)(void*), void*);
+void		(*tsleep)(Rendez*, int (*)(void*), void*, ulong);
+Proc*		(*proctab)(int);
+int	(*postnote)(Proc*, int, char*, int);
+void		(*pexit)(char*, int);
+
+int		(*return0)(void*);
+
+void (*proctrace)(Proc*, int, vlong); // was in devproc.c
+
+void		(*cclose)(Chan*);
+
+uvlong		(*fastticks)(uvlong*);
 
 void	(*coherence)(void); // was in 386/fns.h
 
@@ -59,7 +72,6 @@ void		checkalarms(void);
 void		checkb(Block*, char*);
 void		cinit(void);
 Chan*		cclone(Chan*);
-void		cclose(Chan*);
 void		ccloseq(Chan*);
 void		closeegrp(Egrp*);
 void		closefgrp(Fgrp*);
@@ -124,7 +136,6 @@ int		eqchantdqid(Chan*, int, int, Qid, int);
 int		eqqid(Qid, Qid);
 long		execregs(ulong, ulong, ulong);
 void		exhausted(char*);
-uvlong		fastticks(uvlong*);
 uvlong		fastticks2ns(uvlong);
 uvlong		fastticks2us(uvlong);
 int		fault(ulong, int);
@@ -233,13 +244,11 @@ void		pagersummary(void);
 Cmdbuf*		parsecmd(char *a, int n);
 void		pathclose(Path*);
 ulong		perfticks(void);
-void		pexit(char*, int);
 void		pgrpcpy(Pgrp*, Pgrp*);
 void		pgrpnote(ulong, char*, long, int);
 void		pio(Segment *, ulong, ulong, Page **);
 #define		poperror()		up->nerrlab--
 void		portcountpagerefs(ulong*, int);
-int		postnote(Proc*, int, char*, int);
 int		preempted(void);
 void		prflush(void);
 void		printinit(void);
@@ -251,7 +260,6 @@ int		procindex(ulong);
 void		procinit0(void);
 void		procflushseg(Segment*);
 void		procpriority(Proc*, int, int);
-Proc*		proctab(int);
 void		procwired(Proc*, int);
 Pte*		ptealloc(void);
 Pte*		ptecpy(Pte*);
@@ -311,7 +319,6 @@ void		relocateseg(Segment*, ulong);
 void		renameuser(char*, char*);
 void		resched(char*);
 void		resrcwait(char*);
-int		return0(void*);
 void		rlock(RWlock*);
 long		rtctime(void);
 void		runlock(RWlock*);
@@ -353,7 +360,6 @@ void		todsetfreq(vlong);
 void		todinit(void);
 void		todset(vlong, vlong, int);
 Block*		trimblock(Block*, int, int);
-void		tsleep(Rendez*, int (*)(void*), void*, ulong);
 int		uartctl(Uart*, char*);
 int		uartgetc(void);
 void		uartkick(void*);

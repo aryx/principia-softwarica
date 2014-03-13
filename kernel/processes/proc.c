@@ -854,7 +854,7 @@ twakeup(Ureg*, Timer *t)
 }
 
 void
-tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
+proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
 {
 	if (up->tt){
 		print("tsleep: timer active: mode %d, tf %#p\n", up->tmode, up->tf);
@@ -922,7 +922,7 @@ proc_wakeup(Rendez *r)
  *  lock if we can't get the r->lock and retrying.
  */
 int
-postnote(Proc *p, int dolock, char *n, int flag)
+proc_postnote(Proc *p, int dolock, char *n, int flag)
 {
 	int s, ret;
 	Rendez *r;
@@ -1057,7 +1057,7 @@ freebroken(void)
 }
 
 void
-pexit(char *exitstr, int freemem)
+proc_pexit(char *exitstr, int freemem)
 {
 	Proc *p;
 	Segment **s, **es;
@@ -1252,7 +1252,7 @@ pwait(Waitmsg *w)
 }
 
 Proc*
-proctab(int i)
+proc_proctab(int i)
 {
 	return &procalloc.arena[i];
 }

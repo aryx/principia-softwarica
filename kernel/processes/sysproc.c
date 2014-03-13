@@ -523,7 +523,7 @@ shargs(char *s, int n, char **ap)
 }
 
 int
-return0(void*)
+sysproc_return0(void*)
 {
 	return 0;
 }
