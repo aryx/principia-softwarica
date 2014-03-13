@@ -156,7 +156,6 @@ static Traceevent *tevents;
 static Lock tlock;
 static int topens;
 static int tproduced, tconsumed;
-void (*proctrace)(Proc*, int, vlong);
 
 extern int unfair;
 
