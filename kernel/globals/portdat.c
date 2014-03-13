@@ -18,6 +18,8 @@ void (*_assert)(char *fmt) = 0;
 
 // process/386/trap.c
 void (*dumpstack)(void) = 0;
+// process/proc.c
+void (*dumpaproc)(Proc*) = 0;
 
 // security/auth.c
 char	*eve;
@@ -41,4 +43,15 @@ Mach *m;
 Conf conf;
 char* (*getconf)(char *name) = 0;
 void (*exit)(int ispanic) = 0;
+
+//misc/386/devarch.c
+/*
+ * On a uniprocessor, you'd think that coherence could be nop,
+ * but it can't.  We still need a barrier when using coherence() in
+ * device drivers.
+ *
+ * On VMware, it's safe (and a huge win) to set this to nop.
+ * Aux/vmware does this via the #P/archctl file.
+ */
+void (*coherence)(void) = 0;
 

@@ -505,7 +505,7 @@ unimplemented(int)
 	return 0;
 }
 
-static void
+void
 nop(void)
 {
 }
@@ -558,7 +558,7 @@ cmpswap386(long *addr, long old, long new)
  * On VMware, it's safe (and a huge win) to set this to nop.
  * Aux/vmware does this via the #P/archctl file.
  */
-void (*coherence)(void) = nop;
+//now in globals.c: void (*coherence)(void) = nop;
 
 int (*cmpswap)(long*, long, long) = cmpswap386;
 

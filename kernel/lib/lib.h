@@ -5,6 +5,10 @@
 #define offsetof(s, m)	(ulong)(&(((s*)0)->m))
 #define assert(x)	if(x){}else _assert("x")
 
+//pad: used to be regular function, but to avoid backward deps in kernel
+// made into a pointer function (a bit ugly, and maybe unsafe)
+extern	int	(*print)(char*, ...);
+
 /*
  * mem routines
  */
@@ -74,7 +78,8 @@ struct Fmt{
 	int	prec;
 	ulong	flags;
 };
-extern	int	(*print)(char*, ...);
+//see prelude: extern	int	(*print)(char*, ...);
+
 extern	char*	seprint(char*, char*, char*, ...);
 extern	char*	vseprint(char*, char*, char*, va_list);
 extern	int	snprint(char*, int, char*, ...);

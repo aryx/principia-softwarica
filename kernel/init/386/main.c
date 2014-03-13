@@ -42,6 +42,7 @@ uchar *sp;	/* user stack of init proc */
 int delaylink;
 int idle_spin, idle_if_nproc;
 
+// to avoid backward deps
 void		devcons__assert(char*);
 char*	main_getconf(char*);
 void		trap_dumpstack(void);
@@ -59,6 +60,8 @@ void		proc_ready(Proc*);
 void		proc_sleep(Rendez*, int(*)(void*), void*);
 void            main_exit(int ispanic);
 int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
+void nop(void);
+void proc_dumpaproc(Proc *p);
 
 static void
 options(void)
@@ -155,6 +158,9 @@ main(void)
 
         exit = main_exit;
         isaconfig = main_isaconfig;
+        
+        coherence = nop;
+        dumpaproc = proc_dumpaproc;
 
 	cgapost(0);
 

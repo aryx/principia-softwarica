@@ -15,7 +15,6 @@ void	cgapost(int);
 void	clockintr(Ureg*, void*);
 int	(*cmpswap)(long*, long, long);
 int	cmpswap486(long*, long, long);
-void	(*coherence)(void);
 void	cpuid(int, ulong regs[]);
 int	cpuidentify(void);
 void	cpuidprint(void);

@@ -1258,7 +1258,7 @@ proctab(int i)
 }
 
 void
-dumpaproc(Proc *p)
+proc_dumpaproc(Proc *p)
 {
 	ulong bss;
 	char *s;
