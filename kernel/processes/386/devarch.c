@@ -1075,7 +1075,7 @@ pcmspecialclose(int a)
  *  return value and speed of timer set in arch->clockenable
  */
 uvlong
-fastticks(uvlong *hz)
+devarch_fastticks(uvlong *hz)
 {
 	return (*arch->fastclock)(hz);
 }
