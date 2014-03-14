@@ -34,11 +34,15 @@ void	(*coherence)(void); // was in 386/fns.h
 void		(*exit)(int);
 
 //???
-void		(*screenputs)(char*, int);
 void		(*consdebug)(void);
 void		(*delay)(int);
 void		(*kproftimer)(ulong);
 void		(*microdelay)(int);
+
+// as a pointer in the original
+void		(*screenputs)(char*, int);
+
+
 extern void	(*proctrace)(Proc*, int, vlong); 
 
 void		accounttime(void);
