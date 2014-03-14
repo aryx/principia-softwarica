@@ -1,13 +1,9 @@
 /*
- * functions (possibly) linked in, complete, from libc.
+ * functions (mostly) linked in from libc.
  */
 #define nelem(x)	(sizeof(x)/sizeof((x)[0]))
 #define offsetof(s, m)	(ulong)(&(((s*)0)->m))
 #define assert(x)	if(x){}else _assert("x")
-
-//pad: used to be regular function, but to avoid backward deps in kernel
-// made into a pointer function (a bit ugly, and maybe unsafe)
-extern	int	(*print)(char*, ...);
 
 /*
  * mem routines
@@ -21,30 +17,32 @@ extern	void*	memchr(void*, int, ulong);
 /*
  * string routines
  */
-extern	char*	strcat(char*, char*);
+//unused: extern	char*	strcat(char*, char*);
 extern	char*	strchr(char*, int);
 extern	char*	strrchr(char*, int);
 extern	int	strcmp(char*, char*);
 extern	char*	strcpy(char*, char*);
 extern	char*	strecpy(char*, char*, char*);
-extern	char*	strncat(char*, char*, long);
+//unused: extern	char*	strncat(char*, char*, long);
 extern	char*	strncpy(char*, char*, long);
 extern	int	strncmp(char*, char*, long);
 extern	long	strlen(char*);
 extern	char*	strstr(char*, char*);
 extern	int	atoi(char*);
 extern	int	fullrune(char*, int);
+
+//redefined in the kernel
 extern	int	cistrcmp(char*, char*);
 extern	int	cistrncmp(char*, char*, int);
 
 enum
 {
 	UTFmax		= 4,		/* maximum bytes per rune */
-	Runesync	= 0x80,		/* cannot represent part of a UTF sequence (<) */
+//unused:	Runesync	= 0x80,		/* cannot represent part of a UTF sequence (<) */
 	Runeself	= 0x80,		/* rune and UTF sequences are the same (<) */
-	Runeerror	= 0xFFFD,	/* decoding error in UTF */
-	Runemax		= 0x10FFFF,	/* 24 bit rune */
-	Runemask	= 0x1FFFFF,	/* bits used by runes (see grep) */
+//unused:	Runeerror	= 0xFFFD,	/* decoding error in UTF */
+//unused:	Runemax		= 0x10FFFF,	/* 24 bit rune */
+//unused:	Runemask	= 0x1FFFFF,	/* bits used by runes (see grep) */
 };
 
 /*
@@ -53,9 +51,9 @@ enum
 extern	int	runetochar(char*, Rune*);
 extern	int	chartorune(Rune*, char*);
 extern	char*	utfrune(char*, long);
-extern	int	utflen(char*);
+//unused: extern	int	utflen(char*);
 extern	int	utfnlen(char*, long);
-extern	int	runelen(long);
+//unused: extern	int	runelen(long);
 
 extern	int	abs(int);
 
@@ -78,12 +76,15 @@ struct Fmt{
 	int	prec;
 	ulong	flags;
 };
-//see prelude: extern	int	(*print)(char*, ...);
+
+//pad: used to be regular function, but to avoid backward deps in kernel
+// I made it into a pointer function (a bit ugly, and maybe unsafe)
+extern	int	(*print)(char*, ...);
 
 extern	char*	seprint(char*, char*, char*, ...);
 extern	char*	vseprint(char*, char*, char*, va_list);
 extern	int	snprint(char*, int, char*, ...);
-extern	int	vsnprint(char*, int, char*, va_list);
+//unused: extern	int	vsnprint(char*, int, char*, va_list);
 extern	int	sprint(char*, char*, ...);
 
 #pragma	varargck	argpos	fmtprint	2
@@ -133,14 +134,19 @@ extern	long	strtol(char*, char**, int);
 extern	ulong	strtoul(char*, char**, int);
 extern	vlong	strtoll(char*, char**, int);
 extern	uvlong	strtoull(char*, char**, int);
-extern	char	etext[];
-extern	char	edata[];
-extern	char	end[];
+
 extern	int	getfields(char*, char**, int, int, char*);
 extern	int	tokenize(char*, char**, int);
-extern	int	dec64(uchar*, int, char*, int);
-extern	int	encodefmt(Fmt*);
+//unused: extern	int	dec64(uchar*, int, char*, int);
+//unused: extern	int	encodefmt(Fmt*);
 extern	void	qsort(void*, long, long, int (*)(void*, void*));
+
+
+extern	char	etext[];
+//unused in C, but used by 386/l.s
+extern	char	edata[];
+extern	char	end[];
+
 
 /*
  * Syscall data structures
