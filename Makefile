@@ -33,9 +33,11 @@ run:
 visual:
 	~/pfff/codemap -no_legend -no_symlinks -filter cpp -ss 2 .
 
-#~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
 graph:
 	~/pfff/codegraph -derived_data -lang clang2 -build .
+
+graph2:
+	~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
 
 #trace:
 #	mk clean
