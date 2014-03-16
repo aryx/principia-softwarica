@@ -27,8 +27,8 @@ static Lock physseglock;
 static struct Imagealloc
 {
 	Lock;
-	Image	*free;
-	Image	*hash[IHASHSIZE];
+	KImage	*free;
+	KImage	*hash[IHASHSIZE];
 	QLock	ireclaim;	/* mutex on reclaiming free images */
 
 	Chan	**freechan;	/* free image channels */
@@ -42,9 +42,9 @@ Segment* (*_globalsegattach)(Proc*, char*);
 void
 initseg(void)
 {
-	Image *i, *ie;
+	KImage *i, *ie;
 
-	imagealloc.free = xalloc(conf.nimage*sizeof(Image));
+	imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
 	if (imagealloc.free == nil)
 		panic("initseg: no memory");
 	ie = &imagealloc.free[conf.nimage-1];
@@ -93,7 +93,7 @@ void
 putseg(Segment *s)
 {
 	Pte **pp, **emap;
-	Image *i;
+	KImage *i;
 
 	if(s == 0)
 		return;
@@ -241,10 +241,10 @@ segpage(Segment *s, Page *p)
 		(*pte)->last = pg;
 }
 
-Image*
+KImage*
 attachimage(int type, Chan *c, ulong base, ulong len)
 {
-	Image *i, **l;
+	KImage *i, **l;
 
 	/* reclaim any free channels from reclaimed segments */
 	if(imagealloc.nfreechan)
@@ -389,10 +389,10 @@ imagechanreclaim(void)
 }
 
 void
-putimage(Image *i)
+putimage(KImage *i)
 {
 	Chan *c, **cp;
-	Image *f, **l;
+	KImage *f, **l;
 
 	if(i->notext)
 		return;

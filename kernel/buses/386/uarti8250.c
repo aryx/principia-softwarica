@@ -105,7 +105,7 @@ enum {					/* Msr */
 	Dcd		= 0x80,		/* Data Set Ready */
 };
 
-typedef struct CtlrUart {
+struct CtlrUart {
 	int	io;
 	int	irq;
 	int	tbdf;
@@ -117,11 +117,13 @@ typedef struct CtlrUart {
 	int	hasfifo;
 	int	checkfifo;
 	int	fena;
-} Ctlr;
+};
+
+typedef struct CtlrUart CtlrUart;
 
 extern PhysUart i8250physuart;
 
-static Ctlr i8250ctlr[2] = {
+static CtlrUart i8250ctlr[2] = {
 {	.io	= Uart0,
 	.irq	= Uart0IRQ,
 	.tbdf	= BUSUNKNOWN, },
@@ -154,7 +156,7 @@ static long
 i8250status(Uart* uart, void* buf, long n, long offset)
 {
 	char *p;
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 	uchar ier, lcr, mcr, msr;
 
 	p = malloc(READSTR);
@@ -201,7 +203,7 @@ i8250status(Uart* uart, void* buf, long n, long offset)
 static void
 i8250fifo(Uart* uart, int level)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	ctlr = uart->regs;
 	if(ctlr->hasfifo == 0)
@@ -249,7 +251,7 @@ i8250fifo(Uart* uart, int level)
 static void
 i8250dtr(Uart* uart, int on)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	/*
 	 * Toggle DTR.
@@ -265,7 +267,7 @@ i8250dtr(Uart* uart, int on)
 static void
 i8250rts(Uart* uart, int on)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	/*
 	 * Toggle RTS.
@@ -281,7 +283,7 @@ i8250rts(Uart* uart, int on)
 static void
 i8250modemctl(Uart* uart, int on)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	ctlr = uart->regs;
 	ilock(&uart->tlock);
@@ -307,7 +309,7 @@ static int
 i8250parity(Uart* uart, int parity)
 {
 	int lcr;
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	ctlr = uart->regs;
 	lcr = ctlr->sticky[Lcr] & ~(Eps|Pen);
@@ -336,7 +338,7 @@ static int
 i8250stop(Uart* uart, int stop)
 {
 	int lcr;
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	ctlr = uart->regs;
 	lcr = ctlr->sticky[Lcr] & ~Stb;
@@ -362,7 +364,7 @@ static int
 i8250bits(Uart* uart, int bits)
 {
 	int lcr;
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	ctlr = uart->regs;
 	lcr = ctlr->sticky[Lcr] & ~WlsMASK;
@@ -395,7 +397,7 @@ static int
 i8250baud(Uart* uart, int baud)
 {
 	ulong bgc;
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	/*
 	 * Set the Baud rate by calculating and setting the Baud rate
@@ -420,7 +422,7 @@ i8250baud(Uart* uart, int baud)
 static void
 i8250break(Uart* uart, int ms)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	/*
 	 * Send a break.
@@ -438,7 +440,7 @@ static void
 i8250kick(Uart* uart)
 {
 	int i;
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	if(uart->cts == 0 || uart->blocked)
 		return;
@@ -462,7 +464,7 @@ i8250kick(Uart* uart)
 static void
 i8250interrupt(Ureg*, void* arg)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 	Uart *uart;
 	int iir, lsr, old, r;
 
@@ -530,7 +532,7 @@ i8250interrupt(Ureg*, void* arg)
 static void
 i8250disable(Uart* uart)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	/*
  	 * Turn off DTR and RTS, disable interrupts and fifos.
@@ -552,7 +554,7 @@ i8250disable(Uart* uart)
 static void
 i8250enable(Uart* uart, int ie)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	ctlr = uart->regs;
 
@@ -621,9 +623,9 @@ i8250enable(Uart* uart, int ie)
 void*
 i8250alloc(int io, int irq, int tbdf)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
-	if((ctlr = malloc(sizeof(Ctlr))) != nil){
+	if((ctlr = malloc(sizeof(CtlrUart))) != nil){
 		ctlr->io = io;
 		ctlr->irq = irq;
 		ctlr->tbdf = tbdf;
@@ -641,7 +643,7 @@ i8250pnp(void)
 static int
 i8250getc(Uart *uart)
 {
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	ctlr = uart->regs;
 	while(!(csr8r(ctlr, Lsr)&Dr))
@@ -653,7 +655,7 @@ static void
 i8250putc(Uart *uart, int c)
 {
 	int i;
-	Ctlr *ctlr;
+	CtlrUart *ctlr;
 
 	ctlr = uart->regs;
 	for(i = 0; !(csr8r(ctlr, Lsr)&Thre) && i < 128; i++)

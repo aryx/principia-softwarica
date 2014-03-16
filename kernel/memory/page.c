@@ -386,7 +386,7 @@ uncachepage(Page *p)			/* Always called with a locked page */
 }
 
 void
-cachepage(Page *p, Image *i)
+cachepage(Page *p, KImage *i)
 {
 	Page **l;
 
@@ -408,7 +408,7 @@ cachepage(Page *p, Image *i)
 }
 
 void
-cachedel(Image *i, ulong daddr)
+cachedel(KImage *i, ulong daddr)
 {
 	Page *f, **l;
 
@@ -432,7 +432,7 @@ cachedel(Image *i, ulong daddr)
 }
 
 Page *
-lookpage(Image *i, ulong daddr)
+lookpage(KImage *i, ulong daddr)
 {
 	Page *f;
 

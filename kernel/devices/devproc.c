@@ -1153,7 +1153,7 @@ Chan*
 proctext(Chan *c, Proc *p)
 {
 	Chan *tc;
-	Image *i;
+	KImage *i;
 	Segment *s;
 
 	s = p->seg[TSEG];

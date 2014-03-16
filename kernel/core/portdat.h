@@ -280,7 +280,7 @@ extern	Palloc	palloc;
 int	(*parseboothdr)(Chan *, ulong, Execvals *);
 extern	Queue*	serialoq;
 extern	char*	statename[];
-extern	Image	swapimage;
+extern	KImage	swapimage;
 extern	char*	sysname;
 extern	uint	qiomaxatomic;
 extern	char*	sysctab[];

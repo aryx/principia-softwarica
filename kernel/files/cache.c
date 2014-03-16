@@ -55,7 +55,7 @@ struct Ecache
 	Extent*	head;
 };
 
-static Image fscache;
+static KImage fscache;
 static Cache cache;
 static Ecache ecache;
 static int maxcache = MAXCACHE;

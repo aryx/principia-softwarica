@@ -559,7 +559,7 @@ confinit(void)
 	kpages *= BY2PG;
 	kpages -= conf.upages*sizeof(Page)
 		+ conf.nproc*sizeof(Proc)
-		+ conf.nimage*sizeof(Image)
+		+ conf.nimage*sizeof(KImage)
 		+ conf.nswap
 		+ conf.nswppo*sizeof(Page);
 	mainmem->maxsize = kpages;

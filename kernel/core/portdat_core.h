@@ -244,14 +244,14 @@ struct Page
 	char	modref;			/* Simulated modify/reference bits */
 	char	color;			/* Cache coloring */
 	char	cachectl[MAXMACH];	/* Cache flushing control for putmmu */
-	Image	*image;			/* Associated text or swap image */
+	KImage	*image;			/* Associated text or swap image */
 	Page	*next;			/* Lru free list */
 	Page	*prev;
 	Page	*hash;			/* Image hash chains */
 };
 
 
-struct Image2
+struct KImage
 {
 	Ref;
 	Chan	*c;			/* channel to text file */
@@ -260,8 +260,8 @@ struct Image2
 	Chan	*mchan;
 	ushort	type;			/* Device type of owning channel */
 	Segment *s;			/* TEXT segment for image if running */
-	Image	*hash;			/* Qid hash chains */
-	Image	*next;			/* Free list */
+	KImage	*hash;			/* Qid hash chains */
+	KImage	*next;			/* Free list */
 	int	notext;			/* no file associated */
 };
 
@@ -328,7 +328,7 @@ struct Segment
 	ulong	fstart;		/* start address in file for demand load */
 	ulong	flen;		/* length of segment in file */
 	int	flushme;	/* maintain icache for this segment */
-	Image	*image;		/* text in file attached to this segment */
+	KImage	*image;		/* text in file attached to this segment */
 	Physseg *pseg;
 	ulong*	profile;	/* Tick profile area */
 	Pte	**map;

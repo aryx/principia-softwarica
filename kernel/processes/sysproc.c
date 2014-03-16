@@ -230,7 +230,7 @@ sysexec(ulong *arg)
 	Exec exec;
 	char line[sizeof(Exec)];
 	Fgrp *f;
-	Image *img;
+	KImage *img;
 	ulong magic, text, entry, data, bss;
 	Tos *tos;
 

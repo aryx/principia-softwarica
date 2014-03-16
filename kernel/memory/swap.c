@@ -12,7 +12,7 @@ static void	pageout(Proc*, Segment*);
 static void	pagepte(int, Page**);
 static void	pager(void*);
 
-Image 	swapimage;
+KImage 	swapimage;
 
 static 	int	swopen;
 static	Page	**iolist;

@@ -449,11 +449,11 @@ enum {
 	Rbsz		= 2048,
 };
 
-typedef struct CtlrEtherIgbe Ctlr;
+typedef struct CtlrEtherIgbe CtlrEtherIgbe;
 struct CtlrEtherIgbe {
 	int	port;
 	Pcidev*	pcidev;
-	Ctlr*	next;
+	CtlrEtherIgbe*	next;
 	Ether*	edev;
 	int	active;
 	int	started;
@@ -516,8 +516,8 @@ struct CtlrEtherIgbe {
 #define csr32r(c, r)	(*((c)->nic+((r)/4)))
 #define csr32w(c, r, v)	(*((c)->nic+((r)/4)) = (v))
 
-static Ctlr* igbectlrhead;
-static Ctlr* igbectlrtail;
+static CtlrEtherIgbe* igbectlrhead;
+static CtlrEtherIgbe* igbectlrtail;
 
 static Lock igberblock;		/* free receive Blocks */
 static Block* igberbpool;	/* receive Blocks for all igbe controllers */
@@ -592,7 +592,7 @@ static char* statistics[Nstatistics] = {
 static long
 igbeifstat(Ether* edev, void* a, long n, ulong offset)
 {
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	char *p, *s;
 	int i, l, r;
 	uvlong tuvl, ruvl;
@@ -687,7 +687,7 @@ igbectl(Ether* edev, void* buf, long n)
 {
 	int v;
 	char *p;
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	Cmdbuf *cb;
 	Cmdtab *ct;
 
@@ -720,7 +720,7 @@ static void
 igbepromiscuous(void* arg, int on)
 {
 	int rctl;
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	Ether *edev;
 
 	edev = arg;
@@ -740,7 +740,7 @@ static void
 igbemulticast(void* arg, uchar* addr, int add)
 {
 	int bit, x;
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	Ether *edev;
 
 	edev = arg;
@@ -793,7 +793,7 @@ igberbfree(Block* bp)
 }
 
 static void
-igbeim(Ctlr* ctlr, int im)
+igbeim(CtlrEtherIgbe* ctlr, int im)
 {
 	ilock(&ctlr->imlock);
 	ctlr->im |= im;
@@ -804,13 +804,13 @@ igbeim(Ctlr* ctlr, int im)
 static int
 igbelim(void* ctlr)
 {
-	return ((Ctlr*)ctlr)->lim != 0;
+	return ((CtlrEtherIgbe*)ctlr)->lim != 0;
 }
 
 static void
 igbelproc(void* arg)
 {
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	Ether *edev;
 	MiiPhy *phy;
 	int ctrl, r;
@@ -894,7 +894,7 @@ enable:
 }
 
 static void
-igbetxinit(Ctlr* ctlr)
+igbetxinit(CtlrEtherIgbe* ctlr)
 {
 	int i, r;
 	Block *bp;
@@ -980,7 +980,7 @@ igbetransmit(Ether* edev)
 {
 	Td *td;
 	Block *bp;
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	int tdh, tdt;
 
 	ctlr = edev->ctlr;
@@ -1030,7 +1030,7 @@ igbetransmit(Ether* edev)
 }
 
 static void
-igbereplenish(Ctlr* ctlr)
+igbereplenish(CtlrEtherIgbe* ctlr)
 {
 	Rd *rd;
 	int rdt;
@@ -1060,7 +1060,7 @@ igbereplenish(Ctlr* ctlr)
 }
 
 static void
-igberxinit(Ctlr* ctlr)
+igberxinit(CtlrEtherIgbe* ctlr)
 {
 	int i;
 	Block *bp;
@@ -1111,7 +1111,7 @@ igberxinit(Ctlr* ctlr)
 static int
 igberim(void* ctlr)
 {
-	return ((Ctlr*)ctlr)->rim != 0;
+	return ((CtlrEtherIgbe*)ctlr)->rim != 0;
 }
 
 static void
@@ -1119,7 +1119,7 @@ igberproc(void* arg)
 {
 	Rd *rd;
 	Block *bp;
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	int r, rdh;
 	Ether *edev;
 
@@ -1200,7 +1200,7 @@ static void
 igbeattach(Ether* edev)
 {
 	Block *bp;
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	char name[KNAMELEN];
 
 	ctlr = edev->ctlr;
@@ -1271,7 +1271,7 @@ igbeattach(Ether* edev)
 static void
 igbeinterrupt(Ureg*, void* arg)
 {
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	Ether *edev;
 	int icr, im, txdw;
 
@@ -1312,7 +1312,7 @@ igbeinterrupt(Ureg*, void* arg)
 }
 
 static int
-i82543mdior(Ctlr* ctlr, int n)
+i82543mdior(CtlrEtherIgbe* ctlr, int n)
 {
 	int ctrl, data, i, r;
 
@@ -1334,7 +1334,7 @@ i82543mdior(Ctlr* ctlr, int n)
 }
 
 static int
-i82543mdiow(Ctlr* ctlr, int bits, int n)
+i82543mdiow(CtlrEtherIgbe* ctlr, int bits, int n)
 {
 	int ctrl, i, r;
 
@@ -1360,7 +1360,7 @@ static int
 i82543miimir(Mii* mii, int pa, int ra)
 {
 	int data;
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 
 	ctlr = mii->ctlr;
 
@@ -1384,7 +1384,7 @@ i82543miimir(Mii* mii, int pa, int ra)
 static int
 i82543miimiw(Mii* mii, int pa, int ra, int data)
 {
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 
 	ctlr = mii->ctlr;
 
@@ -1406,7 +1406,7 @@ i82543miimiw(Mii* mii, int pa, int ra, int data)
 static int
 igbemiimir(Mii* mii, int pa, int ra)
 {
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	int mdic, timo;
 
 	ctlr = mii->ctlr;
@@ -1428,7 +1428,7 @@ igbemiimir(Mii* mii, int pa, int ra)
 static int
 igbemiimiw(Mii* mii, int pa, int ra, int data)
 {
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	int mdic, timo;
 
 	ctlr = mii->ctlr;
@@ -1448,7 +1448,7 @@ igbemiimiw(Mii* mii, int pa, int ra, int data)
 }
 
 static int
-igbemii(Ctlr* ctlr)
+igbemii(CtlrEtherIgbe* ctlr)
 {
 	MiiPhy *phy;
 	int ctrl, p, r;
@@ -1570,7 +1570,7 @@ igbemii(Ctlr* ctlr)
 }
 
 static int
-at93c46io(Ctlr* ctlr, char* op, int data)
+at93c46io(CtlrEtherIgbe* ctlr, char* op, int data)
 {
 	char *lp, *p;
 	int i, loop, eecd, r;
@@ -1645,7 +1645,7 @@ at93c46io(Ctlr* ctlr, char* op, int data)
 }
 
 static int
-at93c46r(Ctlr* ctlr)
+at93c46r(CtlrEtherIgbe* ctlr)
 {
 	ushort sum;
 	char rop[20];
@@ -1718,7 +1718,7 @@ release:
 }
 
 static int
-igbedetach(Ctlr* ctlr)
+igbedetach(CtlrEtherIgbe* ctlr)
 {
 	int r, timeo;
 
@@ -1792,7 +1792,7 @@ igbeshutdown(Ether* ether)
 }
 
 static int
-igbereset(Ctlr* ctlr)
+igbereset(CtlrEtherIgbe* ctlr)
 {
 	int ctrl, i, pause, r, swdpio, txcw;
 
@@ -1924,7 +1924,7 @@ igbepci(void)
 {
 	int cls;
 	Pcidev *p;
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 	void *mem;
 
 	p = nil;
@@ -1970,7 +1970,7 @@ igbepci(void)
 		case 0x10:
 			break;
 		}
-		ctlr = malloc(sizeof(Ctlr));
+		ctlr = malloc(sizeof(CtlrEtherIgbe));
 		if(ctlr == nil) {
 			vunmap(mem, p->mem[0].size);
 			error(Enomem);
@@ -1999,7 +1999,7 @@ igbepci(void)
 static int
 igbepnp(Ether* edev)
 {
-	Ctlr *ctlr;
+	CtlrEtherIgbe *ctlr;
 
 	if(igbectlrhead == nil)
 		igbepci();

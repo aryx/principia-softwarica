@@ -13,7 +13,7 @@ typedef struct Evalue	Evalue;
 typedef struct Execvals	Execvals;
 typedef struct Fgrp	Fgrp;
 typedef struct DevConf	DevConf;
-typedef struct Image2	Image;
+typedef struct KImage	KImage;
 typedef struct Log	Log;
 typedef struct Logflag	Logflag;
 typedef struct Mntcache Mntcache;
