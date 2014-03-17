@@ -1,4 +1,8 @@
 
+// Put here only core stuff that are used in port code.
+// Put in xxx/386/ (e.g. processes/386/dat_processes.h) data structures 
+// that are used only in 386/ code
+
 struct Label
 {
 	ulong	sp;
@@ -18,10 +22,10 @@ struct Lock
 
 
 
-//pad: used to be in portdat.h, but needed by Mach
 /*
  *  performance timers, all units in perfticks
  */
+//used to be in portdat.h, but needed by Mach
 struct Perf
 {
 	ulong	intrts;		/* time of last interrupt */
@@ -229,3 +233,76 @@ Mach* machp[MAXMACH];
 
 extern Mach	*m;
 #define up	(((Mach*)MACHADDR)->externup)
+
+
+// define things used in portdat_core.h Proc
+/*
+ *  MMU stuff in proc
+ */
+#define NCOLOR 1
+struct PMMU
+{
+	Page*	mmupdb;			/* page directory base */
+	Page*	mmufree;		/* unused page table pages */
+	Page*	mmuused;		/* used page table pages */
+	Page*	kmaptable;		/* page table used by kmap */
+	uint	lastkmap;		/* last entry used by kmap */
+	int	nkmap;			/* number of current kmaps */
+};
+
+/*
+ *  things saved in the Proc structure during a notify
+ */
+struct Notsave
+{
+	ulong	svflags;
+	ulong	svcs;
+	ulong	svss;
+};
+
+
+
+
+
+
+
+
+struct Confmem
+{
+	ulong	base;
+	ulong	npage;
+	ulong	kbase;
+	ulong	klimit;
+};
+
+struct Conf
+{
+	ulong	nmach;		/* processors */
+	ulong	nproc;		/* processes */
+	ulong	monitor;	/* has monitor? */
+	Confmem	mem[4];		/* physical memory */
+	ulong	npage;		/* total physical pages of memory */
+	ulong	upages;		/* user page pool */
+	ulong	nimage;		/* number of page cache image headers */
+	ulong	nswap;		/* number of swap pages */
+	int	nswppo;		/* max # of pageouts per segment pass */
+	ulong	base0;		/* base of bank 0 */
+	ulong	base1;		/* base of bank 1 */
+	ulong	copymode;	/* 0 is copy on write, 1 is copy on reference */
+	ulong	ialloc;		/* max interrupt time allocation in bytes */
+	ulong	pipeqsize;	/* size in bytes of pipe queues */
+	int	nuart;		/* number of uart devices */
+};
+
+
+struct Active
+{
+	Lock;
+	int	machs;			/* bitmap of active CPUs */
+	int	exiting;		/* shutdown */
+	int	ispanic;		/* shutdown in response to a panic */
+	int	thunderbirdsarego;	/* lets the added processors continue to schedinit */
+	int	rebooting;		/* just idle cpus > 0 */
+};
+
+struct Active active;
