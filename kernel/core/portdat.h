@@ -1,9 +1,18 @@
 #include "../port/portdat_forward.h"
 
+// now used by portdat_core.h
 #include <fcall.h>
-
-// now have a reference to Fcall
 #include "../port/portdat_core.h"
+
+#include "../port/portdat_memory.h"
+#include "../port/portdat_files.h"
+#include "../port/portdat_processes.h"
+
+// used by portdat_buses.h
+#ifndef STAGESIZE
+#define STAGESIZE 64
+#endif
+#include "../port/portdat_buses.h"
 
 #define HOWMANY(x, y)	(((x)+((y)-1))/(y))
 #define ROUNDUP(x, y)	(HOWMANY((x), (y))*(y))	/* ceiling */
@@ -26,38 +35,35 @@
 
 #define FMASK(o, w)	(((1<<(w))-1)<<(o))
 
+
 /* let each port override any of these */
+// used by devcons.c
 #ifndef KMESGSIZE
 #define KMESGSIZE (16*1024)
 #endif
+// used by 386/pci.c
 #ifndef PCICONSSIZE
 #define PCICONSSIZE (16*1024)
 #endif
-#ifndef STAGESIZE
-#define STAGESIZE 64
-#endif
-#ifndef MAXBY2PG
-#define MAXBY2PG BY2PG		/* rounding for UTZERO in executables */
-#endif
-
-#include "../port/portdat_memory.h"
-#include "../port/portdat_files.h"
-#include "../port/portdat_processes.h"
-#include "../port/portdat_buses.h"
-
 //unused
-//enum
-//{
-//	NSMAX	=	1000,
-//	NSLOG	=	7,
-//	NSCACHE	=	(1<<NSLOG),
-//};
+//#ifndef MAXBY2PG
+//#define MAXBY2PG BY2PG		/* rounding for UTZERO in executables */
+//#endif
 
-struct Execvals {
-	uvlong	entry;
-	ulong	textsize;
-	ulong	datasize;
+
+// convenient constants
+enum
+{
+	PRINTSIZE =	256,
+//unused	MAXCRYPT = 	127,
+	NUMSIZE	=	12,		/* size of formatted number */
+	MB =		(1024*1024),
+	/* READSTR was 1000, which is way too small for usb's ctl file */
+	READSTR =	4000,		/* temporary buffer size for device reads */
 };
+
+#define DEVDOTDOT -1
+
 
 enum
 {
@@ -66,13 +72,22 @@ enum
 
 enum
 {
-	PRINTSIZE =	256,
-	MAXCRYPT = 	127,
-	NUMSIZE	=	12,		/* size of formatted number */
-	MB =		(1024*1024),
-	/* READSTR was 1000, which is way too small for usb's ctl file */
-	READSTR =	4000,		/* temporary buffer size for device reads */
+	LRESPROF	= 3,
 };
+
+//unused:
+//enum
+//{
+//	NSMAX	=	1000,
+//	NSLOG	=	7,
+//	NSCACHE	=	(1<<NSLOG),
+//};
+
+//unused:
+//enum
+//{
+//	NCMDFIELD = 128
+//};
 
 extern	Conf	conf;
 extern	char*	conffile;
@@ -88,7 +103,6 @@ extern	Queue*	kprintoq;
 extern 	Ref	noteidalloc;
 extern	int	nsyscall;
 extern	Palloc	palloc;
-int	(*parseboothdr)(Chan *, ulong, Execvals *);
 extern	Queue*	serialoq;
 extern	char*	statename[];
 extern	KImage	swapimage;
@@ -96,9 +110,27 @@ extern	char*	sysname;
 extern	uint	qiomaxatomic;
 extern	char*	sysctab[];
 
-enum
+struct Execvals {
+	uvlong	entry;
+	ulong	textsize;
+	ulong	datasize;
+};
+int	(*parseboothdr)(Chan *, ulong, Execvals *);
+
+
+
+struct Cmdbuf
 {
-	LRESPROF	= 3,
+	char	*buf;
+	char	**f;
+	int	nf;
+};
+
+struct Cmdtab
+{
+	int	index;	/* used by client to switch on result */
+	char	*cmd;	/* command name */
+	int	narg;	/* expected #args; 0 ==> variadic */
 };
 
 //unused
@@ -126,27 +158,6 @@ enum
 //	int	mask;
 //};
 //
-//enum
-//{
-//	NCMDFIELD = 128
-//};
-
-struct Cmdbuf
-{
-	char	*buf;
-	char	**f;
-	int	nf;
-};
-
-struct Cmdtab
-{
-	int	index;	/* used by client to switch on result */
-	char	*cmd;	/* command name */
-	int	narg;	/* expected #args; 0 ==> variadic */
-};
-
-
-#define DEVDOTDOT -1
 
 #pragma	varargck	type	"I"	uchar*
 #pragma	varargck	type	"V"	uchar*
