@@ -11,11 +11,6 @@ enum {
 	Maxtimerloops = 20*1000,
 };
 
-struct Timers
-{
-	Lock;
-	Timer	*head;
-};
 
 static Timers timers[MAXMACH];
 static int timersinited;

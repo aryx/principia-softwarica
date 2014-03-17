@@ -17,38 +17,6 @@ static int debugging;
 
 #define QDEBUG	if(0)
 
-/*
- *  IO queues
- */
-typedef struct Queue	Queue;
-
-struct Queue
-{
-	Lock;
-
-	Block*	bfirst;		/* buffer */
-	Block*	blast;
-
-	int	len;		/* bytes allocated to queue */
-	int	dlen;		/* data bytes in queue */
-	int	limit;		/* max bytes in queue */
-	int	inilim;		/* initial limit */
-	int	state;
-	int	noblock;	/* true if writes return immediately when q full */
-	int	eof;		/* number of eofs read by user */
-
-	void	(*kick)(void*);	/* restart output */
-	void	(*bypass)(void*, Block*);	/* bypass queue altogether */
-	void*	arg;		/* argument to kick */
-
-	QLock	rlock;		/* mutex for reading processes */
-	Rendez	rr;		/* process waiting to read */
-	QLock	wlock;		/* mutex for writing processes */
-	Rendez	wr;		/* process waiting to write */
-
-	char	err[ERRMAX];
-};
-
 enum
 {
 	Maxatomic	= 64*1024,

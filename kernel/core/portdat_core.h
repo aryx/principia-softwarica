@@ -88,6 +88,56 @@ struct Ref
 
 
 
+/*
+ * Access types in namec & channel flags
+ */
+enum
+{
+	Aaccess,			/* as in stat, wstat */
+	Abind,				/* for left-hand-side of bind */
+	Atodir,				/* as in chdir */
+	Aopen,				/* for i/o */
+	Amount,				/* to be mounted or mounted upon */
+	Acreate,			/* is to be created */
+	Aremove,			/* will be removed by caller */
+
+	COPEN	= 0x0001,		/* for i/o */
+	CMSG	= 0x0002,		/* the message channel for a mount */
+/*rsc	CCREATE	= 0x0004,		/* permits creation if c->mnt */
+	CCEXEC	= 0x0008,		/* close on exec */
+	CFREE	= 0x0010,		/* not in use */
+	CRCLOSE	= 0x0020,		/* remove on close */
+	CCACHE	= 0x0080,		/* client cache */
+};
+
+/* flag values */
+enum
+{
+	BINTR	=	(1<<0),
+	BFREE	=	(1<<1),
+	Bipck	=	(1<<2),		/* ip checksum */
+	Budpck	=	(1<<3),		/* udp checksum */
+	Btcpck	=	(1<<4),		/* tcp checksum */
+	Bpktck	=	(1<<5),		/* packet checksum */
+};
+
+struct Block
+{
+	long	ref;
+	Block*	next;
+	Block*	list;
+	uchar*	rp;			/* first unconsumed byte */
+	uchar*	wp;			/* first empty byte */
+	uchar*	lim;			/* 1 past the end of the buffer */
+	uchar*	base;			/* start of the buffer */
+	void	(*free)(Block*);
+	ushort	flag;
+	ushort	checksum;		/* IP checksum of complete packet (minus media header) */
+};
+
+#define BLEN(s)	((s)->wp - (s)->rp)
+#define BALLOC(s) ((s)->lim - (s)->base)
+
 
 struct Mount
 {
@@ -100,6 +150,95 @@ struct Mount
 	int	mflag;
 	char	*spec;
 };
+
+/*
+ *  IO queues
+ */
+// was in qio.c
+struct Queue
+{
+	Lock;
+
+	Block*	bfirst;		/* buffer */
+	Block*	blast;
+
+	int	len;		/* bytes allocated to queue */
+	int	dlen;		/* data bytes in queue */
+	int	limit;		/* max bytes in queue */
+	int	inilim;		/* initial limit */
+	int	state;
+	int	noblock;	/* true if writes return immediately when q full */
+	int	eof;		/* number of eofs read by user */
+
+	void	(*kick)(void*);	/* restart output */
+	void	(*bypass)(void*, Block*);	/* bypass queue altogether */
+	void*	arg;		/* argument to kick */
+
+	QLock	rlock;		/* mutex for reading processes */
+	Rendez	rr;		/* process waiting to read */
+	QLock	wlock;		/* mutex for writing processes */
+	Rendez	wr;		/* process waiting to write */
+
+	char	err[ERRMAX];
+};
+
+// was in devmnt.c
+struct Mntrpc
+{
+	Chan*	c;		/* Channel for whom we are working */
+	Mntrpc*	list;		/* Free/pending list */
+	Fcall	request;	/* Outgoing file system protocol message */
+	Fcall 	reply;		/* Incoming reply */
+	Mnt*	m;		/* Mount device during rpc */
+	Rendez	r;		/* Place to hang out */
+	uchar*	rpc;		/* I/O Data buffer */
+	uint	rpclen;		/* len of buffer */
+	Block	*b;		/* reply blocks */
+	char	done;		/* Rpc completed */
+	uvlong	stime;		/* start time for mnt statistics */
+	ulong	reqlen;		/* request length for mnt statistics */
+	ulong	replen;		/* reply length for mnt statistics */
+	Mntrpc*	flushed;	/* message this one flushes */
+};
+
+struct Mnt
+{
+	Lock;
+	/* references are counted using c->ref; channels on this mount point incref(c->mchan) == Mnt.c */
+	Chan	*c;		/* Channel to file service */
+	Proc	*rip;		/* Reader in progress */
+	Mntrpc	*queue;		/* Queue of pending requests on this channel */
+	ulong	id;		/* Multiplexer id for channel check */
+	Mnt	*list;		/* Free list */
+	int	flags;		/* cache */
+	int	msize;		/* data + IOHDRSZ */
+	char	*version;	/* 9P version */
+	Queue	*q;		/* input queue */
+};
+
+// was in cache.c
+struct Extent
+{
+	int	bid;
+	ulong	start;
+	int	len;
+	Page	*cache;
+	Extent	*next;
+};
+
+// was in cache.c
+struct Mntcache
+{
+	Qid	qid;
+	int	dev;
+	int	type;
+	QLock;
+	Extent	 *list;
+	Mntcache *hash;
+	Mntcache *prev;
+	Mntcache *next;
+};
+
 
 struct Mhead
 {
@@ -367,7 +506,58 @@ struct Timer
 	Timer	*tnext;
 };
 
+// was in portclock.c
+struct Timers
+{
+	Lock;
+	Timer	*head;
+};
 
+
+// was in edf.h
+enum {
+	Maxsteps = 200 * 100 * 2,	/* 100 periods of 200 procs */
+
+	/* Edf.flags field */
+	Admitted		= 0x01,
+	Sporadic		= 0x02,
+	Yieldonblock		= 0x04,
+	Sendnotes		= 0x08,
+	Deadline		= 0x10,
+	Yield			= 0x20,
+	Extratime		= 0x40,
+
+	Infinity = ~0ULL,
+};
+
+struct Edf {
+	/* All times in µs */
+	/* time intervals */
+	long		D;		/* Deadline */
+	long		Delta;		/* Inherited deadline */
+	long		T;		/* period */
+	long		C;		/* Cost */
+	long		S;		/* Slice: time remaining in this period */
+	/* times (only low-order bits of absolute time) */
+	long		r;		/* (this) release time */
+	long		d;		/* (this) deadline */
+	long		t;		/* Start of next period, t += T at release */
+	long		s;		/* Time at which this proc was last scheduled */
+	/* for schedulability testing */
+	long		testDelta;
+	int		testtype;	/* Release or Deadline */
+	long		testtime;
+	Proc		*testnext;
+	/* other */
+	ushort		flags;
+	Timer;
+	/* Stats */
+	long		edfused;
+	long		extraused;
+	long		aged;
+	ulong		periods;
+	ulong		missed;
+};
 
 
 

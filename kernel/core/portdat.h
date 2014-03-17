@@ -1,8 +1,9 @@
 #include "../port/portdat_forward.h"
 
-#include "../port/portdat_core.h"
-
 #include <fcall.h>
+
+// now have a reference to Fcall
+#include "../port/portdat_core.h"
 
 #define HOWMANY(x, y)	(((x)+((y)-1))/(y))
 #define ROUNDUP(x, y)	(HOWMANY((x), (y))*(y))	/* ceiling */
@@ -39,63 +40,12 @@
 #define MAXBY2PG BY2PG		/* rounding for UTZERO in executables */
 #endif
 
-
 struct Alarms
 {
 	QLock;
 	Proc	*head;
 };
 
-
-/*
- * Access types in namec & channel flags
- */
-enum
-{
-	Aaccess,			/* as in stat, wstat */
-	Abind,				/* for left-hand-side of bind */
-	Atodir,				/* as in chdir */
-	Aopen,				/* for i/o */
-	Amount,				/* to be mounted or mounted upon */
-	Acreate,			/* is to be created */
-	Aremove,			/* will be removed by caller */
-
-	COPEN	= 0x0001,		/* for i/o */
-	CMSG	= 0x0002,		/* the message channel for a mount */
-/*rsc	CCREATE	= 0x0004,		/* permits creation if c->mnt */
-	CCEXEC	= 0x0008,		/* close on exec */
-	CFREE	= 0x0010,		/* not in use */
-	CRCLOSE	= 0x0020,		/* remove on close */
-	CCACHE	= 0x0080,		/* client cache */
-};
-
-/* flag values */
-enum
-{
-	BINTR	=	(1<<0),
-	BFREE	=	(1<<1),
-	Bipck	=	(1<<2),		/* ip checksum */
-	Budpck	=	(1<<3),		/* udp checksum */
-	Btcpck	=	(1<<4),		/* tcp checksum */
-	Bpktck	=	(1<<5),		/* packet checksum */
-};
-
-struct Block
-{
-	long	ref;
-	Block*	next;
-	Block*	list;
-	uchar*	rp;			/* first unconsumed byte */
-	uchar*	wp;			/* first empty byte */
-	uchar*	lim;			/* 1 past the end of the buffer */
-	uchar*	base;			/* start of the buffer */
-	void	(*free)(Block*);
-	ushort	flag;
-	ushort	checksum;		/* IP checksum of complete packet (minus media header) */
-};
-
-#define BLEN(s)	((s)->wp - (s)->rp)
-#define BALLOC(s) ((s)->lim - (s)->base)
 
 struct Dev
 {
@@ -153,21 +103,6 @@ struct Mntwalk				/* state for /proc/#/ns */
 	Mount*	cm;
 };
 
-struct Mnt
-{
-	Lock;
-	/* references are counted using c->ref; channels on this mount point incref(c->mchan) == Mnt.c */
-	Chan	*c;		/* Channel to file service */
-	Proc	*rip;		/* Reader in progress */
-	Mntrpc	*queue;		/* Queue of pending requests on this channel */
-	ulong	id;		/* Multiplexer id for channel check */
-	Mnt	*list;		/* Free list */
-	int	flags;		/* cache */
-	int	msize;		/* data + IOHDRSZ */
-	char	*version;	/* 9P version */
-	Queue	*q;		/* input queue */
-};
-
 
 struct Swapalloc
 {
@@ -183,10 +118,6 @@ struct Swapalloc
 };
 
 struct Swapalloc swapalloc;
-
-
-
-
 
 
 enum
@@ -232,7 +163,6 @@ enum
 	RFREND		= (1<<13),
 	RFNOMNT		= (1<<14),
 };
-
 
 
 struct Schedq

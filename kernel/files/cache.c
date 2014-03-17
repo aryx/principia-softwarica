@@ -13,28 +13,6 @@ enum
 	NEXTENT		= 200,		/* extent allocation size */
 };
 
-typedef struct Extent Extent;
-struct Extent
-{
-	int	bid;
-	ulong	start;
-	int	len;
-	Page	*cache;
-	Extent	*next;
-};
-
-typedef struct Mntcache Mntcache;
-struct Mntcache
-{
-	Qid	qid;
-	int	dev;
-	int	type;
-	QLock;
-	Extent	 *list;
-	Mntcache *hash;
-	Mntcache *prev;
-	Mntcache *next;
-};
 
 typedef struct Cache Cache;
 struct Cache

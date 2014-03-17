@@ -18,24 +18,6 @@
 
 #define MAXRPC (IOHDRSZ+8192)
 
-struct Mntrpc
-{
-	Chan*	c;		/* Channel for whom we are working */
-	Mntrpc*	list;		/* Free/pending list */
-	Fcall	request;	/* Outgoing file system protocol message */
-	Fcall 	reply;		/* Incoming reply */
-	Mnt*	m;		/* Mount device during rpc */
-	Rendez	r;		/* Place to hang out */
-	uchar*	rpc;		/* I/O Data buffer */
-	uint	rpclen;		/* len of buffer */
-	Block	*b;		/* reply blocks */
-	char	done;		/* Rpc completed */
-	uvlong	stime;		/* start time for mnt statistics */
-	ulong	reqlen;		/* request length for mnt statistics */
-	ulong	replen;		/* reply length for mnt statistics */
-	Mntrpc*	flushed;	/* message this one flushes */
-};
-
 enum
 {
 	TAGSHIFT = 5,			/* ulong has to be 32 bits */
@@ -53,7 +35,9 @@ struct Mntalloc
 	int	nrpcused;
 	ulong	id;
 	ulong	tagmask[NMASK];
-}mntalloc;
+};
+
+struct Mntalloc mntalloc;
 
 Mnt*	mntchk(Chan*);
 void	mntdirfix(uchar*, Chan*);
