@@ -40,139 +40,29 @@
 #define MAXBY2PG BY2PG		/* rounding for UTZERO in executables */
 #endif
 
-struct Alarms
-{
-	QLock;
-	Proc	*head;
+#include "../port/portdat_memory.h"
+#include "../port/portdat_files.h"
+#include "../port/portdat_processes.h"
+#include "../port/portdat_buses.h"
+
+//unused
+//enum
+//{
+//	NSMAX	=	1000,
+//	NSLOG	=	7,
+//	NSCACHE	=	(1<<NSLOG),
+//};
+
+struct Execvals {
+	uvlong	entry;
+	ulong	textsize;
+	ulong	datasize;
 };
-
-
-struct Dev
-{
-	int	dc;
-	char*	name;
-
-	void	(*reset)(void);
-	void	(*init)(void);
-	void	(*shutdown)(void);
-	Chan*	(*attach)(char*);
-	Walkqid*(*walk)(Chan*, Chan*, char**, int);
-	int	(*stat)(Chan*, uchar*, int);
-	Chan*	(*open)(Chan*, int);
-	void	(*create)(Chan*, char*, int, ulong);
-	void	(*close)(Chan*);
-	long	(*read)(Chan*, void*, long, vlong);
-	Block*	(*bread)(Chan*, long, ulong);
-	long	(*write)(Chan*, void*, long, vlong);
-	long	(*bwrite)(Chan*, Block*, ulong);
-	void	(*remove)(Chan*);
-	int	(*wstat)(Chan*, uchar*, int);
-	void	(*power)(int);	/* power mgt: power(1) => on, power (0) => off */
-	int	(*config)(int, char*, DevConf*);	/* returns nil on error */
-
-	/* not initialised */
-	int	attached;				/* debugging */
-};
-
-struct Dirtab
-{
-	char	name[KNAMELEN];
-	Qid	qid;
-	vlong	length;
-	long	perm;
-};
-
-struct Walkqid
-{
-	Chan	*clone;
-	int	nqid;
-	Qid	qid[1];
-};
-
-enum
-{
-	NSMAX	=	1000,
-	NSLOG	=	7,
-	NSCACHE	=	(1<<NSLOG),
-};
-
-struct Mntwalk				/* state for /proc/#/ns */
-{
-	int	cddone;
-	Mhead*	mh;
-	Mount*	cm;
-};
-
-
-struct Swapalloc
-{
-	Lock;				/* Free map lock */
-	int	free;			/* currently free swap pages */
-	uchar*	swmap;			/* Base of swap map in memory */
-	uchar*	alloc;			/* Round robin allocator */
-	uchar*	last;			/* Speed swap allocation */
-	uchar*	top;			/* Top of swap map */
-	Rendez	r;			/* Pager kproc idle sleep */
-	ulong	highwater;		/* Pager start threshold */
-	ulong	headroom;		/* Space pager frees under highwater */
-};
-
-struct Swapalloc swapalloc;
-
 
 enum
 {
 	DELTAFD	= 20		/* incremental increase in Fgrp.fd's */
 };
-
-struct Pallocmem
-{
-	ulong base;
-	ulong npage;
-};
-
-struct Palloc
-{
-	Lock;
-	Pallocmem	mem[4];
-	Page	*head;			/* most recently used */
-	Page	*tail;			/* least recently used */
-	ulong	freecount;		/* how many pages on free list now */
-	Page	*pages;			/* array of all pages */
-	ulong	user;			/* how many user pages */
-	Page	*hash[PGHSIZE];
-	Lock	hashlock;
-	Rendez	r;			/* Sleep for free mem */
-	QLock	pwait;			/* Queue of procs waiting for memory */
-};
-
-
-
-enum
-{
-	RFNAMEG		= (1<<0),
-	RFENVG		= (1<<1),
-	RFFDG		= (1<<2),
-	RFNOTEG		= (1<<3),
-	RFPROC		= (1<<4),
-	RFMEM		= (1<<5),
-	RFNOWAIT	= (1<<6),
-	RFCNAMEG	= (1<<10),
-	RFCENVG		= (1<<11),
-	RFCFDG		= (1<<12),
-	RFREND		= (1<<13),
-	RFNOMNT		= (1<<14),
-};
-
-
-struct Schedq
-{
-	Lock;
-	Proc*	head;
-	Proc*	tail;
-	int	n;
-};
-
 
 enum
 {
@@ -183,15 +73,6 @@ enum
 	/* READSTR was 1000, which is way too small for usb's ctl file */
 	READSTR =	4000,		/* temporary buffer size for device reads */
 };
-
-struct Execvals {
-	uvlong	entry;
-	ulong	textsize;
-	ulong	datasize;
-};
-
-
-
 
 extern	Conf	conf;
 extern	char*	conffile;
@@ -215,42 +96,40 @@ extern	char*	sysname;
 extern	uint	qiomaxatomic;
 extern	char*	sysctab[];
 
-Watchdog* watchdog;
-int	watchdogon;
-
 enum
 {
 	LRESPROF	= 3,
 };
 
+//unused
 /*
  *  action log
  */
-struct Log {
-	Lock;
-	int	opens;
-	char*	buf;
-	char	*end;
-	char	*rptr;
-	int	len;
-	int	nlog;
-	int	minread;
-
-	int	logmask;	/* mask of things to debug */
-
-	QLock	readq;
-	Rendez	readr;
-};
-
-struct Logflag {
-	char*	name;
-	int	mask;
-};
-
-enum
-{
-	NCMDFIELD = 128
-};
+//struct Log {
+//	Lock;
+//	int	opens;
+//	char*	buf;
+//	char	*end;
+//	char	*rptr;
+//	int	len;
+//	int	nlog;
+//	int	minread;
+//
+//	int	logmask;	/* mask of things to debug */
+//
+//	QLock	readq;
+//	Rendez	readr;
+//};
+//
+//struct Logflag {
+//	char*	name;
+//	int	mask;
+//};
+//
+//enum
+//{
+//	NCMDFIELD = 128
+//};
 
 struct Cmdbuf
 {
@@ -266,120 +145,6 @@ struct Cmdtab
 	int	narg;	/* expected #args; 0 ==> variadic */
 };
 
-/*
- *  routines to access UART hardware
- */
-struct PhysUart
-{
-	char*	name;
-	Uart*	(*pnp)(void);
-	void	(*enable)(Uart*, int);
-	void	(*disable)(Uart*);
-	void	(*kick)(Uart*);
-	void	(*dobreak)(Uart*, int);
-	int	(*baud)(Uart*, int);
-	int	(*bits)(Uart*, int);
-	int	(*stop)(Uart*, int);
-	int	(*parity)(Uart*, int);
-	void	(*modemctl)(Uart*, int);
-	void	(*rts)(Uart*, int);
-	void	(*dtr)(Uart*, int);
-	long	(*status)(Uart*, void*, long, long);
-	void	(*fifo)(Uart*, int);
-	void	(*power)(Uart*, int);
-	int	(*getc)(Uart*);	/* polling versions, for iprint, rdb */
-	void	(*putc)(Uart*, int);
-};
-
-enum {
-	Stagesize=	STAGESIZE
-};
-
-/*
- *  software UART
- */
-struct Uart
-{
-	void*	regs;			/* hardware stuff */
-	void*	saveregs;		/* place to put registers on power down */
-	char*	name;			/* internal name */
-	ulong	freq;			/* clock frequency */
-	int	bits;			/* bits per character */
-	int	stop;			/* stop bits */
-	int	parity;			/* even, odd or no parity */
-	int	baud;			/* baud rate */
-	PhysUart*phys;
-	int	console;		/* used as a serial console */
-	int	special;		/* internal kernel device */
-	Uart*	next;			/* list of allocated uarts */
-
-	QLock;
-	int	type;			/* ?? */
-	int	dev;
-	int	opens;
-
-	int	enabled;
-	Uart	*elist;			/* next enabled interface */
-
-	int	perr;			/* parity errors */
-	int	ferr;			/* framing errors */
-	int	oerr;			/* rcvr overruns */
-	int	berr;			/* no input buffers */
-	int	serr;			/* input queue overflow */
-
-	/* buffers */
-	int	(*putc)(Queue*, int);
-	Queue	*iq;
-	Queue	*oq;
-
-	Lock	rlock;
-	uchar	istage[Stagesize];
-	uchar	*iw;
-	uchar	*ir;
-	uchar	*ie;
-
-	Lock	tlock;			/* transmit */
-	uchar	ostage[Stagesize];
-	uchar	*op;
-	uchar	*oe;
-	int	drain;
-
-	int	modem;			/* hardware flow control on */
-	int	xonoff;			/* software flow control on */
-	int	blocked;
-	int	cts, dsr, dcd;	/* keep track of modem status */ 
-	int	ctsbackoff;
-	int	hup_dsr, hup_dcd;	/* send hangup upstream? */
-	int	dohup;
-
-	Rendez	r;
-};
-
-extern	Uart*	consuart;
-
-void (*lprint)(char *, int);
-
-
-struct Watchdog
-{
-	void	(*enable)(void);	/* watchdog enable */
-	void	(*disable)(void);	/* watchdog disable */
-	void	(*restart)(void);	/* watchdog restart */
-	void	(*stat)(char*, char*);	/* watchdog statistics */
-};
-
-
-/* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
-enum
-{
-	/* Queue.state */
-	Qstarve		= (1<<0),	/* consumer starved */
-	Qmsg		= (1<<1),	/* message stream */
-	Qclosed		= (1<<2),	/* queue has been closed/hungup */
-	Qflow		= (1<<3),	/* producer flow controlled */
-	Qcoalesce	= (1<<4),	/* coalesce packets on read */
-	Qkick		= (1<<5),	/* always call the kick routine after qwrite */
-};
 
 #define DEVDOTDOT -1
 

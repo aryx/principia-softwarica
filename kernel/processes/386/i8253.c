@@ -5,6 +5,18 @@
 #include "fns.h"
 #include "io.h"
 
+struct Watchdog
+{
+	void	(*enable)(void);	/* watchdog enable */
+	void	(*disable)(void);	/* watchdog disable */
+	void	(*restart)(void);	/* watchdog restart */
+	void	(*stat)(char*, char*);	/* watchdog statistics */
+};
+
+Watchdog* watchdog;
+int	watchdogon;
+
+
 /*
  *  8253 timer
  */

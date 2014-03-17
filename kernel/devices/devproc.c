@@ -9,6 +9,14 @@
 #include	"ureg.h"
 #include	"../port/edf.h"
 
+struct Mntwalk				/* state for /proc/#/ns */
+{
+	int	cddone;
+	Mhead*	mh;
+	Mount*	cm;
+};
+
+
 enum
 {
 	Qdir,
