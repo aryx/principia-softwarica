@@ -17,6 +17,6 @@ int		canqlock(QLock*);
 
 void		rlock(RWlock*);
 void		runlock(RWlock*);
+int		canrlock(RWlock*);
 void		wlock(RWlock*);
 void		wunlock(RWlock*);
-int		canrlock(RWlock*);

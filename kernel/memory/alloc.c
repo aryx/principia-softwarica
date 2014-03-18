@@ -7,15 +7,6 @@
 
 #include	<pool.h>
 
-extern void poolsummary(Pool *p);
-
-void
-mallocsummary(void)
-{
-	poolsummary(mainmem);
-	poolsummary(imagmem);
-}
-
 /* everything from here down should be the same in libc, libdebugmalloc, and the kernel */
 /* - except the code for malloc(), which alternately doesn't clear or does. */
 /* - except the code for smalloc(), which lives only in the kernel. */

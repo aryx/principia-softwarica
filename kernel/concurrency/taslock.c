@@ -5,6 +5,8 @@
 #include "fns.h"
 #include "../port/error.h"
 
+// TAS: Test And Set
+
 struct TaslockStats
 {
 	ulong	locks;

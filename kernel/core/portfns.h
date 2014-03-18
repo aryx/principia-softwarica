@@ -80,7 +80,6 @@ int		haswaitq(void*);
 long		hostdomainwrite(char*, int);
 long		hostownerwrite(char*, int);
 int		iseve(void);
-int		islo(void);
 Segment*	isoverlap(Proc*, ulong, int);
 int		ispages(void*);
 int		kbdcr2nl(Queue*, int);
@@ -137,10 +136,6 @@ void		setkernur(Ureg*, Proc*);
 int		setlabel(Label*);
 void		setregisters(Ureg*, char*, char*, int);
 char*		skipslash(char*);
-int		splhi(void);
-int		spllo(void);
-void		splx(int);
-void		splxpc(int);
 char*		srvname(Chan*);
 void		timerset(Tval);
 int		uartctl(Uart*, char*);
@@ -166,8 +161,18 @@ uvlong		nhgetv(void*);
 uint		nhgetl(void*);
 ushort		nhgets(void*);
 ulong		µs(void);
+
+int		islo(void);
+
+int		splhi(void);
+int		spllo(void);
+void		splx(int);
+void		splxpc(int);
+
+//tas
 void		_xinc(long*);
 long		_xdec(long*);
+
 long		lcycles(void);
 
 #pragma varargck argpos iprint	1

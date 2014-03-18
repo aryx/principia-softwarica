@@ -9,7 +9,7 @@ void*		xspanalloc(ulong, int, ulong);
 
 // pool.c
 // see include/pool.h: poollock(), ...
-//void poolsummary(Pool *p);
+void		mallocsummary(void);
 
 // alloc.c
 void*		malloc(ulong);
@@ -19,7 +19,6 @@ void*		mallocz(ulong, int);
 void*		mallocalign(ulong, ulong, long, ulong);
 void*		realloc(void *v, ulong size);
 ulong		msize(void*);
-void		mallocsummary(void);
 void		setmalloctag(void*, ulong);
 void		kstrcpy(char*, char*, int);
 void		kstrdup(char**, char*);

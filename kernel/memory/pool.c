@@ -7,56 +7,11 @@
 
 #include	<pool.h>
 
-static void poolprint(Pool*, char*, ...);
-static void ppanic(Pool*, char*, ...);
-static void plock(Pool*);
-static void punlock(Pool*);
-
 typedef struct Private	Private;
 struct Private {
 	Lock		lk;
 	char		msg[256];	/* a rock for messages to be printed at unlock */
 };
-
-static Private pmainpriv;
-static Pool pmainmem = {
-	.name=	"Main",
-	.maxsize=	4*1024*1024,
-	.minarena=	128*1024,
-	.quantum=	32,
-	.alloc=	xalloc,
-	.merge=	xmerge,
-	.flags=	POOL_TOLERANCE,
-
-	.lock=	plock,
-	.unlock=	punlock,
-	.print=	poolprint,
-	.panic=	ppanic,
-
-	.private=	&pmainpriv,
-};
-
-static Private pimagpriv;
-static Pool pimagmem = {
-	.name=	"Image",
-	.maxsize=	16*1024*1024,
-	.minarena=	2*1024*1024,
-	.quantum=	32,
-	.alloc=	xalloc,
-	.merge=	xmerge,
-	.flags=	0,
-
-	.lock=	plock,
-	.unlock=	punlock,
-	.print=	poolprint,
-	.panic=	ppanic,
-
-	.private=	&pimagpriv,
-};
-
-// include/pool.h
-Pool*	mainmem = &pmainmem;
-Pool*	imagmem = &pimagmem;
 
 
 /*
@@ -125,3 +80,52 @@ poolsummary(Pool *p)
 	print("%s max %lud cur %lud free %lud alloc %lud\n", p->name,
 		p->maxsize, p->cursize, p->curfree, p->curalloc);
 }
+
+
+void
+mallocsummary(void)
+{
+	poolsummary(mainmem);
+	poolsummary(imagmem);
+}
+
+
+static Private pmainpriv;
+static Pool pmainmem = {
+	.name=	"Main",
+	.maxsize=	4*1024*1024,
+	.minarena=	128*1024,
+	.quantum=	32,
+	.alloc=	xalloc,
+	.merge=	xmerge,
+	.flags=	POOL_TOLERANCE,
+
+	.lock=	plock,
+	.unlock=	punlock,
+	.print=	poolprint,
+	.panic=	ppanic,
+
+	.private=	&pmainpriv,
+};
+
+static Private pimagpriv;
+static Pool pimagmem = {
+	.name=	"Image",
+	.maxsize=	16*1024*1024,
+	.minarena=	2*1024*1024,
+	.quantum=	32,
+	.alloc=	xalloc,
+	.merge=	xmerge,
+	.flags=	0,
+
+	.lock=	plock,
+	.unlock=	punlock,
+	.print=	poolprint,
+	.panic=	ppanic,
+
+	.private=	&pimagpriv,
+};
+
+// include/pool.h
+Pool*	mainmem = &pmainmem;
+Pool*	imagmem = &pimagmem;
