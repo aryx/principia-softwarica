@@ -12,7 +12,7 @@ struct Swapalloc
 	ulong	headroom;		/* Space pager frees under highwater */
 };
 
-struct Swapalloc swapalloc;
+extern struct Swapalloc swapalloc;
 
 struct Pallocmem
 {

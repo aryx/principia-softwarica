@@ -64,7 +64,6 @@ enum
 
 #define DEVDOTDOT -1
 
-
 enum
 {
 	DELTAFD	= 20		/* incremental increase in Fgrp.fd's */

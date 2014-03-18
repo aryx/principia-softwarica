@@ -34,7 +34,6 @@ struct Dev
 };
 
 
-
 struct Dirtab
 {
 	char	name[KNAMELEN];

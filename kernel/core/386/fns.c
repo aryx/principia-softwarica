@@ -5,5 +5,4 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-Mach* machp[MAXMACH];
-struct Active active;
+int	(*isaconfig)(char*, int, ISAConf*) = 0;
