@@ -20,6 +20,7 @@ void		(*tsleep)(Rendez*, int (*)(void*), void*, ulong);
 Proc*		(*proctab)(int);
 int	(*postnote)(Proc*, int, char*, int);
 void		(*pexit)(char*, int);
+void		(*exhausted)(char*);
 
 int		(*return0)(void*);
 
@@ -139,7 +140,6 @@ int		eqchan(Chan*, Chan*, int);
 int		eqchantdqid(Chan*, int, int, Qid, int);
 int		eqqid(Qid, Qid);
 long		execregs(ulong, ulong, ulong);
-void		exhausted(char*);
 uvlong		fastticks2ns(uvlong);
 uvlong		fastticks2us(uvlong);
 int		fault(ulong, int);
