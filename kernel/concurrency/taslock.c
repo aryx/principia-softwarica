@@ -14,6 +14,7 @@ struct TaslockStats
 
 struct TaslockStats lockstats;
 
+#ifdef LOCKCYCLES
 long maxlockcycles;
 long maxilockcycles;
 long cumlockcycles;
@@ -21,6 +22,9 @@ long cumilockcycles;
 ulong maxlockpc;
 ulong maxilockpc;
 
+ulong ilockpcs[0x100] = { [0xff] = 1 };
+static int n;
+#endif
 
 static void
 inccnt(Ref *r)
@@ -39,18 +43,19 @@ deccnt(Ref *r)
 	return x;
 }
 
-static void
-dumplockmem(char *tag, Lock *l)
-{
-	uchar *cp;
-	int i;
-
-	iprint("%s: ", tag);
-	cp = (uchar*)l;
-	for(i = 0; i < 64; i++)
-		iprint("%2.2ux ", cp[i]);
-	iprint("\n");
-}
+//unused:
+//static void
+//dumplockmem(char *tag, Lock *l)
+//{
+//	uchar *cp;
+//	int i;
+//
+//	iprint("%s: ", tag);
+//	cp = (uchar*)l;
+//	for(i = 0; i < 64; i++)
+//		iprint("%2.2ux ", cp[i]);
+//	iprint("\n");
+//}
 
 void
 lockloop(Lock *l, ulong pc)
@@ -221,8 +226,6 @@ unlock(Lock *l)
 	}
 }
 
-ulong ilockpcs[0x100] = { [0xff] = 1 };
-static int n;
 
 void
 iunlock(Lock *l)
