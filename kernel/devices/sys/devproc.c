@@ -7,7 +7,7 @@
 #include	"fns.h"
 #include	"../port/error.h"
 #include	"ureg.h"
-#include	"../port/edf.h"
+//#include	"../port/edf.h"
 
 struct Mntwalk				/* state for /proc/#/ns */
 {
