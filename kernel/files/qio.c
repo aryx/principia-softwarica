@@ -902,39 +902,40 @@ bl2mem(uchar *p, Block *b, int n)
 	return nil;
 }
 
+//unused
 /*
  *  copy the contents of memory into a string of blocks.
  *  return nil on error.
  */
-Block*
-mem2bl(uchar *p, int len)
-{
-	int n;
-	Block *b, *first, **l;
-
-	first = nil;
-	l = &first;
-	if(waserror()){
-		freeblist(first);
-		nexterror();
-	}
-	do {
-		n = len;
-		if(n > Maxatomic)
-			n = Maxatomic;
-
-		*l = b = allocb(n);
-		setmalloctag(b, (up->text[0]<<24)|(up->text[1]<<16)|(up->text[2]<<8)|up->text[3]);
-		memmove(b->wp, p, n);
-		b->wp += n;
-		p += n;
-		len -= n;
-		l = &b->next;
-	} while(len > 0);
-	poperror();
-
-	return first;
-}
+//Block*
+//mem2bl(uchar *p, int len)
+//{
+//	int n;
+//	Block *b, *first, **l;
+//
+//	first = nil;
+//	l = &first;
+//	if(waserror()){
+//		freeblist(first);
+//		nexterror();
+//	}
+//	do {
+//		n = len;
+//		if(n > Maxatomic)
+//			n = Maxatomic;
+//
+//		*l = b = allocb(n);
+//		setmalloctag(b, (up->text[0]<<24)|(up->text[1]<<16)|(up->text[2]<<8)|up->text[3]);
+//		memmove(b->wp, p, n);
+//		b->wp += n;
+//		p += n;
+//		len -= n;
+//		l = &b->next;
+//	} while(len > 0);
+//	poperror();
+//
+//	return first;
+//}
 
 /*
  *  put a block back to the front of the queue
@@ -1501,8 +1502,9 @@ qfull(Queue *q)
 	return q->state & Qflow;
 }
 
-int
-qstate(Queue *q)
-{
-	return q->state;
-}
+//unused
+//int
+//qstate(Queue *q)
+//{
+//	return q->state;
+//}

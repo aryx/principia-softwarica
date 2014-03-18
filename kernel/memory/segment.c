@@ -620,22 +620,23 @@ addphysseg(Physseg* new)
 	return 0;
 }
 
-int
-isphysseg(char *name)
-{
-	Physseg *ps;
-	int rv = 0;
-
-	lock(&physseglock);
-	for(ps = physseg; ps->name; ps++){
-		if(strcmp(ps->name, name) == 0){
-			rv = 1;
-			break;
-		}
-	}
-	unlock(&physseglock);
-	return rv;
-}
+//unused
+//int
+//isphysseg(char *name)
+//{
+//	Physseg *ps;
+//	int rv = 0;
+//
+//	lock(&physseglock);
+//	for(ps = physseg; ps->name; ps++){
+//		if(strcmp(ps->name, name) == 0){
+//			rv = 1;
+//			break;
+//		}
+//	}
+//	unlock(&physseglock);
+//	return rv;
+//}
 
 ulong
 segattach(Proc *p, ulong attr, char *name, ulong va, ulong len)

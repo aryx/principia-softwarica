@@ -229,7 +229,6 @@ extern Mach* machp[MAXMACH];
 
 #define	MACHP(n)	(machp[n])
 
-extern Mach	*m;
 // MACHADDR is defined in 386/mem.h
 #define up	(((Mach*)MACHADDR)->externup)
 

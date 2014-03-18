@@ -173,20 +173,21 @@ todget(vlong *ticksp)
 	return x;
 }
 
+//unused
 /*
  *  convert time of day to ticks
  */
-uvlong
-tod2fastticks(vlong ns)
-{
-	uvlong x;
-
-	ilock(&tod);
-	mul64fract(&x, ns-tod.off, tod.divider);
-	x += tod.last;
-	iunlock(&tod);
-	return x;
-}
+//uvlong
+//tod2fastticks(vlong ns)
+//{
+//	uvlong x;
+//
+//	ilock(&tod);
+//	mul64fract(&x, ns-tod.off, tod.divider);
+//	x += tod.last;
+//	iunlock(&tod);
+//	return x;
+//}
 
 /*
  *  called regularly to avoid calculation overflows
@@ -233,27 +234,29 @@ fastticks2us(uvlong ticks)
 	return res;
 }
 
-uvlong
-us2fastticks(uvlong us)
-{
-	uvlong res;
+//unused
+//uvlong
+//us2fastticks(uvlong us)
+//{
+//	uvlong res;
+//
+//	if(!tod.init)
+//		todinit();
+//	mul64fract(&res, us, tod.udivider);
+//	return res;
+//}
 
-	if(!tod.init)
-		todinit();
-	mul64fract(&res, us, tod.udivider);
-	return res;
-}
-
-/*
- *  convert milliseconds to fast ticks
- */
-uvlong
-ms2fastticks(ulong ms)
-{
-	if(!tod.init)
-		todinit();
-	return (tod.hz*ms)/1000ULL;
-}
+//unused
+///*
+// *  convert milliseconds to fast ticks
+// */
+//uvlong
+//ms2fastticks(ulong ms)
+//{
+//	if(!tod.init)
+//		todinit();
+//	return (tod.hz*ms)/1000ULL;
+//}
 
 /*
  *  convert nanoseconds to fast ticks
@@ -269,19 +272,20 @@ ns2fastticks(uvlong ns)
 	return res;
 }
 
-/*
- *  convert fast ticks to ns
- */
-uvlong
-fastticks2ns(uvlong ticks)
-{
-	uvlong res;
-
-	if(!tod.init)
-		todinit();
-	mul64fract(&res, ticks, tod.multiplier);
-	return res;
-}
+//unused
+///*
+// *  convert fast ticks to ns
+// */
+//uvlong
+//fastticks2ns(uvlong ticks)
+//{
+//	uvlong res;
+//
+//	if(!tod.init)
+//		todinit();
+//	mul64fract(&res, ticks, tod.multiplier);
+//	return res;
+//}
 
 /*
  * Make a 64 bit fixed point number that has a decimal point

@@ -34,6 +34,9 @@ struct Palloc
 };
 
 extern struct Swapalloc swapalloc;
+extern	Palloc	palloc;
 
-// in portdat.h, used by processes/ and console/
-//extern	Palloc	palloc;
+// exported by include/pool.h
+//extern Pool*	mainmem;
+//extern Pool*	imagmem;
+

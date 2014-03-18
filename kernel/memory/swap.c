@@ -440,8 +440,9 @@ setswapchan(Chan *c)
 	swapimage.c = c;
 }
 
-int
-swapfull(void)
-{
-	return swapalloc.free < conf.nswap/10;
-}
+//unused
+//int
+//swapfull(void)
+//{
+//	return swapalloc.free < conf.nswap/10;
+//}

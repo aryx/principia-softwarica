@@ -28,8 +28,6 @@ enum
 
 int	shargs(char*, int, char**);
 
-extern void checkpages(void);
-extern void checkpagerefs(void);
 
 long
 sysr1(ulong*)

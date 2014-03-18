@@ -88,12 +88,11 @@ enum
 //	NCMDFIELD = 128
 //};
 
-extern	Conf	conf;
+#include "../port/portdat_globals.h"
+
 extern	char*	conffile;
 extern	int	cpuserver;
-extern	Dev**	devtab/*[]*/;
 extern	Dev*	conf_devtab[];
-extern	char*	eve;
 extern	char	hostdomain[];
 extern	uchar	initcode[];
 extern	int	kbdbuttons;
@@ -101,7 +100,6 @@ extern	Queue*	kbdq;
 extern	Queue*	kprintoq;
 extern 	Ref	noteidalloc;
 extern	int	nsyscall;
-extern	Palloc	palloc;
 extern	Queue*	serialoq;
 extern	char*	statename[];
 extern	KImage	swapimage;

@@ -42,4 +42,3 @@ struct Dirtab
 	long	perm;
 };
 
-
