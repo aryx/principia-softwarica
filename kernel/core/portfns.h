@@ -133,6 +133,9 @@ void		edfrecord(Proc*);
 void		edfrun(Proc*, int);
 void		edfstop(Proc*);
 void		edfyield(void);
+// used to be in edf.h
+Edf*		edflock(Proc*);
+void		edfunlock(void);
 int		emptystr(char*);
 int		encrypt(void*, void*, int);
 void		envcpy(Egrp*, Egrp*);
