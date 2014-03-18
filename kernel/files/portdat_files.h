@@ -1,24 +1,3 @@
-/*
- * Access types in namec & channel flags
- */
-enum
-{
-	Aaccess,			/* as in stat, wstat */
-	Abind,				/* for left-hand-side of bind */
-	Atodir,				/* as in chdir */
-	Aopen,				/* for i/o */
-	Amount,				/* to be mounted or mounted upon */
-	Acreate,			/* is to be created */
-	Aremove,			/* will be removed by caller */
-
-	COPEN	= 0x0001,		/* for i/o */
-	CMSG	= 0x0002,		/* the message channel for a mount */
-/*rsc	CCREATE	= 0x0004,		/* permits creation if c->mnt */
-	CCEXEC	= 0x0008,		/* close on exec */
-	CFREE	= 0x0010,		/* not in use */
-	CRCLOSE	= 0x0020,		/* remove on close */
-	CCACHE	= 0x0080,		/* client cache */
-};
 
 /* flag values */
 enum
@@ -94,28 +73,6 @@ struct Queue
 };
 
 
-struct Mount
-{
-	ulong	mountid;
-	Mount*	next;
-	Mhead*	head;
-	Mount*	copy;
-	Mount*	order;
-	Chan*	to;			/* channel replacing channel */
-	int	mflag;
-	char	*spec;
-};
-
-
-struct Mhead
-{
-	Ref;
-	RWlock	lock;
-	Chan*	from;			/* channel mounted upon */
-	Mount*	mount;			/* what's mounted upon it */
-	Mhead*	hash;			/* Hash chain */
-};
-
 
 // was in cache.c
 struct Extent
@@ -141,16 +98,33 @@ struct Mntcache
 };
 
 
-struct Path
+
+
+
+struct Mount
+{
+	ulong	mountid;
+	Mount*	next;
+	Mhead*	head;
+	Mount*	copy;
+	Mount*	order;
+	Chan*	to;			/* channel replacing channel */
+	int	mflag;
+	char	*spec;
+};
+
+
+struct Mhead
 {
 	Ref;
-	char	*s;
-	Chan	**mtpt;			/* mtpt history */
-	int	len;			/* strlen(s) */
-	int	alen;			/* allocated length of s */
-	int	mlen;			/* number of path elements */
-	int	malen;			/* allocated length of mtpt */
+	RWlock	lock;
+	Chan*	from;			/* channel mounted upon */
+	Mount*	mount;			/* what's mounted upon it */
+	Mhead*	hash;			/* Hash chain */
 };
+
+
+
 
 
 
@@ -190,6 +164,42 @@ struct Mnt
 
 
 
+
+struct Path
+{
+	Ref;
+	char	*s;
+	Chan	**mtpt;			/* mtpt history */
+	int	len;			/* strlen(s) */
+	int	alen;			/* allocated length of s */
+	int	mlen;			/* number of path elements */
+	int	malen;			/* allocated length of mtpt */
+};
+
+
+
+/*
+ * Access types in namec & channel flags
+ */
+enum
+{
+	Aaccess,			/* as in stat, wstat */
+	Abind,				/* for left-hand-side of bind */
+	Atodir,				/* as in chdir */
+	Aopen,				/* for i/o */
+	Amount,				/* to be mounted or mounted upon */
+	Acreate,			/* is to be created */
+	Aremove,			/* will be removed by caller */
+
+	COPEN	= 0x0001,		/* for i/o */
+	CMSG	= 0x0002,		/* the message channel for a mount */
+/*rsc	CCREATE	= 0x0004,		/* permits creation if c->mnt */
+	CCEXEC	= 0x0008,		/* close on exec */
+	CFREE	= 0x0010,		/* not in use */
+	CRCLOSE	= 0x0020,		/* remove on close */
+	CCACHE	= 0x0080,		/* client cache */
+};
+
 struct Chan
 {
 	Ref;				/* the Lock in this Ref is also Chan's lock */
@@ -225,6 +235,7 @@ struct Chan
 	Qid	mqid;			/* qid of root of mount point */
 	Path*	path;
 };
+
 
 
 

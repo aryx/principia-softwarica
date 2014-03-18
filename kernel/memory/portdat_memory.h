@@ -1,3 +1,4 @@
+
 struct Rendez
 {
 	Lock;
@@ -106,7 +107,7 @@ struct Physseg
  */
 enum
 {
-	SSEG, TSEG, DSEG, BSEG, ESEG, LSEG, SEG1, SEG2, SEG3, SEG4, NSEG
+	SSEG, TSEG, DSEG, BSEG, ESEG, LSEG,    SEG1, SEG2, SEG3, SEG4,    NSEG
 };
 
 struct Segment
@@ -171,9 +172,10 @@ struct Palloc
 	QLock	pwait;			/* Queue of procs waiting for memory */
 };
 
+extern	KImage	swapimage;
+
 extern struct Swapalloc swapalloc;
 extern	Palloc	palloc;
-extern	KImage	swapimage;
 
 // exported by include/pool.h
 //extern Pool*	mainmem;

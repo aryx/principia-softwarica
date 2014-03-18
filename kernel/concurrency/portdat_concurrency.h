@@ -27,6 +27,7 @@ struct Ref
 	long	ref;
 };
 
-// see also Sema, Rendez in portdat_memory.h
-// see also Rgrp, Fgrp, Pgrp in portdat_processes.h?  and Egrp in files.h?
+// see also Sema and Rendez in portdat_memory.h
+
 // see also Waitq in portdat_processes.h?
+// see also Rgrp, Fgrp, Pgrp in portdat_processes.h?  and Egrp in files.h?
