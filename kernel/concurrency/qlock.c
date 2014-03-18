@@ -4,14 +4,16 @@
 #include "dat.h"
 #include "fns.h"
 
-struct {
+struct QlockStats {
 	ulong rlock;
 	ulong rlockq;
 	ulong wlock;
 	ulong wlockq;
 	ulong qlock;
 	ulong qlockq;
-} rwstats;
+};
+
+struct QlockStats rwstats;
 
 void
 qlock(QLock *q)

@@ -4,7 +4,15 @@
 #include "dat.h"
 #include "fns.h"
 #include "../port/error.h"
-#include "../port/edf.h"
+
+struct TaslockStats
+{
+	ulong	locks;
+	ulong	glare;
+	ulong	inglare;
+};
+
+struct TaslockStats lockstats;
 
 long maxlockcycles;
 long maxilockcycles;
@@ -13,12 +21,6 @@ long cumilockcycles;
 ulong maxlockpc;
 ulong maxilockpc;
 
-struct
-{
-	ulong	locks;
-	ulong	glare;
-	ulong	inglare;
-} lockstats;
 
 static void
 inccnt(Ref *r)
@@ -254,30 +256,4 @@ iunlock(Lock *l)
 	splx(sr);
 }
 
-
-//pad: was in chan.c
-long
-incref(Ref *r)
-{
-	long x;
-
-	lock(r);
-	x = ++r->ref;
-	unlock(r);
-	return x;
-}
-
-long
-decref(Ref *r)
-{
-	long x;
-
-	lock(r);
-	x = --r->ref;
-	unlock(r);
-	if(x < 0)
-		panic("decref pc=%#p", getcallerpc(&r));
-
-	return x;
-}
 
