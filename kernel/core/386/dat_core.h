@@ -219,52 +219,6 @@ struct Mach
 
 
 
-/*
- * Each processor sees its own Mach structure at address MACHADDR.
- * However, the Mach structures must also be available via the per-processor
- * MMU information array machp, mainly for disambiguation and access to
- * the clock which is only maintained by the bootstrap processor (0).
- */
-// MAXMACH is defined in 386/mem.h
-extern Mach* machp[MAXMACH];
-
-#define	MACHP(n)	(machp[n])
-
-// MACHADDR is defined in 386/mem.h
-#define up	(((Mach*)MACHADDR)->externup)
-
-
-// define things used in portdat_core.h Proc
-/*
- *  MMU stuff in proc
- */
-#define NCOLOR 1
-struct PMMU
-{
-	Page*	mmupdb;			/* page directory base */
-	Page*	mmufree;		/* unused page table pages */
-	Page*	mmuused;		/* used page table pages */
-	Page*	kmaptable;		/* page table used by kmap */
-	uint	lastkmap;		/* last entry used by kmap */
-	int	nkmap;			/* number of current kmaps */
-};
-
-/*
- *  things saved in the Proc structure during a notify
- */
-struct Notsave
-{
-	ulong	svflags;
-	ulong	svcs;
-	ulong	svss;
-};
-
-
-
-
-
-
-
 
 struct Confmem
 {
@@ -304,4 +258,3 @@ struct Active
 	int	rebooting;		/* just idle cpus > 0 */
 };
 
-extern struct Active active;

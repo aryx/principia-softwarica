@@ -1,3 +1,14 @@
+
+/*
+ *  things saved in the Proc structure during a notify
+ */
+struct Notsave
+{
+	ulong	svflags;
+	ulong	svcs;
+	ulong	svss;
+};
+
 /*
  *  routines for things outside the PC model, like power management
  */

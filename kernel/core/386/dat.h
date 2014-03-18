@@ -2,6 +2,7 @@
 
 // reference things defined in portdat_core.h: Proc
 #include "dat_core.h"
+#include "dat_globals.h"
 // reference things defined in portdat_core.h: Page  (see also mem.h)
 #include "dat_memory.h"
 #include "dat_processes.h"
