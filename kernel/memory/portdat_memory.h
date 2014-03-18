@@ -12,8 +12,6 @@ struct Swapalloc
 	ulong	headroom;		/* Space pager frees under highwater */
 };
 
-extern struct Swapalloc swapalloc;
-
 struct Pallocmem
 {
 	ulong base;
@@ -35,3 +33,7 @@ struct Palloc
 	QLock	pwait;			/* Queue of procs waiting for memory */
 };
 
+extern struct Swapalloc swapalloc;
+
+// in portdat.h, used by processes/ and console/
+//extern	Palloc	palloc;

@@ -7,9 +7,6 @@
 
 #define	pghash(daddr)	palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
 
-struct Palloc palloc;
-struct Swapalloc swapalloc;
-
 void
 pageinit(void)
 {

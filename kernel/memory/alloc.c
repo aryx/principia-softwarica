@@ -4,124 +4,10 @@
 #include	"dat.h"
 #include	"fns.h"
 #include	"error.h"
+
 #include	<pool.h>
 
-static void poolprint(Pool*, char*, ...);
-static void ppanic(Pool*, char*, ...);
-static void plock(Pool*);
-static void punlock(Pool*);
-
-typedef struct Private	Private;
-struct Private {
-	Lock		lk;
-	char		msg[256];	/* a rock for messages to be printed at unlock */
-};
-
-static Private pmainpriv;
-static Pool pmainmem = {
-	.name=	"Main",
-	.maxsize=	4*1024*1024,
-	.minarena=	128*1024,
-	.quantum=	32,
-	.alloc=	xalloc,
-	.merge=	xmerge,
-	.flags=	POOL_TOLERANCE,
-
-	.lock=	plock,
-	.unlock=	punlock,
-	.print=	poolprint,
-	.panic=	ppanic,
-
-	.private=	&pmainpriv,
-};
-
-static Private pimagpriv;
-static Pool pimagmem = {
-	.name=	"Image",
-	.maxsize=	16*1024*1024,
-	.minarena=	2*1024*1024,
-	.quantum=	32,
-	.alloc=	xalloc,
-	.merge=	xmerge,
-	.flags=	0,
-
-	.lock=	plock,
-	.unlock=	punlock,
-	.print=	poolprint,
-	.panic=	ppanic,
-
-	.private=	&pimagpriv,
-};
-
-Pool*	mainmem = &pmainmem;
-Pool*	imagmem = &pimagmem;
-
-/*
- * because we can't print while we're holding the locks, 
- * we have the save the message and print it once we let go.
- */
-static void
-poolprint(Pool *p, char *fmt, ...)
-{
-	va_list v;
-	Private *pv;
-
-	pv = p->private;
-	va_start(v, fmt);
-	vseprint(pv->msg+strlen(pv->msg), pv->msg+sizeof pv->msg, fmt, v);
-	va_end(v);
-}
-
-static void
-ppanic(Pool *p, char *fmt, ...)
-{
-	va_list v;
-	Private *pv;
-	char msg[sizeof pv->msg];
-
-	pv = p->private;
-	va_start(v, fmt);
-	vseprint(pv->msg+strlen(pv->msg), pv->msg+sizeof pv->msg, fmt, v);
-	va_end(v);
-	memmove(msg, pv->msg, sizeof msg);
-	iunlock(&pv->lk);
-	panic("%s", msg);
-}
-
-static void
-plock(Pool *p)
-{
-	Private *pv;
-
-	pv = p->private;
-	ilock(&pv->lk);
-	pv->lk.pc = getcallerpc(&p);
-	pv->msg[0] = 0;
-}
-
-static void
-punlock(Pool *p)
-{
-	Private *pv;
-	char msg[sizeof pv->msg];
-
-	pv = p->private;
-	if(pv->msg[0] == 0){
-		iunlock(&pv->lk);
-		return;
-	}
-
-	memmove(msg, pv->msg, sizeof msg);
-	iunlock(&pv->lk);
-	iprint("%.*s", sizeof pv->msg, msg);
-}
-
-void
-poolsummary(Pool *p)
-{
-	print("%s max %lud cur %lud free %lud alloc %lud\n", p->name,
-		p->maxsize, p->cursize, p->curfree, p->curalloc);
-}
+extern void poolsummary(Pool *p);
 
 void
 mallocsummary(void)
@@ -265,14 +151,15 @@ msize(void *v)
 	return poolmsize(mainmem, (ulong*)v-Npadlong)-Npadlong*sizeof(ulong);
 }
 
-void*
-calloc(ulong n, ulong szelem)
-{
-	void *v;
-	if(v = mallocz(n*szelem, 1))
-		setmalloctag(v, getcallerpc(&n));
-	return v;
-}
+//unused:
+//void*
+//calloc(ulong n, ulong szelem)
+//{
+//	void *v;
+//	if(v = mallocz(n*szelem, 1))
+//		setmalloctag(v, getcallerpc(&n));
+//	return v;
+//}
 
 void
 setmalloctag(void *v, ulong pc)
@@ -296,23 +183,24 @@ setrealloctag(void *v, ulong pc)
 	u[-Npadlong+ReallocOffset] = pc;
 }
 
-ulong
-getmalloctag(void *v)
-{
-	USED(v);
-	if(Npadlong <= MallocOffset)
-		return ~0;
-	return ((ulong*)v)[-Npadlong+MallocOffset];
-}
-
-ulong
-getrealloctag(void *v)
-{
-	USED(v);
-	if(Npadlong <= ReallocOffset)
-		return ((ulong*)v)[-Npadlong+ReallocOffset];
-	return ~0;
-}
+//unused:
+//ulong
+//getmalloctag(void *v)
+//{
+//	USED(v);
+//	if(Npadlong <= MallocOffset)
+//		return ~0;
+//	return ((ulong*)v)[-Npadlong+MallocOffset];
+//}
+//
+//ulong
+//getrealloctag(void *v)
+//{
+//	USED(v);
+//	if(Npadlong <= ReallocOffset)
+//		return ((ulong*)v)[-Npadlong+ReallocOffset];
+//	return ~0;
+//}
 
 
 //pad: was in chan.c
@@ -352,6 +240,7 @@ kstrcpy(char *s, char *t, int ns)
 /*
  * Atomically replace *p with copy of s
  */
+//pad: was in chan.c
 void
 kstrdup(char **p, char *s)
 {
@@ -372,36 +261,4 @@ kstrdup(char **p, char *s)
 	prev = *p;
 	*p = t;
 	free(prev);
-}
-
-
-// was in devcons.c
-
-int
-readnum(ulong off, char *buf, ulong n, ulong val, int size)
-{
-	char tmp[64];
-
-	snprint(tmp, sizeof(tmp), "%*lud", size-1, val);
-	tmp[size-1] = ' ';
-	if(off >= size)
-		return 0;
-	if(off+n > size)
-		n = size-off;
-	memmove(buf, tmp+off, n);
-	return n;
-}
-
-int
-readstr(ulong off, char *buf, ulong n, char *str)
-{
-	int size;
-
-	size = strlen(str);
-	if(off >= size)
-		return 0;
-	if(off+n > size)
-		n = size-off;
-	memmove(buf, str+off, n);
-	return n;
 }
