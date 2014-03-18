@@ -6,4 +6,5 @@
 #include	"../port/error.h"
 
 Mach* machp[MAXMACH];
+
 struct Active active;

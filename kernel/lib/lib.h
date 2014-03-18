@@ -1,6 +1,10 @@
+
+// This file mostly references code in lib_core/libc/ (linked with the kernel).
+
 /*
  * functions (mostly) linked in from libc.
  */
+
 #define nelem(x)	(sizeof(x)/sizeof((x)[0]))
 #define offsetof(s, m)	(ulong)(&(((s*)0)->m))
 #define assert(x)	if(x){}else _assert("x")
