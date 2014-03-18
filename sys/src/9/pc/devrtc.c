@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/devrtc.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/sys/devrtc.c

@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/files/devsrv.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/sys/devsrv.c

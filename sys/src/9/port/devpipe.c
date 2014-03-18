@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/files/devpipe.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/sys/devpipe.c

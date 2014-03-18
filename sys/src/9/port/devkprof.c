@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/devkprof.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/sys/devkprof.c

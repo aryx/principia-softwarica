@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/files/devroot.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/sys/devroot.c
