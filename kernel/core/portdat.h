@@ -1,14 +1,29 @@
 #include "../port/portdat_forward.h"
 
-// now used by portdat_core.h
-#include <fcall.h>
-#include "../port/portdat_core.h"
+#include "../port/portdat_concurrency.h"
+
+enum
+{
+  // used by portdat_processes.h
+	RENDLOG	=	5,
+	RENDHASH =	1<<RENDLOG,	/* Hash to lookup rendezvous tags */
+	MNTLOG	=	5,
+	MNTHASH =	1<<MNTLOG,	/* Hash to walk mount table */
+	NFD =		100,		/* per process file descriptors */
+	PGHLOG  =	9,
+  // used by portdat_memory.h
+	PGHSIZE	=	1<<PGHLOG,	/* Page hash for image lookup */
+};
+#define REND(p,s)	((p)->rendhash[(s)&((1<<RENDLOG)-1)])
+#define MOUNTH(p,qid)	((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
 
 #include "../port/portdat_memory.h"
+
+#include <fcall.h>
 #include "../port/portdat_files.h"
+
 #include "../port/portdat_processes.h"
 
-// used by portdat_buses.h
 #ifndef STAGESIZE
 #define STAGESIZE 64
 #endif

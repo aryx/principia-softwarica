@@ -9,6 +9,7 @@ struct Label
 	ulong	pc;
 };
 
+//TODO: mv in portdat_concurrency.h
 struct Lock
 {
 	ulong	key;
