@@ -34,11 +34,9 @@ void (*ready)(Proc*) = 0;
 void (*sleep)(Rendez*, int(*)(void*), void*) = 0;
 void (*tsleep)(Rendez*, int (*)(void*), void*, ulong) = 0;
 
-void (*proctrace)(Proc*, int, vlong) = 0;
 Proc* (*proctab)(int) = 0;
 int (*postnote)(Proc*, int, char*, int) = 0;
 void (*pexit)(char*, int) = 0;
-void (*exhausted)(char*) = 0;
 
 //process/sysproc.c
 int (*return0)(void*) = 0;

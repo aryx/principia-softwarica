@@ -21,11 +21,9 @@ void		(*tsleep)(Rendez*, int (*)(void*), void*, ulong);
 Proc*		(*proctab)(int);
 int	(*postnote)(Proc*, int, char*, int);
 void		(*pexit)(char*, int);
-void		(*exhausted)(char*);
 
 int		(*return0)(void*);
 
-void (*proctrace)(Proc*, int, vlong); // was in devproc.c
 
 void		(*cclose)(Chan*);
 
@@ -40,6 +38,7 @@ void		(*consdebug)(void);
 void		(*delay)(int);
 void		(*kproftimer)(ulong);
 void		(*microdelay)(int);
+
 
 
 extern void	(*proctrace)(Proc*, int, vlong); 

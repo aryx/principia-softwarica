@@ -41,6 +41,7 @@ void		timersinit(void);
 //void		timerset(Tval); in devarch
 
 // proc.c
+void exhausted(char*);
 //void		(*sleep)(Rendez*, int(*)(void*), void*); proc_sleep
 //int	(*postnote)(Proc*, int, char*, int);
 void		procctl(Proc*);

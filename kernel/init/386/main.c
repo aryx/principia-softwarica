@@ -69,7 +69,6 @@ void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
 int proc_postnote(Proc *p, int dolock, char *n, int flag);
 int sysproc_return0(void*);
 void proc_pexit(char *exitstr, int freemem);
-void proc_exhausted(char*);
 
 static void
 options(void)
@@ -188,7 +187,6 @@ main(void)
   postnote = proc_postnote;
   return0 = sysproc_return0;
   pexit = proc_pexit;
-  exhausted = proc_exhausted;
 
   /* end patch, back to original code */
 

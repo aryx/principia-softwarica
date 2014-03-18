@@ -1468,7 +1468,7 @@ proc_nexterror(void)
 }
 
 void
-proc_exhausted(char *resource)
+exhausted(char *resource)
 {
 	char buf[ERRMAX];
 
