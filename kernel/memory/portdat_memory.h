@@ -35,6 +35,7 @@ struct Palloc
 
 extern struct Swapalloc swapalloc;
 extern	Palloc	palloc;
+extern	KImage	swapimage;
 
 // exported by include/pool.h
 //extern Pool*	mainmem;

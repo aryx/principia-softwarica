@@ -7,3 +7,5 @@
 struct Palloc palloc;
 struct Swapalloc swapalloc;
 
+KImage 	swapimage;
+

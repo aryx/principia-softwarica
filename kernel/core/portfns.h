@@ -17,6 +17,7 @@ void		(*sched)(void);
 void		(*ready)(Proc*);
 void		(*sleep)(Rendez*, int(*)(void*), void*);
 void		(*tsleep)(Rendez*, int (*)(void*), void*, ulong);
+
 Proc*		(*proctab)(int);
 int	(*postnote)(Proc*, int, char*, int);
 void		(*pexit)(char*, int);

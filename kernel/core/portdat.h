@@ -102,7 +102,6 @@ extern 	Ref	noteidalloc;
 extern	int	nsyscall;
 extern	Queue*	serialoq;
 extern	char*	statename[];
-extern	KImage	swapimage;
 extern	char*	sysname;
 extern	uint	qiomaxatomic;
 extern	char*	sysctab[];
