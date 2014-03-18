@@ -41,8 +41,6 @@ void		(*delay)(int);
 void		(*kproftimer)(ulong);
 void		(*microdelay)(int);
 
-// as a pointer in the original
-void		(*screenputs)(char*, int);
 
 extern void	(*proctrace)(Proc*, int, vlong); 
 
@@ -51,6 +49,9 @@ extern void	(*proctrace)(Proc*, int, vlong);
 #include "../port/portfns_memory.h"
 #include "../port/portfns_files.h"
 #include "../port/portfns_processes.h"
+// portfns_misc.h?
+#include "../port/portfns_console.h"
+#include "../port/portfns_buses.h"
 
 void		addbootfile(char*, uchar*, ulong);
 void		addwatchdog(Watchdog*);
@@ -60,7 +61,6 @@ void		callwithureg(void(*)(Ureg*));
 long		clrfpintr(void);
 void		cmderror(Cmdbuf*, char*);
 void		confinit(void);
-int		consactive(void);
 void		countpagerefs(ulong*, int);
 ulong		dbgpc(Proc*);
 int		decrypt(void*, void*, int);
@@ -83,9 +83,7 @@ long		hostownerwrite(char*, int);
 int		iseve(void);
 Segment*	isoverlap(Proc*, ulong, int);
 int		ispages(void*);
-int		kbdcr2nl(Queue*, int);
 int		kbdgetmap(uint, int*, int*, Rune*);
-int		kbdputc(Queue*, int);
 void		kbdputmap(ushort, ushort, Rune);
 void		kprocchild(Proc*, void (*)(void*), void*);
 ulong		l2be(long);
@@ -108,17 +106,14 @@ void		mul64fract(uvlong*, uvlong, uvlong);
 void		muxclose(Mnt*);
 int		newfd(Chan*);
 int		notify(Ureg*);
-int		nrand(int);
 Cmdbuf*		parsecmd(char *a, int n);
 ulong		perfticks(void);
 void		pio(Segment *, ulong, ulong, Page **);
 #define		poperror()		up->nerrlab--
 void		portcountpagerefs(ulong*, int);
 void		prflush(void);
-void		printinit(void);
 int		procfdprint(Chan*, int, int, char*, int);
 void		putmmu(ulong, ulong, Page*);
-void		putstrn(char*, int);
 int		rand(void);
 void		randominit(void);
 ulong		randomread(void*, ulong);
@@ -139,15 +134,6 @@ void		setregisters(Ureg*, char*, char*, int);
 char*		skipslash(char*);
 char*		srvname(Chan*);
 void		timerset(Tval);
-int		uartctl(Uart*, char*);
-int		uartgetc(void);
-void		uartkick(void*);
-void		uartmouse(Uart*, int (*)(Queue*, int), int);
-void		uartsetmouseputc(Uart*, int (*)(Queue*, int));
-void		uartputc(int);
-void		uartputs(char*, int);
-void		uartrecv(Uart*, char);
-int		uartstageoutput(Uart*);
 long		unionread(Chan*, void*, long);
 void		userinit(void);
 ulong		userpc(void);

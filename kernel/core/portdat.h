@@ -104,6 +104,7 @@ enum
 //};
 
 #include "../port/portdat_globals.h"
+#include "../port/portdat_console.h"
 
 extern	char*	conffile;
 extern	int	cpuserver;
@@ -111,11 +112,8 @@ extern	Dev*	conf_devtab[];
 extern	char	hostdomain[];
 extern	uchar	initcode[];
 extern	int	kbdbuttons;
-extern	Queue*	kbdq;
-extern	Queue*	kprintoq;
 extern 	Ref	noteidalloc;
 extern	int	nsyscall;
-extern	Queue*	serialoq;
 extern	char*	statename[];
 extern	char*	sysname;
 extern	uint	qiomaxatomic;
