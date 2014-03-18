@@ -44,7 +44,6 @@ int (*return0)(void*) = 0;
 // files/chan.c
 void (*cclose)(Chan*);
 
-
 // init/main.c
 char* (*getconf)(char *name) = 0;
 void (*exit)(int ispanic) = 0;
@@ -53,7 +52,7 @@ void (*exit)(int ispanic) = 0;
 void (*coherence)(void) = 0;
 
 //misc/386/devarch.c
-uvlong		(*fastticks)(uvlong*) = 0;
+uvlong (*fastticks)(uvlong*) = 0;
 
 
 

@@ -39,11 +39,6 @@ void		(*delay)(int);
 void		(*kproftimer)(ulong);
 void		(*microdelay)(int);
 
-
-
-extern void	(*proctrace)(Proc*, int, vlong); 
-
-
 #include "../port/portfns_concurrency.h"
 #include "../port/portfns_memory.h"
 #include "../port/portfns_files.h"
