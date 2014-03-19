@@ -13,6 +13,8 @@ static int trapinited;
 
 void	noted(Ureg*, ulong);
 
+void		dumpregs(Ureg*);
+
 static void debugbpt(Ureg*, void*);
 static void fault386(Ureg*, void*);
 static void doublefault(Ureg*, void*);

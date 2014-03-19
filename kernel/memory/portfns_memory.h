@@ -41,6 +41,7 @@ Page*		auxpage(void);
 Page*		newpage(int, Segment **, ulong);
 int		duppage(Page*);
 void checkpagerefs(void);
+void		portcountpagerefs(ulong*, int);
 
 // swap.c
 void		swapinit(void);
@@ -80,6 +81,7 @@ KImage*		attachimage(int, Chan*, ulong, ulong);
 // sysfile.c
 // syssetflush
 
-// in 386/mmu.c
+// in 386/mmu.c (but used in port)
 KMap*	kmap(Page*);
 void	kunmap(KMap*);
+void		countpagerefs(ulong*, int);

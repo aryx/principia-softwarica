@@ -100,6 +100,7 @@ char*		edfadmit(Proc*);
 // many sysxxx functions
 
 
-// 386
-// 386/trap.c:
+// 386/trap.c (but used in port)
 void		callwithureg(void(*)(Ureg*));
+ulong		dbgpc(Proc*);
+long		execregs(ulong, ulong, ulong);
