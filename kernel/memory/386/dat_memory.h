@@ -1,5 +1,6 @@
 
 // define things used in Conf
+
 struct Confmem
 {
 	ulong	base;
@@ -69,6 +70,4 @@ struct PMMU
  */
 typedef struct KMap		KMap;
 #define	VA(k)		((void*)(k))
-KMap*	kmap(Page*);
-void	kunmap(KMap*);
 

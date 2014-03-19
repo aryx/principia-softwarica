@@ -5,4 +5,3 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-Mach* machp[MAXMACH];

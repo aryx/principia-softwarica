@@ -16,3 +16,6 @@ Dev** devtab = 0;
 char	*eve;
 // should be in portfns.c, but then backward deps
 iseve(void) { return strcmp(eve, up->user) == 0; }
+
+
+Mach* machp[MAXMACH];

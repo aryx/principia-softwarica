@@ -32,7 +32,6 @@ void	(*coherence)(void); // was in 386/fns.h
 
 uvlong		(*fastticks)(uvlong*);
 
-
 //???
 void		(*consdebug)(void);
 void		(*delay)(int);
@@ -43,17 +42,14 @@ void		(*microdelay)(int);
 #include "../port/portfns_memory.h"
 #include "../port/portfns_files.h"
 #include "../port/portfns_processes.h"
-// portfns_misc.h?
+#include "../port/portfns_misc.h"
 #include "../port/portfns_console.h"
 #include "../port/portfns_buses.h"
+#include "../port/portfns_devices.h"
 
-void		addbootfile(char*, uchar*, ulong);
-void		addwatchdog(Watchdog*);
-int		anyready(void);
+//unused: void		addwatchdog(Watchdog*);
 void		bootlinks(void);
-void		callwithureg(void(*)(Ureg*));
-long		clrfpintr(void);
-void		cmderror(Cmdbuf*, char*);
+//unused:long		clrfpintr(void);
 void		confinit(void);
 void		countpagerefs(ulong*, int);
 ulong		dbgpc(Proc*);
@@ -88,7 +84,6 @@ char*		logctl(Log*, int, char**, Logflag*);
 void		logn(Log*, int, void*, int);
 long		logread(Log*, void*, ulong, long);
 void		log(Log*, int, char*, ...);
-Cmdtab*		lookupcmd(Cmdbuf*, Cmdtab*, int);
 void		machinit(void);
 uvlong		mk64fract(uvlong, uvlong);
 void		mmurelease(Proc*);
@@ -100,7 +95,6 @@ void		mul64fract(uvlong*, uvlong, uvlong);
 void		muxclose(Mnt*);
 int		newfd(Chan*);
 int		notify(Ureg*);
-Cmdbuf*		parsecmd(char *a, int n);
 ulong		perfticks(void);
 void		pio(Segment *, ulong, ulong, Page **);
 #define		poperror()		up->nerrlab--
@@ -109,9 +103,6 @@ void		prflush(void);
 int		procfdprint(Chan*, int, int, char*, int);
 void		putmmu(ulong, ulong, Page*);
 int		rand(void);
-void		randominit(void);
-ulong		randomread(void*, ulong);
-void		rdb(void);
 void		readn(Chan *, void *, long);
 int		readnum(ulong, char*, ulong, ulong, int);
 int		readstr(ulong, char*, ulong, char*);

@@ -140,7 +140,5 @@ struct PCArch
 	void	(*resetothers)(void);	/* put other cpus into reset */
 };
 
-extern struct Active active;
-
 extern PCArch	*arch;			/* PC architecture */
 

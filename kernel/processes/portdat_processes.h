@@ -1,7 +1,8 @@
 
 
 // in lib.h: Waitmsg, ERRMAX
-// in 386: Lock (interdepends on Proc), Mach, PMMU, Notsave, MAXSYSARG
+// see also Perf, Fpstate (enum), Active in 386/ (but used in port)
+// see also PMMU, Notsave, MAXSYSARG in 386/
 
 struct Waitq
 {
@@ -342,3 +343,6 @@ struct Schedq
 #pragma	varargck	type	"U"		uvlong
 
 void (*proctrace)(Proc*, int, vlong); // was in devproc.c
+
+extern struct Active active;
+

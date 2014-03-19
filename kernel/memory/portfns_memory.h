@@ -79,3 +79,7 @@ KImage*		attachimage(int, Chan*, ulong, ulong);
 
 // sysfile.c
 // syssetflush
+
+// in 386/mmu.c
+KMap*	kmap(Page*);
+void	kunmap(KMap*);

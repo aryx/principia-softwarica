@@ -1,5 +1,5 @@
 
-// see also Lock (interdepends on Proc) in 386/
+// see also Lock (interdepends on Proc) in 386/ (but used in port)
 
 struct KQLock
 {

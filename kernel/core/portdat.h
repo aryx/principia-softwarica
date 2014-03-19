@@ -1,5 +1,7 @@
 #include "../port/portdat_forward.h"
 
+// see also Mach and Conf in 386/ (but used in port)
+
 #include "../port/portdat_concurrency.h"
 
 enum
@@ -104,7 +106,10 @@ enum
 //};
 
 #include "../port/portdat_globals.h"
+
 #include "../port/portdat_console.h"
+
+#include "../port/portdat_misc.h"
 
 extern	char*	conffile;
 extern	int	cpuserver;
@@ -125,22 +130,6 @@ struct Execvals {
 	ulong	datasize;
 };
 int	(*parseboothdr)(Chan *, ulong, Execvals *);
-
-
-
-struct Cmdbuf
-{
-	char	*buf;
-	char	**f;
-	int	nf;
-};
-
-struct Cmdtab
-{
-	int	index;	/* used by client to switch on result */
-	char	*cmd;	/* command name */
-	int	narg;	/* expected #args; 0 ==> variadic */
-};
 
 //unused
 /*

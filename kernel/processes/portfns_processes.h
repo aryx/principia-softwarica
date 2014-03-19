@@ -76,6 +76,7 @@ void		schedinit(void);
 Proc*		newproc(void);
 void		kproc(char*, void(*)(void*), void*);
 void		hzsched(void);
+//not used outside: int		anyready(void);
 
 // alarm.c
 ulong		procalarm(ulong);
@@ -98,3 +99,7 @@ char*		edfadmit(Proc*);
 // sysproc.c
 // many sysxxx functions
 
+
+// 386
+// 386/trap.c:
+void		callwithureg(void(*)(Ureg*));

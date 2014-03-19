@@ -4,4 +4,3 @@
 #include	"dat.h"
 #include	"fns.h"
 
-struct Active active;

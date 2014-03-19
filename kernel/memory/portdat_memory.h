@@ -1,4 +1,6 @@
 
+// see also ConfMem and KMap in 386/ (but used in port)
+
 enum
 {
 	PG_NOFLUSH	= 0,
