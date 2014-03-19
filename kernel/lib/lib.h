@@ -1,9 +1,9 @@
 
 // This file mostly references code in lib_core/libc/ (linked with the kernel).
-// Those functions are also exported in include/libc.h
+// Those functions are also exported in include/libc.h.
 
 // There are also the poolxxx() functions exported in include/pool.h
-// (also part of libc) that are used in memory/alloc.c
+// (also part of libc) that are used in memory/alloc.c.
 
 /*
  * functions (mostly) linked in from libc.

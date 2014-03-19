@@ -27,7 +27,24 @@ struct Ref
 	long	ref;
 };
 
-// see also Sema and Rendez in portdat_memory.h
+
+
+// defined in this directory but no functions are operating on in this dir
+struct Rendez
+{
+	Lock;
+	Proc	*p;
+};
+
+struct Sema
+{
+	Rendez;
+	long	*addr;
+	int	waiting;
+	Sema	*next;
+	Sema	*prev;
+};
+
 
 // see also Waitq in portdat_processes.h?
 // see also Rgrp, Fgrp, Pgrp in portdat_processes.h?  and Egrp in files.h?

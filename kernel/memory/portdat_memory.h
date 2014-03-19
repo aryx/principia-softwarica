@@ -1,21 +1,4 @@
 
-struct Rendez
-{
-	Lock;
-	Proc	*p;
-};
-
-struct Sema
-{
-	Rendez;
-	long	*addr;
-	int	waiting;
-	Sema	*next;
-	Sema	*prev;
-};
-
-
-
 enum
 {
 	PG_NOFLUSH	= 0,

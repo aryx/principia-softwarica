@@ -13,5 +13,4 @@ extern Mach* machp[MAXMACH];
 // MACHADDR is defined in 386/mem.h
 #define up	(((Mach*)MACHADDR)->externup)
 
-extern struct Active active;
 

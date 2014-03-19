@@ -1,11 +1,15 @@
 #include "dat_forward.h"
 
-// reference things defined in portdat_core.h: Proc
-#include "dat_core.h"
-#include "dat_globals.h"
-// reference things defined in portdat_core.h: Page  (see also mem.h)
+// references Proc and Mach
+#include "dat_concurrency.h"
+// references Page (see also mem.h)
 #include "dat_memory.h"
 #include "dat_processes.h"
+
+// has to be after
+#include "dat_core.h"
+
+#include "dat_globals.h"
 #include "dat_misc.h"
 #include "dat_buses.h"
 #include "dat_devices.h"

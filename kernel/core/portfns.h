@@ -24,14 +24,14 @@ void		(*pexit)(char*, int);
 
 int		(*return0)(void*);
 
-
 void		(*cclose)(Chan*);
 
-uvlong		(*fastticks)(uvlong*);
+void		(*exit)(int);
 
 void	(*coherence)(void); // was in 386/fns.h
 
-void		(*exit)(int);
+uvlong		(*fastticks)(uvlong*);
+
 
 //???
 void		(*consdebug)(void);

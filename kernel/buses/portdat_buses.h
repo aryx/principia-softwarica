@@ -1,3 +1,4 @@
+
 enum {
 	Stagesize=	STAGESIZE
 };

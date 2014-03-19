@@ -22,8 +22,6 @@ void (*dumpstack)(void) = 0;
 void (*dumpaproc)(Proc*) = 0;
 
 
-
-
 // process/proc.c
 void (*error)(char*) = 0;
 void (*nexterror)(void) = 0;
