@@ -53,9 +53,6 @@ extern void mmuinvalidate(void);
 extern void mmuinvalidateaddr(u32int);
 extern uintptr mmukmap(uintptr, uintptr, usize);
 extern void okay(int);
-extern void procrestore(Proc *);
-extern void procsave(Proc*);
-extern void procsetup(Proc*);
 extern void screeninit(void);
 #define sdfree(p) free(p)
 #define sdmalloc(n)	mallocalign(n, CACHELINESZ, 0, 0)
@@ -89,6 +86,8 @@ extern void fpusysprocsetup(Proc*);
 extern void fpusysrfork(Ureg*);
 extern void fpusysrforkchild(Proc*, Ureg*, Proc*);
 extern int fpuemu(Ureg*);
+
+
 /*
  * Things called from port.
  */
@@ -96,7 +95,6 @@ extern void delay(int);				/* only scheddump() */
 extern int islo(void);
 extern void microdelay(int);			/* only edf.c */
 extern void evenaddr(uintptr);
-extern void idlehands(void);
 extern void setkernur(Ureg*, Proc*);		/* only devproc.c */
 extern void* sysexecregs(uintptr, ulong, int);
 extern void sysprocsetup(Proc*);

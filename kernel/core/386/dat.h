@@ -9,7 +9,7 @@
 // has to be after
 #include "dat_core.h"
 
-#include "dat_globals.h"
+//empty: #include "dat_globals.h"
 #include "dat_misc.h"
 #include "dat_buses.h"
 #include "dat_devices.h"

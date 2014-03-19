@@ -1,1 +1,0 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/globals/386/dat.c

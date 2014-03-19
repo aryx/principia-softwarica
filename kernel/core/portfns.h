@@ -47,6 +47,10 @@ void		(*microdelay)(int);
 #include "../port/portfns_buses.h"
 #include "../port/portfns_devices.h"
 
+// exported in lib.h, defined in 386/ (but used in port)
+//extern	int	cistrcmp(char*, char*);
+//extern	int	cistrncmp(char*, char*, int);
+
 //unused: void		addwatchdog(Watchdog*);
 void		bootlinks(void);
 //unused:long		clrfpintr(void);

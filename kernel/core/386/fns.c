@@ -6,3 +6,51 @@
 #include	"../port/error.h"
 
 int	(*isaconfig)(char*, int, ISAConf*) = 0;
+
+int
+cistrncmp(char *a, char *b, int n)
+{
+	unsigned ac, bc;
+
+	while(n > 0){
+		ac = *a++;
+		bc = *b++;
+		n--;
+
+		if(ac >= 'A' && ac <= 'Z')
+			ac = 'a' + (ac - 'A');
+		if(bc >= 'A' && bc <= 'Z')
+			bc = 'a' + (bc - 'A');
+
+		ac -= bc;
+		if(ac)
+			return ac;
+		if(bc == 0)
+			break;
+	}
+
+	return 0;
+}
+
+int
+cistrcmp(char *a, char *b)
+{
+	int ac, bc;
+
+	for(;;){
+		ac = *a++;
+		bc = *b++;
+	
+		if(ac >= 'A' && ac <= 'Z')
+			ac = 'a' + (ac - 'A');
+		if(bc >= 'A' && bc <= 'Z')
+			bc = 'a' + (bc - 'A');
+		ac -= bc;
+		if(ac)
+			return ac;
+		if(bc == 0)
+			break;
+	}
+	return 0;
+}
+
