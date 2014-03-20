@@ -23,6 +23,8 @@ void		setmalloctag(void*, ulong);
 void		kstrcpy(char*, char*, int);
 void		kstrdup(char**, char*);
 void		setrealloctag(void*, ulong);//internal to alloc.c
+//ulong		getmalloctag(void*);
+//ulong		getrealloctag(void*);
 
 // page.c
 void		pageinit(void);
@@ -42,6 +44,7 @@ Page*		newpage(int, Segment **, ulong);
 int		duppage(Page*);
 void checkpagerefs(void);
 void		portcountpagerefs(ulong*, int);
+//int		ispages(void*);
 
 // swap.c
 void		swapinit(void);
@@ -77,6 +80,8 @@ int		addphysseg(Physseg*);
 ulong		segattach(Proc*, ulong, char *, ulong, ulong);
 void		initseg(void);
 KImage*		attachimage(int, Chan*, ulong, ulong);
+//Segment*	isoverlap(Proc*, ulong, int);
+
 
 // sysfile.c
 // syssetflush
@@ -85,3 +90,13 @@ KImage*		attachimage(int, Chan*, ulong, ulong);
 KMap*	kmap(Page*);
 void	kunmap(KMap*);
 void		countpagerefs(ulong*, int);
+void		flushmmu(void);
+void checkmmu(ulong va, ulong pa);
+ulong	cankaddr(ulong);
+// actually KADDR is used in port, but it's expanding to kaddr
+void*	kaddr(ulong);
+// actually PADDR is used in port, but it's expanding to paddr
+ulong	paddr(void*);
+void		putmmu(ulong, ulong, Page*);
+void		mmurelease(Proc*);
+void		mmuswitch(Proc*);

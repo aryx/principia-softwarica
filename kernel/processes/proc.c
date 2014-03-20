@@ -7,10 +7,12 @@
 //#include	"../port/edf.h"
 #include	<trace.h>
 
+
 int	schedgain = 30;	/* units in seconds */
 int	nrdy;
 Ref	noteidalloc;
 
+Proc*		runproc(void);
 void updatecpu(Proc*);
 int reprioritize(Proc*);
 

@@ -5,6 +5,8 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
+uvlong		mk64fract(uvlong, uvlong);
+
 /*
  * Compute nanosecond epoch time from the fastest ticking clock
  * on the system.  Converting the time to nanoseconds requires

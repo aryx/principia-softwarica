@@ -5,14 +5,14 @@ void    todsetfreq(vlong);
 void    todset(vlong, vlong, int);
 vlong   todget(vlong*);
 //uvlong    (*fastticks)(uvlong*); is in devarch
-//uvlong    tod2fastticks(vlong);
 uvlong    fastticks2us(uvlong);
+uvlong    ns2fastticks(uvlong);
+//uvlong    tod2fastticks(vlong);
 //uvlong    us2fastticks(uvlong);
 //uvlong    ms2fastticks(ulong);
-uvlong    ns2fastticks(uvlong);
 //uvlong    fastticks2ns(uvlong);
 long    seconds(void);
-//todfix: TODO false positive, static forward decl
+//todfix(): TODO false positive, static forward decl
 
 // pgrp.c
 Rgrp*   newrgrp(void);
@@ -38,11 +38,11 @@ void    timeradd(Timer*);
 Timer*    addclock0link(void (*)(void), int);
 void    timerintr(Ureg*, Tval);
 void    timersinit(void);
-//void    timerset(Tval); in devarch
+//void    timerset(Tval); is in devarch
 
 // proc.c
 void exhausted(char*);
-//void    (*sleep)(Rendez*, int(*)(void*), void*); proc_sleep
+//void    (*sleep)(Rendez*, int(*)(void*), void*);
 //int (*postnote)(Proc*, int, char*, int);
 void    procctl(Proc*);
 void    procwired(Proc*, int);
@@ -77,6 +77,8 @@ Proc*   newproc(void);
 void    kproc(char*, void(*)(void*), void*);
 void    hzsched(void);
 //not used outside: int   anyready(void);
+//TODO cg didn't find ref outside in devproc.c?
+int		haswaitq(void*);
 
 // alarm.c
 ulong   procalarm(ulong);
@@ -97,16 +99,42 @@ int   edfready(Proc*);
 char*   edfadmit(Proc*);
 
 // sysproc.c
+// TODO cg FP didn't find dependencies from misc/rebootcmd.c
+ulong		l2be(long);
 // many sysxxx functions
+
+
 
 
 // 386/trap.c (but used in port)
 void    callwithureg(void(*)(Ureg*));
 ulong   dbgpc(Proc*);
 long    execregs(ulong, ulong, ulong);
+void		forkchild(Proc*, Ureg*);
+ulong		userpc(void);
+void		setregisters(Ureg*, char*, char*, int);
+void		setkernur(Ureg*, Proc*);
+void		kprocchild(Proc*, void (*)(void*), void*);
+// intrenable(), but mostly used in 386, just in port/devaudio.c
 
 // 386/main_processes.c (but used in port)
 void procsetup(Proc*);
 void procsave(Proc*);
 void procrestore(Proc *);
 void idlehands(void);
+
+// 386/i8253.c (but used in port)
+ulong		perfticks(void);
+
+// 386/devarch.c (but used in port)
+void		timerset(Tval);
+ulong		µs(void);
+
+// in 386/l.s (but used in port)
+void		gotolabel(Label*);
+int		setlabel(Label*);
+void		mul64fract(uvlong*, uvlong, uvlong);
+
+// portdat_processes.c
+void (*proctrace)(Proc*, int, vlong); // was in devproc.c
+void (*kproftimer)(ulong); // was in portfns.h

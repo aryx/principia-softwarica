@@ -1,5 +1,15 @@
 #include "../port/portfns.h"
 
+void		forkret(void);
+// used by pcf.c and main.c
+void		bootlinks(void);
+
+// defined in lib/latin1.c, used only in 386
+long		latin1(Rune*, int);
+
+// used by main.c
+void		machinit(void);
+
 void	aamloop(int);
 void	acpiscan(void (*func)(uchar *));
 Dirtab*	addarchfile(char*, int, long(*)(Chan*,void*,long,vlong), long(*)(Chan*,void*,long,vlong));
@@ -10,7 +20,6 @@ int	bios32ci(BIOS32si*, BIOS32ci*);
 void	bios32close(BIOS32si*);
 BIOS32si* bios32open(char*);
 void	bootargs(void*);
-ulong	cankaddr(ulong);
 void	cgapost(int);
 void	clockintr(Ureg*, void*);
 int	(*cmpswap)(long*, long, long);
@@ -89,7 +98,6 @@ int	ioalloc(int, int, int, char*);
 int	ioreserve(int, int, int, char*);
 //int	iprint(char*, ...); //pad: already in portfns.h
 int	(*isaconfig)(char*, int, ISAConf*);
-void*	kaddr(ulong);
 void	kbdenable(void);
 void	kbdinit(void);
 #define	kmapinval()
@@ -118,7 +126,6 @@ void	outs(int, ushort);
 void	outss(int, void*, int);
 void	outl(int, ulong);
 void	outsl(int, void*, int);
-ulong	paddr(void*);
 ulong	pcibarsize(Pcidev*, int);
 void	pcibussize(Pcidev*, ulong*, ulong*);
 int	pcicfgr8(Pcidev*, int);
@@ -189,9 +196,12 @@ void	wbinvd(void);
 void	wrmsr(int, vlong);
 int	xchgw(ushort*, int);
 
-#define	waserror()	(up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
+
 #define	KADDR(a)	kaddr(a)
 #define PADDR(a)	paddr((void*)(a))
+
+
+
 
 #define	dcflush(a, b)
 

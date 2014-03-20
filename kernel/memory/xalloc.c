@@ -39,6 +39,8 @@ struct Xalloc
 
 static Xalloc	xlists;
 
+void		xhole(ulong, ulong);
+
 void
 xinit(void)
 {

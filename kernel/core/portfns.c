@@ -46,11 +46,15 @@ void (*cclose)(Chan*);
 char* (*getconf)(char *name) = 0;
 void (*exit)(int ispanic) = 0;
 
-//misc/386/devarch.c
+// misc/386/devarch.c
 void (*coherence)(void) = 0;
 
-//misc/386/devarch.c
+// misc/386/devarch.c
 uvlong (*fastticks)(uvlong*) = 0;
+
+// processes/386/i8253.c
+void		(*microdelay)(int) = 0;
+void		(*delay)(int) = 0;
 
 
 

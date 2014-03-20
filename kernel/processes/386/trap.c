@@ -12,7 +12,7 @@
 static int trapinited;
 
 void	noted(Ureg*, ulong);
-
+int		notify(Ureg*);
 void		dumpregs(Ureg*);
 
 static void debugbpt(Ureg*, void*);

@@ -84,6 +84,7 @@ void		nameerror(char*, char*);
 int		walk(Chan**, char**, int, int, int*);
 void		ccloseq(Chan*);
 Chan*		namec(char*, int, int, ulong);
+//long		unionread(Chan*, void*, long);
 
 // file.c
 Chan*		fdtochan(int, int, int, int);
@@ -122,3 +123,4 @@ char*		getconfenv(void);
 
 // sysfile.c
 // many sysxxx functions
+int		newfd(Chan*);

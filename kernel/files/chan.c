@@ -5,6 +5,8 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
+char*		skipslash(char*);
+
 int chandebug=0;		/* toggled by sysr1 */
 #define DBG if(chandebug)iprint
 

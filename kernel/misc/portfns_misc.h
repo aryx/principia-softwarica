@@ -17,3 +17,7 @@ void		randominit(void);
 // rdb.c
 void		rdb(void);
 
+// rebootcmd.c
+//TODO does not show in cg, but not empty file so weird
+//void		readn(Chan *, void *, long);
+void		rebootcmd(int, char**);

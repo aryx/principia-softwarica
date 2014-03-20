@@ -342,7 +342,6 @@ struct Schedq
 #pragma	varargck	type	"t"		long
 #pragma	varargck	type	"U"		uvlong
 
-void (*proctrace)(Proc*, int, vlong); // was in devproc.c
 
 extern struct Active active;
 

@@ -3,6 +3,7 @@ extern Mach	*m;
 extern	Conf	conf;
 extern	Dev**	devtab/*[]*/;
 extern	char*	eve;
+int		iseve(void);
 
 
 /*
@@ -19,4 +20,5 @@ extern Mach* machp[MAXMACH];
 // MACHADDR is defined in 386/mem.h
 #define up	(((Mach*)MACHADDR)->externup)
 
-
+#define poperror()		up->nerrlab--
+#define	waserror()	(up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))

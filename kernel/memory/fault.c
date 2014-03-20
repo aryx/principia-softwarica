@@ -5,6 +5,9 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
+void		pio(Segment *, ulong, ulong, Page **);
+
+
 int
 fault(ulong addr, int read)
 {
@@ -368,7 +371,6 @@ seg(Proc *p, ulong addr, int dolock)
 	return 0;
 }
 
-extern void checkmmu(ulong, ulong);
 void
 checkpages(void)
 {

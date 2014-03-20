@@ -13,3 +13,5 @@ void		putstrn(char*, int);
 //void		(*panic)(char*, ...);
 // as a pointer in the original too
 void		(*screenputs)(char*, int);
+//void		prflush(void);
+//int		rand(void);

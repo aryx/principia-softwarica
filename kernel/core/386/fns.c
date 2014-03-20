@@ -7,6 +7,8 @@
 
 int	(*isaconfig)(char*, int, ISAConf*) = 0;
 
+// was in main.c, could be in lib/386/libc.c (or even lib/libc.c)
+
 int
 cistrncmp(char *a, char *b, int n)
 {

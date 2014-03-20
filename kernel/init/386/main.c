@@ -11,6 +11,9 @@
 #include	"mp.h"
 #include	<tos.h>
 
+void		confinit(void);
+void		userinit(void);
+
 void loop() {
   while(1) {
   }
