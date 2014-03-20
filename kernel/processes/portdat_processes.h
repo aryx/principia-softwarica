@@ -147,7 +147,7 @@ struct Edf {
 
 enum
 {
-	Dead = 0,		/* Process states */
+	Dead = 0,		/* Process states, Proc.state */
 	Moribund,
 	Ready,
 	Scheding,
