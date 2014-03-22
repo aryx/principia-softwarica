@@ -15,6 +15,7 @@ void		confinit(void);
 void		userinit(void);
 void	bootargs(void*);
 void	mach0init(void);
+void	mathinit(void);
 
 void loop() {
   while(1) {

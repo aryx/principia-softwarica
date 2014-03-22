@@ -22,7 +22,7 @@ ulong		msize(void*);
 void		setmalloctag(void*, ulong);
 void		kstrcpy(char*, char*, int);
 void		kstrdup(char**, char*);
-void		setrealloctag(void*, ulong);//internal to alloc.c
+//void		setrealloctag(void*, ulong);
 //ulong		getmalloctag(void*);
 //ulong		getrealloctag(void*);
 
@@ -43,7 +43,7 @@ Page*		auxpage(void);
 Page*		newpage(int, Segment **, ulong);
 int		duppage(Page*);
 void checkpagerefs(void);
-void		portcountpagerefs(ulong*, int);
+//void		portcountpagerefs(ulong*, int);
 //int		ispages(void*);
 
 // swap.c

@@ -118,7 +118,7 @@ extern	char	hostdomain[];
 extern	uchar	initcode[];
 extern 	Ref	noteidalloc;
 extern	char*	statename[];
-extern	char*	sysname;
+//extern	char*	sysname;
 extern	uint	qiomaxatomic;
 
 // defined in syscall/systab.h

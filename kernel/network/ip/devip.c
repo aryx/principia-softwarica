@@ -57,7 +57,10 @@ Queue	*qlog;
 
 extern	void nullmediumlink(void);
 extern	void pktmediumlink(void);
-	long ndbwrite(Fs *f, char *a, ulong off, int n);
+long ndbwrite(Fs *f, char *a, ulong off, int n);
+Conv*	Fsprotoclone(Proto*, char*);
+char*	Fsstdbind(Conv*, char**, int);
+void	closeconv(Conv*);
 
 static int
 ip3gen(Chan *c, int i, Dir *dp)

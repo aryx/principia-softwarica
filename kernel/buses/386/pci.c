@@ -15,9 +15,14 @@ struct
 {
 	char	output[PCICONSSIZE];
 	int	ptr;
-}PCICONS;
+} PCICONS;
 
 int pcivga;
+
+ulong	pcibarsize(Pcidev*, int);
+void	pcibussize(Pcidev*, ulong*, ulong*);
+void	pcihinv(Pcidev*);
+uchar	pciipin(Pcidev*, uchar);
 
 int
 pcilog(char *fmt, ...)

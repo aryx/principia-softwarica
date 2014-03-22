@@ -8,6 +8,7 @@
 #define	pghash(daddr)	palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
 
 int		ispages(void*);
+void		portcountpagerefs(ulong*, int);
 
 void
 pageinit(void)

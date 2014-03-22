@@ -470,14 +470,14 @@ Conv*	Fsnewcall(Conv*, uchar*, ushort, uchar*, ushort, uchar);
 int	Fspcolstats(char*, int);
 int	Fsproto(Fs*, Proto*);
 int	Fsbuiltinproto(Fs*, uchar);
-Conv*	Fsprotoclone(Proto*, char*);
+//Conv*	Fsprotoclone(Proto*, char*);
 Proto*	Fsrcvpcol(Fs*, uchar);
 Proto*	Fsrcvpcolx(Fs*, uchar);
 char*	Fsstdconnect(Conv*, char**, int);
 char*	Fsstdannounce(Conv*, char**, int);
-char*	Fsstdbind(Conv*, char**, int);
+//char*	Fsstdbind(Conv*, char**, int);
 ulong	scalednconv(void);
-void	closeconv(Conv*);
+//void	closeconv(Conv*);
 /*
  *  logging
  */
@@ -671,7 +671,7 @@ extern uchar IPallbits[IPaddrlen];
 /*
  *  media
  */
-extern Medium	ethermedium;
+//extern Medium	ethermedium;
 //extern Medium	nullmedium;
 //extern Medium	pktmedium;
 

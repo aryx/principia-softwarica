@@ -41,6 +41,8 @@ enum {
 	ReallocOffset = 1
 };
 
+void		setrealloctag(void*, ulong);
+
 
 void*
 smalloc(ulong size)
