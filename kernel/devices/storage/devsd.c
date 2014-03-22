@@ -22,6 +22,11 @@ static char devletters[] = "0123456789"
 static SDev *devs[sizeof devletters-1];
 static QLock devslock;
 
+extern void sdaddpart(SDunit*, char*, uvlong, uvlong);
+extern int sdsetsense(SDreq*, int, int, int, int);
+extern int sdmodesense(SDreq*, uchar*, void*, int);
+extern void sdadddevs(SDev*);
+
 enum {
 	Rawcmd,
 	Rawdata,

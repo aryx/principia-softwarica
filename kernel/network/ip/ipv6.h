@@ -178,7 +178,7 @@ extern int ReTransTimer;
 
 void ipv62smcast(uchar *, uchar *);
 void icmpns(Fs *f, uchar* src, int suni, uchar* targ, int tuni, uchar* mac);
-void icmpna(Fs *f, uchar* src, uchar* dst, uchar* targ, uchar* mac, uchar flags);
+//void icmpna(Fs *f, uchar* src, uchar* dst, uchar* targ, uchar* mac, uchar flags);
 void icmpttlexceeded6(Fs *f, Ipifc *ifc, Block *bp);
 void icmppkttoobig6(Fs *f, Ipifc *ifc, Block *bp);
 void icmphostunr(Fs *f, Ipifc *ifc, Block *bp, int code, int free);

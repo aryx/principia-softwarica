@@ -129,7 +129,7 @@ enum {
 
 /* mouse.c */
 extern void mousectl(Cmdbuf*);
-extern void mouseresize(void);
+//now in portfns_devices.h: extern void mouseresize(void);
 
 /* screen.c */
 extern int		hwaccel;	/* use hw acceleration; default on */
@@ -148,8 +148,8 @@ extern void	blankscreen(int);
 
 extern VGAcur swcursor;
 extern void swcursorinit(void);
-extern void swcursorhide(void);
-extern void swcursoravoid(Rectangle);
+//extern void swcursorhide(void);
+//extern void swcursoravoid(Rectangle);
 extern void swcursorunhide(void);
 
 /* devdraw.c */
@@ -158,7 +158,7 @@ extern void	resetscreenimage(void);
 extern int		drawhasclients(void);
 extern ulong	blanktime;
 extern void	setscreenimageclipr(Rectangle);
-extern void	drawflush(void);
+//extern void	drawflush(void);
 extern int drawidletime(void);
 extern QLock	drawlock;
 
@@ -166,7 +166,6 @@ extern QLock	drawlock;
 extern void	vgascreenwin(VGAscr*);
 extern void	vgaimageinit(ulong);
 extern void	vgalinearpciid(VGAscr*, int, int);
-extern void	vgalinearpci(VGAscr*);
 extern void	vgalinearaddr(VGAscr*, ulong, int);
 
 extern void	drawblankscreen(int);

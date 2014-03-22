@@ -15,6 +15,11 @@
 
 #define RGB2K(r,g,b)	((156763*(r)+307758*(g)+59769*(b))>>19)
 
+extern void swcursorhide(void);
+extern void swcursoravoid(Rectangle);
+extern void	vgalinearpci(VGAscr*);
+
+
 Point ZP = {0, 0};
 
 Rectangle physgscreenr;

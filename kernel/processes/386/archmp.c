@@ -7,6 +7,8 @@
 
 #include "mp.h"
 
+uvlong	tscticks(uvlong*);
+
 _MP_ *_mp_;
 
 static void

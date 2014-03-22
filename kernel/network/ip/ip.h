@@ -591,8 +591,8 @@ extern Route*	v6lookup(Fs *f, uchar *a, Conv *c);
 extern long	routeread(Fs *f, char*, ulong, int);
 extern long	routewrite(Fs *f, Chan*, char*, int);
 extern void	routetype(int, char*);
-extern void	ipwalkroutes(Fs*, Routewalk*);
-extern void	convroute(Route*, uchar*, uchar*, uchar*, char*, int*);
+//extern void	ipwalkroutes(Fs*, Routewalk*);
+//extern void	convroute(Route*, uchar*, uchar*, uchar*, char*, int*);
 
 /*
  *  devip.c
@@ -672,8 +672,8 @@ extern uchar IPallbits[IPaddrlen];
  *  media
  */
 extern Medium	ethermedium;
-extern Medium	nullmedium;
-extern Medium	pktmedium;
+//extern Medium	nullmedium;
+//extern Medium	pktmedium;
 
 /*
  *  ipifc.c
@@ -700,10 +700,11 @@ extern void	ipifcaddroute(Fs*, int, uchar*, uchar*, uchar*, int);
 extern void	ipifcremroute(Fs*, int, uchar*, uchar*);
 extern void	ipifcremmulti(Conv *c, uchar *ma, uchar *ia);
 extern void	ipifcaddmulti(Conv *c, uchar *ma, uchar *ia);
-extern char*	ipifcrem(Ipifc *ifc, char **argv, int argc);
-extern char*	ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp);
+//extern char*	ipifcrem(Ipifc *ifc, char **argv, int argc);
+//extern char*	ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp);
 extern long	ipselftabread(Fs*, char *a, ulong offset, int n);
-extern char*	ipifcadd6(Ipifc *ifc, char**argv, int argc);
+//extern char*	ipifcadd6(Ipifc *ifc, char**argv, int argc);
+
 /*
  *  ip.c
  */

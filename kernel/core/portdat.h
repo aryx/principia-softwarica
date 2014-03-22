@@ -116,13 +116,14 @@ extern	int	cpuserver;
 extern	Dev*	conf_devtab[];
 extern	char	hostdomain[];
 extern	uchar	initcode[];
-extern	int	kbdbuttons;
 extern 	Ref	noteidalloc;
-extern	int	nsyscall;
 extern	char*	statename[];
 extern	char*	sysname;
 extern	uint	qiomaxatomic;
+
+// defined in syscall/systab.h
 extern	char*	sysctab[];
+extern	int	nsyscall;
 
 struct Execvals {
 	uvlong	entry;

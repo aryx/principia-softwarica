@@ -10,6 +10,10 @@
 
 #define DPRINT if(0)print
 
+extern char*	ipifcadd6(Ipifc *ifc, char**argv, int argc);
+extern char*	ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp);
+extern char*	ipifcrem(Ipifc *ifc, char **argv, int argc);
+
 enum {
 	Maxmedia	= 32,
 	Nself		= Maxmedia*5,
