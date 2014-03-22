@@ -2,7 +2,7 @@
 //some kind of #include "../port/portfns_core.h"
 
 // exported in lib.h, defined in portfns.c
-// (*print) is declared lib.h
+// (*print)
 
 // exported in lib.h, defined in 386/fns.c (but used in port)
 // int	cistrcmp(char*, char*);
@@ -12,7 +12,6 @@
 // console/devcons.c
 int		(*iprint)(char*, ...);
 int		(*pprint)(char*, ...);
-// (*print)
 void		(*panic)(char*, ...);
 void		(*_assert)(char*);
 // process/386/trap.c
@@ -30,7 +29,7 @@ void		(*sleep)(Rendez*, int(*)(void*), void*);
 void		(*tsleep)(Rendez*, int (*)(void*), void*, ulong);
 // process/proc.c
 Proc*		(*proctab)(int);
-int	(*postnote)(Proc*, int, char*, int);
+int	    (*postnote)(Proc*, int, char*, int);
 void		(*pexit)(char*, int);
 //process/sysproc.c
 int		(*return0)(void*);
@@ -65,7 +64,7 @@ int		readstr(ulong, char*, ulong, char*);
 //in init/386/main.c (but used in port), TODO should be in portfns_init.h
 void		reboot(void*, void*, ulong);
 
-// unused and undefined
+//unused and undefined:
 //void		addwatchdog(Watchdog*);
 //long		clrfpintr(void);
 //int		decrypt(void*, void*, int);

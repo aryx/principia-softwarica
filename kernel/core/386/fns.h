@@ -1,6 +1,5 @@
 #include "../port/portfns.h"
 
-void		forkret(void);
 // used by pcf.c and main.c
 void		bootlinks(void);
 
@@ -9,6 +8,10 @@ long		latin1(Rune*, int);
 
 // used by main.c
 void		machinit(void);
+
+//l.s
+void		forkret(void);
+
 
 void	aamloop(int);
 void	acpiscan(void (*func)(uchar *));
@@ -19,7 +22,6 @@ int	bios32call(BIOS32ci*, u16int[3]);
 int	bios32ci(BIOS32si*, BIOS32ci*);
 void	bios32close(BIOS32si*);
 BIOS32si* bios32open(char*);
-//void	bootargs(void*);
 void	cgapost(int);
 void	clockintr(Ureg*, void*);
 int	(*cmpswap)(long*, long, long);
@@ -28,7 +30,6 @@ void	cpuid(int, ulong regs[]);
 int	cpuidentify(void);
 void	cpuidprint(void);
 void	(*cycles)(uvlong*);
-//void	delay(int); pad: already in portfns.h
 int	dmacount(int);
 int	dmadone(int);
 void	dmaend(int);
@@ -62,7 +63,6 @@ int	i8042auxcmds(uchar*, int);
 void	i8042auxenable(void (*)(int, int));
 void	i8042reset(void);
 void	i8250console(void);
-//void	i8250config(char *);
 void*	i8250alloc(int, int, int);
 void	i8250mouse(char*, int (*)(Queue*, int), int);
 void	i8250setmouseputc(char*, int (*)(Queue*, int));
@@ -96,7 +96,6 @@ void	ioinit(void);
 int	iounused(int, int);
 int	ioalloc(int, int, int, char*);
 int	ioreserve(int, int, int, char*);
-//int	iprint(char*, ...); //pad: already in portfns.h
 int	(*isaconfig)(char*, int, ISAConf*);
 void	kbdenable(void);
 void	kbdinit(void);
@@ -105,8 +104,6 @@ void	lgdt(ushort[3]);
 void	lidt(ushort[3]);
 void	links(void);
 void	ltr(ulong);
-//void	mach0init(void);
-//void	mathinit(void);
 void	mb386(void);
 void	mb586(void);
 void	meminit(void);
@@ -126,8 +123,6 @@ void	outs(int, ushort);
 void	outss(int, void*, int);
 void	outl(int, ulong);
 void	outsl(int, void*, int);
-//ulong	pcibarsize(Pcidev*, int);
-//void	pcibussize(Pcidev*, ulong*, ulong*);
 int	pcicfgr8(Pcidev*, int);
 int	pcicfgr16(Pcidev*, int);
 int	pcicfgr32(Pcidev*, int);
@@ -138,8 +133,6 @@ void	pciclrbme(Pcidev*);
 void	pciclrioe(Pcidev*);
 void	pciclrmwi(Pcidev*);
 int	pcigetpms(Pcidev*);
-//void	pcihinv(Pcidev*);
-//uchar	pciipin(Pcidev*, uchar);
 Pcidev* pcimatch(Pcidev*, int, int);
 Pcidev* pcimatchtbdf(int);
 void	pcireset(void);
@@ -179,7 +172,6 @@ void	trapenable(int, void (*)(Ureg*, void*), void*, char*);
 void	trapinit(void);
 void	trapinit0(void);
 int	tas(void*);
-//uvlong	tscticks(uvlong*);
 ulong	umbmalloc(ulong, int, int);
 void	umbfree(ulong, int);
 ulong	umbrwmalloc(ulong, int, int);
@@ -196,11 +188,8 @@ void	wbinvd(void);
 void	wrmsr(int, vlong);
 int	xchgw(ushort*, int);
 
-
 #define	KADDR(a)	kaddr(a)
 #define PADDR(a)	paddr((void*)(a))
-
-
 
 
 #define	dcflush(a, b)

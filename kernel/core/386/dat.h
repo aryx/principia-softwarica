@@ -1,6 +1,6 @@
 #include "dat_forward.h"
 
-// references Proc and Mach
+// defines Lock, references Proc and Mach
 #include "dat_concurrency.h"
 // references Page (see also mem.h)
 #include "dat_memory.h"

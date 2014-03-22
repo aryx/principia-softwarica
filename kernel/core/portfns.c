@@ -53,9 +53,8 @@ void (*coherence)(void) = 0;
 uvlong (*fastticks)(uvlong*) = 0;
 
 // processes/386/i8253.c
-void		(*microdelay)(int) = 0;
-void		(*delay)(int) = 0;
-
+void (*microdelay)(int) = 0;
+void (*delay)(int) = 0;
 
 
 // was in devcons.c, could be in lib/misc.c

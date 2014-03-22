@@ -20,10 +20,8 @@ enum
 #define MOUNTH(p,qid)	((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
 
 #include "../port/portdat_memory.h"
-
 #include <fcall.h>
 #include "../port/portdat_files.h"
-
 #include "../port/portdat_processes.h"
 
 #ifndef STAGESIZE
@@ -62,17 +60,13 @@ enum
 #ifndef PCICONSSIZE
 #define PCICONSSIZE (16*1024)
 #endif
-//unused
-//#ifndef MAXBY2PG
-//#define MAXBY2PG BY2PG		/* rounding for UTZERO in executables */
-//#endif
-
+//unused: //#define MAXBY2PG BY2PG		/* rounding for UTZERO in executables */
 
 // convenient constants
 enum
 {
 	PRINTSIZE =	256,
-//unused	MAXCRYPT = 	127,
+  //unused:	MAXCRYPT = 	127,
 	NUMSIZE	=	12,		/* size of formatted number */
 	MB =		(1024*1024),
 	/* READSTR was 1000, which is way too small for usb's ctl file */
@@ -91,6 +85,31 @@ enum
 	LRESPROF	= 3,
 };
 
+#include "../port/portdat_globals.h"
+
+#include "../port/portdat_console.h"
+#include "../port/portdat_misc.h"
+
+extern	char*	conffile;
+extern	int	cpuserver;
+extern	Dev*	conf_devtab[];
+extern	char	hostdomain[];
+extern	uchar	initcode[];
+extern 	Ref	noteidalloc;
+extern	char*	statename[];
+extern	uint	qiomaxatomic;
+
+// defined in syscall/systab.h
+extern	char*	sysctab[];
+extern	int	nsyscall;
+
+struct Execvals {
+	uvlong	entry;
+	ulong	textsize;
+	ulong	datasize;
+};
+int	(*parseboothdr)(Chan *, ulong, Execvals *);
+
 //unused:
 //enum
 //{
@@ -104,33 +123,6 @@ enum
 //{
 //	NCMDFIELD = 128
 //};
-
-#include "../port/portdat_globals.h"
-
-#include "../port/portdat_console.h"
-
-#include "../port/portdat_misc.h"
-
-extern	char*	conffile;
-extern	int	cpuserver;
-extern	Dev*	conf_devtab[];
-extern	char	hostdomain[];
-extern	uchar	initcode[];
-extern 	Ref	noteidalloc;
-extern	char*	statename[];
-//extern	char*	sysname;
-extern	uint	qiomaxatomic;
-
-// defined in syscall/systab.h
-extern	char*	sysctab[];
-extern	int	nsyscall;
-
-struct Execvals {
-	uvlong	entry;
-	ulong	textsize;
-	ulong	datasize;
-};
-int	(*parseboothdr)(Chan *, ulong, Execvals *);
 
 //unused
 /*
