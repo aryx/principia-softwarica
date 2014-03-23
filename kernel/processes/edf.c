@@ -22,10 +22,10 @@ extern int	nrdy;
 extern ulong	runvec;
 
 /* Statistics stuff */
-ulong		nilcount;
-ulong		scheds;
+//ulong		nilcount;
+//ulong		scheds;
 ulong		edfnrun;
-int		misseddeadlines;
+//int		misseddeadlines;
 
 /* Edfschedlock protects modification of admission params */
 int		edfinited;
@@ -83,7 +83,9 @@ timeconv(Fmt *f)
 	return fmtstrcpy(f, buf);
 }
 
+#ifdef EDFCYCLES
 long edfcycles;
+#endif
 
 Edf*
 edflock(Proc *p)

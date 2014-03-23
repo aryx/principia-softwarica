@@ -17,11 +17,6 @@ void	bootargs(void*);
 void	mach0init(void);
 void	mathinit(void);
 
-void loop() {
-  while(1) {
-  }
-}
-
 /*
  * Where configuration info is left for the loaded programme.
  * This will turn into a structure as more is done by the boot loader

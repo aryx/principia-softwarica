@@ -7,29 +7,29 @@
 #include	"ip.h"
 #include	"ipv6.h"
 
-char *v6hdrtypes[Maxhdrtype] =
-{
-	[HBH]		"HopbyHop",
-	[ICMP]		"ICMP",
-	[IGMP]		"IGMP",
-	[GGP]		"GGP",
-	[IPINIP]	"IP",
-	[ST]		"ST",
-	[TCP]		"TCP",
-	[UDP]		"UDP",
-	[ISO_TP4]	"ISO_TP4",
-	[RH]		"Routinghdr",
-	[FH]		"Fraghdr",
-	[IDRP]		"IDRP",
-	[RSVP]		"RSVP",
-	[AH]		"Authhdr",
-	[ESP]		"ESP",
-	[ICMPv6]	"ICMPv6",
-	[NNH]		"Nonexthdr",
-	[ISO_IP]	"ISO_IP",
-	[IGRP]		"IGRP",
-	[OSPF]		"OSPF",
-};
+//char *v6hdrtypes[Maxhdrtype] =
+//{
+//	[HBH]		"HopbyHop",
+//	[ICMP]		"ICMP",
+//	[IGMP]		"IGMP",
+//	[GGP]		"GGP",
+//	[IPINIP]	"IP",
+//	[ST]		"ST",
+//	[TCP]		"TCP",
+//	[UDP]		"UDP",
+//	[ISO_TP4]	"ISO_TP4",
+//	[RH]		"Routinghdr",
+//	[FH]		"Fraghdr",
+//	[IDRP]		"IDRP",
+//	[RSVP]		"RSVP",
+//	[AH]		"Authhdr",
+//	[ESP]		"ESP",
+//	[ICMPv6]	"ICMPv6",
+//	[NNH]		"Nonexthdr",
+//	[ISO_IP]	"ISO_IP",
+//	[IGRP]		"IGRP",
+//	[OSPF]		"OSPF",
+//};
 
 /*
  *  well known IPv6 addresses
@@ -53,27 +53,27 @@ uchar v6linklocal[IPaddrlen] = {
 	0, 0, 0, 0,
 	0, 0, 0, 0
 };
-uchar v6linklocalmask[IPaddrlen] = {
-	0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff,
-	0, 0, 0, 0,
-	0, 0, 0, 0
-};
+//uchar v6linklocalmask[IPaddrlen] = {
+//	0xff, 0xff, 0xff, 0xff,
+//	0xff, 0xff, 0xff, 0xff,
+//	0, 0, 0, 0,
+//	0, 0, 0, 0
+//};
 int v6llpreflen = 8;	/* link-local prefix length in bytes */
 
-uchar v6multicast[IPaddrlen] = {
-	0xff, 0, 0, 0,
-	0, 0, 0, 0,
-	0, 0, 0, 0,
-	0, 0, 0, 0
-};
-uchar v6multicastmask[IPaddrlen] = {
-	0xff, 0, 0, 0,
-	0, 0, 0, 0,
-	0, 0, 0, 0,
-	0, 0, 0, 0
-};
-int v6mcpreflen = 1;	/* multicast prefix length */
+//uchar v6multicast[IPaddrlen] = {
+//	0xff, 0, 0, 0,
+//	0, 0, 0, 0,
+//	0, 0, 0, 0,
+//	0, 0, 0, 0
+//};
+//uchar v6multicastmask[IPaddrlen] = {
+//	0xff, 0, 0, 0,
+//	0, 0, 0, 0,
+//	0, 0, 0, 0,
+//	0, 0, 0, 0
+//};
+//int v6mcpreflen = 1;	/* multicast prefix length */
 
 uchar v6allnodesN[IPaddrlen] = {
 	0xff, 0x01, 0, 0,
@@ -81,19 +81,19 @@ uchar v6allnodesN[IPaddrlen] = {
 	0, 0, 0, 0,
 	0, 0, 0, 0x01
 };
-uchar v6allroutersN[IPaddrlen] = {
-	0xff, 0x01, 0, 0,
-	0, 0, 0, 0,
-	0, 0, 0, 0,
-	0, 0, 0, 0x02
-};
+//uchar v6allroutersN[IPaddrlen] = {
+//	0xff, 0x01, 0, 0,
+//	0, 0, 0, 0,
+//	0, 0, 0, 0,
+//	0, 0, 0, 0x02
+//};
 uchar v6allnodesNmask[IPaddrlen] = {
 	0xff, 0xff, 0, 0,
 	0, 0, 0, 0,
 	0, 0, 0, 0,
 	0, 0, 0, 0
 };
-int v6aNpreflen = 2;	/* all nodes (N) prefix */
+//int v6aNpreflen = 2;	/* all nodes (N) prefix */
 
 uchar v6allnodesL[IPaddrlen] = {
 	0xff, 0x02, 0, 0,
@@ -101,19 +101,19 @@ uchar v6allnodesL[IPaddrlen] = {
 	0, 0, 0, 0,
 	0, 0, 0, 0x01
 };
-uchar v6allroutersL[IPaddrlen] = {
-	0xff, 0x02, 0, 0,
-	0, 0, 0, 0,
-	0, 0, 0, 0,
-	0, 0, 0, 0x02
-};
+//uchar v6allroutersL[IPaddrlen] = {
+//	0xff, 0x02, 0, 0,
+//	0, 0, 0, 0,
+//	0, 0, 0, 0,
+//	0, 0, 0, 0x02
+//};
 uchar v6allnodesLmask[IPaddrlen] = {
 	0xff, 0xff, 0, 0,
 	0, 0, 0, 0,
 	0, 0, 0, 0,
 	0, 0, 0, 0
 };
-int v6aLpreflen = 2;	/* all nodes (L) prefix */
+//int v6aLpreflen = 2;	/* all nodes (L) prefix */
 
 uchar v6solicitednode[IPaddrlen] = {
 	0xff, 0x02, 0, 0,
@@ -121,13 +121,13 @@ uchar v6solicitednode[IPaddrlen] = {
 	0, 0, 0, 0x01,
 	0xff, 0, 0, 0
 };
-uchar v6solicitednodemask[IPaddrlen] = {
-	0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff,
-	0xff, 0x0, 0x0, 0x0
-};
-int v6snpreflen = 13;
+//uchar v6solicitednodemask[IPaddrlen] = {
+//	0xff, 0xff, 0xff, 0xff,
+//	0xff, 0xff, 0xff, 0xff,
+//	0xff, 0xff, 0xff, 0xff,
+//	0xff, 0x0, 0x0, 0x0
+//};
+//int v6snpreflen = 13;
 
 ushort
 ptclcsum(Block *bp, int offset, int len)

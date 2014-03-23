@@ -165,7 +165,7 @@ static Lock tlock;
 static int topens;
 static int tproduced, tconsumed;
 
-extern int unfair;
+//extern int unfair;
 
 static void
 profclock(Ureg *ur, Timer *)

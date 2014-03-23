@@ -123,7 +123,7 @@ static int	pcmio(int, ISAConf*);
 static long	pcmread(int, int, void*, long, vlong);
 static long	pcmwrite(int, int, void*, long, vlong);
 
-static void i82365dump(PCMslot*);
+//static void i82365dump(PCMslot*);
 
 /*
  *  reading and writing card registers
@@ -357,7 +357,7 @@ static int
 pcmcia_pcmspecial(char *idstr, ISAConf *isa)
 {
 	PCMslot *pp;
-	extern char *strstr(char*, char*);
+	//extern char *strstr(char*, char*);
 	int enabled;
 
 	for(pp = slot; pp < lastslot; pp++){
@@ -556,20 +556,20 @@ i82365probe(int x, int d, int dev)
 	return cp;
 }
 
-static void
-i82365dump(PCMslot *pp)
-{
-	int i;
-
-	for(i = 0; i < 0x40; i++){
-		if((i&0x0F) == 0)
-			print("\n%2.2uX:	", i);
-		print("%2.2uX ", rdreg(pp, i));
-		if(((i+1) & 0x0F) == 0x08)
-			print(" - ");
-	}
-	print("\n");
-}
+//static void
+//i82365dump(PCMslot *pp)
+//{
+//	int i;
+//
+//	for(i = 0; i < 0x40; i++){
+//		if((i&0x0F) == 0)
+//			print("\n%2.2uX:	", i);
+//		print("%2.2uX ", rdreg(pp, i));
+//		if(((i+1) & 0x0F) == 0x08)
+//			print(" - ");
+//	}
+//	print("\n");
+//}
 
 /*
  *  set up for slot cards

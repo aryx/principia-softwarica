@@ -83,7 +83,7 @@ identify(void)
 	return 0;
 }
 
-Lock mpsynclock;
+//Lock mpsynclock;
 
 void
 syncclock(void)

@@ -91,7 +91,7 @@ struct Udppriv
 	ulong		lenerr;			/* short packet */
 };
 
-void (*etherprofiler)(char *name, int qlen);
+//void (*etherprofiler)(char *name, int qlen);
 void udpkick(void *x, Block *bp);
 
 /*

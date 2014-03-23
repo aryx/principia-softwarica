@@ -32,7 +32,7 @@ Dirtab kproftab[]={
 static void
 _kproftimer(ulong pc)
 {
-	extern void spldone(void);
+	extern void spldone(void); // assembly function
 
 	if(kprof.time == 0)
 		return;

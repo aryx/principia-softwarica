@@ -561,15 +561,15 @@ matchtoken(char *p, char *token)
 	return p;
 }
 
-void
-hnputv(void *p, uvlong v)
-{
-	uchar *a;
-
-	a = p;
-	hnputl(a, v>>32);
-	hnputl(a+4, v);
-}
+//void
+//hnputv(void *p, uvlong v)
+//{
+//	uchar *a;
+//
+//	a = p;
+//	hnputl(a, v>>32);
+//	hnputl(a+4, v);
+//}
 
 void
 hnputl(void *p, uint v)
@@ -593,14 +593,14 @@ hnputs(void *p, ushort v)
 	a[1] = v;
 }
 
-uvlong
-nhgetv(void *p)
-{
-	uchar *a;
-
-	a = p;
-	return ((vlong)nhgetl(a) << 32) | nhgetl(a+4);
-}
+//uvlong
+//nhgetv(void *p)
+//{
+//	uchar *a;
+//
+//	a = p;
+//	return ((vlong)nhgetl(a) << 32) | nhgetl(a+4);
+//}
 
 uint
 nhgetl(void *p)

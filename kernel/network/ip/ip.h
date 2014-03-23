@@ -663,9 +663,9 @@ extern int	eipfmt(Fmt*);
 #define	ipcmp(x, y) ( (x)[IPaddrlen-1] != (y)[IPaddrlen-1] || memcmp(x, y, IPaddrlen) )
 
 extern uchar IPv4bcast[IPaddrlen];
-extern uchar IPv4bcastobs[IPaddrlen];
-extern uchar IPv4allsys[IPaddrlen];
-extern uchar IPv4allrouter[IPaddrlen];
+//extern uchar IPv4bcastobs[IPaddrlen];
+//extern uchar IPv4allsys[IPaddrlen];
+//extern uchar IPv4allrouter[IPaddrlen];
 extern uchar IPnoaddr[IPaddrlen];
 extern uchar v4prefix[IPaddrlen];
 extern uchar IPallbits[IPaddrlen];
@@ -686,7 +686,7 @@ extern Medium*	ipfindmedium(char *name);
 extern void	addipmedium(Medium *med);
 extern int	ipforme(Fs*, uchar *addr);
 extern int	iptentative(Fs*, uchar *addr);
-extern int	ipisbm(uchar *);
+//extern int	ipisbm(uchar *);
 extern int	ipismulticast(uchar *);
 extern Ipifc*	findipifc(Fs*, uchar *remote, int type);
 extern void	findlocalip(Fs*, uchar *local, uchar *remote);
@@ -696,10 +696,10 @@ extern int	ipv6anylocal(Ipifc *ifc, uchar *addr);
 extern Iplifc*	iplocalonifc(Ipifc *ifc, uchar *ip);
 extern int	ipproxyifc(Fs *f, Ipifc *ifc, uchar *ip);
 extern int	ipismulticast(uchar *ip);
-extern int	ipisbooting(void);
-extern int	ipifccheckin(Ipifc *ifc, Medium *med);
-extern void	ipifccheckout(Ipifc *ifc);
-extern int	ipifcgrab(Ipifc *ifc);
+//extern int	ipisbooting(void);
+//extern int	ipifccheckin(Ipifc *ifc, Medium *med);
+//extern void	ipifccheckout(Ipifc *ifc);
+//extern int	ipifcgrab(Ipifc *ifc);
 extern void	ipifcaddroute(Fs*, int, uchar*, uchar*, uchar*, int);
 extern void	ipifcremroute(Fs*, int, uchar*, uchar*);
 extern void	ipifcremmulti(Conv *c, uchar *ma, uchar *ia);
@@ -725,8 +725,8 @@ extern int	ipstats(Fs*, char*, int);
 extern ushort	ptclbsum(uchar*, int);
 extern ushort	ptclcsum(Block*, int, int);
 extern void	ip_init(Fs*);
-extern void	update_mtucache(uchar*, ulong);
-extern ulong	restrict_mtu(uchar*, ulong);
+//extern void	update_mtucache(uchar*, ulong);
+//extern ulong	restrict_mtu(uchar*, ulong);
 /*
  * bootp.c
  */
@@ -746,4 +746,4 @@ extern Chan*	chandial(char*, char*, char*, Chan**);
 /*
  *  global to all of the stack
  */
-extern void	(*igmpreportfn)(Ipifc*, uchar*);
+//extern void	(*igmpreportfn)(Ipifc*, uchar*);

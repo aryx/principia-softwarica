@@ -108,7 +108,7 @@ long		devbwrite(Chan*, Block*, ulong);
 void		devremove(Chan*);
 int		devwstat(Chan*, uchar*, int);
 Devgen		devgen;//TODO?
-void		devpower(int); //TODO? why fp no-deps?
+void		devpower(int);
 int		devconfig(int, char *, DevConf *);//TODO? why fp no-deps?
 int		devstat(Chan*, uchar*, int, Dirtab*, int, Devgen*);
 Chan*		devopen(Chan*, int, Dirtab*, int, Devgen*);

@@ -127,10 +127,10 @@ struct	Ip6hdr {
 	uchar	payload[];
 };
 
-struct	Opthdr {		/* unused */
-	uchar	nexthdr;
-	uchar	len;
-};
+//struct	Opthdr {		/* unused */
+//	uchar	nexthdr;
+//	uchar	len;
+//};
 
 /*
  * Beware routing header type 0 (loose source routing); see
@@ -138,12 +138,12 @@ struct	Opthdr {		/* unused */
  * Type 1 is unused.  Type 2 is for MIPv6 (mobile IPv6) filtering
  * against type 0 header.
  */
-struct	Routinghdr {		/* unused */
-	uchar	nexthdr;
-	uchar	len;
-	uchar	rtetype;
-	uchar	segrem;
-};
+//struct	Routinghdr {		/* unused */
+//	uchar	nexthdr;
+//	uchar	len;
+//	uchar	rtetype;
+//	uchar	segrem;
+//};
 
 struct	Fraghdr6 {
 	uchar	nexthdr;
@@ -154,25 +154,25 @@ struct	Fraghdr6 {
 
 extern uchar v6allnodesN[IPaddrlen];
 extern uchar v6allnodesL[IPaddrlen];
-extern uchar v6allroutersN[IPaddrlen];
-extern uchar v6allroutersL[IPaddrlen];
+//extern uchar v6allroutersN[IPaddrlen];
+//extern uchar v6allroutersL[IPaddrlen];
 extern uchar v6allnodesNmask[IPaddrlen];
 extern uchar v6allnodesLmask[IPaddrlen];
 extern uchar v6solicitednode[IPaddrlen];
-extern uchar v6solicitednodemask[IPaddrlen];
+//extern uchar v6solicitednodemask[IPaddrlen];
 extern uchar v6Unspecified[IPaddrlen];
 extern uchar v6loopback[IPaddrlen];
-extern uchar v6loopbackmask[IPaddrlen];
+//extern uchar v6loopbackmask[IPaddrlen];
 extern uchar v6linklocal[IPaddrlen];
-extern uchar v6linklocalmask[IPaddrlen];
-extern uchar v6multicast[IPaddrlen];
-extern uchar v6multicastmask[IPaddrlen];
+//extern uchar v6linklocalmask[IPaddrlen];
+//extern uchar v6multicast[IPaddrlen];
+//extern uchar v6multicastmask[IPaddrlen];
 
 extern int v6llpreflen;
-extern int v6mcpreflen;
-extern int v6snpreflen;
-extern int v6aNpreflen;
-extern int v6aLpreflen;
+//extern int v6mcpreflen;
+//extern int v6snpreflen;
+//extern int v6aNpreflen;
+//extern int v6aLpreflen;
 
 extern int ReTransTimer;
 

@@ -94,7 +94,7 @@ void	invlpg(ulong);
 void	iofree(int);
 void	ioinit(void);
 int	ioalloc(int, int, int, char*);
-int	ioreserve(int, int, int, char*);
+//int	ioreserve(int, int, int, char*);
 int	(*isaconfig)(char*, int, ISAConf*);
 void	kbdenable(void);
 void	kbdinit(void);
@@ -106,7 +106,7 @@ void	ltr(ulong);
 void	mb386(void);
 void	mb586(void);
 void	meminit(void);
-void	memorysummary(void);
+//void	memorysummary(void);
 void	mfence(void);
 #define mmuflushtlb(pdb) putcr3(pdb)
 void	mmuinit(void);
@@ -173,10 +173,10 @@ void	trapinit0(void);
 int	tas(void*);
 ulong	umbmalloc(ulong, int, int);
 void	umbfree(ulong, int);
-ulong	umbrwmalloc(ulong, int, int);
-void	umbrwfree(ulong, int);
+//ulong	umbrwmalloc(ulong, int, int);
+//void	umbrwfree(ulong, int);
 ulong	upaalloc(int, int);
-void	upafree(ulong, int);
+//void	upafree(ulong, int);
 void	upareserve(ulong, int);
 #define	userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
 void	vectortable(void);
@@ -197,5 +197,3 @@ int	xchgw(ushort*, int);
 
 #define L16GET(p)	(((p)[1]<<8)|(p)[0])
 #define L32GET(p)	(((u32int)L16GET((p)+2)<<16)|L16GET(p))
-
-void loop();

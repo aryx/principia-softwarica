@@ -19,7 +19,7 @@ int reprioritize(Proc*);
 ulong	delayedscheds;	/* statistics */
 long skipscheds;
 long preempts;
-ulong load;
+//ulong load;
 
 static Ref	pidalloc;
 
