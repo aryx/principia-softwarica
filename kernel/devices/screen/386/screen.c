@@ -16,7 +16,7 @@
 #define RGB2K(r,g,b)	((156763*(r)+307758*(g)+59769*(b))>>19)
 
 extern void swcursorhide(void);
-//extern void swcursoravoid(Rectangle);
+extern void swcursoravoid(Rectangle);
 extern void	vgalinearpci(VGAscr*);
 
 
@@ -586,12 +586,12 @@ swcursorhide(void)
 	flushmemscreen(swrect);
 }
 
-//void
-//swcursoravoid(Rectangle r)
-//{
-//	if(swvisible && rectXrect(r, swrect))
-//		swcursorhide();
-//}
+void
+swcursoravoid(Rectangle r)
+{
+	if(swvisible && rectXrect(r, swrect))
+		swcursorhide();
+}
 
 void
 swcursordraw(void)

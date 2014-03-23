@@ -187,6 +187,8 @@ void	wbinvd(void);
 void	wrmsr(int, vlong);
 int	xchgw(ushort*, int);
 
+int iounused(int start, int end);
+
 #define	KADDR(a)	kaddr(a)
 #define PADDR(a)	paddr((void*)(a))
 
