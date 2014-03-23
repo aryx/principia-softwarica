@@ -2,11 +2,6 @@ typedef	struct FController FController;
 typedef	struct FDrive FDrive;
 typedef struct FType FType;
 
-static void floppyintr(Ureg*);
-static int floppyon(FDrive*);
-static void floppyoff(FDrive*);
-static void floppysetdef(FDrive*);
-
 /*
  *  a floppy drive
  */
@@ -123,61 +118,3 @@ enum
 };
 
 
-static void
-pcfloppyintr(Ureg *ur, void *a)
-{
-	USED(a);
-
-	floppyintr(ur);
-}
-
-void
-floppysetup0(FController *fl)
-{
-	fl->ndrive = 0;
-	if(ioalloc(Psra, 6, 0, "floppy") < 0)
-		return;
-	if(ioalloc(Pdir, 1, 0, "floppy") < 0){
-		iofree(Psra);
-		return;
-	}
-	fl->ndrive = 2;
-}
-
-void
-floppysetup1(FController *fl)
-{
-	uchar equip;
-
-	/*
-	 *  read nvram for types of floppies 0 & 1
-	 */
-	equip = nvramread(0x10);
-	if(fl->ndrive > 0){
-		fl->d[0].dt = (equip >> 4) & 0xf;
-		floppysetdef(&fl->d[0]);
-	}
-	if(fl->ndrive > 1){
-		fl->d[1].dt = equip & 0xf;
-		floppysetdef(&fl->d[1]);
-	}
-	intrenable(IrqFLOPPY, pcfloppyintr, fl, BUSUNKNOWN, "floppy");
-}
-
-/*
- *  eject disk ( unknown on safari )
- */
-void
-floppyeject(FDrive *dp)
-{
-	floppyon(dp);
-	dp->vers++;
-	floppyoff(dp);
-}
-
-int 
-floppyexec(char *a, long b, int c)
-{
-	USED(a, b, c);
-	return b;
-}
