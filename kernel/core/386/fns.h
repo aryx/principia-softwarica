@@ -93,7 +93,6 @@ void	intron(void);
 void	invlpg(ulong);
 void	iofree(int);
 void	ioinit(void);
-int	iounused(int, int);
 int	ioalloc(int, int, int, char*);
 int	ioreserve(int, int, int, char*);
 int	(*isaconfig)(char*, int, ISAConf*);
