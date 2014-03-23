@@ -36,6 +36,7 @@ visual:
 graph:
 	~/pfff/codegraph -derived_data -lang clang2 -build .
 
+#include also libc, lib_networking, lib_memlayer, lib_memdraw, lib_draw, libmp?
 graph2:
 	~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
 

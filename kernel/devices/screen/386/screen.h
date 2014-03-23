@@ -150,14 +150,14 @@ extern VGAcur swcursor;
 extern void swcursorinit(void);
 //extern void swcursorhide(void);
 //extern void swcursoravoid(Rectangle);
-extern void swcursorunhide(void);
+//extern void swcursorunhide(void);
 
 /* devdraw.c */
 extern void	deletescreenimage(void);
 extern void	resetscreenimage(void);
-extern int		drawhasclients(void);
+//extern int		drawhasclients(void);
 extern ulong	blanktime;
-extern void	setscreenimageclipr(Rectangle);
+//extern void	setscreenimageclipr(Rectangle);
 //extern void	drawflush(void);
 extern int drawidletime(void);
 extern QLock	drawlock;

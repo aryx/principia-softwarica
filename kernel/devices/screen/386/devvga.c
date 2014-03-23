@@ -224,7 +224,7 @@ vgaread(Chan* c, void* a, long n, vlong off)
 	return 0;
 }
 
-static char Ebusy[] = "vga already configured";
+//static char Ebusy[] = "vga already configured";
 
 static void
 vgactl(Cmdbuf *cb)

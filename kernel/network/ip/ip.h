@@ -1,3 +1,7 @@
+
+// This file references also code in lib_networking (linked with the kernel).
+// Those functions are also exported in include/ip.h.
+
 typedef struct	Conv	Conv;
 typedef struct	Fragment4 Fragment4;
 typedef struct	Fragment6 Fragment6;
@@ -122,6 +126,7 @@ struct Fragment6
 	ulong 	age;
 };
 
+// used only for its macro below, could maybe simplify?
 struct Ipfrag
 {
 	ushort	foff;
@@ -464,10 +469,9 @@ struct v6params
 					/* cdrouter >= 0. */
 };
 
-
 int	Fsconnected(Conv*, char*);
 Conv*	Fsnewcall(Conv*, uchar*, ushort, uchar*, ushort, uchar);
-int	Fspcolstats(char*, int);
+//int	Fspcolstats(char*, int);
 int	Fsproto(Fs*, Proto*);
 int	Fsbuiltinproto(Fs*, uchar);
 //Conv*	Fsprotoclone(Proto*, char*);
@@ -507,11 +511,11 @@ void	netlogclose(Fs*);
 void	netlogctl(Fs*, char*, int);
 long	netlogread(Fs*, void*, ulong, long);
 void	netlog(Fs*, int, char*, ...);
-void	ifcloginit(Fs*);
-long	ifclogread(Fs*, Chan *,void*, ulong, long);
-void	ifclog(Fs*, uchar *, int);
-void	ifclogopen(Fs*, Chan*);
-void	ifclogclose(Fs*, Chan*);
+//void	ifcloginit(Fs*);
+//long	ifclogread(Fs*, Chan *,void*, ulong, long);
+//void	ifclog(Fs*, uchar *, int);
+//void	ifclogopen(Fs*, Chan*);
+//void	ifclogclose(Fs*, Chan*);
 
 #pragma varargck argpos netlog	3
 
@@ -643,10 +647,10 @@ extern void	arpenter(Fs*, int version, uchar *ip, uchar *mac, int len, int noref
  * ipaux.c
  */
 
-extern int	myetheraddr(uchar*, char*);
+//extern int	myetheraddr(uchar*, char*);
 extern vlong	parseip(uchar*, char*);
 extern vlong	parseipmask(uchar*, char*);
-extern char*	v4parseip(uchar*, char*);
+//extern char*	v4parseip(uchar*, char*);
 extern void	maskip(uchar *from, uchar *mask, uchar *to);
 extern int	parsemac(uchar *to, char *from, int len);
 extern uchar*	defmask(uchar*);
