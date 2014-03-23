@@ -241,24 +241,23 @@ addvgaseg(char *name, ulong pa, ulong size)
 	addphysseg(&seg);
 }
 
-//unused:
-//void
-//cornerstring(char *s)
-//{
-//	int h, w;
-//	VGAscr *scr;
-//	Rectangle r;
-//	Point p;
-//
-//	scr = &vgascreen[0];
-//	if(scr->vaddr == nil || screenputs != vgascreenputs)
-//		return;
-//	p = memsubfontwidth(scr->memdefont, s);
-//	w = p.x;
-//	h = scr->memdefont->height;
-//
-//	r = Rect(0, 0, w, h);
-//	memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
-//	memimagestring(scr->gscreen, r.min, conscol, ZP, scr->memdefont, s);
-////	flushmemscreen(r);
-//}
+void
+cornerstring(char *s)
+{
+	int h, w;
+	VGAscr *scr;
+	Rectangle r;
+	Point p;
+
+	scr = &vgascreen[0];
+	if(scr->vaddr == nil || screenputs != vgascreenputs)
+		return;
+	p = memsubfontwidth(scr->memdefont, s);
+	w = p.x;
+	h = scr->memdefont->height;
+
+	r = Rect(0, 0, w, h);
+	memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
+	memimagestring(scr->gscreen, r.min, conscol, ZP, scr->memdefont, s);
+//	flushmemscreen(r);
+}

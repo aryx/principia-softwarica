@@ -358,72 +358,71 @@ int hwaccel = 1;
 int hwblank = 0;	/* turned on by drivers that are known good */
 int panning = 0;
 
-//unused:
-//int
-//hwdraw(Memdrawparam *par)
-//{
-//	VGAscr *scr;
-//	Memimage *dst, *src, *mask;
-//	int m;
-//
-//	if(hwaccel == 0)
-//		return 0;
-//
-//	scr = &vgascreen[0];
-//	if((dst=par->dst) == nil || dst->data == nil)
-//		return 0;
-//	if((src=par->src) == nil || src->data == nil)
-//		return 0;
-//	if((mask=par->mask) == nil || mask->data == nil)
-//		return 0;
-//
-//	if(scr->cur == &swcursor){
-//		/*
-//		 * always calling swcursorhide here doesn't cure
-//		 * leaving cursor tracks nor failing to refresh menus
-//		 * with the latest libmemdraw/draw.c.
-//		 */
-//		if(dst->data->bdata == gscreendata.bdata)
-//			swcursoravoid(par->r);
-//		if(src->data->bdata == gscreendata.bdata)
-//			swcursoravoid(par->sr);
-//		if(mask->data->bdata == gscreendata.bdata)
-//			swcursoravoid(par->mr);
-//	}
-//	
-//	if(dst->data->bdata != gscreendata.bdata)
-//		return 0;
-//
-//	if(scr->fill==nil && scr->scroll==nil)
-//		return 0;
-//
-//	/*
-//	 * If we have an opaque mask and source is one opaque
-//	 * pixel we can convert to the destination format and just
-//	 * replicate with memset.
-//	 */
-//	m = Simplesrc|Simplemask|Fullmask;
-//	if(scr->fill
-//	&& (par->state&m)==m
-//	&& ((par->srgba&0xFF) == 0xFF)
-//	&& (par->op&S) == S)
-//		return scr->fill(scr, par->r, par->sdval);
-//
-//	/*
-//	 * If no source alpha, an opaque mask, we can just copy the
-//	 * source onto the destination.  If the channels are the same and
-//	 * the source is not replicated, memmove suffices.
-//	 */
-//	m = Simplemask|Fullmask;
-//	if(scr->scroll
-//	&& src->data->bdata==dst->data->bdata
-//	&& !(src->flags&Falpha)
-//	&& (par->state&m)==m
-//	&& (par->op&S) == S)
-//		return scr->scroll(scr, par->r, par->sr);
-//
-//	return 0;	
-//}
+int
+hwdraw(Memdrawparam *par)
+{
+	VGAscr *scr;
+	Memimage *dst, *src, *mask;
+	int m;
+
+	if(hwaccel == 0)
+		return 0;
+
+	scr = &vgascreen[0];
+	if((dst=par->dst) == nil || dst->data == nil)
+		return 0;
+	if((src=par->src) == nil || src->data == nil)
+		return 0;
+	if((mask=par->mask) == nil || mask->data == nil)
+		return 0;
+
+	if(scr->cur == &swcursor){
+		/*
+		 * always calling swcursorhide here doesn't cure
+		 * leaving cursor tracks nor failing to refresh menus
+		 * with the latest libmemdraw/draw.c.
+		 */
+		if(dst->data->bdata == gscreendata.bdata)
+			swcursoravoid(par->r);
+		if(src->data->bdata == gscreendata.bdata)
+			swcursoravoid(par->sr);
+		if(mask->data->bdata == gscreendata.bdata)
+			swcursoravoid(par->mr);
+	}
+	
+	if(dst->data->bdata != gscreendata.bdata)
+		return 0;
+
+	if(scr->fill==nil && scr->scroll==nil)
+		return 0;
+
+	/*
+	 * If we have an opaque mask and source is one opaque
+	 * pixel we can convert to the destination format and just
+	 * replicate with memset.
+	 */
+	m = Simplesrc|Simplemask|Fullmask;
+	if(scr->fill
+	&& (par->state&m)==m
+	&& ((par->srgba&0xFF) == 0xFF)
+	&& (par->op&S) == S)
+		return scr->fill(scr, par->r, par->sdval);
+
+	/*
+	 * If no source alpha, an opaque mask, we can just copy the
+	 * source onto the destination.  If the channels are the same and
+	 * the source is not replicated, memmove suffices.
+	 */
+	m = Simplemask|Fullmask;
+	if(scr->scroll
+	&& src->data->bdata==dst->data->bdata
+	&& !(src->flags&Falpha)
+	&& (par->state&m)==m
+	&& (par->op&S) == S)
+		return scr->scroll(scr, par->r, par->sr);
+
+	return 0;	
+}
 
 void
 blankscreen(int blank)
