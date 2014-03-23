@@ -122,5 +122,5 @@ void		ksetenv(char*, char*, int);
 char*		getconfenv(void);
 
 // sysfile.c
-// many sysxxx functions
 int		newfd(Chan*);
+// many sysxxx functions (used in syscalls/ without requiring extern decl)

@@ -4,14 +4,14 @@ void    todinit(void);
 void    todsetfreq(vlong);
 void    todset(vlong, vlong, int);
 vlong   todget(vlong*);
-//uvlong    (*fastticks)(uvlong*); is in devarch
+//uvlong    (*fastticks)(uvlong*); is in 386/devarch.c (but used in port)
 uvlong    fastticks2us(uvlong);
 uvlong    ns2fastticks(uvlong);
+long    seconds(void);
 //uvlong    tod2fastticks(vlong);
 //uvlong    us2fastticks(uvlong);
 //uvlong    ms2fastticks(ulong);
 //uvlong    fastticks2ns(uvlong);
-long    seconds(void);
 //todfix(): TODO false positive, static forward decl
 
 // pgrp.c
@@ -38,10 +38,11 @@ void    timeradd(Timer*);
 Timer*    addclock0link(void (*)(void), int);
 void    timerintr(Ureg*, Tval);
 void    timersinit(void);
-//void    timerset(Tval); is in devarch
+//void    timerset(Tval); is in 386/devarch.c (but used in port)
 
 // proc.c
 void exhausted(char*);
+// in portfns_core.h, to remove some backward dependencies
 //void    (*sleep)(Rendez*, int(*)(void*), void*);
 //int (*postnote)(Proc*, int, char*, int);
 void    procctl(Proc*);
@@ -85,8 +86,7 @@ ulong   procalarm(ulong);
 void    alarmkproc(void*);
 void    checkalarms(void);
 
-// edf.c
-// used to be in edf.h
+// edf.c (used to be declared in edf.h)
 Edf*    edflock(Proc*);
 void    edfunlock(void);
 //TODO fp deadlineintr, static func passed via pointer again
@@ -101,7 +101,7 @@ char*   edfadmit(Proc*);
 // sysproc.c
 // TODO cg FP didn't find dependencies from misc/rebootcmd.c
 ulong		l2be(long);
-// many sysxxx functions
+// many sysxxx functions (used in syscalls/ without requiring extern decl)
 
 
 

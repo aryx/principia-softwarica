@@ -1,4 +1,6 @@
 
+// defined in 386/ but used in port
+
 struct Mach
 {
 	int	machno;			/* physical id of processor (KNOWN TO ASSEMBLY) */

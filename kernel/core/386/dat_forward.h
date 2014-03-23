@@ -28,7 +28,6 @@ typedef struct Vctl	Vctl;
 // was not there, but seems more consistent
 typedef struct Tss Tss;
 typedef struct Devport Devport;
-typedef struct BIOS32ci BIOS32ci;
 // used to be in portdat.h
 typedef struct Perf	Perf;
 

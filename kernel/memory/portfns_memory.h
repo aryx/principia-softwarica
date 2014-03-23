@@ -84,7 +84,7 @@ KImage*		attachimage(int, Chan*, ulong, ulong);
 
 
 // sysfile.c
-// syssetflush
+// syssetflush (used in syscalls/ without requiring extern decl)
 
 // in 386/mmu.c (but used in port)
 KMap*	kmap(Page*);

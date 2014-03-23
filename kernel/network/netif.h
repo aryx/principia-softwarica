@@ -1,3 +1,6 @@
+
+// todo: split in portdat_network.h? and portfns_network.h
+
 typedef struct Etherpkt	Etherpkt;
 typedef struct Netaddr	Netaddr;
 typedef struct Netfile	Netfile;

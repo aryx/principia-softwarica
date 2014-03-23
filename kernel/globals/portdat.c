@@ -5,17 +5,17 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-// init/main.c
+// was in init/main.c
 Mach *m;
 Conf conf;
 
-// conf/pcf.c
+// was in conf/pcf.c
 Dev** devtab = 0;
 
-// security/auth.c
+// was in security/auth.c
 char	*eve;
 // should be in portfns.c, but then backward deps
 iseve(void) { return strcmp(eve, up->user) == 0; }
 
-
+// was in dat.h
 Mach* machp[MAXMACH];

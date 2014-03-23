@@ -1,5 +1,6 @@
 
 // devcons.c
+// in portfns_core.h, to remove some backward dependencies
 //int		(*pprint)(char*, ...);
 //void		(*_assert)(char*);
 void		printinit(void);

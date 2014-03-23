@@ -49,18 +49,16 @@ typedef struct Uart	Uart;
 typedef struct Waitq	Waitq;
 typedef struct Walkqid	Walkqid;
 typedef struct Watchdog	Watchdog;
+
 typedef int    Devgen(Chan*, char*, Dirtab*, int, int, Dir*);
 
 // was in cache.c
 typedef struct Extent Extent;
 typedef struct Mntcache Mntcache;
-
 // was in edf.h
 typedef struct Edf		Edf;
-
 // was in qio.c
 typedef struct Queue	Queue;
-
 
 #pragma incomplete DevConf
 #pragma incomplete Edf

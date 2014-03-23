@@ -29,13 +29,15 @@ enum
 #endif
 #include "../port/portdat_buses.h"
 
+// could be put in lib.h
+#define MIN(a, b)	((a) < (b)? (a): (b))
+#define MAX(a, b)	((a) > (b)? (a): (b))
 #define HOWMANY(x, y)	(((x)+((y)-1))/(y))
 #define ROUNDUP(x, y)	(HOWMANY((x), (y))*(y))	/* ceiling */
 #define ROUNDDN(x, y)	(((x)/(y))*(y))		/* floor */
 #define	ROUND(s, sz)	(((s)+(sz-1))&~(sz-1))
+// BY2PG defines in mem.h, should always be included before "dat.h"
 #define	PGROUND(s)	ROUNDUP(s, BY2PG)
-#define MIN(a, b)	((a) < (b)? (a): (b))
-#define MAX(a, b)	((a) > (b)? (a): (b))
 
 /*
  * For multi-bit fields use FIELD(v, o, w) where 'v' is the value
@@ -66,11 +68,11 @@ enum
 enum
 {
 	PRINTSIZE =	256,
-  //unused:	MAXCRYPT = 	127,
 	NUMSIZE	=	12,		/* size of formatted number */
 	MB =		(1024*1024),
 	/* READSTR was 1000, which is way too small for usb's ctl file */
 	READSTR =	4000,		/* temporary buffer size for device reads */
+  //unused:	MAXCRYPT = 	127,
 };
 
 #define DEVDOTDOT -1

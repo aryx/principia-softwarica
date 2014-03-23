@@ -17,7 +17,7 @@ extern Mach* machp[MAXMACH];
 
 #define	MACHP(n)	(machp[n])
 
-// MACHADDR is defined in 386/mem.h
+// MACHADDR is defined in 386/mem.h, why not using m->externup? m not valid?
 #define up	(((Mach*)MACHADDR)->externup)
 
 #define poperror()		up->nerrlab--

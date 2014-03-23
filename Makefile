@@ -31,7 +31,7 @@ run:
 
 
 visual:
-	~/pfff/codemap -no_legend -no_symlinks -filter cpp -ss 2 .
+	~/pfff/codemap.opt -no_legend -no_symlinks -filter cpp -ss 2 .
 
 graph:
 	~/pfff/codegraph -derived_data -lang clang2 -build .
