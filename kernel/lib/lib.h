@@ -5,9 +5,9 @@
 // There are also the poolxxx() functions exported in include/pool.h
 // (also part of libc) that are used in memory/alloc.c.
 
-// Some functions in libc are also overriden:
-//  - print.c overrides the _fmtlock that were in libc/fmt/
-//  - devcons.s overrides the sysfatal that were in libc/9sys/
+// Some functions in libc are also "overriden" (via linker abuse):
+//  - print.c overrides _fmtlock, _fmtunlock that were in libc/fmt/
+//  - devcons.s overrides the sysfatal that was in libc/9sys/
 
 
 /*
