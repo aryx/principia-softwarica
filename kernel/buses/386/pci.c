@@ -518,16 +518,16 @@ pcilscan(int bno, Pcidev** list)
 	return maxubn;
 }
 
-int
-pciscan(int bno, Pcidev **list)
-{
-	int ubn;
-
-	lock(&pcicfginitlock);
-	ubn = pcilscan(bno, list);
-	unlock(&pcicfginitlock);
-	return ubn;
-}
+//int
+//pciscan(int bno, Pcidev **list)
+//{
+//	int ubn;
+//
+//	lock(&pcicfginitlock);
+//	ubn = pcilscan(bno, list);
+//	unlock(&pcicfginitlock);
+//	return ubn;
+//}
 
 static uchar
 pIIxget(Pcidev *router, uchar link)
@@ -1365,19 +1365,19 @@ pcireset(void)
 	}
 }
 
-void
-pcisetioe(Pcidev* p)
-{
-	p->pcr |= IOen;
-	pcicfgw16(p, PciPCR, p->pcr);
-}
+//void
+//pcisetioe(Pcidev* p)
+//{
+//	p->pcr |= IOen;
+//	pcicfgw16(p, PciPCR, p->pcr);
+//}
 
-void
-pciclrioe(Pcidev* p)
-{
-	p->pcr &= ~IOen;
-	pcicfgw16(p, PciPCR, p->pcr);
-}
+//void
+//pciclrioe(Pcidev* p)
+//{
+//	p->pcr &= ~IOen;
+//	pcicfgw16(p, PciPCR, p->pcr);
+//}
 
 void
 pcisetbme(Pcidev* p)
@@ -1393,19 +1393,19 @@ pciclrbme(Pcidev* p)
 	pcicfgw16(p, PciPCR, p->pcr);
 }
 
-void
-pcisetmwi(Pcidev* p)
-{
-	p->pcr |= MemWrInv;
-	pcicfgw16(p, PciPCR, p->pcr);
-}
+//void
+//pcisetmwi(Pcidev* p)
+//{
+//	p->pcr |= MemWrInv;
+//	pcicfgw16(p, PciPCR, p->pcr);
+//}
 
-void
-pciclrmwi(Pcidev* p)
-{
-	p->pcr &= ~MemWrInv;
-	pcicfgw16(p, PciPCR, p->pcr);
-}
+//void
+//pciclrmwi(Pcidev* p)
+//{
+//	p->pcr &= ~MemWrInv;
+//	pcicfgw16(p, PciPCR, p->pcr);
+//}
 
 static int
 pcigetpmrb(Pcidev* p)
@@ -1456,59 +1456,59 @@ pcigetpmrb(Pcidev* p)
 	return -1;
 }
 
-int
-pcigetpms(Pcidev* p)
-{
-	int pmcsr, ptr;
+//int
+//pcigetpms(Pcidev* p)
+//{
+//	int pmcsr, ptr;
+//
+//	if((ptr = pcigetpmrb(p)) == -1)
+//		return -1;
+//
+//	/*
+//	 * Power Management Register Block:
+//	 *  offset 0:	Capability ID
+//	 *	   1:	next item pointer
+//	 *	   2:	capabilities
+//	 *	   4:	control/status
+//	 *	   6:	bridge support extensions
+//	 *	   7:	data
+//	 */
+//	pmcsr = pcicfgr16(p, ptr+4);
+//
+//	return pmcsr & 0x0003;
+//}
 
-	if((ptr = pcigetpmrb(p)) == -1)
-		return -1;
-
-	/*
-	 * Power Management Register Block:
-	 *  offset 0:	Capability ID
-	 *	   1:	next item pointer
-	 *	   2:	capabilities
-	 *	   4:	control/status
-	 *	   6:	bridge support extensions
-	 *	   7:	data
-	 */
-	pmcsr = pcicfgr16(p, ptr+4);
-
-	return pmcsr & 0x0003;
-}
-
-int
-pcisetpms(Pcidev* p, int state)
-{
-	int ostate, pmc, pmcsr, ptr;
-
-	if((ptr = pcigetpmrb(p)) == -1)
-		return -1;
-
-	pmc = pcicfgr16(p, ptr+2);
-	pmcsr = pcicfgr16(p, ptr+4);
-	ostate = pmcsr & 0x0003;
-	pmcsr &= ~0x0003;
-
-	switch(state){
-	default:
-		return -1;
-	case 0:
-		break;
-	case 1:
-		if(!(pmc & 0x0200))
-			return -1;
-		break;
-	case 2:
-		if(!(pmc & 0x0400))
-			return -1;
-		break;
-	case 3:
-		break;
-	}
-	pmcsr |= state;
-	pcicfgw16(p, ptr+4, pmcsr);
-
-	return ostate;
-}
+//int
+//pcisetpms(Pcidev* p, int state)
+//{
+//	int ostate, pmc, pmcsr, ptr;
+//
+//	if((ptr = pcigetpmrb(p)) == -1)
+//		return -1;
+//
+//	pmc = pcicfgr16(p, ptr+2);
+//	pmcsr = pcicfgr16(p, ptr+4);
+//	ostate = pmcsr & 0x0003;
+//	pmcsr &= ~0x0003;
+//
+//	switch(state){
+//	default:
+//		return -1;
+//	case 0:
+//		break;
+//	case 1:
+//		if(!(pmc & 0x0200))
+//			return -1;
+//		break;
+//	case 2:
+//		if(!(pmc & 0x0400))
+//			return -1;
+//		break;
+//	case 3:
+//		break;
+//	}
+//	pmcsr |= state;
+//	pcicfgw16(p, ptr+4, pmcsr);
+//
+//	return ostate;
+//}

@@ -709,7 +709,8 @@ static X86type *cputype;
 
 static void	simplecycles(uvlong*);
 void	(*cycles)(uvlong*) = simplecycles;
-void	_cycles(uvlong*);	/* in l.s */
+//@Scheck: Assembly l.s
+void	_cycles(uvlong*);	
 
 static void
 simplecycles(uvlong*x)
@@ -1064,12 +1065,12 @@ pcmspecial(char *idstr, ISAConf *isa)
 /*
  *  call either the pcmcia or pccard device teardown
  */
-void
-pcmspecialclose(int a)
-{
-	if (_pcmspecialclose != nil)
-		_pcmspecialclose(a);
-}
+//void
+//pcmspecialclose(int a)
+//{
+//	if (_pcmspecialclose != nil)
+//		_pcmspecialclose(a);
+//}
 
 /*
  *  return value and speed of timer set in arch->clockenable

@@ -51,7 +51,7 @@ void		swapinit(void);
 void		putswap(Page*);
 void		dupswap(Page*);
 int		swapcount(ulong);
-int		swapfull(void);
+//int		swapfull(void);
 void		pagersummary(void);
 void		setswapchan(Chan*);
 void		kickpager(void);

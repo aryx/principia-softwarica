@@ -693,22 +693,22 @@ memmoveb(uchar *to, uchar *from, int n)
 }
 
 /* a memmove using only shorts & bytes */
-static void
-memmoves(uchar *to, uchar *from, int n)
-{
-	ushort *t, *f;
-
-	if((((ulong)to) & 1) || (((ulong)from) & 1) || (n & 1)){
-		while(n-- > 0)
-			*to++ = *from++;
-	} else {
-		n = n/2;
-		t = (ushort*)to;
-		f = (ushort*)from;
-		while(n-- > 0)
-			*t++ = *f++;
-	}
-}
+//static void
+//memmoves(uchar *to, uchar *from, int n)
+//{
+//	ushort *t, *f;
+//
+//	if((((ulong)to) & 1) || (((ulong)from) & 1) || (n & 1)){
+//		while(n-- > 0)
+//			*to++ = *from++;
+//	} else {
+//		n = n/2;
+//		t = (ushort*)to;
+//		f = (ushort*)from;
+//		while(n-- > 0)
+//			*t++ = *f++;
+//	}
+//}
 
 static long
 pcmread(int slotno, int attr, void *a, long n, vlong off)

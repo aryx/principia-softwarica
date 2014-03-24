@@ -131,8 +131,11 @@ void		timerset(Tval);
 ulong		µs(void);
 
 // in 386/l.s (but used in port)
+//@Scheck: Assembly
 void		gotolabel(Label*);
+//@Scheck: Assembly
 int		setlabel(Label*);
+//@Scheck: Assembly
 void		mul64fract(uvlong*, uvlong, uvlong);
 
 // portdat_processes.c

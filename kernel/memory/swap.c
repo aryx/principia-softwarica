@@ -13,7 +13,7 @@ static void	pagepte(int, Page**);
 static void	pager(void*);
 
 
-static 	int	swopen;
+//static 	int	swopen;
 static	Page	**iolist;
 static	int	ioptr;
 

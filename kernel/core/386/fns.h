@@ -31,7 +31,7 @@ int	cpuidentify(void);
 void	cpuidprint(void);
 void	(*cycles)(uvlong*);
 int	dmacount(int);
-int	dmadone(int);
+//int	dmadone(int);
 void	dmaend(int);
 int	dmainit(int, int);
 long	dmasetup(int, void*, long, int);
@@ -129,23 +129,23 @@ void	pcicfgw8(Pcidev*, int, int);
 void	pcicfgw16(Pcidev*, int, int);
 void	pcicfgw32(Pcidev*, int, int);
 void	pciclrbme(Pcidev*);
-void	pciclrioe(Pcidev*);
-void	pciclrmwi(Pcidev*);
-int	pcigetpms(Pcidev*);
+//void	pciclrioe(Pcidev*);
+//void	pciclrmwi(Pcidev*);
+//int	pcigetpms(Pcidev*);
 Pcidev* pcimatch(Pcidev*, int, int);
 Pcidev* pcimatchtbdf(int);
 void	pcireset(void);
-int	pciscan(int, Pcidev**);
+//int	pciscan(int, Pcidev**);
 void	pcisetbme(Pcidev*);
-void	pcisetioe(Pcidev*);
-void	pcisetmwi(Pcidev*);
-int	pcisetpms(Pcidev*, int);
+//void	pcisetioe(Pcidev*);
+//void	pcisetmwi(Pcidev*);
+//int	pcisetpms(Pcidev*, int);
 void	pcmcisread(PCMslot*);
 int	pcmcistuple(int, int, int, void*, int);
 PCMmap*	pcmmap(int, ulong, int, int);
 int	pcmspecial(char*, ISAConf*);
 int	(*_pcmspecial)(char *, ISAConf *);
-void	pcmspecialclose(int);
+//void	pcmspecialclose(int);
 void	(*_pcmspecialclose)(int);
 void	pcmunmap(int, PCMmap*);
 int	pdbmap(ulong*, ulong, ulong, int);
@@ -187,7 +187,7 @@ void	wbinvd(void);
 void	wrmsr(int, vlong);
 int	xchgw(ushort*, int);
 
-int iounused(int start, int end);
+//int iounused(int start, int end); not used anymore in vga.c
 
 #define	KADDR(a)	kaddr(a)
 #define PADDR(a)	paddr((void*)(a))

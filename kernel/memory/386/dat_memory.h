@@ -54,6 +54,7 @@ struct Segdesc
  *  MMU stuff in proc
  */
 #define NCOLOR 1
+//@Scheck: unnamed substructure
 struct PMMU
 {
 	Page*	mmupdb;			/* page directory base */

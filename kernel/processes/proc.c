@@ -842,6 +842,7 @@ tfn(void *arg)
 	return up->trend == nil || up->tfn(arg);
 }
 
+//@Scheck: FP!! TODO because assigned in field of unnamed substructure
 void
 twakeup(Ureg*, Timer *t)
 {

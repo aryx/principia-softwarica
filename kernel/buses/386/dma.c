@@ -25,6 +25,7 @@ struct DMAxfer
  *  the dma controllers.  the first half of this structure specifies
  *  the I/O ports used by the DMA controllers.
  */
+//@Scheck: unnamed substructure
 struct DMAport
 {
 	uchar	addr[4];	/* current address (4 channels) */
@@ -203,16 +204,16 @@ dmasetup(int chan, void *va, long len, int isread)
 	return len;
 }
 
-int
-dmadone(int chan)
-{
-	DMA *dp;
-
-	dp = &dma[(chan>>2)&1];
-	chan = chan & 3;
-
-	return inb(dp->cmd) & (1<<chan);
-}
+//int
+//dmadone(int chan)
+//{
+//	DMA *dp;
+//
+//	dp = &dma[(chan>>2)&1];
+//	chan = chan & 3;
+//
+//	return inb(dp->cmd) & (1<<chan);
+//}
 
 /*
  *  this must be called after a dma has been completed.

@@ -641,6 +641,7 @@ sysawait(ulong *arg)
 	return i;
 }
 
+//@Scheck: this is also defined in libc, so it's supposed to override it? TODO
 void
 werrstr(char *fmt, ...)
 {

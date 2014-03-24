@@ -53,6 +53,7 @@ Syscall sysawait;
 Syscall syspread;
 Syscall syspwrite;
 Syscall systsemacquire;
+//@Scheck: TODO? dead?
 Syscall	sysdeath;
 
 Syscall *systab[]={

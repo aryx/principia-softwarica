@@ -657,6 +657,7 @@ fault386(Ureg* ureg, void*)
 /*
  *  Syscall is called directly from assembler without going through trap().
  */
+//@Scheck: no dead, called from assembly, TODO where?
 void
 syscall(Ureg* ureg)
 {

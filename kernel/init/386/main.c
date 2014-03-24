@@ -129,7 +129,7 @@ options(void)
 }
 
 
-
+//@Scheck: no dead, entry point :) part of elf header and jumped to by qemu
 void
 main(void)
 {
