@@ -39,6 +39,8 @@ graph:
 #include also libc, lib_networking, lib_memlayer, lib_memdraw, lib_draw, libmp?
 graph2:
 	~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
+check2:
+	~/pfff/scheck -lang clang2 .
 
 #trace:
 #	mk clean
@@ -50,7 +52,7 @@ graph2:
 # take quite some time :(
 clangfiles:
 	~/pfff/pfff -gen_clang compile_commands.json
-	~/pfff/pfff_test.opt -uninclude_clang
+	~/pfff/pfff_test.opt -uninclude_clang .
 	cp sys/src/9/pc/apbootstrap.h kernel/conf
 	cp sys/src/9/pc/init.h kernel/conf
 	cp sys/src/9/pc/reboot.h kernel/conf
