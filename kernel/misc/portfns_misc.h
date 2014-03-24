@@ -14,9 +14,6 @@ Cmdtab*		lookupcmd(Cmdbuf*, Cmdtab*, int);
 ulong		randomread(void*, ulong);
 void		randominit(void);
 
-// rdb.c
-void		rdb(void);
-
 // rebootcmd.c
 //TODO does not show in cg, but not empty file so weird
 //void		readn(Chan *, void *, long);

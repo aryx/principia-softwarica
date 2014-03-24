@@ -16,3 +16,6 @@ void		putstrn(char*, int);
 void		(*screenputs)(char*, int);
 //void		prflush(void);
 //int		rand(void);
+
+// rdb.c
+void		rdb(void);
