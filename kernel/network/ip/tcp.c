@@ -990,27 +990,27 @@ tcpstart(Conv *s, int mode)
 	}
 }
 
-static char*
-tcpflag(char *buf, char *e, ushort flag)
-{
-	char *p;
-
-	p = seprint(buf, e, "%d", flag>>10);	/* Head len */
-	if(flag & URG)
-		p = seprint(p, e, " URG");
-	if(flag & ACK)
-		p = seprint(p, e, " ACK");
-	if(flag & PSH)
-		p = seprint(p, e, " PSH");
-	if(flag & RST)
-		p = seprint(p, e, " RST");
-	if(flag & SYN)
-		p = seprint(p, e, " SYN");
-	if(flag & FIN)
-		p = seprint(p, e, " FIN");
-	USED(p);
-	return buf;
-}
+//static char*
+//tcpflag(char *buf, char *e, ushort flag)
+//{
+//	char *p;
+//
+//	p = seprint(buf, e, "%d", flag>>10);	/* Head len */
+//	if(flag & URG)
+//		p = seprint(p, e, " URG");
+//	if(flag & ACK)
+//		p = seprint(p, e, " ACK");
+//	if(flag & PSH)
+//		p = seprint(p, e, " PSH");
+//	if(flag & RST)
+//		p = seprint(p, e, " RST");
+//	if(flag & SYN)
+//		p = seprint(p, e, " SYN");
+//	if(flag & FIN)
+//		p = seprint(p, e, " FIN");
+//	USED(p);
+//	return buf;
+//}
 
 static Block*
 htontcp6(Tcp *tcph, Block *data, Tcp6hdr *ph, Tcpctl *tcb)

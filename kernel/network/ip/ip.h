@@ -126,7 +126,7 @@ struct Fragment6
 	ulong 	age;
 };
 
-// used only for its macro below, could maybe simplify?
+//@Scheck: used only for its macro below, could maybe simplify?
 struct Ipfrag
 {
 	ushort	foff;
@@ -550,6 +550,7 @@ struct Routewalk
 	void	(*walk)(Route*, Routewalk*);
 };
 
+//@Scheck: unnamed substructure
 struct	RouteTree
 {
 	Route*	right;

@@ -358,6 +358,7 @@ int hwaccel = 1;
 int hwblank = 0;	/* turned on by drivers that are known good */
 int panning = 0;
 
+//@Scheck: not dead, actually this is overriding some def in libmemdraw!! ugly
 int
 hwdraw(Memdrawparam *par)
 {

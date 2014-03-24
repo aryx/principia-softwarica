@@ -37,6 +37,7 @@ enum
 	FPillegal=	0x100,
 };
 
+//@Scheck: unnamed substructure
 struct	FPstate			/* x87 fpu state */
 {
 	ushort	control;
@@ -54,6 +55,7 @@ struct	FPstate			/* x87 fpu state */
 	uchar	regs[80];	/* floating point registers */
 };
 
+//@Scheck: unnamed substructure
 struct	FPssestate		/* SSE fp state */
 {
 	ushort	fcw;		/* control */
@@ -71,6 +73,7 @@ struct	FPssestate		/* SSE fp state */
 	uchar	xregs[480];	/* extended registers */
 };
 
+//@Scheck: unnamed substructure
 struct	SFPssestate		/* SSE fp state with alignment slop */
 {
 	FPssestate;
@@ -93,6 +96,7 @@ union FPsave {
 /*
  *  things saved in the Proc structure during a notify
  */
+//@Scheck: unnamed substructure
 struct Notsave
 {
 	ulong	svflags;

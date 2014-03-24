@@ -24,7 +24,7 @@ static QLock devslock;
 
 extern void sdaddpart(SDunit*, char*, uvlong, uvlong);
 extern int sdsetsense(SDreq*, int, int, int, int);
-extern int sdmodesense(SDreq*, uchar*, void*, int);
+//extern int sdmodesense(SDreq*, uchar*, void*, int);
 extern void sdadddevs(SDev*);
 
 enum {
@@ -925,34 +925,34 @@ sdsetsense(SDreq *r, int status, int key, int asc, int ascq)
 	return status;
 }
 
-int
-sdmodesense(SDreq *r, uchar *cmd, void *info, int ilen)
-{
-	int len;
-	uchar *data;
-
-	/*
-	 * Fake a vendor-specific request with page code 0,
-	 * return the drive info.
-	 */
-	if((cmd[2] & 0x3F) != 0 && (cmd[2] & 0x3F) != 0x3F)
-		return sdsetsense(r, SDcheck, 0x05, 0x24, 0);
-	len = (cmd[7]<<8)|cmd[8];
-	if(len == 0)
-		return SDok;
-	if(len < 8+ilen)
-		return sdsetsense(r, SDcheck, 0x05, 0x1A, 0);
-	if(r->data == nil || r->dlen < len)
-		return sdsetsense(r, SDcheck, 0x05, 0x20, 1);
-	data = r->data;
-	memset(data, 0, 8);
-	data[0] = ilen>>8;
-	data[1] = ilen;
-	if(ilen)
-		memmove(data+8, info, ilen);
-	r->rlen = 8+ilen;
-	return sdsetsense(r, SDok, 0, 0, 0);
-}
+//int
+//sdmodesense(SDreq *r, uchar *cmd, void *info, int ilen)
+//{
+//	int len;
+//	uchar *data;
+//
+//	/*
+//	 * Fake a vendor-specific request with page code 0,
+//	 * return the drive info.
+//	 */
+//	if((cmd[2] & 0x3F) != 0 && (cmd[2] & 0x3F) != 0x3F)
+//		return sdsetsense(r, SDcheck, 0x05, 0x24, 0);
+//	len = (cmd[7]<<8)|cmd[8];
+//	if(len == 0)
+//		return SDok;
+//	if(len < 8+ilen)
+//		return sdsetsense(r, SDcheck, 0x05, 0x1A, 0);
+//	if(r->data == nil || r->dlen < len)
+//		return sdsetsense(r, SDcheck, 0x05, 0x20, 1);
+//	data = r->data;
+//	memset(data, 0, 8);
+//	data[0] = ilen>>8;
+//	data[1] = ilen;
+//	if(ilen)
+//		memmove(data+8, info, ilen);
+//	r->rlen = 8+ilen;
+//	return sdsetsense(r, SDok, 0, 0, 0);
+//}
 
 //int
 //sdfakescsi(SDreq *r, void *info, int ilen)
