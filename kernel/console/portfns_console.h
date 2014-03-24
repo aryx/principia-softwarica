@@ -16,6 +16,13 @@ void		putstrn(char*, int);
 void		(*screenputs)(char*, int);
 //void		prflush(void);
 //int		rand(void);
+// overrides also sysfatal from libc/9sys/sysfatal.c, that are called
+// from a few libc functions
 
 // rdb.c
 void		rdb(void);
+
+// print.c
+// overrides _fmtlock, from lib_core/libc/fmt/fmtlock.c that are used
+// in fmt related functions
+

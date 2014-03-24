@@ -10,6 +10,7 @@ long		latin1(Rune*, int);
 void		machinit(void);
 
 //l.s
+//@Scheck: Assembly
 void		forkret(void);
 
 
@@ -59,7 +60,7 @@ char*	(*getconf)(char*);
 void	guesscpuhz(int);
 void	halt(void);
 int	i8042auxcmd(int);
-int	i8042auxcmds(uchar*, int);
+//int	i8042auxcmds(uchar*, int);
 void	i8042auxenable(void (*)(int, int));
 void	i8042reset(void);
 void	i8250console(void);
@@ -141,7 +142,7 @@ void	pcisetbme(Pcidev*);
 //void	pcisetmwi(Pcidev*);
 //int	pcisetpms(Pcidev*, int);
 void	pcmcisread(PCMslot*);
-int	pcmcistuple(int, int, int, void*, int);
+//int	pcmcistuple(int, int, int, void*, int);
 PCMmap*	pcmmap(int, ulong, int, int);
 int	pcmspecial(char*, ISAConf*);
 int	(*_pcmspecial)(char *, ISAConf *);

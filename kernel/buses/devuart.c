@@ -755,6 +755,7 @@ uartclock(void)
  */
 
 Uart* consuart;
+void (*lprint)(char *, int);
 
 int
 uartgetc(void)

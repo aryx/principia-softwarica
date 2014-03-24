@@ -29,6 +29,7 @@ realmode(Ureg *ureg)
 {
 	int s;
 	ulong cr3;
+        //@Scheck: Assembly
 	extern void realmode0(void);	/* in l.s */
 
 	if(getconf("*norealmode"))

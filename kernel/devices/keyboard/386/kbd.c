@@ -217,15 +217,15 @@ inready(void)
 /*
  *  ask 8042 to enable the use of address bit 20
  */
-void
-i8042a20(void)
-{
-	outready();
-	outb(Cmd, 0xD1);
-	outready();
-	outb(Data, 0xDF);
-	outready();
-}
+//void
+//i8042a20(void)
+//{
+//	outready();
+//	outb(Cmd, 0xD1);
+//	outready();
+//	outb(Data, 0xDF);
+//	outready();
+//}
 
 /*
  *  ask 8042 to reset the machine
@@ -299,23 +299,23 @@ i8042auxcmd(int cmd)
 	return 0;
 }
 
-int
-i8042auxcmds(uchar *cmd, int ncmd)
-{
-	int i;
-
-	ilock(&i8042lock);
-	for(i=0; i<ncmd; i++){
-		if(outready() < 0)
-			break;
-		outb(Cmd, 0xD4);
-		if(outready() < 0)
-			break;
-		outb(Data, cmd[i]);
-	}
-	iunlock(&i8042lock);
-	return i;
-}
+//int
+//i8042auxcmds(uchar *cmd, int ncmd)
+//{
+//	int i;
+//
+//	ilock(&i8042lock);
+//	for(i=0; i<ncmd; i++){
+//		if(outready() < 0)
+//			break;
+//		outb(Cmd, 0xD4);
+//		if(outready() < 0)
+//			break;
+//		outb(Data, cmd[i]);
+//	}
+//	iunlock(&i8042lock);
+//	return i;
+//}
 
 typedef struct Kbscan Kbscan;
 struct Kbscan {

@@ -532,22 +532,22 @@ ethershutdown(void)
 #define POLY 0xedb88320
 
 /* really slow 32 bit crc for ethers */
-ulong
-ethercrc(uchar *p, int len)
-{
-	int i, j;
-	ulong crc, b;
-
-	crc = 0xffffffff;
-	for(i = 0; i < len; i++){
-		b = *p++;
-		for(j = 0; j < 8; j++){
-			crc = (crc>>1) ^ (((crc^b) & 1) ? POLY : 0);
-			b >>= 1;
-		}
-	}
-	return crc;
-}
+//ulong
+//ethercrc(uchar *p, int len)
+//{
+//	int i, j;
+//	ulong crc, b;
+//
+//	crc = 0xffffffff;
+//	for(i = 0; i < len; i++){
+//		b = *p++;
+//		for(j = 0; j < 8; j++){
+//			crc = (crc>>1) ^ (((crc^b) & 1) ? POLY : 0);
+//			b >>= 1;
+//		}
+//	}
+//	return crc;
+//}
 
 Dev etherdevtab = {
 	'l',

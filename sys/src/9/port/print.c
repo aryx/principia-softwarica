@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/misc/print.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/console/print.c

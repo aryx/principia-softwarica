@@ -91,16 +91,16 @@ xcistuple(int slotno, int tuple, int subtuple, void *v, int nv, int attr)
 	return -1;
 }
 
-int
-pcmcistuple(int slotno, int tuple, int subtuple, void *v, int nv)
-{
-	int n;
-
-	/* try attribute space, then memory */
-	if((n = xcistuple(slotno, tuple, subtuple, v, nv, 1)) >= 0)
-		return n;
-	return xcistuple(slotno, tuple, subtuple, v, nv, 0);
-}
+//int
+//pcmcistuple(int slotno, int tuple, int subtuple, void *v, int nv)
+//{
+//	int n;
+//
+//	/* try attribute space, then memory */
+//	if((n = xcistuple(slotno, tuple, subtuple, v, nv, 1)) >= 0)
+//		return n;
+//	return xcistuple(slotno, tuple, subtuple, v, nv, 0);
+//}
 
 void
 pcmcisread(PCMslot *pp)

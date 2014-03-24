@@ -22,12 +22,20 @@ void		wlock(RWlock*);
 void		wunlock(RWlock*);
 
 // in 386/l.s (but used in port)
+//@Scheck: Assembly
 int		islo(void);
+//@Scheck: Assembly
 int		splhi(void);
+//@Scheck: Assembly
 int		spllo(void);
+//@Scheck: Assembly
 void		splx(int);
-void		splxpc(int);
-long		lcycles(void);
+//@Scheck: Assembly
+//void		splxpc(int);
+//@Scheck: Assembly
+//long		lcycles(void);
 //test-and-set
+//@Scheck: Assembly
 void		_xinc(long*);
+//@Scheck: Assembly
 long		_xdec(long*);
