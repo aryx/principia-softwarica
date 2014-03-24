@@ -1,7 +1,7 @@
 /*
  * MultiProcessor Specification Version 1.[14].
  */
-typedef struct {			/* floating pointer */
+typedef struct _MP_ {			/* floating pointer */
 	uchar	signature[4];		/* "_MP_" */
 	long	physaddr;		/* physical address of MP configuration table */
 	uchar	length;			/* 1 */
@@ -12,7 +12,7 @@ typedef struct {			/* floating pointer */
 	uchar	reserved[3];
 } _MP_;
 
-typedef struct {			/* configuration table header */
+typedef struct PCMP {			/* configuration table header */
 	uchar	signature[4];		/* "PCMP" */
 	ushort	length;			/* total table length */
 	uchar	version;		/* [14] */
@@ -27,7 +27,7 @@ typedef struct {			/* configuration table header */
 	uchar	reserved;
 } PCMP;
 
-typedef struct {			/* processor table entry */
+typedef struct PCMPprocessor {			/* processor table entry */
 	uchar	type;			/* entry type (0) */
 	uchar	apicno;			/* local APIC id */
 	uchar	version;		/* local APIC verison */
@@ -37,13 +37,13 @@ typedef struct {			/* processor table entry */
 	uchar	reserved[8];
 } PCMPprocessor;
 
-typedef struct {			/* bus table entry */
+typedef struct PCMPbus {			/* bus table entry */
 	uchar	type;			/* entry type (1) */
 	uchar	busno;			/* bus id */
 	char	string[6];		/* bus type string */
 } PCMPbus;
 
-typedef struct {			/* I/O APIC table entry */
+typedef struct PCMPioapic {			/* I/O APIC table entry */
 	uchar	type;			/* entry type (2) */
 	uchar	apicno;			/* I/O APIC id */
 	uchar	version;		/* I/O APIC version */
@@ -51,7 +51,7 @@ typedef struct {			/* I/O APIC table entry */
 	ulong	addr;			/* I/O APIC address */
 } PCMPioapic;
 
-typedef struct {			/* interrupt table entry */
+typedef struct PCMPintr {			/* interrupt table entry */
 	uchar	type;			/* entry type ([34]) */
 	uchar	intr;			/* interrupt type */
 	ushort	flags;			/* interrupt flag */
@@ -61,7 +61,7 @@ typedef struct {			/* interrupt table entry */
 	uchar	intin;			/* destination APIC [L]INTIN# */
 } PCMPintr;
 
-typedef struct {			/* system address space mapping entry */
+typedef struct PCMPsasm {			/* system address space mapping entry */
 	uchar	type;			/* entry type (128) */
 	uchar	length;			/* of this entry (20) */
 	uchar	busno;			/* bus id */
@@ -70,7 +70,7 @@ typedef struct {			/* system address space mapping entry */
 	ulong	addrlength[2];
 } PCMPsasm;
 
-typedef struct {			/* bus hierarchy descriptor entry */
+typedef struct PCMPhierarchy {			/* bus hierarchy descriptor entry */
 	uchar	type;			/* entry type (129) */
 	uchar	length;			/* of this entry (8) */
 	uchar	busno;			/* bus id */
@@ -79,7 +79,7 @@ typedef struct {			/* bus hierarchy descriptor entry */
 	uchar	reserved[3];
 } PCMPhierarchy;
 
-typedef struct {			/* compatibility bus address space modifier entry */
+typedef struct PCMPcbasm {			/* compatibility bus address space modifier entry */
 	uchar	type;			/* entry type (130) */
 	uchar	length;			/* of this entry (8) */
 	uchar	busno;			/* bus id */
@@ -147,13 +147,13 @@ typedef struct Bus {
 	Bus*	next;
 } Bus;
 
-typedef struct Aintr {
+struct Aintr {
 	PCMPintr* intr;
 	Apic*	apic;
 	Aintr*	next;
 };
 
-typedef struct Apic {
+struct Apic {
 	int	type;
 	int	apicno;
 	ulong*	addr;			/* register base address */
@@ -167,7 +167,7 @@ typedef struct Apic {
 	int	machno;
 
 	int	online;
-} Apic;
+};
 
 enum {
 	MaxAPICNO	= 254,		/* 255 is physical broadcast */
