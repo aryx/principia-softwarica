@@ -4,8 +4,10 @@
 #include	"dat.h"
 #include	"fns.h"
 #include	"../port/error.h"
+
 #include	<a.out.h>
-#include 	"/sys/src/libmach/elf.h"
+//#include 	"/sys/src/libmach/elf.h"
+#include	<elf.h>
 
 enum {
 	Ehdr32sz	= 52,
