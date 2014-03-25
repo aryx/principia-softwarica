@@ -71,8 +71,6 @@ enum {
 };
 
 
-#define LOAD PT_LOAD
-
 /*
  *	Definitions needed for accessing ELF headers
  */
