@@ -90,4 +90,4 @@ struct Uart
 
 extern	Uart*	consuart;
 
-void (*lprint)(char *, int);
+//void (*lprint)(char *, int);

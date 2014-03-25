@@ -143,6 +143,7 @@ rangecompare(Route *a, Route *b)
 	return Rcontained;
 }
 
+//@Scheck: not dead, but its use below is not in iproute.clang, (cos unnamed?)
 static void
 copygate(Route *old, Route *new)
 {
@@ -617,6 +618,7 @@ routetype(int type, char *p)
 		*p = 'p';
 }
 
+//@Scheck: not dead, but its use below is not in iproute.clang, weird
 static char *rformat = "%-15I %-4M %-15I %4.4s %4.4s %3s\n";
 
 void
@@ -741,6 +743,7 @@ routeread(Fs *f, char *p, ulong offset, int n)
 /*
  *  this code is not in routeflush to reduce stack size
  */
+//@Scheck: not dead, but its use below is not in iproute.clang, weird
 void
 delroute(Fs *f, Route *r, int dolock)
 {

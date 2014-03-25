@@ -11,8 +11,8 @@
 #include	"mp.h"
 #include	<tos.h>
 
-void		confinit(void);
-void		userinit(void);
+void	confinit(void);
+void	userinit(void);
 void	bootargs(void*);
 void	mach0init(void);
 void	mathinit(void);
@@ -129,12 +129,12 @@ options(void)
 }
 
 
-//@Scheck: no dead, entry point :) part of elf header and jumped to by qemu
+//@Scheck: not dead, entry point :) jumped to by qemu (via elf header)
 void
 main(void)
 {
 
-  /* initial assignment made to avoid circular dependencies in codegraph */
+  // initial assignment made to avoid circular dependencies in codegraph
   iprint = devcons_iprint;
   print = devcons_print;
   pprint = devcons_pprint;
@@ -182,7 +182,7 @@ main(void)
   return0 = sysproc_return0;
   pexit = proc_pexit;
 
-  /* end patch, back to original code */
+  // end patch, back to original code
 
 	cgapost(0);
 
@@ -195,12 +195,14 @@ main(void)
 
 	print("\nPlan 99999999999999\n");
 
+        // the init0 means this is really early on (malloc is not available?!)
 	trapinit0();
 	mmuinit0();
 
 	kbdinit();
 	i8253init();
 	cpuidentify();
+
 	meminit();
 	confinit();
 	archinit();
@@ -219,12 +221,13 @@ main(void)
 	kbdenable();
 	if(arch->clockenable)
 		arch->clockenable();
+
 	procinit0();
 	initseg();
-	if(delaylink){
+	if(delaylink) {
 		bootlinks();
 		pcimatch(0, 0, 0);
-	}else
+	} else
 		links();
 	conf.monitor = 1;
 	chandevreset();
@@ -233,6 +236,7 @@ main(void)
 	pageinit();
 	i8253link();
 	swapinit();
+
 	userinit();
 	active.thunderbirdsarego = 1;
 
@@ -255,6 +259,7 @@ mach0init(void)
 }
 
 
+// set by userinit to sched.pc
 void
 init0(void)
 {
@@ -341,6 +346,7 @@ userinit(void)
 	v = tmpmap(pg);
 	memset(v, 0, BY2PG);
 	segpage(s, pg);
+
 	bootargs(v);
 	tmpunmap(v);
 
@@ -411,6 +417,7 @@ bootargs(void *base)
 	sp += (USTKTOP - BY2PG) - (ulong)base - sizeof(ulong);
 }
 
+// getconf()
 char*
 main_getconf(char *name)
 {
@@ -819,6 +826,7 @@ reboot(void *entry, void *code, ulong size)
 }
 
 
+// exit()
 void
 main_exit(int ispanic)
 {
@@ -826,6 +834,7 @@ main_exit(int ispanic)
 	arch->reset();
 }
 
+// isaconfig()
 int
 main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 {
@@ -858,5 +867,3 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 	}
 	return 1;
 }
-
-

@@ -1407,54 +1407,54 @@ pciclrbme(Pcidev* p)
 //	pcicfgw16(p, PciPCR, p->pcr);
 //}
 
-static int
-pcigetpmrb(Pcidev* p)
-{
-	int ptr;
-
-	if(p->pmrb != 0)
-		return p->pmrb;
-	p->pmrb = -1;
-
-	/*
-	 * If there are no extended capabilities implemented,
-	 * (bit 4 in the status register) assume there's no standard
-	 * power management method.
-	 * Find the capabilities pointer based on PCI header type.
-	 */
-	if(!(pcicfgr16(p, PciPSR) & 0x0010))
-		return -1;
-	switch(pcicfgr8(p, PciHDT)){
-	default:
-		return -1;
-	case 0:					/* all other */
-	case 1:					/* PCI to PCI bridge */
-		ptr = 0x34;
-		break;
-	case 2:					/* CardBus bridge */
-		ptr = 0x14;
-		break;
-	}
-	ptr = pcicfgr32(p, ptr);
-
-	while(ptr != 0){
-		/*
-		 * Check for validity.
-		 * Can't be in standard header and must be double
-		 * word aligned.
-		 */
-		if(ptr < 0x40 || (ptr & ~0xFC))
-			return -1;
-		if(pcicfgr8(p, ptr) == 0x01){
-			p->pmrb = ptr;
-			return ptr;
-		}
-
-		ptr = pcicfgr8(p, ptr+1);
-	}
-
-	return -1;
-}
+//static int
+//pcigetpmrb(Pcidev* p)
+//{
+//	int ptr;
+//
+//	if(p->pmrb != 0)
+//		return p->pmrb;
+//	p->pmrb = -1;
+//
+//	/*
+//	 * If there are no extended capabilities implemented,
+//	 * (bit 4 in the status register) assume there's no standard
+//	 * power management method.
+//	 * Find the capabilities pointer based on PCI header type.
+//	 */
+//	if(!(pcicfgr16(p, PciPSR) & 0x0010))
+//		return -1;
+//	switch(pcicfgr8(p, PciHDT)){
+//	default:
+//		return -1;
+//	case 0:					/* all other */
+//	case 1:					/* PCI to PCI bridge */
+//		ptr = 0x34;
+//		break;
+//	case 2:					/* CardBus bridge */
+//		ptr = 0x14;
+//		break;
+//	}
+//	ptr = pcicfgr32(p, ptr);
+//
+//	while(ptr != 0){
+//		/*
+//		 * Check for validity.
+//		 * Can't be in standard header and must be double
+//		 * word aligned.
+//		 */
+//		if(ptr < 0x40 || (ptr & ~0xFC))
+//			return -1;
+//		if(pcicfgr8(p, ptr) == 0x01){
+//			p->pmrb = ptr;
+//			return ptr;
+//		}
+//
+//		ptr = pcicfgr8(p, ptr+1);
+//	}
+//
+//	return -1;
+//}
 
 //int
 //pcigetpms(Pcidev* p)

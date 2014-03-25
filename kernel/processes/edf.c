@@ -133,6 +133,7 @@ edfinit(Proc*p)
 	return;
 }
 
+//@Scheck: not dead, called below, but not in edf.clang, weird
 static void
 deadlineintr(Ureg*, Timer *t)
 {

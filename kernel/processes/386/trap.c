@@ -311,6 +311,7 @@ kexit(Ureg*)
  *  VectorSYSCALL.
  *  Trap is called with interrupts disabled via interrupt-gates.
  */
+//@Scheck: Assembly, not dead call from assembly
 void
 trap(Ureg* ureg)
 {

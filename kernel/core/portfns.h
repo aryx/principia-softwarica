@@ -28,7 +28,3 @@ void		reboot(void*, void*, ulong);
 //void		log(Log*, int, char*, ...);
 //void		resched(char*);
 //void		savefpregs(FPsave*);
-
-#pragma varargck argpos iprint	1
-#pragma varargck argpos pprint	1
-#pragma	varargck argpos	panic	1

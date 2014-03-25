@@ -156,7 +156,7 @@ extern	void	qsort(void*, long, long, int (*)(void*, void*));
 
 
 extern	char	etext[];
-//unused in C, but used by 386/l.s
+//@Scheck: Assembly, not dead used by 386/l.s
 extern	char	edata[];
 extern	char	end[];
 

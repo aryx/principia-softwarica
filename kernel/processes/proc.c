@@ -1304,6 +1304,7 @@ procdump(void)
  *  wait till all processes have flushed their mmu
  *  state about segement s
  */
+//@Scheck: not dead, used in segment.c, weird
 void
 procflushseg(Segment *s)
 {

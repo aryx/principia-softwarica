@@ -136,6 +136,7 @@ Cmdtab proccmd[] = {
 };
 
 /* Segment type from portdat.h */
+//@Scheck: not dead, used in devether.c but not in .clang, weird
 static char *sname[]={ "Text", "Data", "Bss", "Stack", "Shared", "Phys", };
 
 /*

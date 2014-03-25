@@ -23,7 +23,7 @@ static SDev *devs[sizeof devletters-1];
 static QLock devslock;
 
 extern void sdaddpart(SDunit*, char*, uvlong, uvlong);
-extern int sdsetsense(SDreq*, int, int, int, int);
+//extern int sdsetsense(SDreq*, int, int, int, int);
 //extern int sdmodesense(SDreq*, uchar*, void*, int);
 extern void sdadddevs(SDev*);
 
@@ -898,32 +898,32 @@ sdrio(SDreq* r, void* a, long n)
 /*
  * SCSI simulation for non-SCSI devices
  */
-int
-sdsetsense(SDreq *r, int status, int key, int asc, int ascq)
-{
-	int len;
-	SDunit *unit;
-
-	unit = r->unit;
-	unit->sense[2] = key;
-	unit->sense[12] = asc;
-	unit->sense[13] = ascq;
-
-	r->status = status;
-	if(status == SDcheck && !(r->flags & SDnosense)){
-		/* request sense case from sdfakescsi */
-		len = sizeof unit->sense;
-		if(len > sizeof r->sense-1)
-			len = sizeof r->sense-1;
-		memmove(r->sense, unit->sense, len);
-		unit->sense[2] = 0;
-		unit->sense[12] = 0;
-		unit->sense[13] = 0;
-		r->flags |= SDvalidsense;
-		return SDok;
-	}
-	return status;
-}
+//int
+//sdsetsense(SDreq *r, int status, int key, int asc, int ascq)
+//{
+//	int len;
+//	SDunit *unit;
+//
+//	unit = r->unit;
+//	unit->sense[2] = key;
+//	unit->sense[12] = asc;
+//	unit->sense[13] = ascq;
+//
+//	r->status = status;
+//	if(status == SDcheck && !(r->flags & SDnosense)){
+//		/* request sense case from sdfakescsi */
+//		len = sizeof unit->sense;
+//		if(len > sizeof r->sense-1)
+//			len = sizeof r->sense-1;
+//		memmove(r->sense, unit->sense, len);
+//		unit->sense[2] = 0;
+//		unit->sense[12] = 0;
+//		unit->sense[13] = 0;
+//		r->flags |= SDvalidsense;
+//		return SDok;
+//	}
+//	return status;
+//}
 
 //int
 //sdmodesense(SDreq *r, uchar *cmd, void *info, int ilen)

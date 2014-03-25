@@ -229,6 +229,7 @@ newpath(char *s)
 	return p;
 }
 
+//@Scheck: not dead, used below
 static Path*
 copypath(Path *p)
 {

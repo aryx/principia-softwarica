@@ -120,6 +120,7 @@ Block*	netifbread(Netif*, Chan*, long, ulong);
 long	netifwrite(Netif*, Chan*, void*, long);
 int	netifwstat(Netif*, Chan*, uchar*, int);
 int	netifstat(Netif*, Chan*, uchar*, int);
+//@Scheck: not dead, used in devether.c but not in .clang, weird
 int	activemulti(Netif*, uchar*, int);
 
 /*

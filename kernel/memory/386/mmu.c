@@ -232,6 +232,7 @@ mmupdballoc(void)
 	return page;
 }
 
+//@Scheck: not deaded, called below
 static void
 mmupdbfree(Proc *proc, Page *p)
 {
@@ -373,6 +374,7 @@ mmurelease(Proc* proc)
 /*
  * Allocate and install pdb for the current process.
  */
+//@Scheck: no dead, called bellow
 static void
 upallocpdb(void)
 {

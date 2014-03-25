@@ -101,7 +101,7 @@ extern 	Ref	noteidalloc;
 extern	char*	statename[];
 extern	uint	qiomaxatomic;
 
-// defined in syscall/systab.h
+// defined in syscall/systab.h, but can't include systab.h because?? TODO
 extern	char*	sysctab[];
 extern	int	nsyscall;
 
@@ -112,21 +112,16 @@ struct Execvals {
 };
 int	(*parseboothdr)(Chan *, ulong, Execvals *);
 
-//unused:
 //enum
 //{
 //	NSMAX	=	1000,
 //	NSLOG	=	7,
 //	NSCACHE	=	(1<<NSLOG),
 //};
-
-//unused:
 //enum
 //{
 //	NCMDFIELD = 128
 //};
-
-//unused
 /*
  *  action log
  */

@@ -60,7 +60,8 @@ void    scheddump(void);
 Proc*   dequeueproc(Schedq*, Proc*);
 int   preempted(void);
 void    killbig(char*);
-void    procflushseg(Segment*); //TODO: fp non-deps
+//@Scheck: not dead, used in segment.c, weird TODO
+void    procflushseg(Segment*); 
 void    procdump(void);
 void    renameuser(char*, char*);
 void    procinit0(void);
@@ -99,7 +100,7 @@ int   edfready(Proc*);
 char*   edfadmit(Proc*);
 
 // sysproc.c
-// TODO cg FP didn't find dependencies from misc/rebootcmd.c
+//@Scheck: not useless, used by misc/rebootcmd.c, weird not recognized by cg
 ulong		l2be(long);
 // many sysxxx functions (used in syscalls/ without requiring extern decl)
 
