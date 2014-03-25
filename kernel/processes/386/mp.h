@@ -1,7 +1,7 @@
 /*
  * MultiProcessor Specification Version 1.[14].
  */
-typedef struct _MP_ {			/* floating pointer */
+struct _MP_ {			/* floating pointer */
 	uchar	signature[4];		/* "_MP_" */
 	long	physaddr;		/* physical address of MP configuration table */
 	uchar	length;			/* 1 */
@@ -10,9 +10,9 @@ typedef struct _MP_ {			/* floating pointer */
 	uchar	type;			/* MP system configuration type */
 	uchar	imcrp;
 	uchar	reserved[3];
-} _MP_;
+};
 
-typedef struct PCMP {			/* configuration table header */
+struct PCMP {			/* configuration table header */
 	uchar	signature[4];		/* "PCMP" */
 	ushort	length;			/* total table length */
 	uchar	version;		/* [14] */
@@ -25,9 +25,9 @@ typedef struct PCMP {			/* configuration table header */
 	ushort	xlength;		/* extended table length */
 	uchar	xchecksum;		/* extended table checksum */
 	uchar	reserved;
-} PCMP;
+};
 
-typedef struct PCMPprocessor {			/* processor table entry */
+struct PCMPprocessor {			/* processor table entry */
 	uchar	type;			/* entry type (0) */
 	uchar	apicno;			/* local APIC id */
 	uchar	version;		/* local APIC verison */
@@ -35,23 +35,23 @@ typedef struct PCMPprocessor {			/* processor table entry */
 	uchar	signature[4];		/* CPU signature */
 	ulong	feature;		/* feature flags from CPUID instruction */
 	uchar	reserved[8];
-} PCMPprocessor;
+};
 
-typedef struct PCMPbus {			/* bus table entry */
+struct PCMPbus {			/* bus table entry */
 	uchar	type;			/* entry type (1) */
 	uchar	busno;			/* bus id */
 	char	string[6];		/* bus type string */
-} PCMPbus;
+};
 
-typedef struct PCMPioapic {			/* I/O APIC table entry */
+struct PCMPioapic {			/* I/O APIC table entry */
 	uchar	type;			/* entry type (2) */
 	uchar	apicno;			/* I/O APIC id */
 	uchar	version;		/* I/O APIC version */
 	uchar	flags;			/* I/O APIC flags */
 	ulong	addr;			/* I/O APIC address */
-} PCMPioapic;
+};
 
-typedef struct PCMPintr {			/* interrupt table entry */
+struct PCMPintr {			/* interrupt table entry */
 	uchar	type;			/* entry type ([34]) */
 	uchar	intr;			/* interrupt type */
 	ushort	flags;			/* interrupt flag */
@@ -59,33 +59,43 @@ typedef struct PCMPintr {			/* interrupt table entry */
 	uchar	irq;			/* source bus irq */
 	uchar	apicno;			/* destination APIC id */
 	uchar	intin;			/* destination APIC [L]INTIN# */
-} PCMPintr;
+};
 
-typedef struct PCMPsasm {			/* system address space mapping entry */
-	uchar	type;			/* entry type (128) */
-	uchar	length;			/* of this entry (20) */
-	uchar	busno;			/* bus id */
-	uchar	addrtype;
-	ulong	addrbase[2];
-	ulong	addrlength[2];
-} PCMPsasm;
+//struct PCMPsasm {			/* system address space mapping entry */
+//	uchar	type;			/* entry type (128) */
+//	uchar	length;			/* of this entry (20) */
+//	uchar	busno;			/* bus id */
+//	uchar	addrtype;
+//	ulong	addrbase[2];
+//	ulong	addrlength[2];
+//};
 
-typedef struct PCMPhierarchy {			/* bus hierarchy descriptor entry */
-	uchar	type;			/* entry type (129) */
-	uchar	length;			/* of this entry (8) */
-	uchar	busno;			/* bus id */
-	uchar	info;			/* bus info */
-	uchar	parent;			/* parent bus */
-	uchar	reserved[3];
-} PCMPhierarchy;
+//struct PCMPhierarchy {			/* bus hierarchy descriptor entry */
+//	uchar	type;			/* entry type (129) */
+//	uchar	length;			/* of this entry (8) */
+//	uchar	busno;			/* bus id */
+//	uchar	info;			/* bus info */
+//	uchar	parent;			/* parent bus */
+//	uchar	reserved[3];
+//};
 
-typedef struct PCMPcbasm {			/* compatibility bus address space modifier entry */
-	uchar	type;			/* entry type (130) */
-	uchar	length;			/* of this entry (8) */
-	uchar	busno;			/* bus id */
-	uchar	modifier;		/* address modifier */
-	ulong	range;			/* predefined range list */
-} PCMPcbasm;
+//struct PCMPcbasm {			/* compatibility bus address space modifier entry */
+//	uchar	type;			/* entry type (130) */
+//	uchar	length;			/* of this entry (8) */
+//	uchar	busno;			/* bus id */
+//	uchar	modifier;		/* address modifier */
+//	ulong	range;			/* predefined range list */
+//};
+
+typedef struct PCMP PCMP;
+typedef struct _MP_ _MP_;
+typedef struct PCMPprocessor PCMPprocessor;
+typedef struct PCMPbus PCMPbus;
+typedef struct PCMPioapic PCMPioapic;
+typedef struct PCMPintr PCMPintr;
+//typedef struct PCMPsasm PCMPsasm;
+//typedef struct PCMPhierarchy PCMPhierarchy;
+//typedef struct PCMPcbasm PCMPcbasm;
 
 enum {					/* table entry types */
 	PcmpPROCESSOR	= 0x00,		/* one entry per processor */
