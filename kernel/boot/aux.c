@@ -1,6 +1,6 @@
 #include <u.h>
 #include <libc.h>
-#include <../boot/boot.h>
+#include "../boot/boot.h"
 
 void
 warning(char *s)
