@@ -250,16 +250,16 @@ dmaend(int chan)
 }
 
 /*
-int
-dmacount(int chan)
-{
-	int     retval;
-	DMA     *dp;
- 
-	dp = &dma[(chan>>2)&1];
-	outb(dp->cbp, 0);
-	retval = inb(dp->count[chan]);
-	retval |= inb(dp->count[chan]) << 8;
-	return((retval<<dp->shift)+1);
-}
+//int
+//dmacount(int chan)
+//{
+//	int     retval;
+//	DMA     *dp;
+// 
+//	dp = &dma[(chan>>2)&1];
+//	outb(dp->cbp, 0);
+//	retval = inb(dp->count[chan]);
+//	retval |= inb(dp->count[chan]) << 8;
+//	return((retval<<dp->shift)+1);
+//}
  */

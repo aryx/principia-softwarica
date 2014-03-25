@@ -9,55 +9,70 @@ long		latin1(Rune*, int);
 // used by main.c
 void		machinit(void);
 
-//l.s
 //@Scheck: Assembly
 void		forkret(void);
-
-
+//@Scheck: Assembly
 void	aamloop(int);
-void	acpiscan(void (*func)(uchar *));
+//void	acpiscan(void (*func)(uchar *));
 Dirtab*	addarchfile(char*, int, long(*)(Chan*,void*,long,vlong), long(*)(Chan*,void*,long,vlong));
 void	archinit(void);
 void	archrevert(void);
+//@Scheck: Assembly
 int	bios32call(BIOS32ci*, u16int[3]);
 int	bios32ci(BIOS32si*, BIOS32ci*);
-void	bios32close(BIOS32si*);
+//void	bios32close(BIOS32si*);
 BIOS32si* bios32open(char*);
 void	cgapost(int);
-void	clockintr(Ureg*, void*);
+//void	clockintr(Ureg*, void*);
 int	(*cmpswap)(long*, long, long);
+//@Scheck: Assembly
 int	cmpswap486(long*, long, long);
+//@Scheck: Assembly
 void	cpuid(int, ulong regs[]);
 int	cpuidentify(void);
 void	cpuidprint(void);
 void	(*cycles)(uvlong*);
-int	dmacount(int);
+//int	dmacount(int);
 //int	dmadone(int);
 void	dmaend(int);
 int	dmainit(int, int);
 long	dmasetup(int, void*, long, int);
 #define	evenaddr(x)				/* x86 doesn't care */
+//@Scheck: Assembly
 void	fpclear(void);
+//@Scheck: Assembly
 void	fpenv(FPsave*);
+//@Scheck: Assembly
 void	fpinit(void);
+//@Scheck: Assembly
 void	fpoff(void);
+//@Scheck: Assembly
 void	fpon(void);
 void	(*fprestore)(FPsave*);
 void	(*fpsave)(FPsave*);
 void	fpsavealloc(void);
 void	fpsserestore(FPsave*);
+//@Scheck: Assembly
 void	fpsserestore0(FPsave*);
 void	fpssesave(FPsave*);
+//@Scheck: Assembly
 void	fpssesave0(FPsave*);
-ulong	fpstatus(void);
+//ulong	fpstatus(void);
+//@Scheck: Assembly
 void	fpx87restore(FPsave*);
+//@Scheck: Assembly
 void	fpx87save(FPsave*);
+//@Scheck: Assembly
 ulong	getcr0(void);
+//@Scheck: Assembly
 ulong	getcr2(void);
+//@Scheck: Assembly
 ulong	getcr3(void);
+//@Scheck: Assembly
 ulong	getcr4(void);
 char*	(*getconf)(char*);
 void	guesscpuhz(int);
+//@Scheck: Assembly
 void	halt(void);
 int	i8042auxcmd(int);
 //int	i8042auxcmds(uchar*, int);
@@ -79,18 +94,24 @@ int	i8259isr(int);
 void	i8259on(void);
 void	i8259off(void);
 int	i8259vecno(int);
+//@Scheck: Assembly
 void	idle(void);
 void	idlehands(void);
+//@Scheck: Assembly
 int	inb(int);
-void	insb(int, void*, int);
+//void	insb(int, void*, int);
+//@Scheck: Assembly
 ushort	ins(int);
+//@Scheck: Assembly
 void	inss(int, void*, int);
+//@Scheck: Assembly
 ulong	inl(int);
-void	insl(int, void*, int);
+//void	insl(int, void*, int);
 int	intrdisable(int, void (*)(Ureg *, void *), void*, int, char*);
 void	intrenable(int, void (*)(Ureg*, void*), void*, int, char*);
-void	introff(void);
-void	intron(void);
+//void	introff(void);
+//void	intron(void);
+//@Scheck: Assembly
 void	invlpg(ulong);
 void	iofree(int);
 void	ioinit(void);
@@ -100,14 +121,20 @@ int	(*isaconfig)(char*, int, ISAConf*);
 void	kbdenable(void);
 void	kbdinit(void);
 #define	kmapinval()
+//@Scheck: Assembly
 void	lgdt(ushort[3]);
+//@Scheck: Assembly
 void	lidt(ushort[3]);
 void	links(void);
+//@Scheck: Assembly
 void	ltr(ulong);
+//@Scheck: Assembly
 void	mb386(void);
+//@Scheck: Assembly
 void	mb586(void);
 void	meminit(void);
 //void	memorysummary(void);
+//@Scheck: Assembly
 void	mfence(void);
 #define mmuflushtlb(pdb) putcr3(pdb)
 void	mmuinit(void);
@@ -117,12 +144,16 @@ void	mtrrclock(void);
 int	mtrrprint(char *, long);
 uchar	nvramread(int);
 void	nvramwrite(int, uchar);
+//@Scheck: Assembly
 void	outb(int, int);
-void	outsb(int, void*, int);
+//void	outsb(int, void*, int);
+//@Scheck: Assembly
 void	outs(int, ushort);
+//@Scheck: Assembly
 void	outss(int, void*, int);
+//@Scheck: Assembly
 void	outl(int, ulong);
-void	outsl(int, void*, int);
+//void	outsl(int, void*, int);
 int	pcicfgr8(Pcidev*, int);
 int	pcicfgr16(Pcidev*, int);
 int	pcicfgr32(Pcidev*, int);
@@ -153,10 +184,14 @@ int	pdbmap(ulong*, ulong, ulong, int);
 void	procrestore(Proc*);
 void	procsave(Proc*);
 void	procsetup(Proc*);
+//@Scheck: Assembly
 void	putcr0(ulong);
+//@Scheck: Assembly
 void	putcr3(ulong);
+//@Scheck: Assembly
 void	putcr4(ulong);
 void*	rampage(void);
+//@Scheck: Assembly
 void	rdmsr(int, vlong*);
 void	realmode(Ureg*);
 void	screeninit(void);
@@ -167,10 +202,12 @@ void	syscallfmt(int syscallno, ulong pc, va_list list);
 void	sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop);
 void*	tmpmap(Page*);
 void	tmpunmap(void*);
+//@Scheck: Assembly
 void	touser(void*);
 void	trapenable(int, void (*)(Ureg*, void*), void*, char*);
 void	trapinit(void);
 void	trapinit0(void);
+//@Scheck: Assembly
 int	tas(void*);
 ulong	umbmalloc(ulong, int, int);
 void	umbfree(ulong, int);
@@ -180,13 +217,16 @@ ulong	upaalloc(int, int);
 //void	upafree(ulong, int);
 void	upareserve(ulong, int);
 #define	userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
+//@Scheck: Assembly
 void	vectortable(void);
 void*	vmap(ulong, int);
 int	vmapsync(ulong);
 void	vunmap(void*, int);
+//@Scheck: Assembly
 void	wbinvd(void);
+//@Scheck: Assembly
 void	wrmsr(int, vlong);
-int	xchgw(ushort*, int);
+//int	xchgw(ushort*, int);
 
 //int iounused(int start, int end); not used anymore in vga.c
 

@@ -29,6 +29,7 @@ struct Ether {
 extern Block* etheriq(Ether*, Block*, int);
 extern void addethercard(char*, int(*)(Ether*));
 //extern ulong ethercrc(uchar*, int);
+//@Scheck: not dead
 extern int parseether(uchar*, char*);
 
 #define NEXT(x, l)	(((x)+1)%(l))

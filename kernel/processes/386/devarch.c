@@ -7,6 +7,9 @@
 #include "ureg.h"
 #include "../port/error.h"
 
+void	(*fprestore)(FPsave*);
+void	(*fpsave)(FPsave*);
+
 typedef struct IOMap IOMap;
 struct IOMap
 {

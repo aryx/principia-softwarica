@@ -37,59 +37,59 @@ readc(Cisdat *cis, uchar *x)
 	return 1;
 }
 
-static int
-xcistuple(int slotno, int tuple, int subtuple, void *v, int nv, int attr)
-{
-	PCMmap *m;
-	Cisdat cis;
-	int i, l;
-	uchar *p;
-	uchar type, link, n, c;
-	int this, subtype;
-
-	m = pcmmap(slotno, 0, 0, attr);
-	if(m == 0)
-		return -1;
-
-	cis.cisbase = KADDR(m->isa);
-	cis.cispos = 0;
-	cis.cisskip = attr ? 2 : 1;
-	cis.cislen = m->len;
-
-	/* loop through all the tuples */
-	for(i = 0; i < 1000; i++){
-		this = cis.cispos;
-		if(readc(&cis, &type) != 1)
-			break;
-		if(type == 0xFF)
-			break;
-		if(readc(&cis, &link) != 1)
-			break;
-		if(link == 0xFF)
-			break;
-
-		n = link;
-		if(link > 1 && subtuple != -1){
-			if(readc(&cis, &c) != 1)
-				break;
-			subtype = c;
-			n--;
-		}else
-			subtype = -1;
-
-		if(type == tuple && subtype == subtuple){
-			p = v;
-			for(l=0; l<nv && l<n; l++)
-				if(readc(&cis, p++) != 1)
-					break;
-			pcmunmap(slotno, m);
-			return nv;
-		}
-		cis.cispos = this + (2+link);
-	}
-	pcmunmap(slotno, m);
-	return -1;
-}
+//static int
+//xcistuple(int slotno, int tuple, int subtuple, void *v, int nv, int attr)
+//{
+//	PCMmap *m;
+//	Cisdat cis;
+//	int i, l;
+//	uchar *p;
+//	uchar type, link, n, c;
+//	int this, subtype;
+//
+//	m = pcmmap(slotno, 0, 0, attr);
+//	if(m == 0)
+//		return -1;
+//
+//	cis.cisbase = KADDR(m->isa);
+//	cis.cispos = 0;
+//	cis.cisskip = attr ? 2 : 1;
+//	cis.cislen = m->len;
+//
+//	/* loop through all the tuples */
+//	for(i = 0; i < 1000; i++){
+//		this = cis.cispos;
+//		if(readc(&cis, &type) != 1)
+//			break;
+//		if(type == 0xFF)
+//			break;
+//		if(readc(&cis, &link) != 1)
+//			break;
+//		if(link == 0xFF)
+//			break;
+//
+//		n = link;
+//		if(link > 1 && subtuple != -1){
+//			if(readc(&cis, &c) != 1)
+//				break;
+//			subtype = c;
+//			n--;
+//		}else
+//			subtype = -1;
+//
+//		if(type == tuple && subtype == subtuple){
+//			p = v;
+//			for(l=0; l<nv && l<n; l++)
+//				if(readc(&cis, p++) != 1)
+//					break;
+//			pcmunmap(slotno, m);
+//			return nv;
+//		}
+//		cis.cispos = this + (2+link);
+//	}
+//	pcmunmap(slotno, m);
+//	return -1;
+//}
 
 //int
 //pcmcistuple(int slotno, int tuple, int subtuple, void *v, int nv)

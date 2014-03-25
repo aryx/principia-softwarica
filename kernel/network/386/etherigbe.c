@@ -716,6 +716,7 @@ igbectl(Ether* edev, void* buf, long n)
 	return n;
 }
 
+//@Scheck: not dead, used below, weird
 static void
 igbepromiscuous(void* arg, int on)
 {
@@ -736,6 +737,7 @@ igbepromiscuous(void* arg, int on)
 	csr32w(ctlr, Rctl, rctl|Mpe);	/* temporarily keep Mpe on */
 }
 
+//@Scheck: not dead, used below, weird
 static void
 igbemulticast(void* arg, uchar* addr, int add)
 {

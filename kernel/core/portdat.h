@@ -105,11 +105,13 @@ extern	uint	qiomaxatomic;
 extern	char*	sysctab[];
 extern	int	nsyscall;
 
+//@Scheck: used in params below, FP cg
 struct Execvals {
 	uvlong	entry;
 	ulong	textsize;
 	ulong	datasize;
 };
+// TODO: who sets this? it's used by rebootcmd but who sets it? qemu?
 int	(*parseboothdr)(Chan *, ulong, Execvals *);
 
 //enum

@@ -47,6 +47,7 @@ char *Ebadarp = "bad arp";
 
 #define haship(s) ((s)[IPaddrlen-1]%NHASH)
 
+//@Scheck: not dead, used below, weird
 extern int 	ReTransTimer = RETRANS_TIMER;
 
 static void 	rxmitproc(void *v);

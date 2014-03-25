@@ -53,7 +53,7 @@ static char network[] = "network";
 
 QLock	fslock;
 Fs	*ipfs[Nfs];	/* attached fs's */
-Queue	*qlog;
+//Queue	*qlog;
 
 extern	void nullmediumlink(void);
 extern	void pktmediumlink(void);
@@ -1271,11 +1271,11 @@ Fsproto(Fs *f, Proto *p)
  *  return true if this protocol is
  *  built in
  */
-int
-Fsbuiltinproto(Fs* f, uchar proto)
-{
-	return f->t2p[proto] != nil;
-}
+//int
+//Fsbuiltinproto(Fs* f, uchar proto)
+//{
+//	return f->t2p[proto] != nil;
+//}
 
 /*
  *  called with protocol locked

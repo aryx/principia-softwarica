@@ -543,13 +543,13 @@ TEXT inb(SB), $0
 	INB
 	RET
 
-TEXT insb(SB), $0
-	MOVL	port+0(FP), DX
-	MOVL	address+4(FP), DI
-	MOVL	count+8(FP), CX
-	CLD
-	REP;	INSB
-	RET
+//TEXT insb(SB), $0
+//	MOVL	port+0(FP), DX
+//	MOVL	address+4(FP), DI
+//	MOVL	count+8(FP), CX
+//	CLD
+//	REP;	INSB
+//	RET
 
 TEXT ins(SB), $0
 	MOVL	port+0(FP), DX
@@ -570,13 +570,13 @@ TEXT inl(SB), $0
 	INL
 	RET
 
-TEXT insl(SB), $0
-	MOVL	port+0(FP), DX
-	MOVL	address+4(FP), DI
-	MOVL	count+8(FP), CX
-	CLD
-	REP;	INSL
-	RET
+//TEXT insl(SB), $0
+//	MOVL	port+0(FP), DX
+//	MOVL	address+4(FP), DI
+//	MOVL	count+8(FP), CX
+//	CLD
+//	REP;	INSL
+//	RET
 
 TEXT outb(SB), $0
 	MOVL	port+0(FP), DX
@@ -584,13 +584,13 @@ TEXT outb(SB), $0
 	OUTB
 	RET
 
-TEXT outsb(SB), $0
-	MOVL	port+0(FP), DX
-	MOVL	address+4(FP), SI
-	MOVL	count+8(FP), CX
-	CLD
-	REP;	OUTSB
-	RET
+//TEXT outsb(SB), $0
+//	MOVL	port+0(FP), DX
+//	MOVL	address+4(FP), SI
+//	MOVL	count+8(FP), CX
+//	CLD
+//	REP;	OUTSB
+//	RET
 
 TEXT outs(SB), $0
 	MOVL	port+0(FP), DX
@@ -612,13 +612,13 @@ TEXT outl(SB), $0
 	OUTL
 	RET
 
-TEXT outsl(SB), $0
-	MOVL	port+0(FP), DX
-	MOVL	address+4(FP), SI
-	MOVL	count+8(FP), CX
-	CLD
-	REP;	OUTSL
-	RET
+//TEXT outsl(SB), $0
+//	MOVL	port+0(FP), DX
+//	MOVL	address+4(FP), SI
+//	MOVL	count+8(FP), CX
+//	CLD
+//	REP;	OUTSL
+//	RET
 
 /*
  * Read/write various system registers.
@@ -833,9 +833,9 @@ TEXT fpx87restore(SB), $0			/* enable and restore state */
 	WAIT
 	RET
 
-TEXT fpstatus(SB), $0				/* get floating point status */
-	FSTSW	AX
-	RET
+//TEXT fpstatus(SB), $0				/* get floating point status */
+//	FSTSW	AX
+//	RET
 
 TEXT fpenv(SB), $0				/* save state without waiting */
 	MOVL	p+0(FP), AX
@@ -961,11 +961,11 @@ TEXT mfence(SB), $0
 	BYTE $0xf0
 	RET
 
-TEXT xchgw(SB), $0
-	MOVL	v+4(FP), AX
-	MOVL	p+0(FP), BX
-	XCHGW	AX, (BX)
-	RET
+//TEXT xchgw(SB), $0
+//	MOVL	v+4(FP), AX
+//	MOVL	p+0(FP), BX
+//	XCHGW	AX, (BX)
+//	RET
 
 TEXT cmpswap486(SB), $0
 	MOVL	addr+0(FP), BX

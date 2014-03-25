@@ -473,7 +473,7 @@ int	Fsconnected(Conv*, char*);
 Conv*	Fsnewcall(Conv*, uchar*, ushort, uchar*, ushort, uchar);
 //int	Fspcolstats(char*, int);
 int	Fsproto(Fs*, Proto*);
-int	Fsbuiltinproto(Fs*, uchar);
+//int	Fsbuiltinproto(Fs*, uchar);
 //Conv*	Fsprotoclone(Proto*, char*);
 Proto*	Fsrcvpcol(Fs*, uchar);
 Proto*	Fsrcvpcolx(Fs*, uchar);

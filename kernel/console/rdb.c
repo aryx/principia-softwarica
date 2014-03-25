@@ -8,7 +8,7 @@
 
 #define DBG	if(0)scrprint
 #pragma varargck argpos scrprint 1
-static Ureg ureg;
+//static Ureg ureg;
 
 static void
 scrprint(char *fmt, ...)

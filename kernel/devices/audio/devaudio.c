@@ -216,17 +216,17 @@ mxcmds(int s, int v)
 	mxcmd(s, (v*255)/100);
 }
 
-static	void
-mxcmdt(int s, int v)
-{
-
-	if(v > 100)
-		v = 100;
-	if(v <= 0)
-		mxcmd(s, 0);
-	else
-		mxcmd(s, 255-100+v);
-}
+//static	void
+//mxcmdt(int s, int v)
+//{
+//
+//	if(v > 100)
+//		v = 100;
+//	if(v <= 0)
+//		mxcmd(s, 0);
+//	else
+//		mxcmd(s, 255-100+v);
+//}
 
 static	void
 mxcmdu(int s, int v)
@@ -563,14 +563,14 @@ ess1688intr(void)
 		print("#A: unexpected ess1688 interrupt\n");
 }
 
-void
-audiosbintr(void)
-{
-	/*
-	 * Carrera interrupt interface.
-	 */
-	blaster.intr();
-}
+//void
+//audiosbintr(void)
+//{
+//	/*
+//	 * Carrera interrupt interface.
+//	 */
+//	blaster.intr();
+//}
 
 static void
 pcaudiosbintr(Ureg*, void*)
@@ -581,11 +581,11 @@ pcaudiosbintr(Ureg*, void*)
 	blaster.intr();
 }
 
-void
-audiodmaintr(void)
-{
-/*	print("#A: dma interrupt\n");	/**/
-}
+//void
+//audiodmaintr(void)
+//{
+///*	print("#A: dma interrupt\n");	/**/
+//}
 
 static int
 anybuf(void*)
