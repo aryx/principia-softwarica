@@ -10,6 +10,7 @@
 #include "../port/portfns_devices.h"
 #include "../port/portfns_security.h"
 #include "../port/portfns_network.h"
+#include "../port/portfns_init.h"
 
 //unused and undefined:
 //void		addwatchdog(Watchdog*);
