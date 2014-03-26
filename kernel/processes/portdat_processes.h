@@ -12,11 +12,22 @@ struct Waitq
 
 
 
+enum
+{
+	RENDLOG	=	5,
+	RENDHASH =	1<<RENDLOG,	/* Hash to lookup rendezvous tags */
+};
+#define REND(p,s)	((p)->rendhash[(s)&((1<<RENDLOG)-1)])
 
 struct Rgrp
 {
 	Ref;				/* the Ref's lock is also the Rgrp's lock */
 	Proc	*rendhash[RENDHASH];	/* Rendezvous tag hash */
+};
+
+enum
+{
+	DELTAFD	= 20		/* incremental increase in Fgrp.fd's */
 };
 
 struct Fgrp
@@ -28,6 +39,13 @@ struct Fgrp
 	int	exceed;			/* debugging */
 };
 
+
+enum
+{
+	MNTLOG	=	5,
+	MNTHASH =	1<<MNTLOG,	/* Hash to walk mount table */
+};
+#define MOUNTH(p,qid)	((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
 
 struct Pgrp
 {
@@ -185,7 +203,10 @@ enum
 	PriExtra	= Npriq-1,	/* edf processes at high best-effort pri */
 	PriKproc	= 13,		/* base priority for kernel processes */
 	PriRoot		= 13,		/* base priority for root processes */
+
+	//NFD =		100,		/* per process file descriptors */
 };
+
 
 
 // The big one!

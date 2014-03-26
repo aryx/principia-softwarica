@@ -1,4 +1,8 @@
 
+#ifndef STAGESIZE
+#define STAGESIZE 64
+#endif
+
 enum {
 	Stagesize=	STAGESIZE
 };

@@ -95,6 +95,12 @@ enum
 	SSEG, TSEG, DSEG, BSEG, ESEG, LSEG,    SEG1, SEG2, SEG3, SEG4,    NSEG
 };
 
+// often used as (q->top-q->base)>>LRESPROF
+enum
+{
+	LRESPROF	= 3,
+};
+
 struct Segment
 {
 	Ref;
@@ -140,6 +146,12 @@ struct Pallocmem
 {
 	ulong base;
 	ulong npage;
+};
+
+enum
+{
+	PGHLOG  =	9,
+	PGHSIZE	=	1<<PGHLOG,	/* Page hash for image lookup */
 };
 
 struct Palloc

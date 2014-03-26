@@ -1,32 +1,13 @@
 #include "../port/portdat_forward.h"
 
 // see also Mach and Conf in 386/ (but used in port)
-
+#include "../port/portdat_globals.h"
 #include "../port/portdat_concurrency.h"
-
-enum
-{
-  // used by portdat_processes.h
-	RENDLOG	=	5,
-	RENDHASH =	1<<RENDLOG,	/* Hash to lookup rendezvous tags */
-	MNTLOG	=	5,
-	MNTHASH =	1<<MNTLOG,	/* Hash to walk mount table */
-	//NFD =		100,		/* per process file descriptors */
-	PGHLOG  =	9,
-  // used by portdat_memory.h
-	PGHSIZE	=	1<<PGHLOG,	/* Page hash for image lookup */
-};
-#define REND(p,s)	((p)->rendhash[(s)&((1<<RENDLOG)-1)])
-#define MOUNTH(p,qid)	((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
-
 #include "../port/portdat_memory.h"
-#include <fcall.h>
 #include "../port/portdat_files.h"
 #include "../port/portdat_processes.h"
-
-#ifndef STAGESIZE
-#define STAGESIZE 64
-#endif
+#include "../port/portdat_misc.h"
+#include "../port/portdat_console.h"
 #include "../port/portdat_buses.h"
 
 // could be put in lib.h
@@ -36,7 +17,7 @@ enum
 #define ROUNDUP(x, y)	(HOWMANY((x), (y))*(y))	/* ceiling */
 #define ROUNDDN(x, y)	(((x)/(y))*(y))		/* floor */
 #define	ROUND(s, sz)	(((s)+(sz-1))&~(sz-1))
-// BY2PG defines in mem.h, should always be included before "dat.h"
+// BY2PG is defined in mem.h, which should always be included before "dat.h"!
 #define	PGROUND(s)	ROUNDUP(s, BY2PG)
 
 /*
@@ -52,16 +33,6 @@ enum
 
 #define FMASK(o, w)	(((1<<(w))-1)<<(o))
 
-
-/* let each port override any of these */
-// used by devcons.c
-#ifndef KMESGSIZE
-#define KMESGSIZE (16*1024)
-#endif
-// used by 386/pci.c
-#ifndef PCICONSSIZE
-#define PCICONSSIZE (16*1024)
-#endif
 //unused: //#define MAXBY2PG BY2PG		/* rounding for UTZERO in executables */
 
 // convenient constants
@@ -75,31 +46,15 @@ enum
   //unused:	MAXCRYPT = 	127,
 };
 
-#define DEVDOTDOT -1
-
-enum
-{
-	DELTAFD	= 20		/* incremental increase in Fgrp.fd's */
-};
-
-enum
-{
-	LRESPROF	= 3,
-};
-
-#include "../port/portdat_globals.h"
-
-#include "../port/portdat_console.h"
-#include "../port/portdat_misc.h"
 
 extern	char*	conffile;
 extern	int	cpuserver;
 extern	Dev*	conf_devtab[];
 extern	char	hostdomain[];
-extern	uchar	initcode[];
 extern 	Ref	noteidalloc;
 extern	char*	statename[];
 extern	uint	qiomaxatomic;
+//extern	uchar	initcode[]; in init.h
 
 // defined in syscall/systab.h, but can't include systab.h because?? TODO
 extern	char*	sysctab[];

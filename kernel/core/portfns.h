@@ -11,9 +11,6 @@
 #include "../port/portfns_security.h"
 #include "../port/portfns_network.h"
 
-//in init/386/main.c (but used in port), TODO should be in portfns_init.h
-void		reboot(void*, void*, ulong);
-
 //unused and undefined:
 //void		addwatchdog(Watchdog*);
 //long		clrfpintr(void);

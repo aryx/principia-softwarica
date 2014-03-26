@@ -127,6 +127,7 @@ struct Mhead
 
 
 
+#include <fcall.h>
 
 // was in devmnt.c
 struct Mntrpc

@@ -11,6 +11,11 @@
 
 #define DBG	if(0) pcilog
 
+/* let each port override any of these */
+#ifndef PCICONSSIZE
+#define PCICONSSIZE (16*1024)
+#endif
+
 struct
 {
 	char	output[PCICONSSIZE];
