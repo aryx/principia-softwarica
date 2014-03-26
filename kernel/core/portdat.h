@@ -11,7 +11,7 @@ enum
 	RENDHASH =	1<<RENDLOG,	/* Hash to lookup rendezvous tags */
 	MNTLOG	=	5,
 	MNTHASH =	1<<MNTLOG,	/* Hash to walk mount table */
-	NFD =		100,		/* per process file descriptors */
+	//NFD =		100,		/* per process file descriptors */
 	PGHLOG  =	9,
   // used by portdat_memory.h
 	PGHSIZE	=	1<<PGHLOG,	/* Page hash for image lookup */
@@ -111,7 +111,7 @@ struct Execvals {
 	ulong	textsize;
 	ulong	datasize;
 };
-// TODO: who sets this? it's used by rebootcmd but who sets it? qemu?
+//@Scheck: TODO: who sets this? it's used by rebootcmd but who sets it? qemu?
 int	(*parseboothdr)(Chan *, ulong, Execvals *);
 
 //enum

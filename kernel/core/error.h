@@ -1,4 +1,4 @@
-extern char Enoerror[];		/* no error */
+//extern char Enoerror[];		/* no error */
 extern char Emount[];		/* inconsistent mount */
 extern char Eunmount[];		/* not mounted */
 extern char Eismtpt[];		/* is a mount point */
@@ -20,7 +20,7 @@ extern char Einuse[];		/* device or object already in use */
 extern char Eio[];		/* i/o error */
 extern char Etoobig[];		/* read or write too large */
 extern char Etoosmall[];	/* read or write too small */
-extern char Enoport[];		/* network port not available */
+//extern char Enoport[];		/* network port not available */
 extern char Ehungup[];		/* i/o on hungup channel */
 extern char Ebadctl[];		/* bad process or channel control request */
 extern char Enodev[];		/* no free devices */
@@ -37,7 +37,7 @@ extern char Econrefused[];	/* connection refused */
 extern char Econinuse[];	/* connection in use */
 extern char Eintr[];		/* interrupted */
 extern char Enomem[];		/* kernel allocate failed */
-extern char Enoswap[];		/* swap space full */
+//extern char Enoswap[];		/* swap space full */
 extern char Esoverlap[];	/* segments overlap */
 extern char Emouseset[];	/* mouse type already set */
 extern char Eshort[];		/* i/o count too small */
@@ -52,7 +52,7 @@ extern char Ecmdargs[];		/* wrong #args in control message */
 extern char Ebadip[];		/* bad ip address syntax */
 extern char Edirseek[];		/* seek in directory */
 extern char Echange[];		/* media or partition has changed */
-extern char Estalled[];		/* endpoint stalled */
-extern char Edetach[];		/* device is detached */
-extern char Enotconf[];		/* endpoint not configured */
-extern char Eaoedown[];		/* aoe device is down */
+//extern char Estalled[];		/* endpoint stalled */
+//extern char Edetach[];		/* device is detached */
+//extern char Enotconf[];		/* endpoint not configured */
+//extern char Eaoedown[];		/* aoe device is down */

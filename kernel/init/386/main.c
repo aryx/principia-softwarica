@@ -5,10 +5,14 @@
 #include	"fns.h"
 #include	"io.h"
 #include	"ureg.h"
-#include	"init.h"
+
 #include	"pool.h"
+
+#include	"init.h"
 #include	"reboot.h"
+
 #include	"mp.h"
+
 #include	<tos.h>
 
 void	confinit(void);
@@ -73,13 +77,15 @@ void proc_pexit(char *exitstr, int freemem);
 extern void mmuinit0(void);
 extern void (*i8237alloc)(void);
 
+//@Scheck: Assembly
+extern ulong *multiboot;
+
 static void
 options(void)
 {
 	long i, n;
 	char *cp, *line[MAXCONF], *p, *q;
 	ulong *m, l;
-	extern ulong *multiboot;
 
 	if(multiboot != nil){
 		cp = BOOTARGS;
