@@ -16,6 +16,8 @@
 #define PCICONSSIZE (16*1024)
 #endif
 
+void	pcicfgw16(Pcidev*, int, int);
+
 struct
 {
 	char	output[PCICONSSIZE];
