@@ -2193,9 +2193,9 @@ ataenable(SDev* sdev)
 	ctlr = sdev->ctlr;
 
 	if(ctlr->bmiba){
-#define ALIGN	(4 * 1024)
 		if(ctlr->pcidev != nil)
 			pcisetbme(ctlr->pcidev);
+          //#define ALIGN	(4 * 1024)
 		ctlr->prdt = mallocalign(Nprd*sizeof(Prd), 4, 0, 4*1024);
 		if(ctlr->prdt == nil)
 			error(Enomem);

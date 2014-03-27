@@ -79,7 +79,7 @@ void	Cursortocursor(Cursor*);
 int	mousechanged(void*);
 
 static void mouseclock(void);
-static void xkbdmouse(int);
+//static void xkbdmouse(int);
 
 enum{
 	Qdir,
