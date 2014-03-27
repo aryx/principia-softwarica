@@ -158,7 +158,7 @@ int	pcicfgr8(Pcidev*, int);
 int	pcicfgr16(Pcidev*, int);
 int	pcicfgr32(Pcidev*, int);
 void	pcicfgw8(Pcidev*, int, int);
-void	pcicfgw16(Pcidev*, int, int);
+//void	pcicfgw16(Pcidev*, int, int);
 void	pcicfgw32(Pcidev*, int, int);
 void	pciclrbme(Pcidev*);
 //void	pciclrioe(Pcidev*);
