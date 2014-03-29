@@ -4,6 +4,7 @@
 struct KQLock
 {
 	Lock	use;		/* to access Qlock structure */
+  // see also Proc.qnext for getting the full chain from head to tail.
 	Proc	*head;		/* next process waiting for object */
 	Proc	*tail;		/* last process waiting for object */
 	int	locked;		/* flag */
