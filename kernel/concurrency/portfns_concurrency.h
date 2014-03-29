@@ -30,9 +30,7 @@ int		splhi(void);
 int		spllo(void);
 //@Scheck: Assembly
 void		splx(int);
-//@Scheck: Assembly
 //void		splxpc(int);
-//@Scheck: Assembly
 //long		lcycles(void);
 //test-and-set
 //@Scheck: Assembly
