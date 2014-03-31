@@ -1,5 +1,6 @@
 
 // tod.c
+// initialize the hidden global tod.c#tod
 void    todinit(void);
 void    todsetfreq(vlong);
 void    todset(vlong, vlong, int);

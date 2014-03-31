@@ -28,6 +28,8 @@ ulong ilockpcs[0x100] = { [0xff] = 1 };
 static int n;
 #endif
 
+// See also ref.c incref() and decref(), but we can't use them here as they
+// themselves rely on lock() and unlock(). 
 static void
 inccnt(Ref *r)
 {
@@ -89,6 +91,7 @@ lock(Lock *l)
 		l->pc = pc;
 		l->p = up;
 		l->isilock = 0;
+                //TODO: not setting l->m = ??
 #ifdef LOCKCYCLES
 		l->lockcycles = -lcycles();
 #endif
@@ -134,6 +137,9 @@ lock(Lock *l)
 	}
 }
 
+// To provide mutual exclusion with interrupt code and avoiding deadlock.
+// By using splhi() we disable interrupts while running the critical region
+// code.
 void
 ilock(Lock *l)
 {
@@ -169,6 +175,7 @@ acquire:
 	l->pc = pc;
 	l->p = up;
 	l->isilock = 1;
+        //TODO: why not just l->m = m? 
 	l->m = MACHP(m->machno);
 #ifdef LOCKCYCLES
 	l->lockcycles = -lcycles();
@@ -217,6 +224,9 @@ unlock(Lock *l)
 		print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
 	l->m = nil;
 	l->key = 0;
+        // for processor caches, to ensure the lock value is seen by other
+        // processors so that if they were doing while(l->key) { ... } they
+        // can finally exit the while loop.
 	coherence();
 
 	if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){

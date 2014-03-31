@@ -5,6 +5,8 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
+// TOD: Time Of Day.
+
 uvlong		mk64fract(uvlong, uvlong);
 
 /*
@@ -36,7 +38,7 @@ uvlong		mk64fract(uvlong, uvlong);
 #define TODFREQ		1000000000ULL
 #define MicroFREQ	1000000ULL
 
-struct {
+struct TOD {
 	int	init;		/* true if initialized */
 	ulong	cnt;
 	Lock;
@@ -51,7 +53,9 @@ struct {
 	vlong	delta;	/* add 'delta' each slow clock tick from sstart to send */
 	ulong	sstart;		/* ... */
 	ulong	send;		/* ... */
-} tod;
+};
+
+struct TOD tod;
 
 static void todfix(void);
 

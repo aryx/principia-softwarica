@@ -47,6 +47,7 @@ enum
 };
 #define MOUNTH(p,qid)	((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
 
+// Namespace process group
 struct Pgrp
 {
 	Ref;				/* also used as a lock when mounting */
@@ -165,14 +166,15 @@ struct Edf {
 
 enum
 {
-	Dead = 0,		/* Process states, Proc.state */
+  /* Process states, Proc.state */
+	Dead = 0,
 	Moribund,
 	Ready,
 	Scheding,
 	Running,
-	Queueing,
-	QueueingR,
-	QueueingW,
+	Queueing, // see lock()
+	QueueingR, // see rlock()
+	QueueingW, // see wlock ()
 	Wakeme,
 	Broken,
 	Stopped,
@@ -214,15 +216,21 @@ struct Proc
 {
 	Label	sched;		/* known to l.s */
 	char	*kstack;	/* known to l.s */
+
 	Mach	*mach;		/* machine running this proc */
+
 	char	*text;
 	char	*user;
 	char	*args;
 	int	nargs;		/* number of bytes of args */
+
 	Proc	*rnext;		/* next process in run queue */
+
 	Proc	*qnext;		/* next process on queue for a QLock */
 	QLock	*qlock;		/* addr of qlock being queued for DEBUG */
-	int	state;
+
+	int	state; // Dead, Queuing, etc, see the enum below
+
 	char	*psstate;	/* What /proc/#/status reports */
 	Segment	*seg[NSEG];
 	QLock	seglock;	/* locked whenever seg[] changes */
@@ -239,6 +247,7 @@ struct Proc
 	Proc	*parent;
 
 	Pgrp	*pgrp;		/* Process group for namespace */
+
 	Egrp 	*egrp;		/* Environment group */
 	Fgrp	*fgrp;		/* File descriptor group */
 	Rgrp	*rgrp;		/* Rendez group */
@@ -300,8 +309,9 @@ struct Proc
 	char	errbuf0[ERRMAX];
 	char	errbuf1[ERRMAX];
 	char	genbuf[128];	/* buffer used e.g. for last name element from namec */
-	Chan	*slash;
-	Chan	*dot;
+
+	Chan	*slash; // The root!
+	Chan	*dot; // The current directory
 
 	Note	note[NNOTE];
 	short	nnote;
@@ -315,6 +325,9 @@ struct Proc
 
 	Mach	*wired;
 	Mach	*mp;		/* machine this process last ran on */
+  // As long as the current process hold locks (to kernel data structures),
+  // we will not schedule another process in unlock(); only the last unlock
+  // will eventually cause a rescheduling.
 	Ref	nlocks;		/* number of locks held by proc */
 	ulong	delaysched;
 	ulong	priority;	/* priority level */
@@ -363,6 +376,4 @@ struct Schedq
 #pragma	varargck	type	"t"		long
 #pragma	varargck	type	"U"		uvlong
 
-
 extern struct Active active;
-

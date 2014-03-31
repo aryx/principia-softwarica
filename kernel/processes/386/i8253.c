@@ -5,17 +5,8 @@
 #include "fns.h"
 #include "io.h"
 
-struct Watchdog
-{
-	void	(*enable)(void);	/* watchdog enable */
-	void	(*disable)(void);	/* watchdog disable */
-	void	(*restart)(void);	/* watchdog restart */
-	void	(*stat)(char*, char*);	/* watchdog statistics */
-};
-
-Watchdog* watchdog;
-int	watchdogon;
-
+// the 8253 timer will generate clock ticks which will be useful to preempt
+// processes and so provide multitasking
 
 /*
  *  8253 timer
@@ -70,6 +61,18 @@ enum
 
 	Wdogms	= 200,		/* ms between strokes */
 };
+
+struct Watchdog
+{
+	void	(*enable)(void);	/* watchdog enable */
+	void	(*disable)(void);	/* watchdog disable */
+	void	(*restart)(void);	/* watchdog restart */
+	void	(*stat)(char*, char*);	/* watchdog statistics */
+};
+
+Watchdog* watchdog;
+int	watchdogon;
+
 
 typedef struct I8253 I8253;
 struct I8253

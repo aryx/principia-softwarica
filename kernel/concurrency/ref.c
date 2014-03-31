@@ -5,7 +5,7 @@
 #include "fns.h"
 #include "../port/error.h"
 
-//pad: was in chan.c
+// was in chan.c
 // see also _incnt and _deccnt in tasklock.c
 long
 incref(Ref *r)

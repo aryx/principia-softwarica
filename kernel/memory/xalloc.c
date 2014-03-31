@@ -4,6 +4,8 @@
 #include "dat.h"
 #include "fns.h"
 
+// Memory allocator for long lived allocated structures
+
 enum
 {
 	Nhole		= 128,

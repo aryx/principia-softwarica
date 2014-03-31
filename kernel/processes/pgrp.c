@@ -5,6 +5,8 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
+// Process group, and Namespace.
+
 enum {
 	Whinesecs = 10,		/* frequency of out-of-resources printing */
 };

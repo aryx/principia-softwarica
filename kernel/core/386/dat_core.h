@@ -4,6 +4,7 @@
 struct Mach
 {
 	int	machno;			/* physical id of processor (KNOWN TO ASSEMBLY) */
+  // must be second field at 0x04, used by splhi()
 	ulong	splpc;			/* pc of last caller to splhi */
 
 	ulong*	pdb;			/* page directory base for this processor (va) */
