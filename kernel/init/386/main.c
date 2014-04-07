@@ -43,7 +43,10 @@ enum {
 char *confname[MAXCONF];
 char *confval[MAXCONF];
 int nconf;
+
+// Global! set by bootargs()
 uchar *sp;	/* user stack of init proc */
+
 int delaylink;
 
 // to avoid backward deps
@@ -317,7 +320,7 @@ userinit(void)
 
 	p = newproc();
 	p->pgrp = newpgrp();
-	p->egrp = smalloc(sizeof(Egrp));
+	p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
 	p->egrp->ref = 1;
 	p->fgrp = dupfgrp(nil);
 	p->rgrp = newrgrp();
