@@ -132,10 +132,10 @@
 /*
  *  virtual MMU
  */
-#define	PTEMAPMEM	(1024*1024)	
+#define	PTEMAPMEM	(1024*1024)	// 1MB
 #define	PTEPERTAB	(PTEMAPMEM/BY2PG)
 #define	SEGMAPSIZE	1984
-#define	SSEGMAPSIZE	16
+#define	SSEGMAPSIZE	16 // small segmap
 #define	PPN(x)		((x)&~(BY2PG-1))
 
 /*
