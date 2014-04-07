@@ -4,16 +4,10 @@
 #include	"dat.h"
 #include	"fns.h"
 
-struct Alarms
-{
-	QLock;
-	Proc	*head;
-};
-
-
 static Alarms	alarms;
 static Rendez	alarmr;
 
+// Kernel Process for alarm managment
 void
 alarmkproc(void*)
 {
