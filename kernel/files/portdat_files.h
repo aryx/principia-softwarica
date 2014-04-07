@@ -274,7 +274,7 @@ struct Walkqid
 
 struct Dev
 {
-	int	dc;
+	int	dc; // dev character code
 	char*	name;
 
 	void	(*reset)(void);
