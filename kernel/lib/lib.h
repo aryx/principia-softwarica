@@ -9,6 +9,11 @@
 //  - print.c overrides _fmtlock, _fmtunlock that were in libc/fmt/
 //  - devcons.s overrides the sysfatal that was in libc/9sys/
 
+// pad specific, should be in u.h
+typedef int bool;
+#define true 1
+#define false 0
+
 
 /*
  * functions (mostly) linked in from libc.
