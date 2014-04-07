@@ -33,7 +33,7 @@
 
 #define FMASK(o, w)	(((1<<(w))-1)<<(o))
 
-//unused: //#define MAXBY2PG BY2PG		/* rounding for UTZERO in executables */
+//#define MAXBY2PG BY2PG		/* rounding for UTZERO in executables */
 
 // convenient constants
 enum
@@ -43,7 +43,7 @@ enum
 	MB =		(1024*1024),
 	/* READSTR was 1000, which is way too small for usb's ctl file */
 	READSTR =	4000,		/* temporary buffer size for device reads */
-  //unused:	MAXCRYPT = 	127,
+  //	MAXCRYPT = 	127,
 };
 
 
