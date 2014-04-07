@@ -4,12 +4,15 @@
 // see also Perf, Fpstate (enum), Active in 386/ (but used in port)
 // see also PMMU, Notsave, MAXSYSARG in 386/
 
+//*****************************************************************************
+// Proc components
+//*****************************************************************************
+
 struct Waitq
 {
 	Waitmsg	w;
 	Waitq	*next;
 };
-
 
 
 enum
@@ -94,7 +97,7 @@ struct Timers
 
 
 
-
+// syscall arguments passed in kernel stack
 struct Sargs
 {
 	ulong	args[MAXSYSARG];
@@ -108,6 +111,7 @@ enum
 	NDebug,				/* print debug message */
 };
 
+// a kind of unix signal
 struct Note
 {
 	char	msg[ERRMAX];
@@ -162,8 +166,11 @@ struct Edf {
 };
 
 
+//*****************************************************************************
+// Proc, the big one
+//*****************************************************************************
 
-
+// TODO split and name sub enums
 enum
 {
   /* Process states, Proc.state */
@@ -209,52 +216,65 @@ enum
 	//NFD =		100,		/* per process file descriptors */
 };
 
+/*
+ *  process memory segments - NSEG always last !
+ */
+enum procseg
+{
+	SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
+  ESEG, LSEG, // Extra, L?
+  SEG1, SEG2, SEG3, SEG4,    
+  NSEG // to count, see Proc.seg array
+};
 
 
-// The big one!
+
+// the most important fields are set by newproc()
+// TODO reorganize, move in extra/
 struct Proc
 {
+  // TODO: have to be first?
 	Label	sched;		/* known to l.s */
 	char	*kstack;	/* known to l.s */
 
-	Mach	*mach;		/* machine running this proc */
+	ulong	pid; // PID!!
+
+	int	state; // Dead, Queuing, etc, see the enum below
+	char	*psstate;	/* What /proc/#/status reports */
+
+	Segment	*seg[NSEG];
+	QLock	seglock;	/* locked whenever seg[] changes */
 
 	char	*text;
 	char	*user;
 	char	*args;
 	int	nargs;		/* number of bytes of args */
 
-	Proc	*rnext;		/* next process in run queue */
-
-	Proc	*qnext;		/* next process on queue for a QLock */
-	QLock	*qlock;		/* addr of qlock being queued for DEBUG */
-
-	int	state; // Dead, Queuing, etc, see the enum below
-
-	char	*psstate;	/* What /proc/#/status reports */
-	Segment	*seg[NSEG];
-	QLock	seglock;	/* locked whenever seg[] changes */
-	ulong	pid;
-	ulong	noteid;		/* Equivalent of note group */
-	Proc	*pidhash;	/* next proc in pid hash */
-
-	Lock	exl;		/* Lock count and waitq */
-	Waitq	*waitq;		/* Exited processes wait children */
-	int	nchild;		/* Number of living children */
-	int	nwait;		/* Number of uncollected wait records */
-	QLock	qwaitr;
-	Rendez	waitr;		/* Place to hang out in wait */
-	Proc	*parent;
-
 	Pgrp	*pgrp;		/* Process group for namespace */
-
 	Egrp 	*egrp;		/* Environment group */
 	Fgrp	*fgrp;		/* File descriptor group */
 	Rgrp	*rgrp;		/* Rendez group */
 
+	Chan	*slash; // The root!
+	Chan	*dot; // The current directory
+
+
+	ulong	noteid;		/* Equivalent of note group */
+
+
+	Waitq	*waitq;		/* Exited processes wait children */
+	Lock	exl;		/* Lock count and waitq */
+
+	Proc	*parent;
+	int	nchild;		/* Number of living children */
+	int	nwait;		/* Number of uncollected wait records */
+	QLock	qwaitr;
+	Rendez	waitr;		/* Place to hang out in wait */
+
 	Fgrp	*closingfgrp;	/* used during teardown */
 
 	ulong	parentpid;
+
 	ulong	time[6];	/* User, Sys, Real; child U, S, R */
 
 	uvlong	kentry;		/* Kernel entry time stamp (for profiling) */
@@ -284,8 +304,6 @@ struct Proc
 	Rendez	sleep;		/* place for syssleep/debug */
 	int	notepending;	/* note issued but not acted on */
 	int	kp;		/* true if a kernel process */
-	Proc	*palarm;	/* Next alarm time */
-	ulong	alarm;		/* Time of call */
 	int	newtlb;		/* Pager has changed my pte's, I must flush */
 	int	noswap;		/* process is not swappable */
 
@@ -302,16 +320,16 @@ struct Proc
 	FPsave	fpsave;		/* address of this is known by db */
 	int	scallnr;	/* sys call number - known by db */
 	Sargs	s;		/* address of this is known by db */
+
 	int	nerrlab;
 	Label	errlab[NERR];
 	char	*syserrstr;	/* last error from a system call, errbuf0 or 1 */
 	char	*errstr;	/* reason we're unwinding the error stack, errbuf1 or 0 */
 	char	errbuf0[ERRMAX];
 	char	errbuf1[ERRMAX];
+
 	char	genbuf[128];	/* buffer used e.g. for last name element from namec */
 
-	Chan	*slash; // The root!
-	Chan	*dot; // The current directory
 
 	Note	note[NNOTE];
 	short	nnote;
@@ -325,10 +343,13 @@ struct Proc
 
 	Mach	*wired;
 	Mach	*mp;		/* machine this process last ran on */
+
   // As long as the current process hold locks (to kernel data structures),
   // we will not schedule another process in unlock(); only the last unlock
   // will eventually cause a rescheduling.
 	Ref	nlocks;		/* number of locks held by proc */
+
+
 	ulong	delaysched;
 	ulong	priority;	/* priority level */
 	ulong	basepri;	/* base priority level */
@@ -357,18 +378,65 @@ struct Proc
 	 */
 	PMMU;
 	char	*syscalltrace;	/* syscall trace */
+
+  // Extra
+
+  // KQlock.head chain
+	Proc	*qnext;		/* next process on queue for a QLock */
+	QLock	*qlock;		/* addr of qlock being queued for DEBUG */
+
+  // Schedq.head chain?
+	Proc	*rnext;		/* next process in run queue */
+
+  // Alarms.head chain?
+	Proc	*palarm;	/* Next alarm time */
+	ulong	alarm;		/* Time of call */
+
+  // Procalloc.ht chain?
+	Proc	*pidhash;	/* next proc in pid hash */ 
+
+	Mach	*mach;		/* machine running this proc */
+
 };
 
 
-// internals
+//*****************************************************************************
+// Internal to processe/
+//*****************************************************************************
+
+// Proc allocator (singleton), was actually in proc.c, but important so here
+struct Procalloc
+{
+	Proc*	arena; // initial array of proc, xalloc'ed in procinit0() (conf.nproc)
+
+	Proc*	free; // first free proc
+	Proc*	ht[128]; // hash pid -> proc (see Proc.pidhash)
+
+  // extra
+	Lock;
+};
+//static struct Procalloc procalloc; // private to proc.c
 
 struct Schedq
 {
-	Lock;
 	Proc*	head;
 	Proc*	tail;
 	int	n;
+
+  // extra
+	Lock;
 };
+//Schedq	runq[Nrq];  // private to proc.c
+
+// was in alarm.c, but important so here
+struct Alarms
+{
+	QLock;
+	Proc	*head;
+};
+//static Alarms	alarms; // private to alarm.c
+//static Rendez	alarmr; // private to alarm.c
+
 
 // used to be in edf.h
 //unused: extern Lock	edftestlock;	/* for atomic admitting/expelling */
@@ -376,4 +444,5 @@ struct Schedq
 #pragma	varargck	type	"t"		long
 #pragma	varargck	type	"U"		uvlong
 
+// struct Active defined in 386 (But used in port)
 extern struct Active active;
