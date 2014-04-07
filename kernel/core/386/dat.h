@@ -1,8 +1,8 @@
 #include "dat_forward.h"
 
-// defines Lock, references Proc and Mach
+// defines Lock (which references Proc and Mach)
 #include "dat_concurrency.h"
-// references Page (see also mem.h)
+// defines Confmem, PMMU, etc (which references Page) (see also mem.h)
 #include "dat_memory.h"
 #include "dat_processes.h"
 
@@ -40,11 +40,11 @@ enum {
 	Pge	= 1<<13,	/* page global extension */
 	Fxsr	= 1<<24,	/* have SSE FXSAVE/FXRSTOR */
 	Sse2	= 1<<26,	/* thus mfence & lfence instr.s */
-//unused:	Pae	= 1<<6,		/* physical-addr extensions */
-//unused:	Cmpxchg8b = 1<<8,
-//unused:	Cpuapic	= 1<<9,
-//unused:	Pse2	= 1<<17,	/* more page size extensions */
-//unused:	Clflush = 1<<19,
-//unused:	Mmx	= 1<<23,
-//unused:	Sse	= 1<<25,	/* thus sfence instr. */
+//	Pae	= 1<<6,		/* physical-addr extensions */
+//	Cmpxchg8b = 1<<8,
+//	Cpuapic	= 1<<9,
+//	Pse2	= 1<<17,	/* more page size extensions */
+//	Clflush = 1<<19,
+//	Mmx	= 1<<23,
+//	Sse	= 1<<25,	/* thus sfence instr. */
 };
