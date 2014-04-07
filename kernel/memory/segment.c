@@ -4,11 +4,11 @@
 #include	"dat.h"
 #include	"fns.h"
 #include	"../port/error.h"
-
-static void	imagereclaim(void);
-static void	imagechanreclaim(void);
-
 #include "io.h"
+
+// Big global
+static struct Imagealloc imagealloc;
+
 
 /*
  * Attachable segment types
@@ -18,26 +18,13 @@ static Physseg physseg[10] = {
 	{ SG_BSS,	"memory",	0,	SEGMAXSIZE,	0,	0 },
 	{ 0,		0,		0,	0,		0,	0 },
 };
-
 static Lock physseglock;
 
-#define NFREECHAN	64
-#define IHASHSIZE	64
-#define ihash(s)	imagealloc.hash[s%IHASHSIZE]
-static struct Imagealloc
-{
-	Lock;
-	KImage	*free;
-	KImage	*hash[IHASHSIZE];
-	QLock	ireclaim;	/* mutex on reclaiming free images */
-
-	Chan	**freechan;	/* free image channels */
-	int	nfreechan;	/* number of free channels */
-	int	szfreechan;	/* size of freechan array */
-	QLock	fcreclaim;	/* mutex on reclaiming free channels */
-}imagealloc;
-
 Segment* (*_globalsegattach)(Proc*, char*);
+
+
+static void	imagereclaim(void);
+static void	imagechanreclaim(void);
 
 void
 initseg(void)
@@ -312,12 +299,13 @@ found:
 	return i;
 }
 
-static struct {
+struct Irstats {
 	int	calls;			/* times imagereclaim was called */
 	int	loops;			/* times the main loop was run */
 	uvlong	ticks;			/* total time in the main loop */
 	uvlong	maxt;			/* longest time in main loop */
-} irstats;
+};
+static struct Irstats  irstats;
 
 static void
 imagereclaim(void)
