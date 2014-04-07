@@ -9,7 +9,7 @@ void		pio(Segment *, ulong, ulong, Page **);
 
 
 int
-fault(ulong addr, int read)
+fault(ulong addr, bool read)
 {
 	Segment *s;
 	char *sps;
@@ -182,6 +182,7 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
 	return 0;
 }
 
+// page io on the text segment
 void
 pio(Segment *s, ulong addr, ulong soff, Page **p)
 {
@@ -190,7 +191,7 @@ pio(Segment *s, ulong addr, ulong soff, Page **p)
 	Chan *c;
 	int n, ask;
 	char *kaddr;
-	ulong daddr;
+	ulong daddr; // disk address
 	Page *loadrec;
 
 retry:
