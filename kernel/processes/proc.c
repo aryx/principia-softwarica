@@ -7,29 +7,24 @@
 //#include	"../port/edf.h"
 #include	<trace.h>
 
-
 int	schedgain = 30;	/* units in seconds */
 int	nrdy;
+// also use by sysrfork()
 Ref	noteidalloc;
 
-Proc*		runproc(void);
+Proc* runproc(void);
 void updatecpu(Proc*);
 int reprioritize(Proc*);
 
-ulong	delayedscheds;	/* statistics */
+ulong delayedscheds;	/* statistics */
 long skipscheds;
 long preempts;
 //ulong load;
 
+// Abuse Ref ... it's not reference counting, this is really just a counter
 static Ref	pidalloc;
 
-static struct Procalloc
-{
-	Lock;
-	Proc*	ht[128];
-	Proc*	arena;
-	Proc*	free;
-} procalloc;
+static struct Procalloc procalloc;
 
 enum
 {
@@ -38,6 +33,7 @@ enum
 	Scaling=2,
 };
 
+// The run queue!!
 Schedq	runq[Nrq];
 ulong	runvec;
 
@@ -742,7 +738,8 @@ procinit0(void)		/* bad planning - clashes with devproc.c */
 	procalloc.free = xalloc(conf.nproc*sizeof(Proc));
 	if(procalloc.free == nil){
 		xsummary();
-		panic("cannot allocate %lud procs (%ludMB)\n", conf.nproc, conf.nproc*sizeof(Proc)/(1024*1024));
+		panic("cannot allocate %lud procs (%ludMB)\n", 
+                      conf.nproc, conf.nproc*sizeof(Proc)/(1024*1024));
 	}
 	procalloc.arena = procalloc.free;
 
@@ -1364,6 +1361,7 @@ scheddump(void)
 	print("nrdy %d\n", nrdy);
 }
 
+// kernel process (aka kernel_thread in Linux?)
 void
 kproc(char *name, void (*func)(void *), void *arg)
 {
@@ -1373,7 +1371,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 	p = newproc();
 	p->psstate = 0;
 	p->procmode = 0640;
-	p->kp = 1;
+	p->kp = 1; // Kernel Process
 	p->noswap = 1;
 
 	p->fpsave = up->fpsave;
