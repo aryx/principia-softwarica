@@ -1,61 +1,90 @@
 
 // see also ConfMem and KMap in 386/ (but used in port)
 
-enum
+// physical address
+typedef ulong phys_addr;
+// virtual address
+typedef ulong virt_addr;
+
+//*****************************************************************************
+// Page < Pte (can be filled by KImage) < Segment
+//*****************************************************************************
+
+enum modref 
+{
+	PG_MOD		= 0x01,		/* software modified bit */
+	PG_REF		= 0x02,		/* software referenced bit */
+};
+
+enum cachectl
 {
 	PG_NOFLUSH	= 0,
 	PG_TXTFLUSH	= 1,		/* flush dcache and invalidate icache */
 	PG_DATFLUSH	= 2,		/* flush both i & d caches (UNUSED) */
 	PG_NEWCOL	= 3,		/* page has been recolored */
-
-	PG_MOD		= 0x01,		/* software modified bit */
-	PG_REF		= 0x02,		/* software referenced bit */
 };
 
+// Page metadata, we will allocate as many pages to cover all physical memory
+// and swap "address space". Either pa or daddr should be valid at one time.
+// Should have been xalloc'ed in Palloc.pages
 struct Page
 {
-	Lock;
-	ulong	pa;			/* Physical address in memory */
-	ulong	va;			/* Virtual address for user */
+	phys_addr	pa;			/* Physical address in memory */
+	virt_addr	va;			/* Virtual address for user */
+
 	ulong	daddr;			/* Disc address on swap */
 	ulong	gen;			/* Generation counter for swap */
+
 	ushort	ref;			/* Reference count */
-	char	modref;			/* Simulated modify/reference bits */
+	char	modref;			/* Simulated modify/reference bits */ // see enum above
 	char	color;			/* Cache coloring */
-	char	cachectl[MAXMACH];	/* Cache flushing control for putmmu */
-	KImage	*image;			/* Associated text or swap image */
-	Page	*next;			/* Lru free list */
+	char	cachectl[MAXMACH];	/* Cache flushing control for putmmu */ // see enum
+
+  // extra
+	Lock;
+	Page	*next;			/* Lru free list */ // Palloc.head?
 	Page	*prev;
-	Page	*hash;			/* Image hash chains */
+	Page	*hash;			/* Image hash chains */ // Palloc.hash?
+	KImage	*image;			/* Associated text or swap image */
 };
 
-
-struct KImage
-{
-	Ref;
-	Chan	*c;			/* channel to text file */
-	Qid 	qid;			/* Qid for page cache coherence */
-	Qid	mqid;
-	Chan	*mchan;
-	ushort	type;			/* Device type of owning channel */
-	Segment *s;			/* TEXT segment for image if running */
-	KImage	*hash;			/* Qid hash chains */
-	KImage	*next;			/* Free list */
-	int	notext;			/* no file associated */
-};
-
-
+// malloc'ed?
 struct Pte
 {
+  // will map 1M of memory
 	Page	*pages[PTEPERTAB];	/* Page map for this chunk of pte */
+
+  //to avoid iterate over all pages
 	Page	**first;		/* First used entry */
 	Page	**last;			/* Last used entry */
 };
 
 
 
+// a KImage is essentially a channel to a text file (an image of a binary)
+// the image in memory for a portion of a given file.
+// (renamed KImage to avoid name conflict with memdraw Image (picture))
+struct KImage
+{
+	Chan	*c;			/* channel to text file */
+	Qid 	qid;			/* Qid for page cache coherence */
+	Qid	mqid;
+	Chan	*mchan;
+	ushort	type;			/* Device type of owning channel */
+
+	int	notext;			/* no file associated */
+
+  // extra
+	Ref;
+	KImage	*hash;			/* Qid hash chains */ // Imagealloc.hash?
+	KImage	*next;			/* Free list */ // Imagealloc.free?
+	Segment *s;			/* TEXT segment for image if running */
+};
+
+
+
 /* Segment types */
-enum
+enum segtype
 {
 	SG_TYPE		= 07,		/* Mask type of segment */
 	SG_TEXT		= 00,
@@ -87,64 +116,137 @@ struct Physseg
 };
 
 
-/*
- *  process memory segments - NSEG always last !
- */
-enum
-{
-	SSEG, TSEG, DSEG, BSEG, ESEG, LSEG,    SEG1, SEG2, SEG3, SEG4,    NSEG
-};
-
 // often used as (q->top-q->base)>>LRESPROF
 enum
 {
 	LRESPROF	= 3,
 };
 
+// smalloc'ed by newseg()
 struct Segment
 {
-	Ref;
-	QLock	lk;
-	ushort	steal;		/* Page stealer lock */
 	ushort	type;		/* segment type */
-	ulong	base;		/* virtual base */
-	ulong	top;		/* virtual top */
-	ulong	size;		/* size in pages */
+
+	virt_addr	base;		/* virtual base */
+	virt_addr	top;		/* virtual top */
+	ulong	size;		/* size in pages */ // top - base / BY2PG?
+
+  // kind of a page directory table (and pte = page table)
+	Pte	**map; // SEGMAPSIZE max, smalloc'ed
+  // so 1984 * 1M via PTE =~ 2Go virtual memory per segment!
+	int	mapsize; // nelem(map)
+  // small seg map, used instead of map if segment small enough
+	Pte	*ssegmap[SSEGMAPSIZE]; // 16
+
+	KImage	*image;		/* text in file attached to this segment */
 	ulong	fstart;		/* start address in file for demand load */
 	ulong	flen;		/* length of segment in file */
+
 	int	flushme;	/* maintain icache for this segment */
-	KImage	*image;		/* text in file attached to this segment */
 	Physseg *pseg;
 	ulong*	profile;	/* Tick profile area */
-	Pte	**map;
-	int	mapsize;
-	Pte	*ssegmap[SSEGMAPSIZE];
+	ulong	mark;		/* portcountrefs */
+	ushort	steal;		/* Page stealer lock */
+
+  // extra
+	Ref;
+	QLock	lk;
 	Lock	semalock;
 	Sema	sema;
-	ulong	mark;		/* portcountrefs */
 };
 
 
+//*****************************************************************************
+// Internal to memory/
+//*****************************************************************************
 
-// internals
+// See also RMap and Confmem in 386/
 
-
-struct Swapalloc
+// actually internal to xalloc.c, but important so here
+enum
 {
-	Lock;				/* Free map lock */
-	int	free;			/* currently free swap pages */
-	uchar*	swmap;			/* Base of swap map in memory */
-	uchar*	alloc;			/* Round robin allocator */
-	uchar*	last;			/* Speed swap allocation */
-	uchar*	top;			/* Top of swap map */
-	Rendez	r;			/* Pager kproc idle sleep */
-	ulong	highwater;		/* Pager start threshold */
-	ulong	headroom;		/* Space pager frees under highwater */
+	Nhole		= 128,
+	Magichole	= 0x484F4C45,			/* HOLE */
 };
 
+struct Hole
+{
+	ulong	addr; // phys_addr? base?
+	ulong	top; // phys_addr?
+	ulong	size; // top - addr?
+  
+  // extra
+	Hole*	link; // next in free list or used list
+};
+
+// What is the connection with Hole? a used Hole will describe
+// a portion of memory, and at this memory there will be a header
+// and then the actual memory xalloc'ed by someone
+struct Xhdr
+{
+	ulong	size;
+	ulong	magix;
+
+	char	data[]; // memory pointer returned by xalloc
+};
+
+// Long lived data structure allocator (singleton)
+// so can call xalloc() only Nhole time!
+struct Xalloc
+{
+	Hole	hole[Nhole];
+
+	Hole*	flist; // head free list
+	Hole*	table; // head used list?
+
+  // extra
+	Lock;
+};
+//static Xalloc	xlists; // private to xalloc.c
+
+
+// from pool.h
+//struct Pool {
+//	char*	name;
+//	ulong	maxsize;
+//
+//	ulong	cursize;
+//	ulong	curfree;
+//	ulong	curalloc;
+//
+//	ulong	minarena;	/* smallest size of new arena */
+//	ulong	quantum;	/* allocated blocks should be multiple of */
+//	ulong	minblock;	/* smallest newly allocated block */
+//
+//	void*	freeroot;	/* actually Free* */
+//	void*	arenalist;	/* actually Arena* */
+//
+//	void*	(*alloc)(ulong);
+//	int	(*merge)(void*, void*);
+//	void	(*move)(void* from, void* to);
+//
+//	int	flags;
+//	int	nfree;
+//	int	lastcompact;
+//
+//	void	(*lock)(Pool*);
+//	void	(*unlock)(Pool*);
+//	void	(*print)(Pool*, char*, ...);
+//	void	(*panic)(Pool*, char*, ...);
+//	void	(*logstack)(Pool*);
+//
+//	void*	private;
+//};
+
+// exported by libc include/pool.h, used by malloc, defined in pool.c in this dir
+//extern Pool*	mainmem;
+//extern Pool*	imagmem;
+
+
+// memory banks, similar to RMap, but portable
 struct Pallocmem
 {
-	ulong base;
+	phys_addr base;
 	ulong npage;
 };
 
@@ -153,28 +255,68 @@ enum
 	PGHLOG  =	9,
 	PGHSIZE	=	1<<PGHLOG,	/* Page hash for image lookup */
 };
+#define	pghash(daddr)	palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
 
+// Page Allocator (singleton)
 struct Palloc
 {
-	Lock;
-	Pallocmem	mem[4];
+	Pallocmem	mem[4]; // TODO: 4 ?? same as Conf.mem
+	Page	*pages;	/* array of all pages */ // huge, xalloc'ed in pageinit() 
+  // sum of mem.npage (which should be conf.upages)
+	ulong	user;			/* how many user pages */
+
 	Page	*head;			/* most recently used */
 	Page	*tail;			/* least recently used */
 	ulong	freecount;		/* how many pages on free list now */
-	Page	*pages;			/* array of all pages */
-	ulong	user;			/* how many user pages */
+
 	Page	*hash[PGHSIZE];
 	Lock	hashlock;
+
+  // extra
+	Lock;
 	Rendez	r;			/* Sleep for free mem */
 	QLock	pwait;			/* Queue of procs waiting for memory */
 };
-
-extern	KImage	swapimage;
-
-extern struct Swapalloc swapalloc;
 extern	Palloc	palloc;
 
-// exported by include/pool.h
-//extern Pool*	mainmem;
-//extern Pool*	imagmem;
 
+#define NFREECHAN	64
+#define IHASHSIZE	64
+#define ihash(s)	imagealloc.hash[s%IHASHSIZE] // could be moved in page.c
+
+// Image allocator (internal to segment.c, but important so here, singleton)
+struct Imagealloc
+{
+	KImage	*free; // xalloc'ed in initseg() (conf.nimage)
+	KImage	*hash[IHASHSIZE];
+	QLock	ireclaim;	/* mutex on reclaiming free images */
+
+	Chan	**freechan;	/* free image channels */
+	int	nfreechan;	/* number of free channels */
+	int	szfreechan;	/* size of freechan array */
+	QLock	fcreclaim;	/* mutex on reclaiming free channels */
+
+  // extra
+	Lock;
+
+};
+//static struct Imagealloc imagealloc; // private to segment.c
+
+
+// Swap allocator (singleton)
+struct Swapalloc
+{
+	int	free;			/* currently free swap pages */
+	uchar*	swmap;			/* Base of swap map in memory */
+	uchar*	alloc;			/* Round robin allocator */
+	uchar*	last;			/* Speed swap allocation */
+	uchar*	top;			/* Top of swap map */
+	Rendez	r;			/* Pager kproc idle sleep */
+	ulong	highwater;		/* Pager start threshold */
+	ulong	headroom;		/* Space pager frees under highwater */
+
+  //extra
+	Lock;				/* Free map lock */
+};
+extern struct Swapalloc swapalloc;
+extern	KImage	swapimage;
