@@ -5,6 +5,10 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
+//*****************************************************************************
+// Constants and types
+//*****************************************************************************
+
 enum
 {
 	Qdir = 0,
@@ -17,39 +21,68 @@ enum
 typedef struct Dirlist Dirlist;
 struct Dirlist
 {
-	uint base;
+	uint base; // for unique qids
 	Dirtab *dir;
 	uchar **data;
-	int ndir;
-	int mdir;
+	int ndir; // number of dir used
+	int mdir; // max dir entries
 };
 
+//*****************************************************************************
+// Root
+//*****************************************************************************
+
+// note: directories have by convention 0 length
 static Dirtab rootdir[Nrootfiles] = {
-	"#/",		{Qdir, 0, QTDIR},	0,		DMDIR|0555,
-	"boot",	{Qboot, 0, QTDIR},	0,		DMDIR|0555,
+  {
+    .name = "#/",
+    .qid = {Qdir, 0, QTDIR},
+    .length = 0,
+    .perm = DMDIR|0555,
+  },
+  {    
+    .name = "boot",	
+    .qid = {Qboot, 0, QTDIR},
+    .length = 0,
+    .perm = DMDIR|0555,
+  }
 };
 static uchar *rootdata[Nrootfiles];
 static Dirlist rootlist = 
 {
-	0,
-	rootdir,
-	rootdata,
-	2,
-	Nrootfiles
+  .base = 0,
+  .dir = rootdir,
+  .data = rootdata,
+  .ndir = 2,
+  .mdir = Nrootfiles
 };
 
+//*****************************************************************************
+// Boot
+//*****************************************************************************
+
 static Dirtab bootdir[Nbootfiles] = {
-	"boot",	{Qboot, 0, QTDIR},	0,		DMDIR|0555,
+  {
+    .name = "boot",
+    .qid = {Qboot, 0, QTDIR},
+    .length = 0,
+    .perm = DMDIR|0555,
+  }
 };
+
 static uchar *bootdata[Nbootfiles];
 static Dirlist bootlist =
 {
-	Qboot,
-	bootdir,
-	bootdata,
-	1,
-	Nbootfiles
+	.base = Qboot,
+	.dir = bootdir,
+	.data = bootdata,
+	.ndir = 1,
+	.mdir = Nbootfiles
 };
+
+//*****************************************************************************
+// Functions
+//*****************************************************************************
 
 /*
  *  add a file to the list
@@ -239,23 +272,23 @@ rootwrite(Chan*, void*, long, vlong)
 }
 
 Dev rootdevtab = {
-	'/',
-	"root",
+  .dc = '/',
+  .name = "root",
 
-	rootreset,
-	devinit,
-	devshutdown,
-	rootattach,
-	rootwalk,
-	rootstat,
-	rootopen,
-	devcreate,
-	rootclose,
-	rootread,
-	devbread,
-	rootwrite,
-	devbwrite,
-	devremove,
-	devwstat,
+  .reset = rootreset,
+  .init = devinit,
+  .shutdown = devshutdown,
+  .attach = rootattach,
+  .walk = rootwalk,
+  .stat = rootstat,
+  .open = rootopen,
+  .create = devcreate,
+  .close = rootclose,
+  .read = rootread,
+  .bread = devbread,
+  .write = rootwrite,
+  .bwrite = devbwrite,
+  .remove = devremove,
+  .wstat = devwstat,
 };
 
