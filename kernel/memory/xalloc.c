@@ -5,40 +5,9 @@
 #include "fns.h"
 
 // Memory allocator for long lived allocated structures
+// e.g. array or Proc (procalloc), array of Pages (palloc.pages), etc
 
-enum
-{
-	Nhole		= 128,
-	Magichole	= 0x484F4C45,			/* HOLE */
-};
-
-typedef struct Hole Hole;
-typedef struct Xalloc Xalloc;
-typedef struct Xhdr Xhdr;
-
-struct Hole
-{
-	ulong	addr;
-	ulong	size;
-	ulong	top;
-	Hole*	link;
-};
-
-struct Xhdr
-{
-	ulong	size;
-	ulong	magix;
-	char	data[];
-};
-
-struct Xalloc
-{
-	Lock;
-	Hole	hole[Nhole];
-	Hole*	flist;
-	Hole*	table;
-};
-
+// The global
 static Xalloc	xlists;
 
 void		xhole(ulong, ulong);
@@ -118,7 +87,7 @@ xspanalloc(ulong size, int align, ulong span)
 }
 
 void*
-xallocz(ulong size, int zero)
+xallocz(ulong size, bool zero)
 {
 	Xhdr *p;
 	Hole *h, **l;
@@ -155,7 +124,7 @@ xallocz(ulong size, int zero)
 void*
 xalloc(ulong size)
 {
-	return xallocz(size, 1);
+	return xallocz(size, true);
 }
 
 void
