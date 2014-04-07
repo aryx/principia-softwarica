@@ -48,7 +48,7 @@ enum
 
 
 extern	char*	conffile;
-extern	int	cpuserver;
+extern	bool	cpuserver;
 extern	Dev*	conf_devtab[];
 extern	char	hostdomain[];
 extern 	Ref	noteidalloc;
