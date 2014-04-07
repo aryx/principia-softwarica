@@ -208,11 +208,15 @@ struct Chan
 	Chan*	link;
 	vlong	offset;			/* in fd */
 	vlong	devoffset;		/* in underlying device; see read */
-	ushort	type;
+
+	ushort	type; // idx in devtab?
 	ulong	dev;
+
 	ushort	mode;			/* read/write */
 	ushort	flag;
+
 	Qid	qid;
+
 	int	fid;			/* for devmnt */
 	ulong	iounit;			/* chunk size for i/o; 0==default */
 	Mhead*	umh;			/* mount point that derived Chan; used in unionread */
