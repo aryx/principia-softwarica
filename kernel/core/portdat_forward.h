@@ -59,6 +59,10 @@ typedef struct Mntcache Mntcache;
 typedef struct Edf		Edf;
 // was in qio.c
 typedef struct Queue	Queue;
+// was in xallo.c
+typedef struct Hole Hole;
+typedef struct Xalloc Xalloc;
+typedef struct Xhdr Xhdr;
 
 #pragma incomplete DevConf
 #pragma incomplete Edf
