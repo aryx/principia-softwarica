@@ -30,7 +30,7 @@ qlock(QLock *q)
 	lock(&q->use);
 	rwstats.qlock++;
 	if(!q->locked) {
-		q->locked = 1;
+		q->locked = true;
 		q->qpc = getcallerpc(&q);
 		unlock(&q->use);
 		return;
@@ -61,7 +61,7 @@ canqlock(QLock *q)
 		unlock(&q->use);
 		return 0;
 	}
-	q->locked = 1;
+	q->locked = true;
 	q->qpc = getcallerpc(&q);
 	unlock(&q->use);
 	return 1;
@@ -73,7 +73,7 @@ qunlock(QLock *q)
 	Proc *p;
 
 	lock(&q->use);
-	if (q->locked == 0)
+	if (q->locked == false)
 		print("qunlock called with qlock not held, from %#p\n",
 			getcallerpc(&q));
 	p = q->head;
@@ -85,7 +85,7 @@ qunlock(QLock *q)
 		ready(p);
 		return;
 	}
-	q->locked = 0;
+	q->locked = false;
 	q->qpc = 0;
 	unlock(&q->use);
 }
