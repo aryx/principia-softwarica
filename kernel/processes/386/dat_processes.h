@@ -1,9 +1,9 @@
 
-// things used in Mach
+// things used in Mach (and Proc), =~ a jumpbuf in C, for coroutines
 struct Label
 {
-	ulong	sp;
-	ulong	pc;
+	ulong	sp; // virt_addr?
+	ulong	pc; // virt_addr?
 };
 
 /*
