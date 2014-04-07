@@ -5,8 +5,6 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-#define	pghash(daddr)	palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
-
 int		ispages(void*);
 void		portcountpagerefs(ulong*, int);
 
@@ -46,7 +44,7 @@ pageinit(void)
 	palloc.head->prev = 0;
 	palloc.tail->next = 0;
 
-	palloc.user = p - palloc.pages;
+	palloc.user = p - palloc.pages; // TODO? should be np too no?
 	pkb = palloc.user*BY2PG/1024;
 	vkb = pkb + (conf.nswap*BY2PG)/1024;
 
