@@ -17,11 +17,7 @@
 
 #include        <tos.h>
 
-void confinit(void);
-void userinit(void);
 void bootargs(void*);
-void mach0init(void);
-void mathinit(void);
 
 // to avoid backward deps
 void devcons__assert(char*);
@@ -55,11 +51,33 @@ extern void mmuinit0(void);
 extern void (*i8237alloc)(void);
 
 //*****************************************************************************
-// Globals
+// Configuration
 //*****************************************************************************
 
 // now in portdat_globals.c
 //Conf conf;
+// where?
+//bool cpuserver;
+
+// conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
+#define MAXCONF         64
+// hash<string, string>
+char *confname[MAXCONF];
+char *confval[MAXCONF];
+// Hashtbl.length(confname)
+int nconf;
+
+
+// getconf()
+char*
+main_getconf(char *name)
+{
+        int i;
+        for(i = 0; i < nconf; i++)
+                if(cistrcmp(confname[i], name) == 0)
+                        return confval[i];
+        return nil;
+}
 
 //*****************************************************************************
 // Boot parameters (not used by pad)
@@ -75,7 +93,7 @@ extern void (*i8237alloc)(void);
 #define BOOTLINELEN     64
 #define BOOTARGS        ((char*)(CONFADDR+BOOTLINELEN))
 #define BOOTARGSLEN     (4096-0x200-BOOTLINELEN)
-#define MAXCONF         64
+
 
 enum {
         /* space for syscall args, return PC, top-of-stack struct */
@@ -83,13 +101,11 @@ enum {
 };
 
 //char bootdisk[KNAMELEN];
-char *confname[MAXCONF];
-char *confval[MAXCONF];
-int nconf;
 
 // Global! set by bootargs()
 uchar *sp;      /* user stack of init proc */
 
+// who set this??
 int delaylink;
 
 //@Scheck: Assembly
@@ -149,315 +165,6 @@ options(void)
         }
 }
 
-//*****************************************************************************
-// Conf init
-//*****************************************************************************
-
-// getconf()
-char*
-main_getconf(char *name)
-{
-        int i;
-
-        for(i = 0; i < nconf; i++)
-                if(cistrcmp(confname[i], name) == 0)
-                        return confval[i];
-        return 0;
-}
-
-//*****************************************************************************
-// Main entry point!
-//*****************************************************************************
-
-//@Scheck: not dead, entry point :) jumped to by qemu (via elf header)
-void
-main(void)
-{
-
-  // initial assignment made to avoid circular dependencies in codegraph
-  print = devcons_print;
-  iprint = devcons_iprint;
-  pprint = devcons_pprint;
-  
-  panic = devcons_panic;
-  _assert = devcons__assert;
-  
-  error = proc_error;
-  nexterror = proc_nexterror;
-  
-  dumpstack = trap_dumpstack;
-  dumpaproc = proc_dumpaproc;
-  
-  devtab = conf_devtab;
-  getconf = main_getconf;
-  
-  delay = i8253_delay;
-  microdelay = i8253_microdelay;
-
-  wakeup = proc_wakeup;
-  sched = proc_sched;
-  ready = proc_ready;
-  sleep = proc_sleep;
-  tsleep = proc_tsleep;
-
-  exit = main_exit;
-  isaconfig = main_isaconfig;
-  
-  /*
-   * On a uniprocessor, you'd think that coherence could be nop,
-   * but it can't.  We still need a barrier when using coherence() in
-   * device drivers.
-   *
-   * On VMware, it's safe (and a huge win) to set this to nop.
-   * Aux/vmware does this via the #P/archctl file.
-   */
-  coherence = nop;
-  
-  fastticks = devarch_fastticks;
-  
-  cclose = chan_cclose;
-
-  proctab = proc_proctab;
-  postnote = proc_postnote;
-  return0 = sysproc_return0;
-  pexit = proc_pexit;
-
-  // end patch, back to original code
-
-        cgapost(0);
-
-        mach0init();
-        options();
-        ioinit();
-        i8250console();
-        quotefmtinstall();
-        screeninit();
-
-        print("\nPlan 99999999999999\n");
-
-        // the init0 means this is really early on (malloc is not available?!)
-        trapinit0();
-        mmuinit0();
-
-        kbdinit();
-        i8253init();
-        cpuidentify();
-
-        meminit();
-        confinit();
-        archinit();
-        xinit();
-        if(i8237alloc != nil)
-                i8237alloc();
-        trapinit();
-        printinit();
-        cpuidprint();
-        mmuinit();
-        fpsavealloc();
-        if(arch->intrinit)      /* launches other processors on an mp */
-                arch->intrinit();
-        timersinit();
-        mathinit();
-        kbdenable();
-        if(arch->clockenable)
-                arch->clockenable();
-
-        procinit0();
-        initseg();
-        if(delaylink) {
-                bootlinks();
-                pcimatch(0, 0, 0);
-        } else
-                links();
-        conf.monitor = 1;
-        chandevreset();
-        cgapost(0xcd);
-
-        pageinit();
-        i8253link();
-        swapinit();
-
-        userinit();
-        active.thunderbirdsarego = 1;
-
-        cgapost(0x99);
-        schedinit();
-}
-
-void
-mach0init(void)
-{
-        conf.nmach = 1;
-        MACHP(0) = (Mach*)CPU0MACH;
-        m->pdb = (ulong*)CPU0PDB;
-        m->gdt = (Segdesc*)CPU0GDT;
-
-        machinit();
-
-        active.machs = 1;
-        active.exiting = 0;
-}
-
-
-// set by userinit to sched.pc
-void
-init0(void)
-{
-        int i;
-        char buf[2*KNAMELEN];
-        
-        up->nerrlab = 0;
-
-        spllo();
-
-        /*
-         * These are o.k. because rootinit is null.
-         * Then early kproc's will have a root and dot.
-         */
-        up->slash = namec("#/", Atodir, 0, 0);
-        pathclose(up->slash->path);
-        up->slash->path = newpath("/");
-        up->dot = cclone(up->slash);
-
-        chandevinit();
-
-        if(!waserror()){
-                snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
-                ksetenv("terminal", buf, 0);
-                ksetenv("cputype", "386", 0);
-                if(cpuserver)
-                        ksetenv("service", "cpu", 0);
-                else
-                        ksetenv("service", "terminal", 0);
-                for(i = 0; i < nconf; i++){
-                        if(confname[i][0] != '*')
-                                ksetenv(confname[i], confval[i], 0);
-                        ksetenv(confname[i], confval[i], 1);
-                }
-                poperror();
-        }
-        kproc("alarm", alarmkproc, 0);
-        cgapost(0x9);
-        touser(sp);
-}
-
-void
-userinit(void)
-{
-        void *v;
-        Proc *p;
-        Segment *s;
-        Page *pg;
-
-        p = newproc();
-        p->pgrp = newpgrp();
-        p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
-        p->egrp->ref = 1;
-        p->fgrp = dupfgrp(nil);
-        p->rgrp = newrgrp();
-        p->procmode = 0640;
-
-        kstrdup(&eve, "");
-        kstrdup(&p->text, "*init*");
-        kstrdup(&p->user, eve);
-
-        p->fpstate = FPinit;
-        fpoff();
-
-        /*
-         * Kernel Stack
-         *
-         * N.B. make sure there's enough space for syscall to check
-         *      for valid args and 
-         *      4 bytes for gotolabel's return PC
-         */
-        p->sched.pc = (ulong)init0;
-        p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
-
-        /*
-         * User Stack
-         *
-         * N.B. cannot call newpage() with clear=1, because pc kmap
-         * requires up != nil.  use tmpmap instead.
-         */
-        s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-        p->seg[SSEG] = s;
-        pg = newpage(0, 0, USTKTOP-BY2PG);
-        v = tmpmap(pg);
-        memset(v, 0, BY2PG);
-        segpage(s, pg);
-
-        bootargs(v);
-        tmpunmap(v);
-
-        /*
-         * Text
-         */
-        s = newseg(SG_TEXT, UTZERO, 1);
-        s->flushme++;
-        p->seg[TSEG] = s;
-        pg = newpage(0, 0, UTZERO);
-        memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
-        segpage(s, pg);
-        v = tmpmap(pg);
-        memset(v, 0, BY2PG);
-        memmove(v, initcode, sizeof initcode);
-        tmpunmap(v);
-
-        ready(p);
-}
-
-uchar *
-pusharg(char *p)
-{
-        int n;
-
-        n = strlen(p)+1;
-        sp -= n;
-        memmove(sp, p, n);
-        return sp;
-}
-
-void
-bootargs(void *base)
-{
-        int i, ac;
-        uchar *av[32];
-        uchar **lsp;
-        char *cp = BOOTLINE;
-        char buf[64];
-
-        sp = (uchar*)base + BY2PG - Ustkheadroom;
-
-        ac = 0;
-        av[ac++] = pusharg("/386/9dos");
-
-        /* when boot is changed to only use rc, this code can go away */
-        cp[BOOTLINELEN-1] = 0;
-        buf[0] = 0;
-        if(strncmp(cp, "fd", 2) == 0){
-                snprint(buf, sizeof buf, "local!#f/fd%lddisk",
-                        strtol(cp+2, 0, 0));
-                av[ac++] = pusharg(buf);
-        } else if(strncmp(cp, "sd", 2) == 0){
-                snprint(buf, sizeof buf, "local!#S/sd%c%c/fs", *(cp+2), *(cp+3));
-                av[ac++] = pusharg(buf);
-        } else if(strncmp(cp, "ether", 5) == 0)
-                av[ac++] = pusharg("-n");
-
-        /* 4 byte word align stack */
-        sp = (uchar*)((ulong)sp & ~3);
-
-        /* build argc, argv on stack */
-        sp -= (ac+1)*sizeof(sp);
-        lsp = (uchar**)sp;
-        for(i = 0; i < ac; i++)
-                *lsp++ = av[i] + ((USTKTOP - BY2PG) - (ulong)base);
-        *lsp = 0;
-        sp += (USTKTOP - BY2PG) - (ulong)base - sizeof(ulong);
-}
-
-
 static void
 writeconf(void)
 {
@@ -487,6 +194,29 @@ writeconf(void)
         free(p);
 }
 
+//*****************************************************************************
+// Mach init
+//*****************************************************************************
+
+void
+mach0init(void)
+{
+        conf.nmach = 1;
+        MACHP(0) = (Mach*)CPU0MACH;
+        m->pdb = (ulong*)CPU0PDB;
+        m->gdt = (Segdesc*)CPU0GDT;
+
+        machinit();
+
+        active.machs = 1;
+        active.exiting = 0;
+}
+
+//*****************************************************************************
+// Conf init
+//*****************************************************************************
+
+// precondition: meminit() have initialized Conf.mem
 void
 confinit(void)
 {
@@ -579,6 +309,175 @@ confinit(void)
         }
 }
 
+//*****************************************************************************
+// First process init
+//*****************************************************************************
+
+// set by userinit to sched.pc
+void
+init0(void)
+{
+        int i;
+        char buf[2*KNAMELEN];
+        
+        up->nerrlab = 0;
+
+        spllo();
+
+        /*
+         * These are o.k. because rootinit is null.
+         * Then early kproc's will have a root and dot.
+         */
+        up->slash = namec("#/", Atodir, 0, 0);
+        pathclose(up->slash->path);
+        up->slash->path = newpath("/");
+        up->dot = cclone(up->slash);
+
+        chandevinit();
+
+        if(!waserror()){
+                snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
+                ksetenv("terminal", buf, 0);
+                ksetenv("cputype", "386", 0);
+                if(cpuserver)
+                        ksetenv("service", "cpu", 0);
+                else
+                        ksetenv("service", "terminal", 0);
+                for(i = 0; i < nconf; i++){
+                        if(confname[i][0] != '*')
+                                ksetenv(confname[i], confval[i], 0);
+                        ksetenv(confname[i], confval[i], 1);
+                }
+                poperror();
+        }
+        kproc("alarm", alarmkproc, 0);
+        cgapost(0x9);
+        touser(sp);
+}
+
+
+uchar *
+pusharg(char *p)
+{
+        int n;
+
+        n = strlen(p)+1;
+        sp -= n;
+        memmove(sp, p, n);
+        return sp;
+}
+
+//TODO: get rid of as have simplified boot process, no plan9.ini
+void
+bootargs(void *base)
+{
+        int i, ac;
+        uchar *av[32];
+        uchar **lsp;
+        char *cp = BOOTLINE;
+        char buf[64];
+
+        sp = (uchar*)base + BY2PG - Ustkheadroom;
+
+        ac = 0;
+        av[ac++] = pusharg("/386/9dos");
+
+        /* when boot is changed to only use rc, this code can go away */
+        cp[BOOTLINELEN-1] = 0;
+        buf[0] = 0;
+        if(strncmp(cp, "fd", 2) == 0){
+                snprint(buf, sizeof buf, "local!#f/fd%lddisk",
+                        strtol(cp+2, 0, 0));
+                av[ac++] = pusharg(buf);
+        } else if(strncmp(cp, "sd", 2) == 0){
+                snprint(buf, sizeof buf, "local!#S/sd%c%c/fs", *(cp+2), *(cp+3));
+                av[ac++] = pusharg(buf);
+        } else if(strncmp(cp, "ether", 5) == 0)
+                av[ac++] = pusharg("-n");
+
+        /* 4 byte word align stack */
+        sp = (uchar*)((ulong)sp & ~3);
+
+        /* build argc, argv on stack */
+        sp -= (ac+1)*sizeof(sp);
+        lsp = (uchar**)sp;
+        for(i = 0; i < ac; i++)
+                *lsp++ = av[i] + ((USTKTOP - BY2PG) - (ulong)base);
+        *lsp = 0;
+        sp += (USTKTOP - BY2PG) - (ulong)base - sizeof(ulong);
+}
+
+
+void
+userinit(void)
+{
+        void *v;
+        Proc *p;
+        Segment *s;
+        Page *pg;
+
+        p = newproc();
+        p->pgrp = newpgrp();
+        p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
+        p->egrp->ref = 1;
+        p->fgrp = dupfgrp(nil);
+        p->rgrp = newrgrp();
+        p->procmode = 0640;
+
+        kstrdup(&eve, "");
+        kstrdup(&p->text, "*init*");
+        kstrdup(&p->user, eve);
+
+        p->fpstate = FPinit;
+        fpoff();
+
+        /*
+         * Kernel Stack
+         *
+         * N.B. make sure there's enough space for syscall to check
+         *      for valid args and 
+         *      4 bytes for gotolabel's return PC
+         */
+        p->sched.pc = (ulong)init0;
+        p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
+
+        /*
+         * User Stack
+         *
+         * N.B. cannot call newpage() with clear=1, because pc kmap
+         * requires up != nil.  use tmpmap instead.
+         */
+        s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+        p->seg[SSEG] = s;
+        pg = newpage(0, 0, USTKTOP-BY2PG);
+        v = tmpmap(pg);
+        memset(v, 0, BY2PG);
+        segpage(s, pg);
+
+        bootargs(v);
+        tmpunmap(v);
+
+        /*
+         * Text
+         */
+        s = newseg(SG_TEXT, UTZERO, 1);
+        s->flushme++;
+        p->seg[TSEG] = s;
+        pg = newpage(0, 0, UTZERO);
+        memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+        segpage(s, pg);
+        v = tmpmap(pg);
+        memset(v, 0, BY2PG);
+        memmove(v, initcode, sizeof initcode);
+        tmpunmap(v);
+
+        ready(p);
+}
+
+//*****************************************************************************
+// Math coprocessor
+//*****************************************************************************
+
 static char* mathmsg[] =
 {
         nil,    /* handled below */
@@ -645,7 +544,6 @@ mathnote(void)
                 msg, pc, status);
         postnote(up, 1, note, NDebug);
 }
-
 
 /*
  *  math coprocessor error
@@ -726,6 +624,8 @@ mathover(Ureg*, void*)
         pexit("math overrun", 0);
 }
 
+
+
 void
 mathinit(void)
 {
@@ -736,9 +636,12 @@ mathinit(void)
         trapenable(VectorCSO, mathover, 0, "mathover");
 }
 
+//*****************************************************************************
+// Shutdown/reboot
+//*****************************************************************************
 
 static void
-shutdown(int ispanic)
+shutdown(bool ispanic)
 {
         int ms, once;
 
@@ -781,6 +684,15 @@ shutdown(int ispanic)
         }else
                 delay(1000);
 }
+
+// exit()
+void
+main_exit(bool ispanic)
+{
+        shutdown(ispanic);
+        arch->reset();
+}
+
 
 void
 reboot(void *entry, void *code, ulong size)
@@ -855,13 +767,9 @@ reboot(void *entry, void *code, ulong size)
 }
 
 
-// exit()
-void
-main_exit(int ispanic)
-{
-        shutdown(ispanic);
-        arch->reset();
-}
+//*****************************************************************************
+// Misc
+//*****************************************************************************
 
 // isaconfig()
 int
@@ -895,4 +803,135 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
                         isa->freq = strtoul(p+5, &p, 0);
         }
         return 1;
+}
+
+//*****************************************************************************
+// Main entry point!
+//*****************************************************************************
+
+//@Scheck: not dead, entry point :) jumped to by qemu (via elf header)
+void
+main(void)
+{
+
+  // initial assignment made to avoid circular dependencies in codegraph
+  print = devcons_print;
+  iprint = devcons_iprint;
+  pprint = devcons_pprint;
+  
+  panic = devcons_panic;
+  _assert = devcons__assert;
+  
+  error = proc_error;
+  nexterror = proc_nexterror;
+  
+  dumpstack = trap_dumpstack;
+  dumpaproc = proc_dumpaproc;
+  
+  devtab = conf_devtab;
+  getconf = main_getconf;
+  
+  delay = i8253_delay;
+  microdelay = i8253_microdelay;
+
+  wakeup = proc_wakeup;
+  sched = proc_sched;
+  ready = proc_ready;
+  sleep = proc_sleep;
+  tsleep = proc_tsleep;
+
+  exit = main_exit;
+  isaconfig = main_isaconfig;
+  
+  /*
+   * On a uniprocessor, you'd think that coherence could be nop,
+   * but it can't.  We still need a barrier when using coherence() in
+   * device drivers.
+   *
+   * On VMware, it's safe (and a huge win) to set this to nop.
+   * Aux/vmware does this via the #P/archctl file.
+   */
+  coherence = nop;
+  
+  fastticks = devarch_fastticks;
+  
+  cclose = chan_cclose;
+
+  proctab = proc_proctab;
+  postnote = proc_postnote;
+  return0 = sysproc_return0;
+  pexit = proc_pexit;
+
+  // end patch, back to original code
+
+        cgapost(0);
+
+        mach0init(); // calls machinit()
+
+        options();
+
+        ioinit();
+        i8250console();
+        quotefmtinstall();
+        screeninit();
+        // screeninit() done, we can print stuff!
+        print("\nPlan 99999999999999\n");
+
+        // the init0 means this is really early on (malloc is not available?!)
+        trapinit0();
+        mmuinit0();
+
+        kbdinit();
+        i8253init();
+
+        cpuidentify();
+
+        meminit();
+        confinit();
+
+        archinit();
+
+        xinit();
+
+        if(i8237alloc != nil)
+                i8237alloc();
+
+        trapinit();
+        printinit();
+        cpuidprint();
+        mmuinit();
+
+        fpsavealloc();
+        if(arch->intrinit)      /* launches other processors on an mp */
+                arch->intrinit();
+
+        timersinit();
+        mathinit();
+        kbdenable();
+        if(arch->clockenable)
+                arch->clockenable();
+
+
+        procinit0();
+        initseg();
+        if(delaylink) {
+                bootlinks();
+                pcimatch(0, 0, 0);
+        } else
+                links();
+        conf.monitor = true;
+        // initialize all devices
+        chandevreset();
+        cgapost(0xcd);
+
+        pageinit();
+        i8253link();
+        swapinit();
+
+        // let's craft our first process (that will then exec("boot/boot"))
+        userinit();
+        active.thunderbirdsarego = 1;
+
+        cgapost(0x99);
+        schedinit();
 }
