@@ -1,7 +1,70 @@
 #include "mem.h"
 #include "/sys/src/boot/pc/x16.h"
-       
-        
+
+//*****************************************************************************
+// Helpers
+//*****************************************************************************
+
+/*
+ * Save registers.
+ */
+TEXT saveregs(SB), $0
+	/* appease 8l */
+	SUBL $32, SP
+	POPL AX
+	POPL AX
+	POPL AX
+	POPL AX
+	POPL AX
+	POPL AX
+	POPL AX
+	POPL AX
+	
+	PUSHL	AX
+	PUSHL	BX
+	PUSHL	CX
+	PUSHL	DX
+	PUSHL	BP
+	PUSHL	DI
+	PUSHL	SI
+	PUSHFL
+
+	XCHGL	32(SP), AX	/* swap return PC and saved flags */
+	XCHGL	0(SP), AX
+	XCHGL	32(SP), AX
+	RET
+
+TEXT restoreregs(SB), $0
+	/* appease 8l */
+	PUSHL	AX
+	PUSHL	AX
+	PUSHL	AX
+	PUSHL	AX
+	PUSHL	AX
+	PUSHL	AX
+	PUSHL	AX
+	PUSHL	AX
+	ADDL	$32, SP
+	
+	XCHGL	32(SP), AX	/* swap return PC and saved flags */
+	XCHGL	0(SP), AX
+	XCHGL	32(SP), AX
+
+	POPFL
+	POPL	SI
+	POPL	DI
+	POPL	BP
+	POPL	DX
+	POPL	CX
+	POPL	BX
+	POPL	AX
+	RET
+
+
+//*****************************************************************************
+// Functions
+//*****************************************************************************
+                
 /*
  * Assumed to be in protected mode at time of call.
  * Switch to real mode, execute an interrupt, and

@@ -1,15 +1,6 @@
 #include "mem.h"
-       
         
-/*
- * For backwards compatiblity with 9load - should go away when 9load is changed
- * 9load currently sets up the mmu, however the first 16MB of memory is identity
- * mapped, so behave as if the mmu was not setup
- */
 TEXT _startKADDR(SB), $0
-	MOVL	$_startPADDR(SB), AX
-	ANDL	$~KZERO, AX
-	JMP*	AX
 
 /*
  * Must be 4-byte aligned.
@@ -24,7 +15,7 @@ TEXT _multibootheader(SB), $0
 	LONG	$edata-KZERO(SB)		/* load_end_addr */
 	LONG	$end-KZERO(SB)			/* bss_end_addr */
         
-        /* !!!entry point specification!!! */
+//      !!!entry point specification!!!
 	LONG	$_multibootentry-KZERO(SB)		/* entry_addr */
         
 	LONG	$0				/* mode_type */
@@ -50,7 +41,7 @@ TEXT _multibootentry(SB), $0
 	CLD
 	ADDL	$KZERO, BX
 	MOVL	BX, multiboot-KZERO(SB)
-        /* !!! Jump to _startPADDR (not _startKADDR)!!! */
+//      !!! Jump to _startPADDR (not _startKADDR)!!!
 	MOVL	$_startPADDR(SB), AX
 	ANDL	$~KZERO, AX
 	JMP*	AX
