@@ -12,7 +12,7 @@ struct Lock
   // option<ref<Mach>>
   Mach  *m; // not that used, only in iprintcanlock apparently
 
-
+  // debugging
 //#ifdef LOCKCYCLES
   long  lockcycles;
 //#endif

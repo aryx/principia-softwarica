@@ -2,10 +2,11 @@
 // define things used in Conf in core/386/, could be put in portdat_memory.h
 struct Confmem
 {
-  ulong base;
+  ulong base; // phys?
   ulong npage;
-  ulong kbase;
-  ulong klimit;
+
+  ulong kbase; // phys?
+  ulong klimit; // phys?
 };
 
 // define things used in Mach in core/386/
@@ -46,18 +47,18 @@ struct Segdesc
 
 
 
-
 // define things used in Proc in processes/
 /*
  *  MMU stuff in proc
  */
 #define NCOLOR 1
-//@Scheck: unnamed substructure
+//@Scheck: not dead, unnamed substructure
 struct PMMU
 {
   Page* mmupdb;     /* page directory base */
   Page* mmufree;    /* unused page table pages */
   Page* mmuused;    /* used page table pages */
+
   Page* kmaptable;    /* page table used by kmap */
   uint  lastkmap;   /* last entry used by kmap */
   int nkmap;      /* number of current kmaps */
@@ -69,4 +70,3 @@ struct PMMU
  */
 typedef struct KMap   KMap;
 #define VA(k)   ((void*)(k))
-
