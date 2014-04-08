@@ -10,18 +10,23 @@ typedef ulong virt_addr;
 // Page < Pte (can be filled by KImage) < Segment
 //*****************************************************************************
 
+// All the ref<Page> here are references to Pages in the array<Page> of 
+// Palloc.pages (pool allocator)
+// All the ref<Kimage> here are references to KImage in the ?? of 
+// Imagealloc.free?
+
 enum modref 
 {
-	PG_MOD		= 0x01,		/* software modified bit */
-	PG_REF		= 0x02,		/* software referenced bit */
+  PG_MOD    = 0x01,   /* software modified bit */
+  PG_REF    = 0x02,   /* software referenced bit */
 };
 
 enum cachectl
 {
-	PG_NOFLUSH	= 0,
-	PG_TXTFLUSH	= 1,		/* flush dcache and invalidate icache */
-	PG_DATFLUSH	= 2,		/* flush both i & d caches (UNUSED) */
-	PG_NEWCOL	= 3,		/* page has been recolored */
+  PG_NOFLUSH  = 0,
+  PG_TXTFLUSH = 1,    /* flush dcache and invalidate icache */
+  //  PG_DATFLUSH = 2,    /* flush both i & d caches (UNUSED) */
+  PG_NEWCOL = 3,    /* page has been recolored */
 };
 
 // Page metadata. We will allocate as many Page as to cover all physical memory
@@ -29,34 +34,41 @@ enum cachectl
 // Should have been xalloc'ed in Palloc.pages
 struct Page
 {
-	phys_addr	pa;			/* Physical address in memory */
-	virt_addr	va;			/* Virtual address for user */
+  phys_addr pa;     /* Physical address in memory */
+  virt_addr va;     /* Virtual address for user */
 
-	ulong	daddr;			/* Disc address on swap */
-	ulong	gen;			/* Generation counter for swap */
+  ulong daddr;      /* Disc address on swap */
+  ulong gen;      /* Generation counter for swap */
 
-	ushort	ref;			/* Reference count */
-	char	modref;			/* Simulated modify/reference bits */ // see enum above
-	char	color;			/* Cache coloring */
-	char	cachectl[MAXMACH];	/* Cache flushing control for putmmu */ // see enum
+  // Why not Ref? to save space?
+  ushort  ref;      /* Reference count */
+  // enum<modref>
+  char  modref;     /* Simulated modify/reference bits */
+  // enum<cachectl>??
+  char  color;      /* Cache coloring */
+  // array<enum<cachectl>>
+  char  cachectl[MAXMACH];  /* Cache flushing control for putmmu */
 
   // extra
-	Lock;
-	Page	*next;			/* Lru free list */ // Palloc.head?
-	Page	*prev;
-	Page	*hash;			/* Image hash chains */ // Palloc.hash?
-	KImage	*image;			/* Associated text or swap image */
+  Lock;
+  Page  *next; /* Lru free list */ // list<ref<Page>> Palloc.head?
+  Page  *prev; // ??
+  Page  *hash; /* Image hash chains */ // hash<?, list<ref<Page>>> Palloc.hash?
+  // option<ref<Kimage>>
+  KImage  *image;     /* Associated text or swap image */
 };
 
 // malloc'ed?
 struct Pte
 {
-  // will map 1M of memory
-	Page	*pages[PTEPERTAB];	/* Page map for this chunk of pte */
+  //array<option<ref<Page>> will map 1M of memory
+  Page  *pages[PTEPERTAB];  /* Page map for this chunk of pte */
 
   //to avoid iterate over all pages
-	Page	**first;		/* First used entry */
-	Page	**last;			/* Last used entry */
+  // ref<ref<Page>> in Pte.pages
+  Page  **first;    /* First used entry */
+  // ref<ref<Page>> in Pte.pages
+  Page  **last;     /* Last used entry */
 };
 
 
@@ -66,19 +78,20 @@ struct Pte
 // (renamed KImage to avoid name conflict with memdraw Image (picture))
 struct KImage
 {
-	Chan	*c;			/* channel to text file */
-	Qid 	qid;			/* Qid for page cache coherence */
-	Qid	mqid;
-	Chan	*mchan;
-	ushort	type;			/* Device type of owning channel */
+  Chan  *c;     /* channel to text file */
+  Qid   qid;      /* Qid for page cache coherence */
+  Qid mqid;
+  Chan  *mchan;
+  ushort  type;     /* Device type of owning channel */
 
-	int	notext;			/* no file associated */
+  bool  notext;     /* no file associated */
 
   // extra
-	Ref;
-	KImage	*hash;			/* Qid hash chains */ // Imagealloc.hash?
-	KImage	*next;			/* Free list */ // Imagealloc.free?
-	Segment *s;			/* TEXT segment for image if running */
+  Ref;
+  KImage  *hash; /* Qid hash chains */ // hash<?, list<ref<Kimage>>> Imagealloc.hash? 
+  KImage  *next; /* Free list */ // list<ref<Kimage>> of Imagealloc.free?
+  // option<ref<Segment>>?
+  Segment *s;     /* TEXT segment for image if running */
 };
 
 
@@ -86,73 +99,76 @@ struct KImage
 /* Segment types */
 enum segtype
 {
-	SG_TYPE		= 07,		/* Mask type of segment */
-	SG_TEXT		= 00,
-	SG_DATA		= 01,
-	SG_BSS		= 02,
-	SG_STACK	= 03,
-	SG_SHARED	= 04,
-	SG_PHYSICAL	= 05,
+  SG_TYPE   = 07,   /* Mask type of segment */
+  SG_TEXT   = 00,
+  SG_DATA   = 01,
+  SG_BSS    = 02,
+  SG_STACK  = 03,
+  SG_SHARED = 04,
+  SG_PHYSICAL = 05,
 
-	SG_RONLY	= 0040,		/* Segment is read only */
-	SG_CEXEC	= 0100,		/* Detach at exec */
+  SG_RONLY  = 0040,   /* Segment is read only */
+  SG_CEXEC  = 0100,   /* Detach at exec */
 };
 
-#define PG_ONSWAP	1
-#define onswap(s)	(((ulong)s)&PG_ONSWAP)
-#define pagedout(s)	(((ulong)s)==0 || onswap(s))
-#define swapaddr(s)	(((ulong)s)&~PG_ONSWAP)
+#define PG_ONSWAP 1
+#define onswap(s) (((ulong)s)&PG_ONSWAP)
+#define pagedout(s) (((ulong)s)==0 || onswap(s))
+#define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
 
-#define SEGMAXSIZE	(SEGMAPSIZE*PTEMAPMEM)
+#define SEGMAXSIZE  (SEGMAPSIZE*PTEMAPMEM)
 
 struct Physseg
 {
-	ulong	attr;			/* Segment attributes */
-	char	*name;			/* Attach name */
-	ulong	pa;			/* Physical address */
-	ulong	size;			/* Maximum segment size in pages */
-	Page	*(*pgalloc)(Segment*, ulong);	/* Allocation if we need it */
-	void	(*pgfree)(Page*);
+  ulong attr;     /* Segment attributes */
+  char  *name;      /* Attach name */
+  ulong pa;     /* Physical address */
+  ulong size;     /* Maximum segment size in pages */
+  Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
+  void  (*pgfree)(Page*);
 };
 
 
 // often used as (q->top-q->base)>>LRESPROF
 enum
 {
-	LRESPROF	= 3,
+  LRESPROF  = 3,
 };
 
 // smalloc'ed by newseg()
 struct Segment
 {
-	ushort	type;		/* segment type */
+  // enum<segtype>
+  ushort  type;   /* segment type */
 
-	virt_addr	base;		/* virtual base */
-	virt_addr	top;		/* virtual top */
-	ulong	size;		/* size in pages */ // top - base / BY2PG?
+  virt_addr base;   /* virtual base */
+  virt_addr top;    /* virtual top */
+  ulong size;   /* size in pages */ // top - base / BY2PG?
 
-  // kind of a page directory table (and pte = page table)
-	Pte	**map; // SEGMAPSIZE max, smalloc'ed
-  // so 1984 * 1M via PTE =~ 2Go virtual memory per segment!
-	int	mapsize; // nelem(map)
+  // Kind of a page directory table (and pte = page table)
+  // can be SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per segment!
+  // array<ref<Pte>>, smalloc'ed, point to ssegmap if small enough
+  Pte **map; 
   // small seg map, used instead of map if segment small enough
-	Pte	*ssegmap[SSEGMAPSIZE]; // 16
+  // array<ref<Pte>>
+  Pte *ssegmap[SSEGMAPSIZE]; // 16
+  int mapsize; // nelem(map)
 
-	KImage	*image;		/* text in file attached to this segment */
-	ulong	fstart;		/* start address in file for demand load */
-	ulong	flen;		/* length of segment in file */
+  KImage  *image;   /* text in file attached to this segment */
+  ulong fstart;   /* start address in file for demand load */
+  ulong flen;   /* length of segment in file */
 
-	int	flushme;	/* maintain icache for this segment */
-	Physseg *pseg;
-	ulong*	profile;	/* Tick profile area */
-	ulong	mark;		/* portcountrefs */
-	ushort	steal;		/* Page stealer lock */
+  int flushme;  /* maintain icache for this segment */
+  Physseg *pseg;
+  ulong*  profile;  /* Tick profile area */
+  ulong mark;   /* portcountrefs */
+  ushort  steal;    /* Page stealer lock */
 
   // extra
-	Ref;
-	QLock	lk;
-	Lock	semalock;
-	Sema	sema;
+  Ref;
+  QLock lk;
+  Lock  semalock;
+  Sema  sema;
 };
 
 
@@ -165,18 +181,18 @@ struct Segment
 // actually internal to xalloc.c, but important so here
 enum
 {
-	Nhole		= 128,
-	Magichole	= 0x484F4C45,			/* HOLE */
+  Nhole   = 128,
+  Magichole = 0x484F4C45,     /* HOLE */
 };
 
 struct Hole
 {
-	ulong	addr; // phys_addr? base?
-	ulong	top; // phys_addr?
-	ulong	size; // top - addr?
+  ulong addr; // phys_addr? base?
+  ulong top; // phys_addr?
+  ulong size; // top - addr?
   
   // extra
-	Hole*	link; // next in free list or used list
+  Hole* link; // list<ref<Hole>> of Xalloc.flist or Xalloc.table?
 };
 
 // What is the connection with Hole? a used Hole will describe
@@ -184,120 +200,131 @@ struct Hole
 // and then the actual memory xalloc'ed by someone
 struct Xhdr
 {
-	ulong	size;
-	ulong	magix;
+  ulong size;
+  ulong magix;
 
-	char	data[]; // memory pointer returned by xalloc
+  char  data[]; // memory pointer returned by xalloc
 };
 
 // Long lived data structure allocator (singleton)
 // so can call xalloc() only Nhole time!
 struct Xalloc
 {
-	Hole	hole[Nhole];
+  // array<Hole>
+  Hole  hole[Nhole];
 
-	Hole*	flist; // head free list
-	Hole*	table; // head used list?
+  // list<ref<Hole>> (next = Hole.link) free list?
+  Hole* flist; 
+  // list<ref<Hole>> (next = Hole.link) used list?
+  Hole* table; 
 
   // extra
-	Lock;
+  Lock;
 };
-//static Xalloc	xlists; // private to xalloc.c
+//static Xalloc xlists; // private to xalloc.c
 
 
 // from pool.h
 //struct Pool {
-//	char*	name;
-//	ulong	maxsize;
+//  char* name;
+//  ulong maxsize;
 //
-//	ulong	cursize;
-//	ulong	curfree;
-//	ulong	curalloc;
+//  ulong cursize;
+//  ulong curfree;
+//  ulong curalloc;
 //
-//	ulong	minarena;	/* smallest size of new arena */
-//	ulong	quantum;	/* allocated blocks should be multiple of */
-//	ulong	minblock;	/* smallest newly allocated block */
+//  ulong minarena; /* smallest size of new arena */
+//  ulong quantum;  /* allocated blocks should be multiple of */
+//  ulong minblock; /* smallest newly allocated block */
 //
-//	void*	freeroot;	/* actually Free* */
-//	void*	arenalist;	/* actually Arena* */
+//  void* freeroot; /* actually Free* */
+//  void* arenalist;  /* actually Arena* */
 //
-//	void*	(*alloc)(ulong);
-//	int	(*merge)(void*, void*);
-//	void	(*move)(void* from, void* to);
+//  void* (*alloc)(ulong);
+//  int (*merge)(void*, void*);
+//  void  (*move)(void* from, void* to);
 //
-//	int	flags;
-//	int	nfree;
-//	int	lastcompact;
+//  int flags;
+//  int nfree;
+//  int lastcompact;
 //
-//	void	(*lock)(Pool*);
-//	void	(*unlock)(Pool*);
-//	void	(*print)(Pool*, char*, ...);
-//	void	(*panic)(Pool*, char*, ...);
-//	void	(*logstack)(Pool*);
+//  void  (*lock)(Pool*);
+//  void  (*unlock)(Pool*);
+//  void  (*print)(Pool*, char*, ...);
+//  void  (*panic)(Pool*, char*, ...);
+//  void  (*logstack)(Pool*);
 //
-//	void*	private;
+//  void* private;
 //};
 
 // exported by libc include/pool.h, used by malloc, defined in pool.c in this dir
-//extern Pool*	mainmem;
-//extern Pool*	imagmem;
+//extern Pool*  mainmem;
+//extern Pool*  imagmem;
 
 
 // memory banks, similar to RMap, and Confmem, but page oriented, and portable
 struct Pallocmem
 {
-	phys_addr base;
-	ulong npage;
+  phys_addr base;
+  ulong npage;
 };
 
 enum
 {
-	PGHLOG  =	9, // 2^9 = 512
-	PGHSIZE	=	1<<PGHLOG,	/* Page hash for image lookup */
+  PGHLOG  = 9, // 2^9 = 512
+  PGHSIZE = 1<<PGHLOG,  /* Page hash for image lookup */
 };
-#define	pghash(daddr)	palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
+#define pghash(daddr) palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
 
 // Page Allocator (singleton)
 struct Palloc
 {
-	Pallocmem	mem[4]; // TODO: 4 ?? same as Conf.mem
-	Page	*pages;	/* array of all pages */ // huge, xalloc'ed in pageinit() 
+  Pallocmem mem[4]; // TODO: 4 ?? same as Conf.mem
+  // array<Page>, xalloc'ed in pageinit() (huge)
   // sum of mem.npage (which should be conf.upages)
-	ulong	user;			/* how many user pages */
+  ulong user;     /* how many user pages */
 
-	Page	*head;			/* most recently used */
-	Page	*tail;			/* least recently used */
-	ulong	freecount;		/* how many pages on free list now */
+  Page  *pages; /* array of all pages */ 
 
-	Page	*hash[PGHSIZE]; // key?
-	Lock	hashlock;
+  // list<ref<Page>> (next = Page.next)
+  Page  *head;      /* most recently used */
+  // list<ref<Page>> (next = prev?)
+  Page  *tail;      /* least recently used */
+  ulong freecount;    /* how many pages on free list now */
+
+  // hash<?pghash(Page.daddr?), list<ref<Page>> (next = Page.hash)>
+  Page  *hash[PGHSIZE];
+  Lock  hashlock;
 
   // extra
-	Lock;
-	Rendez	r;			/* Sleep for free mem */
-	QLock	pwait;			/* Queue of procs waiting for memory */
+  Lock;
+  Rendez  r;      /* Sleep for free mem */
+  QLock pwait;      /* Queue of procs waiting for memory */
 };
-extern	Palloc	palloc;
+extern  Palloc  palloc;
 
 
-#define NFREECHAN	64
-#define IHASHSIZE	64
-#define ihash(s)	imagealloc.hash[s%IHASHSIZE] // could be moved in page.c
+#define NFREECHAN 64
+#define IHASHSIZE 64
+// actually internal to page.c, but important so here
+#define ihash(s)  imagealloc.hash[s%IHASHSIZE]
 
 // Image allocator (internal to segment.c, but important so here, singleton)
 struct Imagealloc
 {
-	KImage	*free; // xalloc'ed in initseg() (conf.nimage)
-	KImage	*hash[IHASHSIZE];
-	QLock	ireclaim;	/* mutex on reclaiming free images */
+  // array<Kimage>?  xalloc'ed in initseg() (conf.nimage)
+  KImage  *free; 
+  // hash<?ihash(??), list<ref<Kimage>>
+  KImage  *hash[IHASHSIZE];
+  QLock ireclaim; /* mutex on reclaiming free images */
 
-	Chan	**freechan;	/* free image channels */
-	int	nfreechan;	/* number of free channels */
-	int	szfreechan;	/* size of freechan array */
-	QLock	fcreclaim;	/* mutex on reclaiming free channels */
+  Chan  **freechan; /* free image channels */
+  int nfreechan;  /* number of free channels */
+  int szfreechan; /* size of freechan array */
+  QLock fcreclaim;  /* mutex on reclaiming free channels */
 
   // extra
-	Lock;
+  Lock;
 
 };
 //static struct Imagealloc imagealloc; // private to segment.c
@@ -306,17 +333,17 @@ struct Imagealloc
 // Swap allocator (singleton)
 struct Swapalloc
 {
-	int	free;			/* currently free swap pages */
-	uchar*	swmap;			/* Base of swap map in memory */
-	uchar*	alloc;			/* Round robin allocator */
-	uchar*	last;			/* Speed swap allocation */
-	uchar*	top;			/* Top of swap map */
-	Rendez	r;			/* Pager kproc idle sleep */
-	ulong	highwater;		/* Pager start threshold */
-	ulong	headroom;		/* Space pager frees under highwater */
+  int free;     /* currently free swap pages */
+  uchar*  swmap;      /* Base of swap map in memory */
+  uchar*  alloc;      /* Round robin allocator */
+  uchar*  last;     /* Speed swap allocation */
+  uchar*  top;      /* Top of swap map */
+  Rendez  r;      /* Pager kproc idle sleep */
+  ulong highwater;    /* Pager start threshold */
+  ulong headroom;   /* Space pager frees under highwater */
 
   //extra
-	Lock;				/* Free map lock */
+  Lock;       /* Free map lock */
 };
 extern struct Swapalloc swapalloc;
-extern	KImage	swapimage;
+extern  KImage  swapimage;
