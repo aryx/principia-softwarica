@@ -329,7 +329,7 @@ struct Imagealloc
   Lock;
 
 };
-//static struct Imagealloc imagealloc; // private to segment.c
+//IMPORTANT: static struct Imagealloc imagealloc; (segment.c)
 // so have conf.nimage + 1 Kimages
 extern  KImage  swapimage;
 
