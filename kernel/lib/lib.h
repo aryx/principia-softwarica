@@ -11,6 +11,7 @@
 
 // pad specific, should be in u.h
 typedef int bool;
+typedef ushort bool_ushort;
 #define true 1
 #define false 0
 
