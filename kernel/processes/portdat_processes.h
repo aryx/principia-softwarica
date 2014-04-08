@@ -1,5 +1,4 @@
 
-
 // in lib.h: Waitmsg, ERRMAX
 // see also Perf, Fpstate (enum), Active in 386/ (but used in port)
 // see also PMMU, Notsave, MAXSYSARG in 386/
@@ -11,6 +10,8 @@
 struct Waitq
 {
   Waitmsg w;
+
+  // list<Ref<Waitq>> of ??
   Waitq *next;
 };
 
@@ -24,8 +25,11 @@ enum
 
 struct Rgrp
 {
-  Ref;        /* the Ref's lock is also the Rgrp's lock */
+  // hash<??, list<ref<Proc>>>
   Proc  *rendhash[RENDHASH];  /* Rendezvous tag hash */
+
+  // extra
+  Ref;        /* the Ref's lock is also the Rgrp's lock */
 };
 
 enum
@@ -35,11 +39,16 @@ enum
 
 struct Fgrp
 {
-  Ref;
+  // array<ref<Chan>, smalloc'ed??
   Chan  **fd;
+  // nelem(fd) ?
   int nfd;      /* number allocated */
   int maxfd;      /* highest fd in use */
+
   int exceed;     /* debugging */
+
+  // extra
+  Ref;
 };
 
 
@@ -53,21 +62,23 @@ enum
 // Namespace process group
 struct Pgrp
 {
-  Ref;        /* also used as a lock when mounting */
-  int noattach;
+  // hash<??, list<ref<Mhead>?? ??
+  Mhead *mnthash[MNTHASH];
   ulong pgrpid;
+  bool noattach;
+
+  // extra
+  Ref;        /* also used as a lock when mounting */
   QLock debug;      /* single access via devproc.c */
   RWlock  ns;     /* Namespace n read/one write lock */
-  Mhead *mnthash[MNTHASH];
 };
-
 
 
 /*
  * fasttick timer interrupts
  */
-enum {
-  /* Mode */
+enum timermode 
+{
   Trelative,  /* timer programmed in ns from now */
   Tperiodic,  /* periodic timer, period in ns */
 };
@@ -75,15 +86,20 @@ enum {
 struct Timer
 {
   /* Public interface */
+  // enum<timermode>
   int tmode;    /* See above */
   vlong tns;    /* meaning defined by mode */
   void  (*tf)(Ureg*, Timer*);
   void  *ta;
+
   /* Internal */
   Lock;
+  // ref<list<Timer>> ??
   Timers  *tt;    /* Timers queue this timer runs on */
   Tval  tticks;   /* tns converted to ticks */
   Tval  twhen;    /* ns represented in fastticks */
+
+  // list<Timer> of Timers.head?
   Timer *tnext;
 };
 
@@ -91,6 +107,7 @@ struct Timer
 struct Timers
 {
   Lock;
+  // list<Timer> (next = Timer.tnext?)
   Timer *head;
 };
 
@@ -104,7 +121,7 @@ struct Sargs
 };
 
 
-enum
+enum notekind
 {
   NUser,        /* note provided externally */
   NExit,        /* deliver note quietly */
@@ -115,15 +132,21 @@ enum
 struct Note
 {
   char  msg[ERRMAX];
+  // enum<notekind>
   int flag;     /* whether system posted it */
 };
 
 
 
 // was in edf.h
-enum {
+enum 
+{
   Maxsteps = 200 * 100 * 2, /* 100 periods of 200 procs */
+  Infinity = ~0ULL,
+};
 
+enum edfflags 
+{
   /* Edf.flags field */
   Admitted    = 0x01,
   Sporadic    = 0x02,
@@ -132,8 +155,6 @@ enum {
   Deadline    = 0x10,
   Yield     = 0x20,
   Extratime   = 0x40,
-
-  Infinity = ~0ULL,
 };
 
 struct Edf {
@@ -149,14 +170,19 @@ struct Edf {
   long    d;    /* (this) deadline */
   long    t;    /* Start of next period, t += T at release */
   long    s;    /* Time at which this proc was last scheduled */
+
   /* for schedulability testing */
   long    testDelta;
   int   testtype; /* Release or Deadline */
   long    testtime;
   Proc    *testnext;
+
   /* other */
+  // set<enum<edfflags>>
   ushort    flags;
+
   Timer;
+
   /* Stats */
   long    edfused;
   long    extraused;
@@ -170,8 +196,10 @@ struct Edf {
 // Proc, the big one
 //*****************************************************************************
 
-// TODO split and name sub enums
-enum
+// All the ref<Page> here are references to Proc in the array<Proc> of 
+// Procalloc.arena (pool allocator)
+
+enum procstate
 {
   /* Process states, Proc.state */
   Dead = 0,
@@ -187,33 +215,43 @@ enum
   Stopped,
   Rendezvous,
   Waitrelease,
+};
 
+enum devproc 
+{
   Proc_stopme = 1,  /* devproc requests */
   Proc_exitme,
   Proc_traceme,
   Proc_exitbig,
   Proc_tracesyscall,
+};
 
+enum proctime 
+{
   TUser = 0,    /* Proc.time */
   TSys,
   TReal,
   TCUser,
   TCSys,
   TCReal,
+};
 
+enum {
   NERR = 64,
   NNOTE = 5,
 
   Npriq   = 20,   /* number of scheduler priority levels */
   Nrq   = Npriq+2,  /* number of priority levels including real time */
+  //NFD =   100,    /* per process file descriptors */
+};
+
+enum priority {
   PriRelease  = Npriq,  /* released edf processes */
   PriEdf    = Npriq+1,  /* active edf processes */
   PriNormal = 10,   /* base priority for normal processes */
   PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
   PriKproc  = 13,   /* base priority for kernel processes */
   PriRoot   = 13,   /* base priority for root processes */
-
-  //NFD =   100,    /* per process file descriptors */
 };
 
 /*
@@ -230,26 +268,58 @@ enum procseg
 
 
 // the most important fields are set by newproc()
-// TODO reorganize, move in extra/
 struct Proc
 {
+
+//--------------------------------------------------------------------
+// Assembly requirements, Low level, have to be first
+//--------------------------------------------------------------------
   // TODO: have to be first?
   Label sched;    /* known to l.s */
   char  *kstack;  /* known to l.s */
 
-  ulong pid; // PID!!
+//--------------------------------------------------------------------
+// State
+//--------------------------------------------------------------------
 
+  ulong pid;
+
+  // enum<procstate>
   int state; // Dead, Queuing, etc, see the enum below
   char  *psstate; /* What /proc/#/status reports */
 
+//--------------------------------------------------------------------
+// Memory
+//--------------------------------------------------------------------
+
+  // array<option<Segment>>, elt smalloc'ed?
   Segment *seg[NSEG];
   QLock seglock;  /* locked whenever seg[] changes */
 
-  char  *text;
-  char  *user;
-  char  *args;
-  int nargs;    /* number of bytes of args */
+//--------------------------------------------------------------------
+// Scheduling
+//--------------------------------------------------------------------
+  // enum<priority>
+  ulong priority; /* priority level */
 
+  ulong delaysched;
+
+  ulong basepri;  /* base priority level */
+  uchar fixedpri; /* priority level deson't change */
+
+  ulong cpu;    /* cpu average */
+  ulong lastupdate;
+  uchar yield;    /* non-zero if the process just did a sleep(0) */
+  ulong readytime;  /* time process came ready */
+  ulong movetime; /* last time process switched processors */
+  int preempted;  /* true if this process hasn't finished the interrupt
+         *  that last preempted it
+         */
+  Edf *edf;   /* if non-null, real-time proc, edf contains scheduling params */
+
+//--------------------------------------------------------------------
+// Files
+//--------------------------------------------------------------------
   Pgrp  *pgrp;    /* Process group for namespace */
   Egrp  *egrp;    /* Environment group */
   Fgrp  *fgrp;    /* File descriptor group */
@@ -258,9 +328,42 @@ struct Proc
   Chan  *slash; // The root!
   Chan  *dot; // The current directory
 
-
+//--------------------------------------------------------------------
+// Notes
+//--------------------------------------------------------------------
   ulong noteid;   /* Equivalent of note group */
 
+  Note  note[NNOTE];
+  short nnote;
+  short notified; /* sysnoted is due */
+  Note  lastnote;
+  int (*notify)(void*, char*);
+
+//--------------------------------------------------------------------
+// Stats
+//--------------------------------------------------------------------
+  // hash<enum<proctime>, ulong>
+  ulong time[6];  /* User, Sys, Real; child U, S, R */
+
+//--------------------------------------------------------------------
+// Error managment
+//--------------------------------------------------------------------
+
+  int nerrlab;
+  Label errlab[NERR];
+  char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
+  char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
+  char  errbuf0[ERRMAX];
+  char  errbuf1[ERRMAX];
+
+//--------------------------------------------------------------------
+// Other
+//--------------------------------------------------------------------
+
+  char  *text;
+  char  *user;
+  char  *args;
+  int nargs;    /* number of bytes of args */
 
   Waitq *waitq;   /* Exited processes wait children */
   Lock  exl;    /* Lock count and waitq */
@@ -274,8 +377,6 @@ struct Proc
   Fgrp  *closingfgrp; /* used during teardown */
 
   ulong parentpid;
-
-  ulong time[6];  /* User, Sys, Real; child U, S, R */
 
   uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
   /*
@@ -321,21 +422,9 @@ struct Proc
   int scallnr;  /* sys call number - known by db */
   Sargs s;    /* address of this is known by db */
 
-  int nerrlab;
-  Label errlab[NERR];
-  char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
-  char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
-  char  errbuf0[ERRMAX];
-  char  errbuf1[ERRMAX];
-
   char  genbuf[128];  /* buffer used e.g. for last name element from namec */
 
 
-  Note  note[NNOTE];
-  short nnote;
-  short notified; /* sysnoted is due */
-  Note  lastnote;
-  int (*notify)(void*, char*);
 
   Lock  *lockwait;
   Lock  *lastlock;  /* debugging */
@@ -349,20 +438,6 @@ struct Proc
   // will eventually cause a rescheduling.
   Ref nlocks;   /* number of locks held by proc */
 
-
-  ulong delaysched;
-  ulong priority; /* priority level */
-  ulong basepri;  /* base priority level */
-  uchar fixedpri; /* priority level deson't change */
-  ulong cpu;    /* cpu average */
-  ulong lastupdate;
-  uchar yield;    /* non-zero if the process just did a sleep(0) */
-  ulong readytime;  /* time process came ready */
-  ulong movetime; /* last time process switched processors */
-  int preempted;  /* true if this process hasn't finished the interrupt
-         *  that last preempted it
-         */
-  Edf *edf;   /* if non-null, real-time proc, edf contains scheduling params */
   int trace;    /* process being traced? */
 
   ulong qpc;    /* pc calling last blocking qlock */
@@ -379,13 +454,16 @@ struct Proc
   PMMU;
   char  *syscalltrace;  /* syscall trace */
 
-  // Extra
+//--------------------------------------------------------------------
+// Extra
+//--------------------------------------------------------------------
 
-  // KQlock.head chain
+  // list<ref<Proc>> KQlock.head or RWLock.head
   Proc  *qnext;   /* next process on queue for a QLock */
+  // option<ref<Qlock>> ??
   QLock *qlock;   /* addr of qlock being queued for DEBUG */
 
-  // Schedq.head chain?
+  // list<ref<Proc>> ?? Schedq.head chain?
   Proc  *rnext;   /* next process in run queue */
 
   // Alarms.head chain?
@@ -395,6 +473,7 @@ struct Proc
   // Procalloc.ht chain?
   Proc  *pidhash; /* next proc in pid hash */ 
 
+  // option<ref<Mach>>
   Mach  *mach;    /* machine running this proc */
 
 };
@@ -407,10 +486,13 @@ struct Proc
 // Proc allocator (singleton), was actually in proc.c, but important so here
 struct Procalloc
 {
-  Proc* arena; // initial array of proc, xalloc'ed in procinit0() (conf.nproc)
+  // array<Proc>, xalloc'ed in procinit0() (conf.nproc)
+  Proc* arena;
 
-  Proc* free; // first free proc
-  Proc* ht[128]; // hash pid -> proc (see Proc.pidhash)
+  // list<ref<Proc>> (next = ?)
+  Proc* free;
+  // hash<Proc.pid?, list<ref<Proc>> (next = Proc.pidhash)>
+  Proc* ht[128];
 
   // extra
   Lock;
@@ -419,27 +501,29 @@ struct Procalloc
 
 struct Schedq
 {
+  // list<ref<Proc>> (next = Proc.rnext?)
   Proc* head;
+  // list<ref<Proc>> (next = ??)
   Proc* tail;
+
   int n;
 
   // extra
   Lock;
 };
+// hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
 //Schedq  runq[Nrq];  // private to proc.c
 
 // was in alarm.c, but important so here
 struct Alarms
 {
-  QLock;
+  // list<ref<Proc> (next = ??)
   Proc  *head;
+  QLock;
 };
 //static Alarms alarms; // private to alarm.c
 //static Rendez alarmr; // private to alarm.c
 
-
-// used to be in edf.h
-//unused: extern Lock edftestlock;  /* for atomic admitting/expelling */
 
 #pragma varargck  type  "t"   long
 #pragma varargck  type  "U"   uvlong
