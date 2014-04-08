@@ -1,5 +1,5 @@
 
-// things used in Mach (and Proc), =~ a jumpbuf in C, for coroutines
+// things used in Mach (and Proc), =~ a jumpbuf in C, for coroutines, portable?
 struct Label
 {
   ulong sp; // virt_addr?
@@ -26,7 +26,7 @@ struct Perf
 /*
  * FPsave.status
  */
-enum
+enum fpsavestatus
 {
   /* this is a state */
   FPinit=   0,
@@ -42,6 +42,7 @@ struct  FPstate     /* x87 fpu state */
 {
   ushort  control;
   ushort  r1;
+  // enum<fpsavestatus>
   ushort  status;
   ushort  r2;
   ushort  tag;
@@ -145,4 +146,3 @@ struct PCArch
 };
 
 extern PCArch *arch;      /* PC architecture */
-
