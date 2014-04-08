@@ -8,16 +8,22 @@
 //#include	"../port/edf.h"
 #include	<trace.h>
 
+// hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
+extern Schedq	runq[Nrq];
+
+// used to be in edf.h
+//unused: extern Lock edftestlock;  /* for atomic admitting/expelling */
+
 /* debugging */
 enum {
 	Dontprint = 1,
 };
-
 #define DPRINT	if(Dontprint){}else print
 
+
 static long	now;	/* Low order 32 bits of time in µs */
+
 extern ulong	delayedscheds;
-extern Schedq	runq[Nrq];
 extern int	nrdy;
 extern ulong	runvec;
 
