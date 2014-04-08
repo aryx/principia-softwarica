@@ -54,7 +54,7 @@ Syscall syspread;
 Syscall syspwrite;
 Syscall systsemacquire;
 //@Scheck: TODO? dead?
-Syscall	sysdeath;
+Syscall sysdeath;
 
 extern Syscall *systab[];
 extern char *sysctab[];

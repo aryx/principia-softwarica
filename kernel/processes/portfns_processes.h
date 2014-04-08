@@ -81,7 +81,7 @@ void    kproc(char*, void(*)(void*), void*);
 void    hzsched(void);
 //not used outside: int   anyready(void);
 //TODO cg didn't find ref outside in devproc.c?
-int		haswaitq(void*);
+int   haswaitq(void*);
 
 // alarm.c
 ulong   procalarm(ulong);
@@ -102,7 +102,7 @@ char*   edfadmit(Proc*);
 
 // sysproc.c
 //@Scheck: not useless, used by misc/rebootcmd.c, weird not recognized by cg
-ulong		l2be(long);
+ulong   l2be(long);
 // many sysxxx functions (used in syscalls/ without requiring extern decl)
 
 
@@ -112,11 +112,11 @@ ulong		l2be(long);
 void    callwithureg(void(*)(Ureg*));
 ulong   dbgpc(Proc*);
 long    execregs(ulong, ulong, ulong);
-void		forkchild(Proc*, Ureg*);
-ulong		userpc(void);
-void		setregisters(Ureg*, char*, char*, int);
-void		setkernur(Ureg*, Proc*);
-void		kprocchild(Proc*, void (*)(void*), void*);
+void    forkchild(Proc*, Ureg*);
+ulong   userpc(void);
+void    setregisters(Ureg*, char*, char*, int);
+void    setkernur(Ureg*, Proc*);
+void    kprocchild(Proc*, void (*)(void*), void*);
 // intrenable(), but mostly used in 386, just in port/devaudio.c
 
 // 386/main_processes.c (but used in port)
@@ -126,19 +126,19 @@ void procrestore(Proc *);
 void idlehands(void);
 
 // 386/i8253.c (but used in port)
-ulong		perfticks(void);
+ulong   perfticks(void);
 
 // 386/devarch.c (but used in port)
-void		timerset(Tval);
-ulong		µs(void);
+void    timerset(Tval);
+ulong   µs(void);
 
 // in 386/l.s (but used in port)
 //@Scheck: Assembly
-void		gotolabel(Label*);
+void    gotolabel(Label*);
 //@Scheck: Assembly
-int		setlabel(Label*);
+int   setlabel(Label*);
 //@Scheck: Assembly
-void		mul64fract(uvlong*, uvlong, uvlong);
+void    mul64fract(uvlong*, uvlong, uvlong);
 
 // portdat_processes.c
 void (*proctrace)(Proc*, int, vlong); // was in devproc.c

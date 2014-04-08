@@ -1,10 +1,10 @@
 enum
 {
-	Maxfdata	= 8192,
-	Maxiosize	= IOHDRSZ+Maxfdata,
+  Maxfdata  = 8192,
+  Maxiosize = IOHDRSZ+Maxfdata,
 };
 
-extern Fcall	*req;
-extern Fcall	*rep;
-extern char	repdata[Maxfdata];
-extern uchar	statbuf[STATMAX];
+extern Fcall  *req;
+extern Fcall  *rep;
+extern char repdata[Maxfdata];
+extern uchar  statbuf[STATMAX];

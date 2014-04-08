@@ -10,129 +10,129 @@ typedef struct SDreq SDreq;
 typedef struct SDunit SDunit;
 
 struct SDperm {
-	char*	name;
-	char*	user;
-	ulong	perm;
+  char* name;
+  char* user;
+  ulong perm;
 };
 
 struct SDpart {
-	uvlong	start;
-	uvlong	end;
-	SDperm;
-	int	valid;
-	ulong	vers;
+  uvlong  start;
+  uvlong  end;
+  SDperm;
+  int valid;
+  ulong vers;
 };
 
 struct SDunit {
-	SDev*	dev;
-	int	subno;
-	uchar	inquiry[255];		/* format follows SCSI spec */
-	uchar	sense[18];		/* format follows SCSI spec */
-	SDperm;
+  SDev* dev;
+  int subno;
+  uchar inquiry[255];   /* format follows SCSI spec */
+  uchar sense[18];    /* format follows SCSI spec */
+  SDperm;
 
-	QLock	ctl;
-	uvlong	sectors;
-	ulong	secsize;
-	SDpart*	part;			/* nil or array of size npart */
-	int	npart;
-	ulong	vers;
-	SDperm	ctlperm;
+  QLock ctl;
+  uvlong  sectors;
+  ulong secsize;
+  SDpart* part;     /* nil or array of size npart */
+  int npart;
+  ulong vers;
+  SDperm  ctlperm;
 
-	QLock	raw;			/* raw read or write in progress */
-	ulong	rawinuse;		/* really just a test-and-set */
-	int	state;
-	SDreq*	req;
-	SDperm	rawperm;
+  QLock raw;      /* raw read or write in progress */
+  ulong rawinuse;   /* really just a test-and-set */
+  int state;
+  SDreq*  req;
+  SDperm  rawperm;
 };
 
 /*
  * Each controller is represented by a SDev.
  */
 struct SDev {
-	Ref	r;			/* Number of callers using device */
-	SDifc*	ifc;			/* pnp/legacy */
-	void*	ctlr;
-	int	idno;
-	char	name[8];
-	SDev*	next;
+  Ref r;      /* Number of callers using device */
+  SDifc*  ifc;      /* pnp/legacy */
+  void* ctlr;
+  int idno;
+  char  name[8];
+  SDev* next;
 
-	QLock;				/* enable/disable */
-	int	enabled;
-	int	nunit;			/* Number of units */
-	QLock	unitlock;		/* `Loading' of units */
-	int*	unitflg;		/* Unit flags */
-	SDunit**unit;
+  QLock;        /* enable/disable */
+  int enabled;
+  int nunit;      /* Number of units */
+  QLock unitlock;   /* `Loading' of units */
+  int*  unitflg;    /* Unit flags */
+  SDunit**unit;
 };
 
 struct SDifc {
-	char*	name;
+  char* name;
 
-	SDev*	(*pnp)(void);
-	SDev*	(*legacy)(int, int);
-	int	(*enable)(SDev*);
-	int	(*disable)(SDev*);
+  SDev* (*pnp)(void);
+  SDev* (*legacy)(int, int);
+  int (*enable)(SDev*);
+  int (*disable)(SDev*);
 
-	int	(*verify)(SDunit*);
-	int	(*online)(SDunit*);
-	int	(*rio)(SDreq*);
-	int	(*rctl)(SDunit*, char*, int);
-	int	(*wctl)(SDunit*, Cmdbuf*);
+  int (*verify)(SDunit*);
+  int (*online)(SDunit*);
+  int (*rio)(SDreq*);
+  int (*rctl)(SDunit*, char*, int);
+  int (*wctl)(SDunit*, Cmdbuf*);
 
-	long	(*bio)(SDunit*, int, int, void*, long, uvlong);
-	SDev*	(*probe)(DevConf*);
-	void	(*clear)(SDev*);
-	char*	(*rtopctl)(SDev*, char*, char*);
-	int	(*wtopctl)(SDev*, Cmdbuf*);
+  long  (*bio)(SDunit*, int, int, void*, long, uvlong);
+  SDev* (*probe)(DevConf*);
+  void  (*clear)(SDev*);
+  char* (*rtopctl)(SDev*, char*, char*);
+  int (*wtopctl)(SDev*, Cmdbuf*);
 };
 
 struct SDreq {
-	SDunit*	unit;
-	int	lun;
-	int	write;
-	uchar	cmd[16];
-	int	clen;
-	void*	data;
-	int	dlen;
+  SDunit* unit;
+  int lun;
+  int write;
+  uchar cmd[16];
+  int clen;
+  void* data;
+  int dlen;
 
-	int	flags;
+  int flags;
 
-	int	status;
-	long	rlen;
-	uchar	sense[256];
+  int status;
+  long  rlen;
+  uchar sense[256];
 };
 
 enum {
-	SDnosense	= 0x00000001,
-	SDvalidsense	= 0x00010000,
+  SDnosense = 0x00000001,
+  SDvalidsense  = 0x00010000,
 
-	SDinq0periphqual= 0xe0,
-	SDinq0periphtype= 0x1f,
-	SDinq1removable	= 0x80,
+  SDinq0periphqual= 0xe0,
+  SDinq0periphtype= 0x1f,
+  SDinq1removable = 0x80,
 
-	/* periphtype values */
-	SDperdisk	= 0,	/* Direct access (disk) */
-	SDpertape	= 1,	/* Sequential eg, tape */
-	SDperpr		= 2,	/* Printer */
-	SDperworm	= 4,	/* Worm */
-	SDpercd		= 5,	/* CD-ROM */
-	SDpermo		= 7,	/* rewriteable MO */
-	SDperjuke	= 8,	/* medium-changer */
+  /* periphtype values */
+  SDperdisk = 0,  /* Direct access (disk) */
+  SDpertape = 1,  /* Sequential eg, tape */
+  SDperpr   = 2,  /* Printer */
+  SDperworm = 4,  /* Worm */
+  SDpercd   = 5,  /* CD-ROM */
+  SDpermo   = 7,  /* rewriteable MO */
+  SDperjuke = 8,  /* medium-changer */
 };
 
 enum {
-	SDretry		= -5,		/* internal to controllers */
-	SDmalloc	= -4,
-	SDeio		= -3,
-	SDtimeout	= -2,
-	SDnostatus	= -1,
+  SDretry   = -5,   /* internal to controllers */
+  SDmalloc  = -4,
+  SDeio   = -3,
+  SDtimeout = -2,
+  SDnostatus  = -1,
 
-	SDok		= 0,
+  SDok    = 0,
 
-	SDcheck		= 0x02,		/* check condition */
-	SDbusy		= 0x08,		/* busy */
+  SDcheck   = 0x02,   /* check condition */
+  SDbusy    = 0x08,   /* busy */
 
-	SDmaxio		= 2048*1024,
-	SDnpart		= 16,
+  SDmaxio   = 2048*1024,
+  SDnpart   = 16,
 };
 
 /*
@@ -142,8 +142,8 @@ enum {
  * page-aligned (xen) for DMA.
  */
 #ifndef sdmalloc
-#define sdmalloc(n)	malloc(n)
-#define sdfree(p)	free(p)
+#define sdmalloc(n) malloc(n)
+#define sdfree(p) free(p)
 #endif
 
 /*
@@ -151,13 +151,13 @@ enum {
  */
 
 //struct SDio {
-//	char	*name;
-//	int	(*init)(void);
-//	void	(*enable)(void);
-//	int	(*inquiry)(char*, int);
-//	int	(*cmd)(u32int, u32int, u32int*);
-//	void	(*iosetup)(int, void*, int, int);
-//	void	(*io)(int, uchar*, int);
+//  char  *name;
+//  int (*init)(void);
+//  void  (*enable)(void);
+//  int (*inquiry)(char*, int);
+//  int (*cmd)(u32int, u32int, u32int*);
+//  void  (*iosetup)(int, void*, int, int);
+//  void  (*io)(int, uchar*, int);
 //};
 //
 //extern SDio sdio;

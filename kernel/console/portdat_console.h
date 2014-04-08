@@ -1,6 +1,6 @@
 
-extern	Queue*	serialoq;
-extern	Queue*	kbdq;
-extern	Queue*	kprintoq;
+extern  Queue*  serialoq;
+extern  Queue*  kbdq;
+extern  Queue*  kprintoq;
 
 // consdevtab

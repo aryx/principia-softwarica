@@ -3,40 +3,40 @@
 // For bigger region, or when have lots of contention on a lock: qlock
 
 // taslock.c
-int	lock(Lock*);
+int lock(Lock*);
 void unlock(Lock*);
 void ilock(Lock*);
 void iunlock(Lock*);
-int	canlock(Lock*);
+int canlock(Lock*);
 
 // ref.c
-long		incref(Ref*);
-long		decref(Ref*);
+long    incref(Ref*);
+long    decref(Ref*);
 
 // qlock.c
-void		qlock(QLock*);
-void		qunlock(QLock*);
-int		canqlock(QLock*);
+void    qlock(QLock*);
+void    qunlock(QLock*);
+int   canqlock(QLock*);
 
-void		rlock(RWlock*);
-void		runlock(RWlock*);
-int		canrlock(RWlock*);
-void		wlock(RWlock*);
-void		wunlock(RWlock*);
+void    rlock(RWlock*);
+void    runlock(RWlock*);
+int   canrlock(RWlock*);
+void    wlock(RWlock*);
+void    wunlock(RWlock*);
 
 // in 386/l.s (but used in port)
 //@Scheck: Assembly
-int		islo(void);
+int   islo(void);
 //@Scheck: Assembly
-int		splhi(void);
+int   splhi(void);
 //@Scheck: Assembly
-int		spllo(void);
+int   spllo(void);
 //@Scheck: Assembly
-void		splx(int);
-//void		splxpc(int);
-//long		lcycles(void);
+void    splx(int);
+//void    splxpc(int);
+//long    lcycles(void);
 //test-and-set
 //@Scheck: Assembly
-void		_xinc(long*);
+void    _xinc(long*);
 //@Scheck: Assembly
-long		_xdec(long*);
+long    _xdec(long*);
