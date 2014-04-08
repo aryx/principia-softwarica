@@ -3,6 +3,7 @@
 #include	"mem.h"
 #include	"dat.h"
 #include	"fns.h"
+
 #include	"io.h"
 #include	"ureg.h"
 
@@ -39,6 +40,7 @@ enum {
 };
 
 //char bootdisk[KNAMELEN];
+// now in portdat_globals.c
 //Conf conf;
 char *confname[MAXCONF];
 char *confval[MAXCONF];
@@ -86,55 +88,55 @@ extern ulong *multiboot;
 static void
 options(void)
 {
-	long i, n;
-	char *cp, *line[MAXCONF], *p, *q;
-	ulong *m, l;
+        long i, n;
+        char *cp, *line[MAXCONF], *p, *q;
+        ulong *m, l;
 
-	if(multiboot != nil){
-		cp = BOOTARGS;
-		*cp = 0;
-		if((*multiboot & 8) != 0 && multiboot[5] > 0){
-			m = KADDR(multiboot[6]);
-			l = m[1] - m[0];
-			m = KADDR(m[0]);
-			if(l >= BOOTARGSLEN)
-				l = BOOTARGSLEN - 1;
-			memmove(cp, m, l);
-			cp[l] = 0;
-		}
-	}
+        if(multiboot != nil){
+                cp = BOOTARGS;
+                *cp = 0;
+                if((*multiboot & 8) != 0 && multiboot[5] > 0){
+                        m = KADDR(multiboot[6]);
+                        l = m[1] - m[0];
+                        m = KADDR(m[0]);
+                        if(l >= BOOTARGSLEN)
+                                l = BOOTARGSLEN - 1;
+                        memmove(cp, m, l);
+                        cp[l] = 0;
+                }
+        }
 
-	/*
-	 *  parse configuration args from dos file plan9.ini
-	 */
-	cp = BOOTARGS;	/* where b.com leaves its config */
-	cp[BOOTARGSLEN-1] = 0;
+        /*
+         *  parse configuration args from dos file plan9.ini
+         */
+        cp = BOOTARGS;  /* where b.com leaves its config */
+        cp[BOOTARGSLEN-1] = 0;
 
-	/*
-	 * Strip out '\r', change '\t' -> ' '.
-	 */
-	p = cp;
-	for(q = cp; *q; q++){
-		if(*q == '\r')
-			continue;
-		if(*q == '\t')
-			*q = ' ';
-		*p++ = *q;
-	}
-	*p = 0;
+        /*
+         * Strip out '\r', change '\t' -> ' '.
+         */
+        p = cp;
+        for(q = cp; *q; q++){
+                if(*q == '\r')
+                        continue;
+                if(*q == '\t')
+                        *q = ' ';
+                *p++ = *q;
+        }
+        *p = 0;
 
-	n = getfields(cp, line, MAXCONF, 1, "\n");
-	for(i = 0; i < n; i++){
-		if(*line[i] == '#')
-			continue;
-		cp = strchr(line[i], '=');
-		if(cp == nil)
-			continue;
-		*cp++ = '\0';
-		confname[nconf] = line[i];
-		confval[nconf] = cp;
-		nconf++;
-	}
+        n = getfields(cp, line, MAXCONF, 1, "\n");
+        for(i = 0; i < n; i++){
+                if(*line[i] == '#')
+                        continue;
+                cp = strchr(line[i], '=');
+                if(cp == nil)
+                        continue;
+                *cp++ = '\0';
+                confname[nconf] = line[i];
+                confval[nconf] = cp;
+                nconf++;
+        }
 }
 
 
@@ -193,78 +195,78 @@ main(void)
 
   // end patch, back to original code
 
-	cgapost(0);
+        cgapost(0);
 
-	mach0init();
-	options();
-	ioinit();
-	i8250console();
-	quotefmtinstall();
-	screeninit();
+        mach0init();
+        options();
+        ioinit();
+        i8250console();
+        quotefmtinstall();
+        screeninit();
 
-	print("\nPlan 99999999999999\n");
+        print("\nPlan 99999999999999\n");
 
         // the init0 means this is really early on (malloc is not available?!)
-	trapinit0();
-	mmuinit0();
+        trapinit0();
+        mmuinit0();
 
-	kbdinit();
-	i8253init();
-	cpuidentify();
+        kbdinit();
+        i8253init();
+        cpuidentify();
 
-	meminit();
-	confinit();
-	archinit();
-	xinit();
+        meminit();
+        confinit();
+        archinit();
+        xinit();
         if(i8237alloc != nil)
-        	i8237alloc();
-	trapinit();
-	printinit();
-	cpuidprint();
-	mmuinit();
-	fpsavealloc();
-        if(arch->intrinit)	/* launches other processors on an mp */
-        	arch->intrinit();
-	timersinit();
-	mathinit();
-	kbdenable();
-	if(arch->clockenable)
-		arch->clockenable();
+                i8237alloc();
+        trapinit();
+        printinit();
+        cpuidprint();
+        mmuinit();
+        fpsavealloc();
+        if(arch->intrinit)      /* launches other processors on an mp */
+                arch->intrinit();
+        timersinit();
+        mathinit();
+        kbdenable();
+        if(arch->clockenable)
+                arch->clockenable();
 
-	procinit0();
-	initseg();
-	if(delaylink) {
-		bootlinks();
-		pcimatch(0, 0, 0);
-	} else
-		links();
-	conf.monitor = 1;
-	chandevreset();
-	cgapost(0xcd);
+        procinit0();
+        initseg();
+        if(delaylink) {
+                bootlinks();
+                pcimatch(0, 0, 0);
+        } else
+                links();
+        conf.monitor = 1;
+        chandevreset();
+        cgapost(0xcd);
 
-	pageinit();
-	i8253link();
-	swapinit();
+        pageinit();
+        i8253link();
+        swapinit();
 
-	userinit();
-	active.thunderbirdsarego = 1;
+        userinit();
+        active.thunderbirdsarego = 1;
 
-	cgapost(0x99);
-	schedinit();
+        cgapost(0x99);
+        schedinit();
 }
 
 void
 mach0init(void)
 {
-	conf.nmach = 1;
-	MACHP(0) = (Mach*)CPU0MACH;
-	m->pdb = (ulong*)CPU0PDB;
-	m->gdt = (Segdesc*)CPU0GDT;
+        conf.nmach = 1;
+        MACHP(0) = (Mach*)CPU0MACH;
+        m->pdb = (ulong*)CPU0PDB;
+        m->gdt = (Segdesc*)CPU0GDT;
 
-	machinit();
+        machinit();
 
-	active.machs = 1;
-	active.exiting = 0;
+        active.machs = 1;
+        active.exiting = 0;
 }
 
 
@@ -272,101 +274,101 @@ mach0init(void)
 void
 init0(void)
 {
-	int i;
-	char buf[2*KNAMELEN];
+        int i;
+        char buf[2*KNAMELEN];
+        
+        up->nerrlab = 0;
 
-	up->nerrlab = 0;
+        spllo();
 
-	spllo();
+        /*
+         * These are o.k. because rootinit is null.
+         * Then early kproc's will have a root and dot.
+         */
+        up->slash = namec("#/", Atodir, 0, 0);
+        pathclose(up->slash->path);
+        up->slash->path = newpath("/");
+        up->dot = cclone(up->slash);
 
-	/*
-	 * These are o.k. because rootinit is null.
-	 * Then early kproc's will have a root and dot.
-	 */
-	up->slash = namec("#/", Atodir, 0, 0);
-	pathclose(up->slash->path);
-	up->slash->path = newpath("/");
-	up->dot = cclone(up->slash);
+        chandevinit();
 
-	chandevinit();
-
-	if(!waserror()){
-		snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
-		ksetenv("terminal", buf, 0);
-		ksetenv("cputype", "386", 0);
-		if(cpuserver)
-			ksetenv("service", "cpu", 0);
-		else
-			ksetenv("service", "terminal", 0);
-		for(i = 0; i < nconf; i++){
-			if(confname[i][0] != '*')
-				ksetenv(confname[i], confval[i], 0);
-			ksetenv(confname[i], confval[i], 1);
-		}
-		poperror();
-	}
-	kproc("alarm", alarmkproc, 0);
-	cgapost(0x9);
-	touser(sp);
+        if(!waserror()){
+                snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
+                ksetenv("terminal", buf, 0);
+                ksetenv("cputype", "386", 0);
+                if(cpuserver)
+                        ksetenv("service", "cpu", 0);
+                else
+                        ksetenv("service", "terminal", 0);
+                for(i = 0; i < nconf; i++){
+                        if(confname[i][0] != '*')
+                                ksetenv(confname[i], confval[i], 0);
+                        ksetenv(confname[i], confval[i], 1);
+                }
+                poperror();
+        }
+        kproc("alarm", alarmkproc, 0);
+        cgapost(0x9);
+        touser(sp);
 }
 
 void
 userinit(void)
 {
-	void *v;
-	Proc *p;
-	Segment *s;
-	Page *pg;
+        void *v;
+        Proc *p;
+        Segment *s;
+        Page *pg;
 
-	p = newproc();
-	p->pgrp = newpgrp();
-	p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
-	p->egrp->ref = 1;
-	p->fgrp = dupfgrp(nil);
-	p->rgrp = newrgrp();
-	p->procmode = 0640;
+        p = newproc();
+        p->pgrp = newpgrp();
+        p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
+        p->egrp->ref = 1;
+        p->fgrp = dupfgrp(nil);
+        p->rgrp = newrgrp();
+        p->procmode = 0640;
 
-	kstrdup(&eve, "");
-	kstrdup(&p->text, "*init*");
-	kstrdup(&p->user, eve);
+        kstrdup(&eve, "");
+        kstrdup(&p->text, "*init*");
+        kstrdup(&p->user, eve);
 
-	p->fpstate = FPinit;
-	fpoff();
+        p->fpstate = FPinit;
+        fpoff();
 
-	/*
-	 * Kernel Stack
-	 *
-	 * N.B. make sure there's enough space for syscall to check
-	 *	for valid args and 
-	 *	4 bytes for gotolabel's return PC
-	 */
-	p->sched.pc = (ulong)init0;
-	p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
+        /*
+         * Kernel Stack
+         *
+         * N.B. make sure there's enough space for syscall to check
+         *      for valid args and 
+         *      4 bytes for gotolabel's return PC
+         */
+        p->sched.pc = (ulong)init0;
+        p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
 
-	/*
-	 * User Stack
-	 *
-	 * N.B. cannot call newpage() with clear=1, because pc kmap
-	 * requires up != nil.  use tmpmap instead.
-	 */
-	s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-	p->seg[SSEG] = s;
-	pg = newpage(0, 0, USTKTOP-BY2PG);
-	v = tmpmap(pg);
-	memset(v, 0, BY2PG);
-	segpage(s, pg);
+        /*
+         * User Stack
+         *
+         * N.B. cannot call newpage() with clear=1, because pc kmap
+         * requires up != nil.  use tmpmap instead.
+         */
+        s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+        p->seg[SSEG] = s;
+        pg = newpage(0, 0, USTKTOP-BY2PG);
+        v = tmpmap(pg);
+        memset(v, 0, BY2PG);
+        segpage(s, pg);
 
-	bootargs(v);
-	tmpunmap(v);
+        bootargs(v);
+        tmpunmap(v);
 
-	/*
-	 * Text
-	 */
-	s = newseg(SG_TEXT, UTZERO, 1);
-	s->flushme++;
-	p->seg[TSEG] = s;
-	pg = newpage(0, 0, UTZERO);
-	memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+        /*
+         * Text
+         */
+        s = newseg(SG_TEXT, UTZERO, 1);
+        s->flushme++;
+        p->seg[TSEG] = s;
+        pg = newpage(0, 0, UTZERO);
+        memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
 	segpage(s, pg);
 	v = tmpmap(pg);
 	memset(v, 0, BY2PG);
