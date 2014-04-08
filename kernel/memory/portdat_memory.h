@@ -42,7 +42,7 @@ struct Page
 
   // Why not Ref? to save space?
   ushort  ref;      /* Reference count */
-  // enum<modref>
+  // set<enum<modref>>
   char  modref;     /* Simulated modify/reference bits */
   // enum<cachectl>??
   char  color;      /* Cache coloring */
@@ -88,8 +88,10 @@ struct KImage
 
   // extra
   Ref;
-  KImage  *hash; /* Qid hash chains */ // hash<?, list<ref<Kimage>>> Imagealloc.hash? 
-  KImage  *next; /* Free list */ // list<ref<Kimage>> of Imagealloc.free?
+  // list<ref<Kimage>> of Imagealloc.free?
+  KImage  *next; /* Free list */ 
+  // hash<?, list<ref<Kimage>>> Imagealloc.hash?
+  KImage  *hash; /* Qid hash chains */ 
   // option<ref<Segment>>?
   Segment *s;     /* TEXT segment for image if running */
 };
@@ -147,7 +149,7 @@ struct Segment
 
   // Kind of a page directory table (and pte = page table)
   // can be SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per segment!
-  // array<ref<Pte>>, smalloc'ed, point to ssegmap if small enough
+  // array<option<ref<Pte>>>, smalloc'ed, point to ssegmap if small enough
   Pte **map; 
   // small seg map, used instead of map if segment small enough
   // array<ref<Pte>>
@@ -280,10 +282,10 @@ enum
 struct Palloc
 {
   Pallocmem mem[4]; // TODO: 4 ?? same as Conf.mem
-  // array<Page>, xalloc'ed in pageinit() (huge)
   // sum of mem.npage (which should be conf.upages)
   ulong user;     /* how many user pages */
 
+  // array<Page>, xalloc'ed in pageinit() (huge)
   Page  *pages; /* array of all pages */ 
 
   // list<ref<Page>> (next = Page.next)
@@ -328,6 +330,8 @@ struct Imagealloc
 
 };
 //static struct Imagealloc imagealloc; // private to segment.c
+// so have conf.nimage + 1 Kimages
+extern  KImage  swapimage;
 
 
 // Swap allocator (singleton)
@@ -346,4 +350,3 @@ struct Swapalloc
   Lock;       /* Free map lock */
 };
 extern struct Swapalloc swapalloc;
-extern  KImage  swapimage;
