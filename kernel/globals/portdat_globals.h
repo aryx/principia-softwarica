@@ -1,9 +1,9 @@
 
-extern Mach	*m;
-extern	Conf	conf;
-extern	Dev**	devtab/*[]*/;
-extern	char*	eve;
-int		iseve(void);
+extern Mach *m;
+extern Conf conf;
+extern Dev** devtab/*[]*/;
+extern char* eve;
+int iseve(void);
 
 
 /*
@@ -15,11 +15,11 @@ int		iseve(void);
 // MAXMACH is defined in 386/mem.h
 extern Mach* machp[MAXMACH];
 
-#define	MACHP(n)	(machp[n])
+#define MACHP(n)  (machp[n])
 
 // MACHADDR is defined in 386/mem.h
 // TODO: why not m->externup? m is not valid?
-#define up	(((Mach*)MACHADDR)->externup)
+#define up  (((Mach*)MACHADDR)->externup)
 
-#define poperror()		up->nerrlab--
-#define	waserror()	(up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
+#define poperror()    up->nerrlab--
+#define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
