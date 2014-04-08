@@ -106,7 +106,7 @@ cinit(void)
 	cache.tail->next = 0;
 	cache.head->prev = 0;
 
-	fscache.notext = 1;
+	fscache.notext = true;
 }
 
 //void
