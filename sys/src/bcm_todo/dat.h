@@ -114,9 +114,10 @@ struct Conf
 	ulong	nimage;		/* number of page cache image headers */
 	ulong	nswap;		/* number of swap pages */
 	int	nswppo;		/* max # of pageouts per segment pass */
+	int	monitor;	/* flag */
+
 	ulong	hz;		/* processor cycle freq */
 	ulong	mhz;
-	int	monitor;	/* flag */
 };
 
 /*

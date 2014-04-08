@@ -54,10 +54,8 @@ extern void (*i8237alloc)(void);
 // Configuration
 //*****************************************************************************
 
-// now in portdat_globals.c
-//Conf conf;
-// where?
-//bool cpuserver;
+// Conf conf; // now in portdat_globals.c
+// bool cpuserver; // in pcf.c
 
 // conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
 #define MAXCONF         64

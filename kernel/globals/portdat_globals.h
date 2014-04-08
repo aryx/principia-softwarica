@@ -1,5 +1,6 @@
 
 extern Conf conf;
+extern  bool  cpuserver; // defined in conf/pcf.c
 
 // ref<Mach>, the actual Mach is where??
 extern Mach *m;
