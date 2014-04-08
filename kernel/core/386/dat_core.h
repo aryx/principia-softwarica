@@ -1,5 +1,5 @@
 
-// defined in 386/ but used in port
+// defined in 386/ but used in port, todo? split in portable vs non-port parts?
 
 struct Mach
 {
@@ -7,6 +7,7 @@ struct Mach
   // must be second field at 0x04, used by splhi()
   ulong splpc;      /* pc of last caller to splhi */
 
+  // 386 specific part
   ulong*  pdb;      /* page directory base for this processor (va) */
   Tss*  tss;      /* tss for this processor */
   Segdesc *gdt;     /* gdt for this processor */
@@ -72,7 +73,7 @@ struct Conf
   ulong nproc;    /* processes */
   Confmem mem[4];   /* physical memory */
 
-  ulong monitor;  /* has monitor? */
+  bool_ulong monitor;  /* has monitor? */
 
   ulong npage;    /* total physical pages of memory */
   ulong upages;   /* user page pool */
@@ -84,7 +85,7 @@ struct Conf
   ulong base0;    /* base of bank 0 */
   ulong base1;    /* base of bank 1 */
 
-  ulong copymode; /* 0 is copy on write, 1 is copy on reference */
+  bool_ulong copymode; /* 0 is copy on write, 1 is copy on reference */
   ulong ialloc;   /* max interrupt time allocation in bytes */
   ulong pipeqsize;  /* size in bytes of pipe queues */
   int nuart;    /* number of uart devices */
