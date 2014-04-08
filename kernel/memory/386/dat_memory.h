@@ -1,6 +1,5 @@
 
-// define things used in core/386/ Conf
-
+// define things used in Conf in core/386/
 struct Confmem
 {
 	ulong	base;
@@ -9,8 +8,7 @@ struct Confmem
 	ulong	klimit;
 };
 
-
-// define things used in core/386/ Mach
+// define things used in Mach in core/386/
 struct Tss {
 	ulong	link;			/* link (old TSS selector) */
 	ulong	esp0;			/* privilege level 0 stack pointer */
@@ -49,7 +47,7 @@ struct Segdesc
 
 
 
-// define things used in processes/ Proc
+// define things used in Proc in processes/
 /*
  *  MMU stuff in proc
  */

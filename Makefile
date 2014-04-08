@@ -1,4 +1,5 @@
 
+# on a MAC
 DISK="/Volumes/DISK Image"
 
 all:
@@ -25,9 +26,7 @@ run:
 #-fda ~/floppy.img
 #-hda ~/plan9.raw.img
 # -cdrom plan9.iso? does not work?
-
-
-	(cd sys/src/9/pc/; make qemu)
+#(cd sys/src/9/pc/; make qemu)
 
 
 visual:

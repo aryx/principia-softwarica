@@ -24,7 +24,7 @@ enum cachectl
 	PG_NEWCOL	= 3,		/* page has been recolored */
 };
 
-// Page metadata, we will allocate as many pages to cover all physical memory
+// Page metadata. We will allocate as many Page as to cover all physical memory
 // and swap "address space". Either pa or daddr should be valid at one time.
 // Should have been xalloc'ed in Palloc.pages
 struct Page
@@ -243,7 +243,7 @@ struct Xalloc
 //extern Pool*	imagmem;
 
 
-// memory banks, similar to RMap, but portable
+// memory banks, similar to RMap, and Confmem, but page oriented, and portable
 struct Pallocmem
 {
 	phys_addr base;
@@ -252,7 +252,7 @@ struct Pallocmem
 
 enum
 {
-	PGHLOG  =	9,
+	PGHLOG  =	9, // 2^9 = 512
 	PGHSIZE	=	1<<PGHLOG,	/* Page hash for image lookup */
 };
 #define	pghash(daddr)	palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
@@ -269,7 +269,7 @@ struct Palloc
 	Page	*tail;			/* least recently used */
 	ulong	freecount;		/* how many pages on free list now */
 
-	Page	*hash[PGHSIZE];
+	Page	*hash[PGHSIZE]; // key?
 	Lock	hashlock;
 
   // extra
