@@ -11,7 +11,7 @@ struct Waitq
 {
   Waitmsg w;
 
-  // list<Ref<Waitq>> of ??
+  // list<ref<Waitq>> of ??
   Waitq *next;
 };
 
@@ -32,6 +32,8 @@ struct Rgrp
   Ref;        /* the Ref's lock is also the Rgrp's lock */
 };
 
+
+
 enum
 {
   DELTAFD = 20    /* incremental increase in Fgrp.fd's */
@@ -39,7 +41,7 @@ enum
 
 struct Fgrp
 {
-  // array<ref<Chan>, smalloc'ed??
+  // array<ref_own?<Chan>, smalloc'ed??
   Chan  **fd;
   // nelem(fd) ?
   int nfd;      /* number allocated */
@@ -245,7 +247,8 @@ enum {
   //NFD =   100,    /* per process file descriptors */
 };
 
-enum priority {
+enum priority 
+{
   PriRelease  = Npriq,  /* released edf processes */
   PriEdf    = Npriq+1,  /* active edf processes */
   PriNormal = 10,   /* base priority for normal processes */
@@ -281,7 +284,6 @@ struct Proc
 //--------------------------------------------------------------------
 // State
 //--------------------------------------------------------------------
-
   ulong pid;
 
   // enum<procstate>
@@ -291,8 +293,7 @@ struct Proc
 //--------------------------------------------------------------------
 // Memory
 //--------------------------------------------------------------------
-
-  // array<option<Segment>>, elt smalloc'ed?
+  // array<option<ref_own<Segment>>>, elt smalloc'ed?
   Segment *seg[NSEG];
   QLock seglock;  /* locked whenever seg[] changes */
 
@@ -323,7 +324,6 @@ struct Proc
   Pgrp  *pgrp;    /* Process group for namespace */
   Egrp  *egrp;    /* Environment group */
   Fgrp  *fgrp;    /* File descriptor group */
-  Rgrp  *rgrp;    /* Rendez group */
 
   Chan  *slash; // The root!
   Chan  *dot; // The current directory
@@ -359,6 +359,8 @@ struct Proc
 //--------------------------------------------------------------------
 // Other
 //--------------------------------------------------------------------
+
+  Rgrp  *rgrp;    /* Rendez group */
 
   char  *text;
   char  *user;
@@ -497,7 +499,7 @@ struct Procalloc
   // extra
   Lock;
 };
-//static struct Procalloc procalloc; // private to proc.c
+//IMPORTANT: static struct Procalloc procalloc; (in proc.c)
 
 struct Schedq
 {
@@ -512,7 +514,7 @@ struct Schedq
   Lock;
 };
 // hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
-//Schedq  runq[Nrq];  // private to proc.c
+//IMPORTANT: Schedq  runq[Nrq];  (in proc.c)
 
 // was in alarm.c, but important so here
 struct Alarms
@@ -521,8 +523,8 @@ struct Alarms
   Proc  *head;
   QLock;
 };
-//static Alarms alarms; // private to alarm.c
-//static Rendez alarmr; // private to alarm.c
+//IMPORTANT: static Alarms alarms; (in alarm.c)
+//IMPORTANT: static Rendez alarmr; (in alarm.c)
 
 
 #pragma varargck  type  "t"   long
