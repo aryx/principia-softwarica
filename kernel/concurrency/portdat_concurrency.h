@@ -1,55 +1,68 @@
 
 // see also Lock (interdepends on Proc) in 386/ (but used in port)
 
+// Lock < KQLock|RWLock|Ref
+
+// Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h Qlock)
 struct KQLock
 {
-	Lock	use;		/* to access Qlock structure */
+	bool	locked;		/* flag */
 
-  // see also Proc.qnext for getting the full chain from head to tail.
+  // list<ref<Proc>> (next = Proc.qnext)
 	Proc	*head;		/* next process waiting for object */
+  // list<ref<Proc>> (next = Proc.??)
 	Proc	*tail;		/* last process waiting for object */
 
-	bool	locked;		/* flag */
-	uintptr	qpc;		/* pc of the holder */
+	uintptr	qpc;		/* pc of the holder */ // for debugging?
+
+	Lock	use;		/* to access Qlock structure */
 };
 
+// Read/Write lock
 struct RWlock
 {
-	Lock	use;
-
-  // see also Proc.qnext for getting the full chain from head to tail.
-	Proc	*head;		/* list of waiting processes */
-	Proc	*tail;
-
-	ulong	wpc;		/* pc of writer */
-	Proc	*wproc;		/* writing proc */
 	int	readers;	/* number of readers */
 	int	writer;		/* number of writers */
+
+  // list<ref<Proc>> (next = Proc.qnext)
+	Proc	*head;		/* list of waiting processes */
+  // list<ref<Proc>> (next = Proc.qnext)??
+	Proc	*tail;
+  // option<ref<Proc>>
+	Proc	*wproc;		/* writing proc */
+
+	ulong	wpc;		/* pc of writer */
+
+	Lock	use;
 };
 
+// For reference counting shared things (e.g. a Page)
 struct Ref
 {
-	Lock;
 	long	ref;
+
+	Lock;
 };
 
 
 // defined in this directory but no functions are operating on in this dir
 struct Rendez
 {
-	Lock;
+  // ??
 	Proc	*p;
+
+	Lock;
 };
 
 struct Sema
 {
-	Rendez;
 	long	*addr;
 	int	waiting;
 
+  //list<Sema> of ??
 	Sema	*next;
 	Sema	*prev;
+	Rendez;
 };
 
 // see also Waitq in portdat_processes.h?
-// see also Rgrp, Fgrp, Pgrp in portdat_processes.h?  and Egrp in files.h?
