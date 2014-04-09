@@ -83,6 +83,7 @@ execinit(void)
 }
 
 
+// called from bootbcf.c:main()
 void
 boot(int argc, char *argv[])
 {

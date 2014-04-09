@@ -14,7 +14,7 @@ disk:
 	open dosdisk.img
 	sleep 3
 	rm -rf $(DISK)/*
-	cp -a root/* $(DISK)/
+	cp -a ROOT/* $(DISK)/
 	umount -f $(DISK)
 
 
