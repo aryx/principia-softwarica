@@ -40,6 +40,7 @@ typedef uvlong		Tval;
  */
 #define AOUT_MAGIC	(E_MAGIC)
 
+// actually portable IMHO, just use uintptr like here
 struct Lock
 {
 	ulong	key;
@@ -50,6 +51,7 @@ struct Lock
 	int	isilock;
 };
 
+// actually portable IMHO
 struct Label
 {
 	uintptr	sp;
@@ -92,6 +94,7 @@ enum
 	FPillegal= 0x100,
 };
 
+// actually portable IMHO
 struct Confmem
 {
 	uintptr	base;
@@ -103,6 +106,7 @@ struct Confmem
 	usize	npage;
 };
 
+// actually portable IMHO
 struct Conf
 {
 	ulong	nmach;		/* processors */
@@ -145,6 +149,7 @@ struct MMMU
  *  MMU stuff in proc
  */
 #define NCOLOR	1		/* 1 level cache, don't worry about VCE's */
+//ArchMMU now
 struct PMMU
 {
 	Page*	mmul2;
@@ -224,6 +229,7 @@ typedef void		KMap;
 #define	kmap(p)		(KMap*)((p)->pa|kseg0)
 #define	kunmap(k)
 
+// actually portable IMHO
 struct
 {
 	Lock;
