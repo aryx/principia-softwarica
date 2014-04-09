@@ -75,7 +75,8 @@ struct Pte
 
 // a KImage is essentially a channel to a text file (an image of a binary)
 // the image in memory for a portion of a given file.
-// (renamed KImage to avoid name conflict with memdraw Image (picture))
+// (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
+//  ugly #define Image IMAGE each time one wants to use draw.h from a device driver)
 struct KImage
 {
   Chan  *c;     /* channel to text file */

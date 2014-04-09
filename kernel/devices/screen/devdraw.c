@@ -5,7 +5,6 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-#define	Image	IMAGE
 #include	<draw.h>
 #include	<memdraw.h>
 #include	<memlayer.h>

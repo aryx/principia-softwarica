@@ -9,7 +9,6 @@
 #include "io.h"
 #include "../port/error.h"
 
-#define	Image	IMAGE
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
