@@ -30,12 +30,13 @@ Mach *m;
 // was in dat.h
 Mach* machp[MAXMACH];
 
-// was in conf/pcf.c
-Dev** devtab = 0;
-
 // was in security/auth.c
 char	*eve;
 // should be in portfns.c, but then backward deps
 iseve(void) { 
   return strcmp(eve, up->user) == 0; 
 }
+
+// was in console/devcons.c, but used also by edf.c
+int	panicking;
+
