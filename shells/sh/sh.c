@@ -1,6 +1,6 @@
 /* sh - simple shell - great for early stages of porting */
-#include "u.h"
-#include "libc.h"
+#include <u.h>
+#include <libc.h>
 
 #define MAXLINE 200		/* maximum line length */
 #define WORD 256		/* token code for words */
