@@ -4,7 +4,6 @@ void    addbootfile(char*, uchar*, ulong);
 // sys/devmnt.c
 Chan*   mntauth(Chan*, char*);
 long    mntversion(Chan*, char*, int, int);
-void    muxclose(Mnt*);
 // sys/devsrv.c
 char*   srvname(Chan*);
 // sys/devproc.c

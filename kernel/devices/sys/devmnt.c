@@ -5,47 +5,14 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-/*
- * References are managed as follows:
- * The channel to the server - a network connection or pipe - has one
- * reference for every Chan open on the server.  The server channel has
- * c->mux set to the Mnt used for muxing control to that server.  Mnts
- * have no reference count; they go away when c goes away.
- * Each channel derived from the mount point has mchan set to c,
- * and increfs/decrefs mchan to manage references on the server
- * connection.
- */
-
 #define MAXRPC (IOHDRSZ+8192)
 
-enum
-{
-	TAGSHIFT = 5,			/* ulong has to be 32 bits */
-	TAGMASK = (1<<TAGSHIFT)-1,
-	NMASK = (64*1024)>>TAGSHIFT,
-};
-
-struct Mntalloc
-{
-	Lock;
-	Mnt*	list;		/* Mount devices in use */
-	Mnt*	mntfree;	/* Free list */
-	Mntrpc*	rpcfree;
-	int	nrpcfree;
-	int	nrpcused;
-	ulong	id;
-	ulong	tagmask[NMASK];
-};
-
-struct Mntalloc mntalloc;
 
 Mnt*	mntchk(Chan*);
 void	mntdirfix(uchar*, Chan*);
 Mntrpc*	mntflushalloc(Mntrpc*, ulong);
 void	mntflushfree(Mnt*, Mntrpc*);
-void	mntfree(Mntrpc*);
 void	mntgate(Mnt*);
-void	mntpntfree(Mnt*);
 void	mntqrm(Mnt*, Mntrpc*);
 Mntrpc*	mntralloc(Chan*, ulong);
 long	mntrdwr(int, Chan*, void*, long, vlong);
@@ -545,43 +512,7 @@ mntclunk(Chan *c, int t)
 	poperror();
 }
 
-void
-muxclose(Mnt *m)
-{
-	Mntrpc *q, *r;
 
-	for(q = m->queue; q; q = r) {
-		r = q->list;
-		mntfree(q);
-	}
-	m->id = 0;
-	free(m->version);
-	m->version = nil;
-	mntpntfree(m);
-}
-
-void
-mntpntfree(Mnt *m)
-{
-	Mnt *f, **l;
-	Queue *q;
-
-	lock(&mntalloc);
-	l = &mntalloc.list;
-	for(f = *l; f; f = f->list) {
-		if(f == m) {
-			*l = m->list;
-			break;
-		}
-		l = &f->list;
-	}
-	m->list = mntalloc.mntfree;
-	mntalloc.mntfree = m;
-	q = m->q;
-	unlock(&mntalloc);
-
-	qfree(q);
-}
 
 static void
 mntclose(Chan *c)
@@ -1015,11 +946,6 @@ alloctag(void)
 	return NOTAG;
 }
 
-void
-freetag(int t)
-{
-	mntalloc.tagmask[t>>TAGSHIFT] &= ~(1<<(t&TAGMASK));
-}
 
 Mntrpc*
 mntralloc(Chan *c, ulong msize)
@@ -1071,25 +997,6 @@ mntralloc(Chan *c, ulong msize)
 	return new;
 }
 
-void
-mntfree(Mntrpc *r)
-{
-	if(r->b != nil)
-		freeblist(r->b);
-	lock(&mntalloc);
-	if(mntalloc.nrpcfree >= 10){
-		free(r->rpc);
-		freetag(r->request.tag);
-		free(r);
-	}
-	else{
-		r->list = mntalloc.rpcfree;
-		mntalloc.rpcfree = r;
-		mntalloc.nrpcfree++;
-	}
-	mntalloc.nrpcused--;
-	unlock(&mntalloc);
-}
 
 void
 mntqrm(Mnt *m, Mntrpc *r)

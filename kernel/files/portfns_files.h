@@ -122,6 +122,11 @@ void    closeegrp(Egrp*);
 void    ksetenv(char*, char*, int);
 char*   getconfenv(void);
 
+// mnt.c
+void    muxclose(Mnt*);
+void	mntfree(Mntrpc*);
+void	mntpntfree(Mnt*);
+
 // sysfile.c
 int   newfd(Chan*);
 // many sysxxx functions (used in syscalls/ without requiring extern decl)

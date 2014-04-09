@@ -312,3 +312,44 @@ struct Dirtab
   long  perm;
 };
 
+
+
+//*****************************************************************************
+// Internal to memory/
+//*****************************************************************************
+
+enum
+{
+	TAGSHIFT = 5,			/* ulong has to be 32 bits */
+	TAGMASK = (1<<TAGSHIFT)-1,
+	NMASK = (64*1024)>>TAGSHIFT,
+};
+
+/*
+ * References are managed as follows:
+ * The channel to the server - a network connection or pipe - has one
+ * reference for every Chan open on the server.  The server channel has
+ * c->mux set to the Mnt used for muxing control to that server.  Mnts
+ * have no reference count; they go away when c goes away.
+ * Each channel derived from the mount point has mchan set to c,
+ * and increfs/decrefs mchan to manage references on the server
+ * connection.
+ */
+
+// actually internal to devmnt.c and mnt.c
+struct Mntalloc
+{
+	Mnt*	list;		/* Mount devices in use */
+	Mnt*	mntfree;	/* Free list */
+	Mntrpc*	rpcfree;
+	int	nrpcfree;
+	int	nrpcused;
+	ulong	id;
+	ulong	tagmask[NMASK];
+
+  // extra
+	Lock;
+
+};
+
+extern struct Mntalloc mntalloc;
