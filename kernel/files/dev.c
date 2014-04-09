@@ -5,7 +5,10 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-extern ulong	kerndate;
+// was in conf/pcf.c
+Dev** devtab = 0;
+
+
 
 void
 mkqid(Qid *q, vlong path, ulong vers, int type)

@@ -303,6 +303,12 @@ struct Dev
   int attached;       /* debugging */
 };
 
+// array<Dev>, it looks like an allocated array<ref<dev>> but
+// it is really a static array put here to avoid backward deps on conf_devtab,
+// and it is not really a <ref<dev>> because it's pointer to static
+// structures (e.g. mousedevtab, vgadevtab, etc).
+extern Dev** devtab;
+
 
 struct Dirtab
 {

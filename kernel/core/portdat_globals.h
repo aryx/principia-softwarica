@@ -23,15 +23,14 @@ extern Mach *m;
 extern Mach* machp[MAXMACH];
 #define MACHP(n)  (machp[n])
 
-// array<Dev>, it looks like an allocated array<ref<dev>> but
-// it is really a static array put here to avoid backward deps on conf_devtab,
-// and it is not really a <ref<dev>> because it's pointer to static
-// structures (e.g. mousedevtab, vgadevtab, etc).
-extern Dev** devtab;
 
 extern char* eve;
 int iseve(void);
 
+extern ulong	kerndate; // defined in ???
+
+// used to be in devcons.c, but used also by edf.c
+extern int panicking;
 
 //TODO: mv in 386/
 // MACHADDR is defined in 386/mem.h
