@@ -2,6 +2,12 @@
 // all those structs used to be in 386/, but many of their fields were
 // used from port/ code so I've moved them here.
 
+// less: have a conf.c, mach.c?
+
+//*****************************************************************************
+// Conf
+//*****************************************************************************
+
 // memory "bank"
 struct Confmem
 {
@@ -16,6 +22,7 @@ struct Conf
 {
   ulong nmach;    /* processors */
   ulong nproc;    /* processes */
+  // in bcm/ it's [1], important? 
   Confmem mem[4];   /* physical memory */
 
   bool_ulong monitor;  /* has monitor? */
@@ -35,9 +42,9 @@ struct Conf
   struct ArchConf;
 };
 
-
-
-
+//*****************************************************************************
+// Mach
+//*****************************************************************************
 
 // =~ a jumpbuf in C, for coroutines
 struct Label
@@ -104,7 +111,6 @@ struct Mach
   int cpumhz;
   uvlong  cpuhz;
   uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
-
 
   int stack[1];
 };
