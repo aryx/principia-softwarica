@@ -104,7 +104,6 @@ static int scrollswap;
 static ulong mousetime;
 
 extern Memimage* gscreen;
-extern ulong kerndate;
 
 static void
 mousereset(void)
