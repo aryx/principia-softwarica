@@ -1,18 +1,4 @@
 
-/*
- * FPsave.status
- */
-enum fpsavestatus
-{
-  /* this is a state */
-  FPinit=   0,
-  FPactive= 1,
-  FPinactive= 2,
-
-  /* the following is a bit that can be or'd into the state */
-  FPillegal=  0x100,
-};
-
 //@Scheck: unnamed substructure
 struct  FPstate     /* x87 fpu state */
 {

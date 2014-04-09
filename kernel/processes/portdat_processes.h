@@ -273,6 +273,19 @@ enum procseg
   NSEG // to count, see Proc.seg array
 };
 
+/*
+ * FPsave.status
+ */
+enum fpsavestatus
+{
+  /* this is a state */
+  FPinit=   0,
+  FPactive= 1,
+  FPinactive= 2,
+
+  /* the following is a bit that can be or'd into the state */
+  FPillegal=  0x100,
+};
 
 
 // the most important fields are set by newproc()
@@ -294,6 +307,13 @@ struct Proc
   // enum<procstate>
   int state; // Dead, Queuing, etc, see the enum below
   char  *psstate; /* What /proc/#/status reports */
+
+  // e.g. "*init*"
+  char  *text;
+  char  *user;
+  // set by??
+  char  *args;
+  int nargs;    /* number of bytes of args */
 
 //--------------------------------------------------------------------
 // Memory
@@ -373,10 +393,6 @@ struct Proc
 
   Rgrp  *rgrp;    /* Rendez group */
 
-  char  *text;
-  char  *user;
-  char  *args;
-  int nargs;    /* number of bytes of args */
 
   Waitq *waitq;   /* Exited processes wait children */
   Lock  exl;    /* Lock count and waitq */
@@ -403,6 +419,7 @@ struct Proc
   vlong pcycles;
 
   int insyscall;
+  // enum<fpsavestatus>
   int fpstate;
 
   QLock debug;    /* to access debugging elements of User */

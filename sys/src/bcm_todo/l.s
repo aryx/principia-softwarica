@@ -105,6 +105,8 @@ TEXT lcycles(SB), 1, $-4
 	MRC	CpSC, 0, R0, C(CpSPM), C(CpSPMperf), CpSPMcyc
 	RET
 
+
+        
 TEXT splhi(SB), 1, $-4
 	MOVW	$(MACHADDR+4), R2		/* save caller pc in Mach */
 	MOVW	R14, 0(R2)
@@ -153,6 +155,8 @@ TEXT islo(SB), 1, $-4
 	EOR	$(PsrDirq), R0
 	RET
 
+
+        
 TEXT	tas(SB), $-4
 TEXT	_tas(SB), $-4
 	MOVW	R0,R1
