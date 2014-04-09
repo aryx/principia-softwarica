@@ -9,6 +9,9 @@ long    latin1(Rune*, int);
 // used by main.c
 void    machinit(void);
 
+// used by main.c
+void mmuinit0(void);
+
 //@Scheck: Assembly
 void    forkret(void);
 //@Scheck: Assembly
