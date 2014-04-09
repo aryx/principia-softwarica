@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/globals/portdat_globals.h
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/core/portdat_globals.h
