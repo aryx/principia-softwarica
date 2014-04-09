@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/misc/386/rebootcode.s
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/init/386/rebootcode.s

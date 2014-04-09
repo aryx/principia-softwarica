@@ -2,6 +2,7 @@
 
 #include "dat_core.h"
 #include "dat_concurrency.h"
+#include "dat_arch.h"
 #include "dat_memory.h"
 #include "dat_processes.h"
 //empty: #include "dat_globals.h"

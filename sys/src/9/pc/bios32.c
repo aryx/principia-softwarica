@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/misc/386/bios32.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/arch/386/bios32.c

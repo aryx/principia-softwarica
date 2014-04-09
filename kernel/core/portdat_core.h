@@ -32,10 +32,11 @@ struct Conf
   ulong pipeqsize;  /* size in bytes of pipe queues */
   int nuart;    /* number of uart devices */
 
-  // 386/ specific?
-  ulong base0;    /* base of bank 0 */
-  ulong base1;    /* base of bank 1 */
+  struct ArchConf;
 };
+
+
+
 
 
 // =~ a jumpbuf in C, for coroutines
@@ -61,7 +62,6 @@ struct Perf
 
 
 
-// TODO have a MachArch
 struct Mach
 {
   int machno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
@@ -80,15 +80,11 @@ struct Mach
 
   int flushmmu;   /* make current proc flush it's mmu state */
 
-  // 386 specific part
-  // TODO: have a MMMU like in bcm/
-  ulong*  pdb;      /* page directory base for this processor (va) */
-  Tss*  tss;      /* tss for this processor */
-  Segdesc *gdt;     /* gdt for this processor */
-  Proc* externup;   /* extern register Proc *up */
-  Page* pdbpool;
-  int pdbcnt;
-  int inclockintr;
+  struct ArchMach;
+  // 386 specific, but would force to mv Lock in 386/
+  Lock  apictimerlock;
+  FPsave *fpsavalign;
+
 
 	/* stats */
   int tlbfault;
@@ -108,25 +104,6 @@ struct Mach
   int cpumhz;
   uvlong  cpuhz;
   uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
-
-  // 386/ specific
-  int loopconst;
-  Lock  apictimerlock;
-  int cpuidax;
-  int cpuiddx;
-  char  cpuidid[16];
-  char* cpuidtype;
-  int havetsc;
-  int havepge;
-  uvlong tscticks;
-  int pdballoc;
-  int pdbfree;
-  FPsave *fpsavalign;
-  vlong mtrrcap;
-  vlong mtrrdef;
-  vlong mtrrfix[11];
-  vlong mtrrvar[32];    /* 256 max. */
-
 
 
   int stack[1];

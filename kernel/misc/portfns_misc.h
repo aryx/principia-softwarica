@@ -10,7 +10,3 @@ Cmdtab*   lookupcmd(Cmdbuf*, Cmdtab*, int);
 // random.c
 ulong   randomread(void*, ulong);
 void    randominit(void);
-
-// rebootcmd.c
-//void    readn(Chan *, void *, long);
-void    rebootcmd(int, char**);

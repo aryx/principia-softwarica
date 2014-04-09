@@ -24,6 +24,8 @@ typedef struct Devport Devport;
 
 // needed in arch specific stuff
 typedef struct Page Page;
+typedef struct Proc Proc;
+typedef struct Lock Lock;
 
 #pragma incomplete BIOS32si
 #pragma incomplete Pcidev
