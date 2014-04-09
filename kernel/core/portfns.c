@@ -43,7 +43,6 @@ int (*return0)(void*) = 0;
 void (*cclose)(Chan*);
 
 // init/main.c
-char* (*getconf)(char *name) = 0;
 void (*exit)(int ispanic) = 0;
 
 // misc/386/devarch.c

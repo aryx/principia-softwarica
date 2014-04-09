@@ -1,6 +1,15 @@
 
 extern Conf conf;
+
+// hash<string, string>
+#define MAXCONF         64
+extern char *confname[];
+extern char *confval[];
+// Hashtbl.length(confname)
+extern int nconf;
 extern bool cpuserver; // defined in conf/pcf.c
+
+char* getconf(char *name);
 
 // ref<Mach>, the actual Mach is where??
 extern Mach *m;

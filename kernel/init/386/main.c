@@ -19,15 +19,15 @@
 
 void bootargs(void*);
 
-// to avoid backward deps
-void devcons__assert(char*);
-char* main_getconf(char*);
-void trap_dumpstack(void);
-void proc_error(char*);
-int devcons_iprint(char*, ...);
+// part of a trick to remove some backward dependencies
 int devcons_print(char*, ...);
-void proc_nexterror(void);
+int devcons_iprint(char*, ...);
 void devcons_panic(char*, ...);
+void devcons__assert(char*);
+void trap_dumpstack(void);
+void proc_dumpaproc(Proc *p);
+void proc_error(char*);
+void proc_nexterror(void);
 int devcons_pprint(char*, ...);
 void i8253_delay(int millisecs);
 void i8253_microdelay(int microsecs);
@@ -38,7 +38,6 @@ void proc_sleep(Rendez*, int(*)(void*), void*);
 void main_exit(int ispanic);
 int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
 void nop(void);
-void proc_dumpaproc(Proc *p);
 uvlong devarch_fastticks(uvlong *hz);
 void chan_cclose(Chan *c);
 Proc* proc_proctab(int i);
@@ -53,29 +52,7 @@ extern void (*i8237alloc)(void);
 //*****************************************************************************
 // Configuration
 //*****************************************************************************
-
-// Conf conf; // now in portdat_globals.c
-// bool cpuserver; // in pcf.c
-
-// conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
-#define MAXCONF         64
-// hash<string, string>
-char *confname[MAXCONF];
-char *confval[MAXCONF];
-// Hashtbl.length(confname)
-int nconf;
-
-
-// getconf()
-char*
-main_getconf(char *name)
-{
-        int i;
-        for(i = 0; i < nconf; i++)
-                if(cistrcmp(confname[i], name) == 0)
-                        return confval[i];
-        return nil;
-}
+// See globals in portdat_globals.h
 
 //*****************************************************************************
 // Boot parameters (not used by pad)
@@ -623,7 +600,6 @@ mathover(Ureg*, void*)
 }
 
 
-
 void
 mathinit(void)
 {
@@ -827,7 +803,6 @@ main(void)
   dumpaproc = proc_dumpaproc;
   
   devtab = conf_devtab;
-  getconf = main_getconf;
   
   delay = i8253_delay;
   microdelay = i8253_microdelay;

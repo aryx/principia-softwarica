@@ -70,7 +70,6 @@ ulong getcr2(void);
 ulong getcr3(void);
 //@Scheck: Assembly
 ulong getcr4(void);
-char* (*getconf)(char*);
 void  guesscpuhz(int);
 //@Scheck: Assembly
 void  halt(void);
