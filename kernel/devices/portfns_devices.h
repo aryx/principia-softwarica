@@ -9,8 +9,6 @@ void    muxclose(Mnt*);
 char*   srvname(Chan*);
 // sys/devproc.c
 int   procfdprint(Chan*, int, int, char*, int);
-//TODO: mv in memory/
-Segment*  data2txt(Segment*);
 // sys/devrtc.c
 //long    rtctime(void);
 
