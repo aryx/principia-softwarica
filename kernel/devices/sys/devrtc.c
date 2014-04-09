@@ -5,14 +5,9 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-/*
- *  real time clock and non-volatile ram
- */
+// see also the enum in dat_memory.h used by nvram.c and this file
 
 enum {
-	Paddr=		0x70,	/* address port */
-	Pdata=		0x71,	/* data port */
-
 	Seconds=	0x00,
 	Minutes=	0x02,
 	Hours=		0x04, 
@@ -26,6 +21,8 @@ enum {
 
 	Nbcd=		6,
 };
+
+
 
 typedef struct Rtc	Rtc;
 struct Rtc
@@ -112,19 +109,19 @@ _rtctime(void)
 	/* don't do the read until the clock is no longer busy */
 	for(i = 0; i < 10000; i++){
 		outb(Paddr, Status);
-		if(inb(Pdata) & 0x80)
+		if(inb(PdataPort) & 0x80)
 			continue;
 
 		/* read clock values */
-		outb(Paddr, Seconds);	bcdclock[0] = inb(Pdata);
-		outb(Paddr, Minutes);	bcdclock[1] = inb(Pdata);
-		outb(Paddr, Hours);	bcdclock[2] = inb(Pdata);
-		outb(Paddr, Mday);	bcdclock[3] = inb(Pdata);
-		outb(Paddr, Month);	bcdclock[4] = inb(Pdata);
-		outb(Paddr, Year);	bcdclock[5] = inb(Pdata);
+		outb(Paddr, Seconds);	bcdclock[0] = inb(PdataPort);
+		outb(Paddr, Minutes);	bcdclock[1] = inb(PdataPort);
+		outb(Paddr, Hours);	bcdclock[2] = inb(PdataPort);
+		outb(Paddr, Mday);	bcdclock[3] = inb(PdataPort);
+		outb(Paddr, Month);	bcdclock[4] = inb(PdataPort);
+		outb(Paddr, Year);	bcdclock[5] = inb(PdataPort);
 
 		outb(Paddr, Status);
-		if((inb(Pdata) & 0x80) == 0)
+		if((inb(PdataPort) & 0x80) == 0)
 			break;
 	}
 
@@ -148,7 +145,8 @@ _rtctime(void)
 	return rtc2sec(&rtc);
 }
 
-static Lock nvrtlock;
+// now in dat_memory.h and not static ...
+//static Lock nvrtlock;
 
 long
 rtctime(void)
@@ -200,7 +198,7 @@ rtcread(Chan* c, void* buf, long n, vlong off)
 			if(t >= Nvsize)
 				break;
 			outb(Paddr, Nvoff+t);
-			*a++ = inb(Pdata);
+			*a++ = inb(PdataPort);
 		}
 		iunlock(&nvrtlock);
 
@@ -264,12 +262,12 @@ rtcwrite(Chan* c, void* buf, long n, vlong off)
 		 *  write the clock
 		 */
 		ilock(&nvrtlock);
-		outb(Paddr, Seconds);	outb(Pdata, bcdclock[0]);
-		outb(Paddr, Minutes);	outb(Pdata, bcdclock[1]);
-		outb(Paddr, Hours);	outb(Pdata, bcdclock[2]);
-		outb(Paddr, Mday);	outb(Pdata, bcdclock[3]);
-		outb(Paddr, Month);	outb(Pdata, bcdclock[4]);
-		outb(Paddr, Year);	outb(Pdata, bcdclock[5]);
+		outb(Paddr, Seconds);	outb(PdataPort, bcdclock[0]);
+		outb(Paddr, Minutes);	outb(PdataPort, bcdclock[1]);
+		outb(Paddr, Hours);	outb(PdataPort, bcdclock[2]);
+		outb(Paddr, Mday);	outb(PdataPort, bcdclock[3]);
+		outb(Paddr, Month);	outb(PdataPort, bcdclock[4]);
+		outb(Paddr, Year);	outb(PdataPort, bcdclock[5]);
 		iunlock(&nvrtlock);
 		return n;
 	case Qnvram:
@@ -291,7 +289,7 @@ rtcwrite(Chan* c, void* buf, long n, vlong off)
 			if(t >= Nvsize)
 				break;
 			outb(Paddr, Nvoff+t);
-			outb(Pdata, *a++);
+			outb(PdataPort, *a++);
 		}
 		iunlock(&nvrtlock);
 
@@ -438,24 +436,3 @@ sec2rtc(ulong secs, Rtc *rtc)
 	return;
 }
 
-uchar
-nvramread(int addr)
-{
-	uchar data;
-
-	ilock(&nvrtlock);
-	outb(Paddr, addr);
-	data = inb(Pdata);
-	iunlock(&nvrtlock);
-
-	return data;
-}
-
-void
-nvramwrite(int addr, uchar data)
-{
-	ilock(&nvrtlock);
-	outb(Paddr, addr);
-	outb(Pdata, data);
-	iunlock(&nvrtlock);
-}
