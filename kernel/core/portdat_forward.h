@@ -26,7 +26,7 @@ typedef struct Page Page;
 typedef struct Path Path;
 typedef struct Palloc Palloc;
 typedef struct Pallocmem  Pallocmem;
-//now in dat.h: typedef struct Perf Perf;
+typedef struct Perf Perf;
 typedef struct PhysUart PhysUart;
 typedef struct Pgrp Pgrp;
 typedef struct Physseg  Physseg;
@@ -54,6 +54,8 @@ typedef int    Devgen(Chan*, char*, Dirtab*, int, int, Dir*);
 // was in dat_forward.h
 typedef struct Conf Conf;
 typedef struct Confmem  Confmem;
+typedef struct Lock Lock;
+typedef struct Mach Mach;
 
 // was in cache.c
 typedef struct Extent Extent;
