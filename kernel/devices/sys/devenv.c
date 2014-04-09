@@ -346,24 +346,6 @@ envcpy(Egrp *to, Egrp *from)
 	runlock(from);
 }
 
-void
-closeegrp(Egrp *eg)
-{
-	int i;
-	Evalue *e;
-
-	if(decref(eg) == 0){
-		for(i=0; i<eg->nent; i++){
-			e = eg->ent[i];
-			free(e->name);
-			if(e->value)
-				free(e->value);
-			free(e);
-		}
-		free(eg->ent);
-		free(eg);
-	}
-}
 
 static Egrp*
 envgrp(Chan *c)

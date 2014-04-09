@@ -10,6 +10,11 @@ char*   srvname(Chan*);
 int   procfdprint(Chan*, int, int, char*, int);
 // sys/devrtc.c
 //long    rtctime(void);
+// sys/devenv.c
+void    envcpy(Egrp*, Egrp*);
+void    ksetenv(char*, char*, int);
+char*   getconfenv(void);
+
 
 // screen/devdraw.c
 void    drawactive(int);

@@ -116,11 +116,8 @@ Chan*   devopen(Chan*, int, Dirtab*, int, Devgen*);
 Chan*   devattach(int, char*);
 Walkqid*  devwalk(Chan*, Chan*, char**, int, Dirtab*, int, Devgen*);
 
-// devenv.c
-void    envcpy(Egrp*, Egrp*);
+// env.c
 void    closeegrp(Egrp*);
-void    ksetenv(char*, char*, int);
-char*   getconfenv(void);
 
 // mnt.c
 void    muxclose(Mnt*);
