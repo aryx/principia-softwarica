@@ -56,6 +56,7 @@ typedef struct Conf Conf;
 typedef struct Confmem  Confmem;
 typedef struct Lock Lock;
 typedef struct Mach Mach;
+typedef struct Label  Label;
 
 // was in cache.c
 typedef struct Extent Extent;

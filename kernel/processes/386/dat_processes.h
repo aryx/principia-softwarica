@@ -1,22 +1,5 @@
 
 /*
- *  performance timers, all units in perfticks
- */
-//used to be in portdat.h, but needed by Mach
-struct Perf
-{
-  ulong intrts;   /* time of last interrupt */
-  ulong inintr;   /* time since last clock tick in interrupt handlers */
-  ulong avg_inintr; /* avg time per clock tick in interrupt handlers */
-  ulong inidle;   /* time since last clock tick in idle loop */
-  ulong avg_inidle; /* avg time per clock tick in idle loop */
-  ulong last;   /* value of perfticks() at last clock tick */
-  ulong period;   /* perfticks() per clock tick */
-};
-
-
-
-/*
  * FPsave.status
  */
 enum fpsavestatus

@@ -1,5 +1,5 @@
 
-// define things used in Mach in core/386/
+// define things used in Mach
 struct Tss {
   ulong link;     /* link (old TSS selector) */
   ulong esp0;     /* privilege level 0 stack pointer */
@@ -36,7 +36,7 @@ struct Segdesc
 };
 
 
-// define things used in Proc in processes/
+// define things used in Proc
 /*
  *  MMU stuff in proc
  */

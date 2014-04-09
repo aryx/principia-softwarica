@@ -5,7 +5,6 @@ typedef union FPsave  FPsave;
 typedef struct FPssestate FPssestate;
 typedef struct FPstate  FPstate;
 typedef struct ISAConf  ISAConf;
-typedef struct Label  Label;
 typedef struct MMU  MMU;
 typedef struct ArchNotsave  ArchNotsave;
 typedef struct PCArch PCArch;

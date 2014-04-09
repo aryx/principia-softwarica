@@ -1,14 +1,9 @@
 #include "dat_forward.h"
 
-// defines Lock (which references Proc and Mach)
+#include "dat_core.h"
 #include "dat_concurrency.h"
-// defines PMMU, etc (which references Page) (see also mem.h)
 #include "dat_memory.h"
 #include "dat_processes.h"
-
-// has to be after
-#include "dat_core.h"
-
 //empty: #include "dat_globals.h"
 #include "dat_misc.h"
 #include "dat_buses.h"
