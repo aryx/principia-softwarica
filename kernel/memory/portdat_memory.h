@@ -1,5 +1,5 @@
 
-// see also ConfMem and KMap in 386/ (but used in port)
+// see also KMap in 386/ (but used in port)
 
 // physical address
 typedef ulong phys_addr;
@@ -178,7 +178,7 @@ struct Segment
 // Internal to memory/
 //*****************************************************************************
 
-// See also RMap and Confmem in 386/
+// See also RMap in 386/
 
 // actually internal to xalloc.c, but important so here
 enum

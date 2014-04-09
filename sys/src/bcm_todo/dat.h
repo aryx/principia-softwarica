@@ -95,10 +95,12 @@ enum
 struct Confmem
 {
 	uintptr	base;
-	usize	npage;
 	uintptr	limit;
 	uintptr	kbase;
 	uintptr	klimit;
+
+  // arm/ specific?
+	usize	npage;
 };
 
 struct Conf
@@ -116,6 +118,7 @@ struct Conf
 	int	nswppo;		/* max # of pageouts per segment pass */
 	int	monitor;	/* flag */
 
+  // arm/ specific?
 	ulong	hz;		/* processor cycle freq */
 	ulong	mhz;
 };
@@ -179,6 +182,7 @@ struct Mach
 	int	syscall;
 	int	load;
 	int	intr;
+
 	uvlong	fastclock;		/* last sampled value */
 	ulong	spuriousintr;
 	int	lastintr;

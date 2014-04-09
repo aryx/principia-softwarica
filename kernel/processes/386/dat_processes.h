@@ -1,11 +1,4 @@
 
-// things used in Mach (and Proc), =~ a jumpbuf in C, for coroutines, portable?
-struct Label
-{
-  ulong sp; // virt_addr?
-  ulong pc; // virt_addr?
-};
-
 /*
  *  performance timers, all units in perfticks
  */
@@ -106,19 +99,6 @@ struct Notsave
 };
 
 
-
-struct Active
-{
-  Lock;
-  int machs;      /* bitmap of active CPUs */
-  int exiting;    /* shutdown */
-  int ispanic;    /* shutdown in response to a panic */
-  int thunderbirdsarego;  /* lets the added processors continue to schedinit */
-  int rebooting;    /* just idle cpus > 0 */
-};
-
-
-
 /*
  *  routines for things outside the PC model, like power management
  */
@@ -144,5 +124,4 @@ struct PCArch
 
   void  (*resetothers)(void); /* put other cpus into reset */
 };
-
 extern PCArch *arch;      /* PC architecture */

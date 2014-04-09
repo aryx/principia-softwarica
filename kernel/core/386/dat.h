@@ -2,7 +2,7 @@
 
 // defines Lock (which references Proc and Mach)
 #include "dat_concurrency.h"
-// defines Confmem, PMMU, etc (which references Page) (see also mem.h)
+// defines PMMU, etc (which references Page) (see also mem.h)
 #include "dat_memory.h"
 #include "dat_processes.h"
 

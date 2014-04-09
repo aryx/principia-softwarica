@@ -1,8 +1,9 @@
 #include "../port/portdat_forward.h"
 
-// see also Mach and Conf in 386/ (but used in port)
-#include "../port/portdat_globals.h"
+// defines Lock used inline in Mach in portdat_core.h so must be before
 #include "../port/portdat_concurrency.h"
+#include "../port/portdat_core.h"
+#include "../port/portdat_globals.h"
 #include "../port/portdat_memory.h"
 #include "../port/portdat_files.h"
 #include "../port/portdat_processes.h"

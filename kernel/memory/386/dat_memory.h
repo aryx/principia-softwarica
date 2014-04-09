@@ -1,14 +1,4 @@
 
-// define things used in Conf in core/386/, could be put in portdat_memory.h
-struct Confmem
-{
-  ulong base; // phys?
-  ulong npage;
-
-  ulong kbase; // phys?
-  ulong klimit; // phys?
-};
-
 // define things used in Mach in core/386/
 struct Tss {
   ulong link;     /* link (old TSS selector) */
@@ -44,7 +34,6 @@ struct Segdesc
   ulong d0;
   ulong d1;
 };
-
 
 
 // define things used in Proc in processes/

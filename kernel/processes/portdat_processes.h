@@ -1,6 +1,6 @@
 
 // in lib.h: Waitmsg, ERRMAX
-// see also Perf, Fpstate (enum), Active in 386/ (but used in port)
+// see also Perf, Fpstate (enum), in 386/ (but used in port)
 // see also PMMU, Notsave, MAXSYSARG in 386/
 
 //*****************************************************************************
@@ -527,8 +527,18 @@ struct Alarms
 //IMPORTANT: static Rendez alarmr; (in alarm.c)
 
 
+struct Active
+{
+  Lock;
+  int machs;      /* bitmap of active CPUs */
+  int exiting;    /* shutdown */
+  int ispanic;    /* shutdown in response to a panic */
+  // 386 specific?
+  int thunderbirdsarego;  /* lets the added processors continue to schedinit */
+  int rebooting;    /* just idle cpus > 0 */
+};
+extern struct Active active;
+
 #pragma varargck  type  "t"   long
 #pragma varargck  type  "U"   uvlong
 
-// struct Active defined in 386 (But used in port)
-extern struct Active active;

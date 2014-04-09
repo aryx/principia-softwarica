@@ -1,6 +1,6 @@
 
 extern Conf conf;
-extern  bool  cpuserver; // defined in conf/pcf.c
+extern bool cpuserver; // defined in conf/pcf.c
 
 // ref<Mach>, the actual Mach is where??
 extern Mach *m;
@@ -12,6 +12,7 @@ extern Mach *m;
  */
 // array<ref<Mach>>, MAXMACH is defined in 386/mem.h
 extern Mach* machp[MAXMACH];
+#define MACHP(n)  (machp[n])
 
 // array<Dev>, it looks like an allocated array<ref<dev>> but
 // it is really a static array put here to avoid backward deps on conf_devtab,
@@ -22,7 +23,8 @@ extern Dev** devtab;
 extern char* eve;
 int iseve(void);
 
-#define MACHP(n)  (machp[n])
+
+//TODO: mv in 386/
 // MACHADDR is defined in 386/mem.h
 // TODO: why not m->externup? m is not valid?
 #define up  (((Mach*)MACHADDR)->externup)
