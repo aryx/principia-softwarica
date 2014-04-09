@@ -1,8 +1,6 @@
 
 typedef struct BIOS32si BIOS32si;
 typedef struct BIOS32ci BIOS32ci;
-typedef struct Conf Conf;
-typedef struct Confmem  Confmem;
 typedef union FPsave  FPsave;
 typedef struct FPssestate FPssestate;
 typedef struct FPstate  FPstate;
@@ -11,13 +9,13 @@ typedef struct Label  Label;
 typedef struct Lock Lock;
 typedef struct MMU  MMU;
 typedef struct Mach Mach;
-typedef struct Notsave  Notsave;
+typedef struct ArchNotsave  ArchNotsave;
 typedef struct PCArch PCArch;
 typedef struct Pcidev Pcidev;
 typedef struct PCMmap PCMmap;
 typedef struct PCMslot  PCMslot;
 typedef struct Page Page;
-typedef struct PMMU PMMU;
+typedef struct ArchMMU ArchMMU;
 typedef struct Proc Proc;
 typedef struct Segdesc  Segdesc;
 typedef struct SFPssestate SFPssestate;

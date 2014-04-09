@@ -86,12 +86,11 @@ union FPsave {
 
 
 
-
 /*
  *  things saved in the Proc structure during a notify
  */
 //@Scheck: unnamed substructure
-struct Notsave
+struct ArchNotsave
 {
   ulong svflags;
   ulong svcs;

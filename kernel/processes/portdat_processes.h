@@ -1,7 +1,7 @@
 
 // in lib.h: Waitmsg, ERRMAX
 // see also Perf, Fpstate (enum), in 386/ (but used in port)
-// see also PMMU, Notsave, MAXSYSARG in 386/
+// see also ArchMMU, ArchNotsave, MAXSYSARG in 386/
 
 //*****************************************************************************
 // Proc components
@@ -11,6 +11,7 @@ struct Waitq
 {
   Waitmsg w;
 
+  // extra
   // list<ref<Waitq>> of ??
   Waitq *next;
 };
@@ -108,9 +109,11 @@ struct Timer
 // was in portclock.c
 struct Timers
 {
-  Lock;
   // list<Timer> (next = Timer.tnext?)
   Timer *head;
+
+  // extra
+  Lock;
 };
 
 
@@ -241,7 +244,9 @@ enum proctime
 enum {
   NERR = 64,
   NNOTE = 5,
+};
 
+enum {
   Npriq   = 20,   /* number of scheduler priority levels */
   Nrq   = Npriq+2,  /* number of priority levels including real time */
   //NFD =   100,    /* per process file descriptors */
@@ -316,16 +321,22 @@ struct Proc
   int preempted;  /* true if this process hasn't finished the interrupt
          *  that last preempted it
          */
+  // option<ref_own?<edf>>
   Edf *edf;   /* if non-null, real-time proc, edf contains scheduling params */
 
 //--------------------------------------------------------------------
 // Files
 //--------------------------------------------------------------------
+  // ref<pgrp>, can be shared?
   Pgrp  *pgrp;    /* Process group for namespace */
+  // ref<egrp>, can be shared?
   Egrp  *egrp;    /* Environment group */
+  // ref<fgrp>, can be shared?
   Fgrp  *fgrp;    /* File descriptor group */
 
+  // ref<Chan>
   Chan  *slash; // The root!
+  // ref<Chan>
   Chan  *dot; // The current directory
 
 //--------------------------------------------------------------------
@@ -448,12 +459,14 @@ struct Proc
 
   void  *ureg;    /* User registers for notes */
   void  *dbgreg;  /* User registers for devproc */
-  Notsave;
+
+  ArchNotsave;
 
   /*
    *  machine specific MMU
    */
-  PMMU;
+  ArchMMU;
+
   char  *syscalltrace;  /* syscall trace */
 
 //--------------------------------------------------------------------
@@ -472,10 +485,10 @@ struct Proc
   Proc  *palarm;  /* Next alarm time */
   ulong alarm;    /* Time of call */
 
-  // Procalloc.ht chain?
+  // hash<?, list<ref<Proc>> Procalloc.ht ?
   Proc  *pidhash; /* next proc in pid hash */ 
 
-  // option<ref<Mach>>
+  // option<ref<Mach>>, null when not associated to a machine?
   Mach  *mach;    /* machine running this proc */
 
 };
@@ -521,6 +534,8 @@ struct Alarms
 {
   // list<ref<Proc> (next = ??)
   Proc  *head;
+
+  // extra
   QLock;
 };
 //IMPORTANT: static Alarms alarms; (in alarm.c)
@@ -529,13 +544,16 @@ struct Alarms
 
 struct Active
 {
-  Lock;
   int machs;      /* bitmap of active CPUs */
   int exiting;    /* shutdown */
   int ispanic;    /* shutdown in response to a panic */
+
   // 386 specific?
   int thunderbirdsarego;  /* lets the added processors continue to schedinit */
   int rebooting;    /* just idle cpus > 0 */
+
+  // extra
+  Lock;
 };
 extern struct Active active;
 

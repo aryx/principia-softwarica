@@ -42,7 +42,7 @@ struct Segdesc
  */
 #define NCOLOR 1
 //@Scheck: not dead, unnamed substructure
-struct PMMU
+struct ArchMMU
 {
   Page* mmupdb;     /* page directory base */
   Page* mmufree;    /* unused page table pages */

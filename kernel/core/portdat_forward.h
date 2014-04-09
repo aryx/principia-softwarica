@@ -4,7 +4,6 @@ typedef struct Block  Block;
 typedef struct Chan Chan;
 typedef struct Cmdbuf Cmdbuf;
 typedef struct Cmdtab Cmdtab;
-typedef struct Confmem  Confmem;
 typedef struct Dev  Dev;
 typedef struct Dirtab Dirtab;
 typedef struct Edf  Edf;
@@ -51,6 +50,10 @@ typedef struct Walkqid  Walkqid;
 typedef struct Watchdog Watchdog;
 
 typedef int    Devgen(Chan*, char*, Dirtab*, int, int, Dir*);
+
+// was in dat_forward.h
+typedef struct Conf Conf;
+typedef struct Confmem  Confmem;
 
 // was in cache.c
 typedef struct Extent Extent;
