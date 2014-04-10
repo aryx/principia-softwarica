@@ -7,8 +7,6 @@
 #include "ureg.h"
 #include "../port/error.h"
 
-void	(*fprestore)(FPsave*);
-void	(*fpsave)(FPsave*);
 
 typedef struct IOMap IOMap;
 struct IOMap
@@ -66,10 +64,10 @@ static Dirtab archdir[Qmax] = {
 };
 Lock archwlock;	/* the lock is only for changing archdir */
 int narchdir = Qbase;
-int (*_pcmspecial)(char*, ISAConf*);
+
 void (*_pcmspecialclose)(int);
 
-static int doi8253set = 1;
+extern int doi8253set;
 
 /*
  * Add a file to the #P listing.  Once added, you can't delete it.
@@ -537,35 +535,8 @@ archreset(void)
 		idle();
 }
 
-/*
- * 386 has no compare-and-swap instruction.
- * Run it with interrupts turned off instead.
- */
-static int
-cmpswap386(long *addr, long old, long new)
-{
-	int r, s;
+extern int cmpswap386(long *addr, long old, long new);
 
-	s = splhi();
-	if(r = (*addr == old))
-		*addr = new;
-	splx(s);
-	return r;
-}
-
-/*
- * On a uniprocessor, you'd think that coherence could be nop,
- * but it can't.  We still need a barrier when using coherence() in
- * device drivers.
- *
- * On VMware, it's safe (and a huge win) to set this to nop.
- * Aux/vmware does this via the #P/archctl file.
- */
-//now in globals.c: void (*coherence)(void) = nop;
-
-int (*cmpswap)(long*, long, long) = cmpswap386;
-
-PCArch* arch;
 extern PCArch* knownarch[];
 
 PCArch archgeneric = {
@@ -710,32 +681,8 @@ static X86type x86sis[] =
 
 static X86type *cputype;
 
-static void	simplecycles(uvlong*);
-void	(*cycles)(uvlong*) = simplecycles;
 //@Scheck: Assembly l.s
 void	_cycles(uvlong*);	
-
-static void
-simplecycles(uvlong*x)
-{
-	*x = m->ticks;
-}
-
-void
-cpuidprint(void)
-{
-	int i;
-	char buf[128];
-
-	i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", m->machno,
-		m->machno < 10? " ": "", m->cpumhz);
-	if(m->cpuidid[0])
-		i += sprint(buf+i, "%12.12s ", m->cpuidid);
-	seprint(buf+i, buf + sizeof buf - 1,
-		"%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
-		m->cpuidtype, m->cpuidax, m->cpuiddx);
-	print(buf);
-}
 
 /*
  *  figure out:
@@ -1084,18 +1031,4 @@ devarch_fastticks(uvlong *hz)
 	return (*arch->fastclock)(hz);
 }
 
-ulong
-µs(void)
-{
-	return fastticks2us((*arch->fastclock)(nil));
-}
 
-/*
- *  set next timer interrupt
- */
-void
-timerset(Tval x)
-{
-	if(doi8253set)
-		(*arch->timerset)(x);
-}
