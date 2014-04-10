@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/init/386/l_io.s
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/arch/386/l_io.s

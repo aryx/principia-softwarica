@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/processes/386/devarch.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/sys/386/devarch.c

@@ -477,12 +477,12 @@ struct Proc
   void  *ureg;    /* User registers for notes */
   void  *dbgreg;  /* User registers for devproc */
 
-  ArchNotsave;
+  ArchProcNotsave;
 
   /*
    *  machine specific MMU
    */
-  ArchMMU;
+  ArchProcMMU;
 
   char  *syscalltrace;  /* syscall trace */
 
