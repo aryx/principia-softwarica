@@ -512,7 +512,7 @@ struct Proc
 
 
 //*****************************************************************************
-// Internal to processe/
+// Internal to process/
 //*****************************************************************************
 
 // Proc allocator (singleton), was actually in proc.c, but important so here
