@@ -24,7 +24,7 @@ struct PCArch
   void  (*resetothers)(void); /* put other cpus into reset */
 };
 extern PCArch *arch;      /* PC architecture */
-
+extern PCArch archgeneric;
 
 // this is used only in 386/ code
 struct BIOS32ci {   /* BIOS32 Calling Interface */
@@ -92,3 +92,14 @@ enum {
 	PdataPort=		0x71,	/* data port */
 };
 extern Lock nvrtlock;
+
+
+typedef struct X86type X86type;
+struct X86type {
+	int	family;
+	int	model;
+	int	aalcycles;
+	char*	name;
+};
+
+extern X86type *cputype;
