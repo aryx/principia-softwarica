@@ -5,7 +5,7 @@
 #include "fns.h"
 
 //todo: weird, if don't include this file, then can't declare arch in this file
-// get some type signature mismatch
+// or I get some type signature mismatch
 #include "io.h"
 
 PCArch* arch;

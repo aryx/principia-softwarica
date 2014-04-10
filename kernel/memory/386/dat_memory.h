@@ -61,14 +61,3 @@ typedef struct KMap   KMap;
 #define VA(k)   ((void*)(k))
 
 
-// used to be in devrtc.c, but to remove some backward deps had to be here
-// it's really used only by nvram.c and devrtc.c
-/*
- *  real time clock and non-volatile ram
- */
-
-enum {
-	Paddr=		0x70,	/* address port */
-	PdataPort=		0x71,	/* data port */
-};
-extern Lock nvrtlock;

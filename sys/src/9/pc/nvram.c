@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/memory/386/nvram.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/arch/386/nvram.c
