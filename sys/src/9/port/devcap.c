@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/security/devcap.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/sys/devcap.c

@@ -7,7 +7,7 @@
 
 #include	<authsrv.h>
 
-//char	*eve;
+//char	*eve; now in core/
 char	hostdomain[DOMLEN];
 
 ///*
