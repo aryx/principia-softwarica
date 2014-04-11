@@ -3,13 +3,25 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "io.h"
 
+#include "io.h"
 #include "mp.h"
 
-uvlong	tscticks(uvlong*);
-
 _MP_ *_mp_;
+
+// forward decl, mutual recursivity between archmp and identity
+PCArch archmp;
+
+
+uvlong
+tscticks(uvlong *hz)
+{
+	if(hz != nil)
+		*hz = m->cpuhz;
+
+	cycles(&m->tscticks);	/* Uses the rdtsc instruction */
+	return m->tscticks;
+}
 
 static void
 mpresetothers(void)
@@ -20,22 +32,7 @@ mpresetothers(void)
 	lapicicrw(0, 0x000C0000|ApicINIT);
 }
 
-static int identify(void);
-
-PCArch archmp = {
-.id=		"_MP_",	
-.ident=		identify,
-.reset=		mpshutdown,
-.intrinit=	mpinit,
-.intrenable=	mpintrenable,
-.intron=	lapicintron,
-.introff=	lapicintroff,
-.fastclock=	i8253read,
-.timerset=	lapictimerset,
-.resetothers=	mpresetothers,
-};
-
-static int
+int
 identify(void)
 {
 	char *cp;
@@ -83,6 +80,21 @@ identify(void)
 	return 0;
 }
 
+
+PCArch archmp = {
+.id=		"_MP_",	
+.ident=		identify,
+.reset=		mpshutdown,
+.intrinit=	mpinit,
+.intrenable=	mpintrenable,
+.intron=	lapicintron,
+.introff=	lapicintroff,
+.fastclock=	i8253read,
+.timerset=	lapictimerset,
+.resetothers=	mpresetothers,
+};
+
+
 //Lock mpsynclock;
 
 void
@@ -103,14 +115,4 @@ syncclock(void)
 		wrmsr(0x10, MACHP(0)->tscticks);
 		cycles(&m->tscticks);
 	}
-}
-
-uvlong
-tscticks(uvlong *hz)
-{
-	if(hz != nil)
-		*hz = m->cpuhz;
-
-	cycles(&m->tscticks);	/* Uses the rdtsc instruction */
-	return m->tscticks;
 }
