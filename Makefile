@@ -52,14 +52,17 @@ check2:
 clangfiles:
 	~/pfff/pfff -gen_clang compile_commands.json
 	~/pfff/pfff_test.opt -uninclude_clang .
-	cp sys/src/9/pc/apbootstrap.h kernel/conf
-	cp sys/src/9/pc/init.h kernel/conf
-	cp sys/src/9/pc/reboot.h kernel/conf
+	cp sys/src/9/pc/apbootstrap.h kernel/init/386/
+	mv sys/src/9/pc/apbootstrap.h.clang2 kernel/init/386/
+	cp sys/src/9/pc/init.h kernel/init/
+	mv sys/src/9/pc/init.h.clang2 kernel/init/
+	cp sys/src/9/pc/reboot.h kernel/init/386
+	mv sys/src/9/pc/reboot.h.clang2 kernel/init/386/
+	cp sys/src/9/pc/errstr.c kernel/core
+	mv sys/src/9/pc/errstr.c.clang2 kernel/core
 	cp sys/src/9/pc/pcf.c kernel/conf
 	cp sys/src/9/pc/pcf.rootc.c kernel/conf
-	cp sys/src/9/pc/errstr.c kernel/core
-	cp sys/src/9/pc/*.clang2 kernel/conf
-	mv kernel/conf/errstr.c.clang2 kernel/core
+	mv sys/src/9/pc/*.clang2 kernel/conf
 #	~/pfff/pfff_test -analyze_make_trace make_trace.txt > compile_commands.json
 
 clangclean:
