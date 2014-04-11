@@ -492,7 +492,7 @@ static void
 mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
 {
         ulong sts, fpc, ctl;
-        FPsave *f = &up->fpsave;
+        ArchFPsave *f = &up->fpsave;
 
         if(fpsave == fpx87save){
                 sts = f->status;

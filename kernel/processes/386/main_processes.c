@@ -86,12 +86,12 @@ fpsavealloc(void)
  */
 
 void
-fpssesave(FPsave *fps)
+fpssesave(ArchFPsave *fps)
 {
-	FPsave *afps;
+	ArchFPsave *afps;
 
 	fps->magic = 0x1234;
-	afps = (FPsave *)ROUND(((uintptr)fps), FPalign);
+	afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
 	fpssesave0(afps);
 	if (fps != afps)  /* not aligned? shuffle down from aligned buffer */
 		memmove(fps, afps, sizeof(FPssestate));
@@ -100,12 +100,12 @@ fpssesave(FPsave *fps)
 }
 
 void
-fpsserestore(FPsave *fps)
+fpsserestore(ArchFPsave *fps)
 {
-	FPsave *afps;
+	ArchFPsave *afps;
 
 	fps->magic = 0x4321;
-	afps = (FPsave *)ROUND(((uintptr)fps), FPalign);
+	afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
 	if (fps != afps) {
 		afps = m->fpsavalign;
 		memmove(afps, fps, sizeof(FPssestate));	/* make aligned copy */

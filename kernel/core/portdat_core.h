@@ -1,6 +1,7 @@
 
-// all those structs used to be in 386/, but many of their fields were
-// used from port/ code so I've moved them here.
+// All those structs used to be in dat.h, in 386/, but many of their fields
+// were used from port/ so I've moved them here (and put the arch
+// specific fields in dat_core.h)
 
 // less: have a conf.c, mach.c?
 
@@ -88,10 +89,6 @@ struct Mach
   int flushmmu;   /* make current proc flush it's mmu state */
 
   struct ArchMach;
-  // 386 specific, but would force to mv Lock in 386/
-  Lock  apictimerlock;
-  FPsave *fpsavalign;
-
 
 	/* stats */
   int tlbfault;

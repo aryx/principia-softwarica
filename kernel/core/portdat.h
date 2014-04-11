@@ -1,15 +1,3 @@
-#include "../port/portdat_forward.h"
-
-// defines Lock used inline in Mach in portdat_core.h so must be before
-#include "../port/portdat_concurrency.h"
-#include "../port/portdat_core.h"
-#include "../port/portdat_globals.h"
-#include "../port/portdat_memory.h"
-#include "../port/portdat_files.h"
-#include "../port/portdat_processes.h"
-#include "../port/portdat_misc.h"
-#include "../port/portdat_console.h"
-#include "../port/portdat_buses.h"
 
 // could be put in lib.h
 #define MIN(a, b) ((a) < (b)? (a): (b))

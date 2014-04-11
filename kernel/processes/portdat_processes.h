@@ -448,7 +448,8 @@ struct Proc
   void  (*kpfun)(void*);
   void  *kparg;
 
-  FPsave  fpsave;   /* address of this is known by db */
+  ArchFPsave  fpsave;   /* address of this is known by db */
+
   int scallnr;  /* sys call number - known by db */
   Sargs s;    /* address of this is known by db */
 

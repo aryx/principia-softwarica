@@ -1,7 +1,10 @@
 
+typedef union ArchFPsave  ArchFPsave;
+typedef struct ArchProcNotsave  ArchProcNotsave;
+typedef struct ArchProcMMU ArchProcMMU;
+
 typedef struct BIOS32si BIOS32si;
 typedef struct BIOS32ci BIOS32ci;
-typedef union FPsave  FPsave;
 typedef struct FPssestate FPssestate;
 typedef struct SFPssestate SFPssestate;
 typedef struct FPstate  FPstate;
@@ -11,8 +14,7 @@ typedef struct PCArch PCArch;
 typedef struct Pcidev Pcidev;
 typedef struct PCMmap PCMmap;
 typedef struct PCMslot  PCMslot;
-typedef struct ArchProcNotsave  ArchProcNotsave;
-typedef struct ArchProcMMU ArchProcMMU;
+
 typedef struct Segdesc  Segdesc;
 typedef vlong   Tval;
 typedef struct Ureg Ureg;

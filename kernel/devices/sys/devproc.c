@@ -88,7 +88,7 @@ Dirtab procdir[] =
 	"args",		{Qargs},	0,			0660,
 	"ctl",		{Qctl},		0,			0000,
 	"fd",		{Qfd},		0,			0444,
-	"fpregs",	{Qfpregs},	sizeof(FPsave),		0000,
+	"fpregs",	{Qfpregs},	sizeof(ArchFPsave),		0000,
 	"kregs",	{Qkregs},	sizeof(Ureg),		0400,
 	"mem",		{Qmem},		0,			0000,
 	"note",		{Qnote},	0,			0000,
@@ -831,7 +831,7 @@ procread(Chan *c, void *va, long n, vlong off)
 
 	case Qfpregs:
 		rptr = (uchar*)&p->fpsave;
-		rsize = sizeof(FPsave);
+		rsize = sizeof(ArchFPsave);
 	regread:
 		if(rptr == 0)
 			error(Enoreg);
@@ -1087,10 +1087,10 @@ procwrite(Chan *c, void *va, long n, vlong off)
 		break;
 
 	case Qfpregs:
-		if(offset >= sizeof(FPsave))
+		if(offset >= sizeof(ArchFPsave))
 			n = 0;
-		else if(offset+n > sizeof(FPsave))
-			n = sizeof(FPsave) - offset;
+		else if(offset+n > sizeof(ArchFPsave))
+			n = sizeof(ArchFPsave) - offset;
 		memmove((uchar*)&p->fpsave+offset, va, n);
 		break;
 

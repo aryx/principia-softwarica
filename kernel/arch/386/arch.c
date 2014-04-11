@@ -74,8 +74,8 @@ archrevert(void)
 
 
 
-void	(*fprestore)(FPsave*);
-void	(*fpsave)(FPsave*);
+void	(*fprestore)(ArchFPsave*);
+void	(*fpsave)(ArchFPsave*);
 
 int (*_pcmspecial)(char*, ISAConf*);
 

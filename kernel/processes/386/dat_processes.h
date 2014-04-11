@@ -3,11 +3,10 @@
  * the FP regs must be stored here, not somewhere pointed to from here.
  * port code assumes this.
  */
-union FPsave {
+union ArchFPsave {
   FPstate;
   SFPssestate;
 };
-
 
 
 /*
