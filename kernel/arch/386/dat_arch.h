@@ -103,3 +103,26 @@ struct X86type {
 };
 
 extern X86type *cputype;
+
+
+typedef struct IOMap IOMap;
+struct IOMap
+{
+	IOMap	*next;
+	int	reserved;
+	char	tag[13];
+	ulong	start;
+	ulong	end;
+};
+
+struct Iomapalloc
+{
+	Lock;
+	IOMap	*m;
+	IOMap	*free;
+	IOMap	maps[32];	/* some initial free maps */
+
+	QLock	ql;		/* lock for reading map */
+};
+
+extern struct Iomapalloc iomap;

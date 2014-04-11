@@ -39,6 +39,7 @@ void main_exit(int ispanic);
 int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
 void nop(void);
 uvlong devarch_fastticks(uvlong *hz);
+void devarch_hook_ioalloc();
 void chan_cclose(Chan *c);
 Proc* proc_proctab(int i);
 void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
@@ -859,6 +860,8 @@ main(void)
   postnote = proc_postnote;
   return0 = sysproc_return0;
   pexit = proc_pexit;
+
+  hook_ioalloc = devarch_hook_ioalloc;
 
   // end patch, back to original code
 

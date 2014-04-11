@@ -12,6 +12,9 @@ void    machinit(void);
 // used by main.c
 void mmuinit0(void);
 
+// iomap.c
+void (*hook_ioalloc)();
+
 //@Scheck: Assembly
 void    forkret(void);
 //@Scheck: Assembly
