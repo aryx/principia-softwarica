@@ -357,5 +357,7 @@ struct Mntalloc
 	Lock;
 
 };
-
 extern struct Mntalloc mntalloc;
+
+extern char Esbadstat[];
+extern char Enoversion[];
