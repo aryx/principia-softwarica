@@ -25,13 +25,9 @@ struct ArchProcNotsave
 };
 
 //*****************************************************************************
-// Interrupt
+// Interrupts
 //*****************************************************************************
 // used only in 386/, so could be put in arch/ but more specific to the .c here
-
-//*****************************************************************************
-// Interrupts!
-//*****************************************************************************
 
 // used to be in io.h but more important than just a set of enums for IO
 enum {
