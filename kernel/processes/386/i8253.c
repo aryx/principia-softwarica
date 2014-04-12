@@ -77,15 +77,18 @@ int	watchdogon;
 typedef struct I8253 I8253;
 struct I8253
 {
-	Lock;
 	ulong	period;		/* current clock period */
-	int	enabled;
+	bool	enabled;
 	uvlong	hz;
 
 	ushort	last;		/* last value of clock 1 */
 	uvlong	ticks;		/* cumulative ticks of counter 1 */
 
 	ulong	periodset;
+
+        // extra
+	Lock;
+
 };
 I8253 i8253;
 

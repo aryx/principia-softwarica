@@ -28,8 +28,9 @@ struct ArchProcNotsave
 // Interrupts
 //*****************************************************************************
 // used only in 386/, so could be put in arch/ but more specific to the .c here
-
 // used to be in io.h but more important than just a set of enums for IO
+// so put here.
+
 enum {
   VectorNMI = 2,    /* non-maskable interrupt */
   VectorBPT = 3,    /* breakpoint */
@@ -96,3 +97,6 @@ struct Vctl {
 
 //IMPORTANT: static Vctl *vctl[256]; (in trap.c)
 
+//*****************************************************************************
+// Timer
+//*****************************************************************************

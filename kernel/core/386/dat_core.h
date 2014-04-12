@@ -61,12 +61,14 @@ struct ArchMach {
   Lock  apictimerlock;
   ArchFPsave *fpsavalign;
 
+  // for perfticks, tsc = time stamp counter
+  bool havetsc;
+
   int loopconst;
   int cpuidax;
   int cpuiddx;
   char  cpuidid[16];
   char* cpuidtype;
-  int havetsc;
   int havepge;
   uvlong tscticks;
   int pdballoc;
