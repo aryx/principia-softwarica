@@ -56,7 +56,7 @@ struct ArchMach {
   Proc* externup;   /* extern register Proc *up */
   Page* pdbpool;
   int pdbcnt;
-  int inclockintr;
+//  int inclockintr;
 
   Lock  apictimerlock;
   ArchFPsave *fpsavalign;
