@@ -526,10 +526,12 @@ struct Proc
 };
 
 // poor's man exceptions in C
-//  - waserror() =~ try
+//  - waserror() =~ try  
+//     * if (!waserror()) { } else { } <=> try { } catch { }
+//     * if (waserror()) { }  <=> finally { }
 //  - poperror() = nothing
-//  - error() =~ set error message
-//  - nexterror() =~ raise
+//  - error() =~ raise
+//  - nexterror() =~ re raise from exn handler
 // note, setlabel() return false, so the branch is never taken first
 // but nexterror() is using gotolabel() which returns true, see l_switch.s
 #define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
