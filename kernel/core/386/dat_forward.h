@@ -26,6 +26,7 @@ typedef struct Devport Devport;
 typedef struct Vctl Vctl;
 typedef struct IOMap IOMap;
 typedef struct X86type X86type;
+typedef struct I8253 I8253;
 
 // needed in arch specific stuff
 typedef struct Page Page;
