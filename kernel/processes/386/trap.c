@@ -40,7 +40,7 @@ static void unexpected(Ureg*, void*);
 static void _dumpstack(Ureg*);
 
 //*****************************************************************************
-// Interrupts
+// Interrupts enable/disable
 //*****************************************************************************
 
 void
@@ -56,7 +56,7 @@ intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
 	}
 
 	v = xalloc(sizeof(Vctl));
-	v->isintr = 1;
+	v->isintr = true;
 	v->irq = irq;
 	v->tbdf = tbdf;
 	v->f = f;
@@ -115,6 +115,10 @@ intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
 	xfree(v);
 	return 0;
 }
+
+//*****************************************************************************
+// Init
+//*****************************************************************************
 
 static long
 irqallocread(Chan*, void *vbuf, long n, vlong offset)
@@ -243,6 +247,10 @@ trapinit(void)
 	addarchfile("irqalloc", 0444, irqallocread, nil);
 	trapinited = 1;
 }
+
+//*****************************************************************************
+// Misc
+//*****************************************************************************
 
 static char* excname[32] = {
 	"divide error",

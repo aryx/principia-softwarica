@@ -76,7 +76,7 @@ enum {
 
 struct Vctl {
 
-  int isintr;     /* interrupt or fault/trap */
+  bool isintr;     /* interrupt or fault/trap */
   int irq;
 
   void  (*f)(Ureg*, void*); /* handler to call */
@@ -91,10 +91,11 @@ struct Vctl {
 
   // extra
 
-  // list<Vctl> ?? malloced?
+  // list<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
   Vctl* next;     /* handlers on this vector */
 };
 
+// array<list<Vctl>>
 //IMPORTANT: static Vctl *vctl[256]; (in trap.c)
 
 //*****************************************************************************
