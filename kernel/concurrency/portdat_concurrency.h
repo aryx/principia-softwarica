@@ -11,9 +11,9 @@ struct Lock
   // virt_addr?
   ulong pc; // for debugging
 
-  // option<ref<Proc>>, None when key = 0
+  // option<ref<Proc>>, None when key = 0?
   Proc  *p; // the process locking should be the same unlocking
-  // option<ref<Mach>>
+  // option<ref<Mach>>, None when key = 0?
   Mach  *m; // not that used, only in iprintcanlock apparently
 
   // debugging

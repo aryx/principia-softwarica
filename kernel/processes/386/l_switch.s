@@ -1,4 +1,7 @@
 
+// This file is used for task switching but last to emulate
+// exceptions in C (via the waserror(), nexterror(), poperror() functions)
+        
 /*
  *  label consists of a stack pointer and a PC
  */

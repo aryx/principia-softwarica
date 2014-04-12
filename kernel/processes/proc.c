@@ -7,14 +7,20 @@
 //#include	"../port/edf.h"
 #include	<trace.h>
 
+//*****************************************************************************
+// Globals
+//*****************************************************************************
+
+// The run queue!!
+Schedq	runq[Nrq];
+ulong	runvec;
+
+static struct Procalloc procalloc;
+
 int	schedgain = 30;	/* units in seconds */
 int	nrdy;
 // also use by sysrfork()
 Ref	noteidalloc;
-
-Proc* runproc(void);
-void updatecpu(Proc*);
-int reprioritize(Proc*);
 
 ulong delayedscheds;	/* statistics */
 long skipscheds;
@@ -24,18 +30,12 @@ long preempts;
 // Abuse Ref ... it's not reference counting, this is really just a counter
 static Ref	pidalloc;
 
-static struct Procalloc procalloc;
-
 enum
 {
 	Q=10,
 	DQ=4,
 	Scaling=2,
 };
-
-// The run queue!!
-Schedq	runq[Nrq];
-ulong	runvec;
 
 char *statename[] =
 {	/* BUG: generate automatically */
@@ -54,9 +54,56 @@ char *statename[] =
 	"Waitrelease",
 };
 
+//*****************************************************************************
+// Forward decl
+//*****************************************************************************
+
+Proc* runproc(void);
+void updatecpu(Proc*);
+int reprioritize(Proc*);
+
+
 static void pidhash(Proc*);
 static void pidunhash(Proc*);
 static void rebalance(void);
+
+//*****************************************************************************
+// Error managment
+//*****************************************************************************
+
+// see also waserror() and poperror() macro in portdat_processes.h
+
+void
+proc_error(char *err)
+{
+	spllo();
+
+	assert(up->nerrlab < NERR);
+	kstrcpy(up->errstr, err, ERRMAX);
+	setlabel(&up->errlab[NERR-1]);
+	nexterror();
+}
+
+// raise an exception
+void
+proc_nexterror(void)
+{
+	gotolabel(&up->errlab[--up->nerrlab]);
+}
+
+void
+exhausted(char *resource)
+{
+	char buf[ERRMAX];
+
+	snprint(buf, sizeof buf, "no free %s", resource);
+	iprint("%s\n", buf);
+	error(buf);
+}
+
+//*****************************************************************************
+// Functions
+//*****************************************************************************
 
 /*
  * Always splhi()'ed.
@@ -1452,32 +1499,6 @@ procctl(Proc *p)
 	}
 }
 
-void
-proc_error(char *err)
-{
-	spllo();
-
-	assert(up->nerrlab < NERR);
-	kstrcpy(up->errstr, err, ERRMAX);
-	setlabel(&up->errlab[NERR-1]);
-	nexterror();
-}
-
-void
-proc_nexterror(void)
-{
-	gotolabel(&up->errlab[--up->nerrlab]);
-}
-
-void
-exhausted(char *resource)
-{
-	char buf[ERRMAX];
-
-	snprint(buf, sizeof buf, "no free %s", resource);
-	iprint("%s\n", buf);
-	error(buf);
-}
 
 void
 killbig(char *why)

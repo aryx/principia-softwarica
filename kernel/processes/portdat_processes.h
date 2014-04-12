@@ -315,6 +315,8 @@ struct Proc
   char  *args;
   int nargs;    /* number of bytes of args */
 
+  bool insyscall;
+
 //--------------------------------------------------------------------
 // Memory
 //--------------------------------------------------------------------
@@ -380,18 +382,30 @@ struct Proc
 // Error managment
 //--------------------------------------------------------------------
 
-  int nerrlab;
+  // array<Label>, error labels, poor's man exceptions in C
   Label errlab[NERR];
+  // length(errlab) used.
+  int nerrlab;
+
   char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
   char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
   char  errbuf0[ERRMAX];
   char  errbuf1[ERRMAX];
 
 //--------------------------------------------------------------------
-// Debugging
+// For debugger
 //--------------------------------------------------------------------
 
   void  *dbgreg;  /* User registers for devproc */
+  ulong pc;   /* DEBUG only */
+
+  // e.g. Proc_tracesyscall
+  int procctl;  /* Control for /proc debugging */
+
+// Syscall
+
+  int scallnr;  /* sys call number - known by db */
+  Sargs s;    /* address of this is known by db */
 
 //--------------------------------------------------------------------
 // Other
@@ -424,7 +438,6 @@ struct Proc
    */
   vlong pcycles;
 
-  int insyscall;
   // enum<fpsavestatus>
   int fpstate;
 
@@ -433,8 +446,6 @@ struct Proc
   ulong procmode; /* proc device default file mode */
   ulong privatemem; /* proc does not let anyone read mem */
   int hang;   /* hang at next exec for debug */
-  int procctl;  /* Control for /proc debugging */
-  ulong pc;   /* DEBUG only */
 
   Lock  rlock;    /* sync sleep/wakeup with postnote */
   Rendez  *r;   /* rendezvous point slept on */
@@ -456,8 +467,6 @@ struct Proc
 
   ArchFPsave  fpsave;   /* address of this is known by db */
 
-  int scallnr;  /* sys call number - known by db */
-  Sargs s;    /* address of this is known by db */
 
   char  genbuf[128];  /* buffer used e.g. for last name element from namec */
 
@@ -515,6 +524,17 @@ struct Proc
   Mach  *mach;    /* machine running this proc */
 
 };
+
+// poor's man exceptions in C
+//  - waserror() =~ try
+//  - poperror() = nothing
+//  - error() =~ set error message
+//  - nexterror() =~ raise
+// note, setlabel() return false, so the branch is never taken first
+// but nexterror() is using gotolabel() which returns true, see l_switch.s
+#define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
+#define poperror()    up->nerrlab--
+
 
 
 //*****************************************************************************

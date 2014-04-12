@@ -42,6 +42,7 @@ enum {
   VectorCERR  = 16,   /* coprocessor error */
 
   VectorPIC = 32,   /* external i8259 interrupts */
+
   IrqCLOCK  = 0,
   IrqKBD    = 1,
   IrqUART1  = 3,
@@ -65,6 +66,7 @@ enum {
   IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
   MaxIrqLAPIC = 31,
 
+  //!!! int 64 = way to jump in plan9 OS !!!
   VectorSYSCALL = 64,
 
   VectorAPIC  = 65,   /* external APIC interrupts */
@@ -72,17 +74,24 @@ enum {
 };
 
 struct Vctl {
-  Vctl* next;     /* handlers on this vector */
 
-  char  name[KNAMELEN];   /* of driver */
   int isintr;     /* interrupt or fault/trap */
   int irq;
-  int tbdf;
-  int (*isr)(int);    /* get isr bit for this irq */
-  int (*eoi)(int);    /* eoi */
 
   void  (*f)(Ureg*, void*); /* handler to call */
   void* a;      /* argument to call it with */
+
+  char  name[KNAMELEN];   /* of driver */
+  int tbdf; //?
+
+  // interrupt service routine
+  int (*isr)(int);    /* get isr bit for this irq */
+  int (*eoi)(int);    /* eoi */
+
+  // extra
+
+  // list<Vctl> ?? malloced?
+  Vctl* next;     /* handlers on this vector */
 };
 
 //IMPORTANT: static Vctl *vctl[256]; (in trap.c)

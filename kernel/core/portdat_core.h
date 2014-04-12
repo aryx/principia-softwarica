@@ -137,12 +137,9 @@ extern Mach *m;
 extern Mach* machp[MAXMACH];
 #define MACHP(n)  (machp[n])
 
-//TODO: mv in 386/
-// MACHADDR is defined in 386/mem.h
-// TODO: why not m->externup? m is not valid?
+// up = user process, MACHADDR is defined in 386/mem.h
+//TODO: mv in 386/ TODO: why not m->externup? m is not valid?
 #define up  (((Mach*)MACHADDR)->externup)
-#define poperror()    up->nerrlab--
-#define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
 
 //*****************************************************************************
 // Other

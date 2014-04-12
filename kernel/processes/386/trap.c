@@ -10,6 +10,10 @@
 #include	"../port/error.h"
 #include	<trace.h>
 
+//*****************************************************************************
+// Globals
+//*****************************************************************************
+
 static int trapinited;
 
 static Lock vctllock;
@@ -21,8 +25,9 @@ enum
 };
 ulong intrtimes[256][Ntimevec];
 
-
-
+//*****************************************************************************
+// Forward decl
+//*****************************************************************************
 
 void	noted(Ureg*, ulong);
 int		notify(Ureg*);
@@ -34,6 +39,9 @@ static void doublefault(Ureg*, void*);
 static void unexpected(Ureg*, void*);
 static void _dumpstack(Ureg*);
 
+//*****************************************************************************
+// Interrupts
+//*****************************************************************************
 
 void
 intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
@@ -656,6 +664,10 @@ fault386(Ureg* ureg, void*)
 	up->insyscall = insyscall;
 }
 
+//*****************************************************************************
+// Syscall
+//*****************************************************************************
+
 /*
  *  system calls
  */
@@ -664,7 +676,7 @@ fault386(Ureg* ureg, void*)
 /*
  *  Syscall is called directly from assembler without going through trap().
  */
-//@Scheck: no dead, called from assembly, TODO where?
+//@Scheck: no dead, called from assembly by syscall/386/plan9l.s
 void
 syscall(Ureg* ureg)
 {
@@ -681,11 +693,12 @@ syscall(Ureg* ureg)
 	cycles(&up->kentry);
 
 	m->syscall++;
-	up->insyscall = 1;
+	up->insyscall = true;
 	up->pc = ureg->pc;
 	up->dbgreg = ureg;
 
 	sp = ureg->usp;
+        // syscall number
 	scallnr = ureg->ax;
 	up->scallnr = scallnr;
 
@@ -731,6 +744,7 @@ syscall(Ureg* ureg)
 		up->s = *((Sargs*)(sp+BY2WD));
 		up->psstate = sysctab[scallnr];
 
+                //IMPORTANT: The actual system call
 		ret = systab[scallnr](up->s.args);
 		poperror();
 	}else{
@@ -769,8 +783,8 @@ syscall(Ureg* ureg)
 		up->syscalltrace = nil;
 	}
 
-	up->insyscall = 0;
-	up->psstate = 0;
+	up->insyscall = false;
+	up->psstate = nil;
 
 	if(scallnr == NOTED)
 		noted(ureg, *(ulong*)(sp+BY2WD));
