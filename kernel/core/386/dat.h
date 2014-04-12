@@ -12,7 +12,6 @@
 // defines Conf, Mach
 #include "dat_core.h"
 #include "../port/portdat_core.h"
-#include "../port/portdat_globals.h"
 
 // defines Page
 #include "dat_memory.h"
@@ -27,12 +26,12 @@
 #include "dat_processes.h"
 #include "../port/portdat_processes.h"
 
+// defines Cmd (use ??)
 #include "../port/portdat_misc.h"
 
+// defines Uart
 #include "dat_buses.h"
 #include "../port/portdat_buses.h"
-
-#include "dat_devices.h"
 
 #include "../port/portdat_console.h"
 
