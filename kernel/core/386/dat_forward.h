@@ -23,11 +23,15 @@ typedef struct Vctl Vctl;
 // was not there, but seems more consistent
 typedef struct Tss Tss;
 typedef struct Devport Devport;
+typedef struct Vctl Vctl;
+typedef struct IOMap IOMap;
+typedef struct X86type X86type;
 
 // needed in arch specific stuff
 typedef struct Page Page;
 typedef struct Proc Proc;
 typedef struct Lock Lock;
+
 
 #pragma incomplete BIOS32si
 #pragma incomplete Pcidev

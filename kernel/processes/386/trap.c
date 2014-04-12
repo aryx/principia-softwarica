@@ -12,6 +12,18 @@
 
 static int trapinited;
 
+static Lock vctllock;
+static Vctl *vctl[256];
+
+enum
+{
+	Ntimevec = 20		/* number of time buckets for each intr */
+};
+ulong intrtimes[256][Ntimevec];
+
+
+
+
 void	noted(Ureg*, ulong);
 int		notify(Ureg*);
 void		dumpregs(Ureg*);
@@ -22,14 +34,6 @@ static void doublefault(Ureg*, void*);
 static void unexpected(Ureg*, void*);
 static void _dumpstack(Ureg*);
 
-static Lock vctllock;
-static Vctl *vctl[256];
-
-enum
-{
-	Ntimevec = 20		/* number of time buckets for each intr */
-};
-ulong intrtimes[256][Ntimevec];
 
 void
 intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
@@ -307,12 +311,12 @@ kexit(Ureg*)
 
 /*
  *  All traps come here.  It is slower to have all traps call trap()
- *  rather than directly vectoring the handler.  However, this avoids a
- *  lot of code duplication and possible bugs.  The only exception is
+ *  rather than directly vectoring the handler. However, this avoids a
+ *  lot of code duplication and possible bugs. The only exception is
  *  VectorSYSCALL.
  *  Trap is called with interrupts disabled via interrupt-gates.
  */
-//@Scheck: Assembly, not dead call from assembly
+//@Scheck: Assembly, not dead, called from assembly
 void
 trap(Ureg* ureg)
 {
@@ -612,6 +616,7 @@ unexpected(Ureg* ureg, void*)
 
 extern void checkpages(void);
 extern void checkfault(ulong, ulong);
+
 static void
 fault386(Ureg* ureg, void*)
 {

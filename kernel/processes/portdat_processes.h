@@ -388,6 +388,12 @@ struct Proc
   char  errbuf1[ERRMAX];
 
 //--------------------------------------------------------------------
+// Debugging
+//--------------------------------------------------------------------
+
+  void  *dbgreg;  /* User registers for devproc */
+
+//--------------------------------------------------------------------
 // Other
 //--------------------------------------------------------------------
 
@@ -476,7 +482,6 @@ struct Proc
   int setargs;
 
   void  *ureg;    /* User registers for notes */
-  void  *dbgreg;  /* User registers for devproc */
 
   ArchProcNotsave;
 

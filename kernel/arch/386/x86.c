@@ -6,6 +6,11 @@
 
 #include "io.h"
 
+//#define X86STEPPING(x)  ((x) & 0x0F)
+/* incorporates extended-model and -family bits */
+#define X86MODEL(x) ((((x)>>4) & 0x0F) | (((x)>>16) & 0x0F)<<4)
+
+
 //@Scheck: Assembly l.s
 void	_cycles(uvlong*);	
 

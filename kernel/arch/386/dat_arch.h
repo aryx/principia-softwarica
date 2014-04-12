@@ -1,7 +1,36 @@
+
+//*****************************************************************************
+// IO Map
+//*****************************************************************************
+
+struct IOMap
+{
+	IOMap	*next;
+	int	reserved;
+	char	tag[13];
+	ulong	start;
+	ulong	end;
+};
+
+struct Iomapalloc
+{
+	Lock;
+	IOMap	*m;
+	IOMap	*free;
+	IOMap	maps[32];	/* some initial free maps */
+
+	QLock	ql;		/* lock for reading map */
+};
+
+extern struct Iomapalloc iomap;
+
+//*****************************************************************************
+// PC Architecture hooks
+//*****************************************************************************
+
 /*
  *  routines for things outside the PC model, like power management
  */
-// this is actually only used in 386/ code.
 struct PCArch
 {
   char* id;
@@ -26,15 +55,9 @@ struct PCArch
 extern PCArch *arch;      /* PC architecture */
 extern PCArch archgeneric;
 
-// this is used only in 386/ code
-struct BIOS32ci {   /* BIOS32 Calling Interface */
-  u32int  eax;
-  u32int  ebx;
-  u32int  ecx;
-  u32int  edx;
-  u32int  esi;
-  u32int  edi;
-};
+//*****************************************************************************
+// Co processor
+//*****************************************************************************
 
 //@Scheck: unnamed substructure
 struct  FPstate     /* x87 fpu state */
@@ -81,6 +104,20 @@ struct  SFPssestate   /* SSE fp state with alignment slop */
   ulong magic;    /* debugging: check for overrun */
 };
 
+//*****************************************************************************
+// Misc
+//*****************************************************************************
+
+struct BIOS32ci {   /* BIOS32 Calling Interface */
+  u32int  eax;
+  u32int  ebx;
+  u32int  ecx;
+  u32int  edx;
+  u32int  esi;
+  u32int  edi;
+};
+
+
 // used to be in devrtc.c, but to remove some backward deps had to be here
 // it's really used only by nvram.c and devrtc.c
 /*
@@ -94,7 +131,6 @@ enum {
 extern Lock nvrtlock;
 
 
-typedef struct X86type X86type;
 struct X86type {
 	int	family;
 	int	model;
@@ -105,24 +141,3 @@ struct X86type {
 extern X86type *cputype;
 
 
-typedef struct IOMap IOMap;
-struct IOMap
-{
-	IOMap	*next;
-	int	reserved;
-	char	tag[13];
-	ulong	start;
-	ulong	end;
-};
-
-struct Iomapalloc
-{
-	Lock;
-	IOMap	*m;
-	IOMap	*free;
-	IOMap	maps[32];	/* some initial free maps */
-
-	QLock	ql;		/* lock for reading map */
-};
-
-extern struct Iomapalloc iomap;

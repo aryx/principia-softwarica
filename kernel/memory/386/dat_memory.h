@@ -21,5 +21,3 @@ struct ArchProcMMU
  */
 typedef struct KMap   KMap;
 #define VA(k)   ((void*)(k))
-
-
