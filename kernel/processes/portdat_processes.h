@@ -305,17 +305,18 @@ struct Proc
   ulong pid;
 
   // enum<procstate>
-  int state; // Dead, Queuing, etc, see the enum below
+  int state; // Dead, Queuing, etc,
+  bool insyscall;
   char  *psstate; /* What /proc/#/status reports */
 
   // e.g. "*init*"
   char  *text;
+  // e.g.. "eve", no uid, gid in plan9, because of distributed nature of it?
   char  *user;
+
   // set by??
   char  *args;
   int nargs;    /* number of bytes of args */
-
-  bool insyscall;
 
 //--------------------------------------------------------------------
 // Memory
