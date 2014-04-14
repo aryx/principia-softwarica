@@ -161,7 +161,7 @@ struct Segment
   ulong fstart;   /* start address in file for demand load */
   ulong flen;   /* length of segment in file */
 
-  int flushme;  /* maintain icache for this segment */
+  bool flushme;  /* maintain icache for this segment */
   Physseg *pseg;
   ulong*  profile;  /* Tick profile area */
   ulong mark;   /* portcountrefs */

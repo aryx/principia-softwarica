@@ -6,9 +6,15 @@
 #include	"../port/error.h"
 #include "io.h"
 
-// Big global
+//*****************************************************************************
+// Global
+//*****************************************************************************
+
 static struct Imagealloc imagealloc;
 
+//*****************************************************************************
+// Misc
+//*****************************************************************************
 
 /*
  * Attachable segment types
@@ -26,6 +32,10 @@ Segment* (*_globalsegattach)(Proc*, char*);
 static void	imagereclaim(void);
 static void	imagechanreclaim(void);
 
+//*****************************************************************************
+// Initialization
+//*****************************************************************************
+
 void
 initseg(void)
 {
@@ -41,6 +51,10 @@ initseg(void)
 	imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
 	imagealloc.szfreechan = NFREECHAN;
 }
+
+//*****************************************************************************
+// Functions
+//*****************************************************************************
 
 Segment *
 newseg(int type, ulong base, ulong size)
@@ -723,6 +737,7 @@ segclock(ulong pc)
 	}
 }
 
+// was in another file before
 Segment*
 data2txt(Segment *s)
 {
@@ -733,7 +748,7 @@ data2txt(Segment *s)
 	incref(ps->image);
 	ps->fstart = s->fstart;
 	ps->flen = s->flen;
-	ps->flushme = 1;
+	ps->flushme = true;
 
 	return ps;
 }

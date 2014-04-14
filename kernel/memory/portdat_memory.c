@@ -4,8 +4,10 @@
 #include	"dat.h"
 #include	"fns.h"
 
+// Page allocator
 struct Palloc palloc;
-struct Swapalloc swapalloc;
 
+// Swap allocator
+struct Swapalloc swapalloc;
 KImage 	swapimage;
 
