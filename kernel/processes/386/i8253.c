@@ -5,10 +5,6 @@
 #include "fns.h"
 #include "io.h"
 
-//*****************************************************************************
-// Data
-//*****************************************************************************
-
 // the 8253 timer will generate clock ticks which will be useful to preempt
 // processes and so provide multitasking
 
@@ -66,9 +62,6 @@ enum
 	Wdogms	= 200,		/* ms between strokes */
 };
 
-I8253 i8253;
-
-
 struct Watchdog
 {
 	void	(*enable)(void);	/* watchdog enable */
@@ -80,9 +73,24 @@ struct Watchdog
 Watchdog* watchdog;
 int	watchdogon;
 
-//*****************************************************************************
-// Init
-//*****************************************************************************
+
+typedef struct I8253 I8253;
+struct I8253
+{
+	ulong	period;		/* current clock period */
+	bool	enabled;
+	uvlong	hz;
+
+	ushort	last;		/* last value of clock 1 */
+	uvlong	ticks;		/* cumulative ticks of counter 1 */
+
+	ulong	periodset;
+
+        // extra
+	Lock;
+
+};
+I8253 i8253;
 
 void
 i8253init(void)
@@ -126,10 +134,6 @@ i8253init(void)
 		x |= inb(T0cntr)<<8;
 	}
 }
-
-//*****************************************************************************
-// Misc
-//*****************************************************************************
 
 /*
  * if the watchdog is running and we're on cpu 0 and ignoring (clock)

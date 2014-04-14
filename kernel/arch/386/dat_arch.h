@@ -3,41 +3,29 @@
 // IO Map
 //*****************************************************************************
 
-// All the ref<IOMap> here are references to IOMap in the array<IOMap> of 
-// Iomapalloc.maps (pool allocator)
-
 struct IOMap
 {
+	IOMap	*next;
+	int	reserved;
 	char	tag[13];
 	ulong	start;
 	ulong	end;
-
-  //extra
-	bool	reserved;
-  
-  // list<ref<IOMap>> Iomapalloc.free
-	IOMap	*next;
 };
 
 struct Iomapalloc
 {
+	Lock;
 	IOMap	*m;
-
-  //list<ref<IOMap>> (next = IOMap.mext)
 	IOMap	*free;
-  //array<IOMAP>
 	IOMap	maps[32];	/* some initial free maps */
 
-  // extra
-	Lock;
 	QLock	ql;		/* lock for reading map */
 };
 
-// list?? array?? alloced?
 extern struct Iomapalloc iomap;
 
 //*****************************************************************************
-// PC Architecture hooks (interrupts, clocks, power, reset)
+// PC Architecture hooks
 //*****************************************************************************
 
 /*
@@ -48,11 +36,9 @@ struct PCArch
   char* id;
   int (*ident)(void);   /* this should be in the model */
   void  (*reset)(void);   /* this should be in the model */
-
   int (*serialpower)(int);  /* 1 == on, 0 == off */
   int (*modempower)(int); /* 1 == on, 0 == off */
 
-  // interrupts
   void  (*intrinit)(void);
   int (*intrenable)(Vctl*);
   int (*intrvecno)(int);
@@ -60,7 +46,6 @@ struct PCArch
   void  (*introff)(void);
   void  (*intron)(void);
 
-  // clock, timer
   void  (*clockenable)(void);
   uvlong  (*fastclock)(uvlong*);
   void  (*timerset)(uvlong);
