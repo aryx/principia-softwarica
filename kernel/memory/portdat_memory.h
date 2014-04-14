@@ -30,7 +30,7 @@ enum cachectl
 };
 
 // Page metadata. We will allocate as many Page as to cover all physical memory
-// and swap "address space". Either pa or daddr should be valid at one time.
+// + swap "address space". Either pa or daddr should be valid at one time.
 // Should have been xalloc'ed in Palloc.pages
 struct Page
 {
@@ -200,7 +200,7 @@ struct Hole
 
 // What is the connection with Hole? a used Hole will describe
 // a portion of memory, and at this memory there will be a header
-// and then the actual memory xalloc'ed by someone
+// and then just after the actual memory xalloc'ed by someone
 struct Xhdr
 {
   ulong size;
@@ -224,7 +224,7 @@ struct Xalloc
   // extra
   Lock;
 };
-//static Xalloc xlists; // private to xalloc.c
+//IMPORTANT: static Xalloc xlists; // private to xalloc.c
 
 
 // from pool.h
@@ -261,8 +261,8 @@ struct Xalloc
 //};
 
 // exported by libc include/pool.h, used by malloc, defined in pool.c in this dir
-//extern Pool*  mainmem;
-//extern Pool*  imagmem;
+//IMPORTANT: extern Pool*  mainmem;
+//IMPORTANT: extern Pool*  imagmem;
 
 
 // memory banks, similar to RMap, and Confmem, but page oriented, and portable
