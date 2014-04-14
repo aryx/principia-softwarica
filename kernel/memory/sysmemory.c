@@ -5,6 +5,8 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
+// see also sysbrk_ in sysproc.c
+
 // used to be in segment.c
 
 void
