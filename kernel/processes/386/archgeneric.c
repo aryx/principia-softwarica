@@ -51,6 +51,7 @@ PCArch archgeneric = {
 .serialpower=	unimplemented,
 .modempower=	unimplemented,
 
+// i8259
 .intrinit=	i8259init,
 .intrenable=	i8259enable,
 .intrvecno=	i8259vecno,
@@ -58,6 +59,7 @@ PCArch archgeneric = {
 .intron=	i8259on,
 .introff=	i8259off,
 
+// i8253
 .clockenable=	i8253enable,
 .fastclock=	i8253read,
 .timerset=	i8253timerset,
