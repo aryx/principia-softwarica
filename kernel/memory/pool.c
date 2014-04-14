@@ -7,12 +7,20 @@
 
 #include	<pool.h>
 
+//*****************************************************************************
+// Concurrency
+//*****************************************************************************
+
 typedef struct Private	Private;
+// See Pool.private, for mutual exclusion on memory pools
 struct Private {
 	Lock		lk;
 	char		msg[256];	/* a rock for messages to be printed at unlock */
 };
 
+//*****************************************************************************
+// Helpers
+//*****************************************************************************
 
 /*
  * because we can't print while we're holding the locks, 
@@ -89,6 +97,9 @@ mallocsummary(void)
 	poolsummary(imagmem);
 }
 
+//*****************************************************************************
+// The globals
+//*****************************************************************************
 
 static Private pmainpriv;
 static Pool pmainmem = {
@@ -100,8 +111,8 @@ static Pool pmainmem = {
 	.merge=	xmerge,
 	.flags=	POOL_TOLERANCE,
 
-	.lock=	plock,
-	.unlock=	punlock,
+	.lock=plock,
+	.unlock= punlock,
 	.print=	poolprint,
 	.panic=	ppanic,
 
@@ -118,14 +129,14 @@ static Pool pimagmem = {
 	.merge=	xmerge,
 	.flags=	0,
 
-	.lock=	plock,
-	.unlock=	punlock,
+	.lock= plock,
+	.unlock= punlock,
 	.print=	poolprint,
 	.panic=	ppanic,
 
 	.private=	&pimagpriv,
 };
 
-// include/pool.h
+// exported in include/pool.h, defined here!
 Pool*	mainmem = &pmainmem;
 Pool*	imagmem = &pimagmem;

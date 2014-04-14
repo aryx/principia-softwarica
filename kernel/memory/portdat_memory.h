@@ -211,7 +211,7 @@ struct Xhdr
 };
 
 // Long lived data structure allocator (singleton)
-// so can call xalloc() only Nhole time!
+// (can call xalloc() only Nhole time!)
 struct Xalloc
 {
   // array<Hole>
@@ -262,7 +262,9 @@ struct Xalloc
 //};
 
 // exported by libc include/pool.h, used by malloc, defined in pool.c in this dir
+// memory pools for malloc()/free() (using xalloc pools)
 //IMPORTANT: extern Pool*  mainmem;
+// memory pools for ??
 //IMPORTANT: extern Pool*  imagmem;
 
 
