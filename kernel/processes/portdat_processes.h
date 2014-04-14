@@ -1,21 +1,135 @@
 
 // in lib.h: Waitmsg, ERRMAX
-// see also Perf, Fpstate (enum), in 386/ (but used in port)
-// see also ArchMMU, ArchNotsave, MAXSYSARG in 386/
+// see also ArchProcMMU, ArchProcNotsave, MAXSYSARG in 386/
 
 //*****************************************************************************
 // Proc components
 //*****************************************************************************
+// All the ref<Proc> here are references to Proc in the array<Proc> of 
+// Procalloc.arena (pool allocator)
+
+//--------------------------------------------------------------------
+// State
+//--------------------------------------------------------------------
+
+// TODO: state transition diagram
+enum procstate
+{
+  /* Process states, Proc.state */
+  Dead = 0,
+  Moribund,
+  Ready,
+  Scheding,
+  Running,
+  Queueing, // see lock()
+  QueueingR, // see rlock()
+  QueueingW, // see wlock ()
+  Wakeme,
+  Broken,
+  Stopped,
+  Rendezvous,
+  Waitrelease,
+};
+
+//--------------------------------------------------------------------
+// Memory
+//--------------------------------------------------------------------
+/*
+ *  process memory segments - NSEG always last !
+ */
+enum procseg
+{
+  SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
+  ESEG, LSEG, // Extra, L?
+  SEG1, SEG2, SEG3, SEG4,    
+  NSEG // to count, see Proc.seg array
+};
+
+//--------------------------------------------------------------------
+// Files
+//--------------------------------------------------------------------
+
+enum
+{
+  DELTAFD = 20    /* incremental increase in Fgrp.fd's */
+};
+
+struct Fgrp
+{
+  // array<ref_counted<Chan>, smalloc'ed?
+  Chan  **fd;
+  // nelem(fd) ?
+  int nfd;      /* number allocated */
+  int maxfd;      /* highest fd in use */
+
+  int exceed;     /* debugging */
+
+  // extra
+  Ref;
+};
+
+
+
+enum
+{
+  MNTLOG  = 5,
+  MNTHASH = 1<<MNTLOG,  /* Hash to walk mount table */
+};
+#define MOUNTH(p,qid) ((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
+
+// Namespace process group
+struct Pgrp
+{
+  // hash<qid.path, list<ref<Mhead>>?
+  Mhead *mnthash[MNTHASH];
+  ulong pgrpid;
+  bool noattach;
+
+  // extra
+  Ref;        /* also used as a lock when mounting */
+  QLock debug;      /* single access via devproc.c */
+  RWlock  ns;     /* Namespace n read/one write lock */
+};
+
+//--------------------------------------------------------------------
+// Notes
+//--------------------------------------------------------------------
+
+enum {
+  NNOTE = 5,
+};
+
+enum notekind
+{
+  NUser,        /* note provided externally */
+  NExit,        /* deliver note quietly */
+  NDebug,       /* print debug message */
+};
+
+// a kind of unix signal
+struct Note
+{
+  char  msg[ERRMAX];
+  // enum<notekind>
+  int flag;     /* whether system posted it */
+};
+
+//--------------------------------------------------------------------
+// Process children waiting
+//--------------------------------------------------------------------
 
 struct Waitq
 {
   Waitmsg w;
 
   // extra
-  // list<ref<Waitq>> of ??
+  // list<ref<Waitq>> Proc.waitq
   Waitq *next;
 };
 
+//--------------------------------------------------------------------
+// Synchronization (Rendez vous)
+//--------------------------------------------------------------------
 
 enum
 {
@@ -33,49 +147,9 @@ struct Rgrp
   Ref;        /* the Ref's lock is also the Rgrp's lock */
 };
 
-
-
-enum
-{
-  DELTAFD = 20    /* incremental increase in Fgrp.fd's */
-};
-
-struct Fgrp
-{
-  // array<ref_own?<Chan>, smalloc'ed??
-  Chan  **fd;
-  // nelem(fd) ?
-  int nfd;      /* number allocated */
-  int maxfd;      /* highest fd in use */
-
-  int exceed;     /* debugging */
-
-  // extra
-  Ref;
-};
-
-
-enum
-{
-  MNTLOG  = 5,
-  MNTHASH = 1<<MNTLOG,  /* Hash to walk mount table */
-};
-#define MOUNTH(p,qid) ((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
-
-// Namespace process group
-struct Pgrp
-{
-  // hash<??, list<ref<Mhead>?? ??
-  Mhead *mnthash[MNTHASH];
-  ulong pgrpid;
-  bool noattach;
-
-  // extra
-  Ref;        /* also used as a lock when mounting */
-  QLock debug;      /* single access via devproc.c */
-  RWlock  ns;     /* Namespace n read/one write lock */
-};
-
+//--------------------------------------------------------------------
+// Alarms, timers
+//--------------------------------------------------------------------
 
 /*
  * fasttick timer interrupts
@@ -106,7 +180,7 @@ struct Timer
   Timer *tnext;
 };
 
-// was in portclock.c
+// was in clock.c
 struct Timers
 {
   // list<Timer> (next = Timer.tnext?)
@@ -116,31 +190,25 @@ struct Timers
   Lock;
 };
 
+//--------------------------------------------------------------------
+// Scheduling
+//--------------------------------------------------------------------
 
-
-
-// syscall arguments passed in kernel stack
-struct Sargs
-{
-  ulong args[MAXSYSARG];
+enum {
+  Npriq   = 20,   /* number of scheduler priority levels */
+  Nrq   = Npriq+2,  /* number of priority levels including real time */
+  //NFD =   100,    /* per process file descriptors */
 };
 
-
-enum notekind
+enum priority 
 {
-  NUser,        /* note provided externally */
-  NExit,        /* deliver note quietly */
-  NDebug,       /* print debug message */
+  PriRelease  = Npriq,  /* released edf processes */
+  PriEdf    = Npriq+1,  /* active edf processes */
+  PriNormal = 10,   /* base priority for normal processes */
+  PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
+  PriKproc  = 13,   /* base priority for kernel processes */
+  PriRoot   = 13,   /* base priority for root processes */
 };
-
-// a kind of unix signal
-struct Note
-{
-  char  msg[ERRMAX];
-  // enum<notekind>
-  int flag;     /* whether system posted it */
-};
-
 
 
 // was in edf.h
@@ -196,41 +264,16 @@ struct Edf {
   ulong   missed;
 };
 
-
-//*****************************************************************************
-// Proc, the big one
-//*****************************************************************************
-
-// All the ref<Page> here are references to Proc in the array<Proc> of 
-// Procalloc.arena (pool allocator)
-
-enum procstate
-{
-  /* Process states, Proc.state */
-  Dead = 0,
-  Moribund,
-  Ready,
-  Scheding,
-  Running,
-  Queueing, // see lock()
-  QueueingR, // see rlock()
-  QueueingW, // see wlock ()
-  Wakeme,
-  Broken,
-  Stopped,
-  Rendezvous,
-  Waitrelease,
+//--------------------------------------------------------------------
+// Error managment
+//--------------------------------------------------------------------
+enum {
+  NERR = 64,
 };
 
-enum devproc 
-{
-  Proc_stopme = 1,  /* devproc requests */
-  Proc_exitme,
-  Proc_traceme,
-  Proc_exitbig,
-  Proc_tracesyscall,
-};
-
+//--------------------------------------------------------------------
+// Stats, profiling
+//--------------------------------------------------------------------
 enum proctime 
 {
   TUser = 0,    /* Proc.time */
@@ -241,36 +284,27 @@ enum proctime
   TCReal,
 };
 
-enum {
-  NERR = 64,
-  NNOTE = 5,
-};
+//--------------------------------------------------------------------
+// Debugger
+//--------------------------------------------------------------------
 
-enum {
-  Npriq   = 20,   /* number of scheduler priority levels */
-  Nrq   = Npriq+2,  /* number of priority levels including real time */
-  //NFD =   100,    /* per process file descriptors */
-};
-
-enum priority 
+enum devproc 
 {
-  PriRelease  = Npriq,  /* released edf processes */
-  PriEdf    = Npriq+1,  /* active edf processes */
-  PriNormal = 10,   /* base priority for normal processes */
-  PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
-  PriKproc  = 13,   /* base priority for kernel processes */
-  PriRoot   = 13,   /* base priority for root processes */
+  Proc_stopme = 1,  /* devproc requests */
+  Proc_exitme,
+  Proc_traceme,
+  Proc_exitbig,
+  Proc_tracesyscall,
 };
 
-/*
- *  process memory segments - NSEG always last !
- */
-enum procseg
+//--------------------------------------------------------------------
+// Misc
+//--------------------------------------------------------------------
+
+// syscall arguments passed in kernel stack
+struct Sargs
 {
-  SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
-  ESEG, LSEG, // Extra, L?
-  SEG1, SEG2, SEG3, SEG4,    
-  NSEG // to count, see Proc.seg array
+  ulong args[MAXSYSARG];
 };
 
 /*
@@ -288,6 +322,10 @@ enum fpsavestatus
 };
 
 
+//*****************************************************************************
+// Proc, the big one
+//*****************************************************************************
+
 // the most important fields are set by newproc()
 struct Proc
 {
@@ -295,7 +333,6 @@ struct Proc
 //--------------------------------------------------------------------
 // Assembly requirements, Low level, have to be first
 //--------------------------------------------------------------------
-  // TODO: have to be first?
   Label sched;    /* known to l.s */
   char  *kstack;  /* known to l.s */
 
@@ -309,9 +346,9 @@ struct Proc
   bool insyscall;
   char  *psstate; /* What /proc/#/status reports */
 
-  // e.g. "*init*"
+  // e.g. "*init*", or name of executable
   char  *text;
-  // e.g.. "eve", no uid, gid in plan9, because of distributed nature of it?
+  // e.g.. "eve" (no uid/gid in plan9, because of distributed nature of it?)
   char  *user;
 
   // set by??
@@ -350,16 +387,16 @@ struct Proc
 //--------------------------------------------------------------------
 // Files
 //--------------------------------------------------------------------
-  // ref<pgrp>, can be shared?
+  // ref_counted<pgrp>
   Pgrp  *pgrp;    /* Process group for namespace */
-  // ref<egrp>, can be shared?
+  // ref_counted<egrp>
   Egrp  *egrp;    /* Environment group */
-  // ref<fgrp>, can be shared?
+  // ref_counted<fgrp>
   Fgrp  *fgrp;    /* File descriptor group */
 
   // ref<Chan>
   Chan  *slash; // The root!
-  // ref<Chan>
+  // ref_counted<Chan>
   Chan  *dot; // The current directory
 
 //--------------------------------------------------------------------
@@ -367,17 +404,42 @@ struct Proc
 //--------------------------------------------------------------------
   ulong noteid;   /* Equivalent of note group */
 
+  int notepending;  /* note issued but not acted on */
+
   Note  note[NNOTE];
   short nnote;
   short notified; /* sysnoted is due */
   Note  lastnote;
   int (*notify)(void*, char*);
 
+  void  *ureg;    /* User registers for notes */
+
 //--------------------------------------------------------------------
-// Stats
+// Process hierarchy
 //--------------------------------------------------------------------
-  // hash<enum<proctime>, ulong>
-  ulong time[6];  /* User, Sys, Real; child U, S, R */
+  //list<ref<Waitq>>
+  Waitq *waitq;   /* Exited processes wait children */
+  Lock  exl;    /* Lock count and waitq */
+
+  Proc  *parent;
+  ulong parentpid;
+
+  int nchild;   /* Number of living children */
+  int nwait;    /* Number of uncollected wait records */
+  QLock qwaitr;
+  Rendez  waitr;    /* Place to hang out in wait */
+
+
+//--------------------------------------------------------------------
+// Synchronization
+//--------------------------------------------------------------------
+
+  Rgrp  *rgrp;    /* Rendez group */
+
+  uintptr rendtag;  /* Tag for rendezvous */
+  uintptr rendval;  /* Value for rendezvous */
+  //??
+  Proc  *rendhash;  /* Hash list for tag values */
 
 //--------------------------------------------------------------------
 // Error managment
@@ -394,39 +456,10 @@ struct Proc
   char  errbuf1[ERRMAX];
 
 //--------------------------------------------------------------------
-// For debugger
+// Stats, profiling
 //--------------------------------------------------------------------
-
-  void  *dbgreg;  /* User registers for devproc */
-  ulong pc;   /* DEBUG only */
-
-  // e.g. Proc_tracesyscall
-  int procctl;  /* Control for /proc debugging */
-
-// Syscall
-
-  int scallnr;  /* sys call number - known by db */
-  Sargs s;    /* address of this is known by db */
-
-//--------------------------------------------------------------------
-// Other
-//--------------------------------------------------------------------
-
-  Rgrp  *rgrp;    /* Rendez group */
-
-
-  Waitq *waitq;   /* Exited processes wait children */
-  Lock  exl;    /* Lock count and waitq */
-
-  Proc  *parent;
-  int nchild;   /* Number of living children */
-  int nwait;    /* Number of uncollected wait records */
-  QLock qwaitr;
-  Rendez  waitr;    /* Place to hang out in wait */
-
-  Fgrp  *closingfgrp; /* used during teardown */
-
-  ulong parentpid;
+  // hash<enum<proctime>, ulong>
+  ulong time[6];  /* User, Sys, Real; child U, S, R */
 
   uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
   /*
@@ -439,26 +472,40 @@ struct Proc
    */
   vlong pcycles;
 
-  // enum<fpsavestatus>
-  int fpstate;
+//--------------------------------------------------------------------
+// For debugger
+//--------------------------------------------------------------------
+
+  void  *dbgreg;  /* User registers for devproc */
+  ulong pc;   /* DEBUG only */
+
+  // e.g. Proc_tracesyscall
+  int procctl;  /* Control for /proc debugging */
+
+  // Syscall
+  int scallnr;  /* sys call number - known by db */
+  Sargs s;    /* address of this is known by db */
 
   QLock debug;    /* to access debugging elements of User */
   Proc  *pdbg;    /* the debugging process */
+  bool hang;   /* hang at next exec for debug */
+
+//--------------------------------------------------------------------
+// Other
+//--------------------------------------------------------------------
+
+  Fgrp  *closingfgrp; /* used during teardown */
+
+
   ulong procmode; /* proc device default file mode */
   ulong privatemem; /* proc does not let anyone read mem */
-  int hang;   /* hang at next exec for debug */
 
   Lock  rlock;    /* sync sleep/wakeup with postnote */
   Rendez  *r;   /* rendezvous point slept on */
   Rendez  sleep;    /* place for syssleep/debug */
-  int notepending;  /* note issued but not acted on */
   int kp;   /* true if a kernel process */
   int newtlb;   /* Pager has changed my pte's, I must flush */
   int noswap;   /* process is not swappable */
-
-  uintptr rendtag;  /* Tag for rendezvous */
-  uintptr rendval;  /* Value for rendezvous */
-  Proc  *rendhash;  /* Hash list for tag values */
 
   Timer;      /* For tsleep and real-time */
   Rendez  *trend;
@@ -468,9 +515,7 @@ struct Proc
 
   ArchFPsave  fpsave;   /* address of this is known by db */
 
-
   char  genbuf[128];  /* buffer used e.g. for last name element from namec */
-
 
 
   Lock  *lockwait;
@@ -491,7 +536,8 @@ struct Proc
 
   int setargs;
 
-  void  *ureg;    /* User registers for notes */
+  // enum<fpsavestatus>
+  int fpstate;
 
   ArchProcNotsave;
 
@@ -537,7 +583,6 @@ struct Proc
 // but nexterror() is using gotolabel() which returns true, see l_switch.s
 #define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
 #define poperror()    up->nerrlab--
-
 
 
 //*****************************************************************************

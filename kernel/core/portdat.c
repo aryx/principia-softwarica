@@ -39,4 +39,3 @@ iseve(void) {
 
 // was in console/devcons.c, but used also by edf.c
 int	panicking;
-

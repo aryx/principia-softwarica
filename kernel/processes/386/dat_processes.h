@@ -7,7 +7,7 @@
  * the FP regs must be stored here, not somewhere pointed to from here.
  * port code assumes this.
  */
-// could be renamed ArchProcFPSave (used both in Proc and Mach)
+// could be renamed ArchProcFPSave (used both in Proc and Mach though)
 union ArchFPsave {
   FPstate;
   SFPssestate;
@@ -16,7 +16,7 @@ union ArchFPsave {
 /*
  *  things saved in the Proc structure during a notify
  */
-//@Scheck: unnamed substructure
+//@Scheck: not dead, FP because unnamed substructure
 struct ArchProcNotsave
 {
   ulong svflags;
@@ -27,8 +27,8 @@ struct ArchProcNotsave
 //*****************************************************************************
 // Interrupts
 //*****************************************************************************
-// used only in 386/, so could be put in arch/ but more specific to the .c here
-// used to be in io.h but more important than just a set of enums for IO
+// Used only in 386/, so could be put in arch/, but used by the .c here.
+// Used to be in io.h but more important than just a set of enums for IO
 // so put here.
 
 enum {
@@ -95,16 +95,15 @@ struct Vctl {
   Vctl* next;     /* handlers on this vector */
 };
 
-// array<list<Vctl>>
+// array<list<Vctl>>, xalloc'ed
 //IMPORTANT: static Vctl *vctl[256]; (in trap.c)
 
 //*****************************************************************************
 // Timer
 //*****************************************************************************
 
-
-// used only in 386/, so could be put in arch/ but more specific to the .c here
-// used only in i8253.c but important so put here
+// Used only in 386/, so could be put in arch/ but used by the .c here.
+// Actually used only in i8253.c but important so put here.
 
 struct I8253
 {
