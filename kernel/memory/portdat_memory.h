@@ -58,7 +58,7 @@ struct Page
   KImage  *image;     /* Associated text or swap image */
 };
 
-// malloc'ed?
+// ptealloc'ed (malloc'ed)
 struct Pte
 {
   //array<option<ref<Page>> will map 1M of memory

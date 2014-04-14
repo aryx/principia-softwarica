@@ -7,10 +7,18 @@
 // Memory allocator for long lived allocated structures
 // e.g. array or Proc (procalloc), array of Pages (palloc.pages), etc
 
+// forward decl
+void		xhole(ulong, ulong);
+
+//*****************************************************************************
 // The global
+//*****************************************************************************
+
 static Xalloc	xlists;
 
-void		xhole(ulong, ulong);
+//*****************************************************************************
+// Initialization
+//*****************************************************************************
 
 void
 xinit(void)
@@ -59,6 +67,10 @@ xinit(void)
 	}
 //	xsummary();			/* call it from main if desired */
 }
+
+//*****************************************************************************
+// Functions
+//*****************************************************************************
 
 void*
 xspanalloc(ulong size, int align, ulong span)
@@ -225,6 +237,10 @@ xhole(ulong addr, ulong size)
 	*l = h;
 	iunlock(&xlists);
 }
+
+//*****************************************************************************
+// Debugging
+//*****************************************************************************
 
 void
 xsummary(void)

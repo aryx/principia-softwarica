@@ -11,15 +11,15 @@
 // Concurrency
 //*****************************************************************************
 
-typedef struct Private	Private;
 // See Pool.private, for mutual exclusion on memory pools
 struct Private {
 	Lock		lk;
-	char		msg[256];	/* a rock for messages to be printed at unlock */
+	char		msg[256]; /* a rock for messages to be printed at unlock */
 };
+typedef struct Private	Private;
 
 //*****************************************************************************
-// Helpers
+// Pool methods
 //*****************************************************************************
 
 /*
@@ -89,14 +89,6 @@ poolsummary(Pool *p)
 		p->maxsize, p->cursize, p->curfree, p->curalloc);
 }
 
-
-void
-mallocsummary(void)
-{
-	poolsummary(mainmem);
-	poolsummary(imagmem);
-}
-
 //*****************************************************************************
 // The globals
 //*****************************************************************************
@@ -140,3 +132,11 @@ static Pool pimagmem = {
 // exported in include/pool.h, defined here!
 Pool*	mainmem = &pmainmem;
 Pool*	imagmem = &pimagmem;
+
+void
+mallocsummary(void)
+{
+	poolsummary(mainmem);
+	poolsummary(imagmem);
+}
+

@@ -5,8 +5,13 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
+// forward decl
 int		ispages(void*);
 void		portcountpagerefs(ulong*, int);
+
+//*****************************************************************************
+// Initialization
+//*****************************************************************************
 
 void
 pageinit(void)
@@ -62,6 +67,10 @@ pageinit(void)
 	print("%ldM user, ", pkb/1024);
 	print("%ldM swap\n", vkb/1024);
 }
+
+//*****************************************************************************
+// Functions
+//*****************************************************************************
 
 static void
 pageunchain(Page *p)
