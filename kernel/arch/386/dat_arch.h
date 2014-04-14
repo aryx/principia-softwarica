@@ -8,22 +8,23 @@
 
 struct IOMap
 {
+  // This has to be the first field of IOMap!! otherwise get fault
+  // list<ref<IOMap>> of Iomapalloc.free
 	IOMap	*next;
 
-	int	reserved;
 	char	tag[13];
 	ulong	start;
 	ulong	end;
 
   // extra
+	bool	reserved;
 
-  // list<ref<IOMap>> of Iomapalloc.free
+
 
 };
 
 struct Iomapalloc
 {
-	Lock;
 	IOMap	*m;
   // list<ref<IOMap>> (next = IOMap.next)
 	IOMap	*free;
@@ -31,6 +32,7 @@ struct Iomapalloc
 	IOMap	maps[32];	/* some initial free maps */
 
   // extra
+	Lock;
 	QLock	ql;		/* lock for reading map */
 };
 
