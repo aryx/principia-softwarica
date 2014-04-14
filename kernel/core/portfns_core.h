@@ -20,11 +20,11 @@ void    (*dumpaproc)(Proc*);
 void    (*error)(char*);
 void    (*nexterror)(void);
 // process/proc.c
+void    (*sleep)(Rendez*, int(*)(void*), void*);
+void    (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
 Proc*   (*wakeup)(Rendez*);
 void    (*sched)(void);
 void    (*ready)(Proc*);
-void    (*sleep)(Rendez*, int(*)(void*), void*);
-void    (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
 // process/proc.c
 Proc*   (*proctab)(int);
 int     (*postnote)(Proc*, int, char*, int);

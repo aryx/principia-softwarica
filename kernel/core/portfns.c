@@ -26,9 +26,9 @@ void (*dumpaproc)(Proc*) = 0;
 void (*error)(char*) = 0;
 void (*nexterror)(void) = 0;
 
-Proc* (*wakeup)(Rendez*) = 0;
 void (*sched)(void) = 0;
 void (*ready)(Proc*) = 0;
+Proc* (*wakeup)(Rendez*) = 0;
 void (*sleep)(Rendez*, int(*)(void*), void*) = 0;
 void (*tsleep)(Rendez*, int (*)(void*), void*, ulong) = 0;
 

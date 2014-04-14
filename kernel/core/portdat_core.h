@@ -72,6 +72,7 @@ struct Label
  */
 struct Perf
 {
+  // intr-ts? interrupt time stamp?
   ulong intrts;   /* time of last interrupt */
   ulong inintr;   /* time since last clock tick in interrupt handlers */
   ulong avg_inintr; /* avg time per clock tick in interrupt handlers */
