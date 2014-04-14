@@ -1,5 +1,30 @@
 
-// Lock < KQLock|RWLock|Ref
+//*****************************************************************************
+// Mutual exclusion
+//*****************************************************************************
+
+// There are different code "regions": 
+// - user code, 
+// - kernel init code
+// - kernel processes
+// - kernel code of syscall (soft interrupt), 
+// - kernel code of interrupt (hard interrupt).
+//
+// There is no mutual exclusion need between user and kernel code. They
+// operate on different structures (and address space). Same for init code
+// as only one processor is used during initialization.
+//
+// For the kernel code one wants mutual exclusion because of possible race 
+// on shared data structures between the syscalls themselves, but also between
+// the syscalls and interrupts. 
+// The flow of control can be User -> Syscall, User -> Interrupt,
+// or even User -> Syscall -> Interrupt. One can even have
+// User -> Syscall -> Interrupt -> Interrupt!!
+// So one must take care when using locks inside interrupts as one can deadlock
+// if the same lock was used in the enclosing syscall (hence ilock/iunlock)
+
+
+// tas < Lock < QLock|RWLock|Ref
 
 // used to be in 386/ but the fields were used from port/ so must be portable!
 struct Lock
@@ -30,7 +55,7 @@ struct KQLock
 
   // list<ref<Proc>> (next = Proc.qnext)
   Proc  *head;    /* next process waiting for object */
-  // list<ref<Proc>> (next = Proc.??)
+  // list<ref<Proc>> (direct access to tail, queue)
   Proc  *tail;    /* last process waiting for object */
 
   uintptr qpc;    /* pc of the holder */ // for debugging?
@@ -46,9 +71,9 @@ struct RWlock
 
   // list<ref<Proc>> (next = Proc.qnext)
   Proc  *head;    /* list of waiting processes */
-  // list<ref<Proc>> (next = Proc.qnext)??
+  // list<ref<Proc>>
   Proc  *tail;
-  // option<ref<Proc>>
+  // option<ref<Proc>> (direct access to tail, queue)
   Proc  *wproc;   /* writing proc */
 
   ulong wpc;    /* pc of writer */
@@ -64,6 +89,9 @@ struct Ref
   Lock;
 };
 
+//*****************************************************************************
+// Synchronization
+//*****************************************************************************
 
 // defined in this directory but no functions are operating on in this dir
 struct Rendez
