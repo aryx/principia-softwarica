@@ -203,6 +203,7 @@ struct Hole
 // and then just after the actual memory xalloc'ed by someone
 struct Xhdr
 {
+  // bookkeeping area
   ulong size;
   ulong magix;
 

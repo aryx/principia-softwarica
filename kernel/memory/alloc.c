@@ -11,6 +11,10 @@
 /* - except the code for malloc(), which alternately doesn't clear or does. */
 /* - except the code for smalloc(), which lives only in the kernel. */
 
+//*****************************************************************************
+// Debugging support
+//*****************************************************************************
+
 /*
  * Npadlong is the number of 32-bit longs to leave at the beginning of 
  * each allocated buffer for our own bookkeeping.  We return to the callers
@@ -24,7 +28,7 @@
  * compile out function calls that would otherwise be no-ops.
  */
 
-/*	non tracing
+/* non tracing
  *
 enum {
 	Npadlong	= 0,
@@ -41,16 +45,59 @@ enum {
 	ReallocOffset = 1
 };
 
-void		setrealloctag(void*, ulong);
+void
+setmalloctag(void *v, ulong pc)
+{
+	ulong *u;
+	USED(v, pc);
+	if(Npadlong <= MallocOffset || v == nil)
+		return;
+	u = v;
+	u[-Npadlong+MallocOffset] = pc;
+}
 
+void
+setrealloctag(void *v, ulong pc)
+{
+	ulong *u;
+	USED(v, pc);
+	if(Npadlong <= ReallocOffset || v == nil)
+		return;
+	u = v;
+	u[-Npadlong+ReallocOffset] = pc;
+}
 
+//unused:
+//ulong
+//getmalloctag(void *v)
+//{
+//	USED(v);
+//	if(Npadlong <= MallocOffset)
+//		return ~0;
+//	return ((ulong*)v)[-Npadlong+MallocOffset];
+//}
+//
+//ulong
+//getrealloctag(void *v)
+//{
+//	USED(v);
+//	if(Npadlong <= ReallocOffset)
+//		return ((ulong*)v)[-Npadlong+ReallocOffset];
+//	return ~0;
+//}
+
+//*****************************************************************************
+// Pool wrappers
+//*****************************************************************************
+
+// non failing malloc! will repeat until it can
 void*
 smalloc(ulong size)
 {
 	void *v;
 
 	for(;;) {
-		v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
+		v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
 		if(v != nil)
 			break;
 		tsleep(&up->sleep, return0, 0, 100);
@@ -101,7 +148,8 @@ mallocalign(ulong size, ulong align, long offset, ulong span)
 {
 	void *v;
 
-	v = poolallocalign(mainmem, size+Npadlong*sizeof(ulong), align, offset-Npadlong*sizeof(ulong), span);
+	v = poolallocalign(mainmem, size+Npadlong*sizeof(ulong), align, 
+                           offset-Npadlong*sizeof(ulong), span);
 	if(Npadlong && v != nil){
 		v = (ulong*)v+Npadlong;
 		setmalloctag(v, getcallerpc(&size));
@@ -154,47 +202,10 @@ msize(void *v)
 //	return v;
 //}
 
-void
-setmalloctag(void *v, ulong pc)
-{
-	ulong *u;
-	USED(v, pc);
-	if(Npadlong <= MallocOffset || v == nil)
-		return;
-	u = v;
-	u[-Npadlong+MallocOffset] = pc;
-}
 
-void
-setrealloctag(void *v, ulong pc)
-{
-	ulong *u;
-	USED(v, pc);
-	if(Npadlong <= ReallocOffset || v == nil)
-		return;
-	u = v;
-	u[-Npadlong+ReallocOffset] = pc;
-}
-
-//unused:
-//ulong
-//getmalloctag(void *v)
-//{
-//	USED(v);
-//	if(Npadlong <= MallocOffset)
-//		return ~0;
-//	return ((ulong*)v)[-Npadlong+MallocOffset];
-//}
-//
-//ulong
-//getrealloctag(void *v)
-//{
-//	USED(v);
-//	if(Npadlong <= ReallocOffset)
-//		return ((ulong*)v)[-Npadlong+ReallocOffset];
-//	return ~0;
-//}
-
+//*****************************************************************************
+// kstr functions
+//*****************************************************************************
 
 //pad: was in chan.c
 
@@ -233,7 +244,6 @@ kstrcpy(char *s, char *t, int ns)
 /*
  * Atomically replace *p with copy of s
  */
-//pad: was in chan.c
 void
 kstrdup(char **p, char *s)
 {
