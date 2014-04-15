@@ -148,8 +148,11 @@ extern Mach* machp[MAXMACH];
 
 extern char* eve;
 int iseve(void);
+// accessed by /dev/hostdomain, defined in auth.c
+extern  char  hostdomain[];
 
-extern ulong	kerndate; // defined in ???
+// defined in ???
+extern ulong	kerndate; 
 
 // used to be in devcons.c, but used also by edf.c
 extern int panicking;

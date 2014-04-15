@@ -47,6 +47,9 @@ int proc_postnote(Proc *p, int dolock, char *n, int flag);
 int sysproc_return0(void*);
 void proc_pexit(char *exitstr, int freemem);
 
+// conf.c
+extern  Dev*  conf_devtab[];
+
 extern void (*i8237alloc)(void);
 
 //*****************************************************************************
