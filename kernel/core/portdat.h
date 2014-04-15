@@ -21,9 +21,6 @@ enum
 };
 
 
-extern  char* conffile;
-//extern  uchar initcode[]; in init.h
-
 //@Scheck: used in params below, FP cg
 struct Execvals {
   uvlong  entry;

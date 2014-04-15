@@ -5,7 +5,7 @@
 //*****************************************************************************
 // Proc components
 //*****************************************************************************
-// All the ref<Proc> here are references to Proc in the array<Proc> of 
+// All the ref<Proc> here are references to Proc in the array<Proc> of
 // Procalloc.arena (pool allocator)
 
 //--------------------------------------------------------------------
@@ -43,7 +43,7 @@ extern  char* statename[];
 enum procseg
 {
   SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
-  ESEG, LSEG, // Extra, L?
+  ESEG, LSEG, // Extra (temporary stack segment), L?
   SEG1, SEG2, SEG3, SEG4,    
   NSEG // to count, see Proc.seg array
 };
@@ -93,6 +93,17 @@ struct Pgrp
   QLock debug;      /* single access via devproc.c */
   RWlock  ns;     /* Namespace n read/one write lock */
 };
+
+//--------------------------------------------------------------------
+// System call
+//--------------------------------------------------------------------
+
+// syscall arguments passed in kernel stack
+struct Sargs
+{
+  ulong args[MAXSYSARG];
+};
+
 
 //--------------------------------------------------------------------
 // Notes
@@ -305,12 +316,6 @@ enum devproc
 // Misc
 //--------------------------------------------------------------------
 
-// syscall arguments passed in kernel stack
-struct Sargs
-{
-  ulong args[MAXSYSARG];
-};
-
 /*
  * FPsave.status
  */
@@ -358,6 +363,8 @@ struct Proc
   // set by??
   char  *args;
   int nargs;    /* number of bytes of args */
+
+  int kp;   /* true if a kernel process */
 
 //--------------------------------------------------------------------
 // Memory
@@ -445,6 +452,9 @@ struct Proc
   //??
   Proc  *rendhash;  /* Hash list for tag values */
 
+  Rendez  *r;   /* rendezvous point slept on */
+  Rendez  sleep;    /* place for syssleep/debug */
+
 //--------------------------------------------------------------------
 // Error managment
 //--------------------------------------------------------------------
@@ -505,9 +515,6 @@ struct Proc
   ulong privatemem; /* proc does not let anyone read mem */
 
   Lock  rlock;    /* sync sleep/wakeup with postnote */
-  Rendez  *r;   /* rendezvous point slept on */
-  Rendez  sleep;    /* place for syssleep/debug */
-  int kp;   /* true if a kernel process */
   int newtlb;   /* Pager has changed my pte's, I must flush */
   int noswap;   /* process is not swappable */
 
@@ -534,7 +541,7 @@ struct Proc
   // will eventually cause a rescheduling.
   Ref nlocks;   /* number of locks held by proc */
 
-  int trace;    /* process being traced? */
+  bool trace;    /* process being traced? */
 
   ulong qpc;    /* pc calling last blocking qlock */
 

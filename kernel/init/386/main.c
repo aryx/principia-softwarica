@@ -49,6 +49,9 @@ void proc_pexit(char *exitstr, int freemem);
 
 // conf.c
 extern  Dev*  conf_devtab[];
+// ??
+extern  char* conffile;
+//extern  uchar initcode[]; in init.h
 
 extern void (*i8237alloc)(void);
 
