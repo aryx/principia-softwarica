@@ -24,8 +24,6 @@ enum
 extern  char* conffile;
 extern  Dev*  conf_devtab[];
 extern  char  hostdomain[];
-extern  char* statename[];
-extern  uint  qiomaxatomic;
 //extern  uchar initcode[]; in init.h
 
 //@Scheck: used in params below, FP cg

@@ -31,6 +31,9 @@ enum procstate
   Waitrelease,
 };
 
+// hash<enum<procstate>, string>, to debug
+extern  char* statename[];
+
 //--------------------------------------------------------------------
 // Memory
 //--------------------------------------------------------------------

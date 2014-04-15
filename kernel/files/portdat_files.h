@@ -41,6 +41,9 @@ enum
   Qkick   = (1<<5), /* always call the kick routine after qwrite */
 };
 
+// defined in qio.c
+extern  uint  qiomaxatomic;
+
 /*
  *  IO queues
  */
