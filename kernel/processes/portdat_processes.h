@@ -113,6 +113,7 @@ struct Note
   // enum<notekind>
   int flag;     /* whether system posted it */
 };
+extern Ref	noteidalloc;
 
 //--------------------------------------------------------------------
 // Process children waiting

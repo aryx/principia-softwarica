@@ -33,7 +33,7 @@ Mach* machp[MAXMACH];
 // was in security/auth.c
 char	*eve;
 // should be in portfns.c, but then backward deps
-iseve(void) { 
+bool iseve(void) { 
   return strcmp(eve, up->user) == 0; 
 }
 

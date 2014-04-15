@@ -19,7 +19,7 @@ static struct Procalloc procalloc;
 
 int	schedgain = 30;	/* units in seconds */
 int	nrdy;
-// also use by sysrfork()
+// also used by sysrfork()
 Ref	noteidalloc;
 
 ulong delayedscheds;	/* statistics */

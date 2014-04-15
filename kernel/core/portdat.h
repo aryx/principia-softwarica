@@ -1,28 +1,13 @@
 
 // could be put in lib.h
 #define MIN(a, b) ((a) < (b)? (a): (b))
-#define MAX(a, b) ((a) > (b)? (a): (b))
+//#define MAX(a, b) ((a) > (b)? (a): (b))
 #define HOWMANY(x, y) (((x)+((y)-1))/(y))
 #define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
-#define ROUNDDN(x, y) (((x)/(y))*(y))   /* floor */
+//#define ROUNDDN(x, y) (((x)/(y))*(y))   /* floor */
 #define ROUND(s, sz)  (((s)+(sz-1))&~(sz-1))
 // BY2PG is defined in mem.h, which should always be included before "dat.h"!
 #define PGROUND(s)  ROUNDUP(s, BY2PG)
-
-/*
- * For multi-bit fields use FIELD(v, o, w) where 'v' is the value
- * of the bit-field of width 'w' with LSb at bit offset 'o'.
- */
-#define FIELD(v, o, w)  (((v) & ((1<<(w))-1))<<(o))
-
-#define FCLR(d, o, w) ((d) & ~(((1<<(w))-1)<<(o)))
-#define FEXT(d, o, w) (((d)>>(o)) & ((1<<(w))-1))
-#define FINS(d, o, w, v) (FCLR((d), (o), (w))|FIELD((v), (o), (w)))
-#define FSET(d, o, w) ((d)|(((1<<(w))-1)<<(o)))
-
-#define FMASK(o, w) (((1<<(w))-1)<<(o))
-
-//#define MAXBY2PG BY2PG    /* rounding for UTZERO in executables */
 
 // convenient constants
 enum
@@ -39,14 +24,9 @@ enum
 extern  char* conffile;
 extern  Dev*  conf_devtab[];
 extern  char  hostdomain[];
-extern  Ref noteidalloc;
 extern  char* statename[];
 extern  uint  qiomaxatomic;
 //extern  uchar initcode[]; in init.h
-
-// defined in syscall/systab.h, but can't include systab.h because?? TODO
-extern  char* sysctab[];
-extern  int nsyscall;
 
 //@Scheck: used in params below, FP cg
 struct Execvals {
@@ -56,6 +36,20 @@ struct Execvals {
 };
 //@Scheck: TODO: who sets this? it's used by rebootcmd but who sets it? qemu?
 int (*parseboothdr)(Chan *, ulong, Execvals *);
+
+/*
+ * For multi-bit fields use FIELD(v, o, w) where 'v' is the value
+ * of the bit-field of width 'w' with LSb at bit offset 'o'.
+ */
+//#define FIELD(v, o, w)  (((v) & ((1<<(w))-1))<<(o))
+//#define FCLR(d, o, w) ((d) & ~(((1<<(w))-1)<<(o)))
+//#define FEXT(d, o, w) (((d)>>(o)) & ((1<<(w))-1))
+//#define FINS(d, o, w, v) (FCLR((d), (o), (w))|FIELD((v), (o), (w)))
+//#define FSET(d, o, w) ((d)|(((1<<(w))-1)<<(o)))
+//#define FMASK(o, w) (((1<<(w))-1)<<(o))
+
+//#define MAXBY2PG BY2PG    /* rounding for UTZERO in executables */
+
 
 //enum
 //{

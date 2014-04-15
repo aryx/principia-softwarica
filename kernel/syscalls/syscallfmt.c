@@ -8,6 +8,8 @@
 #include "fns.h"
 
 #include "/sys/src/libc/9syscall/sys.h"
+extern  char* sysctab[];
+extern  int nsyscall;
 
 // WE ARE OVERRUNNING SOMEHOW
 static void
