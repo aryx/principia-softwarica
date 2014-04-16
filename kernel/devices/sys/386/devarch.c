@@ -351,7 +351,7 @@ archctlread(Chan*, void *a, long nn, vlong offset)
 		p = seprint(p, ep, "0x%p\n", cmpswap);
 	p = seprint(p, ep, "i8253set %s\n", doi8253set ? "on" : "off");
 	n = p - buf;
-	n += mtrrprint(p, ep - p);
+	//n += mtrrprint(p, ep - p);
 	buf[n] = '\0';
 
 	n = readstr(offset, a, nn, buf);
@@ -435,7 +435,8 @@ archctlwrite(Chan*, void *a, long n, vlong)
 		size = strtoull(cb->f[2], &ep, 0);
 		if(*ep)
 			error("cache: parse error: size not a number?");
-		mtrr(base, size, cb->f[3]);
+		//mtrr(base, size, cb->f[3]);
+                error("mtrr: disabled");
 		break;
 	}
 	free(cb);

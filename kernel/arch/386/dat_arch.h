@@ -8,7 +8,8 @@
 
 struct IOMap
 {
-  // This has to be the first field of IOMap!! otherwise get fault
+  // TODO: why this has to be the first field of IOMap?! otherwise get fault??
+
   // list<ref<IOMap>> of Iomapalloc.free
 	IOMap	*next;
 
@@ -19,13 +20,13 @@ struct IOMap
   // extra
 	bool	reserved;
 
-
-
 };
 
 struct Iomapalloc
 {
+  // ??
 	IOMap	*m;
+
   // list<ref<IOMap>> (next = IOMap.next)
 	IOMap	*free;
   // array<IOMAP> pool

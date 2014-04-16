@@ -406,7 +406,8 @@ lapicclock(Ureg *u, void*)
 	 * since the MTRR updates need to be synchronized across processors,
 	 * we want to do this within the clock tick.
 	 */
-	mtrrclock();
+	//mtrrclock(); disabled
+
 	timerintr(u, 0);
 }
 
