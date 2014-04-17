@@ -20,16 +20,6 @@ enum
   //  MAXCRYPT =  127,
 };
 
-
-//@Scheck: used in params below, FP cg
-struct Execvals {
-  uvlong  entry;
-  ulong textsize;
-  ulong datasize;
-};
-//@Scheck: TODO: who sets this? it's used by rebootcmd but who sets it? qemu?
-int (*parseboothdr)(Chan *, ulong, Execvals *);
-
 /*
  * For multi-bit fields use FIELD(v, o, w) where 'v' is the value
  * of the bit-field of width 'w' with LSb at bit offset 'o'.

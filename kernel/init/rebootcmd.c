@@ -9,6 +9,16 @@
 //#include 	"/sys/src/libmach/elf.h"
 #include	<elf.h>
 
+//@Scheck: used in params below, FP cg
+struct Execvals {
+  uvlong  entry;
+  ulong textsize;
+  ulong datasize;
+};
+//@Scheck: TODO: who sets this? it's used by rebootcmd but who sets it? qemu?
+int (*parseboothdr)(Chan *, ulong, Execvals *);
+
+
 enum {
 	Ehdr32sz	= 52,
 	Phdr32sz	= 32,
