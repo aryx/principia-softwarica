@@ -202,19 +202,25 @@ enum note {
   NRSTR = 3, /* restore saved state */
 };
 
+
+
 enum miscsize {  
   ERRMAX = 128, /* max length of error string */
   KNAMELEN = 28,  /* max length of name held in kernel */
 };
 
+
+
+
 /* bits in Qid.type */
 enum qidtype {
+  QTFILE = 0x00,    /* plain file */
   QTDIR = 0x80,    /* type bit for directories */
+  QTMOUNT = 0x10,    /* type bit for mounted channel */
+
+  QTAUTH = 0x08,    /* type bit for authentication file */
   QTAPPEND = 0x40,    /* type bit for append only files */
   QTEXCL = 0x20,    /* type bit for exclusive use files */
-  QTMOUNT = 0x10,    /* type bit for mounted channel */
-  QTAUTH = 0x08,    /* type bit for authentication file */
-  QTFILE = 0x00,    /* plain file */
 };
 
 /* bits in Dir.mode */
@@ -223,20 +229,19 @@ enum dirmode {
   DMAPPEND = 0x40000000,  /* mode bit for append only files */
   DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
   DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
+
   DMREAD = 0x4,   /* mode bit for read permission */
   DMWRITE = 0x2,   /* mode bit for write permission */
   DMEXEC = 0x1,   /* mode bit for execute permission */
 };
 
-typedef struct Qid  Qid;
-typedef struct Dir  Dir;
-typedef struct OWaitmsg OWaitmsg;
-typedef struct Waitmsg  Waitmsg;
-
 struct Qid
 {
+  // note that this is not a string, but an int! it's kind of an inode?
   uvlong  path;
+  // for cache invalidation
   ulong vers;
+  // enum<qidtype>
   uchar type;
 };
 
@@ -244,8 +249,10 @@ struct Dir {
   /* system-modified data */
   ushort  type; /* server type */
   uint  dev;  /* server subtype */
+
   /* file data */
   Qid qid;  /* unique id from server */
+  // bitset<enum<dirmode>>
   ulong mode; /* permissions */
   ulong atime;  /* last read time */
   ulong mtime;  /* last write time */
@@ -256,12 +263,7 @@ struct Dir {
   char  *muid;  /* last modifier name */
 };
 
-struct OWaitmsg
-{
-  char  pid[12];  /* of loved one */
-  char  time[3*12]; /* of loved one and descendants */
-  char  msg[64];  /* compatibility BUG */
-};
+
 
 struct Waitmsg
 {
@@ -269,3 +271,17 @@ struct Waitmsg
   ulong time[3];  /* of loved one and descendants */
   char  msg[ERRMAX];  /* actually variable-size in user mode */
 };
+
+// for byteorder agnostic marshalling?
+struct OWaitmsg
+{
+  char  pid[12];  /* of loved one */
+  char  time[3*12]; /* of loved one and descendants */
+  char  msg[64];  /* compatibility BUG */
+};
+
+typedef struct Qid  Qid;
+typedef struct Dir  Dir;
+typedef struct OWaitmsg OWaitmsg;
+typedef struct Waitmsg  Waitmsg;
+
