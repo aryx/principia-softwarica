@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/lib/latin1.c
+/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/keyboard/386/latin1.c
