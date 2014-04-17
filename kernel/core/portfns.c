@@ -5,7 +5,7 @@
 #include	"fns.h"
 #include	"../port/error.h"
 
-// non functional properties backward dependencies breaker
+// backward dependencies breaker for non functional properties functions
 // (logging, security, error, profiling/timing)
 
 // console/devcons.c

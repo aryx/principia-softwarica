@@ -10,7 +10,7 @@
 #define PGROUND(s)  ROUNDUP(s, BY2PG)
 
 // convenient constants
-enum
+enum miscsize_portdat
 {
   PRINTSIZE = 256,
   NUMSIZE = 12,   /* size of formatted number */
@@ -32,7 +32,6 @@ enum
 //#define FMASK(o, w) (((1<<(w))-1)<<(o))
 
 //#define MAXBY2PG BY2PG    /* rounding for UTZERO in executables */
-
 
 //enum
 //{

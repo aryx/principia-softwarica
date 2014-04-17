@@ -8,11 +8,6 @@
 
 #include	<authsrv.h>
 
-/* let each port override any of these */
-#ifndef KMESGSIZE
-#define KMESGSIZE (16*1024)
-#endif
-
 void	(*consdebug)(void) = nil;
 void	(*screenputs)(char*, int) = nil;
 

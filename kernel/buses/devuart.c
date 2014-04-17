@@ -61,7 +61,7 @@ uartenable(Uart *p)
 
 	p->ir = p->istage;
 	p->iw = p->istage;
-	p->ie = &p->istage[Stagesize];
+	p->ie = &p->istage[STAGESIZE];
 	p->op = p->ostage;
 	p->oe = p->ostage;
 
@@ -617,7 +617,7 @@ uartstageoutput(Uart *p)
 {
 	int n;
 
-	n = qconsume(p->oq, p->ostage, Stagesize);
+	n = qconsume(p->oq, p->ostage, STAGESIZE);
 	if(n <= 0)
 		return 0;
 	p->op = p->ostage;

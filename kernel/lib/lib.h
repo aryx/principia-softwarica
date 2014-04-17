@@ -235,6 +235,11 @@ enum dirmode {
   DMEXEC = 0x1,   /* mode bit for execute permission */
 };
 
+typedef struct Qid  Qid;
+typedef struct Dir  Dir;
+typedef struct OWaitmsg OWaitmsg;
+typedef struct Waitmsg  Waitmsg;
+
 struct Qid
 {
   // note that this is not a string, but an int! it's kind of an inode?
@@ -279,9 +284,4 @@ struct OWaitmsg
   char  time[3*12]; /* of loved one and descendants */
   char  msg[64];  /* compatibility BUG */
 };
-
-typedef struct Qid  Qid;
-typedef struct Dir  Dir;
-typedef struct OWaitmsg OWaitmsg;
-typedef struct Waitmsg  Waitmsg;
 

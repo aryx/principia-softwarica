@@ -90,6 +90,7 @@ struct Mach
   // must be second field at 0x04, used by splhi()
   ulong splpc;      /* pc of last caller to splhi */
 
+  // ref<Proc>
   Proc* proc;     /* current process on this processor */
 
   ulong ticks;      /* of the clock since boot time */
@@ -112,7 +113,6 @@ struct Mach
   int syscall;
   int load;
   int intr;
-
 
   ulong spuriousintr;
   int lastintr;

@@ -1,12 +1,4 @@
 
-#ifndef STAGESIZE
-#define STAGESIZE 64
-#endif
-
-enum {
-  Stagesize=  STAGESIZE
-};
-
 /*
  *  routines to access UART hardware
  */
@@ -70,13 +62,13 @@ struct Uart
   Queue *oq;
 
   Lock  rlock;
-  uchar istage[Stagesize];
+  uchar istage[STAGESIZE];
   uchar *iw;
   uchar *ir;
   uchar *ie;
 
   Lock  tlock;      /* transmit */
-  uchar ostage[Stagesize];
+  uchar ostage[STAGESIZE];
   uchar *op;
   uchar *oe;
   int drain;

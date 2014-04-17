@@ -1,10 +1,14 @@
 #include "dat_forward.h"
 #include "../port/portdat_forward.h"
 
-// used in portdat.h
-#define KMESGSIZE (256*1024)  /* lots, for acpi debugging */
-#define STAGESIZE 2048
-#define MAXSYSARG 5 /* for mount(fd, afd, mpt, flag, arg) */
+enum miscsize_dat {
+  // used in devcons.c
+  KMESGSIZE = (256*1024),  /* lots, for acpi debugging */ // default is 16*1024
+  // used by devuart.c
+  STAGESIZE = 2048, // default is 64
+  // used in Proc
+  MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
+};
 
 // defines Lock (used inline in Mach in portdat_core.h so must be before)
 #include "../port/portdat_concurrency.h"
@@ -45,7 +49,7 @@
 
 /* cpuid instruction result register bits */
 // this is actually only used in 386/ code. 
-enum {
+enum misc_dat {
   /* dx */
   Fpuonchip = 1<<0,
   Vmex  = 1<<1,   /* virtual-mode extensions */
