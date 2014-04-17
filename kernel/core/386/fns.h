@@ -212,8 +212,6 @@ void  touser(void*);
 void  trapenable(int, void (*)(Ureg*, void*), void*, char*);
 void  trapinit(void);
 void  trapinit0(void);
-//@Scheck: Assembly
-int tas(void*);
 ulong umbmalloc(ulong, int, int);
 void  umbfree(ulong, int);
 //ulong umbrwmalloc(ulong, int, int);

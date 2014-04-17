@@ -37,6 +37,8 @@ void    splx(int);
 //long    lcycles(void);
 //test-and-set
 //@Scheck: Assembly
+int tas(void*);
+//@Scheck: Assembly
 void    _xinc(long*);
 //@Scheck: Assembly
 long    _xdec(long*);
