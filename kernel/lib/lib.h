@@ -1,21 +1,23 @@
 
-// This file mostly references code in lib_core/libc/ (linked with the kernel).
-// Those functions are also exported in include/libc.h.
+// This file mostly exports code from lib_core/libc/ (linked with the kernel).
+// Those functions are also exported in include/libc.h but they prefered to
+// not include it and instead to reexport here a subset specific to the kernel.
 
 // There are also the poolxxx() functions exported in include/pool.h
 // (also part of libc) that are used in memory/alloc.c.
 
 // Some functions in libc are also "overriden" (via linker abuse):
-//  - print.c overrides _fmtlock, _fmtunlock that were in libc/fmt/
-//  - devcons.s overrides the sysfatal that was in libc/9sys/
+//  - print.c overrides _fmtlock(), _fmtunlock() that were in libc/fmt/
+//  - devcons.s overrides the sysfatal() that was in libc/9sys/
 
 // pad specific, should be in u.h
 typedef int bool;
 typedef ushort bool_ushort;
 typedef ulong bool_ulong;
-#define true 1
-#define false 0
-
+enum _bool {
+  false = 0,
+  true = 1
+};
 
 /*
  * functions (mostly) linked in from libc.
@@ -37,19 +39,19 @@ extern  void* memchr(void*, int, ulong);
 /*
  * string routines
  */
-//unused: extern  char* strcat(char*, char*);
 extern  char* strchr(char*, int);
 extern  char* strrchr(char*, int);
 extern  int strcmp(char*, char*);
 extern  char* strcpy(char*, char*);
 extern  char* strecpy(char*, char*, char*);
-//unused: extern  char* strncat(char*, char*, long);
 extern  char* strncpy(char*, char*, long);
 extern  int strncmp(char*, char*, long);
 extern  long  strlen(char*);
 extern  char* strstr(char*, char*);
 extern  int atoi(char*);
 extern  int fullrune(char*, int);
+//unused: extern  char* strcat(char*, char*);
+//unused: extern  char* strncat(char*, char*, long);
 
 //redefined in the kernel
 extern  int cistrcmp(char*, char*);
@@ -58,8 +60,8 @@ extern  int cistrncmp(char*, char*, int);
 enum
 {
   UTFmax    = 4,    /* maximum bytes per rune */
-//unused: Runesync  = 0x80,   /* cannot represent part of a UTF sequence (<) */
   Runeself  = 0x80,   /* rune and UTF sequences are the same (<) */
+//unused: Runesync  = 0x80,   /* cannot represent part of a UTF sequence (<) */
 //unused: Runeerror = 0xFFFD, /* decoding error in UTF */
 //unused: Runemax   = 0x10FFFF, /* 24 bit rune */
 //unused: Runemask  = 0x1FFFFF, /* bits used by runes (see grep) */
@@ -71,8 +73,8 @@ enum
 extern  int runetochar(char*, Rune*);
 extern  int chartorune(Rune*, char*);
 extern  char* utfrune(char*, long);
-//unused: extern  int utflen(char*);
 extern  int utfnlen(char*, long);
+//unused: extern  int utflen(char*);
 //unused: extern  int runelen(long);
 
 extern  int abs(int);
@@ -97,15 +99,15 @@ struct Fmt{
   ulong flags;
 };
 
-//pad: used to be regular function, but to avoid backward deps in kernel
+// This used to be regular function, but to avoid backward deps in the kernel
 // I made it into a pointer function (a bit ugly, and maybe unsafe)
 extern  int (*print)(char*, ...);
 
 extern  char* seprint(char*, char*, char*, ...);
 extern  char* vseprint(char*, char*, char*, va_list);
 extern  int snprint(char*, int, char*, ...);
-//unused: extern  int vsnprint(char*, int, char*, va_list);
 extern  int sprint(char*, char*, ...);
+//unused: extern  int vsnprint(char*, int, char*, va_list);
 
 #pragma varargck  argpos  fmtprint  2
 #pragma varargck  argpos  print   1
@@ -157,9 +159,9 @@ extern  uvlong  strtoull(char*, char**, int);
 
 extern  int getfields(char*, char**, int, int, char*);
 extern  int tokenize(char*, char**, int);
+extern  void  qsort(void*, long, long, int (*)(void*, void*));
 //unused: extern  int dec64(uchar*, int, char*, int);
 //unused: extern  int encodefmt(Fmt*);
-extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 
 extern  char  etext[];
@@ -171,52 +173,65 @@ extern  char  end[];
 /*
  * Syscall data structures
  */
-#define MORDER  0x0003  /* mask for bits defining order of mounting */
-#define MREPL 0x0000  /* mount replaces object */
-#define MBEFORE 0x0001  /* mount goes before others in union directory */
-#define MAFTER  0x0002  /* mount goes after others in union directory */
-#define MCREATE 0x0004  /* permit creation in mounted directory */
-#define MCACHE  0x0010  /* cache some data */
-#define MMASK 0x0017  /* all bits on */
+enum mount {
+  MREPL = 0x0000,  /* mount replaces object */
+  MBEFORE = 0x0001,  /* mount goes before others in union directory */
+  MAFTER = 0x0002,  /* mount goes after others in union directory */
+  MCREATE = 0x0004,  /* permit creation in mounted directory */
+  MCACHE = 0x0010,  /* cache some data */
 
-#define OREAD 0 /* open for read */
-#define OWRITE  1 /* write */
-#define ORDWR 2 /* read and write */
-#define OEXEC 3 /* execute, == read but check execute permission */
-#define OTRUNC  16  /* or'ed in (except for exec), truncate file first */
-#define OCEXEC  32  /* or'ed in, close on exec */
-#define ORCLOSE 64  /* or'ed in, remove on close */
-#define OEXCL   0x1000  /* or'ed in, exclusive create */
+  MORDER =  0x0003,  /* mask for bits defining order of mounting */
+  MMASK = 0x0017,  /* all bits on */
+};
 
-#define NCONT 0 /* continue after note */
-#define NDFLT 1 /* terminate after note */
-#define NSAVE 2 /* clear note but hold state */
-#define NRSTR 3 /* restore saved state */
+enum open {
+  OREAD = 0, /* open for read */
+  OWRITE = 1, /* write */
+  ORDWR = 2, /* read and write */
+  OEXEC = 3, /* execute, == read but check execute permission */
+  OTRUNC = 16,  /* or'ed in (except for exec), truncate file first */
+  OCEXEC = 32,  /* or'ed in, close on exec */
+  ORCLOSE = 64,  /* or'ed in, remove on close */
+  OEXCL = 0x1000,  /* or'ed in, exclusive create */
+};
+
+enum note {
+  NCONT = 0, /* continue after note */
+  NDFLT = 1, /* terminate after note */
+  NSAVE = 2, /* clear note but hold state */
+  NRSTR = 3, /* restore saved state */
+};
+
+enum miscsize {  
+  ERRMAX = 128, /* max length of error string */
+  KNAMELEN = 28,  /* max length of name held in kernel */
+};
+
+/* bits in Qid.type */
+enum qidtype {
+  QTDIR = 0x80,    /* type bit for directories */
+  QTAPPEND = 0x40,    /* type bit for append only files */
+  QTEXCL = 0x20,    /* type bit for exclusive use files */
+  QTMOUNT = 0x10,    /* type bit for mounted channel */
+  QTAUTH = 0x08,    /* type bit for authentication file */
+  QTFILE = 0x00,    /* plain file */
+};
+
+/* bits in Dir.mode */
+enum dirmode {
+  DMDIR = 0x80000000,  /* mode bit for directories */
+  DMAPPEND = 0x40000000,  /* mode bit for append only files */
+  DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
+  DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
+  DMREAD = 0x4,   /* mode bit for read permission */
+  DMWRITE = 0x2,   /* mode bit for write permission */
+  DMEXEC = 0x1,   /* mode bit for execute permission */
+};
 
 typedef struct Qid  Qid;
 typedef struct Dir  Dir;
 typedef struct OWaitmsg OWaitmsg;
 typedef struct Waitmsg  Waitmsg;
-
-#define ERRMAX      128 /* max length of error string */
-#define KNAMELEN    28  /* max length of name held in kernel */
-
-/* bits in Qid.type */
-#define QTDIR   0x80    /* type bit for directories */
-#define QTAPPEND  0x40    /* type bit for append only files */
-#define QTEXCL    0x20    /* type bit for exclusive use files */
-#define QTMOUNT   0x10    /* type bit for mounted channel */
-#define QTAUTH    0x08    /* type bit for authentication file */
-#define QTFILE    0x00    /* plain file */
-
-/* bits in Dir.mode */
-#define DMDIR   0x80000000  /* mode bit for directories */
-#define DMAPPEND  0x40000000  /* mode bit for append only files */
-#define DMEXCL    0x20000000  /* mode bit for exclusive use files */
-#define DMMOUNT   0x10000000  /* mode bit for mounted channel */
-#define DMREAD    0x4   /* mode bit for read permission */
-#define DMWRITE   0x2   /* mode bit for write permission */
-#define DMEXEC    0x1   /* mode bit for execute permission */
 
 struct Qid
 {
