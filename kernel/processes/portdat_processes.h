@@ -44,7 +44,7 @@ enum procseg
 {
   SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
   ESEG, LSEG, // Extra (temporary stack segment), L?
-  SEG1, SEG2, SEG3, SEG4,    
+  SEG1, SEG2, SEG3, SEG4,
   NSEG // to count, see Proc.seg array
 };
 
@@ -83,7 +83,7 @@ enum
 // Namespace process group
 struct Pgrp
 {
-  // hash<qid.path, list<ref<Mhead>>?
+  // hash<qid.path, list<ref<Mhead> (next = Mhead.next)>
   Mhead *mnthash[MNTHASH];
   ulong pgrpid;
   bool noattach;
@@ -369,7 +369,7 @@ struct Proc
 //--------------------------------------------------------------------
 // Memory
 //--------------------------------------------------------------------
-  // array<option<ref_own<Segment>>>, elt smalloc'ed?
+  // hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
   Segment *seg[NSEG];
   QLock seglock;  /* locked whenever seg[] changes */
 
