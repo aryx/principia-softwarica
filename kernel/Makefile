@@ -37,7 +37,7 @@ sync:
 pdf:
 	$(NOWEB) $(TEXMAIN) > $(TEX)
 	pdflatex $(TEX)
-#	pdflatex $(TEX)
+	pdflatex $(TEX)
 
 lpclean::
 	rm -f $(TEX)
