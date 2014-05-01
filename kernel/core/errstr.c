@@ -1,3 +1,4 @@
+/*s: errstr.c */
 //char Enoerror[] = "no error";
 char Emount[] = "inconsistent mount";
 char Eunmount[] = "not mounted";
@@ -56,3 +57,4 @@ char Echange[] = "media or partition has changed";
 //char Edetach[] = "device is detached";
 //char Enotconf[] = "endpoint not configured";
 //char Eaoedown[] = "aoe device is down";
+/*e: errstr.c */

@@ -6,7 +6,7 @@ all:
 # Generic Literate programming variables
 ##############################################################################
 
-SYNCFLAGS=-md5sum_in_auxfile -less_marks
+SYNCFLAGS=-md5sum_in_auxfile -less_marks -lang C
 
 SYNCWEB=~/github/syncweb/syncweb $(SYNCFLAGS)
 NOWEB=~/github/syncweb/scripts/noweblatex
@@ -29,6 +29,8 @@ TEX=Kernel.tex
 SRC_ORIG=Kernel.tex.nw
 
 SRC_VIEWS= \
+ core/errstr.c \
+ core/error.h \
 
 
 sync:
