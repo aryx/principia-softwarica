@@ -1,12 +1,14 @@
 /*
  *	SB 16 driver
  */
+
 #include	"u.h"
 #include	"../port/lib.h"
 #include	"mem.h"
 #include	"dat.h"
 #include	"fns.h"
 #include	"../port/error.h"
+
 #include	"io.h"
 #include	"audio.h"
 
@@ -19,15 +21,22 @@ enum
 	Qaudio,
 	Qvolume,
 	Qstatus,
+};
 
+enum 
+{
 	Fmono		= 1,
 	Fin		= 2,
 	Fout		= 4,
+};
 
+enum {
 	Aclosed		= 0,
 	Aread,
 	Awrite,
+};
 
+enum {
 	Vaudio		= 0,
 	Vsynth,
 	Vcd,
@@ -38,7 +47,9 @@ enum
 	Vbass,
 	Vspeed,
 	Nvol,
+};
 
+enum {
 	Speed		= 44100,
 	Ncmd		= 50,		/* max volume command words */
 };
