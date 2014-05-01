@@ -29,6 +29,7 @@ TEX=Kernel.tex
 SRC_ORIG=Kernel.tex.nw
 
 SRC_VIEWS= \
+ lib/lib.h \
  core/errstr.c \
  core/error.h \
 
