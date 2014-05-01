@@ -3,8 +3,9 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "io.h"
 #include "../port/error.h"
+
+#include "io.h"
 
 #include <draw.h>
 #include <memdraw.h>
