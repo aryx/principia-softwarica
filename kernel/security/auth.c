@@ -8,16 +8,9 @@
 #include	<authsrv.h>
 
 //char	*eve; now in core/
-char	hostdomain[DOMLEN];
+//int iseve(void) { } now in core/
 
-///*
-// *  return true if current user is eve
-// */
-//int
-//iseve(void)
-//{
-//	return strcmp(eve, up->user) == 0;
-//}
+char	hostdomain[DOMLEN];
 
 long
 sysfversion(ulong *arg)
