@@ -6,6 +6,60 @@
 
 #include "../port/systab.h"
 
+extern Syscall sysr1;
+extern Syscall sys_errstr;
+extern Syscall sysbind;
+extern Syscall syschdir;
+extern Syscall sysclose;
+extern Syscall sysdup;
+extern Syscall sysalarm;
+extern Syscall sysexec;
+extern Syscall sysexits;
+extern Syscall sys_fsession;
+extern Syscall sysfauth;
+extern Syscall sys_fstat;
+extern Syscall syssegbrk;
+extern Syscall sys_mount;
+extern Syscall sysopen;
+extern Syscall sys_read;
+extern Syscall sysoseek;
+extern Syscall syssleep;
+extern Syscall sys_stat;
+extern Syscall sysrfork;
+extern Syscall sys_write;
+extern Syscall syspipe;
+extern Syscall syscreate;
+extern Syscall sysfd2path;
+extern Syscall sysbrk_;
+extern Syscall sysremove;
+extern Syscall sys_wstat;
+extern Syscall sys_fwstat;
+extern Syscall sysnotify;
+extern Syscall sysnoted;
+extern Syscall syssegattach;
+extern Syscall syssegdetach;
+extern Syscall syssegfree;
+extern Syscall syssegflush;
+extern Syscall sysrendezvous;
+extern Syscall sysunmount;
+extern Syscall sys_wait;
+extern Syscall syssemacquire;
+extern Syscall syssemrelease;
+extern Syscall sysseek;
+extern Syscall sysfversion;
+extern Syscall syserrstr;
+extern Syscall sysstat;
+extern Syscall sysfstat;
+extern Syscall syswstat;
+extern Syscall sysfwstat;
+extern Syscall sysmount;
+extern Syscall sysawait;
+extern Syscall syspread;
+extern Syscall syspwrite;
+extern Syscall systsemacquire;
+//@Scheck: TODO? dead?
+extern Syscall sysdeath;
+
 Syscall *systab[] = {
 	[SYSR1]		sysr1,
 	[_ERRSTR]	sys_errstr,
@@ -59,6 +113,7 @@ Syscall *systab[] = {
 	[PWRITE]	syspwrite,
 	[TSEMACQUIRE]	systsemacquire,
 };
+int nsyscall = nelem(systab);
 
 char *sysctab[] = {
 	[SYSR1]		"Running",
@@ -113,5 +168,3 @@ char *sysctab[] = {
 	[PWRITE]	"Pwrite",
 	[TSEMACQUIRE]	"Tsemacquire",
 };
-
-int nsyscall = (sizeof systab/sizeof systab[0]);
