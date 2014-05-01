@@ -49,15 +49,16 @@ execinit(void)
 {
   int fd;
 
-  bind_safe("#p", "/proc", MREPL);
-  bind_safe("#d", "/fd", MREPL);
+  bind_safe("#p", "/proc", MREPL); //devproc
+  // used by rc and many programs, e.g. via open("#d/0")
+  bind_safe("#d", "/fd", MREPL); //devdup
 
   bind_safe("/root", "/", MAFTER|MCREATE);
   bind_safe("/386/bin", "/bin", MREPL);
   bind_safe("/rc/bin", "/bin", MAFTER);
 
-  bind_safe("#v", "/dev", MAFTER);
-  bind_safe("#m", "/dev", MAFTER);
+  bind_safe("#v", "/dev", MAFTER); //devvga
+  bind_safe("#m", "/dev", MAFTER); //devmouse
   bind_safe("#P", "/dev", MAFTER);
 
   run("/bin/aux/mouse", "ps2", nil);
