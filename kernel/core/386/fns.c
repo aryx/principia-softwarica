@@ -1,58 +1,58 @@
-#include	"u.h"
-#include	"../port/lib.h"
-#include	"mem.h"
-#include	"dat.h"
-#include	"fns.h"
-#include	"../port/error.h"
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
+#include    "../port/error.h"
 
-int	(*isaconfig)(char*, int, ISAConf*) = 0;
+int (*isaconfig)(char*, int, ISAConf*) = 0;
 
 // was in main.c, could be in lib/386/libc.c (or even lib/libc.c)
 
 int
 cistrncmp(char *a, char *b, int n)
 {
-	unsigned ac, bc;
+    unsigned ac, bc;
 
-	while(n > 0){
-		ac = *a++;
-		bc = *b++;
-		n--;
+    while(n > 0){
+        ac = *a++;
+        bc = *b++;
+        n--;
 
-		if(ac >= 'A' && ac <= 'Z')
-			ac = 'a' + (ac - 'A');
-		if(bc >= 'A' && bc <= 'Z')
-			bc = 'a' + (bc - 'A');
+        if(ac >= 'A' && ac <= 'Z')
+            ac = 'a' + (ac - 'A');
+        if(bc >= 'A' && bc <= 'Z')
+            bc = 'a' + (bc - 'A');
 
-		ac -= bc;
-		if(ac)
-			return ac;
-		if(bc == 0)
-			break;
-	}
+        ac -= bc;
+        if(ac)
+            return ac;
+        if(bc == 0)
+            break;
+    }
 
-	return 0;
+    return 0;
 }
 
 int
 cistrcmp(char *a, char *b)
 {
-	int ac, bc;
+    int ac, bc;
 
-	for(;;){
-		ac = *a++;
-		bc = *b++;
-	
-		if(ac >= 'A' && ac <= 'Z')
-			ac = 'a' + (ac - 'A');
-		if(bc >= 'A' && bc <= 'Z')
-			bc = 'a' + (bc - 'A');
-		ac -= bc;
-		if(ac)
-			return ac;
-		if(bc == 0)
-			break;
-	}
-	return 0;
+    for(;;){
+        ac = *a++;
+        bc = *b++;
+    
+        if(ac >= 'A' && ac <= 'Z')
+            ac = 'a' + (ac - 'A');
+        if(bc >= 'A' && bc <= 'Z')
+            bc = 'a' + (bc - 'A');
+        ac -= bc;
+        if(ac)
+            return ac;
+        if(bc == 0)
+            break;
+    }
+    return 0;
 }
 

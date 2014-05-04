@@ -1,9 +1,9 @@
-#include	"u.h"
-#include	"../port/lib.h"
-#include	"mem.h"
-#include	"dat.h"
-#include	"fns.h"
-#include	"../port/error.h"
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
+#include    "../port/error.h"
 
 // backward dependencies breaker for non functional properties functions
 // (logging, security, error, profiling/timing)
@@ -60,28 +60,28 @@ void (*delay)(int) = 0;
 int
 readnum(ulong off, char *buf, ulong n, ulong val, int size)
 {
-	char tmp[64];
+    char tmp[64];
 
-	snprint(tmp, sizeof(tmp), "%*lud", size-1, val);
-	tmp[size-1] = ' ';
-	if(off >= size)
-		return 0;
-	if(off+n > size)
-		n = size-off;
-	memmove(buf, tmp+off, n);
-	return n;
+    snprint(tmp, sizeof(tmp), "%*lud", size-1, val);
+    tmp[size-1] = ' ';
+    if(off >= size)
+        return 0;
+    if(off+n > size)
+        n = size-off;
+    memmove(buf, tmp+off, n);
+    return n;
 }
 
 int
 readstr(ulong off, char *buf, ulong n, char *str)
 {
-	int size;
+    int size;
 
-	size = strlen(str);
-	if(off >= size)
-		return 0;
-	if(off+n > size)
-		n = size-off;
-	memmove(buf, str+off, n);
-	return n;
+    size = strlen(str);
+    if(off >= size)
+        return 0;
+    if(off+n > size)
+        n = size-off;
+    memmove(buf, str+off, n);
+    return n;
 }

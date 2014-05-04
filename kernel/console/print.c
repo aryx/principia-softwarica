@@ -14,19 +14,19 @@ static Lock fmtl;
 void
 _fmtlock(void)
 {
-	lock(&fmtl);
+    lock(&fmtl);
 }
 
 //@Scheck: no dead, called from libc
 void
 _fmtunlock(void)
 {
-	unlock(&fmtl);
+    unlock(&fmtl);
 }
 
 //@Scheck: no dead, called from libc
 int
 _efgfmt(Fmt*)
 {
-	return -1;
+    return -1;
 }

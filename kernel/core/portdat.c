@@ -1,9 +1,9 @@
-#include	"u.h"
-#include	"../port/lib.h"
-#include	"mem.h"
-#include	"dat.h"
-#include	"fns.h"
-#include	"../port/error.h"
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
+#include    "../port/error.h"
 
 // was in init/main.c
 Conf conf;
@@ -31,7 +31,7 @@ Mach *m;
 Mach* machp[MAXMACH];
 
 // was in security/auth.c
-char	*eve;
+char    *eve;
 // should be in portfns.c, but then backward deps
 /*
  *  return true if current user is eve
@@ -41,4 +41,4 @@ bool iseve(void) {
 }
 
 // was in console/devcons.c, but used also by edf.c
-int	panicking;
+int panicking;

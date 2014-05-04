@@ -1,11 +1,11 @@
-#include	"u.h"
-#include	"../port/lib.h"
-#include	"mem.h"
-#include	"dat.h"
-#include	"fns.h"
-#include	"error.h"
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
+#include    "error.h"
 
-#include	<pool.h>
+#include    <pool.h>
 
 /* everything from here down should be the same in libc, libdebugmalloc, and the kernel */
 /* - except the code for malloc(), which alternately doesn't clear or does. */
@@ -31,59 +31,59 @@
 /* non tracing
  *
 enum {
-	Npadlong	= 0,
-	MallocOffset = 0,
-	ReallocOffset = 0,
+    Npadlong    = 0,
+    MallocOffset = 0,
+    ReallocOffset = 0,
 };
  *
  */
 
 /* tracing */
 enum {
-	Npadlong	= 2,
-	MallocOffset = 0,
-	ReallocOffset = 1
+    Npadlong    = 2,
+    MallocOffset = 0,
+    ReallocOffset = 1
 };
 
 void
 setmalloctag(void *v, ulong pc)
 {
-	ulong *u;
-	USED(v, pc);
-	if(Npadlong <= MallocOffset || v == nil)
-		return;
-	u = v;
-	u[-Npadlong+MallocOffset] = pc;
+    ulong *u;
+    USED(v, pc);
+    if(Npadlong <= MallocOffset || v == nil)
+        return;
+    u = v;
+    u[-Npadlong+MallocOffset] = pc;
 }
 
 void
 setrealloctag(void *v, ulong pc)
 {
-	ulong *u;
-	USED(v, pc);
-	if(Npadlong <= ReallocOffset || v == nil)
-		return;
-	u = v;
-	u[-Npadlong+ReallocOffset] = pc;
+    ulong *u;
+    USED(v, pc);
+    if(Npadlong <= ReallocOffset || v == nil)
+        return;
+    u = v;
+    u[-Npadlong+ReallocOffset] = pc;
 }
 
 //unused:
 //ulong
 //getmalloctag(void *v)
 //{
-//	USED(v);
-//	if(Npadlong <= MallocOffset)
-//		return ~0;
-//	return ((ulong*)v)[-Npadlong+MallocOffset];
+//  USED(v);
+//  if(Npadlong <= MallocOffset)
+//      return ~0;
+//  return ((ulong*)v)[-Npadlong+MallocOffset];
 //}
 //
 //ulong
 //getrealloctag(void *v)
 //{
-//	USED(v);
-//	if(Npadlong <= ReallocOffset)
-//		return ((ulong*)v)[-Npadlong+ReallocOffset];
-//	return ~0;
+//  USED(v);
+//  if(Npadlong <= ReallocOffset)
+//      return ((ulong*)v)[-Npadlong+ReallocOffset];
+//  return ~0;
 //}
 
 //*****************************************************************************
@@ -94,112 +94,112 @@ setrealloctag(void *v, ulong pc)
 void*
 smalloc(ulong size)
 {
-	void *v;
+    void *v;
 
-	for(;;) {
-		v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
-		if(v != nil)
-			break;
-		tsleep(&up->sleep, return0, 0, 100);
-	}
-	if(Npadlong){
-		v = (ulong*)v+Npadlong;
-		setmalloctag(v, getcallerpc(&size));
-	}
-	memset(v, 0, size);
-	return v;
+    for(;;) {
+        v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
+        if(v != nil)
+            break;
+        tsleep(&up->sleep, return0, 0, 100);
+    }
+    if(Npadlong){
+        v = (ulong*)v+Npadlong;
+        setmalloctag(v, getcallerpc(&size));
+    }
+    memset(v, 0, size);
+    return v;
 }
 
 void*
 malloc(ulong size)
 {
-	void *v;
+    void *v;
 
-	v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
-	if(v == nil)
-		return nil;
-	if(Npadlong){
-		v = (ulong*)v+Npadlong;
-		setmalloctag(v, getcallerpc(&size));
-		setrealloctag(v, 0);
-	}
-	memset(v, 0, size);
-	return v;
+    v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
+    if(v == nil)
+        return nil;
+    if(Npadlong){
+        v = (ulong*)v+Npadlong;
+        setmalloctag(v, getcallerpc(&size));
+        setrealloctag(v, 0);
+    }
+    memset(v, 0, size);
+    return v;
 }
 
 void*
 mallocz(ulong size, int clr)
 {
-	void *v;
+    void *v;
 
-	v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
-	if(Npadlong && v != nil){
-		v = (ulong*)v+Npadlong;
-		setmalloctag(v, getcallerpc(&size));
-		setrealloctag(v, 0);
-	}
-	if(clr && v != nil)
-		memset(v, 0, size);
-	return v;
+    v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
+    if(Npadlong && v != nil){
+        v = (ulong*)v+Npadlong;
+        setmalloctag(v, getcallerpc(&size));
+        setrealloctag(v, 0);
+    }
+    if(clr && v != nil)
+        memset(v, 0, size);
+    return v;
 }
 
 void*
 mallocalign(ulong size, ulong align, long offset, ulong span)
 {
-	void *v;
+    void *v;
 
-	v = poolallocalign(mainmem, size+Npadlong*sizeof(ulong), align, 
+    v = poolallocalign(mainmem, size+Npadlong*sizeof(ulong), align, 
                            offset-Npadlong*sizeof(ulong), span);
-	if(Npadlong && v != nil){
-		v = (ulong*)v+Npadlong;
-		setmalloctag(v, getcallerpc(&size));
-		setrealloctag(v, 0);
-	}
-	if(v)
-		memset(v, 0, size);
-	return v;
+    if(Npadlong && v != nil){
+        v = (ulong*)v+Npadlong;
+        setmalloctag(v, getcallerpc(&size));
+        setrealloctag(v, 0);
+    }
+    if(v)
+        memset(v, 0, size);
+    return v;
 }
 
 void
 free(void *v)
 {
-	if(v != nil)
-		poolfree(mainmem, (ulong*)v-Npadlong);
+    if(v != nil)
+        poolfree(mainmem, (ulong*)v-Npadlong);
 }
 
 void*
 realloc(void *v, ulong size)
 {
-	void *nv;
+    void *nv;
 
-	if(v != nil)
-		v = (ulong*)v-Npadlong;
-	if(Npadlong !=0 && size != 0)
-		size += Npadlong*sizeof(ulong);
+    if(v != nil)
+        v = (ulong*)v-Npadlong;
+    if(Npadlong !=0 && size != 0)
+        size += Npadlong*sizeof(ulong);
 
-	if(nv = poolrealloc(mainmem, v, size)){
-		nv = (ulong*)nv+Npadlong;
-		setrealloctag(nv, getcallerpc(&v));
-		if(v == nil)
-			setmalloctag(nv, getcallerpc(&v));
-	}		
-	return nv;
+    if(nv = poolrealloc(mainmem, v, size)){
+        nv = (ulong*)nv+Npadlong;
+        setrealloctag(nv, getcallerpc(&v));
+        if(v == nil)
+            setmalloctag(nv, getcallerpc(&v));
+    }       
+    return nv;
 }
 
 ulong
 msize(void *v)
 {
-	return poolmsize(mainmem, (ulong*)v-Npadlong)-Npadlong*sizeof(ulong);
+    return poolmsize(mainmem, (ulong*)v-Npadlong)-Npadlong*sizeof(ulong);
 }
 
 //unused:
 //void*
 //calloc(ulong n, ulong szelem)
 //{
-//	void *v;
-//	if(v = mallocz(n*szelem, 1))
-//		setmalloctag(v, getcallerpc(&n));
-//	return v;
+//  void *v;
+//  if(v = mallocz(n*szelem, 1))
+//      setmalloctag(v, getcallerpc(&n));
+//  return v;
 //}
 
 
@@ -218,27 +218,27 @@ msize(void *v)
 void
 kstrcpy(char *s, char *t, int ns)
 {
-	int nt;
+    int nt;
 
-	nt = strlen(t);
-	if(nt+1 <= ns){
-		memmove(s, t, nt+1);
-		return;
-	}
-	/* too long */
-	if(ns < 4){
-		/* but very short! */
-		strncpy(s, t, ns);
-		return;
-	}
-	/* truncate with ... at character boundary (very rare case) */
-	memmove(s, t, ns-4);
-	ns -= 4;
-	s[ns] = '\0';
-	/* look for first byte of UTF-8 sequence by skipping continuation bytes */
-	while(ns>0 && (s[--ns]&0xC0)==0x80)
-		;
-	strcpy(s+ns, "...");
+    nt = strlen(t);
+    if(nt+1 <= ns){
+        memmove(s, t, nt+1);
+        return;
+    }
+    /* too long */
+    if(ns < 4){
+        /* but very short! */
+        strncpy(s, t, ns);
+        return;
+    }
+    /* truncate with ... at character boundary (very rare case) */
+    memmove(s, t, ns-4);
+    ns -= 4;
+    s[ns] = '\0';
+    /* look for first byte of UTF-8 sequence by skipping continuation bytes */
+    while(ns>0 && (s[--ns]&0xC0)==0x80)
+        ;
+    strcpy(s+ns, "...");
 }
 
 /*
@@ -247,21 +247,21 @@ kstrcpy(char *s, char *t, int ns)
 void
 kstrdup(char **p, char *s)
 {
-	int n;
-	char *t, *prev;
+    int n;
+    char *t, *prev;
 
-	n = strlen(s)+1;
-	/* if it's a user, we can wait for memory; if not, something's very wrong */
-	if(up){
-		t = smalloc(n);
-		setmalloctag(t, getcallerpc(&p));
-	}else{
-		t = malloc(n);
-		if(t == nil)
-			panic("kstrdup: no memory");
-	}
-	memmove(t, s, n);
-	prev = *p;
-	*p = t;
-	free(prev);
+    n = strlen(s)+1;
+    /* if it's a user, we can wait for memory; if not, something's very wrong */
+    if(up){
+        t = smalloc(n);
+        setmalloctag(t, getcallerpc(&p));
+    }else{
+        t = malloc(n);
+        if(t == nil)
+            panic("kstrdup: no memory");
+    }
+    memmove(t, s, n);
+    prev = *p;
+    *p = t;
+    free(prev);
 }

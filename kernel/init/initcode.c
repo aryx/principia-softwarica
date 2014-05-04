@@ -20,21 +20,21 @@ char env[] = "/env";
 void
 startboot(char *argv0, char **argv)
 {
-	char buf[200];	/* keep this fairly large to capture error details */
+    char buf[200];  /* keep this fairly large to capture error details */
 
-	/* in case boot is a shell script */
-	open(cons, OREAD);
-	open(cons, OWRITE);
-	open(cons, OWRITE);
-	bind(c, dev, MAFTER);
-	bind(ec, env, MAFTER);
-	bind(e, env, MCREATE|MAFTER);
-	bind(s, srv, MREPL|MCREATE);
+    /* in case boot is a shell script */
+    open(cons, OREAD);
+    open(cons, OWRITE);
+    open(cons, OWRITE);
+    bind(c, dev, MAFTER);
+    bind(ec, env, MAFTER);
+    bind(e, env, MCREATE|MAFTER);
+    bind(s, srv, MREPL|MCREATE);
 
-	USED(argv0);
-	exec(boot, argv);
+    USED(argv0);
+    exec(boot, argv);
 
-	rerrstr(buf, sizeof buf);
-	buf[sizeof buf - 1] = '\0';
-	_exits(buf);
+    rerrstr(buf, sizeof buf);
+    buf[sizeof buf - 1] = '\0';
+    _exits(buf);
 }

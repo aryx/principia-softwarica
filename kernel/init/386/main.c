@@ -182,26 +182,26 @@ writeconf(void)
 void
 machinit(void)
 {
-	int machno;
-	ulong *pdb;
-	Segdesc *gdt;
+    int machno;
+    ulong *pdb;
+    Segdesc *gdt;
 
-	machno = m->machno;
-	pdb = m->pdb;
-	gdt = m->gdt;
-	memset(m, 0, sizeof(Mach));
-	m->machno = machno;
-	m->pdb = pdb;
-	m->gdt = gdt;
-	m->perf.period = 1;
+    machno = m->machno;
+    pdb = m->pdb;
+    gdt = m->gdt;
+    memset(m, 0, sizeof(Mach));
+    m->machno = machno;
+    m->pdb = pdb;
+    m->gdt = gdt;
+    m->perf.period = 1;
 
-	/*
-	 * For polled uart output at boot, need
-	 * a default delay constant. 100000 should
-	 * be enough for a while. Cpuidentify will
-	 * calculate the real value later.
-	 */
-	m->loopconst = 100000;
+    /*
+     * For polled uart output at boot, need
+     * a default delay constant. 100000 should
+     * be enough for a while. Cpuidentify will
+     * calculate the real value later.
+     */
+    m->loopconst = 100000;
 }
 
 

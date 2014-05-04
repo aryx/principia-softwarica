@@ -32,16 +32,16 @@ bindenvsrv(void)
 static void
 swapproc(void)
 {
-	int fd;
+    int fd;
 
-	fd = open("#c/swap", OWRITE);
-	if(fd < 0){
-		warning("opening #c/swap");
-		return;
-	}
-	if(write(fd, "start", 5) <= 0)
-		warning("starting swap kproc");
-	close(fd);
+    fd = open("#c/swap", OWRITE);
+    if(fd < 0){
+        warning("opening #c/swap");
+        return;
+    }
+    if(write(fd, "start", 5) <= 0)
+        warning("starting swap kproc");
+    close(fd);
 }
 
 static void

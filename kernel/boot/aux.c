@@ -5,24 +5,24 @@
 void
 warning(char *s)
 {
-	char buf[ERRMAX];
+    char buf[ERRMAX];
 
-	buf[0] = '\0';
-	errstr(buf, sizeof buf);
-	fprint(2, "boot: %s: %s\n", s, buf);
+    buf[0] = '\0';
+    errstr(buf, sizeof buf);
+    fprint(2, "boot: %s: %s\n", s, buf);
 }
 
 void
 fatal(char *s)
 {
-	char *msg;
-	char buf[ERRMAX];
+    char *msg;
+    char buf[ERRMAX];
 
-	buf[0] = '\0';
-	errstr(buf, sizeof buf);
-	msg = smprint("%s: %s", s, buf);
-	fprint(2, "boot: %s\n", msg);
-	exits(msg);			/* this will trigger a panic */
+    buf[0] = '\0';
+    errstr(buf, sizeof buf);
+    msg = smprint("%s: %s", s, buf);
+    fprint(2, "boot: %s\n", msg);
+    exits(msg);         /* this will trigger a panic */
 }
 
 void

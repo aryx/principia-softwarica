@@ -6,46 +6,46 @@ TEXT _startKADDR(SB), $0
  * Must be 4-byte aligned.
  */
 TEXT _multibootheader(SB), $0
-	LONG	$0x1BADB002			/* magic */
-	LONG	$0x00010003			/* flags */
-	LONG	$-(0x1BADB002 + 0x00010003)	/* checksum */
+        LONG    $0x1BADB002                     /* magic */
+        LONG    $0x00010003                     /* flags */
+        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
         
-	LONG	$_multibootheader-KZERO(SB)	/* header_addr */
-	LONG	$_startKADDR-KZERO(SB)		/* load_addr */
-	LONG	$edata-KZERO(SB)		/* load_end_addr */
-	LONG	$end-KZERO(SB)			/* bss_end_addr */
+        LONG    $_multibootheader-KZERO(SB)     /* header_addr */
+        LONG    $_startKADDR-KZERO(SB)          /* load_addr */
+        LONG    $edata-KZERO(SB)                /* load_end_addr */
+        LONG    $end-KZERO(SB)                  /* bss_end_addr */
         
 //      !!!entry point specification!!!
-	LONG	$_multibootentry-KZERO(SB)		/* entry_addr */
+        LONG    $_multibootentry-KZERO(SB)              /* entry_addr */
         
-	LONG	$0				/* mode_type */
-	LONG	$0				/* width */
-	LONG	$0				/* height */
-	LONG	$0				/* depth */
+        LONG    $0                              /* mode_type */
+        LONG    $0                              /* width */
+        LONG    $0                              /* height */
+        LONG    $0                              /* depth */
 
 /* 
  * the kernel expects the data segment to be page-aligned
  * multiboot bootloaders put the data segment right behind text
  */
 TEXT _multibootentry(SB), $0
-	MOVL	$etext-KZERO(SB), SI
-	MOVL	SI, DI
-	ADDL	$0xfff, DI
-	ANDL	$~0xfff, DI
-	MOVL	$edata-KZERO(SB), CX
-	SUBL	DI, CX
-	ADDL	CX, SI
-	ADDL	CX, DI
-	STD
-	REP; MOVSB
-	CLD
-	ADDL	$KZERO, BX
-	MOVL	BX, multiboot-KZERO(SB)
+        MOVL    $etext-KZERO(SB), SI
+        MOVL    SI, DI
+        ADDL    $0xfff, DI
+        ANDL    $~0xfff, DI
+        MOVL    $edata-KZERO(SB), CX
+        SUBL    DI, CX
+        ADDL    CX, SI
+        ADDL    CX, DI
+        STD
+        REP; MOVSB
+        CLD
+        ADDL    $KZERO, BX
+        MOVL    BX, multiboot-KZERO(SB)
 //      !!! Jump to _startPADDR (not _startKADDR)!!!
-	MOVL	$_startPADDR(SB), AX
-	ANDL	$~KZERO, AX
-	JMP*	AX
+        MOVL    $_startPADDR(SB), AX
+        ANDL    $~KZERO, AX
+        JMP*    AX
 
 /* multiboot structure pointer */
 TEXT multiboot(SB), $0
-	LONG	$0
+        LONG    $0

@@ -8,22 +8,22 @@
 #include "ip.h"
 
 
-static void	pktbind(Ipifc*, int, char**);
-static void	pktunbind(Ipifc*);
-static void	pktbwrite(Ipifc*, Block*, int, uchar*);
-static void	pktin(Fs*, Ipifc*, Block*);
+static void pktbind(Ipifc*, int, char**);
+static void pktunbind(Ipifc*);
+static void pktbwrite(Ipifc*, Block*, int, uchar*);
+static void pktin(Fs*, Ipifc*, Block*);
 
 Medium pktmedium =
 {
-.name=		"pkt",
-.hsize=		14,
-.mintu=		40,
-.maxtu=		4*1024,
-.maclen=	6,
-.bind=		pktbind,
-.unbind=	pktunbind,
-.bwrite=	pktbwrite,
-.pktin=		pktin,
+.name=      "pkt",
+.hsize=     14,
+.mintu=     40,
+.maxtu=     4*1024,
+.maclen=    6,
+.bind=      pktbind,
+.unbind=    pktunbind,
+.bwrite=    pktbwrite,
+.pktin=     pktin,
 };
 
 /*
@@ -33,7 +33,7 @@ Medium pktmedium =
 static void
 pktbind(Ipifc*, int argc, char **argv)
 {
-	USED(argc, argv);
+    USED(argc, argv);
 }
 
 /*
@@ -50,11 +50,11 @@ pktunbind(Ipifc*)
 static void
 pktbwrite(Ipifc *ifc, Block *bp, int, uchar*)
 {
-	/* enqueue onto the conversation's rq */
-	bp = concatblock(bp);
-	if(ifc->conv->snoopers.ref > 0)
-		qpass(ifc->conv->sq, copyblock(bp, BLEN(bp)));
-	qpass(ifc->conv->rq, bp);
+    /* enqueue onto the conversation's rq */
+    bp = concatblock(bp);
+    if(ifc->conv->snoopers.ref > 0)
+        qpass(ifc->conv->sq, copyblock(bp, BLEN(bp)));
+    qpass(ifc->conv->rq, bp);
 }
 
 /*
@@ -63,17 +63,17 @@ pktbwrite(Ipifc *ifc, Block *bp, int, uchar*)
 static void
 pktin(Fs *f, Ipifc *ifc, Block *bp)
 {
-	if(ifc->lifc == nil)
-		freeb(bp);
-	else {
-		if(ifc->conv->snoopers.ref > 0)
-			qpass(ifc->conv->sq, copyblock(bp, BLEN(bp)));
-		ipiput4(f, ifc, bp);
-	}
+    if(ifc->lifc == nil)
+        freeb(bp);
+    else {
+        if(ifc->conv->snoopers.ref > 0)
+            qpass(ifc->conv->sq, copyblock(bp, BLEN(bp)));
+        ipiput4(f, ifc, bp);
+    }
 }
 
 void
 pktmediumlink(void)
 {
-	addipmedium(&pktmedium);
+    addipmedium(&pktmedium);
 }

@@ -1,96 +1,96 @@
-#include	"u.h"
-#include	"../port/lib.h"
-#include	"mem.h"
-#include	"dat.h"
-#include	"fns.h"
-#include	"../port/error.h"
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
+#include    "../port/error.h"
 
-#include	<authsrv.h>
+#include    <authsrv.h>
 
-//char	*eve; now in core/
+//char  *eve; now in core/
 //int iseve(void) { } now in core/
 
-char	hostdomain[DOMLEN];
+char    hostdomain[DOMLEN];
 
 long
 sysfversion(ulong *arg)
 {
-	char *vers;
-	uint arglen, m, msize;
-	Chan *c;
+    char *vers;
+    uint arglen, m, msize;
+    Chan *c;
 
-	msize = arg[1];
-	vers = (char*)arg[2];
-	arglen = arg[3];
-	validaddr(arg[2], arglen, 1);
-	/* check there's a NUL in the version string */
-	if(arglen==0 || memchr(vers, 0, arglen)==0)
-		error(Ebadarg);
-	c = fdtochan(arg[0], ORDWR, 0, 1);
-	if(waserror()){
-		cclose(c);
-		nexterror();
-	}
+    msize = arg[1];
+    vers = (char*)arg[2];
+    arglen = arg[3];
+    validaddr(arg[2], arglen, 1);
+    /* check there's a NUL in the version string */
+    if(arglen==0 || memchr(vers, 0, arglen)==0)
+        error(Ebadarg);
+    c = fdtochan(arg[0], ORDWR, 0, 1);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
 
-	m = mntversion(c, vers, msize, arglen);
+    m = mntversion(c, vers, msize, arglen);
 
-	cclose(c);
-	poperror();
-	return m;
+    cclose(c);
+    poperror();
+    return m;
 }
 
 long
 sys_fsession(ulong *arg)
 {
-	/* deprecated; backwards compatibility only */
+    /* deprecated; backwards compatibility only */
 
-	if(arg[2] == 0)
-		error(Ebadarg);
-	validaddr(arg[1], arg[2], 1);
-	((uchar*)arg[1])[0] = '\0';
-	return 0;
+    if(arg[2] == 0)
+        error(Ebadarg);
+    validaddr(arg[1], arg[2], 1);
+    ((uchar*)arg[1])[0] = '\0';
+    return 0;
 }
 
 long
 sysfauth(ulong *arg)
 {
-	Chan *c, *ac;
-	char *aname;
-	int fd;
+    Chan *c, *ac;
+    char *aname;
+    int fd;
 
-	validaddr(arg[1], 1, 0);
-	aname = validnamedup((char*)arg[1], 1);
-	if(waserror()){
-		free(aname);
-		nexterror();
-	}
-	c = fdtochan(arg[0], ORDWR, 0, 1);
-	if(waserror()){
-		cclose(c);
-		nexterror();
-	}
+    validaddr(arg[1], 1, 0);
+    aname = validnamedup((char*)arg[1], 1);
+    if(waserror()){
+        free(aname);
+        nexterror();
+    }
+    c = fdtochan(arg[0], ORDWR, 0, 1);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
 
-	ac = mntauth(c, aname);
-	/* at this point ac is responsible for keeping c alive */
-	poperror();	/* c */
-	cclose(c);
-	poperror();	/* aname */
-	free(aname);
+    ac = mntauth(c, aname);
+    /* at this point ac is responsible for keeping c alive */
+    poperror(); /* c */
+    cclose(c);
+    poperror(); /* aname */
+    free(aname);
 
-	if(waserror()){
-		cclose(ac);
-		nexterror();
-	}
+    if(waserror()){
+        cclose(ac);
+        nexterror();
+    }
 
-	fd = newfd(ac);
-	if(fd < 0)
-		error(Enofd);
-	poperror();	/* ac */
+    fd = newfd(ac);
+    if(fd < 0)
+        error(Enofd);
+    poperror(); /* ac */
 
-	/* always mark it close on exec */
-	ac->flag |= CCEXEC;
+    /* always mark it close on exec */
+    ac->flag |= CCEXEC;
 
-	return fd;
+    return fd;
 }
 
 /*
@@ -101,11 +101,11 @@ sysfauth(ulong *arg)
 long
 userwrite(char *a, int n)
 {
-	if(n!=4 || strncmp(a, "none", 4)!=0)
-		error(Eperm);
-	kstrdup(&up->user, "none");
-	up->basepri = PriNormal;
-	return n;
+    if(n!=4 || strncmp(a, "none", 4)!=0)
+        error(Eperm);
+    kstrdup(&up->user, "none");
+    up->basepri = PriNormal;
+    return n;
 }
 
 /*
@@ -116,35 +116,35 @@ userwrite(char *a, int n)
 long
 hostownerwrite(char *a, int n)
 {
-	char buf[128];
+    char buf[128];
 
-	if(!iseve())
-		error(Eperm);
-	if(n <= 0 || n >= sizeof buf)
-		error(Ebadarg);
-	memmove(buf, a, n);
-	buf[n] = 0;
+    if(!iseve())
+        error(Eperm);
+    if(n <= 0 || n >= sizeof buf)
+        error(Ebadarg);
+    memmove(buf, a, n);
+    buf[n] = 0;
 
-	renameuser(eve, buf);
-	kstrdup(&eve, buf);
-	kstrdup(&up->user, buf);
-	up->basepri = PriNormal;
-	return n;
+    renameuser(eve, buf);
+    kstrdup(&eve, buf);
+    kstrdup(&up->user, buf);
+    up->basepri = PriNormal;
+    return n;
 }
 
 long
 hostdomainwrite(char *a, int n)
 {
-	char buf[DOMLEN];
+    char buf[DOMLEN];
 
-	if(!iseve())
-		error(Eperm);
-	if(n >= DOMLEN)
-		error(Ebadarg);
-	memset(buf, 0, DOMLEN);
-	strncpy(buf, a, n);
-	if(buf[0] == 0)
-		error(Ebadarg);
-	memmove(hostdomain, buf, DOMLEN);
-	return n;
+    if(!iseve())
+        error(Eperm);
+    if(n >= DOMLEN)
+        error(Ebadarg);
+    memset(buf, 0, DOMLEN);
+    strncpy(buf, a, n);
+    if(buf[0] == 0)
+        error(Ebadarg);
+    memmove(hostdomain, buf, DOMLEN);
+    return n;
 }

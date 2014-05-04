@@ -10,8 +10,8 @@
 
 PCArch* arch;
 
-void	(*fprestore)(ArchFPsave*);
-void	(*fpsave)(ArchFPsave*);
+void    (*fprestore)(ArchFPsave*);
+void    (*fpsave)(ArchFPsave*);
 
 int (*_pcmspecial)(char*, ISAConf*);
 void (*_pcmspecialclose)(int);
@@ -22,24 +22,24 @@ void (*_pcmspecialclose)(int);
 void
 cpuidprint(void)
 {
-	int i;
-	char buf[128];
+    int i;
+    char buf[128];
 
-	i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", m->machno,
-		m->machno < 10? " ": "", m->cpumhz);
-	if(m->cpuidid[0])
-		i += sprint(buf+i, "%12.12s ", m->cpuidid);
-	seprint(buf+i, buf + sizeof buf - 1,
-		"%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
-		m->cpuidtype, m->cpuidax, m->cpuiddx);
-	print(buf);
+    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", m->machno,
+        m->machno < 10? " ": "", m->cpumhz);
+    if(m->cpuidid[0])
+        i += sprint(buf+i, "%12.12s ", m->cpuidid);
+    seprint(buf+i, buf + sizeof buf - 1,
+        "%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
+        m->cpuidtype, m->cpuidax, m->cpuiddx);
+    print(buf);
 }
 
 
 ulong
 µs(void)
 {
-	return fastticks2us((*arch->fastclock)(nil));
+    return fastticks2us((*arch->fastclock)(nil));
 }
 
 
@@ -47,10 +47,10 @@ ulong
 static void
 simplecycles(uvlong*x)
 {
-	*x = m->ticks;
+    *x = m->ticks;
 }
 
-void	(*cycles)(uvlong*) = simplecycles;
+void    (*cycles)(uvlong*) = simplecycles;
 
 /*
  * 386 has no compare-and-swap instruction.
@@ -60,13 +60,13 @@ void	(*cycles)(uvlong*) = simplecycles;
 int
 cmpswap386(long *addr, long old, long new)
 {
-	int r, s;
+    int r, s;
 
-	s = splhi();
-	if(r = (*addr == old))
-		*addr = new;
-	splx(s);
-	return r;
+    s = splhi();
+    if(r = (*addr == old))
+        *addr = new;
+    splx(s);
+    return r;
 }
 
 /*
@@ -91,8 +91,8 @@ int doi8253set = 1;
 void
 timerset(Tval x)
 {
-	if(doi8253set)
-		(*arch->timerset)(x);
+    if(doi8253set)
+        (*arch->timerset)(x);
 }
 
 
@@ -105,7 +105,7 @@ timerset(Tval x)
 int
 pcmspecial(char *idstr, ISAConf *isa)
 {
-	return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
+    return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
 }
 
 /*
@@ -114,8 +114,8 @@ pcmspecial(char *idstr, ISAConf *isa)
 //void
 //pcmspecialclose(int a)
 //{
-//	if (_pcmspecialclose != nil)
-//		_pcmspecialclose(a);
+//  if (_pcmspecialclose != nil)
+//      _pcmspecialclose(a);
 //}
 
 
@@ -125,7 +125,7 @@ pcmspecial(char *idstr, ISAConf *isa)
 uvlong
 devarch_fastticks(uvlong *hz)
 {
-	return (*arch->fastclock)(hz);
+    return (*arch->fastclock)(hz);
 }
 
 
