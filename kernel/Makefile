@@ -2,6 +2,9 @@
 all:
 	make sync
 
+visual:
+	~/pfff/codemap -ss 2 -no_legend -filter nw -ft 0.001 -nblines_file 60000 .
+
 ##############################################################################
 # Generic Literate programming variables
 ##############################################################################
