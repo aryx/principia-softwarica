@@ -767,20 +767,6 @@ uartgetc(void)
     return consuart->phys->getc(consuart);
 }
 
-//void
-//uartputc(int c)
-//{
-//  char c2;
-//
-//  if(consuart == nil || consuart->phys->putc == nil) {
-//      c2 = c;
-//      if (lprint)
-//          (*lprint)(&c2, 1);
-//      return;
-//  }
-//  consuart->phys->putc(consuart, c);
-//}
-
 void
 uartputs(char *s, int n)
 {

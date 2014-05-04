@@ -105,13 +105,6 @@ bios32locate(void)
     return 0;
 }
 
-//void
-//BIOS32close(BIOS32si* si)
-//{
-//  vunmap(si->base, si->length);
-//  free(si);
-//}
-
 BIOS32si*
 bios32open(char* id)
 {

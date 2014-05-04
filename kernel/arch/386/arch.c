@@ -20,8 +20,6 @@ int (*_pcmspecial)(char*, ISAConf*);
 void (*_pcmspecialclose)(int);
 
 
-
-
 void
 cpuidprint(void)
 {
@@ -112,17 +110,6 @@ pcmspecial(char *idstr, ISAConf *isa)
 }
 
 /*
- *  call either the pcmcia or pccard device teardown
- */
-//void
-//pcmspecialclose(int a)
-//{
-//  if (_pcmspecialclose != nil)
-//      _pcmspecialclose(a);
-//}
-
-
-/*
  *  return value and speed of timer set in arch->clockenable
  */
 uvlong
@@ -130,6 +117,4 @@ devarch_fastticks(uvlong *hz)
 {
     return (*arch->fastclock)(hz);
 }
-
-
 /*e: arch.c */

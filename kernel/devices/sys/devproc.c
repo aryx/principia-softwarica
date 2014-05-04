@@ -11,7 +11,6 @@
 #include    <trace.h>
 #include    "tos.h"
 #include    "ureg.h"
-//#include  "../port/edf.h"
 
 struct Mntwalk              /* state for /proc/#/ns */
 {

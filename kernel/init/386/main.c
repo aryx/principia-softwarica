@@ -10,14 +10,10 @@
 
 #include        "io.h"
 #include        "ureg.h"
-
 #include        "pool.h"
-
 #include        "init.h"
 #include        "reboot.h"
-
 #include        "mp.h"
-
 #include        <tos.h>
 
 void bootargs(void*);

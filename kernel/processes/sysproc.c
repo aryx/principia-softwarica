@@ -9,7 +9,6 @@
 /*e: kernel basic includes */
 
 #include    "tos.h"
-//#include  "../port/edf.h"
 #include    <a.out.h>
 
 enum

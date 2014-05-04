@@ -13,18 +13,4 @@
 #include "../port/portfns_network.h"
 #include "../port/portfns_init.h"
 
-//unused and undefined:
-//void    addwatchdog(Watchdog*);
-//long    clrfpintr(void);
-//int   decrypt(void*, void*, int);
-//int   encrypt(void*, void*, int);
-//int   eqchan(Chan*, Chan*, int);
-//void    logopen(Log*);
-//void    logclose(Log*);
-//char*   logctl(Log*, int, char**, Logflag*);
-//void    logn(Log*, int, void*, int);
-//long    logread(Log*, void*, ulong, long);
-//void    log(Log*, int, char*, ...);
-//void    resched(char*);
-//void    savefpregs(FPsave*);
 /*e: portfns.h */

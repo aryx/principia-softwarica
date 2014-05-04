@@ -186,12 +186,6 @@ TEXT mfence(SB), $0
         BYTE $0xf0
         RET
 
-//TEXT xchgw(SB), $0
-//      MOVL    v+4(FP), AX
-//      MOVL    p+0(FP), BX
-//      XCHGW   AX, (BX)
-//      RET
-
 TEXT cmpswap486(SB), $0
         MOVL    addr+0(FP), BX
         MOVL    old+4(FP), AX

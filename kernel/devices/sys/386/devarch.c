@@ -112,15 +112,6 @@ checkport(int start, int end)
 
 
 
-
-
-
-
-
-
-
-
-
 static Chan*
 archattach(char* spec)
 {

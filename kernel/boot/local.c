@@ -3,12 +3,6 @@
 #include <libc.h>
 #include "../boot/boot.h"
 
-//void
-//configlocal(Method *mp)
-//{
-//  USED(mp);
-//}
-
 int
 connectlocal(void)
 {

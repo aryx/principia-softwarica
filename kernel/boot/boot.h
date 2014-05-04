@@ -11,16 +11,6 @@ int open_safe(char* path, int flag);
 void print_safe(int fd, char* str);
 void close_safe(int fd);
 
-// what bootpcf.c used to expect
-//typedef struct Method Method;
-//struct Method
-//{
-//  char  *name;
-//  void  (*config)(Method*);
-//  int (*connect)(void);
-//  char  *arg;
-//};
-
 /* methods */
 // local.c:
 extern int  connectlocal(void);

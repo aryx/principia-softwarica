@@ -43,44 +43,6 @@ struct Elemlist
 
 #define SEP(c) ((c) == 0 || (c) == '/')
 
-//unused
-//static void
-//dumpmount(void)       /* DEBUGGING */
-//{
-//  Pgrp *pg;
-//  Mount *t;
-//  Mhead **h, **he, *f;
-//
-//  if(up == nil){
-//      print("no process for dumpmount\n");
-//      return;
-//  }
-//  pg = up->pgrp;
-//  if(pg == nil){
-//      print("no pgrp for dumpmount\n");
-//      return;
-//  }
-//  rlock(&pg->ns);
-//  if(waserror()){
-//      runlock(&pg->ns);
-//      nexterror();
-//  }
-//
-//  he = &pg->mnthash[MNTHASH];
-//  for(h = pg->mnthash; h < he; h++){
-//      for(f = *h; f; f = f->hash){
-//          print("head: %#p: %s %#llux.%lud %C %lud -> \n", f,
-//              f->from->path->s, f->from->qid.path,
-//              f->from->qid.vers, devtab[f->from->type]->dc,
-//              f->from->dev);
-//          for(t = f->mount; t; t = t->next)
-//              print("\t%#p: %s (umh %#p) (path %#.8llux dev %C %lud)\n", t, t->to->path->s, t->to->umh, t->to->qid.path, devtab[t->to->type]->dc, t->to->dev);
-//      }
-//  }
-//  poperror();
-//  runlock(&pg->ns);
-//}
-
 char*
 chanpath(Chan *c)
 {

@@ -10,7 +10,6 @@
 
 #include "io.h"
 #include "ureg.h"
-
 #include "../port/sd.h"
 
 extern SDifc sdataifc;

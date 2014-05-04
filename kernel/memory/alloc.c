@@ -70,25 +70,6 @@ setrealloctag(void *v, ulong pc)
     u[-Npadlong+ReallocOffset] = pc;
 }
 
-//unused:
-//ulong
-//getmalloctag(void *v)
-//{
-//  USED(v);
-//  if(Npadlong <= MallocOffset)
-//      return ~0;
-//  return ((ulong*)v)[-Npadlong+MallocOffset];
-//}
-//
-//ulong
-//getrealloctag(void *v)
-//{
-//  USED(v);
-//  if(Npadlong <= ReallocOffset)
-//      return ((ulong*)v)[-Npadlong+ReallocOffset];
-//  return ~0;
-//}
-
 //*****************************************************************************
 // Pool wrappers
 //*****************************************************************************
@@ -194,16 +175,6 @@ msize(void *v)
 {
     return poolmsize(mainmem, (ulong*)v-Npadlong)-Npadlong*sizeof(ulong);
 }
-
-//unused:
-//void*
-//calloc(ulong n, ulong szelem)
-//{
-//  void *v;
-//  if(v = mallocz(n*szelem, 1))
-//      setmalloctag(v, getcallerpc(&n));
-//  return v;
-//}
 
 
 //*****************************************************************************

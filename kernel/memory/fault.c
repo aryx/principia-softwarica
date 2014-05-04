@@ -10,7 +10,6 @@
 
 void        pio(Segment *, ulong, ulong, Page **);
 
-
 int
 fault(ulong addr, bool read)
 {

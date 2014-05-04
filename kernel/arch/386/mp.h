@@ -62,41 +62,12 @@ struct PCMPintr {     /* interrupt table entry */
   uchar intin;      /* destination APIC [L]INTIN# */
 };
 
-//struct PCMPsasm {     /* system address space mapping entry */
-//  uchar type;     /* entry type (128) */
-//  uchar length;     /* of this entry (20) */
-//  uchar busno;      /* bus id */
-//  uchar addrtype;
-//  ulong addrbase[2];
-//  ulong addrlength[2];
-//};
-
-//struct PCMPhierarchy {      /* bus hierarchy descriptor entry */
-//  uchar type;     /* entry type (129) */
-//  uchar length;     /* of this entry (8) */
-//  uchar busno;      /* bus id */
-//  uchar info;     /* bus info */
-//  uchar parent;     /* parent bus */
-//  uchar reserved[3];
-//};
-
-//struct PCMPcbasm {      /* compatibility bus address space modifier entry */
-//  uchar type;     /* entry type (130) */
-//  uchar length;     /* of this entry (8) */
-//  uchar busno;      /* bus id */
-//  uchar modifier;   /* address modifier */
-//  ulong range;      /* predefined range list */
-//};
-
 typedef struct PCMP PCMP;
 typedef struct _MP_ _MP_;
 typedef struct PCMPprocessor PCMPprocessor;
 typedef struct PCMPbus PCMPbus;
 typedef struct PCMPioapic PCMPioapic;
 typedef struct PCMPintr PCMPintr;
-//typedef struct PCMPsasm PCMPsasm;
-//typedef struct PCMPhierarchy PCMPhierarchy;
-//typedef struct PCMPcbasm PCMPcbasm;
 
 enum {          /* table entry types */
   PcmpPROCESSOR = 0x00,   /* one entry per processor */

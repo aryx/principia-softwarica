@@ -10,7 +10,6 @@
 
 #define MAXRPC (IOHDRSZ+8192)
 
-
 Mnt*    mntchk(Chan*);
 void    mntdirfix(uchar*, Chan*);
 Mntrpc* mntflushalloc(Mntrpc*, ulong);

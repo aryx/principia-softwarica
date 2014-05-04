@@ -3,8 +3,6 @@
  * Some machine instructions not handled by 8[al].
  */
 #define OP16            BYTE $0x66
-
-        
         
 /*
  * Port I/O.
@@ -18,14 +16,6 @@ TEXT inb(SB), $0
         XORL    AX, AX
         INB
         RET
-
-//TEXT insb(SB), $0
-//      MOVL    port+0(FP), DX
-//      MOVL    address+4(FP), DI
-//      MOVL    count+8(FP), CX
-//      CLD
-//      REP;    INSB
-//      RET
 
 TEXT ins(SB), $0
         MOVL    port+0(FP), DX
@@ -46,27 +36,11 @@ TEXT inl(SB), $0
         INL
         RET
 
-//TEXT insl(SB), $0
-//      MOVL    port+0(FP), DX
-//      MOVL    address+4(FP), DI
-//      MOVL    count+8(FP), CX
-//      CLD
-//      REP;    INSL
-//      RET
-
 TEXT outb(SB), $0
         MOVL    port+0(FP), DX
         MOVL    byte+4(FP), AX
         OUTB
         RET
-
-//TEXT outsb(SB), $0
-//      MOVL    port+0(FP), DX
-//      MOVL    address+4(FP), SI
-//      MOVL    count+8(FP), CX
-//      CLD
-//      REP;    OUTSB
-//      RET
 
 TEXT outs(SB), $0
         MOVL    port+0(FP), DX
@@ -87,14 +61,4 @@ TEXT outl(SB), $0
         MOVL    long+4(FP), AX
         OUTL
         RET
-
-//TEXT outsl(SB), $0
-//      MOVL    port+0(FP), DX
-//      MOVL    address+4(FP), SI
-//      MOVL    count+8(FP), CX
-//      CLD
-//      REP;    OUTSL
-//      RET
-
-
 /*e: l_io.s */

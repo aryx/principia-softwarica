@@ -9,8 +9,8 @@
 /*e: kernel basic includes */
 
 // forward decl
-int     ispages(void*);
-void        portcountpagerefs(ulong*, int);
+int ispages(void*);
+void portcountpagerefs(ulong*, int);
 
 //*****************************************************************************
 // Initialization

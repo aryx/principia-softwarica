@@ -9,7 +9,6 @@
 /*e: kernel basic includes */
 #include "io.h"
 #include "ureg.h"
-
 #include "../port/sd.h"
 
 static int
@@ -255,56 +254,6 @@ scsionline(SDunit* unit)
     else
         return 0;
 }
-
-//int
-//scsiexec(SDunit* unit, int write, uchar* cmd, int clen, void* data, int* dlen)
-//{
-//  SDreq *r;
-//  int status;
-//
-//  if((r = malloc(sizeof(SDreq))) == nil)
-//      return SDmalloc;
-//  r->unit = unit;
-//  r->lun = cmd[1]>>5;     /* ??? */
-//  r->write = write;
-//  memmove(r->cmd, cmd, clen);
-//  r->clen = clen;
-//  r->data = data;
-//  if(dlen)
-//      r->dlen = *dlen;
-//  r->flags = 0;
-//
-//  r->status = ~0;
-//
-//  /*
-//   * Call the device-specific I/O routine.
-//   * There should be no calls to 'error()' below this
-//   * which percolate back up.
-//   */
-//  switch(status = unit->dev->ifc->rio(r)){
-//  case SDok:
-//      if(dlen)
-//          *dlen = r->rlen;
-//      /*FALLTHROUGH*/
-//  case SDcheck:
-//      /*FALLTHROUGH*/
-//  default:
-//      /*
-//       * It's more complicated than this. There are conditions
-//       * which are 'ok' but for which the returned status code
-//       * is not 'SDok'.
-//       * Also, not all conditions require a reqsense, might
-//       * need to do a reqsense here and make it available to the
-//       * caller somehow.
-//       *
-//       * Mañana.
-//       */
-//      break;
-//  }
-//  sdfree(r);
-//
-//  return status;
-//}
 
 static void
 scsifmt10(SDreq *r, int write, int lun, ulong nb, uvlong bno)

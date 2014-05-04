@@ -862,41 +862,6 @@ umbfree(ulong addr, int size)
     mapfree(&rmapumb, PADDR(addr), size);
 }
 
-//ulong
-//umbrwmalloc(ulong addr, int size, int align)
-//{
-//  ulong a;
-//  uchar o[2], *p;
-//
-//  if(a = mapalloc(&rmapumbrw, addr, size, align))
-//      return(ulong)KADDR(a);
-//
-//  /*
-//   * Perhaps the memory wasn't visible before
-//   * the interface is initialised, so try again.
-//   */
-//  if((a = umbmalloc(addr, size, align)) == 0)
-//      return 0;
-//  p = (uchar*)a;
-//  o[0] = p[0];
-//  p[0] = 0xCC;
-//  o[1] = p[size-1];
-//  p[size-1] = 0xCC;
-//  if(p[0] == 0xCC && p[size-1] == 0xCC){
-//      p[0] = o[0];
-//      p[size-1] = o[1];
-//      return a;
-//  }
-//  umbfree(a, size);
-//
-//  return 0;
-//}
-
-//void
-//umbrwfree(ulong addr, int size)
-//{
-//  mapfree(&rmapumbrw, PADDR(addr), size);
-//}
 
 /*
  * Give out otherwise-unused physical address space
@@ -917,12 +882,6 @@ upaalloc(int size, int align)
     return a;
 }
 
-//void
-//upafree(ulong pa, int size)
-//{
-//  mapfree(&rmapupa, pa, size);
-//}
-
 void
 upareserve(ulong pa, int size)
 {
@@ -940,11 +899,5 @@ upareserve(ulong pa, int size)
             mapfree(&rmapupa, a, size);
     }
 }
-
-//void
-//memorysummary(void)
-//{
-//  memdebug();
-//}
 
 /*e: memory.c */

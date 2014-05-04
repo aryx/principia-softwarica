@@ -8,7 +8,7 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
-//#include  "../port/edf.h"
+
 #include    <trace.h>
 
 // hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)

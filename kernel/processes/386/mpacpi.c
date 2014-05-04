@@ -13,6 +13,7 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
+
 #include "io.h"
 #include "mp.h"
 #include "mpacpi.h"

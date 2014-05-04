@@ -208,17 +208,6 @@ dmasetup(int chan, void *va, long len, int isread)
     return len;
 }
 
-//int
-//dmadone(int chan)
-//{
-//  DMA *dp;
-//
-//  dp = &dma[(chan>>2)&1];
-//  chan = chan & 3;
-//
-//  return inb(dp->cmd) & (1<<chan);
-//}
-
 /*
  *  this must be called after a dma has been completed.
  *
@@ -253,18 +242,4 @@ dmaend(int chan)
     xp->len = 0;
 }
 
-/*
-//int
-//dmacount(int chan)
-//{
-//  int     retval;
-//  DMA     *dp;
-// 
-//  dp = &dma[(chan>>2)&1];
-//  outb(dp->cbp, 0);
-//  retval = inb(dp->count[chan]);
-//  retval |= inb(dp->count[chan]) << 8;
-//  return((retval<<dp->shift)+1);
-//}
- */
 /*e: dma.c */

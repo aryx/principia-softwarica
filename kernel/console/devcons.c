@@ -1145,13 +1145,6 @@ nrand(int n)
     return (randn>>16) % n;
 }
 
-//int
-//rand(void)
-//{
-//  nrand(1);
-//  return randn;
-//}
-
 static uvlong uvorder = 0x0001020304050607ULL;
 
 static uchar*
@@ -1195,18 +1188,6 @@ le2long(long *to, uchar *f)
     return f+sizeof(long);
 }
 
-//static uchar*
-//long2le(uchar *t, long from)
-//{
-//  uchar *f, *o;
-//  int i;
-//
-//  f = (uchar*)&from;
-//  o = (uchar*)&order;
-//  for(i = 0; i < sizeof(long); i++)
-//      t[i] = f[o[i]];
-//  return t+sizeof(long);
-//}
 
 char *Ebadtimectl = "bad time control";
 
