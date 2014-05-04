@@ -5,6 +5,7 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+#include "../port/error.h"
 /*e: kernel basic includes */
 //TODO: where this is set??
 int idle_spin, idle_if_nproc;

@@ -5,9 +5,9 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+#include "../port/error.h"
 /*e: kernel basic includes */
 #include "io.h"
-#include "../port/error.h"
 
 /*
  * 8250 UART and compatibles.

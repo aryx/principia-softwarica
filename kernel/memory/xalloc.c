@@ -5,6 +5,7 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+#include "../port/error.h"
 /*e: kernel basic includes */
 // Memory allocator for long lived allocated structures
 // e.g. array or Proc (procalloc), array of Pages (palloc.pages), etc

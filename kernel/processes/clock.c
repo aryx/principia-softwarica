@@ -5,10 +5,10 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+#include "../port/error.h"
 /*e: kernel basic includes */
 #include "io.h"
 #include "ureg.h"
-#include "../port/error.h"
 
 enum {
     Maxtimerloops = 20*1000,

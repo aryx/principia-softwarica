@@ -5,8 +5,8 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+#include "../port/error.h"
 /*e: kernel basic includes */
-#include    "../port/error.h"
 
 // see also sysbrk_ in sysproc.c
 

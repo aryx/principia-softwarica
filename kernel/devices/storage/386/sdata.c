@@ -5,8 +5,8 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-/*e: kernel basic includes */
 #include "../port/error.h"
+/*e: kernel basic includes */
 
 #include "io.h"
 #include "ureg.h"

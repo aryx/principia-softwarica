@@ -8,6 +8,7 @@
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+#include "../port/error.h"
 /*e: kernel basic includes */
 #include "/sys/src/libc/9syscall/sys.h"
 extern  char* sysctab[];
