@@ -2,6 +2,8 @@
 # on a MAC
 DISK="/Volumes/DISK Image"
 
+CONFIG=pcf
+
 all:
 	make compile && make disk && make run
 
@@ -17,16 +19,14 @@ disk:
 	cp -a ROOT/* $(DISK)/
 	umount -f $(DISK)
 
-
 run:
 	qemu-system-i386 -smp 4 -m 256 \
-           -kernel sys/src/9/pc/9pcf \
+           -kernel sys/src/9/pc/9$(CONFIG) \
            -hda dosdisk.img 
-
 #-fda ~/floppy.img
 #-hda ~/plan9.raw.img
-# -cdrom plan9.iso? does not work?
-#(cd sys/src/9/pc/; make qemu)
+#-cdrom plan9.iso? does not work?
+
 
 
 visual:
@@ -35,7 +35,7 @@ visual:
 graph:
 	~/pfff/codegraph -derived_data -lang clang2 -build .
 
-#include also libc, lib_networking, lib_memlayer, lib_memdraw, lib_draw, libmp?
+#todo? add libc, lib_networking, lib_memlayer, lib_memdraw, lib_draw, libmp?
 graph2:
 	~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
 check2:
@@ -60,8 +60,8 @@ clangfiles:
 	mv sys/src/9/pc/reboot.h.clang2 kernel/init/386/
 	cp sys/src/9/pc/errstr.c kernel/core
 	mv sys/src/9/pc/errstr.c.clang2 kernel/core
-	cp sys/src/9/pc/pcf.c kernel/conf
-	cp sys/src/9/pc/pcf.rootc.c kernel/conf
+	cp sys/src/9/pc/$(CONFIG).c kernel/conf
+	cp sys/src/9/pc/$(CONFIG).rootc.c kernel/conf
 	mv sys/src/9/pc/*.clang2 kernel/conf
 #	~/pfff/pfff_test -analyze_make_trace make_trace.txt > compile_commands.json
 
