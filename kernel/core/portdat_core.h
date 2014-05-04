@@ -105,7 +105,7 @@ struct Mach
 
   struct ArchMach;
 
-	/* stats */
+    /* stats */
   int tlbfault;
   int tlbpurge;
   int pfault;
@@ -152,7 +152,7 @@ int iseve(void);
 extern  char  hostdomain[];
 
 // defined in ???
-extern ulong	kerndate; 
+extern ulong    kerndate; 
 
 // used to be in devcons.c, but used also by edf.c
 extern int panicking;

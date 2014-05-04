@@ -329,9 +329,9 @@ struct Dirtab
 
 enum
 {
-	TAGSHIFT = 5,			/* ulong has to be 32 bits */
-	TAGMASK = (1<<TAGSHIFT)-1,
-	NMASK = (64*1024)>>TAGSHIFT,
+    TAGSHIFT = 5,           /* ulong has to be 32 bits */
+    TAGMASK = (1<<TAGSHIFT)-1,
+    NMASK = (64*1024)>>TAGSHIFT,
 };
 
 /*
@@ -348,16 +348,16 @@ enum
 // actually internal to devmnt.c and mnt.c
 struct Mntalloc
 {
-	Mnt*	list;		/* Mount devices in use */
-	Mnt*	mntfree;	/* Free list */
-	Mntrpc*	rpcfree;
-	int	nrpcfree;
-	int	nrpcused;
-	ulong	id;
-	ulong	tagmask[NMASK];
+    Mnt*    list;       /* Mount devices in use */
+    Mnt*    mntfree;    /* Free list */
+    Mntrpc* rpcfree;
+    int nrpcfree;
+    int nrpcused;
+    ulong   id;
+    ulong   tagmask[NMASK];
 
   // extra
-	Lock;
+    Lock;
 
 };
 extern struct Mntalloc mntalloc;

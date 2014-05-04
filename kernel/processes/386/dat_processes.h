@@ -107,17 +107,17 @@ struct Vctl {
 
 struct I8253
 {
-	ulong	period;		/* current clock period */
-	bool	enabled;
-	uvlong	hz;
+    ulong   period;     /* current clock period */
+    bool    enabled;
+    uvlong  hz;
 
-	ushort	last;		/* last value of clock 1 */
-	uvlong	ticks;		/* cumulative ticks of counter 1 */
+    ushort  last;       /* last value of clock 1 */
+    uvlong  ticks;      /* cumulative ticks of counter 1 */
 
-	ulong	periodset;
+    ulong   periodset;
 
   // extra
-	Lock;
+    Lock;
 };
 //IMPORTANT: I8253 i8253; (in i8253.c)
 

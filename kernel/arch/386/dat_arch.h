@@ -11,30 +11,30 @@ struct IOMap
   // TODO: why this has to be the first field of IOMap?! otherwise get fault??
 
   // list<ref<IOMap>> of Iomapalloc.free
-	IOMap	*next;
+    IOMap   *next;
 
-	char	tag[13];
-	ulong	start;
-	ulong	end;
+    char    tag[13];
+    ulong   start;
+    ulong   end;
 
   // extra
-	bool	reserved;
+    bool    reserved;
 
 };
 
 struct Iomapalloc
 {
   // ??
-	IOMap	*m;
+    IOMap   *m;
 
   // list<ref<IOMap>> (next = IOMap.next)
-	IOMap	*free;
+    IOMap   *free;
   // array<IOMAP> pool
-	IOMap	maps[32];	/* some initial free maps */
+    IOMap   maps[32];   /* some initial free maps */
 
   // extra
-	Lock;
-	QLock	ql;		/* lock for reading map */
+    Lock;
+    QLock   ql;     /* lock for reading map */
 };
 
 // array<IMap> alloced statically in maps
@@ -143,17 +143,17 @@ struct BIOS32ci {   /* BIOS32 Calling Interface */
  */
 
 enum {
-	Paddr=		0x70,	/* address port */
-	PdataPort=		0x71,	/* data port */
+    Paddr=      0x70,   /* address port */
+    PdataPort=      0x71,   /* data port */
 };
 extern Lock nvrtlock;
 
 
 struct X86type {
-	int	family;
-	int	model;
-	int	aalcycles;
-	char*	name;
+    int family;
+    int model;
+    int aalcycles;
+    char*   name;
 };
 
 extern X86type *cputype;
