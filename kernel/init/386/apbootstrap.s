@@ -1,3 +1,4 @@
+/*s: apbootstrap.s */
 /*
  * Start an Application Processor. This must be placed on a 4KB boundary
  * somewhere in the 1st MB of conventional memory (APBOOTSTRAP). However,
@@ -108,3 +109,4 @@ TEXT gdt(SB), $0
 TEXT gdtptr(SB), $0
         WORD    $(3*8-1)
         LONG    $gdt-KZERO(SB)
+/*e: apbootstrap.s */

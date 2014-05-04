@@ -1,3 +1,4 @@
+/*s: devproc.c */
 #include    "u.h"
 #include    <trace.h>
 #include    "tos.h"
@@ -1589,3 +1590,4 @@ txt2data(Proc *p, Segment *s)
 
     return ps;
 }
+/*e: devproc.c */

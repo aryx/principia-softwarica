@@ -1,3 +1,4 @@
+/*s: dat_buses.h */
 
 /*
  *  a parsed plan9.ini line
@@ -16,3 +17,4 @@ struct ISAConf {
   int nopt;
   char  *opt[NISAOPT];
 };
+/*e: dat_buses.h */

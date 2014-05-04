@@ -1,3 +1,4 @@
+/*s: main_processes.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -136,3 +137,4 @@ idlehands(void)
         idle_if_nproc && conf.nmach >= idle_if_nproc)
         halt();
 }
+/*e: main_processes.c */

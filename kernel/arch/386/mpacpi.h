@@ -1,3 +1,4 @@
+/*s: mpacpi.h */
 /*
  * ACPI definitions
  *
@@ -61,3 +62,4 @@ struct Rsd {        /* Root System Description * */
   uchar xchecksum;    /* XSDT */
   uchar pad[3];     /* reserved */
 };
+/*e: mpacpi.h */

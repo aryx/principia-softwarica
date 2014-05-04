@@ -1,3 +1,4 @@
+/*s: dat_arch.h */
 
 //*****************************************************************************
 // IO Map
@@ -175,3 +176,4 @@ struct DevConf
   int nports;     /* Number of ports */
   Devport *ports;     /* The ports themselves */
 };
+/*e: dat_arch.h */

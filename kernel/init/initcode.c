@@ -1,3 +1,4 @@
+/*s: initcode.c */
 /*
  * IMPORTANT!  DO NOT ADD LIBRARY CALLS TO THIS FILE.
  * The entire text image must fit on one page
@@ -38,3 +39,4 @@ startboot(char *argv0, char **argv)
     buf[sizeof buf - 1] = '\0';
     _exits(buf);
 }
+/*e: initcode.c */

@@ -1,3 +1,4 @@
+/*s: file.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -116,3 +117,4 @@ validstat(uchar *s, int n)
         validname(buf, 0);
 }
 
+/*e: file.c */

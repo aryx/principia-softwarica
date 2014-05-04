@@ -1,3 +1,4 @@
+/*s: trap.c */
 #include    "u.h"
 #include    "tos.h"
 #include    "../port/lib.h"
@@ -1107,3 +1108,4 @@ dbgpc(Proc *p)
 
     return ureg->pc;
 }
+/*e: trap.c */

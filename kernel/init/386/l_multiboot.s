@@ -1,3 +1,4 @@
+/*s: l_multiboot.s */
 #include "mem.h"
         
 TEXT _startKADDR(SB), $0
@@ -49,3 +50,4 @@ TEXT _multibootentry(SB), $0
 /* multiboot structure pointer */
 TEXT multiboot(SB), $0
         LONG    $0
+/*e: l_multiboot.s */

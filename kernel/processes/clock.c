@@ -1,3 +1,4 @@
+/*s: clock.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -286,3 +287,4 @@ ms2tk(ulong ms)
         return (ms/1000)*HZ;
     return (ms*HZ+500)/1000;
 }
+/*e: clock.c */

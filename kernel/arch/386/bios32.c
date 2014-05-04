@@ -1,3 +1,4 @@
+/*s: bios32.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -150,3 +151,4 @@ bios32open(char* id)
 
     return si;
 }
+/*e: bios32.c */

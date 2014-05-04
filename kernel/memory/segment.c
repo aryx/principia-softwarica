@@ -1,3 +1,4 @@
+/*s: segment.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -752,3 +753,4 @@ data2txt(Segment *s)
 
     return ps;
 }
+/*e: segment.c */

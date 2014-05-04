@@ -1,3 +1,4 @@
+/*s: portfns.h */
 
 #include "../port/portfns_core.h"
 #include "../port/portfns_concurrency.h"
@@ -26,3 +27,4 @@
 //void    log(Log*, int, char*, ...);
 //void    resched(char*);
 //void    savefpregs(FPsave*);
+/*e: portfns.h */

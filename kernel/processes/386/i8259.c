@@ -1,3 +1,4 @@
+/*s: i8259.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -212,3 +213,4 @@ i8259off(void)
     outb(Int1aux, 0xFF);
 }
 
+/*e: i8259.c */

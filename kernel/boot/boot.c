@@ -1,3 +1,4 @@
+/*s: boot.c */
 #include <u.h>
 #include <libc.h>
 #include "../boot/boot.h"
@@ -109,3 +110,4 @@ boot(int argc, char *argv[])
 
   exits("failed to exec init");
 }
+/*e: boot.c */

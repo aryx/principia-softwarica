@@ -1,3 +1,4 @@
+/*s: portdat_memory.h */
 
 // see also KMap in 386/ (but used in port)
 
@@ -354,3 +355,4 @@ struct Swapalloc
   Lock;       /* Free map lock */
 };
 extern struct Swapalloc swapalloc;
+/*e: portdat_memory.h */

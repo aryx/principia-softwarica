@@ -1,3 +1,4 @@
+/*s: l_io.s */
 /*
  * Some machine instructions not handled by 8[al].
  */
@@ -96,3 +97,4 @@ TEXT outl(SB), $0
 //      RET
 
 
+/*e: l_io.s */

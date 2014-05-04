@@ -1,3 +1,4 @@
+/*s: l_fp.s */
 /*
  * Some machine instructions not handled by 8[al].
  */
@@ -91,3 +92,4 @@ TEXT fpsserestore0(SB), $0                      /* enable and restore state */
         RET
 
         
+/*e: l_fp.s */

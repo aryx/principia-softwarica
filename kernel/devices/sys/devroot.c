@@ -1,3 +1,4 @@
+/*s: devroot.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -292,3 +293,4 @@ Dev rootdevtab = {
   .wstat = devwstat,
 };
 
+/*e: devroot.c */

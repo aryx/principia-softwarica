@@ -1,3 +1,4 @@
+/*s: mpacpi.c */
 /*
  * minimal acpi support for multiprocessors.
  *
@@ -252,3 +253,4 @@ mpacpi(void)
 }
 
 void    (*mpacpifunc)(void) = mpacpi;
+/*e: mpacpi.c */

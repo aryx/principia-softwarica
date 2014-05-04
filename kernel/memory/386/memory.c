@@ -1,3 +1,4 @@
+/*s: memory.c */
 /*
  * Size memory and create the kernel page-tables on the fly while doing so.
  * Called from main(), this code should only be run by the bootstrap processor.
@@ -943,3 +944,4 @@ upareserve(ulong pa, int size)
 //  memdebug();
 //}
 
+/*e: memory.c */

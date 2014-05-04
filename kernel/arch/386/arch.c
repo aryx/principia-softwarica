@@ -1,3 +1,4 @@
+/*s: arch.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -129,3 +130,4 @@ devarch_fastticks(uvlong *hz)
 }
 
 
+/*e: arch.c */

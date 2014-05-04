@@ -1,3 +1,4 @@
+/*s: pool.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -140,3 +141,4 @@ mallocsummary(void)
     poolsummary(imagmem);
 }
 
+/*e: pool.c */

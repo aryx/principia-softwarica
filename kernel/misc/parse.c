@@ -1,3 +1,4 @@
+/*s: parse.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -112,3 +113,4 @@ lookupcmd(Cmdbuf *cb, Cmdtab *ctab, int nctab)
     cmderror(cb, "unknown control message");
     return nil;
 }
+/*e: parse.c */

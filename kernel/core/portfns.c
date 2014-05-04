@@ -1,3 +1,4 @@
+/*s: portfns.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -85,3 +86,4 @@ readstr(ulong off, char *buf, ulong n, char *str)
     memmove(buf, str+off, n);
     return n;
 }
+/*e: portfns.c */

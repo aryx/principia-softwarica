@@ -1,3 +1,4 @@
+/*s: iomap.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -204,3 +205,4 @@ iofree(int port)
 //  return m->start;
 //}
 
+/*e: iomap.c */

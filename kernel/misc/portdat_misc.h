@@ -1,3 +1,4 @@
+/*s: portdat_misc.h */
 
 struct Cmdbuf
 {
@@ -12,3 +13,4 @@ struct Cmdtab
   char  *cmd; /* command name */
   int narg; /* expected #args; 0 ==> variadic */
 };
+/*e: portdat_misc.h */

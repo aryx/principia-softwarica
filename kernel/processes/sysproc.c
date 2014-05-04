@@ -1,3 +1,4 @@
+/*s: sysproc.c */
 #include    "u.h"
 #include    "tos.h"
 #include    "../port/lib.h"
@@ -1147,3 +1148,4 @@ syssemrelease(ulong *arg)
         error(Ebadarg);
     return semrelease(s, addr, delta);
 }
+/*e: sysproc.c */

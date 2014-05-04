@@ -1,3 +1,4 @@
+/*s: portfns_memory.h */
 
 // xalloc.c
 void*   xalloc(ulong);
@@ -101,3 +102,4 @@ ulong paddr(void*);
 void    putmmu(ulong, ulong, Page*);
 void    mmurelease(Proc*);
 void    mmuswitch(Proc*);
+/*e: portfns_memory.h */

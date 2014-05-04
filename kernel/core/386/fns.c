@@ -1,3 +1,4 @@
+/*s: fns.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -56,3 +57,4 @@ cistrcmp(char *a, char *b)
     return 0;
 }
 
+/*e: fns.c */

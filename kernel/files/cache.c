@@ -1,3 +1,4 @@
+/*s: cache.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -606,3 +607,4 @@ cwrite(Chan* c, uchar *buf, int len, vlong off)
         p->next = f;
     qunlock(m);
 }
+/*e: cache.c */

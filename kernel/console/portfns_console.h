@@ -1,3 +1,4 @@
+/*s: portfns_console.h */
 
 // devcons.c
 // in portfns_core.h, to remove some backward dependencies
@@ -26,3 +27,4 @@ void    rdb(void);
 // overrides _fmtlock, from lib_core/libc/fmt/fmtlock.c that are used
 // in fmt related functions
 
+/*e: portfns_console.h */

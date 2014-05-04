@@ -1,3 +1,4 @@
+/*s: allocb.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -186,3 +187,4 @@ iallocsummary(void)
 {
     print("ialloc %lud/%lud\n", ialloc.bytes, conf.ialloc);
 }
+/*e: allocb.c */

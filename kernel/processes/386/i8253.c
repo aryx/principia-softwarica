@@ -1,3 +1,4 @@
+/*s: i8253.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -380,3 +381,4 @@ perfticks(void)
         x = 0;
     return x;
 }
+/*e: i8253.c */

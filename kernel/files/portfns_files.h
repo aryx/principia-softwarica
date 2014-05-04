@@ -1,3 +1,4 @@
+/*s: portfns_files.h */
 
 // allocb.c
 Block*    allocb(int);
@@ -127,3 +128,4 @@ void    mntpntfree(Mnt*);
 // sysfile.c
 int   newfd(Chan*);
 // many sysxxx functions (used in syscalls/ without requiring extern decl)
+/*e: portfns_files.h */

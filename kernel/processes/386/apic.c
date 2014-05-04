@@ -1,3 +1,4 @@
+/*s: apic.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -448,3 +449,4 @@ lapicintroff(void)
 //  else
 //      print("lapicnmidisable: no lapic\n");
 //}
+/*e: apic.c */

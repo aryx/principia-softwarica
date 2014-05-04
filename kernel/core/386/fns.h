@@ -1,3 +1,4 @@
+/*s: fns.h */
 #include "../port/portfns.h"
 
 // used by pcf.c and main.c
@@ -243,3 +244,4 @@ void  wrmsr(int, vlong);
 
 #define L16GET(p) (((p)[1]<<8)|(p)[0])
 #define L32GET(p) (((u32int)L16GET((p)+2)<<16)|L16GET(p))
+/*e: fns.h */

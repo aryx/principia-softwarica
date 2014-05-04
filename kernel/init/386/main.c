@@ -1,3 +1,4 @@
+/*s: main.c */
 #include        "u.h"
 #include        "../port/lib.h"
 #include        "mem.h"
@@ -942,3 +943,4 @@ main(void)
         cgapost(0x99);
         schedinit();
 }
+/*e: main.c */

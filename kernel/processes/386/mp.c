@@ -1,3 +1,4 @@
+/*s: mp.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -948,3 +949,4 @@ mpshutdown(void)
     for(;;)
         idle();
 }
+/*e: mp.c */

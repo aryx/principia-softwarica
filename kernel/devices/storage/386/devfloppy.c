@@ -1,3 +1,4 @@
+/*s: devfloppy.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -1153,3 +1154,4 @@ Dev floppydevtab = {
     devremove,
     devwstat,
 };
+/*e: devfloppy.c */

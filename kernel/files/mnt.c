@@ -1,3 +1,4 @@
+/*s: mnt.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -242,3 +243,4 @@ mntversion(Chan *c, char *version, int msize, int returnlen)
 
 
 
+/*e: mnt.c */

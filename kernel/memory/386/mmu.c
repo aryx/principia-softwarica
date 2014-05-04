@@ -1,3 +1,4 @@
+/*s: mmu.c */
 /*
  * Memory mappings.  Life was easier when 2G of memory was enough.
  *
@@ -1065,3 +1066,4 @@ cankaddr(ulong pa)
     return -KZERO - pa;
 }
 
+/*e: mmu.c */

@@ -1,3 +1,4 @@
+/*s: swap.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -445,3 +446,4 @@ setswapchan(Chan *c)
 //{
 //  return swapalloc.free < conf.nswap/10;
 //}
+/*e: swap.c */

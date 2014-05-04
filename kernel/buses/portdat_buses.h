@@ -1,3 +1,4 @@
+/*s: portdat_buses.h */
 
 /*
  *  routines to access UART hardware
@@ -87,3 +88,4 @@ struct Uart
 extern  Uart* consuart;
 
 //void (*lprint)(char *, int);
+/*e: portdat_buses.h */

@@ -1,3 +1,4 @@
+/*s: portdat_files.h */
 
 /* flag values */
 enum
@@ -365,3 +366,4 @@ extern struct Mntalloc mntalloc;
 // TODO: mv in errstr.c
 extern char Esbadstat[];
 extern char Enoversion[];
+/*e: portdat_files.h */

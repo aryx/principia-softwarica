@@ -1,3 +1,4 @@
+/*s: print.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -30,3 +31,4 @@ _efgfmt(Fmt*)
 {
     return -1;
 }
+/*e: print.c */

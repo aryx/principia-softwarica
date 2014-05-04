@@ -1,3 +1,4 @@
+/*s: portdat_forward.h */
 
 typedef struct Alarms Alarms;
 typedef struct Block  Block;
@@ -76,3 +77,4 @@ typedef struct Xhdr Xhdr;
 #pragma incomplete Mntrpc
 #pragma incomplete Queue
 #pragma incomplete Timers
+/*e: portdat_forward.h */

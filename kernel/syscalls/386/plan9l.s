@@ -1,3 +1,4 @@
+/*s: plan9l.s */
 #include "mem.h"
 
 /*
@@ -50,3 +51,4 @@ TEXT _syscallintr(SB), $0
         POPL    DS
         ADDL    $8, SP                          /* pop error code and trap type */
         IRETL
+/*e: plan9l.s */

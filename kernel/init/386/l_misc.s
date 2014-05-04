@@ -1,3 +1,4 @@
+/*s: l_misc.s */
 
 /*
  * Some machine instructions not handled by 8[al].
@@ -234,3 +235,4 @@ TEXT mul64fract(SB), $0
         ADDL    DX, 0(CX)                       /* r1 += hi(a0*b0) */
         ADCL    BX, 4(CX)                       /* r2 += carry */
         RET
+/*e: l_misc.s */

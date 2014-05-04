@@ -1,3 +1,4 @@
+/*s: uarti8250.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -748,3 +749,4 @@ i8250setmouseputc(char* which, int (*putc)(Queue*, int))
     uartsetmouseputc(&i8250uart[port], putc);
 
 }
+/*e: uarti8250.c */

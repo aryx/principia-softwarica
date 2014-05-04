@@ -1,3 +1,4 @@
+/*s: l_switch.s */
 
 // This file is used for task switching but last to emulate
 // exceptions in C (via the waserror(), nexterror(), poperror() functions)
@@ -21,3 +22,4 @@ TEXT setlabel(SB), $0
         MOVL    $0, AX                          /* return 0 */
         RET
 
+/*e: l_switch.s */

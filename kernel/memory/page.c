@@ -1,3 +1,4 @@
+/*s: page.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -658,3 +659,4 @@ portcountpagerefs(ulong *ref, int print)
     }
 }
 
+/*e: page.c */

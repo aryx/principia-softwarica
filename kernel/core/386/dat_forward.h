@@ -1,3 +1,4 @@
+/*s: dat_forward.h */
 
 typedef union ArchFPsave  ArchFPsave;
 typedef struct ArchProcNotsave  ArchProcNotsave;
@@ -37,3 +38,4 @@ typedef struct Lock Lock;
 #pragma incomplete BIOS32si
 #pragma incomplete Pcidev
 #pragma incomplete Ureg
+/*e: dat_forward.h */

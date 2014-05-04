@@ -1,3 +1,4 @@
+/*s: dev.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -450,3 +451,4 @@ devconfig(int, char *, DevConf *)
     error(Eperm);
     return 0;
 }
+/*e: dev.c */

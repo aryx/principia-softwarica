@@ -1,3 +1,4 @@
+/*s: x86.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -271,3 +272,4 @@ cpuidentify(void)
 
 
 
+/*e: x86.c */

@@ -1,3 +1,4 @@
+/*s: sdata.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -2364,3 +2365,4 @@ SDifc sdataifc = {
     atastat,            /* rtopctl */
     nil,                /* wtopctl */
 };
+/*e: sdata.c */

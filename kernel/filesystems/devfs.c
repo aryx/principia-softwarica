@@ -1,3 +1,4 @@
+/*s: devfs.c */
 /*
  * File system devices.
  * Follows device config in Ken's file server.
@@ -1283,3 +1284,4 @@ Dev fsdevtab = {
     devpower,
     devconfig,
 };
+/*e: devfs.c */

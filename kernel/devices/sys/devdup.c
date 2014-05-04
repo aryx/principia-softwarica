@@ -1,3 +1,4 @@
+/*s: devdup.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -144,3 +145,4 @@ Dev dupdevtab = {
     devremove,
     devwstat,
 };
+/*e: devdup.c */

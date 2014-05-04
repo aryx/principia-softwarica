@@ -1,3 +1,4 @@
+/*s: qlock.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -227,3 +228,4 @@ canrlock(RWlock *q)
     unlock(&q->use);
     return 0;
 }
+/*e: qlock.c */

@@ -1,3 +1,4 @@
+/*s: aux.c */
 #include <u.h>
 #include <libc.h>
 #include "../boot/boot.h"
@@ -77,3 +78,4 @@ void close_safe(int fd) {
     fatal("close");
   }
 }
+/*e: aux.c */

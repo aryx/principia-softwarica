@@ -1,3 +1,4 @@
+/*s: systab.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -172,3 +173,4 @@ char *sysctab[] = {
     [PWRITE]    "Pwrite",
     [TSEMACQUIRE]   "Tsemacquire",
 };
+/*e: systab.c */

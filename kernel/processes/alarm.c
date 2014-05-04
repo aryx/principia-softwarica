@@ -1,3 +1,4 @@
+/*s: alarm.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -106,3 +107,4 @@ done:
 
     return old;
 }
+/*e: alarm.c */

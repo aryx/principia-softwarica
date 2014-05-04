@@ -1,3 +1,4 @@
+/*s: devsrv.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -357,3 +358,4 @@ Dev srvdevtab = {
     srvremove,
     srvwstat,
 };
+/*e: devsrv.c */

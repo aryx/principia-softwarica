@@ -1,3 +1,4 @@
+/*s: edf.c */
 /* EDF scheduling */
 #include    <u.h>
 #include    "../port/lib.h"
@@ -685,3 +686,4 @@ testschedulability(Proc *theproc)
     DPRINT("probably not schedulable\n");
     return "probably not schedulable";
 }
+/*e: edf.c */

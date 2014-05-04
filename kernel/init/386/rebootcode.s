@@ -1,3 +1,4 @@
+/*s: rebootcode.s */
 #include "mem.h"
 
 /*
@@ -52,3 +53,4 @@ _back:
 _startkernel:
         ORL     AX, AX          /* NOP: avoid link bug */
         JMP*    AX
+/*e: rebootcode.s */

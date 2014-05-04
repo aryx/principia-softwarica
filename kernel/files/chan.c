@@ -1,3 +1,4 @@
+/*s: chan.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -1717,3 +1718,4 @@ putmhead(Mhead *m)
     }
 }
 
+/*e: chan.c */

@@ -1,3 +1,4 @@
+/*s: devuart.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -796,3 +797,4 @@ uartputs(char *s, int n)
         consuart->phys->putc(consuart, *s);
     }
 }
+/*e: devuart.c */

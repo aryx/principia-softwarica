@@ -1,3 +1,4 @@
+/*s: xalloc.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -268,3 +269,4 @@ xsummary(void)
     }
     print(" %d bytes free\n", i);
 }
+/*e: xalloc.c */

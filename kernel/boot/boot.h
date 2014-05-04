@@ -1,3 +1,4 @@
+/*s: boot.h */
 /* libc equivalent */
 // aux.c: 
 extern void fatal(char*);
@@ -36,3 +37,4 @@ extern int  connectlocal(void);
 extern void boot(int, char **);
 
 
+/*e: boot.h */

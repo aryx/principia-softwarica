@@ -1,3 +1,4 @@
+/*s: auth.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -148,3 +149,4 @@ hostdomainwrite(char *a, int n)
     memmove(hostdomain, buf, DOMLEN);
     return n;
 }
+/*e: auth.c */

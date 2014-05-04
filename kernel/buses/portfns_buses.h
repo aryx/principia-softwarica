@@ -1,3 +1,4 @@
+/*s: portfns_buses.h */
 
 // devuart.c
 void    uartsetmouseputc(Uart*, int (*)(Queue*, int));
@@ -12,3 +13,4 @@ void    uartmouse(Uart*, int (*)(Queue*, int), int);
 
 // devpnp.c
 // dead?
+/*e: portfns_buses.h */

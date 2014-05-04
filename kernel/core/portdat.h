@@ -1,3 +1,4 @@
+/*s: portdat.h */
 
 // could be put in lib.h
 #define MIN(a, b) ((a) < (b)? (a): (b))
@@ -72,3 +73,4 @@ enum miscsize_portdat
 #pragma varargck  type  "V" uchar*
 #pragma varargck  type  "E" uchar*
 #pragma varargck  type  "M" uchar*
+/*e: portdat.h */

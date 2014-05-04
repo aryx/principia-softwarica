@@ -1,3 +1,4 @@
+/*s: nvram.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -30,3 +31,4 @@ nvramwrite(int addr, uchar data)
     outb(PdataPort, data);
     iunlock(&nvrtlock);
 }
+/*e: nvram.c */

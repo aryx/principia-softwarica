@@ -1,3 +1,4 @@
+/*s: l_concurrency.s */
 #include "mem.h"
 
 /*
@@ -74,3 +75,4 @@ _xdecgt:
 _xdeclt:
         DECL    AX
         RET
+/*e: l_concurrency.s */

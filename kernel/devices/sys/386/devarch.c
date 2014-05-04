@@ -1,3 +1,4 @@
+/*s: devarch.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -493,3 +494,4 @@ archinit(void)
     addarchfile("cputype", 0444, cputyperead, nil);
     addarchfile("archctl", 0664, archctlread, archctlwrite);
 }
+/*e: devarch.c */

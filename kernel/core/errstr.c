@@ -1,3 +1,4 @@
+/*s: errstr.c */
 char Emount[] = "inconsistent mount";
 char Eunmount[] = "not mounted";
 char Eismtpt[] = "is a mount point";
@@ -50,3 +51,4 @@ char Ebadip[] = "bad ip address syntax";
 char Edirseek[] = "seek in directory";
 char Echange[] = "media or partition has changed";
 
+/*e: errstr.c */

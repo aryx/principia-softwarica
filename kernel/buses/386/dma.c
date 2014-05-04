@@ -1,3 +1,4 @@
+/*s: dma.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -263,3 +264,4 @@ dmaend(int chan)
 //  return((retval<<dp->shift)+1);
 //}
  */
+/*e: dma.c */

@@ -1,3 +1,4 @@
+/*s: l_realmode.s */
 #include "mem.h"
 #include "x16.h"
 
@@ -269,3 +270,4 @@ TEXT bios32call(SB), $0
 _bios32xxret:
         RET
 
+/*e: l_realmode.s */

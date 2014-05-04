@@ -1,3 +1,4 @@
+/*s: initcode.s */
 #include "/sys/src/libc/9syscall/sys.h"
 
 TEXT    main(SB),$0
@@ -21,3 +22,4 @@ here:
 
 GLOBL   boot+0(SB),$6
 DATA    boot+0(SB)/5,$"/boot"
+/*e: initcode.s */

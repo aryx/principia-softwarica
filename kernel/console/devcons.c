@@ -1,3 +1,4 @@
+/*s: devcons.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -1323,3 +1324,4 @@ writebintime(char *buf, int n)
     }
     return n;
 }
+/*e: devcons.c */

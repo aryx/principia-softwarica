@@ -1,3 +1,4 @@
+/*s: devenv.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -420,3 +421,4 @@ getconfenv(void)
     runlock(eg);
     return p;
 }
+/*e: devenv.c */

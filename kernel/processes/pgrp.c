@@ -1,3 +1,4 @@
+/*s: pgrp.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -320,3 +321,4 @@ resrcwait(char *reason)
     tsleep(&up->sleep, return0, 0, 300);
     up->psstate = p;
 }
+/*e: pgrp.c */

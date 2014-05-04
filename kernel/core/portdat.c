@@ -1,3 +1,4 @@
+/*s: portdat.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -42,3 +43,4 @@ bool iseve(void) {
 
 // was in console/devcons.c, but used also by edf.c
 int panicking;
+/*e: portdat.c */

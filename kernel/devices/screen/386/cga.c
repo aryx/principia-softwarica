@@ -1,3 +1,4 @@
+/*s: cga.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -144,3 +145,4 @@ screeninit(void)
 
     screenputs = cgascreenputs;
 }
+/*e: cga.c */

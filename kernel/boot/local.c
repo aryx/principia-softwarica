@@ -1,3 +1,4 @@
+/*s: local.c */
 #include <u.h>
 #include <libc.h>
 #include "../boot/boot.h"
@@ -27,3 +28,4 @@ connectlocal(void)
   
   return 0;
 }
+/*e: local.c */

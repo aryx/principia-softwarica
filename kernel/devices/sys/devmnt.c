@@ -1,3 +1,4 @@
+/*s: devmnt.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -931,3 +932,4 @@ Dev mntdevtab = {
     mntremove,
     mntwstat,
 };
+/*e: devmnt.c */

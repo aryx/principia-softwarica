@@ -1,3 +1,4 @@
+/*s: tod.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -323,3 +324,4 @@ mk64fract(uvlong to, uvlong from)
  */
     return (to<<32) / from;
 }
+/*e: tod.c */

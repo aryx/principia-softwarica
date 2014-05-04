@@ -1,3 +1,4 @@
+/*s: pci.c */
 /*
  * PCI support code.
  * Needs a massive rewrite.
@@ -1519,3 +1520,4 @@ pciclrbme(Pcidev* p)
 //
 //  return ostate;
 //}
+/*e: pci.c */

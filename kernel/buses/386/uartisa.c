@@ -1,3 +1,4 @@
+/*s: uartisa.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -96,3 +97,4 @@ PhysUart isaphysuart = {
     .status     = nil,
     .fifo       = nil,
 };
+/*e: uartisa.c */

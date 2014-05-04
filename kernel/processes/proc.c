@@ -1,3 +1,4 @@
+/*s: proc.c */
 #include    <u.h>
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -1653,3 +1654,4 @@ procindex(ulong pid)
     unlock(&procalloc);
     return s;
 }
+/*e: proc.c */

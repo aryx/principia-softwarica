@@ -1,3 +1,4 @@
+/*s: sdscsi.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -422,3 +423,4 @@ again:
     return rlen;
 }
 
+/*e: sdscsi.c */

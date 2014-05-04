@@ -1,3 +1,4 @@
+/*s: qio.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -1508,3 +1509,4 @@ qfull(Queue *q)
 //{
 //  return q->state;
 //}
+/*e: qio.c */

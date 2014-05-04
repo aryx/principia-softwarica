@@ -1,3 +1,4 @@
+/*s: sysmemory.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -72,3 +73,4 @@ syssegflush(ulong *arg)
     flushmmu();
     return 0;
 }
+/*e: sysmemory.c */

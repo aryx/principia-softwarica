@@ -1,3 +1,4 @@
+/*s: portdat_processes.h */
 
 // in lib.h: Waitmsg, ERRMAX
 // see also ArchProcMMU, ArchProcNotsave, MAXSYSARG in 386/
@@ -662,3 +663,4 @@ extern struct Active active;
 #pragma varargck  type  "t"   long
 #pragma varargck  type  "U"   uvlong
 
+/*e: portdat_processes.h */

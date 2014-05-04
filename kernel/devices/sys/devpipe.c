@@ -1,3 +1,4 @@
+/*s: devpipe.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -421,3 +422,4 @@ Dev pipedevtab = {
     devremove,
     pipewstat,
 };
+/*e: devpipe.c */

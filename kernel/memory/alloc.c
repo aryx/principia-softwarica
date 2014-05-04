@@ -1,3 +1,4 @@
+/*s: alloc.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -265,3 +266,4 @@ kstrdup(char **p, char *s)
     *p = t;
     free(prev);
 }
+/*e: alloc.c */

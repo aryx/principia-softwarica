@@ -1,3 +1,4 @@
+/*s: rebootcmd.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -173,3 +174,4 @@ rebootcmd(int argc, char *argv[])
 
     panic("return from reboot!");
 }
+/*e: rebootcmd.c */

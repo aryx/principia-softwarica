@@ -1,3 +1,4 @@
+/*s: portdat_memory.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -11,3 +12,4 @@ struct Palloc palloc;
 struct Swapalloc swapalloc;
 KImage  swapimage;
 
+/*e: portdat_memory.c */

@@ -1,3 +1,4 @@
+/*s: portfns_devices.h */
 
 // sys/devroot.c
 void    addbootfile(char*, uchar*, ulong);
@@ -29,3 +30,4 @@ int   setcolor(ulong, ulong, ulong, ulong);
 int   kbdgetmap(uint, int*, int*, Rune*);
 void    kbdputmap(ushort, ushort, Rune);
 
+/*e: portfns_devices.h */

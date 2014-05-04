@@ -1,3 +1,4 @@
+/*s: portfns_concurrency.h */
 // For protecting kernel syscall code from interrupt kernel code: splhi(), splo()
 // For very small critical region: taslock
 // For bigger region, or when have lots of contention on a lock: qlock
@@ -42,3 +43,4 @@ int tas(void*);
 void    _xinc(long*);
 //@Scheck: Assembly
 long    _xdec(long*);
+/*e: portfns_concurrency.h */

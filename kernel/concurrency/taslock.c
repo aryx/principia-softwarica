@@ -1,3 +1,4 @@
+/*s: taslock.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -272,3 +273,4 @@ iunlock(Lock *l)
 }
 
 
+/*e: taslock.c */

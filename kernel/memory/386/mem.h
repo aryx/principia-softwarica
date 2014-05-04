@@ -1,3 +1,4 @@
+/*s: mem.h */
 /*
  * Memory and machine-specific definitions.  Used in C and assembler.
  */
@@ -160,3 +161,4 @@
 
 #define getpgcolor(a) 0
 
+/*e: mem.h */

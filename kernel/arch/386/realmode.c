@@ -1,3 +1,4 @@
+/*s: realmode.c */
 #include    "u.h"
 #include    "tos.h"
 #include    "../port/lib.h"
@@ -140,3 +141,4 @@ realmodelink(void)
     addarchfile("realmodemem", 0660, rmemread, rmemwrite);
 }
 
+/*e: realmode.c */

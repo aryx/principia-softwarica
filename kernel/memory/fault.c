@@ -1,3 +1,4 @@
+/*s: fault.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -405,3 +406,4 @@ checkpages(void)
     }
     print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
 }
+/*e: fault.c */

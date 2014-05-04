@@ -1,3 +1,4 @@
+/*s: portfns_core.h */
 
 // exported in lib.h, defined in portfns.c
 // (*print)
@@ -51,3 +52,4 @@ int   readstr(ulong, char*, ulong, char*);
 #pragma varargck argpos iprint  1
 #pragma varargck argpos pprint  1
 #pragma varargck argpos panic 1
+/*e: portfns_core.h */

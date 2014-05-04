@@ -1,3 +1,4 @@
+/*s: portfns_misc.h */
 
 // cis.c
 // pcmcisread in fns.h
@@ -10,3 +11,4 @@ Cmdtab*   lookupcmd(Cmdbuf*, Cmdtab*, int);
 // random.c
 ulong   randomread(void*, ulong);
 void    randominit(void);
+/*e: portfns_misc.h */

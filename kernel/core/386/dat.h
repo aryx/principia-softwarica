@@ -1,3 +1,4 @@
+/*s: dat.h */
 #include "dat_forward.h"
 #include "../port/portdat_forward.h"
 
@@ -69,3 +70,4 @@ enum misc_dat {
 //  Mmx = 1<<23,
 //  Sse = 1<<25,  /* thus sfence instr. */
 };
+/*e: dat.h */

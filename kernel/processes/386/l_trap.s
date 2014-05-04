@@ -1,3 +1,4 @@
+/*s: l_trap.s */
 #include "mem.h"
         
         
@@ -302,3 +303,4 @@ TEXT vectortable(SB), $0
         CALL _strayintr(SB); BYTE $0xFD
         CALL _strayintr(SB); BYTE $0xFE
         CALL _strayintr(SB); BYTE $0xFF
+/*e: l_trap.s */

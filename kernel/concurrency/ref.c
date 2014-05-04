@@ -1,3 +1,4 @@
+/*s: ref.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -31,3 +32,4 @@ decref(Ref *r)
 
     return x;
 }
+/*e: ref.c */

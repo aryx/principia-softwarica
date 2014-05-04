@@ -1,3 +1,4 @@
+/*s: sysfile.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -1227,3 +1228,4 @@ sys_fwstat(ulong *)
     error("old fwstat system call - recompile");
     return -1;
 }
+/*e: sysfile.c */

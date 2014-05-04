@@ -1,3 +1,4 @@
+/*s: devsd.c */
 /*
  * Storage Device.
  */
@@ -1665,3 +1666,4 @@ legacytopctl(Cmdbuf *cb)
         error(Ebadarg);
     sdconfig(cd.on, cd.spec, &cd.cf);
 }
+/*e: devsd.c */

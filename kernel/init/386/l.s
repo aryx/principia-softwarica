@@ -1,3 +1,4 @@
+/*s: l.s */
 #include "mem.h"
 #undef DELAY
 
@@ -271,3 +272,4 @@ TEXT putcr4(SB), $0
         MOVL    AX, CR4
         RET
 
+/*e: l.s */

@@ -1,3 +1,4 @@
+/*s: floppy.h */
 typedef struct FController FController;
 typedef struct FDrive FDrive;
 typedef struct FType FType;
@@ -118,3 +119,4 @@ enum
 };
 
 
+/*e: floppy.h */

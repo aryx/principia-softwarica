@@ -1,3 +1,4 @@
+/*s: portfns_processes.h */
 
 // tod.c
 // initialize the hidden global tod.c#tod
@@ -143,3 +144,4 @@ void    mul64fract(uvlong*, uvlong, uvlong);
 // portdat_processes.c
 void (*proctrace)(Proc*, int, vlong); // was in devproc.c
 void (*kproftimer)(ulong); // was in portfns.h
+/*e: portfns_processes.h */

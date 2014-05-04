@@ -1,3 +1,4 @@
+/*s: latin1.c */
 #include    "u.h"
 #include    "../port/lib.h"
 /*
@@ -79,3 +80,4 @@ latin1(Rune *k, int n)
         }
     return -1;
 }
+/*e: latin1.c */

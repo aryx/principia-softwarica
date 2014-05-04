@@ -1,3 +1,4 @@
+/*s: dat_memory.h */
 
 // define things used in Proc, for mmu.c to work on
 /*
@@ -21,3 +22,4 @@ struct ArchProcMMU
  */
 typedef struct KMap   KMap;
 #define VA(k)   ((void*)(k))
+/*e: dat_memory.h */

@@ -1,3 +1,4 @@
+/*s: random.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -137,3 +138,4 @@ randomread(void *xp, ulong n)
 
     return n;
 }
+/*e: random.c */
