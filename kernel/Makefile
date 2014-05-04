@@ -19,7 +19,7 @@ lpclean::
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Kernel.tex.nw
+TEXMAIN=Kernel.tex.nw Kernel_extra.tex.nw
 TEX=Kernel.tex
 
 # set of noweb (.nw) files
@@ -29,9 +29,6 @@ TEX=Kernel.tex
 SRC_ORIG=Kernel.tex.nw
 
 SRC_VIEWS= \
- lib/lib.h \
- core/errstr.c \
- core/error.h \
 
 
 sync:
