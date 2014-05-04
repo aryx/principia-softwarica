@@ -10,6 +10,7 @@ all:
 #assumes you have done source env.sh, or have a 'mk' wrapper that does that
 compile:
 	cd sys/src; mk all; cd cmd; mk install
+	cd sys/src/9/pc; mk
 
 disk:
 	umount -f $(DISK) || echo not mounted
@@ -27,6 +28,9 @@ run:
 #-hda ~/plan9.raw.img
 #-cdrom plan9.iso? does not work?
 
+clean:
+	cd sys/src; mk clean
+	cd sys/src/9/pc; mk clean
 
 
 visual:
