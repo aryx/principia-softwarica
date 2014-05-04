@@ -135,22 +135,22 @@ you'll see that Plan9 in essence provides the similar core services
 of MacOS, Linux or Windows.
 % multi tasking, graphics, windows, IO, etc
 
-Other candidates were discarded:
+Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
-\item Unix V6 (or its modern incarnation xv6), too simple,
-no graphics, no network
-\item TECS, excellent for understanding hardware, but the
-software part is too simple. For instance the operating
-system is really a toy.
+\item Unix V6 (or its modern incarnation xv6), but it is too simple,
+there is no graphics, no network
+\item TECS, excellent for understanding hardware, assemblers,
+and even compilers, but the operating part is really too simple.
+The same is true for MMIX.
 \item Alan's Kay STEPS project, far more ambitious as
 the goal is to have a full system in 20 000 LOC, but not
 finished yet.
 \item Minix, bigger and does not provide a simple windowing
-system as it relies on X11 which is far more complicated than plan9
-rio windowing system
+system as it relies on X11 (which is far more complicated than plan9
+rio windowing system)
 \item Gnu/Linux, far far bigger. If you take the source code of glibc,
-the Linux kernel, X11, and the network stack, you'll get at
-least 2 orders of magniture more source code, even though
+the Linux kernel, and X11, you'll get at
+least 2 orders of magnitude more source code than Plan9, even though
 Plan9 provides in essence the same core services. Of course
 the Linux kernel contains thousands of specific drivers,
 glibc handles many different architectures, and X11 can support
@@ -169,17 +169,20 @@ I assume you actually know a lot:
 \begin{itemize}
 \item C
 % ref?
+% see also comp.ps
 \item an assembler
 % ref?
+% see also asm.ps
 \item operating system (yep)
 % ref?
+\item familiarity with the PC architecture
 \end{itemize}
 
 This book is not an introduction to operating systems. The goal
 of this book is to present in full details a kernel but we assume
 you already have a vague idea of how an operating system
-works and so that you are familiar with virtual memory, interrupts,
-system calls, etc.
+works and so that you are familiar with concepts such as 
+virtual memory, critical regions, interrupts, system calls, etc.
 
 \section{About this document}
 %#include "About.tex.nw"
@@ -190,9 +193,10 @@ system calls, etc.
 \section{Acknowledgments}
 
 Of course Plan9's authors who wrote most of this book: Ken Thompson,
-Rob Pile, Russ Cox, etc.
+Rob Pile, Dave Presotto, Phil Winterbottom, Russ Cox, and many other
+people from Bell Labs.
 
-Federic Balesteros who wrote lengthy notes about Plan9's kernel.
+Federic Balesteros who wrote a lengthy note about Plan9's kernel.
 
 \chapter{Overview}
 
@@ -204,9 +208,12 @@ programs.
 It provides convenient abstractions of the hardware and multiplex
 those hardware resources for the benefit of user programs:
 \begin{itemize}
-\item a virtual CPU, each process thinks it has all the CPU for himself
-\item a virtual memory, each process thinks it has all memory for himself
-\item a virtual screen, each process thinks it has all the screen for himself
+\item a virtual CPU, so that each process thinks it has all the CPU 
+for himself
+\item a virtual memory, so that each process thinks it has all memory
+for himself
+\item a virtual screen, so that each process thinks it has all the screen
+for himself
 \item a virtual storage (filesystem)
 \item a virtual network (NFS)
 \end{itemize}
@@ -230,6 +237,24 @@ those hardware resources for the benefit of user programs:
 %plan9 specifics vs general os principles, e.g. namespace so have
 % nice /dev/cons, /dev/draw, which enable easier network and graphics
 
+% see 9.ps
+
+%TODO
+%things plan9 make so much easier to implement/understand:
+% tty
+% X11, xterm
+% nfs
+% fuse
+%
+%Plan9 approach is good? abuse files? could use different API?
+%For instance /dev/draw has a very specific format, so it's
+%a bit abusing files.
+%But at the same time one for sure needs to store things in files,
+%so one need files, at which point you want to define the minimum of 
+%concepts and so make files more generic => device can be files,
+%but also pipes, etc, and so plan9 just push to its conclusion
+%this idea.
+
 \section{The machine}
 %PC vs raspberry pi?
 
@@ -240,8 +265,30 @@ those hardware resources for the benefit of user programs:
 % kernel that creates first user process!
 % introduce dichotomy kernel/user
 
+% there is booting the kernel, booting the kernel environment,
+%  and then booting the user environment, and finally booting user programs
+
 \section{Memory overview}
 % kernel vs user memory
+% dynamic vs static (the static allocator so can bootstrap things)
+
+%need precise physical map of memory
+%
+%with first empty page?, idtr, gdt, pdb intel, pte intel, 
+%io RAM, vga ram,  then KZERO header, KTZERO, 
+%code,  data with important globals like xlist, and array holes,
+%palloc with pointer page, and then on top of that confmem area
+%
+%the data section of the kernel binary is as important as
+%the code section. For the code section can also give name
+%of procedures, and devtab (in data section) pointing back to it
+%via the static "classes" in the data section again).
+%
+%need also precise virtual map of memory for regular process,
+% actually for 2 processes
+%
+%need also precise virtual map of memory for first handcrafted process?
+%
 
 \section{Syscall overview}
 % kernel vs user code
@@ -251,295 +298,6 @@ those hardware resources for the benefit of user programs:
 \section{Mini LibC}
 % bool, int, strings, unicode, etc
 
-<<lib.h>>=
-
-// This file mostly exports code from lib_core/libc/ (linked with the kernel).
-// Those functions are also exported in include/libc.h but they prefered to
-// not include it and instead to reexport here a subset specific to the kernel.
-
-// There are also the poolxxx() functions exported in include/pool.h
-// (also part of libc) that are used in memory/alloc.c.
-
-// Some functions in libc are also "overriden" (via linker abuse):
-//  - print.c overrides _fmtlock(), _fmtunlock() that were in libc/fmt/
-//  - devcons.s overrides the sysfatal() that was in libc/9sys/
-
-// pad specific, should be in u.h
-typedef int bool;
-typedef ushort bool_ushort;
-typedef ulong bool_ulong;
-enum _bool {
-  false = 0,
-  true = 1
-};
-
-/*
- * functions (mostly) linked in from libc.
- */
-
-#define nelem(x)  (sizeof(x)/sizeof((x)[0]))
-#define offsetof(s, m)  (ulong)(&(((s*)0)->m))
-#define assert(x) if(x){}else _assert("x")
-
-/*
- * mem routines
- */
-extern  void* memccpy(void*, void*, int, ulong);
-extern  void* memset(void*, int, ulong);
-extern  int memcmp(void*, void*, ulong);
-extern  void* memmove(void*, void*, ulong);
-extern  void* memchr(void*, int, ulong);
-
-/*
- * string routines
- */
-extern  char* strchr(char*, int);
-extern  char* strrchr(char*, int);
-extern  int strcmp(char*, char*);
-extern  char* strcpy(char*, char*);
-extern  char* strecpy(char*, char*, char*);
-extern  char* strncpy(char*, char*, long);
-extern  int strncmp(char*, char*, long);
-extern  long  strlen(char*);
-extern  char* strstr(char*, char*);
-extern  int atoi(char*);
-extern  int fullrune(char*, int);
-//unused: extern  char* strcat(char*, char*);
-//unused: extern  char* strncat(char*, char*, long);
-
-//redefined in the kernel
-extern  int cistrcmp(char*, char*);
-extern  int cistrncmp(char*, char*, int);
-
-enum
-{
-  UTFmax    = 4,    /* maximum bytes per rune */
-  Runeself  = 0x80,   /* rune and UTF sequences are the same (<) */
-//unused: Runesync  = 0x80,   /* cannot represent part of a UTF sequence (<) */
-//unused: Runeerror = 0xFFFD, /* decoding error in UTF */
-//unused: Runemax   = 0x10FFFF, /* 24 bit rune */
-//unused: Runemask  = 0x1FFFFF, /* bits used by runes (see grep) */
-};
-
-/*
- * rune routines
- */
-extern  int runetochar(char*, Rune*);
-extern  int chartorune(Rune*, char*);
-extern  char* utfrune(char*, long);
-extern  int utfnlen(char*, long);
-//unused: extern  int utflen(char*);
-//unused: extern  int runelen(long);
-
-extern  int abs(int);
-
-/*
- * print routines
- */
-typedef struct Fmt  Fmt;
-typedef int (*Fmts)(Fmt*);
-struct Fmt{
-  uchar runes;      /* output buffer is runes or chars? */
-  void  *start;     /* of buffer */
-  void  *to;      /* current place in the buffer */
-  void  *stop;      /* end of the buffer; overwritten if flush fails */
-  int (*flush)(Fmt *);  /* called when to == stop */
-  void  *farg;      /* to make flush a closure */
-  int nfmt;     /* num chars formatted so far */
-  va_list args;     /* args passed to dofmt */
-  int r;      /* % format Rune */
-  int width;
-  int prec;
-  ulong flags;
-};
-
-// This used to be regular function, but to avoid backward deps in the kernel
-// I made it into a pointer function (a bit ugly, and maybe unsafe)
-extern  int (*print)(char*, ...);
-
-extern  char* seprint(char*, char*, char*, ...);
-extern  char* vseprint(char*, char*, char*, va_list);
-extern  int snprint(char*, int, char*, ...);
-extern  int sprint(char*, char*, ...);
-//unused: extern  int vsnprint(char*, int, char*, va_list);
-
-#pragma varargck  argpos  fmtprint  2
-#pragma varargck  argpos  print   1
-#pragma varargck  argpos  seprint   3
-#pragma varargck  argpos  snprint   3
-#pragma varargck  argpos  sprint    2
-
-#pragma varargck  type  "lld" vlong
-#pragma varargck  type  "llx" vlong
-#pragma varargck  type  "lld" uvlong
-#pragma varargck  type  "llx" uvlong
-#pragma varargck  type  "ld"  long
-#pragma varargck  type  "lx"  long
-#pragma varargck  type  "ld"  ulong
-#pragma varargck  type  "lx"  ulong
-#pragma varargck  type  "d" int
-#pragma varargck  type  "x" int
-#pragma varargck  type  "c" int
-#pragma varargck  type  "C" int
-#pragma varargck  type  "d" uint
-#pragma varargck  type  "x" uint
-#pragma varargck  type  "c" uint
-#pragma varargck  type  "C" uint
-#pragma varargck  type  "s" char*
-#pragma varargck  type  "q" char*
-#pragma varargck  type  "S" Rune*
-#pragma varargck  type  "%" void
-#pragma varargck  type  "p" uintptr
-#pragma varargck  type  "p" void*
-#pragma varargck  flag  ','
-
-extern  int fmtstrinit(Fmt*);
-extern  int fmtinstall(int, int (*)(Fmt*));
-extern  void  quotefmtinstall(void);
-extern  int fmtprint(Fmt*, char*, ...);
-extern  int fmtstrcpy(Fmt*, char*);
-extern  char* fmtstrflush(Fmt*);
-
-/*
- * one-of-a-kind
- */
-extern  char* cleanname(char*);
-extern  ulong getcallerpc(void*);
-
-extern  long  strtol(char*, char**, int);
-extern  ulong strtoul(char*, char**, int);
-extern  vlong strtoll(char*, char**, int);
-extern  uvlong  strtoull(char*, char**, int);
-
-extern  int getfields(char*, char**, int, int, char*);
-extern  int tokenize(char*, char**, int);
-extern  void  qsort(void*, long, long, int (*)(void*, void*));
-//unused: extern  int dec64(uchar*, int, char*, int);
-//unused: extern  int encodefmt(Fmt*);
-
-
-extern  char  etext[];
-//@Scheck: Assembly, not dead used by 386/l.s
-extern  char  edata[];
-extern  char  end[];
-
-
-/*
- * Syscall data structures
- */
-enum mount {
-  MREPL = 0x0000,  /* mount replaces object */
-  MBEFORE = 0x0001,  /* mount goes before others in union directory */
-  MAFTER = 0x0002,  /* mount goes after others in union directory */
-  MCREATE = 0x0004,  /* permit creation in mounted directory */
-  MCACHE = 0x0010,  /* cache some data */
-
-  MORDER =  0x0003,  /* mask for bits defining order of mounting */
-  MMASK = 0x0017,  /* all bits on */
-};
-
-enum open {
-  OREAD = 0, /* open for read */
-  OWRITE = 1, /* write */
-  ORDWR = 2, /* read and write */
-  OEXEC = 3, /* execute, == read but check execute permission */
-  OTRUNC = 16,  /* or'ed in (except for exec), truncate file first */
-  OCEXEC = 32,  /* or'ed in, close on exec */
-  ORCLOSE = 64,  /* or'ed in, remove on close */
-  OEXCL = 0x1000,  /* or'ed in, exclusive create */
-};
-
-enum note {
-  NCONT = 0, /* continue after note */
-  NDFLT = 1, /* terminate after note */
-  NSAVE = 2, /* clear note but hold state */
-  NRSTR = 3, /* restore saved state */
-};
-
-
-
-enum miscsize {  
-  ERRMAX = 128, /* max length of error string */
-  KNAMELEN = 28,  /* max length of name held in kernel */
-};
-
-
-
-
-/* bits in Qid.type */
-enum qidtype {
-  QTFILE = 0x00,    /* plain file */
-  QTDIR = 0x80,    /* type bit for directories */
-  QTMOUNT = 0x10,    /* type bit for mounted channel */
-
-  QTAUTH = 0x08,    /* type bit for authentication file */
-  QTAPPEND = 0x40,    /* type bit for append only files */
-  QTEXCL = 0x20,    /* type bit for exclusive use files */
-};
-
-/* bits in Dir.mode */
-enum dirmode {
-  DMDIR = 0x80000000,  /* mode bit for directories */
-  DMAPPEND = 0x40000000,  /* mode bit for append only files */
-  DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
-  DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
-
-  DMREAD = 0x4,   /* mode bit for read permission */
-  DMWRITE = 0x2,   /* mode bit for write permission */
-  DMEXEC = 0x1,   /* mode bit for execute permission */
-};
-
-typedef struct Qid  Qid;
-typedef struct Dir  Dir;
-typedef struct OWaitmsg OWaitmsg;
-typedef struct Waitmsg  Waitmsg;
-
-struct Qid
-{
-  // note that this is not a string, but an int! it's kind of an inode?
-  uvlong  path;
-  // for cache invalidation
-  ulong vers;
-  // enum<qidtype>
-  uchar type;
-};
-
-struct Dir {
-  /* system-modified data */
-  ushort  type; /* server type */
-  uint  dev;  /* server subtype */
-
-  /* file data */
-  Qid qid;  /* unique id from server */
-  // bitset<enum<dirmode>>
-  ulong mode; /* permissions */
-  ulong atime;  /* last read time */
-  ulong mtime;  /* last write time */
-  vlong length; /* file length: see <u.h> */
-  char  *name;  /* last element of path */
-  char  *uid; /* owner name */
-  char  *gid; /* group name */
-  char  *muid;  /* last modifier name */
-};
-
-
-
-struct Waitmsg
-{
-  int pid;    /* of loved one */
-  ulong time[3];  /* of loved one and descendants */
-  char  msg[ERRMAX];  /* actually variable-size in user mode */
-};
-
-// for byteorder agnostic marshalling?
-struct OWaitmsg
-{
-  char  pid[12];  /* of loved one */
-  char  time[3*12]; /* of loved one and descendants */
-  char  msg[64];  /* compatibility BUG */
-};
-
-@ 
 \section{[[Conf]]}
 
 \section{[[Mach]]}
@@ -559,12 +317,19 @@ struct OWaitmsg
 \section{Lock}
 
 \section{Interrupt Lock}
+% can formalize a checking rule? if access any field
+% accessed from a xxxintr, then need to use ilock
 
 \section{Queue Lock}
 
 \section{Read Write Lock}
 
 \section{References}
+
+\section{Synchronization}
+% different from critical regions
+
+% see sleep.ps in plan9 documents
 
 \section{Rendez-vous}
 
@@ -573,6 +338,7 @@ struct OWaitmsg
 \chapter{Memory}
 
 \section{Overview}
+% kernel vs user memory
 
 \section{Xalloc}
 
@@ -594,6 +360,8 @@ struct OWaitmsg
 \section{Overview}
 
 \section{[[Proc]]}
+
+\section{Context switch}
 
 \section{Traps and interrupts}
 
@@ -617,11 +385,22 @@ struct OWaitmsg
 
 \section{Channels}
 
-\section{Devices table}
+\section{Device table}
 
-\section{Open/read/write/close}
+\section{[[create/open/read/write/close]]}
 
-\section{Namespace}
+\section{Syscalls}
+
+\chapter{Namespace}
+
+% see names.ps
+% see lexnames.ps
+
+\section{Overview}
+
+\section{Bind}
+
+\section{Mount}
 
 \section{Syscalls}
 
@@ -635,7 +414,13 @@ struct OWaitmsg
 
 \chapter{The Console}
 
-\chapter{Core Devices}
+\section{Overview}
+
+\section{Input}
+
+\section{Output}
+
+\chapter{System Devices}
 
 \section{[[devroot.c]]}
 
@@ -645,7 +430,7 @@ struct OWaitmsg
 
 \section{[[devdup.c]] and [[devpipe.c]]}
 
-\chapter{Devices}
+\chapter{External Devices}
 
 \section{Screen}
 
@@ -685,132 +470,24 @@ struct OWaitmsg
 
 \chapter{Debugging}
 
+% printf? all this fmt stuff?
+
 \chapter{Profiling}
 
 \chapter{Error Managment}
 
-<<errstr.c>>=
-//char Enoerror[] = "no error";
-char Emount[] = "inconsistent mount";
-char Eunmount[] = "not mounted";
-char Eismtpt[] = "is a mount point";
-char Eunion[] = "not in union";
-char Emountrpc[] = "mount rpc error";
-char Eshutdown[] = "device shut down";
-char Enocreate[] = "mounted directory forbids creation";
-char Enonexist[] = "file does not exist";
-char Eexist[] = "file already exists";
-char Ebadsharp[] = "unknown device in # filename";
-char Enotdir[] = "not a directory";
-char Eisdir[] = "file is a directory";
-char Ebadchar[] = "bad character in file name";
-char Efilename[] = "file name syntax";
-char Eperm[] = "permission denied";
-char Ebadusefd[] = "inappropriate use of fd";
-char Ebadarg[] = "bad arg in system call";
-char Einuse[] = "device or object already in use";
-char Eio[] = "i/o error";
-char Etoobig[] = "read or write too large";
-char Etoosmall[] = "read or write too small";
-//char Enoport[] = "network port not available";
-char Ehungup[] = "i/o on hungup channel";
-char Ebadctl[] = "bad process or channel control request";
-char Enodev[] = "no free devices";
-char Eprocdied[] = "process exited";
-char Enochild[] = "no living children";
-char Eioload[] = "i/o error in demand load";
-char Enovmem[] = "virtual memory allocation failed";
-char Ebadfd[] = "fd out of range or not open";
-char Enofd[] = "no free file descriptors";
-char Eisstream[] = "seek on a stream";
-char Ebadexec[] = "exec header invalid";
-char Etimedout[] = "connection timed out";
-char Econrefused[] = "connection refused";
-char Econinuse[] = "connection in use";
-char Eintr[] = "interrupted";
-char Enomem[] = "kernel allocate failed";
-//char Enoswap[] = "swap space full";
-char Esoverlap[] = "segments overlap";
-char Emouseset[] = "mouse type already set";
-char Eshort[] = "i/o count too small";
-char Egreg[] = "jmk added reentrancy for threads";
-char Ebadspec[] = "bad attach specifier";
-char Enoreg[] = "process has no saved registers";
-char Enoattach[] = "mount/attach disallowed";
-char Eshortstat[] = "stat buffer too small";
-char Ebadstat[] = "malformed stat buffer";
-char Enegoff[] = "negative i/o offset";
-char Ecmdargs[] = "wrong #args in control message";
-char Ebadip[] = "bad ip address syntax";
-char Edirseek[] = "seek in directory";
-char Echange[] = "media or partition has changed";
-//char Estalled[] = "endpoint stalled";
-//char Edetach[] = "device is detached";
-//char Enotconf[] = "endpoint not configured";
-//char Eaoedown[] = "aoe device is down";
-@ 
+% waserror(), nexterror(), etc
+% =~ poor's man exn mechanism (=> improve C!!)
+
+%//char Enoerror[] = "no error";
+%//char Enoport[] = "network port not available";
+%//char Enoswap[] = "swap space full";
+%//char Estalled[] = "endpoint stalled";
+%//char Edetach[] = "device is detached";
+%//char Enotconf[] = "endpoint not configured";
+%//char Eaoedown[] = "aoe device is down";
 
 \ifallcode
-<<error.h>>=
-//extern char Enoerror[];   /* no error */
-extern char Emount[];   /* inconsistent mount */
-extern char Eunmount[];   /* not mounted */
-extern char Eismtpt[];    /* is a mount point */
-extern char Eunion[];   /* not in union */
-extern char Emountrpc[];  /* mount rpc error */
-extern char Eshutdown[];  /* device shut down */
-extern char Enocreate[];  /* mounted directory forbids creation */
-extern char Enonexist[];  /* file does not exist */
-extern char Eexist[];   /* file already exists */
-extern char Ebadsharp[];  /* unknown device in # filename */
-extern char Enotdir[];    /* not a directory */
-extern char Eisdir[];   /* file is a directory */
-extern char Ebadchar[];   /* bad character in file name */
-extern char Efilename[];  /* file name syntax */
-extern char Eperm[];    /* permission denied */
-extern char Ebadusefd[];  /* inappropriate use of fd */
-extern char Ebadarg[];    /* bad arg in system call */
-extern char Einuse[];   /* device or object already in use */
-extern char Eio[];    /* i/o error */
-extern char Etoobig[];    /* read or write too large */
-extern char Etoosmall[];  /* read or write too small */
-//extern char Enoport[];    /* network port not available */
-extern char Ehungup[];    /* i/o on hungup channel */
-extern char Ebadctl[];    /* bad process or channel control request */
-extern char Enodev[];   /* no free devices */
-extern char Eprocdied[];  /* process exited */
-extern char Enochild[];   /* no living children */
-extern char Eioload[];    /* i/o error in demand load */
-extern char Enovmem[];    /* virtual memory allocation failed */
-extern char Ebadfd[];   /* fd out of range or not open */
-extern char Enofd[];    /* no free file descriptors */
-extern char Eisstream[];  /* seek on a stream */
-extern char Ebadexec[];   /* exec header invalid */
-extern char Etimedout[];  /* connection timed out */
-extern char Econrefused[];  /* connection refused */
-extern char Econinuse[];  /* connection in use */
-extern char Eintr[];    /* interrupted */
-extern char Enomem[];   /* kernel allocate failed */
-//extern char Enoswap[];    /* swap space full */
-extern char Esoverlap[];  /* segments overlap */
-extern char Emouseset[];  /* mouse type already set */
-extern char Eshort[];   /* i/o count too small */
-extern char Egreg[];    /* jmk added reentrancy for threads */
-extern char Ebadspec[];   /* bad attach specifier */
-extern char Enoreg[];   /* process has no saved registers */
-extern char Enoattach[];  /* mount/attach disallowed */
-extern char Eshortstat[]; /* stat buffer too small */
-extern char Ebadstat[];   /* malformed stat buffer */
-extern char Enegoff[];    /* negative i/o offset */
-extern char Ecmdargs[];   /* wrong #args in control message */
-extern char Ebadip[];   /* bad ip address syntax */
-extern char Edirseek[];   /* seek in directory */
-extern char Echange[];    /* media or partition has changed */
-//extern char Estalled[];   /* endpoint stalled */
-//extern char Edetach[];    /* device is detached */
-//extern char Enotconf[];   /* endpoint not configured */
-//extern char Eaoedown[];   /* aoe device is down */
-@ 
 \fi
 
 \chapter{Mini Libc}
@@ -819,11 +496,16 @@ extern char Echange[];    /* media or partition has changed */
 
 \chapter{Extra Code}
 
-\section{[[../include/]]}
+%\section{[[../include/]]}
 
 \section{[[lib/]]}
 
+% lib.h in Mini LibC section
+
 \section{[[core/]]}
+
+% errstr.c  in Error managment section
+% error.h  in Error managment section
 
 \section{[[concurrency/]]}
 
@@ -859,6 +541,58 @@ extern char Echange[];    /* media or partition has changed */
 
 \chapter{Changelog}
 \label{sec:changelog}
+
+\chapter{Glossary}
+\label{sec:glossary}
+
+\begin{verbatim}
+up = user process
+
+pc = program counter
+
+spl = set priority level
+
+ilock = interrupt safe version of lock (disable interruptions)
+
+umb = upper memory block
+
+RMAP = RAM map
+
+PDB = page directory base
+
+PTE = page table entry
+
+tod = time of day
+
+ap = application processor
+
+EDF = Earliest Deadline First
+http://en.wikipedia.org/wiki/Earliest_deadline_first_scheduling
+
+RPC = remote procedure call
+
+EGRP = Environment group
+
+FGRP = File descriptor Group (chans)
+
+PGRP = Process Group (namespace)
+
+VNO = Vector number (interrupt)
+
+ISR = Interrupt Service Routine
+
+TSC = Time Stamp Counter
+http://en.wikipedia.org/wiki/Time_Stamp_Counter
+
+intr = Interrupt (not INT, probably to avoid ambiguity with integer)
+
+APIC = Advanded Programmable Interrupt Controller (a next gen 8259)
+
+ACPI = Advanced Configuration & Power Interface
+
+cistrcmp= ??
+\end{verbatim}
+
 
 \chapter*{Indexes}
 \addcontentsline{toc}{section}{Index}
