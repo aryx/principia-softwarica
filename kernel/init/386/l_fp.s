@@ -90,6 +90,5 @@ TEXT fpsserestore0(SB), $0                      /* enable and restore state */
         FXRSTOR
         WAIT
         RET
-
         
 /*e: l_fp.s */

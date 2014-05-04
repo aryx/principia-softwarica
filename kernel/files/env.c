@@ -1,9 +1,11 @@
 /*s: env.c */
-#include    "u.h"
-#include    "../port/lib.h"
-#include    "mem.h"
-#include    "dat.h"
-#include    "fns.h"
+/*s: kernel basic includes */
+#include "u.h"
+#include "../port/lib.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+/*e: kernel basic includes */
 #include    "../port/error.h"
 
 // this used to be in devenv.c, but to avoid backward deps I've splitted

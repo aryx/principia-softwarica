@@ -36,5 +36,4 @@ extern int  connectlocal(void);
 // boot.c:
 extern void boot(int, char **);
 
-
 /*e: boot.h */

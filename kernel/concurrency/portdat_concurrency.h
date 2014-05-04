@@ -1,32 +1,5 @@
 /*s: portdat_concurrency.h */
 
-// There are different code "regions": 
-// - user code, 
-// - kernel init code
-// - kernel code of kernel processes (e.g. the alarm kernel process)
-// - kernel code of syscalls (soft interrupt), 
-// - kernel code of interrupt handlers (hard interrupt).
-//
-// There is no mutual exclusion need between user and kernel code. 
-// Same for init code as only one processor is used during the
-// uninterrupted sequential initialization.
-//
-// For the kernel code one wants mutual exclusion because of possible race 
-// on shared data structures between the syscalls themselves when run
-// on different processors (or even when run on one processor as one syscall
-// can be interrupted causing a scheduling that will then lead later to
-// another syscall), but also between the syscalls and interrupts.
-// The flow of control on one processor can be 
-//  - User -> Syscall, 
-//  - User -> Interrupt,
-//  - or even User -> Syscall -> Interrupt. 
-//  - one can even have User -> Syscall -> Interrupt -> Interrupt!!
-// This is on one processor. Multiple processors lead to more combinations
-// where 2 processors can run at the same time 2 interrupt handlers for instance.
-// 
-// One must take care when using locks inside interrupts as one can deadlock
-// if the same lock was used in the enclosing syscall (hence ilock/iunlock)
-
 //*****************************************************************************
 // Mutual exclusion
 //*****************************************************************************

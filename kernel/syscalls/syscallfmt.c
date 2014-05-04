@@ -2,12 +2,13 @@
 /*
  * Print functions for system call tracing.
  */
+/*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-
+/*e: kernel basic includes */
 #include "/sys/src/libc/9syscall/sys.h"
 extern  char* sysctab[];
 extern  int nsyscall;

@@ -1,6 +1,5 @@
 /*s: io.h */
 
-
 #define X86FAMILY(x)  ((((x)>>8) & 0x0F) | (((x)>>20) & 0xFF)<<4)
 
 enum {

@@ -9,7 +9,6 @@
 //  USED(mp);
 //}
 
-
 int
 connectlocal(void)
 {

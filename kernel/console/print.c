@@ -1,10 +1,11 @@
 /*s: print.c */
+/*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-
+/*e: kernel basic includes */
 // overrides functions defined in lib_core/libc/fmt/fmtlock.c 
 // to behave in a special way when libc functions related to fmt
 // are called in the kernel.

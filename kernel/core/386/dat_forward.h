@@ -1,5 +1,4 @@
 /*s: dat_forward.h */
-
 typedef union ArchFPsave  ArchFPsave;
 typedef struct ArchProcNotsave  ArchProcNotsave;
 typedef struct ArchProcMMU ArchProcMMU;
@@ -33,7 +32,6 @@ typedef struct I8253 I8253;
 typedef struct Page Page;
 typedef struct Proc Proc;
 typedef struct Lock Lock;
-
 
 #pragma incomplete BIOS32si
 #pragma incomplete Pcidev

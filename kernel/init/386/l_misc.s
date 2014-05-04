@@ -34,8 +34,6 @@ _nothingready:
 
 
 
-
-
 /*
  * Basic timing loop to determine CPU frequency.
  */
@@ -45,7 +43,6 @@ _aamloop:
         AAM
         LOOP    _aamloop
         RET
-
 
 
 //*****************************************************************************

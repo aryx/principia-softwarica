@@ -1,10 +1,11 @@
 /*s: main_processes.c */
+/*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-
+/*e: kernel basic includes */
 //TODO: where this is set??
 int idle_spin, idle_if_nproc;
 

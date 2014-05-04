@@ -6,11 +6,13 @@
  * MemMin is what the bootstrap code in l.s has already mapped;
  * MemMax is the limit of physical memory to scan.
  */
+/*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 #include "io.h"
 #include "ureg.h"
 

@@ -1,10 +1,11 @@
 /*s: x86.c */
+/*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-
+/*e: kernel basic includes */
 #include "io.h"
 
 //#define X86STEPPING(x)  ((x) & 0x0F)
@@ -268,8 +269,5 @@ cpuidentify(void)
     cputype = t;
     return t->family;
 }
-
-
-
 
 /*e: x86.c */

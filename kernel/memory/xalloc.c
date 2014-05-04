@@ -1,10 +1,11 @@
 /*s: xalloc.c */
+/*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-
+/*e: kernel basic includes */
 // Memory allocator for long lived allocated structures
 // e.g. array or Proc (procalloc), array of Pages (palloc.pages), etc
 

@@ -1,10 +1,11 @@
 /*s: arch.c */
+/*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-
+/*e: kernel basic includes */
 //todo: weird, if don't include this file, then can't declare arch in this file
 // or I get some type signature mismatch
 #include "io.h"

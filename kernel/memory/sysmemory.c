@@ -1,9 +1,11 @@
 /*s: sysmemory.c */
-#include    "u.h"
-#include    "../port/lib.h"
-#include    "mem.h"
-#include    "dat.h"
-#include    "fns.h"
+/*s: kernel basic includes */
+#include "u.h"
+#include "../port/lib.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+/*e: kernel basic includes */
 #include    "../port/error.h"
 
 // see also sysbrk_ in sysproc.c

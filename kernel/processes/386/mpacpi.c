@@ -5,11 +5,13 @@
  * avoids AML but that's only enough to discover
  * the processors, not the interrupt routing details.
  */
+/*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+/*e: kernel basic includes */
 #include "io.h"
 #include "mp.h"
 #include "mpacpi.h"
