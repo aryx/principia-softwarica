@@ -60,6 +60,10 @@ extern Syscall systsemacquire;
 //@Scheck: TODO? dead?
 extern Syscall sysdeath;
 
+//coupling: debuggers/acid/conf/syscall
+//coupling: debuggers/acid/conf/truss
+//TODO: remove obsolete calls, all _XXX, and maybe even reorder?
+// also use an enum instead?
 Syscall *systab[] = {
 	[SYSR1]		sysr1,
 	[_ERRSTR]	sys_errstr,

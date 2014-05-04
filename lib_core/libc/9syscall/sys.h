@@ -1,9 +1,3 @@
-//coupling: debuggers/acid/conf/syscall
-//coupling: debuggers/acid/conf/truss
-
-//TODO: remove obsolete calls, all _XXX, and maybe even reorder?
-// also use an enum instead?
-
 #define	SYSR1		0
 #define	_ERRSTR		1
 #define	BIND		2
