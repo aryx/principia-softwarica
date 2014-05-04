@@ -87,6 +87,7 @@ main(int, char**)
 
 	menu.item = mstr;
 	menu.lasthit = 0;
+        // the event loop
 	for(;;) {
 		key = event(&e);
 		if(key == Emouse) {
