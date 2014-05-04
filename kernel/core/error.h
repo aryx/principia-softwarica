@@ -1,4 +1,3 @@
-/*s: error.h */
 //extern char Enoerror[];   /* no error */
 extern char Emount[];   /* inconsistent mount */
 extern char Eunmount[];   /* not mounted */
@@ -57,4 +56,4 @@ extern char Echange[];    /* media or partition has changed */
 //extern char Edetach[];    /* device is detached */
 //extern char Enotconf[];   /* endpoint not configured */
 //extern char Eaoedown[];   /* aoe device is down */
-/*e: error.h */
+

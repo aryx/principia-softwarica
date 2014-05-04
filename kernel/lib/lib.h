@@ -1,5 +1,3 @@
-/*s: lib.h */
-
 // This file mostly exports code from lib_core/libc/ (linked with the kernel).
 // Those functions are also exported in include/libc.h but they prefered to
 // not include it and instead to reexport here a subset specific to the kernel.
@@ -286,4 +284,3 @@ struct OWaitmsg
   char  msg[64];  /* compatibility BUG */
 };
 
-/*e: lib.h */

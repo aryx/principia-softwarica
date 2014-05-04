@@ -1,5 +1,3 @@
-/*s: errstr.c */
-//char Enoerror[] = "no error";
 char Emount[] = "inconsistent mount";
 char Eunmount[] = "not mounted";
 char Eismtpt[] = "is a mount point";
@@ -21,7 +19,6 @@ char Einuse[] = "device or object already in use";
 char Eio[] = "i/o error";
 char Etoobig[] = "read or write too large";
 char Etoosmall[] = "read or write too small";
-//char Enoport[] = "network port not available";
 char Ehungup[] = "i/o on hungup channel";
 char Ebadctl[] = "bad process or channel control request";
 char Enodev[] = "no free devices";
@@ -38,7 +35,6 @@ char Econrefused[] = "connection refused";
 char Econinuse[] = "connection in use";
 char Eintr[] = "interrupted";
 char Enomem[] = "kernel allocate failed";
-//char Enoswap[] = "swap space full";
 char Esoverlap[] = "segments overlap";
 char Emouseset[] = "mouse type already set";
 char Eshort[] = "i/o count too small";
@@ -53,8 +49,4 @@ char Ecmdargs[] = "wrong #args in control message";
 char Ebadip[] = "bad ip address syntax";
 char Edirseek[] = "seek in directory";
 char Echange[] = "media or partition has changed";
-//char Estalled[] = "endpoint stalled";
-//char Edetach[] = "device is detached";
-//char Enotconf[] = "endpoint not configured";
-//char Eaoedown[] = "aoe device is down";
-/*e: errstr.c */
+
