@@ -13,8 +13,10 @@ enum
     Maxenvsize = 16300,
 };
 
+/*s: devenv.c forward decl */
 static Egrp *envgrp(Chan *c);
 static int  envwriteable(Chan *c);
+/*e: devenv.c forward decl */
 
 static Egrp confegrp;   /* global environment group containing the kernel configuration */
 

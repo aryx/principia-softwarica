@@ -10,7 +10,10 @@
 
 #include    "netif.h"
 
+/*s: devpipe.c forward decl */
 typedef struct Pipe Pipe;
+/*e: devpipe.c forward decl */
+
 struct Pipe
 {
     QLock;

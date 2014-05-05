@@ -7,8 +7,9 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
-//TODO: where this is set??
-int idle_spin, idle_if_nproc;
+
+int idle_spin;
+int idle_if_nproc;
 
 /*
  *  set up floating point for a new process

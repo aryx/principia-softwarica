@@ -11,7 +11,6 @@
 // used to be static
 Lock nvrtlock;
 
-
 uchar
 nvramread(int addr)
 {

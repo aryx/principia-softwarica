@@ -21,7 +21,9 @@ enum
     Nbootfiles = 32,
 };
 
+/*s: devroot.c forward decl */
 typedef struct Dirlist Dirlist;
+/*e: devroot.c forward decl */
 struct Dirlist
 {
     uint base; // for unique qids

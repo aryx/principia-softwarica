@@ -1,4 +1,6 @@
 /*s: pgrp.c */
+// Process group, and Namespace.
+
 /*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
@@ -7,8 +9,6 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
-
-// Process group, and Namespace.
 
 enum {
     Whinesecs = 10,     /* frequency of out-of-resources printing */

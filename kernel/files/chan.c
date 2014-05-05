@@ -8,7 +8,10 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: chan.c forward decl */
 char*       skipslash(char*);
+typedef struct Elemlist Elemlist;
+/*e: chan.c forward decl */
 
 int chandebug=0;        /* toggled by sysr1 */
 #define DBG if(chandebug)iprint
@@ -27,7 +30,6 @@ struct
     Chan    *list;
 } chanalloc;
 
-typedef struct Elemlist Elemlist;
 
 struct Elemlist
 {

@@ -11,7 +11,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 #include "io.h"
-#include "ureg.h"
+#include <ureg.h>
 #include "../port/sd.h"
 
 extern Dev sddevtab;
@@ -24,10 +24,10 @@ static char devletters[] = "0123456789"
 static SDev *devs[sizeof devletters-1];
 static QLock devslock;
 
+/*s: devsd.c forward decl */
 extern void sdaddpart(SDunit*, char*, uvlong, uvlong);
-//extern int sdsetsense(SDreq*, int, int, int, int);
-//extern int sdmodesense(SDreq*, uchar*, void*, int);
 extern void sdadddevs(SDev*);
+/*e: devsd.c forward decl */
 
 enum {
     Rawcmd,

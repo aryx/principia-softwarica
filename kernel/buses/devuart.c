@@ -32,8 +32,10 @@ struct Uartalloc {
     Uart *elist;    /* list of enabled interfaces */
 } uartalloc;
 
+/*s: devuart.c forward decl */
 static void uartclock(void);
 static void uartflow(void*);
+/*e: devuart.c forward decl */
 
 /*
  *  enable/disable uart and add/remove to list of enabled uarts

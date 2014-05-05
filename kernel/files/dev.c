@@ -12,7 +12,6 @@
 Dev** devtab = 0;
 
 
-
 void
 mkqid(Qid *q, vlong path, ulong vers, int type)
 {

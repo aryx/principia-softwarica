@@ -8,7 +8,9 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: fault.c forward decl */
 void        pio(Segment *, ulong, ulong, Page **);
+/*e: fault.c forward decl */
 
 int
 fault(ulong addr, bool read)

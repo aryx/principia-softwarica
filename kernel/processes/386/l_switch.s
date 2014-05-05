@@ -1,6 +1,6 @@
 /*s: l_switch.s */
 
-// This file is used for task switching but last to emulate
+// This file is used for task switching but also to emulate
 // exceptions in C (via the waserror(), nexterror(), poperror() functions)
         
 /*

@@ -9,7 +9,7 @@
 /*e: kernel basic includes */
 
 #include "io.h"
-#include "ureg.h"
+#include <ureg.h>
 #include "mp.h"
 #include "apbootstrap.h"
 

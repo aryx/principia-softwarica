@@ -8,7 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-#include    "tos.h"
+#include    <tos.h>
 #include    <a.out.h>
 
 enum
@@ -27,8 +27,9 @@ enum
     RFNOMNT     = (1<<14),
 };
 
-
+/*s: sysproc.c forward decl */
 int shargs(char*, int, char**);
+/*e: sysproc.c forward decl */
 
 
 long

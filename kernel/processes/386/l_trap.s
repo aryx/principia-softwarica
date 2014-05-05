@@ -1,7 +1,6 @@
 /*s: l_trap.s */
 #include "mem.h"
         
-        
 /*
  * Interrupt/exception handling.
  * Each entry in the vector table calls either _strayintr or _strayintrx depending

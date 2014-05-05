@@ -8,9 +8,10 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-// forward decl
+/*s: page.c forward decl */
 int ispages(void*);
 void portcountpagerefs(ulong*, int);
+/*e: page.c forward decl */
 
 //*****************************************************************************
 // Initialization

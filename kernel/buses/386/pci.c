@@ -20,7 +20,6 @@
 #define PCICONSSIZE (16*1024)
 #endif
 
-void    pcicfgw16(Pcidev*, int, int);
 
 struct
 {
@@ -30,10 +29,13 @@ struct
 
 int pcivga;
 
+/*s: pci.c forward decl */
+void    pcicfgw16(Pcidev*, int, int);
 ulong   pcibarsize(Pcidev*, int);
 void    pcibussize(Pcidev*, ulong*, ulong*);
 void    pcihinv(Pcidev*);
 uchar   pciipin(Pcidev*, uchar);
+/*e: pci.c forward decl */
 
 int
 pcilog(char *fmt, ...)

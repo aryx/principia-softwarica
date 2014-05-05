@@ -19,9 +19,10 @@ enum miscsize_portdat
   //  MAXCRYPT =  127,
 };
 
-
+/*s: portdat.h pragmas */
 #pragma varargck  type  "I" uchar*
 #pragma varargck  type  "V" uchar*
 #pragma varargck  type  "E" uchar*
 #pragma varargck  type  "M" uchar*
+/*e: portdat.h pragmas */
 /*e: portdat.h */

@@ -8,9 +8,11 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: dma.c forward decl */
 typedef struct DMAport  DMAport;
 typedef struct DMA  DMA;
 typedef struct DMAxfer  DMAxfer;
+/*e: dma.c forward decl */
 
 /*
  *  state of a dma transfer

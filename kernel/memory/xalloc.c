@@ -1,4 +1,6 @@
 /*s: xalloc.c */
+// Memory allocator for long lived allocated structures
+// e.g. array or Proc (procalloc), array of Pages (palloc.pages), etc
 /*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
@@ -7,11 +9,10 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
-// Memory allocator for long lived allocated structures
-// e.g. array or Proc (procalloc), array of Pages (palloc.pages), etc
 
-// forward decl
+/*s: xalloc.c forward decl */
 void        xhole(ulong, ulong);
+/*e: xalloc.c forward decl */
 
 //*****************************************************************************
 // The global

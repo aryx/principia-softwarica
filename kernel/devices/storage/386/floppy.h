@@ -1,7 +1,9 @@
 /*s: floppy.h */
+/*s: floppy.h forward decl */
 typedef struct FController FController;
 typedef struct FDrive FDrive;
 typedef struct FType FType;
+/*e: floppy.h forward decl */
 
 /*
  *  a floppy drive

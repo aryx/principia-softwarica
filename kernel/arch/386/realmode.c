@@ -8,9 +8,9 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-#include    "tos.h"
+#include    <tos.h>
 #include    "io.h"
-#include    "ureg.h"
+#include    <ureg.h>
 
 /*
  * Back the processor into real mode to run a BIOS call,

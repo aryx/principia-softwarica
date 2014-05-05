@@ -10,6 +10,10 @@
 
 #include    <pool.h>
 
+/*s: pool.c forward decl */
+typedef struct Private  Private;
+/*e: pool.c forward decl */
+
 //*****************************************************************************
 // Concurrency
 //*****************************************************************************
@@ -19,7 +23,6 @@ struct Private {
     Lock        lk;
     char        msg[256]; /* a rock for messages to be printed at unlock */
 };
-typedef struct Private  Private;
 
 //*****************************************************************************
 // Pool methods

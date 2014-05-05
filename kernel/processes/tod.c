@@ -1,4 +1,6 @@
 /*s: tod.c */
+// TOD: Time Of Day.
+
 /*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
@@ -8,9 +10,9 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-// TOD: Time Of Day.
-
+/*s: tod.c forward decl */
 uvlong      mk64fract(uvlong, uvlong);
+/*e: tod.c forward decl */
 
 /*
  * Compute nanosecond epoch time from the fastest ticking clock

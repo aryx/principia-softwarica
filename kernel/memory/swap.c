@@ -8,13 +8,14 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: swap.c forward decl */
 static int  canflush(Proc*, Segment*);
 static void executeio(void);
 static int  needpages(void*);
 static void pageout(Proc*, Segment*);
 static void pagepte(int, Page**);
 static void pager(void*);
-
+/*e: swap.c forward decl */
 
 //static    int swopen;
 static  Page    **iolist;

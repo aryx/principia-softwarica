@@ -2,13 +2,6 @@
 /*
  * Storage Device.
  */
-typedef struct SDev SDev;
-typedef struct SDifc SDifc;
-typedef struct SDio SDio;
-typedef struct SDpart SDpart;
-typedef struct SDperm SDperm;
-typedef struct SDreq SDreq;
-typedef struct SDunit SDunit;
 
 struct SDperm {
   char* name;

@@ -109,6 +109,7 @@ extern  int snprint(char*, int, char*, ...);
 extern  int sprint(char*, char*, ...);
 //unused: extern  int vsnprint(char*, int, char*, va_list);
 
+/*s: lib.h pragmas */
 #pragma varargck  argpos  fmtprint  2
 #pragma varargck  argpos  print   1
 #pragma varargck  argpos  seprint   3
@@ -138,6 +139,7 @@ extern  int sprint(char*, char*, ...);
 #pragma varargck  type  "p" uintptr
 #pragma varargck  type  "p" void*
 #pragma varargck  flag  ','
+/*e: lib.h pragmas */
 
 extern  int fmtstrinit(Fmt*);
 extern  int fmtinstall(int, int (*)(Fmt*));
@@ -235,10 +237,12 @@ enum dirmode {
   DMEXEC = 0x1,   /* mode bit for execute permission */
 };
 
+/*s: lib.h forward decl */
 typedef struct Qid  Qid;
 typedef struct Dir  Dir;
 typedef struct OWaitmsg OWaitmsg;
 typedef struct Waitmsg  Waitmsg;
+/*e: lib.h forward decl */
 
 struct Qid
 {

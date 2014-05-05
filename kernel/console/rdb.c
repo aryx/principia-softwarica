@@ -8,7 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 #include "io.h"
-#include "ureg.h"
+#include <ureg.h>
 
 #define DBG if(0)scrprint
 #pragma varargck argpos scrprint 1

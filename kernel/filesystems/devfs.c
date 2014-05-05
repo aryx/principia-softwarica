@@ -23,7 +23,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 #include "io.h"
-#include "ureg.h"
+#include <ureg.h>
 
 enum
 {
@@ -65,9 +65,11 @@ enum
     Retrypause = 5000,  /* ms. to pause between retries */
 };
 
+/*s: devfs.c forward decl */
 typedef struct Inner Inner;
 typedef struct Fsdev Fsdev;
 typedef struct Tree Tree;
+/*e: devfs.c forward decl */
 
 struct Inner
 {

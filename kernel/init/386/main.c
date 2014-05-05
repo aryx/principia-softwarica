@@ -9,11 +9,12 @@
 /*e: kernel basic includes */
 
 #include        "io.h"
-#include        "ureg.h"
-#include        "pool.h"
+#include        <ureg.h>
 #include        "init.h"
 #include        "reboot.h"
 #include        "mp.h"
+
+#include        <pool.h>
 #include        <tos.h>
 
 void bootargs(void*);
@@ -819,126 +820,126 @@ void
 main(void)
 {
 
-  // initial assignment made to avoid circular dependencies in codegraph
-  print = devcons_print;
-  iprint = devcons_iprint;
-  pprint = devcons_pprint;
+    // initial assignment made to avoid circular dependencies in codegraph
+    print = devcons_print;
+    iprint = devcons_iprint;
+    pprint = devcons_pprint;
+    
+    panic = devcons_panic;
+    _assert = devcons__assert;
+    
+    error = proc_error;
+    nexterror = proc_nexterror;
+    
+    dumpstack = trap_dumpstack;
+    dumpaproc = proc_dumpaproc;
+    
+    devtab = conf_devtab;
+    
+    delay = i8253_delay;
+    microdelay = i8253_microdelay;
   
-  panic = devcons_panic;
-  _assert = devcons__assert;
+    wakeup = proc_wakeup;
+    sched = proc_sched;
+    ready = proc_ready;
+    sleep = proc_sleep;
+    tsleep = proc_tsleep;
   
-  error = proc_error;
-  nexterror = proc_nexterror;
+    exit = main_exit;
+    isaconfig = main_isaconfig;
+    
+    /*
+     * On a uniprocessor, you'd think that coherence could be nop,
+     * but it can't.  We still need a barrier when using coherence() in
+     * device drivers.
+     *
+     * On VMware, it's safe (and a huge win) to set this to nop.
+     * Aux/vmware does this via the #P/archctl file.
+     */
+    coherence = nop;
+    
+    fastticks = devarch_fastticks;
+    
+    cclose = chan_cclose;
   
-  dumpstack = trap_dumpstack;
-  dumpaproc = proc_dumpaproc;
+    proctab = proc_proctab;
+    postnote = proc_postnote;
+    return0 = sysproc_return0;
+    pexit = proc_pexit;
   
-  devtab = conf_devtab;
+    hook_ioalloc = devarch_hook_ioalloc;
   
-  delay = i8253_delay;
-  microdelay = i8253_microdelay;
+    // end patch, back to original code
 
-  wakeup = proc_wakeup;
-  sched = proc_sched;
-  ready = proc_ready;
-  sleep = proc_sleep;
-  tsleep = proc_tsleep;
+    cgapost(0);
 
-  exit = main_exit;
-  isaconfig = main_isaconfig;
-  
-  /*
-   * On a uniprocessor, you'd think that coherence could be nop,
-   * but it can't.  We still need a barrier when using coherence() in
-   * device drivers.
-   *
-   * On VMware, it's safe (and a huge win) to set this to nop.
-   * Aux/vmware does this via the #P/archctl file.
-   */
-  coherence = nop;
-  
-  fastticks = devarch_fastticks;
-  
-  cclose = chan_cclose;
+    mach0init(); // calls machinit()
 
-  proctab = proc_proctab;
-  postnote = proc_postnote;
-  return0 = sysproc_return0;
-  pexit = proc_pexit;
+    options();
 
-  hook_ioalloc = devarch_hook_ioalloc;
+    ioinit();
+    i8250console();
+    quotefmtinstall();
+    screeninit();
+    // screeninit() done, we can print stuff!
+    print("\nPlan 99999999999999\n");
 
-  // end patch, back to original code
+    // the init0 means this is really early on (malloc is not available?!)
+    trapinit0();
+    mmuinit0();
 
-        cgapost(0);
+    kbdinit();
+    i8253init();
 
-        mach0init(); // calls machinit()
+    cpuidentify();
 
-        options();
+    meminit();
+    confinit();
 
-        ioinit();
-        i8250console();
-        quotefmtinstall();
-        screeninit();
-        // screeninit() done, we can print stuff!
-        print("\nPlan 99999999999999\n");
+    archinit();
 
-        // the init0 means this is really early on (malloc is not available?!)
-        trapinit0();
-        mmuinit0();
+    xinit();
 
-        kbdinit();
-        i8253init();
+    if(i8237alloc != nil)
+            i8237alloc();
 
-        cpuidentify();
+    trapinit();
+    printinit();
+    cpuidprint();
+    mmuinit();
 
-        meminit();
-        confinit();
+    fpsavealloc();
+    if(arch->intrinit)      /* launches other processors on an mp */
+            arch->intrinit();
 
-        archinit();
-
-        xinit();
-
-        if(i8237alloc != nil)
-                i8237alloc();
-
-        trapinit();
-        printinit();
-        cpuidprint();
-        mmuinit();
-
-        fpsavealloc();
-        if(arch->intrinit)      /* launches other processors on an mp */
-                arch->intrinit();
-
-        timersinit();
-        mathinit();
-        kbdenable();
-        if(arch->clockenable)
-                arch->clockenable();
+    timersinit();
+    mathinit();
+    kbdenable();
+    if(arch->clockenable)
+            arch->clockenable();
 
 
-        procinit0();
-        initseg();
-        if(delaylink) {
-                bootlinks();
-                pcimatch(0, 0, 0);
-        } else
-                links();
-        conf.monitor = true;
-        // initialize all devices
-        chandevreset();
-        cgapost(0xcd);
+    procinit0();
+    initseg();
+    if(delaylink) {
+            bootlinks();
+            pcimatch(0, 0, 0);
+    } else
+            links();
+    conf.monitor = true;
+    // initialize all devices
+    chandevreset();
+    cgapost(0xcd);
 
-        pageinit();
-        i8253link();
-        swapinit();
+    pageinit();
+    i8253link();
+    swapinit();
 
-        // let's craft our first process (that will then exec("boot/boot"))
-        userinit();
-        active.thunderbirdsarego = 1;
+    // let's craft our first process (that will then exec("boot/boot"))
+    userinit();
+    active.thunderbirdsarego = 1;
 
-        cgapost(0x99);
-        schedinit();
+    cgapost(0x99);
+    schedinit();
 }
 /*e: main.c */

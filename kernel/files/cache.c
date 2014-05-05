@@ -16,8 +16,11 @@ enum
     NEXTENT     = 200,      /* extent allocation size */
 };
 
-
+/*s: cache.c forward decl */
 typedef struct Cache Cache;
+typedef struct Ecache Ecache;
+/*e: cache.c forward decl */
+
 struct Cache
 {
     QLock;
@@ -27,7 +30,6 @@ struct Cache
     Mntcache    *hash[NHASH];
 };
 
-typedef struct Ecache Ecache;
 struct Ecache
 {
     Lock;

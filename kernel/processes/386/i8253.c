@@ -74,7 +74,6 @@ enum
 I8253 i8253;
 
 
-
 struct Watchdog
 {
     void    (*enable)(void);    /* watchdog enable */

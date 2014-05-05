@@ -122,7 +122,9 @@ struct CtlrUart {
     int fena;
 };
 
+/*s: uarti8250.c forward decl */
 typedef struct CtlrUart CtlrUart;
+/*e: uarti8250.c forward decl */
 
 extern PhysUart i8250physuart;
 

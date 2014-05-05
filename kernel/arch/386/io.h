@@ -158,7 +158,6 @@ enum {          /* type 2 pre-defined header */
   PciCBLMBAR  = 0x44,   /* legacy mode base address */
 };
 
-typedef struct Pcisiz Pcisiz;
 struct Pcisiz
 {
   Pcidev* dev;
@@ -166,7 +165,6 @@ struct Pcisiz
   int bar;
 };
 
-typedef struct Pcidev Pcidev;
 struct Pcidev
 {
   int tbdf;     /* type+bus+device+function */
@@ -238,9 +236,6 @@ enum
 /*
  * PCMCIA support code.
  */
-
-typedef struct PCMslot    PCMslot;
-typedef struct PCMconftab PCMconftab;
 
 /*
  * Map between ISA memory space and PCMCIA card memory space.
@@ -314,6 +309,8 @@ struct PCMslot
   PCMmap  mmap[4];  /* maps, last is always for the kernel */
 };
 
+/*s: io.h pragmas */
 #pragma varargck  type  "T" int
 #pragma varargck  type  "T" uint
+/*e: io.h pragmas */
 /*e: io.h */

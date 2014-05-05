@@ -9,8 +9,8 @@
 /*e: kernel basic includes */
 
 #include    <trace.h>
-#include    "tos.h"
-#include    "ureg.h"
+#include    <tos.h>
+#include    <ureg.h>
 
 struct Mntwalk              /* state for /proc/#/ns */
 {
@@ -157,12 +157,14 @@ static char *sname[]={ "Text", "Data", "Bss", "Stack", "Shared", "Phys", };
 #define PID(q)      ((q).vers)
 #define NOTEID(q)   ((q).vers)
 
+/*s: devproc.c forward decl */
 void    procctlreq(Proc*, char*, int);
 int procctlmemio(Proc*, ulong, int, void*, int);
 Chan*   proctext(Chan*, Proc*);
 Segment* txt2data(Proc*, Segment*);
 int procstopped(void*);
 void    mntscan(Mntwalk*, Proc*);
+/*e: devproc.c forward decl */
 
 static Traceevent *tevents;
 static Lock tlock;

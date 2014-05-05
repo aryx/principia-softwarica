@@ -64,8 +64,13 @@ Segdesc gdt[NGDT] =
 };
 
 static int didmmuinit;
+/*s: mmu.c forward decl */
 static void taskswitch(ulong, ulong);
 static void memglobal(void);
+static int findhole(ulong *a, int n, int count);
+static ulong vmapalloc(ulong size);
+static void pdbunmap(ulong*, ulong, int);
+/*e: mmu.c forward decl */
 
 #define vpt ((ulong*)VPT)
 #define VPTX(va)        (((ulong)(va))>>12)
@@ -536,10 +541,6 @@ mmuwalk(ulong* pdb, ulong va, int level, int create)
  */
 
 static Lock vmaplock;
-
-static int findhole(ulong *a, int n, int count);
-static ulong vmapalloc(ulong size);
-static void pdbunmap(ulong*, ulong, int);
 
 /*
  * Add a device mapping to the vmap range.

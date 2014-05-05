@@ -8,7 +8,9 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: devsrv.c forward decl */
 typedef struct Srv Srv;
+/*e: devsrv.c forward decl */
 struct Srv
 {
     char    *name;

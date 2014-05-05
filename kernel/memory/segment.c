@@ -31,9 +31,10 @@ static Lock physseglock;
 
 Segment* (*_globalsegattach)(Proc*, char*);
 
-
+/*s: segment.c forward decl */
 static void imagereclaim(void);
 static void imagechanreclaim(void);
+/*e: segment.c forward decl */
 
 //*****************************************************************************
 // Initialization

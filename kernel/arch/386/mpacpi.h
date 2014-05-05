@@ -6,13 +6,6 @@
  * followed by 4 bytes of total table length then 28 bytes of ID information
  * (including the table checksum).
  */
-typedef struct Dsdt Dsdt;
-typedef struct Facp Facp;
-typedef struct Hpet Hpet;
-typedef struct Madt Madt;
-typedef struct Mcfg Mcfg;
-typedef struct Mcfgd Mcfgd;
-typedef struct Rsd Rsd;
 
 //@Scheck: type deps on params
 struct Madt {       /* Multiple APIC DT */

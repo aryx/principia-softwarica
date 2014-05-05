@@ -56,18 +56,15 @@ char *statename[] =
     "Waitrelease",
 };
 
-//*****************************************************************************
-// Forward decl
-//*****************************************************************************
-
+/*s: proc.c forward decl */
 Proc* runproc(void);
 void updatecpu(Proc*);
 int reprioritize(Proc*);
 
-
 static void pidhash(Proc*);
 static void pidunhash(Proc*);
 static void rebalance(void);
+/*e: proc.c forward decl */
 
 //*****************************************************************************
 // Error managment

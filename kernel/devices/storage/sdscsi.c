@@ -8,7 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 #include "io.h"
-#include "ureg.h"
+#include <ureg.h>
 #include "../port/sd.h"
 
 static int

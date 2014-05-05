@@ -10,6 +10,7 @@
 
 #define MAXRPC (IOHDRSZ+8192)
 
+/*s: devmnt.c forward decl */
 Mnt*    mntchk(Chan*);
 void    mntdirfix(uchar*, Chan*);
 Mntrpc* mntflushalloc(Mntrpc*, ulong);
@@ -24,6 +25,7 @@ void    mountmux(Mnt*, Mntrpc*);
 void    mountrpc(Mnt*, Mntrpc*);
 int rpcattn(void*);
 Chan*   mntchan(void);
+/*e: devmnt.c forward decl */
 
 
 void (*mntstats)(int, Chan*, uvlong, ulong);

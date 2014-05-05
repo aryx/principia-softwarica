@@ -25,9 +25,13 @@ enum {
     Nbcd=       6,
 };
 
-
-
+/*s: devrtc.c forward decl */
 typedef struct Rtc  Rtc;
+
+static ulong rtc2sec(Rtc*);
+static void sec2rtc(ulong, Rtc*);
+/*e: devrtc.c forward decl */
+
 struct Rtc
 {
     int sec;
@@ -50,9 +54,6 @@ Dirtab rtcdir[]={
     "nvram",    {Qnvram, 0},    Nvsize, 0664,
     "rtc",      {Qrtc, 0},  0,  0664,
 };
-
-static ulong rtc2sec(Rtc*);
-static void sec2rtc(ulong, Rtc*);
 
 void
 rtcinit(void)

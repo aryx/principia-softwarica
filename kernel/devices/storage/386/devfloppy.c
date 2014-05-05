@@ -30,10 +30,27 @@
  * dmasetup() may enforce maximum transfer sizes. 
  */
 
+/*s: devfloppy.c forward decl */
 static void floppyintr(Ureg*);
 static int floppyon(FDrive*);
 static void floppyoff(FDrive*);
 static void floppysetdef(FDrive*);
+
+/*
+ *  predeclared
+ */
+static int  cmddone(void*);
+static void floppyformat(FDrive*, Cmdbuf*);
+static void floppykproc(void*);
+static void floppypos(FDrive*,long);
+static int  floppyrecal(FDrive*);
+static int  floppyresult(void);
+static void floppyrevive(void);
+static long floppyseek(FDrive*, long);
+static int  floppysense(void);
+static void floppywait(int);
+static long floppyxfer(FDrive*, int, void*, long, long);
+/*e: devfloppy.c forward decl */
 
 
 
@@ -158,20 +175,6 @@ FController fl;
 
 #define MOTORBIT(i) (1<<((i)+4))
 
-/*
- *  predeclared
- */
-static int  cmddone(void*);
-static void floppyformat(FDrive*, Cmdbuf*);
-static void floppykproc(void*);
-static void floppypos(FDrive*,long);
-static int  floppyrecal(FDrive*);
-static int  floppyresult(void);
-static void floppyrevive(void);
-static long floppyseek(FDrive*, long);
-static int  floppysense(void);
-static void floppywait(int);
-static long floppyxfer(FDrive*, int, void*, long, long);
 
 Dirtab floppydir[]={
     ".",        {Qdir, 0, QTDIR},   0,  0550,

@@ -8,8 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-#include    "pool.h"
-
+#include    <pool.h>
 #include    <authsrv.h>
 
 void    (*consdebug)(void) = nil;
@@ -49,11 +48,13 @@ static struct
 char    *sysname;
 vlong   fasthz;
 
+/*s: devcons.c forward decl */
 static void seedrand(void);
 static int  readtime(ulong, char*, int);
 static int  readbintime(char*, int);
 static int  writetime(char*, int);
 static int  writebintime(char*, int);
+/*e: devcons.c forward decl */
 
 enum
 {

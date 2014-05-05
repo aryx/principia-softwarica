@@ -62,13 +62,6 @@ struct PCMPintr {     /* interrupt table entry */
   uchar intin;      /* destination APIC [L]INTIN# */
 };
 
-typedef struct PCMP PCMP;
-typedef struct _MP_ _MP_;
-typedef struct PCMPprocessor PCMPprocessor;
-typedef struct PCMPbus PCMPbus;
-typedef struct PCMPioapic PCMPioapic;
-typedef struct PCMPintr PCMPintr;
-
 enum {          /* table entry types */
   PcmpPROCESSOR = 0x00,   /* one entry per processor */
   PcmpBUS   = 0x01,   /* one entry per bus */
@@ -115,10 +108,6 @@ enum {          /* table entry types */
  * This is created during a single pass through the MP Configuration
  * table.
  */
-typedef struct Aintr Aintr;
-typedef struct Bus Bus;
-typedef struct Apic Apic;
-
 typedef struct Bus {
   uchar type;
   uchar busno;

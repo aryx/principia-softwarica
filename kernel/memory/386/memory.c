@@ -15,7 +15,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 #include "io.h"
-#include "ureg.h"
+#include <ureg.h>
 
 #define MEMDEBUG    0
 
@@ -32,13 +32,16 @@ enum {
     MemMax      = (3*1024+768)*MB,
 };
 
+/*s: memory.c forward decl */
 typedef struct Map Map;
+typedef struct RMap RMap;
+typedef struct Emap Emap;
+/*e: memory.c forward decl */
 struct Map {
     ulong   size;
     ulong   addr;
 };
 
-typedef struct RMap RMap;
 struct RMap {
     char*   name;
     Map*    map;
@@ -566,7 +569,6 @@ enum
     Carry = 1,
 };
 
-typedef struct Emap Emap;
 struct Emap
 {
     uvlong base;
