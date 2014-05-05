@@ -33,6 +33,12 @@
 #define MS2HZ   (1000/HZ)   /* millisec per clock tick */
 #define TK2SEC(t) ((t)/HZ)    /* ticks to seconds */
 
+// 0x10 = 16
+// 0x100 = 256
+// 0x1000 = 4Ko
+// 0x10000 = 64Ko
+// 0x100000 = 1Mo
+// note: graphic card memory is at 0xb8000 so safer to go to 1Mo for kernel
 /*
  *  Address spaces
  */
