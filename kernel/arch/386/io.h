@@ -235,16 +235,6 @@ enum
   SMBwordread,    /* sends address and cmd, recv's 2 bytes */
 };
 
-//typedef struct SMBus SMBus;
-//struct SMBus {
-//  QLock;    /* mutex */
-//  Rendez  r;  /* rendezvous point for completion interrupts */
-//  void  *arg; /* implementation dependent */
-//  ulong base; /* port or memory base of smbus */
-//  int busy;
-//  void  (*transact)(SMBus*, int, int, int, uchar*);
-//};
-
 /*
  * PCMCIA support code.
  */

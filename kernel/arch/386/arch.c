@@ -36,13 +36,11 @@ cpuidprint(void)
     print(buf);
 }
 
-
 ulong
 µs(void)
 {
     return fastticks2us((*arch->fastclock)(nil));
 }
-
 
 
 static void
@@ -95,8 +93,6 @@ timerset(Tval x)
     if(doi8253set)
         (*arch->timerset)(x);
 }
-
-
 
 
 

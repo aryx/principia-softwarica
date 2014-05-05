@@ -2,6 +2,7 @@
 #include "dat_forward.h"
 #include "../port/portdat_forward.h"
 
+/*s: enum miscsize_dat */
 enum miscsize_dat {
   // used in devcons.c
   KMESGSIZE = (256*1024),  /* lots, for acpi debugging */ // default is 16*1024
@@ -10,6 +11,7 @@ enum miscsize_dat {
   // used in Proc
   MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
 };
+/*e: enum miscsize_dat */
 
 // defines Lock (used inline in Mach in portdat_core.h so must be before)
 #include "../port/portdat_concurrency.h"
@@ -42,12 +44,15 @@ enum miscsize_dat {
 
 #include "../port/portdat.h"
 
+/*s: constant AOUT_MAGIC */
 /*
  *  parameters for sysproc.c
  */
 // I_MAGIC is defined in include/a.out.h
 #define AOUT_MAGIC  (I_MAGIC)
+/*e: constant AOUT_MAGIC */
 
+/*s: enum misc_dat */
 /* cpuid instruction result register bits */
 // this is actually only used in 386/ code. 
 enum misc_dat {
@@ -62,12 +67,6 @@ enum misc_dat {
   Pge = 1<<13,  /* page global extension */
   Fxsr  = 1<<24,  /* have SSE FXSAVE/FXRSTOR */
   Sse2  = 1<<26,  /* thus mfence & lfence instr.s */
-//  Pae = 1<<6,   /* physical-addr extensions */
-//  Cmpxchg8b = 1<<8,
-//  Cpuapic = 1<<9,
-//  Pse2  = 1<<17,  /* more page size extensions */
-//  Clflush = 1<<19,
-//  Mmx = 1<<23,
-//  Sse = 1<<25,  /* thus sfence instr. */
 };
+/*e: enum misc_dat */
 /*e: dat.h */

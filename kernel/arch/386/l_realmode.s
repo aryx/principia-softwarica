@@ -269,5 +269,4 @@ TEXT bios32call(SB), $0
 
 _bios32xxret:
         RET
-
 /*e: l_realmode.s */
