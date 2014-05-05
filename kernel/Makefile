@@ -82,6 +82,7 @@ SRC_VIEWS= \
   core/portfns.c \
   core/portfns.h \
   core/portfns_core.h \
+  devices/keyboard/386/kbd.c \
   devices/keyboard/386/latin1.c \
   devices/keyboard/386/latin1.h \
   devices/portfns_devices.h \

@@ -72,6 +72,7 @@ struct FType
   long  cap;    /* drive capacity in bytes */
   long  tsize;    /* track size in bytes */
 };
+
 /* bits in the registers */
 enum
 {
@@ -117,6 +118,5 @@ enum
   /* status 1 byte */
   Overrun=  0x10,
 };
-
 
 /*e: floppy.h */
