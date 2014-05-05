@@ -10,6 +10,7 @@
 
 #include "../port/systab.h"
 
+/*s: systab.c forward decl */
 extern Syscall sysr1;
 extern Syscall sys_errstr;
 extern Syscall sysbind;
@@ -63,11 +64,11 @@ extern Syscall syspwrite;
 extern Syscall systsemacquire;
 //@Scheck: TODO? dead?
 extern Syscall sysdeath;
+/*e: systab.c forward decl */
 
 //coupling: debuggers/acid/conf/syscall
 //coupling: debuggers/acid/conf/truss
-//TODO: remove obsolete calls, all _XXX, and maybe even reorder?
-// also use an enum instead?
+/*s: global systab */
 Syscall *systab[] = {
     [SYSR1]     sysr1,
     [_ERRSTR]   sys_errstr,
@@ -122,7 +123,9 @@ Syscall *systab[] = {
     [TSEMACQUIRE]   systsemacquire,
 };
 int nsyscall = nelem(systab);
+/*e: global systab */
 
+/*s: global sysstab */
 char *sysctab[] = {
     [SYSR1]     "Running",
     [_ERRSTR]   "_errstr",
@@ -176,4 +179,5 @@ char *sysctab[] = {
     [PWRITE]    "Pwrite",
     [TSEMACQUIRE]   "Tsemacquire",
 };
+/*e: global sysstab */
 /*e: systab.c */
