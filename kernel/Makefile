@@ -166,6 +166,7 @@ SRC_VIEWS= \
   processes/portfns_processes.h \
   processes/proc.c \
   processes/sysproc.c \
+  processes/syssema.c \
   processes/tod.c \
   security/auth.c \
   security/portfns_security.h \
