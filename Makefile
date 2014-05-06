@@ -58,8 +58,8 @@ clangfiles:
 	~/pfff/pfff_test.opt -uninclude_clang .
 	cp sys/src/9/pc/apbootstrap.h kernel/init/386/
 	mv sys/src/9/pc/apbootstrap.h.clang2 kernel/init/386/
-	cp sys/src/9/pc/init.h kernel/init/
-	mv sys/src/9/pc/init.h.clang2 kernel/init/
+	cp sys/src/9/pc/init.h kernel/init/user/preboot
+	mv sys/src/9/pc/init.h.clang2 kernel/init/user/preboot
 	cp sys/src/9/pc/reboot.h kernel/init/386
 	mv sys/src/9/pc/reboot.h.clang2 kernel/init/386/
 	cp sys/src/9/pc/errstr.c kernel/core

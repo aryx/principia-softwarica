@@ -33,7 +33,7 @@ enum miscsize_dat {
 #include "dat_processes.h"
 #include "../port/portdat_processes.h"
 
-// defines Cmd (use ??)
+// defines Cmd
 #include "../port/portdat_misc.h"
 
 // defines Uart

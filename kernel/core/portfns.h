@@ -1,5 +1,4 @@
 /*s: portfns.h */
-
 #include "../port/portfns_core.h"
 #include "../port/portfns_concurrency.h"
 #include "../port/portfns_memory.h"
@@ -12,5 +11,4 @@
 #include "../port/portfns_security.h"
 #include "../port/portfns_network.h"
 #include "../port/portfns_init.h"
-
 /*e: portfns.h */

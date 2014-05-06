@@ -45,10 +45,6 @@ SRC_VIEWS= \
   arch/386/realmode.c \
   arch/386/x16.h \
   arch/386/x86.c \
-  boot/aux.c \
-  boot/boot.c \
-  boot/boot.h \
-  boot/local.c \
   buses/386/dat_buses.h \
   buses/386/dma.c \
   buses/386/pci.c \
@@ -114,15 +110,18 @@ SRC_VIEWS= \
   files/sysfile.c \
   filesystems/devfs.c \
   init/386/apbootstrap.s \
-  init/386/init9.c \
-  init/386/initcode.s \
   init/386/l.s \
   init/386/l_fp.s \
   init/386/l_misc.s \
   init/386/l_multiboot.s \
   init/386/main.c \
   init/386/rebootcode.s \
-  init/initcode.c \
+  init/user/preboot/initcode.c \
+  init/user/preboot/386/init9.c \
+  init/user/boot/aux.c \
+  init/user/boot/boot.c \
+  init/user/boot/boot.h \
+  init/user/boot/local.c \
   init/portfns_init.h \
   init/rebootcmd.c \
   lib/lib.h \
