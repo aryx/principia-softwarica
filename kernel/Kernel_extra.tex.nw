@@ -2293,289 +2293,6 @@ cpuidentify(void)
 
 @
 
-
-\section{[[boot/]]}
-
-\subsection*{[[boot/aux.c]]}
-
-<<aux.c>>=
-#include <u.h>
-#include <libc.h>
-#include "../boot/boot.h"
-
-void
-warning(char *s)
-{
-    char buf[ERRMAX];
-
-    buf[0] = '\0';
-    errstr(buf, sizeof buf);
-    fprint(2, "boot: %s: %s\n", s, buf);
-}
-
-void
-fatal(char *s)
-{
-    char *msg;
-    char buf[ERRMAX];
-
-    buf[0] = '\0';
-    errstr(buf, sizeof buf);
-    msg = smprint("%s: %s", s, buf);
-    fprint(2, "boot: %s\n", msg);
-    exits(msg);         /* this will trigger a panic */
-}
-
-void
-runv(char **argv)
-{
-  int i, pid;
-  
-  switch(pid = fork()){
-  case -1:
-    fatal("fork");
-  case 0:
-    exec(argv[0], argv);
-    fatal(smprint("can't exec %s: %r", argv[0]));
-  default:
-    while ((i = waitpid()) != pid && i != -1)
-      ;
-    if(i == -1)
-      fatal(smprint("wait failed running %s", argv[0]));
-  }
-}
-
-void
-run(char *file, ...)
-{
-  runv(&file);
-}
-
-
-void bind_safe(char* old, char* new, int flag) {
-  if(bind(old, new, flag) < 0)
-    fatal("bind");
-  return;
-}
-
-int open_safe(char* path, int flag) {
-  int fd;
-  if((fd = open(path, flag)) < 0) {
-    fatal("open");
-  }
-  return fd;
-}
-
-void print_safe(int fd, char* str) {
-  if(write(fd, str, strlen(str)) < 0) {
-    fatal("print");
-  };
-  return;
-}
-
-void close_safe(int fd) {
-  if(close(fd) < 0) {
-    fatal("close");
-  }
-}
-@
-
-
-\subsection*{[[boot/boot.c]]}
-
-<<boot.c>>=
-#include <u.h>
-#include <libc.h>
-#include "../boot/boot.h"
-
-/*
- * we should inherit the standard fds all referring to /dev/cons,
- * but we're being paranoid.
- */
-static void
-opencons(void)
-{
-  close(0);
-  close(1);
-  close(2);
-  open("/dev/cons", OREAD);
-  open("/dev/cons", OWRITE);
-  open("/dev/cons", OWRITE);
-}
-
-/*
- * init will reinitialize its namespace.
- * #ec gets us plan9.ini settings (*var variables).
- */
-static void
-bindenvsrv(void)
-{
-  bind("#ec", "/env", MREPL);
-  bind("#e", "/env", MBEFORE|MCREATE);
-  bind("#s", "/srv/", MREPL|MCREATE);
-}
-
-static void
-swapproc(void)
-{
-    int fd;
-
-    fd = open("#c/swap", OWRITE);
-    if(fd < 0){
-        warning("opening #c/swap");
-        return;
-    }
-    if(write(fd, "start", 5) <= 0)
-        warning("starting swap kproc");
-    close(fd);
-}
-
-static void
-execinit(void)
-{
-  int fd;
-
-  bind_safe("#p", "/proc", MREPL); //devproc
-  // used by rc and many programs, e.g. via open("#d/0")
-  bind_safe("#d", "/fd", MREPL); //devdup
-
-  bind_safe("/root", "/", MAFTER|MCREATE);
-  bind_safe("/386/bin", "/bin", MREPL);
-  bind_safe("/rc/bin", "/bin", MAFTER);
-
-  bind_safe("#v", "/dev", MAFTER); //devvga
-  bind_safe("#m", "/dev", MAFTER); //devmouse
-  bind_safe("#P", "/dev", MAFTER);
-
-  run("/bin/aux/mouse", "ps2", nil);
-  //this just need a regular vga driver
-  //run("/bin/aux/vga", "-l", "640x480x8", nil);
-  //this need special drivers, such as the clgd424x.c in the kernel
-  run("/bin/aux/vga", "-l", "1024x768x8", nil);
-  bind_safe("#i", "/dev", MAFTER);
-
-  // for rio
-  run("/bin/ramfs", "-m", "/mnt", nil);
-  run("/bin/mkdir", "/mnt/temp", nil); // see thread(2), used to create pipes
-  run("/bin/mkdir", "/mnt/wsys", nil);
-  fd = open_safe("#c/hostowner", OWRITE);
-  print_safe(fd, "pad");
-  close(fd);
-
-  // network
-  bind_safe("#I", "/net", MREPL);
-  bind_safe("#l0", "/net", MAFTER);
-
-  run("/bin/rc", nil);
-}
-
-
-// called from bootpcf.c:main()
-void
-boot(int argc, char *argv[])
-{
-  USED(argc);
-  USED(argv);
-
-  fmtinstall('r', errfmt);
-
-  //At this point we should have #/ and #c setup by the kernel init0
-
-  opencons();
-  bindenvsrv();
-
-  print("booooooooting...\n");
-
-  rfork(RFNAMEG);
-
-  connectlocal();
-
-  swapproc();
-  execinit();
-
-  exits("failed to exec init");
-}
-@
-
-
-\subsection*{[[boot/boot.h]]}
-
-<<boot.h>>=
-/* libc equivalent */
-// aux.c: 
-extern void fatal(char*);
-extern void warning(char*);
-extern void run(char *file, ...);
-extern void runv(char **argv);
-/* pad style */
-void bind_safe(char* old, char* new, int flag);
-int open_safe(char* path, int flag);
-void print_safe(int fd, char* str);
-void close_safe(int fd);
-
-/* methods */
-// local.c:
-extern int  connectlocal(void);
-//extern void configlocal(Method*);
-// other possible method connections: network.c, ...
-
-// 386/bootpcf.c
-//extern Method method[];   /* defined in ../$arch/boot$CONF.c */
-//extern char*  bootdisk;   /* defined in ../$arch/boot$CONF.c */
-//void main(int argc, char **argv)
-
-/* main entry point */
-// boot.c:
-extern void boot(int, char **);
-
-@
-
-%// what bootpcf.c used to expect
-%//typedef struct Method Method;
-%//struct Method
-%//{
-%//  char  *name;
-%//  void  (*config)(Method*);
-%//  int (*connect)(void);
-%//  char  *arg;
-%//};
-
-
-
-\subsection*{[[boot/local.c]]}
-
-<<local.c>>=
-#include <u.h>
-#include <libc.h>
-#include "../boot/boot.h"
-
-int
-connectlocal(void)
-{
-  int fd;
-  
-  bind_safe("#S", "/dev", MAFTER);
-
-  fd = open_safe("/dev/sdC0/ctl", ORDWR);
-  //TODO: use fdisk -p /dev/sdC1/data > /dev/sdC1/ctl
-  //for sdC0: #prep -p /dev/sdC1/plan9 > /dev/sdC1/ctl
-  print_safe(fd, "part dos 1 1000063");
-  close_safe(fd);
-
-  run("/boot/dossrv", nil);
-  run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC0/dos", nil);
-  
-  return 0;
-}
-@
-
-%//void
-%//configlocal(Method *mp)
-%//{
-%//  USED(mp);
-%//}
-
-
 \section{[[buses/]]}
 
 \subsection*{[[buses/386/dat_buses.h]]}
@@ -29655,6 +29372,286 @@ Dev fsdevtab = {
 
 \section{[[init/]]}
 
+\subsection*{[[boot/aux.c]]}
+
+<<aux.c>>=
+#include <u.h>
+#include <libc.h>
+#include "../boot/boot.h"
+
+void
+warning(char *s)
+{
+    char buf[ERRMAX];
+
+    buf[0] = '\0';
+    errstr(buf, sizeof buf);
+    fprint(2, "boot: %s: %s\n", s, buf);
+}
+
+void
+fatal(char *s)
+{
+    char *msg;
+    char buf[ERRMAX];
+
+    buf[0] = '\0';
+    errstr(buf, sizeof buf);
+    msg = smprint("%s: %s", s, buf);
+    fprint(2, "boot: %s\n", msg);
+    exits(msg);         /* this will trigger a panic */
+}
+
+void
+runv(char **argv)
+{
+  int i, pid;
+  
+  switch(pid = fork()){
+  case -1:
+    fatal("fork");
+  case 0:
+    exec(argv[0], argv);
+    fatal(smprint("can't exec %s: %r", argv[0]));
+  default:
+    while ((i = waitpid()) != pid && i != -1)
+      ;
+    if(i == -1)
+      fatal(smprint("wait failed running %s", argv[0]));
+  }
+}
+
+void
+run(char *file, ...)
+{
+  runv(&file);
+}
+
+
+void bind_safe(char* old, char* new, int flag) {
+  if(bind(old, new, flag) < 0)
+    fatal("bind");
+  return;
+}
+
+int open_safe(char* path, int flag) {
+  int fd;
+  if((fd = open(path, flag)) < 0) {
+    fatal("open");
+  }
+  return fd;
+}
+
+void print_safe(int fd, char* str) {
+  if(write(fd, str, strlen(str)) < 0) {
+    fatal("print");
+  };
+  return;
+}
+
+void close_safe(int fd) {
+  if(close(fd) < 0) {
+    fatal("close");
+  }
+}
+@
+
+
+\subsection*{[[boot/boot.c]]}
+
+<<boot.c>>=
+#include <u.h>
+#include <libc.h>
+#include "../boot/boot.h"
+
+/*
+ * we should inherit the standard fds all referring to /dev/cons,
+ * but we're being paranoid.
+ */
+static void
+opencons(void)
+{
+  close(0);
+  close(1);
+  close(2);
+  open("/dev/cons", OREAD);
+  open("/dev/cons", OWRITE);
+  open("/dev/cons", OWRITE);
+}
+
+/*
+ * init will reinitialize its namespace.
+ * #ec gets us plan9.ini settings (*var variables).
+ */
+static void
+bindenvsrv(void)
+{
+  bind("#ec", "/env", MREPL);
+  bind("#e", "/env", MBEFORE|MCREATE);
+  bind("#s", "/srv/", MREPL|MCREATE);
+}
+
+static void
+swapproc(void)
+{
+    int fd;
+
+    fd = open("#c/swap", OWRITE);
+    if(fd < 0){
+        warning("opening #c/swap");
+        return;
+    }
+    if(write(fd, "start", 5) <= 0)
+        warning("starting swap kproc");
+    close(fd);
+}
+
+static void
+execinit(void)
+{
+  int fd;
+
+  bind_safe("#p", "/proc", MREPL); //devproc
+  // used by rc and many programs, e.g. via open("#d/0")
+  bind_safe("#d", "/fd", MREPL); //devdup
+
+  bind_safe("/root", "/", MAFTER|MCREATE);
+  bind_safe("/386/bin", "/bin", MREPL);
+  bind_safe("/rc/bin", "/bin", MAFTER);
+
+  bind_safe("#v", "/dev", MAFTER); //devvga
+  bind_safe("#m", "/dev", MAFTER); //devmouse
+  bind_safe("#P", "/dev", MAFTER);
+
+  run("/bin/aux/mouse", "ps2", nil);
+  //this just need a regular vga driver
+  //run("/bin/aux/vga", "-l", "640x480x8", nil);
+  //this need special drivers, such as the clgd424x.c in the kernel
+  run("/bin/aux/vga", "-l", "1024x768x8", nil);
+  bind_safe("#i", "/dev", MAFTER);
+
+  // for rio
+  run("/bin/ramfs", "-m", "/mnt", nil);
+  run("/bin/mkdir", "/mnt/temp", nil); // see thread(2), used to create pipes
+  run("/bin/mkdir", "/mnt/wsys", nil);
+  fd = open_safe("#c/hostowner", OWRITE);
+  print_safe(fd, "pad");
+  close(fd);
+
+  // network
+  bind_safe("#I", "/net", MREPL);
+  bind_safe("#l0", "/net", MAFTER);
+
+  run("/bin/rc", nil);
+}
+
+
+// called from bootpcf.c:main()
+void
+boot(int argc, char *argv[])
+{
+  USED(argc);
+  USED(argv);
+
+  fmtinstall('r', errfmt);
+
+  //At this point we should have #/ and #c setup by the kernel init0
+
+  opencons();
+  bindenvsrv();
+
+  print("booooooooting...\n");
+
+  rfork(RFNAMEG);
+
+  connectlocal();
+
+  swapproc();
+  execinit();
+
+  exits("failed to exec init");
+}
+@
+
+
+\subsection*{[[boot/boot.h]]}
+
+<<boot.h>>=
+/* libc equivalent */
+// aux.c: 
+extern void fatal(char*);
+extern void warning(char*);
+extern void run(char *file, ...);
+extern void runv(char **argv);
+/* pad style */
+void bind_safe(char* old, char* new, int flag);
+int open_safe(char* path, int flag);
+void print_safe(int fd, char* str);
+void close_safe(int fd);
+
+/* methods */
+// local.c:
+extern int  connectlocal(void);
+//extern void configlocal(Method*);
+// other possible method connections: network.c, ...
+
+// 386/bootpcf.c
+//extern Method method[];   /* defined in ../$arch/boot$CONF.c */
+//extern char*  bootdisk;   /* defined in ../$arch/boot$CONF.c */
+//void main(int argc, char **argv)
+
+/* main entry point */
+// boot.c:
+extern void boot(int, char **);
+
+@
+
+%// what bootpcf.c used to expect
+%//typedef struct Method Method;
+%//struct Method
+%//{
+%//  char  *name;
+%//  void  (*config)(Method*);
+%//  int (*connect)(void);
+%//  char  *arg;
+%//};
+
+
+
+\subsection*{[[boot/local.c]]}
+
+<<local.c>>=
+#include <u.h>
+#include <libc.h>
+#include "../boot/boot.h"
+
+int
+connectlocal(void)
+{
+  int fd;
+  
+  bind_safe("#S", "/dev", MAFTER);
+
+  fd = open_safe("/dev/sdC0/ctl", ORDWR);
+  //TODO: use fdisk -p /dev/sdC1/data > /dev/sdC1/ctl
+  //for sdC0: #prep -p /dev/sdC1/plan9 > /dev/sdC1/ctl
+  print_safe(fd, "part dos 1 1000063");
+  close_safe(fd);
+
+  run("/boot/dossrv", nil);
+  run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC0/dos", nil);
+  
+  return 0;
+}
+@
+
+%//void
+%//configlocal(Method *mp)
+%//{
+%//  USED(mp);
+%//}
+
+
 \subsection*{[[init/386/apbootstrap.s]]}
 
 <<apbootstrap.s>>=
@@ -29771,7 +29768,7 @@ TEXT gdtptr(SB), $0
 @
 
 
-\subsection*{[[init/386/init9.c]]}
+\subsection*{[[init/user/preboot/386/init9.c]]}
 
 <<init9.c>>=
 //@Scheck: def can actually be found initcode.c, but this file is in skip list
@@ -29783,35 +29780,6 @@ _main(char *argv0)
 {
     startboot(argv0, &argv0);
 }
-@
-
-
-\subsection*{[[init/386/initcode.s]]}
-
-<<initcode.s>>=
-#include "/sys/src/libc/9syscall/sys.h"
-
-TEXT    main(SB),$0
-
-        /*
-         *  exec("/boot", bootv)
-         */
-        LEAL    4(SP),AX
-        PUSHL   AX
-        LEAL    boot(SB),AX
-        PUSHL   AX
-        PUSHL   $0
-        MOVL    $EXEC,AX
-        INT     $64
-
-        /*
-         *  should never get here
-         */
-here:
-        JMP     here
-
-GLOBL   boot+0(SB),$6
-DATA    boot+0(SB)/5,$"/boot"
 @
 
 
@@ -31490,7 +31458,7 @@ _startkernel:
 @
 
 
-\subsection*{[[init/initcode.c]]}
+\subsection*{[[init/user/preboot/initcode.c]]}
 
 <<initcode.c>>=
 /*
@@ -32100,6 +32068,12 @@ typedef struct KMap   KMap;
 #define MS2HZ   (1000/HZ)   /* millisec per clock tick */
 #define TK2SEC(t) ((t)/HZ)    /* ticks to seconds */
 
+// 0x10 = 16
+// 0x100 = 256
+// 0x1000 = 4Ko
+// 0x10000 = 64Ko
+// 0x100000 = 1Mo
+// note: graphic card memory is at 0xb8000 so safer to go to 1Mo for kernel
 /*
  *  Address spaces
  */
