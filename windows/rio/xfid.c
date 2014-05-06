@@ -8,6 +8,7 @@
 #include <frame.h>
 #include <fcall.h>
 #include <plumb.h>
+
 #include "dat.h"
 #include "fns.h"
 
@@ -37,7 +38,11 @@ static	Channel	*cxfidfree;	/* chan(Xfid*) */
 static	char	*tsnarf;
 static	int	ntsnarf;
 
-enum { Alloc, Free, N };
+enum { 
+    Alloc, 
+    Free, 
+    N 
+};
 
 void
 xfidallocthread(void*)

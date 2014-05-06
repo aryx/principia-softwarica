@@ -8,11 +8,11 @@
 #include <frame.h>
 #include <fcall.h>
 #include <plumb.h>
+
 #include <complete.h>
+
 #include "dat.h"
 #include "fns.h"
-
-#define MOVEIT if(0)
 
 enum
 {
@@ -1310,7 +1310,7 @@ wclosewin(Window *w)
 			w->deleted = TRUE;
 			r = w->i->r;
 			/* move it off-screen to hide it, in case client is slow in letting it go */
-			MOVEIT originwindow(w->i, r.min, view->r.max);
+			//if(0) originwindow(w->i, r.min, view->r.max);
 			freeimage(w->i);
 			w->i = nil;
 			return;

@@ -8,6 +8,7 @@
 #include <frame.h>
 #include <fcall.h>
 #include <plumb.h>
+
 #include "dat.h"
 #include "fns.h"
 
@@ -31,10 +32,6 @@ Image	*bandsize(Window*);
 Image*	drag(Window*, Rectangle*);
 void		refresh(Rectangle);
 void		resized(void);
-Channel	*exitchan;	/* chan(int) */
-Channel	*winclosechan; /* chan(Window*); */
-Rectangle	viewr;
-int		threadrforkflag = 0;	/* should be RFENVG but that hides rio from plumber */
 
 void	mousethread(void*);
 void	keyboardthread(void*);
@@ -42,6 +39,10 @@ void winclosethread(void*);
 void deletethread(void*);
 void	initcmd(void*);
 
+Channel	*exitchan;	/* chan(int) */
+Channel	*winclosechan; /* chan(Window*); */
+Rectangle	viewr;
+int		threadrforkflag = 0;	/* should be RFENVG but that hides rio from plumber */
 char		*fontname;
 int		mainpid;
 
@@ -124,7 +125,7 @@ threadmain(int argc, char *argv[])
 	Image *i;
 	Rectangle r;
 
-        //PAD: let's keep the Exit option!
+	//PAD: let's keep the Exit option!
 	//PAD: if(strstr(argv[0], ".out") == nil){
 	//PAD: 	menu3str[Exit] = nil;
 	//PAD: 	Hidden--;
@@ -351,6 +352,7 @@ keyboardthread(void*)
 	}
 }
 
+//pad: Dead?
 /*
  * Used by /dev/kbdin
  */

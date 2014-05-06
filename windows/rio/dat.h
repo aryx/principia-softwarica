@@ -52,6 +52,10 @@ enum
 	Scrollwid 		= 12,		/* width of scroll bar */
 	Scrollgap 		= 4,		/* gap right of scroll bar */
 	BIG			= 3,		/* factor by which window dimension can exceed screen */
+};
+
+enum
+{
 	TRUE		= 1,
 	FALSE		= 0,
 };

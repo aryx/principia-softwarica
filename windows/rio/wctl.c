@@ -8,8 +8,10 @@
 #include <frame.h>
 #include <fcall.h>
 #include <plumb.h>
+
 #include "dat.h"
 #include "fns.h"
+
 #include <ctype.h>
 
 char	Ebadwr[]		= "bad rectangle in wctl request";
