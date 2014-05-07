@@ -1,8 +1,6 @@
 /*s: l_concurrency.s */
 #include "mem.h"
 
-/*
- */
 TEXT splhi(SB), $0
 shi:
         PUSHFL
@@ -28,6 +26,8 @@ alreadylo:
         STI
         RET
 
+
+       
 TEXT splx(SB), $0
         MOVL    s+0(FP), AX
         TESTL   $0x200, AX

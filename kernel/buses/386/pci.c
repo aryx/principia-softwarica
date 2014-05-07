@@ -13,7 +13,9 @@
 /*e: kernel basic includes */
 #include "io.h"
 
+/*s: pci.c debugging macro */
 #define DBG if(0) pcilog
+/*e: pci.c debugging macro */
 
 /* let each port override any of these */
 #ifndef PCICONSSIZE

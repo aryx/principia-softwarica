@@ -11,6 +11,4 @@ void    uartrecv(Uart*, char);
 int   uartctl(Uart*, char*);
 void    uartmouse(Uart*, int (*)(Queue*, int), int);
 
-// devpnp.c
-// dead?
 /*e: portfns_buses.h */
