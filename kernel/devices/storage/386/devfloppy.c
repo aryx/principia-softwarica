@@ -1141,23 +1141,23 @@ floppyintr(Ureg *)
 }
 
 Dev floppydevtab = {
-    'f',
-    "floppy",
-
-    floppyreset,
-    devinit,
-    devshutdown,
-    floppyattach,
-    floppywalk,
-    floppystat,
-    floppyopen,
-    devcreate,
-    floppyclose,
-    floppyread,
-    devbread,
-    floppywrite,
-    devbwrite,
-    devremove,
-    devwstat,
+    .dc       =    'f',
+    .name     =    "floppy",
+               
+    .reset    =    floppyreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    floppyattach,
+    .walk     =    floppywalk,
+    .stat     =    floppystat,
+    .open     =    floppyopen,
+    .create   =    devcreate,
+    .close    =    floppyclose,
+    .read     =    floppyread,
+    .bread    =    devbread,
+    .write    =    floppywrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
 };
 /*e: devfloppy.c */

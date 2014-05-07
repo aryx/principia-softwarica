@@ -479,24 +479,24 @@ mousewrite(Chan *c, void *va, long n, vlong)
 }
 
 Dev mousedevtab = {
-    'm',
-    "mouse",
-
-    mousereset,
-    mouseinit,
-    devshutdown,
-    mouseattach,
-    mousewalk,
-    mousestat,
-    mouseopen,
-    mousecreate,
-    mouseclose,
-    mouseread,
-    devbread,
-    mousewrite,
-    devbwrite,
-    devremove,
-    devwstat,
+    .dc       =    'm',
+    .name     =    "mouse",
+               
+    .reset    =    mousereset,
+    .init     =    mouseinit,
+    .shutdown =    devshutdown,
+    .attach   =    mouseattach,
+    .walk     =    mousewalk,
+    .stat     =    mousestat,
+    .open     =    mouseopen,
+    .create   =    mousecreate,
+    .close    =    mouseclose,
+    .read     =    mouseread,
+    .bread    =    devbread,
+    .write    =    mousewrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
 };
 
 void

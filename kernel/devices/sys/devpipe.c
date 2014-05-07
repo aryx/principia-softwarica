@@ -408,23 +408,23 @@ pipebwrite(Chan *c, Block *bp, ulong)
 }
 
 Dev pipedevtab = {
-    '|',
-    "pipe",
-
-    devreset,
-    pipeinit,
-    devshutdown,
-    pipeattach,
-    pipewalk,
-    pipestat,
-    pipeopen,
-    devcreate,
-    pipeclose,
-    piperead,
-    pipebread,
-    pipewrite,
-    pipebwrite,
-    devremove,
-    pipewstat,
+    .dc       =    '|',
+    .name     =    "pipe",
+               
+    .reset    =    devreset,
+    .init     =    pipeinit,
+    .shutdown =    devshutdown,
+    .attach   =    pipeattach,
+    .walk     =    pipewalk,
+    .stat     =    pipestat,
+    .open     =    pipeopen,
+    .create   =    devcreate,
+    .close    =    pipeclose,
+    .read     =    piperead,
+    .bread    =    pipebread,
+    .write    =    pipewrite,
+    .bwrite   =    pipebwrite,
+    .remove   =    devremove,
+    .wstat    =    pipewstat,
 };
 /*e: devpipe.c */

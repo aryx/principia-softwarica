@@ -1110,24 +1110,24 @@ conswrite(Chan *c, void *va, long n, vlong off)
 }
 
 Dev consdevtab = {
-    'c',
-    "cons",
-
-    devreset,
-    consinit,
-    devshutdown,
-    consattach,
-    conswalk,
-    consstat,
-    consopen,
-    devcreate,
-    consclose,
-    consread,
-    devbread,
-    conswrite,
-    devbwrite,
-    devremove,
-    devwstat,
+    .dc       =    'c',
+    .name     =    "cons",
+               
+    .reset    =    devreset,
+    .init     =    consinit,
+    .shutdown =    devshutdown,
+    .attach   =    consattach,
+    .walk     =    conswalk,
+    .stat     =    consstat,
+    .open     =    consopen,
+    .create   =    devcreate,
+    .close    =    consclose,
+    .read     =    consread,
+    .bread    =    devbread,
+    .write    =    conswrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
 };
 
 static  ulong   randn;

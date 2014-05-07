@@ -128,23 +128,23 @@ dupwrite(Chan*, void*, long, vlong)
 }
 
 Dev dupdevtab = {
-    'd',
-    "dup",
-
-    devreset,
-    devinit,
-    devshutdown,
-    dupattach,
-    dupwalk,
-    dupstat,
-    dupopen,
-    devcreate,
-    dupclose,
-    dupread,
-    devbread,
-    dupwrite,
-    devbwrite,
-    devremove,
-    devwstat,
+    .dc       =    'd',
+    .name     =    "dup",
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    dupattach,
+    .walk     =    dupwalk,
+    .stat     =    dupstat,
+    .open     =    dupopen,
+    .create   =    devcreate,
+    .close    =    dupclose,
+    .read     =    dupread,
+    .bread    =    devbread,
+    .write    =    dupwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
 };
 /*e: devdup.c */

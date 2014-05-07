@@ -277,24 +277,24 @@ rootwrite(Chan*, void*, long, vlong)
 }
 
 Dev rootdevtab = {
-  .dc = '/',
-  .name = "root",
-
-  .reset = rootreset,
-  .init = devinit,
-  .shutdown = devshutdown,
-  .attach = rootattach,
-  .walk = rootwalk,
-  .stat = rootstat,
-  .open = rootopen,
-  .create = devcreate,
-  .close = rootclose,
-  .read = rootread,
-  .bread = devbread,
-  .write = rootwrite,
-  .bwrite = devbwrite,
-  .remove = devremove,
-  .wstat = devwstat,
+    .dc       = '/',
+    .name     = "root",
+  
+    .reset    = rootreset,
+    .init     = devinit,
+    .shutdown = devshutdown,
+    .attach   = rootattach,
+    .walk     = rootwalk,
+    .stat     = rootstat,
+    .open     = rootopen,
+    .create   = devcreate,
+    .close    = rootclose,
+    .read     = rootread,
+    .bread    = devbread,
+    .write    = rootwrite,
+    .bwrite   = devbwrite,
+    .remove   = devremove,
+    .wstat    = devwstat,
 };
 
 /*e: devroot.c */

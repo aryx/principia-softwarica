@@ -266,24 +266,24 @@ archwrite(Chan *c, void *a, long n, vlong offset)
 }
 
 Dev archdevtab = {
-    'P',
-    "arch",
-
-    devreset,
-    devinit,
-    devshutdown,
-    archattach,
-    archwalk,
-    archstat,
-    archopen,
-    devcreate,
-    archclose,
-    archread,
-    devbread,
-    archwrite,
-    devbwrite,
-    devremove,
-    devwstat,
+    .dc       =    'P',
+    .name     =    "arch",
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    archattach,
+    .walk     =    archwalk,
+    .stat     =    archstat,
+    .open     =    archopen,
+    .create   =    devcreate,
+    .close    =    archclose,
+    .read     =    archread,
+    .bread    =    devbread,
+    .write    =    archwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
 };
 
 void

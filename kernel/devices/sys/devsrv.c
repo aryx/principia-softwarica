@@ -342,23 +342,23 @@ srvwrite(Chan *c, void *va, long n, vlong)
 }
 
 Dev srvdevtab = {
-    's',
-    "srv",
-
-    devreset,
-    srvinit,    
-    devshutdown,
-    srvattach,
-    srvwalk,
-    srvstat,
-    srvopen,
-    srvcreate,
-    srvclose,
-    srvread,
-    devbread,
-    srvwrite,
-    devbwrite,
-    srvremove,
-    srvwstat,
+    .dc       =    's',
+    .name     =    "srv",
+               
+    .reset    =    devreset,
+    .init     =    srvinit,    
+    .shutdown =    devshutdown,
+    .attach   =    srvattach,
+    .walk     =    srvwalk,
+    .stat     =    srvstat,
+    .open     =    srvopen,
+    .create   =    srvcreate,
+    .close    =    srvclose,
+    .read     =    srvread,
+    .bread    =    devbread,
+    .write    =    srvwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    srvremove,
+    .wstat    =    srvwstat,
 };
 /*e: devsrv.c */

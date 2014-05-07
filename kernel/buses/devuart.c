@@ -578,25 +578,25 @@ uartpower(int on)
 }
 
 Dev uartdevtab = {
-    't',
-    "uart",
-
-    uartreset,
-    devinit,
-    devshutdown,
-    uartattach,
-    uartwalk,
-    uartstat,
-    uartopen,
-    devcreate,
-    uartclose,
-    uartread,
-    devbread,
-    uartwrite,
-    devbwrite,
-    devremove,
-    uartwstat,
-    uartpower,
+    .dc       =    't',
+    .name     =    "uart",
+               
+    .reset    =    uartreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    uartattach,
+    .walk     =    uartwalk,
+    .stat     =    uartstat,
+    .open     =    uartopen,
+    .create   =    devcreate,
+    .close    =    uartclose,
+    .read     =    uartread,
+    .bread    =    devbread,
+    .write    =    uartwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    uartwstat,
+    .power    =    uartpower,
 };
 
 /*

@@ -916,23 +916,23 @@ rpcattn(void *v)
 }
 
 Dev mntdevtab = {
-    'M',
-    "mnt",
-
-    mntreset,
-    devinit,
-    devshutdown,
-    mntattach,
-    mntwalk,
-    mntstat,
-    mntopen,
-    mntcreate,
-    mntclose,
-    mntread,
-    devbread,
-    mntwrite,
-    devbwrite,
-    mntremove,
-    mntwstat,
+    .dc       =    'M',
+    .name     =    "mnt",
+               
+    .reset    =    mntreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    mntattach,
+    .walk     =    mntwalk,
+    .stat     =    mntstat,
+    .open     =    mntopen,
+    .create   =    mntcreate,
+    .close    =    mntclose,
+    .read     =    mntread,
+    .bread    =    devbread,
+    .write    =    mntwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    mntremove,
+    .wstat    =    mntwstat,
 };
 /*e: devmnt.c */

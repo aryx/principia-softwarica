@@ -1220,24 +1220,24 @@ ipbwrite(Chan* ch, Block* bp, ulong offset)
 }
 
 Dev ipdevtab = {
-    'I',
-    "ip",
-
-    ipreset,
-    devinit,
-    devshutdown,
-    ipattach,
-    ipwalk,
-    ipstat,
-    ipopen,
-    ipcreate,
-    ipclose,
-    ipread,
-    ipbread,
-    ipwrite,
-    ipbwrite,
-    ipremove,
-    ipwstat,
+    .dc       =    'I',
+    .name     =    "ip",
+               
+    .reset    =    ipreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    ipattach,
+    .walk     =    ipwalk,
+    .stat     =    ipstat,
+    .open     =    ipopen,
+    .create   =    ipcreate,
+    .close    =    ipclose,
+    .read     =    ipread,
+    .bread    =    ipbread,
+    .write    =    ipwrite,
+    .bwrite   =    ipbwrite,
+    .remove   =    ipremove,
+    .wstat    =    ipwstat,
 };
 
 int
