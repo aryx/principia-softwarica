@@ -549,14 +549,14 @@ iliput(Proto *il, Ipifc*, Block *bp)
 	ih = (Ilhdr *)bp->rp;
 	plen = blocklen(bp);
 	if(plen < IL_IPSIZE+IL_HDRSIZE){
-		netlog(il->f, Logil, "il: hlenerr\n");
+		//netlog(il->f, Logil, "il: hlenerr\n");
 		ipriv->stats[HlenErrs]++;
 		goto raise;
 	}
 
 	illen = nhgets(ih->illen);
 	if(illen+IL_IPSIZE > plen){
-		netlog(il->f, Logil, "il: lenerr\n");
+		//netlog(il->f, Logil, "il: lenerr\n");
 		ipriv->stats[LenErrs]++;
 		goto raise;
 	}
@@ -572,8 +572,8 @@ iliput(Proto *il, Ipifc*, Block *bp)
 		else
 			st = iltype[ih->iltype];
 		ipriv->stats[CsumErrs]++;
-		netlog(il->f, Logil, "il: cksum %ux %s, pkt(%ux id %ud ack %I/%d->%d)\n",
-			csum, st, nhgetl(ih->ilid), nhgetl(ih->ilack), raddr, sp, dp);
+		//netlog(il->f, Logil, "il: cksum %ux %s, pkt(%ux id %ud ack %I/%d->%d)\n",
+//			csum, st, nhgetl(ih->ilid), nhgetl(ih->ilack), raddr, sp, dp);
 		goto raise;
 	}
 
@@ -595,15 +595,15 @@ iliput(Proto *il, Ipifc*, Block *bp)
 			else
 				st = iltype[ih->iltype];
 			ilreject(il->f, ih);		/* no channel and not sync */
-			netlog(il->f, Logil, "il: no channel, pkt(%s id %ud ack %ud %I/%ud->%ud)\n",
-				st, nhgetl(ih->ilid), nhgetl(ih->ilack), raddr, sp, dp); 
+			//netlog(il->f, Logil, "il: no channel, pkt(%s id %ud ack %ud %I/%ud->%ud)\n",
+//				st, nhgetl(ih->ilid), nhgetl(ih->ilack), raddr, sp, dp); 
 			goto raise;
 		}
 
 		new = Fsnewcall(s, raddr, dp, laddr, sp, V4);
 		if(new == nil){
 			qunlock(il);
-			netlog(il->f, Logil, "il: bad newcall %I/%ud->%ud\n", raddr, sp, dp);
+			//netlog(il->f, Logil, "il: bad newcall %I/%ud->%ud\n", raddr, sp, dp);
 			ilsendctl(s, ih, Ilclose, 0, nhgetl(ih->ilid), 0);
 			goto raise;
 		}
@@ -651,7 +651,7 @@ _ilprocess(Conv *s, Ilhdr *h, Block *bp)
 
 	switch(ic->state) {
 	default:
-		netlog(s->p->f, Logil, "il: unknown state %d\n", ic->state);
+		//netlog(s->p->f, Logil, "il: unknown state %d\n", ic->state);
 	case Ilclosed:
 		freeblist(bp);
 		break;
@@ -829,9 +829,9 @@ ilrexmit(Ilcb *ic)
 
 	c = ic->conv;
 	id = nhgetl(h->ilid);
-	netlog(c->p->f, Logil, "il: rexmit %lud %lud: %d %lud: %I %d/%d\n", id, ic->recvd,
-		ic->rexmit, ic->timeout,
-		c->raddr, c->lport, c->rport);
+	//netlog(c->p->f, Logil, "il: rexmit %lud %lud: %d %lud: %I %d/%d\n", id, ic->recvd,
+//		ic->rexmit, ic->timeout,
+//		c->raddr, c->lport, c->rport);
 
 	ilbackoff(ic);
 
@@ -852,14 +852,14 @@ ilprocess(Conv *s, Ilhdr *h, Block *bp)
 	ic = (Ilcb*)s->ptcl;
 
 	USED(ic);
-	netlog(s->p->f, Logilmsg, "%11s rcv %lud/%lud snt %lud/%lud pkt(%s id %d ack %ud %ud->%ud) ",
-		ilstates[ic->state],  ic->rstart, ic->recvd, ic->start, 
-		ic->next, iltype[h->iltype], nhgetl(h->ilid), 
-		nhgetl(h->ilack), nhgets(h->ilsrc), nhgets(h->ildst));
+	//netlog(s->p->f, Logilmsg, "%11s rcv %lud/%lud snt %lud/%lud pkt(%s id %d ack %ud %ud->%ud) ",
+//		ilstates[ic->state],  ic->rstart, ic->recvd, ic->start, 
+//		ic->next, iltype[h->iltype], nhgetl(h->ilid), 
+//		nhgetl(h->ilack), nhgets(h->ilsrc), nhgets(h->ildst));
 
 	_ilprocess(s, h, bp);
 
-	netlog(s->p->f, Logilmsg, "%11s rcv %lud snt %lud\n", ilstates[ic->state], ic->recvd, ic->next);
+	//netlog(s->p->f, Logilmsg, "%11s rcv %lud snt %lud\n", ilstates[ic->state], ic->recvd, ic->next);
 }
 
 void
@@ -868,8 +868,8 @@ ilhangup(Conv *s, char *msg)
 	Ilcb *ic;
 	int callout;
 
-	netlog(s->p->f, Logil, "il: hangup! %I %d/%d: %s\n", s->raddr,
-		s->lport, s->rport, msg?msg:"no reason");
+	//netlog(s->p->f, Logil, "il: hangup! %I %d/%d: %s\n", s->raddr,
+//		s->lport, s->rport, msg?msg:"no reason");
 
 	ic = (Ilcb*)s->ptcl;
 	callout = ic->state == Ilsyncer;
@@ -948,8 +948,8 @@ iloutoforder(Conv *s, Ilhdr *h, Block *bp)
 	id = nhgetl(h->ilid);
 	/* Window checks */
 	if(id <= ic->recvd || id > ic->recvd+ic->window) {
-		netlog(s->p->f, Logil, "il: message outside window %lud <%lud-%lud>: %I %d/%d\n",
-			id, ic->recvd, ic->recvd+ic->window, s->raddr, s->lport, s->rport);
+		//netlog(s->p->f, Logil, "il: message outside window %lud <%lud-%lud>: %I %d/%d\n",
+//			id, ic->recvd, ic->recvd+ic->window, s->raddr, s->lport, s->rport);
 		freeblist(bp);
 		return;
 	}
@@ -1038,9 +1038,9 @@ if(ipc==nil)
 if(ipc->p==nil)
 	panic("ipc->p is nil");
 
-	netlog(ipc->p->f, Logilmsg, "ctl(%s id %d ack %d %d->%d)\n",
-		iltype[ih->iltype], nhgetl(ih->ilid), nhgetl(ih->ilack), 
-		nhgets(ih->ilsrc), nhgets(ih->ildst));
+	//netlog(ipc->p->f, Logilmsg, "ctl(%s id %d ack %d %d->%d)\n",
+//		iltype[ih->iltype], nhgetl(ih->ilid), nhgetl(ih->ilack), 
+//		nhgets(ih->ilsrc), nhgets(ih->ildst));
 
 	ipoput4(ipc->p->f, bp, 0, ttl, tos, ipc);
 }
@@ -1187,7 +1187,7 @@ loop:
 
 			if(later(NOW, ic->querytime, "querytime")){
 				if(later(NOW, ic->lastrecv+DeathTime, "deathtime")){
-					netlog(il->f, Logil, "il: hangup: deathtime\n");
+					//netlog(il->f, Logil, "il: hangup: deathtime\n");
 					ilhangup(p, etime);
 					break;
 				}
@@ -1198,7 +1198,7 @@ loop:
 			if(ic->unacked != nil)
 			if(later(NOW, ic->timeout, "timeout2")) {
 				if(ic->rexmit > MaxRexmit){
-					netlog(il->f, Logil, "il: hangup: too many rexmits\n");
+					//netlog(il->f, Logil, "il: hangup: too many rexmits\n");
 					ilhangup(p, etime);
 					break;
 				}
@@ -1273,7 +1273,7 @@ ilstart(Conv *c, int type, int fasttimeout)
 
 	switch(type) {
 	default:
-		netlog(c->p->f, Logil, "il: start: type %d\n", type);
+		//netlog(c->p->f, Logil, "il: start: type %d\n", type);
 		break;
 	case IL_LISTEN:
 		ic->state = Illistening;
