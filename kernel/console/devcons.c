@@ -21,7 +21,7 @@ Queue*  kprintoq;       /* console output, for /dev/kprint */
 ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 int iprintscreenputs = 1;
 
-static struct
+struct ConsKbd
 {
     QLock;
 
@@ -36,10 +36,14 @@ static struct
     /* a place to save up characters at interrupt time before dumping them in the queue */
     Lock    lockputc;
     char    istage[1024];
+
     char    *iw;
     char    *ir;
     char    *ie;
-} kbd = {
+};
+
+static struct ConsKbd kbd = 
+{
     .iw = kbd.istage,
     .ir = kbd.istage,
     .ie = kbd.istage + sizeof(kbd.istage),
