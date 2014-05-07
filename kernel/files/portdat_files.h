@@ -205,47 +205,53 @@ enum
   CCACHE  = 0x0080,   /* client cache */
 };
 
+/*s: struct Chan */
 struct Chan
 {
-  Ref;        /* the Lock in this Ref is also Chan's lock */
-  Chan* next;     /* allocation */
-  Chan* link;
-  vlong offset;     /* in fd */
-  vlong devoffset;    /* in underlying device; see read */
+    ushort  type; // idx in devtab?
+    Qid qid;
+    vlong offset;     /* in fd */
+    ushort  mode;     /* read/write */
 
-  ushort  type; // idx in devtab?
-  ulong dev;
+    /*s: Chan other fields */
+    vlong devoffset;    /* in underlying device; see read */
 
-  ushort  mode;     /* read/write */
-  ushort  flag;
+    ulong dev;
 
-  Qid qid;
+    ushort  flag;
 
-  int fid;      /* for devmnt */
-  ulong iounit;     /* chunk size for i/o; 0==default */
-  Mhead*  umh;      /* mount point that derived Chan; used in unionread */
-  Chan* umc;      /* channel in union; held for union read */
-  QLock umqlock;    /* serialize unionreads */
-  int uri;      /* union read index */
-  int dri;      /* devdirread index */
-  uchar*  dirrock;    /* directory entry rock for translations */
-  int nrock;
-  int mrock;
-  QLock rockqlock;
-  int ismtpt;
-  Mntcache* mcp;      /* Mount cache pointer */
-  Mnt*  mux;      /* Mnt for clients using me for messages */
-  union {
-    void* aux;
-    Qid pgrpid;   /* for #p/notepg */
-    ulong mid;    /* for ns in devproc */
-  };
-  Chan* mchan;      /* channel to mounted server */
-  Qid mqid;     /* qid of root of mount point */
-  Path* path;
+    int fid;      /* for devmnt */
+    ulong iounit;     /* chunk size for i/o; 0==default */
+    Mhead*  umh;      /* mount point that derived Chan; used in unionread */
+    Chan* umc;      /* channel in union; held for union read */
+    QLock umqlock;    /* serialize unionreads */
+    int uri;      /* union read index */
+    int dri;      /* devdirread index */
+    uchar*  dirrock;    /* directory entry rock for translations */
+    int nrock;
+    int mrock;
+    QLock rockqlock;
+    int ismtpt;
+    Mntcache* mcp;      /* Mount cache pointer */
+    Mnt*  mux;      /* Mnt for clients using me for messages */
+    union {
+      void* aux;
+      Qid pgrpid;   /* for #p/notepg */
+      ulong mid;    /* for ns in devproc */
+    };
+    Chan* mchan;      /* channel to mounted server */
+    Qid mqid;     /* qid of root of mount point */
+    Path* path;
+    /*e: Chan other fields */
+
+    // Extra
+    /*s: Chan extra fields */
+    Ref;        /* the Lock in this Ref is also Chan's lock */
+    Chan* next;     /* allocation */
+    Chan* link;
+    /*e: Chan extra fields */
 };
-
-
+/*e: struct Chan */
 
 
 
@@ -280,38 +286,45 @@ struct Walkqid
   Qid qid[1];
 };
 
+/*s: struct Dev */
 struct Dev
 {
-  int dc; // dev character code
-  char* name;
+    int dc; // dev character code, e.g. #/ (devroot), #e (devenv), ...
+    char* name;
+    
+    void  (*reset)(void);
+    void  (*init)(void);
+    void  (*shutdown)(void);
+    Chan* (*attach)(char*);
+    Walkqid*(*walk)(Chan*, Chan*, char**, int);
+    int (*stat)(Chan*, uchar*, int);
+    Chan* (*open)(Chan*, int);
+    void  (*create)(Chan*, char*, int, ulong);
+    void  (*close)(Chan*);
+    long  (*read)(Chan*, void*, long, vlong);
+    Block*  (*bread)(Chan*, long, ulong);
+    long  (*write)(Chan*, void*, long, vlong);
+    long  (*bwrite)(Chan*, Block*, ulong);
+    void  (*remove)(Chan*);
+    int (*wstat)(Chan*, uchar*, int);
+    void  (*power)(int);  /* power mgt: power(1) => on, power (0) => off */
+    int (*config)(int, char*, DevConf*);  /* returns nil on error */
 
-  void  (*reset)(void);
-  void  (*init)(void);
-  void  (*shutdown)(void);
-  Chan* (*attach)(char*);
-  Walkqid*(*walk)(Chan*, Chan*, char**, int);
-  int (*stat)(Chan*, uchar*, int);
-  Chan* (*open)(Chan*, int);
-  void  (*create)(Chan*, char*, int, ulong);
-  void  (*close)(Chan*);
-  long  (*read)(Chan*, void*, long, vlong);
-  Block*  (*bread)(Chan*, long, ulong);
-  long  (*write)(Chan*, void*, long, vlong);
-  long  (*bwrite)(Chan*, Block*, ulong);
-  void  (*remove)(Chan*);
-  int (*wstat)(Chan*, uchar*, int);
-  void  (*power)(int);  /* power mgt: power(1) => on, power (0) => off */
-  int (*config)(int, char*, DevConf*);  /* returns nil on error */
-
-  /* not initialised */
-  int attached;       /* debugging */
+    /*s: Dev other fields */
+    /* not initialised */
+    int attached;       /* debugging */
+    /*e: Dev other fields */
 };
+/*e: struct Dev */
+
 
 // array<Dev>, it looks like an allocated array<ref<dev>> but
 // it is really a static array put here to avoid backward deps on conf_devtab,
 // and it is not really a <ref<dev>> because it's pointers to static
 // structures (e.g. mousedevtab, vgadevtab, etc).
+/*s: global devtab decl */
 extern Dev** devtab;
+/*e: global devtab decl */
 
 
 struct Dirtab
