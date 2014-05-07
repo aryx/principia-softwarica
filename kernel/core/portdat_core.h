@@ -53,7 +53,7 @@ extern char *confname[];
 extern char *confval[];
 // Hashtbl.length(confname)
 extern int nconf;
-extern bool cpuserver; // defined in conf/pcf.c
+extern bool cpuserver; // defined in $CONF.c
 
 char* getconf(char *name);
 

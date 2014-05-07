@@ -2,7 +2,7 @@
 # on a MAC
 DISK="/Volumes/DISK Image"
 
-CONFIG=pcf
+CONFIG=qemu
 
 all:
 	make compile && make disk && make run

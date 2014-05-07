@@ -85,7 +85,7 @@ execinit(void)
 }
 
 
-// called from bootpcf.c:main()
+// called from boot$CONF.c:main()
 void
 boot(int argc, char *argv[])
 {

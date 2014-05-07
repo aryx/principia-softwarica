@@ -10,7 +10,7 @@
 
 // was in init/main.c
 Conf conf;
-// bool cpuserver; // defined in conf/pcf.c
+// bool cpuserver; // defined in $CONF.c
 
 // conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
 // hash<string, string>

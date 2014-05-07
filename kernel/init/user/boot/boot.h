@@ -17,7 +17,7 @@ extern int  connectlocal(void);
 //extern void configlocal(Method*);
 // other possible method connections: network.c, ...
 
-// 386/bootpcf.c
+// 386/boot$CONF.c
 //extern Method method[];   /* defined in ../$arch/boot$CONF.c */
 //extern char*  bootdisk;   /* defined in ../$arch/boot$CONF.c */
 //void main(int argc, char **argv)

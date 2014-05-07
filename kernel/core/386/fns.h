@@ -3,7 +3,7 @@
 
 /*s: fns.h declarations */
 
-// used by pcf.c and main.c
+// used by $CONF.c and main.c
 void    bootlinks(void);
 
 // defined in lib/latin1.c, used only in 386

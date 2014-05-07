@@ -8,7 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-// was in conf/pcf.c
+// was in $CONF.c
 Dev** devtab = 0;
 
 
