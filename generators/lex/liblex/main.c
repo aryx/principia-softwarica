@@ -1,6 +1,6 @@
 #include	<u.h>
 #include	<libc.h>
-#include	<stdio.h>
+//#include	<stdio.h>
 
 int	yylex(void);
 

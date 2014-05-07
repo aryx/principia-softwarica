@@ -1,9 +1,9 @@
 #include	<u.h>
 #include	<libc.h>
-#include	<stdio.h>
+//#include	<stdio.h>
 
-extern	FILE*	yyout;
-extern	FILE*	yyin;
+//extern	FILE*	yyout;
+//extern	FILE*	yyin;
 extern	int	yyprevious, *yyfnd;
 extern	char	yyextra[];
 extern	char	yytext[];

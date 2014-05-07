@@ -1,6 +1,6 @@
 #include	<u.h>
 #include	<libc.h>
-#include	<stdio.h>
+//#include	<stdio.h>
 
 extern	char	yytext[];
 extern	int	yyleng;
