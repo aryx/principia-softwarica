@@ -70,6 +70,7 @@ SRC_VIEWS= \
   core/386/fns.c \
   core/386/fns.h \
   core/error.h \
+  core/error.c \
   core/portdat.c \
   core/portdat.h \
   core/portdat_core.h \
