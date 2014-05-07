@@ -317,13 +317,17 @@ found:
     return i;
 }
 
+/*s: struct Irstats */
 struct Irstats {
     int calls;          /* times imagereclaim was called */
     int loops;          /* times the main loop was run */
     uvlong  ticks;          /* total time in the main loop */
     uvlong  maxt;           /* longest time in main loop */
 };
+/*e: struct Irstats */
+/*s: segment.c global irstats */
 static struct Irstats  irstats;
+/*e: segment.c global irstats */
 
 static void
 imagereclaim(void)

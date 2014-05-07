@@ -1,7 +1,4 @@
 /*s: portfns_concurrency.h */
-// For protecting kernel syscall code from interrupt kernel code: splhi(), splo()
-// For very small critical region: taslock
-// For bigger region, or when have lots of contention on a lock: qlock
 
 // taslock.c
 int lock(Lock*);

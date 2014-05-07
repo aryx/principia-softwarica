@@ -31,7 +31,7 @@ ulong intrtimes[256][Ntimevec];
 //*****************************************************************************
 // Forward decl
 //*****************************************************************************
-
+/*s: trap.c forward decl */
 void    noted(Ureg*, ulong);
 int     notify(Ureg*);
 void        dumpregs(Ureg*);
@@ -41,6 +41,7 @@ static void fault386(Ureg*, void*);
 static void doublefault(Ureg*, void*);
 static void unexpected(Ureg*, void*);
 static void _dumpstack(Ureg*);
+/*e: trap.c forward decl */
 
 //*****************************************************************************
 // Interrupts enable/disable

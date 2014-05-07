@@ -19,6 +19,7 @@
 
 void bootargs(void*);
 
+/*s: main.c forward decl for backward dependencies */
 // part of a trick to remove some backward dependencies
 int devcons_print(char*, ...);
 int devcons_iprint(char*, ...);
@@ -46,6 +47,7 @@ void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
 int proc_postnote(Proc *p, int dolock, char *n, int flag);
 int sysproc_return0(void*);
 void proc_pexit(char *exitstr, int freemem);
+/*e: main.c forward decl for backward dependencies */
 
 // conf.c
 extern  Dev*  conf_devtab[];

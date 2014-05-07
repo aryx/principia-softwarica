@@ -8,6 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: qio.c globals cnt */
 static ulong padblockcnt;
 static ulong concatblockcnt;
 static ulong pullupblockcnt;
@@ -15,10 +16,13 @@ static ulong copyblockcnt;
 static ulong consumecnt;
 static ulong producecnt;
 static ulong qcopycnt;
+/*e: qio.c globals cnt */
 
+/*s: qio.c global debugging */
 static int debugging;
 
 #define QDEBUG  if(0)
+/*e: qio.c global debugging */
 
 enum
 {

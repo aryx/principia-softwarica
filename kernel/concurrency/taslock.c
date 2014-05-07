@@ -1,4 +1,5 @@
 /*s: taslock.c */
+// TAS: Test And Set
 /*s: kernel basic includes */
 #include "u.h"
 #include "../port/lib.h"
@@ -8,17 +9,18 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-// TAS: Test And Set
-
+/*s: struct TaslockStats */
 struct TaslockStats
 {
     ulong   locks;
     ulong   glare;
     ulong   inglare;
 };
-
+/*e: struct TaslockStats */
+/*s: global lockstats */
 struct TaslockStats lockstats;
-
+/*e: global lockstats */
+/*s: globals lockcycles */
 #ifdef LOCKCYCLES
 long maxlockcycles;
 long maxilockcycles;
@@ -30,6 +32,7 @@ ulong maxilockpc;
 ulong ilockpcs[0x100] = { [0xff] = 1 };
 static int n;
 #endif
+/*e: globals lockcycles */
 
 // See also ref.c incref() and decref(), but we can't use them here as they
 // themselves rely on lock() and unlock(). 

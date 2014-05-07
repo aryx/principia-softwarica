@@ -7,6 +7,7 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
+/*s: struct QlockStats */
 struct QlockStats {
     ulong rlock;
     ulong rlockq;
@@ -15,8 +16,10 @@ struct QlockStats {
     ulong qlock;
     ulong qlockq;
 };
-
+/*e: struct QlockStats */
+/*s: global rwstats */
 struct QlockStats rwstats;
+/*e: global rwstats */
 
 void
 qlock(QLock *q)

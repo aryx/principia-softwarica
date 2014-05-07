@@ -236,6 +236,7 @@ void  wrmsr(int, vlong);
 
 //int iounused(int start, int end); not used anymore in vga.c
 
+/*s: fns.h macros */
 #define KADDR(a)  kaddr(a)
 #define PADDR(a)  paddr((void*)(a))
 
@@ -246,5 +247,6 @@ void  wrmsr(int, vlong);
 
 #define L16GET(p) (((p)[1]<<8)|(p)[0])
 #define L32GET(p) (((u32int)L16GET((p)+2)<<16)|L16GET(p))
+/*e: fns.h macros */
 /*e: fns.h declarations */
 /*e: fns.h */
