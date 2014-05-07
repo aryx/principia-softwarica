@@ -1,4 +1,5 @@
 /*s: error.h */
+/*s: global errors decls */
 extern char Emount[];   /* inconsistent mount */
 extern char Eunmount[];   /* not mounted */
 extern char Eismtpt[];    /* is a mount point */
@@ -50,5 +51,5 @@ extern char Ecmdargs[];   /* wrong #args in control message */
 extern char Ebadip[];   /* bad ip address syntax */
 extern char Edirseek[];   /* seek in directory */
 extern char Echange[];    /* media or partition has changed */
-
+/*e: global errors decls */
 /*e: error.h */
