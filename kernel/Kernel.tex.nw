@@ -65,7 +65,7 @@
 
 \wantrepetitivecodefalse
 \allcodefalse
- % for forward decl, pragmas, 
+ % for typedef forward decl, pragmas, func decl, extern decl, stats, #ifdef
 
 %******************************************************************************
 % Title
@@ -77,7 +77,7 @@
 {\Huge 
 The Plan9 Kernel
 }\\
-x86 edition\\
+x86 (32 bits) edition\\
 {version 0.1}
 }
 
@@ -115,10 +115,10 @@ Yoann Padioleau\\
 \section{Motivations}
 
 The goal of this book is to present in full details the source code of
-a real operating system (and in later books to also cover the
-compiler, assembler, linker, debugger, windowing system, network, etc). Why?
-Because I think it makes you a better programmer if you fully
-understand how things work under the hood.
+a real operating system\footnote{and in later books to also cover the
+compiler, assembler, linker, debugger, windowing system, network
+stack, etc}. Why? Because I think it makes you a better programmer if
+you fully understand how things work under the hood.
 % a concrete companion to "Computer systems: a programmer's pespective"
 
 The choice of plan9 may not be obvious, but it is IMHO
@@ -351,6 +351,11 @@ for himself
 % see also:
 % http://arjunsreedharan.org/post/82710718100/kernel-101-lets-write-a-kernel
 
+% steps:
+% - hardware detection, populate Conf
+% - initialization, populate allocators
+% - create first process
+
 \section{Memory overview}
 % kernel vs user memory
 % dynamic vs static (the static allocator so can bootstrap things)
@@ -457,13 +462,212 @@ int nsyscall = nelem(systab);
 
 \section{[[Conf]]}
 
+<<struct Conf>>=
+struct Conf
+{
+    ulong nmach;    /* processors */
+    ulong nproc;    /* processes */
+    Confmem mem[4];   /* physical memory */
+
+    <<Conf extra fields>>
+  
+    struct ArchConf;
+};
+@ 
+
+%    // in bcm/ it's mem[1], important? why 4?
+
+<<global conf>>=
+Conf conf;
+@ 
+
+<<globals confname and confvar>>=
+// conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
+// hash<string, string>
+char *confname[MAXCONF];
+char *confval[MAXCONF];
+// Hashtbl.length(confname)
+int nconf;
+@ 
+
+<<constant MAXCONF>>=
+#define MAXCONF         64
+@ 
+
+
+<<struct Confmem>>=
+// memory "bank"
+struct Confmem
+{
+    ulong base; // phys?
+    ulong npage;
+  
+    ulong kbase; // phys?
+    ulong klimit; // phys?
+};
+@ 
+
+
 \section{[[Mach]]}
+
+<<struct Mach>>=
+struct Mach
+{
+    int machno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
+    // must be second field at 0x04, used by splhi()
+    ulong splpc;      /* pc of last caller to splhi */
+  
+    // ref<Proc>
+    Proc* proc;     /* current process on this processor */
+
+    <<Mach extra fields>>
+
+    struct ArchMach;
+  
+    int stack[1];
+};
+@ 
+
+
+<<global m>>=
+Mach *m;
+@ 
+
+
+<<global machp>>=
+/*
+ * Each processor sees its own Mach structure at address MACHADDR.
+ * However, the Mach structures must also be available via the per-processor
+ * MMU information array machp, mainly for disambiguation and access to
+ * the clock which is only maintained by the bootstrap processor (0).
+ */
+// array<ref<Mach>>, MAXMACH is defined in 386/mem.h
+Mach* machp[MAXMACH];
+@ 
+
+<<macro MACHP>>=
+#define MACHP(n)  (machp[n])
+@
+
+<<macro up>>=
+// up = user process, MACHADDR is defined in 386/mem.h
+#define up  (((Mach*)MACHADDR)->externup)
+@
+
+%//TODO: mv in 386/ TODO: why not m->externup? m is not valid?
 
 \section{[[Proc]]}
 
+<<struct Proc>>=
+// the most important fields are set by newproc()
+struct Proc
+{
+//--------------------------------------------------------------------
+// Assembly requirements, Low level, have to be first
+//--------------------------------------------------------------------
+    <<Proc assembly fields>>
+//--------------------------------------------------------------------
+// State
+//--------------------------------------------------------------------
+    <<Proc state fields>> 
+//--------------------------------------------------------------------
+// Memory
+//--------------------------------------------------------------------
+    <<Proc memory fields>>
+//--------------------------------------------------------------------
+// Scheduling
+//--------------------------------------------------------------------
+    <<Proc scheduling fields>>
+//--------------------------------------------------------------------
+// Files
+//--------------------------------------------------------------------
+    <<Proc files fields>>
+//--------------------------------------------------------------------
+// Notes
+//--------------------------------------------------------------------
+    <<Proc notes fields>>
+//--------------------------------------------------------------------
+// Process hierarchy
+//--------------------------------------------------------------------
+    <<Proc hierarchy fields>>
+//--------------------------------------------------------------------
+// Synchronization
+//--------------------------------------------------------------------
+    <<Proc synchronization fields>>
+//--------------------------------------------------------------------
+// Error managment
+//--------------------------------------------------------------------
+    <<Proc error managment fields>>
+//--------------------------------------------------------------------
+// Stats, profiling
+//--------------------------------------------------------------------
+    <<Proc stats and profiling fields>>
+//--------------------------------------------------------------------
+// For debugger
+//--------------------------------------------------------------------
+    <<Proc debugger fields>>
+//--------------------------------------------------------------------
+// Other
+//--------------------------------------------------------------------
+    <<Proc other fields>>
+//--------------------------------------------------------------------
+// Extra
+//--------------------------------------------------------------------
+    <<Proc extra fields>>
+};
+@ 
+
 \section{[[Chan]]}
 
+<<struct Chan>>=
+struct Chan
+{
+    ushort  type; // idx in devtab?
+    Qid qid;
+    vlong offset;     /* in fd */
+    ushort  mode;     /* read/write */
+
+    <<Chan other fields>>
+
+    // Extra
+    <<Chan extra fields>>
+};
+@ 
+
 \section{[[Dev]]}
+
+
+<<struct Dev>>=
+struct Dev
+{
+    int dc; // dev character code, e.g. #/ (devroot), #e (devenv), ...
+    char* name;
+    
+    void  (*reset)(void);
+    void  (*init)(void);
+    void  (*shutdown)(void);
+    Chan* (*attach)(char*);
+    Walkqid*(*walk)(Chan*, Chan*, char**, int);
+    int (*stat)(Chan*, uchar*, int);
+    Chan* (*open)(Chan*, int);
+    void  (*create)(Chan*, char*, int, ulong);
+    void  (*close)(Chan*);
+    long  (*read)(Chan*, void*, long, vlong);
+    Block*  (*bread)(Chan*, long, ulong);
+    long  (*write)(Chan*, void*, long, vlong);
+    long  (*bwrite)(Chan*, Block*, ulong);
+    void  (*remove)(Chan*);
+    int (*wstat)(Chan*, uchar*, int);
+    void  (*power)(int);  /* power mgt: power(1) => on, power (0) => off */
+    int (*config)(int, char*, DevConf*);  /* returns nil on error */
+
+    <<Dev other fields>>    
+};
+@ 
+
+<<global devtab decl>>=
+extern Dev** devtab;
+@ 
 
 \chapter{Concurrency}
 
@@ -496,6 +700,10 @@ int nsyscall = nelem(systab);
  
  One must take care when using locks inside interrupts as one can deadlock
  if the same lock was used in the enclosing syscall (hence ilock/iunlock)
+
+ For protecting kernel syscall code from interrupt kernel code: splhi(), splo()
+ For very small critical region: taslock
+ For bigger region, or when have lots of contention on a lock: qlock
 
 \end{verbatim}
 
@@ -687,7 +895,7 @@ int nsyscall = nelem(systab);
 
 
 
-\chapter{System userspace programs}
+\chapter{Userspace System Programs}
 
 \section{[[boot]]}
 
