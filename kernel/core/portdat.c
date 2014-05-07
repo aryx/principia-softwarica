@@ -23,6 +23,7 @@ char *confval[MAXCONF];
 int nconf;
 /*e: globals confname and confvar */
 
+/*s: function getconf */
 char* getconf(char *name)
 {
         int i;
@@ -31,6 +32,7 @@ char* getconf(char *name)
                         return confval[i];
         return nil;
 }
+/*e: function getconf */
 
 // was in init/main.c
 /*s: global m */
