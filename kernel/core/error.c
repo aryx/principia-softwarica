@@ -1,4 +1,5 @@
-/*s: errstr.c */
+/*s: error.c */
+/*s: global Exxx errors */
 char Emount[] = "inconsistent mount";
 char Eunmount[] = "not mounted";
 char Eismtpt[] = "is a mount point";
@@ -50,5 +51,5 @@ char Ecmdargs[] = "wrong #args in control message";
 char Ebadip[] = "bad ip address syntax";
 char Edirseek[] = "seek in directory";
 char Echange[] = "media or partition has changed";
-
-/*e: errstr.c */
+/*e: global Exxx errors */
+/*e: error.c */
