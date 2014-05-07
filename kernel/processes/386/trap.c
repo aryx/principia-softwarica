@@ -8,8 +8,9 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-#include    <tos.h>
 #include    "io.h"
+
+#include    <tos.h>
 #include    <ureg.h>
 #include    <trace.h>
 

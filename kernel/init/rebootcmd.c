@@ -9,7 +9,6 @@
 /*e: kernel basic includes */
 
 #include    <a.out.h>
-//#include  "/sys/src/libmach/elf.h"
 #include    <elf.h>
 
 //@Scheck: used in params below, FP cg

@@ -14,11 +14,13 @@ enum
     Bdead       = 0x51494F42,   /* "QIOB" */
 };
 
-struct
+struct Ialloc
 {
     Lock;
     ulong   bytes;
-} ialloc;
+};
+
+struct Ialloc ialloc;
 
 static Block*
 _allocb(int size)

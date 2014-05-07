@@ -125,8 +125,10 @@ enum {
     DMAchan=    2,  /* floppy dma channel */
 };
 
+/*s: devfloppy.c debugging macro */
 #define DPRINT if(floppydebug)print
 int floppydebug = 0;
+/*e: devfloppy.c debugging macro */
 
 /*
  *  types of drive (from PC equipment byte)

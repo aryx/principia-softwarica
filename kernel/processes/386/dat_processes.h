@@ -117,7 +117,7 @@ struct I8253
 
     ulong   periodset;
 
-  // extra
+    // extra
     Lock;
 };
 //IMPORTANT: I8253 i8253; (in i8253.c)

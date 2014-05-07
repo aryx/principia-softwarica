@@ -7,6 +7,7 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
+
 //todo: weird, if don't include this file, then can't declare arch in this file
 // or I get some type signature mismatch
 #include "io.h"
@@ -48,24 +49,24 @@ archreset(void)
 
 
 PCArch archgeneric = {
-.id=        "generic",
-.ident=     0,
-.reset=     archreset,
-.serialpower=   unimplemented,
-.modempower=    unimplemented,
-
-// i8259
-.intrinit=  i8259init,
-.intrenable=    i8259enable,
-.intrvecno= i8259vecno,
-.intrdisable=   i8259disable,
-.intron=    i8259on,
-.introff=   i8259off,
-
-// i8253
-.clockenable=   i8253enable,
-.fastclock= i8253read,
-.timerset=  i8253timerset,
+    .id=        "generic",
+    .ident=     0,
+    .reset=     archreset,
+    .serialpower=   unimplemented,
+    .modempower=    unimplemented,
+    
+    // i8259
+    .intrinit=  i8259init,
+    .intrenable=    i8259enable,
+    .intrvecno= i8259vecno,
+    .intrdisable=   i8259disable,
+    .intron=    i8259on,
+    .introff=   i8259off,
+    
+    // i8253
+    .clockenable=   i8253enable,
+    .fastclock= i8253read,
+    .timerset=  i8253timerset,
 };
 
 

@@ -17,11 +17,12 @@ extern Schedq   runq[Nrq];
 // used to be in edf.h
 //unused: extern Lock edftestlock;  /* for atomic admitting/expelling */
 
-/* debugging */
+/*s: edf.c debugging macro */
 enum {
     Dontprint = 1,
 };
 #define DPRINT  if(Dontprint){}else print
+/*e: edf.c debugging macro */
 
 
 static long now;    /* Low order 32 bits of time in µs */

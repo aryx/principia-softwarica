@@ -22,7 +22,9 @@ struct Rb
     uchar   wakeme;
     ushort  bits;
     ulong   randn;
-} rb;
+};
+
+struct Rb rb;
 
 static int
 rbnotfull(void*)

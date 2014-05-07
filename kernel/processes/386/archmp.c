@@ -85,16 +85,16 @@ identify(void)
 
 
 PCArch archmp = {
-.id=        "_MP_", 
-.ident=     identify,
-.reset=     mpshutdown,
-.intrinit=  mpinit,
-.intrenable=    mpintrenable,
-.intron=    lapicintron,
-.introff=   lapicintroff,
-.fastclock= i8253read,
-.timerset=  lapictimerset,
-.resetothers=   mpresetothers,
+    .id=        "_MP_", 
+    .ident=     identify,
+    .reset=     mpshutdown,
+    .intrinit=  mpinit,
+    .intrenable=    mpintrenable,
+    .intron=    lapicintron,
+    .introff=   lapicintroff,
+    .fastclock= i8253read,
+    .timerset=  lapictimerset,
+    .resetothers=   mpresetothers,
 };
 
 

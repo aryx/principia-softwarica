@@ -69,7 +69,13 @@ enum
 typedef struct Inner Inner;
 typedef struct Fsdev Fsdev;
 typedef struct Tree Tree;
+
+extern Dev fsdevtab;        /* forward */
 /*e: devfs.c forward decl */
+
+static int debug;
+#define dprint if(debug)print
+
 
 struct Inner
 {
@@ -101,9 +107,7 @@ struct Tree
     uint    nadevs;     /* number of allocated devices in devs */
 };
 
-#define dprint if(debug)print
 
-extern Dev fsdevtab;        /* forward */
 
 static RWlock lck;      /* r: use devices; w: change config  */
 static Tree fstree;     /* The main "fs" tree. Never goes away */
@@ -117,7 +121,6 @@ static int sectorsz = Sectorsz; /* default sector size */
 
 static char confstr[Maxconf];   /* textual configuration */
 
-static int debug;
 
 static char cfgstr[] = "fsdev:\n";
 

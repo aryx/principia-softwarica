@@ -9,11 +9,14 @@
 /*e: kernel basic includes */
 
 #include        "io.h"
-#include        <ureg.h>
-#include        "init.h"
-#include        "reboot.h"
 #include        "mp.h"
 
+// initcode binary
+#include        "init.h"
+// rebootcode binary
+#include        "reboot.h"
+
+#include        <ureg.h>
 #include        <pool.h>
 #include        <tos.h>
 
@@ -67,7 +70,7 @@ extern void (*i8237alloc)(void);
 //*****************************************************************************
 
 /*
- * Where configuration info is left for the loaded programme.
+ * Where configuration info is left for the loaded program.
  * This will turn into a structure as more is done by the boot loader
  * (e.g. why parse the .ini file twice?).
  * There are 3584 bytes available at CONFADDR.

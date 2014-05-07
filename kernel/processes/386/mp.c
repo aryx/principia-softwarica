@@ -9,17 +9,19 @@
 /*e: kernel basic includes */
 
 #include "io.h"
-#include <ureg.h>
 #include "mp.h"
+
 #include "apbootstrap.h"
+
+#include <ureg.h>
 
 //#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
 #define dprint if(mpdebug) print
+int mpdebug;
 
 /* from mpacpi.c */
 extern Apic *bootapic;
 
-int mpdebug;
 extern void (*mpacpifunc)(void);
 
 static PCMP* mppcmp;

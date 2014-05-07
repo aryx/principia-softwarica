@@ -62,8 +62,6 @@ clangfiles:
 	mv sys/src/9/pc/init.h.clang2 kernel/init/user/preboot
 	cp sys/src/9/pc/reboot.h kernel/init/386
 	mv sys/src/9/pc/reboot.h.clang2 kernel/init/386/
-	cp sys/src/9/pc/errstr.c kernel/core
-	mv sys/src/9/pc/errstr.c.clang2 kernel/core
 	cp sys/src/9/pc/$(CONFIG).c kernel/conf
 	cp sys/src/9/pc/$(CONFIG).rootc.c kernel/conf
 	mv sys/src/9/pc/*.clang2 kernel/conf

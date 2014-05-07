@@ -10,7 +10,7 @@
 
 // see also sysbrk_ in sysproc.c
 
-// used to be in segment.c
+// those functions used to be in segment.c
 
 void
 pteflush(Pte *pte, int s, int e)

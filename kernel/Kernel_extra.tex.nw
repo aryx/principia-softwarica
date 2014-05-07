@@ -8278,88 +8278,106 @@ enum misc_dat {
 
 \subsection*{[[core/386/dat_core.h]]}
 
+<<struct ArchMach>>=
+struct ArchMach {
+    // TODO: have a ArchMachMMU like in bcm/
+    ulong*  pdb;      /* page directory base for this processor (va) */
+    Tss*  tss;      /* tss for this processor */
+    Segdesc *gdt;     /* gdt for this processor */
+    Proc* externup;   /* extern register Proc *up */
+    Page* pdbpool;
+    int pdbcnt;
+    //  int inclockintr;
+  
+    Lock  apictimerlock;
+    ArchFPsave *fpsavalign;
+  
+    // for perfticks, tsc = time stamp counter
+    bool havetsc;
+  
+    int loopconst;
+    int cpuidax;
+    int cpuiddx;
+    char  cpuidid[16];
+    char* cpuidtype;
+    int havepge;
+    uvlong tscticks;
+    int pdballoc;
+    int pdbfree;
+    vlong mtrrcap;
+    vlong mtrrdef;
+    vlong mtrrfix[11];
+    vlong mtrrvar[32];    /* 256 max. */
+};
+@ 
+
+
+<<struct Tss>>=
+struct Tss {
+    ulong link;     /* link (old TSS selector) */
+    ulong esp0;     /* privilege level 0 stack pointer */
+    ulong ss0;      /* privilege level 0 stack selector */
+    ulong esp1;     /* privilege level 1 stack pointer */
+    ulong ss1;      /* privilege level 1 stack selector */
+    ulong esp2;     /* privilege level 2 stack pointer */
+    ulong ss2;      /* privilege level 2 stack selector */
+    ulong xcr3;     /* page directory base register - not used because we don't use trap gates */
+    ulong eip;      /* instruction pointer */
+    ulong eflags;     /* flags register */
+    ulong eax;      /* general registers */
+    ulong   ecx;
+    ulong edx;
+    ulong ebx;
+    ulong esp;
+    ulong ebp;
+    ulong esi;
+    ulong edi;
+    ulong es;     /* segment selectors */
+    ulong cs;
+    ulong ss;
+    ulong ds;
+    ulong fs;
+    ulong gs;
+    ulong ldt;      /* selector for task's LDT */
+    ulong iomap;      /* I/O map base address + T-bit */
+};
+@ 
+
+
+<<struct ArchConf>>=
+struct ArchConf {
+    ulong base0;    /* base of bank 0 */
+    ulong base1;    /* base of bank 1 */
+};
+@ 
+
+
+<<struct Segdesc>>=
+struct Segdesc
+{
+    ulong d0;
+    ulong d1;
+};
+@ 
+
+
 <<dat_core.h>>=
 
 //*****************************************************************************
 // Conf extension
 //*****************************************************************************
 
-struct ArchConf {
-  ulong base0;    /* base of bank 0 */
-  ulong base1;    /* base of bank 1 */
-};
-
+<<struct ArchConf>>
 
 //*****************************************************************************
 // Mach extension
 //*****************************************************************************
 
-struct Tss {
-  ulong link;     /* link (old TSS selector) */
-  ulong esp0;     /* privilege level 0 stack pointer */
-  ulong ss0;      /* privilege level 0 stack selector */
-  ulong esp1;     /* privilege level 1 stack pointer */
-  ulong ss1;      /* privilege level 1 stack selector */
-  ulong esp2;     /* privilege level 2 stack pointer */
-  ulong ss2;      /* privilege level 2 stack selector */
-  ulong xcr3;     /* page directory base register - not used because we don't use trap gates */
-  ulong eip;      /* instruction pointer */
-  ulong eflags;     /* flags register */
-  ulong eax;      /* general registers */
-  ulong   ecx;
-  ulong edx;
-  ulong ebx;
-  ulong esp;
-  ulong ebp;
-  ulong esi;
-  ulong edi;
-  ulong es;     /* segment selectors */
-  ulong cs;
-  ulong ss;
-  ulong ds;
-  ulong fs;
-  ulong gs;
-  ulong ldt;      /* selector for task's LDT */
-  ulong iomap;      /* I/O map base address + T-bit */
-};
+<<struct Tss>>
 
-struct Segdesc
-{
-  ulong d0;
-  ulong d1;
-};
+<<struct Segdesc>>
 
-struct ArchMach {
-  // TODO: have a ArchMachMMU like in bcm/
-  ulong*  pdb;      /* page directory base for this processor (va) */
-  Tss*  tss;      /* tss for this processor */
-  Segdesc *gdt;     /* gdt for this processor */
-  Proc* externup;   /* extern register Proc *up */
-  Page* pdbpool;
-  int pdbcnt;
-//  int inclockintr;
-
-  Lock  apictimerlock;
-  ArchFPsave *fpsavalign;
-
-  // for perfticks, tsc = time stamp counter
-  bool havetsc;
-
-  int loopconst;
-  int cpuidax;
-  int cpuiddx;
-  char  cpuidid[16];
-  char* cpuidtype;
-  int havepge;
-  uvlong tscticks;
-  int pdballoc;
-  int pdbfree;
-  vlong mtrrcap;
-  vlong mtrrdef;
-  vlong mtrrfix[11];
-  vlong mtrrvar[32];    /* 256 max. */
-
-};
+<<struct ArchMach>>
 @
 
 
@@ -10459,7 +10477,14 @@ static int  floppysense(void);
 static void floppywait(int);
 static long floppyxfer(FDrive*, int, void*, long, long);
 @
+
+<<devfloppy.c debugging macro>>=
+#define DPRINT if(floppydebug)print
+int floppydebug = 0;
+@ 
 \fi
+
+
 
 <<devfloppy.c>>=
 <<kernel basic includes>>
@@ -10561,8 +10586,7 @@ enum {
     DMAchan=    2,  /* floppy dma channel */
 };
 
-#define DPRINT if(floppydebug)print
-int floppydebug = 0;
+<<devfloppy.c debugging macro>>
 
 /*
  *  types of drive (from PC equipment byte)
@@ -21539,11 +21563,13 @@ enum
     Bdead       = 0x51494F42,   /* "QIOB" */
 };
 
-struct
+struct Ialloc
 {
     Lock;
     ulong   bytes;
-} ialloc;
+};
+
+struct Ialloc ialloc;
 
 static Block*
 _allocb(int size)
@@ -22340,13 +22366,20 @@ typedef struct Elemlist Elemlist;
 @
 \fi
 
+%PAD: still toggled by sysr1? not true
+\ifallcode
+<<chan.c debugging macro>>=
+int chandebug=0;        /* toggled by sysr1 */
+#define DBG if(chandebug)iprint
+@ 
+\fi
+
 <<chan.c>>=
 <<kernel basic includes>>
 
 <<chan.c forward decl>>
 
-int chandebug=0;        /* toggled by sysr1 */
-#define DBG if(chandebug)iprint
+<<chan.c debugging macro>>
 
 enum
 {
@@ -22354,13 +22387,14 @@ enum
     PATHMSLOP   = 20,
 };
 
-struct
+struct Chanalloc
 {
     Lock;
     int fid;
     Chan    *free;
     Chan    *list;
-} chanalloc;
+};
+struct Chanalloc chanalloc;
 
 
 struct Elemlist
@@ -28147,6 +28181,8 @@ sys_fwstat(ulong *)
 typedef struct Inner Inner;
 typedef struct Fsdev Fsdev;
 typedef struct Tree Tree;
+
+extern Dev fsdevtab;        /* forward */
 @
 \fi
 
@@ -28212,6 +28248,10 @@ enum
 
 <<devfs.c forward decl>>
 
+static int debug;
+#define dprint if(debug)print
+
+
 struct Inner
 {
     char    *iname;     /* inner device name */
@@ -28242,9 +28282,7 @@ struct Tree
     uint    nadevs;     /* number of allocated devices in devs */
 };
 
-#define dprint if(debug)print
 
-extern Dev fsdevtab;        /* forward */
 
 static RWlock lck;      /* r: use devices; w: change config  */
 static Tree fstree;     /* The main "fs" tree. Never goes away */
@@ -28258,7 +28296,6 @@ static int sectorsz = Sectorsz; /* default sector size */
 
 static char confstr[Maxconf];   /* textual configuration */
 
-static int debug;
 
 static char cfgstr[] = "fsdev:\n";
 
@@ -29730,6 +29767,7 @@ connectlocal(void)
  */
 #include "mem.h"
 
+//TODO: mv in x16.h? or just case of instructions not handled by 8[al]?
 #define NOP             BYTE $0x90              /* NOP */
 #define LGDT(gdtptr)    BYTE $0x0F;             /* LGDT */                      \
                         BYTE $0x01; BYTE $0x16;                                 \
@@ -30557,11 +30595,14 @@ void proc_pexit(char *exitstr, int freemem);
 <<kernel basic includes>>
 
 #include        "io.h"
-#include        <ureg.h>
-#include        "init.h"
-#include        "reboot.h"
 #include        "mp.h"
 
+// initcode binary
+#include        "init.h"
+// rebootcode binary
+#include        "reboot.h"
+
+#include        <ureg.h>
 #include        <pool.h>
 #include        <tos.h>
 
@@ -30587,7 +30628,7 @@ extern void (*i8237alloc)(void);
 //*****************************************************************************
 
 /*
- * Where configuration info is left for the loaded programme.
+ * Where configuration info is left for the loaded program.
  * This will turn into a structure as more is done by the boot loader
  * (e.g. why parse the .ini file twice?).
  * There are 3584 bytes available at CONFADDR.
@@ -31594,7 +31635,6 @@ void    rebootcmd(int, char**);
 <<kernel basic includes>>
 
 #include    <a.out.h>
-//#include  "/sys/src/libmach/elf.h"
 #include    <elf.h>
 
 //@Scheck: used in params below, FP cg
@@ -37512,7 +37552,7 @@ setswapchan(Chan *c)
 
 // see also sysbrk_ in sysproc.c
 
-// used to be in segment.c
+// those functions used to be in segment.c
 
 void
 pteflush(Pte *pte, int s, int e)
@@ -37997,17 +38037,15 @@ struct Cmdtab
 \ifallcode
 <<portfns_misc.h>>=
 
-// cis.c
-// pcmcisread in fns.h
-
 // parse.c
-void    cmderror(Cmdbuf*, char*);
 Cmdbuf*   parsecmd(char *a, int n);
 Cmdtab*   lookupcmd(Cmdbuf*, Cmdtab*, int);
+void    cmderror(Cmdbuf*, char*);
 
 // random.c
-ulong   randomread(void*, ulong);
 void    randominit(void);
+ulong   randomread(void*, ulong);
+
 @
 \fi
 
@@ -38030,7 +38068,9 @@ struct Rb
     uchar   wakeme;
     ushort  bits;
     ulong   randn;
-} rb;
+};
+
+struct Rb rb;
 
 static int
 rbnotfull(void*)
@@ -38242,13 +38282,15 @@ enum {                  /* LapicTDCR */
 
 static ulong* lapicbase;
 
-struct
+struct Lapictimer
 {
     uvlong  hz;
     ulong   max;
     ulong   min;
     ulong   div;
-} lapictimer;
+};
+
+struct Lapictimer lapictimer;
 
 static ulong
 lapicr(int r)
@@ -38609,6 +38651,7 @@ lapicintroff(void)
 
 <<archgeneric.c>>=
 <<kernel basic includes>>
+
 //todo: weird, if don't include this file, then can't declare arch in this file
 // or I get some type signature mismatch
 #include "io.h"
@@ -38650,24 +38693,24 @@ archreset(void)
 
 
 PCArch archgeneric = {
-.id=        "generic",
-.ident=     0,
-.reset=     archreset,
-.serialpower=   unimplemented,
-.modempower=    unimplemented,
-
-// i8259
-.intrinit=  i8259init,
-.intrenable=    i8259enable,
-.intrvecno= i8259vecno,
-.intrdisable=   i8259disable,
-.intron=    i8259on,
-.introff=   i8259off,
-
-// i8253
-.clockenable=   i8253enable,
-.fastclock= i8253read,
-.timerset=  i8253timerset,
+    .id=        "generic",
+    .ident=     0,
+    .reset=     archreset,
+    .serialpower=   unimplemented,
+    .modempower=    unimplemented,
+    
+    // i8259
+    .intrinit=  i8259init,
+    .intrenable=    i8259enable,
+    .intrvecno= i8259vecno,
+    .intrdisable=   i8259disable,
+    .intron=    i8259on,
+    .introff=   i8259off,
+    
+    // i8253
+    .clockenable=   i8253enable,
+    .fastclock= i8253read,
+    .timerset=  i8253timerset,
 };
 
 
@@ -38762,16 +38805,16 @@ identify(void)
 
 
 PCArch archmp = {
-.id=        "_MP_", 
-.ident=     identify,
-.reset=     mpshutdown,
-.intrinit=  mpinit,
-.intrenable=    mpintrenable,
-.intron=    lapicintron,
-.introff=   lapicintroff,
-.fastclock= i8253read,
-.timerset=  lapictimerset,
-.resetothers=   mpresetothers,
+    .id=        "_MP_", 
+    .ident=     identify,
+    .reset=     mpshutdown,
+    .intrinit=  mpinit,
+    .intrenable=    mpintrenable,
+    .intron=    lapicintron,
+    .introff=   lapicintroff,
+    .fastclock= i8253read,
+    .timerset=  lapictimerset,
+    .resetothers=   mpresetothers,
 };
 
 
@@ -38920,7 +38963,7 @@ struct I8253
 
     ulong   periodset;
 
-  // extra
+    // extra
     Lock;
 };
 //IMPORTANT: I8253 i8253; (in i8253.c)
@@ -40012,17 +40055,19 @@ idlehands(void)
 <<kernel basic includes>>
 
 #include "io.h"
-#include <ureg.h>
 #include "mp.h"
+
 #include "apbootstrap.h"
+
+#include <ureg.h>
 
 //#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
 #define dprint if(mpdebug) print
+int mpdebug;
 
 /* from mpacpi.c */
 extern Apic *bootapic;
 
-int mpdebug;
 extern void (*mpacpifunc)(void);
 
 static PCMP* mppcmp;
@@ -40999,9 +41044,9 @@ enum {
 
 //#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
 #define dprint if(mpdebug) print
-
 /* from mp.c */
 extern int  mpdebug;
+
 int mpmachno; //PAD: bug? also declared in mp.c
 extern Apic mpapic[MaxAPICNO+1];
 extern int  machno2apicno[MaxAPICNO+1]; /* inverse map: machno -> APIC ID */
@@ -41234,8 +41279,9 @@ static void _dumpstack(Ureg*);
 <<trap.c>>=
 <<kernel basic includes>>
 
-#include    <tos.h>
 #include    "io.h"
+
+#include    <tos.h>
 #include    <ureg.h>
 #include    <trace.h>
 
@@ -42731,6 +42777,15 @@ ms2tk(ulong ms)
 
 \subsection*{[[processes/edf.c]]}
 
+\ifallcode
+<<edf.c debugging macro>>=
+enum {
+    Dontprint = 1,
+};
+#define DPRINT  if(Dontprint){}else print
+@ 
+\fi
+
 <<edf.c>>=
 /* EDF scheduling */
 <<kernel basic includes>>
@@ -42743,11 +42798,7 @@ extern Schedq   runq[Nrq];
 // used to be in edf.h
 //unused: extern Lock edftestlock;  /* for atomic admitting/expelling */
 
-/* debugging */
-enum {
-    Dontprint = 1,
-};
-#define DPRINT  if(Dontprint){}else print
+<<edf.c debugging macro>>
 
 
 static long now;    /* Low order 32 bits of time in µs */
@@ -47952,10 +48003,8 @@ TEXT _syscallintr(SB), $0
  * Print functions for system call tracing.
  */
 <<kernel basic includes>>
-#include "/sys/src/libc/9syscall/sys.h"
 
-extern  char* sysctab[];
-extern  int nsyscall;
+#include "../port/systab.h"
 
 // WE ARE OVERRUNNING SOMEHOW
 static void

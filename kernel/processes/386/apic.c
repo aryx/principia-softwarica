@@ -93,13 +93,15 @@ enum {                  /* LapicTDCR */
 
 static ulong* lapicbase;
 
-struct
+struct Lapictimer
 {
     uvlong  hz;
     ulong   max;
     ulong   min;
     ulong   div;
-} lapictimer;
+};
+
+struct Lapictimer lapictimer;
 
 static ulong
 lapicr(int r)
