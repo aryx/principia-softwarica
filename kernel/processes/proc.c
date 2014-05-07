@@ -40,7 +40,7 @@ enum
 };
 
 char *statename[] =
-{   /* BUG: generate automatically */
+{
     "Dead",
     "Moribund",
     "Ready",

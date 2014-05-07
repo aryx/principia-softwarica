@@ -336,55 +336,59 @@ enum fpsavestatus
 // Proc, the big one
 //*****************************************************************************
 
+/*s: struct Proc */
 // the most important fields are set by newproc()
 struct Proc
 {
-
 //--------------------------------------------------------------------
 // Assembly requirements, Low level, have to be first
 //--------------------------------------------------------------------
+    /*s: Proc assembly fields */
     Label sched;    /* known to l.s */
     char  *kstack;  /* known to l.s */
-
+    /*e: Proc assembly fields */
 //--------------------------------------------------------------------
 // State
 //--------------------------------------------------------------------
+    /*s: Proc state fields */
     ulong pid;
-  
+
     // enum<procstate>
     int state; // Dead, Queuing, etc,
     bool insyscall;
     char  *psstate; /* What /proc/#/status reports */
-  
+
     // e.g. "*init*", or name of executable
     char  *text;
     // e.g.. "eve" (no uid/gid in plan9, because of distributed nature of it?)
     char  *user;
-  
+
     // set by??
     char  *args;
     int nargs;    /* number of bytes of args */
-  
-    int kp;   /* true if a kernel process */
 
+    int kp;   /* true if a kernel process */
+    /*e: Proc state fields */
 //--------------------------------------------------------------------
 // Memory
 //--------------------------------------------------------------------
+    /*s: Proc memory fields */
     // hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
     Segment *seg[NSEG];
     QLock seglock;  /* locked whenever seg[] changes */
-
+    /*e: Proc memory fields */
 //--------------------------------------------------------------------
 // Scheduling
 //--------------------------------------------------------------------
+    /*s: Proc scheduling fields */
     // enum<priority>
     ulong priority; /* priority level */
-  
+
     ulong delaysched;
-  
+
     ulong basepri;  /* base priority level */
     uchar fixedpri; /* priority level deson't change */
-  
+
     ulong cpu;    /* cpu average */
     ulong lastupdate;
     uchar yield;    /* non-zero if the process just did a sleep(0) */
@@ -395,87 +399,90 @@ struct Proc
            */
     // option<ref_own?<edf>>
     Edf *edf;   /* if non-null, real-time proc, edf contains scheduling params */
-
+    /*e: Proc scheduling fields */
 //--------------------------------------------------------------------
 // Files
 //--------------------------------------------------------------------
+    /*s: Proc files fields */
     // ref_counted<pgrp>
     Pgrp  *pgrp;    /* Process group for namespace */
     // ref_counted<egrp>
     Egrp  *egrp;    /* Environment group */
     // ref_counted<fgrp>
     Fgrp  *fgrp;    /* File descriptor group */
-  
+
     // ref<Chan>
     Chan  *slash; // The root!
     // ref_counted<Chan>
     Chan  *dot; // The current directory
-
+    /*e: Proc files fields */
 //--------------------------------------------------------------------
 // Notes
 //--------------------------------------------------------------------
+    /*s: Proc notes fields */
     ulong noteid;   /* Equivalent of note group */
-  
+
     int notepending;  /* note issued but not acted on */
-  
+
     Note  note[NNOTE];
     short nnote;
     short notified; /* sysnoted is due */
     Note  lastnote;
     int (*notify)(void*, char*);
-  
-    void  *ureg;    /* User registers for notes */
 
+    void  *ureg;    /* User registers for notes */
+    /*e: Proc notes fields */
 //--------------------------------------------------------------------
 // Process hierarchy
 //--------------------------------------------------------------------
+    /*s: Proc hierarchy fields */
     //list<ref<Waitq>>
     Waitq *waitq;   /* Exited processes wait children */
     Lock  exl;    /* Lock count and waitq */
-  
+
     Proc  *parent;
     ulong parentpid;
-  
+
     int nchild;   /* Number of living children */
     int nwait;    /* Number of uncollected wait records */
     QLock qwaitr;
     Rendez  waitr;    /* Place to hang out in wait */
-
-
+    /*e: Proc hierarchy fields */
 //--------------------------------------------------------------------
 // Synchronization
 //--------------------------------------------------------------------
-
+    /*s: Proc synchronization fields */
     Rgrp  *rgrp;    /* Rendez group */
-  
+
     uintptr rendtag;  /* Tag for rendezvous */
     uintptr rendval;  /* Value for rendezvous */
     //??
     Proc  *rendhash;  /* Hash list for tag values */
-  
+
     Rendez  *r;   /* rendezvous point slept on */
     Rendez  sleep;    /* place for syssleep/debug */
-
+    /*e: Proc synchronization fields */
 //--------------------------------------------------------------------
 // Error managment
 //--------------------------------------------------------------------
-
+    /*s: Proc error managment fields */
     // array<Label>, error labels, poor's man exceptions in C
     Label errlab[NERR];
     // length(errlab) used.
     int nerrlab;
-  
+
     char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
     char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
     char  errbuf0[ERRMAX];
     char  errbuf1[ERRMAX];
-
+    /*e: Proc error managment fields */
 //--------------------------------------------------------------------
 // Stats, profiling
 //--------------------------------------------------------------------
+    /*s: Proc stats and profiling fields */
     // hash<enum<proctime>, ulong>
     ulong time[6];  /* User, Sys, Real; child U, S, R */
-  
+
     uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
     /*
      * pcycles: cycles spent in this process (updated on procsave/restore)
@@ -486,103 +493,104 @@ struct Proc
      * (procrestores and procsaves balance), it is pcycles.
      */
     vlong pcycles;
-
+    /*e: Proc stats and profiling fields */
 //--------------------------------------------------------------------
 // For debugger
 //--------------------------------------------------------------------
-
+    /*s: Proc debugger fields */
     void  *dbgreg;  /* User registers for devproc */
     ulong pc;   /* DEBUG only */
-  
+
     // e.g. Proc_tracesyscall
     int procctl;  /* Control for /proc debugging */
-  
+
     // Syscall
     int scallnr;  /* sys call number - known by db */
     Sargs s;    /* address of this is known by db */
-  
+
     QLock debug;    /* to access debugging elements of User */
     Proc  *pdbg;    /* the debugging process */
     bool hang;   /* hang at next exec for debug */
-
+    /*e: Proc debugger fields */
 //--------------------------------------------------------------------
 // Other
 //--------------------------------------------------------------------
-
+    /*s: Proc other fields */
     Fgrp  *closingfgrp; /* used during teardown */
-  
-  
+
+
     ulong procmode; /* proc device default file mode */
     ulong privatemem; /* proc does not let anyone read mem */
-  
+
     Lock  rlock;    /* sync sleep/wakeup with postnote */
     int newtlb;   /* Pager has changed my pte's, I must flush */
     int noswap;   /* process is not swappable */
-  
+
     Timer;      /* For tsleep and real-time */
     Rendez  *trend;
     int (*tfn)(void*);
     void  (*kpfun)(void*);
     void  *kparg;
-  
+
     ArchFPsave  fpsave;   /* address of this is known by db */
-  
+
     char  genbuf[128];  /* buffer used e.g. for last name element from namec */
-  
-  
+
+
     Lock  *lockwait;
     Lock  *lastlock;  /* debugging */
     Lock  *lastilock; /* debugging */
-  
+
     Mach  *wired;
     Mach  *mp;    /* machine this process last ran on */
-  
+
     // As long as the current process hold locks (to kernel data structures),
     // we will not schedule another process in unlock(); only the last unlock
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
-  
+
     bool trace;    /* process being traced? */
-  
+
     ulong qpc;    /* pc calling last blocking qlock */
-  
+
     int setargs;
-  
+
     // enum<fpsavestatus>
     int fpstate;
-  
+
     ArchProcNotsave;
-  
+
     /*
      *  machine specific MMU
      */
     ArchProcMMU;
-  
-    char  *syscalltrace;  /* syscall trace */
 
+    char  *syscalltrace;  /* syscall trace */
+    /*e: Proc other fields */
 //--------------------------------------------------------------------
 // Extra
 //--------------------------------------------------------------------
-
+    /*s: Proc extra fields */
     // list<ref<Proc>> KQlock.head or RWLock.head
     Proc  *qnext;   /* next process on queue for a QLock */
     // option<ref<Qlock>> ??
     QLock *qlock;   /* addr of qlock being queued for DEBUG */
-  
+
     // list<ref<Proc>> ?? Schedq.head chain?
     Proc  *rnext;   /* next process in run queue */
-  
+
     // Alarms.head chain?
     Proc  *palarm;  /* Next alarm time */
     ulong alarm;    /* Time of call */
-  
+
     // hash<?, list<ref<Proc>> Procalloc.ht ?
     Proc  *pidhash; /* next proc in pid hash */ 
-  
+
     // option<ref<Mach>>, null when not associated to a machine?
     Mach  *mach;    /* machine running this proc */
-
+    /*e: Proc extra fields */
 };
+/*e: struct Proc */
 
 // poor's man exceptions in C
 //  - waserror() =~ try  
