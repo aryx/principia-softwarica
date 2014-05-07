@@ -40,6 +40,8 @@ extern void	poolcheck(Pool*);
 extern int	poolcompact(Pool*);
 extern void	poolblockcheck(Pool*, void*);
 
+// those globals are initialized in libc but also in the kernel itself
+// so that the kernel can reuse the pool allocation code
 extern Pool*	mainmem;
 extern Pool*	imagmem;
 
