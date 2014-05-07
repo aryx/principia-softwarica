@@ -1,14 +1,16 @@
 #pragma	src	"/sys/src/libc/port"
 #pragma	lib	"libc.a"
 
-#define	_U	01
-#define	_L	02
-#define	_N	04
-#define	_S	010
-#define	_P	020
-#define	_C	040
-#define	_B	0100
-#define	_X	0200
+// could be merged in libc.h
+
+#define	_U	01 // upper
+#define	_L	02 // lower
+#define	_N	04 // number
+#define	_S	010 // space
+#define	_P	020 // punctuation
+#define	_C	040 // ctlr
+#define	_B	0100 // ??
+#define	_X	0200 // ??
 
 extern unsigned char	_ctype[];
 
