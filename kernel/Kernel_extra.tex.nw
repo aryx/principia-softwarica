@@ -6087,10 +6087,8 @@ struct Sema
 
 \subsection*{[[concurrency/portfns_concurrency.h]]}
 
+\ifallcode
 <<portfns_concurrency.h>>=
-// For protecting kernel syscall code from interrupt kernel code: splhi(), splo()
-// For very small critical region: taslock
-// For bigger region, or when have lots of contention on a lock: qlock
 
 // taslock.c
 int lock(Lock*);
@@ -6133,12 +6131,12 @@ void    _xinc(long*);
 //@Scheck: Assembly
 long    _xdec(long*);
 @
-
+\fi
 
 \subsection*{[[concurrency/qlock.c]]}
 
-<<qlock.c>>=
-<<kernel basic includes>>
+\ifallcode
+<<struct QlockStats>>=
 struct QlockStats {
     ulong rlock;
     ulong rlockq;
@@ -6147,8 +6145,18 @@ struct QlockStats {
     ulong qlock;
     ulong qlockq;
 };
+@
 
+
+<<global rwstats>>=
 struct QlockStats rwstats;
+@
+\fi
+
+<<qlock.c>>=
+<<kernel basic includes>>
+<<struct QlockStats>>
+<<global rwstats>>
 
 void
 qlock(QLock *q)
@@ -6401,20 +6409,22 @@ decref(Ref *r)
 
 \subsection*{[[concurrency/taslock.c]]}
 
-<<taslock.c>>=
-<<kernel basic includes>>
-
-// TAS: Test And Set
-
+\ifallcode
+<<struct TaslockStats>>=
 struct TaslockStats
 {
     ulong   locks;
     ulong   glare;
     ulong   inglare;
 };
+@
 
+
+<<global lockstats>>=
 struct TaslockStats lockstats;
+@
 
+<<globals lockcycles>>=
 #ifdef LOCKCYCLES
 long maxlockcycles;
 long maxilockcycles;
@@ -6426,6 +6436,17 @@ ulong maxilockpc;
 ulong ilockpcs[0x100] = { [0xff] = 1 };
 static int n;
 #endif
+@
+\fi
+
+
+<<taslock.c>>=
+// TAS: Test And Set
+<<kernel basic includes>>
+
+<<struct TaslockStats>>
+<<global lockstats>>
+<<globals lockcycles>>
 
 // See also ref.c incref() and decref(), but we can't use them here as they
 // themselves rely on lock() and unlock(). 
@@ -8009,6 +8030,7 @@ writebintime(char *buf, int n)
 
 \subsection*{[[console/portdat_console.h]]}
 
+\ifallcode
 <<portdat_console.h>>=
 extern  Queue*  serialoq;
 extern  Queue*  kbdq;
@@ -8016,10 +8038,11 @@ extern  Queue*  kprintoq;
 
 // consdevtab
 @
-
+\fi
 
 \subsection*{[[console/portfns_console.h]]}
 
+\ifallcode
 <<portfns_console.h>>=
 
 // devcons.c
@@ -8049,7 +8072,7 @@ void    rdb(void);
 // overrides _fmtlock, from lib_core/libc/fmt/fmtlock.c that are used
 // in fmt related functions
 @
-
+\fi
 
 \subsection*{[[console/print.c]]}
 
@@ -8480,6 +8503,20 @@ cistrcmp(char *a, char *b)
 
 \subsection*{[[core/386/fns.h]]}
 
+<<fns.h macros>>=
+#define KADDR(a)  kaddr(a)
+#define PADDR(a)  paddr((void*)(a))
+
+
+#define dcflush(a, b)
+
+#define BIOSSEG(a)  KADDR(((uint)(a))<<4)
+
+#define L16GET(p) (((p)[1]<<8)|(p)[0])
+#define L32GET(p) (((u32int)L16GET((p)+2)<<16)|L16GET(p))
+@
+
+\ifallcode
 <<fns.h declarations>>=
 
 // used by $CONF.c and main.c
@@ -8715,21 +8752,13 @@ void  wrmsr(int, vlong);
 
 //int iounused(int start, int end); not used anymore in vga.c
 
-#define KADDR(a)  kaddr(a)
-#define PADDR(a)  paddr((void*)(a))
-
-
-#define dcflush(a, b)
-
-#define BIOSSEG(a)  KADDR(((uint)(a))<<4)
-
-#define L16GET(p) (((p)[1]<<8)|(p)[0])
-#define L32GET(p) (((u32int)L16GET((p)+2)<<16)|L16GET(p))
+<<fns.h macros>>
 @
+\fi
 
 \subsection*{[[core/error.h]]}
 
-<<error.h>>=
+<<global errors decls>>=
 extern char Emount[];   /* inconsistent mount */
 extern char Eunmount[];   /* not mounted */
 extern char Eismtpt[];    /* is a mount point */
@@ -8781,7 +8810,10 @@ extern char Ecmdargs[];   /* wrong #args in control message */
 extern char Ebadip[];   /* bad ip address syntax */
 extern char Edirseek[];   /* seek in directory */
 extern char Echange[];    /* media or partition has changed */
+@
 
+<<error.h>>=
+<<global errors decls>>
 @
 
 %//extern char Enoerror[];   /* no error */
@@ -8801,15 +8833,10 @@ extern char Echange[];    /* media or partition has changed */
 <<kernel basic includes>>
 
 // was in init/main.c
-Conf conf;
+<<global conf>>
 // bool cpuserver; // defined in $CONF.c
 
-// conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
-// hash<string, string>
-char *confname[MAXCONF];
-char *confval[MAXCONF];
-// Hashtbl.length(confname)
-int nconf;
+<<globals confname and confvar>>
 
 char* getconf(char *name)
 {
@@ -8821,9 +8848,9 @@ char* getconf(char *name)
 }
 
 // was in init/main.c
-Mach *m;
+<<global m>>
 // was in dat.h
-Mach* machp[MAXMACH];
+<<global machp>>
 
 // was in security/auth.c
 char    *eve;
@@ -8937,76 +8964,17 @@ enum miscsize_portdat
 
 \subsection*{[[core/portdat_core.h]]}
 
-<<portdat_core.h>>=
 
-// All those structs used to be in dat.h, in 386/, but many of their fields
-// were used from port/ so I've moved them here (and put the arch
-// specific fields in dat_core.h)
-
-// less: have a conf.c, mach.c?
-
-//*****************************************************************************
-// Conf
-//*****************************************************************************
-
-// memory "bank"
-struct Confmem
-{
-    ulong base; // phys?
-    ulong npage;
-  
-    ulong kbase; // phys?
-    ulong klimit; // phys?
-};
-
-struct Conf
-{
-    ulong nmach;    /* processors */
-    ulong nproc;    /* processes */
-    // in bcm/ it's [1], important? 
-    Confmem mem[4];   /* physical memory */
-  
-    bool_ulong monitor;  /* has monitor? */
-  
-    ulong npage;    /* total physical pages of memory */
-    ulong upages;   /* user page pool */
-    ulong nimage;   /* number of page cache image headers */
-    ulong nswap;    /* number of swap pages */
-  
-    int nswppo;   /* max # of pageouts per segment pass */
-  
-    bool_ulong copymode; /* 0 is copy on write, 1 is copy on reference */
-    ulong ialloc;   /* max interrupt time allocation in bytes */
-    ulong pipeqsize;  /* size in bytes of pipe queues */
-    int nuart;    /* number of uart devices */
-  
-    struct ArchConf;
-};
-
-
-extern Conf conf;
-
-// hash<string, string>
-#define MAXCONF         64
-extern char *confname[];
-extern char *confval[];
-// Hashtbl.length(confname)
-extern int nconf;
-extern bool cpuserver; // defined in $CONF.c
-
-char* getconf(char *name);
-
-//*****************************************************************************
-// Mach
-//*****************************************************************************
-
+<<struct Label>>=
 // =~ a jumpbuf in C, for coroutines
 struct Label
 {
     ulong sp; // virt_addr?
     ulong pc; // virt_addr?
 };
+@ 
 
+<<struct Perf>>=
 /*
  *  performance timers, all units in perfticks
  */
@@ -9021,66 +8989,102 @@ struct Perf
     ulong last;   /* value of perfticks() at last clock tick */
     ulong period;   /* perfticks() per clock tick */
 };
+@ 
+
+
+<<Mach extra fields>>=
+ulong ticks;      /* of the clock since boot time */
+Label sched;      /* scheduler wakeup */
+Lock  alarmlock;    /* access to alarm list */
+void* alarm;      /* alarms bound to this clock */
+
+Proc* readied;    /* for runproc */
+ulong schedticks;   /* next forced context switch */
+
+int flushmmu;   /* make current proc flush it's mmu state */
+
+  /* stats */
+int tlbfault;
+int tlbpurge;
+int pfault;
+int cs;
+int syscall;
+int load;
+int intr;
+
+ulong spuriousintr;
+int lastintr;
+int ilockdepth;
+Perf  perf;     /* performance counters */
+
+int cpumhz;
+uvlong  cpuhz;
+uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
+@ 
+
+<<Conf extra fields>>=
+bool_ulong monitor;  /* has monitor? */
+
+ulong npage;    /* total physical pages of memory */
+ulong upages;   /* user page pool */
+ulong nimage;   /* number of page cache image headers */
+ulong nswap;    /* number of swap pages */
+
+int nswppo;   /* max # of pageouts per segment pass */
+
+bool_ulong copymode; /* 0 is copy on write, 1 is copy on reference */
+ulong ialloc;   /* max interrupt time allocation in bytes */
+ulong pipeqsize;  /* size in bytes of pipe queues */
+int nuart;    /* number of uart devices */
+@ 
 
 
 
-struct Mach
-{
-    int machno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
-    // must be second field at 0x04, used by splhi()
-    ulong splpc;      /* pc of last caller to splhi */
-  
-    // ref<Proc>
-    Proc* proc;     /* current process on this processor */
-  
-    ulong ticks;      /* of the clock since boot time */
-    Label sched;      /* scheduler wakeup */
-    Lock  alarmlock;    /* access to alarm list */
-    void* alarm;      /* alarms bound to this clock */
-  
-    Proc* readied;    /* for runproc */
-    ulong schedticks;   /* next forced context switch */
-  
-    int flushmmu;   /* make current proc flush it's mmu state */
-  
-    struct ArchMach;
-  
-      /* stats */
-    int tlbfault;
-    int tlbpurge;
-    int pfault;
-    int cs;
-    int syscall;
-    int load;
-    int intr;
-  
-    ulong spuriousintr;
-    int lastintr;
-    int ilockdepth;
-    Perf  perf;     /* performance counters */
-  
-    int cpumhz;
-    uvlong  cpuhz;
-    uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
-  
-    int stack[1];
-};
+
+<<portdat_core.h>>=
+
+// All those structs used to be in dat.h, in 386/, but many of their fields
+// were used from port/ so I've moved them here (and put the arch
+// specific fields in dat_core.h)
+
+//*****************************************************************************
+// Conf
+//*****************************************************************************
+
+<<struct Confmem>>
+
+<<struct Conf>>
+
+extern Conf conf;
+
+<<constant MAXCONF>>
+// hash<string, string>
+extern char *confname[];
+extern char *confval[];
+// Hashtbl.length(confname)
+extern int nconf;
+
+extern bool cpuserver; // defined in $CONF.c
+
+char* getconf(char *name);
+
+//*****************************************************************************
+// Mach
+//*****************************************************************************
+
+<<struct Label>>
+
+<<struct Perf>>
+
+<<struct Mach>>
 
 // ref<Mach>, the actual Mach is where??
 extern Mach *m;
-/*
- * Each processor sees its own Mach structure at address MACHADDR.
- * However, the Mach structures must also be available via the per-processor
- * MMU information array machp, mainly for disambiguation and access to
- * the clock which is only maintained by the bootstrap processor (0).
- */
 // array<ref<Mach>>, MAXMACH is defined in 386/mem.h
 extern Mach* machp[MAXMACH];
-#define MACHP(n)  (machp[n])
+<<macro MACHP>>
 
-// up = user process, MACHADDR is defined in 386/mem.h
-//TODO: mv in 386/ TODO: why not m->externup? m is not valid?
-#define up  (((Mach*)MACHADDR)->externup)
+<<macro up>>
 
 //*****************************************************************************
 // Other
@@ -9304,6 +9308,7 @@ readstr(ulong off, char *buf, ulong n, char *str)
 @
 \fi
 
+\ifallcode
 <<portfns_core.h>>=
 
 // exported in lib.h, defined in portfns.c
@@ -9357,7 +9362,7 @@ int   readstr(ulong, char*, ulong, char*);
 
 <<portfns_core.h pragmas>>
 @
-
+\fi
 
 \section{[[devices/]]}
 
@@ -10184,6 +10189,7 @@ latin1(Rune *k, int n)
 
 \subsection*{[[devices/portfns_devices.h]]}
 
+\ifallcode
 <<portfns_devices.h>>=
 
 // sys/devroot.c
@@ -10217,7 +10223,7 @@ int   kbdgetmap(uint, int*, int*, Rune*);
 void    kbdputmap(ushort, ushort, Rune);
 
 @
-
+\fi
 
 \subsection*{[[devices/screen/386/cga.c]]}
 
@@ -24831,6 +24837,51 @@ mntversion(Chan *c, char *version, int msize, int returnlen)
 
 \subsection*{[[files/portdat_files.h]]}
 
+<<Chan other fields>>=
+vlong devoffset;    /* in underlying device; see read */
+
+ulong dev;
+
+ushort  flag;
+
+int fid;      /* for devmnt */
+ulong iounit;     /* chunk size for i/o; 0==default */
+Mhead*  umh;      /* mount point that derived Chan; used in unionread */
+Chan* umc;      /* channel in union; held for union read */
+QLock umqlock;    /* serialize unionreads */
+int uri;      /* union read index */
+int dri;      /* devdirread index */
+uchar*  dirrock;    /* directory entry rock for translations */
+int nrock;
+int mrock;
+QLock rockqlock;
+int ismtpt;
+Mntcache* mcp;      /* Mount cache pointer */
+Mnt*  mux;      /* Mnt for clients using me for messages */
+union {
+  void* aux;
+  Qid pgrpid;   /* for #p/notepg */
+  ulong mid;    /* for ns in devproc */
+};
+Chan* mchan;      /* channel to mounted server */
+Qid mqid;     /* qid of root of mount point */
+Path* path;
+@ 
+
+
+<<Chan extra fields>>=
+Ref;        /* the Lock in this Ref is also Chan's lock */
+Chan* next;     /* allocation */
+Chan* link;
+@ 
+
+<<Dev other fields>>=
+/* not initialised */
+int attached;       /* debugging */
+@
+
+
+
 <<portdat_files.h>>=
 
 /* flag values */
@@ -25038,47 +25089,7 @@ enum
   CCACHE  = 0x0080,   /* client cache */
 };
 
-struct Chan
-{
-  Ref;        /* the Lock in this Ref is also Chan's lock */
-  Chan* next;     /* allocation */
-  Chan* link;
-  vlong offset;     /* in fd */
-  vlong devoffset;    /* in underlying device; see read */
-
-  ushort  type; // idx in devtab?
-  ulong dev;
-
-  ushort  mode;     /* read/write */
-  ushort  flag;
-
-  Qid qid;
-
-  int fid;      /* for devmnt */
-  ulong iounit;     /* chunk size for i/o; 0==default */
-  Mhead*  umh;      /* mount point that derived Chan; used in unionread */
-  Chan* umc;      /* channel in union; held for union read */
-  QLock umqlock;    /* serialize unionreads */
-  int uri;      /* union read index */
-  int dri;      /* devdirread index */
-  uchar*  dirrock;    /* directory entry rock for translations */
-  int nrock;
-  int mrock;
-  QLock rockqlock;
-  int ismtpt;
-  Mntcache* mcp;      /* Mount cache pointer */
-  Mnt*  mux;      /* Mnt for clients using me for messages */
-  union {
-    void* aux;
-    Qid pgrpid;   /* for #p/notepg */
-    ulong mid;    /* for ns in devproc */
-  };
-  Chan* mchan;      /* channel to mounted server */
-  Qid mqid;     /* qid of root of mount point */
-  Path* path;
-};
-
-
+<<struct Chan>>
 
 
 
@@ -25113,38 +25124,14 @@ struct Walkqid
   Qid qid[1];
 };
 
-struct Dev
-{
-  int dc; // dev character code
-  char* name;
+<<struct Dev>>
 
-  void  (*reset)(void);
-  void  (*init)(void);
-  void  (*shutdown)(void);
-  Chan* (*attach)(char*);
-  Walkqid*(*walk)(Chan*, Chan*, char**, int);
-  int (*stat)(Chan*, uchar*, int);
-  Chan* (*open)(Chan*, int);
-  void  (*create)(Chan*, char*, int, ulong);
-  void  (*close)(Chan*);
-  long  (*read)(Chan*, void*, long, vlong);
-  Block*  (*bread)(Chan*, long, ulong);
-  long  (*write)(Chan*, void*, long, vlong);
-  long  (*bwrite)(Chan*, Block*, ulong);
-  void  (*remove)(Chan*);
-  int (*wstat)(Chan*, uchar*, int);
-  void  (*power)(int);  /* power mgt: power(1) => on, power (0) => off */
-  int (*config)(int, char*, DevConf*);  /* returns nil on error */
-
-  /* not initialised */
-  int attached;       /* debugging */
-};
 
 // array<Dev>, it looks like an allocated array<ref<dev>> but
 // it is really a static array put here to avoid backward deps on conf_devtab,
 // and it is not really a <ref<dev>> because it's pointers to static
 // structures (e.g. mousedevtab, vgadevtab, etc).
-extern Dev** devtab;
+<<global devtab decl>>
 
 
 struct Dirtab
@@ -25204,6 +25191,7 @@ extern char Enoversion[];
 
 \subsection*{[[files/portfns_files.h]]}
 
+\ifallcode
 <<portfns_files.h>>=
 
 // allocb.c
@@ -25335,13 +25323,12 @@ void    mntpntfree(Mnt*);
 int   newfd(Chan*);
 // many sysxxx functions (used in syscalls/ without requiring extern decl)
 @
-
+\fi
 
 \subsection*{[[files/qio.c]]}
 
-<<qio.c>>=
-<<kernel basic includes>>
-
+\ifallcode
+<<qio.c globals cnt>>=
 static ulong padblockcnt;
 static ulong concatblockcnt;
 static ulong pullupblockcnt;
@@ -25349,10 +25336,22 @@ static ulong copyblockcnt;
 static ulong consumecnt;
 static ulong producecnt;
 static ulong qcopycnt;
+@ 
 
+<<qio.c global debugging>>=
 static int debugging;
 
 #define QDEBUG  if(0)
+@ 
+\fi
+
+
+<<qio.c>>=
+<<kernel basic includes>>
+
+<<qio.c globals cnt>>
+
+<<qio.c global debugging>>
 
 enum
 {
@@ -29576,6 +29575,7 @@ boot(int argc, char *argv[])
 
 \subsection*{[[boot/boot.h]]}
 
+\ifallcode
 <<boot.h>>=
 /* libc equivalent */
 // aux.c: 
@@ -29605,7 +29605,7 @@ extern int  connectlocal(void);
 extern void boot(int, char **);
 
 @
-
+\fi
 %// what boot$CONF.c used to expect
 %//typedef struct Method Method;
 %//struct Method
@@ -30458,20 +30458,8 @@ TEXT multiboot(SB), $0
 
 \subsection*{[[init/386/main.c]]}
 
-<<main.c>>=
-<<kernel basic includes>>
-
-#include        "io.h"
-#include        <ureg.h>
-#include        "init.h"
-#include        "reboot.h"
-#include        "mp.h"
-
-#include        <pool.h>
-#include        <tos.h>
-
-void bootargs(void*);
-
+\ifallcode
+<<main.c forward decl for backward dependencies>>=
 // part of a trick to remove some backward dependencies
 int devcons_print(char*, ...);
 int devcons_iprint(char*, ...);
@@ -30499,6 +30487,24 @@ void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
 int proc_postnote(Proc *p, int dolock, char *n, int flag);
 int sysproc_return0(void*);
 void proc_pexit(char *exitstr, int freemem);
+@ 
+\fi
+
+<<main.c>>=
+<<kernel basic includes>>
+
+#include        "io.h"
+#include        <ureg.h>
+#include        "init.h"
+#include        "reboot.h"
+#include        "mp.h"
+
+#include        <pool.h>
+#include        <tos.h>
+
+void bootargs(void*);
+
+<<main.c forward decl for backward dependencies>>
 
 // conf.c
 extern  Dev*  conf_devtab[];
@@ -31506,6 +31512,7 @@ startboot(char *argv0, char **argv)
 
 \subsection*{[[init/portfns_init.h]]}
 
+\ifallcode
 <<portfns_init.h>>=
 
 //in init/386/main.c (but used in port)
@@ -31516,7 +31523,7 @@ void    reboot(void*, void*, ulong);
 void    rebootcmd(int, char**);
 
 @
-
+\fi
 
 \subsection*{[[init/rebootcmd.c]]}
 
@@ -36105,6 +36112,7 @@ extern struct Swapalloc swapalloc;
 
 \subsection*{[[memory/portfns_memory.h]]}
 
+\ifallcode
 <<portfns_memory.h>>=
 
 // xalloc.c
@@ -36210,7 +36218,7 @@ void    putmmu(ulong, ulong, Page*);
 void    mmurelease(Proc*);
 void    mmuswitch(Proc*);
 @
-
+\fi
 
 \subsection*{[[memory/segment.c]]}
 
@@ -36219,6 +36227,21 @@ void    mmuswitch(Proc*);
 static void imagereclaim(void);
 static void imagechanreclaim(void);
 @
+\fi
+
+\ifallcode
+<<struct Irstats>>=
+struct Irstats {
+    int calls;          /* times imagereclaim was called */
+    int loops;          /* times the main loop was run */
+    uvlong  ticks;          /* total time in the main loop */
+    uvlong  maxt;           /* longest time in main loop */
+};
+@ 
+
+<<segment.c global irstats>>=
+static struct Irstats  irstats;
+@ 
 \fi
 
 <<segment.c>>=
@@ -36530,13 +36553,8 @@ found:
     return i;
 }
 
-struct Irstats {
-    int calls;          /* times imagereclaim was called */
-    int loops;          /* times the main loop was run */
-    uvlong  ticks;          /* total time in the main loop */
-    uvlong  maxt;           /* longest time in main loop */
-};
-static struct Irstats  irstats;
+<<struct Irstats>>
+<<segment.c global irstats>>
 
 static void
 imagereclaim(void)
@@ -37415,13 +37433,13 @@ setswapchan(Chan *c)
     swapimage.c = c;
 }
 
-//unused
-//int
-//swapfull(void)
-//{
-//  return swapalloc.free < conf.nswap/10;
-//}
 @
+
+%//int
+%//swapfull(void)
+%//{
+%//  return swapalloc.free < conf.nswap/10;
+%//}
 
 
 \subsection*{[[memory/sysmemory.c]]}
@@ -37913,6 +37931,7 @@ struct Cmdtab
 
 \subsection*{[[misc/portfns_misc.h]]}
 
+\ifallcode
 <<portfns_misc.h>>=
 
 // cis.c
@@ -37927,7 +37946,7 @@ Cmdtab*   lookupcmd(Cmdbuf*, Cmdtab*, int);
 ulong   randomread(void*, ulong);
 void    randominit(void);
 @
-
+\fi
 
 \subsection*{[[misc/random.c]]}
 
@@ -41135,6 +41154,20 @@ void    (*mpacpifunc)(void) = mpacpi;
 
 \subsection*{[[processes/386/trap.c]]}
 
+\ifallcode
+<<trap.c forward decl>>=
+void    noted(Ureg*, ulong);
+int     notify(Ureg*);
+void        dumpregs(Ureg*);
+
+static void debugbpt(Ureg*, void*);
+static void fault386(Ureg*, void*);
+static void doublefault(Ureg*, void*);
+static void unexpected(Ureg*, void*);
+static void _dumpstack(Ureg*);
+@ 
+\fi
+
 <<trap.c>>=
 <<kernel basic includes>>
 
@@ -41161,16 +41194,7 @@ ulong intrtimes[256][Ntimevec];
 //*****************************************************************************
 // Forward decl
 //*****************************************************************************
-
-void    noted(Ureg*, ulong);
-int     notify(Ureg*);
-void        dumpregs(Ureg*);
-
-static void debugbpt(Ureg*, void*);
-static void fault386(Ureg*, void*);
-static void doublefault(Ureg*, void*);
-static void unexpected(Ureg*, void*);
-static void _dumpstack(Ureg*);
+<<trap.c forward decl>>
 
 //*****************************************************************************
 // Interrupts enable/disable
@@ -43674,6 +43698,243 @@ struct Active active;
 @
 \fi
 
+<<Proc assembly fields>>=
+Label sched;    /* known to l.s */
+char  *kstack;  /* known to l.s */
+@ 
+
+
+<<Proc state fields>>=
+ulong pid;
+
+// enum<procstate>
+int state; // Dead, Queuing, etc,
+bool insyscall;
+char  *psstate; /* What /proc/#/status reports */
+
+// e.g. "*init*", or name of executable
+char  *text;
+// e.g.. "eve" (no uid/gid in plan9, because of distributed nature of it?)
+char  *user;
+
+// set by??
+char  *args;
+int nargs;    /* number of bytes of args */
+
+int kp;   /* true if a kernel process */
+@
+
+
+<<Proc memory fields>>=
+// hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
+Segment *seg[NSEG];
+QLock seglock;  /* locked whenever seg[] changes */
+@ 
+
+
+<<Proc scheduling fields>>=
+// enum<priority>
+ulong priority; /* priority level */
+
+ulong delaysched;
+
+ulong basepri;  /* base priority level */
+uchar fixedpri; /* priority level deson't change */
+
+ulong cpu;    /* cpu average */
+ulong lastupdate;
+uchar yield;    /* non-zero if the process just did a sleep(0) */
+ulong readytime;  /* time process came ready */
+ulong movetime; /* last time process switched processors */
+int preempted;  /* true if this process hasn't finished the interrupt
+       *  that last preempted it
+       */
+// option<ref_own?<edf>>
+Edf *edf;   /* if non-null, real-time proc, edf contains scheduling params */
+@ 
+
+
+<<Proc files fields>>=
+// ref_counted<pgrp>
+Pgrp  *pgrp;    /* Process group for namespace */
+// ref_counted<egrp>
+Egrp  *egrp;    /* Environment group */
+// ref_counted<fgrp>
+Fgrp  *fgrp;    /* File descriptor group */
+
+// ref<Chan>
+Chan  *slash; // The root!
+// ref_counted<Chan>
+Chan  *dot; // The current directory
+@ 
+
+
+<<Proc notes fields>>=
+ulong noteid;   /* Equivalent of note group */
+
+int notepending;  /* note issued but not acted on */
+
+Note  note[NNOTE];
+short nnote;
+short notified; /* sysnoted is due */
+Note  lastnote;
+int (*notify)(void*, char*);
+
+void  *ureg;    /* User registers for notes */
+@ 
+
+
+<<Proc hierarchy fields>>=
+//list<ref<Waitq>>
+Waitq *waitq;   /* Exited processes wait children */
+Lock  exl;    /* Lock count and waitq */
+
+Proc  *parent;
+ulong parentpid;
+
+int nchild;   /* Number of living children */
+int nwait;    /* Number of uncollected wait records */
+QLock qwaitr;
+Rendez  waitr;    /* Place to hang out in wait */
+@ 
+
+
+<<Proc synchronization fields>>=
+Rgrp  *rgrp;    /* Rendez group */
+
+uintptr rendtag;  /* Tag for rendezvous */
+uintptr rendval;  /* Value for rendezvous */
+//??
+Proc  *rendhash;  /* Hash list for tag values */
+
+Rendez  *r;   /* rendezvous point slept on */
+Rendez  sleep;    /* place for syssleep/debug */
+@ 
+
+
+<<Proc error managment fields>>=
+// array<Label>, error labels, poor's man exceptions in C
+Label errlab[NERR];
+// length(errlab) used.
+int nerrlab;
+
+char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
+char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
+char  errbuf0[ERRMAX];
+char  errbuf1[ERRMAX];
+@ 
+
+
+<<Proc stats and profiling fields>>=
+// hash<enum<proctime>, ulong>
+ulong time[6];  /* User, Sys, Real; child U, S, R */
+
+uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
+/*
+ * pcycles: cycles spent in this process (updated on procsave/restore)
+ * when this is the current proc and we're in the kernel
+ * (procrestores outnumber procsaves by one)
+ * the number of cycles spent in the proc is pcycles + cycles()
+ * when this is not the current process or we're in user mode
+ * (procrestores and procsaves balance), it is pcycles.
+ */
+vlong pcycles;
+@ 
+
+
+<<Proc debugger fields>>=
+void  *dbgreg;  /* User registers for devproc */
+ulong pc;   /* DEBUG only */
+
+// e.g. Proc_tracesyscall
+int procctl;  /* Control for /proc debugging */
+
+// Syscall
+int scallnr;  /* sys call number - known by db */
+Sargs s;    /* address of this is known by db */
+
+QLock debug;    /* to access debugging elements of User */
+Proc  *pdbg;    /* the debugging process */
+bool hang;   /* hang at next exec for debug */
+@ 
+
+
+<<Proc other fields>>=
+Fgrp  *closingfgrp; /* used during teardown */
+
+
+ulong procmode; /* proc device default file mode */
+ulong privatemem; /* proc does not let anyone read mem */
+
+Lock  rlock;    /* sync sleep/wakeup with postnote */
+int newtlb;   /* Pager has changed my pte's, I must flush */
+int noswap;   /* process is not swappable */
+
+Timer;      /* For tsleep and real-time */
+Rendez  *trend;
+int (*tfn)(void*);
+void  (*kpfun)(void*);
+void  *kparg;
+
+ArchFPsave  fpsave;   /* address of this is known by db */
+
+char  genbuf[128];  /* buffer used e.g. for last name element from namec */
+
+
+Lock  *lockwait;
+Lock  *lastlock;  /* debugging */
+Lock  *lastilock; /* debugging */
+
+Mach  *wired;
+Mach  *mp;    /* machine this process last ran on */
+
+// As long as the current process hold locks (to kernel data structures),
+// we will not schedule another process in unlock(); only the last unlock
+// will eventually cause a rescheduling.
+Ref nlocks;   /* number of locks held by proc */
+
+bool trace;    /* process being traced? */
+
+ulong qpc;    /* pc calling last blocking qlock */
+
+int setargs;
+
+// enum<fpsavestatus>
+int fpstate;
+
+ArchProcNotsave;
+
+/*
+ *  machine specific MMU
+ */
+ArchProcMMU;
+
+char  *syscalltrace;  /* syscall trace */
+@ 
+
+
+<<Proc extra fields>>=
+// list<ref<Proc>> KQlock.head or RWLock.head
+Proc  *qnext;   /* next process on queue for a QLock */
+// option<ref<Qlock>> ??
+QLock *qlock;   /* addr of qlock being queued for DEBUG */
+
+// list<ref<Proc>> ?? Schedq.head chain?
+Proc  *rnext;   /* next process in run queue */
+
+// Alarms.head chain?
+Proc  *palarm;  /* Next alarm time */
+ulong alarm;    /* Time of call */
+
+// hash<?, list<ref<Proc>> Procalloc.ht ?
+Proc  *pidhash; /* next proc in pid hash */ 
+
+// option<ref<Mach>>, null when not associated to a machine?
+Mach  *mach;    /* machine running this proc */
+@ 
+
+
+
 <<portdat_processes.h>>=
 
 // in lib.h: Waitmsg, ERRMAX
@@ -44012,253 +44273,7 @@ enum fpsavestatus
 // Proc, the big one
 //*****************************************************************************
 
-// the most important fields are set by newproc()
-struct Proc
-{
-
-//--------------------------------------------------------------------
-// Assembly requirements, Low level, have to be first
-//--------------------------------------------------------------------
-    Label sched;    /* known to l.s */
-    char  *kstack;  /* known to l.s */
-
-//--------------------------------------------------------------------
-// State
-//--------------------------------------------------------------------
-    ulong pid;
-  
-    // enum<procstate>
-    int state; // Dead, Queuing, etc,
-    bool insyscall;
-    char  *psstate; /* What /proc/#/status reports */
-  
-    // e.g. "*init*", or name of executable
-    char  *text;
-    // e.g.. "eve" (no uid/gid in plan9, because of distributed nature of it?)
-    char  *user;
-  
-    // set by??
-    char  *args;
-    int nargs;    /* number of bytes of args */
-  
-    int kp;   /* true if a kernel process */
-
-//--------------------------------------------------------------------
-// Memory
-//--------------------------------------------------------------------
-    // hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
-    Segment *seg[NSEG];
-    QLock seglock;  /* locked whenever seg[] changes */
-
-//--------------------------------------------------------------------
-// Scheduling
-//--------------------------------------------------------------------
-    // enum<priority>
-    ulong priority; /* priority level */
-  
-    ulong delaysched;
-  
-    ulong basepri;  /* base priority level */
-    uchar fixedpri; /* priority level deson't change */
-  
-    ulong cpu;    /* cpu average */
-    ulong lastupdate;
-    uchar yield;    /* non-zero if the process just did a sleep(0) */
-    ulong readytime;  /* time process came ready */
-    ulong movetime; /* last time process switched processors */
-    int preempted;  /* true if this process hasn't finished the interrupt
-           *  that last preempted it
-           */
-    // option<ref_own?<edf>>
-    Edf *edf;   /* if non-null, real-time proc, edf contains scheduling params */
-
-//--------------------------------------------------------------------
-// Files
-//--------------------------------------------------------------------
-    // ref_counted<pgrp>
-    Pgrp  *pgrp;    /* Process group for namespace */
-    // ref_counted<egrp>
-    Egrp  *egrp;    /* Environment group */
-    // ref_counted<fgrp>
-    Fgrp  *fgrp;    /* File descriptor group */
-  
-    // ref<Chan>
-    Chan  *slash; // The root!
-    // ref_counted<Chan>
-    Chan  *dot; // The current directory
-
-//--------------------------------------------------------------------
-// Notes
-//--------------------------------------------------------------------
-    ulong noteid;   /* Equivalent of note group */
-  
-    int notepending;  /* note issued but not acted on */
-  
-    Note  note[NNOTE];
-    short nnote;
-    short notified; /* sysnoted is due */
-    Note  lastnote;
-    int (*notify)(void*, char*);
-  
-    void  *ureg;    /* User registers for notes */
-
-//--------------------------------------------------------------------
-// Process hierarchy
-//--------------------------------------------------------------------
-    //list<ref<Waitq>>
-    Waitq *waitq;   /* Exited processes wait children */
-    Lock  exl;    /* Lock count and waitq */
-  
-    Proc  *parent;
-    ulong parentpid;
-  
-    int nchild;   /* Number of living children */
-    int nwait;    /* Number of uncollected wait records */
-    QLock qwaitr;
-    Rendez  waitr;    /* Place to hang out in wait */
-
-
-//--------------------------------------------------------------------
-// Synchronization
-//--------------------------------------------------------------------
-
-    Rgrp  *rgrp;    /* Rendez group */
-  
-    uintptr rendtag;  /* Tag for rendezvous */
-    uintptr rendval;  /* Value for rendezvous */
-    //??
-    Proc  *rendhash;  /* Hash list for tag values */
-  
-    Rendez  *r;   /* rendezvous point slept on */
-    Rendez  sleep;    /* place for syssleep/debug */
-
-//--------------------------------------------------------------------
-// Error managment
-//--------------------------------------------------------------------
-
-    // array<Label>, error labels, poor's man exceptions in C
-    Label errlab[NERR];
-    // length(errlab) used.
-    int nerrlab;
-  
-    char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
-    char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
-    char  errbuf0[ERRMAX];
-    char  errbuf1[ERRMAX];
-
-//--------------------------------------------------------------------
-// Stats, profiling
-//--------------------------------------------------------------------
-    // hash<enum<proctime>, ulong>
-    ulong time[6];  /* User, Sys, Real; child U, S, R */
-  
-    uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
-    /*
-     * pcycles: cycles spent in this process (updated on procsave/restore)
-     * when this is the current proc and we're in the kernel
-     * (procrestores outnumber procsaves by one)
-     * the number of cycles spent in the proc is pcycles + cycles()
-     * when this is not the current process or we're in user mode
-     * (procrestores and procsaves balance), it is pcycles.
-     */
-    vlong pcycles;
-
-//--------------------------------------------------------------------
-// For debugger
-//--------------------------------------------------------------------
-
-    void  *dbgreg;  /* User registers for devproc */
-    ulong pc;   /* DEBUG only */
-  
-    // e.g. Proc_tracesyscall
-    int procctl;  /* Control for /proc debugging */
-  
-    // Syscall
-    int scallnr;  /* sys call number - known by db */
-    Sargs s;    /* address of this is known by db */
-  
-    QLock debug;    /* to access debugging elements of User */
-    Proc  *pdbg;    /* the debugging process */
-    bool hang;   /* hang at next exec for debug */
-
-//--------------------------------------------------------------------
-// Other
-//--------------------------------------------------------------------
-
-    Fgrp  *closingfgrp; /* used during teardown */
-  
-  
-    ulong procmode; /* proc device default file mode */
-    ulong privatemem; /* proc does not let anyone read mem */
-  
-    Lock  rlock;    /* sync sleep/wakeup with postnote */
-    int newtlb;   /* Pager has changed my pte's, I must flush */
-    int noswap;   /* process is not swappable */
-  
-    Timer;      /* For tsleep and real-time */
-    Rendez  *trend;
-    int (*tfn)(void*);
-    void  (*kpfun)(void*);
-    void  *kparg;
-  
-    ArchFPsave  fpsave;   /* address of this is known by db */
-  
-    char  genbuf[128];  /* buffer used e.g. for last name element from namec */
-  
-  
-    Lock  *lockwait;
-    Lock  *lastlock;  /* debugging */
-    Lock  *lastilock; /* debugging */
-  
-    Mach  *wired;
-    Mach  *mp;    /* machine this process last ran on */
-  
-    // As long as the current process hold locks (to kernel data structures),
-    // we will not schedule another process in unlock(); only the last unlock
-    // will eventually cause a rescheduling.
-    Ref nlocks;   /* number of locks held by proc */
-  
-    bool trace;    /* process being traced? */
-  
-    ulong qpc;    /* pc calling last blocking qlock */
-  
-    int setargs;
-  
-    // enum<fpsavestatus>
-    int fpstate;
-  
-    ArchProcNotsave;
-  
-    /*
-     *  machine specific MMU
-     */
-    ArchProcMMU;
-  
-    char  *syscalltrace;  /* syscall trace */
-
-//--------------------------------------------------------------------
-// Extra
-//--------------------------------------------------------------------
-
-    // list<ref<Proc>> KQlock.head or RWLock.head
-    Proc  *qnext;   /* next process on queue for a QLock */
-    // option<ref<Qlock>> ??
-    QLock *qlock;   /* addr of qlock being queued for DEBUG */
-  
-    // list<ref<Proc>> ?? Schedq.head chain?
-    Proc  *rnext;   /* next process in run queue */
-  
-    // Alarms.head chain?
-    Proc  *palarm;  /* Next alarm time */
-    ulong alarm;    /* Time of call */
-  
-    // hash<?, list<ref<Proc>> Procalloc.ht ?
-    Proc  *pidhash; /* next proc in pid hash */ 
-  
-    // option<ref<Mach>>, null when not associated to a machine?
-    Mach  *mach;    /* machine running this proc */
-
-};
+<<struct Proc>>
 
 // poor's man exceptions in C
 //  - waserror() =~ try  
@@ -44343,6 +44358,7 @@ extern struct Active active;
 
 \subsection*{[[processes/portfns_processes.h]]}
 
+\ifallcode
 <<portfns_processes.h>>=
 
 // tod.c
@@ -44490,6 +44506,7 @@ void    mul64fract(uvlong*, uvlong, uvlong);
 void (*proctrace)(Proc*, int, vlong); // was in devproc.c
 void (*kproftimer)(ulong); // was in portfns.h
 @
+\fi
 
 \subsection*{[[processes/proc.c]]}
 
@@ -44540,7 +44557,7 @@ enum
 };
 
 char *statename[] =
-{   /* BUG: generate automatically */
+{
     "Dead",
     "Moribund",
     "Ready",
@@ -47792,6 +47809,8 @@ hostdomainwrite(char *a, int n)
 
 \subsection*{[[security/portfns_security.h]]}
 
+
+\ifallcode
 <<portfns_security.h>>=
 
 // auth.c
@@ -47801,7 +47820,7 @@ long    hostownerwrite(char*, int);
 
 // and some sysxxx functions
 @
-
+\fi
 
 \section{[[syscalls/]]}
 
