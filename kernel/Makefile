@@ -32,6 +32,7 @@ TEX=Kernel.tex
 SRC_ORIG=Kernel.tex.nw Kernel_extra.tex.nw
 
 SRC_VIEWS= \
+  ../lib_core/libc/9syscall/sys.h\
   arch/386/arch.c \
   arch/386/bios32.c \
   arch/386/dat_arch.h \
@@ -72,11 +73,9 @@ SRC_VIEWS= \
   core/error.h \
   core/error.c \
   core/portdat.c \
-  core/portdat.h \
   core/portdat_core.h \
   core/portdat_forward.h \
   core/portfns.c \
-  core/portfns.h \
   core/portfns_core.h \
   devices/keyboard/386/kbd.c \
   devices/keyboard/386/latin1.c \
