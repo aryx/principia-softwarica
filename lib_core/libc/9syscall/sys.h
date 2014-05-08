@@ -1,11 +1,15 @@
+/*s: sys.h */
 #define	NOP		0
 
+/*s: sys.h process syscalls */
 #define	RFORK		1
 #define	EXEC		2
 #define	EXITS		3
 #define	SLEEP		4
 #define	ALARM		5
+/*e: sys.h process syscalls */
 
+/*s: sys.h file syscalls */
 #define	CREATE		6
 #define	REMOVE		7
 #define	OPEN		8
@@ -18,26 +22,35 @@
 #define	FSTAT		15
 #define	WSTAT		16
 #define	FWSTAT		17
+/*e: sys.h file syscalls */
 
+/*s: sys.h special file syscalls */
 #define	CHDIR		18
 #define	FD2PATH		19
 #define	DUP		    20
 #define	PIPE		21
+/*e: sys.h special file syscalls */
 
+/*s: sys.h namespace syscalls */
 #define	BIND		22
 #define	MOUNT		23
 #define	UNMOUNT		24
+/*e: sys.h namespace syscalls */
 
+/*s: sys.h concurrency syscalls */
 #define	AWAIT		25
 #define	RENDEZVOUS	26
-
 #define	SEMACQUIRE	27
 #define	SEMRELEASE	28
 #define	TSEMACQUIRE	29
+/*e: sys.h concurrency syscalls */
 
+/*s: sys.h note syscalls */
 #define	NOTIFY		30
 #define	NOTED		31
+/*e: sys.h note syscalls */
 
+/*s: sys.h memory syscalls */
 #define	BRK_		32
 
 #define	SEGATTACH	33
@@ -45,9 +58,12 @@
 #define	SEGFREE		35
 #define	SEGFLUSH	36
 #define	SEGBRK		37
+/*e: sys.h memory syscalls */
 
+/*s: sys.h security syscalls */
 #define	FVERSION	38
 #define	FAUTH		39
+/*e: sys.h security syscalls */
 
 #define	ERRSTR		40
-
+/*e: sys.h */
