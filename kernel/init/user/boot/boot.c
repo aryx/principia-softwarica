@@ -62,11 +62,11 @@ execinit(void)
   bind_safe("#m", "/dev", MAFTER); //devmouse
   bind_safe("#P", "/dev", MAFTER);
 
-  run("/bin/aux/mouse", "ps2", nil);
+  run("/bin/mouse", "ps2", nil);
   //this just need a regular vga driver
-  //run("/bin/aux/vga", "-l", "640x480x8", nil);
+  //run("/bin/vga", "-l", "640x480x8", nil);
   //this need special drivers, such as the clgd424x.c in the kernel
-  run("/bin/aux/vga", "-l", "1024x768x8", nil);
+  run("/bin/vga", "-l", "1024x768x8", nil);
   bind_safe("#i", "/dev", MAFTER);
 
   // for rio
