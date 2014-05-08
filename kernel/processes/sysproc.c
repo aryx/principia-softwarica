@@ -33,9 +33,9 @@ int shargs(char*, int, char**);
 
 
 long
-sysr1(ulong*)
+sysnop(ulong*)
 {
-    checkpagerefs();
+    //checkpagerefs();
     return 0;
 }
 

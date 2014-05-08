@@ -11,7 +11,7 @@
 #include "../port/systab.h"
 
 /*s: systab.c forward decl */
-extern Syscall sysr1;
+extern Syscall sysnop;
 extern Syscall sysbind;
 extern Syscall syschdir;
 extern Syscall sysclose;
@@ -66,7 +66,7 @@ extern Syscall sysdeath;
 //coupling: debuggers/acid/conf/truss
 /*s: global systab */
 Syscall *systab[] = {
-    [SYSR1]     sysr1,
+    [NOP]     sysnop,
     [BIND]      sysbind,
     [CHDIR]     syschdir,
     [CLOSE]     sysclose,
@@ -119,7 +119,7 @@ int nsyscall = nelem(systab);
 
 /*s: global sysstab */
 char *sysctab[] = {
-    [SYSR1]     "Running",
+    [NOP]     "Nop",
     [BIND]      "Bind",
     [CHDIR]     "Chdir",
     [CLOSE]     "Close",

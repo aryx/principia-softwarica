@@ -1,4 +1,4 @@
-#define	SYSR1		0
+#define	NOP		0
 #define	BIND		2
 #define	CHDIR		3
 #define	CLOSE		4

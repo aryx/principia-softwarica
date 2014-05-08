@@ -16,7 +16,7 @@ ulong	nofunc;
 
 char*	sysctab[] =
 {
-	[SYSR1]		"Running",
+	[NOP]		"Running",
 	[BIND]		"Bind",
 	[CHDIR]		"Chdir",
 	[CLOSE]		"Close",
@@ -62,7 +62,7 @@ char*	sysctab[] =
 };
 
 void
-sys1(void)
+sysnop(void)
 {
 	Bprint(bioout, "no system call %s\n", sysctab[reg.r[1]]);
 	exits(0);
@@ -707,7 +707,7 @@ sysfversion(void)
 
 void	(*systab[])(void) =
 {
-	[SYSR1]		sys1,
+	[NOP]		sysnop,
 	[BIND]		sysbind,
 	[CHDIR]		syschdir,
 	[CLOSE]		sysclose,

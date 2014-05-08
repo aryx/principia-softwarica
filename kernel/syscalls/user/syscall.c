@@ -8,7 +8,7 @@ char    buf[1048576];
 uintptr arg[NARG];
 
 /* system calls not defined in libc.h */
-int sysr1(void);
+int sysnop(void);
 int _stat(char*, char*);
 int _fstat(int, char*);
 int _read(int, void*, int);

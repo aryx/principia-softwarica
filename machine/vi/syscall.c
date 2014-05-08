@@ -17,7 +17,7 @@ ulong	nofunc;
 #include "/sys/src/libc/9syscall/sys.h"
 
 char *sysctab[]={
-	[SYSR1]		"SYSR1",
+	[NOP]		"Running",
 	[BIND]		"Bind",
 	[CHDIR]		"Chdir",
 	[CLOSE]		"Close",
@@ -63,7 +63,7 @@ char *sysctab[]={
 	[PWRITE]	"Pwrite",
 };
 
-void sys1(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
+void sysnop(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
 
 void
 syserrstr(void)
@@ -640,7 +640,7 @@ void sysmount(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET
 void sysawait(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 
 void (*systab[])(void)	={
-	[SYSR1]		sys1,
+	[NOP]		sysnop,
 	[BIND]		sysbind,
 	[CHDIR]		syschdir,
 	[CLOSE]		sysclose,

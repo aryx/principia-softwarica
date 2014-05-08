@@ -80,7 +80,7 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         free(up->syscalltrace);
 
     switch(syscallno){
-    case SYSR1:
+    case NOP:
         p = va_arg(list, uintptr);
         fmtprint(&fmt, "%#p", p);
         break;

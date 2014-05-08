@@ -14,7 +14,7 @@ typedef struct Elemlist Elemlist;
 /*e: chan.c forward decl */
 
 /*s: chan.c debugging macro */
-int chandebug=0;        /* toggled by sysr1 */
+int chandebug=0;        /* toggle it in sysnop if you want */
 #define DBG if(chandebug)iprint
 /*e: chan.c debugging macro */
 
