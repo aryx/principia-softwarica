@@ -128,7 +128,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
             argv++;
         }
         break;
-    case _FSESSION:                 /* deprecated */
     case _FSTAT:                    /* deprecated */
     case _FWSTAT:                   /* obsolete */
         i[0] = va_arg(list, int);

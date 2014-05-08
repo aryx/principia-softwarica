@@ -26,7 +26,6 @@ char *sysctab[]={
 	[ALARM]		"Alarm",
 	[EXEC]		"Exec",
 	[EXITS]		"Exits",
-	[_FSESSION]	"_Fsession",
 	[FAUTH]		"Fauth",
 	[_FSTAT]	"_fstat",
 	[SEGBRK]	"Segbrk",
@@ -639,7 +638,6 @@ syssegflush(void)
 }
 
 void sysfversion(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
-void sysfsession(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
 void sysfauth(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
 void syswait(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
 void syswstat(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
@@ -671,7 +669,6 @@ void (*systab[])(void)	={
 	[ALARM]		sysalarm,
 	[EXEC]		sysexec,
 	[EXITS]		sysexits,
-	[_FSESSION]	sysfsession,
 	[FAUTH]		sysfauth,
 	[_FSTAT]	sys_fstat,
 	[SEGBRK]	syssegbrk,

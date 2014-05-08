@@ -43,18 +43,6 @@ sysfversion(ulong *arg)
 }
 
 long
-sys_fsession(ulong *arg)
-{
-    /* deprecated; backwards compatibility only */
-
-    if(arg[2] == 0)
-        error(Ebadarg);
-    validaddr(arg[1], arg[2], 1);
-    ((uchar*)arg[1])[0] = '\0';
-    return 0;
-}
-
-long
 sysfauth(ulong *arg)
 {
     Chan *c, *ac;

@@ -7,7 +7,6 @@
 #define	ALARM		6
 #define	EXEC		7
 #define	EXITS		8
-#define	_FSESSION	9
 #define	FAUTH		10
 #define	_FSTAT		11
 #define	SEGBRK		12

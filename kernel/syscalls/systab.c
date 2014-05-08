@@ -20,7 +20,6 @@ extern Syscall sysdup;
 extern Syscall sysalarm;
 extern Syscall sysexec;
 extern Syscall sysexits;
-extern Syscall sys_fsession;
 extern Syscall sysfauth;
 extern Syscall sys_fstat;
 extern Syscall syssegbrk;
@@ -79,7 +78,6 @@ Syscall *systab[] = {
     [ALARM]     sysalarm,
     [EXEC]      sysexec,
     [EXITS]     sysexits,
-    [_FSESSION] sys_fsession,
     [FAUTH]     sysfauth,
     [_FSTAT]    sys_fstat,
     [SEGBRK]    syssegbrk,
@@ -136,7 +134,6 @@ char *sysctab[] = {
     [ALARM]     "Alarm",
     [EXEC]      "Exec",
     [EXITS]     "Exits",
-    [_FSESSION] "_fsession",
     [FAUTH]     "Fauth",
     [_FSTAT]    "_fstat",
     [SEGBRK]    "Segbrk",
