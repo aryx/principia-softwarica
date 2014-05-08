@@ -61,46 +61,68 @@ extern Syscall sysdeath;
 /*s: global systab */
 Syscall *systab[] = {
     [NOP]     sysnop,
-    [BIND]      sysbind,
-    [CHDIR]     syschdir,
-    [CLOSE]     sysclose,
-    [DUP]       sysdup,
-    [ALARM]     sysalarm,
+/*s: systab process syscalls */
+    [RFORK]     sysrfork,
     [EXEC]      sysexec,
     [EXITS]     sysexits,
-    [FAUTH]     sysfauth,
-    [SEGBRK]    syssegbrk,
-    [OPEN]      sysopen,
-    [OSEEK]     sysoseek,
+
     [SLEEP]     syssleep,
-    [RFORK]     sysrfork,
-    [PIPE]      syspipe,
+    [ALARM]     sysalarm,
+/*e: systab process syscalls */
+/*s: systab file syscalls */
     [CREATE]    syscreate,
-    [FD2PATH]   sysfd2path,
-    [BRK_]      sysbrk_,
     [REMOVE]    sysremove,
-    [NOTIFY]    sysnotify,
-    [NOTED]     sysnoted,
-    [SEGATTACH] syssegattach,
-    [SEGDETACH] syssegdetach,
-    [SEGFREE]   syssegfree,
-    [SEGFLUSH]  syssegflush,
-    [RENDEZVOUS]    sysrendezvous,
-    [UNMOUNT]   sysunmount,
-    [SEMACQUIRE]    syssemacquire,
-    [SEMRELEASE]    syssemrelease,
+
+    [OPEN]      sysopen,
+    [CLOSE]     sysclose,
+    [PREAD]     syspread,
+    [PWRITE]    syspwrite,
     [SEEK]      sysseek,
-    [FVERSION]  sysfversion,
-    [ERRSTR]    syserrstr,
+    [OSEEK]     sysoseek,
+
     [STAT]      sysstat,
     [FSTAT]     sysfstat,
     [WSTAT]     syswstat,
     [FWSTAT]    sysfwstat,
+
+    [CHDIR]     syschdir,
+    [FD2PATH]   sysfd2path, // pwd?
+/*e: systab file syscalls */
+/*s: systab special file syscalls */
+    [DUP]       sysdup,
+    [PIPE]      syspipe,
+/*e: systab special file syscalls */
+/*s: systab namespace syscalls */
+    [BIND]      sysbind,
     [MOUNT]     sysmount,
+    [UNMOUNT]   sysunmount,
+/*e: systab namespace syscalls */
+/*s: systab concurrency syscalls */
     [AWAIT]     sysawait,
-    [PREAD]     syspread,
-    [PWRITE]    syspwrite,
+    [RENDEZVOUS]    sysrendezvous,
+
+    [SEMACQUIRE]    syssemacquire,
+    [SEMRELEASE]    syssemrelease,
     [TSEMACQUIRE]   systsemacquire,
+/*e: systab concurrency syscalls */
+/*s: systab note syscalls */
+    [NOTIFY]    sysnotify,
+    [NOTED]     sysnoted,
+/*e: systab note syscalls */
+/*s: systab memory syscalls */
+    [BRK_]      sysbrk_,
+
+    [SEGATTACH] syssegattach,
+    [SEGDETACH] syssegdetach,
+    [SEGFREE]   syssegfree,
+    [SEGFLUSH]  syssegflush,
+    [SEGBRK]    syssegbrk,
+/*e: systab memory syscalls */
+/*s: systab security syscalls */
+    [FAUTH]     sysfauth,
+    [FVERSION]  sysfversion,
+/*e: systab security syscalls */
+    [ERRSTR]    syserrstr,
 };
 int nsyscall = nelem(systab);
 /*e: global systab */

@@ -22,11 +22,11 @@
 #define	FSTAT		15
 #define	WSTAT		16
 #define	FWSTAT		17
+#define	CHDIR		18
+#define	FD2PATH		19
 /*e: sys.h file syscalls */
 
 /*s: sys.h special file syscalls */
-#define	CHDIR		18
-#define	FD2PATH		19
 #define	DUP		    20
 #define	PIPE		21
 /*e: sys.h special file syscalls */
