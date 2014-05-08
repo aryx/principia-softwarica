@@ -263,7 +263,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         a = va_arg(list, char*);
         fmtuserstring(&fmt, a, "");
         break;
-    case _READ:                 /* deprecated */
     case PREAD:
         i[0] = va_arg(list, int);
         v = va_arg(list, void*);
@@ -274,7 +273,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
             fmtprint(&fmt, " %lld", vl);
         }
         break;
-    case _WRITE:                    /* deprecated */
     case PWRITE:
         i[0] = va_arg(list, int);
         v = va_arg(list, void*);
@@ -312,7 +310,6 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
     switch(syscallno){
     default:
     case ALARM:
-    case _WRITE:
     case PWRITE:
         if(ret == -1)
             errstr = up->syserrstr;
@@ -364,7 +361,6 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
             errstr = up->syserrstr;
         }
         break;
-    case _READ:
     case PREAD:
         i = va_arg(list, int);
         USED(i);

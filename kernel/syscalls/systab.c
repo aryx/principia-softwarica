@@ -22,14 +22,11 @@ extern Syscall sysexits;
 extern Syscall sysfauth;
 extern Syscall sys_fstat;
 extern Syscall syssegbrk;
-extern Syscall sys_mount;
 extern Syscall sysopen;
-extern Syscall sys_read;
 extern Syscall sysoseek;
 extern Syscall syssleep;
 extern Syscall sys_stat;
 extern Syscall sysrfork;
-extern Syscall sys_write;
 extern Syscall syspipe;
 extern Syscall syscreate;
 extern Syscall sysfd2path;
@@ -43,7 +40,6 @@ extern Syscall syssegfree;
 extern Syscall syssegflush;
 extern Syscall sysrendezvous;
 extern Syscall sysunmount;
-extern Syscall sys_wait;
 extern Syscall syssemacquire;
 extern Syscall syssemrelease;
 extern Syscall sysseek;
@@ -78,12 +74,10 @@ Syscall *systab[] = {
     [_FSTAT]    sys_fstat,
     [SEGBRK]    syssegbrk,
     [OPEN]      sysopen,
-    [_READ]     sys_read,
     [OSEEK]     sysoseek,
     [SLEEP]     syssleep,
     [_STAT]     sys_stat,
     [RFORK]     sysrfork,
-    [_WRITE]    sys_write,
     [PIPE]      syspipe,
     [CREATE]    syscreate,
     [FD2PATH]   sysfd2path,
@@ -129,12 +123,10 @@ char *sysctab[] = {
     [_FSTAT]    "_fstat",
     [SEGBRK]    "Segbrk",
     [OPEN]      "Open",
-    [_READ]     "_read",
     [OSEEK]     "Oseek",
     [SLEEP]     "Sleep",
     [_STAT]     "_stat",
     [RFORK]     "Rfork",
-    [_WRITE]    "_write",
     [PIPE]      "Pipe",
     [CREATE]    "Create",
     [FD2PATH]   "Fd2path",

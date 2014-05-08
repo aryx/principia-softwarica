@@ -616,12 +616,6 @@ read(ulong *arg, vlong *offp)
 }
 
 long
-sys_read(ulong *arg)
-{
-    return read(arg, nil);
-}
-
-long
 syspread(ulong *arg)
 {
     vlong v;
@@ -686,12 +680,6 @@ write(ulong *arg, vlong *offp)
     cclose(c);
 
     return m;
-}
-
-long
-sys_write(ulong *arg)
-{
-    return write(arg, nil);
 }
 
 long

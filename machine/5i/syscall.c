@@ -29,12 +29,10 @@ char*	sysctab[] =
 	[SEGBRK]		"Segbrk",
 	[MOUNT]		"Mount",
 	[OPEN]		"Open",
-	[_READ]		"_Read",
 	[OSEEK]		"Oseek",
 	[SLEEP]		"Sleep",
 	[_STAT]		"_Stat",
 	[RFORK]		"Rfork",
-	[_WRITE]		"_Write",
 	[PIPE]		"Pipe",
 	[CREATE]		"Create",
 	[FD2PATH]	"Fd2path",
@@ -272,12 +270,6 @@ sysread(vlong offset)
 }
 
 void
-sys_read(void)
-{
-	sysread(-1LL);
-}
-
-void
 syspread(void)
 {
 	sysread(getmem_v(reg.r[13]+16));
@@ -463,12 +455,6 @@ syswrite(vlong offset)
 	free(buf);
 
 	reg.r[REGRET] = n;
-}
-
-void
-sys_write(void)
-{
-	syswrite(-1LL);
 }
 
 void
@@ -719,12 +705,10 @@ void	(*systab[])(void) =
 	[SEGBRK]		syssegbrk,
 	[MOUNT]		sysmount,
 	[OPEN]		sysopen,
-	[_READ]		sys_read,
 	[OSEEK]		sysoseek,
 	[SLEEP]		syssleep,
 	[_STAT]		sys_stat,
 	[RFORK]		sysrfork,
-	[_WRITE]		sys_write,
 	[PIPE]		syspipe,
 	[CREATE]		syscreate,
 	[FD2PATH]	sysfd2path,
