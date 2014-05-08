@@ -39,16 +39,17 @@ enum
     Scaling=2,
 };
 
+//TODO: change
 char *statename[] =
 {
     "Dead",
-    "Moribund",
-    "Ready",
-    "Scheding",
     "Running",
     "Queueing",
     "QueueingR",
     "QueueingW",
+    "Moribund",
+    "Ready",
+    "Scheding",
     "Wakeme",
     "Broken",
     "Stopped",

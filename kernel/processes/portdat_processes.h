@@ -585,8 +585,6 @@ struct Proc
     /*s: Proc extra fields */
     // list<ref<Proc>> KQlock.head or RWLock.head
     Proc  *qnext;   /* next process on queue for a QLock */
-    // option<ref<Qlock>> ??
-    QLock *qlock;   /* addr of qlock being queued for DEBUG */
     /*x: Proc extra fields */
 
     // list<ref<Proc>> ?? Schedq.head chain?
