@@ -5910,161 +5910,43 @@ void    uartmouse(Uart*, int (*)(Queue*, int), int);
 <<l_concurrency.s>>=
 #include "mem.h"
 
-TEXT splhi(SB), $0
-shi:
-        PUSHFL
-        POPL    AX
-        TESTL   $0x200, AX
-        JZ      alreadyhi
-        MOVL    $(MACHADDR+0x04), CX            /* save PC in m->splpc */
-        MOVL    (SP), BX
-        MOVL    BX, (CX)
-alreadyhi:
-        CLI
-        RET
+<<function splhi>>
 
-TEXT spllo(SB), $0
-slo:
-        PUSHFL
-        POPL    AX
-        TESTL   $0x200, AX
-        JNZ     alreadylo
-        MOVL    $(MACHADDR+0x04), CX            /* clear m->splpc */
-        MOVL    $0, (CX)
-alreadylo:
-        STI
-        RET
+<<function spllo>>
 
+<<function splx>>
 
-       
-TEXT splx(SB), $0
-        MOVL    s+0(FP), AX
-        TESTL   $0x200, AX
-        JNZ     slo
-        JMP     shi
-
-TEXT spldone(SB), $0
-        RET
-
-TEXT islo(SB), $0
-        PUSHFL
-        POPL    AX
-        ANDL    $0x200, AX                      /* interrupt enable flag */
-        RET
+<<function islo>>
 
 /*
  * Test-And-Set.
  */
-TEXT tas(SB), $0
-        MOVL    $0xDEADDEAD, AX
-        MOVL    lock+0(FP), BX
-        // Exchange AX to lock->key. So:
-        //  - if the lock was not held, lock->key was 0 and so AX will be 0
-        //     and lock->key will be 0xdeaddead
-        //  - if the lock was held, AX will be 0xdeaddead and lock->key will
-        //    still be 0xdeaddead.
-        XCHGL   AX, (BX)                        /* lock->key */
-        RET
+<<function tas>>
 
-TEXT _xinc(SB), $0                              /* void _xinc(long*); */
-        MOVL    l+0(FP), AX
-        LOCK;   INCL 0(AX)
-        RET
+<<function _xinc>>
 
-TEXT _xdec(SB), $0                              /* long _xdec(long*); */
-        MOVL    l+0(FP), BX
-        XORL    AX, AX
-        LOCK;   DECL 0(BX)
-        JLT     _xdeclt
-        JGT     _xdecgt
-        RET
-_xdecgt:
-        INCL    AX
-        RET
-_xdeclt:
-        DECL    AX
-        RET
+<<function _xdec>>
 @
 
 
 \subsection*{[[concurrency/portdat_concurrency.h]]}
 
-<<portdat_concurrency.h>>=
-
-//*****************************************************************************
-// Mutual exclusion
-//*****************************************************************************
-
-// tas < Lock < QLock|RWLock|Ref
-
-// used to be in 386/ but the fields were used from port/ so must be portable!
-struct Lock
-{
-    ulong key; // 0 when unset, 0xDEADDEAD when acquired, could be a bool
-    bool_ushort isilock; // false when from lock(), true when from ilock()
-  
-    ulong sr; // saved priority level when using ilock() to restore in iunlock()
-    // virt_addr?
-    ulong pc; // for debugging
-  
-    // option<ref<Proc>>, None when key = 0?
-    Proc  *p; // the process locking should be the same unlocking
-    // option<ref<Mach>>, None when key = 0?
-    Mach  *m; // not that used, only in iprintcanlock apparently
-
-    // debugging
+<<Lock debugging fields>>=
+// debugging
 //#ifdef LOCKCYCLES
-    long  lockcycles;
+long  lockcycles;
 //#endif
-};
+@ 
+
+<<Lock other fields>>=
+// option<ref<Mach>>, None when key = 0?
+Mach  *m; // not that used, only in iprintcanlock apparently
+@
 
 
-// Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h Qlock)
-struct KQLock
-{
-    bool  locked;   /* flag */
-  
-    // list<ref<Proc>> (next = Proc.qnext)
-    Proc  *head;    /* next process waiting for object */
-    // list<ref<Proc>> (direct access to tail, queue)
-    Proc  *tail;    /* last process waiting for object */
-  
-    uintptr qpc;    /* pc of the holder */ // for debugging?
-  
-    Lock  use;    /* to access Qlock structure */
-};
 
-// Read/Write lock
-struct RWlock
-{
-    int readers;  /* number of readers */
-    int writer;   /* number of writers */
-  
-    // list<ref<Proc>> (next = Proc.qnext)
-    Proc  *head;    /* list of waiting processes */
-    // list<ref<Proc>>
-    Proc  *tail;
-    // option<ref<Proc>> (direct access to tail, queue)
-    Proc  *wproc;   /* writing proc */
-  
-    ulong wpc;    /* pc of writer */
-  
-    Lock  use;
-};
 
-// For reference counting shared things (e.g. a Page)
-struct Ref
-{
-    long  ref;
-
-    Lock;
-};
-
-//*****************************************************************************
-// Synchronization
-//*****************************************************************************
-
-// defined in this directory but no functions are operating on in this dir
+<<struct Rendez>>=
 struct Rendez
 {
     // ??
@@ -6072,7 +5954,10 @@ struct Rendez
   
     Lock;
 };
+@ 
 
+
+<<struct Sema>>=
 struct Sema
 {
     long  *addr;
@@ -6083,6 +5968,37 @@ struct Sema
     Sema  *prev;
     Rendez;
 };
+@ 
+
+
+<<portdat_concurrency.h>>=
+
+//*****************************************************************************
+// Mutual exclusion
+//*****************************************************************************
+
+// tas < Lock < QLock|RWLock|Ref
+
+// used to be in 386/ but the fields were used from port/ so must be portable!
+<<struct Lock>>
+
+// Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h Qlock)
+<<struct QLock>>
+
+// Read/Write lock
+<<struct RWlock>>
+
+// For reference counting shared things (e.g. a Page)
+<<struct Ref>>
+
+//*****************************************************************************
+// Synchronization
+//*****************************************************************************
+
+// defined in this directory but no functions are operating on in this dir
+<<struct Rendez>>
+
+<<struct Sema>>
 
 // see also Waitq in portdat_processes.h?
 @
@@ -6117,7 +6033,7 @@ void    wunlock(RWlock*);
 
 // in 386/l.s (but used in port)
 //@Scheck: Assembly
-int   islo(void);
+bool   islo(void);
 //@Scheck: Assembly
 int   splhi(void);
 //@Scheck: Assembly
@@ -6156,257 +6072,41 @@ struct QlockStats rwstats;
 @
 \fi
 
+
 <<qlock.c>>=
 <<kernel basic includes>>
 <<struct QlockStats>>
 <<global rwstats>>
 
-void
-qlock(QLock *q)
-{
-    Proc *p;
+<<function qlock>>
 
-    if(m->ilockdepth != 0)
-        print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), m->ilockdepth);
-    if(up != nil && up->nlocks.ref)
-        print("qlock: %#p: nlocks %lud\n", getcallerpc(&q), up->nlocks.ref);
+<<function canqlock>>
 
-    if(q->use.key == 0x55555555)
-        panic("qlock: q %#p, key 5*\n", q);
-    lock(&q->use);
-    rwstats.qlock++;
-    if(!q->locked) {
-        q->locked = true;
-        q->qpc = getcallerpc(&q);
-        unlock(&q->use);
-        return;
-    }
-    if(up == 0)
-        panic("qlock");
-    rwstats.qlockq++;
-    p = q->tail;
-    if(p == 0)
-        q->head = up;
-    else
-        p->qnext = up;
-    q->tail = up;
-    up->qnext = 0;
-    up->state = Queueing;
-    up->qpc = getcallerpc(&q);
-    unlock(&q->use);
-    sched();
-    q->qpc = getcallerpc(&q);
-}
+<<function qunlock>>
 
-int
-canqlock(QLock *q)
-{
-    if(!canlock(&q->use))
-        return 0;
-    if(q->locked){
-        unlock(&q->use);
-        return 0;
-    }
-    q->locked = true;
-    q->qpc = getcallerpc(&q);
-    unlock(&q->use);
-    return 1;
-}
+<<function rlock>>
 
-void
-qunlock(QLock *q)
-{
-    Proc *p;
+<<function runlock>>
 
-    lock(&q->use);
-    if (q->locked == false)
-        print("qunlock called with qlock not held, from %#p\n",
-            getcallerpc(&q));
-    p = q->head;
-    if(p){
-        q->head = p->qnext;
-        if(q->head == 0)
-            q->tail = 0;
-        unlock(&q->use);
-        ready(p);
-        return;
-    }
-    q->locked = false;
-    q->qpc = 0;
-    unlock(&q->use);
-}
+<<function wlock>>
 
-void
-rlock(RWlock *q)
-{
-    Proc *p;
+<<function wunlock>>
 
-    lock(&q->use);
-    rwstats.rlock++;
-    if(q->writer == 0 && q->head == nil){
-        /* no writer, go for it */
-        q->readers++;
-        unlock(&q->use);
-        return;
-    }
-
-    rwstats.rlockq++;
-    p = q->tail;
-    if(up == nil)
-        panic("rlock");
-    if(p == 0)
-        q->head = up;
-    else
-        p->qnext = up;
-    q->tail = up;
-    up->qnext = 0;
-    up->state = QueueingR;
-    unlock(&q->use);
-    sched();
-}
-
-void
-runlock(RWlock *q)
-{
-    Proc *p;
-
-    lock(&q->use);
-    p = q->head;
-    if(--(q->readers) > 0 || p == nil){
-        unlock(&q->use);
-        return;
-    }
-
-    /* start waiting writer */
-    if(p->state != QueueingW)
-        panic("runlock");
-    q->head = p->qnext;
-    if(q->head == 0)
-        q->tail = 0;
-    q->writer = 1;
-    unlock(&q->use);
-    ready(p);
-}
-
-void
-wlock(RWlock *q)
-{
-    Proc *p;
-
-    lock(&q->use);
-    rwstats.wlock++;
-    if(q->readers == 0 && q->writer == 0){
-        /* noone waiting, go for it */
-        q->wpc = getcallerpc(&q);
-        q->wproc = up;
-        q->writer = 1;
-        unlock(&q->use);
-        return;
-    }
-
-    /* wait */
-    rwstats.wlockq++;
-    p = q->tail;
-    if(up == nil)
-        panic("wlock");
-    if(p == nil)
-        q->head = up;
-    else
-        p->qnext = up;
-    q->tail = up;
-    up->qnext = 0;
-    up->state = QueueingW;
-    unlock(&q->use);
-    sched();
-}
-
-void
-wunlock(RWlock *q)
-{
-    Proc *p;
-
-    lock(&q->use);
-    p = q->head;
-    if(p == nil){
-        q->writer = 0;
-        unlock(&q->use);
-        return;
-    }
-    if(p->state == QueueingW){
-        /* start waiting writer */
-        q->head = p->qnext;
-        if(q->head == nil)
-            q->tail = nil;
-        unlock(&q->use);
-        ready(p);
-        return;
-    }
-
-    if(p->state != QueueingR)
-        panic("wunlock");
-
-    /* waken waiting readers */
-    while(q->head != nil && q->head->state == QueueingR){
-        p = q->head;
-        q->head = p->qnext;
-        q->readers++;
-        ready(p);
-    }
-    if(q->head == nil)
-        q->tail = nil;
-    q->writer = 0;
-    unlock(&q->use);
-}
-
-/* same as rlock but punts if there are any writers waiting */
-int
-canrlock(RWlock *q)
-{
-    lock(&q->use);
-    rwstats.rlock++;
-    if(q->writer == 0 && q->head == nil){
-        /* no writer, go for it */
-        q->readers++;
-        unlock(&q->use);
-        return 1;
-    }
-    unlock(&q->use);
-    return 0;
-}
+<<function canrlock>>
 @
 
 
 \subsection*{[[concurrency/ref.c]]}
+
 
 <<ref.c>>=
 <<kernel basic includes>>
 
 // was in chan.c
 // see also _incnt and _deccnt in tasklock.c
-long
-incref(Ref *r)
-{
-    long x;
+<<function incref>>
 
-    lock(r);
-    x = ++r->ref;
-    unlock(r);
-    return x;
-}
-
-long
-decref(Ref *r)
-{
-    long x;
-
-    lock(r);
-    x = --r->ref;
-    unlock(r);
-    if(x < 0)
-        panic("decref pc=%#p", getcallerpc(&r));
-
-    return x;
-}
+<<function decref>>
 @
 
 
@@ -6421,7 +6121,6 @@ struct TaslockStats
     ulong   inglare;
 };
 @
-
 
 <<global lockstats>>=
 struct TaslockStats lockstats;
@@ -6440,36 +6139,8 @@ ulong ilockpcs[0x100] = { [0xff] = 1 };
 static int n;
 #endif
 @
-\fi
 
-
-<<taslock.c>>=
-// TAS: Test And Set
-<<kernel basic includes>>
-
-<<struct TaslockStats>>
-<<global lockstats>>
-<<globals lockcycles>>
-
-// See also ref.c incref() and decref(), but we can't use them here as they
-// themselves rely on lock() and unlock(). 
-static void
-inccnt(Ref *r)
-{
-    _xinc(&r->ref);
-}
-
-static int
-deccnt(Ref *r)
-{
-    int x;
-
-    x = _xdec(&r->ref);
-    if(x < 0)
-        panic("deccnt pc=%#p", getcallerpc(&r));
-    return x;
-}
-
+<<function lockloop>>=
 void
 lockloop(Lock *l, ulong pc)
 {
@@ -6482,203 +6153,34 @@ lockloop(Lock *l, ulong pc)
     if(p != nil)
         dumpaproc(p);
 }
+@ 
 
-int
-lock(Lock *l)
-{
-    int i;
-    ulong pc;
-
-    pc = getcallerpc(&l);
-
-    lockstats.locks++;
-    if(up)
-        inccnt(&up->nlocks);    /* prevent being scheded */
-    if(tas(&l->key) == 0){
-        if(up)
-            up->lastlock = l;
-        l->pc = pc;
-        l->p = up;
-        l->isilock = 0;
-                //TODO: not setting l->m = ??
-#ifdef LOCKCYCLES
-        l->lockcycles = -lcycles();
-#endif
-        return 0;
-    }
-    if(up)
-        deccnt(&up->nlocks);
-
-    lockstats.glare++;
-    for(;;){
-        lockstats.inglare++;
-        i = 0;
-        while(l->key){
-            if(conf.nmach < 2 && up && up->edf && (up->edf->flags & Admitted)){
-                /*
-                 * Priority inversion, yield on a uniprocessor; on a
-                 * multiprocessor, the other processor will unlock
-                 */
-                print("inversion %#p pc %#lux proc %lud held by pc %#lux proc %lud\n",
-                    l, pc, up ? up->pid : 0, l->pc, l->p ? l->p->pid : 0);
-                up->edf->d = todget(nil);   /* yield to process with lock */
-            }
-            if(i++ > 100000000){
-                i = 0;
-                lockloop(l, pc);
-            }
-        }
-        if(up)
-            inccnt(&up->nlocks);
-        if(tas(&l->key) == 0){
-            if(up)
-                up->lastlock = l;
-            l->pc = pc;
-            l->p = up;
-            l->isilock = 0;
-#ifdef LOCKCYCLES
-            l->lockcycles = -lcycles();
-#endif
-            return 1;
-        }
-        if(up)
-            deccnt(&up->nlocks);
-    }
-}
-
-// To provide mutual exclusion with interrupt code and avoiding deadlock.
-// By using splhi() we disable interrupts while running the critical region
-// code.
-void
-ilock(Lock *l)
-{
-    ulong x;
-    ulong pc;
-
-    pc = getcallerpc(&l);
-    lockstats.locks++;
-
-    x = splhi();
-    if(tas(&l->key) != 0){
-        lockstats.glare++;
-        /*
-         * Cannot also check l->pc, l->m, or l->isilock here
-         * because they might just not be set yet, or
-         * (for pc and m) the lock might have just been unlocked.
-         */
-        for(;;){
-            lockstats.inglare++;
-            splx(x);
-            while(l->key)
-                ;
-            x = splhi();
-            if(tas(&l->key) == 0)
-                goto acquire;
-        }
-    }
-acquire:
-    m->ilockdepth++;
-    if(up)
-        up->lastilock = l;
-    l->sr = x;
-    l->pc = pc;
-    l->p = up;
-    l->isilock = 1;
-        //TODO: why not just l->m = m? 
-    l->m = MACHP(m->machno);
-#ifdef LOCKCYCLES
-    l->lockcycles = -lcycles();
-#endif
-}
-
-int
-canlock(Lock *l)
-{
-    if(up)
-        inccnt(&up->nlocks);
-    if(tas(&l->key)){
-        if(up)
-            deccnt(&up->nlocks);
-        return 0;
-    }
-
-    if(up)
-        up->lastlock = l;
-    l->pc = getcallerpc(&l);
-    l->p = up;
-    l->m = MACHP(m->machno);
-    l->isilock = 0;
-#ifdef LOCKCYCLES
-    l->lockcycles = -lcycles();
-#endif
-    return 1;
-}
-
-void
-unlock(Lock *l)
-{
-#ifdef LOCKCYCLES
-    l->lockcycles += lcycles();
-    cumlockcycles += l->lockcycles;
-    if(l->lockcycles > maxlockcycles){
-        maxlockcycles = l->lockcycles;
-        maxlockpc = l->pc;
-    }
-#endif
-    if(l->key == 0)
-        print("unlock: not locked: pc %#p\n", getcallerpc(&l));
-    if(l->isilock)
-        print("unlock of ilock: pc %lux, held by %lux\n", getcallerpc(&l), l->pc);
-    if(l->p != up)
-        print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
-    l->m = nil;
-    l->key = 0;
-        // for processor caches, to ensure the lock value is seen by other
-        // processors so that if they were doing while(l->key) { ... } they
-        // can finally exit the while loop.
-    coherence();
-
-    if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){
-        /*
-         * Call sched if the need arose while locks were held
-         * But, don't do it from interrupt routines, hence the islo() test
-         */
-        sched();
-    }
-}
+\fi
 
 
-void
-iunlock(Lock *l)
-{
-    ulong sr;
+<<taslock.c>>=
+// TAS: Test And Set
+<<kernel basic includes>>
 
-#ifdef LOCKCYCLES
-    l->lockcycles += lcycles();
-    cumilockcycles += l->lockcycles;
-    if(l->lockcycles > maxilockcycles){
-        maxilockcycles = l->lockcycles;
-        maxilockpc = l->pc;
-    }
-    if(l->lockcycles > 2400)
-        ilockpcs[n++ & 0xff]  = l->pc;
-#endif
-    if(l->key == 0)
-        print("iunlock: not locked: pc %#p\n", getcallerpc(&l));
-    if(!l->isilock)
-        print("iunlock of lock: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
-    if(islo())
-        print("iunlock while lo: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
+<<struct TaslockStats>>
+<<global lockstats>>
+<<globals lockcycles>>
 
-    sr = l->sr;
-    l->m = nil;
-    l->key = 0;
-    coherence();
-    m->ilockdepth--;
-    if(up)
-        up->lastilock = nil;
-    splx(sr);
-}
+<<function inccnt>>
+
+<<function deccnt>>
+
+<<function lockloop>>
+
+<<function lock>>
+
+<<function ilock>>
+
+<<function canlock>>
+
+<<function unlock>>
+
+<<function iunlock>>
 
 @
 
@@ -9066,7 +8568,7 @@ struct Perf
 @ 
 
 
-<<Mach extra fields>>=
+<<Mach other fields>>=
 ulong ticks;      /* of the clock since boot time */
 Label sched;      /* scheduler wakeup */
 Lock  alarmlock;    /* access to alarm list */
@@ -9088,7 +8590,6 @@ int intr;
 
 ulong spuriousintr;
 int lastintr;
-int ilockdepth;
 Perf  perf;     /* performance counters */
 
 int cpumhz;
@@ -43814,10 +43315,6 @@ char  *kstack;  /* known to l.s */
 
 
 <<Proc state fields>>=
-ulong pid;
-
-// enum<procstate>
-int state; // Dead, Queuing, etc,
 bool insyscall;
 char  *psstate; /* What /proc/#/status reports */
 
@@ -43991,16 +43488,10 @@ char  genbuf[128];  /* buffer used e.g. for last name element from namec */
 
 
 Lock  *lockwait;
-Lock  *lastlock;  /* debugging */
-Lock  *lastilock; /* debugging */
 
 Mach  *wired;
 Mach  *mp;    /* machine this process last ran on */
 
-// As long as the current process hold locks (to kernel data structures),
-// we will not schedule another process in unlock(); only the last unlock
-// will eventually cause a rescheduling.
-Ref nlocks;   /* number of locks held by proc */
 
 bool trace;    /* process being traced? */
 
@@ -44023,10 +43514,6 @@ char  *syscalltrace;  /* syscall trace */
 
 
 <<Proc extra fields>>=
-// list<ref<Proc>> KQlock.head or RWLock.head
-Proc  *qnext;   /* next process on queue for a QLock */
-// option<ref<Qlock>> ??
-QLock *qlock;   /* addr of qlock being queued for DEBUG */
 
 // list<ref<Proc>> ?? Schedq.head chain?
 Proc  *rnext;   /* next process in run queue */
@@ -44040,6 +43527,19 @@ Proc  *pidhash; /* next proc in pid hash */
 
 // option<ref<Mach>>, null when not associated to a machine?
 Mach  *mach;    /* machine running this proc */
+@ 
+
+
+
+<<enum procstate cases>>=
+Moribund,
+Ready,
+Scheding,
+Wakeme,
+Broken,
+Stopped,
+Rendezvous,
+Waitrelease,
 @ 
 
 
@@ -44060,23 +43560,7 @@ Mach  *mach;    /* machine running this proc */
 //--------------------------------------------------------------------
 
 // TODO: state transition diagram
-enum procstate
-{
-    /* Process states, Proc.state */
-    Dead = 0,
-    Moribund,
-    Ready,
-    Scheding,
-    Running,
-    Queueing, // see lock()
-    QueueingR, // see rlock()
-    QueueingW, // see wlock ()
-    Wakeme,
-    Broken,
-    Stopped,
-    Rendezvous,
-    Waitrelease,
-};
+<<enum procstate>>
 
 // hash<enum<procstate>, string>, to debug
 extern  char* statename[];
@@ -44665,16 +44149,17 @@ enum
     Scaling=2,
 };
 
+//TODO: change
 char *statename[] =
 {
     "Dead",
-    "Moribund",
-    "Ready",
-    "Scheding",
     "Running",
     "Queueing",
     "QueueingR",
     "QueueingW",
+    "Moribund",
+    "Ready",
+    "Scheding",
     "Wakeme",
     "Broken",
     "Stopped",
