@@ -29,7 +29,6 @@
 #define	SEGFLUSH	33
 #define	RENDEZVOUS	34
 #define	UNMOUNT		35
-#define	_WAIT		36
 #define	SEMACQUIRE	37
 #define	SEMRELEASE	38
 #define	SEEK		39

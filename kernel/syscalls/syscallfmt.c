@@ -193,7 +193,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         break;
     case NOTIFY:
     case SEGDETACH:
-    case _WAIT:                 /* deprecated */
         v = va_arg(list, void*);
         fmtprint(&fmt, "%#p", v);
         break;

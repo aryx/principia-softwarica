@@ -599,31 +599,6 @@ sysexits(ulong *arg)
 }
 
 long
-sys_wait(ulong *arg)
-{
-    int pid;
-    Waitmsg w;
-    OWaitmsg *ow;
-
-    if(arg[0] == 0)
-        return pwait(nil);
-
-    validaddr(arg[0], sizeof(OWaitmsg), 1);
-    evenaddr(arg[0]);
-    pid = pwait(&w);
-    if(pid >= 0){
-        ow = (OWaitmsg*)arg[0];
-        readnum(0, ow->pid, NUMSIZE, w.pid, NUMSIZE);
-        readnum(0, ow->time+TUser*NUMSIZE, NUMSIZE, w.time[TUser], NUMSIZE);
-        readnum(0, ow->time+TSys*NUMSIZE, NUMSIZE, w.time[TSys], NUMSIZE);
-        readnum(0, ow->time+TReal*NUMSIZE, NUMSIZE, w.time[TReal], NUMSIZE);
-        strncpy(ow->msg, w.msg, sizeof(ow->msg));
-        ow->msg[sizeof(ow->msg)-1] = '\0';
-    }
-    return pid;
-}
-
-long
 sysawait(ulong *arg)
 {
     int i;
