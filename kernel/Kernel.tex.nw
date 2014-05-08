@@ -14,6 +14,7 @@
 
 %thx to LP, changed for the better a few things :)
 % - introduced syssema.c (found while going through Kernel_extra.tex.nw)
+% - removed deadcode (e.g. field Proc.qlock)
 
 %thx to codemap/codegraph:
 % - see pad.txt#reorganization section
@@ -21,9 +22,10 @@
 %history LP-ization:
 % - skeleton; a not too bad TOC
 % - put all content of files in the Extra section, via syncweb -lpize
-% - TODO split the files in chunks (for type, helpers, ...), using
-%   my emacs macro,  function, global, struct, xxx decl, method (for Dev)
-% - TODO distribute parts of the file before
+% - SEMI split the files in chunks (for type, helpers, ...), using
+%   my emacs macro,  function, global, struct, xxx decl, method (for Dev),
+%   xxx other fields, xxx extra fields
+% - SEMI distribute parts of the file before
 % - TODO add figures (hand made)
 
 %------------------------------------------------------------------------------
@@ -543,7 +545,6 @@ struct Mach
 };
 @ 
 
-
 <<global m>>=
 Mach *m;
 @ 
@@ -564,7 +565,15 @@ Mach* machp[MAXMACH];
 #define MACHP(n)  (machp[n])
 @
 
-% externup is in ArchMach, so put here?
+<<struct ArchMach>>=
+struct ArchMach {
+    <<ArchMach other fields>>
+};
+@ 
+
+<<ArchMach other fields>>=
+Proc* externup;   /* extern register Proc *up */
+@
 
 <<macro up>>=
 // up = user process, MACHADDR is defined in 386/mem.h
@@ -789,7 +798,7 @@ struct Lock
     uintptr pc; // for debugging
 
     <<Lock ilock fields>>
-    <<Lock other fields>>    
+    <<Lock other fields>>
     <<Lock debugging fields>>
 };
 @ 
@@ -1115,8 +1124,6 @@ struct KQLock
 <<Proc extra fields>>=
 // list<ref<Proc>> KQlock.head or RWLock.head
 Proc  *qnext;   /* next process on queue for a QLock */
-// option<ref<Qlock>> ??
-QLock *qlock;   /* addr of qlock being queued for DEBUG */
 @ 
 
 <<enum procstate cases>>=
@@ -1153,7 +1160,7 @@ qlock(QLock *q)
     else
         p->qnext = up;
     q->tail = up;
-    up->qnext = 0;
+    up->qnext = nil;
     up->state = Queueing;
     up->qpc = getcallerpc(&q);
     unlock(&q->use);
@@ -1194,7 +1201,7 @@ qunlock(QLock *q)
     if(p){
         q->head = p->qnext;
         if(q->head == 0)
-            q->tail = 0;
+            q->tail = nil;
         unlock(&q->use);
         ready(p);
         return;
@@ -1254,7 +1261,7 @@ rlock(RWlock *q)
     else
         p->qnext = up;
     q->tail = up;
-    up->qnext = 0;
+    up->qnext = nil;
     up->state = QueueingR;
     unlock(&q->use);
     sched();
@@ -1279,7 +1286,7 @@ runlock(RWlock *q)
         panic("runlock");
     q->head = p->qnext;
     if(q->head == 0)
-        q->tail = 0;
+        q->tail = nil;
     q->writer = 1;
     unlock(&q->use);
     ready(p);
@@ -1317,7 +1324,7 @@ wlock(RWlock *q)
     else
         p->qnext = up;
     q->tail = up;
-    up->qnext = 0;
+    up->qnext = nil;
     up->state = QueueingW;
     unlock(&q->use);
     sched();
@@ -1334,7 +1341,7 @@ wunlock(RWlock *q)
     lock(&q->use);
     p = q->head;
     if(p == nil){
-        q->writer = 0;
+        q->writer = nil;
         unlock(&q->use);
         return;
     }
@@ -1360,7 +1367,7 @@ wunlock(RWlock *q)
     }
     if(q->head == nil)
         q->tail = nil;
-    q->writer = 0;
+    q->writer = nil;
     unlock(&q->use);
 }
 @ 

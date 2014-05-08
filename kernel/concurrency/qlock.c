@@ -51,7 +51,7 @@ qlock(QLock *q)
     else
         p->qnext = up;
     q->tail = up;
-    up->qnext = 0;
+    up->qnext = nil;
     up->state = Queueing;
     up->qpc = getcallerpc(&q);
     unlock(&q->use);
@@ -91,7 +91,7 @@ qunlock(QLock *q)
     if(p){
         q->head = p->qnext;
         if(q->head == 0)
-            q->tail = 0;
+            q->tail = nil;
         unlock(&q->use);
         ready(p);
         return;
@@ -126,7 +126,7 @@ rlock(RWlock *q)
     else
         p->qnext = up;
     q->tail = up;
-    up->qnext = 0;
+    up->qnext = nil;
     up->state = QueueingR;
     unlock(&q->use);
     sched();
@@ -151,7 +151,7 @@ runlock(RWlock *q)
         panic("runlock");
     q->head = p->qnext;
     if(q->head == 0)
-        q->tail = 0;
+        q->tail = nil;
     q->writer = 1;
     unlock(&q->use);
     ready(p);
@@ -185,7 +185,7 @@ wlock(RWlock *q)
     else
         p->qnext = up;
     q->tail = up;
-    up->qnext = 0;
+    up->qnext = nil;
     up->state = QueueingW;
     unlock(&q->use);
     sched();
@@ -201,7 +201,7 @@ wunlock(RWlock *q)
     lock(&q->use);
     p = q->head;
     if(p == nil){
-        q->writer = 0;
+        q->writer = nil;
         unlock(&q->use);
         return;
     }
@@ -227,7 +227,7 @@ wunlock(RWlock *q)
     }
     if(q->head == nil)
         q->tail = nil;
-    q->writer = 0;
+    q->writer = nil;
     unlock(&q->use);
 }
 /*e: function wunlock */

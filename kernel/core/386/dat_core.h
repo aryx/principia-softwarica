@@ -56,21 +56,23 @@ struct Segdesc
 
 /*s: struct ArchMach */
 struct ArchMach {
+    /*s: ArchMach other fields */
+    Proc* externup;   /* extern register Proc *up */
+    /*x: ArchMach other fields */
     // TODO: have a ArchMachMMU like in bcm/
     ulong*  pdb;      /* page directory base for this processor (va) */
     Tss*  tss;      /* tss for this processor */
     Segdesc *gdt;     /* gdt for this processor */
-    Proc* externup;   /* extern register Proc *up */
     Page* pdbpool;
     int pdbcnt;
     //  int inclockintr;
-  
+
     Lock  apictimerlock;
     ArchFPsave *fpsavalign;
-  
+
     // for perfticks, tsc = time stamp counter
     bool havetsc;
-  
+
     int loopconst;
     int cpuidax;
     int cpuiddx;
@@ -84,6 +86,7 @@ struct ArchMach {
     vlong mtrrdef;
     vlong mtrrfix[11];
     vlong mtrrvar[32];    /* 256 max. */
+    /*e: ArchMach other fields */
 };
 /*e: struct ArchMach */
 /*e: dat_core.h */

@@ -19,8 +19,8 @@ struct Lock
     uintptr pc; // for debugging
 
     /*s: Lock ilock fields */
-        bool_ushort isilock; // false when from lock(), true when from ilock()
-        ulong sr; // saved priority level when using ilock() to restore in iunlock()
+    bool_ushort isilock; // false when from lock(), true when from ilock()
+    ulong sr; // saved priority level when using ilock() to restore in iunlock()
     /*e: Lock ilock fields */
     /*s: Lock other fields */
     // option<ref<Mach>>, None when key = 0?
