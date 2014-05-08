@@ -27,7 +27,6 @@ struct Lock
     Mach  *m; // not that used, only in iprintcanlock apparently
     /*e: Lock other fields */
     /*s: Lock debugging fields */
-    // debugging
     //#ifdef LOCKCYCLES
     long  lockcycles;
     //#endif
@@ -35,8 +34,8 @@ struct Lock
 };
 /*e: struct Lock */
 
-// Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h Qlock)
 /*s: struct QLock */
+// Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h Qlock)
 struct KQLock
 {
     bool  locked;   /* flag */
@@ -57,13 +56,13 @@ struct KQLock
 struct RWlock
 {
     int readers;  /* number of readers */
-    int writer;   /* number of writers */
+    bool writer;   /* number of writers */
   
     // list<ref<Proc>> (next = Proc.qnext)
     Proc  *head;    /* list of waiting processes */
-    // list<ref<Proc>>
+    // list<ref<Proc>> (direct access to tail, queue)
     Proc  *tail;
-    // option<ref<Proc>> (direct access to tail, queue)
+    // option<ref<Proc>> 
     Proc  *wproc;   /* writing proc */
   
     uintptr wpc;    /* pc of writer */
@@ -72,8 +71,8 @@ struct RWlock
 };
 /*e: struct RWlock */
 
-// For reference counting shared things (e.g. a Page)
 /*s: struct Ref */
+// For reference counting shared things (e.g. a Page)
 struct Ref
 {
     long  ref;
@@ -85,7 +84,7 @@ struct Ref
 // Synchronization
 //*****************************************************************************
 
-// defined in this directory but no functions are operating on in this dir
+// defined in this directory but no functions are operating on it in this dir
 /*s: struct Rendez */
 struct Rendez
 {
@@ -99,7 +98,7 @@ struct Rendez
 /*s: struct Sema */
 struct Sema
 {
-    long  *addr;
+    long  *addr; // value stored in user space!
     int waiting;
   
     //list<Sema> of ??

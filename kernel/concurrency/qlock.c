@@ -152,7 +152,7 @@ runlock(RWlock *q)
     q->head = p->qnext;
     if(q->head == 0)
         q->tail = nil;
-    q->writer = 1;
+    q->writer = true;
     unlock(&q->use);
     ready(p);
 }
@@ -170,7 +170,7 @@ wlock(RWlock *q)
         /* noone waiting, go for it */
         q->wpc = getcallerpc(&q);
         q->wproc = up;
-        q->writer = 1;
+        q->writer = true;
         unlock(&q->use);
         return;
     }
@@ -201,7 +201,7 @@ wunlock(RWlock *q)
     lock(&q->use);
     p = q->head;
     if(p == nil){
-        q->writer = nil;
+        q->writer = false;
         unlock(&q->use);
         return;
     }
@@ -227,7 +227,7 @@ wunlock(RWlock *q)
     }
     if(q->head == nil)
         q->tail = nil;
-    q->writer = nil;
+    q->writer = false;
     unlock(&q->use);
 }
 /*e: function wunlock */
