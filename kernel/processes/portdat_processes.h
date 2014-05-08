@@ -524,8 +524,6 @@ struct Proc
 // Other
 //--------------------------------------------------------------------
     /*s: Proc other fields */
-    // ...
-    /*x: Proc other fields */
     Lock* lastlock;
     // As long as the current process hold locks (to kernel data structures),
     // we will not schedule another process in unlock(); only the last unlock
