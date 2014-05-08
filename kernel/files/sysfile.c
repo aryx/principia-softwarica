@@ -1217,17 +1217,4 @@ sys_fstat(ulong *arg)
     return 0;
 }
 
-long
-sys_wstat(ulong *)
-{
-    error("old wstat system call - recompile");
-    return -1;
-}
-
-long
-sys_fwstat(ulong *)
-{
-    error("old fwstat system call - recompile");
-    return -1;
-}
 /*e: sysfile.c */

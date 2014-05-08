@@ -18,7 +18,6 @@ ulong	nofunc;
 
 char *sysctab[]={
 	[SYSR1]		"SYSR1",
-	[_ERRSTR]	"_errstr",
 	[BIND]		"Bind",
 	[CHDIR]		"Chdir",
 	[CLOSE]		"Close",
@@ -42,8 +41,6 @@ char *sysctab[]={
 	[FD2PATH]	"Fd2path",
 	[BRK_]		"Brk_",
 	[REMOVE]	"Remove",
-	[_WSTAT]	"_Wstat",
-	[_FWSTAT]	"_Fwstat",
 	[NOTIFY]	"Notify",
 	[NOTED]		"Noted",
 	[SEGATTACH]	"Segattach",
@@ -67,21 +64,6 @@ char *sysctab[]={
 };
 
 void sys1(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
-
-void
-sys_errstr(void)
-{
-	ulong str;
-
-	str = getmem_w(reg.r[REGSP]+4);
-	if(sysdbg)
-		itrace("errstr(0x%lux)", str);
-
-	memio(errbuf, str, OERRLEN, MemWrite);
-	strcpy(errbuf, "no error");
-	reg.r[REGRET] = 0;
-	
-}
 
 void
 syserrstr(void)
@@ -641,9 +623,7 @@ void sysfversion(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REG
 void sysfauth(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
 void syswait(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0); }
 void syswstat(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
-void sys_wstat(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 void sysfwstat(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
-void sys_fwstat(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 void sysnoted(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 void syssegattach(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 void syssegdetach(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
@@ -661,7 +641,6 @@ void sysawait(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET
 
 void (*systab[])(void)	={
 	[SYSR1]		sys1,
-	[_ERRSTR]	sys_errstr,
 	[BIND]		sysbind,
 	[CHDIR]		syschdir,
 	[CLOSE]		sysclose,
@@ -685,8 +664,6 @@ void (*systab[])(void)	={
 	[FD2PATH]	sysfd2path,
 	[BRK_]		sysbrk_,
 	[REMOVE]	sysremove,
-	[_WSTAT]	sys_wstat,
-	[_FWSTAT]	sys_fwstat,
 	[NOTIFY]	sysnotify,
 	[NOTED]		sysnoted,
 	[SEGATTACH]	syssegattach,

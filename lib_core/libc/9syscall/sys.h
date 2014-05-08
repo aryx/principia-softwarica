@@ -1,5 +1,4 @@
 #define	SYSR1		0
-#define	_ERRSTR		1
 #define	BIND		2
 #define	CHDIR		3
 #define	CLOSE		4
@@ -23,8 +22,6 @@
 #define	FD2PATH		23
 #define	BRK_		24
 #define	REMOVE		25
-#define	_WSTAT		26
-#define	_FWSTAT		27
 #define	NOTIFY		28
 #define	NOTED		29
 #define	SEGATTACH	30

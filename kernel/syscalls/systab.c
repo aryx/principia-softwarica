@@ -12,7 +12,6 @@
 
 /*s: systab.c forward decl */
 extern Syscall sysr1;
-extern Syscall sys_errstr;
 extern Syscall sysbind;
 extern Syscall syschdir;
 extern Syscall sysclose;
@@ -36,8 +35,6 @@ extern Syscall syscreate;
 extern Syscall sysfd2path;
 extern Syscall sysbrk_;
 extern Syscall sysremove;
-extern Syscall sys_wstat;
-extern Syscall sys_fwstat;
 extern Syscall sysnotify;
 extern Syscall sysnoted;
 extern Syscall syssegattach;
@@ -70,7 +67,6 @@ extern Syscall sysdeath;
 /*s: global systab */
 Syscall *systab[] = {
     [SYSR1]     sysr1,
-    [_ERRSTR]   sys_errstr,
     [BIND]      sysbind,
     [CHDIR]     syschdir,
     [CLOSE]     sysclose,
@@ -94,8 +90,6 @@ Syscall *systab[] = {
     [FD2PATH]   sysfd2path,
     [BRK_]      sysbrk_,
     [REMOVE]    sysremove,
-    [_WSTAT]    sys_wstat,
-    [_FWSTAT]   sys_fwstat,
     [NOTIFY]    sysnotify,
     [NOTED]     sysnoted,
     [SEGATTACH] syssegattach,
@@ -126,7 +120,6 @@ int nsyscall = nelem(systab);
 /*s: global sysstab */
 char *sysctab[] = {
     [SYSR1]     "Running",
-    [_ERRSTR]   "_errstr",
     [BIND]      "Bind",
     [CHDIR]     "Chdir",
     [CLOSE]     "Close",
@@ -150,8 +143,6 @@ char *sysctab[] = {
     [FD2PATH]   "Fd2path",
     [BRK_]      "Brk",
     [REMOVE]    "Remove",
-    [_WSTAT]    "_wstat",
-    [_FWSTAT]   "_fwstat",
     [NOTIFY]    "Notify",
     [NOTED]     "Noted",
     [SEGATTACH] "Segattach",

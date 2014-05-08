@@ -17,7 +17,6 @@ ulong	nofunc;
 char*	sysctab[] =
 {
 	[SYSR1]		"Running",
-	[_ERRSTR]		"_errstr",
 	[BIND]		"Bind",
 	[CHDIR]		"Chdir",
 	[CLOSE]		"Close",
@@ -41,8 +40,6 @@ char*	sysctab[] =
 	[FD2PATH]	"Fd2path",
 	[BRK_]		"Brk_",
 	[REMOVE]		"Remove",
-	[_WSTAT]		"_Wstat",
-	[_FWSTAT]	"_Fwstat",
 	[NOTIFY]		"Notify",
 	[NOTED]		"Noted",
 	[SEGATTACH]	"Segattach",
@@ -69,21 +66,6 @@ sys1(void)
 {
 	Bprint(bioout, "no system call %s\n", sysctab[reg.r[1]]);
 	exits(0);
-}
-
-void
-sys_errstr(void)
-{
-	ulong str;
-
-	str = getmem_w(reg.r[13]+4);
-	if(sysdbg)
-		itrace("errstr(0x%lux)", str);
-
-	memio(errbuf, str, OERRLEN, MemWrite);
-	strcpy(errbuf, "no error");
-	reg.r[REGRET] = 0;
-	
 }
 
 void
@@ -621,19 +603,7 @@ syswstat(void)
 	exits(0);
 }
 void
-sys_wstat(void)
-{
-	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-	exits(0);
-}
-void
 sysfwstat(void)
-{
-	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-	exits(0);
-}
-void
-sys_fwstat(void)
 {
 	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
 	exits(0);
@@ -738,7 +708,6 @@ sysfversion(void)
 void	(*systab[])(void) =
 {
 	[SYSR1]		sys1,
-	[_ERRSTR]		sys_errstr,
 	[BIND]		sysbind,
 	[CHDIR]		syschdir,
 	[CLOSE]		sysclose,
@@ -762,8 +731,6 @@ void	(*systab[])(void) =
 	[FD2PATH]	sysfd2path,
 	[BRK_]		sysbrk_,
 	[REMOVE]		sysremove,
-	[_WSTAT]		sys_wstat,
-	[_FWSTAT]	sys_fwstat,
 	[NOTIFY]		sysnotify,
 	[NOTED]		sysnoted,
 	[SEGATTACH]	syssegattach,

@@ -684,13 +684,6 @@ syserrstr(ulong *arg)
     return generrstr((char*)arg[0], arg[1]);
 }
 
-/* compatibility for old binaries */
-long
-sys_errstr(ulong *arg)
-{
-    return generrstr((char*)arg[0], 64);
-}
-
 long
 sysnotify(ulong *arg)
 {

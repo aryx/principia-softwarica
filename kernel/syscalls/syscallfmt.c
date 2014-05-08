@@ -84,7 +84,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         p = va_arg(list, uintptr);
         fmtprint(&fmt, "%#p", p);
         break;
-    case _ERRSTR:                   /* deprecated */
     case CHDIR:
     case EXITS:
     case REMOVE:
@@ -129,7 +128,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         }
         break;
     case _FSTAT:                    /* deprecated */
-    case _FWSTAT:                   /* obsolete */
         i[0] = va_arg(list, int);
         a = va_arg(list, char*);
         fmtprint(&fmt, "%d %#p", i[0], a);
@@ -174,7 +172,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         fmtprint(&fmt, "%ld", l);
         break;
     case _STAT:                 /* obsolete */
-    case _WSTAT:                    /* obsolete */
         a = va_arg(list, char*);
         fmtuserstring(&fmt, a, " ");
         a = va_arg(list, char*);
@@ -352,13 +349,9 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
             errstr = up->syserrstr;
         }
         break;
-    case _ERRSTR:
     case ERRSTR:
         a = va_arg(list, char*);
-        if(syscallno == _ERRSTR)
-            l = 64;
-        else
-            l = va_arg(list, unsigned long);
+        l = va_arg(list, unsigned long);
         if(ret > 0){
             fmtuserstring(&fmt, a, " ");
             fmtprint(&fmt, "%lud = %ld", l, ret);

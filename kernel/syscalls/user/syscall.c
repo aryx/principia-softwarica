@@ -11,9 +11,6 @@ uintptr arg[NARG];
 int sysr1(void);
 int _stat(char*, char*);
 int _fstat(int, char*);
-int _errstr(char*);
-int _wstat(char*, char*);
-int _fwstat(int, char*);
 int _read(int, void*, int);
 int _write(int, void*, int);
 int _read9p(int, void*, int);
@@ -23,7 +20,6 @@ int _nfstat(int, void*, int);
 int _nstat(char*, void*, int);
 int _nfwstat(int, void*, int);
 int _nwstat(char*, void*, int);
-int _fsession(char*, void*, int);
 int _mount(int, char*, int, char*);
 int _wait(void*);
 
