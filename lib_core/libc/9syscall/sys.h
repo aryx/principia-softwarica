@@ -7,12 +7,10 @@
 #define	EXEC		7
 #define	EXITS		8
 #define	FAUTH		10
-#define	_FSTAT		11
 #define	SEGBRK		12
 #define	OPEN		14
 #define	OSEEK		16
 #define	SLEEP		17
-#define	_STAT		18
 #define	RFORK		19
 #define	PIPE		21
 #define	CREATE		22

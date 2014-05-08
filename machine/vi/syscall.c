@@ -26,12 +26,10 @@ char *sysctab[]={
 	[EXEC]		"Exec",
 	[EXITS]		"Exits",
 	[FAUTH]		"Fauth",
-	[_FSTAT]	"_fstat",
 	[SEGBRK]	"Segbrk",
 	[OPEN]		"Open",
 	[OSEEK]		"Oseek",
 	[SLEEP]		"Sleep",
-	[_STAT]		"_Stat",
 	[RFORK]		"Rfork",
 	[PIPE]		"Pipe",
 	[CREATE]	"Create",
@@ -355,30 +353,6 @@ syssleep(void)
 }
 
 void
-sys_stat(void)
-{
-	char nambuf[1024];
-	char buf[ODIRLEN];
-	ulong edir, name;
-	extern int _stat(char*, char*);	/* old system call */
-	int n;
-
-	name = getmem_w(reg.r[REGSP]+4);
-	edir = getmem_w(reg.r[REGSP]+8);
-	memio(nambuf, name, sizeof(nambuf), MemReadstring);
-	if(sysdbg)
-		itrace("stat(0x%lux='%s', 0x%lux)", name, nambuf, edir);
-
-	n = _stat(nambuf, buf);
-	if(n < 0)
-		errstr(errbuf, sizeof errbuf);
-	else
-		memio(buf, edir, ODIRLEN, MemWrite);
-
-	reg.r[REGRET] = n;
-}
-
-void
 sysstat(void)
 {
 	char nambuf[1024];
@@ -401,28 +375,6 @@ sysstat(void)
 		else
 			memio((char*)buf, edir, n, MemWrite);
 	}
-	reg.r[REGRET] = n;
-}
-
-void
-sys_fstat(void)
-{
-	char buf[ODIRLEN];
-	ulong edir;
-	extern int _fstat(int, char*);	/* old system call */
-	int n, fd;
-
-	fd = getmem_w(reg.r[REGSP]+4);
-	edir = getmem_w(reg.r[REGSP]+8);
-	if(sysdbg)
-		itrace("fstat(%d, 0x%lux)", fd, edir);
-
-	n = _fstat(fd, buf);
-	if(n < 0)
-		errstr(errbuf, sizeof errbuf);
-	else
-		memio(buf, edir, ODIRLEN, MemWrite);
-
 	reg.r[REGRET] = n;
 }
 
@@ -632,12 +584,10 @@ void (*systab[])(void)	={
 	[EXEC]		sysexec,
 	[EXITS]		sysexits,
 	[FAUTH]		sysfauth,
-	[_FSTAT]	sys_fstat,
 	[SEGBRK]	syssegbrk,
 	[OPEN]		sysopen,
 	[OSEEK]		sysoseek,
 	[SLEEP]		syssleep,
-	[_STAT]		sys_stat,
 	[RFORK]		sysrfork,
 	[PIPE]		syspipe,
 	[CREATE]	syscreate,

@@ -127,11 +127,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
             argv++;
         }
         break;
-    case _FSTAT:                    /* deprecated */
-        i[0] = va_arg(list, int);
-        a = va_arg(list, char*);
-        fmtprint(&fmt, "%d %#p", i[0], a);
-        break;
     case FAUTH:
         i[0] = va_arg(list, int);
         a = va_arg(list, char*);
@@ -160,12 +155,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
     case SLEEP:
         l = va_arg(list, long);
         fmtprint(&fmt, "%ld", l);
-        break;
-    case _STAT:                 /* obsolete */
-        a = va_arg(list, char*);
-        fmtuserstring(&fmt, a, " ");
-        a = va_arg(list, char*);
-        fmtprint(&fmt, "%#p", a);
         break;
     case RFORK:
         i[0] = va_arg(list, int);
