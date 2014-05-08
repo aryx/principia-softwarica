@@ -5957,7 +5957,8 @@ struct Rendez
 
 
 <<struct Sema>>=
-// user level semaphores
+// user level semaphores, used to implement user-level lock, 
+// see libc/port/lock.c
 struct Sema
 {
     long  *addr; // value stored in user space!
@@ -21866,7 +21867,7 @@ typedef struct Elemlist Elemlist;
 %PAD: still toggled by sysr1? not true
 \ifallcode
 <<chan.c debugging macro>>=
-int chandebug=0;        /* toggled by sysr1 */
+int chandebug=0;        /* toggle it in sysnop if you want */
 #define DBG if(chandebug)iprint
 @ 
 \fi
@@ -27053,12 +27054,6 @@ read(ulong *arg, vlong *offp)
 }
 
 long
-sys_read(ulong *arg)
-{
-    return read(arg, nil);
-}
-
-long
 syspread(ulong *arg)
 {
     vlong v;
@@ -27123,12 +27118,6 @@ write(ulong *arg, vlong *offp)
     cclose(c);
 
     return m;
-}
-
-long
-sys_write(ulong *arg)
-{
-    return write(arg, nil);
 }
 
 long
@@ -27410,12 +27399,6 @@ sysmount(ulong *arg)
 }
 
 long
-sys_mount(ulong *arg)
-{
-    return bindmount(1, arg[0], -1, nil, (char*)arg[1], arg[2], (char*)arg[3]);
-}
-
-long
 sysunmount(ulong *arg)
 {
     Chan *cmount, *cmounted;
@@ -27552,121 +27535,6 @@ sysfwstat(ulong *arg)
     return wstat(c, (uchar*)arg[1], l);
 }
 
-static void
-packoldstat(uchar *buf, Dir *d)
-{
-    uchar *p;
-    ulong q;
-
-    /* lay down old stat buffer - grotty code but it's temporary */
-    p = buf;
-    strncpy((char*)p, d->name, 28);
-    p += 28;
-    strncpy((char*)p, d->uid, 28);
-    p += 28;
-    strncpy((char*)p, d->gid, 28);
-    p += 28;
-    q = d->qid.path & ~DMDIR;   /* make sure doesn't accidentally look like directory */
-    if(d->qid.type & QTDIR) /* this is the real test of a new directory */
-        q |= DMDIR;
-    PBIT32(p, q);
-    p += BIT32SZ;
-    PBIT32(p, d->qid.vers);
-    p += BIT32SZ;
-    PBIT32(p, d->mode);
-    p += BIT32SZ;
-    PBIT32(p, d->atime);
-    p += BIT32SZ;
-    PBIT32(p, d->mtime);
-    p += BIT32SZ;
-    PBIT64(p, d->length);
-    p += BIT64SZ;
-    PBIT16(p, d->type);
-    p += BIT16SZ;
-    PBIT16(p, d->dev);
-}
-
-long
-sys_stat(ulong *arg)
-{
-    Chan *c;
-    uint l;
-    uchar buf[128]; /* old DIRLEN plus a little should be plenty */
-    char strs[128], *name;
-    Dir d;
-    char old[] = "old stat system call - recompile";
-
-    validaddr(arg[1], 116, 1);
-    validaddr(arg[0], 1, 0);
-    c = namec((char*)arg[0], Aaccess, 0, 0);
-    if(waserror()){
-        cclose(c);
-        nexterror();
-    }
-    l = devtab[c->type]->stat(c, buf, sizeof buf);
-    /* buf contains a new stat buf; convert to old. yuck. */
-    if(l <= BIT16SZ)    /* buffer too small; time to face reality */
-        error(old);
-    name = pathlast(c->path);
-    if(name)
-        l = dirsetname(name, strlen(name), buf, l, sizeof buf);
-    l = convM2D(buf, l, &d, strs);
-    if(l == 0)
-        error(old);
-    packoldstat((uchar*)arg[1], &d);
-    
-    poperror();
-    cclose(c);
-    return 0;
-}
-
-long
-sys_fstat(ulong *arg)
-{
-    Chan *c;
-    char *name;
-    uint l;
-    uchar buf[128]; /* old DIRLEN plus a little should be plenty */
-    char strs[128];
-    Dir d;
-    char old[] = "old fstat system call - recompile";
-
-    validaddr(arg[1], 116, 1);
-    c = fdtochan(arg[0], -1, 0, 1);
-    if(waserror()){
-        cclose(c);
-        nexterror();
-    }
-    l = devtab[c->type]->stat(c, buf, sizeof buf);
-    /* buf contains a new stat buf; convert to old. yuck. */
-    if(l <= BIT16SZ)    /* buffer too small; time to face reality */
-        error(old);
-    name = pathlast(c->path);
-    if(name)
-        l = dirsetname(name, strlen(name), buf, l, sizeof buf);
-    l = convM2D(buf, l, &d, strs);
-    if(l == 0)
-        error(old);
-    packoldstat((uchar*)arg[1], &d);
-    
-    poperror();
-    cclose(c);
-    return 0;
-}
-
-long
-sys_wstat(ulong *)
-{
-    error("old wstat system call - recompile");
-    return -1;
-}
-
-long
-sys_fwstat(ulong *)
-{
-    error("old fwstat system call - recompile");
-    return -1;
-}
 @
 
 \section{[[filesystems/]]}
@@ -46094,9 +45962,9 @@ enum
 
 
 long
-sysr1(ulong*)
+sysnop(ulong*)
 {
-    checkpagerefs();
+    //checkpagerefs();
     return 0;
 }
 
@@ -46660,31 +46528,6 @@ sysexits(ulong *arg)
 }
 
 long
-sys_wait(ulong *arg)
-{
-    int pid;
-    Waitmsg w;
-    OWaitmsg *ow;
-
-    if(arg[0] == 0)
-        return pwait(nil);
-
-    validaddr(arg[0], sizeof(OWaitmsg), 1);
-    evenaddr(arg[0]);
-    pid = pwait(&w);
-    if(pid >= 0){
-        ow = (OWaitmsg*)arg[0];
-        readnum(0, ow->pid, NUMSIZE, w.pid, NUMSIZE);
-        readnum(0, ow->time+TUser*NUMSIZE, NUMSIZE, w.time[TUser], NUMSIZE);
-        readnum(0, ow->time+TSys*NUMSIZE, NUMSIZE, w.time[TSys], NUMSIZE);
-        readnum(0, ow->time+TReal*NUMSIZE, NUMSIZE, w.time[TReal], NUMSIZE);
-        strncpy(ow->msg, w.msg, sizeof(ow->msg));
-        ow->msg[sizeof(ow->msg)-1] = '\0';
-    }
-    return pid;
-}
-
-long
 sysawait(ulong *arg)
 {
     int i;
@@ -46743,13 +46586,6 @@ long
 syserrstr(ulong *arg)
 {
     return generrstr((char*)arg[0], arg[1]);
-}
-
-/* compatibility for old binaries */
-long
-sys_errstr(ulong *arg)
-{
-    return generrstr((char*)arg[0], 64);
 }
 
 long
@@ -47292,18 +47128,6 @@ sysfversion(ulong *arg)
 }
 
 long
-sys_fsession(ulong *arg)
-{
-    /* deprecated; backwards compatibility only */
-
-    if(arg[2] == 0)
-        error(Ebadarg);
-    validaddr(arg[1], arg[2], 1);
-    ((uchar*)arg[1])[0] = '\0';
-    return 0;
-}
-
-long
 sysfauth(ulong *arg)
 {
     Chan *c, *ac;
@@ -47554,11 +47378,10 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         free(up->syscalltrace);
 
     switch(syscallno){
-    case SYSR1:
+    case NOP:
         p = va_arg(list, uintptr);
         fmtprint(&fmt, "%#p", p);
         break;
-    case _ERRSTR:                   /* deprecated */
     case CHDIR:
     case EXITS:
     case REMOVE:
@@ -47602,13 +47425,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
             argv++;
         }
         break;
-    case _FSESSION:                 /* deprecated */
-    case _FSTAT:                    /* deprecated */
-    case _FWSTAT:                   /* obsolete */
-        i[0] = va_arg(list, int);
-        a = va_arg(list, char*);
-        fmtprint(&fmt, "%d %#p", i[0], a);
-        break;
     case FAUTH:
         i[0] = va_arg(list, int);
         a = va_arg(list, char*);
@@ -47621,16 +47437,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         fmtprint(&fmt, "%#p ", v);
         v = va_arg(list, void*);
         fmtprint(&fmt, "%#p", v);
-        break;
-    case _MOUNT:                    /* deprecated */
-        i[0] = va_arg(list, int);
-        fmtprint(&fmt, "%d ", i[0]);
-        a = va_arg(list, char*);
-        fmtuserstring(&fmt, a, " ");
-        i[0] = va_arg(list, int);
-        fmtprint(&fmt, "%#ux ", i[0]);
-        a = va_arg(list, char*);
-        fmtuserstring(&fmt, a, "");
         break;
     case OPEN:
         a = va_arg(list, char*);
@@ -47647,13 +47453,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
     case SLEEP:
         l = va_arg(list, long);
         fmtprint(&fmt, "%ld", l);
-        break;
-    case _STAT:                 /* obsolete */
-    case _WSTAT:                    /* obsolete */
-        a = va_arg(list, char*);
-        fmtuserstring(&fmt, a, " ");
-        a = va_arg(list, char*);
-        fmtprint(&fmt, "%#p", a);
         break;
     case RFORK:
         i[0] = va_arg(list, int);
@@ -47681,7 +47480,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         break;
     case NOTIFY:
     case SEGDETACH:
-    case _WAIT:                 /* deprecated */
         v = va_arg(list, void*);
         fmtprint(&fmt, "%#p", v);
         break;
@@ -47752,7 +47550,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         a = va_arg(list, char*);
         fmtuserstring(&fmt, a, "");
         break;
-    case _READ:                 /* deprecated */
     case PREAD:
         i[0] = va_arg(list, int);
         v = va_arg(list, void*);
@@ -47763,7 +47560,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
             fmtprint(&fmt, " %lld", vl);
         }
         break;
-    case _WRITE:                    /* deprecated */
     case PWRITE:
         i[0] = va_arg(list, int);
         v = va_arg(list, void*);
@@ -47801,7 +47597,6 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
     switch(syscallno){
     default:
     case ALARM:
-    case _WRITE:
     case PWRITE:
         if(ret == -1)
             errstr = up->syserrstr;
@@ -47827,13 +47622,9 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
             errstr = up->syserrstr;
         }
         break;
-    case _ERRSTR:
     case ERRSTR:
         a = va_arg(list, char*);
-        if(syscallno == _ERRSTR)
-            l = 64;
-        else
-            l = va_arg(list, unsigned long);
+        l = va_arg(list, unsigned long);
         if(ret > 0){
             fmtuserstring(&fmt, a, " ");
             fmtprint(&fmt, "%lud = %ld", l, ret);
@@ -47857,7 +47648,6 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
             errstr = up->syserrstr;
         }
         break;
-    case _READ:
     case PREAD:
         i = va_arg(list, int);
         USED(i);
@@ -47889,8 +47679,7 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
 
 \ifallcode
 <<systab.c forward decl>>=
-extern Syscall sysr1;
-extern Syscall sys_errstr;
+extern Syscall sysnop;
 extern Syscall sysbind;
 extern Syscall syschdir;
 extern Syscall sysclose;
@@ -47898,25 +47687,17 @@ extern Syscall sysdup;
 extern Syscall sysalarm;
 extern Syscall sysexec;
 extern Syscall sysexits;
-extern Syscall sys_fsession;
 extern Syscall sysfauth;
-extern Syscall sys_fstat;
 extern Syscall syssegbrk;
-extern Syscall sys_mount;
 extern Syscall sysopen;
-extern Syscall sys_read;
 extern Syscall sysoseek;
 extern Syscall syssleep;
-extern Syscall sys_stat;
 extern Syscall sysrfork;
-extern Syscall sys_write;
 extern Syscall syspipe;
 extern Syscall syscreate;
 extern Syscall sysfd2path;
 extern Syscall sysbrk_;
 extern Syscall sysremove;
-extern Syscall sys_wstat;
-extern Syscall sys_fwstat;
 extern Syscall sysnotify;
 extern Syscall sysnoted;
 extern Syscall syssegattach;
@@ -47925,7 +47706,6 @@ extern Syscall syssegfree;
 extern Syscall syssegflush;
 extern Syscall sysrendezvous;
 extern Syscall sysunmount;
-extern Syscall sys_wait;
 extern Syscall syssemacquire;
 extern Syscall syssemrelease;
 extern Syscall sysseek;
@@ -47948,8 +47728,7 @@ extern Syscall sysdeath;
 \ifallcode
 <<global sysstab>>=
 char *sysctab[] = {
-    [SYSR1]     "Running",
-    [_ERRSTR]   "_errstr",
+    [NOP]     "Nop",
     [BIND]      "Bind",
     [CHDIR]     "Chdir",
     [CLOSE]     "Close",
@@ -47957,25 +47736,17 @@ char *sysctab[] = {
     [ALARM]     "Alarm",
     [EXEC]      "Exec",
     [EXITS]     "Exits",
-    [_FSESSION] "_fsession",
     [FAUTH]     "Fauth",
-    [_FSTAT]    "_fstat",
     [SEGBRK]    "Segbrk",
-    [_MOUNT]    "_mount",
     [OPEN]      "Open",
-    [_READ]     "_read",
     [OSEEK]     "Oseek",
     [SLEEP]     "Sleep",
-    [_STAT]     "_stat",
     [RFORK]     "Rfork",
-    [_WRITE]    "_write",
     [PIPE]      "Pipe",
     [CREATE]    "Create",
     [FD2PATH]   "Fd2path",
     [BRK_]      "Brk",
     [REMOVE]    "Remove",
-    [_WSTAT]    "_wstat",
-    [_FWSTAT]   "_fwstat",
     [NOTIFY]    "Notify",
     [NOTED]     "Noted",
     [SEGATTACH] "Segattach",
@@ -47984,7 +47755,6 @@ char *sysctab[] = {
     [SEGFLUSH]  "Segflush",
     [RENDEZVOUS]    "Rendez",
     [UNMOUNT]   "Unmount",
-    [_WAIT]     "_wait",
     [SEMACQUIRE]    "Semacquire",
     [SEMRELEASE]    "Semrelease",
     [SEEK]      "Seek",
