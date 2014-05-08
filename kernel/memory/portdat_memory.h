@@ -171,7 +171,6 @@ struct Segment
     // extra
     Ref;
     QLock lk;
-    Lock  semalock;
     Sema  sema;
 };
 
