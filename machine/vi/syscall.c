@@ -28,7 +28,6 @@ char *sysctab[]={
 	[FAUTH]		"Fauth",
 	[_FSTAT]	"_fstat",
 	[SEGBRK]	"Segbrk",
-	[_MOUNT]	"_Mount",
 	[OPEN]		"Open",
 	[_READ]		"_Read",
 	[OSEEK]		"Oseek",
@@ -633,7 +632,6 @@ void sysunmount(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGR
 void sysfork(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 void sysforkpgrp(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 void syssegbrk(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
-void _sysmount(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 void sysalarm(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 void sysexec(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
 void sysmount(void) { Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGRET]]); exits(0);}
@@ -651,7 +649,6 @@ void (*systab[])(void)	={
 	[FAUTH]		sysfauth,
 	[_FSTAT]	sys_fstat,
 	[SEGBRK]	syssegbrk,
-	[_MOUNT]	_sysmount,
 	[OPEN]		sysopen,
 	[_READ]		sys_read,
 	[OSEEK]		sysoseek,

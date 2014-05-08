@@ -145,16 +145,6 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         v = va_arg(list, void*);
         fmtprint(&fmt, "%#p", v);
         break;
-    case _MOUNT:                    /* deprecated */
-        i[0] = va_arg(list, int);
-        fmtprint(&fmt, "%d ", i[0]);
-        a = va_arg(list, char*);
-        fmtuserstring(&fmt, a, " ");
-        i[0] = va_arg(list, int);
-        fmtprint(&fmt, "%#ux ", i[0]);
-        a = va_arg(list, char*);
-        fmtuserstring(&fmt, a, "");
-        break;
     case OPEN:
         a = va_arg(list, char*);
         fmtuserstring(&fmt, a, " ");

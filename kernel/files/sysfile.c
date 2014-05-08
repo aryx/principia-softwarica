@@ -973,12 +973,6 @@ sysmount(ulong *arg)
 }
 
 long
-sys_mount(ulong *arg)
-{
-    return bindmount(1, arg[0], -1, nil, (char*)arg[1], arg[2], (char*)arg[3]);
-}
-
-long
 sysunmount(ulong *arg)
 {
     Chan *cmount, *cmounted;

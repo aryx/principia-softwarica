@@ -9,7 +9,6 @@
 #define	FAUTH		10
 #define	_FSTAT		11
 #define	SEGBRK		12
-#define	_MOUNT		13
 #define	OPEN		14
 #define	_READ		15
 #define	OSEEK		16
