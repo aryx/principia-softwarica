@@ -34,6 +34,7 @@ static int n;
 #endif
 /*e: globals lockcycles */
 
+/*s: function inccnt */
 // See also ref.c incref() and decref(), but we can't use them here as they
 // themselves rely on lock() and unlock(). 
 static void
@@ -41,7 +42,9 @@ inccnt(Ref *r)
 {
     _xinc(&r->ref);
 }
+/*e: function inccnt */
 
+/*s: function deccnt */
 static int
 deccnt(Ref *r)
 {
@@ -52,7 +55,9 @@ deccnt(Ref *r)
         panic("deccnt pc=%#p", getcallerpc(&r));
     return x;
 }
+/*e: function deccnt */
 
+/*s: function lockloop */
 void
 lockloop(Lock *l, ulong pc)
 {
@@ -65,7 +70,9 @@ lockloop(Lock *l, ulong pc)
     if(p != nil)
         dumpaproc(p);
 }
+/*e: function lockloop */
 
+/*s: function lock */
 int
 lock(Lock *l)
 {
@@ -82,11 +89,14 @@ lock(Lock *l)
             up->lastlock = l;
         l->pc = pc;
         l->p = up;
-        l->isilock = 0;
-                //TODO: not setting l->m = ??
+        l->isilock = false;
+        //TODO: not setting l->m = ??
+/*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
         l->lockcycles = -lcycles();
 #endif
+/*e: lock ifdef LOCKCYCLES */
+
         return 0;
     }
     if(up)
@@ -118,17 +128,21 @@ lock(Lock *l)
                 up->lastlock = l;
             l->pc = pc;
             l->p = up;
-            l->isilock = 0;
+            l->isilock = false;
+/*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
-            l->lockcycles = -lcycles();
+        l->lockcycles = -lcycles();
 #endif
+/*e: lock ifdef LOCKCYCLES */
             return 1;
         }
         if(up)
             deccnt(&up->nlocks);
     }
 }
+/*e: function lock */
 
+/*s: function ilock */
 // To provide mutual exclusion with interrupt code and avoiding deadlock.
 // By using splhi() we disable interrupts while running the critical region
 // code.
@@ -166,14 +180,18 @@ acquire:
     l->sr = x;
     l->pc = pc;
     l->p = up;
-    l->isilock = 1;
+    l->isilock = true;
         //TODO: why not just l->m = m? 
     l->m = MACHP(m->machno);
+/*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
-    l->lockcycles = -lcycles();
+        l->lockcycles = -lcycles();
 #endif
+/*e: lock ifdef LOCKCYCLES */
 }
+/*e: function ilock */
 
+/*s: function canlock */
 int
 canlock(Lock *l)
 {
@@ -190,16 +208,21 @@ canlock(Lock *l)
     l->pc = getcallerpc(&l);
     l->p = up;
     l->m = MACHP(m->machno);
-    l->isilock = 0;
+    l->isilock = false;
+/*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
-    l->lockcycles = -lcycles();
+        l->lockcycles = -lcycles();
 #endif
+/*e: lock ifdef LOCKCYCLES */
     return 1;
 }
+/*e: function canlock */
 
+/*s: function unlock */
 void
 unlock(Lock *l)
 {
+/*s: unlock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
     l->lockcycles += lcycles();
     cumlockcycles += l->lockcycles;
@@ -208,6 +231,8 @@ unlock(Lock *l)
         maxlockpc = l->pc;
     }
 #endif
+/*e: unlock ifdef LOCKCYCLES */
+
     if(l->key == 0)
         print("unlock: not locked: pc %#p\n", getcallerpc(&l));
     if(l->isilock)
@@ -229,13 +254,15 @@ unlock(Lock *l)
         sched();
     }
 }
+/*e: function unlock */
 
-
+/*s: function iunlock */
 void
 iunlock(Lock *l)
 {
     ulong sr;
 
+/*s: iunlock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
     l->lockcycles += lcycles();
     cumilockcycles += l->lockcycles;
@@ -246,6 +273,7 @@ iunlock(Lock *l)
     if(l->lockcycles > 2400)
         ilockpcs[n++ & 0xff]  = l->pc;
 #endif
+/*e: iunlock ifdef LOCKCYCLES */
     if(l->key == 0)
         print("iunlock: not locked: pc %#p\n", getcallerpc(&l));
     if(!l->isilock)
@@ -262,5 +290,6 @@ iunlock(Lock *l)
         up->lastilock = nil;
     splx(sr);
 }
+/*e: function iunlock */
 
 /*e: taslock.c */

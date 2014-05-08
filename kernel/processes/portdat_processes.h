@@ -14,23 +14,30 @@
 //--------------------------------------------------------------------
 
 // TODO: state transition diagram
+/*s: enum procstate */
+/* Process states, Proc.state */
 enum procstate
 {
-    /* Process states, Proc.state */
     Dead = 0,
+    Running,
+    /*s: enum procstate cases */
+    Queueing, // see qlock()
+    /*x: enum procstate cases */
+    QueueingR, // see rlock()
+    /*x: enum procstate cases */
+    QueueingW, // see wlock()
+    /*x: enum procstate cases */
     Moribund,
     Ready,
     Scheding,
-    Running,
-    Queueing, // see lock()
-    QueueingR, // see rlock()
-    QueueingW, // see wlock ()
     Wakeme,
     Broken,
     Stopped,
     Rendezvous,
     Waitrelease,
+    /*e: enum procstate cases */
 };
+/*e: enum procstate */
 
 // hash<enum<procstate>, string>, to debug
 extern  char* statename[];
@@ -355,6 +362,7 @@ struct Proc
 
     // enum<procstate>
     int state; // Dead, Queuing, etc,
+    /*x: Proc state fields */
     bool insyscall;
     char  *psstate; /* What /proc/#/status reports */
 
@@ -516,6 +524,16 @@ struct Proc
 // Other
 //--------------------------------------------------------------------
     /*s: Proc other fields */
+    // ...
+    /*x: Proc other fields */
+    Lock* lastlock;
+    // As long as the current process hold locks (to kernel data structures),
+    // we will not schedule another process in unlock(); only the last unlock
+    // will eventually cause a rescheduling.
+    Ref nlocks;   /* number of locks held by proc */
+    /*x: Proc other fields */
+    Lock  *lastilock; /* debugging */
+    /*x: Proc other fields */
     Fgrp  *closingfgrp; /* used during teardown */
 
 
@@ -538,16 +556,10 @@ struct Proc
 
 
     Lock  *lockwait;
-    Lock  *lastlock;  /* debugging */
-    Lock  *lastilock; /* debugging */
 
     Mach  *wired;
     Mach  *mp;    /* machine this process last ran on */
 
-    // As long as the current process hold locks (to kernel data structures),
-    // we will not schedule another process in unlock(); only the last unlock
-    // will eventually cause a rescheduling.
-    Ref nlocks;   /* number of locks held by proc */
 
     bool trace;    /* process being traced? */
 
@@ -575,6 +587,7 @@ struct Proc
     Proc  *qnext;   /* next process on queue for a QLock */
     // option<ref<Qlock>> ??
     QLock *qlock;   /* addr of qlock being queued for DEBUG */
+    /*x: Proc extra fields */
 
     // list<ref<Proc>> ?? Schedq.head chain?
     Proc  *rnext;   /* next process in run queue */

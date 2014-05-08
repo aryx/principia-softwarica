@@ -21,6 +21,7 @@ struct QlockStats {
 struct QlockStats rwstats;
 /*e: global rwstats */
 
+/*s: function qlock */
 void
 qlock(QLock *q)
 {
@@ -57,7 +58,9 @@ qlock(QLock *q)
     sched();
     q->qpc = getcallerpc(&q);
 }
+/*e: function qlock */
 
+/*s: function canqlock */
 int
 canqlock(QLock *q)
 {
@@ -72,7 +75,9 @@ canqlock(QLock *q)
     unlock(&q->use);
     return 1;
 }
+/*e: function canqlock */
 
+/*s: function qunlock */
 void
 qunlock(QLock *q)
 {
@@ -95,7 +100,9 @@ qunlock(QLock *q)
     q->qpc = 0;
     unlock(&q->use);
 }
+/*e: function qunlock */
 
+/*s: function rlock */
 void
 rlock(RWlock *q)
 {
@@ -124,7 +131,9 @@ rlock(RWlock *q)
     unlock(&q->use);
     sched();
 }
+/*e: function rlock */
 
+/*s: function runlock */
 void
 runlock(RWlock *q)
 {
@@ -147,7 +156,9 @@ runlock(RWlock *q)
     unlock(&q->use);
     ready(p);
 }
+/*e: function runlock */
 
+/*s: function wlock */
 void
 wlock(RWlock *q)
 {
@@ -179,7 +190,9 @@ wlock(RWlock *q)
     unlock(&q->use);
     sched();
 }
+/*e: function wlock */
 
+/*s: function wunlock */
 void
 wunlock(RWlock *q)
 {
@@ -217,7 +230,9 @@ wunlock(RWlock *q)
     q->writer = 0;
     unlock(&q->use);
 }
+/*e: function wunlock */
 
+/*s: function canrlock */
 /* same as rlock but punts if there are any writers waiting */
 int
 canrlock(RWlock *q)
@@ -233,4 +248,5 @@ canrlock(RWlock *q)
     unlock(&q->use);
     return 0;
 }
+/*e: function canrlock */
 /*e: qlock.c */

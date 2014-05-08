@@ -10,6 +10,7 @@
 
 // was in chan.c
 // see also _incnt and _deccnt in tasklock.c
+/*s: function incref */
 long
 incref(Ref *r)
 {
@@ -20,7 +21,9 @@ incref(Ref *r)
     unlock(r);
     return x;
 }
+/*e: function incref */
 
+/*s: function decref */
 long
 decref(Ref *r)
 {
@@ -34,4 +37,5 @@ decref(Ref *r)
 
     return x;
 }
+/*e: function decref */
 /*e: ref.c */

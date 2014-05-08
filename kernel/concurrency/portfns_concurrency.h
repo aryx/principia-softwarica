@@ -24,7 +24,7 @@ void    wunlock(RWlock*);
 
 // in 386/l.s (but used in port)
 //@Scheck: Assembly
-int   islo(void);
+bool   islo(void);
 //@Scheck: Assembly
 int   splhi(void);
 //@Scheck: Assembly

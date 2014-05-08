@@ -102,7 +102,9 @@ struct Mach
     // ref<Proc>
     Proc* proc;     /* current process on this processor */
 
-    /*s: Mach extra fields */
+    /*s: Mach other fields */
+    int ilockdepth;
+    /*x: Mach other fields */
     ulong ticks;      /* of the clock since boot time */
     Label sched;      /* scheduler wakeup */
     Lock  alarmlock;    /* access to alarm list */
@@ -124,13 +126,12 @@ struct Mach
 
     ulong spuriousintr;
     int lastintr;
-    int ilockdepth;
     Perf  perf;     /* performance counters */
 
     int cpumhz;
     uvlong  cpuhz;
     uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
-    /*e: Mach extra fields */
+    /*e: Mach other fields */
 
     struct ArchMach;
   
