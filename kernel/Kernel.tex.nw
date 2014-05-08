@@ -14,7 +14,8 @@
 
 %thx to LP, changed for the better a few things :)
 % - introduced syssema.c (found while going through Kernel_extra.tex.nw)
-% - removed deadcode (e.g. field Proc.qlock)
+% - removed deadcode (e.g. field Proc.qlock, semalock)
+% - moved code in init/user such as preboot vs boot vs init
 
 %thx to codemap/codegraph:
 % - see pad.txt#reorganization section
@@ -93,10 +94,10 @@ Yoann Padioleau\\
 \hrule
 \begin{quote}
     Copyright \copyright{} 2014 Yoann Padioleau \\
-    Permission is granted to copy, distribute and/or modify this document
-    under the terms of the GNU Free Documentation License, Version 1.3.
+    Permission is granted to copy, distribute and/or modify this document,
+    except all the source code it contains, under the terms of the GNU Free
+    Documentation License, Version 1.3.
 \end{quote}
-% hmmm what about the code part?
 \hrule
 
 \iffinal
@@ -195,12 +196,16 @@ virtual memory, critical regions, interrupts, system calls, etc.
 #include "About.tex.nw"
 
 \section{Copyright}
-% most of this document is actually code from Plan9, so plan9 copyright.
+
+Most of this document is actually source code from Plan9, so
+those parts are copyright by Lucent Technologies Inc.
+The prose is mine and is licensed under the GNU Free Documentation
+License.
 
 \section{Acknowledgments}
 
 I would like to acknowledge of course Plan9's authors who wrote
-most of this book: Ken Thompson, Rob Pile, Dave Presotto, Phil
+most of this book: Ken Thompson, Rob Pike, Dave Presotto, Phil
 Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 Thanks also to Federic Balesteros who wrote a lengthy note about
@@ -238,8 +243,97 @@ for himself
  - file managment, =~ filesystem
 \end{verbatim}
 
-%the syscalls, grouped in different sections
-% process, memory, IO, fs, etc
+<<sys.h>>=
+#define	NOP		0
+
+<<sys.h process syscalls>>
+
+<<sys.h file syscalls>>
+
+<<sys.h special file syscalls>>
+
+<<sys.h namespace syscalls>>
+
+<<sys.h concurrency syscalls>>
+
+<<sys.h note syscalls>>
+
+<<sys.h memory syscalls>>
+
+<<sys.h security syscalls>>
+
+#define	ERRSTR		40
+@ 
+
+<<sys.h process syscalls>>=
+#define	RFORK		1
+#define	EXEC		2
+#define	EXITS		3
+#define	SLEEP		4
+#define	ALARM		5
+@
+
+<<sys.h file syscalls>>=
+#define	CREATE		6
+#define	REMOVE		7
+#define	OPEN		8
+#define	CLOSE		9
+#define	PREAD		10
+#define	PWRITE		11
+#define	SEEK		12
+#define	OSEEK		13
+#define	STAT		14
+#define	FSTAT		15
+#define	WSTAT		16
+#define	FWSTAT		17
+@
+
+
+<<sys.h special file syscalls>>=
+#define	CHDIR		18
+#define	FD2PATH		19
+#define	DUP		    20
+#define	PIPE		21
+@
+
+
+<<sys.h namespace syscalls>>=
+#define	BIND		22
+#define	MOUNT		23
+#define	UNMOUNT		24
+@
+
+
+<<sys.h concurrency syscalls>>=
+#define	AWAIT		25
+#define	RENDEZVOUS	26
+#define	SEMACQUIRE	27
+#define	SEMRELEASE	28
+#define	TSEMACQUIRE	29
+@
+
+
+<<sys.h note syscalls>>=
+#define	NOTIFY		30
+#define	NOTED		31
+@
+
+
+<<sys.h memory syscalls>>=
+#define	BRK_		32
+
+#define	SEGATTACH	33
+#define	SEGDETACH	34
+#define	SEGFREE		35
+#define	SEGFLUSH	36
+#define	SEGBRK		37
+@
+
+
+<<sys.h security syscalls>>=
+#define	FVERSION	38
+#define	FAUTH		39
+@
 
 \section{Plan9}
 %plan9 specifics vs general os principles, e.g. namespace so have
@@ -313,22 +407,23 @@ for himself
 #include "dat_buses.h"
 #include "../port/portdat_buses.h"
 
+// defines consdevtab 
 #include "../port/portdat_console.h"
-
-#include "../port/portdat.h"
 
 <<constant AOUT_MAGIC>>
 
 <<enum misc_dat>>
+
+// could be put in lib.h
+<<portdat.h macros>>
+
+// convenient constants
+<<enum miscsize_portdat>>
+
+<<portdat.h pragmas>>
 @
 
 <<fns.h>>=
-#include "../port/portfns.h"
-
-<<fns.h declarations>>
-@
-
-<<portfns.h>>=
 #include "../port/portfns_core.h"
 #include "../port/portfns_concurrency.h"
 #include "../port/portfns_memory.h"
@@ -341,7 +436,10 @@ for himself
 #include "../port/portfns_security.h"
 #include "../port/portfns_network.h"
 #include "../port/portfns_init.h"
+
+<<fns.h declarations>>
 @
+
 
 \section{Booting overview}
 % kernel that creates first user process!
@@ -391,7 +489,9 @@ for himself
 % use an enum instead in sys.h? but then the script that generates
 %  the .s in libc/ will be more complicated
 
-% show sys.h excerpt, and then example of generated assembly code
+
+
+% show example of generated assembly code
 % maybe can even show an example where abuse sysnop so can see things :)
 
 <<typedef Syscall>>=
@@ -456,8 +556,6 @@ Syscall *systab[] = {
 };
 int nsyscall = nelem(systab);
 @
-
-% TODO: show the symetric, libc code, sys.h, some simple assembly
 
 \chapter{Core Data Structures}
 
@@ -639,10 +737,6 @@ struct Proc
 //--------------------------------------------------------------------
     <<Proc extra fields>>
 };
-@ 
-
-<<Proc other fields>>=
-// ...
 @ 
 
 <<Proc state fields>>=
@@ -1493,9 +1587,10 @@ _xdeclt:
 % see sleep.ps in plan9 documents
 
 \section{Rendez-vous}
+% sleep/wakeup?
 
 \section{Semaphore}
-
+% those are actually used for user-level locks, see libcore/libc/port/lock.c
 
 
 \chapter{Memory}
@@ -1516,7 +1611,9 @@ _xdeclt:
 
 \section{[[Page]]}
 
-\section{Segments}
+\section{[[Segment]]}
+
+\section{Swapping}
 
 \section{Syscalls}
 
@@ -1670,6 +1767,145 @@ _xdeclt:
 \chapter{Userspace System Programs}
 
 \section{[[boot]]}
+
+<<boot.c>>=
+#include <u.h>
+#include <libc.h>
+#include "../boot/boot.h"
+
+/*
+ * we should inherit the standard fds all referring to /dev/cons,
+ * but we're being paranoid.
+ */
+static void
+opencons(void)
+{
+  close(0);
+  close(1);
+  close(2);
+  open("/dev/cons", OREAD);
+  open("/dev/cons", OWRITE);
+  open("/dev/cons", OWRITE);
+}
+
+/*
+ * init will reinitialize its namespace.
+ * #ec gets us plan9.ini settings (*var variables).
+ */
+static void
+bindenvsrv(void)
+{
+  bind("#ec", "/env", MREPL);
+  bind("#e", "/env", MBEFORE|MCREATE);
+  bind("#s", "/srv/", MREPL|MCREATE);
+}
+
+static void
+swapproc(void)
+{
+    int fd;
+
+    fd = open("#c/swap", OWRITE);
+    if(fd < 0){
+        warning("opening #c/swap");
+        return;
+    }
+    if(write(fd, "start", 5) <= 0)
+        warning("starting swap kproc");
+    close(fd);
+}
+
+static void
+execinit(void)
+{
+  int fd;
+
+  bind_safe("#p", "/proc", MREPL); //devproc
+  // used by rc and many programs, e.g. via open("#d/0")
+  bind_safe("#d", "/fd", MREPL); //devdup
+
+  bind_safe("/root", "/", MAFTER|MCREATE);
+  bind_safe("/386/bin", "/bin", MREPL);
+  bind_safe("/rc/bin", "/bin", MAFTER);
+
+  bind_safe("#v", "/dev", MAFTER); //devvga
+  bind_safe("#m", "/dev", MAFTER); //devmouse
+  bind_safe("#P", "/dev", MAFTER);
+
+  run("/bin/mouse", "ps2", nil);
+  //this just need a regular vga driver
+  //run("/bin/vga", "-l", "640x480x8", nil);
+  //this need special drivers, such as the clgd424x.c in the kernel
+  run("/bin/vga", "-l", "1024x768x8", nil);
+  bind_safe("#i", "/dev", MAFTER);
+
+  // for rio
+  run("/bin/ramfs", "-m", "/mnt", nil);
+  run("/bin/mkdir", "/mnt/temp", nil); // see thread(2), used to create pipes
+  run("/bin/mkdir", "/mnt/wsys", nil);
+  fd = open_safe("#c/hostowner", OWRITE);
+  print_safe(fd, "pad");
+  close(fd);
+
+  // network
+  bind_safe("#I", "/net", MREPL);
+  bind_safe("#l0", "/net", MAFTER);
+
+  run("/bin/rc", nil);
+}
+
+
+// called from boot$CONF.c:main()
+void
+boot(int argc, char *argv[])
+{
+  USED(argc);
+  USED(argv);
+
+  fmtinstall('r', errfmt);
+
+  //At this point we should have #/ and #c setup by the kernel init0
+
+  opencons();
+  bindenvsrv();
+
+  print("booooooooting...\n");
+
+  rfork(RFNAMEG);
+
+  connectlocal();
+
+  swapproc();
+  execinit();
+
+  exits("failed to exec init");
+}
+@
+
+<<local.c>>=
+#include <u.h>
+#include <libc.h>
+#include "../boot/boot.h"
+
+int
+connectlocal(void)
+{
+  int fd;
+  
+  bind_safe("#S", "/dev", MAFTER);
+
+  fd = open_safe("/dev/sdC0/ctl", ORDWR);
+  //TODO: use fdisk -p /dev/sdC1/data > /dev/sdC1/ctl
+  //for sdC0: #prep -p /dev/sdC1/plan9 > /dev/sdC1/ctl
+  print_safe(fd, "part dos 1 1000063");
+  close_safe(fd);
+
+  run("/boot/dossrv", nil);
+  run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC0/dos", nil);
+  
+  return 0;
+}
+@
 
 \section{[[init]]}
 % user init, != kernel init

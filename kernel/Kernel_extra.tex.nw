@@ -8479,16 +8479,6 @@ enum miscsize_portdat
 #define PGROUND(s)  ROUNDUP(s, BY2PG)
 @
 
-<<portdat.h>>=
-
-// could be put in lib.h
-<<portdat.h macros>>
-
-// convenient constants
-<<enum miscsize_portdat>>
-
-<<portdat.h pragmas>>
-@
 
 %/*
 % * For multi-bit fields use FIELD(v, o, w) where 'v' is the value
@@ -28837,8 +28827,70 @@ Dev fsdevtab = {
 
 \section{[[init/]]}
 
-\subsection*{[[boot/aux.c]]}
+\subsection*{[[init/user/preboot/386/init9.c]]}
 
+<<init9.c>>=
+//@Scheck: def can actually be found initcode.c, but this file is in skip list
+extern void startboot(char*, char**);
+
+//@Scheck: TODO who calls that??
+void
+_main(char *argv0)
+{
+    startboot(argv0, &argv0);
+}
+@
+% see also initcode_dead.s
+
+\subsection*{[[init/user/preboot/initcode.c]]}
+
+<<initcode.c>>=
+/*
+ * IMPORTANT!  DO NOT ADD LIBRARY CALLS TO THIS FILE.
+ * The entire text image must fit on one page
+ * (and there's no data segment, so any read/write data must be on the stack).
+ */
+
+#include <u.h>
+#include <libc.h>
+
+char cons[] = "#c/cons";
+char boot[] = "/boot/boot";
+char dev[] = "/dev";
+char c[] = "#c";
+char e[] = "#e";
+char ec[] = "#ec";
+char s[] = "#s";
+char srv[] = "/srv";
+char env[] = "/env";
+
+void
+startboot(char *argv0, char **argv)
+{
+    char buf[200];  /* keep this fairly large to capture error details */
+
+    /* in case boot is a shell script */
+    open(cons, OREAD);
+    open(cons, OWRITE);
+    open(cons, OWRITE);
+    bind(c, dev, MAFTER);
+    bind(ec, env, MAFTER);
+    bind(e, env, MCREATE|MAFTER);
+    bind(s, srv, MREPL|MCREATE);
+
+    USED(argv0);
+    exec(boot, argv);
+
+    rerrstr(buf, sizeof buf);
+    buf[sizeof buf - 1] = '\0';
+    _exits(buf);
+}
+@
+
+\subsection*{[[init/user/boot/aux.c]]}
+
+% only run and runv are maybe slightly interesting
+\ifallcode
 <<aux.c>>=
 #include <u.h>
 #include <libc.h>
@@ -28920,126 +28972,11 @@ void close_safe(int fd) {
   }
 }
 @
+\fi
 
+\subsection*{[[init/user/boot/boot.c]]}
 
-\subsection*{[[boot/boot.c]]}
-
-<<boot.c>>=
-#include <u.h>
-#include <libc.h>
-#include "../boot/boot.h"
-
-/*
- * we should inherit the standard fds all referring to /dev/cons,
- * but we're being paranoid.
- */
-static void
-opencons(void)
-{
-  close(0);
-  close(1);
-  close(2);
-  open("/dev/cons", OREAD);
-  open("/dev/cons", OWRITE);
-  open("/dev/cons", OWRITE);
-}
-
-/*
- * init will reinitialize its namespace.
- * #ec gets us plan9.ini settings (*var variables).
- */
-static void
-bindenvsrv(void)
-{
-  bind("#ec", "/env", MREPL);
-  bind("#e", "/env", MBEFORE|MCREATE);
-  bind("#s", "/srv/", MREPL|MCREATE);
-}
-
-static void
-swapproc(void)
-{
-    int fd;
-
-    fd = open("#c/swap", OWRITE);
-    if(fd < 0){
-        warning("opening #c/swap");
-        return;
-    }
-    if(write(fd, "start", 5) <= 0)
-        warning("starting swap kproc");
-    close(fd);
-}
-
-static void
-execinit(void)
-{
-  int fd;
-
-  bind_safe("#p", "/proc", MREPL); //devproc
-  // used by rc and many programs, e.g. via open("#d/0")
-  bind_safe("#d", "/fd", MREPL); //devdup
-
-  bind_safe("/root", "/", MAFTER|MCREATE);
-  bind_safe("/386/bin", "/bin", MREPL);
-  bind_safe("/rc/bin", "/bin", MAFTER);
-
-  bind_safe("#v", "/dev", MAFTER); //devvga
-  bind_safe("#m", "/dev", MAFTER); //devmouse
-  bind_safe("#P", "/dev", MAFTER);
-
-  run("/bin/mouse", "ps2", nil);
-  //this just need a regular vga driver
-  //run("/bin/vga", "-l", "640x480x8", nil);
-  //this need special drivers, such as the clgd424x.c in the kernel
-  run("/bin/vga", "-l", "1024x768x8", nil);
-  bind_safe("#i", "/dev", MAFTER);
-
-  // for rio
-  run("/bin/ramfs", "-m", "/mnt", nil);
-  run("/bin/mkdir", "/mnt/temp", nil); // see thread(2), used to create pipes
-  run("/bin/mkdir", "/mnt/wsys", nil);
-  fd = open_safe("#c/hostowner", OWRITE);
-  print_safe(fd, "pad");
-  close(fd);
-
-  // network
-  bind_safe("#I", "/net", MREPL);
-  bind_safe("#l0", "/net", MAFTER);
-
-  run("/bin/rc", nil);
-}
-
-
-// called from boot$CONF.c:main()
-void
-boot(int argc, char *argv[])
-{
-  USED(argc);
-  USED(argv);
-
-  fmtinstall('r', errfmt);
-
-  //At this point we should have #/ and #c setup by the kernel init0
-
-  opencons();
-  bindenvsrv();
-
-  print("booooooooting...\n");
-
-  rfork(RFNAMEG);
-
-  connectlocal();
-
-  swapproc();
-  execinit();
-
-  exits("failed to exec init");
-}
-@
-
-
-\subsection*{[[boot/boot.h]]}
+\subsection*{[[init/user/boot/boot.h]]}
 
 \ifallcode
 <<boot.h>>=
@@ -29084,38 +29021,14 @@ extern void boot(int, char **);
 
 
 
-\subsection*{[[boot/local.c]]}
-
-<<local.c>>=
-#include <u.h>
-#include <libc.h>
-#include "../boot/boot.h"
-
-int
-connectlocal(void)
-{
-  int fd;
-  
-  bind_safe("#S", "/dev", MAFTER);
-
-  fd = open_safe("/dev/sdC0/ctl", ORDWR);
-  //TODO: use fdisk -p /dev/sdC1/data > /dev/sdC1/ctl
-  //for sdC0: #prep -p /dev/sdC1/plan9 > /dev/sdC1/ctl
-  print_safe(fd, "part dos 1 1000063");
-  close_safe(fd);
-
-  run("/boot/dossrv", nil);
-  run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC0/dos", nil);
-  
-  return 0;
-}
-@
+\subsection*{[[init/user/boot/local.c]]}
 
 %//void
 %//configlocal(Method *mp)
 %//{
 %//  USED(mp);
 %//}
+
 
 
 \subsection*{[[init/386/apbootstrap.s]]}
@@ -29234,20 +29147,6 @@ TEXT gdtptr(SB), $0
         LONG    $gdt-KZERO(SB)
 @
 
-
-\subsection*{[[init/user/preboot/386/init9.c]]}
-
-<<init9.c>>=
-//@Scheck: def can actually be found initcode.c, but this file is in skip list
-extern void startboot(char*, char**);
-
-//@Scheck: TODO who calls that??
-void
-_main(char *argv0)
-{
-    startboot(argv0, &argv0);
-}
-@
 
 
 \subsection*{[[init/386/l.s]]}
@@ -30934,50 +30833,6 @@ _startkernel:
 @
 
 
-\subsection*{[[init/user/preboot/initcode.c]]}
-
-<<initcode.c>>=
-/*
- * IMPORTANT!  DO NOT ADD LIBRARY CALLS TO THIS FILE.
- * The entire text image must fit on one page
- * (and there's no data segment, so any read/write data must be on the stack).
- */
-
-#include <u.h>
-#include <libc.h>
-
-char cons[] = "#c/cons";
-char boot[] = "/boot/boot";
-char dev[] = "/dev";
-char c[] = "#c";
-char e[] = "#e";
-char ec[] = "#ec";
-char s[] = "#s";
-char srv[] = "/srv";
-char env[] = "/env";
-
-void
-startboot(char *argv0, char **argv)
-{
-    char buf[200];  /* keep this fairly large to capture error details */
-
-    /* in case boot is a shell script */
-    open(cons, OREAD);
-    open(cons, OWRITE);
-    open(cons, OWRITE);
-    bind(c, dev, MAFTER);
-    bind(ec, env, MAFTER);
-    bind(e, env, MCREATE|MAFTER);
-    bind(s, srv, MREPL|MCREATE);
-
-    USED(argv0);
-    exec(boot, argv);
-
-    rerrstr(buf, sizeof buf);
-    buf[sizeof buf - 1] = '\0';
-    _exits(buf);
-}
-@
 
 
 \subsection*{[[init/portfns_init.h]]}
