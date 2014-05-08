@@ -100,7 +100,8 @@ struct Rendez
 /*e: struct Rendez */
 
 /*s: struct Sema */
-// user level semaphores
+// user level semaphores, used to implement user-level lock, 
+// see libc/port/lock.c
 struct Sema
 {
     long  *addr; // value stored in user space!
