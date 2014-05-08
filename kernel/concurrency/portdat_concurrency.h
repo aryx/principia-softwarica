@@ -4,7 +4,7 @@
 // Mutual exclusion
 //*****************************************************************************
 
-// tas < Lock < QLock|RWLock|Ref
+// tas < Lock < QLock|RWLock
 
 // used to be in 386/ but the fields were used from port/ so must be portable!
 /*s: struct Lock */
@@ -71,6 +71,10 @@ struct RWlock
 };
 /*e: struct RWlock */
 
+//*****************************************************************************
+// Atomicity
+//*****************************************************************************
+
 /*s: struct Ref */
 // For reference counting shared things (e.g. a Page)
 struct Ref
@@ -96,14 +100,16 @@ struct Rendez
 /*e: struct Rendez */
 
 /*s: struct Sema */
+// user level semaphores
 struct Sema
 {
     long  *addr; // value stored in user space!
     int waiting;
   
-    //list<Sema> of ??
+    //list<Sema> of Segment.sema
     Sema  *next;
     Sema  *prev;
+
     Rendez;
 };
 /*e: struct Sema */

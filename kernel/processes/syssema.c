@@ -169,7 +169,7 @@ semawoke(void *p)
 
 /* Acquire semaphore (subtract 1). */
 static int
-semacquire(Segment *s, long *addr, int block)
+semacquire(Segment *s, long *addr, bool block)
 {
     int acquired;
     Sema phore;
