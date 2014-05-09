@@ -14,10 +14,8 @@
 //*****************************************************************************
 
 /*s: global runq */
-// hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
-extern Schedq   runq[Nrq];
-/*x: global runq */
 // The run queue!!
+// hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
 Schedq  runq[Nrq];
 /*e: global runq */
 /*s: global runveq */

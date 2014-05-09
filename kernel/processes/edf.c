@@ -11,13 +11,7 @@
 
 #include    <trace.h>
 
-/*s: global runq */
-// hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
 extern Schedq   runq[Nrq];
-/*x: global runq */
-// The run queue!!
-Schedq  runq[Nrq];
-/*e: global runq */
 
 // used to be in edf.h
 //unused: extern Lock edftestlock;  /* for atomic admitting/expelling */
