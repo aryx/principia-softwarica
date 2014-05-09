@@ -12,6 +12,7 @@
  * The sys*() routines needn't poperror() as they return directly to syscall().
  */
 
+/*s: function unlockfgrp */
 static void
 unlockfgrp(Fgrp *f)
 {
@@ -23,7 +24,9 @@ unlockfgrp(Fgrp *f)
     if(ex)
         pprint("warning: process exceeds %d file descriptors\n", ex);
 }
+/*e: function unlockfgrp */
 
+/*s: function growfd */
 int
 growfd(Fgrp *f, int fd) /* fd is always >= 0 */
 {
@@ -56,7 +59,9 @@ growfd(Fgrp *f, int fd) /* fd is always >= 0 */
     }
     return 1;
 }
+/*e: function growfd */
 
+/*s: function findfreefd */
 /*
  *  this assumes that the fgrp is locked
  */
@@ -72,7 +77,9 @@ findfreefd(Fgrp *f, int start)
         return -1;
     return fd;
 }
+/*e: function findfreefd */
 
+/*s: function newfd */
 int
 newfd(Chan *c)
 {
@@ -92,7 +99,9 @@ newfd(Chan *c)
     unlockfgrp(f);
     return fd;
 }
+/*e: function newfd */
 
+/*s: function newfd2 */
 int
 newfd2(int fd[2], Chan *c[2])
 {
@@ -118,9 +127,10 @@ newfd2(int fd[2], Chan *c[2])
 
     return 0;
 }
+/*e: function newfd2 */
 
 
-
+/*s: syscall fd2path */
 long
 sysfd2path(ulong *arg)
 {
@@ -133,7 +143,9 @@ sysfd2path(ulong *arg)
     cclose(c);
     return 0;
 }
+/*e: syscall fd2path */
 
+/*s: syscall pipe */
 long
 syspipe(ulong *arg)
 {
@@ -171,7 +183,9 @@ syspipe(ulong *arg)
     ((long*)arg[0])[1] = fd[1];
     return 0;
 }
+/*e: syscall pipe */
 
+/*s: syscall dup */
 long
 sysdup(ulong *arg)
 {
@@ -212,7 +226,9 @@ sysdup(ulong *arg)
 
     return fd;
 }
+/*e: syscall dup */
 
+/*s: syscall open */
 long
 sysopen(ulong *arg)
 {
@@ -232,8 +248,9 @@ sysopen(ulong *arg)
     poperror();
     return fd;
 }
+/*e: syscall open */
 
-
+/*s: syscall close */
 long
 sysclose(ulong *arg)
 {
@@ -242,7 +259,9 @@ sysclose(ulong *arg)
 
     return 0;
 }
+/*e: syscall close */
 
+/*s: function unionread */
 long
 unionread(Chan *c, void *va, long n)
 {
@@ -287,7 +306,9 @@ unionread(Chan *c, void *va, long n)
     qunlock(&c->umqlock);
     return nr;
 }
+/*e: function unionread */
 
+/*s: function unionrewind */
 static void
 unionrewind(Chan *c)
 {
@@ -299,7 +320,9 @@ unionrewind(Chan *c)
     }
     qunlock(&c->umqlock);
 }
+/*e: function unionrewind */
 
+/*s: function dirfixed */
 static int
 dirfixed(uchar *p, uchar *e, Dir *d)
 {
@@ -330,7 +353,9 @@ dirfixed(uchar *p, uchar *e, Dir *d)
 
     return len;
 }
+/*e: function dirfixed */
 
+/*s: function dirname */
 static char*
 dirname(uchar *p, int *n)
 {
@@ -339,7 +364,9 @@ dirname(uchar *p, int *n)
     *n = GBIT16(p);
     return (char*)p+BIT16SZ;
 }
+/*e: function dirname */
 
+/*s: function dirsetname */
 static long
 dirsetname(char *name, int len, uchar *p, long n, long maxn)
 {
@@ -363,7 +390,9 @@ dirsetname(char *name, int len, uchar *p, long n, long maxn)
     memmove(oname, name, len);
     return nn;
 }
+/*e: function dirsetname */
 
+/*s: function mountrock */
 /*
  * Mountfix might have caused the fixed results of the directory read
  * to overflow the buffer.  Catch the overflow in c->dirrock.
@@ -401,7 +430,9 @@ mountrock(Chan *c, uchar *p, uchar **pe)
     /* drop it */
     *pe = p;
 }
+/*e: function mountrock */
 
+/*s: function mountrockread */
 /*
  * Satisfy a directory read with the results saved in c->dirrock.
  */
@@ -444,13 +475,17 @@ mountrockread(Chan *c, uchar *op, long n, long *nn)
     qunlock(&c->rockqlock);
     return 1;
 }
+/*e: function mountrockread */
 
+/*s: function mountrewind */
 static void
 mountrewind(Chan *c)
 {
     c->nrock = 0;
 }
+/*e: function mountrewind */
 
+/*s: function mountfix */
 /*
  * Rewrite the results of a directory read to reflect current 
  * name space bindings and mounts.  Specifically, replace
@@ -546,7 +581,9 @@ mountfix(Chan *c, uchar *op, long n, long maxn)
 
     return e-op;
 }
+/*e: function mountfix */
 
+/*s: function read */
 static long
 read(ulong *arg, vlong *offp)
 {
@@ -614,7 +651,9 @@ read(ulong *arg, vlong *offp)
 
     return nnn;
 }
+/*e: function read */
 
+/*s: syscall pread */
 long
 syspread(ulong *arg)
 {
@@ -631,7 +670,9 @@ syspread(ulong *arg)
 
     return read(arg, &v);
 }
+/*e: syscall pread */
 
+/*s: function write */
 static long
 write(ulong *arg, vlong *offp)
 {
@@ -681,7 +722,9 @@ write(ulong *arg, vlong *offp)
 
     return m;
 }
+/*e: function write */
 
+/*s: syscall pwrite */
 long
 syspwrite(ulong *arg)
 {
@@ -698,7 +741,9 @@ syspwrite(ulong *arg)
 
     return write(arg, &v);
 }
+/*e: syscall pwrite */
 
+/*s: function sseek */
 static void
 sseek(ulong *arg)
 {
@@ -767,7 +812,9 @@ sseek(ulong *arg)
     cclose(c);
     poperror();
 }
+/*e: function sseek */
 
+/*s: syscall seek */
 long
 sysseek(ulong *arg)
 {
@@ -775,7 +822,9 @@ sysseek(ulong *arg)
     sseek(arg);
     return 0;
 }
+/*e: syscall seek */
 
+/*s: syscall oseek */
 long
 sysoseek(ulong *arg)
 {
@@ -794,8 +843,9 @@ sysoseek(ulong *arg)
     sseek(a);
     return o.v;
 }
+/*e: syscall oseek */
 
-
+/*s: function pathlast */
 static char*
 pathlast(Path *p)
 {
@@ -810,7 +860,9 @@ pathlast(Path *p)
         return s+1;
     return p->s;
 }
+/*e: function pathlast */
 
+/*s: syscall fstat */
 long
 sysfstat(ulong *arg)
 {
@@ -829,7 +881,9 @@ sysfstat(ulong *arg)
     cclose(c);
     return l;
 }
+/*e: syscall fstat */
 
+/*s: syscall stat */
 long
 sysstat(ulong *arg)
 {
@@ -854,7 +908,9 @@ sysstat(ulong *arg)
     cclose(c);
     return l;
 }
+/*e: syscall stat */
 
+/*s: syscall chdir */
 long
 syschdir(ulong *arg)
 {
@@ -867,7 +923,9 @@ syschdir(ulong *arg)
     up->dot = c;
     return 0;
 }
+/*e: syscall chdir */
 
+/*s: function bindmount */
 long
 bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char* spec)
 {
@@ -947,19 +1005,25 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
     }
     return ret;
 }
+/*e: function bindmount */
 
+/*s: syscall bind */
 long
 sysbind(ulong *arg)
 {
     return bindmount(0, -1, -1, (char*)arg[0], (char*)arg[1], arg[2], nil);
 }
+/*e: syscall bind */
 
+/*s: syscall mount */
 long
 sysmount(ulong *arg)
 {
     return bindmount(1, arg[0], arg[1], nil, (char*)arg[2], arg[3], (char*)arg[4]);
 }
+/*e: syscall mount */
 
+/*s: syscall unmount */
 long
 sysunmount(ulong *arg)
 {
@@ -993,7 +1057,9 @@ sysunmount(ulong *arg)
         cclose(cmounted);
     return 0;
 }
+/*e: syscall unmount */
 
+/*s: syscall create */
 long
 syscreate(ulong *arg)
 {
@@ -1013,7 +1079,9 @@ syscreate(ulong *arg)
     poperror();
     return fd;
 }
+/*e: syscall create */
 
+/*s: syscall remove */
 long
 sysremove(ulong *arg)
 {
@@ -1044,7 +1112,9 @@ sysremove(ulong *arg)
     cclose(c);
     return 0;
 }
+/*e: syscall remove */
 
+/*s: function wstat */
 static long
 wstat(Chan *c, uchar *d, int nd)
 {
@@ -1069,7 +1139,9 @@ wstat(Chan *c, uchar *d, int nd)
     cclose(c);
     return l;
 }
+/*e: function wstat */
 
+/*s: syscall wstat */
 long
 syswstat(ulong *arg)
 {
@@ -1083,7 +1155,9 @@ syswstat(ulong *arg)
     c = namec((char*)arg[0], Aaccess, 0, 0);
     return wstat(c, (uchar*)arg[1], l);
 }
+/*e: syscall wstat */
 
+/*s: syscall fwstat */
 long
 sysfwstat(ulong *arg)
 {
@@ -1096,5 +1170,6 @@ sysfwstat(ulong *arg)
     c = fdtochan(arg[0], -1, 1, 1);
     return wstat(c, (uchar*)arg[1], l);
 }
+/*e: syscall fwstat */
 
 /*e: sysfile.c */
