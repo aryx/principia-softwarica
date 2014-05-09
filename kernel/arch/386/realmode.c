@@ -8,8 +8,9 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-#include    <tos.h>
 #include    "io.h"
+
+#include    <tos.h>
 #include    <ureg.h>
 
 /*
@@ -137,11 +138,13 @@ rmemwrite(Chan*, void *a, long n, vlong off)
     return rmemrw(0, a, n, off);
 }
 
+/*s: function realmodelink */
 void
 realmodelink(void)
 {
     addarchfile("realmode", 0660, rtrapread, rtrapwrite);
     addarchfile("realmodemem", 0660, rmemread, rmemwrite);
 }
+/*e: function realmodelink */
 
 /*e: realmode.c */

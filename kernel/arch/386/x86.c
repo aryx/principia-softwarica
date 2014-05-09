@@ -9,14 +9,13 @@
 /*e: kernel basic includes */
 #include "io.h"
 
-//#define X86STEPPING(x)  ((x) & 0x0F)
-/* incorporates extended-model and -family bits */
-#define X86MODEL(x) ((((x)>>4) & 0x0F) | (((x)>>16) & 0x0F)<<4)
-
 /*s: global cputype */
 X86type *cputype;
 /*e: global cputype */
 
+//#define X86STEPPING(x)  ((x) & 0x0F)
+/* incorporates extended-model and -family bits */
+#define X86MODEL(x) ((((x)>>4) & 0x0F) | (((x)>>16) & 0x0F)<<4)
 
 //@Scheck: Assembly l.s
 void    _cycles(uvlong*);   
@@ -33,7 +32,7 @@ enum {              /* cpuid standard function codes */
 };
 
 
-
+/*s: global x86intel */
 /* cpuid ax is 0x0ffMTFmS, where 0xffF is family, 0xMm is model */
 static X86type x86intel[] =
 {
@@ -87,7 +86,9 @@ static X86type x86intel[] =
 
     { -1,   -1, 16, "unknown", },   /* total default */
 };
+/*e: global x86intel */
 
+/*s: global x86amd */
 /*
  * The AMD processors all implement the CPUID instruction.
  * The later ones also return the processor name via functions
@@ -125,7 +126,9 @@ static X86type x86amd[] =
 
     { -1,   -1, 11, "unknown", },   /* total default */
 };
+/*e: global x86amd */
 
+/*s: global x86winchip */
 /*
  * WinChip 240MHz
  */
@@ -137,7 +140,9 @@ static X86type x86winchip[] =
     {6, 9,  23, "Via C3 Eden-N",},
     { -1,   -1, 23, "unknown", },   /* total default */
 };
+/*e: global x86winchip */
 
+/*s: global x86sis */
 /*
  * SiS 55x
  */
@@ -146,8 +151,10 @@ static X86type x86sis[] =
     {5, 0,  23, "SiS 55x",},    /* guesswork */
     { -1,   -1, 23, "unknown", },   /* total default */
 };
+/*e: global x86sis */
 
 
+/*s: function cpuidentify */
 /*
  *  figure out:
  *  - cpu type
@@ -272,5 +279,6 @@ cpuidentify(void)
     cputype = t;
     return t->family;
 }
+/*e: function cpuidentify */
 
 /*e: x86.c */

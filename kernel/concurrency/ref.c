@@ -8,8 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-// was in chan.c
-// see also _incnt and _deccnt in tasklock.c
+// was in chan.c (see also _incnt and _deccnt in tasklock.c)
 /*s: function incref */
 long
 incref(Ref *r)

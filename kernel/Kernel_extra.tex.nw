@@ -1788,11 +1788,22 @@ nvramwrite(int addr, uchar data)
 
 \subsection*{[[arch/386/realmode.c]]}
 
+<<function realmodelink>>=
+void
+realmodelink(void)
+{
+    addarchfile("realmode", 0660, rtrapread, rtrapwrite);
+    addarchfile("realmodemem", 0660, rmemread, rmemwrite);
+}
+@ 
+
+
 <<realmode.c>>=
 <<kernel basic includes>>
 
-#include    <tos.h>
 #include    "io.h"
+
+#include    <tos.h>
 #include    <ureg.h>
 
 /*
@@ -1920,12 +1931,7 @@ rmemwrite(Chan*, void *a, long n, vlong off)
     return rmemrw(0, a, n, off);
 }
 
-void
-realmodelink(void)
-{
-    addarchfile("realmode", 0660, rtrapread, rtrapwrite);
-    addarchfile("realmodemem", 0660, rmemread, rmemwrite);
-}
+<<function realmodelink>>
 
 @
 
@@ -2102,33 +2108,7 @@ X86type *cputype;
 @ 
 
 
-<<x86.c>>=
-<<kernel basic includes>>
-#include "io.h"
-
-//#define X86STEPPING(x)  ((x) & 0x0F)
-/* incorporates extended-model and -family bits */
-#define X86MODEL(x) ((((x)>>4) & 0x0F) | (((x)>>16) & 0x0F)<<4)
-
-<<global cputype>>
-
-
-//@Scheck: Assembly l.s
-void    _cycles(uvlong*);   
-
-enum {
-    CR4Osfxsr = 1 << 9,
-};
-
-enum {              /* cpuid standard function codes */
-    Highstdfunc = 0,    /* also returns vendor string */
-    Procsig,
-    Proctlbcache,
-    Procserial,
-};
-
-
-
+<<global x86intel>>=
 /* cpuid ax is 0x0ffMTFmS, where 0xffF is family, 0xMm is model */
 static X86type x86intel[] =
 {
@@ -2182,7 +2162,10 @@ static X86type x86intel[] =
 
     { -1,   -1, 16, "unknown", },   /* total default */
 };
+@ 
 
+
+<<global x86amd>>=
 /*
  * The AMD processors all implement the CPUID instruction.
  * The later ones also return the processor name via functions
@@ -2220,7 +2203,10 @@ static X86type x86amd[] =
 
     { -1,   -1, 11, "unknown", },   /* total default */
 };
+@ 
 
+
+<<global x86winchip>>=
 /*
  * WinChip 240MHz
  */
@@ -2232,7 +2218,10 @@ static X86type x86winchip[] =
     {6, 9,  23, "Via C3 Eden-N",},
     { -1,   -1, 23, "unknown", },   /* total default */
 };
+@ 
 
+
+<<global x86sis>>=
 /*
  * SiS 55x
  */
@@ -2241,8 +2230,10 @@ static X86type x86sis[] =
     {5, 0,  23, "SiS 55x",},    /* guesswork */
     { -1,   -1, 23, "unknown", },   /* total default */
 };
+@ 
 
 
+<<function cpuidentify>>=
 /*
  *  figure out:
  *  - cpu type
@@ -2367,6 +2358,44 @@ cpuidentify(void)
     cputype = t;
     return t->family;
 }
+@ 
+
+
+<<x86.c>>=
+<<kernel basic includes>>
+#include "io.h"
+
+<<global cputype>>
+
+//#define X86STEPPING(x)  ((x) & 0x0F)
+/* incorporates extended-model and -family bits */
+#define X86MODEL(x) ((((x)>>4) & 0x0F) | (((x)>>16) & 0x0F)<<4)
+
+//@Scheck: Assembly l.s
+void    _cycles(uvlong*);   
+
+enum {
+    CR4Osfxsr = 1 << 9,
+};
+
+enum {              /* cpuid standard function codes */
+    Highstdfunc = 0,    /* also returns vendor string */
+    Procsig,
+    Proctlbcache,
+    Procserial,
+};
+
+
+<<global x86intel>>
+
+<<global x86amd>>
+
+<<global x86winchip>>
+
+<<global x86sis>>
+
+
+<<function cpuidentify>>
 
 @
 
@@ -2374,13 +2403,7 @@ cpuidentify(void)
 
 \subsection*{[[buses/386/dat_buses.h]]}
 
-<<dat_buses.h>>=
-
-/*
- *  a parsed plan9.ini line
- */
-#define NISAOPT   8
-
+<<struct ISAConf>>=
 struct ISAConf {
   char  *type;
   ulong port;
@@ -2393,6 +2416,22 @@ struct ISAConf {
   int nopt;
   char  *opt[NISAOPT];
 };
+@ 
+
+
+<<constant NISAOPT>>=
+#define NISAOPT   8
+@ 
+
+
+<<dat_buses.h>>=
+
+/*
+ *  a parsed plan9.ini line
+ */
+<<constant NISAOPT>>
+
+<<struct ISAConf>>
 @
 
 
@@ -2678,39 +2717,14 @@ ulong   pcibarsize(Pcidev*, int);
 void    pcibussize(Pcidev*, ulong*, ulong*);
 void    pcihinv(Pcidev*);
 uchar   pciipin(Pcidev*, uchar);
+
+typedef struct Slot Slot;
+typedef struct Bridge Bridge;
+typedef struct Router Router;
 @
 
 <<pci.c debugging macro>>=
 #define DBG if(0) pcilog
-@ 
-\fi
-
-
-<<pci.c>>=
-/*
- * PCI support code.
- * Needs a massive rewrite.
- */
-<<kernel basic includes>>
-#include "io.h"
-
-<<pci.c debugging macro>>
-
-/* let each port override any of these */
-#ifndef PCICONSSIZE
-#define PCICONSSIZE (16*1024)
-#endif
-
-
-struct
-{
-    char    output[PCICONSSIZE];
-    int ptr;
-} PCICONS;
-
-int pcivga;
-
-<<pci.c forward decl>>
 
 int
 pcilog(char *fmt, ...)
@@ -2727,6 +2741,89 @@ pcilog(char *fmt, ...)
     PCICONS.ptr += n;
     return n;
 }
+
+@ 
+\fi
+
+<<global southbridges>>=
+static Bridge southbridges[] = {
+    { 0x8086, 0x122e, pIIxget, pIIxset },   /* Intel 82371FB */
+    { 0x8086, 0x1234, pIIxget, pIIxset },   /* Intel 82371MX */
+    { 0x8086, 0x7000, pIIxget, pIIxset },   /* Intel 82371SB */
+    { 0x8086, 0x7110, pIIxget, pIIxset },   /* Intel 82371AB */
+    { 0x8086, 0x7198, pIIxget, pIIxset },   /* Intel 82443MX (fn 1) */
+    { 0x8086, 0x2410, pIIxget, pIIxset },   /* Intel 82801AA */
+    { 0x8086, 0x2420, pIIxget, pIIxset },   /* Intel 82801AB */
+    { 0x8086, 0x2440, pIIxget, pIIxset },   /* Intel 82801BA */
+    { 0x8086, 0x2448, pIIxget, pIIxset },   /* Intel 82801BAM/CAM/DBM */
+    { 0x8086, 0x244c, pIIxget, pIIxset },   /* Intel 82801BAM */
+    { 0x8086, 0x244e, pIIxget, pIIxset },   /* Intel 82801 */
+    { 0x8086, 0x2480, pIIxget, pIIxset },   /* Intel 82801CA */
+    { 0x8086, 0x248c, pIIxget, pIIxset },   /* Intel 82801CAM */
+    { 0x8086, 0x24c0, pIIxget, pIIxset },   /* Intel 82801DBL */
+    { 0x8086, 0x24cc, pIIxget, pIIxset },   /* Intel 82801DBM */
+    { 0x8086, 0x24d0, pIIxget, pIIxset },   /* Intel 82801EB */
+    { 0x8086, 0x25a1, pIIxget, pIIxset },   /* Intel 6300ESB */
+    { 0x8086, 0x2640, pIIxget, pIIxset },   /* Intel 82801FB */
+    { 0x8086, 0x2641, pIIxget, pIIxset },   /* Intel 82801FBM */
+    { 0x8086, 0x27b8, pIIxget, pIIxset },   /* Intel 82801GB */
+    { 0x8086, 0x27b9, pIIxget, pIIxset },   /* Intel 82801GBM */
+    { 0x8086, 0x27bd, pIIxget, pIIxset },   /* Intel 82801GB/GR */
+    { 0x8086, 0x3a16, pIIxget, pIIxset },   /* Intel 82801JIR */
+    { 0x8086, 0x3a40, pIIxget, pIIxset },   /* Intel 82801JI */
+    { 0x8086, 0x3a42, pIIxget, pIIxset },   /* Intel 82801JI */
+    { 0x8086, 0x3a48, pIIxget, pIIxset },   /* Intel 82801JI */
+    { 0x8086, 0x2916, pIIxget, pIIxset },   /* Intel 82801? */
+    { 0x8086, 0x1c02, pIIxget, pIIxset },   /* Intel 6 Series/C200 */
+    { 0x8086, 0x1c44, pIIxget, pIIxset },   /* Intel 6 Series/Z68 Express */
+    { 0x8086, 0x1e53, pIIxget, pIIxset },   /* Intel 7 Series/C216 */
+    { 0x1106, 0x0586, viaget, viaset }, /* Viatech 82C586 */
+    { 0x1106, 0x0596, viaget, viaset }, /* Viatech 82C596 */
+    { 0x1106, 0x0686, viaget, viaset }, /* Viatech 82C686 */
+    { 0x1106, 0x3227, viaget, viaset }, /* Viatech VT8237 */
+    { 0x1045, 0xc700, optiget, optiset },   /* Opti 82C700 */
+    { 0x10b9, 0x1533, aliget, aliset }, /* Al M1533 */
+    { 0x1039, 0x0008, pIIxget, pIIxset },   /* SI 503 */
+    { 0x1039, 0x0496, pIIxget, pIIxset },   /* SI 496 */
+    { 0x1078, 0x0100, cyrixget, cyrixset }, /* Cyrix 5530 Legacy */
+
+    { 0x1022, 0x746B, nil, nil },       /* AMD 8111 */
+    { 0x10DE, 0x00D1, nil, nil },       /* NVIDIA nForce 3 */
+    { 0x10DE, 0x00E0, nil, nil },       /* NVIDIA nForce 3 250 Series */
+    { 0x10DE, 0x00E1, nil, nil },       /* NVIDIA nForce 3 250 Series */
+    { 0x1166, 0x0200, nil, nil },       /* ServerWorks ServerSet III LE */
+    { 0x1002, 0x4377, nil, nil },       /* ATI Radeon Xpress 200M */
+    { 0x1002, 0x4372, nil, nil },       /* ATI SB400 */
+};
+@ 
+
+
+<<pci.c>>=
+/*
+ * PCI support code.
+ * Needs a massive rewrite.
+ */
+<<kernel basic includes>>
+#include "io.h"
+
+/* let each port override any of these */
+#ifndef PCICONSSIZE
+#define PCICONSSIZE (16*1024)
+#endif
+
+struct PCICons
+{
+    char    output[PCICONSSIZE];
+    int ptr;
+};
+struct PCICons PCICONS;
+
+int pcivga;
+
+<<pci.c forward decl>>
+
+<<pci.c debugging macro>>
+
 
 enum
 {                   /* configuration mechanism #1 */
@@ -3312,7 +3409,6 @@ cyrixset(Pcidev *router, uchar link, uchar irq)
     pcicfgw8(router, 0x5c + (link>>1), pirq);
 }
 
-typedef struct Bridge Bridge;
 struct Bridge
 {
     ushort  vid;
@@ -3321,57 +3417,8 @@ struct Bridge
     void    (*set)(Pcidev *, uchar, uchar);
 };
 
-static Bridge southbridges[] = {
-    { 0x8086, 0x122e, pIIxget, pIIxset },   /* Intel 82371FB */
-    { 0x8086, 0x1234, pIIxget, pIIxset },   /* Intel 82371MX */
-    { 0x8086, 0x7000, pIIxget, pIIxset },   /* Intel 82371SB */
-    { 0x8086, 0x7110, pIIxget, pIIxset },   /* Intel 82371AB */
-    { 0x8086, 0x7198, pIIxget, pIIxset },   /* Intel 82443MX (fn 1) */
-    { 0x8086, 0x2410, pIIxget, pIIxset },   /* Intel 82801AA */
-    { 0x8086, 0x2420, pIIxget, pIIxset },   /* Intel 82801AB */
-    { 0x8086, 0x2440, pIIxget, pIIxset },   /* Intel 82801BA */
-    { 0x8086, 0x2448, pIIxget, pIIxset },   /* Intel 82801BAM/CAM/DBM */
-    { 0x8086, 0x244c, pIIxget, pIIxset },   /* Intel 82801BAM */
-    { 0x8086, 0x244e, pIIxget, pIIxset },   /* Intel 82801 */
-    { 0x8086, 0x2480, pIIxget, pIIxset },   /* Intel 82801CA */
-    { 0x8086, 0x248c, pIIxget, pIIxset },   /* Intel 82801CAM */
-    { 0x8086, 0x24c0, pIIxget, pIIxset },   /* Intel 82801DBL */
-    { 0x8086, 0x24cc, pIIxget, pIIxset },   /* Intel 82801DBM */
-    { 0x8086, 0x24d0, pIIxget, pIIxset },   /* Intel 82801EB */
-    { 0x8086, 0x25a1, pIIxget, pIIxset },   /* Intel 6300ESB */
-    { 0x8086, 0x2640, pIIxget, pIIxset },   /* Intel 82801FB */
-    { 0x8086, 0x2641, pIIxget, pIIxset },   /* Intel 82801FBM */
-    { 0x8086, 0x27b8, pIIxget, pIIxset },   /* Intel 82801GB */
-    { 0x8086, 0x27b9, pIIxget, pIIxset },   /* Intel 82801GBM */
-    { 0x8086, 0x27bd, pIIxget, pIIxset },   /* Intel 82801GB/GR */
-    { 0x8086, 0x3a16, pIIxget, pIIxset },   /* Intel 82801JIR */
-    { 0x8086, 0x3a40, pIIxget, pIIxset },   /* Intel 82801JI */
-    { 0x8086, 0x3a42, pIIxget, pIIxset },   /* Intel 82801JI */
-    { 0x8086, 0x3a48, pIIxget, pIIxset },   /* Intel 82801JI */
-    { 0x8086, 0x2916, pIIxget, pIIxset },   /* Intel 82801? */
-    { 0x8086, 0x1c02, pIIxget, pIIxset },   /* Intel 6 Series/C200 */
-    { 0x8086, 0x1c44, pIIxget, pIIxset },   /* Intel 6 Series/Z68 Express */
-    { 0x8086, 0x1e53, pIIxget, pIIxset },   /* Intel 7 Series/C216 */
-    { 0x1106, 0x0586, viaget, viaset }, /* Viatech 82C586 */
-    { 0x1106, 0x0596, viaget, viaset }, /* Viatech 82C596 */
-    { 0x1106, 0x0686, viaget, viaset }, /* Viatech 82C686 */
-    { 0x1106, 0x3227, viaget, viaset }, /* Viatech VT8237 */
-    { 0x1045, 0xc700, optiget, optiset },   /* Opti 82C700 */
-    { 0x10b9, 0x1533, aliget, aliset }, /* Al M1533 */
-    { 0x1039, 0x0008, pIIxget, pIIxset },   /* SI 503 */
-    { 0x1039, 0x0496, pIIxget, pIIxset },   /* SI 496 */
-    { 0x1078, 0x0100, cyrixget, cyrixset }, /* Cyrix 5530 Legacy */
+<<global southbridges>>
 
-    { 0x1022, 0x746B, nil, nil },       /* AMD 8111 */
-    { 0x10DE, 0x00D1, nil, nil },       /* NVIDIA nForce 3 */
-    { 0x10DE, 0x00E0, nil, nil },       /* NVIDIA nForce 3 250 Series */
-    { 0x10DE, 0x00E1, nil, nil },       /* NVIDIA nForce 3 250 Series */
-    { 0x1166, 0x0200, nil, nil },       /* ServerWorks ServerSet III LE */
-    { 0x1002, 0x4377, nil, nil },       /* ATI Radeon Xpress 200M */
-    { 0x1002, 0x4372, nil, nil },       /* ATI SB400 */
-};
-
-typedef struct Slot Slot;
 struct Slot {
     uchar   bus;        /* Pci bus number */
     uchar   dev;        /* Pci device number */
@@ -3380,7 +3427,6 @@ struct Slot {
     uchar   reserved;
 };
 
-typedef struct Router Router;
 struct Router {
     uchar   signature[4];   /* Routing table signature */
     uchar   version[2]; /* Version number */
@@ -5062,7 +5108,6 @@ PhysUart isaphysuart = {
 };
 @
 
-
 \subsection*{[[buses/devuart.c]]}
 
 \ifallcode
@@ -5964,6 +6009,7 @@ extern  Uart* consuart;
 
 \subsection*{[[buses/portfns_buses.h]]}
 
+\ifallcode
 <<portfns_buses.h>>=
 
 // devuart.c
@@ -5978,7 +6024,7 @@ int   uartctl(Uart*, char*);
 void    uartmouse(Uart*, int (*)(Queue*, int), int);
 
 @
-
+\fi
 
 \section{[[concurrency/]]}
 
@@ -6018,37 +6064,6 @@ long  lockcycles;
 // option<ref<Mach>>, None when key = 0?
 Mach  *m; // not that used, only in iprintcanlock apparently
 @
-
-
-
-
-<<struct Rendez>>=
-struct Rendez
-{
-    // ??
-    Proc  *p;
-  
-    Lock;
-};
-@ 
-
-
-<<struct Sema>>=
-// user level semaphores, used to implement user-level lock, 
-// see libc/port/lock.c
-struct Sema
-{
-    long  *addr; // value stored in user space!
-    int waiting;
-  
-    //list<Sema> of Segment.sema
-    Sema  *next;
-    Sema  *prev;
-
-    Rendez;
-};
-@ 
-
 
 <<portdat_concurrency.h>>=
 
@@ -6147,7 +6162,6 @@ struct QlockStats {
 };
 @
 
-
 <<global rwstats>>=
 struct QlockStats rwstats;
 @
@@ -6156,6 +6170,7 @@ struct QlockStats rwstats;
 
 <<qlock.c>>=
 <<kernel basic includes>>
+
 <<struct QlockStats>>
 <<global rwstats>>
 
@@ -6183,8 +6198,7 @@ struct QlockStats rwstats;
 <<ref.c>>=
 <<kernel basic includes>>
 
-// was in chan.c
-// see also _incnt and _deccnt in tasklock.c
+// was in chan.c (see also _incnt and _deccnt in tasklock.c)
 <<function incref>>
 
 <<function decref>>
@@ -6294,30 +6308,21 @@ static int  writebintime(char*, int);
 @
 \fi
 
-<<devcons.c>>=
-<<kernel basic includes>>
+<<global sysname>>=
+char    *sysname;
+@ 
 
-#include    <pool.h>
-#include    <authsrv.h>
+<<global fasthz>>=
+vlong   fasthz;
+@ 
 
-void    (*consdebug)(void) = nil;
-void    (*screenputs)(char*, int) = nil;
-
-Queue*  kbdq;           /* unprocessed console input */
-Queue*  lineq;          /* processed console input */
-Queue*  serialoq;       /* serial console output */
-Queue*  kprintoq;       /* console output, for /dev/kprint */
-ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
-int iprintscreenputs = 1;
-
+<<struct ConsKbd>>=
 struct ConsKbd
 {
-    QLock;
+    bool raw;        /* true if we shouldn't process input */
 
-    int raw;        /* true if we shouldn't process input */
-    Ref ctl;        /* number of opens to the control file */
-    int x;      /* index into line */
     char    line[1024]; /* current input line */
+    int x;      /* index into line */
 
     int count;
     int ctlpoff;
@@ -6326,104 +6331,52 @@ struct ConsKbd
     Lock    lockputc;
     char    istage[1024];
 
+    // extra
+    QLock;
+    Ref ctl;        /* number of opens to the control file */
+
+    //???
     char    *iw;
     char    *ir;
     char    *ie;
 };
+@ 
 
+
+<<global kbd>>=
 static struct ConsKbd kbd = 
 {
     .iw = kbd.istage,
     .ir = kbd.istage,
     .ie = kbd.istage + sizeof(kbd.istage),
 };
+@ 
 
-char    *sysname;
-vlong   fasthz;
 
-<<devcons.c forward decl>>
-
-enum
-{
-    CMhalt,
-    CMreboot,
-    CMpanic,
-};
-
-Cmdtab rebootmsg[] =
-{
-    CMhalt,     "halt",     1,
-    CMreboot,   "reboot",   0,
-    CMpanic,    "panic",    0,
-};
-
-void
-printinit(void)
-{
-    lineq = qopen(2*1024, 0, nil, nil);
-    if(lineq == nil)
-        panic("printinit");
-    qnoblock(lineq, 1);
-}
+<<function print>>=
+bool noprint; // to debug?
 
 int
-consactive(void)
+devcons_print(char *fmt, ...)
 {
-    if(serialoq)
-        return qlen(serialoq) > 0;
-    return 0;
+    int n;
+    va_list arg;
+    char buf[PRINTSIZE];
+
+    if(noprint)
+        return -1;
+
+    va_start(arg, fmt);
+    n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
+    va_end(arg);
+    putstrn(buf, n);
+
+    return n;
 }
+@ 
 
-void
-prflush(void)
-{
-    ulong now;
 
-    now = m->ticks;
-    while(consactive())
-        if(m->ticks - now >= HZ)
-            break;
-}
-
-/*
- * Log console output so it can be retrieved via /dev/kmesg.
- * This is good for catching boot-time messages after the fact.
- */
-struct {
-    Lock lk;
-    char buf[KMESGSIZE];
-    uint n;
-} kmesg;
-
-static void
-kmesgputs(char *str, int n)
-{
-    uint nn, d;
-
-    ilock(&kmesg.lk);
-    /* take the tail of huge writes */
-    if(n > sizeof kmesg.buf){
-        d = n - sizeof kmesg.buf;
-        str += d;
-        n -= d;
-    }
-
-    /* slide the buffer down to make room */
-    nn = kmesg.n;
-    if(nn + n >= sizeof kmesg.buf){
-        d = nn + n - sizeof kmesg.buf;
-        if(d)
-            memmove(kmesg.buf, kmesg.buf+d, sizeof kmesg.buf-d);
-        nn -= d;
-    }
-
-    /* copy the data in */
-    memmove(kmesg.buf+nn, str, n);
-    nn += n;
-    kmesg.n = nn;
-    iunlock(&kmesg.lk);
-}
-
+<<function putstrn0>>=
 /*
  *   Print a string on the console.  Convert \n to \r\n for serial
  *   line consoles.  Locking of the queues is left up to the screen
@@ -6431,7 +6384,7 @@ kmesgputs(char *str, int n)
  *   interspersed with other messages.
  */
 static void
-putstrn0(char *str, int n, int usewrite)
+putstrn0(char *str, int n, bool usewrite)
 {
     int m;
     char *t;
@@ -6488,55 +6441,141 @@ putstrn0(char *str, int n, int usewrite)
         }
     }
 }
+@ 
 
+
+<<function screenputs>>=
+void    (*screenputs)(char*, int) = nil;
+@ 
+
+
+<<function consdebug>>=
+void    (*consdebug)(void) = nil; // for rdb
+@ 
+
+
+<<global iprintscreenputs>>=
+int iprintscreenputs = 1;
+@ 
+
+
+<<global kprintoq>>=
+Queue*  kprintoq;       /* console output, for /dev/kprint */
+@ 
+
+
+<<global kbdq>>=
+Queue*  kbdq;           /* unprocessed console input */
+@ 
+
+
+<<global lineq>>=
+Queue*  lineq;          /* processed console input */
+@ 
+
+
+<<global serialoq>>=
+Queue*  serialoq;       /* serial console output */
+@ 
+
+
+<<function printinit>>=
+void
+printinit(void)
+{
+    lineq = qopen(2*1024, 0, nil, nil);
+    if(lineq == nil)
+        panic("printinit");
+    qnoblock(lineq, 1);
+}
+@ 
+
+
+<<function consactive>>=
+int
+consactive(void)
+{
+    if(serialoq)
+        return qlen(serialoq) > 0;
+    return 0;
+}
+@ 
+
+
+<<function prflush>>=
+void
+prflush(void)
+{
+    ulong now;
+
+    now = m->ticks;
+    while(consactive())
+        if(m->ticks - now >= HZ)
+            break;
+}
+@ 
+
+
+<<struct KMesg>>=
+/*
+ * Log console output so it can be retrieved via /dev/kmesg.
+ * This is good for catching boot-time messages after the fact.
+ */
+struct KMesg {
+    Lock lk;
+    char buf[KMESGSIZE];
+    uint n;
+};
+@ 
+
+
+<<global kmesg>>=
+struct KMesg kmesg;
+@ 
+
+
+<<function kmesgputs>>=
+static void
+kmesgputs(char *str, int n)
+{
+    uint nn, d;
+
+    ilock(&kmesg.lk);
+    /* take the tail of huge writes */
+    if(n > sizeof kmesg.buf){
+        d = n - sizeof kmesg.buf;
+        str += d;
+        n -= d;
+    }
+
+    /* slide the buffer down to make room */
+    nn = kmesg.n;
+    if(nn + n >= sizeof kmesg.buf){
+        d = nn + n - sizeof kmesg.buf;
+        if(d)
+            memmove(kmesg.buf, kmesg.buf+d, sizeof kmesg.buf-d);
+        nn -= d;
+    }
+
+    /* copy the data in */
+    memmove(kmesg.buf+nn, str, n);
+    nn += n;
+    kmesg.n = nn;
+    iunlock(&kmesg.lk);
+}
+@ 
+
+
+<<function putstrn>>=
 void
 putstrn(char *str, int n)
 {
     putstrn0(str, n, 0);
 }
+@ 
 
-int noprint;
 
-int
-devcons_print(char *fmt, ...)
-{
-    int n;
-    va_list arg;
-    char buf[PRINTSIZE];
-
-    if(noprint)
-        return -1;
-
-    va_start(arg, fmt);
-    n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
-    va_end(arg);
-    putstrn(buf, n);
-
-    return n;
-}
-
-/*
- * Want to interlock iprints to avoid interlaced output on 
- * multiprocessor, but don't want to deadlock if one processor
- * dies during print and another has something important to say.
- * Make a good faith effort.
- */
-static Lock iprintlock;
-static int
-iprintcanlock(Lock *l)
-{
-    int i;
-    
-    for(i=0; i<1000; i++){
-        if(canlock(l))
-            return 1;
-        if(l->m == MACHP(m->machno))
-            return 0;
-        microdelay(100);
-    }
-    return 0;
-}
-
+<<function iprint>>=
 int
 devcons_iprint(char *fmt, ...)
 {
@@ -6558,7 +6597,10 @@ devcons_iprint(char *fmt, ...)
 
     return n;
 }
+@ 
 
+
+<<function panic>>=
 void
 devcons_panic(char *fmt, ...)
 {
@@ -6588,9 +6630,13 @@ devcons_panic(char *fmt, ...)
 
         //  exit(1);
 }
+@ 
 
+
+<<function sysfatal>>=
 /* libmp at least contains a few calls to sysfatal; simulate with panic */
 //@Scheck: no dead, override also sysfatal from libc/9sys/sysfatal.c
+// note that this is not a system call, even though it's prefixed with sys
 void
 sysfatal(char *fmt, ...)
 {
@@ -6602,13 +6648,19 @@ sysfatal(char *fmt, ...)
     va_end(arg);
     panic("sysfatal: %s", err);
 }
+@ 
 
+
+<<function _assert>>=
 void
 devcons__assert(char *fmt)
 {
     panic("assert failed at %#p: %s", getcallerpc(&fmt), fmt);
 }
+@ 
 
+
+<<function pprint>>=
 int
 devcons_pprint(char *fmt, ...)
 {
@@ -6639,7 +6691,10 @@ devcons_pprint(char *fmt, ...)
 
     return n;
 }
+@ 
 
+
+<<function echoscreen>>=
 static void
 echoscreen(char *buf, int n)
 {
@@ -6665,7 +6720,10 @@ echoscreen(char *buf, int n)
     if(p != ebuf)
         screenputs(ebuf, p - ebuf);
 }
+@ 
 
+
+<<function echoserialoq>>=
 static void
 echoserialoq(char *buf, int n)
 {
@@ -6694,7 +6752,10 @@ echoserialoq(char *buf, int n)
     if(p != ebuf)
         qiwrite(serialoq, ebuf, p - ebuf);
 }
+@ 
 
+
+<<function echo>>=
 static void
 echo(char *buf, int n)
 {
@@ -6781,7 +6842,10 @@ echo(char *buf, int n)
     if(serialoq)
         echoserialoq(buf, n);
 }
+@ 
 
+
+<<function kbdcr2nl>>=
 /*
  *  Called by a uart interrupt for console input.
  *
@@ -6805,7 +6869,10 @@ kbdcr2nl(Queue*, int ch)
     iunlock(&kbd.lockputc);
     return 0;
 }
+@ 
 
+
+<<function kbdputc>>=
 /*
  *  Put character, possibly a rune, into read queue at interrupt time.
  *  Called at interrupt time to process a character.
@@ -6836,7 +6903,10 @@ kbdputc(Queue*, int ch)
     iunlock(&kbd.lockputc);
     return 0;
 }
+@ 
 
+
+<<function kbdputcclock>>=
 /*
  *  we save up input characters till clock time to reduce
  *  per character interrupt overhead.
@@ -6859,7 +6929,10 @@ kbdputcclock(void)
         }
     }
 }
+@ 
 
+
+<<devcons.c enum Qxxx>>=
 enum{
     Qdir,
     Qbintime,
@@ -6886,12 +6959,10 @@ enum{
     Qzero,
     Qconfig,
 };
+@ 
 
-enum
-{
-    VLNUMSIZE=  22,
-};
 
+<<global consdir>>=
 static Dirtab consdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
     "bintime",  {Qbintime}, 24,     0664,
@@ -6918,8 +6989,10 @@ static Dirtab consdir[]={
     "zero",     {Qzero},    0,      0444,
     "config",   {Qconfig},  0,      0444,
 };
+@ 
 
 
+<<method consinit>>=
 static void
 consinit(void)
 {
@@ -6931,25 +7004,10 @@ consinit(void)
      */
     addclock0link(kbdputcclock, 22);
 }
+@ 
 
-static Chan*
-consattach(char *spec)
-{
-    return devattach('c', spec);
-}
 
-static Walkqid*
-conswalk(Chan *c, Chan *nc, char **name, int nname)
-{
-    return devwalk(c, nc, name,nname, consdir, nelem(consdir), devgen);
-}
-
-static int
-consstat(Chan *c, uchar *dp, int n)
-{
-    return devstat(c, dp, n, consdir, nelem(consdir), devgen);
-}
-
+<<method consopen>>=
 static Chan*
 consopen(Chan *c, int omode)
 {
@@ -6979,7 +7037,10 @@ consopen(Chan *c, int omode)
     }
     return c;
 }
+@ 
 
+
+<<method consclose>>=
 static void
 consclose(Chan *c)
 {
@@ -7001,7 +7062,9 @@ consclose(Chan *c)
         break;
     }
 }
+@ 
 
+<<method consread>>=
 static long
 consread(Chan *c, void *buf, long n, vlong off)
 {
@@ -7232,7 +7295,9 @@ consread(Chan *c, void *buf, long n, vlong off)
     }
     return -1;      /* never reached */
 }
+@
 
+<<method conswrite>>=
 static long
 conswrite(Chan *c, void *va, long n, vlong off)
 {
@@ -7391,7 +7456,9 @@ conswrite(Chan *c, void *va, long n, vlong off)
     }
     return n;
 }
+@ 
 
+<<global consdevtab>>=
 Dev consdevtab = {
     .dc       =    'c',
     .name     =    "cons",
@@ -7412,6 +7479,151 @@ Dev consdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
+@ 
+
+
+<<devcons.c>>=
+<<kernel basic includes>>
+
+#include    <pool.h>
+#include    <authsrv.h>
+
+<<function screenputs>>
+<<function consdebug>>
+
+<<global kbdq>>
+<<global lineq>>
+<<global serialoq>>
+<<global kprintoq>>
+
+ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
+<<global iprintscreenputs>>
+
+<<struct ConsKbd>>
+
+<<global kbd>>
+
+<<global sysname>>
+<<global fasthz>>
+
+<<devcons.c forward decl>>
+
+enum
+{
+    CMhalt,
+    CMreboot,
+    CMpanic,
+};
+
+Cmdtab rebootmsg[] =
+{
+    CMhalt,     "halt",     1,
+    CMreboot,   "reboot",   0,
+    CMpanic,    "panic",    0,
+};
+
+<<function printinit>>
+
+<<function consactive>>
+
+<<function prflush>>
+
+<<struct KMesg>>
+
+<<global kmesg>>
+
+<<function kmesgputs>>
+
+<<function putstrn0>>
+
+<<function putstrn>>
+
+<<function print>>
+
+/*
+ * Want to interlock iprints to avoid interlaced output on 
+ * multiprocessor, but don't want to deadlock if one processor
+ * dies during print and another has something important to say.
+ * Make a good faith effort.
+ */
+static Lock iprintlock;
+
+static int
+iprintcanlock(Lock *l)
+{
+    int i;
+    
+    for(i=0; i<1000; i++){
+        if(canlock(l))
+            return 1;
+        if(l->m == MACHP(m->machno))
+            return 0;
+        microdelay(100);
+    }
+    return 0;
+}
+
+<<function iprint>>
+
+<<function panic>>
+
+<<function sysfatal>>
+
+<<function _assert>>
+
+<<function pprint>>
+
+<<function echoscreen>>
+
+<<function echoserialoq>>
+
+<<function echo>>
+
+<<function kbdcr2nl>>
+
+<<function kbdputc>>
+
+<<function kbdputcclock>>
+
+<<devcons.c enum Qxxx>>
+
+enum
+{
+    VLNUMSIZE=  22,
+};
+
+<<global consdir>>
+
+<<method consinit>>
+
+static Chan*
+consattach(char *spec)
+{
+    return devattach('c', spec);
+}
+
+static Walkqid*
+conswalk(Chan *c, Chan *nc, char **name, int nname)
+{
+    return devwalk(c, nc, name,nname, consdir, nelem(consdir), devgen);
+}
+
+static int
+consstat(Chan *c, uchar *dp, int n)
+{
+    return devstat(c, dp, n, consdir, nelem(consdir), devgen);
+}
+
+<<method consopen>>
+
+<<method consclose>>
+
+<<method consread>>
+
+<<method conswrite>>
+
+<<global consdevtab>>
+
 
 static  ulong   randn;
 

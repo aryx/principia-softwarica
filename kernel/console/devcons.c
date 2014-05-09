@@ -11,24 +11,38 @@
 #include    <pool.h>
 #include    <authsrv.h>
 
-void    (*consdebug)(void) = nil;
+/*s: function screenputs */
 void    (*screenputs)(char*, int) = nil;
+/*e: function screenputs */
+/*s: function consdebug */
+void    (*consdebug)(void) = nil; // for rdb
+/*e: function consdebug */
 
+/*s: global kbdq */
 Queue*  kbdq;           /* unprocessed console input */
+/*e: global kbdq */
+/*s: global lineq */
 Queue*  lineq;          /* processed console input */
+/*e: global lineq */
+/*s: global serialoq */
 Queue*  serialoq;       /* serial console output */
+/*e: global serialoq */
+/*s: global kprintoq */
 Queue*  kprintoq;       /* console output, for /dev/kprint */
-ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
-int iprintscreenputs = 1;
+/*e: global kprintoq */
 
+ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
+/*s: global iprintscreenputs */
+int iprintscreenputs = 1;
+/*e: global iprintscreenputs */
+
+/*s: struct ConsKbd */
 struct ConsKbd
 {
-    QLock;
+    bool raw;        /* true if we shouldn't process input */
 
-    int raw;        /* true if we shouldn't process input */
-    Ref ctl;        /* number of opens to the control file */
-    int x;      /* index into line */
     char    line[1024]; /* current input line */
+    int x;      /* index into line */
 
     int count;
     int ctlpoff;
@@ -37,20 +51,32 @@ struct ConsKbd
     Lock    lockputc;
     char    istage[1024];
 
+    // extra
+    QLock;
+    Ref ctl;        /* number of opens to the control file */
+
+    //???
     char    *iw;
     char    *ir;
     char    *ie;
 };
+/*e: struct ConsKbd */
 
+/*s: global kbd */
 static struct ConsKbd kbd = 
 {
     .iw = kbd.istage,
     .ir = kbd.istage,
     .ie = kbd.istage + sizeof(kbd.istage),
 };
+/*e: global kbd */
 
+/*s: global sysname */
 char    *sysname;
+/*e: global sysname */
+/*s: global fasthz */
 vlong   fasthz;
+/*e: global fasthz */
 
 /*s: devcons.c forward decl */
 static void seedrand(void);
@@ -74,6 +100,7 @@ Cmdtab rebootmsg[] =
     CMpanic,    "panic",    0,
 };
 
+/*s: function printinit */
 void
 printinit(void)
 {
@@ -82,7 +109,9 @@ printinit(void)
         panic("printinit");
     qnoblock(lineq, 1);
 }
+/*e: function printinit */
 
+/*s: function consactive */
 int
 consactive(void)
 {
@@ -90,7 +119,9 @@ consactive(void)
         return qlen(serialoq) > 0;
     return 0;
 }
+/*e: function consactive */
 
+/*s: function prflush */
 void
 prflush(void)
 {
@@ -101,17 +132,25 @@ prflush(void)
         if(m->ticks - now >= HZ)
             break;
 }
+/*e: function prflush */
 
+/*s: struct KMesg */
 /*
  * Log console output so it can be retrieved via /dev/kmesg.
  * This is good for catching boot-time messages after the fact.
  */
-struct {
+struct KMesg {
     Lock lk;
     char buf[KMESGSIZE];
     uint n;
-} kmesg;
+};
+/*e: struct KMesg */
 
+/*s: global kmesg */
+struct KMesg kmesg;
+/*e: global kmesg */
+
+/*s: function kmesgputs */
 static void
 kmesgputs(char *str, int n)
 {
@@ -140,7 +179,9 @@ kmesgputs(char *str, int n)
     kmesg.n = nn;
     iunlock(&kmesg.lk);
 }
+/*e: function kmesgputs */
 
+/*s: function putstrn0 */
 /*
  *   Print a string on the console.  Convert \n to \r\n for serial
  *   line consoles.  Locking of the queues is left up to the screen
@@ -148,7 +189,7 @@ kmesgputs(char *str, int n)
  *   interspersed with other messages.
  */
 static void
-putstrn0(char *str, int n, int usewrite)
+putstrn0(char *str, int n, bool usewrite)
 {
     int m;
     char *t;
@@ -205,14 +246,18 @@ putstrn0(char *str, int n, int usewrite)
         }
     }
 }
+/*e: function putstrn0 */
 
+/*s: function putstrn */
 void
 putstrn(char *str, int n)
 {
     putstrn0(str, n, 0);
 }
+/*e: function putstrn */
 
-int noprint;
+/*s: function print */
+bool noprint; // to debug?
 
 int
 devcons_print(char *fmt, ...)
@@ -231,6 +276,7 @@ devcons_print(char *fmt, ...)
 
     return n;
 }
+/*e: function print */
 
 /*
  * Want to interlock iprints to avoid interlaced output on 
@@ -239,6 +285,7 @@ devcons_print(char *fmt, ...)
  * Make a good faith effort.
  */
 static Lock iprintlock;
+
 static int
 iprintcanlock(Lock *l)
 {
@@ -254,6 +301,7 @@ iprintcanlock(Lock *l)
     return 0;
 }
 
+/*s: function iprint */
 int
 devcons_iprint(char *fmt, ...)
 {
@@ -275,7 +323,9 @@ devcons_iprint(char *fmt, ...)
 
     return n;
 }
+/*e: function iprint */
 
+/*s: function panic */
 void
 devcons_panic(char *fmt, ...)
 {
@@ -305,9 +355,12 @@ devcons_panic(char *fmt, ...)
 
         //  exit(1);
 }
+/*e: function panic */
 
+/*s: function sysfatal */
 /* libmp at least contains a few calls to sysfatal; simulate with panic */
 //@Scheck: no dead, override also sysfatal from libc/9sys/sysfatal.c
+// note that this is not a system call, even though it's prefixed with sys
 void
 sysfatal(char *fmt, ...)
 {
@@ -319,13 +372,17 @@ sysfatal(char *fmt, ...)
     va_end(arg);
     panic("sysfatal: %s", err);
 }
+/*e: function sysfatal */
 
+/*s: function _assert */
 void
 devcons__assert(char *fmt)
 {
     panic("assert failed at %#p: %s", getcallerpc(&fmt), fmt);
 }
+/*e: function _assert */
 
+/*s: function pprint */
 int
 devcons_pprint(char *fmt, ...)
 {
@@ -356,7 +413,9 @@ devcons_pprint(char *fmt, ...)
 
     return n;
 }
+/*e: function pprint */
 
+/*s: function echoscreen */
 static void
 echoscreen(char *buf, int n)
 {
@@ -382,7 +441,9 @@ echoscreen(char *buf, int n)
     if(p != ebuf)
         screenputs(ebuf, p - ebuf);
 }
+/*e: function echoscreen */
 
+/*s: function echoserialoq */
 static void
 echoserialoq(char *buf, int n)
 {
@@ -411,7 +472,9 @@ echoserialoq(char *buf, int n)
     if(p != ebuf)
         qiwrite(serialoq, ebuf, p - ebuf);
 }
+/*e: function echoserialoq */
 
+/*s: function echo */
 static void
 echo(char *buf, int n)
 {
@@ -498,7 +561,9 @@ echo(char *buf, int n)
     if(serialoq)
         echoserialoq(buf, n);
 }
+/*e: function echo */
 
+/*s: function kbdcr2nl */
 /*
  *  Called by a uart interrupt for console input.
  *
@@ -522,7 +587,9 @@ kbdcr2nl(Queue*, int ch)
     iunlock(&kbd.lockputc);
     return 0;
 }
+/*e: function kbdcr2nl */
 
+/*s: function kbdputc */
 /*
  *  Put character, possibly a rune, into read queue at interrupt time.
  *  Called at interrupt time to process a character.
@@ -553,7 +620,9 @@ kbdputc(Queue*, int ch)
     iunlock(&kbd.lockputc);
     return 0;
 }
+/*e: function kbdputc */
 
+/*s: function kbdputcclock */
 /*
  *  we save up input characters till clock time to reduce
  *  per character interrupt overhead.
@@ -576,7 +645,9 @@ kbdputcclock(void)
         }
     }
 }
+/*e: function kbdputcclock */
 
+/*s: devcons.c enum Qxxx */
 enum{
     Qdir,
     Qbintime,
@@ -603,12 +674,14 @@ enum{
     Qzero,
     Qconfig,
 };
+/*e: devcons.c enum Qxxx */
 
 enum
 {
     VLNUMSIZE=  22,
 };
 
+/*s: global consdir */
 static Dirtab consdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
     "bintime",  {Qbintime}, 24,     0664,
@@ -635,8 +708,9 @@ static Dirtab consdir[]={
     "zero",     {Qzero},    0,      0444,
     "config",   {Qconfig},  0,      0444,
 };
+/*e: global consdir */
 
-
+/*s: method consinit */
 static void
 consinit(void)
 {
@@ -648,6 +722,7 @@ consinit(void)
      */
     addclock0link(kbdputcclock, 22);
 }
+/*e: method consinit */
 
 static Chan*
 consattach(char *spec)
@@ -667,6 +742,7 @@ consstat(Chan *c, uchar *dp, int n)
     return devstat(c, dp, n, consdir, nelem(consdir), devgen);
 }
 
+/*s: method consopen */
 static Chan*
 consopen(Chan *c, int omode)
 {
@@ -696,7 +772,9 @@ consopen(Chan *c, int omode)
     }
     return c;
 }
+/*e: method consopen */
 
+/*s: method consclose */
 static void
 consclose(Chan *c)
 {
@@ -718,7 +796,9 @@ consclose(Chan *c)
         break;
     }
 }
+/*e: method consclose */
 
+/*s: method consread */
 static long
 consread(Chan *c, void *buf, long n, vlong off)
 {
@@ -949,7 +1029,9 @@ consread(Chan *c, void *buf, long n, vlong off)
     }
     return -1;      /* never reached */
 }
+/*e: method consread */
 
+/*s: method conswrite */
 static long
 conswrite(Chan *c, void *va, long n, vlong off)
 {
@@ -1108,7 +1190,9 @@ conswrite(Chan *c, void *va, long n, vlong off)
     }
     return n;
 }
+/*e: method conswrite */
 
+/*s: global consdevtab */
 Dev consdevtab = {
     .dc       =    'c',
     .name     =    "cons",
@@ -1129,6 +1213,8 @@ Dev consdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
+/*e: global consdevtab */
+
 
 static  ulong   randn;
 

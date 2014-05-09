@@ -13,21 +13,17 @@
 /*e: kernel basic includes */
 #include "io.h"
 
-/*s: pci.c debugging macro */
-#define DBG if(0) pcilog
-/*e: pci.c debugging macro */
-
 /* let each port override any of these */
 #ifndef PCICONSSIZE
 #define PCICONSSIZE (16*1024)
 #endif
 
-
-struct
+struct PCICons
 {
     char    output[PCICONSSIZE];
     int ptr;
-} PCICONS;
+};
+struct PCICons PCICONS;
 
 int pcivga;
 
@@ -37,7 +33,14 @@ ulong   pcibarsize(Pcidev*, int);
 void    pcibussize(Pcidev*, ulong*, ulong*);
 void    pcihinv(Pcidev*);
 uchar   pciipin(Pcidev*, uchar);
+
+typedef struct Slot Slot;
+typedef struct Bridge Bridge;
+typedef struct Router Router;
 /*e: pci.c forward decl */
+
+/*s: pci.c debugging macro */
+#define DBG if(0) pcilog
 
 int
 pcilog(char *fmt, ...)
@@ -54,6 +57,9 @@ pcilog(char *fmt, ...)
     PCICONS.ptr += n;
     return n;
 }
+
+/*e: pci.c debugging macro */
+
 
 enum
 {                   /* configuration mechanism #1 */
@@ -639,7 +645,6 @@ cyrixset(Pcidev *router, uchar link, uchar irq)
     pcicfgw8(router, 0x5c + (link>>1), pirq);
 }
 
-typedef struct Bridge Bridge;
 struct Bridge
 {
     ushort  vid;
@@ -648,6 +653,7 @@ struct Bridge
     void    (*set)(Pcidev *, uchar, uchar);
 };
 
+/*s: global southbridges */
 static Bridge southbridges[] = {
     { 0x8086, 0x122e, pIIxget, pIIxset },   /* Intel 82371FB */
     { 0x8086, 0x1234, pIIxget, pIIxset },   /* Intel 82371MX */
@@ -697,8 +703,8 @@ static Bridge southbridges[] = {
     { 0x1002, 0x4377, nil, nil },       /* ATI Radeon Xpress 200M */
     { 0x1002, 0x4372, nil, nil },       /* ATI SB400 */
 };
+/*e: global southbridges */
 
-typedef struct Slot Slot;
 struct Slot {
     uchar   bus;        /* Pci bus number */
     uchar   dev;        /* Pci device number */
@@ -707,7 +713,6 @@ struct Slot {
     uchar   reserved;
 };
 
-typedef struct Router Router;
 struct Router {
     uchar   signature[4];   /* Routing table signature */
     uchar   version[2]; /* Version number */
