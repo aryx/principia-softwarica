@@ -11,6 +11,8 @@
 /*s: devsrv.c forward decl */
 typedef struct Srv Srv;
 /*e: devsrv.c forward decl */
+
+/*s: struct Srv */
 struct Srv
 {
     char    *name;
@@ -20,11 +22,19 @@ struct Srv
     Srv *link;
     ulong   path;
 };
+/*e: struct Srv */
 
+/*s: global srvlk */
 static QLock    srvlk;
+/*e: global srvlk */
+/*s: global srv */
 static Srv  *srv;
+/*e: global srv */
+/*s: global qidpath */
 static int  qidpath;
+/*e: global qidpath */
 
+/*s: method srvgen */
 static int
 srvgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 {
@@ -52,12 +62,15 @@ srvgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
     qunlock(&srvlk);
     return 1;
 }
+/*e: method srvgen */
 
+/*s: method srvinit */
 static void
 srvinit(void)
 {
     qidpath = 1;
 }
+/*e: method srvinit */
 
 static Chan*
 srvattach(char *spec)
@@ -71,6 +84,7 @@ srvwalk(Chan *c, Chan *nc, char **name, int nname)
     return devwalk(c, nc, name, nname, 0, 0, srvgen);
 }
 
+/*s: function srvlookup */
 static Srv*
 srvlookup(char *name, ulong qidpath)
 {
@@ -80,6 +94,7 @@ srvlookup(char *name, ulong qidpath)
             return sp;
     return nil;
 }
+/*e: function srvlookup */
 
 static int
 srvstat(Chan *c, uchar *db, int n)
@@ -87,6 +102,7 @@ srvstat(Chan *c, uchar *db, int n)
     return devstat(c, db, n, 0, 0, srvgen);
 }
 
+/*s: function srvname */
 char*
 srvname(Chan *c)
 {
@@ -103,7 +119,9 @@ srvname(Chan *c)
         }
     return nil;
 }
+/*e: function srvname */
 
+/*s: method srvopen */
 static Chan*
 srvopen(Chan *c, int omode)
 {
@@ -141,7 +159,9 @@ srvopen(Chan *c, int omode)
     poperror();
     return sp->chan;
 }
+/*e: method srvopen */
 
+/*s: method srvcreate */
 static void
 srvcreate(Chan *c, char *name, int omode, ulong perm)
 {
@@ -185,7 +205,9 @@ srvcreate(Chan *c, char *name, int omode, ulong perm)
     c->flag |= COPEN;
     c->mode = OWRITE;
 }
+/*e: method srvcreate */
 
+/*s: method srvremove */
 static void
 srvremove(Chan *c)
 {
@@ -234,7 +256,9 @@ srvremove(Chan *c)
     free(sp->name);
     free(sp);
 }
+/*e: method srvremove */
 
+/*s: method srvwstat */
 static int
 srvwstat(Chan *c, uchar *dp, int n)
 {
@@ -278,7 +302,9 @@ srvwstat(Chan *c, uchar *dp, int n)
     poperror();
     return n;
 }
+/*e: method srvwstat */
 
+/*s: method srvclose */
 static void
 srvclose(Chan *c)
 {
@@ -294,14 +320,18 @@ srvclose(Chan *c)
         poperror();
     }
 }
+/*e: method srvclose */
 
+/*s: method srvread */
 static long
 srvread(Chan *c, void *va, long n, vlong)
 {
     isdir(c);
     return devdirread(c, va, n, 0, 0, srvgen);
 }
+/*e: method srvread */
 
+/*s: method srvwrite */
 static long
 srvwrite(Chan *c, void *va, long n, vlong)
 {
@@ -340,7 +370,9 @@ srvwrite(Chan *c, void *va, long n, vlong)
     poperror();
     return n;
 }
+/*e: method srvwrite */
 
+/*s: global srvdevtab */
 Dev srvdevtab = {
     .dc       =    's',
     .name     =    "srv",
@@ -361,4 +393,5 @@ Dev srvdevtab = {
     .remove   =    srvremove,
     .wstat    =    srvwstat,
 };
+/*e: global srvdevtab */
 /*e: devsrv.c */
