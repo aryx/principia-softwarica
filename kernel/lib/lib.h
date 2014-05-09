@@ -11,6 +11,7 @@
 //  - devcons.s overrides the sysfatal() that was in libc/9sys/
 
 // pad specific, should be in u.h
+/*s: pad basic types */
 typedef int bool;
 typedef ushort bool_ushort;
 typedef ulong bool_ulong;
@@ -18,6 +19,15 @@ enum _bool {
   false = 0,
   true = 1
 };
+/*e: pad basic types */
+
+/*s: lib.h forward decl */
+typedef struct Qid  Qid;
+typedef struct Dir  Dir;
+typedef struct OWaitmsg OWaitmsg;
+typedef struct Waitmsg  Waitmsg;
+typedef struct Fmt  Fmt;
+/*e: lib.h forward decl */
 
 /*
  * functions (mostly) linked in from libc.
@@ -30,15 +40,18 @@ enum _bool {
 /*
  * mem routines
  */
+/*s: lib.h mem functions decl */
 extern  void* memccpy(void*, void*, int, ulong);
 extern  void* memset(void*, int, ulong);
 extern  int memcmp(void*, void*, ulong);
 extern  void* memmove(void*, void*, ulong);
 extern  void* memchr(void*, int, ulong);
+/*e: lib.h mem functions decl */
 
 /*
  * string routines
  */
+/*s: lib.h string functions decl */
 extern  char* strchr(char*, int);
 extern  char* strrchr(char*, int);
 extern  int strcmp(char*, char*);
@@ -50,6 +63,7 @@ extern  long  strlen(char*);
 extern  char* strstr(char*, char*);
 extern  int atoi(char*);
 extern  int fullrune(char*, int);
+/*e: lib.h string functions decl */
 //unused: extern  char* strcat(char*, char*);
 //unused: extern  char* strncat(char*, char*, long);
 
@@ -70,10 +84,12 @@ enum
 /*
  * rune routines
  */
+/*s: lib.h rune functions decl */
 extern  int runetochar(char*, Rune*);
 extern  int chartorune(Rune*, char*);
 extern  char* utfrune(char*, long);
 extern  int utfnlen(char*, long);
+/*e: lib.h rune functions decl */
 //unused: extern  int utflen(char*);
 //unused: extern  int runelen(long);
 
@@ -82,8 +98,8 @@ extern  int abs(int);
 /*
  * print routines
  */
-typedef struct Fmt  Fmt;
 typedef int (*Fmts)(Fmt*);
+/*s: struct Fmt */
 struct Fmt{
   uchar runes;      /* output buffer is runes or chars? */
   void  *start;     /* of buffer */
@@ -98,6 +114,7 @@ struct Fmt{
   int prec;
   ulong flags;
 };
+/*e: struct Fmt */
 
 // This used to be regular function, but to avoid backward deps in the kernel
 // I made it into a pointer function (a bit ugly, and maybe unsafe)
@@ -141,40 +158,45 @@ extern  int sprint(char*, char*, ...);
 #pragma varargck  flag  ','
 /*e: lib.h pragmas */
 
+/*s: lib.h fmt functions decl */
 extern  int fmtstrinit(Fmt*);
 extern  int fmtinstall(int, int (*)(Fmt*));
 extern  void  quotefmtinstall(void);
 extern  int fmtprint(Fmt*, char*, ...);
 extern  int fmtstrcpy(Fmt*, char*);
 extern  char* fmtstrflush(Fmt*);
+/*e: lib.h fmt functions decl */
 
 /*
  * one-of-a-kind
  */
-extern  char* cleanname(char*);
-extern  ulong getcallerpc(void*);
-
+/*s: lib.h strto functions decl */
 extern  long  strtol(char*, char**, int);
 extern  ulong strtoul(char*, char**, int);
 extern  vlong strtoll(char*, char**, int);
 extern  uvlong  strtoull(char*, char**, int);
+/*e: lib.h strto functions decl */
 
+extern  ulong getcallerpc(void*);
+extern  char* cleanname(char*);
 extern  int getfields(char*, char**, int, int, char*);
 extern  int tokenize(char*, char**, int);
 extern  void  qsort(void*, long, long, int (*)(void*, void*));
 //unused: extern  int dec64(uchar*, int, char*, int);
 //unused: extern  int encodefmt(Fmt*);
 
-
+/*s: lib.h exxx decl */
 extern  char  etext[];
 //@Scheck: Assembly, not dead used by 386/l.s
 extern  char  edata[];
 extern  char  end[];
+/*e: lib.h exxx decl */
 
 
 /*
  * Syscall data structures
  */
+/*s: enum mount */
 enum mount {
   MREPL = 0x0000,  /* mount replaces object */
   MBEFORE = 0x0001,  /* mount goes before others in union directory */
@@ -185,7 +207,9 @@ enum mount {
   MORDER =  0x0003,  /* mask for bits defining order of mounting */
   MMASK = 0x0017,  /* all bits on */
 };
+/*e: enum mount */
 
+/*s: enum open */
 enum open {
   OREAD = 0, /* open for read */
   OWRITE = 1, /* write */
@@ -196,24 +220,27 @@ enum open {
   ORCLOSE = 64,  /* or'ed in, remove on close */
   OEXCL = 0x1000,  /* or'ed in, exclusive create */
 };
+/*e: enum open */
 
+/*s: enum node */
 enum note {
   NCONT = 0, /* continue after note */
   NDFLT = 1, /* terminate after note */
   NSAVE = 2, /* clear note but hold state */
   NRSTR = 3, /* restore saved state */
 };
+/*e: enum node */
 
-
-
+/*s: enum miscsize */
 enum miscsize {  
   ERRMAX = 128, /* max length of error string */
   KNAMELEN = 28,  /* max length of name held in kernel */
 };
+/*e: enum miscsize */
 
 
 
-
+/*s: enum qidtype */
 /* bits in Qid.type */
 enum qidtype {
   QTFILE = 0x00,    /* plain file */
@@ -224,7 +251,9 @@ enum qidtype {
   QTAPPEND = 0x40,    /* type bit for append only files */
   QTEXCL = 0x20,    /* type bit for exclusive use files */
 };
+/*e: enum qidtype */
 
+/*s: enum dirmode */
 /* bits in Dir.mode */
 enum dirmode {
   DMDIR = 0x80000000,  /* mode bit for directories */
@@ -236,14 +265,9 @@ enum dirmode {
   DMWRITE = 0x2,   /* mode bit for write permission */
   DMEXEC = 0x1,   /* mode bit for execute permission */
 };
+/*e: enum dirmode */
 
-/*s: lib.h forward decl */
-typedef struct Qid  Qid;
-typedef struct Dir  Dir;
-typedef struct OWaitmsg OWaitmsg;
-typedef struct Waitmsg  Waitmsg;
-/*e: lib.h forward decl */
-
+/*s: struct Qid */
 struct Qid
 {
   // note that this is not a string, but an int! it's kind of an inode?
@@ -253,7 +277,9 @@ struct Qid
   // enum<qidtype>
   uchar type;
 };
+/*e: struct Qid */
 
+/*s: struct Dir */
 struct Dir {
   /* system-modified data */
   ushort  type; /* server type */
@@ -271,22 +297,26 @@ struct Dir {
   char  *gid; /* group name */
   char  *muid;  /* last modifier name */
 };
+/*e: struct Dir */
 
 
-
+/*s: struct Waitmsg */
 struct Waitmsg
 {
   int pid;    /* of loved one */
   ulong time[3];  /* of loved one and descendants */
   char  msg[ERRMAX];  /* actually variable-size in user mode */
 };
+/*e: struct Waitmsg */
 
 // for byteorder agnostic marshalling?
+/*s: struct OWaitmsg */
 struct OWaitmsg
 {
   char  pid[12];  /* of loved one */
   char  time[3*12]; /* of loved one and descendants */
   char  msg[64];  /* compatibility BUG */
 };
+/*e: struct OWaitmsg */
 
 /*e: lib.h */
