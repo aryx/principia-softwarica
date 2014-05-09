@@ -11,12 +11,12 @@
 #include    <pool.h>
 #include    <authsrv.h>
 
-/*s: function screenputs */
+/*s: hook screenputs */
 void    (*screenputs)(char*, int) = nil;
-/*e: function screenputs */
-/*s: function consdebug */
+/*e: hook screenputs */
+/*s: hook consdebug */
 void    (*consdebug)(void) = nil; // for rdb
-/*e: function consdebug */
+/*e: hook consdebug */
 
 /*s: global kbdq */
 Queue*  kbdq;           /* unprocessed console input */
