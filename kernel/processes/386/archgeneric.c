@@ -17,12 +17,15 @@
  *  architecture specific stuff
  */
 
+/*s: function unimplemented */
 static int
 unimplemented(int)
 {
     return 0;
 }
+/*e: function unimplemented */
 
+/*s: function archreset */
 static void
 archreset(void)
 {
@@ -46,8 +49,9 @@ archreset(void)
     for(;;)
         idle();
 }
+/*e: function archreset */
 
-
+/*s: global archgeneric */
 PCArch archgeneric = {
     .id=        "generic",
     .ident=     0,
@@ -68,12 +72,14 @@ PCArch archgeneric = {
     .fastclock= i8253read,
     .timerset=  i8253timerset,
 };
+/*e: global archgeneric */
 
-
+/*s: function archrevert */
 void
 archrevert(void)
 {
     arch = &archgeneric;
 }
+/*e: function archrevert */
 
 /*e: archgeneric.c */

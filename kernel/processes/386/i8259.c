@@ -29,10 +29,13 @@ enum
     Elcr2=      0x4D1,
 };
 
+/*s: global i8259lock */
 static Lock i8259lock;
+/*e: global i8259lock */
 static int i8259mask = 0xFFFF;      /* disabled interrupts */
 int i8259elcr;              /* mask of level-triggered interrupts */
 
+/*s: function i8259init */
 void
 i8259init(void)
 {
@@ -104,7 +107,9 @@ i8259init(void)
     }
     iunlock(&i8259lock);
 }
+/*e: function i8259init */
 
+/*s: function i8259isr */
 int
 i8259isr(int vno)
 {
@@ -130,7 +135,9 @@ i8259isr(int vno)
 
     return isr & (1<<irq);
 }
+/*e: function i8259isr */
 
+/*s: function i8259enable */
 int
 i8259enable(Vctl* v)
 {
@@ -168,13 +175,17 @@ i8259enable(Vctl* v)
 
     return VectorPIC+irq;
 }
+/*e: function i8259enable */
 
+/*s: function i8259vecno */
 int
 i8259vecno(int irq)
 {
     return VectorPIC+irq;
 }
+/*e: function i8259vecno */
 
+/*s: function i8259disable */
 int
 i8259disable(int irq)
 {
@@ -201,19 +212,24 @@ i8259disable(int irq)
     iunlock(&i8259lock);
     return 0;
 }
+/*e: function i8259disable */
 
+/*s: function i8259on */
 void
 i8259on(void)
 {
     outb(Int0aux, i8259mask&0xFF);
     outb(Int1aux, (i8259mask>>8)&0xFF);
 }
+/*e: function i8259on */
 
+/*s: function i8259off */
 void
 i8259off(void)
 {
     outb(Int0aux, 0xFF);
     outb(Int1aux, 0xFF);
 }
+/*e: function i8259off */
 
 /*e: i8259.c */

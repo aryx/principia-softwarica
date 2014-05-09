@@ -71,9 +71,11 @@ enum
     Wdogms  = 200,      /* ms between strokes */
 };
 
+/*s: global i8253 */
 I8253 i8253;
+/*e: global i8253 */
 
-
+/*s: struct Watchdog */
 struct Watchdog
 {
     void    (*enable)(void);    /* watchdog enable */
@@ -81,15 +83,19 @@ struct Watchdog
     void    (*restart)(void);   /* watchdog restart */
     void    (*stat)(char*, char*);  /* watchdog statistics */
 };
+/*e: struct Watchdog */
 
+/*s: global watchdog */
 Watchdog* watchdog;
 int watchdogon;
+/*e: global watchdog */
 
 
 //*****************************************************************************
 // Init
 //*****************************************************************************
 
+/*s: function i8253init */
 void
 i8253init(void)
 {
@@ -132,11 +138,13 @@ i8253init(void)
         x |= inb(T0cntr)<<8;
     }
 }
+/*e: function i8253init */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
+/*s: function wdogpause */
 /*
  * if the watchdog is running and we're on cpu 0 and ignoring (clock)
  * interrupts, disable the watchdog temporarily so that the (presumed)
@@ -155,7 +163,9 @@ wdogpause(void)
     }
     return turndogoff;
 }
+/*e: function wdogpause */
 
+/*s: function wdogresume */
 static void
 wdogresume(int resume)
 {
@@ -164,7 +174,9 @@ wdogresume(int resume)
         watchdogon = 1;
     }
 }
+/*e: function wdogresume */
 
+/*s: function guesscpuhz */
 void
 guesscpuhz(int aalcycles)
 {
@@ -243,7 +255,9 @@ guesscpuhz(int aalcycles)
         panic("guesscpuhz: zero m->cpumhz");
     i8253.hz = Freq<<Tickshift;
 }
+/*e: function guesscpuhz */
 
+/*s: function i8253timerset */
 void
 i8253timerset(uvlong next)
 {
@@ -277,13 +291,17 @@ i8253timerset(uvlong next)
         iunlock(&i8253);
     }
 }
+/*e: function i8253timerset */
 
+/*s: function i8253clock */
 static void
 i8253clock(Ureg* ureg, void*)
 {
     timerintr(ureg, 0);
 }
+/*e: function i8253clock */
 
+/*s: function i8253enable */
 void
 i8253enable(void)
 {
@@ -291,12 +309,16 @@ i8253enable(void)
     i8253.period = Freq/HZ;
     intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
 }
+/*e: function i8253enable */
 
+/*s: function i8253link */
 void
 i8253link(void)
 {
 }
+/*e: function i8253link */
 
+/*s: function i8253read */
 /*
  *  return the total ticks of counter 2.  We shift by
  *  8 to give timesync more wriggle room for interpretation
@@ -335,7 +357,9 @@ i8253read(uvlong *hz)
 
     return ticks<<Tickshift;
 }
+/*e: function i8253read */
 
+/*s: function i8253_delay */
 void
 i8253_delay(int millisecs)
 {
@@ -352,7 +376,9 @@ i8253_delay(int millisecs)
         millisecs = 1;
     aamloop(millisecs);
 }
+/*e: function i8253_delay */
 
+/*s: function i8253_microdelay */
 void
 i8253_microdelay(int microsecs)
 {
@@ -367,7 +393,9 @@ i8253_microdelay(int microsecs)
         microsecs = 1;
     aamloop(microsecs);
 }
+/*e: function i8253_microdelay */
 
+/*s: function perfticks */
 /*  
  *  performance measurement ticks.  must be low overhead.
  *  doesn't have to count over a second.
@@ -383,4 +411,5 @@ perfticks(void)
         x = 0;
     return x;
 }
+/*e: function perfticks */
 /*e: i8253.c */

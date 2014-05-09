@@ -12,8 +12,10 @@
 
 _MP_ *_mp_;
 
+/*s: archmp.c forward decl */
 // forward decl, mutual recursivity between archmp and identity
 PCArch archmp;
+/*e: archmp.c forward decl */
 
 
 uvlong
@@ -83,7 +85,7 @@ identify(void)
     return 0;
 }
 
-
+/*s: global archmp */
 PCArch archmp = {
     .id=        "_MP_", 
     .ident=     identify,
@@ -96,10 +98,12 @@ PCArch archmp = {
     .timerset=  lapictimerset,
     .resetothers=   mpresetothers,
 };
+/*e: global archmp */
 
 
 //Lock mpsynclock;
 
+/*s: function syncclock */
 void
 syncclock(void)
 {
@@ -119,4 +123,5 @@ syncclock(void)
         cycles(&m->tscticks);
     }
 }
+/*e: function syncclock */
 /*e: archmp.c */

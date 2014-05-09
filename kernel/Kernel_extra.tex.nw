@@ -40848,24 +40848,16 @@ lapicintroff(void)
 
 \subsection*{[[processes/386/archgeneric.c]]}
 
-<<archgeneric.c>>=
-<<kernel basic includes>>
-
-//todo: weird, if don't include this file, then can't declare arch in this file
-// or I get some type signature mismatch
-#include "io.h"
-
-/*
- *  the following is a generic version of the
- *  architecture specific stuff
- */
-
+<<function unimplemented>>=
 static int
 unimplemented(int)
 {
     return 0;
 }
+@
 
+
+<<function archreset>>=
 static void
 archreset(void)
 {
@@ -40889,8 +40881,10 @@ archreset(void)
     for(;;)
         idle();
 }
+@
 
 
+<<global archgeneric>>=
 PCArch archgeneric = {
     .id=        "generic",
     .ident=     0,
@@ -40911,18 +40905,87 @@ PCArch archgeneric = {
     .fastclock= i8253read,
     .timerset=  i8253timerset,
 };
+@
 
 
+<<function archrevert>>=
 void
 archrevert(void)
 {
     arch = &archgeneric;
 }
+@
+
+
+<<archgeneric.c>>=
+<<kernel basic includes>>
+
+//todo: weird, if don't include this file, then can't declare arch in this file
+// or I get some type signature mismatch
+#include "io.h"
+
+/*
+ *  the following is a generic version of the
+ *  architecture specific stuff
+ */
+
+<<function unimplemented>>
+
+<<function archreset>>
+
+<<global archgeneric>>
+
+<<function archrevert>>
 
 @
 
 
 \subsection*{[[processes/386/archmp.c]]}
+
+<<archmp.c forward decl>>=
+// forward decl, mutual recursivity between archmp and identity
+PCArch archmp;
+@
+
+
+<<global archmp>>=
+PCArch archmp = {
+    .id=        "_MP_", 
+    .ident=     identify,
+    .reset=     mpshutdown,
+    .intrinit=  mpinit,
+    .intrenable=    mpintrenable,
+    .intron=    lapicintron,
+    .introff=   lapicintroff,
+    .fastclock= i8253read,
+    .timerset=  lapictimerset,
+    .resetothers=   mpresetothers,
+};
+@
+
+
+<<function syncclock>>=
+void
+syncclock(void)
+{
+    uvlong x;
+
+    if(arch->fastclock != tscticks)
+        return;
+
+    if(m->machno == 0){
+        wrmsr(0x10, 0);
+        m->tscticks = 0;
+    } else {
+        x = MACHP(0)->tscticks;
+        while(x == MACHP(0)->tscticks)
+            ;
+        wrmsr(0x10, MACHP(0)->tscticks);
+        cycles(&m->tscticks);
+    }
+}
+@
+
 
 <<archmp.c>>=
 <<kernel basic includes>>
@@ -40931,8 +40994,7 @@ archrevert(void)
 
 _MP_ *_mp_;
 
-// forward decl, mutual recursivity between archmp and identity
-PCArch archmp;
+<<archmp.c forward decl>>
 
 
 uvlong
@@ -41002,46 +41064,110 @@ identify(void)
     return 0;
 }
 
-
-PCArch archmp = {
-    .id=        "_MP_", 
-    .ident=     identify,
-    .reset=     mpshutdown,
-    .intrinit=  mpinit,
-    .intrenable=    mpintrenable,
-    .intron=    lapicintron,
-    .introff=   lapicintroff,
-    .fastclock= i8253read,
-    .timerset=  lapictimerset,
-    .resetothers=   mpresetothers,
-};
+<<global archmp>>
 
 
 //Lock mpsynclock;
 
-void
-syncclock(void)
-{
-    uvlong x;
-
-    if(arch->fastclock != tscticks)
-        return;
-
-    if(m->machno == 0){
-        wrmsr(0x10, 0);
-        m->tscticks = 0;
-    } else {
-        x = MACHP(0)->tscticks;
-        while(x == MACHP(0)->tscticks)
-            ;
-        wrmsr(0x10, MACHP(0)->tscticks);
-        cycles(&m->tscticks);
-    }
-}
+<<function syncclock>>
 @
 
 
 \subsection*{[[processes/386/dat_processes.h]]}
+
+<<struct Vctl>>=
+struct Vctl {
+
+    bool isintr;     /* interrupt or fault/trap */
+    int irq;
+  
+    void  (*f)(Ureg*, void*); /* handler to call */
+    void* a;      /* argument to call it with */
+  
+    char  name[KNAMELEN];   /* of driver */
+    int tbdf; //?
+  
+    // interrupt service routine
+    int (*isr)(int);    /* get isr bit for this irq */
+    int (*eoi)(int);    /* eoi */
+  
+    // extra
+  
+    // list<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
+    Vctl* next;     /* handlers on this vector */
+};
+@
+
+
+<<struct I8253>>=
+struct I8253
+{
+    ulong   period;     /* current clock period */
+    bool    enabled;
+    uvlong  hz;
+
+    ushort  last;       /* last value of clock 1 */
+    uvlong  ticks;      /* cumulative ticks of counter 1 */
+
+    ulong   periodset;
+
+    // extra
+    Lock;
+};
+@
+
+
+<<enum vector>>=
+enum {
+    VectorNMI = 2,    /* non-maskable interrupt */
+    VectorBPT = 3,    /* breakpoint */
+    VectorUD  = 6,    /* invalid opcode exception */
+    VectorCNA = 7,    /* coprocessor not available */
+    Vector2F  = 8,    /* double fault */
+    VectorCSO = 9,    /* coprocessor segment overrun */
+    VectorPF  = 14,   /* page fault */
+    Vector15  = 15,   /* reserved */
+    VectorCERR  = 16,   /* coprocessor error */
+  
+    VectorPIC = 32,   /* external i8259 interrupts */
+    VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
+
+    //!!! int 64 = way to jump in plan9 OS !!!
+    VectorSYSCALL = 64,
+  
+    VectorAPIC  = 65,   /* external APIC interrupts */
+    MaxVectorAPIC = 255,
+};
+@
+
+
+<<enum irq>>=
+enum {
+    IrqCLOCK  = 0,
+    IrqKBD    = 1,
+    IrqUART1  = 3,
+    IrqUART0  = 4,
+    IrqPCMCIA = 5,
+    IrqFLOPPY = 6,
+    IrqLPT    = 7,
+    IrqIRQ7   = 7,
+    IrqAUX    = 12,   /* PS/2 port */
+    IrqIRQ13  = 13,   /* coprocessor on 386 */
+    IrqATA0   = 14,
+    IrqATA1   = 15,
+    MaxIrqPIC = 15,
+  
+    IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
+    IrqLINT1  = 17,
+    IrqTIMER  = 18,
+    IrqERROR  = 19,
+    IrqPCINT  = 20,
+    IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
+
+    MaxIrqLAPIC = 31,
+};
+@
+
 
 <<dat_processes.h>>=
 
@@ -41077,69 +41203,12 @@ struct ArchProcNotsave
 // Used to be in io.h but more important than just a set of enums for IO
 // so put here.
 
-enum {
-    VectorNMI = 2,    /* non-maskable interrupt */
-    VectorBPT = 3,    /* breakpoint */
-    VectorUD  = 6,    /* invalid opcode exception */
-    VectorCNA = 7,    /* coprocessor not available */
-    Vector2F  = 8,    /* double fault */
-    VectorCSO = 9,    /* coprocessor segment overrun */
-    VectorPF  = 14,   /* page fault */
-    Vector15  = 15,   /* reserved */
-    VectorCERR  = 16,   /* coprocessor error */
-  
-    VectorPIC = 32,   /* external i8259 interrupts */
-  
-    IrqCLOCK  = 0,
-    IrqKBD    = 1,
-    IrqUART1  = 3,
-    IrqUART0  = 4,
-    IrqPCMCIA = 5,
-    IrqFLOPPY = 6,
-    IrqLPT    = 7,
-    IrqIRQ7   = 7,
-    IrqAUX    = 12,   /* PS/2 port */
-    IrqIRQ13  = 13,   /* coprocessor on 386 */
-    IrqATA0   = 14,
-    IrqATA1   = 15,
-    MaxIrqPIC = 15,
-  
-    VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
-    IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
-    IrqLINT1  = 17,
-    IrqTIMER  = 18,
-    IrqERROR  = 19,
-    IrqPCINT  = 20,
-    IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
-    MaxIrqLAPIC = 31,
-  
-    //!!! int 64 = way to jump in plan9 OS !!!
-    VectorSYSCALL = 64,
-  
-    VectorAPIC  = 65,   /* external APIC interrupts */
-    MaxVectorAPIC = 255,
-};
+<<enum vector>>
 
-struct Vctl {
+<<enum irq>>
+  
 
-    bool isintr;     /* interrupt or fault/trap */
-    int irq;
-  
-    void  (*f)(Ureg*, void*); /* handler to call */
-    void* a;      /* argument to call it with */
-  
-    char  name[KNAMELEN];   /* of driver */
-    int tbdf; //?
-  
-    // interrupt service routine
-    int (*isr)(int);    /* get isr bit for this irq */
-    int (*eoi)(int);    /* eoi */
-  
-    // extra
-  
-    // list<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
-    Vctl* next;     /* handlers on this vector */
-};
+<<struct Vctl>>
 
 // array<list<Vctl>>, xalloc'ed
 //IMPORTANT: static Vctl *vctl[256]; (in trap.c)
@@ -41151,20 +41220,7 @@ struct Vctl {
 // Used only in 386/, so could be put in arch/ but used by the .c here.
 // Actually used only in i8253.c but important so put here.
 
-struct I8253
-{
-    ulong   period;     /* current clock period */
-    bool    enabled;
-    uvlong  hz;
-
-    ushort  last;       /* last value of clock 1 */
-    uvlong  ticks;      /* cumulative ticks of counter 1 */
-
-    ulong   periodset;
-
-    // extra
-    Lock;
-};
+<<struct I8253>>
 //IMPORTANT: I8253 i8253; (in i8253.c)
 
 //IMPORTANT: also is interrupt i8253clock() calling clock.c:timerintr()
@@ -41173,75 +41229,12 @@ struct I8253
 
 \subsection*{[[processes/386/i8253.c]]}
 
-<<i8253.c>>=
-<<kernel basic includes>>
-#include "io.h"
-
-//*****************************************************************************
-// Data
-//*****************************************************************************
-
-
-// the 8253 timer will generate clock ticks which will be useful to preempt
-// processes and so provide multitasking
-
-/*
- *  8253 timer
- */
-enum
-{
-    T0cntr= 0x40,       /* counter ports */
-    T1cntr= 0x41,       /* ... */
-    T2cntr= 0x42,       /* ... */
-    Tmode=  0x43,       /* mode port (control word register) */
-    T2ctl=  0x61,       /* counter 2 control port */
-
-    /* commands */
-    Latch0= 0x00,       /* latch counter 0's value */
-    Load0l= 0x10,       /* load counter 0's lsb */
-    Load0m= 0x20,       /* load counter 0's msb */
-    Load0=  0x30,       /* load counter 0 with 2 bytes */
-
-    Latch1= 0x40,       /* latch counter 1's value */
-    Load1l= 0x50,       /* load counter 1's lsb */
-    Load1m= 0x60,       /* load counter 1's msb */
-    Load1=  0x70,       /* load counter 1 with 2 bytes */
-
-    Latch2= 0x80,       /* latch counter 2's value */
-    Load2l= 0x90,       /* load counter 2's lsb */
-    Load2m= 0xa0,       /* load counter 2's msb */
-    Load2=  0xb0,       /* load counter 2 with 2 bytes */
-
-    /* 8254 read-back command: everything > pc-at has an 8254 */
-    Rdback= 0xc0,       /* readback counters & status */
-    Rdnstat=0x10,       /* don't read status */
-    Rdncnt= 0x20,       /* don't read counter value */
-    Rd0cntr=0x02,       /* read back for which counter */
-    Rd1cntr=0x04,
-    Rd2cntr=0x08,
-
-    /* modes */
-    ModeMsk=0xe,
-    Square= 0x6,        /* periodic square wave */
-    Trigger=0x0,        /* interrupt on terminal count */
-    Sstrobe=0x8,        /* software triggered strobe */
-
-    /* T2ctl bits */
-    T2gate= (1<<0),     /* enable T2 counting */
-    T2spkr= (1<<1),     /* connect T2 out to speaker */
-    T2out=  (1<<5),     /* output of T2 */
-
-    Freq=   1193182,    /* Real clock frequency */
-    Tickshift=8,        /* extra accuracy */
-    MaxPeriod=Freq/HZ,
-    MinPeriod=Freq/(100*HZ),
-
-    Wdogms  = 200,      /* ms between strokes */
-};
-
+<<global i8253>>=
 I8253 i8253;
+@
 
 
+<<struct Watchdog>>=
 struct Watchdog
 {
     void    (*enable)(void);    /* watchdog enable */
@@ -41249,15 +41242,15 @@ struct Watchdog
     void    (*restart)(void);   /* watchdog restart */
     void    (*stat)(char*, char*);  /* watchdog statistics */
 };
+@
 
+
+<<global watchdog>>=
 Watchdog* watchdog;
 int watchdogon;
+@
 
-
-//*****************************************************************************
-// Init
-//*****************************************************************************
-
+<<function i8253init>>=
 void
 i8253init(void)
 {
@@ -41300,11 +41293,9 @@ i8253init(void)
         x |= inb(T0cntr)<<8;
     }
 }
+@
 
-//*****************************************************************************
-// Misc
-//*****************************************************************************
-
+<<function wdogpause>>=
 /*
  * if the watchdog is running and we're on cpu 0 and ignoring (clock)
  * interrupts, disable the watchdog temporarily so that the (presumed)
@@ -41323,7 +41314,10 @@ wdogpause(void)
     }
     return turndogoff;
 }
+@
 
+
+<<function wdogresume>>=
 static void
 wdogresume(int resume)
 {
@@ -41332,7 +41326,9 @@ wdogresume(int resume)
         watchdogon = 1;
     }
 }
+@
 
+<<function guesscpuhz>>=
 void
 guesscpuhz(int aalcycles)
 {
@@ -41411,7 +41407,9 @@ guesscpuhz(int aalcycles)
         panic("guesscpuhz: zero m->cpumhz");
     i8253.hz = Freq<<Tickshift;
 }
+@
 
+<<function i8253timerset>>=
 void
 i8253timerset(uvlong next)
 {
@@ -41445,13 +41443,19 @@ i8253timerset(uvlong next)
         iunlock(&i8253);
     }
 }
+@
 
+
+<<function i8253clock>>=
 static void
 i8253clock(Ureg* ureg, void*)
 {
     timerintr(ureg, 0);
 }
+@
 
+
+<<function i8253enable>>=
 void
 i8253enable(void)
 {
@@ -41459,12 +41463,17 @@ i8253enable(void)
     i8253.period = Freq/HZ;
     intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
 }
+@
 
+
+<<function i8253link>>=
 void
 i8253link(void)
 {
 }
+@
 
+<<function i8253read>>=
 /*
  *  return the total ticks of counter 2.  We shift by
  *  8 to give timesync more wriggle room for interpretation
@@ -41503,7 +41512,9 @@ i8253read(uvlong *hz)
 
     return ticks<<Tickshift;
 }
+@
 
+<<function i8253_delay>>=
 void
 i8253_delay(int millisecs)
 {
@@ -41520,7 +41531,10 @@ i8253_delay(int millisecs)
         millisecs = 1;
     aamloop(millisecs);
 }
+@
 
+
+<<function i8253_microdelay>>=
 void
 i8253_microdelay(int microsecs)
 {
@@ -41535,7 +41549,10 @@ i8253_microdelay(int microsecs)
         microsecs = 1;
     aamloop(microsecs);
 }
+@
 
+
+<<function perfticks>>=
 /*  
  *  performance measurement ticks.  must be low overhead.
  *  doesn't have to count over a second.
@@ -41554,36 +41571,116 @@ perfticks(void)
 @
 
 
-\subsection*{[[processes/386/i8259.c]]}
-
-<<i8259.c>>=
+<<i8253.c>>=
 <<kernel basic includes>>
 #include "io.h"
 
+//*****************************************************************************
+// Data
+//*****************************************************************************
+
+
+// the 8253 timer will generate clock ticks which will be useful to preempt
+// processes and so provide multitasking
+
 /*
- *  8259 interrupt controllers
+ *  8253 timer
  */
 enum
 {
-    Int0ctl=    0x20,       /* control port (ICW1, OCW2, OCW3) */
-    Int0aux=    0x21,       /* everything else (ICW2, ICW3, ICW4, OCW1) */
-    Int1ctl=    0xA0,       /* control port */
-    Int1aux=    0xA1,       /* everything else (ICW2, ICW3, ICW4, OCW1) */
+    T0cntr= 0x40,       /* counter ports */
+    T1cntr= 0x41,       /* ... */
+    T2cntr= 0x42,       /* ... */
+    Tmode=  0x43,       /* mode port (control word register) */
+    T2ctl=  0x61,       /* counter 2 control port */
 
-    Icw1=       0x10,       /* select bit in ctl register */
-    Ocw2=       0x00,
-    Ocw3=       0x08,
+    /* commands */
+    Latch0= 0x00,       /* latch counter 0's value */
+    Load0l= 0x10,       /* load counter 0's lsb */
+    Load0m= 0x20,       /* load counter 0's msb */
+    Load0=  0x30,       /* load counter 0 with 2 bytes */
 
-    EOI=        0x20,       /* non-specific end of interrupt */
+    Latch1= 0x40,       /* latch counter 1's value */
+    Load1l= 0x50,       /* load counter 1's lsb */
+    Load1m= 0x60,       /* load counter 1's msb */
+    Load1=  0x70,       /* load counter 1 with 2 bytes */
 
-    Elcr1=      0x4D0,      /* Edge/Level Triggered Register */
-    Elcr2=      0x4D1,
+    Latch2= 0x80,       /* latch counter 2's value */
+    Load2l= 0x90,       /* load counter 2's lsb */
+    Load2m= 0xa0,       /* load counter 2's msb */
+    Load2=  0xb0,       /* load counter 2 with 2 bytes */
+
+    /* 8254 read-back command: everything > pc-at has an 8254 */
+    Rdback= 0xc0,       /* readback counters & status */
+    Rdnstat=0x10,       /* don't read status */
+    Rdncnt= 0x20,       /* don't read counter value */
+    Rd0cntr=0x02,       /* read back for which counter */
+    Rd1cntr=0x04,
+    Rd2cntr=0x08,
+
+    /* modes */
+    ModeMsk=0xe,
+    Square= 0x6,        /* periodic square wave */
+    Trigger=0x0,        /* interrupt on terminal count */
+    Sstrobe=0x8,        /* software triggered strobe */
+
+    /* T2ctl bits */
+    T2gate= (1<<0),     /* enable T2 counting */
+    T2spkr= (1<<1),     /* connect T2 out to speaker */
+    T2out=  (1<<5),     /* output of T2 */
+
+    Freq=   1193182,    /* Real clock frequency */
+    Tickshift=8,        /* extra accuracy */
+    MaxPeriod=Freq/HZ,
+    MinPeriod=Freq/(100*HZ),
+
+    Wdogms  = 200,      /* ms between strokes */
 };
 
-static Lock i8259lock;
-static int i8259mask = 0xFFFF;      /* disabled interrupts */
-int i8259elcr;              /* mask of level-triggered interrupts */
+<<global i8253>>
 
+<<struct Watchdog>>
+
+<<global watchdog>>
+
+
+//*****************************************************************************
+// Init
+//*****************************************************************************
+
+<<function i8253init>>
+
+//*****************************************************************************
+// Misc
+//*****************************************************************************
+
+<<function wdogpause>>
+
+<<function wdogresume>>
+
+<<function guesscpuhz>>
+
+<<function i8253timerset>>
+
+<<function i8253clock>>
+
+<<function i8253enable>>
+
+<<function i8253link>>
+
+<<function i8253read>>
+
+<<function i8253_delay>>
+
+<<function i8253_microdelay>>
+
+<<function perfticks>>
+@
+
+
+\subsection*{[[processes/386/i8259.c]]}
+
+<<function i8259init>>=
 void
 i8259init(void)
 {
@@ -41655,7 +41752,13 @@ i8259init(void)
     }
     iunlock(&i8259lock);
 }
+@
 
+<<global i8259lock>>=
+static Lock i8259lock;
+@
+
+<<function i8259isr>>=
 int
 i8259isr(int vno)
 {
@@ -41681,7 +41784,9 @@ i8259isr(int vno)
 
     return isr & (1<<irq);
 }
+@
 
+<<function i8259enable>>=
 int
 i8259enable(Vctl* v)
 {
@@ -41719,13 +41824,17 @@ i8259enable(Vctl* v)
 
     return VectorPIC+irq;
 }
+@
 
+<<function i8259vecno>>=
 int
 i8259vecno(int irq)
 {
     return VectorPIC+irq;
 }
+@
 
+<<function i8259disable>>=
 int
 i8259disable(int irq)
 {
@@ -41752,31 +41861,76 @@ i8259disable(int irq)
     iunlock(&i8259lock);
     return 0;
 }
+@
 
+<<function i8259on>>=
 void
 i8259on(void)
 {
     outb(Int0aux, i8259mask&0xFF);
     outb(Int1aux, (i8259mask>>8)&0xFF);
 }
+@
 
+
+<<function i8259off>>=
 void
 i8259off(void)
 {
     outb(Int0aux, 0xFF);
     outb(Int1aux, 0xFF);
 }
+@
+
+
+<<i8259.c>>=
+<<kernel basic includes>>
+#include "io.h"
+
+/*
+ *  8259 interrupt controllers
+ */
+enum
+{
+    Int0ctl=    0x20,       /* control port (ICW1, OCW2, OCW3) */
+    Int0aux=    0x21,       /* everything else (ICW2, ICW3, ICW4, OCW1) */
+    Int1ctl=    0xA0,       /* control port */
+    Int1aux=    0xA1,       /* everything else (ICW2, ICW3, ICW4, OCW1) */
+
+    Icw1=       0x10,       /* select bit in ctl register */
+    Ocw2=       0x00,
+    Ocw3=       0x08,
+
+    EOI=        0x20,       /* non-specific end of interrupt */
+
+    Elcr1=      0x4D0,      /* Edge/Level Triggered Register */
+    Elcr2=      0x4D1,
+};
+
+<<global i8259lock>>
+static int i8259mask = 0xFFFF;      /* disabled interrupts */
+int i8259elcr;              /* mask of level-triggered interrupts */
+
+<<function i8259init>>
+
+<<function i8259isr>>
+
+<<function i8259enable>>
+
+<<function i8259vecno>>
+
+<<function i8259disable>>
+
+<<function i8259on>>
+
+<<function i8259off>>
 
 @
 
 
 \subsection*{[[processes/386/l_switch.s]]}
 
-<<l_switch.s>>=
-
-// This file is used for task switching but also to emulate
-// exceptions in C (via the waserror(), nexterror(), poperror() functions)
-        
+<<function gotolabel>>=
 /*
  *  label consists of a stack pointer and a PC
  */
@@ -41787,7 +41941,10 @@ TEXT gotolabel(SB), $0
         MOVL    AX, 0(SP)
         MOVL    $1, AX                          /* return 1 */
         RET
+@
 
+
+<<function setlabel>>=
 TEXT setlabel(SB), $0
         MOVL    label+0(FP), AX
         MOVL    SP, 0(AX)                       /* store sp */
@@ -41796,6 +41953,17 @@ TEXT setlabel(SB), $0
         MOVL    $0, AX                          /* return 0 */
         RET
 
+@
+
+
+<<l_switch.s>>=
+
+// This file is used for task switching but also to emulate
+// exceptions in C (via the waserror(), nexterror(), poperror() functions)
+
+<<function gotolabel>>        
+
+<<function setlabel>>
 @
 
 

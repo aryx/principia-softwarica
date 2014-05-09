@@ -2,7 +2,8 @@
 
 // This file is used for task switching but also to emulate
 // exceptions in C (via the waserror(), nexterror(), poperror() functions)
-        
+
+/*s: function gotolabel */
 /*
  *  label consists of a stack pointer and a PC
  */
@@ -13,7 +14,9 @@ TEXT gotolabel(SB), $0
         MOVL    AX, 0(SP)
         MOVL    $1, AX                          /* return 1 */
         RET
+/*e: function gotolabel */
 
+/*s: function setlabel */
 TEXT setlabel(SB), $0
         MOVL    label+0(FP), AX
         MOVL    SP, 0(AX)                       /* store sp */
@@ -22,4 +25,5 @@ TEXT setlabel(SB), $0
         MOVL    $0, AX                          /* return 0 */
         RET
 
+/*e: function setlabel */
 /*e: l_switch.s */
