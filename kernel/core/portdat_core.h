@@ -27,7 +27,7 @@ struct Conf
     ulong nproc;    /* processes */
     Confmem mem[4];   /* physical memory */
 
-    /*s: Conf extra fields */
+    /*s: [[Conf]] extra fields */
     bool_ulong monitor;  /* has monitor? */
 
     ulong npage;    /* total physical pages of memory */
@@ -40,9 +40,9 @@ struct Conf
     bool_ulong copymode; /* 0 is copy on write, 1 is copy on reference */
     ulong ialloc;   /* max interrupt time allocation in bytes */
     int nuart;    /* number of uart devices */
-    /*x: Conf extra fields */
+    /*x: [[Conf]] extra fields */
     ulong pipeqsize;  /* size in bytes of pipe queues */
-    /*e: Conf extra fields */
+    /*e: [[Conf]] extra fields */
   
     struct ArchConf;
 };
@@ -103,9 +103,9 @@ struct Mach
     // ref<Proc>
     Proc* proc;     /* current process on this processor */
 
-    /*s: Mach other fields */
+    /*s: [[Mach]] other fields */
     int ilockdepth;
-    /*x: Mach other fields */
+    /*x: [[Mach]] other fields */
     ulong ticks;      /* of the clock since boot time */
     Label sched;      /* scheduler wakeup */
     Lock  alarmlock;    /* access to alarm list */
@@ -132,7 +132,7 @@ struct Mach
     int cpumhz;
     uvlong  cpuhz;
     uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
-    /*e: Mach other fields */
+    /*e: [[Mach]] other fields */
 
     struct ArchMach;
   

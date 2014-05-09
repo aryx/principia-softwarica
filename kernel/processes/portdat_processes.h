@@ -387,19 +387,19 @@ struct Proc
 //--------------------------------------------------------------------
 // Assembly requirements, Low level, have to be first
 //--------------------------------------------------------------------
-    /*s: Proc assembly fields */
+    /*s: [[Proc]] assembly fields */
     Label sched;    /* known to l.s */
     char  *kstack;  /* known to l.s */
-    /*e: Proc assembly fields */
+    /*e: [[Proc]] assembly fields */
 //--------------------------------------------------------------------
 // State
 //--------------------------------------------------------------------
-    /*s: Proc state fields */
+    /*s: [[Proc]] state fields */
     ulong pid;
 
     // enum<procstate>
     int state; // Dead, Queuing, etc,
-    /*x: Proc state fields */
+    /*x: [[Proc]] state fields */
     bool insyscall;
     char  *psstate; /* What /proc/#/status reports */
 
@@ -413,19 +413,19 @@ struct Proc
     int nargs;    /* number of bytes of args */
 
     int kp;   /* true if a kernel process */
-    /*e: Proc state fields */
+    /*e: [[Proc]] state fields */
 //--------------------------------------------------------------------
 // Memory
 //--------------------------------------------------------------------
-    /*s: Proc memory fields */
+    /*s: [[Proc]] memory fields */
     // hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
     Segment *seg[NSEG];
     QLock seglock;  /* locked whenever seg[] changes */
-    /*e: Proc memory fields */
+    /*e: [[Proc]] memory fields */
 //--------------------------------------------------------------------
 // Scheduling
 //--------------------------------------------------------------------
-    /*s: Proc scheduling fields */
+    /*s: [[Proc]] scheduling fields */
     // enum<priority>
     ulong priority; /* priority level */
 
@@ -444,11 +444,11 @@ struct Proc
            */
     // option<ref_own?<edf>>
     Edf *edf;   /* if non-null, real-time proc, edf contains scheduling params */
-    /*e: Proc scheduling fields */
+    /*e: [[Proc]] scheduling fields */
 //--------------------------------------------------------------------
 // Files
 //--------------------------------------------------------------------
-    /*s: Proc files fields */
+    /*s: [[Proc]] files fields */
     // ref_counted<pgrp>
     Pgrp  *pgrp;    /* Process group for namespace */
     // ref_counted<egrp>
@@ -460,11 +460,11 @@ struct Proc
     Chan  *slash; // The root!
     // ref_counted<Chan>
     Chan  *dot; // The current directory
-    /*e: Proc files fields */
+    /*e: [[Proc]] files fields */
 //--------------------------------------------------------------------
 // Notes
 //--------------------------------------------------------------------
-    /*s: Proc notes fields */
+    /*s: [[Proc]] notes fields */
     ulong noteid;   /* Equivalent of note group */
 
     int notepending;  /* note issued but not acted on */
@@ -476,11 +476,11 @@ struct Proc
     int (*notify)(void*, char*);
 
     void  *ureg;    /* User registers for notes */
-    /*e: Proc notes fields */
+    /*e: [[Proc]] notes fields */
 //--------------------------------------------------------------------
 // Process hierarchy
 //--------------------------------------------------------------------
-    /*s: Proc hierarchy fields */
+    /*s: [[Proc]] hierarchy fields */
     //list<ref<Waitq>>
     Waitq *waitq;   /* Exited processes wait children */
     Lock  exl;    /* Lock count and waitq */
@@ -492,11 +492,11 @@ struct Proc
     int nwait;    /* Number of uncollected wait records */
     QLock qwaitr;
     Rendez  waitr;    /* Place to hang out in wait */
-    /*e: Proc hierarchy fields */
+    /*e: [[Proc]] hierarchy fields */
 //--------------------------------------------------------------------
 // Synchronization
 //--------------------------------------------------------------------
-    /*s: Proc synchronization fields */
+    /*s: [[Proc]] synchronization fields */
     Rgrp  *rgrp;    /* Rendez group */
 
     uintptr rendtag;  /* Tag for rendezvous */
@@ -506,11 +506,11 @@ struct Proc
 
     Rendez  *r;   /* rendezvous point slept on */
     Rendez  sleep;    /* place for syssleep/debug */
-    /*e: Proc synchronization fields */
+    /*e: [[Proc]] synchronization fields */
 //--------------------------------------------------------------------
 // Error managment
 //--------------------------------------------------------------------
-    /*s: Proc error managment fields */
+    /*s: [[Proc]] error managment fields */
     // array<Label>, error labels, poor's man exceptions in C
     Label errlab[NERR];
     // length(errlab) used.
@@ -520,11 +520,11 @@ struct Proc
     char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
     char  errbuf0[ERRMAX];
     char  errbuf1[ERRMAX];
-    /*e: Proc error managment fields */
+    /*e: [[Proc]] error managment fields */
 //--------------------------------------------------------------------
 // Stats, profiling
 //--------------------------------------------------------------------
-    /*s: Proc stats and profiling fields */
+    /*s: [[Proc]] stats and profiling fields */
     // hash<enum<proctime>, ulong>
     ulong time[6];  /* User, Sys, Real; child U, S, R */
 
@@ -538,11 +538,11 @@ struct Proc
      * (procrestores and procsaves balance), it is pcycles.
      */
     vlong pcycles;
-    /*e: Proc stats and profiling fields */
+    /*e: [[Proc]] stats and profiling fields */
 //--------------------------------------------------------------------
 // For debugger
 //--------------------------------------------------------------------
-    /*s: Proc debugger fields */
+    /*s: [[Proc]] debugger fields */
     void  *dbgreg;  /* User registers for devproc */
     ulong pc;   /* DEBUG only */
 
@@ -556,19 +556,19 @@ struct Proc
     QLock debug;    /* to access debugging elements of User */
     Proc  *pdbg;    /* the debugging process */
     bool hang;   /* hang at next exec for debug */
-    /*e: Proc debugger fields */
+    /*e: [[Proc]] debugger fields */
 //--------------------------------------------------------------------
 // Other
 //--------------------------------------------------------------------
-    /*s: Proc other fields */
+    /*s: [[Proc]] other fields */
     Lock* lastlock;
     // As long as the current process hold locks (to kernel data structures),
     // we will not schedule another process in unlock(); only the last unlock
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
-    /*x: Proc other fields */
+    /*x: [[Proc]] other fields */
     Lock  *lastilock; /* debugging */
-    /*x: Proc other fields */
+    /*x: [[Proc]] other fields */
     Fgrp  *closingfgrp; /* used during teardown */
 
 
@@ -613,14 +613,14 @@ struct Proc
     ArchProcMMU;
 
     char  *syscalltrace;  /* syscall trace */
-    /*e: Proc other fields */
+    /*e: [[Proc]] other fields */
 //--------------------------------------------------------------------
 // Extra
 //--------------------------------------------------------------------
-    /*s: Proc extra fields */
+    /*s: [[Proc]] extra fields */
     // list<ref<Proc>> KQlock.head or RWLock.head
     Proc  *qnext;   /* next process on queue for a QLock */
-    /*x: Proc extra fields */
+    /*x: [[Proc]] extra fields */
 
     // list<ref<Proc>> ?? Schedq.head chain?
     Proc  *rnext;   /* next process in run queue */
@@ -634,7 +634,7 @@ struct Proc
 
     // option<ref<Mach>>, null when not associated to a machine?
     Mach  *mach;    /* machine running this proc */
-    /*e: Proc extra fields */
+    /*e: [[Proc]] extra fields */
 };
 /*e: struct Proc */
 

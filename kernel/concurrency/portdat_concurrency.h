@@ -18,19 +18,19 @@ struct Lock
     // virt_addr?
     uintptr pc; // for debugging
 
-    /*s: Lock ilock fields */
+    /*s: [[Lock]] ilock fields */
     bool_ushort isilock; // false when from lock(), true when from ilock()
     ulong sr; // saved priority level when using ilock() to restore in iunlock()
-    /*e: Lock ilock fields */
-    /*s: Lock other fields */
+    /*e: [[Lock]] ilock fields */
+    /*s: [[Lock]] other fields */
     // option<ref<Mach>>, None when key = 0?
     Mach  *m; // not that used, only in iprintcanlock apparently
-    /*e: Lock other fields */
-    /*s: Lock debugging fields */
+    /*e: [[Lock]] other fields */
+    /*s: [[Lock]] debugging fields */
     //#ifdef LOCKCYCLES
     long  lockcycles;
     //#endif
-    /*e: Lock debugging fields */
+    /*e: [[Lock]] debugging fields */
 };
 /*e: struct Lock */
 

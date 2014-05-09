@@ -222,7 +222,7 @@ struct Chan
     vlong offset;     /* in fd */
     ushort  mode;     /* read/write */
 
-    /*s: Chan other fields */
+    /*s: [[Chan]] other fields */
     vlong devoffset;    /* in underlying device; see read */
 
     ulong dev;
@@ -251,14 +251,14 @@ struct Chan
     Chan* mchan;      /* channel to mounted server */
     Qid mqid;     /* qid of root of mount point */
     Path* path;
-    /*e: Chan other fields */
+    /*e: [[Chan]] other fields */
 
     // Extra
-    /*s: Chan extra fields */
+    /*s: [[Chan]] extra fields */
     Ref;        /* the Lock in this Ref is also Chan's lock */
     Chan* next;     /* allocation */
     Chan* link;
-    /*e: Chan extra fields */
+    /*e: [[Chan]] extra fields */
 };
 /*e: struct Chan */
 
@@ -329,10 +329,10 @@ struct Dev
     void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
     int (*config)(int, char*, DevConf*);  /* returns nil on error */
 
-    /*s: Dev other fields */
+    /*s: [[Dev]] other fields */
     /* not initialised */
     int attached;       /* debugging */
-    /*e: Dev other fields */
+    /*e: [[Dev]] other fields */
 };
 /*e: struct Dev */
 
