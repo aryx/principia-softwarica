@@ -29315,6 +29315,39 @@ extern Dev fsdevtab;        /* forward */
 @
 \fi
 
+<<devfs.c debugging macro>>=
+static int debug;
+#define dprint if(debug)print
+@
+
+
+<<global fsdevtab>>=
+Dev fsdevtab = {
+    .dc       =    'k',
+    .name     =    "fs",
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    mattach,
+    .walk     =    mwalk,
+    .stat     =    mstat,
+    .open     =    mopen,
+    .create   =    devcreate,
+    .close    =    mclose,
+    .read     =    mread,
+    .bread    =    devbread,
+    .write    =    mwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+
+    .power    =    devpower,
+    .config   =    devconfig,
+};
+@
+
+
 <<devfs.c>>=
 /*
  * File system devices.
@@ -29377,8 +29410,7 @@ enum
 
 <<devfs.c forward decl>>
 
-static int debug;
-#define dprint if(debug)print
+<<devfs.c debugging macro>>
 
 
 struct Inner
@@ -30573,29 +30605,7 @@ Done:
     return res;
 }
 
-Dev fsdevtab = {
-    .dc       =    'k',
-    .name     =    "fs",
-               
-    .reset    =    devreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .attach   =    mattach,
-    .walk     =    mwalk,
-    .stat     =    mstat,
-    .open     =    mopen,
-    .create   =    devcreate,
-    .close    =    mclose,
-    .read     =    mread,
-    .bread    =    devbread,
-    .write    =    mwrite,
-    .bwrite   =    devbwrite,
-    .remove   =    devremove,
-    .wstat    =    devwstat,
-
-    .power    =    devpower,
-    .config   =    devconfig,
-};
+<<global fsdevtab>>
 @
 
 
@@ -31302,13 +31312,7 @@ TEXT fpsserestore0(SB), $0                      /* enable and restore state */
 
 \subsection*{[[init/386/l_misc.s]]}
 
-<<l_misc.s>>=
-
-/*
- * Some machine instructions not handled by 8[al].
- */
-#define HLT             BYTE $0xF4
-        
+<<function idle>>=
 /*
  * Park a processor. Should never fall through a return from main to here,
  * should only be called by application processors when shutting down.
@@ -31318,9 +31322,10 @@ _idle:
         STI
         HLT
         JMP     _idle
+@
 
 
-        
+<<function halt>>=
 /*
  * Attempt at power saving. -rsc
  */
@@ -31335,6 +31340,20 @@ _nothingready:
         STI
         HLT
         RET
+@
+
+
+<<l_misc.s>>=
+
+/*
+ * Some machine instructions not handled by 8[al].
+ */
+#define HLT             BYTE $0xF4
+
+<<function idle>>        
+
+
+<<function halt>>        
 
 
 
@@ -31541,11 +31560,7 @@ TEXT mul64fract(SB), $0
 
 \subsection*{[[init/386/l_multiboot.s]]}
 
-<<l_multiboot.s>>=
-#include "mem.h"
-        
-TEXT _startKADDR(SB), $0
-
+<<global _multibootheader>>=
 /*
  * Must be 4-byte aligned.
  */
@@ -31566,7 +31581,10 @@ TEXT _multibootheader(SB), $0
         LONG    $0                              /* width */
         LONG    $0                              /* height */
         LONG    $0                              /* depth */
+@
 
+
+<<function _multibootentry>>=
 /* 
  * the kernel expects the data segment to be page-aligned
  * multiboot bootloaders put the data segment right behind text
@@ -31589,10 +31607,26 @@ TEXT _multibootentry(SB), $0
         MOVL    $_startPADDR(SB), AX
         ANDL    $~KZERO, AX
         JMP*    AX
+@
 
+
+<<global multiboot>>=
 /* multiboot structure pointer */
 TEXT multiboot(SB), $0
         LONG    $0
+@
+
+
+<<l_multiboot.s>>=
+#include "mem.h"
+        
+TEXT _startKADDR(SB), $0
+
+<<global _multibootheader>>
+
+<<function _multibootentry>>
+
+<<global multiboot>>
 @
 
 
@@ -31630,70 +31664,7 @@ void proc_pexit(char *exitstr, int freemem);
 @ 
 \fi
 
-<<main.c>>=
-<<kernel basic includes>>
-
-#include        "io.h"
-#include        "mp.h"
-
-// initcode binary
-#include        "init.h"
-// rebootcode binary
-#include        "reboot.h"
-
-#include        <ureg.h>
-#include        <pool.h>
-#include        <tos.h>
-
-void bootargs(void*);
-
-<<main.c forward decl for backward dependencies>>
-
-// conf.c
-extern  Dev*  conf_devtab[];
-// ??
-extern  char* conffile;
-//extern  uchar initcode[]; in init.h
-
-extern void (*i8237alloc)(void);
-
-//*****************************************************************************
-// Configuration
-//*****************************************************************************
-// See globals in portdat_globals.h
-
-//*****************************************************************************
-// Boot parameters (not used by pad)
-//*****************************************************************************
-
-/*
- * Where configuration info is left for the loaded program.
- * This will turn into a structure as more is done by the boot loader
- * (e.g. why parse the .ini file twice?).
- * There are 3584 bytes available at CONFADDR.
- */
-#define BOOTLINE        ((char*)CONFADDR)
-#define BOOTLINELEN     64
-#define BOOTARGS        ((char*)(CONFADDR+BOOTLINELEN))
-#define BOOTARGSLEN     (4096-0x200-BOOTLINELEN)
-
-
-enum {
-        /* space for syscall args, return PC, top-of-stack struct */
-        Ustkheadroom    = sizeof(Sargs) + sizeof(uintptr) + sizeof(Tos),
-};
-
-//char bootdisk[KNAMELEN];
-
-// Global! set by bootargs()
-uchar *sp;      /* user stack of init proc */
-
-// who set this??
-int delaylink;
-
-//@Scheck: Assembly
-extern ulong *multiboot;
-
+<<function options>>=
 static void
 options(void)
 {
@@ -31747,7 +31718,10 @@ options(void)
                 nconf++;
         }
 }
+@
 
+
+<<function writeconf>>=
 static void
 writeconf(void)
 {
@@ -31776,11 +31750,10 @@ writeconf(void)
         poperror();
         free(p);
 }
+@
 
-//*****************************************************************************
-// Mach init
-//*****************************************************************************
 
+<<function machinit>>=
 void
 machinit(void)
 {
@@ -31805,8 +31778,10 @@ machinit(void)
      */
     m->loopconst = 100000;
 }
+@
 
 
+<<function mach0init>>=
 void
 mach0init(void)
 {
@@ -31820,11 +31795,10 @@ mach0init(void)
         active.machs = 1;
         active.exiting = 0;
 }
+@
 
-//*****************************************************************************
-// Conf init
-//*****************************************************************************
 
+<<function confinit>>=
 // precondition: meminit() have initialized Conf.mem
 void
 confinit(void)
@@ -31917,11 +31891,10 @@ confinit(void)
                 imagmem->maxsize = kpages;
         }
 }
+@
 
-//*****************************************************************************
-// First process init
-//*****************************************************************************
 
+<<function init0>>=
 // set by userinit to sched.pc
 void
 init0(void)
@@ -31963,8 +31936,10 @@ init0(void)
         cgapost(0x9);
         touser(sp);
 }
+@
 
 
+<<function pusharg>>=
 uchar *
 pusharg(char *p)
 {
@@ -31975,8 +31950,10 @@ pusharg(char *p)
         memmove(sp, p, n);
         return sp;
 }
+@
 
-//TODO: get rid of as have simplified boot process, no plan9.ini
+
+<<function bootargs>>=
 void
 bootargs(void *base)
 {
@@ -32015,8 +31992,10 @@ bootargs(void *base)
         *lsp = 0;
         sp += (USTKTOP - BY2PG) - (ulong)base - sizeof(ulong);
 }
+@
 
 
+<<function userinit>>=
 void
 userinit(void)
 {
@@ -32082,11 +32061,10 @@ userinit(void)
 
         ready(p);
 }
+@
 
-//*****************************************************************************
-// Math coprocessor
-//*****************************************************************************
 
+<<global mathmsg>>=
 static char* mathmsg[] =
 {
         nil,    /* handled below */
@@ -32096,7 +32074,10 @@ static char* mathmsg[] =
         "numeric underflow",
         "precision loss",
 };
+@
 
+
+<<function mathstate>>=
 static void
 mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
 {
@@ -32119,7 +32100,9 @@ mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
         if(ctlp)
                 *ctlp = ctl;
 }
+@
 
+<<function mathnote>>=
 static void
 mathnote(void)
 {
@@ -32153,7 +32136,9 @@ mathnote(void)
                 msg, pc, status);
         postnote(up, 1, note, NDebug);
 }
+@
 
+<<function matherror>>=
 /*
  *  math coprocessor error
  */
@@ -32182,7 +32167,10 @@ matherror(Ureg *ur, void*)
                 panic("fp: status %#lux fppc=%#lux pc=%#lux", status, pc, ur->pc);
         }
 }
+@
 
+
+<<function mathemu>>=
 /*
  *  math coprocessor emulation fault
  */
@@ -32223,7 +32211,10 @@ mathemu(Ureg *ureg, void*)
                 break;
         }
 }
+@
 
+
+<<function mathover>>=
 /*
  *  math coprocessor segment overrun
  */
@@ -32232,8 +32223,10 @@ mathover(Ureg*, void*)
 {
         pexit("math overrun", 0);
 }
+@
 
 
+<<function mathinit>>=
 void
 mathinit(void)
 {
@@ -32243,11 +32236,9 @@ mathinit(void)
         trapenable(VectorCNA, mathemu, 0, "mathemu");
         trapenable(VectorCSO, mathover, 0, "mathover");
 }
+@
 
-//*****************************************************************************
-// Shutdown/reboot
-//*****************************************************************************
-
+<<function shutdown>>=
 static void
 shutdown(bool ispanic)
 {
@@ -32292,16 +32283,19 @@ shutdown(bool ispanic)
         }else
                 delay(1000);
 }
+@
 
-// exit()
+<<function exit>>=
 void
 main_exit(bool ispanic)
 {
         shutdown(ispanic);
         arch->reset();
 }
+@
 
 
+<<function reboot>>=
 void
 reboot(void *entry, void *code, ulong size)
 {
@@ -32373,13 +32367,10 @@ reboot(void *entry, void *code, ulong size)
         coherence();
         (*f)(PADDR(entry), PADDR(code), size);
 }
+@
 
 
-//*****************************************************************************
-// Misc
-//*****************************************************************************
-
-// isaconfig()
+<<function isaconfig>>=
 int
 main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 {
@@ -32412,11 +32403,10 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
         }
         return 1;
 }
+@
 
-//*****************************************************************************
-// Main entry point!
-//*****************************************************************************
 
+<<function main>>=
 //@Scheck: not dead, entry point :) jumped to by qemu (via elf header)
 void
 main(void)
@@ -32544,6 +32534,143 @@ main(void)
     cgapost(0x99);
     schedinit();
 }
+@
+
+
+<<main.c>>=
+<<kernel basic includes>>
+
+#include        "io.h"
+#include        "mp.h"
+
+// initcode binary
+#include        "init.h"
+// rebootcode binary
+#include        "reboot.h"
+
+#include        <ureg.h>
+#include        <pool.h>
+#include        <tos.h>
+
+void bootargs(void*);
+
+<<main.c forward decl for backward dependencies>>
+
+// conf.c
+extern  Dev*  conf_devtab[];
+// ??
+extern  char* conffile;
+//extern  uchar initcode[]; in init.h
+
+extern void (*i8237alloc)(void);
+
+//*****************************************************************************
+// Configuration
+//*****************************************************************************
+// See globals in portdat_globals.h
+
+//*****************************************************************************
+// Boot parameters (not used by pad)
+//*****************************************************************************
+
+/*
+ * Where configuration info is left for the loaded program.
+ * This will turn into a structure as more is done by the boot loader
+ * (e.g. why parse the .ini file twice?).
+ * There are 3584 bytes available at CONFADDR.
+ */
+#define BOOTLINE        ((char*)CONFADDR)
+#define BOOTLINELEN     64
+#define BOOTARGS        ((char*)(CONFADDR+BOOTLINELEN))
+#define BOOTARGSLEN     (4096-0x200-BOOTLINELEN)
+
+
+enum {
+        /* space for syscall args, return PC, top-of-stack struct */
+        Ustkheadroom    = sizeof(Sargs) + sizeof(uintptr) + sizeof(Tos),
+};
+
+//char bootdisk[KNAMELEN];
+
+// Global! set by bootargs()
+uchar *sp;      /* user stack of init proc */
+
+// who set this??
+int delaylink;
+
+//@Scheck: Assembly
+extern ulong *multiboot;
+
+<<function options>>
+
+<<function writeconf>>
+
+//*****************************************************************************
+// Mach init
+//*****************************************************************************
+
+<<function machinit>>
+
+<<function mach0init>>
+
+//*****************************************************************************
+// Conf init
+//*****************************************************************************
+
+<<function confinit>>
+
+//*****************************************************************************
+// First process init
+//*****************************************************************************
+
+<<function init0>>
+
+<<function pusharg>>
+
+//TODO: get rid of as have simplified boot process, no plan9.ini
+<<function bootargs>>
+
+<<function userinit>>
+
+//*****************************************************************************
+// Math coprocessor
+//*****************************************************************************
+
+<<global mathmsg>>
+
+<<function mathstate>>
+
+<<function mathnote>>
+
+<<function matherror>>
+
+<<function mathemu>>
+
+<<function mathover>>
+
+<<function mathinit>>
+
+//*****************************************************************************
+// Shutdown/reboot
+//*****************************************************************************
+
+<<function shutdown>>
+
+<<function exit>>
+
+<<function reboot>>
+
+//*****************************************************************************
+// Misc
+//*****************************************************************************
+
+<<function isaconfig>>
+
+//*****************************************************************************
+// Main entry point!
+//*****************************************************************************
+
+<<function main>>
 @
 
 
@@ -43846,6 +43973,11 @@ enum {
 @ 
 \fi
 
+<<global nrdy>>=
+extern int  nrdy;
+@
+
+
 <<edf.c>>=
 /* EDF scheduling */
 <<kernel basic includes>>
@@ -43864,7 +43996,7 @@ extern Schedq   runq[Nrq];
 static long now;    /* Low order 32 bits of time in µs */
 
 extern ulong    delayedscheds;
-extern int  nrdy;
+<<global nrdy>>
 extern ulong    runvec;
 
 /* Statistics stuff */

@@ -28,7 +28,9 @@ enum {
 static long now;    /* Low order 32 bits of time in µs */
 
 extern ulong    delayedscheds;
+/*s: global nrdy */
 extern int  nrdy;
+/*e: global nrdy */
 extern ulong    runvec;
 
 /* Statistics stuff */

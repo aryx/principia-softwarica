@@ -97,6 +97,7 @@ int delaylink;
 //@Scheck: Assembly
 extern ulong *multiboot;
 
+/*s: function options */
 static void
 options(void)
 {
@@ -150,7 +151,9 @@ options(void)
                 nconf++;
         }
 }
+/*e: function options */
 
+/*s: function writeconf */
 static void
 writeconf(void)
 {
@@ -179,11 +182,13 @@ writeconf(void)
         poperror();
         free(p);
 }
+/*e: function writeconf */
 
 //*****************************************************************************
 // Mach init
 //*****************************************************************************
 
+/*s: function machinit */
 void
 machinit(void)
 {
@@ -208,8 +213,9 @@ machinit(void)
      */
     m->loopconst = 100000;
 }
+/*e: function machinit */
 
-
+/*s: function mach0init */
 void
 mach0init(void)
 {
@@ -223,11 +229,13 @@ mach0init(void)
         active.machs = 1;
         active.exiting = 0;
 }
+/*e: function mach0init */
 
 //*****************************************************************************
 // Conf init
 //*****************************************************************************
 
+/*s: function confinit */
 // precondition: meminit() have initialized Conf.mem
 void
 confinit(void)
@@ -320,11 +328,13 @@ confinit(void)
                 imagmem->maxsize = kpages;
         }
 }
+/*e: function confinit */
 
 //*****************************************************************************
 // First process init
 //*****************************************************************************
 
+/*s: function init0 */
 // set by userinit to sched.pc
 void
 init0(void)
@@ -366,8 +376,9 @@ init0(void)
         cgapost(0x9);
         touser(sp);
 }
+/*e: function init0 */
 
-
+/*s: function pusharg */
 uchar *
 pusharg(char *p)
 {
@@ -378,8 +389,10 @@ pusharg(char *p)
         memmove(sp, p, n);
         return sp;
 }
+/*e: function pusharg */
 
 //TODO: get rid of as have simplified boot process, no plan9.ini
+/*s: function bootargs */
 void
 bootargs(void *base)
 {
@@ -418,8 +431,9 @@ bootargs(void *base)
         *lsp = 0;
         sp += (USTKTOP - BY2PG) - (ulong)base - sizeof(ulong);
 }
+/*e: function bootargs */
 
-
+/*s: function userinit */
 void
 userinit(void)
 {
@@ -485,11 +499,13 @@ userinit(void)
 
         ready(p);
 }
+/*e: function userinit */
 
 //*****************************************************************************
 // Math coprocessor
 //*****************************************************************************
 
+/*s: global mathmsg */
 static char* mathmsg[] =
 {
         nil,    /* handled below */
@@ -499,7 +515,9 @@ static char* mathmsg[] =
         "numeric underflow",
         "precision loss",
 };
+/*e: global mathmsg */
 
+/*s: function mathstate */
 static void
 mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
 {
@@ -522,7 +540,9 @@ mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
         if(ctlp)
                 *ctlp = ctl;
 }
+/*e: function mathstate */
 
+/*s: function mathnote */
 static void
 mathnote(void)
 {
@@ -556,7 +576,9 @@ mathnote(void)
                 msg, pc, status);
         postnote(up, 1, note, NDebug);
 }
+/*e: function mathnote */
 
+/*s: function matherror */
 /*
  *  math coprocessor error
  */
@@ -585,7 +607,9 @@ matherror(Ureg *ur, void*)
                 panic("fp: status %#lux fppc=%#lux pc=%#lux", status, pc, ur->pc);
         }
 }
+/*e: function matherror */
 
+/*s: function mathemu */
 /*
  *  math coprocessor emulation fault
  */
@@ -626,7 +650,9 @@ mathemu(Ureg *ureg, void*)
                 break;
         }
 }
+/*e: function mathemu */
 
+/*s: function mathover */
 /*
  *  math coprocessor segment overrun
  */
@@ -635,8 +661,9 @@ mathover(Ureg*, void*)
 {
         pexit("math overrun", 0);
 }
+/*e: function mathover */
 
-
+/*s: function mathinit */
 void
 mathinit(void)
 {
@@ -646,11 +673,13 @@ mathinit(void)
         trapenable(VectorCNA, mathemu, 0, "mathemu");
         trapenable(VectorCSO, mathover, 0, "mathover");
 }
+/*e: function mathinit */
 
 //*****************************************************************************
 // Shutdown/reboot
 //*****************************************************************************
 
+/*s: function shutdown */
 static void
 shutdown(bool ispanic)
 {
@@ -695,16 +724,18 @@ shutdown(bool ispanic)
         }else
                 delay(1000);
 }
+/*e: function shutdown */
 
-// exit()
+/*s: function exit */
 void
 main_exit(bool ispanic)
 {
         shutdown(ispanic);
         arch->reset();
 }
+/*e: function exit */
 
-
+/*s: function reboot */
 void
 reboot(void *entry, void *code, ulong size)
 {
@@ -776,13 +807,13 @@ reboot(void *entry, void *code, ulong size)
         coherence();
         (*f)(PADDR(entry), PADDR(code), size);
 }
-
+/*e: function reboot */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
-// isaconfig()
+/*s: function isaconfig */
 int
 main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 {
@@ -815,11 +846,13 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
         }
         return 1;
 }
+/*e: function isaconfig */
 
 //*****************************************************************************
 // Main entry point!
 //*****************************************************************************
 
+/*s: function main */
 //@Scheck: not dead, entry point :) jumped to by qemu (via elf header)
 void
 main(void)
@@ -947,4 +980,5 @@ main(void)
     cgapost(0x99);
     schedinit();
 }
+/*e: function main */
 /*e: main.c */

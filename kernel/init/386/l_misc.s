@@ -4,7 +4,8 @@
  * Some machine instructions not handled by 8[al].
  */
 #define HLT             BYTE $0xF4
-        
+
+/*s: function idle */
 /*
  * Park a processor. Should never fall through a return from main to here,
  * should only be called by application processors when shutting down.
@@ -14,9 +15,10 @@ _idle:
         STI
         HLT
         JMP     _idle
+/*e: function idle */
 
 
-        
+/*s: function halt */
 /*
  * Attempt at power saving. -rsc
  */
@@ -31,6 +33,7 @@ _nothingready:
         STI
         HLT
         RET
+/*e: function halt */
 
 
 

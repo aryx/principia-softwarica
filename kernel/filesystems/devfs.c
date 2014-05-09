@@ -73,8 +73,10 @@ typedef struct Tree Tree;
 extern Dev fsdevtab;        /* forward */
 /*e: devfs.c forward decl */
 
+/*s: devfs.c debugging macro */
 static int debug;
 #define dprint if(debug)print
+/*e: devfs.c debugging macro */
 
 
 struct Inner
@@ -1269,6 +1271,7 @@ Done:
     return res;
 }
 
+/*s: global fsdevtab */
 Dev fsdevtab = {
     .dc       =    'k',
     .name     =    "fs",
@@ -1292,4 +1295,5 @@ Dev fsdevtab = {
     .power    =    devpower,
     .config   =    devconfig,
 };
+/*e: global fsdevtab */
 /*e: devfs.c */

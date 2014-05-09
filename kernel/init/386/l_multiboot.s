@@ -3,6 +3,7 @@
         
 TEXT _startKADDR(SB), $0
 
+/*s: global _multibootheader */
 /*
  * Must be 4-byte aligned.
  */
@@ -23,7 +24,9 @@ TEXT _multibootheader(SB), $0
         LONG    $0                              /* width */
         LONG    $0                              /* height */
         LONG    $0                              /* depth */
+/*e: global _multibootheader */
 
+/*s: function _multibootentry */
 /* 
  * the kernel expects the data segment to be page-aligned
  * multiboot bootloaders put the data segment right behind text
@@ -46,8 +49,11 @@ TEXT _multibootentry(SB), $0
         MOVL    $_startPADDR(SB), AX
         ANDL    $~KZERO, AX
         JMP*    AX
+/*e: function _multibootentry */
 
+/*s: global multiboot */
 /* multiboot structure pointer */
 TEXT multiboot(SB), $0
         LONG    $0
+/*e: global multiboot */
 /*e: l_multiboot.s */
