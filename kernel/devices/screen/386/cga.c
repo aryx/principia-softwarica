@@ -8,7 +8,8 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
-enum {
+/*s: cga.c enum color */
+enum color {
     Black,
     Blue,
     Green,
@@ -24,7 +25,9 @@ enum {
     Yellow = Bright|Brown,
     White = Bright|Grey,
 };
-    
+/*e: cga.c enum color */
+
+/*s: cga.c enum misc */
 enum {
     Width       = 80*2,
     Height      = 25,
@@ -37,27 +40,38 @@ enum {
     Postcodelen = 2,
     Postlen     = Poststrlen+Postcodelen,
 };
+/*e: cga.c enum misc */
 
+/*s: constant CGASCREENBASE */
 #define CGASCREENBASE   ((uchar*)KADDR(0xB8000))
-#define CGA     CGASCREENBASE
+/*e: constant CGASCREENBASE */
 
+/*s: global cgapos */
 static int cgapos;
+/*e: global cgapos */
+/*s: global cgascreenlock */
 static Lock cgascreenlock;
+/*e: global cgascreenlock */
 
+/*s: function cgaregr */
 static uchar
 cgaregr(int index)
 {
     outb(0x3D4, index);
     return inb(0x3D4+1) & 0xFF;
 }
+/*e: function cgaregr */
 
+/*s: function cgaregw */
 static void
 cgaregw(int index, int data)
 {
     outb(0x3D4, index);
     outb(0x3D4+1, data);
 }
+/*e: function cgaregw */
 
+/*s: function movecursor */
 static void
 movecursor(void)
 {
@@ -65,7 +79,9 @@ movecursor(void)
     cgaregw(0x0F, cgapos/2 & 0xFF);
     CGASCREENBASE[cgapos+1] = Attr;
 }
+/*e: function movecursor */
 
+/*s: function cgascreenputc */
 static void
 cgascreenputc(int c)
 {
@@ -102,7 +118,9 @@ cgascreenputc(int c)
     }
     movecursor();
 }
+/*e: function cgascreenputc */
 
+/*s: function cgascreenputs */
 static void
 cgascreenputs(char* s, int n)
 {
@@ -122,7 +140,9 @@ cgascreenputs(char* s, int n)
 
     unlock(&cgascreenlock);
 }
+/*e: function cgascreenputs */
 
+/*s: function cgapost */
 char hex[] = "0123456789ABCDEF";
 
 void
@@ -130,13 +150,15 @@ cgapost(int code)
 {
     uchar *cga;
 
-    cga = CGA;
+    cga = CGASCREENBASE;
     cga[Width*Height-Postcodelen*2] = hex[(code>>4) & 0x0F];
     cga[Width*Height-Postcodelen*2+1] = Attr;
     cga[Width*Height-Postcodelen*2+2] = hex[code & 0x0F];
     cga[Width*Height-Postcodelen*2+3] = Attr;
 }
+/*e: function cgapost */
 
+/*s: function screeninit */
 void
 screeninit(void)
 {
@@ -147,4 +169,5 @@ screeninit(void)
 
     screenputs = cgascreenputs;
 }
+/*e: function screeninit */
 /*e: cga.c */
