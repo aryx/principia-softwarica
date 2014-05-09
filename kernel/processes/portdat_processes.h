@@ -148,7 +148,7 @@ struct Note
     int flag;     /* whether system posted it */
 };
 /*e: struct Note */
-extern Ref  noteidalloc;
+extern Counter  noteidalloc;
 
 //--------------------------------------------------------------------
 // Process children waiting

@@ -13,24 +13,40 @@
 // Globals
 //*****************************************************************************
 
+/*s: global runq */
+// hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
+extern Schedq   runq[Nrq];
+/*x: global runq */
 // The run queue!!
 Schedq  runq[Nrq];
+/*e: global runq */
+/*s: global runveq */
 ulong   runvec;
+/*e: global runveq */
 
+/*s: global procalloc */
 static struct Procalloc procalloc;
+/*e: global procalloc */
 
 int schedgain = 30; /* units in seconds */
+/*s: global nrdy */
 int nrdy;
+/*e: global nrdy */
+/*s: global noteidalloc */
 // also used by sysrfork()
-Ref noteidalloc;
+Counter noteidalloc;
+/*e: global noteidalloc */
 
+/*s: proc.c statistics */
 ulong delayedscheds;    /* statistics */
 long skipscheds;
 long preempts;
 //ulong load;
+/*e: proc.c statistics */
 
-// Abuse Ref ... it's not reference counting, this is really just a counter
-static Ref  pidalloc;
+/*s: global pidalloc */
+static Counter  pidalloc;
+/*e: global pidalloc */
 
 enum
 {
@@ -39,7 +55,8 @@ enum
     Scaling=2,
 };
 
-//TODO: change
+/*s: global statename */
+//coupling: with enum procstate
 char *statename[] =
 {
     "Dead",
@@ -56,6 +73,7 @@ char *statename[] =
     "Rendez",
     "Waitrelease",
 };
+/*e: global statename */
 
 /*s: proc.c forward decl */
 Proc* runproc(void);
@@ -73,6 +91,7 @@ static void rebalance(void);
 
 // see also waserror() and poperror() macro in portdat_processes.h
 
+/*s: function error */
 void
 proc_error(char *err)
 {
@@ -83,14 +102,18 @@ proc_error(char *err)
     setlabel(&up->errlab[NERR-1]);
     nexterror();
 }
+/*e: function error */
 
+/*s: function nexterror */
 // raise an exception
 void
 proc_nexterror(void)
 {
     gotolabel(&up->errlab[--up->nerrlab]);
 }
+/*e: function nexterror */
 
+/*s: function exhausted */
 void
 exhausted(char *resource)
 {
@@ -100,11 +123,13 @@ exhausted(char *resource)
     iprint("%s\n", buf);
     error(buf);
 }
+/*e: function exhausted */
 
 //*****************************************************************************
 // Functions
 //*****************************************************************************
 
+/*s: function schedinit */
 /*
  * Always splhi()'ed.
  */
@@ -149,7 +174,9 @@ schedinit(void)     /* never returns */
     }
     sched();
 }
+/*e: function schedinit */
 
+/*s: function sched */
 /*
  *  If changing this routine, look also at sleep().  It
  *  contains a copy of the guts of sched().
@@ -220,19 +247,25 @@ proc_sched(void)
     mmuswitch(up);
     gotolabel(&up->sched);
 }
+/*e: function sched */
 
+/*s: function anyready */
 int
 anyready(void)
 {
     return runvec;
 }
+/*e: function anyready */
 
+/*s: function anyhigher */
 int
 anyhigher(void)
 {
     return runvec & ~((1<<(up->priority+1))-1);
 }
+/*e: function anyhigher */
 
+/*s: function hzsched */
 /*
  *  here once per clock tick to see if we should resched
  */
@@ -250,7 +283,9 @@ hzsched(void)
         up->delaysched++;
     }
 }
+/*e: function hzsched */
 
+/*s: function preempted */
 /*
  *  here at the end of non-clock interrupts to see if we should preempt the
  *  current process.  Returns 1 if preempted, 0 otherwise.
@@ -271,7 +306,9 @@ preempted(void)
     }
     return 0;
 }
+/*e: function preempted */
 
+/*s: function updatecpu */
 /*
  * Update the cpu time average for this particular process,
  * which is about to change from up -> not up or vice versa.
@@ -341,7 +378,9 @@ updatecpu(Proc *p)
 
 //iprint("pid %d %s for %d cpu %d -> %d\n", p->pid,p==up?"active":"inactive",n, ocpu,p->cpu);
 }
+/*e: function updatecpu */
 
+/*s: function reprioritize */
 /*
  * On average, p has used p->cpu of a cpu recently.
  * Its fair share is conf.nmach/m->load of a cpu.  If it has been getting
@@ -377,7 +416,9 @@ reprioritize(Proc *p)
 //iprint("pid %d cpu %d load %d fair %d pri %d\n", p->pid, p->cpu, load, fairshare, ratio);
     return ratio;
 }
+/*e: function reprioritize */
 
+/*s: function queueproc */
 /*
  * add a process to a scheduling queue
  */
@@ -400,7 +441,9 @@ queueproc(Schedq *rq, Proc *p)
     runvec |= 1<<pri;
     unlock(runq);
 }
+/*e: function queueproc */
 
+/*s: function dequeueproc */
 /*
  *  try to remove a process from a scheduling queue (called splhi)
  */
@@ -446,7 +489,9 @@ dequeueproc(Schedq *rq, Proc *tp)
     unlock(runq);
     return p;
 }
+/*e: function dequeueproc */
 
+/*s: function ready */
 /*
  *  ready(p) picks a new priority for a process and sticks it in the
  *  runq for that priority.
@@ -478,7 +523,9 @@ proc_ready(Proc *p)
         pt(p, SReady, 0);
     splx(s);
 }
+/*e: function ready */
 
+/*s: function yield */
 /*
  *  yield the processor and drop our priority
  */
@@ -491,14 +538,18 @@ yield(void)
         sched();
     }
 }
+/*e: function yield */
 
+/*s: global balancetime */
 /*
  *  recalculate priorities once a second.  We need to do this
  *  since priorities will otherwise only be recalculated when
  *  the running process blocks.
  */
 ulong balancetime;
+/*e: global balancetime */
 
+/*s: function rebalance */
 static void
 rebalance(void)
 {
@@ -532,8 +583,9 @@ another:
         }
     }
 }
+/*e: function rebalance */
     
-
+/*s: function runproc */
 /*
  *  pick a process to run
  */
@@ -607,7 +659,9 @@ found:
         pt(p, SRun, 0);
     return p;
 }
+/*e: function runproc */
 
+/*s: function canpage */
 int
 canpage(Proc *p)
 {
@@ -625,7 +679,9 @@ canpage(Proc *p)
 
     return ok;
 }
+/*e: function canpage */
 
+/*s: function noprocpanic */
 void
 noprocpanic(char *msg)
 {
@@ -643,7 +699,9 @@ noprocpanic(char *msg)
     delay(1000);
     panic(msg);
 }
+/*e: function noprocpanic */
 
+/*s: function newproc */
 Proc*
 newproc(void)
 {
@@ -725,7 +783,9 @@ newproc(void)
 
     return p;
 }
+/*e: function newproc */
 
+/*s: functio procwired */
 /*
  * wire this proc to a machine
  */
@@ -759,7 +819,9 @@ procwired(Proc *p, int bm)
     p->wired = MACHP(bm);
     p->mp = p->wired;
 }
+/*e: functio procwired */
 
+/*s: function procpriority */
 void
 procpriority(Proc *p, int pri, int fixed)
 {
@@ -775,7 +837,9 @@ procpriority(Proc *p, int pri, int fixed)
         p->fixedpri = 0;
     }
 }
+/*e: function procpriority */
 
+/*s: function procinit0 */
 void
 procinit0(void)     /* bad planning - clashes with devproc.c */
 {
@@ -795,7 +859,9 @@ procinit0(void)     /* bad planning - clashes with devproc.c */
         p->qnext = p+1;
     p->qnext = 0;
 }
+/*e: function procinit0 */
 
+/*s: function sleep */
 /*
  *  sleep if a condition is not true.  Another process will
  *  awaken us after it sets the condition.  When we awaken
@@ -879,13 +945,17 @@ proc_sleep(Rendez *r, int (*f)(void*), void *arg)
 
     splx(s);
 }
+/*e: function sleep */
 
+/*s: function tfn */
 static int
 tfn(void *arg)
 {
     return up->trend == nil || up->tfn(arg);
 }
+/*e: function tfn */
 
+/*s: function twakeup */
 //@Scheck: FP!! TODO because assigned in field of unnamed substructure
 void
 twakeup(Ureg*, Timer *t)
@@ -899,7 +969,9 @@ twakeup(Ureg*, Timer *t)
     if(trend)
         wakeup(trend);
 }
+/*e: function twakeup */
 
+/*s: function tsleep */
 void
 proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
 {
@@ -925,7 +997,9 @@ proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
     up->twhen = 0;
     poperror();
 }
+/*e: function tsleep */
 
+/*s: function wakeup */
 /*
  *  Expects that only one process can call wakeup for any given Rendez.
  *  We hold both locks to ensure that r->p and p->r remain consistent.
@@ -960,7 +1034,9 @@ proc_wakeup(Rendez *r)
 
     return p;
 }
+/*e: function wakeup */
 
+/*s: function postnote */
 /*
  *  if waking a sleeping process, this routine must hold both
  *  p->rlock and r->lock.  However, it can't know them in
@@ -1040,18 +1116,25 @@ proc_postnote(Proc *p, int dolock, char *n, int flag)
     unlock(p->rgrp);
     return ret;
 }
+/*e: function postnote */
 
+/*s: struct Broken */
 /*
  * weird thing: keep at most NBROKEN around
  */
 #define NBROKEN 4
-struct
+struct Broken
 {
     QLock;
     int n;
     Proc    *p[NBROKEN];
-}broken;
+};
+/*e: struct Broken */
+/*s: global broken */
+struct Broken broken;
+/*e: global broken */
 
+/*s: function addbroken */
 void
 addbroken(Proc *p)
 {
@@ -1069,7 +1152,9 @@ addbroken(Proc *p)
     p->psstate = 0;
     sched();
 }
+/*e: function addbroken */
 
+/*s: function unbreak */
 void
 unbreak(Proc *p)
 {
@@ -1086,7 +1171,9 @@ unbreak(Proc *p)
         }
     qunlock(&broken);
 }
+/*e: function unbreak */
 
+/*s: function freebroken */
 int
 freebroken(void)
 {
@@ -1102,7 +1189,9 @@ freebroken(void)
     qunlock(&broken);
     return n;
 }
+/*e: function freebroken */
 
+/*s: function pexit */
 void
 proc_pexit(char *exitstr, int freemem)
 {
@@ -1249,7 +1338,9 @@ proc_pexit(char *exitstr, int freemem)
     sched();
     panic("pexit");
 }
+/*e: function pexit */
 
+/*s: function haswaitq */
 int
 haswaitq(void *x)
 {
@@ -1258,7 +1349,9 @@ haswaitq(void *x)
     p = (Proc *)x;
     return p->waitq != 0;
 }
+/*e: function haswaitq */
 
+/*s: function pwait */
 ulong
 pwait(Waitmsg *w)
 {
@@ -1297,13 +1390,17 @@ pwait(Waitmsg *w)
     free(wq);
     return cpid;
 }
+/*e: function pwait */
 
+/*s: function proctab */
 Proc*
 proc_proctab(int i)
 {
     return &procalloc.arena[i];
 }
+/*e: function proctab */
 
+/*s: function dumpaproc */
 void
 proc_dumpaproc(Proc *p)
 {
@@ -1324,7 +1421,9 @@ proc_dumpaproc(Proc *p)
         p->pid, p->text, p->pc, dbgpc(p),  s, statename[p->state],
         p->time[0], p->time[1], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
 }
+/*e: function dumpaproc */
 
+/*s: function procdump */
 void
 procdump(void)
 {
@@ -1343,7 +1442,9 @@ procdump(void)
         dumpaproc(p);
     }
 }
+/*e: function procdump */
 
+/*s: function procflushseg */
 /*
  *  wait till all processes have flushed their mmu
  *  state about segement s
@@ -1389,7 +1490,9 @@ procflushseg(Segment *s)
             while(MACHP(nm)->flushmmu)
                 sched();
 }
+/*e: function procflushseg */
 
+/*s: function scheddump */
 void
 scheddump(void)
 {
@@ -1407,7 +1510,9 @@ scheddump(void)
     }
     print("nrdy %d\n", nrdy);
 }
+/*e: function scheddump */
 
+/*s: function kproc */
 // kernel process (aka kernel_thread in Linux?)
 void
 kproc(char *name, void (*func)(void *), void *arg)
@@ -1453,7 +1558,9 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->time[TReal] = MACHP(0)->ticks;
     ready(p);
 }
+/*e: function kproc */
 
+/*s: function procctl */
 /*
  *  called splhi() by notify().  See comment in notify for the
  *  reasoning.
@@ -1498,8 +1605,9 @@ procctl(Proc *p)
         return;
     }
 }
+/*e: function procctl */
 
-
+/*s: function killbig */
 void
 killbig(char *why)
 {
@@ -1542,7 +1650,9 @@ killbig(char *why)
         }
     }
 }
+/*e: function killbig */
 
+/*s: function renameuser */
 /*
  *  change ownership to 'new' of all processes owned by 'old'.  Used when
  *  eve changes.
@@ -1557,7 +1667,9 @@ renameuser(char *old, char *new)
         if(p->user!=nil && strcmp(old, p->user)==0)
             kstrdup(&p->user, new);
 }
+/*e: function renameuser */
 
+/*s: function accounttime */
 /*
  *  time accounting called by clock() splhi'd
  */
@@ -1606,7 +1718,9 @@ accounttime(void)
     n = (nrdy+n)*1000;
     m->load = (m->load*(HZ-1)+n)/HZ;
 }
+/*e: function accounttime */
 
+/*s: function pidhash */
 static void
 pidhash(Proc *p)
 {
@@ -1618,7 +1732,9 @@ pidhash(Proc *p)
     procalloc.ht[h] = p;
     unlock(&procalloc);
 }
+/*e: function pidhash */
 
+/*s: function pidunhash */
 static void
 pidunhash(Proc *p)
 {
@@ -1634,7 +1750,9 @@ pidunhash(Proc *p)
         }
     unlock(&procalloc);
 }
+/*e: function pidunhash */
 
+/*s: function procindex */
 int
 procindex(ulong pid)
 {
@@ -1653,4 +1771,5 @@ procindex(ulong pid)
     unlock(&procalloc);
     return s;
 }
+/*e: function procindex */
 /*e: proc.c */

@@ -14,6 +14,9 @@
 /*s: global runq */
 // hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
 extern Schedq   runq[Nrq];
+/*x: global runq */
+// The run queue!!
+Schedq  runq[Nrq];
 /*e: global runq */
 
 // used to be in edf.h
@@ -29,20 +32,22 @@ enum {
 
 static long now;    /* Low order 32 bits of time in µs */
 
+//TODO: put in .h? or get rid of edf.c?
 extern ulong    delayedscheds;
-/*s: global nrdy */
 extern int  nrdy;
-/*e: global nrdy */
 extern ulong    runvec;
 
+/*s: edf.c statistics */
 /* Statistics stuff */
 ulong       edfnrun;
 //ulong     nilcount;
 //ulong     scheds;
 //int       misseddeadlines;
+/*e: edf.c statistics */
+
+int     edfinited;
 
 /* Edfschedlock protects modification of admission params */
-int     edfinited;
 QLock       edfschedlock;
 static Lock thelock;
 
