@@ -31,7 +31,9 @@ Queue*  serialoq;       /* serial console output */
 Queue*  kprintoq;       /* console output, for /dev/kprint */
 /*e: global kprintoq */
 
+/*s: global kprintinuse */
 ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
+/*e: global kprintinuse */
 /*s: global iprintscreenputs */
 int iprintscreenputs = 1;
 /*e: global iprintscreenputs */
@@ -86,19 +88,23 @@ static int  writetime(char*, int);
 static int  writebintime(char*, int);
 /*e: devcons.c forward decl */
 
+/*s: devcons.c enum Cmd */
 enum
 {
     CMhalt,
     CMreboot,
     CMpanic,
 };
+/*e: devcons.c enum Cmd */
 
+/*s: global rebootmsg */
 Cmdtab rebootmsg[] =
 {
     CMhalt,     "halt",     1,
     CMreboot,   "reboot",   0,
     CMpanic,    "panic",    0,
 };
+/*e: global rebootmsg */
 
 /*s: function printinit */
 void
@@ -278,6 +284,7 @@ devcons_print(char *fmt, ...)
 }
 /*e: function print */
 
+/*s: global iprintlock */
 /*
  * Want to interlock iprints to avoid interlaced output on 
  * multiprocessor, but don't want to deadlock if one processor
@@ -285,7 +292,9 @@ devcons_print(char *fmt, ...)
  * Make a good faith effort.
  */
 static Lock iprintlock;
+/*e: global iprintlock */
 
+/*s: function iprintcanlock */
 static int
 iprintcanlock(Lock *l)
 {
@@ -300,6 +309,7 @@ iprintcanlock(Lock *l)
     }
     return 0;
 }
+/*e: function iprintcanlock */
 
 /*s: function iprint */
 int
@@ -1215,9 +1225,11 @@ Dev consdevtab = {
 };
 /*e: global consdevtab */
 
-
+/*s: global randn */
 static  ulong   randn;
+/*e: global randn */
 
+/*s: function seedrand */
 static void
 seedrand(void)
 {
@@ -1226,7 +1238,9 @@ seedrand(void)
         poperror();
     }
 }
+/*e: function seedrand */
 
+/*s: function nrand */
 int
 nrand(int n)
 {
@@ -1235,9 +1249,13 @@ nrand(int n)
     randn = randn*1103515245 + 12345 + MACHP(0)->ticks;
     return (randn>>16) % n;
 }
+/*e: function nrand */
 
+/*s: global uvorder */
 static uvlong uvorder = 0x0001020304050607ULL;
+/*e: global uvorder */
 
+/*s: function le2vlong */
 static uchar*
 le2vlong(vlong *to, uchar *f)
 {
@@ -1250,7 +1268,9 @@ le2vlong(vlong *to, uchar *f)
         t[o[i]] = f[i];
     return f+sizeof(vlong);
 }
+/*e: function le2vlong */
 
+/*s: function vlong2le */
 static uchar*
 vlong2le(uchar *t, vlong from)
 {
@@ -1263,9 +1283,13 @@ vlong2le(uchar *t, vlong from)
         t[i] = f[o[i]];
     return t+sizeof(vlong);
 }
+/*e: function vlong2le */
 
+/*s: global order */
 static long order = 0x00010203;
+/*e: global order */
 
+/*s: function le2long */
 static uchar*
 le2long(long *to, uchar *f)
 {
@@ -1278,10 +1302,13 @@ le2long(long *to, uchar *f)
         t[o[i]] = f[i];
     return f+sizeof(long);
 }
+/*e: function le2long */
 
-
+/*s: devcons.c Exx errors */
 char *Ebadtimectl = "bad time control";
+/*e: devcons.c Exx errors */
 
+/*s: function readtime */
 /*
  *  like the old #c/time but with added info.  Return
  *
@@ -1305,7 +1332,9 @@ readtime(ulong off, char *buf, int n)
         VLNUMSIZE-1, fasthz);
     return readstr(off, buf, n, str);
 }
+/*e: function readtime */
 
+/*s: function writetime */
 /*
  *  set the time in seconds
  */
@@ -1327,7 +1356,9 @@ writetime(char *buf, int n)
     todset(now, 0, 0);
     return n;
 }
+/*e: function writetime */
 
+/*s: function readbintime */
 /*
  *  read binary time info.  all numbers are little endian.
  *  ticks and nsec are syncronized.
@@ -1357,7 +1388,9 @@ readbintime(char *buf, int n)
     }
     return i;
 }
+/*e: function readbintime */
 
+/*s: function writebintime */
 /*
  *  set any of the following
  *  - time in nsec
@@ -1398,4 +1431,5 @@ writebintime(char *buf, int n)
     }
     return n;
 }
+/*e: function writebintime */
 /*e: devcons.c */

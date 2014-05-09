@@ -7482,6 +7482,281 @@ Dev consdevtab = {
 @ 
 
 
+<<global kprintinuse>>=
+ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
+@
+
+
+<<devcons.c enum Cmd>>=
+enum
+{
+    CMhalt,
+    CMreboot,
+    CMpanic,
+};
+@
+
+
+<<global rebootmsg>>=
+Cmdtab rebootmsg[] =
+{
+    CMhalt,     "halt",     1,
+    CMreboot,   "reboot",   0,
+    CMpanic,    "panic",    0,
+};
+@
+
+
+<<global iprintlock>>=
+/*
+ * Want to interlock iprints to avoid interlaced output on 
+ * multiprocessor, but don't want to deadlock if one processor
+ * dies during print and another has something important to say.
+ * Make a good faith effort.
+ */
+static Lock iprintlock;
+@
+
+
+<<function iprintcanlock>>=
+static int
+iprintcanlock(Lock *l)
+{
+    int i;
+    
+    for(i=0; i<1000; i++){
+        if(canlock(l))
+            return 1;
+        if(l->m == MACHP(m->machno))
+            return 0;
+        microdelay(100);
+    }
+    return 0;
+}
+@
+
+
+<<global randn>>=
+static  ulong   randn;
+@
+
+
+<<function seedrand>>=
+static void
+seedrand(void)
+{
+    if(!waserror()){
+        randomread((void*)&randn, sizeof(randn));
+        poperror();
+    }
+}
+@
+
+
+<<function nrand>>=
+int
+nrand(int n)
+{
+    if(randn == 0)
+        seedrand();
+    randn = randn*1103515245 + 12345 + MACHP(0)->ticks;
+    return (randn>>16) % n;
+}
+@
+
+
+<<global uvorder>>=
+static uvlong uvorder = 0x0001020304050607ULL;
+@
+
+
+<<function le2vlong>>=
+static uchar*
+le2vlong(vlong *to, uchar *f)
+{
+    uchar *t, *o;
+    int i;
+
+    t = (uchar*)to;
+    o = (uchar*)&uvorder;
+    for(i = 0; i < sizeof(vlong); i++)
+        t[o[i]] = f[i];
+    return f+sizeof(vlong);
+}
+@
+
+
+<<function vlong2le>>=
+static uchar*
+vlong2le(uchar *t, vlong from)
+{
+    uchar *f, *o;
+    int i;
+
+    f = (uchar*)&from;
+    o = (uchar*)&uvorder;
+    for(i = 0; i < sizeof(vlong); i++)
+        t[i] = f[o[i]];
+    return t+sizeof(vlong);
+}
+@
+
+
+<<global order>>=
+static long order = 0x00010203;
+@
+
+
+<<function le2long>>=
+static uchar*
+le2long(long *to, uchar *f)
+{
+    uchar *t, *o;
+    int i;
+
+    t = (uchar*)to;
+    o = (uchar*)&order;
+    for(i = 0; i < sizeof(long); i++)
+        t[o[i]] = f[i];
+    return f+sizeof(long);
+}
+@
+
+
+<<devcons.c Exx errors>>=
+char *Ebadtimectl = "bad time control";
+@
+
+
+<<function readtime>>=
+/*
+ *  like the old #c/time but with added info.  Return
+ *
+ *  secs    nanosecs    fastticks   fasthz
+ */
+static int
+readtime(ulong off, char *buf, int n)
+{
+    vlong   nsec, ticks;
+    long sec;
+    char str[7*NUMSIZE];
+
+    nsec = todget(&ticks);
+    if(fasthz == 0LL)
+        fastticks((uvlong*)&fasthz);
+    sec = nsec/1000000000ULL;
+    snprint(str, sizeof(str), "%*lud %*llud %*llud %*llud ",
+        NUMSIZE-1, sec,
+        VLNUMSIZE-1, nsec,
+        VLNUMSIZE-1, ticks,
+        VLNUMSIZE-1, fasthz);
+    return readstr(off, buf, n, str);
+}
+@
+
+
+<<function writetime>>=
+/*
+ *  set the time in seconds
+ */
+static int
+writetime(char *buf, int n)
+{
+    char b[13];
+    long i;
+    vlong now;
+
+    if(n >= sizeof(b))
+        error(Ebadtimectl);
+    strncpy(b, buf, n);
+    b[n] = 0;
+    i = strtol(b, 0, 0);
+    if(i <= 0)
+        error(Ebadtimectl);
+    now = i*1000000000LL;
+    todset(now, 0, 0);
+    return n;
+}
+@
+
+
+<<function readbintime>>=
+/*
+ *  read binary time info.  all numbers are little endian.
+ *  ticks and nsec are syncronized.
+ */
+static int
+readbintime(char *buf, int n)
+{
+    int i;
+    vlong nsec, ticks;
+    uchar *b = (uchar*)buf;
+
+    i = 0;
+    if(fasthz == 0LL)
+        fastticks((uvlong*)&fasthz);
+    nsec = todget(&ticks);
+    if(n >= 3*sizeof(uvlong)){
+        vlong2le(b+2*sizeof(uvlong), fasthz);
+        i += sizeof(uvlong);
+    }
+    if(n >= 2*sizeof(uvlong)){
+        vlong2le(b+sizeof(uvlong), ticks);
+        i += sizeof(uvlong);
+    }
+    if(n >= 8){
+        vlong2le(b, nsec);
+        i += sizeof(vlong);
+    }
+    return i;
+}
+@
+
+
+<<function writebintime>>=
+/*
+ *  set any of the following
+ *  - time in nsec
+ *  - nsec trim applied over some seconds
+ *  - clock frequency
+ */
+static int
+writebintime(char *buf, int n)
+{
+    uchar *p;
+    vlong delta;
+    long period;
+
+    n--;
+    p = (uchar*)buf + 1;
+    switch(*buf){
+    case 'n':
+        if(n < sizeof(vlong))
+            error(Ebadtimectl);
+        le2vlong(&delta, p);
+        todset(delta, 0, 0);
+        break;
+    case 'd':
+        if(n < sizeof(vlong)+sizeof(long))
+            error(Ebadtimectl);
+        p = le2vlong(&delta, p);
+        le2long(&period, p);
+        todset(-1, delta, period);
+        break;
+    case 'f':
+        if(n < sizeof(uvlong))
+            error(Ebadtimectl);
+        le2vlong(&fasthz, p);
+        if(fasthz <= 0)
+            error(Ebadtimectl);
+        todsetfreq(fasthz);
+        break;
+    }
+    return n;
+}
+@
+
+
 <<devcons.c>>=
 <<kernel basic includes>>
 
@@ -7496,7 +7771,7 @@ Dev consdevtab = {
 <<global serialoq>>
 <<global kprintoq>>
 
-ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
+<<global kprintinuse>>
 <<global iprintscreenputs>>
 
 <<struct ConsKbd>>
@@ -7508,19 +7783,9 @@ ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 
 <<devcons.c forward decl>>
 
-enum
-{
-    CMhalt,
-    CMreboot,
-    CMpanic,
-};
+<<devcons.c enum Cmd>>
 
-Cmdtab rebootmsg[] =
-{
-    CMhalt,     "halt",     1,
-    CMreboot,   "reboot",   0,
-    CMpanic,    "panic",    0,
-};
+<<global rebootmsg>>
 
 <<function printinit>>
 
@@ -7540,28 +7805,9 @@ Cmdtab rebootmsg[] =
 
 <<function print>>
 
-/*
- * Want to interlock iprints to avoid interlaced output on 
- * multiprocessor, but don't want to deadlock if one processor
- * dies during print and another has something important to say.
- * Make a good faith effort.
- */
-static Lock iprintlock;
+<<global iprintlock>>
 
-static int
-iprintcanlock(Lock *l)
-{
-    int i;
-    
-    for(i=0; i<1000; i++){
-        if(canlock(l))
-            return 1;
-        if(l->m == MACHP(m->machno))
-            return 0;
-        microdelay(100);
-    }
-    return 0;
-}
+<<function iprintcanlock>>
 
 <<function iprint>>
 
@@ -7624,189 +7870,31 @@ consstat(Chan *c, uchar *dp, int n)
 
 <<global consdevtab>>
 
+<<global randn>>
 
-static  ulong   randn;
+<<function seedrand>>
 
-static void
-seedrand(void)
-{
-    if(!waserror()){
-        randomread((void*)&randn, sizeof(randn));
-        poperror();
-    }
-}
+<<function nrand>>
 
-int
-nrand(int n)
-{
-    if(randn == 0)
-        seedrand();
-    randn = randn*1103515245 + 12345 + MACHP(0)->ticks;
-    return (randn>>16) % n;
-}
+<<global uvorder>>
 
-static uvlong uvorder = 0x0001020304050607ULL;
+<<function le2vlong>>
 
-static uchar*
-le2vlong(vlong *to, uchar *f)
-{
-    uchar *t, *o;
-    int i;
+<<function vlong2le>>
 
-    t = (uchar*)to;
-    o = (uchar*)&uvorder;
-    for(i = 0; i < sizeof(vlong); i++)
-        t[o[i]] = f[i];
-    return f+sizeof(vlong);
-}
+<<global order>>
 
-static uchar*
-vlong2le(uchar *t, vlong from)
-{
-    uchar *f, *o;
-    int i;
+<<function le2long>>
 
-    f = (uchar*)&from;
-    o = (uchar*)&uvorder;
-    for(i = 0; i < sizeof(vlong); i++)
-        t[i] = f[o[i]];
-    return t+sizeof(vlong);
-}
+<<devcons.c Exx errors>>
 
-static long order = 0x00010203;
+<<function readtime>>
 
-static uchar*
-le2long(long *to, uchar *f)
-{
-    uchar *t, *o;
-    int i;
+<<function writetime>>
 
-    t = (uchar*)to;
-    o = (uchar*)&order;
-    for(i = 0; i < sizeof(long); i++)
-        t[o[i]] = f[i];
-    return f+sizeof(long);
-}
+<<function readbintime>>
 
-
-char *Ebadtimectl = "bad time control";
-
-/*
- *  like the old #c/time but with added info.  Return
- *
- *  secs    nanosecs    fastticks   fasthz
- */
-static int
-readtime(ulong off, char *buf, int n)
-{
-    vlong   nsec, ticks;
-    long sec;
-    char str[7*NUMSIZE];
-
-    nsec = todget(&ticks);
-    if(fasthz == 0LL)
-        fastticks((uvlong*)&fasthz);
-    sec = nsec/1000000000ULL;
-    snprint(str, sizeof(str), "%*lud %*llud %*llud %*llud ",
-        NUMSIZE-1, sec,
-        VLNUMSIZE-1, nsec,
-        VLNUMSIZE-1, ticks,
-        VLNUMSIZE-1, fasthz);
-    return readstr(off, buf, n, str);
-}
-
-/*
- *  set the time in seconds
- */
-static int
-writetime(char *buf, int n)
-{
-    char b[13];
-    long i;
-    vlong now;
-
-    if(n >= sizeof(b))
-        error(Ebadtimectl);
-    strncpy(b, buf, n);
-    b[n] = 0;
-    i = strtol(b, 0, 0);
-    if(i <= 0)
-        error(Ebadtimectl);
-    now = i*1000000000LL;
-    todset(now, 0, 0);
-    return n;
-}
-
-/*
- *  read binary time info.  all numbers are little endian.
- *  ticks and nsec are syncronized.
- */
-static int
-readbintime(char *buf, int n)
-{
-    int i;
-    vlong nsec, ticks;
-    uchar *b = (uchar*)buf;
-
-    i = 0;
-    if(fasthz == 0LL)
-        fastticks((uvlong*)&fasthz);
-    nsec = todget(&ticks);
-    if(n >= 3*sizeof(uvlong)){
-        vlong2le(b+2*sizeof(uvlong), fasthz);
-        i += sizeof(uvlong);
-    }
-    if(n >= 2*sizeof(uvlong)){
-        vlong2le(b+sizeof(uvlong), ticks);
-        i += sizeof(uvlong);
-    }
-    if(n >= 8){
-        vlong2le(b, nsec);
-        i += sizeof(vlong);
-    }
-    return i;
-}
-
-/*
- *  set any of the following
- *  - time in nsec
- *  - nsec trim applied over some seconds
- *  - clock frequency
- */
-static int
-writebintime(char *buf, int n)
-{
-    uchar *p;
-    vlong delta;
-    long period;
-
-    n--;
-    p = (uchar*)buf + 1;
-    switch(*buf){
-    case 'n':
-        if(n < sizeof(vlong))
-            error(Ebadtimectl);
-        le2vlong(&delta, p);
-        todset(delta, 0, 0);
-        break;
-    case 'd':
-        if(n < sizeof(vlong)+sizeof(long))
-            error(Ebadtimectl);
-        p = le2vlong(&delta, p);
-        le2long(&period, p);
-        todset(-1, delta, period);
-        break;
-    case 'f':
-        if(n < sizeof(uvlong))
-            error(Ebadtimectl);
-        le2vlong(&fasthz, p);
-        if(fasthz <= 0)
-            error(Ebadtimectl);
-        todsetfreq(fasthz);
-        break;
-    }
-    return n;
-}
+<<function writebintime>>
 @
 
 %//int
