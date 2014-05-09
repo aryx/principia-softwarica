@@ -14,9 +14,14 @@ enum {
     Whinesecs = 10,     /* frequency of out-of-resources printing */
 };
 
+/*s: global pgrpid */
 static Ref pgrpid;
+/*e: global pgrpid */
+/*s: global mountid */
 static Ref mountid;
+/*e: global mountid */
 
+/*s: function pgrpnote */
 void
 pgrpnote(ulong noteid, char *a, long n, int flag)
 {
@@ -47,7 +52,9 @@ pgrpnote(ulong noteid, char *a, long n, int flag)
         }
     }
 }
+/*e: function pgrpnote */
 
+/*s: function newpgrp */
 Pgrp*
 newpgrp(void)
 {
@@ -58,7 +65,9 @@ newpgrp(void)
     p->pgrpid = incref(&pgrpid);
     return p;
 }
+/*e: function newpgrp */
 
+/*s: function newrgrp */
 Rgrp*
 newrgrp(void)
 {
@@ -68,14 +77,18 @@ newrgrp(void)
     r->ref = 1;
     return r;
 }
+/*e: function newrgrp */
 
+/*s: function closergrp */
 void
 closergrp(Rgrp *r)
 {
     if(decref(r) == 0)
         free(r);
 }
+/*e: function closergrp */
 
+/*s: function closepgrp */
 void
 closepgrp(Pgrp *p)
 {
@@ -104,7 +117,9 @@ closepgrp(Pgrp *p)
     qunlock(&p->debug);
     free(p);
 }
+/*e: function closepgrp */
 
+/*s: function pgrpinsert */
 void
 pgrpinsert(Mount **order, Mount *m)
 {
@@ -125,7 +140,9 @@ pgrpinsert(Mount **order, Mount *m)
     }
     *order = m;
 }
+/*e: function pgrpinsert */
 
+/*s: function pgrpcpy */
 /*
  * pgrpcpy MUST preserve the mountid allocation order of the parent group
  */
@@ -166,7 +183,9 @@ pgrpcpy(Pgrp *to, Pgrp *from)
     unlock(&mountid);
     wunlock(&from->ns);
 }
+/*e: function pgrpcpy */
 
+/*s: function dupfgrp */
 Fgrp*
 dupfgrp(Fgrp *f)
 {
@@ -207,7 +226,9 @@ dupfgrp(Fgrp *f)
 
     return new;
 }
+/*e: function dupfgrp */
 
+/*s: function closefgrp */
 void
 closefgrp(Fgrp *f)
 {
@@ -235,7 +256,9 @@ closefgrp(Fgrp *f)
     free(f->fd);
     free(f);
 }
+/*e: function closefgrp */
 
+/*s: function forceclosefgrp */
 /*
  * Called from sleep because up is in the middle
  * of closefgrp and just got a kill ctl message.
@@ -265,8 +288,9 @@ forceclosefgrp(void)
             ccloseq(c);
         }
 }
+/*e: function forceclosefgrp */
 
-
+/*s: function newmount */
 Mount*
 newmount(Mhead *mh, Chan *to, int flag, char *spec)
 {
@@ -283,7 +307,9 @@ newmount(Mhead *mh, Chan *to, int flag, char *spec)
 
     return m;
 }
+/*e: function newmount */
 
+/*s: function mountfree */
 void
 mountfree(Mount *m)
 {
@@ -298,7 +324,9 @@ mountfree(Mount *m)
         m = f;
     }
 }
+/*e: function mountfree */
 
+/*s: function resrcwait */
 void
 resrcwait(char *reason)
 {
@@ -323,4 +351,5 @@ resrcwait(char *reason)
     tsleep(&up->sleep, return0, 0, 300);
     up->psstate = p;
 }
+/*e: function resrcwait */
 /*e: pgrp.c */

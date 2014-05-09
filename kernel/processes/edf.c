@@ -11,8 +11,10 @@
 
 #include    <trace.h>
 
+/*s: global runq */
 // hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
 extern Schedq   runq[Nrq];
+/*e: global runq */
 
 // used to be in edf.h
 //unused: extern Lock edftestlock;  /* for atomic admitting/expelling */
@@ -34,9 +36,9 @@ extern int  nrdy;
 extern ulong    runvec;
 
 /* Statistics stuff */
+ulong       edfnrun;
 //ulong     nilcount;
 //ulong     scheds;
-ulong       edfnrun;
 //int       misseddeadlines;
 
 /* Edfschedlock protects modification of admission params */
