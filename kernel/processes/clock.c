@@ -7,20 +7,24 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
+
 #include "io.h"
+
 #include <ureg.h>
 
 enum {
     Maxtimerloops = 20*1000,
 };
 
-
+/*s: global timers */
 static Timers timers[MAXMACH];
-static int timersinited;
+/*e: global timers */
+static bool timersinited;
 
 ulong intrcount[MAXMACH];
 ulong fcallcount[MAXMACH];
 
+/*s: function tadd */
 static vlong
 tadd(Timers *tt, Timer *nt)
 {
@@ -65,7 +69,9 @@ tadd(Timers *tt, Timer *nt)
         return nt->twhen;
     return 0;
 }
+/*e: function tadd */
 
+/*s: function tdel */
 static uvlong
 tdel(Timer *dt)
 {
@@ -88,7 +94,9 @@ tdel(Timer *dt)
         return tt->head->twhen;
     return 0;
 }
+/*e: function tdel */
 
+/*s: function timeradd */
 /* add or modify a timer */
 void
 timeradd(Timer *nt)
@@ -111,8 +119,9 @@ timeradd(Timer *nt)
     iunlock(tt);
     iunlock(nt);
 }
+/*e: function timeradd */
 
-
+/*s: function timerdel */
 void
 timerdel(Timer *dt)
 {
@@ -129,7 +138,9 @@ timerdel(Timer *dt)
     }
     iunlock(dt);
 }
+/*e: function timerdel */
 
+/*s: function hzclock */
 void
 hzclock(Ureg *ur)
 {
@@ -162,7 +173,10 @@ hzclock(Ureg *ur)
     if(up && up->state == Running)
         hzsched();  /* in proc.c */
 }
+/*e: function hzclock */
 
+/*s: interrupt callback timerintr */
+// called via i8253clock
 void
 timerintr(Ureg *u, Tval)
 {
@@ -215,7 +229,9 @@ timerintr(Ureg *u, Tval)
     }
     iunlock(tt);
 }
+/*e: interrupt callback timerintr */
 
+/*s: function timersinit */
 void
 timersinit(void)
 {
@@ -224,7 +240,7 @@ timersinit(void)
     /*
      * T->tf == nil means the HZ clock for this processor.
      */
-    timersinited = 1;
+    timersinited = true;
     todinit();
     t = malloc(sizeof(*t));
     if(t == nil)
@@ -235,7 +251,9 @@ timersinit(void)
     t->tf = nil;
     timeradd(t);
 }
+/*e: function timersinit */
 
+/*s: function addclock0link */
 Timer*
 addclock0link(void (*f)(void), int ms)
 {
@@ -262,7 +280,9 @@ addclock0link(void (*f)(void), int ms)
     iunlock(&timers[0]);
     return nt;
 }
+/*e: function addclock0link */
 
+/*s: function tk2ms */
 /*
  *  This tk2ms avoids overflows that the macro version is prone to.
  *  It is a LOT slower so shouldn't be used if you're just converting
@@ -280,7 +300,9 @@ tk2ms(ulong ticks)
     ticks = t;
     return ticks;
 }
+/*e: function tk2ms */
 
+/*s: function ms2tk */
 ulong
 ms2tk(ulong ms)
 {
@@ -289,4 +311,5 @@ ms2tk(ulong ms)
         return (ms/1000)*HZ;
     return (ms*HZ+500)/1000;
 }
+/*e: function ms2tk */
 /*e: clock.c */

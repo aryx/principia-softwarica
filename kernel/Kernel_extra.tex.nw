@@ -41451,7 +41451,7 @@ i8253timerset(uvlong next)
 @
 
 
-<<function i8253clock>>=
+<<interrupt callback i8253clock>>=
 static void
 i8253clock(Ureg* ureg, void*)
 {
@@ -41667,7 +41667,7 @@ enum
 
 <<function i8253timerset>>
 
-<<function i8253clock>>
+<<interrupt callback i8253clock>>
 
 <<function i8253enable>>
 
@@ -44976,12 +44976,17 @@ extern void checkfault(ulong, ulong);
 
 \subsection*{[[processes/alarm.c]]}
 
-<<alarm.c>>=
-<<kernel basic includes>>
-
+<<global alarms>>=
 static Alarms   alarms;
-static Rendez   alarmr;
+@ 
 
+
+<<global alarmr>>=
+static Rendez   alarmr;
+@ 
+
+
+<<kernel process alarmkproc>>=
 // Kernel Process for alarm managment
 void
 alarmkproc(void*)
@@ -45015,7 +45020,10 @@ alarmkproc(void*)
         sleep(&alarmr, return0, 0);
     }
 }
+@ 
 
+
+<<function checkalarms>>=
 /*
  *  called every clock tick
  */
@@ -45031,7 +45039,10 @@ checkalarms(void)
     if(p && (long)(now - p->alarm) >= 0)
         wakeup(&alarmr);
 }
+@ 
 
+
+<<function procalarm>>=
 ulong
 procalarm(ulong time)
 {
@@ -45081,27 +45092,31 @@ done:
 
     return old;
 }
+@ 
+
+
+<<alarm.c>>=
+<<kernel basic includes>>
+
+<<global alarms>>
+<<global alarmr>>
+
+<<kernel process alarmkproc>>
+
+<<function checkalarms>>
+
+<<function procalarm>>
 @
 
 
 \subsection*{[[processes/clock.c]]}
 
-<<clock.c>>=
-<<kernel basic includes>>
-#include "io.h"
-#include <ureg.h>
-
-enum {
-    Maxtimerloops = 20*1000,
-};
-
-
+<<global timers>>=
 static Timers timers[MAXMACH];
-static int timersinited;
+@ 
 
-ulong intrcount[MAXMACH];
-ulong fcallcount[MAXMACH];
 
+<<function tadd>>=
 static vlong
 tadd(Timers *tt, Timer *nt)
 {
@@ -45146,7 +45161,10 @@ tadd(Timers *tt, Timer *nt)
         return nt->twhen;
     return 0;
 }
+@ 
 
+
+<<function tdel>>=
 static uvlong
 tdel(Timer *dt)
 {
@@ -45169,7 +45187,10 @@ tdel(Timer *dt)
         return tt->head->twhen;
     return 0;
 }
+@ 
 
+
+<<function timeradd>>=
 /* add or modify a timer */
 void
 timeradd(Timer *nt)
@@ -45192,8 +45213,10 @@ timeradd(Timer *nt)
     iunlock(tt);
     iunlock(nt);
 }
+@ 
 
 
+<<function timerdel>>=
 void
 timerdel(Timer *dt)
 {
@@ -45210,7 +45233,9 @@ timerdel(Timer *dt)
     }
     iunlock(dt);
 }
+@ 
 
+<<function hzclock>>=
 void
 hzclock(Ureg *ur)
 {
@@ -45243,7 +45268,10 @@ hzclock(Ureg *ur)
     if(up && up->state == Running)
         hzsched();  /* in proc.c */
 }
+@ 
 
+<<interrupt callback timerintr>>=
+// called via i8253clock
 void
 timerintr(Ureg *u, Tval)
 {
@@ -45296,7 +45324,10 @@ timerintr(Ureg *u, Tval)
     }
     iunlock(tt);
 }
+@ 
 
+
+<<function timersinit>>=
 void
 timersinit(void)
 {
@@ -45305,7 +45336,7 @@ timersinit(void)
     /*
      * T->tf == nil means the HZ clock for this processor.
      */
-    timersinited = 1;
+    timersinited = true;
     todinit();
     t = malloc(sizeof(*t));
     if(t == nil)
@@ -45316,7 +45347,10 @@ timersinit(void)
     t->tf = nil;
     timeradd(t);
 }
+@ 
 
+
+<<function addclock0link>>=
 Timer*
 addclock0link(void (*f)(void), int ms)
 {
@@ -45343,7 +45377,10 @@ addclock0link(void (*f)(void), int ms)
     iunlock(&timers[0]);
     return nt;
 }
+@ 
 
+
+<<function tk2ms>>=
 /*
  *  This tk2ms avoids overflows that the macro version is prone to.
  *  It is a LOT slower so shouldn't be used if you're just converting
@@ -45361,7 +45398,10 @@ tk2ms(ulong ticks)
     ticks = t;
     return ticks;
 }
+@ 
 
+
+<<function ms2tk>>=
 ulong
 ms2tk(ulong ms)
 {
@@ -45370,6 +45410,45 @@ ms2tk(ulong ms)
         return (ms/1000)*HZ;
     return (ms*HZ+500)/1000;
 }
+@ 
+
+
+<<clock.c>>=
+<<kernel basic includes>>
+
+#include "io.h"
+
+#include <ureg.h>
+
+enum {
+    Maxtimerloops = 20*1000,
+};
+
+<<global timers>>
+static bool timersinited;
+
+ulong intrcount[MAXMACH];
+ulong fcallcount[MAXMACH];
+
+<<function tadd>>
+
+<<function tdel>>
+
+<<function timeradd>>
+
+<<function timerdel>>
+
+<<function hzclock>>
+
+<<interrupt callback timerintr>>
+
+<<function timersinit>>
+
+<<function addclock0link>>
+
+<<function tk2ms>>
+
+<<function ms2tk>>
 @
 
 

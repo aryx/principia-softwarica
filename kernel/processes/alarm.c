@@ -8,9 +8,14 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: global alarms */
 static Alarms   alarms;
+/*e: global alarms */
+/*s: global alarmr */
 static Rendez   alarmr;
+/*e: global alarmr */
 
+/*s: kernel process alarmkproc */
 // Kernel Process for alarm managment
 void
 alarmkproc(void*)
@@ -44,7 +49,9 @@ alarmkproc(void*)
         sleep(&alarmr, return0, 0);
     }
 }
+/*e: kernel process alarmkproc */
 
+/*s: function checkalarms */
 /*
  *  called every clock tick
  */
@@ -60,7 +67,9 @@ checkalarms(void)
     if(p && (long)(now - p->alarm) >= 0)
         wakeup(&alarmr);
 }
+/*e: function checkalarms */
 
+/*s: function procalarm */
 ulong
 procalarm(ulong time)
 {
@@ -110,4 +119,5 @@ done:
 
     return old;
 }
+/*e: function procalarm */
 /*e: alarm.c */

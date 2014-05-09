@@ -293,13 +293,13 @@ i8253timerset(uvlong next)
 }
 /*e: function i8253timerset */
 
-/*s: function i8253clock */
+/*s: interrupt callback i8253clock */
 static void
 i8253clock(Ureg* ureg, void*)
 {
     timerintr(ureg, 0);
 }
-/*e: function i8253clock */
+/*e: interrupt callback i8253clock */
 
 /*s: function i8253enable */
 void
