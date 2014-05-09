@@ -18,12 +18,15 @@ void        xhole(ulong, ulong);
 // The global
 //*****************************************************************************
 
+/*s: global xlists */
 static Xalloc   xlists;
+/*e: global xlists */
 
 //*****************************************************************************
 // Initialization
 //*****************************************************************************
 
+/*s: function xinit */
 void
 xinit(void)
 {
@@ -71,11 +74,13 @@ xinit(void)
     }
 //  xsummary();         /* call it from main if desired */
 }
+/*e: function xinit */
 
 //*****************************************************************************
 // Functions
 //*****************************************************************************
 
+/*s: function xspanalloc */
 void*
 xspanalloc(ulong size, int align, ulong span)
 {
@@ -101,7 +106,9 @@ xspanalloc(ulong size, int align, ulong span)
 
     return (void*)v;
 }
+/*e: function xspanalloc */
 
+/*s: function xallocz */
 void*
 xallocz(ulong size, bool zero)
 {
@@ -136,13 +143,17 @@ xallocz(ulong size, bool zero)
     iunlock(&xlists);
     return nil;
 }
+/*e: function xallocz */
 
+/*s: function xalloc */
 void*
 xalloc(ulong size)
 {
     return xallocz(size, true);
 }
+/*e: function xalloc */
 
+/*s: function xfree */
 void
 xfree(void *p)
 {
@@ -155,7 +166,9 @@ xfree(void *p)
     }
     xhole(PADDR((uintptr)x), x->size);
 }
+/*e: function xfree */
 
+/*s: function xmerge */
 int
 xmerge(void *vp, void *vq)
 {
@@ -187,7 +200,9 @@ xmerge(void *vp, void *vq)
     }
     return 0;
 }
+/*e: function xmerge */
 
+/*s: function xhole */
 void
 xhole(ulong addr, ulong size)
 {
@@ -241,11 +256,13 @@ xhole(ulong addr, ulong size)
     *l = h;
     iunlock(&xlists);
 }
+/*e: function xhole */
 
 //*****************************************************************************
 // Debugging
 //*****************************************************************************
 
+/*s: function xsummary */
 void
 xsummary(void)
 {
@@ -272,4 +289,5 @@ xsummary(void)
     }
     print(" %d bytes free\n", i);
 }
+/*e: function xsummary */
 /*e: xalloc.c */

@@ -8,6 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: ncmdfield */
 /*
  * Generous estimate of number of fields, including terminal nil pointer
  */
@@ -32,7 +33,9 @@ ncmdfield(char *p, int n)
     }
     return nf+1;    /* +1 for nil */
 }
+/*e: ncmdfield */
 
+/*s: function parsecmd */
 /*
  *  parse a command written to a device
  */
@@ -69,7 +72,9 @@ parsecmd(char *p, int n)
 
     return cb;
 }
+/*e: function parsecmd */
 
+/*s: function cmderror */
 /*
  * Reconstruct original message, for error diagnostic
  */
@@ -90,7 +95,9 @@ cmderror(Cmdbuf *cb, char *s)
     strcpy(p, "\"");
     error(up->genbuf);
 }
+/*e: function cmderror */
 
+/*s: function lookupcmd */
 /*
  * Look up entry in table
  */
@@ -115,4 +122,5 @@ lookupcmd(Cmdbuf *cb, Cmdtab *ctab, int nctab)
     cmderror(cb, "unknown control message");
     return nil;
 }
+/*e: function lookupcmd */
 /*e: parse.c */

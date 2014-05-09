@@ -39714,23 +39714,12 @@ void        xhole(ulong, ulong);
 @
 \fi
 
-<<xalloc.c>>=
-// Memory allocator for long lived allocated structures
-// e.g. array or Proc (procalloc), array of Pages (palloc.pages), etc
-<<kernel basic includes>>
-
-<<xalloc.c forward decl>>
-
-//*****************************************************************************
-// The global
-//*****************************************************************************
-
+<<global xlists>>=
 static Xalloc   xlists;
+@
 
-//*****************************************************************************
-// Initialization
-//*****************************************************************************
 
+<<function xinit>>=
 void
 xinit(void)
 {
@@ -39778,11 +39767,10 @@ xinit(void)
     }
 //  xsummary();         /* call it from main if desired */
 }
+@
 
-//*****************************************************************************
-// Functions
-//*****************************************************************************
 
+<<function xspanalloc>>=
 void*
 xspanalloc(ulong size, int align, ulong span)
 {
@@ -39808,7 +39796,10 @@ xspanalloc(ulong size, int align, ulong span)
 
     return (void*)v;
 }
+@
 
+
+<<function xallocz>>=
 void*
 xallocz(ulong size, bool zero)
 {
@@ -39843,13 +39834,19 @@ xallocz(ulong size, bool zero)
     iunlock(&xlists);
     return nil;
 }
+@
 
+
+<<function xalloc>>=
 void*
 xalloc(ulong size)
 {
     return xallocz(size, true);
 }
+@
 
+
+<<function xfree>>=
 void
 xfree(void *p)
 {
@@ -39862,7 +39859,10 @@ xfree(void *p)
     }
     xhole(PADDR((uintptr)x), x->size);
 }
+@
 
+
+<<function xmerge>>=
 int
 xmerge(void *vp, void *vq)
 {
@@ -39894,7 +39894,10 @@ xmerge(void *vp, void *vq)
     }
     return 0;
 }
+@
 
+
+<<function xhole>>=
 void
 xhole(ulong addr, ulong size)
 {
@@ -39948,11 +39951,10 @@ xhole(ulong addr, ulong size)
     *l = h;
     iunlock(&xlists);
 }
+@
 
-//*****************************************************************************
-// Debugging
-//*****************************************************************************
 
+<<function xsummary>>=
 void
 xsummary(void)
 {
@@ -39982,13 +39984,54 @@ xsummary(void)
 @
 
 
+<<xalloc.c>>=
+// Memory allocator for long lived allocated structures
+// e.g. array or Proc (procalloc), array of Pages (palloc.pages), etc
+<<kernel basic includes>>
+
+<<xalloc.c forward decl>>
+
+//*****************************************************************************
+// The global
+//*****************************************************************************
+
+<<global xlists>>
+
+//*****************************************************************************
+// Initialization
+//*****************************************************************************
+
+<<function xinit>>
+
+//*****************************************************************************
+// Functions
+//*****************************************************************************
+
+<<function xspanalloc>>
+
+<<function xallocz>>
+
+<<function xalloc>>
+
+<<function xfree>>
+
+<<function xmerge>>
+
+<<function xhole>>
+
+//*****************************************************************************
+// Debugging
+//*****************************************************************************
+
+<<function xsummary>>
+@
+
+
 \section{[[misc/]]}
 
 \subsection*{[[misc/parse.c]]}
 
-<<parse.c>>=
-<<kernel basic includes>>
-
+<<ncmdfield>>=
 /*
  * Generous estimate of number of fields, including terminal nil pointer
  */
@@ -40013,7 +40056,10 @@ ncmdfield(char *p, int n)
     }
     return nf+1;    /* +1 for nil */
 }
+@
 
+
+<<function parsecmd>>=
 /*
  *  parse a command written to a device
  */
@@ -40050,7 +40096,10 @@ parsecmd(char *p, int n)
 
     return cb;
 }
+@
 
+
+<<function cmderror>>=
 /*
  * Reconstruct original message, for error diagnostic
  */
@@ -40071,7 +40120,10 @@ cmderror(Cmdbuf *cb, char *s)
     strcpy(p, "\"");
     error(up->genbuf);
 }
+@
 
+
+<<function lookupcmd>>=
 /*
  * Look up entry in table
  */
@@ -40099,23 +40151,45 @@ lookupcmd(Cmdbuf *cb, Cmdtab *ctab, int nctab)
 @
 
 
+<<parse.c>>=
+<<kernel basic includes>>
+
+<<ncmdfield>>
+
+<<function parsecmd>>
+
+<<function cmderror>>
+
+<<function lookupcmd>>
+@
+
+
 \subsection*{[[misc/portdat_misc.h]]}
 
-<<portdat_misc.h>>=
-
+<<struct Cmdbuf>>=
 struct Cmdbuf
 {
   char  *buf;
   char  **f;
   int nf;
 };
+@
 
+
+<<struct Cmdtab>>=
 struct Cmdtab
 {
   int index;  /* used by client to switch on result */
   char  *cmd; /* command name */
   int narg; /* expected #args; 0 ==> variadic */
 };
+@
+
+<<portdat_misc.h>>=
+
+<<struct Cmdbuf>>
+
+<<struct Cmdtab>>
 @
 
 
@@ -40138,9 +40212,7 @@ ulong   randomread(void*, ulong);
 
 \subsection*{[[misc/random.c]]}
 
-<<random.c>>=
-<<kernel basic includes>>
-
+<<struct Rb>>=
 struct Rb
 {
     QLock;
@@ -40156,9 +40228,15 @@ struct Rb
     ushort  bits;
     ulong   randn;
 };
+@
 
+
+<<global rb>>=
 struct Rb rb;
+@
 
+
+<<struct rbnotfull>>=
 static int
 rbnotfull(void*)
 {
@@ -40167,13 +40245,19 @@ rbnotfull(void*)
     i = rb.rp - rb.wp;
     return i != 1 && i != (1 - sizeof(rb.buf));
 }
+@
 
+
+<<struct rbnotempty>>=
 static int
 rbnotempty(void*)
 {
     return rb.wp != rb.rp;
 }
+@
 
+
+<<function genrandom>>=
 static void
 genrandom(void*)
 {
@@ -40190,7 +40274,9 @@ genrandom(void*)
             sleep(&rb.producer, rbnotfull, 0);
     }
 }
+@
 
+<<function randomclock>>=
 /*
  *  produce random bits in a circular buffer
  */
@@ -40217,7 +40303,9 @@ randomclock(void)
     if(rb.wakeme)
         wakeup(&rb.consumer);
 }
+@
 
+<<function randominit>>=
 void
 randominit(void)
 {
@@ -40227,7 +40315,10 @@ randominit(void)
     rb.rp = rb.wp = rb.buf;
     kproc("genrandom", genrandom, 0);
 }
+@
 
+
+<<function randomread>>=
 /*
  *  consume random bytes from a circular buffer
  */
@@ -40274,6 +40365,27 @@ randomread(void *xp, ulong n)
 
     return n;
 }
+@
+
+
+<<random.c>>=
+<<kernel basic includes>>
+
+<<struct Rb>>
+
+<<global rb>>
+
+<<struct rbnotfull>>
+
+<<struct rbnotempty>>
+
+<<function genrandom>>
+
+<<function randomclock>>
+
+<<function randominit>>
+
+<<function randomread>>
 @
 
 

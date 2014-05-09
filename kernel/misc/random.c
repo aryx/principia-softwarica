@@ -8,6 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: struct Rb */
 struct Rb
 {
     QLock;
@@ -23,9 +24,13 @@ struct Rb
     ushort  bits;
     ulong   randn;
 };
+/*e: struct Rb */
 
+/*s: global rb */
 struct Rb rb;
+/*e: global rb */
 
+/*s: struct rbnotfull */
 static int
 rbnotfull(void*)
 {
@@ -34,13 +39,17 @@ rbnotfull(void*)
     i = rb.rp - rb.wp;
     return i != 1 && i != (1 - sizeof(rb.buf));
 }
+/*e: struct rbnotfull */
 
+/*s: struct rbnotempty */
 static int
 rbnotempty(void*)
 {
     return rb.wp != rb.rp;
 }
+/*e: struct rbnotempty */
 
+/*s: function genrandom */
 static void
 genrandom(void*)
 {
@@ -57,7 +66,9 @@ genrandom(void*)
             sleep(&rb.producer, rbnotfull, 0);
     }
 }
+/*e: function genrandom */
 
+/*s: function randomclock */
 /*
  *  produce random bits in a circular buffer
  */
@@ -84,7 +95,9 @@ randomclock(void)
     if(rb.wakeme)
         wakeup(&rb.consumer);
 }
+/*e: function randomclock */
 
+/*s: function randominit */
 void
 randominit(void)
 {
@@ -94,7 +107,9 @@ randominit(void)
     rb.rp = rb.wp = rb.buf;
     kproc("genrandom", genrandom, 0);
 }
+/*e: function randominit */
 
+/*s: function randomread */
 /*
  *  consume random bytes from a circular buffer
  */
@@ -141,4 +156,5 @@ randomread(void *xp, ulong n)
 
     return n;
 }
+/*e: function randomread */
 /*e: random.c */
