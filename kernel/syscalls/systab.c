@@ -69,6 +69,9 @@ Syscall *systab[] = {
     [SLEEP]     syssleep,
     [ALARM]     sysalarm,
 /*e: systab process syscalls */
+/*s: systab memory syscalls */
+    [BRK_]      sysbrk_,
+/*e: systab memory syscalls */
 /*s: systab file syscalls */
     [CREATE]    syscreate,
     [REMOVE]    sysremove,
@@ -88,10 +91,6 @@ Syscall *systab[] = {
     [CHDIR]     syschdir,
     [FD2PATH]   sysfd2path, // pwd?
 /*e: systab file syscalls */
-/*s: systab special file syscalls */
-    [DUP]       sysdup,
-    [PIPE]      syspipe,
-/*e: systab special file syscalls */
 /*s: systab namespace syscalls */
     [BIND]      sysbind,
     [MOUNT]     sysmount,
@@ -105,19 +104,21 @@ Syscall *systab[] = {
     [SEMRELEASE]    syssemrelease,
     [TSEMACQUIRE]   systsemacquire,
 /*e: systab concurrency syscalls */
-/*s: systab note syscalls */
+/*s: systab ipc syscalls */
     [NOTIFY]    sysnotify,
     [NOTED]     sysnoted,
-/*e: systab note syscalls */
-/*s: systab memory syscalls */
-    [BRK_]      sysbrk_,
+
+    [PIPE]      syspipe,
 
     [SEGATTACH] syssegattach,
     [SEGDETACH] syssegdetach,
     [SEGFREE]   syssegfree,
     [SEGFLUSH]  syssegflush,
     [SEGBRK]    syssegbrk,
-/*e: systab memory syscalls */
+/*e: systab ipc syscalls */
+/*s: systab special file syscalls */
+    [DUP]       sysdup,
+/*e: systab special file syscalls */
 /*s: systab security syscalls */
     [FAUTH]     sysfauth,
     [FVERSION]  sysfversion,

@@ -16,6 +16,7 @@
 % - introduced syssema.c (found while going through Kernel_extra.tex.nw)
 % - removed deadcode (e.g. field Proc.qlock, semalock)
 % - moved code in init/user such as preboot vs boot vs init
+% - introduced notion of IPC
 
 %thx to codemap/codegraph:
 % - see pad.txt#reorganization section
@@ -245,23 +246,14 @@ for himself
 
 <<sys.h>>=
 #define	NOP		0
-
 <<sys.h process syscalls>>
-
-<<sys.h file syscalls>>
-
-<<sys.h special file syscalls>>
-
-<<sys.h namespace syscalls>>
-
-<<sys.h concurrency syscalls>>
-
-<<sys.h note syscalls>>
-
 <<sys.h memory syscalls>>
-
+<<sys.h file syscalls>>
+<<sys.h namespace syscalls>>
+<<sys.h ipc syscalls>>
+<<sys.h concurrency syscalls>>
+<<sys.h special file syscalls>>
 <<sys.h security syscalls>>
-
 #define	ERRSTR		40
 @ 
 
@@ -272,6 +264,10 @@ for himself
 #define	SLEEP		4
 #define	ALARM		5
 @
+
+<<sys.h memory syscalls>>=
+#define	BRK_		32
+@ 
 
 <<sys.h file syscalls>>=
 #define	CREATE		6
@@ -290,12 +286,6 @@ for himself
 #define	FD2PATH		19
 @
 
-<<sys.h special file syscalls>>=
-#define	DUP		    20
-#define	PIPE		21
-@
-
-
 <<sys.h namespace syscalls>>=
 #define	BIND		22
 #define	MOUNT		23
@@ -311,16 +301,10 @@ for himself
 #define	TSEMACQUIRE	29
 @
 
-
-<<sys.h note syscalls>>=
+<<sys.h ipc syscalls>>=
 #define	NOTIFY		30
 #define	NOTED		31
-@
-
-
-<<sys.h memory syscalls>>=
-#define	BRK_		32
-
+#define	PIPE		21
 #define	SEGATTACH	33
 #define	SEGDETACH	34
 #define	SEGFREE		35
@@ -328,6 +312,9 @@ for himself
 #define	SEGBRK		37
 @
 
+<<sys.h special file syscalls>>=
+#define	DUP		    20
+@
 
 <<sys.h security syscalls>>=
 #define	FVERSION	38
@@ -515,12 +502,12 @@ extern char *sysctab[];
 Syscall *systab[] = {
     [NOP]     sysnop,
 <<systab process syscalls>>
+<<systab memory syscalls>>
 <<systab file syscalls>>
-<<systab special file syscalls>>
 <<systab namespace syscalls>>
 <<systab concurrency syscalls>>
-<<systab note syscalls>>
-<<systab memory syscalls>>
+<<systab ipc syscalls>>
+<<systab special file syscalls>>
 <<systab security syscalls>>
     [ERRSTR]    syserrstr,
 };
@@ -794,6 +781,16 @@ extern Dev** devtab;
 %       ...
 
 \chapter{Concurrency}
+
+% when think about concurrency in userspace program, have
+% shared memory of multiple program threads and need to mediate
+% access to shared data via semaphore/lock/whatever.
+
+% well OS is a kind of program and it has also mutiple
+% "threads" (different processors) and lots of shared data
+% (kernel meta data about user processes and its own data)
+% (which is why lots of the concurrency issues arised first
+% for OS programmers long before the other)
 
 <<systab concurrency syscalls>>=
     [AWAIT]     sysawait,
@@ -1579,12 +1576,6 @@ _xdeclt:
 
 <<systab memory syscalls>>=
     [BRK_]      sysbrk_,
-
-    [SEGATTACH] syssegattach,
-    [SEGDETACH] syssegdetach,
-    [SEGFREE]   syssegfree,
-    [SEGFLUSH]  syssegflush,
-    [SEGBRK]    syssegbrk,
 @ 
 
 \section{Overview}
@@ -1651,19 +1642,30 @@ _xdeclt:
 
 % of course can use fs to communicate between process :)
 
-% shared segment? and so semaphore? libc_thread?
-
 % see also network
+
+<<systab ipc syscalls>>=
+    [NOTIFY]    sysnotify,
+    [NOTED]     sysnoted,
+
+    [PIPE]      syspipe,
+
+    [SEGATTACH] syssegattach,
+    [SEGDETACH] syssegdetach,
+    [SEGFREE]   syssegfree,
+    [SEGFLUSH]  syssegflush,
+    [SEGBRK]    syssegbrk,
+@ 
 
 \section{Notes (signals)}
 
-<<systab note syscalls>>=
-    [NOTIFY]    sysnotify,
-    [NOTED]     sysnoted,
-@ 
-
 \section{Pipes}
 
+\section{Shared [[Segment]] and [[Sema]]phore}
+
+% shared segment? and so semaphore? libc_thread?
+
+\section{Network}
 
 \chapter{Files}
 
@@ -1793,12 +1795,14 @@ _xdeclt:
 
 <<systab special file syscalls>>=
     [DUP]       sysdup,
-    [PIPE]      syspipe,
 @ 
 
 \section{[[devdup.c]]}
 
 \section{[[devpipe.c]]}
+% see section in IPC also?
+% have pipe syscall and device, so both useful? named pipe
+% can be done only via devpipe.c
 
 \section{[[devmnt.c]]}
 
