@@ -14,14 +14,18 @@ enum
     Bdead       = 0x51494F42,   /* "QIOB" */
 };
 
+/*s: struct Ialloc */
 struct Ialloc
 {
     Lock;
     ulong   bytes;
 };
-
+/*e: struct Ialloc */
+/*s: global ialloc */
 struct Ialloc ialloc;
+/*e: global ialloc */
 
+/*s: function _allocb */
 static Block*
 _allocb(int size)
 {
@@ -57,7 +61,9 @@ _allocb(int size)
 
     return b;
 }
+/*e: function _allocb */
 
+/*s: function allocb */
 Block*
 allocb(int size)
 {
@@ -81,7 +87,9 @@ allocb(int size)
 
     return b;
 }
+/*e: function allocb */
 
+/*s: function iallocb */
 Block*
 iallocb(int size)
 {
@@ -120,7 +128,9 @@ iallocb(int size)
 
     return b;
 }
+/*e: function iallocb */
 
+/*s: function freeb */
 void
 freeb(Block *b)
 {
@@ -158,7 +168,9 @@ freeb(Block *b)
 
     free(b);
 }
+/*e: function freeb */
 
+/*s: function checkb */
 void
 checkb(Block *b, char *msg)
 {
@@ -185,10 +197,13 @@ checkb(Block *b, char *msg)
     if(b->wp > b->lim)
         panic("checkb 4 %s %#p %#p", msg, b->wp, b->lim);
 }
+/*e: function checkb */
 
+/*s: function iallocsummary */
 void
 iallocsummary(void)
 {
     print("ialloc %lud/%lud\n", ialloc.bytes, conf.ialloc);
 }
+/*e: function iallocsummary */
 /*e: allocb.c */
