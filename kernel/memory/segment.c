@@ -13,12 +13,15 @@
 // Global
 //*****************************************************************************
 
+/*s: global imagealloc */
 static struct Imagealloc imagealloc;
+/*e: global imagealloc */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
+/*s: global physseg */
 /*
  * Attachable segment types
  */
@@ -27,8 +30,12 @@ static Physseg physseg[10] = {
     { SG_BSS,   "memory",   0,  SEGMAXSIZE, 0,  0 },
     { 0,        0,      0,  0,      0,  0 },
 };
+/*e: global physseg */
+/*s: global physseglock */
 static Lock physseglock;
+/*e: global physseglock */
 
+// for debugging?
 Segment* (*_globalsegattach)(Proc*, char*);
 
 /*s: segment.c forward decl */
@@ -40,6 +47,7 @@ static void imagechanreclaim(void);
 // Initialization
 //*****************************************************************************
 
+/*s: function initseg */
 void
 initseg(void)
 {
@@ -55,11 +63,13 @@ initseg(void)
     imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
     imagealloc.szfreechan = NFREECHAN;
 }
+/*e: function initseg */
 
 //*****************************************************************************
 // Functions
 //*****************************************************************************
 
+/*s: function newseg */
 Segment *
 newseg(int type, ulong base, ulong size)
 {
@@ -93,7 +103,9 @@ newseg(int type, ulong base, ulong size)
 
     return s;
 }
+/*e: function newseg */
 
+/*s: function putseg */
 void
 putseg(Segment *s)
 {
@@ -137,7 +149,9 @@ putseg(Segment *s)
         free(s->profile);
     free(s);
 }
+/*e: function putseg */
 
+/*s: function relocateseg */
 void
 relocateseg(Segment *s, ulong offset)
 {
@@ -155,7 +169,9 @@ relocateseg(Segment *s, ulong offset)
         }
     }
 }
+/*e: function relocateseg */
 
+/*s: function dupseg */
 Segment*
 dupseg(Segment **seg, int segno, int share)
 {
@@ -222,7 +238,9 @@ sameseg:
     qunlock(&s->lk);
     return s;
 }
+/*e: function dupseg */
 
+/*s: function segpage */
 void
 segpage(Segment *s, Page *p)
 {
@@ -245,7 +263,9 @@ segpage(Segment *s, Page *p)
     if(pg > (*pte)->last)
         (*pte)->last = pg;
 }
+/*e: function segpage */
 
+/*s: function attachimage */
 KImage*
 attachimage(int type, Chan *c, ulong base, ulong len)
 {
@@ -316,6 +336,7 @@ found:
 
     return i;
 }
+/*e: function attachimage */
 
 /*s: struct Irstats */
 struct Irstats {
@@ -329,6 +350,7 @@ struct Irstats {
 static struct Irstats  irstats;
 /*e: segment.c global irstats */
 
+/*s: function imagereclaim */
 static void
 imagereclaim(void)
 {
@@ -367,7 +389,9 @@ imagereclaim(void)
     //print("T%llud+", ticks);
     qunlock(&imagealloc.ireclaim);
 }
+/*e: function imagereclaim */
 
+/*s: function imagechanreclaim */
 /*
  *  since close can block, this has to be called outside of
  *  spin locks.
@@ -397,7 +421,9 @@ imagechanreclaim(void)
 
     qunlock(&imagealloc.fcreclaim);
 }
+/*e: function imagechanreclaim */
 
+/*s: function putimage */
 void
 putimage(KImage *i)
 {
@@ -443,7 +469,9 @@ putimage(KImage *i)
     }
     unlock(i);
 }
+/*e: function putimage */
 
+/*s: function ibrk */
 long
 ibrk(ulong addr, int seg)
 {
@@ -519,7 +547,9 @@ ibrk(ulong addr, int seg)
     qunlock(&s->lk);
     return 0;
 }
+/*e: function ibrk */
 
+/*s: function mfreeseg */
 /*
  *  called with s->lk locked
  */
@@ -583,7 +613,9 @@ out:
         putpage(pg);
     }
 }
+/*e: function mfreeseg */
 
+/*s: function isoverlap */
 Segment*
 isoverlap(Proc *p, ulong va, int len)
 {
@@ -602,7 +634,9 @@ isoverlap(Proc *p, ulong va, int len)
     }
     return nil;
 }
+/*e: function isoverlap */
 
+/*s: function addphysseg */
 int
 addphysseg(Physseg* new)
 {
@@ -629,7 +663,9 @@ addphysseg(Physseg* new)
 
     return 0;
 }
+/*e: function addphysseg */
 
+/*s: function segattach */
 ulong
 segattach(Proc *p, ulong attr, char *name, ulong va, ulong len)
 {
@@ -709,8 +745,9 @@ found:
 
     return va;
 }
+/*e: function segattach */
 
-
+/*s: function segclock */
 void
 segclock(ulong pc)
 {
@@ -726,8 +763,10 @@ segclock(ulong pc)
         s->profile[pc>>LRESPROF] += TK2MS(1);
     }
 }
+/*e: function segclock */
 
 // was in another file before
+/*s: function data2txt */
 Segment*
 data2txt(Segment *s)
 {
@@ -742,4 +781,5 @@ data2txt(Segment *s)
 
     return ps;
 }
+/*e: function data2txt */
 /*e: segment.c */
