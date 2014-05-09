@@ -11,6 +11,7 @@
 int idle_spin;
 int idle_if_nproc;
 
+/*s: function procsetup */
 /*
  *  set up floating point for a new process
  */
@@ -20,7 +21,9 @@ procsetup(Proc*p)
     p->fpstate = FPinit;
     fpoff();
 }
+/*e: function procsetup */
 
+/*s: function procsave */
 /*
  *  Save the mach dependent part of the process state.
  */
@@ -61,9 +64,9 @@ procsave(Proc *p)
      */
     mmuflushtlb(PADDR(m->pdb));
 }
+/*e: function procsave */
 
-
-
+/*s: function procrestore */
 void
 procrestore(Proc *p)
 {
@@ -74,8 +77,9 @@ procrestore(Proc *p)
     cycles(&t);
     p->pcycles -= t;
 }
+/*e: function procrestore */
 
-
+/*s: function fpsavealloc */
 void
 fpsavealloc(void)
 {
@@ -83,7 +87,9 @@ fpsavealloc(void)
     if (m->fpsavalign == nil)
         panic("cpu%d: can't allocate fpsavalign", m->machno);
 }
+/*e: function fpsavealloc */
 
+/*s: function fpssesave */
 /*
  * sse fp save and restore buffers have to be 16-byte (FPalign) aligned,
  * so we shuffle the data down as needed or make copies.
@@ -102,7 +108,9 @@ fpssesave(ArchFPsave *fps)
     if (fps->magic != 0x1234)
         print("fpssesave: magic corrupted\n");
 }
+/*e: function fpssesave */
 
+/*s: function fpsserestore */
 void
 fpsserestore(ArchFPsave *fps)
 {
@@ -118,7 +126,9 @@ fpsserestore(ArchFPsave *fps)
     if (fps->magic != 0x4321)
         print("fpsserestore: magic corrupted\n");
 }
+/*e: function fpsserestore */
 
+/*s: function idlehands */
 /*
  *  put the processor in the halt state if we've no processes to run.
  *  an interrupt will get us going again.
@@ -140,4 +150,5 @@ idlehands(void)
         idle_if_nproc && conf.nmach >= idle_if_nproc)
         halt();
 }
+/*e: function idlehands */
 /*e: main_processes.c */

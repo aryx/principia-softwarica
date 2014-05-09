@@ -18,16 +18,22 @@
 // Globals
 //*****************************************************************************
 
-static int trapinited;
+static bool trapinited;
 
+/*s: global vctllock */
 static Lock vctllock;
+/*e: global vctllock */
+/*s: global vctl */
 static Vctl *vctl[256];
+/*e: global vctl */
 
 enum
 {
     Ntimevec = 20       /* number of time buckets for each intr */
 };
+/*s: global intrtimes */
 ulong intrtimes[256][Ntimevec];
+/*e: global intrtimes */
 
 //*****************************************************************************
 // Forward decl
@@ -48,6 +54,7 @@ static void _dumpstack(Ureg*);
 // Interrupts enable/disable
 //*****************************************************************************
 
+/*s: function intrenable */
 void
 intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
 {
@@ -88,7 +95,9 @@ intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
     vctl[vno] = v;
     iunlock(&vctllock);
 }
+/*e: function intrenable */
 
+/*s: function intrdisable */
 int
 intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
 {
@@ -120,11 +129,13 @@ intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
     xfree(v);
     return 0;
 }
+/*e: function intrdisable */
 
 //*****************************************************************************
 // Init
 //*****************************************************************************
 
+/*s: function irqallocread */
 static long
 irqallocread(Chan*, void *vbuf, long n, vlong offset)
 {
@@ -163,7 +174,9 @@ irqallocread(Chan*, void *vbuf, long n, vlong offset)
     }
     return oldn - n;
 }
+/*e: function irqallocread */
 
+/*s: function trapenable */
 void
 trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
 {
@@ -183,7 +196,9 @@ trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
     vctl[vno] = v;
     iunlock(&vctllock);
 }
+/*e: function trapenable */
 
+/*s: function nmienable */
 static void
 nmienable(void)
 {
@@ -199,7 +214,9 @@ nmienable(void)
     outb(0x61, 0x08|x);
     outb(0x61, x);
 }
+/*e: function nmienable */
 
+/*s: function trapinit0 */
 /*
  * Minimal trap setup.  Just enough so that we can panic
  * on traps (bugs) during kernel initialization.
@@ -235,7 +252,9 @@ trapinit0(void)
         vaddr += 6;
     }
 }
+/*e: function trapinit0 */
 
+/*s: function trapinit */
 void
 trapinit(void)
 {
@@ -250,13 +269,15 @@ trapinit(void)
     nmienable();
 
     addarchfile("irqalloc", 0444, irqallocread, nil);
-    trapinited = 1;
+    trapinited = true;
 }
+/*e: function trapinit */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
+/*s: global excname */
 static char* excname[32] = {
     "divide error",
     "debug exception",
@@ -291,7 +312,9 @@ static char* excname[32] = {
     "30 (reserved)",
     "31 (reserved)",
 };
+/*e: global excname */
 
+/*s: function intrtime */
 /*
  *  keep histogram of interrupt service times
  */
@@ -314,7 +337,9 @@ intrtime(Mach*, int vno)
         diff = Ntimevec-1;
     intrtimes[vno][diff]++;
 }
+/*e: function intrtime */
 
+/*s: function kexit */
 /* go to user space */
 void
 kexit(Ureg*)
@@ -329,7 +354,9 @@ kexit(Ureg*)
     tos->pcycles = up->pcycles;
     tos->pid = up->pid;
 }
+/*e: function kexit */
 
+/*s: function trap */
 /*
  *  All traps come here.  It is slower to have all traps call trap()
  *  rather than directly vectoring the handler. However, this avoids a
@@ -475,7 +502,9 @@ trap(Ureg* ureg)
         kexit(ureg);
     }
 }
+/*e: function trap */
 
+/*s: function dumpregs2 */
 /*
  *  dump registers
  */
@@ -498,7 +527,9 @@ dumpregs2(Ureg* ureg)
         ureg->cs & 0xFFFF, ureg->ds & 0xFFFF, ureg->es & 0xFFFF,
         ureg->fs & 0xFFFF, ureg->gs & 0xFFFF);
 }
+/*e: function dumpregs2 */
 
+/*s: function dumpregs */
 void
 dumpregs(Ureg* ureg)
 {
@@ -525,8 +556,9 @@ dumpregs(Ureg* ureg)
     }
     iprint("\n  ur %#p up %#p\n", ureg, up);
 }
+/*e: function dumpregs */
 
-
+/*s: function callwithureg */
 /*
  * Fill in enough of Ureg to get a stack trace, and call a function.
  * Used by debugging interface rdb.
@@ -539,7 +571,9 @@ callwithureg(void (*fn)(Ureg*))
     ureg.sp = (ulong)&fn;
     fn(&ureg);
 }
+/*e: function callwithureg */
 
+/*s: function _dumpstack */
 static void
 _dumpstack(Ureg *ureg)
 {
@@ -603,13 +637,17 @@ _dumpstack(Ureg *ureg)
     if(i)
         iprint("\n");
 }
+/*e: function _dumpstack */
 
+/*s: function trap_dumpstack */
 void
 trap_dumpstack(void)
 {
     callwithureg(_dumpstack);
 }
+/*e: function trap_dumpstack */
 
+/*s: function debugbpt */
 static void
 debugbpt(Ureg* ureg, void*)
 {
@@ -622,22 +660,28 @@ debugbpt(Ureg* ureg, void*)
     snprint(buf, sizeof buf, "sys: breakpoint");
     postnote(up, 1, buf, NDebug);
 }
+/*e: function debugbpt */
 
+/*s: function doublefault */
 static void
 doublefault(Ureg*, void*)
 {
     panic("double fault");
 }
+/*e: function doublefault */
 
+/*s: function unexpected */
 static void
 unexpected(Ureg* ureg, void*)
 {
     print("unexpected trap %lud; ignoring\n", ureg->trap);
 }
+/*e: function unexpected */
 
 extern void checkpages(void);
 extern void checkfault(ulong, ulong);
 
+/*s: function fault386 */
 static void
 fault386(Ureg* ureg, void*)
 {
@@ -676,6 +720,7 @@ fault386(Ureg* ureg, void*)
     }
     up->insyscall = insyscall;
 }
+/*e: function fault386 */
 
 //*****************************************************************************
 // Syscall
@@ -686,6 +731,7 @@ fault386(Ureg* ureg, void*)
  */
 #include "../port/systab.h"
 
+/*s: function syscall */
 /*
  *  Syscall is called directly from assembler without going through trap().
  */
@@ -811,7 +857,9 @@ syscall(Ureg* ureg)
         sched();
     kexit(ureg);
 }
+/*e: function syscall */
 
+/*s: function notify */
 /*
  *  Call user, if necessary, with note.
  *  Pass user the Ureg struct and the note on his stack.
@@ -896,7 +944,9 @@ if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
     splx(s);
     return 1;
 }
+/*e: function notify */
 
+/*s: function noted */
 /*
  *   Return user to state before notify()
  */
@@ -989,7 +1039,9 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
         pexit(up->lastnote.msg, up->lastnote.flag!=NDebug);
     }
 }
+/*e: function noted */
 
+/*s: function execregs */
 long
 execregs(ulong entry, ulong ssize, ulong nargs)
 {
@@ -1007,7 +1059,9 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ureg->pc = entry;
     return USTKTOP-sizeof(Tos);     /* address of kernel/user shared data */
 }
+/*e: function execregs */
 
+/*s: function userpc */
 /*
  *  return the userpc the last exception happened at
  */
@@ -1019,7 +1073,9 @@ userpc(void)
     ureg = (Ureg*)up->dbgreg;
     return ureg->pc;
 }
+/*e: function userpc */
 
+/*s: function setregisters */
 /* This routine must save the values of registers the user is not permitted
  * to write from devproc and then restore the saved values before returning.
  */
@@ -1044,7 +1100,9 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
     ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
     ureg->ss = ss;
 }
+/*e: function setregisters */
 
+/*s: function linkproc */
 static void
 linkproc(void)
 {
@@ -1052,7 +1110,9 @@ linkproc(void)
     up->kpfun(up->kparg);
     pexit("kproc dying", 0);
 }
+/*e: function linkproc */
 
+/*s: function kprocchild */
 void
 kprocchild(Proc* p, void (*func)(void*), void* arg)
 {
@@ -1067,7 +1127,9 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
     p->kpfun = func;
     p->kparg = arg;
 }
+/*e: function kprocchild */
 
+/*s: function forkchild */
 void
 forkchild(Proc *p, Ureg *ureg)
 {
@@ -1090,7 +1152,9 @@ forkchild(Proc *p, Ureg *ureg)
     p->psstate = 0;
     p->insyscall = 0;
 }
+/*e: function forkchild */
 
+/*s: function setkernur */
 /* Give enough context in the ureg to produce a kernel stack for
  * a sleeping process
  */
@@ -1100,7 +1164,9 @@ setkernur(Ureg* ureg, Proc* p)
     ureg->pc = p->sched.pc;
     ureg->sp = p->sched.sp+4;
 }
+/*e: function setkernur */
 
+/*s: function dbgpc */
 ulong
 dbgpc(Proc *p)
 {
@@ -1112,4 +1178,5 @@ dbgpc(Proc *p)
 
     return ureg->pc;
 }
+/*e: function dbgpc */
 /*e: trap.c */

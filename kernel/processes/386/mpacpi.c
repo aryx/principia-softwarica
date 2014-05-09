@@ -42,10 +42,12 @@ enum {
     Lapicae = 1<<11,        /* apic enable in Lapicbase */
 };
 
+/*s: mpacpi.c debugging macro */
 //#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
 #define dprint if(mpdebug) print
 /* from mp.c */
 extern int  mpdebug;
+/*e: mpacpi.c debugging macro */
 
 int mpmachno; //PAD: bug? also declared in mp.c
 extern Apic mpapic[MaxAPICNO+1];

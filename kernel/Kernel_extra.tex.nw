@@ -41974,9 +41974,7 @@ TEXT setlabel(SB), $0
 
 \subsection*{[[processes/386/l_trap.s]]}
 
-<<l_trap.s>>=
-#include "mem.h"
-        
+<<function _strayintr>>=
 /*
  * Interrupt/exception handling.
  * Each entry in the vector table calls either _strayintr or _strayintrx depending
@@ -41990,7 +41988,10 @@ TEXT _strayintr(SB), $0
         PUSHL   AX                      /* save AX */
         MOVL    4(SP), AX               /* return PC from vectortable(SB) */
         JMP     intrcommon
+@
 
+
+<<function _strayintrx>>=
 TEXT _strayintrx(SB), $0
         XCHGL   AX, (SP)                /* swap AX with vectortable CALL PC */
 intrcommon:
@@ -42010,7 +42011,10 @@ intrcommon:
 
         PUSHL   SP                      /* Ureg* argument to trap */
         CALL    trap(SB)
+@ 
 
+
+<<function forkret>>=
 TEXT forkret(SB), $0
         POPL    AX
         POPAL
@@ -42020,7 +42024,10 @@ TEXT forkret(SB), $0
         POPL    DS
         ADDL    $8, SP                  /* pop error code and trap type */
         IRETL
+@ 
 
+
+<<global vectortable>>=
 TEXT vectortable(SB), $0
         CALL _strayintr(SB); BYTE $0x00         /* divide error */
         CALL _strayintr(SB); BYTE $0x01         /* debug exception */
@@ -42278,17 +42285,25 @@ TEXT vectortable(SB), $0
         CALL _strayintr(SB); BYTE $0xFD
         CALL _strayintr(SB); BYTE $0xFE
         CALL _strayintr(SB); BYTE $0xFF
+@ 
+
+
+<<l_trap.s>>=
+#include "mem.h"
+
+<<function _strayintr>>        
+
+<<function _strayintrx>>
+
+<<function forkret>>
+
+<<global vectortable>>
 @
 
 
 \subsection*{[[processes/386/main_processes.c]]}
 
-<<main_processes.c>>=
-<<kernel basic includes>>
-
-int idle_spin;
-int idle_if_nproc;
-
+<<function procsetup>>=
 /*
  *  set up floating point for a new process
  */
@@ -42298,7 +42313,10 @@ procsetup(Proc*p)
     p->fpstate = FPinit;
     fpoff();
 }
+@ 
 
+
+<<function procsave>>=
 /*
  *  Save the mach dependent part of the process state.
  */
@@ -42339,9 +42357,10 @@ procsave(Proc *p)
      */
     mmuflushtlb(PADDR(m->pdb));
 }
+@ 
 
 
-
+<<function procrestore>>=
 void
 procrestore(Proc *p)
 {
@@ -42352,8 +42371,10 @@ procrestore(Proc *p)
     cycles(&t);
     p->pcycles -= t;
 }
+@ 
 
 
+<<function fpsavealloc>>=
 void
 fpsavealloc(void)
 {
@@ -42361,7 +42382,10 @@ fpsavealloc(void)
     if (m->fpsavalign == nil)
         panic("cpu%d: can't allocate fpsavalign", m->machno);
 }
+@ 
 
+
+<<function fpssesave>>=
 /*
  * sse fp save and restore buffers have to be 16-byte (FPalign) aligned,
  * so we shuffle the data down as needed or make copies.
@@ -42380,7 +42404,10 @@ fpssesave(ArchFPsave *fps)
     if (fps->magic != 0x1234)
         print("fpssesave: magic corrupted\n");
 }
+@ 
 
+
+<<function fpsserestore>>=
 void
 fpsserestore(ArchFPsave *fps)
 {
@@ -42396,7 +42423,10 @@ fpsserestore(ArchFPsave *fps)
     if (fps->magic != 0x4321)
         print("fpsserestore: magic corrupted\n");
 }
+@ 
 
+
+<<function idlehands>>=
 /*
  *  put the processor in the halt state if we've no processes to run.
  *  an interrupt will get us going again.
@@ -42418,10 +42448,39 @@ idlehands(void)
         idle_if_nproc && conf.nmach >= idle_if_nproc)
         halt();
 }
+@ 
+
+
+<<main_processes.c>>=
+<<kernel basic includes>>
+
+int idle_spin;
+int idle_if_nproc;
+
+<<function procsetup>>
+
+<<function procsave>>
+
+<<function procrestore>>
+
+<<function fpsavealloc>>
+
+<<function fpssesave>>
+
+<<function fpsserestore>>
+
+<<function idlehands>>
 @
 
 
 \subsection*{[[processes/386/mp.c]]}
+
+<<mp.c debugging macro>>=
+//#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+#define dprint if(mpdebug) print
+int mpdebug;
+@ 
+
 
 <<mp.c>>=
 <<kernel basic includes>>
@@ -42433,9 +42492,7 @@ idlehands(void)
 
 #include <ureg.h>
 
-//#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
-#define dprint if(mpdebug) print
-int mpdebug;
+<<mp.c debugging macro>>
 
 /* from mpacpi.c */
 extern Apic *bootapic;
@@ -43377,6 +43434,14 @@ mpshutdown(void)
 
 \subsection*{[[processes/386/mpacpi.c]]}
 
+<<mpacpi.c debugging macro>>=
+//#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+#define dprint if(mpdebug) print
+/* from mp.c */
+extern int  mpdebug;
+@ 
+
+
 <<mpacpi.c>>=
 /*
  * minimal acpi support for multiprocessors.
@@ -43414,10 +43479,7 @@ enum {
     Lapicae = 1<<11,        /* apic enable in Lapicbase */
 };
 
-//#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
-#define dprint if(mpdebug) print
-/* from mp.c */
-extern int  mpdebug;
+<<mpacpi.c debugging macro>>
 
 int mpmachno; //PAD: bug? also declared in mp.c
 extern Apic mpapic[MaxAPICNO+1];
@@ -43648,39 +43710,22 @@ static void _dumpstack(Ureg*);
 @ 
 \fi
 
-<<trap.c>>=
-<<kernel basic includes>>
-
-#include    "io.h"
-
-#include    <tos.h>
-#include    <ureg.h>
-#include    <trace.h>
-
-//*****************************************************************************
-// Globals
-//*****************************************************************************
-
-static int trapinited;
-
+<<global vctllock>>=
 static Lock vctllock;
+@ 
+
+
+<<global vctl>>=
 static Vctl *vctl[256];
+@ 
 
-enum
-{
-    Ntimevec = 20       /* number of time buckets for each intr */
-};
+
+<<global intrtimes>>=
 ulong intrtimes[256][Ntimevec];
+@ 
 
-//*****************************************************************************
-// Forward decl
-//*****************************************************************************
-<<trap.c forward decl>>
 
-//*****************************************************************************
-// Interrupts enable/disable
-//*****************************************************************************
-
+<<function intrenable>>=
 void
 intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
 {
@@ -43721,7 +43766,10 @@ intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
     vctl[vno] = v;
     iunlock(&vctllock);
 }
+@ 
 
+
+<<function intrdisable>>=
 int
 intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
 {
@@ -43753,11 +43801,10 @@ intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
     xfree(v);
     return 0;
 }
+@ 
 
-//*****************************************************************************
-// Init
-//*****************************************************************************
 
+<<function irqallocread>>=
 static long
 irqallocread(Chan*, void *vbuf, long n, vlong offset)
 {
@@ -43796,7 +43843,10 @@ irqallocread(Chan*, void *vbuf, long n, vlong offset)
     }
     return oldn - n;
 }
+@ 
 
+
+<<function trapenable>>=
 void
 trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
 {
@@ -43816,7 +43866,10 @@ trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
     vctl[vno] = v;
     iunlock(&vctllock);
 }
+@ 
 
+
+<<function nmienable>>=
 static void
 nmienable(void)
 {
@@ -43832,7 +43885,9 @@ nmienable(void)
     outb(0x61, 0x08|x);
     outb(0x61, x);
 }
+@ 
 
+<<function trapinit0>>=
 /*
  * Minimal trap setup.  Just enough so that we can panic
  * on traps (bugs) during kernel initialization.
@@ -43868,7 +43923,9 @@ trapinit0(void)
         vaddr += 6;
     }
 }
+@ 
 
+<<function trapinit>>=
 void
 trapinit(void)
 {
@@ -43883,13 +43940,12 @@ trapinit(void)
     nmienable();
 
     addarchfile("irqalloc", 0444, irqallocread, nil);
-    trapinited = 1;
+    trapinited = true;
 }
+@ 
 
-//*****************************************************************************
-// Misc
-//*****************************************************************************
 
+<<global excname>>=
 static char* excname[32] = {
     "divide error",
     "debug exception",
@@ -43924,7 +43980,10 @@ static char* excname[32] = {
     "30 (reserved)",
     "31 (reserved)",
 };
+@ 
 
+
+<<function intrtime>>=
 /*
  *  keep histogram of interrupt service times
  */
@@ -43947,7 +44006,10 @@ intrtime(Mach*, int vno)
         diff = Ntimevec-1;
     intrtimes[vno][diff]++;
 }
+@ 
 
+
+<<function kexit>>=
 /* go to user space */
 void
 kexit(Ureg*)
@@ -43962,7 +44024,9 @@ kexit(Ureg*)
     tos->pcycles = up->pcycles;
     tos->pid = up->pid;
 }
+@ 
 
+<<function trap>>=
 /*
  *  All traps come here.  It is slower to have all traps call trap()
  *  rather than directly vectoring the handler. However, this avoids a
@@ -44108,7 +44172,10 @@ trap(Ureg* ureg)
         kexit(ureg);
     }
 }
+@ 
 
+
+<<function dumpregs2>>=
 /*
  *  dump registers
  */
@@ -44131,7 +44198,10 @@ dumpregs2(Ureg* ureg)
         ureg->cs & 0xFFFF, ureg->ds & 0xFFFF, ureg->es & 0xFFFF,
         ureg->fs & 0xFFFF, ureg->gs & 0xFFFF);
 }
+@ 
 
+
+<<function dumpregs>>=
 void
 dumpregs(Ureg* ureg)
 {
@@ -44158,8 +44228,10 @@ dumpregs(Ureg* ureg)
     }
     iprint("\n  ur %#p up %#p\n", ureg, up);
 }
+@ 
 
 
+<<function callwithureg>>=
 /*
  * Fill in enough of Ureg to get a stack trace, and call a function.
  * Used by debugging interface rdb.
@@ -44172,7 +44244,9 @@ callwithureg(void (*fn)(Ureg*))
     ureg.sp = (ulong)&fn;
     fn(&ureg);
 }
+@ 
 
+<<function _dumpstack>>=
 static void
 _dumpstack(Ureg *ureg)
 {
@@ -44236,13 +44310,18 @@ _dumpstack(Ureg *ureg)
     if(i)
         iprint("\n");
 }
+@ 
 
+<<function trap_dumpstack>>=
 void
 trap_dumpstack(void)
 {
     callwithureg(_dumpstack);
 }
+@ 
 
+
+<<function debugbpt>>=
 static void
 debugbpt(Ureg* ureg, void*)
 {
@@ -44255,22 +44334,28 @@ debugbpt(Ureg* ureg, void*)
     snprint(buf, sizeof buf, "sys: breakpoint");
     postnote(up, 1, buf, NDebug);
 }
+@ 
 
+
+<<function doublefault>>=
 static void
 doublefault(Ureg*, void*)
 {
     panic("double fault");
 }
+@ 
 
+
+<<function unexpected>>=
 static void
 unexpected(Ureg* ureg, void*)
 {
     print("unexpected trap %lud; ignoring\n", ureg->trap);
 }
+@ 
 
-extern void checkpages(void);
-extern void checkfault(ulong, ulong);
 
+<<function fault386>>=
 static void
 fault386(Ureg* ureg, void*)
 {
@@ -44309,16 +44394,10 @@ fault386(Ureg* ureg, void*)
     }
     up->insyscall = insyscall;
 }
+@ 
 
-//*****************************************************************************
-// Syscall
-//*****************************************************************************
 
-/*
- *  system calls
- */
-#include "../port/systab.h"
-
+<<function syscall>>=
 /*
  *  Syscall is called directly from assembler without going through trap().
  */
@@ -44444,7 +44523,10 @@ syscall(Ureg* ureg)
         sched();
     kexit(ureg);
 }
+@ 
 
+
+<<function notify>>=
 /*
  *  Call user, if necessary, with note.
  *  Pass user the Ureg struct and the note on his stack.
@@ -44529,7 +44611,10 @@ if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
     splx(s);
     return 1;
 }
+@ 
 
+
+<<function noted>>=
 /*
  *   Return user to state before notify()
  */
@@ -44622,7 +44707,10 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
         pexit(up->lastnote.msg, up->lastnote.flag!=NDebug);
     }
 }
+@ 
 
+
+<<function execregs>>=
 long
 execregs(ulong entry, ulong ssize, ulong nargs)
 {
@@ -44640,7 +44728,10 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ureg->pc = entry;
     return USTKTOP-sizeof(Tos);     /* address of kernel/user shared data */
 }
+@ 
 
+
+<<function userpc>>=
 /*
  *  return the userpc the last exception happened at
  */
@@ -44652,7 +44743,10 @@ userpc(void)
     ureg = (Ureg*)up->dbgreg;
     return ureg->pc;
 }
+@ 
 
+
+<<function setregisters>>=
 /* This routine must save the values of registers the user is not permitted
  * to write from devproc and then restore the saved values before returning.
  */
@@ -44677,7 +44771,10 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
     ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
     ureg->ss = ss;
 }
+@ 
 
+
+<<function linkproc>>=
 static void
 linkproc(void)
 {
@@ -44685,7 +44782,10 @@ linkproc(void)
     up->kpfun(up->kparg);
     pexit("kproc dying", 0);
 }
+@ 
 
+
+<<function kprocchild>>=
 void
 kprocchild(Proc* p, void (*func)(void*), void* arg)
 {
@@ -44700,7 +44800,10 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
     p->kpfun = func;
     p->kparg = arg;
 }
+@ 
 
+
+<<function forkchild>>=
 void
 forkchild(Proc *p, Ureg *ureg)
 {
@@ -44723,7 +44826,10 @@ forkchild(Proc *p, Ureg *ureg)
     p->psstate = 0;
     p->insyscall = 0;
 }
+@ 
 
+
+<<function setkernur>>=
 /* Give enough context in the ureg to produce a kernel stack for
  * a sleeping process
  */
@@ -44733,7 +44839,10 @@ setkernur(Ureg* ureg, Proc* p)
     ureg->pc = p->sched.pc;
     ureg->sp = p->sched.sp+4;
 }
+@ 
 
+
+<<function dbgpc>>=
 ulong
 dbgpc(Proc *p)
 {
@@ -44745,6 +44854,123 @@ dbgpc(Proc *p)
 
     return ureg->pc;
 }
+@ 
+
+
+<<trap.c>>=
+<<kernel basic includes>>
+
+#include    "io.h"
+
+#include    <tos.h>
+#include    <ureg.h>
+#include    <trace.h>
+
+//*****************************************************************************
+// Globals
+//*****************************************************************************
+
+static bool trapinited;
+
+<<global vctllock>>
+<<global vctl>>
+
+enum
+{
+    Ntimevec = 20       /* number of time buckets for each intr */
+};
+<<global intrtimes>>
+
+//*****************************************************************************
+// Forward decl
+//*****************************************************************************
+<<trap.c forward decl>>
+
+//*****************************************************************************
+// Interrupts enable/disable
+//*****************************************************************************
+
+<<function intrenable>>
+
+<<function intrdisable>>
+
+//*****************************************************************************
+// Init
+//*****************************************************************************
+
+<<function irqallocread>>
+
+<<function trapenable>>
+
+<<function nmienable>>
+
+<<function trapinit0>>
+
+<<function trapinit>>
+
+//*****************************************************************************
+// Misc
+//*****************************************************************************
+
+<<global excname>>
+
+<<function intrtime>>
+
+<<function kexit>>
+
+<<function trap>>
+
+<<function dumpregs2>>
+
+<<function dumpregs>>
+
+<<function callwithureg>>
+
+<<function _dumpstack>>
+
+<<function trap_dumpstack>>
+
+<<function debugbpt>>
+
+<<function doublefault>>
+
+<<function unexpected>>
+
+extern void checkpages(void);
+extern void checkfault(ulong, ulong);
+
+<<function fault386>>
+
+//*****************************************************************************
+// Syscall
+//*****************************************************************************
+
+/*
+ *  system calls
+ */
+#include "../port/systab.h"
+
+<<function syscall>>
+
+<<function notify>>
+
+<<function noted>>
+
+<<function execregs>>
+
+<<function userpc>>
+
+<<function setregisters>>
+
+<<function linkproc>>
+
+<<function kprocchild>>
+
+<<function forkchild>>
+
+<<function setkernur>>
+
+<<function dbgpc>>
 @
 
 
