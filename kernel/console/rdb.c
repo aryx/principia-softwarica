@@ -10,6 +10,7 @@
 #include "io.h"
 #include <ureg.h>
 
+/*s: rdb.c debugging macro */
 #define DBG if(0)scrprint
 #pragma varargck argpos scrprint 1
 //static Ureg ureg;
@@ -26,6 +27,7 @@ scrprint(char *fmt, ...)
     va_end(va);
     putstrn(buf, n);
 }
+/*e: rdb.c debugging macro */
 
 static char*
 getline(void)
@@ -65,7 +67,7 @@ talkrdb(Ureg *ureg)
 
     serialoq = nil;     /* turn off serial console */
     kprintoq = nil;     /* turn off /dev/kprint if active */
-//  scrprint("Plan 9 debugger\n");
+    DBG("Plan 9 debugger\n");
     iprint("Edebugger reset\n");
     for(;;){
         req = getline();

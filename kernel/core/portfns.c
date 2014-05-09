@@ -60,6 +60,7 @@ void (*delay)(int) = 0;
 
 
 // was in devcons.c, could be in lib/misc.c
+/*s: function readnum */
 int
 readnum(ulong off, char *buf, ulong n, ulong val, int size)
 {
@@ -74,7 +75,9 @@ readnum(ulong off, char *buf, ulong n, ulong val, int size)
     memmove(buf, tmp+off, n);
     return n;
 }
+/*e: function readnum */
 
+/*s: function readstr */
 int
 readstr(ulong off, char *buf, ulong n, char *str)
 {
@@ -88,4 +91,5 @@ readstr(ulong off, char *buf, ulong n, char *str)
     memmove(buf, str+off, n);
     return n;
 }
+/*e: function readstr */
 /*e: portfns.c */

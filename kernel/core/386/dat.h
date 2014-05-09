@@ -4,12 +4,18 @@
 
 /*s: enum miscsize_dat */
 enum miscsize_dat {
-  // used in devcons.c
-  KMESGSIZE = (256*1024),  /* lots, for acpi debugging */ // default is 16*1024
-  // used by devuart.c
-  STAGESIZE = 2048, // default is 64
-  // used in Proc
-  MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
+    /*s: constant KMESGSIZE */
+    // used in devcons.c
+    KMESGSIZE = (256*1024),  /* lots, for acpi debugging */ // default is 16*1024
+    /*e: constant KMESGSIZE */
+    /*s: constant STAGESIZE */
+    // used by devuart.c
+    STAGESIZE = 2048, // default is 64
+    /*e: constant STAGESIZE */
+    /*s: constant MAXSYSARG */
+    // used in Proc
+    MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
+    /*e: constant MAXSYSARG */
 };
 /*e: enum miscsize_dat */
 

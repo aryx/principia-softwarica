@@ -12,6 +12,7 @@ int (*isaconfig)(char*, int, ISAConf*) = 0;
 
 // was in main.c, could be in lib/386/libc.c (or even lib/libc.c)
 
+/*s: function cistrncmp */
 int
 cistrncmp(char *a, char *b, int n)
 {
@@ -36,7 +37,9 @@ cistrncmp(char *a, char *b, int n)
 
     return 0;
 }
+/*e: function cistrncmp */
 
+/*s: function cistrcmp */
 int
 cistrcmp(char *a, char *b)
 {
@@ -58,5 +61,6 @@ cistrcmp(char *a, char *b)
     }
     return 0;
 }
+/*e: function cistrcmp */
 
 /*e: fns.c */

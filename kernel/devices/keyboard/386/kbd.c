@@ -13,6 +13,10 @@
 
 #include    "io.h"
 
+/*s: kbd.c forward decl */
+typedef struct Kbscan Kbscan;
+/*e: kbd.c forward decl */
+
 enum {
     Data=       0x60,       /* data port */
 
@@ -63,6 +67,9 @@ enum {
     Nscans,
 };
 
+static char *initfailed = "i8042: kbdinit failed\n";
+
+/*s: global kbtab */
 /*
  * The codes at 0x79 and 0x7b are produced by the PFU Happy Hacking keyboard.
  * A 'standard' keyboard doesn't produce anything above 0x58.
@@ -86,7 +93,9 @@ Rune kbtab[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, View,   No, Up, No, No, No, No,
 };
+/*e: global kbtab */
 
+/*s: global kbtabshift */
 Rune kbtabshift[Nscan] =
 {
 [0x00]  No, 0x1b,   '!',    '@',    '#',    '$',    '%',    '^',
@@ -106,7 +115,9 @@ Rune kbtabshift[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, Up, No, Up, No, No, No, No,
 };
+/*e: global kbtabshift */
 
+/*s: global kbtabesc1 */
 Rune kbtabesc1[Nscan] =
 {
 [0x00]  No, No, No, No, No, No, No, No,
@@ -126,7 +137,9 @@ Rune kbtabesc1[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, Up, No, No, No, No, No, No,
 };
+/*e: global kbtabesc1 */
 
+/*s: global kbtabaltgr */
 Rune kbtabaltgr[Nscan] =
 {
 [0x00]  No, No, No, No, No, No, No, No,
@@ -146,11 +159,14 @@ Rune kbtabaltgr[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, Up, No, No, No, No, No, No,
 };
+/*e: global kbtabaltgr */
 
 // see kbtab.c for the ctrl one, put in another file because
 // of issues with TeX with the special characters it contain
 // can't LPize it.
+/*s: global kbtabctrl decl */
 extern Rune kbtabctrl[];
+/*e: global kbtabctrl decl */
 
 enum
 {
@@ -163,14 +179,21 @@ enum
     Ckbdint=    (1<<0),     /* kbd interrupt enable */
 };
 
+/*s: global i8042lock */
+static Lock i8042lock;
+/*e: global i8042lock */
+/*s: global nokbd */
+static int nokbd = true;           /* flag: no PS/2 keyboard */
+/*e: global nokbd */
+
 extern int mouseshifted;
 extern void (*kbdmouse)(int);
 
-static Lock i8042lock;
 static uchar ccc;
 static void (*auxputc)(int, int);
-static int nokbd = 1;           /* flag: no PS/2 keyboard */
 
+
+/*s: function outready */
 /*
  *  wait for output no longer busy
  */
@@ -186,7 +209,9 @@ outready(void)
     }
     return 0;
 }
+/*e: function outready */
 
+/*s: function inready */
 /*
  *  wait for input
  */
@@ -202,7 +227,9 @@ inready(void)
     }
     return 0;
 }
+/*e: function inready */
 
+/*s: function i8042reset */
 /*
  *  ask 8042 to reset the machine
  */
@@ -236,7 +263,9 @@ i8042reset(void)
         delay(100);
     }
 }
+/*e: function i8042reset */
 
+/*s: function i8042auxcmd */
 int
 i8042auxcmd(int cmd)
 {
@@ -274,9 +303,9 @@ i8042auxcmd(int cmd)
     }
     return 0;
 }
+/*e: function i8042auxcmd */
 
-
-typedef struct Kbscan Kbscan;
+/*s: struct Kbscan */
 struct Kbscan {
     int esc1;
     int esc2;
@@ -291,11 +320,17 @@ struct Kbscan {
     Rune    kc[5];
     int buttons;
 };
+/*e: struct Kbscan */
 
+/*s: global kbscans */
 Kbscan kbscans[Nscans]; /* kernel and external scan code state */
+/*e: global kbscans */
 
+/*s: kbd.c debugging macro */
 static int kdebug;
+/*e: kbd.c debugging macro */
 
+/*s: function setleds */
 /*
  * set keyboard's leds for lock states (scroll, numeric, caps).
  *
@@ -333,7 +368,9 @@ setleds(Kbscan *kbscan)
     outready();
     iunlock(&i8042lock);
 }
+/*e: function setleds */
 
+/*s: function kbdputsc */
 /*
  * Scan code processing
  */
@@ -504,7 +541,9 @@ kbdputsc(int c, int external)
     }
     kbdputc(kbdq, c);
 }
+/*e: function kbdputsc */
 
+/*s: interrupt callback i8042intr */
 /*
  *  keyboard interrupt
  */
@@ -540,7 +579,9 @@ i8042intr(Ureg*, void*)
 
     kbdputsc(c, Int);
 }
+/*e: interrupt callback i8042intr */
 
+/*s: function i8042auxenable */
 void
 i8042auxenable(void (*putc)(int, int))
 {
@@ -568,9 +609,9 @@ i8042auxenable(void (*putc)(int, int))
     intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
     iunlock(&i8042lock);
 }
+/*e: function i8042auxenable */
 
-static char *initfailed = "i8042: kbdinit failed\n";
-
+/*s: function outbyte */
 static int
 outbyte(int port, int c)
 {
@@ -581,7 +622,9 @@ outbyte(int port, int c)
     }
     return 0;
 }
+/*e: function outbyte */
 
+/*s: function kbdinit */
 void
 kbdinit(void)
 {
@@ -615,7 +658,7 @@ kbdinit(void)
         return;
     }
 
-    nokbd = 0;
+    nokbd = false;
 
     /* disable mouse */
     if (outbyte(Cmd, 0x60) < 0 || outbyte(Data, ccc) < 0)
@@ -627,7 +670,9 @@ kbdinit(void)
         if(outbyte(Data, 0xf3) < 0 || outbyte(Data, 0) < 0)
             print("i8042: kbdinit set typematic rate failed\n");
 }
+/*e: function kbdinit */
 
+/*s: function kbdenable */
 void
 kbdenable(void)
 {
@@ -644,7 +689,9 @@ kbdenable(void)
     kbscans[Int].num = 0;
     setleds(&kbscans[Int]);
 }
+/*e: function kbdenable */
 
+/*s: function kbdputmap */
 void
 kbdputmap(ushort m, ushort scanc, Rune r)
 {
@@ -670,7 +717,9 @@ kbdputmap(ushort m, ushort scanc, Rune r)
         break;
     }
 }
+/*e: function kbdputmap */
 
+/*s: function kbdgetmap */
 int
 kbdgetmap(uint offset, int *t, int *sc, Rune *r)
 {
@@ -698,4 +747,5 @@ kbdgetmap(uint offset, int *t, int *sc, Rune *r)
         return 1;
     }
 }
+/*e: function kbdgetmap */
 /*e: kbd.c */

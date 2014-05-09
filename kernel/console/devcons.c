@@ -1304,9 +1304,9 @@ le2long(long *to, uchar *f)
 }
 /*e: function le2long */
 
-/*s: devcons.c Exx errors */
+/*s: devcons.c Exxx errors */
 char *Ebadtimectl = "bad time control";
-/*e: devcons.c Exx errors */
+/*e: devcons.c Exxx errors */
 
 /*s: function readtime */
 /*

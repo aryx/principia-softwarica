@@ -51,15 +51,21 @@ Mach* machp[MAXMACH];
 /*e: global machp */
 
 // was in security/auth.c
+/*s: global eve */
 char    *eve;
+/*e: global eve */
 // should be in portfns.c, but then backward deps
 /*
  *  return true if current user is eve
  */
+/*s: function iseve */
 bool iseve(void) { 
   return strcmp(eve, up->user) == 0; 
 }
+/*e: function iseve */
 
 // was in console/devcons.c, but used also by edf.c
+/*s: global panicking */
 int panicking;
+/*e: global panicking */
 /*e: portdat.c */
