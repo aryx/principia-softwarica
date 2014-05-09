@@ -13,6 +13,7 @@
 
 #include "../port/systab.h"
 
+/*s: function fmtrwdata */
 // WE ARE OVERRUNNING SOMEHOW
 static void
 fmtrwdata(Fmt* f, char* a, int n, char* suffix)
@@ -35,7 +36,9 @@ fmtrwdata(Fmt* f, char* a, int n, char* suffix)
     fmtprint(f, " %#p/\"%s\"%s", a, t, suffix);
     free(t);
 }
+/*e: function fmtrwdata */
 
+/*s: function fmtuserstring */
 static void
 fmtuserstring(Fmt* f, char* a, char* suffix)
 {
@@ -54,7 +57,9 @@ fmtuserstring(Fmt* f, char* a, char* suffix)
     fmtprint(f, "%#p/\"%s\"%s", a, t, suffix);
     free(t);
 }
+/*e: function fmtuserstring */
 
+/*s: function syscallfmt */
 void
 syscallfmt(int syscallno, ulong pc, va_list list)
 {
@@ -279,7 +284,9 @@ syscallfmt(int syscallno, ulong pc, va_list list)
 
     up->syscalltrace = fmtstrflush(&fmt);
 }
+/*e: function syscallfmt */
 
+/*s: function sysretfmt */
 void
 sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
 {
@@ -374,4 +381,5 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
     fmtprint(&fmt, " %s %#llud %#llud\n", errstr, start, stop);
     up->syscalltrace = fmtstrflush(&fmt);
 }
+/*e: function sysretfmt */
 /*e: syscallfmt.c */

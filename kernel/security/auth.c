@@ -13,8 +13,11 @@
 //char  *eve; now in core/
 //int iseve(void) { } now in core/
 
+/*s: global hostdomain */
 char    hostdomain[DOMLEN];
+/*e: global hostdomain */
 
+/*s: syscall fversion */
 long
 sysfversion(ulong *arg)
 {
@@ -41,7 +44,9 @@ sysfversion(ulong *arg)
     poperror();
     return m;
 }
+/*e: syscall fversion */
 
+/*s: syscall fauth */
 long
 sysfauth(ulong *arg)
 {
@@ -83,7 +88,9 @@ sysfauth(ulong *arg)
 
     return fd;
 }
+/*e: syscall fauth */
 
+/*s: function userwrite */
 /*
  *  called by devcons() for user device
  *
@@ -98,7 +105,9 @@ userwrite(char *a, int n)
     up->basepri = PriNormal;
     return n;
 }
+/*e: function userwrite */
 
+/*s: function hostownerwrite */
 /*
  *  called by devcons() for host owner/domain
  *
@@ -122,7 +131,9 @@ hostownerwrite(char *a, int n)
     up->basepri = PriNormal;
     return n;
 }
+/*e: function hostownerwrite */
 
+/*s: function hostdomainwrite */
 long
 hostdomainwrite(char *a, int n)
 {
@@ -139,4 +150,5 @@ hostdomainwrite(char *a, int n)
     memmove(hostdomain, buf, DOMLEN);
     return n;
 }
+/*e: function hostdomainwrite */
 /*e: auth.c */

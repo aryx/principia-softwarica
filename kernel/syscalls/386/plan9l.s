@@ -1,6 +1,7 @@
 /*s: plan9l.s */
 #include "mem.h"
 
+/*s: function touser */
 /*
  *  Used to get to the first process:
  *      set up an interrupt return frame and IRET to user level.
@@ -19,7 +20,9 @@ TEXT touser(SB), $0
         MOVW    AX, GS
         MOVW    AX, FS
         IRETL
+/*e: function touser */
 
+/*s: function _syscallintr */
 /*
  * This is merely _strayintr from l.s optimised to vector
  * to syscall() without going through trap().
@@ -46,4 +49,5 @@ TEXT _syscallintr(SB), $0
         POPL    DS
         ADDL    $8, SP                          /* pop error code and trap type */
         IRETL
+/*e: function _syscallintr */
 /*e: plan9l.s */

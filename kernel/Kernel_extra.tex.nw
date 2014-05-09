@@ -50742,45 +50742,11 @@ sysrendezvous(ulong *arg)
 \ifallcode
 <<tod.c forward decl>>=
 uvlong      mk64fract(uvlong, uvlong);
+static void todfix(void);
 @
 \fi
 
-<<tod.c>>=
-// TOD: Time Of Day.
-
-<<kernel basic includes>>
-
-<<tod.c forward decl>>
-
-/*
- * Compute nanosecond epoch time from the fastest ticking clock
- * on the system.  Converting the time to nanoseconds requires
- * the following formula
- *
- *  t = (((1000000000<<31)/f)*ticks)>>31
- *
- *  where
- *
- *  'f'     is the clock frequency
- *  'ticks'     are clock ticks
- *
- *  to avoid too much calculation in todget(), we calculate
- *
- *  mult = (1000000000<<32)/f
- *
- *  each time f is set.  f is normally set by a user level
- *  program writing to /dev/fastclock.  mul64fract will then
- *  take that fractional multiplier and a 64 bit integer and
- *  return the resulting integer product.
- *
- *  We assume that the cpu's of a multiprocessor are synchronized.
- *  This assumption needs to be questioned with each new architecture.
- */
-
-/* frequency of the tod clock */
-#define TODFREQ     1000000000ULL
-#define MicroFREQ   1000000ULL
-
+<<struct TOD>>=
 struct TOD {
     int init;       /* true if initialized */
     ulong   cnt;
@@ -50797,11 +50763,15 @@ struct TOD {
     ulong   sstart;     /* ... */
     ulong   send;       /* ... */
 };
+@ 
 
+
+<<global tod>>=
 struct TOD tod;
+@ 
 
-static void todfix(void);
 
+<<function todinit>>=
 void
 todinit(void)
 {
@@ -50814,7 +50784,10 @@ todinit(void)
     todsetfreq(tod.hz);
     addclock0link(todfix, 100);
 }
+@ 
 
+
+<<function todsetfreq>>=
 /*
  *  calculate multiplier
  */
@@ -50833,7 +50806,10 @@ todsetfreq(vlong f)
     tod.udivider = mk64fract(f, MicroFREQ) + 1;
     iunlock(&tod);
 }
+@ 
 
+
+<<function todset>>=
 /*
  *  Set the time of day struct
  */
@@ -50869,7 +50845,10 @@ todset(vlong t, vlong delta, int n)
     }
     iunlock(&tod);
 }
+@ 
 
+
+<<function todget>>=
 /*
  *  get time of day
  */
@@ -50921,7 +50900,10 @@ todget(vlong *ticksp)
 
     return x;
 }
+@ 
 
+
+<<function todfix>>=
 /*
  *  called regularly to avoid calculation overflows
  */
@@ -50949,13 +50931,19 @@ if(x > 30000000000ULL) iprint("todfix %llud\n", x);
         iunlock(&tod);
     }
 }
+@ 
 
+
+<<function seconds>>=
 long
 seconds(void)
 {
     return (vlong)todget(nil) / TODFREQ;
 }
+@ 
 
+
+<<function fastticks2us>>=
 uvlong
 fastticks2us(uvlong ticks)
 {
@@ -50966,7 +50954,10 @@ fastticks2us(uvlong ticks)
     mul64fract(&res, ticks, tod.umultiplier);
     return res;
 }
+@ 
 
+
+<<function ns2fastticks>>=
 /*
  *  convert nanoseconds to fast ticks
  */
@@ -50980,8 +50971,9 @@ ns2fastticks(uvlong ns)
     mul64fract(&res, ns, tod.divider);
     return res;
 }
+@ 
 
-
+<<function mk64fract>>=
 /*
  * Make a 64 bit fixed point number that has a decimal point
  * to the left of the low order 32 bits.  This is used with
@@ -50992,26 +50984,86 @@ ns2fastticks(uvlong ns)
 uvlong
 mk64fract(uvlong to, uvlong from)
 {
-/*
-    int shift;
-
-    if(to == 0ULL)
-        return 0ULL;
-
-    shift = 0;
-    while(shift < 32 && to < (1ULL<<(32+24))){
-        to <<= 8;
-        shift += 8;
-    }
-    while(shift < 32 && to < (1ULL<<(32+31))){
-        to <<= 1;
-        shift += 1;
-    }
-
-    return (to/from)<<(32-shift);
- */
     return (to<<32) / from;
 }
+@ 
+
+%/*
+%    int shift;
+%
+%    if(to == 0ULL)
+%        return 0ULL;
+%
+%    shift = 0;
+%    while(shift < 32 && to < (1ULL<<(32+24))){
+%        to <<= 8;
+%        shift += 8;
+%    }
+%    while(shift < 32 && to < (1ULL<<(32+31))){
+%        to <<= 1;
+%        shift += 1;
+%    }
+%
+%    return (to/from)<<(32-shift);
+% */
+
+
+<<tod.c>>=
+// TOD: Time Of Day.
+
+<<kernel basic includes>>
+
+<<tod.c forward decl>>
+
+/*
+ * Compute nanosecond epoch time from the fastest ticking clock
+ * on the system.  Converting the time to nanoseconds requires
+ * the following formula
+ *
+ *  t = (((1000000000<<31)/f)*ticks)>>31
+ *
+ *  where
+ *
+ *  'f'     is the clock frequency
+ *  'ticks'     are clock ticks
+ *
+ *  to avoid too much calculation in todget(), we calculate
+ *
+ *  mult = (1000000000<<32)/f
+ *
+ *  each time f is set.  f is normally set by a user level
+ *  program writing to /dev/fastclock.  mul64fract will then
+ *  take that fractional multiplier and a 64 bit integer and
+ *  return the resulting integer product.
+ *
+ *  We assume that the cpu's of a multiprocessor are synchronized.
+ *  This assumption needs to be questioned with each new architecture.
+ */
+
+/* frequency of the tod clock */
+#define TODFREQ     1000000000ULL
+#define MicroFREQ   1000000ULL
+
+<<struct TOD>>
+<<global tod>>
+
+<<function todinit>>
+
+<<function todsetfreq>>
+
+<<function todset>>
+
+<<function todget>>
+
+<<function todfix>>
+
+<<function seconds>>
+
+<<function fastticks2us>>
+
+<<function ns2fastticks>>
+
+<<function mk64fract>>
 @
 
 %/*
@@ -51071,16 +51123,12 @@ mk64fract(uvlong to, uvlong from)
 
 \subsection*{[[security/auth.c]]}
 
-<<auth.c>>=
-<<kernel basic includes>>
-
-#include    <authsrv.h>
-
-//char  *eve; now in core/
-//int iseve(void) { } now in core/
-
+<<global hostdomain>>=
 char    hostdomain[DOMLEN];
+@ 
 
+
+<<syscall fversion>>=
 long
 sysfversion(ulong *arg)
 {
@@ -51107,7 +51155,10 @@ sysfversion(ulong *arg)
     poperror();
     return m;
 }
+@ 
 
+
+<<syscall fauth>>=
 long
 sysfauth(ulong *arg)
 {
@@ -51149,7 +51200,10 @@ sysfauth(ulong *arg)
 
     return fd;
 }
+@ 
 
+
+<<function userwrite>>=
 /*
  *  called by devcons() for user device
  *
@@ -51164,7 +51218,10 @@ userwrite(char *a, int n)
     up->basepri = PriNormal;
     return n;
 }
+@ 
 
+
+<<function hostownerwrite>>=
 /*
  *  called by devcons() for host owner/domain
  *
@@ -51188,7 +51245,10 @@ hostownerwrite(char *a, int n)
     up->basepri = PriNormal;
     return n;
 }
+@ 
 
+
+<<function hostdomainwrite>>=
 long
 hostdomainwrite(char *a, int n)
 {
@@ -51205,6 +51265,28 @@ hostdomainwrite(char *a, int n)
     memmove(hostdomain, buf, DOMLEN);
     return n;
 }
+@ 
+
+
+<<auth.c>>=
+<<kernel basic includes>>
+
+#include    <authsrv.h>
+
+//char  *eve; now in core/
+//int iseve(void) { } now in core/
+
+<<global hostdomain>>
+
+<<syscall fversion>>
+
+<<syscall fauth>>
+
+<<function userwrite>>
+
+<<function hostownerwrite>>
+
+<<function hostdomainwrite>>
 @
 
 \subsection*{[[security/portfns_security.h]]}
@@ -51226,9 +51308,7 @@ long    hostownerwrite(char*, int);
 
 \subsection*{[[syscalls/386/plan9l.s]]}
 
-<<plan9l.s>>=
-#include "mem.h"
-
+<<function touser>>=
 /*
  *  Used to get to the first process:
  *      set up an interrupt return frame and IRET to user level.
@@ -51247,7 +51327,10 @@ TEXT touser(SB), $0
         MOVW    AX, GS
         MOVW    AX, FS
         IRETL
+@ 
 
+
+<<function _syscallintr>>=
 /*
  * This is merely _strayintr from l.s optimised to vector
  * to syscall() without going through trap().
@@ -51274,19 +51357,21 @@ TEXT _syscallintr(SB), $0
         POPL    DS
         ADDL    $8, SP                          /* pop error code and trap type */
         IRETL
+@ 
+
+
+<<plan9l.s>>=
+#include "mem.h"
+
+<<function touser>>
+
+<<function _syscallintr>>
 @
 
 
 \subsection*{[[syscalls/syscallfmt.c]]}
 
-<<syscallfmt.c>>=
-/*
- * Print functions for system call tracing.
- */
-<<kernel basic includes>>
-
-#include "../port/systab.h"
-
+<<function fmtrwdata>>=
 // WE ARE OVERRUNNING SOMEHOW
 static void
 fmtrwdata(Fmt* f, char* a, int n, char* suffix)
@@ -51309,7 +51394,10 @@ fmtrwdata(Fmt* f, char* a, int n, char* suffix)
     fmtprint(f, " %#p/\"%s\"%s", a, t, suffix);
     free(t);
 }
+@ 
 
+
+<<function fmtuserstring>>=
 static void
 fmtuserstring(Fmt* f, char* a, char* suffix)
 {
@@ -51328,7 +51416,10 @@ fmtuserstring(Fmt* f, char* a, char* suffix)
     fmtprint(f, "%#p/\"%s\"%s", a, t, suffix);
     free(t);
 }
+@ 
 
+
+<<function syscallfmt>>=
 void
 syscallfmt(int syscallno, ulong pc, va_list list)
 {
@@ -51553,7 +51644,10 @@ syscallfmt(int syscallno, ulong pc, va_list list)
 
     up->syscalltrace = fmtstrflush(&fmt);
 }
+@ 
 
+
+<<function sysretfmt>>=
 void
 sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
 {
@@ -51648,6 +51742,24 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
     fmtprint(&fmt, " %s %#llud %#llud\n", errstr, start, stop);
     up->syscalltrace = fmtstrflush(&fmt);
 }
+@ 
+
+
+<<syscallfmt.c>>=
+/*
+ * Print functions for system call tracing.
+ */
+<<kernel basic includes>>
+
+#include "../port/systab.h"
+
+<<function fmtrwdata>>
+
+<<function fmtuserstring>>
+
+<<function syscallfmt>>
+
+<<function sysretfmt>>
 @
 
 
