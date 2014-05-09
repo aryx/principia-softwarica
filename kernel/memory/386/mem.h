@@ -8,23 +8,31 @@
  */
 #define BI2BY   8     /* bits per byte */
 #define BI2WD   32      /* bits per word */
+
 #define BY2WD   4     /* bytes per word */
 #define BY2V    8     /* bytes per double word */
 #define BY2PG   4096      /* bytes per page */
-#define WD2PG   (BY2PG/BY2WD)   /* words per page */
 #define BY2XPG    (4096*1024)   /* bytes per big page */
+
+#define WD2PG   (BY2PG/BY2WD)   /* words per page */
+
 #define PGSHIFT   12      /* log(BY2PG) */
 #define CACHELINESZ 32      /* pentium & later */
 #define BLOCKALIGN  8
+
 #define FPalign   16      /* required for FXSAVE */
 
+/*s: constant MAXMACH */
 /*
  * In 32-bit mode, the MAXMACH limit is 32 without
  * changing the way active.machs is defined and used
  * (unfortunately, it is also used in the port code).
  */
 #define MAXMACH   32      /* max # cpus system can run */
+/*e: constant MAXMACH */
+/*s: constant KSTACK */
 #define KSTACK    4096      /* Size of kernel stack */
+/*e: constant KSTACK */
 
 /*
  * Time
@@ -84,6 +92,9 @@
  * and that there are 6 of them.
  */
 
+
+// could be an enum but this also used from assembly
+/*s: constant x86 segments */
 /*
  *  known x86 segments (in GDT) and their selectors
  */
@@ -93,12 +104,16 @@
 #define UDSEG 3 /* user data/stack */
 #define UESEG 4 /* user executable */
 #define TSSSEG  5 /* task segment */
+
 #define APMCSEG   6 /* APM code segment */
 #define APMCSEG16 7 /* APM 16-bit code segment */
 #define APMDSEG   8 /* APM data segment */
 #define KESEG16   9 /* kernel executable 16-bit */
+
 #define NGDT    10  /* number of GDT entries required */
+/*e: constant x86 segments */
 /* #define  APM40SEG  8 /* APM segment 0x40 */
+
 
 #define SELGDT  (0<<2)  /* selector is in gdt */
 #define SELLDT  (1<<2)  /* selector is in ldt */

@@ -52,6 +52,7 @@
 #define TSSSEGM(b,p)    { ((b)<<16)|sizeof(Tss),\
               ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
 
+/*s: global gdt */
 Segdesc gdt[NGDT] =
 {
 [NULLSEG]   { 0, 0},        /* null descriptor */
@@ -62,8 +63,8 @@ Segdesc gdt[NGDT] =
 [TSSSEG]    TSSSEGM(0,0),       /* tss segment */
 [KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
 };
+/*e: global gdt */
 
-static int didmmuinit;
 /*s: mmu.c forward decl */
 static void taskswitch(ulong, ulong);
 static void memglobal(void);
@@ -72,16 +73,24 @@ static ulong vmapalloc(ulong size);
 static void pdbunmap(ulong*, ulong, int);
 /*e: mmu.c forward decl */
 
+
 #define vpt ((ulong*)VPT)
 #define VPTX(va)        (((ulong)(va))>>12)
 #define vpd (vpt+VPTX(VPT))
 
+/*s: function mmuinit0 */
 void
 mmuinit0(void)
 {
     memmove(m->gdt, gdt, sizeof gdt);
 }
+/*e: function mmuinit0 */
 
+/*s: global didmmuinit */
+static int didmmuinit;
+/*e: global didmmuinit */
+
+/*s: function mmuinit */
 void
 mmuinit(void)
 {
@@ -139,7 +148,9 @@ mmuinit(void)
     taskswitch(PADDR(m->pdb),  (ulong)m + BY2PG);
     ltr(TSSSEL);
 }
+/*e: function mmuinit */
 
+/*s: function memglobal */
 /* 
  * On processors that support it, we set the PTEGLOBAL bit in
  * page table and page directory entries that map kernel memory.
@@ -180,7 +191,9 @@ memglobal(void)
         }
     }           
 }
+/*e: function memglobal */
 
+/*s: function flushmmu */
 /*
  * Flush all the user-space and device-mapping mmu info
  * for this process, because something has been deleted.
@@ -196,7 +209,9 @@ flushmmu(void)
     mmuswitch(up);
     splx(s);
 }
+/*e: function flushmmu */
 
+/*s: function flushpg */
 /*
  * Flush a single page mapping from the tlb.
  */
@@ -208,7 +223,9 @@ flushpg(ulong va)
     else
         putcr3(getcr3());
 }
-    
+/*e: function flushpg */
+
+/*s: function mmupdballoc */
 /*
  * Allocate a new page for a page directory. 
  * We keep a small cache of pre-initialized
@@ -240,7 +257,9 @@ mmupdballoc(void)
     splx(s);
     return page;
 }
+/*e: function mmupdballoc */
 
+/*s: function mmupdbfree */
 //@Scheck: not deaded, called below
 static void
 mmupdbfree(Proc *proc, Page *p)
@@ -257,7 +276,9 @@ mmupdbfree(Proc *proc, Page *p)
         m->pdbcnt++;
     }
 }
+/*e: function mmupdbfree */
 
+/*s: function mmuptefree */
 /*
  * A user-space memory segment has been deleted, or the
  * process is exiting.  Clear all the pde entries for user-space
@@ -286,7 +307,9 @@ mmuptefree(Proc* proc)
     proc->mmufree = proc->mmuused;
     proc->mmuused = 0;
 }
+/*e: function mmuptefree */
 
+/*s: function taskswitch */
 static void
 taskswitch(ulong pdb, ulong stack)
 {
@@ -301,7 +324,9 @@ taskswitch(ulong pdb, ulong stack)
     tss->esp2 = stack;
     putcr3(pdb);
 }
+/*e: function taskswitch */
 
+/*s: function mmuswitch */
 void
 mmuswitch(Proc* proc)
 {
@@ -320,7 +345,9 @@ mmuswitch(Proc* proc)
     }else
         taskswitch(PADDR(m->pdb), (ulong)(proc->kstack+KSTACK));
 }
+/*e: function mmuswitch */
 
+/*s: function mmurelease */
 /*
  * Release any pages allocated for a page directory base or page-tables
  * for this process:
@@ -379,7 +406,9 @@ mmurelease(Proc* proc)
         wakeup(&palloc.r);
     proc->mmufree = 0;
 }
+/*e: function mmurelease */
 
+/*s: function upallocpdb */
 /*
  * Allocate and install pdb for the current process.
  */
@@ -413,7 +442,9 @@ upallocpdb(void)
     putcr3(up->mmupdb->pa);
     splx(s);
 }
+/*e: function upallocpdb */
 
+/*s: function putmmu */
 /*
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
  */
@@ -466,7 +497,9 @@ putmmu(ulong va, ulong pa, Page*)
         print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupdb->pa);
     splx(s);
 }
+/*e: function putmmu */
 
+/*s: function checkmmu */
 /*
  * Double-check the user MMU.
  * Error checking only.
@@ -483,7 +516,9 @@ checkmmu(ulong va, ulong pa)
             up->pid, up->text,
             va, pa, vpt[VPTX(va)]);
 }
+/*e: function checkmmu */
 
+/*s: function mmuwalk */
 /*
  * Walk the page-table pointed to by pdb and return a pointer
  * to the entry for virtual address va at the requested level.
@@ -532,6 +567,7 @@ mmuwalk(ulong* pdb, ulong va, int level, int create)
         return &table[PTX(va)];
     }
 }
+/*e: function mmuwalk */
 
 /*
  * Device mappings are shared by all procs and processors and
@@ -540,8 +576,11 @@ mmuwalk(ulong* pdb, ulong va, int level, int create)
  * paged in from there as necessary by vmapsync during faults.
  */
 
+/*s: global vmaplock */
 static Lock vmaplock;
+/*e: global vmaplock */
 
+/*s: function vmap */
 /*
  * Add a device mapping to the vmap range.
  */
@@ -579,7 +618,9 @@ vmap(ulong pa, int size)
 //  print("  vmap %#.8lux %d => %#.8lux\n", pa+o, osize, va+o);
     return (void*)(va + o);
 }
+/*e: function vmap */
 
+/*s: function findhole */
 static int
 findhole(ulong *a, int n, int count)
 {
@@ -596,7 +637,9 @@ findhole(ulong *a, int n, int count)
     }
     return -1;
 }
+/*e: function findhole */
 
+/*s: function vmapalloc */
 /*
  * Look for free space in the vmap.
  */
@@ -630,7 +673,9 @@ vmapalloc(ulong size)
      */
     return 0;
 }
+/*e: function vmapalloc */
 
+/*s: function vunmap */
 /*
  * Remove a device mapping from the vmap range.
  * Since pdbunmap does not remove page tables, just entries,
@@ -691,7 +736,9 @@ vunmap(void *v, int size)
                 ;
     }
 }
+/*e: function vunmap */
 
+/*s: function pdbmap */
 /*
  * Add kernel mappings for pa -> va for a section of size bytes.
  */
@@ -734,7 +781,9 @@ pdbmap(ulong *pdb, ulong pa, ulong va, int size)
     }
     return 0;
 }
+/*e: function pdbmap */
 
+/*s: function pdbunmap */
 /*
  * Remove mappings.  Must already exist, for sanity.
  * Only used for kernel mappings, so okay to use KADDR.
@@ -767,7 +816,9 @@ pdbunmap(ulong *pdb, ulong va, int size)
         va += BY2PG;
     }
 }
+/*e: function pdbunmap */
 
+/*s: function vmapsync */
 /*
  * Handle a fault by bringing vmap up to date.
  * Only copy pdb entries and they never go away,
@@ -796,7 +847,7 @@ vmapsync(ulong va)
      */
     return 1;
 }
-
+/*e: function vmapsync */
 
 /*
  * KMap is used to map individual pages into virtual memory.
@@ -809,6 +860,7 @@ vmapsync(ulong va)
 #define kpt (vpt+VPTX(KMAP))
 #define NKPT (KMAPSIZE/BY2PG)
 
+/*s: function kmap */
 KMap*
 kmap(Page *page)
 {
@@ -859,7 +911,9 @@ kmap(Page *page)
     panic("out of kmap");
     return nil;
 }
+/*e: function kmap */
 
+/*s: function kunmap */
 void
 kunmap(KMap *k)
 {
@@ -878,6 +932,7 @@ kunmap(KMap *k)
     vpt[VPTX(va)] = 0;
     flushpg(va);
 }
+/*e: function kunmap */
 
 /*
  * Temporary one-page mapping used to edit page directories.
@@ -888,6 +943,7 @@ kunmap(KMap *k)
  */
 #define fasttmp 1
 
+/*s: function tmpmap */
 void*
 tmpmap(Page *p)
 {
@@ -917,7 +973,9 @@ tmpmap(Page *p)
     flushpg(TMPADDR);
     return (void*)TMPADDR;
 }
+/*e: function tmpmap */
 
+/*s: function tmpunmap */
 void
 tmpunmap(void *v)
 {
@@ -935,7 +993,9 @@ tmpunmap(void *v)
     *entry = PPN(TMPADDR-KZERO)|PTEWRITE|PTEVALID;
     flushpg(TMPADDR);
 }
+/*e: function tmpunmap */
 
+/*s: function kaddr */
 /*
  * These could go back to being macros once the kernel is debugged,
  * but the extra checking is nice to have.
@@ -947,7 +1007,9 @@ kaddr(ulong pa)
         panic("kaddr: pa=%#.8lux", pa);
     return (void*)(pa+KZERO);
 }
+/*e: function kaddr */
 
+/*s: function paddr */
 ulong
 paddr(void *v)
 {
@@ -958,7 +1020,9 @@ paddr(void *v)
         panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
     return va-KZERO;
 }
+/*e: function paddr */
 
+/*s: function countpagerefs */
 /*
  * More debugging.
  */
@@ -1052,12 +1116,16 @@ countpagerefs(ulong *ref, int print)
                 i, MACHP(i)->pdballoc, MACHP(i)->pdbfree);
     }
 }
+/*e: function countpagerefs */
 
+/*s: function checkfault */
 void
 checkfault(ulong, ulong)
 {
 }
+/*e: function checkfault */
 
+/*s: function cankaddr */
 /*
  * Return the number of bytes that can be accessed via KADDR(pa).
  * If pa is not a valid argument to KADDR, return 0.
@@ -1069,5 +1137,6 @@ cankaddr(ulong pa)
         return 0;
     return -KZERO - pa;
 }
+/*e: function cankaddr */
 
 /*e: mmu.c */

@@ -32,10 +32,15 @@ typedef struct Fmt  Fmt;
 /*
  * functions (mostly) linked in from libc.
  */
-
+/*s: function nelem */
 #define nelem(x)  (sizeof(x)/sizeof((x)[0]))
+/*e: function nelem */
+/*s: function offsetof */
 #define offsetof(s, m)  (ulong)(&(((s*)0)->m))
+/*e: function offsetof */
+/*s: function assert */
 #define assert(x) if(x){}else _assert("x")
+/*e: function assert */
 
 /*
  * mem routines
@@ -64,22 +69,18 @@ extern  char* strstr(char*, char*);
 extern  int atoi(char*);
 extern  int fullrune(char*, int);
 /*e: lib.h string functions decl */
-//unused: extern  char* strcat(char*, char*);
-//unused: extern  char* strncat(char*, char*, long);
 
 //redefined in the kernel
 extern  int cistrcmp(char*, char*);
 extern  int cistrncmp(char*, char*, int);
 
+/*s: enum utf */
 enum
 {
   UTFmax    = 4,    /* maximum bytes per rune */
   Runeself  = 0x80,   /* rune and UTF sequences are the same (<) */
-//unused: Runesync  = 0x80,   /* cannot represent part of a UTF sequence (<) */
-//unused: Runeerror = 0xFFFD, /* decoding error in UTF */
-//unused: Runemax   = 0x10FFFF, /* 24 bit rune */
-//unused: Runemask  = 0x1FFFFF, /* bits used by runes (see grep) */
 };
+/*e: enum utf */
 
 /*
  * rune routines
@@ -90,8 +91,6 @@ extern  int chartorune(Rune*, char*);
 extern  char* utfrune(char*, long);
 extern  int utfnlen(char*, long);
 /*e: lib.h rune functions decl */
-//unused: extern  int utflen(char*);
-//unused: extern  int runelen(long);
 
 extern  int abs(int);
 
@@ -116,15 +115,18 @@ struct Fmt{
 };
 /*e: struct Fmt */
 
+/*s: lib.h print decl */
 // This used to be regular function, but to avoid backward deps in the kernel
 // I made it into a pointer function (a bit ugly, and maybe unsafe)
 extern  int (*print)(char*, ...);
+/*e: lib.h print decl */
 
+/*s: lib.h printf functions decl */
 extern  char* seprint(char*, char*, char*, ...);
 extern  char* vseprint(char*, char*, char*, va_list);
 extern  int snprint(char*, int, char*, ...);
 extern  int sprint(char*, char*, ...);
-//unused: extern  int vsnprint(char*, int, char*, va_list);
+/*e: lib.h printf functions decl */
 
 /*s: lib.h pragmas */
 #pragma varargck  argpos  fmtprint  2
@@ -182,8 +184,6 @@ extern  char* cleanname(char*);
 extern  int getfields(char*, char**, int, int, char*);
 extern  int tokenize(char*, char**, int);
 extern  void  qsort(void*, long, long, int (*)(void*, void*));
-//unused: extern  int dec64(uchar*, int, char*, int);
-//unused: extern  int encodefmt(Fmt*);
 
 /*s: lib.h exxx decl */
 extern  char  etext[];

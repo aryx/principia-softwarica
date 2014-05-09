@@ -17,15 +17,22 @@
 #include "io.h"
 #include <ureg.h>
 
+/*s: memory.c debugging macro */
 #define MEMDEBUG    0
+/*e: memory.c debugging macro */
 
-enum {
+/*s: enum memkind */
+enum memkind {
     MemUPA      = 0,        /* unbacked physical address */
     MemRAM      = 1,        /* physical memory */
     MemUMB      = 2,        /* upper memory block (<16MB) */
     MemReserved = 3,
-    NMemType    = 4,
 
+    NMemType    = 4,
+};
+/*e: enum memkind */
+
+enum {
     KB      = 1024,
 
     MemMin      = 8*MB,
@@ -37,11 +44,14 @@ typedef struct Map Map;
 typedef struct RMap RMap;
 typedef struct Emap Emap;
 /*e: memory.c forward decl */
+/*s: struct Map */
 struct Map {
     ulong   size;
     ulong   addr;
 };
+/*e: struct Map */
 
+/*s: struct RMap */
 struct RMap {
     char*   name;
     Map*    map;
@@ -49,6 +59,7 @@ struct RMap {
 
     Lock;
 };
+/*e: struct RMap */
 
 /* 
  * Memory allocation tracking.
@@ -81,6 +92,7 @@ static RMap rmapumbrw = {
     &mapumbrw[nelem(mapumbrw)-1],
 };
 
+/*s: function mapprint */
 void
 mapprint(RMap *rmap)
 {
@@ -90,8 +102,9 @@ mapprint(RMap *rmap)
     for(mp = rmap->map; mp->size; mp++)
         print("\t%8.8luX %8.8luX (%lud)\n", mp->addr, mp->addr+mp->size, mp->size);
 }
+/*e: function mapprint */
 
-
+/*s: function memdebug */
 void
 memdebug(void)
 {
@@ -108,7 +121,9 @@ memdebug(void)
     mapprint(&rmapumbrw);
     mapprint(&rmapupa);
 }
+/*e: function memdebug */
 
+/*s: function mapfree */
 void
 mapfree(RMap* rmap, ulong addr, ulong size)
 {
@@ -154,7 +169,9 @@ mapfree(RMap* rmap, ulong addr, ulong size)
     }
     unlock(rmap);
 }
+/*e: function mapfree */
 
+/*s: function mapalloc */
 ulong
 mapalloc(RMap* rmap, ulong addr, int size, int align)
 {
@@ -211,7 +228,9 @@ mapalloc(RMap* rmap, ulong addr, int size, int align)
 
     return 0;
 }
+/*e: function mapalloc */
 
+/*s: function rampage */
 /*
  * Allocate from the ram map directly to make page tables.
  * Called by mmuwalk during e820scan.
@@ -226,7 +245,9 @@ rampage(void)
         return nil;
     return KADDR(m);
 }
+/*e: function rampage */
 
+/*s: function umbexclude */
 static void
 umbexclude(void)
 {
@@ -258,7 +279,9 @@ umbexclude(void)
         mapalloc(&rmapumb, addr, size, 0);
     }
 }
+/*e: function umbexclude */
 
+/*s: function umbscan */
 static void
 umbscan(void)
 {
@@ -319,7 +342,9 @@ umbscan(void)
 
     umbexclude();
 }
+/*e: function umbscan */
 
+/*s: function sigscan */
 static void*
 sigscan(uchar* addr, int len, char* signature)
 {
@@ -333,7 +358,9 @@ sigscan(uchar* addr, int len, char* signature)
             return p;
     return nil;
 }
+/*e: function sigscan */
 
+/*s: function sigsearch */
 void*
 sigsearch(char* signature)
 {
@@ -367,7 +394,9 @@ sigsearch(char* signature)
 
     return sigscan(BIOSSEG(0xe000), 0x20000, signature);
 }
+/*e: function sigsearch */
 
+/*s: function lowraminit */
 static void
 lowraminit(void)
 {
@@ -393,7 +422,9 @@ lowraminit(void)
     mapfree(&rmapram, x, pa-x);
     memset(KADDR(x), 0, pa-x);      /* keep us honest */
 }
+/*e: function lowraminit */
 
+/*s: function ramscan */
 static void
 ramscan(ulong maxmem)
 {
@@ -557,6 +588,7 @@ ramscan(ulong maxmem)
     mapfree(&rmapupa, pa, (u32int)-pa);
     *k0 = kzero;
 }
+/*e: function ramscan */
 
 /*
  * BIOS Int 0x15 E820 memory map.
@@ -587,6 +619,7 @@ static char *etypes[] =
     "acpi nvs",
 };
 
+/*s: function emapcmp */
 static int
 emapcmp(const void *va, const void *vb)
 {
@@ -604,7 +637,9 @@ emapcmp(const void *va, const void *vb)
         return 1;
     return a->type - b->type;
 }
+/*e: function emapcmp */
 
+/*s: function map */
 static void
 map(ulong base, ulong len, int type)
 {
@@ -711,7 +746,9 @@ map(ulong base, ulong len, int type)
         pdbmap(m->pdb, base|flags, base+KZERO, len);
     }
 }
+/*e: function map */
 
+/*s: function e820scan */
 static int
 e820scan(void)
 {
@@ -787,7 +824,9 @@ e820scan(void)
         map(last, (u32int)-last, MemUPA);
     return 0;
 }
+/*e: function e820scan */
 
+/*s: function meminit */
 void
 meminit(void)
 {
@@ -843,7 +882,9 @@ meminit(void)
     if(MEMDEBUG)
         memdebug();
 }
+/*e: function meminit */
 
+/*s: function umbmalloc */
 /*
  * Allocate memory from the upper memory blocks.
  */
@@ -857,14 +898,17 @@ umbmalloc(ulong addr, int size, int align)
 
     return 0;
 }
+/*e: function umbmalloc */
 
+/*s: function umbfree */
 void
 umbfree(ulong addr, int size)
 {
     mapfree(&rmapumb, PADDR(addr), size);
 }
+/*e: function umbfree */
 
-
+/*s: function upalloc */
 /*
  * Give out otherwise-unused physical address space
  * for use in configuring devices.  Note that unlike upamalloc
@@ -883,7 +927,9 @@ upaalloc(int size, int align)
     }
     return a;
 }
+/*e: function upalloc */
 
+/*s: function upareserve */
 void
 upareserve(ulong pa, int size)
 {
@@ -901,5 +947,6 @@ upareserve(ulong pa, int size)
             mapfree(&rmapupa, a, size);
     }
 }
+/*e: function upareserve */
 
 /*e: memory.c */

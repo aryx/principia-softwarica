@@ -12,6 +12,7 @@
 void        pio(Segment *, ulong, ulong, Page **);
 /*e: fault.c forward decl */
 
+/*s: function fault */
 int
 fault(ulong addr, bool read)
 {
@@ -48,7 +49,9 @@ fault(ulong addr, bool read)
     up->psstate = sps;
     return 0;
 }
+/*e: function fault */
 
+/*s: function faulterror */
 static void
 faulterror(char *s, Chan *c, int freemem)
 {
@@ -64,10 +67,13 @@ faulterror(char *s, Chan *c, int freemem)
     }
     pexit(s, freemem);
 }
+/*e: function faulterror */
 
+// for debugging??
 void    (*checkaddr)(ulong, Segment *, Page *);
 ulong   addr2check;
 
+/*s: function fixfault */
 int
 fixfault(Segment *s, ulong addr, int read, int doputmmu)
 {
@@ -185,7 +191,9 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
 
     return 0;
 }
+/*e: function fixfault */
 
+/*s: function pio */
 // page io on the text segment
 void
 pio(Segment *s, ulong addr, ulong soff, Page **p)
@@ -289,7 +297,9 @@ done:
     if(s->flushme)
         memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
 }
+/*e: function pio */
 
+/*s: function okaddr */
 /*
  * Called only in a system call
  */
@@ -315,7 +325,9 @@ okaddr(ulong addr, ulong len, int write)
     pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
     return 0;
 }
+/*e: function okaddr */
 
+/*s: function validaddr */
 void
 validaddr(ulong addr, ulong len, int write)
 {
@@ -324,7 +336,9 @@ validaddr(ulong addr, ulong len, int write)
         error(Ebadarg);
     }
 }
+/*e: function validaddr */
 
+/*s: function vmemchr */
 /*
  * &s[0] is known to be a valid address.
  */
@@ -351,7 +365,9 @@ vmemchr(void *s, int c, int n)
     /* fits in one page */
     return memchr((void*)a, c, n);
 }
+/*e: function vmemchr */
 
+/*s: function seg */
 Segment*
 seg(Proc *p, ulong addr, int dolock)
 {
@@ -375,7 +391,9 @@ seg(Proc *p, ulong addr, int dolock)
 
     return 0;
 }
+/*e: function seg */
 
+/*s: function checkpages */
 void
 checkpages(void)
 {
@@ -409,4 +427,5 @@ checkpages(void)
     }
     print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
 }
+/*e: function checkpages */
 /*e: fault.c */

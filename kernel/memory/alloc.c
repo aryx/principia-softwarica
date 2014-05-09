@@ -31,6 +31,14 @@
  * compile out function calls that would otherwise be no-ops.
  */
 
+/* tracing */
+enum {
+    Npadlong    = 2,
+    MallocOffset = 0,
+    ReallocOffset = 1
+};
+
+/*s: alloc.c debugging macro */
 /* non tracing
  *
 enum {
@@ -40,14 +48,9 @@ enum {
 };
  *
  */
+/*e: alloc.c debugging macro */
 
-/* tracing */
-enum {
-    Npadlong    = 2,
-    MallocOffset = 0,
-    ReallocOffset = 1
-};
-
+/*s: function setmalloctag */
 void
 setmalloctag(void *v, ulong pc)
 {
@@ -58,7 +61,9 @@ setmalloctag(void *v, ulong pc)
     u = v;
     u[-Npadlong+MallocOffset] = pc;
 }
+/*e: function setmalloctag */
 
+/*s: function setrealloctag */
 void
 setrealloctag(void *v, ulong pc)
 {
@@ -69,11 +74,13 @@ setrealloctag(void *v, ulong pc)
     u = v;
     u[-Npadlong+ReallocOffset] = pc;
 }
+/*e: function setrealloctag */
 
 //*****************************************************************************
 // Pool wrappers
 //*****************************************************************************
 
+/*s: function smalloc */
 // non failing malloc! will repeat until it can
 void*
 smalloc(ulong size)
@@ -93,7 +100,9 @@ smalloc(ulong size)
     memset(v, 0, size);
     return v;
 }
+/*e: function smalloc */
 
+/*s: function malloc */
 void*
 malloc(ulong size)
 {
@@ -110,7 +119,9 @@ malloc(ulong size)
     memset(v, 0, size);
     return v;
 }
+/*e: function malloc */
 
+/*s: function mallocz */
 void*
 mallocz(ulong size, int clr)
 {
@@ -126,7 +137,9 @@ mallocz(ulong size, int clr)
         memset(v, 0, size);
     return v;
 }
+/*e: function mallocz */
 
+/*s: function mallocalign */
 void*
 mallocalign(ulong size, ulong align, long offset, ulong span)
 {
@@ -143,14 +156,18 @@ mallocalign(ulong size, ulong align, long offset, ulong span)
         memset(v, 0, size);
     return v;
 }
+/*e: function mallocalign */
 
+/*s: function free */
 void
 free(void *v)
 {
     if(v != nil)
         poolfree(mainmem, (ulong*)v-Npadlong);
 }
+/*e: function free */
 
+/*s: function realloc */
 void*
 realloc(void *v, ulong size)
 {
@@ -169,12 +186,15 @@ realloc(void *v, ulong size)
     }       
     return nv;
 }
+/*e: function realloc */
 
+/*s: function msize */
 ulong
 msize(void *v)
 {
     return poolmsize(mainmem, (ulong*)v-Npadlong)-Npadlong*sizeof(ulong);
 }
+/*e: function msize */
 
 
 //*****************************************************************************
@@ -183,6 +203,7 @@ msize(void *v)
 
 //pad: was in chan.c
 
+/*s: function kstrcpy */
 /*
  * Rather than strncpy, which zeros the rest of the buffer, kstrcpy
  * truncates if necessary, always zero terminates, does not zero fill,
@@ -214,7 +235,9 @@ kstrcpy(char *s, char *t, int ns)
         ;
     strcpy(s+ns, "...");
 }
+/*e: function kstrcpy */
 
+/*s: function kstrdup */
 /*
  * Atomically replace *p with copy of s
  */
@@ -239,4 +262,5 @@ kstrdup(char **p, char *s)
     *p = t;
     free(prev);
 }
+/*e: function kstrdup */
 /*e: alloc.c */

@@ -4,7 +4,10 @@
 /*
  *  MMU stuff in proc
  */
+/*s: constant NCOLOR */
 #define NCOLOR 1
+/*e: constant NCOLOR */
+/*s: struct ArchProcMMU */
 //@Scheck: not dead, unnamed substructure
 struct ArchProcMMU
 {
@@ -16,10 +19,15 @@ struct ArchProcMMU
   uint  lastkmap;   /* last entry used by kmap */
   int nkmap;      /* number of current kmaps */
 };
+/*e: struct ArchProcMMU */
 
+/*s: struct KMap */
 /*
  * KMap the structure doesn't exist, but the functions do.
  */
 typedef struct KMap   KMap;
+/*e: struct KMap */
+/*s: macro VA */
 #define VA(k)   ((void*)(k))
+/*e: macro VA */
 /*e: dat_memory.h */
