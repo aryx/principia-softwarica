@@ -45,6 +45,7 @@ extern  char* statename[];
 //--------------------------------------------------------------------
 // Memory
 //--------------------------------------------------------------------
+/*s: enum procseg */
 /*
  *  process memory segments - NSEG always last !
  */
@@ -55,6 +56,7 @@ enum procseg
     SEG1, SEG2, SEG3, SEG4,
     NSEG // to count, see Proc.seg array
 };
+/*e: enum procseg */
 
 //--------------------------------------------------------------------
 // Files
@@ -65,6 +67,7 @@ enum
     DELTAFD = 20    /* incremental increase in Fgrp.fd's */
 };
 
+/*s: struct Fgrp */
 struct Fgrp
 {
     // array<ref_counted<Chan>, smalloc'ed?
@@ -78,16 +81,19 @@ struct Fgrp
     // extra
     Ref;
 };
+/*e: struct Fgrp */
 
 
-
+/*s: function MOUNTH */
 enum
 {
     MNTLOG  = 5,
     MNTHASH = 1<<MNTLOG,  /* Hash to walk mount table */
 };
 #define MOUNTH(p,qid) ((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
+/*e: function MOUNTH */
 
+/*s: struct Pgrp */
 // Namespace process group
 struct Pgrp
 {
@@ -101,16 +107,19 @@ struct Pgrp
     QLock debug;      /* single access via devproc.c */
     RWlock  ns;     /* Namespace n read/one write lock */
 };
+/*e: struct Pgrp */
 
 //--------------------------------------------------------------------
 // System call
 //--------------------------------------------------------------------
 
+/*s: struct Sargs */
 // syscall arguments passed in kernel stack
 struct Sargs
 {
     ulong args[MAXSYSARG];
 };
+/*e: struct Sargs */
 
 
 //--------------------------------------------------------------------
@@ -121,13 +130,16 @@ enum {
     NNOTE = 5,
 };
 
+/*s: enum notekind */
 enum notekind
 {
     NUser,        /* note provided externally */
     NExit,        /* deliver note quietly */
     NDebug,       /* print debug message */
 };
+/*e: enum notekind */
 
+/*s: struct Note */
 // a kind of unix signal
 struct Note
 {
@@ -135,12 +147,14 @@ struct Note
     // enum<notekind>
     int flag;     /* whether system posted it */
 };
+/*e: struct Note */
 extern Ref  noteidalloc;
 
 //--------------------------------------------------------------------
 // Process children waiting
 //--------------------------------------------------------------------
 
+/*s: struct Waitq */
 struct Waitq
 {
     Waitmsg w;
@@ -149,18 +163,22 @@ struct Waitq
     // list<ref<Waitq>> Proc.waitq
     Waitq *next;
 };
+/*e: struct Waitq */
 
 //--------------------------------------------------------------------
 // Synchronization (Rendez vous)
 //--------------------------------------------------------------------
 
+/*s: function REND */
 enum
 {
     RENDLOG = 5,
     RENDHASH =  1<<RENDLOG, /* Hash to lookup rendezvous tags */
 };
 #define REND(p,s) ((p)->rendhash[(s)&((1<<RENDLOG)-1)])
+/*e: function REND */
 
+/*s: struct Rgrp */
 struct Rgrp
 {
     // hash<??, list<ref<Proc>>>
@@ -169,11 +187,13 @@ struct Rgrp
     // extra
     Ref;        /* the Ref's lock is also the Rgrp's lock */
 };
+/*e: struct Rgrp */
 
 //--------------------------------------------------------------------
 // Alarms, timers
 //--------------------------------------------------------------------
 
+/*s: enum timermode */
 /*
  * fasttick timer interrupts
  */
@@ -182,7 +202,9 @@ enum timermode
     Trelative,  /* timer programmed in ns from now */
     Tperiodic,  /* periodic timer, period in ns */
 };
+/*e: enum timermode */
 
+/*s: struct Timer */
 struct Timer
 {
     /* Public interface */
@@ -202,8 +224,10 @@ struct Timer
     // list<Timer> of Timers.head?
     Timer *tnext;
 };
+/*e: struct Timer */
 
 // was in clock.c
+/*s: struct Timers */
 struct Timers
 {
     // list<Timer> (next = Timer.tnext?)
@@ -212,6 +236,7 @@ struct Timers
     // extra
     Lock;
 };
+/*e: struct Timers */
 
 //--------------------------------------------------------------------
 // Scheduling
@@ -223,6 +248,7 @@ enum {
     //NFD =   100,    /* per process file descriptors */
 };
 
+/*s: enum priority */
 enum priority 
 {
     PriRelease  = Npriq,  /* released edf processes */
@@ -232,6 +258,7 @@ enum priority
     PriKproc  = 13,   /* base priority for kernel processes */
     PriRoot   = 13,   /* base priority for root processes */
 };
+/*e: enum priority */
 
 
 // was in edf.h
@@ -241,6 +268,7 @@ enum
     Infinity = ~0ULL,
 };
 
+/*s: enum edfflags */
 enum edfflags 
 {
     /* Edf.flags field */
@@ -252,7 +280,9 @@ enum edfflags
     Yield     = 0x20,
     Extratime   = 0x40,
 };
+/*e: enum edfflags */
 
+/*s: struct Edf */
 struct Edf {
     /* All times in µs */
     /* time intervals */
@@ -286,6 +316,7 @@ struct Edf {
     ulong   periods;
     ulong   missed;
 };
+/*e: struct Edf */
 
 //--------------------------------------------------------------------
 // Error managment
@@ -297,6 +328,7 @@ enum {
 //--------------------------------------------------------------------
 // Stats, profiling
 //--------------------------------------------------------------------
+/*s: enum proctimer */
 enum proctime 
 {
     TUser = 0,    /* Proc.time */
@@ -306,11 +338,13 @@ enum proctime
     TCSys,
     TCReal,
 };
+/*e: enum proctimer */
 
 //--------------------------------------------------------------------
 // Debugger
 //--------------------------------------------------------------------
 
+/*s: enum devproc */
 enum devproc 
 {
     Proc_stopme = 1,  /* devproc requests */
@@ -319,11 +353,13 @@ enum devproc
     Proc_exitbig,
     Proc_tracesyscall,
 };
+/*e: enum devproc */
 
 //--------------------------------------------------------------------
 // Misc
 //--------------------------------------------------------------------
 
+/*s: enum fpsavestatus */
 /*
  * FPsave.status
  */
@@ -337,6 +373,7 @@ enum fpsavestatus
     /* the following is a bit that can be or'd into the state */
     FPillegal=  0x100,
 };
+/*e: enum fpsavestatus */
 
 
 //*****************************************************************************
@@ -601,6 +638,7 @@ struct Proc
 };
 /*e: struct Proc */
 
+/*s: macro waserror poperror */
 // poor's man exceptions in C
 //  - waserror() =~ try  
 //     * if (!waserror()) { } else { } <=> try { } catch { }
@@ -612,6 +650,7 @@ struct Proc
 // but nexterror() is using gotolabel() which returns true, see l_switch.s
 #define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
 #define poperror()    up->nerrlab--
+/*e: macro waserror poperror */
 
 
 //*****************************************************************************
@@ -619,6 +658,7 @@ struct Proc
 //*****************************************************************************
 
 // Proc allocator (singleton), was actually in proc.c, but important so here
+/*s: struct Procalloc */
 struct Procalloc
 {
     // array<Proc>, xalloc'ed in procinit0() (conf.nproc)
@@ -632,8 +672,10 @@ struct Procalloc
     // extra
     Lock;
 };
+/*e: struct Procalloc */
 //IMPORTANT: static struct Procalloc procalloc; (in proc.c)
 
+/*s: struct Schedq */
 struct Schedq
 {
     // list<ref<Proc>> (next = Proc.rnext?)
@@ -646,10 +688,12 @@ struct Schedq
     // extra
     Lock;
 };
+/*e: struct Schedq */
 // hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
 //IMPORTANT: Schedq  runq[Nrq];  (in proc.c)
 
 // was in alarm.c, but important so here
+/*s: struct Alarms */
 struct Alarms
 {
     // list<ref<Proc> (next = ??)
@@ -658,10 +702,11 @@ struct Alarms
     // extra
     QLock;
 };
+/*e: struct Alarms */
 //IMPORTANT: static Alarms alarms; (in alarm.c)
 //IMPORTANT: static Rendez alarmr; (in alarm.c)
 
-
+/*s: struct Active */
 struct Active
 {
     int machs;      /* bitmap of active CPUs */
@@ -675,6 +720,7 @@ struct Active
     // extra
     Lock;
 };
+/*e: struct Active */
 extern struct Active active;
 
 /*s: portdat_processes.h pragmas */
