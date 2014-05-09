@@ -92,6 +92,7 @@
  * read and after each write.       - rsc
  */
 
+/*s: function semqueue */
 /* Add semaphore p with addr a to list in seg. */
 static void
 semqueue(Segment *s, long *a, Sema *p)
@@ -105,7 +106,9 @@ semqueue(Segment *s, long *a, Sema *p)
     p->prev->next = p;
     unlock(&s->sema);
 }
+/*e: function semqueue */
 
+/*s: function semdequeue */
 /* Remove semaphore p from list in seg. */
 static void
 semdequeue(Segment *s, Sema *p)
@@ -115,7 +118,9 @@ semdequeue(Segment *s, Sema *p)
     p->prev->next = p->next;
     unlock(&s->sema);
 }
+/*e: function semdequeue */
 
+/*s: function semwakeup */
 /* Wake up n waiters with addr a on list in seg. */
 static void
 semwakeup(Segment *s, long *a, long n)
@@ -133,7 +138,9 @@ semwakeup(Segment *s, long *a, long n)
     }
     unlock(&s->sema);
 }
+/*e: function semwakeup */
 
+/*s: function semrelease */
 /* Add delta to semaphore and wake up waiters as appropriate. */
 static long
 semrelease(Segment *s, long *addr, long delta)
@@ -146,7 +153,9 @@ semrelease(Segment *s, long *addr, long delta)
     semwakeup(s, addr, delta);
     return value+delta;
 }
+/*e: function semrelease */
 
+/*s: function canacquire */
 /* Try to acquire semaphore using compare-and-swap */
 static int
 canacquire(long *addr)
@@ -158,7 +167,9 @@ canacquire(long *addr)
             return 1;
     return 0;
 }       
+/*e: function canacquire */
 
+/*s: function semawoke */
 /* Should we wake up? */
 static int
 semawoke(void *p)
@@ -166,7 +177,9 @@ semawoke(void *p)
     coherence();
     return !((Sema*)p)->waiting;
 }
+/*e: function semawoke */
 
+/*s: function semacquire */
 /* Acquire semaphore (subtract 1). */
 static int
 semacquire(Segment *s, long *addr, bool block)
@@ -201,7 +214,9 @@ semacquire(Segment *s, long *addr, bool block)
         nexterror();
     return 1;
 }
+/*e: function semacquire */
 
+/*s: function tsemacquire */
 /* Acquire semaphore or time-out */
 static int
 tsemacquire(Segment *s, long *addr, ulong ms)
@@ -245,7 +260,9 @@ tsemacquire(Segment *s, long *addr, ulong ms)
         nexterror();
     return 1;
 }
+/*e: function tsemacquire */
 
+/*s: syscall semacquire */
 long
 syssemacquire(ulong *arg)
 {
@@ -264,7 +281,9 @@ syssemacquire(ulong *arg)
         error(Ebadarg);
     return semacquire(s, addr, block);
 }
+/*e: syscall semacquire */
 
+/*s: syscall tsemacquire */
 long
 systsemacquire(ulong *arg)
 {
@@ -283,7 +302,9 @@ systsemacquire(ulong *arg)
         error(Ebadarg);
     return tsemacquire(s, addr, ms);
 }
+/*e: syscall tsemacquire */
 
+/*s: syscall semrelease */
 long
 syssemrelease(ulong *arg)
 {
@@ -302,5 +323,6 @@ syssemrelease(ulong *arg)
         error(Ebadarg);
     return semrelease(s, addr, delta);
 }
+/*e: syscall semrelease */
 
 /*e: syssema.c */
