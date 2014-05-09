@@ -17,6 +17,7 @@ void portcountpagerefs(ulong*, int);
 // Initialization
 //*****************************************************************************
 
+/*s: function pageinit */
 void
 pageinit(void)
 {
@@ -71,11 +72,13 @@ pageinit(void)
     print("%ldM user, ", pkb/1024);
     print("%ldM swap\n", vkb/1024);
 }
+/*e: function pageinit */
 
 //*****************************************************************************
 // Functions
 //*****************************************************************************
 
+/*s: function pageunchain */
 static void
 pageunchain(Page *p)
 {
@@ -92,7 +95,9 @@ pageunchain(Page *p)
     p->prev = p->next = nil;
     palloc.freecount--;
 }
+/*e: function pageunchain */
 
+/*s: function pagechaintail */
 void
 pagechaintail(Page *p)
 {
@@ -110,7 +115,9 @@ pagechaintail(Page *p)
     p->next = 0;
     palloc.freecount++;
 }
+/*e: function pagechaintail */
 
+/*s: function pagechainhead */
 void
 pagechainhead(Page *p)
 {
@@ -128,7 +135,9 @@ pagechainhead(Page *p)
     p->prev = 0;
     palloc.freecount++;
 }
+/*e: function pagechainhead */
 
+/*s: function newpage */
 Page*
 newpage(int clear, Segment **s, ulong va)
 {
@@ -212,13 +221,17 @@ newpage(int clear, Segment **s, ulong va)
 
     return p;
 }
+/*e: function newpage */
 
+/*s: function ispages */
 int
 ispages(void*)
 {
     return palloc.freecount >= swapalloc.highwater;
 }
+/*e: function ispages */
 
+/*s: function putpage */
 void
 putpage(Page *p)
 {
@@ -250,7 +263,9 @@ putpage(Page *p)
     unlock(p);
     unlock(&palloc);
 }
+/*e: function putpage */
 
+/*s: function auxpage */
 Page*
 auxpage(void)
 {
@@ -274,9 +289,13 @@ auxpage(void)
 
     return p;
 }
+/*e: function auxpage */
 
+/*s: global dupretries */
 static int dupretries = 15000;
+/*e: global dupretries */
 
+/*s: function duppage */
 int
 duppage(Page *p)                /* Always call with p locked */
 {
@@ -361,7 +380,9 @@ retry:
 
     return 0;
 }
+/*e: function duppage */
 
+/*s: function copypage */
 void
 copypage(Page *f, Page *t)
 {
@@ -373,7 +394,9 @@ copypage(Page *f, Page *t)
     kunmap(ks);
     kunmap(kd);
 }
+/*e: function copypage */
 
+/*s: function uncachepage */
 void
 uncachepage(Page *p)            /* Always called with a locked page */
 {
@@ -396,7 +419,9 @@ uncachepage(Page *p)            /* Always called with a locked page */
     p->image = 0;
     p->daddr = 0;
 }
+/*e: function uncachepage */
 
+/*s: function cachepage */
 void
 cachepage(Page *p, KImage *i)
 {
@@ -418,7 +443,9 @@ cachepage(Page *p, KImage *i)
     *l = p;
     unlock(&palloc.hashlock);
 }
+/*e: function cachepage */
 
+/*s: function cachedel */
 void
 cachedel(KImage *i, ulong daddr)
 {
@@ -442,7 +469,9 @@ cachedel(KImage *i, ulong daddr)
     }
     unlock(&palloc.hashlock);
 }
+/*e: function cachedel */
 
+/*s: function lookpage */
 Page *
 lookpage(KImage *i, ulong daddr)
 {
@@ -472,7 +501,9 @@ lookpage(KImage *i, ulong daddr)
 
     return 0;
 }
+/*e: function lookpage */
 
+/*s: function ptecpy */
 Pte*
 ptecpy(Pte *old)
 {
@@ -497,7 +528,9 @@ ptecpy(Pte *old)
 
     return new;
 }
+/*e: function ptecpy */
 
+/*s: function ptealloc */
 Pte*
 ptealloc(void)
 {
@@ -508,7 +541,9 @@ ptealloc(void)
     new->last = new->pages;
     return new;
 }
+/*e: function ptealloc */
 
+/*s: function freepte */
 void
 freepte(Segment *s, Pte *p)
 {
@@ -549,13 +584,17 @@ freepte(Segment *s, Pte *p)
     }
     free(p);
 }
+/*e: function freepte */
 
+/*s: function pagenumber */
 ulong
 pagenumber(Page *p)
 {
     return p-palloc.pages;
 }
+/*e: function pagenumber */
 
+/*s: function checkpagerefs */
 void
 checkpagerefs(void)
 {
@@ -596,7 +635,9 @@ checkpagerefs(void)
     unlock(&palloc);
     splx(s);
 }
+/*e: function checkpagerefs */
 
+/*s: function portcountpagerefs */
 void
 portcountpagerefs(ulong *ref, int print)
 {
@@ -661,5 +702,6 @@ portcountpagerefs(ulong *ref, int print)
         }
     }
 }
+/*e: function portcountpagerefs */
 
 /*e: page.c */

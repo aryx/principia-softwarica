@@ -2,10 +2,12 @@
 
 // see also KMap in 386/ (but used in port)
 
+/*s: pad memory pointer types */
 // physical address
 typedef ulong phys_addr;
 // virtual address
 typedef ulong virt_addr;
+/*e: pad memory pointer types */
 
 //*****************************************************************************
 // Page < Pte (can be filled by KImage) < Segment
@@ -16,12 +18,15 @@ typedef ulong virt_addr;
 // All the ref<Kimage> here are references to KImage in the ?? of 
 // Imagealloc.free?
 
+/*s: enum modref */
 enum modref 
 {
     PG_MOD    = 0x01,   /* software modified bit */
     PG_REF    = 0x02,   /* software referenced bit */
 };
+/*e: enum modref */
 
+/*s: enum cachectl */
 enum cachectl
 {
     PG_NOFLUSH  = 0,
@@ -29,7 +34,9 @@ enum cachectl
     //  PG_DATFLUSH = 2,    /* flush both i & d caches (UNUSED) */
     PG_NEWCOL = 3,    /* page has been recolored */
 };
+/*e: enum cachectl */
 
+/*s: struct Page */
 // Page metadata. We will allocate as many Page as to cover all physical memory
 // + swap "address space". Either pa or daddr should be valid at one time.
 // Should have been xalloc'ed in Palloc.pages
@@ -58,7 +65,9 @@ struct Page
     // option<ref<Kimage>>
     KImage  *image;     /* Associated text or swap image */
 };
+/*e: struct Page */
 
+/*s: struct Pte */
 // ptealloc'ed (malloc'ed)
 struct Pte
 {
@@ -71,9 +80,10 @@ struct Pte
     // ref<ref<Page>> in Pte.pages
     Page  **last;     /* Last used entry */
 };
+/*e: struct Pte */
 
 
-
+/*s: struct KImage */
 // a KImage is essentially a channel to a text file (an image of a binary)
 // the image in memory for a portion of a given file.
 // (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
@@ -97,9 +107,10 @@ struct KImage
     // option<ref<Segment>>?
     Segment *s;     /* TEXT segment for image if running */
 };
+/*e: struct KImage */
 
 
-
+/*s: enum segtype */
 /* Segment types */
 enum segtype
 {
@@ -114,6 +125,7 @@ enum segtype
     SG_RONLY  = 0040,   /* Segment is read only */
     SG_CEXEC  = 0100,   /* Detach at exec */
 };
+/*e: enum segtype */
 
 #define PG_ONSWAP 1
 #define onswap(s) (((ulong)s)&PG_ONSWAP)
@@ -122,6 +134,7 @@ enum segtype
 
 #define SEGMAXSIZE  (SEGMAPSIZE*PTEMAPMEM)
 
+/*s: struct Physseg */
 struct Physseg
 {
     ulong attr;     /* Segment attributes */
@@ -131,6 +144,7 @@ struct Physseg
     Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
     void  (*pgfree)(Page*);
 };
+/*e: struct Physseg */
 
 
 // often used as (q->top-q->base)>>LRESPROF
@@ -139,6 +153,7 @@ enum
     LRESPROF  = 3,
 };
 
+/*s: struct Segment */
 // smalloc'ed by newseg()
 struct Segment
 {
@@ -173,6 +188,7 @@ struct Segment
     QLock lk;
     Sema  sema;
 };
+/*e: struct Segment */
 
 
 //*****************************************************************************
@@ -182,12 +198,15 @@ struct Segment
 // See also RMap in 386/
 
 // actually internal to xalloc.c, but important so here
+/*s: constants holes */
 enum
 {
     Nhole   = 128,
     Magichole = 0x484F4C45,     /* HOLE */
 };
+/*e: constants holes */
 
+/*s: struct Hole */
 struct Hole
 {
     ulong addr; // phys_addr? base?
@@ -197,7 +216,9 @@ struct Hole
     // extra
     Hole* link; // list<ref<Hole>> of Xalloc.flist or Xalloc.table?
 };
+/*e: struct Hole */
 
+/*s: struct Xhdr */
 // What is the connection with Hole? a used Hole will describe
 // a portion of memory, and at this memory there will be a header
 // and then just after the actual memory xalloc'ed by someone
@@ -209,7 +230,9 @@ struct Xhdr
   
     char  data[]; // memory pointer returned by xalloc
 };
+/*e: struct Xhdr */
 
+/*s: struct Xalloc */
 // Long lived data structure allocator (singleton)
 // (can call xalloc() only Nhole time!)
 struct Xalloc
@@ -225,6 +248,7 @@ struct Xalloc
     // extra
     Lock;
 };
+/*e: struct Xalloc */
 //IMPORTANT: static Xalloc xlists; // private to xalloc.c
 
 
@@ -267,21 +291,25 @@ struct Xalloc
 // memory pools for ??
 //IMPORTANT: extern Pool*  imagmem;
 
-
+/*s: struct Pallocmem */
 // memory banks, similar to RMap, and Confmem, but page oriented, and portable
 struct Pallocmem
 {
     phys_addr base;
     ulong npage;
 };
+/*e: struct Pallocmem */
 
+/*s: function pghash */
 enum
 {
     PGHLOG  = 9, // 2^9 = 512
     PGHSIZE = 1<<PGHLOG,  /* Page hash for image lookup */
 };
 #define pghash(daddr) palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
+/*e: function pghash */
 
+/*s: struct Palloc */
 // Page Allocator (singleton)
 struct Palloc
 {
@@ -307,14 +335,17 @@ struct Palloc
     Rendez  r;      /* Sleep for free mem */
     QLock pwait;      /* Queue of procs waiting for memory */
 };
+/*e: struct Palloc */
 extern  Palloc  palloc;
 
-
 #define NFREECHAN 64
+/*s: function ihash */
 #define IHASHSIZE 64
 // actually internal to page.c, but important so here
 #define ihash(s)  imagealloc.hash[s%IHASHSIZE]
+/*e: function ihash */
 
+/*s: struct Imagealloc */
 // Image allocator (internal to segment.c, but important so here, singleton)
 struct Imagealloc
 {
@@ -333,11 +364,13 @@ struct Imagealloc
     Lock;
 
 };
+/*e: struct Imagealloc */
+
 //IMPORTANT: static struct Imagealloc imagealloc; (segment.c)
 // so have conf.nimage + 1 Kimages
 extern  KImage  swapimage;
 
-
+/*s: struct Swapalloc */
 // Swap allocator (singleton)
 struct Swapalloc
 {
@@ -353,5 +386,6 @@ struct Swapalloc
     //extra
     Lock;       /* Free map lock */
 };
+/*e: struct Swapalloc */
 extern struct Swapalloc swapalloc;
 /*e: portdat_memory.h */
