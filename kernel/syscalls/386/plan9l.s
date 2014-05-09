@@ -2,11 +2,6 @@
 #include "mem.h"
 
 /*
- * This must match io.h.
- */
-#define VectorSYSCALL   0x40
-
-/*
  *  Used to get to the first process:
  *      set up an interrupt return frame and IRET to user level.
  */

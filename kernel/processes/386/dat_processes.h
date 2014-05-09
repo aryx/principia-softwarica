@@ -48,7 +48,7 @@ enum {
     VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
 
     //!!! int 64 = way to jump in plan9 OS !!!
-    VectorSYSCALL = 64,
+    // VectorSYSCALL = 64, in mem.h because used by Assembly too
   
     VectorAPIC  = 65,   /* external APIC interrupts */
     MaxVectorAPIC = 255,

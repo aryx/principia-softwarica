@@ -182,4 +182,8 @@
 
 #define getpgcolor(a) 0
 
+/*s: constant VectorSYSCALL */
+//!!! int 64 (0x40), way to jump in plan9 OS !!!
+#define VectorSYSCALL 64
+/*e: constant VectorSYSCALL */
 /*e: mem.h */
