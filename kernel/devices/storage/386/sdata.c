@@ -9,8 +9,9 @@
 /*e: kernel basic includes */
 
 #include "io.h"
-#include <ureg.h>
 #include "../port/sd.h"
+
+#include <ureg.h>
 
 extern SDifc sdataifc;
 
@@ -257,12 +258,13 @@ enum {                  /* bit masks for supported/enabled features */
 /*s: sdata.c forward decl */
 typedef struct Ctlr Ctlr;
 typedef struct Drive Drive;
+typedef struct Prd Prd;
 /*e: sdata.c forward decl */
 
-typedef struct Prd {            /* Physical Region Descriptor */
+struct Prd {            /* Physical Region Descriptor */
     ulong   pa;         /* Physical Base Address */
     int count;
-} Prd;
+};
 
 enum {
     BMspan      = 64*1024,  /* must be power of 2 <= 64*1024 */
@@ -270,7 +272,7 @@ enum {
     Nprd        = SDmaxio/BMspan+2,
 };
 
-typedef struct Ctlr {
+struct Ctlr {
     int cmdport;
     int ctlport;
     int irq;
@@ -301,9 +303,9 @@ typedef struct Ctlr {
     ulong   intok;          /* normal */
 
     Lock;               /* register access */
-} Ctlr;
+};
 
-typedef struct Drive {
+struct Drive {
     Ctlr*   ctlr;
 
     int dev;
@@ -342,7 +344,7 @@ typedef struct Drive {
     ulong   intcmd;         /* commands */
     ulong   intrd;          /* reads */
     ulong   intwr;          /* writes */
-} Drive;
+};
 
 enum {                  /* internal flags */
     Lba48       = 0x1,      /* LBA48 mode */

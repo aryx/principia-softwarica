@@ -915,6 +915,7 @@ rpcattn(void *v)
     return r->done || r->m->rip == 0;
 }
 
+/*s: global mntdevtab */
 Dev mntdevtab = {
     .dc       =    'M',
     .name     =    "mnt",
@@ -935,4 +936,5 @@ Dev mntdevtab = {
     .remove   =    mntremove,
     .wstat    =    mntwstat,
 };
+/*e: global mntdevtab */
 /*e: devmnt.c */

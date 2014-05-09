@@ -10,9 +10,11 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
+
 #include "io.h"
-#include <ureg.h>
 #include "../port/sd.h"
+
+#include <ureg.h>
 
 extern Dev sddevtab;
 extern SDifc* sdifc[];
@@ -1297,6 +1299,7 @@ sdconfig(int on, char* spec, DevConf* cf)
     return unconfigure(spec);
 }
 
+/*s: global sddevtab */
 Dev sddevtab = {
     .dc       =    'S',
     .name     =    "sd",
@@ -1320,6 +1323,7 @@ Dev sddevtab = {
     .power    = devpower,
     .config   = sdconfig,   /* probe; only called for pcmcia-like devices */
 };
+/*e: global sddevtab */
 
 /*
  * This is wrong for so many reasons.  This code must go.

@@ -144,27 +144,6 @@ enum {
  * mmc/sd/sdio host controller interface
  */
 
-//struct SDio {
-//  char  *name;
-//  int (*init)(void);
-//  void  (*enable)(void);
-//  int (*inquiry)(char*, int);
-//  int (*cmd)(u32int, u32int, u32int*);
-//  void  (*iosetup)(int, void*, int, int);
-//  void  (*io)(int, uchar*, int);
-//};
-//
-//extern SDio sdio;
-
-/* devsd.c */
-//extern void sdadddevs(SDev*);
-//extern void sdaddconf(SDunit*);
-//extern void sdaddallconfs(void (*f)(SDunit*));
-//extern void sdaddpart(SDunit*, char*, uvlong, uvlong);
-//extern int sdsetsense(SDreq*, int, int, int, int);
-//extern int sdmodesense(SDreq*, uchar*, void*, int);
-//extern int sdfakescsi(SDreq*, void*, int);
-
 /* sdscsi.c */
 extern int scsiverify(SDunit*);
 extern int scsionline(SDunit*);

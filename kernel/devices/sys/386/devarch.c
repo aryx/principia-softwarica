@@ -7,7 +7,9 @@
 #include "fns.h"
 #include "../port/error.h"
 /*e: kernel basic includes */
+
 #include "io.h"
+
 #include <ureg.h>
 
 enum {
@@ -265,6 +267,7 @@ archwrite(Chan *c, void *a, long n, vlong offset)
     return 0;
 }
 
+/*s: global archdevtab */
 Dev archdevtab = {
     .dc       =    'P',
     .name     =    "arch",
@@ -285,6 +288,7 @@ Dev archdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
+/*e: global archdevtab */
 
 void
 nop(void)
@@ -438,6 +442,7 @@ archctlwrite(Chan*, void *a, long n, vlong)
     return n;
 }
 
+/*s: function archinit */
 void
 archinit(void)
 {
@@ -487,4 +492,5 @@ archinit(void)
     addarchfile("cputype", 0444, cputyperead, nil);
     addarchfile("archctl", 0664, archctlread, archctlwrite);
 }
+/*e: function archinit */
 /*e: devarch.c */

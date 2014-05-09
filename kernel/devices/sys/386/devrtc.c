@@ -32,6 +32,7 @@ static ulong rtc2sec(Rtc*);
 static void sec2rtc(ulong, Rtc*);
 /*e: devrtc.c forward decl */
 
+/*s: struct Rtc */
 struct Rtc
 {
     int sec;
@@ -41,6 +42,7 @@ struct Rtc
     int mon;
     int year;
 };
+/*e: struct Rtc */
 
 
 enum{
@@ -304,6 +306,7 @@ rtcwrite(Chan* c, void* buf, long n, vlong off)
     return 0;
 }
 
+/*s: global rtcdevtab */
 Dev rtcdevtab = {
     .dc       =    'r',
     .name     =    "rtc",
@@ -324,6 +327,7 @@ Dev rtcdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
+/*e: global rtcdevtab */
 
 #define SEC2MIN 60L
 #define SEC2HOUR (60L*SEC2MIN)

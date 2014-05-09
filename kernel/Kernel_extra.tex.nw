@@ -9023,7 +9023,6 @@ int nswppo;   /* max # of pageouts per segment pass */
 
 bool_ulong copymode; /* 0 is copy on write, 1 is copy on reference */
 ulong ialloc;   /* max interrupt time allocation in bytes */
-ulong pipeqsize;  /* size in bytes of pipe queues */
 int nuart;    /* number of uart devices */
 @ 
 
@@ -10583,6 +10582,41 @@ int floppydebug = 0;
 
 
 
+<<interrupt callback pcfloppyintr>>=
+static void
+pcfloppyintr(Ureg *ur, void *a)
+{
+    USED(a);
+
+    floppyintr(ur);
+}
+@
+
+
+<<global floppydevtab>>=
+Dev floppydevtab = {
+    .dc       =    'f',
+    .name     =    "floppy",
+               
+    .reset    =    floppyreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    floppyattach,
+    .walk     =    floppywalk,
+    .stat     =    floppystat,
+    .open     =    floppyopen,
+    .create   =    devcreate,
+    .close    =    floppyclose,
+    .read     =    floppyread,
+    .bread    =    devbread,
+    .write    =    floppywrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+};
+@
+
+
 <<devfloppy.c>>=
 <<kernel basic includes>>
 #include    "io.h"
@@ -10611,14 +10645,7 @@ int floppydebug = 0;
 <<devfloppy.c forward decl>>
 
 
-
-static void
-pcfloppyintr(Ureg *ur, void *a)
-{
-    USED(a);
-
-    floppyintr(ur);
-}
+<<interrupt callback pcfloppyintr>>
 
 void
 floppysetup0(FController *fl)
@@ -11695,26 +11722,7 @@ floppyintr(Ureg *)
     wakeup(&fl.r);
 }
 
-Dev floppydevtab = {
-    .dc       =    'f',
-    .name     =    "floppy",
-               
-    .reset    =    floppyreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .attach   =    floppyattach,
-    .walk     =    floppywalk,
-    .stat     =    floppystat,
-    .open     =    floppyopen,
-    .create   =    devcreate,
-    .close    =    floppyclose,
-    .read     =    floppyread,
-    .bread    =    devbread,
-    .write    =    floppywrite,
-    .bwrite   =    devbwrite,
-    .remove   =    devremove,
-    .wstat    =    devwstat,
-};
+<<global floppydevtab>>
 @
 
 
@@ -11730,6 +11738,8 @@ typedef struct FType FType;
 
 <<floppy.h>>=
 <<floppy.h forward decl>>
+
+// why not inlined in devfloppy.c? used by other programs?
 
 /*
  *  a floppy drive
@@ -11856,6 +11866,7 @@ enum
 <<sdata.c forward decl>>=
 typedef struct Ctlr Ctlr;
 typedef struct Drive Drive;
+typedef struct Prd Prd;
 @
 \fi
 
@@ -11865,8 +11876,9 @@ typedef struct Drive Drive;
 <<kernel basic includes>>
 
 #include "io.h"
-#include <ureg.h>
 #include "../port/sd.h"
+
+#include <ureg.h>
 
 extern SDifc sdataifc;
 
@@ -12112,10 +12124,10 @@ enum {                  /* bit masks for supported/enabled features */
 
 <<sdata.c forward decl>>
 
-typedef struct Prd {            /* Physical Region Descriptor */
+struct Prd {            /* Physical Region Descriptor */
     ulong   pa;         /* Physical Base Address */
     int count;
-} Prd;
+};
 
 enum {
     BMspan      = 64*1024,  /* must be power of 2 <= 64*1024 */
@@ -12123,7 +12135,7 @@ enum {
     Nprd        = SDmaxio/BMspan+2,
 };
 
-typedef struct Ctlr {
+struct Ctlr {
     int cmdport;
     int ctlport;
     int irq;
@@ -12154,9 +12166,9 @@ typedef struct Ctlr {
     ulong   intok;          /* normal */
 
     Lock;               /* register access */
-} Ctlr;
+};
 
-typedef struct Drive {
+struct Drive {
     Ctlr*   ctlr;
 
     int dev;
@@ -12195,7 +12207,7 @@ typedef struct Drive {
     ulong   intcmd;         /* commands */
     ulong   intrd;          /* reads */
     ulong   intwr;          /* writes */
-} Drive;
+};
 
 enum {                  /* internal flags */
     Lba48       = 0x1,      /* LBA48 mode */
@@ -14238,15 +14250,44 @@ extern void sdadddevs(SDev*);
 %//extern int sdmodesense(SDreq*, uchar*, void*, int);
 
 % very big for now so skip
+
+<<global sddevtab>>=
+Dev sddevtab = {
+    .dc       =    'S',
+    .name     =    "sd",
+               
+    .reset    =    sdreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    sdattach,
+    .walk     =    sdwalk,
+    .stat     =    sdstat,
+    .open     =    sdopen,
+    .create   =    devcreate,
+    .close    =    sdclose,
+    .read     =    sdread,
+    .bread    =    devbread,
+    .write    =    sdwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    sdwstat,
+
+    .power    = devpower,
+    .config   = sdconfig,   /* probe; only called for pcmcia-like devices */
+};
+@
+
 \ifallcode
 <<devsd.c>>=
 /*
  * Storage Device.
  */
 <<kernel basic includes>>
+
 #include "io.h"
-#include <ureg.h>
 #include "../port/sd.h"
+
+#include <ureg.h>
 
 extern Dev sddevtab;
 extern SDifc* sdifc[];
@@ -15528,29 +15569,7 @@ sdconfig(int on, char* spec, DevConf* cf)
     return unconfigure(spec);
 }
 
-Dev sddevtab = {
-    .dc       =    'S',
-    .name     =    "sd",
-               
-    .reset    =    sdreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .attach   =    sdattach,
-    .walk     =    sdwalk,
-    .stat     =    sdstat,
-    .open     =    sdopen,
-    .create   =    devcreate,
-    .close    =    sdclose,
-    .read     =    sdread,
-    .bread    =    devbread,
-    .write    =    sdwrite,
-    .bwrite   =    devbwrite,
-    .remove   =    devremove,
-    .wstat    =    sdwstat,
-
-    .power    = devpower,
-    .config   = sdconfig,   /* probe; only called for pcmcia-like devices */
-};
+<<global sddevtab>>
 
 /*
  * This is wrong for so many reasons.  This code must go.
@@ -16052,33 +16071,34 @@ enum {
  * mmc/sd/sdio host controller interface
  */
 
-//struct SDio {
-//  char  *name;
-//  int (*init)(void);
-//  void  (*enable)(void);
-//  int (*inquiry)(char*, int);
-//  int (*cmd)(u32int, u32int, u32int*);
-//  void  (*iosetup)(int, void*, int, int);
-//  void  (*io)(int, uchar*, int);
-//};
-//
-//extern SDio sdio;
-
-/* devsd.c */
-//extern void sdadddevs(SDev*);
-//extern void sdaddconf(SDunit*);
-//extern void sdaddallconfs(void (*f)(SDunit*));
-//extern void sdaddpart(SDunit*, char*, uvlong, uvlong);
-//extern int sdsetsense(SDreq*, int, int, int, int);
-//extern int sdmodesense(SDreq*, uchar*, void*, int);
-//extern int sdfakescsi(SDreq*, void*, int);
-
 /* sdscsi.c */
 extern int scsiverify(SDunit*);
 extern int scsionline(SDunit*);
 extern long scsibio(SDunit*, int, int, void*, long, uvlong);
 //extern SDev* scsiid(SDev*, SDifc*);
 @
+
+%//struct SDio {
+%//  char  *name;
+%//  int (*init)(void);
+%//  void  (*enable)(void);
+%//  int (*inquiry)(char*, int);
+%//  int (*cmd)(u32int, u32int, u32int*);
+%//  void  (*iosetup)(int, void*, int, int);
+%//  void  (*io)(int, uchar*, int);
+%//};
+%//
+%//extern SDio sdio;
+%
+%/* devsd.c */
+%//extern void sdadddevs(SDev*);
+%//extern void sdaddconf(SDunit*);
+%//extern void sdaddallconfs(void (*f)(SDunit*));
+%//extern void sdaddpart(SDunit*, char*, uvlong, uvlong);
+%//extern int sdsetsense(SDreq*, int, int, int, int);
+%//extern int sdmodesense(SDreq*, uchar*, void*, int);
+%//extern int sdfakescsi(SDreq*, void*, int);
+
 
 
 \subsection*{[[devices/storage/sdscsi.c]]}
@@ -16087,9 +16107,11 @@ extern long scsibio(SDunit*, int, int, void*, long, uvlong);
 \ifallcode
 <<sdscsi.c>>=
 <<kernel basic includes>>
+
 #include "io.h"
-#include <ureg.h>
 #include "../port/sd.h"
+
+#include <ureg.h>
 
 static int
 scsitest(SDreq* r)
@@ -16510,9 +16532,88 @@ again:
 
 \subsection*{[[devices/sys/386/devarch.c]]}
 
+<<global archdevtab>>=
+Dev archdevtab = {
+    .dc       =    'P',
+    .name     =    "arch",
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    archattach,
+    .walk     =    archwalk,
+    .stat     =    archstat,
+    .open     =    archopen,
+    .create   =    devcreate,
+    .close    =    archclose,
+    .read     =    archread,
+    .bread    =    devbread,
+    .write    =    archwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+};
+@
+
+
+<<function archinit>>=
+void
+archinit(void)
+{
+    PCArch **p;
+
+    arch = 0;
+    for(p = knownarch; *p; p++){
+        if((*p)->ident && (*p)->ident() == 0){
+            arch = *p;
+            break;
+        }
+    }
+    if(arch == 0)
+        arch = &archgeneric;
+    else{
+        if(arch->id == 0)
+            arch->id = archgeneric.id;
+        if(arch->reset == 0)
+            arch->reset = archgeneric.reset;
+        if(arch->serialpower == 0)
+            arch->serialpower = archgeneric.serialpower;
+        if(arch->modempower == 0)
+            arch->modempower = archgeneric.modempower;
+        if(arch->intrinit == 0)
+            arch->intrinit = archgeneric.intrinit;
+        if(arch->intrenable == 0)
+            arch->intrenable = archgeneric.intrenable;
+    }
+
+    /*
+     *  Decide whether to use copy-on-reference (386 and mp).
+     *  We get another chance to set it in mpinit() for a
+     *  multiprocessor.
+     */
+    if(X86FAMILY(m->cpuidax) == 3)
+        conf.copymode = 1;
+
+    if(X86FAMILY(m->cpuidax) >= 4)
+        cmpswap = cmpswap486;
+
+    if(X86FAMILY(m->cpuidax) >= 5)
+        coherence = mb586;
+
+    if(m->cpuiddx & Sse2)
+        coherence = mfence;
+
+    addarchfile("cputype", 0444, cputyperead, nil);
+    addarchfile("archctl", 0664, archctlread, archctlwrite);
+}
+@
+
+
 <<devarch.c>>=
 <<kernel basic includes>>
+
 #include "io.h"
+
 #include <ureg.h>
 
 enum {
@@ -16770,26 +16871,7 @@ archwrite(Chan *c, void *a, long n, vlong offset)
     return 0;
 }
 
-Dev archdevtab = {
-    .dc       =    'P',
-    .name     =    "arch",
-               
-    .reset    =    devreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .attach   =    archattach,
-    .walk     =    archwalk,
-    .stat     =    archstat,
-    .open     =    archopen,
-    .create   =    devcreate,
-    .close    =    archclose,
-    .read     =    archread,
-    .bread    =    devbread,
-    .write    =    archwrite,
-    .bwrite   =    devbwrite,
-    .remove   =    devremove,
-    .wstat    =    devwstat,
-};
+<<global archdevtab>>
 
 void
 nop(void)
@@ -16943,55 +17025,7 @@ archctlwrite(Chan*, void *a, long n, vlong)
     return n;
 }
 
-void
-archinit(void)
-{
-    PCArch **p;
-
-    arch = 0;
-    for(p = knownarch; *p; p++){
-        if((*p)->ident && (*p)->ident() == 0){
-            arch = *p;
-            break;
-        }
-    }
-    if(arch == 0)
-        arch = &archgeneric;
-    else{
-        if(arch->id == 0)
-            arch->id = archgeneric.id;
-        if(arch->reset == 0)
-            arch->reset = archgeneric.reset;
-        if(arch->serialpower == 0)
-            arch->serialpower = archgeneric.serialpower;
-        if(arch->modempower == 0)
-            arch->modempower = archgeneric.modempower;
-        if(arch->intrinit == 0)
-            arch->intrinit = archgeneric.intrinit;
-        if(arch->intrenable == 0)
-            arch->intrenable = archgeneric.intrenable;
-    }
-
-    /*
-     *  Decide whether to use copy-on-reference (386 and mp).
-     *  We get another chance to set it in mpinit() for a
-     *  multiprocessor.
-     */
-    if(X86FAMILY(m->cpuidax) == 3)
-        conf.copymode = 1;
-
-    if(X86FAMILY(m->cpuidax) >= 4)
-        cmpswap = cmpswap486;
-
-    if(X86FAMILY(m->cpuidax) >= 5)
-        coherence = mb586;
-
-    if(m->cpuiddx & Sse2)
-        coherence = mfence;
-
-    addarchfile("cputype", 0444, cputyperead, nil);
-    addarchfile("archctl", 0664, archctlread, archctlwrite);
-}
+<<function archinit>>
 @
 
 
@@ -17005,6 +17039,43 @@ static ulong rtc2sec(Rtc*);
 static void sec2rtc(ulong, Rtc*);
 @
 \fi
+
+<<struct Rtc>>=
+struct Rtc
+{
+    int sec;
+    int min;
+    int hour;
+    int mday;
+    int mon;
+    int year;
+};
+@
+
+
+<<global rtcdevtab>>=
+Dev rtcdevtab = {
+    .dc       =    'r',
+    .name     =    "rtc",
+               
+    .reset    =    devreset,
+    .init     =    rtcinit,
+    .shutdown =    devshutdown,
+    .attach   =    rtcattach,
+    .walk     =    rtcwalk,
+    .stat     =    rtcstat,
+    .open     =    rtcopen,
+    .create   =    devcreate,
+    .close    =    rtcclose,
+    .read     =    rtcread,
+    .bread    =    devbread,
+    .write    =    rtcwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+};
+@
+
 
 <<devrtc.c>>=
 <<kernel basic includes>>
@@ -17028,15 +17099,7 @@ enum {
 
 <<devrtc.c forward decl>>
 
-struct Rtc
-{
-    int sec;
-    int min;
-    int hour;
-    int mday;
-    int mon;
-    int year;
-};
+<<struct Rtc>>
 
 
 enum{
@@ -17300,26 +17363,7 @@ rtcwrite(Chan* c, void* buf, long n, vlong off)
     return 0;
 }
 
-Dev rtcdevtab = {
-    .dc       =    'r',
-    .name     =    "rtc",
-               
-    .reset    =    devreset,
-    .init     =    rtcinit,
-    .shutdown =    devshutdown,
-    .attach   =    rtcattach,
-    .walk     =    rtcwalk,
-    .stat     =    rtcstat,
-    .open     =    rtcopen,
-    .create   =    devcreate,
-    .close    =    rtcclose,
-    .read     =    rtcread,
-    .bread    =    devbread,
-    .write    =    rtcwrite,
-    .bwrite   =    devbwrite,
-    .remove   =    devremove,
-    .wstat    =    devwstat,
-};
+<<global rtcdevtab>>
 
 #define SEC2MIN 60L
 #define SEC2HOUR (60L*SEC2MIN)
@@ -17440,6 +17484,30 @@ sec2rtc(ulong secs, Rtc *rtc)
 
 
 \subsection*{[[devices/sys/devdup.c]]}
+
+<<global dupdevtab>>=
+Dev dupdevtab = {
+    .dc       =    'd',
+    .name     =    "dup",
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    dupattach,
+    .walk     =    dupwalk,
+    .stat     =    dupstat,
+    .open     =    dupopen,
+    .create   =    devcreate,
+    .close    =    dupclose,
+    .read     =    dupread,
+    .bread    =    devbread,
+    .write    =    dupwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+};
+@
+
 
 <<devdup.c>>=
 <<kernel basic includes>>
@@ -17563,26 +17631,7 @@ dupwrite(Chan*, void*, long, vlong)
     return 0;       /* not reached */
 }
 
-Dev dupdevtab = {
-    .dc       =    'd',
-    .name     =    "dup",
-               
-    .reset    =    devreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .attach   =    dupattach,
-    .walk     =    dupwalk,
-    .stat     =    dupstat,
-    .open     =    dupopen,
-    .create   =    devcreate,
-    .close    =    dupclose,
-    .read     =    dupread,
-    .bread    =    devbread,
-    .write    =    dupwrite,
-    .bwrite   =    devbwrite,
-    .remove   =    devremove,
-    .wstat    =    devwstat,
-};
+<<global dupdevtab>>
 @
 
 
@@ -17594,6 +17643,145 @@ static Egrp *envgrp(Chan *c);
 static int  envwriteable(Chan *c);
 @
 \fi
+
+<<global envdevtab>>=
+Dev envdevtab = {
+    .dc       =    'e',
+    .name     =    "env",
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    envattach,
+    .walk     =    envwalk,
+    .stat     =    envstat,
+    .open     =    envopen,
+    .create   =    envcreate,
+    .close    =    envclose,
+    .read     =    envread,
+    .bread    =    devbread,
+    .write    =    envwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    envremove,
+    .wstat    =    devwstat,
+};
+@
+
+
+<<function ksetenv>>=
+/*
+ *  to let the kernel set environment variables
+ */
+void
+ksetenv(char *ename, char *eval, int conf)
+{
+    Chan *c;
+    char buf[2*KNAMELEN];
+    
+    snprint(buf, sizeof(buf), "#e%s/%s", conf?"c":"", ename);
+    c = namec(buf, Acreate, OWRITE, 0600);
+    devtab[c->type]->write(c, eval, strlen(eval), 0);
+    cclose(c);
+}
+@
+
+
+<<function envcpy>>=
+void
+envcpy(Egrp *to, Egrp *from)
+{
+    int i;
+    Evalue *ne, *e;
+
+    rlock(from);
+    to->ment = (from->nent+31)&~31;
+    to->ent = smalloc(to->ment*sizeof(to->ent[0]));
+    for(i=0; i<from->nent; i++){
+        e = from->ent[i];
+        ne = smalloc(sizeof(Evalue));
+        ne->name = smalloc(strlen(e->name)+1);
+        strcpy(ne->name, e->name);
+        if(e->value){
+            ne->value = smalloc(e->len);
+            memmove(ne->value, e->value, e->len);
+            ne->len = e->len;
+        }
+        ne->qid.path = ++to->path;
+        to->ent[i] = ne;
+    }
+    to->nent = from->nent;
+    runlock(from);
+}
+@
+
+
+<<function envgrp>>=
+static Egrp*
+envgrp(Chan *c)
+{
+    if(c->aux == nil)
+        return up->egrp;
+    return c->aux;
+}
+@
+
+
+<<function envwriteable>>=
+static int
+envwriteable(Chan *c)
+{
+    return iseve() || c->aux == nil;
+}
+@
+
+
+<<function getconfenv>>=
+/*
+ * Return a copy of configuration environment as a sequence of strings.
+ * The strings alternate between name and value.  A zero length name string
+ * indicates the end of the list
+ */
+char *
+getconfenv(void)
+{
+    Egrp *eg = &confegrp;
+    Evalue *e;
+    char *p, *q;
+    int i, n;
+
+    rlock(eg);
+    if(waserror()) {
+        runlock(eg);
+        nexterror();
+    }
+    
+    /* determine size */
+    n = 0;
+    for(i=0; i<eg->nent; i++){
+        e = eg->ent[i];
+        n += strlen(e->name) + e->len + 2;
+    }
+    p = malloc(n + 1);
+    if(p == nil)
+        error(Enomem);
+    q = p;
+    for(i=0; i<eg->nent; i++){
+        e = eg->ent[i];
+        strcpy(q, e->name);
+        q += strlen(q) + 1;
+        memmove(q, e->value, e->len);
+        q[e->len] = 0;
+        /* move up to the first null */
+        q += strlen(q) + 1;
+    }
+    *q = 0;
+    
+    poperror();
+    runlock(eg);
+    return p;
+}
+@
+
 
 <<devenv.c>>=
 <<kernel basic includes>>
@@ -17891,127 +18079,19 @@ envwrite(Chan *c, void *a, long n, vlong off)
     return n;
 }
 
-Dev envdevtab = {
-    .dc       =    'e',
-    .name     =    "env",
-               
-    .reset    =    devreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .attach   =    envattach,
-    .walk     =    envwalk,
-    .stat     =    envstat,
-    .open     =    envopen,
-    .create   =    envcreate,
-    .close    =    envclose,
-    .read     =    envread,
-    .bread    =    devbread,
-    .write    =    envwrite,
-    .bwrite   =    devbwrite,
-    .remove   =    envremove,
-    .wstat    =    devwstat,
-};
-
-void
-envcpy(Egrp *to, Egrp *from)
-{
-    int i;
-    Evalue *ne, *e;
-
-    rlock(from);
-    to->ment = (from->nent+31)&~31;
-    to->ent = smalloc(to->ment*sizeof(to->ent[0]));
-    for(i=0; i<from->nent; i++){
-        e = from->ent[i];
-        ne = smalloc(sizeof(Evalue));
-        ne->name = smalloc(strlen(e->name)+1);
-        strcpy(ne->name, e->name);
-        if(e->value){
-            ne->value = smalloc(e->len);
-            memmove(ne->value, e->value, e->len);
-            ne->len = e->len;
-        }
-        ne->qid.path = ++to->path;
-        to->ent[i] = ne;
-    }
-    to->nent = from->nent;
-    runlock(from);
-}
+<<global envdevtab>>
 
 
-static Egrp*
-envgrp(Chan *c)
-{
-    if(c->aux == nil)
-        return up->egrp;
-    return c->aux;
-}
 
-static int
-envwriteable(Chan *c)
-{
-    return iseve() || c->aux == nil;
-}
+<<function envcpy>>
 
-/*
- *  to let the kernel set environment variables
- */
-void
-ksetenv(char *ename, char *eval, int conf)
-{
-    Chan *c;
-    char buf[2*KNAMELEN];
-    
-    snprint(buf, sizeof(buf), "#e%s/%s", conf?"c":"", ename);
-    c = namec(buf, Acreate, OWRITE, 0600);
-    devtab[c->type]->write(c, eval, strlen(eval), 0);
-    cclose(c);
-}
+<<function envgrp>>
 
-/*
- * Return a copy of configuration environment as a sequence of strings.
- * The strings alternate between name and value.  A zero length name string
- * indicates the end of the list
- */
-char *
-getconfenv(void)
-{
-    Egrp *eg = &confegrp;
-    Evalue *e;
-    char *p, *q;
-    int i, n;
+<<function envwriteable>>
 
-    rlock(eg);
-    if(waserror()) {
-        runlock(eg);
-        nexterror();
-    }
-    
-    /* determine size */
-    n = 0;
-    for(i=0; i<eg->nent; i++){
-        e = eg->ent[i];
-        n += strlen(e->name) + e->len + 2;
-    }
-    p = malloc(n + 1);
-    if(p == nil)
-        error(Enomem);
-    q = p;
-    for(i=0; i<eg->nent; i++){
-        e = eg->ent[i];
-        strcpy(q, e->name);
-        q += strlen(q) + 1;
-        memmove(q, e->value, e->len);
-        q[e->len] = 0;
-        /* move up to the first null */
-        q += strlen(q) + 1;
-    }
-    *q = 0;
-    
-    poperror();
-    runlock(eg);
-    return p;
-}
+<<function ksetenv>>
+
+<<function getconfenv>>
 @
 
 \subsection*{[[devices/sys/devmnt.c]]}
@@ -18034,6 +18114,30 @@ int rpcattn(void*);
 Chan*   mntchan(void);
 @
 \fi
+
+<<global mntdevtab>>=
+Dev mntdevtab = {
+    .dc       =    'M',
+    .name     =    "mnt",
+               
+    .reset    =    mntreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    mntattach,
+    .walk     =    mntwalk,
+    .stat     =    mntstat,
+    .open     =    mntopen,
+    .create   =    mntcreate,
+    .close    =    mntclose,
+    .read     =    mntread,
+    .bread    =    devbread,
+    .write    =    mntwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    mntremove,
+    .wstat    =    mntwstat,
+};
+@
+
 
 <<devmnt.c>>=
 <<kernel basic includes>>
@@ -18930,26 +19034,7 @@ rpcattn(void *v)
     return r->done || r->m->rip == 0;
 }
 
-Dev mntdevtab = {
-    .dc       =    'M',
-    .name     =    "mnt",
-               
-    .reset    =    mntreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .attach   =    mntattach,
-    .walk     =    mntwalk,
-    .stat     =    mntstat,
-    .open     =    mntopen,
-    .create   =    mntcreate,
-    .close    =    mntclose,
-    .read     =    mntread,
-    .bread    =    devbread,
-    .write    =    mntwrite,
-    .bwrite   =    devbwrite,
-    .remove   =    mntremove,
-    .wstat    =    mntwstat,
-};
+<<global mntdevtab>>
 @
 
 
@@ -18961,13 +19046,7 @@ typedef struct Pipe Pipe;
 @
 \fi
 
-<<devpipe.c>>=
-<<kernel basic includes>>
-
-#include    "netif.h"
-
-<<devpipe.c forward decl>>
-
+<<struct Pipe>>=
 struct Pipe
 {
     QLock;
@@ -18978,28 +19057,47 @@ struct Pipe
     Queue   *q[2];
     int qref[2];
 };
+@
 
-struct
+
+<<struct Pipealloc>>=
+struct Pipealloc
 {
     Lock;
     ulong   path;
-} pipealloc;
+};
+@
 
+
+<<global pipealloc>>=
+struct Pipealloc pipealloc;
+@
+
+
+<<devpipe.c enum Qxxx>>=
 enum
 {
     Qdir,
     Qdata0,
     Qdata1,
 };
+@
 
+
+<<global pipedir>>=
 Dirtab pipedir[] =
 {
     ".",        {Qdir,0,QTDIR}, 0,      DMDIR|0500,
     "data",     {Qdata0},   0,      0600,
     "data1",    {Qdata1},   0,      0600,
 };
-#define NPIPEDIR 3
+@
 
+<<Conf extra fields>>=
+ulong pipeqsize;  /* size in bytes of pipe queues */
+@ 
+
+<<method pipeinit>>=
 static void
 pipeinit(void)
 {
@@ -19010,7 +19108,10 @@ pipeinit(void)
             conf.pipeqsize = 32*1024;
     }
 }
+@
 
+
+<<method pipeattach>>=
 /*
  *  create a pipe, no streams are created until an open
  */
@@ -19048,7 +19149,10 @@ pipeattach(char *spec)
     c->dev = 0;
     return c;
 }
+@
 
+
+<<function pipegen>>=
 static int
 pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, Dir *dp)
 {
@@ -19081,8 +19185,10 @@ pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, Dir *dp)
     devdir(c, q, tab->name, len, eve, p->perm, dp);
     return 1;
 }
+@
 
 
+<<method pipewalk>>=
 static Walkqid*
 pipewalk(Chan *c, Chan *nc, char **name, int nname)
 {
@@ -19109,7 +19215,10 @@ pipewalk(Chan *c, Chan *nc, char **name, int nname)
     }
     return wq;
 }
+@
 
+
+<<method pipestat>>=
 static int
 pipestat(Chan *c, uchar *db, int n)
 {
@@ -19136,7 +19245,10 @@ pipestat(Chan *c, uchar *db, int n)
         error(Eshortstat);
     return n;
 }
+@
 
+
+<<method pipewstat>>=
 static int
 pipewstat(Chan* c, uchar* db, int n)
 {
@@ -19166,7 +19278,10 @@ pipewstat(Chan* c, uchar* db, int n)
     free(dir);
     return m;
 }
+@
 
+
+<<method pipeopen>>=
 /*
  *  if the stream doesn't exist, create it
  */
@@ -19202,7 +19317,10 @@ pipeopen(Chan *c, int omode)
     c->iounit = qiomaxatomic;
     return c;
 }
+@
 
+
+<<method pipeclose>>=
 static void
 pipeclose(Chan *c)
 {
@@ -19254,7 +19372,10 @@ pipeclose(Chan *c)
     } else
         qunlock(p);
 }
+@
 
+
+<<method piperead>>=
 static long
 piperead(Chan *c, void *va, long n, vlong)
 {
@@ -19274,7 +19395,10 @@ piperead(Chan *c, void *va, long n, vlong)
     }
     return -1;  /* not reached */
 }
+@
 
+
+<<method pipebread>>=
 static Block*
 pipebread(Chan *c, long n, ulong offset)
 {
@@ -19291,7 +19415,10 @@ pipebread(Chan *c, long n, ulong offset)
 
     return devbread(c, n, offset);
 }
+@
 
+
+<<method pipewrite>>=
 /*
  *  a write to a closed pipe causes a note to be sent to
  *  the process.
@@ -19328,7 +19455,10 @@ pipewrite(Chan *c, void *va, long n, vlong)
     poperror();
     return n;
 }
+@
 
+
+<<method pipebwrite>>=
 static long
 pipebwrite(Chan *c, Block *bp, ulong)
 {
@@ -19360,7 +19490,10 @@ pipebwrite(Chan *c, Block *bp, ulong)
     poperror();
     return n;
 }
+@
 
+
+<<global pipedevtab>>=
 Dev pipedevtab = {
     .dc       =    '|',
     .name     =    "pipe",
@@ -19381,6 +19514,55 @@ Dev pipedevtab = {
     .remove   =    devremove,
     .wstat    =    pipewstat,
 };
+@
+
+
+<<devpipe.c>>=
+<<kernel basic includes>>
+
+// need that??
+#include    "netif.h"
+
+<<devpipe.c forward decl>>
+
+<<struct Pipe>>
+
+<<struct Pipealloc>>
+
+<<global pipealloc>>
+
+<<devpipe.c enum Qxxx>>
+
+<<global pipedir>>
+
+#define NPIPEDIR 3
+
+
+<<method pipeinit>>
+
+<<method pipeattach>>
+
+<<function pipegen>>
+
+<<method pipewalk>>
+
+<<method pipestat>>
+
+<<method pipewstat>>
+
+<<method pipeopen>>
+
+<<method pipeclose>>
+
+<<method piperead>>
+
+<<method pipebread>>
+
+<<method pipewrite>>
+
+<<method pipebwrite>>
+
+<<global pipedevtab>>
 @
 
 

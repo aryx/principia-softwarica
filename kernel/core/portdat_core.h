@@ -39,8 +39,9 @@ struct Conf
 
     bool_ulong copymode; /* 0 is copy on write, 1 is copy on reference */
     ulong ialloc;   /* max interrupt time allocation in bytes */
-    ulong pipeqsize;  /* size in bytes of pipe queues */
     int nuart;    /* number of uart devices */
+    /*x: Conf extra fields */
+    ulong pipeqsize;  /* size in bytes of pipe queues */
     /*e: Conf extra fields */
   
     struct ArchConf;

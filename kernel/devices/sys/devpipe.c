@@ -8,12 +8,14 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+// need that??
 #include    "netif.h"
 
 /*s: devpipe.c forward decl */
 typedef struct Pipe Pipe;
 /*e: devpipe.c forward decl */
 
+/*s: struct Pipe */
 struct Pipe
 {
     QLock;
@@ -24,28 +26,42 @@ struct Pipe
     Queue   *q[2];
     int qref[2];
 };
+/*e: struct Pipe */
 
-struct
+/*s: struct Pipealloc */
+struct Pipealloc
 {
     Lock;
     ulong   path;
-} pipealloc;
+};
+/*e: struct Pipealloc */
 
+/*s: global pipealloc */
+struct Pipealloc pipealloc;
+/*e: global pipealloc */
+
+/*s: devpipe.c enum Qxxx */
 enum
 {
     Qdir,
     Qdata0,
     Qdata1,
 };
+/*e: devpipe.c enum Qxxx */
 
+/*s: global pipedir */
 Dirtab pipedir[] =
 {
     ".",        {Qdir,0,QTDIR}, 0,      DMDIR|0500,
     "data",     {Qdata0},   0,      0600,
     "data1",    {Qdata1},   0,      0600,
 };
+/*e: global pipedir */
+
 #define NPIPEDIR 3
 
+
+/*s: method pipeinit */
 static void
 pipeinit(void)
 {
@@ -56,7 +72,9 @@ pipeinit(void)
             conf.pipeqsize = 32*1024;
     }
 }
+/*e: method pipeinit */
 
+/*s: method pipeattach */
 /*
  *  create a pipe, no streams are created until an open
  */
@@ -94,7 +112,9 @@ pipeattach(char *spec)
     c->dev = 0;
     return c;
 }
+/*e: method pipeattach */
 
+/*s: function pipegen */
 static int
 pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, Dir *dp)
 {
@@ -127,8 +147,9 @@ pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, Dir *dp)
     devdir(c, q, tab->name, len, eve, p->perm, dp);
     return 1;
 }
+/*e: function pipegen */
 
-
+/*s: method pipewalk */
 static Walkqid*
 pipewalk(Chan *c, Chan *nc, char **name, int nname)
 {
@@ -155,7 +176,9 @@ pipewalk(Chan *c, Chan *nc, char **name, int nname)
     }
     return wq;
 }
+/*e: method pipewalk */
 
+/*s: method pipestat */
 static int
 pipestat(Chan *c, uchar *db, int n)
 {
@@ -182,7 +205,9 @@ pipestat(Chan *c, uchar *db, int n)
         error(Eshortstat);
     return n;
 }
+/*e: method pipestat */
 
+/*s: method pipewstat */
 static int
 pipewstat(Chan* c, uchar* db, int n)
 {
@@ -212,7 +237,9 @@ pipewstat(Chan* c, uchar* db, int n)
     free(dir);
     return m;
 }
+/*e: method pipewstat */
 
+/*s: method pipeopen */
 /*
  *  if the stream doesn't exist, create it
  */
@@ -248,7 +275,9 @@ pipeopen(Chan *c, int omode)
     c->iounit = qiomaxatomic;
     return c;
 }
+/*e: method pipeopen */
 
+/*s: method pipeclose */
 static void
 pipeclose(Chan *c)
 {
@@ -300,7 +329,9 @@ pipeclose(Chan *c)
     } else
         qunlock(p);
 }
+/*e: method pipeclose */
 
+/*s: method piperead */
 static long
 piperead(Chan *c, void *va, long n, vlong)
 {
@@ -320,7 +351,9 @@ piperead(Chan *c, void *va, long n, vlong)
     }
     return -1;  /* not reached */
 }
+/*e: method piperead */
 
+/*s: method pipebread */
 static Block*
 pipebread(Chan *c, long n, ulong offset)
 {
@@ -337,7 +370,9 @@ pipebread(Chan *c, long n, ulong offset)
 
     return devbread(c, n, offset);
 }
+/*e: method pipebread */
 
+/*s: method pipewrite */
 /*
  *  a write to a closed pipe causes a note to be sent to
  *  the process.
@@ -374,7 +409,9 @@ pipewrite(Chan *c, void *va, long n, vlong)
     poperror();
     return n;
 }
+/*e: method pipewrite */
 
+/*s: method pipebwrite */
 static long
 pipebwrite(Chan *c, Block *bp, ulong)
 {
@@ -406,7 +443,9 @@ pipebwrite(Chan *c, Block *bp, ulong)
     poperror();
     return n;
 }
+/*e: method pipebwrite */
 
+/*s: global pipedevtab */
 Dev pipedevtab = {
     .dc       =    '|',
     .name     =    "pipe",
@@ -427,4 +466,5 @@ Dev pipedevtab = {
     .remove   =    devremove,
     .wstat    =    pipewstat,
 };
+/*e: global pipedevtab */
 /*e: devpipe.c */

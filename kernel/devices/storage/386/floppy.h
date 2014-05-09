@@ -5,6 +5,8 @@ typedef struct FDrive FDrive;
 typedef struct FType FType;
 /*e: floppy.h forward decl */
 
+// why not inlined in devfloppy.c? used by other programs?
+
 /*
  *  a floppy drive
  */

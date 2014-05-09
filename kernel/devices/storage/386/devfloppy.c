@@ -53,7 +53,7 @@ static long floppyxfer(FDrive*, int, void*, long, long);
 /*e: devfloppy.c forward decl */
 
 
-
+/*s: interrupt callback pcfloppyintr */
 static void
 pcfloppyintr(Ureg *ur, void *a)
 {
@@ -61,6 +61,7 @@ pcfloppyintr(Ureg *ur, void *a)
 
     floppyintr(ur);
 }
+/*e: interrupt callback pcfloppyintr */
 
 void
 floppysetup0(FController *fl)
@@ -1140,6 +1141,7 @@ floppyintr(Ureg *)
     wakeup(&fl.r);
 }
 
+/*s: global floppydevtab */
 Dev floppydevtab = {
     .dc       =    'f',
     .name     =    "floppy",
@@ -1160,4 +1162,5 @@ Dev floppydevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
+/*e: global floppydevtab */
 /*e: devfloppy.c */
