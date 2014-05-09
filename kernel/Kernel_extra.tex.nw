@@ -49810,13 +49810,9 @@ int shargs(char*, int, char**);
 @
 \fi
 
-<<sysproc.c>>=
-<<kernel basic includes>>
-
-#include    <tos.h>
-#include    <a.out.h>
-
-enum
+% no coupling with libc.h?
+<<enum rfork>>=
+enum rfork
 {
     RFNAMEG     = (1<<0),
     RFENVG      = (1<<1),
@@ -49831,17 +49827,29 @@ enum
     RFREND      = (1<<13),
     RFNOMNT     = (1<<14),
 };
+@ 
 
-<<sysproc.c forward decl>>
-
-
+<<syscall nop>>=
 long
 sysnop(ulong*)
 {
     //checkpagerefs();
     return 0;
 }
+@ 
 
+<<function l2be>>=
+ulong
+l2be(long l)
+{
+    uchar *cp;
+
+    cp = (uchar*)&l;
+    return (cp[0]<<24) | (cp[1]<<16) | (cp[2]<<8) | cp[3];
+}
+@ 
+
+<<syscall rfork>>=
 long
 sysrfork(ulong *arg)
 {
@@ -50026,16 +50034,10 @@ sysrfork(ulong *arg)
     sched();
     return pid;
 }
+@ 
 
-ulong
-l2be(long l)
-{
-    uchar *cp;
 
-    cp = (uchar*)&l;
-    return (cp[0]<<24) | (cp[1]<<16) | (cp[2]<<8) | cp[3];
-}
-
+<<syscall exec>>=
 long
 sysexec(ulong *arg)
 {
@@ -50311,7 +50313,10 @@ sysexec(ulong *arg)
 
     return execregs(entry, ssize, nargs);
 }
+@ 
 
+
+<<function shargs>>=
 int
 shargs(char *s, int n, char **ap)
 {
@@ -50342,13 +50347,19 @@ shargs(char *s, int n, char **ap)
     }
     return i;
 }
+@ 
 
+
+<<function return0>>=
 int
 sysproc_return0(void*)
 {
     return 0;
 }
+@ 
 
+
+<<syscall sleep>>=
 long
 syssleep(ulong *arg)
 {
@@ -50368,13 +50379,19 @@ syssleep(ulong *arg)
     tsleep(&up->sleep, return0, 0, n);
     return 0;
 }
+@ 
 
+
+<<syscall alarm>>=
 long
 sysalarm(ulong *arg)
 {
     return procalarm(arg[0]);
 }
+@ 
 
+
+<<syscall exits>>=
 long
 sysexits(ulong *arg)
 {
@@ -50400,7 +50417,10 @@ sysexits(ulong *arg)
     pexit(status, 1);
     return 0;       /* not reached */
 }
+@ 
 
+
+<<syscall await>>=
 long
 sysawait(ulong *arg)
 {
@@ -50421,7 +50441,10 @@ sysawait(ulong *arg)
 
     return i;
 }
+@ 
 
+
+<<function werrstr>>=
 //@Scheck: this is also defined in libc, so it's supposed to override it? TODO
 void
 werrstr(char *fmt, ...)
@@ -50435,7 +50458,10 @@ werrstr(char *fmt, ...)
     vseprint(up->syserrstr, up->syserrstr+ERRMAX, fmt, va);
     va_end(va);
 }
+@ 
 
+
+<<function generrstr>>=
 static long
 generrstr(char *buf, uint nbuf)
 {
@@ -50455,13 +50481,19 @@ generrstr(char *buf, uint nbuf)
     memmove(up->syserrstr, tmp, nbuf);
     return 0;
 }
+@ 
 
+
+<<syscall errstr>>=
 long
 syserrstr(ulong *arg)
 {
     return generrstr((char*)arg[0], arg[1]);
 }
+@ 
 
+
+<<syscall notify>>=
 long
 sysnotify(ulong *arg)
 {
@@ -50470,7 +50502,10 @@ sysnotify(ulong *arg)
     up->notify = (int(*)(void*, char*))(arg[0]);
     return 0;
 }
+@ 
 
+
+<<syscall noted>>=
 long
 sysnoted(ulong *arg)
 {
@@ -50478,7 +50513,10 @@ sysnoted(ulong *arg)
         error(Egreg);
     return 0;
 }
+@ 
 
+
+<<syscall segbrk>>=
 long
 syssegbrk(ulong *arg)
 {
@@ -50504,13 +50542,19 @@ syssegbrk(ulong *arg)
     error(Ebadarg);
     return 0;       /* not reached */
 }
+@ 
 
+
+<<syscall segattach>>=
 long
 syssegattach(ulong *arg)
 {
     return segattach(up, arg[0], (char*)arg[1], arg[2], arg[3]);
 }
+@ 
 
+
+<<syscall segdetach>>=
 long
 syssegdetach(ulong *arg)
 {
@@ -50555,7 +50599,10 @@ found:
     flushmmu();
     return 0;
 }
+@ 
 
+
+<<syscall segfree>>=
 long
 syssegfree(ulong *arg)
 {
@@ -50580,14 +50627,20 @@ syssegfree(ulong *arg)
 
     return 0;
 }
+@ 
 
+
+<<syscall brk_>>=
 /* For binary compatibility */
 long
 sysbrk_(ulong *arg)
 {
     return ibrk(arg[0], BSEG);
 }
+@ 
 
+
+<<syscall rendezvous>>=
 long
 sysrendezvous(ulong *arg)
 {
@@ -50626,6 +50679,60 @@ sysrendezvous(ulong *arg)
 
     return up->rendval;
 }
+@ 
+
+
+<<sysproc.c>>=
+<<kernel basic includes>>
+
+#include    <tos.h>
+#include    <a.out.h>
+
+<<enum rfork>>
+
+<<sysproc.c forward decl>>
+
+<<syscall nop>>
+
+<<syscall rfork>>
+
+<<function l2be>>
+
+<<syscall exec>>
+
+<<function shargs>>
+
+<<function return0>>
+
+<<syscall sleep>>
+
+<<syscall alarm>>
+
+<<syscall exits>>
+
+<<syscall await>>
+
+<<function werrstr>>
+
+<<function generrstr>>
+
+<<syscall errstr>>
+
+<<syscall notify>>
+
+<<syscall noted>>
+
+<<syscall segbrk>>
+
+<<syscall segattach>>
+
+<<syscall segdetach>>
+
+<<syscall segfree>>
+
+<<syscall brk_>>
+
+<<syscall rendezvous>>
 
 @
 

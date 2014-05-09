@@ -11,7 +11,8 @@
 #include    <tos.h>
 #include    <a.out.h>
 
-enum
+/*s: enum rfork */
+enum rfork
 {
     RFNAMEG     = (1<<0),
     RFENVG      = (1<<1),
@@ -26,19 +27,22 @@ enum
     RFREND      = (1<<13),
     RFNOMNT     = (1<<14),
 };
+/*e: enum rfork */
 
 /*s: sysproc.c forward decl */
 int shargs(char*, int, char**);
 /*e: sysproc.c forward decl */
 
-
+/*s: syscall nop */
 long
 sysnop(ulong*)
 {
     //checkpagerefs();
     return 0;
 }
+/*e: syscall nop */
 
+/*s: syscall rfork */
 long
 sysrfork(ulong *arg)
 {
@@ -223,7 +227,9 @@ sysrfork(ulong *arg)
     sched();
     return pid;
 }
+/*e: syscall rfork */
 
+/*s: function l2be */
 ulong
 l2be(long l)
 {
@@ -232,7 +238,9 @@ l2be(long l)
     cp = (uchar*)&l;
     return (cp[0]<<24) | (cp[1]<<16) | (cp[2]<<8) | cp[3];
 }
+/*e: function l2be */
 
+/*s: syscall exec */
 long
 sysexec(ulong *arg)
 {
@@ -508,7 +516,9 @@ sysexec(ulong *arg)
 
     return execregs(entry, ssize, nargs);
 }
+/*e: syscall exec */
 
+/*s: function shargs */
 int
 shargs(char *s, int n, char **ap)
 {
@@ -539,13 +549,17 @@ shargs(char *s, int n, char **ap)
     }
     return i;
 }
+/*e: function shargs */
 
+/*s: function return0 */
 int
 sysproc_return0(void*)
 {
     return 0;
 }
+/*e: function return0 */
 
+/*s: syscall sleep */
 long
 syssleep(ulong *arg)
 {
@@ -565,13 +579,17 @@ syssleep(ulong *arg)
     tsleep(&up->sleep, return0, 0, n);
     return 0;
 }
+/*e: syscall sleep */
 
+/*s: syscall alarm */
 long
 sysalarm(ulong *arg)
 {
     return procalarm(arg[0]);
 }
+/*e: syscall alarm */
 
+/*s: syscall exits */
 long
 sysexits(ulong *arg)
 {
@@ -597,7 +615,9 @@ sysexits(ulong *arg)
     pexit(status, 1);
     return 0;       /* not reached */
 }
+/*e: syscall exits */
 
+/*s: syscall await */
 long
 sysawait(ulong *arg)
 {
@@ -618,7 +638,9 @@ sysawait(ulong *arg)
 
     return i;
 }
+/*e: syscall await */
 
+/*s: function werrstr */
 //@Scheck: this is also defined in libc, so it's supposed to override it? TODO
 void
 werrstr(char *fmt, ...)
@@ -632,7 +654,9 @@ werrstr(char *fmt, ...)
     vseprint(up->syserrstr, up->syserrstr+ERRMAX, fmt, va);
     va_end(va);
 }
+/*e: function werrstr */
 
+/*s: function generrstr */
 static long
 generrstr(char *buf, uint nbuf)
 {
@@ -652,13 +676,17 @@ generrstr(char *buf, uint nbuf)
     memmove(up->syserrstr, tmp, nbuf);
     return 0;
 }
+/*e: function generrstr */
 
+/*s: syscall errstr */
 long
 syserrstr(ulong *arg)
 {
     return generrstr((char*)arg[0], arg[1]);
 }
+/*e: syscall errstr */
 
+/*s: syscall notify */
 long
 sysnotify(ulong *arg)
 {
@@ -667,7 +695,9 @@ sysnotify(ulong *arg)
     up->notify = (int(*)(void*, char*))(arg[0]);
     return 0;
 }
+/*e: syscall notify */
 
+/*s: syscall noted */
 long
 sysnoted(ulong *arg)
 {
@@ -675,7 +705,9 @@ sysnoted(ulong *arg)
         error(Egreg);
     return 0;
 }
+/*e: syscall noted */
 
+/*s: syscall segbrk */
 long
 syssegbrk(ulong *arg)
 {
@@ -701,13 +733,17 @@ syssegbrk(ulong *arg)
     error(Ebadarg);
     return 0;       /* not reached */
 }
+/*e: syscall segbrk */
 
+/*s: syscall segattach */
 long
 syssegattach(ulong *arg)
 {
     return segattach(up, arg[0], (char*)arg[1], arg[2], arg[3]);
 }
+/*e: syscall segattach */
 
+/*s: syscall segdetach */
 long
 syssegdetach(ulong *arg)
 {
@@ -752,7 +788,9 @@ found:
     flushmmu();
     return 0;
 }
+/*e: syscall segdetach */
 
+/*s: syscall segfree */
 long
 syssegfree(ulong *arg)
 {
@@ -777,14 +815,18 @@ syssegfree(ulong *arg)
 
     return 0;
 }
+/*e: syscall segfree */
 
+/*s: syscall brk_ */
 /* For binary compatibility */
 long
 sysbrk_(ulong *arg)
 {
     return ibrk(arg[0], BSEG);
 }
+/*e: syscall brk_ */
 
+/*s: syscall rendezvous */
 long
 sysrendezvous(ulong *arg)
 {
@@ -823,5 +865,6 @@ sysrendezvous(ulong *arg)
 
     return up->rendval;
 }
+/*e: syscall rendezvous */
 
 /*e: sysproc.c */
