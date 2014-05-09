@@ -9,12 +9,15 @@
 /*e: kernel basic includes */
 #include "io.h"
 
+/*s: global iomap */
 struct Iomapalloc iomap;
+/*e: global iomap */
 
 // to remove some backward dependencies, so that ioalloc()
 // can be here instead of in devarch.c
 void (*hook_ioalloc)() = nil;
 
+/*s: function ioinit */
 void
 ioinit(void)
 {
@@ -58,8 +61,9 @@ ioinit(void)
     }
 
 }
+/*e: function ioinit */
 
-
+/*s: function ioalloc */
 /*
  *  alloc some io port space and remember who it was
  *  alloced to.  if port < 0, find a free region.
@@ -132,7 +136,9 @@ ioalloc(int port, int size, int align, char *tag)
     unlock(&iomap);
     return m->start;
 }
+/*e: function ioalloc */
 
+/*s: function iofree */
 void
 iofree(int port)
 {
@@ -156,5 +162,6 @@ iofree(int port)
 
     unlock(&iomap);
 }
+/*e: function iofree */
 
 /*e: iomap.c */

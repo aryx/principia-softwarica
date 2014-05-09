@@ -2,19 +2,66 @@
 
 \subsection*{[[arch/386/arch.c]]}
 
+<<global arch>>=
+PCArch* arch;
+@ 
+
+
+<<function cycles and default implementation>>=
+static void
+simplecycles(uvlong*x)
+{
+    *x = m->ticks;
+}
+
+void    (*cycles)(uvlong*) = simplecycles;
+@ 
+
+
+<<function cmpswap and default implementation>>=
+/*
+ * 386 has no compare-and-swap instruction.
+ * Run it with interrupts turned off instead.
+ */
+// used to be static, but now shared between arch.c and devarch.c
+int
+cmpswap386(long *addr, long old, long new)
+{
+    int r, s;
+
+    s = splhi();
+    if(r = (*addr == old))
+        *addr = new;
+    splx(s);
+    return r;
+}
+
+int (*cmpswap)(long*, long, long) = cmpswap386;
+@ 
+
+
 <<arch.c>>=
 <<kernel basic includes>>
 //todo: weird, if don't include this file, then can't declare arch in this file
 // or I get some type signature mismatch
 #include "io.h"
 
-PCArch* arch;
+<<global arch>>
 
 void    (*fprestore)(ArchFPsave*);
 void    (*fpsave)(ArchFPsave*);
 
 int (*_pcmspecial)(char*, ISAConf*);
 void (*_pcmspecialclose)(int);
+
+/*
+ *  call either the pcmcia or pccard device setup
+ */
+int
+pcmspecial(char *idstr, ISAConf *isa)
+{
+    return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
+}
 
 
 void
@@ -33,37 +80,9 @@ cpuidprint(void)
     print(buf);
 }
 
-ulong
-µs(void)
-{
-    return fastticks2us((*arch->fastclock)(nil));
-}
+<<function cycles and default implementation>>
 
-
-static void
-simplecycles(uvlong*x)
-{
-    *x = m->ticks;
-}
-
-void    (*cycles)(uvlong*) = simplecycles;
-
-/*
- * 386 has no compare-and-swap instruction.
- * Run it with interrupts turned off instead.
- */
-// used to be static, but now shared between arch.c and devarch.c
-int
-cmpswap386(long *addr, long old, long new)
-{
-    int r, s;
-
-    s = splhi();
-    if(r = (*addr == old))
-        *addr = new;
-    splx(s);
-    return r;
-}
+<<function cmpswap and default implementation>>
 
 /*
  * On a uniprocessor, you'd think that coherence could be nop,
@@ -75,7 +94,6 @@ cmpswap386(long *addr, long old, long new)
  */
 //now in globals.c: void (*coherence)(void) = nop;
 
-int (*cmpswap)(long*, long, long) = cmpswap386;
 
 
 // used to be static, but now shared between arch.c and devarch.c
@@ -92,14 +110,10 @@ timerset(Tval x)
 }
 
 
-
-/*
- *  call either the pcmcia or pccard device setup
- */
-int
-pcmspecial(char *idstr, ISAConf *isa)
+ulong
+µs(void)
 {
-    return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
+    return fastticks2us((*arch->fastclock)(nil));
 }
 
 /*
@@ -125,33 +139,44 @@ devarch_fastticks(uvlong *hz)
 
 \subsection*{[[arch/386/bios32.c]]}
 
+\ifallcode
+<<bios32.c debugging macro>>=
+static int vflag = 0;
+//#define VFLAG(...)    if(vflag) print(__VA_ARGS__)
+#define VFLAG if(vflag) print
+@ 
+\fi
+
+<<bios32.c forward decl>>=
+typedef struct BIOS32sdh BIOS32sdh;
+typedef struct BIOS32si BIOS32si;
+@ 
+
+
 <<bios32.c>>=
 <<kernel basic includes>>
 #include "io.h"
 
-//#define VFLAG(...)    if(vflag) print(__VA_ARGS__)
-#define VFLAG if(vflag) print
+<<bios32.c debugging macro>>
 
-#define UPTR2INT(p) ((uintptr)(p))
+<<bios32.c forward decl>>
 
-static int vflag = 0;
-
-typedef struct BIOS32sdh {      /* BIOS32 Service Directory Header */
+struct BIOS32sdh {      /* BIOS32 Service Directory Header */
     u8int   signature[4];       /* "_32_" */
     u8int   physaddr[4];        /* physical address of entry point */
     u8int   revision;
     u8int   length;         /* of header in paragraphs */
     u8int   checksum;       /* */
     u8int   reserved[5];
-} BIOS32sdh;
+};
 
-typedef struct BIOS32si {       /* BIOS32 Service Interface */
+struct BIOS32si {       /* BIOS32 Service Interface */
     u8int*  base;           /* base address of service */
     int length;         /* length of service */
     u32int  offset;         /* service entry-point from base */
 
     u16int  ptr[3];         /* far pointer m16:32 */
-} BIOS32si;
+};
 
 static Lock bios32lock;
 static u16int bios32ptr[3];
@@ -215,7 +240,7 @@ bios32locate(void)
 
     bios32entry = vmap(L32GET(sdh->physaddr), 4096+1);
     VFLAG("entry @ %#p\n", bios32entry);
-    ptr = UPTR2INT(bios32entry);
+    ptr = (uintptr)(bios32entry);
     bios32ptr[0] = ptr & 0xffff;
     bios32ptr[1] = (ptr>>16) & 0xffff;
     bios32ptr[2] = KESEL;
@@ -259,7 +284,7 @@ bios32open(char* id)
     }
     si->length = ci.ecx;
 
-    ptr = UPTR2INT(si->base)+ci.edx;
+    ptr = (uintptr)(si->base)+ci.edx;
     si->ptr[0] = ptr & 0xffff;
     si->ptr[1] = (ptr>>16) & 0xffff;
     si->ptr[2] = KESEL;
@@ -280,56 +305,7 @@ bios32open(char* id)
 
 \subsection*{[[arch/386/dat_arch.h]]}
 
-<<dat_arch.h>>=
-
-//*****************************************************************************
-// IO Map
-//*****************************************************************************
-
-// All the ref<IOMap> here are references to IOMap in the array<IOMap> of 
-// Iomapalloc.maps (pool allocator)
-
-struct IOMap
-{
-  // TODO: why this has to be the first field of IOMap?! otherwise get fault??
-
-  // list<ref<IOMap>> of Iomapalloc.free
-    IOMap   *next;
-
-    char    tag[13];
-    ulong   start;
-    ulong   end;
-
-  // extra
-    bool    reserved;
-
-};
-
-struct Iomapalloc
-{
-  // ??
-    IOMap   *m;
-
-  // list<ref<IOMap>> (next = IOMap.next)
-    IOMap   *free;
-  // array<IOMAP> pool
-    IOMap   maps[32];   /* some initial free maps */
-
-  // extra
-    Lock;
-    QLock   ql;     /* lock for reading map */
-};
-
-// array<IMap> alloced statically in maps
-extern struct Iomapalloc iomap;
-
-//*****************************************************************************
-// PC Architecture hooks (interrupts, clocks, power, reset)
-//*****************************************************************************
-
-/*
- *  routines for things outside the PC model, like power management
- */
+<<struct PCArch>>=
 struct PCArch
 {
   char* id;
@@ -353,6 +329,99 @@ struct PCArch
 
   void  (*resetothers)(void); /* put other cpus into reset */
 };
+@ 
+
+
+<<struct IOMap>>=
+struct IOMap
+{
+    // TODO: why this has to be the first field of IOMap?! otherwise get fault??
+
+    // list<ref<IOMap>> of Iomapalloc.free
+    IOMap   *next;
+
+    char    tag[13];
+    ulong   start;
+    ulong   end;
+
+    // extra
+    bool    reserved;
+
+};
+@ 
+
+
+<<struct Iomapalloc>>=
+struct Iomapalloc
+{
+    // ??
+    IOMap   *m;
+
+    // list<ref<IOMap>> (next = IOMap.next)
+    IOMap   *free;
+    // array<IOMAP> pool
+    IOMap   maps[32];   /* some initial free maps */
+
+    // extra
+    Lock;
+    QLock   ql;     /* lock for reading map */
+};
+@ 
+
+
+<<struct X86type>>=
+struct X86type {
+    int family;
+    int model;
+    int aalcycles;
+    char*   name;
+};
+@ 
+
+
+<<struct Devport>>=
+struct Devport {
+  ulong port; 
+  int size;
+};
+@ 
+
+
+<<struct DevConf>>=
+struct DevConf
+{
+  ulong intnum;     /* interrupt number */
+  char  *type;      /* card type, malloced */
+  int nports;     /* Number of ports */
+  Devport *ports;     /* The ports themselves */
+};
+@ 
+
+
+<<dat_arch.h>>=
+
+//*****************************************************************************
+// IO Map
+//*****************************************************************************
+
+// All the ref<IOMap> here are references to IOMap in the array<IOMap> of 
+// Iomapalloc.maps (pool allocator)
+
+<<struct IOMap>>
+
+<<struct Iomapalloc>>
+
+// array<IMap> alloced statically in maps
+extern struct Iomapalloc iomap;
+
+//*****************************************************************************
+// PC Architecture hooks (interrupts, clocks, power, reset)
+//*****************************************************************************
+
+/*
+ *  routines for things outside the PC model, like power management
+ */
+<<struct PCArch>>
 extern PCArch *arch;      /* PC architecture */
 extern PCArch archgeneric;
 
@@ -431,33 +500,17 @@ enum {
 };
 extern Lock nvrtlock;
 
-
-struct X86type {
-    int family;
-    int model;
-    int aalcycles;
-    char*   name;
-};
+<<struct X86type>>
 
 extern X86type *cputype;
-
 
 
 /*
  *  hardware info about a device
  */
-struct Devport {
-  ulong port; 
-  int size;
-};
+<<struct Devport>>
 
-struct DevConf
-{
-  ulong intnum;     /* interrupt number */
-  char  *type;      /* card type, malloced */
-  int nports;     /* Number of ports */
-  Devport *ports;     /* The ports themselves */
-};
+<<struct DevConf>>
 @
 
 
@@ -800,16 +853,12 @@ struct PCMslot
 
 \subsection*{[[arch/386/iomap.c]]}
 
-<<iomap.c>>=
-<<kernel basic includes>>
-#include "io.h"
-
+<<global iomap>>=
 struct Iomapalloc iomap;
+@ 
 
-// to remove some backward dependencies, so that ioalloc()
-// can be here instead of in devarch.c
-void (*hook_ioalloc)() = nil;
 
+<<function ioinit>>=
 void
 ioinit(void)
 {
@@ -853,8 +902,10 @@ ioinit(void)
     }
 
 }
+@ 
 
 
+<<function ioalloc>>=
 /*
  *  alloc some io port space and remember who it was
  *  alloced to.  if port < 0, find a free region.
@@ -927,7 +978,10 @@ ioalloc(int port, int size, int align, char *tag)
     unlock(&iomap);
     return m->start;
 }
+@ 
 
+
+<<function iofree>>=
 void
 iofree(int port)
 {
@@ -951,6 +1005,24 @@ iofree(int port)
 
     unlock(&iomap);
 }
+@ 
+
+
+<<iomap.c>>=
+<<kernel basic includes>>
+#include "io.h"
+
+<<global iomap>>
+
+// to remove some backward dependencies, so that ioalloc()
+// can be here instead of in devarch.c
+void (*hook_ioalloc)() = nil;
+
+<<function ioinit>>
+
+<<function ioalloc>>
+
+<<function iofree>>
 
 @
 
@@ -2025,6 +2097,11 @@ realmodelink(void)
 
 \subsection*{[[arch/386/x86.c]]}
 
+<<global cputype>>=
+X86type *cputype;
+@ 
+
+
 <<x86.c>>=
 <<kernel basic includes>>
 #include "io.h"
@@ -2032,6 +2109,8 @@ realmodelink(void)
 //#define X86STEPPING(x)  ((x) & 0x0F)
 /* incorporates extended-model and -family bits */
 #define X86MODEL(x) ((((x)>>4) & 0x0F) | (((x)>>16) & 0x0F)<<4)
+
+<<global cputype>>
 
 
 //@Scheck: Assembly l.s
@@ -2162,8 +2241,6 @@ static X86type x86sis[] =
     {5, 0,  23, "SiS 55x",},    /* guesswork */
     { -1,   -1, 23, "unknown", },   /* total default */
 };
-
-X86type *cputype;
 
 
 /*

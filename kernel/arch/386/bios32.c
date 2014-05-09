@@ -9,29 +9,33 @@
 /*e: kernel basic includes */
 #include "io.h"
 
+/*s: bios32.c debugging macro */
+static int vflag = 0;
 //#define VFLAG(...)    if(vflag) print(__VA_ARGS__)
 #define VFLAG if(vflag) print
+/*e: bios32.c debugging macro */
 
-#define UPTR2INT(p) ((uintptr)(p))
+/*s: bios32.c forward decl */
+typedef struct BIOS32sdh BIOS32sdh;
+typedef struct BIOS32si BIOS32si;
+/*e: bios32.c forward decl */
 
-static int vflag = 0;
-
-typedef struct BIOS32sdh {      /* BIOS32 Service Directory Header */
+struct BIOS32sdh {      /* BIOS32 Service Directory Header */
     u8int   signature[4];       /* "_32_" */
     u8int   physaddr[4];        /* physical address of entry point */
     u8int   revision;
     u8int   length;         /* of header in paragraphs */
     u8int   checksum;       /* */
     u8int   reserved[5];
-} BIOS32sdh;
+};
 
-typedef struct BIOS32si {       /* BIOS32 Service Interface */
+struct BIOS32si {       /* BIOS32 Service Interface */
     u8int*  base;           /* base address of service */
     int length;         /* length of service */
     u32int  offset;         /* service entry-point from base */
 
     u16int  ptr[3];         /* far pointer m16:32 */
-} BIOS32si;
+};
 
 static Lock bios32lock;
 static u16int bios32ptr[3];
@@ -95,7 +99,7 @@ bios32locate(void)
 
     bios32entry = vmap(L32GET(sdh->physaddr), 4096+1);
     VFLAG("entry @ %#p\n", bios32entry);
-    ptr = UPTR2INT(bios32entry);
+    ptr = (uintptr)(bios32entry);
     bios32ptr[0] = ptr & 0xffff;
     bios32ptr[1] = (ptr>>16) & 0xffff;
     bios32ptr[2] = KESEL;
@@ -139,7 +143,7 @@ bios32open(char* id)
     }
     si->length = ci.ecx;
 
-    ptr = UPTR2INT(si->base)+ci.edx;
+    ptr = (uintptr)(si->base)+ci.edx;
     si->ptr[0] = ptr & 0xffff;
     si->ptr[1] = (ptr>>16) & 0xffff;
     si->ptr[2] = KESEL;

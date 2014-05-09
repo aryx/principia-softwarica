@@ -13,6 +13,10 @@
 /* incorporates extended-model and -family bits */
 #define X86MODEL(x) ((((x)>>4) & 0x0F) | (((x)>>16) & 0x0F)<<4)
 
+/*s: global cputype */
+X86type *cputype;
+/*e: global cputype */
+
 
 //@Scheck: Assembly l.s
 void    _cycles(uvlong*);   
@@ -142,8 +146,6 @@ static X86type x86sis[] =
     {5, 0,  23, "SiS 55x",},    /* guesswork */
     { -1,   -1, 23, "unknown", },   /* total default */
 };
-
-X86type *cputype;
 
 
 /*

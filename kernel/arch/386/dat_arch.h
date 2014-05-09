@@ -7,36 +7,40 @@
 // All the ref<IOMap> here are references to IOMap in the array<IOMap> of 
 // Iomapalloc.maps (pool allocator)
 
+/*s: struct IOMap */
 struct IOMap
 {
-  // TODO: why this has to be the first field of IOMap?! otherwise get fault??
+    // TODO: why this has to be the first field of IOMap?! otherwise get fault??
 
-  // list<ref<IOMap>> of Iomapalloc.free
+    // list<ref<IOMap>> of Iomapalloc.free
     IOMap   *next;
 
     char    tag[13];
     ulong   start;
     ulong   end;
 
-  // extra
+    // extra
     bool    reserved;
 
 };
+/*e: struct IOMap */
 
+/*s: struct Iomapalloc */
 struct Iomapalloc
 {
-  // ??
+    // ??
     IOMap   *m;
 
-  // list<ref<IOMap>> (next = IOMap.next)
+    // list<ref<IOMap>> (next = IOMap.next)
     IOMap   *free;
-  // array<IOMAP> pool
+    // array<IOMAP> pool
     IOMap   maps[32];   /* some initial free maps */
 
-  // extra
+    // extra
     Lock;
     QLock   ql;     /* lock for reading map */
 };
+/*e: struct Iomapalloc */
 
 // array<IMap> alloced statically in maps
 extern struct Iomapalloc iomap;
@@ -48,6 +52,7 @@ extern struct Iomapalloc iomap;
 /*
  *  routines for things outside the PC model, like power management
  */
+/*s: struct PCArch */
 struct PCArch
 {
   char* id;
@@ -71,6 +76,7 @@ struct PCArch
 
   void  (*resetothers)(void); /* put other cpus into reset */
 };
+/*e: struct PCArch */
 extern PCArch *arch;      /* PC architecture */
 extern PCArch archgeneric;
 
@@ -149,26 +155,29 @@ enum {
 };
 extern Lock nvrtlock;
 
-
+/*s: struct X86type */
 struct X86type {
     int family;
     int model;
     int aalcycles;
     char*   name;
 };
+/*e: struct X86type */
 
 extern X86type *cputype;
-
 
 
 /*
  *  hardware info about a device
  */
+/*s: struct Devport */
 struct Devport {
   ulong port; 
   int size;
 };
+/*e: struct Devport */
 
+/*s: struct DevConf */
 struct DevConf
 {
   ulong intnum;     /* interrupt number */
@@ -176,4 +185,5 @@ struct DevConf
   int nports;     /* Number of ports */
   Devport *ports;     /* The ports themselves */
 };
+/*e: struct DevConf */
 /*e: dat_arch.h */

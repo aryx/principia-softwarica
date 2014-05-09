@@ -11,13 +11,24 @@
 // or I get some type signature mismatch
 #include "io.h"
 
+/*s: global arch */
 PCArch* arch;
+/*e: global arch */
 
 void    (*fprestore)(ArchFPsave*);
 void    (*fpsave)(ArchFPsave*);
 
 int (*_pcmspecial)(char*, ISAConf*);
 void (*_pcmspecialclose)(int);
+
+/*
+ *  call either the pcmcia or pccard device setup
+ */
+int
+pcmspecial(char *idstr, ISAConf *isa)
+{
+    return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
+}
 
 
 void
@@ -36,13 +47,7 @@ cpuidprint(void)
     print(buf);
 }
 
-ulong
-µs(void)
-{
-    return fastticks2us((*arch->fastclock)(nil));
-}
-
-
+/*s: function cycles and default implementation */
 static void
 simplecycles(uvlong*x)
 {
@@ -50,7 +55,9 @@ simplecycles(uvlong*x)
 }
 
 void    (*cycles)(uvlong*) = simplecycles;
+/*e: function cycles and default implementation */
 
+/*s: function cmpswap and default implementation */
 /*
  * 386 has no compare-and-swap instruction.
  * Run it with interrupts turned off instead.
@@ -68,6 +75,9 @@ cmpswap386(long *addr, long old, long new)
     return r;
 }
 
+int (*cmpswap)(long*, long, long) = cmpswap386;
+/*e: function cmpswap and default implementation */
+
 /*
  * On a uniprocessor, you'd think that coherence could be nop,
  * but it can't.  We still need a barrier when using coherence() in
@@ -78,7 +88,6 @@ cmpswap386(long *addr, long old, long new)
  */
 //now in globals.c: void (*coherence)(void) = nop;
 
-int (*cmpswap)(long*, long, long) = cmpswap386;
 
 
 // used to be static, but now shared between arch.c and devarch.c
@@ -95,14 +104,10 @@ timerset(Tval x)
 }
 
 
-
-/*
- *  call either the pcmcia or pccard device setup
- */
-int
-pcmspecial(char *idstr, ISAConf *isa)
+ulong
+µs(void)
 {
-    return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
+    return fastticks2us((*arch->fastclock)(nil));
 }
 
 /*
