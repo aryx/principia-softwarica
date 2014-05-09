@@ -8,6 +8,7 @@
 #include "../port/error.h"
 /*e: kernel basic includes */
 
+/*s: function fdtochan */
 Chan*
 fdtochan(int fd, int mode, int chkmnt, int iref)
 {
@@ -49,7 +50,9 @@ fdtochan(int fd, int mode, int chkmnt, int iref)
 
     return c;
 }
+/*e: function fdtochan */
 
+/*s: function openmode */
 int
 openmode(ulong o)
 {
@@ -60,8 +63,9 @@ openmode(ulong o)
         return OREAD;
     return o;
 }
+/*e: function openmode */
 
-
+/*s: function fdclose */
 void
 fdclose(int fd, int flag)
 {
@@ -90,8 +94,9 @@ fdclose(int fd, int flag)
     unlock(f);
     cclose(c);
 }
+/*e: function fdclose */
 
-
+/*s: function validstat */
 void
 validstat(uchar *s, int n)
 {
@@ -118,5 +123,6 @@ validstat(uchar *s, int n)
     if(strcmp(buf, "/") != 0)
         validname(buf, 0);
 }
+/*e: function validstat */
 
 /*e: file.c */

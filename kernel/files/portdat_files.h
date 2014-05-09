@@ -11,6 +11,7 @@ enum
   Bpktck  = (1<<5),   /* packet checksum */
 };
 
+/*s: struct Block */
 struct Block
 {
   long  ref;
@@ -24,6 +25,7 @@ struct Block
   ushort  flag;
   ushort  checksum;   /* IP checksum of complete packet (minus media header) */
 };
+/*e: struct Block */
 
 #define BLEN(s) ((s)->wp - (s)->rp)
 #define BALLOC(s) ((s)->lim - (s)->base)
@@ -49,6 +51,7 @@ extern  uint  qiomaxatomic;
  *  IO queues
  */
 // was in qio.c
+/*s: struct Queue */
 struct Queue
 {
   Lock;
@@ -75,10 +78,11 @@ struct Queue
 
   char  err[ERRMAX];
 };
-
+/*e: struct Queue */
 
 
 // was in cache.c
+/*s: struct Extent */
 struct Extent
 {
   int bid;
@@ -87,8 +91,10 @@ struct Extent
   Page  *cache;
   Extent  *next;
 };
+/*e: struct Extent */
 
 // was in cache.c
+/*s: struct Mntcache */
 struct Mntcache
 {
   Qid qid;
@@ -100,11 +106,10 @@ struct Mntcache
   Mntcache *prev;
   Mntcache *next;
 };
+/*e: struct Mntcache */
 
 
-
-
-
+/*s: struct Mount */
 struct Mount
 {
   ulong mountid;
@@ -116,8 +121,9 @@ struct Mount
   int mflag;
   char  *spec;
 };
+/*e: struct Mount */
 
-
+/*s: struct Mhead */
 struct Mhead
 {
   Ref;
@@ -126,14 +132,14 @@ struct Mhead
   Mount*  mount;      /* what's mounted upon it */
   Mhead*  hash;     /* Hash chain */
 };
-
-
+/*e: struct Mhead */
 
 
 
 #include <fcall.h>
 
 // was in devmnt.c
+/*s: struct Mntrpc */
 struct Mntrpc
 {
   Chan* c;    /* Channel for whom we are working */
@@ -151,7 +157,9 @@ struct Mntrpc
   ulong replen;   /* reply length for mnt statistics */
   Mntrpc* flushed;  /* message this one flushes */
 };
+/*e: struct Mntrpc */
 
+/*s: struct Mnt */
 struct Mnt
 {
   Lock;
@@ -166,10 +174,11 @@ struct Mnt
   char  *version; /* 9P version */
   Queue *q;   /* input queue */
 };
+/*e: struct Mnt */
 
 
 
-
+/*s: struct Path */
 struct Path
 {
   Ref;
@@ -180,7 +189,7 @@ struct Path
   int mlen;     /* number of path elements */
   int malen;      /* allocated length of mtpt */
 };
-
+/*e: struct Path */
 
 
 /*
@@ -254,7 +263,7 @@ struct Chan
 /*e: struct Chan */
 
 
-
+/*s: struct Evalue */
 struct Evalue
 {
   char  *name;
@@ -263,7 +272,9 @@ struct Evalue
   Evalue  *link;
   Qid qid;
 };
+/*e: struct Evalue */
 
+/*s: struct Egrp */
 struct Egrp
 {
   Ref;
@@ -274,17 +285,19 @@ struct Egrp
   ulong path; /* qid.path of next Evalue to be allocated */
   ulong vers; /* of Egrp */
 };
+/*e: struct Egrp */
 
 
 // internals
 
-
+/*s: struct Walkqid */
 struct Walkqid
 {
   Chan  *clone;
   int nqid;
   Qid qid[1];
 };
+/*e: struct Walkqid */
 
 /*s: struct Dev */
 struct Dev
@@ -332,7 +345,7 @@ struct Dev
 extern Dev** devtab;
 /*e: global devtab decl */
 
-
+/*s: struct Dirtab */
 struct Dirtab
 {
   char  name[KNAMELEN];
@@ -340,6 +353,7 @@ struct Dirtab
   vlong length;
   long  perm;
 };
+/*e: struct Dirtab */
 
 
 
@@ -366,6 +380,7 @@ enum
  */
 
 // actually internal to devmnt.c and mnt.c
+/*s: struct Mntalloc */
 struct Mntalloc
 {
     Mnt*    list;       /* Mount devices in use */
@@ -376,13 +391,18 @@ struct Mntalloc
     ulong   id;
     ulong   tagmask[NMASK];
 
-  // extra
+    // extra
     Lock;
 
 };
+/*e: struct Mntalloc */
+/*s: global mntalloc */
+struct Mntalloc mntalloc;
+/*x: global mntalloc */
 extern struct Mntalloc mntalloc;
+/*e: global mntalloc */
 
-// TODO: mv in errstr.c
+// TODO: mv in errstr.c?
 extern char Esbadstat[];
 extern char Enoversion[];
 /*e: portdat_files.h */

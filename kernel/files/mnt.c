@@ -11,19 +11,28 @@
 // this used to be in devmnt.c, but to avoid backward deps I've splitted
 // this file in 2 (which forced to put more stuff in portdat_files.h though).
 
+/*s: global mntalloc */
 struct Mntalloc mntalloc;
+/*x: global mntalloc */
+extern struct Mntalloc mntalloc;
+/*e: global mntalloc */
 
 #define MAXRPC (IOHDRSZ+8192)
 
+/*s: mnt.c Exxx errors */
 char   Esbadstat[] = "invalid directory entry received from server";
 char   Enoversion[] = "version not established for mount channel";
+/*e: mnt.c Exxx errors */
 
+/*s: function freetag */
 void
 freetag(int t)
 {
     mntalloc.tagmask[t>>TAGSHIFT] &= ~(1<<(t&TAGMASK));
 }
+/*e: function freetag */
 
+/*s: function mntfree */
 void
 mntfree(Mntrpc *r)
 {
@@ -43,8 +52,9 @@ mntfree(Mntrpc *r)
     mntalloc.nrpcused--;
     unlock(&mntalloc);
 }
+/*e: function mntfree */
 
-
+/*s: function mntpntfree */
 void
 mntpntfree(Mnt *m)
 {
@@ -67,9 +77,9 @@ mntpntfree(Mnt *m)
 
     qfree(q);
 }
+/*e: function mntpntfree */
 
-
-
+/*s: function muxclose */
 void
 muxclose(Mnt *m)
 {
@@ -84,9 +94,9 @@ muxclose(Mnt *m)
     m->version = nil;
     mntpntfree(m);
 }
+/*e: function muxclose */
 
-
-
+/*s: function mntversion */
 /*
  * Version is not multiplexed: message sent only once per connection.
  */
@@ -240,5 +250,6 @@ mntversion(Chan *c, char *version, int msize, int returnlen)
 
     return k;
 }
+/*e: function mntversion */
 
 /*e: mnt.c */

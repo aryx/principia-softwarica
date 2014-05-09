@@ -10,7 +10,7 @@
 
 // this used to be in devenv.c, but to avoid backward deps I've splitted
 // this file in 2
-
+/*s: function closeegrp */
 void
 closeegrp(Egrp *eg)
 {
@@ -29,4 +29,5 @@ closeegrp(Egrp *eg)
         free(eg);
     }
 }
+/*e: function closeegrp */
 /*e: env.c */

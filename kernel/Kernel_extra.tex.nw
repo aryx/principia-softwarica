@@ -25502,12 +25502,7 @@ devconfig(int, char *, DevConf *)
 
 \subsection*{[[files/env.c]]}
 
-<<env.c>>=
-<<kernel basic includes>>
-
-// this used to be in devenv.c, but to avoid backward deps I've splitted
-// this file in 2
-
+<<function closeegrp>>=
 void
 closeegrp(Egrp *eg)
 {
@@ -25529,11 +25524,18 @@ closeegrp(Egrp *eg)
 @
 
 
-\subsection*{[[files/file.c]]}
-
-<<file.c>>=
+<<env.c>>=
 <<kernel basic includes>>
 
+// this used to be in devenv.c, but to avoid backward deps I've splitted
+// this file in 2
+<<function closeegrp>>
+@
+
+
+\subsection*{[[files/file.c]]}
+
+<<function fdtochan>>=
 Chan*
 fdtochan(int fd, int mode, int chkmnt, int iref)
 {
@@ -25575,7 +25577,10 @@ fdtochan(int fd, int mode, int chkmnt, int iref)
 
     return c;
 }
+@
 
+
+<<function openmode>>=
 int
 openmode(ulong o)
 {
@@ -25586,8 +25591,10 @@ openmode(ulong o)
         return OREAD;
     return o;
 }
+@
 
 
+<<function fdclose>>=
 void
 fdclose(int fd, int flag)
 {
@@ -25616,8 +25623,10 @@ fdclose(int fd, int flag)
     unlock(f);
     cclose(c);
 }
+@
 
 
+<<function validstat>>=
 void
 validstat(uchar *s, int n)
 {
@@ -25644,31 +25653,44 @@ validstat(uchar *s, int n)
     if(strcmp(buf, "/") != 0)
         validname(buf, 0);
 }
+@
+
+
+<<file.c>>=
+<<kernel basic includes>>
+
+<<function fdtochan>>
+
+<<function openmode>>
+
+<<function fdclose>>
+
+<<function validstat>>
 
 @
 
 
 \subsection*{[[files/mnt.c]]}
 
-<<mnt.c>>=
-<<kernel basic includes>>
-
-// this used to be in devmnt.c, but to avoid backward deps I've splitted
-// this file in 2 (which forced to put more stuff in portdat_files.h though).
-
+<<global mntalloc>>=
 struct Mntalloc mntalloc;
+@
 
-#define MAXRPC (IOHDRSZ+8192)
 
+<<mnt.c Exxx errors>>=
 char   Esbadstat[] = "invalid directory entry received from server";
 char   Enoversion[] = "version not established for mount channel";
+@
 
+<<function freetag>>=
 void
 freetag(int t)
 {
     mntalloc.tagmask[t>>TAGSHIFT] &= ~(1<<(t&TAGMASK));
 }
+@
 
+<<function mntfree>>=
 void
 mntfree(Mntrpc *r)
 {
@@ -25688,8 +25710,10 @@ mntfree(Mntrpc *r)
     mntalloc.nrpcused--;
     unlock(&mntalloc);
 }
+@
 
 
+<<function mntpntfree>>=
 void
 mntpntfree(Mnt *m)
 {
@@ -25712,9 +25736,10 @@ mntpntfree(Mnt *m)
 
     qfree(q);
 }
+@
 
 
-
+<<function muxclose>>=
 void
 muxclose(Mnt *m)
 {
@@ -25729,9 +25754,10 @@ muxclose(Mnt *m)
     m->version = nil;
     mntpntfree(m);
 }
+@
 
 
-
+<<function mntversion>>=
 /*
  * Version is not multiplexed: message sent only once per connection.
  */
@@ -25885,6 +25911,30 @@ mntversion(Chan *c, char *version, int msize, int returnlen)
 
     return k;
 }
+@
+
+
+<<mnt.c>>=
+<<kernel basic includes>>
+
+// this used to be in devmnt.c, but to avoid backward deps I've splitted
+// this file in 2 (which forced to put more stuff in portdat_files.h though).
+
+<<global mntalloc>>
+
+#define MAXRPC (IOHDRSZ+8192)
+
+<<mnt.c Exxx errors>>
+
+<<function freetag>>
+
+<<function mntfree>>
+
+<<function mntpntfree>>
+
+<<function muxclose>>
+
+<<function mntversion>>
 
 @
 
@@ -25936,19 +25986,7 @@ int attached;       /* debugging */
 
 
 
-<<portdat_files.h>>=
-
-/* flag values */
-enum
-{
-  BINTR = (1<<0),
-  BFREE = (1<<1),
-  Bipck = (1<<2),   /* ip checksum */
-  Budpck  = (1<<3),   /* udp checksum */
-  Btcpck  = (1<<4),   /* tcp checksum */
-  Bpktck  = (1<<5),   /* packet checksum */
-};
-
+<<struct Block>>=
 struct Block
 {
   long  ref;
@@ -25962,31 +26000,10 @@ struct Block
   ushort  flag;
   ushort  checksum;   /* IP checksum of complete packet (minus media header) */
 };
-
-#define BLEN(s) ((s)->wp - (s)->rp)
-#define BALLOC(s) ((s)->lim - (s)->base)
+@
 
 
-
-/* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
-enum
-{
-  /* Queue.state */
-  Qstarve   = (1<<0), /* consumer starved */
-  Qmsg    = (1<<1), /* message stream */
-  Qclosed   = (1<<2), /* queue has been closed/hungup */
-  Qflow   = (1<<3), /* producer flow controlled */
-  Qcoalesce = (1<<4), /* coalesce packets on read */
-  Qkick   = (1<<5), /* always call the kick routine after qwrite */
-};
-
-// defined in qio.c
-extern  uint  qiomaxatomic;
-
-/*
- *  IO queues
- */
-// was in qio.c
+<<struct Queue>>=
 struct Queue
 {
   Lock;
@@ -26013,10 +26030,10 @@ struct Queue
 
   char  err[ERRMAX];
 };
+@
 
 
-
-// was in cache.c
+<<struct Extent>>=
 struct Extent
 {
   int bid;
@@ -26025,8 +26042,10 @@ struct Extent
   Page  *cache;
   Extent  *next;
 };
+@
 
-// was in cache.c
+
+<<struct Mntcache>>=
 struct Mntcache
 {
   Qid qid;
@@ -26038,11 +26057,10 @@ struct Mntcache
   Mntcache *prev;
   Mntcache *next;
 };
+@
 
 
-
-
-
+<<struct Mount>>=
 struct Mount
 {
   ulong mountid;
@@ -26054,8 +26072,10 @@ struct Mount
   int mflag;
   char  *spec;
 };
+@
 
 
+<<struct Mhead>>=
 struct Mhead
 {
   Ref;
@@ -26064,14 +26084,10 @@ struct Mhead
   Mount*  mount;      /* what's mounted upon it */
   Mhead*  hash;     /* Hash chain */
 };
+@
 
 
-
-
-
-#include <fcall.h>
-
-// was in devmnt.c
+<<struct Mntrpc>>=
 struct Mntrpc
 {
   Chan* c;    /* Channel for whom we are working */
@@ -26089,7 +26105,10 @@ struct Mntrpc
   ulong replen;   /* reply length for mnt statistics */
   Mntrpc* flushed;  /* message this one flushes */
 };
+@
 
+
+<<struct Mnt>>=
 struct Mnt
 {
   Lock;
@@ -26104,10 +26123,10 @@ struct Mnt
   char  *version; /* 9P version */
   Queue *q;   /* input queue */
 };
+@
 
 
-
-
+<<struct Path>>=
 struct Path
 {
   Ref;
@@ -26118,7 +26137,144 @@ struct Path
   int mlen;     /* number of path elements */
   int malen;      /* allocated length of mtpt */
 };
+@
 
+
+<<struct Evalue>>=
+struct Evalue
+{
+  char  *name;
+  char  *value;
+  int len;
+  Evalue  *link;
+  Qid qid;
+};
+@
+
+
+<<struct Egrp>>=
+struct Egrp
+{
+  Ref;
+  RWlock;
+  Evalue  **ent;
+  int nent;
+  int ment;
+  ulong path; /* qid.path of next Evalue to be allocated */
+  ulong vers; /* of Egrp */
+};
+@
+
+
+<<struct Walkqid>>=
+struct Walkqid
+{
+  Chan  *clone;
+  int nqid;
+  Qid qid[1];
+};
+@
+
+
+<<struct Dirtab>>=
+struct Dirtab
+{
+  char  name[KNAMELEN];
+  Qid qid;
+  vlong length;
+  long  perm;
+};
+@
+
+
+<<struct Mntalloc>>=
+struct Mntalloc
+{
+    Mnt*    list;       /* Mount devices in use */
+    Mnt*    mntfree;    /* Free list */
+    Mntrpc* rpcfree;
+    int nrpcfree;
+    int nrpcused;
+    ulong   id;
+    ulong   tagmask[NMASK];
+
+    // extra
+    Lock;
+
+};
+@
+
+
+<<global mntalloc>>=
+extern struct Mntalloc mntalloc;
+@
+
+
+<<portdat_files.h>>=
+
+/* flag values */
+enum
+{
+  BINTR = (1<<0),
+  BFREE = (1<<1),
+  Bipck = (1<<2),   /* ip checksum */
+  Budpck  = (1<<3),   /* udp checksum */
+  Btcpck  = (1<<4),   /* tcp checksum */
+  Bpktck  = (1<<5),   /* packet checksum */
+};
+
+<<struct Block>>
+
+#define BLEN(s) ((s)->wp - (s)->rp)
+#define BALLOC(s) ((s)->lim - (s)->base)
+
+
+
+/* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
+enum
+{
+  /* Queue.state */
+  Qstarve   = (1<<0), /* consumer starved */
+  Qmsg    = (1<<1), /* message stream */
+  Qclosed   = (1<<2), /* queue has been closed/hungup */
+  Qflow   = (1<<3), /* producer flow controlled */
+  Qcoalesce = (1<<4), /* coalesce packets on read */
+  Qkick   = (1<<5), /* always call the kick routine after qwrite */
+};
+
+// defined in qio.c
+extern  uint  qiomaxatomic;
+
+/*
+ *  IO queues
+ */
+// was in qio.c
+<<struct Queue>>
+
+
+// was in cache.c
+<<struct Extent>>
+
+// was in cache.c
+<<struct Mntcache>>
+
+
+<<struct Mount>>
+
+<<struct Mhead>>
+
+
+
+#include <fcall.h>
+
+// was in devmnt.c
+<<struct Mntrpc>>
+
+<<struct Mnt>>
+
+
+
+<<struct Path>>
 
 
 /*
@@ -26146,37 +26302,14 @@ enum
 <<struct Chan>>
 
 
+<<struct Evalue>>
 
-struct Evalue
-{
-  char  *name;
-  char  *value;
-  int len;
-  Evalue  *link;
-  Qid qid;
-};
-
-struct Egrp
-{
-  Ref;
-  RWlock;
-  Evalue  **ent;
-  int nent;
-  int ment;
-  ulong path; /* qid.path of next Evalue to be allocated */
-  ulong vers; /* of Egrp */
-};
+<<struct Egrp>>
 
 
 // internals
 
-
-struct Walkqid
-{
-  Chan  *clone;
-  int nqid;
-  Qid qid[1];
-};
+<<struct Walkqid>>
 
 <<struct Dev>>
 
@@ -26187,14 +26320,7 @@ struct Walkqid
 // structures (e.g. mousedevtab, vgadevtab, etc).
 <<global devtab decl>>
 
-
-struct Dirtab
-{
-  char  name[KNAMELEN];
-  Qid qid;
-  vlong length;
-  long  perm;
-};
+<<struct Dirtab>>
 
 
 
@@ -26221,23 +26347,10 @@ enum
  */
 
 // actually internal to devmnt.c and mnt.c
-struct Mntalloc
-{
-    Mnt*    list;       /* Mount devices in use */
-    Mnt*    mntfree;    /* Free list */
-    Mntrpc* rpcfree;
-    int nrpcfree;
-    int nrpcused;
-    ulong   id;
-    ulong   tagmask[NMASK];
+<<struct Mntalloc>>
+<<global mntalloc>>
 
-  // extra
-    Lock;
-
-};
-extern struct Mntalloc mntalloc;
-
-// TODO: mv in errstr.c
+// TODO: mv in errstr.c?
 extern char Esbadstat[];
 extern char Enoversion[];
 @
