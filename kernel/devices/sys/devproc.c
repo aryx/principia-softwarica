@@ -12,14 +12,16 @@
 #include    <tos.h>
 #include    <ureg.h>
 
+/*s: struct Mntwalk */
 struct Mntwalk              /* state for /proc/#/ns */
 {
     int cddone;
     Mhead*  mh;
     Mount*  cm;
 };
+/*e: struct Mntwalk */
 
-
+/*s: devproc.c enum Qxxx */
 enum
 {
     Qdir,
@@ -43,7 +45,9 @@ enum
     Qprofile,
     Qsyscall,
 };
+/*e: devproc.c enum Qxxx */
 
+/*s: devproc enum CMxxx */
 enum
 {
     CMclose,
@@ -74,6 +78,7 @@ enum
     CMexpel,
     CMevent,
 };
+/*e: devproc enum CMxxx */
 
 enum{
     Nevents = 0x4000,
@@ -81,6 +86,7 @@ enum{
 };
 
 #define STATSIZE    (2*KNAMELEN+12+9*12)
+/*s: global procdir */
 /*
  * Status, fd, and ns are left fully readable (0444) because of their use in debugging,
  * particularly on shared servers.
@@ -107,7 +113,9 @@ Dirtab procdir[] =
     "profile",  {Qprofile}, 0,          0400,
     "syscall",  {Qsyscall}, 0,          0400,   
 };
+/*e: global procdir */
 
+/*s: global proccmd */
 static
 Cmdtab proccmd[] = {
     CMclose,        "close",        2,
@@ -137,11 +145,12 @@ Cmdtab proccmd[] = {
     CMexpel,        "expel",        1,
     CMevent,        "event",        1,
 };
+/*e: global proccmd */
 
 /* Segment type from portdat.h */
-//@Scheck: not dead, used in devether.c but not in .clang, weird
 static char *sname[]={ "Text", "Data", "Bss", "Stack", "Shared", "Phys", };
 
+/*s: devproc QXXX macros */
 /*
  * Qids are, in path:
  *   5 bits of file type (qids above)
@@ -156,6 +165,7 @@ static char *sname[]={ "Text", "Data", "Bss", "Stack", "Shared", "Phys", };
 #define SLOT(q)     (((((ulong)(q).path) & ~(1UL<<31)) >> QSHIFT) - 1)
 #define PID(q)      ((q).vers)
 #define NOTEID(q)   ((q).vers)
+/*e: devproc QXXX macros */
 
 /*s: devproc.c forward decl */
 void    procctlreq(Proc*, char*, int);
@@ -170,8 +180,6 @@ static Traceevent *tevents;
 static Lock tlock;
 static int topens;
 static int tproduced, tconsumed;
-
-//extern int unfair;
 
 static void
 profclock(Ureg *ur, Timer *)
@@ -189,6 +197,7 @@ profclock(Ureg *ur, Timer *)
     }
 }
 
+/*s: function procgen */
 static int
 procgen(Chan *c, char *name, Dirtab *tab, int, int s, Dir *dp)
 {
@@ -278,7 +287,9 @@ procgen(Chan *c, char *name, Dirtab *tab, int, int s, Dir *dp)
     devdir(c, qid, tab->name, len, p->user, perm, dp);
     return 1;
 }
+/*e: function procgen */
 
+/*s: function _proctrace */
 static void
 _proctrace(Proc* p, Tevent etype, vlong ts)
 {
@@ -297,7 +308,9 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
         te->time = ts;
     tproduced++;
 }
+/*e: function _proctrace */
 
+/*s: method procinit */
 static void
 procinit(void)
 {
@@ -305,6 +318,7 @@ procinit(void)
         print("warning: too many procs for devproc\n");
     addclock0link((void (*)(void))profclock, 113);  /* Relative prime to HZ */
 }
+/*e: method procinit */
 
 static Chan*
 procattach(char *spec)
@@ -324,6 +338,7 @@ procstat(Chan *c, uchar *db, int n)
     return devstat(c, db, n, 0, 0, procgen);
 }
 
+/*s: function nonone */
 /*
  *  none can't read or write state on other
  *  processes.  This is to contain access of
@@ -341,7 +356,9 @@ nonone(Proc *p)
         return;
     error(Eperm);
 }
+/*e: function nonone */
 
+/*s: method procopen */
 static Chan*
 procopen(Chan *c, int omode)
 {
@@ -471,7 +488,9 @@ procopen(Chan *c, int omode)
 
     return tc;
 }
+/*e: method procopen */
 
+/*s: method procwstat */
 static int
 procwstat(Chan *c, uchar *db, int n)
 {
@@ -519,8 +538,9 @@ procwstat(Chan *c, uchar *db, int n)
     qunlock(&p->debug);
     return n;
 }
+/*e: method procwstat */
 
-
+/*s: function procoffset */
 static long
 procoffset(long offset, char *va, int *np)
 {
@@ -535,7 +555,9 @@ procoffset(long offset, char *va, int *np)
     }
     return offset;
 }
+/*e: function procoffset */
 
+/*s: function procqidwidth */
 static int
 procqidwidth(Chan *c)
 {
@@ -543,7 +565,9 @@ procqidwidth(Chan *c)
 
     return snprint(buf, sizeof buf, "%lud", c->qid.vers);
 }
+/*e: function procqidwidth */
 
+/*s: function procfdprint */
 int
 procfdprint(Chan *c, int fd, int w, char *s, int ns)
 {
@@ -559,7 +583,9 @@ procfdprint(Chan *c, int fd, int w, char *s, int ns)
         c->iounit, c->offset, c->path->s);
     return n;
 }
+/*e: function procfdprint */
 
+/*s: function procfds */
 static int
 procfds(Proc *p, char *va, int count, long offset)
 {
@@ -616,7 +642,9 @@ procfds(Proc *p, char *va, int count, long offset)
 
     return n;
 }
+/*e: function procfds */
 
+/*s: method procclose */
 static void
 procclose(Chan * c)
 {
@@ -631,7 +659,9 @@ procclose(Chan * c)
     if(QID(c->qid) == Qns && c->aux != 0)
         free(c->aux);
 }
+/*e: method procclose */
 
+/*s: function int2flag */
 static void
 int2flag(int flag, char *s)
 {
@@ -650,7 +680,9 @@ int2flag(int flag, char *s)
         *s++ = 'C';
     *s = '\0';
 }
+/*e: function int2flag */
 
+/*s: function procargs */
 static int
 procargs(Proc *p, char *buf, int nbuf)
 {
@@ -676,13 +708,17 @@ procargs(Proc *p, char *buf, int nbuf)
     }
     return j;
 }
+/*e: function procargs */
 
+/*s: function eventsavailable */
 static int
 eventsavailable(void *)
 {
     return tproduced > tconsumed;
 }
+/*e: function eventsavailable */
 
+/*s: method procread */
 static long
 procread(Chan *c, void *va, long n, vlong off)
 {
@@ -986,7 +1022,9 @@ procread(Chan *c, void *va, long n, vlong off)
     error(Egreg);
     return 0;       /* not reached */
 }
+/*e: method procread */
 
+/*s: function mntscan */
 void
 mntscan(Mntwalk *mw, Proc *p)
 {
@@ -1024,7 +1062,9 @@ mntscan(Mntwalk *mw, Proc *p)
 
     runlock(&pg->ns);
 }
+/*e: function mntscan */
 
+/*s: method procwrite */
 static long
 procwrite(Chan *c, void *va, long n, vlong off)
 {
@@ -1141,7 +1181,9 @@ procwrite(Chan *c, void *va, long n, vlong off)
     qunlock(&p->debug);
     return n;
 }
+/*e: method procwrite */
 
+/*s: global procdevtab */
 Dev procdevtab = {
     .dc       =    'p',
     .name     =    "proc",
@@ -1162,7 +1204,11 @@ Dev procdevtab = {
     .remove   =    devremove,
     .wstat    =    procwstat,
 };
+/*e: global procdevtab */
 
+
+
+/*s: function proctext */
 Chan*
 proctext(Chan *c, Proc *p)
 {
@@ -1209,7 +1255,9 @@ proctext(Chan *c, Proc *p)
 
     return tc;
 }
+/*e: function proctext */
 
+/*s: function procstopwait */
 void
 procstopwait(Proc *p, int ctl)
 {
@@ -1237,7 +1285,9 @@ procstopwait(Proc *p, int ctl)
     if(p->pid != pid)
         error(Eprocdied);
 }
+/*e: function procstopwait */
 
+/*s: function procctlcloseone */
 static void
 procctlcloseone(Proc *p, Fgrp *f, int fd)
 {
@@ -1253,7 +1303,9 @@ procctlcloseone(Proc *p, Fgrp *f, int fd)
     qlock(&p->debug);
     lock(f);
 }
+/*e: function procctlcloseone */
 
+/*s: function procctlclosefiles */
 void
 procctlclosefiles(Proc *p, int all, int fd)
 {
@@ -1274,7 +1326,9 @@ procctlclosefiles(Proc *p, int all, int fd)
     unlock(f);
     closefgrp(f);
 }
+/*e: function procctlclosefiles */
 
+/*s: function parsetime */
 static char *
 parsetime(vlong *rt, char *s)
 {
@@ -1307,7 +1361,9 @@ parsetime(vlong *rt, char *s)
     *rt = ticks;
     return nil;
 }
+/*e: function parsetime */
 
+/*s: function procctlreq */
 void
 procctlreq(Proc *p, char *va, int n)
 {
@@ -1487,14 +1543,18 @@ procctlreq(Proc *p, char *va, int n)
     poperror();
     free(cb);
 }
+/*e: function procctlreq */
 
+/*s: function procstopped */
 int
 procstopped(void *a)
 {
     Proc *p = a;
     return p->state == Stopped;
 }
+/*e: function procstopped */
 
+/*s: function procctlmemio */
 int
 procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
 {
@@ -1565,7 +1625,9 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
 
     return n;
 }
+/*e: function procctlmemio */
 
+/*s: function txt2data */
 Segment*
 txt2data(Proc *p, Segment *s)
 {
@@ -1594,4 +1656,5 @@ txt2data(Proc *p, Segment *s)
 
     return ps;
 }
+/*e: function txt2data */
 /*e: devproc.c */

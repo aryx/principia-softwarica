@@ -233,8 +233,12 @@ enum note {
 
 /*s: enum miscsize */
 enum miscsize {  
-  ERRMAX = 128, /* max length of error string */
-  KNAMELEN = 28,  /* max length of name held in kernel */
+    /*s: constant ERRMAX */
+    ERRMAX = 128, /* max length of error string */
+    /*e: constant ERRMAX */
+    /*s: constant KNAMELEN */
+    KNAMELEN = 28,  /* max length of name held in kernel */
+    /*e: constant KNAMELEN */
 };
 /*e: enum miscsize */
 
