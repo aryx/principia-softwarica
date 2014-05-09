@@ -21328,13 +21328,7 @@ typedef struct Dirlist Dirlist;
 @
 \fi
 
-<<devroot.c>>=
-<<kernel basic includes>>
-
-//*****************************************************************************
-// Constants and types
-//*****************************************************************************
-
+<<devroot enum Qxxx>>=
 enum
 {
     Qdir = 0,
@@ -21343,8 +21337,10 @@ enum
     Nrootfiles = 32,
     Nbootfiles = 32,
 };
+@
 
-<<devroot.c forward decl>>
+
+<<struct Dirlist>>=
 struct Dirlist
 {
     uint base; // for unique qids
@@ -21353,12 +21349,10 @@ struct Dirlist
     int ndir; // number of dir used
     int mdir; // max dir entries
 };
+@
 
-//*****************************************************************************
-// Root
-//*****************************************************************************
 
-// note: directories have by convention 0 length
+<<globals rootdir, rootdata, rootlist>>=
 static Dirtab rootdir[Nrootfiles] = {
   {
     .name = "#/",
@@ -21382,11 +21376,10 @@ static Dirlist rootlist =
   .ndir = 2,
   .mdir = Nrootfiles
 };
+@
 
-//*****************************************************************************
-// Boot
-//*****************************************************************************
 
+<<globals bootdir, bootdata, bootlist>>=
 static Dirtab bootdir[Nbootfiles] = {
   {
     .name = "boot",
@@ -21405,11 +21398,10 @@ static Dirlist bootlist =
     .ndir = 1,
     .mdir = Nbootfiles
 };
+@
 
-//*****************************************************************************
-// Functions
-//*****************************************************************************
 
+<<function addlist>>=
 /*
  *  add a file to the list
  */
@@ -21431,16 +21423,22 @@ addlist(Dirlist *l, char *name, uchar *contents, ulong len, int perm)
     if(perm & DMDIR)
         d->qid.type |= QTDIR;
 }
+@
 
+
+<<function addbootfile>>=
 /*
- *  add a root file
+ *  add a boot file
  */
 void
 addbootfile(char *name, uchar *contents, ulong len)
 {
     addlist(&bootlist, name, contents, len, 0555);
 }
+@
 
+
+<<function addrootdir>>=
 /*
  *  add a root directory
  */
@@ -21449,7 +21447,10 @@ addrootdir(char *name)
 {
     addlist(&rootlist, name, nil, 0, DMDIR|0555);
 }
+@
 
+
+<<method rootreset>>=
 static void
 rootreset(void)
 {
@@ -21464,13 +21465,10 @@ rootreset(void)
     addrootdir("root");
     addrootdir("srv");
 }
+@
 
-static Chan*
-rootattach(char *spec)
-{
-    return devattach('/', spec);
-}
 
+<<function rootgen>>=
 static int
 rootgen(Chan *c, char *name, Dirtab*, int, int s, Dir *dp)
 {
@@ -21510,34 +21508,20 @@ rootgen(Chan *c, char *name, Dirtab*, int, int s, Dir *dp)
         }
         if(t >= l->ndir)
             return -1;
-if(t < 0){
-print("rootgen %llud %d %d\n", c->qid.path, s, t);
-panic("whoops");
-}
         d = &l->dir[t];
         devdir(c, d->qid, d->name, d->length, eve, d->perm, dp);
         return 1;
     }
 }
+@
 
-static Walkqid*
-rootwalk(Chan *c, Chan *nc, char **name, int nname)
-{
-    return devwalk(c,  nc, name, nname, nil, 0, rootgen);
-}
+%if(t < 0){
+%print("rootgen %llud %d %d\n", c->qid.path, s, t);
+%panic("whoops");
+%}
 
-static int
-rootstat(Chan *c, uchar *dp, int n)
-{
-    return devstat(c, dp, n, nil, 0, rootgen);
-}
 
-static Chan*
-rootopen(Chan *c, int omode)
-{
-    return devopen(c, omode, nil, 0, devgen);
-}
-
+<<method rootclose>>=
 /*
  * sysremove() knows this is a nop
  */
@@ -21545,7 +21529,10 @@ static void
 rootclose(Chan*)
 {
 }
+@
 
+
+<<method rootread>>=
 static long
 rootread(Chan *c, void *buf, long n, vlong off)
 {
@@ -21589,14 +21576,20 @@ print("[%d] kaddr %.8ulx base %.8ulx offset %ld (%.8ulx), n %d %.8ulx %.8ulx %.8
     memmove(buf, data+offset, n);
     return n;
 }
+@
 
+
+<<method rootwrite>>=
 static long
 rootwrite(Chan*, void*, long, vlong)
 {
     error(Egreg);
     return 0;
 }
+@
 
+
+<<global rootdevtab>>=
 Dev rootdevtab = {
     .dc       = '/',
     .name     = "root",
@@ -21617,6 +21610,80 @@ Dev rootdevtab = {
     .remove   = devremove,
     .wstat    = devwstat,
 };
+@
+
+
+<<devroot.c>>=
+<<kernel basic includes>>
+
+//*****************************************************************************
+// Constants and types
+//*****************************************************************************
+
+<<devroot enum Qxxx>>
+
+<<devroot.c forward decl>>
+<<struct Dirlist>>
+
+//*****************************************************************************
+// Root
+//*****************************************************************************
+
+// note: directories have by convention 0 length
+
+<<globals rootdir, rootdata, rootlist>>
+
+//*****************************************************************************
+// Boot
+//*****************************************************************************
+
+<<globals bootdir, bootdata, bootlist>>
+
+//*****************************************************************************
+// Functions
+//*****************************************************************************
+
+<<function addlist>>
+
+<<function addbootfile>>
+
+<<function addrootdir>>
+
+<<method rootreset>>
+
+static Chan*
+rootattach(char *spec)
+{
+    return devattach('/', spec);
+}
+
+<<function rootgen>>
+
+static Walkqid*
+rootwalk(Chan *c, Chan *nc, char **name, int nname)
+{
+    return devwalk(c,  nc, name, nname, nil, 0, rootgen);
+}
+
+static int
+rootstat(Chan *c, uchar *dp, int n)
+{
+    return devstat(c, dp, n, nil, 0, rootgen);
+}
+
+static Chan*
+rootopen(Chan *c, int omode)
+{
+    return devopen(c, omode, nil, 0, devgen);
+}
+
+<<method rootclose>>
+
+<<method rootread>>
+
+<<method rootwrite>>
+
+<<global rootdevtab>>
 
 @
 
