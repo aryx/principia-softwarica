@@ -12,6 +12,7 @@
 
 // those functions used to be in segment.c
 
+/*s: function pteflush */
 void
 pteflush(Pte *pte, int s, int e)
 {
@@ -24,7 +25,9 @@ pteflush(Pte *pte, int s, int e)
             memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
     }
 }
+/*e: function pteflush */
 
+/*s: syscall segflush */
 long
 syssegflush(ulong *arg)
 {
@@ -75,4 +78,5 @@ syssegflush(ulong *arg)
     flushmmu();
     return 0;
 }
+/*e: syscall segflush */
 /*e: sysmemory.c */

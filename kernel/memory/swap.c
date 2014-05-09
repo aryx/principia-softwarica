@@ -35,6 +35,7 @@ gentick(void)
     gensum = gencount = 0;
 }
 
+/*s: function swapinit */
 void
 swapinit(void)
 {
@@ -49,7 +50,9 @@ swapinit(void)
 
     swapimage.notext = 1;
 }
+/*e: function swapinit */
 
+/*s: function newswap */
 ulong
 newswap(void)
 {
@@ -72,7 +75,9 @@ newswap(void)
     unlock(&swapalloc);
     return (look-swapalloc.swmap) * BY2PG;
 }
+/*e: function newswap */
 
+/*s: function putswap */
 void
 putswap(Page *p)
 {
@@ -89,7 +94,9 @@ putswap(Page *p)
         panic("putswap %#p == %ud", p, *idx);
     unlock(&swapalloc);
 }
+/*e: function putswap */
 
+/*s: function dupswap */
 void
 dupswap(Page *p)
 {
@@ -98,13 +105,17 @@ dupswap(Page *p)
         panic("dupswap");
     unlock(&swapalloc);
 }
+/*e: function dupswap */
 
+/*s: function swapcount */
 int
 swapcount(ulong daddr)
 {
     return swapalloc.swmap[daddr/BY2PG];
 }
+/*e: function swapcount */
 
+/*s: function kickpager */
 void
 kickpager(void)
 {
@@ -117,7 +128,9 @@ kickpager(void)
         started = 1;
     }
 }
+/*e: function kickpager */
 
+/*s: function pager */
 static void
 pager(void *junk)
 {
@@ -190,7 +203,9 @@ loop:
     }
     goto loop;
 }
+/*e: function pager */
 
+/*s: function pageout */
 static void
 pageout(Proc *p, Segment *s)
 {
@@ -256,7 +271,9 @@ out:
     qunlock(&s->lk);
     putseg(s);
 }
+/*e: function pageout */
 
+/*s: function canflush */
 static int
 canflush(Proc *p, Segment *s)
 {
@@ -288,7 +305,9 @@ canflush(Proc *p, Segment *s)
     }
     return 1;
 }
+/*e: function canflush */
 
+/*s: function pagepte */
 static void
 pagepte(int type, Page **pg)
 {
@@ -341,7 +360,9 @@ pagepte(int type, Page **pg)
         break;
     }
 }
+/*e: function pagepte */
 
+/*s: function pagersummary */
 void
 pagersummary(void)
 {
@@ -350,7 +371,9 @@ pagersummary(void)
         palloc.user, conf.nswap-swapalloc.free, conf.nswap,
         ioptr);
 }
+/*e: function pagersummary */
 
+/*s: function pageiocomp */
 static int
 pageiocomp(void *a, void *b)
 {
@@ -363,7 +386,9 @@ pageiocomp(void *a, void *b)
     else
         return -1;
 }
+/*e: function pageiocomp */
 
+/*s: function executeio */
 static void
 executeio(void)
 {
@@ -400,13 +425,17 @@ executeio(void)
     }
     ioptr = 0;
 }
+/*e: function executeio */
 
+/*s: function needpages */
 static int
 needpages(void*)
 {
     return palloc.freecount < swapalloc.headroom;
 }
+/*e: function needpages */
 
+/*s: function setswapchan */
 void
 setswapchan(Chan *c)
 {
@@ -442,5 +471,6 @@ setswapchan(Chan *c)
 
     swapimage.c = c;
 }
+/*e: function setswapchan */
 
 /*e: swap.c */
