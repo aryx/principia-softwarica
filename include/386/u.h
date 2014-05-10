@@ -1,3 +1,5 @@
+// called u.h mainly because of all those uxxx typedefs
+
 #define nil		((void*)0)
 typedef	unsigned short	ushort;
 typedef	unsigned char	uchar;
