@@ -25,7 +25,7 @@ ulong intrcount[MAXMACH];
 ulong fcallcount[MAXMACH];
 
 /*s: function tadd */
-static vlong
+static Tval
 tadd(Timers *tt, Timer *nt)
 {
     Timer *t, **last;
@@ -33,9 +33,6 @@ tadd(Timers *tt, Timer *nt)
     /* Called with tt locked */
     assert(nt->tt == nil);
     switch(nt->tmode){
-    default:
-        panic("timer");
-        break;
     case Trelative:
         if(nt->tns <= 0)
             nt->tns = 1;
@@ -56,6 +53,9 @@ tadd(Timers *tt, Timer *nt)
         }
         nt->twhen += ns2fastticks(nt->tns);
         break;
+    default:
+        panic("timer: impossible");
+        break;
     }
 
     for(last = &tt->head; t = *last; last = &t->tnext){
@@ -72,16 +72,15 @@ tadd(Timers *tt, Timer *nt)
 /*e: function tadd */
 
 /*s: function tdel */
-static uvlong
+static Tval
 tdel(Timer *dt)
 {
-
     Timer *t, **last;
     Timers *tt;
 
     tt = dt->tt;
     if (tt == nil)
-        return 0;
+        return 0; // possible? panic("impossible") would be better no?
     for(last = &tt->head; t = *last; last = &t->tnext){
         if(t == dt){
             assert(dt->tt);
@@ -102,15 +101,17 @@ void
 timeradd(Timer *nt)
 {
     Timers *tt;
-    vlong when;
+    Tval when;
 
     /* Must lock Timer struct before Timers struct */
     ilock(nt);
+
     if(tt = nt->tt){
         ilock(tt);
         tdel(nt);
         iunlock(tt);
     }
+
     tt = &timers[m->machno];
     ilock(tt);
     when = tadd(tt, nt);
@@ -126,7 +127,7 @@ void
 timerdel(Timer *dt)
 {
     Timers *tt;
-    uvlong when;
+    Tval when;
 
     ilock(dt);
     if(tt = dt->tt){
@@ -237,17 +238,18 @@ timersinit(void)
 {
     Timer *t;
 
-    /*
-     * T->tf == nil means the HZ clock for this processor.
-     */
     timersinited = true;
     todinit();
-    t = malloc(sizeof(*t));
+
+    t = malloc(sizeof(Timer));
     if(t == nil)
         error(Enomem);
     t->tmode = Tperiodic;
     t->tt = nil;
     t->tns = 1000000000/HZ;
+    /*
+     * T->tf == nil means the HZ clock for this processor.
+     */
     t->tf = nil;
     timeradd(t);
 }
@@ -255,24 +257,28 @@ timersinit(void)
 
 /*s: function addclock0link */
 Timer*
-addclock0link(void (*f)(void), int ms)
+addclock0link(void (*f)(void), Tms ms)
 {
     Timer *nt;
-    uvlong when;
+    Tval when;
 
     if(!timersinited)
         panic("addclock0link: timersinit not called yet");
+
     /* Synchronize to hztimer if ms is 0 */
     nt = malloc(sizeof(Timer));
     if(nt == nil)
         error(Enomem);
     if(ms == 0)
         ms = 1000/HZ;
-    nt->tns = (vlong)ms*1000000LL;
+
+    nt->tns = (Tnano)ms*1000000LL;
     nt->tmode = Tperiodic;
     nt->tt = nil;
     nt->tf = (void (*)(Ureg*, Timer*))f;
 
+    // those clock callbacks are all done on the bootstrap processor
+    //dupe: timeradd() but with forced processor number
     ilock(&timers[0]);
     when = tadd(&timers[0], nt);
     if(when)

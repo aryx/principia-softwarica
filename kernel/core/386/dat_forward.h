@@ -14,9 +14,7 @@ typedef struct PCArch PCArch;
 typedef struct Pcidev Pcidev;
 typedef struct PCMmap PCMmap;
 typedef struct PCMslot  PCMslot;
-
 typedef struct Segdesc  Segdesc;
-typedef vlong   Tval;
 typedef struct Ureg Ureg;
 typedef struct Vctl Vctl;
 

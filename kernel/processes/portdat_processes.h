@@ -204,35 +204,44 @@ enum timermode
 };
 /*e: enum timermode */
 
+/*s: type Tval */
+typedef vlong   Tval; // ticks
+typedef vlong   Tnano; // nanoseconds
+typedef vlong   Tmicro; // microseconds
+typedef int     Tms; // milliseconds
+typedef vlong   Tsec; // seconds
+/*e: type Tval */
+
 /*s: struct Timer */
 struct Timer
 {
     /* Public interface */
     // enum<timermode>
     int tmode;    /* See above */
-    vlong tns;    /* meaning defined by mode */
+    Tnano tns;    /* meaning defined by mode */ //nanosecond
     void  (*tf)(Ureg*, Timer*);
     void  *ta;
   
     /* Internal */
     Lock;
-    // ref<list<Timer>> ??
-    Timers  *tt;    /* Timers queue this timer runs on */
     Tval  tticks;   /* tns converted to ticks */
     Tval  twhen;    /* ns represented in fastticks */
-  
-    // list<Timer> of Timers.head?
+
+    /*s: [[Timer extra fields */
+    // list<Timer> of Timers.head
     Timer *tnext;
-};
+    // ref<list<Timer>> Timers.head
+    Timers  *tt;    /* Timers queue this timer runs on */
+    /*e: [[Timer extra fields */
+    };
 /*e: struct Timer */
 
 // was in clock.c
 /*s: struct Timers */
 struct Timers
 {
-    // list<Timer> (next = Timer.tnext?)
+    // list<Timer> (next = Timer.tnext)
     Timer *head;
-  
     // extra
     Lock;
 };
