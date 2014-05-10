@@ -603,6 +603,7 @@ enum
 	RFNOMNT		= (1<<14)
 };
 
+// Qid as in uniQue id
 typedef
 struct Qid
 {
