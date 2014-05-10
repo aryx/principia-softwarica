@@ -747,7 +747,8 @@ found:
 }
 /*e: function segattach */
 
-/*s: function segclock */
+/*s: clock callback segclock */
+// called via profclock
 void
 segclock(ulong pc)
 {
@@ -763,7 +764,7 @@ segclock(ulong pc)
         s->profile[pc>>LRESPROF] += TK2MS(1);
     }
 }
-/*e: function segclock */
+/*e: clock callback segclock */
 
 // was in another file before
 /*s: function data2txt */

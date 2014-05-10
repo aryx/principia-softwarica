@@ -305,7 +305,7 @@ i8253clock(Ureg* ureg, void*)
 void
 i8253enable(void)
 {
-    i8253.enabled = 1;
+    i8253.enabled = true;
     i8253.period = Freq/HZ;
     intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
 }

@@ -1238,7 +1238,7 @@ kbdputc(Queue*, int ch)
 @ 
 
 
-<<function kbdputcclock>>=
+<<clock callback kbdputcclock>>=
 /*
  *  we save up input characters till clock time to reduce
  *  per character interrupt overhead.
@@ -2161,7 +2161,7 @@ writebintime(char *buf, int n)
 
 <<function kbdputc>>
 
-<<function kbdputcclock>>
+<<clock callback kbdputcclock>>
 
 <<devcons.c enum Qxxx>>
 
@@ -20404,7 +20404,8 @@ found:
 @
 
 
-<<function segclock>>=
+<<clock callback segclock>>=
+// called via profclock
 void
 segclock(ulong pc)
 {
@@ -20504,7 +20505,7 @@ Segment* (*_globalsegattach)(Proc*, char*);
 
 <<function segattach>>
 
-<<function segclock>>
+<<clock callback segclock>>
 
 // was in another file before
 <<function data2txt>>
@@ -21710,7 +21711,7 @@ genrandom(void*)
 }
 @
 
-<<function randomclock>>=
+<<clock callback randomclock>>=
 /*
  *  produce random bits in a circular buffer
  */
@@ -21815,7 +21816,7 @@ randomread(void *xp, ulong n)
 
 <<function genrandom>>
 
-<<function randomclock>>
+<<clock callback randomclock>>
 
 <<function randominit>>
 
@@ -22305,7 +22306,7 @@ i8253clock(Ureg* ureg, void*)
 void
 i8253enable(void)
 {
-    i8253.enabled = 1;
+    i8253.enabled = true;
     i8253.period = Freq/HZ;
     intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
 }
@@ -24731,131 +24732,10 @@ done:
 
 \subsection*{[[processes/clock.c]]}
 
-<<global timers>>=
-static Timers timers[MAXMACH];
-@ 
 
 
-<<function tadd>>=
-static vlong
-tadd(Timers *tt, Timer *nt)
-{
-    Timer *t, **last;
 
-    /* Called with tt locked */
-    assert(nt->tt == nil);
-    switch(nt->tmode){
-    default:
-        panic("timer");
-        break;
-    case Trelative:
-        if(nt->tns <= 0)
-            nt->tns = 1;
-        nt->twhen = fastticks(nil) + ns2fastticks(nt->tns);
-        break;
-    case Tperiodic:
-        assert(nt->tns >= 100000);  /* At least 100 µs period */
-        if(nt->twhen == 0){
-            /* look for another timer at same frequency for combining */
-            for(t = tt->head; t; t = t->tnext){
-                if(t->tmode == Tperiodic && t->tns == nt->tns)
-                    break;
-            }
-            if (t)
-                nt->twhen = t->twhen;
-            else
-                nt->twhen = fastticks(nil);
-        }
-        nt->twhen += ns2fastticks(nt->tns);
-        break;
-    }
-
-    for(last = &tt->head; t = *last; last = &t->tnext){
-        if(t->twhen > nt->twhen)
-            break;
-    }
-    nt->tnext = *last;
-    *last = nt;
-    nt->tt = tt;
-    if(last == &tt->head)
-        return nt->twhen;
-    return 0;
-}
-@ 
-
-
-<<function tdel>>=
-static uvlong
-tdel(Timer *dt)
-{
-
-    Timer *t, **last;
-    Timers *tt;
-
-    tt = dt->tt;
-    if (tt == nil)
-        return 0;
-    for(last = &tt->head; t = *last; last = &t->tnext){
-        if(t == dt){
-            assert(dt->tt);
-            dt->tt = nil;
-            *last = t->tnext;
-            break;
-        }
-    }
-    if(last == &tt->head && tt->head)
-        return tt->head->twhen;
-    return 0;
-}
-@ 
-
-
-<<function timeradd>>=
-/* add or modify a timer */
-void
-timeradd(Timer *nt)
-{
-    Timers *tt;
-    vlong when;
-
-    /* Must lock Timer struct before Timers struct */
-    ilock(nt);
-    if(tt = nt->tt){
-        ilock(tt);
-        tdel(nt);
-        iunlock(tt);
-    }
-    tt = &timers[m->machno];
-    ilock(tt);
-    when = tadd(tt, nt);
-    if(when)
-        timerset(when);
-    iunlock(tt);
-    iunlock(nt);
-}
-@ 
-
-
-<<function timerdel>>=
-void
-timerdel(Timer *dt)
-{
-    Timers *tt;
-    uvlong when;
-
-    ilock(dt);
-    if(tt = dt->tt){
-        ilock(tt);
-        when = tdel(dt);
-        if(when && tt == &timers[m->machno])
-            timerset(tt->head->twhen);
-        iunlock(tt);
-    }
-    iunlock(dt);
-}
-@ 
-
-<<function hzclock>>=
+<<clock callback hzclock>>=
 void
 hzclock(Ureg *ur)
 {
@@ -24947,58 +24827,6 @@ timerintr(Ureg *u, Tval)
 @ 
 
 
-<<function timersinit>>=
-void
-timersinit(void)
-{
-    Timer *t;
-
-    /*
-     * T->tf == nil means the HZ clock for this processor.
-     */
-    timersinited = true;
-    todinit();
-    t = malloc(sizeof(*t));
-    if(t == nil)
-        error(Enomem);
-    t->tmode = Tperiodic;
-    t->tt = nil;
-    t->tns = 1000000000/HZ;
-    t->tf = nil;
-    timeradd(t);
-}
-@ 
-
-
-<<function addclock0link>>=
-Timer*
-addclock0link(void (*f)(void), int ms)
-{
-    Timer *nt;
-    uvlong when;
-
-    if(!timersinited)
-        panic("addclock0link: timersinit not called yet");
-    /* Synchronize to hztimer if ms is 0 */
-    nt = malloc(sizeof(Timer));
-    if(nt == nil)
-        error(Enomem);
-    if(ms == 0)
-        ms = 1000/HZ;
-    nt->tns = (vlong)ms*1000000LL;
-    nt->tmode = Tperiodic;
-    nt->tt = nil;
-    nt->tf = (void (*)(Ureg*, Timer*))f;
-
-    ilock(&timers[0]);
-    when = tadd(&timers[0], nt);
-    if(when)
-        timerset(when);
-    iunlock(&timers[0]);
-    return nt;
-}
-@ 
-
 
 <<function tk2ms>>=
 /*
@@ -25058,7 +24886,7 @@ ulong fcallcount[MAXMACH];
 
 <<function timerdel>>
 
-<<function hzclock>>
+<<clock callback hzclock>>
 
 <<interrupt callback timerintr>>
 
@@ -25523,7 +25351,7 @@ char  *user;
 char  *args;
 int nargs;    /* number of bytes of args */
 
-int kp;   /* true if a kernel process */
+bool kp;   /* true if a kernel process */
 @
 
 
@@ -25859,51 +25687,8 @@ struct Rgrp
 @ 
 
 
-<<enum timermode>>=
-/*
- * fasttick timer interrupts
- */
-enum timermode 
-{
-    Trelative,  /* timer programmed in ns from now */
-    Tperiodic,  /* periodic timer, period in ns */
-};
-@ 
 
 
-<<struct Timer>>=
-struct Timer
-{
-    /* Public interface */
-    // enum<timermode>
-    int tmode;    /* See above */
-    vlong tns;    /* meaning defined by mode */
-    void  (*tf)(Ureg*, Timer*);
-    void  *ta;
-  
-    /* Internal */
-    Lock;
-    // ref<list<Timer>> ??
-    Timers  *tt;    /* Timers queue this timer runs on */
-    Tval  tticks;   /* tns converted to ticks */
-    Tval  twhen;    /* ns represented in fastticks */
-  
-    // list<Timer> of Timers.head?
-    Timer *tnext;
-};
-@ 
-
-
-<<struct Timers>>=
-struct Timers
-{
-    // list<Timer> (next = Timer.tnext?)
-    Timer *head;
-  
-    // extra
-    Lock;
-};
-@ 
 
 
 <<enum priority>>=
@@ -27954,7 +27739,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     p = newproc();
     p->psstate = 0;
     p->procmode = 0640;
-    p->kp = 1; // Kernel Process
+    p->kp = true; // Kernel Process
     p->noswap = 1;
 
     p->fpsave = up->fpsave;
@@ -46846,6 +46631,25 @@ txt2data(Proc *p, Segment *s)
 @
 
 
+<<clock callback profclock>>=
+static void
+profclock(Ureg *ur, Timer *)
+{
+    Tos *tos;
+
+    if(up == 0 || up->state != Running)
+        return;
+
+    /* user profiling clock */
+    if(userureg(ur)){
+        tos = (Tos*)(USTKTOP-sizeof(Tos));
+        tos->clock += TK2MS(1);
+        segclock(ur->pc);
+    }
+}
+@ 
+
+
 <<devproc.c>>=
 <<kernel basic includes>>
 
@@ -46881,21 +46685,7 @@ static Lock tlock;
 static int topens;
 static int tproduced, tconsumed;
 
-static void
-profclock(Ureg *ur, Timer *)
-{
-    Tos *tos;
-
-    if(up == 0 || up->state != Running)
-        return;
-
-    /* user profiling clock */
-    if(userureg(ur)){
-        tos = (Tos*)(USTKTOP-sizeof(Tos));
-        tos->clock += TK2MS(1);
-        segclock(ur->pc);
-    }
-}
+<<clock callback profclock>>
 
 <<function procgen>>
 
@@ -49589,6 +49379,7 @@ PCArch archmp = {
 
 
 <<function syncclock>>=
+// actually not a clock callback even though finish in clock
 void
 syncclock(void)
 {

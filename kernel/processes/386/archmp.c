@@ -104,6 +104,7 @@ PCArch archmp = {
 //Lock mpsynclock;
 
 /*s: function syncclock */
+// actually not a clock callback even though finish in clock
 void
 syncclock(void)
 {

@@ -412,7 +412,7 @@ struct Proc
     char  *args;
     int nargs;    /* number of bytes of args */
 
-    int kp;   /* true if a kernel process */
+    bool kp;   /* true if a kernel process */
     /*e: [[Proc]] state fields */
 //--------------------------------------------------------------------
 // Memory

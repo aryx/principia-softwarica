@@ -68,7 +68,7 @@ genrandom(void*)
 }
 /*e: function genrandom */
 
-/*s: function randomclock */
+/*s: clock callback randomclock */
 /*
  *  produce random bits in a circular buffer
  */
@@ -95,7 +95,7 @@ randomclock(void)
     if(rb.wakeme)
         wakeup(&rb.consumer);
 }
-/*e: function randomclock */
+/*e: clock callback randomclock */
 
 /*s: function randominit */
 void

@@ -632,7 +632,7 @@ kbdputc(Queue*, int ch)
 }
 /*e: function kbdputc */
 
-/*s: function kbdputcclock */
+/*s: clock callback kbdputcclock */
 /*
  *  we save up input characters till clock time to reduce
  *  per character interrupt overhead.
@@ -655,7 +655,7 @@ kbdputcclock(void)
         }
     }
 }
-/*e: function kbdputcclock */
+/*e: clock callback kbdputcclock */
 
 /*s: devcons.c enum Qxxx */
 enum{

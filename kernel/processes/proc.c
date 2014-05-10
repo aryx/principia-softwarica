@@ -1521,7 +1521,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     p = newproc();
     p->psstate = 0;
     p->procmode = 0640;
-    p->kp = 1; // Kernel Process
+    p->kp = true; // Kernel Process
     p->noswap = 1;
 
     p->fpsave = up->fpsave;

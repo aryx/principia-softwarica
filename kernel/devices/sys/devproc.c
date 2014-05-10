@@ -181,6 +181,7 @@ static Lock tlock;
 static int topens;
 static int tproduced, tconsumed;
 
+/*s: clock callback profclock */
 static void
 profclock(Ureg *ur, Timer *)
 {
@@ -196,6 +197,7 @@ profclock(Ureg *ur, Timer *)
         segclock(ur->pc);
     }
 }
+/*e: clock callback profclock */
 
 /*s: function procgen */
 static int
