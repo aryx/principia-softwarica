@@ -22,7 +22,6 @@ extern Syscall sysexits;
 extern Syscall sysfauth;
 extern Syscall syssegbrk;
 extern Syscall sysopen;
-extern Syscall sysoseek;
 extern Syscall syssleep;
 extern Syscall sysrfork;
 extern Syscall syspipe;
@@ -81,7 +80,6 @@ Syscall *systab[] = {
     [PREAD]     syspread,
     [PWRITE]    syspwrite,
     [SEEK]      sysseek,
-    [OSEEK]     sysoseek,
 
     [STAT]      sysstat,
     [FSTAT]     sysfstat,
@@ -141,7 +139,6 @@ char *sysctab[] = {
     [FAUTH]     "Fauth",
     [SEGBRK]    "Segbrk",
     [OPEN]      "Open",
-    [OSEEK]     "Oseek",
     [SLEEP]     "Sleep",
     [RFORK]     "Rfork",
     [PIPE]      "Pipe",

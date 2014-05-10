@@ -28,7 +28,6 @@ char*	sysctab[] =
 	[SEGBRK]		"Segbrk",
 	[MOUNT]		"Mount",
 	[OPEN]		"Open",
-	[OSEEK]		"Oseek",
 	[SLEEP]		"Sleep",
 	[RFORK]		"Rfork",
 	[PIPE]		"Pipe",
@@ -295,24 +294,6 @@ sysseek(void)
 	putmem_v(retp, v);
 }
 
-void
-sysoseek(void)
-{
-	int fd, n;
-	ulong off, mode;
-
-	fd = getmem_w(reg.r[13]+4);
-	off = getmem_w(reg.r[13]+8);
-	mode = getmem_w(reg.r[13]+12);
-	if(sysdbg)
-		itrace("seek(%d, %lud, %d)", fd, off, mode);
-
-	n = seek(fd, off, mode);
-	if(n < 0)
-		errstr(errbuf, sizeof errbuf);	
-
-	reg.r[REGRET] = n;
-}
 
 void
 syssleep(void)
@@ -656,7 +637,6 @@ void	(*systab[])(void) =
 	[SEGBRK]		syssegbrk,
 	[MOUNT]		sysmount,
 	[OPEN]		sysopen,
-	[OSEEK]		sysoseek,
 	[SLEEP]		syssleep,
 	[RFORK]		sysrfork,
 	[PIPE]		syspipe,

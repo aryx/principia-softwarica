@@ -1,11 +1,10 @@
 /*s: lib.h */
+// coupling: libc.h
 // This file mostly exports code from lib_core/libc/ (linked with the kernel).
 // Those functions are also exported in include/libc.h but they prefered to
 // not include it and instead to reexport here a subset specific to the kernel.
-
 // There are also the poolxxx() functions exported in include/pool.h
 // (also part of libc) that are used in memory/alloc.c.
-
 // Some functions in libc are also "overriden" (via linker abuse):
 //  - print.c overrides _fmtlock(), _fmtunlock() that were in libc/fmt/
 //  - devcons.s overrides the sysfatal() that was in libc/9sys/

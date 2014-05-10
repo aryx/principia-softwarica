@@ -12,6 +12,7 @@
 #include    <a.out.h>
 
 /*s: enum rfork */
+//coupling: with libc.h
 enum rfork
 {
     RFNAMEG     = (1<<0),

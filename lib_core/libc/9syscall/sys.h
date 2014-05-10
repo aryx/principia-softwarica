@@ -18,7 +18,6 @@
 #define	PREAD		10
 #define	PWRITE		11
 #define	SEEK		12
-#define	OSEEK		13
 #define	STAT		14
 #define	FSTAT		15
 #define	WSTAT		16

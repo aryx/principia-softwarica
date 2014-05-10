@@ -824,27 +824,6 @@ sysseek(ulong *arg)
 }
 /*e: syscall seek */
 
-/*s: syscall oseek */
-long
-sysoseek(ulong *arg)
-{
-    union {
-        vlong v;
-        ulong u[2];
-    } o;
-    ulong a[5];
-
-    o.v = (long)arg[1];
-    a[0] = (ulong)&o.v;
-    a[1] = arg[0];
-    a[2] = o.u[0];
-    a[3] = o.u[1];
-    a[4] = arg[2];
-    sseek(a);
-    return o.v;
-}
-/*e: syscall oseek */
-
 /*s: function pathlast */
 static char*
 pathlast(Path *p)

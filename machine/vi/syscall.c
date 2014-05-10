@@ -28,7 +28,6 @@ char *sysctab[]={
 	[FAUTH]		"Fauth",
 	[SEGBRK]	"Segbrk",
 	[OPEN]		"Open",
-	[OSEEK]		"Oseek",
 	[SLEEP]		"Sleep",
 	[RFORK]		"Rfork",
 	[PIPE]		"Pipe",
@@ -301,24 +300,6 @@ sysseek(void)
 	memio((char*)o.u, retp, sizeof(vlong), MemWrite);
 }
 
-void
-sysoseek(void)
-{
-	int fd, n;
-	ulong off, mode;
-
-	fd = getmem_w(reg.r[REGSP]+4);
-	off = getmem_w(reg.r[REGSP]+8);
-	mode = getmem_w(reg.r[REGSP]+12);
-	if(sysdbg)
-		itrace("seek(%d, %lud, %d)", fd, off, mode);
-
-	n = seek(fd, off, mode);
-	if(n < 0)
-		errstr(errbuf, sizeof errbuf);	
-
-	reg.r[REGRET] = n;
-}
 
 void
 sysrfork(void)
@@ -586,7 +567,6 @@ void (*systab[])(void)	={
 	[FAUTH]		sysfauth,
 	[SEGBRK]	syssegbrk,
 	[OPEN]		sysopen,
-	[OSEEK]		sysoseek,
 	[SLEEP]		syssleep,
 	[RFORK]		sysrfork,
 	[PIPE]		syspipe,

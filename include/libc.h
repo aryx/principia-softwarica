@@ -682,7 +682,6 @@ extern	long	readn(int, void*, long);
 extern	long	readv(int, IOchunk*, int);
 extern	int	remove(char*);
 extern	void*	sbrk(ulong);
-extern	long	oseek(int, long, int);
 extern	vlong	seek(int, vlong, int);
 extern	void*	segattach(int, char*, void*, ulong);
 extern	void*	segbrk(void*, void*);
