@@ -140,7 +140,7 @@ timerdel(Timer *dt)
 }
 /*e: function timerdel */
 
-/*s: function hzclock */
+/*s: clock callback hzclock */
 void
 hzclock(Ureg *ur)
 {
@@ -173,7 +173,7 @@ hzclock(Ureg *ur)
     if(up && up->state == Running)
         hzsched();  /* in proc.c */
 }
-/*e: function hzclock */
+/*e: clock callback hzclock */
 
 /*s: interrupt callback timerintr */
 // called via i8253clock
