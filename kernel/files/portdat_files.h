@@ -253,7 +253,7 @@ struct Chan
     Path* path;
     /*e: [[Chan]] other fields */
 
-    // Extra
+    // extra
     /*s: [[Chan]] extra fields */
     Ref;        /* the Lock in this Ref is also Chan's lock */
     Chan* next;     /* allocation */

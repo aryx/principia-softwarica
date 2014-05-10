@@ -11,7 +11,6 @@
 struct IOMap
 {
     // TODO: why this has to be the first field of IOMap?! otherwise get fault??
-
     // list<ref<IOMap>> of Iomapalloc.free
     IOMap   *next;
 
@@ -21,7 +20,6 @@ struct IOMap
 
     // extra
     bool    reserved;
-
 };
 /*e: struct IOMap */
 
@@ -56,8 +54,10 @@ extern struct Iomapalloc iomap;
 struct PCArch
 {
   char* id;
+
   int (*ident)(void);   /* this should be in the model */
   void  (*reset)(void);   /* this should be in the model */
+
   int (*serialpower)(int);  /* 1 == on, 0 == off */
   int (*modempower)(int); /* 1 == on, 0 == off */
 

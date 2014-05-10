@@ -1440,7 +1440,7 @@ qsetlimit(Queue *q, int limit)
  *  set blocking/nonblocking
  */
 void
-qnoblock(Queue *q, int onoff)
+qnoblock(Queue *q, bool onoff)
 {
     q->noblock = onoff;
 }

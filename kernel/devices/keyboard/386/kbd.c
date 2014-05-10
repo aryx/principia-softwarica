@@ -61,9 +61,12 @@ enum {
     Scroll=     KF|21,
 
     Nscan=  128,
+};
 
+enum {
     Int=    0,          /* kbscans indices */
     Ext,
+
     Nscans,
 };
 
@@ -183,7 +186,7 @@ enum
 static Lock i8042lock;
 /*e: global i8042lock */
 /*s: global nokbd */
-static int nokbd = true;           /* flag: no PS/2 keyboard */
+static bool nokbd = true;           /* flag: no PS/2 keyboard */
 /*e: global nokbd */
 
 extern int mouseshifted;
@@ -307,15 +310,17 @@ i8042auxcmd(int cmd)
 
 /*s: struct Kbscan */
 struct Kbscan {
-    int esc1;
+    bool esc1;
+    bool alt;
+    bool altgr;
+    bool caps;
+    bool ctl;
+    bool num;
+    bool shift;
+
     int esc2;
-    int alt;
-    int altgr;
-    int caps;
-    int ctl;
-    int num;
-    int shift;
-    int collecting;
+
+    bool collecting;
     int nk;
     Rune    kc[5];
     int buttons;
@@ -327,7 +332,7 @@ Kbscan kbscans[Nscans]; /* kernel and external scan code state */
 /*e: global kbscans */
 
 /*s: kbd.c debugging macro */
-static int kdebug;
+static bool kdebug;
 /*e: kbd.c debugging macro */
 
 /*s: function setleds */
@@ -375,7 +380,7 @@ setleds(Kbscan *kbscan)
  * Scan code processing
  */
 void
-kbdputsc(int c, int external)
+kbdputsc(int c, bool external)
 {
     int i, keyup;
     Kbscan *kbscan;

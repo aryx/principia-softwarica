@@ -239,11 +239,12 @@ unlock(Lock *l)
         print("unlock of ilock: pc %lux, held by %lux\n", getcallerpc(&l), l->pc);
     if(l->p != up)
         print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
+
     l->m = nil;
     l->key = 0;
-        // for processor caches, to ensure the lock value is seen by other
-        // processors so that if they were doing while(l->key) { ... } they
-        // can finally exit the while loop.
+    // for processor caches, to ensure the lock value is seen by other
+    // processors so that if they were doing while(l->key) { ... } they
+    // can finally exit the while loop.
     coherence();
 
     if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){

@@ -28,7 +28,7 @@ Block*    packblock(Block*);
 Queue*    qbypass(void (*)(void*, Block*), void*);
 int   pullblock(Block**, int);
 Block*    bl2mem(uchar*, Block*, int);
-void    qnoblock(Queue*, int);
+void    qnoblock(Queue*, bool);
 int   qisclosed(Queue*);
 int   qfull(Queue*);
 int   qwindow(Queue*);

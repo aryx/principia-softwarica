@@ -46,7 +46,7 @@ enum miscsize_dat {
 #include "dat_buses.h"
 #include "../port/portdat_buses.h"
 
-// defines consdevtab 
+// defines keyboard queue
 #include "../port/portdat_console.h"
 
 /*s: constant AOUT_MAGIC */

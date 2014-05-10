@@ -97,7 +97,6 @@ struct Rendez
 {
     // ??
     Proc  *p;
-  
     Lock;
 };
 /*e: struct Rendez */

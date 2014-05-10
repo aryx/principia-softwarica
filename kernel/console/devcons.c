@@ -530,7 +530,7 @@ echo(char *buf, int n)
             xsummary();
             ixsummary();
             mallocsummary();
-        //  memorysummary();
+            memorysummary();
             pagersummary();
             return;
         case 'd':

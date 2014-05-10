@@ -103,6 +103,17 @@ struct Mach
     // ref<Proc>
     Proc* proc;     /* current process on this processor */
 
+    /*s: [[Mach]] stat fields */
+    /* stats */
+    int tlbfault;
+    int tlbpurge;
+    int pfault;
+    int cs; // context switch?
+    int syscall;
+    int load;
+    int intr;
+    /*e: [[Mach]] stat fields */
+
     /*s: [[Mach]] other fields */
     int ilockdepth;
     /*x: [[Mach]] other fields */
@@ -116,15 +127,6 @@ struct Mach
 
     int flushmmu;   /* make current proc flush it's mmu state */
 
-      /* stats */
-    int tlbfault;
-    int tlbpurge;
-    int pfault;
-    int cs;
-    int syscall;
-    int load;
-    int intr;
-
     ulong spuriousintr;
     int lastintr;
     Perf  perf;     /* performance counters */
@@ -136,6 +138,7 @@ struct Mach
 
     struct ArchMach;
   
+    // must be at the end of the structure!
     int stack[1];
 };
 /*e: struct Mach */

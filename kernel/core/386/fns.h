@@ -152,7 +152,7 @@ void  mb386(void);
 //@Scheck: Assembly
 void  mb586(void);
 void  meminit(void);
-//void  memorysummary(void);
+void  memorysummary(void);
 //@Scheck: Assembly
 void  mfence(void);
 #define mmuflushtlb(pdb) putcr3(pdb)

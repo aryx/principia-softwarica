@@ -407,7 +407,7 @@ for himself
 #include "dat_buses.h"
 #include "../port/portdat_buses.h"
 
-// defines consdevtab 
+// defines keyboard queue
 #include "../port/portdat_console.h"
 
 <<constant AOUT_MAGIC>>
@@ -526,6 +526,14 @@ Syscall *systab[] = {
 int nsyscall = nelem(systab);
 @
 
+<<syscall nop>>=
+long
+sysnop(ulong*)
+{
+    //checkpagerefs();
+    return 0;
+}
+@ 
 
 
 
@@ -605,10 +613,13 @@ struct Mach
     // ref<Proc>
     Proc* proc;     /* current process on this processor */
 
+    <<[[Mach]] stat fields>>
+
     <<[[Mach]] other fields>>
 
     struct ArchMach;
   
+    // must be at the end of the structure!
     int stack[1];
 };
 @ 
@@ -697,6 +708,10 @@ struct Proc
 //--------------------------------------------------------------------
     <<[[Proc]] stats and profiling fields>>
 //--------------------------------------------------------------------
+// Debugginf
+//--------------------------------------------------------------------
+    <<[[Proc]] debugging fields>>
+//--------------------------------------------------------------------
 // For debugger
 //--------------------------------------------------------------------
     <<[[Proc]] debugger fields>>
@@ -740,12 +755,13 @@ struct Chan
 
     <<[[Chan]] other fields>>
 
-    // Extra
+    // extra
     <<[[Chan]] extra fields>>
 };
 @ 
 
-% qid =~ inode =~ internal presentation of a file
+% rob pike: "q for unique"
+% qid =~ inode =~ internal representation of a file
 <<struct Qid>>=
 struct Qid
 {
@@ -916,9 +932,11 @@ struct Lock
 };
 @ 
 
+<<[[Proc]] debugging fields>>=
+Lock* lastlock;
+@
 
 <<[[Proc]] other fields>>=
-Lock* lastlock;
 // As long as the current process hold locks (to kernel data structures),
 // we will not schedule another process in unlock(); only the last unlock
 // will eventually cause a rescheduling.
@@ -1020,11 +1038,12 @@ unlock(Lock *l)
         print("unlock of ilock: pc %lux, held by %lux\n", getcallerpc(&l), l->pc);
     if(l->p != up)
         print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
+
     l->m = nil;
     l->key = 0;
-        // for processor caches, to ensure the lock value is seen by other
-        // processors so that if they were doing while(l->key) { ... } they
-        // can finally exit the while loop.
+    // for processor caches, to ensure the lock value is seen by other
+    // processors so that if they were doing while(l->key) { ... } they
+    // can finally exit the while loop.
     coherence();
 
     if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){
@@ -1123,7 +1142,7 @@ bool_ushort isilock; // false when from lock(), true when from ilock()
 ulong sr; // saved priority level when using ilock() to restore in iunlock()
 @ 
 
-<<[[Proc]] other fields>>=
+<<[[Proc]] debugging fields>>=
 Lock  *lastilock; /* debugging */
 @ 
 
@@ -1600,6 +1619,11 @@ _xdeclt:
 @ 
 
 
+<<struct Counter>>=
+typedef struct Ref Counter;
+@ 
+
+
 \section{Synchronization}
 % different from critical regions
 
@@ -1613,7 +1637,6 @@ struct Rendez
 {
     // ??
     Proc  *p;
-  
     Lock;
 };
 @ 
@@ -2288,6 +2311,7 @@ connectlocal(void)
 
 % use sysnop (was called sysr1) to show example of debugging session?
 
+% Ctrl-t Ctrl-t <debugcode>
 
 \chapter{Profiling}
 
@@ -2297,6 +2321,8 @@ connectlocal(void)
 
 % waserror(), nexterror(), etc
 % =~ poor's man exn mechanism (=> improve C!!)
+
+% syserrstr?
 
 \chapter{Mini Libc}
 
@@ -2363,6 +2389,8 @@ APIC = Advanded Programmable Interrupt Controller (a next gen 8259)
 
 ACPI = Advanced Configuration & Power Interface
 
+QID = unique identifier
+
 \end{verbatim}
 %cistrcmp= ??
 
@@ -2386,6 +2414,9 @@ ACPI = Advanced Configuration & Power Interface
 \bibitem[3]{syncweb} Yoann Padioleau,
 {\em Syncweb, literate programming meets unison}, 
 \url{http://padator.org/software/project-syncweb/readme.txt}
+
+
+% TECS, STEPS, MINIX, etc
 
 \end{thebibliography}
 

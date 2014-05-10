@@ -540,6 +540,14 @@ struct Proc
     vlong pcycles;
     /*e: [[Proc]] stats and profiling fields */
 //--------------------------------------------------------------------
+// Debugginf
+//--------------------------------------------------------------------
+    /*s: [[Proc]] debugging fields */
+    Lock* lastlock;
+    /*x: [[Proc]] debugging fields */
+    Lock  *lastilock; /* debugging */
+    /*e: [[Proc]] debugging fields */
+//--------------------------------------------------------------------
 // For debugger
 //--------------------------------------------------------------------
     /*s: [[Proc]] debugger fields */
@@ -561,13 +569,10 @@ struct Proc
 // Other
 //--------------------------------------------------------------------
     /*s: [[Proc]] other fields */
-    Lock* lastlock;
     // As long as the current process hold locks (to kernel data structures),
     // we will not schedule another process in unlock(); only the last unlock
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
-    /*x: [[Proc]] other fields */
-    Lock  *lastilock; /* debugging */
     /*x: [[Proc]] other fields */
     Fgrp  *closingfgrp; /* used during teardown */
 

@@ -949,4 +949,12 @@ upareserve(ulong pa, int size)
 }
 /*e: function upareserve */
 
+/*s: function memorysummary */
+void
+memorysummary(void)
+{
+  memdebug();
+}
+/*e: function memorysummary */
+
 /*e: memory.c */
