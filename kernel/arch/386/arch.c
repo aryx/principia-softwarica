@@ -89,10 +89,9 @@ int (*cmpswap)(long*, long, long) = cmpswap386;
 //now in globals.c: void (*coherence)(void) = nop;
 
 
-
+/*s: function timerset */
 // used to be static, but now shared between arch.c and devarch.c
 int doi8253set = 1;
-
 /*
  *  set next timer interrupt
  */
@@ -102,6 +101,7 @@ timerset(Tval x)
     if(doi8253set)
         (*arch->timerset)(x);
 }
+/*e: function timerset */
 
 
 ulong

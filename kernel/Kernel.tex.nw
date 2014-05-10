@@ -1721,6 +1721,12 @@ struct Sema
 
 \section{Timers}
 
+% capacity of machine is very low, just timer next point
+%  but have many processes, many timer needs, so need map
+%  all of that on very limited hardware power
+
+\subsection{Time units}
+
 <<type Tval>>=
 typedef vlong   Tval; // ticks
 typedef vlong   Tnano; // nanoseconds
@@ -1728,6 +1734,92 @@ typedef vlong   Tmicro; // microseconds
 typedef int     Tms; // milliseconds
 typedef vlong   Tsec; // seconds
 @
+
+<<function tk2ms>>=
+/*
+ *  This tk2ms avoids overflows that the macro version is prone to.
+ *  It is a LOT slower so shouldn't be used if you're just converting
+ *  a delta.
+ */
+ulong
+tk2ms(ulong ticks)
+{
+    uvlong t, hz;
+
+    t = ticks;
+    hz = HZ;
+    t *= 1000L;
+    t = t/hz;
+    ticks = t;
+    return ticks;
+}
+@ 
+
+
+<<function ms2tk>>=
+ulong
+ms2tk(ulong ms)
+{
+    /* avoid overflows at the cost of precision */
+    if(ms >= 1000000000/HZ)
+        return (ms/1000)*HZ;
+    return (ms*HZ+500)/1000;
+}
+@ 
+
+\subsection{[[timerset()]]}
+
+<<function timerset>>=
+// used to be static, but now shared between arch.c and devarch.c
+int doi8253set = 1;
+/*
+ *  set next timer interrupt
+ */
+void
+timerset(Tval x)
+{
+    if(doi8253set)
+        (*arch->timerset)(x);
+}
+@
+
+<<function i8253timerset>>=
+void
+i8253timerset(uvlong next)
+{
+    long period;
+    ulong want;
+    ulong now;
+
+    period = MaxPeriod;
+    if(next != 0){
+        want = next>>Tickshift;
+        now = i8253.ticks;  /* assuming whomever called us just did fastticks() */
+
+        period = want - now;
+        if(period < MinPeriod)
+            period = MinPeriod;
+        else if(period > MaxPeriod)
+            period = MaxPeriod;
+    }
+
+    /* hysteresis */
+    if(i8253.period != period){
+        ilock(&i8253);
+        /* load new value */
+        outb(Tmode, Load0|Square);
+        outb(T0cntr, period);       /* low byte */
+        outb(T0cntr, period >> 8);      /* high byte */
+
+        /* remember period */
+        i8253.period = period;
+        i8253.periodset++;
+        iunlock(&i8253);
+    }
+}
+@
+
+\subsection{[[Timer]] and [[Timers]]}
 
 <<struct Timer>>=
 struct Timer
@@ -1758,6 +1850,7 @@ enum timermode
     Tperiodic,  /* periodic timer, period in ns */
 };
 @ 
+
 <<struct Timers>>=
 struct Timers
 {
@@ -1848,6 +1941,7 @@ tdel(Timer *dt)
 }
 @ 
 
+\subsection{[[timers]]}
 <<global timers>>=
 static Timers timers[MAXMACH];
 @ 
@@ -1899,8 +1993,7 @@ timerdel(Timer *dt)
 @ 
 
 
-
-
+\subsection{Initialisation}
 
 <<function timersinit>>=
 void
@@ -1924,6 +2017,8 @@ timersinit(void)
     timeradd(t);
 }
 @ 
+
+\subsection{Clock callback}
 
 <<function addclock0link>>=
 Timer*
