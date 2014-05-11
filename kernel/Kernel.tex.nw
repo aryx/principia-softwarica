@@ -3273,6 +3273,157 @@ struct Vctl {
 };
 @
 
+<<global vctl>>=
+static Vctl *vctl[256];
+@ 
+
+<<global vctllock>>=
+static Lock vctllock;
+@ 
+
+<<function intrenable>>=
+void
+intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
+{
+    int vno;
+    Vctl *v;
+
+    if(f == nil){
+        print("intrenable: nil handler for %d, tbdf 0x%uX for %s\n",
+            irq, tbdf, name);
+        return;
+    }
+
+    v = xalloc(sizeof(Vctl));
+    v->isintr = true;
+    v->irq = irq;
+    v->tbdf = tbdf;
+    v->f = f;
+    v->a = a;
+    strncpy(v->name, name, KNAMELEN-1);
+    v->name[KNAMELEN-1] = 0;
+
+    ilock(&vctllock);
+    vno = arch->intrenable(v);
+    if(vno == -1){
+        iunlock(&vctllock);
+        print("intrenable: couldn't enable irq %d, tbdf 0x%uX for %s\n",
+            irq, tbdf, v->name);
+        xfree(v);
+        return;
+    }
+    if(vctl[vno]){
+        if(vctl[vno]->isr != v->isr || vctl[vno]->eoi != v->eoi)
+            panic("intrenable: handler: %s %s %#p %#p %#p %#p",
+                vctl[vno]->name, v->name,
+                vctl[vno]->isr, v->isr, vctl[vno]->eoi, v->eoi);
+        v->next = vctl[vno];
+    }
+    vctl[vno] = v;
+    iunlock(&vctllock);
+}
+@ 
+
+
+<<function intrdisable>>=
+int
+intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
+{
+    Vctl **pv, *v;
+    int vno;
+
+    /*
+     * For now, none of this will work with the APIC code,
+     * there is no mapping between irq and vector as the IRQ
+     * is pretty meaningless.
+     */
+    if(arch->intrvecno == nil)
+        return -1;
+    vno = arch->intrvecno(irq);
+    ilock(&vctllock);
+    pv = &vctl[vno];
+    while (*pv &&
+          ((*pv)->irq != irq || (*pv)->tbdf != tbdf || (*pv)->f != f || (*pv)->a != a ||
+           strcmp((*pv)->name, name)))
+        pv = &((*pv)->next);
+    assert(*pv);
+
+    v = *pv;
+    *pv = (*pv)->next;  /* Link out the entry */
+
+    if(vctl[vno] == nil && arch->intrdisable != nil)
+        arch->intrdisable(irq);
+    iunlock(&vctllock);
+    xfree(v);
+    return 0;
+}
+@ 
+
+
+<<function irqallocread>>=
+static long
+irqallocread(Chan*, void *vbuf, long n, vlong offset)
+{
+    char *buf, *p, str[2*(11+1)+KNAMELEN+1+1];
+    int m, vno;
+    long oldn;
+    Vctl *v;
+
+    if(n < 0 || offset < 0)
+        error(Ebadarg);
+
+    oldn = n;
+    buf = vbuf;
+    for(vno=0; vno<nelem(vctl); vno++){
+        for(v=vctl[vno]; v; v=v->next){
+            m = snprint(str, sizeof str, "%11d %11d %.*s\n", vno, v->irq, KNAMELEN, v->name);
+            if(m <= offset) /* if do not want this, skip entry */
+                offset -= m;
+            else{
+                /* skip offset bytes */
+                m -= offset;
+                p = str+offset;
+                offset = 0;
+
+                /* write at most max(n,m) bytes */
+                if(m > n)
+                    m = n;
+                memmove(buf, p, m);
+                n -= m;
+                buf += m;
+
+                if(n == 0)
+                    return oldn;
+            }
+        }
+    }
+    return oldn - n;
+}
+@ 
+
+<<function trapenable>>=
+void
+trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
+{
+    Vctl *v;
+
+    if(vno < 0 || vno >= VectorPIC)
+        panic("trapenable: vno %d", vno);
+    v = xalloc(sizeof(Vctl));
+    v->tbdf = BUSUNKNOWN;
+    v->f = f;
+    v->a = a;
+    strncpy(v->name, name, KNAMELEN);
+    v->name[KNAMELEN-1] = 0;
+
+    ilock(&vctllock);
+    v->next = vctl[vno];
+    vctl[vno] = v;
+    iunlock(&vctllock);
+}
+@ 
+
+
 \section{Exceptions}
 
 <<enum vector>>=
@@ -3420,6 +3571,135 @@ i8259init(void)
 @
 
 
+<<global i8259lock>>=
+static Lock i8259lock;
+@
+
+<<function i8259isr>>=
+int
+i8259isr(int vno)
+{
+    int irq, isr;
+
+    if(vno < VectorPIC || vno > VectorPIC+MaxIrqPIC)
+        return 0;
+    irq = vno-VectorPIC;
+
+    /*
+     *  tell the 8259 that we're done with the
+     *  highest level interrupt (interrupts are still
+     *  off at this point)
+     */
+    ilock(&i8259lock);
+    isr = inb(Int0ctl);
+    outb(Int0ctl, EOI);
+    if(irq >= 8){
+        isr |= inb(Int1ctl)<<8;
+        outb(Int1ctl, EOI);
+    }
+    iunlock(&i8259lock);
+
+    return isr & (1<<irq);
+}
+@
+
+<<function i8259enable>>=
+int
+i8259enable(Vctl* v)
+{
+    int irq, irqbit;
+
+    /*
+     * Given an IRQ, enable the corresponding interrupt in the i8259
+     * and return the vector to be used. The i8259 is set to use a fixed
+     * range of vectors starting at VectorPIC.
+     */
+    irq = v->irq;
+    if(irq < 0 || irq > MaxIrqPIC){
+        print("i8259enable: irq %d out of range\n", irq);
+        return -1;
+    }
+    irqbit = 1<<irq;
+
+    ilock(&i8259lock);
+    if(!(i8259mask & irqbit) && !(i8259elcr & irqbit)){
+        print("i8259enable: irq %d shared but not level\n", irq);
+        iunlock(&i8259lock);
+        return -1;
+    }
+    i8259mask &= ~irqbit;
+    if(irq < 8)
+        outb(Int0aux, i8259mask & 0xFF);
+    else
+        outb(Int1aux, (i8259mask>>8) & 0xFF);
+
+    if(i8259elcr & irqbit)
+        v->eoi = i8259isr;
+    else
+        v->isr = i8259isr;
+    iunlock(&i8259lock);
+
+    return VectorPIC+irq;
+}
+@
+
+<<function i8259vecno>>=
+int
+i8259vecno(int irq)
+{
+    return VectorPIC+irq;
+}
+@
+
+<<function i8259disable>>=
+int
+i8259disable(int irq)
+{
+    int irqbit;
+
+    /*
+     * Given an IRQ, disable the corresponding interrupt
+     * in the 8259.
+     */
+    if(irq < 0 || irq > MaxIrqPIC){
+        print("i8259disable: irq %d out of range\n", irq);
+        return -1;
+    }
+    irqbit = 1<<irq;
+
+    ilock(&i8259lock);
+    if(!(i8259mask & irqbit)){
+        i8259mask |= irqbit;
+        if(irq < 8)
+            outb(Int0aux, i8259mask & 0xFF);
+        else
+            outb(Int1aux, (i8259mask>>8) & 0xFF);
+    }
+    iunlock(&i8259lock);
+    return 0;
+}
+@
+
+<<function i8259on>>=
+void
+i8259on(void)
+{
+    outb(Int0aux, i8259mask&0xFF);
+    outb(Int1aux, (i8259mask>>8)&0xFF);
+}
+@
+
+
+<<function i8259off>>=
+void
+i8259off(void)
+{
+    outb(Int0aux, 0xFF);
+    outb(Int1aux, 0xFF);
+}
+@
+
+
 \section{Software interrupts}
 
 <<constant MAXSYSARG>>=
@@ -3457,6 +3737,573 @@ TEXT _syscallintr(SB), $0
         IRETL
 @ 
 
+<<function syscall>>=
+/*
+ *  Syscall is called directly from assembler without going through trap().
+ */
+//@Scheck: no dead, called from assembly by syscall/386/plan9l.s
+void
+syscall(Ureg* ureg)
+{
+    char *e;
+    ulong   sp;
+    long    ret;
+    int i, s;
+    ulong scallnr;
+    vlong startns, stopns;
+
+    if((ureg->cs & 0xFFFF) != UESEL)
+        panic("syscall: cs 0x%4.4luX", ureg->cs);
+
+    cycles(&up->kentry);
+
+    m->syscall++;
+    up->insyscall = true;
+    up->pc = ureg->pc;
+    up->dbgreg = ureg;
+
+    sp = ureg->usp;
+        // syscall number
+    scallnr = ureg->ax;
+    up->scallnr = scallnr;
+
+    if(up->procctl == Proc_tracesyscall){
+        /*
+         * Redundant validaddr.  Do we care?
+         * Tracing syscalls is not exactly a fast path...
+         * Beware, validaddr currently does a pexit rather
+         * than an error if there's a problem; that might
+         * change in the future.
+         */
+        if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
+            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+
+        syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
+        up->procctl = Proc_stopme;
+        procctl(up);
+        if(up->syscalltrace)
+            free(up->syscalltrace);
+        up->syscalltrace = nil;
+        startns = todget(nil);
+    }
+
+    if(scallnr == RFORK && up->fpstate == FPactive){
+        fpsave(&up->fpsave);
+        up->fpstate = FPinactive;
+    }
+    spllo();
+
+    up->nerrlab = 0;
+    ret = -1;
+    if(!waserror()){
+        if(scallnr >= nsyscall || systab[scallnr] == 0){
+            pprint("bad sys call number %lud pc %lux\n",
+                scallnr, ureg->pc);
+            postnote(up, 1, "sys: bad sys call", NDebug);
+            error(Ebadarg);
+        }
+
+        if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD))
+            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+
+        up->s = *((Sargs*)(sp+BY2WD));
+        up->psstate = sysctab[scallnr];
+
+                //IMPORTANT: The actual system call
+        ret = systab[scallnr](up->s.args);
+        poperror();
+    }else{
+        /* failure: save the error buffer for errstr */
+        e = up->syserrstr;
+        up->syserrstr = up->errstr;
+        up->errstr = e;
+        if(0 && up->pid == 1)
+            print("syscall %lud error %s\n", scallnr, up->syserrstr);
+    }
+    if(up->nerrlab){
+        print("bad errstack [%lud]: %d extra\n", scallnr, up->nerrlab);
+        for(i = 0; i < NERR; i++)
+            print("sp=%lux pc=%lux\n",
+                up->errlab[i].sp, up->errlab[i].pc);
+        panic("error stack");
+    }
+
+    /*
+     *  Put return value in frame.  On the x86 the syscall is
+     *  just another trap and the return value from syscall is
+     *  ignored.  On other machines the return value is put into
+     *  the results register by caller of syscall.
+     */
+    ureg->ax = ret;
+
+    if(up->procctl == Proc_tracesyscall){
+        stopns = todget(nil);
+        up->procctl = Proc_stopme;
+        sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
+        s = splhi();
+        procctl(up);
+        splx(s);
+        if(up->syscalltrace)
+            free(up->syscalltrace);
+        up->syscalltrace = nil;
+    }
+
+    up->insyscall = false;
+    up->psstate = nil;
+
+    if(scallnr == NOTED)
+        noted(ureg, *(ulong*)(sp+BY2WD));
+
+    if(scallnr!=RFORK && (up->procctl || up->nnote)){
+        splhi();
+        notify(ureg);
+    }
+    /* if we delayed sched because we held a lock, sched now */
+    if(up->delaysched)
+        sched();
+    kexit(ureg);
+}
+@ 
+
+\section{[[trap()]]}
+
+<<global vectortable>>=
+TEXT vectortable(SB), $0
+        CALL _strayintr(SB); BYTE $0x00         /* divide error */
+        CALL _strayintr(SB); BYTE $0x01         /* debug exception */
+        CALL _strayintr(SB); BYTE $0x02         /* NMI interrupt */
+        CALL _strayintr(SB); BYTE $0x03         /* breakpoint */
+        CALL _strayintr(SB); BYTE $0x04         /* overflow */
+        CALL _strayintr(SB); BYTE $0x05         /* bound */
+        CALL _strayintr(SB); BYTE $0x06         /* invalid opcode */
+        CALL _strayintr(SB); BYTE $0x07         /* no coprocessor available */
+        CALL _strayintrx(SB); BYTE $0x08        /* double fault */
+        CALL _strayintr(SB); BYTE $0x09         /* coprocessor segment overflow */
+        CALL _strayintrx(SB); BYTE $0x0A        /* invalid TSS */
+        CALL _strayintrx(SB); BYTE $0x0B        /* segment not available */
+        CALL _strayintrx(SB); BYTE $0x0C        /* stack exception */
+        CALL _strayintrx(SB); BYTE $0x0D        /* general protection error */
+        CALL _strayintrx(SB); BYTE $0x0E        /* page fault */
+        CALL _strayintr(SB); BYTE $0x0F         /*  */
+        CALL _strayintr(SB); BYTE $0x10         /* coprocessor error */
+        CALL _strayintrx(SB); BYTE $0x11        /* alignment check */
+        CALL _strayintr(SB); BYTE $0x12         /* machine check */
+        CALL _strayintr(SB); BYTE $0x13
+        CALL _strayintr(SB); BYTE $0x14
+        CALL _strayintr(SB); BYTE $0x15
+        CALL _strayintr(SB); BYTE $0x16
+        CALL _strayintr(SB); BYTE $0x17
+        CALL _strayintr(SB); BYTE $0x18
+        CALL _strayintr(SB); BYTE $0x19
+        CALL _strayintr(SB); BYTE $0x1A
+        CALL _strayintr(SB); BYTE $0x1B
+        CALL _strayintr(SB); BYTE $0x1C
+        CALL _strayintr(SB); BYTE $0x1D
+        CALL _strayintr(SB); BYTE $0x1E
+        CALL _strayintr(SB); BYTE $0x1F
+        CALL _strayintr(SB); BYTE $0x20         /* VectorLAPIC */
+        CALL _strayintr(SB); BYTE $0x21
+        CALL _strayintr(SB); BYTE $0x22
+        CALL _strayintr(SB); BYTE $0x23
+        CALL _strayintr(SB); BYTE $0x24
+        CALL _strayintr(SB); BYTE $0x25
+        CALL _strayintr(SB); BYTE $0x26
+        CALL _strayintr(SB); BYTE $0x27
+        CALL _strayintr(SB); BYTE $0x28
+        CALL _strayintr(SB); BYTE $0x29
+        CALL _strayintr(SB); BYTE $0x2A
+        CALL _strayintr(SB); BYTE $0x2B
+        CALL _strayintr(SB); BYTE $0x2C
+        CALL _strayintr(SB); BYTE $0x2D
+        CALL _strayintr(SB); BYTE $0x2E
+        CALL _strayintr(SB); BYTE $0x2F
+        CALL _strayintr(SB); BYTE $0x30
+        CALL _strayintr(SB); BYTE $0x31
+        CALL _strayintr(SB); BYTE $0x32
+        CALL _strayintr(SB); BYTE $0x33
+        CALL _strayintr(SB); BYTE $0x34
+        CALL _strayintr(SB); BYTE $0x35
+        CALL _strayintr(SB); BYTE $0x36
+        CALL _strayintr(SB); BYTE $0x37
+        CALL _strayintr(SB); BYTE $0x38
+        CALL _strayintr(SB); BYTE $0x39
+        CALL _strayintr(SB); BYTE $0x3A
+        CALL _strayintr(SB); BYTE $0x3B
+        CALL _strayintr(SB); BYTE $0x3C
+        CALL _strayintr(SB); BYTE $0x3D
+        CALL _strayintr(SB); BYTE $0x3E
+        CALL _strayintr(SB); BYTE $0x3F
+        CALL _syscallintr(SB); BYTE $0x40       /* VectorSYSCALL */
+        CALL _strayintr(SB); BYTE $0x41
+        CALL _strayintr(SB); BYTE $0x42
+        CALL _strayintr(SB); BYTE $0x43
+        CALL _strayintr(SB); BYTE $0x44
+        CALL _strayintr(SB); BYTE $0x45
+        CALL _strayintr(SB); BYTE $0x46
+        CALL _strayintr(SB); BYTE $0x47
+        CALL _strayintr(SB); BYTE $0x48
+        CALL _strayintr(SB); BYTE $0x49
+        CALL _strayintr(SB); BYTE $0x4A
+        CALL _strayintr(SB); BYTE $0x4B
+        CALL _strayintr(SB); BYTE $0x4C
+        CALL _strayintr(SB); BYTE $0x4D
+        CALL _strayintr(SB); BYTE $0x4E
+        CALL _strayintr(SB); BYTE $0x4F
+        CALL _strayintr(SB); BYTE $0x50
+        CALL _strayintr(SB); BYTE $0x51
+        CALL _strayintr(SB); BYTE $0x52
+        CALL _strayintr(SB); BYTE $0x53
+        CALL _strayintr(SB); BYTE $0x54
+        CALL _strayintr(SB); BYTE $0x55
+        CALL _strayintr(SB); BYTE $0x56
+        CALL _strayintr(SB); BYTE $0x57
+        CALL _strayintr(SB); BYTE $0x58
+        CALL _strayintr(SB); BYTE $0x59
+        CALL _strayintr(SB); BYTE $0x5A
+        CALL _strayintr(SB); BYTE $0x5B
+        CALL _strayintr(SB); BYTE $0x5C
+        CALL _strayintr(SB); BYTE $0x5D
+        CALL _strayintr(SB); BYTE $0x5E
+        CALL _strayintr(SB); BYTE $0x5F
+        CALL _strayintr(SB); BYTE $0x60
+        CALL _strayintr(SB); BYTE $0x61
+        CALL _strayintr(SB); BYTE $0x62
+        CALL _strayintr(SB); BYTE $0x63
+        CALL _strayintr(SB); BYTE $0x64
+        CALL _strayintr(SB); BYTE $0x65
+        CALL _strayintr(SB); BYTE $0x66
+        CALL _strayintr(SB); BYTE $0x67
+        CALL _strayintr(SB); BYTE $0x68
+        CALL _strayintr(SB); BYTE $0x69
+        CALL _strayintr(SB); BYTE $0x6A
+        CALL _strayintr(SB); BYTE $0x6B
+        CALL _strayintr(SB); BYTE $0x6C
+        CALL _strayintr(SB); BYTE $0x6D
+        CALL _strayintr(SB); BYTE $0x6E
+        CALL _strayintr(SB); BYTE $0x6F
+        CALL _strayintr(SB); BYTE $0x70
+        CALL _strayintr(SB); BYTE $0x71
+        CALL _strayintr(SB); BYTE $0x72
+        CALL _strayintr(SB); BYTE $0x73
+        CALL _strayintr(SB); BYTE $0x74
+        CALL _strayintr(SB); BYTE $0x75
+        CALL _strayintr(SB); BYTE $0x76
+        CALL _strayintr(SB); BYTE $0x77
+        CALL _strayintr(SB); BYTE $0x78
+        CALL _strayintr(SB); BYTE $0x79
+        CALL _strayintr(SB); BYTE $0x7A
+        CALL _strayintr(SB); BYTE $0x7B
+        CALL _strayintr(SB); BYTE $0x7C
+        CALL _strayintr(SB); BYTE $0x7D
+        CALL _strayintr(SB); BYTE $0x7E
+        CALL _strayintr(SB); BYTE $0x7F
+        CALL _strayintr(SB); BYTE $0x80         /* Vector[A]PIC */
+        CALL _strayintr(SB); BYTE $0x81
+        CALL _strayintr(SB); BYTE $0x82
+        CALL _strayintr(SB); BYTE $0x83
+        CALL _strayintr(SB); BYTE $0x84
+        CALL _strayintr(SB); BYTE $0x85
+        CALL _strayintr(SB); BYTE $0x86
+        CALL _strayintr(SB); BYTE $0x87
+        CALL _strayintr(SB); BYTE $0x88
+        CALL _strayintr(SB); BYTE $0x89
+        CALL _strayintr(SB); BYTE $0x8A
+        CALL _strayintr(SB); BYTE $0x8B
+        CALL _strayintr(SB); BYTE $0x8C
+        CALL _strayintr(SB); BYTE $0x8D
+        CALL _strayintr(SB); BYTE $0x8E
+        CALL _strayintr(SB); BYTE $0x8F
+        CALL _strayintr(SB); BYTE $0x90
+        CALL _strayintr(SB); BYTE $0x91
+        CALL _strayintr(SB); BYTE $0x92
+        CALL _strayintr(SB); BYTE $0x93
+        CALL _strayintr(SB); BYTE $0x94
+        CALL _strayintr(SB); BYTE $0x95
+        CALL _strayintr(SB); BYTE $0x96
+        CALL _strayintr(SB); BYTE $0x97
+        CALL _strayintr(SB); BYTE $0x98
+        CALL _strayintr(SB); BYTE $0x99
+        CALL _strayintr(SB); BYTE $0x9A
+        CALL _strayintr(SB); BYTE $0x9B
+        CALL _strayintr(SB); BYTE $0x9C
+        CALL _strayintr(SB); BYTE $0x9D
+        CALL _strayintr(SB); BYTE $0x9E
+        CALL _strayintr(SB); BYTE $0x9F
+        CALL _strayintr(SB); BYTE $0xA0
+        CALL _strayintr(SB); BYTE $0xA1
+        CALL _strayintr(SB); BYTE $0xA2
+        CALL _strayintr(SB); BYTE $0xA3
+        CALL _strayintr(SB); BYTE $0xA4
+        CALL _strayintr(SB); BYTE $0xA5
+        CALL _strayintr(SB); BYTE $0xA6
+        CALL _strayintr(SB); BYTE $0xA7
+        CALL _strayintr(SB); BYTE $0xA8
+        CALL _strayintr(SB); BYTE $0xA9
+        CALL _strayintr(SB); BYTE $0xAA
+        CALL _strayintr(SB); BYTE $0xAB
+        CALL _strayintr(SB); BYTE $0xAC
+        CALL _strayintr(SB); BYTE $0xAD
+        CALL _strayintr(SB); BYTE $0xAE
+        CALL _strayintr(SB); BYTE $0xAF
+        CALL _strayintr(SB); BYTE $0xB0
+        CALL _strayintr(SB); BYTE $0xB1
+        CALL _strayintr(SB); BYTE $0xB2
+        CALL _strayintr(SB); BYTE $0xB3
+        CALL _strayintr(SB); BYTE $0xB4
+        CALL _strayintr(SB); BYTE $0xB5
+        CALL _strayintr(SB); BYTE $0xB6
+        CALL _strayintr(SB); BYTE $0xB7
+        CALL _strayintr(SB); BYTE $0xB8
+        CALL _strayintr(SB); BYTE $0xB9
+        CALL _strayintr(SB); BYTE $0xBA
+        CALL _strayintr(SB); BYTE $0xBB
+        CALL _strayintr(SB); BYTE $0xBC
+        CALL _strayintr(SB); BYTE $0xBD
+        CALL _strayintr(SB); BYTE $0xBE
+        CALL _strayintr(SB); BYTE $0xBF
+        CALL _strayintr(SB); BYTE $0xC0
+        CALL _strayintr(SB); BYTE $0xC1
+        CALL _strayintr(SB); BYTE $0xC2
+        CALL _strayintr(SB); BYTE $0xC3
+        CALL _strayintr(SB); BYTE $0xC4
+        CALL _strayintr(SB); BYTE $0xC5
+        CALL _strayintr(SB); BYTE $0xC6
+        CALL _strayintr(SB); BYTE $0xC7
+        CALL _strayintr(SB); BYTE $0xC8
+        CALL _strayintr(SB); BYTE $0xC9
+        CALL _strayintr(SB); BYTE $0xCA
+        CALL _strayintr(SB); BYTE $0xCB
+        CALL _strayintr(SB); BYTE $0xCC
+        CALL _strayintr(SB); BYTE $0xCD
+        CALL _strayintr(SB); BYTE $0xCE
+        CALL _strayintr(SB); BYTE $0xCF
+        CALL _strayintr(SB); BYTE $0xD0
+        CALL _strayintr(SB); BYTE $0xD1
+        CALL _strayintr(SB); BYTE $0xD2
+        CALL _strayintr(SB); BYTE $0xD3
+        CALL _strayintr(SB); BYTE $0xD4
+        CALL _strayintr(SB); BYTE $0xD5
+        CALL _strayintr(SB); BYTE $0xD6
+        CALL _strayintr(SB); BYTE $0xD7
+        CALL _strayintr(SB); BYTE $0xD8
+        CALL _strayintr(SB); BYTE $0xD9
+        CALL _strayintr(SB); BYTE $0xDA
+        CALL _strayintr(SB); BYTE $0xDB
+        CALL _strayintr(SB); BYTE $0xDC
+        CALL _strayintr(SB); BYTE $0xDD
+        CALL _strayintr(SB); BYTE $0xDE
+        CALL _strayintr(SB); BYTE $0xDF
+        CALL _strayintr(SB); BYTE $0xE0
+        CALL _strayintr(SB); BYTE $0xE1
+        CALL _strayintr(SB); BYTE $0xE2
+        CALL _strayintr(SB); BYTE $0xE3
+        CALL _strayintr(SB); BYTE $0xE4
+        CALL _strayintr(SB); BYTE $0xE5
+        CALL _strayintr(SB); BYTE $0xE6
+        CALL _strayintr(SB); BYTE $0xE7
+        CALL _strayintr(SB); BYTE $0xE8
+        CALL _strayintr(SB); BYTE $0xE9
+        CALL _strayintr(SB); BYTE $0xEA
+        CALL _strayintr(SB); BYTE $0xEB
+        CALL _strayintr(SB); BYTE $0xEC
+        CALL _strayintr(SB); BYTE $0xED
+        CALL _strayintr(SB); BYTE $0xEE
+        CALL _strayintr(SB); BYTE $0xEF
+        CALL _strayintr(SB); BYTE $0xF0
+        CALL _strayintr(SB); BYTE $0xF1
+        CALL _strayintr(SB); BYTE $0xF2
+        CALL _strayintr(SB); BYTE $0xF3
+        CALL _strayintr(SB); BYTE $0xF4
+        CALL _strayintr(SB); BYTE $0xF5
+        CALL _strayintr(SB); BYTE $0xF6
+        CALL _strayintr(SB); BYTE $0xF7
+        CALL _strayintr(SB); BYTE $0xF8
+        CALL _strayintr(SB); BYTE $0xF9
+        CALL _strayintr(SB); BYTE $0xFA
+        CALL _strayintr(SB); BYTE $0xFB
+        CALL _strayintr(SB); BYTE $0xFC
+        CALL _strayintr(SB); BYTE $0xFD
+        CALL _strayintr(SB); BYTE $0xFE
+        CALL _strayintr(SB); BYTE $0xFF
+@ 
+
+<<function _strayintr>>=
+/*
+ * Interrupt/exception handling.
+ * Each entry in the vector table calls either _strayintr or _strayintrx depending
+ * on whether an error code has been automatically pushed onto the stack
+ * (_strayintrx) or not, in which case a dummy entry must be pushed before retrieving
+ * the trap type from the vector table entry and placing it on the stack as part
+ * of the Ureg structure.
+ * The size of each entry in the vector table (6 bytes) is known in trapinit().
+ */
+TEXT _strayintr(SB), $0
+        PUSHL   AX                      /* save AX */
+        MOVL    4(SP), AX               /* return PC from vectortable(SB) */
+        JMP     intrcommon
+@
+
+
+<<function _strayintrx>>=
+TEXT _strayintrx(SB), $0
+        XCHGL   AX, (SP)                /* swap AX with vectortable CALL PC */
+intrcommon:
+        PUSHL   DS                      /* save DS */
+        PUSHL   $(KDSEL)
+        POPL    DS                      /* fix up DS */
+        MOVBLZX (AX), AX                /* trap type -> AX */
+        XCHGL   AX, 4(SP)               /* exchange trap type with saved AX */
+
+        PUSHL   ES                      /* save ES */
+        PUSHL   $(KDSEL)
+        POPL    ES                      /* fix up ES */
+
+        PUSHL   FS                      /* save the rest of the Ureg struct */
+        PUSHL   GS
+        PUSHAL
+
+        PUSHL   SP                      /* Ureg* argument to trap */
+        CALL    trap(SB)
+@ 
+
+
+
+<<function trap>>=
+/*
+ *  All traps come here.  It is slower to have all traps call trap()
+ *  rather than directly vectoring the handler. However, this avoids a
+ *  lot of code duplication and possible bugs. The only exception is
+ *  VectorSYSCALL.
+ *  Trap is called with interrupts disabled via interrupt-gates.
+ */
+//@Scheck: Assembly, not dead, called from assembly
+void
+trap(Ureg* ureg)
+{
+    bool clockintr;
+    int i, vno, user;
+    char buf[ERRMAX];
+    Vctl *ctl, *v;
+    Mach *mach;
+
+    if(!trapinited){
+        /* fault386 can give a better error message */
+        if(ureg->trap == VectorPF)
+            fault386(ureg, nil);
+        panic("trap %lud: not ready", ureg->trap);
+    }
+
+    m->perf.intrts = perfticks();
+    user = (ureg->cs & 0xFFFF) == UESEL;
+    if(user){
+        up->dbgreg = ureg;
+        cycles(&up->kentry);
+    }
+
+    clockintr = false;
+
+    vno = ureg->trap;
+    if(ctl = vctl[vno]){
+        if(ctl->isintr){
+            m->intr++;
+            if(vno >= VectorPIC && vno != VectorSYSCALL)
+                m->lastintr = ctl->irq;
+        }
+
+        if(ctl->isr)
+            ctl->isr(vno);
+        for(v = ctl; v != nil; v = v->next){
+            if(v->f)
+                v->f(ureg, v->a);
+        }
+        if(ctl->eoi)
+            ctl->eoi(vno);
+
+        if(ctl->isintr){
+            intrtime(m, vno);
+
+            if(ctl->irq == IrqCLOCK || ctl->irq == IrqTIMER)
+                clockintr = true;
+
+            if(up && !clockintr)
+                preempted();
+        }
+    }
+    else if(vno < nelem(excname) && user){
+        spllo();
+        snprint(buf, sizeof buf, "sys: trap: %s", excname[vno]);
+        postnote(up, 1, buf, NDebug);
+    }
+    else if(vno >= VectorPIC && vno != VectorSYSCALL){
+        /*
+         * An unknown interrupt.
+         * Check for a default IRQ7. This can happen when
+         * the IRQ input goes away before the acknowledge.
+         * In this case, a 'default IRQ7' is generated, but
+         * the corresponding bit in the ISR isn't set.
+         * In fact, just ignore all such interrupts.
+         */
+
+        /* call all interrupt routines, just in case */
+        for(i = VectorPIC; i <= MaxIrqLAPIC; i++){
+            ctl = vctl[i];
+            if(ctl == nil)
+                continue;
+            if(!ctl->isintr)
+                continue;
+            for(v = ctl; v != nil; v = v->next){
+                if(v->f)
+                    v->f(ureg, v->a);
+            }
+            /* should we do this? */
+            if(ctl->eoi)
+                ctl->eoi(i);
+        }
+
+        /* clear the interrupt */
+        i8259isr(vno);
+        <<[[trap()]] debugging>>
+        m->spuriousintr++;
+        if(user)
+            kexit(ureg);
+        return;
+    }
+    else{
+        if(vno == VectorNMI){
+            /*
+             * Don't re-enable, it confuses the crash dumps.
+            nmienable();
+             */
+            iprint("cpu%d: NMI PC %#8.8lux\n", m->machno, ureg->pc);
+            while(m->machno != 0)
+                ;
+        }
+        dumpregs(ureg);
+        if(!user){
+            ureg->sp = (ulong)&ureg->sp;
+            _dumpstack(ureg);
+        }
+        if(vno < nelem(excname))
+            panic("%s", excname[vno]);
+        panic("unknown trap/intr: %d", vno);
+    }
+    splhi();
+
+    /* delaysched set because we held a lock or because our quantum ended */
+    if(up && up->delaysched && clockintr){
+        sched();
+        splhi();
+    }
+
+    if(user){
+        if(up->procctl || up->nnote)
+            notify(ureg);
+        kexit(ureg);
+    }
+}
+@ 
+
+
 \chapter{Processes}
 \minitoc
 
@@ -3470,9 +4317,120 @@ TEXT _syscallintr(SB), $0
 
 \section{[[Proc]]}
 
+<<function newproc>>=
+Proc*
+newproc(void)
+{
+    char msg[64];
+    Proc *p;
+
+    lock(&procalloc);
+    while((p = procalloc.free) == nil) {
+        unlock(&procalloc);
+
+        snprint(msg, sizeof msg, "no procs; %s forking",
+            up? up->text: "kernel");
+        /*
+         * the situation is unlikely to heal itself.
+         * dump the proc table and restart by default.
+         * *noprocspersist in plan9.ini will yield the old
+         * behaviour of trying forever.
+         */
+        if(getconf("*noprocspersist") == nil)
+            noprocpanic(msg);
+        resrcwait(msg);
+        lock(&procalloc);
+    }
+    procalloc.free = p->qnext;
+    unlock(&procalloc);
+
+    p->state = Scheding;
+    p->psstate = "New";
+    p->mach = 0;
+    p->qnext = 0;
+    p->nchild = 0;
+    p->nwait = 0;
+    p->waitq = 0;
+    p->parent = 0;
+    p->pgrp = 0;
+    p->egrp = 0;
+    p->fgrp = 0;
+    p->rgrp = 0;
+    p->pdbg = 0;
+    p->fpstate = FPinit;
+    p->kp = 0;
+    if(up && up->procctl == Proc_tracesyscall)
+        p->procctl = Proc_tracesyscall;
+    else
+        p->procctl = 0;
+    p->syscalltrace = 0;    
+    p->notepending = 0;
+    p->ureg = 0;
+    p->privatemem = 0;
+    p->noswap = 0;
+    p->errstr = p->errbuf0;
+    p->syserrstr = p->errbuf1;
+    p->errbuf0[0] = '\0';
+    p->errbuf1[0] = '\0';
+    p->nlocks.ref = 0;
+    p->delaysched = 0;
+    p->trace = 0;
+    kstrdup(&p->user, "*nouser");
+    kstrdup(&p->text, "*notext");
+    kstrdup(&p->args, "");
+    p->nargs = 0;
+    p->setargs = 0;
+    memset(p->seg, 0, sizeof p->seg);
+    p->pid = incref(&pidalloc);
+    pidhash(p);
+    p->noteid = incref(&noteidalloc);
+    if(p->pid==0 || p->noteid==0)
+        panic("pidalloc");
+    if(p->kstack == 0)
+        p->kstack = smalloc(KSTACK);
+
+    /* sched params */
+    p->mp = 0;
+    p->wired = 0;
+    procpriority(p, PriNormal, 0);
+    p->cpu = 0;
+    p->lastupdate = MACHP(0)->ticks*Scaling;
+    p->edf = nil;
+
+    return p;
+}
+@ 
+
+
 \section{User}
 
 \section{Context switch}
+
+<<function gotolabel>>=
+/*
+ *  label consists of a stack pointer and a PC
+ */
+TEXT gotolabel(SB), $0
+        MOVL    label+0(FP), AX
+        MOVL    0(AX), SP                       /* restore sp */
+        MOVL    4(AX), AX                       /* put return pc on the stack */
+        MOVL    AX, 0(SP)
+        MOVL    $1, AX                          /* return 1 */
+        RET
+@
+
+
+<<function setlabel>>=
+TEXT setlabel(SB), $0
+        MOVL    label+0(FP), AX
+        MOVL    SP, 0(AX)                       /* store sp */
+        MOVL    0(SP), BX                       /* store return pc */
+        MOVL    BX, 4(AX)
+        MOVL    $0, AX                          /* return 0 */
+        RET
+
+@
+
 
 \section{Clock interrupt}
 
@@ -3606,6 +4564,251 @@ hzclock(Ureg *ur)
 
 \section{[[sysfork()]]}
 
+<<enum rfork>>=
+//coupling: with libc.h
+enum rfork
+{
+    RFNAMEG     = (1<<0),
+    RFENVG      = (1<<1),
+    RFFDG       = (1<<2),
+    RFNOTEG     = (1<<3),
+    RFPROC      = (1<<4),
+    RFMEM       = (1<<5),
+    RFNOWAIT    = (1<<6),
+    RFCNAMEG    = (1<<10),
+    RFCENVG     = (1<<11),
+    RFCFDG      = (1<<12),
+    RFREND      = (1<<13),
+    RFNOMNT     = (1<<14),
+};
+@ 
+
+
+<<function forkchild>>=
+void
+forkchild(Proc *p, Ureg *ureg)
+{
+    Ureg *cureg;
+
+    /*
+     * Add 2*BY2WD to the stack to account for
+     *  - the return PC
+     *  - trap's argument (ur)
+     */
+    p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Ureg)+2*BY2WD);
+    p->sched.pc = (ulong)forkret;
+
+    cureg = (Ureg*)(p->sched.sp+2*BY2WD);
+    memmove(cureg, ureg, sizeof(Ureg));
+    /* return value of syscall in child */
+    cureg->ax = 0;
+
+    /* Things from bottom of syscall which were never executed */
+    p->psstate = 0;
+    p->insyscall = 0;
+}
+@ 
+
+<<function forkret>>=
+TEXT forkret(SB), $0
+        POPL    AX
+        POPAL
+        POPL    GS
+        POPL    FS
+        POPL    ES
+        POPL    DS
+        ADDL    $8, SP                  /* pop error code and trap type */
+        IRETL
+@ 
+
+<<syscall rfork>>=
+long
+sysrfork(ulong *arg)
+{
+    Proc *p;
+    int n, i;
+    Fgrp *ofg;
+    Pgrp *opg;
+    Rgrp *org;
+    Egrp *oeg;
+    ulong pid, flag;
+    Mach *wm;
+
+    flag = arg[0];
+    /* Check flags before we commit */
+    if((flag & (RFFDG|RFCFDG)) == (RFFDG|RFCFDG))
+        error(Ebadarg);
+    if((flag & (RFNAMEG|RFCNAMEG)) == (RFNAMEG|RFCNAMEG))
+        error(Ebadarg);
+    if((flag & (RFENVG|RFCENVG)) == (RFENVG|RFCENVG))
+        error(Ebadarg);
+
+    if((flag&RFPROC) == 0) {
+        if(flag & (RFMEM|RFNOWAIT))
+            error(Ebadarg);
+        if(flag & (RFFDG|RFCFDG)) {
+            ofg = up->fgrp;
+            if(flag & RFFDG)
+                up->fgrp = dupfgrp(ofg);
+            else
+                up->fgrp = dupfgrp(nil);
+            closefgrp(ofg);
+        }
+        if(flag & (RFNAMEG|RFCNAMEG)) {
+            opg = up->pgrp;
+            up->pgrp = newpgrp();
+            if(flag & RFNAMEG)
+                pgrpcpy(up->pgrp, opg);
+            /* inherit noattach */
+            up->pgrp->noattach = opg->noattach;
+            closepgrp(opg);
+        }
+        if(flag & RFNOMNT)
+            up->pgrp->noattach = 1;
+        if(flag & RFREND) {
+            org = up->rgrp;
+            up->rgrp = newrgrp();
+            closergrp(org);
+        }
+        if(flag & (RFENVG|RFCENVG)) {
+            oeg = up->egrp;
+            up->egrp = smalloc(sizeof(Egrp));
+            up->egrp->ref = 1;
+            if(flag & RFENVG)
+                envcpy(up->egrp, oeg);
+            closeegrp(oeg);
+        }
+        if(flag & RFNOTEG)
+            up->noteid = incref(&noteidalloc);
+        return 0;
+    }
+
+    p = newproc();
+
+    p->fpsave = up->fpsave;
+    p->scallnr = up->scallnr;
+    p->s = up->s;
+    p->nerrlab = 0;
+    p->slash = up->slash;
+    p->dot = up->dot;
+    incref(p->dot);
+
+    memmove(p->note, up->note, sizeof(p->note));
+    p->privatemem = up->privatemem;
+    p->noswap = up->noswap;
+    p->nnote = up->nnote;
+    p->notified = 0;
+    p->lastnote = up->lastnote;
+    p->notify = up->notify;
+    p->ureg = up->ureg;
+    p->dbgreg = 0;
+
+    /* Make a new set of memory segments */
+    n = flag & RFMEM;
+    qlock(&p->seglock);
+    if(waserror()){
+        qunlock(&p->seglock);
+        nexterror();
+    }
+    for(i = 0; i < NSEG; i++)
+        if(up->seg[i])
+            p->seg[i] = dupseg(up->seg, i, n);
+    qunlock(&p->seglock);
+    poperror();
+
+    /* File descriptors */
+    if(flag & (RFFDG|RFCFDG)) {
+        if(flag & RFFDG)
+            p->fgrp = dupfgrp(up->fgrp);
+        else
+            p->fgrp = dupfgrp(nil);
+    }
+    else {
+        p->fgrp = up->fgrp;
+        incref(p->fgrp);
+    }
+
+    /* Process groups */
+    if(flag & (RFNAMEG|RFCNAMEG)) {
+        p->pgrp = newpgrp();
+        if(flag & RFNAMEG)
+            pgrpcpy(p->pgrp, up->pgrp);
+        /* inherit noattach */
+        p->pgrp->noattach = up->pgrp->noattach;
+    }
+    else {
+        p->pgrp = up->pgrp;
+        incref(p->pgrp);
+    }
+    if(flag & RFNOMNT)
+        p->pgrp->noattach = 1;
+
+    if(flag & RFREND)
+        p->rgrp = newrgrp();
+    else {
+        incref(up->rgrp);
+        p->rgrp = up->rgrp;
+    }
+
+    /* Environment group */
+    if(flag & (RFENVG|RFCENVG)) {
+        p->egrp = smalloc(sizeof(Egrp));
+        p->egrp->ref = 1;
+        if(flag & RFENVG)
+            envcpy(p->egrp, up->egrp);
+    }
+    else {
+        p->egrp = up->egrp;
+        incref(p->egrp);
+    }
+    p->hang = up->hang;
+    p->procmode = up->procmode;
+
+    /* Craft a return frame which will cause the child to pop out of
+     * the scheduler in user mode with the return register zero
+     */
+    forkchild(p, up->dbgreg);
+
+    p->parent = up;
+    p->parentpid = up->pid;
+    if(flag&RFNOWAIT)
+        p->parentpid = 0;
+    else {
+        lock(&up->exl);
+        up->nchild++;
+        unlock(&up->exl);
+    }
+    if((flag&RFNOTEG) == 0)
+        p->noteid = up->noteid;
+
+    /* don't penalize the child, it hasn't done FP in a note handler. */
+    p->fpstate = up->fpstate & ~FPillegal;
+    pid = p->pid;
+    memset(p->time, 0, sizeof(p->time));
+    p->time[TReal] = MACHP(0)->ticks;
+
+    kstrdup(&p->text, up->text);
+    kstrdup(&p->user, up->user);
+    /*
+     *  since the bss/data segments are now shareable,
+     *  any mmu info about this process is now stale
+     *  (i.e. has bad properties) and has to be discarded.
+     */
+    flushmmu();
+    p->basepri = up->basepri;
+    p->priority = up->basepri;
+    p->fixedpri = up->fixedpri;
+    p->mp = up->mp;
+    wm = up->wired;
+    if(wm)
+        procwired(p, wm->machno);
+    ready(p);
+    sched();
+    return pid;
+}
+@ 
+
+
 \section{[[sysexec()]]}
 
 <<constant AOUT_MAGIC>>=
@@ -3615,6 +4818,285 @@ hzclock(Ureg *ur)
 // I_MAGIC is defined in include/a.out.h
 #define AOUT_MAGIC  (I_MAGIC)
 @
+
+<<syscall exec>>=
+long
+sysexec(ulong *arg)
+{
+    Segment *s, *ts;
+    ulong t, d, b;
+    int i;
+    Chan *tc;
+    char **argv, **argp;
+    char *a, *charp, *args, *file, *file0;
+    char *progarg[sizeof(Exec)/2+1], *elem, progelem[64];
+    ulong ssize, spage, nargs, nbytes, n, bssend;
+    int indir;
+    Exec exec;
+    char line[sizeof(Exec)];
+    Fgrp *f;
+    KImage *img;
+    ulong magic, text, entry, data, bss;
+    Tos *tos;
+
+    indir = 0;
+    elem = nil;
+    validaddr(arg[0], 1, 0);
+    file0 = validnamedup((char*)arg[0], 1);
+    if(waserror()){
+        free(file0);
+        free(elem);
+        nexterror();
+    }
+    file = file0;
+    for(;;){
+        tc = namec(file, Aopen, OEXEC, 0);
+        if(waserror()){
+            cclose(tc);
+            nexterror();
+        }
+        if(!indir)
+            kstrdup(&elem, up->genbuf);
+
+        n = devtab[tc->type]->read(tc, &exec, sizeof(Exec), 0);
+        if(n < 2)
+            error(Ebadexec);
+        magic = l2be(exec.magic);
+        text = l2be(exec.text);
+        entry = l2be(exec.entry);
+        if(n==sizeof(Exec) && (magic == AOUT_MAGIC)){
+            if(text >= USTKTOP-UTZERO
+            || entry < UTZERO+sizeof(Exec)
+            || entry >= UTZERO+sizeof(Exec)+text)
+                error(Ebadexec);
+            break; /* for binary */
+        }
+
+        /*
+         * Process #! /bin/sh args ...
+         */
+        memmove(line, &exec, sizeof(Exec));
+        if(indir || line[0]!='#' || line[1]!='!')
+            error(Ebadexec);
+        n = shargs(line, n, progarg);
+        if(n == 0)
+            error(Ebadexec);
+        indir = 1;
+        /*
+         * First arg becomes complete file name
+         */
+        progarg[n++] = file;
+        progarg[n] = 0;
+        validaddr(arg[1], BY2WD, 1);
+        arg[1] += BY2WD;
+        file = progarg[0];
+        if(strlen(elem) >= sizeof progelem)
+            error(Ebadexec);
+        strcpy(progelem, elem);
+        progarg[0] = progelem;
+        poperror();
+        cclose(tc);
+    }
+
+    data = l2be(exec.data);
+    bss = l2be(exec.bss);
+    t = UTROUND(UTZERO+sizeof(Exec)+text);
+    d = (t + data + (BY2PG-1)) & ~(BY2PG-1);
+    bssend = t + data + bss;
+    b = (bssend + (BY2PG-1)) & ~(BY2PG-1);
+    if(t >= KZERO || d >= KZERO || b >= KZERO)
+        error(Ebadexec);
+
+    /*
+     * Args: pass 1: count
+     */
+    nbytes = sizeof(Tos);       /* hole for profiling clock at top of stack (and more) */
+    nargs = 0;
+    if(indir){
+        argp = progarg;
+        while(*argp){
+            a = *argp++;
+            nbytes += strlen(a) + 1;
+            nargs++;
+        }
+    }
+    evenaddr(arg[1]);
+    argp = (char**)arg[1];
+    validaddr((ulong)argp, BY2WD, 0);
+    while(*argp){
+        a = *argp++;
+        if(((ulong)argp&(BY2PG-1)) < BY2WD)
+            validaddr((ulong)argp, BY2WD, 0);
+        validaddr((ulong)a, 1, 0);
+        nbytes += ((char*)vmemchr(a, 0, 0x7FFFFFFF) - a) + 1;
+        nargs++;
+    }
+    ssize = BY2WD*(nargs+1) + ((nbytes+(BY2WD-1)) & ~(BY2WD-1));
+
+    /*
+     * 8-byte align SP for those (e.g. sparc) that need it.
+     * execregs() will subtract another 4 bytes for argc.
+     */
+    if((ssize+4) & 7)
+        ssize += 4;
+    spage = (ssize+(BY2PG-1)) >> PGSHIFT;
+
+    /*
+     * Build the stack segment, putting it in kernel virtual for the moment
+     */
+    if(spage > TSTKSIZ)
+        error(Enovmem);
+
+    qlock(&up->seglock);
+    if(waserror()){
+        qunlock(&up->seglock);
+        nexterror();
+    }
+    up->seg[ESEG] = newseg(SG_STACK, TSTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+
+    /*
+     * Args: pass 2: assemble; the pages will be faulted in
+     */
+    tos = (Tos*)(TSTKTOP - sizeof(Tos));
+    tos->cyclefreq = m->cyclefreq;
+    cycles((uvlong*)&tos->pcycles);
+    tos->pcycles = -tos->pcycles;
+    tos->kcycles = tos->pcycles;
+    tos->clock = 0;
+    argv = (char**)(TSTKTOP - ssize);
+    charp = (char*)(TSTKTOP - nbytes);
+    args = charp;
+    if(indir)
+        argp = progarg;
+    else
+        argp = (char**)arg[1];
+
+    for(i=0; i<nargs; i++){
+        if(indir && *argp==0) {
+            indir = 0;
+            argp = (char**)arg[1];
+        }
+        *argv++ = charp + (USTKTOP-TSTKTOP);
+        n = strlen(*argp) + 1;
+        memmove(charp, *argp++, n);
+        charp += n;
+    }
+    free(file0);
+
+    free(up->text);
+    up->text = elem;
+    elem = nil; /* so waserror() won't free elem */
+    USED(elem);
+
+    /* copy args; easiest from new process's stack */
+    n = charp - args;
+    if(n > 128) /* don't waste too much space on huge arg lists */
+        n = 128;
+    a = up->args;
+    up->args = nil;
+    free(a);
+    up->args = smalloc(n);
+    memmove(up->args, args, n);
+    if(n>0 && up->args[n-1]!='\0'){
+        /* make sure last arg is NUL-terminated */
+        /* put NUL at UTF-8 character boundary */
+        for(i=n-1; i>0; --i)
+            if(fullrune(up->args+i, n-i))
+                break;
+        up->args[i] = 0;
+        n = i+1;
+    }
+    up->nargs = n;
+
+    /*
+     * Committed.
+     * Free old memory.
+     * Special segments are maintained across exec
+     */
+    for(i = SSEG; i <= BSEG; i++) {
+        putseg(up->seg[i]);
+        /* prevent a second free if we have an error */
+        up->seg[i] = 0;
+    }
+    for(i = BSEG+1; i < NSEG; i++) {
+        s = up->seg[i];
+        if(s != 0 && (s->type&SG_CEXEC)) {
+            putseg(s);
+            up->seg[i] = 0;
+        }
+    }
+
+    /*
+     * Close on exec
+     */
+    f = up->fgrp;
+    for(i=0; i<=f->maxfd; i++)
+        fdclose(i, CCEXEC);
+
+    /* Text.  Shared. Attaches to cache image if possible */
+    /* attachimage returns a locked cache image */
+    img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
+    ts = img->s;
+    up->seg[TSEG] = ts;
+    ts->flushme = 1;
+    ts->fstart = 0;
+    ts->flen = sizeof(Exec)+text;
+    unlock(img);
+
+    /* Data. Shared. */
+    s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);
+    up->seg[DSEG] = s;
+
+    /* Attached by hand */
+    incref(img);
+    s->image = img;
+    s->fstart = ts->fstart+ts->flen;
+    s->flen = data;
+
+    /* BSS. Zero fill on demand */
+    up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
+
+    /*
+     * Move the stack
+     */
+    s = up->seg[ESEG];
+    up->seg[ESEG] = 0;
+    up->seg[SSEG] = s;
+    qunlock(&up->seglock);
+    poperror(); /* seglock */
+    poperror(); /* elem */
+    s->base = USTKTOP-USTKSIZE;
+    s->top = USTKTOP;
+    relocateseg(s, USTKTOP-TSTKTOP);
+
+    /*
+     *  '/' processes are higher priority (hack to make /ip more responsive).
+     */
+    if(devtab[tc->type]->dc == L'/')
+        up->basepri = PriRoot;
+    up->priority = up->basepri;
+    poperror();
+    cclose(tc);
+
+    /*
+     *  At this point, the mmu contains info about the old address
+     *  space and needs to be flushed
+     */
+    flushmmu();
+    qlock(&up->debug);
+    up->nnote = 0;
+    up->notify = 0;
+    up->notified = 0;
+    up->privatemem = 0;
+    procsetup(up);
+    qunlock(&up->debug);
+    if(up->hang)
+        up->procctl = Proc_stopme;
+
+    return execregs(entry, ssize, nargs);
+}
+@ 
+
 
 \section{[[sysexits()]]}
 
@@ -3643,6 +5125,155 @@ sysexits(ulong *arg)
     }
     pexit(status, 1);
     return 0;       /* not reached */
+}
+@ 
+
+<<function pexit>>=
+void
+proc_pexit(char *exitstr, int freemem)
+{
+    Proc *p;
+    Segment **s, **es;
+    long utime, stime;
+    Waitq *wq, *f, *next;
+    Fgrp *fgrp;
+    Egrp *egrp;
+    Rgrp *rgrp;
+    Pgrp *pgrp;
+    Chan *dot;
+    void (*pt)(Proc*, int, vlong);
+
+    if(up->syscalltrace)
+        free(up->syscalltrace);
+    up->alarm = 0;
+    if (up->tt)
+        timerdel(up);
+    pt = proctrace;
+    if(pt)
+        pt(up, SDead, 0);
+
+    /* nil out all the resources under lock (free later) */
+    qlock(&up->debug);
+    fgrp = up->fgrp;
+    up->fgrp = nil;
+    egrp = up->egrp;
+    up->egrp = nil;
+    rgrp = up->rgrp;
+    up->rgrp = nil;
+    pgrp = up->pgrp;
+    up->pgrp = nil;
+    dot = up->dot;
+    up->dot = nil;
+    qunlock(&up->debug);
+
+    if(fgrp)
+        closefgrp(fgrp);
+    if(egrp)
+        closeegrp(egrp);
+    if(rgrp)
+        closergrp(rgrp);
+    if(dot)
+        cclose(dot);
+    if(pgrp)
+        closepgrp(pgrp);
+
+    /*
+     * if not a kernel process and have a parent,
+     * do some housekeeping.
+     */
+    if(up->kp == 0) {
+        p = up->parent;
+        if(p == 0) {
+            if(exitstr == 0)
+                exitstr = "unknown";
+            panic("boot process died: %s", exitstr);
+        }
+
+        while(waserror())
+            ;
+
+        wq = smalloc(sizeof(Waitq));
+        poperror();
+
+        wq->w.pid = up->pid;
+        utime = up->time[TUser] + up->time[TCUser];
+        stime = up->time[TSys] + up->time[TCSys];
+        wq->w.time[TUser] = tk2ms(utime);
+        wq->w.time[TSys] = tk2ms(stime);
+        wq->w.time[TReal] = tk2ms(MACHP(0)->ticks - up->time[TReal]);
+        if(exitstr && exitstr[0])
+            snprint(wq->w.msg, sizeof(wq->w.msg), "%s %lud: %s", up->text, up->pid, exitstr);
+        else
+            wq->w.msg[0] = '\0';
+
+        lock(&p->exl);
+        /*
+         * Check that parent is still alive.
+         */
+        if(p->pid == up->parentpid && p->state != Broken) {
+            p->nchild--;
+            p->time[TCUser] += utime;
+            p->time[TCSys] += stime;
+            /*
+             * If there would be more than 128 wait records
+             * processes for my parent, then don't leave a wait
+             * record behind.  This helps prevent badly written
+             * daemon processes from accumulating lots of wait
+             * records.
+             */
+            if(p->nwait < 128) {
+                wq->next = p->waitq;
+                p->waitq = wq;
+                p->nwait++;
+                wq = nil;
+                wakeup(&p->waitr);
+            }
+        }
+        unlock(&p->exl);
+        if(wq)
+            free(wq);
+    }
+
+    if(!freemem)
+        addbroken(up);
+
+    qlock(&up->seglock);
+    es = &up->seg[NSEG];
+    for(s = up->seg; s < es; s++) {
+        if(*s) {
+            putseg(*s);
+            *s = 0;
+        }
+    }
+    qunlock(&up->seglock);
+
+    lock(&up->exl);     /* Prevent my children from leaving waits */
+    pidunhash(up);
+    up->pid = 0;
+    wakeup(&up->waitr);
+    unlock(&up->exl);
+
+    for(f = up->waitq; f; f = next) {
+        next = f->next;
+        free(f);
+    }
+
+    /* release debuggers */
+    qlock(&up->debug);
+    if(up->pdbg) {
+        wakeup(&up->pdbg->sleep);
+        up->pdbg = 0;
+    }
+    qunlock(&up->debug);
+
+    /* Sched must not loop for these locks */
+    lock(&procalloc);
+    lock(&palloc);
+
+    edfstop(up);
+    up->state = Moribund;
+    sched();
+    panic("pexit");
 }
 @ 
 
@@ -3966,6 +5597,64 @@ confinit(void)
 }
 @
 
+
+<<function trapinit0>>=
+/*
+ * Minimal trap setup.  Just enough so that we can panic
+ * on traps (bugs) during kernel initialization.
+ * Called very early - malloc is not yet available.
+ */
+void
+trapinit0(void)
+{
+    int d1, v;
+    ulong vaddr;
+    Segdesc *idt;
+
+    idt = (Segdesc*)IDTADDR;
+    vaddr = (ulong)vectortable;
+    for(v = 0; v < 256; v++){
+        d1 = (vaddr & 0xFFFF0000)|SEGP;
+        switch(v){
+
+        case VectorBPT:
+            d1 |= SEGPL(3)|SEGIG;
+            break;
+
+        case VectorSYSCALL:
+            d1 |= SEGPL(3)|SEGIG;
+            break;
+
+        default:
+            d1 |= SEGPL(0)|SEGIG;
+            break;
+        }
+        idt[v].d0 = (vaddr & 0xFFFF)|(KESEL<<16);
+        idt[v].d1 = d1;
+        vaddr += 6;
+    }
+}
+@ 
+
+
+<<function trapinit>>=
+void
+trapinit(void)
+{
+    /*
+     * Special traps.
+     * Syscall() is called directly without going through trap().
+     */
+    trapenable(VectorBPT, debugbpt, 0, "debugpt");
+    trapenable(VectorPF, fault386, 0, "fault386");
+    trapenable(Vector2F, doublefault, 0, "doublefault");
+    trapenable(Vector15, unexpected, 0, "unexpected");
+    nmienable();
+
+    addarchfile("irqalloc", 0444, irqallocread, nil);
+    trapinited = true;
+}
+@ 
 
 \subsection{CPU identification}
 
@@ -10954,10 +12643,201 @@ addclock0link(void (*f)(void), Tms ms)
 
 \section{[[syssleep()]]}
 
+<<syscall sleep>>=
+long
+syssleep(ulong *arg)
+{
+
+    int n;
+
+    n = arg[0];
+    if(n <= 0) {
+        if (up->edf && (up->edf->flags & Admitted))
+            edfyield();
+        else
+            yield();
+        return 0;
+    }
+    if(n < TK2MS(1))
+        n = TK2MS(1);
+    tsleep(&up->sleep, return0, 0, n);
+    return 0;
+}
+@ 
+
 \section{[[sysalarm()]]}
 %related? tsleep, tsemacquire
 
+<<struct Alarms>>=
+struct Alarms
+{
+    // list<ref<Proc> (next = Proc.palarm)
+    Proc  *head;
+    // extra
+    QLock;
+};
+@ 
+
+<<[[Proc]] extra fields>>=
+// Alarms.head chain?
+Proc  *palarm;  /* Next alarm time */
+@
+
+<<global alarms>>=
+static Alarms   alarms;
+@ 
+
+<<syscall alarm>>=
+long
+sysalarm(ulong *arg)
+{
+    return procalarm(arg[0]);
+}
+@ 
+
+<<function procalarm>>=
+ulong
+procalarm(ulong time)
+{
+    Proc **l, *f;
+    ulong when, old;
+
+    if(up->alarm)
+        old = tk2ms(up->alarm - MACHP(0)->ticks);
+    else
+        old = 0;
+    if(time == 0) {
+        up->alarm = 0;
+        return old;
+    }
+    when = ms2tk(time)+MACHP(0)->ticks;
+    if(when == 0)       /* ticks have wrapped to 0? */
+        when = 1;   /* distinguish a wrapped alarm from no alarm */
+
+    qlock(&alarms);
+    l = &alarms.head;
+    for(f = *l; f; f = f->palarm) {
+        if(up == f){
+            *l = f->palarm;
+            break;
+        }
+        l = &f->palarm;
+    }
+
+    up->palarm = 0;
+    if(alarms.head) {
+        l = &alarms.head;
+        for(f = *l; f; f = f->palarm) {
+            if((long)(f->alarm - when) >= 0) {
+                up->palarm = f;
+                *l = up;
+                goto done;
+            }
+            l = &f->palarm;
+        }
+        *l = up;
+    }
+    else
+        alarms.head = up;
+done:
+    up->alarm = when;
+    qunlock(&alarms);
+
+    return old;
+}
+@ 
+
+
+
+
+
+<<global alarmr>>=
+static Rendez   alarmr;
+@ 
+
+<<kernel process alarmkproc>>=
+// Kernel Process for alarm managment
+void
+alarmkproc(void*)
+{
+    Proc *rp;
+    ulong now;
+
+    for(;;){
+        now = MACHP(0)->ticks;
+        qlock(&alarms);
+        /*
+         * the odd test of now vs. rp->alarm is to cope with
+         * now wrapping around.
+         */
+        while((rp = alarms.head) && (long)(now - rp->alarm) >= 0){
+            if(rp->alarm != 0L){
+                if(canqlock(&rp->debug)){
+                    if(!waserror()){
+                        postnote(rp, 0, "alarm", NUser);
+                        poperror();
+                    }
+                    qunlock(&rp->debug);
+                    rp->alarm = 0L;
+                }else
+                    break;
+            }
+            alarms.head = rp->palarm;
+        }
+        qunlock(&alarms);
+
+        sleep(&alarmr, return0, 0);
+    }
+}
+@ 
+
+
+<<function checkalarms>>=
+/*
+ *  called every clock tick
+ */
+void
+checkalarms(void)
+{
+    Proc *p;
+    ulong now;
+
+    p = alarms.head;
+    now = MACHP(0)->ticks;
+
+    if(p && (long)(now - p->alarm) >= 0)
+        wakeup(&alarmr);
+}
+@ 
+
+
+
 \section{Time of day}
+
+<<struct TOD>>=
+struct TOD {
+    int init;       /* true if initialized */
+    ulong   cnt;
+    Lock;
+    uvlong  multiplier; /* ns = off + (multiplier*ticks)>>31 */
+    uvlong  divider;    /* ticks = (divider*(ns-off))>>31 */
+    uvlong  umultiplier;    /* µs = (µmultiplier*ticks)>>31 */
+    uvlong  udivider;   /* ticks = (µdivider*µs)>>31 */
+    vlong   hz;     /* frequency of fast clock */
+    vlong   last;       /* last reading of fast clock */
+    vlong   off;        /* offset from epoch to last */
+    vlong   lasttime;   /* last return value from todget */
+    vlong   delta;  /* add 'delta' each slow clock tick from sstart to send */
+    ulong   sstart;     /* ... */
+    ulong   send;       /* ... */
+};
+@ 
+
+
+<<global tod>>=
+struct TOD tod;
+@ 
+
 
 <<devcons.c Exxx errors>>=
 char *Ebadtimectl = "bad time control";
@@ -11199,6 +13079,22 @@ closeegrp(Egrp *eg)
 
 \section{Notes (signals)}
 
+<<[[Proc]] notes fields>>=
+Note  note[NNOTE];
+short nnote;
+
+int (*notify)(void*, char*);
+short notified; /* sysnoted is due */
+
+ulong noteid;   /* Equivalent of note group */
+
+int notepending;  /* note issued but not acted on */
+
+Note  lastnote;
+
+void  *ureg;    /* User registers for notes */
+@ 
+
 <<syscall notify>>=
 long
 sysnotify(ulong *arg)
@@ -11219,6 +13115,272 @@ sysnoted(ulong *arg)
     return 0;
 }
 @ 
+
+<<function postnote>>=
+/*
+ *  if waking a sleeping process, this routine must hold both
+ *  p->rlock and r->lock.  However, it can't know them in
+ *  the same order as wakeup causing a possible lock ordering
+ *  deadlock.  We break the deadlock by giving up the p->rlock
+ *  lock if we can't get the r->lock and retrying.
+ */
+int
+proc_postnote(Proc *p, int dolock, char *n, int flag)
+{
+    int s, ret;
+    Rendez *r;
+    Proc *d, **l;
+
+    if(dolock)
+        qlock(&p->debug);
+
+    if(flag != NUser && (p->notify == 0 || p->notified))
+        p->nnote = 0;
+
+    ret = 0;
+    if(p->nnote < NNOTE) {
+        strcpy(p->note[p->nnote].msg, n);
+        p->note[p->nnote++].flag = flag;
+        ret = 1;
+    }
+    p->notepending = 1;
+    if(dolock)
+        qunlock(&p->debug);
+
+    /* this loop is to avoid lock ordering problems. */
+    for(;;){
+        s = splhi();
+        lock(&p->rlock);
+        r = p->r;
+
+        /* waiting for a wakeup? */
+        if(r == nil)
+            break;  /* no */
+
+        /* try for the second lock */
+        if(canlock(r)){
+            if(p->state != Wakeme || r->p != p)
+                panic("postnote: state %d %d %d", r->p != p, p->r != r, p->state);
+            p->r = nil;
+            r->p = nil;
+            ready(p);
+            unlock(r);
+            break;
+        }
+
+        /* give other process time to get out of critical section and try again */
+        unlock(&p->rlock);
+        splx(s);
+        sched();
+    }
+    unlock(&p->rlock);
+    splx(s);
+
+    if(p->state != Rendezvous)
+        return ret;
+
+    /* Try and pull out of a rendezvous */
+    lock(p->rgrp);
+    if(p->state == Rendezvous) {
+        p->rendval = ~0;
+        l = &REND(p->rgrp, p->rendtag);
+        for(d = *l; d; d = d->rendhash) {
+            if(d == p) {
+                *l = p->rendhash;
+                break;
+            }
+            l = &d->rendhash;
+        }
+        ready(p);
+    }
+    unlock(p->rgrp);
+    return ret;
+}
+@ 
+
+<<function notify>>=
+/*
+ *  Call user, if necessary, with note.
+ *  Pass user the Ureg struct and the note on his stack.
+ */
+int
+notify(Ureg* ureg)
+{
+    int l;
+    ulong s, sp;
+    Note *n;
+
+    if(up->procctl)
+        procctl(up);
+    if(up->nnote == 0)
+        return 0;
+
+    if(up->fpstate == FPactive){
+        fpsave(&up->fpsave);
+        up->fpstate = FPinactive;
+    }
+    up->fpstate |= FPillegal;
+
+    s = spllo();
+    qlock(&up->debug);
+    up->notepending = 0;
+    n = &up->note[0];
+    if(strncmp(n->msg, "sys:", 4) == 0){
+        l = strlen(n->msg);
+        if(l > ERRMAX-15)   /* " pc=0x12345678\0" */
+            l = ERRMAX-15;
+        seprint(n->msg+l, &n->msg[sizeof n->msg], " pc=0x%.8lux",
+            ureg->pc);
+    }
+
+    if(n->flag!=NUser && (up->notified || up->notify==0)){
+        if(n->flag == NDebug)
+            pprint("suicide: %s\n", n->msg);
+        qunlock(&up->debug);
+        pexit(n->msg, n->flag!=NDebug);
+    }
+
+    if(up->notified){
+        qunlock(&up->debug);
+        splhi();
+        return 0;
+    }
+
+    if(!up->notify){
+        qunlock(&up->debug);
+        pexit(n->msg, n->flag!=NDebug);
+    }
+    sp = ureg->usp;
+    sp -= 256;  /* debugging: preserve context causing problem */
+    sp -= sizeof(Ureg);
+if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
+    up->text, up->pid, ureg->pc, ureg->usp, sp, n->msg);
+
+    if(!okaddr((ulong)up->notify, 1, 0)
+    || !okaddr(sp-ERRMAX-4*BY2WD, sizeof(Ureg)+ERRMAX+4*BY2WD, 1)){
+        qunlock(&up->debug);
+        pprint("suicide: bad address in notify\n");
+        pexit("Suicide", 0);
+    }
+
+    memmove((Ureg*)sp, ureg, sizeof(Ureg));
+    *(Ureg**)(sp-BY2WD) = up->ureg; /* word under Ureg is old up->ureg */
+    up->ureg = (void*)sp;
+    sp -= BY2WD+ERRMAX;
+    memmove((char*)sp, up->note[0].msg, ERRMAX);
+    sp -= 3*BY2WD;
+    *(ulong*)(sp+2*BY2WD) = sp+3*BY2WD;     /* arg 2 is string */
+    *(ulong*)(sp+1*BY2WD) = (ulong)up->ureg;    /* arg 1 is ureg* */
+    *(ulong*)(sp+0*BY2WD) = 0;          /* arg 0 is pc */
+    ureg->usp = sp;
+    ureg->pc = (ulong)up->notify;
+    up->notified = 1;
+    up->nnote--;
+    memmove(&up->lastnote, &up->note[0], sizeof(Note));
+    memmove(&up->note[0], &up->note[1], up->nnote*sizeof(Note));
+
+    qunlock(&up->debug);
+    splx(s);
+    return 1;
+}
+@ 
+
+
+<<function noted>>=
+/*
+ *   Return user to state before notify()
+ */
+void
+noted(Ureg* ureg, ulong arg0)
+{
+    Ureg *nureg;
+    ulong oureg, sp;
+
+    qlock(&up->debug);
+    if(arg0!=NRSTR && !up->notified) {
+        qunlock(&up->debug);
+        pprint("call to noted() when not notified\n");
+        pexit("Suicide", 0);
+    }
+    up->notified = 0;
+
+    nureg = up->ureg;   /* pointer to user returned Ureg struct */
+
+    up->fpstate &= ~FPillegal;
+
+    /* sanity clause */
+    oureg = (ulong)nureg;
+    if(!okaddr((ulong)oureg-BY2WD, BY2WD+sizeof(Ureg), 0)){
+        qunlock(&up->debug);
+        pprint("bad ureg in noted or call to noted when not notified\n");
+        pexit("Suicide", 0);
+    }
+
+    /*
+     * Check the segment selectors are all valid, otherwise
+     * a fault will be taken on attempting to return to the
+     * user process.
+     * Take care with the comparisons as different processor
+     * generations push segment descriptors in different ways.
+     */
+    if((nureg->cs & 0xFFFF) != UESEL || (nureg->ss & 0xFFFF) != UDSEL
+      || (nureg->ds & 0xFFFF) != UDSEL || (nureg->es & 0xFFFF) != UDSEL
+      || (nureg->fs & 0xFFFF) != UDSEL || (nureg->gs & 0xFFFF) != UDSEL){
+        qunlock(&up->debug);
+        pprint("bad segment selector in noted\n");
+        pexit("Suicide", 0);
+    }
+
+    /* don't let user change system flags */
+    nureg->flags = (ureg->flags & ~0xCD5) | (nureg->flags & 0xCD5);
+
+    memmove(ureg, nureg, sizeof(Ureg));
+
+    switch(arg0){
+    case NCONT:
+    case NRSTR:
+if(0) print("%s %lud: noted %.8lux %.8lux\n",
+    up->text, up->pid, nureg->pc, nureg->usp);
+        if(!okaddr(nureg->pc, 1, 0) || !okaddr(nureg->usp, BY2WD, 0)){
+            qunlock(&up->debug);
+            pprint("suicide: trap in noted\n");
+            pexit("Suicide", 0);
+        }
+        up->ureg = (Ureg*)(*(ulong*)(oureg-BY2WD));
+        qunlock(&up->debug);
+        break;
+
+    case NSAVE:
+        if(!okaddr(nureg->pc, BY2WD, 0)
+        || !okaddr(nureg->usp, BY2WD, 0)){
+            qunlock(&up->debug);
+            pprint("suicide: trap in noted\n");
+            pexit("Suicide", 0);
+        }
+        qunlock(&up->debug);
+        sp = oureg-4*BY2WD-ERRMAX;
+        splhi();
+        ureg->sp = sp;
+        ((ulong*)sp)[1] = oureg;    /* arg 1 0(FP) is ureg* */
+        ((ulong*)sp)[0] = 0;        /* arg 0 is pc */
+        break;
+
+    default:
+        pprint("unknown noted arg 0x%lux\n", arg0);
+        up->lastnote.flag = NDebug;
+        /* fall through */
+
+    case NDFLT:
+        if(up->lastnote.flag == NDebug){
+            qunlock(&up->debug);
+            pprint("suicide: %s\n", up->lastnote.msg);
+        } else
+            qunlock(&up->debug);
+        pexit(up->lastnote.msg, up->lastnote.flag!=NDebug);
+    }
+}
+@ 
+
 
 \section{Pipes}
 
@@ -11377,6 +13539,252 @@ syssegfree(ulong *arg)
     return 0;
 }
 @ 
+
+
+<<function semqueue>>=
+/* Add semaphore p with addr a to list in seg. */
+static void
+semqueue(Segment *s, long *a, Sema *p)
+{
+    memset(p, 0, sizeof *p);
+    p->addr = a;
+    lock(&s->sema); /* uses s->sema.Rendez.Lock, but no one else is */
+    p->next = &s->sema;
+    p->prev = s->sema.prev;
+    p->next->prev = p;
+    p->prev->next = p;
+    unlock(&s->sema);
+}
+@ 
+
+
+<<function semdequeue>>=
+/* Remove semaphore p from list in seg. */
+static void
+semdequeue(Segment *s, Sema *p)
+{
+    lock(&s->sema);
+    p->next->prev = p->prev;
+    p->prev->next = p->next;
+    unlock(&s->sema);
+}
+@ 
+
+
+<<function semwakeup>>=
+/* Wake up n waiters with addr a on list in seg. */
+static void
+semwakeup(Segment *s, long *a, long n)
+{
+    Sema *p;
+    
+    lock(&s->sema);
+    for(p=s->sema.next; p!=&s->sema && n>0; p=p->next){
+        if(p->addr == a && p->waiting){
+            p->waiting = 0;
+            coherence();
+            wakeup(p);
+            n--;
+        }
+    }
+    unlock(&s->sema);
+}
+@ 
+
+
+<<function semrelease>>=
+/* Add delta to semaphore and wake up waiters as appropriate. */
+static long
+semrelease(Segment *s, long *addr, long delta)
+{
+    long value;
+
+    do
+        value = *addr;
+    while(!cmpswap(addr, value, value+delta));
+    semwakeup(s, addr, delta);
+    return value+delta;
+}
+@ 
+
+
+<<function canacquire>>=
+/* Try to acquire semaphore using compare-and-swap */
+static int
+canacquire(long *addr)
+{
+    long value;
+    
+    while((value=*addr) > 0)
+        if(cmpswap(addr, value, value-1))
+            return 1;
+    return 0;
+}       
+@ 
+
+
+<<function semawoke>>=
+/* Should we wake up? */
+static int
+semawoke(void *p)
+{
+    coherence();
+    return !((Sema*)p)->waiting;
+}
+@ 
+
+
+<<function semacquire>>=
+/* Acquire semaphore (subtract 1). */
+static int
+semacquire(Segment *s, long *addr, bool block)
+{
+    int acquired;
+    Sema phore;
+
+    if(canacquire(addr))
+        return 1;
+    if(!block)
+        return 0;
+
+    acquired = 0;
+    semqueue(s, addr, &phore);
+    for(;;){
+        phore.waiting = 1;
+        coherence();
+        if(canacquire(addr)){
+            acquired = 1;
+            break;
+        }
+        if(waserror())
+            break;
+        sleep(&phore, semawoke, &phore);
+        poperror();
+    }
+    semdequeue(s, &phore);
+    coherence();    /* not strictly necessary due to lock in semdequeue */
+    if(!phore.waiting)
+        semwakeup(s, addr, 1);
+    if(!acquired)
+        nexterror();
+    return 1;
+}
+@ 
+
+
+<<function tsemacquire>>=
+/* Acquire semaphore or time-out */
+static int
+tsemacquire(Segment *s, long *addr, ulong ms)
+{
+    int acquired, timedout;
+    ulong t, elms;
+    Sema phore;
+
+    if(canacquire(addr))
+        return 1;
+    if(ms == 0)
+        return 0;
+    acquired = timedout = 0;
+    semqueue(s, addr, &phore);
+    for(;;){
+        phore.waiting = 1;
+        coherence();
+        if(canacquire(addr)){
+            acquired = 1;
+            break;
+        }
+        if(waserror())
+            break;
+        t = m->ticks;
+        tsleep(&phore, semawoke, &phore, ms);
+        elms = TK2MS(m->ticks - t);
+        poperror();
+        if(elms >= ms){
+            timedout = 1;
+            break;
+        }
+        ms -= elms;
+    }
+    semdequeue(s, &phore);
+    coherence();    /* not strictly necessary due to lock in semdequeue */
+    if(!phore.waiting)
+        semwakeup(s, addr, 1);
+    if(timedout)
+        return 0;
+    if(!acquired)
+        nexterror();
+    return 1;
+}
+@ 
+
+
+<<syscall semacquire>>=
+long
+syssemacquire(ulong *arg)
+{
+    int block;
+    long *addr;
+    Segment *s;
+
+    validaddr(arg[0], sizeof(long), 1);
+    evenaddr(arg[0]);
+    addr = (long*)arg[0];
+    block = arg[1];
+    
+    if((s = seg(up, (ulong)addr, 0)) == nil)
+        error(Ebadarg);
+    if(*addr < 0)
+        error(Ebadarg);
+    return semacquire(s, addr, block);
+}
+@ 
+
+
+<<syscall tsemacquire>>=
+long
+systsemacquire(ulong *arg)
+{
+    long *addr;
+    ulong ms;
+    Segment *s;
+
+    validaddr(arg[0], sizeof(long), 1);
+    evenaddr(arg[0]);
+    addr = (long*)arg[0];
+    ms = arg[1];
+
+    if((s = seg(up, (ulong)addr, 0)) == nil)
+        error(Ebadarg);
+    if(*addr < 0)
+        error(Ebadarg);
+    return tsemacquire(s, addr, ms);
+}
+@ 
+
+
+<<syscall semrelease>>=
+long
+syssemrelease(ulong *arg)
+{
+    long *addr, delta;
+    Segment *s;
+
+    validaddr(arg[0], sizeof(long), 1);
+    evenaddr(arg[0]);
+    addr = (long*)arg[0];
+    delta = arg[1];
+
+    if((s = seg(up, (ulong)addr, 0)) == nil)
+        error(Ebadarg);
+    /* delta == 0 is a no-op, not a release */
+    if(delta < 0 || *addr < 0)
+        error(Ebadarg);
+    return semrelease(s, addr, delta);
+}
+@ 
+
+
 
 \section{Network}
 
@@ -12636,9 +15044,47 @@ char Edirseek[] = "seek in directory";
 char Echange[] = "media or partition has changed";
 @ 
 
+
 \section{[[waserror()]], [[nexterror()]]}
 % waserror(), nexterror(), etc
 % =~ poor's man exn mechanism (=> improve C!!)
+
+<<function error>>=
+void
+proc_error(char *err)
+{
+    spllo();
+
+    assert(up->nerrlab < NERR);
+    kstrcpy(up->errstr, err, ERRMAX);
+    setlabel(&up->errlab[NERR-1]);
+    nexterror();
+}
+@ 
+
+
+<<function nexterror>>=
+// raise an exception
+void
+proc_nexterror(void)
+{
+    gotolabel(&up->errlab[--up->nerrlab]);
+}
+@ 
+
+
+<<function exhausted>>=
+void
+exhausted(char *resource)
+{
+    char buf[ERRMAX];
+
+    snprint(buf, sizeof buf, "no free %s", resource);
+    iprint("%s\n", buf);
+    error(buf);
+}
+@ 
+
 
 \section{[[syserrstr()]]}
 

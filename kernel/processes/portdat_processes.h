@@ -475,15 +475,17 @@ struct Proc
 // Notes
 //--------------------------------------------------------------------
     /*s: [[Proc]] notes fields */
+    Note  note[NNOTE];
+    short nnote;
+
+    int (*notify)(void*, char*);
+    short notified; /* sysnoted is due */
+
     ulong noteid;   /* Equivalent of note group */
 
     int notepending;  /* note issued but not acted on */
 
-    Note  note[NNOTE];
-    short nnote;
-    short notified; /* sysnoted is due */
     Note  lastnote;
-    int (*notify)(void*, char*);
 
     void  *ureg;    /* User registers for notes */
     /*e: [[Proc]] notes fields */
@@ -636,12 +638,13 @@ struct Proc
     // list<ref<Proc>> KQlock.head or RWLock.head
     Proc  *qnext;   /* next process on queue for a QLock */
     /*x: [[Proc]] extra fields */
+    // Alarms.head chain?
+    Proc  *palarm;  /* Next alarm time */
+    /*x: [[Proc]] extra fields */
 
     // list<ref<Proc>> ?? Schedq.head chain?
     Proc  *rnext;   /* next process in run queue */
 
-    // Alarms.head chain?
-    Proc  *palarm;  /* Next alarm time */
     ulong alarm;    /* Time of call */
 
     // hash<?, list<ref<Proc>> Procalloc.ht ?
@@ -711,9 +714,8 @@ struct Schedq
 /*s: struct Alarms */
 struct Alarms
 {
-    // list<ref<Proc> (next = ??)
+    // list<ref<Proc> (next = Proc.palarm)
     Proc  *head;
-  
     // extra
     QLock;
 };
