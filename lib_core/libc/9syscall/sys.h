@@ -4,8 +4,6 @@
 #define	RFORK		1
 #define	EXEC		2
 #define	EXITS		3
-#define	SLEEP		4
-#define	ALARM		5
 /*e: sys.h process syscalls */
 /*s: sys.h memory syscalls */
 #define	BRK_		32
@@ -30,6 +28,10 @@
 #define	MOUNT		23
 #define	UNMOUNT		24
 /*e: sys.h namespace syscalls */
+/*s: sys.h time syscalls */
+#define	SLEEP		4
+#define	ALARM		5
+/*e: sys.h time syscalls */
 /*s: sys.h ipc syscalls */
 #define	NOTIFY		30
 #define	NOTED		31

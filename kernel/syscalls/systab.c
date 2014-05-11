@@ -64,9 +64,6 @@ Syscall *systab[] = {
     [RFORK]     sysrfork,
     [EXEC]      sysexec,
     [EXITS]     sysexits,
-
-    [SLEEP]     syssleep,
-    [ALARM]     sysalarm,
 /*e: systab process syscalls */
 /*s: systab memory syscalls */
     [BRK_]      sysbrk_,
@@ -94,14 +91,10 @@ Syscall *systab[] = {
     [MOUNT]     sysmount,
     [UNMOUNT]   sysunmount,
 /*e: systab namespace syscalls */
-/*s: systab concurrency syscalls */
-    [AWAIT]     sysawait,
-    [RENDEZVOUS]    sysrendezvous,
-
-    [SEMACQUIRE]    syssemacquire,
-    [SEMRELEASE]    syssemrelease,
-    [TSEMACQUIRE]   systsemacquire,
-/*e: systab concurrency syscalls */
+/*s: systab time syscalls */
+    [SLEEP]     syssleep,
+    [ALARM]     sysalarm,
+/*e: systab time syscalls */
 /*s: systab ipc syscalls */
     [NOTIFY]    sysnotify,
     [NOTED]     sysnoted,
@@ -114,6 +107,14 @@ Syscall *systab[] = {
     [SEGFLUSH]  syssegflush,
     [SEGBRK]    syssegbrk,
 /*e: systab ipc syscalls */
+/*s: systab concurrency syscalls */
+    [AWAIT]     sysawait,
+    [RENDEZVOUS]    sysrendezvous,
+
+    [SEMACQUIRE]    syssemacquire,
+    [SEMRELEASE]    syssemrelease,
+    [TSEMACQUIRE]   systsemacquire,
+/*e: systab concurrency syscalls */
 /*s: systab special file syscalls */
     [DUP]       sysdup,
 /*e: systab special file syscalls */
