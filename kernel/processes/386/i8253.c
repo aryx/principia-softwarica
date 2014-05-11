@@ -311,13 +311,6 @@ i8253enable(void)
 }
 /*e: function i8253enable */
 
-/*s: function i8253link */
-void
-i8253link(void)
-{
-}
-/*e: function i8253link */
-
 /*s: function i8253read */
 /*
  *  return the total ticks of counter 2.  We shift by
