@@ -30,7 +30,7 @@ pcmspecial(char *idstr, ISAConf *isa)
     return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
 }
 
-
+/*s: function cpuidprint */
 void
 cpuidprint(void)
 {
@@ -46,6 +46,7 @@ cpuidprint(void)
         m->cpuidtype, m->cpuidax, m->cpuiddx);
     print(buf);
 }
+/*e: function cpuidprint */
 
 /*s: function cycles and default implementation */
 static void

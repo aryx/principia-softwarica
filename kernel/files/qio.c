@@ -16,6 +16,7 @@ static ulong copyblockcnt;
 static ulong consumecnt;
 static ulong producecnt;
 static ulong qcopycnt;
+static ulong noblockcnt;
 /*e: qio.c globals cnt */
 
 /*s: qio.c global debugging */
@@ -24,13 +25,16 @@ static int debugging;
 #define QDEBUG  if(0)
 /*e: qio.c global debugging */
 
+/*s: global qiomaxatomic */
 enum
 {
     Maxatomic   = 64*1024,
 };
 
 uint    qiomaxatomic = Maxatomic;
+/*e: global qiomaxatomic */
 
+/*s: function ixsummary */
 void
 ixsummary(void)
 {
@@ -41,7 +45,9 @@ ixsummary(void)
     print("consume %lud, produce %lud, qcopy %lud\n",
         consumecnt, producecnt, qcopycnt);
 }
+/*e: function ixsummary */
 
+/*s: function freeblist */
 /*
  *  free a list of blocks
  */
@@ -57,7 +63,9 @@ freeblist(Block *b)
         freeb(b);
     }
 }
+/*e: function freeblist */
 
+/*s: function padblock */
 /*
  *  pad a block to the front (or the back if size is negative)
  */
@@ -104,7 +112,9 @@ padblock(Block *bp, int size)
     QDEBUG checkb(nbp, "padblock 1");
     return nbp;
 }
+/*e: function padblock */
 
+/*s: function blocklen */
 /*
  *  return count of bytes in a string of blocks
  */
@@ -120,7 +130,9 @@ blocklen(Block *bp)
     }
     return len;
 }
+/*e: function blocklen */
 
+/*s: function blockalloclen */
 /*
  * return count of space in blocks
  */
@@ -136,7 +148,9 @@ blockalloclen(Block *bp)
     }
     return len;
 }
+/*e: function blockalloclen */
 
+/*s: function concatblock */
 /*
  *  copy the  string of blocks into
  *  a single block and free the string
@@ -161,7 +175,9 @@ concatblock(Block *bp)
     QDEBUG checkb(nb, "concatblock 1");
     return nb;
 }
+/*e: function concatblock */
 
+/*s: function pullupblock */
 /*
  *  make sure the first block has at least n bytes
  */
@@ -224,7 +240,9 @@ pullupblock(Block *bp, int n)
     freeb(bp);
     return 0;
 }
+/*e: function pullupblock */
 
+/*s: function pullupqueue */
 /*
  *  make sure the first block has at least n bytes
  */
@@ -241,7 +259,9 @@ pullupqueue(Queue *q, int n)
     q->blast = b;
     return q->bfirst;
 }
+/*e: function pullupqueue */
 
+/*s: function trimblock */
 /*
  *  trim to len bytes starting at offset
  */
@@ -282,7 +302,9 @@ trimblock(Block *bp, int offset, int len)
 
     return startb;
 }
+/*e: function trimblock */
 
+/*s: function copyblock */
 /*
  *  copy 'count' bytes into a new block
  */
@@ -311,7 +333,9 @@ copyblock(Block *bp, int count)
 
     return nbp;
 }
+/*e: function copyblock */
 
+/*s: function adjustblock */
 Block*
 adjustblock(Block* bp, int len)
 {
@@ -339,8 +363,9 @@ adjustblock(Block* bp, int len)
 
     return bp;
 }
+/*e: function adjustblock */
 
-
+/*s: function pullblock */
 /*
  *  throw away up to count bytes from a
  *  list of blocks.  Return count of bytes
@@ -373,7 +398,9 @@ pullblock(Block **bph, int count)
     }
     return bytes;
 }
+/*e: function pullblock */
 
+/*s: function qget */
 /*
  *  get next block from a queue, return null if nothing there
  */
@@ -412,7 +439,9 @@ qget(Queue *q)
 
     return b;
 }
+/*e: function qget */
 
+/*s: function qdiscard */
 /*
  *  throw away the next 'len' bytes in the queue
  */
@@ -465,7 +494,9 @@ qdiscard(Queue *q, int len)
 
     return sofar;
 }
+/*e: function qdiscard */
 
+/*s: function qconsume */
 /*
  *  Interrupt level copy out of a queue, return # bytes copied.
  */
@@ -536,7 +567,9 @@ qconsume(Queue *q, void *vp, int len)
 
     return len;
 }
+/*e: function qconsume */
 
+/*s: function qpass */
 int
 qpass(Queue *q, Block *b)
 {
@@ -589,7 +622,9 @@ qpass(Queue *q, Block *b)
 
     return len;
 }
+/*e: function qpass */
 
+/*s: function qpassnolim */
 int
 qpassnolim(Queue *q, Block *b)
 {
@@ -637,7 +672,9 @@ qpassnolim(Queue *q, Block *b)
 
     return len;
 }
+/*e: function qpassnolim */
 
+/*s: function packblock */
 /*
  *  if the allocated space is way out of line with the used
  *  space, reallocate to a smaller block
@@ -662,7 +699,9 @@ packblock(Block *bp)
 
     return bp;
 }
+/*e: function packblock */
 
+/*s: function qproduce */
 int
 qproduce(Queue *q, void *vp, int len)
 {
@@ -714,7 +753,9 @@ qproduce(Queue *q, void *vp, int len)
 
     return len;
 }
+/*e: function qproduce */
 
+/*s: function qcopy */
 /*
  *  copy from offset in the queue
  */
@@ -765,7 +806,9 @@ qcopy(Queue *q, int len, ulong offset)
 
     return nb;
 }
+/*e: function qcopy */
 
+/*s: function qopen */
 /*
  *  called by non-interrupt code
  */
@@ -789,7 +832,9 @@ qopen(int limit, int msg, void (*kick)(void*), void *arg)
 
     return q;
 }
+/*e: function qopen */
 
+/*s: function qbypass */
 /* open a queue to be bypassed */
 Queue*
 qbypass(void (*bypass)(void*, Block*), void *arg)
@@ -807,7 +852,9 @@ qbypass(void (*bypass)(void*, Block*), void *arg)
 
     return q;
 }
+/*e: function qbypass */
 
+/*s: function notempty */
 static int
 notempty(void *a)
 {
@@ -815,7 +862,9 @@ notempty(void *a)
 
     return (q->state & Qclosed) || q->bfirst != 0;
 }
+/*e: function notempty */
 
+/*s: function qwait */
 /*
  *  wait for the queue to be non-empty or closed.
  *  called with q ilocked.
@@ -843,7 +892,9 @@ qwait(Queue *q)
     }
     return 1;
 }
+/*e: function qwait */
 
+/*s: function qaddlist */
 /*
  * add a block list to a queue
  */
@@ -861,7 +912,9 @@ qaddlist(Queue *q, Block *b)
         b = b->next;
     q->blast = b;
 }
+/*e: function qaddlist */
 
+/*s: function qremove */
 /*
  *  called with q ilocked
  */
@@ -880,7 +933,9 @@ qremove(Queue *q)
     QDEBUG checkb(b, "qremove");
     return b;
 }
+/*e: function qremove */
 
+/*s: function bl2mem */
 /*
  *  copy the contents of a string of blocks into
  *  memory.  emptied blocks are freed.  return
@@ -908,7 +963,9 @@ bl2mem(uchar *p, Block *b, int n)
     }
     return nil;
 }
+/*e: function bl2mem */
 
+/*s: function qputback */
 /*
  *  put a block back to the front of the queue
  *  called with q ilocked
@@ -923,7 +980,9 @@ qputback(Queue *q, Block *b)
     q->len += BALLOC(b);
     q->dlen += BLEN(b);
 }
+/*e: function qputback */
 
+/*s: function qwakeup_iunlock */
 /*
  *  flow control, get producer going again
  *  called with q ilocked
@@ -948,7 +1007,9 @@ qwakeup_iunlock(Queue *q)
         wakeup(&q->wr);
     }
 }
+/*e: function qwakeup_iunlock */
 
+/*s: function qbread */
 /*
  *  get next block from a queue (up to a limit)
  */
@@ -1002,7 +1063,9 @@ qbread(Queue *q, int len)
     qunlock(&q->rlock);
     return nb;
 }
+/*e: function qbread */
 
+/*s: function qread */
 /*
  *  read a queue.  if no data is queued, post a Block
  *  and wait on its Rendez.
@@ -1088,7 +1151,9 @@ again:
     qunlock(&q->rlock);
     return n;
 }
+/*e: function qread */
 
+/*s: function qnotfull */
 static int
 qnotfull(void *a)
 {
@@ -1096,9 +1161,9 @@ qnotfull(void *a)
 
     return q->len < q->limit || (q->state & Qclosed);
 }
+/*e: function qnotfull */
 
-ulong noblockcnt;
-
+/*s: function qbwrite */
 /*
  *  add a block to a queue obeying flow control
  */
@@ -1203,7 +1268,9 @@ qbwrite(Queue *q, Block *b)
     poperror();
     return n;
 }
+/*e: function qbwrite */
 
+/*s: function qwrite */
 /*
  *  write to a queue.  only Maxatomic bytes at a time is atomic.
  */
@@ -1240,7 +1307,9 @@ qwrite(Queue *q, void *vp, int len)
 
     return len;
 }
+/*e: function qwrite */
 
+/*s: function qiwrite */
 /*
  *  used by print() to write to a queue.  Since we may be splhi or not in
  *  a process, don't qlock.
@@ -1307,7 +1376,9 @@ qiwrite(Queue *q, void *vp, int len)
 
     return sofar;
 }
+/*e: function qiwrite */
 
+/*s: function qfree */
 /*
  *  be extremely careful when calling this,
  *  as there is no reference accounting
@@ -1318,7 +1389,9 @@ qfree(Queue *q)
     qclose(q);
     free(q);
 }
+/*e: function qfree */
 
+/*s: function qclose */
 /*
  *  Mark a queue as closed.  No further IO is permitted.
  *  All blocks are released.
@@ -1350,7 +1423,9 @@ qclose(Queue *q)
     wakeup(&q->rr);
     wakeup(&q->wr);
 }
+/*e: function qclose */
 
+/*s: function qhangup */
 /*
  *  Mark a queue as closed.  Wakeup any readers.  Don't remove queued
  *  blocks.
@@ -1371,7 +1446,9 @@ qhangup(Queue *q, char *msg)
     wakeup(&q->rr);
     wakeup(&q->wr);
 }
+/*e: function qhangup */
 
+/*s: function qiclosed */
 /*
  *  return non-zero if the q is hungup
  */
@@ -1380,7 +1457,9 @@ qisclosed(Queue *q)
 {
     return q->state & Qclosed;
 }
+/*e: function qiclosed */
 
+/*s: function qreopen */
 /*
  *  mark a queue as no longer hung up
  */
@@ -1394,7 +1473,9 @@ qreopen(Queue *q)
     q->limit = q->inilim;
     iunlock(q);
 }
+/*e: function qreopen */
 
+/*s: function qlen */
 /*
  *  return bytes queued
  */
@@ -1403,7 +1484,9 @@ qlen(Queue *q)
 {
     return q->dlen;
 }
+/*e: function qlen */
 
+/*s: function qwindow */
 /*
  * return space remaining before flow control
  */
@@ -1417,7 +1500,9 @@ qwindow(Queue *q)
         l = 0;
     return l;
 }
+/*e: function qwindow */
 
+/*s: function qcanread */
 /*
  *  return true if we can read without blocking
  */
@@ -1426,7 +1511,9 @@ qcanread(Queue *q)
 {
     return q->bfirst!=0;
 }
+/*e: function qcanread */
 
+/*s: function qsetlimit */
 /*
  *  change queue limit
  */
@@ -1435,7 +1522,9 @@ qsetlimit(Queue *q, int limit)
 {
     q->limit = limit;
 }
+/*e: function qsetlimit */
 
+/*s: function qnoblock */
 /*
  *  set blocking/nonblocking
  */
@@ -1444,7 +1533,9 @@ qnoblock(Queue *q, bool onoff)
 {
     q->noblock = onoff;
 }
+/*e: function qnoblock */
 
+/*s: function qflush */
 /*
  *  flush the output queue
  */
@@ -1467,11 +1558,14 @@ qflush(Queue *q)
     /* wake up readers/writers */
     wakeup(&q->wr);
 }
+/*e: function qflush */
 
+/*s: function qfull */
 int
 qfull(Queue *q)
 {
     return q->state & Qflow;
 }
+/*e: function qfull */
 
 /*e: qio.c */

@@ -1,5 +1,6 @@
 /*s: portdat_files.h */
 
+/*s: enum blockflag */
 /* flag values */
 enum
 {
@@ -10,6 +11,7 @@ enum
   Btcpck  = (1<<4),   /* tcp checksum */
   Bpktck  = (1<<5),   /* packet checksum */
 };
+/*e: enum blockflag */
 
 /*s: struct Block */
 struct Block
@@ -27,11 +29,15 @@ struct Block
 };
 /*e: struct Block */
 
+/*s: function BLEN */
 #define BLEN(s) ((s)->wp - (s)->rp)
+/*e: function BLEN */
+/*s: function BALLOC */
 #define BALLOC(s) ((s)->lim - (s)->base)
+/*e: function BALLOC */
 
 
-
+/*s: enum queuestate */
 /* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
 enum
 {
@@ -43,6 +49,7 @@ enum
   Qcoalesce = (1<<4), /* coalesce packets on read */
   Qkick   = (1<<5), /* always call the kick routine after qwrite */
 };
+/*e: enum queuestate */
 
 // defined in qio.c
 extern  uint  qiomaxatomic;

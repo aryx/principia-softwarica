@@ -57,8 +57,6 @@ struct Segdesc
 /*s: struct ArchMach */
 struct ArchMach {
     /*s: [[ArchMach]] other fields */
-    Proc* externup;   /* extern register Proc *up */
-    /*x: [[ArchMach]] other fields */
     // TODO: have a ArchMachMMU like in bcm/
     ulong*  pdb;      /* page directory base for this processor (va) */
     Tss*  tss;      /* tss for this processor */
@@ -74,18 +72,26 @@ struct ArchMach {
     bool havetsc;
 
     int loopconst;
-    int cpuidax;
-    int cpuiddx;
+
+    /*s: [[ArchMach]] cpuid fields */
     char  cpuidid[16];
     char* cpuidtype;
+    int cpuidax;
+    int cpuiddx;
+    /*e: [[ArchMach]] cpuid fields */
+
     int havepge;
     uvlong tscticks;
+
     int pdballoc;
     int pdbfree;
+
     vlong mtrrcap;
     vlong mtrrdef;
     vlong mtrrfix[11];
     vlong mtrrvar[32];    /* 256 max. */
+    /*x: [[ArchMach]] other fields */
+    Proc* externup;   /* extern register Proc *up */
     /*e: [[ArchMach]] other fields */
 };
 /*e: struct ArchMach */

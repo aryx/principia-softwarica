@@ -126,6 +126,41 @@ Yoann Padioleau\\
 % Body
 %******************************************************************************
 
+\chapter{XTODO}
+
+
+
+<<[[ArchMach]] other fields>>=
+// TODO: have a ArchMachMMU like in bcm/
+ulong*  pdb;      /* page directory base for this processor (va) */
+Tss*  tss;      /* tss for this processor */
+Segdesc *gdt;     /* gdt for this processor */
+Page* pdbpool;
+int pdbcnt;
+//  int inclockintr;
+
+Lock  apictimerlock;
+ArchFPsave *fpsavalign;
+
+// for perfticks, tsc = time stamp counter
+bool havetsc;
+
+int loopconst;
+
+<<[[ArchMach]] cpuid fields>>
+
+int havepge;
+uvlong tscticks;
+
+int pdballoc;
+int pdbfree;
+
+vlong mtrrcap;
+vlong mtrrdef;
+vlong mtrrfix[11];
+vlong mtrrvar[32];    /* 256 max. */
+@ 
+
 \chapter{Introduction}
 
 \section{Motivations}
@@ -1799,6 +1834,8 @@ struct Sema
 };
 @ 
 
+\section{Producer/Consumer Queue}
+%IO Queue
 
 \chapter{Memory}
 \minitoc
@@ -2076,6 +2113,33 @@ hzclock(Ureg *ur)
 
 \section{Kernel initialization}
 
+\subsection{CPU identification}
+
+<<[[ArchMach]] cpuid fields>>=
+char  cpuidid[16];
+char* cpuidtype;
+int cpuidax;
+int cpuiddx;
+@
+
+<<function cpuidprint>>=
+void
+cpuidprint(void)
+{
+    int i;
+    char buf[128];
+
+    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", m->machno,
+        m->machno < 10? " ": "", m->cpumhz);
+    if(m->cpuidid[0])
+        i += sprint(buf+i, "%12.12s ", m->cpuidid);
+    seprint(buf+i, buf + sizeof buf - 1,
+        "%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
+        m->cpuidtype, m->cpuidax, m->cpuiddx);
+    print(buf);
+}
+@
+
 \section{The first process}
 
 \section{Booting the user}
@@ -2112,6 +2176,191 @@ hzclock(Ureg *ur)
 
 \section{[[Chan]]nels}
 
+\section{[[Path]]}
+
+<<struct Path>>=
+struct Path
+{
+  Ref;
+  char  *s;
+  Chan  **mtpt;     /* mtpt history */
+  int len;      /* strlen(s) */
+  int alen;     /* allocated length of s */
+  int mlen;     /* number of path elements */
+  int malen;      /* allocated length of mtpt */
+};
+@
+
+<<function chanpath>>=
+char*
+chanpath(Chan *c)
+{
+    if(c == nil)
+        return "<nil chan>";
+    if(c->path == nil)
+        return "<nil path>";
+    if(c->path->s == nil)
+        return "<nil path.s>";
+    return c->path->s;
+}
+@
+
+\section{[[Block]]}
+
+<<enum blockflag>>=
+/* flag values */
+enum
+{
+  BINTR = (1<<0),
+  BFREE = (1<<1),
+  Bipck = (1<<2),   /* ip checksum */
+  Budpck  = (1<<3),   /* udp checksum */
+  Btcpck  = (1<<4),   /* tcp checksum */
+  Bpktck  = (1<<5),   /* packet checksum */
+};
+@
+
+<<struct Block>>=
+struct Block
+{
+  long  ref;
+  Block*  next;
+  Block*  list;
+  uchar*  rp;     /* first unconsumed byte */
+  uchar*  wp;     /* first empty byte */
+  uchar*  lim;      /* 1 past the end of the buffer */
+  uchar*  base;     /* start of the buffer */
+  void  (*free)(Block*);
+  ushort  flag;
+  ushort  checksum;   /* IP checksum of complete packet (minus media header) */
+};
+@
+
+<<function BLEN>>=
+#define BLEN(s) ((s)->wp - (s)->rp)
+@
+
+
+<<function BALLOC>>=
+#define BALLOC(s) ((s)->lim - (s)->base)
+@
+
+
+\section{[[Queue]]}
+
+<<enum queuestate>>=
+/* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
+enum
+{
+  /* Queue.state */
+  Qstarve   = (1<<0), /* consumer starved */
+  Qmsg    = (1<<1), /* message stream */
+  Qclosed   = (1<<2), /* queue has been closed/hungup */
+  Qflow   = (1<<3), /* producer flow controlled */
+  Qcoalesce = (1<<4), /* coalesce packets on read */
+  Qkick   = (1<<5), /* always call the kick routine after qwrite */
+};
+@
+
+<<struct Queue>>=
+struct Queue
+{
+  Lock;
+
+  Block*  bfirst;   /* buffer */
+  Block*  blast;
+
+  int len;    /* bytes allocated to queue */
+  int dlen;   /* data bytes in queue */
+  int limit;    /* max bytes in queue */
+  int inilim;   /* initial limit */
+  int state;
+  int noblock;  /* true if writes return immediately when q full */
+  int eof;    /* number of eofs read by user */
+
+  void  (*kick)(void*); /* restart output */
+  void  (*bypass)(void*, Block*); /* bypass queue altogether */
+  void* arg;    /* argument to kick */
+
+  QLock rlock;    /* mutex for reading processes */
+  Rendez  rr;   /* process waiting to read */
+  QLock wlock;    /* mutex for writing processes */
+  Rendez  wr;   /* process waiting to write */
+
+  char  err[ERRMAX];
+};
+@
+
+
+
+<<function packblock>>=
+/*
+ *  if the allocated space is way out of line with the used
+ *  space, reallocate to a smaller block
+ */
+Block*
+packblock(Block *bp)
+{
+    Block **l, *nbp;
+    int n;
+
+    for(l = &bp; *l; l = &(*l)->next){
+        nbp = *l;
+        n = BLEN(nbp);
+        if((n<<2) < BALLOC(nbp)){
+            *l = allocb(n);
+            memmove((*l)->wp, nbp->rp, n);
+            (*l)->wp += n;
+            (*l)->next = nbp->next;
+            freeb(nbp);
+        }
+    }
+
+    return bp;
+}
+@
+
+<<function qwrite>>=
+/*
+ *  write to a queue.  only Maxatomic bytes at a time is atomic.
+ */
+int
+qwrite(Queue *q, void *vp, int len)
+{
+    int n, sofar;
+    Block *b;
+    uchar *p = vp;
+
+    QDEBUG if(!islo())
+        print("qwrite hi %#p\n", getcallerpc(&q));
+
+    sofar = 0;
+    do {
+        n = len-sofar;
+        if(n > Maxatomic)
+            n = Maxatomic;
+
+        b = allocb(n);
+        setmalloctag(b, (up->text[0]<<24)|(up->text[1]<<16)|(up->text[2]<<8)|up->text[3]);
+        if(waserror()){
+            freeb(b);
+            nexterror();
+        }
+        memmove(b->wp, p+sofar, n);
+        poperror();
+        b->wp += n;
+
+        qbwrite(q, b);
+
+        sofar += n;
+    } while(sofar < len && (q->state & Qmsg) == 0);
+
+    return len;
+}
+@
+
+
+
 \section{[[dev]]ices [[tab]]le}
 
 \section{[[syscreate()]], [[sysremove()]]}
@@ -2123,6 +2372,69 @@ hzclock(Ureg *ur)
 \section {[[sysstat()]]}
 
 \section {[[syschdir()]]}
+
+\section {[[sysfd2path()]] (a.k.a [[pwd()]])}
+
+<<syscall fd2path>>=
+long
+sysfd2path(ulong *arg)
+{
+    Chan *c;
+
+    validaddr(arg[1], arg[2], 1);
+
+    c = fdtochan(arg[0], -1, 0, 1);
+    snprint((char*)arg[1], arg[2], "%s", chanpath(c));
+    cclose(c);
+    return 0;
+}
+@
+
+<<function fdtochan>>=
+Chan*
+fdtochan(int fd, int mode, int chkmnt, int iref)
+{
+    Chan *c;
+    Fgrp *f;
+
+    c = 0;
+    f = up->fgrp;
+
+    lock(f);
+    if(fd<0 || f->nfd<=fd || (c = f->fd[fd])==0) {
+        unlock(f);
+        error(Ebadfd);
+    }
+    if(iref)
+        incref(c);
+    unlock(f);
+
+    if(chkmnt && (c->flag&CMSG)) {
+        if(iref)
+            cclose(c);
+        error(Ebadusefd);
+    }
+
+    if(mode<0 || c->mode==ORDWR)
+        return c;
+
+    if((mode&OTRUNC) && c->mode==OREAD) {
+        if(iref)
+            cclose(c);
+        error(Ebadusefd);
+    }
+
+    if((mode&~OTRUNC) != c->mode) {
+        if(iref)
+            cclose(c);
+        error(Ebadusefd);
+    }
+
+    return c;
+}
+@
+
+
 
 \section{Other syscalls}
 
@@ -2275,6 +2587,8 @@ kbdputcclock(void)
 
 \subsection{Output}
 
+\subsubsection{[[print()]]}
+
 <<function print>>=
 bool noprint; // to debug?
 
@@ -2373,74 +2687,8 @@ putstrn0(char *str, int n, bool usewrite)
 }
 @ 
 
-
 <<hook screenputs>>=
 void    (*screenputs)(char*, int) = nil;
-@ 
-
-
-<<global iprintscreenputs>>=
-int iprintscreenputs = 1;
-@ 
-
-<<function iprint>>=
-int
-devcons_iprint(char *fmt, ...)
-{
-    int n, s, locked;
-    va_list arg;
-    char buf[PRINTSIZE];
-
-    s = splhi();
-    va_start(arg, fmt);
-    n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
-    va_end(arg);
-    locked = iprintcanlock(&iprintlock);
-    if(screenputs != nil && iprintscreenputs)
-        screenputs(buf, n);
-    uartputs(buf, n);
-    if(locked)
-        unlock(&iprintlock);
-    splx(s);
-
-    return n;
-}
-@ 
-
-% todo: see balestero note,
-% in distributed context we want to print process error at the right place
-% not just on kernel console
-<<function pprint>>=
-int
-devcons_pprint(char *fmt, ...)
-{
-    int n;
-    Chan *c;
-    va_list arg;
-    char buf[2*PRINTSIZE];
-
-    if(up == nil || up->fgrp == nil)
-        return 0;
-
-    c = up->fgrp->fd[2];
-    if(c==0 || (c->mode!=OWRITE && c->mode!=ORDWR))
-        return 0;
-    n = snprint(buf, sizeof buf, "%s %lud: ", up->text, up->pid);
-    va_start(arg, fmt);
-    n = vseprint(buf+n, buf+sizeof(buf), fmt, arg) - buf;
-    va_end(arg);
-
-    if(waserror())
-        return 0;
-    devtab[c->type]->write(c, buf, n, c->offset);
-    poperror();
-
-    lock(c);
-    c->offset += n;
-    unlock(c);
-
-    return n;
-}
 @ 
 
 <<function echoscreen>>=
@@ -2557,6 +2805,75 @@ echo(char *buf, int n)
         echoscreen(buf, n);
     if(serialoq)
         echoserialoq(buf, n);
+}
+@ 
+
+
+\subsubsection{[[iprint()]]}
+
+<<global iprintscreenputs>>=
+int iprintscreenputs = 1;
+@ 
+
+<<function iprint>>=
+int
+devcons_iprint(char *fmt, ...)
+{
+    int n, s, locked;
+    va_list arg;
+    char buf[PRINTSIZE];
+
+    s = splhi();
+    va_start(arg, fmt);
+    n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
+    va_end(arg);
+    locked = iprintcanlock(&iprintlock);
+    if(screenputs != nil && iprintscreenputs)
+        screenputs(buf, n);
+    uartputs(buf, n);
+    if(locked)
+        unlock(&iprintlock);
+    splx(s);
+
+    return n;
+}
+@ 
+
+\subsubsection{[[pprint()]]}
+
+% todo: see balestero note,
+% in distributed context we want to print process error at the right place
+% not just on kernel console
+<<function pprint>>=
+int
+devcons_pprint(char *fmt, ...)
+{
+    int n;
+    Chan *c;
+    va_list arg;
+    char buf[2*PRINTSIZE];
+
+    if(up == nil || up->fgrp == nil)
+        return 0;
+
+    c = up->fgrp->fd[2];
+    if(c==0 || (c->mode!=OWRITE && c->mode!=ORDWR))
+        return 0;
+    n = snprint(buf, sizeof buf, "%s %lud: ", up->text, up->pid);
+    va_start(arg, fmt);
+    n = vseprint(buf+n, buf+sizeof(buf), fmt, arg) - buf;
+    va_end(arg);
+
+    if(waserror())
+        return 0;
+    devtab[c->type]->write(c, buf, n, c->offset);
+    poperror();
+
+    lock(c);
+    c->offset += n;
+    unlock(c);
+
+    return n;
 }
 @ 
 
@@ -3125,6 +3442,267 @@ char    *sysname;
 % with a memory fs! where all binaries are processed via data2txt
 
 %#/
+
+<<global rootdevtab>>=
+Dev rootdevtab = {
+    .dc       = '/',
+    .name     = "root",
+  
+    .reset    = rootreset,
+    .init     = devinit,
+    .shutdown = devshutdown,
+    .attach   = rootattach,
+    .walk     = rootwalk,
+    .stat     = rootstat,
+    .open     = rootopen,
+    .create   = devcreate,
+    .close    = rootclose,
+    .read     = rootread,
+    .bread    = devbread,
+    .write    = rootwrite,
+    .bwrite   = devbwrite,
+    .remove   = devremove,
+    .wstat    = devwstat,
+};
+@
+
+<<devroot enum Qxxx>>=
+enum
+{
+    Qdir = 0,
+    Qboot = 0x1000,
+
+    Nrootfiles = 32,
+    Nbootfiles = 32,
+};
+@
+
+
+<<struct Dirlist>>=
+struct Dirlist
+{
+    uint base; // for unique qids
+    Dirtab *dir;
+    uchar **data;
+    int ndir; // number of dir used
+    int mdir; // max dir entries
+};
+@
+
+
+<<globals rootdir, rootdata, rootlist>>=
+static Dirtab rootdir[Nrootfiles] = {
+  {
+    .name = "#/",
+    .qid = {Qdir, 0, QTDIR},
+    .length = 0,
+    .perm = DMDIR|0555,
+  },
+  {    
+    .name = "boot", 
+    .qid = {Qboot, 0, QTDIR},
+    .length = 0,
+    .perm = DMDIR|0555,
+  }
+};
+static uchar *rootdata[Nrootfiles];
+static Dirlist rootlist = 
+{
+  .base = 0,
+  .dir = rootdir,
+  .data = rootdata,
+  .ndir = 2,
+  .mdir = Nrootfiles
+};
+@
+
+
+<<globals bootdir, bootdata, bootlist>>=
+static Dirtab bootdir[Nbootfiles] = {
+  {
+    .name = "boot",
+    .qid = {Qboot, 0, QTDIR},
+    .length = 0,
+    .perm = DMDIR|0555,
+  }
+};
+
+static uchar *bootdata[Nbootfiles];
+static Dirlist bootlist =
+{
+    .base = Qboot,
+    .dir = bootdir,
+    .data = bootdata,
+    .ndir = 1,
+    .mdir = Nbootfiles
+};
+@
+
+
+<<function addlist>>=
+/*
+ *  add a file to the list
+ */
+static void
+addlist(Dirlist *l, char *name, uchar *contents, ulong len, int perm)
+{
+    Dirtab *d;
+
+    if(l->ndir >= l->mdir)
+        panic("too many root files");
+    l->data[l->ndir] = contents;
+    d = &l->dir[l->ndir];
+    strcpy(d->name, name);
+    d->length = len;
+    d->perm = perm;
+    d->qid.type = 0;
+    d->qid.vers = 0;
+    d->qid.path = ++l->ndir + l->base;
+    if(perm & DMDIR)
+        d->qid.type |= QTDIR;
+}
+@
+
+
+<<function addbootfile>>=
+/*
+ *  add a boot file
+ */
+void
+addbootfile(char *name, uchar *contents, ulong len)
+{
+    addlist(&bootlist, name, contents, len, 0555);
+}
+@
+
+
+<<function addrootdir>>=
+/*
+ *  add a root directory
+ */
+static void
+addrootdir(char *name)
+{
+    addlist(&rootlist, name, nil, 0, DMDIR|0555);
+}
+@
+
+
+<<method rootreset>>=
+static void
+rootreset(void)
+{
+    addrootdir("bin");
+    addrootdir("dev");
+    addrootdir("env");
+    addrootdir("fd");
+    addrootdir("mnt");
+    addrootdir("net");
+    addrootdir("net.alt");
+    addrootdir("proc");
+    addrootdir("root");
+    addrootdir("srv");
+}
+@
+
+
+<<function rootgen>>=
+static int
+rootgen(Chan *c, char *name, Dirtab*, int, int s, Dir *dp)
+{
+    int t;
+    Dirtab *d;
+    Dirlist *l;
+
+    switch((int)c->qid.path){
+    case Qdir:
+        if(s == DEVDOTDOT){
+            devdir(c, (Qid){Qdir, 0, QTDIR}, "#/", 0, eve, 0555, dp);
+            return 1;
+        }
+        return devgen(c, name, rootlist.dir, rootlist.ndir, s, dp);
+    case Qboot:
+        if(s == DEVDOTDOT){
+            devdir(c, (Qid){Qdir, 0, QTDIR}, "#/", 0, eve, 0555, dp);
+            return 1;
+        }
+        return devgen(c, name, bootlist.dir, bootlist.ndir, s, dp);
+    default:
+        if(s == DEVDOTDOT){
+            if((int)c->qid.path < Qboot)
+                devdir(c, (Qid){Qdir, 0, QTDIR}, "#/", 0, eve, 0555, dp);
+            else
+                devdir(c, (Qid){Qboot, 0, QTDIR}, "#/", 0, eve, 0555, dp);
+            return 1;
+        }
+        if(s != 0)
+            return -1;
+        if((int)c->qid.path < Qboot){
+            t = c->qid.path-1;
+            l = &rootlist;
+        }else{
+            t = c->qid.path - Qboot - 1;
+            l = &bootlist;
+        }
+        if(t >= l->ndir)
+            return -1;
+        d = &l->dir[t];
+        devdir(c, d->qid, d->name, d->length, eve, d->perm, dp);
+        return 1;
+    }
+}
+@
+
+%if(t < 0){
+%print("rootgen %llud %d %d\n", c->qid.path, s, t);
+%panic("whoops");
+%}
+
+<<method rootread>>=
+static long
+rootread(Chan *c, void *buf, long n, vlong off)
+{
+    ulong t;
+    Dirtab *d;
+    Dirlist *l;
+    uchar *data;
+    ulong offset = off;
+
+    t = c->qid.path;
+    switch(t){
+    case Qdir:
+    case Qboot:
+        return devdirread(c, buf, n, nil, 0, rootgen);
+    }
+
+    if(t<Qboot)
+        l = &rootlist;
+    else{
+        t -= Qboot;
+        l = &bootlist;
+    }
+
+    t--;
+    if(t >= l->ndir)
+        error(Egreg);
+
+    d = &l->dir[t];
+    data = l->data[t];
+    if(offset >= d->length)
+        return 0;
+    if(offset+n > d->length)
+        n = d->length - offset;
+#ifdef asdf
+print("[%d] kaddr %.8ulx base %.8ulx offset %ld (%.8ulx), n %d %.8ulx %.8ulx %.8ulx\n", 
+        t, buf, data, offset, offset, n,
+        ((ulong*)(data+offset))[0],
+        ((ulong*)(data+offset))[1],
+        ((ulong*)(data+offset))[2]);
+#endif asdf
+    memmove(buf, data+offset, n);
+    return n;
+}
+@
 
 \subsection{[[devenv.c]]}
 
@@ -4454,8 +5032,7 @@ writebintime(char *buf, int n)
 \minitoc
 
 % of course can use fs to communicate between process :)
-
-% see also network
+% also when fork child inherit
 
 <<systab ipc syscalls>>=
     [NOTIFY]    sysnotify,
@@ -4469,6 +5046,55 @@ writebintime(char *buf, int n)
     [SEGFLUSH]  syssegflush,
     [SEGBRK]    syssegbrk,
 @ 
+
+\section{Environment}
+%really an IPC?
+
+<<struct Evalue>>=
+struct Evalue
+{
+  char  *name;
+  char  *value;
+  int len;
+  Evalue  *link;
+  Qid qid;
+};
+@
+
+
+<<struct Egrp>>=
+struct Egrp
+{
+  Ref;
+  RWlock;
+  Evalue  **ent;
+  int nent;
+  int ment;
+  ulong path; /* qid.path of next Evalue to be allocated */
+  ulong vers; /* of Egrp */
+};
+@
+
+<<function closeegrp>>=
+void
+closeegrp(Egrp *eg)
+{
+    int i;
+    Evalue *e;
+
+    if(decref(eg) == 0){
+        for(i=0; i<eg->nent; i++){
+            e = eg->ent[i];
+            free(e->name);
+            if(e->value)
+                free(e->value);
+            free(e);
+        }
+        free(eg->ent);
+        free(eg);
+    }
+}
+@
 
 \section{Notes (signals)}
 
@@ -4642,9 +5268,28 @@ connectlocal(void)
 
 \chapter{Misc}
 
+\section{Reboot}
+
+<<devcons.c enum Cmd>>=
+enum
+{
+    CMhalt,
+    CMreboot,
+    CMpanic,
+};
+@
+
+
+<<global rebootmsg>>=
+Cmdtab rebootmsg[] =
+{
+    CMhalt,     "halt",     1,
+    CMreboot,   "reboot",   0,
+    CMpanic,    "panic",    0,
+};
+@
+
 \section{Random}
-
-
 
 <<global randn>>=
 static  ulong   randn;
@@ -4673,6 +5318,67 @@ nrand(int n)
     return (randn>>16) % n;
 }
 @
+
+\section{Serial line}
+
+<<global serialoq>>=
+Queue*  serialoq;       /* serial console output */
+@ 
+
+<<function consactive>>=
+int
+consactive(void)
+{
+    if(serialoq)
+        return qlen(serialoq) > 0;
+    return 0;
+}
+@ 
+
+% dead?
+<<function prflush>>=
+void
+prflush(void)
+{
+    ulong now;
+
+    now = m->ticks;
+    while(consactive())
+        if(m->ticks - now >= HZ)
+            break;
+}
+@ 
+
+<<function echoserialoq>>=
+static void
+echoserialoq(char *buf, int n)
+{
+    char *e, *p;
+    char ebuf[128];
+    int x;
+
+    p = ebuf;
+    e = ebuf + sizeof(ebuf) - 4;
+    while(n-- > 0){
+        if(p >= e){
+            qiwrite(serialoq, ebuf, p - ebuf);
+            p = ebuf;
+        }
+        x = *buf++;
+        if(x == '\n'){
+            *p++ = '\r';
+            *p++ = '\n';
+        } else if(x == 0x15){
+            *p++ = '^';
+            *p++ = 'U';
+            *p++ = '\n';
+        } else
+            *p++ = x;
+    }
+    if(p != ebuf)
+        qiwrite(serialoq, ebuf, p - ebuf);
+}
+@ 
 
 \chapter{Conclusion}
 
@@ -4787,6 +5493,12 @@ kmesgputs(char *str, int n)
 <<global kprintoq>>=
 Queue*  kprintoq;       /* console output, for /dev/kprint */
 @ 
+
+<<global kprintinuse>>=
+ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
+@
+
+
 
 \section{Remote debugger}
 % rdb.c

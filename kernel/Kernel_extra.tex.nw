@@ -25,22 +25,7 @@ pcmspecial(char *idstr, ISAConf *isa)
     return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
 }
 
-
-void
-cpuidprint(void)
-{
-    int i;
-    char buf[128];
-
-    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", m->machno,
-        m->machno < 10? " ": "", m->cpumhz);
-    if(m->cpuidid[0])
-        i += sprint(buf+i, "%12.12s ", m->cpuidid);
-    seprint(buf+i, buf + sizeof buf - 1,
-        "%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
-        m->cpuidtype, m->cpuidax, m->cpuiddx);
-    print(buf);
-}
+<<function cpuidprint>>
 
 <<function cycles and default implementation>>
 
@@ -545,68 +530,6 @@ static int  writebintime(char*, int);
 @
 \fi
 
-<<global serialoq>>=
-Queue*  serialoq;       /* serial console output */
-@ 
-
-<<function consactive>>=
-int
-consactive(void)
-{
-    if(serialoq)
-        return qlen(serialoq) > 0;
-    return 0;
-}
-@ 
-
-
-<<function prflush>>=
-void
-prflush(void)
-{
-    ulong now;
-
-    now = m->ticks;
-    while(consactive())
-        if(m->ticks - now >= HZ)
-            break;
-}
-@ 
-
-
-
-<<function echoserialoq>>=
-static void
-echoserialoq(char *buf, int n)
-{
-    char *e, *p;
-    char ebuf[128];
-    int x;
-
-    p = ebuf;
-    e = ebuf + sizeof(ebuf) - 4;
-    while(n-- > 0){
-        if(p >= e){
-            qiwrite(serialoq, ebuf, p - ebuf);
-            p = ebuf;
-        }
-        x = *buf++;
-        if(x == '\n'){
-            *p++ = '\r';
-            *p++ = '\n';
-        } else if(x == 0x15){
-            *p++ = '^';
-            *p++ = 'U';
-            *p++ = '\n';
-        } else
-            *p++ = x;
-    }
-    if(p != ebuf)
-        qiwrite(serialoq, ebuf, p - ebuf);
-}
-@ 
-
-
 <<function kbdcr2nl>>=
 /*
  *  Called by a uart interrupt for console input.
@@ -633,32 +556,6 @@ kbdcr2nl(Queue*, int ch)
 }
 @ 
 
-
-
-
-<<global kprintinuse>>=
-ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
-@
-
-
-<<devcons.c enum Cmd>>=
-enum
-{
-    CMhalt,
-    CMreboot,
-    CMpanic,
-};
-@
-
-
-<<global rebootmsg>>=
-Cmdtab rebootmsg[] =
-{
-    CMhalt,     "halt",     1,
-    CMreboot,   "reboot",   0,
-    CMpanic,    "panic",    0,
-};
-@
 
 
 <<global iprintlock>>=
@@ -1014,35 +911,6 @@ enum misc_dat {
 
 \subsection*{[[core/386/dat_core.h]]}
 
-<<[[ArchMach]] other fields>>=
-// TODO: have a ArchMachMMU like in bcm/
-ulong*  pdb;      /* page directory base for this processor (va) */
-Tss*  tss;      /* tss for this processor */
-Segdesc *gdt;     /* gdt for this processor */
-Page* pdbpool;
-int pdbcnt;
-//  int inclockintr;
-
-Lock  apictimerlock;
-ArchFPsave *fpsavalign;
-
-// for perfticks, tsc = time stamp counter
-bool havetsc;
-
-int loopconst;
-int cpuidax;
-int cpuiddx;
-char  cpuidid[16];
-char* cpuidtype;
-int havepge;
-uvlong tscticks;
-int pdballoc;
-int pdbfree;
-vlong mtrrcap;
-vlong mtrrdef;
-vlong mtrrfix[11];
-vlong mtrrvar[32];    /* 256 max. */
-@ 
 
 
 
@@ -3489,199 +3357,6 @@ typedef struct Dirlist Dirlist;
 @
 \fi
 
-<<devroot enum Qxxx>>=
-enum
-{
-    Qdir = 0,
-    Qboot = 0x1000,
-
-    Nrootfiles = 32,
-    Nbootfiles = 32,
-};
-@
-
-
-<<struct Dirlist>>=
-struct Dirlist
-{
-    uint base; // for unique qids
-    Dirtab *dir;
-    uchar **data;
-    int ndir; // number of dir used
-    int mdir; // max dir entries
-};
-@
-
-
-<<globals rootdir, rootdata, rootlist>>=
-static Dirtab rootdir[Nrootfiles] = {
-  {
-    .name = "#/",
-    .qid = {Qdir, 0, QTDIR},
-    .length = 0,
-    .perm = DMDIR|0555,
-  },
-  {    
-    .name = "boot", 
-    .qid = {Qboot, 0, QTDIR},
-    .length = 0,
-    .perm = DMDIR|0555,
-  }
-};
-static uchar *rootdata[Nrootfiles];
-static Dirlist rootlist = 
-{
-  .base = 0,
-  .dir = rootdir,
-  .data = rootdata,
-  .ndir = 2,
-  .mdir = Nrootfiles
-};
-@
-
-
-<<globals bootdir, bootdata, bootlist>>=
-static Dirtab bootdir[Nbootfiles] = {
-  {
-    .name = "boot",
-    .qid = {Qboot, 0, QTDIR},
-    .length = 0,
-    .perm = DMDIR|0555,
-  }
-};
-
-static uchar *bootdata[Nbootfiles];
-static Dirlist bootlist =
-{
-    .base = Qboot,
-    .dir = bootdir,
-    .data = bootdata,
-    .ndir = 1,
-    .mdir = Nbootfiles
-};
-@
-
-
-<<function addlist>>=
-/*
- *  add a file to the list
- */
-static void
-addlist(Dirlist *l, char *name, uchar *contents, ulong len, int perm)
-{
-    Dirtab *d;
-
-    if(l->ndir >= l->mdir)
-        panic("too many root files");
-    l->data[l->ndir] = contents;
-    d = &l->dir[l->ndir];
-    strcpy(d->name, name);
-    d->length = len;
-    d->perm = perm;
-    d->qid.type = 0;
-    d->qid.vers = 0;
-    d->qid.path = ++l->ndir + l->base;
-    if(perm & DMDIR)
-        d->qid.type |= QTDIR;
-}
-@
-
-
-<<function addbootfile>>=
-/*
- *  add a boot file
- */
-void
-addbootfile(char *name, uchar *contents, ulong len)
-{
-    addlist(&bootlist, name, contents, len, 0555);
-}
-@
-
-
-<<function addrootdir>>=
-/*
- *  add a root directory
- */
-static void
-addrootdir(char *name)
-{
-    addlist(&rootlist, name, nil, 0, DMDIR|0555);
-}
-@
-
-
-<<method rootreset>>=
-static void
-rootreset(void)
-{
-    addrootdir("bin");
-    addrootdir("dev");
-    addrootdir("env");
-    addrootdir("fd");
-    addrootdir("mnt");
-    addrootdir("net");
-    addrootdir("net.alt");
-    addrootdir("proc");
-    addrootdir("root");
-    addrootdir("srv");
-}
-@
-
-
-<<function rootgen>>=
-static int
-rootgen(Chan *c, char *name, Dirtab*, int, int s, Dir *dp)
-{
-    int t;
-    Dirtab *d;
-    Dirlist *l;
-
-    switch((int)c->qid.path){
-    case Qdir:
-        if(s == DEVDOTDOT){
-            devdir(c, (Qid){Qdir, 0, QTDIR}, "#/", 0, eve, 0555, dp);
-            return 1;
-        }
-        return devgen(c, name, rootlist.dir, rootlist.ndir, s, dp);
-    case Qboot:
-        if(s == DEVDOTDOT){
-            devdir(c, (Qid){Qdir, 0, QTDIR}, "#/", 0, eve, 0555, dp);
-            return 1;
-        }
-        return devgen(c, name, bootlist.dir, bootlist.ndir, s, dp);
-    default:
-        if(s == DEVDOTDOT){
-            if((int)c->qid.path < Qboot)
-                devdir(c, (Qid){Qdir, 0, QTDIR}, "#/", 0, eve, 0555, dp);
-            else
-                devdir(c, (Qid){Qboot, 0, QTDIR}, "#/", 0, eve, 0555, dp);
-            return 1;
-        }
-        if(s != 0)
-            return -1;
-        if((int)c->qid.path < Qboot){
-            t = c->qid.path-1;
-            l = &rootlist;
-        }else{
-            t = c->qid.path - Qboot - 1;
-            l = &bootlist;
-        }
-        if(t >= l->ndir)
-            return -1;
-        d = &l->dir[t];
-        devdir(c, d->qid, d->name, d->length, eve, d->perm, dp);
-        return 1;
-    }
-}
-@
-
-%if(t < 0){
-%print("rootgen %llud %d %d\n", c->qid.path, s, t);
-%panic("whoops");
-%}
-
-
 <<method rootclose>>=
 /*
  * sysremove() knows this is a nop
@@ -3691,54 +3366,6 @@ rootclose(Chan*)
 {
 }
 @
-
-
-<<method rootread>>=
-static long
-rootread(Chan *c, void *buf, long n, vlong off)
-{
-    ulong t;
-    Dirtab *d;
-    Dirlist *l;
-    uchar *data;
-    ulong offset = off;
-
-    t = c->qid.path;
-    switch(t){
-    case Qdir:
-    case Qboot:
-        return devdirread(c, buf, n, nil, 0, rootgen);
-    }
-
-    if(t<Qboot)
-        l = &rootlist;
-    else{
-        t -= Qboot;
-        l = &bootlist;
-    }
-
-    t--;
-    if(t >= l->ndir)
-        error(Egreg);
-
-    d = &l->dir[t];
-    data = l->data[t];
-    if(offset >= d->length)
-        return 0;
-    if(offset+n > d->length)
-        n = d->length - offset;
-#ifdef asdf
-print("[%d] kaddr %.8ulx base %.8ulx offset %ld (%.8ulx), n %d %.8ulx %.8ulx %.8ulx\n", 
-        t, buf, data, offset, offset, n,
-        ((ulong*)(data+offset))[0],
-        ((ulong*)(data+offset))[1],
-        ((ulong*)(data+offset))[2]);
-#endif asdf
-    memmove(buf, data+offset, n);
-    return n;
-}
-@
-
 
 <<method rootwrite>>=
 static long
@@ -3750,28 +3377,6 @@ rootwrite(Chan*, void*, long, vlong)
 @
 
 
-<<global rootdevtab>>=
-Dev rootdevtab = {
-    .dc       = '/',
-    .name     = "root",
-  
-    .reset    = rootreset,
-    .init     = devinit,
-    .shutdown = devshutdown,
-    .attach   = rootattach,
-    .walk     = rootwalk,
-    .stat     = rootstat,
-    .open     = rootopen,
-    .create   = devcreate,
-    .close    = rootclose,
-    .read     = rootread,
-    .bread    = devbread,
-    .write    = rootwrite,
-    .bwrite   = devbwrite,
-    .remove   = devremove,
-    .wstat    = devwstat,
-};
-@
 
 
 <<devroot.c>>=
@@ -4138,19 +3743,6 @@ struct Elemlist
 @
 
 
-<<function chanpath>>=
-char*
-chanpath(Chan *c)
-{
-    if(c == nil)
-        return "<nil chan>";
-    if(c->path == nil)
-        return "<nil path>";
-    if(c->path->s == nil)
-        return "<nil path.s>";
-    return c->path->s;
-}
-@
 
 
 <<function isdotdot>>=
@@ -6600,28 +6192,6 @@ devconfig(int, char *, DevConf *)
 
 \subsection*{[[files/env.c]]}
 
-<<function closeegrp>>=
-void
-closeegrp(Egrp *eg)
-{
-    int i;
-    Evalue *e;
-
-    if(decref(eg) == 0){
-        for(i=0; i<eg->nent; i++){
-            e = eg->ent[i];
-            free(e->name);
-            if(e->value)
-                free(e->value);
-            free(e);
-        }
-        free(eg->ent);
-        free(eg);
-    }
-}
-@
-
-
 <<env.c>>=
 <<kernel basic includes>>
 
@@ -6633,49 +6203,6 @@ closeegrp(Egrp *eg)
 
 \subsection*{[[files/file.c]]}
 
-<<function fdtochan>>=
-Chan*
-fdtochan(int fd, int mode, int chkmnt, int iref)
-{
-    Chan *c;
-    Fgrp *f;
-
-    c = 0;
-    f = up->fgrp;
-
-    lock(f);
-    if(fd<0 || f->nfd<=fd || (c = f->fd[fd])==0) {
-        unlock(f);
-        error(Ebadfd);
-    }
-    if(iref)
-        incref(c);
-    unlock(f);
-
-    if(chkmnt && (c->flag&CMSG)) {
-        if(iref)
-            cclose(c);
-        error(Ebadusefd);
-    }
-
-    if(mode<0 || c->mode==ORDWR)
-        return c;
-
-    if((mode&OTRUNC) && c->mode==OREAD) {
-        if(iref)
-            cclose(c);
-        error(Ebadusefd);
-    }
-
-    if((mode&~OTRUNC) != c->mode) {
-        if(iref)
-            cclose(c);
-        error(Ebadusefd);
-    }
-
-    return c;
-}
-@
 
 
 <<function openmode>>=
@@ -7084,51 +6611,7 @@ int attached;       /* debugging */
 
 
 
-<<struct Block>>=
-struct Block
-{
-  long  ref;
-  Block*  next;
-  Block*  list;
-  uchar*  rp;     /* first unconsumed byte */
-  uchar*  wp;     /* first empty byte */
-  uchar*  lim;      /* 1 past the end of the buffer */
-  uchar*  base;     /* start of the buffer */
-  void  (*free)(Block*);
-  ushort  flag;
-  ushort  checksum;   /* IP checksum of complete packet (minus media header) */
-};
-@
 
-
-<<struct Queue>>=
-struct Queue
-{
-  Lock;
-
-  Block*  bfirst;   /* buffer */
-  Block*  blast;
-
-  int len;    /* bytes allocated to queue */
-  int dlen;   /* data bytes in queue */
-  int limit;    /* max bytes in queue */
-  int inilim;   /* initial limit */
-  int state;
-  int noblock;  /* true if writes return immediately when q full */
-  int eof;    /* number of eofs read by user */
-
-  void  (*kick)(void*); /* restart output */
-  void  (*bypass)(void*, Block*); /* bypass queue altogether */
-  void* arg;    /* argument to kick */
-
-  QLock rlock;    /* mutex for reading processes */
-  Rendez  rr;   /* process waiting to read */
-  QLock wlock;    /* mutex for writing processes */
-  Rendez  wr;   /* process waiting to write */
-
-  char  err[ERRMAX];
-};
-@
 
 
 <<struct Extent>>=
@@ -7224,45 +6707,6 @@ struct Mnt
 @
 
 
-<<struct Path>>=
-struct Path
-{
-  Ref;
-  char  *s;
-  Chan  **mtpt;     /* mtpt history */
-  int len;      /* strlen(s) */
-  int alen;     /* allocated length of s */
-  int mlen;     /* number of path elements */
-  int malen;      /* allocated length of mtpt */
-};
-@
-
-
-<<struct Evalue>>=
-struct Evalue
-{
-  char  *name;
-  char  *value;
-  int len;
-  Evalue  *link;
-  Qid qid;
-};
-@
-
-
-<<struct Egrp>>=
-struct Egrp
-{
-  Ref;
-  RWlock;
-  Evalue  **ent;
-  int nent;
-  int ment;
-  ulong path; /* qid.path of next Evalue to be allocated */
-  ulong vers; /* of Egrp */
-};
-@
-
 
 <<struct Walkqid>>=
 struct Walkqid
@@ -7308,37 +6752,19 @@ extern struct Mntalloc mntalloc;
 @
 
 
+
+
 <<portdat_files.h>>=
 
-/* flag values */
-enum
-{
-  BINTR = (1<<0),
-  BFREE = (1<<1),
-  Bipck = (1<<2),   /* ip checksum */
-  Budpck  = (1<<3),   /* udp checksum */
-  Btcpck  = (1<<4),   /* tcp checksum */
-  Bpktck  = (1<<5),   /* packet checksum */
-};
+<<enum blockflag>>
 
 <<struct Block>>
 
-#define BLEN(s) ((s)->wp - (s)->rp)
-#define BALLOC(s) ((s)->lim - (s)->base)
+<<function BLEN>>
+<<function BALLOC>>
 
 
-
-/* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
-enum
-{
-  /* Queue.state */
-  Qstarve   = (1<<0), /* consumer starved */
-  Qmsg    = (1<<1), /* message stream */
-  Qclosed   = (1<<2), /* queue has been closed/hungup */
-  Qflow   = (1<<3), /* producer flow controlled */
-  Qcoalesce = (1<<4), /* coalesce packets on read */
-  Qkick   = (1<<5), /* always call the kick routine after qwrite */
-};
+<<enum queuestate>>
 
 // defined in qio.c
 extern  uint  qiomaxatomic;
@@ -7601,6 +7027,7 @@ static ulong copyblockcnt;
 static ulong consumecnt;
 static ulong producecnt;
 static ulong qcopycnt;
+static ulong noblockcnt;
 @ 
 
 <<qio.c global debugging>>=
@@ -7611,20 +7038,17 @@ static int debugging;
 \fi
 
 
-<<qio.c>>=
-<<kernel basic includes>>
-
-<<qio.c globals cnt>>
-
-<<qio.c global debugging>>
-
+<<global qiomaxatomic>>=
 enum
 {
     Maxatomic   = 64*1024,
 };
 
 uint    qiomaxatomic = Maxatomic;
+@
 
+
+<<function ixsummary>>=
 void
 ixsummary(void)
 {
@@ -7635,7 +7059,10 @@ ixsummary(void)
     print("consume %lud, produce %lud, qcopy %lud\n",
         consumecnt, producecnt, qcopycnt);
 }
+@
 
+
+<<function freeblist>>=
 /*
  *  free a list of blocks
  */
@@ -7651,7 +7078,10 @@ freeblist(Block *b)
         freeb(b);
     }
 }
+@
 
+
+<<function padblock>>=
 /*
  *  pad a block to the front (or the back if size is negative)
  */
@@ -7698,7 +7128,10 @@ padblock(Block *bp, int size)
     QDEBUG checkb(nbp, "padblock 1");
     return nbp;
 }
+@
 
+
+<<function blocklen>>=
 /*
  *  return count of bytes in a string of blocks
  */
@@ -7714,7 +7147,10 @@ blocklen(Block *bp)
     }
     return len;
 }
+@
 
+
+<<function blockalloclen>>=
 /*
  * return count of space in blocks
  */
@@ -7730,7 +7166,10 @@ blockalloclen(Block *bp)
     }
     return len;
 }
+@
 
+
+<<function concatblock>>=
 /*
  *  copy the  string of blocks into
  *  a single block and free the string
@@ -7755,7 +7194,10 @@ concatblock(Block *bp)
     QDEBUG checkb(nb, "concatblock 1");
     return nb;
 }
+@
 
+
+<<function pullupblock>>=
 /*
  *  make sure the first block has at least n bytes
  */
@@ -7818,7 +7260,10 @@ pullupblock(Block *bp, int n)
     freeb(bp);
     return 0;
 }
+@
 
+
+<<function pullupqueue>>=
 /*
  *  make sure the first block has at least n bytes
  */
@@ -7835,7 +7280,10 @@ pullupqueue(Queue *q, int n)
     q->blast = b;
     return q->bfirst;
 }
+@
 
+
+<<function trimblock>>=
 /*
  *  trim to len bytes starting at offset
  */
@@ -7876,7 +7324,10 @@ trimblock(Block *bp, int offset, int len)
 
     return startb;
 }
+@
 
+
+<<function copyblock>>=
 /*
  *  copy 'count' bytes into a new block
  */
@@ -7905,7 +7356,10 @@ copyblock(Block *bp, int count)
 
     return nbp;
 }
+@
 
+
+<<function adjustblock>>=
 Block*
 adjustblock(Block* bp, int len)
 {
@@ -7933,8 +7387,10 @@ adjustblock(Block* bp, int len)
 
     return bp;
 }
+@
 
 
+<<function pullblock>>=
 /*
  *  throw away up to count bytes from a
  *  list of blocks.  Return count of bytes
@@ -7967,7 +7423,10 @@ pullblock(Block **bph, int count)
     }
     return bytes;
 }
+@
 
+
+<<function qget>>=
 /*
  *  get next block from a queue, return null if nothing there
  */
@@ -8006,7 +7465,10 @@ qget(Queue *q)
 
     return b;
 }
+@
 
+
+<<function qdiscard>>=
 /*
  *  throw away the next 'len' bytes in the queue
  */
@@ -8059,7 +7521,10 @@ qdiscard(Queue *q, int len)
 
     return sofar;
 }
+@
 
+
+<<function qconsume>>=
 /*
  *  Interrupt level copy out of a queue, return # bytes copied.
  */
@@ -8130,7 +7595,10 @@ qconsume(Queue *q, void *vp, int len)
 
     return len;
 }
+@
 
+
+<<function qpass>>=
 int
 qpass(Queue *q, Block *b)
 {
@@ -8183,7 +7651,10 @@ qpass(Queue *q, Block *b)
 
     return len;
 }
+@
 
+
+<<function qpassnolim>>=
 int
 qpassnolim(Queue *q, Block *b)
 {
@@ -8231,32 +7702,10 @@ qpassnolim(Queue *q, Block *b)
 
     return len;
 }
+@
 
-/*
- *  if the allocated space is way out of line with the used
- *  space, reallocate to a smaller block
- */
-Block*
-packblock(Block *bp)
-{
-    Block **l, *nbp;
-    int n;
 
-    for(l = &bp; *l; l = &(*l)->next){
-        nbp = *l;
-        n = BLEN(nbp);
-        if((n<<2) < BALLOC(nbp)){
-            *l = allocb(n);
-            memmove((*l)->wp, nbp->rp, n);
-            (*l)->wp += n;
-            (*l)->next = nbp->next;
-            freeb(nbp);
-        }
-    }
-
-    return bp;
-}
-
+<<function qproduce>>=
 int
 qproduce(Queue *q, void *vp, int len)
 {
@@ -8308,7 +7757,10 @@ qproduce(Queue *q, void *vp, int len)
 
     return len;
 }
+@
 
+
+<<function qcopy>>=
 /*
  *  copy from offset in the queue
  */
@@ -8359,7 +7811,10 @@ qcopy(Queue *q, int len, ulong offset)
 
     return nb;
 }
+@
 
+
+<<function qopen>>=
 /*
  *  called by non-interrupt code
  */
@@ -8383,7 +7838,10 @@ qopen(int limit, int msg, void (*kick)(void*), void *arg)
 
     return q;
 }
+@
 
+
+<<function qbypass>>=
 /* open a queue to be bypassed */
 Queue*
 qbypass(void (*bypass)(void*, Block*), void *arg)
@@ -8401,7 +7859,10 @@ qbypass(void (*bypass)(void*, Block*), void *arg)
 
     return q;
 }
+@
 
+
+<<function notempty>>=
 static int
 notempty(void *a)
 {
@@ -8409,7 +7870,10 @@ notempty(void *a)
 
     return (q->state & Qclosed) || q->bfirst != 0;
 }
+@
 
+
+<<function qwait>>=
 /*
  *  wait for the queue to be non-empty or closed.
  *  called with q ilocked.
@@ -8437,7 +7901,10 @@ qwait(Queue *q)
     }
     return 1;
 }
+@
 
+
+<<function qaddlist>>=
 /*
  * add a block list to a queue
  */
@@ -8455,7 +7922,10 @@ qaddlist(Queue *q, Block *b)
         b = b->next;
     q->blast = b;
 }
+@
 
+
+<<function qremove>>=
 /*
  *  called with q ilocked
  */
@@ -8474,7 +7944,10 @@ qremove(Queue *q)
     QDEBUG checkb(b, "qremove");
     return b;
 }
+@
 
+
+<<function bl2mem>>=
 /*
  *  copy the contents of a string of blocks into
  *  memory.  emptied blocks are freed.  return
@@ -8502,7 +7975,10 @@ bl2mem(uchar *p, Block *b, int n)
     }
     return nil;
 }
+@
 
+
+<<function qputback>>=
 /*
  *  put a block back to the front of the queue
  *  called with q ilocked
@@ -8517,7 +7993,10 @@ qputback(Queue *q, Block *b)
     q->len += BALLOC(b);
     q->dlen += BLEN(b);
 }
+@
 
+
+<<function qwakeup_iunlock>>=
 /*
  *  flow control, get producer going again
  *  called with q ilocked
@@ -8542,7 +8021,10 @@ qwakeup_iunlock(Queue *q)
         wakeup(&q->wr);
     }
 }
+@
 
+
+<<function qbread>>=
 /*
  *  get next block from a queue (up to a limit)
  */
@@ -8596,7 +8078,10 @@ qbread(Queue *q, int len)
     qunlock(&q->rlock);
     return nb;
 }
+@
 
+
+<<function qread>>=
 /*
  *  read a queue.  if no data is queued, post a Block
  *  and wait on its Rendez.
@@ -8682,7 +8167,10 @@ again:
     qunlock(&q->rlock);
     return n;
 }
+@
 
+
+<<function qnotfull>>=
 static int
 qnotfull(void *a)
 {
@@ -8690,9 +8178,10 @@ qnotfull(void *a)
 
     return q->len < q->limit || (q->state & Qclosed);
 }
+@
 
-ulong noblockcnt;
 
+<<function qbwrite>>=
 /*
  *  add a block to a queue obeying flow control
  */
@@ -8797,44 +8286,10 @@ qbwrite(Queue *q, Block *b)
     poperror();
     return n;
 }
+@
 
-/*
- *  write to a queue.  only Maxatomic bytes at a time is atomic.
- */
-int
-qwrite(Queue *q, void *vp, int len)
-{
-    int n, sofar;
-    Block *b;
-    uchar *p = vp;
 
-    QDEBUG if(!islo())
-        print("qwrite hi %#p\n", getcallerpc(&q));
-
-    sofar = 0;
-    do {
-        n = len-sofar;
-        if(n > Maxatomic)
-            n = Maxatomic;
-
-        b = allocb(n);
-        setmalloctag(b, (up->text[0]<<24)|(up->text[1]<<16)|(up->text[2]<<8)|up->text[3]);
-        if(waserror()){
-            freeb(b);
-            nexterror();
-        }
-        memmove(b->wp, p+sofar, n);
-        poperror();
-        b->wp += n;
-
-        qbwrite(q, b);
-
-        sofar += n;
-    } while(sofar < len && (q->state & Qmsg) == 0);
-
-    return len;
-}
-
+<<function qiwrite>>=
 /*
  *  used by print() to write to a queue.  Since we may be splhi or not in
  *  a process, don't qlock.
@@ -8901,7 +8356,10 @@ qiwrite(Queue *q, void *vp, int len)
 
     return sofar;
 }
+@
 
+
+<<function qfree>>=
 /*
  *  be extremely careful when calling this,
  *  as there is no reference accounting
@@ -8912,7 +8370,10 @@ qfree(Queue *q)
     qclose(q);
     free(q);
 }
+@
 
+
+<<function qclose>>=
 /*
  *  Mark a queue as closed.  No further IO is permitted.
  *  All blocks are released.
@@ -8944,7 +8405,10 @@ qclose(Queue *q)
     wakeup(&q->rr);
     wakeup(&q->wr);
 }
+@
 
+
+<<function qhangup>>=
 /*
  *  Mark a queue as closed.  Wakeup any readers.  Don't remove queued
  *  blocks.
@@ -8965,7 +8429,10 @@ qhangup(Queue *q, char *msg)
     wakeup(&q->rr);
     wakeup(&q->wr);
 }
+@
 
+
+<<function qiclosed>>=
 /*
  *  return non-zero if the q is hungup
  */
@@ -8974,7 +8441,10 @@ qisclosed(Queue *q)
 {
     return q->state & Qclosed;
 }
+@
 
+
+<<function qreopen>>=
 /*
  *  mark a queue as no longer hung up
  */
@@ -8988,7 +8458,10 @@ qreopen(Queue *q)
     q->limit = q->inilim;
     iunlock(q);
 }
+@
 
+
+<<function qlen>>=
 /*
  *  return bytes queued
  */
@@ -8997,7 +8470,10 @@ qlen(Queue *q)
 {
     return q->dlen;
 }
+@
 
+
+<<function qwindow>>=
 /*
  * return space remaining before flow control
  */
@@ -9011,7 +8487,10 @@ qwindow(Queue *q)
         l = 0;
     return l;
 }
+@
 
+
+<<function qcanread>>=
 /*
  *  return true if we can read without blocking
  */
@@ -9020,7 +8499,10 @@ qcanread(Queue *q)
 {
     return q->bfirst!=0;
 }
+@
 
+
+<<function qsetlimit>>=
 /*
  *  change queue limit
  */
@@ -9029,7 +8511,10 @@ qsetlimit(Queue *q, int limit)
 {
     q->limit = limit;
 }
+@
 
+
+<<function qnoblock>>=
 /*
  *  set blocking/nonblocking
  */
@@ -9038,7 +8523,10 @@ qnoblock(Queue *q, bool onoff)
 {
     q->noblock = onoff;
 }
+@
 
+
+<<function qflush>>=
 /*
  *  flush the output queue
  */
@@ -9061,12 +8549,120 @@ qflush(Queue *q)
     /* wake up readers/writers */
     wakeup(&q->wr);
 }
+@
 
+
+<<function qfull>>=
 int
 qfull(Queue *q)
 {
     return q->state & Qflow;
 }
+@
+
+
+<<qio.c>>=
+<<kernel basic includes>>
+
+<<qio.c globals cnt>>
+
+<<qio.c global debugging>>
+
+<<global qiomaxatomic>>
+
+<<function ixsummary>>
+
+<<function freeblist>>
+
+<<function padblock>>
+
+<<function blocklen>>
+
+<<function blockalloclen>>
+
+<<function concatblock>>
+
+<<function pullupblock>>
+
+<<function pullupqueue>>
+
+<<function trimblock>>
+
+<<function copyblock>>
+
+<<function adjustblock>>
+
+<<function pullblock>>
+
+<<function qget>>
+
+<<function qdiscard>>
+
+<<function qconsume>>
+
+<<function qpass>>
+
+<<function qpassnolim>>
+
+<<function packblock>>
+
+<<function qproduce>>
+
+<<function qcopy>>
+
+<<function qopen>>
+
+<<function qbypass>>
+
+<<function notempty>>
+
+<<function qwait>>
+
+<<function qaddlist>>
+
+<<function qremove>>
+
+<<function bl2mem>>
+
+<<function qputback>>
+
+<<function qwakeup_iunlock>>
+
+<<function qbread>>
+
+<<function qread>>
+
+<<function qnotfull>>
+
+<<function qbwrite>>
+
+<<function qwrite>>
+
+<<function qiwrite>>
+
+<<function qfree>>
+
+<<function qclose>>
+
+<<function qhangup>>
+
+<<function qiclosed>>
+
+<<function qreopen>>
+
+<<function qlen>>
+
+<<function qwindow>>
+
+<<function qcanread>>
+
+<<function qsetlimit>>
+
+<<function qnoblock>>
+
+<<function qflush>>
+
+<<function qfull>>
 
 @
 
@@ -9235,20 +8831,6 @@ newfd2(int fd[2], Chan *c[2])
 @
 
 
-<<syscall fd2path>>=
-long
-sysfd2path(ulong *arg)
-{
-    Chan *c;
-
-    validaddr(arg[1], arg[2], 1);
-
-    c = fdtochan(arg[0], -1, 0, 1);
-    snprint((char*)arg[1], arg[2], "%s", chanpath(c));
-    cclose(c);
-    return 0;
-}
-@
 
 
 <<syscall pipe>>=
