@@ -103,13 +103,15 @@ timerset(Tval x)
 }
 /*e: function timerset */
 
-
+/*s: function us */
 ulong
 µs(void)
 {
     return fastticks2us((*arch->fastclock)(nil));
 }
+/*e: function us */
 
+/*s: function fastticks */
 /*
  *  return value and speed of timer set in arch->clockenable
  */
@@ -118,4 +120,5 @@ devarch_fastticks(uvlong *hz)
 {
     return (*arch->fastclock)(hz);
 }
+/*e: function fastticks */
 /*e: arch.c */
