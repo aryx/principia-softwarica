@@ -89,11 +89,12 @@ enum misc_dat {
 /*s: enum miscsize_portdat */
 enum miscsize_portdat
 {
+  MB =    (1024*1024),
+
   /*s: constant PRINTSIZE */
   PRINTSIZE = 256,
   /*e: constant PRINTSIZE */
   NUMSIZE = 12,   /* size of formatted number */
-  MB =    (1024*1024),
   /* READSTR was 1000, which is way too small for usb's ctl file */
   READSTR = 4000,   /* temporary buffer size for device reads */
 };

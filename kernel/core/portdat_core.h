@@ -35,7 +35,7 @@ struct Conf
 
     int nswppo;   /* max # of pageouts per segment pass */
 
-    bool_ulong copymode; /* 0 is copy on write, 1 is copy on reference */
+    bool copymode; /* 0 is copy on write, 1 is copy on reference */
     ulong ialloc;   /* max interrupt time allocation in bytes */
     int nuart;    /* number of uart devices */
     /*x: [[Conf]] extra fields */

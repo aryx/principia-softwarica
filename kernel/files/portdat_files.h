@@ -243,7 +243,6 @@ struct Chan
 
     ulong dev;
 
-    ushort  flag;
 
     int fid;      /* for devmnt */
     ulong iounit;     /* chunk size for i/o; 0==default */
@@ -267,6 +266,8 @@ struct Chan
     Chan* mchan;      /* channel to mounted server */
     Qid mqid;     /* qid of root of mount point */
     Path* path;
+    /*x: [[Chan]] other fields */
+    ushort  flag;
     /*e: [[Chan]] other fields */
 
     // extra

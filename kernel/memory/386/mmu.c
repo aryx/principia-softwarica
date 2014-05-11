@@ -43,6 +43,7 @@
 /*e: kernel basic includes */
 #include    "io.h"
 
+/*s: macros xxxSEGM */
 /*
  * Simple segment descriptors with no translation.
  */
@@ -51,6 +52,7 @@
 #define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
 #define TSSSEGM(b,p)    { ((b)<<16)|sizeof(Tss),\
               ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
+/*e: macros xxxSEGM */
 
 /*s: global gdt */
 Segdesc gdt[NGDT] =
@@ -87,7 +89,7 @@ mmuinit0(void)
 /*e: function mmuinit0 */
 
 /*s: global didmmuinit */
-static int didmmuinit;
+static bool didmmuinit;
 /*e: global didmmuinit */
 
 /*s: function mmuinit */
@@ -97,7 +99,7 @@ mmuinit(void)
     ulong x, *p;
     ushort ptr[3];
 
-    didmmuinit = 1;
+    didmmuinit = true;
 
     if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n",
         VPT, vpd, KMAP);

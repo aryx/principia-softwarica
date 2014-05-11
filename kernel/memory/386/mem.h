@@ -37,7 +37,9 @@
 /*
  * Time
  */
+/*s: constant HZ */
 #define HZ    (100)     /* clock frequency */
+/*e: constant HZ */
 #define MS2HZ   (1000/HZ)   /* millisec per clock tick */
 #define TK2SEC(t) ((t)/HZ)    /* ticks to seconds */
 

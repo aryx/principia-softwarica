@@ -14,9 +14,6 @@
 //*****************************************************************************
 
 
-// the 8253 timer will generate clock ticks which will be useful to preempt
-// processes and so provide multitasking
-
 /*
  *  8253 timer
  */
@@ -62,7 +59,9 @@ enum
     T2gate= (1<<0),     /* enable T2 counting */
     T2spkr= (1<<1),     /* connect T2 out to speaker */
     T2out=  (1<<5),     /* output of T2 */
+};
 
+enum {
     Freq=   1193182,    /* Real clock frequency */
     Tickshift=8,        /* extra accuracy */
     MaxPeriod=Freq/HZ,

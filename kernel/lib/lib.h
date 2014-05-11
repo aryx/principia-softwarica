@@ -13,7 +13,6 @@
 /*s: pad basic types */
 typedef int bool;
 typedef ushort bool_ushort;
-typedef ulong bool_ulong;
 enum _bool {
   false = 0,
   true = 1

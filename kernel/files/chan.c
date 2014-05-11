@@ -82,14 +82,14 @@ isdotdot(char *p)
 /*e: function isdotdot */
 
 /*s: function emptystr */
-int
+bool
 emptystr(char *s)
 {
     if(s == nil)
-        return 1;
+        return true;
     if(s[0] == '\0')
-        return 1;
-    return 0;
+        return true;
+    return false;
 }
 /*e: function emptystr */
 
