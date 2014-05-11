@@ -97,8 +97,10 @@ struct Perf
 struct Mach
 {
     int machno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
-    // must be second field at 0x04, used by splhi()
-    ulong splpc;      /* pc of last caller to splhi */
+    /*s: [[Mach]] second field */
+        // must be second field at 0x04, used by splhi()
+        ulong splpc;      /* pc of last caller to splhi */
+    /*e: [[Mach]] second field */
   
     // ref<Proc>
     Proc* proc;     /* current process on this processor */

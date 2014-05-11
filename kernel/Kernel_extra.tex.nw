@@ -2713,7 +2713,6 @@ void  i8250mouse(char*, int (*)(Queue*, int), int);
 void  i8250setmouseputc(char*, int (*)(Queue*, int));
 void  i8253enable(void);
 void  i8253init(void);
-void  i8253link(void);
 uvlong  i8253read(uvlong*);
 void  i8253timerset(uvlong);
 int i8259disable(int);
@@ -3182,8 +3181,6 @@ uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 @ 
 
 <<[[Conf]] extra fields>>=
-bool_ulong monitor;  /* has monitor? */
-
 ulong npage;    /* total physical pages of memory */
 ulong upages;   /* user page pool */
 ulong nimage;   /* number of page cache image headers */
@@ -8189,9 +8186,6 @@ enum
 
 \subsection*{[[files/dev.c]]}
 
-<<global devtab>>=
-Dev** devtab = 0;
-@
 
 
 <<function mkqid>>=
@@ -9521,7 +9515,7 @@ enum
 // it is really a static array put here to avoid backward deps on conf_devtab,
 // and it is not really a <ref<dev>> because it's pointers to static
 // structures (e.g. mousedevtab, vgadevtab, etc).
-<<global devtab decl>>
+extern Dev** devtab;
 
 <<struct Dirtab>>
 
@@ -13296,30 +13290,30 @@ TEXT _startKADDR(SB), $0
 // part of a trick to remove some backward dependencies
 int devcons_print(char*, ...);
 int devcons_iprint(char*, ...);
+int devcons_pprint(char*, ...);
 void devcons_panic(char*, ...);
 void devcons__assert(char*);
 void trap_dumpstack(void);
 void proc_dumpaproc(Proc *p);
 void proc_error(char*);
 void proc_nexterror(void);
-int devcons_pprint(char*, ...);
 void i8253_delay(int millisecs);
 void i8253_microdelay(int microsecs);
-Proc* proc_wakeup(Rendez*);
 void proc_sched(void);
 void proc_ready(Proc*);
 void proc_sleep(Rendez*, int(*)(void*), void*);
+void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
+Proc* proc_wakeup(Rendez*);
+void proc_pexit(char *exitstr, int freemem);
+Proc* proc_proctab(int i);
 void main_exit(int ispanic);
 int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
 void nop(void);
 uvlong devarch_fastticks(uvlong *hz);
 void devarch_hook_ioalloc();
 void chan_cclose(Chan *c);
-Proc* proc_proctab(int i);
-void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
 int proc_postnote(Proc *p, int dolock, char *n, int flag);
 int sysproc_return0(void*);
-void proc_pexit(char *exitstr, int freemem);
 @ 
 \fi
 
@@ -14065,62 +14059,64 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 @
 
 
+<<[[main()]] initial assgnments for backward dependencies>>=
+// initial assignment made to avoid circular dependencies in codegraph
+print = devcons_print;
+iprint = devcons_iprint;
+pprint = devcons_pprint;
+
+panic = devcons_panic;
+_assert = devcons__assert;
+
+error = proc_error;
+nexterror = proc_nexterror;
+
+dumpstack = trap_dumpstack;
+dumpaproc = proc_dumpaproc;
+
+devtab = conf_devtab;
+
+delay = i8253_delay;
+microdelay = i8253_microdelay;
+
+wakeup = proc_wakeup;
+sched = proc_sched;
+ready = proc_ready;
+sleep = proc_sleep;
+tsleep = proc_tsleep;
+
+exit = main_exit;
+isaconfig = main_isaconfig;
+
+/*
+ * On a uniprocessor, you'd think that coherence could be nop,
+ * but it can't.  We still need a barrier when using coherence() in
+ * device drivers.
+ *
+ * On VMware, it's safe (and a huge win) to set this to nop.
+ * Aux/vmware does this via the #P/archctl file.
+ */
+coherence = nop;
+
+fastticks = devarch_fastticks;
+
+cclose = chan_cclose;
+
+proctab = proc_proctab;
+postnote = proc_postnote;
+return0 = sysproc_return0;
+pexit = proc_pexit;
+
+hook_ioalloc = devarch_hook_ioalloc;
+@
+
+
 <<function main>>=
 //@Scheck: not dead, entry point :) jumped to by qemu (via elf header)
 void
 main(void)
 {
-
-    // initial assignment made to avoid circular dependencies in codegraph
-    print = devcons_print;
-    iprint = devcons_iprint;
-    pprint = devcons_pprint;
-    
-    panic = devcons_panic;
-    _assert = devcons__assert;
-    
-    error = proc_error;
-    nexterror = proc_nexterror;
-    
-    dumpstack = trap_dumpstack;
-    dumpaproc = proc_dumpaproc;
-    
-    devtab = conf_devtab;
-    
-    delay = i8253_delay;
-    microdelay = i8253_microdelay;
-  
-    wakeup = proc_wakeup;
-    sched = proc_sched;
-    ready = proc_ready;
-    sleep = proc_sleep;
-    tsleep = proc_tsleep;
-  
-    exit = main_exit;
-    isaconfig = main_isaconfig;
-    
-    /*
-     * On a uniprocessor, you'd think that coherence could be nop,
-     * but it can't.  We still need a barrier when using coherence() in
-     * device drivers.
-     *
-     * On VMware, it's safe (and a huge win) to set this to nop.
-     * Aux/vmware does this via the #P/archctl file.
-     */
-    coherence = nop;
-    
-    fastticks = devarch_fastticks;
-    
-    cclose = chan_cclose;
-  
-    proctab = proc_proctab;
-    postnote = proc_postnote;
-    return0 = sysproc_return0;
-    pexit = proc_pexit;
-  
-    hook_ioalloc = devarch_hook_ioalloc;
-  
-    // end patch, back to original code
+    <<[[main()]] initial assgnments for backward dependencies>>
 
     cgapost(0);
 
@@ -14129,6 +14125,7 @@ main(void)
     options();
 
     ioinit();
+
     i8250console();
     quotefmtinstall();
     screeninit();
@@ -14177,20 +14174,19 @@ main(void)
             pcimatch(0, 0, 0);
     } else
             links();
-    conf.monitor = true;
+
     // initialize all devices
     chandevreset();
-    cgapost(0xcd);
+    cgapost(0xcd); // 0xcd, for chandev :)
 
     pageinit();
-    i8253link();
     swapinit();
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
     active.thunderbirdsarego = 1;
 
-    cgapost(0x99);
+    cgapost(0x99); // done!
     schedinit();
 }
 @
@@ -21944,23 +21940,6 @@ struct Vctl {
 @
 
 
-<<struct I8253>>=
-struct I8253
-{
-    ulong   period;     /* current clock period */
-    bool    enabled;
-    uvlong  hz;
-
-    ushort  last;       /* last value of clock 1 */
-    uvlong  ticks;      /* cumulative ticks of counter 1 */
-
-    ulong   periodset;
-
-    // extra
-    Lock;
-};
-@
-
 
 <<enum vector>>=
 enum {
@@ -22074,10 +22053,6 @@ struct ArchProcNotsave
 
 \subsection*{[[processes/386/i8253.c]]}
 
-<<global i8253>>=
-I8253 i8253;
-@
-
 
 <<struct Watchdog>>=
 struct Watchdog
@@ -22089,55 +22064,9 @@ struct Watchdog
 };
 @
 
-
 <<global watchdog>>=
 Watchdog* watchdog;
 int watchdogon;
-@
-
-<<function i8253init>>=
-void
-i8253init(void)
-{
-    int loops, x;
-
-    ioalloc(T0cntr, 4, 0, "i8253");
-    ioalloc(T2ctl, 1, 0, "i8253.cntr2ctl");
-
-    i8253.period = Freq/HZ;
-
-    /*
-     *  enable a 1/HZ interrupt for providing scheduling interrupts
-     */
-    outb(Tmode, Load0|Square);
-    outb(T0cntr, (Freq/HZ));    /* low byte */
-    outb(T0cntr, (Freq/HZ)>>8); /* high byte */
-
-    /*
-     *  enable a longer period counter to use as a clock
-     */
-    outb(Tmode, Load2|Square);
-    outb(T2cntr, 0);        /* low byte */
-    outb(T2cntr, 0);        /* high byte */
-    x = inb(T2ctl);
-    x |= T2gate;
-    outb(T2ctl, x);
-    
-    /*
-     * Introduce a little delay to make sure the count is
-     * latched and the timer is counting down; with a fast
-     * enough processor this may not be the case.
-     * The i8254 (which this probably is) has a read-back
-     * command which can be used to make sure the counting
-     * register has been written into the counting element.
-     */
-    x = (Freq/HZ);
-    for(loops = 0; loops < 100000 && x >= (Freq/HZ); loops++){
-        outb(Tmode, Latch0);
-        x = inb(T0cntr);
-        x |= inb(T0cntr)<<8;
-    }
-}
 @
 
 <<function wdogpause>>=
@@ -22256,32 +22185,6 @@ guesscpuhz(int aalcycles)
 
 
 
-<<interrupt callback i8253clock>>=
-static void
-i8253clock(Ureg* ureg, void*)
-{
-    timerintr(ureg, 0);
-}
-@
-
-
-<<function i8253enable>>=
-void
-i8253enable(void)
-{
-    i8253.enabled = true;
-    i8253.period = Freq/HZ;
-    intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
-}
-@
-
-
-<<function i8253link>>=
-void
-i8253link(void)
-{
-}
-@
 
 <<function i8253read>>=
 /*
@@ -22475,8 +22378,6 @@ enum
 <<interrupt callback i8253clock>>
 
 <<function i8253enable>>
-
-<<function i8253link>>
 
 <<function i8253read>>
 
@@ -24733,63 +24634,6 @@ hzclock(Ureg *ur)
 }
 @ 
 
-<<interrupt callback timerintr>>=
-// called via i8253clock
-void
-timerintr(Ureg *u, Tval)
-{
-    Timer *t;
-    Timers *tt;
-    uvlong when, now;
-    int count, callhzclock;
-
-    intrcount[m->machno]++;
-    callhzclock = 0;
-    tt = &timers[m->machno];
-    now = fastticks(nil);
-    if(now == 0)
-        panic("timerintr: zero fastticks()");
-    ilock(tt);
-    count = Maxtimerloops;
-    while((t = tt->head) != nil){
-        /*
-         * No need to ilock t here: any manipulation of t
-         * requires tdel(t) and this must be done with a
-         * lock to tt held.  We have tt, so the tdel will
-         * wait until we're done
-         */
-        when = t->twhen;
-        if(when > now){
-            timerset(when);
-            iunlock(tt);
-            if(callhzclock)
-                hzclock(u);
-            return;
-        }
-        tt->head = t->tnext;
-        assert(t->tt == tt);
-        t->tt = nil;
-        fcallcount[m->machno]++;
-        iunlock(tt);
-        if(t->tf)
-            (*t->tf)(u, t);
-        else
-            callhzclock++;
-        ilock(tt);
-        if(t->tmode == Tperiodic)
-            tadd(tt, t);
-        if (--count <= 0) {
-            count = Maxtimerloops;
-            iprint("timerintr: probably stuck in while loop; "
-                "scrutinise clock.c or use faster cycle "
-                "counter\n");
-        }
-    }
-    iunlock(tt);
-}
-@ 
-
-
 
 
 
@@ -25231,9 +25075,6 @@ enum {
 
 \subsection*{[[processes/portdat_processes.c]]}
 
-<<global active>>=
-struct Active active;
-@ 
 
 
 <<hook proctrace>>=
@@ -25790,21 +25631,6 @@ struct Alarms
 @ 
 
 
-<<struct Active>>=
-struct Active
-{
-    int machs;      /* bitmap of active CPUs */
-    int exiting;    /* shutdown */
-    int ispanic;    /* shutdown in response to a panic */
-  
-    // 386 specific?
-    int thunderbirdsarego;  /* lets the added processors continue to schedinit */
-    int rebooting;    /* just idle cpus > 0 */
-  
-    // extra
-    Lock;
-};
-@ 
 
 
 

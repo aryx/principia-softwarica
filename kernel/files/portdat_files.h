@@ -341,9 +341,7 @@ struct Dev
 // it is really a static array put here to avoid backward deps on conf_devtab,
 // and it is not really a <ref<dev>> because it's pointers to static
 // structures (e.g. mousedevtab, vgadevtab, etc).
-/*s: global devtab decl */
 extern Dev** devtab;
-/*e: global devtab decl */
 
 /*s: struct Dirtab */
 struct Dirtab

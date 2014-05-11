@@ -549,7 +549,7 @@ struct Proc
     vlong pcycles;
     /*e: [[Proc]] stats and profiling fields */
 //--------------------------------------------------------------------
-// Debugginf
+// Debugging
 //--------------------------------------------------------------------
     /*s: [[Proc]] debugging fields */
     Lock* lastlock;
@@ -723,7 +723,9 @@ struct Alarms
 /*s: struct Active */
 struct Active
 {
+    //array<bool>
     int machs;      /* bitmap of active CPUs */
+
     int exiting;    /* shutdown */
     int ispanic;    /* shutdown in response to a panic */
   

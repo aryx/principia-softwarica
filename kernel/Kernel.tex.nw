@@ -260,19 +260,17 @@ for himself
 <<sys.h memory syscalls>>
 <<sys.h file syscalls>>
 <<sys.h namespace syscalls>>
+<<sys.h time syscalls>>
 <<sys.h ipc syscalls>>
 <<sys.h concurrency syscalls>>
 <<sys.h special file syscalls>>
 <<sys.h security syscalls>>
 #define	ERRSTR		40
 @ 
-
 <<sys.h process syscalls>>=
 #define	RFORK		1
 #define	EXEC		2
 #define	EXITS		3
-#define	SLEEP		4
-#define	ALARM		5
 @
 
 <<sys.h memory syscalls>>=
@@ -301,13 +299,9 @@ for himself
 #define	UNMOUNT		24
 @
 
-
-<<sys.h concurrency syscalls>>=
-#define	AWAIT		25
-#define	RENDEZVOUS	26
-#define	SEMACQUIRE	27
-#define	SEMRELEASE	28
-#define	TSEMACQUIRE	29
+<<sys.h time syscalls>>=
+#define	SLEEP		4
+#define	ALARM		5
 @
 
 <<sys.h ipc syscalls>>=
@@ -319,6 +313,14 @@ for himself
 #define	SEGFREE		35
 #define	SEGFLUSH	36
 #define	SEGBRK		37
+@
+
+<<sys.h concurrency syscalls>>=
+#define	AWAIT		25
+#define	RENDEZVOUS	26
+#define	SEMACQUIRE	27
+#define	SEMRELEASE	28
+#define	TSEMACQUIRE	29
 @
 
 <<sys.h special file syscalls>>=
@@ -522,8 +524,9 @@ Syscall *systab[] = {
 <<systab memory syscalls>>
 <<systab file syscalls>>
 <<systab namespace syscalls>>
-<<systab concurrency syscalls>>
+<<systab time syscalls>>
 <<systab ipc syscalls>>
+<<systab concurrency syscalls>>
 <<systab special file syscalls>>
 <<systab security syscalls>>
     [ERRSTR]    syserrstr,
@@ -546,7 +549,7 @@ sysnop(ulong*)
 
 % mini libc: bool, int, strings, unicode, etc
 
-\section{[[Conf]]}
+\section{[[Conf]] and [[conf]]}
 
 <<struct Conf>>=
 struct Conf
@@ -606,14 +609,13 @@ struct Confmem
 @ 
 
 
-\section{[[Mach]]}
+\section{[[Mach]] and [[m]]}
 
 <<struct Mach>>=
 struct Mach
 {
     int machno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
-    // must be second field at 0x04, used by splhi()
-    ulong splpc;      /* pc of last caller to splhi */
+    <<[[Mach]] second field>>
   
     // ref<Proc>
     Proc* proc;     /* current process on this processor */
@@ -649,24 +651,38 @@ Mach* machp[MAXMACH];
 #define MACHP(n)  (machp[n])
 @
 
+
+<<struct Active>>=
+struct Active
+{
+    //array<bool>
+    int machs;      /* bitmap of active CPUs */
+
+    int exiting;    /* shutdown */
+    int ispanic;    /* shutdown in response to a panic */
+  
+    // 386 specific?
+    int thunderbirdsarego;  /* lets the added processors continue to schedinit */
+    int rebooting;    /* just idle cpus > 0 */
+  
+    // extra
+    Lock;
+};
+@ 
+
+<<global active>>=
+struct Active active;
+@ 
+
+
+
 <<struct ArchMach>>=
 struct ArchMach {
     <<[[ArchMach]] other fields>>
 };
 @ 
 
-<<[[ArchMach]] other fields>>=
-Proc* externup;   /* extern register Proc *up */
-@
-
-<<macro up>>=
-// up = user process, MACHADDR is defined in 386/mem.h
-#define up  (((Mach*)MACHADDR)->externup)
-@
-
-%//TODO: mv in 386/ TODO: why not m->externup? m is not valid?
-
-\section{[[Proc]]}
+\section{[[Proc]] and [[up]]}
 
 <<struct Proc>>=
 // the most important fields are set by newproc()
@@ -713,7 +729,7 @@ struct Proc
 //--------------------------------------------------------------------
     <<[[Proc]] stats and profiling fields>>
 //--------------------------------------------------------------------
-// Debugginf
+// Debugging
 //--------------------------------------------------------------------
     <<[[Proc]] debugging fields>>
 //--------------------------------------------------------------------
@@ -747,6 +763,19 @@ enum procstate
     <<enum procstate cases>>
 };
 @ 
+
+
+<<[[ArchMach]] other fields>>=
+Proc* externup;   /* extern register Proc *up */
+@
+
+<<macro up>>=
+// up = user process, MACHADDR is defined in 386/mem.h
+#define up  (((Mach*)MACHADDR)->externup)
+@
+
+%//TODO: mv in 386/ TODO: why not m->externup? m is not valid?
+
 
 \section{[[Chan]]}
 
@@ -793,7 +822,7 @@ enum qidtype {
 };
 @ 
 
-\section{[[Dev]]}
+\section{[[Dev]] and [[devtab]]}
 
 
 <<struct Dev>>=
@@ -830,8 +859,8 @@ struct Dev
 };
 @ 
 
-<<global devtab decl>>=
-extern Dev** devtab;
+<<global devtab>>=
+Dev** devtab = 0;
 @
 
 % ex of conf_devtab:
@@ -1088,6 +1117,11 @@ canlock(Lock *l)
 \section{Interrupt [[Lock]]}
 % can formalize a checking rule? if access any field
 % accessed from a xxxintr, then need to use ilock
+
+<<[[Mach]] second field>>=
+    // must be second field at 0x04, used by splhi()
+    ulong splpc;      /* pc of last caller to splhi */
+@ 
 
 <<function splhi>>=
 // int   splhi(void);
@@ -1704,9 +1738,6 @@ struct Sema
     [RFORK]     sysrfork,
     [EXEC]      sysexec,
     [EXITS]     sysexits,
-
-    [SLEEP]     syssleep,
-    [ALARM]     sysalarm,
 @ 
 
 \section{Overview}
@@ -1718,6 +1749,112 @@ struct Sema
 \section{Traps and interrupts}
 
 \section{Clock interrupt}
+
+<<struct I8253>>=
+struct I8253
+{
+    ulong   period;     /* current clock period */
+    bool    enabled;
+
+    uvlong  hz;
+
+    ushort  last;       /* last value of clock 1 */
+    uvlong  ticks;      /* cumulative ticks of counter 1 */
+
+    ulong   periodset;
+
+    // extra
+    Lock;
+};
+@
+
+
+<<global i8253>>=
+I8253 i8253;
+@
+
+<<function i8253init>>=
+void
+i8253init(void)
+{
+    int loops, x;
+
+    ioalloc(T0cntr, 4, 0, "i8253");
+    ioalloc(T2ctl, 1, 0, "i8253.cntr2ctl");
+
+    i8253.period = Freq/HZ;
+
+    /*
+     *  enable a 1/HZ interrupt for providing scheduling interrupts
+     */
+    outb(Tmode, Load0|Square);
+    outb(T0cntr, (Freq/HZ));    /* low byte */
+    outb(T0cntr, (Freq/HZ)>>8); /* high byte */
+
+    /*
+     *  enable a longer period counter to use as a clock
+     */
+    outb(Tmode, Load2|Square);
+    outb(T2cntr, 0);        /* low byte */
+    outb(T2cntr, 0);        /* high byte */
+    x = inb(T2ctl);
+    x |= T2gate;
+    outb(T2ctl, x);
+    
+    /*
+     * Introduce a little delay to make sure the count is
+     * latched and the timer is counting down; with a fast
+     * enough processor this may not be the case.
+     * The i8254 (which this probably is) has a read-back
+     * command which can be used to make sure the counting
+     * register has been written into the counting element.
+     */
+    x = (Freq/HZ);
+    for(loops = 0; loops < 100000 && x >= (Freq/HZ); loops++){
+        outb(Tmode, Latch0);
+        x = inb(T0cntr);
+        x |= inb(T0cntr)<<8;
+    }
+}
+@
+
+<<function i8253enable>>=
+void
+i8253enable(void)
+{
+    i8253.enabled = true;
+    i8253.period = Freq/HZ;
+    intrenable(IrqCLOCK, i8253clock, 0, BUSUNKNOWN, "clock");
+}
+@
+
+<<interrupt callback i8253clock>>=
+static void
+i8253clock(Ureg* ureg, void*)
+{
+    timerintr(ureg, 0);
+}
+@
+
+
+
+\section{Scheduler, [[sched()]] and [[ready()]]}
+
+\section{SMP}
+
+\section{[[sleep()]], [[wakeup()]]}
+
+\section{[[sysfork()]]}
+
+\section{[[sysexec()]]}
+
+
+\chapter{Time}
+
+<<systab time syscalls>>=
+    [SLEEP]     syssleep,
+    [ALARM]     sysalarm,
+@
 
 \section{Timers}
 
@@ -2018,6 +2155,64 @@ timersinit(void)
 }
 @ 
 
+\subsection{[[timerintr()]]}
+
+<<interrupt callback timerintr>>=
+// called via i8253clock
+void
+timerintr(Ureg *u, Tval)
+{
+    Timer *t;
+    Timers *tt;
+    uvlong when, now;
+    int count, callhzclock;
+
+    intrcount[m->machno]++;
+    callhzclock = 0;
+    tt = &timers[m->machno];
+    now = fastticks(nil);
+    if(now == 0)
+        panic("timerintr: zero fastticks()");
+    ilock(tt);
+    count = Maxtimerloops;
+    while((t = tt->head) != nil){
+        /*
+         * No need to ilock t here: any manipulation of t
+         * requires tdel(t) and this must be done with a
+         * lock to tt held.  We have tt, so the tdel will
+         * wait until we're done
+         */
+        when = t->twhen;
+        if(when > now){
+            timerset(when);
+            iunlock(tt);
+            if(callhzclock)
+                hzclock(u);
+            return;
+        }
+        tt->head = t->tnext;
+        assert(t->tt == tt);
+        t->tt = nil;
+        fcallcount[m->machno]++;
+        iunlock(tt);
+        if(t->tf)
+            (*t->tf)(u, t);
+        else
+            callhzclock++;
+        ilock(tt);
+        if(t->tmode == Tperiodic)
+            tadd(tt, t);
+        if (--count <= 0) {
+            count = Maxtimerloops;
+            iprint("timerintr: probably stuck in while loop; "
+                "scrutinise clock.c or use faster cycle "
+                "counter\n");
+        }
+    }
+    iunlock(tt);
+}
+@ 
+
 \subsection{Clock callback}
 
 <<function addclock0link>>=
@@ -2053,18 +2248,12 @@ addclock0link(void (*f)(void), Tms ms)
 }
 @ 
 
-\section{Scheduler, [[sched()]] and [[ready()]]}
-
-\section{SMP}
-
-\section{[[syssleep()]], [[syswakeup()]]}
+\section{[[syssleep()]]}
 
 \section{[[sysalarm()]]}
 %related? tsleep, tsemacquire
 
-\section{[[sysfork()]]}
-
-\section{[[sysexec()]]}
+\section{Time of day}
 
 
 \chapter{IPC}

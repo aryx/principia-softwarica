@@ -26,30 +26,30 @@ void bootargs(void*);
 // part of a trick to remove some backward dependencies
 int devcons_print(char*, ...);
 int devcons_iprint(char*, ...);
+int devcons_pprint(char*, ...);
 void devcons_panic(char*, ...);
 void devcons__assert(char*);
 void trap_dumpstack(void);
 void proc_dumpaproc(Proc *p);
 void proc_error(char*);
 void proc_nexterror(void);
-int devcons_pprint(char*, ...);
 void i8253_delay(int millisecs);
 void i8253_microdelay(int microsecs);
-Proc* proc_wakeup(Rendez*);
 void proc_sched(void);
 void proc_ready(Proc*);
 void proc_sleep(Rendez*, int(*)(void*), void*);
+void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
+Proc* proc_wakeup(Rendez*);
+void proc_pexit(char *exitstr, int freemem);
+Proc* proc_proctab(int i);
 void main_exit(int ispanic);
 int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
 void nop(void);
 uvlong devarch_fastticks(uvlong *hz);
 void devarch_hook_ioalloc();
 void chan_cclose(Chan *c);
-Proc* proc_proctab(int i);
-void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
 int proc_postnote(Proc *p, int dolock, char *n, int flag);
 int sysproc_return0(void*);
-void proc_pexit(char *exitstr, int freemem);
 /*e: main.c forward decl for backward dependencies */
 
 // conf.c
@@ -857,35 +857,35 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 void
 main(void)
 {
-
+    /*s: [[main()]] initial assgnments for backward dependencies */
     // initial assignment made to avoid circular dependencies in codegraph
     print = devcons_print;
     iprint = devcons_iprint;
     pprint = devcons_pprint;
-    
+
     panic = devcons_panic;
     _assert = devcons__assert;
-    
+
     error = proc_error;
     nexterror = proc_nexterror;
-    
+
     dumpstack = trap_dumpstack;
     dumpaproc = proc_dumpaproc;
-    
+
     devtab = conf_devtab;
-    
+
     delay = i8253_delay;
     microdelay = i8253_microdelay;
-  
+
     wakeup = proc_wakeup;
     sched = proc_sched;
     ready = proc_ready;
     sleep = proc_sleep;
     tsleep = proc_tsleep;
-  
+
     exit = main_exit;
     isaconfig = main_isaconfig;
-    
+
     /*
      * On a uniprocessor, you'd think that coherence could be nop,
      * but it can't.  We still need a barrier when using coherence() in
@@ -895,19 +895,18 @@ main(void)
      * Aux/vmware does this via the #P/archctl file.
      */
     coherence = nop;
-    
+
     fastticks = devarch_fastticks;
-    
+
     cclose = chan_cclose;
-  
+
     proctab = proc_proctab;
     postnote = proc_postnote;
     return0 = sysproc_return0;
     pexit = proc_pexit;
-  
+
     hook_ioalloc = devarch_hook_ioalloc;
-  
-    // end patch, back to original code
+    /*e: [[main()]] initial assgnments for backward dependencies */
 
     cgapost(0);
 
@@ -916,6 +915,7 @@ main(void)
     options();
 
     ioinit();
+
     i8250console();
     quotefmtinstall();
     screeninit();
@@ -964,20 +964,19 @@ main(void)
             pcimatch(0, 0, 0);
     } else
             links();
-    conf.monitor = true;
+
     // initialize all devices
     chandevreset();
-    cgapost(0xcd);
+    cgapost(0xcd); // 0xcd, for chandev :)
 
     pageinit();
-    i8253link();
     swapinit();
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
     active.thunderbirdsarego = 1;
 
-    cgapost(0x99);
+    cgapost(0x99); // done!
     schedinit();
 }
 /*e: function main */

@@ -121,6 +121,7 @@ struct I8253
 {
     ulong   period;     /* current clock period */
     bool    enabled;
+
     uvlong  hz;
 
     ushort  last;       /* last value of clock 1 */
