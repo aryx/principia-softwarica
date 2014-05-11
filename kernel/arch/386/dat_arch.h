@@ -57,24 +57,28 @@ struct PCArch
 
   int (*ident)(void);   /* this should be in the model */
   void  (*reset)(void);   /* this should be in the model */
-
-  int (*serialpower)(int);  /* 1 == on, 0 == off */
-  int (*modempower)(int); /* 1 == on, 0 == off */
+  void  (*resetothers)(void); /* put other cpus into reset */
 
   // interrupts
+  /*s: [[PCArch]] interrupt methods fields */
   void  (*intrinit)(void);
   int (*intrenable)(Vctl*);
   int (*intrvecno)(int);
   int (*intrdisable)(int);
   void  (*introff)(void);
   void  (*intron)(void);
-
+  /*e: [[PCArch]] interrupt methods fields */
   // clock, timer
+  /*s: [[PCArch]] time methods fields */
   void  (*clockenable)(void);
   uvlong  (*fastclock)(uvlong*);
   void  (*timerset)(uvlong);
-
-  void  (*resetothers)(void); /* put other cpus into reset */
+  /*e: [[PCArch]] time methods fields */
+  // power
+  /*s: [[PCArch]] power methods fields */
+  int (*serialpower)(int);  /* 1 == on, 0 == off */
+  int (*modempower)(int); /* 1 == on, 0 == off */
+  /*e: [[PCArch]] power methods fields */
 };
 /*e: struct PCArch */
 extern PCArch *arch;      /* PC architecture */

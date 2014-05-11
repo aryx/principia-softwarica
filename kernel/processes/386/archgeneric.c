@@ -56,21 +56,27 @@ PCArch archgeneric = {
     .id=        "generic",
     .ident=     0,
     .reset=     archreset,
-    .serialpower=   unimplemented,
-    .modempower=    unimplemented,
-    
-    // i8259
+
+    // interrupt: i8259 controller
+    /*s: [[archgeneric]] interrupt methods */
     .intrinit=  i8259init,
     .intrenable=    i8259enable,
     .intrvecno= i8259vecno,
     .intrdisable=   i8259disable,
     .intron=    i8259on,
     .introff=   i8259off,
-    
-    // i8253
+    /*e: [[archgeneric]] interrupt methods */
+    // clock: i8253 controller
+    /*s: [[archgeneric]] time methods */
     .clockenable=   i8253enable,
     .fastclock= i8253read,
     .timerset=  i8253timerset,
+    /*e: [[archgeneric]] time methods */
+    // power: none
+    /*s: [[archgeneric]] power methods */
+        .serialpower=   unimplemented,
+        .modempower=    unimplemented,
+    /*e: [[archgeneric]] power methods */
 };
 /*e: global archgeneric */
 

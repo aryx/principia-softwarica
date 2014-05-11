@@ -115,8 +115,6 @@ struct Mach
     /*e: [[Mach]] stat fields */
 
     /*s: [[Mach]] other fields */
-    int ilockdepth;
-    /*x: [[Mach]] other fields */
     ulong ticks;      /* of the clock since boot time */
     Label sched;      /* scheduler wakeup */
     Lock  alarmlock;    /* access to alarm list */
@@ -134,6 +132,8 @@ struct Mach
     int cpumhz;
     uvlong  cpuhz;
     uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
+    /*x: [[Mach]] other fields */
+    int ilockdepth;
     /*e: [[Mach]] other fields */
 
     struct ArchMach;

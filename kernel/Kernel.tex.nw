@@ -128,6 +128,86 @@ Yoann Padioleau\\
 
 \chapter{XTODO}
 
+<<[[Chan]] other fields>>=
+vlong devoffset;    /* in underlying device; see read */
+
+ulong dev;
+
+ushort  flag;
+
+int fid;      /* for devmnt */
+ulong iounit;     /* chunk size for i/o; 0==default */
+Mhead*  umh;      /* mount point that derived Chan; used in unionread */
+Chan* umc;      /* channel in union; held for union read */
+QLock umqlock;    /* serialize unionreads */
+int uri;      /* union read index */
+int dri;      /* devdirread index */
+uchar*  dirrock;    /* directory entry rock for translations */
+int nrock;
+int mrock;
+QLock rockqlock;
+int ismtpt;
+Mntcache* mcp;      /* Mount cache pointer */
+Mnt*  mux;      /* Mnt for clients using me for messages */
+union {
+  void* aux;
+  Qid pgrpid;   /* for #p/notepg */
+  ulong mid;    /* for ns in devproc */
+};
+Chan* mchan;      /* channel to mounted server */
+Qid mqid;     /* qid of root of mount point */
+Path* path;
+@ 
+
+
+<<[[Chan]] extra fields>>=
+Ref;        /* the Lock in this Ref is also Chan's lock */
+Chan* next;     /* allocation */
+Chan* link;
+@ 
+
+
+<<[[Mach]] other fields>>=
+ulong ticks;      /* of the clock since boot time */
+Label sched;      /* scheduler wakeup */
+Lock  alarmlock;    /* access to alarm list */
+void* alarm;      /* alarms bound to this clock */
+
+Proc* readied;    /* for runproc */
+ulong schedticks;   /* next forced context switch */
+
+int flushmmu;   /* make current proc flush it's mmu state */
+
+ulong spuriousintr;
+int lastintr;
+Perf  perf;     /* performance counters */
+
+int cpumhz;
+uvlong  cpuhz;
+uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
+@ 
+
+<<[[Conf]] extra fields>>=
+ulong npage;    /* total physical pages of memory */
+ulong upages;   /* user page pool */
+ulong nimage;   /* number of page cache image headers */
+ulong nswap;    /* number of swap pages */
+
+int nswppo;   /* max # of pageouts per segment pass */
+
+bool_ulong copymode; /* 0 is copy on write, 1 is copy on reference */
+ulong ialloc;   /* max interrupt time allocation in bytes */
+int nuart;    /* number of uart devices */
+@ 
+
+<<struct Label>>=
+// =~ a jumpbuf in C, for coroutines
+struct Label
+{
+    ulong sp; // virt_addr?
+    ulong pc; // virt_addr?
+};
+@ 
 
 
 <<[[ArchMach]] other fields>>=
@@ -160,6 +240,56 @@ vlong mtrrdef;
 vlong mtrrfix[11];
 vlong mtrrvar[32];    /* 256 max. */
 @ 
+
+<<struct Tss>>=
+struct Tss {
+    ulong link;     /* link (old TSS selector) */
+    ulong esp0;     /* privilege level 0 stack pointer */
+    ulong ss0;      /* privilege level 0 stack selector */
+    ulong esp1;     /* privilege level 1 stack pointer */
+    ulong ss1;      /* privilege level 1 stack selector */
+    ulong esp2;     /* privilege level 2 stack pointer */
+    ulong ss2;      /* privilege level 2 stack selector */
+    ulong xcr3;     /* page directory base register - not used because we don't use trap gates */
+    ulong eip;      /* instruction pointer */
+    ulong eflags;     /* flags register */
+    ulong eax;      /* general registers */
+    ulong   ecx;
+    ulong edx;
+    ulong ebx;
+    ulong esp;
+    ulong ebp;
+    ulong esi;
+    ulong edi;
+    ulong es;     /* segment selectors */
+    ulong cs;
+    ulong ss;
+    ulong ds;
+    ulong fs;
+    ulong gs;
+    ulong ldt;      /* selector for task's LDT */
+    ulong iomap;      /* I/O map base address + T-bit */
+};
+@ 
+
+
+<<struct ArchConf>>=
+struct ArchConf {
+    ulong base0;    /* base of bank 0 */
+    ulong base1;    /* base of bank 1 */
+};
+@ 
+
+
+<<struct Segdesc>>=
+struct Segdesc
+{
+    ulong d0;
+    ulong d1;
+};
+@ 
+
+
 
 \chapter{Introduction}
 
@@ -578,7 +708,7 @@ int nsyscall = nelem(systab);
 long
 sysnop(ulong*)
 {
-    //checkpagerefs();
+    print("Hello World\n");
     return 0;
 }
 @ 
@@ -611,6 +741,20 @@ struct Conf
 Conf conf;
 @ 
 
+<<struct Confmem>>=
+// memory "bank"
+struct Confmem
+{
+    ulong base; // phys?
+    ulong npage;
+  
+    ulong kbase; // phys?
+    ulong klimit; // phys?
+};
+@ 
+
+
+
 <<globals confname and confvar>>=
 // conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
 // hash<string, string>
@@ -635,19 +779,6 @@ char* getconf(char *name)
 }
 @
 
-
-
-<<struct Confmem>>=
-// memory "bank"
-struct Confmem
-{
-    ulong base; // phys?
-    ulong npage;
-  
-    ulong kbase; // phys?
-    ulong klimit; // phys?
-};
-@ 
 
 
 \section{[[Mach]] and [[m]]}
@@ -849,6 +980,24 @@ struct Qid
 };
 @ 
 
+<<function eqqid>>=
+int
+eqqid(Qid a, Qid b)
+{
+    return a.path==b.path && a.vers==b.vers;
+}
+@
+
+<<function mkqid>>=
+void
+mkqid(Qid *q, vlong path, ulong vers, int type)
+{
+    q->type = type;
+    q->vers = vers;
+    q->path = path;
+}
+@
+
 
 <<enum qidtype>>=
 /* bits in Qid.type */
@@ -919,24 +1068,14 @@ struct PCArch
 
   int (*ident)(void);   /* this should be in the model */
   void  (*reset)(void);   /* this should be in the model */
-
-  int (*serialpower)(int);  /* 1 == on, 0 == off */
-  int (*modempower)(int); /* 1 == on, 0 == off */
+  void  (*resetothers)(void); /* put other cpus into reset */
 
   // interrupts
-  void  (*intrinit)(void);
-  int (*intrenable)(Vctl*);
-  int (*intrvecno)(int);
-  int (*intrdisable)(int);
-  void  (*introff)(void);
-  void  (*intron)(void);
-
+  <<[[PCArch]] interrupt methods fields>>
   // clock, timer
-  void  (*clockenable)(void);
-  uvlong  (*fastclock)(uvlong*);
-  void  (*timerset)(uvlong);
-
-  void  (*resetothers)(void); /* put other cpus into reset */
+  <<[[PCArch]] time methods fields>>
+  // power
+  <<[[PCArch]] power methods fields>>
 };
 @ 
 
@@ -951,21 +1090,13 @@ PCArch archgeneric = {
     .id=        "generic",
     .ident=     0,
     .reset=     archreset,
-    .serialpower=   unimplemented,
-    .modempower=    unimplemented,
-    
-    // i8259
-    .intrinit=  i8259init,
-    .intrenable=    i8259enable,
-    .intrvecno= i8259vecno,
-    .intrdisable=   i8259disable,
-    .intron=    i8259on,
-    .introff=   i8259off,
-    
-    // i8253
-    .clockenable=   i8253enable,
-    .fastclock= i8253read,
-    .timerset=  i8253timerset,
+
+    // interrupt: i8259 controller
+    <<[[archgeneric]] interrupt methods>>
+    // clock: i8253 controller
+    <<[[archgeneric]] time methods>>
+    // power: none
+    <<[[archgeneric]] power methods>>
 };
 @
 
@@ -1943,6 +2074,98 @@ enum {
 };
 @
 
+<<[[PCArch]] interrupt methods fields>>=
+void  (*intrinit)(void);
+int (*intrenable)(Vctl*);
+int (*intrvecno)(int);
+int (*intrdisable)(int);
+void  (*introff)(void);
+void  (*intron)(void);
+@
+
+<<[[archgeneric]] interrupt methods>>=
+.intrinit=  i8259init,
+.intrenable=    i8259enable,
+.intrvecno= i8259vecno,
+.intrdisable=   i8259disable,
+.intron=    i8259on,
+.introff=   i8259off,
+@
+
+<<function i8259init>>=
+void
+i8259init(void)
+{
+    int x;
+
+    ioalloc(Int0ctl, 2, 0, "i8259.0");
+    ioalloc(Int1ctl, 2, 0, "i8259.1");
+    ilock(&i8259lock);
+
+    /*
+     *  Set up the first 8259 interrupt processor.
+     *  Make 8259 interrupts start at CPU vector VectorPIC.
+     *  Set the 8259 as master with edge triggered
+     *  input with fully nested interrupts.
+     */
+    outb(Int0ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
+                           ICW4 will be sent */
+    outb(Int0aux, VectorPIC);       /* ICW2 - interrupt vector offset */
+    outb(Int0aux, 0x04);            /* ICW3 - have slave on level 2 */
+    outb(Int0aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
+
+    /*
+     *  Set up the second 8259 interrupt processor.
+     *  Make 8259 interrupts start at CPU vector VectorPIC+8.
+     *  Set the 8259 as slave with edge triggered
+     *  input with fully nested interrupts.
+     */
+    outb(Int1ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
+                           ICW4 will be sent */
+    outb(Int1aux, VectorPIC+8);     /* ICW2 - interrupt vector offset */
+    outb(Int1aux, 0x02);            /* ICW3 - I am a slave on level 2 */
+    outb(Int1aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
+    outb(Int1aux, (i8259mask>>8) & 0xFF);
+
+    /*
+     *  pass #2 8259 interrupts to #1
+     */
+    i8259mask &= ~0x04;
+    outb(Int0aux, i8259mask & 0xFF);
+
+    /*
+     * Set Ocw3 to return the ISR when ctl read.
+     * After initialisation status read is set to IRR.
+     * Read IRR first to possibly deassert an outstanding
+     * interrupt.
+     */
+    inb(Int0ctl);
+    outb(Int0ctl, Ocw3|0x03);
+    inb(Int1ctl);
+    outb(Int1ctl, Ocw3|0x03);
+
+    /*
+     * Check for Edge/Level register.
+     * This check may not work for all chipsets.
+     * First try a non-intrusive test - the bits for
+     * IRQs 13, 8, 2, 1 and 0 must be edge (0). If
+     * that's OK try a R/W test.
+     */
+    x = (inb(Elcr2)<<8)|inb(Elcr1);
+    if(!(x & 0x2107)){
+        outb(Elcr1, 0);
+        if(inb(Elcr1) == 0){
+            outb(Elcr1, 0x20);
+            if(inb(Elcr1) == 0x20)
+                i8259elcr = x;
+            outb(Elcr1, x & 0xFF);
+            print("ELCR: %4.4uX\n", i8259elcr);
+        }
+    }
+    iunlock(&i8259lock);
+}
+@
+
 \section{Exceptions}
 
 \section{Hardware interrupts}
@@ -1966,6 +2189,8 @@ MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
 \section{Overview}
 
 \section{[[Proc]]}
+
+\section{User}
 
 \section{Context switch}
 
@@ -2103,6 +2328,14 @@ hzclock(Ureg *ur)
 
 \section{[[sysexec()]]}
 
+<<constant AOUT_MAGIC>>=
+/*
+ *  parameters for sysproc.c
+ */
+// I_MAGIC is defined in include/a.out.h
+#define AOUT_MAGIC  (I_MAGIC)
+@
+
 \section{[[sysexits()]]}
 
 
@@ -2137,6 +2370,28 @@ cpuidprint(void)
         "%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
         m->cpuidtype, m->cpuidax, m->cpuiddx);
     print(buf);
+}
+@
+
+\subsection{Device initialisation}
+
+<<function chandevreset>>=
+void
+chandevreset(void)
+{
+    int i;
+
+    todinit();  /* avoid later reentry causing infinite recursion */
+    debugstart = getconf("*debugstart") != nil;
+    if(debugstart)
+        iprint("reset:");
+    for(i=0; devtab[i] != nil; i++) {
+        if(debugstart)
+            iprint(" %s", devtab[i]->name);
+        devtab[i]->reset();
+    }
+    if(debugstart)
+        iprint("\n");
 }
 @
 
@@ -2176,6 +2431,179 @@ cpuidprint(void)
 
 \section{[[Chan]]nels}
 
+<<struct Chanalloc>>=
+struct Chanalloc
+{
+    Lock;
+    int fid;
+    Chan    *free;
+    Chan    *list;
+};
+@
+
+
+<<global chanalloc>>=
+struct Chanalloc chanalloc;
+@
+
+<<function newchan>>=
+Chan*
+newchan(void)
+{
+    Chan *c;
+
+    lock(&chanalloc);
+    c = chanalloc.free;
+    if(c != 0)
+        chanalloc.free = c->next;
+    unlock(&chanalloc);
+
+    if(c == nil){
+        c = smalloc(sizeof(Chan));
+        lock(&chanalloc);
+        c->fid = ++chanalloc.fid;
+        c->link = chanalloc.list;
+        chanalloc.list = c;
+        unlock(&chanalloc);
+    }
+
+    /* if you get an error before associating with a dev,
+       close calls rootclose, a nop */
+    c->type = 0;
+    c->flag = 0;
+    c->ref = 1;
+    c->dev = 0;
+    c->offset = 0;
+    c->devoffset = 0;
+    c->iounit = 0;
+    c->umh = 0;
+    c->uri = 0;
+    c->dri = 0;
+    c->aux = 0;
+    c->mchan = 0;
+    c->mcp = 0;
+    c->mux = 0;
+    memset(&c->mqid, 0, sizeof(c->mqid));
+    c->path = 0;
+    c->ismtpt = 0;
+    
+    return c;
+}
+@
+
+<<function chanfree>>=
+void
+chanfree(Chan *c)
+{
+    c->flag = CFREE;
+
+    if(c->dirrock != nil){
+        free(c->dirrock);
+        c->dirrock = 0;
+        c->nrock = 0;
+        c->mrock = 0;
+    }
+    if(c->umh != nil){
+        putmhead(c->umh);
+        c->umh = nil;
+    }
+    if(c->umc != nil){
+        cclose(c->umc);
+        c->umc = nil;
+    }
+    if(c->mux != nil){
+        muxclose(c->mux);
+        c->mux = nil;
+    }
+    if(c->mchan != nil){
+        cclose(c->mchan);
+        c->mchan = nil;
+    }
+
+    pathclose(c->path);
+    c->path = nil;
+
+    lock(&chanalloc);
+    c->next = chanalloc.free;
+    chanalloc.free = c;
+    unlock(&chanalloc);
+}
+@
+
+
+<<function cclose>>=
+void
+chan_cclose(Chan *c)
+{
+    if(c->flag&CFREE)
+        panic("cclose %#p", getcallerpc(&c));
+
+    DBG("cclose %p name=%s ref=%ld\n", c, c->path->s, c->ref);
+    if(decref(c))
+        return;
+
+    if(!waserror()){
+        devtab[c->type]->close(c);
+        poperror();
+    }
+    chanfree(c);
+}
+@
+
+<<function eqchan>>=
+int
+eqchan(Chan *a, Chan *b, int skipvers)
+{
+    if(a->qid.path != b->qid.path)
+        return 0;
+    if(!skipvers && a->qid.vers!=b->qid.vers)
+        return 0;
+    if(a->type != b->type)
+        return 0;
+    if(a->dev != b->dev)
+        return 0;
+    return 1;
+}
+@
+
+
+<<function eqchantdqid>>=
+int
+eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
+{
+    if(a->qid.path != qid.path)
+        return 0;
+    if(!skipvers && a->qid.vers!=qid.vers)
+        return 0;
+    if(a->type != type)
+        return 0;
+    if(a->dev != dev)
+        return 0;
+    return 1;
+}
+@
+
+
+
+<<function cclone>>=
+Chan*
+cclone(Chan *c)
+{
+    Chan *nc;
+    Walkqid *wq;
+
+    wq = devtab[c->type]->walk(c, nil, nil, 0);
+    if(wq == nil)
+        error("clone failed");
+    nc = wq->clone;
+    free(wq);
+    nc->path = c->path;
+    if(c->path)
+        incref(c->path);
+    return nc;
+}
+@
+
 \section{[[Path]]}
 
 <<struct Path>>=
@@ -2191,6 +2619,202 @@ struct Path
 };
 @
 
+<<global npath>>=
+Ref npath;
+@
+
+
+<<function newpath>>=
+Path*
+newpath(char *s)
+{
+    int i;
+    Path *p;
+
+    p = smalloc(sizeof(Path));
+    i = strlen(s);
+    p->len = i;
+    p->alen = i+PATHSLOP;
+    p->s = smalloc(p->alen);
+    memmove(p->s, s, i+1);
+    p->ref = 1;
+    incref(&npath);
+
+    /*
+     * Cannot use newpath for arbitrary names because the mtpt 
+     * array will not be populated correctly.  The names #/ and / are
+     * allowed, but other names with / in them draw warnings.
+     */
+    if(strchr(s, '/') && strcmp(s, "#/") != 0 && strcmp(s, "/") != 0)
+        print("newpath: %s from %#p\n", s, getcallerpc(&s));
+
+    p->mlen = 1;
+    p->malen = PATHMSLOP;
+    p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]);
+    return p;
+}
+@
+
+
+<<function copypath>>=
+//@Scheck: not dead, used below
+static Path*
+copypath(Path *p)
+{
+    int i;
+    Path *pp;
+    
+    pp = smalloc(sizeof(Path));
+    pp->ref = 1;
+    incref(&npath);
+    DBG("copypath %s %p => %p\n", p->s, p, pp);
+    
+    pp->len = p->len;
+    pp->alen = p->alen;
+    pp->s = smalloc(p->alen);
+    memmove(pp->s, p->s, p->len+1);
+    
+    pp->mlen = p->mlen;
+    pp->malen = p->malen;
+    pp->mtpt = smalloc(p->malen*sizeof pp->mtpt[0]);
+    for(i=0; i<pp->mlen; i++){
+        pp->mtpt[i] = p->mtpt[i];
+        if(pp->mtpt[i])
+            incref(pp->mtpt[i]);
+    }
+
+    return pp;
+}
+@
+
+
+<<function pathclose>>=
+void
+pathclose(Path *p)
+{
+    int i;
+    
+    if(p == nil)
+        return;
+
+    DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
+    for(i=0; i<p->mlen; i++)
+        DBG(" %p", p->mtpt[i]);
+    DBG("\n");
+
+    if(decref(p))
+        return;
+    decref(&npath);
+    free(p->s);
+    for(i=0; i<p->mlen; i++)
+        if(p->mtpt[i])
+            cclose(p->mtpt[i]);
+    free(p->mtpt);
+    free(p);
+}
+@
+
+
+<<function fixdotdotname>>=
+/*
+ * In place, rewrite name to compress multiple /, eliminate ., and process ..
+ * (Really only called to remove a trailing .. that has been added.
+ * Otherwise would need to update n->mtpt as well.)
+ */
+static void
+fixdotdotname(Path *p)
+{
+    char *r;
+
+    if(p->s[0] == '#'){
+        r = strchr(p->s, '/');
+        if(r == nil)
+            return;
+        cleanname(r);
+
+        /*
+         * The correct name is #i rather than #i/,
+         * but the correct name of #/ is #/.
+         */
+        if(strcmp(r, "/")==0 && p->s[1] != '/')
+            *r = '\0';
+    }else
+        cleanname(p->s);
+    p->len = strlen(p->s);
+}
+@
+
+
+<<function uniquepath>>=
+static Path*
+uniquepath(Path *p)
+{
+    Path *new;
+    
+    if(p->ref > 1){
+        /* copy on write */
+        new = copypath(p);
+        pathclose(p);
+        p = new;
+    }
+    return p;
+}
+@
+
+
+<<function addelem>>=
+static Path*
+addelem(Path *p, char *s, Chan *from)
+{
+    char *t;
+    int a, i;
+    Chan *c, **tt;
+
+    if(s[0]=='.' && s[1]=='\0')
+        return p;
+
+    p = uniquepath(p);
+
+    i = strlen(s);
+    if(p->len+1+i+1 > p->alen){
+        a = p->len+1+i+1 + PATHSLOP;
+        t = smalloc(a);
+        memmove(t, p->s, p->len+1);
+        free(p->s);
+        p->s = t;
+        p->alen = a;
+    }
+    /* don't insert extra slash if one is present */
+    if(p->len>0 && p->s[p->len-1]!='/' && s[0]!='/')
+        p->s[p->len++] = '/';
+    memmove(p->s+p->len, s, i+1);
+    p->len += i;
+    if(isdotdot(s)){
+        fixdotdotname(p);
+        DBG("addelem %s .. => rm %p\n", p->s, p->mtpt[p->mlen-1]);
+        if(p->mlen>1 && (c = p->mtpt[--p->mlen])){
+            p->mtpt[p->mlen] = nil;
+            cclose(c);
+        }
+    }else{
+        if(p->mlen >= p->malen){
+            p->malen = p->mlen+1+PATHMSLOP;
+            tt = smalloc(p->malen*sizeof tt[0]);
+            memmove(tt, p->mtpt, p->mlen*sizeof tt[0]);
+            free(p->mtpt);
+            p->mtpt = tt;
+        }
+        DBG("addelem %s %s => add %p\n", p->s, s, from);
+        p->mtpt[p->mlen++] = from;
+        if(from)
+            incref(from);
+    }
+    return p;
+}
+@
+
+
+
 <<function chanpath>>=
 char*
 chanpath(Chan *c)
@@ -2202,6 +2826,44 @@ chanpath(Chan *c)
     if(c->path->s == nil)
         return "<nil path.s>";
     return c->path->s;
+}
+@
+
+<<function skipslash>>=
+/*
+ * name is valid. skip leading / and ./ as much as possible
+ */
+char*
+skipslash(char *name)
+{
+    while(name[0]=='/' || (name[0]=='.' && (name[1]==0 || name[1]=='/')))
+        name++;
+    return name;
+}
+@
+
+
+<<global isfrog>>=
+char isfrog[256]={
+    /*NUL*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    /*BKS*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    /*DLE*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    /*CAN*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    ['/']   1,
+    [0x7f]  1,
+};
+@
+
+<<macro SEP>>=
+#define SEP(c) ((c) == 0 || (c) == '/')
+@
+
+
+<<function isdotdot>>=
+int
+isdotdot(char *p)
+{
+    return p[0]=='.' && p[1]=='.' && p[2]=='\0';
 }
 @
 
@@ -2243,6 +2905,612 @@ struct Block
 
 <<function BALLOC>>=
 #define BALLOC(s) ((s)->lim - (s)->base)
+@
+
+
+<<function _allocb>>=
+static Block*
+_allocb(int size)
+{
+    Block *b;
+    ulong addr;
+
+    if((b = mallocz(sizeof(Block)+size+Hdrspc, 0)) == nil)
+        return nil;
+
+    b->next = nil;
+    b->list = nil;
+    b->free = 0;
+    b->flag = 0;
+    b->ref = 0;
+    _xinc(&b->ref);
+
+    /* align start of data portion by rounding up */
+    addr = (ulong)b;
+    addr = ROUND(addr + sizeof(Block), BLOCKALIGN);
+    b->base = (uchar*)addr;
+
+    /* align end of data portion by rounding down */
+    b->lim = ((uchar*)b) + msize(b);
+    addr = (ulong)(b->lim);
+    addr = addr & ~(BLOCKALIGN-1);
+    b->lim = (uchar*)addr;
+
+    /* leave sluff at beginning for added headers */
+    b->rp = b->lim - ROUND(size, BLOCKALIGN);
+    if(b->rp < b->base)
+        panic("_allocb");
+    b->wp = b->rp;
+
+    return b;
+}
+@
+
+<<function allocb>>=
+Block*
+allocb(int size)
+{
+    Block *b;
+
+    /*
+     * Check in a process and wait until successful.
+     * Can still error out of here, though.
+     */
+    if(up == nil)
+        panic("allocb without up: %#p", getcallerpc(&size));
+    if((b = _allocb(size)) == nil){
+        splhi();
+        xsummary();
+        mallocsummary();
+        delay(500);
+        panic("allocb: no memory for %d bytes; caller %#p", size,
+            getcallerpc(&size));
+    }
+    setmalloctag(b, getcallerpc(&size));
+
+    return b;
+}
+@
+
+
+
+
+<<struct Ialloc>>=
+struct Ialloc
+{
+    Lock;
+    ulong   bytes;
+};
+@
+
+
+<<global ialloc>>=
+struct Ialloc ialloc;
+@
+
+<<function iallocsummary>>=
+void
+iallocsummary(void)
+{
+    print("ialloc %lud/%lud\n", ialloc.bytes, conf.ialloc);
+}
+@
+
+<<function iallocb>>=
+Block*
+iallocb(int size)
+{
+    Block *b;
+    static int m1, m2, mp;
+
+    if(ialloc.bytes > conf.ialloc){
+        if((m1++%10000)==0){
+            if(mp++ > 1000){
+                active.exiting = 1;
+                exit(0);
+            }
+            iprint("iallocb: limited %lud/%lud\n",
+                ialloc.bytes, conf.ialloc);
+        }
+        return nil;
+    }
+
+    if((b = _allocb(size)) == nil){
+        if((m2++%10000)==0){
+            if(mp++ > 1000){
+                active.exiting = 1;
+                exit(0);
+            }
+            iprint("iallocb: no memory %lud/%lud\n",
+                ialloc.bytes, conf.ialloc);
+        }
+        return nil;
+    }
+    setmalloctag(b, getcallerpc(&size));
+    b->flag = BINTR;
+
+    ilock(&ialloc);
+    ialloc.bytes += b->lim - b->base;
+    iunlock(&ialloc);
+
+    return b;
+}
+@
+
+
+<<function freeb>>=
+void
+freeb(Block *b)
+{
+    void *dead = (void*)Bdead;
+    long ref;
+
+    if(b == nil || (ref = _xdec(&b->ref)) > 0)
+        return;
+
+    if(ref < 0){
+        dumpstack();
+        panic("freeb: ref %ld; caller pc %#p", ref, getcallerpc(&b));
+    }
+
+    /*
+     * drivers which perform non cache coherent DMA manage their own buffer
+     * pool of uncached buffers and provide their own free routine.
+     */
+    if(b->free) {
+        b->free(b);
+        return;
+    }
+    if(b->flag & BINTR) {
+        ilock(&ialloc);
+        ialloc.bytes -= b->lim - b->base;
+        iunlock(&ialloc);
+    }
+
+    /* poison the block in case someone is still holding onto it */
+    b->next = dead;
+    b->rp = dead;
+    b->wp = dead;
+    b->lim = dead;
+    b->base = dead;
+
+    free(b);
+}
+@
+
+
+<<function checkb>>=
+void
+checkb(Block *b, char *msg)
+{
+    void *dead = (void*)Bdead;
+
+    if(b == dead)
+        panic("checkb b %s %#p", msg, b);
+    if(b->base == dead || b->lim == dead || b->next == dead
+      || b->rp == dead || b->wp == dead){
+        print("checkb: base %#p lim %#p next %#p\n",
+            b->base, b->lim, b->next);
+        print("checkb: rp %#p wp %#p\n", b->rp, b->wp);
+        panic("checkb dead: %s", msg);
+    }
+
+    if(b->base > b->lim)
+        panic("checkb 0 %s %#p %#p", msg, b->base, b->lim);
+    if(b->rp < b->base)
+        panic("checkb 1 %s %#p %#p", msg, b->base, b->rp);
+    if(b->wp < b->base)
+        panic("checkb 2 %s %#p %#p", msg, b->base, b->wp);
+    if(b->rp > b->lim)
+        panic("checkb 3 %s %#p %#p", msg, b->rp, b->lim);
+    if(b->wp > b->lim)
+        panic("checkb 4 %s %#p %#p", msg, b->wp, b->lim);
+}
+@
+
+
+
+
+
+<<function freeblist>>=
+/*
+ *  free a list of blocks
+ */
+void
+freeblist(Block *b)
+{
+    Block *next;
+
+    for(; b != 0; b = next){
+        next = b->next;
+        if(b->ref == 1)
+            b->next = nil;
+        freeb(b);
+    }
+}
+@
+
+
+<<function padblock>>=
+/*
+ *  pad a block to the front (or the back if size is negative)
+ */
+Block*
+padblock(Block *bp, int size)
+{
+    int n;
+    Block *nbp;
+
+    QDEBUG checkb(bp, "padblock 1");
+    if(size >= 0){
+        if(bp->rp - bp->base >= size){
+            bp->rp -= size;
+            return bp;
+        }
+
+        if(bp->next)
+            panic("padblock %#p", getcallerpc(&bp));
+        n = BLEN(bp);
+        padblockcnt++;
+        nbp = allocb(size+n);
+        nbp->rp += size;
+        nbp->wp = nbp->rp;
+        memmove(nbp->wp, bp->rp, n);
+        nbp->wp += n;
+        freeb(bp);
+        nbp->rp -= size;
+    } else {
+        size = -size;
+
+        if(bp->next)
+            panic("padblock %#p", getcallerpc(&bp));
+
+        if(bp->lim - bp->wp >= size)
+            return bp;
+
+        n = BLEN(bp);
+        padblockcnt++;
+        nbp = allocb(size+n);
+        memmove(nbp->wp, bp->rp, n);
+        nbp->wp += n;
+        freeb(bp);
+    }
+    QDEBUG checkb(nbp, "padblock 1");
+    return nbp;
+}
+@
+
+
+<<function blocklen>>=
+/*
+ *  return count of bytes in a string of blocks
+ */
+int
+blocklen(Block *bp)
+{
+    int len;
+
+    len = 0;
+    while(bp) {
+        len += BLEN(bp);
+        bp = bp->next;
+    }
+    return len;
+}
+@
+
+
+<<function blockalloclen>>=
+/*
+ * return count of space in blocks
+ */
+int
+blockalloclen(Block *bp)
+{
+    int len;
+
+    len = 0;
+    while(bp) {
+        len += BALLOC(bp);
+        bp = bp->next;
+    }
+    return len;
+}
+@
+
+
+<<function concatblock>>=
+/*
+ *  copy the  string of blocks into
+ *  a single block and free the string
+ */
+Block*
+concatblock(Block *bp)
+{
+    int len;
+    Block *nb, *f;
+
+    if(bp->next == 0)
+        return bp;
+
+    nb = allocb(blocklen(bp));
+    for(f = bp; f; f = f->next) {
+        len = BLEN(f);
+        memmove(nb->wp, f->rp, len);
+        nb->wp += len;
+    }
+    concatblockcnt += BLEN(nb);
+    freeblist(bp);
+    QDEBUG checkb(nb, "concatblock 1");
+    return nb;
+}
+@
+
+
+<<function pullupblock>>=
+/*
+ *  make sure the first block has at least n bytes
+ */
+Block*
+pullupblock(Block *bp, int n)
+{
+    int i;
+    Block *nbp;
+
+    /*
+     *  this should almost always be true, it's
+     *  just to avoid every caller checking.
+     */
+    if(BLEN(bp) >= n)
+        return bp;
+
+    /*
+     *  if not enough room in the first block,
+     *  add another to the front of the list.
+     */
+    if(bp->lim - bp->rp < n){
+        nbp = allocb(n);
+        nbp->next = bp;
+        bp = nbp;
+    }
+
+    /*
+     *  copy bytes from the trailing blocks into the first
+     */
+    n -= BLEN(bp);
+    while(nbp = bp->next){
+        i = BLEN(nbp);
+        if(i > n) {
+            memmove(bp->wp, nbp->rp, n);
+            pullupblockcnt++;
+            bp->wp += n;
+            nbp->rp += n;
+            QDEBUG checkb(bp, "pullupblock 1");
+            return bp;
+        } else {
+            /* shouldn't happen but why crash if it does */
+            if(i < 0){
+                print("pullup negative length packet, called from %#p\n",
+                    getcallerpc(&bp));
+                i = 0;
+            }
+            memmove(bp->wp, nbp->rp, i);
+            pullupblockcnt++;
+            bp->wp += i;
+            bp->next = nbp->next;
+            nbp->next = 0;
+            freeb(nbp);
+            n -= i;
+            if(n == 0){
+                QDEBUG checkb(bp, "pullupblock 2");
+                return bp;
+            }
+        }
+    }
+    freeb(bp);
+    return 0;
+}
+@
+
+
+<<function packblock>>=
+/*
+ *  if the allocated space is way out of line with the used
+ *  space, reallocate to a smaller block
+ */
+Block*
+packblock(Block *bp)
+{
+    Block **l, *nbp;
+    int n;
+
+    for(l = &bp; *l; l = &(*l)->next){
+        nbp = *l;
+        n = BLEN(nbp);
+        if((n<<2) < BALLOC(nbp)){
+            *l = allocb(n);
+            memmove((*l)->wp, nbp->rp, n);
+            (*l)->wp += n;
+            (*l)->next = nbp->next;
+            freeb(nbp);
+        }
+    }
+
+    return bp;
+}
+@
+
+
+<<function trimblock>>=
+/*
+ *  trim to len bytes starting at offset
+ */
+Block *
+trimblock(Block *bp, int offset, int len)
+{
+    ulong l;
+    Block *nb, *startb;
+
+    QDEBUG checkb(bp, "trimblock 1");
+    if(blocklen(bp) < offset+len) {
+        freeblist(bp);
+        return nil;
+    }
+
+    while((l = BLEN(bp)) < offset) {
+        offset -= l;
+        nb = bp->next;
+        bp->next = nil;
+        freeb(bp);
+        bp = nb;
+    }
+
+    startb = bp;
+    bp->rp += offset;
+
+    while((l = BLEN(bp)) < len) {
+        len -= l;
+        bp = bp->next;
+    }
+
+    bp->wp -= (BLEN(bp) - len);
+
+    if(bp->next) {
+        freeblist(bp->next);
+        bp->next = nil;
+    }
+
+    return startb;
+}
+@
+
+
+<<function copyblock>>=
+/*
+ *  copy 'count' bytes into a new block
+ */
+Block*
+copyblock(Block *bp, int count)
+{
+    int l;
+    Block *nbp;
+
+    QDEBUG checkb(bp, "copyblock 0");
+    nbp = allocb(count);
+    for(; count > 0 && bp != 0; bp = bp->next){
+        l = BLEN(bp);
+        if(l > count)
+            l = count;
+        memmove(nbp->wp, bp->rp, l);
+        nbp->wp += l;
+        count -= l;
+    }
+    if(count > 0){
+        memset(nbp->wp, 0, count);
+        nbp->wp += count;
+    }
+    copyblockcnt++;
+    QDEBUG checkb(nbp, "copyblock 1");
+
+    return nbp;
+}
+@
+
+
+<<function adjustblock>>=
+Block*
+adjustblock(Block* bp, int len)
+{
+    int n;
+    Block *nbp;
+
+    if(len < 0){
+        freeb(bp);
+        return nil;
+    }
+
+    if(bp->rp+len > bp->lim){
+        nbp = copyblock(bp, len);
+        freeblist(bp);
+        QDEBUG checkb(nbp, "adjustblock 1");
+
+        return nbp;
+    }
+
+    n = BLEN(bp);
+    if(len > n)
+        memset(bp->wp, 0, len-n);
+    bp->wp = bp->rp+len;
+    QDEBUG checkb(bp, "adjustblock 2");
+
+    return bp;
+}
+@
+
+
+<<function pullblock>>=
+/*
+ *  throw away up to count bytes from a
+ *  list of blocks.  Return count of bytes
+ *  thrown away.
+ */
+int
+pullblock(Block **bph, int count)
+{
+    Block *bp;
+    int n, bytes;
+
+    bytes = 0;
+    if(bph == nil)
+        return 0;
+
+    while(*bph != nil && count != 0) {
+        bp = *bph;
+        n = BLEN(bp);
+        if(count < n)
+            n = count;
+        bytes += n;
+        count -= n;
+        bp->rp += n;
+        QDEBUG checkb(bp, "pullblock ");
+        if(BLEN(bp) == 0) {
+            *bph = bp->next;
+            bp->next = nil;
+            freeb(bp);
+        }
+    }
+    return bytes;
+}
+@
+
+<<function bl2mem>>=
+/*
+ *  copy the contents of a string of blocks into
+ *  memory.  emptied blocks are freed.  return
+ *  pointer to first unconsumed block.
+ */
+Block*
+bl2mem(uchar *p, Block *b, int n)
+{
+    int i;
+    Block *next;
+
+    for(; b != nil; b = next){
+        i = BLEN(b);
+        if(i > n){
+            memmove(p, b->rp, n);
+            b->rp += n;
+            return b;
+        }
+        memmove(p, b->rp, i);
+        n -= i;
+        p += i;
+        b->rp += i;
+        next = b->next;
+        freeb(b);
+    }
+    return nil;
+}
 @
 
 
@@ -2291,34 +3559,25 @@ struct Queue
 };
 @
 
-
-
-<<function packblock>>=
+<<function pullupqueue>>=
 /*
- *  if the allocated space is way out of line with the used
- *  space, reallocate to a smaller block
+ *  make sure the first block has at least n bytes
  */
 Block*
-packblock(Block *bp)
+pullupqueue(Queue *q, int n)
 {
-    Block **l, *nbp;
-    int n;
+    Block *b;
 
-    for(l = &bp; *l; l = &(*l)->next){
-        nbp = *l;
-        n = BLEN(nbp);
-        if((n<<2) < BALLOC(nbp)){
-            *l = allocb(n);
-            memmove((*l)->wp, nbp->rp, n);
-            (*l)->wp += n;
-            (*l)->next = nbp->next;
-            freeb(nbp);
-        }
-    }
-
-    return bp;
+    if(BLEN(q->bfirst) >= n)
+        return q->bfirst;
+    q->bfirst = pullupblock(q->bfirst, n);
+    for(b = q->bfirst; b != nil && b->next != nil; b = b->next)
+        ;
+    q->blast = b;
+    return q->bfirst;
 }
 @
+
 
 <<function qwrite>>=
 /*
@@ -2361,17 +3620,1319 @@ qwrite(Queue *q, void *vp, int len)
 
 
 
+<<function qget>>=
+/*
+ *  get next block from a queue, return null if nothing there
+ */
+Block*
+qget(Queue *q)
+{
+    int dowakeup;
+    Block *b;
+
+    /* sync with qwrite */
+    ilock(q);
+
+    b = q->bfirst;
+    if(b == nil){
+        q->state |= Qstarve;
+        iunlock(q);
+        return nil;
+    }
+    q->bfirst = b->next;
+    b->next = 0;
+    q->len -= BALLOC(b);
+    q->dlen -= BLEN(b);
+    QDEBUG checkb(b, "qget");
+
+    /* if writer flow controlled, restart */
+    if((q->state & Qflow) && q->len < q->limit/2){
+        q->state &= ~Qflow;
+        dowakeup = 1;
+    } else
+        dowakeup = 0;
+
+    iunlock(q);
+
+    if(dowakeup)
+        wakeup(&q->wr);
+
+    return b;
+}
+@
+
+
+<<function qdiscard>>=
+/*
+ *  throw away the next 'len' bytes in the queue
+ */
+int
+qdiscard(Queue *q, int len)
+{
+    Block *b;
+    int dowakeup, n, sofar;
+
+    ilock(q);
+    for(sofar = 0; sofar < len; sofar += n){
+        b = q->bfirst;
+        if(b == nil)
+            break;
+        QDEBUG checkb(b, "qdiscard");
+        n = BLEN(b);
+        if(n <= len - sofar){
+            q->bfirst = b->next;
+            b->next = 0;
+            q->len -= BALLOC(b);
+            q->dlen -= BLEN(b);
+            freeb(b);
+        } else {
+            n = len - sofar;
+            b->rp += n;
+            q->dlen -= n;
+        }
+    }
+
+    /*
+     *  if writer flow controlled, restart
+     *
+     *  This used to be
+     *  q->len < q->limit/2
+     *  but it slows down tcp too much for certain write sizes.
+     *  I really don't understand it completely.  It may be
+     *  due to the queue draining so fast that the transmission
+     *  stalls waiting for the app to produce more data.  - presotto
+     */
+    if((q->state & Qflow) && q->len < q->limit){
+        q->state &= ~Qflow;
+        dowakeup = 1;
+    } else
+        dowakeup = 0;
+
+    iunlock(q);
+
+    if(dowakeup)
+        wakeup(&q->wr);
+
+    return sofar;
+}
+@
+
+
+<<function qconsume>>=
+/*
+ *  Interrupt level copy out of a queue, return # bytes copied.
+ */
+int
+qconsume(Queue *q, void *vp, int len)
+{
+    Block *b;
+    int n, dowakeup;
+    uchar *p = vp;
+    Block *tofree = nil;
+
+    /* sync with qwrite */
+    ilock(q);
+
+    for(;;) {
+        b = q->bfirst;
+        if(b == 0){
+            q->state |= Qstarve;
+            iunlock(q);
+            return -1;
+        }
+        QDEBUG checkb(b, "qconsume 1");
+
+        n = BLEN(b);
+        if(n > 0)
+            break;
+        q->bfirst = b->next;
+        q->len -= BALLOC(b);
+
+        /* remember to free this */
+        b->next = tofree;
+        tofree = b;
+    };
+
+    if(n < len)
+        len = n;
+    memmove(p, b->rp, len);
+    consumecnt += n;
+    b->rp += len;
+    q->dlen -= len;
+
+    /* discard the block if we're done with it */
+    if((q->state & Qmsg) || len == n){
+        q->bfirst = b->next;
+        b->next = 0;
+        q->len -= BALLOC(b);
+        q->dlen -= BLEN(b);
+
+        /* remember to free this */
+        b->next = tofree;
+        tofree = b;
+    }
+
+    /* if writer flow controlled, restart */
+    if((q->state & Qflow) && q->len < q->limit/2){
+        q->state &= ~Qflow;
+        dowakeup = 1;
+    } else
+        dowakeup = 0;
+
+    iunlock(q);
+
+    if(dowakeup)
+        wakeup(&q->wr);
+
+    if(tofree != nil)
+        freeblist(tofree);
+
+    return len;
+}
+@
+
+
+<<function qpass>>=
+int
+qpass(Queue *q, Block *b)
+{
+    int dlen, len, dowakeup;
+
+    /* sync with qread */
+    dowakeup = 0;
+    ilock(q);
+    if(q->len >= q->limit){
+        freeblist(b);
+        iunlock(q);
+        return -1;
+    }
+    if(q->state & Qclosed){
+        len = BALLOC(b);
+        freeblist(b);
+        iunlock(q);
+        return len;
+    }
+
+    /* add buffer to queue */
+    if(q->bfirst)
+        q->blast->next = b;
+    else
+        q->bfirst = b;
+    len = BALLOC(b);
+    dlen = BLEN(b);
+    QDEBUG checkb(b, "qpass");
+    while(b->next){
+        b = b->next;
+        QDEBUG checkb(b, "qpass");
+        len += BALLOC(b);
+        dlen += BLEN(b);
+    }
+    q->blast = b;
+    q->len += len;
+    q->dlen += dlen;
+
+    if(q->len >= q->limit/2)
+        q->state |= Qflow;
+
+    if(q->state & Qstarve){
+        q->state &= ~Qstarve;
+        dowakeup = 1;
+    }
+    iunlock(q);
+
+    if(dowakeup)
+        wakeup(&q->rr);
+
+    return len;
+}
+@
+
+
+<<function qpassnolim>>=
+int
+qpassnolim(Queue *q, Block *b)
+{
+    int dlen, len, dowakeup;
+
+    /* sync with qread */
+    dowakeup = 0;
+    ilock(q);
+
+    if(q->state & Qclosed){
+        freeblist(b);
+        iunlock(q);
+        return BALLOC(b);
+    }
+
+    /* add buffer to queue */
+    if(q->bfirst)
+        q->blast->next = b;
+    else
+        q->bfirst = b;
+    len = BALLOC(b);
+    dlen = BLEN(b);
+    QDEBUG checkb(b, "qpass");
+    while(b->next){
+        b = b->next;
+        QDEBUG checkb(b, "qpass");
+        len += BALLOC(b);
+        dlen += BLEN(b);
+    }
+    q->blast = b;
+    q->len += len;
+    q->dlen += dlen;
+
+    if(q->len >= q->limit/2)
+        q->state |= Qflow;
+
+    if(q->state & Qstarve){
+        q->state &= ~Qstarve;
+        dowakeup = 1;
+    }
+    iunlock(q);
+
+    if(dowakeup)
+        wakeup(&q->rr);
+
+    return len;
+}
+@
+
+
+<<function qproduce>>=
+int
+qproduce(Queue *q, void *vp, int len)
+{
+    Block *b;
+    int dowakeup;
+    uchar *p = vp;
+
+    /* sync with qread */
+    dowakeup = 0;
+    ilock(q);
+
+    /* no waiting receivers, room in buffer? */
+    if(q->len >= q->limit){
+        q->state |= Qflow;
+        iunlock(q);
+        return -1;
+    }
+
+    /* save in buffer */
+    b = iallocb(len);
+    if(b == 0){
+        iunlock(q);
+        return 0;
+    }
+    memmove(b->wp, p, len);
+    producecnt += len;
+    b->wp += len;
+    if(q->bfirst)
+        q->blast->next = b;
+    else
+        q->bfirst = b;
+    q->blast = b;
+    /* b->next = 0; done by iallocb() */
+    q->len += BALLOC(b);
+    q->dlen += BLEN(b);
+    QDEBUG checkb(b, "qproduce");
+
+    if(q->state & Qstarve){
+        q->state &= ~Qstarve;
+        dowakeup = 1;
+    }
+
+    if(q->len >= q->limit)
+        q->state |= Qflow;
+    iunlock(q);
+
+    if(dowakeup)
+        wakeup(&q->rr);
+
+    return len;
+}
+@
+
+
+<<function qcopy>>=
+/*
+ *  copy from offset in the queue
+ */
+Block*
+qcopy(Queue *q, int len, ulong offset)
+{
+    int sofar;
+    int n;
+    Block *b, *nb;
+    uchar *p;
+
+    nb = allocb(len);
+
+    ilock(q);
+
+    /* go to offset */
+    b = q->bfirst;
+    for(sofar = 0; ; sofar += n){
+        if(b == nil){
+            iunlock(q);
+            return nb;
+        }
+        n = BLEN(b);
+        if(sofar + n > offset){
+            p = b->rp + offset - sofar;
+            n -= offset - sofar;
+            break;
+        }
+        QDEBUG checkb(b, "qcopy");
+        b = b->next;
+    }
+
+    /* copy bytes from there */
+    for(sofar = 0; sofar < len;){
+        if(n > len - sofar)
+            n = len - sofar;
+        memmove(nb->wp, p, n);
+        qcopycnt += n;
+        sofar += n;
+        nb->wp += n;
+        b = b->next;
+        if(b == nil)
+            break;
+        n = BLEN(b);
+        p = b->rp;
+    }
+    iunlock(q);
+
+    return nb;
+}
+@
+
+
+<<function qopen>>=
+/*
+ *  called by non-interrupt code
+ */
+Queue*
+qopen(int limit, int msg, void (*kick)(void*), void *arg)
+{
+    Queue *q;
+
+    q = malloc(sizeof(Queue));
+    if(q == 0)
+        return 0;
+
+    q->limit = q->inilim = limit;
+    q->kick = kick;
+    q->arg = arg;
+    q->state = msg;
+    
+    q->state |= Qstarve;
+    q->eof = 0;
+    q->noblock = 0;
+
+    return q;
+}
+@
+
+
+<<function qbypass>>=
+/* open a queue to be bypassed */
+Queue*
+qbypass(void (*bypass)(void*, Block*), void *arg)
+{
+    Queue *q;
+
+    q = malloc(sizeof(Queue));
+    if(q == 0)
+        return 0;
+
+    q->limit = 0;
+    q->arg = arg;
+    q->bypass = bypass;
+    q->state = 0;
+
+    return q;
+}
+@
+
+
+<<function notempty>>=
+static int
+notempty(void *a)
+{
+    Queue *q = a;
+
+    return (q->state & Qclosed) || q->bfirst != 0;
+}
+@
+
+
+<<function qwait>>=
+/*
+ *  wait for the queue to be non-empty or closed.
+ *  called with q ilocked.
+ */
+static int
+qwait(Queue *q)
+{
+    /* wait for data */
+    for(;;){
+        if(q->bfirst != nil)
+            break;
+
+        if(q->state & Qclosed){
+            if(++q->eof > 3)
+                return -1;
+            if(*q->err && strcmp(q->err, Ehungup) != 0)
+                return -1;
+            return 0;
+        }
+
+        q->state |= Qstarve;    /* flag requesting producer to wake me */
+        iunlock(q);
+        sleep(&q->rr, notempty, q);
+        ilock(q);
+    }
+    return 1;
+}
+@
+
+
+<<function qaddlist>>=
+/*
+ * add a block list to a queue
+ */
+void
+qaddlist(Queue *q, Block *b)
+{
+    /* queue the block */
+    if(q->bfirst)
+        q->blast->next = b;
+    else
+        q->bfirst = b;
+    q->len += blockalloclen(b);
+    q->dlen += blocklen(b);
+    while(b->next)
+        b = b->next;
+    q->blast = b;
+}
+@
+
+
+<<function qremove>>=
+/*
+ *  called with q ilocked
+ */
+Block*
+qremove(Queue *q)
+{
+    Block *b;
+
+    b = q->bfirst;
+    if(b == nil)
+        return nil;
+    q->bfirst = b->next;
+    b->next = nil;
+    q->dlen -= BLEN(b);
+    q->len -= BALLOC(b);
+    QDEBUG checkb(b, "qremove");
+    return b;
+}
+@
+
+
+<<function qputback>>=
+/*
+ *  put a block back to the front of the queue
+ *  called with q ilocked
+ */
+void
+qputback(Queue *q, Block *b)
+{
+    b->next = q->bfirst;
+    if(q->bfirst == nil)
+        q->blast = b;
+    q->bfirst = b;
+    q->len += BALLOC(b);
+    q->dlen += BLEN(b);
+}
+@
+
+
+<<function qwakeup_iunlock>>=
+/*
+ *  flow control, get producer going again
+ *  called with q ilocked
+ */
+static void
+qwakeup_iunlock(Queue *q)
+{
+    int dowakeup = 0;
+
+    /* if writer flow controlled, restart */
+    if((q->state & Qflow) && q->len < q->limit/2){
+        q->state &= ~Qflow;
+        dowakeup = 1;
+    }
+
+    iunlock(q);
+
+    /* wakeup flow controlled writers */
+    if(dowakeup){
+        if(q->kick)
+            q->kick(q->arg);
+        wakeup(&q->wr);
+    }
+}
+@
+
+
+<<function qbread>>=
+/*
+ *  get next block from a queue (up to a limit)
+ */
+Block*
+qbread(Queue *q, int len)
+{
+    Block *b, *nb;
+    int n;
+
+    qlock(&q->rlock);
+    if(waserror()){
+        qunlock(&q->rlock);
+        nexterror();
+    }
+
+    ilock(q);
+    switch(qwait(q)){
+    case 0:
+        /* queue closed */
+        iunlock(q);
+        qunlock(&q->rlock);
+        poperror();
+        return nil;
+    case -1:
+        /* multiple reads on a closed queue */
+        iunlock(q);
+        error(q->err);
+    }
+
+    /* if we get here, there's at least one block in the queue */
+    b = qremove(q);
+    n = BLEN(b);
+
+    /* split block if it's too big and this is not a message queue */
+    nb = b;
+    if(n > len){
+        if((q->state&Qmsg) == 0){
+            n -= len;
+            b = allocb(n);
+            memmove(b->wp, nb->rp+len, n);
+            b->wp += n;
+            qputback(q, b);
+        }
+        nb->wp = nb->rp + len;
+    }
+
+    /* restart producer */
+    qwakeup_iunlock(q);
+
+    poperror();
+    qunlock(&q->rlock);
+    return nb;
+}
+@
+
+
+<<function qread>>=
+/*
+ *  read a queue.  if no data is queued, post a Block
+ *  and wait on its Rendez.
+ */
+long
+qread(Queue *q, void *vp, int len)
+{
+    Block *b, *first, **l;
+    int m, n;
+
+    qlock(&q->rlock);
+    if(waserror()){
+        qunlock(&q->rlock);
+        nexterror();
+    }
+
+    ilock(q);
+again:
+    switch(qwait(q)){
+    case 0:
+        /* queue closed */
+        iunlock(q);
+        qunlock(&q->rlock);
+        poperror();
+        return 0;
+    case -1:
+        /* multiple reads on a closed queue */
+        iunlock(q);
+        error(q->err);
+    }
+
+    /* if we get here, there's at least one block in the queue */
+    if(q->state & Qcoalesce){
+        /* when coalescing, 0 length blocks just go away */
+        b = q->bfirst;
+        if(BLEN(b) <= 0){
+            freeb(qremove(q));
+            goto again;
+        }
+
+        /*  grab the first block plus as many
+         *  following blocks as will completely
+         *  fit in the read.
+         */
+        n = 0;
+        l = &first;
+        m = BLEN(b);
+        for(;;) {
+            *l = qremove(q);
+            l = &b->next;
+            n += m;
+
+            b = q->bfirst;
+            if(b == nil)
+                break;
+            m = BLEN(b);
+            if(n+m > len)
+                break;
+        }
+    } else {
+        first = qremove(q);
+        n = BLEN(first);
+    }
+
+    /* copy to user space outside of the ilock */
+    iunlock(q);
+    b = bl2mem(vp, first, len);
+    ilock(q);
+
+    /* take care of any left over partial block */
+    if(b != nil){
+        n -= BLEN(b);
+        if(q->state & Qmsg)
+            freeb(b);
+        else
+            qputback(q, b);
+    }
+
+    /* restart producer */
+    qwakeup_iunlock(q);
+
+    poperror();
+    qunlock(&q->rlock);
+    return n;
+}
+@
+
+
+<<function qnotfull>>=
+static int
+qnotfull(void *a)
+{
+    Queue *q = a;
+
+    return q->len < q->limit || (q->state & Qclosed);
+}
+@
+
+
+<<function qbwrite>>=
+/*
+ *  add a block to a queue obeying flow control
+ */
+long
+qbwrite(Queue *q, Block *b)
+{
+    int n, dowakeup;
+    Proc *p;
+
+    n = BLEN(b);
+
+    if(q->bypass){
+        (*q->bypass)(q->arg, b);
+        return n;
+    }
+
+    dowakeup = 0;
+    qlock(&q->wlock);
+    if(waserror()){
+        if(b != nil)
+            freeb(b);
+        qunlock(&q->wlock);
+        nexterror();
+    }
+
+    ilock(q);
+
+    /* give up if the queue is closed */
+    if(q->state & Qclosed){
+        iunlock(q);
+        error(q->err);
+    }
+
+    /* if nonblocking, don't queue over the limit */
+    if(q->len >= q->limit){
+        if(q->noblock){
+            iunlock(q);
+            freeb(b);
+            noblockcnt += n;
+            qunlock(&q->wlock);
+            poperror();
+            return n;
+        }
+    }
+
+    /* queue the block */
+    if(q->bfirst)
+        q->blast->next = b;
+    else
+        q->bfirst = b;
+    q->blast = b;
+    b->next = 0;
+    q->len += BALLOC(b);
+    q->dlen += n;
+    QDEBUG checkb(b, "qbwrite");
+    b = nil;
+
+    /* make sure other end gets awakened */
+    if(q->state & Qstarve){
+        q->state &= ~Qstarve;
+        dowakeup = 1;
+    }
+    iunlock(q);
+
+    /*  get output going again */
+    if(q->kick && (dowakeup || (q->state&Qkick)))
+        q->kick(q->arg);
+
+    /* wakeup anyone consuming at the other end */
+    if(dowakeup){
+        p = wakeup(&q->rr);
+
+        /* if we just wokeup a higher priority process, let it run */
+        if(p != nil && p->priority > up->priority)
+            sched();
+    }
+
+    /*
+     *  flow control, wait for queue to get below the limit
+     *  before allowing the process to continue and queue
+     *  more.  We do this here so that postnote can only
+     *  interrupt us after the data has been queued.  This
+     *  means that things like 9p flushes and ssl messages
+     *  will not be disrupted by software interrupts.
+     *
+     *  Note - this is moderately dangerous since a process
+     *  that keeps getting interrupted and rewriting will
+     *  queue infinite crud.
+     */
+    for(;;){
+        if(q->noblock || qnotfull(q))
+            break;
+
+        ilock(q);
+        q->state |= Qflow;
+        iunlock(q);
+        sleep(&q->wr, qnotfull, q);
+    }
+    USED(b);
+
+    qunlock(&q->wlock);
+    poperror();
+    return n;
+}
+@
+
+
+<<function qiwrite>>=
+/*
+ *  used by print() to write to a queue.  Since we may be splhi or not in
+ *  a process, don't qlock.
+ *
+ *  this routine merges adjacent blocks if block n+1 will fit into
+ *  the free space of block n.
+ */
+int
+qiwrite(Queue *q, void *vp, int len)
+{
+    int n, sofar, dowakeup;
+    Block *b;
+    uchar *p = vp;
+
+    dowakeup = 0;
+
+    sofar = 0;
+    do {
+        n = len-sofar;
+        if(n > Maxatomic)
+            n = Maxatomic;
+
+        b = iallocb(n);
+        if(b == nil)
+            break;
+        memmove(b->wp, p+sofar, n);
+        b->wp += n;
+
+        ilock(q);
+
+        /* we use an artificially high limit for kernel prints since anything
+         * over the limit gets dropped
+         */
+        if(q->dlen >= 16*1024){
+            iunlock(q);
+            freeb(b);
+            break;
+        }
+
+        QDEBUG checkb(b, "qiwrite");
+        if(q->bfirst)
+            q->blast->next = b;
+        else
+            q->bfirst = b;
+        q->blast = b;
+        q->len += BALLOC(b);
+        q->dlen += n;
+
+        if(q->state & Qstarve){
+            q->state &= ~Qstarve;
+            dowakeup = 1;
+        }
+
+        iunlock(q);
+
+        if(dowakeup){
+            if(q->kick)
+                q->kick(q->arg);
+            wakeup(&q->rr);
+        }
+
+        sofar += n;
+    } while(sofar < len && (q->state & Qmsg) == 0);
+
+    return sofar;
+}
+@
+
+
+<<function qfree>>=
+/*
+ *  be extremely careful when calling this,
+ *  as there is no reference accounting
+ */
+void
+qfree(Queue *q)
+{
+    qclose(q);
+    free(q);
+}
+@
+
+
+<<function qclose>>=
+/*
+ *  Mark a queue as closed.  No further IO is permitted.
+ *  All blocks are released.
+ */
+void
+qclose(Queue *q)
+{
+    Block *bfirst;
+
+    if(q == nil)
+        return;
+
+    /* mark it */
+    ilock(q);
+    q->state |= Qclosed;
+    q->state &= ~(Qflow|Qstarve);
+    strcpy(q->err, Ehungup);
+    bfirst = q->bfirst;
+    q->bfirst = 0;
+    q->len = 0;
+    q->dlen = 0;
+    q->noblock = 0;
+    iunlock(q);
+
+    /* free queued blocks */
+    freeblist(bfirst);
+
+    /* wake up readers/writers */
+    wakeup(&q->rr);
+    wakeup(&q->wr);
+}
+@
+
+
+<<function qhangup>>=
+/*
+ *  Mark a queue as closed.  Wakeup any readers.  Don't remove queued
+ *  blocks.
+ */
+void
+qhangup(Queue *q, char *msg)
+{
+    /* mark it */
+    ilock(q);
+    q->state |= Qclosed;
+    if(msg == 0 || *msg == 0)
+        strcpy(q->err, Ehungup);
+    else
+        strncpy(q->err, msg, ERRMAX-1);
+    iunlock(q);
+
+    /* wake up readers/writers */
+    wakeup(&q->rr);
+    wakeup(&q->wr);
+}
+@
+
+
+<<function qiclosed>>=
+/*
+ *  return non-zero if the q is hungup
+ */
+int
+qisclosed(Queue *q)
+{
+    return q->state & Qclosed;
+}
+@
+
+
+<<function qreopen>>=
+/*
+ *  mark a queue as no longer hung up
+ */
+void
+qreopen(Queue *q)
+{
+    ilock(q);
+    q->state &= ~Qclosed;
+    q->state |= Qstarve;
+    q->eof = 0;
+    q->limit = q->inilim;
+    iunlock(q);
+}
+@
+
+
+<<function qlen>>=
+/*
+ *  return bytes queued
+ */
+int
+qlen(Queue *q)
+{
+    return q->dlen;
+}
+@
+
+
+<<function qwindow>>=
+/*
+ * return space remaining before flow control
+ */
+int
+qwindow(Queue *q)
+{
+    int l;
+
+    l = q->limit - q->len;
+    if(l < 0)
+        l = 0;
+    return l;
+}
+@
+
+
+<<function qcanread>>=
+/*
+ *  return true if we can read without blocking
+ */
+int
+qcanread(Queue *q)
+{
+    return q->bfirst!=0;
+}
+@
+
+
+<<function qsetlimit>>=
+/*
+ *  change queue limit
+ */
+void
+qsetlimit(Queue *q, int limit)
+{
+    q->limit = limit;
+}
+@
+
+
+<<function qnoblock>>=
+/*
+ *  set blocking/nonblocking
+ */
+void
+qnoblock(Queue *q, bool onoff)
+{
+    q->noblock = onoff;
+}
+@
+
+
+<<function qflush>>=
+/*
+ *  flush the output queue
+ */
+void
+qflush(Queue *q)
+{
+    Block *bfirst;
+
+    /* mark it */
+    ilock(q);
+    bfirst = q->bfirst;
+    q->bfirst = 0;
+    q->len = 0;
+    q->dlen = 0;
+    iunlock(q);
+
+    /* free queued blocks */
+    freeblist(bfirst);
+
+    /* wake up readers/writers */
+    wakeup(&q->wr);
+}
+@
+
+
+<<function qfull>>=
+int
+qfull(Queue *q)
+{
+    return q->state & Qflow;
+}
+@
+
+
+
 \section{[[dev]]ices [[tab]]le}
+
+<<function devno>>=
+int
+devno(int c, int user)
+{
+    int i;
+
+    for(i = 0; devtab[i] != nil; i++) {
+        if(devtab[i]->dc == c)
+            return i;
+    }
+    if(user == 0)
+        panic("devno %C %#ux", c, c);
+
+    return -1;
+}
+@
 
 \section{[[syscreate()]], [[sysremove()]]}
 
 \section {[[sysopen()]], [[sysclose()]]}
 
+<<function openmode>>=
+int
+openmode(ulong o)
+{
+    o &= ~(OTRUNC|OCEXEC|ORCLOSE);
+    if(o > OEXEC)
+        error(Ebadarg);
+    if(o == OEXEC)
+        return OREAD;
+    return o;
+}
+@
+
+
+<<syscall open>>=
+long
+sysopen(ulong *arg)
+{
+    int fd;
+    Chan *c;
+
+    openmode(arg[1]);   /* error check only */
+    validaddr(arg[0], 1, 0);
+    c = namec((char*)arg[0], Aopen, arg[1], 0);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    fd = newfd(c);
+    if(fd < 0)
+        error(Enofd);
+    poperror();
+    return fd;
+}
+@
+
+
+
+<<syscall close>>=
+long
+sysclose(ulong *arg)
+{
+    fdtochan(arg[0], -1, 0, 0);
+    fdclose(arg[0], 0);
+
+    return 0;
+}
+@
+
+<<function fdclose>>=
+void
+fdclose(int fd, int flag)
+{
+    int i;
+    Chan *c;
+    Fgrp *f = up->fgrp;
+
+    lock(f);
+    c = f->fd[fd];
+    if(c == 0){
+        /* can happen for users with shared fd tables */
+        unlock(f);
+        return;
+    }
+    if(flag){
+        if(c==0 || !(c->flag&flag)){
+            unlock(f);
+            return;
+        }
+    }
+    f->fd[fd] = 0;
+    if(fd == f->maxfd)
+        for(i=fd; --i>=0 && f->fd[i]==0; )
+            f->maxfd = i;
+
+    unlock(f);
+    cclose(c);
+}
+@
+
 \section {[[syspread()]], [[syspwrite()]]}
 
 \section {[[sysstat()]]}
 
+<<function validstat>>=
+void
+validstat(uchar *s, int n)
+{
+    int m;
+    char buf[64];
+
+    if(statcheck(s, n) < 0)
+        error(Ebadstat);
+    /* verify that name entry is acceptable */
+    s += STATFIXLEN - 4*BIT16SZ;    /* location of first string */
+    /*
+     * s now points at count for first string.
+     * if it's too long, let the server decide; this is
+     * only for his protection anyway. otherwise
+     * we'd have to allocate and waserror.
+     */
+    m = GBIT16(s);
+    s += BIT16SZ;
+    if(m+1 > sizeof buf)
+        return;
+    memmove(buf, s, m);
+    buf[m] = '\0';
+    /* name could be '/' */
+    if(strcmp(buf, "/") != 0)
+        validname(buf, 0);
+}
+@
+
+
+<<function wstat>>=
+static long
+wstat(Chan *c, uchar *d, int nd)
+{
+    long l;
+    int namelen;
+
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    if(c->ismtpt){
+        /*
+         * Renaming mount points is disallowed to avoid surprises
+         * (which should be renamed? the mount point or the mounted Chan?).
+         */
+        dirname(d, &namelen);
+        if(namelen)
+            nameerror(chanpath(c), Eismtpt);
+    }
+    l = devtab[c->type]->wstat(c, d, nd);
+    poperror();
+    cclose(c);
+    return l;
+}
+@
+
+
+<<syscall wstat>>=
+long
+syswstat(ulong *arg)
+{
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, 0);
+    validstat((uchar*)arg[1], l);
+    validaddr(arg[0], 1, 0);
+    c = namec((char*)arg[0], Aaccess, 0, 0);
+    return wstat(c, (uchar*)arg[1], l);
+}
+@
+
+
+<<syscall fwstat>>=
+long
+sysfwstat(ulong *arg)
+{
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, 0);
+    validstat((uchar*)arg[1], l);
+    c = fdtochan(arg[0], -1, 1, 1);
+    return wstat(c, (uchar*)arg[1], l);
+}
+@
+
 \section {[[syschdir()]]}
+
+<<struct Dirtab>>=
+struct Dirtab
+{
+  char  name[KNAMELEN];
+  Qid qid;
+  vlong length;
+  long  perm;
+};
+@
 
 \section {[[sysfd2path()]] (a.k.a [[pwd()]])}
 
@@ -2588,6 +5149,10 @@ kbdputcclock(void)
 \subsection{Output}
 
 \subsubsection{[[print()]]}
+
+<<constant PRINTSIZE>>=
+PRINTSIZE = 256,
+@
 
 <<function print>>=
 bool noprint; // to debug?
@@ -2838,6 +5403,35 @@ devcons_iprint(char *fmt, ...)
     return n;
 }
 @ 
+
+<<global iprintlock>>=
+/*
+ * Want to interlock iprints to avoid interlaced output on 
+ * multiprocessor, but don't want to deadlock if one processor
+ * dies during print and another has something important to say.
+ * Make a good faith effort.
+ */
+static Lock iprintlock;
+@
+
+
+<<function iprintcanlock>>=
+static int
+iprintcanlock(Lock *l)
+{
+    int i;
+    
+    for(i=0; i<1000; i++){
+        if(canlock(l))
+            return 1;
+        if(l->m == MACHP(m->machno))
+            return 0;
+        microdelay(100);
+    }
+    return 0;
+}
+@
+
 
 \subsubsection{[[pprint()]]}
 
@@ -3876,6 +6470,41 @@ cgascreenputs(char* s, int n)
 
 \subsection{Keyboard}
 
+<<enum specialkey>>=
+enum {
+    Spec=       0xF800,     /* Unicode private space */
+    PF=     Spec|0x20,  /* num pad function key */
+    View=       Spec|0x00,  /* view (shift window up) */
+    KF=     0xF000,     /* function key (begin Unicode private space) */
+    Shift=      Spec|0x60,
+    Break=      Spec|0x61,
+    Ctrl=       Spec|0x62,
+    Latin=      Spec|0x63,
+    Caps=       Spec|0x64,
+    Num=        Spec|0x65,
+    Middle=     Spec|0x66,
+    Altgr=      Spec|0x67,
+    Kmouse=     Spec|0x100,
+    No=     0x00,       /* peter */
+
+    Home=       KF|13,
+    Up=     KF|14,
+    Pgup=       KF|15,
+    Print=      KF|16,
+    Left=       KF|17,
+    Right=      KF|18,
+    End=        KF|24,
+    Down=       View,
+    Pgdown=     KF|19,
+    Ins=        KF|20,
+    Del=        0x7F,
+    Scroll=     KF|21,
+
+    Nscan=  128,
+};
+@
+
+
 <<global kbtab>>=
 /*
  * The codes at 0x79 and 0x7b are produced by the PFU Happy Hacking keyboard.
@@ -4420,6 +7049,7 @@ i8042auxenable(void (*putc)(int, int))
 @
 
 
+% to change keyboard: kbdputmap, kbdgetmap and probably /dev/kbmap
 
 \subsection{Mouse}
 
@@ -4435,8 +7065,6 @@ i8042auxenable(void (*putc)(int, int))
     [DUP]       sysdup,
 @ 
 
-\subsection{[[devdup.c]]}
-
 \subsection{[[devpipe.c]]}
 % see section in IPC also?
 % have pipe syscall and device, so both useful? named pipe
@@ -4451,6 +7079,19 @@ i8042auxenable(void (*putc)(int, int))
 
 \chapter{Time}
 \minitoc
+
+<<[[PCArch]] time methods fields>>=
+void  (*clockenable)(void);
+uvlong  (*fastclock)(uvlong*);
+void  (*timerset)(uvlong);
+@
+
+<<[[archgeneric]] time methods>>=
+.clockenable=   i8253enable,
+.fastclock= i8253read,
+.timerset=  i8253timerset,
+@
+
 
 <<global fasthz>>=
 vlong   fasthz;
@@ -4898,7 +7539,6 @@ addclock0link(void (*f)(void), Tms ms)
 char *Ebadtimectl = "bad time control";
 @
 
-
 <<function readtime>>=
 /*
  *  like the old #c/time but with added info.  Return
@@ -5027,6 +7667,43 @@ writebintime(char *buf, int n)
 }
 @
 
+\section{[[devrtc.c]]}
+
+<<struct Rtc>>=
+struct Rtc
+{
+    int sec;
+    int min;
+    int hour;
+    int mday;
+    int mon;
+    int year;
+};
+@
+
+
+<<global rtcdevtab>>=
+Dev rtcdevtab = {
+    .dc       =    'r',
+    .name     =    "rtc",
+               
+    .reset    =    devreset,
+    .init     =    rtcinit,
+    .shutdown =    devshutdown,
+    .attach   =    rtcattach,
+    .walk     =    rtcwalk,
+    .stat     =    rtcstat,
+    .open     =    rtcopen,
+    .create   =    devcreate,
+    .close    =    rtcclose,
+    .read     =    rtcread,
+    .bread    =    devbread,
+    .write    =    rtcwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+};
+@
 
 \chapter{IPC}
 \minitoc
@@ -5099,6 +7776,46 @@ closeegrp(Egrp *eg)
 \section{Notes (signals)}
 
 \section{Pipes}
+
+<<syscall pipe>>=
+long
+syspipe(ulong *arg)
+{
+    int fd[2];
+    Chan *c[2];
+    Dev *d;
+    static char *datastr[] = {"data", "data1"};
+
+    validaddr(arg[0], 2*BY2WD, 1);
+    evenaddr(arg[0]);
+    d = devtab[devno('|', 0)];
+    c[0] = namec("#|", Atodir, 0, 0);
+    c[1] = 0;
+    fd[0] = -1;
+    fd[1] = -1;
+
+    if(waserror()){
+        cclose(c[0]);
+        if(c[1])
+            cclose(c[1]);
+        nexterror();
+    }
+    c[1] = cclone(c[0]);
+    if(walk(&c[0], datastr+0, 1, 1, nil) < 0)
+        error(Egreg);
+    if(walk(&c[1], datastr+1, 1, 1, nil) < 0)
+        error(Egreg);
+    c[0] = d->open(c[0], ORDWR);
+    c[1] = d->open(c[1], ORDWR);
+    if(newfd2(fd, c) < 0)
+        error(Enofd);
+    poperror();
+
+    ((long*)arg[0])[0] = fd[0];
+    ((long*)arg[0])[1] = fd[1];
+    return 0;
+}
+@
 
 \section{Shared [[Segment]] and [[Sema]]phore}
 
@@ -5268,7 +7985,199 @@ connectlocal(void)
 
 \chapter{Misc}
 
+\section{Dup}
+
+<<syscall dup>>=
+long
+sysdup(ulong *arg)
+{
+    int fd;
+    Chan *c, *oc;
+    Fgrp *f = up->fgrp;
+
+    /*
+     * Close after dup'ing, so date > #d/1 works
+     */
+    c = fdtochan(arg[0], -1, 0, 1);
+    fd = arg[1];
+    if(fd != -1){
+        lock(f);
+        if(fd<0 || growfd(f, fd)<0) {
+            unlockfgrp(f);
+            cclose(c);
+            error(Ebadfd);
+        }
+        if(fd > f->maxfd)
+            f->maxfd = fd;
+
+        oc = f->fd[fd];
+        f->fd[fd] = c;
+        unlockfgrp(f);
+        if(oc)
+            cclose(oc);
+    }else{
+        if(waserror()) {
+            cclose(c);
+            nexterror();
+        }
+        fd = newfd(c);
+        if(fd < 0)
+            error(Enofd);
+        poperror();
+    }
+
+    return fd;
+}
+@
+
+\subsection{[[devdup.c]]}
+
+
+
+\section{SMP}
+
+\section{Floating Point}
+
+\section{Power managment}
+
+<<[[PCArch]] power methods fields>>=
+int (*serialpower)(int);  /* 1 == on, 0 == off */
+int (*modempower)(int); /* 1 == on, 0 == off */
+@
+
+<<[[archgeneric]] power methods>>=
+    .serialpower=   unimplemented,
+    .modempower=    unimplemented,
+@
+
 \section{Reboot}
+
+<<function reboot>>=
+void
+reboot(void *entry, void *code, ulong size)
+{
+        void (*f)(ulong, ulong, ulong);
+        ulong *pdb;
+
+        writeconf();
+
+        /*
+         * the boot processor is cpu0.  execute this function on it
+         * so that the new kernel has the same cpu0.  this only matters
+         * because the hardware has a notion of which processor was the
+         * boot processor and we look at it at start up.
+         */
+        if (m->machno != 0) {
+                procwired(up, 0);
+                sched();
+        }
+
+        if(conf.nmach > 1) {
+                /*
+                 * the other cpus could be holding locks that will never get
+                 * released (e.g., in the print path) if we put them into
+                 * reset now, so force them to shutdown gracefully first.
+                 */
+                lock(&active);
+                active.rebooting = 1;
+                unlock(&active);
+                shutdown(0);
+                if(arch->resetothers)
+                        arch->resetothers();
+                delay(20);
+        }
+
+        /*
+         * should be the only processor running now
+         */
+        active.machs = 0;
+        if (m->machno != 0)
+                print("on cpu%d (not 0)!\n", m->machno);
+
+        print("shutting down...\n");
+        delay(200);
+
+        splhi();
+
+        /* turn off buffered serial console */
+        serialoq = nil;
+
+        /* shutdown devices */
+        chandevshutdown();
+        arch->introff();
+
+        /*
+         * Modify the machine page table to directly map the low 4MB of memory
+         * This allows the reboot code to turn off the page mapping
+         */
+        pdb = m->pdb;
+        pdb[PDX(0)] = pdb[PDX(KZERO)];
+        mmuflushtlb(PADDR(pdb));
+
+        /* setup reboot trampoline function */
+        f = (void*)REBOOTADDR;
+        memmove(f, rebootcode, sizeof(rebootcode));
+
+        print("rebooting...\n");
+
+        /* off we go - never to return */
+        coherence();
+        (*f)(PADDR(entry), PADDR(code), size);
+}
+@
+
+
+<<function chandevshutdown>>=
+void
+chandevshutdown(void)
+{
+    int i;
+    
+    /* shutdown in reverse order */
+    for(i=0; devtab[i] != nil; i++)
+        ;
+    for(i--; i >= 0; i--)
+        devtab[i]->shutdown();
+}
+@
+
+
+<<function i8042reset>>=
+/*
+ *  ask 8042 to reset the machine
+ */
+void
+i8042reset(void)
+{
+    int i, x;
+
+    if(nokbd)
+        return;
+
+    *((ushort*)KADDR(0x472)) = 0x1234;  /* BIOS warm-boot flag */
+
+    /*
+     *  newer reset the machine command
+     */
+    outready();
+    outb(Cmd, 0xFE);
+    outready();
+
+    /*
+     *  Pulse it by hand (old somewhat reliable)
+     */
+    x = 0xDF;
+    for(i = 0; i < 5; i++){
+        x ^= 1;
+        outready();
+        outb(Cmd, 0xD1);
+        outready();
+        outb(Data, x);  /* toggle reset */
+        delay(100);
+    }
+}
+@
+
 
 <<devcons.c enum Cmd>>=
 enum
@@ -5318,6 +8227,14 @@ nrand(int n)
     return (randn>>16) % n;
 }
 @
+
+%//int
+%//rand(void)
+%//{
+%//  nrand(1);
+%//  return randn;
+%//}
+
 
 \section{Serial line}
 
@@ -5387,6 +8304,17 @@ echoserialoq(char *buf, int n)
 % other subjects: SMP, storage (scsi, ata, floppy, ...)
 
 \section{Security}
+
+<<global eve>>=
+char    *eve;
+@
+
+
+<<function iseve>>=
+bool iseve(void) { 
+  return strcmp(eve, up->user) == 0; 
+}
+@
 
 <<systab security syscalls>>=
     [FAUTH]     sysfauth,
@@ -5508,6 +8436,36 @@ void    (*consdebug)(void) = nil; // for rdb
 @ 
 
 \chapter{Profiling}
+
+% in Proc?
+<<struct Perf>>=
+/*
+ *  performance timers, all units in perfticks
+ */
+struct Perf
+{
+    // intr-ts? interrupt time stamp?
+    ulong intrts;   /* time of last interrupt */
+    ulong inintr;   /* time since last clock tick in interrupt handlers */
+    ulong avg_inintr; /* avg time per clock tick in interrupt handlers */
+    ulong inidle;   /* time since last clock tick in idle loop */
+    ulong avg_inidle; /* avg time per clock tick in idle loop */
+    ulong last;   /* value of perfticks() at last clock tick */
+    ulong period;   /* perfticks() per clock tick */
+};
+@ 
+
+<<[[Mach]] stat fields>>=
+/* stats */
+int tlbfault;
+int tlbpurge;
+int pfault;
+int cs; // context switch?
+int syscall;
+int load;
+int intr;
+@
+
 
 % devkprof.c?
 

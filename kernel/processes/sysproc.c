@@ -38,7 +38,7 @@ int shargs(char*, int, char**);
 long
 sysnop(ulong*)
 {
-    //checkpagerefs();
+    print("Hello World\n");
     return 0;
 }
 /*e: syscall nop */

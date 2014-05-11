@@ -198,9 +198,9 @@ struct Path
 };
 /*e: struct Path */
 
-
+/*s: enum accessnamec */
 /*
- * Access types in namec & channel flags
+ * Access types in namec
  */
 enum
 {
@@ -211,7 +211,15 @@ enum
   Amount,       /* to be mounted or mounted upon */
   Acreate,      /* is to be created */
   Aremove,      /* will be removed by caller */
+};
+/*e: enum accessnamec */
 
+/*s: enum channelflag */
+/*
+ * channel flags
+ */
+enum 
+{
   COPEN = 0x0001,   /* for i/o */
   CMSG  = 0x0002,   /* the message channel for a mount */
 /*rsc CCREATE = 0x0004,   /* permits creation if c->mnt */
@@ -220,6 +228,7 @@ enum
   CRCLOSE = 0x0020,   /* remove on close */
   CCACHE  = 0x0080,   /* client cache */
 };
+/*e: enum channelflag */
 
 /*s: struct Chan */
 struct Chan

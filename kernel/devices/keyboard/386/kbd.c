@@ -31,7 +31,10 @@ enum {
      Parity=    0x80,
 
     Cmd=        0x64,       /* command port (write only) */
+};
 
+/*s: enum specialkey */
+enum {
     Spec=       0xF800,     /* Unicode private space */
     PF=     Spec|0x20,  /* num pad function key */
     View=       Spec|0x00,  /* view (shift window up) */
@@ -62,6 +65,7 @@ enum {
 
     Nscan=  128,
 };
+/*e: enum specialkey */
 
 enum {
     Int=    0,          /* kbscans indices */
