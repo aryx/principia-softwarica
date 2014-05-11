@@ -1,11 +1,11 @@
 /*s: dma.c */
 /*s: kernel basic includes */
-#include "u.h"
+#include <u.h>
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "../port/error.h"
 /*e: kernel basic includes */
 
 /*s: dma.c forward decl */

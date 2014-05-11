@@ -1,11 +1,11 @@
 /*s: ref.c */
 /*s: kernel basic includes */
-#include "u.h"
+#include <u.h>
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "../port/error.h"
 /*e: kernel basic includes */
 
 // was in chan.c (see also _incnt and _deccnt in tasklock.c)

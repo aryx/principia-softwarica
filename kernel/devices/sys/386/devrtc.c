@@ -1,11 +1,11 @@
 /*s: devrtc.c */
 /*s: kernel basic includes */
-#include "u.h"
+#include <u.h>
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "../port/error.h"
 /*e: kernel basic includes */
 
 // see also the enum in dat_memory.h used by nvram.c and this file

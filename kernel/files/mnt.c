@@ -1,11 +1,11 @@
 /*s: mnt.c */
 /*s: kernel basic includes */
-#include "u.h"
+#include <u.h>
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "../port/error.h"
 /*e: kernel basic includes */
 
 // this used to be in devmnt.c, but to avoid backward deps I've splitted
