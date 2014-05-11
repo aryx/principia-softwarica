@@ -28,8 +28,6 @@ struct Conf
     Confmem mem[4];   /* physical memory */
 
     /*s: [[Conf]] extra fields */
-    bool_ulong monitor;  /* has monitor? */
-
     ulong npage;    /* total physical pages of memory */
     ulong upages;   /* user page pool */
     ulong nimage;   /* number of page cache image headers */
