@@ -905,7 +905,7 @@ struct PCArch
 };
 @ 
 
-% could add cycles and cmpswap here?
+% could add cycles and cmpswap here? and also pcmspecial, fps?
 
 <<global arch>>=
 PCArch* arch;
@@ -1912,6 +1912,11 @@ enum {
 
 \section{Software interrupts}
 
+<<constant MAXSYSARG>>=
+// used in Proc
+MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
+@
+
 \chapter{Processes}
 \minitoc
 
@@ -2149,10 +2154,968 @@ hzclock(Ureg *ur)
 \section{The Console device}
 
 \subsection{Overview}
+
 \subsection{Input}
+%buffered input
+
+
+<<struct ConsKbd>>=
+struct ConsKbd
+{
+    bool raw;        /* true if we shouldn't process input */
+
+    char    line[1024]; /* current input line */
+    int x;      /* index into line */
+
+    int count;
+    int ctlpoff;
+
+    /* a place to save up characters at interrupt time before dumping them in the queue */
+    Lock    lockputc;
+    char    istage[1024];
+
+    // extra
+    QLock;
+    Ref ctl;        /* number of opens to the control file */
+
+    //???
+    char    *iw;
+    char    *ir;
+    char    *ie;
+};
+@ 
+
+<<global kbd>>=
+static struct ConsKbd kbd = 
+{
+    .iw = kbd.istage,
+    .ir = kbd.istage,
+    .ie = kbd.istage + sizeof(kbd.istage),
+};
+@ 
+
+<<global kbdq>>=
+Queue*  kbdq;           /* unprocessed console input */
+@ 
+
+
+<<global lineq>>=
+Queue*  lineq;          /* processed console input */
+@ 
+
+<<function printinit>>=
+void
+printinit(void)
+{
+    lineq = qopen(2*1024, 0, nil, nil);
+    if(lineq == nil)
+        panic("printinit");
+    qnoblock(lineq, 1);
+}
+@ 
+
+<<function kbdputc>>=
+/*
+ *  Put character, possibly a rune, into read queue at interrupt time.
+ *  Called at interrupt time to process a character.
+ */
+int
+kbdputc(Queue*, int ch)
+{
+    int i, n;
+    char buf[3];
+    Rune r;
+    char *next;
+
+    if(kbd.ir == nil)
+        return 0;       /* in case we're not inited yet */
+    
+    ilock(&kbd.lockputc);       /* just a mutex */
+    r = ch;
+    n = runetochar(buf, &r);
+    for(i = 0; i < n; i++){
+        next = kbd.iw+1;
+        if(next >= kbd.ie)
+            next = kbd.istage;
+        if(next == kbd.ir)
+            break;
+        *kbd.iw = buf[i];
+        kbd.iw = next;
+    }
+    iunlock(&kbd.lockputc);
+    return 0;
+}
+@ 
+
+<<clock callback kbdputcclock>>=
+/*
+ *  we save up input characters till clock time to reduce
+ *  per character interrupt overhead.
+ */
+static void
+kbdputcclock(void)
+{
+    char *iw;
+
+    /* this amortizes cost of qproduce */
+    if(kbd.iw != kbd.ir){
+        iw = kbd.iw;
+        if(iw < kbd.ir){
+            echo(kbd.ir, kbd.ie-kbd.ir);
+            kbd.ir = kbd.istage;
+        }
+        if(kbd.ir != iw){
+            echo(kbd.ir, iw-kbd.ir);
+            kbd.ir = iw;
+        }
+    }
+}
+@ 
+
+
 \subsection{Output}
+
+<<function print>>=
+bool noprint; // to debug?
+
+int
+devcons_print(char *fmt, ...)
+{
+    int n;
+    va_list arg;
+    char buf[PRINTSIZE];
+
+    if(noprint)
+        return -1;
+
+    va_start(arg, fmt);
+    n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
+    va_end(arg);
+    putstrn(buf, n);
+
+    return n;
+}
+@ 
+
+
+<<function putstrn>>=
+void
+putstrn(char *str, int n)
+{
+    putstrn0(str, n, 0);
+}
+@ 
+
+<<function putstrn0>>=
+/*
+ *   Print a string on the console.  Convert \n to \r\n for serial
+ *   line consoles.  Locking of the queues is left up to the screen
+ *   or uart code.  Multi-line messages to serial consoles may get
+ *   interspersed with other messages.
+ */
+static void
+putstrn0(char *str, int n, bool usewrite)
+{
+    int m;
+    char *t;
+
+    if(!islo())
+        usewrite = 0;
+
+    /*
+     *  how many different output devices do we need?
+     */
+    kmesgputs(str, n);
+
+    /*
+     *  if someone is reading /dev/kprint,
+     *  put the message there.
+     *  if not and there's an attached bit mapped display,
+     *  put the message there.
+     *
+     *  if there's a serial line being used as a console,
+     *  put the message there.
+     */
+    if(kprintoq != nil && !qisclosed(kprintoq)){
+        if(usewrite)
+            qwrite(kprintoq, str, n);
+        else
+            qiwrite(kprintoq, str, n);
+    }else if(screenputs != nil)
+        screenputs(str, n);
+
+    if(serialoq == nil){
+        uartputs(str, n);
+        return;
+    }
+
+    while(n > 0) {
+        t = memchr(str, '\n', n);
+        if(t && !kbd.raw) {
+            m = t-str;
+            if(usewrite){
+                qwrite(serialoq, str, m);
+                qwrite(serialoq, "\r\n", 2);
+            } else {
+                qiwrite(serialoq, str, m);
+                qiwrite(serialoq, "\r\n", 2);
+            }
+            n -= m+1;
+            str = t+1;
+        } else {
+            if(usewrite)
+                qwrite(serialoq, str, n);
+            else
+                qiwrite(serialoq, str, n);
+            break;
+        }
+    }
+}
+@ 
+
+
+<<hook screenputs>>=
+void    (*screenputs)(char*, int) = nil;
+@ 
+
+
+<<global iprintscreenputs>>=
+int iprintscreenputs = 1;
+@ 
+
+<<function iprint>>=
+int
+devcons_iprint(char *fmt, ...)
+{
+    int n, s, locked;
+    va_list arg;
+    char buf[PRINTSIZE];
+
+    s = splhi();
+    va_start(arg, fmt);
+    n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
+    va_end(arg);
+    locked = iprintcanlock(&iprintlock);
+    if(screenputs != nil && iprintscreenputs)
+        screenputs(buf, n);
+    uartputs(buf, n);
+    if(locked)
+        unlock(&iprintlock);
+    splx(s);
+
+    return n;
+}
+@ 
+
+% todo: see balestero note,
+% in distributed context we want to print process error at the right place
+% not just on kernel console
+<<function pprint>>=
+int
+devcons_pprint(char *fmt, ...)
+{
+    int n;
+    Chan *c;
+    va_list arg;
+    char buf[2*PRINTSIZE];
+
+    if(up == nil || up->fgrp == nil)
+        return 0;
+
+    c = up->fgrp->fd[2];
+    if(c==0 || (c->mode!=OWRITE && c->mode!=ORDWR))
+        return 0;
+    n = snprint(buf, sizeof buf, "%s %lud: ", up->text, up->pid);
+    va_start(arg, fmt);
+    n = vseprint(buf+n, buf+sizeof(buf), fmt, arg) - buf;
+    va_end(arg);
+
+    if(waserror())
+        return 0;
+    devtab[c->type]->write(c, buf, n, c->offset);
+    poperror();
+
+    lock(c);
+    c->offset += n;
+    unlock(c);
+
+    return n;
+}
+@ 
+
+<<function echoscreen>>=
+static void
+echoscreen(char *buf, int n)
+{
+    char *e, *p;
+    char ebuf[128];
+    int x;
+
+    p = ebuf;
+    e = ebuf + sizeof(ebuf) - 4;
+    while(n-- > 0){
+        if(p >= e){
+            screenputs(ebuf, p - ebuf);
+            p = ebuf;
+        }
+        x = *buf++;
+        if(x == 0x15){
+            *p++ = '^';
+            *p++ = 'U';
+            *p++ = '\n';
+        } else
+            *p++ = x;
+    }
+    if(p != ebuf)
+        screenputs(ebuf, p - ebuf);
+}
+@ 
+
+<<function echo>>=
+static void
+echo(char *buf, int n)
+{
+    static int ctrlt, pid;
+    int x;
+    char *e, *p;
+
+    if(n == 0)
+        return;
+
+    e = buf+n;
+    for(p = buf; p < e; p++){
+        switch(*p){
+        case 0x10:  /* ^P */
+            if(cpuserver && !kbd.ctlpoff){
+                active.exiting = 1;
+                return;
+            }
+            break;
+        case 0x14:  /* ^T */
+            ctrlt++;
+            if(ctrlt > 2)
+                ctrlt = 2;
+            continue;
+        }
+
+        if(ctrlt != 2)
+            continue;
+
+        /* ^T escapes */
+        ctrlt = 0;
+        switch(*p){
+        case 'S':
+            x = splhi();
+            dumpstack();
+            procdump();
+            splx(x);
+            return;
+        case 's':
+            dumpstack();
+            return;
+        case 'x':
+            xsummary();
+            ixsummary();
+            mallocsummary();
+            memorysummary();
+            pagersummary();
+            return;
+        case 'd':
+            if(consdebug == nil)
+                consdebug = rdb;
+            else
+                consdebug = nil;
+            print("consdebug now %#p\n", consdebug);
+            return;
+        case 'D':
+            if(consdebug == nil)
+                consdebug = rdb;
+            consdebug();
+            return;
+        case 'p':
+            x = spllo();
+            procdump();
+            splx(x);
+            return;
+        case 'q':
+            scheddump();
+            return;
+        case 'k':
+            killbig("^t ^t k");
+            return;
+        case 'r':
+            exit(0);
+            return;
+        }
+    }
+
+    qproduce(kbdq, buf, n);
+    if(kbd.raw)
+        return;
+    kmesgputs(buf, n);
+    if(screenputs != nil)
+        echoscreen(buf, n);
+    if(serialoq)
+        echoserialoq(buf, n);
+}
+@ 
+
 \subsection{[[devcons.c]]}
 
+<<devcons.c enum Qxxx>>=
+enum{
+    Qdir,
+    Qbintime,
+    Qcons,
+    Qconsctl,
+    Qcputime,
+    Qdrivers,
+    Qkmesg,
+    Qkprint,
+    Qhostdomain,
+    Qhostowner,
+    Qnull,
+    Qosversion,
+    Qpgrpid,
+    Qpid,
+    Qppid,
+    Qrandom,
+    Qreboot,
+    Qswap,
+    Qsysname,
+    Qsysstat,
+    Qtime,
+    Quser,
+    Qzero,
+    Qconfig,
+};
+@ 
+
+
+<<global consdir>>=
+static Dirtab consdir[]={
+    ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
+    "bintime",  {Qbintime}, 24,     0664,
+    "cons",     {Qcons},    0,      0660,
+    "consctl",  {Qconsctl}, 0,      0220,
+    "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
+    "drivers",  {Qdrivers}, 0,      0444,
+    "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
+    "hostowner",    {Qhostowner},   0,      0664,
+    "kmesg",    {Qkmesg},   0,      0440,
+    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
+    "null",     {Qnull},    0,      0666,
+    "osversion",    {Qosversion},   0,      0444,
+    "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
+    "pid",      {Qpid},     NUMSIZE,    0444,
+    "ppid",     {Qppid},    NUMSIZE,    0444,
+    "random",   {Qrandom},  0,      0444,
+    "reboot",   {Qreboot},  0,      0660,
+    "swap",     {Qswap},    0,      0664,
+    "sysname",  {Qsysname}, 0,      0664,
+    "sysstat",  {Qsysstat}, 0,      0666,
+    "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
+    "user",     {Quser},    0,      0666,
+    "zero",     {Qzero},    0,      0444,
+    "config",   {Qconfig},  0,      0444,
+};
+@ 
+
+
+<<method consinit>>=
+static void
+consinit(void)
+{
+    todinit();
+    randominit();
+    /*
+     * at 115200 baud, the 1024 char buffer takes 56 ms to process,
+     * processing it every 22 ms should be fine
+     */
+    addclock0link(kbdputcclock, 22);
+}
+@ 
+
+
+<<method consopen>>=
+static Chan*
+consopen(Chan *c, int omode)
+{
+    c->aux = nil;
+    c = devopen(c, omode, consdir, nelem(consdir), devgen);
+    switch((ulong)c->qid.path){
+    case Qconsctl:
+        incref(&kbd.ctl);
+        break;
+
+    case Qkprint:
+        if(tas(&kprintinuse) != 0){
+            c->flag &= ~COPEN;
+            error(Einuse);
+        }
+        if(kprintoq == nil){
+            kprintoq = qopen(8*1024, Qcoalesce, 0, 0);
+            if(kprintoq == nil){
+                c->flag &= ~COPEN;
+                error(Enomem);
+            }
+            qnoblock(kprintoq, 1);
+        }else
+            qreopen(kprintoq);
+        c->iounit = qiomaxatomic;
+        break;
+    }
+    return c;
+}
+@ 
+
+
+<<method consclose>>=
+static void
+consclose(Chan *c)
+{
+    switch((ulong)c->qid.path){
+    /* last close of control file turns off raw */
+    case Qconsctl:
+        if(c->flag&COPEN){
+            if(decref(&kbd.ctl) == 0)
+                kbd.raw = 0;
+        }
+        break;
+
+    /* close of kprint allows other opens */
+    case Qkprint:
+        if(c->flag & COPEN){
+            kprintinuse = 0;
+            qhangup(kprintoq, nil);
+        }
+        break;
+    }
+}
+@ 
+
+<<method consread>>=
+static long
+consread(Chan *c, void *buf, long n, vlong off)
+{
+    ulong l;
+    Mach *mp;
+    char *b, *bp, ch;
+    char tmp[256];      /* must be >= 18*NUMSIZE (Qswap) */
+    int i, k, id, send;
+    vlong offset = off;
+    extern char configfile[];
+
+    if(n <= 0)
+        return n;
+
+    switch((ulong)c->qid.path){
+    case Qdir:
+        return devdirread(c, buf, n, consdir, nelem(consdir), devgen);
+
+    case Qcons:
+        qlock(&kbd);
+        if(waserror()) {
+            qunlock(&kbd);
+            nexterror();
+        }
+        while(!qcanread(lineq)){
+            if(qread(kbdq, &ch, 1) == 0)
+                continue;
+            send = 0;
+            if(ch == 0){
+                /* flush output on rawoff -> rawon */
+                if(kbd.x > 0)
+                    send = !qcanread(kbdq);
+            }else if(kbd.raw){
+                kbd.line[kbd.x++] = ch;
+                send = !qcanread(kbdq);
+            }else{
+                switch(ch){
+                case '\b':
+                    if(kbd.x > 0)
+                        kbd.x--;
+                    break;
+                case 0x15:  /* ^U */
+                    kbd.x = 0;
+                    break;
+                case '\n':
+                case 0x04:  /* ^D */
+                    send = 1;
+                default:
+                    if(ch != 0x04)
+                        kbd.line[kbd.x++] = ch;
+                    break;
+                }
+            }
+            if(send || kbd.x == sizeof kbd.line){
+                qwrite(lineq, kbd.line, kbd.x);
+                kbd.x = 0;
+            }
+        }
+        n = qread(lineq, buf, n);
+        qunlock(&kbd);
+        poperror();
+        return n;
+
+    case Qcputime:
+        k = offset;
+        if(k >= 6*NUMSIZE)
+            return 0;
+        if(k+n > 6*NUMSIZE)
+            n = 6*NUMSIZE - k;
+        /* easiest to format in a separate buffer and copy out */
+        for(i=0; i<6 && NUMSIZE*i<k+n; i++){
+            l = up->time[i];
+            if(i == TReal)
+                l = MACHP(0)->ticks - l;
+            l = TK2MS(l);
+            readnum(0, tmp+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
+        }
+        memmove(buf, tmp+k, n);
+        return n;
+
+    case Qkmesg:
+        /*
+         * This is unlocked to avoid tying up a process
+         * that's writing to the buffer.  kmesg.n never 
+         * gets smaller, so worst case the reader will
+         * see a slurred buffer.
+         */
+        if(off >= kmesg.n)
+            n = 0;
+        else{
+            if(off+n > kmesg.n)
+                n = kmesg.n - off;
+            memmove(buf, kmesg.buf+off, n);
+        }
+        return n;
+        
+    case Qkprint:
+        return qread(kprintoq, buf, n);
+
+    case Qpgrpid:
+        return readnum((ulong)offset, buf, n, up->pgrp->pgrpid, NUMSIZE);
+
+    case Qpid:
+        return readnum((ulong)offset, buf, n, up->pid, NUMSIZE);
+
+    case Qppid:
+        return readnum((ulong)offset, buf, n, up->parentpid, NUMSIZE);
+
+    case Qtime:
+        return readtime((ulong)offset, buf, n);
+
+    case Qbintime:
+        return readbintime(buf, n);
+
+    case Qhostowner:
+        return readstr((ulong)offset, buf, n, eve);
+
+    case Qhostdomain:
+        return readstr((ulong)offset, buf, n, hostdomain);
+
+    case Quser:
+        return readstr((ulong)offset, buf, n, up->user);
+
+    case Qnull:
+        return 0;
+
+    case Qconfig:
+        return readstr((ulong)offset, buf, n, configfile);
+
+    case Qsysstat:
+        b = smalloc(conf.nmach*(NUMSIZE*11+1) + 1); /* +1 for NUL */
+        bp = b;
+        for(id = 0; id < 32; id++) {
+            if(active.machs & (1<<id)) {
+                mp = MACHP(id);
+                readnum(0, bp, NUMSIZE, id, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->intr, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->syscall, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->pfault, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->tlbfault, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->tlbpurge, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->load, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE,
+                    (mp->perf.avg_inidle*100)/mp->perf.period,
+                    NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE,
+                    (mp->perf.avg_inintr*100)/mp->perf.period,
+                    NUMSIZE);
+                bp += NUMSIZE;
+                *bp++ = '\n';
+            }
+        }
+        if(waserror()){
+            free(b);
+            nexterror();
+        }
+        n = readstr((ulong)offset, buf, n, b);
+        free(b);
+        poperror();
+        return n;
+
+    case Qswap:
+        snprint(tmp, sizeof tmp,
+            "%lud memory\n"
+            "%d pagesize\n"
+            "%lud kernel\n"
+            "%lud/%lud user\n"
+            "%lud/%lud swap\n"
+            "%lud/%lud kernel malloc\n"
+            "%lud/%lud kernel draw\n",
+            conf.npage*BY2PG,
+            BY2PG,
+            conf.npage-conf.upages,
+            palloc.user-palloc.freecount, palloc.user,
+            conf.nswap-swapalloc.free, conf.nswap,
+            mainmem->cursize, mainmem->maxsize,
+            imagmem->cursize, imagmem->maxsize);
+
+        return readstr((ulong)offset, buf, n, tmp);
+
+    case Qsysname:
+        if(sysname == nil)
+            return 0;
+        return readstr((ulong)offset, buf, n, sysname);
+
+    case Qrandom:
+        return randomread(buf, n);
+
+    case Qdrivers:
+        b = malloc(READSTR);
+        if(b == nil)
+            error(Enomem);
+        k = 0;
+        for(i = 0; devtab[i] != nil; i++)
+            k += snprint(b+k, READSTR-k, "#%C %s\n",
+                devtab[i]->dc, devtab[i]->name);
+        if(waserror()){
+            free(b);
+            nexterror();
+        }
+        n = readstr((ulong)offset, buf, n, b);
+        free(b);
+        poperror();
+        return n;
+
+    case Qzero:
+        memset(buf, 0, n);
+        return n;
+
+    case Qosversion:
+        snprint(tmp, sizeof tmp, "2000");
+        n = readstr((ulong)offset, buf, n, tmp);
+        return n;
+
+    default:
+        print("consread %#llux\n", c->qid.path);
+        error(Egreg);
+    }
+    return -1;      /* never reached */
+}
+@
+
+<<method conswrite>>=
+static long
+conswrite(Chan *c, void *va, long n, vlong off)
+{
+    char buf[256], ch;
+    long l, bp;
+    char *a;
+    Mach *mp;
+    int id, fd;
+    Chan *swc;
+    ulong offset;
+    Cmdbuf *cb;
+    Cmdtab *ct;
+
+    a = va;
+    offset = off;
+
+    switch((ulong)c->qid.path){
+    case Qcons:
+        /*
+         * Can't page fault in putstrn, so copy the data locally.
+         */
+        l = n;
+        while(l > 0){
+            bp = l;
+            if(bp > sizeof buf)
+                bp = sizeof buf;
+            memmove(buf, a, bp);
+            putstrn0(buf, bp, 1);
+            a += bp;
+            l -= bp;
+        }
+        break;
+
+    case Qconsctl:
+        if(n >= sizeof(buf))
+            n = sizeof(buf)-1;
+        strncpy(buf, a, n);
+        buf[n] = 0;
+        for(a = buf; a;){
+            if(strncmp(a, "rawon", 5) == 0){
+                kbd.raw = 1;
+                /* clumsy hack - wake up reader */
+                ch = 0;
+                qwrite(kbdq, &ch, 1);           
+            } else if(strncmp(a, "rawoff", 6) == 0){
+                kbd.raw = 0;
+            } else if(strncmp(a, "ctlpon", 6) == 0){
+                kbd.ctlpoff = 0;
+            } else if(strncmp(a, "ctlpoff", 7) == 0){
+                kbd.ctlpoff = 1;
+            }
+            if(a = strchr(a, ' '))
+                a++;
+        }
+        break;
+
+    case Qtime:
+        if(!iseve())
+            error(Eperm);
+        return writetime(a, n);
+
+    case Qbintime:
+        if(!iseve())
+            error(Eperm);
+        return writebintime(a, n);
+
+    case Qhostowner:
+        return hostownerwrite(a, n);
+
+    case Qhostdomain:
+        return hostdomainwrite(a, n);
+
+    case Quser:
+        return userwrite(a, n);
+
+    case Qnull:
+        break;
+
+    case Qconfig:
+        error(Eperm);
+        break;
+
+    case Qreboot:
+        if(!iseve())
+            error(Eperm);
+        cb = parsecmd(a, n);
+
+        if(waserror()) {
+            free(cb);
+            nexterror();
+        }
+        ct = lookupcmd(cb, rebootmsg, nelem(rebootmsg));
+        switch(ct->index) {
+        case CMhalt:
+            reboot(nil, 0, 0);
+            break;
+        case CMreboot:
+            rebootcmd(cb->nf-1, cb->f+1);
+            break;
+        case CMpanic:
+            *(ulong*)0=0;
+            panic("/dev/reboot");
+        }
+        poperror();
+        free(cb);
+        break;
+
+    case Qsysstat:
+        for(id = 0; id < 32; id++) {
+            if(active.machs & (1<<id)) {
+                mp = MACHP(id);
+                mp->cs = 0;
+                mp->intr = 0;
+                mp->syscall = 0;
+                mp->pfault = 0;
+                mp->tlbfault = 0;
+                mp->tlbpurge = 0;
+            }
+        }
+        break;
+
+    case Qswap:
+        if(n >= sizeof buf)
+            error(Egreg);
+        memmove(buf, va, n);    /* so we can NUL-terminate */
+        buf[n] = 0;
+        /* start a pager if not already started */
+        if(strncmp(buf, "start", 5) == 0){
+            kickpager();
+            break;
+        }
+        if(!iseve())
+            error(Eperm);
+        if(buf[0]<'0' || '9'<buf[0])
+            error(Ebadarg);
+        fd = strtoul(buf, 0, 0);
+        swc = fdtochan(fd, -1, 1, 1);
+        setswapchan(swc);
+        break;
+
+    case Qsysname:
+        if(offset != 0)
+            error(Ebadarg);
+        if(n <= 0 || n >= sizeof buf)
+            error(Ebadarg);
+        strncpy(buf, a, n);
+        buf[n] = 0;
+        if(buf[n-1] == '\n')
+            buf[n-1] = 0;
+        kstrdup(&sysname, buf);
+        break;
+
+    default:
+        print("conswrite: %#llux\n", c->qid.path);
+        error(Egreg);
+    }
+    return n;
+}
+@ 
+
+<<global consdevtab>>=
+Dev consdevtab = {
+    .dc       =    'c',
+    .name     =    "cons",
+               
+    .reset    =    devreset,
+    .init     =    consinit,
+    .shutdown =    devshutdown,
+    .attach   =    consattach,
+    .walk     =    conswalk,
+    .stat     =    consstat,
+    .open     =    consopen,
+    .create   =    devcreate,
+    .close    =    consclose,
+    .read     =    consread,
+    .bread    =    devbread,
+    .write    =    conswrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+};
+@ 
+
+\subsection{Other}
+
+<<global sysname>>=
+char    *sysname;
+@ 
 
 \section{System devices}
 
@@ -2177,7 +3140,708 @@ hzclock(Ureg *ur)
 \subsection{Screen}
 % just cga.c here, see Window.tex.nw for the advanced vga kernel support
 
+<<cga.c enum color>>=
+enum color {
+    Black,
+    Blue,
+    Green,
+    Cyan,
+    Red,
+    Magenta,
+    Brown,
+    Grey,
+
+    Bright = 0x08,
+    Blinking = 0x80,
+
+    Yellow = Bright|Brown,
+    White = Bright|Grey,
+};
+@
+
+<<cga.c enum misc>>=
+enum {
+    Width       = 80*2,
+    Height      = 25,
+
+    Attr        = (Black<<4)|Grey,  /* high nibble background
+                         * low foreground
+                         */
+
+    Poststrlen  = 0,
+    Postcodelen = 2,
+    Postlen     = Poststrlen+Postcodelen,
+};
+@
+
+<<constant CGASCREENBASE>>=
+#define CGASCREENBASE   ((uchar*)KADDR(0xB8000))
+@
+
+
+<<global cgapos>>=
+static int cgapos;
+@
+
+
+<<global cgascreenlock>>=
+static Lock cgascreenlock;
+@
+
+<<function screeninit>>=
+void
+screeninit(void)
+{
+
+    cgapos = cgaregr(0x0E)<<8;
+    cgapos |= cgaregr(0x0F);
+    cgapos *= 2;
+
+    screenputs = cgascreenputs;
+}
+@
+
+
+<<function cgaregr>>=
+static uchar
+cgaregr(int index)
+{
+    outb(0x3D4, index);
+    return inb(0x3D4+1) & 0xFF;
+}
+@
+
+
+<<function cgaregw>>=
+static void
+cgaregw(int index, int data)
+{
+    outb(0x3D4, index);
+    outb(0x3D4+1, data);
+}
+@
+
+
+<<function movecursor>>=
+static void
+movecursor(void)
+{
+    cgaregw(0x0E, (cgapos/2>>8) & 0xFF);
+    cgaregw(0x0F, cgapos/2 & 0xFF);
+    CGASCREENBASE[cgapos+1] = Attr;
+}
+@
+
+
+<<function cgascreenputc>>=
+static void
+cgascreenputc(int c)
+{
+    int i;
+    uchar *p;
+
+    if(c == '\n'){
+        cgapos = cgapos/Width;
+        cgapos = (cgapos+1)*Width;
+    }
+    else if(c == '\t'){
+        i = 8 - ((cgapos/2)&7);
+        while(i-->0)
+            cgascreenputc(' ');
+    }
+    else if(c == '\b'){
+        if(cgapos >= 2)
+            cgapos -= 2;
+        cgascreenputc(' ');
+        cgapos -= 2;
+    }
+    else{
+        CGASCREENBASE[cgapos++] = c;
+        CGASCREENBASE[cgapos++] = Attr;
+    }
+    if(cgapos >= Width*Height){
+        memmove(CGASCREENBASE, &CGASCREENBASE[Width], Width*(Height-1));
+        p = &CGASCREENBASE[Width*(Height-1)];
+        for(i=0; i<Width/2; i++){
+            *p++ = ' ';
+            *p++ = Attr;
+        }
+        cgapos = Width*(Height-1);
+    }
+    movecursor();
+}
+@
+
+
+<<function cgascreenputs>>=
+static void
+cgascreenputs(char* s, int n)
+{
+    if(!islo()){
+        /*
+         * Don't deadlock trying to
+         * print in an interrupt.
+         */
+        if(!canlock(&cgascreenlock))
+            return;
+    }
+    else
+        lock(&cgascreenlock);
+
+    while(n-- > 0)
+        cgascreenputc(*s++);
+
+    unlock(&cgascreenlock);
+}
+@
+
+
 \subsection{Keyboard}
+
+<<global kbtab>>=
+/*
+ * The codes at 0x79 and 0x7b are produced by the PFU Happy Hacking keyboard.
+ * A 'standard' keyboard doesn't produce anything above 0x58.
+ */
+Rune kbtab[Nscan] = 
+{
+[0x00]  No, 0x1b,   '1',    '2',    '3',    '4',    '5',    '6',
+[0x08]  '7',    '8',    '9',    '0',    '-',    '=',    '\b',   '\t',
+[0x10]  'q',    'w',    'e',    'r',    't',    'y',    'u',    'i',
+[0x18]  'o',    'p',    '[',    ']',    '\n',   Ctrl,   'a',    's',
+[0x20]  'd',    'f',    'g',    'h',    'j',    'k',    'l',    ';',
+[0x28]  '\'',   '`',    Shift,  '\\',   'z',    'x',    'c',    'v',
+[0x30]  'b',    'n',    'm',    ',',    '.',    '/',    Shift,  '*',
+[0x38]  Latin,  ' ',    Ctrl,   KF|1,   KF|2,   KF|3,   KF|4,   KF|5,
+[0x40]  KF|6,   KF|7,   KF|8,   KF|9,   KF|10,  Num,    Scroll, '7',
+[0x48]  '8',    '9',    '-',    '4',    '5',    '6',    '+',    '1',
+[0x50]  '2',    '3',    '0',    '.',    No, No, No, KF|11,
+[0x58]  KF|12,  No, No, No, No, No, No, No,
+[0x60]  No, No, No, No, No, No, No, No,
+[0x68]  No, No, No, No, No, No, No, No,
+[0x70]  No, No, No, No, No, No, No, No,
+[0x78]  No, View,   No, Up, No, No, No, No,
+};
+@
+
+
+<<global kbtabshift>>=
+Rune kbtabshift[Nscan] =
+{
+[0x00]  No, 0x1b,   '!',    '@',    '#',    '$',    '%',    '^',
+[0x08]  '&',    '*',    '(',    ')',    '_',    '+',    '\b',   '\t',
+[0x10]  'Q',    'W',    'E',    'R',    'T',    'Y',    'U',    'I',
+[0x18]  'O',    'P',    '{',    '}',    '\n',   Ctrl,   'A',    'S',
+[0x20]  'D',    'F',    'G',    'H',    'J',    'K',    'L',    ':',
+[0x28]  '"',    '~',    Shift,  '|',    'Z',    'X',    'C',    'V',
+[0x30]  'B',    'N',    'M',    '<',    '>',    '?',    Shift,  '*',
+[0x38]  Latin,  ' ',    Ctrl,   KF|1,   KF|2,   KF|3,   KF|4,   KF|5,
+[0x40]  KF|6,   KF|7,   KF|8,   KF|9,   KF|10,  Num,    Scroll, '7',
+[0x48]  '8',    '9',    '-',    '4',    '5',    '6',    '+',    '1',
+[0x50]  '2',    '3',    '0',    '.',    No, No, No, KF|11,
+[0x58]  KF|12,  No, No, No, No, No, No, No,
+[0x60]  No, No, No, No, No, No, No, No,
+[0x68]  No, No, No, No, No, No, No, No,
+[0x70]  No, No, No, No, No, No, No, No,
+[0x78]  No, Up, No, Up, No, No, No, No,
+};
+@
+
+
+<<global kbtabesc1>>=
+Rune kbtabesc1[Nscan] =
+{
+[0x00]  No, No, No, No, No, No, No, No,
+[0x08]  No, No, No, No, No, No, No, No,
+[0x10]  No, No, No, No, No, No, No, No,
+[0x18]  No, No, No, No, '\n',   Ctrl,   No, No,
+[0x20]  No, No, No, No, No, No, No, No,
+[0x28]  No, No, Shift,  No, No, No, No, No,
+[0x30]  No, No, No, No, No, '/',    No, Print,
+[0x38]  Altgr,  No, No, No, No, No, No, No,
+[0x40]  No, No, No, No, No, No, Break,  Home,
+[0x48]  Up, Pgup,   No, Left,   No, Right,  No, End,
+[0x50]  Down,   Pgdown, Ins,    Del,    No, No, No, No,
+[0x58]  No, No, No, No, No, No, No, No,
+[0x60]  No, No, No, No, No, No, No, No,
+[0x68]  No, No, No, No, No, No, No, No,
+[0x70]  No, No, No, No, No, No, No, No,
+[0x78]  No, Up, No, No, No, No, No, No,
+};
+@
+
+
+<<global kbtabaltgr>>=
+Rune kbtabaltgr[Nscan] =
+{
+[0x00]  No, No, No, No, No, No, No, No,
+[0x08]  No, No, No, No, No, No, No, No,
+[0x10]  No, No, No, No, No, No, No, No,
+[0x18]  No, No, No, No, '\n',   Ctrl,   No, No,
+[0x20]  No, No, No, No, No, No, No, No,
+[0x28]  No, No, Shift,  No, No, No, No, No,
+[0x30]  No, No, No, No, No, '/',    No, Print,
+[0x38]  Altgr,  No, No, No, No, No, No, No,
+[0x40]  No, No, No, No, No, No, Break,  Home,
+[0x48]  Up, Pgup,   No, Left,   No, Right,  No, End,
+[0x50]  Down,   Pgdown, Ins,    Del,    No, No, No, No,
+[0x58]  No, No, No, No, No, No, No, No,
+[0x60]  No, No, No, No, No, No, No, No,
+[0x68]  No, No, No, No, No, No, No, No,
+[0x70]  No, No, No, No, No, No, No, No,
+[0x78]  No, Up, No, No, No, No, No, No,
+};
+@
+
+
+<<global kbtabctrl decl>>=
+extern Rune kbtabctrl[];
+@
+
+
+<<struct Kbscan>>=
+struct Kbscan {
+    bool esc1;
+    bool alt;
+    bool altgr;
+    bool caps;
+    bool ctl;
+    bool num;
+    bool shift;
+
+    int esc2;
+
+    bool collecting;
+    int nk;
+    Rune    kc[5];
+    int buttons;
+};
+@
+
+
+<<global kbscans>>=
+Kbscan kbscans[Nscans]; /* kernel and external scan code state */
+@
+
+
+<<global nokbd>>=
+static bool nokbd = true;           /* flag: no PS/2 keyboard */
+@
+
+
+
+<<function kbdinit>>=
+void
+kbdinit(void)
+{
+    int c, try;
+
+    /* wait for a quiescent controller */
+    try = 500;
+    while(try-- > 0 && (c = inb(Status)) & (Outbusy | Inready)) {
+        if(c & Inready)
+            inb(Data);
+        delay(1);
+    }
+    if (try <= 0) {
+        print(initfailed);
+        return;
+    }
+
+    /* get current controller command byte */
+    outb(Cmd, 0x20);
+    if(inready() < 0){
+        print("i8042: kbdinit can't read ccc\n");
+        ccc = 0;
+    } else
+        ccc = inb(Data);
+
+    /* enable kbd xfers and interrupts */
+    ccc &= ~Ckbddis;
+    ccc |= Csf | Ckbdint | Cscs1;
+    if(outready() < 0) {
+        print(initfailed);
+        return;
+    }
+
+    nokbd = false;
+
+    /* disable mouse */
+    if (outbyte(Cmd, 0x60) < 0 || outbyte(Data, ccc) < 0)
+        print("i8042: kbdinit mouse disable failed\n");
+
+    /* see http://www.computer-engineering.org/ps2keyboard for codes */
+    if(getconf("*typematic") != nil)
+        /* set typematic rate/delay (0 -> delay=250ms & rate=30cps) */
+        if(outbyte(Data, 0xf3) < 0 || outbyte(Data, 0) < 0)
+            print("i8042: kbdinit set typematic rate failed\n");
+}
+@
+
+
+<<function kbdenable>>=
+void
+kbdenable(void)
+{
+    kbdq = qopen(4*1024, 0, 0, 0);
+    if(kbdq == nil)
+        panic("kbdinit");
+    qnoblock(kbdq, 1);
+
+    ioalloc(Data, 1, 0, "kbd");
+    ioalloc(Cmd, 1, 0, "kbd");
+
+    intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
+
+    kbscans[Int].num = 0;
+    setleds(&kbscans[Int]);
+}
+@
+
+<<global i8042lock>>=
+static Lock i8042lock;
+@
+
+
+<<interrupt callback i8042intr>>=
+/*
+ *  keyboard interrupt
+ */
+static void
+i8042intr(Ureg*, void*)
+{
+    int s, c;
+
+    /*
+     *  get status
+     */
+    ilock(&i8042lock);
+    s = inb(Status);
+    if(!(s&Inready)){
+        iunlock(&i8042lock);
+        return;
+    }
+
+    /*
+     *  get the character
+     */
+    c = inb(Data);
+    iunlock(&i8042lock);
+
+    /*
+     *  if it's the aux port...
+     */
+    if(s & Minready){
+        if(auxputc != nil)
+            auxputc(c, kbscans[Int].shift);
+        return;
+    }
+
+    kbdputsc(c, Int);
+}
+@
+
+
+
+
+
+
+
+<<function kbdputsc>>=
+/*
+ * Scan code processing
+ */
+void
+kbdputsc(int c, bool external)
+{
+    int i, keyup;
+    Kbscan *kbscan;
+
+    if(external)
+        kbscan = &kbscans[Ext];
+    else
+        kbscan = &kbscans[Int];
+
+    if(kdebug)
+        print("sc %x ms %d\n", c, mouseshifted);
+    /*
+     *  e0's is the first of a 2 character sequence, e1 the first
+     *  of a 3 character sequence (on the safari)
+     */
+    if(c == 0xe0){
+        kbscan->esc1 = 1;
+        return;
+    } else if(c == 0xe1){
+        kbscan->esc2 = 2;
+        return;
+    }
+
+    keyup = c & 0x80;
+    c &= 0x7f;
+    if(c > sizeof kbtab){
+        c |= keyup;
+        if(c != 0xFF)   /* these come fairly often: CAPSLOCK U Y */
+            print("unknown key %ux\n", c);
+        return;
+    }
+
+    if(kbscan->esc1){
+        c = kbtabesc1[c];
+        kbscan->esc1 = 0;
+    } else if(kbscan->esc2){
+        kbscan->esc2--;
+        return;
+    } else if(kbscan->shift)
+        c = kbtabshift[c];
+    else if(kbscan->altgr)
+        c = kbtabaltgr[c];
+    else if(kbscan->ctl)
+        c = kbtabctrl[c];
+    else
+        c = kbtab[c];
+
+    if(kbscan->caps && c<='z' && c>='a')
+        c += 'A' - 'a';
+
+    /*
+     *  keyup only important for shifts
+     */
+    if(keyup){
+        switch(c){
+        case Latin:
+            kbscan->alt = 0;
+            break;
+        case Shift:
+            kbscan->shift = 0;
+            mouseshifted = 0;
+            if(kdebug)
+                print("shiftclr\n");
+            break;
+        case Ctrl:
+            kbscan->ctl = 0;
+            break;
+        case Altgr:
+            kbscan->altgr = 0;
+            break;
+        case Kmouse|1:
+        case Kmouse|2:
+        case Kmouse|3:
+        case Kmouse|4:
+        case Kmouse|5:
+            kbscan->buttons &= ~(1<<(c-Kmouse-1));
+            if(kbdmouse)
+                kbdmouse(kbscan->buttons);
+            break;
+        }
+        return;
+    }
+
+    /*
+     *  normal character
+     */
+    if(!(c & (Spec|KF))){
+        if(kbscan->ctl)
+            if(kbscan->alt && c == Del)
+                exit(0);
+        if(!kbscan->collecting){
+            kbdputc(kbdq, c);
+            return;
+        }
+        kbscan->kc[kbscan->nk++] = c;
+        c = latin1(kbscan->kc, kbscan->nk);
+        if(c < -1)  /* need more keystrokes */
+            return;
+        if(c != -1) /* valid sequence */
+            kbdputc(kbdq, c);
+        else    /* dump characters */
+            for(i=0; i<kbscan->nk; i++)
+                kbdputc(kbdq, kbscan->kc[i]);
+        kbscan->nk = 0;
+        kbscan->collecting = 0;
+        return;
+    } else {
+        switch(c){
+        case Caps:
+            kbscan->caps ^= 1;
+            return;
+        case Num:
+            kbscan->num ^= 1;
+            if(!external)
+                setleds(kbscan);
+            return;
+        case Shift:
+            kbscan->shift = 1;
+            if(kdebug)
+                print("shift\n");
+            mouseshifted = 1;
+            return;
+        case Latin:
+            kbscan->alt = 1;
+            /*
+             * VMware and Qemu use Ctl-Alt as the key combination
+             * to make the VM give up keyboard and mouse focus.
+             * This has the unfortunate side effect that when you
+             * come back into focus, Plan 9 thinks you want to type
+             * a compose sequence (you just typed alt). 
+             *
+             * As a clumsy hack around this, we look for ctl-alt
+             * and don't treat it as the start of a compose sequence.
+             */
+            if(!kbscan->ctl){
+                kbscan->collecting = 1;
+                kbscan->nk = 0;
+            }
+            return;
+        case Ctrl:
+            kbscan->ctl = 1;
+            return;
+        case Altgr:
+            kbscan->altgr = 1;
+            return;
+        case Kmouse|1:
+        case Kmouse|2:
+        case Kmouse|3:
+        case Kmouse|4:
+        case Kmouse|5:
+            kbscan->buttons |= 1<<(c-Kmouse-1);
+            if(kbdmouse)
+                kbdmouse(kbscan->buttons);
+            return;
+        case KF|11:
+            print("kbd debug on, F12 turns it off\n");
+            kdebug = 1;
+            break;
+        case KF|12:
+            kdebug = 0;
+            break;
+        }
+    }
+    kbdputc(kbdq, c);
+}
+@
+
+<<function outbyte>>=
+static int
+outbyte(int port, int c)
+{
+    outb(port, c);
+    if(outready() < 0) {
+        print(initfailed);
+        return -1;
+    }
+    return 0;
+}
+@
+
+<<function outready>>=
+/*
+ *  wait for output no longer busy
+ */
+static int
+outready(void)
+{
+    int tries;
+
+    for(tries = 0; (inb(Status) & Outbusy); tries++){
+        if(tries > 500)
+            return -1;
+        delay(2);
+    }
+    return 0;
+}
+@
+
+
+<<function inready>>=
+/*
+ *  wait for input
+ */
+static int
+inready(void)
+{
+    int tries;
+
+    for(tries = 0; !(inb(Status) & Inready); tries++){
+        if(tries > 500)
+            return -1;
+        delay(2);
+    }
+    return 0;
+}
+@
+
+
+<<function i8042auxcmd>>=
+int
+i8042auxcmd(int cmd)
+{
+    unsigned int c;
+    int tries;
+    static int badkbd;
+
+    if(badkbd)
+        return -1;
+    c = 0;
+    tries = 0;
+
+    ilock(&i8042lock);
+    do{
+        if(tries++ > 2)
+            break;
+        if(outready() < 0)
+            break;
+        outb(Cmd, 0xD4);
+        if(outready() < 0)
+            break;
+        outb(Data, cmd);
+        if(outready() < 0)
+            break;
+        if(inready() < 0)
+            break;
+        c = inb(Data);
+    } while(c == 0xFE || c == 0);
+    iunlock(&i8042lock);
+
+    if(c != 0xFA){
+        print("i8042: %2.2ux returned to the %2.2ux command\n", c, cmd);
+        badkbd = 1; /* don't keep trying; there might not be one */
+        return -1;
+    }
+    return 0;
+}
+@
+
+<<function i8042auxenable>>=
+void
+i8042auxenable(void (*putc)(int, int))
+{
+    char *err = "i8042: aux init failed\n";
+
+    /* enable kbd/aux xfers and interrupts */
+    ccc &= ~Cauxdis;
+    ccc |= Cauxint;
+
+    ilock(&i8042lock);
+    if(outready() < 0)
+        print(err);
+    outb(Cmd, 0x60);            /* write control register */
+    if(outready() < 0)
+        print(err);
+    outb(Data, ccc);
+    if(outready() < 0)
+        print(err);
+    outb(Cmd, 0xA8);            /* auxiliary device enable */
+    if(outready() < 0){
+        iunlock(&i8042lock);
+        return;
+    }
+    auxputc = putc;
+    intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
+    iunlock(&i8042lock);
+}
+@
+
+
 
 \subsection{Mouse}
 
@@ -2209,6 +3873,10 @@ hzclock(Ureg *ur)
 
 \chapter{Time}
 \minitoc
+
+<<global fasthz>>=
+vlong   fasthz;
+@ 
 
 <<function us>>=
 ulong
@@ -2648,6 +4316,139 @@ addclock0link(void (*f)(void), Tms ms)
 
 \section{Time of day}
 
+<<devcons.c Exxx errors>>=
+char *Ebadtimectl = "bad time control";
+@
+
+
+<<function readtime>>=
+/*
+ *  like the old #c/time but with added info.  Return
+ *
+ *  secs    nanosecs    fastticks   fasthz
+ */
+static int
+readtime(ulong off, char *buf, int n)
+{
+    vlong   nsec, ticks;
+    long sec;
+    char str[7*NUMSIZE];
+
+    nsec = todget(&ticks);
+    if(fasthz == 0LL)
+        fastticks((uvlong*)&fasthz);
+    sec = nsec/1000000000ULL;
+    snprint(str, sizeof(str), "%*lud %*llud %*llud %*llud ",
+        NUMSIZE-1, sec,
+        VLNUMSIZE-1, nsec,
+        VLNUMSIZE-1, ticks,
+        VLNUMSIZE-1, fasthz);
+    return readstr(off, buf, n, str);
+}
+@
+
+
+<<function writetime>>=
+/*
+ *  set the time in seconds
+ */
+static int
+writetime(char *buf, int n)
+{
+    char b[13];
+    long i;
+    vlong now;
+
+    if(n >= sizeof(b))
+        error(Ebadtimectl);
+    strncpy(b, buf, n);
+    b[n] = 0;
+    i = strtol(b, 0, 0);
+    if(i <= 0)
+        error(Ebadtimectl);
+    now = i*1000000000LL;
+    todset(now, 0, 0);
+    return n;
+}
+@
+
+
+<<function readbintime>>=
+/*
+ *  read binary time info.  all numbers are little endian.
+ *  ticks and nsec are syncronized.
+ */
+static int
+readbintime(char *buf, int n)
+{
+    int i;
+    vlong nsec, ticks;
+    uchar *b = (uchar*)buf;
+
+    i = 0;
+    if(fasthz == 0LL)
+        fastticks((uvlong*)&fasthz);
+    nsec = todget(&ticks);
+    if(n >= 3*sizeof(uvlong)){
+        vlong2le(b+2*sizeof(uvlong), fasthz);
+        i += sizeof(uvlong);
+    }
+    if(n >= 2*sizeof(uvlong)){
+        vlong2le(b+sizeof(uvlong), ticks);
+        i += sizeof(uvlong);
+    }
+    if(n >= 8){
+        vlong2le(b, nsec);
+        i += sizeof(vlong);
+    }
+    return i;
+}
+@
+
+
+<<function writebintime>>=
+/*
+ *  set any of the following
+ *  - time in nsec
+ *  - nsec trim applied over some seconds
+ *  - clock frequency
+ */
+static int
+writebintime(char *buf, int n)
+{
+    uchar *p;
+    vlong delta;
+    long period;
+
+    n--;
+    p = (uchar*)buf + 1;
+    switch(*buf){
+    case 'n':
+        if(n < sizeof(vlong))
+            error(Ebadtimectl);
+        le2vlong(&delta, p);
+        todset(delta, 0, 0);
+        break;
+    case 'd':
+        if(n < sizeof(vlong)+sizeof(long))
+            error(Ebadtimectl);
+        p = le2vlong(&delta, p);
+        le2long(&period, p);
+        todset(-1, delta, period);
+        break;
+    case 'f':
+        if(n < sizeof(uvlong))
+            error(Ebadtimectl);
+        le2vlong(&fasthz, p);
+        if(fasthz <= 0)
+            error(Ebadtimectl);
+        todsetfreq(fasthz);
+        break;
+    }
+    return n;
+}
+@
+
 
 \chapter{IPC}
 \minitoc
@@ -2839,7 +4640,39 @@ connectlocal(void)
 \section{The shell}
 
 
+\chapter{Misc}
 
+\section{Random}
+
+
+
+<<global randn>>=
+static  ulong   randn;
+@
+
+
+<<function seedrand>>=
+static void
+seedrand(void)
+{
+    if(!waserror()){
+        randomread((void*)&randn, sizeof(randn));
+        poperror();
+    }
+}
+@
+
+
+<<function nrand>>=
+int
+nrand(int n)
+{
+    if(randn == 0)
+        seedrand();
+    randn = randn*1103515245 + 12345 + MACHP(0)->ticks;
+    return (randn>>16) % n;
+}
+@
 
 \chapter{Conclusion}
 
@@ -2866,13 +4699,101 @@ connectlocal(void)
 % what to do when have panic, e.g. when I mixed some fields
 % and I got a pc error, how do I fix it? how do I find the relevant code?
 
-% rdb.c
-
 % see also printf section all this fmt stuff
 
-% use sysnop (was called sysr1) to show example of debugging session?
+\section{[[cgapost()]]}
+
+<<function cgapost>>=
+char hex[] = "0123456789ABCDEF";
+
+void
+cgapost(int code)
+{
+    uchar *cga;
+
+    cga = CGASCREENBASE;
+    cga[Width*Height-Postcodelen*2] = hex[(code>>4) & 0x0F];
+    cga[Width*Height-Postcodelen*2+1] = Attr;
+    cga[Width*Height-Postcodelen*2+2] = hex[code & 0x0F];
+    cga[Width*Height-Postcodelen*2+3] = Attr;
+}
+@
+
+\section{Special keys}
 
 % Ctrl-t Ctrl-t <debugcode>
+
+\section{[[sysnop()]]}
+% use sysnop (was called sysr1) to show example of debugging session?
+
+\section{[[/dev/kmesg]]}
+
+<<constant KMESGSIZE>>=
+// used in devcons.c
+KMESGSIZE = (256*1024),  /* lots, for acpi debugging */ // default is 16*1024
+@
+
+<<struct KMesg>>=
+/*
+ * Log console output so it can be retrieved via /dev/kmesg.
+ * This is good for catching boot-time messages after the fact.
+ */
+struct KMesg {
+    Lock lk;
+    char buf[KMESGSIZE];
+    uint n;
+};
+@ 
+
+
+<<global kmesg>>=
+struct KMesg kmesg;
+@ 
+
+
+<<function kmesgputs>>=
+static void
+kmesgputs(char *str, int n)
+{
+    uint nn, d;
+
+    ilock(&kmesg.lk);
+    /* take the tail of huge writes */
+    if(n > sizeof kmesg.buf){
+        d = n - sizeof kmesg.buf;
+        str += d;
+        n -= d;
+    }
+
+    /* slide the buffer down to make room */
+    nn = kmesg.n;
+    if(nn + n >= sizeof kmesg.buf){
+        d = nn + n - sizeof kmesg.buf;
+        if(d)
+            memmove(kmesg.buf, kmesg.buf+d, sizeof kmesg.buf-d);
+        nn -= d;
+    }
+
+    /* copy the data in */
+    memmove(kmesg.buf+nn, str, n);
+    nn += n;
+    kmesg.n = nn;
+    iunlock(&kmesg.lk);
+}
+@ 
+
+\section{[[/dev/kprint]]}
+
+<<global kprintoq>>=
+Queue*  kprintoq;       /* console output, for /dev/kprint */
+@ 
+
+\section{Remote debugger}
+% rdb.c
+
+<<hook consdebug>>=
+void    (*consdebug)(void) = nil; // for rdb
+@ 
 
 \chapter{Profiling}
 
@@ -2884,10 +4805,128 @@ void (*kproftimer)(ulong);
 
 \chapter{Error Managment}
 
+\section{[[panic()]]}
+
+<<function panic>>=
+void
+devcons_panic(char *fmt, ...)
+{
+    int n, s;
+    va_list arg;
+    char buf[PRINTSIZE];
+
+    kprintoq = nil; /* don't try to write to /dev/kprint */
+
+    if(panicking)
+        for(;;);
+    panicking = 1;
+
+    s = splhi();
+    strcpy(buf, "panic: ");
+    va_start(arg, fmt);
+    n = vseprint(buf+strlen(buf), buf+sizeof(buf), fmt, arg) - buf;
+    va_end(arg);
+    iprint("%s\n", buf);
+    if(consdebug)
+        (*consdebug)();
+    splx(s);
+    prflush();
+    buf[n] = '\n';
+    putstrn(buf, n+1);
+    //dumpstack();
+
+        //  exit(1);
+}
+@ 
+
+
+<<function sysfatal>>=
+/* libmp at least contains a few calls to sysfatal; simulate with panic */
+//@Scheck: no dead, override also sysfatal from libc/9sys/sysfatal.c
+// note that this is not a system call, even though it's prefixed with sys
+void
+sysfatal(char *fmt, ...)
+{
+    char err[256];
+    va_list arg;
+
+    va_start(arg, fmt);
+    vseprint(err, err + sizeof err, fmt, arg);
+    va_end(arg);
+    panic("sysfatal: %s", err);
+}
+@ 
+
+
+<<function _assert>>=
+void
+devcons__assert(char *fmt)
+{
+    panic("assert failed at %#p: %s", getcallerpc(&fmt), fmt);
+}
+@ 
+
+\section{[[error()]]}
+
+<<global Exxx errors>>=
+char Emount[] = "inconsistent mount";
+char Eunmount[] = "not mounted";
+char Eismtpt[] = "is a mount point";
+char Eunion[] = "not in union";
+char Emountrpc[] = "mount rpc error";
+char Eshutdown[] = "device shut down";
+char Enocreate[] = "mounted directory forbids creation";
+char Enonexist[] = "file does not exist";
+char Eexist[] = "file already exists";
+char Ebadsharp[] = "unknown device in # filename";
+char Enotdir[] = "not a directory";
+char Eisdir[] = "file is a directory";
+char Ebadchar[] = "bad character in file name";
+char Efilename[] = "file name syntax";
+char Eperm[] = "permission denied";
+char Ebadusefd[] = "inappropriate use of fd";
+char Ebadarg[] = "bad arg in system call";
+char Einuse[] = "device or object already in use";
+char Eio[] = "i/o error";
+char Etoobig[] = "read or write too large";
+char Etoosmall[] = "read or write too small";
+char Ehungup[] = "i/o on hungup channel";
+char Ebadctl[] = "bad process or channel control request";
+char Enodev[] = "no free devices";
+char Eprocdied[] = "process exited";
+char Enochild[] = "no living children";
+char Eioload[] = "i/o error in demand load";
+char Enovmem[] = "virtual memory allocation failed";
+char Ebadfd[] = "fd out of range or not open";
+char Enofd[] = "no free file descriptors";
+char Eisstream[] = "seek on a stream";
+char Ebadexec[] = "exec header invalid";
+char Etimedout[] = "connection timed out";
+char Econrefused[] = "connection refused";
+char Econinuse[] = "connection in use";
+char Eintr[] = "interrupted";
+char Enomem[] = "kernel allocate failed";
+char Esoverlap[] = "segments overlap";
+char Emouseset[] = "mouse type already set";
+char Eshort[] = "i/o count too small";
+char Egreg[] = "jmk added reentrancy for threads";
+char Ebadspec[] = "bad attach specifier";
+char Enoreg[] = "process has no saved registers";
+char Enoattach[] = "mount/attach disallowed";
+char Eshortstat[] = "stat buffer too small";
+char Ebadstat[] = "malformed stat buffer";
+char Enegoff[] = "negative i/o offset";
+char Ecmdargs[] = "wrong #args in control message";
+char Ebadip[] = "bad ip address syntax";
+char Edirseek[] = "seek in directory";
+char Echange[] = "media or partition has changed";
+@ 
+
+\section{[[waserror()]], [[nexterror()]]}
 % waserror(), nexterror(), etc
 % =~ poor's man exn mechanism (=> improve C!!)
 
-% syserrstr?
+\section{[[syserrstr()]]}
 
 \chapter{Mini Libc}
 
