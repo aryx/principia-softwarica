@@ -26,6 +26,7 @@
 // Entry point!! (after jump from l_multiboot.s)
 //*****************************************************************************
 
+/*s: function _startPADDR */
 /*
  * In protected mode with paging turned off and segment registers setup
  * to linear map all memory. Entered via a jump to PADDR(entry),
@@ -66,7 +67,7 @@ TEXT _startPADDR(SB), $0
          BYTE   $0xEA
          LONG   $mode32bit-KZERO(SB)
          WORD   $(2<<3)
-
+/*e: function _startPADDR */
 
 //*****************************************************************************
 // Gdts Data

@@ -17,7 +17,6 @@ _idle:
         JMP     _idle
 /*e: function idle */
 
-
 /*s: function halt */
 /*
  * Attempt at power saving. -rsc
@@ -34,8 +33,6 @@ _nothingready:
         HLT
         RET
 /*e: function halt */
-
-
 
 /*
  * Basic timing loop to determine CPU frequency.

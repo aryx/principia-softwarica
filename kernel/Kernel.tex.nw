@@ -2024,6 +2024,8 @@ struct Vctl {
 };
 @
 
+\section{Exceptions}
+
 <<enum vector>>=
 enum {
     VectorNMI = 2,    /* non-maskable interrupt */
@@ -2046,6 +2048,8 @@ enum {
     MaxVectorAPIC = 255,
 };
 @
+
+\section{Hardware interrupts}
 
 <<enum irq>>=
 enum {
@@ -2166,9 +2170,6 @@ i8259init(void)
 }
 @
 
-\section{Exceptions}
-
-\section{Hardware interrupts}
 
 \section{Software interrupts}
 
@@ -2176,6 +2177,36 @@ i8259init(void)
 // used in Proc
 MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
 @
+
+
+<<function _syscallintr>>=
+/*
+ * This is merely _strayintr from l.s optimised to vector
+ * to syscall() without going through trap().
+ */
+TEXT _syscallintr(SB), $0
+        PUSHL   $VectorSYSCALL                  /* trap type */
+
+        PUSHL   DS
+        PUSHL   ES
+        PUSHL   FS
+        PUSHL   GS
+        PUSHAL
+        MOVL    $(KDSEL), AX
+        MOVW    AX, DS
+        MOVW    AX, ES
+        PUSHL   SP
+        CALL    syscall(SB)
+
+        POPL    AX
+        POPAL
+        POPL    GS
+        POPL    FS
+        POPL    ES
+        POPL    DS
+        ADDL    $8, SP                          /* pop error code and trap type */
+        IRETL
+@ 
 
 \chapter{Processes}
 \minitoc
@@ -2344,7 +2375,182 @@ hzclock(Ureg *ur)
 
 \section{Booting the kernel}
 
+<<global _multibootheader>>=
+/*
+ * Must be 4-byte aligned.
+ */
+TEXT _multibootheader(SB), $0
+        LONG    $0x1BADB002                     /* magic */
+        LONG    $0x00010003                     /* flags */
+        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
+        
+        LONG    $_multibootheader-KZERO(SB)     /* header_addr */
+        LONG    $_startKADDR-KZERO(SB)          /* load_addr */
+        LONG    $edata-KZERO(SB)                /* load_end_addr */
+        LONG    $end-KZERO(SB)                  /* bss_end_addr */
+        
+//      !!!entry point specification!!!
+        LONG    $_multibootentry-KZERO(SB)              /* entry_addr */
+        
+        LONG    $0                              /* mode_type */
+        LONG    $0                              /* width */
+        LONG    $0                              /* height */
+        LONG    $0                              /* depth */
+@
+
+<<function _multibootentry>>=
+/* 
+ * the kernel expects the data segment to be page-aligned
+ * multiboot bootloaders put the data segment right behind text
+ */
+TEXT _multibootentry(SB), $0
+        MOVL    $etext-KZERO(SB), SI
+        MOVL    SI, DI
+        ADDL    $0xfff, DI
+        ANDL    $~0xfff, DI
+        MOVL    $edata-KZERO(SB), CX
+        SUBL    DI, CX
+        ADDL    CX, SI
+        ADDL    CX, DI
+        STD
+        REP; MOVSB
+        CLD
+        ADDL    $KZERO, BX
+        MOVL    BX, multiboot-KZERO(SB)
+//      !!! Jump to _startPADDR (not _startKADDR)!!!
+        MOVL    $_startPADDR(SB), AX
+        ANDL    $~KZERO, AX
+        JMP*    AX
+@
+
+
+<<function _startPADDR>>=
+/*
+ * In protected mode with paging turned off and segment registers setup
+ * to linear map all memory. Entered via a jump to PADDR(entry),
+ * the physical address of the virtual kernel entry point of KADDR(entry).
+ * Make the basic page tables for processor 0. Six pages are needed for
+ * the basic set:
+ *      a page directory;
+ *      page tables for mapping the first 8MB of physical memory to KZERO;
+ *      a page for the GDT;
+ *      virtual and physical pages for mapping the Mach structure.
+ * The remaining PTEs will be allocated later when memory is sized.
+ * An identity mmu map is also needed for the switch to virtual mode.
+ * This identity mapping is removed once the MMU is going and the JMP has
+ * been made to virtual memory.
+ */
+TEXT _startPADDR(SB), $0
+        CLI                     /* make sure interrupts are off */
+
+        /* set up the gdt so we have sane plan 9 style gdts. */
+        MOVL    $tgdtptr(SB), AX
+        ANDL    $~KZERO, AX
+        MOVL    (AX), GDTR
+        MOVW    $1, AX
+        MOVW    AX, MSW
+
+        /* clear prefetch queue (weird code to avoid optimizations) */
+        DELAY
+
+        /* set segs to something sane (avoid traps later) */
+        MOVW    $(1<<3), AX
+        MOVW    AX, DS
+        MOVW    AX, SS
+        MOVW    AX, ES
+        MOVW    AX, FS
+        MOVW    AX, GS
+
+/*      JMP     $(2<<3):$mode32bit(SB) /**/
+         BYTE   $0xEA
+         LONG   $mode32bit-KZERO(SB)
+         WORD   $(2<<3)
+@
+
+
+
 \section{Kernel initialization}
+
+<<function main>>=
+//@Scheck: not dead, entry point :) jumped to by qemu (via elf header)
+void
+main(void)
+{
+    <<[[main()]] initial assgnments for backward dependencies>>
+
+    cgapost(0);
+
+    mach0init(); // calls machinit()
+
+    options();
+
+    ioinit();
+
+    i8250console();
+    quotefmtinstall();
+    screeninit();
+    // screeninit() done, we can print stuff!
+    print("\nPlan 99999999999999\n");
+
+    // the init0 means this is really early on (malloc is not available?!)
+    trapinit0();
+    mmuinit0();
+
+    kbdinit();
+    i8253init();
+
+    cpuidentify();
+
+    meminit();
+    confinit();
+
+    archinit();
+
+    xinit();
+
+    if(i8237alloc != nil)
+            i8237alloc();
+
+    trapinit();
+    printinit();
+    cpuidprint();
+    mmuinit();
+
+    fpsavealloc();
+    if(arch->intrinit)      /* launches other processors on an mp */
+            arch->intrinit();
+
+    timersinit();
+    mathinit();
+    kbdenable();
+    if(arch->clockenable)
+            arch->clockenable();
+
+
+    procinit0();
+    initseg();
+    if(delaylink) {
+            bootlinks();
+            pcimatch(0, 0, 0);
+    } else
+            links();
+
+    // initialize all devices
+    chandevreset();
+    cgapost(0xcd); // 0xcd, for chandev :)
+
+    pageinit();
+    swapinit();
+
+    // let's craft our first process (that will then exec("boot/boot"))
+    userinit();
+    active.thunderbirdsarego = 1;
+
+    cgapost(0x99); // done!
+    schedinit();
+}
+@
+
 
 \subsection{CPU identification}
 
@@ -2396,6 +2602,140 @@ chandevreset(void)
 @
 
 \section{The first process}
+
+<<function userinit>>=
+void
+userinit(void)
+{
+        void *v;
+        Proc *p;
+        Segment *s;
+        Page *pg;
+
+        p = newproc();
+        p->pgrp = newpgrp();
+        p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
+        p->egrp->ref = 1;
+        p->fgrp = dupfgrp(nil);
+        p->rgrp = newrgrp();
+        p->procmode = 0640;
+
+        kstrdup(&eve, "");
+        kstrdup(&p->text, "*init*");
+        kstrdup(&p->user, eve);
+
+        p->fpstate = FPinit;
+        fpoff();
+
+        /*
+         * Kernel Stack
+         *
+         * N.B. make sure there's enough space for syscall to check
+         *      for valid args and 
+         *      4 bytes for gotolabel's return PC
+         */
+        p->sched.pc = (ulong)init0;
+        p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
+
+        /*
+         * User Stack
+         *
+         * N.B. cannot call newpage() with clear=1, because pc kmap
+         * requires up != nil.  use tmpmap instead.
+         */
+        s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+        p->seg[SSEG] = s;
+        pg = newpage(0, 0, USTKTOP-BY2PG);
+        v = tmpmap(pg);
+        memset(v, 0, BY2PG);
+        segpage(s, pg);
+
+        bootargs(v);
+        tmpunmap(v);
+
+        /*
+         * Text
+         */
+        s = newseg(SG_TEXT, UTZERO, 1);
+        s->flushme++;
+        p->seg[TSEG] = s;
+        pg = newpage(0, 0, UTZERO);
+        memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+        segpage(s, pg);
+        v = tmpmap(pg);
+        memset(v, 0, BY2PG);
+        memmove(v, initcode, sizeof initcode);
+        tmpunmap(v);
+
+        ready(p);
+}
+@
+
+<<function init0>>=
+// set by userinit to sched.pc
+void
+init0(void)
+{
+        int i;
+        char buf[2*KNAMELEN];
+        
+        up->nerrlab = 0;
+
+        spllo();
+
+        /*
+         * These are o.k. because rootinit is null.
+         * Then early kproc's will have a root and dot.
+         */
+        up->slash = namec("#/", Atodir, 0, 0);
+        pathclose(up->slash->path);
+        up->slash->path = newpath("/");
+        up->dot = cclone(up->slash);
+
+        chandevinit();
+
+        if(!waserror()){
+                snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
+                ksetenv("terminal", buf, 0);
+                ksetenv("cputype", "386", 0);
+                if(cpuserver)
+                        ksetenv("service", "cpu", 0);
+                else
+                        ksetenv("service", "terminal", 0);
+                for(i = 0; i < nconf; i++){
+                        if(confname[i][0] != '*')
+                                ksetenv(confname[i], confval[i], 0);
+                        ksetenv(confname[i], confval[i], 1);
+                }
+                poperror();
+        }
+        kproc("alarm", alarmkproc, 0);
+        cgapost(0x9);
+        touser(sp);
+}
+@
+
+<<function touser>>=
+/*
+ *  Used to get to the first process:
+ *      set up an interrupt return frame and IRET to user level.
+ */
+TEXT touser(SB), $0
+        PUSHL   $(UDSEL)                        /* old ss */
+        MOVL    sp+0(FP), AX                    /* old sp */
+        PUSHL   AX
+        MOVL    $0x200, AX                      /* interrupt enable flag */
+        PUSHL   AX                              /* old flags */
+        PUSHL   $(UESEL)                        /* old cs */
+        PUSHL   $(UTZERO+32)                    /* old pc */
+        MOVL    $(UDSEL), AX
+        MOVW    AX, DS
+        MOVW    AX, ES
+        MOVW    AX, GS
+        MOVW    AX, FS
+        IRETL
+@ 
+
 
 \section{Booting the user}
 % see section on Userspace system programs
@@ -2813,6 +3153,22 @@ addelem(Path *p, char *s, Chan *from)
 }
 @
 
+<<function pathlast>>=
+static char*
+pathlast(Path *p)
+{
+    char *s;
+
+    if(p == nil)
+        return nil;
+    if(p->len == 0)
+        return nil;
+    s = strrchr(p->s, '/');
+    if(s)
+        return s+1;
+    return p->s;
+}
+@
 
 
 <<function chanpath>>=
@@ -2866,6 +3222,7 @@ isdotdot(char *p)
     return p[0]=='.' && p[1]=='.' && p[2]=='\0';
 }
 @
+
 
 \section{[[Block]]}
 
@@ -4744,7 +5101,210 @@ devno(int c, int user)
 }
 @
 
+\section{Directories}
+
+\section{File descriptors}
+
+<<struct Fgrp>>=
+struct Fgrp
+{
+    // array<ref_counted<Chan>, smalloc'ed?
+    Chan  **fd;
+    // nelem(fd) ?
+    int nfd;      /* number allocated */
+    int maxfd;      /* highest fd in use */
+  
+    int exceed;     /* debugging */
+  
+    // extra
+    Ref;
+};
+@ 
+
+<<[[Proc]] files fields>>=
+// ref_counted<fgrp>
+Fgrp  *fgrp;    /* File descriptor group */
+@
+
+<<function unlockfgrp>>=
+static void
+unlockfgrp(Fgrp *f)
+{
+    int ex;
+
+    ex = f->exceed;
+    f->exceed = 0;
+    unlock(f);
+    if(ex)
+        pprint("warning: process exceeds %d file descriptors\n", ex);
+}
+@
+
+
+<<function growfd>>=
+int
+growfd(Fgrp *f, int fd) /* fd is always >= 0 */
+{
+    Chan **newfd, **oldfd;
+
+    if(fd < f->nfd)
+        return 0;
+    if(fd >= f->nfd+DELTAFD)
+        return -1;  /* out of range */
+    /*
+     * Unbounded allocation is unwise
+     */
+    if(f->nfd >= 5000){
+    Exhausted:
+        print("no free file descriptors\n");
+        return -1;
+    }
+    newfd = malloc((f->nfd+DELTAFD)*sizeof(Chan*));
+    if(newfd == 0)
+        goto Exhausted;
+    oldfd = f->fd;
+    memmove(newfd, oldfd, f->nfd*sizeof(Chan*));
+    f->fd = newfd;
+    free(oldfd);
+    f->nfd += DELTAFD;
+    if(fd > f->maxfd){
+        if(fd/100 > f->maxfd/100)
+            f->exceed = (fd/100)*100;
+        f->maxfd = fd;
+    }
+    return 1;
+}
+@
+
+
+<<function findfreefd>>=
+/*
+ *  this assumes that the fgrp is locked
+ */
+int
+findfreefd(Fgrp *f, int start)
+{
+    int fd;
+
+    for(fd=start; fd<f->nfd; fd++)
+        if(f->fd[fd] == 0)
+            break;
+    if(fd >= f->nfd && growfd(f, fd) < 0)
+        return -1;
+    return fd;
+}
+@
+
+
+<<function newfd>>=
+int
+newfd(Chan *c)
+{
+    int fd;
+    Fgrp *f;
+
+    f = up->fgrp;
+    lock(f);
+    fd = findfreefd(f, 0);
+    if(fd < 0){
+        unlockfgrp(f);
+        return -1;
+    }
+    if(fd > f->maxfd)
+        f->maxfd = fd;
+    f->fd[fd] = c;
+    unlockfgrp(f);
+    return fd;
+}
+@
+
+
+<<function newfd2>>=
+int
+newfd2(int fd[2], Chan *c[2])
+{
+    Fgrp *f;
+
+    f = up->fgrp;
+    lock(f);
+    fd[0] = findfreefd(f, 0);
+    if(fd[0] < 0){
+        unlockfgrp(f);
+        return -1;
+    }
+    fd[1] = findfreefd(f, fd[0]+1);
+    if(fd[1] < 0){
+        unlockfgrp(f);
+        return -1;
+    }
+    if(fd[1] > f->maxfd)
+        f->maxfd = fd[1];
+    f->fd[fd[0]] = c[0];
+    f->fd[fd[1]] = c[1];
+    unlockfgrp(f);
+
+    return 0;
+}
+@
+
+
 \section{[[syscreate()]], [[sysremove()]]}
+
+<<syscall create>>=
+long
+syscreate(ulong *arg)
+{
+    int fd;
+    Chan *c;
+
+    openmode(arg[1]&~OEXCL);    /* error check only; OEXCL okay here */
+    validaddr(arg[0], 1, 0);
+    c = namec((char*)arg[0], Acreate, arg[1], arg[2]);
+    if(waserror()) {
+        cclose(c);
+        nexterror();
+    }
+    fd = newfd(c);
+    if(fd < 0)
+        error(Enofd);
+    poperror();
+    return fd;
+}
+@
+
+
+<<syscall remove>>=
+long
+sysremove(ulong *arg)
+{
+    Chan *c;
+
+    validaddr(arg[0], 1, 0);
+    c = namec((char*)arg[0], Aremove, 0, 0);
+    /*
+     * Removing mount points is disallowed to avoid surprises
+     * (which should be removed: the mount point or the mounted Chan?).
+     */
+    if(c->ismtpt){
+        cclose(c);
+        error(Eismtpt);
+    }
+    if(waserror()){
+        c->type = 0;    /* see below */
+        cclose(c);
+        nexterror();
+    }
+    devtab[c->type]->remove(c);
+    /*
+     * Remove clunks the fid, but we need to recover the Chan
+     * so fake it up.  rootclose() is known to be a nop.
+     */
+    c->type = 0;
+    poperror();
+    cclose(c);
+    return 0;
+}
+@
 
 \section {[[sysopen()]], [[sysclose()]]}
 
@@ -4829,6 +5389,169 @@ fdclose(int fd, int flag)
 @
 
 \section {[[syspread()]], [[syspwrite()]]}
+
+<<function read>>=
+static long
+read(ulong *arg, vlong *offp)
+{
+    long n, nn, nnn;
+    uchar *p;
+    Chan *c;
+    vlong off;
+
+    n = arg[2];
+    validaddr(arg[1], n, 1);
+    p = (void*)arg[1];
+    c = fdtochan(arg[0], OREAD, 1, 1);
+
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+
+    /*
+     * The offset is passed through on directories, normally.
+     * Sysseek complains, but pread is used by servers like exportfs,
+     * that shouldn't need to worry about this issue.
+     *
+     * Notice that c->devoffset is the offset that c's dev is seeing.
+     * The number of bytes read on this fd (c->offset) may be different
+     * due to rewritings in rockfix.
+     */
+    if(offp == nil) /* use and maintain channel's offset */
+        off = c->offset;
+    else
+        off = *offp;
+    if(off < 0)
+        error(Enegoff);
+
+    if(off == 0){   /* rewind to the beginning of the directory */
+        if(offp == nil){
+            c->offset = 0;
+            c->devoffset = 0;
+        }
+        mountrewind(c);
+        unionrewind(c);
+    }
+
+    if(c->qid.type & QTDIR){
+        if(mountrockread(c, p, n, &nn)){
+            /* do nothing: mountrockread filled buffer */
+        }else if(c->umh)
+            nn = unionread(c, p, n);
+        else{
+            if(off != c->offset)
+                error(Edirseek);
+            nn = devtab[c->type]->read(c, p, n, c->devoffset);
+        }
+        nnn = mountfix(c, p, nn, n);
+    }else
+        nnn = nn = devtab[c->type]->read(c, p, n, off);
+
+    lock(c);
+    c->devoffset += nn;
+    c->offset += nnn;
+    unlock(c);
+
+    poperror();
+    cclose(c);
+
+    return nnn;
+}
+@
+
+
+<<syscall pread>>=
+long
+syspread(ulong *arg)
+{
+    vlong v;
+    va_list list;
+
+    /* use varargs to guarantee alignment of vlong */
+    va_start(list, arg[2]);
+    v = va_arg(list, vlong);
+    va_end(list);
+
+    if(v == ~0ULL)
+        return read(arg, nil);
+
+    return read(arg, &v);
+}
+@
+
+
+<<function write>>=
+static long
+write(ulong *arg, vlong *offp)
+{
+    Chan *c;
+    long m, n;
+    vlong off;
+
+    validaddr(arg[1], arg[2], 0);
+    n = 0;
+    c = fdtochan(arg[0], OWRITE, 1, 1);
+    if(waserror()) {
+        if(offp == nil){
+            lock(c);
+            c->offset -= n;
+            unlock(c);
+        }
+        cclose(c);
+        nexterror();
+    }
+
+    if(c->qid.type & QTDIR)
+        error(Eisdir);
+
+    n = arg[2];
+
+    if(offp == nil){    /* use and maintain channel's offset */
+        lock(c);
+        off = c->offset;
+        c->offset += n;
+        unlock(c);
+    }else
+        off = *offp;
+
+    if(off < 0)
+        error(Enegoff);
+
+    m = devtab[c->type]->write(c, (void*)arg[1], n, off);
+
+    if(offp == nil && m < n){
+        lock(c);
+        c->offset -= n - m;
+        unlock(c);
+    }
+
+    poperror();
+    cclose(c);
+
+    return m;
+}
+@
+
+
+<<syscall pwrite>>=
+long
+syspwrite(ulong *arg)
+{
+    vlong v;
+    va_list list;
+
+    /* use varargs to guarantee alignment of vlong */
+    va_start(list, arg[2]);
+    v = va_arg(list, vlong);
+    va_end(list);
+
+    if(v == ~0ULL)
+        return write(arg, nil);
+
+    return write(arg, &v);
+}
+@
 
 \section {[[sysstat()]]}
 
@@ -4922,6 +5645,56 @@ sysfwstat(ulong *arg)
 }
 @
 
+<<syscall fstat>>=
+long
+sysfstat(ulong *arg)
+{
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, 1);
+    c = fdtochan(arg[0], -1, 0, 1);
+    if(waserror()) {
+        cclose(c);
+        nexterror();
+    }
+    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+    poperror();
+    cclose(c);
+    return l;
+}
+@
+
+
+<<syscall stat>>=
+long
+sysstat(ulong *arg)
+{
+    char *name;
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, 1);
+    validaddr(arg[0], 1, 0);
+    c = namec((char*)arg[0], Aaccess, 0, 0);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+    name = pathlast(c->path);
+    if(name)
+        l = dirsetname(name, strlen(name), (uchar*)arg[1], l, arg[2]);
+
+    poperror();
+    cclose(c);
+    return l;
+}
+@
+
+
 \section {[[syschdir()]]}
 
 <<struct Dirtab>>=
@@ -4933,6 +5706,25 @@ struct Dirtab
   long  perm;
 };
 @
+
+
+<<syscall chdir>>=
+long
+syschdir(ulong *arg)
+{
+    Chan *c;
+
+    validaddr(arg[0], 1, 0);
+
+    c = namec((char*)arg[0], Atodir, 0, 0);
+    cclose(up->dot);
+    up->dot = c;
+    return 0;
+}
+@
+
+
+
 
 \section {[[sysfd2path()]] (a.k.a [[pwd()]])}
 
@@ -4999,6 +5791,88 @@ fdtochan(int fd, int mode, int chkmnt, int iref)
 
 \section{Other syscalls}
 
+<<function sseek>>=
+static void
+sseek(ulong *arg)
+{
+    Chan *c;
+    uchar buf[sizeof(Dir)+100];
+    Dir dir;
+    int n;
+    vlong off;
+    union {
+        vlong v;
+        ulong u[2];
+    } o;
+
+    c = fdtochan(arg[1], -1, 1, 1);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    if(devtab[c->type]->dc == '|')
+        error(Eisstream);
+
+    off = 0;
+    o.u[0] = arg[2];
+    o.u[1] = arg[3];
+    switch(arg[4]){
+    case 0:
+        off = o.v;
+        if((c->qid.type & QTDIR) && off != 0)
+            error(Eisdir);
+        if(off < 0)
+            error(Enegoff);
+        c->offset = off;
+        break;
+
+    case 1:
+        if(c->qid.type & QTDIR)
+            error(Eisdir);
+        lock(c);    /* lock for read/write update */
+        off = o.v + c->offset;
+        if(off < 0){
+            unlock(c);
+            error(Enegoff);
+        }
+        c->offset = off;
+        unlock(c);
+        break;
+
+    case 2:
+        if(c->qid.type & QTDIR)
+            error(Eisdir);
+        n = devtab[c->type]->stat(c, buf, sizeof buf);
+        if(convM2D(buf, n, &dir, nil) == 0)
+            error("internal error: stat error in seek");
+        off = dir.length + o.v;
+        if(off < 0)
+            error(Enegoff);
+        c->offset = off;
+        break;
+
+    default:
+        error(Ebadarg);
+    }
+    *(vlong*)arg[0] = off;
+    c->uri = 0;
+    c->dri = 0;
+    cclose(c);
+    poperror();
+}
+@
+
+
+<<syscall seek>>=
+long
+sysseek(ulong *arg)
+{
+    validaddr(arg[0], BY2V, 1);
+    sseek(arg);
+    return 0;
+}
+@
+
 
 \chapter{Namespace}
 \minitoc
@@ -5014,11 +5888,145 @@ fdtochan(int fd, int mode, int chkmnt, int iref)
 
 \section{Overview}
 
-\section{[[bind()]]}
+<<function bindmount>>=
+long
+bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char* spec)
+{
+    int ret;
+    Chan *c0, *c1, *ac, *bc;
+    struct{
+        Chan    *chan;
+        Chan    *authchan;
+        char    *spec;
+        int flags;
+    }bogus;
 
-\section{[[mount()]]}
+    if((flag&~MMASK) || (flag&MORDER)==(MBEFORE|MAFTER))
+        error(Ebadarg);
+
+    if(ismount){
+        validaddr((ulong)spec, 1, 0);
+        spec = validnamedup(spec, 1);
+        if(waserror()){
+            free(spec);
+            nexterror();
+        }
+
+        if(up->pgrp->noattach)
+            error(Enoattach);
+
+        ac = nil;
+        bc = fdtochan(fd, ORDWR, 0, 1);
+        if(waserror()) {
+            if(ac)
+                cclose(ac);
+            cclose(bc);
+            nexterror();
+        }
+
+        if(afd >= 0)
+            ac = fdtochan(afd, ORDWR, 0, 1);
+
+        bogus.flags = flag & MCACHE;
+        bogus.chan = bc;
+        bogus.authchan = ac;
+        bogus.spec = spec;
+        ret = devno('M', 0);
+        c0 = devtab[ret]->attach((char*)&bogus);
+        poperror(); /* ac bc */
+        if(ac)
+            cclose(ac);
+        cclose(bc);
+    }else{
+        spec = 0;
+        validaddr((ulong)arg0, 1, 0);
+        c0 = namec(arg0, Abind, 0, 0);
+    }
+
+    if(waserror()){
+        cclose(c0);
+        nexterror();
+    }
+
+    validaddr((ulong)arg1, 1, 0);
+    c1 = namec(arg1, Amount, 0, 0);
+    if(waserror()){
+        cclose(c1);
+        nexterror();
+    }
+
+    ret = cmount(&c0, c1, flag, spec);
+
+    poperror();
+    cclose(c1);
+    poperror();
+    cclose(c0);
+    if(ismount){
+        fdclose(fd, 0);
+        poperror();
+        free(spec);
+    }
+    return ret;
+}
+@
+
+\section{[[sysbind()]]}
+
+<<syscall bind>>=
+long
+sysbind(ulong *arg)
+{
+    return bindmount(0, -1, -1, (char*)arg[0], (char*)arg[1], arg[2], nil);
+}
+@
+
+\section{[[sysmount()]]}
+
+<<syscall mount>>=
+long
+sysmount(ulong *arg)
+{
+    return bindmount(1, arg[0], arg[1], nil, (char*)arg[2], arg[3], (char*)arg[4]);
+}
+@
 
 \section{Other syscalls}
+
+<<syscall unmount>>=
+long
+sysunmount(ulong *arg)
+{
+    Chan *cmount, *cmounted;
+
+    cmounted = 0;
+
+    validaddr(arg[1], 1, 0);
+    cmount = namec((char *)arg[1], Amount, 0, 0);
+    if(waserror()) {
+        cclose(cmount);
+        if(cmounted)
+            cclose(cmounted);
+        nexterror();
+    }
+
+    if(arg[0]) {
+        /*
+         * This has to be namec(..., Aopen, ...) because
+         * if arg[0] is something like /srv/cs or /fd/0,
+         * opening it is the only way to get at the real
+         * Chan underneath.
+         */
+        validaddr(arg[0], 1, 0);
+        cmounted = namec((char*)arg[0], Aopen, OREAD, 0);
+    }
+    cunmount(cmount, cmounted);
+    poperror();
+    cclose(cmount);
+    if(cmounted)
+        cclose(cmounted);
+    return 0;
+}
+@
 
 
 \chapter{Devices}
@@ -8040,6 +9048,24 @@ sysdup(ulong *arg)
 
 \section{Power managment}
 
+<<function halt>>=
+/*
+ * Attempt at power saving. -rsc
+ */
+TEXT halt(SB), $0
+        CLI
+        CMPL    nrdy(SB), $0
+        JEQ     _nothingready
+        STI
+        RET
+
+_nothingready:
+        STI
+        HLT
+        RET
+@
+
+
 <<[[PCArch]] power methods fields>>=
 int (*serialpower)(int);  /* 1 == on, 0 == off */
 int (*modempower)(int); /* 1 == on, 0 == off */
@@ -8051,6 +9077,104 @@ int (*modempower)(int); /* 1 == on, 0 == off */
 @
 
 \section{Reboot}
+
+<<function exit>>=
+void
+main_exit(bool ispanic)
+{
+        shutdown(ispanic);
+        arch->reset();
+}
+@
+
+<<function shutdown>>=
+static void
+shutdown(bool ispanic)
+{
+        int ms, once;
+
+        lock(&active);
+        if(ispanic)
+                active.ispanic = ispanic;
+        else if(m->machno == 0 && (active.machs & (1<<m->machno)) == 0)
+                active.ispanic = 0;
+        once = active.machs & (1<<m->machno);
+        /*
+         * setting exiting will make hzclock() on each processor call exit(0),
+         * which calls shutdown(0) and arch->reset(), which on mp systems is
+         * mpshutdown, which idles non-bootstrap cpus and returns on bootstrap
+         * processors (to permit a reboot).  clearing our bit in machs avoids
+         * calling exit(0) from hzclock() on this processor.
+         */
+        active.machs &= ~(1<<m->machno);
+        active.exiting = 1;
+        unlock(&active);
+
+        if(once)
+                iprint("cpu%d: exiting\n", m->machno);
+
+        /* wait for any other processors to shutdown */
+        spllo();
+        for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
+                delay(TK2MS(2));
+                if(active.machs == 0 && consactive() == 0)
+                        break;
+        }
+
+        if(active.ispanic){
+                if(!cpuserver)
+                        for(;;)
+                                halt();
+                if(getconf("*debug"))
+                        delay(5*60*1000);
+                else
+                        delay(10000);
+        }else
+                delay(1000);
+}
+@
+
+
+
+<<function idle>>=
+/*
+ * Park a processor. Should never fall through a return from main to here,
+ * should only be called by application processors when shutting down.
+ */
+TEXT idle(SB), $0
+_idle:
+        STI
+        HLT
+        JMP     _idle
+@
+
+<<function archreset>>=
+static void
+archreset(void)
+{
+    i8042reset();
+
+    /*
+     * Often the BIOS hangs during restart if a conventional 8042
+     * warm-boot sequence is tried. The following is Intel specific and
+     * seems to perform a cold-boot, but at least it comes back.
+     * And sometimes there is no keyboard...
+     *
+     * The reset register (0xcf9) is usually in one of the bridge
+     * chips. The actual location and sequence could be extracted from
+     * ACPI but why bother, this is the end of the line anyway.
+     */
+    print("Takes a licking and keeps on ticking...\n");
+    *(ushort*)KADDR(0x472) = 0x1234;    /* BIOS warm-boot flag */
+    outb(0xcf9, 0x02);
+    outb(0xcf9, 0x06);
+
+    for(;;)
+        idle();
+}
+@
+
+
 
 <<function reboot>>=
 void
@@ -8353,12 +9477,13 @@ cgapost(int code)
 }
 @
 
+\section{[[sysnop()]]}
+% use sysnop (was called sysr1) to show example of debugging session?
+
+
 \section{Special keys}
 
 % Ctrl-t Ctrl-t <debugcode>
-
-\section{[[sysnop()]]}
-% use sysnop (was called sysr1) to show example of debugging session?
 
 \section{[[/dev/kmesg]]}
 
@@ -8434,6 +9559,376 @@ ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 <<hook consdebug>>=
 void    (*consdebug)(void) = nil; // for rdb
 @ 
+
+\section{Fmt}
+
+<<function fmtrwdata>>=
+// WE ARE OVERRUNNING SOMEHOW
+static void
+fmtrwdata(Fmt* f, char* a, int n, char* suffix)
+{
+    int i;
+    char *t;
+
+    if(a == nil){
+        fmtprint(f, "0x0%s", suffix);
+        return;
+    }
+    validaddr((ulong)a, n, 0);
+    t = smalloc(n+1);
+    for(i = 0; i < n; i++)
+        if(a[i] > 0x20 && a[i] < 0x7f)  /* printable ascii? */
+            t[i] = a[i];
+        else
+            t[i] = '.';
+
+    fmtprint(f, " %#p/\"%s\"%s", a, t, suffix);
+    free(t);
+}
+@ 
+
+
+<<function fmtuserstring>>=
+static void
+fmtuserstring(Fmt* f, char* a, char* suffix)
+{
+    int n;
+    char *t;
+
+    if(a == nil){
+        fmtprint(f, "0/\"\"%s", suffix);
+        return;
+    }
+    validaddr((ulong)a, 1, 0);
+    n = ((char*)vmemchr(a, 0, 0x7fffffff) - a) + 1;
+    t = smalloc(n+1);
+    memmove(t, a, n);
+    t[n] = 0;
+    fmtprint(f, "%#p/\"%s\"%s", a, t, suffix);
+    free(t);
+}
+@ 
+
+
+<<function syscallfmt>>=
+void
+syscallfmt(int syscallno, ulong pc, va_list list)
+{
+    long l;
+    Fmt fmt;
+    void *v;
+    vlong vl;
+    uintptr p;
+    int i[2], len;
+    char *a, **argv;
+
+    fmtstrinit(&fmt);
+    fmtprint(&fmt, "%uld %s ", up->pid, up->text);
+
+    if(syscallno > nsyscall)
+        fmtprint(&fmt, " %d ", syscallno);
+    else
+        fmtprint(&fmt, "%s ", sysctab[syscallno]?
+            sysctab[syscallno]: "huh?");
+
+    fmtprint(&fmt, "%ulx ", pc);
+    if(up->syscalltrace != nil)
+        free(up->syscalltrace);
+
+    switch(syscallno){
+    case NOP:
+        p = va_arg(list, uintptr);
+        fmtprint(&fmt, "%#p", p);
+        break;
+    case CHDIR:
+    case EXITS:
+    case REMOVE:
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, "");
+        break;
+    case BIND:
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, " ");
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, " ");
+        i[0] = va_arg(list, int);
+        fmtprint(&fmt, "%#ux",  i[0]);
+        break;
+    case CLOSE:
+    case NOTED:
+        i[0] = va_arg(list, int);
+        fmtprint(&fmt, "%d", i[0]);
+        break;
+    case DUP:
+        i[0] = va_arg(list, int);
+        i[1] = va_arg(list, int);
+        fmtprint(&fmt, "%d %d", i[0], i[1]);
+        break;
+    case ALARM:
+        l = va_arg(list, unsigned long);
+        fmtprint(&fmt, "%#lud ", l);
+        break;
+    case EXEC:
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, "");
+        argv = va_arg(list, char**);
+        evenaddr(PTR2UINT(argv));
+        for(;;){
+            validaddr((ulong)argv, sizeof(char**), 0);
+            a = *(char **)argv;
+            if(a == nil)
+                break;
+            fmtprint(&fmt, " ");
+            fmtuserstring(&fmt, a, "");
+            argv++;
+        }
+        break;
+    case FAUTH:
+        i[0] = va_arg(list, int);
+        a = va_arg(list, char*);
+        fmtprint(&fmt, "%d", i[0]);
+        fmtuserstring(&fmt, a, "");
+        break;
+    case SEGBRK:
+    case RENDEZVOUS:
+        v = va_arg(list, void*);
+        fmtprint(&fmt, "%#p ", v);
+        v = va_arg(list, void*);
+        fmtprint(&fmt, "%#p", v);
+        break;
+    case OPEN:
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, " ");
+        i[0] = va_arg(list, int);
+        fmtprint(&fmt, "%#ux", i[0]);
+        break;
+    case SLEEP:
+        l = va_arg(list, long);
+        fmtprint(&fmt, "%ld", l);
+        break;
+    case RFORK:
+        i[0] = va_arg(list, int);
+        fmtprint(&fmt, "%#ux", i[0]);
+        break;
+    case PIPE:
+    case BRK_:
+        v = va_arg(list, int*);
+        fmtprint(&fmt, "%#p", v);
+        break;
+    case CREATE:
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, " ");
+        i[0] = va_arg(list, int);
+        i[1] = va_arg(list, int);
+        fmtprint(&fmt, "%#ux %#ux", i[0], i[1]);
+        break;
+    case FD2PATH:
+    case FSTAT:
+    case FWSTAT:
+        i[0] = va_arg(list, int);
+        a = va_arg(list, char*);
+        l = va_arg(list, unsigned long);
+        fmtprint(&fmt, "%d %#p %lud", i[0], a, l);
+        break;
+    case NOTIFY:
+    case SEGDETACH:
+        v = va_arg(list, void*);
+        fmtprint(&fmt, "%#p", v);
+        break;
+    case SEGATTACH:
+        i[0] = va_arg(list, int);
+        fmtprint(&fmt, "%d ", i[0]);
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, " ");
+        /*FALLTHROUGH*/
+    case SEGFREE:
+    case SEGFLUSH:
+        v = va_arg(list, void*);
+        l = va_arg(list, unsigned long);
+        fmtprint(&fmt, "%#p %lud", v, l);
+        break;
+    case UNMOUNT:
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, " ");
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, "");
+        break;
+    case SEMACQUIRE:
+    case SEMRELEASE:
+        v = va_arg(list, int*);
+        i[0] = va_arg(list, int);
+        fmtprint(&fmt, "%#p %d", v, i[0]);
+        break;
+    case TSEMACQUIRE:
+        v = va_arg(list, long*);
+        l = va_arg(list, ulong);
+        fmtprint(&fmt, "%#p %ld", v, l);
+        break;
+    case SEEK:
+        v = va_arg(list, vlong*);
+        i[0] = va_arg(list, int);
+        vl = va_arg(list, vlong);
+        i[1] = va_arg(list, int);
+        fmtprint(&fmt, "%#p %d %#llux %d", v, i[0], vl, i[1]);
+        break;
+    case FVERSION:
+        i[0] = va_arg(list, int);
+        i[1] = va_arg(list, int);
+        fmtprint(&fmt, "%d %d ", i[0], i[1]);
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, " ");
+        l = va_arg(list, unsigned long);
+        fmtprint(&fmt, "%lud", l);
+        break;
+    case WSTAT:
+    case STAT:
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, " ");
+        /*FALLTHROUGH*/
+    case ERRSTR:
+    case AWAIT:
+        a = va_arg(list, char*);
+        l = va_arg(list, unsigned long);
+        fmtprint(&fmt, "%#p %lud", a, l);
+        break;
+    case MOUNT:
+        i[0] = va_arg(list, int);
+        i[1] = va_arg(list, int);
+        fmtprint(&fmt, "%d %d ", i[0], i[1]);
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, " ");
+        i[0] = va_arg(list, int);
+        fmtprint(&fmt, "%#ux ", i[0]);
+        a = va_arg(list, char*);
+        fmtuserstring(&fmt, a, "");
+        break;
+    case PREAD:
+        i[0] = va_arg(list, int);
+        v = va_arg(list, void*);
+        l = va_arg(list, long);
+        fmtprint(&fmt, "%d %#p %ld", i[0], v, l);
+        if(syscallno == PREAD){
+            vl = va_arg(list, vlong);
+            fmtprint(&fmt, " %lld", vl);
+        }
+        break;
+    case PWRITE:
+        i[0] = va_arg(list, int);
+        v = va_arg(list, void*);
+        l = va_arg(list, long);
+        fmtprint(&fmt, "%d ", i[0]);
+        len = MIN(l, 64);
+        fmtrwdata(&fmt, v, len, " ");
+        fmtprint(&fmt, "%ld", l);
+        if(syscallno == PWRITE){
+            vl = va_arg(list, vlong);
+            fmtprint(&fmt, " %lld", vl);
+        }
+        break;
+    }
+
+    up->syscalltrace = fmtstrflush(&fmt);
+}
+@ 
+
+
+<<function sysretfmt>>=
+void
+sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
+{
+    long l;
+    void* v;
+    Fmt fmt;
+    vlong vl;
+    int i, len;
+    char *a, *errstr;
+
+    fmtstrinit(&fmt);
+
+    if(up->syscalltrace)
+        free(up->syscalltrace);
+
+    errstr = "\"\"";
+    switch(syscallno){
+    default:
+    case ALARM:
+    case PWRITE:
+        if(ret == -1)
+            errstr = up->syserrstr;
+        fmtprint(&fmt, " = %ld", ret);
+        break;
+    case EXEC:
+    case SEGBRK:
+    case SEGATTACH:
+    case RENDEZVOUS:
+        if((void *)ret == (void*)-1)
+            errstr = up->syserrstr;
+        fmtprint(&fmt, " = %#p", (void *)ret);
+        break;
+    case AWAIT:
+        a = va_arg(list, char*);
+        l = va_arg(list, unsigned long);
+        if(ret > 0){
+            fmtuserstring(&fmt, a, " ");
+            fmtprint(&fmt, "%lud = %ld", l, ret);
+        }
+        else{
+            fmtprint(&fmt, "%#p/\"\" %lud = %ld", a, l, ret);
+            errstr = up->syserrstr;
+        }
+        break;
+    case ERRSTR:
+        a = va_arg(list, char*);
+        l = va_arg(list, unsigned long);
+        if(ret > 0){
+            fmtuserstring(&fmt, a, " ");
+            fmtprint(&fmt, "%lud = %ld", l, ret);
+        }
+        else{
+            fmtprint(&fmt, "\"\" %lud = %ld", l, ret);
+            errstr = up->syserrstr;
+        }
+        break;
+    case FD2PATH:
+        i = va_arg(list, int);
+        USED(i);
+        a = va_arg(list, char*);
+        l = va_arg(list, unsigned long);
+        if(ret > 0){
+            fmtuserstring(&fmt, a, " ");
+            fmtprint(&fmt, "%lud = %ld", l, ret);
+        }
+        else{
+            fmtprint(&fmt, "\"\" %lud = %ld", l, ret);
+            errstr = up->syserrstr;
+        }
+        break;
+    case PREAD:
+        i = va_arg(list, int);
+        USED(i);
+        v = va_arg(list, void*);
+        l = va_arg(list, long);
+        if(ret > 0){
+            len = MIN(ret, 64);
+            fmtrwdata(&fmt, v, len, "");
+        }
+        else{
+            fmtprint(&fmt, "/\"\"");
+            errstr = up->syserrstr;
+        }
+        fmtprint(&fmt, " %ld", l);
+        if(syscallno == PREAD){
+            vl = va_arg(list, vlong);
+            fmtprint(&fmt, " %lld", vl);
+        }
+        fmtprint(&fmt, " = %ld", ret);
+        break;
+    }
+    fmtprint(&fmt, " %s %#llud %#llud\n", errstr, start, stop);
+    up->syscalltrace = fmtstrflush(&fmt);
+}
+@ 
+
 
 \chapter{Profiling}
 

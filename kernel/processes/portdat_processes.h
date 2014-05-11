@@ -458,12 +458,13 @@ struct Proc
 // Files
 //--------------------------------------------------------------------
     /*s: [[Proc]] files fields */
+    // ref_counted<fgrp>
+    Fgrp  *fgrp;    /* File descriptor group */
+    /*x: [[Proc]] files fields */
     // ref_counted<pgrp>
     Pgrp  *pgrp;    /* Process group for namespace */
     // ref_counted<egrp>
     Egrp  *egrp;    /* Environment group */
-    // ref_counted<fgrp>
-    Fgrp  *fgrp;    /* File descriptor group */
 
     // ref<Chan>
     Chan  *slash; // The root!
