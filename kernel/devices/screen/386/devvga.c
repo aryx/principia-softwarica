@@ -72,7 +72,6 @@ vgareset(void)
         panic("vga ports already allocated"); 
     if(ioalloc(0x3c0, 0x3da-0x3c0+1, 0, "vga") < 0)
         panic("vga ports already allocated"); 
-    conf.monitor = 1;
 }
 
 static Chan*

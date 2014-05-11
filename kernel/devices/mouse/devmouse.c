@@ -108,9 +108,6 @@ extern Memimage* gscreen;
 static void
 mousereset(void)
 {
-    if(!conf.monitor)
-        return;
-
     curs = arrow;
     Cursortocursor(&arrow);
     /* redraw cursor about 30 times per second */
@@ -138,9 +135,6 @@ mousedevgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, Dir *dp)
 static void
 mouseinit(void)
 {
-    if(!conf.monitor)
-        return;
-
     curs = arrow;
     Cursortocursor(&arrow);
     cursoron(1);
@@ -151,8 +145,6 @@ mouseinit(void)
 static Chan*
 mouseattach(char *spec)
 {
-    if(!conf.monitor)
-        error(Egreg);
     return devattach('m', spec);
 }
 
@@ -212,8 +204,6 @@ mouseopen(Chan *c, int omode)
 static void
 mousecreate(Chan*, char*, int, ulong)
 {
-    if(!conf.monitor)
-        error(Egreg);
     error(Eperm);
 }
 
