@@ -368,7 +368,8 @@ kexit(Ureg*)
 void
 trap(Ureg* ureg)
 {
-    int clockintr, i, vno, user;
+    bool clockintr;
+    int i, vno, user;
     char buf[ERRMAX];
     Vctl *ctl, *v;
     Mach *mach;
@@ -387,7 +388,7 @@ trap(Ureg* ureg)
         cycles(&up->kentry);
     }
 
-    clockintr = 0;
+    clockintr = false;
 
     vno = ureg->trap;
     if(ctl = vctl[vno]){
@@ -410,7 +411,7 @@ trap(Ureg* ureg)
             intrtime(m, vno);
 
             if(ctl->irq == IrqCLOCK || ctl->irq == IrqTIMER)
-                clockintr = 1;
+                clockintr = true;
 
             if(up && !clockintr)
                 preempted();
@@ -449,21 +450,22 @@ trap(Ureg* ureg)
 
         /* clear the interrupt */
         i8259isr(vno);
-
-        if(0)print("cpu%d: spurious interrupt %d, last %d\n",
-            m->machno, vno, m->lastintr);
-        if(0)if(conf.nmach > 1){
-            for(i = 0; i < 32; i++){
-                if(!(active.machs & (1<<i)))
-                    continue;
-                mach = MACHP(i);
-                if(m->machno == mach->machno)
-                    continue;
-                print(" cpu%d: last %d",
-                    mach->machno, mach->lastintr);
-            }
-            print("\n");
-        }
+        /*s: [[trap()]] debugging */
+                if(0)print("cpu%d: spurious interrupt %d, last %d\n",
+                    m->machno, vno, m->lastintr);
+                if(0)if(conf.nmach > 1){
+                    for(i = 0; i < 32; i++){
+                        if(!(active.machs & (1<<i)))
+                            continue;
+                        mach = MACHP(i);
+                        if(m->machno == mach->machno)
+                            continue;
+                        print(" cpu%d: last %d",
+                            mach->machno, mach->lastintr);
+                    }
+                    print("\n");
+                }
+        /*e: [[trap()]] debugging */
         m->spuriousintr++;
         if(user)
             kexit(ureg);

@@ -352,7 +352,7 @@ i8253read(uvlong *hz)
 }
 /*e: function i8253read */
 
-/*s: function i8253_delay */
+/*s: function delay */
 void
 i8253_delay(int millisecs)
 {
@@ -369,9 +369,9 @@ i8253_delay(int millisecs)
         millisecs = 1;
     aamloop(millisecs);
 }
-/*e: function i8253_delay */
+/*e: function delay */
 
-/*s: function i8253_microdelay */
+/*s: function microdelay */
 void
 i8253_microdelay(int microsecs)
 {
@@ -386,7 +386,7 @@ i8253_microdelay(int microsecs)
         microsecs = 1;
     aamloop(microsecs);
 }
-/*e: function i8253_microdelay */
+/*e: function microdelay */
 
 /*s: function perfticks */
 /*  
