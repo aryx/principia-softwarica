@@ -2,46 +2,6 @@
 
 \subsection*{[[arch/386/arch.c]]}
 
-<<global arch>>=
-PCArch* arch;
-@ 
-
-
-<<function cycles and default implementation>>=
-static void
-simplecycles(uvlong*x)
-{
-    *x = m->ticks;
-}
-
-void    (*cycles)(uvlong*) = simplecycles;
-@ 
-
-
-<<function cmpswap and default implementation>>=
-/*
- * 386 has no compare-and-swap instruction.
- * Run it with interrupts turned off instead.
- */
-// used to be static, but now shared between arch.c and devarch.c
-int
-cmpswap386(long *addr, long old, long new)
-{
-    int r, s;
-
-    s = splhi();
-    if(r = (*addr == old))
-        *addr = new;
-    splx(s);
-    return r;
-}
-
-int (*cmpswap)(long*, long, long) = cmpswap386;
-@ 
-
-
-
-
 <<arch.c>>=
 <<kernel basic includes>>
 //todo: weird, if don't include this file, then can't declare arch in this file
@@ -99,21 +59,9 @@ cpuidprint(void)
 
 <<function timerset>>
 
+<<function us>>
 
-ulong
-µs(void)
-{
-    return fastticks2us((*arch->fastclock)(nil));
-}
-
-/*
- *  return value and speed of timer set in arch->clockenable
- */
-uvlong
-devarch_fastticks(uvlong *hz)
-{
-    return (*arch->fastclock)(hz);
-}
+<<function fastticks>>
 @
 
 %/*
@@ -128,35 +76,6 @@ devarch_fastticks(uvlong *hz)
 
 
 \subsection*{[[arch/386/dat_arch.h]]}
-
-<<struct PCArch>>=
-struct PCArch
-{
-  char* id;
-
-  int (*ident)(void);   /* this should be in the model */
-  void  (*reset)(void);   /* this should be in the model */
-
-  int (*serialpower)(int);  /* 1 == on, 0 == off */
-  int (*modempower)(int); /* 1 == on, 0 == off */
-
-  // interrupts
-  void  (*intrinit)(void);
-  int (*intrenable)(Vctl*);
-  int (*intrvecno)(int);
-  int (*intrdisable)(int);
-  void  (*introff)(void);
-  void  (*intron)(void);
-
-  // clock, timer
-  void  (*clockenable)(void);
-  uvlong  (*fastclock)(uvlong*);
-  void  (*timerset)(uvlong);
-
-  void  (*resetothers)(void); /* put other cpus into reset */
-};
-@ 
-
 
 <<struct IOMap>>=
 struct IOMap
@@ -21822,14 +21741,6 @@ randomread(void *xp, ulong n)
 
 \subsection*{[[processes/386/archgeneric.c]]}
 
-<<function unimplemented>>=
-static int
-unimplemented(int)
-{
-    return 0;
-}
-@
-
 
 <<function archreset>>=
 static void
@@ -21858,28 +21769,6 @@ archreset(void)
 @
 
 
-<<global archgeneric>>=
-PCArch archgeneric = {
-    .id=        "generic",
-    .ident=     0,
-    .reset=     archreset,
-    .serialpower=   unimplemented,
-    .modempower=    unimplemented,
-    
-    // i8259
-    .intrinit=  i8259init,
-    .intrenable=    i8259enable,
-    .intrvecno= i8259vecno,
-    .intrdisable=   i8259disable,
-    .intron=    i8259on,
-    .introff=   i8259off,
-    
-    // i8253
-    .clockenable=   i8253enable,
-    .fastclock= i8253read,
-    .timerset=  i8253timerset,
-};
-@
 
 
 <<function archrevert>>=
@@ -21915,82 +21804,6 @@ archrevert(void)
 
 
 \subsection*{[[processes/386/dat_processes.h]]}
-
-<<struct Vctl>>=
-struct Vctl {
-
-    bool isintr;     /* interrupt or fault/trap */
-    int irq;
-  
-    void  (*f)(Ureg*, void*); /* handler to call */
-    void* a;      /* argument to call it with */
-  
-    char  name[KNAMELEN];   /* of driver */
-    int tbdf; //?
-  
-    // interrupt service routine
-    int (*isr)(int);    /* get isr bit for this irq */
-    int (*eoi)(int);    /* eoi */
-  
-    // extra
-  
-    // list<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
-    Vctl* next;     /* handlers on this vector */
-};
-@
-
-
-
-<<enum vector>>=
-enum {
-    VectorNMI = 2,    /* non-maskable interrupt */
-    VectorBPT = 3,    /* breakpoint */
-    VectorUD  = 6,    /* invalid opcode exception */
-    VectorCNA = 7,    /* coprocessor not available */
-    Vector2F  = 8,    /* double fault */
-    VectorCSO = 9,    /* coprocessor segment overrun */
-    VectorPF  = 14,   /* page fault */
-    Vector15  = 15,   /* reserved */
-    VectorCERR  = 16,   /* coprocessor error */
-  
-    VectorPIC = 32,   /* external i8259 interrupts */
-    VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
-
-    //!!! int 64 = way to jump in plan9 OS !!!
-    // VectorSYSCALL = 64, in mem.h because used by Assembly too
-  
-    VectorAPIC  = 65,   /* external APIC interrupts */
-    MaxVectorAPIC = 255,
-};
-@
-
-
-<<enum irq>>=
-enum {
-    IrqCLOCK  = 0,
-    IrqKBD    = 1,
-    IrqUART1  = 3,
-    IrqUART0  = 4,
-    IrqPCMCIA = 5,
-    IrqFLOPPY = 6,
-    IrqLPT    = 7,
-    IrqIRQ7   = 7,
-    IrqAUX    = 12,   /* PS/2 port */
-    IrqIRQ13  = 13,   /* coprocessor on 386 */
-    IrqATA0   = 14,
-    IrqATA1   = 15,
-    MaxIrqPIC = 15,
-  
-    IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
-    IrqLINT1  = 17,
-    IrqTIMER  = 18,
-    IrqERROR  = 19,
-    IrqPCINT  = 20,
-    IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
-
-    MaxIrqLAPIC = 31,
-};
-@
 
 
 <<dat_processes.h>>=
@@ -22227,7 +22040,7 @@ i8253read(uvlong *hz)
 }
 @
 
-<<function i8253_delay>>=
+<<function delay>>=
 void
 i8253_delay(int millisecs)
 {
@@ -22247,7 +22060,7 @@ i8253_delay(int millisecs)
 @
 
 
-<<function i8253_microdelay>>=
+<<function microdelay>>=
 void
 i8253_microdelay(int microsecs)
 {
@@ -22381,9 +22194,9 @@ enum
 
 <<function i8253read>>
 
-<<function i8253_delay>>
+<<function delay>>
 
-<<function i8253_microdelay>>
+<<function microdelay>>
 
 <<function perfticks>>
 @
@@ -23511,6 +23324,25 @@ kexit(Ureg*)
 }
 @ 
 
+\ifallcode
+<<[[trap()]] debugging>>=
+        if(0)print("cpu%d: spurious interrupt %d, last %d\n",
+            m->machno, vno, m->lastintr);
+        if(0)if(conf.nmach > 1){
+            for(i = 0; i < 32; i++){
+                if(!(active.machs & (1<<i)))
+                    continue;
+                mach = MACHP(i);
+                if(m->machno == mach->machno)
+                    continue;
+                print(" cpu%d: last %d",
+                    mach->machno, mach->lastintr);
+            }
+            print("\n");
+        }
+@
+\fi
+
 <<function trap>>=
 /*
  *  All traps come here.  It is slower to have all traps call trap()
@@ -23523,7 +23355,8 @@ kexit(Ureg*)
 void
 trap(Ureg* ureg)
 {
-    int clockintr, i, vno, user;
+    bool clockintr;
+    int i, vno, user;
     char buf[ERRMAX];
     Vctl *ctl, *v;
     Mach *mach;
@@ -23542,7 +23375,7 @@ trap(Ureg* ureg)
         cycles(&up->kentry);
     }
 
-    clockintr = 0;
+    clockintr = false;
 
     vno = ureg->trap;
     if(ctl = vctl[vno]){
@@ -23565,7 +23398,7 @@ trap(Ureg* ureg)
             intrtime(m, vno);
 
             if(ctl->irq == IrqCLOCK || ctl->irq == IrqTIMER)
-                clockintr = 1;
+                clockintr = true;
 
             if(up && !clockintr)
                 preempted();
@@ -23604,21 +23437,7 @@ trap(Ureg* ureg)
 
         /* clear the interrupt */
         i8259isr(vno);
-
-        if(0)print("cpu%d: spurious interrupt %d, last %d\n",
-            m->machno, vno, m->lastintr);
-        if(0)if(conf.nmach > 1){
-            for(i = 0; i < 32; i++){
-                if(!(active.machs & (1<<i)))
-                    continue;
-                mach = MACHP(i);
-                if(m->machno == mach->machno)
-                    continue;
-                print(" cpu%d: last %d",
-                    mach->machno, mach->lastintr);
-            }
-            print("\n");
-        }
+        <<[[trap()]] debugging>>
         m->spuriousintr++;
         if(user)
             kexit(ureg);
@@ -24599,41 +24418,6 @@ done:
 
 
 
-<<clock callback hzclock>>=
-void
-hzclock(Ureg *ur)
-{
-    m->ticks++;
-    if(m->proc)
-        m->proc->pc = ur->pc;
-
-    if(m->flushmmu){
-        if(up)
-            flushmmu();
-        m->flushmmu = 0;
-    }
-
-    accounttime();
-    kmapinval();
-
-    if(kproftimer != nil)
-        kproftimer(ur->pc);
-
-    if((active.machs&(1<<m->machno)) == 0)
-        return;
-
-    if(active.exiting) {
-        print("someone's exiting\n");
-        exit(0);
-    }
-
-    checkalarms();
-
-    if(up && up->state == Running)
-        hzsched();  /* in proc.c */
-}
-@ 
-
 
 
 
@@ -25075,14 +24859,8 @@ enum {
 
 \subsection*{[[processes/portdat_processes.c]]}
 
-
-
 <<hook proctrace>>=
 void (*proctrace)(Proc*, int, vlong) = 0; // was in devproc.c
-@ 
-
-<<hook kproftimer>>=
-void (*kproftimer)(ulong);
 @ 
 
 
