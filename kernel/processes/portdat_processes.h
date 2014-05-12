@@ -342,6 +342,7 @@ enum proctime
     TUser = 0,    /* Proc.time */
     TSys,
     TReal,
+
     TCUser,
     TCSys,
     TCReal,
@@ -430,6 +431,8 @@ struct Proc
     Segment *seg[NSEG];
     QLock seglock;  /* locked whenever seg[] changes */
     /*e: [[Proc]] memory fields */
+
+    struct ArchProcMMU;
 //--------------------------------------------------------------------
 // Scheduling
 //--------------------------------------------------------------------
@@ -617,13 +620,6 @@ struct Proc
     // enum<fpsavestatus>
     int fpstate;
 
-    ArchProcNotsave;
-
-    /*
-     *  machine specific MMU
-     */
-    ArchProcMMU;
-
     char  *syscalltrace;  /* syscall trace */
     /*x: [[Proc]] other fields */
     // As long as the current process hold locks (to kernel data structures),
@@ -631,6 +627,8 @@ struct Proc
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
     /*e: [[Proc]] other fields */
+
+    struct ArchProcNotsave;
 //--------------------------------------------------------------------
 // Extra
 //--------------------------------------------------------------------

@@ -212,23 +212,6 @@ Rendez  sleep;    /* place for syssleep/debug */
 
 
 
-<<[[Proc]] stats and profiling fields>>=
-// hash<enum<proctime>, ulong>
-ulong time[6];  /* User, Sys, Real; child U, S, R */
-
-uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
-/*
- * pcycles: cycles spent in this process (updated on procsave/restore)
- * when this is the current proc and we're in the kernel
- * (procrestores outnumber procsaves by one)
- * the number of cycles spent in the proc is pcycles + cycles()
- * when this is not the current process or we're in user mode
- * (procrestores and procsaves balance), it is pcycles.
- */
-vlong pcycles;
-@ 
-
-
 <<[[Proc]] debugger fields>>=
 void  *dbgreg;  /* User registers for devproc */
 ulong pc;   /* DEBUG only */
@@ -282,13 +265,6 @@ int setargs;
 
 // enum<fpsavestatus>
 int fpstate;
-
-ArchProcNotsave;
-
-/*
- *  machine specific MMU
- */
-ArchProcMMU;
 
 char  *syscalltrace;  /* syscall trace */
 @ 
@@ -720,6 +696,7 @@ for himself
 #include "fns.h"
 @ 
 
+% u.h for uchar, uint, ... can be seen also as universal :)
 
 <<dat.h>>=
 #include "dat_forward.h"
@@ -1057,6 +1034,8 @@ struct Proc
 // Memory
 //--------------------------------------------------------------------
     <<[[Proc]] memory fields>>
+
+    struct ArchProcMMU;
 //--------------------------------------------------------------------
 // Scheduling
 //--------------------------------------------------------------------
@@ -1097,6 +1076,8 @@ struct Proc
 // Other
 //--------------------------------------------------------------------
     <<[[Proc]] other fields>>
+
+    struct ArchProcNotsave;
 //--------------------------------------------------------------------
 // Extra
 //--------------------------------------------------------------------
@@ -1200,6 +1181,11 @@ enum qidtype {
 
 \section{[[Dev]] and [[devtab]]}
 
+% actually Device that also play the role of filesystem/fileserver!
+
+% concrete device like kbd, screen, are exported via this
+%  read from /dev/cons, write to /dev/cons, and then
+%  fancy graphics are write to /dev/vga!
 
 <<struct Dev>>=
 struct Dev
@@ -8053,6 +8039,26 @@ sysexec(ulong *arg)
 }
 @ 
 
+<<function execregs>>=
+long
+execregs(ulong entry, ulong ssize, ulong nargs)
+{
+    ulong *sp;
+    Ureg *ureg;
+
+    up->fpstate = FPinit;
+    fpoff();
+
+    sp = (ulong*)(USTKTOP - ssize);
+    *--sp = nargs;
+
+    ureg = up->dbgreg;
+    ureg->usp = (ulong)sp;
+    ureg->pc = entry;
+    return USTKTOP-sizeof(Tos);     /* address of kernel/user shared data */
+}
+@ 
+
 
 \section{[[sysexits()]]}
 
@@ -8232,56 +8238,6 @@ proc_pexit(char *exitstr, int freemem)
     panic("pexit");
 }
 @ 
-
-\section{Environment}
-%really an IPC?
-
-<<struct Evalue>>=
-struct Evalue
-{
-  char  *name;
-  char  *value;
-  int len;
-  Evalue  *link;
-  Qid qid;
-};
-@
-
-
-<<struct Egrp>>=
-struct Egrp
-{
-  Ref;
-  RWlock;
-  Evalue  **ent;
-  int nent;
-  int ment;
-  ulong path; /* qid.path of next Evalue to be allocated */
-  ulong vers; /* of Egrp */
-};
-@
-
-<<function closeegrp>>=
-void
-closeegrp(Egrp *eg)
-{
-    int i;
-    Evalue *e;
-
-    if(decref(eg) == 0){
-        for(i=0; i<eg->nent; i++){
-            e = eg->ent[i];
-            free(e->name);
-            if(e->value)
-                free(e->value);
-            free(e);
-        }
-        free(eg->ent);
-        free(eg);
-    }
-}
-@
-
 
 \chapter{Initialization}
 \minitoc
@@ -14929,6 +14885,412 @@ cunmount(Chan *mnt, Chan *mounted)
 \chapter{Devices}
 \minitoc
 
+% reorganize, have a Root device, then Keyboad, Screen, Console ?
+% and mv devproc, devenv, elsewhere
+
+\section{Helpers}
+
+<<function devdir>>=
+void
+devdir(Chan *c, Qid qid, char *n, vlong length, char *user, long perm, Dir *db)
+{
+    db->name = n;
+    if(c->flag&CMSG)
+        qid.type |= QTMOUNT;
+    db->qid = qid;
+    db->type = devtab[c->type]->dc;
+    db->dev = c->dev;
+    db->mode = perm;
+    db->mode |= qid.type << 24;
+    db->atime = seconds();
+    db->mtime = kerndate;
+    db->length = length;
+    db->uid = user;
+    db->gid = eve;
+    db->muid = user;
+}
+@
+
+<<function devgen>>=
+/*
+ * (here, Devgen is the prototype; devgen is the function in dev.c.)
+ * 
+ * a Devgen is expected to return the directory entry for ".."
+ * if you pass it s==DEVDOTDOT (-1).  otherwise...
+ * 
+ * there are two contradictory rules.
+ * 
+ * (i) if c is a directory, a Devgen is expected to list its children
+ * as you iterate s.
+ * 
+ * (ii) whether or not c is a directory, a Devgen is expected to list
+ * its siblings as you iterate s.
+ * 
+ * devgen always returns the list of children in the root
+ * directory.  thus it follows (i) when c is the root and (ii) otherwise.
+ * many other Devgens follow (i) when c is a directory and (ii) otherwise.
+ * 
+ * devwalk assumes (i).  it knows that devgen breaks (i)
+ * for children that are themselves directories, and explicitly catches them.
+ * 
+ * devstat assumes (ii).  if the Devgen in question follows (i)
+ * for this particular c, devstat will not find the necessary info.
+ * with our particular Devgen functions, this happens only for
+ * directories, so devstat makes something up, assuming
+ * c->name, c->qid, eve, DMDIR|0555.
+ * 
+ * devdirread assumes (i).  the callers have to make sure
+ * that the Devgen satisfies (i) for the chan being read.
+ */
+/*
+ * the zeroth element of the table MUST be the directory itself for ..
+*/
+int
+devgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, Dir *dp)
+{
+    if(tab == 0)
+        return -1;
+    if(i == DEVDOTDOT){
+        /* nothing */
+    }else if(name){
+        for(i=1; i<ntab; i++)
+            if(strcmp(tab[i].name, name) == 0)
+                break;
+        if(i==ntab)
+            return -1;
+        tab += i;
+    }else{
+        /* skip over the first element, that for . itself */
+        i++;
+        if(i >= ntab)
+            return -1;
+        tab += i;
+    }
+    devdir(c, tab->qid, tab->name, tab->length, eve, tab->perm, dp);
+    return 1;
+}
+@
+
+
+<<function devattach>>=
+Chan*
+devattach(int tc, char *spec)
+{
+    int n;
+    Chan *c;
+    char *buf;
+
+    c = newchan();
+    mkqid(&c->qid, 0, 0, QTDIR);
+    c->type = devno(tc, 0);
+    if(spec == nil)
+        spec = "";
+    n = 1+UTFmax+strlen(spec)+1;
+    buf = smalloc(n);
+    snprint(buf, n, "#%C%s", tc, spec);
+    c->path = newpath(buf);
+    free(buf);
+    return c;
+}
+@
+
+
+<<function devclone>>=
+Chan*
+devclone(Chan *c)
+{
+    Chan *nc;
+
+    if(c->flag & COPEN)
+        panic("clone of open file type %C\n", devtab[c->type]->dc);
+
+    nc = newchan();
+
+    nc->type = c->type;
+    nc->dev = c->dev;
+    nc->mode = c->mode;
+    nc->qid = c->qid;
+    nc->offset = c->offset;
+    nc->umh = nil;
+    nc->aux = c->aux;
+    nc->mqid = c->mqid;
+    nc->mcp = c->mcp;
+    return nc;
+}
+@
+
+
+<<function devwalk>>=
+Walkqid*
+devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen *gen)
+{
+    int i, j, alloc;
+    Walkqid *wq;
+    char *n;
+    Dir dir;
+
+    if(nname > 0)
+        isdir(c);
+
+    alloc = 0;
+    wq = smalloc(sizeof(Walkqid)+(nname-1)*sizeof(Qid));
+    if(waserror()){
+        if(alloc && wq->clone!=nil)
+            cclose(wq->clone);
+        free(wq);
+        return nil;
+    }
+    if(nc == nil){
+        nc = devclone(c);
+        nc->type = 0;   /* device doesn't know about this channel yet */
+        alloc = 1;
+    }
+    wq->clone = nc;
+
+    for(j=0; j<nname; j++){
+        if(!(nc->qid.type&QTDIR)){
+            if(j==0)
+                error(Enotdir);
+            goto Done;
+        }
+        n = name[j];
+        if(strcmp(n, ".") == 0){
+    Accept:
+            wq->qid[wq->nqid++] = nc->qid;
+            continue;
+        }
+        if(strcmp(n, "..") == 0){
+            if((*gen)(nc, nil, tab, ntab, DEVDOTDOT, &dir) != 1){
+                print("devgen walk .. in dev%s %llux broken\n",
+                    devtab[nc->type]->name, nc->qid.path);
+                error("broken devgen");
+            }
+            nc->qid = dir.qid;
+            goto Accept;
+        }
+        /*
+         * Ugly problem: If we're using devgen, make sure we're
+         * walking the directory itself, represented by the first
+         * entry in the table, and not trying to step into a sub-
+         * directory of the table, e.g. /net/net. Devgen itself
+         * should take care of the problem, but it doesn't have
+         * the necessary information (that we're doing a walk).
+         */
+        if(gen==devgen && nc->qid.path!=tab[0].qid.path)
+            goto Notfound;
+        for(i=0;; i++) {
+            switch((*gen)(nc, n, tab, ntab, i, &dir)){
+            case -1:
+            Notfound:
+                if(j == 0)
+                    error(Enonexist);
+                kstrcpy(up->errstr, Enonexist, ERRMAX);
+                goto Done;
+            case 0:
+                continue;
+            case 1:
+                if(strcmp(n, dir.name) == 0){
+                    nc->qid = dir.qid;
+                    goto Accept;
+                }
+                continue;
+            }
+        }
+    }
+    /*
+     * We processed at least one name, so will return some data.
+     * If we didn't process all nname entries succesfully, we drop
+     * the cloned channel and return just the Qids of the walks.
+     */
+Done:
+    poperror();
+    if(wq->nqid < nname){
+        if(alloc)
+            cclose(wq->clone);
+        wq->clone = nil;
+    }else if(wq->clone){
+        /* attach cloned channel to same device */
+        wq->clone->type = c->type;
+    }
+    return wq;
+}
+@
+
+
+<<function devstat>>=
+int
+devstat(Chan *c, uchar *db, int n, Dirtab *tab, int ntab, Devgen *gen)
+{
+    int i;
+    Dir dir;
+    char *p, *elem;
+
+    for(i=0;; i++){
+        switch((*gen)(c, nil, tab, ntab, i, &dir)){
+        case -1:
+            if(c->qid.type & QTDIR){
+                if(c->path == nil)
+                    elem = "???";
+                else if(strcmp(c->path->s, "/") == 0)
+                    elem = "/";
+                else
+                    for(elem=p=c->path->s; *p; p++)
+                        if(*p == '/')
+                            elem = p+1;
+                devdir(c, c->qid, elem, 0, eve, DMDIR|0555, &dir);
+                n = convD2M(&dir, db, n);
+                if(n == 0)
+                    error(Ebadarg);
+                return n;
+            }
+
+            error(Enonexist);
+        case 0:
+            break;
+        case 1:
+            if(c->qid.path == dir.qid.path) {
+                if(c->flag&CMSG)
+                    dir.mode |= DMMOUNT;
+                n = convD2M(&dir, db, n);
+                if(n == 0)
+                    error(Ebadarg);
+                return n;
+            }
+            break;
+        }
+    }
+}
+@
+
+
+<<function devdirread>>=
+long
+devdirread(Chan *c, char *d, long n, Dirtab *tab, int ntab, Devgen *gen)
+{
+    long m, dsz;
+    Dir dir;
+
+    for(m=0; m<n; c->dri++) {
+        switch((*gen)(c, nil, tab, ntab, c->dri, &dir)){
+        case -1:
+            return m;
+
+        case 0:
+            break;
+
+        case 1:
+            dsz = convD2M(&dir, (uchar*)d, n-m);
+            if(dsz <= BIT16SZ){ /* <= not < because this isn't stat; read is stuck */
+                if(m == 0)
+                    error(Eshort);
+                return m;
+            }
+            m += dsz;
+            d += dsz;
+            break;
+        }
+    }
+
+    return m;
+}
+@
+
+<<function devpermcheck>>=
+/*
+ * error(Eperm) if open permission not granted for up->user.
+ */
+void
+devpermcheck(char *fileuid, ulong perm, int omode)
+{
+    ulong t;
+    static int access[] = { 0400, 0200, 0600, 0100 };
+
+    if(strcmp(up->user, fileuid) == 0)
+        perm <<= 0;
+    else
+    if(strcmp(up->user, eve) == 0)
+        perm <<= 3;
+    else
+        perm <<= 6;
+
+    t = access[omode&3];
+    if((t&perm) != t)
+        error(Eperm);
+}
+@
+
+<<function devopen>>=
+Chan*
+devopen(Chan *c, int omode, Dirtab *tab, int ntab, Devgen *gen)
+{
+    int i;
+    Dir dir;
+
+    for(i=0;; i++) {
+        switch((*gen)(c, nil, tab, ntab, i, &dir)){
+        case -1:
+            goto Return;
+        case 0:
+            break;
+        case 1:
+            if(c->qid.path == dir.qid.path) {
+                devpermcheck(dir.uid, dir.mode, omode);
+                goto Return;
+            }
+            break;
+        }
+    }
+Return:
+    c->offset = 0;
+    if((c->qid.type&QTDIR) && omode!=OREAD)
+        error(Eperm);
+    c->mode = openmode(omode);
+    c->flag |= COPEN;
+    return c;
+}
+@
+
+
+<<function devbread>>=
+Block*
+devbread(Chan *c, long n, ulong offset)
+{
+    Block *bp;
+
+    bp = allocb(n);
+    if(bp == 0)
+        error(Enomem);
+    if(waserror()) {
+        freeb(bp);
+        nexterror();
+    }
+    bp->wp += devtab[c->type]->read(c, bp->wp, n, offset);
+    poperror();
+    return bp;
+}
+@
+
+
+<<function devbrwrite>>=
+long
+devbwrite(Chan *c, Block *bp, ulong offset)
+{
+    long n;
+
+    if(waserror()) {
+        freeb(bp);
+        nexterror();
+    }
+    n = devtab[c->type]->write(c, bp->rp, BLEN(bp), offset);
+    poperror();
+    freeb(bp);
+
+    return n;
+}
+@
+
+
+
 \section{The Console device}
 
 \subsection{Overview}
@@ -16203,10 +16565,6 @@ print("[%d] kaddr %.8ulx base %.8ulx offset %ld (%.8ulx), n %d %.8ulx %.8ulx %.8
 }
 @
 
-\subsection{[[devenv.c]]}
-
-%#e
-
 \subsection{[[devproc.c]]}
 
 %#p
@@ -16963,19 +17321,12 @@ i8042auxenable(void (*putc)(int, int))
 \section{Special devices}
 %optional, advanced concepts
 
-% see also devpipe.c and devdup.c
+% see also devpipe.c and devdup.c, devmnt.c, devsrv.c
 
 \subsection{[[devpipe.c]]}
 % see section in IPC also?
 % have pipe syscall and device, so both useful? named pipe
 % can be done only via devpipe.c
-
-\subsection{[[devmnt.c]]}
-
-\subsection{[[devsrv.c]]}
-
-
-
 
 \chapter{Time}
 \minitoc
@@ -16985,8 +17336,9 @@ i8042auxenable(void (*putc)(int, int))
     [ALARM]     sysalarm,
 @
 
-\section*{YTODO}
+\section{Overview}
 
+% different capabilities? timer, clock, rtc, ??
 
 <<[[PCArch]] time methods fields>>=
 void  (*clockenable)(void);
@@ -17000,50 +17352,12 @@ void  (*timerset)(uvlong);
 .timerset=  i8253timerset,
 @
 
-
 <<global fasthz>>=
 vlong   fasthz;
 @ 
 
-<<function us>>=
-ulong
-µs(void)
-{
-    return fastticks2us((*arch->fastclock)(nil));
-}
-@
 
-
-<<function fastticks>>=
-/*
- *  return value and speed of timer set in arch->clockenable
- */
-uvlong
-devarch_fastticks(uvlong *hz)
-{
-    return (*arch->fastclock)(hz);
-}
-@
-
-
-<<function cycles and default implementation>>=
-static void
-simplecycles(uvlong*x)
-{
-    *x = m->ticks;
-}
-
-void    (*cycles)(uvlong*) = simplecycles;
-@ 
-
-
-\section{Timers}
-
-% capacity of machine is very low, just timer next point
-%  but have many processes, many timer needs, so need map
-%  all of that on very limited hardware power
-
-\subsection{Time units}
+\section{Time units}
 
 <<type Tval>>=
 typedef vlong   Tval; // ticks
@@ -17084,6 +17398,47 @@ ms2tk(ulong ms)
     return (ms*HZ+500)/1000;
 }
 @ 
+
+
+<<function us>>=
+ulong
+µs(void)
+{
+    return fastticks2us((*arch->fastclock)(nil));
+}
+@
+
+
+<<function fastticks>>=
+/*
+ *  return value and speed of timer set in arch->clockenable
+ */
+uvlong
+devarch_fastticks(uvlong *hz)
+{
+    return (*arch->fastclock)(hz);
+}
+@
+
+
+<<function cycles and default implementation>>=
+static void
+simplecycles(uvlong*x)
+{
+    *x = m->ticks;
+}
+
+void    (*cycles)(uvlong*) = simplecycles;
+@ 
+
+
+\section{Timers}
+
+% capacity of machine is very low, just timer next point
+%  but have many processes, many timer needs, so need map
+%  all of that on very limited hardware power
+
+
 
 \subsection{[[timerset()]]}
 
@@ -17627,6 +17982,7 @@ checkalarms(void)
 }
 @ 
 
+\section{Real time clock}
 
 
 \section{Time of day}
@@ -17787,8 +18143,6 @@ writebintime(char *buf, int n)
     return n;
 }
 @
-
-\section{Real time clock}
 
 \section{[[devrtc.c]]}
 
@@ -18623,6 +18977,9 @@ syssemrelease(ulong *arg)
 
 \chapter{Fileservers}
 \minitoc
+% put after Devices? after all Device and file servers
+% are similar, they also implement the Dev interface
+% it's just that they provide a Dev on top of another Dev
 
 \section{[[MntRpc]]}
 
@@ -18645,6 +19002,11 @@ struct Mntrpc
   Mntrpc* flushed;  /* message this one flushes */
 };
 @
+
+
+\section{[[devmnt.c]]}
+
+\section{[[devsrv.c]]}
 
 
 \section{[[devfs.c]]}
@@ -18816,6 +19178,199 @@ connectlocal(void)
 
 \chapter{Misc}
 
+\section{Environment}
+%kind of an IPC?
+
+<<struct Evalue>>=
+struct Evalue
+{
+  char  *name;
+  char  *value;
+  int len;
+  Evalue  *link;
+  Qid qid;
+};
+@
+
+
+<<struct Egrp>>=
+struct Egrp
+{
+  Ref;
+  RWlock;
+  Evalue  **ent;
+  int nent;
+  int ment;
+  ulong path; /* qid.path of next Evalue to be allocated */
+  ulong vers; /* of Egrp */
+};
+@
+
+<<function closeegrp>>=
+void
+closeegrp(Egrp *eg)
+{
+    int i;
+    Evalue *e;
+
+    if(decref(eg) == 0){
+        for(i=0; i<eg->nent; i++){
+            e = eg->ent[i];
+            free(e->name);
+            if(e->value)
+                free(e->value);
+            free(e);
+        }
+        free(eg->ent);
+        free(eg);
+    }
+}
+@
+
+\subsection{[[devenv.c]]}
+
+%#e
+
+\section{[[Cmdtab]]}
+
+<<struct Cmdtab>>=
+struct Cmdtab
+{
+  int index;  /* used by client to switch on result */
+  char  *cmd; /* command name */
+  int narg; /* expected #args; 0 ==> variadic */
+};
+@
+
+<<struct Cmdbuf>>=
+struct Cmdbuf
+{
+  char  *buf;
+  char  **f;
+  int nf;
+};
+@
+
+<<function parsecmd>>=
+/*
+ *  parse a command written to a device
+ */
+Cmdbuf*
+parsecmd(char *p, int n)
+{
+    Cmdbuf *volatile cb;
+    int nf;
+    char *sp;
+
+    nf = ncmdfield(p, n);
+
+    /* allocate Cmdbuf plus string pointers plus copy of string including \0 */
+    sp = smalloc(sizeof(*cb) + nf * sizeof(char*) + n + 1);
+    cb = (Cmdbuf*)sp;
+    cb->f = (char**)(&cb[1]);
+    cb->buf = (char*)(&cb->f[nf]);
+
+    if(up!=nil && waserror()){
+        free(cb);
+        nexterror();
+    }
+    memmove(cb->buf, p, n);
+    if(up != nil)
+        poperror();
+
+    /* dump new line and null terminate */
+    if(n > 0 && cb->buf[n-1] == '\n')
+        n--;
+    cb->buf[n] = '\0';
+
+    cb->nf = tokenize(cb->buf, cb->f, nf-1);
+    cb->f[cb->nf] = nil;
+
+    return cb;
+}
+@
+
+
+<<function cmderror>>=
+/*
+ * Reconstruct original message, for error diagnostic
+ */
+void
+cmderror(Cmdbuf *cb, char *s)
+{
+    int i;
+    char *p, *e;
+
+    p = up->genbuf;
+    e = p+ERRMAX-10;
+    p = seprint(p, e, "%s \"", s);
+    for(i=0; i<cb->nf; i++){
+        if(i > 0)
+            p = seprint(p, e, " ");
+        p = seprint(p, e, "%q", cb->f[i]);
+    }
+    strcpy(p, "\"");
+    error(up->genbuf);
+}
+@
+
+
+<<function lookupcmd>>=
+/*
+ * Look up entry in table
+ */
+Cmdtab*
+lookupcmd(Cmdbuf *cb, Cmdtab *ctab, int nctab)
+{
+    int i;
+    Cmdtab *ct;
+
+    if(cb->nf == 0)
+        error("empty control message");
+
+    for(ct = ctab, i=0; i<nctab; i++, ct++){
+        if(strcmp(ct->cmd, "*") !=0)    /* wildcard always matches */
+        if(strcmp(ct->cmd, cb->f[0]) != 0)
+            continue;
+        if(ct->narg != 0 && ct->narg != cb->nf)
+            cmderror(cb, Ecmdargs);
+        return ct;
+    }
+
+    cmderror(cb, "unknown control message");
+    return nil;
+}
+@
+
+<<ncmdfield>>=
+/*
+ * Generous estimate of number of fields, including terminal nil pointer
+ */
+static int
+ncmdfield(char *p, int n)
+{
+    int white, nwhite;
+    char *ep;
+    int nf;
+
+    if(p == nil)
+        return 1;
+
+    nf = 0;
+    ep = p+n;
+    white = 1;  /* first text will start field */
+    while(p < ep){
+        nwhite = (strchr(" \t\r\n", *p++ & 0xFF) != 0); /* UTF is irrelevant */
+        if(white && !nwhite)    /* beginning of field */
+            nf++;
+        white = nwhite;
+    }
+    return nf+1;    /* +1 for nil */
+}
+@
+
+
+
 \section{Dup}
 
 <<systab special file syscalls>>=
@@ -18867,7 +19422,6 @@ sysdup(ulong *arg)
 @
 
 \subsection{[[devdup.c]]}
-
 
 
 \section{SMP}
@@ -19189,6 +19743,8 @@ nrand(int n)
 %//}
 
 \subsection{[[/dev/random]]}
+
+
 
 
 \section{Serial line}
@@ -19830,6 +20386,38 @@ int intr;
 void (*kproftimer)(ulong);
 @ 
 
+\section{[[time]]}
+
+<<enum proctimer>>=
+enum proctime 
+{
+    TUser = 0,    /* Proc.time */
+    TSys,
+    TReal,
+
+    TCUser,
+    TCSys,
+    TCReal,
+};
+@ 
+
+<<[[Proc]] stats and profiling fields>>=
+// hash<enum<proctime>, ulong>
+ulong time[6];  /* User, Sys, Real; child U, S, R */
+
+uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
+/*
+ * pcycles: cycles spent in this process (updated on procsave/restore)
+ * when this is the current proc and we're in the kernel
+ * (procrestores outnumber procsaves by one)
+ * the number of cycles spent in the proc is pcycles + cycles()
+ * when this is not the current process or we're in user mode
+ * (procrestores and procsaves balance), it is pcycles.
+ */
+vlong pcycles;
+@ 
+
+
 \chapter{Error Managment}
 
 \section{[[panic()]]}
@@ -20117,6 +20705,9 @@ extern  int fullrune(char*, int);
 %//unused: extern  char* strcat(char*, char*);
 %//unused: extern  char* strncat(char*, char*, long);
 
+
+%todo: put the isdot, isfrog here?
+
 \section{Conversion allocation}
 
 <<lib.h strto functions decl>>=
@@ -20194,9 +20785,19 @@ extern  int utfnlen(char*, long);
 %//unused: extern  int utflen(char*);
 %//unused: extern  int runelen(long);
 
+
+
+
+
+
+
+
+
 \chapter{Extra Code}
 
+\ifallcode
 #include "Kernel_extra.tex.nw"
+\fi
 
 \chapter{Changelog}
 \label{sec:changelog}
@@ -20274,7 +20875,6 @@ QID = unique identifier
 \bibitem[3]{syncweb} Yoann Padioleau,
 {\em Syncweb, literate programming meets unison}, 
 \url{http://padator.org/software/project-syncweb/readme.txt}
-
 
 % TECS, STEPS, MINIX, etc
 
