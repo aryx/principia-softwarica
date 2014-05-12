@@ -681,7 +681,7 @@ unexpected(Ureg* ureg, void*)
 /*e: function unexpected */
 
 extern void checkpages(void);
-extern void checkfault(ulong, ulong);
+//extern void checkfault(ulong, ulong);
 
 /*s: function fault386 */
 static void
@@ -715,7 +715,7 @@ fault386(Ureg* ureg, void*)
             panic("fault: 0x%lux", addr);
         }
         checkpages();
-        checkfault(addr, ureg->pc);
+        //checkfault(addr, ureg->pc);
         snprint(buf, sizeof buf, "sys: trap: fault %s addr=0x%lux",
             read ? "read" : "write", addr);
         postnote(up, 1, buf, NDebug);

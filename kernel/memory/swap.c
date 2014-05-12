@@ -17,13 +17,17 @@ static void pagepte(int, Page**);
 static void pager(void*);
 /*e: swap.c forward decl */
 
-//static    int swopen;
+/*s: global iolist */
 static  Page    **iolist;
+/*e: global iolist */
+/*s: globa ioptr */
 static  int ioptr;
+/*e: globa ioptr */
 
 static  ulong   genage, genclock, gencount;
 static  uvlong  gensum;
 
+/*s: function gentick */
 static void
 gentick(void)
 {
@@ -34,6 +38,7 @@ gentick(void)
         genage = 0;
     gensum = gencount = 0;
 }
+/*e: function gentick */
 
 /*s: function swapinit */
 void

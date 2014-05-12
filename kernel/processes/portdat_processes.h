@@ -254,7 +254,6 @@ struct Timers
 enum {
     Npriq   = 20,   /* number of scheduler priority levels */
     Nrq   = Npriq+2,  /* number of priority levels including real time */
-    //NFD =   100,    /* per process file descriptors */
 };
 
 /*s: enum priority */
@@ -404,11 +403,6 @@ struct Proc
 // State
 //--------------------------------------------------------------------
     /*s: [[Proc]] state fields */
-    ulong pid;
-
-    // enum<procstate>
-    int state; // Dead, Queuing, etc,
-    /*x: [[Proc]] state fields */
     bool insyscall;
     char  *psstate; /* What /proc/#/status reports */
 
@@ -422,6 +416,11 @@ struct Proc
     int nargs;    /* number of bytes of args */
 
     bool kp;   /* true if a kernel process */
+    /*x: [[Proc]] state fields */
+    ulong pid;
+
+    // enum<procstate>
+    int state; // Dead, Queuing, etc,
     /*e: [[Proc]] state fields */
 //--------------------------------------------------------------------
 // Memory
@@ -458,9 +457,6 @@ struct Proc
 // Files
 //--------------------------------------------------------------------
     /*s: [[Proc]] files fields */
-    // ref_counted<fgrp>
-    Fgrp  *fgrp;    /* File descriptor group */
-    /*x: [[Proc]] files fields */
     // ref_counted<pgrp>
     Pgrp  *pgrp;    /* Process group for namespace */
     // ref_counted<egrp>
@@ -470,6 +466,9 @@ struct Proc
     Chan  *slash; // The root!
     // ref_counted<Chan>
     Chan  *dot; // The current directory
+    /*x: [[Proc]] files fields */
+    // ref_counted<fgrp>
+    Fgrp  *fgrp;    /* File descriptor group */
     /*e: [[Proc]] files fields */
 //--------------------------------------------------------------------
 // Notes
@@ -582,11 +581,6 @@ struct Proc
 // Other
 //--------------------------------------------------------------------
     /*s: [[Proc]] other fields */
-    // As long as the current process hold locks (to kernel data structures),
-    // we will not schedule another process in unlock(); only the last unlock
-    // will eventually cause a rescheduling.
-    Ref nlocks;   /* number of locks held by proc */
-    /*x: [[Proc]] other fields */
     Fgrp  *closingfgrp; /* used during teardown */
 
 
@@ -631,17 +625,16 @@ struct Proc
     ArchProcMMU;
 
     char  *syscalltrace;  /* syscall trace */
+    /*x: [[Proc]] other fields */
+    // As long as the current process hold locks (to kernel data structures),
+    // we will not schedule another process in unlock(); only the last unlock
+    // will eventually cause a rescheduling.
+    Ref nlocks;   /* number of locks held by proc */
     /*e: [[Proc]] other fields */
 //--------------------------------------------------------------------
 // Extra
 //--------------------------------------------------------------------
     /*s: [[Proc]] extra fields */
-    // list<ref<Proc>> KQlock.head or RWLock.head
-    Proc  *qnext;   /* next process on queue for a QLock */
-    /*x: [[Proc]] extra fields */
-    // Alarms.head chain?
-    Proc  *palarm;  /* Next alarm time */
-    /*x: [[Proc]] extra fields */
 
     // list<ref<Proc>> ?? Schedq.head chain?
     Proc  *rnext;   /* next process in run queue */
@@ -653,6 +646,12 @@ struct Proc
 
     // option<ref<Mach>>, null when not associated to a machine?
     Mach  *mach;    /* machine running this proc */
+    /*x: [[Proc]] extra fields */
+    // list<ref<Proc>> KQlock.head or RWLock.head
+    Proc  *qnext;   /* next process on queue for a QLock */
+    /*x: [[Proc]] extra fields */
+    // Alarms.head chain?
+    Proc  *palarm;  /* Next alarm time */
     /*e: [[Proc]] extra fields */
 };
 /*e: struct Proc */

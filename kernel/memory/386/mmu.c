@@ -1120,13 +1120,6 @@ countpagerefs(ulong *ref, int print)
 }
 /*e: function countpagerefs */
 
-/*s: function checkfault */
-void
-checkfault(ulong, ulong)
-{
-}
-/*e: function checkfault */
-
 /*s: function cankaddr */
 /*
  * Return the number of bytes that can be accessed via KADDR(pa).

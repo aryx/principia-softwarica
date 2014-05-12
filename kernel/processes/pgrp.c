@@ -15,10 +15,10 @@ enum {
 };
 
 /*s: global pgrpid */
-static Ref pgrpid;
+static Counter pgrpid;
 /*e: global pgrpid */
 /*s: global mountid */
-static Ref mountid;
+static Counter mountid;
 /*e: global mountid */
 
 /*s: function pgrpnote */
