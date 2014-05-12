@@ -66,6 +66,6 @@ bool iseve(void) {
 
 // was in console/devcons.c, but used also by edf.c
 /*s: global panicking */
-int panicking;
+bool panicking;
 /*e: global panicking */
 /*e: portdat.c */

@@ -926,7 +926,7 @@ main(void)
     trapinit0();
     mmuinit0();
 
-    kbdinit();
+    kbdinit(); //kbd enable below
     i8253init();
 
     cpuidentify();
@@ -949,6 +949,8 @@ main(void)
     fpsavealloc();
     if(arch->intrinit)      /* launches other processors on an mp */
             arch->intrinit();
+
+
 
     timersinit();
     mathinit();

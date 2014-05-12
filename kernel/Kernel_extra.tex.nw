@@ -1372,9 +1372,6 @@ extern char Echange[];    /* media or partition has changed */
 
 \subsection*{[[core/portdat.c]]}
 
-<<global panicking>>=
-int panicking;
-@
 
 <<portdat.c>>=
 <<kernel basic includes>>
@@ -7849,32 +7846,6 @@ enum _bool {
 @ 
 \fi
 
-<<lib.h mem functions decl>>=
-extern  void* memccpy(void*, void*, int, ulong);
-extern  void* memset(void*, int, ulong);
-extern  int memcmp(void*, void*, ulong);
-extern  void* memmove(void*, void*, ulong);
-extern  void* memchr(void*, int, ulong);
-@ 
-%todo: memrchr
-
-<<lib.h string functions decl>>=
-extern  char* strchr(char*, int);
-extern  char* strrchr(char*, int);
-extern  int strcmp(char*, char*);
-extern  char* strcpy(char*, char*);
-extern  char* strecpy(char*, char*, char*);
-extern  char* strncpy(char*, char*, long);
-extern  int strncmp(char*, char*, long);
-extern  long  strlen(char*);
-extern  char* strstr(char*, char*);
-extern  int atoi(char*);
-extern  int fullrune(char*, int);
-@ 
-%//unused: extern  char* strcat(char*, char*);
-%//unused: extern  char* strncat(char*, char*, long);
-
-
 <<lib.h exxx decl>>=
 extern  char  etext[];
 //@Scheck: Assembly, not dead used by 386/l.s
@@ -7995,13 +7966,6 @@ enum miscsize {
 @ 
 \fi
 
-<<lib.h strto functions decl>>=
-extern  long  strtol(char*, char**, int);
-extern  ulong strtoul(char*, char**, int);
-extern  vlong strtoll(char*, char**, int);
-extern  uvlong  strtoull(char*, char**, int);
-@ 
-
 
 <<function nelem>>=
 #define nelem(x)  (sizeof(x)/sizeof((x)[0]))
@@ -8012,19 +7976,11 @@ extern  uvlong  strtoull(char*, char**, int);
 #define offsetof(s, m)  (ulong)(&(((s*)0)->m))
 @
 
-
 <<function assert>>=
 #define assert(x) if(x){}else _assert("x")
 @
 
 
-<<lib.h printf functions decl>>=
-extern  char* seprint(char*, char*, char*, ...);
-extern  char* vseprint(char*, char*, char*, va_list);
-extern  int snprint(char*, int, char*, ...);
-extern  int sprint(char*, char*, ...);
-@
-%//unused: extern  int vsnprint(char*, int, char*, va_list);
 
 
 <<lib.h print decl>>=
@@ -14809,9 +14765,6 @@ enum {
 
 \subsection*{[[processes/portdat_processes.c]]}
 
-<<hook proctrace>>=
-void (*proctrace)(Proc*, int, vlong) = 0; // was in devproc.c
-@ 
 
 
 <<portdat_processes.c>>=
@@ -14922,18 +14875,6 @@ Rendez  *r;   /* rendezvous point slept on */
 Rendez  sleep;    /* place for syssleep/debug */
 @ 
 
-
-<<[[Proc]] error managment fields>>=
-// array<Label>, error labels, poor's man exceptions in C
-Label errlab[NERR];
-// length(errlab) used.
-int nerrlab;
-
-char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
-char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
-char  errbuf0[ERRMAX];
-char  errbuf1[ERRMAX];
-@ 
 
 
 <<[[Proc]] stats and profiling fields>>=
@@ -15262,19 +15203,6 @@ enum fpsavestatus
 @ 
 
 
-<<macro waserror poperror>>=
-// poor's man exceptions in C
-//  - waserror() =~ try  
-//     * if (!waserror()) { } else { } <=> try { } catch { }
-//     * if (waserror()) { }  <=> finally { }
-//  - poperror() = nothing
-//  - error() =~ raise
-//  - nexterror() =~ re raise from exn handler
-// note, setlabel() return false, so the branch is never taken first
-// but nexterror() is using gotolabel() which returns true, see l_switch.s
-#define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
-#define poperror()    up->nerrlab--
-@ 
 
 
 <<struct Procalloc>>=
@@ -16381,91 +16309,6 @@ procinit0(void)     /* bad planning - clashes with devproc.c */
 @ 
 
 
-<<function sleep>>=
-/*
- *  sleep if a condition is not true.  Another process will
- *  awaken us after it sets the condition.  When we awaken
- *  the condition may no longer be true.
- *
- *  we lock both the process and the rendezvous to keep r->p
- *  and p->r synchronized.
- */
-void
-proc_sleep(Rendez *r, int (*f)(void*), void *arg)
-{
-    int s;
-    void (*pt)(Proc*, int, vlong);
-
-    s = splhi();
-
-    if(up->nlocks.ref)
-        print("process %lud sleeps with %lud locks held, last lock %#p locked at pc %#lux, sleep called from %#p\n",
-            up->pid, up->nlocks.ref, up->lastlock, up->lastlock->pc, getcallerpc(&r));
-    lock(r);
-    lock(&up->rlock);
-    if(r->p){
-        print("double sleep called from %#p, %lud %lud\n", getcallerpc(&r), r->p->pid, up->pid);
-        dumpstack();
-    }
-
-    /*
-     *  Wakeup only knows there may be something to do by testing
-     *  r->p in order to get something to lock on.
-     *  Flush that information out to memory in case the sleep is
-     *  committed.
-     */
-    r->p = up;
-
-    if((*f)(arg) || up->notepending){
-        /*
-         *  if condition happened or a note is pending
-         *  never mind
-         */
-        r->p = nil;
-        unlock(&up->rlock);
-        unlock(r);
-    } else {
-        /*
-         *  now we are committed to
-         *  change state and call scheduler
-         */
-        pt = proctrace;
-        if(pt)
-            pt(up, SSleep, 0);
-        up->state = Wakeme;
-        up->r = r;
-
-        /* statistics */
-        m->cs++;
-
-        procsave(up);
-        if(setlabel(&up->sched)) {
-            /*
-             *  here when the process is awakened
-             */
-            procrestore(up);
-            spllo();
-        } else {
-            /*
-             *  here to go to sleep (i.e. stop Running)
-             */
-            unlock(&up->rlock);
-            unlock(r);
-            gotolabel(&m->sched);
-        }
-    }
-
-    if(up->notepending) {
-        up->notepending = 0;
-        splx(s);
-        if(up->procctl == Proc_exitme && up->closingfgrp)
-            forceclosefgrp();
-        error(Eintr);
-    }
-
-    splx(s);
-}
-@ 
 
 
 <<function tfn>>=
@@ -16494,71 +16337,8 @@ twakeup(Ureg*, Timer *t)
 @ 
 
 
-<<function tsleep>>=
-void
-proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
-{
-    if (up->tt){
-        print("tsleep: timer active: mode %d, tf %#p\n", up->tmode, up->tf);
-        timerdel(up);
-    }
-    up->tns = MS2NS(ms);
-    up->tf = twakeup;
-    up->tmode = Trelative;
-    up->ta = up;
-    up->trend = r;
-    up->tfn = fn;
-    timeradd(up);
-
-    if(waserror()){
-        timerdel(up);
-        nexterror();
-    }
-    sleep(r, tfn, arg);
-    if(up->tt)
-        timerdel(up);
-    up->twhen = 0;
-    poperror();
-}
-@ 
 
 
-<<function wakeup>>=
-/*
- *  Expects that only one process can call wakeup for any given Rendez.
- *  We hold both locks to ensure that r->p and p->r remain consistent.
- *  Richard Miller has a better solution that doesn't require both to
- *  be held simultaneously, but I'm a paranoid - presotto.
- */
-Proc*
-proc_wakeup(Rendez *r)
-{
-    Proc *p;
-    int s;
-
-    s = splhi();
-
-    lock(r);
-    p = r->p;
-
-    if(p != nil){
-        lock(&p->rlock);
-        if(p->state != Wakeme || p->r != r){
-            iprint("%p %p %d\n", p->r, r, p->state);
-            panic("wakeup: state");
-        }
-        r->p = nil;
-        p->r = nil;
-        ready(p);
-        unlock(&p->rlock);
-    }
-    unlock(r);
-
-    splx(s);
-
-    return p;
-}
-@ 
 
 
 
@@ -33166,26 +32946,6 @@ procgen(Chan *c, char *name, Dirtab *tab, int, int s, Dir *dp)
 }
 @
 
-<<function _proctrace>>=
-static void
-_proctrace(Proc* p, Tevent etype, vlong ts)
-{
-    Traceevent *te;
-
-    if (p->trace == 0 || topens == 0 ||
-        tproduced - tconsumed >= Nevents)
-        return;
-
-    te = &tevents[tproduced&Emask];
-    te->pid = p->pid;
-    te->etype = etype;
-    if (ts == 0)
-        te->time = todget(nil);
-    else
-        te->time = ts;
-    tproduced++;
-}
-@
 
 
 <<function nonone>>=

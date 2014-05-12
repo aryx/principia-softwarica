@@ -347,7 +347,7 @@ devcons_panic(char *fmt, ...)
 
     if(panicking)
         for(;;);
-    panicking = 1;
+    panicking = true;
 
     s = splhi();
     strcpy(buf, "panic: ");

@@ -243,7 +243,6 @@ struct Chan
 
     ulong dev;
 
-
     int fid;      /* for devmnt */
     ulong iounit;     /* chunk size for i/o; 0==default */
     Mhead*  umh;      /* mount point that derived Chan; used in unionread */

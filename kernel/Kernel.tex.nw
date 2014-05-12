@@ -161,7 +161,6 @@ vlong devoffset;    /* in underlying device; see read */
 
 ulong dev;
 
-
 int fid;      /* for devmnt */
 ulong iounit;     /* chunk size for i/o; 0==default */
 Mhead*  umh;      /* mount point that derived Chan; used in unionread */
@@ -225,15 +224,6 @@ int nswppo;   /* max # of pageouts per segment pass */
 bool copymode; /* 0 is copy on write, 1 is copy on reference */
 ulong ialloc;   /* max interrupt time allocation in bytes */
 int nuart;    /* number of uart devices */
-@ 
-
-<<struct Label>>=
-// =~ a jumpbuf in C, for coroutines
-struct Label
-{
-    ulong sp; // virt_addr?
-    ulong pc; // virt_addr?
-};
 @ 
 
 
@@ -1217,27 +1207,6 @@ unimplemented(int)
 \end{verbatim}
 
 \section{[[tas()]]}
-<<function cmpswap and default implementation>>=
-/*
- * 386 has no compare-and-swap instruction.
- * Run it with interrupts turned off instead.
- */
-// used to be static, but now shared between arch.c and devarch.c
-int
-cmpswap386(long *addr, long old, long new)
-{
-    int r, s;
-
-    s = splhi();
-    if(r = (*addr == old))
-        *addr = new;
-    splx(s);
-    return r;
-}
-
-int (*cmpswap)(long*, long, long) = cmpswap386;
-@
-
 
 
 <<function tas>>=
@@ -1252,8 +1221,6 @@ TEXT tas(SB), $0
         XCHGL   AX, (BX)                        /* lock->key */
         RET
 @ 
-
-% see als cmpswap in arch? and used for semaphore for instance
 
 \section{[[Lock]]}
 
@@ -1989,24 +1956,8 @@ struct Rendez
 @ 
 
 
-\section{[[Sema]]phore}
+\section{[Semaphore}
 % those are actually used for user-level locks, see libcore/libc/port/lock.c
-
-<<struct Sema>>=
-// user level semaphores, used to implement user-level lock, 
-// see libc/port/lock.c
-struct Sema
-{
-    long  *addr; // value stored in user space!
-    int waiting;
-  
-    //list<Sema> of Segment.sema
-    Sema  *next;
-    Sema  *prev;
-
-    Rendez;
-};
-@ 
 
 \section{Producer/Consumer Queue}
 %IO Queue
@@ -2298,65 +2249,8 @@ kstrdup(char **p, char *s)
 
 
 
-
-
 \section{User malloc}
 %actually brk
-
-\section{Virtual memory}
-
-<<constant x86 segments>>=
-/*
- *  known x86 segments (in GDT) and their selectors
- */
-#define NULLSEG 0 /* null segment */
-#define KDSEG 1 /* kernel data/stack */
-#define KESEG 2 /* kernel executable */ 
-#define UDSEG 3 /* user data/stack */
-#define UESEG 4 /* user executable */
-#define TSSSEG  5 /* task segment */
-
-#define APMCSEG   6 /* APM code segment */
-#define APMCSEG16 7 /* APM 16-bit code segment */
-#define APMDSEG   8 /* APM data segment */
-#define KESEG16   9 /* kernel executable 16-bit */
-
-#define NGDT    10  /* number of GDT entries required */
-@
-
-<<macros xxxSEGM>>=
-/*
- * Simple segment descriptors with no translation.
- */
-#define DATASEGM(p)     { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
-#define EXECSEGM(p)     { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-#define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-#define TSSSEGM(b,p)    { ((b)<<16)|sizeof(Tss),\
-              ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
-@
-
-<<global gdt>>=
-Segdesc gdt[NGDT] =
-{
-[NULLSEG]   { 0, 0},        /* null descriptor */
-[KDSEG]     DATASEGM(0),        /* kernel data/stack */
-[KESEG]     EXECSEGM(0),        /* kernel code */
-[UDSEG]     DATASEGM(3),        /* user data/stack */
-[UESEG]     EXECSEGM(3),        /* user code */
-[TSSSEG]    TSSSEGM(0,0),       /* tss segment */
-[KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
-};
-@
-
-<<function mmuinit0>>=
-void
-mmuinit0(void)
-{
-    memmove(m->gdt, gdt, sizeof gdt);
-}
-@
-
-
 
 \section{[[Page]]}
 
@@ -3245,6 +3139,67 @@ ibrk(ulong addr, int seg)
 }
 @
 
+
+\chapter{Virtual Memory}
+
+\section{Virtual memory}
+
+\subsection{Segmentation}
+
+<<constant x86 segments>>=
+/*
+ *  known x86 segments (in GDT) and their selectors
+ */
+#define NULLSEG 0 /* null segment */
+#define KDSEG 1 /* kernel data/stack */
+#define KESEG 2 /* kernel executable */ 
+#define UDSEG 3 /* user data/stack */
+#define UESEG 4 /* user executable */
+#define TSSSEG  5 /* task segment */
+
+#define APMCSEG   6 /* APM code segment */
+#define APMCSEG16 7 /* APM 16-bit code segment */
+#define APMDSEG   8 /* APM data segment */
+#define KESEG16   9 /* kernel executable 16-bit */
+
+#define NGDT    10  /* number of GDT entries required */
+@
+
+<<macros xxxSEGM>>=
+/*
+ * Simple segment descriptors with no translation.
+ */
+#define DATASEGM(p)     { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
+#define EXECSEGM(p)     { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
+#define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
+#define TSSSEGM(b,p)    { ((b)<<16)|sizeof(Tss),\
+              ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
+@
+
+<<global gdt>>=
+Segdesc gdt[NGDT] =
+{
+[NULLSEG]   { 0, 0},        /* null descriptor */
+[KDSEG]     DATASEGM(0),        /* kernel data/stack */
+[KESEG]     EXECSEGM(0),        /* kernel code */
+[UDSEG]     DATASEGM(3),        /* user data/stack */
+[UESEG]     EXECSEGM(3),        /* user code */
+[TSSSEG]    TSSSEGM(0,0),       /* tss segment */
+[KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
+};
+@
+
+<<function mmuinit0>>=
+void
+mmuinit0(void)
+{
+    memmove(m->gdt, gdt, sizeof gdt);
+}
+@
+
+\subsection{Pagination}
+
+\subsection{Page fault}
 
 
 \chapter{Interrupts}
@@ -4406,6 +4361,15 @@ newproc(void)
 
 \section{Context switch}
 
+<<struct Label>>=
+// =~ a jumpbuf in C, for coroutines
+struct Label
+{
+    ulong sp; // virt_addr?
+    ulong pc; // virt_addr?
+};
+@ 
+
 <<function gotolabel>>=
 /*
  *  label consists of a stack pointer and a PC
@@ -4561,6 +4525,131 @@ hzclock(Ureg *ur)
 \section{Scheduler, [[sched()]] and [[ready()]]}
 
 \section{[[sleep()]], [[wakeup()]]}
+
+<<function sleep>>=
+/*
+ *  sleep if a condition is not true.  Another process will
+ *  awaken us after it sets the condition.  When we awaken
+ *  the condition may no longer be true.
+ *
+ *  we lock both the process and the rendezvous to keep r->p
+ *  and p->r synchronized.
+ */
+void
+proc_sleep(Rendez *r, int (*f)(void*), void *arg)
+{
+    int s;
+    void (*pt)(Proc*, int, vlong);
+
+    s = splhi();
+
+    if(up->nlocks.ref)
+        print("process %lud sleeps with %lud locks held, last lock %#p locked at pc %#lux, sleep called from %#p\n",
+            up->pid, up->nlocks.ref, up->lastlock, up->lastlock->pc, getcallerpc(&r));
+    lock(r);
+    lock(&up->rlock);
+    if(r->p){
+        print("double sleep called from %#p, %lud %lud\n", getcallerpc(&r), r->p->pid, up->pid);
+        dumpstack();
+    }
+
+    /*
+     *  Wakeup only knows there may be something to do by testing
+     *  r->p in order to get something to lock on.
+     *  Flush that information out to memory in case the sleep is
+     *  committed.
+     */
+    r->p = up;
+
+    if((*f)(arg) || up->notepending){
+        /*
+         *  if condition happened or a note is pending
+         *  never mind
+         */
+        r->p = nil;
+        unlock(&up->rlock);
+        unlock(r);
+    } else {
+        /*
+         *  now we are committed to
+         *  change state and call scheduler
+         */
+        pt = proctrace;
+        if(pt)
+            pt(up, SSleep, 0);
+        up->state = Wakeme;
+        up->r = r;
+
+        /* statistics */
+        m->cs++;
+
+        procsave(up);
+        if(setlabel(&up->sched)) {
+            /*
+             *  here when the process is awakened
+             */
+            procrestore(up);
+            spllo();
+        } else {
+            /*
+             *  here to go to sleep (i.e. stop Running)
+             */
+            unlock(&up->rlock);
+            unlock(r);
+            gotolabel(&m->sched);
+        }
+    }
+
+    if(up->notepending) {
+        up->notepending = 0;
+        splx(s);
+        if(up->procctl == Proc_exitme && up->closingfgrp)
+            forceclosefgrp();
+        error(Eintr);
+    }
+
+    splx(s);
+}
+@ 
+
+<<function wakeup>>=
+/*
+ *  Expects that only one process can call wakeup for any given Rendez.
+ *  We hold both locks to ensure that r->p and p->r remain consistent.
+ *  Richard Miller has a better solution that doesn't require both to
+ *  be held simultaneously, but I'm a paranoid - presotto.
+ */
+Proc*
+proc_wakeup(Rendez *r)
+{
+    Proc *p;
+    int s;
+
+    s = splhi();
+
+    lock(r);
+    p = r->p;
+
+    if(p != nil){
+        lock(&p->rlock);
+        if(p->state != Wakeme || p->r != r){
+            iprint("%p %p %d\n", p->r, r, p->state);
+            panic("wakeup: state");
+        }
+        r->p = nil;
+        p->r = nil;
+        ready(p);
+        unlock(&p->rlock);
+    }
+    unlock(r);
+
+    splx(s);
+
+    return p;
+}
+@ 
+
+
 
 \section{[[sysfork()]]}
 
@@ -5277,6 +5366,55 @@ proc_pexit(char *exitstr, int freemem)
 }
 @ 
 
+\section{Environment}
+%really an IPC?
+
+<<struct Evalue>>=
+struct Evalue
+{
+  char  *name;
+  char  *value;
+  int len;
+  Evalue  *link;
+  Qid qid;
+};
+@
+
+
+<<struct Egrp>>=
+struct Egrp
+{
+  Ref;
+  RWlock;
+  Evalue  **ent;
+  int nent;
+  int ment;
+  ulong path; /* qid.path of next Evalue to be allocated */
+  ulong vers; /* of Egrp */
+};
+@
+
+<<function closeegrp>>=
+void
+closeegrp(Egrp *eg)
+{
+    int i;
+    Evalue *e;
+
+    if(decref(eg) == 0){
+        for(i=0; i<eg->nent; i++){
+            e = eg->ent[i];
+            free(e->name);
+            if(e->value)
+                free(e->value);
+            free(e);
+        }
+        free(eg->ent);
+        free(eg);
+    }
+}
+@
+
 
 \chapter{Initialization}
 \minitoc
@@ -5404,7 +5542,7 @@ main(void)
     trapinit0();
     mmuinit0();
 
-    kbdinit();
+    kbdinit(); //kbd enable below
     i8253init();
 
     cpuidentify();
@@ -5427,6 +5565,8 @@ main(void)
     fpsavealloc();
     if(arch->intrinit)      /* launches other processors on an mp */
             arch->intrinit();
+
+
 
     timersinit();
     mathinit();
@@ -5683,7 +5823,7 @@ cpuidprint(void)
 }
 @
 
-\subsection{Memory initialisation}
+\subsection{Memory detection}
 
 
 <<struct Map>>=
@@ -6525,8 +6665,9 @@ upareserve(ulong pa, int size)
 }
 @
 
-\subsection{Misc memory initialisation}
+\subsection{Memory initialisation}
 
+% rename? initkimage?
 <<function initseg>>=
 void
 initseg(void)
@@ -7277,6 +7418,10 @@ chanpath(Chan *c)
     return c->path->s;
 }
 @
+
+
+
+
 
 <<function skipslash>>=
 /*
@@ -9208,6 +9353,16 @@ devno(int c, int user)
 
 \section{Directories}
 
+<<struct Dirtab>>=
+struct Dirtab
+{
+  char  name[KNAMELEN];
+  Qid qid;
+  vlong length;
+  long  perm;
+};
+@
+
 \section{File descriptors}
 
 <<struct Fgrp>>=
@@ -9230,6 +9385,51 @@ struct Fgrp
 // ref_counted<fgrp>
 Fgrp  *fgrp;    /* File descriptor group */
 @
+
+<<function fdtochan>>=
+Chan*
+fdtochan(int fd, int mode, int chkmnt, int iref)
+{
+    Chan *c;
+    Fgrp *f;
+
+    c = 0;
+    f = up->fgrp;
+
+    lock(f);
+    if(fd<0 || f->nfd<=fd || (c = f->fd[fd])==0) {
+        unlock(f);
+        error(Ebadfd);
+    }
+    if(iref)
+        incref(c);
+    unlock(f);
+
+    if(chkmnt && (c->flag&CMSG)) {
+        if(iref)
+            cclose(c);
+        error(Ebadusefd);
+    }
+
+    if(mode<0 || c->mode==ORDWR)
+        return c;
+
+    if((mode&OTRUNC) && c->mode==OREAD) {
+        if(iref)
+            cclose(c);
+        error(Ebadusefd);
+    }
+
+    if((mode&~OTRUNC) != c->mode) {
+        if(iref)
+            cclose(c);
+        error(Ebadusefd);
+    }
+
+    return c;
+}
+@
+
 
 <<function unlockfgrp>>=
 static void
@@ -9355,6 +9555,19 @@ newfd2(int fd[2], Chan *c[2])
 
 \section{[[syscreate()]], [[sysremove()]]}
 
+<<function openmode>>=
+int
+openmode(ulong o)
+{
+    o &= ~(OTRUNC|OCEXEC|ORCLOSE);
+    if(o > OEXEC)
+        error(Ebadarg);
+    if(o == OEXEC)
+        return OREAD;
+    return o;
+}
+@
+
 <<syscall create>>=
 long
 syscreate(ulong *arg)
@@ -9412,19 +9625,6 @@ sysremove(ulong *arg)
 @
 
 \section {[[sysopen()]], [[sysclose()]]}
-
-<<function openmode>>=
-int
-openmode(ulong o)
-{
-    o &= ~(OTRUNC|OCEXEC|ORCLOSE);
-    if(o > OEXEC)
-        error(Ebadarg);
-    if(o == OEXEC)
-        return OREAD;
-    return o;
-}
-@
 
 
 <<syscall open>>=
@@ -9802,16 +10002,6 @@ sysstat(ulong *arg)
 
 \section {[[syschdir()]]}
 
-<<struct Dirtab>>=
-struct Dirtab
-{
-  char  name[KNAMELEN];
-  Qid qid;
-  vlong length;
-  long  perm;
-};
-@
-
 
 <<syscall chdir>>=
 long
@@ -9827,8 +10017,6 @@ syschdir(ulong *arg)
     return 0;
 }
 @
-
-
 
 
 \section {[[sysfd2path()]] (a.k.a [[pwd()]])}
@@ -9848,53 +10036,9 @@ sysfd2path(ulong *arg)
 }
 @
 
-<<function fdtochan>>=
-Chan*
-fdtochan(int fd, int mode, int chkmnt, int iref)
-{
-    Chan *c;
-    Fgrp *f;
-
-    c = 0;
-    f = up->fgrp;
-
-    lock(f);
-    if(fd<0 || f->nfd<=fd || (c = f->fd[fd])==0) {
-        unlock(f);
-        error(Ebadfd);
-    }
-    if(iref)
-        incref(c);
-    unlock(f);
-
-    if(chkmnt && (c->flag&CMSG)) {
-        if(iref)
-            cclose(c);
-        error(Ebadusefd);
-    }
-
-    if(mode<0 || c->mode==ORDWR)
-        return c;
-
-    if((mode&OTRUNC) && c->mode==OREAD) {
-        if(iref)
-            cclose(c);
-        error(Ebadusefd);
-    }
-
-    if((mode&~OTRUNC) != c->mode) {
-        if(iref)
-            cclose(c);
-        error(Ebadusefd);
-    }
-
-    return c;
-}
-@
 
 
-
-\section{Other syscalls}
+\section{[[sysseek()]]}
 
 <<function sseek>>=
 static void
@@ -10095,7 +10239,7 @@ sysmount(ulong *arg)
 }
 @
 
-\section{Other syscalls}
+\section{[[sysumount()]]}
 
 <<syscall unmount>>=
 long
@@ -11864,9 +12008,6 @@ i8042intr(Ureg*, void*)
 
 
 
-
-
-
 <<function kbdputsc>>=
 /*
  * Scan code processing
@@ -12174,9 +12315,7 @@ i8042auxenable(void (*putc)(int, int))
 \section{Special devices}
 %optional, advanced concepts
 
-<<systab special file syscalls>>=
-    [DUP]       sysdup,
-@ 
+% see also devpipe.c and devdup.c
 
 \subsection{[[devpipe.c]]}
 % see section in IPC also?
@@ -12192,6 +12331,14 @@ i8042auxenable(void (*putc)(int, int))
 
 \chapter{Time}
 \minitoc
+
+<<systab time syscalls>>=
+    [SLEEP]     syssleep,
+    [ALARM]     sysalarm,
+@
+
+\section{YTODO}
+
 
 <<[[PCArch]] time methods fields>>=
 void  (*clockenable)(void);
@@ -12241,13 +12388,6 @@ simplecycles(uvlong*x)
 void    (*cycles)(uvlong*) = simplecycles;
 @ 
 
-
-
-
-<<systab time syscalls>>=
-    [SLEEP]     syssleep,
-    [ALARM]     sysalarm,
-@
 
 \section{Timers}
 
@@ -12665,6 +12805,35 @@ syssleep(ulong *arg)
 }
 @ 
 
+<<function tsleep>>=
+void
+proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
+{
+    if (up->tt){
+        print("tsleep: timer active: mode %d, tf %#p\n", up->tmode, up->tf);
+        timerdel(up);
+    }
+    up->tns = MS2NS(ms);
+    up->tf = twakeup;
+    up->tmode = Trelative;
+    up->ta = up;
+    up->trend = r;
+    up->tfn = fn;
+    timeradd(up);
+
+    if(waserror()){
+        timerdel(up);
+        nexterror();
+    }
+    sleep(r, tfn, arg);
+    if(up->tt)
+        timerdel(up);
+    up->twhen = 0;
+    poperror();
+}
+@ 
+
+
 \section{[[sysalarm()]]}
 %related? tsleep, tsemacquire
 
@@ -12971,6 +13140,8 @@ writebintime(char *buf, int n)
 }
 @
 
+\section{Real time clock}
+
 \section{[[devrtc.c]]}
 
 <<struct Rtc>>=
@@ -13027,55 +13198,6 @@ Dev rtcdevtab = {
     [SEGFLUSH]  syssegflush,
     [SEGBRK]    syssegbrk,
 @ 
-
-\section{Environment}
-%really an IPC?
-
-<<struct Evalue>>=
-struct Evalue
-{
-  char  *name;
-  char  *value;
-  int len;
-  Evalue  *link;
-  Qid qid;
-};
-@
-
-
-<<struct Egrp>>=
-struct Egrp
-{
-  Ref;
-  RWlock;
-  Evalue  **ent;
-  int nent;
-  int ment;
-  ulong path; /* qid.path of next Evalue to be allocated */
-  ulong vers; /* of Egrp */
-};
-@
-
-<<function closeegrp>>=
-void
-closeegrp(Egrp *eg)
-{
-    int i;
-    Evalue *e;
-
-    if(decref(eg) == 0){
-        for(i=0; i<eg->nent; i++){
-            e = eg->ent[i];
-            free(e->name);
-            if(e->value)
-                free(e->value);
-            free(e);
-        }
-        free(eg->ent);
-        free(eg);
-    }
-}
-@
 
 \section{Notes (signals)}
 
@@ -13428,6 +13550,7 @@ syspipe(ulong *arg)
 
 % shared segment? and so semaphore? libc_thread?
 
+\subsection{Segment}
 
 <<syscall segbrk>>=
 long
@@ -13539,6 +13662,47 @@ syssegfree(ulong *arg)
     return 0;
 }
 @ 
+
+\subsection{Semaphore}
+
+% and show code of libcore/libc/port/lock.c! that uses that
+
+<<struct Sema>>=
+// user level semaphores, used to implement user-level lock, 
+// see libc/port/lock.c
+struct Sema
+{
+    long  *addr; // value stored in user space!
+    int waiting;
+  
+    //list<Sema> of Segment.sema
+    Sema  *next;
+    Sema  *prev;
+
+    Rendez;
+};
+@ 
+
+<<function cmpswap and default implementation>>=
+/*
+ * 386 has no compare-and-swap instruction.
+ * Run it with interrupts turned off instead.
+ */
+// used to be static, but now shared between arch.c and devarch.c
+int
+cmpswap386(long *addr, long old, long new)
+{
+    int r, s;
+
+    s = splhi();
+    if(r = (*addr == old))
+        *addr = new;
+    splx(s);
+    return r;
+}
+
+int (*cmpswap)(long*, long, long) = cmpswap386;
+@
 
 
 <<function semqueue>>=
@@ -13948,9 +14112,24 @@ connectlocal(void)
 \section{The shell}
 
 
+
+
+
+
+
+
+
+
+
+
 \chapter{Misc}
 
 \section{Dup}
+
+<<systab special file syscalls>>=
+    [DUP]       sysdup,
+@ 
+
 
 <<syscall dup>>=
 long
@@ -14259,6 +14438,7 @@ i8042reset(void)
 }
 @
 
+\subsection{[[/dev/reboot]]}
 
 <<devcons.c enum Cmd>>=
 enum
@@ -14315,6 +14495,8 @@ nrand(int n)
 %//  nrand(1);
 %//  return randn;
 %//}
+
+\subsection{[[/dev/random]]}
 
 
 \section{Serial line}
@@ -14886,6 +15068,33 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
 }
 @ 
 
+\section{Proctrace}
+
+<<hook proctrace>>=
+void (*proctrace)(Proc*, int, vlong) = 0; // was in devproc.c
+@ 
+
+<<function _proctrace>>=
+static void
+_proctrace(Proc* p, Tevent etype, vlong ts)
+{
+    Traceevent *te;
+
+    if (p->trace == 0 || topens == 0 ||
+        tproduced - tconsumed >= Nevents)
+        return;
+
+    te = &tevents[tproduced&Emask];
+    te->pid = p->pid;
+    te->etype = etype;
+    if (ts == 0)
+        te->time = todget(nil);
+    else
+        te->time = ts;
+    tproduced++;
+}
+@
+
 
 \chapter{Profiling}
 
@@ -14918,7 +15127,7 @@ int load;
 int intr;
 @
 
-
+\section{[[devkprof.c]]}
 % devkprof.c?
 
 <<hook kproftimer>>=
@@ -14928,6 +15137,10 @@ void (*kproftimer)(ulong);
 \chapter{Error Managment}
 
 \section{[[panic()]]}
+
+<<global panicking>>=
+bool panicking;
+@
 
 <<function panic>>=
 void
@@ -14941,7 +15154,7 @@ devcons_panic(char *fmt, ...)
 
     if(panicking)
         for(;;);
-    panicking = 1;
+    panicking = true;
 
     s = splhi();
     strcpy(buf, "panic: ");
@@ -15045,9 +15258,16 @@ char Echange[] = "media or partition has changed";
 @ 
 
 
-\section{[[waserror()]], [[nexterror()]]}
-% waserror(), nexterror(), etc
-% =~ poor's man exn mechanism (=> improve C!!)
+<<[[Proc]] error managment fields>>=
+// array<Label>, error labels, poor's man exceptions in C
+Label errlab[NERR];
+// length(errlab) used.
+int nerrlab;
+
+char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
+char  errbuf0[ERRMAX];
+char  errbuf1[ERRMAX];
+@ 
 
 <<function error>>=
 void
@@ -15062,17 +15282,6 @@ proc_error(char *err)
 }
 @ 
 
-
-<<function nexterror>>=
-// raise an exception
-void
-proc_nexterror(void)
-{
-    gotolabel(&up->errlab[--up->nerrlab]);
-}
-@ 
-
-
 <<function exhausted>>=
 void
 exhausted(char *resource)
@@ -15086,7 +15295,40 @@ exhausted(char *resource)
 @ 
 
 
+\section{[[waserror()]], [[nexterror()]], [[poperror()]]}
+% waserror(), nexterror(), etc
+% =~ poor's man exn mechanism (=> improve C!!)
+
+<<macro waserror poperror>>=
+// poor's man exceptions in C
+//  - waserror() =~ try  
+//     * if (!waserror()) { } else { } <=> try { } catch { }
+//     * if (waserror()) { }  <=> finally { }
+//  - poperror() = nothing
+//  - error() =~ raise
+//  - nexterror() =~ re raise from exn handler
+// note, setlabel() return false, so the branch is never taken first
+// but nexterror() is using gotolabel() which returns true, see l_switch.s
+#define waserror()  (up->nerrlab++, setlabel(&up->errlab[up->nerrlab-1]))
+#define poperror()    up->nerrlab--
+@ 
+
+
+<<function nexterror>>=
+// raise an exception
+void
+proc_nexterror(void)
+{
+    gotolabel(&up->errlab[--up->nerrlab]);
+}
+@ 
+
+
 \section{[[syserrstr()]]}
+
+<<[[Proc]] error managment fields>>=
+char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
+@
 
 <<syscall errstr>>=
 long
@@ -15136,6 +15378,17 @@ werrstr(char *fmt, ...)
 
 \chapter{Mini Libc}
 
+\section{Memory functions}
+
+<<lib.h mem functions decl>>=
+extern  void* memccpy(void*, void*, int, ulong);
+extern  void* memset(void*, int, ulong);
+extern  int memcmp(void*, void*, ulong);
+extern  void* memmove(void*, void*, ulong);
+extern  void* memchr(void*, int, ulong);
+@ 
+%todo: memrchr
+
 <<function memrchr>>=
 void*
 memrchr(void *va, int c, long n)
@@ -15150,12 +15403,47 @@ memrchr(void *va, int c, long n)
 }
 @
 
+\section{String functions}
+
+<<lib.h string functions decl>>=
+extern  char* strchr(char*, int);
+extern  char* strrchr(char*, int);
+extern  int strcmp(char*, char*);
+extern  char* strcpy(char*, char*);
+extern  char* strecpy(char*, char*, char*);
+extern  char* strncpy(char*, char*, long);
+extern  int strncmp(char*, char*, long);
+extern  long  strlen(char*);
+extern  char* strstr(char*, char*);
+extern  int atoi(char*);
+extern  int fullrune(char*, int);
+@ 
+%//unused: extern  char* strcat(char*, char*);
+%//unused: extern  char* strncat(char*, char*, long);
+
+\section{Conversion allocation}
+
+<<lib.h strto functions decl>>=
+extern  long  strtol(char*, char**, int);
+extern  ulong strtoul(char*, char**, int);
+extern  vlong strtoll(char*, char**, int);
+extern  uvlong  strtoull(char*, char**, int);
+@ 
 
 \section{Pool allocation}
 
 % set things from lib_core/libc/...?pool.c mainmem? imagmem?
 
 \section{Printf and Fmt}
+
+<<lib.h printf functions decl>>=
+extern  char* seprint(char*, char*, char*, ...);
+extern  char* vseprint(char*, char*, char*, va_list);
+extern  int snprint(char*, int, char*, ...);
+extern  int sprint(char*, char*, ...);
+@
+%//unused: extern  int vsnprint(char*, int, char*, va_list);
+
 
 % see print.c which overrides functions defined in lib_core/libc/fmt/fmtlock.c 
 
