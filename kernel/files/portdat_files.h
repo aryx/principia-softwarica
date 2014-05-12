@@ -375,12 +375,14 @@ struct Dirtab
 // Internal to memory/
 //*****************************************************************************
 
+/*s: constants tags */
 enum
 {
     TAGSHIFT = 5,           /* ulong has to be 32 bits */
     TAGMASK = (1<<TAGSHIFT)-1,
     NMASK = (64*1024)>>TAGSHIFT,
 };
+/*e: constants tags */
 
 /*
  * References are managed as follows:
@@ -410,11 +412,7 @@ struct Mntalloc
 
 };
 /*e: struct Mntalloc */
-/*s: global mntalloc */
-struct Mntalloc mntalloc;
-/*x: global mntalloc */
 extern struct Mntalloc mntalloc;
-/*e: global mntalloc */
 
 // TODO: mv in errstr.c?
 extern char Esbadstat[];

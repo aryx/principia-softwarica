@@ -13,8 +13,6 @@
 
 /*s: global mntalloc */
 struct Mntalloc mntalloc;
-/*x: global mntalloc */
-extern struct Mntalloc mntalloc;
 /*e: global mntalloc */
 
 #define MAXRPC (IOHDRSZ+8192)
