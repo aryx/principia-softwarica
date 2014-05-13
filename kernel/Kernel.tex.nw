@@ -455,8 +455,8 @@ the simplest and at the same time fairly complete operating system.
 If you look at the screenshot in Figure~\ref{fig:X}, you'll see
 many features:
 \begin{itemize}
-\item a screen with basic graphics and windows managment
 \item multiple shells running multiple commands
+\item a screen with basic graphics and windows managment
 \item a simple clock graphical application
 \item a simple program communicating through the network
 \end{itemize}
@@ -482,19 +482,34 @@ Rio windowing system)
 \item Gnu/Linux, far far bigger. If you take the source code of glibc,
 the Linux kernel, and X11, you'll get at
 least 2 orders of magnitude more source code than Plan9, even though
-Plan9 provides in essence the same core services. Of course
-the Linux kernel contains thousands of specific drivers,
-glibc handles many different architectures, and X11 can support
-lots of graphic cards and all of those things could be discarded 
-when presenting the core of those software, but their core
-is still far bigger than Plan9 equivalent core.
+Plan9 provides in essence the same core services. 
 \end{itemize}
+
+Of course the Linux kernel contains thousands of specific drivers,
+glibc handles many different architectures, and X11 can support lots
+of graphic cards and all of those things could be discarded when
+presenting the core of those software, but their core is still far
+bigger than Plan9 equivalent core.
 
 \section{Getting started}
 
-See \url{https://github.com/aryx/fork-plan9}
-and \url{https://github.com/aryx/fork-kencc}.
-%kencc install, fork-plan9 install
+To get started you first need to get the source of the plan9
+version described in this book at: 
+\url{https://github.com/aryx/fork-plan9}
+
+Then you need to compile, using a regular C compiler (e.g. gcc),
+and install the Plan9 C cross compilers written by Ken Thompson:
+ \url{https://github.com/aryx/fork-kencc}.
+
+Then you need to cross compile, e.g. from MacOS, the kernel
+using the Plan9 C cross compilers installed in the previous step.
+You can also cross compile the whole Plan9 operating
+system with all its libraries and utilities.
+
+Finally you can test this compiled kernel and utilities using
+QEMU.
+
+As a bonus step you can also now compile Plan9 under Plan9 itself!
 
 \section{Assumptions}
 
@@ -516,6 +531,8 @@ of this book is to present in full details a kernel but we assume
 you already have a vague idea of how an operating system
 works and so that you are familiar with concepts such as 
 virtual memory, critical regions, interrupts, system calls, etc.
+We assume you already know most of the theory; this book is here to
+cover the rest, the practice.
 
 \section{About this document}
 #include "About.tex.nw"
@@ -542,34 +559,40 @@ Plan9's kernel that was very useful.
 \section{Operating system principles}
 
 An operating system is a meta-program: A program that manages other
-programs.
-
+programs. 
 It provides convenient abstractions of the hardware and multiplex
-those hardware resources for the benefit of user programs:
+those hardware resources for the benefit of isolated user programs:
 \begin{itemize}
 \item a virtual CPU, so that each process thinks it has all the CPU 
 for himself
 \item a virtual memory, so that each process thinks it has all memory
 for himself
 \item a virtual screen, so that each process thinks it has all the screen
-for himself
-% a file abstraction, continous even though spreaded on concrete disk
-% a directory, also continous, even though spread over network and devices
-\item a virtual storage (filesystem)
-\item a virtual network (NFS)
+for himself (via the windowing system)
+\item the file abstraction, so a process can read and store data
+on a disk, network, floppy etc
+% continous even though spreaded on concrete disk (like mm)
+\item the directory abstraction, so a process can organize data
+on a disk, network, floppy, etc
+% also continous, even though spread over network and devices
+%\item a virtual storage (filesystem)
+%\item a virtual network (NFS)
 \end{itemize}
+
+Entire books have been written on this subject.
+We assume you already know what is an operating system
+and will now focus on the concrete services (API) a kernel
+provides to the user programs.
 
 \section{Operating system services}
 
-\begin{verbatim}
- user point of view:
- - start the whole thing, first program!
- - process managment, shell, fork, exec, multi task
- - system calls, =~ APIs of user program
- - interrupt handling, =~ devices and also syscalls and preemptive multi task
- - IO operations, =~ devices and files
- - file managment, =~ filesystem
-\end{verbatim}
+% user point of view:
+% - start the whole thing, first program!
+% - process managment, shell, fork, exec, multi task
+% - system calls, =~ APIs of user program
+% - interrupt handling, =~ devices and also syscalls and preemptive multi task
+% - IO operations, =~ devices and files
+% - file managment, =~ filesystem
 
 <<sys.h>>=
 #define	NOP		0
@@ -677,18 +700,21 @@ for himself
 % - shared library (help save some memory, but complicated)
 %   but: http://www.kix.in/2008/06/19/an-alternative-to-shared-libraries/ ??
 
-\section{The machine}
+\section{The [[x86]] machine}
 %PC vs raspberry pi?
 
-\section{C and asm}
+% actually will take 386, not 486, or x86_64 or amd64 so simpler.
+
+
+\section{C and assembly}
 
 % Kencc extension: anon field. e.g. Lock; 
 
 % the lock+0(FP) is intriguing
 
 \section{Code organization}
-
 % codemap and codegraph screenshot?
+% graph dependencies? (where remove artificial edges, or use thickness of edge?)
 
 <<kernel basic includes>>=
 #include <u.h>
@@ -700,6 +726,8 @@ for himself
 @ 
 
 % u.h for uchar, uint, ... can be seen also as universal :)
+% lib.h =~ libc utilities, see Section XX
+% error.h see Section YY
 
 <<dat.h>>=
 #include "dat_forward.h"
@@ -868,7 +896,7 @@ sysnop(ulong*)
 #define VectorSYSCALL 64
 @
 
-
+% show small ex of asm that call this hello world
 
 \chapter{Core Data Structures}
 \minitoc
@@ -1018,6 +1046,58 @@ struct ArchMach {
     <<[[ArchMach]] other fields>>
 };
 @ 
+
+\section{[[PCArch]] and [[arch]]}
+
+<<struct PCArch>>=
+struct PCArch
+{
+  char* id;
+
+  int (*ident)(void);   /* this should be in the model */
+  void  (*reset)(void);   /* this should be in the model */
+  void  (*resetothers)(void); /* put other cpus into reset */
+
+  // interrupts
+  <<[[PCArch]] interrupt methods fields>>
+  // clock, timer
+  <<[[PCArch]] time methods fields>>
+  // power
+  <<[[PCArch]] power methods fields>>
+};
+@ 
+
+% could add cycles and cmpswap here? and also pcmspecial, fps?
+
+<<global arch>>=
+PCArch* arch;
+@ 
+
+<<global archgeneric>>=
+PCArch archgeneric = {
+    .id=        "generic",
+    .ident=     0,
+    .reset=     archreset,
+
+    // interrupt: i8259 controller
+    <<[[archgeneric]] interrupt methods>>
+    // clock: i8253 controller
+    <<[[archgeneric]] time methods>>
+    // power: none
+    <<[[archgeneric]] power methods>>
+};
+@
+
+<<function unimplemented>>=
+static int
+unimplemented(int)
+{
+    return 0;
+}
+@
+
+
+% SMP is more complex arch, archmp
 
 \section{[[Proc]] and [[up]]}
 
@@ -1237,58 +1317,6 @@ Dev** devtab = 0;
 %	&rootdevtab,
 %	&consdevtab,
 %       ...
-
-\section{[[PCArch]] and [[arch]]}
-
-<<struct PCArch>>=
-struct PCArch
-{
-  char* id;
-
-  int (*ident)(void);   /* this should be in the model */
-  void  (*reset)(void);   /* this should be in the model */
-  void  (*resetothers)(void); /* put other cpus into reset */
-
-  // interrupts
-  <<[[PCArch]] interrupt methods fields>>
-  // clock, timer
-  <<[[PCArch]] time methods fields>>
-  // power
-  <<[[PCArch]] power methods fields>>
-};
-@ 
-
-% could add cycles and cmpswap here? and also pcmspecial, fps?
-
-<<global arch>>=
-PCArch* arch;
-@ 
-
-<<global archgeneric>>=
-PCArch archgeneric = {
-    .id=        "generic",
-    .ident=     0,
-    .reset=     archreset,
-
-    // interrupt: i8259 controller
-    <<[[archgeneric]] interrupt methods>>
-    // clock: i8253 controller
-    <<[[archgeneric]] time methods>>
-    // power: none
-    <<[[archgeneric]] power methods>>
-};
-@
-
-<<function unimplemented>>=
-static int
-unimplemented(int)
-{
-    return 0;
-}
-@
-
-
-% SMP is more complex arch, archmp
 
 \chapter{Concurrency}
 \minitoc
@@ -2477,6 +2505,8 @@ Pool*   imagmem = &pimagmem;
 
 
 \section{Kernel [[malloc()]]}
+
+% the memcpy, memmove, functions of libc use malloc?
 
 <<function malloc>>=
 void*
@@ -6988,6 +7018,8 @@ newproc(void)
 
 \section{Context switch}
 
+% TSS, mmu, sched labels, ... many switches
+
 <<struct Label>>=
 // =~ a jumpbuf in C, for coroutines
 struct Label
@@ -7369,8 +7401,7 @@ proc_sched(void)
 }
 @ 
 
-
-\section{[[sleep()]], [[wakeup()]]}
+\section{[[Rendez]]-vous}
 
 <<struct Rendez>>=
 struct Rendez
@@ -7380,6 +7411,54 @@ struct Rendez
     Lock;
 };
 @ 
+
+\section{[[Rgrp]]}
+
+<<function REND>>=
+enum
+{
+    RENDLOG = 5,
+    RENDHASH =  1<<RENDLOG, /* Hash to lookup rendezvous tags */
+};
+#define REND(p,s) ((p)->rendhash[(s)&((1<<RENDLOG)-1)])
+@
+
+
+<<struct Rgrp>>=
+struct Rgrp
+{
+    // hash<??, list<ref<Proc>>>
+    Proc  *rendhash[RENDHASH];  /* Rendezvous tag hash */
+  
+    // extra
+    Ref;        /* the Ref's lock is also the Rgrp's lock */
+};
+@ 
+
+
+<<function newrgrp>>=
+Rgrp*
+newrgrp(void)
+{
+    Rgrp *r;
+
+    r = smalloc(sizeof(Rgrp));
+    r->ref = 1;
+    return r;
+}
+@ 
+
+<<function closergrp>>=
+void
+closergrp(Rgrp *r)
+{
+    if(decref(r) == 0)
+        free(r);
+}
+@ 
+
+\section{[[sleep()]], [[wakeup()]]}
+
 
 <<function sleep>>=
 /*
@@ -10196,300 +10275,6 @@ cclone(Chan *c)
 }
 @
 
-\section{[[Path]]}
-
-<<struct Path>>=
-struct Path
-{
-  Ref;
-  char  *s;
-  Chan  **mtpt;     /* mtpt history */
-  int len;      /* strlen(s) */
-  int alen;     /* allocated length of s */
-  int mlen;     /* number of path elements */
-  int malen;      /* allocated length of mtpt */
-};
-@
-
-<<global npath>>=
-Ref npath;
-@
-
-
-<<function newpath>>=
-Path*
-newpath(char *s)
-{
-    int i;
-    Path *p;
-
-    p = smalloc(sizeof(Path));
-    i = strlen(s);
-    p->len = i;
-    p->alen = i+PATHSLOP;
-    p->s = smalloc(p->alen);
-    memmove(p->s, s, i+1);
-    p->ref = 1;
-    incref(&npath);
-
-    /*
-     * Cannot use newpath for arbitrary names because the mtpt 
-     * array will not be populated correctly.  The names #/ and / are
-     * allowed, but other names with / in them draw warnings.
-     */
-    if(strchr(s, '/') && strcmp(s, "#/") != 0 && strcmp(s, "/") != 0)
-        print("newpath: %s from %#p\n", s, getcallerpc(&s));
-
-    p->mlen = 1;
-    p->malen = PATHMSLOP;
-    p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]);
-    return p;
-}
-@
-
-
-<<function copypath>>=
-//@Scheck: not dead, used below
-static Path*
-copypath(Path *p)
-{
-    int i;
-    Path *pp;
-    
-    pp = smalloc(sizeof(Path));
-    pp->ref = 1;
-    incref(&npath);
-    DBG("copypath %s %p => %p\n", p->s, p, pp);
-    
-    pp->len = p->len;
-    pp->alen = p->alen;
-    pp->s = smalloc(p->alen);
-    memmove(pp->s, p->s, p->len+1);
-    
-    pp->mlen = p->mlen;
-    pp->malen = p->malen;
-    pp->mtpt = smalloc(p->malen*sizeof pp->mtpt[0]);
-    for(i=0; i<pp->mlen; i++){
-        pp->mtpt[i] = p->mtpt[i];
-        if(pp->mtpt[i])
-            incref(pp->mtpt[i]);
-    }
-
-    return pp;
-}
-@
-
-
-<<function pathclose>>=
-void
-pathclose(Path *p)
-{
-    int i;
-    
-    if(p == nil)
-        return;
-
-    DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
-    for(i=0; i<p->mlen; i++)
-        DBG(" %p", p->mtpt[i]);
-    DBG("\n");
-
-    if(decref(p))
-        return;
-    decref(&npath);
-    free(p->s);
-    for(i=0; i<p->mlen; i++)
-        if(p->mtpt[i])
-            cclose(p->mtpt[i]);
-    free(p->mtpt);
-    free(p);
-}
-@
-
-
-<<function fixdotdotname>>=
-/*
- * In place, rewrite name to compress multiple /, eliminate ., and process ..
- * (Really only called to remove a trailing .. that has been added.
- * Otherwise would need to update n->mtpt as well.)
- */
-static void
-fixdotdotname(Path *p)
-{
-    char *r;
-
-    if(p->s[0] == '#'){
-        r = strchr(p->s, '/');
-        if(r == nil)
-            return;
-        cleanname(r);
-
-        /*
-         * The correct name is #i rather than #i/,
-         * but the correct name of #/ is #/.
-         */
-        if(strcmp(r, "/")==0 && p->s[1] != '/')
-            *r = '\0';
-    }else
-        cleanname(p->s);
-    p->len = strlen(p->s);
-}
-@
-
-
-<<function uniquepath>>=
-static Path*
-uniquepath(Path *p)
-{
-    Path *new;
-    
-    if(p->ref > 1){
-        /* copy on write */
-        new = copypath(p);
-        pathclose(p);
-        p = new;
-    }
-    return p;
-}
-@
-
-
-<<function addelem>>=
-static Path*
-addelem(Path *p, char *s, Chan *from)
-{
-    char *t;
-    int a, i;
-    Chan *c, **tt;
-
-    if(s[0]=='.' && s[1]=='\0')
-        return p;
-
-    p = uniquepath(p);
-
-    i = strlen(s);
-    if(p->len+1+i+1 > p->alen){
-        a = p->len+1+i+1 + PATHSLOP;
-        t = smalloc(a);
-        memmove(t, p->s, p->len+1);
-        free(p->s);
-        p->s = t;
-        p->alen = a;
-    }
-    /* don't insert extra slash if one is present */
-    if(p->len>0 && p->s[p->len-1]!='/' && s[0]!='/')
-        p->s[p->len++] = '/';
-    memmove(p->s+p->len, s, i+1);
-    p->len += i;
-    if(isdotdot(s)){
-        fixdotdotname(p);
-        DBG("addelem %s .. => rm %p\n", p->s, p->mtpt[p->mlen-1]);
-        if(p->mlen>1 && (c = p->mtpt[--p->mlen])){
-            p->mtpt[p->mlen] = nil;
-            cclose(c);
-        }
-    }else{
-        if(p->mlen >= p->malen){
-            p->malen = p->mlen+1+PATHMSLOP;
-            tt = smalloc(p->malen*sizeof tt[0]);
-            memmove(tt, p->mtpt, p->mlen*sizeof tt[0]);
-            free(p->mtpt);
-            p->mtpt = tt;
-        }
-        DBG("addelem %s %s => add %p\n", p->s, s, from);
-        p->mtpt[p->mlen++] = from;
-        if(from)
-            incref(from);
-    }
-    return p;
-}
-@
-
-<<function pathlast>>=
-static char*
-pathlast(Path *p)
-{
-    char *s;
-
-    if(p == nil)
-        return nil;
-    if(p->len == 0)
-        return nil;
-    s = strrchr(p->s, '/');
-    if(s)
-        return s+1;
-    return p->s;
-}
-@
-
-
-<<function chanpath>>=
-char*
-chanpath(Chan *c)
-{
-    if(c == nil)
-        return "<nil chan>";
-    if(c->path == nil)
-        return "<nil path>";
-    if(c->path->s == nil)
-        return "<nil path.s>";
-    return c->path->s;
-}
-@
-
-
-
-
-
-<<function skipslash>>=
-/*
- * name is valid. skip leading / and ./ as much as possible
- */
-char*
-skipslash(char *name)
-{
-    while(name[0]=='/' || (name[0]=='.' && (name[1]==0 || name[1]=='/')))
-        name++;
-    return name;
-}
-@
-
-<<function emptystr>>=
-bool
-emptystr(char *s)
-{
-    if(s == nil)
-        return true;
-    if(s[0] == '\0')
-        return true;
-    return false;
-}
-@
-
-
-<<global isfrog>>=
-char isfrog[256]={
-    /*NUL*/ 1, 1, 1, 1, 1, 1, 1, 1,
-    /*BKS*/ 1, 1, 1, 1, 1, 1, 1, 1,
-    /*DLE*/ 1, 1, 1, 1, 1, 1, 1, 1,
-    /*CAN*/ 1, 1, 1, 1, 1, 1, 1, 1,
-    ['/']   1,
-    [0x7f]  1,
-};
-@
-
-<<macro SEP>>=
-#define SEP(c) ((c) == 0 || (c) == '/')
-@
-
-
-<<function isdotdot>>=
-int
-isdotdot(char *p)
-{
-    return p[0]=='.' && p[1]=='.' && p[2]=='\0';
-}
-@
 
 
 \section{[[Block]]}
@@ -12369,7 +12154,1068 @@ devno(int c, int user)
 }
 @
 
-\section{Directories}
+
+
+\section{File descriptors}
+
+<<struct Fgrp>>=
+struct Fgrp
+{
+    // array<ref_counted<Chan>, smalloc'ed?
+    Chan  **fd;
+    // nelem(fd) ?
+    int nfd;      /* number allocated */
+    int maxfd;      /* highest fd in use */
+  
+    int exceed;     /* debugging */
+  
+    // extra
+    Ref;
+};
+@ 
+
+<<[[Proc]] files fields>>=
+// ref_counted<fgrp>
+Fgrp  *fgrp;    /* File descriptor group */
+@
+
+<<function dupfgrp>>=
+Fgrp*
+dupfgrp(Fgrp *f)
+{
+    Fgrp *new;
+    Chan *c;
+    int i;
+
+    new = smalloc(sizeof(Fgrp));
+    if(f == nil){
+        new->fd = smalloc(DELTAFD*sizeof(Chan*));
+        new->nfd = DELTAFD;
+        new->ref = 1;
+        return new;
+    }
+
+    lock(f);
+    /* Make new fd list shorter if possible, preserving quantization */
+    new->nfd = f->maxfd+1;
+    i = new->nfd%DELTAFD;
+    if(i != 0)
+        new->nfd += DELTAFD - i;
+    new->fd = malloc(new->nfd*sizeof(Chan*));
+    if(new->fd == nil){
+        unlock(f);
+        free(new);
+        error("no memory for fgrp");
+    }
+    new->ref = 1;
+
+    new->maxfd = f->maxfd;
+    for(i = 0; i <= f->maxfd; i++) {
+        if(c = f->fd[i]){
+            incref(c);
+            new->fd[i] = c;
+        }
+    }
+    unlock(f);
+
+    return new;
+}
+@ 
+
+
+<<function closefgrp>>=
+void
+closefgrp(Fgrp *f)
+{
+    int i;
+    Chan *c;
+
+    if(f == 0)
+        return;
+
+    if(decref(f) != 0)
+        return;
+
+    /*
+     * If we get into trouble, forceclosefgrp
+     * will bail us out.
+     */
+    up->closingfgrp = f;
+    for(i = 0; i <= f->maxfd; i++)
+        if(c = f->fd[i]){
+            f->fd[i] = nil;
+            cclose(c);
+        }
+    up->closingfgrp = nil;
+
+    free(f->fd);
+    free(f);
+}
+@ 
+
+
+<<function forceclosefgrp>>=
+/*
+ * Called from sleep because up is in the middle
+ * of closefgrp and just got a kill ctl message.
+ * This usually means that up has wedged because
+ * of some kind of deadly embrace with mntclose
+ * trying to talk to itself.  To break free, hand the
+ * unclosed channels to the close queue.  Once they
+ * are finished, the blocked cclose that we've 
+ * interrupted will finish by itself.
+ */
+void
+forceclosefgrp(void)
+{
+    int i;
+    Chan *c;
+    Fgrp *f;
+
+    if(up->procctl != Proc_exitme || up->closingfgrp == nil){
+        print("bad forceclosefgrp call");
+        return;
+    }
+
+    f = up->closingfgrp;
+    for(i = 0; i <= f->maxfd; i++)
+        if(c = f->fd[i]){
+            f->fd[i] = nil;
+            ccloseq(c);
+        }
+}
+@ 
+
+
+
+<<function fdtochan>>=
+Chan*
+fdtochan(int fd, int mode, int chkmnt, int iref)
+{
+    Chan *c;
+    Fgrp *f;
+
+    c = 0;
+    f = up->fgrp;
+
+    lock(f);
+    if(fd<0 || f->nfd<=fd || (c = f->fd[fd])==0) {
+        unlock(f);
+        error(Ebadfd);
+    }
+    if(iref)
+        incref(c);
+    unlock(f);
+
+    if(chkmnt && (c->flag&CMSG)) {
+        if(iref)
+            cclose(c);
+        error(Ebadusefd);
+    }
+
+    if(mode<0 || c->mode==ORDWR)
+        return c;
+
+    if((mode&OTRUNC) && c->mode==OREAD) {
+        if(iref)
+            cclose(c);
+        error(Ebadusefd);
+    }
+
+    if((mode&~OTRUNC) != c->mode) {
+        if(iref)
+            cclose(c);
+        error(Ebadusefd);
+    }
+
+    return c;
+}
+@
+
+
+<<function unlockfgrp>>=
+static void
+unlockfgrp(Fgrp *f)
+{
+    int ex;
+
+    ex = f->exceed;
+    f->exceed = 0;
+    unlock(f);
+    if(ex)
+        pprint("warning: process exceeds %d file descriptors\n", ex);
+}
+@
+
+
+<<function growfd>>=
+int
+growfd(Fgrp *f, int fd) /* fd is always >= 0 */
+{
+    Chan **newfd, **oldfd;
+
+    if(fd < f->nfd)
+        return 0;
+    if(fd >= f->nfd+DELTAFD)
+        return -1;  /* out of range */
+    /*
+     * Unbounded allocation is unwise
+     */
+    if(f->nfd >= 5000){
+    Exhausted:
+        print("no free file descriptors\n");
+        return -1;
+    }
+    newfd = malloc((f->nfd+DELTAFD)*sizeof(Chan*));
+    if(newfd == 0)
+        goto Exhausted;
+    oldfd = f->fd;
+    memmove(newfd, oldfd, f->nfd*sizeof(Chan*));
+    f->fd = newfd;
+    free(oldfd);
+    f->nfd += DELTAFD;
+    if(fd > f->maxfd){
+        if(fd/100 > f->maxfd/100)
+            f->exceed = (fd/100)*100;
+        f->maxfd = fd;
+    }
+    return 1;
+}
+@
+
+
+<<function findfreefd>>=
+/*
+ *  this assumes that the fgrp is locked
+ */
+int
+findfreefd(Fgrp *f, int start)
+{
+    int fd;
+
+    for(fd=start; fd<f->nfd; fd++)
+        if(f->fd[fd] == 0)
+            break;
+    if(fd >= f->nfd && growfd(f, fd) < 0)
+        return -1;
+    return fd;
+}
+@
+
+
+<<function newfd>>=
+int
+newfd(Chan *c)
+{
+    int fd;
+    Fgrp *f;
+
+    f = up->fgrp;
+    lock(f);
+    fd = findfreefd(f, 0);
+    if(fd < 0){
+        unlockfgrp(f);
+        return -1;
+    }
+    if(fd > f->maxfd)
+        f->maxfd = fd;
+    f->fd[fd] = c;
+    unlockfgrp(f);
+    return fd;
+}
+@
+
+
+<<function newfd2>>=
+int
+newfd2(int fd[2], Chan *c[2])
+{
+    Fgrp *f;
+
+    f = up->fgrp;
+    lock(f);
+    fd[0] = findfreefd(f, 0);
+    if(fd[0] < 0){
+        unlockfgrp(f);
+        return -1;
+    }
+    fd[1] = findfreefd(f, fd[0]+1);
+    if(fd[1] < 0){
+        unlockfgrp(f);
+        return -1;
+    }
+    if(fd[1] > f->maxfd)
+        f->maxfd = fd[1];
+    f->fd[fd[0]] = c[0];
+    f->fd[fd[1]] = c[1];
+    unlockfgrp(f);
+
+    return 0;
+}
+@
+
+
+\section {[[sysopen()]], [[sysclose()]]}
+
+
+<<syscall open>>=
+long
+sysopen(ulong *arg)
+{
+    int fd;
+    Chan *c;
+
+    openmode(arg[1]);   /* error check only */
+    validaddr(arg[0], 1, 0);
+    c = namec((char*)arg[0], Aopen, arg[1], 0);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    fd = newfd(c);
+    if(fd < 0)
+        error(Enofd);
+    poperror();
+    return fd;
+}
+@
+
+
+
+<<syscall close>>=
+long
+sysclose(ulong *arg)
+{
+    fdtochan(arg[0], -1, 0, 0);
+    fdclose(arg[0], 0);
+
+    return 0;
+}
+@
+
+<<function fdclose>>=
+void
+fdclose(int fd, int flag)
+{
+    int i;
+    Chan *c;
+    Fgrp *f = up->fgrp;
+
+    lock(f);
+    c = f->fd[fd];
+    if(c == 0){
+        /* can happen for users with shared fd tables */
+        unlock(f);
+        return;
+    }
+    if(flag){
+        if(c==0 || !(c->flag&flag)){
+            unlock(f);
+            return;
+        }
+    }
+    f->fd[fd] = 0;
+    if(fd == f->maxfd)
+        for(i=fd; --i>=0 && f->fd[i]==0; )
+            f->maxfd = i;
+
+    unlock(f);
+    cclose(c);
+}
+@
+
+\section {[[syspread()]], [[syspwrite()]]}
+
+<<function read>>=
+static long
+read(ulong *arg, vlong *offp)
+{
+    long n, nn, nnn;
+    uchar *p;
+    Chan *c;
+    vlong off;
+
+    n = arg[2];
+    validaddr(arg[1], n, 1);
+    p = (void*)arg[1];
+    c = fdtochan(arg[0], OREAD, 1, 1);
+
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+
+    /*
+     * The offset is passed through on directories, normally.
+     * Sysseek complains, but pread is used by servers like exportfs,
+     * that shouldn't need to worry about this issue.
+     *
+     * Notice that c->devoffset is the offset that c's dev is seeing.
+     * The number of bytes read on this fd (c->offset) may be different
+     * due to rewritings in rockfix.
+     */
+    if(offp == nil) /* use and maintain channel's offset */
+        off = c->offset;
+    else
+        off = *offp;
+    if(off < 0)
+        error(Enegoff);
+
+    if(off == 0){   /* rewind to the beginning of the directory */
+        if(offp == nil){
+            c->offset = 0;
+            c->devoffset = 0;
+        }
+        mountrewind(c);
+        unionrewind(c);
+    }
+
+    if(c->qid.type & QTDIR){
+        if(mountrockread(c, p, n, &nn)){
+            /* do nothing: mountrockread filled buffer */
+        }else if(c->umh)
+            nn = unionread(c, p, n);
+        else{
+            if(off != c->offset)
+                error(Edirseek);
+            nn = devtab[c->type]->read(c, p, n, c->devoffset);
+        }
+        nnn = mountfix(c, p, nn, n);
+    }else
+        nnn = nn = devtab[c->type]->read(c, p, n, off);
+
+    lock(c);
+    c->devoffset += nn;
+    c->offset += nnn;
+    unlock(c);
+
+    poperror();
+    cclose(c);
+
+    return nnn;
+}
+@
+
+
+<<syscall pread>>=
+long
+syspread(ulong *arg)
+{
+    vlong v;
+    va_list list;
+
+    /* use varargs to guarantee alignment of vlong */
+    va_start(list, arg[2]);
+    v = va_arg(list, vlong);
+    va_end(list);
+
+    if(v == ~0ULL)
+        return read(arg, nil);
+
+    return read(arg, &v);
+}
+@
+
+
+<<function write>>=
+static long
+write(ulong *arg, vlong *offp)
+{
+    Chan *c;
+    long m, n;
+    vlong off;
+
+    validaddr(arg[1], arg[2], 0);
+    n = 0;
+    c = fdtochan(arg[0], OWRITE, 1, 1);
+    if(waserror()) {
+        if(offp == nil){
+            lock(c);
+            c->offset -= n;
+            unlock(c);
+        }
+        cclose(c);
+        nexterror();
+    }
+
+    if(c->qid.type & QTDIR)
+        error(Eisdir);
+
+    n = arg[2];
+
+    if(offp == nil){    /* use and maintain channel's offset */
+        lock(c);
+        off = c->offset;
+        c->offset += n;
+        unlock(c);
+    }else
+        off = *offp;
+
+    if(off < 0)
+        error(Enegoff);
+
+    m = devtab[c->type]->write(c, (void*)arg[1], n, off);
+
+    if(offp == nil && m < n){
+        lock(c);
+        c->offset -= n - m;
+        unlock(c);
+    }
+
+    poperror();
+    cclose(c);
+
+    return m;
+}
+@
+
+
+<<syscall pwrite>>=
+long
+syspwrite(ulong *arg)
+{
+    vlong v;
+    va_list list;
+
+    /* use varargs to guarantee alignment of vlong */
+    va_start(list, arg[2]);
+    v = va_arg(list, vlong);
+    va_end(list);
+
+    if(v == ~0ULL)
+        return write(arg, nil);
+
+    return write(arg, &v);
+}
+@
+
+\section {[[sysstat()]]}
+
+<<function validstat>>=
+void
+validstat(uchar *s, int n)
+{
+    int m;
+    char buf[64];
+
+    if(statcheck(s, n) < 0)
+        error(Ebadstat);
+    /* verify that name entry is acceptable */
+    s += STATFIXLEN - 4*BIT16SZ;    /* location of first string */
+    /*
+     * s now points at count for first string.
+     * if it's too long, let the server decide; this is
+     * only for his protection anyway. otherwise
+     * we'd have to allocate and waserror.
+     */
+    m = GBIT16(s);
+    s += BIT16SZ;
+    if(m+1 > sizeof buf)
+        return;
+    memmove(buf, s, m);
+    buf[m] = '\0';
+    /* name could be '/' */
+    if(strcmp(buf, "/") != 0)
+        validname(buf, 0);
+}
+@
+
+
+<<function wstat>>=
+static long
+wstat(Chan *c, uchar *d, int nd)
+{
+    long l;
+    int namelen;
+
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    if(c->ismtpt){
+        /*
+         * Renaming mount points is disallowed to avoid surprises
+         * (which should be renamed? the mount point or the mounted Chan?).
+         */
+        dirname(d, &namelen);
+        if(namelen)
+            nameerror(chanpath(c), Eismtpt);
+    }
+    l = devtab[c->type]->wstat(c, d, nd);
+    poperror();
+    cclose(c);
+    return l;
+}
+@
+
+
+<<syscall wstat>>=
+long
+syswstat(ulong *arg)
+{
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, 0);
+    validstat((uchar*)arg[1], l);
+    validaddr(arg[0], 1, 0);
+    c = namec((char*)arg[0], Aaccess, 0, 0);
+    return wstat(c, (uchar*)arg[1], l);
+}
+@
+
+
+<<syscall fwstat>>=
+long
+sysfwstat(ulong *arg)
+{
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, 0);
+    validstat((uchar*)arg[1], l);
+    c = fdtochan(arg[0], -1, 1, 1);
+    return wstat(c, (uchar*)arg[1], l);
+}
+@
+
+<<syscall fstat>>=
+long
+sysfstat(ulong *arg)
+{
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, 1);
+    c = fdtochan(arg[0], -1, 0, 1);
+    if(waserror()) {
+        cclose(c);
+        nexterror();
+    }
+    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+    poperror();
+    cclose(c);
+    return l;
+}
+@
+
+
+<<syscall stat>>=
+long
+sysstat(ulong *arg)
+{
+    char *name;
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, 1);
+    validaddr(arg[0], 1, 0);
+    c = namec((char*)arg[0], Aaccess, 0, 0);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+    name = pathlast(c->path);
+    if(name)
+        l = dirsetname(name, strlen(name), (uchar*)arg[1], l, arg[2]);
+
+    poperror();
+    cclose(c);
+    return l;
+}
+@
+
+
+\section{[[sysseek()]]}
+
+<<function sseek>>=
+static void
+sseek(ulong *arg)
+{
+    Chan *c;
+    uchar buf[sizeof(Dir)+100];
+    Dir dir;
+    int n;
+    vlong off;
+    union {
+        vlong v;
+        ulong u[2];
+    } o;
+
+    c = fdtochan(arg[1], -1, 1, 1);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    if(devtab[c->type]->dc == '|')
+        error(Eisstream);
+
+    off = 0;
+    o.u[0] = arg[2];
+    o.u[1] = arg[3];
+    switch(arg[4]){
+    case 0:
+        off = o.v;
+        if((c->qid.type & QTDIR) && off != 0)
+            error(Eisdir);
+        if(off < 0)
+            error(Enegoff);
+        c->offset = off;
+        break;
+
+    case 1:
+        if(c->qid.type & QTDIR)
+            error(Eisdir);
+        lock(c);    /* lock for read/write update */
+        off = o.v + c->offset;
+        if(off < 0){
+            unlock(c);
+            error(Enegoff);
+        }
+        c->offset = off;
+        unlock(c);
+        break;
+
+    case 2:
+        if(c->qid.type & QTDIR)
+            error(Eisdir);
+        n = devtab[c->type]->stat(c, buf, sizeof buf);
+        if(convM2D(buf, n, &dir, nil) == 0)
+            error("internal error: stat error in seek");
+        off = dir.length + o.v;
+        if(off < 0)
+            error(Enegoff);
+        c->offset = off;
+        break;
+
+    default:
+        error(Ebadarg);
+    }
+    *(vlong*)arg[0] = off;
+    c->uri = 0;
+    c->dri = 0;
+    cclose(c);
+    poperror();
+}
+@
+
+
+<<syscall seek>>=
+long
+sysseek(ulong *arg)
+{
+    validaddr(arg[0], BY2V, 1);
+    sseek(arg);
+    return 0;
+}
+@
+
+
+\chapter{Directories}
+
+\section{Overview}
+
+\section{[[Path]]}
+
+<<struct Path>>=
+struct Path
+{
+  Ref;
+  char  *s;
+  Chan  **mtpt;     /* mtpt history */
+  int len;      /* strlen(s) */
+  int alen;     /* allocated length of s */
+  int mlen;     /* number of path elements */
+  int malen;      /* allocated length of mtpt */
+};
+@
+
+<<global npath>>=
+Ref npath;
+@
+
+
+<<function newpath>>=
+Path*
+newpath(char *s)
+{
+    int i;
+    Path *p;
+
+    p = smalloc(sizeof(Path));
+    i = strlen(s);
+    p->len = i;
+    p->alen = i+PATHSLOP;
+    p->s = smalloc(p->alen);
+    memmove(p->s, s, i+1);
+    p->ref = 1;
+    incref(&npath);
+
+    /*
+     * Cannot use newpath for arbitrary names because the mtpt 
+     * array will not be populated correctly.  The names #/ and / are
+     * allowed, but other names with / in them draw warnings.
+     */
+    if(strchr(s, '/') && strcmp(s, "#/") != 0 && strcmp(s, "/") != 0)
+        print("newpath: %s from %#p\n", s, getcallerpc(&s));
+
+    p->mlen = 1;
+    p->malen = PATHMSLOP;
+    p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]);
+    return p;
+}
+@
+
+
+<<function copypath>>=
+//@Scheck: not dead, used below
+static Path*
+copypath(Path *p)
+{
+    int i;
+    Path *pp;
+    
+    pp = smalloc(sizeof(Path));
+    pp->ref = 1;
+    incref(&npath);
+    DBG("copypath %s %p => %p\n", p->s, p, pp);
+    
+    pp->len = p->len;
+    pp->alen = p->alen;
+    pp->s = smalloc(p->alen);
+    memmove(pp->s, p->s, p->len+1);
+    
+    pp->mlen = p->mlen;
+    pp->malen = p->malen;
+    pp->mtpt = smalloc(p->malen*sizeof pp->mtpt[0]);
+    for(i=0; i<pp->mlen; i++){
+        pp->mtpt[i] = p->mtpt[i];
+        if(pp->mtpt[i])
+            incref(pp->mtpt[i]);
+    }
+
+    return pp;
+}
+@
+
+
+<<function pathclose>>=
+void
+pathclose(Path *p)
+{
+    int i;
+    
+    if(p == nil)
+        return;
+
+    DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
+    for(i=0; i<p->mlen; i++)
+        DBG(" %p", p->mtpt[i]);
+    DBG("\n");
+
+    if(decref(p))
+        return;
+    decref(&npath);
+    free(p->s);
+    for(i=0; i<p->mlen; i++)
+        if(p->mtpt[i])
+            cclose(p->mtpt[i]);
+    free(p->mtpt);
+    free(p);
+}
+@
+
+
+<<function fixdotdotname>>=
+/*
+ * In place, rewrite name to compress multiple /, eliminate ., and process ..
+ * (Really only called to remove a trailing .. that has been added.
+ * Otherwise would need to update n->mtpt as well.)
+ */
+static void
+fixdotdotname(Path *p)
+{
+    char *r;
+
+    if(p->s[0] == '#'){
+        r = strchr(p->s, '/');
+        if(r == nil)
+            return;
+        cleanname(r);
+
+        /*
+         * The correct name is #i rather than #i/,
+         * but the correct name of #/ is #/.
+         */
+        if(strcmp(r, "/")==0 && p->s[1] != '/')
+            *r = '\0';
+    }else
+        cleanname(p->s);
+    p->len = strlen(p->s);
+}
+@
+
+
+<<function uniquepath>>=
+static Path*
+uniquepath(Path *p)
+{
+    Path *new;
+    
+    if(p->ref > 1){
+        /* copy on write */
+        new = copypath(p);
+        pathclose(p);
+        p = new;
+    }
+    return p;
+}
+@
+
+
+<<function addelem>>=
+static Path*
+addelem(Path *p, char *s, Chan *from)
+{
+    char *t;
+    int a, i;
+    Chan *c, **tt;
+
+    if(s[0]=='.' && s[1]=='\0')
+        return p;
+
+    p = uniquepath(p);
+
+    i = strlen(s);
+    if(p->len+1+i+1 > p->alen){
+        a = p->len+1+i+1 + PATHSLOP;
+        t = smalloc(a);
+        memmove(t, p->s, p->len+1);
+        free(p->s);
+        p->s = t;
+        p->alen = a;
+    }
+    /* don't insert extra slash if one is present */
+    if(p->len>0 && p->s[p->len-1]!='/' && s[0]!='/')
+        p->s[p->len++] = '/';
+    memmove(p->s+p->len, s, i+1);
+    p->len += i;
+    if(isdotdot(s)){
+        fixdotdotname(p);
+        DBG("addelem %s .. => rm %p\n", p->s, p->mtpt[p->mlen-1]);
+        if(p->mlen>1 && (c = p->mtpt[--p->mlen])){
+            p->mtpt[p->mlen] = nil;
+            cclose(c);
+        }
+    }else{
+        if(p->mlen >= p->malen){
+            p->malen = p->mlen+1+PATHMSLOP;
+            tt = smalloc(p->malen*sizeof tt[0]);
+            memmove(tt, p->mtpt, p->mlen*sizeof tt[0]);
+            free(p->mtpt);
+            p->mtpt = tt;
+        }
+        DBG("addelem %s %s => add %p\n", p->s, s, from);
+        p->mtpt[p->mlen++] = from;
+        if(from)
+            incref(from);
+    }
+    return p;
+}
+@
+
+<<function pathlast>>=
+static char*
+pathlast(Path *p)
+{
+    char *s;
+
+    if(p == nil)
+        return nil;
+    if(p->len == 0)
+        return nil;
+    s = strrchr(p->s, '/');
+    if(s)
+        return s+1;
+    return p->s;
+}
+@
+
+
+<<function chanpath>>=
+char*
+chanpath(Chan *c)
+{
+    if(c == nil)
+        return "<nil chan>";
+    if(c->path == nil)
+        return "<nil path>";
+    if(c->path->s == nil)
+        return "<nil path.s>";
+    return c->path->s;
+}
+@
+
+
+
+
+
+<<function skipslash>>=
+/*
+ * name is valid. skip leading / and ./ as much as possible
+ */
+char*
+skipslash(char *name)
+{
+    while(name[0]=='/' || (name[0]=='.' && (name[1]==0 || name[1]=='/')))
+        name++;
+    return name;
+}
+@
+
+<<function emptystr>>=
+bool
+emptystr(char *s)
+{
+    if(s == nil)
+        return true;
+    if(s[0] == '\0')
+        return true;
+    return false;
+}
+@
+
+
+<<global isfrog>>=
+char isfrog[256]={
+    /*NUL*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    /*BKS*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    /*DLE*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    /*CAN*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    ['/']   1,
+    [0x7f]  1,
+};
+@
+
+<<macro SEP>>=
+#define SEP(c) ((c) == 0 || (c) == '/')
+@
+
+
+<<function isdotdot>>=
+int
+isdotdot(char *p)
+{
+    return p[0]=='.' && p[1]=='.' && p[2]=='\0';
+}
+@
+
+\section{[[Dir]]}
 
 <<struct Dir>>=
 struct Dir {
@@ -12589,6 +13435,71 @@ dirsetname(char *name, int len, uchar *p, long n, long maxn)
     return nn;
 }
 @
+
+\section{Union directories}
+
+<<function unionread>>=
+long
+unionread(Chan *c, void *va, long n)
+{
+    int i;
+    long nr;
+    Mhead *m;
+    Mount *mount;
+
+    qlock(&c->umqlock);
+    m = c->umh;
+    rlock(&m->lock);
+    mount = m->mount;
+    /* bring mount in sync with c->uri and c->umc */
+    for(i = 0; mount != nil && i < c->uri; i++)
+        mount = mount->next;
+
+    nr = 0;
+    while(mount != nil){
+        /* Error causes component of union to be skipped */
+        if(mount->to && !waserror()){
+            if(c->umc == nil){
+                c->umc = cclone(mount->to);
+                c->umc = devtab[c->umc->type]->open(c->umc, OREAD);
+            }
+    
+            nr = devtab[c->umc->type]->read(c->umc, va, n, c->umc->offset);
+            c->umc->offset += nr;
+            poperror();
+        }
+        if(nr > 0)
+            break;
+
+        /* Advance to next element */
+        c->uri++;
+        if(c->umc){
+            cclose(c->umc);
+            c->umc = nil;
+        }
+        mount = mount->next;
+    }
+    runlock(&m->lock);
+    qunlock(&c->umqlock);
+    return nr;
+}
+@
+
+
+<<function unionrewind>>=
+static void
+unionrewind(Chan *c)
+{
+    qlock(&c->umqlock);
+    c->uri = 0;
+    if(c->umc){
+        cclose(c->umc);
+        c->umc = nil;
+    }
+    qunlock(&c->umqlock);
+}
+@
+
 
 \section{[[namec()]]}
 % first part
@@ -12980,306 +13891,6 @@ if(c->umh != nil){
 @
 
 
-
-\section{File descriptors}
-
-<<struct Fgrp>>=
-struct Fgrp
-{
-    // array<ref_counted<Chan>, smalloc'ed?
-    Chan  **fd;
-    // nelem(fd) ?
-    int nfd;      /* number allocated */
-    int maxfd;      /* highest fd in use */
-  
-    int exceed;     /* debugging */
-  
-    // extra
-    Ref;
-};
-@ 
-
-<<[[Proc]] files fields>>=
-// ref_counted<fgrp>
-Fgrp  *fgrp;    /* File descriptor group */
-@
-
-<<function dupfgrp>>=
-Fgrp*
-dupfgrp(Fgrp *f)
-{
-    Fgrp *new;
-    Chan *c;
-    int i;
-
-    new = smalloc(sizeof(Fgrp));
-    if(f == nil){
-        new->fd = smalloc(DELTAFD*sizeof(Chan*));
-        new->nfd = DELTAFD;
-        new->ref = 1;
-        return new;
-    }
-
-    lock(f);
-    /* Make new fd list shorter if possible, preserving quantization */
-    new->nfd = f->maxfd+1;
-    i = new->nfd%DELTAFD;
-    if(i != 0)
-        new->nfd += DELTAFD - i;
-    new->fd = malloc(new->nfd*sizeof(Chan*));
-    if(new->fd == nil){
-        unlock(f);
-        free(new);
-        error("no memory for fgrp");
-    }
-    new->ref = 1;
-
-    new->maxfd = f->maxfd;
-    for(i = 0; i <= f->maxfd; i++) {
-        if(c = f->fd[i]){
-            incref(c);
-            new->fd[i] = c;
-        }
-    }
-    unlock(f);
-
-    return new;
-}
-@ 
-
-
-<<function closefgrp>>=
-void
-closefgrp(Fgrp *f)
-{
-    int i;
-    Chan *c;
-
-    if(f == 0)
-        return;
-
-    if(decref(f) != 0)
-        return;
-
-    /*
-     * If we get into trouble, forceclosefgrp
-     * will bail us out.
-     */
-    up->closingfgrp = f;
-    for(i = 0; i <= f->maxfd; i++)
-        if(c = f->fd[i]){
-            f->fd[i] = nil;
-            cclose(c);
-        }
-    up->closingfgrp = nil;
-
-    free(f->fd);
-    free(f);
-}
-@ 
-
-
-<<function forceclosefgrp>>=
-/*
- * Called from sleep because up is in the middle
- * of closefgrp and just got a kill ctl message.
- * This usually means that up has wedged because
- * of some kind of deadly embrace with mntclose
- * trying to talk to itself.  To break free, hand the
- * unclosed channels to the close queue.  Once they
- * are finished, the blocked cclose that we've 
- * interrupted will finish by itself.
- */
-void
-forceclosefgrp(void)
-{
-    int i;
-    Chan *c;
-    Fgrp *f;
-
-    if(up->procctl != Proc_exitme || up->closingfgrp == nil){
-        print("bad forceclosefgrp call");
-        return;
-    }
-
-    f = up->closingfgrp;
-    for(i = 0; i <= f->maxfd; i++)
-        if(c = f->fd[i]){
-            f->fd[i] = nil;
-            ccloseq(c);
-        }
-}
-@ 
-
-
-
-<<function fdtochan>>=
-Chan*
-fdtochan(int fd, int mode, int chkmnt, int iref)
-{
-    Chan *c;
-    Fgrp *f;
-
-    c = 0;
-    f = up->fgrp;
-
-    lock(f);
-    if(fd<0 || f->nfd<=fd || (c = f->fd[fd])==0) {
-        unlock(f);
-        error(Ebadfd);
-    }
-    if(iref)
-        incref(c);
-    unlock(f);
-
-    if(chkmnt && (c->flag&CMSG)) {
-        if(iref)
-            cclose(c);
-        error(Ebadusefd);
-    }
-
-    if(mode<0 || c->mode==ORDWR)
-        return c;
-
-    if((mode&OTRUNC) && c->mode==OREAD) {
-        if(iref)
-            cclose(c);
-        error(Ebadusefd);
-    }
-
-    if((mode&~OTRUNC) != c->mode) {
-        if(iref)
-            cclose(c);
-        error(Ebadusefd);
-    }
-
-    return c;
-}
-@
-
-
-<<function unlockfgrp>>=
-static void
-unlockfgrp(Fgrp *f)
-{
-    int ex;
-
-    ex = f->exceed;
-    f->exceed = 0;
-    unlock(f);
-    if(ex)
-        pprint("warning: process exceeds %d file descriptors\n", ex);
-}
-@
-
-
-<<function growfd>>=
-int
-growfd(Fgrp *f, int fd) /* fd is always >= 0 */
-{
-    Chan **newfd, **oldfd;
-
-    if(fd < f->nfd)
-        return 0;
-    if(fd >= f->nfd+DELTAFD)
-        return -1;  /* out of range */
-    /*
-     * Unbounded allocation is unwise
-     */
-    if(f->nfd >= 5000){
-    Exhausted:
-        print("no free file descriptors\n");
-        return -1;
-    }
-    newfd = malloc((f->nfd+DELTAFD)*sizeof(Chan*));
-    if(newfd == 0)
-        goto Exhausted;
-    oldfd = f->fd;
-    memmove(newfd, oldfd, f->nfd*sizeof(Chan*));
-    f->fd = newfd;
-    free(oldfd);
-    f->nfd += DELTAFD;
-    if(fd > f->maxfd){
-        if(fd/100 > f->maxfd/100)
-            f->exceed = (fd/100)*100;
-        f->maxfd = fd;
-    }
-    return 1;
-}
-@
-
-
-<<function findfreefd>>=
-/*
- *  this assumes that the fgrp is locked
- */
-int
-findfreefd(Fgrp *f, int start)
-{
-    int fd;
-
-    for(fd=start; fd<f->nfd; fd++)
-        if(f->fd[fd] == 0)
-            break;
-    if(fd >= f->nfd && growfd(f, fd) < 0)
-        return -1;
-    return fd;
-}
-@
-
-
-<<function newfd>>=
-int
-newfd(Chan *c)
-{
-    int fd;
-    Fgrp *f;
-
-    f = up->fgrp;
-    lock(f);
-    fd = findfreefd(f, 0);
-    if(fd < 0){
-        unlockfgrp(f);
-        return -1;
-    }
-    if(fd > f->maxfd)
-        f->maxfd = fd;
-    f->fd[fd] = c;
-    unlockfgrp(f);
-    return fd;
-}
-@
-
-
-<<function newfd2>>=
-int
-newfd2(int fd[2], Chan *c[2])
-{
-    Fgrp *f;
-
-    f = up->fgrp;
-    lock(f);
-    fd[0] = findfreefd(f, 0);
-    if(fd[0] < 0){
-        unlockfgrp(f);
-        return -1;
-    }
-    fd[1] = findfreefd(f, fd[0]+1);
-    if(fd[1] < 0){
-        unlockfgrp(f);
-        return -1;
-    }
-    if(fd[1] > f->maxfd)
-        f->maxfd = fd[1];
-    f->fd[fd[0]] = c[0];
-    f->fd[fd[1]] = c[1];
-    unlockfgrp(f);
-
-    return 0;
-}
-@
-
-
 \section{[[syscreate()]], [[sysremove()]]}
 
 <<function openmode>>=
@@ -13350,383 +13961,6 @@ sysremove(ulong *arg)
     return 0;
 }
 @
-
-\section {[[sysopen()]], [[sysclose()]]}
-
-
-<<syscall open>>=
-long
-sysopen(ulong *arg)
-{
-    int fd;
-    Chan *c;
-
-    openmode(arg[1]);   /* error check only */
-    validaddr(arg[0], 1, 0);
-    c = namec((char*)arg[0], Aopen, arg[1], 0);
-    if(waserror()){
-        cclose(c);
-        nexterror();
-    }
-    fd = newfd(c);
-    if(fd < 0)
-        error(Enofd);
-    poperror();
-    return fd;
-}
-@
-
-
-
-<<syscall close>>=
-long
-sysclose(ulong *arg)
-{
-    fdtochan(arg[0], -1, 0, 0);
-    fdclose(arg[0], 0);
-
-    return 0;
-}
-@
-
-<<function fdclose>>=
-void
-fdclose(int fd, int flag)
-{
-    int i;
-    Chan *c;
-    Fgrp *f = up->fgrp;
-
-    lock(f);
-    c = f->fd[fd];
-    if(c == 0){
-        /* can happen for users with shared fd tables */
-        unlock(f);
-        return;
-    }
-    if(flag){
-        if(c==0 || !(c->flag&flag)){
-            unlock(f);
-            return;
-        }
-    }
-    f->fd[fd] = 0;
-    if(fd == f->maxfd)
-        for(i=fd; --i>=0 && f->fd[i]==0; )
-            f->maxfd = i;
-
-    unlock(f);
-    cclose(c);
-}
-@
-
-\section {[[syspread()]], [[syspwrite()]]}
-
-<<function read>>=
-static long
-read(ulong *arg, vlong *offp)
-{
-    long n, nn, nnn;
-    uchar *p;
-    Chan *c;
-    vlong off;
-
-    n = arg[2];
-    validaddr(arg[1], n, 1);
-    p = (void*)arg[1];
-    c = fdtochan(arg[0], OREAD, 1, 1);
-
-    if(waserror()){
-        cclose(c);
-        nexterror();
-    }
-
-    /*
-     * The offset is passed through on directories, normally.
-     * Sysseek complains, but pread is used by servers like exportfs,
-     * that shouldn't need to worry about this issue.
-     *
-     * Notice that c->devoffset is the offset that c's dev is seeing.
-     * The number of bytes read on this fd (c->offset) may be different
-     * due to rewritings in rockfix.
-     */
-    if(offp == nil) /* use and maintain channel's offset */
-        off = c->offset;
-    else
-        off = *offp;
-    if(off < 0)
-        error(Enegoff);
-
-    if(off == 0){   /* rewind to the beginning of the directory */
-        if(offp == nil){
-            c->offset = 0;
-            c->devoffset = 0;
-        }
-        mountrewind(c);
-        unionrewind(c);
-    }
-
-    if(c->qid.type & QTDIR){
-        if(mountrockread(c, p, n, &nn)){
-            /* do nothing: mountrockread filled buffer */
-        }else if(c->umh)
-            nn = unionread(c, p, n);
-        else{
-            if(off != c->offset)
-                error(Edirseek);
-            nn = devtab[c->type]->read(c, p, n, c->devoffset);
-        }
-        nnn = mountfix(c, p, nn, n);
-    }else
-        nnn = nn = devtab[c->type]->read(c, p, n, off);
-
-    lock(c);
-    c->devoffset += nn;
-    c->offset += nnn;
-    unlock(c);
-
-    poperror();
-    cclose(c);
-
-    return nnn;
-}
-@
-
-
-<<syscall pread>>=
-long
-syspread(ulong *arg)
-{
-    vlong v;
-    va_list list;
-
-    /* use varargs to guarantee alignment of vlong */
-    va_start(list, arg[2]);
-    v = va_arg(list, vlong);
-    va_end(list);
-
-    if(v == ~0ULL)
-        return read(arg, nil);
-
-    return read(arg, &v);
-}
-@
-
-
-<<function write>>=
-static long
-write(ulong *arg, vlong *offp)
-{
-    Chan *c;
-    long m, n;
-    vlong off;
-
-    validaddr(arg[1], arg[2], 0);
-    n = 0;
-    c = fdtochan(arg[0], OWRITE, 1, 1);
-    if(waserror()) {
-        if(offp == nil){
-            lock(c);
-            c->offset -= n;
-            unlock(c);
-        }
-        cclose(c);
-        nexterror();
-    }
-
-    if(c->qid.type & QTDIR)
-        error(Eisdir);
-
-    n = arg[2];
-
-    if(offp == nil){    /* use and maintain channel's offset */
-        lock(c);
-        off = c->offset;
-        c->offset += n;
-        unlock(c);
-    }else
-        off = *offp;
-
-    if(off < 0)
-        error(Enegoff);
-
-    m = devtab[c->type]->write(c, (void*)arg[1], n, off);
-
-    if(offp == nil && m < n){
-        lock(c);
-        c->offset -= n - m;
-        unlock(c);
-    }
-
-    poperror();
-    cclose(c);
-
-    return m;
-}
-@
-
-
-<<syscall pwrite>>=
-long
-syspwrite(ulong *arg)
-{
-    vlong v;
-    va_list list;
-
-    /* use varargs to guarantee alignment of vlong */
-    va_start(list, arg[2]);
-    v = va_arg(list, vlong);
-    va_end(list);
-
-    if(v == ~0ULL)
-        return write(arg, nil);
-
-    return write(arg, &v);
-}
-@
-
-\section {[[sysstat()]]}
-
-<<function validstat>>=
-void
-validstat(uchar *s, int n)
-{
-    int m;
-    char buf[64];
-
-    if(statcheck(s, n) < 0)
-        error(Ebadstat);
-    /* verify that name entry is acceptable */
-    s += STATFIXLEN - 4*BIT16SZ;    /* location of first string */
-    /*
-     * s now points at count for first string.
-     * if it's too long, let the server decide; this is
-     * only for his protection anyway. otherwise
-     * we'd have to allocate and waserror.
-     */
-    m = GBIT16(s);
-    s += BIT16SZ;
-    if(m+1 > sizeof buf)
-        return;
-    memmove(buf, s, m);
-    buf[m] = '\0';
-    /* name could be '/' */
-    if(strcmp(buf, "/") != 0)
-        validname(buf, 0);
-}
-@
-
-
-<<function wstat>>=
-static long
-wstat(Chan *c, uchar *d, int nd)
-{
-    long l;
-    int namelen;
-
-    if(waserror()){
-        cclose(c);
-        nexterror();
-    }
-    if(c->ismtpt){
-        /*
-         * Renaming mount points is disallowed to avoid surprises
-         * (which should be renamed? the mount point or the mounted Chan?).
-         */
-        dirname(d, &namelen);
-        if(namelen)
-            nameerror(chanpath(c), Eismtpt);
-    }
-    l = devtab[c->type]->wstat(c, d, nd);
-    poperror();
-    cclose(c);
-    return l;
-}
-@
-
-
-<<syscall wstat>>=
-long
-syswstat(ulong *arg)
-{
-    Chan *c;
-    uint l;
-
-    l = arg[2];
-    validaddr(arg[1], l, 0);
-    validstat((uchar*)arg[1], l);
-    validaddr(arg[0], 1, 0);
-    c = namec((char*)arg[0], Aaccess, 0, 0);
-    return wstat(c, (uchar*)arg[1], l);
-}
-@
-
-
-<<syscall fwstat>>=
-long
-sysfwstat(ulong *arg)
-{
-    Chan *c;
-    uint l;
-
-    l = arg[2];
-    validaddr(arg[1], l, 0);
-    validstat((uchar*)arg[1], l);
-    c = fdtochan(arg[0], -1, 1, 1);
-    return wstat(c, (uchar*)arg[1], l);
-}
-@
-
-<<syscall fstat>>=
-long
-sysfstat(ulong *arg)
-{
-    Chan *c;
-    uint l;
-
-    l = arg[2];
-    validaddr(arg[1], l, 1);
-    c = fdtochan(arg[0], -1, 0, 1);
-    if(waserror()) {
-        cclose(c);
-        nexterror();
-    }
-    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
-    poperror();
-    cclose(c);
-    return l;
-}
-@
-
-
-<<syscall stat>>=
-long
-sysstat(ulong *arg)
-{
-    char *name;
-    Chan *c;
-    uint l;
-
-    l = arg[2];
-    validaddr(arg[1], l, 1);
-    validaddr(arg[0], 1, 0);
-    c = namec((char*)arg[0], Aaccess, 0, 0);
-    if(waserror()){
-        cclose(c);
-        nexterror();
-    }
-    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
-    name = pathlast(c->path);
-    if(name)
-        l = dirsetname(name, strlen(name), (uchar*)arg[1], l, arg[2]);
-
-    poperror();
-    cclose(c);
-    return l;
-}
-@
-
-
 \section {[[syschdir()]]}
 
 
@@ -13764,90 +13998,6 @@ sysfd2path(ulong *arg)
 @
 
 
-
-\section{[[sysseek()]]}
-
-<<function sseek>>=
-static void
-sseek(ulong *arg)
-{
-    Chan *c;
-    uchar buf[sizeof(Dir)+100];
-    Dir dir;
-    int n;
-    vlong off;
-    union {
-        vlong v;
-        ulong u[2];
-    } o;
-
-    c = fdtochan(arg[1], -1, 1, 1);
-    if(waserror()){
-        cclose(c);
-        nexterror();
-    }
-    if(devtab[c->type]->dc == '|')
-        error(Eisstream);
-
-    off = 0;
-    o.u[0] = arg[2];
-    o.u[1] = arg[3];
-    switch(arg[4]){
-    case 0:
-        off = o.v;
-        if((c->qid.type & QTDIR) && off != 0)
-            error(Eisdir);
-        if(off < 0)
-            error(Enegoff);
-        c->offset = off;
-        break;
-
-    case 1:
-        if(c->qid.type & QTDIR)
-            error(Eisdir);
-        lock(c);    /* lock for read/write update */
-        off = o.v + c->offset;
-        if(off < 0){
-            unlock(c);
-            error(Enegoff);
-        }
-        c->offset = off;
-        unlock(c);
-        break;
-
-    case 2:
-        if(c->qid.type & QTDIR)
-            error(Eisdir);
-        n = devtab[c->type]->stat(c, buf, sizeof buf);
-        if(convM2D(buf, n, &dir, nil) == 0)
-            error("internal error: stat error in seek");
-        off = dir.length + o.v;
-        if(off < 0)
-            error(Enegoff);
-        c->offset = off;
-        break;
-
-    default:
-        error(Ebadarg);
-    }
-    *(vlong*)arg[0] = off;
-    c->uri = 0;
-    c->dri = 0;
-    cclose(c);
-    poperror();
-}
-@
-
-
-<<syscall seek>>=
-long
-sysseek(ulong *arg)
-{
-    validaddr(arg[0], BY2V, 1);
-    sseek(arg);
-    return 0;
-}
-@
 
 
 \chapter{Namespace}
@@ -14541,6 +14691,203 @@ pgrpcpy(Pgrp *to, Pgrp *from)
     wunlock(&from->ns);
 }
 @ 
+
+\section{miscmount}
+
+
+<<function mountrock>>=
+/*
+ * Mountfix might have caused the fixed results of the directory read
+ * to overflow the buffer.  Catch the overflow in c->dirrock.
+ */
+static void
+mountrock(Chan *c, uchar *p, uchar **pe)
+{
+    uchar *e, *r;
+    int len, n;
+
+    e = *pe;
+
+    /* find last directory entry */
+    for(;;){
+        len = BIT16SZ+GBIT16(p);
+        if(p+len >= e)
+            break;
+        p += len;
+    }
+
+    /* save it away */
+    qlock(&c->rockqlock);
+    if(c->nrock+len > c->mrock){
+        n = ROUND(c->nrock+len, 1024);
+        r = smalloc(n);
+        memmove(r, c->dirrock, c->nrock);
+        free(c->dirrock);
+        c->dirrock = r;
+        c->mrock = n;
+    }
+    memmove(c->dirrock+c->nrock, p, len);
+    c->nrock += len;
+    qunlock(&c->rockqlock);
+
+    /* drop it */
+    *pe = p;
+}
+@
+
+
+<<function mountrockread>>=
+/*
+ * Satisfy a directory read with the results saved in c->dirrock.
+ */
+static int
+mountrockread(Chan *c, uchar *op, long n, long *nn)
+{
+    long dirlen;
+    uchar *rp, *erp, *ep, *p;
+
+    /* common case */
+    if(c->nrock == 0)
+        return 0;
+
+    /* copy out what we can */
+    qlock(&c->rockqlock);
+    rp = c->dirrock;
+    erp = rp+c->nrock;
+    p = op;
+    ep = p+n;
+    while(rp+BIT16SZ <= erp){
+        dirlen = BIT16SZ+GBIT16(rp);
+        if(p+dirlen > ep)
+            break;
+        memmove(p, rp, dirlen);
+        p += dirlen;
+        rp += dirlen;
+    }
+
+    if(p == op){
+        qunlock(&c->rockqlock);
+        return 0;
+    }
+
+    /* shift the rest */
+    if(rp != erp)
+        memmove(c->dirrock, rp, erp-rp);
+    c->nrock = erp - rp;
+
+    *nn = p - op;
+    qunlock(&c->rockqlock);
+    return 1;
+}
+@
+
+
+<<function mountrewind>>=
+static void
+mountrewind(Chan *c)
+{
+    c->nrock = 0;
+}
+@
+
+
+<<function mountfix>>=
+/*
+ * Rewrite the results of a directory read to reflect current 
+ * name space bindings and mounts.  Specifically, replace
+ * directory entries for bind and mount points with the results
+ * of statting what is mounted there.  Except leave the old names.
+ */
+static long
+mountfix(Chan *c, uchar *op, long n, long maxn)
+{
+    char *name;
+    int nbuf, nname;
+    Chan *nc;
+    Mhead *mh;
+    Mount *m;
+    uchar *p;
+    int dirlen, rest;
+    long l;
+    uchar *buf, *e;
+    Dir d;
+
+    p = op;
+    buf = nil;
+    nbuf = 0;
+    for(e=&p[n]; p+BIT16SZ<e; p+=dirlen){
+        dirlen = dirfixed(p, e, &d);
+        if(dirlen < 0)
+            break;
+        nc = nil;
+        mh = nil;
+        if(findmount(&nc, &mh, d.type, d.dev, d.qid)){
+            /*
+             * If it's a union directory and the original is
+             * in the union, don't rewrite anything.
+             */
+            for(m=mh->mount; m; m=m->next)
+                if(eqchantdqid(m->to, d.type, d.dev, d.qid, 1))
+                    goto Norewrite;
+
+            name = dirname(p, &nname);
+            /*
+             * Do the stat but fix the name.  If it fails, leave old entry.
+             * BUG: If it fails because there isn't room for the entry,
+             * what can we do?  Nothing, really.  Might as well skip it.
+             */
+            if(buf == nil){
+                buf = smalloc(4096);
+                nbuf = 4096;
+            }
+            if(waserror())
+                goto Norewrite;
+            l = devtab[nc->type]->stat(nc, buf, nbuf);
+            l = dirsetname(name, nname, buf, l, nbuf);
+            if(l == BIT16SZ)
+                error("dirsetname");
+            poperror();
+
+            /*
+             * Shift data in buffer to accomodate new entry,
+             * possibly overflowing into rock.
+             */
+            rest = e - (p+dirlen);
+            if(l > dirlen){
+                while(p+l+rest > op+maxn){
+                    mountrock(c, p, &e);
+                    if(e == p){
+                        dirlen = 0;
+                        goto Norewrite;
+                    }
+                    rest = e - (p+dirlen);
+                }
+            }
+            if(l != dirlen){
+                memmove(p+l, p+dirlen, rest);
+                dirlen = l;
+                e = p+dirlen+rest;
+            }
+
+            /*
+             * Rewrite directory entry.
+             */
+            memmove(p, buf, l);
+
+            Norewrite:
+            cclose(nc);
+            putmhead(mh);
+        }
+    }
+    if(buf)
+        free(buf);
+
+    if(p != e)
+        error("oops in rockfix");
+
+    return e-op;
+}
+@
 
 
 \section{[[bindmount()]]}
@@ -15291,7 +15638,7 @@ devbwrite(Chan *c, Block *bp, ulong offset)
 }
 @
 
-\section{The root device}
+\section{The root device, filesystem, and fileserver [[/]]}
 % root device, root filesystem
 
 % just with that we can already have a working environment
@@ -15557,164 +15904,6 @@ print("[%d] kaddr %.8ulx base %.8ulx offset %ld (%.8ulx), n %d %.8ulx %.8ulx %.8
 #endif asdf
     memmove(buf, data+offset, n);
     return n;
-}
-@
-
-\section{The screen}
-% just cga.c here, see Window.tex.nw for the advanced vga kernel support
-
-<<cga.c enum color>>=
-enum color {
-    Black,
-    Blue,
-    Green,
-    Cyan,
-    Red,
-    Magenta,
-    Brown,
-    Grey,
-
-    Bright = 0x08,
-    Blinking = 0x80,
-
-    Yellow = Bright|Brown,
-    White = Bright|Grey,
-};
-@
-
-<<cga.c enum misc>>=
-enum {
-    Width       = 80*2,
-    Height      = 25,
-
-    Attr        = (Black<<4)|Grey,  /* high nibble background
-                         * low foreground
-                         */
-
-    Poststrlen  = 0,
-    Postcodelen = 2,
-    Postlen     = Poststrlen+Postcodelen,
-};
-@
-
-<<constant CGASCREENBASE>>=
-#define CGASCREENBASE   ((uchar*)KADDR(0xB8000))
-@
-
-
-<<global cgapos>>=
-static int cgapos;
-@
-
-
-<<global cgascreenlock>>=
-static Lock cgascreenlock;
-@
-
-<<function screeninit>>=
-void
-screeninit(void)
-{
-
-    cgapos = cgaregr(0x0E)<<8;
-    cgapos |= cgaregr(0x0F);
-    cgapos *= 2;
-
-    screenputs = cgascreenputs;
-}
-@
-
-
-<<function cgaregr>>=
-static uchar
-cgaregr(int index)
-{
-    outb(0x3D4, index);
-    return inb(0x3D4+1) & 0xFF;
-}
-@
-
-
-<<function cgaregw>>=
-static void
-cgaregw(int index, int data)
-{
-    outb(0x3D4, index);
-    outb(0x3D4+1, data);
-}
-@
-
-
-<<function movecursor>>=
-static void
-movecursor(void)
-{
-    cgaregw(0x0E, (cgapos/2>>8) & 0xFF);
-    cgaregw(0x0F, cgapos/2 & 0xFF);
-    CGASCREENBASE[cgapos+1] = Attr;
-}
-@
-
-
-<<function cgascreenputc>>=
-static void
-cgascreenputc(int c)
-{
-    int i;
-    uchar *p;
-
-    if(c == '\n'){
-        cgapos = cgapos/Width;
-        cgapos = (cgapos+1)*Width;
-    }
-    else if(c == '\t'){
-        i = 8 - ((cgapos/2)&7);
-        while(i-->0)
-            cgascreenputc(' ');
-    }
-    else if(c == '\b'){
-        if(cgapos >= 2)
-            cgapos -= 2;
-        cgascreenputc(' ');
-        cgapos -= 2;
-    }
-    else{
-        CGASCREENBASE[cgapos++] = c;
-        CGASCREENBASE[cgapos++] = Attr;
-    }
-    if(cgapos >= Width*Height){
-        memmove(CGASCREENBASE, &CGASCREENBASE[Width], Width*(Height-1));
-        p = &CGASCREENBASE[Width*(Height-1)];
-        for(i=0; i<Width/2; i++){
-            *p++ = ' ';
-            *p++ = Attr;
-        }
-        cgapos = Width*(Height-1);
-    }
-    movecursor();
-}
-@
-
-
-<<function cgascreenputs>>=
-static void
-cgascreenputs(char* s, int n)
-{
-    if(!islo()){
-        /*
-         * Don't deadlock trying to
-         * print in an interrupt.
-         */
-        if(!canlock(&cgascreenlock))
-            return;
-    }
-    else
-        lock(&cgascreenlock);
-
-    while(n-- > 0)
-        cgascreenputc(*s++);
-
-    unlock(&cgascreenlock);
 }
 @
 
@@ -16298,7 +16487,165 @@ i8042auxenable(void (*putc)(int, int))
 
 % to change keyboard: kbdputmap, kbdgetmap and probably /dev/kbmap
 
-\section{The console device}
+\section{The screen}
+% just cga.c here, see Window.tex.nw for the advanced vga kernel support
+
+<<cga.c enum color>>=
+enum color {
+    Black,
+    Blue,
+    Green,
+    Cyan,
+    Red,
+    Magenta,
+    Brown,
+    Grey,
+
+    Bright = 0x08,
+    Blinking = 0x80,
+
+    Yellow = Bright|Brown,
+    White = Bright|Grey,
+};
+@
+
+<<cga.c enum misc>>=
+enum {
+    Width       = 80*2,
+    Height      = 25,
+
+    Attr        = (Black<<4)|Grey,  /* high nibble background
+                         * low foreground
+                         */
+
+    Poststrlen  = 0,
+    Postcodelen = 2,
+    Postlen     = Poststrlen+Postcodelen,
+};
+@
+
+<<constant CGASCREENBASE>>=
+#define CGASCREENBASE   ((uchar*)KADDR(0xB8000))
+@
+
+
+<<global cgapos>>=
+static int cgapos;
+@
+
+
+<<global cgascreenlock>>=
+static Lock cgascreenlock;
+@
+
+<<function screeninit>>=
+void
+screeninit(void)
+{
+
+    cgapos = cgaregr(0x0E)<<8;
+    cgapos |= cgaregr(0x0F);
+    cgapos *= 2;
+
+    screenputs = cgascreenputs;
+}
+@
+
+
+<<function cgaregr>>=
+static uchar
+cgaregr(int index)
+{
+    outb(0x3D4, index);
+    return inb(0x3D4+1) & 0xFF;
+}
+@
+
+
+<<function cgaregw>>=
+static void
+cgaregw(int index, int data)
+{
+    outb(0x3D4, index);
+    outb(0x3D4+1, data);
+}
+@
+
+
+<<function movecursor>>=
+static void
+movecursor(void)
+{
+    cgaregw(0x0E, (cgapos/2>>8) & 0xFF);
+    cgaregw(0x0F, cgapos/2 & 0xFF);
+    CGASCREENBASE[cgapos+1] = Attr;
+}
+@
+
+
+<<function cgascreenputc>>=
+static void
+cgascreenputc(int c)
+{
+    int i;
+    uchar *p;
+
+    if(c == '\n'){
+        cgapos = cgapos/Width;
+        cgapos = (cgapos+1)*Width;
+    }
+    else if(c == '\t'){
+        i = 8 - ((cgapos/2)&7);
+        while(i-->0)
+            cgascreenputc(' ');
+    }
+    else if(c == '\b'){
+        if(cgapos >= 2)
+            cgapos -= 2;
+        cgascreenputc(' ');
+        cgapos -= 2;
+    }
+    else{
+        CGASCREENBASE[cgapos++] = c;
+        CGASCREENBASE[cgapos++] = Attr;
+    }
+    if(cgapos >= Width*Height){
+        memmove(CGASCREENBASE, &CGASCREENBASE[Width], Width*(Height-1));
+        p = &CGASCREENBASE[Width*(Height-1)];
+        for(i=0; i<Width/2; i++){
+            *p++ = ' ';
+            *p++ = Attr;
+        }
+        cgapos = Width*(Height-1);
+    }
+    movecursor();
+}
+@
+
+
+<<function cgascreenputs>>=
+static void
+cgascreenputs(char* s, int n)
+{
+    if(!islo()){
+        /*
+         * Don't deadlock trying to
+         * print in an interrupt.
+         */
+        if(!canlock(&cgascreenlock))
+            return;
+    }
+    else
+        lock(&cgascreenlock);
+
+    while(n-- > 0)
+        cgascreenputc(*s++);
+
+    unlock(&cgascreenlock);
+}
+@
+
+\section{The console device [[/dev/cons]]}
 
 \subsection{Overview}
 
@@ -16744,7 +17091,7 @@ devcons_pprint(char *fmt, ...)
 }
 @ 
 
-\subsection{[[devcons.c]]}
+\subsection{[[/dev/cons]]}
 
 <<devcons.c enum Qxxx>>=
 enum{
@@ -17312,6 +17659,12 @@ char    *sysname;
 % are similar, they also implement the Dev interface
 % it's just that they provide a Dev on top of another Dev
 
+\section{Overview}
+
+% intro to architecture? vs micro kernel?
+% ref to FUSE?
+% explain RPC? 9p
+
 \section{[[MntRpc]]}
 
 <<struct Mntrpc>>=
@@ -17768,7 +18121,7 @@ timerintr(Ureg *u, Tval)
 }
 @ 
 
-\subsection{Clock callback}
+\subsection{Clock callbacks}
 
 <<function addclock0link>>=
 Timer*
@@ -18163,7 +18516,7 @@ writebintime(char *buf, int n)
 }
 @
 
-\section{[[devrtc.c]]}
+\section{[[/dev/rtc]]}
 
 <<struct Rtc>>=
 struct Rtc
@@ -18588,8 +18941,7 @@ syspipe(ulong *arg)
 }
 @
 
-\subsection{[[devpipe.c]]}
-% see section in IPC also?
+\subsection{[[/dev/pipe]]}
 % have pipe syscall and device, so both useful? named pipe
 % can be done only via devpipe.c
 
@@ -19157,62 +19509,105 @@ connectlocal(void)
 
 
 
+\chapter{Advanced Topics}
 
+\section{SMP}
 
-\chapter{Misc}
+\section{Floating point}
 
-\section{Environment}
-%kind of an IPC?
+\section{Power managment}
 
-<<struct Evalue>>=
-struct Evalue
-{
-  char  *name;
-  char  *value;
-  int len;
-  Evalue  *link;
-  Qid qid;
-};
+<<function halt>>=
+/*
+ * Attempt at power saving. -rsc
+ */
+TEXT halt(SB), $0
+        CLI
+        CMPL    nrdy(SB), $0
+        JEQ     _nothingready
+        STI
+        RET
+
+_nothingready:
+        STI
+        HLT
+        RET
 @
 
 
-<<struct Egrp>>=
-struct Egrp
-{
-  Ref;
-  RWlock;
-  Evalue  **ent;
-  int nent;
-  int ment;
-  ulong path; /* qid.path of next Evalue to be allocated */
-  ulong vers; /* of Egrp */
-};
+<<[[PCArch]] power methods fields>>=
+int (*serialpower)(int);  /* 1 == on, 0 == off */
+int (*modempower)(int); /* 1 == on, 0 == off */
 @
 
-<<function closeegrp>>=
-void
-closeegrp(Egrp *eg)
-{
-    int i;
-    Evalue *e;
+<<[[archgeneric]] power methods>>=
+    .serialpower=   unimplemented,
+    .modempower=    unimplemented,
+@
 
-    if(decref(eg) == 0){
-        for(i=0; i<eg->nent; i++){
-            e = eg->ent[i];
-            free(e->name);
-            if(e->value)
-                free(e->value);
-            free(e);
-        }
-        free(eg->ent);
-        free(eg);
-    }
+
+\section{Serial line}
+
+<<global serialoq>>=
+Queue*  serialoq;       /* serial console output */
+@ 
+
+<<function consactive>>=
+int
+consactive(void)
+{
+    if(serialoq)
+        return qlen(serialoq) > 0;
+    return 0;
 }
-@
+@ 
 
-\subsection{[[devenv.c]]}
+% dead?
+<<function prflush>>=
+void
+prflush(void)
+{
+    ulong now;
 
-%#e
+    now = m->ticks;
+    while(consactive())
+        if(m->ticks - now >= HZ)
+            break;
+}
+@ 
+
+<<function echoserialoq>>=
+static void
+echoserialoq(char *buf, int n)
+{
+    char *e, *p;
+    char ebuf[128];
+    int x;
+
+    p = ebuf;
+    e = ebuf + sizeof(ebuf) - 4;
+    while(n-- > 0){
+        if(p >= e){
+            qiwrite(serialoq, ebuf, p - ebuf);
+            p = ebuf;
+        }
+        x = *buf++;
+        if(x == '\n'){
+            *p++ = '\r';
+            *p++ = '\n';
+        } else if(x == 0x15){
+            *p++ = '^';
+            *p++ = 'U';
+            *p++ = '\n';
+        } else
+            *p++ = x;
+    }
+    if(p != ebuf)
+        qiwrite(serialoq, ebuf, p - ebuf);
+}
+@ 
+
+\chapter{Special Fileservers}
 
 \section{[[Cmdtab]]}
 
@@ -19356,94 +19751,65 @@ ncmdfield(char *p, int n)
 
 
 
-\section{Dup}
+\section{[[/env/]]}
+%kind of an IPC?
 
-<<systab special file syscalls>>=
-    [DUP]       sysdup,
-@ 
+\subsection{[[Egrp]]}
 
-
-<<syscall dup>>=
-long
-sysdup(ulong *arg)
+<<struct Evalue>>=
+struct Evalue
 {
-    int fd;
-    Chan *c, *oc;
-    Fgrp *f = up->fgrp;
+  char  *name;
+  char  *value;
+  int len;
+  Evalue  *link;
+  Qid qid;
+};
+@
 
-    /*
-     * Close after dup'ing, so date > #d/1 works
-     */
-    c = fdtochan(arg[0], -1, 0, 1);
-    fd = arg[1];
-    if(fd != -1){
-        lock(f);
-        if(fd<0 || growfd(f, fd)<0) {
-            unlockfgrp(f);
-            cclose(c);
-            error(Ebadfd);
-        }
-        if(fd > f->maxfd)
-            f->maxfd = fd;
 
-        oc = f->fd[fd];
-        f->fd[fd] = c;
-        unlockfgrp(f);
-        if(oc)
-            cclose(oc);
-    }else{
-        if(waserror()) {
-            cclose(c);
-            nexterror();
+<<struct Egrp>>=
+struct Egrp
+{
+  Ref;
+  RWlock;
+  Evalue  **ent;
+  int nent;
+  int ment;
+  ulong path; /* qid.path of next Evalue to be allocated */
+  ulong vers; /* of Egrp */
+};
+@
+
+<<function closeegrp>>=
+void
+closeegrp(Egrp *eg)
+{
+    int i;
+    Evalue *e;
+
+    if(decref(eg) == 0){
+        for(i=0; i<eg->nent; i++){
+            e = eg->ent[i];
+            free(e->name);
+            if(e->value)
+                free(e->value);
+            free(e);
         }
-        fd = newfd(c);
-        if(fd < 0)
-            error(Enofd);
-        poperror();
+        free(eg->ent);
+        free(eg);
     }
-
-    return fd;
 }
 @
 
-\subsection{[[devdup.c]]}
+\subsection{[[/env/]]}
 
+%#e
 
-\section{SMP}
+\section{[[/proc/]]}
+%#p
 
-\section{Floating point}
-
-\section{Power managment}
-
-<<function halt>>=
-/*
- * Attempt at power saving. -rsc
- */
-TEXT halt(SB), $0
-        CLI
-        CMPL    nrdy(SB), $0
-        JEQ     _nothingready
-        STI
-        RET
-
-_nothingready:
-        STI
-        HLT
-        RET
-@
-
-
-<<[[PCArch]] power methods fields>>=
-int (*serialpower)(int);  /* 1 == on, 0 == off */
-int (*modempower)(int); /* 1 == on, 0 == off */
-@
-
-<<[[archgeneric]] power methods>>=
-    .serialpower=   unimplemented,
-    .modempower=    unimplemented,
-@
-
-\section{Reboot}
+\section{[[/dev/reboot]]}
 
 <<function exit>>=
 void
@@ -19669,8 +20035,6 @@ i8042reset(void)
 }
 @
 
-\subsection{[[/dev/reboot]]}
-
 <<devcons.c enum Cmd>>=
 enum
 {
@@ -19690,7 +20054,7 @@ Cmdtab rebootmsg[] =
 };
 @
 
-\section{Random}
+\section{[[/dev/random]]}
 
 <<global randn>>=
 static  ulong   randn;
@@ -19727,74 +20091,56 @@ nrand(int n)
 %//  return randn;
 %//}
 
-\subsection{[[/dev/random]]}
 
 
+\section{[[/dev/dup]]}
 
-
-\section{Serial line}
-
-<<global serialoq>>=
-Queue*  serialoq;       /* serial console output */
+<<systab special file syscalls>>=
+    [DUP]       sysdup,
 @ 
 
-<<function consactive>>=
-int
-consactive(void)
+<<syscall dup>>=
+long
+sysdup(ulong *arg)
 {
-    if(serialoq)
-        return qlen(serialoq) > 0;
-    return 0;
-}
-@ 
+    int fd;
+    Chan *c, *oc;
+    Fgrp *f = up->fgrp;
 
-% dead?
-<<function prflush>>=
-void
-prflush(void)
-{
-    ulong now;
-
-    now = m->ticks;
-    while(consactive())
-        if(m->ticks - now >= HZ)
-            break;
-}
-@ 
-
-<<function echoserialoq>>=
-static void
-echoserialoq(char *buf, int n)
-{
-    char *e, *p;
-    char ebuf[128];
-    int x;
-
-    p = ebuf;
-    e = ebuf + sizeof(ebuf) - 4;
-    while(n-- > 0){
-        if(p >= e){
-            qiwrite(serialoq, ebuf, p - ebuf);
-            p = ebuf;
+    /*
+     * Close after dup'ing, so date > #d/1 works
+     */
+    c = fdtochan(arg[0], -1, 0, 1);
+    fd = arg[1];
+    if(fd != -1){
+        lock(f);
+        if(fd<0 || growfd(f, fd)<0) {
+            unlockfgrp(f);
+            cclose(c);
+            error(Ebadfd);
         }
-        x = *buf++;
-        if(x == '\n'){
-            *p++ = '\r';
-            *p++ = '\n';
-        } else if(x == 0x15){
-            *p++ = '^';
-            *p++ = 'U';
-            *p++ = '\n';
-        } else
-            *p++ = x;
-    }
-    if(p != ebuf)
-        qiwrite(serialoq, ebuf, p - ebuf);
-}
-@ 
+        if(fd > f->maxfd)
+            f->maxfd = fd;
 
-\section{[[devproc.c]]}
-%#p
+        oc = f->fd[fd];
+        f->fd[fd] = c;
+        unlockfgrp(f);
+        if(oc)
+            cclose(oc);
+    }else{
+        if(waserror()) {
+            cclose(c);
+            nexterror();
+        }
+        fd = newfd(c);
+        if(fd < 0)
+            error(Enofd);
+        poperror();
+    }
+
+    return fd;
+}
+@
 
 \chapter{Conclusion}
 
@@ -19858,7 +20204,7 @@ cgapost(int code)
 % use sysnop (was called sysr1) to show example of debugging session?
 
 
-\section{Special keys}
+\section{Special keys [[C-t C-t]]}
 
 % Ctrl-t Ctrl-t <debugcode>
 
@@ -19937,7 +20283,7 @@ ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 void    (*consdebug)(void) = nil; // for rdb
 @ 
 
-\section{Fmt}
+\section{[[Fmt]]}
 
 <<function fmtrwdata>>=
 // WE ARE OVERRUNNING SOMEHOW
@@ -20367,7 +20713,7 @@ int load;
 int intr;
 @
 
-\section{[[devkprof.c]]}
+\section{[[/dev/kprof]]}
 % devkprof.c?
 
 <<hook kproftimer>>=
@@ -20650,7 +20996,9 @@ werrstr(char *fmt, ...)
 
 \chapter{Mini Libc}
 
-\section{Memory functions}
+% use malloc internally?
+
+\section{Memory areas functions}
 
 <<lib.h mem functions decl>>=
 extern  void* memccpy(void*, void*, int, ulong);
