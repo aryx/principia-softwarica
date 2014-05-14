@@ -847,6 +847,11 @@ provides to the user programs.
 %need also precise virtual map of memory for first handcrafted process?
 %
 
+%binary image has been compiled with -TKZERO_AND_HEADER!! important
+% and assume loading phase setup physical mapping from KZERO to 0 physical
+% and so by having kernel at KTZERO beyond all special memory so no overlap
+% with sensitive area.
+
 <<pad memory pointer types>>=
 // physical address
 typedef uintptr phys_addr;
@@ -855,6 +860,54 @@ typedef uintptr virt_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
 #define nilptr 0
+@
+
+<<constant KZERO>>=
+#define KZERO   0xF0000000    /* base of kernel address space */
+@ 
+
+<<constant KTZERO>>=
+#define KTZERO    (KZERO+0x100000)  /* first address in kernel text */
+@
+
+
+<<constant UZERO>>=
+#define UZERO   0     /* base of user address space */
+@
+
+
+<<constant UTZERO>>=
+#define UTZERO    (UZERO+BY2PG)   /* first address in user text */
+@
+
+
+<<function kaddr>>=
+/*
+ * These could go back to being macros once the kernel is debugged,
+ * but the extra checking is nice to have.
+ */
+//todo: should return a kern_addr
+void*
+kaddr(phys_addr pa)
+{
+    if(pa > (ulong)-KZERO)
+        panic("kaddr: pa=%#.8lux", pa);
+    return (void*)(pa+KZERO);
+}
+@
+
+
+<<function paddr>>=
+kern_addr
+paddr(void *v)
+{
+    kern_addr va;
+    
+    va = (virt_addr)v;
+    if(va < KZERO)
+        panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
+    return va-KZERO;
+}
 @
 
 \section{Syscall overview}
@@ -952,8 +1005,8 @@ struct Confmem
     phys_addr base;
     ulong npage;
   
-    ulong kbase; // phys?
-    ulong klimit; // phys?
+    kern_addr kbase; // KADDR(base)
+    kern_addr klimit; // KADDR(base+npage*BY2PG)
 };
 @ 
 
@@ -1430,8 +1483,7 @@ struct Lock
     // option<ref<Proc>>, None when key = 0
     Proc  *p; // the process locking should be the same unlocking
 
-    // virt_addr?
-    uintptr pc; // for debugging
+    kern_addr pc; // for debugging
 
     <<[[Lock]] ilock fields>>
     <<[[Lock]] other fields>>
@@ -2203,8 +2255,8 @@ enum
 <<struct Hole>>=
 struct Hole
 {
-    ulong addr; // phys_addr? base?
-    ulong top; // phys_addr?
+    phys_addr addr;
+    phys_addr top; 
     ulong size; // top - addr?
     
     // extra
@@ -5071,33 +5123,6 @@ tmpunmap(void *v)
 @
 
 
-<<function kaddr>>=
-/*
- * These could go back to being macros once the kernel is debugged,
- * but the extra checking is nice to have.
- */
-void*
-kaddr(ulong pa)
-{
-    if(pa > (ulong)-KZERO)
-        panic("kaddr: pa=%#.8lux", pa);
-    return (void*)(pa+KZERO);
-}
-@
-
-
-<<function paddr>>=
-ulong
-paddr(void *v)
-{
-    ulong va;
-    
-    va = (ulong)v;
-    if(va < KZERO)
-        panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
-    return va-KZERO;
-}
-@
 
 
 
@@ -7081,8 +7106,9 @@ newproc(void)
 // =~ a jumpbuf in C, for coroutines
 struct Label
 {
-    ulong sp; // virt_addr?
-    ulong pc; // virt_addr?
+    // or virt_addr? used also for saving context of user code?
+    kern_addr sp; 
+    kern_addr pc; 
 };
 @ 
 

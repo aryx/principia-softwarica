@@ -52,8 +52,12 @@
 /*
  *  Address spaces
  */
+/*s: constant KZERO */
 #define KZERO   0xF0000000    /* base of kernel address space */
-#define KTZERO    (KZERO+0x100000)  /* first address in kernel text - 9load sits below */
+/*e: constant KZERO */
+/*s: constant KTZERO */
+#define KTZERO    (KZERO+0x100000)  /* first address in kernel text */
+/*e: constant KTZERO */
 #define VPT   (KZERO-VPTSIZE)
 #define VPTSIZE   BY2XPG
 #define NVPT    (VPTSIZE/BY2WD)
@@ -61,8 +65,12 @@
 #define KMAPSIZE  BY2XPG
 #define VMAP    (KMAP-VMAPSIZE)
 #define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
+/*s: constant UZERO */
 #define UZERO   0     /* base of user address space */
+/*e: constant UZERO */
+/*s: constant UTZERO */
 #define UTZERO    (UZERO+BY2PG)   /* first address in user text */
+/*e: constant UTZERO */
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
 #define USTKTOP   (VMAP-BY2PG)    /* byte just beyond user stack */
 #define USTKSIZE  (16*1024*1024)    /* size of user stack */

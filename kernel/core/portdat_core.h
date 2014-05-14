@@ -15,8 +15,8 @@ struct Confmem
     phys_addr base;
     ulong npage;
   
-    ulong kbase; // phys?
-    ulong klimit; // phys?
+    kern_addr kbase; // KADDR(base)
+    kern_addr klimit; // KADDR(base+npage*BY2PG)
 };
 /*e: struct Confmem */
 
@@ -69,8 +69,9 @@ char* getconf(char *name);
 // =~ a jumpbuf in C, for coroutines
 struct Label
 {
-    ulong sp; // virt_addr?
-    ulong pc; // virt_addr?
+    // or virt_addr? used also for saving context of user code?
+    kern_addr sp; 
+    kern_addr pc; 
 };
 /*e: struct Label */
 

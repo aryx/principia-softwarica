@@ -1002,8 +1002,9 @@ tmpunmap(void *v)
  * These could go back to being macros once the kernel is debugged,
  * but the extra checking is nice to have.
  */
+//todo: should return a kern_addr
 void*
-kaddr(ulong pa)
+kaddr(phys_addr pa)
 {
     if(pa > (ulong)-KZERO)
         panic("kaddr: pa=%#.8lux", pa);
@@ -1012,12 +1013,12 @@ kaddr(ulong pa)
 /*e: function kaddr */
 
 /*s: function paddr */
-ulong
+kern_addr
 paddr(void *v)
 {
-    ulong va;
+    kern_addr va;
     
-    va = (ulong)v;
+    va = (virt_addr)v;
     if(va < KZERO)
         panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
     return va-KZERO;

@@ -15,8 +15,7 @@ struct Lock
     // option<ref<Proc>>, None when key = 0
     Proc  *p; // the process locking should be the same unlocking
 
-    // virt_addr?
-    uintptr pc; // for debugging
+    kern_addr pc; // for debugging
 
     /*s: [[Lock]] ilock fields */
     bool_ushort isilock; // false when from lock(), true when from ilock()

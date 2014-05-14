@@ -202,8 +202,8 @@ enum
 /*s: struct Hole */
 struct Hole
 {
-    ulong addr; // phys_addr? base?
-    ulong top; // phys_addr?
+    phys_addr addr;
+    phys_addr top; 
     ulong size; // top - addr?
     
     // extra
