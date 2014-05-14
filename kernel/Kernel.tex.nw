@@ -1,4 +1,4 @@
-\documentclass{report}
+\documentclass[twocolumn]{report}
 
 %******************************************************************************
 % Prelude
@@ -46,7 +46,7 @@
 %------------------------------------------------------------------------------
 
 \usepackage{noweb}
- \noweboptions{}
+ \noweboptions{footnotesizecode,nomargintag}
  %note: allow chunk on different pages, less white space at bottom of pages
  \def\nwendcode{\endtrivlist \endgroup}
  \let\nwdocspar=\par
@@ -65,7 +65,14 @@
 \usepackage{booktabs} 
  \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
 \usepackage{graphicx}
-\usepackage{fullpage}
+ %\usepackage[margin=0.15in]{geometry} but eat the bottom
+ %\usepackage{fullpage} is deprecated 
+ % => do the more manual below:
+ \addtolength{\oddsidemargin}{-.850in}
+ \addtolength{\evensidemargin}{-.850in}
+ \addtolength{\textwidth}{1.70in}
+ \addtolength{\topmargin}{-.850in}
+ \addtolength{\textheight}{1.70in}
 \usepackage{minitoc}
 
 %------------------------------------------------------------------------------
@@ -81,6 +88,7 @@
 %  debugging macros
 
 %\setcounter{tocdepth}{1}
+
 
 %******************************************************************************
 % Title
@@ -102,7 +110,7 @@ Yoann Padioleau\\
 }
 
 \maketitle 
-
+\onecolumn
 \hrule
 \begin{quote}
     Copyright \copyright{} 2014 Yoann Padioleau \\
@@ -114,9 +122,12 @@ Yoann Padioleau\\
 
 %\dominitoc
 
+
 \iffinal
 \begingroup
 \hypersetup{linkcolor=blue}
+% need to s/onecolumn/twocolumn in report.cls :) for \tableofcontents
+\twocolumn
 \tableofcontents
 \endgroup
 \else
@@ -584,7 +595,7 @@ We assume you already know what is an operating system
 and will now focus on the concrete services (API) a kernel
 provides to the user programs.
 
-\section{Operating system services}
+\section{Plan9 services}
 
 % user point of view:
 % - start the whole thing, first program!
@@ -671,8 +682,6 @@ provides to the user programs.
 #define	FVERSION	38
 #define	FAUTH		39
 @
-
-\section{Plan9}
 
 %plan9 specifics vs general os principles, e.g. namespace so have
 % nice /dev/cons, /dev/draw, which enable easier network and graphics
@@ -836,6 +845,13 @@ provides to the user programs.
 %need also precise virtual map of memory for first handcrafted process?
 %
 
+<<pad memory pointer types>>=
+// physical address
+typedef ulong phys_addr;
+// virtual address
+typedef ulong virt_addr;
+@
+
 \section{Syscall overview}
 % kernel vs user code
 
@@ -928,7 +944,7 @@ Conf conf;
 // memory "bank"
 struct Confmem
 {
-    ulong base; // phys?
+    phys_addr base;
     ulong npage;
   
     ulong kbase; // phys?
@@ -986,7 +1002,10 @@ struct Mach
 };
 @ 
 
+% where this is allocated??? in assembly, cos machinit just set machp[0]
+% why not make m an alias for machp[processor_id]?
 <<global m>>=
+// ref<Mach> allocated??
 Mach *m;
 @ 
 
@@ -2134,6 +2153,37 @@ _xdeclt:
 
 \section{Overview}
 % kernel vs user memory
+
+%memory kind allocation:
+% - static and initialized (data) in binary itself! "allocated" by 
+%    kernel loader
+% - static and unitiliaized (bss), "allocated" by kernel loader again,
+%   initialized to zero in asm (via edata, eend linker info)
+% - dynamic
+%    - via static arena
+%    - via malloc (heap)
+
+% malloc/free memory does not appear from thin air, need data structure
+% to remember what was malloced, where, how much memory remains,
+% so need memory to talk about memory ... chichen and egg.
+
+% approach: 
+% - eend, edata fixed area
+% - confmem detectioj
+% - xalloc static metadata about mem
+%  - then from it build pools
+%    - then from it get malloc
+%  - orthogonally also use xalloc for procs, pages, more??
+
+% then for user, pages is the granularity. see brk too.
+
+% => figure of physical memory with zoom on kernel data and bss section,
+%   conf.confmem, xalloc metadata, procallocs and pageallog, all procs,
+%   all pages,  and then kernel memory area malloc. The user memory area
+%   is made of all those pages.
+% get the actual number (and try optimize? less % for kernel more for user,
+%  reduce Page data structure? less conf.nproc?
+
 
 \section{[[xalloc()]]}
 
@@ -8505,33 +8555,6 @@ main(void)
 }
 @
 
-<<function machinit>>=
-void
-machinit(void)
-{
-    int machno;
-    ulong *pdb;
-    Segdesc *gdt;
-
-    machno = m->machno;
-    pdb = m->pdb;
-    gdt = m->gdt;
-    memset(m, 0, sizeof(Mach));
-    m->machno = machno;
-    m->pdb = pdb;
-    m->gdt = gdt;
-    m->perf.period = 1;
-
-    /*
-     * For polled uart output at boot, need
-     * a default delay constant. 100000 should
-     * be enough for a while. Cpuidentify will
-     * calculate the real value later.
-     */
-    m->loopconst = 100000;
-}
-@
-
 <<function mach0init>>=
 void
 mach0init(void)
@@ -8547,6 +8570,35 @@ mach0init(void)
         active.exiting = 0;
 }
 @
+
+% inline in previous func? no? because used in squidboy!
+<<function machinit>>=
+void
+machinit(void)
+{
+    int machno;
+    ulong *pdb;
+    Segdesc *gdt;
+
+    machno = m->machno;
+    pdb = m->pdb;
+    gdt = m->gdt;
+    memset(m, 0, sizeof(Mach));
+    m->machno = machno;
+    m->pdb = pdb;
+    m->gdt = gdt;
+
+    m->perf.period = 1;
+    /*
+     * For polled uart output at boot, need
+     * a default delay constant. 100000 should
+     * be enough for a while. Cpuidentify will
+     * calculate the real value later.
+     */
+    m->loopconst = 100000;
+}
+@
+
 
 <<function confinit>>=
 // precondition: meminit() have initialized Conf.mem
@@ -19810,6 +19862,9 @@ closeegrp(Egrp *eg)
 
 \section{[[/proc/]]}
 %#p
+
+% apparently can also be used by the debugger acid
+%  chmod +w /proc/96/mem and then acid 96
 
 \section{[[/dev/reboot]]}
 
