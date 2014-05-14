@@ -12,7 +12,7 @@
 // memory "bank"
 struct Confmem
 {
-    ulong base; // phys?
+    phys_addr base;
     ulong npage;
   
     ulong kbase; // phys?

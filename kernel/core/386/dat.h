@@ -19,6 +19,13 @@ enum miscsize_dat {
 };
 /*e: enum miscsize_dat */
 
+/*s: pad memory pointer types */
+// physical address
+typedef ulong phys_addr;
+// virtual address
+typedef ulong virt_addr;
+/*e: pad memory pointer types */
+
 // defines Lock (used inline in Mach in portdat_core.h so must be before)
 #include "../port/portdat_concurrency.h"
 

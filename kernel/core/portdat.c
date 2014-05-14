@@ -36,6 +36,7 @@ char* getconf(char *name)
 
 // was in init/main.c
 /*s: global m */
+// ref<Mach> allocated??
 Mach *m;
 /*e: global m */
 // was in dat.h

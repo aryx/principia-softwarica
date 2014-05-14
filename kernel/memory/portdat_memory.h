@@ -2,13 +2,6 @@
 
 // see also KMap in 386/ (but used in port)
 
-/*s: pad memory pointer types */
-// physical address
-typedef ulong phys_addr;
-// virtual address
-typedef ulong virt_addr;
-/*e: pad memory pointer types */
-
 //*****************************************************************************
 // Page < Pte (can be filled by KImage) < Segment
 //*****************************************************************************
