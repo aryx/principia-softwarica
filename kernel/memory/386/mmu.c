@@ -1003,18 +1003,18 @@ tmpunmap(void *v)
  * but the extra checking is nice to have.
  */
 //todo: should return a kern_addr
-void*
+kern_addr3
 kaddr(phys_addr pa)
 {
     if(pa > (ulong)-KZERO)
         panic("kaddr: pa=%#.8lux", pa);
-    return (void*)(pa+KZERO);
+    return (kern_addr3)(pa+KZERO);
 }
 /*e: function kaddr */
 
 /*s: function paddr */
 kern_addr
-paddr(void *v)
+paddr(virt_addr3 v)
 {
     kern_addr va;
     

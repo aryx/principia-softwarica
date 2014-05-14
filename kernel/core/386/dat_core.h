@@ -58,7 +58,7 @@ struct Segdesc
 struct ArchMach {
     /*s: [[ArchMach]] other fields */
     // TODO: have a ArchMachMMU like in bcm/
-    ulong*  pdb;      /* page directory base for this processor (va) */
+    kern_addr2  pdb;      /* page directory base for this processor (va) */
     Tss*  tss;      /* tss for this processor */
     Segdesc *gdt;     /* gdt for this processor */
     Page* pdbpool;
