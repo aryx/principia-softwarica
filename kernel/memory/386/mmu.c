@@ -1014,11 +1014,11 @@ kaddr(phys_addr pa)
 
 /*s: function paddr */
 kern_addr
-paddr(virt_addr3 v)
+paddr(kern_addr3 v)
 {
     kern_addr va;
     
-    va = (virt_addr)v;
+    va = (kern_addr)v;
     if(va < KZERO)
         panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
     return va-KZERO;

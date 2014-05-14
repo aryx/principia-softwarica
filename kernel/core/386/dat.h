@@ -22,7 +22,7 @@ enum miscsize_dat {
 /*s: pad memory pointer types */
 // physical address
 typedef uintptr phys_addr;
-// virtual address
+// virtual address (which should be a user address)
 typedef uintptr virt_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
