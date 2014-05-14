@@ -45,7 +45,7 @@ struct KQLock
     // list<ref<Proc>> (direct access to tail, queue)
     Proc  *tail;    /* last process waiting for object */
   
-    uintptr qpc;    /* pc of the holder */ // for debugging?
+    kern_addr qpc;    /* pc of the holder */ // for debugging?
   
     Lock  use;    /* to access Qlock structure */
 };

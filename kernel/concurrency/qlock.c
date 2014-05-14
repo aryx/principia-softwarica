@@ -98,7 +98,7 @@ qunlock(QLock *q)
         return;
     }
     q->locked = false;
-    q->qpc = 0;
+    q->qpc = nilptr;
     unlock(&q->use);
 }
 /*e: function qunlock */

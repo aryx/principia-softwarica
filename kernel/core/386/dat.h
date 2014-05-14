@@ -21,9 +21,12 @@ enum miscsize_dat {
 
 /*s: pad memory pointer types */
 // physical address
-typedef ulong phys_addr;
+typedef uintptr phys_addr;
 // virtual address
-typedef ulong virt_addr;
+typedef uintptr virt_addr;
+// kernel address (mostly physical + KZERO)
+typedef uintptr kern_addr;
+#define nilptr 0
 /*e: pad memory pointer types */
 
 // defines Lock (used inline in Mach in portdat_core.h so must be before)

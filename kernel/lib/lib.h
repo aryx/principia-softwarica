@@ -177,6 +177,7 @@ extern  vlong strtoll(char*, char**, int);
 extern  uvlong  strtoull(char*, char**, int);
 /*e: lib.h strto functions decl */
 
+//todo: should return a (void*)
 extern  ulong getcallerpc(void*);
 extern  char* cleanname(char*);
 extern  int getfields(char*, char**, int, int, char*);
