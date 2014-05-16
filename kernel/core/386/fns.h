@@ -154,7 +154,9 @@ void  meminit(void);
 void  memorysummary(void);
 //@Scheck: Assembly
 void  mfence(void);
+/*s: function mmuflushtlb */
 #define mmuflushtlb(pdb) putcr3(pdb)
+/*e: function mmuflushtlb */
 void  mmuinit(void);
 ulong*  mmuwalk(ulong*, ulong, int, int);
 int mtrr(uvlong, uvlong, char *);
@@ -247,9 +249,12 @@ void  wrmsr(int, vlong);
 //int iounused(int start, int end); not used anymore in vga.c
 
 /*s: fns.h macros */
+/*s: function KADDR */
 #define KADDR(a)  kaddr(a)
+/*e: function KADDR */
+/*s: function PADDR */
 #define PADDR(a)  paddr((void*)(a))
-
+/*e: function PADDR */
 
 #define dcflush(a, b)
 

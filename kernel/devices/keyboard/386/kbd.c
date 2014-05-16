@@ -196,7 +196,9 @@ static bool nokbd = true;           /* flag: no PS/2 keyboard */
 extern int mouseshifted;
 extern void (*kbdmouse)(int);
 
+/*s: global ccc */
 static uchar ccc;
+/*e: global ccc */
 static void (*auxputc)(int, int);
 
 

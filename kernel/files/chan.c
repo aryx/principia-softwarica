@@ -24,8 +24,12 @@ static int debugstart = 1;
 
 enum
 {
+/*s: constant PATHSLOP */
     PATHSLOP    = 20,
+/*e: constant PATHSLOP */
+/*s: constant PATHMSLOP */
     PATHMSLOP   = 20,
+/*e: constant PATHMSLOP */
 };
 
 /*s: struct Chanalloc */

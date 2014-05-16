@@ -91,8 +91,8 @@ enum {
 // Global! set by bootargs()
 uchar *sp;      /* user stack of init proc */
 
-// who set this??
-int delaylink;
+// could delete, nobody set it to true anyway
+int delaylink = 0;
 
 //@Scheck: Assembly
 extern ulong *multiboot;

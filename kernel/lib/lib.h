@@ -314,6 +314,7 @@ struct Waitmsg
 
 // for byteorder agnostic marshalling?
 /*s: struct OWaitmsg */
+// dead?
 struct OWaitmsg
 {
   char  pid[12];  /* of loved one */

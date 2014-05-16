@@ -329,10 +329,13 @@ Dev rtcdevtab = {
 };
 /*e: global rtcdevtab */
 
+/*s: constants SEC2XXX */
 #define SEC2MIN 60L
 #define SEC2HOUR (60L*SEC2MIN)
 #define SEC2DAY (24L*SEC2HOUR)
+/*e: constants SEC2XXX */
 
+/*s: globals dmsize ldmsize */
 /*
  *  days per month plus days/year
  */
@@ -344,7 +347,9 @@ static  int ldmsize[] =
 {
     366, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 };
+/*e: globals dmsize ldmsize */
 
+/*s: function yrsize */
 /*
  *  return the days/month for the given year
  */
@@ -356,7 +361,9 @@ yrsize(int y)
     else
         return dmsize;
 }
+/*e: function yrsize */
 
+/*s: function rtc2sec */
 /*
  *  compute seconds since Jan 1 1970
  */
@@ -391,7 +398,9 @@ rtc2sec(Rtc *rtc)
 
     return secs;
 }
+/*e: function rtc2sec */
 
+/*s: function sec2rtc */
 /*
  *  compute rtc from seconds since Jan 1 1970
  */
@@ -443,5 +452,6 @@ sec2rtc(ulong secs, Rtc *rtc)
 
     return;
 }
+/*e: function sec2rtc */
 
 /*e: devrtc.c */

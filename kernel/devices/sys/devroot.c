@@ -288,14 +288,12 @@ print("[%d] kaddr %.8ulx base %.8ulx offset %ld (%.8ulx), n %d %.8ulx %.8ulx %.8
 }
 /*e: method rootread */
 
-/*s: method rootwrite */
 static long
 rootwrite(Chan*, void*, long, vlong)
 {
     error(Egreg);
     return 0;
 }
-/*e: method rootwrite */
 
 /*s: global rootdevtab */
 Dev rootdevtab = {

@@ -1,4 +1,5 @@
 \documentclass[twocolumn]{report}
+%\documentclass[twocolumn,landscape]{report}
 
 %******************************************************************************
 % Prelude
@@ -65,7 +66,8 @@
 \usepackage{booktabs} 
  \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
 \usepackage{graphicx}
- %\usepackage[margin=0.15in]{geometry} but eat the bottom
+ %\usepackage[margin=0.5in]{geometry}
+ %  but eat the bottom when very low
  %\usepackage{fullpage} is deprecated 
  % => do the more manual below:
  \addtolength{\oddsidemargin}{-.850in}
@@ -139,6 +141,11 @@ Yoann Padioleau\\
 %******************************************************************************
 
 \chapter*{XTODO}
+
+<<[[Dev]] other fields>>=
+/* not initialised */
+int attached;       /* debugging */
+@
 
 <<[[Proc]] assembly fields>>=
 Label sched;    /* known to l.s */
@@ -304,16 +311,21 @@ ulong dev;
 
 int fid;      /* for devmnt */
 ulong iounit;     /* chunk size for i/o; 0==default */
+
 Mhead*  umh;      /* mount point that derived Chan; used in unionread */
 Chan* umc;      /* channel in union; held for union read */
 QLock umqlock;    /* serialize unionreads */
 int uri;      /* union read index */
+
 int dri;      /* devdirread index */
+
 uchar*  dirrock;    /* directory entry rock for translations */
 int nrock;
 int mrock;
 QLock rockqlock;
+
 int ismtpt;
+
 Mntcache* mcp;      /* Mount cache pointer */
 Mnt*  mux;      /* Mnt for clients using me for messages */
 union {
@@ -323,6 +335,7 @@ union {
 };
 Chan* mchan;      /* channel to mounted server */
 Qid mqid;     /* qid of root of mount point */
+
 Path* path;
 @ 
 
@@ -597,6 +610,9 @@ provides to the user programs.
 
 \section{Plan9 services}
 
+% see 9.ps, excellent introduction to Plan9 advanced features
+% see also docs/doc/ and docs/man/
+
 % user point of view:
 % - start the whole thing, first program!
 % - process managment, shell, fork, exec, multi task
@@ -686,8 +702,6 @@ provides to the user programs.
 %plan9 specifics vs general os principles, e.g. namespace so have
 % nice /dev/cons, /dev/draw, which enable easier network and graphics
 
-% see 9.ps, excellent introduction to Plan9 advanced features
-
 %TODO
 %things plan9 make so much easier to implement/understand:
 % tty
@@ -713,6 +727,8 @@ provides to the user programs.
 %PC vs raspberry pi?
 
 % actually will take 386, not 486, or x86_64 or amd64 so simpler.
+
+% little endian, big endian, the le2xxx function?
 
 
 \section{C and assembly}
@@ -914,6 +930,15 @@ paddr(kern_addr3 v)
         panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
     return va-KZERO;
 }
+@
+
+<<function KADDR>>=
+#define KADDR(a)  kaddr(a)
+@
+
+
+<<function PADDR>>=
+#define PADDR(a)  paddr((void*)(a))
 @
 
 \section{Syscall overview}
@@ -1297,13 +1322,20 @@ enum qidtype {
 
 \section{[[Dev]] and [[devtab]]}
 
+% actually Device that also play the role of filesystem/fileserver!
+
 % everything is a file ... server!
 
-% actually Device that also play the role of filesystem/fileserver!
+% so devtab = VFS. device are often a special case
+% one-level directory containing a single file and thx to union
+% dir we can gather them in one directory such as /dev/
 
 % concrete device like kbd, screen, are exported via this
 %  read from /dev/cons, write to /dev/cons, and then
 %  fancy graphics are write to /dev/vga!
+
+% open take a Chan? how bootstrap? how get an handle to a file
+% you want to open
 
 <<struct Dev>>=
 struct Dev
@@ -2775,69 +2807,6 @@ msize(void *v)
 @
 
 
-<<function kstrcpy>>=
-/*
- * Rather than strncpy, which zeros the rest of the buffer, kstrcpy
- * truncates if necessary, always zero terminates, does not zero fill,
- * and puts ... at the end of the string if it's too long.  Usually used to
- * save a string in up->genbuf;
- */
-void
-kstrcpy(char *s, char *t, int ns)
-{
-    int nt;
-
-    nt = strlen(t);
-    if(nt+1 <= ns){
-        memmove(s, t, nt+1);
-        return;
-    }
-    /* too long */
-    if(ns < 4){
-        /* but very short! */
-        strncpy(s, t, ns);
-        return;
-    }
-    /* truncate with ... at character boundary (very rare case) */
-    memmove(s, t, ns-4);
-    ns -= 4;
-    s[ns] = '\0';
-    /* look for first byte of UTF-8 sequence by skipping continuation bytes */
-    while(ns>0 && (s[--ns]&0xC0)==0x80)
-        ;
-    strcpy(s+ns, "...");
-}
-@
-
-
-<<function kstrdup>>=
-/*
- * Atomically replace *p with copy of s
- */
-void
-kstrdup(char **p, char *s)
-{
-    int n;
-    char *t, *prev;
-
-    n = strlen(s)+1;
-    /* if it's a user, we can wait for memory; if not, something's very wrong */
-    if(up){
-        t = smalloc(n);
-        setmalloctag(t, getcallerpc(&p));
-    }else{
-        t = malloc(n);
-        if(t == nil)
-            panic("kstrdup: no memory");
-    }
-    memmove(t, s, n);
-    prev = *p;
-    *p = t;
-    free(prev);
-}
-@
-
-
 
 \section{User malloc}
 %actually brk
@@ -4289,7 +4258,8 @@ ibrk(ulong addr, int seg)
 
 \section{Overview}
 
-\section{Segmentation}
+\section{Segmentation and [[gdt]]}
+
 
 <<constant x86 segments>>=
 /*
@@ -8209,6 +8179,17 @@ sysexec(ulong *arg)
 }
 @ 
 
+<<function l2be>>=
+ulong
+l2be(long l)
+{
+    uchar *cp;
+
+    cp = (uchar*)&l;
+    return (cp[0]<<24) | (cp[1]<<16) | (cp[2]<<8) | cp[3];
+}
+@ 
+
 <<function execregs>>=
 long
 execregs(ulong entry, ulong ssize, ulong nargs)
@@ -8228,6 +8209,40 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     return USTKTOP-sizeof(Tos);     /* address of kernel/user shared data */
 }
 @ 
+
+<<function shargs>>=
+int
+shargs(char *s, int n, char **ap)
+{
+    int i;
+
+    s += 2;
+    n -= 2;     /* skip #! */
+    for(i=0; s[i]!='\n'; i++)
+        if(i == n-1)
+            return 0;
+    s[i] = 0;
+    *ap = 0;
+    i = 0;
+    for(;;) {
+        while(*s==' ' || *s=='\t')
+            s++;
+        if(*s == 0)
+            break;
+        i++;
+        *ap++ = s;
+        *ap = 0;
+        while(*s && *s!=' ' && *s!='\t')
+            s++;
+        if(*s == 0)
+            break;
+        else
+            *s++ = 0;
+    }
+    return i;
+}
+@ 
+
 
 
 \section{[[sysexits()]]}
@@ -8409,10 +8424,123 @@ proc_pexit(char *exitstr, int freemem)
 }
 @ 
 
+\section{[[sysawait()]]}
+
+<<struct Waitmsg>>=
+struct Waitmsg
+{
+  int pid;    /* of loved one */
+  ulong time[3];  /* of loved one and descendants */
+  char  msg[ERRMAX];  /* actually variable-size in user mode */
+};
+@ 
+
+<<struct Waitq>>=
+struct Waitq
+{
+    Waitmsg w;
+  
+    // extra
+    // list<ref<Waitq>> Proc.waitq
+    Waitq *next;
+};
+@ 
+
+
+<<function haswaitq>>=
+int
+haswaitq(void *x)
+{
+    Proc *p;
+
+    p = (Proc *)x;
+    return p->waitq != 0;
+}
+@ 
+
+
+<<function pwait>>=
+ulong
+pwait(Waitmsg *w)
+{
+    ulong cpid;
+    Waitq *wq;
+
+    if(!canqlock(&up->qwaitr))
+        error(Einuse);
+
+    if(waserror()) {
+        qunlock(&up->qwaitr);
+        nexterror();
+    }
+
+    lock(&up->exl);
+    if(up->nchild == 0 && up->waitq == 0) {
+        unlock(&up->exl);
+        error(Enochild);
+    }
+    unlock(&up->exl);
+
+    sleep(&up->waitr, haswaitq, up);
+
+    lock(&up->exl);
+    wq = up->waitq;
+    up->waitq = wq->next;
+    up->nwait--;
+    unlock(&up->exl);
+
+    qunlock(&up->qwaitr);
+    poperror();
+
+    if(w)
+        memmove(w, &wq->w, sizeof(Waitmsg));
+    cpid = wq->w.pid;
+    free(wq);
+    return cpid;
+}
+@ 
+
+<<syscall await>>=
+long
+sysawait(ulong *arg)
+{
+    int i;
+    int pid;
+    Waitmsg w;
+    ulong n;
+
+    n = arg[1];
+    validaddr(arg[0], n, 1);
+    pid = pwait(&w);
+    if(pid < 0)
+        return -1;
+    i = snprint((char*)arg[0], n, "%d %lud %lud %lud %q",
+        w.pid,
+        w.time[TUser], w.time[TSys], w.time[TReal],
+        w.msg);
+
+    return i;
+}
+@ 
+
 \chapter{Initialization}
 \minitoc
 
 \section{Booting the kernel}
+
+\subsection{Loading the kernel in physical memory}
+
+<<l_multiboot.s>>=
+#include "mem.h"
+        
+TEXT _startKADDR(SB), $0
+
+<<global _multibootheader>>
+
+<<function _multibootentry>>
+
+<<global multiboot>>
+@
 
 <<global _multibootheader>>=
 /*
@@ -8462,6 +8590,22 @@ TEXT _multibootentry(SB), $0
         JMP*    AX
 @
 
+<<lib.h exxx decl>>=
+extern  char  etext[];
+//@Scheck: Assembly, not dead used by 386/l.s
+extern  char  edata[];
+extern  char  end[];
+@ 
+
+
+<<global multiboot>>=
+/* multiboot structure pointer */
+TEXT multiboot(SB), $0
+        LONG    $0
+@
+
+
+\subsection{Setup basic segmentation}
 
 <<function _startPADDR>>=
 /*
@@ -8506,6 +8650,155 @@ TEXT _startPADDR(SB), $0
          WORD   $(2<<3)
 @
 
+
+
+
+<<global tgdt>>=
+/*
+ *  gdt to get us to 32-bit/segmented/unpaged mode
+ */
+TEXT tgdt(SB), $0
+
+        /* null descriptor */
+        LONG    $0
+        LONG    $0
+
+        /* data segment descriptor for 4 gigabytes (PL 0) */
+        LONG    $(0xFFFF)
+        LONG    $(SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(0)|SEGDATA|SEGW)
+
+        /* exec segment descriptor for 4 gigabytes (PL 0) */
+        LONG    $(0xFFFF)
+        LONG    $(SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(0)|SEGEXEC|SEGR)
+@
+
+<<global tgdtptr>>=
+/*
+ *  pointer to initial gdt
+ *  Note the -KZERO which puts the physical address in the gdtptr. 
+ *  that's needed as we start executing in physical addresses. 
+ */
+TEXT tgdtptr(SB), $0
+        WORD    $(3*8)
+        LONG    $tgdt-KZERO(SB)
+@
+
+
+\subsection{Setup basic pagination}
+
+<<function mode32bits>>=
+TEXT mode32bit(SB), $0
+        /* At this point, the GDT setup is done. */
+
+        MOVL    $PADDR(CPU0PDB), DI             /* clear 4 pages for the tables etc. */
+        XORL    AX, AX
+        MOVL    $(4*BY2PG), CX
+        SHRL    $2, CX
+
+        CLD
+        REP;    STOSL
+
+        MOVL    $PADDR(CPU0PDB), AX
+        ADDL    $PDO(KZERO), AX                 /* page directory offset for KZERO */
+        MOVL    $PADDR(CPU0PTE), (AX)           /* PTE's for KZERO */
+        MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
+        ORL     BX, (AX)
+
+        ADDL    $4, AX
+        MOVL    $PADDR(CPU0PTE1), (AX)          /* PTE's for KZERO+4MB */
+        MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
+        ORL     BX, (AX)
+
+        MOVL    $PADDR(CPU0PTE), AX             /* first page of page table */
+        MOVL    $1024, CX                       /* 1024 pages in 4MB */
+_setpte:
+        MOVL    BX, (AX)
+        ADDL    $(1<<PGSHIFT), BX
+        ADDL    $4, AX
+        LOOP    _setpte
+
+        MOVL    $PADDR(CPU0PTE1), AX            /* second page of page table */
+        MOVL    $1024, CX                       /* 1024 pages in 4MB */
+_setpte1:
+        MOVL    BX, (AX)
+        ADDL    $(1<<PGSHIFT), BX
+        ADDL    $4, AX
+        LOOP    _setpte1
+
+        MOVL    $PADDR(CPU0PTE), AX
+        ADDL    $PTO(MACHADDR), AX              /* page table entry offset for MACHADDR */
+        MOVL    $PADDR(CPU0MACH), (AX)          /* PTE for Mach */
+        MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
+        ORL     BX, (AX)
+
+/*
+ * Now ready to use the new map. Make sure the processor options are what is wanted.
+ * It is necessary on some processors to immediately follow mode switching with a JMP instruction
+ * to clear the prefetch queues.
+ */
+        MOVL    $PADDR(CPU0PDB), CX             /* load address of page directory */
+        MOVL    (PDO(KZERO))(CX), DX            /* double-map KZERO at 0 */
+        MOVL    DX, (PDO(0))(CX)
+        MOVL    CX, CR3
+        DELAY                                   /* JMP .+2 */
+
+        MOVL    CR0, DX
+        ORL     $0x80010000, DX                 /* PG|WP */
+        ANDL    $~0x6000000A, DX                /* ~(CD|NW|TS|MP) */
+
+        MOVL    $_startpg(SB), AX               /* this is a virtual address */
+        MOVL    DX, CR0                         /* turn on paging */
+        JMP*    AX                              /* jump to the virtual nirvana */
+@
+
+\subsection{Setup BSS and Stack}
+
+<<function _startpg>>=
+/*
+ * Basic machine environment set, can clear BSS and create a stack.
+ * The stack starts at the top of the page containing the Mach structure.
+ * The x86 architecture forces the use of the same virtual address for
+ * each processor's Mach structure, so the global Mach pointer 'm' can
+ * be initialised here.
+ */
+TEXT _startpg(SB), $0
+        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */
+        MOVL    CX, CR3                         /* load and flush the mmu */
+
+_clearbss:
+        MOVL    $edata(SB), DI
+        XORL    AX, AX
+        MOVL    $end(SB), CX
+        SUBL    DI, CX                          /* end-edata bytes */
+        SHRL    $2, CX                          /* end-edata doublewords */
+
+        CLD
+        REP;    STOSL                           /* clear BSS */
+
+        MOVL    $MACHADDR, SP
+        MOVL    SP, m(SB)                       /* initialise global Mach pointer */
+        MOVL    $0, 0(SP)                       /* initialise m->machno */
+
+
+        ADDL    $(MACHSIZE-4), SP               /* initialise stack */
+
+<<end of _startpg>>
+@
+
+
+\subsection{Jumping to C [[main()]]}
+
+<<end of _startpg>>=
+/*
+ * Need to do one final thing to ensure a clean machine environment,
+ * clear the EFLAGS register, which can only be done once there is a stack.
+ */
+        MOVL    $0, AX
+        PUSHL   AX
+        POPFL
+
+        CALL    main(SB)
+@
 
 
 \section{Kernel initialization}
@@ -8633,6 +8926,59 @@ machinit(void)
      * calculate the real value later.
      */
     m->loopconst = 100000;
+}
+@
+
+
+<<function archinit>>=
+void
+archinit(void)
+{
+    PCArch **p;
+
+    arch = 0;
+    for(p = knownarch; *p; p++){
+        if((*p)->ident && (*p)->ident() == 0){
+            arch = *p;
+            break;
+        }
+    }
+    if(arch == 0)
+        arch = &archgeneric;
+    else{
+        if(arch->id == 0)
+            arch->id = archgeneric.id;
+        if(arch->reset == 0)
+            arch->reset = archgeneric.reset;
+        if(arch->serialpower == 0)
+            arch->serialpower = archgeneric.serialpower;
+        if(arch->modempower == 0)
+            arch->modempower = archgeneric.modempower;
+        if(arch->intrinit == 0)
+            arch->intrinit = archgeneric.intrinit;
+        if(arch->intrenable == 0)
+            arch->intrenable = archgeneric.intrenable;
+    }
+
+    /*
+     *  Decide whether to use copy-on-reference (386 and mp).
+     *  We get another chance to set it in mpinit() for a
+     *  multiprocessor.
+     */
+    if(X86FAMILY(m->cpuidax) == 3)
+        conf.copymode = 1;
+
+    if(X86FAMILY(m->cpuidax) >= 4)
+        cmpswap = cmpswap486;
+
+    if(X86FAMILY(m->cpuidax) >= 5)
+        coherence = mb586;
+
+    if(m->cpuiddx & Sse2)
+        coherence = mfence;
+
+    addarchfile("cputype", 0444, cputyperead, nil);
+    addarchfile("archctl", 0664, archctlread, archctlwrite);
 }
 @
 
@@ -9391,6 +9737,10 @@ lowraminit(void)
 }
 @
 
+<<function mmuflushtlb>>=
+#define mmuflushtlb(pdb) putcr3(pdb)
+@
+
 <<function ramscan>>=
 static void
 ramscan(ulong maxmem)
@@ -10141,6 +10491,12 @@ TEXT touser(SB), $0
 \section{Booting the user}
 % see section on Userspace system programs
 
+
+
+
+
+
+
 \chapter{Files}
 \minitoc
 
@@ -10363,6 +10719,25 @@ cclone(Chan *c)
     if(c->path)
         incref(c->path);
     return nc;
+}
+@
+
+<<function cunique>>=
+/*
+ * Make sure we have the only copy of c.  (Copy on write.)
+ */
+Chan*
+cunique(Chan *c)
+{
+    Chan *nc;
+
+    if(c->ref != 1){
+        nc = cclone(c);
+        cclose(c);
+        c = nc;
+    }
+
+    return c;
 }
 @
 
@@ -11014,6 +11389,99 @@ bl2mem(uchar *p, Block *b, int n)
 }
 @
 
+
+\section{[[Clunkq]]}
+
+<<struct Clunkq>>=
+/*
+ * Queue a chan to be closed by one of the clunk procs.
+ */
+struct Clunkq {
+    Chan *head;
+    Chan *tail;
+    int nqueued;
+    int nclosed;
+    Lock l;
+    QLock q;
+    Rendez r;
+};
+@
+
+
+<<global clunkq>>=
+struct Clunkq clunkq;
+@
+
+
+<<function ccloseq>>=
+void
+ccloseq(Chan *c)
+{
+    if(c->flag&CFREE)
+        panic("cclose %#p", getcallerpc(&c));
+
+    DBG("ccloseq %p name=%s ref=%ld\n", c, c->path->s, c->ref);
+
+    if(decref(c))
+        return;
+
+    lock(&clunkq.l);
+    clunkq.nqueued++;
+    c->next = nil;
+    if(clunkq.head)
+        clunkq.tail->next = c;
+    else
+        clunkq.head = c;
+    clunkq.tail = c;
+    unlock(&clunkq.l);
+
+    if(!wakeup(&clunkq.r))
+        kproc("closeproc", closeproc, nil); 
+}
+@
+
+
+<<function clunkwork>>=
+static int
+clunkwork(void*)
+{
+    return clunkq.head != nil;
+}
+@
+
+
+<<function closeproc>>=
+void
+closeproc(void*)
+{
+    Chan *c;
+
+    for(;;){
+        qlock(&clunkq.q);
+        if(clunkq.head == nil){
+            if(!waserror()){
+                tsleep(&clunkq.r, clunkwork, nil, 5000);
+                poperror();
+            }
+            if(clunkq.head == nil){
+                qunlock(&clunkq.q);
+                pexit("no work", 1);
+            }
+        }
+        lock(&clunkq.l);
+        c = clunkq.head;
+        clunkq.head = c->next;
+        clunkq.nclosed++;
+        unlock(&clunkq.l);
+        qunlock(&clunkq.q);
+        if(!waserror()){
+            devtab[c->type]->close(c);
+            poperror();
+        }
+        chanfree(c);
+    }
+}
+@
 
 \section{[[Queue]]}
 
@@ -13011,6 +13479,17 @@ sysseek(ulong *arg)
 
 \section{Overview}
 
+<<function isdir>>=
+void
+isdir(Chan *c)
+{
+    if(c->qid.type & QTDIR)
+        return;
+    error(Enotdir);
+}
+@
+
+
 \section{[[Path]]}
 
 <<struct Path>>=
@@ -13028,6 +13507,14 @@ struct Path
 
 <<global npath>>=
 Ref npath;
+@
+
+<<constant PATHSLOP>>=
+    PATHSLOP    = 20,
+@
+
+<<constant PATHMSLOP>>=
+    PATHMSLOP   = 20,
 @
 
 
@@ -13527,6 +14014,37 @@ dirsetname(char *name, int len, uchar *p, long n, long maxn)
 }
 @
 
+
+<<function createdir>>=
+/*
+ * c is a mounted non-creatable directory.  find a creatable one.
+ */
+Chan*
+createdir(Chan *c, Mhead *m)
+{
+    Chan *nc;
+    Mount *f;
+
+    rlock(&m->lock);
+    if(waserror()){
+        runlock(&m->lock);
+        nexterror();
+    }
+    for(f = m->mount; f; f = f->next){
+        if(f->mflag&MCREATE){
+            nc = cclone(f->to);
+            runlock(&m->lock);
+            poperror();
+            cclose(c);
+            return nc;
+        }
+    }
+    error(Enocreate);
+    return 0;
+}
+@
+
+
 \section{Union directories}
 
 <<function unionread>>=
@@ -13982,6 +14500,148 @@ if(c->umh != nil){
 @
 
 
+<<function namelenerror>>=
+void
+namelenerror(char *aname, int len, char *err)
+{
+    char *ename, *name, *next;
+    int i, errlen;
+
+    /*
+     * If the name is short enough, just use the whole thing.
+     */
+    errlen = strlen(err);
+    if(len < ERRMAX/3 || len+errlen < 2*ERRMAX/3)
+        snprint(up->genbuf, sizeof up->genbuf, "%.*s", 
+            utfnlen(aname, len), aname);
+    else{
+        /*
+         * Print a suffix of the name, but try to get a little info.
+         */
+        ename = aname+len;
+        next = ename;
+        do{
+            name = next;
+            next = memrchr(aname, '/', name-aname);
+            if(next == nil)
+                next = aname;
+            len = ename-next;
+        }while(len < ERRMAX/3 || len + errlen < 2*ERRMAX/3);
+
+        /*
+         * If the name is ridiculously long, chop it.
+         */
+        if(name == ename){
+            name = ename-ERRMAX/4;
+            if(name <= aname)
+                panic("bad math in namelenerror");
+            /* walk out of current UTF sequence */
+            for(i=0; (*name&0xC0)==0x80 && i<UTFmax; i++)
+                name++;
+        }
+        snprint(up->genbuf, sizeof up->genbuf, "...%.*s",
+            utfnlen(name, ename-name), name);
+    }               
+    snprint(up->errstr, ERRMAX, "%#q %s", up->genbuf, err);
+    nexterror();
+}
+@
+
+
+<<function nameerror>>=
+void
+nameerror(char *name, char *err)
+{
+    namelenerror(name, strlen(name), err);
+}
+@
+
+
+
+
+<<function validname0>>=
+/*
+ * Check that the name
+ *  a) is in valid memory.
+ *  b) is shorter than 2^16 bytes, so it can fit in a 9P string field.
+ *  c) contains no frogs.
+ * The first byte is known to be addressible by the requester, so the
+ * routine works for kernel and user memory both.
+ * The parameter slashok flags whether a slash character is an error
+ * or a valid character.
+ *
+ * The parameter dup flags whether the string should be copied
+ * out of user space before being scanned the second time.
+ * (Otherwise a malicious thread could remove the NUL, causing us
+ * to access unchecked addresses.) 
+ */
+static char*
+validname0(char *aname, int slashok, int dup, ulong pc)
+{
+    char *ename, *name, *s;
+    int c, n;
+    Rune r;
+
+    name = aname;
+    if((ulong)name < KZERO){
+        if(!dup)
+            print("warning: validname called from %#p with user pointer", pc);
+        ename = vmemchr(name, 0, (1<<16));
+    }else
+        ename = memchr(name, 0, (1<<16));
+
+    if(ename==nil || ename-name>=(1<<16))
+        error("name too long");
+
+    s = nil;
+    if(dup){
+        n = ename-name;
+        s = smalloc(n+1);
+        memmove(s, name, n);
+        s[n] = 0;
+        aname = s;
+        name = s;
+        setmalloctag(s, pc);
+    }
+    
+    while(*name){
+        /* all characters above '~' are ok */
+        c = *(uchar*)name;
+        if(c >= Runeself)
+            name += chartorune(&r, name);
+        else{
+            if(isfrog[c])
+                if(!slashok || c!='/'){
+                    snprint(up->genbuf, sizeof(up->genbuf), "%s: %q", Ebadchar, aname);
+                    free(s);
+                    error(up->genbuf);
+            }
+            name++;
+        }
+    }
+    return s;
+}
+@
+
+<<function validname>>=
+void
+validname(char *aname, int slashok)
+{
+    validname0(aname, slashok, 0, getcallerpc(&aname));
+}
+@
+
+
+<<function validnamedup>>=
+char*
+validnamedup(char *aname, int slashok)
+{
+    return validname0(aname, slashok, 1, getcallerpc(&aname));
+}
+@
+
+
+
 \section{[[syscreate()]], [[sysremove()]]}
 
 <<function openmode>>=
@@ -14125,6 +14785,16 @@ struct Mnt
 @
 
 <<struct Mntalloc>>=
+/*
+ * References are managed as follows:
+ * The channel to the server - a network connection or pipe - has one
+ * reference for every Chan open on the server.  The server channel has
+ * c->mux set to the Mnt used for muxing control to that server.  Mnts
+ * have no reference count; they go away when c goes away.
+ * Each channel derived from the mount point has mchan set to c,
+ * and increfs/decrefs mchan to manage references on the server
+ * connection.
+ */
 struct Mntalloc
 {
     Mnt*    list;       /* Mount devices in use */
@@ -15325,6 +15995,10 @@ cunmount(Chan *mnt, Chan *mounted)
 \chapter{Devices}
 \minitoc
 
+% see docs/man/3/ for references on all "devices/fileservers"
+
+% often "one-level directory containing a single file" 
+
 % reorganize, have a Root device, then Keyboad, Screen, Console ?
 % and mv devproc, devenv, elsewhere
 
@@ -16163,6 +16837,10 @@ Kbscan kbscans[Nscans]; /* kernel and external scan code state */
 
 <<global nokbd>>=
 static bool nokbd = true;           /* flag: no PS/2 keyboard */
+@
+
+<<global ccc>>=
+static uchar ccc;
 @
 
 
@@ -18645,6 +19323,132 @@ Dev rtcdevtab = {
 };
 @
 
+<<constants SEC2XXX>>=
+#define SEC2MIN 60L
+#define SEC2HOUR (60L*SEC2MIN)
+#define SEC2DAY (24L*SEC2HOUR)
+@
+
+<<globals dmsize ldmsize>>=
+/*
+ *  days per month plus days/year
+ */
+static  int dmsize[] =
+{
+    365, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+};
+static  int ldmsize[] =
+{
+    366, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+};
+@
+
+<<function yrsize>>=
+/*
+ *  return the days/month for the given year
+ */
+static int*
+yrsize(int y)
+{
+    if((y%4) == 0 && ((y%100) != 0 || (y%400) == 0))
+        return ldmsize;
+    else
+        return dmsize;
+}
+@
+
+<<function rtc2sec>>=
+/*
+ *  compute seconds since Jan 1 1970
+ */
+static ulong
+rtc2sec(Rtc *rtc)
+{
+    ulong secs;
+    int i;
+    int *d2m;
+
+    secs = 0;
+
+    /*
+     *  seconds per year
+     */
+    for(i = 1970; i < rtc->year; i++){
+        d2m = yrsize(i);
+        secs += d2m[0] * SEC2DAY;
+    }
+
+    /*
+     *  seconds per month
+     */
+    d2m = yrsize(rtc->year);
+    for(i = 1; i < rtc->mon; i++)
+        secs += d2m[i] * SEC2DAY;
+
+    secs += (rtc->mday-1) * SEC2DAY;
+    secs += rtc->hour * SEC2HOUR;
+    secs += rtc->min * SEC2MIN;
+    secs += rtc->sec;
+
+    return secs;
+}
+@
+
+<<function sec2rtc>>=
+/*
+ *  compute rtc from seconds since Jan 1 1970
+ */
+static void
+sec2rtc(ulong secs, Rtc *rtc)
+{
+    int d;
+    long hms, day;
+    int *d2m;
+
+    /*
+     * break initial number into days
+     */
+    hms = secs % SEC2DAY;
+    day = secs / SEC2DAY;
+    if(hms < 0) {
+        hms += SEC2DAY;
+        day -= 1;
+    }
+
+    /*
+     * generate hours:minutes:seconds
+     */
+    rtc->sec = hms % 60;
+    d = hms / 60;
+    rtc->min = d % 60;
+    d /= 60;
+    rtc->hour = d;
+
+    /*
+     * year number
+     */
+    if(day >= 0)
+        for(d = 1970; day >= *yrsize(d); d++)
+            day -= *yrsize(d);
+    else
+        for (d = 1970; day < 0; d--)
+            day += *yrsize(d-1);
+    rtc->year = d;
+
+    /*
+     * generate month
+     */
+    d2m = yrsize(rtc->year);
+    for(d = 1; day >= d2m[d]; d++)
+        day -= d2m[d];
+    rtc->mday = day + 1;
+    rtc->mon = d;
+
+    return;
+}
+@
+
+
 \chapter{IPC}
 \minitoc
 
@@ -18991,6 +19795,8 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
 
 
 \section{Pipes}
+
+\subsection{[[syspipe()]]}
 
 <<syscall pipe>>=
 long
@@ -19561,6 +20367,36 @@ boot(int argc, char *argv[])
 }
 @
 
+<<function run>>=
+void
+run(char *file, ...)
+{
+  runv(&file);
+}
+@
+
+<<function runv>>=
+void
+runv(char **argv)
+{
+  int i, pid;
+  
+  switch(pid = fork()){
+  case -1:
+    fatal("fork");
+  case 0:
+    exec(argv[0], argv);
+    fatal(smprint("can't exec %s: %r", argv[0]));
+  default:
+    while ((i = waitpid()) != pid && i != -1)
+      ;
+    if(i == -1)
+      fatal(smprint("wait failed running %s", argv[0]));
+  }
+}
+@
+
+
 <<local.c>>=
 #include <u.h>
 #include <libc.h>
@@ -19903,6 +20739,59 @@ closeegrp(Egrp *eg)
 % apparently can also be used by the debugger acid
 %  chmod +w /proc/96/mem and then acid 96
 
+\section{[[/fd/]]}
+
+\subsection{[[sysdup()]]}
+
+<<systab special file syscalls>>=
+    [DUP]       sysdup,
+@ 
+
+<<syscall dup>>=
+long
+sysdup(ulong *arg)
+{
+    int fd;
+    Chan *c, *oc;
+    Fgrp *f = up->fgrp;
+
+    /*
+     * Close after dup'ing, so date > #d/1 works
+     */
+    c = fdtochan(arg[0], -1, 0, 1);
+    fd = arg[1];
+    if(fd != -1){
+        lock(f);
+        if(fd<0 || growfd(f, fd)<0) {
+            unlockfgrp(f);
+            cclose(c);
+            error(Ebadfd);
+        }
+        if(fd > f->maxfd)
+            f->maxfd = fd;
+
+        oc = f->fd[fd];
+        f->fd[fd] = c;
+        unlockfgrp(f);
+        if(oc)
+            cclose(oc);
+    }else{
+        if(waserror()) {
+            cclose(c);
+            nexterror();
+        }
+        fd = newfd(c);
+        if(fd < 0)
+            error(Enofd);
+        poperror();
+    }
+
+    return fd;
+}
+@
+
+\subsection{[[/fd/]]}
+
 \section{[[/dev/reboot]]}
 
 <<function exit>>=
@@ -20186,55 +21075,6 @@ nrand(int n)
 %//}
 
 
-
-\section{[[/dev/dup]]}
-
-<<systab special file syscalls>>=
-    [DUP]       sysdup,
-@ 
-
-<<syscall dup>>=
-long
-sysdup(ulong *arg)
-{
-    int fd;
-    Chan *c, *oc;
-    Fgrp *f = up->fgrp;
-
-    /*
-     * Close after dup'ing, so date > #d/1 works
-     */
-    c = fdtochan(arg[0], -1, 0, 1);
-    fd = arg[1];
-    if(fd != -1){
-        lock(f);
-        if(fd<0 || growfd(f, fd)<0) {
-            unlockfgrp(f);
-            cclose(c);
-            error(Ebadfd);
-        }
-        if(fd > f->maxfd)
-            f->maxfd = fd;
-
-        oc = f->fd[fd];
-        f->fd[fd] = c;
-        unlockfgrp(f);
-        if(oc)
-            cclose(oc);
-    }else{
-        if(waserror()) {
-            cclose(c);
-            nexterror();
-        }
-        fd = newfd(c);
-        if(fd < 0)
-            error(Enofd);
-        poperror();
-    }
-
-    return fd;
-}
-@
 
 \chapter{Conclusion}
 
@@ -21138,6 +21978,69 @@ extern  int fullrune(char*, int);
 
 %todo: put the isdot, isfrog here?
 
+<<function kstrcpy>>=
+/*
+ * Rather than strncpy, which zeros the rest of the buffer, kstrcpy
+ * truncates if necessary, always zero terminates, does not zero fill,
+ * and puts ... at the end of the string if it's too long.  Usually used to
+ * save a string in up->genbuf;
+ */
+void
+kstrcpy(char *s, char *t, int ns)
+{
+    int nt;
+
+    nt = strlen(t);
+    if(nt+1 <= ns){
+        memmove(s, t, nt+1);
+        return;
+    }
+    /* too long */
+    if(ns < 4){
+        /* but very short! */
+        strncpy(s, t, ns);
+        return;
+    }
+    /* truncate with ... at character boundary (very rare case) */
+    memmove(s, t, ns-4);
+    ns -= 4;
+    s[ns] = '\0';
+    /* look for first byte of UTF-8 sequence by skipping continuation bytes */
+    while(ns>0 && (s[--ns]&0xC0)==0x80)
+        ;
+    strcpy(s+ns, "...");
+}
+@
+
+
+<<function kstrdup>>=
+/*
+ * Atomically replace *p with copy of s
+ */
+void
+kstrdup(char **p, char *s)
+{
+    int n;
+    char *t, *prev;
+
+    n = strlen(s)+1;
+    /* if it's a user, we can wait for memory; if not, something's very wrong */
+    if(up){
+        t = smalloc(n);
+        setmalloctag(t, getcallerpc(&p));
+    }else{
+        t = malloc(n);
+        if(t == nil)
+            panic("kstrdup: no memory");
+    }
+    memmove(t, s, n);
+    prev = *p;
+    *p = t;
+    free(prev);
+}
+@
+
+
 \section{Conversion functions}
 
 <<lib.h strto functions decl>>=
@@ -21146,6 +22049,40 @@ extern  ulong strtoul(char*, char**, int);
 extern  vlong strtoll(char*, char**, int);
 extern  uvlong  strtoull(char*, char**, int);
 @ 
+
+<<function readnum>>=
+int
+readnum(ulong off, char *buf, ulong n, ulong val, int size)
+{
+    char tmp[64];
+
+    snprint(tmp, sizeof(tmp), "%*lud", size-1, val);
+    tmp[size-1] = ' ';
+    if(off >= size)
+        return 0;
+    if(off+n > size)
+        n = size-off;
+    memmove(buf, tmp+off, n);
+    return n;
+}
+@
+
+
+<<function readstr>>=
+int
+readstr(ulong off, char *buf, ulong n, char *str)
+{
+    int size;
+
+    size = strlen(str);
+    if(off >= size)
+        return 0;
+    if(off+n > size)
+        n = size-off;
+    memmove(buf, str+off, n);
+    return n;
+}
+@
 
 \section{Pool allocation}
 
@@ -21189,6 +22126,39 @@ extern  int fmtprint(Fmt*, char*, ...);
 extern  int fmtstrcpy(Fmt*, char*);
 extern  char* fmtstrflush(Fmt*);
 @ 
+
+<<lib.h pragmas>>=
+#pragma varargck  argpos  fmtprint  2
+#pragma varargck  argpos  print   1
+#pragma varargck  argpos  seprint   3
+#pragma varargck  argpos  snprint   3
+#pragma varargck  argpos  sprint    2
+
+#pragma varargck  type  "lld" vlong
+#pragma varargck  type  "llx" vlong
+#pragma varargck  type  "lld" uvlong
+#pragma varargck  type  "llx" uvlong
+#pragma varargck  type  "ld"  long
+#pragma varargck  type  "lx"  long
+#pragma varargck  type  "ld"  ulong
+#pragma varargck  type  "lx"  ulong
+#pragma varargck  type  "d" int
+#pragma varargck  type  "x" int
+#pragma varargck  type  "c" int
+#pragma varargck  type  "C" int
+#pragma varargck  type  "d" uint
+#pragma varargck  type  "x" uint
+#pragma varargck  type  "c" uint
+#pragma varargck  type  "C" uint
+#pragma varargck  type  "s" char*
+#pragma varargck  type  "q" char*
+#pragma varargck  type  "S" Rune*
+#pragma varargck  type  "%" void
+#pragma varargck  type  "p" uintptr
+#pragma varargck  type  "p" void*
+#pragma varargck  flag  ','
+@
+
 
 \section{Runes, a.k.a unicode}
 

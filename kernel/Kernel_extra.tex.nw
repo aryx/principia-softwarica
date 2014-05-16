@@ -1047,9 +1047,8 @@ int (*isaconfig)(char*, int, ISAConf*) = 0;
 \subsection*{[[core/386/fns.h]]}
 
 <<fns.h macros>>=
-#define KADDR(a)  kaddr(a)
-#define PADDR(a)  paddr((void*)(a))
-
+<<function KADDR>>
+<<function PADDR>>
 
 #define dcflush(a, b)
 
@@ -1058,6 +1057,7 @@ int (*isaconfig)(char*, int, ISAConf*) = 0;
 #define L16GET(p) (((p)[1]<<8)|(p)[0])
 #define L32GET(p) (((u32int)L16GET((p)+2)<<16)|L16GET(p))
 @
+
 
 \ifallcode
 <<fns.h declarations>>=
@@ -1202,7 +1202,7 @@ void  meminit(void);
 void  memorysummary(void);
 //@Scheck: Assembly
 void  mfence(void);
-#define mmuflushtlb(pdb) putcr3(pdb)
+<<function mmuflushtlb>>
 void  mmuinit(void);
 ulong*  mmuwalk(ulong*, ulong, int, int);
 int mtrr(uvlong, uvlong, char *);
@@ -1645,40 +1645,6 @@ typedef struct Xhdr Xhdr;
 
 \subsection*{[[core/portfns.c]]}
 
-<<function readnum>>=
-int
-readnum(ulong off, char *buf, ulong n, ulong val, int size)
-{
-    char tmp[64];
-
-    snprint(tmp, sizeof(tmp), "%*lud", size-1, val);
-    tmp[size-1] = ' ';
-    if(off >= size)
-        return 0;
-    if(off+n > size)
-        n = size-off;
-    memmove(buf, tmp+off, n);
-    return n;
-}
-@
-
-
-<<function readstr>>=
-int
-readstr(ulong off, char *buf, ulong n, char *str)
-{
-    int size;
-
-    size = strlen(str);
-    if(off >= size)
-        return 0;
-    if(off+n > size)
-        n = size-off;
-    memmove(buf, str+off, n);
-    return n;
-}
-@
-
 
 <<portfns.c>>=
 <<kernel basic includes>>
@@ -1943,8 +1909,6 @@ kbdputmap(ushort m, ushort scanc, Rune r)
 @
 
 
-
-
 <<kbd.c>>=
 /*
  * keyboard input
@@ -2012,7 +1976,7 @@ enum
 extern int mouseshifted;
 extern void (*kbdmouse)(int);
 
-static uchar ccc;
+<<global ccc>>
 static void (*auxputc)(int, int);
 
 
@@ -2175,58 +2139,6 @@ Dev archdevtab = {
 @
 
 
-<<function archinit>>=
-void
-archinit(void)
-{
-    PCArch **p;
-
-    arch = 0;
-    for(p = knownarch; *p; p++){
-        if((*p)->ident && (*p)->ident() == 0){
-            arch = *p;
-            break;
-        }
-    }
-    if(arch == 0)
-        arch = &archgeneric;
-    else{
-        if(arch->id == 0)
-            arch->id = archgeneric.id;
-        if(arch->reset == 0)
-            arch->reset = archgeneric.reset;
-        if(arch->serialpower == 0)
-            arch->serialpower = archgeneric.serialpower;
-        if(arch->modempower == 0)
-            arch->modempower = archgeneric.modempower;
-        if(arch->intrinit == 0)
-            arch->intrinit = archgeneric.intrinit;
-        if(arch->intrenable == 0)
-            arch->intrenable = archgeneric.intrenable;
-    }
-
-    /*
-     *  Decide whether to use copy-on-reference (386 and mp).
-     *  We get another chance to set it in mpinit() for a
-     *  multiprocessor.
-     */
-    if(X86FAMILY(m->cpuidax) == 3)
-        conf.copymode = 1;
-
-    if(X86FAMILY(m->cpuidax) >= 4)
-        cmpswap = cmpswap486;
-
-    if(X86FAMILY(m->cpuidax) >= 5)
-        coherence = mb586;
-
-    if(m->cpuiddx & Sse2)
-        coherence = mfence;
-
-    addarchfile("cputype", 0444, cputyperead, nil);
-    addarchfile("archctl", 0664, archctlread, archctlwrite);
-}
-@
-
 
 <<devarch.c>>=
 <<kernel basic includes>>
@@ -2248,6 +2160,11 @@ enum {
 
 typedef long Rdwrfn(Chan*, void*, long, vlong);
 
+extern int doi8253set;
+extern int cmpswap386(long *addr, long old, long new);
+extern PCArch* knownarch[];
+
+
 static Rdwrfn *readfn[Qmax];
 static Rdwrfn *writefn[Qmax];
 
@@ -2261,7 +2178,6 @@ static Dirtab archdir[Qmax] = {
 Lock archwlock; /* the lock is only for changing archdir */
 int narchdir = Qbase;
 
-extern int doi8253set;
 
 /*
  * Add a file to the #P listing.  Once added, you can't delete it.
@@ -2496,12 +2412,6 @@ void
 nop(void)
 {
 }
-
-extern int cmpswap386(long *addr, long old, long new);
-
-extern PCArch* knownarch[];
-
-
 
 
 
@@ -2949,123 +2859,17 @@ rtcwrite(Chan* c, void* buf, long n, vlong off)
 
 <<global rtcdevtab>>
 
-#define SEC2MIN 60L
-#define SEC2HOUR (60L*SEC2MIN)
-#define SEC2DAY (24L*SEC2HOUR)
+<<constants SEC2XXX>>
 
-/*
- *  days per month plus days/year
- */
-static  int dmsize[] =
-{
-    365, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-};
-static  int ldmsize[] =
-{
-    366, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-};
+<<globals dmsize ldmsize>>
 
-/*
- *  return the days/month for the given year
- */
-static int*
-yrsize(int y)
-{
-    if((y%4) == 0 && ((y%100) != 0 || (y%400) == 0))
-        return ldmsize;
-    else
-        return dmsize;
-}
+<<function yrsize>>
 
-/*
- *  compute seconds since Jan 1 1970
- */
-static ulong
-rtc2sec(Rtc *rtc)
-{
-    ulong secs;
-    int i;
-    int *d2m;
+<<function rtc2sec>>
 
-    secs = 0;
-
-    /*
-     *  seconds per year
-     */
-    for(i = 1970; i < rtc->year; i++){
-        d2m = yrsize(i);
-        secs += d2m[0] * SEC2DAY;
-    }
-
-    /*
-     *  seconds per month
-     */
-    d2m = yrsize(rtc->year);
-    for(i = 1; i < rtc->mon; i++)
-        secs += d2m[i] * SEC2DAY;
-
-    secs += (rtc->mday-1) * SEC2DAY;
-    secs += rtc->hour * SEC2HOUR;
-    secs += rtc->min * SEC2MIN;
-    secs += rtc->sec;
-
-    return secs;
-}
-
-/*
- *  compute rtc from seconds since Jan 1 1970
- */
-static void
-sec2rtc(ulong secs, Rtc *rtc)
-{
-    int d;
-    long hms, day;
-    int *d2m;
-
-    /*
-     * break initial number into days
-     */
-    hms = secs % SEC2DAY;
-    day = secs / SEC2DAY;
-    if(hms < 0) {
-        hms += SEC2DAY;
-        day -= 1;
-    }
-
-    /*
-     * generate hours:minutes:seconds
-     */
-    rtc->sec = hms % 60;
-    d = hms / 60;
-    rtc->min = d % 60;
-    d /= 60;
-    rtc->hour = d;
-
-    /*
-     * year number
-     */
-    if(day >= 0)
-        for(d = 1970; day >= *yrsize(d); d++)
-            day -= *yrsize(d);
-    else
-        for (d = 1970; day < 0; d--)
-            day += *yrsize(d-1);
-    rtc->year = d;
-
-    /*
-     * generate month
-     */
-    d2m = yrsize(rtc->year);
-    for(d = 1; day >= d2m[d]; d++)
-        day -= d2m[d];
-    rtc->mday = day + 1;
-    rtc->mon = d;
-
-    return;
-}
+<<function sec2rtc>>
 
 @
-
 
 \subsection*{[[devices/sys/devroot.c]]}
 
@@ -3084,16 +2888,6 @@ rootclose(Chan*)
 {
 }
 @
-
-<<method rootwrite>>=
-static long
-rootwrite(Chan*, void*, long, vlong)
-{
-    error(Egreg);
-    return 0;
-}
-@
-
 
 
 
@@ -3165,7 +2959,12 @@ rootopen(Chan *c, int omode)
 
 <<method rootread>>
 
-<<method rootwrite>>
+static long
+rootwrite(Chan*, void*, long, vlong)
+{
+    error(Egreg);
+    return 0;
+}
 
 <<global rootdevtab>>
 
@@ -3225,306 +3024,6 @@ static int debugstart = 1;
 \fi
 
 
-
-
-<<struct Clunkq>>=
-/*
- * Queue a chan to be closed by one of the clunk procs.
- */
-struct Clunkq {
-    Chan *head;
-    Chan *tail;
-    int nqueued;
-    int nclosed;
-    Lock l;
-    QLock q;
-    Rendez r;
-};
-@
-
-
-<<global clunkq>>=
-struct Clunkq clunkq;
-@
-
-
-<<function ccloseq>>=
-void
-ccloseq(Chan *c)
-{
-    if(c->flag&CFREE)
-        panic("cclose %#p", getcallerpc(&c));
-
-    DBG("ccloseq %p name=%s ref=%ld\n", c, c->path->s, c->ref);
-
-    if(decref(c))
-        return;
-
-    lock(&clunkq.l);
-    clunkq.nqueued++;
-    c->next = nil;
-    if(clunkq.head)
-        clunkq.tail->next = c;
-    else
-        clunkq.head = c;
-    clunkq.tail = c;
-    unlock(&clunkq.l);
-
-    if(!wakeup(&clunkq.r))
-        kproc("closeproc", closeproc, nil); 
-}
-@
-
-
-<<function clunkwork>>=
-static int
-clunkwork(void*)
-{
-    return clunkq.head != nil;
-}
-@
-
-
-<<function closeproc>>=
-void
-closeproc(void*)
-{
-    Chan *c;
-
-    for(;;){
-        qlock(&clunkq.q);
-        if(clunkq.head == nil){
-            if(!waserror()){
-                tsleep(&clunkq.r, clunkwork, nil, 5000);
-                poperror();
-            }
-            if(clunkq.head == nil){
-                qunlock(&clunkq.q);
-                pexit("no work", 1);
-            }
-        }
-        lock(&clunkq.l);
-        c = clunkq.head;
-        clunkq.head = c->next;
-        clunkq.nclosed++;
-        unlock(&clunkq.l);
-        qunlock(&clunkq.q);
-        if(!waserror()){
-            devtab[c->type]->close(c);
-            poperror();
-        }
-        chanfree(c);
-    }
-}
-@
-
-
-<<function cunique>>=
-/*
- * Make sure we have the only copy of c.  (Copy on write.)
- */
-Chan*
-cunique(Chan *c)
-{
-    Chan *nc;
-
-    if(c->ref != 1){
-        nc = cclone(c);
-        cclose(c);
-        c = nc;
-    }
-
-    return c;
-}
-@
-
-
-<<function createdir>>=
-/*
- * c is a mounted non-creatable directory.  find a creatable one.
- */
-Chan*
-createdir(Chan *c, Mhead *m)
-{
-    Chan *nc;
-    Mount *f;
-
-    rlock(&m->lock);
-    if(waserror()){
-        runlock(&m->lock);
-        nexterror();
-    }
-    for(f = m->mount; f; f = f->next){
-        if(f->mflag&MCREATE){
-            nc = cclone(f->to);
-            runlock(&m->lock);
-            poperror();
-            cclose(c);
-            return nc;
-        }
-    }
-    error(Enocreate);
-    return 0;
-}
-@
-
-
-
-
-<<function namelenerror>>=
-void
-namelenerror(char *aname, int len, char *err)
-{
-    char *ename, *name, *next;
-    int i, errlen;
-
-    /*
-     * If the name is short enough, just use the whole thing.
-     */
-    errlen = strlen(err);
-    if(len < ERRMAX/3 || len+errlen < 2*ERRMAX/3)
-        snprint(up->genbuf, sizeof up->genbuf, "%.*s", 
-            utfnlen(aname, len), aname);
-    else{
-        /*
-         * Print a suffix of the name, but try to get a little info.
-         */
-        ename = aname+len;
-        next = ename;
-        do{
-            name = next;
-            next = memrchr(aname, '/', name-aname);
-            if(next == nil)
-                next = aname;
-            len = ename-next;
-        }while(len < ERRMAX/3 || len + errlen < 2*ERRMAX/3);
-
-        /*
-         * If the name is ridiculously long, chop it.
-         */
-        if(name == ename){
-            name = ename-ERRMAX/4;
-            if(name <= aname)
-                panic("bad math in namelenerror");
-            /* walk out of current UTF sequence */
-            for(i=0; (*name&0xC0)==0x80 && i<UTFmax; i++)
-                name++;
-        }
-        snprint(up->genbuf, sizeof up->genbuf, "...%.*s",
-            utfnlen(name, ename-name), name);
-    }               
-    snprint(up->errstr, ERRMAX, "%#q %s", up->genbuf, err);
-    nexterror();
-}
-@
-
-
-<<function nameerror>>=
-void
-nameerror(char *name, char *err)
-{
-    namelenerror(name, strlen(name), err);
-}
-@
-
-
-
-
-<<function validname0>>=
-/*
- * Check that the name
- *  a) is in valid memory.
- *  b) is shorter than 2^16 bytes, so it can fit in a 9P string field.
- *  c) contains no frogs.
- * The first byte is known to be addressible by the requester, so the
- * routine works for kernel and user memory both.
- * The parameter slashok flags whether a slash character is an error
- * or a valid character.
- *
- * The parameter dup flags whether the string should be copied
- * out of user space before being scanned the second time.
- * (Otherwise a malicious thread could remove the NUL, causing us
- * to access unchecked addresses.) 
- */
-static char*
-validname0(char *aname, int slashok, int dup, ulong pc)
-{
-    char *ename, *name, *s;
-    int c, n;
-    Rune r;
-
-    name = aname;
-    if((ulong)name < KZERO){
-        if(!dup)
-            print("warning: validname called from %#p with user pointer", pc);
-        ename = vmemchr(name, 0, (1<<16));
-    }else
-        ename = memchr(name, 0, (1<<16));
-
-    if(ename==nil || ename-name>=(1<<16))
-        error("name too long");
-
-    s = nil;
-    if(dup){
-        n = ename-name;
-        s = smalloc(n+1);
-        memmove(s, name, n);
-        s[n] = 0;
-        aname = s;
-        name = s;
-        setmalloctag(s, pc);
-    }
-    
-    while(*name){
-        /* all characters above '~' are ok */
-        c = *(uchar*)name;
-        if(c >= Runeself)
-            name += chartorune(&r, name);
-        else{
-            if(isfrog[c])
-                if(!slashok || c!='/'){
-                    snprint(up->genbuf, sizeof(up->genbuf), "%s: %q", Ebadchar, aname);
-                    free(s);
-                    error(up->genbuf);
-            }
-            name++;
-        }
-    }
-    return s;
-}
-@
-
-<<function validname>>=
-void
-validname(char *aname, int slashok)
-{
-    validname0(aname, slashok, 0, getcallerpc(&aname));
-}
-@
-
-
-<<function validnamedup>>=
-char*
-validnamedup(char *aname, int slashok)
-{
-    return validname0(aname, slashok, 1, getcallerpc(&aname));
-}
-@
-
-
-<<function isdir>>=
-void
-isdir(Chan *c)
-{
-    if(c->qid.type & QTDIR)
-        return;
-    error(Enotdir);
-}
-@
-
-
-
-
 <<chan.c>>=
 <<kernel basic includes>>
 
@@ -3534,8 +3033,8 @@ isdir(Chan *c)
 
 enum
 {
-    PATHSLOP    = 20,
-    PATHMSLOP   = 20,
+<<constant PATHSLOP>>
+<<constant PATHMSLOP>>
 };
 
 <<struct Chanalloc>>
@@ -3986,12 +3485,6 @@ mntversion(Chan *c, char *version, int msize, int returnlen)
 
 \subsection*{[[files/portdat_files.h]]}
 
-<<[[Dev]] other fields>>=
-/* not initialised */
-int attached;       /* debugging */
-@
-
-
 <<struct Extent>>=
 struct Extent
 {
@@ -4100,17 +3593,6 @@ extern Dev** devtab;
 //*****************************************************************************
 
 <<constants tags>>
-
-/*
- * References are managed as follows:
- * The channel to the server - a network connection or pipe - has one
- * reference for every Chan open on the server.  The server channel has
- * c->mux set to the Mnt used for muxing control to that server.  Mnts
- * have no reference count; they go away when c goes away.
- * Each channel derived from the mount point has mchan set to c,
- * and increfs/decrefs mchan to manage references on the server
- * connection.
- */
 
 // actually internal to devmnt.c and mnt.c
 <<struct Mntalloc>>
@@ -4606,6 +4088,8 @@ startboot(char *argv0, char **argv)
 \subsection*{[[init/user/boot/aux.c]]}
 
 % only run and runv are maybe slightly interesting
+
+
 \ifallcode
 <<aux.c>>=
 #include <u.h>
@@ -4635,30 +4119,9 @@ fatal(char *s)
     exits(msg);         /* this will trigger a panic */
 }
 
-void
-runv(char **argv)
-{
-  int i, pid;
-  
-  switch(pid = fork()){
-  case -1:
-    fatal("fork");
-  case 0:
-    exec(argv[0], argv);
-    fatal(smprint("can't exec %s: %r", argv[0]));
-  default:
-    while ((i = waitpid()) != pid && i != -1)
-      ;
-    if(i == -1)
-      fatal(smprint("wait failed running %s", argv[0]));
-  }
-}
+<<function runv>>
 
-void
-run(char *file, ...)
-{
-  runv(&file);
-}
+<<function run>>
 
 
 void bind_safe(char* old, char* new, int flag) {
@@ -4781,32 +4244,10 @@ extern void boot(int, char **);
 //*****************************************************************************
 // Gdts Data
 //*****************************************************************************
-        
-/*
- *  gdt to get us to 32-bit/segmented/unpaged mode
- */
-TEXT tgdt(SB), $0
 
-        /* null descriptor */
-        LONG    $0
-        LONG    $0
+<<global tgdt>>
 
-        /* data segment descriptor for 4 gigabytes (PL 0) */
-        LONG    $(0xFFFF)
-        LONG    $(SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(0)|SEGDATA|SEGW)
-
-        /* exec segment descriptor for 4 gigabytes (PL 0) */
-        LONG    $(0xFFFF)
-        LONG    $(SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(0)|SEGEXEC|SEGR)
-
-/*
- *  pointer to initial gdt
- *  Note the -KZERO which puts the physical address in the gdtptr. 
- *  that's needed as we start executing in physical addresses. 
- */
-TEXT tgdtptr(SB), $0
-        WORD    $(3*8)
-        LONG    $tgdt-KZERO(SB)
+<<global tgdtptr>>
 
 TEXT m0rgdtptr(SB), $0
         WORD    $(NGDT*8-1)
@@ -4824,107 +4265,9 @@ TEXT m0idtptr(SB), $0
 // Assume protected 32 bit and GTD done
 //*****************************************************************************
 
-TEXT mode32bit(SB), $0
-        /* At this point, the GDT setup is done. */
+<<function mode32bits>>
 
-        MOVL    $PADDR(CPU0PDB), DI             /* clear 4 pages for the tables etc. */
-        XORL    AX, AX
-        MOVL    $(4*BY2PG), CX
-        SHRL    $2, CX
-
-        CLD
-        REP;    STOSL
-
-        MOVL    $PADDR(CPU0PDB), AX
-        ADDL    $PDO(KZERO), AX                 /* page directory offset for KZERO */
-        MOVL    $PADDR(CPU0PTE), (AX)           /* PTE's for KZERO */
-        MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
-        ORL     BX, (AX)
-
-        ADDL    $4, AX
-        MOVL    $PADDR(CPU0PTE1), (AX)          /* PTE's for KZERO+4MB */
-        MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
-        ORL     BX, (AX)
-
-        MOVL    $PADDR(CPU0PTE), AX             /* first page of page table */
-        MOVL    $1024, CX                       /* 1024 pages in 4MB */
-_setpte:
-        MOVL    BX, (AX)
-        ADDL    $(1<<PGSHIFT), BX
-        ADDL    $4, AX
-        LOOP    _setpte
-
-        MOVL    $PADDR(CPU0PTE1), AX            /* second page of page table */
-        MOVL    $1024, CX                       /* 1024 pages in 4MB */
-_setpte1:
-        MOVL    BX, (AX)
-        ADDL    $(1<<PGSHIFT), BX
-        ADDL    $4, AX
-        LOOP    _setpte1
-
-        MOVL    $PADDR(CPU0PTE), AX
-        ADDL    $PTO(MACHADDR), AX              /* page table entry offset for MACHADDR */
-        MOVL    $PADDR(CPU0MACH), (AX)          /* PTE for Mach */
-        MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
-        ORL     BX, (AX)
-
-/*
- * Now ready to use the new map. Make sure the processor options are what is wanted.
- * It is necessary on some processors to immediately follow mode switching with a JMP instruction
- * to clear the prefetch queues.
- */
-        MOVL    $PADDR(CPU0PDB), CX             /* load address of page directory */
-        MOVL    (PDO(KZERO))(CX), DX            /* double-map KZERO at 0 */
-        MOVL    DX, (PDO(0))(CX)
-        MOVL    CX, CR3
-        DELAY                                   /* JMP .+2 */
-
-        MOVL    CR0, DX
-        ORL     $0x80010000, DX                 /* PG|WP */
-        ANDL    $~0x6000000A, DX                /* ~(CD|NW|TS|MP) */
-
-        MOVL    $_startpg(SB), AX               /* this is a virtual address */
-        MOVL    DX, CR0                         /* turn on paging */
-        JMP*    AX                              /* jump to the virtual nirvana */
-
-/*
- * Basic machine environment set, can clear BSS and create a stack.
- * The stack starts at the top of the page containing the Mach structure.
- * The x86 architecture forces the use of the same virtual address for
- * each processor's Mach structure, so the global Mach pointer 'm' can
- * be initialised here.
- */
-TEXT _startpg(SB), $0
-        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */
-        MOVL    CX, CR3                         /* load and flush the mmu */
-
-_clearbss:
-        MOVL    $edata(SB), DI
-        XORL    AX, AX
-        MOVL    $end(SB), CX
-        SUBL    DI, CX                          /* end-edata bytes */
-        SHRL    $2, CX                          /* end-edata doublewords */
-
-        CLD
-        REP;    STOSL                           /* clear BSS */
-
-        MOVL    $MACHADDR, SP
-        MOVL    SP, m(SB)                       /* initialise global Mach pointer */
-        MOVL    $0, 0(SP)                       /* initialise m->machno */
-
-
-        ADDL    $(MACHSIZE-4), SP               /* initialise stack */
-
-/*
- * Need to do one final thing to ensure a clean machine environment,
- * clear the EFLAGS register, which can only be done once there is a stack.
- */
-        MOVL    $0, AX
-        PUSHL   AX
-        POPFL
-
-        CALL    main(SB)
-
+<<function _startpg>>
 
         
 //*****************************************************************************
@@ -5201,27 +4544,6 @@ TEXT mul64fract(SB), $0
 
 
 \subsection*{[[init/386/l_multiboot.s]]}
-
-
-
-<<global multiboot>>=
-/* multiboot structure pointer */
-TEXT multiboot(SB), $0
-        LONG    $0
-@
-
-
-<<l_multiboot.s>>=
-#include "mem.h"
-        
-TEXT _startKADDR(SB), $0
-
-<<global _multibootheader>>
-
-<<function _multibootentry>>
-
-<<global multiboot>>
-@
 
 
 \subsection*{[[init/386/main.c]]}
@@ -5728,8 +5050,8 @@ enum {
 // Global! set by bootargs()
 uchar *sp;      /* user stack of init proc */
 
-// who set this??
-int delaylink;
+// could delete, nobody set it to true anyway
+int delaylink = 0;
 
 //@Scheck: Assembly
 extern ulong *multiboot;
@@ -5827,40 +5149,6 @@ void    rebootcmd(int, char**);
 \subsection*{[[lib/lib.h]]}
 
 \ifallcode
-<<lib.h pragmas>>=
-#pragma varargck  argpos  fmtprint  2
-#pragma varargck  argpos  print   1
-#pragma varargck  argpos  seprint   3
-#pragma varargck  argpos  snprint   3
-#pragma varargck  argpos  sprint    2
-
-#pragma varargck  type  "lld" vlong
-#pragma varargck  type  "llx" vlong
-#pragma varargck  type  "lld" uvlong
-#pragma varargck  type  "llx" uvlong
-#pragma varargck  type  "ld"  long
-#pragma varargck  type  "lx"  long
-#pragma varargck  type  "ld"  ulong
-#pragma varargck  type  "lx"  ulong
-#pragma varargck  type  "d" int
-#pragma varargck  type  "x" int
-#pragma varargck  type  "c" int
-#pragma varargck  type  "C" int
-#pragma varargck  type  "d" uint
-#pragma varargck  type  "x" uint
-#pragma varargck  type  "c" uint
-#pragma varargck  type  "C" uint
-#pragma varargck  type  "s" char*
-#pragma varargck  type  "q" char*
-#pragma varargck  type  "S" Rune*
-#pragma varargck  type  "%" void
-#pragma varargck  type  "p" uintptr
-#pragma varargck  type  "p" void*
-#pragma varargck  flag  ','
-@
-\fi
-
-\ifallcode
 <<lib.h forward decl>>=
 typedef struct Qid  Qid;
 typedef struct Dir  Dir;
@@ -5881,29 +5169,9 @@ enum _bool {
 @ 
 \fi
 
-<<lib.h exxx decl>>=
-extern  char  etext[];
-//@Scheck: Assembly, not dead used by 386/l.s
-extern  char  edata[];
-extern  char  end[];
-@ 
-
-
-
-
-
-
-<<struct Waitmsg>>=
-struct Waitmsg
-{
-  int pid;    /* of loved one */
-  ulong time[3];  /* of loved one and descendants */
-  char  msg[ERRMAX];  /* actually variable-size in user mode */
-};
-@ 
-
 
 <<struct OWaitmsg>>=
+// dead?
 struct OWaitmsg
 {
   char  pid[12];  /* of loved one */
@@ -9818,16 +9086,6 @@ struct Sargs
 
 
 
-<<struct Waitq>>=
-struct Waitq
-{
-    Waitmsg w;
-  
-    // extra
-    // list<ref<Waitq>> Proc.waitq
-    Waitq *next;
-};
-@ 
 
 
 
@@ -10888,58 +10146,6 @@ freebroken(void)
 
 
 
-<<function haswaitq>>=
-int
-haswaitq(void *x)
-{
-    Proc *p;
-
-    p = (Proc *)x;
-    return p->waitq != 0;
-}
-@ 
-
-
-<<function pwait>>=
-ulong
-pwait(Waitmsg *w)
-{
-    ulong cpid;
-    Waitq *wq;
-
-    if(!canqlock(&up->qwaitr))
-        error(Einuse);
-
-    if(waserror()) {
-        qunlock(&up->qwaitr);
-        nexterror();
-    }
-
-    lock(&up->exl);
-    if(up->nchild == 0 && up->waitq == 0) {
-        unlock(&up->exl);
-        error(Enochild);
-    }
-    unlock(&up->exl);
-
-    sleep(&up->waitr, haswaitq, up);
-
-    lock(&up->exl);
-    wq = up->waitq;
-    up->waitq = wq->next;
-    up->nwait--;
-    unlock(&up->exl);
-
-    qunlock(&up->qwaitr);
-    poperror();
-
-    if(w)
-        memmove(w, &wq->w, sizeof(Waitmsg));
-    cpid = wq->w.pid;
-    free(wq);
-    return cpid;
-}
-@ 
 
 
 <<function proctab>>=
@@ -11603,56 +10809,6 @@ int shargs(char*, int, char**);
 \fi
 
 
-
-<<function l2be>>=
-ulong
-l2be(long l)
-{
-    uchar *cp;
-
-    cp = (uchar*)&l;
-    return (cp[0]<<24) | (cp[1]<<16) | (cp[2]<<8) | cp[3];
-}
-@ 
-
-
-
-
-
-<<function shargs>>=
-int
-shargs(char *s, int n, char **ap)
-{
-    int i;
-
-    s += 2;
-    n -= 2;     /* skip #! */
-    for(i=0; s[i]!='\n'; i++)
-        if(i == n-1)
-            return 0;
-    s[i] = 0;
-    *ap = 0;
-    i = 0;
-    for(;;) {
-        while(*s==' ' || *s=='\t')
-            s++;
-        if(*s == 0)
-            break;
-        i++;
-        *ap++ = s;
-        *ap = 0;
-        while(*s && *s!=' ' && *s!='\t')
-            s++;
-        if(*s == 0)
-            break;
-        else
-            *s++ = 0;
-    }
-    return i;
-}
-@ 
-
-
 <<function return0>>=
 int
 sysproc_return0(void*)
@@ -11660,34 +10816,6 @@ sysproc_return0(void*)
     return 0;
 }
 @ 
-
-
-
-
-
-<<syscall await>>=
-long
-sysawait(ulong *arg)
-{
-    int i;
-    int pid;
-    Waitmsg w;
-    ulong n;
-
-    n = arg[1];
-    validaddr(arg[0], n, 1);
-    pid = pwait(&w);
-    if(pid < 0)
-        return -1;
-    i = snprint((char*)arg[0], n, "%d %lud %lud %lud %q",
-        w.pid,
-        w.time[TUser], w.time[TSys], w.time[TReal],
-        w.msg);
-
-    return i;
-}
-@ 
-
 
 
 <<syscall rendezvous>>=

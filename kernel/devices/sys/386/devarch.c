@@ -25,6 +25,11 @@ enum {
 
 typedef long Rdwrfn(Chan*, void*, long, vlong);
 
+extern int doi8253set;
+extern int cmpswap386(long *addr, long old, long new);
+extern PCArch* knownarch[];
+
+
 static Rdwrfn *readfn[Qmax];
 static Rdwrfn *writefn[Qmax];
 
@@ -38,7 +43,6 @@ static Dirtab archdir[Qmax] = {
 Lock archwlock; /* the lock is only for changing archdir */
 int narchdir = Qbase;
 
-extern int doi8253set;
 
 /*
  * Add a file to the #P listing.  Once added, you can't delete it.
@@ -294,12 +298,6 @@ void
 nop(void)
 {
 }
-
-extern int cmpswap386(long *addr, long old, long new);
-
-extern PCArch* knownarch[];
-
-
 
 
 

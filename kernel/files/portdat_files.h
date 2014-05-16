@@ -245,16 +245,21 @@ struct Chan
 
     int fid;      /* for devmnt */
     ulong iounit;     /* chunk size for i/o; 0==default */
+
     Mhead*  umh;      /* mount point that derived Chan; used in unionread */
     Chan* umc;      /* channel in union; held for union read */
     QLock umqlock;    /* serialize unionreads */
     int uri;      /* union read index */
+
     int dri;      /* devdirread index */
+
     uchar*  dirrock;    /* directory entry rock for translations */
     int nrock;
     int mrock;
     QLock rockqlock;
+
     int ismtpt;
+
     Mntcache* mcp;      /* Mount cache pointer */
     Mnt*  mux;      /* Mnt for clients using me for messages */
     union {
@@ -264,6 +269,7 @@ struct Chan
     };
     Chan* mchan;      /* channel to mounted server */
     Qid mqid;     /* qid of root of mount point */
+
     Path* path;
     /*x: [[Chan]] other fields */
     ushort  flag;
@@ -384,6 +390,8 @@ enum
 };
 /*e: constants tags */
 
+// actually internal to devmnt.c and mnt.c
+/*s: struct Mntalloc */
 /*
  * References are managed as follows:
  * The channel to the server - a network connection or pipe - has one
@@ -394,9 +402,6 @@ enum
  * and increfs/decrefs mchan to manage references on the server
  * connection.
  */
-
-// actually internal to devmnt.c and mnt.c
-/*s: struct Mntalloc */
 struct Mntalloc
 {
     Mnt*    list;       /* Mount devices in use */
