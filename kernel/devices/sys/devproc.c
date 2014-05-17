@@ -779,6 +779,7 @@ procread(Chan *c, void *va, long n, vlong off)
             n = j-offset;
         memmove(a, &up->genbuf[offset], n);
         return n;
+
     case Qsyscall:
         if(!p->syscalltrace)
             return 0;
@@ -1113,7 +1114,7 @@ procwrite(Chan *c, void *va, long n, vlong off)
         free(p->args);
         p->nargs = m;
         p->args = arg;
-        p->setargs = 1;
+        p->setargs = true;
         break;
 
     case Qmem:
@@ -1473,10 +1474,11 @@ procctlreq(Proc *p, char *va, int n)
     case CMwired:
         procwired(p, atoi(cb->f[1]));
         break;
+
     case CMtrace:
         switch(cb->nf){
         case 1:
-            p->trace ^= 1;
+            p->trace ^= true;
             break;
         case 2:
             p->trace = (atoi(cb->f[1]) != 0);

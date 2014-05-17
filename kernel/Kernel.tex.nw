@@ -142,43 +142,6 @@ Yoann Padioleau\\
 
 \chapter*{XTODO}
 
-<<enum procstate cases>>=
-Moribund,
-Ready,
-Scheding,
-Wakeme,
-Broken,
-Stopped,
-Rendezvous,
-Waitrelease,
-@ 
-
-<<[[Proc]] other fields>>=
-void  (*kpfun)(void*);
-void  *kparg;
-
-char  genbuf[128];  /* buffer used e.g. for last name element from namec */
-
-Lock  *lockwait;
-
-Mach  *wired;
-Mach  *mp;    /* machine this process last ran on */
-
-bool trace;    /* process being traced? */
-char  *syscalltrace;  /* syscall trace */
-
-int setargs;
-@ 
-
-
-<<[[Proc]] extra fields>>=
-ulong alarm;    /* Time of call */
-
-// option<ref<Mach>>, null when not associated to a machine?
-Mach  *mach;    /* machine running this proc */
-@ 
-
-
 <<[[Chan]] other fields>>=
 vlong devoffset;    /* in underlying device; see read */
 
@@ -1019,7 +982,7 @@ struct Proc
 //--------------------------------------------------------------------
     <<[[Proc]] debugging fields>>
 //--------------------------------------------------------------------
-// For debugger
+// For debugger, strace
 //--------------------------------------------------------------------
     <<[[Proc]] debugger fields>>
 //--------------------------------------------------------------------
@@ -7012,6 +6975,10 @@ static Counter  pidalloc;
 Counter noteidalloc;
 @ 
 
+<<enum procstate cases>>=
+Scheding,
+@
+
 <<function newproc>>=
 Proc*
 newproc(void)
@@ -7041,7 +7008,7 @@ newproc(void)
 
     p->state = Scheding;
     p->psstate = "New";
-    p->mach = 0;
+    p->mach = nil;
     p->qnext = 0;
     p->nchild = 0;
     p->nwait = 0;
@@ -7058,7 +7025,7 @@ newproc(void)
         p->procctl = Proc_tracesyscall;
     else
         p->procctl = 0;
-    p->syscalltrace = 0;    
+    p->syscalltrace = nil;    
     p->notepending = 0;
     p->ureg = 0;
     p->privatemem = false;
@@ -7069,12 +7036,12 @@ newproc(void)
     p->errbuf1[0] = '\0';
     p->nlocks.ref = 0;
     p->delaysched = 0;
-    p->trace = 0;
+    p->trace = false;
     kstrdup(&p->user, "*nouser");
     kstrdup(&p->text, "*notext");
     kstrdup(&p->args, "");
     p->nargs = 0;
-    p->setargs = 0;
+    p->setargs = false;
     memset(p->seg, 0, sizeof p->seg);
     p->pid = incref(&pidalloc);
     pidhash(p);
@@ -7085,14 +7052,34 @@ newproc(void)
         p->kstack = smalloc(KSTACK);
 
     /* sched params */
-    p->mp = 0;
-    p->wired = 0;
+    p->mp = nil;
+    p->wired = nil;
     procpriority(p, PriNormal, 0);
     p->cpu = 0;
     p->lastupdate = MACHP(0)->ticks*Scaling;
     p->edf = nil;
 
     return p;
+}
+@ 
+
+<<function noprocpanic>>=
+void
+noprocpanic(char *msg)
+{
+    /*
+     * setting exiting will make hzclock() on each processor call exit(0).
+     * clearing our bit in machs avoids calling exit(0) from hzclock()
+     * on this processor.
+     */
+    lock(&active);
+    active.machs &= ~(1<<m->machno);
+    active.exiting = 1;
+    unlock(&active);
+
+    procdump();
+    delay(1000);
+    panic(msg);
 }
 @ 
 
@@ -7245,9 +7232,13 @@ ulong priority; /* priority level */
 
 ulong basepri;  /* base priority level */
 uchar fixedpri; /* priority level deson't change */
+@ 
 
+<<[[Proc]] scheduling fields>>=
 ulong delaysched;
+@
 
+<<[[Proc]] scheduling fields>>=
 int preempted;  /* true if this process hasn't finished the interrupt
        *  that last preempted it
        */
@@ -7259,6 +7250,29 @@ ulong readytime;  /* time process came ready */
 ulong movetime; /* last time process switched processors */
 
 <<[[Proc]] optional [[edf]] field for real-time scheduling>>
+@ 
+
+<<[[Proc]] scheduling fields>>=
+// option<ref<Mach>>, null when not associated to a processor
+Mach  *mach;    /* machine running this proc */
+@
+
+<<function procpriority>>=
+void
+procpriority(Proc *p, int pri, int fixed)
+{
+    if(pri >= Npriq)
+        pri = Npriq - 1;
+    else if(pri < 0)
+        pri = 0;
+    p->basepri = pri;
+    p->priority = pri;
+    if(fixed){
+        p->fixedpri = 1;
+    } else {
+        p->fixedpri = 0;
+    }
+}
 @ 
 
 
@@ -7625,6 +7639,9 @@ reprioritize(Proc *p)
 }
 @ 
 
+<<enum procstate cases>>=
+Ready,
+@
 
 <<function ready>>=
 /*
@@ -7686,6 +7703,9 @@ yield(void)
 ulong balancetime;
 @ 
 
+<<[[Proc]] scheduling fields>>=
+Mach  *mp;    /* machine this process last ran on */
+@
 
 <<function rebalance>>=
 static void
@@ -7797,6 +7817,47 @@ found:
     if(pt)
         pt(p, SRun, 0);
     return p;
+}
+@ 
+
+
+<<[[Proc]] scheduling fields>>=
+Mach  *wired;
+@
+
+<<function procwired>>=
+/*
+ * wire this proc to a machine
+ */
+void
+procwired(Proc *p, int bm)
+{
+    Proc *pp;
+    int i;
+    char nwired[MAXMACH];
+    Mach *wm;
+
+    if(bm < 0){
+        /* pick a machine to wire to */
+        memset(nwired, 0, sizeof(nwired));
+        p->wired = 0;
+        pp = proctab(0);
+        for(i=0; i<conf.nproc; i++, pp++){
+            wm = pp->wired;
+            if(wm && pp->pid)
+                nwired[wm->machno]++;
+        }
+        bm = 0;
+        for(i=0; i<conf.nmach; i++)
+            if(nwired[i] < nwired[bm])
+                bm = i;
+    } else {
+        /* use the virtual machine requested */
+        bm = bm % conf.nmach;
+    }
+
+    p->wired = MACHP(bm);
+    p->mp = p->wired;
 }
 @ 
 
@@ -8052,6 +8113,9 @@ closergrp(Rgrp *r)
 
 \section{[[sleep()]], [[wakeup()]]}
 
+<<enum procstate cases>>=
+Wakeme,
+@
 
 <<function sleep>>=
 /*
@@ -8813,6 +8877,10 @@ sysexits(ulong *arg)
 }
 @ 
 
+<<enum procstate cases>>=
+Moribund,
+@
+
 <<function pexit>>=
 void
 proc_pexit(char *exitstr, int freemem)
@@ -8962,6 +9030,91 @@ proc_pexit(char *exitstr, int freemem)
 }
 @ 
 
+<<enum procstate cases>>=
+Broken,
+@
+
+
+<<struct Broken>>=
+/*
+ * weird thing: keep at most NBROKEN around
+ */
+#define NBROKEN 4
+struct Broken
+{
+    QLock;
+    int n;
+    Proc    *p[NBROKEN];
+};
+@ 
+
+
+<<global broken>>=
+struct Broken broken;
+@ 
+
+
+<<function addbroken>>=
+void
+addbroken(Proc *p)
+{
+    qlock(&broken);
+    if(broken.n == NBROKEN) {
+        ready(broken.p[0]);
+        memmove(&broken.p[0], &broken.p[1], sizeof(Proc*)*(NBROKEN-1));
+        --broken.n;
+    }
+    broken.p[broken.n++] = p;
+    qunlock(&broken);
+
+    edfstop(up);
+    p->state = Broken;
+    p->psstate = nil;
+    sched();
+}
+@ 
+
+
+<<function unbreak>>=
+void
+unbreak(Proc *p)
+{
+    int b;
+
+    qlock(&broken);
+    for(b=0; b < broken.n; b++)
+        if(broken.p[b] == p) {
+            broken.n--;
+            memmove(&broken.p[b], &broken.p[b+1],
+                    sizeof(Proc*)*(NBROKEN-(b+1)));
+            ready(p);
+            break;
+        }
+    qunlock(&broken);
+}
+@ 
+
+
+<<function freebroken>>=
+int
+freebroken(void)
+{
+    int i, n;
+
+    qlock(&broken);
+    n = broken.n;
+    for(i=0; i<n; i++) {
+        ready(broken.p[i]);
+        broken.p[i] = 0;
+    }
+    broken.n = 0;
+    qunlock(&broken);
+    return n;
+}
+@ 
+
+
+
 \section{[[sysawait()]]}
 
 <<struct Waitmsg>>=
@@ -9076,10 +9229,60 @@ sysawait(ulong *arg)
 }
 @ 
 
+\section{[[sysrendezvous()]]}
+
+<<enum procstate cases>>=
+Rendezvous,
+@
+
+<<syscall rendezvous>>=
+long
+sysrendezvous(ulong *arg)
+{
+    uintptr tag, val;
+    Proc *p, **l;
+
+    tag = arg[0];
+    l = &REND(up->rgrp, tag);
+    up->rendval = ~(uintptr)0;
+
+    lock(up->rgrp);
+    for(p = *l; p; p = p->rendhash) {
+        if(p->rendtag == tag) {
+            *l = p->rendhash;
+            val = p->rendval;
+            p->rendval = arg[1];
+
+            while(p->mach != 0)
+                ;
+            ready(p);
+            unlock(up->rgrp);
+            return val;
+        }
+        l = &p->rendhash;
+    }
+
+    /* Going to sleep here */
+    up->rendtag = tag;
+    up->rendval = arg[1];
+    up->rendhash = *l;
+    *l = up;
+    up->state = Rendezvous;
+    unlock(up->rgrp);
+
+    sched();
+
+    return up->rendval;
+}
+@ 
+
+
 \section{Kernel processes}
 
-<<[[Proc]] state fields>>=
+<<[[Proc]] other fields>>=
 bool kp;   /* true if a kernel process */
+void  (*kpfun)(void*);
+void  *kparg;
 @
 
 <<function kproc>>=
@@ -9126,6 +9329,34 @@ kproc(char *name, void (*func)(void *), void *arg)
     memset(p->time, 0, sizeof(p->time));
     p->time[TReal] = MACHP(0)->ticks;
     ready(p);
+}
+@ 
+
+<<function linkproc>>=
+static void
+linkproc(void)
+{
+    spllo();
+    up->kpfun(up->kparg);
+    pexit("kproc dying", 0);
+}
+@ 
+
+
+<<function kprocchild>>=
+void
+kprocchild(Proc* p, void (*func)(void*), void* arg)
+{
+    /*
+     * gotolabel() needs a word on the stack in
+     * which to place the return PC used to jump
+     * to linkproc().
+     */
+    p->sched.pc = (ulong)linkproc;
+    p->sched.sp = (ulong)p->kstack+KSTACK-BY2WD;
+
+    p->kpfun = func;
+    p->kparg = arg;
 }
 @ 
 
@@ -9491,6 +9722,28 @@ main(void)
     schedinit();
 }
 @
+
+<<function procinit0>>=
+void
+procinit0(void)     /* bad planning - clashes with devproc.c */
+{
+    Proc *p;
+    int i;
+
+    procalloc.free = xalloc(conf.nproc*sizeof(Proc));
+    if(procalloc.free == nil){
+        xsummary();
+        panic("cannot allocate %lud procs (%ludMB)\n", 
+                      conf.nproc, conf.nproc*sizeof(Proc)/(1024*1024));
+    }
+    procalloc.arena = procalloc.free;
+
+    p = procalloc.free;
+    for(i=0; i<conf.nproc-1; i++,p++)
+        p->qnext = p+1;
+    p->qnext = 0;
+}
+@ 
 
 <<function mach0init>>=
 void
@@ -9883,7 +10136,6 @@ schedinit(void)     /* never returns */
     setlabel(&m->sched);
     if(up) {
         <<[[schedinit()]] optional real-time [[edfrecord()]]>>
-
         m->proc = nil;
         switch(up->state) {
         case Running:
@@ -9891,9 +10143,7 @@ schedinit(void)     /* never returns */
             break;
         case Moribund:
             up->state = Dead;
-
            <<[[schedinit()]] optional real-time [[edfstop()]]>>
-
             /*
              * Holding locks from pexit:
              *  procalloc
@@ -15103,6 +15353,10 @@ if(c->umh != nil){
 @
 
 
+<<[[Proc]] other fields>>=
+char  genbuf[128];  /* buffer used e.g. for last name element from namec */
+@
+
 <<function namelenerror>>=
 void
 namelenerror(char *aname, int len, char *err)
@@ -19618,6 +19872,11 @@ sysalarm(ulong *arg)
 }
 @ 
 
+% have a [[Proc]] time field?
+<<[[Proc]] other fields>>=
+ulong alarm;    /* Time of call */
+@
+
 <<function procalarm>>=
 ulong
 procalarm(ulong time)
@@ -21978,6 +22237,7 @@ procread(Chan *c, void *va, long n, vlong off)
             n = j-offset;
         memmove(a, &up->genbuf[offset], n);
         return n;
+
     case Qsyscall:
         if(!p->syscalltrace)
             return 0;
@@ -22272,7 +22532,7 @@ procwrite(Chan *c, void *va, long n, vlong off)
         free(p->args);
         p->nargs = m;
         p->args = arg;
-        p->setargs = 1;
+        p->setargs = true;
         break;
 
     case Qmem:
@@ -22788,6 +23048,11 @@ int2flag(int flag, char *s)
 }
 @
 
+<<[[Proc]] debugger fields>>=
+bool setargs;
+@ 
+
+
 
 <<function procargs>>=
 static int
@@ -23142,10 +23407,11 @@ procctlreq(Proc *p, char *va, int n)
     case CMwired:
         procwired(p, atoi(cb->f[1]));
         break;
+
     case CMtrace:
         switch(cb->nf){
         case 1:
-            p->trace ^= 1;
+            p->trace ^= true;
             break;
         case 2:
             p->trace = (atoi(cb->f[1]) != 0);
@@ -23852,55 +24118,161 @@ ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 void    (*consdebug)(void) = nil; // for rdb
 @ 
 
-\section{Syscalls [[Fmt]]}
+\section{Debugging user processes}
 
-<<function fmtrwdata>>=
-// WE ARE OVERRUNNING SOMEHOW
-static void
-fmtrwdata(Fmt* f, char* a, int n, char* suffix)
+% Should be in Debugger.tex.nw at some point
+
+\subsection{[[/proc/]]}
+
+<<[[Proc]] debugger fields>>=
+void  *dbgreg;  /* User registers for devproc */
+@
+% put back? db will still work?
+% int scallnr;  /* sys call number - known by db */
+
+%TODO: Qreg section of /dev/proc
+
+<<function setregisters>>=
+/* This routine must save the values of registers the user is not permitted
+ * to write from devproc and then restore the saved values before returning.
+ */
+void
+setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 {
-    int i;
-    char *t;
+    ulong cs, ds, es, flags, fs, gs, ss;
 
-    if(a == nil){
-        fmtprint(f, "0x0%s", suffix);
-        return;
-    }
-    validaddr((ulong)a, n, 0);
-    t = smalloc(n+1);
-    for(i = 0; i < n; i++)
-        if(a[i] > 0x20 && a[i] < 0x7f)  /* printable ascii? */
-            t[i] = a[i];
-        else
-            t[i] = '.';
-
-    fmtprint(f, " %#p/\"%s\"%s", a, t, suffix);
-    free(t);
+    ss = ureg->ss;
+    flags = ureg->flags;
+    cs = ureg->cs;
+    ds = ureg->ds;
+    es = ureg->es;
+    fs = ureg->fs;
+    gs = ureg->gs;
+    memmove(pureg, uva, n);
+    ureg->gs = gs;
+    ureg->fs = fs;
+    ureg->es = es;
+    ureg->ds = ds;
+    ureg->cs = cs;
+    ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
+    ureg->ss = ss;
 }
 @ 
 
 
-<<function fmtuserstring>>=
-static void
-fmtuserstring(Fmt* f, char* a, char* suffix)
+<<enum devproc>>=
+enum devproc
 {
-    int n;
-    char *t;
+    Proc_stopme = 1,  /* devproc requests */
+    Proc_exitme,
+    Proc_traceme,
+    Proc_exitbig,
+    Proc_tracesyscall,
+};
+@ 
 
-    if(a == nil){
-        fmtprint(f, "0/\"\"%s", suffix);
+<<[[Proc]] debugger fields>>=
+// enum<devproc>
+int procctl;  /* Control for /proc debugging */
+@
+
+<<[[Proc]] debugger fields>>=
+bool hang;   /* hang at next exec for debug */
+@
+
+<<[[Proc]] debugger fields>>=
+bool trace;    /* process being traced? */
+@
+
+<<hook proctrace>>=
+void (*proctrace)(Proc*, int, vlong) = 0; // was in devproc.c
+@ 
+
+<<function _proctrace>>=
+static void
+_proctrace(Proc* p, Tevent etype, vlong ts)
+{
+    Traceevent *te;
+
+    if (p->trace == 0 || topens == 0 ||
+        tproduced - tconsumed >= Nevents)
+        return;
+
+    te = &tevents[tproduced&Emask];
+    te->pid = p->pid;
+    te->etype = etype;
+    if (ts == 0)
+        te->time = todget(nil);
+    else
+        te->time = ts;
+    tproduced++;
+}
+@
+
+
+<<[[Proc]] debugger fields>>=
+Proc  *pdbg;    /* the debugging process */
+QLock debug;    /* to access debugging elements of User */
+@
+
+<<function procctl>>=
+/*
+ *  called splhi() by notify().  See comment in notify for the
+ *  reasoning.
+ */
+void
+procctl(Proc *p)
+{
+    char *state;
+    ulong s;
+
+    switch(p->procctl) {
+    case Proc_exitbig:
+        spllo();
+        pexit("Killed: Insufficient physical memory", 1);
+
+    case Proc_exitme:
+        spllo();        /* pexit has locks in it */
+        pexit("Killed", 1);
+
+    case Proc_traceme:
+        if(p->nnote == 0)
+            return;
+        /* No break */
+
+    case Proc_stopme:
+        p->procctl = 0;
+        state = p->psstate;
+        p->psstate = "Stopped";
+        /* free a waiting debugger */
+        s = spllo();
+        qlock(&p->debug);
+        if(p->pdbg) {
+            wakeup(&p->pdbg->sleep);
+            p->pdbg = 0;
+        }
+        qunlock(&p->debug);
+        splhi();
+        p->state = Stopped;
+        sched();
+        p->psstate = state;
+        splx(s);
         return;
     }
-    validaddr((ulong)a, 1, 0);
-    n = ((char*)vmemchr(a, 0, 0x7fffffff) - a) + 1;
-    t = smalloc(n+1);
-    memmove(t, a, n);
-    t[n] = 0;
-    fmtprint(f, "%#p/\"%s\"%s", a, t, suffix);
-    free(t);
 }
 @ 
 
+<<enum procstate cases>>=
+Stopped,
+@
+
+\subsection{[[/bin/db]]}
+
+\subsection{[[/bin/trace]]}
+
+<<[[Proc]] debugger fields>>=
+char  *syscalltrace;  /* syscall trace */
+@
 
 <<function syscallfmt>>=
 void
@@ -24221,145 +24593,53 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
 }
 @ 
 
-\section{Debugging user processes}
-
-% Should be in Debugger.tex.nw at some point
-
-\subsection{[[/proc/]]}
-
-<<[[Proc]] debugger fields>>=
-void  *dbgreg;  /* User registers for devproc */
-@
-% put back? db will still work?
-% int scallnr;  /* sys call number - known by db */
-
-%TODO: Qreg section of /dev/proc
-
-<<function setregisters>>=
-/* This routine must save the values of registers the user is not permitted
- * to write from devproc and then restore the saved values before returning.
- */
-void
-setregisters(Ureg* ureg, char* pureg, char* uva, int n)
-{
-    ulong cs, ds, es, flags, fs, gs, ss;
-
-    ss = ureg->ss;
-    flags = ureg->flags;
-    cs = ureg->cs;
-    ds = ureg->ds;
-    es = ureg->es;
-    fs = ureg->fs;
-    gs = ureg->gs;
-    memmove(pureg, uva, n);
-    ureg->gs = gs;
-    ureg->fs = fs;
-    ureg->es = es;
-    ureg->ds = ds;
-    ureg->cs = cs;
-    ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
-    ureg->ss = ss;
-}
-@ 
-
-
-<<enum devproc>>=
-enum devproc
-{
-    Proc_stopme = 1,  /* devproc requests */
-    Proc_exitme,
-    Proc_traceme,
-    Proc_exitbig,
-    Proc_tracesyscall,
-};
-@ 
-
-<<[[Proc]] debugger fields>>=
-// enum<devproc>
-int procctl;  /* Control for /proc debugging */
-@
-
-<<[[Proc]] debugger fields>>=
-bool hang;   /* hang at next exec for debug */
-@
-
-<<hook proctrace>>=
-void (*proctrace)(Proc*, int, vlong) = 0; // was in devproc.c
-@ 
-
-<<function _proctrace>>=
+<<function fmtrwdata>>=
+// WE ARE OVERRUNNING SOMEHOW
 static void
-_proctrace(Proc* p, Tevent etype, vlong ts)
+fmtrwdata(Fmt* f, char* a, int n, char* suffix)
 {
-    Traceevent *te;
+    int i;
+    char *t;
 
-    if (p->trace == 0 || topens == 0 ||
-        tproduced - tconsumed >= Nevents)
-        return;
-
-    te = &tevents[tproduced&Emask];
-    te->pid = p->pid;
-    te->etype = etype;
-    if (ts == 0)
-        te->time = todget(nil);
-    else
-        te->time = ts;
-    tproduced++;
-}
-@
-
-
-<<[[Proc]] debugger fields>>=
-Proc  *pdbg;    /* the debugging process */
-QLock debug;    /* to access debugging elements of User */
-@
-
-<<function procctl>>=
-/*
- *  called splhi() by notify().  See comment in notify for the
- *  reasoning.
- */
-void
-procctl(Proc *p)
-{
-    char *state;
-    ulong s;
-
-    switch(p->procctl) {
-    case Proc_exitbig:
-        spllo();
-        pexit("Killed: Insufficient physical memory", 1);
-
-    case Proc_exitme:
-        spllo();        /* pexit has locks in it */
-        pexit("Killed", 1);
-
-    case Proc_traceme:
-        if(p->nnote == 0)
-            return;
-        /* No break */
-
-    case Proc_stopme:
-        p->procctl = 0;
-        state = p->psstate;
-        p->psstate = "Stopped";
-        /* free a waiting debugger */
-        s = spllo();
-        qlock(&p->debug);
-        if(p->pdbg) {
-            wakeup(&p->pdbg->sleep);
-            p->pdbg = 0;
-        }
-        qunlock(&p->debug);
-        splhi();
-        p->state = Stopped;
-        sched();
-        p->psstate = state;
-        splx(s);
+    if(a == nil){
+        fmtprint(f, "0x0%s", suffix);
         return;
     }
+    validaddr((ulong)a, n, 0);
+    t = smalloc(n+1);
+    for(i = 0; i < n; i++)
+        if(a[i] > 0x20 && a[i] < 0x7f)  /* printable ascii? */
+            t[i] = a[i];
+        else
+            t[i] = '.';
+
+    fmtprint(f, " %#p/\"%s\"%s", a, t, suffix);
+    free(t);
 }
 @ 
+
+
+<<function fmtuserstring>>=
+static void
+fmtuserstring(Fmt* f, char* a, char* suffix)
+{
+    int n;
+    char *t;
+
+    if(a == nil){
+        fmtprint(f, "0/\"\"%s", suffix);
+        return;
+    }
+    validaddr((ulong)a, 1, 0);
+    n = ((char*)vmemchr(a, 0, 0x7fffffff) - a) + 1;
+    t = smalloc(n+1);
+    memmove(t, a, n);
+    t[n] = 0;
+    fmtprint(f, "%#p/\"%s\"%s", a, t, suffix);
+    free(t);
+}
+@ 
+
 
 \chapter{Profiling}
 

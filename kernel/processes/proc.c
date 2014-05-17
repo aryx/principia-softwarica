@@ -143,7 +143,6 @@ schedinit(void)     /* never returns */
                 if((e = up->edf) && (e->flags & Admitted))
                     edfrecord(up);
         /*e: [[schedinit()]] optional real-time [[edfrecord()]] */
-
         m->proc = nil;
         switch(up->state) {
         case Running:
@@ -151,14 +150,12 @@ schedinit(void)     /* never returns */
             break;
         case Moribund:
             up->state = Dead;
-
            /*s: [[schedinit()]] optional real-time [[edfstop()]] */
                        edfstop(up);
                        if (up->edf)
                            free(up->edf);
                        up->edf = nil;
            /*e: [[schedinit()]] optional real-time [[edfstop()]] */
-
             /*
              * Holding locks from pexit:
              *  procalloc
@@ -679,7 +676,7 @@ canpage(Proc *p)
     lock(runq);
     /* Only reliable way to see if we are Running */
     if(p->mach == 0) {
-        p->newtlb = 1;
+        p->newtlb = true;
         ok = 1;
     }
     unlock(runq);
@@ -738,7 +735,7 @@ newproc(void)
 
     p->state = Scheding;
     p->psstate = "New";
-    p->mach = 0;
+    p->mach = nil;
     p->qnext = 0;
     p->nchild = 0;
     p->nwait = 0;
@@ -755,7 +752,7 @@ newproc(void)
         p->procctl = Proc_tracesyscall;
     else
         p->procctl = 0;
-    p->syscalltrace = 0;    
+    p->syscalltrace = nil;    
     p->notepending = 0;
     p->ureg = 0;
     p->privatemem = false;
@@ -766,12 +763,12 @@ newproc(void)
     p->errbuf1[0] = '\0';
     p->nlocks.ref = 0;
     p->delaysched = 0;
-    p->trace = 0;
+    p->trace = false;
     kstrdup(&p->user, "*nouser");
     kstrdup(&p->text, "*notext");
     kstrdup(&p->args, "");
     p->nargs = 0;
-    p->setargs = 0;
+    p->setargs = false;
     memset(p->seg, 0, sizeof p->seg);
     p->pid = incref(&pidalloc);
     pidhash(p);
@@ -782,8 +779,8 @@ newproc(void)
         p->kstack = smalloc(KSTACK);
 
     /* sched params */
-    p->mp = 0;
-    p->wired = 0;
+    p->mp = nil;
+    p->wired = nil;
     procpriority(p, PriNormal, 0);
     p->cpu = 0;
     p->lastupdate = MACHP(0)->ticks*Scaling;
@@ -793,7 +790,7 @@ newproc(void)
 }
 /*e: function newproc */
 
-/*s: functio procwired */
+/*s: function procwired */
 /*
  * wire this proc to a machine
  */
@@ -827,7 +824,7 @@ procwired(Proc *p, int bm)
     p->wired = MACHP(bm);
     p->mp = p->wired;
 }
-/*e: functio procwired */
+/*e: function procwired */
 
 /*s: function procpriority */
 void

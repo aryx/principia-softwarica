@@ -21,20 +21,27 @@ enum procstate
     Dead = 0,
     Running,
     /*s: enum procstate cases */
-    Moribund,
-    Ready,
-    Scheding,
-    Wakeme,
-    Broken,
-    Stopped,
-    Rendezvous,
-    Waitrelease,
-    /*x: enum procstate cases */
     Queueing, // see qlock()
     /*x: enum procstate cases */
     QueueingR, // see rlock()
     /*x: enum procstate cases */
     QueueingW, // see wlock()
+    /*x: enum procstate cases */
+    Scheding,
+    /*x: enum procstate cases */
+    Ready,
+    /*x: enum procstate cases */
+    Wakeme,
+    /*x: enum procstate cases */
+    Moribund,
+    /*x: enum procstate cases */
+    Broken,
+    /*x: enum procstate cases */
+    Rendezvous,
+    /*x: enum procstate cases */
+    Stopped,
+    /*x: enum procstate cases */
+    Waitrelease, // for real-time scheduling
     /*e: enum procstate cases */
 };
 /*e: enum procstate */
@@ -419,8 +426,6 @@ struct Proc
     /*x: [[Proc]] state fields */
     char  *args;
     int nargs;    /* number of bytes of args */
-    /*x: [[Proc]] state fields */
-    bool kp;   /* true if a kernel process */
     /*e: [[Proc]] state fields */
 //--------------------------------------------------------------------
 // Memory
@@ -445,9 +450,9 @@ struct Proc
 
     ulong basepri;  /* base priority level */
     uchar fixedpri; /* priority level deson't change */
-
+    /*x: [[Proc]] scheduling fields */
     ulong delaysched;
-
+    /*x: [[Proc]] scheduling fields */
     int preempted;  /* true if this process hasn't finished the interrupt
            *  that last preempted it
            */
@@ -462,6 +467,13 @@ struct Proc
     // option<ref_own?<edf>>
     Edf *edf; /* if non-null, real-time proc, edf contains scheduling params */
     /*e: [[Proc]] optional [[edf]] field for real-time scheduling */
+    /*x: [[Proc]] scheduling fields */
+    // option<ref<Mach>>, null when not associated to a processor
+    Mach  *mach;    /* machine running this proc */
+    /*x: [[Proc]] scheduling fields */
+    Mach  *mp;    /* machine this process last ran on */
+    /*x: [[Proc]] scheduling fields */
+    Mach  *wired;
     /*e: [[Proc]] scheduling fields */
 //--------------------------------------------------------------------
 // Files
@@ -574,9 +586,11 @@ struct Proc
     ulong qpc;    /* pc calling last blocking qlock */
     /*e: [[Proc]] debugging fields */
 //--------------------------------------------------------------------
-// For debugger
+// For debugger, strace
 //--------------------------------------------------------------------
     /*s: [[Proc]] debugger fields */
+    bool setargs;
+    /*x: [[Proc]] debugger fields */
     void  *dbgreg;  /* User registers for devproc */
     /*x: [[Proc]] debugger fields */
     // enum<devproc>
@@ -584,28 +598,17 @@ struct Proc
     /*x: [[Proc]] debugger fields */
     bool hang;   /* hang at next exec for debug */
     /*x: [[Proc]] debugger fields */
+    bool trace;    /* process being traced? */
+    /*x: [[Proc]] debugger fields */
     Proc  *pdbg;    /* the debugging process */
     QLock debug;    /* to access debugging elements of User */
+    /*x: [[Proc]] debugger fields */
+    char  *syscalltrace;  /* syscall trace */
     /*e: [[Proc]] debugger fields */
 //--------------------------------------------------------------------
 // Other
 //--------------------------------------------------------------------
     /*s: [[Proc]] other fields */
-    void  (*kpfun)(void*);
-    void  *kparg;
-
-    char  genbuf[128];  /* buffer used e.g. for last name element from namec */
-
-    Lock  *lockwait;
-
-    Mach  *wired;
-    Mach  *mp;    /* machine this process last ran on */
-
-    bool trace;    /* process being traced? */
-    char  *syscalltrace;  /* syscall trace */
-
-    int setargs;
-    /*x: [[Proc]] other fields */
     // As long as the current process hold locks (to kernel data structures),
     // we will not schedule another process in unlock(); only the last unlock
     // will eventually cause a rescheduling.
@@ -613,9 +616,17 @@ struct Proc
     /*x: [[Proc]] other fields */
     Sargs sargs;    /* address of this is known by db */
     /*x: [[Proc]] other fields */
+    bool kp;   /* true if a kernel process */
+    void  (*kpfun)(void*);
+    void  *kparg;
+    /*x: [[Proc]] other fields */
+    char  genbuf[128];  /* buffer used e.g. for last name element from namec */
+    /*x: [[Proc]] other fields */
     Timer;      /* For tsleep and real-time */
     Rendez  *trend;
     int (*tfn)(void*);
+    /*x: [[Proc]] other fields */
+    ulong alarm;    /* Time of call */
     /*x: [[Proc]] other fields */
     // ref_counted<egrp>
     Egrp  *egrp;    /* Environment group */
@@ -634,11 +645,6 @@ struct Proc
 // Extra
 //--------------------------------------------------------------------
     /*s: [[Proc]] extra fields */
-    ulong alarm;    /* Time of call */
-
-    // option<ref<Mach>>, null when not associated to a machine?
-    Mach  *mach;    /* machine running this proc */
-    /*x: [[Proc]] extra fields */
     // list<ref<Proc>> KQlock.head or RWLock.head
     Proc  *qnext;   /* next process on queue for a QLock */
     /*x: [[Proc]] extra fields */
