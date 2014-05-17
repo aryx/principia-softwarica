@@ -105,6 +105,8 @@ struct Mach
     // ref<Proc>
     Proc* proc;     /* current process on this processor */
 
+    ulong ticks;      /* of the clock since boot time */
+
     /*s: [[Mach]] stat fields */
     /* stats */
     int tlbfault;
@@ -117,11 +119,6 @@ struct Mach
     /*e: [[Mach]] stat fields */
 
     /*s: [[Mach]] other fields */
-    ulong ticks;      /* of the clock since boot time */
-    Label sched;      /* scheduler wakeup */
-    Lock  alarmlock;    /* access to alarm list */
-    void* alarm;      /* alarms bound to this clock */
-
     Proc* readied;    /* for runproc */
     ulong schedticks;   /* next forced context switch */
 
@@ -136,6 +133,8 @@ struct Mach
     uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
     /*x: [[Mach]] other fields */
     int ilockdepth;
+    /*x: [[Mach]] other fields */
+    Label sched;      /* scheduler wakeup */
     /*e: [[Mach]] other fields */
 
     struct ArchMach;

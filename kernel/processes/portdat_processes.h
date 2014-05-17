@@ -458,7 +458,6 @@ struct Proc
            */
 
     ulong cpu;    /* cpu average */
-    ulong lastupdate;
     uchar yield;    /* non-zero if the process just did a sleep(0) */
     ulong readytime;  /* time process came ready */
     ulong movetime; /* last time process switched processors */
@@ -470,6 +469,8 @@ struct Proc
     /*x: [[Proc]] scheduling fields */
     // option<ref<Mach>>, null when not associated to a processor
     Mach  *mach;    /* machine running this proc */
+    /*x: [[Proc]] scheduling fields */
+    ulong lastupdate;
     /*x: [[Proc]] scheduling fields */
     Mach  *mp;    /* machine this process last ran on */
     /*x: [[Proc]] scheduling fields */
