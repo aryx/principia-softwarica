@@ -456,7 +456,7 @@ struct Proc
 
     /*s: [[Proc]] optional [[edf]] field for real-time scheduling */
     // option<ref_own?<edf>>
-    Edf *edf;   /* if non-null, real-time proc, edf contains scheduling params */
+    Edf *edf; /* if non-null, real-time proc, edf contains scheduling params */
     /*e: [[Proc]] optional [[edf]] field for real-time scheduling */
     /*e: [[Proc]] scheduling fields */
 //--------------------------------------------------------------------
@@ -473,9 +473,6 @@ struct Proc
     /*x: [[Proc]] files fields */
     // ref_counted<pgrp>
     Pgrp  *pgrp;    /* Process group for namespace */
-    /*x: [[Proc]] files fields */
-    // ref_counted<egrp>
-    Egrp  *egrp;    /* Environment group */
     /*e: [[Proc]] files fields */
 //--------------------------------------------------------------------
 // Notes
@@ -564,18 +561,16 @@ struct Proc
     /*s: [[Proc]] debugging fields */
     Lock* lastlock;
     /*x: [[Proc]] debugging fields */
-    Lock  *lastilock; /* debugging */
+    Lock  *lastilock;
     /*x: [[Proc]] debugging fields */
     ulong qpc;    /* pc calling last blocking qlock */
-    /*x: [[Proc]] debugging fields */
-    ulong pc;   /* DEBUG only */
     /*e: [[Proc]] debugging fields */
 //--------------------------------------------------------------------
 // For debugger
 //--------------------------------------------------------------------
     /*s: [[Proc]] debugger fields */
     // Syscall
-    Sargs s;    /* address of this is known by db */
+    Sargs sargs;    /* address of this is known by db */
     /*x: [[Proc]] debugger fields */
     void  *dbgreg;  /* User registers for devproc */
     /*x: [[Proc]] debugger fields */
@@ -625,6 +620,9 @@ struct Proc
     // we will not schedule another process in unlock(); only the last unlock
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
+    /*x: [[Proc]] other fields */
+    // ref_counted<egrp>
+    Egrp  *egrp;    /* Environment group */
     /*x: [[Proc]] other fields */
     ulong procmode; /* proc device default file mode */
     /*x: [[Proc]] other fields */

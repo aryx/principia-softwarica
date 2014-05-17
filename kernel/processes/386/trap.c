@@ -801,11 +801,11 @@ syscall(Ureg* ureg)
         if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD))
             validaddr(sp, sizeof(Sargs)+BY2WD, 0);
 
-        up->s = *((Sargs*)(sp+BY2WD));
+        up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
 
                 //IMPORTANT: The actual system call
-        ret = systab[scallnr](up->s.args);
+        ret = systab[scallnr](up->sargs.args);
         poperror();
     }else{
         /* failure: save the error buffer for errstr */

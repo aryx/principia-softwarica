@@ -1537,7 +1537,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->noswap = 1;
 
     p->fpsave = up->fpsave;
-    p->s = up->s;
+    p->sargs = up->sargs;
     p->nerrlab = 0;
     p->slash = up->slash;
     p->dot = up->dot;
