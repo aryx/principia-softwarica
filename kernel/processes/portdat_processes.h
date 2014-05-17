@@ -21,12 +21,6 @@ enum procstate
     Dead = 0,
     Running,
     /*s: enum procstate cases */
-    Queueing, // see qlock()
-    /*x: enum procstate cases */
-    QueueingR, // see rlock()
-    /*x: enum procstate cases */
-    QueueingW, // see wlock()
-    /*x: enum procstate cases */
     Moribund,
     Ready,
     Scheding,
@@ -35,6 +29,12 @@ enum procstate
     Stopped,
     Rendezvous,
     Waitrelease,
+    /*x: enum procstate cases */
+    Queueing, // see qlock()
+    /*x: enum procstate cases */
+    QueueingR, // see rlock()
+    /*x: enum procstate cases */
+    QueueingW, // see wlock()
     /*e: enum procstate cases */
 };
 /*e: enum procstate */
@@ -404,6 +404,7 @@ struct Proc
 //--------------------------------------------------------------------
     /*s: [[Proc]] state fields */
     ulong pid;
+    ulong parentpid;
 
     // enum<procstate> 
     int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate nil)
@@ -499,8 +500,8 @@ struct Proc
 //--------------------------------------------------------------------
     /*s: [[Proc]] hierarchy fields */
     Proc  *parent;
-    ulong parentpid;
     /*x: [[Proc]] hierarchy fields */
+
     //list<ref<Waitq>>
     Waitq *waitq;   /* Exited processes wait children */
     Lock  exl;    /* Lock count and waitq */
@@ -566,24 +567,25 @@ struct Proc
     Lock  *lastilock; /* debugging */
     /*x: [[Proc]] debugging fields */
     ulong qpc;    /* pc calling last blocking qlock */
+    /*x: [[Proc]] debugging fields */
+    ulong pc;   /* DEBUG only */
     /*e: [[Proc]] debugging fields */
 //--------------------------------------------------------------------
 // For debugger
 //--------------------------------------------------------------------
     /*s: [[Proc]] debugger fields */
+    // Syscall
+    Sargs s;    /* address of this is known by db */
+    /*x: [[Proc]] debugger fields */
     void  *dbgreg;  /* User registers for devproc */
-    ulong pc;   /* DEBUG only */
-
+    /*x: [[Proc]] debugger fields */
     // enum<devproc>
     int procctl;  /* Control for /proc debugging */
-
-    // Syscall
-    int scallnr;  /* sys call number - known by db */
-    Sargs s;    /* address of this is known by db */
-
-    QLock debug;    /* to access debugging elements of User */
-    Proc  *pdbg;    /* the debugging process */
+    /*x: [[Proc]] debugger fields */
     bool hang;   /* hang at next exec for debug */
+    /*x: [[Proc]] debugger fields */
+    Proc  *pdbg;    /* the debugging process */
+    QLock debug;    /* to access debugging elements of User */
     /*e: [[Proc]] debugger fields */
 //--------------------------------------------------------------------
 // Other
@@ -591,7 +593,6 @@ struct Proc
     /*s: [[Proc]] other fields */
     Fgrp  *closingfgrp; /* used during teardown */
 
-    ulong procmode; /* proc device default file mode */
     ulong privatemem; /* proc does not let anyone read mem */
 
     Lock  rlock;    /* sync sleep/wakeup with postnote */
@@ -624,6 +625,8 @@ struct Proc
     // we will not schedule another process in unlock(); only the last unlock
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
+    /*x: [[Proc]] other fields */
+    ulong procmode; /* proc device default file mode */
     /*x: [[Proc]] other fields */
     ArchFPsave  fpsave;   /* address of this is known by db */
     // enum<fpsavestatus>

@@ -351,11 +351,6 @@ struct Dev
 
     void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
     int (*config)(int, char*, DevConf*);  /* returns nil on error */
-
-    /*s: [[Dev]] other fields */
-    /* not initialised */
-    int attached;       /* debugging */
-    /*e: [[Dev]] other fields */
 };
 /*e: struct Dev */
 

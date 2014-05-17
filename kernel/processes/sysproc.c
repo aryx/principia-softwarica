@@ -108,7 +108,6 @@ sysrfork(ulong *arg)
     p = newproc();
 
     p->fpsave = up->fpsave;
-    p->scallnr = up->scallnr;
     p->s = up->s;
     p->nerrlab = 0;
     p->slash = up->slash;
@@ -123,7 +122,7 @@ sysrfork(ulong *arg)
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = up->ureg;
-    p->dbgreg = 0;
+    p->dbgreg = nil;
 
     /* Make a new set of memory segments */
     n = flag & RFMEM;

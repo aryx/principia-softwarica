@@ -142,38 +142,26 @@ Yoann Padioleau\\
 
 \chapter*{XTODO}
 
-<<[[Proc]] hierarchy fields>>=
-Proc  *parent;
-ulong parentpid;
-@
-
-<<[[Dev]] other fields>>=
-/* not initialised */
-int attached;       /* debugging */
-@
-
+<<enum procstate cases>>=
+Moribund,
+Ready,
+Scheding,
+Wakeme,
+Broken,
+Stopped,
+Rendezvous,
+Waitrelease,
+@ 
 
 <<[[Proc]] debugger fields>>=
-void  *dbgreg;  /* User registers for devproc */
-ulong pc;   /* DEBUG only */
-
-// enum<devproc>
-int procctl;  /* Control for /proc debugging */
-
 // Syscall
-int scallnr;  /* sys call number - known by db */
 Sargs s;    /* address of this is known by db */
-
-QLock debug;    /* to access debugging elements of User */
-Proc  *pdbg;    /* the debugging process */
-bool hang;   /* hang at next exec for debug */
 @ 
 
 
 <<[[Proc]] other fields>>=
 Fgrp  *closingfgrp; /* used during teardown */
 
-ulong procmode; /* proc device default file mode */
 ulong privatemem; /* proc does not let anyone read mem */
 
 Lock  rlock;    /* sync sleep/wakeup with postnote */
@@ -1070,6 +1058,7 @@ struct Proc
 
 <<[[Proc]] state fields>>=
 ulong pid;
+ulong parentpid;
 
 // enum<procstate> 
 int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate nil)
@@ -1253,8 +1242,6 @@ struct Dev
 
     void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
     int (*config)(int, char*, DevConf*);  /* returns nil on error */
-
-    <<[[Dev]] other fields>>
 };
 @ 
 
@@ -6643,9 +6630,8 @@ syscall(Ureg* ureg)
     up->dbgreg = ureg;
 
     sp = ureg->usp;
-        // syscall number
+    // syscall number
     scallnr = ureg->ax;
-    up->scallnr = scallnr;
 
     if(up->procctl == Proc_tracesyscall){
         /*
@@ -7061,12 +7047,12 @@ newproc(void)
     p->nchild = 0;
     p->nwait = 0;
     p->waitq = 0;
-    p->parent = 0;
+    p->parent = nil;
     p->pgrp = nil;
     p->egrp = nil;
     p->fgrp = nil;
     p->rgrp = nil;
-    p->pdbg = 0;
+    p->pdbg = nil;
     p->fpstate = FPinit;
     p->kp = 0;
     if(up && up->procctl == Proc_tracesyscall)
@@ -8315,7 +8301,6 @@ sysrfork(ulong *arg)
     p = newproc();
 
     p->fpsave = up->fpsave;
-    p->scallnr = up->scallnr;
     p->s = up->s;
     p->nerrlab = 0;
     p->slash = up->slash;
@@ -8330,7 +8315,7 @@ sysrfork(ulong *arg)
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = up->ureg;
-    p->dbgreg = 0;
+    p->dbgreg = nil;
 
     /* Make a new set of memory segments */
     n = flag & RFMEM;
@@ -8880,9 +8865,9 @@ proc_pexit(char *exitstr, int freemem)
      * if not a kernel process and have a parent,
      * do some housekeeping.
      */
-    if(up->kp == 0) {
+    if(up->kp == false) {
         p = up->parent;
-        if(p == 0) {
+        if(p == nil) {
             if(exitstr == 0)
                 exitstr = "unknown";
             panic("boot process died: %s", exitstr);
@@ -8961,7 +8946,7 @@ proc_pexit(char *exitstr, int freemem)
     qlock(&up->debug);
     if(up->pdbg) {
         wakeup(&up->pdbg->sleep);
-        up->pdbg = 0;
+        up->pdbg = nil;
     }
     qunlock(&up->debug);
 
@@ -8997,8 +8982,12 @@ struct Waitq
     Waitq *next;
 };
 @ 
+<<[[Proc]] hierarchy fields>>=
+Proc  *parent;
+@
 
 <<[[Proc]] hierarchy fields>>=
+
 //list<ref<Waitq>>
 Waitq *waitq;   /* Exited processes wait children */
 Lock  exl;    /* Lock count and waitq */
@@ -9107,7 +9096,6 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->noswap = 1;
 
     p->fpsave = up->fpsave;
-    p->scallnr = up->scallnr;
     p->s = up->s;
     p->nerrlab = 0;
     p->slash = up->slash;
@@ -9121,7 +9109,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = 0;
-    p->dbgreg = 0;
+    p->dbgreg = nil;
 
     procpriority(p, PriKproc, 0);
 
@@ -10937,16 +10925,10 @@ chandevreset(void)
     int i;
 
     todinit();  /* avoid later reentry causing infinite recursion */
-    debugstart = getconf("*debugstart") != nil;
-    if(debugstart)
-        iprint("reset:");
+    //debugstart = getconf("*debugstart") != nil;
     for(i=0; devtab[i] != nil; i++) {
-        if(debugstart)
-            iprint(" %s", devtab[i]->name);
         devtab[i]->reset();
     }
-    if(debugstart)
-        iprint("\n");
 }
 @
 
@@ -11025,16 +11007,9 @@ void
 chandevinit(void)
 {
     int i;
-
-    if(debugstart)
-        iprint("init:");
     for(i=0; devtab[i] != nil; i++) {
-        if(debugstart)
-            iprint(" %s", devtab[i]->name);
         devtab[i]->init();
     }
-    if(debugstart)
-        iprint("\n");
 }
 @
 
@@ -14838,11 +14813,8 @@ namec(char *aname, int amode, int omode, ulong perm)
         t = devno(r, 1);
         if(t == -1)
             error(Ebadsharp);
-        if(debugstart && !devtab[t]->attached)
-            print("#%C...", devtab[t]->dc);
+
         c = devtab[t]->attach(up->genbuf+n);
-        if(debugstart && c != nil)
-            devtab[t]->attached = 1;
         break;
 
     default:
@@ -21753,6 +21725,10 @@ closeegrp(Egrp *eg)
 \section{[[/proc/]]}
 %#p
 
+<<[[Proc]] other fields>>=
+ulong procmode; /* proc device default file mode */
+@
+
 % apparently can also be used by the debugger acid
 %  chmod +w /proc/96/mem and then acid 96
 
@@ -22296,7 +22272,7 @@ procwrite(Chan *c, void *va, long n, vlong off)
             n = 0;
         else if(offset+n > sizeof(Ureg))
             n = sizeof(Ureg) - offset;
-        if(p->dbgreg == 0)
+        if(p->dbgreg == nil)
             error(Enoreg);
         setregisters(p->dbgreg, (char*)(p->dbgreg)+offset, va, n);
         break;
@@ -22951,7 +22927,7 @@ procstopwait(Proc *p, int ctl)
     qunlock(&p->debug);
     up->psstate = "Stopwait";
     if(waserror()) {
-        p->pdbg = 0;
+        p->pdbg = nil;
         qlock(&p->debug);
         nexterror();
     }
@@ -23074,7 +23050,7 @@ procctlreq(Proc *p, char *va, int n)
         procctlclosefiles(p, 1, 0);
         break;
     case CMhang:
-        p->hang = 1;
+        p->hang = true;
         break;
     case CMkill:
         switch(p->state) {
@@ -23092,7 +23068,7 @@ procctlreq(Proc *p, char *va, int n)
         }
         break;
     case CMnohang:
-        p->hang = 0;
+        p->hang = false;
         break;
     case CMnoswap:
         p->noswap = 1;
@@ -23690,7 +23666,9 @@ bool iseve(void) {
 
 % see also printf section all this fmt stuff
 
-%getcallerpc
+% getcallerpc
+
+% use of getconf("*debugstart*") to setup some global tracing stuff
 
 \section{[[cgapost()]]}
 
@@ -23738,6 +23716,56 @@ scheddump(void)
     print("nrdy %d\n", nrdy);
 }
 @ 
+
+<<function procdump>>=
+void
+procdump(void)
+{
+    int i;
+    Proc *p;
+
+    if(up)
+        print("up %lud\n", up->pid);
+    else
+        print("no current process\n");
+    for(i=0; i<conf.nproc; i++) {
+        p = &procalloc.arena[i];
+        if(p->state == Dead)
+            continue;
+
+        dumpaproc(p);
+    }
+}
+@ 
+
+<<function dumpaproc>>=
+void
+proc_dumpaproc(Proc *p)
+{
+    ulong bss;
+    char *s;
+
+    if(p == 0)
+        return;
+
+    bss = 0;
+    if(p->seg[BSEG])
+        bss = p->seg[BSEG]->top;
+
+    s = p->psstate;
+    if(s == 0)
+        s = statename[p->state];
+    print("%3lud:%10s pc %8lux dbgpc %8lux  %8s (%s) ut %ld st %ld bss %lux qpc %lux nl %lud nd %lud lpc %lux pri %lud\n",
+        p->pid, p->text, p->pc, dbgpc(p),  s, statename[p->state],
+        p->time[0], p->time[1], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
+}
+@ 
+
+% TODO: rename so less ambiguity with ureg->pc, maybe dbgpc?
+<<[[Proc]] debugging fields>>=
+ulong pc;   /* DEBUG only */
+@
+
 
 \section{[[/dev/kmesg]]}
 
@@ -24184,7 +24212,66 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
 }
 @ 
 
-\section{Proctrace}
+\section{Debugging user processes}
+
+% Should be in Debugger.tex.nw at some point
+
+\subsection{[[/proc/]]}
+
+<<[[Proc]] debugger fields>>=
+void  *dbgreg;  /* User registers for devproc */
+@
+% int scallnr;  /* sys call number - known by db */
+
+%TODO: Qreg section of /dev/proc
+
+<<function setregisters>>=
+/* This routine must save the values of registers the user is not permitted
+ * to write from devproc and then restore the saved values before returning.
+ */
+void
+setregisters(Ureg* ureg, char* pureg, char* uva, int n)
+{
+    ulong cs, ds, es, flags, fs, gs, ss;
+
+    ss = ureg->ss;
+    flags = ureg->flags;
+    cs = ureg->cs;
+    ds = ureg->ds;
+    es = ureg->es;
+    fs = ureg->fs;
+    gs = ureg->gs;
+    memmove(pureg, uva, n);
+    ureg->gs = gs;
+    ureg->fs = fs;
+    ureg->es = es;
+    ureg->ds = ds;
+    ureg->cs = cs;
+    ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
+    ureg->ss = ss;
+}
+@ 
+
+
+<<enum devproc>>=
+enum devproc
+{
+    Proc_stopme = 1,  /* devproc requests */
+    Proc_exitme,
+    Proc_traceme,
+    Proc_exitbig,
+    Proc_tracesyscall,
+};
+@ 
+
+<<[[Proc]] debugger fields>>=
+// enum<devproc>
+int procctl;  /* Control for /proc debugging */
+@
+
+<<[[Proc]] debugger fields>>=
+bool hang;   /* hang at next exec for debug */
+@
 
 <<hook proctrace>>=
 void (*proctrace)(Proc*, int, vlong) = 0; // was in devproc.c
@@ -24211,6 +24298,58 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 }
 @
 
+
+<<[[Proc]] debugger fields>>=
+Proc  *pdbg;    /* the debugging process */
+QLock debug;    /* to access debugging elements of User */
+@
+
+<<function procctl>>=
+/*
+ *  called splhi() by notify().  See comment in notify for the
+ *  reasoning.
+ */
+void
+procctl(Proc *p)
+{
+    char *state;
+    ulong s;
+
+    switch(p->procctl) {
+    case Proc_exitbig:
+        spllo();
+        pexit("Killed: Insufficient physical memory", 1);
+
+    case Proc_exitme:
+        spllo();        /* pexit has locks in it */
+        pexit("Killed", 1);
+
+    case Proc_traceme:
+        if(p->nnote == 0)
+            return;
+        /* No break */
+
+    case Proc_stopme:
+        p->procctl = 0;
+        state = p->psstate;
+        p->psstate = "Stopped";
+        /* free a waiting debugger */
+        s = spllo();
+        qlock(&p->debug);
+        if(p->pdbg) {
+            wakeup(&p->pdbg->sleep);
+            p->pdbg = 0;
+        }
+        qunlock(&p->debug);
+        splhi();
+        p->state = Stopped;
+        sched();
+        p->psstate = state;
+        splx(s);
+        return;
+    }
+}
+@ 
 
 \chapter{Profiling}
 
@@ -24254,7 +24393,11 @@ int intr;
 void (*kproftimer)(ulong);
 @ 
 
-\section{[[/bin/time]]}
+\section{Profiling user processes}
+
+% should be in Profiling.tex.nw at some point
+
+\subsection{[[/bin/time]]}
 
 <<enum proctimer>>=
 enum proctime 

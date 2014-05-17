@@ -3020,9 +3020,7 @@ typedef struct Elemlist Elemlist;
 <<chan.c debugging macro>>=
 int chandebug=0;        /* toggle it in sysnop if you want */
 #define DBG if(chandebug)iprint
-
-static int debugstart = 1;
-
+static bool debugstart = false;
 @ 
 \fi
 
@@ -8596,32 +8594,6 @@ userpc(void)
 @ 
 
 
-<<function setregisters>>=
-/* This routine must save the values of registers the user is not permitted
- * to write from devproc and then restore the saved values before returning.
- */
-void
-setregisters(Ureg* ureg, char* pureg, char* uva, int n)
-{
-    ulong cs, ds, es, flags, fs, gs, ss;
-
-    ss = ureg->ss;
-    flags = ureg->flags;
-    cs = ureg->cs;
-    ds = ureg->ds;
-    es = ureg->es;
-    fs = ureg->fs;
-    gs = ureg->gs;
-    memmove(pureg, uva, n);
-    ureg->gs = gs;
-    ureg->fs = fs;
-    ureg->es = es;
-    ureg->ds = ds;
-    ureg->cs = cs;
-    ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
-    ureg->ss = ss;
-}
-@ 
 
 
 <<function linkproc>>=
@@ -9007,16 +8979,6 @@ enum {
 \fi
 
 
-<<enum procstate cases>>=
-Moribund,
-Ready,
-Scheding,
-Wakeme,
-Broken,
-Stopped,
-Rendezvous,
-Waitrelease,
-@ 
 
 
 <<struct Sargs>>=
@@ -9026,40 +8988,6 @@ struct Sargs
     ulong args[MAXSYSARG];
 };
 @ 
-
-
-<<enum devproc>>=
-enum devproc
-{
-    Proc_stopme = 1,  /* devproc requests */
-    Proc_exitme,
-    Proc_traceme,
-    Proc_exitbig,
-    Proc_tracesyscall,
-};
-@ 
-
-
-<<enum fpsavestatus>>=
-/*
- * FPsave.status
- */
-enum fpsavestatus
-{
-    /* this is a state */
-    FPinit=   0,
-    FPactive= 1,
-    FPinactive= 2,
-  
-    /* the following is a bit that can be or'd into the state */
-    FPillegal=  0x100,
-};
-@ 
-
-
-
-
-
 
 
 
@@ -9654,50 +9582,8 @@ proc_proctab(int i)
 @ 
 
 
-<<function dumpaproc>>=
-void
-proc_dumpaproc(Proc *p)
-{
-    ulong bss;
-    char *s;
-
-    if(p == 0)
-        return;
-
-    bss = 0;
-    if(p->seg[BSEG])
-        bss = p->seg[BSEG]->top;
-
-    s = p->psstate;
-    if(s == 0)
-        s = statename[p->state];
-    print("%3lud:%10s pc %8lux dbgpc %8lux  %8s (%s) ut %ld st %ld bss %lux qpc %lux nl %lud nd %lud lpc %lux pri %lud\n",
-        p->pid, p->text, p->pc, dbgpc(p),  s, statename[p->state],
-        p->time[0], p->time[1], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
-}
-@ 
 
 
-<<function procdump>>=
-void
-procdump(void)
-{
-    int i;
-    Proc *p;
-
-    if(up)
-        print("up %lud\n", up->pid);
-    else
-        print("no current process\n");
-    for(i=0; i<conf.nproc; i++) {
-        p = &procalloc.arena[i];
-        if(p->state == Dead)
-            continue;
-
-        dumpaproc(p);
-    }
-}
-@ 
 
 
 <<function procflushseg>>=
@@ -9749,52 +9635,6 @@ procflushseg(Segment *s)
 @ 
 
 
-<<function procctl>>=
-/*
- *  called splhi() by notify().  See comment in notify for the
- *  reasoning.
- */
-void
-procctl(Proc *p)
-{
-    char *state;
-    ulong s;
-
-    switch(p->procctl) {
-    case Proc_exitbig:
-        spllo();
-        pexit("Killed: Insufficient physical memory", 1);
-
-    case Proc_exitme:
-        spllo();        /* pexit has locks in it */
-        pexit("Killed", 1);
-
-    case Proc_traceme:
-        if(p->nnote == 0)
-            return;
-        /* No break */
-
-    case Proc_stopme:
-        p->procctl = 0;
-        state = p->psstate;
-        p->psstate = "Stopped";
-        /* free a waiting debugger */
-        s = spllo();
-        qlock(&p->debug);
-        if(p->pdbg) {
-            wakeup(&p->pdbg->sleep);
-            p->pdbg = 0;
-        }
-        qunlock(&p->debug);
-        splhi();
-        p->state = Stopped;
-        sched();
-        p->psstate = state;
-        splx(s);
-        return;
-    }
-}
-@ 
 
 
 <<function killbig>>=
@@ -11037,6 +10877,22 @@ echoserialoq(char *buf, int n)
 
 \section{Floating Point}
 %{FP}
+
+<<enum fpsavestatus>>=
+/*
+ * FPsave.status
+ */
+enum fpsavestatus
+{
+    /* this is a state */
+    FPinit=   0,
+    FPactive= 1,
+    FPinactive= 2,
+  
+    /* the following is a bit that can be or'd into the state */
+    FPillegal=  0x100,
+};
+@ 
 
 <<[[ArchMach]] other fields>>=
 ArchFPsave *fpsavalign;

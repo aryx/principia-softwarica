@@ -759,9 +759,8 @@ syscall(Ureg* ureg)
     up->dbgreg = ureg;
 
     sp = ureg->usp;
-        // syscall number
+    // syscall number
     scallnr = ureg->ax;
-    up->scallnr = scallnr;
 
     if(up->procctl == Proc_tracesyscall){
         /*

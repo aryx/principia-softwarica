@@ -743,12 +743,12 @@ newproc(void)
     p->nchild = 0;
     p->nwait = 0;
     p->waitq = 0;
-    p->parent = 0;
+    p->parent = nil;
     p->pgrp = nil;
     p->egrp = nil;
     p->fgrp = nil;
     p->rgrp = nil;
-    p->pdbg = 0;
+    p->pdbg = nil;
     p->fpstate = FPinit;
     p->kp = 0;
     if(up && up->procctl == Proc_tracesyscall)
@@ -1252,9 +1252,9 @@ proc_pexit(char *exitstr, int freemem)
      * if not a kernel process and have a parent,
      * do some housekeeping.
      */
-    if(up->kp == 0) {
+    if(up->kp == false) {
         p = up->parent;
-        if(p == 0) {
+        if(p == nil) {
             if(exitstr == 0)
                 exitstr = "unknown";
             panic("boot process died: %s", exitstr);
@@ -1333,7 +1333,7 @@ proc_pexit(char *exitstr, int freemem)
     qlock(&up->debug);
     if(up->pdbg) {
         wakeup(&up->pdbg->sleep);
-        up->pdbg = 0;
+        up->pdbg = nil;
     }
     qunlock(&up->debug);
 
@@ -1537,7 +1537,6 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->noswap = 1;
 
     p->fpsave = up->fpsave;
-    p->scallnr = up->scallnr;
     p->s = up->s;
     p->nerrlab = 0;
     p->slash = up->slash;
@@ -1551,7 +1550,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = 0;
-    p->dbgreg = 0;
+    p->dbgreg = nil;
 
     procpriority(p, PriKproc, 0);
 

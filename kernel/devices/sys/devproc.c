@@ -1128,7 +1128,7 @@ procwrite(Chan *c, void *va, long n, vlong off)
             n = 0;
         else if(offset+n > sizeof(Ureg))
             n = sizeof(Ureg) - offset;
-        if(p->dbgreg == 0)
+        if(p->dbgreg == nil)
             error(Enoreg);
         setregisters(p->dbgreg, (char*)(p->dbgreg)+offset, va, n);
         break;
@@ -1277,7 +1277,7 @@ procstopwait(Proc *p, int ctl)
     qunlock(&p->debug);
     up->psstate = "Stopwait";
     if(waserror()) {
-        p->pdbg = 0;
+        p->pdbg = nil;
         qlock(&p->debug);
         nexterror();
     }
@@ -1396,7 +1396,7 @@ procctlreq(Proc *p, char *va, int n)
         procctlclosefiles(p, 1, 0);
         break;
     case CMhang:
-        p->hang = 1;
+        p->hang = true;
         break;
     case CMkill:
         switch(p->state) {
@@ -1414,7 +1414,7 @@ procctlreq(Proc *p, char *va, int n)
         }
         break;
     case CMnohang:
-        p->hang = 0;
+        p->hang = false;
         break;
     case CMnoswap:
         p->noswap = 1;

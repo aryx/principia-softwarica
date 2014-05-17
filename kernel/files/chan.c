@@ -17,9 +17,7 @@ typedef struct Elemlist Elemlist;
 /*s: chan.c debugging macro */
 int chandebug=0;        /* toggle it in sysnop if you want */
 #define DBG if(chandebug)iprint
-
-static int debugstart = 1;
-
+static bool debugstart = false;
 /*e: chan.c debugging macro */
 
 enum
@@ -104,16 +102,10 @@ chandevreset(void)
     int i;
 
     todinit();  /* avoid later reentry causing infinite recursion */
-    debugstart = getconf("*debugstart") != nil;
-    if(debugstart)
-        iprint("reset:");
+    //debugstart = getconf("*debugstart") != nil;
     for(i=0; devtab[i] != nil; i++) {
-        if(debugstart)
-            iprint(" %s", devtab[i]->name);
         devtab[i]->reset();
     }
-    if(debugstart)
-        iprint("\n");
 }
 /*e: function chandevreset */
 
@@ -122,16 +114,9 @@ void
 chandevinit(void)
 {
     int i;
-
-    if(debugstart)
-        iprint("init:");
     for(i=0; devtab[i] != nil; i++) {
-        if(debugstart)
-            iprint(" %s", devtab[i]->name);
         devtab[i]->init();
     }
-    if(debugstart)
-        iprint("\n");
 }
 /*e: function chandevinit */
 
@@ -1363,11 +1348,8 @@ namec(char *aname, int amode, int omode, ulong perm)
         t = devno(r, 1);
         if(t == -1)
             error(Ebadsharp);
-        if(debugstart && !devtab[t]->attached)
-            print("#%C...", devtab[t]->dc);
+
         c = devtab[t]->attach(up->genbuf+n);
-        if(debugstart && c != nil)
-            devtab[t]->attached = 1;
         break;
 
     default:
