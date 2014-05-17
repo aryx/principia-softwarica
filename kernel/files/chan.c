@@ -33,10 +33,13 @@ enum
 /*s: struct Chanalloc */
 struct Chanalloc
 {
-    Lock;
     int fid;
+
     Chan    *free;
     Chan    *list;
+
+    // extra
+    Lock;
 };
 /*e: struct Chanalloc */
 /*s: global chanalloc */
@@ -164,16 +167,16 @@ newchan(void)
     c->offset = 0;
     c->devoffset = 0;
     c->iounit = 0;
-    c->umh = 0;
+    c->umh = nil;
     c->uri = 0;
     c->dri = 0;
-    c->aux = 0;
-    c->mchan = 0;
-    c->mcp = 0;
-    c->mux = 0;
+    c->aux = nil;
+    c->mchan = nil;
+    c->mcp = nil;
+    c->mux = nil;
     memset(&c->mqid, 0, sizeof(c->mqid));
     c->path = 0;
-    c->ismtpt = 0;
+    c->ismtpt = false;
     
     return c;
 }
@@ -375,7 +378,7 @@ chanfree(Chan *c)
 
     if(c->dirrock != nil){
         free(c->dirrock);
-        c->dirrock = 0;
+        c->dirrock = nil;
         c->nrock = 0;
         c->mrock = 0;
     }
@@ -1450,7 +1453,7 @@ namec(char *aname, int amode, int omode, ulong perm)
         c->path = path;
 
         /* record whether c is on a mount point */
-        c->ismtpt = m!=nil;
+        c->ismtpt = (m!=nil);
 
         switch(amode){
         case Aaccess:

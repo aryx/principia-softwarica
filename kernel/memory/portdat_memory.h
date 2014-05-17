@@ -84,7 +84,9 @@ struct Pte
 struct KImage
 {
     Chan  *c;     /* channel to text file */
+
     Qid   qid;      /* Qid for page cache coherence */
+
     Qid mqid;
     Chan  *mchan;
     ushort  type;     /* Device type of owning channel */

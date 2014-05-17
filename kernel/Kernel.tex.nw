@@ -142,41 +142,6 @@ Yoann Padioleau\\
 
 \chapter*{XTODO}
 
-<<[[Chan]] other fields>>=
-vlong devoffset;    /* in underlying device; see read */
-
-ulong dev;
-
-int fid;      /* for devmnt */
-ulong iounit;     /* chunk size for i/o; 0==default */
-
-Mhead*  umh;      /* mount point that derived Chan; used in unionread */
-Chan* umc;      /* channel in union; held for union read */
-QLock umqlock;    /* serialize unionreads */
-int uri;      /* union read index */
-
-int dri;      /* devdirread index */
-
-uchar*  dirrock;    /* directory entry rock for translations */
-int nrock;
-int mrock;
-QLock rockqlock;
-
-int ismtpt;
-
-Mntcache* mcp;      /* Mount cache pointer */
-Mnt*  mux;      /* Mnt for clients using me for messages */
-union {
-  void* aux;
-  Qid pgrpid;   /* for #p/notepg */
-  ulong mid;    /* for ns in devproc */
-};
-Chan* mchan;      /* channel to mounted server */
-Qid mqid;     /* qid of root of mount point */
-
-@ 
-
-
 <<[[Mach]] other fields>>=
 ulong ticks;      /* of the clock since boot time */
 Label sched;      /* scheduler wakeup */
@@ -1068,11 +1033,20 @@ struct Chan
 {
     Path* path;
 
-    ushort  type; // idx in devtab?
+    ushort type; // idx in devtab?
+    ulong dev;
+
     Qid qid;
 
     vlong offset;     /* in fd */
     ushort  mode;     /* read/write */
+
+    bool ismtpt;
+
+    union {
+       void* aux; // generic pointer, for specific usages
+       <<[[Chan]] union other fields>>
+    };
 
     <<[[Chan]] other fields>>
     // extra
@@ -1136,6 +1110,38 @@ mkqid(Qid *q, vlong path, ulong vers, int type)
 @
 
 
+<<function eqchan>>=
+int
+eqchan(Chan *a, Chan *b, int skipvers)
+{
+    if(a->qid.path != b->qid.path)
+        return 0;
+    if(!skipvers && a->qid.vers!=b->qid.vers)
+        return 0;
+    if(a->type != b->type)
+        return 0;
+    if(a->dev != b->dev)
+        return 0;
+    return 1;
+}
+@
+
+
+<<function eqchantdqid>>=
+int
+eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
+{
+    if(a->qid.path != qid.path)
+        return 0;
+    if(!skipvers && a->qid.vers!=qid.vers)
+        return 0;
+    if(a->type != type)
+        return 0;
+    if(a->dev != dev)
+        return 0;
+    return 1;
+}
+@
 
 
 \section{[[Dev]] and [[devtab]]}
@@ -3783,7 +3789,9 @@ segpage(Segment *s, Page *p)
 struct KImage
 {
     Chan  *c;     /* channel to text file */
+
     Qid   qid;      /* Qid for page cache coherence */
+
     Qid mqid;
     Chan  *mchan;
     ushort  type;     /* Device type of owning channel */
@@ -11394,10 +11402,13 @@ enum
 <<struct Chanalloc>>=
 struct Chanalloc
 {
-    Lock;
     int fid;
+
     Chan    *free;
     Chan    *list;
+
+    // extra
+    Lock;
 };
 @
 
@@ -11442,16 +11453,16 @@ newchan(void)
     c->offset = 0;
     c->devoffset = 0;
     c->iounit = 0;
-    c->umh = 0;
+    c->umh = nil;
     c->uri = 0;
     c->dri = 0;
-    c->aux = 0;
-    c->mchan = 0;
-    c->mcp = 0;
-    c->mux = 0;
+    c->aux = nil;
+    c->mchan = nil;
+    c->mcp = nil;
+    c->mux = nil;
     memset(&c->mqid, 0, sizeof(c->mqid));
     c->path = 0;
-    c->ismtpt = 0;
+    c->ismtpt = false;
     
     return c;
 }
@@ -11465,7 +11476,7 @@ chanfree(Chan *c)
 
     if(c->dirrock != nil){
         free(c->dirrock);
-        c->dirrock = 0;
+        c->dirrock = nil;
         c->nrock = 0;
         c->mrock = 0;
     }
@@ -11515,40 +11526,6 @@ chan_cclose(Chan *c)
     chanfree(c);
 }
 @
-
-<<function eqchan>>=
-int
-eqchan(Chan *a, Chan *b, int skipvers)
-{
-    if(a->qid.path != b->qid.path)
-        return 0;
-    if(!skipvers && a->qid.vers!=b->qid.vers)
-        return 0;
-    if(a->type != b->type)
-        return 0;
-    if(a->dev != b->dev)
-        return 0;
-    return 1;
-}
-@
-
-
-<<function eqchantdqid>>=
-int
-eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
-{
-    if(a->qid.path != qid.path)
-        return 0;
-    if(!skipvers && a->qid.vers!=qid.vers)
-        return 0;
-    if(a->type != type)
-        return 0;
-    if(a->dev != dev)
-        return 0;
-    return 1;
-}
-@
-
 
 
 <<function cclone>>=
@@ -13937,6 +13914,10 @@ fdclose(int fd, int flag)
 
 \section {[[syspread()]], [[syspwrite()]]}
 
+<<[[Chan]] other fields>>=
+vlong devoffset;    /* in underlying device; see read */
+@
+
 <<function read>>=
 static long
 read(ulong *arg, vlong *offp)
@@ -14902,6 +14883,12 @@ createdir(Chan *c, Mhead *m)
 
 
 \section{Union directories}
+<<[[Chan]] other fields>>=
+Mhead*  umh;      /* mount point that derived Chan; used in unionread */
+Chan* umc;      /* channel in union; held for union read */
+QLock umqlock;    /* serialize unionreads */
+int uri;      /* union read index */
+@
 
 <<function unionread>>=
 long
@@ -15170,7 +15157,7 @@ namec(char *aname, int amode, int omode, ulong perm)
         c->path = path;
 
         /* record whether c is on a mount point */
-        c->ismtpt = m!=nil;
+        c->ismtpt = (m!=nil);
 
         switch(amode){
         case Aaccess:
@@ -16317,6 +16304,12 @@ pgrpcpy(Pgrp *to, Pgrp *from)
 
 \section{miscmount}
 
+<<[[Chan]] other fields>>=
+uchar*  dirrock;    /* directory entry rock for translations */
+int nrock;
+int mrock;
+QLock rockqlock;
+@
 
 <<function mountrock>>=
 /*
@@ -16742,6 +16735,10 @@ sysmount(ulong *arg)
 
 \section{[[sysumount()]]}
 
+<<[[Chan]] other fields>>=
+Chan* mchan;      /* channel to mounted server */
+@
+
 <<syscall unmount>>=
 long
 sysunmount(ulong *arg)
@@ -16777,6 +16774,8 @@ sysunmount(ulong *arg)
     return 0;
 }
 @
+
+
 
 <<function cunmount>>=
 void
@@ -17138,6 +17137,10 @@ devstat(Chan *c, uchar *db, int n, Dirtab *tab, int ntab, Devgen *gen)
 }
 @
 
+% could not be a local var of devdirread?
+<<[[Chan]] other fields>>=
+int dri;      /* devdirread index */
+@
 
 <<function devdirread>>=
 long
@@ -20775,6 +20778,10 @@ pipeinit(void)
 }
 @
 
+%TODO: use chanpipe below instead of chan
+<<[[Chan]] union other fields>>=
+/*Pipe*/void* chanpipe; // for pipes
+@
 
 <<method pipeattach>>=
 /*
@@ -22144,6 +22151,10 @@ Cmdtab proccmd[] = {
 #define NOTEID(q)   ((q).vers)
 @
 
+<<[[Chan]] union other fields>>=
+Qid pgrpid;   /* for #p/notepg */
+@
+
 <<method procinit>>=
 static void
 procinit(void)
@@ -22175,6 +22186,11 @@ Dev procdevtab = {
     .remove   =    devremove,
     .wstat    =    procwstat,
 };
+@
+
+%TODO: use mid below instead of ->aux
+<<[[Chan]] union other fields>>=
+  ulong mid;    /* for ns in devproc */
 @
 
 

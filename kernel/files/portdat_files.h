@@ -235,46 +235,54 @@ struct Chan
 {
     Path* path;
 
-    ushort  type; // idx in devtab?
+    ushort type; // idx in devtab?
+    ulong dev;
+
     Qid qid;
 
     vlong offset;     /* in fd */
     ushort  mode;     /* read/write */
 
+    bool ismtpt;
+
+    union {
+       void* aux; // generic pointer, for specific usages
+       /*s: [[Chan]] union other fields */
+       /*Pipe*/void* chanpipe; // for pipes
+       /*x: [[Chan]] union other fields */
+       Qid pgrpid;   /* for #p/notepg */
+       /*x: [[Chan]] union other fields */
+         ulong mid;    /* for ns in devproc */
+       /*e: [[Chan]] union other fields */
+    };
+
     /*s: [[Chan]] other fields */
+    ushort  flag;
+    /*x: [[Chan]] other fields */
     vlong devoffset;    /* in underlying device; see read */
-
-    ulong dev;
-
-    int fid;      /* for devmnt */
-    ulong iounit;     /* chunk size for i/o; 0==default */
-
+    /*x: [[Chan]] other fields */
     Mhead*  umh;      /* mount point that derived Chan; used in unionread */
     Chan* umc;      /* channel in union; held for union read */
     QLock umqlock;    /* serialize unionreads */
     int uri;      /* union read index */
-
-    int dri;      /* devdirread index */
-
+    /*x: [[Chan]] other fields */
     uchar*  dirrock;    /* directory entry rock for translations */
     int nrock;
     int mrock;
     QLock rockqlock;
-
-    int ismtpt;
-
-    Mntcache* mcp;      /* Mount cache pointer */
-    Mnt*  mux;      /* Mnt for clients using me for messages */
-    union {
-      void* aux;
-      Qid pgrpid;   /* for #p/notepg */
-      ulong mid;    /* for ns in devproc */
-    };
-    Chan* mchan;      /* channel to mounted server */
-    Qid mqid;     /* qid of root of mount point */
-
     /*x: [[Chan]] other fields */
-    ushort  flag;
+    Chan* mchan;      /* channel to mounted server */
+    /*x: [[Chan]] other fields */
+    int dri;      /* devdirread index */
+    /*x: [[Chan]] other fields */
+    int fid;      /* for devmnt */
+    ulong iounit;     /* chunk size for i/o; 0==default */
+
+    Mnt*  mux;      /* Mnt for clients using me for messages */
+
+    Qid mqid;     /* qid of root of mount point */
+    /*x: [[Chan]] other fields */
+    Mntcache* mcp;      /* Mount cache pointer */
     /*e: [[Chan]] other fields */
     // extra
     Ref;        /* the Lock in this Ref is also Chan's lock */
