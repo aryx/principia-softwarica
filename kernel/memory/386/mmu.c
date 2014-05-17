@@ -207,7 +207,7 @@ flushmmu(void)
     int s;
 
     s = splhi();
-    up->newtlb = 1;
+    up->newtlb = true;
     mmuswitch(up);
     splx(s);
 }
@@ -336,7 +336,7 @@ mmuswitch(Proc* proc)
 
     if(proc->newtlb){
         mmuptefree(proc);
-        proc->newtlb = 0;
+        proc->newtlb = false;
     }
 
     if(proc->mmupdb){
@@ -723,7 +723,7 @@ vunmap(void *v, int size)
         if(p->state == Dead)
             continue;
         if(p != up)
-            p->newtlb = 1;
+            p->newtlb = true;
     }
     for(i=0; i<conf.nmach; i++){
         nm = MACHP(i);

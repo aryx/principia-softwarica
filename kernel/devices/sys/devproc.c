@@ -1417,7 +1417,7 @@ procctlreq(Proc *p, char *va, int n)
         p->hang = false;
         break;
     case CMnoswap:
-        p->noswap = 1;
+        p->noswap = true;
         break;
     case CMpri:
         pri = atoi(cb->f[1]);
@@ -1432,7 +1432,7 @@ procctlreq(Proc *p, char *va, int n)
         procpriority(p, pri, 1);
         break;
     case CMprivate:
-        p->privatemem = 1;
+        p->privatemem = true;
         break;
     case CMprofile:
         s = p->seg[TSEG];
@@ -1628,7 +1628,7 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
     s->steal--;
 
     if(read == 0)
-        p->newtlb = 1;
+        p->newtlb = false;
 
     return n;
 }

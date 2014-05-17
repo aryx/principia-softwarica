@@ -758,8 +758,8 @@ newproc(void)
     p->syscalltrace = 0;    
     p->notepending = 0;
     p->ureg = 0;
-    p->privatemem = 0;
-    p->noswap = 0;
+    p->privatemem = false;
+    p->noswap = false;
     p->errstr = p->errbuf0;
     p->syserrstr = p->errbuf1;
     p->errbuf0[0] = '\0';
@@ -1534,7 +1534,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->psstate = nil;
     p->procmode = 0640;
     p->kp = true; // Kernel Process
-    p->noswap = 1;
+    p->noswap = true;
 
     p->fpsave = up->fpsave;
     p->sargs = up->sargs;

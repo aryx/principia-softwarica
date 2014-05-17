@@ -153,42 +153,21 @@ Rendezvous,
 Waitrelease,
 @ 
 
-<<[[Proc]] debugger fields>>=
-// Syscall
-Sargs sargs;    /* address of this is known by db */
-@ 
-
-
 <<[[Proc]] other fields>>=
-Fgrp  *closingfgrp; /* used during teardown */
-
-ulong privatemem; /* proc does not let anyone read mem */
-
-Lock  rlock;    /* sync sleep/wakeup with postnote */
-int newtlb;   /* Pager has changed my pte's, I must flush */
-int noswap;   /* process is not swappable */
-
-Timer;      /* For tsleep and real-time */
-Rendez  *trend;
-int (*tfn)(void*);
 void  (*kpfun)(void*);
 void  *kparg;
 
-
 char  genbuf[128];  /* buffer used e.g. for last name element from namec */
-
 
 Lock  *lockwait;
 
 Mach  *wired;
 Mach  *mp;    /* machine this process last ran on */
 
-
 bool trace;    /* process being traced? */
+char  *syscalltrace;  /* syscall trace */
 
 int setargs;
-
-char  *syscalltrace;  /* syscall trace */
 @ 
 
 
@@ -4278,6 +4257,10 @@ struct ArchProcMMU
 };
 @
 
+<<[[Proc]] memory fields>>=
+bool newtlb;   /* Pager has changed my pte's, I must flush */
+@ 
+
 
 <<struct KMap>>=
 /*
@@ -4304,7 +4287,7 @@ flushmmu(void)
     int s;
 
     s = splhi();
-    up->newtlb = 1;
+    up->newtlb = true;
     mmuswitch(up);
     splx(s);
 }
@@ -4788,7 +4771,7 @@ vunmap(void *v, int size)
         if(p->state == Dead)
             continue;
         if(p != up)
-            p->newtlb = 1;
+            p->newtlb = true;
     }
     for(i=0; i<conf.nmach; i++){
         nm = MACHP(i);
@@ -5489,6 +5472,10 @@ kickpager(void)
         started = 1;
     }
 }
+@
+
+<<[[Proc]] memory fields>>=
+bool noswap;   /* process is not swappable */
 @
 
 
@@ -6574,6 +6561,18 @@ i8259off(void)
 MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
 @
 
+<<struct Sargs>>=
+// syscall arguments passed in kernel stack
+struct Sargs
+{
+    ulong args[MAXSYSARG];
+};
+@ 
+
+<<[[Proc]] other fields>>=
+Sargs sargs;    /* address of this is known by db */
+@ 
+
 
 <<function _syscallintr>>=
 /*
@@ -6675,7 +6674,7 @@ syscall(Ureg* ureg)
         up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
 
-                //IMPORTANT: The actual system call
+        //IMPORTANT: The actual system call
         ret = systab[scallnr](up->sargs.args);
         poperror();
     }else{
@@ -7062,8 +7061,8 @@ newproc(void)
     p->syscalltrace = 0;    
     p->notepending = 0;
     p->ureg = 0;
-    p->privatemem = 0;
-    p->noswap = 0;
+    p->privatemem = false;
+    p->noswap = false;
     p->errstr = p->errbuf0;
     p->syserrstr = p->errbuf1;
     p->errbuf0[0] = '\0';
@@ -7205,7 +7204,7 @@ mmuswitch(Proc* proc)
 
     if(proc->newtlb){
         mmuptefree(proc);
-        proc->newtlb = 0;
+        proc->newtlb = false;
     }
 
     if(proc->mmupdb){
@@ -8025,6 +8024,8 @@ Proc  *rendhash;  /* Hash list for tag values */
 
 Rendez  *r;   /* rendezvous point slept on */
 Rendez  sleep;    /* place for syssleep/debug */
+
+Lock  rlock;    /* sync sleep/wakeup with postnote */
 @ 
 
 
@@ -8706,7 +8707,7 @@ sysexec(ulong *arg)
     up->nnote = 0;
     up->notify = 0;
     up->notified = 0;
-    up->privatemem = 0;
+    up->privatemem = false;
     procsetup(up);
     qunlock(&up->debug);
     if(up->hang)
@@ -9093,7 +9094,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->psstate = nil;
     p->procmode = 0640;
     p->kp = true; // Kernel Process
-    p->noswap = 1;
+    p->noswap = true;
 
     p->fpsave = up->fpsave;
     p->sargs = up->sargs;
@@ -13409,6 +13410,10 @@ closefgrp(Fgrp *f)
 }
 @ 
 
+
+<<[[Proc]] files fields>>=
+Fgrp  *closingfgrp; /* used during teardown */
+@
 
 <<function forceclosefgrp>>=
 /*
@@ -19548,6 +19553,12 @@ syssleep(ulong *arg)
 }
 @ 
 
+<<[[Proc]] other fields>>=
+Timer;      /* For tsleep and real-time */
+Rendez  *trend;
+int (*tfn)(void*);
+@
+
 <<function tsleep>>=
 void
 proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
@@ -21729,6 +21740,10 @@ closeegrp(Egrp *eg)
 ulong procmode; /* proc device default file mode */
 @
 
+<<[[Proc]] other fields>>=
+bool privatemem; /* proc does not let anyone read mem */
+@
+
 % apparently can also be used by the debugger acid
 %  chmod +w /proc/96/mem and then acid 96
 
@@ -23071,7 +23086,7 @@ procctlreq(Proc *p, char *va, int n)
         p->hang = false;
         break;
     case CMnoswap:
-        p->noswap = 1;
+        p->noswap = true;
         break;
     case CMpri:
         pri = atoi(cb->f[1]);
@@ -23086,7 +23101,7 @@ procctlreq(Proc *p, char *va, int n)
         procpriority(p, pri, 1);
         break;
     case CMprivate:
-        p->privatemem = 1;
+        p->privatemem = true;
         break;
     case CMprofile:
         s = p->seg[TSEG];
@@ -23232,7 +23247,7 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
     s->steal--;
 
     if(read == 0)
-        p->newtlb = 1;
+        p->newtlb = false;
 
     return n;
 }
@@ -24215,6 +24230,7 @@ sysretfmt(int syscallno, va_list list, long ret, uvlong start, uvlong stop)
 <<[[Proc]] debugger fields>>=
 void  *dbgreg;  /* User registers for devproc */
 @
+% put back? db will still work?
 % int scallnr;  /* sys call number - known by db */
 
 %TODO: Qreg section of /dev/proc

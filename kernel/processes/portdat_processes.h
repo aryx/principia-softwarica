@@ -429,6 +429,10 @@ struct Proc
     // hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
     Segment *seg[NSEG];
     QLock seglock;  /* locked whenever seg[] changes */
+    /*x: [[Proc]] memory fields */
+    bool newtlb;   /* Pager has changed my pte's, I must flush */
+    /*x: [[Proc]] memory fields */
+    bool noswap;   /* process is not swappable */
     /*e: [[Proc]] memory fields */
 
     struct ArchProcMMU;
@@ -470,6 +474,8 @@ struct Proc
     /*x: [[Proc]] files fields */
     // ref_counted<fgrp>
     Fgrp  *fgrp;    /* File descriptor group */
+    /*x: [[Proc]] files fields */
+    Fgrp  *closingfgrp; /* used during teardown */
     /*x: [[Proc]] files fields */
     // ref_counted<pgrp>
     Pgrp  *pgrp;    /* Process group for namespace */
@@ -521,6 +527,8 @@ struct Proc
 
     Rendez  *r;   /* rendezvous point slept on */
     Rendez  sleep;    /* place for syssleep/debug */
+
+    Lock  rlock;    /* sync sleep/wakeup with postnote */
     /*e: [[Proc]] synchronization fields */
 //--------------------------------------------------------------------
 // Error managment
@@ -569,9 +577,6 @@ struct Proc
 // For debugger
 //--------------------------------------------------------------------
     /*s: [[Proc]] debugger fields */
-    // Syscall
-    Sargs sargs;    /* address of this is known by db */
-    /*x: [[Proc]] debugger fields */
     void  *dbgreg;  /* User registers for devproc */
     /*x: [[Proc]] debugger fields */
     // enum<devproc>
@@ -586,45 +591,38 @@ struct Proc
 // Other
 //--------------------------------------------------------------------
     /*s: [[Proc]] other fields */
-    Fgrp  *closingfgrp; /* used during teardown */
-
-    ulong privatemem; /* proc does not let anyone read mem */
-
-    Lock  rlock;    /* sync sleep/wakeup with postnote */
-    int newtlb;   /* Pager has changed my pte's, I must flush */
-    int noswap;   /* process is not swappable */
-
-    Timer;      /* For tsleep and real-time */
-    Rendez  *trend;
-    int (*tfn)(void*);
     void  (*kpfun)(void*);
     void  *kparg;
 
-
     char  genbuf[128];  /* buffer used e.g. for last name element from namec */
-
 
     Lock  *lockwait;
 
     Mach  *wired;
     Mach  *mp;    /* machine this process last ran on */
 
-
     bool trace;    /* process being traced? */
+    char  *syscalltrace;  /* syscall trace */
 
     int setargs;
-
-    char  *syscalltrace;  /* syscall trace */
     /*x: [[Proc]] other fields */
     // As long as the current process hold locks (to kernel data structures),
     // we will not schedule another process in unlock(); only the last unlock
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
     /*x: [[Proc]] other fields */
+    Sargs sargs;    /* address of this is known by db */
+    /*x: [[Proc]] other fields */
+    Timer;      /* For tsleep and real-time */
+    Rendez  *trend;
+    int (*tfn)(void*);
+    /*x: [[Proc]] other fields */
     // ref_counted<egrp>
     Egrp  *egrp;    /* Environment group */
     /*x: [[Proc]] other fields */
     ulong procmode; /* proc device default file mode */
+    /*x: [[Proc]] other fields */
+    bool privatemem; /* proc does not let anyone read mem */
     /*x: [[Proc]] other fields */
     ArchFPsave  fpsave;   /* address of this is known by db */
     // enum<fpsavestatus>

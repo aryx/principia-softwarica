@@ -804,7 +804,7 @@ syscall(Ureg* ureg)
         up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
 
-                //IMPORTANT: The actual system call
+        //IMPORTANT: The actual system call
         ret = systab[scallnr](up->sargs.args);
         poperror();
     }else{
