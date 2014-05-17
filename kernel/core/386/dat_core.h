@@ -57,13 +57,6 @@ struct Segdesc
 /*s: struct ArchMach */
 struct ArchMach {
     /*s: [[ArchMach]] other fields */
-    // TODO: have a ArchMachMMU like in bcm/
-    kern_addr2  pdb;      /* page directory base for this processor (va) */
-    Tss*  tss;      /* tss for this processor */
-    Segdesc *gdt;     /* gdt for this processor */
-    Page* pdbpool;
-    int pdbcnt;
-
     // for perfticks, tsc = time stamp counter
     bool havetsc;
 
@@ -75,7 +68,6 @@ struct ArchMach {
     int cpuidax;
     int cpuiddx;
     /*e: [[ArchMach]] cpuid fields */
-
     int havepge;
     uvlong tscticks;
 
@@ -88,6 +80,15 @@ struct ArchMach {
     vlong mtrrvar[32];    /* 256 max. */
     /*x: [[ArchMach]] other fields */
     Proc* externup;   /* extern register Proc *up */
+    /*x: [[ArchMach]] other fields */
+    Segdesc *gdt;     /* gdt for this processor */
+    /*x: [[ArchMach]] other fields */
+    // TODO: have a ArchMachMMU like in bcm/
+    kern_addr2  pdb;      /* page directory base for this processor (va) */
+    Page* pdbpool;
+    int pdbcnt;
+    /*x: [[ArchMach]] other fields */
+    Tss*  tss;      /* tss for this processor */
     /*x: [[ArchMach]] other fields */
     ArchFPsave *fpsavalign;
     /*x: [[ArchMach]] other fields */

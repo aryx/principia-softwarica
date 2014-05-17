@@ -12,10 +12,8 @@ struct Lock
 {
     ulong key; // 0 when unset, 0xDEADDEAD when acquired, could be a bool
 
-    // option<ref<Proc>>, None when key = 0
+    // option<ref<Proc>>, None when key == 0
     Proc  *p; // the process locking should be the same unlocking
-
-    kern_addr pc; // for debugging
 
     /*s: [[Lock]] ilock fields */
     bool_ushort isilock; // false when from lock(), true when from ilock()
@@ -26,6 +24,8 @@ struct Lock
     Mach  *m; // not that used, only in iprintcanlock apparently
     /*e: [[Lock]] other fields */
     /*s: [[Lock]] debugging fields */
+    kern_addr pc; // for debugging
+    /*x: [[Lock]] debugging fields */
     //#ifdef LOCKCYCLES
     long  lockcycles;
     //#endif
@@ -34,7 +34,7 @@ struct Lock
 /*e: struct Lock */
 
 /*s: struct QLock */
-// Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h Qlock)
+// Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
 struct KQLock
 {
     bool  locked;   /* flag */
@@ -55,7 +55,7 @@ struct KQLock
 struct RWlock
 {
     int readers;  /* number of readers */
-    bool writer;   /* number of writers */
+    bool writer;   /* have a writer? */
   
     // list<ref<Proc>> (next = Proc.qnext)
     Proc  *head;    /* list of waiting processes */

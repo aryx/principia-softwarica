@@ -279,20 +279,12 @@ ulong ialloc;   /* max interrupt time allocation in bytes */
 
 
 <<[[ArchMach]] other fields>>=
-// TODO: have a ArchMachMMU like in bcm/
-kern_addr2  pdb;      /* page directory base for this processor (va) */
-Tss*  tss;      /* tss for this processor */
-Segdesc *gdt;     /* gdt for this processor */
-Page* pdbpool;
-int pdbcnt;
-
 // for perfticks, tsc = time stamp counter
 bool havetsc;
 
 int loopconst;
 
 <<[[ArchMach]] cpuid fields>>
-
 int havepge;
 uvlong tscticks;
 
@@ -304,38 +296,6 @@ vlong mtrrdef;
 vlong mtrrfix[11];
 vlong mtrrvar[32];    /* 256 max. */
 @ 
-
-<<struct Tss>>=
-struct Tss {
-    ulong link;     /* link (old TSS selector) */
-    ulong esp0;     /* privilege level 0 stack pointer */
-    ulong ss0;      /* privilege level 0 stack selector */
-    ulong esp1;     /* privilege level 1 stack pointer */
-    ulong ss1;      /* privilege level 1 stack selector */
-    ulong esp2;     /* privilege level 2 stack pointer */
-    ulong ss2;      /* privilege level 2 stack selector */
-    ulong xcr3;     /* page directory base register - not used because we don't use trap gates */
-    ulong eip;      /* instruction pointer */
-    ulong eflags;     /* flags register */
-    ulong eax;      /* general registers */
-    ulong   ecx;
-    ulong edx;
-    ulong ebx;
-    ulong esp;
-    ulong ebp;
-    ulong esi;
-    ulong edi;
-    ulong es;     /* segment selectors */
-    ulong cs;
-    ulong ss;
-    ulong ds;
-    ulong fs;
-    ulong gs;
-    ulong ldt;      /* selector for task's LDT */
-    ulong iomap;      /* I/O map base address + T-bit */
-};
-@ 
-
 
 <<struct ArchConf>>=
 struct ArchConf {
@@ -1430,23 +1390,31 @@ TEXT tas(SB), $0
 @ 
 
 \section{Spin [[Lock]]}
-% spin-lock?
 
 <<struct Lock>>=
 struct Lock
 {
     ulong key; // 0 when unset, 0xDEADDEAD when acquired, could be a bool
 
-    // option<ref<Proc>>, None when key = 0
+    // option<ref<Proc>>, None when key == 0
     Proc  *p; // the process locking should be the same unlocking
-
-    kern_addr pc; // for debugging
 
     <<[[Lock]] ilock fields>>
     <<[[Lock]] other fields>>
     <<[[Lock]] debugging fields>>
 };
 @ 
+
+\ifallcode
+<<[[Lock]] other fields>>=
+// option<ref<Mach>>, None when key = 0?
+Mach  *m; // not that used, only in iprintcanlock apparently
+@
+\fi
+
+<<[[Lock]] debugging fields>>=
+kern_addr pc; // for debugging
+@
 
 <<[[Proc]] debugging fields>>=
 Lock* lastlock;
@@ -1458,14 +1426,6 @@ Lock* lastlock;
 // will eventually cause a rescheduling.
 Ref nlocks;   /* number of locks held by proc */
 @ 
-
-\ifallcode
-<<lock ifdef LOCKCYCLES>>=
-#ifdef LOCKCYCLES
-        l->lockcycles = -lcycles();
-#endif
-@ 
-\fi
 
 <<function lock>>=
 int
@@ -1751,7 +1711,7 @@ iunlock(Lock *l)
 \section{Blocking [[QLock]]}
 
 <<struct QLock>>=
-// Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h Qlock)
+// Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
 struct KQLock
 {
     bool  locked;   /* flag */
@@ -1770,7 +1730,6 @@ struct KQLock
 <<[[Proc]] debugging fields>>=
 ulong qpc;    /* pc calling last blocking qlock */
 @
-
 
 <<[[Proc]] extra fields>>=
 // list<ref<Proc>> KQlock.head or RWLock.head
@@ -1869,7 +1828,7 @@ qunlock(QLock *q)
 struct RWlock
 {
     int readers;  /* number of readers */
-    bool writer;   /* number of writers */
+    bool writer;   /* have a writer? */
   
     // list<ref<Proc>> (next = Proc.qnext)
     Proc  *head;    /* list of waiting processes */
@@ -4296,6 +4255,10 @@ struct Segdesc
 };
 @ 
 
+<<[[ArchMach]] other fields>>=
+Segdesc *gdt;     /* gdt for this processor */
+@
+
 <<function mmuinit0>>=
 void
 mmuinit0(void)
@@ -4305,6 +4268,13 @@ mmuinit0(void)
 @
 
 \section{Pagination and [[pdb]]} 
+
+<<[[ArchMach]] other fields>>=
+// TODO: have a ArchMachMMU like in bcm/
+kern_addr2  pdb;      /* page directory base for this processor (va) */
+Page* pdbpool;
+int pdbcnt;
+@
 
 <<struct ArchProcMMU>>=
 //@Scheck: not dead, unnamed substructure
@@ -7185,6 +7155,41 @@ TEXT setlabel(SB), $0
         MOVL    $0, AX                          /* return 0 */
         RET
 
+@
+
+<<struct Tss>>=
+struct Tss {
+    ulong link;     /* link (old TSS selector) */
+    ulong esp0;     /* privilege level 0 stack pointer */
+    ulong ss0;      /* privilege level 0 stack selector */
+    ulong esp1;     /* privilege level 1 stack pointer */
+    ulong ss1;      /* privilege level 1 stack selector */
+    ulong esp2;     /* privilege level 2 stack pointer */
+    ulong ss2;      /* privilege level 2 stack selector */
+    ulong xcr3;     /* page directory base register - not used because we don't use trap gates */
+    ulong eip;      /* instruction pointer */
+    ulong eflags;     /* flags register */
+    ulong eax;      /* general registers */
+    ulong   ecx;
+    ulong edx;
+    ulong ebx;
+    ulong esp;
+    ulong ebp;
+    ulong esi;
+    ulong edi;
+    ulong es;     /* segment selectors */
+    ulong cs;
+    ulong ss;
+    ulong ds;
+    ulong fs;
+    ulong gs;
+    ulong ldt;      /* selector for task's LDT */
+    ulong iomap;      /* I/O map base address + T-bit */
+};
+@ 
+
+<<[[ArchMach]] other fields>>=
+Tss*  tss;      /* tss for this processor */
 @
 
 <<function taskswitch>>=
@@ -24237,6 +24242,8 @@ int syscall;
 int load;
 int intr;
 @
+
+% also lockcycles here?
 
 \section{[[/dev/kprof]]}
 % devkprof.c?
