@@ -86,7 +86,9 @@
 #define RMUADDR   (KZERO+0x7C00)    /* real mode Ureg */
 #define RMCODE    (KZERO+0x8000)    /* copy of first page of KTEXT */
 #define RMBUF   (KZERO+0x9000)    /* buffer for user space - known to vga */
+/*s: constant IDTADDR */
 #define IDTADDR   (KZERO+0x10800)   /* idt */
+/*e: constant IDTADDR */
 #define REBOOTADDR  (0x11000)   /* reboot code - physical address */
 #define CPU0PDB   (KZERO+0x12000)   /* bootstrap processor PDB */
 #define CPU0PTE   (KZERO+0x13000)   /* bootstrap processor PTE's for 0-4MB */

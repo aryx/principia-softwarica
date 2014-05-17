@@ -15,7 +15,7 @@
 
 /*s: global runq */
 // The run queue!!
-// hash<enum<priority>, Schedq>, Nrq is the number of priority level (20+2)
+// hash<enum<priority>, Schedq>
 Schedq  runq[Nrq];
 /*e: global runq */
 /*s: global runveq */
@@ -55,6 +55,7 @@ enum
 
 /*s: global statename */
 //coupling: with enum procstate
+// hash<enum<procstate>, string>, to debug
 char *statename[] =
 {
     "Dead",
@@ -138,19 +139,25 @@ schedinit(void)     /* never returns */
 
     setlabel(&m->sched);
     if(up) {
-        if((e = up->edf) && (e->flags & Admitted))
-            edfrecord(up);
-        m->proc = 0;
+        /*s: [[schedinit()]] optional real-time [[edfrecord()]] */
+                if((e = up->edf) && (e->flags & Admitted))
+                    edfrecord(up);
+        /*e: [[schedinit()]] optional real-time [[edfrecord()]] */
+
+        m->proc = nil;
         switch(up->state) {
         case Running:
             ready(up);
             break;
         case Moribund:
             up->state = Dead;
-            edfstop(up);
-            if (up->edf)
-                free(up->edf);
-            up->edf = nil;
+
+           /*s: [[schedinit()]] optional real-time [[edfstop()]] */
+                       edfstop(up);
+                       if (up->edf)
+                           free(up->edf);
+                       up->edf = nil;
+           /*e: [[schedinit()]] optional real-time [[edfstop()]] */
 
             /*
              * Holding locks from pexit:
@@ -231,7 +238,10 @@ proc_sched(void)
         gotolabel(&m->sched);
     }
     p = runproc();
-    if(!p->edf){
+    /*s: [[proc_sched()]] optional guard for real-time process */
+        if(!p->edf)
+    /*e: [[proc_sched()]] optional guard for real-time process */
+    {
         updatecpu(p);
         p->priority = reprioritize(p);
     }
@@ -1147,7 +1157,7 @@ addbroken(Proc *p)
 
     edfstop(up);
     p->state = Broken;
-    p->psstate = 0;
+    p->psstate = nil;
     sched();
 }
 /*e: function addbroken */
@@ -1331,7 +1341,9 @@ proc_pexit(char *exitstr, int freemem)
     lock(&procalloc);
     lock(&palloc);
 
-    edfstop(up);
+    /*s: [[pexit()]] optional [[edfstop()]] for real-time scheduling */
+        edfstop(up);
+    /*e: [[pexit()]] optional [[edfstop()]] for real-time scheduling */
     up->state = Moribund;
     sched();
     panic("pexit");
@@ -1519,7 +1531,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     static Pgrp *kpgrp;
 
     p = newproc();
-    p->psstate = 0;
+    p->psstate = nil;
     p->procmode = 0640;
     p->kp = true; // Kernel Process
     p->noswap = 1;

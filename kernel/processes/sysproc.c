@@ -564,15 +564,15 @@ sysproc_return0(void*)
 long
 syssleep(ulong *arg)
 {
-
     int n;
-
     n = arg[0];
     if(n <= 0) {
-        if (up->edf && (up->edf->flags & Admitted))
-            edfyield();
-        else
-            yield();
+        /*s: [[syssleep()]] optional [[edfyield()]] for real-time scheduling */
+                if (up->edf && (up->edf->flags & Admitted))
+                    edfyield();
+                else
+        /*e: [[syssleep()]] optional [[edfyield()]] for real-time scheduling */
+        yield();
         return 0;
     }
     if(n < TK2MS(1))

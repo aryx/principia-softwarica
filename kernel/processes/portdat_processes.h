@@ -252,29 +252,28 @@ struct Timers
 //--------------------------------------------------------------------
 
 enum {
+    /*s: constant Npriq */
     Npriq   = 20,   /* number of scheduler priority levels */
+    /*e: constant Npriq */
+    /*s: constant Nrq */
     Nrq   = Npriq+2,  /* number of priority levels including real time */
+    /*e: constant Nrq */
 };
 
 /*s: enum priority */
 enum priority 
 {
-    PriRelease  = Npriq,  /* released edf processes */
-    PriEdf    = Npriq+1,  /* active edf processes */
     PriNormal = 10,   /* base priority for normal processes */
-    PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
     PriKproc  = 13,   /* base priority for kernel processes */
     PriRoot   = 13,   /* base priority for root processes */
+
+    /*s: constants for real-time priority */
+        PriRelease  = Npriq,  /* released edf processes */
+        PriEdf    = Npriq+1,  /* active edf processes */
+        PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
+    /*e: constants for real-time priority */
 };
 /*e: enum priority */
-
-
-// was in edf.h
-enum 
-{
-    Maxsteps = 200 * 100 * 2, /* 100 periods of 200 procs */
-    Infinity = ~0ULL,
-};
 
 /*s: enum edfflags */
 enum edfflags 
@@ -404,24 +403,23 @@ struct Proc
 // State
 //--------------------------------------------------------------------
     /*s: [[Proc]] state fields */
-    bool insyscall;
-    char  *psstate; /* What /proc/#/status reports */
+    ulong pid;
+
+    // enum<procstate> 
+    int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate nil)
+    // some debugging information, e.g. "New", "PageOut", or name of syscall
+    char  *psstate; /* used by /proc/#/status */
+    bool insyscall; // true when process inside a syscall
 
     // e.g. "*init*", or name of executable
     char  *text;
-    // e.g.. "eve" (no uid/gid in plan9, because of distributed nature of it?)
+    // e.g.. "eve" (no uid/gid in plan9, because of its distributed nature?)
     char  *user;
-
-    // set by??
+    /*x: [[Proc]] state fields */
     char  *args;
     int nargs;    /* number of bytes of args */
-
-    bool kp;   /* true if a kernel process */
     /*x: [[Proc]] state fields */
-    ulong pid;
-
-    // enum<procstate>
-    int state; // Dead, Queuing, etc,
+    bool kp;   /* true if a kernel process */
     /*e: [[Proc]] state fields */
 //--------------------------------------------------------------------
 // Memory
@@ -440,21 +438,25 @@ struct Proc
     // enum<priority>
     ulong priority; /* priority level */
 
-    ulong delaysched;
-
     ulong basepri;  /* base priority level */
     uchar fixedpri; /* priority level deson't change */
+
+    ulong delaysched;
+
+    int preempted;  /* true if this process hasn't finished the interrupt
+           *  that last preempted it
+           */
 
     ulong cpu;    /* cpu average */
     ulong lastupdate;
     uchar yield;    /* non-zero if the process just did a sleep(0) */
     ulong readytime;  /* time process came ready */
     ulong movetime; /* last time process switched processors */
-    int preempted;  /* true if this process hasn't finished the interrupt
-           *  that last preempted it
-           */
+
+    /*s: [[Proc]] optional [[edf]] field for real-time scheduling */
     // option<ref_own?<edf>>
     Edf *edf;   /* if non-null, real-time proc, edf contains scheduling params */
+    /*e: [[Proc]] optional [[edf]] field for real-time scheduling */
     /*e: [[Proc]] scheduling fields */
 //--------------------------------------------------------------------
 // Files
@@ -495,12 +497,12 @@ struct Proc
 // Process hierarchy
 //--------------------------------------------------------------------
     /*s: [[Proc]] hierarchy fields */
+    Proc  *parent;
+    ulong parentpid;
+    /*x: [[Proc]] hierarchy fields */
     //list<ref<Waitq>>
     Waitq *waitq;   /* Exited processes wait children */
     Lock  exl;    /* Lock count and waitq */
-
-    Proc  *parent;
-    ulong parentpid;
 
     int nchild;   /* Number of living children */
     int nwait;    /* Number of uncollected wait records */

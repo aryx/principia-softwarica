@@ -707,7 +707,7 @@ fault386(Ureg* ureg, void*)
         panic("user fault: up=0 pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
 
     insyscall = up->insyscall;
-    up->insyscall = 1;
+    up->insyscall = true;
     n = fault(addr, read);
     if(n < 0){
         if(!user){
@@ -1151,8 +1151,8 @@ forkchild(Proc *p, Ureg *ureg)
     cureg->ax = 0;
 
     /* Things from bottom of syscall which were never executed */
-    p->psstate = 0;
-    p->insyscall = 0;
+    p->psstate = nil;
+    p->insyscall = false;
 }
 /*e: function forkchild */
 

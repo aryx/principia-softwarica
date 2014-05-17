@@ -9,13 +9,19 @@
 //  - print.c overrides _fmtlock(), _fmtunlock() that were in libc/fmt/
 //  - devcons.s overrides the sysfatal() that was in libc/9sys/
 
-// pad specific, should be in u.h
+// pad specific, could be in u.h
 /*s: pad basic types */
 typedef int bool;
-typedef ushort bool_ushort;
 enum _bool {
   false = 0,
   true = 1
+};
+typedef ushort bool_ushort;
+
+typedef int retcode;
+enum _retcode {
+    OK = 0,
+    ERROR = 1,
 };
 /*e: pad basic types */
 

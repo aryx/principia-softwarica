@@ -1485,56 +1485,61 @@ procctlreq(Proc *p, char *va, int n)
             error("args");
         }
         break;
-    /* real time */
-    case CMperiod:
-        if(p->edf == nil)
-            edfinit(p);
-        if(e=parsetime(&time, cb->f[1]))    /* time in ns */
-            error(e);
-        edfstop(p);
-        p->edf->T = time/1000;  /* Edf times are in µs */
-        break;
-    case CMdeadline:
-        if(p->edf == nil)
-            edfinit(p);
-        if(e=parsetime(&time, cb->f[1]))
-            error(e);
-        edfstop(p);
-        p->edf->D = time/1000;
-        break;
-    case CMcost:
-        if(p->edf == nil)
-            edfinit(p);
-        if(e=parsetime(&time, cb->f[1]))
-            error(e);
-        edfstop(p);
-        p->edf->C = time/1000;
-        break;
-    case CMsporadic:
-        if(p->edf == nil)
-            edfinit(p);
-        p->edf->flags |= Sporadic;
-        break;
-    case CMdeadlinenotes:
-        if(p->edf == nil)
-            edfinit(p);
-        p->edf->flags |= Sendnotes;
-        break;
-    case CMadmit:
-        if(p->edf == 0)
-            error("edf params");
-        if(e = edfadmit(p))
-            error(e);
-        break;
-    case CMextra:
-        if(p->edf == nil)
-            edfinit(p);
-        p->edf->flags |= Extratime;
-        break;
-    case CMexpel:
-        if(p->edf)
+
+    /*s: [[procctlreq()]] optional real-time commands */
+        /* real time */
+        case CMperiod:
+            if(p->edf == nil)
+                edfinit(p);
+            if(e=parsetime(&time, cb->f[1]))    /* time in ns */
+                error(e);
             edfstop(p);
-        break;
+            p->edf->T = time/1000;  /* Edf times are in microseconds */
+            break;
+        case CMdeadline:
+            if(p->edf == nil)
+                edfinit(p);
+            if(e=parsetime(&time, cb->f[1]))
+                error(e);
+            edfstop(p);
+            p->edf->D = time/1000;
+            break;
+        case CMcost:
+            if(p->edf == nil)
+                edfinit(p);
+            if(e=parsetime(&time, cb->f[1]))
+                error(e);
+            edfstop(p);
+            p->edf->C = time/1000;
+            break;
+        case CMsporadic:
+            if(p->edf == nil)
+                edfinit(p);
+            p->edf->flags |= Sporadic;
+            break;
+        case CMdeadlinenotes:
+            if(p->edf == nil)
+                edfinit(p);
+            p->edf->flags |= Sendnotes;
+            break;
+        case CMadmit:
+            if(p->edf == 0)
+                error("edf params");
+            if(e = edfadmit(p))
+                error(e);
+            break;
+        case CMextra:
+            if(p->edf == nil)
+                edfinit(p);
+            p->edf->flags |= Extratime;
+            break;
+        case CMexpel:
+            if(p->edf)
+                edfstop(p);
+            break;
+
+    /*e: [[procctlreq()]] optional real-time commands */
+
     case CMevent:
         pt = proctrace;
         if(up->trace && pt)

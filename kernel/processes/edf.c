@@ -23,6 +23,11 @@ enum {
 #define DPRINT  if(Dontprint){}else print
 /*e: edf.c debugging macro */
 
+enum 
+{
+    Maxsteps = 200 * 100 * 2, /* 100 periods of 200 procs */
+};
+
 
 static long now;    /* Low order 32 bits of time in µs */
 
