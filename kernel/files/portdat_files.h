@@ -237,6 +237,7 @@ struct Chan
 
     ushort  type; // idx in devtab?
     Qid qid;
+
     vlong offset;     /* in fd */
     ushort  mode;     /* read/write */
 
@@ -276,8 +277,8 @@ struct Chan
     ushort  flag;
     /*e: [[Chan]] other fields */
     // extra
-    /*s: [[Chan]] extra fields */
     Ref;        /* the Lock in this Ref is also Chan's lock */
+    /*s: [[Chan]] extra fields */
     Chan* next;     /* allocation */
     Chan* link;
     /*e: [[Chan]] extra fields */

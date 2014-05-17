@@ -10929,8 +10929,113 @@ char *sysctab[] = {
 \ifallcode
 \chapter{Extra Extra}
 
+\section{Power}
+
+<<function halt>>=
+/*
+ * Attempt at power saving. -rsc
+ */
+TEXT halt(SB), $0
+        CLI
+        CMPL    nrdy(SB), $0
+        JEQ     _nothingready
+        STI
+        RET
+
+_nothingready:
+        STI
+        HLT
+        RET
+@
+
+
+<<[[PCArch]] power methods fields>>=
+int (*serialpower)(int);  /* 1 == on, 0 == off */
+int (*modempower)(int); /* 1 == on, 0 == off */
+@
+
+<<[[archgeneric]] power methods>>=
+    .serialpower=   unimplemented,
+    .modempower=    unimplemented,
+@
+
+<<function unimplemented>>=
+static int
+unimplemented(int)
+{
+    return 0;
+}
+@
+
+
+\section{Serial line}
+
+<<global serialoq>>=
+Queue*  serialoq;       /* serial console output */
+@ 
+
+<<function consactive>>=
+int
+consactive(void)
+{
+    if(serialoq)
+        return qlen(serialoq) > 0;
+    return 0;
+}
+@ 
+
+% dead?
+<<function prflush>>=
+void
+prflush(void)
+{
+    ulong now;
+
+    now = m->ticks;
+    while(consactive())
+        if(m->ticks - now >= HZ)
+            break;
+}
+@ 
+
+<<function echoserialoq>>=
+static void
+echoserialoq(char *buf, int n)
+{
+    char *e, *p;
+    char ebuf[128];
+    int x;
+
+    p = ebuf;
+    e = ebuf + sizeof(ebuf) - 4;
+    while(n-- > 0){
+        if(p >= e){
+            qiwrite(serialoq, ebuf, p - ebuf);
+            p = ebuf;
+        }
+        x = *buf++;
+        if(x == '\n'){
+            *p++ = '\r';
+            *p++ = '\n';
+        } else if(x == 0x15){
+            *p++ = '^';
+            *p++ = 'U';
+            *p++ = '\n';
+        } else
+            *p++ = x;
+    }
+    if(p != ebuf)
+        qiwrite(serialoq, ebuf, p - ebuf);
+}
+@ 
+
+
 \section{Floating Point}
 %{FP}
+
+<<[[ArchMach]] other fields>>=
+ArchFPsave *fpsavalign;
+@
 
 <<[[Proc]] other fields>>=
 ArchFPsave  fpsave;   /* address of this is known by db */
@@ -28057,6 +28162,12 @@ TEXT fpsserestore0(SB), $0                      /* enable and restore state */
 
 
 \subsection*{[[processes/386/apic.c]]}
+
+
+<<[[ArchMach]] other fields>>=
+Lock  apictimerlock;
+@
+
 
 <<apic.c>>=
 <<kernel basic includes>>

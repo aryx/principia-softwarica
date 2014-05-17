@@ -207,7 +207,6 @@ char  *syscalltrace;  /* syscall trace */
 <<[[Proc]] extra fields>>=
 ulong alarm;    /* Time of call */
 
-
 // option<ref<Mach>>, null when not associated to a machine?
 Mach  *mach;    /* machine running this proc */
 @ 
@@ -248,13 +247,6 @@ Qid mqid;     /* qid of root of mount point */
 @ 
 
 
-<<[[Chan]] extra fields>>=
-Ref;        /* the Lock in this Ref is also Chan's lock */
-Chan* next;     /* allocation */
-Chan* link;
-@ 
-
-
 <<[[Mach]] other fields>>=
 ulong ticks;      /* of the clock since boot time */
 Label sched;      /* scheduler wakeup */
@@ -278,14 +270,11 @@ uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 <<[[Conf]] other fields>>=
 ulong npage;    /* total physical pages of memory */
 ulong upages;   /* user page pool */
-ulong nimage;   /* number of page cache image headers */
-ulong nswap;    /* number of swap pages */
 
 int nswppo;   /* max # of pageouts per segment pass */
 
 bool copymode; /* 0 is copy on write, 1 is copy on reference */
 ulong ialloc;   /* max interrupt time allocation in bytes */
-int nuart;    /* number of uart devices */
 @ 
 
 
@@ -296,10 +285,6 @@ Tss*  tss;      /* tss for this processor */
 Segdesc *gdt;     /* gdt for this processor */
 Page* pdbpool;
 int pdbcnt;
-//  int inclockintr;
-
-Lock  apictimerlock;
-ArchFPsave *fpsavalign;
 
 // for perfticks, tsc = time stamp counter
 bool havetsc;
@@ -432,8 +417,7 @@ QEMU.
 
 As a bonus step you can also now compile Plan9 under Plan9 itself!
 
-\section{Assumptions}
-% Requirments?
+\section{Requirments}
 
 I assume you actually know a lot:
 \begin{itemize}
@@ -454,7 +438,7 @@ you already have a vague idea of how an operating system
 works and so that you are familiar with concepts such as 
 virtual memory, critical regions, interrupts, system calls, etc.
 We assume you already know most of the theory; this book is here to
-cover the rest, the practice.
+cover the practice.
 
 \section{About this document}
 #include "About.tex.nw"
@@ -492,7 +476,7 @@ for himself
 \item a virtual screen, so that each process thinks it has all the screen
 for himself (via the windowing system)
 \item the file abstraction, so a process can read and store data
-on a disk, network, floppy etc
+on a disk, network, floppy, etc
 % continous even though spreaded on concrete disk (like mm)
 \item the directory abstraction, so a process can organize data
 on a disk, network, floppy, etc
@@ -501,9 +485,9 @@ on a disk, network, floppy, etc
 %\item a virtual network (NFS)
 \end{itemize}
 
-Entire books have been written on this subject.
+Entire books have been written on those subjects.
 We assume you already know what is an operating system
-and will now focus on the concrete services (API) a kernel
+and we will now focus on the concrete services (API) a kernel
 provides to the user programs.
 
 \section{Plan9 services}
@@ -773,7 +757,10 @@ typedef uintptr phys_addr;
 typedef uintptr virt_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
+@ 
 
+\ifallcode
+<<pad memory pointer types>>=
 typedef ulong* kern_addr2;
 typedef ulong* virt_addr2;
 typedef void* virt_addr3;
@@ -781,6 +768,7 @@ typedef void* kern_addr3;
 //#define nil (void*)0 in lib.h
 #define nilptr 0
 @
+\fi
 
 <<constant KZERO>>=
 #define KZERO   0xF0000000    /* base of kernel address space */
@@ -815,7 +803,6 @@ kaddr(phys_addr pa)
     return (kern_addr3)(pa+KZERO);
 }
 @
-
 
 <<function paddr>>=
 kern_addr
@@ -912,9 +899,9 @@ sysnop(ulong*)
 struct Conf
 {
     ulong nmach;    /* processors */
-    ulong nproc;    /* processes */
     Confmem mem[4];   /* physical memory */
 
+    ulong nproc;    /* processes */
     <<[[Conf]] other fields>>
   
     struct ArchConf;
@@ -938,7 +925,6 @@ struct Confmem
     kern_addr klimit; // KADDR(base+npage*BY2PG)
 };
 @ 
-
 
 
 <<globals confname and confvar>>=
@@ -1193,11 +1179,13 @@ struct Chan
 
     ushort  type; // idx in devtab?
     Qid qid;
+
     vlong offset;     /* in fd */
     ushort  mode;     /* read/write */
 
     <<[[Chan]] other fields>>
     // extra
+    Ref;        /* the Lock in this Ref is also Chan's lock */
     <<[[Chan]] extra fields>>
 };
 @ 
@@ -1224,6 +1212,20 @@ struct Qid
 };
 @ 
 
+<<enum qidtype>>=
+/* bits in Qid.type */
+enum qidtype {
+  QTFILE = 0x00,    /* plain file */
+  QTDIR = 0x80,    /* type bit for directories */
+  QTMOUNT = 0x10,    /* type bit for mounted channel */
+
+  QTAUTH = 0x08,    /* type bit for authentication file */
+  QTAPPEND = 0x40,    /* type bit for append only files */
+  QTEXCL = 0x20,    /* type bit for exclusive use files */
+};
+@ 
+
+
 <<function eqqid>>=
 int
 eqqid(Qid a, Qid b)
@@ -1243,18 +1245,6 @@ mkqid(Qid *q, vlong path, ulong vers, int type)
 @
 
 
-<<enum qidtype>>=
-/* bits in Qid.type */
-enum qidtype {
-  QTFILE = 0x00,    /* plain file */
-  QTDIR = 0x80,    /* type bit for directories */
-  QTMOUNT = 0x10,    /* type bit for mounted channel */
-
-  QTAUTH = 0x08,    /* type bit for authentication file */
-  QTAPPEND = 0x40,    /* type bit for append only files */
-  QTEXCL = 0x20,    /* type bit for exclusive use files */
-};
-@ 
 
 
 \section{[[Dev]] and [[devtab]]}
@@ -1358,15 +1348,6 @@ PCArch archgeneric = {
     <<[[archgeneric]] power methods>>
 };
 @
-
-<<function unimplemented>>=
-static int
-unimplemented(int)
-{
-    return 0;
-}
-@
-
 
 % SMP is more complex arch, archmp
 
@@ -3952,6 +3933,11 @@ struct Imagealloc
 };
 @
 
+<<[[Conf]] other fields>>=
+ulong nimage;   /* number of page cache image headers */
+@
+
+
 <<global imagealloc>>=
 static struct Imagealloc imagealloc;
 @
@@ -5458,6 +5444,12 @@ struct Swapalloc
     Lock;       /* Free map lock */
 };
 @
+
+
+<<[[Conf]] other fields>>=
+ulong nswap;    /* number of swap pages */
+@
+
 
 <<function newswap>>=
 ulong
@@ -11181,6 +11173,12 @@ struct Chanalloc
 <<global chanalloc>>=
 struct Chanalloc chanalloc;
 @
+
+<<[[Chan]] extra fields>>=
+Chan* next;     /* allocation */
+Chan* link;
+@ 
+
 
 <<function newchan>>=
 Chan*
@@ -21534,99 +21532,13 @@ connectlocal(void)
 
 \section{SMP}
 
+\section{Real-time scheduling}
+
 \section{Floating point}
 
 \section{Power managment}
 
-<<function halt>>=
-/*
- * Attempt at power saving. -rsc
- */
-TEXT halt(SB), $0
-        CLI
-        CMPL    nrdy(SB), $0
-        JEQ     _nothingready
-        STI
-        RET
 
-_nothingready:
-        STI
-        HLT
-        RET
-@
-
-
-<<[[PCArch]] power methods fields>>=
-int (*serialpower)(int);  /* 1 == on, 0 == off */
-int (*modempower)(int); /* 1 == on, 0 == off */
-@
-
-<<[[archgeneric]] power methods>>=
-    .serialpower=   unimplemented,
-    .modempower=    unimplemented,
-@
-
-
-\section{Serial line}
-
-<<global serialoq>>=
-Queue*  serialoq;       /* serial console output */
-@ 
-
-<<function consactive>>=
-int
-consactive(void)
-{
-    if(serialoq)
-        return qlen(serialoq) > 0;
-    return 0;
-}
-@ 
-
-% dead?
-<<function prflush>>=
-void
-prflush(void)
-{
-    ulong now;
-
-    now = m->ticks;
-    while(consactive())
-        if(m->ticks - now >= HZ)
-            break;
-}
-@ 
-
-<<function echoserialoq>>=
-static void
-echoserialoq(char *buf, int n)
-{
-    char *e, *p;
-    char ebuf[128];
-    int x;
-
-    p = ebuf;
-    e = ebuf + sizeof(ebuf) - 4;
-    while(n-- > 0){
-        if(p >= e){
-            qiwrite(serialoq, ebuf, p - ebuf);
-            p = ebuf;
-        }
-        x = *buf++;
-        if(x == '\n'){
-            *p++ = '\r';
-            *p++ = '\n';
-        } else if(x == 0x15){
-            *p++ = '^';
-            *p++ = 'U';
-            *p++ = '\n';
-        } else
-            *p++ = x;
-    }
-    if(p != ebuf)
-        qiwrite(serialoq, ebuf, p - ebuf);
-}
-@ 
 
 \chapter{Special Fileservers}
 

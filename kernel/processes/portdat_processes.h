@@ -637,7 +637,6 @@ struct Proc
     /*s: [[Proc]] extra fields */
     ulong alarm;    /* Time of call */
 
-
     // option<ref<Mach>>, null when not associated to a machine?
     Mach  *mach;    /* machine running this proc */
     /*x: [[Proc]] extra fields */

@@ -63,10 +63,6 @@ struct ArchMach {
     Segdesc *gdt;     /* gdt for this processor */
     Page* pdbpool;
     int pdbcnt;
-    //  int inclockintr;
-
-    Lock  apictimerlock;
-    ArchFPsave *fpsavalign;
 
     // for perfticks, tsc = time stamp counter
     bool havetsc;
@@ -92,6 +88,10 @@ struct ArchMach {
     vlong mtrrvar[32];    /* 256 max. */
     /*x: [[ArchMach]] other fields */
     Proc* externup;   /* extern register Proc *up */
+    /*x: [[ArchMach]] other fields */
+    ArchFPsave *fpsavalign;
+    /*x: [[ArchMach]] other fields */
+    Lock  apictimerlock;
     /*e: [[ArchMach]] other fields */
 };
 /*e: struct ArchMach */

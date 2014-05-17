@@ -24,20 +24,21 @@ struct Confmem
 struct Conf
 {
     ulong nmach;    /* processors */
-    ulong nproc;    /* processes */
     Confmem mem[4];   /* physical memory */
 
+    ulong nproc;    /* processes */
     /*s: [[Conf]] other fields */
     ulong npage;    /* total physical pages of memory */
     ulong upages;   /* user page pool */
-    ulong nimage;   /* number of page cache image headers */
-    ulong nswap;    /* number of swap pages */
 
     int nswppo;   /* max # of pageouts per segment pass */
 
     bool copymode; /* 0 is copy on write, 1 is copy on reference */
     ulong ialloc;   /* max interrupt time allocation in bytes */
-    int nuart;    /* number of uart devices */
+    /*x: [[Conf]] other fields */
+    ulong nimage;   /* number of page cache image headers */
+    /*x: [[Conf]] other fields */
+    ulong nswap;    /* number of swap pages */
     /*x: [[Conf]] other fields */
     ulong pipeqsize;  /* size in bytes of pipe queues */
     /*e: [[Conf]] other fields */

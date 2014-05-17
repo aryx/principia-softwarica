@@ -26,7 +26,7 @@ typedef uintptr phys_addr;
 typedef uintptr virt_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
-
+/*x: pad memory pointer types */
 typedef ulong* kern_addr2;
 typedef ulong* virt_addr2;
 typedef void* virt_addr3;
