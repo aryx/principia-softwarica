@@ -60,7 +60,6 @@ Dirtab pipedir[] =
 
 #define NPIPEDIR 3
 
-
 /*s: method pipeinit */
 static void
 pipeinit(void)

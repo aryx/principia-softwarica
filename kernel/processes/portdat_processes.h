@@ -353,7 +353,7 @@ enum proctime
 //--------------------------------------------------------------------
 
 /*s: enum devproc */
-enum devproc 
+enum devproc
 {
     Proc_stopme = 1,  /* devproc requests */
     Proc_exitme,
@@ -462,18 +462,19 @@ struct Proc
 // Files
 //--------------------------------------------------------------------
     /*s: [[Proc]] files fields */
-    // ref_counted<pgrp>
-    Pgrp  *pgrp;    /* Process group for namespace */
-    // ref_counted<egrp>
-    Egrp  *egrp;    /* Environment group */
-
     // ref<Chan>
-    Chan  *slash; // The root!
+    Chan  *slash; // The root! used by namec()
     // ref_counted<Chan>
     Chan  *dot; // The current directory
     /*x: [[Proc]] files fields */
     // ref_counted<fgrp>
     Fgrp  *fgrp;    /* File descriptor group */
+    /*x: [[Proc]] files fields */
+    // ref_counted<pgrp>
+    Pgrp  *pgrp;    /* Process group for namespace */
+    /*x: [[Proc]] files fields */
+    // ref_counted<egrp>
+    Egrp  *egrp;    /* Environment group */
     /*e: [[Proc]] files fields */
 //--------------------------------------------------------------------
 // Notes
@@ -563,6 +564,8 @@ struct Proc
     Lock* lastlock;
     /*x: [[Proc]] debugging fields */
     Lock  *lastilock; /* debugging */
+    /*x: [[Proc]] debugging fields */
+    ulong qpc;    /* pc calling last blocking qlock */
     /*e: [[Proc]] debugging fields */
 //--------------------------------------------------------------------
 // For debugger
@@ -571,7 +574,7 @@ struct Proc
     void  *dbgreg;  /* User registers for devproc */
     ulong pc;   /* DEBUG only */
 
-    // e.g. Proc_tracesyscall
+    // enum<devproc>
     int procctl;  /* Control for /proc debugging */
 
     // Syscall
@@ -588,7 +591,6 @@ struct Proc
     /*s: [[Proc]] other fields */
     Fgrp  *closingfgrp; /* used during teardown */
 
-
     ulong procmode; /* proc device default file mode */
     ulong privatemem; /* proc does not let anyone read mem */
 
@@ -602,7 +604,6 @@ struct Proc
     void  (*kpfun)(void*);
     void  *kparg;
 
-    ArchFPsave  fpsave;   /* address of this is known by db */
 
     char  genbuf[128];  /* buffer used e.g. for last name element from namec */
 
@@ -615,12 +616,7 @@ struct Proc
 
     bool trace;    /* process being traced? */
 
-    ulong qpc;    /* pc calling last blocking qlock */
-
     int setargs;
-
-    // enum<fpsavestatus>
-    int fpstate;
 
     char  *syscalltrace;  /* syscall trace */
     /*x: [[Proc]] other fields */
@@ -628,6 +624,10 @@ struct Proc
     // we will not schedule another process in unlock(); only the last unlock
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
+    /*x: [[Proc]] other fields */
+    ArchFPsave  fpsave;   /* address of this is known by db */
+    // enum<fpsavestatus>
+    int fpstate;
     /*e: [[Proc]] other fields */
 
     struct ArchProcNotsave;
@@ -635,20 +635,20 @@ struct Proc
 // Extra
 //--------------------------------------------------------------------
     /*s: [[Proc]] extra fields */
-
-    // list<ref<Proc>> ?? Schedq.head chain?
-    Proc  *rnext;   /* next process in run queue */
-
     ulong alarm;    /* Time of call */
 
-    // hash<?, list<ref<Proc>> Procalloc.ht ?
-    Proc  *pidhash; /* next proc in pid hash */ 
 
     // option<ref<Mach>>, null when not associated to a machine?
     Mach  *mach;    /* machine running this proc */
     /*x: [[Proc]] extra fields */
     // list<ref<Proc>> KQlock.head or RWLock.head
     Proc  *qnext;   /* next process on queue for a QLock */
+    /*x: [[Proc]] extra fields */
+    // hash<?, list<ref<Proc>> Procalloc.ht
+    Proc  *pidhash; /* next proc in pid hash */ 
+    /*x: [[Proc]] extra fields */
+    // list<ref<Proc>> ?? Schedq.head chain?
+    Proc  *rnext;   /* next process in run queue */
     /*x: [[Proc]] extra fields */
     // Alarms.head chain?
     Proc  *palarm;  /* Next alarm time */

@@ -233,6 +233,8 @@ enum
 /*s: struct Chan */
 struct Chan
 {
+    Path* path;
+
     ushort  type; // idx in devtab?
     Qid qid;
     vlong offset;     /* in fd */
@@ -270,11 +272,9 @@ struct Chan
     Chan* mchan;      /* channel to mounted server */
     Qid mqid;     /* qid of root of mount point */
 
-    Path* path;
     /*x: [[Chan]] other fields */
     ushort  flag;
     /*e: [[Chan]] other fields */
-
     // extra
     /*s: [[Chan]] extra fields */
     Ref;        /* the Lock in this Ref is also Chan's lock */

@@ -27,7 +27,7 @@ struct Conf
     ulong nproc;    /* processes */
     Confmem mem[4];   /* physical memory */
 
-    /*s: [[Conf]] extra fields */
+    /*s: [[Conf]] other fields */
     ulong npage;    /* total physical pages of memory */
     ulong upages;   /* user page pool */
     ulong nimage;   /* number of page cache image headers */
@@ -38,9 +38,9 @@ struct Conf
     bool copymode; /* 0 is copy on write, 1 is copy on reference */
     ulong ialloc;   /* max interrupt time allocation in bytes */
     int nuart;    /* number of uart devices */
-    /*x: [[Conf]] extra fields */
+    /*x: [[Conf]] other fields */
     ulong pipeqsize;  /* size in bytes of pipe queues */
-    /*e: [[Conf]] extra fields */
+    /*e: [[Conf]] other fields */
   
     struct ArchConf;
 };

@@ -438,7 +438,7 @@ queueproc(Schedq *rq, Proc *p)
     pri = rq - runq;
     lock(runq);
     p->priority = pri;
-    p->rnext = 0;
+    p->rnext = nil;
     if(rq->tail)
         rq->tail->rnext = p;
     else
@@ -481,7 +481,7 @@ dequeueproc(Schedq *rq, Proc *tp)
         unlock(runq);
         return nil;
     }
-    if(p->rnext == 0)
+    if(p->rnext == nil)
         rq->tail = l;
     if(l)
         l->rnext = p->rnext;
@@ -744,10 +744,10 @@ newproc(void)
     p->nwait = 0;
     p->waitq = 0;
     p->parent = 0;
-    p->pgrp = 0;
-    p->egrp = 0;
-    p->fgrp = 0;
-    p->rgrp = 0;
+    p->pgrp = nil;
+    p->egrp = nil;
+    p->fgrp = nil;
+    p->rgrp = nil;
     p->pdbg = 0;
     p->fpstate = FPinit;
     p->kp = 0;
