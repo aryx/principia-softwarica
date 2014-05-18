@@ -138,7 +138,7 @@ Yoann Padioleau\\
 %******************************************************************************
 % Body
 %******************************************************************************
-\chapter*{XTODO}
+%\chapter*{XTODO}
 
 \chapter{Introduction}
 
@@ -23980,6 +23980,194 @@ cgapost(int code)
             exit(0);
             return;
         }
+@
+
+<<function trap_dumpstack>>=
+void
+trap_dumpstack(void)
+{
+    callwithureg(_dumpstack);
+}
+@ 
+
+<<function _dumpstack>>=
+static void
+_dumpstack(Ureg *ureg)
+{
+    uintptr l, v, i, estack;
+    extern ulong etext;
+    int x;
+    char *s;
+
+    if((s = getconf("*nodumpstack")) != nil && strcmp(s, "0") != 0){
+        iprint("dumpstack disabled\n");
+        return;
+    }
+    iprint("dumpstack\n");
+
+    x = 0;
+    x += iprint("ktrace /kernel/path %.8lux %.8lux <<EOF\n", ureg->pc, ureg->sp);
+    i = 0;
+    if(up
+    && (uintptr)&l >= (uintptr)up->kstack
+    && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
+        estack = (uintptr)up->kstack+KSTACK;
+    else if((uintptr)&l >= (uintptr)m->stack
+    && (uintptr)&l <= (uintptr)m+MACHSIZE)
+        estack = (uintptr)m+MACHSIZE;
+    else
+        return;
+    x += iprint("estackx %p\n", estack);
+
+    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
+        v = *(uintptr*)l;
+        if((KTZERO < v && v < (uintptr)&etext) || estack-l < 32){
+            /*
+             * Could Pick off general CALL (((uchar*)v)[-5] == 0xE8)
+             * and CALL indirect through AX
+             * (((uchar*)v)[-2] == 0xFF && ((uchar*)v)[-2] == 0xD0),
+             * but this is too clever and misses faulting address.
+             */
+            x += iprint("%.8p=%.8p ", l, v);
+            i++;
+        }
+        if(i == 4){
+            i = 0;
+            x += iprint("\n");
+        }
+    }
+    if(i)
+        iprint("\n");
+    iprint("EOF\n");
+
+    if(ureg->trap != VectorNMI)
+        return;
+
+    i = 0;
+    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
+        iprint("%.8p ", *(uintptr*)l);
+        if(++i == 8){
+            i = 0;
+            iprint("\n");
+        }
+    }
+    if(i)
+        iprint("\n");
+}
+@ 
+
+<<function callwithureg>>=
+/*
+ * Fill in enough of Ureg to get a stack trace, and call a function.
+ * Used by debugging interface rdb.
+ */
+void
+callwithureg(void (*fn)(Ureg*))
+{
+    Ureg ureg;
+    ureg.pc = getcallerpc(&fn);
+    ureg.sp = (ulong)&fn;
+    fn(&ureg);
+}
+@ 
+
+
+<<function xsummary>>=
+void
+xsummary(void)
+{
+    int i;
+    Hole *h;
+
+    i = 0;
+    for(h = xlists.flist; h; h = h->link)
+        i++;
+
+    print("%d holes free", i);
+    i = 0;
+    for(h = xlists.table; h; h = h->link) {
+        if (0) {
+            print("addr %#.8lux top %#.8lux size %lud\n",
+                h->addr, h->top, h->size);
+            delay(10);
+        }
+        i += h->size;
+        if (h == h->link) {
+            print("xsummary: infinite loop broken\n");
+            break;
+        }
+    }
+    print(" %d bytes free\n", i);
+}
+@
+
+<<function mallosummary>>=
+void
+mallocsummary(void)
+{
+    poolsummary(mainmem);
+    poolsummary(imagmem);
+}
+@
+
+<<function poolsummary>>=
+void
+poolsummary(Pool *p)
+{
+    print("%s max %lud cur %lud free %lud alloc %lud\n", p->name,
+        p->maxsize, p->cursize, p->curfree, p->curalloc);
+}
+@
+
+<<function memorysummary>>=
+void
+memorysummary(void)
+{
+  memdebug();
+}
+@
+
+<<function memdebug>>=
+void
+memdebug(void)
+{
+    ulong maxpa, maxpa1, maxpa2;
+
+    maxpa = (nvramread(0x18)<<8)|nvramread(0x17);
+    maxpa1 = (nvramread(0x31)<<8)|nvramread(0x30);
+    maxpa2 = (nvramread(0x16)<<8)|nvramread(0x15);
+    print("maxpa = %luX -> %luX, maxpa1 = %luX maxpa2 = %luX\n",
+        maxpa, MB+maxpa*KB, maxpa1, maxpa2);
+
+    mapprint(&rmapram);
+    mapprint(&rmapumb);
+    mapprint(&rmapumbrw);
+    mapprint(&rmapupa);
+}
+@
+
+
+<<function mapprint>>=
+void
+mapprint(RMap *rmap)
+{
+    Map *mp;
+
+    print("%s\n", rmap->name);  
+    for(mp = rmap->map; mp->size; mp++)
+        print("\t%8.8luX %8.8luX (%lud)\n", mp->addr, mp->addr+mp->size, mp->size);
+}
+@
+
+<<function pagersummary>>=
+void
+pagersummary(void)
+{
+    print("%lud/%lud memory %lud/%lud swap %d iolist\n",
+        palloc.user-palloc.freecount,
+        palloc.user, conf.nswap-swapalloc.free, conf.nswap,
+        ioptr);
+}
 @
 
 
