@@ -11,6 +11,7 @@
 //@Scheck: not dead, unnamed substructure
 struct ArchProcMMU
 {
+  /*s: [[Proc]] [[Arch]] memory fields */
   Page* mmupdb;     /* page directory base */
   Page* mmufree;    /* unused page table pages */
   Page* mmuused;    /* used page table pages */
@@ -18,6 +19,7 @@ struct ArchProcMMU
   Page* kmaptable;    /* page table used by kmap */
   uint  lastkmap;   /* last entry used by kmap */
   int nkmap;      /* number of current kmaps */
+  /*e: [[Proc]] [[Arch]] memory fields */
 };
 /*e: struct ArchProcMMU */
 

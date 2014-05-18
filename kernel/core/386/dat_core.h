@@ -45,45 +45,45 @@ struct Segdesc
 
 /*s: struct ArchMach */
 struct ArchMach {
-    /*s: [[ArchMach]] cpuid fields */
+    /*s: [[Mach]] [[Arch]] cpuid fields */
     char  cpuidid[16];
     char* cpuidtype;
     int cpuidax;
     int cpuiddx;
-    /*e: [[ArchMach]] cpuid fields */
-    /*s: [[ArchMach]] other fields */
+    /*e: [[Mach]] [[Arch]] cpuid fields */
+    /*s: [[Mach]] [[Arch]] other fields */
     Proc* externup;   /* extern register Proc *up */
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     Segdesc *gdt;     /* gdt for this processor */
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     // TODO: have a ArchMachMMU like in bcm/
     kern_addr2  pdb;      /* page directory base for this processor (va) */
     Page* pdbpool;
     int pdbcnt;
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     Tss*  tss;      /* tss for this processor */
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     int havepge;
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     // for perfticks, tsc = time stamp counter
     bool havetsc;
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     int pdballoc;
     int pdbfree;
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     int loopconst;
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     ArchFPsave *fpsavalign;
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     Lock  apictimerlock;
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     uvlong tscticks;
-    /*x: [[ArchMach]] other fields */
+    /*x: [[Mach]] [[Arch]] other fields */
     vlong mtrrcap;
     vlong mtrrdef;
     vlong mtrrfix[11];
     vlong mtrrvar[32];    /* 256 max. */
-    /*e: [[ArchMach]] other fields */
+    /*e: [[Mach]] [[Arch]] other fields */
 };
 /*e: struct ArchMach */
 
