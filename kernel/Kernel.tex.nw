@@ -1187,12 +1187,12 @@ PCArch* arch;
 <<global archgeneric>>=
 PCArch archgeneric = {
     .id=        "generic",
-    .ident=     0,
+    .ident=     nil,
     .reset=     archreset,
 
-    // interrupt: i8259 controller
+    // interrupt: Intel i8259 controller
     <<[[archgeneric]] interrupt methods>>
-    // clock: i8253 controller
+    // clock: Intel i8253 controller
     <<[[archgeneric]] time methods>>
     // power: none
     <<[[archgeneric]] power methods>>
@@ -1209,7 +1209,7 @@ PCArch archgeneric = {
 % access to shared data via semaphore/lock/whatever.
 
 % well OS is a kind of program and it has also mutiple
-% "threads" (different processors) and lots of shared data
+% "threads" (different activities the processes) and lots of shared data
 % (kernel meta data about user processes and its own data)
 % (which is why lots of the concurrency issues arised first
 % for OS programmers long before the other)
@@ -1264,7 +1264,6 @@ PCArch archgeneric = {
 
 \section{[[tas()]]}
 
-
 <<function tas>>=
 TEXT tas(SB), $0
         MOVL    $0xDEADDEAD, AX
@@ -1278,6 +1277,38 @@ TEXT tas(SB), $0
         RET
 @ 
 
+\section{Atomic [[_xinc()]] and [[_xdec()]]}
+
+% tas() is for make sure arrive first on something
+% another operation is increment/decrement atomic
+
+<<function _xinc>>=
+/* void _xinc(long*); */
+TEXT _xinc(SB), $0
+        MOVL    l+0(FP), AX
+        LOCK;   INCL 0(AX)
+        RET
+@ 
+
+
+<<function _xdec>>=
+/* long _xdec(long*); */
+TEXT _xdec(SB), $0
+        MOVL    l+0(FP), BX
+        XORL    AX, AX
+        LOCK;   DECL 0(BX)
+        JLT     _xdeclt
+        JGT     _xdecgt
+        RET
+_xdecgt:
+        INCL    AX
+        RET
+_xdeclt:
+        DECL    AX
+        RET
+@ 
+
+
 \section{Spin [[Lock]]}
 
 <<struct Lock>>=
@@ -1289,8 +1320,8 @@ struct Lock
     Proc  *p; // the process locking should be the same unlocking
 
     <<[[Lock]] ilock fields>>
-    <<[[Lock]] other fields>>
     <<[[Lock]] debugging fields>>
+    <<[[Lock]] other fields>>
 };
 @ 
 
@@ -1302,20 +1333,22 @@ Mach  *m; // not that used, only in iprintcanlock apparently
 \fi
 
 <<[[Lock]] debugging fields>>=
-kern_addr pc; // for debugging
+kern_addr pc; // for debugging, the caller who did the lock()
 @
 
 <<[[Proc]] debugging fields>>=
 Lock* lastlock;
 @
 
-<<[[Proc]] other fields>>=
+<<[[Proc]] synchronization fields>>=
 // As long as the current process hold locks (to kernel data structures),
 // we will not schedule another process in unlock(); only the last unlock
 // will eventually cause a rescheduling.
 Ref nlocks;   /* number of locks held by proc */
 @ 
 
+% actually returns ret_code, 1 means ok but there was some contention
+%  but does not look used, so TODO return void?
 <<function lock>>=
 int
 lock(Lock *l)
@@ -1336,7 +1369,6 @@ lock(Lock *l)
         l->isilock = false;
         //TODO: not setting l->m = ??
 <<lock ifdef LOCKCYCLES>>
-
         return 0;
     }
     if(up)
@@ -1353,6 +1385,7 @@ lock(Lock *l)
                 lockloop(l, pc);
             }
         }
+        // try again
         if(up)
             inccnt(&up->nlocks);
         if(tas(&l->key) == 0){
@@ -1413,8 +1446,9 @@ unlock(Lock *l)
 }
 @ 
 
+% does not spin if it can not get it
 <<function canlock>>=
-int
+bool
 canlock(Lock *l)
 {
     if(up)
@@ -1422,7 +1456,7 @@ canlock(Lock *l)
     if(tas(&l->key)){
         if(up)
             deccnt(&up->nlocks);
-        return 0;
+        return false;
     }
 
     if(up)
@@ -1432,7 +1466,7 @@ canlock(Lock *l)
     l->m = MACHP(m->machno);
     l->isilock = false;
 <<lock ifdef LOCKCYCLES>>
-    return 1;
+    return true;
 }
 @ 
 
@@ -1526,6 +1560,8 @@ ilock(Lock *l)
     lockstats.locks++;
 
     x = splhi();
+    // no need to take care of up->nlock++ here, we have disabled interrupt
+    // so no risk of getting scheduled
     if(tas(&l->key) != 0){
         lockstats.glare++;
         /*
@@ -1538,6 +1574,7 @@ ilock(Lock *l)
             splx(x);
             while(l->key)
                 ;
+            // let's try again
             x = splhi();
             if(tas(&l->key) == 0)
                 goto acquire;
@@ -1551,7 +1588,7 @@ acquire:
     l->pc = pc;
     l->p = up;
     l->isilock = true;
-        //TODO: why not just l->m = m? 
+    //TODO: why not just l->m = m? 
     l->m = MACHP(m->machno);
 <<lock ifdef LOCKCYCLES>>
 }
@@ -1639,9 +1676,9 @@ qlock(QLock *q)
         print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), m->ilockdepth);
     if(up != nil && up->nlocks.ref)
         print("qlock: %#p: nlocks %lud\n", getcallerpc(&q), up->nlocks.ref);
-
-    if(q->use.key == 0x55555555)
+    if(q->use.key == 0x55555555) // dead code??
         panic("qlock: q %#p, key 5*\n", q);
+
     lock(&q->use);
     rwstats.qlock++;
     if(!q->locked) {
@@ -1650,39 +1687,29 @@ qlock(QLock *q)
         unlock(&q->use);
         return;
     }
-    if(up == 0)
+    if(up == nil)
         panic("qlock");
     rwstats.qlockq++;
+
+    // add_queue(q, up)
     p = q->tail;
-    if(p == 0)
+    if(p == nil)
         q->head = up;
     else
         p->qnext = up;
     q->tail = up;
+    // up->qnext could be non nil before? no otherwise that means
+    // the process is already waiting for a lock and so had no occasion
+    // to run another qlock() instruction.
     up->qnext = nil;
+
     up->state = Queueing;
     up->qpc = getcallerpc(&q);
     unlock(&q->use);
-    sched();
+    // switch to another process! 
+    sched(); 
+    // will resume here when another process unlock() the lock and ready() us
     q->qpc = getcallerpc(&q);
-}
-@ 
-
-
-<<function canqlock>>=
-int
-canqlock(QLock *q)
-{
-    if(!canlock(&q->use))
-        return 0;
-    if(q->locked){
-        unlock(&q->use);
-        return 0;
-    }
-    q->locked = true;
-    q->qpc = getcallerpc(&q);
-    unlock(&q->use);
-    return 1;
 }
 @ 
 
@@ -1696,18 +1723,37 @@ qunlock(QLock *q)
     if (q->locked == false)
         print("qunlock called with qlock not held, from %#p\n",
             getcallerpc(&q));
+
     p = q->head;
     if(p){
+        // dequeue(q)
         q->head = p->qnext;
         if(q->head == 0)
             q->tail = nil;
         unlock(&q->use);
         ready(p);
-        return;
+    }else{
+        q->locked = false;
+        q->qpc = nilptr;
+        unlock(&q->use);
     }
-    q->locked = false;
-    q->qpc = nilptr;
+@ 
+
+% does not wait if can not get it
+<<function canqlock>>=
+bool
+canqlock(QLock *q)
+{
+    if(!canlock(&q->use))
+        return false;
+    if(q->locked){
+        unlock(&q->use);
+        return false;
+    }
+    q->locked = true;
+    q->qpc = getcallerpc(&q);
     unlock(&q->use);
+    return true;
 }
 @ 
 
@@ -1744,26 +1790,30 @@ rlock(RWlock *q)
 
     lock(&q->use);
     rwstats.rlock++;
-    if(q->writer == 0 && q->head == nil){
+    if(q->writer == false && q->head == nil){
         /* no writer, go for it */
         q->readers++;
         unlock(&q->use);
         return;
     }
 
-    rwstats.rlockq++;
-    p = q->tail;
     if(up == nil)
         panic("rlock");
-    if(p == 0)
+    rwstats.rlockq++;
+
+    // add_queue(q, up)
+    p = q->tail;
+    if(p == nil)
         q->head = up;
     else
         p->qnext = up;
     q->tail = up;
     up->qnext = nil;
+
     up->state = QueueingR;
     unlock(&q->use);
     sched();
+    // will resume here when another process unlock() the lock and ready() us
 }
 @ 
 
@@ -1783,9 +1833,12 @@ runlock(RWlock *q)
     /* start waiting writer */
     if(p->state != QueueingW)
         panic("runlock");
+
+    // dequeue(q)
     q->head = p->qnext;
-    if(q->head == 0)
+    if(q->head == nil)
         q->tail = nil;
+
     q->writer = true;
     unlock(&q->use);
     ready(p);
@@ -1804,7 +1857,7 @@ wlock(RWlock *q)
 
     lock(&q->use);
     rwstats.wlock++;
-    if(q->readers == 0 && q->writer == 0){
+    if(q->readers == 0 && q->writer == false){
         /* noone waiting, go for it */
         q->wpc = getcallerpc(&q);
         q->wproc = up;
@@ -1814,16 +1867,19 @@ wlock(RWlock *q)
     }
 
     /* wait */
-    rwstats.wlockq++;
-    p = q->tail;
     if(up == nil)
         panic("wlock");
+    rwstats.wlockq++;
+
+    // add_queue(q, up)
+    p = q->tail;
     if(p == nil)
         q->head = up;
     else
         p->qnext = up;
     q->tail = up;
     up->qnext = nil;
+
     up->state = QueueingW;
     unlock(&q->use);
     sched();
@@ -1846,9 +1902,11 @@ wunlock(RWlock *q)
     }
     if(p->state == QueueingW){
         /* start waiting writer */
+        // dequeue(q)
         q->head = p->qnext;
         if(q->head == nil)
             q->tail = nil;
+
         unlock(&q->use);
         ready(p);
         return;
@@ -1864,6 +1922,7 @@ wunlock(RWlock *q)
         q->readers++;
         ready(p);
     }
+
     if(q->head == nil)
         q->tail = nil;
     q->writer = false;
@@ -1874,19 +1933,19 @@ wunlock(RWlock *q)
 
 <<function canrlock>>=
 /* same as rlock but punts if there are any writers waiting */
-int
+bool
 canrlock(RWlock *q)
 {
     lock(&q->use);
     rwstats.rlock++;
-    if(q->writer == 0 && q->head == nil){
+    if(q->writer == false && q->head == nil){
         /* no writer, go for it */
         q->readers++;
         unlock(&q->use);
-        return 1;
+        return true;
     }
     unlock(&q->use);
-    return 0;
+    return false;
 }
 @ 
 
@@ -1926,7 +1985,6 @@ decref(Ref *r)
     unlock(r);
     if(x < 0)
         panic("decref pc=%#p", getcallerpc(&r));
-
     return x;
 }
 @ 
@@ -1934,7 +1992,6 @@ decref(Ref *r)
 <<struct Counter>>=
 typedef struct Ref Counter;
 @ 
-
 
 
 <<function inccnt>>=
@@ -1961,47 +2018,20 @@ deccnt(Ref *r)
 }
 @ 
 
-<<function _xinc>>=
-/* void _xinc(long*); */
-TEXT _xinc(SB), $0
-        MOVL    l+0(FP), AX
-        LOCK;   INCL 0(AX)
-        RET
-@ 
-
-
-<<function _xdec>>=
-/* long _xdec(long*); */
-TEXT _xdec(SB), $0
-        MOVL    l+0(FP), BX
-        XORL    AX, AX
-        LOCK;   DECL 0(BX)
-        JLT     _xdeclt
-        JGT     _xdecgt
-        RET
-_xdecgt:
-        INCL    AX
-        RET
-_xdeclt:
-        DECL    AX
-        RET
-@ 
-
-
 
 \section{Synchronization}
 % different from critical regions
 
 % see sleep.ps in plan9 documents
 
-\subsection{Semaphore}
-% those are actually used for user-level locks, see libcore/libc/port/lock.c
+\subsection{Rendez-vous}
+% sleep/wakeup?
 
 \subsection{Producer/Consumer Queue}
 %IO Queue
 
-\subsection{Rendez-vous}
-% sleep/wakeup?
+\subsection{Semaphore}
+% those are actually used for user-level locks, see libcore/libc/port/lock.c
 
 \chapter{Memory}
 \minitoc
