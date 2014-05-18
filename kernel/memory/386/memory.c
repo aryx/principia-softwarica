@@ -33,8 +33,6 @@ enum memkind {
 /*e: enum memkind */
 
 enum {
-    KB      = 1024,
-
     MemMin      = 8*MB,
     MemMax      = (3*1024+768)*MB,
 };
@@ -953,6 +951,19 @@ upareserve(ulong pa, int size)
 void
 memorysummary(void)
 {
+  int i;
+
+  print("\n");
+  print("etext = 0x%luX, edata = 0x%luX, eend = 0x%luX, sizeof long = %d\n",
+        etext, edata, end, sizeof(long));
+  for(i=0; i<nelem(conf.mem); i++) {
+       print("conf mem %d start = 0x%luX, npage = %ld\n", 
+          i,
+          conf.mem[i].base,
+          conf.mem[i].npage
+          );
+  }
+  print("\n");
   memdebug();
 }
 /*e: function memorysummary */

@@ -517,14 +517,14 @@ echo(char *buf, int n)
                 /* ^T escapes */
                 ctrlt = 0;
                 switch(*p){
+                case 's':
+                    dumpstack();
+                    return;
                 case 'S':
                     x = splhi();
                     dumpstack();
                     procdump();
                     splx(x);
-                    return;
-                case 's':
-                    dumpstack();
                     return;
                 case 'x':
                     xsummary();
@@ -532,6 +532,9 @@ echo(char *buf, int n)
                     mallocsummary();
                     memorysummary();
                     pagersummary();
+                    return;
+                case 'm':
+                    memorysummary();
                     return;
                 case 'd':
                     if(consdebug == nil)

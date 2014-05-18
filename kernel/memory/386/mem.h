@@ -45,7 +45,7 @@
 
 // 0x10 = 16
 // 0x100 = 256
-// 0x1000 = 4Ko
+// 0x1000 = 4Ko (1 page)
 // 0x10000 = 64Ko
 // 0x100000 = 1Mo
 // note: graphic card memory is at 0xb8000 so safer to go to 1Mo for kernel
