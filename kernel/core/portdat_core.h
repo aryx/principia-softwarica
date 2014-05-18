@@ -28,22 +28,20 @@ struct Conf
 
     ulong nproc;    /* processes */
     /*s: [[Conf]] other fields */
-    ulong npage;    /* total physical pages of memory */
-    ulong upages;   /* user page pool */
-
-    int nswppo;   /* max # of pageouts per segment pass */
-
     bool copymode; /* 0 is copy on write, 1 is copy on reference */
-    ulong ialloc;   /* max interrupt time allocation in bytes */
-    /*x: [[Conf]] other fields */
-    ulong nimage;   /* number of page cache image headers */
     /*x: [[Conf]] other fields */
     ulong nswap;    /* number of swap pages */
+    int nswppo;   /* max # of pageouts per segment pass */
+    /*x: [[Conf]] other fields */
+    ulong npage;    /* total physical pages of memory */
+
+    // kpages = npage - upages
+    ulong upages;   /* user page pool */ 
+    ulong nimage;   /* number of page cache image headers */
+    ulong ialloc;   /* max interrupt time allocation in bytes */
     /*x: [[Conf]] other fields */
     ulong pipeqsize;  /* size in bytes of pipe queues */
     /*e: [[Conf]] other fields */
-  
-    struct ArchConf;
 };
 /*e: struct Conf */
 
@@ -107,34 +105,35 @@ struct Mach
 
     ulong ticks;      /* of the clock since boot time */
 
+    uvlong  cpuhz;
+    // cpuhz / 1_000_000
+    int cpumhz;
+    // = cpuhz if havetsc, 0 otherwise
+    uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
+
     /*s: [[Mach]] stat fields */
-    /* stats */
+    Perf  perf;     /* performance counters */
+    /*x: [[Mach]] stat fields */
     int tlbfault;
     int tlbpurge;
     int pfault;
-    int cs; // context switch?
+    int cs; // context switch, sched() and sleep() call
     int syscall;
     int load;
     int intr;
+    ulong spuriousintr;
     /*e: [[Mach]] stat fields */
 
     /*s: [[Mach]] other fields */
-    Proc* readied;    /* for runproc */
-    ulong schedticks;   /* next forced context switch */
-
-    int flushmmu;   /* make current proc flush it's mmu state */
-
-    ulong spuriousintr;
-    int lastintr;
-    Perf  perf;     /* performance counters */
-
-    int cpumhz;
-    uvlong  cpuhz;
-    uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
-    /*x: [[Mach]] other fields */
     int ilockdepth;
     /*x: [[Mach]] other fields */
+    bool flushmmu;   /* make current proc flush it's mmu state */
+    /*x: [[Mach]] other fields */
+    int lastintr; // debugging
+    /*x: [[Mach]] other fields */
     Label sched;      /* scheduler wakeup */
+    Proc* readied;    /* for runproc */
+    ulong schedticks;   /* next forced context switch */
     /*e: [[Mach]] other fields */
 
     struct ArchMach;

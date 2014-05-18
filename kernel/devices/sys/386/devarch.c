@@ -476,7 +476,7 @@ archinit(void)
      *  multiprocessor.
      */
     if(X86FAMILY(m->cpuidax) == 3)
-        conf.copymode = 1;
+        conf.copymode = true;
 
     if(X86FAMILY(m->cpuidax) >= 4)
         cmpswap = cmpswap486;

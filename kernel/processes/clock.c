@@ -152,7 +152,7 @@ hzclock(Ureg *ur)
     if(m->flushmmu){
         if(up)
             flushmmu();
-        m->flushmmu = 0;
+        m->flushmmu = false;
     }
 
     accounttime();

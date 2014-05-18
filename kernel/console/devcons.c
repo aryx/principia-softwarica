@@ -510,56 +510,57 @@ echo(char *buf, int n)
                 ctrlt = 2;
             continue;
         }
-
         if(ctrlt != 2)
             continue;
 
-        /* ^T escapes */
-        ctrlt = 0;
-        switch(*p){
-        case 'S':
-            x = splhi();
-            dumpstack();
-            procdump();
-            splx(x);
-            return;
-        case 's':
-            dumpstack();
-            return;
-        case 'x':
-            xsummary();
-            ixsummary();
-            mallocsummary();
-            memorysummary();
-            pagersummary();
-            return;
-        case 'd':
-            if(consdebug == nil)
-                consdebug = rdb;
-            else
-                consdebug = nil;
-            print("consdebug now %#p\n", consdebug);
-            return;
-        case 'D':
-            if(consdebug == nil)
-                consdebug = rdb;
-            consdebug();
-            return;
-        case 'p':
-            x = spllo();
-            procdump();
-            splx(x);
-            return;
-        case 'q':
-            scheddump();
-            return;
-        case 'k':
-            killbig("^t ^t k");
-            return;
-        case 'r':
-            exit(0);
-            return;
-        }
+        /*s: [[echo()]] C-t C-t special keys handler */
+                /* ^T escapes */
+                ctrlt = 0;
+                switch(*p){
+                case 'S':
+                    x = splhi();
+                    dumpstack();
+                    procdump();
+                    splx(x);
+                    return;
+                case 's':
+                    dumpstack();
+                    return;
+                case 'x':
+                    xsummary();
+                    ixsummary();
+                    mallocsummary();
+                    memorysummary();
+                    pagersummary();
+                    return;
+                case 'd':
+                    if(consdebug == nil)
+                        consdebug = rdb;
+                    else
+                        consdebug = nil;
+                    print("consdebug now %#p\n", consdebug);
+                    return;
+                case 'D':
+                    if(consdebug == nil)
+                        consdebug = rdb;
+                    consdebug();
+                    return;
+                case 'p':
+                    x = spllo();
+                    procdump();
+                    splx(x);
+                    return;
+                case 'q':
+                    scheddump();
+                    return;
+                case 'k':
+                    killbig("^t ^t k");
+                    return;
+                case 'r':
+                    exit(0);
+                    return;
+                }
+        /*e: [[echo()]] C-t C-t special keys handler */
     }
 
     qproduce(kbdq, buf, n);

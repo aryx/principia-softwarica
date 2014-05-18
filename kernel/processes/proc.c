@@ -244,7 +244,7 @@ proc_sched(void)
     }
     if(p != m->readied)
         m->schedticks = m->ticks + HZ/10;
-    m->readied = 0;
+    m->readied = nil;
     up = p;
     up->state = Running;
     up->mach = MACHP(m->machno);

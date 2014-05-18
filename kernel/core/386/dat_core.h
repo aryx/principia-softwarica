@@ -1,17 +1,6 @@
 /*s: dat_core.h */
 
 //*****************************************************************************
-// Conf extension
-//*****************************************************************************
-
-/*s: struct ArchConf */
-struct ArchConf {
-    ulong base0;    /* base of bank 0 */
-    ulong base1;    /* base of bank 1 */
-};
-/*e: struct ArchConf */
-
-//*****************************************************************************
 // Mach extension
 //*****************************************************************************
 
@@ -56,29 +45,13 @@ struct Segdesc
 
 /*s: struct ArchMach */
 struct ArchMach {
-    /*s: [[ArchMach]] other fields */
-    // for perfticks, tsc = time stamp counter
-    bool havetsc;
-
-    int loopconst;
-
     /*s: [[ArchMach]] cpuid fields */
     char  cpuidid[16];
     char* cpuidtype;
     int cpuidax;
     int cpuiddx;
     /*e: [[ArchMach]] cpuid fields */
-    int havepge;
-    uvlong tscticks;
-
-    int pdballoc;
-    int pdbfree;
-
-    vlong mtrrcap;
-    vlong mtrrdef;
-    vlong mtrrfix[11];
-    vlong mtrrvar[32];    /* 256 max. */
-    /*x: [[ArchMach]] other fields */
+    /*s: [[ArchMach]] other fields */
     Proc* externup;   /* extern register Proc *up */
     /*x: [[ArchMach]] other fields */
     Segdesc *gdt;     /* gdt for this processor */
@@ -90,10 +63,32 @@ struct ArchMach {
     /*x: [[ArchMach]] other fields */
     Tss*  tss;      /* tss for this processor */
     /*x: [[ArchMach]] other fields */
+    int havepge;
+    /*x: [[ArchMach]] other fields */
+    // for perfticks, tsc = time stamp counter
+    bool havetsc;
+    /*x: [[ArchMach]] other fields */
+    int pdballoc;
+    int pdbfree;
+    /*x: [[ArchMach]] other fields */
+    int loopconst;
+    /*x: [[ArchMach]] other fields */
     ArchFPsave *fpsavalign;
     /*x: [[ArchMach]] other fields */
     Lock  apictimerlock;
+    /*x: [[ArchMach]] other fields */
+    uvlong tscticks;
+    /*x: [[ArchMach]] other fields */
+    vlong mtrrcap;
+    vlong mtrrdef;
+    vlong mtrrfix[11];
+    vlong mtrrvar[32];    /* 256 max. */
     /*e: [[ArchMach]] other fields */
 };
 /*e: struct ArchMach */
+
+//*****************************************************************************
+// Conf extension?
+//*****************************************************************************
+
 /*e: dat_core.h */

@@ -210,7 +210,7 @@ cpuidentify(void)
      *  if there is one, set tsc to a known value
      */
     if(m->cpuiddx & Tsc){
-        m->havetsc = 1;
+        m->havetsc = true;
         cycles = _cycles;
         if(m->cpuiddx & Cpumsr)
             wrmsr(0x10, 0);
@@ -259,7 +259,7 @@ cpuidentify(void)
          */
         if(m->cpuiddx & Pge){
             cr4 |= 0x80;        /* page global enable bit */
-            m->havepge = 1;
+            m->havepge = true;
         }
 
         putcr4(cr4);

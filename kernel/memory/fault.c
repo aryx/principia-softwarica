@@ -133,7 +133,7 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
          *  It's only possible to copy on write if
          *  we're the only user of the segment.
          */
-        if(read && conf.copymode == 0 && s->ref == 1) {
+        if(read && conf.copymode == false && s->ref == 1) {
             mmuphys = PPN((*pg)->pa)|PTERONLY|PTEVALID;
             (*pg)->modref |= PG_REF;
             break;

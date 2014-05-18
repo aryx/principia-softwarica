@@ -728,7 +728,7 @@ vunmap(void *v, int size)
     for(i=0; i<conf.nmach; i++){
         nm = MACHP(i);
         if(nm != m)
-            nm->flushmmu = 1;
+            nm->flushmmu = true;
     }
     flushmmu();
     for(i=0; i<conf.nmach; i++){

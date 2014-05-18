@@ -139,60 +139,7 @@ Yoann Padioleau\\
 %******************************************************************************
 % Body
 %******************************************************************************
-
 \chapter*{XTODO}
-
-<<[[Mach]] other fields>>=
-Proc* readied;    /* for runproc */
-ulong schedticks;   /* next forced context switch */
-
-int flushmmu;   /* make current proc flush it's mmu state */
-
-ulong spuriousintr;
-int lastintr;
-Perf  perf;     /* performance counters */
-
-int cpumhz;
-uvlong  cpuhz;
-uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
-@ 
-
-<<[[Conf]] other fields>>=
-ulong npage;    /* total physical pages of memory */
-ulong upages;   /* user page pool */
-
-int nswppo;   /* max # of pageouts per segment pass */
-
-bool copymode; /* 0 is copy on write, 1 is copy on reference */
-ulong ialloc;   /* max interrupt time allocation in bytes */
-@ 
-
-
-<<[[ArchMach]] other fields>>=
-// for perfticks, tsc = time stamp counter
-bool havetsc;
-
-int loopconst;
-
-<<[[ArchMach]] cpuid fields>>
-int havepge;
-uvlong tscticks;
-
-int pdballoc;
-int pdbfree;
-
-vlong mtrrcap;
-vlong mtrrdef;
-vlong mtrrfix[11];
-vlong mtrrvar[32];    /* 256 max. */
-@ 
-
-<<struct ArchConf>>=
-struct ArchConf {
-    ulong base0;    /* base of bank 0 */
-    ulong base1;    /* base of bank 1 */
-};
-@ 
 
 \chapter{Introduction}
 
@@ -753,8 +700,6 @@ struct Conf
 
     ulong nproc;    /* processes */
     <<[[Conf]] other fields>>
-  
-    struct ArchConf;
 };
 @ 
 
@@ -815,6 +760,12 @@ struct Mach
     Proc* proc;     /* current process on this processor */
 
     ulong ticks;      /* of the clock since boot time */
+
+    uvlong  cpuhz;
+    // cpuhz / 1_000_000
+    int cpumhz;
+    // = cpuhz if havetsc, 0 otherwise
+    uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 
     <<[[Mach]] stat fields>>
 
@@ -889,6 +840,7 @@ struct Active active;
 
 <<struct ArchMach>>=
 struct ArchMach {
+    <<[[ArchMach]] cpuid fields>>
     <<[[ArchMach]] other fields>>
 };
 @ 
@@ -3829,14 +3781,10 @@ struct Imagealloc
 };
 @
 
-<<[[Conf]] other fields>>=
-ulong nimage;   /* number of page cache image headers */
-@
-
-
 <<global imagealloc>>=
 static struct Imagealloc imagealloc;
 @
+
 
 
 <<function ihash>>=
@@ -4695,6 +4643,10 @@ vmapalloc(ulong size)
 }
 @
 
+<<[[Mach]] other fields>>=
+bool flushmmu;   /* make current proc flush it's mmu state */
+@
+
 <<function vunmap>>=
 /*
  * Remove a device mapping from the vmap range.
@@ -4746,7 +4698,7 @@ vunmap(void *v, int size)
     for(i=0; i<conf.nmach; i++){
         nm = MACHP(i);
         if(nm != m)
-            nm->flushmmu = 1;
+            nm->flushmmu = true;
     }
     flushmmu();
     for(i=0; i<conf.nmach; i++){
@@ -5066,6 +5018,10 @@ faulterror(char *s, Chan *c, int freemem)
 @
 
 
+<<[[Conf]] other fields>>=
+bool copymode; /* 0 is copy on write, 1 is copy on reference */
+@
+
 <<function fixfault>>=
 int
 fixfault(Segment *s, ulong addr, int read, int doputmmu)
@@ -5126,7 +5082,7 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
          *  It's only possible to copy on write if
          *  we're the only user of the segment.
          */
-        if(read && conf.copymode == 0 && s->ref == 1) {
+        if(read && conf.copymode == false && s->ref == 1) {
             mmuphys = PPN((*pg)->pa)|PTERONLY|PTEVALID;
             (*pg)->modref |= PG_REF;
             break;
@@ -5359,6 +5315,7 @@ struct Swapalloc
 
 <<[[Conf]] other fields>>=
 ulong nswap;    /* number of swap pages */
+int nswppo;   /* max # of pageouts per segment pass */
 @
 
 
@@ -6741,7 +6698,10 @@ intrcommon:
         CALL    trap(SB)
 @ 
 
-
+% todo: [[Mach]] debugging fields?
+<<[[Mach]] other fields>>=
+int lastintr; // debugging
+@
 
 <<function trap>>=
 /*
@@ -6878,6 +6838,24 @@ trap(Ureg* ureg)
 }
 @ 
 
+\ifallcode
+<<[[trap()]] debugging>>=
+        if(0)print("cpu%d: spurious interrupt %d, last %d\n",
+            m->machno, vno, m->lastintr);
+        if(0)if(conf.nmach > 1){
+            for(i = 0; i < 32; i++){
+                if(!(active.machs & (1<<i)))
+                    continue;
+                mach = MACHP(i);
+                if(m->machno == mach->machno)
+                    continue;
+                print(" cpu%d: last %d",
+                    mach->machno, mach->lastintr);
+            }
+            print("\n");
+        }
+@
+\fi
 
 \chapter{Processes}
 \minitoc
@@ -7100,8 +7078,11 @@ Label sched;    /* known to l.s */
 char  *kstack;  /* known to l.s */
 @ 
 
+% have a [[Mach]] scheduler fields? 
 <<[[Mach]] other fields>>=
 Label sched;      /* scheduler wakeup */
+Proc* readied;    /* for runproc */
+ulong schedticks;   /* next forced context switch */
 @
 
 % TSS, mmu, sched labels, ... many switches
@@ -7464,7 +7445,7 @@ proc_sched(void)
     }
     if(p != m->readied)
         m->schedticks = m->ticks + HZ/10;
-    m->readied = 0;
+    m->readied = nil;
     up = p;
     up->state = Running;
     up->mach = MACHP(m->machno);
@@ -7975,7 +7956,7 @@ hzclock(Ureg *ur)
     if(m->flushmmu){
         if(up)
             flushmmu();
-        m->flushmmu = 0;
+        m->flushmmu = false;
     }
 
     accounttime();
@@ -9838,7 +9819,7 @@ archinit(void)
      *  multiprocessor.
      */
     if(X86FAMILY(m->cpuidax) == 3)
-        conf.copymode = 1;
+        conf.copymode = true;
 
     if(X86FAMILY(m->cpuidax) >= 4)
         cmpswap = cmpswap486;
@@ -9854,6 +9835,14 @@ archinit(void)
 }
 @
 
+<<[[Conf]] other fields>>=
+ulong npage;    /* total physical pages of memory */
+
+// kpages = npage - upages
+ulong upages;   /* user page pool */ 
+ulong nimage;   /* number of page cache image headers */
+ulong ialloc;   /* max interrupt time allocation in bytes */
+@
 
 <<function confinit>>=
 // precondition: meminit() have initialized Conf.mem
@@ -11135,6 +11124,10 @@ mmuinit(void)
 }
 @
 
+<<[[ArchMach]] other fields>>=
+int havepge;
+@
+
 <<function memglobal>>=
 /* 
  * On processors that support it, we set the PTEGLOBAL bit in
@@ -11691,14 +11684,6 @@ struct Ialloc
 
 <<global ialloc>>=
 struct Ialloc ialloc;
-@
-
-<<function iallocsummary>>=
-void
-iallocsummary(void)
-{
-    print("ialloc %lud/%lud\n", ialloc.bytes, conf.ialloc);
-}
 @
 
 <<function iallocb>>=
@@ -18568,56 +18553,10 @@ echo(char *buf, int n)
                 ctrlt = 2;
             continue;
         }
-
         if(ctrlt != 2)
             continue;
 
-        /* ^T escapes */
-        ctrlt = 0;
-        switch(*p){
-        case 'S':
-            x = splhi();
-            dumpstack();
-            procdump();
-            splx(x);
-            return;
-        case 's':
-            dumpstack();
-            return;
-        case 'x':
-            xsummary();
-            ixsummary();
-            mallocsummary();
-            memorysummary();
-            pagersummary();
-            return;
-        case 'd':
-            if(consdebug == nil)
-                consdebug = rdb;
-            else
-                consdebug = nil;
-            print("consdebug now %#p\n", consdebug);
-            return;
-        case 'D':
-            if(consdebug == nil)
-                consdebug = rdb;
-            consdebug();
-            return;
-        case 'p':
-            x = spllo();
-            procdump();
-            splx(x);
-            return;
-        case 'q':
-            scheddump();
-            return;
-        case 'k':
-            killbig("^t ^t k");
-            return;
-        case 'r':
-            exit(0);
-            return;
-        }
+        <<[[echo()]] C-t C-t special keys handler>>
     }
 
     qproduce(kbdq, buf, n);
@@ -19344,6 +19283,11 @@ struct Mntrpc
 <<systab time syscalls>>=
     [SLEEP]     syssleep,
     [ALARM]     sysalarm,
+@
+
+<<[[ArchMach]] other fields>>=
+// for perfticks, tsc = time stamp counter
+bool havetsc;
 @
 
 \section{Overview}
@@ -23997,6 +23941,76 @@ cgapost(int code)
 
 % Ctrl-t Ctrl-t <debugcode>
 
+<<[[echo()]] C-t C-t special keys handler>>=
+        /* ^T escapes */
+        ctrlt = 0;
+        switch(*p){
+        case 'S':
+            x = splhi();
+            dumpstack();
+            procdump();
+            splx(x);
+            return;
+        case 's':
+            dumpstack();
+            return;
+        case 'x':
+            xsummary();
+            ixsummary();
+            mallocsummary();
+            memorysummary();
+            pagersummary();
+            return;
+        case 'd':
+            if(consdebug == nil)
+                consdebug = rdb;
+            else
+                consdebug = nil;
+            print("consdebug now %#p\n", consdebug);
+            return;
+        case 'D':
+            if(consdebug == nil)
+                consdebug = rdb;
+            consdebug();
+            return;
+        case 'p':
+            x = spllo();
+            procdump();
+            splx(x);
+            return;
+        case 'q':
+            scheddump();
+            return;
+        case 'k':
+            killbig("^t ^t k");
+            return;
+        case 'r':
+            exit(0);
+            return;
+        }
+@
+
+
+<<function ixsummary>>=
+void
+ixsummary(void)
+{
+    debugging ^= 1;
+    iallocsummary();
+    print("pad %lud, concat %lud, pullup %lud, copy %lud\n",
+        padblockcnt, concatblockcnt, pullupblockcnt, copyblockcnt);
+    print("consume %lud, produce %lud, qcopy %lud\n",
+        consumecnt, producecnt, qcopycnt);
+}
+@
+
+<<function iallocsummary>>=
+void
+iallocsummary(void)
+{
+    print("ialloc %lud/%lud\n", ialloc.bytes, conf.ialloc);
+}
+@
 
 <<function scheddump>>=
 void
@@ -24665,7 +24679,6 @@ fmtuserstring(Fmt* f, char* a, char* suffix)
 
 \section{Counters}
 
-% in Proc?
 <<struct Perf>>=
 /*
  *  performance timers, all units in perfticks
@@ -24684,14 +24697,23 @@ struct Perf
 @ 
 
 <<[[Mach]] stat fields>>=
-/* stats */
+Perf  perf;     /* performance counters */
+@ 
+
+<<[[Mach]] stat fields>>=
 int tlbfault;
 int tlbpurge;
 int pfault;
-int cs; // context switch?
+int cs; // context switch, sched() and sleep() call
 int syscall;
 int load;
 int intr;
+ulong spuriousintr;
+@
+
+<<[[ArchMach]] other fields>>=
+int pdballoc;
+int pdbfree;
 @
 
 % also lockcycles here?
