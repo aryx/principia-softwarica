@@ -79,16 +79,16 @@ newrgrp(void)
 }
 /*e: constructor newrgrp */
 
-/*s: function closergrp */
+/*s: destructor closergrp */
 void
 closergrp(Rgrp *r)
 {
     if(decref(r) == 0)
         free(r);
 }
-/*e: function closergrp */
+/*e: destructor closergrp */
 
-/*s: function closepgrp */
+/*s: destructor closepgrp */
 void
 closepgrp(Pgrp *p)
 {
@@ -117,7 +117,7 @@ closepgrp(Pgrp *p)
     qunlock(&p->debug);
     free(p);
 }
-/*e: function closepgrp */
+/*e: destructor closepgrp */
 
 /*s: function pgrpinsert */
 void
@@ -309,7 +309,7 @@ newmount(Mhead *mh, Chan *to, int flag, char *spec)
 }
 /*e: constructor newmount */
 
-/*s: function mountfree */
+/*s: destructor mountfree */
 void
 mountfree(Mount *m)
 {
@@ -324,7 +324,7 @@ mountfree(Mount *m)
         m = f;
     }
 }
-/*e: function mountfree */
+/*e: destructor mountfree */
 
 /*s: function resrcwait */
 void

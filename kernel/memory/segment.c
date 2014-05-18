@@ -105,7 +105,7 @@ newseg(int type, ulong base, ulong size)
 }
 /*e: constructor newseg */
 
-/*s: function putseg */
+/*s: destructor putseg */
 void
 putseg(Segment *s)
 {
@@ -149,7 +149,7 @@ putseg(Segment *s)
         free(s->profile);
     free(s);
 }
-/*e: function putseg */
+/*e: destructor putseg */
 
 /*s: function relocateseg */
 void
@@ -423,7 +423,7 @@ imagechanreclaim(void)
 }
 /*e: function imagechanreclaim */
 
-/*s: function putimage */
+/*s: destructor putimage */
 void
 putimage(KImage *i)
 {
@@ -469,7 +469,7 @@ putimage(KImage *i)
     }
     unlock(i);
 }
-/*e: function putimage */
+/*e: destructor putimage */
 
 /*s: function ibrk */
 long

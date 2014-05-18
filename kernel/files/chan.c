@@ -248,7 +248,7 @@ copypath(Path *p)
 }
 /*e: function copypath */
 
-/*s: function pathclose */
+/*s: destructor pathclose */
 void
 pathclose(Path *p)
 {
@@ -272,7 +272,7 @@ pathclose(Path *p)
     free(p->mtpt);
     free(p);
 }
-/*e: function pathclose */
+/*e: destructor pathclose */
 
 /*s: function fixdotdotname */
 /*
@@ -370,7 +370,7 @@ addelem(Path *p, char *s, Chan *from)
 }
 /*e: function addelem */
 
-/*s: function chanfree */
+/*s: destructor chanfree */
 void
 chanfree(Chan *c)
 {
@@ -407,7 +407,7 @@ chanfree(Chan *c)
     chanalloc.free = c;
     unlock(&chanalloc);
 }
-/*e: function chanfree */
+/*e: destructor chanfree */
 
 /*s: function cclose */
 void
@@ -1749,7 +1749,7 @@ isdir(Chan *c)
 }
 /*e: function isdir */
 
-/*s: function putmhead */
+/*s: destructor putmhead */
 /*
  * This is necessary because there are many
  * pointers to the top of a given mount list:
@@ -1777,6 +1777,6 @@ putmhead(Mhead *m)
         free(m);
     }
 }
-/*e: function putmhead */
+/*e: destructor putmhead */
 
 /*e: chan.c */

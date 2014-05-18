@@ -231,7 +231,7 @@ ispages(void*)
 }
 /*e: function ispages */
 
-/*s: function putpage */
+/*s: destructor putpage */
 void
 putpage(Page *p)
 {
@@ -263,7 +263,7 @@ putpage(Page *p)
     unlock(p);
     unlock(&palloc);
 }
-/*e: function putpage */
+/*e: destructor putpage */
 
 /*s: function auxpage */
 Page*
@@ -530,7 +530,7 @@ ptecpy(Pte *old)
 }
 /*e: function ptecpy */
 
-/*s: function ptealloc */
+/*s: constructor ptealloc */
 Pte*
 ptealloc(void)
 {
@@ -541,9 +541,9 @@ ptealloc(void)
     new->last = new->pages;
     return new;
 }
-/*e: function ptealloc */
+/*e: constructor ptealloc */
 
-/*s: function freepte */
+/*s: destructor freepte */
 void
 freepte(Segment *s, Pte *p)
 {
@@ -584,7 +584,7 @@ freepte(Segment *s, Pte *p)
     }
     free(p);
 }
-/*e: function freepte */
+/*e: destructor freepte */
 
 /*s: function pagenumber */
 ulong
