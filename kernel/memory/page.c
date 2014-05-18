@@ -137,7 +137,7 @@ pagechainhead(Page *p)
 }
 /*e: function pagechainhead */
 
-/*s: function newpage */
+/*s: constructor newpage */
 Page*
 newpage(int clear, Segment **s, ulong va)
 {
@@ -221,7 +221,7 @@ newpage(int clear, Segment **s, ulong va)
 
     return p;
 }
-/*e: function newpage */
+/*e: constructor newpage */
 
 /*s: function ispages */
 int

@@ -54,7 +54,7 @@ pgrpnote(ulong noteid, char *a, long n, int flag)
 }
 /*e: function pgrpnote */
 
-/*s: function newpgrp */
+/*s: constructor newpgrp */
 Pgrp*
 newpgrp(void)
 {
@@ -65,9 +65,9 @@ newpgrp(void)
     p->pgrpid = incref(&pgrpid);
     return p;
 }
-/*e: function newpgrp */
+/*e: constructor newpgrp */
 
-/*s: function newrgrp */
+/*s: constructor newrgrp */
 Rgrp*
 newrgrp(void)
 {
@@ -77,7 +77,7 @@ newrgrp(void)
     r->ref = 1;
     return r;
 }
-/*e: function newrgrp */
+/*e: constructor newrgrp */
 
 /*s: function closergrp */
 void
@@ -290,7 +290,7 @@ forceclosefgrp(void)
 }
 /*e: function forceclosefgrp */
 
-/*s: function newmount */
+/*s: constructor newmount */
 Mount*
 newmount(Mhead *mh, Chan *to, int flag, char *spec)
 {
@@ -307,7 +307,7 @@ newmount(Mhead *mh, Chan *to, int flag, char *spec)
 
     return m;
 }
-/*e: function newmount */
+/*e: constructor newmount */
 
 /*s: function mountfree */
 void

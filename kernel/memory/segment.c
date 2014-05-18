@@ -69,7 +69,7 @@ initseg(void)
 // Functions
 //*****************************************************************************
 
-/*s: function newseg */
+/*s: constructor newseg */
 Segment *
 newseg(int type, ulong base, ulong size)
 {
@@ -103,7 +103,7 @@ newseg(int type, ulong base, ulong size)
 
     return s;
 }
-/*e: function newseg */
+/*e: constructor newseg */
 
 /*s: function putseg */
 void

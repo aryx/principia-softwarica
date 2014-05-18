@@ -706,7 +706,7 @@ noprocpanic(char *msg)
 }
 /*e: function noprocpanic */
 
-/*s: function newproc */
+/*s: constructor newproc */
 Proc*
 newproc(void)
 {
@@ -788,7 +788,7 @@ newproc(void)
 
     return p;
 }
-/*e: function newproc */
+/*e: constructor newproc */
 
 /*s: function procwired */
 /*

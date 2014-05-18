@@ -137,7 +137,7 @@ chandevshutdown(void)
 }
 /*e: function chandevshutdown */
 
-/*s: function newchan */
+/*s: constructor newchan */
 Chan*
 newchan(void)
 {
@@ -180,13 +180,13 @@ newchan(void)
     
     return c;
 }
-/*e: function newchan */
+/*e: constructor newchan */
 
 /*s: global npath */
 Ref npath;
 /*e: global npath */
 
-/*s: function newpath */
+/*s: constructor newpath */
 Path*
 newpath(char *s)
 {
@@ -215,7 +215,7 @@ newpath(char *s)
     p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]);
     return p;
 }
-/*e: function newpath */
+/*e: constructor newpath */
 
 /*s: function copypath */
 //@Scheck: not dead, used below
@@ -573,7 +573,7 @@ eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
 }
 /*e: function eqchantdqid */
 
-/*s: function newmhead */
+/*s: constructor newmhead */
 Mhead*
 newmhead(Chan *from)
 {
@@ -585,7 +585,7 @@ newmhead(Chan *from)
     incref(from);
     return mh;
 }
-/*e: function newmhead */
+/*e: constructor newmhead */
 
 /*s: function cmount */
 int
