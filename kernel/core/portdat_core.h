@@ -96,8 +96,8 @@ struct Mach
 {
     int machno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
     /*s: [[Mach]] second field */
-        // must be second field at 0x04, used by splhi()
-        ulong splpc;      /* pc of last caller to splhi */
+    // must be second field at 0x04, used by splhi()
+    ulong splpc;      /* pc of last caller to splhi */
     /*e: [[Mach]] second field */
   
     // ref<Proc>
@@ -106,8 +106,7 @@ struct Mach
     ulong ticks;      /* of the clock since boot time */
 
     uvlong  cpuhz;
-    // cpuhz / 1_000_000
-    int cpumhz;
+    int cpumhz; // cpuhz / 1_000_000
     // = cpuhz if havetsc, 0 otherwise
     uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 
@@ -123,7 +122,6 @@ struct Mach
     int intr;
     ulong spuriousintr;
     /*e: [[Mach]] stat fields */
-
     /*s: [[Mach]] other fields */
     int ilockdepth;
     /*x: [[Mach]] other fields */
@@ -135,7 +133,6 @@ struct Mach
     Proc* readied;    /* for runproc */
     ulong schedticks;   /* next forced context switch */
     /*e: [[Mach]] other fields */
-
     struct ArchMach;
   
     // must be at the end of the structure!

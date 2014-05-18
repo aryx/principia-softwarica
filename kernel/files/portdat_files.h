@@ -233,17 +233,16 @@ enum
 /*s: struct Chan */
 struct Chan
 {
-    Path* path;
-
     ushort type; // idx in devtab?
     ulong dev;
-
     Qid qid;
 
-    vlong offset;     /* in fd */
-    ushort  mode;     /* read/write */
+    Path* path;
 
-    bool ismtpt;
+    vlong offset;     /* in fd */
+    ushort mode;     /* read/write */
+
+    bool ismtpt; // is a mount point
 
     union {
        void* aux; // generic pointer, for specific usages
@@ -255,7 +254,6 @@ struct Chan
          ulong mid;    /* for ns in devproc */
        /*e: [[Chan]] union other fields */
     };
-
     /*s: [[Chan]] other fields */
     ushort  flag;
     /*x: [[Chan]] other fields */
@@ -284,8 +282,9 @@ struct Chan
     /*x: [[Chan]] other fields */
     Mntcache* mcp;      /* Mount cache pointer */
     /*e: [[Chan]] other fields */
+
     // extra
-    Ref;        /* the Lock in this Ref is also Chan's lock */
+    Ref; /* the Lock in this Ref is also Chan's lock */
     /*s: [[Chan]] extra fields */
     Chan* next;     /* allocation */
     Chan* link;
@@ -333,7 +332,7 @@ struct Walkqid
 /*s: struct Dev */
 struct Dev
 {
-    int dc; // dev character code, e.g. '/' (devroot), 'e' (devenv), ...
+    Rune dc; // dev character code, e.g. '/' (devroot), 'e' (devenv), ...
     char* name;
     
     void  (*reset)(void);

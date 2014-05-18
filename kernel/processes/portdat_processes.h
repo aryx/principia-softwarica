@@ -396,7 +396,6 @@ enum fpsavestatus
 //*****************************************************************************
 
 /*s: struct Proc */
-// the most important fields are set by newproc()
 struct Proc
 {
 //--------------------------------------------------------------------
@@ -414,7 +413,7 @@ struct Proc
     ulong parentpid;
 
     // enum<procstate> 
-    int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate nil)
+    int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate==nil)
     // some debugging information, e.g. "New", "PageOut", or name of syscall
     char  *psstate; /* used by /proc/#/status */
     bool insyscall; // true when process inside a syscall
@@ -734,12 +733,12 @@ struct Active
     //array<bool>
     int machs;      /* bitmap of active CPUs */
 
-    int exiting;    /* shutdown */
-    int ispanic;    /* shutdown in response to a panic */
+    bool exiting;    /* shutdown */
+    bool ispanic;    /* shutdown in response to a panic */
+    bool rebooting;    /* just idle cpus > 0 */
   
     // 386 specific?
-    int thunderbirdsarego;  /* lets the added processors continue to schedinit */
-    int rebooting;    /* just idle cpus > 0 */
+    bool thunderbirdsarego;/* lets the added processors continue to schedinit */
   
     // extra
     Lock;

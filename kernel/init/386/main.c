@@ -227,7 +227,7 @@ mach0init(void)
         machinit();
 
         active.machs = 1;
-        active.exiting = 0;
+        active.exiting = false;
 }
 /*e: function mach0init */
 
@@ -689,7 +689,7 @@ shutdown(bool ispanic)
         if(ispanic)
                 active.ispanic = ispanic;
         else if(m->machno == 0 && (active.machs & (1<<m->machno)) == 0)
-                active.ispanic = 0;
+                active.ispanic = false;
         once = active.machs & (1<<m->machno);
         /*
          * setting exiting will make hzclock() on each processor call exit(0),
@@ -699,7 +699,7 @@ shutdown(bool ispanic)
          * calling exit(0) from hzclock() on this processor.
          */
         active.machs &= ~(1<<m->machno);
-        active.exiting = 1;
+        active.exiting = true;
         unlock(&active);
 
         if(once)
@@ -762,7 +762,7 @@ reboot(void *entry, void *code, ulong size)
                  * reset now, so force them to shutdown gracefully first.
                  */
                 lock(&active);
-                active.rebooting = 1;
+                active.rebooting = true;
                 unlock(&active);
                 shutdown(0);
                 if(arch->resetothers)
@@ -976,7 +976,7 @@ main(void)
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
-    active.thunderbirdsarego = 1;
+    active.thunderbirdsarego = true;
 
     cgapost(0x99); // done!
     schedinit();

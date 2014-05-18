@@ -1,5 +1,5 @@
 \documentclass[twocolumn]{report}
-%landscape
+%CONFIG: landscape
 
 %******************************************************************************
 % Prelude
@@ -15,29 +15,31 @@
 
 %thx to LP, changed for the better a few things :)
 % - introduced syssema.c (found while going through Kernel_extra.tex.nw)
-% - removed deadcode (e.g. field Proc.qlock, semalock, ArchConf, etc
+% - removed deadcode (e.g. field Proc.qlock, semalock, ArchConf, etc)
 % - moved code in init/user such as preboot vs boot vs init
 % - introduced notion of IPC and Time
-% - TODO better grouping of things in devcons.c, present together the Qxxx
+% - TODO better grouping of things in devcons.c, present together the Qxxx,
+%   same for /proc/ and its many uses
 
 %thx to codemap/codegraph:
 % - see pad.txt#reorganization section
 
 %history LP-ization:
 % - skeleton; a not too bad TOC
-% - put all content of files in the Extra section, via syncweb -lpize
+% - put all content of files in the Extra section, via 'syncweb -lpize'
 % - split the files in chunks (for type, helpers, ...), using
 %   my emacs macro, and prefixing the chunk with special names:
 %    * function, global, struct, enum
-%    * method (for Dev), class??(for xxxdevtab?), constructor, destructor, 
-%    * syscall, interrupt callback, clock callback, kernel process, hook, dumper
+%    * method (for Dev), constructor, destructor, TODO class??(for xxxdevtab?)
+%    * syscall, interrupt callback, clock callback, kernel process, hook, 
+%      TODO dumper
 %    * xxx decl, xxx.c forward decl, xxx.c debugging macro, xxx.c Exxx errors,
 %    * [[xxx]] other fields, [[xxx]] extra fields, 
 % - distribute parts of the file before
 % - TODO add figures (hand made)
 
 %TODO:
-% - lots of things could be reduces if C had better support for lists, hash
+% - lots of things could be reduces if C had better support for lists or hash;
 %   there are lots of duplicated code adding/removing stuff in list
 %   (e.g. tdel(), tadd(), etc)
 
@@ -85,8 +87,8 @@
 % Config
 %------------------------------------------------------------------------------
 \allcodefalse
-% for typedef forward decl, pragmas, func decl, extern decl, stats, #ifdef,
-%  debugging macros
+% used for forward decl, pragmas, func decl, extern decl, stats, #ifdef,
+% debugging macros
 
 %\setcounter{tocdepth}{1}
 
@@ -121,8 +123,7 @@ Yoann Padioleau\\
 \end{quote}
 \hrule
 
-%\dominitoc
-
+%CONFIG: \dominitoc
 
 \iffinal
 \begingroup
@@ -138,7 +139,6 @@ Yoann Padioleau\\
 %******************************************************************************
 % Body
 %******************************************************************************
-%\chapter*{XTODO}
 
 \chapter{Introduction}
 
@@ -304,6 +304,7 @@ provides to the user programs.
 <<sys.h process syscalls>>
 <<sys.h memory syscalls>>
 <<sys.h file syscalls>>
+<<sys.h directory syscalls>>
 <<sys.h namespace syscalls>>
 <<sys.h time syscalls>>
 <<sys.h ipc syscalls>>
@@ -312,10 +313,12 @@ provides to the user programs.
 <<sys.h security syscalls>>
 #define	ERRSTR		40
 @ 
+
 <<sys.h process syscalls>>=
 #define	RFORK		1
 #define	EXEC		2
 #define	EXITS		3
+#define	AWAIT		25
 @
 
 <<sys.h memory syscalls>>=
@@ -323,19 +326,22 @@ provides to the user programs.
 @ 
 
 <<sys.h file syscalls>>=
-#define	CREATE		6
-#define	REMOVE		7
 #define	OPEN		8
 #define	CLOSE		9
 #define	PREAD		10
 #define	PWRITE		11
 #define	SEEK		12
+@
+
+<<sys.h directory syscalls>>=
+#define	CREATE		6
+#define	REMOVE		7
+#define	CHDIR		18
+#define	FD2PATH		19
 #define	STAT		14
 #define	FSTAT		15
 #define	WSTAT		16
 #define	FWSTAT		17
-#define	CHDIR		18
-#define	FD2PATH		19
 @
 
 <<sys.h namespace syscalls>>=
@@ -361,7 +367,6 @@ provides to the user programs.
 @
 
 <<sys.h concurrency syscalls>>=
-#define	AWAIT		25
 #define	RENDEZVOUS	26
 #define	SEMACQUIRE	27
 #define	SEMRELEASE	28
@@ -538,6 +543,8 @@ provides to the user programs.
 % and assume loading phase setup physical mapping from KZERO to 0 physical
 % and so by having kernel at KTZERO beyond all special memory so no overlap
 % with sensitive area.
+% maybe figure with the binary composition (a.out header, multiboot header, 
+%  code, data, empty bss, etc)
 
 <<pad memory pointer types>>=
 // physical address
@@ -650,6 +657,7 @@ Syscall *systab[] = {
 <<systab process syscalls>>
 <<systab memory syscalls>>
 <<systab file syscalls>>
+<<systab directory syscalls>>
 <<systab namespace syscalls>>
 <<systab time syscalls>>
 <<systab ipc syscalls>>
@@ -742,6 +750,7 @@ char* getconf(char *name)
 
 \section{[[Mach]] and [[m]]}
 
+% bad name, should be Processor
 <<struct Mach>>=
 struct Mach
 {
@@ -754,15 +763,12 @@ struct Mach
     ulong ticks;      /* of the clock since boot time */
 
     uvlong  cpuhz;
-    // cpuhz / 1_000_000
-    int cpumhz;
+    int cpumhz; // cpuhz / 1_000_000
     // = cpuhz if havetsc, 0 otherwise
     uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 
     <<[[Mach]] stat fields>>
-
     <<[[Mach]] other fields>>
-
     struct ArchMach;
   
     // must be at the end of the structure!
@@ -770,7 +776,7 @@ struct Mach
 };
 @ 
 
-% more on ticks in Time chapter, TODO how set? no ticks = ?
+% more on ticks in Time chapter, TODO how set? there no ticks = ? anywhere
 
 % where this is allocated??? in assembly, cos machinit just set machp[0]
 % why not make m an alias for machp[processor_id]?
@@ -812,12 +818,12 @@ struct Active
     //array<bool>
     int machs;      /* bitmap of active CPUs */
 
-    int exiting;    /* shutdown */
-    int ispanic;    /* shutdown in response to a panic */
+    bool exiting;    /* shutdown */
+    bool ispanic;    /* shutdown in response to a panic */
+    bool rebooting;    /* just idle cpus > 0 */
   
     // 386 specific?
-    int thunderbirdsarego;  /* lets the added processors continue to schedinit */
-    int rebooting;    /* just idle cpus > 0 */
+    bool thunderbirdsarego;/* lets the added processors continue to schedinit */
   
     // extra
     Lock;
@@ -840,7 +846,6 @@ struct ArchMach {
 \section{[[Proc]] and [[up]]}
 
 <<struct Proc>>=
-// the most important fields are set by newproc()
 struct Proc
 {
 //--------------------------------------------------------------------
@@ -911,7 +916,7 @@ ulong pid;
 ulong parentpid;
 
 // enum<procstate> 
-int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate nil)
+int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate==nil)
 // some debugging information, e.g. "New", "PageOut", or name of syscall
 char  *psstate; /* used by /proc/#/status */
 bool insyscall; // true when process inside a syscall
@@ -982,26 +987,25 @@ struct ArchProcMMU
 <<struct Chan>>=
 struct Chan
 {
-    Path* path;
-
     ushort type; // idx in devtab?
     ulong dev;
-
     Qid qid;
 
-    vlong offset;     /* in fd */
-    ushort  mode;     /* read/write */
+    Path* path;
 
-    bool ismtpt;
+    vlong offset;     /* in fd */
+    ushort mode;     /* read/write */
+
+    bool ismtpt; // is a mount point
 
     union {
        void* aux; // generic pointer, for specific usages
        <<[[Chan]] union other fields>>
     };
-
     <<[[Chan]] other fields>>
+
     // extra
-    Ref;        /* the Lock in this Ref is also Chan's lock */
+    Ref; /* the Lock in this Ref is also Chan's lock */
     <<[[Chan]] extra fields>>
 };
 @ 
@@ -1043,7 +1047,7 @@ enum qidtype {
 
 
 <<function eqqid>>=
-int
+bool
 eqqid(Qid a, Qid b)
 {
     return a.path==b.path && a.vers==b.vers;
@@ -1062,35 +1066,35 @@ mkqid(Qid *q, vlong path, ulong vers, int type)
 
 
 <<function eqchan>>=
-int
+bool
 eqchan(Chan *a, Chan *b, int skipvers)
 {
     if(a->qid.path != b->qid.path)
-        return 0;
+        return false;
     if(!skipvers && a->qid.vers!=b->qid.vers)
-        return 0;
+        return false;
     if(a->type != b->type)
-        return 0;
+        return false;
     if(a->dev != b->dev)
-        return 0;
-    return 1;
+        return false;
+    return true;
 }
 @
 
 
 <<function eqchantdqid>>=
-int
+bool
 eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
 {
     if(a->qid.path != qid.path)
-        return 0;
+        return false;
     if(!skipvers && a->qid.vers!=qid.vers)
-        return 0;
+        return false;
     if(a->type != type)
-        return 0;
+        return false;
     if(a->dev != dev)
-        return 0;
-    return 1;
+        return false;
+    return true;
 }
 @
 
@@ -1115,7 +1119,7 @@ eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
 <<struct Dev>>=
 struct Dev
 {
-    int dc; // dev character code, e.g. '/' (devroot), 'e' (devenv), ...
+    Rune dc; // dev character code, e.g. '/' (devroot), 'e' (devenv), ...
     char* name;
     
     void  (*reset)(void);
@@ -1211,7 +1215,6 @@ PCArch archgeneric = {
 % for OS programmers long before the other)
 
 <<systab concurrency syscalls>>=
-    [AWAIT]     sysawait,
     [RENDEZVOUS]    sysrendezvous,
 
     [SEMACQUIRE]    syssemacquire,
@@ -1439,8 +1442,8 @@ canlock(Lock *l)
 % accessed from a xxxintr, then need to use ilock
 
 <<[[Mach]] second field>>=
-    // must be second field at 0x04, used by splhi()
-    ulong splpc;      /* pc of last caller to splhi */
+// must be second field at 0x04, used by splhi()
+ulong splpc;      /* pc of last caller to splhi */
 @ 
 
 <<function splhi>>=
@@ -6859,6 +6862,7 @@ trap(Ureg* ureg)
     [RFORK]     sysrfork,
     [EXEC]      sysexec,
     [EXITS]     sysexits,
+    [AWAIT]     sysawait,
 @ 
 
 \section{Overview}
@@ -7055,7 +7059,7 @@ noprocpanic(char *msg)
      */
     lock(&active);
     active.machs &= ~(1<<m->machno);
-    active.exiting = 1;
+    active.exiting = true;
     unlock(&active);
 
     procdump();
@@ -9705,7 +9709,7 @@ main(void)
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
-    active.thunderbirdsarego = 1;
+    active.thunderbirdsarego = true;
 
     cgapost(0x99); // done!
     schedinit();
@@ -9746,7 +9750,7 @@ mach0init(void)
         machinit();
 
         active.machs = 1;
-        active.exiting = 0;
+        active.exiting = false;
 }
 @
 
@@ -11344,22 +11348,11 @@ TEXT touser(SB), $0
 \minitoc
 
 <<systab file syscalls>>=
-    [CREATE]    syscreate,
-    [REMOVE]    sysremove,
-
     [OPEN]      sysopen,
     [CLOSE]     sysclose,
     [PREAD]     syspread,
     [PWRITE]    syspwrite,
     [SEEK]      sysseek,
-
-    [STAT]      sysstat,
-    [FSTAT]     sysfstat,
-    [WSTAT]     syswstat,
-    [FWSTAT]    sysfwstat,
-
-    [CHDIR]     syschdir,
-    [FD2PATH]   sysfd2path, // pwd?
 @ 
 
 % note that files are used for many things, including devices!!
@@ -11692,7 +11685,7 @@ iallocb(int size)
     if(ialloc.bytes > conf.ialloc){
         if((m1++%10000)==0){
             if(mp++ > 1000){
-                active.exiting = 1;
+                active.exiting = true;
                 exit(0);
             }
             iprint("iallocb: limited %lud/%lud\n",
@@ -11704,7 +11697,7 @@ iallocb(int size)
     if((b = _allocb(size)) == nil){
         if((m2++%10000)==0){
             if(mp++ > 1000){
-                active.exiting = 1;
+                active.exiting = true;
                 exit(0);
             }
             iprint("iallocb: no memory %lud/%lud\n",
@@ -14294,6 +14287,19 @@ sysseek(ulong *arg)
 
 
 \chapter{Directories}
+
+<<systab directory syscalls>>=
+    [CREATE]    syscreate,
+    [REMOVE]    sysremove,
+
+    [CHDIR]     syschdir,
+    [FD2PATH]   sysfd2path, // pwd?
+
+    [STAT]      sysstat,
+    [FSTAT]     sysfstat,
+    [WSTAT]     syswstat,
+    [FWSTAT]    sysfwstat,
+@
 
 \section{Overview}
 
@@ -18539,7 +18545,7 @@ echo(char *buf, int n)
         switch(*p){
         case 0x10:  /* ^P */
             if(cpuserver && !kbd.ctlpoff){
-                active.exiting = 1;
+                active.exiting = true;
                 return;
             }
             break;
@@ -23605,7 +23611,7 @@ shutdown(bool ispanic)
         if(ispanic)
                 active.ispanic = ispanic;
         else if(m->machno == 0 && (active.machs & (1<<m->machno)) == 0)
-                active.ispanic = 0;
+                active.ispanic = false;
         once = active.machs & (1<<m->machno);
         /*
          * setting exiting will make hzclock() on each processor call exit(0),
@@ -23615,7 +23621,7 @@ shutdown(bool ispanic)
          * calling exit(0) from hzclock() on this processor.
          */
         active.machs &= ~(1<<m->machno);
-        active.exiting = 1;
+        active.exiting = true;
         unlock(&active);
 
         if(once)
@@ -23711,7 +23717,7 @@ reboot(void *entry, void *code, ulong size)
                  * reset now, so force them to shutdown gracefully first.
                  */
                 lock(&active);
-                active.rebooting = 1;
+                active.rebooting = true;
                 unlock(&active);
                 shutdown(0);
                 if(arch->resetothers)

@@ -697,7 +697,7 @@ noprocpanic(char *msg)
      */
     lock(&active);
     active.machs &= ~(1<<m->machno);
-    active.exiting = 1;
+    active.exiting = true;
     unlock(&active);
 
     procdump();

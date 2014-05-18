@@ -64,28 +64,30 @@ Syscall *systab[] = {
     [RFORK]     sysrfork,
     [EXEC]      sysexec,
     [EXITS]     sysexits,
+    [AWAIT]     sysawait,
 /*e: systab process syscalls */
 /*s: systab memory syscalls */
     [BRK_]      sysbrk_,
 /*e: systab memory syscalls */
 /*s: systab file syscalls */
-    [CREATE]    syscreate,
-    [REMOVE]    sysremove,
-
     [OPEN]      sysopen,
     [CLOSE]     sysclose,
     [PREAD]     syspread,
     [PWRITE]    syspwrite,
     [SEEK]      sysseek,
+/*e: systab file syscalls */
+/*s: systab directory syscalls */
+    [CREATE]    syscreate,
+    [REMOVE]    sysremove,
+
+    [CHDIR]     syschdir,
+    [FD2PATH]   sysfd2path, // pwd?
 
     [STAT]      sysstat,
     [FSTAT]     sysfstat,
     [WSTAT]     syswstat,
     [FWSTAT]    sysfwstat,
-
-    [CHDIR]     syschdir,
-    [FD2PATH]   sysfd2path, // pwd?
-/*e: systab file syscalls */
+/*e: systab directory syscalls */
 /*s: systab namespace syscalls */
     [BIND]      sysbind,
     [MOUNT]     sysmount,
@@ -108,7 +110,6 @@ Syscall *systab[] = {
     [SEGBRK]    syssegbrk,
 /*e: systab ipc syscalls */
 /*s: systab concurrency syscalls */
-    [AWAIT]     sysawait,
     [RENDEZVOUS]    sysrendezvous,
 
     [SEMACQUIRE]    syssemacquire,

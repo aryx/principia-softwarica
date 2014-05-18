@@ -500,7 +500,7 @@ echo(char *buf, int n)
         switch(*p){
         case 0x10:  /* ^P */
             if(cpuserver && !kbd.ctlpoff){
-                active.exiting = 1;
+                active.exiting = true;
                 return;
             }
             break;

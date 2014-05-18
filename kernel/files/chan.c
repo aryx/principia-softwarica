@@ -534,7 +534,7 @@ cunique(Chan *c)
 /*e: function cunique */
 
 /*s: function eqqid */
-int
+bool
 eqqid(Qid a, Qid b)
 {
     return a.path==b.path && a.vers==b.vers;
@@ -542,34 +542,34 @@ eqqid(Qid a, Qid b)
 /*e: function eqqid */
 
 /*s: function eqchan */
-int
+bool
 eqchan(Chan *a, Chan *b, int skipvers)
 {
     if(a->qid.path != b->qid.path)
-        return 0;
+        return false;
     if(!skipvers && a->qid.vers!=b->qid.vers)
-        return 0;
+        return false;
     if(a->type != b->type)
-        return 0;
+        return false;
     if(a->dev != b->dev)
-        return 0;
-    return 1;
+        return false;
+    return true;
 }
 /*e: function eqchan */
 
 /*s: function eqchantdqid */
-int
+bool
 eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
 {
     if(a->qid.path != qid.path)
-        return 0;
+        return false;
     if(!skipvers && a->qid.vers!=qid.vers)
-        return 0;
+        return false;
     if(a->type != type)
-        return 0;
+        return false;
     if(a->dev != dev)
-        return 0;
-    return 1;
+        return false;
+    return true;
 }
 /*e: function eqchantdqid */
 
