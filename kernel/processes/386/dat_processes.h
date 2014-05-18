@@ -1,5 +1,13 @@
 /*s: dat_processes.h */
 
+/*s: constant AOUT_MAGIC */
+/*
+ *  parameters for sysproc.c
+ */
+// I_MAGIC is defined in include/a.out.h
+#define AOUT_MAGIC  (I_MAGIC)
+/*e: constant AOUT_MAGIC */
+
 //*****************************************************************************
 // Proc extensions
 //*****************************************************************************
