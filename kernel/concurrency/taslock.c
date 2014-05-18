@@ -96,7 +96,6 @@ lock(Lock *l)
         l->lockcycles = -lcycles();
 #endif
 /*e: lock ifdef LOCKCYCLES */
-
         return 0;
     }
     if(up)
@@ -123,6 +122,7 @@ lock(Lock *l)
                 lockloop(l, pc);
             }
         }
+        // try again
         if(up)
             inccnt(&up->nlocks);
         if(tas(&l->key) == 0){
@@ -158,6 +158,8 @@ ilock(Lock *l)
     lockstats.locks++;
 
     x = splhi();
+    // no need to take care of up->nlock++ here, we have disabled interrupt
+    // so no risk of getting scheduled
     if(tas(&l->key) != 0){
         lockstats.glare++;
         /*
@@ -170,6 +172,7 @@ ilock(Lock *l)
             splx(x);
             while(l->key)
                 ;
+            // let's try again
             x = splhi();
             if(tas(&l->key) == 0)
                 goto acquire;
@@ -183,7 +186,7 @@ acquire:
     l->pc = pc;
     l->p = up;
     l->isilock = true;
-        //TODO: why not just l->m = m? 
+    //TODO: why not just l->m = m? 
     l->m = MACHP(m->machno);
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
@@ -194,7 +197,7 @@ acquire:
 /*e: function ilock */
 
 /*s: function canlock */
-int
+bool
 canlock(Lock *l)
 {
     if(up)
@@ -202,7 +205,7 @@ canlock(Lock *l)
     if(tas(&l->key)){
         if(up)
             deccnt(&up->nlocks);
-        return 0;
+        return false;
     }
 
     if(up)
@@ -216,7 +219,7 @@ canlock(Lock *l)
         l->lockcycles = -lcycles();
 #endif
 /*e: lock ifdef LOCKCYCLES */
-    return 1;
+    return true;
 }
 /*e: function canlock */
 

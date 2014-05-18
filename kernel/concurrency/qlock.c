@@ -32,9 +32,9 @@ qlock(QLock *q)
         print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), m->ilockdepth);
     if(up != nil && up->nlocks.ref)
         print("qlock: %#p: nlocks %lud\n", getcallerpc(&q), up->nlocks.ref);
-
-    if(q->use.key == 0x55555555)
+    if(q->use.key == 0x55555555) // dead code??
         panic("qlock: q %#p, key 5*\n", q);
+
     lock(&q->use);
     rwstats.qlock++;
     if(!q->locked) {
@@ -43,38 +43,46 @@ qlock(QLock *q)
         unlock(&q->use);
         return;
     }
-    if(up == 0)
+    if(up == nil)
         panic("qlock");
     rwstats.qlockq++;
+
+    // add_queue(q, up)
     p = q->tail;
-    if(p == 0)
+    if(p == nil)
         q->head = up;
     else
         p->qnext = up;
     q->tail = up;
+    // up->qnext could be non nil before? no otherwise that means
+    // the process is already waiting for a lock and so had no occasion
+    // to run another qlock() instruction.
     up->qnext = nil;
+
     up->state = Queueing;
     up->qpc = getcallerpc(&q);
     unlock(&q->use);
-    sched();
+    // switch to another process! 
+    sched(); 
+    // will resume here when another process unlock() the lock and ready() us
     q->qpc = getcallerpc(&q);
 }
 /*e: function qlock */
 
 /*s: function canqlock */
-int
+bool
 canqlock(QLock *q)
 {
     if(!canlock(&q->use))
-        return 0;
+        return false;
     if(q->locked){
         unlock(&q->use);
-        return 0;
+        return false;
     }
     q->locked = true;
     q->qpc = getcallerpc(&q);
     unlock(&q->use);
-    return 1;
+    return true;
 }
 /*e: function canqlock */
 
@@ -88,18 +96,20 @@ qunlock(QLock *q)
     if (q->locked == false)
         print("qunlock called with qlock not held, from %#p\n",
             getcallerpc(&q));
+
     p = q->head;
     if(p){
+        // dequeue(q)
         q->head = p->qnext;
         if(q->head == 0)
             q->tail = nil;
         unlock(&q->use);
         ready(p);
-        return;
+    }else{
+        q->locked = false;
+        q->qpc = nilptr;
+        unlock(&q->use);
     }
-    q->locked = false;
-    q->qpc = nilptr;
-    unlock(&q->use);
 }
 /*e: function qunlock */
 
@@ -111,26 +121,30 @@ rlock(RWlock *q)
 
     lock(&q->use);
     rwstats.rlock++;
-    if(q->writer == 0 && q->head == nil){
+    if(q->writer == false && q->head == nil){
         /* no writer, go for it */
         q->readers++;
         unlock(&q->use);
         return;
     }
 
-    rwstats.rlockq++;
-    p = q->tail;
     if(up == nil)
         panic("rlock");
-    if(p == 0)
+    rwstats.rlockq++;
+
+    // add_queue(q, up)
+    p = q->tail;
+    if(p == nil)
         q->head = up;
     else
         p->qnext = up;
     q->tail = up;
     up->qnext = nil;
+
     up->state = QueueingR;
     unlock(&q->use);
     sched();
+    // will resume here when another process unlock() the lock and ready() us
 }
 /*e: function rlock */
 
@@ -150,9 +164,12 @@ runlock(RWlock *q)
     /* start waiting writer */
     if(p->state != QueueingW)
         panic("runlock");
+
+    // dequeue(q)
     q->head = p->qnext;
-    if(q->head == 0)
+    if(q->head == nil)
         q->tail = nil;
+
     q->writer = true;
     unlock(&q->use);
     ready(p);
@@ -167,7 +184,7 @@ wlock(RWlock *q)
 
     lock(&q->use);
     rwstats.wlock++;
-    if(q->readers == 0 && q->writer == 0){
+    if(q->readers == 0 && q->writer == false){
         /* noone waiting, go for it */
         q->wpc = getcallerpc(&q);
         q->wproc = up;
@@ -177,16 +194,19 @@ wlock(RWlock *q)
     }
 
     /* wait */
-    rwstats.wlockq++;
-    p = q->tail;
     if(up == nil)
         panic("wlock");
+    rwstats.wlockq++;
+
+    // add_queue(q, up)
+    p = q->tail;
     if(p == nil)
         q->head = up;
     else
         p->qnext = up;
     q->tail = up;
     up->qnext = nil;
+
     up->state = QueueingW;
     unlock(&q->use);
     sched();
@@ -208,9 +228,11 @@ wunlock(RWlock *q)
     }
     if(p->state == QueueingW){
         /* start waiting writer */
+        // dequeue(q)
         q->head = p->qnext;
         if(q->head == nil)
             q->tail = nil;
+
         unlock(&q->use);
         ready(p);
         return;
@@ -226,6 +248,7 @@ wunlock(RWlock *q)
         q->readers++;
         ready(p);
     }
+
     if(q->head == nil)
         q->tail = nil;
     q->writer = false;
@@ -235,19 +258,19 @@ wunlock(RWlock *q)
 
 /*s: function canrlock */
 /* same as rlock but punts if there are any writers waiting */
-int
+bool
 canrlock(RWlock *q)
 {
     lock(&q->use);
     rwstats.rlock++;
-    if(q->writer == 0 && q->head == nil){
+    if(q->writer == false && q->head == nil){
         /* no writer, go for it */
         q->readers++;
         unlock(&q->use);
-        return 1;
+        return true;
     }
     unlock(&q->use);
-    return 0;
+    return false;
 }
 /*e: function canrlock */
 /*e: qlock.c */

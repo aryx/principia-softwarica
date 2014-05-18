@@ -530,6 +530,11 @@ struct Proc
 // Synchronization
 //--------------------------------------------------------------------
     /*s: [[Proc]] synchronization fields */
+    // As long as the current process hold locks (to kernel data structures),
+    // we will not schedule another process in unlock(); only the last unlock
+    // will eventually cause a rescheduling.
+    Ref nlocks;   /* number of locks held by proc */
+    /*x: [[Proc]] synchronization fields */
     Rgrp  *rgrp;    /* Rendez group */
 
     uintptr rendtag;  /* Tag for rendezvous */
@@ -609,11 +614,6 @@ struct Proc
 // Other
 //--------------------------------------------------------------------
     /*s: [[Proc]] other fields */
-    // As long as the current process hold locks (to kernel data structures),
-    // we will not schedule another process in unlock(); only the last unlock
-    // will eventually cause a rescheduling.
-    Ref nlocks;   /* number of locks held by proc */
-    /*x: [[Proc]] other fields */
     Sargs sargs;    /* address of this is known by db */
     /*x: [[Proc]] other fields */
     bool kp;   /* true if a kernel process */

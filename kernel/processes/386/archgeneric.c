@@ -54,10 +54,10 @@ archreset(void)
 /*s: global archgeneric */
 PCArch archgeneric = {
     .id=        "generic",
-    .ident=     0,
+    .ident=     nil,
     .reset=     archreset,
 
-    // interrupt: i8259 controller
+    // interrupt: Intel i8259 controller
     /*s: [[archgeneric]] interrupt methods */
     .intrinit=  i8259init,
     .intrenable=    i8259enable,
@@ -66,7 +66,7 @@ PCArch archgeneric = {
     .intron=    i8259on,
     .introff=   i8259off,
     /*e: [[archgeneric]] interrupt methods */
-    // clock: i8253 controller
+    // clock: Intel i8253 controller
     /*s: [[archgeneric]] time methods */
     .clockenable=   i8253enable,
     .fastclock= i8253read,

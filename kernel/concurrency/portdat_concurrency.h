@@ -19,17 +19,17 @@ struct Lock
     bool_ushort isilock; // false when from lock(), true when from ilock()
     ulong sr; // saved priority level when using ilock() to restore in iunlock()
     /*e: [[Lock]] ilock fields */
-    /*s: [[Lock]] other fields */
-    // option<ref<Mach>>, None when key = 0?
-    Mach  *m; // not that used, only in iprintcanlock apparently
-    /*e: [[Lock]] other fields */
     /*s: [[Lock]] debugging fields */
-    kern_addr pc; // for debugging
+    kern_addr pc; // for debugging, the caller who did the lock()
     /*x: [[Lock]] debugging fields */
     //#ifdef LOCKCYCLES
     long  lockcycles;
     //#endif
     /*e: [[Lock]] debugging fields */
+    /*s: [[Lock]] other fields */
+    // option<ref<Mach>>, None when key = 0?
+    Mach  *m; // not that used, only in iprintcanlock apparently
+    /*e: [[Lock]] other fields */
 };
 /*e: struct Lock */
 

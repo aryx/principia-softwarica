@@ -33,7 +33,6 @@ decref(Ref *r)
     unlock(r);
     if(x < 0)
         panic("decref pc=%#p", getcallerpc(&r));
-
     return x;
 }
 /*e: function decref */
