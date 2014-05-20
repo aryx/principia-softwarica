@@ -38,6 +38,12 @@
 % - distribute parts of the file before
 % - TODO add figures (hand made)
 
+% thx to this manual, better understand unix:
+%  - child/parent relation and zombie process, the fact that a parent
+%    exiting does not mean it will kill its children
+%  - TODO malloc internals
+%  - TODO time, user vs sys vs real
+
 %TODO:
 % - lots of things could be reduces if C had better support for lists or hash;
 %   there are lots of duplicated code adding/removing stuff in list
@@ -721,6 +727,8 @@ struct Confmem
 };
 @ 
 
+% show concrete value for qemu! see C-t C-t m
+
 
 <<globals confname and confvar>>=
 // conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
@@ -778,10 +786,10 @@ struct Mach
 
 % more on ticks in Time chapter, TODO how set? there no ticks = ? anywhere
 
-% where this is allocated??? in assembly, cos machinit just set machp[0]
-% why not make m an alias for machp[processor_id]?
+% note that machinit just set machp[0], not m
+% todo: why not make m an alias for machp[processor_id]?
 <<global m>>=
-// ref<Mach> allocated??
+// ref<Mach>, assigned to MACHADDR in _clearbss
 Mach *m;
 @ 
 
@@ -1741,6 +1749,7 @@ qunlock(QLock *q)
 @ 
 
 % does not wait if can not get it
+% what is the point of using a qlock if everybody uses it via canqlock??
 <<function canqlock>>=
 bool
 canqlock(QLock *q)
@@ -2059,7 +2068,7 @@ deccnt(Ref *r)
 
 % approach: 
 % - end, edata fixed area
-% - confmem detectioj
+% - confmem detection
 % - xalloc static metadata about mem
 %  - then from it build pools
 %    - then from it get malloc
@@ -2074,8 +2083,11 @@ deccnt(Ref *r)
 % get the actual number (and try optimize? less % for kernel more for user,
 %  reduce Page data structure? less conf.nproc?
 
-
 \section{[[xalloc()]]}
+
+% start with Confmem, huge bank, now we want to use some memory
+% draw figure with many holes in memory. Can't support too much
+% fragmentation (no compact() function)
 
 <<constants holes>>=
 enum
@@ -2088,18 +2100,65 @@ enum
 <<struct Hole>>=
 struct Hole
 {
-    phys_addr addr;
+    // between addr and top the memory is free
+    phys_addr addr; 
     phys_addr top; 
-    ulong size; // top - addr?
-    
+    ulong size; // top - addr
     // extra
-    Hole* link; // list<ref<Hole>> of Xalloc.flist or Xalloc.table?
+    <<[[Hole]] extra fields>>
 };
+@
+
+<<struct Xalloc>>=
+// Long lived data structure allocator (singleton)
+struct Xalloc
+{
+    // array<Hole>
+    Hole  hole[Nhole];
+  
+    // list<ref<Hole>> (next = Hole.link) list of free holes (addr=top=size=0)
+    Hole* flist; 
+    // list<ref<Hole>> (next = Hole.link) memory holes, sorted by top addr
+    Hole* table; 
+  
+    // extra
+    Lock;
+};
+@
+% note that the hole is free means the metadata is free
+% a used hole means actually there is free memory here, it's a hole
+% in the contiguous memory area
+
+<<[[Hole]] extra fields>>=
+Hole* link; // list<ref<Hole>> of Xalloc.flist or Xalloc.table
+@
+
+<<global xlists>>=
+static Xalloc   xlists;
+@
+
+% complex data structure, show concrete example, C-t C-t x
+% where does xalloc(1000); xalloc(1000) and then free first => new hole used
+%  see complex linking and role of table and flist,
+%  recall what confmem was so can understand the small split of the first
+%  bank and then the huge bank
+% this does not handle well many alloc/free, each free in the middle
+% will allocate a new hole. Does not handle fragmentation.
+% example of bad case: if does 12 * 2 xalloc, and then free
+% one in two, then will use all the holes
+
+
+<<function xalloc>>=
+void*
+xalloc(ulong size)
+{
+    return xallocz(size, true);
+}
 @
 
 
 <<struct Xhdr>>=
-// What is the connection with Hole? a used Hole will describe
+// What is the connection with Hole? a part of a used Hole will describe
 // a portion of memory, and at this memory there will be a header
 // and then just after the actual memory xalloc'ed by someone
 struct Xhdr
@@ -2112,61 +2171,14 @@ struct Xhdr
 };
 @
 
-
-<<struct Xalloc>>=
-// Long lived data structure allocator (singleton)
-// (can call xalloc() only Nhole time!)
-struct Xalloc
-{
-    // array<Hole>
-    Hole  hole[Nhole];
-  
-    // list<ref<Hole>> (next = Hole.link) free list?
-    Hole* flist; 
-    // list<ref<Hole>> (next = Hole.link) used list?
-    Hole* table; 
-  
-    // extra
-    Lock;
-};
-@
-
-<<global xlists>>=
-static Xalloc   xlists;
-@
-
-
-<<function xspanalloc>>=
-void*
-xspanalloc(ulong size, int align, ulong span)
-{
-    ulong a, v, t;
-    a = (ulong)xalloc(size+align+span);
-    if(a == 0)
-        panic("xspanalloc: %lud %d %lux", size, align, span);
-
-    if(span > 2) {
-        v = (a + span) & ~(span-1);
-        t = v - a;
-        if(t > 0)
-            xhole(PADDR(a), t);
-        t = a + span - v;
-        if(t > 0)
-            xhole(PADDR(v+size+align), t);
-    }
-    else
-        v = a;
-
-    if(align > 1)
-        v = (v + align) & ~(align-1);
-
-    return (void*)v;
-}
-@
-
+% can show a config where have big hole and then do 2 xalloc so that
+% this same hole will be smaller but have multiple xhdr inside it
+% in spirit (and if xfree the top one then hole gets bigger, and if
+% free lower one, then a new hole is used (because of top addr sorted
+% requirment)
 
 <<function xallocz>>=
-void*
+kern_addr3
 xallocz(ulong size, bool zero)
 {
     Xhdr *p;
@@ -2179,15 +2191,21 @@ xallocz(ulong size, bool zero)
     ilock(&xlists);
     l = &xlists.table;
     for(h = *l; h; h = h->link) {
+        // found an appropriate hole
         if(h->size >= size) {
             p = (Xhdr*)KADDR(h->addr);
-            h->addr += size;
+            h->addr += size; // shrink towards top
             h->size -= size;
+
+            // this hole is now fully used (which is rare because one
+            // rarely does an xalloc with the remaining size of a hole)
+            // can put it back in the free list
             if(h->size == 0) {
                 *l = h->link;
                 h->link = xlists.flist;
                 xlists.flist = h;
             }
+
             iunlock(&xlists);
             if(zero)
                 memset(p, 0, size);
@@ -2202,19 +2220,15 @@ xallocz(ulong size, bool zero)
 }
 @
 
-
-<<function xalloc>>=
-void*
-xalloc(ulong size)
-{
-    return xallocz(size, true);
-}
-@
-
-
+% this is very rarely used in the kernel
+% why use it at all? apparently in intrdisable, but why they dont
+% use malloc/free? because in interrupt code?
+% actually this is so rarely used that we could simplify even more
+% and have a alloc-only thing with just confmem that get reduces
+% gradually.
 <<function xfree>>=
 void
-xfree(void *p)
+xfree(kern_addr3 p)
 {
     Xhdr *x;
 
@@ -2227,47 +2241,12 @@ xfree(void *p)
 }
 @
 
-
-<<function xmerge>>=
-int
-xmerge(void *vp, void *vq)
-{
-    Xhdr *p, *q;
-
-    p = (Xhdr*)(((ulong)vp - offsetof(Xhdr, data[0])));
-    q = (Xhdr*)(((ulong)vq - offsetof(Xhdr, data[0])));
-    if(p->magix != Magichole || q->magix != Magichole) {
-        int i;
-        ulong *wd;
-        void *badp;
-
-        xsummary();
-        badp = (p->magix != Magichole? p: q);
-        wd = (ulong *)badp - 12;
-        for (i = 24; i-- > 0; ) {
-            print("%#p: %lux", wd, *wd);
-            if (wd == badp)
-                print(" <-");
-            print("\n");
-            wd++;
-        }
-        panic("xmerge(%#p, %#p) bad magic %#lux, %#lux",
-            vp, vq, p->magix, q->magix);
-    }
-    if((uchar*)p+p->size == (uchar*)q) {
-        p->size += q->size;
-        return 1;
-    }
-    return 0;
-}
-@
-
-
+% this may have to allocate a new Hole from the free list
 <<function xhole>>=
 void
-xhole(ulong addr, ulong size)
+xhole(phys_addr addr, ulong size)
 {
-    ulong top;
+    phys_addr top;
     Hole *h, *c, **l;
 
     if(size == 0)
@@ -2318,6 +2297,79 @@ xhole(ulong addr, ulong size)
     iunlock(&xlists);
 }
 @
+
+
+<<function xmerge>>=
+bool
+xmerge(void *vp, void *vq)
+{
+    Xhdr *p, *q;
+
+    p = (Xhdr*)(((ulong)vp - offsetof(Xhdr, data[0])));
+    q = (Xhdr*)(((ulong)vq - offsetof(Xhdr, data[0])));
+
+    if(p->magix != Magichole || q->magix != Magichole) {
+        <<[[xmerge()]] debug info when not magichole>>
+        panic("xmerge(%#p, %#p) bad magic %#lux, %#lux",
+            vp, vq, p->magix, q->magix);
+    }
+    if((uchar*)p+p->size == (uchar*)q) {
+        p->size += q->size;
+        return true;
+    }
+    return false;
+}
+@
+
+\ifallcode
+<<[[xmerge()]] debug info when not magichole>>=
+        int i;
+        ulong *wd;
+        void *badp;
+
+        xsummary();
+        badp = (p->magix != Magichole? p: q);
+        wd = (ulong *)badp - 12;
+        for (i = 24; i-- > 0; ) {
+            print("%#p: %lux", wd, *wd);
+            if (wd == badp)
+                print(" <-");
+            print("\n");
+            wd++;
+        }
+@
+\fi
+
+%??
+<<function xspanalloc>>=
+void*
+xspanalloc(ulong size, int align, ulong span)
+{
+    ulong a, v, t;
+    a = (ulong)xalloc(size+align+span);
+    if(a == 0)
+        panic("xspanalloc: %lud %d %lux", size, align, span);
+
+    if(span > 2) {
+        v = (a + span) & ~(span-1);
+        t = v - a;
+        if(t > 0)
+            xhole(PADDR(a), t);
+        t = a + span - v;
+        if(t > 0)
+            xhole(PADDR(v+size+align), t);
+    }
+    else
+        v = a;
+
+    if(align > 1)
+        v = (v + align) & ~(align-1);
+
+    return (void*)v;
+}
+@
+
+
 
 \section{[[Pool]]}
 % pool allocation, aka arena?
@@ -2398,6 +2450,8 @@ punlock(Pool *p)
 }
 @
 
+% note that no xfree or xhole here ... so it always grow
+% (which is good for the fragmentation issue of xalloc anyway)
 <<global pmainmem>>=
 static Private pmainpriv;
 static Pool pmainmem = {
@@ -2610,6 +2664,14 @@ msize(void *v)
 % from OS point of view the user malloc granularity is
 % done via brk at a page level. malloc is actually
 % done in libc on top of brk (cf insa and aubourg :) )
+
+
+% in lib_core/libc/port/malloc.c 
+
+%Pool *mainmem = &sbrkmem;
+%Pool *imagmem = &sbrkmem;
+
+% note also here that it always grow! brk always bigger.
 
 \section{[[Page]]}
 
@@ -3885,7 +3947,7 @@ found:
         /* Disaster after commit in exec */
         if(waserror()) {
             unlock(i);
-            pexit(Enovmem, 1);
+            pexit(Enovmem, true);
         }
         i->s = newseg(type, base, len);
         i->s->image = i;
@@ -5030,7 +5092,7 @@ fault(ulong addr, bool read)
 
 <<function faulterror>>=
 static void
-faulterror(char *s, Chan *c, int freemem)
+faulterror(char *s, Chan *c, bool freemem)
 {
     char buf[ERRMAX];
 
@@ -7111,7 +7173,7 @@ char  *kstack;  /* known to l.s */
 
 % have a [[Mach]] scheduler fields? 
 <<[[Mach]] other fields>>=
-Label sched;      /* scheduler wakeup */
+Label sched;      /* scheduler wakeup */ // address of schedinit()
 Proc* readied;    /* for runproc */
 ulong schedticks;   /* next forced context switch */
 @
@@ -7232,6 +7294,10 @@ mmuswitch(Proc* proc)
 \section{Scheduler, [[sched()]] and [[ready()]]}
 % split scheduler? own chapter? virtual CPU? (After all have virtual memory
 % chapter)
+
+% actually first part is cooperative scheduling, with sleep/wakeup
+%  and people calling sched themselves
+% then have preemptive scheduling with interrupt clock
 
 <<constant Npriq>>=
 Npriq   = 20,   /* number of scheduler priority levels */
@@ -7454,9 +7520,7 @@ proc_sched(void)
             return;
         }
         up->delaysched = 0;
-
-        splhi();
-
+        splhi(); // schedinit requires this
         /* statistics */
         m->cs++;
 
@@ -7466,7 +7530,9 @@ proc_sched(void)
             spllo();
             return;
         }
-        gotolabel(&m->sched);
+        gotolabel(&m->sched); // goto schedinit()
+        //TODO can reach this point? schedinit calls sched()
+        // so can return from sched() here at some point?
     }
     p = runproc();
     <<[[proc_sched()]] optional guard for real-time process>>
@@ -8070,8 +8136,8 @@ accounttime(void)
 <<struct Rendez>>=
 struct Rendez
 {
-    // ??
-    Proc  *p;
+    // option<ref<Proc>>
+    Proc  *p; // sleeping process
     Lock;
 };
 @ 
@@ -8871,7 +8937,191 @@ shargs(char *s, int n, char **ap)
 
 
 
+\section{[[sysrendezvous()]]}
+
+<<enum procstate cases>>=
+Rendezvous,
+@
+
+<<syscall rendezvous>>=
+long
+sysrendezvous(ulong *arg)
+{
+    uintptr tag, val;
+    Proc *p, **l;
+
+    tag = arg[0];
+    l = &REND(up->rgrp, tag);
+    up->rendval = ~(uintptr)0;
+
+    lock(up->rgrp);
+    for(p = *l; p; p = p->rendhash) {
+        if(p->rendtag == tag) {
+            *l = p->rendhash;
+            val = p->rendval;
+            p->rendval = arg[1];
+
+            while(p->mach != 0)
+                ;
+            ready(p);
+            unlock(up->rgrp);
+            return val;
+        }
+        l = &p->rendhash;
+    }
+
+    /* Going to sleep here */
+    up->rendtag = tag;
+    up->rendval = arg[1];
+    up->rendhash = *l;
+    *l = up;
+    up->state = Rendezvous;
+    unlock(up->rgrp);
+
+    sched();
+
+    return up->rendval;
+}
+@ 
+
+
+\section{[[sysawait()]]}
+% better show sysawait before sysexits, parent point of view, then child pov
+
+% can have zombies in plan9? yes ... because if parent exit
+% and have blocked children (on a pipe) then those children
+% will never finish I think
+
+<<[[Proc]] hierarchy fields>>=
+Proc  *parent;
+int nchild;   /* Number of living children */
+@
+% subtle: I think it's useful to also have parentpid field because
+% the parent may have died, and so freed in procalloc and then
+% reused for another process!
+
+<<[[Proc]] hierarchy fields>>=
+// list<ref_own<Waitq>>> =~ list<ref_own<Waitmsg>>
+Waitq *waitq;   /* Exited processes wait children */
+int nwait;    /* Number of uncollected wait records */ // len(waitq)
+Lock  exl;    /* Lock count and waitq */
+@
+
+<<struct Waitmsg>>=
+struct Waitmsg
+{
+  int pid;    /* of loved one */ // pid of the child
+  ulong time[3];  /* of loved one and descendants */
+  char  msg[ERRMAX];  /* actually variable-size in user mode */
+};
+@ 
+
+% it's actually not a queue, but really a stack
+<<struct Waitq>>=
+struct Waitq
+{
+    Waitmsg w;
+  
+    // extra
+    // list<ref_own<Waitq>> Proc.waitq
+    Waitq *next;
+};
+@ 
+
+<<[[Proc]] hierarchy fields>>=
+Rendez  waitr;    /* Place to hang out in wait */
+@ 
+
+% when canqlock return false? who else access qwaitr? users via /proc/!
+% seems too subtle the need for this
+% put with the code for Qwait if want to talk about it
+<<[[Proc]] hierarchy fields>>=
+QLock qwaitr;
+@
+
+<<syscall await>>=
+long
+sysawait(ulong *arg)
+{
+    int i;
+    int pid;
+    Waitmsg w; // allocated in stack!
+    ulong n;
+
+    n = arg[1];
+    validaddr(arg[0], n, 1);
+    pid = pwait(&w);
+    if(pid < 0)
+        return -1;
+    i = snprint((char*)arg[0], n, "%d %lud %lud %lud %q",
+        w.pid,
+        w.time[TUser], w.time[TSys], w.time[TReal],
+        w.msg);
+
+    return i;
+}
+@ 
+
+<<function pwait>>=
+ulong
+pwait(Waitmsg *w)
+{
+    ulong cpid; // child pid
+    Waitq *wq;
+
+    if(!canqlock(&up->qwaitr))
+        error(Einuse); // someone is reading /proc/pid/wait?
+
+    if(waserror()) {
+        qunlock(&up->qwaitr);
+        nexterror();
+    }
+
+    lock(&up->exl);
+    if(up->nchild == 0 && up->waitq == nil) {
+        unlock(&up->exl);
+        error(Enochild);
+    }
+    unlock(&up->exl);
+
+    sleep(&up->waitr, haswaitq, up); // qwaitr is still locked
+
+    // wq = pop(up->waitq), // can't be null, see haswaitq()
+    lock(&up->exl);
+    wq = up->waitq; 
+    up->waitq = wq->next;
+    up->nwait--;
+    unlock(&up->exl);
+
+    qunlock(&up->qwaitr);
+    poperror();
+
+    if(w)
+        memmove(w, &wq->w, sizeof(Waitmsg));
+    cpid = wq->w.pid;
+    free(wq);
+    return cpid;
+}
+@ 
+
+
+<<function haswaitq>>=
+int
+haswaitq(void *x)
+{
+    Proc *p;
+    p = (Proc *)x;
+    return p->waitq != nil;
+}
+@ 
+
+
 \section{[[sysexits()]]}
+
+% semantic of exits? what happens if still have children?
+% the children will still be there! the parent closes all its
+% filedescriptor but if have pipe with children, then the pipe
+% will still be there and have hanging process?
 
 <<syscall exits>>=
 long
@@ -8896,20 +9146,26 @@ sysexits(ulong *arg)
         }
 
     }
-    pexit(status, 1);
+    pexit(status, true);
     return 0;       /* not reached */
 }
 @ 
 
+% != Dead,  Not sure why the logic of killing process is split in proc_pexit
+% here and schedinit. Because one part is portable and the other is not;
+% schedinit needs low level access and do things like mmurelease().
+% but then maybe should just do gotolabel(m->sched) instead of calling sched
 <<enum procstate cases>>=
 Moribund,
 @
 
+% todo: split in purely deallocate stuff and then the children/parent part
+% todo: rename freemem to addbroken? and reverse true to false and false to true
 <<function pexit>>=
 void
-proc_pexit(char *exitstr, int freemem)
+proc_pexit(char *exitstr, bool freemem)
 {
-    Proc *p;
+    Proc *p; // parent
     Segment **s, **es;
     long utime, stime;
     Waitq *wq, *f, *next;
@@ -8960,6 +9216,7 @@ proc_pexit(char *exitstr, int freemem)
      */
     if(up->kp == false) {
         p = up->parent;
+        // no parent pointer, must be the very first process
         if(p == nil) {
             if(exitstr == 0)
                 exitstr = "unknown";
@@ -8987,6 +9244,8 @@ proc_pexit(char *exitstr, int freemem)
         /*
          * Check that parent is still alive.
          */
+        // the parent pointer may not be your parent anymore, the parent
+        // could have died and its slot reallocated to another process
         if(p->pid == up->parentpid && p->state != Broken) {
             p->nchild--;
             p->time[TCUser] += utime;
@@ -8999,11 +9258,13 @@ proc_pexit(char *exitstr, int freemem)
              * records.
              */
             if(p->nwait < 128) {
+                // push(wq, p->waitq)
                 wq->next = p->waitq;
                 p->waitq = wq;
                 p->nwait++;
-                wq = nil;
-                wakeup(&p->waitr);
+
+                wq = nil; // the parent will do the free
+                wakeup(&p->waitr); // haswaitq() is true now
             }
         }
         unlock(&p->exl);
@@ -9011,23 +9272,26 @@ proc_pexit(char *exitstr, int freemem)
             free(wq);
     }
 
+    //?
     if(!freemem)
-        addbroken(up);
+        addbroken(up); // will call sched()
 
     qlock(&up->seglock);
+    //todo: rewrite using nelem(seg?)
     es = &up->seg[NSEG];
     for(s = up->seg; s < es; s++) {
         if(*s) {
             putseg(*s);
-            *s = 0;
+            *s = nil;
         }
     }
     qunlock(&up->seglock);
 
     lock(&up->exl);     /* Prevent my children from leaving waits */
     pidunhash(up);
-    up->pid = 0;
-    wakeup(&up->waitr);
+    // so my children will not generate a waitq, I will not be here anymore
+    up->pid = 0; 
+    wakeup(&up->waitr); // wakeup process reading /proc/pid/wait
     unlock(&up->exl);
 
     for(f = up->waitq; f; f = next) {
@@ -9049,15 +9313,25 @@ proc_pexit(char *exitstr, int freemem)
 
     <<[[pexit()]] optional [[edfstop()]] for real-time scheduling>>
     up->state = Moribund;
-    sched();
-    panic("pexit");
+    // will gotolabel() to schedinit() which has special code around Moribund
+    // (why not doing more simply gotolabel(m->sched)? to reuse some of
+    //  sched() code?)
+    sched(); 
+    // should never reach this
+    panic("pexit"); 
 }
 @ 
+
+% What about zombie process? There is no zombie in plan9!
+% Nicer design! the child write in the parent (if it has still one)
+% the information the parent may need and then die!
+
+\section*{Broken processes}
+% zombie processes? no, it's different.
 
 <<enum procstate cases>>=
 Broken,
 @
-
 
 <<struct Broken>>=
 /*
@@ -9066,17 +9340,19 @@ Broken,
 #define NBROKEN 4
 struct Broken
 {
-    QLock;
-    int n;
+    // array<ref<Proc>>
     Proc    *p[NBROKEN];
+    // number of entries used in p
+    int n;
+
+    // extra
+    QLock;
 };
 @ 
-
 
 <<global broken>>=
 struct Broken broken;
 @ 
-
 
 <<function addbroken>>=
 void
@@ -9129,177 +9405,13 @@ freebroken(void)
     n = broken.n;
     for(i=0; i<n; i++) {
         ready(broken.p[i]);
-        broken.p[i] = 0;
+        broken.p[i] = nil;
     }
     broken.n = 0;
     qunlock(&broken);
     return n;
 }
 @ 
-
-
-
-\section{[[sysawait()]]}
-
-<<struct Waitmsg>>=
-struct Waitmsg
-{
-  int pid;    /* of loved one */
-  ulong time[3];  /* of loved one and descendants */
-  char  msg[ERRMAX];  /* actually variable-size in user mode */
-};
-@ 
-
-<<struct Waitq>>=
-struct Waitq
-{
-    Waitmsg w;
-  
-    // extra
-    // list<ref<Waitq>> Proc.waitq
-    Waitq *next;
-};
-@ 
-<<[[Proc]] hierarchy fields>>=
-Proc  *parent;
-@
-
-<<[[Proc]] hierarchy fields>>=
-
-//list<ref<Waitq>>
-Waitq *waitq;   /* Exited processes wait children */
-Lock  exl;    /* Lock count and waitq */
-
-int nchild;   /* Number of living children */
-int nwait;    /* Number of uncollected wait records */
-QLock qwaitr;
-Rendez  waitr;    /* Place to hang out in wait */
-@ 
-
-
-<<function haswaitq>>=
-int
-haswaitq(void *x)
-{
-    Proc *p;
-
-    p = (Proc *)x;
-    return p->waitq != 0;
-}
-@ 
-
-
-<<function pwait>>=
-ulong
-pwait(Waitmsg *w)
-{
-    ulong cpid;
-    Waitq *wq;
-
-    if(!canqlock(&up->qwaitr))
-        error(Einuse);
-
-    if(waserror()) {
-        qunlock(&up->qwaitr);
-        nexterror();
-    }
-
-    lock(&up->exl);
-    if(up->nchild == 0 && up->waitq == 0) {
-        unlock(&up->exl);
-        error(Enochild);
-    }
-    unlock(&up->exl);
-
-    sleep(&up->waitr, haswaitq, up);
-
-    lock(&up->exl);
-    wq = up->waitq;
-    up->waitq = wq->next;
-    up->nwait--;
-    unlock(&up->exl);
-
-    qunlock(&up->qwaitr);
-    poperror();
-
-    if(w)
-        memmove(w, &wq->w, sizeof(Waitmsg));
-    cpid = wq->w.pid;
-    free(wq);
-    return cpid;
-}
-@ 
-
-<<syscall await>>=
-long
-sysawait(ulong *arg)
-{
-    int i;
-    int pid;
-    Waitmsg w;
-    ulong n;
-
-    n = arg[1];
-    validaddr(arg[0], n, 1);
-    pid = pwait(&w);
-    if(pid < 0)
-        return -1;
-    i = snprint((char*)arg[0], n, "%d %lud %lud %lud %q",
-        w.pid,
-        w.time[TUser], w.time[TSys], w.time[TReal],
-        w.msg);
-
-    return i;
-}
-@ 
-
-\section{[[sysrendezvous()]]}
-
-<<enum procstate cases>>=
-Rendezvous,
-@
-
-<<syscall rendezvous>>=
-long
-sysrendezvous(ulong *arg)
-{
-    uintptr tag, val;
-    Proc *p, **l;
-
-    tag = arg[0];
-    l = &REND(up->rgrp, tag);
-    up->rendval = ~(uintptr)0;
-
-    lock(up->rgrp);
-    for(p = *l; p; p = p->rendhash) {
-        if(p->rendtag == tag) {
-            *l = p->rendhash;
-            val = p->rendval;
-            p->rendval = arg[1];
-
-            while(p->mach != 0)
-                ;
-            ready(p);
-            unlock(up->rgrp);
-            return val;
-        }
-        l = &p->rendhash;
-    }
-
-    /* Going to sleep here */
-    up->rendtag = tag;
-    up->rendval = arg[1];
-    up->rendhash = *l;
-    *l = up;
-    up->state = Rendezvous;
-    unlock(up->rgrp);
-
-    sched();
-
-    return up->rendval;
-}
-@ 
-
 
 \section{Kernel processes}
 
@@ -9362,7 +9474,10 @@ linkproc(void)
 {
     spllo();
     up->kpfun(up->kparg);
-    pexit("kproc dying", 0);
+    // should never reach this place?? kernel processes are supposed
+    // to run forever??
+
+    pexit("kproc dying", false); 
 }
 @ 
 
@@ -9391,6 +9506,8 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
 \section{Booting the kernel}
 
 \subsection{Loading the kernel in physical memory}
+
+% rename _startKADDR? just _start?
 
 <<l_multiboot.s>>=
 #include "mem.h"
@@ -9446,7 +9563,7 @@ TEXT _multibootentry(SB), $0
         CLD
         ADDL    $KZERO, BX
         MOVL    BX, multiboot-KZERO(SB)
-//      !!! Jump to _startPADDR (not _startKADDR)!!!
+//      !!! Jump to _startPADDR (not _startKADDR anymore)!!!
         MOVL    $_startPADDR(SB), AX
         ANDL    $~KZERO, AX
         JMP*    AX
@@ -9666,7 +9783,7 @@ _clearbss:
 \section{Kernel initialization}
 
 <<function main>>=
-//@Scheck: not dead, entry point :) jumped to by qemu (via elf header)
+//@Scheck: not dead, entry point :) jumped from assembly at _startpg() end
 void
 main(void)
 {
@@ -9925,7 +10042,7 @@ confinit(void)
                         if(conf.npage*BY2PG < 16*MB)
                                 userpcnt = 40;
                         else
-                                userpcnt = 60;
+                                userpcnt = 80;
                 }
                 kpages = conf.npage - (conf.npage*userpcnt)/100;
 
@@ -9999,6 +10116,7 @@ xinit(void)
         maxpages = cankaddr(m->base)/BY2PG;
         if(n > maxpages)
             n = maxpages;
+
         /* first give to kernel */
         if(n > 0){
             m->kbase = (ulong)KADDR(m->base);
@@ -12299,7 +12417,7 @@ closeproc(void*)
             }
             if(clunkq.head == nil){
                 qunlock(&clunkq.q);
-                pexit("no work", 1);
+                pexit("no work", true);
             }
         }
         lock(&clunkq.l);
@@ -18567,6 +18685,7 @@ echo(char *buf, int n)
     static int ctrlt, pid;
     int x;
     char *e, *p;
+    void* tmp;
 
     if(n == 0)
         return;
@@ -20306,7 +20425,8 @@ sec2rtc(ulong secs, Rtc *rtc)
 \minitoc
 
 % of course can use fs to communicate between process :)
-% also when fork child inherit
+% also when fork child inherit fd and can share stuff there
+% also child can communicate to parent fix exit code (if parent calls wait())
 
 <<systab ipc syscalls>>=
     [NOTIFY]    sysnotify,
@@ -20525,7 +20645,7 @@ if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
     || !okaddr(sp-ERRMAX-4*BY2WD, sizeof(Ureg)+ERRMAX+4*BY2WD, 1)){
         qunlock(&up->debug);
         pprint("suicide: bad address in notify\n");
-        pexit("Suicide", 0);
+        pexit("Suicide", false);
     }
 
     memmove((Ureg*)sp, ureg, sizeof(Ureg));
@@ -20565,7 +20685,7 @@ noted(Ureg* ureg, ulong arg0)
     if(arg0!=NRSTR && !up->notified) {
         qunlock(&up->debug);
         pprint("call to noted() when not notified\n");
-        pexit("Suicide", 0);
+        pexit("Suicide", false);
     }
     up->notified = 0;
 
@@ -20578,7 +20698,7 @@ noted(Ureg* ureg, ulong arg0)
     if(!okaddr((ulong)oureg-BY2WD, BY2WD+sizeof(Ureg), 0)){
         qunlock(&up->debug);
         pprint("bad ureg in noted or call to noted when not notified\n");
-        pexit("Suicide", 0);
+        pexit("Suicide", false);
     }
 
     /*
@@ -20593,7 +20713,7 @@ noted(Ureg* ureg, ulong arg0)
       || (nureg->fs & 0xFFFF) != UDSEL || (nureg->gs & 0xFFFF) != UDSEL){
         qunlock(&up->debug);
         pprint("bad segment selector in noted\n");
-        pexit("Suicide", 0);
+        pexit("Suicide", false);
     }
 
     /* don't let user change system flags */
@@ -20609,7 +20729,7 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
         if(!okaddr(nureg->pc, 1, 0) || !okaddr(nureg->usp, BY2WD, 0)){
             qunlock(&up->debug);
             pprint("suicide: trap in noted\n");
-            pexit("Suicide", 0);
+            pexit("Suicide", false);
         }
         up->ureg = (Ureg*)(*(ulong*)(oureg-BY2WD));
         qunlock(&up->debug);
@@ -20620,7 +20740,7 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
         || !okaddr(nureg->usp, BY2WD, 0)){
             qunlock(&up->debug);
             pprint("suicide: trap in noted\n");
-            pexit("Suicide", 0);
+            pexit("Suicide", false);
         }
         qunlock(&up->debug);
         sp = oureg-4*BY2WD-ERRMAX;
@@ -20664,7 +20784,7 @@ syspipe(ulong *arg)
     evenaddr(arg[0]);
     d = devtab[devno('|', 0)];
     c[0] = namec("#|", Atodir, 0, 0);
-    c[1] = 0;
+    c[1] = nil;
     fd[0] = -1;
     fd[1] = -1;
 
@@ -20692,19 +20812,22 @@ syspipe(ulong *arg)
 @
 
 \subsection{[[/dev/pipe]]}
-% have pipe syscall and device, so both useful? named pipe
-% can be done only via devpipe.c
+% have pipe syscall and device, both useful? the syscall
+% anyway calls the device, and named pipe
+% can be done only via the device
 
 <<struct Pipe>>=
 struct Pipe
 {
-    QLock;
-    Pipe    *next;
     int ref;
     ulong   path;
     long    perm;
     Queue   *q[2];
     int qref[2];
+
+    // extra
+    QLock;
+    Pipe    *next;
 };
 @
 
@@ -20712,8 +20835,10 @@ struct Pipe
 <<struct Pipealloc>>=
 struct Pipealloc
 {
-    Lock;
     ulong   path;
+
+    // extra
+    Lock;
 };
 @
 
@@ -23989,6 +24114,13 @@ cgapost(int code)
             return;
         case 'x':
             xsummary();
+            tmp = xalloc(1000);
+            xalloc(1000);
+            xfree(tmp);
+            xsummary();
+            return;
+        case 'X':
+            xsummary();
             ixsummary();
             mallocsummary();
             memorysummary();
@@ -24123,6 +24255,14 @@ xsummary(void)
     int i;
     Hole *h;
 
+    for(i = 0; i < Nhole && xlists.hole[i].top != 0; i++) {
+        print("|i| = %d (0x%luX), addr 0x%luX, top = 0x%luX, size = %ld, link = 0x%luX\n",
+              i, &xlists.hole[i],
+              xlists.hole[i].addr, xlists.hole[i].top, xlists.hole[i].size,
+              xlists.hole[i].link
+              );
+    }
+    print("flists = 0x%luX, table = 0x%luX\n", xlists.flist, xlists.table);
     i = 0;
     for(h = xlists.flist; h; h = h->link)
         i++;
@@ -24480,7 +24620,7 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 }
 @
 
-
+% debug also (ab?)used in pexit when freeing memory
 <<[[Proc]] debugger fields>>=
 Proc  *pdbg;    /* the debugging process */
 QLock debug;    /* to access debugging elements of User */
@@ -24500,11 +24640,11 @@ procctl(Proc *p)
     switch(p->procctl) {
     case Proc_exitbig:
         spllo();
-        pexit("Killed: Insufficient physical memory", 1);
+        pexit("Killed: Insufficient physical memory", true);
 
     case Proc_exitme:
         spllo();        /* pexit has locks in it */
-        pexit("Killed", 1);
+        pexit("Killed", true);
 
     case Proc_traceme:
         if(p->nnote == 0)
@@ -24975,8 +25115,9 @@ enum proctime
     TSys,
     TReal,
 
-    TCUser,
-    TCSys,
+    // accumulates also the time of its children
+    TCUser, 
+    TCSys, 
     TCReal,
 };
 @ 
