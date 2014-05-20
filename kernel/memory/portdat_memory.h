@@ -204,17 +204,19 @@ enum
 /*s: struct Hole */
 struct Hole
 {
-    phys_addr addr;
+    // between addr and top the memory is free
+    phys_addr addr; 
     phys_addr top; 
-    ulong size; // top - addr?
-    
+    ulong size; // top - addr
     // extra
-    Hole* link; // list<ref<Hole>> of Xalloc.flist or Xalloc.table?
+    /*s: [[Hole]] extra fields */
+    Hole* link; // list<ref<Hole>> of Xalloc.flist or Xalloc.table
+    /*e: [[Hole]] extra fields */
 };
 /*e: struct Hole */
 
 /*s: struct Xhdr */
-// What is the connection with Hole? a used Hole will describe
+// What is the connection with Hole? a part of a used Hole will describe
 // a portion of memory, and at this memory there will be a header
 // and then just after the actual memory xalloc'ed by someone
 struct Xhdr
@@ -229,15 +231,14 @@ struct Xhdr
 
 /*s: struct Xalloc */
 // Long lived data structure allocator (singleton)
-// (can call xalloc() only Nhole time!)
 struct Xalloc
 {
     // array<Hole>
     Hole  hole[Nhole];
   
-    // list<ref<Hole>> (next = Hole.link) free list?
+    // list<ref<Hole>> (next = Hole.link) list of free holes (addr=top=size=0)
     Hole* flist; 
-    // list<ref<Hole>> (next = Hole.link) used list?
+    // list<ref<Hole>> (next = Hole.link) memory holes, sorted by top addr
     Hole* table; 
   
     // extra

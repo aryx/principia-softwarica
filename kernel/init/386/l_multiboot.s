@@ -45,7 +45,7 @@ TEXT _multibootentry(SB), $0
         CLD
         ADDL    $KZERO, BX
         MOVL    BX, multiboot-KZERO(SB)
-//      !!! Jump to _startPADDR (not _startKADDR)!!!
+//      !!! Jump to _startPADDR (not _startKADDR anymore)!!!
         MOVL    $_startPADDR(SB), AX
         ANDL    $~KZERO, AX
         JMP*    AX

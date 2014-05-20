@@ -11,8 +11,13 @@
 
 #include    <trace.h>
 
+// in proc.c
 extern Schedq   runq[Nrq];
-
+extern ulong    delayedscheds;
+extern int  nrdy;
+extern ulong    runvec;
+// in devcons.c
+extern int panicking; 
 // used to be in edf.h
 //unused: extern Lock edftestlock;  /* for atomic admitting/expelling */
 
@@ -31,10 +36,6 @@ enum
 
 static long now;    /* Low order 32 bits of time in µs */
 
-//TODO: put in .h? or get rid of edf.c?
-extern ulong    delayedscheds;
-extern int  nrdy;
-extern ulong    runvec;
 
 /*s: edf.c statistics */
 /* Statistics stuff */

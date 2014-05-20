@@ -220,9 +220,7 @@ proc_sched(void)
             return;
         }
         up->delaysched = 0;
-
-        splhi();
-
+        splhi(); // schedinit requires this
         /* statistics */
         m->cs++;
 
@@ -232,7 +230,9 @@ proc_sched(void)
             spllo();
             return;
         }
-        gotolabel(&m->sched);
+        gotolabel(&m->sched); // goto schedinit()
+        //TODO can reach this point? schedinit calls sched()
+        // so can return from sched() here at some point?
     }
     p = runproc();
     /*s: [[proc_sched()]] optional guard for real-time process */
@@ -1130,9 +1130,13 @@ proc_postnote(Proc *p, int dolock, char *n, int flag)
 #define NBROKEN 4
 struct Broken
 {
-    QLock;
-    int n;
+    // array<ref<Proc>>
     Proc    *p[NBROKEN];
+    // number of entries used in p
+    int n;
+
+    // extra
+    QLock;
 };
 /*e: struct Broken */
 /*s: global broken */
@@ -1188,7 +1192,7 @@ freebroken(void)
     n = broken.n;
     for(i=0; i<n; i++) {
         ready(broken.p[i]);
-        broken.p[i] = 0;
+        broken.p[i] = nil;
     }
     broken.n = 0;
     qunlock(&broken);
@@ -1198,9 +1202,9 @@ freebroken(void)
 
 /*s: function pexit */
 void
-proc_pexit(char *exitstr, int freemem)
+proc_pexit(char *exitstr, bool freemem)
 {
-    Proc *p;
+    Proc *p; // parent
     Segment **s, **es;
     long utime, stime;
     Waitq *wq, *f, *next;
@@ -1251,6 +1255,7 @@ proc_pexit(char *exitstr, int freemem)
      */
     if(up->kp == false) {
         p = up->parent;
+        // no parent pointer, must be the very first process
         if(p == nil) {
             if(exitstr == 0)
                 exitstr = "unknown";
@@ -1278,6 +1283,8 @@ proc_pexit(char *exitstr, int freemem)
         /*
          * Check that parent is still alive.
          */
+        // the parent pointer may not be your parent anymore, the parent
+        // could have died and its slot reallocated to another process
         if(p->pid == up->parentpid && p->state != Broken) {
             p->nchild--;
             p->time[TCUser] += utime;
@@ -1290,11 +1297,13 @@ proc_pexit(char *exitstr, int freemem)
              * records.
              */
             if(p->nwait < 128) {
+                // push(wq, p->waitq)
                 wq->next = p->waitq;
                 p->waitq = wq;
                 p->nwait++;
-                wq = nil;
-                wakeup(&p->waitr);
+
+                wq = nil; // the parent will do the free
+                wakeup(&p->waitr); // haswaitq() is true now
             }
         }
         unlock(&p->exl);
@@ -1302,23 +1311,26 @@ proc_pexit(char *exitstr, int freemem)
             free(wq);
     }
 
+    //?
     if(!freemem)
-        addbroken(up);
+        addbroken(up); // will call sched()
 
     qlock(&up->seglock);
+    //todo: rewrite using nelem(seg?)
     es = &up->seg[NSEG];
     for(s = up->seg; s < es; s++) {
         if(*s) {
             putseg(*s);
-            *s = 0;
+            *s = nil;
         }
     }
     qunlock(&up->seglock);
 
     lock(&up->exl);     /* Prevent my children from leaving waits */
     pidunhash(up);
-    up->pid = 0;
-    wakeup(&up->waitr);
+    // so my children will not generate a waitq, I will not be here anymore
+    up->pid = 0; 
+    wakeup(&up->waitr); // wakeup process reading /proc/pid/wait
     unlock(&up->exl);
 
     for(f = up->waitq; f; f = next) {
@@ -1342,8 +1354,12 @@ proc_pexit(char *exitstr, int freemem)
         edfstop(up);
     /*e: [[pexit()]] optional [[edfstop()]] for real-time scheduling */
     up->state = Moribund;
-    sched();
-    panic("pexit");
+    // will gotolabel() to schedinit() which has special code around Moribund
+    // (why not doing more simply gotolabel(m->sched)? to reuse some of
+    //  sched() code?)
+    sched(); 
+    // should never reach this
+    panic("pexit"); 
 }
 /*e: function pexit */
 
@@ -1352,9 +1368,8 @@ int
 haswaitq(void *x)
 {
     Proc *p;
-
     p = (Proc *)x;
-    return p->waitq != 0;
+    return p->waitq != nil;
 }
 /*e: function haswaitq */
 
@@ -1362,11 +1377,11 @@ haswaitq(void *x)
 ulong
 pwait(Waitmsg *w)
 {
-    ulong cpid;
+    ulong cpid; // child pid
     Waitq *wq;
 
     if(!canqlock(&up->qwaitr))
-        error(Einuse);
+        error(Einuse); // someone is reading /proc/pid/wait?
 
     if(waserror()) {
         qunlock(&up->qwaitr);
@@ -1374,16 +1389,17 @@ pwait(Waitmsg *w)
     }
 
     lock(&up->exl);
-    if(up->nchild == 0 && up->waitq == 0) {
+    if(up->nchild == 0 && up->waitq == nil) {
         unlock(&up->exl);
         error(Enochild);
     }
     unlock(&up->exl);
 
-    sleep(&up->waitr, haswaitq, up);
+    sleep(&up->waitr, haswaitq, up); // qwaitr is still locked
 
+    // wq = pop(up->waitq), // can't be null, see haswaitq()
     lock(&up->exl);
-    wq = up->waitq;
+    wq = up->waitq; 
     up->waitq = wq->next;
     up->nwait--;
     unlock(&up->exl);
@@ -1580,11 +1596,11 @@ procctl(Proc *p)
     switch(p->procctl) {
     case Proc_exitbig:
         spllo();
-        pexit("Killed: Insufficient physical memory", 1);
+        pexit("Killed: Insufficient physical memory", true);
 
     case Proc_exitme:
         spllo();        /* pexit has locks in it */
-        pexit("Killed", 1);
+        pexit("Killed", true);
 
     case Proc_traceme:
         if(p->nnote == 0)

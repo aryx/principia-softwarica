@@ -612,7 +612,7 @@ sysexits(ulong *arg)
         }
 
     }
-    pexit(status, 1);
+    pexit(status, true);
     return 0;       /* not reached */
 }
 /*e: syscall exits */
@@ -623,7 +623,7 @@ sysawait(ulong *arg)
 {
     int i;
     int pid;
-    Waitmsg w;
+    Waitmsg w; // allocated in stack!
     ulong n;
 
     n = arg[1];

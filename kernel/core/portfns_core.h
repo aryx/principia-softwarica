@@ -29,7 +29,7 @@ void    (*ready)(Proc*);
 // process/proc.c
 Proc*   (*proctab)(int);
 int     (*postnote)(Proc*, int, char*, int);
-void    (*pexit)(char*, int);
+void    (*pexit)(char*, bool);
 //process/sysproc.c
 int   (*return0)(void*);
 // files/chan.c

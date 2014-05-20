@@ -53,7 +53,7 @@ fault(ulong addr, bool read)
 
 /*s: function faulterror */
 static void
-faulterror(char *s, Chan *c, int freemem)
+faulterror(char *s, Chan *c, bool freemem)
 {
     char buf[ERRMAX];
 

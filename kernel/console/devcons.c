@@ -11,6 +11,11 @@
 #include    <pool.h>
 #include    <authsrv.h>
 
+// used also by edf.c
+/*s: global panicking */
+bool panicking;
+/*e: global panicking */
+
 /*s: hook screenputs */
 void    (*screenputs)(char*, int) = nil;
 /*e: hook screenputs */
@@ -491,6 +496,7 @@ echo(char *buf, int n)
     static int ctrlt, pid;
     int x;
     char *e, *p;
+    void* tmp;
 
     if(n == 0)
         return;
@@ -527,6 +533,13 @@ echo(char *buf, int n)
                     splx(x);
                     return;
                 case 'x':
+                    xsummary();
+                    tmp = xalloc(1000);
+                    xalloc(1000);
+                    xfree(tmp);
+                    xsummary();
+                    return;
+                case 'X':
                     xsummary();
                     ixsummary();
                     mallocsummary();

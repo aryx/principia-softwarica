@@ -158,7 +158,7 @@ syspipe(ulong *arg)
     evenaddr(arg[0]);
     d = devtab[devno('|', 0)];
     c[0] = namec("#|", Atodir, 0, 0);
-    c[1] = 0;
+    c[1] = nil;
     fd[0] = -1;
     fd[1] = -1;
 

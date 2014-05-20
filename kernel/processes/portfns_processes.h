@@ -73,7 +73,7 @@ ulong   pwait(Waitmsg*);
 void    unbreak(Proc*);
 int   freebroken(void);
 void    yield(void);
-//void    (*pexit)(char*, int);
+//void    (*pexit)(char*, bool);
 //void    (*sched)(void);
 void    schedinit(void);
 //void    (*ready)(Proc*);

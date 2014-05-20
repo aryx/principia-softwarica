@@ -18,21 +18,25 @@ typedef struct Pipe Pipe;
 /*s: struct Pipe */
 struct Pipe
 {
-    QLock;
-    Pipe    *next;
     int ref;
     ulong   path;
     long    perm;
     Queue   *q[2];
     int qref[2];
+
+    // extra
+    QLock;
+    Pipe    *next;
 };
 /*e: struct Pipe */
 
 /*s: struct Pipealloc */
 struct Pipealloc
 {
-    Lock;
     ulong   path;
+
+    // extra
+    Lock;
 };
 /*e: struct Pipealloc */
 

@@ -33,11 +33,11 @@ enum procstate
     /*x: enum procstate cases */
     Wakeme,
     /*x: enum procstate cases */
+    Rendezvous,
+    /*x: enum procstate cases */
     Moribund,
     /*x: enum procstate cases */
     Broken,
-    /*x: enum procstate cases */
-    Rendezvous,
     /*x: enum procstate cases */
     Stopped,
     /*x: enum procstate cases */
@@ -167,7 +167,7 @@ struct Waitq
     Waitmsg w;
   
     // extra
-    // list<ref<Waitq>> Proc.waitq
+    // list<ref_own<Waitq>> Proc.waitq
     Waitq *next;
 };
 /*e: struct Waitq */
@@ -349,8 +349,9 @@ enum proctime
     TSys,
     TReal,
 
-    TCUser,
-    TCSys,
+    // accumulates also the time of its children
+    TCUser, 
+    TCSys, 
     TCReal,
 };
 /*e: enum proctimer */
@@ -515,16 +516,16 @@ struct Proc
 //--------------------------------------------------------------------
     /*s: [[Proc]] hierarchy fields */
     Proc  *parent;
-    /*x: [[Proc]] hierarchy fields */
-
-    //list<ref<Waitq>>
-    Waitq *waitq;   /* Exited processes wait children */
-    Lock  exl;    /* Lock count and waitq */
-
     int nchild;   /* Number of living children */
-    int nwait;    /* Number of uncollected wait records */
-    QLock qwaitr;
+    /*x: [[Proc]] hierarchy fields */
+    // list<ref_own<Waitq>>> =~ list<ref_own<Waitmsg>>
+    Waitq *waitq;   /* Exited processes wait children */
+    int nwait;    /* Number of uncollected wait records */ // len(waitq)
+    Lock  exl;    /* Lock count and waitq */
+    /*x: [[Proc]] hierarchy fields */
     Rendez  waitr;    /* Place to hang out in wait */
+    /*x: [[Proc]] hierarchy fields */
+    QLock qwaitr;
     /*e: [[Proc]] hierarchy fields */
 //--------------------------------------------------------------------
 // Synchronization

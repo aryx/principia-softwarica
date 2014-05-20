@@ -40,7 +40,7 @@ void proc_ready(Proc*);
 void proc_sleep(Rendez*, int(*)(void*), void*);
 void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
 Proc* proc_wakeup(Rendez*);
-void proc_pexit(char *exitstr, int freemem);
+void proc_pexit(char *exitstr, bool freemem);
 Proc* proc_proctab(int i);
 void main_exit(int ispanic);
 int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
@@ -285,7 +285,7 @@ confinit(void)
                         if(conf.npage*BY2PG < 16*MB)
                                 userpcnt = 40;
                         else
-                                userpcnt = 60;
+                                userpcnt = 80;
                 }
                 kpages = conf.npage - (conf.npage*userpcnt)/100;
 
@@ -659,7 +659,7 @@ mathemu(Ureg *ureg, void*)
 static void
 mathover(Ureg*, void*)
 {
-        pexit("math overrun", 0);
+        pexit("math overrun", false);
 }
 /*e: function mathover */
 
@@ -853,7 +853,7 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 //*****************************************************************************
 
 /*s: function main */
-//@Scheck: not dead, entry point :) jumped to by qemu (via elf header)
+//@Scheck: not dead, entry point :) jumped from assembly at _startpg() end
 void
 main(void)
 {

@@ -54,6 +54,7 @@ xinit(void)
         maxpages = cankaddr(m->base)/BY2PG;
         if(n > maxpages)
             n = maxpages;
+
         /* first give to kernel */
         if(n > 0){
             m->kbase = (ulong)KADDR(m->base);
@@ -109,7 +110,7 @@ xspanalloc(ulong size, int align, ulong span)
 /*e: function xspanalloc */
 
 /*s: function xallocz */
-void*
+kern_addr3
 xallocz(ulong size, bool zero)
 {
     Xhdr *p;
@@ -122,15 +123,21 @@ xallocz(ulong size, bool zero)
     ilock(&xlists);
     l = &xlists.table;
     for(h = *l; h; h = h->link) {
+        // found an appropriate hole
         if(h->size >= size) {
             p = (Xhdr*)KADDR(h->addr);
-            h->addr += size;
+            h->addr += size; // shrink towards top
             h->size -= size;
+
+            // this hole is now fully used (which is rare because one
+            // rarely does an xalloc with the remaining size of a hole)
+            // can put it back in the free list
             if(h->size == 0) {
                 *l = h->link;
                 h->link = xlists.flist;
                 xlists.flist = h;
             }
+
             iunlock(&xlists);
             if(zero)
                 memset(p, 0, size);
@@ -155,7 +162,7 @@ xalloc(ulong size)
 
 /*s: function xfree */
 void
-xfree(void *p)
+xfree(kern_addr3 p)
 {
     Xhdr *x;
 
@@ -169,44 +176,47 @@ xfree(void *p)
 /*e: function xfree */
 
 /*s: function xmerge */
-int
+bool
 xmerge(void *vp, void *vq)
 {
     Xhdr *p, *q;
 
     p = (Xhdr*)(((ulong)vp - offsetof(Xhdr, data[0])));
     q = (Xhdr*)(((ulong)vq - offsetof(Xhdr, data[0])));
-    if(p->magix != Magichole || q->magix != Magichole) {
-        int i;
-        ulong *wd;
-        void *badp;
 
-        xsummary();
-        badp = (p->magix != Magichole? p: q);
-        wd = (ulong *)badp - 12;
-        for (i = 24; i-- > 0; ) {
-            print("%#p: %lux", wd, *wd);
-            if (wd == badp)
-                print(" <-");
-            print("\n");
-            wd++;
-        }
+    if(p->magix != Magichole || q->magix != Magichole) {
+        /*s: [[xmerge()]] debug info when not magichole */
+                int i;
+                ulong *wd;
+                void *badp;
+
+                xsummary();
+                badp = (p->magix != Magichole? p: q);
+                wd = (ulong *)badp - 12;
+                for (i = 24; i-- > 0; ) {
+                    print("%#p: %lux", wd, *wd);
+                    if (wd == badp)
+                        print(" <-");
+                    print("\n");
+                    wd++;
+                }
+        /*e: [[xmerge()]] debug info when not magichole */
         panic("xmerge(%#p, %#p) bad magic %#lux, %#lux",
             vp, vq, p->magix, q->magix);
     }
     if((uchar*)p+p->size == (uchar*)q) {
         p->size += q->size;
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 /*e: function xmerge */
 
 /*s: function xhole */
 void
-xhole(ulong addr, ulong size)
+xhole(phys_addr addr, ulong size)
 {
-    ulong top;
+    phys_addr top;
     Hole *h, *c, **l;
 
     if(size == 0)
@@ -269,6 +279,14 @@ xsummary(void)
     int i;
     Hole *h;
 
+    for(i = 0; i < Nhole && xlists.hole[i].top != 0; i++) {
+        print("|i| = %d (0x%luX), addr 0x%luX, top = 0x%luX, size = %ld, link = 0x%luX\n",
+              i, &xlists.hole[i],
+              xlists.hole[i].addr, xlists.hole[i].top, xlists.hole[i].size,
+              xlists.hole[i].link
+              );
+    }
+    print("flists = 0x%luX, table = 0x%luX\n", xlists.flist, xlists.table);
     i = 0;
     for(h = xlists.flist; h; h = h->link)
         i++;

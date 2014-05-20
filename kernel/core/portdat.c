@@ -36,7 +36,7 @@ char* getconf(char *name)
 
 // was in init/main.c
 /*s: global m */
-// ref<Mach> allocated??
+// ref<Mach>, assigned to MACHADDR in _clearbss
 Mach *m;
 /*e: global m */
 // was in dat.h
@@ -65,8 +65,4 @@ bool iseve(void) {
 }
 /*e: function iseve */
 
-// was in console/devcons.c, but used also by edf.c
-/*s: global panicking */
-bool panicking;
-/*e: global panicking */
 /*e: portdat.c */

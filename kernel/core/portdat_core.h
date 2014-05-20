@@ -129,7 +129,7 @@ struct Mach
     /*x: [[Mach]] other fields */
     int lastintr; // debugging
     /*x: [[Mach]] other fields */
-    Label sched;      /* scheduler wakeup */
+    Label sched;      /* scheduler wakeup */ // address of schedinit()
     Proc* readied;    /* for runproc */
     ulong schedticks;   /* next forced context switch */
     /*e: [[Mach]] other fields */
@@ -165,6 +165,4 @@ extern  char  hostdomain[];
 // defined in ???
 extern ulong    kerndate; 
 
-// used to be in devcons.c, but used also by edf.c
-extern int panicking;
 /*e: portdat_core.h */

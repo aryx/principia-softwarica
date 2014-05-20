@@ -2,7 +2,11 @@
 #include <libc.h>
 
 extern	char	end[];
+
+// starting point for the heap, after the text, data, and bss.
 static	char	*bloc = { end };
+
+// the syscall
 extern	int	brk_(void*);
 
 enum

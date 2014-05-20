@@ -94,8 +94,8 @@ typedef struct Ref Counter;
 /*s: struct Rendez */
 struct Rendez
 {
-    // ??
-    Proc  *p;
+    // option<ref<Proc>>
+    Proc  *p; // sleeping process
     Lock;
 };
 /*e: struct Rendez */

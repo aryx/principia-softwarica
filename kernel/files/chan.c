@@ -496,7 +496,7 @@ closeproc(void*)
             }
             if(clunkq.head == nil){
                 qunlock(&clunkq.q);
-                pexit("no work", 1);
+                pexit("no work", true);
             }
         }
         lock(&clunkq.l);

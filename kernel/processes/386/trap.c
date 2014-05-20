@@ -922,7 +922,7 @@ if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
     || !okaddr(sp-ERRMAX-4*BY2WD, sizeof(Ureg)+ERRMAX+4*BY2WD, 1)){
         qunlock(&up->debug);
         pprint("suicide: bad address in notify\n");
-        pexit("Suicide", 0);
+        pexit("Suicide", false);
     }
 
     memmove((Ureg*)sp, ureg, sizeof(Ureg));
@@ -961,7 +961,7 @@ noted(Ureg* ureg, ulong arg0)
     if(arg0!=NRSTR && !up->notified) {
         qunlock(&up->debug);
         pprint("call to noted() when not notified\n");
-        pexit("Suicide", 0);
+        pexit("Suicide", false);
     }
     up->notified = 0;
 
@@ -974,7 +974,7 @@ noted(Ureg* ureg, ulong arg0)
     if(!okaddr((ulong)oureg-BY2WD, BY2WD+sizeof(Ureg), 0)){
         qunlock(&up->debug);
         pprint("bad ureg in noted or call to noted when not notified\n");
-        pexit("Suicide", 0);
+        pexit("Suicide", false);
     }
 
     /*
@@ -989,7 +989,7 @@ noted(Ureg* ureg, ulong arg0)
       || (nureg->fs & 0xFFFF) != UDSEL || (nureg->gs & 0xFFFF) != UDSEL){
         qunlock(&up->debug);
         pprint("bad segment selector in noted\n");
-        pexit("Suicide", 0);
+        pexit("Suicide", false);
     }
 
     /* don't let user change system flags */
@@ -1005,7 +1005,7 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
         if(!okaddr(nureg->pc, 1, 0) || !okaddr(nureg->usp, BY2WD, 0)){
             qunlock(&up->debug);
             pprint("suicide: trap in noted\n");
-            pexit("Suicide", 0);
+            pexit("Suicide", false);
         }
         up->ureg = (Ureg*)(*(ulong*)(oureg-BY2WD));
         qunlock(&up->debug);
@@ -1016,7 +1016,7 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
         || !okaddr(nureg->usp, BY2WD, 0)){
             qunlock(&up->debug);
             pprint("suicide: trap in noted\n");
-            pexit("Suicide", 0);
+            pexit("Suicide", false);
         }
         qunlock(&up->debug);
         sp = oureg-4*BY2WD-ERRMAX;
@@ -1109,7 +1109,10 @@ linkproc(void)
 {
     spllo();
     up->kpfun(up->kparg);
-    pexit("kproc dying", 0);
+    // should never reach this place?? kernel processes are supposed
+    // to run forever??
+
+    pexit("kproc dying", false); 
 }
 /*e: function linkproc */
 

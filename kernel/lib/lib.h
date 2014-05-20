@@ -312,7 +312,7 @@ struct Dir {
 /*s: struct Waitmsg */
 struct Waitmsg
 {
-  int pid;    /* of loved one */
+  int pid;    /* of loved one */ // pid of the child
   ulong time[3];  /* of loved one and descendants */
   char  msg[ERRMAX];  /* actually variable-size in user mode */
 };
