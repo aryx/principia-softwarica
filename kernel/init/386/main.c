@@ -185,7 +185,7 @@ writeconf(void)
 /*e: function writeconf */
 
 //*****************************************************************************
-// Mach init
+// Cpu init
 //*****************************************************************************
 
 /*s: function machinit */
@@ -199,7 +199,7 @@ machinit(void)
     machno = cpu->machno;
     pdb = cpu->pdb;
     gdt = cpu->gdt;
-    memset(cpu, 0, sizeof(Mach));
+    memset(cpu, 0, sizeof(Cpu));
     cpu->machno = machno;
     cpu->pdb = pdb;
     cpu->gdt = gdt;
@@ -220,7 +220,7 @@ void
 mach0init(void)
 {
         conf.nmach = 1;
-        MACHP(0) = (Mach*)CPU0MACH;
+        MACHP(0) = (Cpu*)CPU0MACH;
         cpu->pdb = (ulong*)CPU0PDB;
         cpu->gdt = (Segdesc*)CPU0GDT;
 

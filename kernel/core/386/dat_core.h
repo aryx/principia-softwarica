@@ -1,7 +1,7 @@
 /*s: dat_core.h */
 
 //*****************************************************************************
-// Mach extension
+// Cpu extension
 //*****************************************************************************
 
 /*s: struct Tss */
@@ -43,49 +43,49 @@ struct Segdesc
 };
 /*e: struct Segdesc */
 
-/*s: struct ArchMach */
-struct ArchMach {
-    /*s: [[Mach]] [[Arch]] cpuid fields */
+/*s: struct ArchCpu */
+struct ArchCpu {
+    /*s: [[Cpu]] [[Arch]] cpuid fields */
     char  cpuidid[16];
     char* cpuidtype;
     int cpuidax;
     int cpuiddx;
-    /*e: [[Mach]] [[Arch]] cpuid fields */
-    /*s: [[Mach]] [[Arch]] other fields */
+    /*e: [[Cpu]] [[Arch]] cpuid fields */
+    /*s: [[Cpu]] [[Arch]] other fields */
     Proc* externup;   /* extern register Proc *up */
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     Segdesc *gdt;     /* gdt for this processor */
-    /*x: [[Mach]] [[Arch]] other fields */
-    // TODO: have a ArchMachMMU like in bcm/
+    /*x: [[Cpu]] [[Arch]] other fields */
+    // TODO: have a ArchCpuMMU like in bcm/
     kern_addr2  pdb;      /* page directory base for this processor (va) */
     Page* pdbpool;
     int pdbcnt;
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     Tss*  tss;      /* tss for this processor */
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     int havepge;
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     // for perfticks, tsc = time stamp counter
     bool havetsc;
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     int pdballoc;
     int pdbfree;
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     int loopconst;
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     ArchFPsave *fpsavalign;
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     Lock  apictimerlock;
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     uvlong tscticks;
-    /*x: [[Mach]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields */
     vlong mtrrcap;
     vlong mtrrdef;
     vlong mtrrfix[11];
     vlong mtrrvar[32];    /* 256 max. */
-    /*e: [[Mach]] [[Arch]] other fields */
+    /*e: [[Cpu]] [[Arch]] other fields */
 };
-/*e: struct ArchMach */
+/*e: struct ArchCpu */
 
 //*****************************************************************************
 // Conf extension?

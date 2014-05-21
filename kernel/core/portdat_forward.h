@@ -55,7 +55,7 @@ typedef int    Devgen(Chan*, char*, Dirtab*, int, int, Dir*);
 typedef struct Conf Conf;
 typedef struct Confmem  Confmem;
 typedef struct Lock Lock;
-typedef struct Mach Mach;
+typedef struct Cpu Cpu;
 typedef struct Label  Label;
 
 // was in cache.c

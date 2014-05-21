@@ -830,7 +830,7 @@ static long
 consread(Chan *c, void *buf, long n, vlong off)
 {
     ulong l;
-    Mach *mp;
+    Cpu *mp;
     char *b, *bp, ch;
     char tmp[256];      /* must be >= 18*NUMSIZE (Qswap) */
     int i, k, id, send;
@@ -1065,7 +1065,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
     char buf[256], ch;
     long l, bp;
     char *a;
-    Mach *mp;
+    Cpu *mp;
     int id, fd;
     Chan *swc;
     ulong offset;

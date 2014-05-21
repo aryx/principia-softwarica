@@ -800,7 +800,7 @@ procwired(Proc *p, int bm)
     Proc *pp;
     int i;
     char nwired[MAXMACH];
-    Mach *wm;
+    Cpu *wm;
 
     if(bm < 0){
         /* pick a machine to wire to */

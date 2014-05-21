@@ -27,8 +27,8 @@ struct Lock
     //#endif
     /*e: [[Lock]] debugging fields */
     /*s: [[Lock]] other fields */
-    // option<ref<Mach>>, None when key = 0?
-    Mach  *m; // not that used, only in iprintcanlock apparently
+    // option<ref<Cpu>>, None when key = 0?
+    Cpu  *m; // not that used, only in iprintcanlock apparently
     /*e: [[Lock]] other fields */
 };
 /*e: struct Lock */

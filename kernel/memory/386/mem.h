@@ -94,7 +94,7 @@
 #define CPU0PTE   (KZERO+0x13000)   /* bootstrap processor PTE's for 0-4MB */
 #define CPU0GDT   (KZERO+0x14000)   /* bootstrap processor GDT */
 #define MACHADDR  (KZERO+0x15000)   /* as seen by current processor */
-#define CPU0MACH  (KZERO+0x16000)   /* Mach for bootstrap processor */
+#define CPU0MACH  (KZERO+0x16000)   /* Cpu for bootstrap processor */
 #define MACHSIZE  BY2PG
 #define CPU0PTE1  (KZERO+0x17000)   /* bootstrap processor PTE's for 4MB-8MB */
 #define CPU0END   (CPU0PTE1+BY2PG)

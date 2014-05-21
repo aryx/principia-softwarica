@@ -467,14 +467,14 @@ struct Proc
     Edf *edf; /* if non-null, real-time proc, edf contains scheduling params */
     /*e: [[Proc]] optional [[edf]] field for real-time scheduling */
     /*x: [[Proc]] scheduling fields */
-    // option<ref<Mach>>, null when not associated to a processor
-    Mach  *mach;    /* machine running this proc */
+    // option<ref<Cpu>>, null when not associated to a processor
+    Cpu  *mach;    /* machine running this proc */
     /*x: [[Proc]] scheduling fields */
     ulong lastupdate;
     /*x: [[Proc]] scheduling fields */
-    Mach  *mp;    /* machine this process last ran on */
+    Cpu  *mp;    /* machine this process last ran on */
     /*x: [[Proc]] scheduling fields */
-    Mach  *wired;
+    Cpu  *wired;
     /*e: [[Proc]] scheduling fields */
 //--------------------------------------------------------------------
 // Files

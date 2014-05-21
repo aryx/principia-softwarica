@@ -61,7 +61,7 @@ extern bool cpuserver; // defined in $CONF.c
 char* getconf(char *name);
 
 //*****************************************************************************
-// Mach
+// Cpu
 //*****************************************************************************
 
 /*s: struct Label */
@@ -91,14 +91,14 @@ struct Perf
 };
 /*e: struct Perf */
 
-/*s: struct Mach */
-struct Mach
+/*s: struct Cpu */
+struct Cpu
 {
     int machno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
-    /*s: [[Mach]] second field */
+    /*s: [[Cpu]] second field */
     // must be second field at 0x04, used by splhi()
     ulong splpc;      /* pc of last caller to splhi */
-    /*e: [[Mach]] second field */
+    /*e: [[Cpu]] second field */
   
     // ref<Proc>
     Proc* proc;     /* current process on this processor */
@@ -110,9 +110,9 @@ struct Mach
     // = cpuhz if havetsc, 0 otherwise
     uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 
-    /*s: [[Mach]] stat fields */
+    /*s: [[Cpu]] stat fields */
     Perf  perf;     /* performance counters */
-    /*x: [[Mach]] stat fields */
+    /*x: [[Cpu]] stat fields */
     int tlbfault;
     int tlbpurge;
     int pfault;
@@ -121,29 +121,29 @@ struct Mach
     int load;
     int intr;
     ulong spuriousintr;
-    /*e: [[Mach]] stat fields */
-    /*s: [[Mach]] other fields */
+    /*e: [[Cpu]] stat fields */
+    /*s: [[Cpu]] other fields */
     int ilockdepth;
-    /*x: [[Mach]] other fields */
+    /*x: [[Cpu]] other fields */
     bool flushmmu;   /* make current proc flush it's mmu state */
-    /*x: [[Mach]] other fields */
+    /*x: [[Cpu]] other fields */
     int lastintr; // debugging
-    /*x: [[Mach]] other fields */
+    /*x: [[Cpu]] other fields */
     Label sched;      /* scheduler wakeup */ // address of schedinit()
     Proc* readied;    /* for runproc */
     ulong schedticks;   /* next forced context switch */
-    /*e: [[Mach]] other fields */
-    struct ArchMach;
+    /*e: [[Cpu]] other fields */
+    struct ArchCpu;
   
     // must be at the end of the structure!
     int stack[1];
 };
-/*e: struct Mach */
+/*e: struct Cpu */
 
-// ref<Mach>, the actual Mach is where??
-extern Mach *cpu;
-// array<ref<Mach>>, MAXMACH is defined in 386/mem.h
-extern Mach* machp[MAXMACH];
+// ref<Cpu>, the actual Cpu is where??
+extern Cpu *cpu;
+// array<ref<Cpu>>, MAXMACH is defined in 386/mem.h
+extern Cpu* machp[MAXMACH];
 /*s: macro MACHP */
 #define MACHP(n)  (machp[n])
 /*e: macro MACHP */

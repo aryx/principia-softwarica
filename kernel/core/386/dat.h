@@ -60,10 +60,10 @@ typedef void* kern_addr3;
 #include "dat_forward.h"
 #include "../port/portdat_forward.h"
 
-// defines Lock (used inline in Mach in portdat_core.h so must be before)
+// defines Lock (used inline in Cpu in portdat_core.h so must be before)
 #include "../port/portdat_concurrency.h"
 
-// defines Conf, Mach
+// defines Conf, Cpu
 #include "dat_core.h"
 #include "../port/portdat_core.h"
 

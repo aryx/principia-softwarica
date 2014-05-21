@@ -54,7 +54,7 @@ sysrfork(ulong *arg)
     Rgrp *org;
     Egrp *oeg;
     ulong pid, flag;
-    Mach *wm;
+    Cpu *wm;
 
     flag = arg[0];
     /* Check flags before we commit */

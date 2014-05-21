@@ -319,7 +319,7 @@ static char* excname[32] = {
  *  keep histogram of interrupt service times
  */
 void
-intrtime(Mach*, int vno)
+intrtime(Cpu*, int vno)
 {
     ulong diff;
     ulong x;
@@ -372,7 +372,7 @@ trap(Ureg* ureg)
     int i, vno, user;
     char buf[ERRMAX];
     Vctl *ctl, *v;
-    Mach *mach;
+    Cpu *mach;
 
     if(!trapinited){
         /* fault386 can give a better error message */

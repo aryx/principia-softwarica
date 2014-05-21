@@ -114,9 +114,9 @@ mmuinit(void)
     cpu->tss->iomap = 0xDFFF<<16;
 
     /*
-     * We used to keep the GDT in the Mach structure, but it
+     * We used to keep the GDT in the Cpu structure, but it
      * turns out that that slows down access to the rest of the
-     * page.  Since the Mach structure is accessed quite often,
+     * page.  Since the Cpu structure is accessed quite often,
      * it pays off anywhere from a factor of 1.25 to 2 on real
      * hardware to separate them (the AMDs are more sensitive
      * than Intels in this regard).  Under VMware it pays off
@@ -688,7 +688,7 @@ vunmap(void *v, int size)
 {
     int i;
     ulong va, o;
-    Mach *nm;
+    Cpu *nm;
     Proc *p;
     
     /*
@@ -1033,7 +1033,7 @@ void
 countpagerefs(ulong *ref, int print)
 {
     int i, n;
-    Mach *mm;
+    Cpu *mm;
     Page *pg;
     Proc *p;
     

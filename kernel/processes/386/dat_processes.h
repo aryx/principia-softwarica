@@ -16,7 +16,7 @@
  * the FP regs must be stored here, not somewhere pointed to from here.
  * port code assumes this.
  */
-// could be renamed ArchProcFPSave (used both in Proc and Mach though)
+// could be renamed ArchProcFPSave (used both in Proc and Cpu though)
 union ArchFPsave {
     FPstate;
     SFPssestate;

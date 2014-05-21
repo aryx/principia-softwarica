@@ -354,7 +354,7 @@ static void
 checkmtrr(void)
 {
     int i, vcnt;
-    Mach *mach0;
+    Cpu *mach0;
 
     /*
      * If there are MTRR registers, snarf them for validation.
@@ -439,16 +439,16 @@ static void
 mpstartap(Apic* apic)
 {
     ulong *apbootp, *pdb, *pte;
-    Mach *mach, *mach0;
+    Cpu *mach, *mach0;
     int i, machno;
     uchar *p;
 
     mach0 = MACHP(0);
 
     /*
-     * Initialise the AP page-tables and Mach structure. The page-tables
+     * Initialise the AP page-tables and Cpu structure. The page-tables
      * are the same as for the bootstrap processor with the exception of
-     * the PTE for the Mach structure.
+     * the PTE for the Cpu structure.
      * Xspanalloc will panic if an allocation can't be made.
      */
     p = xspanalloc(4*BY2PG, BY2PG, 0);
@@ -464,7 +464,7 @@ mpstartap(Apic* apic)
         *pte |= PTEGLOBAL;
     p += BY2PG;
 
-    mach = (Mach*)p;
+    mach = (Cpu*)p;
     if((pte = mmuwalk(pdb, MACHADDR, 2, 0)) == nil)
         return;
     *pte = PADDR(mach)|PTEWRITE|PTEVALID;

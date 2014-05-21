@@ -36,7 +36,7 @@
  *      a page directory;
  *      page tables for mapping the first 8MB of physical memory to KZERO;
  *      a page for the GDT;
- *      virtual and physical pages for mapping the Mach structure.
+ *      virtual and physical pages for mapping the Cpu structure.
  * The remaining PTEs will be allocated later when memory is sized.
  * An identity mmu map is also needed for the switch to virtual mode.
  * This identity mapping is removed once the MMU is going and the JMP has
@@ -160,7 +160,7 @@ _setpte1:
 
         MOVL    $PADDR(CPU0PTE), AX
         ADDL    $PTO(MACHADDR), AX              /* page table entry offset for MACHADDR */
-        MOVL    $PADDR(CPU0MACH), (AX)          /* PTE for Mach */
+        MOVL    $PADDR(CPU0MACH), (AX)          /* PTE for Cpu */
         MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
         ORL     BX, (AX)
 
@@ -187,9 +187,9 @@ _setpte1:
 /*s: function _startpg */
 /*
  * Basic machine environment set, can clear BSS and create a stack.
- * The stack starts at the top of the page containing the Mach structure.
+ * The stack starts at the top of the page containing the Cpu structure.
  * The x86 architecture forces the use of the same virtual address for
- * each processor's Mach structure, so the global Mach pointer 'cpu' can
+ * each processor's Cpu structure, so the global Cpu pointer 'cpu' can
  * be initialised here.
  */
 TEXT _startpg(SB), $0
@@ -207,7 +207,7 @@ _clearbss:
         REP;    STOSL                           /* clear BSS */
 
         MOVL    $MACHADDR, SP
-        MOVL    SP, cpu(SB)                /* initialise global Mach pointer */
+        MOVL    SP, cpu(SB)                /* initialise global Cpu pointer */
         MOVL    $0, 0(SP)                       /* initialise cpu->machno */
 
 
