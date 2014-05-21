@@ -800,7 +800,7 @@ struct Mach
 % todo: why not make m an alias for machp[processor_id]? so faster?
 <<global m>>=
 // ref<Mach>, assigned to MACHADDR in _clearbss
-Mach *m;
+Mach *cpu;
 @ 
 
 
@@ -4436,7 +4436,7 @@ mmurelease(Proc* proc)
 
     if(islo())
         panic("mmurelease: islo");
-    taskswitch(PADDR(cpu->pdb), (ulong)m + BY2PG);
+    taskswitch(PADDR(cpu->pdb), (ulong)cpu + BY2PG);
     if(proc->kmaptable){
         if(proc->mmupdb == nil)
             panic("mmurelease: no mmupdb");
@@ -4798,13 +4798,13 @@ vunmap(void *v, int size)
     }
     for(i=0; i<conf.nmach; i++){
         nm = MACHP(i);
-        if(nm != m)
+        if(nm != cpu)
             nm->flushmmu = true;
     }
     flushmmu();
     for(i=0; i<conf.nmach; i++){
         nm = MACHP(i);
-        if(nm != m)
+        if(nm != cpu)
             while((active.machs&(1<<nm->machno)) && nm->flushmmu)
                 ;
     }
@@ -6856,7 +6856,7 @@ trap(Ureg* ureg)
             ctl->eoi(vno);
 
         if(ctl->isintr){
-            intrtime(m, vno);
+            intrtime(cpu, vno);
 
             if(ctl->irq == IrqCLOCK || ctl->irq == IrqTIMER)
                 clockintr = true;
@@ -7761,7 +7761,7 @@ proc_ready(Proc *p)
         return;
     }
 
-    if(up != p && (p->wired == nil || p->wired == m))
+    if(up != p && (p->wired == nil || p->wired == cpu))
         cpu->readied = p; /* group scheduling */
 
     updatecpu(p);
@@ -7861,7 +7861,7 @@ runproc(void)
 
     /* cooperative scheduling until the clock ticks */
     if((p=cpu->readied) && p->mach==0 && p->state==Ready
-    && (p->wired == nil || p->wired == m)
+    && (p->wired == nil || p->wired == cpu)
     && runq[Nrq-1].head == nil && runq[Nrq-2].head == nil){
         skipscheds++;
         rq = &runq[p->priority];
@@ -9746,7 +9746,7 @@ _setpte1:
  * Basic machine environment set, can clear BSS and create a stack.
  * The stack starts at the top of the page containing the Mach structure.
  * The x86 architecture forces the use of the same virtual address for
- * each processor's Mach structure, so the global Mach pointer 'm' can
+ * each processor's Mach structure, so the global Mach pointer 'cpu' can
  * be initialised here.
  */
 TEXT _startpg(SB), $0
@@ -9764,7 +9764,7 @@ _clearbss:
         REP;    STOSL                           /* clear BSS */
 
         MOVL    $MACHADDR, SP
-        MOVL    SP, m(SB)                       /* initialise global Mach pointer */
+        MOVL    SP, cpu(SB)                /* initialise global Mach pointer */
         MOVL    $0, 0(SP)                       /* initialise cpu->machno */
 
 
@@ -9820,7 +9820,7 @@ main(void)
     kbdinit(); // kbd is then fully enabled below via kdbenable()
     i8253init(); // clock controller
 
-    cpuidentify(); // setup m, to know which advanced features we can enable
+    cpuidentify(); // setup cpu, to know which advanced features we can enable
     cpuidprint();
     meminit(); // setup conf.mem memory banks
     confinit(); // setup conf
@@ -9925,7 +9925,7 @@ machinit(void)
     machno = cpu->machno;
     pdb = cpu->pdb;
     gdt = cpu->gdt;
-    memset(m, 0, sizeof(Mach));
+    memset(cpu, 0, sizeof(Mach));
     cpu->machno = machno;
     cpu->pdb = pdb;
     cpu->gdt = gdt;
@@ -11279,7 +11279,7 @@ mmuinit(void)
         *p &= ~PTEWRITE;
     }
 
-    taskswitch(PADDR(cpu->pdb),  (ulong)m + BY2PG);
+    taskswitch(PADDR(cpu->pdb),  (ulong)cpu + BY2PG);
     ltr(TSSSEL);
 }
 @
@@ -24200,8 +24200,8 @@ _dumpstack(Ureg *ureg)
     && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
         estack = (uintptr)up->kstack+KSTACK;
     else if((uintptr)&l >= (uintptr)cpu->stack
-    && (uintptr)&l <= (uintptr)m+MACHSIZE)
-        estack = (uintptr)m+MACHSIZE;
+    && (uintptr)&l <= (uintptr)cpu+MACHSIZE)
+        estack = (uintptr)cpu+MACHSIZE;
     else
         return;
     x += iprint("estackx %p\n", estack);
