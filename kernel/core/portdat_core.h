@@ -144,9 +144,9 @@ struct Cpu
 extern Cpu *cpu;
 // array<ref<Cpu>>, MAXMACH is defined in 386/mem.h
 extern Cpu* cpus[MAXMACH];
-/*s: macro MACHP */
-#define MACHP(n)  (cpus[n])
-/*e: macro MACHP */
+/*s: macro CPUS */
+#define CPUS(n)  (cpus[n])
+/*e: macro CPUS */
 
 /*s: macro up */
 // up = user process

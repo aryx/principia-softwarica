@@ -24,7 +24,7 @@ alarmkproc(void*)
     ulong now;
 
     for(;;){
-        now = MACHP(0)->ticks;
+        now = CPUS(0)->ticks;
         qlock(&alarms);
         /*
          * the odd test of now vs. rp->alarm is to cope with
@@ -62,7 +62,7 @@ checkalarms(void)
     ulong now;
 
     p = alarms.head;
-    now = MACHP(0)->ticks;
+    now = CPUS(0)->ticks;
 
     if(p && (long)(now - p->alarm) >= 0)
         wakeup(&alarmr);
@@ -77,14 +77,14 @@ procalarm(ulong time)
     ulong when, old;
 
     if(up->alarm)
-        old = tk2ms(up->alarm - MACHP(0)->ticks);
+        old = tk2ms(up->alarm - CPUS(0)->ticks);
     else
         old = 0;
     if(time == 0) {
         up->alarm = 0;
         return old;
     }
-    when = ms2tk(time)+MACHP(0)->ticks;
+    when = ms2tk(time)+CPUS(0)->ticks;
     if(when == 0)       /* ticks have wrapped to 0? */
         when = 1;   /* distinguish a wrapped alarm from no alarm */
 

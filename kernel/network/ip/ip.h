@@ -671,7 +671,7 @@ extern uchar IPnoaddr[IPaddrlen];
 extern uchar v4prefix[IPaddrlen];
 extern uchar IPallbits[IPaddrlen];
 
-#define NOW TK2MS(MACHP(0)->ticks)
+#define NOW TK2MS(CPUS(0)->ticks)
 
 /*
  *  media

@@ -220,7 +220,7 @@ void
 cpu0init(void)
 {
         conf.ncpu = 1;
-        MACHP(0) = (Cpu*)CPU0MACH;
+        CPUS(0) = (Cpu*)CPU0MACH;
         cpu->pdb = (ulong*)CPU0PDB;
         cpu->gdt = (Segdesc*)CPU0GDT;
 

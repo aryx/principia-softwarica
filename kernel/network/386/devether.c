@@ -119,7 +119,7 @@ etherrtrace(Netfile* f, Etherpkt* pkt, int len)
     if(bp == nil)
         return;
     memmove(bp->wp, pkt->d, n);
-    i = TK2MS(MACHP(0)->ticks);
+    i = TK2MS(CPUS(0)->ticks);
     bp->wp[58] = len>>8;
     bp->wp[59] = len;
     bp->wp[60] = i>>24;

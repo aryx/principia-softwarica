@@ -118,7 +118,7 @@ static void
 mousefromkbd(int buttons)
 {
     kbdbuttons = buttons;
-    mousetrack(0, 0, 0, TK2MS(MACHP(0)->ticks));
+    mousetrack(0, 0, 0, TK2MS(CPUS(0)->ticks));
 }
 
 static int
@@ -439,7 +439,7 @@ mousewrite(Chan *c, void *va, long n, vlong)
         b = strtol(p, &p, 0);
         msec = strtol(p, &p, 0);
         if(msec == 0)
-            msec = TK2MS(MACHP(0)->ticks);
+            msec = TK2MS(CPUS(0)->ticks);
         mousetrack(pt.x, pt.y, b, msec);
         return n;
 
@@ -506,7 +506,7 @@ static void
 mouseclock(void)
 {
     if(mouse.track){
-        mousetrack(mouse.dx, mouse.dy, mouse.buttons, TK2MS(MACHP(0)->ticks));
+        mousetrack(mouse.dx, mouse.dy, mouse.buttons, TK2MS(CPUS(0)->ticks));
         mouse.track = 0;
         mouse.dx = 0;
         mouse.dy = 0;
@@ -620,7 +620,7 @@ m3mouseputc(Queue*, int c)
     ulong m;
 
     /* Resynchronize in stream with timing. */
-    m = MACHP(0)->ticks;
+    m = CPUS(0)->ticks;
     if(TK2SEC(m - lasttick) > 2)
         nb = 0;
     lasttick = m;
@@ -634,7 +634,7 @@ m3mouseputc(Queue*, int c)
             /* an extra byte gets sent for the middle button */
             middle = (c&0x20) ? 2 : 0;
             newbuttons = (mouse.buttons & ~2) | middle;
-            mousetrack(0, 0, newbuttons, TK2MS(MACHP(0)->ticks));
+            mousetrack(0, 0, newbuttons, TK2MS(CPUS(0)->ticks));
             return 0;
         }
     }
@@ -646,7 +646,7 @@ m3mouseputc(Queue*, int c)
         dx = (x>>8) | msg[1];
         x = (msg[0]&0xc)<<12;
         dy = (x>>8) | msg[2];
-        mousetrack(dx, dy, newbuttons, TK2MS(MACHP(0)->ticks));
+        mousetrack(dx, dy, newbuttons, TK2MS(CPUS(0)->ticks));
     }
     return 0;
 }
@@ -674,7 +674,7 @@ m5mouseputc(Queue*, int c)
     ulong m;
 
     /* Resynchronize in stream with timing. */
-    m = MACHP(0)->ticks;
+    m = CPUS(0)->ticks;
     if(TK2SEC(m - lasttick) > 2)
         nb = 0;
     lasttick = m;
@@ -690,7 +690,7 @@ m5mouseputc(Queue*, int c)
             | ( msg[3] == 0x10 ? 0x02 :
                 msg[3] == 0x0f ? ScrollUp :
                 msg[3] == 0x01 ? ScrollDown : 0 );
-        mousetrack(dx, dy, newbuttons, TK2MS(MACHP(0)->ticks));
+        mousetrack(dx, dy, newbuttons, TK2MS(CPUS(0)->ticks));
         nb = 0;
     }
     return 0;
@@ -712,7 +712,7 @@ mouseputc(Queue*, int c)
     ulong m;
 
     /* Resynchronize in stream with timing. */
-    m = MACHP(0)->ticks;
+    m = CPUS(0)->ticks;
     if(TK2SEC(m - lasttick) > 2)
         nb = 0;
     lasttick = m;
@@ -726,7 +726,7 @@ mouseputc(Queue*, int c)
         newbuttons = b[((msg[0]&7)^7) | (mouseshifted ? 8 : 0)];
         dx = msg[1]+msg[3];
         dy = -(msg[2]+msg[4]);
-        mousetrack(dx, dy, newbuttons, TK2MS(MACHP(0)->ticks));
+        mousetrack(dx, dy, newbuttons, TK2MS(CPUS(0)->ticks));
         nb = 0;
     }
     return 0;

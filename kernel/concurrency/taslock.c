@@ -187,7 +187,7 @@ acquire:
     l->p = up;
     l->isilock = true;
     //TODO: why not just l->m = m? 
-    l->m = MACHP(cpu->cpuno);
+    l->m = CPUS(cpu->cpuno);
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
         l->lockcycles = -lcycles();
@@ -212,7 +212,7 @@ canlock(Lock *l)
         up->lastlock = l;
     l->pc = getcallerpc(&l);
     l->p = up;
-    l->m = MACHP(cpu->cpuno);
+    l->m = CPUS(cpu->cpuno);
     l->isilock = false;
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES

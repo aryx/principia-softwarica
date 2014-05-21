@@ -247,7 +247,7 @@ proc_sched(void)
     cpu->readied = nil;
     up = p;
     up->state = Running;
-    up->cpu = MACHP(cpu->cpuno);
+    up->cpu = CPUS(cpu->cpuno);
     cpu->proc = up;
     mmuswitch(up);
     gotolabel(&up->sched);
@@ -363,7 +363,7 @@ updatecpu(Proc *p)
     if(p->edf)
         return;
 
-    t = MACHP(0)->ticks*Scaling + Scaling/2;
+    t = CPUS(0)->ticks*Scaling + Scaling/2;
     n = t - p->lastupdate;
     p->lastupdate = t;
 
@@ -400,7 +400,7 @@ reprioritize(Proc *p)
 {
     int fairshare, n, load, ratio;
 
-    load = MACHP(0)->load;
+    load = CPUS(0)->load;
     if(load == 0)
         return p->basepri;
 
@@ -572,7 +572,7 @@ another:
         p = rq->head;
         if(p == nil)
             continue;
-        if(p->mp != MACHP(cpu->cpuno))
+        if(p->mp != CPUS(cpu->cpuno))
             continue;
         if(pri == p->basepri)
             continue;
@@ -631,7 +631,7 @@ loop:
          */
         for(rq = &runq[Nrq-1]; rq >= runq; rq--){
             for(p = rq->head; p; p = p->rnext){
-                if(p->mp == nil || p->mp == MACHP(cpu->cpuno)
+                if(p->mp == nil || p->mp == CPUS(cpu->cpuno)
                 || (!p->wired && i > 0))
                     goto found;
             }
@@ -653,7 +653,7 @@ found:
         goto loop;
 
     p->state = Scheding;
-    p->mp = MACHP(cpu->cpuno);
+    p->mp = CPUS(cpu->cpuno);
 
     if(edflock(p)){
         edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
@@ -783,7 +783,7 @@ newproc(void)
     p->wired = nil;
     procpriority(p, PriNormal, 0);
     p->cpuavg = 0;
-    p->lastupdate = MACHP(0)->ticks*Scaling;
+    p->lastupdate = CPUS(0)->ticks*Scaling;
     p->edf = nil;
 
     return p;
@@ -821,7 +821,7 @@ procwired(Proc *p, int bm)
         bm = bm % conf.ncpu;
     }
 
-    p->wired = MACHP(bm);
+    p->wired = CPUS(bm);
     p->mp = p->wired;
 }
 /*e: function procwired */
@@ -1273,7 +1273,7 @@ proc_pexit(char *exitstr, bool freemem)
         stime = up->time[TSys] + up->time[TCSys];
         wq->w.time[TUser] = tk2ms(utime);
         wq->w.time[TSys] = tk2ms(stime);
-        wq->w.time[TReal] = tk2ms(MACHP(0)->ticks - up->time[TReal]);
+        wq->w.time[TReal] = tk2ms(CPUS(0)->ticks - up->time[TReal]);
         if(exitstr && exitstr[0])
             snprint(wq->w.msg, sizeof(wq->w.msg), "%s %lud: %s", up->text, up->pid, exitstr);
         else
@@ -1492,8 +1492,8 @@ procflushseg(Segment *s)
             if(p->seg[ns] == s){
                 p->newtlb = 1;
                 for(nm = 0; nm < conf.ncpu; nm++){
-                    if(MACHP(nm)->proc == p){
-                        MACHP(nm)->flushmmu = 1;
+                    if(CPUS(nm)->proc == p){
+                        CPUS(nm)->flushmmu = 1;
                         nwait++;
                     }
                 }
@@ -1509,8 +1509,8 @@ procflushseg(Segment *s)
      *  and flush their mmu's
      */
     for(nm = 0; nm < conf.ncpu; nm++)
-        if(MACHP(nm) != cpu)
-            while(MACHP(nm)->flushmmu)
+        if(CPUS(nm) != cpu)
+            while(CPUS(nm)->flushmmu)
                 sched();
 }
 /*e: function procflushseg */
@@ -1577,7 +1577,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     incref(kpgrp);
 
     memset(p->time, 0, sizeof(p->time));
-    p->time[TReal] = MACHP(0)->ticks;
+    p->time[TReal] = CPUS(0)->ticks;
     ready(p);
 }
 /*e: function kproc */

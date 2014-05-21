@@ -607,7 +607,7 @@ vmap(ulong pa, int size)
     }
     ilock(&vmaplock);
     if((va = vmapalloc(size)) == 0 
-    || pdbmap(MACHP(0)->pdb, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
+    || pdbmap(CPUS(0)->pdb, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
         iunlock(&vmaplock);
         return 0;
     }
@@ -652,7 +652,7 @@ vmapalloc(ulong size)
     ulong *vpdb;
     int vpdbsize;
     
-    vpdb = &MACHP(0)->pdb[PDX(VMAP)];
+    vpdb = &CPUS(0)->pdb[PDX(VMAP)];
     vpdbsize = VMAPSIZE/(4*MB);
 
     if(size >= 4*MB){
@@ -704,7 +704,7 @@ vunmap(void *v, int size)
         panic("vunmap va=%#.8lux size=%#x pc=%#.8lux",
             va, size, getcallerpc(&v));
 
-    pdbunmap(MACHP(0)->pdb, va, size);
+    pdbunmap(CPUS(0)->pdb, va, size);
     
     /*
      * Flush mapping from all the tlbs and copied pdbs.
@@ -715,7 +715,7 @@ vunmap(void *v, int size)
      * and return.
      */
     if(!active.thunderbirdsarego){
-        putcr3(PADDR(MACHP(0)->pdb));
+        putcr3(PADDR(CPUS(0)->pdb));
         return;
     }
     for(i=0; i<conf.nproc; i++){
@@ -726,13 +726,13 @@ vunmap(void *v, int size)
             p->newtlb = true;
     }
     for(i=0; i<conf.ncpu; i++){
-        nm = MACHP(i);
+        nm = CPUS(i);
         if(nm != cpu)
             nm->flushmmu = true;
     }
     flushmmu();
     for(i=0; i<conf.ncpu; i++){
-        nm = MACHP(i);
+        nm = CPUS(i);
         if(nm != cpu)
             while((active.cpus&(1<<nm->cpuno)) && nm->flushmmu)
                 ;
@@ -754,7 +754,7 @@ pdbmap(ulong *pdb, ulong pa, ulong va, int size)
     flag = pa&0xFFF;
     pa &= ~0xFFF;
 
-    if((MACHP(0)->cpuiddx & Pse) && (getcr4() & 0x10))
+    if((CPUS(0)->cpuiddx & Pse) && (getcr4() & 0x10))
         pse = 1;
     else
         pse = 0;
@@ -834,7 +834,7 @@ vmapsync(ulong va)
     if(va < VMAP || va >= VMAP+VMAPSIZE)
         return 0;
 
-    entry = MACHP(0)->pdb[PDX(va)];
+    entry = CPUS(0)->pdb[PDX(va)];
     if(!(entry&PTEVALID))
         return 0;
     if(!(entry&PTESIZE)){
@@ -1097,7 +1097,7 @@ countpagerefs(ulong *ref, int print)
         iprint("%d pages in proc mmu\n", n);
     n = 0;
     for(i=0; i<conf.ncpu; i++){
-        mm = MACHP(i);
+        mm = CPUS(i);
         for(pg=mm->pdbpool; pg; pg=pg->next){
             if(print){
                 if(ref[pagenumber(pg)])
@@ -1116,7 +1116,7 @@ countpagerefs(ulong *ref, int print)
         iprint("%d pages in cpu pdbpools\n", n);
         for(i=0; i<conf.ncpu; i++)
             iprint("cpu%d: %d pdballoc, %d pdbfree\n",
-                i, MACHP(i)->pdballoc, MACHP(i)->pdbfree);
+                i, CPUS(i)->pdballoc, CPUS(i)->pdbfree);
     }
 }
 /*e: function countpagerefs */

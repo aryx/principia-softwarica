@@ -825,8 +825,8 @@ Cpu* cpus[MAXMACH];
 @
 
 
-<<macro MACHP>>=
-#define MACHP(n)  (cpus[n])
+<<macro CPUS>>=
+#define CPUS(n)  (cpus[n])
 @
 
 
@@ -1481,7 +1481,7 @@ canlock(Lock *l)
         up->lastlock = l;
     l->pc = getcallerpc(&l);
     l->p = up;
-    l->m = MACHP(cpu->cpuno);
+    l->m = CPUS(cpu->cpuno);
     l->isilock = false;
 <<lock ifdef LOCKCYCLES>>
     return true;
@@ -1607,7 +1607,7 @@ acquire:
     l->p = up;
     l->isilock = true;
     //TODO: why not just l->m = m? 
-    l->m = MACHP(cpu->cpuno);
+    l->m = CPUS(cpu->cpuno);
 <<lock ifdef LOCKCYCLES>>
 }
 @ 
@@ -4672,7 +4672,7 @@ vmap(ulong pa, int size)
     }
     ilock(&vmaplock);
     if((va = vmapalloc(size)) == 0 
-    || pdbmap(MACHP(0)->pdb, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
+    || pdbmap(CPUS(0)->pdb, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
         iunlock(&vmaplock);
         return 0;
     }
@@ -4719,7 +4719,7 @@ vmapalloc(ulong size)
     ulong *vpdb;
     int vpdbsize;
     
-    vpdb = &MACHP(0)->pdb[PDX(VMAP)];
+    vpdb = &CPUS(0)->pdb[PDX(VMAP)];
     vpdbsize = VMAPSIZE/(4*MB);
 
     if(size >= 4*MB){
@@ -4775,7 +4775,7 @@ vunmap(void *v, int size)
         panic("vunmap va=%#.8lux size=%#x pc=%#.8lux",
             va, size, getcallerpc(&v));
 
-    pdbunmap(MACHP(0)->pdb, va, size);
+    pdbunmap(CPUS(0)->pdb, va, size);
     
     /*
      * Flush mapping from all the tlbs and copied pdbs.
@@ -4786,7 +4786,7 @@ vunmap(void *v, int size)
      * and return.
      */
     if(!active.thunderbirdsarego){
-        putcr3(PADDR(MACHP(0)->pdb));
+        putcr3(PADDR(CPUS(0)->pdb));
         return;
     }
     for(i=0; i<conf.nproc; i++){
@@ -4797,13 +4797,13 @@ vunmap(void *v, int size)
             p->newtlb = true;
     }
     for(i=0; i<conf.ncpu; i++){
-        nm = MACHP(i);
+        nm = CPUS(i);
         if(nm != cpu)
             nm->flushmmu = true;
     }
     flushmmu();
     for(i=0; i<conf.ncpu; i++){
-        nm = MACHP(i);
+        nm = CPUS(i);
         if(nm != cpu)
             while((active.cpus&(1<<nm->cpuno)) && nm->flushmmu)
                 ;
@@ -4825,7 +4825,7 @@ pdbmap(ulong *pdb, ulong pa, ulong va, int size)
     flag = pa&0xFFF;
     pa &= ~0xFFF;
 
-    if((MACHP(0)->cpuiddx & Pse) && (getcr4() & 0x10))
+    if((CPUS(0)->cpuiddx & Pse) && (getcr4() & 0x10))
         pse = 1;
     else
         pse = 0;
@@ -4907,7 +4907,7 @@ vmapsync(ulong va)
     if(va < VMAP || va >= VMAP+VMAPSIZE)
         return 0;
 
-    entry = MACHP(0)->pdb[PDX(va)];
+    entry = CPUS(0)->pdb[PDX(va)];
     if(!(entry&PTEVALID))
         return 0;
     if(!(entry&PTESIZE)){
@@ -6947,7 +6947,7 @@ trap(Ureg* ureg)
             for(i = 0; i < 32; i++){
                 if(!(active.cpus & (1<<i)))
                     continue;
-                mach = MACHP(i);
+                mach = CPUS(i);
                 if(cpu->cpuno == mach->cpuno)
                     continue;
                 print(" cpu%d: last %d",
@@ -7144,7 +7144,7 @@ newproc(void)
     p->wired = nil;
     procpriority(p, PriNormal, 0);
     p->cpuavg = 0;
-    p->lastupdate = MACHP(0)->ticks*Scaling;
+    p->lastupdate = CPUS(0)->ticks*Scaling;
     p->edf = nil;
 
     return p;
@@ -7555,7 +7555,7 @@ proc_sched(void)
     cpu->readied = nil;
     up = p;
     up->state = Running;
-    up->cpu = MACHP(cpu->cpuno);
+    up->cpu = CPUS(cpu->cpuno);
     cpu->proc = up;
     mmuswitch(up);
     gotolabel(&up->sched);
@@ -7678,7 +7678,7 @@ updatecpu(Proc *p)
     if(p->edf)
         return;
 
-    t = MACHP(0)->ticks*Scaling + Scaling/2;
+    t = CPUS(0)->ticks*Scaling + Scaling/2;
     n = t - p->lastupdate;
     p->lastupdate = t;
 
@@ -7716,7 +7716,7 @@ reprioritize(Proc *p)
 {
     int fairshare, n, load, ratio;
 
-    load = MACHP(0)->load;
+    load = CPUS(0)->load;
     if(load == 0)
         return p->basepri;
 
@@ -7825,7 +7825,7 @@ another:
         p = rq->head;
         if(p == nil)
             continue;
-        if(p->mp != MACHP(cpu->cpuno))
+        if(p->mp != CPUS(cpu->cpuno))
             continue;
         if(pri == p->basepri)
             continue;
@@ -7885,7 +7885,7 @@ loop:
          */
         for(rq = &runq[Nrq-1]; rq >= runq; rq--){
             for(p = rq->head; p; p = p->rnext){
-                if(p->mp == nil || p->mp == MACHP(cpu->cpuno)
+                if(p->mp == nil || p->mp == CPUS(cpu->cpuno)
                 || (!p->wired && i > 0))
                     goto found;
             }
@@ -7907,7 +7907,7 @@ found:
         goto loop;
 
     p->state = Scheding;
-    p->mp = MACHP(cpu->cpuno);
+    p->mp = CPUS(cpu->cpuno);
 
     if(edflock(p)){
         edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
@@ -7956,7 +7956,7 @@ procwired(Proc *p, int bm)
         bm = bm % conf.ncpu;
     }
 
-    p->wired = MACHP(bm);
+    p->wired = CPUS(bm);
     p->mp = p->wired;
 }
 @ 
@@ -8564,7 +8564,7 @@ sysrfork(ulong *arg)
     p->fpstate = up->fpstate & ~FPillegal;
     pid = p->pid;
     memset(p->time, 0, sizeof(p->time));
-    p->time[TReal] = MACHP(0)->ticks;
+    p->time[TReal] = CPUS(0)->ticks;
 
     kstrdup(&p->text, up->text);
     kstrdup(&p->user, up->user);
@@ -9243,7 +9243,7 @@ proc_pexit(char *exitstr, bool freemem)
         stime = up->time[TSys] + up->time[TCSys];
         wq->w.time[TUser] = tk2ms(utime);
         wq->w.time[TSys] = tk2ms(stime);
-        wq->w.time[TReal] = tk2ms(MACHP(0)->ticks - up->time[TReal]);
+        wq->w.time[TReal] = tk2ms(CPUS(0)->ticks - up->time[TReal]);
         if(exitstr && exitstr[0])
             snprint(wq->w.msg, sizeof(wq->w.msg), "%s %lud: %s", up->text, up->pid, exitstr);
         else
@@ -9472,7 +9472,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     incref(kpgrp);
 
     memset(p->time, 0, sizeof(p->time));
-    p->time[TReal] = MACHP(0)->ticks;
+    p->time[TReal] = CPUS(0)->ticks;
     ready(p);
 }
 @ 
@@ -9902,7 +9902,7 @@ void
 cpu0init(void)
 {
         conf.ncpu = 1;
-        MACHP(0) = (Cpu*)CPU0MACH;
+        CPUS(0) = (Cpu*)CPU0MACH;
         cpu->pdb = (ulong*)CPU0PDB;
         cpu->gdt = (Segdesc*)CPU0GDT;
 
@@ -18784,7 +18784,7 @@ iprintcanlock(Lock *l)
     for(i=0; i<1000; i++){
         if(canlock(l))
             return 1;
-        if(l->m == MACHP(cpu->cpuno))
+        if(l->m == CPUS(cpu->cpuno))
             return 0;
         microdelay(100);
     }
@@ -19039,7 +19039,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         for(i=0; i<6 && NUMSIZE*i<k+n; i++){
             l = up->time[i];
             if(i == TReal)
-                l = MACHP(0)->ticks - l;
+                l = CPUS(0)->ticks - l;
             l = TK2MS(l);
             readnum(0, tmp+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
         }
@@ -19100,7 +19100,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         bp = b;
         for(id = 0; id < 32; id++) {
             if(active.cpus & (1<<id)) {
-                mp = MACHP(id);
+                mp = CPUS(id);
                 readnum(0, bp, NUMSIZE, id, NUMSIZE);
                 bp += NUMSIZE;
                 readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
@@ -19309,7 +19309,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
     case Qsysstat:
         for(id = 0; id < 32; id++) {
             if(active.cpus & (1<<id)) {
-                mp = MACHP(id);
+                mp = CPUS(id);
                 mp->cs = 0;
                 mp->intr = 0;
                 mp->syscall = 0;
@@ -19999,14 +19999,14 @@ procalarm(ulong time)
     ulong when, old;
 
     if(up->alarm)
-        old = tk2ms(up->alarm - MACHP(0)->ticks);
+        old = tk2ms(up->alarm - CPUS(0)->ticks);
     else
         old = 0;
     if(time == 0) {
         up->alarm = 0;
         return old;
     }
-    when = ms2tk(time)+MACHP(0)->ticks;
+    when = ms2tk(time)+CPUS(0)->ticks;
     if(when == 0)       /* ticks have wrapped to 0? */
         when = 1;   /* distinguish a wrapped alarm from no alarm */
 
@@ -20060,7 +20060,7 @@ alarmkproc(void*)
     ulong now;
 
     for(;;){
-        now = MACHP(0)->ticks;
+        now = CPUS(0)->ticks;
         qlock(&alarms);
         /*
          * the odd test of now vs. rp->alarm is to cope with
@@ -20099,7 +20099,7 @@ checkalarms(void)
     ulong now;
 
     p = alarms.head;
-    now = MACHP(0)->ticks;
+    now = CPUS(0)->ticks;
 
     if(p && (long)(now - p->alarm) >= 0)
         wakeup(&alarmr);
@@ -22495,7 +22495,7 @@ procread(Chan *c, void *va, long n, vlong off)
         for(i = 0; i < 6; i++) {
             l = p->time[i];
             if(i == TReal)
-                l = MACHP(0)->ticks - l;
+                l = CPUS(0)->ticks - l;
             l = TK2MS(l);
             readnum(0, statbuf+j+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
         }
@@ -24027,7 +24027,7 @@ nrand(int n)
 {
     if(randn == 0)
         seedrand();
-    randn = randn*1103515245 + 12345 + MACHP(0)->ticks;
+    randn = randn*1103515245 + 12345 + CPUS(0)->ticks;
     return (randn>>16) % n;
 }
 @

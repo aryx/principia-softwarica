@@ -103,7 +103,7 @@ ps2mouseputc(int c, int shift)
     /*
      * Resynchronize in stream with timing; see comment above.
      */
-    m = MACHP(0)->ticks;
+    m = CPUS(0)->ticks;
     if(TK2SEC(m - lasttick) > 2)
         nb = 0;
     lasttick = m;
@@ -156,7 +156,7 @@ ps2mouseputc(int c, int shift)
         }
         dx = msg[1];
         dy = -msg[2];
-        mousetrack(dx, dy, buttons, TK2MS(MACHP(0)->ticks));
+        mousetrack(dx, dy, buttons, TK2MS(CPUS(0)->ticks));
     }
     return;
 }

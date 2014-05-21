@@ -308,7 +308,7 @@ iprintcanlock(Lock *l)
     for(i=0; i<1000; i++){
         if(canlock(l))
             return 1;
-        if(l->m == MACHP(cpu->cpuno))
+        if(l->m == CPUS(cpu->cpuno))
             return 0;
         microdelay(100);
     }
@@ -899,7 +899,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         for(i=0; i<6 && NUMSIZE*i<k+n; i++){
             l = up->time[i];
             if(i == TReal)
-                l = MACHP(0)->ticks - l;
+                l = CPUS(0)->ticks - l;
             l = TK2MS(l);
             readnum(0, tmp+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
         }
@@ -960,7 +960,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         bp = b;
         for(id = 0; id < 32; id++) {
             if(active.cpus & (1<<id)) {
-                mp = MACHP(id);
+                mp = CPUS(id);
                 readnum(0, bp, NUMSIZE, id, NUMSIZE);
                 bp += NUMSIZE;
                 readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
@@ -1169,7 +1169,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
     case Qsysstat:
         for(id = 0; id < 32; id++) {
             if(active.cpus & (1<<id)) {
-                mp = MACHP(id);
+                mp = CPUS(id);
                 mp->cs = 0;
                 mp->intr = 0;
                 mp->syscall = 0;
@@ -1263,7 +1263,7 @@ nrand(int n)
 {
     if(randn == 0)
         seedrand();
-    randn = randn*1103515245 + 12345 + MACHP(0)->ticks;
+    randn = randn*1103515245 + 12345 + CPUS(0)->ticks;
     return (randn>>16) % n;
 }
 /*e: function nrand */

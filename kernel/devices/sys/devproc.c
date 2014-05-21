@@ -904,7 +904,7 @@ procread(Chan *c, void *va, long n, vlong off)
         for(i = 0; i < 6; i++) {
             l = p->time[i];
             if(i == TReal)
-                l = MACHP(0)->ticks - l;
+                l = CPUS(0)->ticks - l;
             l = TK2MS(l);
             readnum(0, statbuf+j+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
         }

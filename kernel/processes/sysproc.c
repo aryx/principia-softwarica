@@ -206,7 +206,7 @@ sysrfork(ulong *arg)
     p->fpstate = up->fpstate & ~FPillegal;
     pid = p->pid;
     memset(p->time, 0, sizeof(p->time));
-    p->time[TReal] = MACHP(0)->ticks;
+    p->time[TReal] = CPUS(0)->ticks;
 
     kstrdup(&p->text, up->text);
     kstrdup(&p->user, up->user);

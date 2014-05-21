@@ -117,10 +117,10 @@ syncclock(void)
         wrmsr(0x10, 0);
         cpu->tscticks = 0;
     } else {
-        x = MACHP(0)->tscticks;
-        while(x == MACHP(0)->tscticks)
+        x = CPUS(0)->tscticks;
+        while(x == CPUS(0)->tscticks)
             ;
-        wrmsr(0x10, MACHP(0)->tscticks);
+        wrmsr(0x10, CPUS(0)->tscticks);
         cycles(&cpu->tscticks);
     }
 }

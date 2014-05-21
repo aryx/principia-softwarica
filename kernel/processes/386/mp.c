@@ -383,7 +383,7 @@ checkmtrr(void)
     if(cpu->cpuno == 0)
         return;
 
-    cpu0 = MACHP(0);
+    cpu0 = CPUS(0);
     if(cpu0->mtrrcap != cpu->mtrrcap)
         print("mtrrcap%d: %lluX %lluX\n",
             cpu->cpuno, cpu0->mtrrcap, cpu->mtrrcap);
@@ -443,7 +443,7 @@ mpstartap(Apic* apic)
     int i, cpuno;
     uchar *p;
 
-    cpu0 = MACHP(0);
+    cpu0 = CPUS(0);
 
     /*
      * Initialise the AP page-tables and Cpu structure. The page-tables
@@ -473,7 +473,7 @@ mpstartap(Apic* apic)
     p += BY2PG;
 
     cpuno = apic->cpuno;
-    MACHP(cpuno) = mach;
+    CPUS(cpuno) = mach;
     mach->cpuno = cpuno;
     mach->pdb = pdb;
     mach->gdt = (Segdesc*)p;    /* filled by mmuinit */

@@ -457,7 +457,7 @@ trap(Ureg* ureg)
                     for(i = 0; i < 32; i++){
                         if(!(active.cpus & (1<<i)))
                             continue;
-                        mach = MACHP(i);
+                        mach = CPUS(i);
                         if(cpu->cpuno == mach->cpuno)
                             continue;
                         print(" cpu%d: last %d",
