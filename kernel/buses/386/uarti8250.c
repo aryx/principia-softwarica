@@ -720,7 +720,7 @@ i8250config(char *p)
         uartctl(uart, cmd);
 
     consuart = uart;
-    uart->console = 1;
+    uart->console = true;
 }
 
 void

@@ -39,7 +39,7 @@ struct Uart
   int parity;     /* even, odd or no parity */
   int baud;     /* baud rate */
   PhysUart*phys;
-  int console;    /* used as a serial console */
+  bool console;    /* used as a serial console */
   int special;    /* internal kernel device */
   Uart* next;     /* list of allocated uarts */
 

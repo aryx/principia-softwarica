@@ -910,57 +910,58 @@ main(void)
 
     cgapost(0);
 
-    mach0init(); // calls machinit()
+    mach0init(); // cpu0 initialization (calls machinit())
 
-    options();
+    options(); // setup values for getconf() from bootloader config
+    // example of manual config:
+    // TODO confname(``console'') = 1?
 
-    ioinit();
+    ioinit(); // does some getconf("ioexclude") so must be after options()
 
-    i8250console();
-    quotefmtinstall();
-    screeninit();
-    // screeninit() done, we can print stuff!
-    print("\nPlan 99999999999999\n");
+    screeninit(); // screenputs = cgascreenputs
+    quotefmtinstall(); // libc printf initialization
+    i8250console(); // setup optional serial console if getconf("console") == 1
+    print("\nPlan 9\n");
 
-    // the init0 means this is really early on (malloc is not available?!)
+    // the init0 means this is really early on (e.g. malloc is not available)
     trapinit0();
     mmuinit0();
 
-    kbdinit(); //kbd enable below
-    i8253init();
+    kbdinit(); // kbd is then fully enabled below via kdbenable()
+    i8253init(); // clock controller
 
-    cpuidentify();
+    cpuidentify(); // setup m, to know which advanced features we can enable
+    cpuidprint();
+    meminit(); // setup conf.mem memory banks
+    confinit(); // setup conf
 
-    meminit();
-    confinit();
+    archinit(); // setup arch
 
-    archinit();
-
-    xinit();
-
+    xinit(); // setup xalloc memory allocator
     if(i8237alloc != nil)
-            i8237alloc();
+            i8237alloc(); // setup dma
 
     trapinit();
-    printinit();
-    cpuidprint();
     mmuinit();
 
     fpsavealloc();
     if(arch->intrinit)      /* launches other processors on an mp */
             arch->intrinit();
 
-
-
     timersinit();
     mathinit();
-    kbdenable();
+
+    kbdenable(); // setup kdbq
+    //TODO: bad name, setup lineq = queue for keyboard for reading /dev/cons
+    printinit();  // setup lineq
+
     if(arch->clockenable)
             arch->clockenable();
 
 
     procinit0();
     initseg();
+
     if(delaylink) {
             bootlinks();
             pcimatch(0, 0, 0);
