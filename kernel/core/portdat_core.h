@@ -149,8 +149,8 @@ extern Mach* machp[MAXMACH];
 /*e: macro MACHP */
 
 /*s: macro up */
-// up = user process, MACHADDR is defined in 386/mem.h
-#define up  (((Mach*)MACHADDR)->externup)
+// up = user process
+#define up  (cpu->externup)
 /*e: macro up */
 
 //*****************************************************************************
