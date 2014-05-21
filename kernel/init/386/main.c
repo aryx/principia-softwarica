@@ -196,22 +196,22 @@ machinit(void)
     ulong *pdb;
     Segdesc *gdt;
 
-    machno = m->machno;
-    pdb = m->pdb;
-    gdt = m->gdt;
-    memset(m, 0, sizeof(Mach));
-    m->machno = machno;
-    m->pdb = pdb;
-    m->gdt = gdt;
+    machno = cpu->machno;
+    pdb = cpu->pdb;
+    gdt = cpu->gdt;
+    memset(cpu, 0, sizeof(Mach));
+    cpu->machno = machno;
+    cpu->pdb = pdb;
+    cpu->gdt = gdt;
 
-    m->perf.period = 1;
+    cpu->perf.period = 1;
     /*
      * For polled uart output at boot, need
      * a default delay constant. 100000 should
      * be enough for a while. Cpuidentify will
      * calculate the real value later.
      */
-    m->loopconst = 100000;
+    cpu->loopconst = 100000;
 }
 /*e: function machinit */
 
@@ -221,8 +221,8 @@ mach0init(void)
 {
         conf.nmach = 1;
         MACHP(0) = (Mach*)CPU0MACH;
-        m->pdb = (ulong*)CPU0PDB;
-        m->gdt = (Segdesc*)CPU0GDT;
+        cpu->pdb = (ulong*)CPU0PDB;
+        cpu->gdt = (Segdesc*)CPU0GDT;
 
         machinit();
 
@@ -591,7 +591,7 @@ matherror(Ureg *ur, void*)
          *  a write cycle to port 0xF0 clears the interrupt latch attached
          *  to the error# line from the 387
          */
-        if(!(m->cpuiddx & Fpuonchip))
+        if(!(cpu->cpuiddx & Fpuonchip))
                 outb(0xF0, 0xFF);
 
         /*
@@ -668,7 +668,7 @@ void
 mathinit(void)
 {
         trapenable(VectorCERR, matherror, 0, "matherror");
-        if(X86FAMILY(m->cpuidax) == 3)
+        if(X86FAMILY(cpu->cpuidax) == 3)
                 intrenable(IrqIRQ13, matherror, 0, BUSUNKNOWN, "matherror");
         trapenable(VectorCNA, mathemu, 0, "mathemu");
         trapenable(VectorCSO, mathover, 0, "mathover");
@@ -688,9 +688,9 @@ shutdown(bool ispanic)
         lock(&active);
         if(ispanic)
                 active.ispanic = ispanic;
-        else if(m->machno == 0 && (active.machs & (1<<m->machno)) == 0)
+        else if(cpu->machno == 0 && (active.machs & (1<<cpu->machno)) == 0)
                 active.ispanic = false;
-        once = active.machs & (1<<m->machno);
+        once = active.machs & (1<<cpu->machno);
         /*
          * setting exiting will make hzclock() on each processor call exit(0),
          * which calls shutdown(0) and arch->reset(), which on mp systems is
@@ -698,12 +698,12 @@ shutdown(bool ispanic)
          * processors (to permit a reboot).  clearing our bit in machs avoids
          * calling exit(0) from hzclock() on this processor.
          */
-        active.machs &= ~(1<<m->machno);
+        active.machs &= ~(1<<cpu->machno);
         active.exiting = true;
         unlock(&active);
 
         if(once)
-                iprint("cpu%d: exiting\n", m->machno);
+                iprint("cpu%d: exiting\n", cpu->machno);
 
         /* wait for any other processors to shutdown */
         spllo();
@@ -750,7 +750,7 @@ reboot(void *entry, void *code, ulong size)
          * because the hardware has a notion of which processor was the
          * boot processor and we look at it at start up.
          */
-        if (m->machno != 0) {
+        if (cpu->machno != 0) {
                 procwired(up, 0);
                 sched();
         }
@@ -774,8 +774,8 @@ reboot(void *entry, void *code, ulong size)
          * should be the only processor running now
          */
         active.machs = 0;
-        if (m->machno != 0)
-                print("on cpu%d (not 0)!\n", m->machno);
+        if (cpu->machno != 0)
+                print("on cpu%d (not 0)!\n", cpu->machno);
 
         print("shutting down...\n");
         delay(200);
@@ -793,7 +793,7 @@ reboot(void *entry, void *code, ulong size)
          * Modify the machine page table to directly map the low 4MB of memory
          * This allows the reboot code to turn off the page mapping
          */
-        pdb = m->pdb;
+        pdb = cpu->pdb;
         pdb[PDX(0)] = pdb[PDX(KZERO)];
         mmuflushtlb(PADDR(pdb));
 
@@ -930,7 +930,7 @@ main(void)
     kbdinit(); // kbd is then fully enabled below via kdbenable()
     i8253init(); // clock controller
 
-    cpuidentify(); // setup m, to know which advanced features we can enable
+    cpuidentify(); // setup cpu, to know which advanced features we can enable
     cpuidprint();
     meminit(); // setup conf.mem memory banks
     confinit(); // setup conf

@@ -603,7 +603,7 @@ edfready(Proc *p)
     nrdy++;
     runvec |= 1 << PriEdf;
     p->priority = PriEdf;
-    p->readytime = m->ticks;
+    p->readytime = cpu->ticks;
     p->state = Ready;
     unlock(runq);
     if(p->trace && (pt = proctrace))

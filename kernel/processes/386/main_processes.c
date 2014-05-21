@@ -62,7 +62,7 @@ procsave(Proc *p)
      * You might think it would be a win not to do this in that case,
      * especially on VMware, but it turns out not to matter.
      */
-    mmuflushtlb(PADDR(m->pdb));
+    mmuflushtlb(PADDR(cpu->pdb));
 }
 /*e: function procsave */
 
@@ -83,9 +83,9 @@ procrestore(Proc *p)
 void
 fpsavealloc(void)
 {
-    m->fpsavalign = mallocalign(sizeof(FPssestate), FPalign, 0, 0);
-    if (m->fpsavalign == nil)
-        panic("cpu%d: can't allocate fpsavalign", m->machno);
+    cpu->fpsavalign = mallocalign(sizeof(FPssestate), FPalign, 0, 0);
+    if (cpu->fpsavalign == nil)
+        panic("cpu%d: can't allocate fpsavalign", cpu->machno);
 }
 /*e: function fpsavealloc */
 
@@ -119,7 +119,7 @@ fpsserestore(ArchFPsave *fps)
     fps->magic = 0x4321;
     afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
     if (fps != afps) {
-        afps = m->fpsavalign;
+        afps = cpu->fpsavalign;
         memmove(afps, fps, sizeof(FPssestate)); /* make aligned copy */
     }
     fpsserestore0(afps);

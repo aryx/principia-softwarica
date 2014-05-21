@@ -22,10 +22,10 @@ uvlong
 tscticks(uvlong *hz)
 {
     if(hz != nil)
-        *hz = m->cpuhz;
+        *hz = cpu->cpuhz;
 
-    cycles(&m->tscticks);   /* Uses the rdtsc instruction */
-    return m->tscticks;
+    cycles(&cpu->tscticks);   /* Uses the rdtsc instruction */
+    return cpu->tscticks;
 }
 
 static void
@@ -80,7 +80,7 @@ identify(void)
     if(sum || (pcmp->version != 1 && pcmp->version != 4))
         return 1;
 
-    if(cpuserver && m->havetsc)
+    if(cpuserver && cpu->havetsc)
         archmp.fastclock = tscticks;
     return 0;
 }
@@ -113,15 +113,15 @@ syncclock(void)
     if(arch->fastclock != tscticks)
         return;
 
-    if(m->machno == 0){
+    if(cpu->machno == 0){
         wrmsr(0x10, 0);
-        m->tscticks = 0;
+        cpu->tscticks = 0;
     } else {
         x = MACHP(0)->tscticks;
         while(x == MACHP(0)->tscticks)
             ;
         wrmsr(0x10, MACHP(0)->tscticks);
-        cycles(&m->tscticks);
+        cycles(&cpu->tscticks);
     }
 }
 /*e: function syncclock */

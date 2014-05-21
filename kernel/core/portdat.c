@@ -37,7 +37,7 @@ char* getconf(char *name)
 // was in init/main.c
 /*s: global m */
 // ref<Mach>, assigned to MACHADDR in _clearbss
-Mach *m;
+Mach *cpu;
 /*e: global m */
 // was in dat.h
 /*s: global machp */

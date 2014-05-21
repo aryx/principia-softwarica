@@ -986,7 +986,7 @@ Proc* externup;   /* extern register Proc *up */
 // up = user process, MACHADDR is defined in 386/mem.h
 #define up  (((Mach*)MACHADDR)->externup)
 @
-% could use m->externup, but then this is a macro, not a closure
+% could use cpu->externup, but then this is a macro, not a closure
 % so any code introducing a local variable m will not be able to use up
 
 
@@ -1481,7 +1481,7 @@ canlock(Lock *l)
         up->lastlock = l;
     l->pc = getcallerpc(&l);
     l->p = up;
-    l->m = MACHP(m->machno);
+    l->m = MACHP(cpu->machno);
     l->isilock = false;
 <<lock ifdef LOCKCYCLES>>
     return true;
@@ -1506,7 +1506,7 @@ shi:
         POPL    AX
         TESTL   $0x200, AX
         JZ      alreadyhi
-        MOVL    $(MACHADDR+0x04), CX            /* save PC in m->splpc */
+        MOVL    $(MACHADDR+0x04), CX            /* save PC in cpu->splpc */
         MOVL    (SP), BX
         MOVL    BX, (CX)
 alreadyhi:
@@ -1523,7 +1523,7 @@ slo:
         POPL    AX
         TESTL   $0x200, AX
         JNZ     alreadylo
-        MOVL    $(MACHADDR+0x04), CX            /* clear m->splpc */
+        MOVL    $(MACHADDR+0x04), CX            /* clear cpu->splpc */
         MOVL    $0, (CX)
 alreadylo:
         STI
@@ -1599,7 +1599,7 @@ ilock(Lock *l)
         }
     }
 acquire:
-    m->ilockdepth++;
+    cpu->ilockdepth++;
     if(up)
         up->lastilock = l;
     l->sr = x;
@@ -1607,7 +1607,7 @@ acquire:
     l->p = up;
     l->isilock = true;
     //TODO: why not just l->m = m? 
-    l->m = MACHP(m->machno);
+    l->m = MACHP(cpu->machno);
 <<lock ifdef LOCKCYCLES>>
 }
 @ 
@@ -1645,7 +1645,7 @@ iunlock(Lock *l)
     l->m = nil;
     l->key = 0;
     coherence();
-    m->ilockdepth--;
+    cpu->ilockdepth--;
     if(up)
         up->lastilock = nil;
     splx(sr);
@@ -1690,8 +1690,8 @@ qlock(QLock *q)
 {
     Proc *p;
 
-    if(m->ilockdepth != 0)
-        print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), m->ilockdepth);
+    if(cpu->ilockdepth != 0)
+        print("qlock: %#p: ilockdepth %d\n", getcallerpc(&q), cpu->ilockdepth);
     if(up != nil && up->nlocks.ref)
         print("qlock: %#p: nlocks %lud\n", getcallerpc(&q), up->nlocks.ref);
     if(q->use.key == 0x55555555) // dead code??
@@ -4253,7 +4253,7 @@ Segdesc *gdt;     /* gdt for this processor */
 void
 mmuinit0(void)
 {
-    memmove(m->gdt, gdt, sizeof gdt);
+    memmove(cpu->gdt, gdt, sizeof gdt);
 }
 @
 
@@ -4320,7 +4320,7 @@ flushmmu(void)
 void
 flushpg(ulong va)
 {
-    if(X86FAMILY(m->cpuidax) >= 4)
+    if(X86FAMILY(cpu->cpuidax) >= 4)
         invlpg(va);
     else
         putcr3(getcr3());
@@ -4342,20 +4342,20 @@ mmupdballoc(void)
     ulong *pdb;
 
     s = splhi();
-    m->pdballoc++;
-    if(m->pdbpool == 0){
+    cpu->pdballoc++;
+    if(cpu->pdbpool == 0){
         spllo();
         page = newpage(0, 0, 0);
         page->va = (ulong)vpd;
         splhi();
         pdb = tmpmap(page);
-        memmove(pdb, m->pdb, BY2PG);
+        memmove(pdb, cpu->pdb, BY2PG);
         pdb[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
         tmpunmap(pdb);
     }else{
-        page = m->pdbpool;
-        m->pdbpool = page->next;
-        m->pdbcnt--;
+        page = cpu->pdbpool;
+        cpu->pdbpool = page->next;
+        cpu->pdbcnt--;
     }
     splx(s);
     return page;
@@ -4370,14 +4370,14 @@ mmupdbfree(Proc *proc, Page *p)
 {
     if(islo())
         panic("mmupdbfree: islo");
-    m->pdbfree++;
-    if(m->pdbcnt >= 10){
+    cpu->pdbfree++;
+    if(cpu->pdbcnt >= 10){
         p->next = proc->mmufree;
         proc->mmufree = p;
     }else{
-        p->next = m->pdbpool;
-        m->pdbpool = p;
-        m->pdbcnt++;
+        p->next = cpu->pdbpool;
+        cpu->pdbpool = p;
+        cpu->pdbcnt++;
     }
 }
 @
@@ -4419,12 +4419,12 @@ mmuptefree(Proc* proc)
 /*
  * Release any pages allocated for a page directory base or page-tables
  * for this process:
- *   switch to the prototype pdb for this processor (m->pdb);
+ *   switch to the prototype pdb for this processor (cpu->pdb);
  *   call mmuptefree() to place all pages used for page-tables (proc->mmuused)
  *   onto the process' free list (proc->mmufree). This has the side-effect of
  *   cleaning any user entries in the pdb (proc->mmupdb);
  *   if there's a pdb put it in the cache of pre-initialised pdb's
- *   for this processor (m->pdbpool) or on the process' free list;
+ *   for this processor (cpu->pdbpool) or on the process' free list;
  *   finally, place any pages freed back into the free pool (palloc).
  * This routine is only called from schedinit() with palloc locked.
  */
@@ -4436,7 +4436,7 @@ mmurelease(Proc* proc)
 
     if(islo())
         panic("mmurelease: islo");
-    taskswitch(PADDR(m->pdb), (ulong)m + BY2PG);
+    taskswitch(PADDR(cpu->pdb), (ulong)m + BY2PG);
     if(proc->kmaptable){
         if(proc->mmupdb == nil)
             panic("mmurelease: no mmupdb");
@@ -4505,7 +4505,7 @@ upallocpdb(void)
         return;
     }
     pdb = tmpmap(page);
-    pdb[PDX(MACHADDR)] = m->pdb[PDX(MACHADDR)];
+    pdb[PDX(MACHADDR)] = cpu->pdb[PDX(MACHADDR)];
     tmpunmap(pdb);
     up->mmupdb = page;
     putcr3(up->mmupdb->pa);
@@ -5017,7 +5017,7 @@ tmpmap(Page *p)
     /*
      * PDX(TMPADDR) == PDX(MACHADDR), so this
      * entry is private to the processor and shared 
-     * between up->mmupdb (if any) and m->pdb.
+     * between up->mmupdb (if any) and cpu->pdb.
      */
     entry = &vpt[VPTX(TMPADDR)];
     if(!(*entry&PTEVALID)){
@@ -5076,7 +5076,7 @@ fault(ulong addr, bool read)
     up->psstate = "Fault";
     spllo();
 
-    m->pfault++;
+    cpu->pfault++;
     for(;;) {
         s = seg(up, addr, 1);       /* leaves s->lk qlocked if seg != nil */
         if(s == 0) {
@@ -6651,7 +6651,7 @@ syscall(Ureg* ureg)
 
     cycles(&up->kentry);
 
-    m->syscall++;
+    cpu->syscall++;
     up->insyscall = true;
     up->pc = ureg->pc;
     up->dbgreg = ureg;
@@ -6829,7 +6829,7 @@ trap(Ureg* ureg)
         panic("trap %lud: not ready", ureg->trap);
     }
 
-    m->perf.intrts = perfticks();
+    cpu->perf.intrts = perfticks();
     user = (ureg->cs & 0xFFFF) == UESEL;
     if(user){
         up->dbgreg = ureg;
@@ -6841,9 +6841,9 @@ trap(Ureg* ureg)
     vno = ureg->trap;
     if(ctl = vctl[vno]){
         if(ctl->isintr){
-            m->intr++;
+            cpu->intr++;
             if(vno >= VectorPIC && vno != VectorSYSCALL)
-                m->lastintr = ctl->irq;
+                cpu->lastintr = ctl->irq;
         }
 
         if(ctl->isr)
@@ -6899,7 +6899,7 @@ trap(Ureg* ureg)
         /* clear the interrupt */
         i8259isr(vno);
         <<[[trap()]] debugging>>
-        m->spuriousintr++;
+        cpu->spuriousintr++;
         if(user)
             kexit(ureg);
         return;
@@ -6910,8 +6910,8 @@ trap(Ureg* ureg)
              * Don't re-enable, it confuses the crash dumps.
             nmienable();
              */
-            iprint("cpu%d: NMI PC %#8.8lux\n", m->machno, ureg->pc);
-            while(m->machno != 0)
+            iprint("cpu%d: NMI PC %#8.8lux\n", cpu->machno, ureg->pc);
+            while(cpu->machno != 0)
                 ;
         }
         dumpregs(ureg);
@@ -6942,13 +6942,13 @@ trap(Ureg* ureg)
 \ifallcode
 <<[[trap()]] debugging>>=
         if(0)print("cpu%d: spurious interrupt %d, last %d\n",
-            m->machno, vno, m->lastintr);
+            cpu->machno, vno, cpu->lastintr);
         if(0)if(conf.nmach > 1){
             for(i = 0; i < 32; i++){
                 if(!(active.machs & (1<<i)))
                     continue;
                 mach = MACHP(i);
-                if(m->machno == mach->machno)
+                if(cpu->machno == mach->machno)
                     continue;
                 print(" cpu%d: last %d",
                     mach->machno, mach->lastintr);
@@ -7161,7 +7161,7 @@ noprocpanic(char *msg)
      * on this processor.
      */
     lock(&active);
-    active.machs &= ~(1<<m->machno);
+    active.machs &= ~(1<<cpu->machno);
     active.exiting = true;
     unlock(&active);
 
@@ -7266,7 +7266,7 @@ taskswitch(ulong pdb, ulong stack)
 {
     Tss *tss;
 
-    tss = m->tss;
+    tss = cpu->tss;
     tss->ss0 = KDSEL;
     tss->esp0 = stack;
     tss->ss1 = KDSEL;
@@ -7291,11 +7291,11 @@ mmuswitch(Proc* proc)
 
     if(proc->mmupdb){
         pdb = tmpmap(proc->mmupdb);
-        pdb[PDX(MACHADDR)] = m->pdb[PDX(MACHADDR)];
+        pdb[PDX(MACHADDR)] = cpu->pdb[PDX(MACHADDR)];
         tmpunmap(pdb);
         taskswitch(proc->mmupdb->pa, (ulong)(proc->kstack+KSTACK));
     }else
-        taskswitch(PADDR(m->pdb), (ulong)(proc->kstack+KSTACK));
+        taskswitch(PADDR(cpu->pdb), (ulong)(proc->kstack+KSTACK));
 }
 @
 
@@ -7498,10 +7498,10 @@ proc_sched(void)
 {
     Proc *p;
 
-    if(m->ilockdepth)
+    if(cpu->ilockdepth)
         panic("cpu%d: ilockdepth %d, last lock %#p at %#p, sched called from %#p",
-            m->machno,
-            m->ilockdepth,
+            cpu->machno,
+            cpu->ilockdepth,
             up? up->lastilock: nil,
             (up && up->lastilock)? up->lastilock->pc: 0,
             getcallerpc(&p+2));
@@ -7532,7 +7532,7 @@ proc_sched(void)
         up->delaysched = 0;
         splhi(); // schedinit requires this
         /* statistics */
-        m->cs++;
+        cpu->cs++;
 
         procsave(up);
         if(setlabel(&up->sched)){
@@ -7540,7 +7540,7 @@ proc_sched(void)
             spllo();
             return;
         }
-        gotolabel(&m->sched); // goto schedinit()
+        gotolabel(&cpu->sched); // goto schedinit()
         //TODO can reach this point? schedinit calls sched()
         // so can return from sched() here at some point?
     }
@@ -7550,13 +7550,13 @@ proc_sched(void)
         updatecpu(p);
         p->priority = reprioritize(p);
     }
-    if(p != m->readied)
-        m->schedticks = m->ticks + HZ/10;
-    m->readied = nil;
+    if(p != cpu->readied)
+        cpu->schedticks = cpu->ticks + HZ/10;
+    cpu->readied = nil;
     up = p;
     up->state = Running;
-    up->mach = MACHP(m->machno);
-    m->proc = up;
+    up->mach = MACHP(cpu->machno);
+    cpu->proc = up;
     mmuswitch(up);
     gotolabel(&up->sched);
 }
@@ -7588,13 +7588,13 @@ void
 hzsched(void)
 {
     /* once a second, rebalance will reprioritize ready procs */
-    if(m->machno == 0)
+    if(cpu->machno == 0)
         rebalance();
 
     /* unless preempted, get to run for at least 100ms */
     if(anyhigher()
-    || (!up->fixedpri && m->ticks > m->schedticks && anyready())){
-        m->readied = nil;   /* avoid cooperative scheduling */
+    || (!up->fixedpri && cpu->ticks > cpu->schedticks && anyready())){
+        cpu->readied = nil;   /* avoid cooperative scheduling */
         up->delaysched++;
     }
 }
@@ -7613,7 +7613,7 @@ preempted(void)
     if(up->preempted == 0)
     if(anyhigher())
     if(!active.exiting){
-        m->readied = nil;   /* avoid cooperative scheduling */
+        cpu->readied = nil;   /* avoid cooperative scheduling */
         up->preempted = 1;
         sched();
         splhi();
@@ -7704,7 +7704,7 @@ updatecpu(Proc *p)
 <<function reprioritize>>=
 /*
  * On average, p has used p->cpu of a cpu recently.
- * Its fair share is conf.nmach/m->load of a cpu.  If it has been getting
+ * Its fair share is conf.nmach/cpu->load of a cpu.  If it has been getting
  * too much, penalize it.  If it has been getting not enough, reward it.
  * I don't think you can get much more than your fair share that 
  * often, so most of the queues are for using less.  Having a priority
@@ -7762,7 +7762,7 @@ proc_ready(Proc *p)
     }
 
     if(up != p && (p->wired == nil || p->wired == m))
-        m->readied = p; /* group scheduling */
+        cpu->readied = p; /* group scheduling */
 
     updatecpu(p);
     pri = reprioritize(p);
@@ -7815,7 +7815,7 @@ rebalance(void)
     Schedq *rq;
     Proc *p;
 
-    t = m->ticks;
+    t = cpu->ticks;
     if(t - balancetime < HZ)
         return;
     balancetime = t;
@@ -7825,7 +7825,7 @@ another:
         p = rq->head;
         if(p == nil)
             continue;
-        if(p->mp != MACHP(m->machno))
+        if(p->mp != MACHP(cpu->machno))
             continue;
         if(pri == p->basepri)
             continue;
@@ -7860,7 +7860,7 @@ runproc(void)
     start = perfticks();
 
     /* cooperative scheduling until the clock ticks */
-    if((p=m->readied) && p->mach==0 && p->state==Ready
+    if((p=cpu->readied) && p->mach==0 && p->state==Ready
     && (p->wired == nil || p->wired == m)
     && runq[Nrq-1].head == nil && runq[Nrq-2].head == nil){
         skipscheds++;
@@ -7885,7 +7885,7 @@ loop:
          */
         for(rq = &runq[Nrq-1]; rq >= runq; rq--){
             for(p = rq->head; p; p = p->rnext){
-                if(p->mp == nil || p->mp == MACHP(m->machno)
+                if(p->mp == nil || p->mp == MACHP(cpu->machno)
                 || (!p->wired && i > 0))
                     goto found;
             }
@@ -7896,7 +7896,7 @@ loop:
 
         /* remember how much time we're here */
         now = perfticks();
-        m->perf.inidle += now-start;
+        cpu->perf.inidle += now-start;
         start = now;
     }
 
@@ -7907,7 +7907,7 @@ found:
         goto loop;
 
     p->state = Scheding;
-    p->mp = MACHP(m->machno);
+    p->mp = MACHP(cpu->machno);
 
     if(edflock(p)){
         edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
@@ -8056,14 +8056,14 @@ i8253clock(Ureg* ureg, void*)
 void
 hzclock(Ureg *ur)
 {
-    m->ticks++;
-    if(m->proc)
-        m->proc->pc = ur->pc;
+    cpu->ticks++;
+    if(cpu->proc)
+        cpu->proc->pc = ur->pc;
 
-    if(m->flushmmu){
+    if(cpu->flushmmu){
         if(up)
             flushmmu();
-        m->flushmmu = false;
+        cpu->flushmmu = false;
     }
 
     accounttime();
@@ -8072,7 +8072,7 @@ hzclock(Ureg *ur)
     if(kproftimer != nil)
         kproftimer(ur->pc);
 
-    if((active.machs&(1<<m->machno)) == 0)
+    if((active.machs&(1<<cpu->machno)) == 0)
         return;
 
     if(active.exiting) {
@@ -8098,7 +8098,7 @@ accounttime(void)
     ulong n, per;
     static ulong nrun;
 
-    p = m->proc;
+    p = cpu->proc;
     if(p) {
         nrun++;
         p->time[p->insyscall]++;
@@ -8106,20 +8106,20 @@ accounttime(void)
 
     /* calculate decaying duty cycles */
     n = perfticks();
-    per = n - m->perf.last;
-    m->perf.last = n;
-    per = (m->perf.period*(HZ-1) + per)/HZ;
+    per = n - cpu->perf.last;
+    cpu->perf.last = n;
+    per = (cpu->perf.period*(HZ-1) + per)/HZ;
     if(per != 0)
-        m->perf.period = per;
+        cpu->perf.period = per;
 
-    m->perf.avg_inidle = (m->perf.avg_inidle*(HZ-1)+m->perf.inidle)/HZ;
-    m->perf.inidle = 0;
+    cpu->perf.avg_inidle = (cpu->perf.avg_inidle*(HZ-1)+cpu->perf.inidle)/HZ;
+    cpu->perf.inidle = 0;
 
-    m->perf.avg_inintr = (m->perf.avg_inintr*(HZ-1)+m->perf.inintr)/HZ;
-    m->perf.inintr = 0;
+    cpu->perf.avg_inintr = (cpu->perf.avg_inintr*(HZ-1)+cpu->perf.inintr)/HZ;
+    cpu->perf.inintr = 0;
 
     /* only one processor gets to compute system load averages */
-    if(m->machno != 0)
+    if(cpu->machno != 0)
         return;
 
     /*
@@ -8134,7 +8134,7 @@ accounttime(void)
     n = nrun;
     nrun = 0;
     n = (nrdy+n)*1000;
-    m->load = (m->load*(HZ-1)+n)/HZ;
+    cpu->load = (cpu->load*(HZ-1)+n)/HZ;
 }
 @ 
 
@@ -8272,7 +8272,7 @@ proc_sleep(Rendez *r, int (*f)(void*), void *arg)
         up->r = r;
 
         /* statistics */
-        m->cs++;
+        cpu->cs++;
 
         procsave(up);
         if(setlabel(&up->sched)) {
@@ -8287,7 +8287,7 @@ proc_sleep(Rendez *r, int (*f)(void*), void *arg)
              */
             unlock(&up->rlock);
             unlock(r);
-            gotolabel(&m->sched);
+            gotolabel(&cpu->sched);
         }
     }
 
@@ -8742,7 +8742,7 @@ sysexec(ulong *arg)
      * Args: pass 2: assemble; the pages will be faulted in
      */
     tos = (Tos*)(TSTKTOP - sizeof(Tos));
-    tos->cyclefreq = m->cyclefreq;
+    tos->cyclefreq = cpu->cyclefreq;
     cycles((uvlong*)&tos->pcycles);
     tos->pcycles = -tos->pcycles;
     tos->kcycles = tos->pcycles;
@@ -9323,7 +9323,7 @@ proc_pexit(char *exitstr, bool freemem)
     <<[[pexit()]] optional [[edfstop()]] for real-time scheduling>>
     up->state = Moribund;
     // will gotolabel() to schedinit() which has special code around Moribund
-    // (why not doing more simply gotolabel(m->sched)? to reuse some of
+    // (why not doing more simply gotolabel(cpu->sched)? to reuse some of
     //  sched() code?)
     sched(); 
     // should never reach this
@@ -9765,7 +9765,7 @@ _clearbss:
 
         MOVL    $MACHADDR, SP
         MOVL    SP, m(SB)                       /* initialise global Mach pointer */
-        MOVL    $0, 0(SP)                       /* initialise m->machno */
+        MOVL    $0, 0(SP)                       /* initialise cpu->machno */
 
 
         ADDL    $(MACHSIZE-4), SP               /* initialise stack */
@@ -9903,8 +9903,8 @@ mach0init(void)
 {
         conf.nmach = 1;
         MACHP(0) = (Mach*)CPU0MACH;
-        m->pdb = (ulong*)CPU0PDB;
-        m->gdt = (Segdesc*)CPU0GDT;
+        cpu->pdb = (ulong*)CPU0PDB;
+        cpu->gdt = (Segdesc*)CPU0GDT;
 
         machinit();
 
@@ -9922,22 +9922,22 @@ machinit(void)
     ulong *pdb;
     Segdesc *gdt;
 
-    machno = m->machno;
-    pdb = m->pdb;
-    gdt = m->gdt;
+    machno = cpu->machno;
+    pdb = cpu->pdb;
+    gdt = cpu->gdt;
     memset(m, 0, sizeof(Mach));
-    m->machno = machno;
-    m->pdb = pdb;
-    m->gdt = gdt;
+    cpu->machno = machno;
+    cpu->pdb = pdb;
+    cpu->gdt = gdt;
 
-    m->perf.period = 1;
+    cpu->perf.period = 1;
     /*
      * For polled uart output at boot, need
      * a default delay constant. 100000 should
      * be enough for a while. Cpuidentify will
      * calculate the real value later.
      */
-    m->loopconst = 100000;
+    cpu->loopconst = 100000;
 }
 @
 
@@ -9977,16 +9977,16 @@ archinit(void)
      *  We get another chance to set it in mpinit() for a
      *  multiprocessor.
      */
-    if(X86FAMILY(m->cpuidax) == 3)
+    if(X86FAMILY(cpu->cpuidax) == 3)
         conf.copymode = true;
 
-    if(X86FAMILY(m->cpuidax) >= 4)
+    if(X86FAMILY(cpu->cpuidax) >= 4)
         cmpswap = cmpswap486;
 
-    if(X86FAMILY(m->cpuidax) >= 5)
+    if(X86FAMILY(cpu->cpuidax) >= 5)
         coherence = mb586;
 
-    if(m->cpuiddx & Sse2)
+    if(cpu->cpuiddx & Sse2)
         coherence = mfence;
 
     addarchfile("cputype", 0444, cputyperead, nil);
@@ -10294,10 +10294,10 @@ schedinit(void)     /* never returns */
 {
     Edf *e;
 
-    setlabel(&m->sched);
+    setlabel(&cpu->sched);
     if(up) {
         <<[[schedinit()]] optional real-time [[edfrecord()]]>>
-        m->proc = nil;
+        cpu->proc = nil;
         switch(up->state) {
         case Running:
             ready(up);
@@ -10344,13 +10344,13 @@ cpuidprint(void)
     int i;
     char buf[128];
 
-    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", m->machno,
-        m->machno < 10? " ": "", m->cpumhz);
-    if(m->cpuidid[0])
-        i += sprint(buf+i, "%12.12s ", m->cpuidid);
+    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", cpu->machno,
+        cpu->machno < 10? " ": "", cpu->cpumhz);
+    if(cpu->cpuidid[0])
+        i += sprint(buf+i, "%12.12s ", cpu->cpuidid);
     seprint(buf+i, buf + sizeof buf - 1,
         "%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
-        m->cpuidtype, m->cpuidax, m->cpuiddx);
+        cpu->cpuidtype, cpu->cpuidax, cpu->cpuiddx);
     print(buf);
 }
 @
@@ -10410,14 +10410,14 @@ meminit(void)
      * then scan for useful memory.
      */
     for(pa = 0xA0000; pa < 0xC0000; pa += BY2PG){
-        pte = mmuwalk(m->pdb, (ulong)KADDR(pa), 2, 0);
+        pte = mmuwalk(cpu->pdb, (ulong)KADDR(pa), 2, 0);
         *pte |= PTEWT;
     }
     for(pa = 0xC0000; pa < 0x100000; pa += BY2PG){
-        pte = mmuwalk(m->pdb, (ulong)KADDR(pa), 2, 0);
+        pte = mmuwalk(cpu->pdb, (ulong)KADDR(pa), 2, 0);
         *pte |= PTEUNCACHED;
     }
-    mmuflushtlb(PADDR(m->pdb));
+    mmuflushtlb(PADDR(cpu->pdb));
 
     umbscan();
     lowraminit();
@@ -10767,7 +10767,7 @@ ramscan(ulong maxmem)
     /*
      * The bootstrap code has has created a prototype page
      * table which maps the first MemMin of physical memory to KZERO.
-     * The page directory is at m->pdb and the first page of
+     * The page directory is at cpu->pdb and the first page of
      * free memory is after the per-processor MMU information.
      */
     pa = MemMin;
@@ -10819,7 +10819,7 @@ ramscan(ulong maxmem)
          * because high physical addresses cannot be passed to KADDR.
          */
         va = (void*)(vbase + pa%(4*MB));
-        table = &m->pdb[PDX(va)];
+        table = &cpu->pdb[PDX(va)];
         if(pa%(4*MB) == 0){
             if(map == 0 && (map = mapalloc(&rmapram, 0, BY2PG, BY2PG)) == 0)
                 break;
@@ -10831,7 +10831,7 @@ ramscan(ulong maxmem)
         pte = &table[PTX(va)];
 
         *pte = pa|PTEWRITE|PTEUNCACHED|PTEVALID;
-        mmuflushtlb(PADDR(m->pdb));
+        mmuflushtlb(PADDR(cpu->pdb));
         /*
          * Write a pattern to the page and write a different
          * pattern to a possible mirror at KZERO. If the data
@@ -10851,7 +10851,7 @@ ramscan(ulong maxmem)
                 *pte++ = pa|PTEWRITE|PTEVALID;
                 pa += BY2PG;
             }while(pa % MB);
-            mmuflushtlb(PADDR(m->pdb));
+            mmuflushtlb(PADDR(cpu->pdb));
             /* memset(va, 0, MB); so damn slow to memset all of memory */
         }
         else if(pa < 16*MB){
@@ -10889,19 +10889,19 @@ ramscan(ulong maxmem)
             break;
         }
         if(pa <= maxkpa && pa%(4*MB) == 0){
-            table = &m->pdb[PDX(KADDR(pa - 4*MB))];
+            table = &cpu->pdb[PDX(KADDR(pa - 4*MB))];
             if(nvalid[MemUPA] == (4*MB)/BY2PG)
                 *table = 0;
-            else if(nvalid[MemRAM] == (4*MB)/BY2PG && (m->cpuiddx & 0x08))
+            else if(nvalid[MemRAM] == (4*MB)/BY2PG && (cpu->cpuiddx & 0x08))
                 *table = (pa - 4*MB)|PTESIZE|PTEWRITE|PTEVALID;
-            else if(nvalid[MemUMB] == (4*MB)/BY2PG && (m->cpuiddx & 0x08))
+            else if(nvalid[MemUMB] == (4*MB)/BY2PG && (cpu->cpuiddx & 0x08))
                 *table = (pa - 4*MB)|PTESIZE|PTEWRITE|PTEUNCACHED|PTEVALID;
             else{
                 *table = map|PTEWRITE|PTEVALID;
                 map = 0;
             }
         }
-        mmuflushtlb(PADDR(m->pdb));
+        mmuflushtlb(PADDR(cpu->pdb));
         x += 0x3141526;
     }
     /*
@@ -10909,14 +10909,14 @@ ramscan(ulong maxmem)
      * be mapped.  Commit the already initialised space for the page table.
      */
     if(pa % (4*MB) && pa <= maxkpa){
-        m->pdb[PDX(KADDR(pa))] = map|PTEWRITE|PTEVALID;
+        cpu->pdb[PDX(KADDR(pa))] = map|PTEWRITE|PTEVALID;
         map = 0;
     }
     if(map)
         mapfree(&rmapram, map, BY2PG);
 
-    m->pdb[PDX(vbase)] = 0;
-    mmuflushtlb(PADDR(m->pdb));
+    cpu->pdb[PDX(vbase)] = 0;
+    mmuflushtlb(PADDR(cpu->pdb));
 
     mapfree(&rmapupa, pa, (u32int)-pa);
     *k0 = kzero;
@@ -11031,7 +11031,7 @@ map(ulong base, ulong len, int type)
      * (not currently used - see above)
      */
     if(base < MemMin){
-        table = KADDR(PPN(m->pdb[PDX(base)]));
+        table = KADDR(PPN(cpu->pdb[PDX(base)]));
         e = base+len;
         base = PPN(base);
         for(; base<e; base+=BY2PG)
@@ -11048,7 +11048,7 @@ map(ulong base, ulong len, int type)
             return;
         if(len > maxkpa-base)
             len = maxkpa - base;
-        pdbmap(m->pdb, base|flags, base+KZERO, len);
+        pdbmap(cpu->pdb, base|flags, base+KZERO, len);
     }
 }
 @
@@ -11237,13 +11237,13 @@ mmuinit(void)
         VPT, vpd, KMAP);
 
     memglobal();
-    m->pdb[PDX(VPT)] = PADDR(m->pdb)|PTEWRITE|PTEVALID;
+    cpu->pdb[PDX(VPT)] = PADDR(cpu->pdb)|PTEWRITE|PTEVALID;
     
-    m->tss = malloc(sizeof(Tss));
-    if(m->tss == nil)
+    cpu->tss = malloc(sizeof(Tss));
+    if(cpu->tss == nil)
         panic("mmuinit: no memory");
-    memset(m->tss, 0, sizeof(Tss));
-    m->tss->iomap = 0xDFFF<<16;
+    memset(cpu->tss, 0, sizeof(Tss));
+    cpu->tss->iomap = 0xDFFF<<16;
 
     /*
      * We used to keep the GDT in the Mach structure, but it
@@ -11254,13 +11254,13 @@ mmuinit(void)
      * than Intels in this regard).  Under VMware it pays off
      * a factor of about 10 to 100.
      */
-    memmove(m->gdt, gdt, sizeof gdt);
-    x = (ulong)m->tss;
-    m->gdt[TSSSEG].d0 = (x<<16)|sizeof(Tss);
-    m->gdt[TSSSEG].d1 = (x&0xFF000000)|((x>>16)&0xFF)|SEGTSS|SEGPL(0)|SEGP;
+    memmove(cpu->gdt, gdt, sizeof gdt);
+    x = (ulong)cpu->tss;
+    cpu->gdt[TSSSEG].d0 = (x<<16)|sizeof(Tss);
+    cpu->gdt[TSSSEG].d1 = (x&0xFF000000)|((x>>16)&0xFF)|SEGTSS|SEGPL(0)|SEGP;
 
     ptr[0] = sizeof(gdt)-1;
-    x = (ulong)m->gdt;
+    x = (ulong)cpu->gdt;
     ptr[1] = x & 0xFFFF;
     ptr[2] = (x>>16) & 0xFFFF;
     lgdt(ptr);
@@ -11273,13 +11273,13 @@ mmuinit(void)
 
     /* make kernel text unwritable */
     for(x = KTZERO; x < (ulong)etext; x += BY2PG){
-        p = mmuwalk(m->pdb, x, 2, 0);
+        p = mmuwalk(cpu->pdb, x, 2, 0);
         if(p == nil)
             panic("mmuinit");
         *p &= ~PTEWRITE;
     }
 
-    taskswitch(PADDR(m->pdb),  (ulong)m + BY2PG);
+    taskswitch(PADDR(cpu->pdb),  (ulong)m + BY2PG);
     ltr(TSSSEL);
 }
 @
@@ -11310,13 +11310,13 @@ memglobal(void)
     ulong *pde, *pte;
 
     /* only need to do this once, on bootstrap processor */
-    if(m->machno != 0)
+    if(cpu->machno != 0)
         return;
 
-    if(!m->havepge)
+    if(!cpu->havepge)
         return;
 
-    pde = m->pdb;
+    pde = cpu->pdb;
     for(i=PDX(KZERO); i<1024; i++){
         if(pde[i] & PTEVALID){
             pde[i] |= PTEGLOBAL;
@@ -18784,7 +18784,7 @@ iprintcanlock(Lock *l)
     for(i=0; i<1000; i++){
         if(canlock(l))
             return 1;
-        if(l->m == MACHP(m->machno))
+        if(l->m == MACHP(cpu->machno))
             return 0;
         microdelay(100);
     }
@@ -19542,7 +19542,7 @@ devarch_fastticks(uvlong *hz)
 static void
 simplecycles(uvlong*x)
 {
-    *x = m->ticks;
+    *x = cpu->ticks;
 }
 
 void    (*cycles)(uvlong*) = simplecycles;
@@ -19753,7 +19753,7 @@ timeradd(Timer *nt)
         iunlock(tt);
     }
 
-    tt = &timers[m->machno];
+    tt = &timers[cpu->machno];
     ilock(tt);
     when = tadd(tt, nt);
     if(when)
@@ -19774,7 +19774,7 @@ timerdel(Timer *dt)
     if(tt = dt->tt){
         ilock(tt);
         when = tdel(dt);
-        if(when && tt == &timers[m->machno])
+        if(when && tt == &timers[cpu->machno])
             timerset(tt->head->twhen);
         iunlock(tt);
     }
@@ -19820,9 +19820,9 @@ timerintr(Ureg *u, Tval)
     uvlong when, now;
     int count, callhzclock;
 
-    intrcount[m->machno]++;
+    intrcount[cpu->machno]++;
     callhzclock = 0;
-    tt = &timers[m->machno];
+    tt = &timers[cpu->machno];
     now = fastticks(nil);
     if(now == 0)
         panic("timerintr: zero fastticks()");
@@ -19846,7 +19846,7 @@ timerintr(Ureg *u, Tval)
         tt->head = t->tnext;
         assert(t->tt == tt);
         t->tt = nil;
-        fcallcount[m->machno]++;
+        fcallcount[cpu->machno]++;
         iunlock(tt);
         if(t->tf)
             (*t->tf)(u, t);
@@ -21620,9 +21620,9 @@ tsemacquire(Segment *s, long *addr, ulong ms)
         }
         if(waserror())
             break;
-        t = m->ticks;
+        t = cpu->ticks;
         tsleep(&phore, semawoke, &phore, ms);
-        elms = TK2MS(m->ticks - t);
+        elms = TK2MS(cpu->ticks - t);
         poperror();
         if(elms >= ms){
             timedout = 1;
@@ -23777,9 +23777,9 @@ shutdown(bool ispanic)
         lock(&active);
         if(ispanic)
                 active.ispanic = ispanic;
-        else if(m->machno == 0 && (active.machs & (1<<m->machno)) == 0)
+        else if(cpu->machno == 0 && (active.machs & (1<<cpu->machno)) == 0)
                 active.ispanic = false;
-        once = active.machs & (1<<m->machno);
+        once = active.machs & (1<<cpu->machno);
         /*
          * setting exiting will make hzclock() on each processor call exit(0),
          * which calls shutdown(0) and arch->reset(), which on mp systems is
@@ -23787,12 +23787,12 @@ shutdown(bool ispanic)
          * processors (to permit a reboot).  clearing our bit in machs avoids
          * calling exit(0) from hzclock() on this processor.
          */
-        active.machs &= ~(1<<m->machno);
+        active.machs &= ~(1<<cpu->machno);
         active.exiting = true;
         unlock(&active);
 
         if(once)
-                iprint("cpu%d: exiting\n", m->machno);
+                iprint("cpu%d: exiting\n", cpu->machno);
 
         /* wait for any other processors to shutdown */
         spllo();
@@ -23872,7 +23872,7 @@ reboot(void *entry, void *code, ulong size)
          * because the hardware has a notion of which processor was the
          * boot processor and we look at it at start up.
          */
-        if (m->machno != 0) {
+        if (cpu->machno != 0) {
                 procwired(up, 0);
                 sched();
         }
@@ -23896,8 +23896,8 @@ reboot(void *entry, void *code, ulong size)
          * should be the only processor running now
          */
         active.machs = 0;
-        if (m->machno != 0)
-                print("on cpu%d (not 0)!\n", m->machno);
+        if (cpu->machno != 0)
+                print("on cpu%d (not 0)!\n", cpu->machno);
 
         print("shutting down...\n");
         delay(200);
@@ -23915,7 +23915,7 @@ reboot(void *entry, void *code, ulong size)
          * Modify the machine page table to directly map the low 4MB of memory
          * This allows the reboot code to turn off the page mapping
          */
-        pdb = m->pdb;
+        pdb = cpu->pdb;
         pdb[PDX(0)] = pdb[PDX(KZERO)];
         mmuflushtlb(PADDR(pdb));
 
@@ -24199,7 +24199,7 @@ _dumpstack(Ureg *ureg)
     && (uintptr)&l >= (uintptr)up->kstack
     && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
         estack = (uintptr)up->kstack+KSTACK;
-    else if((uintptr)&l >= (uintptr)m->stack
+    else if((uintptr)&l >= (uintptr)cpu->stack
     && (uintptr)&l <= (uintptr)m+MACHSIZE)
         estack = (uintptr)m+MACHSIZE;
     else
@@ -24412,7 +24412,7 @@ scheddump(void)
             continue;
         print("rq%ld:", rq-runq);
         for(p = rq->head; p; p = p->rnext)
-            print(" %lud(%lud)", p->pid, m->ticks - p->readytime);
+            print(" %lud(%lud)", p->pid, cpu->ticks - p->readytime);
         print("\n");
         delay(150);
     }

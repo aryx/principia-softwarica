@@ -141,7 +141,7 @@ struct Mach
 /*e: struct Mach */
 
 // ref<Mach>, the actual Mach is where??
-extern Mach *m;
+extern Mach *cpu;
 // array<ref<Mach>>, MAXMACH is defined in 386/mem.h
 extern Mach* machp[MAXMACH];
 /*s: macro MACHP */

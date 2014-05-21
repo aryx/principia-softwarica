@@ -28,7 +28,7 @@ fault(ulong addr, bool read)
     up->psstate = "Fault";
     spllo();
 
-    m->pfault++;
+    cpu->pfault++;
     for(;;) {
         s = seg(up, addr, 1);       /* leaves s->lk qlocked if seg != nil */
         if(s == 0) {

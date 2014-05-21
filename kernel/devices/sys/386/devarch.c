@@ -307,7 +307,7 @@ cputyperead(Chan*, void *a, long n, vlong offset)
     char str[32];
     ulong mhz;
 
-    mhz = (m->cpuhz+999999)/1000000;
+    mhz = (cpu->cpuhz+999999)/1000000;
 
     snprint(str, sizeof(str), "%s %lud\n", cputype->name, mhz);
     return readstr(offset, a, n, str);
@@ -324,8 +324,8 @@ archctlread(Chan*, void *a, long nn, vlong offset)
         error(Enomem);
     ep = p + READSTR;
     p = seprint(p, ep, "cpu %s %lud%s\n",
-        cputype->name, (ulong)(m->cpuhz+999999)/1000000,
-        m->havepge ? " pge" : "");
+        cputype->name, (ulong)(cpu->cpuhz+999999)/1000000,
+        cpu->havepge ? " pge" : "");
     p = seprint(p, ep, "pge %s\n", getcr4()&0x80 ? "on" : "off");
     p = seprint(p, ep, "coherence ");
     if(coherence == mb386)
@@ -387,7 +387,7 @@ archctlwrite(Chan*, void *a, long n, vlong)
     ct = lookupcmd(cb, archctlmsg, nelem(archctlmsg));
     switch(ct->index){
     case CMpge:
-        if(!m->havepge)
+        if(!cpu->havepge)
             error("processor does not support pge");
         if(strcmp(cb->f[1], "on") == 0)
             putcr4(getcr4() | 0x80);
@@ -400,11 +400,11 @@ archctlwrite(Chan*, void *a, long n, vlong)
         if(strcmp(cb->f[1], "mb386") == 0)
             coherence = mb386;
         else if(strcmp(cb->f[1], "mb586") == 0){
-            if(X86FAMILY(m->cpuidax) < 5)
+            if(X86FAMILY(cpu->cpuidax) < 5)
                 error("invalid coherence ctl on this cpu family");
             coherence = mb586;
         }else if(strcmp(cb->f[1], "mfence") == 0){
-            if((m->cpuiddx & Sse2) == 0)
+            if((cpu->cpuiddx & Sse2) == 0)
                 error("invalid coherence ctl on this cpu family");
             coherence = mfence;
         }else if(strcmp(cb->f[1], "nop") == 0){
@@ -475,16 +475,16 @@ archinit(void)
      *  We get another chance to set it in mpinit() for a
      *  multiprocessor.
      */
-    if(X86FAMILY(m->cpuidax) == 3)
+    if(X86FAMILY(cpu->cpuidax) == 3)
         conf.copymode = true;
 
-    if(X86FAMILY(m->cpuidax) >= 4)
+    if(X86FAMILY(cpu->cpuidax) >= 4)
         cmpswap = cmpswap486;
 
-    if(X86FAMILY(m->cpuidax) >= 5)
+    if(X86FAMILY(cpu->cpuidax) >= 5)
         coherence = mb586;
 
-    if(m->cpuiddx & Sse2)
+    if(cpu->cpuiddx & Sse2)
         coherence = mfence;
 
     addarchfile("cputype", 0444, cputyperead, nil);

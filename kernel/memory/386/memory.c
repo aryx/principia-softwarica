@@ -432,7 +432,7 @@ ramscan(ulong maxmem)
     /*
      * The bootstrap code has has created a prototype page
      * table which maps the first MemMin of physical memory to KZERO.
-     * The page directory is at m->pdb and the first page of
+     * The page directory is at cpu->pdb and the first page of
      * free memory is after the per-processor MMU information.
      */
     pa = MemMin;
@@ -484,7 +484,7 @@ ramscan(ulong maxmem)
          * because high physical addresses cannot be passed to KADDR.
          */
         va = (void*)(vbase + pa%(4*MB));
-        table = &m->pdb[PDX(va)];
+        table = &cpu->pdb[PDX(va)];
         if(pa%(4*MB) == 0){
             if(map == 0 && (map = mapalloc(&rmapram, 0, BY2PG, BY2PG)) == 0)
                 break;
@@ -496,7 +496,7 @@ ramscan(ulong maxmem)
         pte = &table[PTX(va)];
 
         *pte = pa|PTEWRITE|PTEUNCACHED|PTEVALID;
-        mmuflushtlb(PADDR(m->pdb));
+        mmuflushtlb(PADDR(cpu->pdb));
         /*
          * Write a pattern to the page and write a different
          * pattern to a possible mirror at KZERO. If the data
@@ -516,7 +516,7 @@ ramscan(ulong maxmem)
                 *pte++ = pa|PTEWRITE|PTEVALID;
                 pa += BY2PG;
             }while(pa % MB);
-            mmuflushtlb(PADDR(m->pdb));
+            mmuflushtlb(PADDR(cpu->pdb));
             /* memset(va, 0, MB); so damn slow to memset all of memory */
         }
         else if(pa < 16*MB){
@@ -554,19 +554,19 @@ ramscan(ulong maxmem)
             break;
         }
         if(pa <= maxkpa && pa%(4*MB) == 0){
-            table = &m->pdb[PDX(KADDR(pa - 4*MB))];
+            table = &cpu->pdb[PDX(KADDR(pa - 4*MB))];
             if(nvalid[MemUPA] == (4*MB)/BY2PG)
                 *table = 0;
-            else if(nvalid[MemRAM] == (4*MB)/BY2PG && (m->cpuiddx & 0x08))
+            else if(nvalid[MemRAM] == (4*MB)/BY2PG && (cpu->cpuiddx & 0x08))
                 *table = (pa - 4*MB)|PTESIZE|PTEWRITE|PTEVALID;
-            else if(nvalid[MemUMB] == (4*MB)/BY2PG && (m->cpuiddx & 0x08))
+            else if(nvalid[MemUMB] == (4*MB)/BY2PG && (cpu->cpuiddx & 0x08))
                 *table = (pa - 4*MB)|PTESIZE|PTEWRITE|PTEUNCACHED|PTEVALID;
             else{
                 *table = map|PTEWRITE|PTEVALID;
                 map = 0;
             }
         }
-        mmuflushtlb(PADDR(m->pdb));
+        mmuflushtlb(PADDR(cpu->pdb));
         x += 0x3141526;
     }
     /*
@@ -574,14 +574,14 @@ ramscan(ulong maxmem)
      * be mapped.  Commit the already initialised space for the page table.
      */
     if(pa % (4*MB) && pa <= maxkpa){
-        m->pdb[PDX(KADDR(pa))] = map|PTEWRITE|PTEVALID;
+        cpu->pdb[PDX(KADDR(pa))] = map|PTEWRITE|PTEVALID;
         map = 0;
     }
     if(map)
         mapfree(&rmapram, map, BY2PG);
 
-    m->pdb[PDX(vbase)] = 0;
-    mmuflushtlb(PADDR(m->pdb));
+    cpu->pdb[PDX(vbase)] = 0;
+    mmuflushtlb(PADDR(cpu->pdb));
 
     mapfree(&rmapupa, pa, (u32int)-pa);
     *k0 = kzero;
@@ -724,7 +724,7 @@ map(ulong base, ulong len, int type)
      * (not currently used - see above)
      */
     if(base < MemMin){
-        table = KADDR(PPN(m->pdb[PDX(base)]));
+        table = KADDR(PPN(cpu->pdb[PDX(base)]));
         e = base+len;
         base = PPN(base);
         for(; base<e; base+=BY2PG)
@@ -741,7 +741,7 @@ map(ulong base, ulong len, int type)
             return;
         if(len > maxkpa-base)
             len = maxkpa - base;
-        pdbmap(m->pdb, base|flags, base+KZERO, len);
+        pdbmap(cpu->pdb, base|flags, base+KZERO, len);
     }
 }
 /*e: function map */
@@ -847,14 +847,14 @@ meminit(void)
      * then scan for useful memory.
      */
     for(pa = 0xA0000; pa < 0xC0000; pa += BY2PG){
-        pte = mmuwalk(m->pdb, (ulong)KADDR(pa), 2, 0);
+        pte = mmuwalk(cpu->pdb, (ulong)KADDR(pa), 2, 0);
         *pte |= PTEWT;
     }
     for(pa = 0xC0000; pa < 0x100000; pa += BY2PG){
-        pte = mmuwalk(m->pdb, (ulong)KADDR(pa), 2, 0);
+        pte = mmuwalk(cpu->pdb, (ulong)KADDR(pa), 2, 0);
         *pte |= PTEUNCACHED;
     }
-    mmuflushtlb(PADDR(m->pdb));
+    mmuflushtlb(PADDR(cpu->pdb));
 
     umbscan();
     lowraminit();

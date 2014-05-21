@@ -359,46 +359,46 @@ checkmtrr(void)
     /*
      * If there are MTRR registers, snarf them for validation.
      */
-    if(!(m->cpuiddx & Mtrr))
+    if(!(cpu->cpuiddx & Mtrr))
         return;
 
-    rdmsr(0x0FE, &m->mtrrcap);
-    rdmsr(0x2FF, &m->mtrrdef);
-    if(m->mtrrcap & 0x0100){
-        rdmsr(0x250, &m->mtrrfix[0]);
-        rdmsr(0x258, &m->mtrrfix[1]);
-        rdmsr(0x259, &m->mtrrfix[2]);
+    rdmsr(0x0FE, &cpu->mtrrcap);
+    rdmsr(0x2FF, &cpu->mtrrdef);
+    if(cpu->mtrrcap & 0x0100){
+        rdmsr(0x250, &cpu->mtrrfix[0]);
+        rdmsr(0x258, &cpu->mtrrfix[1]);
+        rdmsr(0x259, &cpu->mtrrfix[2]);
         for(i = 0; i < 8; i++)
-            rdmsr(0x268+i, &m->mtrrfix[(i+3)]);
+            rdmsr(0x268+i, &cpu->mtrrfix[(i+3)]);
     }
-    vcnt = m->mtrrcap & 0x00FF;
-    if(vcnt > nelem(m->mtrrvar))
-        vcnt = nelem(m->mtrrvar);
+    vcnt = cpu->mtrrcap & 0x00FF;
+    if(vcnt > nelem(cpu->mtrrvar))
+        vcnt = nelem(cpu->mtrrvar);
     for(i = 0; i < vcnt; i++)
-        rdmsr(0x200+i, &m->mtrrvar[i]);
+        rdmsr(0x200+i, &cpu->mtrrvar[i]);
 
     /*
      * If not the bootstrap processor, compare.
      */
-    if(m->machno == 0)
+    if(cpu->machno == 0)
         return;
 
     mach0 = MACHP(0);
-    if(mach0->mtrrcap != m->mtrrcap)
+    if(mach0->mtrrcap != cpu->mtrrcap)
         print("mtrrcap%d: %lluX %lluX\n",
-            m->machno, mach0->mtrrcap, m->mtrrcap);
-    if(mach0->mtrrdef != m->mtrrdef)
+            cpu->machno, mach0->mtrrcap, cpu->mtrrcap);
+    if(mach0->mtrrdef != cpu->mtrrdef)
         print("mtrrdef%d: %lluX %lluX\n",
-            m->machno, mach0->mtrrdef, m->mtrrdef);
+            cpu->machno, mach0->mtrrdef, cpu->mtrrdef);
     for(i = 0; i < 11; i++){
-        if(mach0->mtrrfix[i] != m->mtrrfix[i])
+        if(mach0->mtrrfix[i] != cpu->mtrrfix[i])
             print("mtrrfix%d: i%d: %lluX %lluX\n",
-                m->machno, i, mach0->mtrrfix[i], m->mtrrfix[i]);
+                cpu->machno, i, mach0->mtrrfix[i], cpu->mtrrfix[i]);
     }
     for(i = 0; i < vcnt; i++){
-        if(mach0->mtrrvar[i] != m->mtrrvar[i])
+        if(mach0->mtrrvar[i] != cpu->mtrrvar[i])
             print("mtrrvar%d: i%d: %lluX %lluX\n",
-                m->machno, i, mach0->mtrrvar[i], m->mtrrvar[i]);
+                cpu->machno, i, mach0->mtrrvar[i], cpu->mtrrvar[i]);
     }
 }
 
@@ -426,7 +426,7 @@ squidboy(Apic* apic)
     fpoff();
 
     lock(&active);
-    active.machs |= 1<<m->machno;
+    active.machs |= 1<<cpu->machno;
     unlock(&active);
 
     while(!active.thunderbirdsarego)
@@ -675,7 +675,7 @@ mpinit(void)
      *  set conf.copymode here if nmach > 1.
      *  Should look for an ExtINT line and enable it.
      */
-    if(X86FAMILY(m->cpuidax) == 3 || conf.nmach > 1)
+    if(X86FAMILY(cpu->cpuidax) == 3 || conf.nmach > 1)
         conf.copymode = 1;
 }
 
@@ -706,7 +706,7 @@ mpintrcpu(void)
      * temporary workaround for many-core intel (non-amd) systems:
      * always use cpu 0.  (TODO)
      */
-    if(strncmp(m->cpuidid, "AuthenticAMD", 12) != 0 && conf.nmach > 8)
+    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) != 0 && conf.nmach > 8)
         return 0;
 
     lock(&mpphysidlock);

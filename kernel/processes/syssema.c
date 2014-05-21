@@ -240,9 +240,9 @@ tsemacquire(Segment *s, long *addr, ulong ms)
         }
         if(waserror())
             break;
-        t = m->ticks;
+        t = cpu->ticks;
         tsleep(&phore, semawoke, &phore, ms);
-        elms = TK2MS(m->ticks - t);
+        elms = TK2MS(cpu->ticks - t);
         poperror();
         if(elms >= ms){
             timedout = 1;

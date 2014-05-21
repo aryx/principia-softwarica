@@ -379,7 +379,7 @@ sysexec(ulong *arg)
      * Args: pass 2: assemble; the pages will be faulted in
      */
     tos = (Tos*)(TSTKTOP - sizeof(Tos));
-    tos->cyclefreq = m->cyclefreq;
+    tos->cyclefreq = cpu->cyclefreq;
     cycles((uvlong*)&tos->pcycles);
     tos->pcycles = -tos->pcycles;
     tos->kcycles = tos->pcycles;

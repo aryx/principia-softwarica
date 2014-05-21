@@ -138,9 +138,9 @@ prflush(void)
 {
     ulong now;
 
-    now = m->ticks;
+    now = cpu->ticks;
     while(consactive())
-        if(m->ticks - now >= HZ)
+        if(cpu->ticks - now >= HZ)
             break;
 }
 /*e: function prflush */
@@ -308,7 +308,7 @@ iprintcanlock(Lock *l)
     for(i=0; i<1000; i++){
         if(canlock(l))
             return 1;
-        if(l->m == MACHP(m->machno))
+        if(l->m == MACHP(cpu->machno))
             return 0;
         microdelay(100);
     }

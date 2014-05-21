@@ -48,15 +48,15 @@ realmode(Ureg *ureg)
     memmove((void*)RMCODE, (void*)KTZERO, 0x1000);
 
     s = splhi();
-    m->pdb[PDX(0)] = m->pdb[PDX(KZERO)];    /* identity map low */
+    cpu->pdb[PDX(0)] = cpu->pdb[PDX(KZERO)];    /* identity map low */
     cr3 = getcr3();
-    putcr3(PADDR(m->pdb));
+    putcr3(PADDR(cpu->pdb));
     if (arch)
         arch->introff();
     else
         i8259off();
     realmode0();
-    if(m->tss){
+    if(cpu->tss){
         /*
          * Called from memory.c before initialization of mmu.
          * Don't turn interrupts on before the kernel is ready!
@@ -66,7 +66,7 @@ realmode(Ureg *ureg)
         else
             i8259on();
     }
-    m->pdb[PDX(0)] = 0; /* remove low mapping */
+    cpu->pdb[PDX(0)] = 0; /* remove low mapping */
     putcr3(cr3);
     splx(s);
     *ureg = realmoderegs;

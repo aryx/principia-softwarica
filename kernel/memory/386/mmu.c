@@ -84,7 +84,7 @@ static void pdbunmap(ulong*, ulong, int);
 void
 mmuinit0(void)
 {
-    memmove(m->gdt, gdt, sizeof gdt);
+    memmove(cpu->gdt, gdt, sizeof gdt);
 }
 /*e: function mmuinit0 */
 
@@ -105,13 +105,13 @@ mmuinit(void)
         VPT, vpd, KMAP);
 
     memglobal();
-    m->pdb[PDX(VPT)] = PADDR(m->pdb)|PTEWRITE|PTEVALID;
+    cpu->pdb[PDX(VPT)] = PADDR(cpu->pdb)|PTEWRITE|PTEVALID;
     
-    m->tss = malloc(sizeof(Tss));
-    if(m->tss == nil)
+    cpu->tss = malloc(sizeof(Tss));
+    if(cpu->tss == nil)
         panic("mmuinit: no memory");
-    memset(m->tss, 0, sizeof(Tss));
-    m->tss->iomap = 0xDFFF<<16;
+    memset(cpu->tss, 0, sizeof(Tss));
+    cpu->tss->iomap = 0xDFFF<<16;
 
     /*
      * We used to keep the GDT in the Mach structure, but it
@@ -122,13 +122,13 @@ mmuinit(void)
      * than Intels in this regard).  Under VMware it pays off
      * a factor of about 10 to 100.
      */
-    memmove(m->gdt, gdt, sizeof gdt);
-    x = (ulong)m->tss;
-    m->gdt[TSSSEG].d0 = (x<<16)|sizeof(Tss);
-    m->gdt[TSSSEG].d1 = (x&0xFF000000)|((x>>16)&0xFF)|SEGTSS|SEGPL(0)|SEGP;
+    memmove(cpu->gdt, gdt, sizeof gdt);
+    x = (ulong)cpu->tss;
+    cpu->gdt[TSSSEG].d0 = (x<<16)|sizeof(Tss);
+    cpu->gdt[TSSSEG].d1 = (x&0xFF000000)|((x>>16)&0xFF)|SEGTSS|SEGPL(0)|SEGP;
 
     ptr[0] = sizeof(gdt)-1;
-    x = (ulong)m->gdt;
+    x = (ulong)cpu->gdt;
     ptr[1] = x & 0xFFFF;
     ptr[2] = (x>>16) & 0xFFFF;
     lgdt(ptr);
@@ -141,13 +141,13 @@ mmuinit(void)
 
     /* make kernel text unwritable */
     for(x = KTZERO; x < (ulong)etext; x += BY2PG){
-        p = mmuwalk(m->pdb, x, 2, 0);
+        p = mmuwalk(cpu->pdb, x, 2, 0);
         if(p == nil)
             panic("mmuinit");
         *p &= ~PTEWRITE;
     }
 
-    taskswitch(PADDR(m->pdb),  (ulong)m + BY2PG);
+    taskswitch(PADDR(cpu->pdb),  (ulong)cpu + BY2PG);
     ltr(TSSSEL);
 }
 /*e: function mmuinit */
@@ -174,13 +174,13 @@ memglobal(void)
     ulong *pde, *pte;
 
     /* only need to do this once, on bootstrap processor */
-    if(m->machno != 0)
+    if(cpu->machno != 0)
         return;
 
-    if(!m->havepge)
+    if(!cpu->havepge)
         return;
 
-    pde = m->pdb;
+    pde = cpu->pdb;
     for(i=PDX(KZERO); i<1024; i++){
         if(pde[i] & PTEVALID){
             pde[i] |= PTEGLOBAL;
@@ -220,7 +220,7 @@ flushmmu(void)
 void
 flushpg(ulong va)
 {
-    if(X86FAMILY(m->cpuidax) >= 4)
+    if(X86FAMILY(cpu->cpuidax) >= 4)
         invlpg(va);
     else
         putcr3(getcr3());
@@ -241,20 +241,20 @@ mmupdballoc(void)
     ulong *pdb;
 
     s = splhi();
-    m->pdballoc++;
-    if(m->pdbpool == 0){
+    cpu->pdballoc++;
+    if(cpu->pdbpool == 0){
         spllo();
         page = newpage(0, 0, 0);
         page->va = (ulong)vpd;
         splhi();
         pdb = tmpmap(page);
-        memmove(pdb, m->pdb, BY2PG);
+        memmove(pdb, cpu->pdb, BY2PG);
         pdb[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
         tmpunmap(pdb);
     }else{
-        page = m->pdbpool;
-        m->pdbpool = page->next;
-        m->pdbcnt--;
+        page = cpu->pdbpool;
+        cpu->pdbpool = page->next;
+        cpu->pdbcnt--;
     }
     splx(s);
     return page;
@@ -268,14 +268,14 @@ mmupdbfree(Proc *proc, Page *p)
 {
     if(islo())
         panic("mmupdbfree: islo");
-    m->pdbfree++;
-    if(m->pdbcnt >= 10){
+    cpu->pdbfree++;
+    if(cpu->pdbcnt >= 10){
         p->next = proc->mmufree;
         proc->mmufree = p;
     }else{
-        p->next = m->pdbpool;
-        m->pdbpool = p;
-        m->pdbcnt++;
+        p->next = cpu->pdbpool;
+        cpu->pdbpool = p;
+        cpu->pdbcnt++;
     }
 }
 /*e: function mmupdbfree */
@@ -317,7 +317,7 @@ taskswitch(ulong pdb, ulong stack)
 {
     Tss *tss;
 
-    tss = m->tss;
+    tss = cpu->tss;
     tss->ss0 = KDSEL;
     tss->esp0 = stack;
     tss->ss1 = KDSEL;
@@ -341,11 +341,11 @@ mmuswitch(Proc* proc)
 
     if(proc->mmupdb){
         pdb = tmpmap(proc->mmupdb);
-        pdb[PDX(MACHADDR)] = m->pdb[PDX(MACHADDR)];
+        pdb[PDX(MACHADDR)] = cpu->pdb[PDX(MACHADDR)];
         tmpunmap(pdb);
         taskswitch(proc->mmupdb->pa, (ulong)(proc->kstack+KSTACK));
     }else
-        taskswitch(PADDR(m->pdb), (ulong)(proc->kstack+KSTACK));
+        taskswitch(PADDR(cpu->pdb), (ulong)(proc->kstack+KSTACK));
 }
 /*e: function mmuswitch */
 
@@ -353,12 +353,12 @@ mmuswitch(Proc* proc)
 /*
  * Release any pages allocated for a page directory base or page-tables
  * for this process:
- *   switch to the prototype pdb for this processor (m->pdb);
+ *   switch to the prototype pdb for this processor (cpu->pdb);
  *   call mmuptefree() to place all pages used for page-tables (proc->mmuused)
  *   onto the process' free list (proc->mmufree). This has the side-effect of
  *   cleaning any user entries in the pdb (proc->mmupdb);
  *   if there's a pdb put it in the cache of pre-initialised pdb's
- *   for this processor (m->pdbpool) or on the process' free list;
+ *   for this processor (cpu->pdbpool) or on the process' free list;
  *   finally, place any pages freed back into the free pool (palloc).
  * This routine is only called from schedinit() with palloc locked.
  */
@@ -370,7 +370,7 @@ mmurelease(Proc* proc)
 
     if(islo())
         panic("mmurelease: islo");
-    taskswitch(PADDR(m->pdb), (ulong)m + BY2PG);
+    taskswitch(PADDR(cpu->pdb), (ulong)cpu + BY2PG);
     if(proc->kmaptable){
         if(proc->mmupdb == nil)
             panic("mmurelease: no mmupdb");
@@ -438,7 +438,7 @@ upallocpdb(void)
         return;
     }
     pdb = tmpmap(page);
-    pdb[PDX(MACHADDR)] = m->pdb[PDX(MACHADDR)];
+    pdb[PDX(MACHADDR)] = cpu->pdb[PDX(MACHADDR)];
     tmpunmap(pdb);
     up->mmupdb = page;
     putcr3(up->mmupdb->pa);
@@ -727,13 +727,13 @@ vunmap(void *v, int size)
     }
     for(i=0; i<conf.nmach; i++){
         nm = MACHP(i);
-        if(nm != m)
+        if(nm != cpu)
             nm->flushmmu = true;
     }
     flushmmu();
     for(i=0; i<conf.nmach; i++){
         nm = MACHP(i);
-        if(nm != m)
+        if(nm != cpu)
             while((active.machs&(1<<nm->machno)) && nm->flushmmu)
                 ;
     }
@@ -961,7 +961,7 @@ tmpmap(Page *p)
     /*
      * PDX(TMPADDR) == PDX(MACHADDR), so this
      * entry is private to the processor and shared 
-     * between up->mmupdb (if any) and m->pdb.
+     * between up->mmupdb (if any) and cpu->pdb.
      */
     entry = &vpt[VPTX(TMPADDR)];
     if(!(*entry&PTEVALID)){

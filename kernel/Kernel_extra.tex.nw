@@ -2412,7 +2412,7 @@ cputyperead(Chan*, void *a, long n, vlong offset)
     char str[32];
     ulong mhz;
 
-    mhz = (m->cpuhz+999999)/1000000;
+    mhz = (cpu->cpuhz+999999)/1000000;
 
     snprint(str, sizeof(str), "%s %lud\n", cputype->name, mhz);
     return readstr(offset, a, n, str);
@@ -2429,8 +2429,8 @@ archctlread(Chan*, void *a, long nn, vlong offset)
         error(Enomem);
     ep = p + READSTR;
     p = seprint(p, ep, "cpu %s %lud%s\n",
-        cputype->name, (ulong)(m->cpuhz+999999)/1000000,
-        m->havepge ? " pge" : "");
+        cputype->name, (ulong)(cpu->cpuhz+999999)/1000000,
+        cpu->havepge ? " pge" : "");
     p = seprint(p, ep, "pge %s\n", getcr4()&0x80 ? "on" : "off");
     p = seprint(p, ep, "coherence ");
     if(coherence == mb386)
@@ -2492,7 +2492,7 @@ archctlwrite(Chan*, void *a, long n, vlong)
     ct = lookupcmd(cb, archctlmsg, nelem(archctlmsg));
     switch(ct->index){
     case CMpge:
-        if(!m->havepge)
+        if(!cpu->havepge)
             error("processor does not support pge");
         if(strcmp(cb->f[1], "on") == 0)
             putcr4(getcr4() | 0x80);
@@ -2505,11 +2505,11 @@ archctlwrite(Chan*, void *a, long n, vlong)
         if(strcmp(cb->f[1], "mb386") == 0)
             coherence = mb386;
         else if(strcmp(cb->f[1], "mb586") == 0){
-            if(X86FAMILY(m->cpuidax) < 5)
+            if(X86FAMILY(cpu->cpuidax) < 5)
                 error("invalid coherence ctl on this cpu family");
             coherence = mb586;
         }else if(strcmp(cb->f[1], "mfence") == 0){
-            if((m->cpuiddx & Sse2) == 0)
+            if((cpu->cpuiddx & Sse2) == 0)
                 error("invalid coherence ctl on this cpu family");
             coherence = mfence;
         }else if(strcmp(cb->f[1], "nop") == 0){
@@ -4790,7 +4790,7 @@ matherror(Ureg *ur, void*)
          *  a write cycle to port 0xF0 clears the interrupt latch attached
          *  to the error# line from the 387
          */
-        if(!(m->cpuiddx & Fpuonchip))
+        if(!(cpu->cpuiddx & Fpuonchip))
                 outb(0xF0, 0xFF);
 
         /*
@@ -4870,7 +4870,7 @@ void
 mathinit(void)
 {
         trapenable(VectorCERR, matherror, 0, "matherror");
-        if(X86FAMILY(m->cpuidax) == 3)
+        if(X86FAMILY(cpu->cpuidax) == 3)
                 intrenable(IrqIRQ13, matherror, 0, BUSUNKNOWN, "matherror");
         trapenable(VectorCNA, mathemu, 0, "mathemu");
         trapenable(VectorCSO, mathover, 0, "mathover");
@@ -7576,7 +7576,7 @@ wdogpause(void)
 {
     int turndogoff;
 
-    turndogoff = watchdogon && m->machno == 0 && !islo();
+    turndogoff = watchdogon && cpu->machno == 0 && !islo();
     if (turndogoff) {
         watchdog->disable();
         watchdogon = 0;
@@ -7649,9 +7649,9 @@ guesscpuhz(int aalcycles)
     if(x == 0)
         x = 1;          /* avoid division by zero on vmware 7 */
     cpufreq = (vlong)loops*((aalcycles*2*Freq)/x);
-    m->loopconst = (cpufreq/1000)/aalcycles;    /* AAM+LOOP's for 1 ms */
+    cpu->loopconst = (cpufreq/1000)/aalcycles;    /* AAM+LOOP's for 1 ms */
 
-    if(m->havetsc && a != b){  /* a == b means virtualbox has confused us */
+    if(cpu->havetsc && a != b){  /* a == b means virtualbox has confused us */
         /* counter goes up by 2*Freq */
         b = (b-a)<<1;
         b *= Freq;
@@ -7660,20 +7660,20 @@ guesscpuhz(int aalcycles)
         /*
          *  round to the nearest megahz
          */
-        m->cpumhz = (b+500000)/1000000L;
-        m->cpuhz = b;
-        m->cyclefreq = b;
+        cpu->cpumhz = (b+500000)/1000000L;
+        cpu->cpuhz = b;
+        cpu->cyclefreq = b;
     } else {
         /*
          *  add in possible 0.5% error and convert to MHz
          */
-        m->cpumhz = (cpufreq + cpufreq/200)/1000000;
-        m->cpuhz = cpufreq;
+        cpu->cpumhz = (cpufreq + cpufreq/200)/1000000;
+        cpu->cpuhz = cpufreq;
     }
 
     /* don't divide by zero in trap.c */
-    if (m->cpumhz == 0)
-        panic("guesscpuhz: zero m->cpumhz");
+    if (cpu->cpumhz == 0)
+        panic("guesscpuhz: zero cpu->cpumhz");
     i8253.hz = Freq<<Tickshift;
 }
 @
@@ -7733,12 +7733,12 @@ i8253_delay(int millisecs)
     if (millisecs > 10*1000)
         iprint("delay(%d) from %#p\n", millisecs,
             getcallerpc(&millisecs));
-    if (watchdogon && m->machno == 0 && !islo())
+    if (watchdogon && cpu->machno == 0 && !islo())
         for (; millisecs > Wdogms; millisecs -= Wdogms) {
             delay(Wdogms);
             watchdog->restart();
         }
-    millisecs *= m->loopconst;
+    millisecs *= cpu->loopconst;
     if(millisecs <= 0)
         millisecs = 1;
     aamloop(millisecs);
@@ -7750,12 +7750,12 @@ i8253_delay(int millisecs)
 void
 i8253_microdelay(int microsecs)
 {
-    if (watchdogon && m->machno == 0 && !islo())
+    if (watchdogon && cpu->machno == 0 && !islo())
         for (; microsecs > Wdogms*1000; microsecs -= Wdogms*1000) {
             delay(Wdogms);
             watchdog->restart();
         }
-    microsecs *= m->loopconst;
+    microsecs *= cpu->loopconst;
     microsecs /= 1000;
     if(microsecs <= 0)
         microsecs = 1;
@@ -7774,7 +7774,7 @@ perfticks(void)
 {
     uvlong x;
 
-    if(m->havetsc)
+    if(cpu->havetsc)
         cycles(&x);
     else
         x = 0;
@@ -8017,7 +8017,7 @@ procsave(Proc *p)
      * You might think it would be a win not to do this in that case,
      * especially on VMware, but it turns out not to matter.
      */
-    mmuflushtlb(PADDR(m->pdb));
+    mmuflushtlb(PADDR(cpu->pdb));
 }
 @ 
 
@@ -8040,9 +8040,9 @@ procrestore(Proc *p)
 void
 fpsavealloc(void)
 {
-    m->fpsavalign = mallocalign(sizeof(FPssestate), FPalign, 0, 0);
-    if (m->fpsavalign == nil)
-        panic("cpu%d: can't allocate fpsavalign", m->machno);
+    cpu->fpsavalign = mallocalign(sizeof(FPssestate), FPalign, 0, 0);
+    if (cpu->fpsavalign == nil)
+        panic("cpu%d: can't allocate fpsavalign", cpu->machno);
 }
 @ 
 
@@ -8078,7 +8078,7 @@ fpsserestore(ArchFPsave *fps)
     fps->magic = 0x4321;
     afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
     if (fps != afps) {
-        afps = m->fpsavalign;
+        afps = cpu->fpsavalign;
         memmove(afps, fps, sizeof(FPssestate)); /* make aligned copy */
     }
     fpsserestore0(afps);
@@ -8230,14 +8230,14 @@ intrtime(Mach*, int vno)
     ulong x;
 
     x = perfticks();
-    diff = x - m->perf.intrts;
-    m->perf.intrts = x;
+    diff = x - cpu->perf.intrts;
+    cpu->perf.intrts = x;
 
-    m->perf.inintr += diff;
-    if(up == nil && m->perf.inidle > diff)
-        m->perf.inidle -= diff;
+    cpu->perf.inintr += diff;
+    if(up == nil && cpu->perf.inidle > diff)
+        cpu->perf.inidle -= diff;
 
-    diff /= m->cpumhz*100;      /* quantum = 100µsec */
+    diff /= cpu->cpumhz*100;      /* quantum = 100µsec */
     if(diff >= Ntimevec)
         diff = Ntimevec-1;
     intrtimes[vno][diff]++;
@@ -8272,9 +8272,9 @@ dumpregs2(Ureg* ureg)
 {
     if(up)
         iprint("cpu%d: registers for %s %lud\n",
-            m->machno, up->text, up->pid);
+            cpu->machno, up->text, up->pid);
     else
-        iprint("cpu%d: registers for kernel\n", m->machno);
+        iprint("cpu%d: registers for kernel\n", cpu->machno);
     iprint("FLAGS=%luX TRAP=%luX ECODE=%luX PC=%luX",
         ureg->flags, ureg->trap, ureg->ecode, ureg->pc);
     iprint(" SS=%4.4luX USP=%luX\n", ureg->ss & 0xFFFF, ureg->usp);
@@ -8306,9 +8306,9 @@ dumpregs(Ureg* ureg)
      */
     iprint("  CR0 %8.8lux CR2 %8.8lux CR3 %8.8lux",
         getcr0(), getcr2(), getcr3());
-    if(m->cpuiddx & (Mce|Tsc|Pse|Vmex)){
+    if(cpu->cpuiddx & (Mce|Tsc|Pse|Vmex)){
         iprint(" CR4 %8.8lux", getcr4());
-        if((m->cpuiddx & (Mce|Cpumsr)) == (Mce|Cpumsr)){
+        if((cpu->cpuiddx & (Mce|Cpumsr)) == (Mce|Cpumsr)){
             rdmsr(0x00, &mca);
             rdmsr(0x01, &mct);
             iprint("\n  MCA %8.8llux MCT %8.8llux", mca, mct);
@@ -10353,9 +10353,9 @@ prflush(void)
 {
     ulong now;
 
-    now = m->ticks;
+    now = cpu->ticks;
     while(consactive())
-        if(m->ticks - now >= HZ)
+        if(cpu->ticks - now >= HZ)
             break;
 }
 @ 
@@ -11196,7 +11196,7 @@ edfready(Proc *p)
     nrdy++;
     runvec |= 1 << PriEdf;
     p->priority = PriEdf;
-    p->readytime = m->ticks;
+    p->readytime = cpu->ticks;
     p->state = Ready;
     unlock(runq);
     if(p->trace && (pt = proctrace))
@@ -12117,42 +12117,42 @@ cpuidentify(void)
     vlong mca, mct;
 
     cpuid(Highstdfunc, regs);
-    memmove(m->cpuidid,   &regs[1], BY2WD); /* bx */
-    memmove(m->cpuidid+4, &regs[3], BY2WD); /* dx */
-    memmove(m->cpuidid+8, &regs[2], BY2WD); /* cx */
-    m->cpuidid[12] = '\0';
+    memmove(cpu->cpuidid,   &regs[1], BY2WD); /* bx */
+    memmove(cpu->cpuidid+4, &regs[3], BY2WD); /* dx */
+    memmove(cpu->cpuidid+8, &regs[2], BY2WD); /* cx */
+    cpu->cpuidid[12] = '\0';
 
     cpuid(Procsig, regs);
-    m->cpuidax = regs[0];
-    m->cpuiddx = regs[3];
+    cpu->cpuidax = regs[0];
+    cpu->cpuiddx = regs[3];
 
-    if(strncmp(m->cpuidid, "AuthenticAMD", 12) == 0 ||
-       strncmp(m->cpuidid, "Geode by NSC", 12) == 0)
+    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) == 0 ||
+       strncmp(cpu->cpuidid, "Geode by NSC", 12) == 0)
         tab = x86amd;
-    else if(strncmp(m->cpuidid, "CentaurHauls", 12) == 0)
+    else if(strncmp(cpu->cpuidid, "CentaurHauls", 12) == 0)
         tab = x86winchip;
-    else if(strncmp(m->cpuidid, "SiS SiS SiS ", 12) == 0)
+    else if(strncmp(cpu->cpuidid, "SiS SiS SiS ", 12) == 0)
         tab = x86sis;
     else
         tab = x86intel;
 
-    family = X86FAMILY(m->cpuidax);
-    model = X86MODEL(m->cpuidax);
+    family = X86FAMILY(cpu->cpuidax);
+    model = X86MODEL(cpu->cpuidax);
     for(t=tab; t->name; t++)
         if((t->family == family && t->model == model)
         || (t->family == family && t->model == -1)
         || (t->family == -1))
             break;
 
-    m->cpuidtype = t->name;
+    cpu->cpuidtype = t->name;
 
     /*
      *  if there is one, set tsc to a known value
      */
-    if(m->cpuiddx & Tsc){
-        m->havetsc = true;
+    if(cpu->cpuiddx & Tsc){
+        cpu->havetsc = true;
         cycles = _cycles;
-        if(m->cpuiddx & Cpumsr)
+        if(cpu->cpuiddx & Cpumsr)
             wrmsr(0x10, 0);
     }
 
@@ -12166,15 +12166,15 @@ cpuidentify(void)
      * are supported enable them in CR4 and clear any other set extensions.
      * If machine check was enabled clear out any lingering status.
      */
-    if(m->cpuiddx & (Pge|Mce|Pse)){
+    if(cpu->cpuiddx & (Pge|Mce|Pse)){
         cr4 = 0;
-        if(m->cpuiddx & Pse)
+        if(cpu->cpuiddx & Pse)
             cr4 |= 0x10;        /* page size extensions */
         if(p = getconf("*nomce"))
             nomce = strtoul(p, 0, 0);
         else
             nomce = 0;
-        if((m->cpuiddx & Mce) && !nomce){
+        if((cpu->cpuiddx & Mce) && !nomce){
             cr4 |= 0x40;        /* machine check enable */
             if(family == 5){
                 rdmsr(0x00, &mca);
@@ -12197,17 +12197,17 @@ cpuidentify(void)
          * the PGE bit in CR4, writing to CR3, and then
          * restoring the PGE bit.
          */
-        if(m->cpuiddx & Pge){
+        if(cpu->cpuiddx & Pge){
             cr4 |= 0x80;        /* page global enable bit */
-            m->havepge = true;
+            cpu->havepge = true;
         }
 
         putcr4(cr4);
-        if(m->cpuiddx & Mce)
+        if(cpu->cpuiddx & Mce)
             rdmsr(0x01, &mct);
     }
 
-    if(m->cpuiddx & Fxsr){          /* have sse fp? */
+    if(cpu->cpuiddx & Fxsr){          /* have sse fp? */
         fpsave = fpssesave;
         fprestore = fpsserestore;
         putcr4(getcr4() | CR4Osfxsr);
@@ -13093,15 +13093,15 @@ realmode(Ureg *ureg)
     memmove((void*)RMCODE, (void*)KTZERO, 0x1000);
 
     s = splhi();
-    m->pdb[PDX(0)] = m->pdb[PDX(KZERO)];    /* identity map low */
+    cpu->pdb[PDX(0)] = cpu->pdb[PDX(KZERO)];    /* identity map low */
     cr3 = getcr3();
-    putcr3(PADDR(m->pdb));
+    putcr3(PADDR(cpu->pdb));
     if (arch)
         arch->introff();
     else
         i8259off();
     realmode0();
-    if(m->tss){
+    if(cpu->tss){
         /*
          * Called from memory.c before initialization of mmu.
          * Don't turn interrupts on before the kernel is ready!
@@ -13111,7 +13111,7 @@ realmode(Ureg *ureg)
         else
             i8259on();
     }
-    m->pdb[PDX(0)] = 0; /* remove low mapping */
+    cpu->pdb[PDX(0)] = 0; /* remove low mapping */
     putcr3(cr3);
     splx(s);
     *ureg = realmoderegs;
@@ -17836,9 +17836,9 @@ floppykproc(void *)
     for(;;){
         for(dp = fl.d; dp < &fl.d[fl.ndrive]; dp++){
             if((fl.motor&MOTORBIT(dp->dev))
-            && TK2SEC(m->ticks - dp->lasttouched) > 5
+            && TK2SEC(cpu->ticks - dp->lasttouched) > 5
             && canqlock(&fl)){
-                if(TK2SEC(m->ticks - dp->lasttouched) > 5)
+                if(TK2SEC(cpu->ticks - dp->lasttouched) > 5)
                     floppyoff(dp);
                 qunlock(&fl);
             }
@@ -17882,7 +17882,7 @@ floppyon(FDrive *dp)
         for(tries = 0; tries < 4; tries++)
             if(floppyrecal(dp) >= 0)
                 break;
-    dp->lasttouched = m->ticks;
+    dp->lasttouched = cpu->ticks;
     fl.selected = dp;
 
     /* return -1 if this didn't work */
@@ -18248,7 +18248,7 @@ floppyxfer(FDrive *dp, int cmd, void *a, long off, long n)
     }
     poperror();
 
-    dp->lasttouched = m->ticks;
+    dp->lasttouched = cpu->ticks;
     return dp->len;
 }
 
@@ -27689,7 +27689,7 @@ lapiconline(void)
      * then lower the task priority to allow interrupts to be
      * accepted by the APIC.
      */
-    microdelay((TK2MS(1)*1000/conf.nmach) * m->machno);
+    microdelay((TK2MS(1)*1000/conf.nmach) * cpu->machno);
     lapicw(LapicTICR, lapictimer.max);
     lapicw(LapicTIMER, LapicCLKIN|LapicPERIODIC|(VectorPIC+IrqTIMER));
 
@@ -27704,7 +27704,7 @@ lapictimerinit(void)
 {
     uvlong x, v, hz;
 
-    v = m->cpuhz/1000;
+    v = cpu->cpuhz/1000;
     lapicw(LapicTDCR, LapicX1);
     lapicw(LapicTIMER, ApicIMASK|LapicCLKIN|LapicONESHOT|(VectorPIC+IrqTIMER));
 
@@ -27747,7 +27747,7 @@ lapicinit(Apic* apic)
      * These don't really matter in Physical mode;
      * set the defaults anyway.
      */
-    if(strncmp(m->cpuidid, "AuthenticAMD", 12) == 0)
+    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) == 0)
         dfr = 0xf0000000;
     else
         dfr = 0xffffffff;
@@ -27764,7 +27764,7 @@ lapicinit(Apic* apic)
      * Some Pentium revisions have a bug whereby spurious
      * interrupts are generated in the through-local mode.
      */
-    switch(m->cpuidax & 0xFFF){
+    switch(cpu->cpuidax & 0xFFF){
     case 0x526:             /* stepping cB1 */
     case 0x52B:             /* stepping E0 */
     case 0x52C:             /* stepping cC0 */
@@ -27837,19 +27837,19 @@ lapicerror(Ureg*, void*)
 
     lapicw(LapicESR, 0);
     esr = lapicr(LapicESR);
-    switch(m->cpuidax & 0xFFF){
+    switch(cpu->cpuidax & 0xFFF){
     case 0x526:             /* stepping cB1 */
     case 0x52B:             /* stepping E0 */
     case 0x52C:             /* stepping cC0 */
         return;
     }
-    print("cpu%d: lapicerror: 0x%8.8luX\n", m->machno, esr);
+    print("cpu%d: lapicerror: 0x%8.8luX\n", cpu->machno, esr);
 }
 
 void
 lapicspurious(Ureg*, void*)
 {
-    print("cpu%d: lapicspurious\n", m->machno);
+    print("cpu%d: lapicspurious\n", cpu->machno);
 }
 
 int
@@ -27945,7 +27945,7 @@ lapictimerset(uvlong next)
     int x;
 
     x = splhi();
-    lock(&m->apictimerlock);
+    lock(&cpu->apictimerlock);
 
     period = lapictimer.max;
     if(next != 0){
@@ -27961,7 +27961,7 @@ lapictimerset(uvlong next)
     }
     lapicw(LapicTICR, period);
 
-    unlock(&m->apictimerlock);
+    unlock(&cpu->apictimerlock);
     splx(x);
 }
 
@@ -28056,15 +28056,15 @@ syncclock(void)
     if(arch->fastclock != tscticks)
         return;
 
-    if(m->machno == 0){
+    if(cpu->machno == 0){
         wrmsr(0x10, 0);
-        m->tscticks = 0;
+        cpu->tscticks = 0;
     } else {
         x = MACHP(0)->tscticks;
         while(x == MACHP(0)->tscticks)
             ;
         wrmsr(0x10, MACHP(0)->tscticks);
-        cycles(&m->tscticks);
+        cycles(&cpu->tscticks);
     }
 }
 @
@@ -28084,10 +28084,10 @@ uvlong
 tscticks(uvlong *hz)
 {
     if(hz != nil)
-        *hz = m->cpuhz;
+        *hz = cpu->cpuhz;
 
-    cycles(&m->tscticks);   /* Uses the rdtsc instruction */
-    return m->tscticks;
+    cycles(&cpu->tscticks);   /* Uses the rdtsc instruction */
+    return cpu->tscticks;
 }
 
 static void
@@ -28142,7 +28142,7 @@ identify(void)
     if(sum || (pcmp->version != 1 && pcmp->version != 4))
         return 1;
 
-    if(cpuserver && m->havetsc)
+    if(cpuserver && cpu->havetsc)
         archmp.fastclock = tscticks;
     return 0;
 }
@@ -28522,46 +28522,46 @@ checkmtrr(void)
     /*
      * If there are MTRR registers, snarf them for validation.
      */
-    if(!(m->cpuiddx & Mtrr))
+    if(!(cpu->cpuiddx & Mtrr))
         return;
 
-    rdmsr(0x0FE, &m->mtrrcap);
-    rdmsr(0x2FF, &m->mtrrdef);
-    if(m->mtrrcap & 0x0100){
-        rdmsr(0x250, &m->mtrrfix[0]);
-        rdmsr(0x258, &m->mtrrfix[1]);
-        rdmsr(0x259, &m->mtrrfix[2]);
+    rdmsr(0x0FE, &cpu->mtrrcap);
+    rdmsr(0x2FF, &cpu->mtrrdef);
+    if(cpu->mtrrcap & 0x0100){
+        rdmsr(0x250, &cpu->mtrrfix[0]);
+        rdmsr(0x258, &cpu->mtrrfix[1]);
+        rdmsr(0x259, &cpu->mtrrfix[2]);
         for(i = 0; i < 8; i++)
-            rdmsr(0x268+i, &m->mtrrfix[(i+3)]);
+            rdmsr(0x268+i, &cpu->mtrrfix[(i+3)]);
     }
-    vcnt = m->mtrrcap & 0x00FF;
-    if(vcnt > nelem(m->mtrrvar))
-        vcnt = nelem(m->mtrrvar);
+    vcnt = cpu->mtrrcap & 0x00FF;
+    if(vcnt > nelem(cpu->mtrrvar))
+        vcnt = nelem(cpu->mtrrvar);
     for(i = 0; i < vcnt; i++)
-        rdmsr(0x200+i, &m->mtrrvar[i]);
+        rdmsr(0x200+i, &cpu->mtrrvar[i]);
 
     /*
      * If not the bootstrap processor, compare.
      */
-    if(m->machno == 0)
+    if(cpu->machno == 0)
         return;
 
     mach0 = MACHP(0);
-    if(mach0->mtrrcap != m->mtrrcap)
+    if(mach0->mtrrcap != cpu->mtrrcap)
         print("mtrrcap%d: %lluX %lluX\n",
-            m->machno, mach0->mtrrcap, m->mtrrcap);
-    if(mach0->mtrrdef != m->mtrrdef)
+            cpu->machno, mach0->mtrrcap, cpu->mtrrcap);
+    if(mach0->mtrrdef != cpu->mtrrdef)
         print("mtrrdef%d: %lluX %lluX\n",
-            m->machno, mach0->mtrrdef, m->mtrrdef);
+            cpu->machno, mach0->mtrrdef, cpu->mtrrdef);
     for(i = 0; i < 11; i++){
-        if(mach0->mtrrfix[i] != m->mtrrfix[i])
+        if(mach0->mtrrfix[i] != cpu->mtrrfix[i])
             print("mtrrfix%d: i%d: %lluX %lluX\n",
-                m->machno, i, mach0->mtrrfix[i], m->mtrrfix[i]);
+                cpu->machno, i, mach0->mtrrfix[i], cpu->mtrrfix[i]);
     }
     for(i = 0; i < vcnt; i++){
-        if(mach0->mtrrvar[i] != m->mtrrvar[i])
+        if(mach0->mtrrvar[i] != cpu->mtrrvar[i])
             print("mtrrvar%d: i%d: %lluX %lluX\n",
-                m->machno, i, mach0->mtrrvar[i], m->mtrrvar[i]);
+                cpu->machno, i, mach0->mtrrvar[i], cpu->mtrrvar[i]);
     }
 }
 
@@ -28589,7 +28589,7 @@ squidboy(Apic* apic)
     fpoff();
 
     lock(&active);
-    active.machs |= 1<<m->machno;
+    active.machs |= 1<<cpu->machno;
     unlock(&active);
 
     while(!active.thunderbirdsarego)
@@ -28838,7 +28838,7 @@ mpinit(void)
      *  set conf.copymode here if nmach > 1.
      *  Should look for an ExtINT line and enable it.
      */
-    if(X86FAMILY(m->cpuidax) == 3 || conf.nmach > 1)
+    if(X86FAMILY(cpu->cpuidax) == 3 || conf.nmach > 1)
         conf.copymode = 1;
 }
 
@@ -28869,7 +28869,7 @@ mpintrcpu(void)
      * temporary workaround for many-core intel (non-amd) systems:
      * always use cpu 0.  (TODO)
      */
-    if(strncmp(m->cpuidid, "AuthenticAMD", 12) != 0 && conf.nmach > 8)
+    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) != 0 && conf.nmach > 8)
         return 0;
 
     lock(&mpphysidlock);

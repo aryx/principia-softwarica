@@ -155,7 +155,7 @@ wdogpause(void)
 {
     int turndogoff;
 
-    turndogoff = watchdogon && m->machno == 0 && !islo();
+    turndogoff = watchdogon && cpu->machno == 0 && !islo();
     if (turndogoff) {
         watchdog->disable();
         watchdogon = 0;
@@ -227,9 +227,9 @@ guesscpuhz(int aalcycles)
     if(x == 0)
         x = 1;          /* avoid division by zero on vmware 7 */
     cpufreq = (vlong)loops*((aalcycles*2*Freq)/x);
-    m->loopconst = (cpufreq/1000)/aalcycles;    /* AAM+LOOP's for 1 ms */
+    cpu->loopconst = (cpufreq/1000)/aalcycles;    /* AAM+LOOP's for 1 ms */
 
-    if(m->havetsc && a != b){  /* a == b means virtualbox has confused us */
+    if(cpu->havetsc && a != b){  /* a == b means virtualbox has confused us */
         /* counter goes up by 2*Freq */
         b = (b-a)<<1;
         b *= Freq;
@@ -238,20 +238,20 @@ guesscpuhz(int aalcycles)
         /*
          *  round to the nearest megahz
          */
-        m->cpumhz = (b+500000)/1000000L;
-        m->cpuhz = b;
-        m->cyclefreq = b;
+        cpu->cpumhz = (b+500000)/1000000L;
+        cpu->cpuhz = b;
+        cpu->cyclefreq = b;
     } else {
         /*
          *  add in possible 0.5% error and convert to MHz
          */
-        m->cpumhz = (cpufreq + cpufreq/200)/1000000;
-        m->cpuhz = cpufreq;
+        cpu->cpumhz = (cpufreq + cpufreq/200)/1000000;
+        cpu->cpuhz = cpufreq;
     }
 
     /* don't divide by zero in trap.c */
-    if (m->cpumhz == 0)
-        panic("guesscpuhz: zero m->cpumhz");
+    if (cpu->cpumhz == 0)
+        panic("guesscpuhz: zero cpu->cpumhz");
     i8253.hz = Freq<<Tickshift;
 }
 /*e: function guesscpuhz */
@@ -358,12 +358,12 @@ i8253_delay(int millisecs)
     if (millisecs > 10*1000)
         iprint("delay(%d) from %#p\n", millisecs,
             getcallerpc(&millisecs));
-    if (watchdogon && m->machno == 0 && !islo())
+    if (watchdogon && cpu->machno == 0 && !islo())
         for (; millisecs > Wdogms; millisecs -= Wdogms) {
             delay(Wdogms);
             watchdog->restart();
         }
-    millisecs *= m->loopconst;
+    millisecs *= cpu->loopconst;
     if(millisecs <= 0)
         millisecs = 1;
     aamloop(millisecs);
@@ -374,12 +374,12 @@ i8253_delay(int millisecs)
 void
 i8253_microdelay(int microsecs)
 {
-    if (watchdogon && m->machno == 0 && !islo())
+    if (watchdogon && cpu->machno == 0 && !islo())
         for (; microsecs > Wdogms*1000; microsecs -= Wdogms*1000) {
             delay(Wdogms);
             watchdog->restart();
         }
-    microsecs *= m->loopconst;
+    microsecs *= cpu->loopconst;
     microsecs /= 1000;
     if(microsecs <= 0)
         microsecs = 1;
@@ -397,7 +397,7 @@ perfticks(void)
 {
     uvlong x;
 
-    if(m->havetsc)
+    if(cpu->havetsc)
         cycles(&x);
     else
         x = 0;

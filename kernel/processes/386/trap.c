@@ -325,14 +325,14 @@ intrtime(Mach*, int vno)
     ulong x;
 
     x = perfticks();
-    diff = x - m->perf.intrts;
-    m->perf.intrts = x;
+    diff = x - cpu->perf.intrts;
+    cpu->perf.intrts = x;
 
-    m->perf.inintr += diff;
-    if(up == nil && m->perf.inidle > diff)
-        m->perf.inidle -= diff;
+    cpu->perf.inintr += diff;
+    if(up == nil && cpu->perf.inidle > diff)
+        cpu->perf.inidle -= diff;
 
-    diff /= m->cpumhz*100;      /* quantum = 100µsec */
+    diff /= cpu->cpumhz*100;      /* quantum = 100µsec */
     if(diff >= Ntimevec)
         diff = Ntimevec-1;
     intrtimes[vno][diff]++;
@@ -381,7 +381,7 @@ trap(Ureg* ureg)
         panic("trap %lud: not ready", ureg->trap);
     }
 
-    m->perf.intrts = perfticks();
+    cpu->perf.intrts = perfticks();
     user = (ureg->cs & 0xFFFF) == UESEL;
     if(user){
         up->dbgreg = ureg;
@@ -393,9 +393,9 @@ trap(Ureg* ureg)
     vno = ureg->trap;
     if(ctl = vctl[vno]){
         if(ctl->isintr){
-            m->intr++;
+            cpu->intr++;
             if(vno >= VectorPIC && vno != VectorSYSCALL)
-                m->lastintr = ctl->irq;
+                cpu->lastintr = ctl->irq;
         }
 
         if(ctl->isr)
@@ -408,7 +408,7 @@ trap(Ureg* ureg)
             ctl->eoi(vno);
 
         if(ctl->isintr){
-            intrtime(m, vno);
+            intrtime(cpu, vno);
 
             if(ctl->irq == IrqCLOCK || ctl->irq == IrqTIMER)
                 clockintr = true;
@@ -452,13 +452,13 @@ trap(Ureg* ureg)
         i8259isr(vno);
         /*s: [[trap()]] debugging */
                 if(0)print("cpu%d: spurious interrupt %d, last %d\n",
-                    m->machno, vno, m->lastintr);
+                    cpu->machno, vno, cpu->lastintr);
                 if(0)if(conf.nmach > 1){
                     for(i = 0; i < 32; i++){
                         if(!(active.machs & (1<<i)))
                             continue;
                         mach = MACHP(i);
-                        if(m->machno == mach->machno)
+                        if(cpu->machno == mach->machno)
                             continue;
                         print(" cpu%d: last %d",
                             mach->machno, mach->lastintr);
@@ -466,7 +466,7 @@ trap(Ureg* ureg)
                     print("\n");
                 }
         /*e: [[trap()]] debugging */
-        m->spuriousintr++;
+        cpu->spuriousintr++;
         if(user)
             kexit(ureg);
         return;
@@ -477,8 +477,8 @@ trap(Ureg* ureg)
              * Don't re-enable, it confuses the crash dumps.
             nmienable();
              */
-            iprint("cpu%d: NMI PC %#8.8lux\n", m->machno, ureg->pc);
-            while(m->machno != 0)
+            iprint("cpu%d: NMI PC %#8.8lux\n", cpu->machno, ureg->pc);
+            while(cpu->machno != 0)
                 ;
         }
         dumpregs(ureg);
@@ -515,9 +515,9 @@ dumpregs2(Ureg* ureg)
 {
     if(up)
         iprint("cpu%d: registers for %s %lud\n",
-            m->machno, up->text, up->pid);
+            cpu->machno, up->text, up->pid);
     else
-        iprint("cpu%d: registers for kernel\n", m->machno);
+        iprint("cpu%d: registers for kernel\n", cpu->machno);
     iprint("FLAGS=%luX TRAP=%luX ECODE=%luX PC=%luX",
         ureg->flags, ureg->trap, ureg->ecode, ureg->pc);
     iprint(" SS=%4.4luX USP=%luX\n", ureg->ss & 0xFFFF, ureg->usp);
@@ -548,9 +548,9 @@ dumpregs(Ureg* ureg)
      */
     iprint("  CR0 %8.8lux CR2 %8.8lux CR3 %8.8lux",
         getcr0(), getcr2(), getcr3());
-    if(m->cpuiddx & (Mce|Tsc|Pse|Vmex)){
+    if(cpu->cpuiddx & (Mce|Tsc|Pse|Vmex)){
         iprint(" CR4 %8.8lux", getcr4());
-        if((m->cpuiddx & (Mce|Cpumsr)) == (Mce|Cpumsr)){
+        if((cpu->cpuiddx & (Mce|Cpumsr)) == (Mce|Cpumsr)){
             rdmsr(0x00, &mca);
             rdmsr(0x01, &mct);
             iprint("\n  MCA %8.8llux MCT %8.8llux", mca, mct);
@@ -597,9 +597,9 @@ _dumpstack(Ureg *ureg)
     && (uintptr)&l >= (uintptr)up->kstack
     && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
         estack = (uintptr)up->kstack+KSTACK;
-    else if((uintptr)&l >= (uintptr)m->stack
-    && (uintptr)&l <= (uintptr)m+MACHSIZE)
-        estack = (uintptr)m+MACHSIZE;
+    else if((uintptr)&l >= (uintptr)cpu->stack
+    && (uintptr)&l <= (uintptr)cpu+MACHSIZE)
+        estack = (uintptr)cpu+MACHSIZE;
     else
         return;
     x += iprint("estackx %p\n", estack);
@@ -753,7 +753,7 @@ syscall(Ureg* ureg)
 
     cycles(&up->kentry);
 
-    m->syscall++;
+    cpu->syscall++;
     up->insyscall = true;
     up->pc = ureg->pc;
     up->dbgreg = ureg;

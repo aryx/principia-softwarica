@@ -9,7 +9,7 @@ shi:
         POPL    AX
         TESTL   $0x200, AX
         JZ      alreadyhi
-        MOVL    $(MACHADDR+0x04), CX            /* save PC in m->splpc */
+        MOVL    $(MACHADDR+0x04), CX            /* save PC in cpu->splpc */
         MOVL    (SP), BX
         MOVL    BX, (CX)
 alreadyhi:
@@ -25,7 +25,7 @@ slo:
         POPL    AX
         TESTL   $0x200, AX
         JNZ     alreadylo
-        MOVL    $(MACHADDR+0x04), CX            /* clear m->splpc */
+        MOVL    $(MACHADDR+0x04), CX            /* clear cpu->splpc */
         MOVL    $0, (CX)
 alreadylo:
         STI

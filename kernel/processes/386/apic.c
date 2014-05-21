@@ -129,7 +129,7 @@ lapiconline(void)
      * then lower the task priority to allow interrupts to be
      * accepted by the APIC.
      */
-    microdelay((TK2MS(1)*1000/conf.nmach) * m->machno);
+    microdelay((TK2MS(1)*1000/conf.nmach) * cpu->machno);
     lapicw(LapicTICR, lapictimer.max);
     lapicw(LapicTIMER, LapicCLKIN|LapicPERIODIC|(VectorPIC+IrqTIMER));
 
@@ -144,7 +144,7 @@ lapictimerinit(void)
 {
     uvlong x, v, hz;
 
-    v = m->cpuhz/1000;
+    v = cpu->cpuhz/1000;
     lapicw(LapicTDCR, LapicX1);
     lapicw(LapicTIMER, ApicIMASK|LapicCLKIN|LapicONESHOT|(VectorPIC+IrqTIMER));
 
@@ -187,7 +187,7 @@ lapicinit(Apic* apic)
      * These don't really matter in Physical mode;
      * set the defaults anyway.
      */
-    if(strncmp(m->cpuidid, "AuthenticAMD", 12) == 0)
+    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) == 0)
         dfr = 0xf0000000;
     else
         dfr = 0xffffffff;
@@ -204,7 +204,7 @@ lapicinit(Apic* apic)
      * Some Pentium revisions have a bug whereby spurious
      * interrupts are generated in the through-local mode.
      */
-    switch(m->cpuidax & 0xFFF){
+    switch(cpu->cpuidax & 0xFFF){
     case 0x526:             /* stepping cB1 */
     case 0x52B:             /* stepping E0 */
     case 0x52C:             /* stepping cC0 */
@@ -277,19 +277,19 @@ lapicerror(Ureg*, void*)
 
     lapicw(LapicESR, 0);
     esr = lapicr(LapicESR);
-    switch(m->cpuidax & 0xFFF){
+    switch(cpu->cpuidax & 0xFFF){
     case 0x526:             /* stepping cB1 */
     case 0x52B:             /* stepping E0 */
     case 0x52C:             /* stepping cC0 */
         return;
     }
-    print("cpu%d: lapicerror: 0x%8.8luX\n", m->machno, esr);
+    print("cpu%d: lapicerror: 0x%8.8luX\n", cpu->machno, esr);
 }
 
 void
 lapicspurious(Ureg*, void*)
 {
-    print("cpu%d: lapicspurious\n", m->machno);
+    print("cpu%d: lapicspurious\n", cpu->machno);
 }
 
 int
@@ -385,7 +385,7 @@ lapictimerset(uvlong next)
     int x;
 
     x = splhi();
-    lock(&m->apictimerlock);
+    lock(&cpu->apictimerlock);
 
     period = lapictimer.max;
     if(next != 0){
@@ -401,7 +401,7 @@ lapictimerset(uvlong next)
     }
     lapicw(LapicTICR, period);
 
-    unlock(&m->apictimerlock);
+    unlock(&cpu->apictimerlock);
     splx(x);
 }
 

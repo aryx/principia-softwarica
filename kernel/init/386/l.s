@@ -189,7 +189,7 @@ _setpte1:
  * Basic machine environment set, can clear BSS and create a stack.
  * The stack starts at the top of the page containing the Mach structure.
  * The x86 architecture forces the use of the same virtual address for
- * each processor's Mach structure, so the global Mach pointer 'm' can
+ * each processor's Mach structure, so the global Mach pointer 'cpu' can
  * be initialised here.
  */
 TEXT _startpg(SB), $0
@@ -207,8 +207,8 @@ _clearbss:
         REP;    STOSL                           /* clear BSS */
 
         MOVL    $MACHADDR, SP
-        MOVL    SP, m(SB)                       /* initialise global Mach pointer */
-        MOVL    $0, 0(SP)                       /* initialise m->machno */
+        MOVL    SP, cpu(SB)                /* initialise global Mach pointer */
+        MOVL    $0, 0(SP)                       /* initialise cpu->machno */
 
 
         ADDL    $(MACHSIZE-4), SP               /* initialise stack */

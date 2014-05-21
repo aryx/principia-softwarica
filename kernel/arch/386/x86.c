@@ -177,42 +177,42 @@ cpuidentify(void)
     vlong mca, mct;
 
     cpuid(Highstdfunc, regs);
-    memmove(m->cpuidid,   &regs[1], BY2WD); /* bx */
-    memmove(m->cpuidid+4, &regs[3], BY2WD); /* dx */
-    memmove(m->cpuidid+8, &regs[2], BY2WD); /* cx */
-    m->cpuidid[12] = '\0';
+    memmove(cpu->cpuidid,   &regs[1], BY2WD); /* bx */
+    memmove(cpu->cpuidid+4, &regs[3], BY2WD); /* dx */
+    memmove(cpu->cpuidid+8, &regs[2], BY2WD); /* cx */
+    cpu->cpuidid[12] = '\0';
 
     cpuid(Procsig, regs);
-    m->cpuidax = regs[0];
-    m->cpuiddx = regs[3];
+    cpu->cpuidax = regs[0];
+    cpu->cpuiddx = regs[3];
 
-    if(strncmp(m->cpuidid, "AuthenticAMD", 12) == 0 ||
-       strncmp(m->cpuidid, "Geode by NSC", 12) == 0)
+    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) == 0 ||
+       strncmp(cpu->cpuidid, "Geode by NSC", 12) == 0)
         tab = x86amd;
-    else if(strncmp(m->cpuidid, "CentaurHauls", 12) == 0)
+    else if(strncmp(cpu->cpuidid, "CentaurHauls", 12) == 0)
         tab = x86winchip;
-    else if(strncmp(m->cpuidid, "SiS SiS SiS ", 12) == 0)
+    else if(strncmp(cpu->cpuidid, "SiS SiS SiS ", 12) == 0)
         tab = x86sis;
     else
         tab = x86intel;
 
-    family = X86FAMILY(m->cpuidax);
-    model = X86MODEL(m->cpuidax);
+    family = X86FAMILY(cpu->cpuidax);
+    model = X86MODEL(cpu->cpuidax);
     for(t=tab; t->name; t++)
         if((t->family == family && t->model == model)
         || (t->family == family && t->model == -1)
         || (t->family == -1))
             break;
 
-    m->cpuidtype = t->name;
+    cpu->cpuidtype = t->name;
 
     /*
      *  if there is one, set tsc to a known value
      */
-    if(m->cpuiddx & Tsc){
-        m->havetsc = true;
+    if(cpu->cpuiddx & Tsc){
+        cpu->havetsc = true;
         cycles = _cycles;
-        if(m->cpuiddx & Cpumsr)
+        if(cpu->cpuiddx & Cpumsr)
             wrmsr(0x10, 0);
     }
 
@@ -226,15 +226,15 @@ cpuidentify(void)
      * are supported enable them in CR4 and clear any other set extensions.
      * If machine check was enabled clear out any lingering status.
      */
-    if(m->cpuiddx & (Pge|Mce|Pse)){
+    if(cpu->cpuiddx & (Pge|Mce|Pse)){
         cr4 = 0;
-        if(m->cpuiddx & Pse)
+        if(cpu->cpuiddx & Pse)
             cr4 |= 0x10;        /* page size extensions */
         if(p = getconf("*nomce"))
             nomce = strtoul(p, 0, 0);
         else
             nomce = 0;
-        if((m->cpuiddx & Mce) && !nomce){
+        if((cpu->cpuiddx & Mce) && !nomce){
             cr4 |= 0x40;        /* machine check enable */
             if(family == 5){
                 rdmsr(0x00, &mca);
@@ -257,17 +257,17 @@ cpuidentify(void)
          * the PGE bit in CR4, writing to CR3, and then
          * restoring the PGE bit.
          */
-        if(m->cpuiddx & Pge){
+        if(cpu->cpuiddx & Pge){
             cr4 |= 0x80;        /* page global enable bit */
-            m->havepge = true;
+            cpu->havepge = true;
         }
 
         putcr4(cr4);
-        if(m->cpuiddx & Mce)
+        if(cpu->cpuiddx & Mce)
             rdmsr(0x01, &mct);
     }
 
-    if(m->cpuiddx & Fxsr){          /* have sse fp? */
+    if(cpu->cpuiddx & Fxsr){          /* have sse fp? */
         fpsave = fpssesave;
         fprestore = fpsserestore;
         putcr4(getcr4() | CR4Osfxsr);

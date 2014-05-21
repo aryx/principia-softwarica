@@ -179,7 +179,7 @@ ilock(Lock *l)
         }
     }
 acquire:
-    m->ilockdepth++;
+    cpu->ilockdepth++;
     if(up)
         up->lastilock = l;
     l->sr = x;
@@ -187,7 +187,7 @@ acquire:
     l->p = up;
     l->isilock = true;
     //TODO: why not just l->m = m? 
-    l->m = MACHP(m->machno);
+    l->m = MACHP(cpu->machno);
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
         l->lockcycles = -lcycles();
@@ -212,7 +212,7 @@ canlock(Lock *l)
         up->lastlock = l;
     l->pc = getcallerpc(&l);
     l->p = up;
-    l->m = MACHP(m->machno);
+    l->m = MACHP(cpu->machno);
     l->isilock = false;
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
@@ -291,7 +291,7 @@ iunlock(Lock *l)
     l->m = nil;
     l->key = 0;
     coherence();
-    m->ilockdepth--;
+    cpu->ilockdepth--;
     if(up)
         up->lastilock = nil;
     splx(sr);

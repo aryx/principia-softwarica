@@ -112,7 +112,7 @@ timeradd(Timer *nt)
         iunlock(tt);
     }
 
-    tt = &timers[m->machno];
+    tt = &timers[cpu->machno];
     ilock(tt);
     when = tadd(tt, nt);
     if(when)
@@ -133,7 +133,7 @@ timerdel(Timer *dt)
     if(tt = dt->tt){
         ilock(tt);
         when = tdel(dt);
-        if(when && tt == &timers[m->machno])
+        if(when && tt == &timers[cpu->machno])
             timerset(tt->head->twhen);
         iunlock(tt);
     }
@@ -145,14 +145,14 @@ timerdel(Timer *dt)
 void
 hzclock(Ureg *ur)
 {
-    m->ticks++;
-    if(m->proc)
-        m->proc->pc = ur->pc;
+    cpu->ticks++;
+    if(cpu->proc)
+        cpu->proc->pc = ur->pc;
 
-    if(m->flushmmu){
+    if(cpu->flushmmu){
         if(up)
             flushmmu();
-        m->flushmmu = false;
+        cpu->flushmmu = false;
     }
 
     accounttime();
@@ -161,7 +161,7 @@ hzclock(Ureg *ur)
     if(kproftimer != nil)
         kproftimer(ur->pc);
 
-    if((active.machs&(1<<m->machno)) == 0)
+    if((active.machs&(1<<cpu->machno)) == 0)
         return;
 
     if(active.exiting) {
@@ -186,9 +186,9 @@ timerintr(Ureg *u, Tval)
     uvlong when, now;
     int count, callhzclock;
 
-    intrcount[m->machno]++;
+    intrcount[cpu->machno]++;
     callhzclock = 0;
-    tt = &timers[m->machno];
+    tt = &timers[cpu->machno];
     now = fastticks(nil);
     if(now == 0)
         panic("timerintr: zero fastticks()");
@@ -212,7 +212,7 @@ timerintr(Ureg *u, Tval)
         tt->head = t->tnext;
         assert(t->tt == tt);
         t->tt = nil;
-        fcallcount[m->machno]++;
+        fcallcount[cpu->machno]++;
         iunlock(tt);
         if(t->tf)
             (*t->tf)(u, t);

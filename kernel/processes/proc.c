@@ -137,13 +137,13 @@ schedinit(void)     /* never returns */
 {
     Edf *e;
 
-    setlabel(&m->sched);
+    setlabel(&cpu->sched);
     if(up) {
         /*s: [[schedinit()]] optional real-time [[edfrecord()]] */
                 if((e = up->edf) && (e->flags & Admitted))
                     edfrecord(up);
         /*e: [[schedinit()]] optional real-time [[edfrecord()]] */
-        m->proc = nil;
+        cpu->proc = nil;
         switch(up->state) {
         case Running:
             ready(up);
@@ -188,10 +188,10 @@ proc_sched(void)
 {
     Proc *p;
 
-    if(m->ilockdepth)
+    if(cpu->ilockdepth)
         panic("cpu%d: ilockdepth %d, last lock %#p at %#p, sched called from %#p",
-            m->machno,
-            m->ilockdepth,
+            cpu->machno,
+            cpu->ilockdepth,
             up? up->lastilock: nil,
             (up && up->lastilock)? up->lastilock->pc: 0,
             getcallerpc(&p+2));
@@ -222,7 +222,7 @@ proc_sched(void)
         up->delaysched = 0;
         splhi(); // schedinit requires this
         /* statistics */
-        m->cs++;
+        cpu->cs++;
 
         procsave(up);
         if(setlabel(&up->sched)){
@@ -230,7 +230,7 @@ proc_sched(void)
             spllo();
             return;
         }
-        gotolabel(&m->sched); // goto schedinit()
+        gotolabel(&cpu->sched); // goto schedinit()
         //TODO can reach this point? schedinit calls sched()
         // so can return from sched() here at some point?
     }
@@ -242,13 +242,13 @@ proc_sched(void)
         updatecpu(p);
         p->priority = reprioritize(p);
     }
-    if(p != m->readied)
-        m->schedticks = m->ticks + HZ/10;
-    m->readied = nil;
+    if(p != cpu->readied)
+        cpu->schedticks = cpu->ticks + HZ/10;
+    cpu->readied = nil;
     up = p;
     up->state = Running;
-    up->mach = MACHP(m->machno);
-    m->proc = up;
+    up->mach = MACHP(cpu->machno);
+    cpu->proc = up;
     mmuswitch(up);
     gotolabel(&up->sched);
 }
@@ -278,13 +278,13 @@ void
 hzsched(void)
 {
     /* once a second, rebalance will reprioritize ready procs */
-    if(m->machno == 0)
+    if(cpu->machno == 0)
         rebalance();
 
     /* unless preempted, get to run for at least 100ms */
     if(anyhigher()
-    || (!up->fixedpri && m->ticks > m->schedticks && anyready())){
-        m->readied = nil;   /* avoid cooperative scheduling */
+    || (!up->fixedpri && cpu->ticks > cpu->schedticks && anyready())){
+        cpu->readied = nil;   /* avoid cooperative scheduling */
         up->delaysched++;
     }
 }
@@ -302,7 +302,7 @@ preempted(void)
     if(up->preempted == 0)
     if(anyhigher())
     if(!active.exiting){
-        m->readied = nil;   /* avoid cooperative scheduling */
+        cpu->readied = nil;   /* avoid cooperative scheduling */
         up->preempted = 1;
         sched();
         splhi();
@@ -388,7 +388,7 @@ updatecpu(Proc *p)
 /*s: function reprioritize */
 /*
  * On average, p has used p->cpu of a cpu recently.
- * Its fair share is conf.nmach/m->load of a cpu.  If it has been getting
+ * Its fair share is conf.nmach/cpu->load of a cpu.  If it has been getting
  * too much, penalize it.  If it has been getting not enough, reward it.
  * I don't think you can get much more than your fair share that 
  * often, so most of the queues are for using less.  Having a priority
@@ -514,8 +514,8 @@ proc_ready(Proc *p)
         return;
     }
 
-    if(up != p && (p->wired == nil || p->wired == m))
-        m->readied = p; /* group scheduling */
+    if(up != p && (p->wired == nil || p->wired == cpu))
+        cpu->readied = p; /* group scheduling */
 
     updatecpu(p);
     pri = reprioritize(p);
@@ -562,7 +562,7 @@ rebalance(void)
     Schedq *rq;
     Proc *p;
 
-    t = m->ticks;
+    t = cpu->ticks;
     if(t - balancetime < HZ)
         return;
     balancetime = t;
@@ -572,7 +572,7 @@ another:
         p = rq->head;
         if(p == nil)
             continue;
-        if(p->mp != MACHP(m->machno))
+        if(p->mp != MACHP(cpu->machno))
             continue;
         if(pri == p->basepri)
             continue;
@@ -606,8 +606,8 @@ runproc(void)
     start = perfticks();
 
     /* cooperative scheduling until the clock ticks */
-    if((p=m->readied) && p->mach==0 && p->state==Ready
-    && (p->wired == nil || p->wired == m)
+    if((p=cpu->readied) && p->mach==0 && p->state==Ready
+    && (p->wired == nil || p->wired == cpu)
     && runq[Nrq-1].head == nil && runq[Nrq-2].head == nil){
         skipscheds++;
         rq = &runq[p->priority];
@@ -631,7 +631,7 @@ loop:
          */
         for(rq = &runq[Nrq-1]; rq >= runq; rq--){
             for(p = rq->head; p; p = p->rnext){
-                if(p->mp == nil || p->mp == MACHP(m->machno)
+                if(p->mp == nil || p->mp == MACHP(cpu->machno)
                 || (!p->wired && i > 0))
                     goto found;
             }
@@ -642,7 +642,7 @@ loop:
 
         /* remember how much time we're here */
         now = perfticks();
-        m->perf.inidle += now-start;
+        cpu->perf.inidle += now-start;
         start = now;
     }
 
@@ -653,7 +653,7 @@ found:
         goto loop;
 
     p->state = Scheding;
-    p->mp = MACHP(m->machno);
+    p->mp = MACHP(cpu->machno);
 
     if(edflock(p)){
         edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
@@ -696,7 +696,7 @@ noprocpanic(char *msg)
      * on this processor.
      */
     lock(&active);
-    active.machs &= ~(1<<m->machno);
+    active.machs &= ~(1<<cpu->machno);
     active.exiting = true;
     unlock(&active);
 
@@ -921,7 +921,7 @@ proc_sleep(Rendez *r, int (*f)(void*), void *arg)
         up->r = r;
 
         /* statistics */
-        m->cs++;
+        cpu->cs++;
 
         procsave(up);
         if(setlabel(&up->sched)) {
@@ -936,7 +936,7 @@ proc_sleep(Rendez *r, int (*f)(void*), void *arg)
              */
             unlock(&up->rlock);
             unlock(r);
-            gotolabel(&m->sched);
+            gotolabel(&cpu->sched);
         }
     }
 
@@ -1355,7 +1355,7 @@ proc_pexit(char *exitstr, bool freemem)
     /*e: [[pexit()]] optional [[edfstop()]] for real-time scheduling */
     up->state = Moribund;
     // will gotolabel() to schedinit() which has special code around Moribund
-    // (why not doing more simply gotolabel(m->sched)? to reuse some of
+    // (why not doing more simply gotolabel(cpu->sched)? to reuse some of
     //  sched() code?)
     sched(); 
     // should never reach this
@@ -1509,7 +1509,7 @@ procflushseg(Segment *s)
      *  and flush their mmu's
      */
     for(nm = 0; nm < conf.nmach; nm++)
-        if(MACHP(nm) != m)
+        if(MACHP(nm) != cpu)
             while(MACHP(nm)->flushmmu)
                 sched();
 }
@@ -1527,7 +1527,7 @@ scheddump(void)
             continue;
         print("rq%ld:", rq-runq);
         for(p = rq->head; p; p = p->rnext)
-            print(" %lud(%lud)", p->pid, m->ticks - p->readytime);
+            print(" %lud(%lud)", p->pid, cpu->ticks - p->readytime);
         print("\n");
         delay(150);
     }
@@ -1702,7 +1702,7 @@ accounttime(void)
     ulong n, per;
     static ulong nrun;
 
-    p = m->proc;
+    p = cpu->proc;
     if(p) {
         nrun++;
         p->time[p->insyscall]++;
@@ -1710,20 +1710,20 @@ accounttime(void)
 
     /* calculate decaying duty cycles */
     n = perfticks();
-    per = n - m->perf.last;
-    m->perf.last = n;
-    per = (m->perf.period*(HZ-1) + per)/HZ;
+    per = n - cpu->perf.last;
+    cpu->perf.last = n;
+    per = (cpu->perf.period*(HZ-1) + per)/HZ;
     if(per != 0)
-        m->perf.period = per;
+        cpu->perf.period = per;
 
-    m->perf.avg_inidle = (m->perf.avg_inidle*(HZ-1)+m->perf.inidle)/HZ;
-    m->perf.inidle = 0;
+    cpu->perf.avg_inidle = (cpu->perf.avg_inidle*(HZ-1)+cpu->perf.inidle)/HZ;
+    cpu->perf.inidle = 0;
 
-    m->perf.avg_inintr = (m->perf.avg_inintr*(HZ-1)+m->perf.inintr)/HZ;
-    m->perf.inintr = 0;
+    cpu->perf.avg_inintr = (cpu->perf.avg_inintr*(HZ-1)+cpu->perf.inintr)/HZ;
+    cpu->perf.inintr = 0;
 
     /* only one processor gets to compute system load averages */
-    if(m->machno != 0)
+    if(cpu->machno != 0)
         return;
 
     /*
@@ -1738,7 +1738,7 @@ accounttime(void)
     n = nrun;
     nrun = 0;
     n = (nrdy+n)*1000;
-    m->load = (m->load*(HZ-1)+n)/HZ;
+    cpu->load = (cpu->load*(HZ-1)+n)/HZ;
 }
 /*e: function accounttime */
 

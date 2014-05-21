@@ -583,9 +583,9 @@ floppykproc(void *)
     for(;;){
         for(dp = fl.d; dp < &fl.d[fl.ndrive]; dp++){
             if((fl.motor&MOTORBIT(dp->dev))
-            && TK2SEC(m->ticks - dp->lasttouched) > 5
+            && TK2SEC(cpu->ticks - dp->lasttouched) > 5
             && canqlock(&fl)){
-                if(TK2SEC(m->ticks - dp->lasttouched) > 5)
+                if(TK2SEC(cpu->ticks - dp->lasttouched) > 5)
                     floppyoff(dp);
                 qunlock(&fl);
             }
@@ -629,7 +629,7 @@ floppyon(FDrive *dp)
         for(tries = 0; tries < 4; tries++)
             if(floppyrecal(dp) >= 0)
                 break;
-    dp->lasttouched = m->ticks;
+    dp->lasttouched = cpu->ticks;
     fl.selected = dp;
 
     /* return -1 if this didn't work */
@@ -995,7 +995,7 @@ floppyxfer(FDrive *dp, int cmd, void *a, long off, long n)
     }
     poperror();
 
-    dp->lasttouched = m->ticks;
+    dp->lasttouched = cpu->ticks;
     return dp->len;
 }
 
