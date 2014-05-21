@@ -188,19 +188,19 @@ writeconf(void)
 // Cpu init
 //*****************************************************************************
 
-/*s: function machinit */
+/*s: function cpuinit */
 void
-machinit(void)
+cpuinit(void)
 {
-    int machno;
+    int cpuno;
     ulong *pdb;
     Segdesc *gdt;
 
-    machno = cpu->machno;
+    cpuno = cpu->cpuno;
     pdb = cpu->pdb;
     gdt = cpu->gdt;
     memset(cpu, 0, sizeof(Cpu));
-    cpu->machno = machno;
+    cpu->cpuno = cpuno;
     cpu->pdb = pdb;
     cpu->gdt = gdt;
 
@@ -213,23 +213,23 @@ machinit(void)
      */
     cpu->loopconst = 100000;
 }
-/*e: function machinit */
+/*e: function cpuinit */
 
-/*s: function mach0init */
+/*s: function cpu0init */
 void
-mach0init(void)
+cpu0init(void)
 {
-        conf.nmach = 1;
+        conf.ncpu = 1;
         MACHP(0) = (Cpu*)CPU0MACH;
         cpu->pdb = (ulong*)CPU0PDB;
         cpu->gdt = (Segdesc*)CPU0GDT;
 
-        machinit();
+        cpuinit();
 
-        active.machs = 1;
+        active.cpus = 1;
         active.exiting = false;
 }
-/*e: function mach0init */
+/*e: function cpu0init */
 
 //*****************************************************************************
 // Conf init
@@ -688,28 +688,28 @@ shutdown(bool ispanic)
         lock(&active);
         if(ispanic)
                 active.ispanic = ispanic;
-        else if(cpu->machno == 0 && (active.machs & (1<<cpu->machno)) == 0)
+        else if(cpu->cpuno == 0 && (active.cpus & (1<<cpu->cpuno)) == 0)
                 active.ispanic = false;
-        once = active.machs & (1<<cpu->machno);
+        once = active.cpus & (1<<cpu->cpuno);
         /*
          * setting exiting will make hzclock() on each processor call exit(0),
          * which calls shutdown(0) and arch->reset(), which on mp systems is
          * mpshutdown, which idles non-bootstrap cpus and returns on bootstrap
-         * processors (to permit a reboot).  clearing our bit in machs avoids
+         * processors (to permit a reboot).  clearing our bit in cpus avoids
          * calling exit(0) from hzclock() on this processor.
          */
-        active.machs &= ~(1<<cpu->machno);
+        active.cpus &= ~(1<<cpu->cpuno);
         active.exiting = true;
         unlock(&active);
 
         if(once)
-                iprint("cpu%d: exiting\n", cpu->machno);
+                iprint("cpu%d: exiting\n", cpu->cpuno);
 
         /* wait for any other processors to shutdown */
         spllo();
         for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
                 delay(TK2MS(2));
-                if(active.machs == 0 && consactive() == 0)
+                if(active.cpus == 0 && consactive() == 0)
                         break;
         }
 
@@ -750,12 +750,12 @@ reboot(void *entry, void *code, ulong size)
          * because the hardware has a notion of which processor was the
          * boot processor and we look at it at start up.
          */
-        if (cpu->machno != 0) {
+        if (cpu->cpuno != 0) {
                 procwired(up, 0);
                 sched();
         }
 
-        if(conf.nmach > 1) {
+        if(conf.ncpu > 1) {
                 /*
                  * the other cpus could be holding locks that will never get
                  * released (e.g., in the print path) if we put them into
@@ -773,9 +773,9 @@ reboot(void *entry, void *code, ulong size)
         /*
          * should be the only processor running now
          */
-        active.machs = 0;
-        if (cpu->machno != 0)
-                print("on cpu%d (not 0)!\n", cpu->machno);
+        active.cpus = 0;
+        if (cpu->cpuno != 0)
+                print("on cpu%d (not 0)!\n", cpu->cpuno);
 
         print("shutting down...\n");
         delay(200);
@@ -910,7 +910,7 @@ main(void)
 
     cgapost(0);
 
-    mach0init(); // cpu0 initialization (calls machinit())
+    cpu0init(); // cpu0 initialization (calls cpuinit())
 
     options(); // setup values for getconf() from bootloader config
     // example of manual config:

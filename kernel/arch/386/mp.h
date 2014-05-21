@@ -135,7 +135,7 @@ struct Apic {
   int mre;      /* I/O APIC: maximum redirection entry */
 
   int lintr[2];   /* Local APIC */
-  int machno;
+  int cpuno;
 
   int online;
 };

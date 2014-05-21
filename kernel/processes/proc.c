@@ -170,7 +170,7 @@ schedinit(void)     /* never returns */
             unlock(&procalloc);
             break;
         }
-        up->mach = nil;
+        up->cpu = nil;
         updatecpu(up);
         up = nil;
     }
@@ -190,7 +190,7 @@ proc_sched(void)
 
     if(cpu->ilockdepth)
         panic("cpu%d: ilockdepth %d, last lock %#p at %#p, sched called from %#p",
-            cpu->machno,
+            cpu->cpuno,
             cpu->ilockdepth,
             up? up->lastilock: nil,
             (up && up->lastilock)? up->lastilock->pc: 0,
@@ -247,7 +247,7 @@ proc_sched(void)
     cpu->readied = nil;
     up = p;
     up->state = Running;
-    up->mach = MACHP(cpu->machno);
+    up->cpu = MACHP(cpu->cpuno);
     cpu->proc = up;
     mmuswitch(up);
     gotolabel(&up->sched);
@@ -278,7 +278,7 @@ void
 hzsched(void)
 {
     /* once a second, rebalance will reprioritize ready procs */
-    if(cpu->machno == 0)
+    if(cpu->cpuno == 0)
         rebalance();
 
     /* unless preempted, get to run for at least 100ms */
@@ -372,23 +372,23 @@ updatecpu(Proc *p)
     if(n > D)
         n = D;
 
-    ocpu = p->cpu;
+    ocpu = p->cpuavg;
     if(p != up)
-        p->cpu = (ocpu*(D-n))/D;
+        p->cpuavg = (ocpu*(D-n))/D;
     else{
         t = 1000 - ocpu;
         t = (t*(D-n))/D;
-        p->cpu = 1000 - t;
+        p->cpuavg = 1000 - t;
     }
 
-//iprint("pid %d %s for %d cpu %d -> %d\n", p->pid,p==up?"active":"inactive",n, ocpu,p->cpu);
+//iprint("pid %d %s for %d cpu %d -> %d\n", p->pid,p==up?"active":"inactive",n, ocpu,p->cpuavg);
 }
 /*e: function updatecpu */
 
 /*s: function reprioritize */
 /*
- * On average, p has used p->cpu of a cpu recently.
- * Its fair share is conf.nmach/cpu->load of a cpu.  If it has been getting
+ * On average, p has used p->cpuavg of a cpu recently.
+ * Its fair share is conf.ncpu/cpu->load of a cpu.  If it has been getting
  * too much, penalize it.  If it has been getting not enough, reward it.
  * I don't think you can get much more than your fair share that 
  * often, so most of the queues are for using less.  Having a priority
@@ -409,8 +409,8 @@ reprioritize(Proc *p)
      * except the decimal point is moved three places
      * on both load and fairshare.
      */
-    fairshare = (conf.nmach*1000*1000)/load;
-    n = p->cpu;
+    fairshare = (conf.ncpu*1000*1000)/load;
+    n = p->cpuavg;
     if(n == 0)
         n = 1;
     ratio = (fairshare+n/2) / n;
@@ -418,7 +418,7 @@ reprioritize(Proc *p)
         ratio = p->basepri;
     if(ratio < 0)
         panic("reprioritize");
-//iprint("pid %d cpu %d load %d fair %d pri %d\n", p->pid, p->cpu, load, fairshare, ratio);
+//iprint("pid %d cpu %d load %d fair %d pri %d\n", p->pid, p->cpuavg, load, fairshare, ratio);
     return ratio;
 }
 /*e: function reprioritize */
@@ -472,9 +472,9 @@ dequeueproc(Schedq *rq, Proc *tp)
     }
 
     /*
-     *  p->mach==0 only when process state is saved
+     *  p->cpu==0 only when process state is saved
      */
-    if(p == 0 || p->mach){
+    if(p == 0 || p->cpu){
         unlock(runq);
         return nil;
     }
@@ -572,7 +572,7 @@ another:
         p = rq->head;
         if(p == nil)
             continue;
-        if(p->mp != MACHP(cpu->machno))
+        if(p->mp != MACHP(cpu->cpuno))
             continue;
         if(pri == p->basepri)
             continue;
@@ -606,7 +606,7 @@ runproc(void)
     start = perfticks();
 
     /* cooperative scheduling until the clock ticks */
-    if((p=cpu->readied) && p->mach==0 && p->state==Ready
+    if((p=cpu->readied) && p->cpu==0 && p->state==Ready
     && (p->wired == nil || p->wired == cpu)
     && runq[Nrq-1].head == nil && runq[Nrq-2].head == nil){
         skipscheds++;
@@ -631,7 +631,7 @@ loop:
          */
         for(rq = &runq[Nrq-1]; rq >= runq; rq--){
             for(p = rq->head; p; p = p->rnext){
-                if(p->mp == nil || p->mp == MACHP(cpu->machno)
+                if(p->mp == nil || p->mp == MACHP(cpu->cpuno)
                 || (!p->wired && i > 0))
                     goto found;
             }
@@ -653,7 +653,7 @@ found:
         goto loop;
 
     p->state = Scheding;
-    p->mp = MACHP(cpu->machno);
+    p->mp = MACHP(cpu->cpuno);
 
     if(edflock(p)){
         edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
@@ -675,7 +675,7 @@ canpage(Proc *p)
     splhi();
     lock(runq);
     /* Only reliable way to see if we are Running */
-    if(p->mach == 0) {
+    if(p->cpu == nil) {
         p->newtlb = true;
         ok = 1;
     }
@@ -692,11 +692,11 @@ noprocpanic(char *msg)
 {
     /*
      * setting exiting will make hzclock() on each processor call exit(0).
-     * clearing our bit in machs avoids calling exit(0) from hzclock()
+     * clearing our bit in cpus avoids calling exit(0) from hzclock()
      * on this processor.
      */
     lock(&active);
-    active.machs &= ~(1<<cpu->machno);
+    active.cpus &= ~(1<<cpu->cpuno);
     active.exiting = true;
     unlock(&active);
 
@@ -735,7 +735,7 @@ newproc(void)
 
     p->state = Scheding;
     p->psstate = "New";
-    p->mach = nil;
+    p->cpu = nil;
     p->qnext = 0;
     p->nchild = 0;
     p->nwait = 0;
@@ -782,7 +782,7 @@ newproc(void)
     p->mp = nil;
     p->wired = nil;
     procpriority(p, PriNormal, 0);
-    p->cpu = 0;
+    p->cpuavg = 0;
     p->lastupdate = MACHP(0)->ticks*Scaling;
     p->edf = nil;
 
@@ -810,15 +810,15 @@ procwired(Proc *p, int bm)
         for(i=0; i<conf.nproc; i++, pp++){
             wm = pp->wired;
             if(wm && pp->pid)
-                nwired[wm->machno]++;
+                nwired[wm->cpuno]++;
         }
         bm = 0;
-        for(i=0; i<conf.nmach; i++)
+        for(i=0; i<conf.ncpu; i++)
             if(nwired[i] < nwired[bm])
                 bm = i;
     } else {
         /* use the virtual machine requested */
-        bm = bm % conf.nmach;
+        bm = bm % conf.ncpu;
     }
 
     p->wired = MACHP(bm);
@@ -1491,7 +1491,7 @@ procflushseg(Segment *s)
         for(ns = 0; ns < NSEG; ns++)
             if(p->seg[ns] == s){
                 p->newtlb = 1;
-                for(nm = 0; nm < conf.nmach; nm++){
+                for(nm = 0; nm < conf.ncpu; nm++){
                     if(MACHP(nm)->proc == p){
                         MACHP(nm)->flushmmu = 1;
                         nwait++;
@@ -1508,7 +1508,7 @@ procflushseg(Segment *s)
      *  wait for all processors to take a clock interrupt
      *  and flush their mmu's
      */
-    for(nm = 0; nm < conf.nmach; nm++)
+    for(nm = 0; nm < conf.ncpu; nm++)
         if(MACHP(nm) != cpu)
             while(MACHP(nm)->flushmmu)
                 sched();
@@ -1723,7 +1723,7 @@ accounttime(void)
     cpu->perf.inintr = 0;
 
     /* only one processor gets to compute system load averages */
-    if(cpu->machno != 0)
+    if(cpu->cpuno != 0)
         return;
 
     /*

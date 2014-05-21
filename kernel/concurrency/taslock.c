@@ -107,7 +107,7 @@ lock(Lock *l)
         i = 0;
         while(l->key){
            /*s: [[lock()]] optional priority-inversion for real-time process */
-                       if(conf.nmach < 2 && up && up->edf && (up->edf->flags & Admitted)){
+                       if(conf.ncpu < 2 && up && up->edf && (up->edf->flags & Admitted)){
                            /*
                             * Priority inversion, yield on a uniprocessor; on a
                             * multiprocessor, the other processor will unlock
@@ -187,7 +187,7 @@ acquire:
     l->p = up;
     l->isilock = true;
     //TODO: why not just l->m = m? 
-    l->m = MACHP(cpu->machno);
+    l->m = MACHP(cpu->cpuno);
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
         l->lockcycles = -lcycles();
@@ -212,7 +212,7 @@ canlock(Lock *l)
         up->lastlock = l;
     l->pc = getcallerpc(&l);
     l->p = up;
-    l->m = MACHP(cpu->machno);
+    l->m = MACHP(cpu->cpuno);
     l->isilock = false;
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES

@@ -308,7 +308,7 @@ iprintcanlock(Lock *l)
     for(i=0; i<1000; i++){
         if(canlock(l))
             return 1;
-        if(l->m == MACHP(cpu->machno))
+        if(l->m == MACHP(cpu->cpuno))
             return 0;
         microdelay(100);
     }
@@ -956,10 +956,10 @@ consread(Chan *c, void *buf, long n, vlong off)
         return readstr((ulong)offset, buf, n, configfile);
 
     case Qsysstat:
-        b = smalloc(conf.nmach*(NUMSIZE*11+1) + 1); /* +1 for NUL */
+        b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
         bp = b;
         for(id = 0; id < 32; id++) {
-            if(active.machs & (1<<id)) {
+            if(active.cpus & (1<<id)) {
                 mp = MACHP(id);
                 readnum(0, bp, NUMSIZE, id, NUMSIZE);
                 bp += NUMSIZE;
@@ -1168,7 +1168,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
 
     case Qsysstat:
         for(id = 0; id < 32; id++) {
-            if(active.machs & (1<<id)) {
+            if(active.cpus & (1<<id)) {
                 mp = MACHP(id);
                 mp->cs = 0;
                 mp->intr = 0;

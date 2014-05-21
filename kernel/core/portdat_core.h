@@ -23,7 +23,7 @@ struct Confmem
 /*s: struct Conf */
 struct Conf
 {
-    ulong nmach;    /* processors */
+    ulong ncpu;    /* processors */
     Confmem mem[4];   /* physical memory */
 
     ulong nproc;    /* processes */
@@ -94,7 +94,7 @@ struct Perf
 /*s: struct Cpu */
 struct Cpu
 {
-    int machno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
+    int cpuno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
     /*s: [[Cpu]] second field */
     // must be second field at 0x04, used by splhi()
     ulong splpc;      /* pc of last caller to splhi */
@@ -143,9 +143,9 @@ struct Cpu
 // ref<Cpu>, the actual Cpu is where??
 extern Cpu *cpu;
 // array<ref<Cpu>>, MAXMACH is defined in 386/mem.h
-extern Cpu* machp[MAXMACH];
+extern Cpu* cpup[MAXMACH];
 /*s: macro MACHP */
-#define MACHP(n)  (machp[n])
+#define MACHP(n)  (cpup[n])
 /*e: macro MACHP */
 
 /*s: macro up */

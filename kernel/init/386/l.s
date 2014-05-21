@@ -208,7 +208,7 @@ _clearbss:
 
         MOVL    $MACHADDR, SP
         MOVL    SP, cpu(SB)                /* initialise global Cpu pointer */
-        MOVL    $0, 0(SP)                       /* initialise cpu->machno */
+        MOVL    $0, 0(SP)                       /* initialise cpu->cpuno */
 
 
         ADDL    $(MACHSIZE-4), SP               /* initialise stack */

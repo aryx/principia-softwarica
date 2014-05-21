@@ -409,7 +409,7 @@ archctlwrite(Chan*, void *a, long n, vlong)
             coherence = mfence;
         }else if(strcmp(cb->f[1], "nop") == 0){
             /* only safe on vmware */
-            if(conf.nmach > 1)
+            if(conf.ncpu > 1)
                 error("cannot disable coherence on a multiprocessor");
             coherence = nop;
         }else

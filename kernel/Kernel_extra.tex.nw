@@ -1031,7 +1031,7 @@ void    bootlinks(void);
 long    latin1(Rune*, int);
 
 // used by main.c
-void    machinit(void);
+void    cpuinit(void);
 
 // used by main.c
 void mmuinit0(void);
@@ -1349,7 +1349,7 @@ extern char Echange[];    /* media or partition has changed */
 // was in init/main.c
 <<global m>>
 // was in dat.h
-<<global machp>>
+<<global cpup>>
 
 // was in security/auth.c
 <<global eve>>
@@ -1524,7 +1524,7 @@ char* getconf(char *name);
 // ref<Cpu>, the actual Cpu is where??
 extern Cpu *cpu;
 // array<ref<Cpu>>, MAXMACH is defined in 386/mem.h
-extern Cpu* machp[MAXMACH];
+extern Cpu* cpup[MAXMACH];
 <<macro MACHP>>
 
 <<macro up>>
@@ -2514,7 +2514,7 @@ archctlwrite(Chan*, void *a, long n, vlong)
             coherence = mfence;
         }else if(strcmp(cb->f[1], "nop") == 0){
             /* only safe on vmware */
-            if(conf.nmach > 1)
+            if(conf.ncpu > 1)
                 error("cannot disable coherence on a multiprocessor");
             coherence = nop;
         }else
@@ -5040,9 +5040,9 @@ extern ulong *multiboot;
 // Cpu init
 //*****************************************************************************
 
-<<function machinit>>
+<<function cpuinit>>
 
-<<function mach0init>>
+<<function cpu0init>>
 
 //*****************************************************************************
 // Conf init
@@ -5830,7 +5830,7 @@ countpagerefs(ulong *ref, int print)
     if(!print)
         iprint("%d pages in proc mmu\n", n);
     n = 0;
-    for(i=0; i<conf.nmach; i++){
+    for(i=0; i<conf.ncpu; i++){
         mm = MACHP(i);
         for(pg=mm->pdbpool; pg; pg=pg->next){
             if(print){
@@ -5847,8 +5847,8 @@ countpagerefs(ulong *ref, int print)
         }
     }
     if(!print){
-        iprint("%d pages in mach pdbpools\n", n);
-        for(i=0; i<conf.nmach; i++)
+        iprint("%d pages in cpu pdbpools\n", n);
+        for(i=0; i<conf.ncpu; i++)
             iprint("cpu%d: %d pdballoc, %d pdbfree\n",
                 i, MACHP(i)->pdballoc, MACHP(i)->pdbfree);
     }
@@ -5955,7 +5955,7 @@ cankaddr(ulong pa)
 /*
  * Device mappings are shared by all procs and processors and
  * live in the virtual range VMAP to VMAP+VMAPSIZE.  The master
- * copy of the mappings is stored in mach0->pdb, and they are
+ * copy of the mappings is stored in cpu0->pdb, and they are
  * paged in from there as necessary by vmapsync during faults.
  */
 
@@ -7576,7 +7576,7 @@ wdogpause(void)
 {
     int turndogoff;
 
-    turndogoff = watchdogon && cpu->machno == 0 && !islo();
+    turndogoff = watchdogon && cpu->cpuno == 0 && !islo();
     if (turndogoff) {
         watchdog->disable();
         watchdogon = 0;
@@ -7733,7 +7733,7 @@ i8253_delay(int millisecs)
     if (millisecs > 10*1000)
         iprint("delay(%d) from %#p\n", millisecs,
             getcallerpc(&millisecs));
-    if (watchdogon && cpu->machno == 0 && !islo())
+    if (watchdogon && cpu->cpuno == 0 && !islo())
         for (; millisecs > Wdogms; millisecs -= Wdogms) {
             delay(Wdogms);
             watchdog->restart();
@@ -7750,7 +7750,7 @@ i8253_delay(int millisecs)
 void
 i8253_microdelay(int microsecs)
 {
-    if (watchdogon && cpu->machno == 0 && !islo())
+    if (watchdogon && cpu->cpuno == 0 && !islo())
         for (; microsecs > Wdogms*1000; microsecs -= Wdogms*1000) {
             delay(Wdogms);
             watchdog->restart();
@@ -8042,7 +8042,7 @@ fpsavealloc(void)
 {
     cpu->fpsavalign = mallocalign(sizeof(FPssestate), FPalign, 0, 0);
     if (cpu->fpsavalign == nil)
-        panic("cpu%d: can't allocate fpsavalign", cpu->machno);
+        panic("cpu%d: can't allocate fpsavalign", cpu->cpuno);
 }
 @ 
 
@@ -8106,8 +8106,8 @@ idlehands(void)
      * and it reduces lock contention (thus system time and real time)
      * on many-core systems with large values of NPROC.
      */
-    if(conf.nmach == 1 || idle_spin == 0 ||
-        idle_if_nproc && conf.nmach >= idle_if_nproc)
+    if(conf.ncpu == 1 || idle_spin == 0 ||
+        idle_if_nproc && conf.ncpu >= idle_if_nproc)
         halt();
 }
 @ 
@@ -8272,9 +8272,9 @@ dumpregs2(Ureg* ureg)
 {
     if(up)
         iprint("cpu%d: registers for %s %lud\n",
-            cpu->machno, up->text, up->pid);
+            cpu->cpuno, up->text, up->pid);
     else
-        iprint("cpu%d: registers for kernel\n", cpu->machno);
+        iprint("cpu%d: registers for kernel\n", cpu->cpuno);
     iprint("FLAGS=%luX TRAP=%luX ECODE=%luX PC=%luX",
         ureg->flags, ureg->trap, ureg->ecode, ureg->pc);
     iprint(" SS=%4.4luX USP=%luX\n", ureg->ss & 0xFFFF, ureg->usp);
@@ -9082,7 +9082,7 @@ canpage(Proc *p)
     splhi();
     lock(runq);
     /* Only reliable way to see if we are Running */
-    if(p->mach == 0) {
+    if(p->cpu == nil) {
         p->newtlb = true;
         ok = 1;
     }
@@ -9169,7 +9169,7 @@ procflushseg(Segment *s)
         for(ns = 0; ns < NSEG; ns++)
             if(p->seg[ns] == s){
                 p->newtlb = 1;
-                for(nm = 0; nm < conf.nmach; nm++){
+                for(nm = 0; nm < conf.ncpu; nm++){
                     if(MACHP(nm)->proc == p){
                         MACHP(nm)->flushmmu = 1;
                         nwait++;
@@ -9186,7 +9186,7 @@ procflushseg(Segment *s)
      *  wait for all processors to take a clock interrupt
      *  and flush their mmu's
      */
-    for(nm = 0; nm < conf.nmach; nm++)
+    for(nm = 0; nm < conf.ncpu; nm++)
         if(MACHP(nm) != cpu)
             while(MACHP(nm)->flushmmu)
                 sched();
@@ -10518,7 +10518,7 @@ Edf *edf; /* if non-null, real-time proc, edf contains scheduling params */
 @
 
 <<[[lock()]] optional priority-inversion for real-time process>>=
-            if(conf.nmach < 2 && up && up->edf && (up->edf->flags & Admitted)){
+            if(conf.ncpu < 2 && up && up->edf && (up->edf->flags & Admitted)){
                 /*
                  * Priority inversion, yield on a uniprocessor; on a
                  * multiprocessor, the other processor will unlock
@@ -12842,7 +12842,7 @@ struct Apic {
   int mre;      /* I/O APIC: maximum redirection entry */
 
   int lintr[2];   /* Local APIC */
-  int machno;
+  int cpuno;
 
   int online;
 };
@@ -27689,7 +27689,7 @@ lapiconline(void)
      * then lower the task priority to allow interrupts to be
      * accepted by the APIC.
      */
-    microdelay((TK2MS(1)*1000/conf.nmach) * cpu->machno);
+    microdelay((TK2MS(1)*1000/conf.ncpu) * cpu->cpuno);
     lapicw(LapicTICR, lapictimer.max);
     lapicw(LapicTIMER, LapicCLKIN|LapicPERIODIC|(VectorPIC+IrqTIMER));
 
@@ -27843,13 +27843,13 @@ lapicerror(Ureg*, void*)
     case 0x52C:             /* stepping cC0 */
         return;
     }
-    print("cpu%d: lapicerror: 0x%8.8luX\n", cpu->machno, esr);
+    print("cpu%d: lapicerror: 0x%8.8luX\n", cpu->cpuno, esr);
 }
 
 void
 lapicspurious(Ureg*, void*)
 {
-    print("cpu%d: lapicspurious\n", cpu->machno);
+    print("cpu%d: lapicspurious\n", cpu->cpuno);
 }
 
 int
@@ -28056,7 +28056,7 @@ syncclock(void)
     if(arch->fastclock != tscticks)
         return;
 
-    if(cpu->machno == 0){
+    if(cpu->cpuno == 0){
         wrmsr(0x10, 0);
         cpu->tscticks = 0;
     } else {
@@ -28196,10 +28196,10 @@ static int mpisabus = -1;
 static int mpeisabus = -1;
 extern int i8259elcr;           /* mask of level-triggered interrupts */
 /* static */ Apic mpapic[MaxAPICNO+1];
-/* static */ int machno2apicno[MaxAPICNO+1];    /* inverse map: machno -> APIC ID */
+/* static */ int cpuno2apicno[MaxAPICNO+1];    /* inverse map: cpuno -> APIC ID */
 /* static */ Apic ioapic[MaxAPICNO+1];
 static Ref mpvnoref;            /* unique vector assignment */
-static int mpmachno = 1;
+static int mpcpuno = 1;
 static Lock mpphysidlock;
 static int mpphysid;
 
@@ -28243,13 +28243,13 @@ mkprocessor(PCMPprocessor* p)
     apic->lintr[1] = ApicIMASK;
 
     if(p->flags & PcmpBP){
-        machno2apicno[0] = apicno;
-        apic->machno = 0;
+        cpuno2apicno[0] = apicno;
+        apic->cpuno = 0;
     }
     else{
-        machno2apicno[mpmachno] = apicno;
-        apic->machno = mpmachno;
-        mpmachno++;
+        cpuno2apicno[mpcpuno] = apicno;
+        apic->cpuno = mpcpuno;
+        mpcpuno++;
     }
 
     return apic;
@@ -28517,7 +28517,7 @@ static void
 checkmtrr(void)
 {
     int i, vcnt;
-    Cpu *mach0;
+    Cpu *cpu0;
 
     /*
      * If there are MTRR registers, snarf them for validation.
@@ -28543,25 +28543,25 @@ checkmtrr(void)
     /*
      * If not the bootstrap processor, compare.
      */
-    if(cpu->machno == 0)
+    if(cpu->cpuno == 0)
         return;
 
-    mach0 = MACHP(0);
-    if(mach0->mtrrcap != cpu->mtrrcap)
+    cpu0 = MACHP(0);
+    if(cpu0->mtrrcap != cpu->mtrrcap)
         print("mtrrcap%d: %lluX %lluX\n",
-            cpu->machno, mach0->mtrrcap, cpu->mtrrcap);
-    if(mach0->mtrrdef != cpu->mtrrdef)
+            cpu->cpuno, cpu0->mtrrcap, cpu->mtrrcap);
+    if(cpu0->mtrrdef != cpu->mtrrdef)
         print("mtrrdef%d: %lluX %lluX\n",
-            cpu->machno, mach0->mtrrdef, cpu->mtrrdef);
+            cpu->cpuno, cpu0->mtrrdef, cpu->mtrrdef);
     for(i = 0; i < 11; i++){
-        if(mach0->mtrrfix[i] != cpu->mtrrfix[i])
+        if(cpu0->mtrrfix[i] != cpu->mtrrfix[i])
             print("mtrrfix%d: i%d: %lluX %lluX\n",
-                cpu->machno, i, mach0->mtrrfix[i], cpu->mtrrfix[i]);
+                cpu->cpuno, i, cpu0->mtrrfix[i], cpu->mtrrfix[i]);
     }
     for(i = 0; i < vcnt; i++){
-        if(mach0->mtrrvar[i] != cpu->mtrrvar[i])
+        if(cpu0->mtrrvar[i] != cpu->mtrrvar[i])
             print("mtrrvar%d: i%d: %lluX %lluX\n",
-                cpu->machno, i, mach0->mtrrvar[i], cpu->mtrrvar[i]);
+                cpu->cpuno, i, cpu0->mtrrvar[i], cpu->mtrrvar[i]);
     }
 }
 
@@ -28570,7 +28570,7 @@ squidboy(Apic* apic)
 {
 //  iprint("Hello Squidboy\n");
 
-    machinit();
+    cpuinit();
     fpsavealloc();
     mmuinit();
 
@@ -28589,7 +28589,7 @@ squidboy(Apic* apic)
     fpoff();
 
     lock(&active);
-    active.machs |= 1<<cpu->machno;
+    active.cpus |= 1<<cpu->cpuno;
     unlock(&active);
 
     while(!active.thunderbirdsarego)
@@ -28602,11 +28602,11 @@ static void
 mpstartap(Apic* apic)
 {
     ulong *apbootp, *pdb, *pte;
-    Cpu *mach, *mach0;
-    int i, machno;
+    Cpu *mach, *cpu0;
+    int i, cpuno;
     uchar *p;
 
-    mach0 = MACHP(0);
+    cpu0 = MACHP(0);
 
     /*
      * Initialise the AP page-tables and Cpu structure. The page-tables
@@ -28616,14 +28616,14 @@ mpstartap(Apic* apic)
      */
     p = xspanalloc(4*BY2PG, BY2PG, 0);
     pdb = (ulong*)p;
-    memmove(pdb, mach0->pdb, BY2PG);
+    memmove(pdb, cpu0->pdb, BY2PG);
     p += BY2PG;
 
     if((pte = mmuwalk(pdb, MACHADDR, 1, 0)) == nil)
         return;
     memmove(p, KADDR(PPN(*pte)), BY2PG);
     *pte = PADDR(p)|PTEWRITE|PTEVALID;
-    if(mach0->havepge)
+    if(cpu0->havepge)
         *pte |= PTEGLOBAL;
     p += BY2PG;
 
@@ -28631,13 +28631,13 @@ mpstartap(Apic* apic)
     if((pte = mmuwalk(pdb, MACHADDR, 2, 0)) == nil)
         return;
     *pte = PADDR(mach)|PTEWRITE|PTEVALID;
-    if(mach0->havepge)
+    if(cpu0->havepge)
         *pte |= PTEGLOBAL;
     p += BY2PG;
 
-    machno = apic->machno;
-    MACHP(machno) = mach;
-    mach->machno = machno;
+    cpuno = apic->cpuno;
+    MACHP(cpuno) = mach;
+    mach->cpuno = cpuno;
     mach->pdb = pdb;
     mach->gdt = (Segdesc*)p;    /* filled by mmuinit */
 
@@ -28826,7 +28826,7 @@ mpinit(void)
         if((apic->flags & (PcmpBP|PcmpEN)) == PcmpEN
         && apic->type == PcmpPROCESSOR){
             mpstartap(apic);
-            conf.nmach++;
+            conf.ncpu++;
             ncpu--;
         }
     }
@@ -28835,10 +28835,10 @@ mpinit(void)
      *  we don't really know the number of processors till
      *  here.
      *
-     *  set conf.copymode here if nmach > 1.
+     *  set conf.copymode here if ncpu > 1.
      *  Should look for an ExtINT line and enable it.
      */
-    if(X86FAMILY(cpu->cpuidax) == 3 || conf.nmach > 1)
+    if(X86FAMILY(cpu->cpuidax) == 3 || conf.ncpu > 1)
         conf.copymode = 1;
 }
 
@@ -28869,7 +28869,7 @@ mpintrcpu(void)
      * temporary workaround for many-core intel (non-amd) systems:
      * always use cpu 0.  (TODO)
      */
-    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) != 0 && conf.nmach > 8)
+    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) != 0 && conf.ncpu > 8)
         return 0;
 
     lock(&mpphysidlock);
@@ -29092,7 +29092,7 @@ mpshutdown(void)
 
     if(active.rebooting)
         return;
-    print("apshutdown: active = %#8.8ux\n", active.machs);
+    print("apshutdown: active = %#8.8ux\n", active.cpus);
     delay(1000);
     splhi();
     arch->resetothers();
@@ -29171,9 +29171,9 @@ enum {
 
 <<mpacpi.c debugging macro>>
 
-int mpmachno; //PAD: bug? also declared in mp.c
+int mpcpuno; //PAD: bug? also declared in mp.c
 extern Apic mpapic[MaxAPICNO+1];
-extern int  machno2apicno[MaxAPICNO+1]; /* inverse map: machno -> APIC ID */
+extern int  cpuno2apicno[MaxAPICNO+1]; /* inverse map: cpuno -> APIC ID */
 
 Apic    *bootapic;
 
@@ -29208,10 +29208,10 @@ mpnewproc(Apic *apic, int apicno, int f)
     apic->lintr[1] = apic->lintr[0] = ApicIMASK;
     /* botch! just enumerate */
     if(apic->flags & PcmpBP)
-        apic->machno = 0;
+        apic->cpuno = 0;
     else
-        apic->machno = ++mpmachno;
-    machno2apicno[apic->machno] = apicno;
+        apic->cpuno = ++mpcpuno;
+    cpuno2apicno[apic->cpuno] = apicno;
     return 0;
 }
 
@@ -29255,7 +29255,7 @@ mpacpiproc(uchar *p, ulong laddr)
 
     if (0)
         dprint("\tapic proc %d/%d apicid %d flags%s%s %s\n", nprocid-1,
-            apic->machno, id, f & PcmpBP? " boot": "",
+            apic->cpuno, id, f & PcmpBP? " boot": "",
             f & PcmpEN? " enabled": "", already);
     USED(already);
 

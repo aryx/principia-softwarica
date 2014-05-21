@@ -85,7 +85,7 @@ fpsavealloc(void)
 {
     cpu->fpsavalign = mallocalign(sizeof(FPssestate), FPalign, 0, 0);
     if (cpu->fpsavalign == nil)
-        panic("cpu%d: can't allocate fpsavalign", cpu->machno);
+        panic("cpu%d: can't allocate fpsavalign", cpu->cpuno);
 }
 /*e: function fpsavealloc */
 
@@ -146,8 +146,8 @@ idlehands(void)
      * and it reduces lock contention (thus system time and real time)
      * on many-core systems with large values of NPROC.
      */
-    if(conf.nmach == 1 || idle_spin == 0 ||
-        idle_if_nproc && conf.nmach >= idle_if_nproc)
+    if(conf.ncpu == 1 || idle_spin == 0 ||
+        idle_if_nproc && conf.ncpu >= idle_if_nproc)
         halt();
 }
 /*e: function idlehands */

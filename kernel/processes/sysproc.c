@@ -222,7 +222,7 @@ sysrfork(ulong *arg)
     p->mp = up->mp;
     wm = up->wired;
     if(wm)
-        procwired(p, wm->machno);
+        procwired(p, wm->cpuno);
     ready(p);
     sched();
     return pid;
@@ -844,7 +844,7 @@ sysrendezvous(ulong *arg)
             val = p->rendval;
             p->rendval = arg[1];
 
-            while(p->mach != 0)
+            while(p->cpu != 0)
                 ;
             ready(p);
             unlock(up->rgrp);

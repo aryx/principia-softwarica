@@ -457,7 +457,7 @@ struct Proc
            *  that last preempted it
            */
 
-    ulong cpu;    /* cpu average */
+    ulong cpuavg;    /* cpu average */
     uchar yield;    /* non-zero if the process just did a sleep(0) */
     ulong readytime;  /* time process came ready */
     ulong movetime; /* last time process switched processors */
@@ -468,7 +468,7 @@ struct Proc
     /*e: [[Proc]] optional [[edf]] field for real-time scheduling */
     /*x: [[Proc]] scheduling fields */
     // option<ref<Cpu>>, null when not associated to a processor
-    Cpu  *mach;    /* machine running this proc */
+    Cpu  *cpu;    /* machine running this proc */
     /*x: [[Proc]] scheduling fields */
     ulong lastupdate;
     /*x: [[Proc]] scheduling fields */
@@ -732,7 +732,7 @@ struct Alarms
 struct Active
 {
     //array<bool>
-    int machs;      /* bitmap of active CPUs */
+    int cpus;      /* bitmap of active CPUs */
 
     bool exiting;    /* shutdown */
     bool ispanic;    /* shutdown in response to a panic */

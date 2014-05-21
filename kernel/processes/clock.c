@@ -112,7 +112,7 @@ timeradd(Timer *nt)
         iunlock(tt);
     }
 
-    tt = &timers[cpu->machno];
+    tt = &timers[cpu->cpuno];
     ilock(tt);
     when = tadd(tt, nt);
     if(when)
@@ -133,7 +133,7 @@ timerdel(Timer *dt)
     if(tt = dt->tt){
         ilock(tt);
         when = tdel(dt);
-        if(when && tt == &timers[cpu->machno])
+        if(when && tt == &timers[cpu->cpuno])
             timerset(tt->head->twhen);
         iunlock(tt);
     }
@@ -161,7 +161,7 @@ hzclock(Ureg *ur)
     if(kproftimer != nil)
         kproftimer(ur->pc);
 
-    if((active.machs&(1<<cpu->machno)) == 0)
+    if((active.cpus&(1<<cpu->cpuno)) == 0)
         return;
 
     if(active.exiting) {
@@ -186,9 +186,9 @@ timerintr(Ureg *u, Tval)
     uvlong when, now;
     int count, callhzclock;
 
-    intrcount[cpu->machno]++;
+    intrcount[cpu->cpuno]++;
     callhzclock = 0;
-    tt = &timers[cpu->machno];
+    tt = &timers[cpu->cpuno];
     now = fastticks(nil);
     if(now == 0)
         panic("timerintr: zero fastticks()");
@@ -212,7 +212,7 @@ timerintr(Ureg *u, Tval)
         tt->head = t->tnext;
         assert(t->tt == tt);
         t->tt = nil;
-        fcallcount[cpu->machno]++;
+        fcallcount[cpu->cpuno]++;
         iunlock(tt);
         if(t->tf)
             (*t->tf)(u, t);

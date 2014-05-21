@@ -21,7 +21,7 @@ void    bootlinks(void);
 long    latin1(Rune*, int);
 
 // used by main.c
-void    machinit(void);
+void    cpuinit(void);
 
 // used by main.c
 void mmuinit0(void);

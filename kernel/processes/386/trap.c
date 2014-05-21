@@ -452,16 +452,16 @@ trap(Ureg* ureg)
         i8259isr(vno);
         /*s: [[trap()]] debugging */
                 if(0)print("cpu%d: spurious interrupt %d, last %d\n",
-                    cpu->machno, vno, cpu->lastintr);
-                if(0)if(conf.nmach > 1){
+                    cpu->cpuno, vno, cpu->lastintr);
+                if(0)if(conf.ncpu > 1){
                     for(i = 0; i < 32; i++){
-                        if(!(active.machs & (1<<i)))
+                        if(!(active.cpus & (1<<i)))
                             continue;
                         mach = MACHP(i);
-                        if(cpu->machno == mach->machno)
+                        if(cpu->cpuno == mach->cpuno)
                             continue;
                         print(" cpu%d: last %d",
-                            mach->machno, mach->lastintr);
+                            mach->cpuno, mach->lastintr);
                     }
                     print("\n");
                 }
@@ -477,8 +477,8 @@ trap(Ureg* ureg)
              * Don't re-enable, it confuses the crash dumps.
             nmienable();
              */
-            iprint("cpu%d: NMI PC %#8.8lux\n", cpu->machno, ureg->pc);
-            while(cpu->machno != 0)
+            iprint("cpu%d: NMI PC %#8.8lux\n", cpu->cpuno, ureg->pc);
+            while(cpu->cpuno != 0)
                 ;
         }
         dumpregs(ureg);
@@ -515,9 +515,9 @@ dumpregs2(Ureg* ureg)
 {
     if(up)
         iprint("cpu%d: registers for %s %lud\n",
-            cpu->machno, up->text, up->pid);
+            cpu->cpuno, up->text, up->pid);
     else
-        iprint("cpu%d: registers for kernel\n", cpu->machno);
+        iprint("cpu%d: registers for kernel\n", cpu->cpuno);
     iprint("FLAGS=%luX TRAP=%luX ECODE=%luX PC=%luX",
         ureg->flags, ureg->trap, ureg->ecode, ureg->pc);
     iprint(" SS=%4.4luX USP=%luX\n", ureg->ss & 0xFFFF, ureg->usp);

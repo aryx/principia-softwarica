@@ -69,7 +69,7 @@ static void
 pipeinit(void)
 {
     if(conf.pipeqsize == 0){
-        if(conf.nmach > 1)
+        if(conf.ncpu > 1)
             conf.pipeqsize = 256*1024;
         else
             conf.pipeqsize = 32*1024;

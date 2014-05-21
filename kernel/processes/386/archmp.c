@@ -113,7 +113,7 @@ syncclock(void)
     if(arch->fastclock != tscticks)
         return;
 
-    if(cpu->machno == 0){
+    if(cpu->cpuno == 0){
         wrmsr(0x10, 0);
         cpu->tscticks = 0;
     } else {

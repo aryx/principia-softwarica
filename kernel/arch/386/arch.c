@@ -37,8 +37,8 @@ cpuidprint(void)
     int i;
     char buf[128];
 
-    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", cpu->machno,
-        cpu->machno < 10? " ": "", cpu->cpumhz);
+    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", cpu->cpuno,
+        cpu->cpuno < 10? " ": "", cpu->cpumhz);
     if(cpu->cpuidid[0])
         i += sprint(buf+i, "%12.12s ", cpu->cpuidid);
     seprint(buf+i, buf + sizeof buf - 1,

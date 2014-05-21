@@ -174,7 +174,7 @@ memglobal(void)
     ulong *pde, *pte;
 
     /* only need to do this once, on bootstrap processor */
-    if(cpu->machno != 0)
+    if(cpu->cpuno != 0)
         return;
 
     if(!cpu->havepge)
@@ -231,7 +231,7 @@ flushpg(ulong va)
 /*
  * Allocate a new page for a page directory. 
  * We keep a small cache of pre-initialized
- * page directories in each mach.
+ * page directories in each cpu.
  */
 static Page*
 mmupdballoc(void)
@@ -574,7 +574,7 @@ mmuwalk(ulong* pdb, ulong va, int level, int create)
 /*
  * Device mappings are shared by all procs and processors and
  * live in the virtual range VMAP to VMAP+VMAPSIZE.  The master
- * copy of the mappings is stored in mach0->pdb, and they are
+ * copy of the mappings is stored in cpu0->pdb, and they are
  * paged in from there as necessary by vmapsync during faults.
  */
 
@@ -725,16 +725,16 @@ vunmap(void *v, int size)
         if(p != up)
             p->newtlb = true;
     }
-    for(i=0; i<conf.nmach; i++){
+    for(i=0; i<conf.ncpu; i++){
         nm = MACHP(i);
         if(nm != cpu)
             nm->flushmmu = true;
     }
     flushmmu();
-    for(i=0; i<conf.nmach; i++){
+    for(i=0; i<conf.ncpu; i++){
         nm = MACHP(i);
         if(nm != cpu)
-            while((active.machs&(1<<nm->machno)) && nm->flushmmu)
+            while((active.cpus&(1<<nm->cpuno)) && nm->flushmmu)
                 ;
     }
 }
@@ -1096,7 +1096,7 @@ countpagerefs(ulong *ref, int print)
     if(!print)
         iprint("%d pages in proc mmu\n", n);
     n = 0;
-    for(i=0; i<conf.nmach; i++){
+    for(i=0; i<conf.ncpu; i++){
         mm = MACHP(i);
         for(pg=mm->pdbpool; pg; pg=pg->next){
             if(print){
@@ -1113,8 +1113,8 @@ countpagerefs(ulong *ref, int print)
         }
     }
     if(!print){
-        iprint("%d pages in mach pdbpools\n", n);
-        for(i=0; i<conf.nmach; i++)
+        iprint("%d pages in cpu pdbpools\n", n);
+        for(i=0; i<conf.ncpu; i++)
             iprint("cpu%d: %d pdballoc, %d pdbfree\n",
                 i, MACHP(i)->pdballoc, MACHP(i)->pdbfree);
     }

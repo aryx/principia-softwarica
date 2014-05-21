@@ -25,7 +25,7 @@
 /*s: constant MAXMACH */
 /*
  * In 32-bit mode, the MAXMACH limit is 32 without
- * changing the way active.machs is defined and used
+ * changing the way active.cpus is defined and used
  * (unfortunately, it is also used in the port code).
  */
 #define MAXMACH   32      /* max # cpus system can run */

@@ -40,16 +40,16 @@ char* getconf(char *name)
 Cpu *cpu;
 /*e: global m */
 // was in dat.h
-/*s: global machp */
+/*s: global cpup */
 /*
  * Each processor sees its own Cpu structure at address MACHADDR.
  * However, the Cpu structures must also be available via the per-processor
- * MMU information array machp, mainly for disambiguation and access to
+ * MMU information array cpup, mainly for disambiguation and access to
  * the clock which is only maintained by the bootstrap processor (0).
  */
 // array<ref<Cpu>>, MAXMACH is defined in 386/mem.h
-Cpu* machp[MAXMACH];
-/*e: global machp */
+Cpu* cpup[MAXMACH];
+/*e: global cpup */
 
 // was in security/auth.c
 /*s: global eve */

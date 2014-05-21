@@ -129,7 +129,7 @@ lapiconline(void)
      * then lower the task priority to allow interrupts to be
      * accepted by the APIC.
      */
-    microdelay((TK2MS(1)*1000/conf.nmach) * cpu->machno);
+    microdelay((TK2MS(1)*1000/conf.ncpu) * cpu->cpuno);
     lapicw(LapicTICR, lapictimer.max);
     lapicw(LapicTIMER, LapicCLKIN|LapicPERIODIC|(VectorPIC+IrqTIMER));
 
@@ -283,13 +283,13 @@ lapicerror(Ureg*, void*)
     case 0x52C:             /* stepping cC0 */
         return;
     }
-    print("cpu%d: lapicerror: 0x%8.8luX\n", cpu->machno, esr);
+    print("cpu%d: lapicerror: 0x%8.8luX\n", cpu->cpuno, esr);
 }
 
 void
 lapicspurious(Ureg*, void*)
 {
-    print("cpu%d: lapicspurious\n", cpu->machno);
+    print("cpu%d: lapicspurious\n", cpu->cpuno);
 }
 
 int

@@ -49,9 +49,9 @@ enum {
 extern int  mpdebug;
 /*e: mpacpi.c debugging macro */
 
-int mpmachno; //PAD: bug? also declared in mp.c
+int mpcpuno; //PAD: bug? also declared in mp.c
 extern Apic mpapic[MaxAPICNO+1];
-extern int  machno2apicno[MaxAPICNO+1]; /* inverse map: machno -> APIC ID */
+extern int  cpuno2apicno[MaxAPICNO+1]; /* inverse map: cpuno -> APIC ID */
 
 Apic    *bootapic;
 
@@ -86,10 +86,10 @@ mpnewproc(Apic *apic, int apicno, int f)
     apic->lintr[1] = apic->lintr[0] = ApicIMASK;
     /* botch! just enumerate */
     if(apic->flags & PcmpBP)
-        apic->machno = 0;
+        apic->cpuno = 0;
     else
-        apic->machno = ++mpmachno;
-    machno2apicno[apic->machno] = apicno;
+        apic->cpuno = ++mpcpuno;
+    cpuno2apicno[apic->cpuno] = apicno;
     return 0;
 }
 
@@ -133,7 +133,7 @@ mpacpiproc(uchar *p, ulong laddr)
 
     if (0)
         dprint("\tapic proc %d/%d apicid %d flags%s%s %s\n", nprocid-1,
-            apic->machno, id, f & PcmpBP? " boot": "",
+            apic->cpuno, id, f & PcmpBP? " boot": "",
             f & PcmpEN? " enabled": "", already);
     USED(already);
 
