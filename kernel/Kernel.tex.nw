@@ -206,6 +206,9 @@ bigger than Plan9 equivalent core.
 To get started you first need to get the source of the plan9
 version described in this book at: 
 \url{https://github.com/aryx/fork-plan9}
+% did modifs, renamed, mv around, add types,
+% mostly to ease presentation
+
 
 Then you need to compile, using a regular C compiler (e.g. gcc),
 and install the Plan9 C cross compilers written by Ken Thompson:
@@ -630,6 +633,11 @@ paddr(kern_addr3 v)
 #define PADDR(a)  paddr((void*)(a))
 @
 
+
+
+%MACHADDR here!! because we talk about it later with m and machp
+% also IDT, GDT, etc
+
 \section{Syscall overview}
 % kernel vs user code
 
@@ -789,7 +797,7 @@ struct Mach
 % more on ticks in Time chapter, TODO how set? there no ticks = ? anywhere
 
 % note that machinit just set machp[0], not m
-% todo: why not make m an alias for machp[processor_id]?
+% todo: why not make m an alias for machp[processor_id]? so faster?
 <<global m>>=
 // ref<Mach>, assigned to MACHADDR in _clearbss
 Mach *m;
@@ -978,8 +986,8 @@ Proc* externup;   /* extern register Proc *up */
 // up = user process, MACHADDR is defined in 386/mem.h
 #define up  (((Mach*)MACHADDR)->externup)
 @
-
-%//TODO: mv in 386/ TODO: why not m->externup? m is not valid?
+% could use m->externup, but then this is a macro, not a closure
+% so any code introducing a local variable m will not be able to use up
 
 
 <<struct ArchProcMMU>>=
@@ -9792,57 +9800,58 @@ main(void)
 
     cgapost(0);
 
-    mach0init(); // calls machinit()
+    mach0init(); // cpu0 initialization (calls machinit())
 
-    options();
+    options(); // setup values for getconf() from bootloader config
+    // example of manual config:
+    // TODO confname(``console'') = 1?
 
-    ioinit();
+    ioinit(); // does some getconf("ioexclude") so must be after options()
 
-    i8250console();
-    quotefmtinstall();
-    screeninit();
-    // screeninit() done, we can print stuff!
-    print("\nPlan 99999999999999\n");
+    screeninit(); // screenputs = cgascreenputs
+    quotefmtinstall(); // libc printf initialization
+    i8250console(); // setup optional serial console if getconf("console") == 1
+    print("\nPlan 9\n");
 
-    // the init0 means this is really early on (malloc is not available?!)
+    // the init0 means this is really early on (e.g. malloc is not available)
     trapinit0();
     mmuinit0();
 
-    kbdinit(); //kbd enable below
-    i8253init();
+    kbdinit(); // kbd is then fully enabled below via kdbenable()
+    i8253init(); // clock controller
 
-    cpuidentify();
+    cpuidentify(); // setup m, to know which advanced features we can enable
+    cpuidprint();
+    meminit(); // setup conf.mem memory banks
+    confinit(); // setup conf
 
-    meminit();
-    confinit();
+    archinit(); // setup arch
 
-    archinit();
-
-    xinit();
-
+    xinit(); // setup xalloc memory allocator
     if(i8237alloc != nil)
-            i8237alloc();
+            i8237alloc(); // setup dma
 
     trapinit();
-    printinit();
-    cpuidprint();
     mmuinit();
 
     fpsavealloc();
     if(arch->intrinit)      /* launches other processors on an mp */
             arch->intrinit();
 
-
-
     timersinit();
     mathinit();
-    kbdenable();
+
+    kbdenable(); // setup kdbq
+    //TODO: bad name, setup lineq = queue for keyboard for reading /dev/cons
+    printinit();  // setup lineq
+
     if(arch->clockenable)
             arch->clockenable();
 
 
     procinit0();
     initseg();
+
     if(delaylink) {
             bootlinks();
             pcimatch(0, 0, 0);
@@ -9865,6 +9874,7 @@ main(void)
 }
 @
 
+% rename procinit and rename other in devprocinit
 <<function procinit0>>=
 void
 procinit0(void)     /* bad planning - clashes with devproc.c */
