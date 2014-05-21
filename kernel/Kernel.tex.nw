@@ -463,7 +463,7 @@ provides to the user programs.
 #include "dat_core.h"
 #include "../port/portdat_core.h"
 
-// defines Page
+// defines Page, Segment, KImage
 #include "dat_memory.h"
 #include "../port/portdat_memory.h"
 
@@ -624,15 +624,14 @@ paddr(kern_addr3 v)
 }
 @
 
+% why stupid macro? because in other archi can be different
 <<function KADDR>>=
 #define KADDR(a)  kaddr(a)
 @
 
-
 <<function PADDR>>=
 #define PADDR(a)  paddr((void*)(a))
 @
-
 
 
 %CPUADDR here!! because we talk about it later with cpu and cpus
@@ -766,9 +765,8 @@ char* getconf(char *name)
 
 
 
-\section{[[Cpu]] and [[m]]}
+\section{[[Cpu]] and [[cpu]]}
 
-% bad name, should be Processor
 <<struct Cpu>>=
 struct Cpu
 {
@@ -793,16 +791,25 @@ struct Cpu
     int stack[1];
 };
 @ 
-
 % more on ticks in Time chapter, TODO how set? there no ticks = ? anywhere
 
-% note that cpuinit just set cpus[0], not m
-% todo: why not make m an alias for cpus[processor_id]? so faster?
-<<global m>>=
+% cpu must be "something" that is local to each processor. How to achieve
+%  that? if there was a special instruction like MYCPUID then could
+%  make cpu a macro to cpus[MYCPUID()]. Could also use one register
+%  to hold it and so have something like extern register Cpu* cpu;
+%  This is actually the case on some archi like bcm. 
+%     extern register Mach* m;			/* R10 */
+%  for sure this is a technique leading to a local value and different
+%  in each processor.
+%  But on PC we can't do that because there is not enough registers to
+%  spare. 
+%  So cpu is a variable holding an addr that points to an area that
+%  is different on each processor, thx to a trick involving the page table.
+% note that cpuinit just set cpus[0], not cpu, cpu is set in clearbss
+<<global cpu>>=
 // ref<Cpu>, assigned to CPUADDR in _clearbss
 Cpu *cpu;
 @ 
-
 
 <<global cpus>>=
 /*
@@ -813,7 +820,11 @@ Cpu *cpu;
  */
 // array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
 Cpu* cpus[MAXCPUS];
-@ 
+@
+% could have instead of cpu and cpus have cpus and a Int *mycpu; where
+% mycpu points to the per-processor memory area and hold the value
+% of the processor, but then each access to cpu will be more costly
+% than a direct access as it's done above.
 
 <<constant MAXCPUS>>=
 /*
@@ -824,7 +835,7 @@ Cpu* cpus[MAXCPUS];
 #define MAXCPUS   32      /* max # cpus system can run */
 @
 
-
+% why macro? because again in other archi it could be more complex
 <<macro CPUS>>=
 #define CPUS(n)  (cpus[n])
 @
@@ -833,14 +844,14 @@ Cpu* cpus[MAXCPUS];
 <<struct Active>>=
 struct Active
 {
-    //array<bool>
+    // array<bool>
     int cpus;      /* bitmap of active CPUs */
 
     bool exiting;    /* shutdown */
     bool ispanic;    /* shutdown in response to a panic */
     bool rebooting;    /* just idle cpus > 0 */
   
-    // 386 specific?
+    // 386 specific? rename to ready_for_schedinit or wait_xxx?
     bool thunderbirdsarego;/* lets the added processors continue to schedinit */
   
     // extra
@@ -984,11 +995,25 @@ Proc* externup;   /* extern register Proc *up */
 
 <<macro up>>=
 // up = user process
-#define up  (cpu->externup)
+#define up (cpu->externup)
 @
-% could use cpu->externup, but then this is a macro, not a closure
-% so any code introducing a local variable m will not be able to use up
-
+%history: 
+% Just like for cpu, we want up to be something local to each processor
+% up used to be '#define up ((MACH*)MACHADDR)->externup' because:
+% - doing just (m->externup) was conflicting with some functions using
+%   a local variables called 'm'. Indeed up is a macro, not a closure so
+%   any code introducing a local variable 'm' will not be able to use up
+% - => rename m to cpu so less conflict and can now do (cpu->externup)
+% - why externup? because in other architectures such as bcm one can do
+%     extern register Mach* m;			/* R10 */
+%     extern register Proc* up;			/* R9 */
+%   and so m and up are really extern registers (for sure local and different
+%   in each processor). On the PC we don't have that many registers so
+%   have to emulate per-processor data via the virtual memory and the CPUADDR
+%   trick
+% - => but because in the end we don't have registers, there is no need
+%   to have both a cpu->proc and cpu->externup fields, one can just
+%   use cpu->proc for up!
 
 <<struct ArchProcMMU>>=
 //@Scheck: not dead, unnamed substructure

@@ -35,10 +35,10 @@ char* getconf(char *name)
 /*e: function getconf */
 
 // was in init/main.c
-/*s: global m */
+/*s: global cpu */
 // ref<Cpu>, assigned to CPUADDR in _clearbss
 Cpu *cpu;
-/*e: global m */
+/*e: global cpu */
 // was in dat.h
 /*s: global cpus */
 /*

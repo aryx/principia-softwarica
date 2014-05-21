@@ -731,14 +731,14 @@ struct Alarms
 /*s: struct Active */
 struct Active
 {
-    //array<bool>
+    // array<bool>
     int cpus;      /* bitmap of active CPUs */
 
     bool exiting;    /* shutdown */
     bool ispanic;    /* shutdown in response to a panic */
     bool rebooting;    /* just idle cpus > 0 */
   
-    // 386 specific?
+    // 386 specific? rename to ready_for_schedinit or wait_xxx?
     bool thunderbirdsarego;/* lets the added processors continue to schedinit */
   
     // extra
