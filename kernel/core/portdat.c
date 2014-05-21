@@ -36,19 +36,19 @@ char* getconf(char *name)
 
 // was in init/main.c
 /*s: global m */
-// ref<Cpu>, assigned to MACHADDR in _clearbss
+// ref<Cpu>, assigned to CPUADDR in _clearbss
 Cpu *cpu;
 /*e: global m */
 // was in dat.h
 /*s: global cpus */
 /*
- * Each processor sees its own Cpu structure at address MACHADDR.
+ * Each processor sees its own Cpu structure at address CPUADDR.
  * However, the Cpu structures must also be available via the per-processor
  * MMU information array cpus, mainly for disambiguation and access to
  * the clock which is only maintained by the bootstrap processor (0).
  */
-// array<ref<Cpu>>, MAXMACH is defined in 386/mem.h
-Cpu* cpus[MAXMACH];
+// array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
+Cpu* cpus[MAXCPUS];
 /*e: global cpus */
 
 // was in security/auth.c

@@ -48,7 +48,7 @@ struct Page
     // enum<cachectl>??
     char  color;      /* Cache coloring */
     // array<enum<cachectl>>
-    char  cachectl[MAXMACH];  /* Cache flushing control for putmmu */
+    char  cachectl[MAXCPUS];  /* Cache flushing control for putmmu */
   
     // extra
     Lock;

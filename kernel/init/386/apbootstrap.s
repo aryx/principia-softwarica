@@ -89,7 +89,7 @@ TEXT _appg(SB), $0
         MOVL    $0, (PDO(0))(AX)                /* undo double-map of KZERO at 0 */
         MOVL    CX, CR3                         /* load and flush the mmu */
 
-        MOVL    $(MACHADDR+MACHSIZE-4), SP
+        MOVL    $(CPUADDR+CPUSIZE-4), SP
 
         MOVL    $0, AX
         PUSHL   AX

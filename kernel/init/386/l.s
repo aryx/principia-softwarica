@@ -159,8 +159,8 @@ _setpte1:
         LOOP    _setpte1
 
         MOVL    $PADDR(CPU0PTE), AX
-        ADDL    $PTO(MACHADDR), AX              /* page table entry offset for MACHADDR */
-        MOVL    $PADDR(CPU0MACH), (AX)          /* PTE for Cpu */
+        ADDL    $PTO(CPUADDR), AX              /* page table entry offset for CPUADDR */
+        MOVL    $PADDR(CPU0CPU), (AX)          /* PTE for Cpu */
         MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
         ORL     BX, (AX)
 
@@ -206,12 +206,12 @@ _clearbss:
         CLD
         REP;    STOSL                           /* clear BSS */
 
-        MOVL    $MACHADDR, SP
+        MOVL    $CPUADDR, SP
         MOVL    SP, cpu(SB)                /* initialise global Cpu pointer */
         MOVL    $0, 0(SP)                       /* initialise cpu->cpuno */
 
 
-        ADDL    $(MACHSIZE-4), SP               /* initialise stack */
+        ADDL    $(CPUSIZE-4), SP               /* initialise stack */
 
 /*s: end of _startpg */
 /*

@@ -456,7 +456,7 @@ mpstartap(Apic* apic)
     memmove(pdb, cpu0->pdb, BY2PG);
     p += BY2PG;
 
-    if((pte = mmuwalk(pdb, MACHADDR, 1, 0)) == nil)
+    if((pte = mmuwalk(pdb, CPUADDR, 1, 0)) == nil)
         return;
     memmove(p, KADDR(PPN(*pte)), BY2PG);
     *pte = PADDR(p)|PTEWRITE|PTEVALID;
@@ -465,7 +465,7 @@ mpstartap(Apic* apic)
     p += BY2PG;
 
     mach = (Cpu*)p;
-    if((pte = mmuwalk(pdb, MACHADDR, 2, 0)) == nil)
+    if((pte = mmuwalk(pdb, CPUADDR, 2, 0)) == nil)
         return;
     *pte = PADDR(mach)|PTEWRITE|PTEVALID;
     if(cpu0->havepge)
@@ -651,11 +651,11 @@ mpinit(void)
         ncpu = strtol(cp, 0, 0);
         if(ncpu < 1)
             ncpu = 1;
-        else if(ncpu > MAXMACH)
-            ncpu = MAXMACH;
+        else if(ncpu > MAXCPUS)
+            ncpu = MAXCPUS;
     }
     else
-        ncpu = MAXMACH;
+        ncpu = MAXCPUS;
     memmove((void*)APBOOTSTRAP, apbootstrap, sizeof(apbootstrap));
     for(apic = mpapic; apic <= &mpapic[MaxAPICNO]; apic++){
         if(ncpu <= 1)

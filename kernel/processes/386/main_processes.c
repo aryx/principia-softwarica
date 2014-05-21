@@ -25,7 +25,7 @@ procsetup(Proc*p)
 
 /*s: function procsave */
 /*
- *  Save the mach dependent part of the process state.
+ *  Save the cpu dependent part of the process state.
  */
 void
 procsave(Proc *p)

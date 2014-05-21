@@ -22,14 +22,14 @@
 
 #define FPalign   16      /* required for FXSAVE */
 
-/*s: constant MAXMACH */
+/*s: constant MAXCPUS */
 /*
- * In 32-bit mode, the MAXMACH limit is 32 without
+ * In 32-bit mode, the MAXCPUS limit is 32 without
  * changing the way active.cpus is defined and used
  * (unfortunately, it is also used in the port code).
  */
-#define MAXMACH   32      /* max # cpus system can run */
-/*e: constant MAXMACH */
+#define MAXCPUS   32      /* max # cpus system can run */
+/*e: constant MAXCPUS */
 /*s: constant KSTACK */
 #define KSTACK    4096      /* Size of kernel stack */
 /*e: constant KSTACK */
@@ -93,9 +93,9 @@
 #define CPU0PDB   (KZERO+0x12000)   /* bootstrap processor PDB */
 #define CPU0PTE   (KZERO+0x13000)   /* bootstrap processor PTE's for 0-4MB */
 #define CPU0GDT   (KZERO+0x14000)   /* bootstrap processor GDT */
-#define MACHADDR  (KZERO+0x15000)   /* as seen by current processor */
-#define CPU0MACH  (KZERO+0x16000)   /* Cpu for bootstrap processor */
-#define MACHSIZE  BY2PG
+#define CPUADDR  (KZERO+0x15000)   /* as seen by current processor */
+#define CPU0CPU  (KZERO+0x16000)   /* Cpu for bootstrap processor */
+#define CPUSIZE  BY2PG
 #define CPU0PTE1  (KZERO+0x17000)   /* bootstrap processor PTE's for 4MB-8MB */
 #define CPU0END   (CPU0PTE1+BY2PG)
 /*

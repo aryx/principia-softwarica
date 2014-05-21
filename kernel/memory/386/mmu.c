@@ -341,7 +341,7 @@ mmuswitch(Proc* proc)
 
     if(proc->mmupdb){
         pdb = tmpmap(proc->mmupdb);
-        pdb[PDX(MACHADDR)] = cpu->pdb[PDX(MACHADDR)];
+        pdb[PDX(CPUADDR)] = cpu->pdb[PDX(CPUADDR)];
         tmpunmap(pdb);
         taskswitch(proc->mmupdb->pa, (ulong)(proc->kstack+KSTACK));
     }else
@@ -438,7 +438,7 @@ upallocpdb(void)
         return;
     }
     pdb = tmpmap(page);
-    pdb[PDX(MACHADDR)] = cpu->pdb[PDX(MACHADDR)];
+    pdb[PDX(CPUADDR)] = cpu->pdb[PDX(CPUADDR)];
     tmpunmap(pdb);
     up->mmupdb = page;
     putcr3(up->mmupdb->pa);
@@ -711,7 +711,7 @@ vunmap(void *v, int size)
      * This can be (and is) slow, since it is called only rarely.
      * It is possible for vunmap to be called with up == nil,
      * e.g. from the reset/init driver routines during system
-     * boot. In that case it suffices to flush the MACH(0) TLB
+     * boot. In that case it suffices to flush the CPUS(0) TLB
      * and return.
      */
     if(!active.thunderbirdsarego){
@@ -959,13 +959,13 @@ tmpmap(Page *p)
         return KADDR(p->pa);
 
     /*
-     * PDX(TMPADDR) == PDX(MACHADDR), so this
+     * PDX(TMPADDR) == PDX(CPUADDR), so this
      * entry is private to the processor and shared 
      * between up->mmupdb (if any) and cpu->pdb.
      */
     entry = &vpt[VPTX(TMPADDR)];
     if(!(*entry&PTEVALID)){
-        for(i=KZERO; i<=CPU0MACH; i+=BY2PG)
+        for(i=KZERO; i<=CPU0CPU; i+=BY2PG)
             print("%#p: *%#p=%#p (vpt=%#p index=%#p)\n", i, &vpt[VPTX(i)], vpt[VPTX(i)], vpt, VPTX(i));
         panic("tmpmap: no entry");
     }

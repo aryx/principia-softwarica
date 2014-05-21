@@ -208,7 +208,7 @@ newpage(int clear, Segment **s, ulong va)
     p->ref++;
     p->va = va;
     p->modref = 0;
-    for(i = 0; i < MAXMACH; i++)
+    for(i = 0; i < MAXCPUS; i++)
         p->cachectl[i] = ct;
     unlock(p);
     unlock(&palloc);

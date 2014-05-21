@@ -220,7 +220,7 @@ void
 cpu0init(void)
 {
         conf.ncpu = 1;
-        CPUS(0) = (Cpu*)CPU0MACH;
+        CPUS(0) = (Cpu*)CPU0CPU;
         cpu->pdb = (ulong*)CPU0PDB;
         cpu->gdt = (Segdesc*)CPU0GDT;
 
@@ -790,7 +790,7 @@ reboot(void *entry, void *code, ulong size)
         arch->introff();
 
         /*
-         * Modify the machine page table to directly map the low 4MB of memory
+         * Modify the processor page table to directly map the low 4MB of memory
          * This allows the reboot code to turn off the page mapping
          */
         pdb = cpu->pdb;

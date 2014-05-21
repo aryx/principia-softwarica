@@ -792,18 +792,18 @@ newproc(void)
 
 /*s: function procwired */
 /*
- * wire this proc to a machine
+ * wire this proc to a processor
  */
 void
 procwired(Proc *p, int bm)
 {
     Proc *pp;
     int i;
-    char nwired[MAXMACH];
+    char nwired[MAXCPUS];
     Cpu *wm;
 
     if(bm < 0){
-        /* pick a machine to wire to */
+        /* pick a processor to wire to */
         memset(nwired, 0, sizeof(nwired));
         p->wired = 0;
         pp = proctab(0);
@@ -817,7 +817,7 @@ procwired(Proc *p, int bm)
             if(nwired[i] < nwired[bm])
                 bm = i;
     } else {
-        /* use the virtual machine requested */
+        /* use the virtual processor requested */
         bm = bm % conf.ncpu;
     }
 

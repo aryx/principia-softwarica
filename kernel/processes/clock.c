@@ -17,12 +17,12 @@ enum {
 };
 
 /*s: global timers */
-static Timers timers[MAXMACH];
+static Timers timers[MAXCPUS];
 /*e: global timers */
 static bool timersinited;
 
-ulong intrcount[MAXMACH];
-ulong fcallcount[MAXMACH];
+ulong intrcount[MAXCPUS];
+ulong fcallcount[MAXCPUS];
 
 /*s: function tadd */
 static Tval

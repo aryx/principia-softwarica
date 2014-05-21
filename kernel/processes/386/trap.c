@@ -598,8 +598,8 @@ _dumpstack(Ureg *ureg)
     && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
         estack = (uintptr)up->kstack+KSTACK;
     else if((uintptr)&l >= (uintptr)cpu->stack
-    && (uintptr)&l <= (uintptr)cpu+MACHSIZE)
-        estack = (uintptr)cpu+MACHSIZE;
+    && (uintptr)&l <= (uintptr)cpu+CPUSIZE)
+        estack = (uintptr)cpu+CPUSIZE;
     else
         return;
     x += iprint("estackx %p\n", estack);

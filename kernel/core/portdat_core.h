@@ -142,8 +142,8 @@ struct Cpu
 
 // ref<Cpu>, the actual Cpu is where??
 extern Cpu *cpu;
-// array<ref<Cpu>>, MAXMACH is defined in 386/mem.h
-extern Cpu* cpus[MAXMACH];
+// array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
+extern Cpu* cpus[MAXCPUS];
 /*s: macro CPUS */
 #define CPUS(n)  (cpus[n])
 /*e: macro CPUS */

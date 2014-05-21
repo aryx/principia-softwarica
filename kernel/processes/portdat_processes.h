@@ -468,11 +468,11 @@ struct Proc
     /*e: [[Proc]] optional [[edf]] field for real-time scheduling */
     /*x: [[Proc]] scheduling fields */
     // option<ref<Cpu>>, null when not associated to a processor
-    Cpu  *cpu;    /* machine running this proc */
+    Cpu  *cpu;    /* processor running this proc */
     /*x: [[Proc]] scheduling fields */
     ulong lastupdate;
     /*x: [[Proc]] scheduling fields */
-    Cpu  *mp;    /* machine this process last ran on */
+    Cpu  *mp;    /* processor this process last ran on */
     /*x: [[Proc]] scheduling fields */
     Cpu  *wired;
     /*e: [[Proc]] scheduling fields */
