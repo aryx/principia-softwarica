@@ -143,7 +143,10 @@ schedinit(void)     /* never returns */
                 if((e = up->edf) && (e->flags & Admitted))
                     edfrecord(up);
         /*e: [[schedinit()]] optional real-time [[edfrecord()]] */
-        cpu->proc = nil;
+        //old: cpu->proc = nil;
+        // but now that on PC up = cpu->proc and not cpu->externup
+        // we can't do that anymore. Is there a place that rely on
+        // cpu->proc and cpu-externup to not be in sync?
         switch(up->state) {
         case Running:
             ready(up);
@@ -172,7 +175,9 @@ schedinit(void)     /* never returns */
         }
         up->cpu = nil;
         updatecpu(up);
-        up = nil;
+
+        cpu->proc = nil;
+        up = nil; // same instruction than previous line on some archi (e.g. PC)
     }
     sched();
 }
@@ -199,9 +204,10 @@ proc_sched(void)
         /*
          * Delay the sched until the process gives up the locks
          * it is holding.  This avoids dumb lock loops.
-         * Don't delay if the process is Moribund.
+         *
+         * But don't delay if the process is Moribund.
          * It called sched to die.
-         * But do sched eventually.  This avoids a missing unlock
+         * But do sched eventually. This avoids a missing unlock
          * from hanging the entire kernel. 
          * But don't reschedule procs holding palloc or procalloc.
          * Those are far too important to be holding while asleep.
@@ -211,14 +217,15 @@ proc_sched(void)
          * but Lock.p has not yet been initialized.
          */
         if(up->nlocks.ref)
-        if(up->state != Moribund)
-        if(up->delaysched < 20
-        || palloc.Lock.p == up
-        || procalloc.Lock.p == up){
-            up->delaysched++;
-            delayedscheds++;
-            return;
-        }
+          if(up->state != Moribund)
+            if(up->delaysched < 20
+              || palloc.Lock.p == up
+              || procalloc.Lock.p == up){
+
+                up->delaysched++;
+                delayedscheds++; // stats
+                return;
+            }
         up->delaysched = 0;
         splhi(); // schedinit requires this
         /* statistics */
@@ -245,10 +252,13 @@ proc_sched(void)
     if(p != cpu->readied)
         cpu->schedticks = cpu->ticks + HZ/10;
     cpu->readied = nil;
-    up = p;
+
+    cpu->proc = p;
+    up = p; // same instruction than previous line on some archi (e.g. PC)
+
     up->state = Running;
     up->cpu = CPUS(cpu->cpuno);
-    cpu->proc = up;
+
     mmuswitch(up);
     gotolabel(&up->sched);
 }
@@ -1702,7 +1712,7 @@ accounttime(void)
     ulong n, per;
     static ulong nrun;
 
-    p = cpu->proc;
+    p = cpu->proc; // why not p = up?
     if(p) {
         nrun++;
         p->time[p->insyscall]++;

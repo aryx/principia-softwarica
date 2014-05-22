@@ -146,7 +146,7 @@ void
 hzclock(Ureg *ur)
 {
     cpu->ticks++;
-    if(cpu->proc)
+    if(cpu->proc) // why not using up here? why cpu->proc?
         cpu->proc->pc = ur->pc;
 
     if(cpu->flushmmu){

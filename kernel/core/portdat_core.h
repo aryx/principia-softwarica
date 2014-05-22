@@ -150,7 +150,7 @@ extern Cpu* cpus[MAXCPUS];
 
 /*s: macro up */
 // up = user process
-#define up (cpu->externup)
+#define up (cpu->proc)
 /*e: macro up */
 
 //*****************************************************************************

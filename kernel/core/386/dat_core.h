@@ -52,8 +52,6 @@ struct ArchCpu {
     int cpuiddx;
     /*e: [[Cpu]] [[Arch]] cpuid fields */
     /*s: [[Cpu]] [[Arch]] other fields */
-    Proc* externup;   /* extern register Proc *up */
-    /*x: [[Cpu]] [[Arch]] other fields */
     Segdesc *gdt;     /* gdt for this processor */
     /*x: [[Cpu]] [[Arch]] other fields */
     // TODO: have a ArchCpuMMU like in bcm/
