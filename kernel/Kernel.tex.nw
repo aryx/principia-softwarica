@@ -703,7 +703,7 @@ sysnop(ulong*)
 \chapter{Core Data Structures}
 \minitoc
 
-% mini libc: bool, int, strings, unicode, etc
+% mini libc: bool, int, strings, Rune (unicode), etc
 
 \section{[[Conf]] and [[conf]]}
 
@@ -717,8 +717,9 @@ struct Conf
     <<[[Conf]] other fields>>
 };
 @ 
-
-%    // in bcm/ it's mem[1], important? why 4?
+% mem[4] to allow to have up to 4 free not contiguous memory regions
+% (on the PC we have 2, one in the low memory before the kernel, and
+% one after the kernel bss. On the bcm they just have 1)
 
 <<global conf>>=
 Conf conf;
@@ -735,7 +736,6 @@ struct Confmem
     kern_addr klimit; // KADDR(base+npage*BY2PG)
 };
 @ 
-
 % show concrete value for qemu! see C-t C-t m
 
 
@@ -764,7 +764,6 @@ char* getconf(char *name)
 @
 
 
-
 \section{[[Cpu]] and [[cpu]]}
 
 <<struct Cpu>>=
@@ -791,6 +790,25 @@ struct Cpu
     int stack[1];
 };
 @ 
+
+<<struct ArchCpu>>=
+struct ArchCpu {
+    <<[[Cpu]] [[Arch]] cpuid fields>>
+    <<[[Cpu]] [[Arch]] other fields>>
+};
+@ 
+
+
+%history:
+% Cpu used to be called Mach, but in the end it didn't make sense.
+% Maybe they originally used Mach for "machine" because back in the day
+% there was only  monoprocessor machine, but now with multiprocessor
+% machines having names like Mach to represent one cpu, or field names
+% like machno, mach0init, etc seems wrong. So I've renamed it!
+% A nice side effect is also that it avoids conflicts with libmach! 
+% There it acually makes sense to use the Mach name because they speak 
+% about a machine.
+
 % more on ticks in Time chapter, TODO how set? there no ticks = ? anywhere
 
 % cpu must be "something" that is local to each processor. How to achieve
@@ -821,6 +839,9 @@ Cpu *cpu;
 // array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
 Cpu* cpus[MAXCPUS];
 @
+% note that cpus[0] will not be CPUADDR! it will be
+% CPU0CPU. this will defeat the purpose otherwise.
+
 % could have instead of cpu and cpus have cpus and a Int *mycpu; where
 % mycpu points to the per-processor memory area and hold the value
 % of the processor, but then each access to cpu will be more costly
@@ -844,7 +865,7 @@ Cpu* cpus[MAXCPUS];
 <<struct Active>>=
 struct Active
 {
-    // array<bool>
+    // array<bool> (coupling: sizeof(int) must be >= MAXCPUS)
     int cpus;      /* bitmap of active CPUs */
 
     bool exiting;    /* shutdown */
@@ -863,14 +884,6 @@ struct Active
 struct Active active;
 @ 
 
-
-
-<<struct ArchCpu>>=
-struct ArchCpu {
-    <<[[Cpu]] [[Arch]] cpuid fields>>
-    <<[[Cpu]] [[Arch]] other fields>>
-};
-@ 
 
 \section{[[Proc]] and [[up]]}
 
@@ -940,6 +953,15 @@ struct Proc
 };
 @ 
 
+<<struct ArchProcMMU>>=
+//@Scheck: not dead, unnamed substructure
+struct ArchProcMMU
+{
+  <<[[Proc]] [[Arch]] memory fields>>
+};
+@
+
+
 <<[[Proc]] state fields>>=
 ulong pid;
 ulong parentpid;
@@ -988,17 +1010,12 @@ char *statename[] =
 };
 @ 
 
-
-<<[[Cpu]] [[Arch]] other fields>>=
-Proc* externup;   /* extern register Proc *up */
-@
-
 <<macro up>>=
 // up = user process
-#define up (cpu->externup)
+#define up (cpu->proc)
 @
 %history: 
-% Just like for cpu, we want up to be something local to each processor
+% Just like for 'cpu', we want 'up' to be something local to each processor.
 % up used to be '#define up ((MACH*)MACHADDR)->externup' because:
 % - doing just (m->externup) was conflicting with some functions using
 %   a local variables called 'm'. Indeed up is a macro, not a closure so
@@ -1011,21 +1028,13 @@ Proc* externup;   /* extern register Proc *up */
 %   in each processor). On the PC we don't have that many registers so
 %   have to emulate per-processor data via the virtual memory and the CPUADDR
 %   trick
-% - => but because in the end we don't have registers, there is no need
-%   to have both a cpu->proc and cpu->externup fields, one can just
+% - => because in the end we don't use registers, there is no need
+%   to have both a cpu->proc and cpu->externup field, one can just
 %   use cpu->proc for up!
-
-<<struct ArchProcMMU>>=
-//@Scheck: not dead, unnamed substructure
-struct ArchProcMMU
-{
-  <<[[Proc]] [[Arch]] memory fields>>
-};
-@
 
 \section{[[Chan]]}
 % everything is a file/Chan :)
-% diff with file descriptor? fd = index in chan table, chan = opened file
+% diff with file descriptor? fd = index in chan table (fgrp), chan = opened file
 
 <<struct Chan>>=
 struct Chan
@@ -1062,11 +1071,11 @@ Chan  *dot; // The current directory
 
 
 % rob pike: "q for unique"
-% qid =~ inode =~ internal representation of a file
+% qid =~ inode =~ internal representation of a file on a filesystem
 <<struct Qid>>=
 struct Qid
 {
-  // note that this is not a string, but an int! it's kind of an inode?
+  // note that this is not a string, but an int! it's kind of an inode
   uvlong  path;
   // for cache invalidation
   ulong vers;
@@ -1087,6 +1096,7 @@ enum qidtype {
   QTEXCL = 0x20,    /* type bit for exclusive use files */
 };
 @ 
+%TODO: reaffect the bit? 1<<1, 1<<2, 1<<3, etc?
 
 
 <<function eqqid>>=
@@ -1143,21 +1153,19 @@ eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
 
 
 \section{[[Dev]] and [[devtab]]}
-
-% actually Device that also play the role of filesystem/fileserver!
-
+% actually Device also plays the role of filesystem and even fileserver!
 % everything is a file ... server!
 
-% so devtab = VFS. device are often a special case
-% one-level directory containing a single file and thx to union
+% so devtab = major/minor + VFS +??? . Devices are often a special case
+% of a one-level directory containing a single file and thx to union
 % dir we can gather them in one directory such as /dev/
 
-% concrete device like kbd, screen, are exported via this
-%  read from /dev/cons, write to /dev/cons, and then
-%  fancy graphics are write to /dev/vga!
+% concrete device like kbd, screen, are exported via the
+%  read() method below from /dev/cons, write() method to /dev/cons, and then
+%  fancy graphics are write() to /dev/vga!
 
-% open take a Chan? how bootstrap? how get an handle to a file
-% you want to open
+% open take a Chan? how bootstrap? how to get an handle to a file
+% you want to open? first attach to get Chan from root?
 
 <<struct Dev>>=
 struct Dev
@@ -1196,7 +1204,7 @@ Dev** devtab = 0;
 @
 
 % ex of conf_devtab:
-%Dev* conf_devtab[]={
+% Dev* conf_devtab[]={
 %	&rootdevtab,
 %	&consdevtab,
 %       ...
@@ -1242,20 +1250,20 @@ PCArch archgeneric = {
 };
 @
 
-% SMP is more complex arch, archmp
+% SMP is more complex arch: 'archmp'
 
 \chapter{Concurrency}
 \minitoc
 
-% when think about concurrency in userspace program, have
+% when think about concurrency in a userspace program, one have
 % shared memory of multiple program threads and need to mediate
 % access to shared data via semaphore/lock/whatever.
 
-% well OS is a kind of program and it has also mutiple
+% well an OS is a kind of program and it has also mutiple
 % "threads" (different activities the processes) and lots of shared data
-% (kernel meta data about user processes and its own data)
-% (which is why lots of the concurrency issues arised first
-% for OS programmers long before the other)
+% (kernel meta data about user processes and its own data).
+% This is why lots of the concurrency issues arised first
+% for OS programmers long before the other.
 
 <<systab concurrency syscalls>>=
     [RENDEZVOUS]    sysrendezvous,
@@ -1267,43 +1275,41 @@ PCArch archgeneric = {
 
 \section{Critical regions}
 
-\begin{verbatim}
- There are different code/data "regions": 
- - user code/data
- - kernel data about user process
- - kernel data
- - kernel init code
- - kernel code of syscalls (soft interrupt), acting on behalf of user process
- - kernel code of interrupt handlers (hard interrupt).
- - kernel code of kernel processes (e.g. the alarm kernel process)
-
- There is no mutual exclusion need between user and kernel code. 
- Same for init code as only one processor is used during the
- uninterrupted sequential initialization.
- There is also no need between different user processes.
-
- For the kernel code one wants mutual exclusion because of possible race 
- on shared data structures between the syscalls themselves when run
- on different processors (or even when run on one processor as one syscall
- can be interrupted causing a scheduling that will then lead later to
- another syscall), but also between the syscalls and interrupts.
- The flow of control on one processor can be 
-  - User -> Syscall, 
-  - User -> Interrupt,
-  - or even User -> Syscall -> Interrupt
-  - one can even have User -> Syscall -> Interrupt -> Interrupt!!
-
- This is on one processor. Multiple processors lead to more combinations
- where 2 processors can run at the same time 2 interrupt handlers for instance.
- 
- One must take care when using locks inside interrupts as one can deadlock
- if the same lock was used in the enclosing syscall (hence ilock/iunlock)
-
- For protecting kernel syscall code from interrupt kernel code: splhi(), splo()
- For very small critical region: taslock
- For bigger region, or when have lots of contention on a lock: qlock
-
-\end{verbatim}
+% There are different code/data "regions": 
+% - user code/data
+% - kernel data about user process
+% - kernel data
+% - kernel init code
+% - kernel code of syscalls (soft interrupt), acting on behalf of user process
+% - kernel code of interrupt handlers (hard interrupt).
+% - kernel code of kernel processes (e.g. the alarm kernel process)
+%
+% There is no mutual exclusion need between user and kernel code. 
+% Same for init code as only one processor is used during the
+% uninterrupted sequential initialization.
+% There is also no need between different user processes.
+%
+% For the kernel code one wants mutual exclusion because of possible race 
+% on shared data structures between the syscalls themselves when run
+% on different processors (or even when run on one processor as one syscall
+% can be interrupted causing a scheduling that will then lead later to
+% another syscall), but also between the syscalls and interrupts.
+% The flow of control on one processor can be 
+%  - User -> Syscall, 
+%  - User -> Interrupt,
+%  - or even User -> Syscall -> Interrupt
+%  - one can even have User -> Syscall -> Interrupt -> Interrupt!!
+%
+% This is on one processor. Multiple processors lead to more combinations
+% where 2 processors can run at the same time 2 interrupt handlers for instance.
+% 
+% One must take care when using locks inside interrupts as one can deadlock
+% if the same lock was used in the enclosing syscall (hence ilock/iunlock)
+%
+% For protecting kernel syscall code from interrupt kernel code: splhi(), splo()
+% For very small critical region: taslock
+% For bigger region, or when have lots of contention on a lock: qlock
+%
 
 \section{[[tas()]]}
 
@@ -1319,11 +1325,12 @@ TEXT tas(SB), $0
         XCHGL   AX, (BX)                        /* lock->key */
         RET
 @ 
+% TODO: movl lock+0(FP) ??? what means this lock+0?
 
 \section{Atomic [[_xinc()]] and [[_xdec()]]}
 
-% tas() is for make sure arrive first on something
-% another operation is increment/decrement atomic
+% tas() is to make sure one arrive first on something
+% another operation is increment/decrement atomically
 
 <<function _xinc>>=
 /* void _xinc(long*); */
@@ -1358,10 +1365,6 @@ _xdeclt:
 struct Lock
 {
     ulong key; // 0 when unset, 0xDEADDEAD when acquired, could be a bool
-
-    // option<ref<Proc>>, None when key == 0
-    Proc  *p; // the process locking should be the same unlocking
-
     <<[[Lock]] ilock fields>>
     <<[[Lock]] debugging fields>>
     <<[[Lock]] other fields>>
@@ -1376,7 +1379,10 @@ Cpu  *m; // not that used, only in iprintcanlock apparently
 \fi
 
 <<[[Lock]] debugging fields>>=
-kern_addr pc; // for debugging, the caller who did the lock()
+// option<ref<Proc>>, None when key == 0
+Proc  *p; // the process who did the locking should be the same unlocking
+// for debugging, the caller who did the lock()
+kern_addr pc; 
 @
 
 <<[[Proc]] debugging fields>>=
@@ -1384,7 +1390,7 @@ Lock* lastlock;
 @
 
 <<[[Proc]] synchronization fields>>=
-// As long as the current process hold locks (to kernel data structures),
+// As long as the current process hold spinlocks (to kernel data structures),
 // we will not schedule another process in unlock(); only the last unlock
 // will eventually cause a rescheduling.
 Ref nlocks;   /* number of locks held by proc */
@@ -1488,8 +1494,12 @@ unlock(Lock *l)
     }
 }
 @ 
+% the last if is very subtle, have to understand sched() and delaysched
+% to understand. too early to show a scenario
 
 % does not spin if it can not get it
+% it can be used also to make sure your caller have the lock by doing
+%  if(canlock(x)) panic("lock not held by caller")
 <<function canlock>>=
 bool
 canlock(Lock *l)
@@ -1513,6 +1523,9 @@ canlock(Lock *l)
 }
 @ 
 
+% what about deadlock when need 2 locks? need to have
+% an ordering! and use always the same! could use the
+% address of the lock trick of linux?
 
 \section{Interrupt [[Lock]]}
 % can formalize a checking rule? if access any field
@@ -1677,7 +1690,8 @@ iunlock(Lock *l)
 }
 @ 
 
-\section{Blocking [[QLock]]}
+\section{Sleepable [[QLock]]}
+% can be seen also as a Waiting queue
 
 <<struct QLock>>=
 // Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
@@ -1755,6 +1769,7 @@ qlock(QLock *q)
     q->qpc = getcallerpc(&q);
 }
 @ 
+% call to sched() function! =~ sleep
 
 <<function qunlock>>=
 void
@@ -1773,6 +1788,7 @@ qunlock(QLock *q)
         q->head = p->qnext;
         if(q->head == 0)
             q->tail = nil;
+
         unlock(&q->use);
         ready(p);
     }else{
@@ -1783,7 +1799,9 @@ qunlock(QLock *q)
 }
 @ 
 
-% does not wait if can not get it
+%call to ready() function! could put the Ready state here then?
+
+% does not sleep if can not get it (but if can get it then it does!)
 % what is the point of using a qlock if everybody uses it via canqlock??
 <<function canqlock>>=
 bool
@@ -2069,6 +2087,8 @@ deccnt(Ref *r)
 
 % see sleep.ps in plan9 documents
 
+% already have seen kinda of with sched()/ready()
+
 \subsection{Rendez-vous}
 % sleep/wakeup?
 
@@ -2088,13 +2108,13 @@ deccnt(Ref *r)
 \section{Overview}
 % kernel vs user memory
 
-%memory kind allocation:
+%allocation memory kinds:
 % - static and initialized (data) in binary itself! "allocated" by 
 %    kernel loader
 % - static and unitiliaized (bss), "allocated" by kernel loader again,
 %   initialized to zero in asm (via 'edata', 'end' linker info)
 % - dynamic
-%    - via static arena
+%    - via static arena (and trick to maintain free list)
 %    - via malloc (heap)
 
 % malloc/free memory does not appear from thin air, need data structure
@@ -2120,9 +2140,9 @@ deccnt(Ref *r)
 
 \section{[[xalloc()]]}
 
-% start with Confmem, huge bank, now we want to use some memory
-% draw figure with many holes in memory. Can't support too much
-% fragmentation (no compact() function)
+% start with Confmem, huge bank, now we want to use some memory.
+% draw figure with idea. Draw also figures with many holes in memory. 
+% Can't support too much fragmentation (no compact() function)
 
 <<constants holes>>=
 enum
@@ -2135,7 +2155,7 @@ enum
 <<struct Hole>>=
 struct Hole
 {
-    // between addr and top the memory is free
+    // between addr and top the memory is free, this is the "hole"
     phys_addr addr; 
     phys_addr top; 
     ulong size; // top - addr
@@ -2148,21 +2168,23 @@ struct Hole
 // Long lived data structure allocator (singleton)
 struct Xalloc
 {
-    // array<Hole>
+    // array<Hole> where each Hole is linked to another hole
     Hole  hole[Nhole];
   
-    // list<ref<Hole>> (next = Hole.link) list of free holes (addr=top=size=0)
+    // list<ref<Hole>> (next = Hole.link) list of free hole entries (addr=top=size=0)
     Hole* flist; 
-    // list<ref<Hole>> (next = Hole.link) memory holes, sorted by top addr
+    // list<ref<Hole>> (next = Hole.link) memory holes, sorted by their top addr
     Hole* table; 
   
     // extra
     Lock;
 };
 @
-% note that the hole is free means the metadata is free
-% a used hole means actually there is free memory here, it's a hole
-% in the contiguous memory area
+% note that the hole entry is free means the metadata is free.
+% a used hole in table means actually the hole entry is valid
+% and describe some free memory there
+%TODO: rename flist and table? to free_hole_entries, and sorted_used_holes?
+
 
 <<[[Hole]] extra fields>>=
 Hole* link; // list<ref<Hole>> of Xalloc.flist or Xalloc.table
@@ -2175,12 +2197,16 @@ static Xalloc   xlists;
 % complex data structure, show concrete example, C-t C-t x
 % where does xalloc(1000); xalloc(1000) and then free first => new hole used
 %  see complex linking and role of table and flist,
-%  recall what confmem was so can understand the small split of the first
+% recall what confmem was so can understand the small split of the first
 %  bank and then the huge bank
+
 % this does not handle well many alloc/free, each free in the middle
 % will allocate a new hole. Does not handle fragmentation.
 % example of bad case: if does 12 * 2 xalloc, and then free
-% one in two, then will use all the holes
+% one in two, then will use all the holes. Which is why xalloc
+% is really used as the building block for the other memory allocators
+% for things that are never free (long-lived data structures e.g. procs,
+% pages, etc)
 
 
 <<function xalloc>>=
@@ -2193,8 +2219,9 @@ xalloc(ulong size)
 
 
 <<struct Xhdr>>=
-// What is the connection with Hole? a part of a used Hole will describe
-// a portion of memory, and at this memory there will be a header
+// What is the connection with Hole? A Hole that get used will gets
+// its top and size decremented, and this newly allocated part will describe
+// a portion of used memory, and at this memory there will be a header
 // and then just after the actual memory xalloc'ed by someone
 struct Xhdr
 {
@@ -2232,9 +2259,9 @@ xallocz(ulong size, bool zero)
             h->addr += size; // shrink towards top
             h->size -= size;
 
-            // this hole is now fully used (which is rare because one
-            // rarely does an xalloc with the remaining size of a hole)
-            // can put it back in the free list
+            // This hole is now fully used (which is rare because one
+            // rarely does an xalloc with the remaining size of a hole).
+            // We can put it back in the list of free hole entries.
             if(h->size == 0) {
                 *l = h->link;
                 h->link = xlists.flist;
@@ -2700,7 +2727,6 @@ msize(void *v)
 % done via brk at a page level. malloc is actually
 % done in libc on top of brk (cf insa and aubourg :) )
 
-
 % in lib_core/libc/port/malloc.c 
 
 %Pool *mainmem = &sbrkmem;
@@ -2710,8 +2736,12 @@ msize(void *v)
 
 \section{[[Page]]}
 
+% TODO: lots of code is related to KImage, like cachedel, etc
+% so should move this code in the KImage section
+
 % will be used to share, copy on write!
 
+%TODO LP: split [[Page]] extra fields and distribute later
 <<struct Page>>=
 // Page metadata. We will allocate as many Page as to cover all physical memory
 // + swap "address space". Either pa or daddr should be valid at one time.
@@ -2721,10 +2751,13 @@ struct Page
     phys_addr pa;     /* Physical address in memory */
     virt_addr va;     /* Virtual address for user */
   
+    // option<ref<Kimage>>
+    KImage  *image;     /* Associated text or swap image */
     ulong daddr;      /* Disc address on swap */
     ulong gen;      /* Generation counter for swap */
   
-    // Why not Ref? to save space?
+    // Why not Ref? to save space probably (same reason they use char below)
+    // but that means needs to use Lock below to access this non-atomic ref.
     ushort  ref;      /* Reference count */
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
@@ -2732,26 +2765,32 @@ struct Page
     char  color;      /* Cache coloring */
     // array<enum<cachectl>>
     char  cachectl[MAXCPUS];  /* Cache flushing control for putmmu */
-  
+
     // extra
     Lock;
-    Page  *next; /* Lru free list */ // list<ref<Page>> Palloc.head?
-    Page  *prev; // ??
-    Page  *hash; /* Image hash chains */ // hash<?, list<ref<Page>>> Palloc.hash?
-    // option<ref<Kimage>>
-    KImage  *image;     /* Associated text or swap image */
+    // list<ref<Page>> Palloc.head
+    Page  *next; /* Lru free list */ 
+    // list<ref<Page>> Palloc.tail
+    Page  *prev; 
+    // hash<daddr, list<ref<Page>>> Palloc.hash
+    Page  *hash; /* Image hash chains */ 
+
 };
 @
+
+% put kmap, kunmap here? apparently they are used when copying from
+% one another or doing memset 0. just to get pa -> kern_addr?
 
 <<enum cachectl>>=
 enum cachectl
 {
     PG_NOFLUSH  = 0,
     PG_TXTFLUSH = 1,    /* flush dcache and invalidate icache */
-    //  PG_DATFLUSH = 2,    /* flush both i & d caches (UNUSED) */
     PG_NEWCOL = 3,    /* page has been recolored */
 };
 @
+% todo: use 2 above for PG_NEWCOL?
+%    //  PG_DATFLUSH = 2,    /* flush both i & d caches (UNUSED) */
 
 <<enum modref>>=
 enum modref 
@@ -2761,47 +2800,24 @@ enum modref
 };
 @
 
-<<function pghash>>=
-enum
-{
-    PGHLOG  = 9, // 2^9 = 512
-    PGHSIZE = 1<<PGHLOG,  /* Page hash for image lookup */
-};
-#define pghash(daddr) palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
-@
-
-
-<<struct Pte>>=
-// ptealloc'ed (malloc'ed)
-struct Pte
-{
-    //array<option<ref<Page>> will map 1M of memory
-    Page  *pages[PTEPERTAB];  /* Page map for this chunk of pte */
-  
-    //to avoid iterate over all pages
-    // ref<ref<Page>> in Pte.pages
-    Page  **first;    /* First used entry */
-    // ref<ref<Page>> in Pte.pages
-    Page  **last;     /* Last used entry */
-};
-@
-
 
 <<struct Palloc>>=
 // Page Allocator (singleton)
 struct Palloc
 {
-    Pallocmem mem[4]; // TODO: 4 ?? same as Conf.mem
+    Pallocmem mem[4]; // essentially the same as Conf.mem
     // sum of mem.npage (which should be conf.upages)
     ulong user;     /* how many user pages */
   
-    // array<Page>, xalloc'ed in pageinit() (huge)
+    // array<Page>, xalloc'ed in pageinit() (huge) cover physical+swap space???
     Page  *pages; /* array of all pages */ 
   
-    // list<ref<Page>> (next = Page.next)
+    // list<ref<Page>> (next = Page.next), list of free pages
     Page  *head;      /* most recently used */
-    // list<ref<Page>> (next = prev?)
+    // list<ref<Page>> (prev = Page.prev), list of free pages (backward)
     Page  *tail;      /* least recently used */
+
+    //Does it cover also the pages on the swap?
     ulong freecount;    /* how many pages on free list now */
   
     // hash<?pghash(Page.daddr?), list<ref<Page>> (next = Page.hash)>
@@ -2809,12 +2825,22 @@ struct Palloc
     Lock  hashlock;
   
     // extra
-    Lock;
-    Rendez  r;      /* Sleep for free mem */
-    QLock pwait;      /* Queue of procs waiting for memory */
+    Lock; // LOCK ORDERING: always do lock(&palloc); lock(p)!!
+    Rendez  r; /* Sleep for free mem */
+    QLock pwait; /* Queue of procs waiting for memory */
 };
 @
 
+<<function pagenumber>>=
+ulong
+pagenumber(Page *p)
+{
+    return p-palloc.pages;
+}
+@
+
+
+%TODO: could merge with Confmem?
 <<struct Pallocmem>>=
 // memory banks, similar to RMap, and Confmem, but page oriented, and portable
 struct Pallocmem
@@ -2827,12 +2853,13 @@ struct Pallocmem
 
 <<constructor newpage>>=
 Page*
-newpage(int clear, Segment **s, ulong va)
+newpage(bool clear, Segment **s, ulong va)
 {
     Page *p;
     KMap *k;
     uchar ct;
-    int i, hw, dontalloc, color;
+    int i, hw, color;
+    bool dontalloc;
 
     lock(&palloc);
     color = getpgcolor(va);
@@ -2844,11 +2871,11 @@ newpage(int clear, Segment **s, ulong va)
             break;
 
         unlock(&palloc);
-        dontalloc = 0;
+        dontalloc = false;
         if(s && *s) {
             qunlock(&((*s)->lk));
-            *s = 0;
-            dontalloc = 1;
+            *s = nil;
+            dontalloc = true;
         }
         qlock(&palloc.pwait);   /* Hold memory requesters here */
 
@@ -2869,7 +2896,7 @@ newpage(int clear, Segment **s, ulong va)
          * reacquired the segment locks
          */
         if(dontalloc)
-            return 0;
+            return nil;
 
         lock(&palloc);
     }
@@ -2880,7 +2907,7 @@ newpage(int clear, Segment **s, ulong va)
             break;
 
     ct = PG_NOFLUSH;
-    if(p == 0) {
+    if(p == nil) {
         p = palloc.head;
         p->color = color;
         ct = PG_NEWCOL;
@@ -2912,11 +2939,14 @@ newpage(int clear, Segment **s, ulong va)
 @
 
 <<function pageunchain>>=
+// assumes palloc is held
 static void
 pageunchain(Page *p)
 {
     if(canlock(&palloc))
         panic("pageunchain (palloc %p)", &palloc);
+
+    // remove(p, palloc);
     if(p->prev)
         p->prev->next = p->next;
     else
@@ -2932,11 +2962,14 @@ pageunchain(Page *p)
 
 
 <<function pagechaintail>>=
+// assumes palloc is held
 void
 pagechaintail(Page *p)
 {
     if(canlock(&palloc))
         panic("pagechaintail");
+
+    // add_tail(p, palloc)
     if(palloc.tail) {
         p->prev = palloc.tail;
         palloc.tail->next = p;
@@ -2946,35 +2979,37 @@ pagechaintail(Page *p)
         p->prev = 0;
     }
     palloc.tail = p;
-    p->next = 0;
+    p->next = nil;
     palloc.freecount++;
 }
 @
 
 
 <<function pagechainhead>>=
+// assumes palloc is held
 void
 pagechainhead(Page *p)
 {
     if(canlock(&palloc))
         panic("pagechainhead");
+    // add_head(p, palloc)
     if(palloc.head) {
         p->next = palloc.head;
         palloc.head->prev = p;
     }
     else {
         palloc.tail = p;
-        p->next = 0;
+        p->next = nil;
     }
     palloc.head = p;
-    p->prev = 0;
+    p->prev = nil;
     palloc.freecount++;
 }
 @
 
 
 
-
+% rename hasfreepages?
 <<function ispages>>=
 int
 ispages(void*)
@@ -3010,7 +3045,7 @@ putpage(Page *p)
     else 
         pagechainhead(p);
 
-    if(palloc.r.p != 0)
+    if(palloc.r.p != nil)
         wakeup(&palloc.r);
 
     unlock(p);
@@ -3018,7 +3053,8 @@ putpage(Page *p)
 }
 @
 
-
+\ifallcode
+% used only by cache.c, could be moved there, also should be renamed, aux??
 <<function auxpage>>=
 Page*
 auxpage(void)
@@ -3044,6 +3080,26 @@ auxpage(void)
     return p;
 }
 @
+\fi
+
+
+
+%\section{page copy?} for copy on write?
+
+% memmove? should be called memcopy no?
+<<function copypage>>=
+void
+copypage(Page *f, Page *t)
+{
+    KMap *ks, *kd;
+
+    ks = kmap(f);
+    kd = kmap(t);
+    memmove((void*)VA(kd), (void*)VA(ks), BY2PG);
+    kunmap(ks);
+    kunmap(kd);
+}
+@
 
 
 <<global dupretries>>=
@@ -3051,9 +3107,12 @@ static int dupretries = 15000;
 @
 
 
+% called only from fixfault, move close to it? for copy-on-write?
+% type: ret_code?
 <<function duppage>>=
+/* Always call with p locked */
 int
-duppage(Page *p)                /* Always call with p locked */
+duppage(Page *p)
 {
     Page *np;
     int color;
@@ -3103,7 +3162,7 @@ retry:
             break;
 
     /* No page of the correct color */
-    if(np == 0) {
+    if(np == nil) {
         unlock(&palloc);
         uncachepage(p);
         return 1;
@@ -3139,47 +3198,19 @@ retry:
 @
 
 
-<<function copypage>>=
-void
-copypage(Page *f, Page *t)
+<<function pghash>>=
+enum
 {
-    KMap *ks, *kd;
-
-    ks = kmap(f);
-    kd = kmap(t);
-    memmove((void*)VA(kd), (void*)VA(ks), BY2PG);
-    kunmap(ks);
-    kunmap(kd);
-}
+    PGHLOG  = 9, // 2^9 = 512
+    PGHSIZE = 1<<PGHLOG,  /* Page hash for image lookup */
+};
+#define pghash(daddr) palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
 @
 
 
-<<function uncachepage>>=
-void
-uncachepage(Page *p)            /* Always called with a locked page */
-{
-    Page **l, *f;
-
-    if(p->image == 0)
-        return;
-
-    lock(&palloc.hashlock);
-    l = &pghash(p->daddr);
-    for(f = *l; f; f = f->hash) {
-        if(f == p) {
-            *l = p->hash;
-            break;
-        }
-        l = &f->hash;
-    }
-    unlock(&palloc.hashlock);
-    putimage(p->image);
-    p->image = 0;
-    p->daddr = 0;
-}
-@
 
 
+% should be called swappage? but Kimage can be a swapimage or a text binary?
 <<function cachepage>>=
 void
 cachepage(Page *p, KImage *i)
@@ -3197,12 +3228,43 @@ cachepage(Page *p, KImage *i)
     incref(i);
     lock(&palloc.hashlock);
     p->image = i;
+    // add_hash(palloc.hash, p->daddr, p)
     l = &pghash(p->daddr);
     p->hash = *l;
     *l = p;
     unlock(&palloc.hashlock);
 }
 @
+
+
+<<function uncachepage>>=
+/* Always called with a locked page */
+void
+uncachepage(Page *p)
+{
+    Page **l, *f;
+
+    if(p->image == nil)
+        return;
+
+    lock(&palloc.hashlock);
+    // remove_hash(palloc.hash, p->daddr, p)
+    l = &pghash(p->daddr);
+    for(f = *l; f; f = f->hash) {
+        if(f == p) {
+            *l = p->hash;
+            break;
+        }
+        l = &f->hash;
+    }
+    unlock(&palloc.hashlock);
+    putimage(p->image);
+    p->image = nil;
+    p->daddr = 0;
+}
+@
+
+
 
 
 <<function cachedel>>=
@@ -3216,10 +3278,11 @@ cachedel(KImage *i, ulong daddr)
     for(f = *l; f; f = f->hash) {
         if(f->image == i && f->daddr == daddr) {
             lock(f);
+            // can have a race? things could have changed, so rested under lock
             if(f->image == i && f->daddr == daddr){
                 *l = f->hash;
-                putimage(f->image);
-                f->image = 0;
+                putimage(f->image); // =~ decref
+                f->image = nil;
                 f->daddr = 0;
             }
             unlock(f);
@@ -3263,6 +3326,43 @@ lookpage(KImage *i, ulong daddr)
     return 0;
 }
 @
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<<struct Pte>>=
+// ptealloc'ed (malloc'ed)
+struct Pte
+{
+    //array<option<ref<Page>> will map 1M of memory
+    Page  *pages[PTEPERTAB];  /* Page map for this chunk of pte */
+  
+    //to avoid iterate over all pages
+    // ref<ref<Page>> in Pte.pages
+    Page  **first;    /* First used entry */
+    // ref<ref<Page>> in Pte.pages
+    Page  **last;     /* Last used entry */
+};
+@
+
+<<constant PTEMAPMEM>>=
+#define PTEMAPMEM (1024*1024) // 1MB
+@
+
+<<constant PTEPERTAB>>=
+#define PTEPERTAB (PTEMAPMEM/BY2PG)
+@
+
 
 <<constructor ptealloc>>=
 Pte*
@@ -3349,16 +3449,7 @@ ptecpy(Pte *old)
 @
 
 
-
-<<function pagenumber>>=
-ulong
-pagenumber(Page *p)
-{
-    return p-palloc.pages;
-}
-@
-
-
+// called? mv in debugging section? with C-t C-t stuff?
 <<function checkpagerefs>>=
 void
 checkpagerefs(void)
@@ -3504,7 +3595,7 @@ struct Segment
     ulong size;   /* size in pages */ // top - base / BY2PG?
   
     // Kind of a page directory table (and pte = page table)
-    // can be SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per segment!
+    // max is SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per seg!
     // array<option<ref<Pte>>>, smalloc'ed, point to ssegmap if small enough
     Pte **map; 
     // small seg map, used instead of map if segment small enough
@@ -3529,138 +3620,10 @@ struct Segment
 };
 @
 
-<<enum procseg>>=
-/*
- *  process memory segments - NSEG always last !
- */
-enum procseg
-{
-    SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
-    ESEG, LSEG, // Extra (temporary stack segment), L?
-    SEG1, SEG2, SEG3, SEG4,
-    NSEG // to count, see Proc.seg array
-};
-@ 
-
-<<struct Physseg>>=
-struct Physseg
-{
-    ulong attr;     /* Segment attributes */
-    char  *name;      /* Attach name */
-    ulong pa;     /* Physical address */
-    ulong size;     /* Maximum segment size in pages */
-    Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
-    void  (*pgfree)(Page*);
-};
-@
-
-
-<<[[Proc]] memory fields>>=
-// hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
-Segment *seg[NSEG];
-QLock seglock;  /* locked whenever seg[] changes */
-@ 
-
-
-<<function seg>>=
-Segment*
-seg(Proc *p, ulong addr, int dolock)
-{
-    Segment **s, **et, *n;
-
-    et = &p->seg[NSEG];
-    for(s = p->seg; s < et; s++) {
-        n = *s;
-        if(n == 0)
-            continue;
-        if(addr >= n->base && addr < n->top) {
-            if(dolock == 0)
-                return n;
-
-            qlock(&n->lk);
-            if(addr >= n->base && addr < n->top)
-                return n;
-            qunlock(&n->lk);
-        }
-    }
-
-    return 0;
-}
-@
-
-<<function okaddr>>=
-/*
- * Called only in a system call
- */
-int
-okaddr(ulong addr, ulong len, int write)
-{
-    Segment *s;
-
-    if((long)len >= 0) {
-        for(;;) {
-            s = seg(up, addr, 0);
-            if(s == 0 || (write && (s->type&SG_RONLY)))
-                break;
-
-            if(addr+len > s->top) {
-                len -= s->top - addr;
-                addr = s->top;
-                continue;
-            }
-            return 1;
-        }
-    }
-    pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
-    return 0;
-}
-@
-
-
-<<function validaddr>>=
-void
-validaddr(ulong addr, ulong len, int write)
-{
-    if(!okaddr(addr, len, write)){
-        postnote(up, 1, "sys: bad address in syscall", NDebug);
-        error(Ebadarg);
-    }
-}
-@
-
-
-<<function vmemchr>>=
-/*
- * &s[0] is known to be a valid address.
- */
-void*
-vmemchr(void *s, int c, int n)
-{
-    int m;
-    ulong a;
-    void *t;
-
-    a = (ulong)s;
-    while(PGROUND(a) != PGROUND(a+n-1)){
-        /* spans pages; handle this page */
-        m = BY2PG - (a & (BY2PG-1));
-        t = memchr((void*)a, c, m);
-        if(t)
-            return t;
-        a += m;
-        n -= m;
-        if(a < KZERO)
-            validaddr(a, 1, 0);
-    }
-
-    /* fits in one page */
-    return memchr((void*)a, c, n);
-}
-@
-
+% size is in pages?
 <<constructor newseg>>=
 Segment *
-newseg(int type, ulong base, ulong size)
+newseg(int type, virt_addr base, ulong size)
 {
     Segment *s;
     int mapsize;
@@ -3674,6 +3637,8 @@ newseg(int type, ulong base, ulong size)
     s->base = base;
     s->top = base+(size*BY2PG);
     s->size = size;
+
+    // no list, just one sema
     s->sema.prev = &s->sema;
     s->sema.next = &s->sema;
 
@@ -3702,11 +3667,11 @@ putseg(Segment *s)
     Pte **pp, **emap;
     KImage *i;
 
-    if(s == 0)
-        return;
+    if(s == nil)
+        return; // TODO: panic("putset") instead?
 
     i = s->image;
-    if(i != 0) {
+    if(i != nil) {
         lock(i);
         lock(s);
         if(i->s == s && s->ref == 1)
@@ -3735,13 +3700,148 @@ putseg(Segment *s)
     qunlock(&s->lk);
     if(s->map != s->ssegmap)
         free(s->map);
-    if(s->profile != 0)
+    if(s->profile != nil)
         free(s->profile);
     free(s);
 }
 @
 
 
+
+% todo: remove LSEG, and use _SEG1, _SEG2, etc
+<<enum procseg>>=
+/*
+ *  process memory segments - NSEG always last !
+ */
+enum procseg
+{
+    SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
+    ESEG, LSEG, // E = Extra (used for temporary stack segment), L?
+    SEG1, SEG2, SEG3, SEG4, // free slots for for segattach
+    NSEG // to count, see Proc.seg array
+};
+@ 
+
+<<struct Physseg>>=
+struct Physseg
+{
+    ulong attr;     /* Segment attributes */
+    char  *name;      /* Attach name */
+    phys_addr pa;     /* Physical address */
+    ulong size;     /* Maximum segment size in pages */
+
+    Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
+    void  (*pgfree)(Page*);
+};
+@
+
+
+<<[[Proc]] memory fields>>=
+// hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
+Segment *seg[NSEG];
+QLock seglock;  /* locked whenever seg[] changes */
+@ 
+
+
+<<function seg>>=
+Segment*
+seg(Proc *p, virt_addr addr, bool dolock)
+{
+    Segment **s, **et, *n;
+
+    et = &p->seg[NSEG];
+    for(s = p->seg; s < et; s++) {
+        n = *s;
+        if(n == nil)
+            continue;
+        if(addr >= n->base && addr < n->top) {
+            if(dolock == false)
+                return n;
+
+            qlock(&n->lk);
+            // can have a race, need to check again
+            if(addr >= n->base && addr < n->top)
+                return n;
+            qunlock(&n->lk);
+        }
+    }
+    return nil;
+}
+@
+
+<<function okaddr>>=
+/*
+ * Called only in a system call
+ */
+bool
+okaddr(virt_addr addr, ulong len, bool write)
+{
+    Segment *s;
+
+    if((long)len >= 0) {
+        for(;;) {
+            s = seg(up, addr, false);
+            if(s == nil || (write && (s->type&SG_RONLY)))
+                break;
+
+            if(addr+len > s->top) {
+                len -= s->top - addr;
+                addr = s->top;
+                continue;
+            }
+            return true;
+        }
+    }
+    pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
+    return false;
+}
+@
+
+
+<<function validaddr>>=
+void
+validaddr(virt_addr addr, ulong len, bool write)
+{
+    if(!okaddr(addr, len, write)){
+        postnote(up, 1, "sys: bad address in syscall", NDebug);
+        error(Ebadarg);
+    }
+}
+@
+
+% memchr on virtual address? and so that can span different pages, and 
+% even different segments!
+<<function vmemchr>>=
+/*
+ * &s[0] is known to be a valid address.
+ */
+void*
+vmemchr(virt_addr3 *s, int c, int n)
+{
+    int m;
+    virt_addr a;
+    virt_addr3 t;
+
+    a = (virt_addr)s;
+    while(PGROUND(a) != PGROUND(a+n-1)){
+        /* spans pages; handle this page */
+        m = BY2PG - (a & (BY2PG-1));
+        t = memchr((void*)a, c, m);
+        if(t)
+            return t;
+        a += m;
+        n -= m;
+        if(a < KZERO)
+            validaddr(a, 1, false);
+    }
+
+    /* fits in one page */
+    return memchr((void*)a, c, n);
+}
+@
+
+
+% used by sysexec()
 <<function relocateseg>>=
 void
 relocateseg(Segment *s, ulong offset)
@@ -3762,16 +3862,17 @@ relocateseg(Segment *s, ulong offset)
 }
 @
 
-
+% used by sysfork()
 <<function dupseg>>=
 Segment*
-dupseg(Segment **seg, int segno, int share)
+dupseg(Segment **seg, int segno, bool share)
 {
     int i, size;
     Pte *pte;
     Segment *n, *s;
 
-    SET(n);
+    SET(n); //????
+
     s = seg[segno];
 
     qlock(&s->lk);
@@ -3799,7 +3900,7 @@ dupseg(Segment **seg, int segno, int share)
         if(segno == TSEG){
             poperror();
             qunlock(&s->lk);
-            return data2txt(s);
+            return data2txt(s);// ????
         }
 
         if(share)
@@ -3832,7 +3933,7 @@ sameseg:
 }
 @
 
-
+% used by userinit
 <<function segpage>>=
 void
 segpage(Segment *s, Page *p)
@@ -5084,6 +5185,9 @@ tmpunmap(void *v)
 
 
 \section{Page fault}
+
+% split copy-on-write feature in another section?
+% have also demand-loading here
 
 <<function fault>>=
 int
@@ -7534,9 +7638,10 @@ proc_sched(void)
         /*
          * Delay the sched until the process gives up the locks
          * it is holding.  This avoids dumb lock loops.
-         * Don't delay if the process is Moribund.
+         *
+         * But don't delay if the process is Moribund.
          * It called sched to die.
-         * But do sched eventually.  This avoids a missing unlock
+         * But do sched eventually. This avoids a missing unlock
          * from hanging the entire kernel. 
          * But don't reschedule procs holding palloc or procalloc.
          * Those are far too important to be holding while asleep.
@@ -7546,14 +7651,15 @@ proc_sched(void)
          * but Lock.p has not yet been initialized.
          */
         if(up->nlocks.ref)
-        if(up->state != Moribund)
-        if(up->delaysched < 20
-        || palloc.Lock.p == up
-        || procalloc.Lock.p == up){
-            up->delaysched++;
-            delayedscheds++;
-            return;
-        }
+          if(up->state != Moribund)
+            if(up->delaysched < 20
+              || palloc.Lock.p == up
+              || procalloc.Lock.p == up){
+
+                up->delaysched++;
+                delayedscheds++; // stats
+                return;
+            }
         up->delaysched = 0;
         splhi(); // schedinit requires this
         /* statistics */
@@ -7578,10 +7684,13 @@ proc_sched(void)
     if(p != cpu->readied)
         cpu->schedticks = cpu->ticks + HZ/10;
     cpu->readied = nil;
-    up = p;
+
+    cpu->proc = p;
+    up = p; // same instruction than previous line on some archi (e.g. PC)
+
     up->state = Running;
     up->cpu = CPUS(cpu->cpuno);
-    cpu->proc = up;
+
     mmuswitch(up);
     gotolabel(&up->sched);
 }
@@ -8082,7 +8191,7 @@ void
 hzclock(Ureg *ur)
 {
     cpu->ticks++;
-    if(cpu->proc)
+    if(cpu->proc) // why not using up here? why cpu->proc?
         cpu->proc->pc = ur->pc;
 
     if(cpu->flushmmu){
@@ -8123,7 +8232,7 @@ accounttime(void)
     ulong n, per;
     static ulong nrun;
 
-    p = cpu->proc;
+    p = cpu->proc; // why not p = up?
     if(p) {
         nrun++;
         p->time[p->insyscall]++;
@@ -9927,6 +10036,8 @@ void
 cpu0init(void)
 {
         conf.ncpu = 1;
+        // note that cpu points to CPUADDR, which then is mapped to CPU0CPU
+        // via the page table on the first processor
         CPUS(0) = (Cpu*)CPU0CPU;
         cpu->pdb = (ulong*)CPU0PDB;
         cpu->gdt = (Segdesc*)CPU0GDT;
@@ -10322,7 +10433,10 @@ schedinit(void)     /* never returns */
     setlabel(&cpu->sched);
     if(up) {
         <<[[schedinit()]] optional real-time [[edfrecord()]]>>
-        cpu->proc = nil;
+        //old: cpu->proc = nil;
+        // but now that on PC up = cpu->proc and not cpu->externup
+        // we can't do that anymore. Is there a place that rely on
+        // cpu->proc and cpu-externup to not be in sync?
         switch(up->state) {
         case Running:
             ready(up);
@@ -10346,7 +10460,9 @@ schedinit(void)     /* never returns */
         }
         up->cpu = nil;
         updatecpu(up);
-        up = nil;
+
+        cpu->proc = nil;
+        up = nil; // same instruction than previous line on some archi (e.g. PC)
     }
     sched();
 }
@@ -19123,7 +19239,7 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qsysstat:
         b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
         bp = b;
-        for(id = 0; id < 32; id++) {
+        for(id = 0; id < MAXCPUS; id++) {
             if(active.cpus & (1<<id)) {
                 mp = CPUS(id);
                 readnum(0, bp, NUMSIZE, id, NUMSIZE);
@@ -21915,10 +22031,6 @@ connectlocal(void)
 % user init, != kernel init
 
 \section{The shell}
-
-
-
-
 
 
 

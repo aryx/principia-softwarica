@@ -71,7 +71,7 @@ initseg(void)
 
 /*s: constructor newseg */
 Segment *
-newseg(int type, ulong base, ulong size)
+newseg(int type, virt_addr base, ulong size)
 {
     Segment *s;
     int mapsize;
@@ -85,6 +85,8 @@ newseg(int type, ulong base, ulong size)
     s->base = base;
     s->top = base+(size*BY2PG);
     s->size = size;
+
+    // no list, just one sema
     s->sema.prev = &s->sema;
     s->sema.next = &s->sema;
 
@@ -112,11 +114,11 @@ putseg(Segment *s)
     Pte **pp, **emap;
     KImage *i;
 
-    if(s == 0)
-        return;
+    if(s == nil)
+        return; // TODO: panic("putset") instead?
 
     i = s->image;
-    if(i != 0) {
+    if(i != nil) {
         lock(i);
         lock(s);
         if(i->s == s && s->ref == 1)
@@ -145,7 +147,7 @@ putseg(Segment *s)
     qunlock(&s->lk);
     if(s->map != s->ssegmap)
         free(s->map);
-    if(s->profile != 0)
+    if(s->profile != nil)
         free(s->profile);
     free(s);
 }
@@ -173,13 +175,14 @@ relocateseg(Segment *s, ulong offset)
 
 /*s: function dupseg */
 Segment*
-dupseg(Segment **seg, int segno, int share)
+dupseg(Segment **seg, int segno, bool share)
 {
     int i, size;
     Pte *pte;
     Segment *n, *s;
 
-    SET(n);
+    SET(n); //????
+
     s = seg[segno];
 
     qlock(&s->lk);
@@ -207,7 +210,7 @@ dupseg(Segment **seg, int segno, int share)
         if(segno == TSEG){
             poperror();
             qunlock(&s->lk);
-            return data2txt(s);
+            return data2txt(s);// ????
         }
 
         if(share)

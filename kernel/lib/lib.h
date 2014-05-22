@@ -279,7 +279,7 @@ enum dirmode {
 /*s: struct Qid */
 struct Qid
 {
-  // note that this is not a string, but an int! it's kind of an inode?
+  // note that this is not a string, but an int! it's kind of an inode
   uvlong  path;
   // for cache invalidation
   ulong vers;

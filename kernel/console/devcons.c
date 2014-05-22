@@ -958,7 +958,7 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qsysstat:
         b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
         bp = b;
-        for(id = 0; id < 32; id++) {
+        for(id = 0; id < MAXCPUS; id++) {
             if(active.cpus & (1<<id)) {
                 mp = CPUS(id);
                 readnum(0, bp, NUMSIZE, id, NUMSIZE);

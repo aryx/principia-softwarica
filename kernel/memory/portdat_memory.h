@@ -24,7 +24,6 @@ enum cachectl
 {
     PG_NOFLUSH  = 0,
     PG_TXTFLUSH = 1,    /* flush dcache and invalidate icache */
-    //  PG_DATFLUSH = 2,    /* flush both i & d caches (UNUSED) */
     PG_NEWCOL = 3,    /* page has been recolored */
 };
 /*e: enum cachectl */
@@ -38,10 +37,13 @@ struct Page
     phys_addr pa;     /* Physical address in memory */
     virt_addr va;     /* Virtual address for user */
   
+    // option<ref<Kimage>>
+    KImage  *image;     /* Associated text or swap image */
     ulong daddr;      /* Disc address on swap */
     ulong gen;      /* Generation counter for swap */
   
-    // Why not Ref? to save space?
+    // Why not Ref? to save space probably (same reason they use char below)
+    // but that means needs to use Lock below to access this non-atomic ref.
     ushort  ref;      /* Reference count */
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
@@ -49,14 +51,16 @@ struct Page
     char  color;      /* Cache coloring */
     // array<enum<cachectl>>
     char  cachectl[MAXCPUS];  /* Cache flushing control for putmmu */
-  
+
     // extra
     Lock;
-    Page  *next; /* Lru free list */ // list<ref<Page>> Palloc.head?
-    Page  *prev; // ??
-    Page  *hash; /* Image hash chains */ // hash<?, list<ref<Page>>> Palloc.hash?
-    // option<ref<Kimage>>
-    KImage  *image;     /* Associated text or swap image */
+    // list<ref<Page>> Palloc.head
+    Page  *next; /* Lru free list */ 
+    // list<ref<Page>> Palloc.tail
+    Page  *prev; 
+    // hash<daddr, list<ref<Page>>> Palloc.hash
+    Page  *hash; /* Image hash chains */ 
+
 };
 /*e: struct Page */
 
@@ -134,8 +138,9 @@ struct Physseg
 {
     ulong attr;     /* Segment attributes */
     char  *name;      /* Attach name */
-    ulong pa;     /* Physical address */
+    phys_addr pa;     /* Physical address */
     ulong size;     /* Maximum segment size in pages */
+
     Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
     void  (*pgfree)(Page*);
 };
@@ -160,7 +165,7 @@ struct Segment
     ulong size;   /* size in pages */ // top - base / BY2PG?
   
     // Kind of a page directory table (and pte = page table)
-    // can be SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per segment!
+    // max is SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per seg!
     // array<option<ref<Pte>>>, smalloc'ed, point to ssegmap if small enough
     Pte **map; 
     // small seg map, used instead of map if segment small enough
@@ -204,7 +209,7 @@ enum
 /*s: struct Hole */
 struct Hole
 {
-    // between addr and top the memory is free
+    // between addr and top the memory is free, this is the "hole"
     phys_addr addr; 
     phys_addr top; 
     ulong size; // top - addr
@@ -216,8 +221,9 @@ struct Hole
 /*e: struct Hole */
 
 /*s: struct Xhdr */
-// What is the connection with Hole? a part of a used Hole will describe
-// a portion of memory, and at this memory there will be a header
+// What is the connection with Hole? A Hole that get used will gets
+// its top and size decremented, and this newly allocated part will describe
+// a portion of used memory, and at this memory there will be a header
 // and then just after the actual memory xalloc'ed by someone
 struct Xhdr
 {
@@ -233,12 +239,12 @@ struct Xhdr
 // Long lived data structure allocator (singleton)
 struct Xalloc
 {
-    // array<Hole>
+    // array<Hole> where each Hole is linked to another hole
     Hole  hole[Nhole];
   
-    // list<ref<Hole>> (next = Hole.link) list of free holes (addr=top=size=0)
+    // list<ref<Hole>> (next = Hole.link) list of free hole entries (addr=top=size=0)
     Hole* flist; 
-    // list<ref<Hole>> (next = Hole.link) memory holes, sorted by top addr
+    // list<ref<Hole>> (next = Hole.link) memory holes, sorted by their top addr
     Hole* table; 
   
     // extra
@@ -309,17 +315,19 @@ enum
 // Page Allocator (singleton)
 struct Palloc
 {
-    Pallocmem mem[4]; // TODO: 4 ?? same as Conf.mem
+    Pallocmem mem[4]; // essentially the same as Conf.mem
     // sum of mem.npage (which should be conf.upages)
     ulong user;     /* how many user pages */
   
-    // array<Page>, xalloc'ed in pageinit() (huge)
+    // array<Page>, xalloc'ed in pageinit() (huge) cover physical+swap space???
     Page  *pages; /* array of all pages */ 
   
-    // list<ref<Page>> (next = Page.next)
+    // list<ref<Page>> (next = Page.next), list of free pages
     Page  *head;      /* most recently used */
-    // list<ref<Page>> (next = prev?)
+    // list<ref<Page>> (prev = Page.prev), list of free pages (backward)
     Page  *tail;      /* least recently used */
+
+    //Does it cover also the pages on the swap?
     ulong freecount;    /* how many pages on free list now */
   
     // hash<?pghash(Page.daddr?), list<ref<Page>> (next = Page.hash)>
@@ -327,9 +335,9 @@ struct Palloc
     Lock  hashlock;
   
     // extra
-    Lock;
-    Rendez  r;      /* Sleep for free mem */
-    QLock pwait;      /* Queue of procs waiting for memory */
+    Lock; // LOCK ORDERING: always do lock(&palloc); lock(p)!!
+    Rendez  r; /* Sleep for free mem */
+    QLock pwait; /* Queue of procs waiting for memory */
 };
 /*e: struct Palloc */
 extern  Palloc  palloc;

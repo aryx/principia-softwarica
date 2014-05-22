@@ -129,9 +129,9 @@ xallocz(ulong size, bool zero)
             h->addr += size; // shrink towards top
             h->size -= size;
 
-            // this hole is now fully used (which is rare because one
-            // rarely does an xalloc with the remaining size of a hole)
-            // can put it back in the free list
+            // This hole is now fully used (which is rare because one
+            // rarely does an xalloc with the remaining size of a hole).
+            // We can put it back in the list of free hole entries.
             if(h->size == 0) {
                 *l = h->link;
                 h->link = xlists.flist;

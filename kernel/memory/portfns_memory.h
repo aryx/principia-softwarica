@@ -63,7 +63,7 @@ void checkpages(void);
 void    validaddr(ulong, ulong, int);
 int   okaddr(ulong, ulong, int);
 int   fixfault(Segment*, ulong, int, int);
-void*   vmemchr(void*, int, int);
+void*   vmemchr(virt_addr3, int, int);
 int   fault(ulong, int);
 
 // segment.c

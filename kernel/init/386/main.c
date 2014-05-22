@@ -220,6 +220,8 @@ void
 cpu0init(void)
 {
         conf.ncpu = 1;
+        // note that cpu points to CPUADDR, which then is mapped to CPU0CPU
+        // via the page table on the first processor
         CPUS(0) = (Cpu*)CPU0CPU;
         cpu->pdb = (ulong*)CPU0PDB;
         cpu->gdt = (Segdesc*)CPU0GDT;

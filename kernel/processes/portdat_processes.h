@@ -59,8 +59,8 @@ extern  char* statename[];
 enum procseg
 {
     SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
-    ESEG, LSEG, // Extra (temporary stack segment), L?
-    SEG1, SEG2, SEG3, SEG4,
+    ESEG, LSEG, // E = Extra (used for temporary stack segment), L?
+    SEG1, SEG2, SEG3, SEG4, // free slots for for segattach
     NSEG // to count, see Proc.seg array
 };
 /*e: enum procseg */
@@ -531,7 +531,7 @@ struct Proc
 // Synchronization
 //--------------------------------------------------------------------
     /*s: [[Proc]] synchronization fields */
-    // As long as the current process hold locks (to kernel data structures),
+    // As long as the current process hold spinlocks (to kernel data structures),
     // we will not schedule another process in unlock(); only the last unlock
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
@@ -731,7 +731,7 @@ struct Alarms
 /*s: struct Active */
 struct Active
 {
-    // array<bool>
+    // array<bool> (coupling: sizeof(int) must be >= MAXCPUS)
     int cpus;      /* bitmap of active CPUs */
 
     bool exiting;    /* shutdown */

@@ -103,6 +103,7 @@ qunlock(QLock *q)
         q->head = p->qnext;
         if(q->head == 0)
             q->tail = nil;
+
         unlock(&q->use);
         ready(p);
     }else{

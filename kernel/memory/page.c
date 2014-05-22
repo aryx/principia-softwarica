@@ -79,11 +79,14 @@ pageinit(void)
 //*****************************************************************************
 
 /*s: function pageunchain */
+// assumes palloc is held
 static void
 pageunchain(Page *p)
 {
     if(canlock(&palloc))
         panic("pageunchain (palloc %p)", &palloc);
+
+    // remove(p, palloc);
     if(p->prev)
         p->prev->next = p->next;
     else
@@ -98,11 +101,14 @@ pageunchain(Page *p)
 /*e: function pageunchain */
 
 /*s: function pagechaintail */
+// assumes palloc is held
 void
 pagechaintail(Page *p)
 {
     if(canlock(&palloc))
         panic("pagechaintail");
+
+    // add_tail(p, palloc)
     if(palloc.tail) {
         p->prev = palloc.tail;
         palloc.tail->next = p;
@@ -112,39 +118,42 @@ pagechaintail(Page *p)
         p->prev = 0;
     }
     palloc.tail = p;
-    p->next = 0;
+    p->next = nil;
     palloc.freecount++;
 }
 /*e: function pagechaintail */
 
 /*s: function pagechainhead */
+// assumes palloc is held
 void
 pagechainhead(Page *p)
 {
     if(canlock(&palloc))
         panic("pagechainhead");
+    // add_head(p, palloc)
     if(palloc.head) {
         p->next = palloc.head;
         palloc.head->prev = p;
     }
     else {
         palloc.tail = p;
-        p->next = 0;
+        p->next = nil;
     }
     palloc.head = p;
-    p->prev = 0;
+    p->prev = nil;
     palloc.freecount++;
 }
 /*e: function pagechainhead */
 
 /*s: constructor newpage */
 Page*
-newpage(int clear, Segment **s, ulong va)
+newpage(bool clear, Segment **s, ulong va)
 {
     Page *p;
     KMap *k;
     uchar ct;
-    int i, hw, dontalloc, color;
+    int i, hw, color;
+    bool dontalloc;
 
     lock(&palloc);
     color = getpgcolor(va);
@@ -156,11 +165,11 @@ newpage(int clear, Segment **s, ulong va)
             break;
 
         unlock(&palloc);
-        dontalloc = 0;
+        dontalloc = false;
         if(s && *s) {
             qunlock(&((*s)->lk));
-            *s = 0;
-            dontalloc = 1;
+            *s = nil;
+            dontalloc = true;
         }
         qlock(&palloc.pwait);   /* Hold memory requesters here */
 
@@ -181,7 +190,7 @@ newpage(int clear, Segment **s, ulong va)
          * reacquired the segment locks
          */
         if(dontalloc)
-            return 0;
+            return nil;
 
         lock(&palloc);
     }
@@ -192,7 +201,7 @@ newpage(int clear, Segment **s, ulong va)
             break;
 
     ct = PG_NOFLUSH;
-    if(p == 0) {
+    if(p == nil) {
         p = palloc.head;
         p->color = color;
         ct = PG_NEWCOL;
@@ -257,7 +266,7 @@ putpage(Page *p)
     else 
         pagechainhead(p);
 
-    if(palloc.r.p != 0)
+    if(palloc.r.p != nil)
         wakeup(&palloc.r);
 
     unlock(p);
@@ -296,8 +305,9 @@ static int dupretries = 15000;
 /*e: global dupretries */
 
 /*s: function duppage */
+/* Always call with p locked */
 int
-duppage(Page *p)                /* Always call with p locked */
+duppage(Page *p)
 {
     Page *np;
     int color;
@@ -347,7 +357,7 @@ retry:
             break;
 
     /* No page of the correct color */
-    if(np == 0) {
+    if(np == nil) {
         unlock(&palloc);
         uncachepage(p);
         return 1;
@@ -397,15 +407,17 @@ copypage(Page *f, Page *t)
 /*e: function copypage */
 
 /*s: function uncachepage */
+/* Always called with a locked page */
 void
-uncachepage(Page *p)            /* Always called with a locked page */
+uncachepage(Page *p)
 {
     Page **l, *f;
 
-    if(p->image == 0)
+    if(p->image == nil)
         return;
 
     lock(&palloc.hashlock);
+    // remove_hash(palloc.hash, p->daddr, p)
     l = &pghash(p->daddr);
     for(f = *l; f; f = f->hash) {
         if(f == p) {
@@ -416,7 +428,7 @@ uncachepage(Page *p)            /* Always called with a locked page */
     }
     unlock(&palloc.hashlock);
     putimage(p->image);
-    p->image = 0;
+    p->image = nil;
     p->daddr = 0;
 }
 /*e: function uncachepage */
@@ -438,6 +450,7 @@ cachepage(Page *p, KImage *i)
     incref(i);
     lock(&palloc.hashlock);
     p->image = i;
+    // add_hash(palloc.hash, p->daddr, p)
     l = &pghash(p->daddr);
     p->hash = *l;
     *l = p;
@@ -456,10 +469,11 @@ cachedel(KImage *i, ulong daddr)
     for(f = *l; f; f = f->hash) {
         if(f->image == i && f->daddr == daddr) {
             lock(f);
+            // can have a race? things could have changed, so rested under lock
             if(f->image == i && f->daddr == daddr){
                 *l = f->hash;
-                putimage(f->image);
-                f->image = 0;
+                putimage(f->image); // =~ decref
+                f->image = nil;
                 f->daddr = 0;
             }
             unlock(f);

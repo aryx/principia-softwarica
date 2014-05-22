@@ -303,15 +303,15 @@ done:
 /*
  * Called only in a system call
  */
-int
-okaddr(ulong addr, ulong len, int write)
+bool
+okaddr(virt_addr addr, ulong len, bool write)
 {
     Segment *s;
 
     if((long)len >= 0) {
         for(;;) {
-            s = seg(up, addr, 0);
-            if(s == 0 || (write && (s->type&SG_RONLY)))
+            s = seg(up, addr, false);
+            if(s == nil || (write && (s->type&SG_RONLY)))
                 break;
 
             if(addr+len > s->top) {
@@ -319,17 +319,17 @@ okaddr(ulong addr, ulong len, int write)
                 addr = s->top;
                 continue;
             }
-            return 1;
+            return true;
         }
     }
     pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
-    return 0;
+    return false;
 }
 /*e: function okaddr */
 
 /*s: function validaddr */
 void
-validaddr(ulong addr, ulong len, int write)
+validaddr(virt_addr addr, ulong len, bool write)
 {
     if(!okaddr(addr, len, write)){
         postnote(up, 1, "sys: bad address in syscall", NDebug);
@@ -343,13 +343,13 @@ validaddr(ulong addr, ulong len, int write)
  * &s[0] is known to be a valid address.
  */
 void*
-vmemchr(void *s, int c, int n)
+vmemchr(virt_addr3 s, int c, int n)
 {
     int m;
-    ulong a;
-    void *t;
+    virt_addr a;
+    virt_addr3 t;
 
-    a = (ulong)s;
+    a = (virt_addr)s;
     while(PGROUND(a) != PGROUND(a+n-1)){
         /* spans pages; handle this page */
         m = BY2PG - (a & (BY2PG-1));
@@ -359,7 +359,7 @@ vmemchr(void *s, int c, int n)
         a += m;
         n -= m;
         if(a < KZERO)
-            validaddr(a, 1, 0);
+            validaddr(a, 1, false);
     }
 
     /* fits in one page */
@@ -369,27 +369,27 @@ vmemchr(void *s, int c, int n)
 
 /*s: function seg */
 Segment*
-seg(Proc *p, ulong addr, int dolock)
+seg(Proc *p, virt_addr addr, bool dolock)
 {
     Segment **s, **et, *n;
 
     et = &p->seg[NSEG];
     for(s = p->seg; s < et; s++) {
         n = *s;
-        if(n == 0)
+        if(n == nil)
             continue;
         if(addr >= n->base && addr < n->top) {
-            if(dolock == 0)
+            if(dolock == false)
                 return n;
 
             qlock(&n->lk);
+            // can have a race, need to check again
             if(addr >= n->base && addr < n->top)
                 return n;
             qunlock(&n->lk);
         }
     }
-
-    return 0;
+    return nil;
 }
 /*e: function seg */
 

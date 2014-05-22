@@ -11,16 +11,15 @@
 struct Lock
 {
     ulong key; // 0 when unset, 0xDEADDEAD when acquired, could be a bool
-
-    // option<ref<Proc>>, None when key == 0
-    Proc  *p; // the process locking should be the same unlocking
-
     /*s: [[Lock]] ilock fields */
     bool_ushort isilock; // false when from lock(), true when from ilock()
     ulong sr; // saved priority level when using ilock() to restore in iunlock()
     /*e: [[Lock]] ilock fields */
     /*s: [[Lock]] debugging fields */
-    kern_addr pc; // for debugging, the caller who did the lock()
+    // option<ref<Proc>>, None when key == 0
+    Proc  *p; // the process who did the locking should be the same unlocking
+    // for debugging, the caller who did the lock()
+    kern_addr pc; 
     /*x: [[Lock]] debugging fields */
     //#ifdef LOCKCYCLES
     long  lockcycles;
