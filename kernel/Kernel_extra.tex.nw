@@ -5376,14 +5376,27 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 \subsection*{[[memory/386/mem.h]]}
 
+<<constant x86 other segments>>=
+#define APMCSEG   6 /* APM code segment */
+#define APMCSEG16 7 /* APM 16-bit code segment */
+#define APMDSEG   8 /* APM data segment */
+#define KESEG16   9 /* kernel executable 16-bit */
+@
 
-<<constant KSTACK>>=
-#define KSTACK    4096      /* Size of kernel stack */
+<<macros other xxxSEGM>>=
+#define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
+@
+
+<<constant x86 other segment selectors>>=
+#define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
+#define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
+#define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
+/* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
 @
 
 
-<<constant HZ>>=
-#define HZ    (100)     /* clock frequency */
+<<[[gdt]] other elements>>=
+[KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
 @
 
 <<mem.h>>=
@@ -5431,15 +5444,18 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
  */
 <<constant KZERO>>
 <<constant KTZERO>>
-#define VPT   (KZERO-VPTSIZE)
+
 #define VPTSIZE   BY2XPG
+#define VPT   (KZERO-VPTSIZE)
 #define NVPT    (VPTSIZE/BY2WD)
-#define KMAP    (VPT-KMAPSIZE)
 #define KMAPSIZE  BY2XPG
-#define VMAP    (KMAP-VMAPSIZE)
+#define KMAP    (VPT-KMAPSIZE)
 #define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
+#define VMAP    (KMAP-VMAPSIZE)
+
 <<constant UZERO>>
 <<constant UTZERO>>
+
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
 #define USTKTOP   (VMAP-BY2PG)    /* byte just beyond user stack */
 #define USTKSIZE  (16*1024*1024)    /* size of user stack */
@@ -5457,6 +5473,7 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 #define RMBUF   (KZERO+0x9000)    /* buffer for user space - known to vga */
 <<constant IDTADDR>>
 #define REBOOTADDR  (0x11000)   /* reboot code - physical address */
+
 #define CPU0PDB   (KZERO+0x12000)   /* bootstrap processor PDB */
 #define CPU0PTE   (KZERO+0x13000)   /* bootstrap processor PTE's for 0-4MB */
 #define CPU0GDT   (KZERO+0x14000)   /* bootstrap processor GDT */
@@ -5480,46 +5497,19 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 #define SELGDT  (0<<2)  /* selector is in gdt */
 #define SELLDT  (1<<2)  /* selector is in ldt */
 
-#define SELECTOR(i, t, p) (((i)<<3) | (t) | (p))
+<<macro SELECTOR>>
 
-#define NULLSEL SELECTOR(NULLSEG, SELGDT, 0)
-#define KDSEL SELECTOR(KDSEG, SELGDT, 0)
-#define KESEL SELECTOR(KESEG, SELGDT, 0)
-#define UESEL SELECTOR(UESEG, SELGDT, 3)
-#define UDSEL SELECTOR(UDSEG, SELGDT, 3)
-#define TSSSEL  SELECTOR(TSSSEG, SELGDT, 0)
-#define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
-#define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
-#define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
-/* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
+<<constant x86 segment selectors>>
 
-/*
- *  fields in segment descriptors
- */
-#define SEGDATA (0x10<<8) /* data/stack segment */
-#define SEGEXEC (0x18<<8) /* executable segment */
-#define SEGTSS  (0x9<<8)  /* TSS segment */
-#define SEGCG (0x0C<<8) /* call gate */
-#define SEGIG (0x0E<<8) /* interrupt gate */
-#define SEGTG (0x0F<<8) /* trap gate */
-#define SEGTYPE (0x1F<<8)
-
-#define SEGP  (1<<15)   /* segment present */
-#define SEGPL(x) ((x)<<13)  /* priority level */
-#define SEGB  (1<<22)   /* granularity 1==4k (for expand-down) */
-#define SEGG  (1<<23)   /* granularity 1==4k (for other) */
-#define SEGE  (1<<10)   /* expand down */
-#define SEGW  (1<<9)    /* writable (for data/stack) */
-#define SEGR  (1<<9)    /* readable (for code) */
-#define SEGD  (1<<22)   /* default 1==32bit (for code) */
+<<constant segment field extractors>>
 
 /*
  *  virtual MMU
  */
 <<constant PTEMAPMEM>>
 <<constant PTEPERTAB>>
-#define SEGMAPSIZE  1984
-#define SSEGMAPSIZE 16 // small segmap
+<<constant SEGMAPSIZE>>
+<<constant SSEGMAPSIZE>>
 #define PPN(x)    ((x)&~(BY2PG-1))
 
 /*
@@ -6135,42 +6125,6 @@ void        pio(Segment *, ulong, ulong, Page **);
 \fi
 
 
-<<function checkpages>>=
-void
-checkpages(void)
-{
-    int checked;
-    ulong addr, off;
-    Pte *p;
-    Page *pg;
-    Segment **sp, **ep, *s;
-    
-    if(up == nil)
-        return;
-
-    checked = 0;
-    for(sp=up->seg, ep=&up->seg[NSEG]; sp<ep; sp++){
-        s = *sp;
-        if(s == nil)
-            continue;
-        qlock(&s->lk);
-        for(addr=s->base; addr<s->top; addr+=BY2PG){
-            off = addr - s->base;
-            p = s->map[off/PTEMAPMEM];
-            if(p == 0)
-                continue;
-            pg = p->pages[(off&(PTEMAPMEM-1))/BY2PG];
-            if(pg == 0 || pagedout(pg))
-                continue;
-            checkmmu(addr, pg->pa);
-            checked++;
-        }
-        qunlock(&s->lk);
-    }
-    print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
-}
-@
-
 
 <<fault.c>>=
 <<kernel basic includes>>
@@ -6670,71 +6624,6 @@ static Lock physseglock;
 
 
 
-<<function mfreeseg>>=
-/*
- *  called with s->lk locked
- */
-void
-mfreeseg(Segment *s, ulong start, int pages)
-{
-    int i, j, size;
-    ulong soff;
-    Page *pg;
-    Page *list;
-
-    soff = start-s->base;
-    j = (soff&(PTEMAPMEM-1))/BY2PG;
-
-    size = s->mapsize;
-    list = nil;
-    for(i = soff/PTEMAPMEM; i < size; i++) {
-        if(pages <= 0)
-            break;
-        if(s->map[i] == 0) {
-            pages -= PTEPERTAB-j;
-            j = 0;
-            continue;
-        }
-        while(j < PTEPERTAB) {
-            pg = s->map[i]->pages[j];
-            /*
-             * We want to zero s->map[i]->page[j] and putpage(pg),
-             * but we have to make sure other processors flush the
-             * entry from their TLBs before the page is freed.
-             * We construct a list of the pages to be freed, zero
-             * the entries, then (below) call procflushseg, and call
-             * putpage on the whole list.
-             *
-             * Swapped-out pages don't appear in TLBs, so it's okay
-             * to putswap those pages before procflushseg.
-             */
-            if(pg){
-                if(onswap(pg))
-                    putswap(pg);
-                else{
-                    pg->next = list;
-                    list = pg;
-                }
-                s->map[i]->pages[j] = 0;
-            }
-            if(--pages == 0)
-                goto out;
-            j++;
-        }
-        j = 0;
-    }
-out:
-    /* flush this seg in all other processes */
-    if(s->ref > 1)
-        procflushseg(s);
-
-    /* free the pages */
-    for(pg = list; pg != nil; pg = list){
-        list = list->next;
-        putpage(pg);
-    }
-}
-@
 
 
 <<function isoverlap>>=
@@ -10442,6 +10331,14 @@ int fpstate;
                 free(up->edf);
             up->edf = nil;
 @
+
+<<[[ready()]] optional [[edfready()]] for real-time scheduling>>=
+    if(edfready(p)){
+        splx(s);
+        return;
+    }
+@
+
 
 <<[[syssleep()]] optional [[edfyield()]] for real-time scheduling>>=
         if (up->edf && (up->edf->flags & Admitted))

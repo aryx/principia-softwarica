@@ -933,7 +933,7 @@ struct Proc
 //--------------------------------------------------------------------
     <<[[Proc]] stats and profiling fields>>
 //--------------------------------------------------------------------
-// Debugging
+// Debugging (the kernel itself)
 //--------------------------------------------------------------------
     <<[[Proc]] debugging fields>>
 //--------------------------------------------------------------------
@@ -977,6 +977,9 @@ char  *text;
 // e.g.. "eve" (no uid/gid in plan9, because of its distributed nature?)
 char  *user;
 @ 
+% how can change user??? all the code here mostly duplicate the user
+%  from a fork from eve. Can become none via userwrite() on /proc I think
+% or via hostowner()
 
 <<enum procstate>>=
 /* Process states, Proc.state */
@@ -1525,7 +1528,8 @@ canlock(Lock *l)
 
 % what about deadlock when need 2 locks? need to have
 % an ordering! and use always the same! could use the
-% address of the lock trick of linux?
+% address of the lock trick of linux? could also use the lexical ordering
+% of the enclosing structure :) Palloc after Page!
 
 \section{Interrupt [[Lock]]}
 % can formalize a checking rule? if access any field
@@ -1691,7 +1695,7 @@ iunlock(Lock *l)
 @ 
 
 \section{Sleepable [[QLock]]}
-% can be seen also as a Waiting queue
+% can be seen also as a Waiting queue, Waiting lock?
 
 <<struct QLock>>=
 // Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
@@ -2624,7 +2628,7 @@ setrealloctag(void *v, ulong pc)
 @
 
 
-
+% sleep malloc, probably can't be called from interrupt code!
 <<function smalloc>>=
 // non failing malloc! will repeat until it can
 void*
@@ -2851,6 +2855,7 @@ struct Pallocmem
 @
 
 
+% can set s to nil at exit in case of ???
 <<constructor newpage>>=
 Page*
 newpage(bool clear, Segment **s, ulong va)
@@ -2874,7 +2879,7 @@ newpage(bool clear, Segment **s, ulong va)
         dontalloc = false;
         if(s && *s) {
             qunlock(&((*s)->lk));
-            *s = nil;
+            *s = nil;// !!
             dontalloc = true;
         }
         qlock(&palloc.pwait);   /* Hold memory requesters here */
@@ -3354,6 +3359,7 @@ struct Pte
     Page  **last;     /* Last used entry */
 };
 @
+% the pages can be really sparse, but first and last optimize a bit
 
 <<constant PTEMAPMEM>>=
 #define PTEMAPMEM (1024*1024) // 1MB
@@ -3619,6 +3625,15 @@ struct Segment
     Sema  sema;
 };
 @
+
+<<constant SEGMAPSIZE>>=
+#define SEGMAPSIZE  1984
+@
+
+<<constant SSEGMAPSIZE>>=
+#define SSEGMAPSIZE 16 // small segmap
+@
+
 
 % size is in pages?
 <<constructor newseg>>=
@@ -3959,6 +3974,71 @@ segpage(Segment *s, Page *p)
 }
 @
 
+<<function mfreeseg>>=
+/*
+ *  called with s->lk locked
+ */
+void
+mfreeseg(Segment *s, ulong start, int pages)
+{
+    int i, j, size;
+    ulong soff;
+    Page *pg;
+    Page *list;
+
+    soff = start-s->base;
+    j = (soff&(PTEMAPMEM-1))/BY2PG;
+
+    size = s->mapsize;
+    list = nil;
+    for(i = soff/PTEMAPMEM; i < size; i++) {
+        if(pages <= 0)
+            break;
+        if(s->map[i] == 0) {
+            pages -= PTEPERTAB-j;
+            j = 0;
+            continue;
+        }
+        while(j < PTEPERTAB) {
+            pg = s->map[i]->pages[j];
+            /*
+             * We want to zero s->map[i]->page[j] and putpage(pg),
+             * but we have to make sure other processors flush the
+             * entry from their TLBs before the page is freed.
+             * We construct a list of the pages to be freed, zero
+             * the entries, then (below) call procflushseg, and call
+             * putpage on the whole list.
+             *
+             * Swapped-out pages don't appear in TLBs, so it's okay
+             * to putswap those pages before procflushseg.
+             */
+            if(pg){
+                if(onswap(pg))
+                    putswap(pg);
+                else{
+                    pg->next = list;
+                    list = pg;
+                }
+                s->map[i]->pages[j] = 0;
+            }
+            if(--pages == 0)
+                goto out;
+            j++;
+        }
+        j = 0;
+    }
+out:
+    /* flush this seg in all other processes */
+    if(s->ref > 1)
+        procflushseg(s);
+
+    /* free the pages */
+    for(pg = list; pg != nil; pg = list){
+        list = list->next;
+        putpage(pg);
+    }
+}
+@
 
 
 \section{Code segment [[KImage]]}
@@ -4224,6 +4304,8 @@ putimage(KImage *i)
 
 \section{[[sysbrk_()]]}
 
+% for binary compatibility of what? because there is a C function
+% called brk already? TOFIX!
 <<syscall brk_>>=
 /* For binary compatibility */
 long
@@ -4246,7 +4328,7 @@ ibrk(ulong addr, int seg)
     if(s == 0)
         error(Ebadarg);
 
-    if(addr == 0)
+    if(addr == nilptr)
         return s->base;
 
     qlock(&s->lk);
@@ -4311,14 +4393,29 @@ ibrk(ulong addr, int seg)
 }
 @
 
+\chapter{Scheduling}
+
+\section{Overview}
+
+% What a system would be for a programmer without (preemptive) scheduling?
+%  - a malicious/buggy process could never yield (see MacOS 9 ... windows 3.1)
+%  - 
 
 \chapter{Virtual Memory}
 
 \section{Overview}
 
+% What a system would be for a programmer without virtual memory!!
+% Virtual memory enables many things:
+% - isolated processes, safer! (see DOS ...) a malicious/buggy process 
+%   can't harm
+% - can access more than physical, hence virtual in some sense
+% - easier for loading programs, no need relocation, they all
+%   start at 0
+
 \section{Segmentation and [[gdt]]}
 
-
+% could be an enum, but has to be used from assembly too
 <<constant x86 segments>>=
 /*
  *  known x86 segments (in GDT) and their selectors
@@ -4329,26 +4426,19 @@ ibrk(ulong addr, int seg)
 #define UDSEG 3 /* user data/stack */
 #define UESEG 4 /* user executable */
 #define TSSSEG  5 /* task segment */
-
-#define APMCSEG   6 /* APM code segment */
-#define APMCSEG16 7 /* APM 16-bit code segment */
-#define APMDSEG   8 /* APM data segment */
-#define KESEG16   9 /* kernel executable 16-bit */
-
+<<constant x86 other segments>>
 #define NGDT    10  /* number of GDT entries required */
 @
 
-<<macros xxxSEGM>>=
-/*
- * Simple segment descriptors with no translation.
- */
-#define DATASEGM(p)     { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
-#define EXECSEGM(p)     { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-#define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-#define TSSSEGM(b,p)    { ((b)<<16)|sizeof(Tss),\
-              ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
-@
 
+% also used for IDT
+<<struct Segdesc>>=
+struct Segdesc
+{
+    ulong d0; // ??
+    ulong d1; // ??
+};
+@ 
 <<global gdt>>=
 Segdesc gdt[NGDT] =
 {
@@ -4358,39 +4448,77 @@ Segdesc gdt[NGDT] =
 [UDSEG]     DATASEGM(3),        /* user data/stack */
 [UESEG]     EXECSEGM(3),        /* user code */
 [TSSSEG]    TSSSEGM(0,0),       /* tss segment */
-[KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
+<<[[gdt]] other elements>>
 };
 @
 
-% also used for IDT
-<<struct Segdesc>>=
-struct Segdesc
-{
-    ulong d0;
-    ulong d1;
-};
-@ 
+<<constant segment field extractors>>=
+/*
+ *  fields in segment descriptors
+ */
+#define SEGDATA (0x10<<8) /* data/stack segment */
+#define SEGEXEC (0x18<<8) /* executable segment */
+#define SEGTSS  (0x9<<8)  /* TSS segment */
+#define SEGCG (0x0C<<8) /* call gate */
+#define SEGIG (0x0E<<8) /* interrupt gate */
+#define SEGTG (0x0F<<8) /* trap gate */
+#define SEGTYPE (0x1F<<8)
+
+#define SEGP  (1<<15)   /* segment present */
+#define SEGPL(x) ((x)<<13)  /* priority level */
+#define SEGB  (1<<22)   /* granularity 1==4k (for expand-down) */
+#define SEGG  (1<<23)   /* granularity 1==4k (for other) */
+#define SEGE  (1<<10)   /* expand down */
+#define SEGW  (1<<9)    /* writable (for data/stack) */
+#define SEGR  (1<<9)    /* readable (for code) */
+#define SEGD  (1<<22)   /* default 1==32bit (for code) */
+@
+
+
+<<macros xxxSEGM>>=
+/*
+ * Simple segment descriptors with no translation.
+ */
+#define DATASEGM(p)     { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
+#define EXECSEGM(p)     { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
+#define TSSSEGM(b,p)    { ((b)<<16)|sizeof(Tss),\
+              ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
+<<macros other xxxSEGM>>
+@
+
 
 <<[[Cpu]] [[Arch]] other fields>>=
+// array<Segdesc>
 Segdesc *gdt;     /* gdt for this processor */
 @
 
-<<function mmuinit0>>=
-void
-mmuinit0(void)
-{
-    memmove(cpu->gdt, gdt, sizeof gdt);
-}
+
+<<constant x86 segment selectors>>=
+#define NULLSEL SELECTOR(NULLSEG, SELGDT, 0)
+#define KDSEL SELECTOR(KDSEG, SELGDT, 0)
+#define KESEL SELECTOR(KESEG, SELGDT, 0)
+#define UESEL SELECTOR(UESEG, SELGDT, 3)
+#define UDSEL SELECTOR(UDSEG, SELGDT, 3)
+#define TSSSEL  SELECTOR(TSSSEG, SELGDT, 0)
+<<constant x86 other segment selectors>>
 @
+
+<<macro SELECTOR>>=
+#define SELECTOR(i, t, p) (((i)<<3) | (t) | (p))
+@
+
+% could put code of tgdt of initialization here? but the real gdt
+% is the one above, the tgdt is just used at the beginning
 
 \section{Pagination and [[pdb]]} 
 
 <<[[Cpu]] [[Arch]] other fields>>=
-// TODO: have a ArchCpuMMU like in bcm/
 kern_addr2  pdb;      /* page directory base for this processor (va) */
 Page* pdbpool;
 int pdbcnt;
 @
+%// TODO: have a ArchCpuMMU like in bcm/
+
 
 <<[[Proc]] [[Arch]] memory fields>>=
 Page* mmupdb;     /* page directory base */
@@ -4405,6 +4533,62 @@ int nkmap;      /* number of current kmaps */
 <<[[Proc]] memory fields>>=
 bool newtlb;   /* Pager has changed my pte's, I must flush */
 @ 
+
+
+
+
+<<function mmuwalk>>=
+/*
+ * Walk the page-table pointed to by pdb and return a pointer
+ * to the entry for virtual address va at the requested level.
+ * If the entry is invalid and create isn't requested then bail
+ * out early. Otherwise, for the 2nd level walk, allocate a new
+ * page-table page and register it in the 1st level.  This is used
+ * only to edit kernel mappings, which use pages from kernel memory,
+ * so it's okay to use KADDR to look at the tables.
+ */
+ulong*
+mmuwalk(ulong* pdb, ulong va, int level, int create)
+{
+    ulong *table;
+    void *map;
+
+    table = &pdb[PDX(va)];
+    if(!(*table & PTEVALID) && create == 0)
+        return 0;
+
+    switch(level){
+
+    default:
+        return 0;
+
+    case 1:
+        return table;
+
+    case 2:
+        if(*table & PTESIZE)
+            panic("mmuwalk2: va %luX entry %luX", va, *table);
+        if(!(*table & PTEVALID)){
+            /*
+             * Have to call low-level allocator from
+             * memory.c if we haven't set up the xalloc
+             * tables yet.
+             */
+            if(didmmuinit)
+                map = xspanalloc(BY2PG, BY2PG, 0);
+            else
+                map = rampage();
+            if(map == nil)
+                panic("mmuwalk xspanalloc failed");
+            *table = PADDR(map)|PTEWRITE|PTEVALID;
+        }
+        table = KADDR(PPN(*table));
+        return &table[PTX(va)];
+    }
+}
+@
+
+
 
 
 <<struct KMap>>=
@@ -4490,7 +4674,7 @@ mmupdballoc(void)
 
 
 <<function mmupdbfree>>=
-//@Scheck: not deaded, called below
+//@Scheck: not dead
 static void
 mmupdbfree(Proc *proc, Page *p)
 {
@@ -4716,56 +4900,6 @@ checkmmu(ulong va, ulong pa)
 @
 
 
-<<function mmuwalk>>=
-/*
- * Walk the page-table pointed to by pdb and return a pointer
- * to the entry for virtual address va at the requested level.
- * If the entry is invalid and create isn't requested then bail
- * out early. Otherwise, for the 2nd level walk, allocate a new
- * page-table page and register it in the 1st level.  This is used
- * only to edit kernel mappings, which use pages from kernel memory,
- * so it's okay to use KADDR to look at the tables.
- */
-ulong*
-mmuwalk(ulong* pdb, ulong va, int level, int create)
-{
-    ulong *table;
-    void *map;
-
-    table = &pdb[PDX(va)];
-    if(!(*table & PTEVALID) && create == 0)
-        return 0;
-
-    switch(level){
-
-    default:
-        return 0;
-
-    case 1:
-        return table;
-
-    case 2:
-        if(*table & PTESIZE)
-            panic("mmuwalk2: va %luX entry %luX", va, *table);
-        if(!(*table & PTEVALID)){
-            /*
-             * Have to call low-level allocator from
-             * memory.c if we haven't set up the xalloc
-             * tables yet.
-             */
-            if(didmmuinit)
-                map = xspanalloc(BY2PG, BY2PG, 0);
-            else
-                map = rampage();
-            if(map == nil)
-                panic("mmuwalk xspanalloc failed");
-            *table = PADDR(map)|PTEWRITE|PTEVALID;
-        }
-        table = KADDR(PPN(*table));
-        return &table[PTX(va)];
-    }
-}
-@
 
 
 <<global vmaplock>>=
@@ -5186,12 +5320,101 @@ tmpunmap(void *v)
 
 \section{Page fault}
 
+
 % split copy-on-write feature in another section?
 % have also demand-loading here
 
+% see also trapinit
+
+<<function fault386>>=
+static void
+fault386(Ureg* ureg, void*)
+{
+    ulong addr; // could be kernel (virtual) address or user (virtual) address
+    bool read, insyscall, user;
+    int n; // ret_code
+    char buf[ERRMAX];
+
+    addr = getcr2();
+    read = !(ureg->ecode & 2);
+
+    user = (ureg->cs & 0xFFFF) == UESEL;
+    if(!user){
+        if(vmapsync(addr))
+            return;
+        if(addr >= USTKTOP)
+            panic("kernel fault: bad address pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+        if(up == nil)
+            panic("kernel fault: no user process pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+    }
+    if(up == nil)
+        panic("user fault: up=0 pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+
+    insyscall = up->insyscall;
+    up->insyscall = true; // really?
+
+    n = fault(addr, read); // portable code
+
+    if(n < 0){
+        if(!user){
+            dumpregs(ureg);
+            panic("fault: 0x%lux", addr);
+        }
+        checkpages();
+        //checkfault(addr, ureg->pc);
+        snprint(buf, sizeof buf, "sys: trap: fault %s addr=0x%lux",
+            read ? "read" : "write", addr);
+        postnote(up, 1, buf, NDebug);
+    }
+    up->insyscall = insyscall;
+}
+@ 
+
+
+
+<<function checkpages>>=
+void
+checkpages(void)
+{
+    int checked;
+    ulong addr, off;
+    Pte *p;
+    Page *pg;
+    Segment **sp, **ep, *s;
+    
+    if(up == nil)
+        return;
+
+    checked = 0;
+    // foreach(up->seg)
+    for(sp=up->seg, ep=&up->seg[NSEG]; sp<ep; sp++){
+        s = *sp;
+        if(s == nil)
+            continue;
+        qlock(&s->lk);
+        for(addr=s->base; addr<s->top; addr+=BY2PG){
+            off = addr - s->base;
+            p = s->map[off/PTEMAPMEM];
+            if(p == nil)
+                continue;
+            pg = p->pages[(off&(PTEMAPMEM-1))/BY2PG];
+            if(pg == nil || pagedout(pg))
+                continue;
+            checkmmu(addr, pg->pa);
+            checked++;
+        }
+        qunlock(&s->lk);
+    }
+    print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
+}
+@
+
+
+
+% ret_code2?
 <<function fault>>=
 int
-fault(ulong addr, bool read)
+fault(virt_addr addr, bool read)
 {
     Segment *s;
     char *sps;
@@ -5207,8 +5430,8 @@ fault(ulong addr, bool read)
 
     cpu->pfault++;
     for(;;) {
-        s = seg(up, addr, 1);       /* leaves s->lk qlocked if seg != nil */
-        if(s == 0) {
+        s = seg(up, addr, /*dolock*/true); /* leaves s->lk qlocked if seg != nil */
+        if(s == nil) {
             up->psstate = sps;
             return -1;
         }
@@ -5219,8 +5442,10 @@ fault(ulong addr, bool read)
             return -1;
         }
 
-        if(fixfault(s, addr, read, 1) == 0) /* qunlocks s->lk */
+        if(fixfault(s, addr, read, /*putmmu*/true) == 0) /* qunlocks s->lk */
             break;
+
+        // else? try again?
     }
 
     up->psstate = sps;
@@ -5229,42 +5454,26 @@ fault(ulong addr, bool read)
 @
 
 
-<<function faulterror>>=
-static void
-faulterror(char *s, Chan *c, bool freemem)
-{
-    char buf[ERRMAX];
-
-    if(c && c->path){
-        snprint(buf, sizeof buf, "%s accessing %s: %s", s, c->path->s, up->errstr);
-        s = buf;
-    }
-    if(up->nerrlab) {
-        postnote(up, 1, s, NDebug);
-        error(s);
-    }
-    pexit(s, freemem);
-}
-@
-
-
 <<[[Conf]] other fields>>=
 bool copymode; /* 0 is copy on write, 1 is copy on reference */
 @
 
+% The big one! very important function!
+%ret_code
 <<function fixfault>>=
 int
-fixfault(Segment *s, ulong addr, int read, int doputmmu)
+fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 {
     int type;
     int ref;
     Pte **p, *etp;
-    ulong mmuphys=0, soff;
+    ulong mmuphys=0;
+    ulong soff;
     Page **pg, *lkp, *new;
     Page *(*fn)(Segment*, ulong);
 
     addr &= ~(BY2PG-1);
-    soff = addr-s->base;
+    soff = addr - s->base;
     p = &s->map[soff/PTEMAPMEM];
     if(*p == 0)
         *p = ptealloc();
@@ -5296,9 +5505,8 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
     case SG_STACK:
         if(*pg == 0) {
             new = newpage(1, &s, addr);
-            if(s == 0)
+            if(s == nil) //?? when can be nil at exit?
                 return -1;
-
             *pg = new;
         }
         goto common;
@@ -5333,7 +5541,7 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
         unlock(lkp);
         if(ref > 1){
             new = newpage(0, &s, addr);
-            if(s == 0)
+            if(s == nil)
                 return -1;
             *pg = new;
             copypage(lkp, *pg);
@@ -5368,7 +5576,7 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
     if(doputmmu)
         putmmu(addr, mmuphys, *pg);
 
-    return 0;
+    return 0; // OK
 }
 @
 
@@ -5388,7 +5596,7 @@ pio(Segment *s, ulong addr, ulong soff, Page **p)
 
 retry:
     loadrec = *p;
-    if(loadrec == 0) {  /* from a text/data image */
+    if(loadrec == nil) {  /* from a text/data image */
         daddr = s->fstart+soff;
         new = lookpage(s->image, daddr);
         if(new != nil) {
@@ -5480,46 +5688,24 @@ done:
 @
 
 
-<<function fault386>>=
+<<function faulterror>>=
 static void
-fault386(Ureg* ureg, void*)
+faulterror(char *s, Chan *c, bool freemem)
 {
-    ulong addr;
-    int read, user, n, insyscall;
     char buf[ERRMAX];
 
-    addr = getcr2();
-    read = !(ureg->ecode & 2);
-
-    user = (ureg->cs & 0xFFFF) == UESEL;
-    if(!user){
-        if(vmapsync(addr))
-            return;
-        if(addr >= USTKTOP)
-            panic("kernel fault: bad address pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
-        if(up == nil)
-            panic("kernel fault: no user process pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+    if(c && c->path){
+        snprint(buf, sizeof buf, "%s accessing %s: %s", s, c->path->s, up->errstr);
+        s = buf;
     }
-    if(up == nil)
-        panic("user fault: up=0 pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
-
-    insyscall = up->insyscall;
-    up->insyscall = true;
-    n = fault(addr, read);
-    if(n < 0){
-        if(!user){
-            dumpregs(ureg);
-            panic("fault: 0x%lux", addr);
-        }
-        checkpages();
-        //checkfault(addr, ureg->pc);
-        snprint(buf, sizeof buf, "sys: trap: fault %s addr=0x%lux",
-            read ? "read" : "write", addr);
-        postnote(up, 1, buf, NDebug);
+    if(up->nerrlab) {
+        postnote(up, 1, s, NDebug);
+        error(s);
     }
-    up->insyscall = insyscall;
+    pexit(s, freemem);
 }
-@ 
+@
+
 
 
 \section{Swapping}
@@ -5995,6 +6181,8 @@ setswapchan(Chan *c)
 \section{Overview}
 
 \section{[[Vctl]]}
+
+
 <<struct Vctl>>=
 struct Vctl {
 
@@ -6005,7 +6193,7 @@ struct Vctl {
     void* a;      /* argument to call it with */
   
     char  name[KNAMELEN];   /* of driver */
-    int tbdf; //?
+    int tbdf; // /* type+bus+device+function */ ??
   
     // interrupt service routine
     int (*isr)(int);    /* get isr bit for this irq */
@@ -7310,6 +7498,12 @@ Label sched;    /* known to l.s */
 char  *kstack;  /* known to l.s */
 @ 
 
+<<constant KSTACK>>=
+#define KSTACK    4096      /* Size of kernel stack */
+@
+
+
+
 % have a [[Cpu]] scheduler fields? 
 <<[[Cpu]] other fields>>=
 Label sched;      /* scheduler wakeup */ // address of schedinit()
@@ -7484,6 +7678,8 @@ ulong movetime; /* last time process switched processors */
 Cpu  *cpu;    /* processor running this proc */
 @
 
+
+
 <<function procpriority>>=
 void
 procpriority(Proc *p, int pri, int fixed)
@@ -7533,6 +7729,7 @@ Nrq   = Npriq+2,  /* number of priority levels including real time */
 // hash<enum<priority>, Schedq>
 Schedq  runq[Nrq];
 @ 
+
 
 <<global runveq>>=
 ulong   runvec;
@@ -7617,6 +7814,46 @@ dequeueproc(Schedq *rq, Proc *tp)
 @ 
 
 
+
+<<enum procstate cases>>=
+Ready,
+@
+
+<<function ready>>=
+/*
+ *  ready(p) picks a new priority for a process and sticks it in the
+ *  runq for that priority.
+ */
+void
+proc_ready(Proc *p)
+{
+    int s, pri;
+    Schedq *rq;
+    void (*pt)(Proc*, int, vlong);
+
+    s = splhi();
+    <<[[ready()]] optional [[edfready()]] for real-time scheduling>>
+
+    if(up != p && (p->wired == nil || p->wired == cpu))
+        cpu->readied = p; /* group scheduling */
+
+    updatecpu(p);
+    pri = reprioritize(p);
+    p->priority = pri;
+    rq = &runq[pri];
+    p->state = Ready;
+    queueproc(rq, p);
+    pt = proctrace;
+    if(pt)
+        pt(p, SReady, 0);
+    splx(s);
+}
+@ 
+
+
+
+
+% actually why could not factorize code with sleep()?
 <<function sched>>=
 /*
  *  If changing this routine, look also at sleep().  It
@@ -7873,43 +8110,6 @@ reprioritize(Proc *p)
 }
 @ 
 
-<<enum procstate cases>>=
-Ready,
-@
-
-<<function ready>>=
-/*
- *  ready(p) picks a new priority for a process and sticks it in the
- *  runq for that priority.
- */
-void
-proc_ready(Proc *p)
-{
-    int s, pri;
-    Schedq *rq;
-    void (*pt)(Proc*, int, vlong);
-
-    s = splhi();
-    if(edfready(p)){
-        splx(s);
-        return;
-    }
-
-    if(up != p && (p->wired == nil || p->wired == cpu))
-        cpu->readied = p; /* group scheduling */
-
-    updatecpu(p);
-    pri = reprioritize(p);
-    p->priority = pri;
-    rq = &runq[pri];
-    p->state = Ready;
-    queueproc(rq, p);
-    pt = proctrace;
-    if(pt)
-        pt(p, SReady, 0);
-    splx(s);
-}
-@ 
 
 
 <<function yield>>=
@@ -7994,7 +8194,7 @@ runproc(void)
     start = perfticks();
 
     /* cooperative scheduling until the clock ticks */
-    if((p=cpu->readied) && p->cpu==0 && p->state==Ready
+    if((p=cpu->readied) && p->cpu==nil && p->state==Ready
     && (p->wired == nil || p->wired == cpu)
     && runq[Nrq-1].head == nil && runq[Nrq-2].head == nil){
         skipscheds++;
@@ -8097,6 +8297,11 @@ procwired(Proc *p, int bm)
 
 
 \section{Clock interrupt}
+
+<<constant HZ>>=
+#define HZ    (100)     /* clock frequency */
+@
+
 
 <<struct I8253>>=
 struct I8253
@@ -8286,64 +8491,13 @@ struct Rendez
 };
 @ 
 
-\section{[[Rgrp]]}
-
-<<function REND>>=
-enum
-{
-    RENDLOG = 5,
-    RENDHASH =  1<<RENDLOG, /* Hash to lookup rendezvous tags */
-};
-#define REND(p,s) ((p)->rendhash[(s)&((1<<RENDLOG)-1)])
-@
-
-
-<<struct Rgrp>>=
-struct Rgrp
-{
-    // hash<??, list<ref<Proc>>>
-    Proc  *rendhash[RENDHASH];  /* Rendezvous tag hash */
-  
-    // extra
-    Ref;        /* the Ref's lock is also the Rgrp's lock */
-};
-@ 
-
+% those one are kind of scheduling fields, because they are about
+% cooperative scheduling, not so much about inter process synchro via
+% sysrendezvous
 <<[[Proc]] synchronization fields>>=
-Rgrp  *rgrp;    /* Rendez group */
-
-uintptr rendtag;  /* Tag for rendezvous */
-uintptr rendval;  /* Value for rendezvous */
-//??
-Proc  *rendhash;  /* Hash list for tag values */
-
 Rendez  *r;   /* rendezvous point slept on */
-Rendez  sleep;    /* place for syssleep/debug */
-
 Lock  rlock;    /* sync sleep/wakeup with postnote */
-@ 
-
-
-<<constructor newrgrp>>=
-Rgrp*
-newrgrp(void)
-{
-    Rgrp *r;
-
-    r = smalloc(sizeof(Rgrp));
-    r->ref = 1;
-    return r;
-}
-@ 
-
-<<destructor closergrp>>=
-void
-closergrp(Rgrp *r)
-{
-    if(decref(r) == 0)
-        free(r);
-}
-@ 
+@
 
 \section{[[sleep()]], [[wakeup()]]}
 
@@ -8361,7 +8515,7 @@ Wakeme,
  *  and p->r synchronized.
  */
 void
-proc_sleep(Rendez *r, int (*f)(void*), void *arg)
+proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
 {
     int s;
     void (*pt)(Proc*, int, vlong);
@@ -8451,7 +8605,6 @@ proc_wakeup(Rendez *r)
     int s;
 
     s = splhi();
-
     lock(r);
     p = r->p;
 
@@ -8467,9 +8620,7 @@ proc_wakeup(Rendez *r)
         unlock(&p->rlock);
     }
     unlock(r);
-
     splx(s);
-
     return p;
 }
 @ 
@@ -9083,6 +9234,63 @@ shargs(char *s, int n, char **ap)
 
 \section{[[sysrendezvous()]]}
 
+
+\section{[[Rgrp]]}
+
+<<function REND>>=
+enum
+{
+    RENDLOG = 5,
+    RENDHASH =  1<<RENDLOG, /* Hash to lookup rendezvous tags */
+};
+#define REND(p,s) ((p)->rendhash[(s)&((1<<RENDLOG)-1)])
+@
+
+
+<<struct Rgrp>>=
+struct Rgrp
+{
+    // hash<??, list<ref<Proc>>>
+    Proc  *rendhash[RENDHASH];  /* Rendezvous tag hash */
+  
+    // extra
+    Ref;        /* the Ref's lock is also the Rgrp's lock */
+};
+@ 
+
+% could be in other fields honestly, just like Egrp fields
+<<[[Proc]] synchronization fields>>=
+Rgrp  *rgrp;    /* Rendez group */
+
+uintptr rendtag;  /* Tag for rendezvous */
+uintptr rendval;  /* Value for rendezvous */
+//??
+Proc  *rendhash;  /* Hash list for tag values */
+@
+
+
+<<constructor newrgrp>>=
+Rgrp*
+newrgrp(void)
+{
+    Rgrp *r;
+
+    r = smalloc(sizeof(Rgrp));
+    r->ref = 1;
+    return r;
+}
+@ 
+
+<<destructor closergrp>>=
+void
+closergrp(Rgrp *r)
+{
+    if(decref(r) == 0)
+        free(r);
+}
+@ 
+
+
 <<enum procstate cases>>=
 Rendezvous,
 @
@@ -9650,7 +9858,8 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
 
 \subsection{Loading the kernel in physical memory}
 
-% rename _startKADDR? just _start?
+% rename _startKADDR? just _start? it's true
+% that the label is in in KADDR space as we call ld with -TKZERO...
 
 <<l_multiboot.s>>=
 #include "mem.h"
@@ -9686,6 +9895,12 @@ TEXT _multibootheader(SB), $0
         LONG    $0                              /* height */
         LONG    $0                              /* depth */
 @
+
+% about the page-aligned requirment:
+% indeed, as we will see later binaries when exec'd are
+% mapped to memory and we want the data section to be
+% separate from text section so they can have different
+% property for their segments
 
 <<function _multibootentry>>=
 /* 
@@ -9729,6 +9944,10 @@ TEXT multiboot(SB), $0
 
 \subsection{Setup basic segmentation}
 
+% this comment below is still valid??? not when come from multiboot header
+% maybe should be rename this _startPADDR as it's not a physical addr
+% anyway
+% rename? setup_segmentation_KADDR
 <<function _startPADDR>>=
 /*
  * In protected mode with paging turned off and segment registers setup
@@ -9808,6 +10027,7 @@ TEXT tgdtptr(SB), $0
 
 \subsection{Setup basic pagination}
 
+% again, rename? setup_pagination_KADDR?
 <<function mode32bits>>=
 TEXT mode32bit(SB), $0
         /* At this point, the GDT setup is done. */
@@ -9875,6 +10095,9 @@ _setpte1:
 
 \subsection{Setup BSS and Stack}
 
+% rename, setup_bss_stack_KADDR
+% the x86 archi does not have multi register, so have to use same
+% pointer to differently mapped physical page
 <<function _startpg>>=
 /*
  * Basic machine environment set, can clear BSS and create a stack.
@@ -9910,6 +10133,7 @@ _clearbss:
 
 \subsection{Jumping to C [[main()]]}
 
+% or do another function and in previous code to a JMP _last_before_main_KADDR?
 <<end of _startpg>>=
 /*
  * Need to do one final thing to ensure a clean machine environment,
@@ -10008,28 +10232,7 @@ main(void)
 }
 @
 
-% rename procinit and rename other in devprocinit
-<<function procinit0>>=
-void
-procinit0(void)     /* bad planning - clashes with devproc.c */
-{
-    Proc *p;
-    int i;
-
-    procalloc.free = xalloc(conf.nproc*sizeof(Proc));
-    if(procalloc.free == nil){
-        xsummary();
-        panic("cannot allocate %lud procs (%ludMB)\n", 
-                      conf.nproc, conf.nproc*sizeof(Proc)/(1024*1024));
-    }
-    procalloc.arena = procalloc.free;
-
-    p = procalloc.free;
-    for(i=0; i<conf.nproc-1; i++,p++)
-        p->qnext = p+1;
-    p->qnext = 0;
-}
-@ 
+\subsection{[[cpu]] initialization}
 
 <<function cpu0init>>=
 void
@@ -10077,6 +10280,35 @@ cpuinit(void)
 }
 @
 
+
+\subsection{CPU detection}
+
+<<[[Cpu]] [[Arch]] cpuid fields>>=
+char  cpuidid[16];
+char* cpuidtype;
+int cpuidax;
+int cpuiddx;
+@
+
+<<function cpuidprint>>=
+void
+cpuidprint(void)
+{
+    int i;
+    char buf[128];
+
+    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", cpu->cpuno,
+        cpu->cpuno < 10? " ": "", cpu->cpumhz);
+    if(cpu->cpuidid[0])
+        i += sprint(buf+i, "%12.12s ", cpu->cpuidid);
+    seprint(buf+i, buf + sizeof buf - 1,
+        "%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
+        cpu->cpuidtype, cpu->cpuidax, cpu->cpuiddx);
+    print(buf);
+}
+@
+
+\subsection{[[arch]] initialization}
 
 <<function archinit>>=
 void
@@ -10130,374 +10362,7 @@ archinit(void)
 }
 @
 
-<<[[Conf]] other fields>>=
-ulong npage;    /* total physical pages of memory */
-
-// kpages = npage - upages
-ulong upages;   /* user page pool */ 
-ulong nimage;   /* number of page cache image headers */
-ulong ialloc;   /* max interrupt time allocation in bytes */
-@
-
-<<function confinit>>=
-// precondition: meminit() have initialized Conf.mem
-void
-confinit(void)
-{
-        char *p;
-        int i, userpcnt;
-        ulong kpages;
-
-        if(p = getconf("*kernelpercent"))
-                userpcnt = 100 - strtol(p, 0, 0);
-        else
-                userpcnt = 0;
-
-        conf.npage = 0;
-        for(i=0; i<nelem(conf.mem); i++)
-                conf.npage += conf.mem[i].npage;
-
-        conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
-        if(cpuserver)
-                conf.nproc *= 3;
-        if(conf.nproc > 2000)
-                conf.nproc = 2000;
-        conf.nimage = 200;
-        conf.nswap = conf.nproc*80;
-        conf.nswppo = 4096;
-
-        if(cpuserver) {
-                if(userpcnt < 10)
-                        userpcnt = 70;
-                kpages = conf.npage - (conf.npage*userpcnt)/100;
-
-                /*
-                 * Hack for the big boys. Only good while physmem < 4GB.
-                 * Give the kernel fixed max + enough to allocate the
-                 * page pool.
-                 * This is an overestimate as conf.upages < conf.npages.
-                 * The patch of nimage is a band-aid, scanning the whole
-                 * page list in imagereclaim just takes too long.
-                 */
-                if(kpages > (128*MB + conf.npage*sizeof(Page))/BY2PG){
-                        kpages = (128*MB + conf.npage*sizeof(Page))/BY2PG;
-                        conf.nimage = 2000;
-                        kpages += (conf.nproc*KSTACK)/BY2PG;
-                }
-        } else {
-                if(userpcnt < 10) {
-                        if(conf.npage*BY2PG < 16*MB)
-                                userpcnt = 40;
-                        else
-                                userpcnt = 80;
-                }
-                kpages = conf.npage - (conf.npage*userpcnt)/100;
-
-                /*
-                 * Make sure terminals with low memory get at least
-                 * 4MB on the first Image chunk allocation.
-                 */
-                if(conf.npage*BY2PG < 16*MB)
-                        imagmem->minarena = 4*1024*1024;
-        }
-
-        /*
-         * can't go past the end of virtual memory
-         * (ulong)-KZERO is 2^32 - KZERO
-         */
-        if(kpages > ((ulong)-KZERO)/BY2PG)
-                kpages = ((ulong)-KZERO)/BY2PG;
-
-        conf.upages = conf.npage - kpages;
-        conf.ialloc = (kpages/2)*BY2PG;
-
-        /*
-         * Guess how much is taken by the large permanent
-         * datastructures. Mntcache and Mntrpc are not accounted for
-         * (probably ~300KB).
-         */
-        kpages *= BY2PG;
-        kpages -= conf.upages*sizeof(Page)
-                + conf.nproc*sizeof(Proc)
-                + conf.nimage*sizeof(KImage)
-                + conf.nswap
-                + conf.nswppo*sizeof(Page);
-        mainmem->maxsize = kpages;
-        if(!cpuserver){
-                /*
-                 * give terminals lots of image memory, too; the dynamic
-                 * allocation will balance the load properly, hopefully.
-                 * be careful with 32-bit overflow.
-                 */
-                imagmem->maxsize = kpages;
-        }
-}
-@
-
-
-<<function xinit>>=
-void
-xinit(void)
-{
-    int i, n, upages, kpages;
-    ulong maxpages;
-    Confmem *m;
-    Pallocmem *pm;
-    Hole *h, *eh;
-
-    eh = &xlists.hole[Nhole-1];
-    for(h = xlists.hole; h < eh; h++)
-        h->link = h+1;
-
-    xlists.flist = xlists.hole;
-
-    upages = conf.upages;
-    kpages = conf.npage - upages;
-    pm = palloc.mem;
-    for(i=0; i<nelem(conf.mem); i++){
-        m = &conf.mem[i];
-        n = m->npage;
-        if(n > kpages)
-            n = kpages;
-        /* don't try to use non-KADDR-able memory for kernel */
-        maxpages = cankaddr(m->base)/BY2PG;
-        if(n > maxpages)
-            n = maxpages;
-
-        /* first give to kernel */
-        if(n > 0){
-            m->kbase = (ulong)KADDR(m->base);
-            m->klimit = (ulong)KADDR(m->base+n*BY2PG);
-            xhole(m->base, n*BY2PG);
-            kpages -= n;
-        }
-        /* if anything left over, give to user */
-        if(n < m->npage){
-            if(pm >= palloc.mem+nelem(palloc.mem)){
-                print("xinit: losing %lud pages\n", m->npage-n);
-                continue;
-            }
-            pm->base = m->base+n*BY2PG;
-            pm->npage = m->npage - n;
-            pm++;
-        }
-    }
-//  xsummary();         /* call it from main if desired */
-}
-@
-
-
-<<function pageinit>>=
-void
-pageinit(void)
-{
-    int color, i, j;
-    Page *p;
-    Pallocmem *pm;
-    ulong m, np, k, vkb, pkb;
-
-    np = 0;
-    for(i=0; i<nelem(palloc.mem); i++){
-        pm = &palloc.mem[i];
-        np += pm->npage;
-    }
-    palloc.pages = xalloc(np*sizeof(Page));
-    if(palloc.pages == 0)
-        panic("pageinit");
-
-    color = 0;
-    palloc.head = palloc.pages;
-    p = palloc.head;
-    for(i=0; i<nelem(palloc.mem); i++){
-        pm = &palloc.mem[i];
-        for(j=0; j<pm->npage; j++){
-            p->prev = p-1;
-            p->next = p+1;
-            p->pa = pm->base+j*BY2PG;
-            p->color = color;
-            palloc.freecount++;
-            color = (color+1)%NCOLOR;
-            p++;
-        }
-    }
-    palloc.tail = p - 1;
-    palloc.head->prev = 0;
-    palloc.tail->next = 0;
-
-    palloc.user = p - palloc.pages; // TODO? should be np too no?
-    pkb = palloc.user*BY2PG/1024;
-    vkb = pkb + (conf.nswap*BY2PG)/1024;
-
-    /* Paging numbers */
-    swapalloc.highwater = (palloc.user*5)/100;
-    swapalloc.headroom = swapalloc.highwater + (swapalloc.highwater/4);
-
-    m = 0;
-    for(i=0; i<nelem(conf.mem); i++)
-        if(conf.mem[i].npage)
-            m += conf.mem[i].npage*BY2PG;
-    k = PGROUND(end - (char*)KTZERO);
-    print("%ldM memory: ", (m+k+1024*1024-1)/(1024*1024));
-    print("%ldM kernel data, ", (m+k-pkb*1024+1024*1024-1)/(1024*1024));
-    print("%ldM user, ", pkb/1024);
-    print("%ldM swap\n", vkb/1024);
-}
-@
-
-
-<<function swapinit>>=
-void
-swapinit(void)
-{
-    swapalloc.swmap = xalloc(conf.nswap);
-    swapalloc.top = &swapalloc.swmap[conf.nswap];
-    swapalloc.alloc = swapalloc.swmap;
-    swapalloc.last = swapalloc.swmap;
-    swapalloc.free = conf.nswap;
-    iolist = xalloc(conf.nswppo*sizeof(Page*));
-    if(swapalloc.swmap == 0 || iolist == 0)
-        panic("swapinit: not enough memory");
-
-    swapimage.notext = 1;
-}
-@
-
-<<function trapinit0>>=
-/*
- * Minimal trap setup.  Just enough so that we can panic
- * on traps (bugs) during kernel initialization.
- * Called very early - malloc is not yet available.
- */
-void
-trapinit0(void)
-{
-    int d1, v;
-    ulong vaddr;
-    Segdesc *idt;
-
-    idt = (Segdesc*)IDTADDR;
-    vaddr = (ulong)vectortable;
-    for(v = 0; v < 256; v++){
-        d1 = (vaddr & 0xFFFF0000)|SEGP;
-        switch(v){
-
-        case VectorBPT:
-            d1 |= SEGPL(3)|SEGIG;
-            break;
-
-        case VectorSYSCALL:
-            d1 |= SEGPL(3)|SEGIG;
-            break;
-
-        default:
-            d1 |= SEGPL(0)|SEGIG;
-            break;
-        }
-        idt[v].d0 = (vaddr & 0xFFFF)|(KESEL<<16);
-        idt[v].d1 = d1;
-        vaddr += 6;
-    }
-}
-@ 
-
-
-<<function trapinit>>=
-void
-trapinit(void)
-{
-    /*
-     * Special traps.
-     * Syscall() is called directly without going through trap().
-     */
-    trapenable(VectorBPT, debugbpt, 0, "debugpt");
-    trapenable(VectorPF, fault386, 0, "fault386");
-    trapenable(Vector2F, doublefault, 0, "doublefault");
-    trapenable(Vector15, unexpected, 0, "unexpected");
-    nmienable();
-
-    addarchfile("irqalloc", 0444, irqallocread, nil);
-    trapinited = true;
-}
-@ 
-
-
-<<function schedinit>>=
-/*
- * Always splhi()'ed.
- */
-void
-schedinit(void)     /* never returns */
-{
-    Edf *e;
-
-    setlabel(&cpu->sched);
-    if(up) {
-        <<[[schedinit()]] optional real-time [[edfrecord()]]>>
-        //old: cpu->proc = nil;
-        // but now that on PC up = cpu->proc and not cpu->externup
-        // we can't do that anymore. Is there a place that rely on
-        // cpu->proc and cpu-externup to not be in sync?
-        switch(up->state) {
-        case Running:
-            ready(up);
-            break;
-        case Moribund:
-            up->state = Dead;
-           <<[[schedinit()]] optional real-time [[edfstop()]]>>
-            /*
-             * Holding locks from pexit:
-             *  procalloc
-             *  palloc
-             */
-            mmurelease(up);
-
-            up->qnext = procalloc.free;
-            procalloc.free = up;
-
-            unlock(&palloc);
-            unlock(&procalloc);
-            break;
-        }
-        up->cpu = nil;
-        updatecpu(up);
-
-        cpu->proc = nil;
-        up = nil; // same instruction than previous line on some archi (e.g. PC)
-    }
-    sched();
-}
-@ 
-
-
-\subsection{CPU identification}
-
-<<[[Cpu]] [[Arch]] cpuid fields>>=
-char  cpuidid[16];
-char* cpuidtype;
-int cpuidax;
-int cpuiddx;
-@
-
-<<function cpuidprint>>=
-void
-cpuidprint(void)
-{
-    int i;
-    char buf[128];
-
-    i = snprint(buf, sizeof buf, "cpu%d: %s%dMHz ", cpu->cpuno,
-        cpu->cpuno < 10? " ": "", cpu->cpumhz);
-    if(cpu->cpuidid[0])
-        i += sprint(buf+i, "%12.12s ", cpu->cpuidid);
-    seprint(buf+i, buf + sizeof buf - 1,
-        "%s (cpuid: AX 0x%4.4uX DX 0x%4.4uX)\n",
-        cpu->cpuidtype, cpu->cpuidax, cpu->cpuiddx);
-    print(buf);
-}
-@
-
 \subsection{Memory detection}
-
 
 <<struct Map>>=
 struct Map {
@@ -11342,29 +11207,186 @@ upareserve(ulong pa, int size)
 }
 @
 
-\subsection{Memory initialisation}
+\subsection{[[conf]] initialization}
 
-% rename? initkimage?
-<<function initseg>>=
+<<[[Conf]] other fields>>=
+ulong npage;    /* total physical pages of memory */
+
+// kpages = npage - upages
+ulong upages;   /* user page pool */ 
+ulong nimage;   /* number of page cache image headers */
+ulong ialloc;   /* max interrupt time allocation in bytes */
+@
+
+<<function confinit>>=
+// precondition: meminit() have initialized Conf.mem
 void
-initseg(void)
+confinit(void)
 {
-    KImage *i, *ie;
+        char *p;
+        int i, userpcnt;
+        ulong kpages;
 
-    imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
-    if (imagealloc.free == nil)
-        panic("initseg: no memory");
-    ie = &imagealloc.free[conf.nimage-1];
-    for(i = imagealloc.free; i < ie; i++)
-        i->next = i+1;
-    i->next = 0;
-    imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
-    imagealloc.szfreechan = NFREECHAN;
+        if(p = getconf("*kernelpercent"))
+                userpcnt = 100 - strtol(p, 0, 0);
+        else
+                userpcnt = 0;
+
+        conf.npage = 0;
+        for(i=0; i<nelem(conf.mem); i++)
+                conf.npage += conf.mem[i].npage;
+
+        conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
+        if(cpuserver)
+                conf.nproc *= 3;
+        if(conf.nproc > 2000)
+                conf.nproc = 2000;
+        conf.nimage = 200;
+        conf.nswap = conf.nproc*80;
+        conf.nswppo = 4096;
+
+        if(cpuserver) {
+                if(userpcnt < 10)
+                        userpcnt = 70;
+                kpages = conf.npage - (conf.npage*userpcnt)/100;
+
+                /*
+                 * Hack for the big boys. Only good while physmem < 4GB.
+                 * Give the kernel fixed max + enough to allocate the
+                 * page pool.
+                 * This is an overestimate as conf.upages < conf.npages.
+                 * The patch of nimage is a band-aid, scanning the whole
+                 * page list in imagereclaim just takes too long.
+                 */
+                if(kpages > (128*MB + conf.npage*sizeof(Page))/BY2PG){
+                        kpages = (128*MB + conf.npage*sizeof(Page))/BY2PG;
+                        conf.nimage = 2000;
+                        kpages += (conf.nproc*KSTACK)/BY2PG;
+                }
+        } else {
+                if(userpcnt < 10) {
+                        if(conf.npage*BY2PG < 16*MB)
+                                userpcnt = 40;
+                        else
+                                userpcnt = 80;
+                }
+                kpages = conf.npage - (conf.npage*userpcnt)/100;
+
+                /*
+                 * Make sure terminals with low memory get at least
+                 * 4MB on the first Image chunk allocation.
+                 */
+                if(conf.npage*BY2PG < 16*MB)
+                        imagmem->minarena = 4*1024*1024;
+        }
+
+        /*
+         * can't go past the end of virtual memory
+         * (ulong)-KZERO is 2^32 - KZERO
+         */
+        if(kpages > ((ulong)-KZERO)/BY2PG)
+                kpages = ((ulong)-KZERO)/BY2PG;
+
+        conf.upages = conf.npage - kpages;
+        conf.ialloc = (kpages/2)*BY2PG;
+
+        /*
+         * Guess how much is taken by the large permanent
+         * datastructures. Mntcache and Mntrpc are not accounted for
+         * (probably ~300KB).
+         */
+        kpages *= BY2PG;
+        kpages -= conf.upages*sizeof(Page)
+                + conf.nproc*sizeof(Proc)
+                + conf.nimage*sizeof(KImage)
+                + conf.nswap
+                + conf.nswppo*sizeof(Page);
+        mainmem->maxsize = kpages;
+        if(!cpuserver){
+                /*
+                 * give terminals lots of image memory, too; the dynamic
+                 * allocation will balance the load properly, hopefully.
+                 * be careful with 32-bit overflow.
+                 */
+                imagmem->maxsize = kpages;
+        }
 }
 @
 
+\subsection{[[idt]] initialization}
+
+<<function trapinit0>>=
+/*
+ * Minimal trap setup.  Just enough so that we can panic
+ * on traps (bugs) during kernel initialization.
+ * Called very early - malloc is not yet available.
+ */
+void
+trapinit0(void)
+{
+    int d1, v;
+    ulong vaddr;
+    Segdesc *idt;
+
+    idt = (Segdesc*)IDTADDR;
+    vaddr = (ulong)vectortable;
+    for(v = 0; v < 256; v++){
+        d1 = (vaddr & 0xFFFF0000)|SEGP;
+        switch(v){
+
+        case VectorBPT:
+            d1 |= SEGPL(3)|SEGIG;
+            break;
+
+        case VectorSYSCALL:
+            d1 |= SEGPL(3)|SEGIG;
+            break;
+
+        default:
+            d1 |= SEGPL(0)|SEGIG;
+            break;
+        }
+        idt[v].d0 = (vaddr & 0xFFFF)|(KESEL<<16);
+        idt[v].d1 = d1;
+        vaddr += 6;
+    }
+}
+@ 
+
+
+<<function trapinit>>=
+void
+trapinit(void)
+{
+    /*
+     * Special traps.
+     * Syscall() is called directly without going through trap().
+     */
+    trapenable(VectorBPT, debugbpt, 0, "debugpt");
+    trapenable(VectorPF, fault386, 0, "fault386");
+    trapenable(Vector2F, doublefault, 0, "doublefault");
+    trapenable(Vector15, unexpected, 0, "unexpected");
+    nmienable();
+
+    addarchfile("irqalloc", 0444, irqallocread, nil);
+    trapinited = true;
+}
+@ 
+
+
 \subsection{Virtual memory initialisation}
 
+<<function mmuinit0>>=
+void
+mmuinit0(void)
+{
+    // cpu->gdt should be CPU0GDT, see cpu0init
+    memmove(cpu->gdt, gdt, sizeof gdt); 
+}
+@
+
+% need xinit, cos mmuwalk possible call xpanalloc
+% todo simplify the code?
 <<function mmuinit>>=
 void
 mmuinit(void)
@@ -11395,7 +11417,11 @@ mmuinit(void)
      * than Intels in this regard).  Under VMware it pays off
      * a factor of about 10 to 100.
      */
-    memmove(cpu->gdt, gdt, sizeof gdt);
+
+    // we already did that in mmuinit0, but mmuinit is also called by
+    // the other processors which don't call mmuinit0 and which have
+    // a different cpu->gdt pointer.
+    memmove(cpu->gdt, gdt, sizeof gdt); 
     x = (ulong)cpu->tss;
     cpu->gdt[TSSSEG].d0 = (x<<16)|sizeof(Tss);
     cpu->gdt[TSSSEG].d1 = (x&0xFF000000)|((x>>16)&0xFF)|SEGTSS|SEGPL(0)|SEGP;
@@ -11469,6 +11495,177 @@ memglobal(void)
             }
         }
     }           
+}
+@
+
+\subsection{Memory initialisation}
+
+<<function xinit>>=
+void
+xinit(void)
+{
+    int i, n, upages, kpages;
+    ulong maxpages;
+    Confmem *m;
+    Pallocmem *pm;
+    Hole *h, *eh;
+
+    eh = &xlists.hole[Nhole-1];
+    for(h = xlists.hole; h < eh; h++)
+        h->link = h+1;
+
+    xlists.flist = xlists.hole;
+
+    upages = conf.upages;
+    kpages = conf.npage - upages;
+    pm = palloc.mem;
+    for(i=0; i<nelem(conf.mem); i++){
+        m = &conf.mem[i];
+        n = m->npage;
+        if(n > kpages)
+            n = kpages;
+        /* don't try to use non-KADDR-able memory for kernel */
+        maxpages = cankaddr(m->base)/BY2PG;
+        if(n > maxpages)
+            n = maxpages;
+
+        /* first give to kernel */
+        if(n > 0){
+            m->kbase = (ulong)KADDR(m->base);
+            m->klimit = (ulong)KADDR(m->base+n*BY2PG);
+            xhole(m->base, n*BY2PG);
+            kpages -= n;
+        }
+        /* if anything left over, give to user */
+        if(n < m->npage){
+            if(pm >= palloc.mem+nelem(palloc.mem)){
+                print("xinit: losing %lud pages\n", m->npage-n);
+                continue;
+            }
+            pm->base = m->base+n*BY2PG;
+            pm->npage = m->npage - n;
+            pm++;
+        }
+    }
+//  xsummary();         /* call it from main if desired */
+}
+@
+
+%TODO: rename procinit!! and rename other in devprocinit
+<<function procinit0>>=
+void
+procinit0(void)     /* bad planning - clashes with devproc.c */
+{
+    Proc *p;
+    int i;
+
+    procalloc.free = xalloc(conf.nproc*sizeof(Proc));
+    if(procalloc.free == nil){
+        xsummary();
+        panic("cannot allocate %lud procs (%ludMB)\n", 
+                      conf.nproc, conf.nproc*sizeof(Proc)/(1024*1024));
+    }
+    procalloc.arena = procalloc.free;
+
+    p = procalloc.free;
+    for(i=0; i<conf.nproc-1; i++,p++)
+        p->qnext = p+1;
+    p->qnext = 0;
+}
+@ 
+
+% TODO: rename initkimage?
+<<function initseg>>=
+void
+initseg(void)
+{
+    KImage *i, *ie;
+
+    imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
+    if (imagealloc.free == nil)
+        panic("initseg: no memory");
+    ie = &imagealloc.free[conf.nimage-1];
+    for(i = imagealloc.free; i < ie; i++)
+        i->next = i+1;
+    i->next = 0;
+    imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
+    imagealloc.szfreechan = NFREECHAN;
+}
+@
+
+
+<<function pageinit>>=
+void
+pageinit(void)
+{
+    int color, i, j;
+    Page *p;
+    Pallocmem *pm;
+    ulong m, np, k, vkb, pkb;
+
+    np = 0;
+    for(i=0; i<nelem(palloc.mem); i++){
+        pm = &palloc.mem[i];
+        np += pm->npage;
+    }
+    palloc.pages = xalloc(np*sizeof(Page));
+    if(palloc.pages == 0)
+        panic("pageinit");
+
+    color = 0;
+    palloc.head = palloc.pages;
+    p = palloc.head;
+    for(i=0; i<nelem(palloc.mem); i++){
+        pm = &palloc.mem[i];
+        for(j=0; j<pm->npage; j++){
+            p->prev = p-1;
+            p->next = p+1;
+            p->pa = pm->base+j*BY2PG;
+            p->color = color;
+            palloc.freecount++;
+            color = (color+1)%NCOLOR;
+            p++;
+        }
+    }
+    palloc.tail = p - 1;
+    palloc.head->prev = 0;
+    palloc.tail->next = 0;
+
+    palloc.user = p - palloc.pages; // TODO? should be np too no?
+    pkb = palloc.user*BY2PG/1024;
+    vkb = pkb + (conf.nswap*BY2PG)/1024;
+
+    /* Paging numbers */
+    swapalloc.highwater = (palloc.user*5)/100;
+    swapalloc.headroom = swapalloc.highwater + (swapalloc.highwater/4);
+
+    m = 0;
+    for(i=0; i<nelem(conf.mem); i++)
+        if(conf.mem[i].npage)
+            m += conf.mem[i].npage*BY2PG;
+    k = PGROUND(end - (char*)KTZERO);
+    print("%ldM memory: ", (m+k+1024*1024-1)/(1024*1024));
+    print("%ldM kernel data, ", (m+k-pkb*1024+1024*1024-1)/(1024*1024));
+    print("%ldM user, ", pkb/1024);
+    print("%ldM swap\n", vkb/1024);
+}
+@
+
+
+<<function swapinit>>=
+void
+swapinit(void)
+{
+    swapalloc.swmap = xalloc(conf.nswap);
+    swapalloc.top = &swapalloc.swmap[conf.nswap];
+    swapalloc.alloc = swapalloc.swmap;
+    swapalloc.last = swapalloc.swmap;
+    swapalloc.free = conf.nswap;
+    iolist = xalloc(conf.nswppo*sizeof(Page*));
+    if(swapalloc.swmap == 0 || iolist == 0)
+        panic("swapinit: not enough memory");
+
+    swapimage.notext = 1;
 }
 @
 
@@ -11636,13 +11833,57 @@ TEXT touser(SB), $0
 @ 
 
 
+\section{Scheduler initialization}
+
+<<function schedinit>>=
+/*
+ * Always splhi()'ed.
+ */
+void
+schedinit(void)     /* never returns */
+{
+    Edf *e;
+
+    setlabel(&cpu->sched);
+    if(up) {
+        <<[[schedinit()]] optional real-time [[edfrecord()]]>>
+        //old: cpu->proc = nil;
+        // but now that on PC up = cpu->proc and not cpu->externup
+        // we can't do that anymore. Is there a place that rely on
+        // cpu->proc and cpu-externup to not be in sync?
+        switch(up->state) {
+        case Running:
+            ready(up);
+            break;
+        case Moribund:
+            up->state = Dead;
+           <<[[schedinit()]] optional real-time [[edfstop()]]>>
+            /*
+             * Holding locks from pexit:
+             *  procalloc
+             *  palloc
+             */
+            mmurelease(up);
+
+            up->qnext = procalloc.free;
+            procalloc.free = up;
+
+            unlock(&palloc);
+            unlock(&procalloc);
+            break;
+        }
+        up->cpu = nil;
+        updatecpu(up);
+
+        cpu->proc = nil;
+        up = nil; // same instruction than previous line on some archi (e.g. PC)
+    }
+    sched();
+}
+@ 
+
 \section{Booting the user}
 % see section on Userspace system programs
-
-
-
-
-
 
 
 \chapter{Files}
@@ -11657,8 +11898,8 @@ TEXT touser(SB), $0
 @ 
 
 % note that files are used for many things, including devices!!
-% plan has lots of actually file servers
-%pike: interface is not everything is not a file, but everything is
+% plan9 has actually lots of file servers
+%pike: interface is not everything is a file, but everything is
 % a file server interface!
 
 \section{Overview}
@@ -11689,11 +11930,11 @@ enum
 <<struct Chanalloc>>=
 struct Chanalloc
 {
-    int fid;
-
+    int fid; // could be a Counter, but already have a Lock anyway
+    //list<ref<Chan>> ???
     Chan    *free;
+    //list<ref<Chan>> ???
     Chan    *list;
-
     // extra
     Lock;
 };
@@ -14504,6 +14745,17 @@ sysstat(ulong *arg)
 
 \section{[[sysseek()]]}
 
+<<syscall seek>>=
+long
+sysseek(ulong *arg)
+{
+    validaddr(arg[0], BY2V, 1);
+    sseek(arg);
+    return 0;
+}
+@
+
+
 <<function sseek>>=
 static void
 sseek(ulong *arg)
@@ -14576,16 +14828,6 @@ sseek(ulong *arg)
 @
 
 
-<<syscall seek>>=
-long
-sysseek(ulong *arg)
-{
-    validaddr(arg[0], BY2V, 1);
-    sseek(arg);
-    return 0;
-}
-@
-
 
 \chapter{Directories}
 
@@ -14624,16 +14866,19 @@ isdir(Chan *c)
 <<struct Path>>=
 struct Path
 {
-  Ref;
   char  *s;
   Chan  **mtpt;     /* mtpt history */
   int len;      /* strlen(s) */
   int alen;     /* allocated length of s */
   int mlen;     /* number of path elements */
   int malen;      /* allocated length of mtpt */
+
+  // extra
+  Ref;
 };
 @
 
+% could delete, just used for statistics but never made accessible anywhere
 <<global npath>>=
 Ref npath;
 @
@@ -15175,6 +15420,8 @@ createdir(Chan *c, Mhead *m)
 
 
 \section{Union directories}
+
+
 <<[[Chan]] other fields>>=
 Mhead*  umh;      /* mount point that derived Chan; used in unionread */
 Chan* umc;      /* channel in union; held for union read */
@@ -15265,6 +15512,7 @@ enum
 @
 
 
+% another big function ...
 <<function namec>>=
 /*
  * Turn a name into a channel.
@@ -15852,6 +16100,7 @@ sysremove(ulong *arg)
 
 
 <<syscall chdir>>=
+// int chdir(char *dirname)
 long
 syschdir(ulong *arg)
 {
@@ -15870,6 +16119,7 @@ syschdir(ulong *arg)
 \section {[[sysfd2path()]] (a.k.a [[pwd()]])}
 
 <<syscall fd2path>>=
+// int fd2path(int fd, char *buf, int nbuf)
 long
 sysfd2path(ulong *arg)
 {
@@ -19091,7 +19341,7 @@ consclose(Chan *c)
     case Qconsctl:
         if(c->flag&COPEN){
             if(decref(&kbd.ctl) == 0)
-                kbd.raw = 0;
+                kbd.raw = false;
         }
         break;
 
@@ -20044,6 +20294,10 @@ addclock0link(void (*f)(void), Tms ms)
 
 \section{[[syssleep()]]}
 
+<<[[Proc]] synchronization fields>>=
+Rendez  sleep;    /* place for syssleep/debug/tsleep */
+@ 
+
 <<syscall sleep>>=
 long
 syssleep(ulong *arg)
@@ -20062,6 +20316,7 @@ syssleep(ulong *arg)
 }
 @ 
 
+% time field?
 <<[[Proc]] other fields>>=
 Timer;      /* For tsleep and real-time */
 Rendez  *trend;
@@ -23744,7 +23999,7 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
             s->steal--;
             nexterror();
         }
-        if(fixfault(s, offset, read, 0) == 0)
+        if(fixfault(s, offset, read, /*putmmu*/false) == 0)
             break;
         poperror();
         s->steal--;
@@ -24663,6 +24918,8 @@ kmesgputs(char *str, int n)
 Queue*  kprintoq;       /* console output, for /dev/kprint */
 @ 
 
+% why use tas() on it? why not use a Ref? because core debugging?
+% so don't want to rely on anything fancy?
 <<global kprintinuse>>=
 ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 @
@@ -25535,6 +25792,9 @@ werrstr(char *fmt, ...)
 
 \section{Memory areas operations}
 
+% ugly that memmove is actually not a move but a copy, and ugly
+% that take dest first and src second ...
+% actually memmove can handle when memory area overlap!
 <<lib.h mem functions decl>>=
 extern  void* memccpy(void*, void*, int, ulong);
 extern  void* memset(void*, int, ulong);
@@ -25807,51 +26067,55 @@ extern  int utfnlen(char*, long);
 \label{sec:glossary}
 
 \begin{verbatim}
-up = user process
+UP = User Process
 
-pc = program counter
+PC = Program Counter
 
-spl = set priority level
+SPL = Set Priority Level
 
 ilock = interrupt safe version of lock (disable interruptions)
 
-umb = upper memory block
+UMB = Upper Memory Block
 
 RMAP = RAM map
 
-PDB = page directory base
+PDB = Page Directory Base
 
-PTE = page table entry
+PTE = Page Table Entry
 
-tod = time of day
+TOD = Time Of Day
 
-ap = application processor
+AP = Application Processor
 
 EDF = Earliest Deadline First
 http://en.wikipedia.org/wiki/Earliest_deadline_first_scheduling
 
-RPC = remote procedure call
+RPC = Remote Procedure Call
 
-EGRP = Environment group
+EGRP = Environment GRouP
 
-FGRP = File descriptor Group (chans)
+FGRP = File descriptor GRouP (chans)
 
-PGRP = Process Group (namespace)
+PGRP = Process GRouP (namespace)
 
-VNO = Vector number (interrupt)
+VNO = Vector Number (interrupt)
 
 ISR = Interrupt Service Routine
 
 TSC = Time Stamp Counter
 http://en.wikipedia.org/wiki/Time_Stamp_Counter
 
-intr = Interrupt (not INT, probably to avoid ambiguity with integer)
+INTR = INTeRrupt (not INT, probably to avoid ambiguity with integer)
 
 APIC = Advanded Programmable Interrupt Controller (a next gen 8259)
 
 ACPI = Advanced Configuration & Power Interface
 
-QID = unique identifier
+QID = uniQue IDentifier (uid is taken for user id)
+
+VPT = Virtual Page Table
+
+GDT = Global Descriptor Table
 
 \end{verbatim}
 %cistrcmp= ??
