@@ -810,7 +810,7 @@ consclose(Chan *c)
     case Qconsctl:
         if(c->flag&COPEN){
             if(decref(&kbd.ctl) == 0)
-                kbd.raw = 0;
+                kbd.raw = false;
         }
         break;
 

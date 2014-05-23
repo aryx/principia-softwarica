@@ -687,8 +687,9 @@ extern void checkpages(void);
 static void
 fault386(Ureg* ureg, void*)
 {
-    ulong addr;
-    int read, user, n, insyscall;
+    ulong addr; // could be kernel (virtual) address or user (virtual) address
+    bool read, insyscall, user;
+    int n; // ret_code
     char buf[ERRMAX];
 
     addr = getcr2();
@@ -707,8 +708,10 @@ fault386(Ureg* ureg, void*)
         panic("user fault: up=0 pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
 
     insyscall = up->insyscall;
-    up->insyscall = true;
-    n = fault(addr, read);
+    up->insyscall = true; // really?
+
+    n = fault(addr, read); // portable code
+
     if(n < 0){
         if(!user){
             dumpregs(ureg);

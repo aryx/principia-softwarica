@@ -1591,7 +1591,7 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
             s->steal--;
             nexterror();
         }
-        if(fixfault(s, offset, read, 0) == 0)
+        if(fixfault(s, offset, read, /*putmmu*/false) == 0)
             break;
         poperror();
         s->steal--;

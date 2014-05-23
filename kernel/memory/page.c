@@ -168,7 +168,7 @@ newpage(bool clear, Segment **s, ulong va)
         dontalloc = false;
         if(s && *s) {
             qunlock(&((*s)->lk));
-            *s = nil;
+            *s = nil;// !!
             dontalloc = true;
         }
         qlock(&palloc.pwait);   /* Hold memory requesters here */

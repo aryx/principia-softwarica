@@ -14,7 +14,7 @@ void        pio(Segment *, ulong, ulong, Page **);
 
 /*s: function fault */
 int
-fault(ulong addr, bool read)
+fault(virt_addr addr, bool read)
 {
     Segment *s;
     char *sps;
@@ -30,8 +30,8 @@ fault(ulong addr, bool read)
 
     cpu->pfault++;
     for(;;) {
-        s = seg(up, addr, 1);       /* leaves s->lk qlocked if seg != nil */
-        if(s == 0) {
+        s = seg(up, addr, /*dolock*/true); /* leaves s->lk qlocked if seg != nil */
+        if(s == nil) {
             up->psstate = sps;
             return -1;
         }
@@ -42,8 +42,10 @@ fault(ulong addr, bool read)
             return -1;
         }
 
-        if(fixfault(s, addr, read, 1) == 0) /* qunlocks s->lk */
+        if(fixfault(s, addr, read, /*putmmu*/true) == 0) /* qunlocks s->lk */
             break;
+
+        // else? try again?
     }
 
     up->psstate = sps;
@@ -75,17 +77,18 @@ ulong   addr2check;
 
 /*s: function fixfault */
 int
-fixfault(Segment *s, ulong addr, int read, int doputmmu)
+fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 {
     int type;
     int ref;
     Pte **p, *etp;
-    ulong mmuphys=0, soff;
+    ulong mmuphys=0;
+    ulong soff;
     Page **pg, *lkp, *new;
     Page *(*fn)(Segment*, ulong);
 
     addr &= ~(BY2PG-1);
-    soff = addr-s->base;
+    soff = addr - s->base;
     p = &s->map[soff/PTEMAPMEM];
     if(*p == 0)
         *p = ptealloc();
@@ -117,9 +120,8 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
     case SG_STACK:
         if(*pg == 0) {
             new = newpage(1, &s, addr);
-            if(s == 0)
+            if(s == nil) //?? when can be nil at exit?
                 return -1;
-
             *pg = new;
         }
         goto common;
@@ -154,7 +156,7 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
         unlock(lkp);
         if(ref > 1){
             new = newpage(0, &s, addr);
-            if(s == 0)
+            if(s == nil)
                 return -1;
             *pg = new;
             copypage(lkp, *pg);
@@ -189,7 +191,7 @@ fixfault(Segment *s, ulong addr, int read, int doputmmu)
     if(doputmmu)
         putmmu(addr, mmuphys, *pg);
 
-    return 0;
+    return 0; // OK
 }
 /*e: function fixfault */
 
@@ -208,7 +210,7 @@ pio(Segment *s, ulong addr, ulong soff, Page **p)
 
 retry:
     loadrec = *p;
-    if(loadrec == 0) {  /* from a text/data image */
+    if(loadrec == nil) {  /* from a text/data image */
         daddr = s->fstart+soff;
         new = lookpage(s->image, daddr);
         if(new != nil) {
@@ -407,6 +409,7 @@ checkpages(void)
         return;
 
     checked = 0;
+    // foreach(up->seg)
     for(sp=up->seg, ep=&up->seg[NSEG]; sp<ep; sp++){
         s = *sp;
         if(s == nil)
@@ -415,10 +418,10 @@ checkpages(void)
         for(addr=s->base; addr<s->top; addr+=BY2PG){
             off = addr - s->base;
             p = s->map[off/PTEMAPMEM];
-            if(p == 0)
+            if(p == nil)
                 continue;
             pg = p->pages[(off&(PTEMAPMEM-1))/BY2PG];
-            if(pg == 0 || pagedout(pg))
+            if(pg == nil || pagedout(pg))
                 continue;
             checkmmu(addr, pg->pa);
             checked++;

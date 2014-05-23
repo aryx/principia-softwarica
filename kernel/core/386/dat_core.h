@@ -38,8 +38,8 @@ struct Tss {
 /*s: struct Segdesc */
 struct Segdesc
 {
-    ulong d0;
-    ulong d1;
+    ulong d0; // ??
+    ulong d1; // ??
 };
 /*e: struct Segdesc */
 
@@ -52,9 +52,9 @@ struct ArchCpu {
     int cpuiddx;
     /*e: [[Cpu]] [[Arch]] cpuid fields */
     /*s: [[Cpu]] [[Arch]] other fields */
+    // array<Segdesc>
     Segdesc *gdt;     /* gdt for this processor */
     /*x: [[Cpu]] [[Arch]] other fields */
-    // TODO: have a ArchCpuMMU like in bcm/
     kern_addr2  pdb;      /* page directory base for this processor (va) */
     Page* pdbpool;
     int pdbcnt;

@@ -33,11 +33,11 @@ enum
 /*s: struct Chanalloc */
 struct Chanalloc
 {
-    int fid;
-
+    int fid; // could be a Counter, but already have a Lock anyway
+    //list<ref<Chan>> ???
     Chan    *free;
+    //list<ref<Chan>> ???
     Chan    *list;
-
     // extra
     Lock;
 };

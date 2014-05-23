@@ -188,13 +188,15 @@ struct Mnt
 /*s: struct Path */
 struct Path
 {
-  Ref;
   char  *s;
   Chan  **mtpt;     /* mtpt history */
   int len;      /* strlen(s) */
   int alen;     /* allocated length of s */
   int mlen;     /* number of path elements */
   int malen;      /* allocated length of mtpt */
+
+  // extra
+  Ref;
 };
 /*e: struct Path */
 

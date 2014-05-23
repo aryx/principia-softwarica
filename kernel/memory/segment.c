@@ -487,7 +487,7 @@ ibrk(ulong addr, int seg)
     if(s == 0)
         error(Ebadarg);
 
-    if(addr == 0)
+    if(addr == nilptr)
         return s->base;
 
     qlock(&s->lk);

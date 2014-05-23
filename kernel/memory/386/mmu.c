@@ -49,9 +49,11 @@
  */
 #define DATASEGM(p)     { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
 #define EXECSEGM(p)     { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-#define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
 #define TSSSEGM(b,p)    { ((b)<<16)|sizeof(Tss),\
               ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
+/*s: macros other xxxSEGM */
+#define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
+/*e: macros other xxxSEGM */
 /*e: macros xxxSEGM */
 
 /*s: global gdt */
@@ -63,7 +65,9 @@ Segdesc gdt[NGDT] =
 [UDSEG]     DATASEGM(3),        /* user data/stack */
 [UESEG]     EXECSEGM(3),        /* user code */
 [TSSSEG]    TSSSEGM(0,0),       /* tss segment */
+/*s: [[gdt]] other elements */
 [KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
+/*e: [[gdt]] other elements */
 };
 /*e: global gdt */
 
@@ -84,7 +88,8 @@ static void pdbunmap(ulong*, ulong, int);
 void
 mmuinit0(void)
 {
-    memmove(cpu->gdt, gdt, sizeof gdt);
+    // cpu->gdt should be CPU0GDT, see cpu0init
+    memmove(cpu->gdt, gdt, sizeof gdt); 
 }
 /*e: function mmuinit0 */
 
@@ -122,7 +127,11 @@ mmuinit(void)
      * than Intels in this regard).  Under VMware it pays off
      * a factor of about 10 to 100.
      */
-    memmove(cpu->gdt, gdt, sizeof gdt);
+
+    // we already did that in mmuinit0, but mmuinit is also called by
+    // the other processors which don't call mmuinit0 and which have
+    // a different cpu->gdt pointer.
+    memmove(cpu->gdt, gdt, sizeof gdt); 
     x = (ulong)cpu->tss;
     cpu->gdt[TSSSEG].d0 = (x<<16)|sizeof(Tss);
     cpu->gdt[TSSSEG].d1 = (x&0xFF000000)|((x>>16)&0xFF)|SEGTSS|SEGPL(0)|SEGP;
@@ -262,7 +271,7 @@ mmupdballoc(void)
 /*e: function mmupdballoc */
 
 /*s: function mmupdbfree */
-//@Scheck: not deaded, called below
+//@Scheck: not dead
 static void
 mmupdbfree(Proc *proc, Page *p)
 {

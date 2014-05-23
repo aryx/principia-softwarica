@@ -101,7 +101,7 @@ struct Vctl {
     void* a;      /* argument to call it with */
   
     char  name[KNAMELEN];   /* of driver */
-    int tbdf; //?
+    int tbdf; // /* type+bus+device+function */ ??
   
     // interrupt service routine
     int (*isr)(int);    /* get isr bit for this irq */

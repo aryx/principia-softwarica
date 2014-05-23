@@ -536,17 +536,17 @@ struct Proc
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
     /*x: [[Proc]] synchronization fields */
+    Rendez  *r;   /* rendezvous point slept on */
+    Lock  rlock;    /* sync sleep/wakeup with postnote */
+    /*x: [[Proc]] synchronization fields */
     Rgrp  *rgrp;    /* Rendez group */
 
     uintptr rendtag;  /* Tag for rendezvous */
     uintptr rendval;  /* Value for rendezvous */
     //??
     Proc  *rendhash;  /* Hash list for tag values */
-
-    Rendez  *r;   /* rendezvous point slept on */
-    Rendez  sleep;    /* place for syssleep/debug */
-
-    Lock  rlock;    /* sync sleep/wakeup with postnote */
+    /*x: [[Proc]] synchronization fields */
+    Rendez  sleep;    /* place for syssleep/debug/tsleep */
     /*e: [[Proc]] synchronization fields */
 //--------------------------------------------------------------------
 // Error managment
@@ -582,7 +582,7 @@ struct Proc
     vlong pcycles;
     /*e: [[Proc]] stats and profiling fields */
 //--------------------------------------------------------------------
-// Debugging
+// Debugging (the kernel itself)
 //--------------------------------------------------------------------
     /*s: [[Proc]] debugging fields */
     Lock* lastlock;

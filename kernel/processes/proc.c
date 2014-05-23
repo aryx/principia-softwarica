@@ -519,10 +519,12 @@ proc_ready(Proc *p)
     void (*pt)(Proc*, int, vlong);
 
     s = splhi();
-    if(edfready(p)){
-        splx(s);
-        return;
-    }
+    /*s: [[ready()]] optional [[edfready()]] for real-time scheduling */
+        if(edfready(p)){
+            splx(s);
+            return;
+        }
+    /*e: [[ready()]] optional [[edfready()]] for real-time scheduling */
 
     if(up != p && (p->wired == nil || p->wired == cpu))
         cpu->readied = p; /* group scheduling */
@@ -616,7 +618,7 @@ runproc(void)
     start = perfticks();
 
     /* cooperative scheduling until the clock ticks */
-    if((p=cpu->readied) && p->cpu==0 && p->state==Ready
+    if((p=cpu->readied) && p->cpu==nil && p->state==Ready
     && (p->wired == nil || p->wired == cpu)
     && runq[Nrq-1].head == nil && runq[Nrq-2].head == nil){
         skipscheds++;
@@ -886,7 +888,7 @@ procinit0(void)     /* bad planning - clashes with devproc.c */
  *  and p->r synchronized.
  */
 void
-proc_sleep(Rendez *r, int (*f)(void*), void *arg)
+proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
 {
     int s;
     void (*pt)(Proc*, int, vlong);
@@ -1028,7 +1030,6 @@ proc_wakeup(Rendez *r)
     int s;
 
     s = splhi();
-
     lock(r);
     p = r->p;
 
@@ -1044,9 +1045,7 @@ proc_wakeup(Rendez *r)
         unlock(&p->rlock);
     }
     unlock(r);
-
     splx(s);
-
     return p;
 }
 /*e: function wakeup */

@@ -58,19 +58,22 @@
 /*s: constant KTZERO */
 #define KTZERO    (KZERO+0x100000)  /* first address in kernel text */
 /*e: constant KTZERO */
-#define VPT   (KZERO-VPTSIZE)
+
 #define VPTSIZE   BY2XPG
+#define VPT   (KZERO-VPTSIZE)
 #define NVPT    (VPTSIZE/BY2WD)
-#define KMAP    (VPT-KMAPSIZE)
 #define KMAPSIZE  BY2XPG
-#define VMAP    (KMAP-VMAPSIZE)
+#define KMAP    (VPT-KMAPSIZE)
 #define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
+#define VMAP    (KMAP-VMAPSIZE)
+
 /*s: constant UZERO */
 #define UZERO   0     /* base of user address space */
 /*e: constant UZERO */
 /*s: constant UTZERO */
 #define UTZERO    (UZERO+BY2PG)   /* first address in user text */
 /*e: constant UTZERO */
+
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
 #define USTKTOP   (VMAP-BY2PG)    /* byte just beyond user stack */
 #define USTKSIZE  (16*1024*1024)    /* size of user stack */
@@ -90,6 +93,7 @@
 #define IDTADDR   (KZERO+0x10800)   /* idt */
 /*e: constant IDTADDR */
 #define REBOOTADDR  (0x11000)   /* reboot code - physical address */
+
 #define CPU0PDB   (KZERO+0x12000)   /* bootstrap processor PDB */
 #define CPU0PTE   (KZERO+0x13000)   /* bootstrap processor PTE's for 0-4MB */
 #define CPU0GDT   (KZERO+0x14000)   /* bootstrap processor GDT */
@@ -116,12 +120,12 @@
 #define UDSEG 3 /* user data/stack */
 #define UESEG 4 /* user executable */
 #define TSSSEG  5 /* task segment */
-
+/*s: constant x86 other segments */
 #define APMCSEG   6 /* APM code segment */
 #define APMCSEG16 7 /* APM 16-bit code segment */
 #define APMDSEG   8 /* APM data segment */
 #define KESEG16   9 /* kernel executable 16-bit */
-
+/*e: constant x86 other segments */
 #define NGDT    10  /* number of GDT entries required */
 /*e: constant x86 segments */
 /* #define  APM40SEG  8 /* APM segment 0x40 */
@@ -130,19 +134,26 @@
 #define SELGDT  (0<<2)  /* selector is in gdt */
 #define SELLDT  (1<<2)  /* selector is in ldt */
 
+/*s: macro SELECTOR */
 #define SELECTOR(i, t, p) (((i)<<3) | (t) | (p))
+/*e: macro SELECTOR */
 
+/*s: constant x86 segment selectors */
 #define NULLSEL SELECTOR(NULLSEG, SELGDT, 0)
 #define KDSEL SELECTOR(KDSEG, SELGDT, 0)
 #define KESEL SELECTOR(KESEG, SELGDT, 0)
 #define UESEL SELECTOR(UESEG, SELGDT, 3)
 #define UDSEL SELECTOR(UDSEG, SELGDT, 3)
 #define TSSSEL  SELECTOR(TSSSEG, SELGDT, 0)
+/*s: constant x86 other segment selectors */
 #define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
 #define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
 #define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
 /* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
+/*e: constant x86 other segment selectors */
+/*e: constant x86 segment selectors */
 
+/*s: constant segment field extractors */
 /*
  *  fields in segment descriptors
  */
@@ -162,6 +173,7 @@
 #define SEGW  (1<<9)    /* writable (for data/stack) */
 #define SEGR  (1<<9)    /* readable (for code) */
 #define SEGD  (1<<22)   /* default 1==32bit (for code) */
+/*e: constant segment field extractors */
 
 /*
  *  virtual MMU
@@ -172,8 +184,12 @@
 /*s: constant PTEPERTAB */
 #define PTEPERTAB (PTEMAPMEM/BY2PG)
 /*e: constant PTEPERTAB */
+/*s: constant SEGMAPSIZE */
 #define SEGMAPSIZE  1984
+/*e: constant SEGMAPSIZE */
+/*s: constant SSEGMAPSIZE */
 #define SSEGMAPSIZE 16 // small segmap
+/*e: constant SSEGMAPSIZE */
 #define PPN(x)    ((x)&~(BY2PG-1))
 
 /*

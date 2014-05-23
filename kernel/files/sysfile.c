@@ -131,6 +131,7 @@ newfd2(int fd[2], Chan *c[2])
 
 
 /*s: syscall fd2path */
+// int fd2path(int fd, char *buf, int nbuf)
 long
 sysfd2path(ulong *arg)
 {
@@ -890,6 +891,7 @@ sysstat(ulong *arg)
 /*e: syscall stat */
 
 /*s: syscall chdir */
+// int chdir(char *dirname)
 long
 syschdir(ulong *arg)
 {
