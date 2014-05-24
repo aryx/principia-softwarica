@@ -130,7 +130,7 @@ semwakeup(Segment *s, long *a, long n)
     lock(&s->sema);
     for(p=s->sema.next; p!=&s->sema && n>0; p=p->next){
         if(p->addr == a && p->waiting){
-            p->waiting = 0;
+            p->waiting = false;
             coherence();
             wakeup(p);
             n--;
@@ -157,21 +157,21 @@ semrelease(Segment *s, long *addr, long delta)
 
 /*s: function canacquire */
 /* Try to acquire semaphore using compare-and-swap */
-static int
+static bool
 canacquire(long *addr)
 {
     long value;
     
     while((value=*addr) > 0)
         if(cmpswap(addr, value, value-1))
-            return 1;
-    return 0;
+            return true;
+    return false;
 }       
 /*e: function canacquire */
 
 /*s: function semawoke */
 /* Should we wake up? */
-static int
+static bool
 semawoke(void *p)
 {
     coherence();
@@ -181,24 +181,24 @@ semawoke(void *p)
 
 /*s: function semacquire */
 /* Acquire semaphore (subtract 1). */
-static int
+static bool
 semacquire(Segment *s, long *addr, bool block)
 {
     int acquired;
     Sema phore;
 
     if(canacquire(addr))
-        return 1;
+        return true;
     if(!block)
-        return 0;
+        return false;
 
-    acquired = 0;
+    acquired = false;
     semqueue(s, addr, &phore);
     for(;;){
-        phore.waiting = 1;
+        phore.waiting = true;
         coherence();
         if(canacquire(addr)){
-            acquired = 1;
+            acquired = true;
             break;
         }
         if(waserror())
@@ -212,13 +212,13 @@ semacquire(Segment *s, long *addr, bool block)
         semwakeup(s, addr, 1);
     if(!acquired)
         nexterror();
-    return 1;
+    return false;
 }
 /*e: function semacquire */
 
 /*s: function tsemacquire */
 /* Acquire semaphore or time-out */
-static int
+static bool
 tsemacquire(Segment *s, long *addr, ulong ms)
 {
     int acquired, timedout;
@@ -226,16 +226,16 @@ tsemacquire(Segment *s, long *addr, ulong ms)
     Sema phore;
 
     if(canacquire(addr))
-        return 1;
+        return true;
     if(ms == 0)
-        return 0;
-    acquired = timedout = 0;
+        return false;
+    acquired = timedout = false;
     semqueue(s, addr, &phore);
     for(;;){
-        phore.waiting = 1;
+        phore.waiting = true;
         coherence();
         if(canacquire(addr)){
-            acquired = 1;
+            acquired = true;
             break;
         }
         if(waserror())
@@ -245,7 +245,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
         elms = TK2MS(cpu->ticks - t);
         poperror();
         if(elms >= ms){
-            timedout = 1;
+            timedout = true;
             break;
         }
         ms -= elms;
@@ -255,10 +255,10 @@ tsemacquire(Segment *s, long *addr, ulong ms)
     if(!phore.waiting)
         semwakeup(s, addr, 1);
     if(timedout)
-        return 0;
+        return false;
     if(!acquired)
         nexterror();
-    return 1;
+    return false;
 }
 /*e: function tsemacquire */
 

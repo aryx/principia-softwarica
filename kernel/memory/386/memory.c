@@ -224,7 +224,7 @@ mapalloc(RMap* rmap, ulong addr, int size, int align)
     }
     unlock(rmap);
 
-    return 0;
+    return nilptr;
 }
 /*e: function mapalloc */
 
@@ -886,7 +886,7 @@ meminit(void)
 /*
  * Allocate memory from the upper memory blocks.
  */
-ulong
+kern_addr
 umbmalloc(ulong addr, int size, int align)
 {
     ulong a;
@@ -894,7 +894,7 @@ umbmalloc(ulong addr, int size, int align)
     if(a = mapalloc(&rmapumb, addr, size, align))
         return (ulong)KADDR(a);
 
-    return 0;
+    return nilptr;
 }
 /*e: function umbmalloc */
 

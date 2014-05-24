@@ -1123,7 +1123,7 @@ createdir(Chan *c, Mhead *m)
         }
     }
     error(Enocreate);
-    return 0;
+    return nil; // not reached
 }
 /*e: function createdir */
 

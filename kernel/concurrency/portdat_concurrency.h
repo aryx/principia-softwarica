@@ -105,7 +105,7 @@ struct Rendez
 struct Sema
 {
     long  *addr; // value stored in user space!
-    int waiting;
+    bool waiting;
   
     //list<Sema> of Segment.sema
     Sema  *next;

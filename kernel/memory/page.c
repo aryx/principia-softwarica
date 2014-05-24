@@ -284,7 +284,7 @@ auxpage(void)
     p = palloc.head;
     if(palloc.freecount < swapalloc.highwater) {
         unlock(&palloc);
-        return 0;
+        return nil;
     }
     pageunchain(p);
 
@@ -501,7 +501,7 @@ lookpage(KImage *i, ulong daddr)
             if(f->image != i || f->daddr != daddr) {
                 unlock(f);
                 unlock(&palloc);
-                return 0;
+                return nil;
             }
             if(++f->ref == 1)
                 pageunchain(f);
@@ -513,7 +513,7 @@ lookpage(KImage *i, ulong daddr)
     }
     unlock(&palloc.hashlock);
 
-    return 0;
+    return nil;
 }
 /*e: function lookpage */
 

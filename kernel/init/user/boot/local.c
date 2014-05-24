@@ -3,7 +3,7 @@
 #include <libc.h>
 #include "../boot/boot.h"
 
-int
+void
 connectlocal(void)
 {
   int fd;
@@ -19,6 +19,6 @@ connectlocal(void)
   run("/boot/dossrv", nil);
   run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC0/dos", nil);
   
-  return 0;
+  return;
 }
 /*e: local.c */

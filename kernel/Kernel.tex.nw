@@ -3095,7 +3095,7 @@ auxpage(void)
     p = palloc.head;
     if(palloc.freecount < swapalloc.highwater) {
         unlock(&palloc);
-        return 0;
+        return nil;
     }
     pageunchain(p);
 
@@ -3341,7 +3341,7 @@ lookpage(KImage *i, ulong daddr)
             if(f->image != i || f->daddr != daddr) {
                 unlock(f);
                 unlock(&palloc);
-                return 0;
+                return nil;
             }
             if(++f->ref == 1)
                 pageunchain(f);
@@ -3353,7 +3353,7 @@ lookpage(KImage *i, ulong daddr)
     }
     unlock(&palloc.hashlock);
 
-    return 0;
+    return nil;
 }
 @
 
@@ -7112,12 +7112,12 @@ mmuwalk(ulong* pdb, ulong va, int level, int create)
 
     table = &pdb[PDX(va)];
     if(!(*table & PTEVALID) && create == 0)
-        return 0;
+        return nil;
 
     switch(level){
 
     default:
-        return 0;
+        return nil;
 
     case 1:
         return table;
@@ -7491,7 +7491,7 @@ vmap(ulong pa, int size)
     if((va = vmapalloc(size)) == 0 
     || pdbmap(CPUS(0)->pdb, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
         iunlock(&vmaplock);
-        return 0;
+        return nil;
     }
     iunlock(&vmaplock);
     /* avoid trap on local processor
@@ -8524,7 +8524,7 @@ out:
 
 
 <<function canflush>>=
-static int
+static bool
 canflush(Proc *p, Segment *s)
 {
     int i;
@@ -8549,11 +8549,11 @@ canflush(Proc *p, Segment *s)
             for(i = 0; i < NSEG; i++)
                 if(p->seg[i] == s)
                     if(!canpage(p))
-                        return 0;
+                        return false;
         }
         p++;
     }
-    return 1;
+    return true;
 }
 @
 
@@ -9315,7 +9315,7 @@ TEXT gotolabel(SB), $0
         MOVL    0(AX), SP                       /* restore sp */
         MOVL    4(AX), AX                       /* put return pc on the stack */
         MOVL    AX, 0(SP)
-        MOVL    $1, AX                          /* return 1 */
+        MOVL    $1, AX                          /* return true */
         RET
 @
 
@@ -9326,7 +9326,7 @@ TEXT setlabel(SB), $0
         MOVL    SP, 0(AX)                       /* store sp */
         MOVL    0(SP), BX                       /* store return pc */
         MOVL    BX, 4(AX)
-        MOVL    $0, AX                          /* return 0 */
+        MOVL    $0, AX                          /* return false */
         RET
 
 @
@@ -10684,7 +10684,7 @@ mapalloc(RMap* rmap, ulong addr, int size, int align)
     }
     unlock(rmap);
 
-    return 0;
+    return nilptr;
 }
 @
 
@@ -11270,7 +11270,7 @@ e820scan(void)
 /*
  * Allocate memory from the upper memory blocks.
  */
-ulong
+kern_addr
 umbmalloc(ulong addr, int size, int align)
 {
     ulong a;
@@ -11278,7 +11278,7 @@ umbmalloc(ulong addr, int size, int align)
     if(a = mapalloc(&rmapumb, addr, size, align))
         return (ulong)KADDR(a);
 
-    return 0;
+    return nilptr;
 }
 @
 
@@ -12609,7 +12609,7 @@ pullupblock(Block *bp, int n)
         }
     }
     freeb(bp);
-    return 0;
+    return nil;
 }
 @
 
@@ -13412,8 +13412,8 @@ qopen(int limit, int msg, void (*kick)(void*), void *arg)
     Queue *q;
 
     q = malloc(sizeof(Queue));
-    if(q == 0)
-        return 0;
+    if(q == nil)
+        return nil;
 
     q->limit = q->inilim = limit;
     q->kick = kick;
@@ -13437,8 +13437,8 @@ qbypass(void (*bypass)(void*, Block*), void *arg)
     Queue *q;
 
     q = malloc(sizeof(Queue));
-    if(q == 0)
-        return 0;
+    if(q == nil)
+        return nil;
 
     q->limit = 0;
     q->arg = arg;
@@ -14476,7 +14476,6 @@ sysclose(ulong *arg)
 {
     fdtochan(arg[0], -1, 0, 0);
     fdclose(arg[0], 0);
-
     return 0;
 }
 @
@@ -15494,7 +15493,7 @@ createdir(Chan *c, Mhead *m)
         }
     }
     error(Enocreate);
-    return 0;
+    return nil; // not reached
 }
 @
 
@@ -16979,7 +16978,7 @@ mountrock(Chan *c, uchar *p, uchar **pe)
 /*
  * Satisfy a directory read with the results saved in c->dirrock.
  */
-static int
+static bool
 mountrockread(Chan *c, uchar *op, long n, long *nn)
 {
     long dirlen;
@@ -16987,7 +16986,7 @@ mountrockread(Chan *c, uchar *op, long n, long *nn)
 
     /* common case */
     if(c->nrock == 0)
-        return 0;
+        return false;
 
     /* copy out what we can */
     qlock(&c->rockqlock);
@@ -17006,7 +17005,7 @@ mountrockread(Chan *c, uchar *op, long n, long *nn)
 
     if(p == op){
         qunlock(&c->rockqlock);
-        return 0;
+        return false;
     }
 
     /* shift the rest */
@@ -17016,7 +17015,7 @@ mountrockread(Chan *c, uchar *op, long n, long *nn)
 
     *nn = p - op;
     qunlock(&c->rockqlock);
-    return 1;
+    return true;
 }
 @
 
@@ -17949,6 +17948,7 @@ kbdputsc(int c, bool external)
 }
 @
 
+%TODO: return bool instead? those outread < 0 seems bad no?
 <<function outbyte>>=
 static int
 outbyte(int port, int c)
@@ -18293,6 +18293,7 @@ printinit(void)
 }
 @ 
 
+% return void?
 <<function kbdputc>>=
 /*
  *  Put character, possibly a rune, into read queue at interrupt time.
@@ -18577,19 +18578,19 @@ static Lock iprintlock;
 
 
 <<function iprintcanlock>>=
-static int
+static bool
 iprintcanlock(Lock *l)
 {
     int i;
     
     for(i=0; i<1000; i++){
         if(canlock(l))
-            return 1;
+            return true;
         if(l->m == CPUS(cpu->cpuno))
-            return 0;
+            return false;
         microdelay(100);
     }
-    return 0;
+    return false;
 }
 @
 
@@ -21918,7 +21919,7 @@ syssegfree(ulong *arg)
 struct Sema
 {
     long  *addr; // value stored in user space!
-    int waiting;
+    bool waiting;
   
     //list<Sema> of Segment.sema
     Sema  *next;
@@ -21990,7 +21991,7 @@ semwakeup(Segment *s, long *a, long n)
     lock(&s->sema);
     for(p=s->sema.next; p!=&s->sema && n>0; p=p->next){
         if(p->addr == a && p->waiting){
-            p->waiting = 0;
+            p->waiting = false;
             coherence();
             wakeup(p);
             n--;
@@ -22019,22 +22020,22 @@ semrelease(Segment *s, long *addr, long delta)
 
 <<function canacquire>>=
 /* Try to acquire semaphore using compare-and-swap */
-static int
+static bool
 canacquire(long *addr)
 {
     long value;
     
     while((value=*addr) > 0)
         if(cmpswap(addr, value, value-1))
-            return 1;
-    return 0;
+            return true;
+    return false;
 }       
 @ 
 
 
 <<function semawoke>>=
 /* Should we wake up? */
-static int
+static bool
 semawoke(void *p)
 {
     coherence();
@@ -22045,24 +22046,24 @@ semawoke(void *p)
 
 <<function semacquire>>=
 /* Acquire semaphore (subtract 1). */
-static int
+static bool
 semacquire(Segment *s, long *addr, bool block)
 {
     int acquired;
     Sema phore;
 
     if(canacquire(addr))
-        return 1;
+        return true;
     if(!block)
-        return 0;
+        return false;
 
-    acquired = 0;
+    acquired = false;
     semqueue(s, addr, &phore);
     for(;;){
-        phore.waiting = 1;
+        phore.waiting = true;
         coherence();
         if(canacquire(addr)){
-            acquired = 1;
+            acquired = true;
             break;
         }
         if(waserror())
@@ -22076,14 +22077,14 @@ semacquire(Segment *s, long *addr, bool block)
         semwakeup(s, addr, 1);
     if(!acquired)
         nexterror();
-    return 1;
+    return false;
 }
 @ 
 
 
 <<function tsemacquire>>=
 /* Acquire semaphore or time-out */
-static int
+static bool
 tsemacquire(Segment *s, long *addr, ulong ms)
 {
     int acquired, timedout;
@@ -22091,16 +22092,16 @@ tsemacquire(Segment *s, long *addr, ulong ms)
     Sema phore;
 
     if(canacquire(addr))
-        return 1;
+        return true;
     if(ms == 0)
-        return 0;
-    acquired = timedout = 0;
+        return false;
+    acquired = timedout = false;
     semqueue(s, addr, &phore);
     for(;;){
-        phore.waiting = 1;
+        phore.waiting = true;
         coherence();
         if(canacquire(addr)){
-            acquired = 1;
+            acquired = true;
             break;
         }
         if(waserror())
@@ -22110,7 +22111,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
         elms = TK2MS(cpu->ticks - t);
         poperror();
         if(elms >= ms){
-            timedout = 1;
+            timedout = true;
             break;
         }
         ms -= elms;
@@ -22120,10 +22121,10 @@ tsemacquire(Segment *s, long *addr, ulong ms)
     if(!phore.waiting)
         semwakeup(s, addr, 1);
     if(timedout)
-        return 0;
+        return false;
     if(!acquired)
         nexterror();
-    return 1;
+    return false;
 }
 @ 
 
@@ -22352,7 +22353,7 @@ runv(char **argv)
 #include <libc.h>
 #include "../boot/boot.h"
 
-int
+void
 connectlocal(void)
 {
   int fd;
@@ -22368,7 +22369,7 @@ connectlocal(void)
   run("/boot/dossrv", nil);
   run("/boot/mount", "-c", "/srv/dos", "/root", "/dev/sdC0/dos", nil);
   
-  return 0;
+  return;
 }
 @
 

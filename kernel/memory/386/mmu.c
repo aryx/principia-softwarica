@@ -547,12 +547,12 @@ mmuwalk(ulong* pdb, ulong va, int level, int create)
 
     table = &pdb[PDX(va)];
     if(!(*table & PTEVALID) && create == 0)
-        return 0;
+        return nil;
 
     switch(level){
 
     default:
-        return 0;
+        return nil;
 
     case 1:
         return table;
@@ -618,7 +618,7 @@ vmap(ulong pa, int size)
     if((va = vmapalloc(size)) == 0 
     || pdbmap(CPUS(0)->pdb, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
         iunlock(&vmaplock);
-        return 0;
+        return nil;
     }
     iunlock(&vmaplock);
     /* avoid trap on local processor

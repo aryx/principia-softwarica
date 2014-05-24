@@ -279,7 +279,7 @@ out:
 /*e: function pageout */
 
 /*s: function canflush */
-static int
+static bool
 canflush(Proc *p, Segment *s)
 {
     int i;
@@ -304,11 +304,11 @@ canflush(Proc *p, Segment *s)
             for(i = 0; i < NSEG; i++)
                 if(p->seg[i] == s)
                     if(!canpage(p))
-                        return 0;
+                        return false;
         }
         p++;
     }
-    return 1;
+    return true;
 }
 /*e: function canflush */
 

@@ -238,7 +238,7 @@ pullupblock(Block *bp, int n)
         }
     }
     freeb(bp);
-    return 0;
+    return nil;
 }
 /*e: function pullupblock */
 
@@ -818,8 +818,8 @@ qopen(int limit, int msg, void (*kick)(void*), void *arg)
     Queue *q;
 
     q = malloc(sizeof(Queue));
-    if(q == 0)
-        return 0;
+    if(q == nil)
+        return nil;
 
     q->limit = q->inilim = limit;
     q->kick = kick;
@@ -842,8 +842,8 @@ qbypass(void (*bypass)(void*, Block*), void *arg)
     Queue *q;
 
     q = malloc(sizeof(Queue));
-    if(q == 0)
-        return 0;
+    if(q == nil)
+        return nil;
 
     q->limit = 0;
     q->arg = arg;

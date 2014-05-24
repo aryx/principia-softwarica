@@ -300,19 +300,19 @@ static Lock iprintlock;
 /*e: global iprintlock */
 
 /*s: function iprintcanlock */
-static int
+static bool
 iprintcanlock(Lock *l)
 {
     int i;
     
     for(i=0; i<1000; i++){
         if(canlock(l))
-            return 1;
+            return true;
         if(l->m == CPUS(cpu->cpuno))
-            return 0;
+            return false;
         microdelay(100);
     }
-    return 0;
+    return false;
 }
 /*e: function iprintcanlock */
 

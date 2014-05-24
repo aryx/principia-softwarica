@@ -257,7 +257,6 @@ sysclose(ulong *arg)
 {
     fdtochan(arg[0], -1, 0, 0);
     fdclose(arg[0], 0);
-
     return 0;
 }
 /*e: syscall close */
@@ -437,7 +436,7 @@ mountrock(Chan *c, uchar *p, uchar **pe)
 /*
  * Satisfy a directory read with the results saved in c->dirrock.
  */
-static int
+static bool
 mountrockread(Chan *c, uchar *op, long n, long *nn)
 {
     long dirlen;
@@ -445,7 +444,7 @@ mountrockread(Chan *c, uchar *op, long n, long *nn)
 
     /* common case */
     if(c->nrock == 0)
-        return 0;
+        return false;
 
     /* copy out what we can */
     qlock(&c->rockqlock);
@@ -464,7 +463,7 @@ mountrockread(Chan *c, uchar *op, long n, long *nn)
 
     if(p == op){
         qunlock(&c->rockqlock);
-        return 0;
+        return false;
     }
 
     /* shift the rest */
@@ -474,7 +473,7 @@ mountrockread(Chan *c, uchar *op, long n, long *nn)
 
     *nn = p - op;
     qunlock(&c->rockqlock);
-    return 1;
+    return true;
 }
 /*e: function mountrockread */
 
