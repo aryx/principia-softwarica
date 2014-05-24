@@ -263,6 +263,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
 /*e: function tsemacquire */
 
 /*s: syscall semacquire */
+// int semacquire(long *addr, int block);
 long
 syssemacquire(ulong *arg)
 {
@@ -284,6 +285,7 @@ syssemacquire(ulong *arg)
 /*e: syscall semacquire */
 
 /*s: syscall tsemacquire */
+// int tsemacquire(long *addr, ulong ms);
 long
 systsemacquire(ulong *arg)
 {
@@ -305,6 +307,7 @@ systsemacquire(ulong *arg)
 /*e: syscall tsemacquire */
 
 /*s: syscall semrelease */
+// long semrelease(long *addr, long count);
 long
 syssemrelease(ulong *arg)
 {

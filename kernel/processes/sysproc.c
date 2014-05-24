@@ -35,6 +35,7 @@ int shargs(char*, int, char**);
 /*e: sysproc.c forward decl */
 
 /*s: syscall nop */
+// void nop(void);
 long
 sysnop(ulong*)
 {
@@ -44,6 +45,7 @@ sysnop(ulong*)
 /*e: syscall nop */
 
 /*s: syscall rfork */
+// int rfork(int flags);
 long
 sysrfork(ulong *arg)
 {
@@ -241,6 +243,7 @@ l2be(long l)
 /*e: function l2be */
 
 /*s: syscall exec */
+// void* exec(char *name, char* argv[]);
 long
 sysexec(ulong *arg)
 {
@@ -560,6 +563,7 @@ sysproc_return0(void*)
 /*e: function return0 */
 
 /*s: syscall sleep */
+// int sleep(long millisecs);
 long
 syssleep(ulong *arg)
 {
@@ -582,6 +586,7 @@ syssleep(ulong *arg)
 /*e: syscall sleep */
 
 /*s: syscall alarm */
+// long alarm(unsigned long millisecs);
 long
 sysalarm(ulong *arg)
 {
@@ -590,6 +595,7 @@ sysalarm(ulong *arg)
 /*e: syscall alarm */
 
 /*s: syscall exits */
+// void exits(char *msg);
 long
 sysexits(ulong *arg)
 {
@@ -618,6 +624,7 @@ sysexits(ulong *arg)
 /*e: syscall exits */
 
 /*s: syscall await */
+// int await(char *s, int n);
 long
 sysawait(ulong *arg)
 {
@@ -679,6 +686,7 @@ generrstr(char *buf, uint nbuf)
 /*e: function generrstr */
 
 /*s: syscall errstr */
+// int errstr(char *err, uint nerr);
 long
 syserrstr(ulong *arg)
 {
@@ -687,6 +695,7 @@ syserrstr(ulong *arg)
 /*e: syscall errstr */
 
 /*s: syscall notify */
+// int notify(void (*f)(void*, char*));
 long
 sysnotify(ulong *arg)
 {
@@ -698,6 +707,7 @@ sysnotify(ulong *arg)
 /*e: syscall notify */
 
 /*s: syscall noted */
+// int noted(int v);
 long
 sysnoted(ulong *arg)
 {
@@ -708,6 +718,7 @@ sysnoted(ulong *arg)
 /*e: syscall noted */
 
 /*s: syscall segbrk */
+// void* segbrk(void *saddr, void *addr);
 long
 syssegbrk(ulong *arg)
 {
@@ -736,6 +747,7 @@ syssegbrk(ulong *arg)
 /*e: syscall segbrk */
 
 /*s: syscall segattach */
+// void* segattach(int attr, char *class, void *va, ulong len);
 long
 syssegattach(ulong *arg)
 {
@@ -744,6 +756,7 @@ syssegattach(ulong *arg)
 /*e: syscall segattach */
 
 /*s: syscall segdetach */
+// int segdetach(void *addr);
 long
 syssegdetach(ulong *arg)
 {
@@ -791,6 +804,7 @@ found:
 /*e: syscall segdetach */
 
 /*s: syscall segfree */
+// int segfree(void *va, ulong len);
 long
 syssegfree(ulong *arg)
 {
@@ -818,6 +832,7 @@ syssegfree(ulong *arg)
 /*e: syscall segfree */
 
 /*s: syscall brk */
+// int brk(void*);
 long
 sysbrk(ulong *arg)
 {
@@ -826,6 +841,7 @@ sysbrk(ulong *arg)
 /*e: syscall brk */
 
 /*s: syscall rendezvous */
+// void* rendezvous(void* tag, void* value);
 long
 sysrendezvous(ulong *arg)
 {

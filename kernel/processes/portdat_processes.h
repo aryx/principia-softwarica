@@ -29,8 +29,6 @@ enum procstate
     /*x: enum procstate cases */
     Scheding,
     /*x: enum procstate cases */
-    Rendezvous,
-    /*x: enum procstate cases */
     Moribund,
     /*x: enum procstate cases */
     Broken,
@@ -38,6 +36,8 @@ enum procstate
     Ready,
     /*x: enum procstate cases */
     Wakeme,
+    /*x: enum procstate cases */
+    Rendezvous,
     /*x: enum procstate cases */
     Stopped,
     /*x: enum procstate cases */
@@ -534,17 +534,17 @@ struct Proc
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
     /*x: [[Proc]] synchronization fields */
+    Rendez  *r;   /* rendezvous point slept on */
+    Lock  rlock;    /* sync sleep/wakeup with postnote */
+    /*x: [[Proc]] synchronization fields */
+    Rendez  sleep;    /* place for syssleep/debug/tsleep */
+    /*x: [[Proc]] synchronization fields */
     Rgrp  *rgrp;    /* Rendez group */
 
     uintptr rendtag;  /* Tag for rendezvous */
     uintptr rendval;  /* Value for rendezvous */
     //??
     Proc  *rendhash;  /* Hash list for tag values */
-    /*x: [[Proc]] synchronization fields */
-    Rendez  *r;   /* rendezvous point slept on */
-    Lock  rlock;    /* sync sleep/wakeup with postnote */
-    /*x: [[Proc]] synchronization fields */
-    Rendez  sleep;    /* place for syssleep/debug/tsleep */
     /*e: [[Proc]] synchronization fields */
 //--------------------------------------------------------------------
 // Error managment

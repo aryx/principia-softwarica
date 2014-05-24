@@ -443,6 +443,10 @@ provides to the user programs.
 
 \section{C and assembly}
 
+% compilation scheme of kernel assumes pass parameters in stack,
+% return value in ax, and caller save registers it needs
+% after call before calling (so Label is simple)
+
 % Kencc extension: anon field. e.g. Lock; 
 
 % the lock+0(FP) is intriguing
@@ -704,6 +708,7 @@ int nsyscall = nelem(systab);
 @
 
 <<syscall nop>>=
+// void nop(void);
 long
 sysnop(ulong*)
 {
@@ -4330,6 +4335,7 @@ putimage(KImage *i)
 \section{[[sysbrk()]]}
 
 <<syscall brk>>=
+// int brk(void*);
 long
 sysbrk(ulong *arg)
 {
@@ -4691,6 +4697,7 @@ TEXT forkret(SB), $0
 @ 
 
 <<syscall rfork>>=
+// int rfork(int flags);
 long
 sysrfork(ulong *arg)
 {
@@ -4893,6 +4900,7 @@ int nargs;    /* number of bytes of args */
 @
 
 <<syscall exec>>=
+// void* exec(char *name, char* argv[]);
 long
 sysexec(ulong *arg)
 {
@@ -5237,110 +5245,6 @@ shargs(char *s, int n, char **ap)
 
 
 
-\section{[[sysrendezvous()]]}
-
-
-<<function REND>>=
-enum
-{
-    RENDLOG = 5,
-    RENDHASH =  1<<RENDLOG, /* Hash to lookup rendezvous tags */
-};
-#define REND(p,s) ((p)->rendhash[(s)&((1<<RENDLOG)-1)])
-@
-
-% >>
-
-<<struct Rgrp>>=
-struct Rgrp
-{
-    // hash<??, list<ref<Proc>>>
-    Proc  *rendhash[RENDHASH];  /* Rendezvous tag hash */
-  
-    // extra
-    Ref;        /* the Ref's lock is also the Rgrp's lock */
-};
-@ 
-
-% could be in other fields honestly, just like Egrp fields
-<<[[Proc]] synchronization fields>>=
-Rgrp  *rgrp;    /* Rendez group */
-
-uintptr rendtag;  /* Tag for rendezvous */
-uintptr rendval;  /* Value for rendezvous */
-//??
-Proc  *rendhash;  /* Hash list for tag values */
-@
-
-
-<<constructor newrgrp>>=
-Rgrp*
-newrgrp(void)
-{
-    Rgrp *r;
-
-    r = smalloc(sizeof(Rgrp));
-    r->ref = 1;
-    return r;
-}
-@ 
-
-<<destructor closergrp>>=
-void
-closergrp(Rgrp *r)
-{
-    if(decref(r) == 0)
-        free(r);
-}
-@ 
-
-
-<<enum procstate cases>>=
-Rendezvous,
-@
-
-<<syscall rendezvous>>=
-long
-sysrendezvous(ulong *arg)
-{
-    uintptr tag, val;
-    Proc *p, **l;
-
-    tag = arg[0];
-    l = &REND(up->rgrp, tag);
-    up->rendval = ~(uintptr)0;
-
-    lock(up->rgrp);
-    for(p = *l; p; p = p->rendhash) {
-        if(p->rendtag == tag) {
-            *l = p->rendhash;
-            val = p->rendval;
-            p->rendval = arg[1];
-
-            while(p->cpu != 0)
-                ;
-            ready(p);
-            unlock(up->rgrp);
-            return val;
-        }
-        l = &p->rendhash;
-    }
-
-    /* Going to sleep here */
-    up->rendtag = tag;
-    up->rendval = arg[1];
-    up->rendhash = *l;
-    *l = up;
-    up->state = Rendezvous;
-    unlock(up->rgrp);
-
-    sched();
-
-    return up->rendval;
-}
-@ 
-
-
 \section{[[sysawait()]]}
 % better show sysawait before sysexits, parent point of view, then child pov
 
@@ -5397,6 +5301,7 @@ QLock qwaitr;
 @
 
 <<syscall await>>=
+// int await(char *s, int n);
 long
 sysawait(ulong *arg)
 {
@@ -5481,6 +5386,7 @@ haswaitq(void *x)
 % will still be there and have hanging process?
 
 <<syscall exits>>=
+// void exits(char *msg);
 long
 sysexits(ulong *arg)
 {
@@ -9294,6 +9200,19 @@ struct Label
     kern_addr pc; 
 };
 @ 
+
+% is this enough? what about the other registers? the kernel code assumes
+% compiles with kencc, so the only context we need is this.
+% no need save registers, the caller compiled code should have done
+% that before calling setlabel(). Note that this is ok because
+% gotolabel assumes we jump to other kernel code compiled via kencc!
+% for the user switch, this is not the same (also because can
+% be interrupted in the middle of anything) and so we save
+% everything.
+
+% cflow of syscall e.g. syssleep is: user -> kernel -> sleep ->
+% kernel switch gotolabel -> return from kernel code (syscall or trap)
+% restore registers back from kernel code to user.
 
 <<[[Proc]] assembly fields>>=
 Label sched;    /* known to l.s */
@@ -14447,6 +14366,7 @@ newfd2(int fd[2], Chan *c[2])
 
 
 <<syscall open>>=
+// int open(char *file, int omode);
 long
 sysopen(ulong *arg)
 {
@@ -14471,6 +14391,7 @@ sysopen(ulong *arg)
 
 
 <<syscall close>>=
+// int close(int fd);
 long
 sysclose(ulong *arg)
 {
@@ -14589,6 +14510,7 @@ read(ulong *arg, vlong *offp)
 
 
 <<syscall pread>>=
+// long pread(int fd, void *buf, long nbytes, vlong offset);
 long
 syspread(ulong *arg)
 {
@@ -14662,6 +14584,7 @@ write(ulong *arg, vlong *offp)
 
 
 <<syscall pwrite>>=
+// long pwrite(int fd, void *buf, long nbytes, vlong offset);
 long
 syspwrite(ulong *arg)
 {
@@ -14741,6 +14664,7 @@ wstat(Chan *c, uchar *d, int nd)
 
 
 <<syscall wstat>>=
+// int wstat(char *name, uchar *edir, int nedir);
 long
 syswstat(ulong *arg)
 {
@@ -14758,6 +14682,7 @@ syswstat(ulong *arg)
 
 
 <<syscall fwstat>>=
+// int fwstat(int fd, uchar *edir, int nedir);
 long
 sysfwstat(ulong *arg)
 {
@@ -14773,6 +14698,7 @@ sysfwstat(ulong *arg)
 @
 
 <<syscall fstat>>=
+// int fstat(int fd, uchar *edir, int nedir);
 long
 sysfstat(ulong *arg)
 {
@@ -14795,6 +14721,7 @@ sysfstat(ulong *arg)
 
 
 <<syscall stat>>=
+// int stat(char *name, uchar *edir, int nedir);
 long
 sysstat(ulong *arg)
 {
@@ -14825,6 +14752,7 @@ sysstat(ulong *arg)
 \section{[[sysseek()]]}
 
 <<syscall seek>>=
+// vlong seek(int fd, vlong n, int type);
 long
 sysseek(ulong *arg)
 {
@@ -16122,6 +16050,7 @@ openmode(ulong o)
 @
 
 <<syscall create>>=
+// int create(char *file, int omode, ulong perm);
 long
 syscreate(ulong *arg)
 {
@@ -16145,6 +16074,7 @@ syscreate(ulong *arg)
 
 
 <<syscall remove>>=
+// int remove(char *file);
 long
 sysremove(ulong *arg)
 {
@@ -16180,7 +16110,7 @@ sysremove(ulong *arg)
 
 
 <<syscall chdir>>=
-// int chdir(char *dirname)
+// int chdir(char *dirname);
 long
 syschdir(ulong *arg)
 {
@@ -16199,7 +16129,7 @@ syschdir(ulong *arg)
 \section {[[sysfd2path()]] (a.k.a [[pwd()]])}
 
 <<syscall fd2path>>=
-// int fd2path(int fd, char *buf, int nbuf)
+// int fd2path(int fd, char *buf, int nbuf);
 long
 sysfd2path(ulong *arg)
 {
@@ -17336,6 +17266,7 @@ cmount(Chan **newp, Chan *old, int flag, char *spec)
 \section{[[sysbind()]]}
 
 <<syscall bind>>=
+// int bind(char *name, char *old, int flag);
 long
 sysbind(ulong *arg)
 {
@@ -17348,6 +17279,7 @@ sysbind(ulong *arg)
 \section{[[sysmount()]]}
 
 <<syscall mount>>=
+// int mount(int fd, int afd, char *old, int flag, char *aname);
 long
 sysmount(ulong *arg)
 {
@@ -17362,6 +17294,7 @@ Chan* mchan;      /* channel to mounted server */
 @
 
 <<syscall unmount>>=
+// int unmount(char *name, char *old);
 long
 sysunmount(ulong *arg)
 {
@@ -20389,6 +20322,7 @@ Rendez  sleep;    /* place for syssleep/debug/tsleep */
 @ 
 
 <<syscall sleep>>=
+// int sleep(long millisecs);
 long
 syssleep(ulong *arg)
 {
@@ -20465,6 +20399,7 @@ static Alarms   alarms;
 @ 
 
 <<syscall alarm>>=
+// long alarm(unsigned long millisecs);
 long
 sysalarm(ulong *arg)
 {
@@ -20978,6 +20913,7 @@ void  *ureg;    /* User registers for notes */
 @ 
 
 <<syscall notify>>=
+// int notify(void (*f)(void*, char*));
 long
 sysnotify(ulong *arg)
 {
@@ -20989,6 +20925,7 @@ sysnotify(ulong *arg)
 @ 
 
 <<syscall noted>>=
+// int noted(int v);
 long
 sysnoted(ulong *arg)
 {
@@ -21269,6 +21206,7 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
 \subsection{[[syspipe()]]}
 
 <<syscall pipe>>=
+// int pipe(int fd[2]);
 long
 syspipe(ulong *arg)
 {
@@ -21799,6 +21737,7 @@ Dev pipedevtab = {
 \subsection{Segment}
 
 <<syscall segbrk>>=
+// void* segbrk(void *saddr, void *addr);
 long
 syssegbrk(ulong *arg)
 {
@@ -21827,6 +21766,7 @@ syssegbrk(ulong *arg)
 @ 
 
 <<syscall segattach>>=
+// void* segattach(int attr, char *class, void *va, ulong len);
 long
 syssegattach(ulong *arg)
 {
@@ -21835,6 +21775,7 @@ syssegattach(ulong *arg)
 @ 
 
 <<syscall segdetach>>=
+// int segdetach(void *addr);
 long
 syssegdetach(ulong *arg)
 {
@@ -21883,6 +21824,7 @@ found:
 
 
 <<syscall segfree>>=
+// int segfree(void *va, ulong len);
 long
 syssegfree(ulong *arg)
 {
@@ -22130,6 +22072,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
 
 
 <<syscall semacquire>>=
+// int semacquire(long *addr, int block);
 long
 syssemacquire(ulong *arg)
 {
@@ -22152,6 +22095,7 @@ syssemacquire(ulong *arg)
 
 
 <<syscall tsemacquire>>=
+// int tsemacquire(long *addr, ulong ms);
 long
 systsemacquire(ulong *arg)
 {
@@ -22174,6 +22118,7 @@ systsemacquire(ulong *arg)
 
 
 <<syscall semrelease>>=
+// long semrelease(long *addr, long count);
 long
 syssemrelease(ulong *arg)
 {
@@ -22191,6 +22136,111 @@ syssemrelease(ulong *arg)
     if(delta < 0 || *addr < 0)
         error(Ebadarg);
     return semrelease(s, addr, delta);
+}
+@ 
+
+
+\section{[[sysrendezvous()]]}
+
+
+<<function REND>>=
+enum
+{
+    RENDLOG = 5,
+    RENDHASH =  1<<RENDLOG, /* Hash to lookup rendezvous tags */
+};
+#define REND(p,s) ((p)->rendhash[(s)&((1<<RENDLOG)-1)])
+@
+
+% >>
+
+<<struct Rgrp>>=
+struct Rgrp
+{
+    // hash<??, list<ref<Proc>>>
+    Proc  *rendhash[RENDHASH];  /* Rendezvous tag hash */
+  
+    // extra
+    Ref;        /* the Ref's lock is also the Rgrp's lock */
+};
+@ 
+
+% could be in other fields honestly, just like Egrp fields
+<<[[Proc]] synchronization fields>>=
+Rgrp  *rgrp;    /* Rendez group */
+
+uintptr rendtag;  /* Tag for rendezvous */
+uintptr rendval;  /* Value for rendezvous */
+//??
+Proc  *rendhash;  /* Hash list for tag values */
+@
+
+
+<<constructor newrgrp>>=
+Rgrp*
+newrgrp(void)
+{
+    Rgrp *r;
+
+    r = smalloc(sizeof(Rgrp));
+    r->ref = 1;
+    return r;
+}
+@ 
+
+<<destructor closergrp>>=
+void
+closergrp(Rgrp *r)
+{
+    if(decref(r) == 0)
+        free(r);
+}
+@ 
+
+
+<<enum procstate cases>>=
+Rendezvous,
+@
+
+<<syscall rendezvous>>=
+// void* rendezvous(void* tag, void* value);
+long
+sysrendezvous(ulong *arg)
+{
+    uintptr tag, val;
+    Proc *p, **l;
+
+    tag = arg[0];
+    l = &REND(up->rgrp, tag);
+    up->rendval = ~(uintptr)0;
+
+    lock(up->rgrp);
+    for(p = *l; p; p = p->rendhash) {
+        if(p->rendtag == tag) {
+            *l = p->rendhash;
+            val = p->rendval;
+            p->rendval = arg[1];
+
+            while(p->cpu != 0)
+                ;
+            ready(p);
+            unlock(up->rgrp);
+            return val;
+        }
+        l = &p->rendhash;
+    }
+
+    /* Going to sleep here */
+    up->rendtag = tag;
+    up->rendval = arg[1];
+    up->rendhash = *l;
+    *l = up;
+    up->state = Rendezvous;
+    unlock(up->rgrp);
+
+    sched();
+
+    return up->rendval;
 }
 @ 
 
@@ -24197,6 +24247,7 @@ profclock(Ureg *ur, Timer *)
 @ 
 
 <<syscall dup>>=
+// int dup(int oldfd, int newfd);
 long
 sysdup(ulong *arg)
 {
@@ -25835,6 +25886,7 @@ char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
 @
 
 <<syscall errstr>>=
+// int errstr(char *err, uint nerr);
 long
 syserrstr(ulong *arg)
 {
