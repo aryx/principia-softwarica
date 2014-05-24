@@ -101,7 +101,7 @@ qunlock(QLock *q)
     if(p){
         // dequeue(q)
         q->head = p->qnext;
-        if(q->head == 0)
+        if(q->head == nil)
             q->tail = nil;
 
         unlock(&q->use);

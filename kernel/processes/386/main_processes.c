@@ -8,9 +8,6 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-int idle_spin;
-int idle_if_nproc;
-
 /*s: function procsetup */
 /*
  *  set up floating point for a new process
@@ -129,6 +126,11 @@ fpsserestore(ArchFPsave *fps)
 /*e: function fpsserestore */
 
 /*s: function idlehands */
+// current configuration
+static bool idle_spin = false;
+static bool idle_if_nproc = 0;
+
+
 /*
  *  put the processor in the halt state if we've no processes to run.
  *  an interrupt will get us going again.
@@ -137,17 +139,17 @@ void
 idlehands(void)
 {
     /*
-     * we used to halt only on single-core setups. halting in an smp system 
+     * we used to halt only on single-core setups. halting in an SMP system 
      * can result in a startup latency for processes that become ready.
-     * if idle_spin is zero, we care more about saving energy
+     * if idle_spin is false, we care more about saving energy
      * than reducing this latency.
      *
-     * the performance loss with idle_spin == 0 seems to be slight
+     * the performance loss with idle_spin == false seems to be slight
      * and it reduces lock contention (thus system time and real time)
      * on many-core systems with large values of NPROC.
      */
-    if(conf.ncpu == 1 || idle_spin == 0 ||
-        idle_if_nproc && conf.ncpu >= idle_if_nproc)
+    if(conf.ncpu == 1 || idle_spin == false ||
+        (idle_if_nproc && conf.ncpu >= idle_if_nproc))
         halt();
 }
 /*e: function idlehands */

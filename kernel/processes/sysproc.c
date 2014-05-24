@@ -221,7 +221,7 @@ sysrfork(ulong *arg)
     p->basepri = up->basepri;
     p->priority = up->basepri;
     p->fixedpri = up->fixedpri;
-    p->mp = up->mp;
+    p->lastcpu = up->lastcpu;
     wm = up->wired;
     if(wm)
         procwired(p, wm->cpuno);

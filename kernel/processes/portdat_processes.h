@@ -162,6 +162,7 @@ extern Counter  noteidalloc;
 //--------------------------------------------------------------------
 
 /*s: struct Waitq */
+// essentially a stack<ref_own<Waitmsg>>
 struct Waitq
 {
     Waitmsg w;
@@ -449,7 +450,7 @@ struct Proc
     ulong priority; /* priority level */
 
     ulong basepri;  /* base priority level */
-    bool fixedpri; /* priority level deson't change */
+    bool fixedpri; /* priority level doesn't change */
     /*x: [[Proc]] scheduling fields */
     // option<ref<Cpu>>, null when not associated to a processor
     Cpu  *cpu;    /* processor running this proc */
@@ -463,7 +464,7 @@ struct Proc
            *  that last preempted it
            */
     /*x: [[Proc]] scheduling fields */
-    Cpu  *mp;    /* processor this process last ran on */
+    Cpu *lastcpu;    /* processor this process last ran on */
     /*x: [[Proc]] scheduling fields */
     Cpu  *wired;
     /*x: [[Proc]] scheduling fields */
@@ -698,11 +699,12 @@ struct Procalloc
 //IMPORTANT: static struct Procalloc procalloc; (in proc.c)
 
 /*s: struct Schedq */
+// essentially a queue<ref<Proc>>
 struct Schedq
 {
     // list<ref<Proc>> (next = Proc.rnext)
     Proc* head;
-    // list<ref<Proc>>, the tail
+    // ref<Proc>, the tail
     Proc* tail;
     // size of list
     int n; 

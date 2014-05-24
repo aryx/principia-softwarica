@@ -15,7 +15,7 @@
 
 /*s: global runq */
 // The run queue!!
-// hash<enum<priority>, Schedq>
+// hash<enum<priority>, queue<ref<Proc>>>
 Schedq  runq[Nrq];
 /*e: global runq */
 /*s: global runveq */
@@ -139,7 +139,6 @@ schedinit(void)     /* never returns */
 
     setlabel(&cpu->sched);
 
-
     if(up) {
         /*s: [[schedinit()]] optional real-time [[edfrecord()]] */
                 if((e = up->edf) && (e->flags & Admitted))
@@ -197,11 +196,8 @@ proc_sched(void)
 
     if(cpu->ilockdepth)
         panic("cpu%d: ilockdepth %d, last lock %#p at %#p, sched called from %#p",
-            cpu->cpuno,
-            cpu->ilockdepth,
-            up? up->lastilock: nil,
-            (up && up->lastilock)? up->lastilock->pc: 0,
-            getcallerpc(&p+2));
+            cpu->cpuno, cpu->ilockdepth, up? up->lastilock: nil,
+            (up && up->lastilock)? up->lastilock->pc: 0, getcallerpc(&p+2));
     if(up){
         /*
          * Delay the sched until the process gives up the locks
@@ -228,13 +224,16 @@ proc_sched(void)
                 delayedscheds++; // stats
                 return;
             }
+        
         up->delaysched = 0;
         splhi(); // schedinit requires this
-        /* statistics */
         cpu->cs++;
 
         procsave(up);
+        // save label for context switch
         if(setlabel(&up->sched)){
+            // will resume here after we have been scheduled back
+            // from a gotolabel(up->sched) by another process, see below
             procrestore(up);
             spllo();
             return;
@@ -245,6 +244,8 @@ proc_sched(void)
         // why not call sched() recursively? or goto common:
         // where do the p = runproc() ...?
     }
+
+
     p = runproc();
     /*s: [[proc_sched()]] optional guard for real-time process */
         if(!p->edf)
@@ -449,6 +450,8 @@ queueproc(Schedq *rq, Proc *p)
     pri = rq - runq;
     lock(runq);
     p->priority = pri;
+
+    // add_queue(p, rq)
     p->rnext = nil;
     if(rq->tail)
         rq->tail->rnext = p;
@@ -456,6 +459,7 @@ queueproc(Schedq *rq, Proc *p)
         rq->head = p;
     rq->tail = p;
     rq->n++;
+
     nrdy++;
     runvec |= 1<<pri;
     unlock(runq);
@@ -466,6 +470,7 @@ queueproc(Schedq *rq, Proc *p)
 /*
  *  try to remove a process from a scheduling queue (called splhi)
  */
+// tp should belong to the queue
 Proc*
 dequeueproc(Schedq *rq, Proc *tp)
 {
@@ -484,6 +489,7 @@ dequeueproc(Schedq *rq, Proc *tp)
             break;
         l = p;
     }
+    // l should be nil most of the time, the queue probably didn't change
 
     /*
      *  p->cpu==nil only when process state is saved
@@ -492,6 +498,8 @@ dequeueproc(Schedq *rq, Proc *tp)
         unlock(runq);
         return nil;
     }
+
+    // remove_queue(p, rq)
     if(p->rnext == nil)
         rq->tail = l;
     if(l)
@@ -501,7 +509,9 @@ dequeueproc(Schedq *rq, Proc *tp)
     if(rq->head == nil)
         runvec &= ~(1<<(rq-runq));
     rq->n--;
+
     nrdy--;
+
     if(p->state != Ready)
         print("dequeueproc %s %lud %s\n", p->text, p->pid, statename[p->state]);
 
@@ -588,7 +598,7 @@ another:
         p = rq->head;
         if(p == nil)
             continue;
-        if(p->mp != CPUS(cpu->cpuno))
+        if(p->lastcpu != CPUS(cpu->cpuno))
             continue;
         if(pri == p->basepri)
             continue;
@@ -622,9 +632,12 @@ runproc(void)
     start = perfticks();
 
     /* cooperative scheduling until the clock ticks */
-    if((p=cpu->readied) && p->cpu==nil && p->state==Ready
-    && (p->wired == nil || p->wired == cpu)
-    && runq[Nrq-1].head == nil && runq[Nrq-2].head == nil){
+    if((p=cpu->readied) && p->cpu==nil && p->state==Ready && 
+      (p->wired == nil || p->wired == cpu) && 
+      /*s: [[runproc()]] test for empty real-time scheduling queue */
+      runq[Nrq-1].head == nil && runq[Nrq-2].head == nil
+      /*e: [[runproc()]] test for empty real-time scheduling queue */
+    ){
         skipscheds++;
         rq = &runq[p->priority];
         goto found;
@@ -635,7 +648,7 @@ runproc(void)
 loop:
     /*
      *  find a process that last ran on this processor (affinity),
-     *  or one that hasn't moved in a while (load balancing).  Every
+     *  or one that hasn't moved in a while (load balancing). Every
      *  time around the loop affinity goes down.
      */
     spllo();
@@ -647,12 +660,12 @@ loop:
          */
         for(rq = &runq[Nrq-1]; rq >= runq; rq--){
             for(p = rq->head; p; p = p->rnext){
-                if(p->mp == nil || p->mp == CPUS(cpu->cpuno)
+                if(p->lastcpu == nil || p->lastcpu == CPUS(cpu->cpuno)
                 || (!p->wired && i > 0))
                     goto found;
             }
         }
-
+        // nothing found
         /* waste time or halt the CPU */
         idlehands();
 
@@ -669,12 +682,14 @@ found:
         goto loop;
 
     p->state = Scheding;
-    p->mp = CPUS(cpu->cpuno);
+    p->lastcpu = CPUS(cpu->cpuno);
 
-    if(edflock(p)){
-        edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
-        edfunlock();
-    }
+    /*s: [[runproc()]] test if p is a real-time process */
+        if(edflock(p)){
+            edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
+            edfunlock();
+        }
+    /*e: [[runproc()]] test if p is a real-time process */
     pt = proctrace;
     if(pt)
         pt(p, SRun, 0);
@@ -795,7 +810,7 @@ newproc(void)
         p->kstack = smalloc(KSTACK);
 
     /* sched params */
-    p->mp = nil;
+    p->lastcpu = nil;
     p->wired = nil;
     procpriority(p, PriNormal, false);
     p->cpuavg = 0;
@@ -838,7 +853,7 @@ procwired(Proc *p, int bm)
     }
 
     p->wired = CPUS(bm);
-    p->mp = p->wired;
+    p->lastcpu = p->wired;
 }
 /*e: function procwired */
 
@@ -850,13 +865,10 @@ procpriority(Proc *p, int pri, bool fixed)
         pri = Npriq - 1;
     else if(pri < 0)
         pri = 0;
+
     p->basepri = pri;
     p->priority = pri;
-    if(fixed){
-        p->fixedpri = true;
-    } else {
-        p->fixedpri = false;
-    }
+    p->fixedpri = fixed;
 }
 /*e: function procpriority */
 

@@ -40,7 +40,7 @@ struct KQLock
   
     // list<ref<Proc>> (next = Proc.qnext)
     Proc  *head;    /* next process waiting for object */
-    // list<ref<Proc>> (direct access to tail, queue)
+    // ref<Proc> (direct access to tail, queue)
     Proc  *tail;    /* last process waiting for object */
   
     kern_addr qpc;    /* pc of the holder */ // for debugging?

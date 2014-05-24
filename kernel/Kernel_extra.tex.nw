@@ -7977,36 +7977,10 @@ fpsserestore(ArchFPsave *fps)
 @ 
 
 
-<<function idlehands>>=
-/*
- *  put the processor in the halt state if we've no processes to run.
- *  an interrupt will get us going again.
- */
-void
-idlehands(void)
-{
-    /*
-     * we used to halt only on single-core setups. halting in an smp system 
-     * can result in a startup latency for processes that become ready.
-     * if idle_spin is zero, we care more about saving energy
-     * than reducing this latency.
-     *
-     * the performance loss with idle_spin == 0 seems to be slight
-     * and it reduces lock contention (thus system time and real time)
-     * on many-core systems with large values of NPROC.
-     */
-    if(conf.ncpu == 1 || idle_spin == 0 ||
-        idle_if_nproc && conf.ncpu >= idle_if_nproc)
-        halt();
-}
-@ 
 
 
 <<main_processes.c>>=
 <<kernel basic includes>>
-
-int idle_spin;
-int idle_if_nproc;
 
 <<function procsetup>>
 
@@ -10180,23 +10154,6 @@ char *sysctab[] = {
 
 \section{Power}
 
-<<function halt>>=
-/*
- * Attempt at power saving. -rsc
- */
-TEXT halt(SB), $0
-        CLI
-        CMPL    nrdy(SB), $0
-        JEQ     _nothingready
-        STI
-        RET
-
-_nothingready:
-        STI
-        HLT
-        RET
-@
-
 
 <<[[PCArch]] power methods fields>>=
 int (*serialpower)(int);  /* 1 == on, 0 == off */
@@ -10318,6 +10275,17 @@ int fpstate;
     PriRelease  = Npriq,  /* released edf processes */
     PriEdf    = Npriq+1,  /* active edf processes */
     PriExtra  = Npriq-1,  /* edf processes at high best-effort pri */
+@
+
+<<[[runproc()]] test for empty real-time scheduling queue>>=
+runq[Nrq-1].head == nil && runq[Nrq-2].head == nil
+@
+
+<<[[runproc()]] test if p is a real-time process>>=
+    if(edflock(p)){
+        edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
+        edfunlock();
+    }
 @
 
 <<[[schedinit()]] optional real-time [[edfrecord()]]>>=

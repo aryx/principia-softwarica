@@ -1585,7 +1585,7 @@ alreadyhi:
         CLI
         RET
 @ 
-
+% this function is actually used quite a lot, not just internally in ilock
 
 <<function spllo>>=
 // int   spllo(void);
@@ -1735,7 +1735,7 @@ struct KQLock
   
     // list<ref<Proc>> (next = Proc.qnext)
     Proc  *head;    /* next process waiting for object */
-    // list<ref<Proc>> (direct access to tail, queue)
+    // ref<Proc> (direct access to tail, queue)
     Proc  *tail;    /* last process waiting for object */
   
     kern_addr qpc;    /* pc of the holder */ // for debugging?
@@ -1820,7 +1820,7 @@ qunlock(QLock *q)
     if(p){
         // dequeue(q)
         q->head = p->qnext;
-        if(q->head == 0)
+        if(q->head == nil)
             q->tail = nil;
 
         unlock(&q->use);
@@ -4603,7 +4603,7 @@ newproc(void)
         p->kstack = smalloc(KSTACK);
 
     /* sched params */
-    p->mp = nil;
+    p->lastcpu = nil;
     p->wired = nil;
     procpriority(p, PriNormal, false);
     p->cpuavg = 0;
@@ -4873,7 +4873,7 @@ sysrfork(ulong *arg)
     p->basepri = up->basepri;
     p->priority = up->basepri;
     p->fixedpri = up->fixedpri;
-    p->mp = up->mp;
+    p->lastcpu = up->lastcpu;
     wm = up->wired;
     if(wm)
         procwired(p, wm->cpuno);
@@ -5277,8 +5277,8 @@ struct Waitmsg
 };
 @ 
 
-% it's actually not a queue, but really a stack
 <<struct Waitq>>=
+// essentially a stack<ref_own<Waitmsg>>
 struct Waitq
 {
     Waitmsg w;
@@ -6868,7 +6868,7 @@ trap(Ureg* ureg)
 
 \section{Overview}
 
-% What a system would be for a programmer without virtual memory!!
+% What a system would look like (including for a programmer) without VM?
 % Virtual memory enables many things:
 % - isolated processes, safer! (see DOS ...) a malicious/buggy process 
 %   can't harm
@@ -8646,13 +8646,15 @@ setswapchan(Chan *c)
 % in essence the main role of an OS is to manage programs and so in essence
 % it is first and foremost a scheduler! 
 
-% What a system would be for a programmer without (preemptive) scheduling?
-%  - a malicious/buggy process could never yield (see MacOS 9 ... windows 3.1)
-%  - 
-
 % first part is cooperative scheduling, with sleep/wakeup
 %  and people calling sched themselves
-% then have preemptive scheduling with interrupt clock
+% then will see preemptive scheduling with interrupt clock
+
+
+% What a system would look like without (preemptive) scheduling?
+%  - a malicious/buggy process could never yield (see MacOS 9 ... windows 3.1)
+%  - DOS didn't even offer cooperative scheduling, so could just have one
+%    process at a time (at least windows 3.1 improved a bit on that)
 
 \section{Process priority}
 %adjustable priority actually
@@ -8677,7 +8679,7 @@ enum priority
 ulong priority; /* priority level */
 
 ulong basepri;  /* base priority level */
-bool fixedpri; /* priority level deson't change */
+bool fixedpri; /* priority level doesn't change */
 @ 
 
 
@@ -8689,13 +8691,10 @@ procpriority(Proc *p, int pri, bool fixed)
         pri = Npriq - 1;
     else if(pri < 0)
         pri = 0;
+
     p->basepri = pri;
     p->priority = pri;
-    if(fixed){
-        p->fixedpri = true;
-    } else {
-        p->fixedpri = false;
-    }
+    p->fixedpri = fixed;
 }
 @ 
 
@@ -8708,16 +8707,17 @@ Nrq   = Npriq+2,  /* number of priority levels including real time */
 
 <<global runq>>=
 // The run queue!!
-// hash<enum<priority>, Schedq>
+// hash<enum<priority>, queue<ref<Proc>>>
 Schedq  runq[Nrq];
 @ 
 
 <<struct Schedq>>=
+// essentially a queue<ref<Proc>>
 struct Schedq
 {
     // list<ref<Proc>> (next = Proc.rnext)
     Proc* head;
-    // list<ref<Proc>>, the tail
+    // ref<Proc>, the tail
     Proc* tail;
     // size of list
     int n; 
@@ -8762,6 +8762,8 @@ queueproc(Schedq *rq, Proc *p)
     pri = rq - runq;
     lock(runq);
     p->priority = pri;
+
+    // add_queue(p, rq)
     p->rnext = nil;
     if(rq->tail)
         rq->tail->rnext = p;
@@ -8769,6 +8771,7 @@ queueproc(Schedq *rq, Proc *p)
         rq->head = p;
     rq->tail = p;
     rq->n++;
+
     nrdy++;
     runvec |= 1<<pri;
     unlock(runq);
@@ -8779,6 +8782,7 @@ queueproc(Schedq *rq, Proc *p)
 /*
  *  try to remove a process from a scheduling queue (called splhi)
  */
+// tp should belong to the queue
 Proc*
 dequeueproc(Schedq *rq, Proc *tp)
 {
@@ -8797,6 +8801,7 @@ dequeueproc(Schedq *rq, Proc *tp)
             break;
         l = p;
     }
+    // l should be nil most of the time, the queue probably didn't change
 
     /*
      *  p->cpu==nil only when process state is saved
@@ -8805,6 +8810,8 @@ dequeueproc(Schedq *rq, Proc *tp)
         unlock(runq);
         return nil;
     }
+
+    // remove_queue(p, rq)
     if(p->rnext == nil)
         rq->tail = l;
     if(l)
@@ -8814,7 +8821,9 @@ dequeueproc(Schedq *rq, Proc *tp)
     if(rq->head == nil)
         runvec &= ~(1<<(rq-runq));
     rq->n--;
+
     nrdy--;
+
     if(p->state != Ready)
         print("dequeueproc %s %lud %s\n", p->text, p->pid, statename[p->state]);
 
@@ -8830,8 +8839,8 @@ dequeueproc(Schedq *rq, Proc *tp)
 Cpu  *cpu;    /* processor running this proc */
 @
 
-% and more important cpu->proc!!  (so proc->cpu and cpu->proc)
-% sched will do cpu->proc = newp; (or up = newp)
+% and more importantly cpu->proc!!  (so have proc->cpu and cpu->proc)
+% sched() will essentially do cpu->proc = newp; (or up = newp)
 
 
 % actually why could not factorize code with sleep()?
@@ -8847,11 +8856,8 @@ proc_sched(void)
 
     if(cpu->ilockdepth)
         panic("cpu%d: ilockdepth %d, last lock %#p at %#p, sched called from %#p",
-            cpu->cpuno,
-            cpu->ilockdepth,
-            up? up->lastilock: nil,
-            (up && up->lastilock)? up->lastilock->pc: 0,
-            getcallerpc(&p+2));
+            cpu->cpuno, cpu->ilockdepth, up? up->lastilock: nil,
+            (up && up->lastilock)? up->lastilock->pc: 0, getcallerpc(&p+2));
     if(up){
         /*
          * Delay the sched until the process gives up the locks
@@ -8878,13 +8884,16 @@ proc_sched(void)
                 delayedscheds++; // stats
                 return;
             }
+        
         up->delaysched = 0;
         splhi(); // schedinit requires this
-        /* statistics */
         cpu->cs++;
 
         procsave(up);
+        // save label for context switch
         if(setlabel(&up->sched)){
+            // will resume here after we have been scheduled back
+            // from a gotolabel(up->sched) by another process, see below
             procrestore(up);
             spllo();
             return;
@@ -8895,6 +8904,8 @@ proc_sched(void)
         // why not call sched() recursively? or goto common:
         // where do the p = runproc() ...?
     }
+
+
     p = runproc();
     <<[[proc_sched()]] optional guard for real-time process>>
     {
@@ -8916,106 +8927,7 @@ proc_sched(void)
 }
 @ 
 
-% important, put part of code of trap() here that use delaysched to
-% recall sched()
-<<[[Proc]] scheduling fields>>=
-ulong delaysched;
-@
-
-
-
-
-
-
-
-
-<<[[Cpu]] other fields>>=
-Proc* readied;    /* for runproc */
-@
-
-<<function runproc>>=
-/*
- *  pick a process to run
- */
-Proc*
-runproc(void)
-{
-    Schedq *rq;
-    Proc *p;
-    ulong start, now;
-    int i;
-    void (*pt)(Proc*, int, vlong);
-
-    start = perfticks();
-
-    /* cooperative scheduling until the clock ticks */
-    if((p=cpu->readied) && p->cpu==nil && p->state==Ready
-    && (p->wired == nil || p->wired == cpu)
-    && runq[Nrq-1].head == nil && runq[Nrq-2].head == nil){
-        skipscheds++;
-        rq = &runq[p->priority];
-        goto found;
-    }
-
-    preempts++;
-
-loop:
-    /*
-     *  find a process that last ran on this processor (affinity),
-     *  or one that hasn't moved in a while (load balancing).  Every
-     *  time around the loop affinity goes down.
-     */
-    spllo();
-    for(i = 0;; i++){
-        /*
-         *  find the highest priority target process that this
-         *  processor can run given affinity constraints.
-         *
-         */
-        for(rq = &runq[Nrq-1]; rq >= runq; rq--){
-            for(p = rq->head; p; p = p->rnext){
-                if(p->mp == nil || p->mp == CPUS(cpu->cpuno)
-                || (!p->wired && i > 0))
-                    goto found;
-            }
-        }
-
-        /* waste time or halt the CPU */
-        idlehands();
-
-        /* remember how much time we're here */
-        now = perfticks();
-        cpu->perf.inidle += now-start;
-        start = now;
-    }
-
-found:
-    splhi();
-    p = dequeueproc(rq, p);
-    if(p == nil)
-        goto loop;
-
-    p->state = Scheding;
-    p->mp = CPUS(cpu->cpuno);
-
-    if(edflock(p)){
-        edfrun(p, rq == &runq[PriEdf]); /* start deadline timer and do admin */
-        edfunlock();
-    }
-    pt = proctrace;
-    if(pt)
-        pt(p, SRun, 0);
-    return p;
-}
-@ 
-
-
-
-% have a [[Cpu]] scheduler fields? also this not really related to contextswitch
-% the sched of the Cpu is to jump to schedinit that eventually calls sched()
-<<[[Cpu]] other fields>>=
-Label sched;      /* scheduler wakeup */ // address of schedinit()
-@
+% why logic splitted between sched and schedinit, could not gather?
 
 
 <<function schedinit>>=
@@ -9028,7 +8940,6 @@ schedinit(void)     /* never returns */
     Edf *e;
 
     setlabel(&cpu->sched);
-
 
     if(up) {
         <<[[schedinit()]] optional real-time [[edfrecord()]]>>
@@ -9066,6 +8977,149 @@ schedinit(void)     /* never returns */
     sched();
 }
 @ 
+
+
+
+
+% important, put part of code of trap() here that use delaysched to
+% call sched() again
+<<[[Proc]] scheduling fields>>=
+ulong delaysched;
+@
+
+
+
+
+
+<<function runproc>>=
+/*
+ *  pick a process to run
+ */
+Proc*
+runproc(void)
+{
+    Schedq *rq;
+    Proc *p;
+    ulong start, now;
+    int i;
+    void (*pt)(Proc*, int, vlong);
+
+    start = perfticks();
+
+    /* cooperative scheduling until the clock ticks */
+    if((p=cpu->readied) && p->cpu==nil && p->state==Ready && 
+      (p->wired == nil || p->wired == cpu) && 
+      <<[[runproc()]] test for empty real-time scheduling queue>>
+    ){
+        skipscheds++;
+        rq = &runq[p->priority];
+        goto found;
+    }
+
+    preempts++;
+
+loop:
+    /*
+     *  find a process that last ran on this processor (affinity),
+     *  or one that hasn't moved in a while (load balancing). Every
+     *  time around the loop affinity goes down.
+     */
+    spllo();
+    for(i = 0;; i++){
+        /*
+         *  find the highest priority target process that this
+         *  processor can run given affinity constraints.
+         *
+         */
+        for(rq = &runq[Nrq-1]; rq >= runq; rq--){
+            for(p = rq->head; p; p = p->rnext){
+                if(p->lastcpu == nil || p->lastcpu == CPUS(cpu->cpuno)
+                || (!p->wired && i > 0))
+                    goto found;
+            }
+        }
+        // nothing found
+        /* waste time or halt the CPU */
+        idlehands();
+
+        /* remember how much time we're here */
+        now = perfticks();
+        cpu->perf.inidle += now-start;
+        start = now;
+    }
+
+found:
+    splhi();
+    p = dequeueproc(rq, p);
+    if(p == nil)
+        goto loop;
+
+    p->state = Scheding;
+    p->lastcpu = CPUS(cpu->cpuno);
+
+    <<[[runproc()]] test if p is a real-time process>> 
+    pt = proctrace;
+    if(pt)
+        pt(p, SRun, 0);
+    return p;
+}
+@ 
+
+
+
+<<function idlehands>>=
+// current configuration
+static bool idle_spin = false;
+static bool idle_if_nproc = 0;
+
+
+/*
+ *  put the processor in the halt state if we've no processes to run.
+ *  an interrupt will get us going again.
+ */
+void
+idlehands(void)
+{
+    /*
+     * we used to halt only on single-core setups. halting in an SMP system 
+     * can result in a startup latency for processes that become ready.
+     * if idle_spin is false, we care more about saving energy
+     * than reducing this latency.
+     *
+     * the performance loss with idle_spin == false seems to be slight
+     * and it reduces lock contention (thus system time and real time)
+     * on many-core systems with large values of NPROC.
+     */
+    if(conf.ncpu == 1 || idle_spin == false ||
+        (idle_if_nproc && conf.ncpu >= idle_if_nproc))
+        halt();
+}
+@ 
+
+<<function halt>>=
+/*
+ * Attempt at power saving. -rsc
+ */
+TEXT halt(SB), $0
+        CLI
+        CMPL    nrdy(SB), $0
+        JEQ     _nothingready
+        STI
+        RET
+
+_nothingready:
+        STI
+        HLT
+        RET
+@
+
+
+% have a [[Cpu]] scheduler fields? also this not really related to contextswitch
+% the sched of the Cpu is to jump to schedinit that eventually calls sched()
+<<[[Cpu]] other fields>>=
+Label sched;      /* scheduler wakeup */ // address of schedinit()
+@
+
 
 
 
@@ -9353,6 +9407,10 @@ yield(void)
 Ready,
 @
 
+<<[[Cpu]] other fields>>=
+Proc* readied;    /* for runproc */
+@
+
 <<function ready>>=
 /*
  *  ready(p) picks a new priority for a process and sticks it in the
@@ -9617,7 +9675,7 @@ ulong balancetime;
 @ 
 
 <<[[Proc]] scheduling fields>>=
-Cpu  *mp;    /* processor this process last ran on */
+Cpu *lastcpu;    /* processor this process last ran on */
 @
 
 <<function rebalance>>=
@@ -9638,7 +9696,7 @@ another:
         p = rq->head;
         if(p == nil)
             continue;
-        if(p->mp != CPUS(cpu->cpuno))
+        if(p->lastcpu != CPUS(cpu->cpuno))
             continue;
         if(pri == p->basepri)
             continue;
@@ -9695,7 +9753,7 @@ procwired(Proc *p, int bm)
     }
 
     p->wired = CPUS(bm);
-    p->mp = p->wired;
+    p->lastcpu = p->wired;
 }
 @ 
 
@@ -25147,6 +25205,12 @@ bool trace;    /* process being traced? */
 <<hook proctrace>>=
 void (*proctrace)(Proc*, int, vlong) = 0; // was in devproc.c
 @ 
+
+% always code like
+%  pt = proctrace
+%  if(pt) pt(...)
+%  why not just if(proctrace) proctrace(...)? because of race!
+%  after the if proctrace could be null!
 
 <<function _proctrace>>=
 static void
