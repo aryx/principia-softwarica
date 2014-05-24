@@ -860,9 +860,9 @@ procpriority(Proc *p, int pri, bool fixed)
 }
 /*e: function procpriority */
 
-/*s: function procinit0 */
+/*s: function procinit */
 void
-procinit0(void)     /* bad planning - clashes with devproc.c */
+procinit(void)
 {
     Proc *p;
     int i;
@@ -880,7 +880,7 @@ procinit0(void)     /* bad planning - clashes with devproc.c */
         p->qnext = p+1;
     p->qnext = 0;
 }
-/*e: function procinit0 */
+/*e: function procinit */
 
 /*s: function sleep */
 /*

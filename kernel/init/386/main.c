@@ -961,7 +961,7 @@ main(void)
             arch->clockenable();
 
 
-    procinit0();
+    procinit();
     initseg();
 
     if(delaylink) {

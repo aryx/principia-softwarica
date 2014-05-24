@@ -683,7 +683,7 @@ struct Proc
 /*s: struct Procalloc */
 struct Procalloc
 {
-    // array<Proc>, xalloc'ed in procinit0() (conf.nproc)
+    // array<Proc>, xalloc'ed in procinit() (conf.nproc)
     Proc* arena;
   
     // list<ref<Proc>> (next = ?)

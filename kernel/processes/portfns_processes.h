@@ -66,7 +66,7 @@ void    killbig(char*);
 void    procflushseg(Segment*); 
 void    procdump(void);
 void    renameuser(char*, char*);
-void    procinit0(void);
+void    procinit(void);
 int   procindex(ulong);
 ulong   pwait(Waitmsg*);
 //void    (*tsleep)(Rendez*, int (*)(void*), void*, ulong);

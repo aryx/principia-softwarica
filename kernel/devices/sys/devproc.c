@@ -314,7 +314,7 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 
 /*s: method procinit */
 static void
-procinit(void)
+proc_init(void)
 {
     if(conf.nproc >= (1<<(31-QSHIFT))-1)
         print("warning: too many procs for devproc\n");
@@ -1192,7 +1192,7 @@ Dev procdevtab = {
     .name     =    "proc",
                
     .reset    =    devreset,
-    .init     =    procinit,
+    .init     =    proc_init,
     .shutdown =    devshutdown,
     .attach   =    procattach,
     .walk     =    procwalk,
