@@ -33,7 +33,7 @@ char*	sysctab[] =
 	[PIPE]		"Pipe",
 	[CREATE]		"Create",
 	[FD2PATH]	"Fd2path",
-	[BRK_]		"Brk_",
+	[BRK]		"Brk",
 	[REMOVE]		"Remove",
 	[NOTIFY]		"Notify",
 	[NOTED]		"Noted",
@@ -438,14 +438,14 @@ syscreate(void)
 }
 
 void
-sysbrk_(void)
+sysbrk(void)
 {
 	ulong addr, osize, nsize;
 	Segment *s;
 
 	addr = getmem_w(reg.r[13]+4);
 	if(sysdbg)
-		itrace("brk_(0x%lux)", addr);
+		itrace("brk(0x%lux)", addr);
 
 	reg.r[REGRET] = -1;
 	if(addr < memory.seg[Data].base+datasize) {
@@ -642,7 +642,7 @@ void	(*systab[])(void) =
 	[PIPE]		syspipe,
 	[CREATE]		syscreate,
 	[FD2PATH]	sysfd2path,
-	[BRK_]		sysbrk_,
+	[BRK]		sysbrk,
 	[REMOVE]		sysremove,
 	[NOTIFY]		sysnotify,
 	[NOTED]		sysnoted,

@@ -8,7 +8,7 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-// see also sysbrk_ in sysproc.c
+// see also sysbrk in sysproc.c
 
 // those functions used to be in segment.c
 

@@ -652,7 +652,6 @@ extern	int	access(char*, int);
 extern	long	alarm(ulong);
 extern	int	await(char*, int);
 extern	int	bind(char*, char*, int);
-extern	int	brk(void*);
 extern	int	chdir(char*);
 extern	int	close(int);
 extern	int	create(char*, int, ulong);

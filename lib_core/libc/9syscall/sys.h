@@ -7,7 +7,7 @@
 #define	AWAIT		25
 /*e: sys.h process syscalls */
 /*s: sys.h memory syscalls */
-#define	BRK_		32
+#define	BRK		32
 /*e: sys.h memory syscalls */
 /*s: sys.h file syscalls */
 #define	OPEN		8

@@ -817,14 +817,13 @@ syssegfree(ulong *arg)
 }
 /*e: syscall segfree */
 
-/*s: syscall brk_ */
-/* For binary compatibility */
+/*s: syscall brk */
 long
-sysbrk_(ulong *arg)
+sysbrk(ulong *arg)
 {
     return ibrk(arg[0], BSEG);
 }
-/*e: syscall brk_ */
+/*e: syscall brk */
 
 /*s: syscall rendezvous */
 long

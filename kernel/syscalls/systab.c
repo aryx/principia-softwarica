@@ -27,7 +27,7 @@ extern Syscall sysrfork;
 extern Syscall syspipe;
 extern Syscall syscreate;
 extern Syscall sysfd2path;
-extern Syscall sysbrk_;
+extern Syscall sysbrk;
 extern Syscall sysremove;
 extern Syscall sysnotify;
 extern Syscall sysnoted;
@@ -67,7 +67,7 @@ Syscall *systab[] = {
     [AWAIT]     sysawait,
 /*e: systab process syscalls */
 /*s: systab memory syscalls */
-    [BRK_]      sysbrk_,
+    [BRK]      sysbrk,
 /*e: systab memory syscalls */
 /*s: systab file syscalls */
     [OPEN]      sysopen,
@@ -146,7 +146,7 @@ char *sysctab[] = {
     [PIPE]      "Pipe",
     [CREATE]    "Create",
     [FD2PATH]   "Fd2path",
-    [BRK_]      "Brk",
+    [BRK]      "Brk",
     [REMOVE]    "Remove",
     [NOTIFY]    "Notify",
     [NOTED]     "Noted",
