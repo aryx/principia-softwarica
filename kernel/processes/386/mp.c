@@ -473,7 +473,7 @@ mpstartap(Apic* apic)
     p += BY2PG;
 
     cpuno = apic->cpuno;
-    CPUS(cpuno) = mach;
+    CPUS(cpuno) = mach; // !!!!
     mach->cpuno = cpuno;
     mach->pdb = pdb;
     mach->gdt = (Segdesc*)p;    /* filled by mmuinit */

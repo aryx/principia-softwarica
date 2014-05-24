@@ -29,15 +29,15 @@ enum procstate
     /*x: enum procstate cases */
     Scheding,
     /*x: enum procstate cases */
-    Ready,
-    /*x: enum procstate cases */
-    Wakeme,
-    /*x: enum procstate cases */
     Rendezvous,
     /*x: enum procstate cases */
     Moribund,
     /*x: enum procstate cases */
     Broken,
+    /*x: enum procstate cases */
+    Ready,
+    /*x: enum procstate cases */
+    Wakeme,
     /*x: enum procstate cases */
     Stopped,
     /*x: enum procstate cases */
@@ -449,32 +449,30 @@ struct Proc
     ulong priority; /* priority level */
 
     ulong basepri;  /* base priority level */
-    uchar fixedpri; /* priority level deson't change */
+    bool fixedpri; /* priority level deson't change */
+    /*x: [[Proc]] scheduling fields */
+    // option<ref<Cpu>>, null when not associated to a processor
+    Cpu  *cpu;    /* processor running this proc */
     /*x: [[Proc]] scheduling fields */
     ulong delaysched;
     /*x: [[Proc]] scheduling fields */
-    int preempted;  /* true if this process hasn't finished the interrupt
+    ulong lastupdate;
+    ulong cpuavg;    /* cpu average */
+    /*x: [[Proc]] scheduling fields */
+    bool preempted;  /* true if this process hasn't finished the interrupt
            *  that last preempted it
            */
-
-    ulong cpuavg;    /* cpu average */
-    uchar yield;    /* non-zero if the process just did a sleep(0) */
-    ulong readytime;  /* time process came ready */
-    ulong movetime; /* last time process switched processors */
-
+    /*x: [[Proc]] scheduling fields */
+    Cpu  *mp;    /* processor this process last ran on */
+    /*x: [[Proc]] scheduling fields */
+    Cpu  *wired;
+    /*x: [[Proc]] scheduling fields */
     /*s: [[Proc]] optional [[edf]] field for real-time scheduling */
     // option<ref_own?<edf>>
     Edf *edf; /* if non-null, real-time proc, edf contains scheduling params */
     /*e: [[Proc]] optional [[edf]] field for real-time scheduling */
     /*x: [[Proc]] scheduling fields */
-    // option<ref<Cpu>>, null when not associated to a processor
-    Cpu  *cpu;    /* processor running this proc */
-    /*x: [[Proc]] scheduling fields */
-    ulong lastupdate;
-    /*x: [[Proc]] scheduling fields */
-    Cpu  *mp;    /* processor this process last ran on */
-    /*x: [[Proc]] scheduling fields */
-    Cpu  *wired;
+    ulong readytime;  /* time process came ready */
     /*e: [[Proc]] scheduling fields */
 //--------------------------------------------------------------------
 // Files
@@ -536,15 +534,15 @@ struct Proc
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
     /*x: [[Proc]] synchronization fields */
-    Rendez  *r;   /* rendezvous point slept on */
-    Lock  rlock;    /* sync sleep/wakeup with postnote */
-    /*x: [[Proc]] synchronization fields */
     Rgrp  *rgrp;    /* Rendez group */
 
     uintptr rendtag;  /* Tag for rendezvous */
     uintptr rendval;  /* Value for rendezvous */
     //??
     Proc  *rendhash;  /* Hash list for tag values */
+    /*x: [[Proc]] synchronization fields */
+    Rendez  *r;   /* rendezvous point slept on */
+    Lock  rlock;    /* sync sleep/wakeup with postnote */
     /*x: [[Proc]] synchronization fields */
     Rendez  sleep;    /* place for syssleep/debug/tsleep */
     /*e: [[Proc]] synchronization fields */
@@ -557,6 +555,7 @@ struct Proc
     // length(errlab) used.
     int nerrlab;
 
+    // ref<string> point to errbuf0 or to syserrstr (which points to errbuf1)
     char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
     char  errbuf0[ERRMAX];
     char  errbuf1[ERRMAX];
@@ -615,11 +614,11 @@ struct Proc
 // Other
 //--------------------------------------------------------------------
     /*s: [[Proc]] other fields */
-    Sargs sargs;    /* address of this is known by db */
-    /*x: [[Proc]] other fields */
     bool kp;   /* true if a kernel process */
     void  (*kpfun)(void*);
     void  *kparg;
+    /*x: [[Proc]] other fields */
+    Sargs sargs;    /* address of this is known by db */
     /*x: [[Proc]] other fields */
     char  genbuf[128];  /* buffer used e.g. for last name element from namec */
     /*x: [[Proc]] other fields */
@@ -652,7 +651,7 @@ struct Proc
     // hash<?, list<ref<Proc>> Procalloc.ht
     Proc  *pidhash; /* next proc in pid hash */ 
     /*x: [[Proc]] extra fields */
-    // list<ref<Proc>> ?? Schedq.head chain?
+    // list<ref<Proc>> of Schedq.head
     Proc  *rnext;   /* next process in run queue */
     /*x: [[Proc]] extra fields */
     // Alarms.head chain?
@@ -701,12 +700,12 @@ struct Procalloc
 /*s: struct Schedq */
 struct Schedq
 {
-    // list<ref<Proc>> (next = Proc.rnext?)
+    // list<ref<Proc>> (next = Proc.rnext)
     Proc* head;
-    // list<ref<Proc>> (next = ??)
+    // list<ref<Proc>>, the tail
     Proc* tail;
-  
-    int n;
+    // size of list
+    int n; 
   
     // extra
     Lock;

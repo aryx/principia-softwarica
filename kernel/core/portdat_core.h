@@ -125,12 +125,14 @@ struct Cpu
     /*s: [[Cpu]] other fields */
     int ilockdepth;
     /*x: [[Cpu]] other fields */
-    bool flushmmu;   /* make current proc flush it's mmu state */
-    /*x: [[Cpu]] other fields */
     int lastintr; // debugging
     /*x: [[Cpu]] other fields */
-    Label sched;      /* scheduler wakeup */ // address of schedinit()
+    bool flushmmu;   /* make current proc flush it's mmu state */
+    /*x: [[Cpu]] other fields */
     Proc* readied;    /* for runproc */
+    /*x: [[Cpu]] other fields */
+    Label sched;      /* scheduler wakeup */ // address of schedinit()
+    /*x: [[Cpu]] other fields */
     ulong schedticks;   /* next forced context switch */
     /*e: [[Cpu]] other fields */
     struct ArchCpu;

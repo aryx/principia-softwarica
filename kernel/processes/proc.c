@@ -138,6 +138,8 @@ schedinit(void)     /* never returns */
     Edf *e;
 
     setlabel(&cpu->sched);
+
+
     if(up) {
         /*s: [[schedinit()]] optional real-time [[edfrecord()]] */
                 if((e = up->edf) && (e->flags & Admitted))
@@ -240,6 +242,8 @@ proc_sched(void)
         gotolabel(&cpu->sched); // goto schedinit()
         //TODO can reach this point? schedinit calls sched()
         // so can return from sched() here at some point?
+        // why not call sched() recursively? or goto common:
+        // where do the p = runproc() ...?
     }
     p = runproc();
     /*s: [[proc_sched()]] optional guard for real-time process */
@@ -250,7 +254,7 @@ proc_sched(void)
         p->priority = reprioritize(p);
     }
     if(p != cpu->readied)
-        cpu->schedticks = cpu->ticks + HZ/10;
+        cpu->schedticks = cpu->ticks + HZ/10; // 100ms of allocated time
     cpu->readied = nil;
 
     cpu->proc = p;
@@ -265,7 +269,7 @@ proc_sched(void)
 /*e: function sched */
 
 /*s: function anyready */
-int
+bool
 anyready(void)
 {
     return runvec;
@@ -305,7 +309,7 @@ hzsched(void)
  *  here at the end of non-clock interrupts to see if we should preempt the
  *  current process.  Returns 1 if preempted, 0 otherwise.
  */
-int
+bool
 preempted(void)
 {
     if(up && up->state == Running)
@@ -313,13 +317,13 @@ preempted(void)
     if(anyhigher())
     if(!active.exiting){
         cpu->readied = nil;   /* avoid cooperative scheduling */
-        up->preempted = 1;
+        up->preempted = true;
         sched();
         splhi();
-        up->preempted = 0;
-        return 1;
+        up->preempted = false;
+        return true;
     }
-    return 0;
+    return false;
 }
 /*e: function preempted */
 
@@ -474,7 +478,7 @@ dequeueproc(Schedq *rq, Proc *tp)
      *  the queue may have changed before we locked runq,
      *  refind the target process.
      */
-    l = 0;
+    l = nil;
     for(p = rq->head; p; p = p->rnext){
         if(p == tp)
             break;
@@ -482,9 +486,9 @@ dequeueproc(Schedq *rq, Proc *tp)
     }
 
     /*
-     *  p->cpu==0 only when process state is saved
+     *  p->cpu==nil only when process state is saved
      */
-    if(p == 0 || p->cpu){
+    if(p == nil || p->cpu){
         unlock(runq);
         return nil;
     }
@@ -793,7 +797,7 @@ newproc(void)
     /* sched params */
     p->mp = nil;
     p->wired = nil;
-    procpriority(p, PriNormal, 0);
+    procpriority(p, PriNormal, false);
     p->cpuavg = 0;
     p->lastupdate = CPUS(0)->ticks*Scaling;
     p->edf = nil;
@@ -840,7 +844,7 @@ procwired(Proc *p, int bm)
 
 /*s: function procpriority */
 void
-procpriority(Proc *p, int pri, int fixed)
+procpriority(Proc *p, int pri, bool fixed)
 {
     if(pri >= Npriq)
         pri = Npriq - 1;
@@ -849,9 +853,9 @@ procpriority(Proc *p, int pri, int fixed)
     p->basepri = pri;
     p->priority = pri;
     if(fixed){
-        p->fixedpri = 1;
+        p->fixedpri = true;
     } else {
-        p->fixedpri = 0;
+        p->fixedpri = false;
     }
 }
 /*e: function procpriority */
@@ -1574,7 +1578,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->ureg = 0;
     p->dbgreg = nil;
 
-    procpriority(p, PriKproc, 0);
+    procpriority(p, PriKproc, false);
 
     kprocchild(p, func, arg);
 

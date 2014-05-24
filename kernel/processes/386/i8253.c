@@ -62,7 +62,9 @@ enum
 };
 
 enum {
+    /*s: constant Freq */
     Freq=   1193182,    /* Real clock frequency */
+    /*e: constant Freq */
     Tickshift=8,        /* extra accuracy */
     MaxPeriod=Freq/HZ,
     MinPeriod=Freq/(100*HZ),
