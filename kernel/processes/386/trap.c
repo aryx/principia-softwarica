@@ -888,7 +888,7 @@ notify(Ureg* ureg)
 
     s = spllo();
     qlock(&up->debug);
-    up->notepending = 0;
+    up->notepending = false;
     n = &up->note[0];
     if(strncmp(n->msg, "sys:", 4) == 0){
         l = strlen(n->msg);

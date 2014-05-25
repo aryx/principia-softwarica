@@ -848,7 +848,7 @@ procread(Chan *c, void *va, long n, vlong off)
             n = m;
         }
         if(p->nnote == 0)
-            p->notepending = 0;
+            p->notepending = false;
         poperror();
         qunlock(&p->debug);
         return n;

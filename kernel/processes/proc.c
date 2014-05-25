@@ -19,6 +19,8 @@
 Schedq  runq[Nrq];
 /*e: global runq */
 /*s: global runveq */
+// bitset, each bit i represents whether the runq at pri i has some process
+// sizeof(ulong) > Nrq
 ulong   runvec;
 /*e: global runveq */
 
@@ -26,7 +28,6 @@ ulong   runvec;
 static struct Procalloc procalloc;
 /*e: global procalloc */
 
-int schedgain = 30; /* units in seconds */
 /*s: global nrdy */
 int nrdy;
 /*e: global nrdy */
@@ -50,7 +51,12 @@ enum
 {
     Q=10,
     DQ=4,
+    /*s: constant Schedagain */
+    schedgain = 30, /* units in seconds */
+    /*e: constant Schedagain */
+    /*s: constant Scaling */
     Scaling=2,
+    /*e: constant Scaling */
 };
 
 /*s: global statename */
@@ -232,17 +238,23 @@ proc_sched(void)
         procsave(up);
         // save label for context switch
         if(setlabel(&up->sched)){
-            // will resume here after we have been scheduled back
+            //
+            // here when the process has been scheduled back
             // from a gotolabel(up->sched) by another process, see below
+            //
             procrestore(up);
             spllo();
             return;
+        } else {
+            //
+            // here to go to sched
+            //
+            gotolabel(&cpu->sched); // goto schedinit()
+           //TODO can reach this point? schedinit calls sched()
+           // so can return from sched() here at some point?
+           // why not call sched() recursively? or goto common:
+           // where do the p = runproc() ...?
         }
-        gotolabel(&cpu->sched); // goto schedinit()
-        //TODO can reach this point? schedinit calls sched()
-        // so can return from sched() here at some point?
-        // why not call sched() recursively? or goto common:
-        // where do the p = runproc() ...?
     }
 
 
@@ -299,6 +311,7 @@ hzsched(void)
     /* unless preempted, get to run for at least 100ms */
     if(anyhigher()
     || (!up->fixedpri && cpu->ticks > cpu->schedticks && anyready())){
+
         cpu->readied = nil;   /* avoid cooperative scheduling */
         up->delaysched++;
     }
@@ -314,16 +327,16 @@ bool
 preempted(void)
 {
     if(up && up->state == Running)
-    if(up->preempted == 0)
-    if(anyhigher())
-    if(!active.exiting){
-        cpu->readied = nil;   /* avoid cooperative scheduling */
-        up->preempted = true;
-        sched();
-        splhi();
-        up->preempted = false;
-        return true;
-    }
+      if(up->preempted == false)
+        if(anyhigher())
+          if(!active.exiting){
+              cpu->readied = nil;   /* avoid cooperative scheduling */
+              up->preempted = true;
+              sched();
+              splhi(); // still in interrupt context
+              up->preempted = false;
+              return true;
+          }
     return false;
 }
 /*e: function preempted */
@@ -549,9 +562,11 @@ proc_ready(Proc *p)
     rq = &runq[pri];
     p->state = Ready;
     queueproc(rq, p);
+
     pt = proctrace;
     if(pt)
         pt(p, SReady, 0);
+
     splx(s);
 }
 /*e: function ready */
@@ -784,7 +799,7 @@ newproc(void)
     else
         p->procctl = 0;
     p->syscalltrace = nil;    
-    p->notepending = 0;
+    p->notepending = false;
     p->ureg = 0;
     p->privatemem = false;
     p->noswap = false;
@@ -914,8 +929,10 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
     if(up->nlocks.ref)
         print("process %lud sleeps with %lud locks held, last lock %#p locked at pc %#lux, sleep called from %#p\n",
             up->pid, up->nlocks.ref, up->lastlock, up->lastlock->pc, getcallerpc(&r));
+
     lock(r);
     lock(&up->rlock);
+
     if(r->p){
         print("double sleep called from %#p, %lud %lud\n", getcallerpc(&r), r->p->pid, up->pid);
         dumpstack();
@@ -945,9 +962,11 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
         pt = proctrace;
         if(pt)
             pt(up, SSleep, 0);
+
         up->state = Wakeme;
         up->r = r;
 
+        // similar code to sched(), why not call sched()?
         /* statistics */
         cpu->cs++;
 
@@ -969,7 +988,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
     }
 
     if(up->notepending) {
-        up->notepending = 0;
+        up->notepending = false;
         splx(s);
         if(up->procctl == Proc_exitme && up->closingfgrp)
             forceclosefgrp();
@@ -1093,7 +1112,7 @@ proc_postnote(Proc *p, int dolock, char *n, int flag)
         p->note[p->nnote++].flag = flag;
         ret = 1;
     }
-    p->notepending = 1;
+    p->notepending = true;
     if(dolock)
         qunlock(&p->debug);
 

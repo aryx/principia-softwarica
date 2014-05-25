@@ -457,14 +457,14 @@ struct Proc
     /*x: [[Proc]] scheduling fields */
     ulong delaysched;
     /*x: [[Proc]] scheduling fields */
-    ulong lastupdate;
+    Cpu *lastcpu;    /* processor this process last ran on */
+    /*x: [[Proc]] scheduling fields */
+    ulong lastupdate; // dimension?? ticks * Scaling;
     ulong cpuavg;    /* cpu average */
     /*x: [[Proc]] scheduling fields */
     bool preempted;  /* true if this process hasn't finished the interrupt
            *  that last preempted it
            */
-    /*x: [[Proc]] scheduling fields */
-    Cpu *lastcpu;    /* processor this process last ran on */
     /*x: [[Proc]] scheduling fields */
     Cpu  *wired;
     /*x: [[Proc]] scheduling fields */
@@ -504,7 +504,7 @@ struct Proc
 
     ulong noteid;   /* Equivalent of note group */
 
-    int notepending;  /* note issued but not acted on */
+    bool notepending;  /* note issued but not acted on */
 
     Note  lastnote;
 
@@ -535,6 +535,7 @@ struct Proc
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
     /*x: [[Proc]] synchronization fields */
+    // ref<Rendez>
     Rendez  *r;   /* rendezvous point slept on */
     Lock  rlock;    /* sync sleep/wakeup with postnote */
     /*x: [[Proc]] synchronization fields */
