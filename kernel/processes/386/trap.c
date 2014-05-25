@@ -369,7 +369,8 @@ void
 trap(Ureg* ureg)
 {
     bool clockintr;
-    int i, vno, user;
+    bool user;
+    int i, vno;
     char buf[ERRMAX];
     Vctl *ctl, *v;
     Cpu *mach;
@@ -414,7 +415,7 @@ trap(Ureg* ureg)
                 clockintr = true;
 
             if(up && !clockintr)
-                preempted();
+                preempt();
         }
     }
     else if(vno < nelem(excname) && user){

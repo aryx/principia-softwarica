@@ -318,13 +318,13 @@ hzsched(void)
 }
 /*e: function hzsched */
 
-/*s: function preempted */
+/*s: function preempt */
 /*
  *  here at the end of non-clock interrupts to see if we should preempt the
- *  current process.  Returns 1 if preempted, 0 otherwise.
+ *  current process.
  */
-bool
-preempted(void)
+void
+preempt(void)
 {
     if(up && up->state == Running)
       if(up->preempted == false)
@@ -335,11 +335,10 @@ preempted(void)
               sched();
               splhi(); // still in interrupt context
               up->preempted = false;
-              return true;
           }
-    return false;
+    return;
 }
-/*e: function preempted */
+/*e: function preempt */
 
 /*s: function updatecpu */
 /*
@@ -984,6 +983,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
             unlock(&up->rlock);
             unlock(r);
             gotolabel(&cpu->sched);
+            // reachable??
         }
     }
 

@@ -535,7 +535,7 @@ struct Proc
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
     /*x: [[Proc]] synchronization fields */
-    // ref<Rendez>
+    // option<ref<Rendez>>
     Rendez  *r;   /* rendezvous point slept on */
     Lock  rlock;    /* sync sleep/wakeup with postnote */
     /*x: [[Proc]] synchronization fields */

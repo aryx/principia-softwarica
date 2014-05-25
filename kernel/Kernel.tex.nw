@@ -6722,7 +6722,8 @@ void
 trap(Ureg* ureg)
 {
     bool clockintr;
-    int i, vno, user;
+    bool user;
+    int i, vno;
     char buf[ERRMAX];
     Vctl *ctl, *v;
     Cpu *mach;
@@ -6767,7 +6768,7 @@ trap(Ureg* ureg)
                 clockintr = true;
 
             if(up && !clockintr)
-                preempted();
+                preempt();
         }
     }
     else if(vno < nelem(excname) && user){
@@ -6843,6 +6844,24 @@ trap(Ureg* ureg)
     }
 }
 @ 
+
+<<function kexit>>=
+/* go to user space */
+void
+kexit(Ureg*)
+{
+    uvlong t;
+    Tos *tos;
+
+    /* precise time accounting, kernel exit */
+    tos = (Tos*)(USTKTOP-sizeof(Tos));
+    cycles(&t);
+    tos->kcycles += t - up->kentry;
+    tos->pcycles = up->pcycles;
+    tos->pid = up->pid;
+}
+@ 
+
 
 \ifallcode
 <<[[trap()]] debugging>>=
@@ -9511,6 +9530,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
             unlock(&up->rlock);
             unlock(r);
             gotolabel(&cpu->sched);
+            // reachable??
         }
     }
 
@@ -9654,13 +9674,13 @@ bool preempted;  /* true if this process hasn't finished the interrupt
        */
 @
 
-<<function preempted>>=
+<<function preempt>>=
 /*
  *  here at the end of non-clock interrupts to see if we should preempt the
- *  current process.  Returns 1 if preempted, 0 otherwise.
+ *  current process.
  */
-bool
-preempted(void)
+void
+preempt(void)
 {
     if(up && up->state == Running)
       if(up->preempted == false)
@@ -9671,9 +9691,8 @@ preempted(void)
               sched();
               splhi(); // still in interrupt context
               up->preempted = false;
-              return true;
           }
-    return false;
+    return;
 }
 @ 
 
@@ -11947,8 +11966,6 @@ TEXT touser(SB), $0
         IRETL
 @ 
 
-
-\section{Scheduler initialization}
 
 \section{Booting the user}
 % see section on Userspace system programs

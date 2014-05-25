@@ -60,7 +60,7 @@ int   canpage(Proc*);
 int   anyhigher(void);
 void    scheddump(void);
 Proc*   dequeueproc(Schedq*, Proc*);
-int   preempted(void);
+void   preempt(void);
 void    killbig(char*);
 //@Scheck: not dead, used in segment.c, weird TODO
 void    procflushseg(Segment*); 
