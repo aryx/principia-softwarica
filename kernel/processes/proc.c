@@ -158,12 +158,12 @@ schedinit(void)     /* never returns */
             break;
         case Moribund:
             up->state = Dead;
-           /*s: [[schedinit()]] optional real-time [[edfstop()]] */
-                       edfstop(up);
-                       if (up->edf)
-                           free(up->edf);
-                       up->edf = nil;
-           /*e: [[schedinit()]] optional real-time [[edfstop()]] */
+            /*s: [[schedinit()]] optional real-time [[edfstop()]] */
+                        edfstop(up);
+                        if (up->edf)
+                            free(up->edf);
+                        up->edf = nil;
+            /*e: [[schedinit()]] optional real-time [[edfstop()]] */
             /*
              * Holding locks from pexit:
              *  procalloc
@@ -178,6 +178,7 @@ schedinit(void)     /* never returns */
             unlock(&procalloc);
             break;
         }
+
         up->cpu = nil;
         updatecpu(up);
 
@@ -248,10 +249,7 @@ proc_sched(void)
             // here to go to sched
             //
             gotolabel(&cpu->sched); // goto schedinit()
-           //TODO can reach this point? schedinit calls sched()
-           // so can return from sched() here at some point?
-           // why not call sched() recursively? or goto common:
-           // where do the p = runproc() ...?
+            panic("sched: should never reach this point");
         }
     }
 
@@ -818,7 +816,7 @@ newproc(void)
     p->noteid = incref(&noteidalloc);
     if(p->pid==0 || p->noteid==0)
         panic("pidalloc");
-    if(p->kstack == 0)
+    if(p->kstack == nil)
         p->kstack = smalloc(KSTACK);
 
     /* sched params */
@@ -1397,11 +1395,8 @@ proc_pexit(char *exitstr, bool freemem)
     /*e: [[pexit()]] optional [[edfstop()]] for real-time scheduling */
     up->state = Moribund;
     // will gotolabel() to schedinit() which has special code around Moribund
-    // (why not doing more simply gotolabel(cpu->sched)? to reuse some of
-    //  sched() code?)
     sched(); 
-    // should never reach this
-    panic("pexit"); 
+    panic("pexit: should never reach this point"); 
 }
 /*e: function pexit */
 
