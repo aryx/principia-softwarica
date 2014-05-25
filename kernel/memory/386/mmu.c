@@ -723,7 +723,7 @@ vunmap(void *v, int size)
      * boot. In that case it suffices to flush the CPUS(0) TLB
      * and return.
      */
-    if(!active.thunderbirdsarego){
+    if(!active.main_reached_sched){
         putcr3(PADDR(CPUS(0)->pdb));
         return;
     }

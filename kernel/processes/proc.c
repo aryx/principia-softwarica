@@ -19,9 +19,8 @@
 Schedq  runq[Nrq];
 /*e: global runq */
 /*s: global runveq */
-// bitset, each bit i represents whether the runq at pri i has some process
-// sizeof(ulong) > Nrq
-ulong   runvec;
+// array<bool>, each bit i represents whether the runq at pri i has processes
+ulong   runvec; // coupling: sizeof(ulong) must be >= Nrq
 /*e: global runveq */
 
 /*s: global procalloc */
@@ -60,8 +59,7 @@ enum
 };
 
 /*s: global statename */
-//coupling: with enum procstate
-// hash<enum<procstate>, string>, to debug
+// hash<enum<procstate>, string>, coupling: with enum procstate
 char *statename[] =
 {
     "Dead",
@@ -259,9 +257,9 @@ proc_sched(void)
 
 
     p = runproc();
-    /*s: [[proc_sched()]] optional guard for real-time process */
+    /*s: [[sched()]] optional guard for real-time process */
         if(!p->edf)
-    /*e: [[proc_sched()]] optional guard for real-time process */
+    /*e: [[sched()]] optional guard for real-time process */
     {
         updatecpu(p);
         p->priority = reprioritize(p);

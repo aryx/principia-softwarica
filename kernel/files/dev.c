@@ -10,7 +10,7 @@
 
 // was in $CONF.c
 /*s: global devtab */
-Dev** devtab = 0;
+Dev** devtab = nil;
 /*e: global devtab */
 
 /*s: function mkqid */

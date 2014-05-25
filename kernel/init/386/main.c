@@ -439,67 +439,67 @@ bootargs(void *base)
 void
 userinit(void)
 {
-        void *v;
-        Proc *p;
-        Segment *s;
-        Page *pg;
+    void *v;
+    Proc *p;
+    Segment *s;
+    Page *pg;
 
-        p = newproc();
-        p->pgrp = newpgrp();
-        p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
-        p->egrp->ref = 1;
-        p->fgrp = dupfgrp(nil);
-        p->rgrp = newrgrp();
-        p->procmode = 0640;
+    p = newproc();
+    p->pgrp = newpgrp();
+    p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
+    p->egrp->ref = 1;
+    p->fgrp = dupfgrp(nil);
+    p->rgrp = newrgrp();
+    p->procmode = 0640;
 
-        kstrdup(&eve, "");
-        kstrdup(&p->text, "*init*");
-        kstrdup(&p->user, eve);
+    kstrdup(&eve, "");
+    kstrdup(&p->text, "*init*");
+    kstrdup(&p->user, eve);
 
-        p->fpstate = FPinit;
-        fpoff();
+    p->fpstate = FPinit;
+    fpoff();
 
-        /*
-         * Kernel Stack
-         *
-         * N.B. make sure there's enough space for syscall to check
-         *      for valid args and 
-         *      4 bytes for gotolabel's return PC
-         */
-        p->sched.pc = (ulong)init0;
-        p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
+    /*
+     * Kernel Stack
+     *
+     * N.B. make sure there's enough space for syscall to check
+     *      for valid args and 
+     *      4 bytes for gotolabel's return PC
+     */
+    p->sched.pc = (ulong)init0;
+    p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
 
-        /*
-         * User Stack
-         *
-         * N.B. cannot call newpage() with clear=1, because pc kmap
-         * requires up != nil.  use tmpmap instead.
-         */
-        s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-        p->seg[SSEG] = s;
-        pg = newpage(0, 0, USTKTOP-BY2PG);
-        v = tmpmap(pg);
-        memset(v, 0, BY2PG);
-        segpage(s, pg);
+    /*
+     * User Stack
+     *
+     * N.B. cannot call newpage() with clear=1, because pc kmap
+     * requires up != nil.  use tmpmap instead.
+     */
+    s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+    p->seg[SSEG] = s;
+    pg = newpage(0, 0, USTKTOP-BY2PG);
+    v = tmpmap(pg);
+    memset(v, 0, BY2PG);
+    segpage(s, pg);
 
-        bootargs(v);
-        tmpunmap(v);
+    bootargs(v);
+    tmpunmap(v);
 
-        /*
-         * Text
-         */
-        s = newseg(SG_TEXT, UTZERO, 1);
-        s->flushme++;
-        p->seg[TSEG] = s;
-        pg = newpage(0, 0, UTZERO);
-        memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
-        segpage(s, pg);
-        v = tmpmap(pg);
-        memset(v, 0, BY2PG);
-        memmove(v, initcode, sizeof initcode);
-        tmpunmap(v);
+    /*
+     * Text
+     */
+    s = newseg(SG_TEXT, UTZERO, 1);
+    s->flushme++;
+    p->seg[TSEG] = s;
+    pg = newpage(0, 0, UTZERO);
+    memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+    segpage(s, pg);
+    v = tmpmap(pg);
+    memset(v, 0, BY2PG);
+    memmove(v, initcode, sizeof initcode);
+    tmpunmap(v);
 
-        ready(p);
+    ready(p);
 }
 /*e: function userinit */
 
@@ -979,7 +979,7 @@ main(void)
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
-    active.thunderbirdsarego = true;
+    active.main_reached_sched = true;
 
     cgapost(0x99); // done!
     schedinit();

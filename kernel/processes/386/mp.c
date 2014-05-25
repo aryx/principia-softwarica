@@ -429,7 +429,7 @@ squidboy(Apic* apic)
     active.cpus |= 1<<cpu->cpuno;
     unlock(&active);
 
-    while(!active.thunderbirdsarego)
+    while(!active.main_reached_sched)
         microdelay(100);
 
     schedinit();

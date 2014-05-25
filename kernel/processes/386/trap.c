@@ -364,7 +364,7 @@ kexit(Ureg*)
  *  VectorSYSCALL.
  *  Trap is called with interrupts disabled via interrupt-gates.
  */
-//@Scheck: Assembly, not dead, called from assembly
+//@Scheck: not dead, called from assembly by _strayintr
 void
 trap(Ureg* ureg)
 {
@@ -741,7 +741,7 @@ fault386(Ureg* ureg, void*)
 /*
  *  Syscall is called directly from assembler without going through trap().
  */
-//@Scheck: no dead, called from assembly by syscall/386/plan9l.s
+//@Scheck: not dead, called from assembly by _syscallintr
 void
 syscall(Ureg* ureg)
 {

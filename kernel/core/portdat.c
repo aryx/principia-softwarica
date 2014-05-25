@@ -47,7 +47,7 @@ Cpu *cpu;
  * MMU information array cpus, mainly for disambiguation and access to
  * the clock which is only maintained by the bootstrap processor (0).
  */
-// array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
+// array<ref<Cpu>>
 Cpu* cpus[MAXCPUS];
 /*e: global cpus */
 

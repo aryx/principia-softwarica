@@ -866,7 +866,7 @@ Cpu *cpu;
  * MMU information array cpus, mainly for disambiguation and access to
  * the clock which is only maintained by the bootstrap processor (0).
  */
-// array<ref<Cpu>>, MAXCPUS is defined in 386/mem.h
+// array<ref<Cpu>>
 Cpu* cpus[MAXCPUS];
 @
 % note that cpus[0] will not be CPUADDR! it will be
@@ -902,13 +902,13 @@ struct Active
     bool ispanic;    /* shutdown in response to a panic */
     bool rebooting;    /* just idle cpus > 0 */
   
-    // 386 specific? rename to ready_for_schedinit or wait_xxx?
-    bool thunderbirdsarego;/* lets the added processors continue to schedinit */
+    bool main_reached_sched;/* lets the added processors continue to schedinit*/
   
     // extra
     Lock;
 };
 @ 
+% main_reached_sched was called thunderbirdsareago
 
 <<global active>>=
 struct Active active;
@@ -1023,8 +1023,7 @@ enum procstate
 
 % 
 <<global statename>>=
-//coupling: with enum procstate
-// hash<enum<procstate>, string>, to debug
+// hash<enum<procstate>, string>, coupling: with enum procstate
 char *statename[] =
 {
     "Dead",
@@ -1233,7 +1232,7 @@ struct Dev
 @ 
 
 <<global devtab>>=
-Dev** devtab = 0;
+Dev** devtab = nil;
 @
 
 % ex of conf_devtab:
@@ -1298,13 +1297,8 @@ PCArch archgeneric = {
 % This is why lots of the concurrency issues arised first
 % for OS programmers long before the other.
 
-<<systab concurrency syscalls>>=
-    [RENDEZVOUS]    sysrendezvous,
-
-    [SEMACQUIRE]    syssemacquire,
-    [SEMRELEASE]    syssemrelease,
-    [TSEMACQUIRE]   systsemacquire,
-@ 
+% for userspace concurrency, see IPC chapter, here this is
+% kernel concurrency!
 
 \section{Critical regions}
 
@@ -1390,6 +1384,67 @@ _xdeclt:
         DECL    AX
         RET
 @ 
+
+\section{[[splhi()]], [[spllo()]]}
+
+<<[[Cpu]] second field>>=
+// must be second field at 0x04, used by splhi()
+ulong splpc;      /* pc of last caller to splhi */
+@ 
+
+<<function splhi>>=
+// int   splhi(void);
+TEXT splhi(SB), $0
+shi:
+        PUSHFL
+        POPL    AX
+        TESTL   $0x200, AX
+        JZ      alreadyhi
+        MOVL    $(CPUADDR+0x04), CX            /* save PC in cpu->splpc */
+        MOVL    (SP), BX
+        MOVL    BX, (CX)
+alreadyhi:
+        CLI
+        RET
+@ 
+
+% this function is actually used quite a lot, not just internally in ilock
+
+<<function spllo>>=
+// int   spllo(void);
+TEXT spllo(SB), $0
+slo:
+        PUSHFL
+        POPL    AX
+        TESTL   $0x200, AX
+        JNZ     alreadylo
+        MOVL    $(CPUADDR+0x04), CX            /* clear cpu->splpc */
+        MOVL    $0, (CX)
+alreadylo:
+        STI
+        RET
+@ 
+
+
+<<function splx>>=
+// void    splx(int);
+TEXT splx(SB), $0
+        MOVL    s+0(FP), AX
+        TESTL   $0x200, AX
+        JNZ     slo
+        JMP     shi
+@ 
+
+
+<<function islo>>=
+// bool islo(void);
+TEXT islo(SB), $0
+        PUSHFL
+        POPL    AX
+        ANDL    $0x200, AX                      /* interrupt enable flag */
+        RET
+@ 
+%$
 
 
 \section{Spin [[Lock]]}
@@ -1564,64 +1619,6 @@ canlock(Lock *l)
 \section{Uninterruptable [[Lock]]}
 % can formalize a checking rule? if access any field
 % accessed from a xxxintr, then need to use ilock
-
-<<[[Cpu]] second field>>=
-// must be second field at 0x04, used by splhi()
-ulong splpc;      /* pc of last caller to splhi */
-@ 
-
-<<function splhi>>=
-// int   splhi(void);
-TEXT splhi(SB), $0
-shi:
-        PUSHFL
-        POPL    AX
-        TESTL   $0x200, AX
-        JZ      alreadyhi
-        MOVL    $(CPUADDR+0x04), CX            /* save PC in cpu->splpc */
-        MOVL    (SP), BX
-        MOVL    BX, (CX)
-alreadyhi:
-        CLI
-        RET
-@ 
-% this function is actually used quite a lot, not just internally in ilock
-
-<<function spllo>>=
-// int   spllo(void);
-TEXT spllo(SB), $0
-slo:
-        PUSHFL
-        POPL    AX
-        TESTL   $0x200, AX
-        JNZ     alreadylo
-        MOVL    $(CPUADDR+0x04), CX            /* clear cpu->splpc */
-        MOVL    $0, (CX)
-alreadylo:
-        STI
-        RET
-@ 
-
-
-<<function splx>>=
-// void    splx(int);
-TEXT splx(SB), $0
-        MOVL    s+0(FP), AX
-        TESTL   $0x200, AX
-        JNZ     slo
-        JMP     shi
-@ 
-
-
-<<function islo>>=
-// bool islo(void);
-TEXT islo(SB), $0
-        PUSHFL
-        POPL    AX
-        ANDL    $0x200, AX                      /* interrupt enable flag */
-        RET
-@ 
-%$
 
 <<[[Lock]] ilock fields>>=
 bool_ushort isilock; // false when from lock(), true when from ilock()
@@ -6540,7 +6537,7 @@ TEXT _syscallintr(SB), $0
 /*
  *  Syscall is called directly from assembler without going through trap().
  */
-//@Scheck: no dead, called from assembly by syscall/386/plan9l.s
+//@Scheck: not dead, called from assembly by _syscallintr
 void
 syscall(Ureg* ureg)
 {
@@ -6717,7 +6714,7 @@ int lastintr; // debugging
  *  VectorSYSCALL.
  *  Trap is called with interrupts disabled via interrupt-gates.
  */
-//@Scheck: Assembly, not dead, called from assembly
+//@Scheck: not dead, called from assembly by _strayintr
 void
 trap(Ureg* ureg)
 {
@@ -7527,7 +7524,7 @@ vunmap(void *v, int size)
      * boot. In that case it suffices to flush the CPUS(0) TLB
      * and return.
      */
-    if(!active.thunderbirdsarego){
+    if(!active.main_reached_sched){
         putcr3(PADDR(CPUS(0)->pdb));
         return;
     }
@@ -8200,7 +8197,7 @@ struct Swapalloc
     uchar*  alloc;      /* Round robin allocator */
     uchar*  last;     /* Speed swap allocation */
     uchar*  top;      /* Top of swap map */
-    Rendez  r;      /* Pager kproc idle sleep */
+    Rendez r;      /* Pager kproc idle sleep */
     ulong highwater;    /* Pager start threshold */
     ulong headroom;   /* Space pager frees under highwater */
   
@@ -8754,9 +8751,8 @@ Proc  *rnext;   /* next process in run queue */
 
 
 <<global runveq>>=
-// bitset, each bit i represents whether the runq at pri i has some process
-// sizeof(ulong) > Nrq
-ulong   runvec;
+// array<bool>, each bit i represents whether the runq at pri i has processes
+ulong   runvec; // coupling: sizeof(ulong) must be >= Nrq
 @ 
 
 <<function anyready>>=
@@ -8935,7 +8931,7 @@ proc_sched(void)
 
 
     p = runproc();
-    <<[[proc_sched()]] optional guard for real-time process>>
+    <<[[sched()]] optional guard for real-time process>>
     {
         updatecpu(p);
         p->priority = reprioritize(p);
@@ -9102,6 +9098,7 @@ Cpu *lastcpu;    /* processor this process last ran on */
 
 
 
+% new typedef? Ttick_scaled?
 <<[[Proc]] scheduling fields>>=
 ulong lastupdate; // dimension?? ticks * Scaling;
 ulong cpuavg;    /* cpu average */
@@ -9443,7 +9440,7 @@ struct Rendez
 % cooperative scheduling, not so much about inter process synchro via
 % sysrendezvous
 <<[[Proc]] synchronization fields>>=
-// option<ref<Rendez>>
+// option<ref<Rendez>>, can point to waitr, freememr, etc
 Rendez  *r;   /* rendezvous point slept on */
 Lock  rlock;    /* sync sleep/wakeup with postnote */
 @
@@ -10359,7 +10356,7 @@ main(void)
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
-    active.thunderbirdsarego = true;
+    active.main_reached_sched = true;
 
     cgapost(0x99); // done!
     schedinit();
@@ -11826,67 +11823,67 @@ chandevreset(void)
 void
 userinit(void)
 {
-        void *v;
-        Proc *p;
-        Segment *s;
-        Page *pg;
+    void *v;
+    Proc *p;
+    Segment *s;
+    Page *pg;
 
-        p = newproc();
-        p->pgrp = newpgrp();
-        p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
-        p->egrp->ref = 1;
-        p->fgrp = dupfgrp(nil);
-        p->rgrp = newrgrp();
-        p->procmode = 0640;
+    p = newproc();
+    p->pgrp = newpgrp();
+    p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
+    p->egrp->ref = 1;
+    p->fgrp = dupfgrp(nil);
+    p->rgrp = newrgrp();
+    p->procmode = 0640;
 
-        kstrdup(&eve, "");
-        kstrdup(&p->text, "*init*");
-        kstrdup(&p->user, eve);
+    kstrdup(&eve, "");
+    kstrdup(&p->text, "*init*");
+    kstrdup(&p->user, eve);
 
-        p->fpstate = FPinit;
-        fpoff();
+    p->fpstate = FPinit;
+    fpoff();
 
-        /*
-         * Kernel Stack
-         *
-         * N.B. make sure there's enough space for syscall to check
-         *      for valid args and 
-         *      4 bytes for gotolabel's return PC
-         */
-        p->sched.pc = (ulong)init0;
-        p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
+    /*
+     * Kernel Stack
+     *
+     * N.B. make sure there's enough space for syscall to check
+     *      for valid args and 
+     *      4 bytes for gotolabel's return PC
+     */
+    p->sched.pc = (ulong)init0;
+    p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
 
-        /*
-         * User Stack
-         *
-         * N.B. cannot call newpage() with clear=1, because pc kmap
-         * requires up != nil.  use tmpmap instead.
-         */
-        s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
-        p->seg[SSEG] = s;
-        pg = newpage(0, 0, USTKTOP-BY2PG);
-        v = tmpmap(pg);
-        memset(v, 0, BY2PG);
-        segpage(s, pg);
+    /*
+     * User Stack
+     *
+     * N.B. cannot call newpage() with clear=1, because pc kmap
+     * requires up != nil.  use tmpmap instead.
+     */
+    s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
+    p->seg[SSEG] = s;
+    pg = newpage(0, 0, USTKTOP-BY2PG);
+    v = tmpmap(pg);
+    memset(v, 0, BY2PG);
+    segpage(s, pg);
 
-        bootargs(v);
-        tmpunmap(v);
+    bootargs(v);
+    tmpunmap(v);
 
-        /*
-         * Text
-         */
-        s = newseg(SG_TEXT, UTZERO, 1);
-        s->flushme++;
-        p->seg[TSEG] = s;
-        pg = newpage(0, 0, UTZERO);
-        memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
-        segpage(s, pg);
-        v = tmpmap(pg);
-        memset(v, 0, BY2PG);
-        memmove(v, initcode, sizeof initcode);
-        tmpunmap(v);
+    /*
+     * Text
+     */
+    s = newseg(SG_TEXT, UTZERO, 1);
+    s->flushme++;
+    p->seg[TSEG] = s;
+    pg = newpage(0, 0, UTZERO);
+    memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
+    segpage(s, pg);
+    v = tmpmap(pg);
+    memset(v, 0, BY2PG);
+    memmove(v, initcode, sizeof initcode);
+    tmpunmap(v);
 
-        ready(p);
+    ready(p);
 }
 @
 
@@ -19976,7 +19973,7 @@ vlong   fasthz;
 
 \section{Time units}
 
-<<type Tval>>=
+<<type Txxx>>=
 typedef vlong   Tval; // ticks
 typedef vlong   Tnano; // nanoseconds
 typedef vlong   Tmicro; // microseconds
@@ -20957,6 +20954,14 @@ sec2rtc(ulong secs, Rtc *rtc)
     [SEGFREE]   syssegfree,
     [SEGFLUSH]  syssegflush,
     [SEGBRK]    syssegbrk,
+@ 
+
+<<systab concurrency syscalls>>=
+    [RENDEZVOUS]    sysrendezvous,
+
+    [SEMACQUIRE]    syssemacquire,
+    [SEMRELEASE]    syssemrelease,
+    [TSEMACQUIRE]   systsemacquire,
 @ 
 
 \section{Notes (signals)}

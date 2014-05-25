@@ -212,13 +212,13 @@ enum timermode
 };
 /*e: enum timermode */
 
-/*s: type Tval */
+/*s: type Txxx */
 typedef vlong   Tval; // ticks
 typedef vlong   Tnano; // nanoseconds
 typedef vlong   Tmicro; // microseconds
 typedef int     Tms; // milliseconds
 typedef vlong   Tsec; // seconds
-/*e: type Tval */
+/*e: type Txxx */
 
 /*s: struct Timer */
 struct Timer
@@ -535,7 +535,7 @@ struct Proc
     // will eventually cause a rescheduling.
     Ref nlocks;   /* number of locks held by proc */
     /*x: [[Proc]] synchronization fields */
-    // option<ref<Rendez>>
+    // option<ref<Rendez>>, can point to waitr, freememr, etc
     Rendez  *r;   /* rendezvous point slept on */
     Lock  rlock;    /* sync sleep/wakeup with postnote */
     /*x: [[Proc]] synchronization fields */
@@ -740,8 +740,7 @@ struct Active
     bool ispanic;    /* shutdown in response to a panic */
     bool rebooting;    /* just idle cpus > 0 */
   
-    // 386 specific? rename to ready_for_schedinit or wait_xxx?
-    bool thunderbirdsarego;/* lets the added processors continue to schedinit */
+    bool main_reached_sched;/* lets the added processors continue to schedinit*/
   
     // extra
     Lock;

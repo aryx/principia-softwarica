@@ -383,7 +383,7 @@ struct Swapalloc
     uchar*  alloc;      /* Round robin allocator */
     uchar*  last;     /* Speed swap allocation */
     uchar*  top;      /* Top of swap map */
-    Rendez  r;      /* Pager kproc idle sleep */
+    Rendez r;      /* Pager kproc idle sleep */
     ulong highwater;    /* Pager start threshold */
     ulong headroom;   /* Space pager frees under highwater */
   
