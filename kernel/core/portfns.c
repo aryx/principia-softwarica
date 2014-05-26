@@ -55,14 +55,14 @@ uvlong (*fastticks)(uvlong*) = 0;
 void (*microdelay)(int) = 0;
 void (*delay)(int) = 0;
 
-
+/*s: function returnfalse */
 // usually used as default callback for sleep/tsleep
 bool
 returnfalse(void*)
 {
     return false;
 }
-
+/*e: function returnfalse */
 
 // was in devcons.c, could be in lib/misc.c
 /*s: function readnum */

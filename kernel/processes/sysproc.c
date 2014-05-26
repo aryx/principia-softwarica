@@ -554,9 +554,6 @@ shargs(char *s, int n, char **ap)
 }
 /*e: function shargs */
 
-/*s: function returnfalse */
-/*e: function returnfalse */
-
 /*s: syscall sleep */
 // int sleep(long millisecs);
 long
