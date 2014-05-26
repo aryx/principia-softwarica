@@ -185,6 +185,7 @@ schedinit(void)     /* never returns */
         cpu->proc = nil;
         up = nil; // same instruction than previous line on some archi (e.g. PC)
     }
+    // ok at this point up is nil
     sched();
 }
 /*e: function schedinit */
@@ -235,7 +236,6 @@ proc_sched(void)
         cpu->cs++;
 
         procsave(up);
-        // save label for context switch
         if(setlabel(&up->sched)){
             //
             // here when the process has been scheduled back
@@ -246,13 +246,14 @@ proc_sched(void)
             return;
         } else {
             //
-            // here to go to sched
+            // here to go to schedinit() (which will call sched() back)
             //
             gotolabel(&cpu->sched); // goto schedinit()
             panic("sched: should never reach this point");
         }
     }
-
+    // We should execute this code using the main kernel stack, as
+    // we should arrive here from schedinit().
 
     p = runproc();
     /*s: [[sched()]] optional guard for real-time process */
@@ -979,7 +980,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
             unlock(&up->rlock);
             unlock(r);
             gotolabel(&cpu->sched);
-            // reachable??
+            panic("sleep: should never reach this point");
         }
     }
 

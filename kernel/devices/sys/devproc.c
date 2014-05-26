@@ -1023,7 +1023,7 @@ procread(Chan *c, void *va, long n, vlong off)
         return procfds(p, va, n, offset);
     }
     error(Egreg);
-    return 0;       /* not reached */
+    panic("procread: should not reach this point");
 }
 /*e: method procread */
 

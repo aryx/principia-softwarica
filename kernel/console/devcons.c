@@ -1054,7 +1054,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         print("consread %#llux\n", c->qid.path);
         error(Egreg);
     }
-    return -1;      /* never reached */
+    panic("consread: should not reach this point");
 }
 /*e: method consread */
 

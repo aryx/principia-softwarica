@@ -611,7 +611,7 @@ sysexits(ulong *arg)
 
     }
     pexit(status, true);
-    return 0;       /* not reached */
+    panic("pexit: should never reach this point");
 }
 /*e: syscall exits */
 
@@ -734,7 +734,7 @@ syssegbrk(ulong *arg)
     }
 
     error(Ebadarg);
-    return 0;       /* not reached */
+    panic("syssegbrk: should not reach this point");
 }
 /*e: syscall segbrk */
 
