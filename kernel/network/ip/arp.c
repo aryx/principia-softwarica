@@ -680,7 +680,7 @@ rxmitproc(void *v)
         if(wakeupat == 0)
             sleep(&arp->rxmtq, rxready, v);
         else if(wakeupat > ReTransTimer/4)
-            tsleep(&arp->rxmtq, return0, 0, wakeupat);
+            tsleep(&arp->rxmtq, returnfalse, 0, wakeupat);
     }
 }
 

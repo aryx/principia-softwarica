@@ -46,7 +46,7 @@ alarmkproc(void*)
         }
         qunlock(&alarms);
 
-        sleep(&alarmr, return0, 0);
+        sleep(&alarmr, returnfalse, 0);
     }
 }
 /*e: kernel process alarmkproc */

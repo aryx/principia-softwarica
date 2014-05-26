@@ -49,7 +49,6 @@ uvlong devarch_fastticks(uvlong *hz);
 void devarch_hook_ioalloc();
 void chan_cclose(Chan *c);
 int proc_postnote(Proc *p, int dolock, char *n, int flag);
-int sysproc_return0(void*);
 /*e: main.c forward decl for backward dependencies */
 
 // conf.c
@@ -904,7 +903,6 @@ main(void)
 
     proctab = proc_proctab;
     postnote = proc_postnote;
-    return0 = sysproc_return0;
     pexit = proc_pexit;
 
     hook_ioalloc = devarch_hook_ioalloc;

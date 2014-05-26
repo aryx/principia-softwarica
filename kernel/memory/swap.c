@@ -203,7 +203,7 @@ loop:
 
             /* Emulate the old system if no swap channel */
             if(!swapimage.c)
-                tsleep(&up->sleepr, return0, 0, 5000);
+                tsleep(&up->sleepr, returnfalse, 0, 5000);
         }
     }
     goto loop;

@@ -554,13 +554,8 @@ shargs(char *s, int n, char **ap)
 }
 /*e: function shargs */
 
-/*s: function return0 */
-int
-sysproc_return0(void*)
-{
-    return 0;
-}
-/*e: function return0 */
+/*s: function returnfalse */
+/*e: function returnfalse */
 
 /*s: syscall sleep */
 // int sleep(long millisecs);
@@ -580,7 +575,7 @@ syssleep(ulong *arg)
     }
     if(n < TK2MS(1))
         n = TK2MS(1);
-    tsleep(&up->sleepr, return0, 0, n);
+    tsleep(&up->sleepr, returnfalse, 0, n);
     return 0;
 }
 /*e: syscall sleep */

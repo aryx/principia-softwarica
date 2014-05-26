@@ -1148,7 +1148,7 @@ ilackproc(void *x)
 	while(waserror())
 		;
 loop:
-	tsleep(&up->sleepr, return0, 0, Iltickms);
+	tsleep(&up->sleepr, returnfalse, 0, Iltickms);
 	for(s = il->conv; s && *s; s++) {
 		p = *s;
 		ic = (Ilcb*)p->ptcl;

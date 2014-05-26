@@ -39,9 +39,6 @@ Proc* (*proctab)(int) = 0;
 int (*postnote)(Proc*, int, char*, int) = 0;
 void (*pexit)(char*, bool) = 0;
 
-//process/sysproc.c
-int (*return0)(void*) = 0;
-
 // files/chan.c
 void (*cclose)(Chan*);
 
@@ -57,6 +54,14 @@ uvlong (*fastticks)(uvlong*) = 0;
 // processes/386/i8253.c
 void (*microdelay)(int) = 0;
 void (*delay)(int) = 0;
+
+
+// usually used as default callback for sleep/tsleep
+bool
+returnfalse(void*)
+{
+    return false;
+}
 
 
 // was in devcons.c, could be in lib/misc.c

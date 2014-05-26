@@ -30,8 +30,6 @@ void    (*ready)(Proc*);
 Proc*   (*proctab)(int);
 int     (*postnote)(Proc*, int, char*, int);
 void    (*pexit)(char*, bool);
-//process/sysproc.c
-int   (*return0)(void*);
 // files/chan.c
 void    (*cclose)(Chan*);
 // init/main.c
@@ -46,6 +44,7 @@ void    (*microdelay)(int);
 void    (*delay)(int);
 
 // portfns.c
+bool returnfalse(void*);
 int   readnum(ulong, char*, ulong, ulong, int);
 int   readstr(ulong, char*, ulong, char*);
 

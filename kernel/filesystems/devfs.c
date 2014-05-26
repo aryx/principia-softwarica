@@ -1145,7 +1145,7 @@ mread(Chan *c, void *a, long n, vlong off)
                  * pause before retrying in case it's due to
                  * a transient bus or controller problem.
                  */
-                tsleep(&up->sleepr, return0, 0, Retrypause);
+                tsleep(&up->sleepr, returnfalse, 0, Retrypause);
             }
             for (i = 0; i < mp->ndevs; i++){
                 if (waserror())
@@ -1235,7 +1235,7 @@ mwrite(Chan *c, void *a, long n, vlong off)
                  * pause before retrying in case it's due to
                  * a transient bus or controller problem.
                  */
-                tsleep(&up->sleepr, return0, 0, Retrypause);
+                tsleep(&up->sleepr, returnfalse, 0, Retrypause);
             }
             allbad = 1;
             anybad = 0;

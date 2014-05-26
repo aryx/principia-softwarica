@@ -47,7 +47,7 @@ loopbackunbind(Ipifc *ifc)
 
     /* wait for reader to die */
     while(lb->readp != 0)
-        tsleep(&up->sleepr, return0, 0, 300);
+        tsleep(&up->sleepr, returnfalse, 0, 300);
 
     /* clean up */
     qfree(lb->q);

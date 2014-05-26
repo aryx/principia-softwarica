@@ -1671,9 +1671,6 @@ Proc* (*proctab)(int) = 0;
 int (*postnote)(Proc*, int, char*, int) = 0;
 void (*pexit)(char*, bool) = 0;
 
-//process/sysproc.c
-int (*return0)(void*) = 0;
-
 // files/chan.c
 void (*cclose)(Chan*);
 
@@ -1689,6 +1686,14 @@ uvlong (*fastticks)(uvlong*) = 0;
 // processes/386/i8253.c
 void (*microdelay)(int) = 0;
 void (*delay)(int) = 0;
+
+
+// usually used as default callback for sleep/tsleep
+bool
+returnfalse(void*)
+{
+    return false;
+}
 
 
 // was in devcons.c, could be in lib/misc.c
@@ -1758,8 +1763,6 @@ void    (*ready)(Proc*);
 Proc*   (*proctab)(int);
 int     (*postnote)(Proc*, int, char*, int);
 void    (*pexit)(char*, bool);
-//process/sysproc.c
-int   (*return0)(void*);
 // files/chan.c
 void    (*cclose)(Chan*);
 // init/main.c
@@ -1774,6 +1777,7 @@ void    (*microdelay)(int);
 void    (*delay)(int);
 
 // portfns.c
+bool returnfalse(void*);
 int   readnum(ulong, char*, ulong, ulong, int);
 int   readstr(ulong, char*, ulong, char*);
 
@@ -4552,7 +4556,6 @@ uvlong devarch_fastticks(uvlong *hz);
 void devarch_hook_ioalloc();
 void chan_cclose(Chan *c);
 int proc_postnote(Proc *p, int dolock, char *n, int flag);
-int sysproc_return0(void*);
 @ 
 \fi
 
@@ -4959,7 +4962,6 @@ cclose = chan_cclose;
 
 proctab = proc_proctab;
 postnote = proc_postnote;
-return0 = sysproc_return0;
 pexit = proc_pexit;
 
 hook_ioalloc = devarch_hook_ioalloc;
@@ -8503,7 +8505,7 @@ resrcwait(char *reason)
         }
     }
 
-    tsleep(&up->sleep, return0, 0, 300);
+    tsleep(&up->sleepr, returnfalse, 0, 300);
     up->psstate = p;
 }
 @ 
@@ -9374,12 +9376,7 @@ int shargs(char*, int, char**);
 \fi
 
 
-<<function return0>>=
-int
-sysproc_return0(void*)
-{
-    return 0;
-}
+<<function returnfalse>>=
 @ 
 
 
@@ -9403,7 +9400,7 @@ sysproc_return0(void*)
 
 <<function shargs>>
 
-<<function return0>>
+<<function returnfalse>>
 
 <<syscall sleep>>
 
@@ -10963,12 +10960,12 @@ edfyield(void)
         up->tf = releaseintr;
         up->tmode = Trelative;
         up->ta = up;
-        up->trend = &up->sleep;
+        up->trend = &up->sleepr;
         timeradd(up);
     }else if(up->tf != releaseintr)
         print("edfyield: surprise! %#p\n", up->tf);
     edfunlock();
-    sleep(&up->sleep, yfn, nil);
+    sleep(&up->sleepr, yfn, nil);
 }
 
 int
@@ -15505,7 +15502,7 @@ i8250break(Uart* uart, int ms)
 
     ctlr = uart->regs;
     csr8w(ctlr, Lcr, Brk);
-    tsleep(&up->sleep, return0, 0, ms);
+    tsleep(&up->sleepr, returnfalse, 0, ms);
     csr8w(ctlr, Lcr, 0);
 }
 
@@ -17705,7 +17702,7 @@ floppykproc(void *)
                 qunlock(&fl);
             }
         }
-        tsleep(&up->sleep, return0, 0, 1000);
+        tsleep(&up->sleepr, returnfalse, 0, 1000);
     }
 }
 
@@ -17727,7 +17724,7 @@ floppyon(FDrive *dp)
     outb(Pdor, fl.motor | Fintena | Fena | dp->dev);
     if(!alreadyon){
         /* wait for drive to spin up */
-        tsleep(&up->sleep, return0, 0, 750);
+        tsleep(&up->sleepr, returnfalse, 0, 750);
 
         /* clear any pending interrupts */
         floppysense();
@@ -22799,7 +22796,7 @@ scsirio(SDreq* r)
 
             while(waserror())
                 ;
-            tsleep(&up->sleep, return0, 0, 500);
+            tsleep(&up->sleepr, returnfalse, 0, 500);
             poperror();
             scsitest(r);
             return 2;
@@ -27073,7 +27070,7 @@ mread(Chan *c, void *a, long n, vlong off)
                  * pause before retrying in case it's due to
                  * a transient bus or controller problem.
                  */
-                tsleep(&up->sleep, return0, 0, Retrypause);
+                tsleep(&up->sleepr, returnfalse, 0, Retrypause);
             }
             for (i = 0; i < mp->ndevs; i++){
                 if (waserror())
@@ -27163,7 +27160,7 @@ mwrite(Chan *c, void *a, long n, vlong off)
                  * pause before retrying in case it's due to
                  * a transient bus or controller problem.
                  */
-                tsleep(&up->sleep, return0, 0, Retrypause);
+                tsleep(&up->sleepr, returnfalse, 0, Retrypause);
             }
             allbad = 1;
             anybad = 0;
