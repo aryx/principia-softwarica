@@ -27,8 +27,8 @@ enum {
 	MilliRound = US(1)/2LL,
 };
 
-typedef struct Event	Event;
-typedef struct Task	Task;
+typedef struct Event Event;
+typedef struct Task Task;
 struct Event {
 	Traceevent;
 	vlong	etime;	/* length of block to draw */
@@ -72,20 +72,20 @@ int schedparse(char*, char*, char*);
 int timeconv(Fmt*);
 
 char *schedstatename[] = {
-	[SAdmit] =	"Admit",
-	[SSleep] =	"Sleep",
-	[SDead] =	"Dead",
-	[SDeadline] =	"Deadline",
-	[SEdf] =	"Edf",
-	[SExpel] =	"Expel",
 	[SReady] =	"Ready",
-	[SRelease] =	"Release",
 	[SRun] =	"Run",
+	[SDead] =	"Dead",
+	[SSleep] =	"Sleep",
+	[SUser] = 	"User",
+
+	[SAdmit] =	"Admit",
+	[SRelease] =	"Release",
+	[SYield] =	"Yield",
 	[SSlice] =	"Slice",
+	[SDeadline] =	"Deadline",
+	[SExpel] =	"Expel",
 	[SInts] =	"Ints",
 	[SInte] =	"Inte",
-	[SUser] = 	"User",
-	[SYield] =	"Yield",
 };
 
 struct {
@@ -228,7 +228,7 @@ redraw(int scaleno)
 	Task *t;
 	vlong ts, oldestts, newestts, period, ppp, scale, s, ss;
 
-#	define time2x(t)	((int)(((t) - oldestts) / ppp))
+#define time2x(t)	((int)(((t) - oldestts) / ppp))
 
 	scale = scales[scaleno].scale;
 	period = scale + scales[scaleno].littletics;
@@ -362,7 +362,6 @@ redraw(int scaleno)
 				break;
 
 			case SRun:
-			case SEdf:
 				sx = time2x(e->time);
 				ex = time2x(e->etime);
 				if(ex == sx)
@@ -524,8 +523,7 @@ doevent(Task *t, Traceevent *ep)
 	case SReady:
 	case SSlice:
 		for(i = n-1; i >= 0; i--)
-			if (t->events[i].etype == SRun || 
-				t->events[i].etype == SEdf)
+			if (t->events[i].etype == SRun)
 				break;
 		if(i < 0 || t->events[i].etime != 0)
 			break;
