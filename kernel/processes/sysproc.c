@@ -184,7 +184,9 @@ sysrfork(ulong *arg)
         p->egrp = up->egrp;
         incref(p->egrp);
     }
-    p->hang = up->hang;
+    /*s: [[sysfork()]] inherit hang */
+        p->hang = up->hang;
+    /*e: [[sysfork()]] inherit hang */
     p->procmode = up->procmode;
 
     /* Craft a return frame which will cause the child to pop out of
@@ -507,6 +509,7 @@ sysexec(ulong *arg)
      *  space and needs to be flushed
      */
     flushmmu();
+
     qlock(&up->debug);
     up->nnote = 0;
     up->notify = 0;
@@ -514,8 +517,11 @@ sysexec(ulong *arg)
     up->privatemem = false;
     procsetup(up);
     qunlock(&up->debug);
-    if(up->hang)
-        up->procctl = Proc_stopme;
+
+    /*s: [[sysexec()]] if hang */
+        if(up->hang)
+            up->procctl = Proc_stopme;
+    /*e: [[sysexec()]] if hang */
 
     return execregs(entry, ssize, nargs);
 }

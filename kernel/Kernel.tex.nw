@@ -4570,10 +4570,7 @@ newproc(void)
     p->pdbg = nil;
     p->fpstate = FPinit;
     p->kp = 0;
-    if(up && up->procctl == Proc_tracesyscall)
-        p->procctl = Proc_tracesyscall;
-    else
-        p->procctl = 0;
+    <<[[newproc()]] inherit Proc_tracesyscall>>
     p->syscalltrace = nil;    
     p->notepending = false;
     p->ureg = 0;
@@ -4834,7 +4831,7 @@ sysrfork(ulong *arg)
         p->egrp = up->egrp;
         incref(p->egrp);
     }
-    p->hang = up->hang;
+    <<[[sysfork()]] inherit hang>>
     p->procmode = up->procmode;
 
     /* Craft a return frame which will cause the child to pop out of
@@ -5162,6 +5159,7 @@ sysexec(ulong *arg)
      *  space and needs to be flushed
      */
     flushmmu();
+
     qlock(&up->debug);
     up->nnote = 0;
     up->notify = 0;
@@ -5169,8 +5167,8 @@ sysexec(ulong *arg)
     up->privatemem = false;
     procsetup(up);
     qunlock(&up->debug);
-    if(up->hang)
-        up->procctl = Proc_stopme;
+
+    <<[[sysexec()]] if hang>>
 
     return execregs(entry, ssize, nargs);
 }
@@ -6567,25 +6565,7 @@ syscall(Ureg* ureg)
     // syscall number
     scallnr = ureg->ax;
 
-    if(up->procctl == Proc_tracesyscall){
-        /*
-         * Redundant validaddr.  Do we care?
-         * Tracing syscalls is not exactly a fast path...
-         * Beware, validaddr currently does a pexit rather
-         * than an error if there's a problem; that might
-         * change in the future.
-         */
-        if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
-            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
-
-        syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
-        up->procctl = Proc_stopme;
-        procctl(up);
-        if(up->syscalltrace)
-            free(up->syscalltrace);
-        up->syscalltrace = nil;
-        startns = todget(nil);
-    }
+    <<[[syscall()]] Proc_tracesyscall if, syscall entry>>
 
     if(scallnr == RFORK && up->fpstate == FPactive){
         fpsave(&up->fpsave);
@@ -6595,6 +6575,7 @@ syscall(Ureg* ureg)
 
     up->nerrlab = 0;
     ret = -1;
+
     if(!waserror()){
         if(scallnr >= nsyscall || systab[scallnr] == 0){
             pprint("bad sys call number %lud pc %lux\n",
@@ -6609,17 +6590,21 @@ syscall(Ureg* ureg)
         up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
 
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         //IMPORTANT: The actual system call
         ret = systab[scallnr](up->sargs.args);
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         poperror();
     }else{
         /* failure: save the error buffer for errstr */
         e = up->syserrstr;
         up->syserrstr = up->errstr;
         up->errstr = e;
-        if(0 && up->pid == 1)
-            print("syscall %lud error %s\n", scallnr, up->syserrstr);
+        //if(0 && up->pid == 1)
+        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
     }
+
     if(up->nerrlab){
         print("bad errstack [%lud]: %d extra\n", scallnr, up->nerrlab);
         for(i = 0; i < NERR; i++)
@@ -6636,17 +6621,7 @@ syscall(Ureg* ureg)
      */
     ureg->ax = ret;
 
-    if(up->procctl == Proc_tracesyscall){
-        stopns = todget(nil);
-        up->procctl = Proc_stopme;
-        sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
-        s = splhi();
-        procctl(up);
-        splx(s);
-        if(up->syscalltrace)
-            free(up->syscalltrace);
-        up->syscalltrace = nil;
-    }
+    <<[[syscall()]] Proc_tracesyscall if, syscall exit>>
 
     up->insyscall = false;
     up->psstate = nil;
@@ -9110,7 +9085,7 @@ found:
     p->state = Scheding;
     p->lastcpu = CPUS(cpu->cpuno);
 
-    <<[[runproc()]] test if p is a real-time process>> 
+    <<[[runproc()]] test if p is a real-time process>>
     <<[[runproc()]] hook proctrace>>
     return p;
 }
@@ -22772,6 +22747,12 @@ ulong procmode; /* proc device default file mode */
 bool privatemem; /* proc does not let anyone read mem */
 @
 
+<<[[procctlreq()]] CMprivate case>>=
+    case CMprivate:
+        p->privatemem = true;
+        break;
+@
+
 % apparently can also be used by the debugger acid
 %  chmod +w /proc/96/mem and then acid 96
 
@@ -22808,21 +22789,24 @@ enum
 {
     CMclose,
     CMclosefiles,
-    CMfixedpri,
     CMhang,
     CMkill,
     CMnohang,
     CMnoswap,
-    CMpri,
     CMprivate,
     CMprofile,
+
+    CMpri,
+    CMfixedpri,
+    CMwired,
+
     CMstart,
     CMstartstop,
     CMstartsyscall,
     CMstop,
     CMwaitstop,
-    CMwired,
     CMtrace,
+
     /* real time */
     CMperiod,
     CMdeadline,
@@ -22984,6 +22968,7 @@ procread(Chan *c, void *va, long n, vlong off)
     <<[[procread()]] Qtrace if>>
 
     p = proctab(SLOT(c->qid));
+
     if(p->pid != PID(c->qid))
         error(Eprocdied);
 
@@ -22999,11 +22984,7 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, &up->genbuf[offset], n);
         return n;
 
-    case Qsyscall:
-        if(!p->syscalltrace)
-            return 0;
-        n = readstr(offset, a, n, p->syscalltrace);
-        return n;
+    <<[[procread()]] Qsyscall case>>
 
     case Qmem:
         if(offset < KZERO)
@@ -23278,6 +23259,11 @@ procwrite(Chan *c, void *va, long n, vlong off)
         error(Eprocdied);
 
     switch(QID(c->qid)){
+    case Qctl:
+        procctlreq(p, va, n);
+        break;
+
+
     case Qargs:
         if(n == 0)
             error(Eshort);
@@ -23321,9 +23307,6 @@ procwrite(Chan *c, void *va, long n, vlong off)
         memmove((uchar*)&p->fpsave+offset, va, n);
         break;
 
-    case Qctl:
-        procctlreq(p, va, n);
-        break;
 
     case Qnote:
         if(p->kp)
@@ -23813,10 +23796,6 @@ procargs(Proc *p, char *buf, int nbuf)
 @
 
 
-
-
-
-
 <<function mntscan>>=
 void
 mntscan(Mntwalk *mw, Proc *p)
@@ -23912,37 +23891,6 @@ proctext(Chan *c, Proc *p)
 @
 
 
-<<function procstopwait>>=
-void
-procstopwait(Proc *p, int ctl)
-{
-    int pid;
-
-    if(p->pdbg)
-        error(Einuse);
-    if(procstopped(p) || p->state == Broken)
-        return;
-
-    if(ctl != 0)
-        p->procctl = ctl;
-    p->pdbg = up;
-    pid = p->pid;
-    qunlock(&p->debug);
-    up->psstate = "Stopwait";
-    if(waserror()) {
-        p->pdbg = nil;
-        qlock(&p->debug);
-        nexterror();
-    }
-    sleep(&up->sleepr, procstopped, p);
-    poperror();
-    qlock(&p->debug);
-    if(p->pid != pid)
-        error(Eprocdied);
-}
-@
-
-
 <<function procctlcloseone>>=
 static void
 procctlcloseone(Proc *p, Fgrp *f, int fd)
@@ -24023,6 +23971,7 @@ parsetime(vlong *rt, char *s)
 
 
 <<function procctlreq>>=
+// assumes p->debug is held
 void
 procctlreq(Proc *p, char *va, int n)
 {
@@ -24052,9 +24001,10 @@ procctlreq(Proc *p, char *va, int n)
     case CMclosefiles:
         procctlclosefiles(p, 1, 0);
         break;
-    case CMhang:
-        p->hang = true;
-        break;
+
+    <<[[procctlreq()]] CMhang case>>
+    <<[[procctlreq()]] CMnohang case>>
+
     case CMkill:
         switch(p->state) {
         case Broken:
@@ -24070,12 +24020,10 @@ procctlreq(Proc *p, char *va, int n)
             postnote(p, 0, "sys: killed", NExit);
         }
         break;
-    case CMnohang:
-        p->hang = false;
-        break;
     case CMnoswap:
         p->noswap = true;
         break;
+
     case CMpri:
         pri = atoi(cb->f[1]);
         if(pri > PriNormal && !iseve())
@@ -24088,9 +24036,8 @@ procctlreq(Proc *p, char *va, int n)
             error(Eperm);
         procpriority(p, pri, true);
         break;
-    case CMprivate:
-        p->privatemem = true;
-        break;
+
+    <<[[procctlreq()]] CMprivate case>>
     case CMprofile:
         s = p->seg[TSEG];
         if(s == 0 || (s->type&SG_TYPE) != SG_TEXT)
@@ -24114,18 +24061,12 @@ procctlreq(Proc *p, char *va, int n)
         ready(p);
         procstopwait(p, Proc_traceme);
         break;
-    case CMstartsyscall:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        p->procctl = Proc_tracesyscall;
-        ready(p);
-        procstopwait(p, Proc_tracesyscall);
-        break;
+    <<[[procctlreq()]] CMstartsyscall case>>
     case CMstop:
         procstopwait(p, Proc_stopme);
         break;
     case CMwaitstop:
-        procstopwait(p, 0);
+        procstopwait(p, Proc_nothing);
         break;
     case CMwired:
         procwired(p, atoi(cb->f[1]));
@@ -24143,15 +24084,6 @@ procctlreq(Proc *p, char *va, int n)
 }
 @
 
-
-<<function procstopped>>=
-int
-procstopped(void *a)
-{
-    Proc *p = a;
-    return p->state == Stopped;
-}
-@
 
 
 <<function procctlmemio>>=
@@ -25122,16 +25054,21 @@ void    (*consdebug)(void) = nil; // for rdb
 
 \section{Debugging user processes}
 
-% Should be in Debugger.tex.nw at some point
+% Should cooperate with Debugger.tex.nw at some point
+
+% there are 2 processes involved: the debuggee, and the debugger.
+% In the following, could call slave and master?
+
+\subsection{XTODO}
 
 <<[[Proc]] debugger fields>>=
 void  *dbgreg;  /* User registers for devproc */
 @
+
+% old: int scallnr;  /* sys call number - known by db */
 % put back? db will still work?
-% int scallnr;  /* sys call number - known by db */
 
 %TODO: Qreg section of /dev/proc
-
 <<function setregisters>>=
 /* This routine must save the values of registers the user is not permitted
  * to write from devproc and then restore the saved values before returning.
@@ -25159,32 +25096,69 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 }
 @ 
 
-<<enum devproc>>=
-enum devproc
-{
-    Proc_stopme = 1,  /* devproc requests */
+<<enum procctl cases>>=
     Proc_exitme,
     Proc_traceme,
     Proc_exitbig,
-    Proc_tracesyscall,
+@
+
+<<[[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]])>>=
+    case Proc_traceme:
+        if(p->nnote == 0)
+            return;
+        /* No break */
+@
+
+<<[[procctl()]] Proc_exitbig case>>=
+    case Proc_exitbig:
+        spllo();
+        pexit("Killed: Insufficient physical memory", true);
+@
+
+<<[[procctl()]] Proc_exitme case>>=
+    case Proc_exitme:
+        spllo();        /* pexit has locks in it */
+        pexit("Killed", true);
+@
+
+
+\subsection{Stopping a process}
+
+% multi usage: strace, debugger
+
+% If want to implement a debugger or strace, what do you need?
+% Need a way to control and inspect another process. First for
+% the control you need a way to stop him.
+% For instance before it gets to his second syscall you got a chance
+% to print the trace of the first syscall. 
+
+<<enum procstate cases>>=
+Stopped,
+@
+% Who can set this state? only when do procttl() where have a Proc_stopme.
+% So who can set Proc_stopme for the procctl?
+
+
+<<enum procctl>>=
+enum procctl
+{
+    Proc_nothing = 0,
+    Proc_stopme,
+    <<enum procctl cases>>
 };
 @ 
 
+
 <<[[Proc]] debugger fields>>=
-// enum<devproc>
+// enum<procctl>
 int procctl;  /* Control for /proc debugging */
 @
+% who can set to Proc_stopme? 
+%  - when have up->hang
+%  - when have Proc_tracesyscall
+%    then at the entry the syscall sets the process to Stopme,
 
-<<[[Proc]] debugger fields>>=
-bool hang;   /* hang at next exec for debug */
-@
 
-
-% debug also (ab?)used in pexit when freeing memory
-<<[[Proc]] debugger fields>>=
-Proc  *pdbg;    /* the debugging process */
-QLock debug;    /* to access debugging elements of User */
-@
 
 <<function procctl>>=
 /*
@@ -25194,269 +25168,274 @@ QLock debug;    /* to access debugging elements of User */
 void
 procctl(Proc *p)
 {
-    char *state;
+    char *oldstate;
     ulong s;
 
     switch(p->procctl) {
-    case Proc_exitbig:
-        spllo();
-        pexit("Killed: Insufficient physical memory", true);
-
-    case Proc_exitme:
-        spllo();        /* pexit has locks in it */
-        pexit("Killed", true);
-
-    case Proc_traceme:
-        if(p->nnote == 0)
-            return;
-        /* No break */
-
+    <<[[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]])>>
     case Proc_stopme:
-        p->procctl = 0;
-        state = p->psstate;
+        p->procctl = Proc_nothing;
+        oldstate = p->psstate;
         p->psstate = "Stopped";
-        /* free a waiting debugger */
         s = spllo();
-        qlock(&p->debug);
-        if(p->pdbg) {
-            wakeup(&p->pdbg->sleepr);
-            p->pdbg = 0;
-        }
-        qunlock(&p->debug);
+        <<[[procctl()]] wakeup waiting debugger>>
         splhi();
         p->state = Stopped;
         sched();
-        p->psstate = state;
+        // here when the debugger ready p back
+        p->psstate = oldstate;
         splx(s);
         return;
+    <<[[procctl()]] Proc_exitbig case>>
+    <<[[procctl()]] Proc_exitme case>>
     }
 }
 @ 
+% why pass p? it's always called via procctl(up), so why not using
+% up directly? in the end we call sched()
+% why set p->state = Stopped inside splhi(), would make more sense
+% actually to set it before wakeing up the debugger that is sleeping
+% on the condition that the process was stopped!
 
-<<enum procstate cases>>=
-Stopped,
-@
+% so how a process can cause procctl() for another process to
+% be executed? can't just do  procctl(other_process)?
+% but this other process is executing ... maybe at next trap
+% it can look?
 
-\subsection{[[/proc/x/ctl]]}
+% overview steps on 'strace ls' or 'db ls':
+% - strace: fork (to later exec ls)
+% - child: before exec(), will 'echo hang > /proc/child/ctl'
+%   (exec will use this info)
+% - child: exec ls, because of hang will get his procctl to Proc_stopme,
+%   which later when return from sysexec will get back to syscall() which
+%   check if procctl, call notify() which then call procctl() which
+%   will effectively stop ls!
 
-% multi usage: trace, syscall, debug?
-
-\subsection{[[/proc/trace]] and [[/bin/trace]]}
-% /proc/trace contains events from the kernel scheduler
 
 <<[[Proc]] debugger fields>>=
-bool trace;    /* process being traced? */
+bool hang;   /* hang at next exec for debug */
 @
 
-<<[[procctlreq()]] CMtrace case>>=
-    case CMtrace:
-        switch(cb->nf){
-        case 1:
-            p->trace ^= true;
-            break;
-        case 2:
-            p->trace = (atoi(cb->f[1]) != 0);
-            break;
-        default:
-            error("args");
-        }
+<<[[procctlreq()]] CMhang case>>=
+    case CMhang:
+        p->hang = true;
+        break;
+@
+<<[[procctlreq()]] CMnohang case>>=
+    case CMnohang:
+        p->hang = false;
         break;
 @
 
 
-<<hook proctrace>>=
-void (*proctrace)(Proc*, /*enum<tevent>*/int, vlong) = 0; // was in devproc.c
-@ 
-
-<<enum Tevent>>=
-enum Tevent {
-	SReady = 0,		/* runnable but not running  */
-	SRun,		/* running best effort */
-	SDead,		/* proc dies */
-	SSleep,		/* blocked */
-	SUser,		/* user event */
-
-        /* real-time extensions */
-        <<[[enum Tevent]] real-time scheduling events>>
-
-	Nevent, // must be last
-};
+<<[[sysfork()]] inherit hang>>=
+    p->hang = up->hang;
 @
 
-<<struct Traceevent>>=
-struct Traceevent {
-	ulong	pid;	
-        // enum<tevent>
-	ulong	etype;	/* Event type */
-	vlong	time;	/* time stamp  */ // dimention?
-};
+<<[[sysexec()]] if hang>>=
+    if(up->hang)
+        up->procctl = Proc_stopme;
+@
+% why not do procctl(up) here? when the process will stop? because
+% at return of sysexec there will be a call to notify and procctl(up),
+% but looks a bit dirty, why they abused notify for that?
+% because for the debugger they need more than just procctl? they need
+% notes?
+
+
+% so now we know how to stop another (your child at least), but
+% how tracer can wait? can't just call await(), we don't wait
+% for the child to die...
+
+
+% debug also (ab?)used in pexit when freeing memory
+<<[[Proc]] debugger fields>>=
+Proc  *pdbg;    /* the debugging process */
 @
 
-%TODO: code of trace.h here
-
-% Always code like:
-%    pt = proctrace
-%    if(pt) pt(...)
-% Why not just if(proctrace) proctrace(...)? because of race!
-% After the 'if' proctrace could be null!
-
-% could draw automata :)
-
-<<ready()]] hook proctrace>>=
-    pt = proctrace;
-    if(pt)
-        pt(p, SReady, 0);
+<<[[Proc]] debugger fields>>=
+QLock debug;    /* to access debugging elements */ // used for many things
 @
-
-<<[[runproc()]] hook proctrace>>=
-    pt = proctrace;
-    if(pt)
-        pt(p, SRun, 0);
-@
-
-<<[[pexit()]] hook proctrace>>=
-    pt = proctrace;
-    if(pt)
-        pt(up, SDead, 0);
-@
+% used by strace, but also db
 
 
-<<[[sleep()]] hook proctrace>>=
-        pt = proctrace;
-        if(pt)
-            pt(up, SSleep, 0);
-@
-
-% this one is a little bit different
-<<[[procctlreq()]] CMevent case>>=
-    case CMevent:
-        pt = proctrace;
-        if(up->trace && pt)
-            pt(up, SUser, 0);
-        break;
-@
-%TODO: can remove the up->trace, pt does this internally
-
-%TODO could put all of that in a struct, and a Lock, would be cleaner
-<<global trace txxx>>=
-// array<Traceevent>
-static Traceevent *tevents;
-static int topens;
-static int tproduced, tconsumed;
-static Lock tlock;
-@
-% topens can be > 1 ??? use a bool no?
-
-<<function eventsavailable>>=
-static int
-eventsavailable(void *)
+<<function procstopwait>>=
+// assumes p->debug is held
+void
+procstopwait(Proc *p, int ctl)
 {
-    return tproduced > tconsumed;
-}
-@
+    int pid;
 
-
-
-% no locks?
-<<function _proctrace>>=
-static void
-_proctrace(Proc* p, Tevent etype, vlong ts)
-{
-    Traceevent *te;
-
-    if (p->trace == false || topens == 0 ||
-        tproduced - tconsumed >= Nevents)
+    if(p->pdbg)
+        error(Einuse);
+    if(procstopped(p) || p->state == Broken)
         return;
 
-    te = &tevents[tproduced&Emask];
-    te->pid = p->pid;
-    te->etype = etype;
-    if (ts == 0)
-        te->time = todget(nil);
-    else
-        te->time = ts;
-    tproduced++;
+    if(ctl != Proc_nothing)
+        p->procctl = ctl;
+
+    p->pdbg = up;
+    pid = p->pid;
+
+    qunlock(&p->debug);
+    up->psstate = "Stopwait";
+    if(waserror()) {
+        p->pdbg = nil;
+        qlock(&p->debug);
+        nexterror();
+    }
+
+    sleep(&up->sleepr, procstopped, p);
+
+    poperror();
+    qlock(&p->debug);
+    if(p->pid != pid) // p was reallocated to a new process
+        error(Eprocdied);
 }
 @
 
-<<constant Nevents>>=
-    Nevents = 0x4000,
+<<function procstopped>>=
+bool
+procstopped(void *a)
+{
+    Proc *p = a;
+    return p->state == Stopped;
+}
 @
 
-<<constant Emask>>=
-    Emask = Nevents - 1,
+
+<<[[procctl()]] wakeup waiting debugger>>=
+        /* free a waiting debugger */
+        qlock(&p->debug);
+        if(p->pdbg) {
+            wakeup(&p->pdbg->sleepr);
+            p->pdbg = nil;
+        }
+        qunlock(&p->debug);
 @
 
-<<[[procopen()]] Qtrace if>>=
-    if(QID(c->qid) == Qtrace){
-        if (omode != OREAD) 
-            error(Eperm);
-        lock(&tlock);
-        if (waserror()){
-            unlock(&tlock);
-            nexterror();
-        }
-        if (topens > 0)
-            error("already open");
-        topens++;
-        if (tevents == nil){
-            tevents = (Traceevent*)malloc(sizeof(Traceevent) * Nevents);
-            if(tevents == nil)
-                error(Enomem);
-            tproduced = tconsumed = 0;
-        }
-        proctrace = _proctrace;
-        unlock(&tlock);
-        poperror();
 
-        c->mode = openmode(omode);
-        c->flag |= COPEN;
-        c->offset = 0;
-        return c;
+
+
+
+\subsection{[[/bin/strace]]}
+% was actually called ratrace, but prefer strace
+
+% overview steps on 'strace ls':
+% - strace: echo 'startsyscall' > /proc/child/ctl
+%   which should ready the child (ls) process and write Proc_tracesyscall
+%   to procctl of child! (which was stopped so no race).
+%   it will also trigger a sleep for strace until the other proc get
+%   stopped again via procstopwait()
+
+% loop:
+% - ls could continue, and at first syscall entry will stop again
+%   and wakeup tracer
+% - strace: can read /proc/child/syscall content
+% - strace: write back 'startsyscall' to /proc/child/ctl (and sleep)
+% - ls continue and do actual syscall, and stop again
+% - strace: can read /proc/child/syscall of return value of syscall
+% - strace: write back 'startsyscall' to /proc/child/ctl (which will
+%   make strace sleep at the same time)
+
+% show sequence diagram? cos complex.
+% why abuse notify()?
+
+% alternative approach? 
+
+<<enum procctl cases>>=
+    Proc_tracesyscall,
+@
+% but who can set the procctl to Proc_tracesyscall?
+
+<<[[syscall()]] Proc_tracesyscall if, syscall entry>>=
+    if(up->procctl == Proc_tracesyscall){
+        /*
+         * Redundant validaddr.  Do we care?
+         * Tracing syscalls is not exactly a fast path...
+         * Beware, validaddr currently does a pexit rather
+         * than an error if there's a problem; that might
+         * change in the future.
+         */
+        if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
+            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+
+        syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
+        up->procctl = Proc_stopme;
+        // this will call sched() and wakeup the tracer process
+        procctl(up); 
+        // back here when the tracer process readied us back and
+        // should have set procctl back to Proc_tracesyscall
+        if(up->syscalltrace)
+            free(up->syscalltrace);
+        up->syscalltrace = nil;
+        startns = todget(nil);
     }
 @
 
-<<[[procclose()]] Qtrace if>>=
-    if(QID(c->qid) == Qtrace){
-        lock(&tlock);
-        if(topens > 0)
-            topens--;
-        if(topens == 0)
-            proctrace = nil;
-        unlock(&tlock);
+<<[[syscall()]] Proc_tracesyscall if, syscall exit>>=
+    if(up->procctl == Proc_tracesyscall){
+        stopns = todget(nil);
+        up->procctl = Proc_stopme;
+        sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
+        s = splhi();
+        procctl(up); // again, will call sched() and wakeup tracer process
+        splx(s);
+        if(up->syscalltrace)
+            free(up->syscalltrace);
+        up->syscalltrace = nil;
     }
 @
+% why protect procctl(up) with splhi here and not before?
+% both the entry and exit are not perfectly symetric :( TOFIX?
 
-<<[[procread()]] Qtrace if>>=
-    if(QID(c->qid) == Qtrace){
-        if(!eventsavailable(nil))
-            return 0;
-
-        rptr = (uchar*)va;
-        navail = tproduced - tconsumed;
-        if(navail > n / sizeof(Traceevent))
-            navail = n / sizeof(Traceevent);
-        while(navail > 0) {
-            ne = ((tconsumed & Emask) + navail > Nevents)? 
-                    Nevents - (tconsumed & Emask): navail;
-            memmove(rptr, &tevents[tconsumed & Emask], 
-                    ne * sizeof(Traceevent));
-
-            tconsumed += ne;
-            rptr += ne * sizeof(Traceevent);
-            navail -= ne;
-        }
-        return rptr - (uchar*)va;
-    }
+<<[[newproc()]] inherit Proc_tracesyscall>>=
+    if(up && up->procctl == Proc_tracesyscall)
+        p->procctl = Proc_tracesyscall;
+    else
+        p->procctl = Proc_nothing;
 @
 
 
-
-\subsection{[[/bin/strace?]]}
-
+% communicate info via syscalltrace! accessible at /proc/x/syscall
+% the 'inspect' mechanism needed
 <<[[Proc]] debugger fields>>=
 char  *syscalltrace;  /* syscall trace */
 @
+
+
+% /proc/x/syscall
+<<[[procread()]] Qsyscall case>>=
+    case Qsyscall:
+        if(!p->syscalltrace)
+            return 0;
+        n = readstr(offset, a, n, p->syscalltrace);
+        return n;
+@
+
+
+% note that 'up' here is the process of the tracer! he is the one
+% writing to /proc/x/ctl 
+<<[[procctlreq()]] CMstartsyscall case>>=
+    case CMstartsyscall:
+        if(p->state != Stopped)
+            error(Ebadctl);
+        p->procctl = Proc_tracesyscall;
+        ready(p);
+        procstopwait(p, Proc_tracesyscall); // will sleep
+        break;
+@
+% but how x was stopped in the first place? get hang to true
+% but then it just leads to Proc_stopme, there was no call to procctl(up)
+% in sysexec, so who stopped it?
+
+
+
+
+
+
+
+
 
 <<function syscallfmt>>=
 void
@@ -25823,6 +25802,221 @@ fmtuserstring(Fmt* f, char* a, char* suffix)
     free(t);
 }
 @ 
+
+
+\subsection{[[/proc/trace]] and [[/bin/trace]]}
+% /proc/trace contains events from the kernel scheduler
+
+
+<<[[Proc]] debugger fields>>=
+bool trace;    /* process being traced? */
+@
+% schedtrace?
+
+% echo 'trace 1' > proc/x/ctl
+
+<<[[procctlreq()]] CMtrace case>>=
+    case CMtrace:
+        switch(cb->nf){
+        case 1:
+            p->trace ^= true;
+            break;
+        case 2:
+            p->trace = (atoi(cb->f[1]) != 0);
+            break;
+        default:
+            error("args");
+        }
+        break;
+@
+
+
+<<hook proctrace>>=
+void (*proctrace)(Proc*, /*enum<tevent>*/int, vlong) = 0; // was in devproc.c
+@ 
+
+<<enum Tevent>>=
+enum Tevent {
+ SReady = 0,		/* runnable but not running  */
+ SRun,		/* running best effort */
+ SDead,		/* proc dies */
+ SSleep,		/* blocked */
+ SUser,		/* user event */
+
+        /* real-time extensions */
+        <<[[enum Tevent]] real-time scheduling events>>
+
+ Nevent, // must be last
+};
+@
+
+<<struct Traceevent>>=
+struct Traceevent {
+ ulong	pid;	
+        // enum<tevent>
+ ulong	etype;	/* Event type */
+ vlong	time;	/* time stamp  */ // dimention?
+};
+@
+
+%TODO: code of trace.h here
+
+% Always code like:
+%    pt = proctrace
+%    if(pt) pt(...)
+% Why not just if(proctrace) proctrace(...)? because of race!
+% After the 'if' proctrace could be null!
+
+% could draw automata :)
+
+<<ready()]] hook proctrace>>=
+    pt = proctrace;
+    if(pt)
+        pt(p, SReady, 0);
+@
+
+<<[[runproc()]] hook proctrace>>=
+    pt = proctrace;
+    if(pt)
+        pt(p, SRun, 0);
+@
+
+<<[[pexit()]] hook proctrace>>=
+    pt = proctrace;
+    if(pt)
+        pt(up, SDead, 0);
+@
+
+
+<<[[sleep()]] hook proctrace>>=
+        pt = proctrace;
+        if(pt)
+            pt(up, SSleep, 0);
+@
+
+% this one is a little bit different
+<<[[procctlreq()]] CMevent case>>=
+    case CMevent:
+        pt = proctrace;
+        if(up->trace && pt)
+            pt(up, SUser, 0);
+        break;
+@
+%TODO: can remove the up->trace, pt does this internally
+
+%TODO could put all of that in a struct, and a Lock, would be cleaner
+<<global trace txxx>>=
+// array<Traceevent>
+static Traceevent *tevents;
+static int topens;
+static int tproduced, tconsumed;
+static Lock tlock;
+@
+% topens can be > 1 ??? use a bool no?
+
+<<function eventsavailable>>=
+static int
+eventsavailable(void *)
+{
+    return tproduced > tconsumed;
+}
+@
+
+
+
+% no locks?
+<<function _proctrace>>=
+static void
+_proctrace(Proc* p, Tevent etype, vlong ts)
+{
+    Traceevent *te;
+
+    if (p->trace == false || topens == 0 ||
+        tproduced - tconsumed >= Nevents)
+        return;
+
+    te = &tevents[tproduced&Emask];
+    te->pid = p->pid;
+    te->etype = etype;
+    if (ts == 0)
+        te->time = todget(nil);
+    else
+        te->time = ts;
+    tproduced++;
+}
+@
+
+<<constant Nevents>>=
+    Nevents = 0x4000,
+@
+
+<<constant Emask>>=
+    Emask = Nevents - 1,
+@
+
+<<[[procopen()]] Qtrace if>>=
+    if(QID(c->qid) == Qtrace){
+        if (omode != OREAD) 
+            error(Eperm);
+        lock(&tlock);
+        if (waserror()){
+            unlock(&tlock);
+            nexterror();
+        }
+        if (topens > 0)
+            error("already open");
+        topens++;
+        if (tevents == nil){
+            tevents = (Traceevent*)malloc(sizeof(Traceevent) * Nevents);
+            if(tevents == nil)
+                error(Enomem);
+            tproduced = tconsumed = 0;
+        }
+        proctrace = _proctrace;
+        unlock(&tlock);
+        poperror();
+
+        c->mode = openmode(omode);
+        c->flag |= COPEN;
+        c->offset = 0;
+        return c;
+    }
+@
+
+<<[[procclose()]] Qtrace if>>=
+    if(QID(c->qid) == Qtrace){
+        lock(&tlock);
+        if(topens > 0)
+            topens--;
+        if(topens == 0)
+            proctrace = nil;
+        unlock(&tlock);
+    }
+@
+
+<<[[procread()]] Qtrace if>>=
+    if(QID(c->qid) == Qtrace){
+        if(!eventsavailable(nil))
+            return 0;
+
+        rptr = (uchar*)va;
+        navail = tproduced - tconsumed;
+        if(navail > n / sizeof(Traceevent))
+            navail = n / sizeof(Traceevent);
+        while(navail > 0) {
+            ne = ((tconsumed & Emask) + navail > Nevents)? 
+                    Nevents - (tconsumed & Emask): navail;
+            memmove(rptr, &tevents[tconsumed & Emask], 
+                    ne * sizeof(Traceevent));
+
+            tconsumed += ne;
+            rptr += ne * sizeof(Traceevent);
+            navail -= ne;
+        }
+        return rptr - (uchar*)va;
+    }
+@
+
 
 
 \subsection{[[/bin/db]]}

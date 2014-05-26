@@ -53,21 +53,24 @@ enum
 {
     CMclose,
     CMclosefiles,
-    CMfixedpri,
     CMhang,
     CMkill,
     CMnohang,
     CMnoswap,
-    CMpri,
     CMprivate,
     CMprofile,
+
+    CMpri,
+    CMfixedpri,
+    CMwired,
+
     CMstart,
     CMstartstop,
     CMstartsyscall,
     CMstop,
     CMwaitstop,
-    CMwired,
     CMtrace,
+
     /* real time */
     CMperiod,
     CMdeadline,
@@ -780,6 +783,7 @@ procread(Chan *c, void *va, long n, vlong off)
     /*e: [[procread()]] Qtrace if */
 
     p = proctab(SLOT(c->qid));
+
     if(p->pid != PID(c->qid))
         error(Eprocdied);
 
@@ -795,11 +799,13 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, &up->genbuf[offset], n);
         return n;
 
-    case Qsyscall:
-        if(!p->syscalltrace)
-            return 0;
-        n = readstr(offset, a, n, p->syscalltrace);
-        return n;
+    /*s: [[procread()]] Qsyscall case */
+        case Qsyscall:
+            if(!p->syscalltrace)
+                return 0;
+            n = readstr(offset, a, n, p->syscalltrace);
+            return n;
+    /*e: [[procread()]] Qsyscall case */
 
     case Qmem:
         if(offset < KZERO)
@@ -1114,6 +1120,11 @@ procwrite(Chan *c, void *va, long n, vlong off)
         error(Eprocdied);
 
     switch(QID(c->qid)){
+    case Qctl:
+        procctlreq(p, va, n);
+        break;
+
+
     case Qargs:
         if(n == 0)
             error(Eshort);
@@ -1157,9 +1168,6 @@ procwrite(Chan *c, void *va, long n, vlong off)
         memmove((uchar*)&p->fpsave+offset, va, n);
         break;
 
-    case Qctl:
-        procctlreq(p, va, n);
-        break;
 
     case Qnote:
         if(p->kp)
@@ -1276,6 +1284,7 @@ proctext(Chan *c, Proc *p)
 /*e: function proctext */
 
 /*s: function procstopwait */
+// assumes p->debug is held
 void
 procstopwait(Proc *p, int ctl)
 {
@@ -1286,10 +1295,12 @@ procstopwait(Proc *p, int ctl)
     if(procstopped(p) || p->state == Broken)
         return;
 
-    if(ctl != 0)
+    if(ctl != Proc_nothing)
         p->procctl = ctl;
+
     p->pdbg = up;
     pid = p->pid;
+
     qunlock(&p->debug);
     up->psstate = "Stopwait";
     if(waserror()) {
@@ -1297,10 +1308,12 @@ procstopwait(Proc *p, int ctl)
         qlock(&p->debug);
         nexterror();
     }
+
     sleep(&up->sleepr, procstopped, p);
+
     poperror();
     qlock(&p->debug);
-    if(p->pid != pid)
+    if(p->pid != pid) // p was reallocated to a new process
         error(Eprocdied);
 }
 /*e: function procstopwait */
@@ -1382,6 +1395,7 @@ parsetime(vlong *rt, char *s)
 /*e: function parsetime */
 
 /*s: function procctlreq */
+// assumes p->debug is held
 void
 procctlreq(Proc *p, char *va, int n)
 {
@@ -1411,9 +1425,18 @@ procctlreq(Proc *p, char *va, int n)
     case CMclosefiles:
         procctlclosefiles(p, 1, 0);
         break;
-    case CMhang:
-        p->hang = true;
-        break;
+
+    /*s: [[procctlreq()]] CMhang case */
+        case CMhang:
+            p->hang = true;
+            break;
+    /*e: [[procctlreq()]] CMhang case */
+    /*s: [[procctlreq()]] CMnohang case */
+        case CMnohang:
+            p->hang = false;
+            break;
+    /*e: [[procctlreq()]] CMnohang case */
+
     case CMkill:
         switch(p->state) {
         case Broken:
@@ -1429,12 +1452,10 @@ procctlreq(Proc *p, char *va, int n)
             postnote(p, 0, "sys: killed", NExit);
         }
         break;
-    case CMnohang:
-        p->hang = false;
-        break;
     case CMnoswap:
         p->noswap = true;
         break;
+
     case CMpri:
         pri = atoi(cb->f[1]);
         if(pri > PriNormal && !iseve())
@@ -1447,9 +1468,12 @@ procctlreq(Proc *p, char *va, int n)
             error(Eperm);
         procpriority(p, pri, true);
         break;
-    case CMprivate:
-        p->privatemem = true;
-        break;
+
+    /*s: [[procctlreq()]] CMprivate case */
+        case CMprivate:
+            p->privatemem = true;
+            break;
+    /*e: [[procctlreq()]] CMprivate case */
     case CMprofile:
         s = p->seg[TSEG];
         if(s == 0 || (s->type&SG_TYPE) != SG_TEXT)
@@ -1473,18 +1497,20 @@ procctlreq(Proc *p, char *va, int n)
         ready(p);
         procstopwait(p, Proc_traceme);
         break;
-    case CMstartsyscall:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        p->procctl = Proc_tracesyscall;
-        ready(p);
-        procstopwait(p, Proc_tracesyscall);
-        break;
+    /*s: [[procctlreq()]] CMstartsyscall case */
+        case CMstartsyscall:
+            if(p->state != Stopped)
+                error(Ebadctl);
+            p->procctl = Proc_tracesyscall;
+            ready(p);
+            procstopwait(p, Proc_tracesyscall); // will sleep
+            break;
+    /*e: [[procctlreq()]] CMstartsyscall case */
     case CMstop:
         procstopwait(p, Proc_stopme);
         break;
     case CMwaitstop:
-        procstopwait(p, 0);
+        procstopwait(p, Proc_nothing);
         break;
     case CMwired:
         procwired(p, atoi(cb->f[1]));
@@ -1574,7 +1600,7 @@ procctlreq(Proc *p, char *va, int n)
 /*e: function procctlreq */
 
 /*s: function procstopped */
-int
+bool
 procstopped(void *a)
 {
     Proc *p = a;

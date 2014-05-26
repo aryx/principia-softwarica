@@ -361,16 +361,20 @@ enum proctime
 // Debugger
 //--------------------------------------------------------------------
 
-/*s: enum devproc */
-enum devproc
+/*s: enum procctl */
+enum procctl
 {
-    Proc_stopme = 1,  /* devproc requests */
-    Proc_exitme,
-    Proc_traceme,
-    Proc_exitbig,
-    Proc_tracesyscall,
+    Proc_nothing = 0,
+    Proc_stopme,
+    /*s: enum procctl cases */
+        Proc_exitme,
+        Proc_traceme,
+        Proc_exitbig,
+    /*x: enum procctl cases */
+        Proc_tracesyscall,
+    /*e: enum procctl cases */
 };
-/*e: enum devproc */
+/*e: enum procctl */
 
 //--------------------------------------------------------------------
 // Misc
@@ -600,17 +604,18 @@ struct Proc
     /*x: [[Proc]] debugger fields */
     void  *dbgreg;  /* User registers for devproc */
     /*x: [[Proc]] debugger fields */
-    // enum<devproc>
+    // enum<procctl>
     int procctl;  /* Control for /proc debugging */
     /*x: [[Proc]] debugger fields */
     bool hang;   /* hang at next exec for debug */
     /*x: [[Proc]] debugger fields */
     Proc  *pdbg;    /* the debugging process */
-    QLock debug;    /* to access debugging elements of User */
     /*x: [[Proc]] debugger fields */
-    bool trace;    /* process being traced? */
+    QLock debug;    /* to access debugging elements */ // used for many things
     /*x: [[Proc]] debugger fields */
     char  *syscalltrace;  /* syscall trace */
+    /*x: [[Proc]] debugger fields */
+    bool trace;    /* process being traced? */
     /*e: [[Proc]] debugger fields */
 //--------------------------------------------------------------------
 // Other

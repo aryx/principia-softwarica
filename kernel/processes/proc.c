@@ -792,10 +792,12 @@ newproc(void)
     p->pdbg = nil;
     p->fpstate = FPinit;
     p->kp = 0;
-    if(up && up->procctl == Proc_tracesyscall)
-        p->procctl = Proc_tracesyscall;
-    else
-        p->procctl = 0;
+    /*s: [[newproc()]] inherit Proc_tracesyscall */
+        if(up && up->procctl == Proc_tracesyscall)
+            p->procctl = Proc_tracesyscall;
+        else
+            p->procctl = Proc_nothing;
+    /*e: [[newproc()]] inherit Proc_tracesyscall */
     p->syscalltrace = nil;    
     p->notepending = false;
     p->ureg = 0;
@@ -1635,41 +1637,47 @@ kproc(char *name, void (*func)(void *), void *arg)
 void
 procctl(Proc *p)
 {
-    char *state;
+    char *oldstate;
     ulong s;
 
     switch(p->procctl) {
-    case Proc_exitbig:
-        spllo();
-        pexit("Killed: Insufficient physical memory", true);
-
-    case Proc_exitme:
-        spllo();        /* pexit has locks in it */
-        pexit("Killed", true);
-
-    case Proc_traceme:
-        if(p->nnote == 0)
-            return;
-        /* No break */
-
+    /*s: [[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]]) */
+        case Proc_traceme:
+            if(p->nnote == 0)
+                return;
+            /* No break */
+    /*e: [[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]]) */
     case Proc_stopme:
-        p->procctl = 0;
-        state = p->psstate;
+        p->procctl = Proc_nothing;
+        oldstate = p->psstate;
         p->psstate = "Stopped";
-        /* free a waiting debugger */
         s = spllo();
-        qlock(&p->debug);
-        if(p->pdbg) {
-            wakeup(&p->pdbg->sleepr);
-            p->pdbg = 0;
-        }
-        qunlock(&p->debug);
+        /*s: [[procctl()]] wakeup waiting debugger */
+                /* free a waiting debugger */
+                qlock(&p->debug);
+                if(p->pdbg) {
+                    wakeup(&p->pdbg->sleepr);
+                    p->pdbg = nil;
+                }
+                qunlock(&p->debug);
+        /*e: [[procctl()]] wakeup waiting debugger */
         splhi();
         p->state = Stopped;
         sched();
-        p->psstate = state;
+        // here when the debugger ready p back
+        p->psstate = oldstate;
         splx(s);
         return;
+    /*s: [[procctl()]] Proc_exitbig case */
+        case Proc_exitbig:
+            spllo();
+            pexit("Killed: Insufficient physical memory", true);
+    /*e: [[procctl()]] Proc_exitbig case */
+    /*s: [[procctl()]] Proc_exitme case */
+        case Proc_exitme:
+            spllo();        /* pexit has locks in it */
+            pexit("Killed", true);
+    /*e: [[procctl()]] Proc_exitme case */
     }
 }
 /*e: function procctl */

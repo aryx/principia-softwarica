@@ -766,25 +766,30 @@ syscall(Ureg* ureg)
     // syscall number
     scallnr = ureg->ax;
 
-    if(up->procctl == Proc_tracesyscall){
-        /*
-         * Redundant validaddr.  Do we care?
-         * Tracing syscalls is not exactly a fast path...
-         * Beware, validaddr currently does a pexit rather
-         * than an error if there's a problem; that might
-         * change in the future.
-         */
-        if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
-            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+    /*s: [[syscall()]] Proc_tracesyscall if, syscall entry */
+        if(up->procctl == Proc_tracesyscall){
+            /*
+             * Redundant validaddr.  Do we care?
+             * Tracing syscalls is not exactly a fast path...
+             * Beware, validaddr currently does a pexit rather
+             * than an error if there's a problem; that might
+             * change in the future.
+             */
+            if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
+                validaddr(sp, sizeof(Sargs)+BY2WD, 0);
 
-        syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
-        up->procctl = Proc_stopme;
-        procctl(up);
-        if(up->syscalltrace)
-            free(up->syscalltrace);
-        up->syscalltrace = nil;
-        startns = todget(nil);
-    }
+            syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
+            up->procctl = Proc_stopme;
+            // this will call sched() and wakeup the tracer process
+            procctl(up); 
+            // back here when the tracer process readied us back and
+            // should have set procctl back to Proc_tracesyscall
+            if(up->syscalltrace)
+                free(up->syscalltrace);
+            up->syscalltrace = nil;
+            startns = todget(nil);
+        }
+    /*e: [[syscall()]] Proc_tracesyscall if, syscall entry */
 
     if(scallnr == RFORK && up->fpstate == FPactive){
         fpsave(&up->fpsave);
@@ -794,6 +799,7 @@ syscall(Ureg* ureg)
 
     up->nerrlab = 0;
     ret = -1;
+
     if(!waserror()){
         if(scallnr >= nsyscall || systab[scallnr] == 0){
             pprint("bad sys call number %lud pc %lux\n",
@@ -808,17 +814,21 @@ syscall(Ureg* ureg)
         up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
 
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         //IMPORTANT: The actual system call
         ret = systab[scallnr](up->sargs.args);
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         poperror();
     }else{
         /* failure: save the error buffer for errstr */
         e = up->syserrstr;
         up->syserrstr = up->errstr;
         up->errstr = e;
-        if(0 && up->pid == 1)
-            print("syscall %lud error %s\n", scallnr, up->syserrstr);
+        //if(0 && up->pid == 1)
+        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
     }
+
     if(up->nerrlab){
         print("bad errstack [%lud]: %d extra\n", scallnr, up->nerrlab);
         for(i = 0; i < NERR; i++)
@@ -835,17 +845,19 @@ syscall(Ureg* ureg)
      */
     ureg->ax = ret;
 
-    if(up->procctl == Proc_tracesyscall){
-        stopns = todget(nil);
-        up->procctl = Proc_stopme;
-        sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
-        s = splhi();
-        procctl(up);
-        splx(s);
-        if(up->syscalltrace)
-            free(up->syscalltrace);
-        up->syscalltrace = nil;
-    }
+    /*s: [[syscall()]] Proc_tracesyscall if, syscall exit */
+        if(up->procctl == Proc_tracesyscall){
+            stopns = todget(nil);
+            up->procctl = Proc_stopme;
+            sysretfmt(scallnr, (va_list)(sp+BY2WD), ret, startns, stopns);
+            s = splhi();
+            procctl(up); // again, will call sched() and wakeup tracer process
+            splx(s);
+            if(up->syscalltrace)
+                free(up->syscalltrace);
+            up->syscalltrace = nil;
+        }
+    /*e: [[syscall()]] Proc_tracesyscall if, syscall exit */
 
     up->insyscall = false;
     up->psstate = nil;
