@@ -605,10 +605,10 @@ struct Proc
     /*x: [[Proc]] debugger fields */
     bool hang;   /* hang at next exec for debug */
     /*x: [[Proc]] debugger fields */
-    bool trace;    /* process being traced? */
-    /*x: [[Proc]] debugger fields */
     Proc  *pdbg;    /* the debugging process */
     QLock debug;    /* to access debugging elements of User */
+    /*x: [[Proc]] debugger fields */
+    bool trace;    /* process being traced? */
     /*x: [[Proc]] debugger fields */
     char  *syscalltrace;  /* syscall trace */
     /*e: [[Proc]] debugger fields */

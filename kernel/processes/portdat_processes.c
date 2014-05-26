@@ -9,7 +9,7 @@
 /*e: kernel basic includes */
 
 /*s: hook proctrace */
-void (*proctrace)(Proc*, int, vlong) = 0; // was in devproc.c
+void (*proctrace)(Proc*, /*enum<tevent>*/int, vlong) = 0; // was in devproc.c
 /*e: hook proctrace */
 /*s: hook kproftimer */
 void (*kproftimer)(ulong);

@@ -8,7 +8,8 @@
 #include <mouse.h>
 #include <cursor.h>
 #include <keyboard.h>
-#include "trace.h"
+
+#include <trace.h>
 
 #pragma	varargck	type	"t"		vlong
 #pragma	varargck	type	"U"		uvlong

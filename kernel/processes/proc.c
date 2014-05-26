@@ -558,11 +558,11 @@ proc_ready(Proc *p)
     rq = &runq[pri];
     p->state = Ready;
     queueproc(rq, p);
-
-    pt = proctrace;
-    if(pt)
-        pt(p, SReady, 0);
-
+    /*s: ready()]] hook proctrace */
+        pt = proctrace;
+        if(pt)
+            pt(p, SReady, 0);
+    /*e: ready()]] hook proctrace */
     splx(s);
 }
 /*e: function ready */
@@ -701,9 +701,11 @@ found:
             edfunlock();
         }
     /*e: [[runproc()]] test if p is a real-time process */
-    pt = proctrace;
-    if(pt)
-        pt(p, SRun, 0);
+    /*s: [[runproc()]] hook proctrace */
+        pt = proctrace;
+        if(pt)
+            pt(p, SRun, 0);
+    /*e: [[runproc()]] hook proctrace */
     return p;
 }
 /*e: function runproc */
@@ -955,9 +957,11 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
          *  now we are committed to
          *  change state and call scheduler
          */
-        pt = proctrace;
-        if(pt)
-            pt(up, SSleep, 0);
+        /*s: [[sleep()]] hook proctrace */
+                pt = proctrace;
+                if(pt)
+                    pt(up, SSleep, 0);
+        /*e: [[sleep()]] hook proctrace */
 
         up->state = Wakeme;
         up->r = r;
@@ -1261,9 +1265,12 @@ proc_pexit(char *exitstr, bool freemem)
     up->alarm = 0;
     if (up->tt)
         timerdel(up);
-    pt = proctrace;
-    if(pt)
-        pt(up, SDead, 0);
+
+    /*s: [[pexit()]] hook proctrace */
+        pt = proctrace;
+        if(pt)
+            pt(up, SDead, 0);
+    /*e: [[pexit()]] hook proctrace */
 
     /* nil out all the resources under lock (free later) */
     qlock(&up->debug);

@@ -5446,9 +5446,8 @@ proc_pexit(char *exitstr, bool freemem)
     up->alarm = 0;
     if (up->tt)
         timerdel(up);
-    pt = proctrace;
-    if(pt)
-        pt(up, SDead, 0);
+
+    <<[[pexit()]] hook proctrace>>
 
     /* nil out all the resources under lock (free later) */
     qlock(&up->debug);
@@ -9109,9 +9108,7 @@ found:
     p->lastcpu = CPUS(cpu->cpuno);
 
     <<[[runproc()]] test if p is a real-time process>> 
-    pt = proctrace;
-    if(pt)
-        pt(p, SRun, 0);
+    <<[[runproc()]] hook proctrace>>
     return p;
 }
 @ 
@@ -9442,11 +9439,7 @@ proc_ready(Proc *p)
     rq = &runq[pri];
     p->state = Ready;
     queueproc(rq, p);
-
-    pt = proctrace;
-    if(pt)
-        pt(p, SReady, 0);
-
+    <<ready()]] hook proctrace>>
     splx(s);
 }
 @ 
@@ -9528,9 +9521,7 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
          *  now we are committed to
          *  change state and call scheduler
          */
-        pt = proctrace;
-        if(pt)
-            pt(up, SSleep, 0);
+        <<[[sleep()]] hook proctrace>>
 
         up->state = Wakeme;
         up->r = r;
@@ -22785,6 +22776,7 @@ enum
 {
     Qdir,
     Qtrace,
+
     Qargs,
     Qctl,
     Qfd,
@@ -22985,26 +22977,7 @@ procread(Chan *c, void *va, long n, vlong off)
     if(c->qid.type & QTDIR)
         return devdirread(c, a, n, 0, 0, procgen);
 
-    if(QID(c->qid) == Qtrace){
-        if(!eventsavailable(nil))
-            return 0;
-
-        rptr = (uchar*)va;
-        navail = tproduced - tconsumed;
-        if(navail > n / sizeof(Traceevent))
-            navail = n / sizeof(Traceevent);
-        while(navail > 0) {
-            ne = ((tconsumed & Emask) + navail > Nevents)? 
-                    Nevents - (tconsumed & Emask): navail;
-            memmove(rptr, &tevents[tconsumed & Emask], 
-                    ne * sizeof(Traceevent));
-
-            tconsumed += ne;
-            rptr += ne * sizeof(Traceevent);
-            navail -= ne;
-        }
-        return rptr - (uchar*)va;
-    }
+    <<[[procread()]] Qtrace if>>
 
     p = proctab(SLOT(c->qid));
     if(p->pid != PID(c->qid))
@@ -23400,32 +23373,7 @@ procopen(Chan *c, int omode)
     if(c->qid.type & QTDIR)
         return devopen(c, omode, 0, 0, procgen);
 
-    if(QID(c->qid) == Qtrace){
-        if (omode != OREAD) 
-            error(Eperm);
-        lock(&tlock);
-        if (waserror()){
-            unlock(&tlock);
-            nexterror();
-        }
-        if (topens > 0)
-            error("already open");
-        topens++;
-        if (tevents == nil){
-            tevents = (Traceevent*)malloc(sizeof(Traceevent) * Nevents);
-            if(tevents == nil)
-                error(Enomem);
-            tproduced = tconsumed = 0;
-        }
-        proctrace = _proctrace;
-        unlock(&tlock);
-        poperror();
-
-        c->mode = openmode(omode);
-        c->flag |= COPEN;
-        c->offset = 0;
-        return c;
-    }
+    <<[[procopen()]] Qtrace if>>
         
     p = proctab(SLOT(c->qid));
     qlock(&p->debug);
@@ -23797,14 +23745,8 @@ procfds(Proc *p, char *va, int count, long offset)
 static void
 procclose(Chan * c)
 {
-    if(QID(c->qid) == Qtrace){
-        lock(&tlock);
-        if(topens > 0)
-            topens--;
-        if(topens == 0)
-            proctrace = nil;
-        unlock(&tlock);
-    }
+    <<[[procclose()]] Qtrace if>>
+
     if(QID(c->qid) == Qns && c->aux != 0)
         free(c->aux);
 }
@@ -23867,13 +23809,6 @@ procargs(Proc *p, char *buf, int nbuf)
 @
 
 
-<<function eventsavailable>>=
-static int
-eventsavailable(void *)
-{
-    return tproduced > tconsumed;
-}
-@
 
 
 
@@ -24192,26 +24127,11 @@ procctlreq(Proc *p, char *va, int n)
         procwired(p, atoi(cb->f[1]));
         break;
 
-    case CMtrace:
-        switch(cb->nf){
-        case 1:
-            p->trace ^= true;
-            break;
-        case 2:
-            p->trace = (atoi(cb->f[1]) != 0);
-            break;
-        default:
-            error("args");
-        }
-        break;
+    <<[[procctlreq()]] CMtrace case>>
+    <<[[procctlreq()]] CMevent case>>
 
     <<[[procctlreq()]] optional real-time commands>>
 
-    case CMevent:
-        pt = proctrace;
-        if(up->trace && pt)
-            pt(up, SUser, 0);
-        break;
     }
 
     poperror();
@@ -25200,8 +25120,6 @@ void    (*consdebug)(void) = nil; // for rdb
 
 % Should be in Debugger.tex.nw at some point
 
-\subsection{[[/proc/]]}
-
 <<[[Proc]] debugger fields>>=
 void  *dbgreg;  /* User registers for devproc */
 @
@@ -25237,7 +25155,6 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 }
 @ 
 
-
 <<enum devproc>>=
 enum devproc
 {
@@ -25258,40 +25175,6 @@ int procctl;  /* Control for /proc debugging */
 bool hang;   /* hang at next exec for debug */
 @
 
-<<[[Proc]] debugger fields>>=
-bool trace;    /* process being traced? */
-@
-
-<<hook proctrace>>=
-void (*proctrace)(Proc*, int, vlong) = 0; // was in devproc.c
-@ 
-
-% always code like
-%  pt = proctrace
-%  if(pt) pt(...)
-%  why not just if(proctrace) proctrace(...)? because of race!
-%  after the if proctrace could be null!
-
-<<function _proctrace>>=
-static void
-_proctrace(Proc* p, Tevent etype, vlong ts)
-{
-    Traceevent *te;
-
-    if (p->trace == 0 || topens == 0 ||
-        tproduced - tconsumed >= Nevents)
-        return;
-
-    te = &tevents[tproduced&Emask];
-    te->pid = p->pid;
-    te->etype = etype;
-    if (ts == 0)
-        te->time = todget(nil);
-    else
-        te->time = ts;
-    tproduced++;
-}
-@
 
 % debug also (ab?)used in pexit when freeing memory
 <<[[Proc]] debugger fields>>=
@@ -25350,9 +25233,197 @@ procctl(Proc *p)
 Stopped,
 @
 
-\subsection{[[/bin/db]]}
+\subsection{[[/proc/x/ctl]]}
 
-\subsection{[[/bin/trace]]}
+% multi usage: trace, syscall, debug?
+
+\subsection{[[/proc/trace]] and [[/bin/trace]]}
+
+<<[[Proc]] debugger fields>>=
+bool trace;    /* process being traced? */
+@
+
+<<[[procctlreq()]] CMtrace case>>=
+    case CMtrace:
+        switch(cb->nf){
+        case 1:
+            p->trace ^= true;
+            break;
+        case 2:
+            p->trace = (atoi(cb->f[1]) != 0);
+            break;
+        default:
+            error("args");
+        }
+        break;
+@
+
+
+<<hook proctrace>>=
+void (*proctrace)(Proc*, /*enum<tevent>*/int, vlong) = 0; // was in devproc.c
+@ 
+
+%TODO: code of trace.h here
+
+% Always code like:
+%    pt = proctrace
+%    if(pt) pt(...)
+% Why not just if(proctrace) proctrace(...)? because of race!
+% After the 'if' proctrace could be null!
+
+% could draw automata :)
+
+<<ready()]] hook proctrace>>=
+    pt = proctrace;
+    if(pt)
+        pt(p, SReady, 0);
+@
+
+<<[[runproc()]] hook proctrace>>=
+    pt = proctrace;
+    if(pt)
+        pt(p, SRun, 0);
+@
+
+<<[[pexit()]] hook proctrace>>=
+    pt = proctrace;
+    if(pt)
+        pt(up, SDead, 0);
+@
+
+
+<<[[sleep()]] hook proctrace>>=
+        pt = proctrace;
+        if(pt)
+            pt(up, SSleep, 0);
+@
+
+% this one is a little bit different
+<<[[procctlreq()]] CMevent case>>=
+    case CMevent:
+        pt = proctrace;
+        if(up->trace && pt)
+            pt(up, SUser, 0);
+        break;
+@
+%TODO: can remove the up->trace, pt does this internally
+
+%TODO could put all of that in a struct, and a Lock, would be cleaner
+<<global trace txxx>>=
+// array<Traceevent>
+static Traceevent *tevents;
+static int topens;
+static int tproduced, tconsumed;
+static Lock tlock;
+@
+% topens can be > 1 ??? use a bool no?
+
+<<function eventsavailable>>=
+static int
+eventsavailable(void *)
+{
+    return tproduced > tconsumed;
+}
+@
+
+
+
+% no locks?
+<<function _proctrace>>=
+static void
+_proctrace(Proc* p, Tevent etype, vlong ts)
+{
+    Traceevent *te;
+
+    if (p->trace == false || topens == 0 ||
+        tproduced - tconsumed >= Nevents)
+        return;
+
+    te = &tevents[tproduced&Emask];
+    te->pid = p->pid;
+    te->etype = etype;
+    if (ts == 0)
+        te->time = todget(nil);
+    else
+        te->time = ts;
+    tproduced++;
+}
+@
+
+<<constant Nevents>>=
+    Nevents = 0x4000,
+@
+
+<<constant Emask>>=
+    Emask = Nevents - 1,
+@
+
+<<[[procopen()]] Qtrace if>>=
+    if(QID(c->qid) == Qtrace){
+        if (omode != OREAD) 
+            error(Eperm);
+        lock(&tlock);
+        if (waserror()){
+            unlock(&tlock);
+            nexterror();
+        }
+        if (topens > 0)
+            error("already open");
+        topens++;
+        if (tevents == nil){
+            tevents = (Traceevent*)malloc(sizeof(Traceevent) * Nevents);
+            if(tevents == nil)
+                error(Enomem);
+            tproduced = tconsumed = 0;
+        }
+        proctrace = _proctrace;
+        unlock(&tlock);
+        poperror();
+
+        c->mode = openmode(omode);
+        c->flag |= COPEN;
+        c->offset = 0;
+        return c;
+    }
+@
+
+<<[[procclose()]] Qtrace if>>=
+    if(QID(c->qid) == Qtrace){
+        lock(&tlock);
+        if(topens > 0)
+            topens--;
+        if(topens == 0)
+            proctrace = nil;
+        unlock(&tlock);
+    }
+@
+
+<<[[procread()]] Qtrace if>>=
+    if(QID(c->qid) == Qtrace){
+        if(!eventsavailable(nil))
+            return 0;
+
+        rptr = (uchar*)va;
+        navail = tproduced - tconsumed;
+        if(navail > n / sizeof(Traceevent))
+            navail = n / sizeof(Traceevent);
+        while(navail > 0) {
+            ne = ((tconsumed & Emask) + navail > Nevents)? 
+                    Nevents - (tconsumed & Emask): navail;
+            memmove(rptr, &tevents[tconsumed & Emask], 
+                    ne * sizeof(Traceevent));
+
+            tconsumed += ne;
+            rptr += ne * sizeof(Traceevent);
+            navail -= ne;
+        }
+        return rptr - (uchar*)va;
+    }
+@
+
+
+
+\subsection{[[/bin/strace?]]}
 
 <<[[Proc]] debugger fields>>=
 char  *syscalltrace;  /* syscall trace */
@@ -25723,6 +25794,10 @@ fmtuserstring(Fmt* f, char* a, char* suffix)
     free(t);
 }
 @ 
+
+
+\subsection{[[/bin/db]]}
+
 
 
 \chapter{Profiling}

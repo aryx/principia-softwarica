@@ -26,6 +26,7 @@ enum
 {
     Qdir,
     Qtrace,
+
     Qargs,
     Qctl,
     Qfd,
@@ -81,8 +82,12 @@ enum
 /*e: devproc enum CMxxx */
 
 enum{
+/*s: constant Nevents */
     Nevents = 0x4000,
+/*e: constant Nevents */
+/*s: constant Emask */
     Emask = Nevents - 1,
+/*e: constant Emask */
 };
 
 #define STATSIZE    (2*KNAMELEN+12+9*12)
@@ -176,10 +181,13 @@ int procstopped(void*);
 void    mntscan(Mntwalk*, Proc*);
 /*e: devproc.c forward decl */
 
+/*s: global trace txxx */
+// array<Traceevent>
 static Traceevent *tevents;
-static Lock tlock;
 static int topens;
 static int tproduced, tconsumed;
+static Lock tlock;
+/*e: global trace txxx */
 
 /*s: clock callback profclock */
 static void
@@ -297,7 +305,7 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 {
     Traceevent *te;
 
-    if (p->trace == 0 || topens == 0 ||
+    if (p->trace == false || topens == 0 ||
         tproduced - tconsumed >= Nevents)
         return;
 
@@ -372,32 +380,34 @@ procopen(Chan *c, int omode)
     if(c->qid.type & QTDIR)
         return devopen(c, omode, 0, 0, procgen);
 
-    if(QID(c->qid) == Qtrace){
-        if (omode != OREAD) 
-            error(Eperm);
-        lock(&tlock);
-        if (waserror()){
+    /*s: [[procopen()]] Qtrace if */
+        if(QID(c->qid) == Qtrace){
+            if (omode != OREAD) 
+                error(Eperm);
+            lock(&tlock);
+            if (waserror()){
+                unlock(&tlock);
+                nexterror();
+            }
+            if (topens > 0)
+                error("already open");
+            topens++;
+            if (tevents == nil){
+                tevents = (Traceevent*)malloc(sizeof(Traceevent) * Nevents);
+                if(tevents == nil)
+                    error(Enomem);
+                tproduced = tconsumed = 0;
+            }
+            proctrace = _proctrace;
             unlock(&tlock);
-            nexterror();
-        }
-        if (topens > 0)
-            error("already open");
-        topens++;
-        if (tevents == nil){
-            tevents = (Traceevent*)malloc(sizeof(Traceevent) * Nevents);
-            if(tevents == nil)
-                error(Enomem);
-            tproduced = tconsumed = 0;
-        }
-        proctrace = _proctrace;
-        unlock(&tlock);
-        poperror();
+            poperror();
 
-        c->mode = openmode(omode);
-        c->flag |= COPEN;
-        c->offset = 0;
-        return c;
-    }
+            c->mode = openmode(omode);
+            c->flag |= COPEN;
+            c->offset = 0;
+            return c;
+        }
+    /*e: [[procopen()]] Qtrace if */
         
     p = proctab(SLOT(c->qid));
     qlock(&p->debug);
@@ -650,14 +660,17 @@ procfds(Proc *p, char *va, int count, long offset)
 static void
 procclose(Chan * c)
 {
-    if(QID(c->qid) == Qtrace){
-        lock(&tlock);
-        if(topens > 0)
-            topens--;
-        if(topens == 0)
-            proctrace = nil;
-        unlock(&tlock);
-    }
+    /*s: [[procclose()]] Qtrace if */
+        if(QID(c->qid) == Qtrace){
+            lock(&tlock);
+            if(topens > 0)
+                topens--;
+            if(topens == 0)
+                proctrace = nil;
+            unlock(&tlock);
+        }
+    /*e: [[procclose()]] Qtrace if */
+
     if(QID(c->qid) == Qns && c->aux != 0)
         free(c->aux);
 }
@@ -743,26 +756,28 @@ procread(Chan *c, void *va, long n, vlong off)
     if(c->qid.type & QTDIR)
         return devdirread(c, a, n, 0, 0, procgen);
 
-    if(QID(c->qid) == Qtrace){
-        if(!eventsavailable(nil))
-            return 0;
+    /*s: [[procread()]] Qtrace if */
+        if(QID(c->qid) == Qtrace){
+            if(!eventsavailable(nil))
+                return 0;
 
-        rptr = (uchar*)va;
-        navail = tproduced - tconsumed;
-        if(navail > n / sizeof(Traceevent))
-            navail = n / sizeof(Traceevent);
-        while(navail > 0) {
-            ne = ((tconsumed & Emask) + navail > Nevents)? 
-                    Nevents - (tconsumed & Emask): navail;
-            memmove(rptr, &tevents[tconsumed & Emask], 
-                    ne * sizeof(Traceevent));
+            rptr = (uchar*)va;
+            navail = tproduced - tconsumed;
+            if(navail > n / sizeof(Traceevent))
+                navail = n / sizeof(Traceevent);
+            while(navail > 0) {
+                ne = ((tconsumed & Emask) + navail > Nevents)? 
+                        Nevents - (tconsumed & Emask): navail;
+                memmove(rptr, &tevents[tconsumed & Emask], 
+                        ne * sizeof(Traceevent));
 
-            tconsumed += ne;
-            rptr += ne * sizeof(Traceevent);
-            navail -= ne;
+                tconsumed += ne;
+                rptr += ne * sizeof(Traceevent);
+                navail -= ne;
+            }
+            return rptr - (uchar*)va;
         }
-        return rptr - (uchar*)va;
-    }
+    /*e: [[procread()]] Qtrace if */
 
     p = proctab(SLOT(c->qid));
     if(p->pid != PID(c->qid))
@@ -1475,18 +1490,27 @@ procctlreq(Proc *p, char *va, int n)
         procwired(p, atoi(cb->f[1]));
         break;
 
-    case CMtrace:
-        switch(cb->nf){
-        case 1:
-            p->trace ^= true;
+    /*s: [[procctlreq()]] CMtrace case */
+        case CMtrace:
+            switch(cb->nf){
+            case 1:
+                p->trace ^= true;
+                break;
+            case 2:
+                p->trace = (atoi(cb->f[1]) != 0);
+                break;
+            default:
+                error("args");
+            }
             break;
-        case 2:
-            p->trace = (atoi(cb->f[1]) != 0);
+    /*e: [[procctlreq()]] CMtrace case */
+    /*s: [[procctlreq()]] CMevent case */
+        case CMevent:
+            pt = proctrace;
+            if(up->trace && pt)
+                pt(up, SUser, 0);
             break;
-        default:
-            error("args");
-        }
-        break;
+    /*e: [[procctlreq()]] CMevent case */
 
     /*s: [[procctlreq()]] optional real-time commands */
         /* real time */
@@ -1542,11 +1566,6 @@ procctlreq(Proc *p, char *va, int n)
 
     /*e: [[procctlreq()]] optional real-time commands */
 
-    case CMevent:
-        pt = proctrace;
-        if(up->trace && pt)
-            pt(up, SUser, 0);
-        break;
     }
 
     poperror();
