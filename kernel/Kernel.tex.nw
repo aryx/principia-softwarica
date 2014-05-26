@@ -2668,7 +2668,7 @@ smalloc(ulong size)
         v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
         if(v != nil)
             break;
-        tsleep(&up->sleep, return0, 0, 100);
+        tsleep(&up->sleepr, return0, 0, 100);
     }
     if(Npadlong){
         v = (ulong*)v+Npadlong;
@@ -2858,7 +2858,7 @@ struct Palloc
   
     // extra
     Lock; // LOCK ORDERING: always do lock(&palloc); lock(p)!!
-    Rendez  r; /* Sleep for free mem */
+    Rendez  freememr; /* Sleep for free mem */ // ispages()
     QLock pwait; /* Queue of procs waiting for memory */
 };
 @
@@ -2916,7 +2916,7 @@ newpage(bool clear, Segment **s, ulong va)
             ;
 
         kickpager();
-        tsleep(&palloc.r, ispages, 0, 1000);
+        tsleep(&palloc.freememr, ispages, 0, 1000);
 
         poperror();
 
@@ -3078,8 +3078,8 @@ putpage(Page *p)
     else 
         pagechainhead(p);
 
-    if(palloc.r.p != nil)
-        wakeup(&palloc.r);
+    if(palloc.freememr.p != nil)
+        wakeup(&palloc.freememr);
 
     unlock(p);
     unlock(&palloc);
@@ -5567,7 +5567,7 @@ proc_pexit(char *exitstr, bool freemem)
     /* release debuggers */
     qlock(&up->debug);
     if(up->pdbg) {
-        wakeup(&up->pdbg->sleep);
+        wakeup(&up->pdbg->sleepr);
         up->pdbg = nil;
     }
     qunlock(&up->debug);
@@ -7265,8 +7265,8 @@ mmurelease(Proc* proc)
             panic("mmurelease: page->ref %d", page->ref);
         pagechainhead(page);
     }
-    if(proc->mmufree && palloc.r.p)
-        wakeup(&palloc.r);
+    if(proc->mmufree && palloc.freememr.p)
+        wakeup(&palloc.freememr);
     proc->mmufree = 0;
 }
 @
@@ -8203,7 +8203,7 @@ struct Swapalloc
     uchar*  alloc;      /* Round robin allocator */
     uchar*  last;     /* Speed swap allocation */
     uchar*  top;      /* Top of swap map */
-    Rendez r;      /* Pager kproc idle sleep */
+    Rendez r;      /* Pager kproc idle sleep */ // needpages()
     ulong highwater;    /* Pager start threshold */
     ulong headroom;   /* Space pager frees under highwater */
   
@@ -8290,13 +8290,13 @@ swapcount(ulong daddr)
 void
 kickpager(void)
 {
-    static int started;
+    static bool started;
 
     if(started)
         wakeup(&swapalloc.r);
     else {
         kproc("pager", pager, 0);
-        started = 1;
+        started = true;
     }
 }
 @
@@ -8322,7 +8322,7 @@ pager(void *junk)
 
 loop:
     up->psstate = "Idle";
-    wakeup(&palloc.r);
+    wakeup(&palloc.freememr);
     sleep(&swapalloc.r, needpages, 0);
 
     while(needpages(junk)) {
@@ -8374,7 +8374,7 @@ loop:
 
             /* Emulate the old system if no swap channel */
             if(!swapimage.c)
-                tsleep(&up->sleep, return0, 0, 5000);
+                tsleep(&up->sleepr, return0, 0, 5000);
         }
     }
     goto loop;
@@ -8608,7 +8608,7 @@ executeio(void)
 
 
 <<function needpages>>=
-static int
+static bool
 needpages(void*)
 {
     return palloc.freecount < swapalloc.headroom;
@@ -9465,7 +9465,7 @@ struct Rendez
 % cooperative scheduling, not so much about inter process synchro via
 % sysrendezvous
 <<[[Proc]] synchronization fields>>=
-// option<ref<Rendez>>, can point to waitr, freememr, etc
+// option<ref<Rendez>>, can point to waitr, freememr, sleepr, etc
 Rendez  *r;   /* rendezvous point slept on */
 Lock  rlock;    /* sync sleep/wakeup with postnote */
 @
@@ -20426,7 +20426,7 @@ addclock0link(void (*f)(void), Tms ms)
 \section{[[syssleep()]]}
 
 <<[[Proc]] synchronization fields>>=
-Rendez  sleep;    /* place for syssleep/debug/tsleep */
+Rendez  sleepr;    /* place for syssleep/debug/tsleep */
 @ 
 
 <<syscall sleep>>=
@@ -20443,7 +20443,7 @@ syssleep(ulong *arg)
     }
     if(n < TK2MS(1))
         n = TK2MS(1);
-    tsleep(&up->sleep, return0, 0, n);
+    tsleep(&up->sleepr, return0, 0, n);
     return 0;
 }
 @ 
@@ -20577,7 +20577,7 @@ done:
 
 
 <<global alarmr>>=
-static Rendez   alarmr;
+static Rendez alarmr;
 @ 
 
 <<kernel process alarmkproc>>=
@@ -23994,7 +23994,7 @@ procstopwait(Proc *p, int ctl)
         qlock(&p->debug);
         nexterror();
     }
-    sleep(&up->sleep, procstopped, p);
+    sleep(&up->sleepr, procstopped, p);
     poperror();
     qlock(&p->debug);
     if(p->pid != pid)
@@ -25331,7 +25331,7 @@ procctl(Proc *p)
         s = spllo();
         qlock(&p->debug);
         if(p->pdbg) {
-            wakeup(&p->pdbg->sleep);
+            wakeup(&p->pdbg->sleepr);
             p->pdbg = 0;
         }
         qunlock(&p->debug);

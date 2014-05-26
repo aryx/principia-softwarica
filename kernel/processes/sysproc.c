@@ -580,7 +580,7 @@ syssleep(ulong *arg)
     }
     if(n < TK2MS(1))
         n = TK2MS(1);
-    tsleep(&up->sleep, return0, 0, n);
+    tsleep(&up->sleepr, return0, 0, n);
     return 0;
 }
 /*e: syscall sleep */

@@ -1282,7 +1282,7 @@ procstopwait(Proc *p, int ctl)
         qlock(&p->debug);
         nexterror();
     }
-    sleep(&up->sleep, procstopped, p);
+    sleep(&up->sleepr, procstopped, p);
     poperror();
     qlock(&p->debug);
     if(p->pid != pid)

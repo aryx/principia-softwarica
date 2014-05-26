@@ -348,7 +348,7 @@ resrcwait(char *reason)
         }
     }
 
-    tsleep(&up->sleep, return0, 0, 300);
+    tsleep(&up->sleepr, return0, 0, 300);
     up->psstate = p;
 }
 /*e: function resrcwait */

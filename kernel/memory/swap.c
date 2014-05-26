@@ -124,13 +124,13 @@ swapcount(ulong daddr)
 void
 kickpager(void)
 {
-    static int started;
+    static bool started;
 
     if(started)
         wakeup(&swapalloc.r);
     else {
         kproc("pager", pager, 0);
-        started = 1;
+        started = true;
     }
 }
 /*e: function kickpager */
@@ -151,7 +151,7 @@ pager(void *junk)
 
 loop:
     up->psstate = "Idle";
-    wakeup(&palloc.r);
+    wakeup(&palloc.freememr);
     sleep(&swapalloc.r, needpages, 0);
 
     while(needpages(junk)) {
@@ -203,7 +203,7 @@ loop:
 
             /* Emulate the old system if no swap channel */
             if(!swapimage.c)
-                tsleep(&up->sleep, return0, 0, 5000);
+                tsleep(&up->sleepr, return0, 0, 5000);
         }
     }
     goto loop;
@@ -433,7 +433,7 @@ executeio(void)
 /*e: function executeio */
 
 /*s: function needpages */
-static int
+static bool
 needpages(void*)
 {
     return palloc.freecount < swapalloc.headroom;

@@ -277,7 +277,7 @@ mouseread(Chan *c, void *va, long n, vlong off)
                 mouse.ri = 0;
         } else {
             while(!canlock(&cursor))
-                tsleep(&up->sleep, return0, 0, TK2MS(1));
+                tsleep(&up->sleepr, return0, 0, TK2MS(1));
 
             m = mouse.Mousestate;
             unlock(&cursor);

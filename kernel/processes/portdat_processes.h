@@ -539,7 +539,7 @@ struct Proc
     Rendez  *r;   /* rendezvous point slept on */
     Lock  rlock;    /* sync sleep/wakeup with postnote */
     /*x: [[Proc]] synchronization fields */
-    Rendez  sleep;    /* place for syssleep/debug/tsleep */
+    Rendez  sleepr;    /* place for syssleep/debug/tsleep */
     /*x: [[Proc]] synchronization fields */
     Rgrp  *rgrp;    /* Rendez group */
 

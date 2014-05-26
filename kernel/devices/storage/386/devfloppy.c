@@ -590,7 +590,7 @@ floppykproc(void *)
                 qunlock(&fl);
             }
         }
-        tsleep(&up->sleep, return0, 0, 1000);
+        tsleep(&up->sleepr, return0, 0, 1000);
     }
 }
 
@@ -612,7 +612,7 @@ floppyon(FDrive *dp)
     outb(Pdor, fl.motor | Fintena | Fena | dp->dev);
     if(!alreadyon){
         /* wait for drive to spin up */
-        tsleep(&up->sleep, return0, 0, 750);
+        tsleep(&up->sleepr, return0, 0, 750);
 
         /* clear any pending interrupts */
         floppysense();

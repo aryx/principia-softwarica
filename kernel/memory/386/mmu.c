@@ -413,8 +413,8 @@ mmurelease(Proc* proc)
             panic("mmurelease: page->ref %d", page->ref);
         pagechainhead(page);
     }
-    if(proc->mmufree && palloc.r.p)
-        wakeup(&palloc.r);
+    if(proc->mmufree && palloc.freememr.p)
+        wakeup(&palloc.freememr);
     proc->mmufree = 0;
 }
 /*e: function mmurelease */

@@ -177,7 +177,7 @@ newpage(bool clear, Segment **s, ulong va)
             ;
 
         kickpager();
-        tsleep(&palloc.r, ispages, 0, 1000);
+        tsleep(&palloc.freememr, ispages, 0, 1000);
 
         poperror();
 
@@ -266,8 +266,8 @@ putpage(Page *p)
     else 
         pagechainhead(p);
 
-    if(palloc.r.p != nil)
-        wakeup(&palloc.r);
+    if(palloc.freememr.p != nil)
+        wakeup(&palloc.freememr);
 
     unlock(p);
     unlock(&palloc);

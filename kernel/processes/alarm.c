@@ -12,7 +12,7 @@
 static Alarms   alarms;
 /*e: global alarms */
 /*s: global alarmr */
-static Rendez   alarmr;
+static Rendez alarmr;
 /*e: global alarmr */
 
 /*s: kernel process alarmkproc */

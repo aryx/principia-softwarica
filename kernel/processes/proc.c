@@ -1381,7 +1381,7 @@ proc_pexit(char *exitstr, bool freemem)
     /* release debuggers */
     qlock(&up->debug);
     if(up->pdbg) {
-        wakeup(&up->pdbg->sleep);
+        wakeup(&up->pdbg->sleepr);
         up->pdbg = nil;
     }
     qunlock(&up->debug);
@@ -1652,7 +1652,7 @@ procctl(Proc *p)
         s = spllo();
         qlock(&p->debug);
         if(p->pdbg) {
-            wakeup(&p->pdbg->sleep);
+            wakeup(&p->pdbg->sleepr);
             p->pdbg = 0;
         }
         qunlock(&p->debug);

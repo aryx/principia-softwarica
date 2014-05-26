@@ -508,12 +508,12 @@ edfyield(void)
         up->tf = releaseintr;
         up->tmode = Trelative;
         up->ta = up;
-        up->trend = &up->sleep;
+        up->trend = &up->sleepr;
         timeradd(up);
     }else if(up->tf != releaseintr)
         print("edfyield: surprise! %#p\n", up->tf);
     edfunlock();
-    sleep(&up->sleep, yfn, nil);
+    sleep(&up->sleepr, yfn, nil);
 }
 
 int

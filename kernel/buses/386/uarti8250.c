@@ -437,7 +437,7 @@ i8250break(Uart* uart, int ms)
 
     ctlr = uart->regs;
     csr8w(ctlr, Lcr, Brk);
-    tsleep(&up->sleep, return0, 0, ms);
+    tsleep(&up->sleepr, return0, 0, ms);
     csr8w(ctlr, Lcr, 0);
 }
 

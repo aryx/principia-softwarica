@@ -249,7 +249,7 @@ etherunbind(Ipifc *ifc)
 
     /* wait for readers to die */
     while(er->arpp != 0 || er->read4p != 0 || er->read6p != 0)
-        tsleep(&up->sleep, return0, 0, 300);
+        tsleep(&up->sleepr, return0, 0, 300);
 
     if(er->mchan4 != nil)
         cclose(er->mchan4);
