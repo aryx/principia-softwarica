@@ -11,6 +11,8 @@
 
 #include <trace.h>
 
+// a GUI tracer for kernel scheduler events
+
 #pragma	varargck	type	"t"		vlong
 #pragma	varargck	type	"U"		uvlong
 

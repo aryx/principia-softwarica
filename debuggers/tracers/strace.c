@@ -3,6 +3,9 @@
 #include <bio.h>
 #include <thread.h>
 
+// was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
+// but most people knows 'strace'
+
 enum {
 	Stacksize	= 8*1024,
 	Bufsize		= 8*1024,
@@ -156,7 +159,7 @@ done:
 void
 usage(void)
 {
-	fprint(2, "Usage: ratrace [-c cmd [arg...]] | [pid]\n");
+	fprint(2, "Usage: strace [-c cmd [arg...]] | [pid]\n");
 	exits("usage");
 }
 
