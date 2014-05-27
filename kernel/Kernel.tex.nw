@@ -5758,6 +5758,52 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
 }
 @ 
 
+\section{Process control [[/proc/xxx/ctl]]}
+
+% see /proc, /proc/x/ctl, procctl()
+% see section on Debugging where explain procctl
+% see also section on notifications
+
+% TODO: How implement C-z on plan9? how shell can stop user process?
+% actually on linux C-z is something interpreted by the tty maybe,
+% and send SIGSTOP, but why resume to the shell then? because shell was
+% waitpid and a SIGSTOP makes this waitpid resume?
+% actually echo kill /proc/x/ctl?
+
+
+% used by 'echo kill > /proc/x/ctl, and used by pager if not enough free memory
+<<enum procctl cases>>=
+    Proc_exitme,
+@
+
+<<[[procctl()]] Proc_exitme case>>=
+    case Proc_exitme:
+        spllo();        /* pexit has locks in it */
+        pexit("Killed", true);
+@
+%procctl() is executed by notify() executed itself usually
+% at syscall boundary or trap
+
+% lock on p->debug hold while doing that?
+<<[[procctlreq()]] CMkill case>>=
+    case CMkill:
+        switch(p->state) {
+        case Broken:
+            unbreak(p);
+            break;
+        case Stopped:
+            p->procctl = Proc_exitme;
+            postnote(p, 0, "sys: killed", NExit);
+            ready(p);
+            break;
+        default:
+            p->procctl = Proc_exitme;
+            postnote(p, 0, "sys: killed", NExit);
+        }
+        break;
+@
+
+
 \chapter{Interrupts}
 \minitoc
 
@@ -6709,7 +6755,9 @@ trap(Ureg* ureg)
     }
 
     cpu->perf.intrts = perfticks();
+
     user = (ureg->cs & 0xFFFF) == UESEL;
+
     if(user){
         up->dbgreg = ureg;
         cycles(&up->kentry);
@@ -6830,6 +6878,7 @@ kexit(Ureg*)
     tos->pid = up->pid;
 }
 @ 
+% really? this go to user space?? how? what is Tos?
 
 
 \ifallcode
@@ -20994,6 +21043,9 @@ sec2rtc(ulong secs, Rtc *rtc)
 % also when fork child inherit fd and can share stuff there
 % also child can communicate to parent fix exit code (if parent calls wait())
 
+% finally debugging is a form of IPC, the debugger communicate/control
+% the debuggee process
+
 <<systab ipc syscalls>>=
     [NOTIFY]    sysnotify,
     [NOTED]     sysnoted,
@@ -24067,22 +24119,8 @@ procctlreq(Proc *p, char *va, int n)
 
     <<[[procctlreq()]] CMhang case>>
     <<[[procctlreq()]] CMnohang case>>
+    <<[[procctlreq()]] CMkill case>>
 
-    case CMkill:
-        switch(p->state) {
-        case Broken:
-            unbreak(p);
-            break;
-        case Stopped:
-            p->procctl = Proc_exitme;
-            postnote(p, 0, "sys: killed", NExit);
-            ready(p);
-            break;
-        default:
-            p->procctl = Proc_exitme;
-            postnote(p, 0, "sys: killed", NExit);
-        }
-        break;
     case CMnoswap:
         p->noswap = true;
         break;
@@ -24112,25 +24150,12 @@ procctlreq(Proc *p, char *va, int n)
         if(s->profile == 0)
             error(Enomem);
         break;
-    case CMstart:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        ready(p);
-        break;
-    case CMstartstop:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        p->procctl = Proc_traceme;
-        ready(p);
-        procstopwait(p, Proc_traceme);
-        break;
+    <<[[procctlreq()]] CMstart case>>
+    <<[[procctlreq()]] CMstartstop case>>
     <<[[procctlreq()]] CMstartsyscall case>>
-    case CMstop:
-        procstopwait(p, Proc_stopme);
-        break;
-    case CMwaitstop:
-        procstopwait(p, Proc_nothing);
-        break;
+    <<[[procctlreq()]] CMstop case>>
+    <<[[procctlreq()]] CMwaitstop case>>
+
     case CMwired:
         procwired(p, atoi(cb->f[1]));
         break;
@@ -25168,31 +25193,6 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 }
 @ 
 
-<<enum procctl cases>>=
-    Proc_exitme,
-    Proc_traceme,
-    Proc_exitbig,
-@
-
-<<[[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]])>>=
-    case Proc_traceme:
-        if(p->nnote == 0)
-            return;
-        /* No break */
-@
-
-<<[[procctl()]] Proc_exitbig case>>=
-    case Proc_exitbig:
-        spllo();
-        pexit("Killed: Insufficient physical memory", true);
-@
-
-<<[[procctl()]] Proc_exitme case>>=
-    case Proc_exitme:
-        spllo();        /* pexit has locks in it */
-        pexit("Killed", true);
-@
-
 
 \subsection{Stopping a process}
 
@@ -25226,9 +25226,12 @@ enum procctl
 int procctl;  /* Control for /proc debugging */
 @
 % who can set to Proc_stopme? 
-%  - when have up->hang
+%  - when have up->hang (get stopped before anything run)
+%  - when wrote stop to its ctl file (will be seen at next trap or syscall,
+%    similar to notifications)
 %  - when have Proc_tracesyscall
 %    then at the entry the syscall sets the process to Stopme,
+%    but actually Proc_tracesyscall needed a stopped process to begin with
 
 
 
@@ -25272,63 +25275,22 @@ procctl(Proc *p)
 % so how a process can cause procctl() for another process to
 % be executed? can't just do  procctl(other_process)?
 % but this other process is executing ... maybe at next trap
-% it can look?
-
-% overview steps on 'strace ls' or 'db ls':
-% - strace: fork (to later exec ls)
-% - child: before exec(), will 'echo hang > /proc/child/ctl'
-%   (exec will use this info)
-% - child: exec ls, because of hang will get his procctl to Proc_stopme,
-%   which later when return from sysexec will get back to syscall() which
-%   check if procctl, call notify() which then call procctl() which
-%   will effectively stop ls!
+% it can look? Yes, notification mechanism
 
 
-<<[[Proc]] debugger fields>>=
-bool hang;   /* hang at next exec for debug */
-@
-
-<<[[procctlreq()]] CMhang case>>=
-    case CMhang:
-        p->hang = true;
-        break;
-@
-<<[[procctlreq()]] CMnohang case>>=
-    case CMnohang:
-        p->hang = false;
+<<[[procctlreq()]] CMstop case>>=
+    case CMstop:
+        procstopwait(p, Proc_stopme);
         break;
 @
 
-
-<<[[sysfork()]] inherit hang>>=
-    p->hang = up->hang;
+<<[[procctlreq()]] CMstart case>>=
+    case CMstart:
+        if(p->state != Stopped)
+            error(Ebadctl);
+        ready(p);
+        break;
 @
-
-<<[[sysexec()]] if hang>>=
-    if(up->hang)
-        up->procctl = Proc_stopme;
-@
-% why not do procctl(up) here? when the process will stop? because
-% at return of sysexec there will be a call to notify and procctl(up),
-% but looks a bit dirty, why they abused notify for that?
-% because for the debugger they need more than just procctl? they need
-% notes?
-
-
-% so now we know how to stop another (your child at least), but
-% how tracer can wait? can't just call await(), we don't wait
-% for the child to die...
-
-
-% debug also (ab?)used in pexit when freeing memory
-<<[[Proc]] debugger fields>>=
-Proc  *pdbg;    /* the debugging process */
-@
-
-<<[[Proc]] debugger fields>>=
-QLock debug;    /* to access debugging elements */ // used for many things
-@
-% used by strace, but also db
 
 
 <<function procstopwait>>=
@@ -25375,6 +25337,22 @@ procstopped(void *a)
 }
 @
 
+% so now we know how to stop another (your child at least), but
+% how tracer can wait? can't just call await(), we don't wait
+% for the child to die...
+
+
+% debug also (ab?)used in pexit when freeing memory
+<<[[Proc]] debugger fields>>=
+Proc  *pdbg;    /* the debugging process */
+@
+
+<<[[Proc]] debugger fields>>=
+QLock debug;    /* to access debugging elements */ // used for many things
+@
+% used by strace, but also db, and also for notes, all related to
+% one process communicating/controlling another process
+
 
 <<[[procctl()]] wakeup waiting debugger>>=
         /* free a waiting debugger */
@@ -25387,6 +25365,56 @@ procstopped(void *a)
 @
 
 
+
+
+
+
+% overview steps on 'strace ls' or 'db ls':
+% - strace: fork (to later exec ls)
+% - child: before exec(), will 'echo hang > /proc/child/ctl'
+%   (exec will use this info)
+% - child: exec ls, because of hang will get his procctl to Proc_stopme,
+%   which later when return from sysexec will get back to syscall() which
+%   check if procctl, call notify() which then call procctl() which
+%   will effectively stop ls!
+
+
+<<[[Proc]] debugger fields>>=
+bool hang;   /* hang at next exec for debug */
+@
+
+<<[[procctlreq()]] CMhang case>>=
+    case CMhang:
+        p->hang = true;
+        break;
+@
+<<[[procctlreq()]] CMnohang case>>=
+    case CMnohang:
+        p->hang = false;
+        break;
+@
+
+
+<<[[sysfork()]] inherit hang>>=
+    p->hang = up->hang;
+@
+
+<<[[sysexec()]] if hang>>=
+    if(up->hang)
+        up->procctl = Proc_stopme;
+@
+% why not do procctl(up) here? when the process will stop? because
+% at return of sysexec there will be a call to notify and procctl(up),
+% but looks a bit dirty, why they abused notify for that?
+% because for the debugger they need more than just procctl? they need
+% notes?
+
+
+<<[[procctlreq()]] CMwaitstop case>>=
+    case CMwaitstop:
+        procstopwait(p, Proc_nothing);
+        break;
+@
 
 
 
@@ -26091,6 +26119,31 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 
 
 \subsection{[[/bin/db]]}
+
+
+\subsection{Other}
+
+% used? by what? acid? db? seems stopped until there is a note
+<<enum procctl cases>>=
+    Proc_traceme,
+@
+
+<<[[procctl()]] Proc_traceme case (and fallthrough [[Proc_stopme]])>>=
+    case Proc_traceme:
+        if(p->nnote == 0)
+            return;
+        /* No break */
+@
+
+<<[[procctlreq()]] CMstartstop case>>=
+    case CMstartstop:
+        if(p->state != Stopped)
+            error(Ebadctl);
+        p->procctl = Proc_traceme;
+        ready(p);
+        procstopwait(p, Proc_traceme);
+        break;
+@
 
 
 

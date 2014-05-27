@@ -1338,7 +1338,7 @@ procctlcloseone(Proc *p, Fgrp *f, int fd)
 
 /*s: function procctlclosefiles */
 void
-procctlclosefiles(Proc *p, int all, int fd)
+procctlclosefiles(Proc *p, bool all, int fd)
 {
     int i;
     Fgrp *f;
@@ -1420,10 +1420,10 @@ procctlreq(Proc *p, char *va, int n)
 
     switch(ct->index){
     case CMclose:
-        procctlclosefiles(p, 0, atoi(cb->f[1]));
+        procctlclosefiles(p, false, atoi(cb->f[1]));
         break;
     case CMclosefiles:
-        procctlclosefiles(p, 1, 0);
+        procctlclosefiles(p, true, 0);
         break;
 
     /*s: [[procctlreq()]] CMhang case */
@@ -1436,22 +1436,24 @@ procctlreq(Proc *p, char *va, int n)
             p->hang = false;
             break;
     /*e: [[procctlreq()]] CMnohang case */
+    /*s: [[procctlreq()]] CMkill case */
+        case CMkill:
+            switch(p->state) {
+            case Broken:
+                unbreak(p);
+                break;
+            case Stopped:
+                p->procctl = Proc_exitme;
+                postnote(p, 0, "sys: killed", NExit);
+                ready(p);
+                break;
+            default:
+                p->procctl = Proc_exitme;
+                postnote(p, 0, "sys: killed", NExit);
+            }
+            break;
+    /*e: [[procctlreq()]] CMkill case */
 
-    case CMkill:
-        switch(p->state) {
-        case Broken:
-            unbreak(p);
-            break;
-        case Stopped:
-            p->procctl = Proc_exitme;
-            postnote(p, 0, "sys: killed", NExit);
-            ready(p);
-            break;
-        default:
-            p->procctl = Proc_exitme;
-            postnote(p, 0, "sys: killed", NExit);
-        }
-        break;
     case CMnoswap:
         p->noswap = true;
         break;
@@ -1485,18 +1487,22 @@ procctlreq(Proc *p, char *va, int n)
         if(s->profile == 0)
             error(Enomem);
         break;
-    case CMstart:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        ready(p);
-        break;
-    case CMstartstop:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        p->procctl = Proc_traceme;
-        ready(p);
-        procstopwait(p, Proc_traceme);
-        break;
+    /*s: [[procctlreq()]] CMstart case */
+        case CMstart:
+            if(p->state != Stopped)
+                error(Ebadctl);
+            ready(p);
+            break;
+    /*e: [[procctlreq()]] CMstart case */
+    /*s: [[procctlreq()]] CMstartstop case */
+        case CMstartstop:
+            if(p->state != Stopped)
+                error(Ebadctl);
+            p->procctl = Proc_traceme;
+            ready(p);
+            procstopwait(p, Proc_traceme);
+            break;
+    /*e: [[procctlreq()]] CMstartstop case */
     /*s: [[procctlreq()]] CMstartsyscall case */
         case CMstartsyscall:
             if(p->state != Stopped)
@@ -1506,12 +1512,17 @@ procctlreq(Proc *p, char *va, int n)
             procstopwait(p, Proc_tracesyscall); // will sleep
             break;
     /*e: [[procctlreq()]] CMstartsyscall case */
-    case CMstop:
-        procstopwait(p, Proc_stopme);
-        break;
-    case CMwaitstop:
-        procstopwait(p, Proc_nothing);
-        break;
+    /*s: [[procctlreq()]] CMstop case */
+        case CMstop:
+            procstopwait(p, Proc_stopme);
+            break;
+    /*e: [[procctlreq()]] CMstop case */
+    /*s: [[procctlreq()]] CMwaitstop case */
+        case CMwaitstop:
+            procstopwait(p, Proc_nothing);
+            break;
+    /*e: [[procctlreq()]] CMwaitstop case */
+
     case CMwired:
         procwired(p, atoi(cb->f[1]));
         break;

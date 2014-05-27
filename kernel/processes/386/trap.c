@@ -385,7 +385,9 @@ trap(Ureg* ureg)
     }
 
     cpu->perf.intrts = perfticks();
+
     user = (ureg->cs & 0xFFFF) == UESEL;
+
     if(user){
         up->dbgreg = ureg;
         cycles(&up->kentry);

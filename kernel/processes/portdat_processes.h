@@ -368,10 +368,12 @@ enum procctl
     Proc_stopme,
     /*s: enum procctl cases */
         Proc_exitme,
-        Proc_traceme,
-        Proc_exitbig,
     /*x: enum procctl cases */
         Proc_tracesyscall,
+    /*x: enum procctl cases */
+        Proc_traceme,
+    /*x: enum procctl cases */
+        Proc_exitbig,
     /*e: enum procctl cases */
 };
 /*e: enum procctl */
@@ -607,11 +609,11 @@ struct Proc
     // enum<procctl>
     int procctl;  /* Control for /proc debugging */
     /*x: [[Proc]] debugger fields */
-    bool hang;   /* hang at next exec for debug */
-    /*x: [[Proc]] debugger fields */
     Proc  *pdbg;    /* the debugging process */
     /*x: [[Proc]] debugger fields */
     QLock debug;    /* to access debugging elements */ // used for many things
+    /*x: [[Proc]] debugger fields */
+    bool hang;   /* hang at next exec for debug */
     /*x: [[Proc]] debugger fields */
     char  *syscalltrace;  /* syscall trace */
     /*x: [[Proc]] debugger fields */
