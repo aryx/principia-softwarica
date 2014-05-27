@@ -1665,7 +1665,7 @@ procctl(Proc *p)
         splhi();
         p->state = Stopped;
         sched();
-        // here when the debugger ready p back
+        // here when something (debugger, strace, user) ready(p) back
         p->psstate = oldstate;
         splx(s);
         return;

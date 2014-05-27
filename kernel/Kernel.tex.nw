@@ -14,11 +14,11 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things :)
-% - introduced syssema.c (found while going through Kernel_extra.tex.nw)
 % - removed deadcode (e.g. field Proc.qlock, semalock, ArchConf, etc)
 % - moved code in init/user such as preboot vs boot vs init
-% - introduced notion of IPC and Time
-% - TODO better grouping of things in devcons.c, present together the Qxxx,
+% - introduced syssema.c (found while going through Kernel_extra.tex.nw)
+% - introduced notion of IPC and Time (TODO change files accordingly)
+% - better grouping of things in devcons.c, present together the Qxxx,
 %   same for /proc/ and its many uses
 
 %thx to codemap/codegraph:
@@ -99,7 +99,6 @@
 % debugging macros
 
 %\setcounter{tocdepth}{1}
-
 
 %******************************************************************************
 % Title
@@ -8320,6 +8319,13 @@ kickpager(void)
 bool noswap;   /* process is not swappable */
 @
 
+<<[[procctlreq()]] CMnoswap case>>=
+    case CMnoswap:
+        p->noswap = true;
+        break;
+@
+
+
 
 <<function pager>>=
 static void
@@ -8737,6 +8743,28 @@ procpriority(Proc *p, int pri, bool fixed)
     p->fixedpri = fixed;
 }
 @ 
+
+
+% complex, but essentially means echo 3 > /proc/x/ctl
+
+<<[[procctlreq()]] CMpri case>>=
+    case CMpri:
+        pri = atoi(cb->f[1]);
+        if(pri > PriNormal && !iseve())
+            error(Eperm);
+        procpriority(p, pri, false);
+        break;
+@
+
+<<[[procctlreq()]] CMfixedpri case>>=
+    case CMfixedpri:
+        pri = atoi(cb->f[1]);
+        if(pri > PriNormal && !iseve())
+            error(Eperm);
+        procpriority(p, pri, true);
+        break;
+@
+
 
 
 \section{The [[runq]]ueue}
@@ -9948,10 +9976,14 @@ accounttime(void)
 
 \section{Customized scheduling}
 
-% put /dev/proc things here?
-
 <<[[Proc]] scheduling fields>>=
 Cpu  *wired;
+@
+
+<<[[procctlreq()]] CMwired case>>=
+    case CMwired:
+        procwired(p, atoi(cb->f[1]));
+        break;
 @
 
 <<function procwired>>=
@@ -24110,35 +24142,27 @@ procctlreq(Proc *p, char *va, int n)
     ct = lookupcmd(cb, proccmd, nelem(proccmd));
 
     switch(ct->index){
-    case CMclose:
-        procctlclosefiles(p, false, atoi(cb->f[1]));
-        break;
-    case CMclosefiles:
-        procctlclosefiles(p, true, 0);
-        break;
+
+    <<[[procctlreq()]] CMpri case>>
+    <<[[procctlreq()]] CMfixedpri case>>
+    <<[[procctlreq()]] CMwired case>>
+    <<[[procctlreq()]] CMnoswap case>>
+
+    <<[[procctlreq()]] CMprivate case>>
 
     <<[[procctlreq()]] CMhang case>>
     <<[[procctlreq()]] CMnohang case>>
-    <<[[procctlreq()]] CMkill case>>
 
-    case CMnoswap:
-        p->noswap = true;
-        break;
+    <<[[procctlreq()]] CMstop case>>
+    <<[[procctlreq()]] CMstart case>>
+    <<[[procctlreq()]] CMwaitstop case>>
 
-    case CMpri:
-        pri = atoi(cb->f[1]);
-        if(pri > PriNormal && !iseve())
-            error(Eperm);
-        procpriority(p, pri, false);
-        break;
-    case CMfixedpri:
-        pri = atoi(cb->f[1]);
-        if(pri > PriNormal && !iseve())
-            error(Eperm);
-        procpriority(p, pri, true);
-        break;
+    <<[[procctlreq()]] CMstartsyscall case>>
+    <<[[procctlreq()]] CMstartstop case>>
 
-    <<[[procctlreq()]] CMprivate case>>
+    <<[[procctlreq()]] CMtrace case>>
+    <<[[procctlreq()]] CMevent case>>
+
     case CMprofile:
         s = p->seg[TSEG];
         if(s == 0 || (s->type&SG_TYPE) != SG_TEXT)
@@ -24150,18 +24174,17 @@ procctlreq(Proc *p, char *va, int n)
         if(s->profile == 0)
             error(Enomem);
         break;
-    <<[[procctlreq()]] CMstart case>>
-    <<[[procctlreq()]] CMstartstop case>>
-    <<[[procctlreq()]] CMstartsyscall case>>
-    <<[[procctlreq()]] CMstop case>>
-    <<[[procctlreq()]] CMwaitstop case>>
 
-    case CMwired:
-        procwired(p, atoi(cb->f[1]));
+
+    <<[[procctlreq()]] CMkill case>>
+
+    case CMclose:
+        procctlclosefiles(p, false, atoi(cb->f[1]));
+        break;
+    case CMclosefiles:
+        procctlclosefiles(p, true, 0);
         break;
 
-    <<[[procctlreq()]] CMtrace case>>
-    <<[[procctlreq()]] CMevent case>>
 
     <<[[procctlreq()]] optional real-time commands>>
 
@@ -25257,7 +25280,7 @@ procctl(Proc *p)
         splhi();
         p->state = Stopped;
         sched();
-        // here when the debugger ready p back
+        // here when something (debugger, strace, user) ready(p) back
         p->psstate = oldstate;
         splx(s);
         return;
@@ -25272,8 +25295,11 @@ procctl(Proc *p)
 % actually to set it before wakeing up the debugger that is sleeping
 % on the condition that the process was stopped!
 
+
+
 % so how a process can cause procctl() for another process to
-% be executed? can't just do  procctl(other_process)?
+% be executed? can't just do  procctl(other_process)? sched()
+% only sched up.
 % but this other process is executing ... maybe at next trap
 % it can look? Yes, notification mechanism
 
@@ -25291,6 +25317,18 @@ procctl(Proc *p)
         ready(p);
         break;
 @
+
+
+% debug also (ab?)used in pexit when freeing memory
+<<[[Proc]] debugger fields>>=
+Proc  *pdbg;    /* the debugging process */
+@
+
+<<[[Proc]] debugger fields>>=
+QLock debug;    /* to access debugging elements */ // used for many things
+@
+% used by strace, but also db, and also for notes, all related to
+% one process communicating/controlling another process
 
 
 <<function procstopwait>>=
@@ -25337,21 +25375,9 @@ procstopped(void *a)
 }
 @
 
-% so now we know how to stop another (your child at least), but
+% so now we know how to stop another (your child or via /proc/x/ctl stop), but
 % how tracer can wait? can't just call await(), we don't wait
 % for the child to die...
-
-
-% debug also (ab?)used in pexit when freeing memory
-<<[[Proc]] debugger fields>>=
-Proc  *pdbg;    /* the debugging process */
-@
-
-<<[[Proc]] debugger fields>>=
-QLock debug;    /* to access debugging elements */ // used for many things
-@
-% used by strace, but also db, and also for notes, all related to
-% one process communicating/controlling another process
 
 
 <<[[procctl()]] wakeup waiting debugger>>=
@@ -25367,9 +25393,7 @@ QLock debug;    /* to access debugging elements */ // used for many things
 
 
 
-
-
-% overview steps on 'strace ls' or 'db ls':
+% overview steps on 'strace -c ls' or 'db ls':
 % - strace: fork (to later exec ls)
 % - child: before exec(), will 'echo hang > /proc/child/ctl'
 %   (exec will use this info)
@@ -25410,6 +25434,10 @@ bool hang;   /* hang at next exec for debug */
 % notes?
 
 
+
+
+
+
 <<[[procctlreq()]] CMwaitstop case>>=
     case CMwaitstop:
         procstopwait(p, Proc_nothing);
@@ -25447,6 +25475,24 @@ bool hang;   /* hang at next exec for debug */
     Proc_tracesyscall,
 @
 % but who can set the procctl to Proc_tracesyscall?
+
+% note that 'up' here is the process of the tracer! he is the one
+% writing to /proc/x/ctl 
+<<[[procctlreq()]] CMstartsyscall case>>=
+    case CMstartsyscall:
+        if(p->state != Stopped)
+            error(Ebadctl);
+        p->procctl = Proc_tracesyscall;
+        ready(p);
+        procstopwait(p, Proc_tracesyscall); // will sleep
+        break;
+@
+% but how x was stopped in the first place? get hang to true
+% but then it just leads to Proc_stopme, there was no call to procctl(up)
+% in sysexec, so who stopped it? notify() ... call procctl(up)
+
+
+
 
 <<[[syscall()]] Proc_tracesyscall if, syscall entry>>=
     if(up->procctl == Proc_tracesyscall){
@@ -25512,22 +25558,6 @@ char  *syscalltrace;  /* syscall trace */
         n = readstr(offset, a, n, p->syscalltrace);
         return n;
 @
-
-
-% note that 'up' here is the process of the tracer! he is the one
-% writing to /proc/x/ctl 
-<<[[procctlreq()]] CMstartsyscall case>>=
-    case CMstartsyscall:
-        if(p->state != Stopped)
-            error(Ebadctl);
-        p->procctl = Proc_tracesyscall;
-        ready(p);
-        procstopwait(p, Proc_tracesyscall); // will sleep
-        break;
-@
-% but how x was stopped in the first place? get hang to true
-% but then it just leads to Proc_stopme, there was no call to procctl(up)
-% in sysexec, so who stopped it?
 
 
 
@@ -26120,10 +26150,12 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 
 \subsection{[[/bin/db]]}
 
+% breakpoint?? via hardware exception? so trap? and in trap
+% we look for procctl no?
 
 \subsection{Other}
 
-% used? by what? acid? db? seems stopped until there is a note
+% used? by what? acid? db? seems to stop until there is a note essentially
 <<enum procctl cases>>=
     Proc_traceme,
 @

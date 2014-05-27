@@ -63,9 +63,11 @@ reader(void *v)
 	static char waitstop[] = "waitstop";
 
 	pid = (int)(uintptr)v;
+
 	ctl = smprint("/proc/%d/ctl", pid);
 	if ((cfd = open(ctl, OWRITE)) < 0)
 		die(smprint("%s: %r", ctl));
+
 	truss = smprint("/proc/%d/syscall", pid);
 	if ((tfd = open(truss, OREAD)) < 0)
 		die(smprint("%s: %r", truss));

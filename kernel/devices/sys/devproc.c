@@ -1419,12 +1419,39 @@ procctlreq(Proc *p, char *va, int n)
     ct = lookupcmd(cb, proccmd, nelem(proccmd));
 
     switch(ct->index){
-    case CMclose:
-        procctlclosefiles(p, false, atoi(cb->f[1]));
-        break;
-    case CMclosefiles:
-        procctlclosefiles(p, true, 0);
-        break;
+
+    /*s: [[procctlreq()]] CMpri case */
+        case CMpri:
+            pri = atoi(cb->f[1]);
+            if(pri > PriNormal && !iseve())
+                error(Eperm);
+            procpriority(p, pri, false);
+            break;
+    /*e: [[procctlreq()]] CMpri case */
+    /*s: [[procctlreq()]] CMfixedpri case */
+        case CMfixedpri:
+            pri = atoi(cb->f[1]);
+            if(pri > PriNormal && !iseve())
+                error(Eperm);
+            procpriority(p, pri, true);
+            break;
+    /*e: [[procctlreq()]] CMfixedpri case */
+    /*s: [[procctlreq()]] CMwired case */
+        case CMwired:
+            procwired(p, atoi(cb->f[1]));
+            break;
+    /*e: [[procctlreq()]] CMwired case */
+    /*s: [[procctlreq()]] CMnoswap case */
+        case CMnoswap:
+            p->noswap = true;
+            break;
+    /*e: [[procctlreq()]] CMnoswap case */
+
+    /*s: [[procctlreq()]] CMprivate case */
+        case CMprivate:
+            p->privatemem = true;
+            break;
+    /*e: [[procctlreq()]] CMprivate case */
 
     /*s: [[procctlreq()]] CMhang case */
         case CMhang:
@@ -1436,57 +1463,12 @@ procctlreq(Proc *p, char *va, int n)
             p->hang = false;
             break;
     /*e: [[procctlreq()]] CMnohang case */
-    /*s: [[procctlreq()]] CMkill case */
-        case CMkill:
-            switch(p->state) {
-            case Broken:
-                unbreak(p);
-                break;
-            case Stopped:
-                p->procctl = Proc_exitme;
-                postnote(p, 0, "sys: killed", NExit);
-                ready(p);
-                break;
-            default:
-                p->procctl = Proc_exitme;
-                postnote(p, 0, "sys: killed", NExit);
-            }
+
+    /*s: [[procctlreq()]] CMstop case */
+        case CMstop:
+            procstopwait(p, Proc_stopme);
             break;
-    /*e: [[procctlreq()]] CMkill case */
-
-    case CMnoswap:
-        p->noswap = true;
-        break;
-
-    case CMpri:
-        pri = atoi(cb->f[1]);
-        if(pri > PriNormal && !iseve())
-            error(Eperm);
-        procpriority(p, pri, false);
-        break;
-    case CMfixedpri:
-        pri = atoi(cb->f[1]);
-        if(pri > PriNormal && !iseve())
-            error(Eperm);
-        procpriority(p, pri, true);
-        break;
-
-    /*s: [[procctlreq()]] CMprivate case */
-        case CMprivate:
-            p->privatemem = true;
-            break;
-    /*e: [[procctlreq()]] CMprivate case */
-    case CMprofile:
-        s = p->seg[TSEG];
-        if(s == 0 || (s->type&SG_TYPE) != SG_TEXT)
-            error(Ebadctl);
-        if(s->profile != 0)
-            free(s->profile);
-        npc = (s->top-s->base)>>LRESPROF;
-        s->profile = malloc(npc*sizeof(*s->profile));
-        if(s->profile == 0)
-            error(Enomem);
-        break;
+    /*e: [[procctlreq()]] CMstop case */
     /*s: [[procctlreq()]] CMstart case */
         case CMstart:
             if(p->state != Stopped)
@@ -1494,15 +1476,12 @@ procctlreq(Proc *p, char *va, int n)
             ready(p);
             break;
     /*e: [[procctlreq()]] CMstart case */
-    /*s: [[procctlreq()]] CMstartstop case */
-        case CMstartstop:
-            if(p->state != Stopped)
-                error(Ebadctl);
-            p->procctl = Proc_traceme;
-            ready(p);
-            procstopwait(p, Proc_traceme);
+    /*s: [[procctlreq()]] CMwaitstop case */
+        case CMwaitstop:
+            procstopwait(p, Proc_nothing);
             break;
-    /*e: [[procctlreq()]] CMstartstop case */
+    /*e: [[procctlreq()]] CMwaitstop case */
+
     /*s: [[procctlreq()]] CMstartsyscall case */
         case CMstartsyscall:
             if(p->state != Stopped)
@@ -1512,20 +1491,15 @@ procctlreq(Proc *p, char *va, int n)
             procstopwait(p, Proc_tracesyscall); // will sleep
             break;
     /*e: [[procctlreq()]] CMstartsyscall case */
-    /*s: [[procctlreq()]] CMstop case */
-        case CMstop:
-            procstopwait(p, Proc_stopme);
+    /*s: [[procctlreq()]] CMstartstop case */
+        case CMstartstop:
+            if(p->state != Stopped)
+                error(Ebadctl);
+            p->procctl = Proc_traceme;
+            ready(p);
+            procstopwait(p, Proc_traceme);
             break;
-    /*e: [[procctlreq()]] CMstop case */
-    /*s: [[procctlreq()]] CMwaitstop case */
-        case CMwaitstop:
-            procstopwait(p, Proc_nothing);
-            break;
-    /*e: [[procctlreq()]] CMwaitstop case */
-
-    case CMwired:
-        procwired(p, atoi(cb->f[1]));
-        break;
+    /*e: [[procctlreq()]] CMstartstop case */
 
     /*s: [[procctlreq()]] CMtrace case */
         case CMtrace:
@@ -1548,6 +1522,45 @@ procctlreq(Proc *p, char *va, int n)
                 pt(up, SUser, 0);
             break;
     /*e: [[procctlreq()]] CMevent case */
+
+    case CMprofile:
+        s = p->seg[TSEG];
+        if(s == 0 || (s->type&SG_TYPE) != SG_TEXT)
+            error(Ebadctl);
+        if(s->profile != 0)
+            free(s->profile);
+        npc = (s->top-s->base)>>LRESPROF;
+        s->profile = malloc(npc*sizeof(*s->profile));
+        if(s->profile == 0)
+            error(Enomem);
+        break;
+
+
+    /*s: [[procctlreq()]] CMkill case */
+        case CMkill:
+            switch(p->state) {
+            case Broken:
+                unbreak(p);
+                break;
+            case Stopped:
+                p->procctl = Proc_exitme;
+                postnote(p, 0, "sys: killed", NExit);
+                ready(p);
+                break;
+            default:
+                p->procctl = Proc_exitme;
+                postnote(p, 0, "sys: killed", NExit);
+            }
+            break;
+    /*e: [[procctlreq()]] CMkill case */
+
+    case CMclose:
+        procctlclosefiles(p, false, atoi(cb->f[1]));
+        break;
+    case CMclosefiles:
+        procctlclosefiles(p, true, 0);
+        break;
+
 
     /*s: [[procctlreq()]] optional real-time commands */
         /* real time */
