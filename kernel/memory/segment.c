@@ -47,15 +47,15 @@ static void imagechanreclaim(void);
 // Initialization
 //*****************************************************************************
 
-/*s: function initseg */
+/*s: function initimage */
 void
-initseg(void)
+initimage(void)
 {
     KImage *i, *ie;
 
     imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
     if (imagealloc.free == nil)
-        panic("initseg: no memory");
+        panic("initimage: no memory");
     ie = &imagealloc.free[conf.nimage-1];
     for(i = imagealloc.free; i < ie; i++)
         i->next = i+1;
@@ -63,7 +63,7 @@ initseg(void)
     imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
     imagealloc.szfreechan = NFREECHAN;
 }
-/*e: function initseg */
+/*e: function initimage */
 
 //*****************************************************************************
 // Functions

@@ -446,14 +446,14 @@ archinit(void)
 {
     PCArch **p;
 
-    arch = 0;
+    arch = nil;
     for(p = knownarch; *p; p++){
         if((*p)->ident && (*p)->ident() == 0){
             arch = *p;
             break;
         }
     }
-    if(arch == 0)
+    if(arch == nil)
         arch = &archgeneric;
     else{
         if(arch->id == 0)

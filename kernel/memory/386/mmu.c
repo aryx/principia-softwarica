@@ -88,7 +88,7 @@ static void pdbunmap(ulong*, ulong, int);
 void
 mmuinit0(void)
 {
-    // cpu->gdt should be CPU0GDT, see cpu0init
+    // cpu->gdt should point to CPU0GDT, see cpu0init
     memmove(cpu->gdt, gdt, sizeof gdt); 
 }
 /*e: function mmuinit0 */

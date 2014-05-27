@@ -205,6 +205,7 @@ proc_sched(void)
             cpu->cpuno, cpu->ilockdepth, up? up->lastilock: nil,
             (up && up->lastilock)? up->lastilock->pc: 0, getcallerpc(&p+2));
     if(up){
+        /*s: [[sched()]] if complex condition increment delaysched and return */
         /*
          * Delay the sched until the process gives up the locks
          * it is holding.  This avoids dumb lock loops.
@@ -230,8 +231,8 @@ proc_sched(void)
                 delayedscheds++; // stats
                 return;
             }
-        
         up->delaysched = 0;
+        /*e: [[sched()]] if complex condition increment delaysched and return */
         splhi(); // schedinit requires this
         cpu->cs++;
 
@@ -905,7 +906,7 @@ procinit(void)
     p = procalloc.free;
     for(i=0; i<conf.nproc-1; i++,p++)
         p->qnext = p+1;
-    p->qnext = 0;
+    p->qnext = nil;
 }
 /*e: function procinit */
 

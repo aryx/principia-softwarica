@@ -113,12 +113,12 @@ struct Cpu
     /*s: [[Cpu]] stat fields */
     Perf  perf;     /* performance counters */
     /*x: [[Cpu]] stat fields */
-    int tlbfault;
-    int tlbpurge;
-    int pfault;
     int cs; // context switch, sched() and sleep() call
     int syscall;
     int load;
+    int tlbfault;
+    int tlbpurge;
+    int pfault;
     int intr;
     ulong spuriousintr;
     /*e: [[Cpu]] stat fields */

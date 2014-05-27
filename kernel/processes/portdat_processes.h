@@ -459,12 +459,12 @@ struct Proc
     // option<ref<Cpu>>, null when not associated to a processor
     Cpu  *cpu;    /* processor running this proc */
     /*x: [[Proc]] scheduling fields */
-    ulong delaysched;
-    /*x: [[Proc]] scheduling fields */
     Cpu *lastcpu;    /* processor this process last ran on */
     /*x: [[Proc]] scheduling fields */
     ulong lastupdate; // dimension?? ticks * Scaling;
     ulong cpuavg;    /* cpu average */
+    /*x: [[Proc]] scheduling fields */
+    ulong delaysched;
     /*x: [[Proc]] scheduling fields */
     bool preempted;  /* true if this process hasn't finished the interrupt
            *  that last preempted it
@@ -574,7 +574,7 @@ struct Proc
     /*s: [[Proc]] stats and profiling fields */
     // hash<enum<proctime>, ulong>
     ulong time[6];  /* User, Sys, Real; child U, S, R */
-
+    /*x: [[Proc]] stats and profiling fields */
     uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
     /*
      * pcycles: cycles spent in this process (updated on procsave/restore)
@@ -740,13 +740,14 @@ struct Active
 {
     // array<bool> (coupling: sizeof(int) must be >= MAXCPUS)
     int cpus;      /* bitmap of active CPUs */
-
     bool exiting;    /* shutdown */
+    /*s: [[Active]] other fields */
     bool ispanic;    /* shutdown in response to a panic */
+    /*x: [[Active]] other fields */
     bool rebooting;    /* just idle cpus > 0 */
-  
+    /*x: [[Active]] other fields */
     bool main_reached_sched;/* lets the added processors continue to schedinit*/
-  
+    /*e: [[Active]] other fields */
     // extra
     Lock;
 };

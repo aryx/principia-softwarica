@@ -353,7 +353,7 @@ extern  Palloc  palloc;
 // Image allocator (internal to segment.c, but important so here, singleton)
 struct Imagealloc
 {
-    // array<Kimage>?  xalloc'ed in initseg() (conf.nimage)
+    // array<Kimage>?  xalloc'ed in initimage() (conf.nimage)
     KImage  *free; 
     // hash<?ihash(??), list<ref<Kimage>>
     KImage  *hash[IHASHSIZE];

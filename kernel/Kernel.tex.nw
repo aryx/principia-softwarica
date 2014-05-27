@@ -27,8 +27,10 @@
 %thx to this manual, better understand unix:
 %  - child/parent relation and zombie process, the fact that a parent
 %    exiting does not mean it will kill its children
+%  - strace
 %  - SEMI malloc internals
 %  - TODO time, user vs sys vs real
+%  - TODO debugger
 
 %history LP-ization:
 % - skeleton; a not too bad TOC
@@ -156,6 +158,10 @@ compiler, assembler, linker, debugger, windowing system, network
 stack, etc}. Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 % a concrete companion to "Computer systems: a programmer's pespective"
+
+% Also maybe to help people imagine a better system. Hard to invent
+% something if have no clue that it's actually not that hard to build
+% a complete thing.
 
 The choice of plan9 may not be obvious, but it is IMHO
 the simplest and at the same time fairly complete operating system.
@@ -547,6 +553,7 @@ provides to the user programs.
 
 % then user/preboot setup env, boot is responbile to mount root
 % and then init assumes a root and setup last things.
+% show also rootfs and data2txt
 
 \section{Memory overview}
 % kernel vs user memory
@@ -818,6 +825,7 @@ struct Cpu
     int stack[1];
 };
 @ 
+% not that the stack actually is until CPUSIZE
 
 <<struct ArchCpu>>=
 struct ArchCpu {
@@ -897,18 +905,12 @@ struct Active
 {
     // array<bool> (coupling: sizeof(int) must be >= MAXCPUS)
     int cpus;      /* bitmap of active CPUs */
-
     bool exiting;    /* shutdown */
-    bool ispanic;    /* shutdown in response to a panic */
-    bool rebooting;    /* just idle cpus > 0 */
-  
-    bool main_reached_sched;/* lets the added processors continue to schedinit*/
-  
+    <<[[Active]] other fields>>
     // extra
     Lock;
 };
 @ 
-% main_reached_sched was called thunderbirdsareago
 
 <<global active>>=
 struct Active active;
@@ -1573,13 +1575,7 @@ unlock(Lock *l)
     // can finally exit the while loop.
     coherence();
 
-    if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){
-        /*
-         * Call sched if the need arose while locks were held
-         * But, don't do it from interrupt routines, hence the islo() test
-         */
-        sched();
-    }
+    <<[[unlock()]] if delaysched>>
 }
 @ 
 % the last if is very subtle, have to understand sched() and delaysched
@@ -1619,6 +1615,8 @@ canlock(Lock *l)
 \section{Uninterruptable [[Lock]]}
 % can formalize a checking rule? if access any field
 % accessed from a xxxintr, then need to use ilock
+
+%ilock = interrupt safe version of lock (disable interruptions)
 
 <<[[Lock]] ilock fields>>=
 bool_ushort isilock; // false when from lock(), true when from ilock()
@@ -4103,7 +4101,7 @@ struct KImage
 // Image allocator (internal to segment.c, but important so here, singleton)
 struct Imagealloc
 {
-    // array<Kimage>?  xalloc'ed in initseg() (conf.nimage)
+    // array<Kimage>?  xalloc'ed in initimage() (conf.nimage)
     KImage  *free; 
     // hash<?ihash(??), list<ref<Kimage>>
     KImage  *hash[IHASHSIZE];
@@ -6633,9 +6631,7 @@ syscall(Ureg* ureg)
         splhi();
         notify(ureg);
     }
-    /* if we delayed sched because we held a lock, sched now */
-    if(up->delaysched)
-        sched();
+    <<[[syscall()]] if delaysched>>
     kexit(ureg);
 }
 @ 
@@ -6808,11 +6804,7 @@ trap(Ureg* ureg)
     }
     splhi();
 
-    /* delaysched set because we held a lock or because our quantum ended */
-    if(up && up->delaysched && clockintr){
-        sched();
-        splhi();
-    }
+    <<[[trap()]] if delaysched>>
 
     if(user){
         if(up->procctl || up->nnote)
@@ -8860,33 +8852,7 @@ proc_sched(void)
             cpu->cpuno, cpu->ilockdepth, up? up->lastilock: nil,
             (up && up->lastilock)? up->lastilock->pc: 0, getcallerpc(&p+2));
     if(up){
-        /*
-         * Delay the sched until the process gives up the locks
-         * it is holding.  This avoids dumb lock loops.
-         *
-         * But don't delay if the process is Moribund.
-         * It called sched to die.
-         * But do sched eventually. This avoids a missing unlock
-         * from hanging the entire kernel. 
-         * But don't reschedule procs holding palloc or procalloc.
-         * Those are far too important to be holding while asleep.
-         *
-         * This test is not exact.  There can still be a few instructions
-         * in the middle of taslock when a process holds a lock
-         * but Lock.p has not yet been initialized.
-         */
-        if(up->nlocks.ref)
-          if(up->state != Moribund)
-            if(up->delaysched < 20
-              || palloc.Lock.p == up
-              || procalloc.Lock.p == up){
-
-                up->delaysched++;
-                delayedscheds++; // stats
-                return;
-            }
-        
-        up->delaysched = 0;
+        <<[[sched()]] if complex condition increment delaysched and return>>
         splhi(); // schedinit requires this
         cpu->cs++;
 
@@ -8933,10 +8899,6 @@ proc_sched(void)
 
 % Why going to schedinit()? Why not call sched() recursively? or goto common:
 % where we would do the p = runproc() ...? See below.
-
-
-% when can have this situation? up->delaysched < 20
-% means sched() got called like 20 times, but impossible no?
 
 
 % less: have a [[Cpu]] scheduler fields? 
@@ -9008,14 +8970,6 @@ schedinit(void)     /* never returns */
 % stack of main()!! (hmmm but actually we never free Proc->kstack ... so
 % we could for a few more instructions use it)
 % todo: look in balestero's notes
-
-
-
-% important, put part of code of trap() here that use delaysched to
-% call sched() again
-<<[[Proc]] scheduling fields>>=
-ulong delaysched;
-@
 
 
 
@@ -9223,6 +9177,71 @@ reprioritize(Proc *p)
     return ratio;
 }
 @ 
+
+
+
+\subsection{Delayed [[sched()]]}
+
+% when can have this situation? up->delaysched < 20
+% means sched() got called like 20 times, but impossible no?
+
+<<[[Proc]] scheduling fields>>=
+ulong delaysched;
+@
+
+<<[[sched()]] if complex condition increment delaysched and return>>=
+/*
+ * Delay the sched until the process gives up the locks
+ * it is holding.  This avoids dumb lock loops.
+ *
+ * But don't delay if the process is Moribund.
+ * It called sched to die.
+ * But do sched eventually. This avoids a missing unlock
+ * from hanging the entire kernel. 
+ * But don't reschedule procs holding palloc or procalloc.
+ * Those are far too important to be holding while asleep.
+ *
+ * This test is not exact.  There can still be a few instructions
+ * in the middle of taslock when a process holds a lock
+ * but Lock.p has not yet been initialized.
+ */
+if(up->nlocks.ref)
+  if(up->state != Moribund)
+    if(up->delaysched < 20
+      || palloc.Lock.p == up
+      || procalloc.Lock.p == up){
+
+        up->delaysched++;
+        delayedscheds++; // stats
+        return;
+    }
+up->delaysched = 0;
+@
+
+
+<<[[trap()]] if delaysched>>=
+/* delaysched set because we held a lock or because our quantum ended */
+if(up && up->delaysched && clockintr){
+    sched();
+    splhi();
+}
+@
+
+<<[[syscall()]] if delaysched>>=
+/* if we delayed sched because we held a lock, sched now */
+if(up->delaysched)
+    sched();
+@
+
+<<[[unlock()]] if delaysched>>=
+if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){
+    /*
+     * Call sched if the need arose while locks were held
+     * But, don't do it from interrupt routines, hence the islo() test
+     */
+    sched();
+}
+@
 
 
 \section{Context switch}
@@ -9880,7 +9899,7 @@ accounttime(void)
 
 \section{Customized scheduling}
 
-% procwired here and /dev/proc things?
+% put /dev/proc things here?
 
 <<[[Proc]] scheduling fields>>=
 Cpu  *wired;
@@ -9933,7 +9952,7 @@ procwired(Proc *p, int bm)
 <<function idlehands>>=
 // current configuration
 static bool idle_spin = false;
-static bool idle_if_nproc = 0;
+static int idle_if_nproc = 0;
 
 
 /*
@@ -10282,7 +10301,6 @@ void
 main(void)
 {
     <<[[main()]] initial assgnments for backward dependencies>>
-
     cgapost(0);
 
     cpu0init(); // cpu0 initialization (calls cpuinit())
@@ -10307,11 +10325,10 @@ main(void)
 
     cpuidentify(); // setup cpu, to know which advanced features we can enable
     cpuidprint();
+
     meminit(); // setup conf.mem memory banks
     confinit(); // setup conf
-
     archinit(); // setup arch
-
     xinit(); // setup xalloc memory allocator
     if(i8237alloc != nil)
             i8237alloc(); // setup dma
@@ -10321,7 +10338,7 @@ main(void)
 
     fpsavealloc();
     if(arch->intrinit)      /* launches other processors on an mp */
-            arch->intrinit();
+        arch->intrinit();
 
     timersinit();
     mathinit();
@@ -10331,17 +10348,16 @@ main(void)
     printinit();  // setup lineq
 
     if(arch->clockenable)
-            arch->clockenable();
-
+        arch->clockenable();
 
     procinit();
-    initseg();
+    initimage();
 
     if(delaylink) {
-            bootlinks();
-            pcimatch(0, 0, 0);
+       bootlinks();
+       pcimatch(0, 0, 0);
     } else
-            links();
+       links();
 
     // initialize all devices
     chandevreset();
@@ -10352,8 +10368,7 @@ main(void)
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
-    active.main_reached_sched = true;
-
+    <<[[main()]] before schedinit()>>
     cgapost(0x99); // done!
     schedinit();
 }
@@ -10417,6 +10432,9 @@ int cpuidax;
 int cpuiddx;
 @
 
+% put code guesscpu? guesshz? but quite long and ugly ...
+% or maybe can simplify?
+
 <<function cpuidprint>>=
 void
 cpuidprint(void)
@@ -10443,14 +10461,14 @@ archinit(void)
 {
     PCArch **p;
 
-    arch = 0;
+    arch = nil;
     for(p = knownarch; *p; p++){
         if((*p)->ident && (*p)->ident() == 0){
             arch = *p;
             break;
         }
     }
-    if(arch == 0)
+    if(arch == nil)
         arch = &archgeneric;
     else{
         if(arch->id == 0)
@@ -10511,12 +10529,12 @@ struct RMap {
 
 <<enum memkind>>=
 enum memkind {
-    MemUPA      = 0,        /* unbacked physical address */
-    MemRAM      = 1,        /* physical memory */
-    MemUMB      = 2,        /* upper memory block (<16MB) */
-    MemReserved = 3,
+    MemUPA,        /* unbacked physical address */
+    MemRAM,        /* physical memory */
+    MemUMB,        /* upper memory block (<16MB) */
+    MemReserved,
 
-    NMemType    = 4,
+    NMemType, // must be last
 };
 @
 
@@ -11336,6 +11354,8 @@ upareserve(ulong pa, int size)
 
 \subsection{[[conf]] initialization}
 
+% already set conf.ncpu (but to 1), and conf.mem normally
+
 <<[[Conf]] other fields>>=
 ulong npage;    /* total physical pages of memory */
 
@@ -11350,93 +11370,93 @@ ulong ialloc;   /* max interrupt time allocation in bytes */
 void
 confinit(void)
 {
-        char *p;
-        int i, userpcnt;
-        ulong kpages;
+    char *p;
+    int i, userpcnt;
+    ulong kpages;
 
-        if(p = getconf("*kernelpercent"))
-                userpcnt = 100 - strtol(p, 0, 0);
-        else
-                userpcnt = 0;
+    if(p = getconf("*kernelpercent"))
+        userpcnt = 100 - strtol(p, 0, 0);
+    else
+        userpcnt = 0;
 
-        conf.npage = 0;
-        for(i=0; i<nelem(conf.mem); i++)
-                conf.npage += conf.mem[i].npage;
+    conf.npage = 0;
+    for(i=0; i<nelem(conf.mem); i++)
+        conf.npage += conf.mem[i].npage;
 
-        conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
-        if(cpuserver)
-                conf.nproc *= 3;
-        if(conf.nproc > 2000)
-                conf.nproc = 2000;
-        conf.nimage = 200;
-        conf.nswap = conf.nproc*80;
-        conf.nswppo = 4096;
+    conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
+    if(cpuserver)
+        conf.nproc *= 3;
+    if(conf.nproc > 2000)
+        conf.nproc = 2000;
+    conf.nimage = 200;
+    conf.nswap = conf.nproc*80;
+    conf.nswppo = 4096;
 
-        if(cpuserver) {
-                if(userpcnt < 10)
-                        userpcnt = 70;
-                kpages = conf.npage - (conf.npage*userpcnt)/100;
-
-                /*
-                 * Hack for the big boys. Only good while physmem < 4GB.
-                 * Give the kernel fixed max + enough to allocate the
-                 * page pool.
-                 * This is an overestimate as conf.upages < conf.npages.
-                 * The patch of nimage is a band-aid, scanning the whole
-                 * page list in imagereclaim just takes too long.
-                 */
-                if(kpages > (128*MB + conf.npage*sizeof(Page))/BY2PG){
-                        kpages = (128*MB + conf.npage*sizeof(Page))/BY2PG;
-                        conf.nimage = 2000;
-                        kpages += (conf.nproc*KSTACK)/BY2PG;
-                }
-        } else {
-                if(userpcnt < 10) {
-                        if(conf.npage*BY2PG < 16*MB)
-                                userpcnt = 40;
-                        else
-                                userpcnt = 80;
-                }
-                kpages = conf.npage - (conf.npage*userpcnt)/100;
-
-                /*
-                 * Make sure terminals with low memory get at least
-                 * 4MB on the first Image chunk allocation.
-                 */
-                if(conf.npage*BY2PG < 16*MB)
-                        imagmem->minarena = 4*1024*1024;
-        }
+    if(cpuserver) {
+        if(userpcnt < 10)
+            userpcnt = 70;
+        kpages = conf.npage - (conf.npage*userpcnt)/100;
 
         /*
-         * can't go past the end of virtual memory
-         * (ulong)-KZERO is 2^32 - KZERO
+         * Hack for the big boys. Only good while physmem < 4GB.
+         * Give the kernel fixed max + enough to allocate the
+         * page pool.
+         * This is an overestimate as conf.upages < conf.npages.
+         * The patch of nimage is a band-aid, scanning the whole
+         * page list in imagereclaim just takes too long.
          */
-        if(kpages > ((ulong)-KZERO)/BY2PG)
-                kpages = ((ulong)-KZERO)/BY2PG;
-
-        conf.upages = conf.npage - kpages;
-        conf.ialloc = (kpages/2)*BY2PG;
+        if(kpages > (128*MB + conf.npage*sizeof(Page))/BY2PG){
+            kpages = (128*MB + conf.npage*sizeof(Page))/BY2PG;
+            conf.nimage = 2000;
+            kpages += (conf.nproc*KSTACK)/BY2PG;
+        }
+    } else {
+        if(userpcnt < 10) {
+            if(conf.npage*BY2PG < 16*MB)
+                userpcnt = 40;
+            else
+                userpcnt = 80;
+        }
+        kpages = conf.npage - (conf.npage*userpcnt)/100;
 
         /*
-         * Guess how much is taken by the large permanent
-         * datastructures. Mntcache and Mntrpc are not accounted for
-         * (probably ~300KB).
+         * Make sure terminals with low memory get at least
+         * 4MB on the first Image chunk allocation.
          */
-        kpages *= BY2PG;
-        kpages -= conf.upages*sizeof(Page)
-                + conf.nproc*sizeof(Proc)
-                + conf.nimage*sizeof(KImage)
-                + conf.nswap
-                + conf.nswppo*sizeof(Page);
-        mainmem->maxsize = kpages;
-        if(!cpuserver){
-                /*
-                 * give terminals lots of image memory, too; the dynamic
-                 * allocation will balance the load properly, hopefully.
-                 * be careful with 32-bit overflow.
-                 */
-                imagmem->maxsize = kpages;
-        }
+        if(conf.npage*BY2PG < 16*MB)
+            imagmem->minarena = 4*1024*1024;
+    }
+
+    /*
+     * can't go past the end of virtual memory
+     * (ulong)-KZERO is 2^32 - KZERO
+     */
+    if(kpages > ((ulong)-KZERO)/BY2PG)
+        kpages = ((ulong)-KZERO)/BY2PG;
+
+    conf.upages = conf.npage - kpages;
+    conf.ialloc = (kpages/2)*BY2PG;
+
+    /*
+     * Guess how much is taken by the large permanent
+     * datastructures. Mntcache and Mntrpc are not accounted for
+     * (probably ~300KB).
+     */
+    kpages *= BY2PG;
+    kpages -= conf.upages*sizeof(Page)
+            + conf.nproc*sizeof(Proc)
+            + conf.nimage*sizeof(KImage)
+            + conf.nswap
+            + conf.nswppo*sizeof(Page);
+    mainmem->maxsize = kpages;
+    if(!cpuserver){
+        /*
+         * give terminals lots of image memory, too; the dynamic
+         * allocation will balance the load properly, hopefully.
+         * be careful with 32-bit overflow.
+         */
+        imagmem->maxsize = kpages;
+    }
 }
 @
 
@@ -11500,6 +11520,9 @@ trapinit(void)
 }
 @ 
 
+<<global trapinited>>=
+static bool trapinited;
+@
 
 \subsection{Virtual memory initialisation}
 
@@ -11507,7 +11530,7 @@ trapinit(void)
 void
 mmuinit0(void)
 {
-    // cpu->gdt should be CPU0GDT, see cpu0init
+    // cpu->gdt should point to CPU0GDT, see cpu0init
     memmove(cpu->gdt, gdt, sizeof gdt); 
 }
 @
@@ -11577,6 +11600,11 @@ mmuinit(void)
     ltr(TSSSEL);
 }
 @
+
+<<global didmmuinit>>=
+static bool didmmuinit;
+@
+
 
 <<[[Cpu]] [[Arch]] other fields>>=
 int havepge;
@@ -11674,11 +11702,9 @@ xinit(void)
             pm++;
         }
     }
-//  xsummary();         /* call it from main if desired */
 }
 @
 
-%TODO: rename procinit!! and rename other in devprocinit
 <<function procinit>>=
 void
 procinit(void)
@@ -11697,20 +11723,19 @@ procinit(void)
     p = procalloc.free;
     for(i=0; i<conf.nproc-1; i++,p++)
         p->qnext = p+1;
-    p->qnext = 0;
+    p->qnext = nil;
 }
 @ 
 
-% TODO: rename initkimage?
-<<function initseg>>=
+<<function initimage>>=
 void
-initseg(void)
+initimage(void)
 {
     KImage *i, *ie;
 
     imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
     if (imagealloc.free == nil)
-        panic("initseg: no memory");
+        panic("initimage: no memory");
     ie = &imagealloc.free[conf.nimage-1];
     for(i = imagealloc.free; i < ie; i++)
         i->next = i+1;
@@ -11719,6 +11744,7 @@ initseg(void)
     imagealloc.szfreechan = NFREECHAN;
 }
 @
+% was called initseg, not sure why
 
 
 <<function pageinit>>=
@@ -11962,7 +11988,8 @@ TEXT touser(SB), $0
 
 \section{Booting the user}
 % see section on Userspace system programs
-
+% when arrive here, we got the first process executing! and
+% a working kernel!
 
 \chapter{Files}
 \minitoc
@@ -12814,6 +12841,7 @@ bl2mem(uchar *p, Block *b, int n)
 
 
 \section{[[Clunkq]]}
+%?????
 
 <<struct Clunkq>>=
 /*
@@ -14117,7 +14145,7 @@ qfull(Queue *q)
 
 
 
-\section{[[dev]]ices [[tab]]le}
+\section{Devices table [[devtab]]}
 
 <<function devno>>=
 int
@@ -18247,6 +18275,68 @@ cgascreenputs(char* s, int n)
 
 \subsection{Overview}
 
+<<devcons.c enum Qxxx>>=
+enum{
+    Qdir,
+
+    Qcons,
+
+    Qbintime,
+    Qconsctl,
+    Qcputime,
+    Qdrivers,
+    Qkmesg,
+    Qkprint,
+    Qhostdomain,
+    Qhostowner,
+    Qnull,
+    Qosversion,
+    Qpgrpid,
+    Qpid,
+    Qppid,
+    Qrandom,
+    Qreboot,
+    Qswap,
+    Qsysname,
+    Qsysstat,
+    Qtime,
+    Quser,
+    Qzero,
+    Qconfig,
+};
+@ 
+
+
+<<global consdir>>=
+static Dirtab consdir[]={
+    ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
+    "cons",     {Qcons},    0,      0660,
+    "bintime",  {Qbintime}, 24,     0664,
+    "consctl",  {Qconsctl}, 0,      0220,
+    "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
+    "drivers",  {Qdrivers}, 0,      0444,
+    "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
+    "hostowner",    {Qhostowner},   0,      0664,
+    "kmesg",    {Qkmesg},   0,      0440,
+    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
+    "null",     {Qnull},    0,      0666,
+    "osversion",    {Qosversion},   0,      0444,
+    "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
+    "pid",      {Qpid},     NUMSIZE,    0444,
+    "ppid",     {Qppid},    NUMSIZE,    0444,
+    "random",   {Qrandom},  0,      0444,
+    "reboot",   {Qreboot},  0,      0660,
+    "swap",     {Qswap},    0,      0664,
+    "sysname",  {Qsysname}, 0,      0664,
+    "sysstat",  {Qsysstat}, 0,      0666,
+    "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
+    "user",     {Quser},    0,      0666,
+    "zero",     {Qzero},    0,      0444,
+    "config",   {Qconfig},  0,      0444,
+};
+@ 
+
+
 \subsection{Input}
 %buffered input
 
@@ -18364,45 +18454,84 @@ kbdputcclock(void)
 }
 @ 
 
+% see echo() below!
 
-\subsection{Output}
 
-\subsubsection{[[print()]]}
-
-<<constant PRINTSIZE>>=
-PRINTSIZE = 256,
+<<[[consread()]] Qcons case>>=
+    case Qcons:
+        qlock(&kbd);
+        if(waserror()) {
+            qunlock(&kbd);
+            nexterror();
+        }
+        while(!qcanread(lineq)){
+            if(qread(kbdq, &ch, 1) == 0)
+                continue;
+            send = 0;
+            if(ch == 0){
+                /* flush output on rawoff -> rawon */
+                if(kbd.x > 0)
+                    send = !qcanread(kbdq);
+            }else if(kbd.raw){
+                kbd.line[kbd.x++] = ch;
+                send = !qcanread(kbdq);
+            }else{
+                switch(ch){
+                case '\b':
+                    if(kbd.x > 0)
+                        kbd.x--;
+                    break;
+                case 0x15:  /* ^U */
+                    kbd.x = 0;
+                    break;
+                case '\n':
+                case 0x04:  /* ^D */
+                    send = 1;
+                default:
+                    if(ch != 0x04)
+                        kbd.line[kbd.x++] = ch;
+                    break;
+                }
+            }
+            if(send || kbd.x == sizeof kbd.line){
+                qwrite(lineq, kbd.line, kbd.x);
+                kbd.x = 0;
+            }
+        }
+        n = qread(lineq, buf, n);
+        qunlock(&kbd);
+        poperror();
+        return n;
 @
 
-<<function print>>=
-bool noprint; // to debug?
 
-int
-devcons_print(char *fmt, ...)
-{
-    int n;
-    va_list arg;
-    char buf[PRINTSIZE];
+\subsection{Output}
+% what happens when do ls > file, how we do not call screenputs?
+% because in this case /dev/cons is not binded to the console!??
+% but then how can still read from it? because fd0 is binded to it,
+% but fd1 no!??? but then why  echo 'foo' > dev/cons from
+% rio does the right thing? how does not call cgascreenputs?
+% because screenputs has been redirected in rio! via vga controller?
 
-    if(noprint)
-        return -1;
+\subsubsection{[[/dev/cons]]}
 
-    va_start(arg, fmt);
-    n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
-    va_end(arg);
-    putstrn(buf, n);
-
-    return n;
-}
-@ 
-
-
-<<function putstrn>>=
-void
-putstrn(char *str, int n)
-{
-    putstrn0(str, n, 0);
-}
-@ 
+<<[[conswrite()]] Qcons case>>=
+    case Qcons:
+        /*
+         * Can't page fault in putstrn, so copy the data locally.
+         */
+        l = n;
+        while(l > 0){
+            bp = l;
+            if(bp > sizeof buf)
+                bp = sizeof buf;
+            memmove(buf, a, bp);
+            putstrn0(buf, bp, 1);
+            a += bp;
+            l -= bp;
+        }
+        break;
+@
 
 <<function putstrn0>>=
 /*
@@ -18418,7 +18547,7 @@ putstrn0(char *str, int n, bool usewrite)
     char *t;
 
     if(!islo())
-        usewrite = 0;
+        usewrite = false;
 
     /*
      *  how many different output devices do we need?
@@ -18475,33 +18604,6 @@ putstrn0(char *str, int n, bool usewrite)
 void    (*screenputs)(char*, int) = nil;
 @ 
 
-<<function echoscreen>>=
-static void
-echoscreen(char *buf, int n)
-{
-    char *e, *p;
-    char ebuf[128];
-    int x;
-
-    p = ebuf;
-    e = ebuf + sizeof(ebuf) - 4;
-    while(n-- > 0){
-        if(p >= e){
-            screenputs(ebuf, p - ebuf);
-            p = ebuf;
-        }
-        x = *buf++;
-        if(x == 0x15){
-            *p++ = '^';
-            *p++ = 'U';
-            *p++ = '\n';
-        } else
-            *p++ = x;
-    }
-    if(p != ebuf)
-        screenputs(ebuf, p - ebuf);
-}
-@ 
 
 <<function echo>>=
 static void
@@ -18544,6 +18646,71 @@ echo(char *buf, int n)
         echoscreen(buf, n);
     if(serialoq)
         echoserialoq(buf, n);
+}
+@ 
+
+<<function echoscreen>>=
+static void
+echoscreen(char *buf, int n)
+{
+    char *e, *p;
+    char ebuf[128];
+    int x;
+
+    p = ebuf;
+    e = ebuf + sizeof(ebuf) - 4;
+    while(n-- > 0){
+        if(p >= e){
+            screenputs(ebuf, p - ebuf);
+            p = ebuf;
+        }
+        x = *buf++;
+        if(x == 0x15){
+            *p++ = '^';
+            *p++ = 'U';
+            *p++ = '\n';
+        } else
+            *p++ = x;
+    }
+    if(p != ebuf)
+        screenputs(ebuf, p - ebuf);
+}
+@ 
+
+
+\subsubsection{[[print()]]}
+
+<<constant PRINTSIZE>>=
+PRINTSIZE = 256,
+@
+
+<<function print>>=
+bool noprint; // to debug?
+
+int
+devcons_print(char *fmt, ...)
+{
+    int n;
+    va_list arg;
+    char buf[PRINTSIZE];
+
+    if(noprint)
+        return -1;
+
+    va_start(arg, fmt);
+    n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
+    va_end(arg);
+    putstrn(buf, n);
+
+    return n;
+}
+@ 
+
+<<function putstrn>>=
+void
+putstrn(char *str, int n)
+{
+    putstrn0(str, n, 0);
 }
 @ 
 
@@ -18647,66 +18814,6 @@ devcons_pprint(char *fmt, ...)
 
 \subsection{[[/dev/cons]]}
 
-<<devcons.c enum Qxxx>>=
-enum{
-    Qdir,
-    Qbintime,
-    Qcons,
-    Qconsctl,
-    Qcputime,
-    Qdrivers,
-    Qkmesg,
-    Qkprint,
-    Qhostdomain,
-    Qhostowner,
-    Qnull,
-    Qosversion,
-    Qpgrpid,
-    Qpid,
-    Qppid,
-    Qrandom,
-    Qreboot,
-    Qswap,
-    Qsysname,
-    Qsysstat,
-    Qtime,
-    Quser,
-    Qzero,
-    Qconfig,
-};
-@ 
-
-
-<<global consdir>>=
-static Dirtab consdir[]={
-    ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
-    "bintime",  {Qbintime}, 24,     0664,
-    "cons",     {Qcons},    0,      0660,
-    "consctl",  {Qconsctl}, 0,      0220,
-    "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-    "drivers",  {Qdrivers}, 0,      0444,
-    "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
-    "hostowner",    {Qhostowner},   0,      0664,
-    "kmesg",    {Qkmesg},   0,      0440,
-    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
-    "null",     {Qnull},    0,      0666,
-    "osversion",    {Qosversion},   0,      0444,
-    "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
-    "pid",      {Qpid},     NUMSIZE,    0444,
-    "ppid",     {Qppid},    NUMSIZE,    0444,
-    "random",   {Qrandom},  0,      0444,
-    "reboot",   {Qreboot},  0,      0660,
-    "swap",     {Qswap},    0,      0664,
-    "sysname",  {Qsysname}, 0,      0664,
-    "sysstat",  {Qsysstat}, 0,      0666,
-    "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
-    "user",     {Quser},    0,      0666,
-    "zero",     {Qzero},    0,      0444,
-    "config",   {Qconfig},  0,      0444,
-};
-@ 
-
-
 <<method consinit>>=
 static void
 consinit(void)
@@ -18798,50 +18905,7 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qdir:
         return devdirread(c, buf, n, consdir, nelem(consdir), devgen);
 
-    case Qcons:
-        qlock(&kbd);
-        if(waserror()) {
-            qunlock(&kbd);
-            nexterror();
-        }
-        while(!qcanread(lineq)){
-            if(qread(kbdq, &ch, 1) == 0)
-                continue;
-            send = 0;
-            if(ch == 0){
-                /* flush output on rawoff -> rawon */
-                if(kbd.x > 0)
-                    send = !qcanread(kbdq);
-            }else if(kbd.raw){
-                kbd.line[kbd.x++] = ch;
-                send = !qcanread(kbdq);
-            }else{
-                switch(ch){
-                case '\b':
-                    if(kbd.x > 0)
-                        kbd.x--;
-                    break;
-                case 0x15:  /* ^U */
-                    kbd.x = 0;
-                    break;
-                case '\n':
-                case 0x04:  /* ^D */
-                    send = 1;
-                default:
-                    if(ch != 0x04)
-                        kbd.line[kbd.x++] = ch;
-                    break;
-                }
-            }
-            if(send || kbd.x == sizeof kbd.line){
-                qwrite(lineq, kbd.line, kbd.x);
-                kbd.x = 0;
-            }
-        }
-        n = qread(lineq, buf, n);
-        qunlock(&kbd);
-        poperror();
-        return n;
+    <<[[consread()]] Qcons case>>
 
     case Qcputime:
         k = offset;
@@ -19030,21 +19094,8 @@ conswrite(Chan *c, void *va, long n, vlong off)
     offset = off;
 
     switch((ulong)c->qid.path){
-    case Qcons:
-        /*
-         * Can't page fault in putstrn, so copy the data locally.
-         */
-        l = n;
-        while(l > 0){
-            bp = l;
-            if(bp > sizeof buf)
-                bp = sizeof buf;
-            memmove(buf, a, bp);
-            putstrn0(buf, bp, 1);
-            a += bp;
-            l -= bp;
-        }
-        break;
+
+    <<[[conswrite()]] Qcons case>>
 
     case Qconsctl:
         if(n >= sizeof(buf))
@@ -19619,6 +19670,10 @@ devbwrite(Chan *c, Block *bp, ulong offset)
 
 % just with that we can already have a working environment
 % with a memory fs! where all binaries are processed via data2txt
+
+% also see the trick with data2txt to get an initial rootfs
+% that is not too bad, that allows for instance to have dossrv
+% so can boostrap the whole thing
 
 %#/
 
@@ -21117,7 +21172,7 @@ notify(Ureg* ureg)
     Note *n;
 
     if(up->procctl)
-        procctl(up);
+        procctl(up); // a bit ugly to group procctl handling and note handling
     if(up->nnote == 0)
         return 0;
 
@@ -22338,6 +22393,9 @@ sysrendezvous(ulong *arg)
 \chapter{Userspace System Programs}
 \minitoc
 
+% can execute them because they are in rootfs, via addrootfile,
+% see mkrootall in mkfile via data2txt
+
 \section{[[/boot/boot]]}
 
 <<boot.c>>=
@@ -22743,6 +22801,8 @@ closeegrp(Egrp *eg)
 ulong procmode; /* proc device default file mode */
 @
 
+
+
 <<[[Proc]] other fields>>=
 bool privatemem; /* proc does not let anyone read mem */
 @
@@ -22912,6 +22972,7 @@ proc_init(void)
 }
 @
 % >>
+% was called procinit but conflict with procalloc procinit() function
 
 <<global procdevtab>>=
 Dev procdevtab = {
@@ -24276,53 +24337,57 @@ main_exit(bool ispanic)
 }
 @
 
+<<[[Active]] other fields>>=
+bool ispanic;    /* shutdown in response to a panic */
+@
+
 <<function shutdown>>=
 static void
 shutdown(bool ispanic)
 {
-        int ms, once;
+    int ms, once;
 
-        lock(&active);
-        if(ispanic)
-                active.ispanic = ispanic;
-        else if(cpu->cpuno == 0 && (active.cpus & (1<<cpu->cpuno)) == 0)
-                active.ispanic = false;
-        once = active.cpus & (1<<cpu->cpuno);
-        /*
-         * setting exiting will make hzclock() on each processor call exit(0),
-         * which calls shutdown(0) and arch->reset(), which on mp systems is
-         * mpshutdown, which idles non-bootstrap cpus and returns on bootstrap
-         * processors (to permit a reboot).  clearing our bit in cpus avoids
-         * calling exit(0) from hzclock() on this processor.
-         */
-        active.cpus &= ~(1<<cpu->cpuno);
-        active.exiting = true;
-        unlock(&active);
+    lock(&active);
+    if(ispanic)
+        active.ispanic = ispanic;
+    else if(cpu->cpuno == 0 && (active.cpus & (1<<cpu->cpuno)) == 0)
+        active.ispanic = false;
+    once = active.cpus & (1<<cpu->cpuno);
+    /*
+     * setting exiting will make hzclock() on each processor call exit(0),
+     * which calls shutdown(0) and arch->reset(), which on mp systems is
+     * mpshutdown, which idles non-bootstrap cpus and returns on bootstrap
+     * processors (to permit a reboot).  clearing our bit in cpus avoids
+     * calling exit(0) from hzclock() on this processor.
+     */
+    active.cpus &= ~(1<<cpu->cpuno);
+    active.exiting = true;
+    unlock(&active);
 
-        if(once)
-                iprint("cpu%d: exiting\n", cpu->cpuno);
+    if(once)
+        iprint("cpu%d: exiting\n", cpu->cpuno);
 
-        /* wait for any other processors to shutdown */
-        spllo();
-        for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
-                delay(TK2MS(2));
-                if(active.cpus == 0 && consactive() == 0)
-                        break;
-        }
+    /* wait for any other processors to shutdown */
+    spllo();
+    for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
+        delay(TK2MS(2));
+        if(active.cpus == 0 && consactive() == 0)
+            break;
+    }
 
-        if(active.ispanic){
-                if(!cpuserver)
-                        for(;;)
-                                halt();
-                if(getconf("*debug"))
-                        delay(5*60*1000);
-                else
-                        delay(10000);
-        }else
-                delay(1000);
+    if(active.ispanic){
+        if(!cpuserver)
+            for(;;)
+               halt();
+        if(getconf("*debug"))
+            delay(5*60*1000);
+        else
+            delay(10000);
+    }else
+        delay(1000);
 }
 @
-
+% >>
 
 
 <<function idle>>=
@@ -24364,79 +24429,82 @@ archreset(void)
 }
 @
 
+<<[[Active]] other fields>>=
+bool rebooting;    /* just idle cpus > 0 */
+@
 
 
 <<function reboot>>=
 void
 reboot(void *entry, void *code, ulong size)
 {
-        void (*f)(ulong, ulong, ulong);
-        ulong *pdb;
+    void (*f)(ulong, ulong, ulong);
+    ulong *pdb;
 
-        writeconf();
+    writeconf();
 
+    /*
+     * the boot processor is cpu0.  execute this function on it
+     * so that the new kernel has the same cpu0.  this only matters
+     * because the hardware has a notion of which processor was the
+     * boot processor and we look at it at start up.
+     */
+    if (cpu->cpuno != 0) {
+        procwired(up, 0);
+        sched();
+    }
+
+    if(conf.ncpu > 1) {
         /*
-         * the boot processor is cpu0.  execute this function on it
-         * so that the new kernel has the same cpu0.  this only matters
-         * because the hardware has a notion of which processor was the
-         * boot processor and we look at it at start up.
+         * the other cpus could be holding locks that will never get
+         * released (e.g., in the print path) if we put them into
+         * reset now, so force them to shutdown gracefully first.
          */
-        if (cpu->cpuno != 0) {
-                procwired(up, 0);
-                sched();
-        }
+        lock(&active);
+        active.rebooting = true;
+        unlock(&active);
+        shutdown(0);
+        if(arch->resetothers)
+            arch->resetothers();
+        delay(20);
+    }
 
-        if(conf.ncpu > 1) {
-                /*
-                 * the other cpus could be holding locks that will never get
-                 * released (e.g., in the print path) if we put them into
-                 * reset now, so force them to shutdown gracefully first.
-                 */
-                lock(&active);
-                active.rebooting = true;
-                unlock(&active);
-                shutdown(0);
-                if(arch->resetothers)
-                        arch->resetothers();
-                delay(20);
-        }
+    /*
+     * should be the only processor running now
+     */
+    active.cpus = 0;
+    if (cpu->cpuno != 0)
+        print("on cpu%d (not 0)!\n", cpu->cpuno);
 
-        /*
-         * should be the only processor running now
-         */
-        active.cpus = 0;
-        if (cpu->cpuno != 0)
-                print("on cpu%d (not 0)!\n", cpu->cpuno);
+    print("shutting down...\n");
+    delay(200);
 
-        print("shutting down...\n");
-        delay(200);
+    splhi();
 
-        splhi();
+    /* turn off buffered serial console */
+    serialoq = nil;
 
-        /* turn off buffered serial console */
-        serialoq = nil;
+    /* shutdown devices */
+    chandevshutdown();
+    arch->introff();
 
-        /* shutdown devices */
-        chandevshutdown();
-        arch->introff();
+    /*
+     * Modify the processor page table to directly map the low 4MB of memory
+     * This allows the reboot code to turn off the page mapping
+     */
+    pdb = cpu->pdb;
+    pdb[PDX(0)] = pdb[PDX(KZERO)];
+    mmuflushtlb(PADDR(pdb));
 
-        /*
-         * Modify the processor page table to directly map the low 4MB of memory
-         * This allows the reboot code to turn off the page mapping
-         */
-        pdb = cpu->pdb;
-        pdb[PDX(0)] = pdb[PDX(KZERO)];
-        mmuflushtlb(PADDR(pdb));
+    /* setup reboot trampoline function */
+    f = (void*)REBOOTADDR;
+    memmove(f, rebootcode, sizeof(rebootcode));
 
-        /* setup reboot trampoline function */
-        f = (void*)REBOOTADDR;
-        memmove(f, rebootcode, sizeof(rebootcode));
+    print("rebooting...\n");
 
-        print("rebooting...\n");
-
-        /* off we go - never to return */
-        coherence();
-        (*f)(PADDR(entry), PADDR(code), size);
+    /* off we go - never to return */
+    coherence();
+    (*f)(PADDR(entry), PADDR(code), size);
 }
 @
 
@@ -24552,10 +24620,9 @@ nrand(int n)
 
 \chapter{Conclusion}
 
-% already 900 pages ... so network in another volume
-
-% other subjects: SMP, storage (scsi, ata, floppy, ...) real time scheculing
-%  EDF
+% already 900 pages ... so network, graphics, security in another volume
+% actually even fs in other volume, and advanced subjects like:
+%  SMP, storage (scsi, ata, floppy, ...) real time scheculing EDF, 
 
 \section{Security}
 
@@ -24584,6 +24651,7 @@ bool iseve(void) {
 
 \chapter{Debugging}
 
+%TODO
 % what to do when have panic, e.g. when I mixed some fields
 % and I got a pc error, how do I fix it? how do I find the relevant code?
 
@@ -24594,7 +24662,7 @@ bool iseve(void) {
 % use of getconf("*debugstart*") to setup some global tracing stuff
 
 \section{[[cgapost()]]}
-%first line of "defense", using sound could be nice too
+%first line of "defense" (using sound could be nice too)
 
 <<function cgapost>>=
 char hex[] = "0123456789ABCDEF";
@@ -24613,7 +24681,8 @@ cgapost(int code)
 @
 
 \section{[[sysnop()]]}
-% use sysnop (was called sysr1) to show example of debugging session?
+% use sysnop to show example of debugging session?
+%(was called sysr1) 
 
 
 \section{Special keys [[C-t C-t]]}
@@ -25047,6 +25116,7 @@ ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 \section{Remote debugger}
 % rdb.c
 % related to serial line code?
+% TODO: how does it work? can make it work via qemu?
 
 <<hook consdebug>>=
 void    (*consdebug)(void) = nil; // for rdb
@@ -25807,11 +25877,10 @@ fmtuserstring(Fmt* f, char* a, char* suffix)
 \subsection{[[/proc/trace]] and [[/bin/trace]]}
 % /proc/trace contains events from the kernel scheduler
 
-
 <<[[Proc]] debugger fields>>=
 bool trace;    /* process being traced? */
 @
-% schedtrace?
+% rename to schedtrace?
 
 % echo 'trace 1' > proc/x/ctl
 
@@ -26049,12 +26118,12 @@ Perf  perf;     /* performance counters */
 @ 
 
 <<[[Cpu]] stat fields>>=
-int tlbfault;
-int tlbpurge;
-int pfault;
 int cs; // context switch, sched() and sleep() call
 int syscall;
 int load;
+int tlbfault;
+int tlbpurge;
+int pfault;
 int intr;
 ulong spuriousintr;
 @
@@ -26075,7 +26144,7 @@ void (*kproftimer)(ulong);
 
 \section{Profiling user processes}
 
-% should be in Profiling.tex.nw at some point
+% should cooperate with Profiling.tex.nw at some point
 
 \subsection{[[/bin/time]]}
 
@@ -26096,7 +26165,9 @@ enum proctime
 <<[[Proc]] stats and profiling fields>>=
 // hash<enum<proctime>, ulong>
 ulong time[6];  /* User, Sys, Real; child U, S, R */
+@
 
+<<[[Proc]] stats and profiling fields>>=
 uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
 /*
  * pcycles: cycles spent in this process (updated on procsave/restore)
@@ -26144,9 +26215,10 @@ devcons_panic(char *fmt, ...)
     prflush();
     buf[n] = '\n';
     putstrn(buf, n+1);
+    //TODO: put in comment for now because already got some panic with
+    // lapic, but it seems to work still :)
     //dumpstack();
-
-        //  exit(1);
+    //exit(1);
 }
 @ 
 
@@ -26167,7 +26239,6 @@ sysfatal(char *fmt, ...)
     panic("sysfatal: %s", err);
 }
 @ 
-
 
 <<function _assert>>=
 void
@@ -26258,6 +26329,8 @@ proc_error(char *err)
     nexterror();
 }
 @ 
+% todo: there is a top waserror() in trap and syscall? so will
+% always jump somewhere?
 
 <<function exhausted>>=
 void
@@ -26370,8 +26443,8 @@ extern  int memcmp(void*, void*, ulong);
 extern  void* memmove(void*, void*, ulong);
 extern  void* memchr(void*, int, ulong);
 @ 
-%todo: memrchr
 
+% memchr reverse?
 <<function memrchr>>=
 void*
 memrchr(void *va, int c, long n)
@@ -26603,8 +26676,6 @@ enum
 %//unused: Runemax   = 0x10FFFF, /* 24 bit rune */
 %//unused: Runemask  = 0x1FFFFF, /* bits used by runes (see grep) */
 
-
-
 <<lib.h rune functions decl>>=
 extern  int runetochar(char*, Rune*);
 extern  int chartorune(Rune*, char*);
@@ -26613,11 +26684,6 @@ extern  int utfnlen(char*, long);
 @ 
 %//unused: extern  int utflen(char*);
 %//unused: extern  int runelen(long);
-
-
-
-
-
 
 
 
@@ -26638,7 +26704,6 @@ extern  int utfnlen(char*, long);
 UP = User Process
 PC = Program Counter
 SPL = Set Priority Level
-ilock = interrupt safe version of lock (disable interruptions)
 UMB = Upper Memory Block
 RMAP = RAM map
 PDB = Page Directory Base
@@ -26659,7 +26724,6 @@ ACPI = Advanced Configuration & Power Interface
 QID = uniQue IDentifier (uid is taken for user id)
 VPT = Virtual Page Table
 GDT = Global Descriptor Table
-
 \end{verbatim}
 %cistrcmp= ??
 

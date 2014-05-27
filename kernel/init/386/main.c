@@ -241,93 +241,93 @@ cpu0init(void)
 void
 confinit(void)
 {
-        char *p;
-        int i, userpcnt;
-        ulong kpages;
+    char *p;
+    int i, userpcnt;
+    ulong kpages;
 
-        if(p = getconf("*kernelpercent"))
-                userpcnt = 100 - strtol(p, 0, 0);
-        else
-                userpcnt = 0;
+    if(p = getconf("*kernelpercent"))
+        userpcnt = 100 - strtol(p, 0, 0);
+    else
+        userpcnt = 0;
 
-        conf.npage = 0;
-        for(i=0; i<nelem(conf.mem); i++)
-                conf.npage += conf.mem[i].npage;
+    conf.npage = 0;
+    for(i=0; i<nelem(conf.mem); i++)
+        conf.npage += conf.mem[i].npage;
 
-        conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
-        if(cpuserver)
-                conf.nproc *= 3;
-        if(conf.nproc > 2000)
-                conf.nproc = 2000;
-        conf.nimage = 200;
-        conf.nswap = conf.nproc*80;
-        conf.nswppo = 4096;
+    conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
+    if(cpuserver)
+        conf.nproc *= 3;
+    if(conf.nproc > 2000)
+        conf.nproc = 2000;
+    conf.nimage = 200;
+    conf.nswap = conf.nproc*80;
+    conf.nswppo = 4096;
 
-        if(cpuserver) {
-                if(userpcnt < 10)
-                        userpcnt = 70;
-                kpages = conf.npage - (conf.npage*userpcnt)/100;
-
-                /*
-                 * Hack for the big boys. Only good while physmem < 4GB.
-                 * Give the kernel fixed max + enough to allocate the
-                 * page pool.
-                 * This is an overestimate as conf.upages < conf.npages.
-                 * The patch of nimage is a band-aid, scanning the whole
-                 * page list in imagereclaim just takes too long.
-                 */
-                if(kpages > (128*MB + conf.npage*sizeof(Page))/BY2PG){
-                        kpages = (128*MB + conf.npage*sizeof(Page))/BY2PG;
-                        conf.nimage = 2000;
-                        kpages += (conf.nproc*KSTACK)/BY2PG;
-                }
-        } else {
-                if(userpcnt < 10) {
-                        if(conf.npage*BY2PG < 16*MB)
-                                userpcnt = 40;
-                        else
-                                userpcnt = 80;
-                }
-                kpages = conf.npage - (conf.npage*userpcnt)/100;
-
-                /*
-                 * Make sure terminals with low memory get at least
-                 * 4MB on the first Image chunk allocation.
-                 */
-                if(conf.npage*BY2PG < 16*MB)
-                        imagmem->minarena = 4*1024*1024;
-        }
+    if(cpuserver) {
+        if(userpcnt < 10)
+            userpcnt = 70;
+        kpages = conf.npage - (conf.npage*userpcnt)/100;
 
         /*
-         * can't go past the end of virtual memory
-         * (ulong)-KZERO is 2^32 - KZERO
+         * Hack for the big boys. Only good while physmem < 4GB.
+         * Give the kernel fixed max + enough to allocate the
+         * page pool.
+         * This is an overestimate as conf.upages < conf.npages.
+         * The patch of nimage is a band-aid, scanning the whole
+         * page list in imagereclaim just takes too long.
          */
-        if(kpages > ((ulong)-KZERO)/BY2PG)
-                kpages = ((ulong)-KZERO)/BY2PG;
-
-        conf.upages = conf.npage - kpages;
-        conf.ialloc = (kpages/2)*BY2PG;
+        if(kpages > (128*MB + conf.npage*sizeof(Page))/BY2PG){
+            kpages = (128*MB + conf.npage*sizeof(Page))/BY2PG;
+            conf.nimage = 2000;
+            kpages += (conf.nproc*KSTACK)/BY2PG;
+        }
+    } else {
+        if(userpcnt < 10) {
+            if(conf.npage*BY2PG < 16*MB)
+                userpcnt = 40;
+            else
+                userpcnt = 80;
+        }
+        kpages = conf.npage - (conf.npage*userpcnt)/100;
 
         /*
-         * Guess how much is taken by the large permanent
-         * datastructures. Mntcache and Mntrpc are not accounted for
-         * (probably ~300KB).
+         * Make sure terminals with low memory get at least
+         * 4MB on the first Image chunk allocation.
          */
-        kpages *= BY2PG;
-        kpages -= conf.upages*sizeof(Page)
-                + conf.nproc*sizeof(Proc)
-                + conf.nimage*sizeof(KImage)
-                + conf.nswap
-                + conf.nswppo*sizeof(Page);
-        mainmem->maxsize = kpages;
-        if(!cpuserver){
-                /*
-                 * give terminals lots of image memory, too; the dynamic
-                 * allocation will balance the load properly, hopefully.
-                 * be careful with 32-bit overflow.
-                 */
-                imagmem->maxsize = kpages;
-        }
+        if(conf.npage*BY2PG < 16*MB)
+            imagmem->minarena = 4*1024*1024;
+    }
+
+    /*
+     * can't go past the end of virtual memory
+     * (ulong)-KZERO is 2^32 - KZERO
+     */
+    if(kpages > ((ulong)-KZERO)/BY2PG)
+        kpages = ((ulong)-KZERO)/BY2PG;
+
+    conf.upages = conf.npage - kpages;
+    conf.ialloc = (kpages/2)*BY2PG;
+
+    /*
+     * Guess how much is taken by the large permanent
+     * datastructures. Mntcache and Mntrpc are not accounted for
+     * (probably ~300KB).
+     */
+    kpages *= BY2PG;
+    kpages -= conf.upages*sizeof(Page)
+            + conf.nproc*sizeof(Proc)
+            + conf.nimage*sizeof(KImage)
+            + conf.nswap
+            + conf.nswppo*sizeof(Page);
+    mainmem->maxsize = kpages;
+    if(!cpuserver){
+        /*
+         * give terminals lots of image memory, too; the dynamic
+         * allocation will balance the load properly, hopefully.
+         * be careful with 32-bit overflow.
+         */
+        imagmem->maxsize = kpages;
+    }
 }
 /*e: function confinit */
 
@@ -684,46 +684,46 @@ mathinit(void)
 static void
 shutdown(bool ispanic)
 {
-        int ms, once;
+    int ms, once;
 
-        lock(&active);
-        if(ispanic)
-                active.ispanic = ispanic;
-        else if(cpu->cpuno == 0 && (active.cpus & (1<<cpu->cpuno)) == 0)
-                active.ispanic = false;
-        once = active.cpus & (1<<cpu->cpuno);
-        /*
-         * setting exiting will make hzclock() on each processor call exit(0),
-         * which calls shutdown(0) and arch->reset(), which on mp systems is
-         * mpshutdown, which idles non-bootstrap cpus and returns on bootstrap
-         * processors (to permit a reboot).  clearing our bit in cpus avoids
-         * calling exit(0) from hzclock() on this processor.
-         */
-        active.cpus &= ~(1<<cpu->cpuno);
-        active.exiting = true;
-        unlock(&active);
+    lock(&active);
+    if(ispanic)
+        active.ispanic = ispanic;
+    else if(cpu->cpuno == 0 && (active.cpus & (1<<cpu->cpuno)) == 0)
+        active.ispanic = false;
+    once = active.cpus & (1<<cpu->cpuno);
+    /*
+     * setting exiting will make hzclock() on each processor call exit(0),
+     * which calls shutdown(0) and arch->reset(), which on mp systems is
+     * mpshutdown, which idles non-bootstrap cpus and returns on bootstrap
+     * processors (to permit a reboot).  clearing our bit in cpus avoids
+     * calling exit(0) from hzclock() on this processor.
+     */
+    active.cpus &= ~(1<<cpu->cpuno);
+    active.exiting = true;
+    unlock(&active);
 
-        if(once)
-                iprint("cpu%d: exiting\n", cpu->cpuno);
+    if(once)
+        iprint("cpu%d: exiting\n", cpu->cpuno);
 
-        /* wait for any other processors to shutdown */
-        spllo();
-        for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
-                delay(TK2MS(2));
-                if(active.cpus == 0 && consactive() == 0)
-                        break;
-        }
+    /* wait for any other processors to shutdown */
+    spllo();
+    for(ms = 5*1000; ms > 0; ms -= TK2MS(2)){
+        delay(TK2MS(2));
+        if(active.cpus == 0 && consactive() == 0)
+            break;
+    }
 
-        if(active.ispanic){
-                if(!cpuserver)
-                        for(;;)
-                                halt();
-                if(getconf("*debug"))
-                        delay(5*60*1000);
-                else
-                        delay(10000);
-        }else
-                delay(1000);
+    if(active.ispanic){
+        if(!cpuserver)
+            for(;;)
+               halt();
+        if(getconf("*debug"))
+            delay(5*60*1000);
+        else
+            delay(10000);
+    }else
+        delay(1000);
 }
 /*e: function shutdown */
 
@@ -740,73 +740,73 @@ main_exit(bool ispanic)
 void
 reboot(void *entry, void *code, ulong size)
 {
-        void (*f)(ulong, ulong, ulong);
-        ulong *pdb;
+    void (*f)(ulong, ulong, ulong);
+    ulong *pdb;
 
-        writeconf();
+    writeconf();
 
+    /*
+     * the boot processor is cpu0.  execute this function on it
+     * so that the new kernel has the same cpu0.  this only matters
+     * because the hardware has a notion of which processor was the
+     * boot processor and we look at it at start up.
+     */
+    if (cpu->cpuno != 0) {
+        procwired(up, 0);
+        sched();
+    }
+
+    if(conf.ncpu > 1) {
         /*
-         * the boot processor is cpu0.  execute this function on it
-         * so that the new kernel has the same cpu0.  this only matters
-         * because the hardware has a notion of which processor was the
-         * boot processor and we look at it at start up.
+         * the other cpus could be holding locks that will never get
+         * released (e.g., in the print path) if we put them into
+         * reset now, so force them to shutdown gracefully first.
          */
-        if (cpu->cpuno != 0) {
-                procwired(up, 0);
-                sched();
-        }
+        lock(&active);
+        active.rebooting = true;
+        unlock(&active);
+        shutdown(0);
+        if(arch->resetothers)
+            arch->resetothers();
+        delay(20);
+    }
 
-        if(conf.ncpu > 1) {
-                /*
-                 * the other cpus could be holding locks that will never get
-                 * released (e.g., in the print path) if we put them into
-                 * reset now, so force them to shutdown gracefully first.
-                 */
-                lock(&active);
-                active.rebooting = true;
-                unlock(&active);
-                shutdown(0);
-                if(arch->resetothers)
-                        arch->resetothers();
-                delay(20);
-        }
+    /*
+     * should be the only processor running now
+     */
+    active.cpus = 0;
+    if (cpu->cpuno != 0)
+        print("on cpu%d (not 0)!\n", cpu->cpuno);
 
-        /*
-         * should be the only processor running now
-         */
-        active.cpus = 0;
-        if (cpu->cpuno != 0)
-                print("on cpu%d (not 0)!\n", cpu->cpuno);
+    print("shutting down...\n");
+    delay(200);
 
-        print("shutting down...\n");
-        delay(200);
+    splhi();
 
-        splhi();
+    /* turn off buffered serial console */
+    serialoq = nil;
 
-        /* turn off buffered serial console */
-        serialoq = nil;
+    /* shutdown devices */
+    chandevshutdown();
+    arch->introff();
 
-        /* shutdown devices */
-        chandevshutdown();
-        arch->introff();
+    /*
+     * Modify the processor page table to directly map the low 4MB of memory
+     * This allows the reboot code to turn off the page mapping
+     */
+    pdb = cpu->pdb;
+    pdb[PDX(0)] = pdb[PDX(KZERO)];
+    mmuflushtlb(PADDR(pdb));
 
-        /*
-         * Modify the processor page table to directly map the low 4MB of memory
-         * This allows the reboot code to turn off the page mapping
-         */
-        pdb = cpu->pdb;
-        pdb[PDX(0)] = pdb[PDX(KZERO)];
-        mmuflushtlb(PADDR(pdb));
+    /* setup reboot trampoline function */
+    f = (void*)REBOOTADDR;
+    memmove(f, rebootcode, sizeof(rebootcode));
 
-        /* setup reboot trampoline function */
-        f = (void*)REBOOTADDR;
-        memmove(f, rebootcode, sizeof(rebootcode));
+    print("rebooting...\n");
 
-        print("rebooting...\n");
-
-        /* off we go - never to return */
-        coherence();
-        (*f)(PADDR(entry), PADDR(code), size);
+    /* off we go - never to return */
+    coherence();
+    (*f)(PADDR(entry), PADDR(code), size);
 }
 /*e: function reboot */
 
@@ -907,7 +907,6 @@ main(void)
 
     hook_ioalloc = devarch_hook_ioalloc;
     /*e: [[main()]] initial assgnments for backward dependencies */
-
     cgapost(0);
 
     cpu0init(); // cpu0 initialization (calls cpuinit())
@@ -932,11 +931,10 @@ main(void)
 
     cpuidentify(); // setup cpu, to know which advanced features we can enable
     cpuidprint();
+
     meminit(); // setup conf.mem memory banks
     confinit(); // setup conf
-
     archinit(); // setup arch
-
     xinit(); // setup xalloc memory allocator
     if(i8237alloc != nil)
             i8237alloc(); // setup dma
@@ -946,7 +944,7 @@ main(void)
 
     fpsavealloc();
     if(arch->intrinit)      /* launches other processors on an mp */
-            arch->intrinit();
+        arch->intrinit();
 
     timersinit();
     mathinit();
@@ -956,17 +954,16 @@ main(void)
     printinit();  // setup lineq
 
     if(arch->clockenable)
-            arch->clockenable();
-
+        arch->clockenable();
 
     procinit();
-    initseg();
+    initimage();
 
     if(delaylink) {
-            bootlinks();
-            pcimatch(0, 0, 0);
+       bootlinks();
+       pcimatch(0, 0, 0);
     } else
-            links();
+       links();
 
     // initialize all devices
     chandevreset();
@@ -977,8 +974,9 @@ main(void)
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
+    /*s: [[main()]] before schedinit() */
     active.main_reached_sched = true;
-
+    /*e: [[main()]] before schedinit() */
     cgapost(0x99); // done!
     schedinit();
 }

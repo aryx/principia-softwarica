@@ -23,12 +23,12 @@
 
 /*s: enum memkind */
 enum memkind {
-    MemUPA      = 0,        /* unbacked physical address */
-    MemRAM      = 1,        /* physical memory */
-    MemUMB      = 2,        /* upper memory block (<16MB) */
-    MemReserved = 3,
+    MemUPA,        /* unbacked physical address */
+    MemRAM,        /* physical memory */
+    MemUMB,        /* upper memory block (<16MB) */
+    MemReserved,
 
-    NMemType    = 4,
+    NMemType, // must be last
 };
 /*e: enum memkind */
 

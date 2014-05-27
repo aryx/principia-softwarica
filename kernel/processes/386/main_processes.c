@@ -128,7 +128,7 @@ fpsserestore(ArchFPsave *fps)
 /*s: function idlehands */
 // current configuration
 static bool idle_spin = false;
-static bool idle_if_nproc = 0;
+static int idle_if_nproc = 0;
 
 
 /*

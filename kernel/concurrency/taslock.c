@@ -252,6 +252,7 @@ unlock(Lock *l)
     // can finally exit the while loop.
     coherence();
 
+    /*s: [[unlock()]] if delaysched */
     if(up && deccnt(&up->nlocks) == 0 && up->delaysched && islo()){
         /*
          * Call sched if the need arose while locks were held
@@ -259,6 +260,7 @@ unlock(Lock *l)
          */
         sched();
     }
+    /*e: [[unlock()]] if delaysched */
 }
 /*e: function unlock */
 

@@ -73,7 +73,6 @@ xinit(void)
             pm++;
         }
     }
-//  xsummary();         /* call it from main if desired */
 }
 /*e: function xinit */
 

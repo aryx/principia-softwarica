@@ -206,7 +206,7 @@ putstrn0(char *str, int n, bool usewrite)
     char *t;
 
     if(!islo())
-        usewrite = 0;
+        usewrite = false;
 
     /*
      *  how many different output devices do we need?
@@ -366,9 +366,10 @@ devcons_panic(char *fmt, ...)
     prflush();
     buf[n] = '\n';
     putstrn(buf, n+1);
+    //TODO: put in comment for now because already got some panic with
+    // lapic, but it seems to work still :)
     //dumpstack();
-
-        //  exit(1);
+    //exit(1);
 }
 /*e: function panic */
 
@@ -677,8 +678,10 @@ kbdputcclock(void)
 /*s: devcons.c enum Qxxx */
 enum{
     Qdir,
-    Qbintime,
+
     Qcons,
+
+    Qbintime,
     Qconsctl,
     Qcputime,
     Qdrivers,
@@ -711,8 +714,8 @@ enum
 /*s: global consdir */
 static Dirtab consdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
-    "bintime",  {Qbintime}, 24,     0664,
     "cons",     {Qcons},    0,      0660,
+    "bintime",  {Qbintime}, 24,     0664,
     "consctl",  {Qconsctl}, 0,      0220,
     "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
     "drivers",  {Qdrivers}, 0,      0444,
@@ -844,50 +847,52 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qdir:
         return devdirread(c, buf, n, consdir, nelem(consdir), devgen);
 
-    case Qcons:
-        qlock(&kbd);
-        if(waserror()) {
-            qunlock(&kbd);
-            nexterror();
-        }
-        while(!qcanread(lineq)){
-            if(qread(kbdq, &ch, 1) == 0)
-                continue;
-            send = 0;
-            if(ch == 0){
-                /* flush output on rawoff -> rawon */
-                if(kbd.x > 0)
-                    send = !qcanread(kbdq);
-            }else if(kbd.raw){
-                kbd.line[kbd.x++] = ch;
-                send = !qcanread(kbdq);
-            }else{
-                switch(ch){
-                case '\b':
+    /*s: [[consread()]] Qcons case */
+        case Qcons:
+            qlock(&kbd);
+            if(waserror()) {
+                qunlock(&kbd);
+                nexterror();
+            }
+            while(!qcanread(lineq)){
+                if(qread(kbdq, &ch, 1) == 0)
+                    continue;
+                send = 0;
+                if(ch == 0){
+                    /* flush output on rawoff -> rawon */
                     if(kbd.x > 0)
-                        kbd.x--;
-                    break;
-                case 0x15:  /* ^U */
+                        send = !qcanread(kbdq);
+                }else if(kbd.raw){
+                    kbd.line[kbd.x++] = ch;
+                    send = !qcanread(kbdq);
+                }else{
+                    switch(ch){
+                    case '\b':
+                        if(kbd.x > 0)
+                            kbd.x--;
+                        break;
+                    case 0x15:  /* ^U */
+                        kbd.x = 0;
+                        break;
+                    case '\n':
+                    case 0x04:  /* ^D */
+                        send = 1;
+                    default:
+                        if(ch != 0x04)
+                            kbd.line[kbd.x++] = ch;
+                        break;
+                    }
+                }
+                if(send || kbd.x == sizeof kbd.line){
+                    qwrite(lineq, kbd.line, kbd.x);
                     kbd.x = 0;
-                    break;
-                case '\n':
-                case 0x04:  /* ^D */
-                    send = 1;
-                default:
-                    if(ch != 0x04)
-                        kbd.line[kbd.x++] = ch;
-                    break;
                 }
             }
-            if(send || kbd.x == sizeof kbd.line){
-                qwrite(lineq, kbd.line, kbd.x);
-                kbd.x = 0;
-            }
-        }
-        n = qread(lineq, buf, n);
-        qunlock(&kbd);
-        poperror();
-        return n;
+            n = qread(lineq, buf, n);
+            qunlock(&kbd);
+            poperror();
+            return n;
+    /*e: [[consread()]] Qcons case */
 
     case Qcputime:
         k = offset;
@@ -1076,21 +1081,24 @@ conswrite(Chan *c, void *va, long n, vlong off)
     offset = off;
 
     switch((ulong)c->qid.path){
-    case Qcons:
-        /*
-         * Can't page fault in putstrn, so copy the data locally.
-         */
-        l = n;
-        while(l > 0){
-            bp = l;
-            if(bp > sizeof buf)
-                bp = sizeof buf;
-            memmove(buf, a, bp);
-            putstrn0(buf, bp, 1);
-            a += bp;
-            l -= bp;
-        }
-        break;
+
+    /*s: [[conswrite()]] Qcons case */
+        case Qcons:
+            /*
+             * Can't page fault in putstrn, so copy the data locally.
+             */
+            l = n;
+            while(l > 0){
+                bp = l;
+                if(bp > sizeof buf)
+                    bp = sizeof buf;
+                memmove(buf, a, bp);
+                putstrn0(buf, bp, 1);
+                a += bp;
+                l -= bp;
+            }
+            break;
+    /*e: [[conswrite()]] Qcons case */
 
     case Qconsctl:
         if(n >= sizeof(buf))

@@ -18,7 +18,9 @@
 // Globals
 //*****************************************************************************
 
+/*s: global trapinited */
 static bool trapinited;
+/*e: global trapinited */
 
 /*s: global vctllock */
 static Lock vctllock;
@@ -493,11 +495,13 @@ trap(Ureg* ureg)
     }
     splhi();
 
+    /*s: [[trap()]] if delaysched */
     /* delaysched set because we held a lock or because our quantum ended */
     if(up && up->delaysched && clockintr){
         sched();
         splhi();
     }
+    /*e: [[trap()]] if delaysched */
 
     if(user){
         if(up->procctl || up->nnote)
@@ -869,9 +873,11 @@ syscall(Ureg* ureg)
         splhi();
         notify(ureg);
     }
+    /*s: [[syscall()]] if delaysched */
     /* if we delayed sched because we held a lock, sched now */
     if(up->delaysched)
         sched();
+    /*e: [[syscall()]] if delaysched */
     kexit(ureg);
 }
 /*e: function syscall */
@@ -889,7 +895,7 @@ notify(Ureg* ureg)
     Note *n;
 
     if(up->procctl)
-        procctl(up);
+        procctl(up); // a bit ugly to group procctl handling and note handling
     if(up->nnote == 0)
         return 0;
 
