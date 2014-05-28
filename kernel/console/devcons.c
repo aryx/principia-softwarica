@@ -332,6 +332,7 @@ devcons_iprint(char *fmt, ...)
 
     locked = iprintcanlock(&iprintlock);
 
+    kmesgputs(buf, n); // addon
     if(screenputs != nil && iprintscreenputs)
         screenputs(buf, n);
     uartputs(buf, n);

@@ -10,15 +10,14 @@
 /*s: struct IOMap */
 struct IOMap
 {
-    // TODO: why this has to be the first field of IOMap?! otherwise get fault??
-    // list<ref<IOMap>> of Iomapalloc.free
-    IOMap   *next;
-
     char    tag[13];
     ulong   start;
     ulong   end;
 
     // extra
+    // list<ref<IOMap>> of Iomapalloc.free
+    IOMap   *next;
+
     bool    reserved;
 };
 /*e: struct IOMap */
