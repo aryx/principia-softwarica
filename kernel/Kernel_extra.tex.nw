@@ -4007,65 +4007,8 @@ uint    qiomaxatomic = Maxatomic;
 
 \subsection*{[[init/user/preboot/386/init9.c]]}
 
-<<init9.c>>=
-//@Scheck: def can actually be found initcode.c, but this file is in skip list
-extern void startboot(char*, char**);
-
-//@Scheck: TODO who calls that??
-void
-_main(char *argv0)
-{
-    startboot(argv0, &argv0);
-}
-@
-% see also initcode_dead.s
-
-% _main? related to main9.s in libc/386/?
-
 \subsection*{[[init/user/preboot/initcode.c]]}
 
-<<initcode.c>>=
-/*
- * IMPORTANT!  DO NOT ADD LIBRARY CALLS TO THIS FILE.
- * The entire text image must fit on one page
- * (and there's no data segment, so any read/write data must be on the stack).
- */
-
-#include <u.h>
-#include <libc.h>
-
-char cons[] = "#c/cons";
-char boot[] = "/boot/boot";
-char dev[] = "/dev";
-char c[] = "#c";
-char e[] = "#e";
-char ec[] = "#ec";
-char s[] = "#s";
-char srv[] = "/srv";
-char env[] = "/env";
-
-void
-startboot(char *argv0, char **argv)
-{
-    char buf[200];  /* keep this fairly large to capture error details */
-
-    /* in case boot is a shell script */
-    open(cons, OREAD);
-    open(cons, OWRITE);
-    open(cons, OWRITE);
-    bind(c, dev, MAFTER);
-    bind(ec, env, MAFTER);
-    bind(e, env, MCREATE|MAFTER);
-    bind(s, srv, MREPL|MCREATE);
-
-    USED(argv0);
-    exec(boot, argv);
-
-    rerrstr(buf, sizeof buf);
-    buf[sizeof buf - 1] = '\0';
-    _exits(buf);
-}
-@
 
 \subsection*{[[init/user/boot/aux.c]]}
 
@@ -8476,35 +8419,6 @@ pgrpnote(ulong noteid, char *a, long n, int flag)
 
 
 
-
-
-
-<<function resrcwait>>=
-void
-resrcwait(char *reason)
-{
-    ulong now;
-    char *p;
-    static ulong lastwhine;
-
-    if(up == 0)
-        panic("resrcwait");
-
-    p = up->psstate;
-    if(reason) {
-        up->psstate = reason;
-        now = seconds();
-        /* don't tie up the console with complaints */
-        if(now - lastwhine > Whinesecs) {
-            lastwhine = now;
-            print("%s\n", reason);
-        }
-    }
-
-    tsleep(&up->sleepr, returnfalse, 0, 300);
-    up->psstate = p;
-}
-@ 
 
 
 <<pgrp.c>>=
@@ -24699,23 +24613,6 @@ Dev envdevtab = {
 };
 @
 
-
-<<function ksetenv>>=
-/*
- *  to let the kernel set environment variables
- */
-void
-ksetenv(char *ename, char *eval, int conf)
-{
-    Chan *c;
-    char buf[2*KNAMELEN];
-    
-    snprint(buf, sizeof(buf), "#e%s/%s", conf?"c":"", ename);
-    c = namec(buf, Acreate, OWRITE, 0600);
-    devtab[c->type]->write(c, eval, strlen(eval), 0);
-    cclose(c);
-}
-@
 
 
 <<function envcpy>>=

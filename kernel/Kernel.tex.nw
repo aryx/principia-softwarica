@@ -555,26 +555,26 @@ provides to the user programs.
 % show also rootfs and data2txt
 
 \section{Memory overview}
+
 % kernel vs user memory
 % dynamic vs static (the static allocator so can bootstrap things)
+% per-process kernel stack, user stack, main kernel stack
 
-%need precise physical map of memory
-%
+%figure: need precise physical map of memory
 %with first empty page?, idtr, gdt, pdb intel, pte intel, 
 %io RAM, vga ram,  then KZERO header, KTZERO, 
 %code,  data with important globals like xlist, and array holes,
 %palloc with pointer page, and then on top of that confmem area
-%
+
 %the data section of the kernel binary is as important as
 %the code section. For the code section can also give name
 %of procedures, and devtab (in data section) pointing back to it
 %via the static "classes" in the data section again).
-%
+
 %need also precise virtual map of memory for regular process,
 % actually for 2 processes
-%
+
 %need also precise virtual map of memory for first handcrafted process?
-%
 
 %binary image has been compiled with -TKZERO_AND_HEADER!! important
 % and assume loading phase setup physical mapping from KZERO to 0 physical
@@ -1743,7 +1743,7 @@ ulong qpc;    /* pc calling last blocking qlock */
 @
 
 <<[[Proc]] extra fields>>=
-// list<ref<Proc>> KQlock.head or RWLock.head
+// list<ref<Proc>> KQlock.head or RWLock.head (or Procalloc.free)
 Proc  *qnext;   /* next process on queue for a QLock */
 @ 
 
@@ -2886,7 +2886,7 @@ struct Pallocmem
 % can set s to nil at exit in case of ???
 <<constructor newpage>>=
 Page*
-newpage(bool clear, Segment **s, ulong va)
+newpage(bool clear, Segment **s, virt_addr va)
 {
     Page *p;
     KMap *k;
@@ -3663,7 +3663,7 @@ struct Segment
 @
 
 
-% size is in pages?
+% size is in pages. really need dimention types.
 <<constructor newseg>>=
 Segment *
 newseg(int type, virt_addr base, ulong size)
@@ -3746,6 +3746,32 @@ putseg(Segment *s)
     if(s->profile != nil)
         free(s->profile);
     free(s);
+}
+@
+
+% used by userinit(), explain well relation between a Page and a segment
+<<function segpage>>=
+void
+segpage(Segment *s, Page *p)
+{
+    Pte **pte;
+    ulong off;
+    Page **pg;
+
+    if(p->va < s->base || p->va >= s->top)
+        panic("segpage");
+
+    off = p->va - s->base;
+    pte = &s->map[off/PTEMAPMEM];
+    if(*pte == 0)
+        *pte = ptealloc();
+
+    pg = &(*pte)->pages[(off&(PTEMAPMEM-1))/BY2PG];
+    *pg = p;
+    if(pg < (*pte)->first)
+        (*pte)->first = pg;
+    if(pg > (*pte)->last)
+        (*pte)->last = pg;
 }
 @
 
@@ -3976,31 +4002,6 @@ sameseg:
 }
 @
 
-% used by userinit
-<<function segpage>>=
-void
-segpage(Segment *s, Page *p)
-{
-    Pte **pte;
-    ulong off;
-    Page **pg;
-
-    if(p->va < s->base || p->va >= s->top)
-        panic("segpage");
-
-    off = p->va - s->base;
-    pte = &s->map[off/PTEMAPMEM];
-    if(*pte == 0)
-        *pte = ptealloc();
-
-    pg = &(*pte)->pages[(off&(PTEMAPMEM-1))/BY2PG];
-    *pg = p;
-    if(pg < (*pte)->first)
-        (*pte)->first = pg;
-    if(pg > (*pte)->last)
-        (*pte)->last = pg;
-}
-@
 
 <<function mfreeseg>>=
 /*
@@ -4439,9 +4440,10 @@ struct Procalloc
     // array<Proc>, xalloc'ed in procinit() (conf.nproc)
     Proc* arena;
   
-    // list<ref<Proc>> (next = ?)
+    // list<ref<Proc>> (next = Proc.qnext, hmmm abuse qnext)
     Proc* free;
-    // hash<Proc.pid?, list<ref<Proc>> (next = Proc.pidhash)>
+
+    // hash<Proc.pid, list<ref<Proc>> (next = Proc.pidhash)>
     Proc* ht[128];
   
     // extra
@@ -4449,14 +4451,27 @@ struct Procalloc
 };
 @ 
 
+<<global procalloc>>=
+static struct Procalloc procalloc;
+@ 
+
+
+% reuse proc, but increment pidalloc each time, so 
+% if have ref to Proc, can save pid and make sure when resume
+% that the pid is the same. if not, means proc died and got reused.
+
+<<global pidalloc>>=
+static Counter  pidalloc;
+@ 
+
+
+% this is used to get from pid to the Proc. For instance
+% useful in /proc/x/... to get the Proc of x. 
+
 <<[[Proc]] extra fields>>=
 // hash<?, list<ref<Proc>> Procalloc.ht
 Proc  *pidhash; /* next proc in pid hash */ 
 @
-
-<<global procalloc>>=
-static struct Procalloc procalloc;
-@ 
 
 <<function pidhash>>=
 static void
@@ -4466,6 +4481,7 @@ pidhash(Proc *p)
 
     h = p->pid % nelem(procalloc.ht);
     lock(&procalloc);
+    // add_hash(procalloc.ht, p->pid, p)
     p->pidhash = procalloc.ht[h];
     procalloc.ht[h] = p;
     unlock(&procalloc);
@@ -4482,6 +4498,7 @@ pidunhash(Proc *p)
 
     h = p->pid % nelem(procalloc.ht);
     lock(&procalloc);
+    // remove_hash(procalloc.ht, p->pid, p)
     for(l = &procalloc.ht[h]; *l != nil; l = &(*l)->pidhash)
         if(*l == p){
             *l = p->pidhash;
@@ -4490,7 +4507,6 @@ pidunhash(Proc *p)
     unlock(&procalloc);
 }
 @ 
-
 
 <<function procindex>>=
 int
@@ -4514,14 +4530,8 @@ procindex(ulong pid)
 @ 
 
 
-<<global pidalloc>>=
-static Counter  pidalloc;
-@ 
 
-<<global noteidalloc>>=
-// also used by sysrfork()
-Counter noteidalloc;
-@ 
+
 
 <<enum procstate cases>>=
 Scheding,
@@ -4539,8 +4549,7 @@ newproc(void)
     while((p = procalloc.free) == nil) {
         unlock(&procalloc);
 
-        snprint(msg, sizeof msg, "no procs; %s forking",
-            up? up->text: "kernel");
+        snprint(msg, sizeof msg, "no procs; %s forking", up?up->text:"kernel");
         /*
          * the situation is unlikely to heal itself.
          * dump the proc table and restart by default.
@@ -4556,9 +4565,17 @@ newproc(void)
     unlock(&procalloc);
 
     p->state = Scheding;
+    p->pid = incref(&pidalloc);
+    p->noteid = incref(&noteidalloc);
+    if(p->pid==0 || p->noteid==0)
+        panic("pidalloc");
+    pidhash(p);
     p->psstate = "New";
     p->cpu = nil;
-    p->qnext = 0;
+    if(p->kstack == nil)
+        p->kstack = smalloc(KSTACK);
+
+    p->qnext = nil;
     p->nchild = 0;
     p->nwait = 0;
     p->waitq = 0;
@@ -4569,7 +4586,7 @@ newproc(void)
     p->rgrp = nil;
     p->pdbg = nil;
     p->fpstate = FPinit;
-    p->kp = 0;
+    p->kp = false;
     <<[[newproc()]] inherit Proc_tracesyscall>>
     p->syscalltrace = nil;    
     p->notepending = false;
@@ -4589,13 +4606,6 @@ newproc(void)
     p->nargs = 0;
     p->setargs = false;
     memset(p->seg, 0, sizeof p->seg);
-    p->pid = incref(&pidalloc);
-    pidhash(p);
-    p->noteid = incref(&noteidalloc);
-    if(p->pid==0 || p->noteid==0)
-        panic("pidalloc");
-    if(p->kstack == nil)
-        p->kstack = smalloc(KSTACK);
 
     /* sched params */
     p->lastcpu = nil;
@@ -4629,6 +4639,32 @@ noprocpanic(char *msg)
 }
 @ 
 
+<<function resrcwait>>=
+void
+resrcwait(char *reason)
+{
+    ulong now;
+    char *p;
+    static ulong lastwhine;
+
+    if(up == 0)
+        panic("resrcwait");
+
+    p = up->psstate;
+    if(reason) {
+        up->psstate = reason;
+        now = seconds();
+        /* don't tie up the console with complaints */
+        if(now - lastwhine > Whinesecs) {
+            lastwhine = now;
+            print("%s\n", reason);
+        }
+    }
+
+    tsleep(&up->sleepr, returnfalse, 0, 300);
+    up->psstate = p;
+}
+@ 
 
 \section{The user}
 
@@ -5114,7 +5150,7 @@ sysexec(ulong *arg)
     img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
     ts = img->s;
     up->seg[TSEG] = ts;
-    ts->flushme = 1;
+    ts->flushme = true;
     ts->fstart = 0;
     ts->flen = sizeof(Exec)+text;
     unlock(img);
@@ -6943,6 +6979,8 @@ struct Segdesc
     ulong d1; // ??
 };
 @ 
+
+% define ring0, ring3
 <<global gdt>>=
 Segdesc gdt[NGDT] =
 {
@@ -8314,7 +8352,7 @@ kickpager(void)
     if(started)
         wakeup(&swapalloc.r);
     else {
-        kproc("pager", pager, 0);
+        kproc("pager", pager, nil);
         started = true;
     }
 }
@@ -11932,6 +11970,9 @@ chandevreset(void)
 
 \section{The first process}
 
+% kernel code part of first process: init0
+% user code part of first process: initcode, which will then exec boot/boot!
+
 <<function userinit>>=
 void
 userinit(void)
@@ -11969,36 +12010,82 @@ userinit(void)
     /*
      * User Stack
      *
-     * N.B. cannot call newpage() with clear=1, because pc kmap
-     * requires up != nil.  use tmpmap instead.
+     * N.B. cannot call newpage() with clear=1, because PC kmap()
+     * requires up != nil.  use tmpmap() instead.
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
     p->seg[SSEG] = s;
-    pg = newpage(0, 0, USTKTOP-BY2PG);
+    pg = newpage(false, 0, USTKTOP-BY2PG);
     v = tmpmap(pg);
     memset(v, 0, BY2PG);
     segpage(s, pg);
-
-    bootargs(v);
+    bootargs(v); // populate user stack for boot/boot program
     tmpunmap(v);
 
     /*
      * Text
      */
-    s = newseg(SG_TEXT, UTZERO, 1);
-    s->flushme++;
+    s = newseg(SG_TEXT, UTZERO, 1); // 1 page
+    s->flushme = true;
     p->seg[TSEG] = s;
-    pg = newpage(0, 0, UTZERO);
+    pg = newpage(false, 0, UTZERO);
     memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
     segpage(s, pg);
     v = tmpmap(pg);
     memset(v, 0, BY2PG);
-    memmove(v, initcode, sizeof initcode);
+    memmove(v, initcode, sizeof initcode); // must be < BY2PG!
     tmpunmap(v);
 
     ready(p);
 }
 @
+
+% rename init_kernel_part? will be the code at the very top
+% of the stack! that should eventually IRET to user code
+<<function init0>>=
+// set by userinit to sched.pc
+void
+init0(void)
+{
+        int i;
+        char buf[2*KNAMELEN]; // has to be the same than in ksetenv?
+        
+        up->nerrlab = 0;
+
+        spllo();
+
+        /*
+         * These are o.k. because rootinit is null.
+         * Then early kproc's will have a root and dot.
+         */
+        up->slash = namec("#/", Atodir, 0, 0);
+        pathclose(up->slash->path); // TODO? what it is? #/ ?
+        up->slash->path = newpath("/");
+        up->dot = cclone(up->slash);
+
+        chandevinit();
+
+        if(!waserror()){
+                snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
+                ksetenv("terminal", buf, false);
+                ksetenv("cputype", "386", false); // used by mkfile! 
+                if(cpuserver)
+                        ksetenv("service", "cpu", false);
+                else
+                        ksetenv("service", "terminal", false);
+                for(i = 0; i < nconf; i++){
+                        if(confname[i][0] != '*')
+                                ksetenv(confname[i], confval[i], false);
+                        ksetenv(confname[i], confval[i], true);
+                }
+                poperror();
+        }
+        kproc("alarm", alarmkproc, nil);
+        cgapost(0x9);
+        touser(sp);
+}
+@
+% sp, use of global sp, because of bootargs?
 
 <<function chandevinit>>=
 void
@@ -12011,50 +12098,8 @@ chandevinit(void)
 }
 @
 
-<<function init0>>=
-// set by userinit to sched.pc
-void
-init0(void)
-{
-        int i;
-        char buf[2*KNAMELEN];
-        
-        up->nerrlab = 0;
 
-        spllo();
-
-        /*
-         * These are o.k. because rootinit is null.
-         * Then early kproc's will have a root and dot.
-         */
-        up->slash = namec("#/", Atodir, 0, 0);
-        pathclose(up->slash->path);
-        up->slash->path = newpath("/");
-        up->dot = cclone(up->slash);
-
-        chandevinit();
-
-        if(!waserror()){
-                snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
-                ksetenv("terminal", buf, 0);
-                ksetenv("cputype", "386", 0);
-                if(cpuserver)
-                        ksetenv("service", "cpu", 0);
-                else
-                        ksetenv("service", "terminal", 0);
-                for(i = 0; i < nconf; i++){
-                        if(confname[i][0] != '*')
-                                ksetenv(confname[i], confval[i], 0);
-                        ksetenv(confname[i], confval[i], 1);
-                }
-                poperror();
-        }
-        kproc("alarm", alarmkproc, 0);
-        cgapost(0x9);
-        touser(sp);
-}
-@
-
+% UTZERO+32 because of a.out header of initcode binary generated by ld
 <<function touser>>=
 /*
  *  Used to get to the first process:
@@ -12076,6 +12121,73 @@ TEXT touser(SB), $0
         IRETL
 @ 
 
+
+% code of initcode here! generated by a trick in a .h! chicken and egg
+
+% get rid of that? have just initcode.c that do the _main? why this extra
+%  complexity?
+<<init9.c>>=
+//@Scheck: def can actually be found initcode.c, but this file is in skip list
+extern void startboot(char*, char**);
+
+//@Scheck: TODO who calls that??
+void
+_main(char *argv0)
+{
+    startboot(argv0, &argv0);
+}
+@
+% see also initcode_dead.s
+
+% _main? related to main9.s in libc/386/?
+% ld is looking for _main entry point?
+
+% TODO how is compiled char cons[] = "#c/cons";? not in data segment?
+%	$LD -l -R1 -s -o init.out init9.$O initcode.$O /386/lib/libc.a
+% so stripped? -s? -l ?
+
+<<initcode.c>>=
+/*
+ * IMPORTANT!  DO NOT ADD LIBRARY CALLS TO THIS FILE.
+ * The entire text image must fit on one page
+ * (and there's no data segment, so any read/write data must be on the stack).
+ */
+
+#include <u.h>
+#include <libc.h>
+
+char cons[] = "#c/cons";
+char boot[] = "/boot/boot";
+char dev[] = "/dev";
+char c[] = "#c";
+char e[] = "#e";
+char ec[] = "#ec";
+char s[] = "#s";
+char srv[] = "/srv";
+char env[] = "/env";
+
+void
+startboot(char *argv0, char **argv)
+{
+    char buf[200];  /* keep this fairly large to capture error details */
+
+    /* in case boot is a shell script */
+    open(cons, OREAD);
+    open(cons, OWRITE);
+    open(cons, OWRITE);
+    bind(c, dev, MAFTER);
+    bind(ec, env, MAFTER);
+    bind(e, env, MCREATE|MAFTER);
+    bind(s, srv, MREPL|MCREATE);
+
+    USED(argv0);
+    exec(boot, argv);
+
+    rerrstr(buf, sizeof buf);
+    buf[sizeof buf - 1] = '\0';
+    _exits(buf);
+}
+@
 
 \section{Booting the user}
 % see section on Userspace system programs
@@ -21139,6 +21251,12 @@ enum notekind
 };
 @ 
 
+<<global noteidalloc>>=
+// also used by sysrfork()
+Counter noteidalloc;
+@ 
+
+
 
 <<struct Note>>=
 // a kind of unix signal
@@ -22907,6 +23025,25 @@ closeegrp(Egrp *eg)
 
 %#e
 
+<<function ksetenv>>=
+/*
+ *  to let the kernel set environment variables
+ */
+void
+ksetenv(char *ename, char *eval, bool conf)
+{
+    Chan *c;
+    char buf[2*KNAMELEN];
+    
+    snprint(buf, sizeof(buf), "#e%s/%s", conf?"c":"", ename);
+    c = namec(buf, Acreate, OWRITE, 0600);
+    devtab[c->type]->write(c, eval, strlen(eval), 0);
+    cclose(c);
+}
+@
+
+
+
 \section{[[/proc/]]}
 %#p
 
@@ -24312,7 +24449,7 @@ txt2data(Proc *p, Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
-    ps->flushme = 1;
+    ps->flushme = true;
 
     qlock(&p->seglock);
     for(i = 0; i < NSEG; i++)
