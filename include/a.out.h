@@ -1,4 +1,3 @@
-typedef	struct	Exec	Exec;
 struct	Exec
 {
 	long	magic;		/* magic number */
@@ -10,10 +9,12 @@ struct	Exec
 	long	spsz;		/* size of pc/sp offset table */
 	long	pcsz;		/* size of pc/line number table */
 };
+typedef	struct	Exec	Exec;
 
 #define HDR_MAGIC	0x00008000		/* header expansion */
 
 #define	_MAGIC(f, b)	((f)|((((4*(b))+0)*(b))+7))
+
 #define	A_MAGIC		_MAGIC(0, 8)		/* 68020 (retired) */
 #define	I_MAGIC		_MAGIC(0, 11)		/* intel 386 */
 #define	J_MAGIC		_MAGIC(0, 12)		/* intel 960 (retired) */
