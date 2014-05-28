@@ -2543,6 +2543,7 @@ punlock(Pool *p)
 
 % note that no xfree or xhole here ... so it always grow
 % (which is good for the fragmentation issue of xalloc anyway)
+% kernel memory: 4Mo max? this is actually adjusted in confinit
 <<global pmainmem>>=
 static Private pmainpriv;
 static Pool pmainmem = {
@@ -2564,6 +2565,8 @@ static Pool pmainmem = {
 @
 
 
+% this is really for image ... for kernel draw, 16Mo, not for KImage
+% this is actually adjusted in confinit
 <<global pimagmem>>=
 static Private pimagpriv;
 static Pool pimagmem = {
@@ -6757,6 +6760,8 @@ trap(Ureg* ureg)
 
     user = (ureg->cs & 0xFFFF) == UESEL;
 
+    // if not user, then that means we interrupted a syscall() which should
+    // already have done those things, so no need for redundancy
     if(user){
         up->dbgreg = ureg;
         cycles(&up->kentry);
@@ -10087,6 +10092,9 @@ _nothingready:
 % rename _startKADDR? just _start? it's true
 % that the label is in in KADDR space as we call ld with -TKZERO...
 
+% output of inm -n 9qemu  is nice! 2879 symbols!
+% explain the text + data + bss part of the binary! see ksize 9qemu too
+
 <<l_multiboot.s>>=
 #include "mem.h"
         
@@ -11454,6 +11462,7 @@ confinit(void)
     char *p;
     int i, userpcnt;
     ulong kpages;
+    ulong kmem;
 
     if(p = getconf("*kernelpercent"))
         userpcnt = 100 - strtol(p, 0, 0);
@@ -11523,23 +11532,24 @@ confinit(void)
      * datastructures. Mntcache and Mntrpc are not accounted for
      * (probably ~300KB).
      */
-    kpages *= BY2PG;
-    kpages -= conf.upages*sizeof(Page)
+    kmem = kpages * BY2PG;
+    kmem -= conf.upages*sizeof(Page)
             + conf.nproc*sizeof(Proc)
             + conf.nimage*sizeof(KImage)
             + conf.nswap
             + conf.nswppo*sizeof(Page);
-    mainmem->maxsize = kpages;
+    mainmem->maxsize = kmem;
     if(!cpuserver){
         /*
          * give terminals lots of image memory, too; the dynamic
          * allocation will balance the load properly, hopefully.
          * be careful with 32-bit overflow.
          */
-        imagmem->maxsize = kpages;
+        imagmem->maxsize = kmem;
     }
 }
 @
+% see also cat /dev/swap
 
 \subsection{[[idt]] initialization}
 
@@ -17602,13 +17612,13 @@ cunmount(Chan *mnt, Chan *mounted)
 
 % often "one-level directory containing a single file" 
 
-% reorganize, have a Root device, then Keyboad, Screen, Console ?
-% and mv devproc, devenv, elsewhere
-
 % could we Keyboard/Screen before? instead of after all those
 % File/Dir/Namespace thing/
 
 \section{The keyboard}
+
+% many of the code below references kbdq. Maybe it's harder
+% than for the screen to split ... 
 
 <<enum specialkey>>=
 enum {
@@ -17895,6 +17905,7 @@ i8042intr(Ureg*, void*)
 
 
 
+% call kbdputc(kbdq, c); so need put this code here too?
 
 <<function kbdputsc>>=
 /*
@@ -18356,6 +18367,7 @@ cgascreenputs(char* s, int n)
 
 \subsection{Overview}
 
+%TODO lp split
 <<devcons.c enum Qxxx>>=
 enum{
     Qdir,
@@ -18387,11 +18399,12 @@ enum{
 };
 @ 
 
-
+%TODO lp split
 <<global consdir>>=
 static Dirtab consdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
     "cons",     {Qcons},    0,      0660,
+
     "bintime",  {Qbintime}, 24,     0664,
     "consctl",  {Qconsctl}, 0,      0220,
     "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
@@ -18417,6 +18430,8 @@ static Dirtab consdir[]={
 };
 @ 
 
+% here interested only in the "cons"! see other sections
+% for extra features of the "console"
 
 \subsection{Input}
 %buffered input
@@ -18456,15 +18471,19 @@ static struct ConsKbd kbd =
 };
 @ 
 
+% put before with kbdputc
 <<global kbdq>>=
 Queue*  kbdq;           /* unprocessed console input */
 @ 
+
+
 
 
 <<global lineq>>=
 Queue*  lineq;          /* processed console input */
 @ 
 
+% bad name!
 <<function printinit>>=
 void
 printinit(void)
@@ -18535,8 +18554,7 @@ kbdputcclock(void)
 }
 @ 
 
-% see echo() below!
-
+% see also echo() below!
 
 <<[[consread()]] Qcons case>>=
     case Qcons:
@@ -18585,14 +18603,17 @@ kbdputcclock(void)
         return n;
 @
 
-
 \subsection{Output}
+
 % what happens when do ls > file, how we do not call screenputs?
 % because in this case /dev/cons is not binded to the console!??
 % but then how can still read from it? because fd0 is binded to it,
-% but fd1 no!??? but then why  echo 'foo' > dev/cons from
+% but fd1 no! 
+
+% but then why  echo 'foo' > dev/cons from
 % rio does the right thing? how does not call cgascreenputs?
 % because screenputs has been redirected in rio! via vga controller?
+% and because rio actually create a new /dev/cons I think
 
 \subsubsection{[[/dev/cons]]}
 
@@ -18799,8 +18820,9 @@ putstrn(char *str, int n)
 \subsubsection{[[iprint()]]}
 
 <<global iprintscreenputs>>=
-int iprintscreenputs = 1;
+bool iprintscreenputs = true;
 @ 
+%bool iprintkmesgputs = true; ?
 
 <<function iprint>>=
 int
@@ -18811,20 +18833,26 @@ devcons_iprint(char *fmt, ...)
     char buf[PRINTSIZE];
 
     s = splhi();
+
     va_start(arg, fmt);
     n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
     va_end(arg);
+
     locked = iprintcanlock(&iprintlock);
+
     if(screenputs != nil && iprintscreenputs)
         screenputs(buf, n);
     uartputs(buf, n);
+
     if(locked)
         unlock(&iprintlock);
+
     splx(s);
 
     return n;
 }
-@ 
+@
+% could kmesgputs() here too
 
 <<global iprintlock>>=
 /*
@@ -18835,7 +18863,6 @@ devcons_iprint(char *fmt, ...)
  */
 static Lock iprintlock;
 @
-
 
 <<function iprintcanlock>>=
 static bool
@@ -18859,7 +18886,7 @@ iprintcanlock(Lock *l)
 
 % todo: see balestero note,
 % in distributed context we want to print process error at the right place
-% not just on kernel console
+%  not just on machine console
 <<function pprint>>=
 int
 devcons_pprint(char *fmt, ...)
@@ -18872,9 +18899,10 @@ devcons_pprint(char *fmt, ...)
     if(up == nil || up->fgrp == nil)
         return 0;
 
-    c = up->fgrp->fd[2];
-    if(c==0 || (c->mode!=OWRITE && c->mode!=ORDWR))
+    c = up->fgrp->fd[2]; // stderr
+    if(c==nil || (c->mode!=OWRITE && c->mode!=ORDWR))
         return 0;
+
     n = snprint(buf, sizeof buf, "%s %lud: ", up->text, up->pid);
     va_start(arg, fmt);
     n = vseprint(buf+n, buf+sizeof(buf), fmt, arg) - buf;
@@ -24701,18 +24729,14 @@ bool iseve(void) {
 
 \chapter{Debugging}
 
-%TODO
-% what to do when have panic, e.g. when I mixed some fields
-% and I got a pc error, how do I fix it? how do I find the relevant code?
-
 % see also printf section all this fmt stuff
-
-% getcallerpc
 
 % use of getconf("*debugstart*") to setup some global tracing stuff
 
 \section{[[cgapost()]]}
 %first line of "defense" (using sound could be nice too)
+% printf style debugging, except when can't even printf :) have to access
+% directly the screen device :)
 
 <<function cgapost>>=
 char hex[] = "0123456789ABCDEF";
@@ -24731,6 +24755,7 @@ cgapost(int code)
 @
 
 \section{[[sysnop()]]}
+
 % use sysnop to show example of debugging session?
 %(was called sysr1) 
 
@@ -24797,95 +24822,6 @@ cgapost(int code)
             return;
         }
 @
-
-<<function trap_dumpstack>>=
-void
-trap_dumpstack(void)
-{
-    callwithureg(_dumpstack);
-}
-@ 
-
-<<function _dumpstack>>=
-static void
-_dumpstack(Ureg *ureg)
-{
-    uintptr l, v, i, estack;
-    extern ulong etext;
-    int x;
-    char *s;
-
-    if((s = getconf("*nodumpstack")) != nil && strcmp(s, "0") != 0){
-        iprint("dumpstack disabled\n");
-        return;
-    }
-    iprint("dumpstack\n");
-
-    x = 0;
-    x += iprint("ktrace /kernel/path %.8lux %.8lux <<EOF\n", ureg->pc, ureg->sp);
-    i = 0;
-    if(up
-    && (uintptr)&l >= (uintptr)up->kstack
-    && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
-        estack = (uintptr)up->kstack+KSTACK;
-    else if((uintptr)&l >= (uintptr)cpu->stack
-    && (uintptr)&l <= (uintptr)cpu+CPUSIZE)
-        estack = (uintptr)cpu+CPUSIZE;
-    else
-        return;
-    x += iprint("estackx %p\n", estack);
-
-    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
-        v = *(uintptr*)l;
-        if((KTZERO < v && v < (uintptr)&etext) || estack-l < 32){
-            /*
-             * Could Pick off general CALL (((uchar*)v)[-5] == 0xE8)
-             * and CALL indirect through AX
-             * (((uchar*)v)[-2] == 0xFF && ((uchar*)v)[-2] == 0xD0),
-             * but this is too clever and misses faulting address.
-             */
-            x += iprint("%.8p=%.8p ", l, v);
-            i++;
-        }
-        if(i == 4){
-            i = 0;
-            x += iprint("\n");
-        }
-    }
-    if(i)
-        iprint("\n");
-    iprint("EOF\n");
-
-    if(ureg->trap != VectorNMI)
-        return;
-
-    i = 0;
-    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
-        iprint("%.8p ", *(uintptr*)l);
-        if(++i == 8){
-            i = 0;
-            iprint("\n");
-        }
-    }
-    if(i)
-        iprint("\n");
-}
-@ 
-
-<<function callwithureg>>=
-/*
- * Fill in enough of Ureg to get a stack trace, and call a function.
- * Used by debugging interface rdb.
- */
-void
-callwithureg(void (*fn)(Ureg*))
-{
-    Ureg ureg;
-    ureg.pc = getcallerpc(&fn);
-    ureg.sp = (ulong)&fn;
-    fn(&ureg);
-}
-@ 
 
 
 <<function xsummary>>=
@@ -25092,6 +25028,111 @@ proc_dumpaproc(Proc *p)
         p->time[0], p->time[1], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
 }
 @ 
+
+\section{[[/bin/ktrace]]}
+
+% getcallerpc nice trick
+
+% what to do when have panic, e.g. when I mixed some fields
+% and I got a pc error, how do I fix it? how do I find the relevant code?
+% first can use nm -n 9qemu and try to find the name of the function involved
+
+% can also use ktrace!!!
+
+% ex of dumpstack(): 
+
+<<function dumpstack>>=
+void
+trap_dumpstack(void)
+{
+    callwithureg(_dumpstack);
+}
+@ 
+
+<<function _dumpstack>>=
+static void
+_dumpstack(Ureg *ureg)
+{
+    uintptr l, v, i, estack;
+    extern ulong etext;
+    int x;
+    char *s;
+
+    if((s = getconf("*nodumpstack")) != nil && strcmp(s, "0") != 0){
+        iprint("dumpstack disabled\n");
+        return;
+    }
+    iprint("dumpstack\n");
+
+    x = 0;
+    x += iprint("ktrace /kernel/path %.8lux %.8lux <<EOF\n", ureg->pc, ureg->sp);
+    i = 0;
+    if(up
+    && (uintptr)&l >= (uintptr)up->kstack
+    && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
+        estack = (uintptr)up->kstack+KSTACK;
+    else if((uintptr)&l >= (uintptr)cpu->stack
+    && (uintptr)&l <= (uintptr)cpu+CPUSIZE)
+        estack = (uintptr)cpu+CPUSIZE;
+    else
+        return;
+    x += iprint("estackx %p\n", estack);
+
+    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
+        v = *(uintptr*)l;
+        if((KTZERO < v && v < (uintptr)&etext) || estack-l < 32){
+            /*
+             * Could Pick off general CALL (((uchar*)v)[-5] == 0xE8)
+             * and CALL indirect through AX
+             * (((uchar*)v)[-2] == 0xFF && ((uchar*)v)[-2] == 0xD0),
+             * but this is too clever and misses faulting address.
+             */
+            x += iprint("%.8p=%.8p ", l, v);
+            i++;
+        }
+        if(i == 4){
+            i = 0;
+            x += iprint("\n");
+        }
+    }
+    if(i)
+        iprint("\n");
+    iprint("EOF\n");
+
+    if(ureg->trap != VectorNMI)
+        return;
+
+    i = 0;
+    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
+        iprint("%.8p ", *(uintptr*)l);
+        if(++i == 8){
+            i = 0;
+            iprint("\n");
+        }
+    }
+    if(i)
+        iprint("\n");
+}
+@ 
+
+<<function callwithureg>>=
+/*
+ * Fill in enough of Ureg to get a stack trace, and call a function.
+ * Used by debugging interface rdb.
+ */
+void
+callwithureg(void (*fn)(Ureg*))
+{
+    Ureg ureg;
+    ureg.pc = getcallerpc(&fn);
+    ureg.sp = (ulong)&fn;
+    fn(&ureg);
+}
+@ 
+
+
+% put code of ktrace? interesting code ... and very kernel specific
+% or maybe in Debuggers.tex.nw?
 
 \section{[[/dev/kmesg]]}
 
@@ -25317,6 +25358,7 @@ procctl(Proc *p)
         ready(p);
         break;
 @
+% hmm but does not set to Proc_nothing?
 
 
 % debug also (ab?)used in pexit when freeing memory
@@ -25422,6 +25464,9 @@ bool hang;   /* hang at next exec for debug */
 <<[[sysfork()]] inherit hang>>=
     p->hang = up->hang;
 @
+% so strace can trace child of process! actually create one thread
+% per child, see strace.c! but will it trace the syscall between
+% fork and exec? yes because up->procctl get inherited!
 
 <<[[sysexec()]] if hang>>=
     if(up->hang)
@@ -25433,16 +25478,20 @@ bool hang;   /* hang at next exec for debug */
 % because for the debugger they need more than just procctl? they need
 % notes?
 
-
-
-
-
-% rename? terrible name ... but then coupling with tracing tools
 <<[[procctlreq()]] CMwaitstop case>>=
     case CMwaitstop:
         procstopwait(p, Proc_nothing);
         break;
 @
+% used by strace actually ... because did fork, but
+% need to wait that it is actually created and scheduled
+% to execute the exec and so on! it's not stopped yet!
+% not that this one does not check for Stopped. It just sleep
+% until reach the state Stopped (that we know it should eventually
+% reach) 
+
+
+
 
 
 
@@ -25541,6 +25590,8 @@ bool hang;   /* hang at next exec for debug */
     else
         p->procctl = Proc_nothing;
 @
+% why not mv that in sysrfork? only thing in newproc() that propagate
+% info from up; not very consistent
 
 
 % communicate info via syscalltrace! accessible at /proc/x/syscall
