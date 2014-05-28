@@ -13,7 +13,7 @@ enum misc_constants
     /*e: constant PRINTSIZE */
     /*s: constant KMESGSIZE */
     // used in devcons.c
-    KMESGSIZE = (256*1024),  /* lots, for acpi debugging */ // default is 16*1024
+    KMESGSIZE = (16*1024),  /* put 256*1024 if want acpi debugging */
     /*e: constant KMESGSIZE */
     /*s: constant STAGESIZE */
     // used by devuart.c
