@@ -10,7 +10,7 @@ all:
 #assumes you have done source env.sh, or have a 'mk' wrapper that does that
 compile:
 	cd sys/src; mk all; cd cmd; mk install
-	cd sys/src/9/pc; mk
+	cd sys/src/9/pc; mk; mk install
 
 disk:
 	umount -f $(DISK) || echo not mounted
