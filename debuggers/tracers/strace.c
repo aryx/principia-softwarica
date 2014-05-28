@@ -3,8 +3,10 @@
 #include <bio.h>
 #include <thread.h>
 
+// System calls tracer
+
 // was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
-// but most people knows 'strace'
+// but most people knows better 'strace'
 
 enum {
 	Stacksize	= 8*1024,
@@ -74,6 +76,9 @@ reader(void *v)
 
 	/* child was stopped by hang msg earlier */
 	cwrite(cfd, ctl, waitstop, sizeof waitstop - 1);
+    // useful? if it was stopped, then why need waitstop?
+    // because the fork() has been done but maybe the child
+    // has not yet reached the exec() and got actually stopped!
 
 	cwrite(cfd, ctl, "startsyscall", 12);
 	s = newstr();
@@ -123,18 +128,23 @@ void
 writer(void *)
 {
 	int newpid;
-	Alt a[4];
 	Str *s;
+
+    // TODO use better initializer?
+	Alt a[4];
 
 	a[0].op = CHANRCV;
 	a[0].c = quit;
 	a[0].v = nil;
+
 	a[1].op = CHANRCV;
 	a[1].c = out;
 	a[1].v = &s;
+
 	a[2].op = CHANRCV;
 	a[2].c = forkc;
 	a[2].v = &newpid;
+
 	a[3].op = CHANEND;
 
 	for(;;)
@@ -226,6 +236,7 @@ threadmain(int argc, char **argv)
 		if(argc != 2)
 			usage();
 		pid = atoi(argv[1]);
+        //TODO? send a 'stop' to its ctl file?
 	}
 
 	out   = chancreate(sizeof(char*), 0);
