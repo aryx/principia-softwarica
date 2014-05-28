@@ -40,7 +40,7 @@ Queue*  kprintoq;       /* console output, for /dev/kprint */
 ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 /*e: global kprintinuse */
 /*s: global iprintscreenputs */
-int iprintscreenputs = 1;
+bool iprintscreenputs = true;
 /*e: global iprintscreenputs */
 
 /*s: struct ConsKbd */
@@ -325,15 +325,20 @@ devcons_iprint(char *fmt, ...)
     char buf[PRINTSIZE];
 
     s = splhi();
+
     va_start(arg, fmt);
     n = vseprint(buf, buf+sizeof(buf), fmt, arg) - buf;
     va_end(arg);
+
     locked = iprintcanlock(&iprintlock);
+
     if(screenputs != nil && iprintscreenputs)
         screenputs(buf, n);
     uartputs(buf, n);
+
     if(locked)
         unlock(&iprintlock);
+
     splx(s);
 
     return n;
@@ -410,9 +415,10 @@ devcons_pprint(char *fmt, ...)
     if(up == nil || up->fgrp == nil)
         return 0;
 
-    c = up->fgrp->fd[2];
-    if(c==0 || (c->mode!=OWRITE && c->mode!=ORDWR))
+    c = up->fgrp->fd[2]; // stderr
+    if(c==nil || (c->mode!=OWRITE && c->mode!=ORDWR))
         return 0;
+
     n = snprint(buf, sizeof buf, "%s %lud: ", up->text, up->pid);
     va_start(arg, fmt);
     n = vseprint(buf+n, buf+sizeof(buf), fmt, arg) - buf;
@@ -715,6 +721,7 @@ enum
 static Dirtab consdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
     "cons",     {Qcons},    0,      0660,
+
     "bintime",  {Qbintime}, 24,     0664,
     "consctl",  {Qconsctl}, 0,      0220,
     "cputime",  {Qcputime}, 6*NUMSIZE,  0444,

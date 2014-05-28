@@ -388,6 +388,8 @@ trap(Ureg* ureg)
 
     user = (ureg->cs & 0xFFFF) == UESEL;
 
+    // if not user, then that means we interrupted a syscall() which should
+    // already have done those things, so no need for redundancy
     if(user){
         up->dbgreg = ureg;
         cycles(&up->kentry);
@@ -648,13 +650,13 @@ _dumpstack(Ureg *ureg)
 }
 /*e: function _dumpstack */
 
-/*s: function trap_dumpstack */
+/*s: function dumpstack */
 void
 trap_dumpstack(void)
 {
     callwithureg(_dumpstack);
 }
-/*e: function trap_dumpstack */
+/*e: function dumpstack */
 
 /*s: function debugbpt */
 static void

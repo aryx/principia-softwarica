@@ -244,6 +244,7 @@ confinit(void)
     char *p;
     int i, userpcnt;
     ulong kpages;
+    ulong kmem;
 
     if(p = getconf("*kernelpercent"))
         userpcnt = 100 - strtol(p, 0, 0);
@@ -313,20 +314,20 @@ confinit(void)
      * datastructures. Mntcache and Mntrpc are not accounted for
      * (probably ~300KB).
      */
-    kpages *= BY2PG;
-    kpages -= conf.upages*sizeof(Page)
+    kmem = kpages * BY2PG;
+    kmem -= conf.upages*sizeof(Page)
             + conf.nproc*sizeof(Proc)
             + conf.nimage*sizeof(KImage)
             + conf.nswap
             + conf.nswppo*sizeof(Page);
-    mainmem->maxsize = kpages;
+    mainmem->maxsize = kmem;
     if(!cpuserver){
         /*
          * give terminals lots of image memory, too; the dynamic
          * allocation will balance the load properly, hopefully.
          * be careful with 32-bit overflow.
          */
-        imagmem->maxsize = kpages;
+        imagmem->maxsize = kmem;
     }
 }
 /*e: function confinit */
