@@ -6,6 +6,8 @@
 #include <draw.h>
 #include <event.h>
 
+// a GUI system monitoring tool
+
 #define	MAXNUM	10	/* maximum number of numbers on data line */
 
 typedef struct Graph	Graph;
