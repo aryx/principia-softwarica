@@ -21,7 +21,7 @@ disk:
 	umount -f $(DISK)
 
 run:
-	qemu-system-i386 -smp 4 -m 256 \
+	qemu-system-i386 -smp 4 -m 512 \
            -kernel sys/src/9/pc/9$(CONFIG) \
            -hda dosdisk.img 
 #-fda ~/floppy.img
