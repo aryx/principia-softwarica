@@ -52,7 +52,7 @@ struct ConsKbd
     int x;      /* index into line */
 
     int count;
-    int ctlpoff;
+    bool ctlpoff; // ^P will not reboot if true
 
     /* a place to save up characters at interrupt time before dumping them in the queue */
     Lock    lockputc;
@@ -1115,16 +1115,16 @@ conswrite(Chan *c, void *va, long n, vlong off)
         buf[n] = 0;
         for(a = buf; a;){
             if(strncmp(a, "rawon", 5) == 0){
-                kbd.raw = 1;
+                kbd.raw = true;
                 /* clumsy hack - wake up reader */
                 ch = 0;
                 qwrite(kbdq, &ch, 1);           
             } else if(strncmp(a, "rawoff", 6) == 0){
-                kbd.raw = 0;
+                kbd.raw = false;
             } else if(strncmp(a, "ctlpon", 6) == 0){
-                kbd.ctlpoff = 0;
+                kbd.ctlpoff = false;
             } else if(strncmp(a, "ctlpoff", 7) == 0){
-                kbd.ctlpoff = 1;
+                kbd.ctlpoff = true;
             }
             if(a = strchr(a, ' '))
                 a++;

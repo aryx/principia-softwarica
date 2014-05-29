@@ -1717,7 +1717,7 @@ txt2data(Proc *p, Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
-    ps->flushme = 1;
+    ps->flushme = true;
 
     qlock(&p->seglock);
     for(i = 0; i < NSEG; i++)

@@ -342,7 +342,7 @@ void
 init0(void)
 {
         int i;
-        char buf[2*KNAMELEN];
+        char buf[2*KNAMELEN]; // has to be the same than in ksetenv?
         
         up->nerrlab = 0;
 
@@ -353,7 +353,7 @@ init0(void)
          * Then early kproc's will have a root and dot.
          */
         up->slash = namec("#/", Atodir, 0, 0);
-        pathclose(up->slash->path);
+        pathclose(up->slash->path); // TODO? what it is? #/ ?
         up->slash->path = newpath("/");
         up->dot = cclone(up->slash);
 
@@ -361,20 +361,20 @@ init0(void)
 
         if(!waserror()){
                 snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
-                ksetenv("terminal", buf, 0);
-                ksetenv("cputype", "386", 0);
+                ksetenv("terminal", buf, false);
+                ksetenv("cputype", "386", false); // used by mkfile! 
                 if(cpuserver)
-                        ksetenv("service", "cpu", 0);
+                        ksetenv("service", "cpu", false);
                 else
-                        ksetenv("service", "terminal", 0);
+                        ksetenv("service", "terminal", false);
                 for(i = 0; i < nconf; i++){
                         if(confname[i][0] != '*')
-                                ksetenv(confname[i], confval[i], 0);
-                        ksetenv(confname[i], confval[i], 1);
+                                ksetenv(confname[i], confval[i], false);
+                        ksetenv(confname[i], confval[i], true);
                 }
                 poperror();
         }
-        kproc("alarm", alarmkproc, 0);
+        kproc("alarm", alarmkproc, nil);
         cgapost(0x9);
         touser(sp);
 }
@@ -472,31 +472,30 @@ userinit(void)
     /*
      * User Stack
      *
-     * N.B. cannot call newpage() with clear=1, because pc kmap
-     * requires up != nil.  use tmpmap instead.
+     * N.B. cannot call newpage() with clear=1, because PC kmap()
+     * requires up != nil.  use tmpmap() instead.
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
     p->seg[SSEG] = s;
-    pg = newpage(0, 0, USTKTOP-BY2PG);
+    pg = newpage(false, 0, USTKTOP-BY2PG);
     v = tmpmap(pg);
     memset(v, 0, BY2PG);
     segpage(s, pg);
-
-    bootargs(v);
+    bootargs(v); // populate user stack for boot/boot program
     tmpunmap(v);
 
     /*
      * Text
      */
-    s = newseg(SG_TEXT, UTZERO, 1);
-    s->flushme++;
+    s = newseg(SG_TEXT, UTZERO, 1); // 1 page
+    s->flushme = true;
     p->seg[TSEG] = s;
-    pg = newpage(0, 0, UTZERO);
+    pg = newpage(false, 0, UTZERO);
     memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
     segpage(s, pg);
     v = tmpmap(pg);
     memset(v, 0, BY2PG);
-    memmove(v, initcode, sizeof initcode);
+    memmove(v, initcode, sizeof initcode); // must be < BY2PG!
     tmpunmap(v);
 
     ready(p);

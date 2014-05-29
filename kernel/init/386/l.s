@@ -6,8 +6,8 @@
 // Constants/Macros
 //*****************************************************************************
 
-#define PADDR(a)        ((a) & ~KZERO)
-#define KADDR(a)        (KZERO|(a))
+#define PADDR(ka)        ((ka) & ~KZERO)
+#define KADDR(pa)        (KZERO|(pa))
 
 /*
  * Some machine instructions not handled by 8[al].

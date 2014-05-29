@@ -228,23 +228,20 @@ void
 trapinit0(void)
 {
     int d1, v;
-    ulong vaddr;
+    kern_addr vaddr;
     Segdesc *idt;
 
     idt = (Segdesc*)IDTADDR;
-    vaddr = (ulong)vectortable;
+    vaddr = (kern_addr)vectortable;
     for(v = 0; v < 256; v++){
         d1 = (vaddr & 0xFFFF0000)|SEGP;
         switch(v){
-
         case VectorBPT:
             d1 |= SEGPL(3)|SEGIG;
             break;
-
         case VectorSYSCALL:
             d1 |= SEGPL(3)|SEGIG;
             break;
-
         default:
             d1 |= SEGPL(0)|SEGIG;
             break;

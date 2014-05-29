@@ -250,10 +250,10 @@ void  wrmsr(int, vlong);
 
 /*s: fns.h macros */
 /*s: function KADDR */
-#define KADDR(a)  kaddr(a)
+#define KADDR(pa)  kaddr(pa)
 /*e: function KADDR */
 /*s: function PADDR */
-#define PADDR(a)  paddr((void*)(a))
+#define PADDR(ka)  paddr((kern_addr3)(ka))
 /*e: function PADDR */
 
 #define dcflush(a, b)

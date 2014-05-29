@@ -147,7 +147,7 @@ pagechainhead(Page *p)
 
 /*s: constructor newpage */
 Page*
-newpage(bool clear, Segment **s, ulong va)
+newpage(bool clear, Segment **s, virt_addr va)
 {
     Page *p;
     KMap *k;

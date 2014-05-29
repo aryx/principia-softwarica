@@ -17,7 +17,6 @@
 #define WD2PG   (BY2PG/BY2WD)   /* words per page */
 
 #define PGSHIFT   12      /* log(BY2PG) */
-#define CACHELINESZ 32      /* pentium & later */
 #define BLOCKALIGN  8
 
 #define FPalign   16      /* required for FXSAVE */
@@ -43,15 +42,17 @@
 #define MS2HZ   (1000/HZ)   /* millisec per clock tick */
 #define TK2SEC(t) ((t)/HZ)    /* ticks to seconds */
 
+/*
+ *  Address spaces
+ */
+
 // 0x10 = 16
 // 0x100 = 256
 // 0x1000 = 4Ko (1 page)
 // 0x10000 = 64Ko
 // 0x100000 = 1Mo
 // note: graphic card memory is at 0xb8000 so safer to go to 1Mo for kernel
-/*
- *  Address spaces
- */
+
 /*s: constant KZERO */
 #define KZERO   0xF0000000    /* base of kernel address space */
 /*e: constant KZERO */
@@ -62,6 +63,7 @@
 #define VPTSIZE   BY2XPG
 #define VPT   (KZERO-VPTSIZE)
 #define NVPT    (VPTSIZE/BY2WD)
+
 #define KMAPSIZE  BY2XPG
 #define KMAP    (VPT-KMAPSIZE)
 #define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
@@ -89,6 +91,7 @@
 #define RMUADDR   (KZERO+0x7C00)    /* real mode Ureg */
 #define RMCODE    (KZERO+0x8000)    /* copy of first page of KTEXT */
 #define RMBUF   (KZERO+0x9000)    /* buffer for user space - known to vga */
+
 /*s: constant IDTADDR */
 #define IDTADDR   (KZERO+0x10800)   /* idt */
 /*e: constant IDTADDR */
@@ -97,11 +100,15 @@
 #define CPU0PDB   (KZERO+0x12000)   /* bootstrap processor PDB */
 #define CPU0PTE   (KZERO+0x13000)   /* bootstrap processor PTE's for 0-4MB */
 #define CPU0GDT   (KZERO+0x14000)   /* bootstrap processor GDT */
+
 #define CPUADDR  (KZERO+0x15000)   /* as seen by current processor */
 #define CPU0CPU  (KZERO+0x16000)   /* Cpu for bootstrap processor */
 #define CPUSIZE  BY2PG
+
 #define CPU0PTE1  (KZERO+0x17000)   /* bootstrap processor PTE's for 4MB-8MB */
+
 #define CPU0END   (CPU0PTE1+BY2PG)
+
 /*
  * N.B.  ramscan knows that CPU0END is the end of reserved data
  * N.B.  _startPADDR knows that CPU0PDB is the first reserved page
@@ -130,12 +137,13 @@
 /*e: constant x86 segments */
 /* #define  APM40SEG  8 /* APM segment 0x40 */
 
-
+/*s: constant SELGDT */
 #define SELGDT  (0<<2)  /* selector is in gdt */
+/*e: constant SELGDT */
 #define SELLDT  (1<<2)  /* selector is in ldt */
 
 /*s: macro SELECTOR */
-#define SELECTOR(i, t, p) (((i)<<3) | (t) | (p))
+#define SELECTOR(idx, type, prio) (((idx)<<3) | (type) | (prio))
 /*e: macro SELECTOR */
 
 /*s: constant x86 segment selectors */
@@ -163,15 +171,20 @@
 #define SEGCG (0x0C<<8) /* call gate */
 #define SEGIG (0x0E<<8) /* interrupt gate */
 #define SEGTG (0x0F<<8) /* trap gate */
+
 #define SEGTYPE (0x1F<<8)
 
 #define SEGP  (1<<15)   /* segment present */
+
 #define SEGPL(x) ((x)<<13)  /* priority level */
+
 #define SEGB  (1<<22)   /* granularity 1==4k (for expand-down) */
 #define SEGG  (1<<23)   /* granularity 1==4k (for other) */
 #define SEGE  (1<<10)   /* expand down */
+
 #define SEGW  (1<<9)    /* writable (for data/stack) */
 #define SEGR  (1<<9)    /* readable (for code) */
+
 #define SEGD  (1<<22)   /* default 1==32bit (for code) */
 /*e: constant segment field extractors */
 
@@ -192,25 +205,30 @@
 /*e: constant SSEGMAPSIZE */
 #define PPN(x)    ((x)&~(BY2PG-1))
 
+/*s: constant PTExxx */
 /*
  *  physical MMU
  */
 #define PTEVALID  (1<<0)
-#define PTEWT   (1<<3)
-#define PTEUNCACHED (1<<4)
+
 #define PTEWRITE  (1<<1)
 #define PTERONLY  (0<<1)
+
 #define PTEKERNEL (0<<2)
 #define PTEUSER   (1<<2)
+
+#define PTEWT       (1<<3)
+#define PTEUNCACHED (1<<4)
 #define PTESIZE   (1<<7)
 #define PTEGLOBAL (1<<8)
+/*e: constant PTExxx */
 
 /*
  * Macros for calculating offsets within the page directory base
  * and page tables. 
  */
-#define PDX(va)   ((((ulong)(va))>>22) & 0x03FF)
-#define PTX(va)   ((((ulong)(va))>>12) & 0x03FF)
+#define PDX(va)   ((((virt_addr)(va))>>22) & 0x03FF)
+#define PTX(va)   ((((virt_addr)(va))>>12) & 0x03FF)
 
 #define getpgcolor(a) 0
 

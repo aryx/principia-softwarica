@@ -15,7 +15,7 @@ struct ArchProcMMU
   Page* mmupdb;     /* page directory base */
   Page* mmufree;    /* unused page table pages */
   Page* mmuused;    /* used page table pages */
-
+  /*x: [[Proc]] [[Arch]] memory fields */
   Page* kmaptable;    /* page table used by kmap */
   uint  lastkmap;   /* last entry used by kmap */
   int nkmap;      /* number of current kmaps */
@@ -30,6 +30,6 @@ struct ArchProcMMU
 typedef struct KMap   KMap;
 /*e: struct KMap */
 /*s: macro VA */
-#define VA(k)   ((void*)(k))
+#define VA(k)   ((virt_addr3)(k))
 /*e: macro VA */
 /*e: dat_memory.h */

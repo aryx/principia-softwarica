@@ -59,8 +59,8 @@ extern  char* statename[];
 enum procseg
 {
     SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
-    ESEG, LSEG, // E = Extra (used for temporary stack segment), L?
-    SEG1, SEG2, SEG3, SEG4, // free slots for for segattach
+    ESEG, // E = Extra (used for temporary stack segment),
+    _SEG0, _SEG1, _SEG2, _SEG3, _SEG4, // free slots for for segattach
     NSEG // to count, see Proc.seg array
 };
 /*e: enum procseg */
@@ -574,9 +574,6 @@ struct Proc
 // Stats, profiling
 //--------------------------------------------------------------------
     /*s: [[Proc]] stats and profiling fields */
-    // hash<enum<proctime>, ulong>
-    ulong time[6];  /* User, Sys, Real; child U, S, R */
-    /*x: [[Proc]] stats and profiling fields */
     uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
     /*
      * pcycles: cycles spent in this process (updated on procsave/restore)
@@ -587,6 +584,9 @@ struct Proc
      * (procrestores and procsaves balance), it is pcycles.
      */
     vlong pcycles;
+    /*x: [[Proc]] stats and profiling fields */
+    // hash<enum<proctime>, ulong>
+    ulong time[6];  /* User, Sys, Real; child U, S, R */
     /*e: [[Proc]] stats and profiling fields */
 //--------------------------------------------------------------------
 // Debugging (the kernel itself)
@@ -654,7 +654,7 @@ struct Proc
 // Extra
 //--------------------------------------------------------------------
     /*s: [[Proc]] extra fields */
-    // list<ref<Proc>> KQlock.head or RWLock.head
+    // list<ref<Proc>> KQlock.head or RWLock.head (or Procalloc.free)
     Proc  *qnext;   /* next process on queue for a QLock */
     /*x: [[Proc]] extra fields */
     // hash<?, list<ref<Proc>> Procalloc.ht
@@ -695,9 +695,10 @@ struct Procalloc
     // array<Proc>, xalloc'ed in procinit() (conf.nproc)
     Proc* arena;
   
-    // list<ref<Proc>> (next = ?)
+    // list<ref<Proc>> (next = Proc.qnext, hmmm abuse qnext)
     Proc* free;
-    // hash<Proc.pid?, list<ref<Proc>> (next = Proc.pidhash)>
+
+    // hash<Proc.pid, list<ref<Proc>> (next = Proc.pidhash)>
     Proc* ht[128];
   
     // extra

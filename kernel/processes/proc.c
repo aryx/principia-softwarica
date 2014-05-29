@@ -762,8 +762,7 @@ newproc(void)
     while((p = procalloc.free) == nil) {
         unlock(&procalloc);
 
-        snprint(msg, sizeof msg, "no procs; %s forking",
-            up? up->text: "kernel");
+        snprint(msg, sizeof msg, "no procs; %s forking", up?up->text:"kernel");
         /*
          * the situation is unlikely to heal itself.
          * dump the proc table and restart by default.
@@ -779,9 +778,17 @@ newproc(void)
     unlock(&procalloc);
 
     p->state = Scheding;
+    p->pid = incref(&pidalloc);
+    p->noteid = incref(&noteidalloc);
+    if(p->pid==0 || p->noteid==0)
+        panic("pidalloc");
+    pidhash(p);
     p->psstate = "New";
     p->cpu = nil;
-    p->qnext = 0;
+    if(p->kstack == nil)
+        p->kstack = smalloc(KSTACK);
+
+    p->qnext = nil;
     p->nchild = 0;
     p->nwait = 0;
     p->waitq = 0;
@@ -792,7 +799,7 @@ newproc(void)
     p->rgrp = nil;
     p->pdbg = nil;
     p->fpstate = FPinit;
-    p->kp = 0;
+    p->kp = false;
     /*s: [[newproc()]] inherit Proc_tracesyscall */
         if(up && up->procctl == Proc_tracesyscall)
             p->procctl = Proc_tracesyscall;
@@ -817,13 +824,6 @@ newproc(void)
     p->nargs = 0;
     p->setargs = false;
     memset(p->seg, 0, sizeof p->seg);
-    p->pid = incref(&pidalloc);
-    pidhash(p);
-    p->noteid = incref(&noteidalloc);
-    if(p->pid==0 || p->noteid==0)
-        panic("pidalloc");
-    if(p->kstack == nil)
-        p->kstack = smalloc(KSTACK);
 
     /* sched params */
     p->lastcpu = nil;
@@ -1804,6 +1804,7 @@ pidhash(Proc *p)
 
     h = p->pid % nelem(procalloc.ht);
     lock(&procalloc);
+    // add_hash(procalloc.ht, p->pid, p)
     p->pidhash = procalloc.ht[h];
     procalloc.ht[h] = p;
     unlock(&procalloc);
@@ -1819,6 +1820,7 @@ pidunhash(Proc *p)
 
     h = p->pid % nelem(procalloc.ht);
     lock(&procalloc);
+    // remove_hash(procalloc.ht, p->pid, p)
     for(l = &procalloc.ht[h]; *l != nil; l = &(*l)->pidhash)
         if(*l == p){
             *l = p->pidhash;

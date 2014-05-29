@@ -47,9 +47,9 @@
 /*
  * Simple segment descriptors with no translation.
  */
-#define DATASEGM(p)     { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
-#define EXECSEGM(p)     { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-#define TSSSEGM(b,p)    { ((b)<<16)|sizeof(Tss),\
+#define DATASEGM(p) { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
+#define EXECSEGM(p) { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
+#define TSSSEGM(b,p) { ((b)<<16)|sizeof(Tss),\
               ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
 /*s: macros other xxxSEGM */
 #define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
@@ -227,7 +227,7 @@ flushmmu(void)
  * Flush a single page mapping from the tlb.
  */
 void
-flushpg(ulong va)
+flushpg(virt_addr va)
 {
     if(X86FAMILY(cpu->cpuidax) >= 4)
         invlpg(va);
@@ -955,7 +955,7 @@ kunmap(KMap *k)
 #define fasttmp 1
 
 /*s: function tmpmap */
-void*
+virt_addr3
 tmpmap(Page *p)
 {
     ulong i;
@@ -982,13 +982,13 @@ tmpmap(Page *p)
         panic("tmpmap: already mapped entry=%#.8lux", *entry);
     *entry = p->pa|PTEWRITE|PTEVALID;
     flushpg(TMPADDR);
-    return (void*)TMPADDR;
+    return (virt_addr3)TMPADDR;
 }
 /*e: function tmpmap */
 
 /*s: function tmpunmap */
 void
-tmpunmap(void *v)
+tmpunmap(virt_addr3 v)
 {
     ulong *entry;
     
@@ -1011,7 +1011,6 @@ tmpunmap(void *v)
  * These could go back to being macros once the kernel is debugged,
  * but the extra checking is nice to have.
  */
-//todo: should return a kern_addr
 kern_addr3
 kaddr(phys_addr pa)
 {
@@ -1022,7 +1021,7 @@ kaddr(phys_addr pa)
 /*e: function kaddr */
 
 /*s: function paddr */
-kern_addr
+phys_addr
 paddr(kern_addr3 v)
 {
     kern_addr va;

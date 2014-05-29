@@ -380,7 +380,7 @@ envwriteable(Chan *c)
  *  to let the kernel set environment variables
  */
 void
-ksetenv(char *ename, char *eval, int conf)
+ksetenv(char *ename, char *eval, bool conf)
 {
     Chan *c;
     char buf[2*KNAMELEN];
