@@ -158,7 +158,7 @@ void  mfence(void);
 #define mmuflushtlb(pdb) putcr3(pdb)
 /*e: function mmuflushtlb */
 void  mmuinit(void);
-ulong*  mmuwalk(ulong*, ulong, int, int);
+ulong*  mmuwalk(ulong*, ulong, int, bool);
 int mtrr(uvlong, uvlong, char *);
 void  mtrrclock(void);
 int mtrrprint(char *, long);

@@ -55,7 +55,8 @@ struct ArchCpu {
     // array<Segdesc>
     Segdesc *gdt;     /* gdt for this processor */
     /*x: [[Cpu]] [[Arch]] other fields */
-    kern_addr2  pdb;      /* page directory base for this processor (va) */
+    ulong*  pdb;      /* page directory base for this processor (va) */
+    /*x: [[Cpu]] [[Arch]] other fields */
     Page* pdbpool;
     int pdbcnt;
     /*x: [[Cpu]] [[Arch]] other fields */

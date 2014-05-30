@@ -13,6 +13,8 @@ struct ArchProcMMU
 {
   /*s: [[Proc]] [[Arch]] memory fields */
   Page* mmupdb;     /* page directory base */
+  /*x: [[Proc]] [[Arch]] memory fields */
+  // type? list<ref<?? > >
   Page* mmufree;    /* unused page table pages */
   Page* mmuused;    /* used page table pages */
   /*x: [[Proc]] [[Arch]] memory fields */

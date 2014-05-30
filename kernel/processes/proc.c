@@ -1538,10 +1538,10 @@ procflushseg(Segment *s)
             continue;
         for(ns = 0; ns < NSEG; ns++)
             if(p->seg[ns] == s){
-                p->newtlb = 1;
+                p->newtlb = true;
                 for(nm = 0; nm < conf.ncpu; nm++){
                     if(CPUS(nm)->proc == p){
-                        CPUS(nm)->flushmmu = 1;
+                        CPUS(nm)->flushmmu = true;
                         nwait++;
                     }
                 }

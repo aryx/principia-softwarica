@@ -106,8 +106,7 @@ mmuinit(void)
 
     didmmuinit = true;
 
-    if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n",
-        VPT, vpd, KMAP);
+    if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n", VPT, vpd, KMAP);
 
     memglobal();
     cpu->pdb[PDX(VPT)] = PADDR(cpu->pdb)|PTEWRITE|PTEVALID;
@@ -127,6 +126,8 @@ mmuinit(void)
      * than Intels in this regard).  Under VMware it pays off
      * a factor of about 10 to 100.
      */
+     // so now cpu->gdt is a pointer to another page (CPU0GDT <> CPUADDR)
+     // but why it was slowing down things to have both data in same page?
 
     // we already did that in mmuinit0, but mmuinit is also called by
     // the other processors which don't call mmuinit0 and which have
@@ -150,7 +151,7 @@ mmuinit(void)
 
     /* make kernel text unwritable */
     for(x = KTZERO; x < (ulong)etext; x += BY2PG){
-        p = mmuwalk(cpu->pdb, x, 2, 0);
+        p = mmuwalk(cpu->pdb, x, 2, false);
         if(p == nil)
             panic("mmuinit");
         *p &= ~PTEWRITE;
@@ -251,9 +252,9 @@ mmupdballoc(void)
 
     s = splhi();
     cpu->pdballoc++;
-    if(cpu->pdbpool == 0){
+    if(cpu->pdbpool == nil){
         spllo();
-        page = newpage(0, 0, 0);
+        page = newpage(false, nil, nilptr);
         page->va = (ulong)vpd;
         splhi();
         pdb = tmpmap(page);
@@ -273,17 +274,17 @@ mmupdballoc(void)
 /*s: function mmupdbfree */
 //@Scheck: not dead
 static void
-mmupdbfree(Proc *proc, Page *p)
+mmupdbfree(Proc *proc, Page *page)
 {
     if(islo())
         panic("mmupdbfree: islo");
     cpu->pdbfree++;
-    if(cpu->pdbcnt >= 10){
-        p->next = proc->mmufree;
-        proc->mmufree = p;
+    if(cpu->pdbcnt >= 10){ // 10???
+        page->next = proc->mmufree;
+        proc->mmufree = page;
     }else{
-        p->next = cpu->pdbpool;
-        cpu->pdbpool = p;
+        page->next = cpu->pdbpool;
+        cpu->pdbpool = page;
         cpu->pdbcnt++;
     }
 }
@@ -304,7 +305,8 @@ mmuptefree(Proc* proc)
     Page **last, *page;
 
     if(proc->mmupdb == nil || proc->mmuused == nil)
-        return;
+        return; // panic? bug to be called with that?
+
     s = splhi();
     pdb = tmpmap(proc->mmupdb);
     last = &proc->mmuused;
@@ -316,7 +318,7 @@ mmuptefree(Proc* proc)
     splx(s);
     *last = proc->mmufree;
     proc->mmufree = proc->mmuused;
-    proc->mmuused = 0;
+    proc->mmuused = nil;
 }
 /*e: function mmuptefree */
 
@@ -352,6 +354,7 @@ mmuswitch(Proc* proc)
         pdb = tmpmap(proc->mmupdb);
         pdb[PDX(CPUADDR)] = cpu->pdb[PDX(CPUADDR)];
         tmpunmap(pdb);
+
         taskswitch(proc->mmupdb->pa, (ulong)(proc->kstack+KSTACK));
     }else
         taskswitch(PADDR(cpu->pdb), (ulong)(proc->kstack+KSTACK));
@@ -380,6 +383,8 @@ mmurelease(Proc* proc)
     if(islo())
         panic("mmurelease: islo");
     taskswitch(PADDR(cpu->pdb), (ulong)cpu + BY2PG);
+
+
     if(proc->kmaptable){
         if(proc->mmupdb == nil)
             panic("mmurelease: no mmupdb");
@@ -400,12 +405,14 @@ mmurelease(Proc* proc)
          * move kmaptable to free list.
          */
         pagechainhead(proc->kmaptable);
-        proc->kmaptable = 0;
+        proc->kmaptable = nil;
     }
+
+
     if(proc->mmupdb){
         mmuptefree(proc);
         mmupdbfree(proc, proc->mmupdb);
-        proc->mmupdb = 0;
+        proc->mmupdb = nil;
     }
     for(page = proc->mmufree; page; page = next){
         next = page->next;
@@ -415,7 +422,7 @@ mmurelease(Proc* proc)
     }
     if(proc->mmufree && palloc.freememr.p)
         wakeup(&palloc.freememr);
-    proc->mmufree = 0;
+    proc->mmufree = nil;
 }
 /*e: function mmurelease */
 
@@ -450,7 +457,7 @@ upallocpdb(void)
     pdb[PDX(CPUADDR)] = cpu->pdb[PDX(CPUADDR)];
     tmpunmap(pdb);
     up->mmupdb = page;
-    putcr3(up->mmupdb->pa);
+    putcr3(up->mmupdb->pa); //!!!!
     splx(s);
 }
 /*e: function upallocpdb */
@@ -518,7 +525,7 @@ putmmu(ulong va, ulong pa, Page*)
 void
 checkmmu(ulong va, ulong pa)
 {
-    if(up->mmupdb == 0)
+    if(up->mmupdb == nil)
         return;
     if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
         return;
@@ -540,23 +547,20 @@ checkmmu(ulong va, ulong pa)
  * so it's okay to use KADDR to look at the tables.
  */
 ulong*
-mmuwalk(ulong* pdb, ulong va, int level, int create)
+mmuwalk(ulong* pdb, virt_addr va, int level, bool create)
 {
     ulong *table;
     void *map;
 
     table = &pdb[PDX(va)];
-    if(!(*table & PTEVALID) && create == 0)
+    if(!(*table & PTEVALID) && create == false)
         return nil;
 
     switch(level){
-
     default:
-        return nil;
-
+        return nil; //todo: panic? invalid value no?
     case 1:
         return table;
-
     case 2:
         if(*table & PTESIZE)
             panic("mmuwalk2: va %luX entry %luX", va, *table);
@@ -569,12 +573,12 @@ mmuwalk(ulong* pdb, ulong va, int level, int create)
             if(didmmuinit)
                 map = xspanalloc(BY2PG, BY2PG, 0);
             else
-                map = rampage();
+                map = rampage();  //todo: can happen?
             if(map == nil)
                 panic("mmuwalk xspanalloc failed");
             *table = PADDR(map)|PTEWRITE|PTEVALID;
         }
-        table = KADDR(PPN(*table));
+        table = KADDR(PPN(*table)); //todo: use page here? s/table/pte?
         return &table[PTX(va)];
     }
 }
@@ -782,7 +786,7 @@ pdbmap(ulong *pdb, ulong pa, ulong va, int size)
             *table = (pa+off)|flag|PTESIZE|PTEVALID;
             pgsz = 4*MB;
         }else{
-            pte = mmuwalk(pdb, va+off, 2, 1);
+            pte = mmuwalk(pdb, va+off, 2, true);
             if(*pte&PTEVALID)
                 panic("vmap: va=%#.8lux pa=%#.8lux pte=%#.8lux",
                     va+off, pa+off, *pte);
@@ -967,6 +971,8 @@ tmpmap(Page *p)
     if(fasttmp && p->pa < -KZERO)
         return KADDR(p->pa);
 
+
+
     /*
      * PDX(TMPADDR) == PDX(CPUADDR), so this
      * entry is private to the processor and shared 
@@ -998,6 +1004,7 @@ tmpunmap(virt_addr3 v)
         return;
     if(v != (void*)TMPADDR)
         panic("tmpunmap: bad address");
+
     entry = &vpt[VPTX(TMPADDR)];
     if(!(*entry&PTEVALID) || PPN(*entry) == PPN(PADDR(TMPADDR)))
         panic("tmpmap: not mapped entry=%#.8lux", *entry);

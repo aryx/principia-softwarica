@@ -456,7 +456,7 @@ mpstartap(Apic* apic)
     memmove(pdb, cpu0->pdb, BY2PG);
     p += BY2PG;
 
-    if((pte = mmuwalk(pdb, CPUADDR, 1, 0)) == nil)
+    if((pte = mmuwalk(pdb, CPUADDR, 1, false)) == nil)
         return;
     memmove(p, KADDR(PPN(*pte)), BY2PG);
     *pte = PADDR(p)|PTEWRITE|PTEVALID;
@@ -465,7 +465,7 @@ mpstartap(Apic* apic)
     p += BY2PG;
 
     mach = (Cpu*)p;
-    if((pte = mmuwalk(pdb, CPUADDR, 2, 0)) == nil)
+    if((pte = mmuwalk(pdb, CPUADDR, 2, false)) == nil)
         return;
     *pte = PADDR(mach)|PTEWRITE|PTEVALID;
     if(cpu0->havepge)

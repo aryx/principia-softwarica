@@ -847,11 +847,11 @@ meminit(void)
      * then scan for useful memory.
      */
     for(pa = 0xA0000; pa < 0xC0000; pa += BY2PG){
-        pte = mmuwalk(cpu->pdb, (ulong)KADDR(pa), 2, 0);
+        pte = mmuwalk(cpu->pdb, (ulong)KADDR(pa), 2, false);
         *pte |= PTEWT;
     }
     for(pa = 0xC0000; pa < 0x100000; pa += BY2PG){
-        pte = mmuwalk(cpu->pdb, (ulong)KADDR(pa), 2, 0);
+        pte = mmuwalk(cpu->pdb, (ulong)KADDR(pa), 2, false);
         *pte |= PTEUNCACHED;
     }
     mmuflushtlb(PADDR(cpu->pdb));

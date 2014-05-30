@@ -23,6 +23,7 @@ enum modref
 enum cachectl
 {
     PG_NOFLUSH  = 0,
+
     PG_TXTFLUSH = 1,    /* flush dcache and invalidate icache */
     PG_NEWCOL = 3,    /* page has been recolored */
 };
