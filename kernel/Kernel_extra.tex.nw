@@ -1426,6 +1426,8 @@ STAGESIZE = 2048, // default is 64
 #define HOWMANY(x, y) (((x)+((y)-1))/(y))
 #define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
 #define ROUND(s, sz)  (((s)+(sz-1))&~(sz-1))
+// ex: ROUND(??, ??) = ??
+
 // BY2PG is defined in mem.h, which should always be included before "dat.h"!
 #define PGROUND(s)  ROUNDUP(s, BY2PG)
 @
@@ -4159,6 +4161,7 @@ extern void boot(int, char **);
  */
 #define PDO(a)          (((((a))>>22) & 0x03FF)<<2)
 #define PTO(a)          (((((a))>>12) & 0x03FF)<<2)
+% <<2 because each PDE or PTE is 4 bytes.
 
 //*****************************************************************************
 // Entry point!! (after jump from l_multiboot.s)
@@ -5341,10 +5344,15 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 /* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
 @
 
-
 <<[[gdt]] other elements>>=
 [KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
 @
+
+
+
+
+
+
 
 <<mem.h>>=
 /*
@@ -5388,19 +5396,11 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 // 0x1000 = 4Ko (1 page)
 // 0x10000 = 64Ko
 // 0x100000 = 1Mo
+// 0x1000000 = 256Mo
 // note: graphic card memory is at 0xb8000 so safer to go to 1Mo for kernel
 
 <<constant KZERO>>
 <<constant KTZERO>>
-
-#define VPTSIZE   BY2XPG
-#define VPT   (KZERO-VPTSIZE)
-#define NVPT    (VPTSIZE/BY2WD)
-
-#define KMAPSIZE  BY2XPG
-#define KMAP    (VPT-KMAPSIZE)
-#define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
-#define VMAP    (KMAP-VMAPSIZE)
 
 <<constant UZERO>>
 <<constant UTZERO>>
@@ -5411,10 +5411,23 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 #define TSTKTOP   (USTKTOP-USTKSIZE)  /* end of new stack in sysexec */
 #define TSTKSIZ   100     /* pages in new stack; limits exec args */
 
+<<constant MAXKPA>>
+
+
+#define VPTSIZE   BY2XPG
+#define VPT   (KZERO-VPTSIZE)
+#define NVPT    (VPTSIZE/BY2WD)
+
+#define KMAPSIZE  BY2XPG
+#define KMAP    (VPT-KMAPSIZE)
+#define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
+#define VMAP    (KMAP-VMAPSIZE)
+
 /*
  * Fundamental addresses - bottom 64kB saved for return to real mode
  */
 #define CONFADDR  (KZERO+0x1200)    /* info passed from boot loader */
+
 #define TMPADDR   (KZERO+0x2000)    /* used for temporary mappings */
 #define APBOOTSTRAP (KZERO+0x3000)    /* AP bootstrap code */
 #define RMUADDR   (KZERO+0x7C00)    /* real mode Ureg */
@@ -5433,6 +5446,7 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 #define CPUSIZE  BY2PG
 
 #define CPU0PTE1  (KZERO+0x17000)   /* bootstrap processor PTE's for 4MB-8MB */
+% needed?
 
 #define CPU0END   (CPU0PTE1+BY2PG)
 
@@ -5463,6 +5477,7 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 <<constant PTEPERTAB>>
 <<constant SEGMAPSIZE>>
 <<constant SSEGMAPSIZE>>
+
 #define PPN(x)    ((x)&~(BY2PG-1))
 
 <<constant PTExxx>>
@@ -5473,6 +5488,7 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
  */
 #define PDX(va)   ((((virt_addr)(va))>>22) & 0x03FF)
 #define PTX(va)   ((((virt_addr)(va))>>12) & 0x03FF)
+// 0x03FF = 1023, so 10 bits
 
 #define getpgcolor(a) 0
 
@@ -5919,11 +5935,7 @@ cankaddr(ulong pa)
 /*
  * Temporary one-page mapping used to edit page directories.
  *
- * The fasttmp #define controls whether the code optimizes
- * the case where the page is already mapped in the physical
- * memory window.  
  */
-#define fasttmp 1
 
 <<function tmpmap>>
 
