@@ -54,7 +54,8 @@
 // note: graphic card memory is at 0xb8000 so safer to go to 1Mo for kernel
 
 /*s: constant KZERO */
-#define KZERO   0xF0000000    /* base of kernel address space */
+//coupling: with mkfile KZERO_AND_HEADER
+#define KZERO   0xE0000000    /* base of kernel address space */
 /*e: constant KZERO */
 /*s: constant KTZERO */
 #define KTZERO    (KZERO+0x100000)  /* first address in kernel text */
