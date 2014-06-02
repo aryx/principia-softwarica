@@ -21,6 +21,7 @@
  */
 #define PDO(a)          (((((a))>>22) & 0x03FF)<<2)
 #define PTO(a)          (((((a))>>12) & 0x03FF)<<2)
+// <<2 because each PDE or PTE is 4 bytes.
 
 //*****************************************************************************
 // Entry point!! (after jump from l_multiboot.s)
@@ -38,6 +39,7 @@
  *      a page for the GDT;
  *      virtual and physical pages for mapping the Cpu structure.
  * The remaining PTEs will be allocated later when memory is sized.
+ *
  * An identity mmu map is also needed for the switch to virtual mode.
  * This identity mapping is removed once the MMU is going and the JMP has
  * been made to virtual memory.
@@ -142,6 +144,7 @@ TEXT mode32bit(SB), $0
         MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
         ORL     BX, (AX)
 
+
         MOVL    $PADDR(CPU0PTE), AX             /* first page of page table */
         MOVL    $1024, CX                       /* 1024 pages in 4MB */
 _setpte:
@@ -158,6 +161,7 @@ _setpte1:
         ADDL    $4, AX
         LOOP    _setpte1
 
+
         MOVL    $PADDR(CPU0PTE), AX
         ADDL    $PTO(CPUADDR), AX              /* page table entry offset for CPUADDR */
         MOVL    $PADDR(CPU0CPU), (AX)          /* PTE for Cpu */
@@ -171,7 +175,8 @@ _setpte1:
  */
         MOVL    $PADDR(CPU0PDB), CX             /* load address of page directory */
         MOVL    (PDO(KZERO))(CX), DX            /* double-map KZERO at 0 */
-        MOVL    DX, (PDO(0))(CX)
+        MOVL    DX, (PDO(0))(CX) // needed?? already mapped to 0
+
         MOVL    CX, CR3
         DELAY                                   /* JMP .+2 */
 
@@ -193,7 +198,7 @@ _setpte1:
  * be initialised here.
  */
 TEXT _startpg(SB), $0
-        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */
+        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */ /* Why??? */
         MOVL    CX, CR3                         /* load and flush the mmu */
 
 _clearbss:

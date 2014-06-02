@@ -123,7 +123,7 @@ malloc(ulong size)
 
 /*s: function mallocz */
 void*
-mallocz(ulong size, int clr)
+mallocz(ulong size, bool clr)
 {
     void *v;
 

@@ -239,9 +239,9 @@ flushpg(virt_addr va)
 
 /*s: function mmupdballoc */
 /*
- * Allocate a new page for a page directory. 
+ * Allocate a new page for a page directory.
  * We keep a small cache of pre-initialized
- * page directories in each cpu.
+ * page directories in each cpu (see mmupdbfree).
  */
 static Page*
 mmupdballoc(void)
@@ -258,7 +258,7 @@ mmupdballoc(void)
         page->va = (ulong)vpd;
         splhi();
         pdb = tmpmap(page);
-        memmove(pdb, cpu->pdb, BY2PG);
+        memmove(pdb, cpu->pdb, BY2PG); // prototype
         pdb[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
         tmpunmap(pdb);
     }else{
@@ -279,7 +279,7 @@ mmupdbfree(Proc *proc, Page *page)
     if(islo())
         panic("mmupdbfree: islo");
     cpu->pdbfree++;
-    if(cpu->pdbcnt >= 10){ // 10???
+    if(cpu->pdbcnt >= 10){ // 10??? keep small cache of pdb page, but not too big, don't want to eat too much memory for that.
         page->next = proc->mmufree;
         proc->mmufree = page;
     }else{
@@ -457,7 +457,7 @@ upallocpdb(void)
     pdb[PDX(CPUADDR)] = cpu->pdb[PDX(CPUADDR)];
     tmpunmap(pdb);
     up->mmupdb = page;
-    putcr3(up->mmupdb->pa); //!!!!
+    putcr3(up->mmupdb->pa); //!!!! bootstrap! putcr3 take a PA of course
     splx(s);
 }
 /*e: function upallocpdb */
@@ -467,7 +467,7 @@ upallocpdb(void)
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
  */
 void
-putmmu(ulong va, ulong pa, Page*)
+putmmu(virt_addr va, phys_addr pa, Page*)
 {
     int old, s;
     Page *page;
@@ -491,9 +491,9 @@ putmmu(ulong va, ulong pa, Page*)
     
     s = splhi();
     if(!(vpd[PDX(va)]&PTEVALID)){
-        if(up->mmufree == 0){
+        if(up->mmufree == nil){
             spllo();
-            page = newpage(0, 0, 0);
+            page = newpage(false, nil, nilptr);
             splhi();
         }
         else{
@@ -952,11 +952,7 @@ kunmap(KMap *k)
 /*
  * Temporary one-page mapping used to edit page directories.
  *
- * The fasttmp #define controls whether the code optimizes
- * the case where the page is already mapped in the physical
- * memory window.  
  */
-#define fasttmp 1
 
 /*s: function tmpmap */
 virt_addr3
@@ -968,7 +964,7 @@ tmpmap(Page *p)
     if(islo())
         panic("tmpaddr: islo");
 
-    if(fasttmp && p->pa < -KZERO)
+    if(p->pa < MAXKPA)
         return KADDR(p->pa);
 
 
@@ -1000,7 +996,7 @@ tmpunmap(virt_addr3 v)
     
     if(islo())
         panic("tmpaddr: islo");
-    if(fasttmp && (ulong)v >= KZERO && v != (void*)TMPADDR)
+    if((ulong)v >= KZERO && v != (void*)TMPADDR)
         return;
     if(v != (void*)TMPADDR)
         panic("tmpunmap: bad address");
@@ -1021,7 +1017,7 @@ tmpunmap(virt_addr3 v)
 kern_addr3
 kaddr(phys_addr pa)
 {
-    if(pa > (ulong)-KZERO)
+    if(pa > MAXKPA)
         panic("kaddr: pa=%#.8lux", pa);
     return (kern_addr3)(pa+KZERO);
 }

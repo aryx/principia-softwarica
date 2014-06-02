@@ -97,6 +97,8 @@ typedef void* kern_addr3;
 #define HOWMANY(x, y) (((x)+((y)-1))/(y))
 #define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
 #define ROUND(s, sz)  (((s)+(sz-1))&~(sz-1))
+// ex: ROUND(??, ??) = ??
+
 // BY2PG is defined in mem.h, which should always be included before "dat.h"!
 #define PGROUND(s)  ROUNDUP(s, BY2PG)
 /*e: portdat.h macros */

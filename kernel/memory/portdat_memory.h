@@ -40,6 +40,7 @@ struct Page
   
     // option<ref<Kimage>>
     KImage  *image;     /* Associated text or swap image */
+    // I think this is also abused to store PDX ???
     ulong daddr;      /* Disc address on swap */
     ulong gen;      /* Generation counter for swap */
   
@@ -48,6 +49,7 @@ struct Page
     ushort  ref;      /* Reference count */
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
+
     // enum<cachectl>??
     char  color;      /* Cache coloring */
     // array<enum<cachectl>>
@@ -55,7 +57,7 @@ struct Page
 
     // extra
     Lock;
-    // list<ref<Page>> Palloc.head
+    // list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
     Page  *next; /* Lru free list */ 
     // list<ref<Page>> Palloc.tail
     Page  *prev; 
@@ -166,11 +168,11 @@ struct Segment
     ulong size;   /* size in pages */ // top - base / BY2PG?
   
     // Kind of a page directory table (and pte = page table)
-    // max is SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per seg!
-    // array<option<ref<Pte>>>, smalloc'ed, point to ssegmap if small enough
+    // map is SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per seg!
+    // array<option<ref_own<Pte>>>, smalloc'ed, point to ssegmap if small enough
     Pte **map; 
     // small seg map, used instead of map if segment small enough
-    // array<ref<Pte>>
+    // array<ref_own<Pte>>
     Pte *ssegmap[SSEGMAPSIZE]; // 16
     int mapsize; // nelem(map)
   

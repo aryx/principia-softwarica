@@ -94,7 +94,7 @@ newseg(int type, virt_addr base, ulong size)
     if(mapsize > nelem(s->ssegmap)){
         mapsize *= 2;
         if(mapsize > (SEGMAPSIZE*PTEPERTAB))
-            mapsize = (SEGMAPSIZE*PTEPERTAB);
+            mapsize = (SEGMAPSIZE*PTEPERTAB); // Really? not SEGMAPSIZE MAX?
         s->map = smalloc(mapsize*sizeof(Pte*));
         s->mapsize = mapsize;
     }

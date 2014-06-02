@@ -438,7 +438,7 @@ struct Proc
 // Memory
 //--------------------------------------------------------------------
     /*s: [[Proc]] memory fields */
-    // hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
+    // hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed? ref_counted?
     Segment *seg[NSEG];
     QLock seglock;  /* locked whenever seg[] changes */
     /*x: [[Proc]] memory fields */

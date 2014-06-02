@@ -698,10 +698,10 @@ fault386(Ureg* ureg, void*)
     int n; // ret_code
     char buf[ERRMAX];
 
-    addr = getcr2();
+    addr = getcr2(); // faulting va
     read = !(ureg->ecode & 2);
-
     user = (ureg->cs & 0xFFFF) == UESEL;
+
     if(!user){
         if(vmapsync(addr))
             return;

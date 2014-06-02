@@ -32,7 +32,7 @@ _allocb(int size)
     Block *b;
     ulong addr;
 
-    if((b = mallocz(sizeof(Block)+size+Hdrspc, 0)) == nil)
+    if((b = mallocz(sizeof(Block)+size+Hdrspc, false)) == nil)
         return nil;
 
     b->next = nil;

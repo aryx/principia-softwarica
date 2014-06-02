@@ -51,6 +51,7 @@
 // 0x1000 = 4Ko (1 page)
 // 0x10000 = 64Ko
 // 0x100000 = 1Mo
+// 0x1000000 = 256Mo
 // note: graphic card memory is at 0xb8000 so safer to go to 1Mo for kernel
 
 /*s: constant KZERO */
@@ -60,15 +61,6 @@
 /*s: constant KTZERO */
 #define KTZERO    (KZERO+0x100000)  /* first address in kernel text */
 /*e: constant KTZERO */
-
-#define VPTSIZE   BY2XPG
-#define VPT   (KZERO-VPTSIZE)
-#define NVPT    (VPTSIZE/BY2WD)
-
-#define KMAPSIZE  BY2XPG
-#define KMAP    (VPT-KMAPSIZE)
-#define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
-#define VMAP    (KMAP-VMAPSIZE)
 
 /*s: constant UZERO */
 #define UZERO   0     /* base of user address space */
@@ -83,10 +75,26 @@
 #define TSTKTOP   (USTKTOP-USTKSIZE)  /* end of new stack in sysexec */
 #define TSTKSIZ   100     /* pages in new stack; limits exec args */
 
+/*s: constant MAXKPA */
+// -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic
+#define MAXKPA (ulong)(-KZERO)
+/*e: constant MAXKPA */
+
+
+#define VPTSIZE   BY2XPG
+#define VPT   (KZERO-VPTSIZE)
+#define NVPT    (VPTSIZE/BY2WD)
+
+#define KMAPSIZE  BY2XPG
+#define KMAP    (VPT-KMAPSIZE)
+#define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
+#define VMAP    (KMAP-VMAPSIZE)
+
 /*
  * Fundamental addresses - bottom 64kB saved for return to real mode
  */
 #define CONFADDR  (KZERO+0x1200)    /* info passed from boot loader */
+
 #define TMPADDR   (KZERO+0x2000)    /* used for temporary mappings */
 #define APBOOTSTRAP (KZERO+0x3000)    /* AP bootstrap code */
 #define RMUADDR   (KZERO+0x7C00)    /* real mode Ureg */
@@ -107,6 +115,7 @@
 #define CPUSIZE  BY2PG
 
 #define CPU0PTE1  (KZERO+0x17000)   /* bootstrap processor PTE's for 4MB-8MB */
+// needed?
 
 #define CPU0END   (CPU0PTE1+BY2PG)
 
@@ -204,6 +213,7 @@
 /*s: constant SSEGMAPSIZE */
 #define SSEGMAPSIZE 16 // small segmap
 /*e: constant SSEGMAPSIZE */
+
 #define PPN(x)    ((x)&~(BY2PG-1))
 
 /*s: constant PTExxx */
@@ -230,6 +240,7 @@
  */
 #define PDX(va)   ((((virt_addr)(va))>>22) & 0x03FF)
 #define PTX(va)   ((((virt_addr)(va))>>12) & 0x03FF)
+// 0x03FF = 1023, so 10 bits
 
 #define getpgcolor(a) 0
 
