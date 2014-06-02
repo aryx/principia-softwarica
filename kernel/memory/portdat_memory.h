@@ -3,7 +3,7 @@
 // see also KMap in 386/ (but used in port)
 
 //*****************************************************************************
-// Page < Pte (can be filled by KImage) < Segment
+// Page < Pagetable (can be filled by KImage) < Segment
 //*****************************************************************************
 
 // All the ref<Page> here are references to Pages in the array<Page> of 
@@ -67,20 +67,20 @@ struct Page
 };
 /*e: struct Page */
 
-/*s: struct Pte */
+/*s: struct Pagetable */
 // ptealloc'ed (malloc'ed)
-struct Pte
+struct Pagetable
 {
     //array<option<ref<Page>> will map 1M of memory
     Page  *pages[PTEPERTAB];  /* Page map for this chunk of pte */
   
     //to avoid iterate over all pages
-    // ref<ref<Page>> in Pte.pages
+    // ref<ref<Page>> in Pagetable.pages
     Page  **first;    /* First used entry */
-    // ref<ref<Page>> in Pte.pages
+    // ref<ref<Page>> in Pagetable.pages
     Page  **last;     /* Last used entry */
 };
-/*e: struct Pte */
+/*e: struct Pagetable */
 
 
 /*s: struct KImage */
@@ -169,11 +169,11 @@ struct Segment
   
     // Kind of a page directory table (and pte = page table)
     // map is SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per seg!
-    // array<option<ref_own<Pte>>>, smalloc'ed, point to ssegmap if small enough
-    Pte **map; 
+    // array<option<ref_own<Pagetable>>>, smalloc'ed, point to ssegmap if small enough
+    Pagetable **map; 
     // small seg map, used instead of map if segment small enough
-    // array<ref_own<Pte>>
-    Pte *ssegmap[SSEGMAPSIZE]; // 16
+    // array<ref_own<Pagetable>>
+    Pagetable *ssegmap[SSEGMAPSIZE]; // 16
     int mapsize; // nelem(map)
   
     KImage  *image;   /* text in file attached to this segment */

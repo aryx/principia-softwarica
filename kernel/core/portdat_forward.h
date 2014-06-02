@@ -31,7 +31,7 @@ typedef struct PhysUart PhysUart;
 typedef struct Pgrp Pgrp;
 typedef struct Physseg  Physseg;
 typedef struct Proc Proc;
-typedef struct Pte  Pte;
+typedef struct Pagetable  Pagetable;
 typedef struct KQLock QLock;
 typedef struct Queue  Queue;
 typedef struct Ref  Ref;

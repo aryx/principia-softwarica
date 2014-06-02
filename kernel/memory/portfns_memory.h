@@ -34,9 +34,9 @@ void    copypage(Page*, Page*); //TODO: why fp no-deps in codegraph?
 void cachepage(Page *p, KImage *i);
 void    uncachepage(Page*);
 void    cachedel(KImage*, ulong);
-Pte*    ptealloc(void);
-Pte*    ptecpy(Pte*);
-void    freepte(Segment*, Pte*);
+Pagetable*    ptealloc(void);
+Pagetable*    ptecpy(Pagetable*);
+void    freepte(Segment*, Pagetable*);
 ulong pagenumber(Page*);
 Page*   lookpage(KImage*, ulong);
 void    putpage(Page*);

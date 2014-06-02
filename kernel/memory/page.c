@@ -518,10 +518,10 @@ lookpage(KImage *i, ulong daddr)
 /*e: function lookpage */
 
 /*s: function ptecpy */
-Pte*
-ptecpy(Pte *old)
+Pagetable*
+ptecpy(Pagetable *old)
 {
-    Pte *new;
+    Pagetable *new;
     Page **src, **dst;
 
     new = ptealloc();
@@ -545,12 +545,12 @@ ptecpy(Pte *old)
 /*e: function ptecpy */
 
 /*s: constructor ptealloc */
-Pte*
+Pagetable*
 ptealloc(void)
 {
-    Pte *new;
+    Pagetable *new;
 
-    new = smalloc(sizeof(Pte));
+    new = smalloc(sizeof(Pagetable));
     new->first = &new->pages[PTEPERTAB];
     new->last = new->pages;
     return new;
@@ -559,7 +559,7 @@ ptealloc(void)
 
 /*s: destructor freepte */
 void
-freepte(Segment *s, Pte *p)
+freepte(Segment *s, Pagetable *p)
 {
     int ref;
     void (*fn)(Page*);
@@ -658,7 +658,7 @@ portcountpagerefs(ulong *ref, int print)
     ulong i, j, k, ns, n;
     Page **pg, *entry;
     Proc *p;
-    Pte *pte;
+    Pagetable *pte;
     Segment *s;
 
     /*

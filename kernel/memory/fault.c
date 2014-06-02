@@ -81,7 +81,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 {
     int type;
     int ref;
-    Pte **p, *etp;
+    Pagetable **p, *etp;
     ulong mmuphys=0;
     ulong soff;
     Page **pg, *lkp, *new;
@@ -401,7 +401,7 @@ checkpages(void)
 {
     int checked;
     ulong addr, off;
-    Pte *p;
+    Pagetable *p;
     Page *pg;
     Segment **sp, **ep, *s;
     

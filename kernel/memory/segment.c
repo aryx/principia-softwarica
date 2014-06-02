@@ -95,7 +95,7 @@ newseg(int type, virt_addr base, ulong size)
         mapsize *= 2;
         if(mapsize > (SEGMAPSIZE*PTEPERTAB))
             mapsize = (SEGMAPSIZE*PTEPERTAB); // Really? not SEGMAPSIZE MAX?
-        s->map = smalloc(mapsize*sizeof(Pte*));
+        s->map = smalloc(mapsize*sizeof(Pagetable*));
         s->mapsize = mapsize;
     }
     else{
@@ -111,7 +111,7 @@ newseg(int type, virt_addr base, ulong size)
 void
 putseg(Segment *s)
 {
-    Pte **pp, **emap;
+    Pagetable **pp, **emap;
     KImage *i;
 
     if(s == nil)
@@ -158,7 +158,7 @@ void
 relocateseg(Segment *s, ulong offset)
 {
     Page **pg, *x;
-    Pte *pte, **p, **endpte;
+    Pagetable *pte, **p, **endpte;
 
     endpte = &s->map[s->mapsize];
     for(p = s->map; p < endpte; p++) {
@@ -178,7 +178,7 @@ Segment*
 dupseg(Segment **seg, int segno, bool share)
 {
     int i, size;
-    Pte *pte;
+    Pagetable *pte;
     Segment *n, *s;
 
     SET(n); //????
@@ -247,7 +247,7 @@ sameseg:
 void
 segpage(Segment *s, Page *p)
 {
-    Pte **pte;
+    Pagetable **pte;
     ulong off;
     Page **pg;
 
@@ -481,7 +481,7 @@ ibrk(ulong addr, int seg)
     Segment *s, *ns;
     ulong newtop, newsize;
     int i, mapsize;
-    Pte **map;
+    Pagetable **map;
 
     s = up->seg[seg];
     if(s == 0)
@@ -537,8 +537,8 @@ ibrk(ulong addr, int seg)
     }
     mapsize = ROUND(newsize, PTEPERTAB)/PTEPERTAB;
     if(mapsize > s->mapsize){
-        map = smalloc(mapsize*sizeof(Pte*));
-        memmove(map, s->map, s->mapsize*sizeof(Pte*));
+        map = smalloc(mapsize*sizeof(Pagetable*));
+        memmove(map, s->map, s->mapsize*sizeof(Pagetable*));
         if(s->map != s->ssegmap)
             free(s->map);
         s->map = map;

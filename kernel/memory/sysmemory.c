@@ -14,7 +14,7 @@
 
 /*s: function pteflush */
 void
-pteflush(Pte *pte, int s, int e)
+pteflush(Pagetable *pte, int s, int e)
 {
     int i;
     Page *p;
@@ -33,7 +33,7 @@ syssegflush(ulong *arg)
 {
     Segment *s;
     ulong addr, l;
-    Pte *pte;
+    Pagetable *pte;
     int chunk, ps, pe, len;
 
     addr = arg[0];

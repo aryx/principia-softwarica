@@ -216,7 +216,7 @@ pageout(Proc *p, Segment *s)
 {
     int type, i, size;
     ulong age;
-    Pte *l;
+    Pagetable *l;
     Page **pg, *entry;
 
     if(!canqlock(&s->lk))   /* We cannot afford to wait, we will surely deadlock */

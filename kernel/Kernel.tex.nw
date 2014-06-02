@@ -3437,11 +3437,11 @@ struct Segment
   
     // Kind of a page directory table (and pte = page table)
     // map is SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per seg!
-    // array<option<ref_own<Pte>>>, smalloc'ed, point to ssegmap if small enough
-    Pte **map; 
+    // array<option<ref_own<Pagetable>>>, smalloc'ed, point to ssegmap if small enough
+    Pagetable **map; 
     // small seg map, used instead of map if segment small enough
-    // array<ref_own<Pte>>
-    Pte *ssegmap[SSEGMAPSIZE]; // 16
+    // array<ref_own<Pagetable>>
+    Pagetable *ssegmap[SSEGMAPSIZE]; // 16
     int mapsize; // nelem(map)
   
     KImage  *image;   /* text in file attached to this segment */
@@ -3477,17 +3477,17 @@ struct Segment
 
 
 
-<<struct Pte>>=
+<<struct Pagetable>>=
 // ptealloc'ed (malloc'ed)
-struct Pte
+struct Pagetable
 {
     //array<option<ref<Page>> will map 1M of memory
     Page  *pages[PTEPERTAB];  /* Page map for this chunk of pte */
   
     //to avoid iterate over all pages
-    // ref<ref<Page>> in Pte.pages
+    // ref<ref<Page>> in Pagetable.pages
     Page  **first;    /* First used entry */
-    // ref<ref<Page>> in Pte.pages
+    // ref<ref<Page>> in Pagetable.pages
     Page  **last;     /* Last used entry */
 };
 @
@@ -3501,7 +3501,7 @@ struct Pte
 <<constant PTEPERTAB>>=
 #define PTEPERTAB (PTEMAPMEM/BY2PG)
 @
-% = 256. Each Pte have PageInfo *pages[256]; so 256 pointers
+% = 256. Each Pagetable have PageInfo *pages[256]; so 256 pointers
 % to PageInfo. each PageInfo speak about a page of 4Ko. so
 % with 256 PageInfo you can speak about 256 * 4096 = 1M of memory.
 % then later will have a segment that can have 1984 Pt,
@@ -3510,12 +3510,12 @@ struct Pte
 
 
 <<constructor ptealloc>>=
-Pte*
+Pagetable*
 ptealloc(void)
 {
-    Pte *new;
+    Pagetable *new;
 
-    new = smalloc(sizeof(Pte));
+    new = smalloc(sizeof(Pagetable));
     new->first = &new->pages[PTEPERTAB];
     new->last = new->pages;
     return new;
@@ -3524,7 +3524,7 @@ ptealloc(void)
 
 <<destructor freepte>>=
 void
-freepte(Segment *s, Pte *p)
+freepte(Segment *s, Pagetable *p)
 {
     int ref;
     void (*fn)(Page*);
@@ -3567,10 +3567,10 @@ freepte(Segment *s, Pte *p)
 
 
 <<function ptecpy>>=
-Pte*
-ptecpy(Pte *old)
+Pagetable*
+ptecpy(Pagetable *old)
 {
-    Pte *new;
+    Pagetable *new;
     Page **src, **dst;
 
     new = ptealloc();
@@ -3646,7 +3646,7 @@ portcountpagerefs(ulong *ref, int print)
     ulong i, j, k, ns, n;
     Page **pg, *entry;
     Proc *p;
-    Pte *pte;
+    Pagetable *pte;
     Segment *s;
 
     /*
@@ -3742,7 +3742,7 @@ newseg(int type, virt_addr base, ulong size)
         mapsize *= 2;
         if(mapsize > (SEGMAPSIZE*PTEPERTAB))
             mapsize = (SEGMAPSIZE*PTEPERTAB); // Really? not SEGMAPSIZE MAX?
-        s->map = smalloc(mapsize*sizeof(Pte*));
+        s->map = smalloc(mapsize*sizeof(Pagetable*));
         s->mapsize = mapsize;
     }
     else{
@@ -3759,7 +3759,7 @@ newseg(int type, virt_addr base, ulong size)
 void
 putseg(Segment *s)
 {
-    Pte **pp, **emap;
+    Pagetable **pp, **emap;
     KImage *i;
 
     if(s == nil)
@@ -3806,7 +3806,7 @@ putseg(Segment *s)
 void
 segpage(Segment *s, Page *p)
 {
-    Pte **pte;
+    Pagetable **pte;
     ulong off;
     Page **pg;
 
@@ -3966,7 +3966,7 @@ void
 relocateseg(Segment *s, ulong offset)
 {
     Page **pg, *x;
-    Pte *pte, **p, **endpte;
+    Pagetable *pte, **p, **endpte;
 
     endpte = &s->map[s->mapsize];
     for(p = s->map; p < endpte; p++) {
@@ -3987,7 +3987,7 @@ Segment*
 dupseg(Segment **seg, int segno, bool share)
 {
     int i, size;
-    Pte *pte;
+    Pagetable *pte;
     Segment *n, *s;
 
     SET(n); //????
@@ -4453,7 +4453,7 @@ ibrk(ulong addr, int seg)
     Segment *s, *ns;
     ulong newtop, newsize;
     int i, mapsize;
-    Pte **map;
+    Pagetable **map;
 
     s = up->seg[seg];
     if(s == 0)
@@ -4509,8 +4509,8 @@ ibrk(ulong addr, int seg)
     }
     mapsize = ROUND(newsize, PTEPERTAB)/PTEPERTAB;
     if(mapsize > s->mapsize){
-        map = smalloc(mapsize*sizeof(Pte*));
-        memmove(map, s->map, s->mapsize*sizeof(Pte*));
+        map = smalloc(mapsize*sizeof(Pagetable*));
+        memmove(map, s->map, s->mapsize*sizeof(Pagetable*));
         if(s->map != s->ssegmap)
             free(s->map);
         s->map = map;
@@ -7212,7 +7212,7 @@ Segdesc *gdt;     /* gdt for this processor */
 % different pages they use, so will need to empty VPT and
 % reassign based on per-process info?
 
-% sections: MMUPDB section (=~ Segment), MMUPTE section (=~ Pte)
+% sections: MMUPDB section (=~ Segment), MMUPTE section (=~ Pagetable)
 
 % glossary: PTE = page table entry, so spec about one page
 
@@ -7800,7 +7800,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 {
     int type;
     int ref;
-    Pte **p, *etp;
+    Pagetable **p, *etp;
     ulong mmuphys=0;
     ulong soff;
     Page **pg, *lkp, *new;
@@ -7922,7 +7922,7 @@ checkpages(void)
 {
     int checked;
     ulong addr, off;
-    Pte *p;
+    Pagetable *p;
     Page *pg;
     Segment **sp, **ep, *s;
     
@@ -8410,7 +8410,7 @@ pageout(Proc *p, Segment *s)
 {
     int type, i, size;
     ulong age;
-    Pte *l;
+    Pagetable *l;
     Page **pg, *entry;
 
     if(!canqlock(&s->lk))   /* We cannot afford to wait, we will surely deadlock */
@@ -10344,7 +10344,7 @@ _setpte1:
  * be initialised here.
  */
 TEXT _startpg(SB), $0
-        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */ // Why???
+        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */ /* Why??? */
         MOVL    CX, CR3                         /* load and flush the mmu */
 
 _clearbss:
@@ -24355,7 +24355,7 @@ int
 procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
 {
     KMap *k;
-    Pte *pte;
+    Pagetable *pte;
     Page *pg;
     Segment *s;
     ulong soff, l;

@@ -1637,7 +1637,7 @@ int
 procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
 {
     KMap *k;
-    Pte *pte;
+    Pagetable *pte;
     Page *pg;
     Segment *s;
     ulong soff, l;
