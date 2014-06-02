@@ -569,7 +569,7 @@ provides to the user programs.
 % size
 
 %figure: need precise physical map of memory
-%with first empty page?, idtr, gdt, pdb intel, pte intel, 
+%with first empty page?, idt, gdt, pd intel, pt intel, 
 %io RAM, vga ram,  then KZERO header, KTZERO, 
 %code,  data with important globals like xlist, and array holes,
 %palloc with pointer page, and then on top of that confmem area
@@ -599,6 +599,9 @@ typedef uintptr virt_addr;
 // kernel address (mostly physical + KZERO)
 typedef uintptr kern_addr;
 @
+
+% all structure pointers in the code are kernel addresses.
+% e.g. Page*, Segment*, be it in fields or in globals.
 
 \ifallcode
 <<pad memory pointer types>>=
@@ -635,8 +638,14 @@ typedef void* kern_addr3;
 #define UTZERO    (UZERO+BY2PG)   /* first address in user text */
 @
 
+<<constant MAXKPA>>=
+// -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic
+#define MAXKPA (ulong)(-KZERO)
+@
+%    maxkpa = (u32int)-KZERO;    /* 2^32 - KZERO */
+% rename KEND? but it's not really kernel end. KADDREND? MAXKADDR? KADDREND?
 
-% pa must be < MAXKPA, use kaddr to access kernel data.
+% pa must be <= MAXKPA, use kaddr to access kernel data.
 % if want to access different pa, then must use tmpmap or kmap
 <<function kaddr>>=
 /*
@@ -646,15 +655,12 @@ typedef void* kern_addr3;
 kern_addr3
 kaddr(phys_addr pa)
 {
-    if(pa > (ulong)-KZERO)
+    if(pa > MAXKPA)
         panic("kaddr: pa=%#.8lux", pa);
     return (kern_addr3)(pa+KZERO);
 }
 @
 %//todo: should return a kern_addr
-% this -KZERO is ugly, it's because 0xFFFFFFFF-KZERO = 0-KZERO?
-%    maxkpa = (u32int)-KZERO;    /* 2^32 - KZERO */
-%MAXKPA here? or too early
 
 <<function paddr>>=
 phys_addr
@@ -670,7 +676,7 @@ paddr(kern_addr3 v)
 @
 %less: not symetric, phys_addr vs kern_addr3
 
-% why stupid macro? because in other archi can be different
+% why trivial macro? because in other archi can be different
 <<function KADDR>>=
 #define KADDR(pa)  kaddr(pa)
 @
@@ -793,6 +799,7 @@ struct Confmem
 };
 @ 
 % show concrete value for qemu! see C-t C-t m
+% hmmm klimit can overflow and not be a kern_addr?
 
 
 <<globals confname and confvar>>=
@@ -2678,7 +2685,8 @@ setrealloctag(void *v, ulong pc)
 @
 
 
-% sleep malloc, probably can't be called from interrupt code!
+% sleep malloc, probably can't be called from interrupt code! 
+% also memset to 0! so should be called smallocz no?
 <<function smalloc>>=
 // non failing malloc! will repeat until it can
 void*
@@ -2706,7 +2714,7 @@ smalloc(ulong size)
 
 <<function mallocz>>=
 void*
-mallocz(ulong size, int clr)
+mallocz(ulong size, bool clr)
 {
     void *v;
 
@@ -2807,6 +2815,7 @@ struct Page
   
     // option<ref<Kimage>>
     KImage  *image;     /* Associated text or swap image */
+    // I think this is also abused to store PDX ???
     ulong daddr;      /* Disc address on swap */
     ulong gen;      /* Generation counter for swap */
   
@@ -2815,6 +2824,7 @@ struct Page
     ushort  ref;      /* Reference count */
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
+
     // enum<cachectl>??
     char  color;      /* Cache coloring */
     // array<enum<cachectl>>
@@ -2822,7 +2832,7 @@ struct Page
 
     // extra
     Lock;
-    // list<ref<Page>> Palloc.head
+    // list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
     Page  *next; /* Lru free list */ 
     // list<ref<Page>> Palloc.tail
     Page  *prev; 
@@ -2831,6 +2841,14 @@ struct Page
 
 };
 @
+% note that not a Page! some metadata about a Page. It's actually a kind of
+% PTE if compare to the terminology in Intel MMU.
+% rename PageInfo? Pte?
+
+% Kind of a reverse of PTE actually. PTE is here to map
+% a va to a pa. Here it's the reverse, we store given a physical
+% page what is his virtual address (and the pointer to this info
+% is stored in different places).
 
 % put kmap, kunmap here? apparently they are used when copying from
 % one another or doing memset 0. just to get pa -> kern_addr?
@@ -3142,7 +3160,7 @@ auxpage(void)
 
 %\section{page copy?} for copy on write?
 
-% memmove? should be called memcopy no?
+% memmove? should be called memcopy no? also rename f -> src, t -> dst?
 <<function copypage>>=
 void
 copypage(Page *f, Page *t)
@@ -3385,13 +3403,74 @@ lookpage(KImage *i, ulong daddr)
 
 
 
+\section{[[Segment]]}
 
+<<enum segtype>>=
+/* Segment types */
+enum segtype
+{
+    SG_TYPE   = 07,   /* Mask type of segment */
+    SG_TEXT   = 00,
+    SG_DATA   = 01,
+    SG_BSS    = 02,
+    SG_STACK  = 03,
+    SG_SHARED = 04,
+    SG_PHYSICAL = 05,
+  
+    SG_RONLY  = 0040,   /* Segment is read only */
+    SG_CEXEC  = 0100,   /* Detach at exec */
+};
+@
 
+<<struct Segment>>=
+// smalloc'ed by newseg()
+struct Segment
+{
+    // enum<segtype>
+    ushort  type;   /* segment type */
+  
+    virt_addr base;   /* virtual base */
+    virt_addr top;    /* virtual top */
+    ulong size;   /* size in pages */ // top - base / BY2PG?
+  
+    // Kind of a page directory table (and pte = page table)
+    // map is SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per seg!
+    // array<option<ref_own<Pte>>>, smalloc'ed, point to ssegmap if small enough
+    Pte **map; 
+    // small seg map, used instead of map if segment small enough
+    // array<ref_own<Pte>>
+    Pte *ssegmap[SSEGMAPSIZE]; // 16
+    int mapsize; // nelem(map)
+  
+    KImage  *image;   /* text in file attached to this segment */
+    ulong fstart;   /* start address in file for demand load */
+    ulong flen;   /* length of segment in file */
+  
+    bool flushme;  /* maintain icache for this segment */
+    Physseg *pseg;
+    ulong*  profile;  /* Tick profile area */
+    ulong mark;   /* portcountrefs */
+    ushort  steal;    /* Page stealer lock */
+  
+    // extra
+    Ref;
+    QLock lk;
+    Sema  sema;
+};
+@
 
+% Segment act as a kind of VPT, per process, but 
+% archi-independent mostly
 
+% why this size? SEGMAPSIZE*PTEPERTAB = ?
+<<constant SEGMAPSIZE>>=
+#define SEGMAPSIZE  1984
+@
 
-
-
+<<constant SSEGMAPSIZE>>=
+#define SSEGMAPSIZE 16 // small segmap
+@
+%rename SMALLSEGMAPSIZE
 
 
 
@@ -3411,6 +3490,7 @@ struct Pte
 };
 @
 % the pages can be really sparse, but first and last optimize a bit
+% todo: rename Pagetable?
 
 <<constant PTEMAPMEM>>=
 #define PTEMAPMEM (1024*1024) // 1MB
@@ -3419,6 +3499,12 @@ struct Pte
 <<constant PTEPERTAB>>=
 #define PTEPERTAB (PTEMAPMEM/BY2PG)
 @
+% = 256. Each Pte have PageInfo *pages[256]; so 256 pointers
+% to PageInfo. each PageInfo speak about a page of 4Ko. so
+% with 256 PageInfo you can speak about 256 * 4096 = 1M of memory.
+% then later will have a segment that can have 1984 Pt,
+% and each of this Pt have 256 PageInfo so 1984 * 256 * 4096 = 2Go
+% of mapped virtual memory
 
 
 <<constructor ptealloc>>=
@@ -3621,76 +3707,13 @@ portcountpagerefs(ulong *ref, int print)
 
 
 
-\section{[[Segment]]}
-
-<<enum segtype>>=
-/* Segment types */
-enum segtype
-{
-    SG_TYPE   = 07,   /* Mask type of segment */
-    SG_TEXT   = 00,
-    SG_DATA   = 01,
-    SG_BSS    = 02,
-    SG_STACK  = 03,
-    SG_SHARED = 04,
-    SG_PHYSICAL = 05,
-  
-    SG_RONLY  = 0040,   /* Segment is read only */
-    SG_CEXEC  = 0100,   /* Detach at exec */
-};
-@
-
-<<struct Segment>>=
-// smalloc'ed by newseg()
-struct Segment
-{
-    // enum<segtype>
-    ushort  type;   /* segment type */
-  
-    virt_addr base;   /* virtual base */
-    virt_addr top;    /* virtual top */
-    ulong size;   /* size in pages */ // top - base / BY2PG?
-  
-    // Kind of a page directory table (and pte = page table)
-    // max is SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per seg!
-    // array<option<ref<Pte>>>, smalloc'ed, point to ssegmap if small enough
-    Pte **map; 
-    // small seg map, used instead of map if segment small enough
-    // array<ref<Pte>>
-    Pte *ssegmap[SSEGMAPSIZE]; // 16
-    int mapsize; // nelem(map)
-  
-    KImage  *image;   /* text in file attached to this segment */
-    ulong fstart;   /* start address in file for demand load */
-    ulong flen;   /* length of segment in file */
-  
-    bool flushme;  /* maintain icache for this segment */
-    Physseg *pseg;
-    ulong*  profile;  /* Tick profile area */
-    ulong mark;   /* portcountrefs */
-    ushort  steal;    /* Page stealer lock */
-  
-    // extra
-    Ref;
-    QLock lk;
-    Sema  sema;
-};
-@
-
-% Segment act as a kind of VPT, per process, but 
-% archi-independent mostly
-
-% why this size? SEGMAPSIZE*PTEPERTAB = ?
-<<constant SEGMAPSIZE>>=
-#define SEGMAPSIZE  1984
-@
-
-<<constant SSEGMAPSIZE>>=
-#define SSEGMAPSIZE 16 // small segmap
-@
 
 
-% size is in pages. really need dimention types.
+
+
+
+
+% size is in pages. (really need dimention types)
 <<constructor newseg>>=
 Segment *
 newseg(int type, virt_addr base, ulong size)
@@ -3716,7 +3739,7 @@ newseg(int type, virt_addr base, ulong size)
     if(mapsize > nelem(s->ssegmap)){
         mapsize *= 2;
         if(mapsize > (SEGMAPSIZE*PTEPERTAB))
-            mapsize = (SEGMAPSIZE*PTEPERTAB);
+            mapsize = (SEGMAPSIZE*PTEPERTAB); // Really? not SEGMAPSIZE MAX?
         s->map = smalloc(mapsize*sizeof(Pte*));
         s->mapsize = mapsize;
     }
@@ -3831,7 +3854,7 @@ struct Physseg
 
 
 <<[[Proc]] memory fields>>=
-// hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed?
+// hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed? ref_counted?
 Segment *seg[NSEG];
 QLock seglock;  /* locked whenever seg[] changes */
 @ 
@@ -7175,6 +7198,11 @@ Segdesc *gdt;     /* gdt for this processor */
 %  and cpu have pdb, and proc avec mmupdb ... very complex.
 % PDX, PTX (page directory idx?, page table idx?)
 
+% glossary: 
+% PD (and PDB), and PDE (page directory entry)
+% PT, PTE (page table entry)
+
+
 % page, 4096, so when give page address, don't need 12 low bits! PGSHIFT
 
 % VPT, per processor.
@@ -7187,7 +7215,7 @@ Segdesc *gdt;     /* gdt for this processor */
 % glossary: PTE = page table entry, so spec about one page
 
 
-% 1 page properties
+% 1 page properties, 1 byte
 <<constant PTExxx>>=
 /*
  *  physical MMU
@@ -7205,12 +7233,11 @@ Segdesc *gdt;     /* gdt for this processor */
 #define PTESIZE   (1<<7)
 #define PTEGLOBAL (1<<8)
 @
+% in a PTE what is implicit is the va. the va is the index
+% in the PD (Page Directory) + index in the PT (Page table)
 
 %VPT! tmpmap, tmpunmap
 % how set 1-to-1 mapping for KZERO and more?
-
-% MAXKPA here! 
-% or remove fasttmp
 
 % complicated to access to physical memory if have lots of memory :)
 <<function tmpmap>>=
@@ -7223,7 +7250,7 @@ tmpmap(Page *p)
     if(islo())
         panic("tmpaddr: islo");
 
-    if(fasttmp && p->pa < -KZERO)
+    if(p->pa < MAXKPA)
         return KADDR(p->pa);
 
 
@@ -7257,7 +7284,7 @@ tmpunmap(virt_addr3 v)
     
     if(islo())
         panic("tmpaddr: islo");
-    if(fasttmp && (ulong)v >= KZERO && v != (void*)TMPADDR)
+    if((ulong)v >= KZERO && v != (void*)TMPADDR)
         return;
     if(v != (void*)TMPADDR)
         panic("tmpunmap: bad address");
@@ -7332,6 +7359,8 @@ ulong*  pdb;      /* page directory base for this processor (va) */
 @
 % this pdb is super important!! see mmuswitch, he's the one
 % that will map specially the CPUADDR for each CPU!
+% it is actually a prototype that is copied in the pdb of each
+% new process
 
 <<[[Cpu]] [[Arch]] other fields>>=
 Page* pdbpool;
@@ -7341,7 +7370,7 @@ int pdbcnt;
 
 
 
-% pointers in kern_addr?
+% pointers in kern_addr? no! but the page->pa there is real mem.
 <<[[Proc]] [[Arch]] memory fields>>=
 Page* mmupdb;     /* page directory base */
 @
@@ -7351,6 +7380,7 @@ Page* mmupdb;     /* page directory base */
 Page* mmufree;    /* unused page table pages */
 Page* mmuused;    /* used page table pages */
 @
+% rename! pt_used, pt_free
 
 <<function upallocpdb>>=
 /*
@@ -7383,7 +7413,7 @@ upallocpdb(void)
     pdb[PDX(CPUADDR)] = cpu->pdb[PDX(CPUADDR)];
     tmpunmap(pdb);
     up->mmupdb = page;
-    putcr3(up->mmupdb->pa); //!!!!
+    putcr3(up->mmupdb->pa); //!!!! bootstrap! putcr3 take a PA of course
     splx(s);
 }
 @
@@ -7393,9 +7423,9 @@ upallocpdb(void)
 %ctor
 <<function mmupdballoc>>=
 /*
- * Allocate a new page for a page directory. 
+ * Allocate a new page for a page directory.
  * We keep a small cache of pre-initialized
- * page directories in each cpu.
+ * page directories in each cpu (see mmupdbfree).
  */
 static Page*
 mmupdballoc(void)
@@ -7412,7 +7442,7 @@ mmupdballoc(void)
         page->va = (ulong)vpd;
         splhi();
         pdb = tmpmap(page);
-        memmove(pdb, cpu->pdb, BY2PG);
+        memmove(pdb, cpu->pdb, BY2PG); // prototype
         pdb[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
         tmpunmap(pdb);
     }else{
@@ -7435,7 +7465,7 @@ mmupdbfree(Proc *proc, Page *page)
     if(islo())
         panic("mmupdbfree: islo");
     cpu->pdbfree++;
-    if(cpu->pdbcnt >= 10){ // 10???
+    if(cpu->pdbcnt >= 10){ // 10??? keep small cache of pdb page, but not too big, don't want to eat too much memory for that.
         page->next = proc->mmufree;
         proc->mmufree = page;
     }else{
@@ -7445,6 +7475,9 @@ mmupdbfree(Proc *proc, Page *page)
     }
 }
 @
+% but the Page is a pdb that have all entries correct? who initialize it?
+% it has the good entries for the mapping of the kernel, but before KZERO?
+% assumes have called mmuptefree before I think in mmurelease
 
 
 
@@ -7556,7 +7589,7 @@ mmurelease(Proc* proc)
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
  */
 void
-putmmu(ulong va, ulong pa, Page*)
+putmmu(virt_addr va, phys_addr pa, Page*)
 {
     int old, s;
     Page *page;
@@ -7580,9 +7613,9 @@ putmmu(ulong va, ulong pa, Page*)
     
     s = splhi();
     if(!(vpd[PDX(va)]&PTEVALID)){
-        if(up->mmufree == 0){
+        if(up->mmufree == nil){
             spllo();
-            page = newpage(0, 0, 0);
+            page = newpage(false, nil, nilptr);
             splhi();
         }
         else{
@@ -7671,10 +7704,10 @@ fault386(Ureg* ureg, void*)
     int n; // ret_code
     char buf[ERRMAX];
 
-    addr = getcr2();
+    addr = getcr2(); // faulting va
     read = !(ureg->ecode & 2);
-
     user = (ureg->cs & 0xFFFF) == UESEL;
+
     if(!user){
         if(vmapsync(addr))
             return;
@@ -7880,133 +7913,6 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 @
 
 
-<<function pio>>=
-// page io on the text segment
-void
-pio(Segment *s, ulong addr, ulong soff, Page **p)
-{
-    Page *new;
-    KMap *k;
-    Chan *c;
-    int n, ask;
-    char *kaddr;
-    ulong daddr; // disk address
-    Page *loadrec;
-
-retry:
-    loadrec = *p;
-    if(loadrec == nil) {  /* from a text/data image */
-        daddr = s->fstart+soff;
-        new = lookpage(s->image, daddr);
-        if(new != nil) {
-            *p = new;
-            return;
-        }
-
-        c = s->image->c;
-        ask = s->flen-soff;
-        if(ask > BY2PG)
-            ask = BY2PG;
-    }
-    else {          /* from a swap image */
-        daddr = swapaddr(loadrec);
-        new = lookpage(&swapimage, daddr);
-        if(new != nil) {
-            putswap(loadrec);
-            *p = new;
-            return;
-        }
-
-        c = swapimage.c;
-        ask = BY2PG;
-    }
-    qunlock(&s->lk);
-
-    new = newpage(0, 0, addr);
-    k = kmap(new);
-    kaddr = (char*)VA(k);
-
-    while(waserror()) {
-        if(strcmp(up->errstr, Eintr) == 0)
-            continue;
-        kunmap(k);
-        putpage(new);
-        faulterror(Eioload, c, 0);
-    }
-
-    n = devtab[c->type]->read(c, kaddr, ask, daddr);
-    if(n != ask)
-        faulterror(Eioload, c, 0);
-    if(ask < BY2PG)
-        memset(kaddr+ask, 0, BY2PG-ask);
-
-    poperror();
-    kunmap(k);
-    qlock(&s->lk);
-    if(loadrec == 0) {  /* This is demand load */
-        /*
-         *  race, another proc may have gotten here first while
-         *  s->lk was unlocked
-         */
-        if(*p == 0) { 
-            new->daddr = daddr;
-            cachepage(new, s->image);
-            *p = new;
-        }
-        else
-            putpage(new);
-    }
-    else {          /* This is paged out */
-        /*
-         *  race, another proc may have gotten here first
-         *  (and the pager may have run on that page) while
-         *  s->lk was unlocked
-         */
-        if(*p != loadrec){
-            if(!pagedout(*p)){
-                /* another process did it for me */
-                putpage(new);
-                goto done;
-            } else {
-                /* another process and the pager got in */
-                putpage(new);
-                goto retry;
-            }
-        }
-
-        new->daddr = daddr;
-        cachepage(new, &swapimage);
-        *p = new;
-        putswap(loadrec);
-    }
-
-done:
-    if(s->flushme)
-        memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
-}
-@
-
-
-<<function faulterror>>=
-static void
-faulterror(char *s, Chan *c, bool freemem)
-{
-    char buf[ERRMAX];
-
-    if(c && c->path){
-        snprint(buf, sizeof buf, "%s accessing %s: %s", s, c->path->s, up->errstr);
-        s = buf;
-    }
-    if(up->nerrlab) {
-        postnote(up, 1, s, NDebug);
-        error(s);
-    }
-    pexit(s, freemem);
-}
-@
-
-
-
 
 <<function checkpages>>=
 void
@@ -8082,6 +7988,7 @@ int nkmap;      /* number of current kmaps */
  */
 typedef struct KMap   KMap;
 @
+% why not void like in bcm?
 
 <<macro VA>>=
 #define VA(k)   ((virt_addr3)(k))
@@ -8361,6 +8268,138 @@ loop:
     goto loop;
 }
 @
+
+
+
+
+
+<<function pio>>=
+// page io on the text segment
+void
+pio(Segment *s, ulong addr, ulong soff, Page **p)
+{
+    Page *new;
+    KMap *k;
+    Chan *c;
+    int n, ask;
+    char *kaddr;
+    ulong daddr; // disk address
+    Page *loadrec;
+
+retry:
+    loadrec = *p;
+    if(loadrec == nil) {  /* from a text/data image */
+        daddr = s->fstart+soff;
+        new = lookpage(s->image, daddr);
+        if(new != nil) {
+            *p = new;
+            return;
+        }
+
+        c = s->image->c;
+        ask = s->flen-soff;
+        if(ask > BY2PG)
+            ask = BY2PG;
+    }
+    else {          /* from a swap image */
+        daddr = swapaddr(loadrec);
+        new = lookpage(&swapimage, daddr);
+        if(new != nil) {
+            putswap(loadrec);
+            *p = new;
+            return;
+        }
+
+        c = swapimage.c;
+        ask = BY2PG;
+    }
+    qunlock(&s->lk);
+
+    new = newpage(0, 0, addr);
+    k = kmap(new);
+    kaddr = (char*)VA(k);
+
+    while(waserror()) {
+        if(strcmp(up->errstr, Eintr) == 0)
+            continue;
+        kunmap(k);
+        putpage(new);
+        faulterror(Eioload, c, 0);
+    }
+
+    n = devtab[c->type]->read(c, kaddr, ask, daddr);
+    if(n != ask)
+        faulterror(Eioload, c, 0);
+    if(ask < BY2PG)
+        memset(kaddr+ask, 0, BY2PG-ask);
+
+    poperror();
+    kunmap(k);
+    qlock(&s->lk);
+    if(loadrec == 0) {  /* This is demand load */
+        /*
+         *  race, another proc may have gotten here first while
+         *  s->lk was unlocked
+         */
+        if(*p == 0) { 
+            new->daddr = daddr;
+            cachepage(new, s->image);
+            *p = new;
+        }
+        else
+            putpage(new);
+    }
+    else {          /* This is paged out */
+        /*
+         *  race, another proc may have gotten here first
+         *  (and the pager may have run on that page) while
+         *  s->lk was unlocked
+         */
+        if(*p != loadrec){
+            if(!pagedout(*p)){
+                /* another process did it for me */
+                putpage(new);
+                goto done;
+            } else {
+                /* another process and the pager got in */
+                putpage(new);
+                goto retry;
+            }
+        }
+
+        new->daddr = daddr;
+        cachepage(new, &swapimage);
+        *p = new;
+        putswap(loadrec);
+    }
+
+done:
+    if(s->flushme)
+        memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
+}
+@
+
+
+<<function faulterror>>=
+static void
+faulterror(char *s, Chan *c, bool freemem)
+{
+    char buf[ERRMAX];
+
+    if(c && c->path){
+        snprint(buf, sizeof buf, "%s accessing %s: %s", s, c->path->s, up->errstr);
+        s = buf;
+    }
+    if(up->nerrlab) {
+        postnote(up, 1, s, NDebug);
+        error(s);
+    }
+    pexit(s, freemem);
+}
+@
+
+
+
 
 
 <<function pageout>>=
@@ -8860,6 +8899,7 @@ dequeueproc(Schedq *rq, Proc *tp)
     return p;
 }
 @ 
+% >> >>
 
 \section{[[sched()]]}
 
@@ -10038,7 +10078,6 @@ _nothingready:
         RET
 @
 
-
 \chapter{Initialization}
 \minitoc
 
@@ -10151,6 +10190,7 @@ TEXT multiboot(SB), $0
  *      a page for the GDT;
  *      virtual and physical pages for mapping the Cpu structure.
  * The remaining PTEs will be allocated later when memory is sized.
+ *
  * An identity mmu map is also needed for the switch to virtual mode.
  * This identity mapping is removed once the MMU is going and the JMP has
  * been made to virtual memory.
@@ -10242,6 +10282,7 @@ TEXT mode32bit(SB), $0
         MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
         ORL     BX, (AX)
 
+
         MOVL    $PADDR(CPU0PTE), AX             /* first page of page table */
         MOVL    $1024, CX                       /* 1024 pages in 4MB */
 _setpte:
@@ -10258,6 +10299,7 @@ _setpte1:
         ADDL    $4, AX
         LOOP    _setpte1
 
+
         MOVL    $PADDR(CPU0PTE), AX
         ADDL    $PTO(CPUADDR), AX              /* page table entry offset for CPUADDR */
         MOVL    $PADDR(CPU0CPU), (AX)          /* PTE for Cpu */
@@ -10271,7 +10313,8 @@ _setpte1:
  */
         MOVL    $PADDR(CPU0PDB), CX             /* load address of page directory */
         MOVL    (PDO(KZERO))(CX), DX            /* double-map KZERO at 0 */
-        MOVL    DX, (PDO(0))(CX)
+        MOVL    DX, (PDO(0))(CX) // needed?? already mapped to 0
+
         MOVL    CX, CR3
         DELAY                                   /* JMP .+2 */
 
@@ -10299,7 +10342,7 @@ _setpte1:
  * be initialised here.
  */
 TEXT _startpg(SB), $0
-        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */
+        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */ // Why???
         MOVL    CX, CR3                         /* load and flush the mmu */
 
 _clearbss:
@@ -12383,7 +12426,7 @@ _allocb(int size)
     Block *b;
     ulong addr;
 
-    if((b = mallocz(sizeof(Block)+size+Hdrspc, 0)) == nil)
+    if((b = mallocz(sizeof(Block)+size+Hdrspc, false)) == nil)
         return nil;
 
     b->next = nil;
@@ -26945,9 +26988,12 @@ SPL = Set Priority Level
 RMAP = RAM map
 UMB = Upper Memory Block
 GDT = Global Descriptor Table
-VPT = Virtual Page Table
+PD = Page Directory
+PT = Page Table
 PDB = Page Directory Base
 PTE = Page Table Entry
+PPN = Physical Page Number?
+VPT = Virtual Page Table
 INTR = INTeRrupt (not INT, probably to avoid ambiguity with integer)
 VNO = Vector Number (interrupt)
 ISR = Interrupt Service Routine
