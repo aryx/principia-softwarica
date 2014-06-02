@@ -1666,7 +1666,7 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
         s->steal--;
     }
     poperror();
-    pte = s->map[soff/PTEMAPMEM];
+    pte = s->pagedir[soff/PTEMAPMEM];
     if(pte == 0)
         panic("procctlmemio");
     pg = pte->pages[(soff&(PTEMAPMEM-1))/BY2PG];

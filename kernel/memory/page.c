@@ -681,8 +681,8 @@ portcountpagerefs(ulong *ref, int print)
             if(s == nil || s->mark++)
                 continue;
             ns++;
-            for(k=0; k<s->mapsize; k++){
-                pte = s->map[k];
+            for(k=0; k<s->pagedirsize; k++){
+                pte = s->pagedir[k];
                 if(pte == nil)
                     continue;
                 for(pg = pte->first; pg <= pte->last; pg++){

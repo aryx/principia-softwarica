@@ -51,7 +51,7 @@ syssegflush(ulong *arg)
             l = s->top - addr;
 
         ps = addr-s->base;
-        pte = s->map[ps/PTEMAPMEM];
+        pte = s->pagedir[ps/PTEMAPMEM];
         ps &= PTEMAPMEM-1;
         pe = PTEMAPMEM;
         if(pe-ps > l){

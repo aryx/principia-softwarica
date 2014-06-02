@@ -241,9 +241,9 @@ pageout(Proc *p, Segment *s)
 
     /* Pass through the pte tables looking for memory pages to swap out */
     type = s->type&SG_TYPE;
-    size = s->mapsize;
+    size = s->pagedirsize;
     for(i = 0; i < size; i++) {
-        l = s->map[i];
+        l = s->pagedir[i];
         if(l == 0)
             continue;
         for(pg = l->first; pg < l->last; pg++) {

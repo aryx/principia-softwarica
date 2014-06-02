@@ -91,16 +91,16 @@ newseg(int type, virt_addr base, ulong size)
     s->sema.next = &s->sema;
 
     mapsize = ROUND(size, PTEPERTAB)/PTEPERTAB;
-    if(mapsize > nelem(s->ssegmap)){
+    if(mapsize > nelem(s->smallpagedir)){
         mapsize *= 2;
         if(mapsize > (SEGMAPSIZE*PTEPERTAB))
             mapsize = (SEGMAPSIZE*PTEPERTAB); // Really? not SEGMAPSIZE MAX?
-        s->map = smalloc(mapsize*sizeof(Pagetable*));
-        s->mapsize = mapsize;
+        s->pagedir = smalloc(mapsize*sizeof(Pagetable*));
+        s->pagedirsize = mapsize;
     }
     else{
-        s->map = s->ssegmap;
-        s->mapsize = nelem(s->ssegmap);
+        s->pagedir = s->smallpagedir;
+        s->pagedirsize = nelem(s->smallpagedir);
     }
 
     return s;
@@ -139,14 +139,14 @@ putseg(Segment *s)
     if(i)
         putimage(i);
 
-    emap = &s->map[s->mapsize];
-    for(pp = s->map; pp < emap; pp++)
+    emap = &s->pagedir[s->pagedirsize];
+    for(pp = s->pagedir; pp < emap; pp++)
         if(*pp)
             freepte(s, *pp);
 
     qunlock(&s->lk);
-    if(s->map != s->ssegmap)
-        free(s->map);
+    if(s->pagedir != s->smallpagedir)
+        free(s->pagedir);
     if(s->profile != nil)
         free(s->profile);
     free(s);
@@ -160,8 +160,8 @@ relocateseg(Segment *s, ulong offset)
     Page **pg, *x;
     Pagetable *pte, **p, **endpte;
 
-    endpte = &s->map[s->mapsize];
-    for(p = s->map; p < endpte; p++) {
+    endpte = &s->pagedir[s->pagedirsize];
+    for(p = s->pagedir; p < endpte; p++) {
         if(*p == 0)
             continue;
         pte = *p;
@@ -223,10 +223,10 @@ dupseg(Segment **seg, int segno, bool share)
         n->flen = s->flen;
         break;
     }
-    size = s->mapsize;
+    size = s->pagedirsize;
     for(i = 0; i < size; i++)
-        if(pte = s->map[i])
-            n->map[i] = ptecpy(pte);
+        if(pte = s->pagedir[i])
+            n->pagedir[i] = ptecpy(pte);
 
     n->flushme = s->flushme;
     if(s->ref > 1)
@@ -255,7 +255,7 @@ segpage(Segment *s, Page *p)
         panic("segpage");
 
     off = p->va - s->base;
-    pte = &s->map[off/PTEMAPMEM];
+    pte = &s->pagedir[off/PTEMAPMEM];
     if(*pte == 0)
         *pte = ptealloc();
 
@@ -536,13 +536,13 @@ ibrk(ulong addr, int seg)
         error(Enovmem);
     }
     mapsize = ROUND(newsize, PTEPERTAB)/PTEPERTAB;
-    if(mapsize > s->mapsize){
+    if(mapsize > s->pagedirsize){
         map = smalloc(mapsize*sizeof(Pagetable*));
-        memmove(map, s->map, s->mapsize*sizeof(Pagetable*));
-        if(s->map != s->ssegmap)
-            free(s->map);
-        s->map = map;
-        s->mapsize = mapsize;
+        memmove(map, s->pagedir, s->pagedirsize*sizeof(Pagetable*));
+        if(s->pagedir != s->smallpagedir)
+            free(s->pagedir);
+        s->pagedir = map;
+        s->pagedirsize = mapsize;
     }
 
     s->top = newtop;
@@ -567,20 +567,20 @@ mfreeseg(Segment *s, ulong start, int pages)
     soff = start-s->base;
     j = (soff&(PTEMAPMEM-1))/BY2PG;
 
-    size = s->mapsize;
+    size = s->pagedirsize;
     list = nil;
     for(i = soff/PTEMAPMEM; i < size; i++) {
         if(pages <= 0)
             break;
-        if(s->map[i] == 0) {
+        if(s->pagedir[i] == 0) {
             pages -= PTEPERTAB-j;
             j = 0;
             continue;
         }
         while(j < PTEPERTAB) {
-            pg = s->map[i]->pages[j];
+            pg = s->pagedir[i]->pages[j];
             /*
-             * We want to zero s->map[i]->page[j] and putpage(pg),
+             * We want to zero s->pagedir[i]->page[j] and putpage(pg),
              * but we have to make sure other processors flush the
              * entry from their TLBs before the page is freed.
              * We construct a list of the pages to be freed, zero
@@ -597,7 +597,7 @@ mfreeseg(Segment *s, ulong start, int pages)
                     pg->next = list;
                     list = pg;
                 }
-                s->map[i]->pages[j] = 0;
+                s->pagedir[i]->pages[j] = 0;
             }
             if(--pages == 0)
                 goto out;

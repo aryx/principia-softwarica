@@ -167,14 +167,14 @@ struct Segment
     virt_addr top;    /* virtual top */
     ulong size;   /* size in pages */ // top - base / BY2PG?
   
-    // Kind of a page directory table (and pte = page table)
-    // map is SEGMAPSIZE max so 1984 * 1M via PTE =~ 2Go virtual mem per seg!
-    // array<option<ref_own<Pagetable>>>, smalloc'ed, point to ssegmap if small enough
-    Pagetable **map; 
-    // small seg map, used instead of map if segment small enough
-    // array<ref_own<Pagetable>>
-    Pagetable *ssegmap[SSEGMAPSIZE]; // 16
-    int mapsize; // nelem(map)
+    // Kind of a page directory table
+    // SEGMAPSIZE max so 1984 * 1M via Pagetable =~ 2Go virtual mem per seg!
+    // array<option<ref_own<Pagetable>>>, smalloc'ed, point to smallpagedir if small enough
+    Pagetable **pagedir; 
+    // small page directory, used instead of pagedir if segment small enough
+    // array<option<ref_own<Pagetable>>
+    Pagetable *smallpagedir[SSEGMAPSIZE]; // 16
+    int pagedirsize; // nelem(pagedir)
   
     KImage  *image;   /* text in file attached to this segment */
     ulong fstart;   /* start address in file for demand load */
