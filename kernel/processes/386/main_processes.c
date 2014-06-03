@@ -59,7 +59,7 @@ procsave(Proc *p)
      * You might think it would be a win not to do this in that case,
      * especially on VMware, but it turns out not to matter.
      */
-    mmuflushtlb(PADDR(cpu->pdb));
+    mmuflushtlb(PADDR(cpu->pdproto));
 }
 /*e: function procsave */
 

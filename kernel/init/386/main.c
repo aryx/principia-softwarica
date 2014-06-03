@@ -192,15 +192,15 @@ void
 cpuinit(void)
 {
     int cpuno;
-    ulong *pdb;
+    ulong *mmupd;
     Segdesc *gdt;
 
     cpuno = cpu->cpuno;
-    pdb = cpu->pdb;
+    mmupd = cpu->pdproto;
     gdt = cpu->gdt;
     memset(cpu, 0, sizeof(Cpu));
     cpu->cpuno = cpuno;
-    cpu->pdb = pdb;
+    cpu->pdproto = mmupd;
     cpu->gdt = gdt;
 
     cpu->perf.period = 1;
@@ -222,7 +222,7 @@ cpu0init(void)
         // note that cpu points to CPUADDR, which then is mapped to CPU0CPU
         // via the page table on the first processor
         CPUS(0) = (Cpu*)CPU0CPU;
-        cpu->pdb = (ulong*)CPU0PDB;
+        cpu->pdproto = (ulong*)CPU0PD;
         cpu->gdt = (Segdesc*)CPU0GDT;
 
         cpuinit();
@@ -741,7 +741,7 @@ void
 reboot(void *entry, void *code, ulong size)
 {
     void (*f)(ulong, ulong, ulong);
-    ulong *pdb;
+    ulong *mmupd;
 
     writeconf();
 
@@ -794,9 +794,9 @@ reboot(void *entry, void *code, ulong size)
      * Modify the processor page table to directly map the low 4MB of memory
      * This allows the reboot code to turn off the page mapping
      */
-    pdb = cpu->pdb;
-    pdb[PDX(0)] = pdb[PDX(KZERO)];
-    mmuflushtlb(PADDR(pdb));
+    mmupd = cpu->pdproto;
+    mmupd[PDX(0)] = mmupd[PDX(KZERO)];
+    mmuflushtlb(PADDR(mmupd));
 
     /* setup reboot trampoline function */
     f = (void*)REBOOTADDR;

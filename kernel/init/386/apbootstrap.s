@@ -70,7 +70,7 @@ TEXT _apbootstrap(SB), $0                       /* address APBOOTSTRAP+0x14 */
  * nirvana has been obtained.
  */
 TEXT _ap32(SB), $0
-        MOVL    _appdb-KZERO(SB), CX            /* physical address of PDB */
+        MOVL    _appdb-KZERO(SB), CX            /* physical address of PD */
         MOVL    (PDO(KZERO))(CX), DX            /* double-map KZERO at 0 */
         MOVL    DX, (PDO(0))(CX)
         MOVL    CX, CR3                         /* load and flush the mmu */
@@ -84,7 +84,7 @@ TEXT _ap32(SB), $0
         JMP*    AX
 
 TEXT _appg(SB), $0
-        MOVL    CX, AX                          /* physical address of PDB */
+        MOVL    CX, AX                          /* physical address of PD */
         ORL     $KZERO, AX
         MOVL    $0, (PDO(0))(AX)                /* undo double-map of KZERO at 0 */
         MOVL    CX, CR3                         /* load and flush the mmu */

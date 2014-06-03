@@ -48,9 +48,9 @@ realmode(Ureg *ureg)
     memmove((void*)RMCODE, (void*)KTZERO, 0x1000);
 
     s = splhi();
-    cpu->pdb[PDX(0)] = cpu->pdb[PDX(KZERO)];    /* identity map low */
+    cpu->pdproto[PDX(0)] = cpu->pdproto[PDX(KZERO)];    /* identity map low */
     cr3 = getcr3();
-    putcr3(PADDR(cpu->pdb));
+    putcr3(PADDR(cpu->pdproto));
     if (arch)
         arch->introff();
     else
@@ -66,7 +66,7 @@ realmode(Ureg *ureg)
         else
             i8259on();
     }
-    cpu->pdb[PDX(0)] = 0; /* remove low mapping */
+    cpu->pdproto[PDX(0)] = 0; /* remove low mapping */
     putcr3(cr3);
     splx(s);
     *ureg = realmoderegs;

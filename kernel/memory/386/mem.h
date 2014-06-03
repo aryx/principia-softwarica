@@ -106,22 +106,22 @@
 /*e: constant IDTADDR */
 #define REBOOTADDR  (0x11000)   /* reboot code - physical address */
 
-#define CPU0PDB   (KZERO+0x12000)   /* bootstrap processor PDB */
-#define CPU0PTE   (KZERO+0x13000)   /* bootstrap processor PTE's for 0-4MB */
+#define CPU0PD   (KZERO+0x12000)   /* bootstrap processor PD */
+#define CPU0PT   (KZERO+0x13000)   /* bootstrap processor PT for 0-4MB */
 #define CPU0GDT   (KZERO+0x14000)   /* bootstrap processor GDT */
 
 #define CPUADDR  (KZERO+0x15000)   /* as seen by current processor */
 #define CPU0CPU  (KZERO+0x16000)   /* Cpu for bootstrap processor */
 #define CPUSIZE  BY2PG
 
-#define CPU0PTE1  (KZERO+0x17000)   /* bootstrap processor PTE's for 4MB-8MB */
+#define CPU0PT1  (KZERO+0x17000)   /* bootstrap processor PTE's for 4MB-8MB */
 // needed?
 
-#define CPU0END   (CPU0PTE1+BY2PG)
+#define CPU0END   (CPU0PT1+BY2PG)
 
 /*
  * N.B.  ramscan knows that CPU0END is the end of reserved data
- * N.B.  _startPADDR knows that CPU0PDB is the first reserved page
+ * N.B.  _startPADDR knows that CPU0PD is the first reserved page
  * and that there are 6 of them.
  */
 

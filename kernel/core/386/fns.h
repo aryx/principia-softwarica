@@ -155,7 +155,7 @@ void  memorysummary(void);
 //@Scheck: Assembly
 void  mfence(void);
 /*s: function mmuflushtlb */
-#define mmuflushtlb(pdb) putcr3(pdb)
+#define mmuflushtlb(mmupd) putcr3(mmupd)
 /*e: function mmuflushtlb */
 void  mmuinit(void);
 ulong*  mmuwalk(ulong*, ulong, int, bool);

@@ -125,7 +125,7 @@ TEXT m0idtptr(SB), $0
 TEXT mode32bit(SB), $0
         /* At this point, the GDT setup is done. */
 
-        MOVL    $PADDR(CPU0PDB), DI             /* clear 4 pages for the tables etc. */
+        MOVL    $PADDR(CPU0PD), DI             /* clear 4 pages for the tables etc. */
         XORL    AX, AX
         MOVL    $(4*BY2PG), CX
         SHRL    $2, CX
@@ -133,19 +133,19 @@ TEXT mode32bit(SB), $0
         CLD
         REP;    STOSL
 
-        MOVL    $PADDR(CPU0PDB), AX
+        MOVL    $PADDR(CPU0PD), AX
         ADDL    $PDO(KZERO), AX                 /* page directory offset for KZERO */
-        MOVL    $PADDR(CPU0PTE), (AX)           /* PTE's for KZERO */
+        MOVL    $PADDR(CPU0PT), (AX)           /* PTE's for KZERO */
         MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
         ORL     BX, (AX)
 
         ADDL    $4, AX
-        MOVL    $PADDR(CPU0PTE1), (AX)          /* PTE's for KZERO+4MB */
+        MOVL    $PADDR(CPU0PT1), (AX)          /* PTE's for KZERO+4MB */
         MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
         ORL     BX, (AX)
 
 
-        MOVL    $PADDR(CPU0PTE), AX             /* first page of page table */
+        MOVL    $PADDR(CPU0PT), AX             /* first page of page table */
         MOVL    $1024, CX                       /* 1024 pages in 4MB */
 _setpte:
         MOVL    BX, (AX)
@@ -153,7 +153,7 @@ _setpte:
         ADDL    $4, AX
         LOOP    _setpte
 
-        MOVL    $PADDR(CPU0PTE1), AX            /* second page of page table */
+        MOVL    $PADDR(CPU0PT1), AX            /* second page of page table */
         MOVL    $1024, CX                       /* 1024 pages in 4MB */
 _setpte1:
         MOVL    BX, (AX)
@@ -162,7 +162,7 @@ _setpte1:
         LOOP    _setpte1
 
 
-        MOVL    $PADDR(CPU0PTE), AX
+        MOVL    $PADDR(CPU0PT), AX
         ADDL    $PTO(CPUADDR), AX              /* page table entry offset for CPUADDR */
         MOVL    $PADDR(CPU0CPU), (AX)          /* PTE for Cpu */
         MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
@@ -173,7 +173,7 @@ _setpte1:
  * It is necessary on some processors to immediately follow mode switching with a JMP instruction
  * to clear the prefetch queues.
  */
-        MOVL    $PADDR(CPU0PDB), CX             /* load address of page directory */
+        MOVL    $PADDR(CPU0PD), CX             /* load address of page directory */
         MOVL    (PDO(KZERO))(CX), DX            /* double-map KZERO at 0 */
         MOVL    DX, (PDO(0))(CX) // needed?? already mapped to 0
 

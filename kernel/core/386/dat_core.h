@@ -55,10 +55,10 @@ struct ArchCpu {
     // array<Segdesc>
     Segdesc *gdt;     /* gdt for this processor */
     /*x: [[Cpu]] [[Arch]] other fields */
-    ulong*  pdb;      /* page directory base for this processor (va) */
+    ulong*   pdproto;      /* page directory base for this processor (va) */
     /*x: [[Cpu]] [[Arch]] other fields */
-    Page* pdbpool;
-    int pdbcnt;
+    Page* mmupdpool;
+    int mmupdcnt;
     /*x: [[Cpu]] [[Arch]] other fields */
     Tss*  tss;      /* tss for this processor */
     /*x: [[Cpu]] [[Arch]] other fields */
@@ -67,8 +67,8 @@ struct ArchCpu {
     // for perfticks, tsc = time stamp counter
     bool havetsc;
     /*x: [[Cpu]] [[Arch]] other fields */
-    int pdballoc;
-    int pdbfree;
+    int mmupdalloc;
+    int mmupdfree;
     /*x: [[Cpu]] [[Arch]] other fields */
     int loopconst;
     /*x: [[Cpu]] [[Arch]] other fields */

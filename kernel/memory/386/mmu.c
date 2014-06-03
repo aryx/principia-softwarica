@@ -20,7 +20,7 @@
  * have embarrassing amounts of memory, the video drivers only use one
  * frame buffer worth (at most 16M).  Each is described in more detail below.
  *
- * The VPT is a 4M frame constructed by inserting the pdb into itself.
+ * The VPT is a 4M frame constructed by inserting the pd into itself.
  * This short-circuits one level of the page tables, with the result that 
  * the contents of second-level page tables can be accessed at VPT.  
  * We use the VPT to edit the page tables (see mmu) after inserting them
@@ -109,7 +109,7 @@ mmuinit(void)
     if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n", VPT, vpd, KMAP);
 
     memglobal();
-    cpu->pdb[PDX(VPT)] = PADDR(cpu->pdb)|PTEWRITE|PTEVALID;
+    cpu->pdproto[PDX(VPT)] = PADDR(cpu->pdproto)|PTEWRITE|PTEVALID;
     
     cpu->tss = malloc(sizeof(Tss));
     if(cpu->tss == nil)
@@ -151,13 +151,13 @@ mmuinit(void)
 
     /* make kernel text unwritable */
     for(x = KTZERO; x < (ulong)etext; x += BY2PG){
-        p = mmuwalk(cpu->pdb, x, 2, false);
+        p = mmuwalk(cpu->pdproto, x, 2, false);
         if(p == nil)
             panic("mmuinit");
         *p &= ~PTEWRITE;
     }
 
-    taskswitch(PADDR(cpu->pdb),  (ulong)cpu + BY2PG);
+    taskswitch(PADDR(cpu->pdproto),  (ulong)cpu + BY2PG);
     ltr(TSSSEL);
 }
 /*e: function mmuinit */
@@ -190,7 +190,7 @@ memglobal(void)
     if(!cpu->havepge)
         return;
 
-    pd = cpu->pdb;
+    pd = cpu->pdproto;
     for(i=PDX(KZERO); i<1024; i++){
         if(pd[i] & PTEVALID){
             pd[i] |= PTEGLOBAL;
@@ -237,58 +237,58 @@ flushpg(virt_addr va)
 }
 /*e: function flushpg */
 
-/*s: function mmupdballoc */
+/*s: function mmupdalloc */
 /*
  * Allocate a new page for a page directory.
  * We keep a small cache of pre-initialized
- * page directories in each cpu (see mmupdbfree).
+ * page directories in each cpu (see mmupdfree).
  */
 static Page*
-mmupdballoc(void)
+mmupdalloc(void)
 {
     int s;
     Page *page;
-    ulong *pdb;
+    ulong *mmupd;
 
     s = splhi();
-    cpu->pdballoc++;
-    if(cpu->pdbpool == nil){
+    cpu->mmupdalloc++;
+    if(cpu->mmupdpool == nil){
         spllo();
         page = newpage(false, nil, nilptr);
         page->va = (ulong)vpd;
         splhi();
-        pdb = tmpmap(page);
-        memmove(pdb, cpu->pdb, BY2PG); // prototype
-        pdb[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
-        tmpunmap(pdb);
+        mmupd = tmpmap(page);
+        memmove(mmupd, cpu->pdproto, BY2PG);
+        mmupd[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
+        tmpunmap(mmupd);
     }else{
-        page = cpu->pdbpool;
-        cpu->pdbpool = page->next;
-        cpu->pdbcnt--;
+        page = cpu->mmupdpool;
+        cpu->mmupdpool = page->next;
+        cpu->mmupdcnt--;
     }
     splx(s);
     return page;
 }
-/*e: function mmupdballoc */
+/*e: function mmupdalloc */
 
-/*s: function mmupdbfree */
+/*s: function mmupdfree */
 //@Scheck: not dead
 static void
-mmupdbfree(Proc *proc, Page *page)
+mmupdfree(Proc *proc, Page *page)
 {
     if(islo())
-        panic("mmupdbfree: islo");
-    cpu->pdbfree++;
-    if(cpu->pdbcnt >= 10){ // 10??? keep small cache of pdb page, but not too big, don't want to eat too much memory for that.
+        panic("mmupdfree: islo");
+    cpu->mmupdfree++;
+    if(cpu->mmupdcnt >= 10){ // 10??? keep small cache of mmupd page, but not too big, don't want to eat too much memory for that.
         page->next = proc->mmufree;
         proc->mmufree = page;
     }else{
-        page->next = cpu->pdbpool;
-        cpu->pdbpool = page;
-        cpu->pdbcnt++;
+        page->next = cpu->mmupdpool;
+        cpu->mmupdpool = page;
+        cpu->mmupdcnt++;
     }
 }
-/*e: function mmupdbfree */
+/*e: function mmupdfree */
 
 /*s: function mmuptefree */
 /*
@@ -301,20 +301,20 @@ static void
 mmuptefree(Proc* proc)
 {
     int s;
-    ulong *pdb;
+    ulong *mmupd;
     Page **last, *page;
 
-    if(proc->mmupdb == nil || proc->mmuused == nil)
+    if(proc->mmupd == nil || proc->mmuused == nil)
         return; // panic? bug to be called with that?
 
     s = splhi();
-    pdb = tmpmap(proc->mmupdb);
+    mmupd = tmpmap(proc->mmupd);
     last = &proc->mmuused;
     for(page = *last; page; page = page->next){
-        pdb[page->daddr] = 0;
+        mmupd[page->daddr] = 0;
         last = &page->next;
     }
-    tmpunmap(pdb);
+    tmpunmap(mmupd);
     splx(s);
     *last = proc->mmufree;
     proc->mmufree = proc->mmuused;
@@ -324,7 +324,7 @@ mmuptefree(Proc* proc)
 
 /*s: function taskswitch */
 static void
-taskswitch(ulong pdb, ulong stack)
+taskswitch(phys_addr mmupd, ulong stack)
 {
     Tss *tss;
 
@@ -335,7 +335,7 @@ taskswitch(ulong pdb, ulong stack)
     tss->esp1 = stack;
     tss->ss2 = KDSEL;
     tss->esp2 = stack;
-    putcr3(pdb);
+    putcr3(mmupd);
 }
 /*e: function taskswitch */
 
@@ -343,21 +343,21 @@ taskswitch(ulong pdb, ulong stack)
 void
 mmuswitch(Proc* proc)
 {
-    ulong *pdb;
+    ulong *mmupd;
 
     if(proc->newtlb){
         mmuptefree(proc);
         proc->newtlb = false;
     }
 
-    if(proc->mmupdb){
-        pdb = tmpmap(proc->mmupdb);
-        pdb[PDX(CPUADDR)] = cpu->pdb[PDX(CPUADDR)];
-        tmpunmap(pdb);
+    if(proc->mmupd){
+        mmupd = tmpmap(proc->mmupd);
+        mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)];
+        tmpunmap(mmupd);
 
-        taskswitch(proc->mmupdb->pa, (ulong)(proc->kstack+KSTACK));
+        taskswitch(proc->mmupd->pa, (ulong)(proc->kstack+KSTACK));
     }else
-        taskswitch(PADDR(cpu->pdb), (ulong)(proc->kstack+KSTACK));
+        taskswitch(PADDR(cpu->pdproto), (ulong)(proc->kstack+KSTACK));
 }
 /*e: function mmuswitch */
 
@@ -365,12 +365,12 @@ mmuswitch(Proc* proc)
 /*
  * Release any pages allocated for a page directory base or page-tables
  * for this process:
- *   switch to the prototype pdb for this processor (cpu->pdb);
+ *   switch to the prototype pd for this processor (cpu->pdproto);
  *   call mmuptefree() to place all pages used for page-tables (proc->mmuused)
  *   onto the process' free list (proc->mmufree). This has the side-effect of
- *   cleaning any user entries in the pdb (proc->mmupdb);
- *   if there's a pdb put it in the cache of pre-initialised pdb's
- *   for this processor (cpu->pdbpool) or on the process' free list;
+ *   cleaning any user entries in the pdb (proc->mmupd);
+ *   if there's a pd put it in the cache of pre-initialised pd's
+ *   for this processor (cpu->mmupdpool) or on the process' free list;
  *   finally, place any pages freed back into the free pool (palloc).
  * This routine is only called from schedinit() with palloc locked.
  */
@@ -378,29 +378,29 @@ void
 mmurelease(Proc* proc)
 {
     Page *page, *next;
-    ulong *pdb;
+    ulong *mmupd;
 
     if(islo())
         panic("mmurelease: islo");
-    taskswitch(PADDR(cpu->pdb), (ulong)cpu + BY2PG);
+    taskswitch(PADDR(cpu->pdproto), (ulong)cpu + BY2PG);
 
 
     if(proc->kmaptable){
-        if(proc->mmupdb == nil)
-            panic("mmurelease: no mmupdb");
+        if(proc->mmupd == nil)
+            panic("mmurelease: no mmupd");
         if(--proc->kmaptable->ref)
             panic("mmurelease: kmap ref %d", proc->kmaptable->ref);
         if(proc->nkmap)
             panic("mmurelease: nkmap %d", proc->nkmap);
         /*
-         * remove kmaptable from pdb before putting pdb up for reuse.
+         * remove kmaptable from pd before putting pd up for reuse.
          */
-        pdb = tmpmap(proc->mmupdb);
-        if(PPN(pdb[PDX(KMAP)]) != proc->kmaptable->pa)
+        mmupd = tmpmap(proc->mmupd);
+        if(PPN(mmupd[PDX(KMAP)]) != proc->kmaptable->pa)
             panic("mmurelease: bad kmap pde %#.8lux kmap %#.8lux",
-                pdb[PDX(KMAP)], proc->kmaptable->pa);
-        pdb[PDX(KMAP)] = 0;
-        tmpunmap(pdb);
+                mmupd[PDX(KMAP)], proc->kmaptable->pa);
+        mmupd[PDX(KMAP)] = 0;
+        tmpunmap(mmupd);
         /*
          * move kmaptable to free list.
          */
@@ -409,10 +409,10 @@ mmurelease(Proc* proc)
     }
 
 
-    if(proc->mmupdb){
+    if(proc->mmupd){
         mmuptefree(proc);
-        mmupdbfree(proc, proc->mmupdb);
-        proc->mmupdb = nil;
+        mmupdfree(proc, proc->mmupd);
+        proc->mmupd = nil;
     }
     for(page = proc->mmufree; page; page = next){
         next = page->next;
@@ -426,41 +426,41 @@ mmurelease(Proc* proc)
 }
 /*e: function mmurelease */
 
-/*s: function upallocpdb */
+/*s: function upallocmmupd */
 /*
- * Allocate and install pdb for the current process.
+ * Allocate and install pd for the current process.
  */
 //@Scheck: no dead, called bellow
 static void
-upallocpdb(void)
+upallocmmupd(void)
 {
     int s;
-    ulong *pdb;
+    ulong *mmupd;
     Page *page;
     
-    if(up->mmupdb != nil)
+    if(up->mmupd != nil)
         return;
-    page = mmupdballoc();
+    page = mmupdalloc();
     s = splhi();
-    if(up->mmupdb != nil){
+    if(up->mmupd != nil){
         /*
          * Perhaps we got an interrupt while
-         * mmupdballoc was sleeping and that
-         * interrupt allocated an mmupdb?
+         * mmupdalloc was sleeping and that
+         * interrupt allocated an mmupd?
          * Seems unlikely.
          */
-        mmupdbfree(up, page);
+        mmupdfree(up, page);
         splx(s);
         return;
     }
-    pdb = tmpmap(page);
-    pdb[PDX(CPUADDR)] = cpu->pdb[PDX(CPUADDR)];
-    tmpunmap(pdb);
-    up->mmupdb = page;
-    putcr3(up->mmupdb->pa); //!!!! bootstrap! putcr3 take a PA of course
+    mmupd = tmpmap(page);
+    mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)];
+    tmpunmap(mmupd);
+    up->mmupd = page;
+    putcr3(up->mmupd->pa); //!!!! bootstrap! putcr3 take a PA of course
     splx(s);
 }
-/*e: function upallocpdb */
+/*e: function upallocmmupd */
 
 /*s: function putmmu */
 /*
@@ -472,8 +472,8 @@ putmmu(virt_addr va, phys_addr pa, Page*)
     int old, s;
     Page *page;
 
-    if(up->mmupdb == nil)
-        upallocpdb();
+    if(up->mmupd == nil)
+        upallocmmupd();
 
     /*
      * We should be able to get through this with interrupts
@@ -511,8 +511,8 @@ putmmu(virt_addr va, phys_addr pa, Page*)
     vpt[VPTX(va)] = pa|PTEUSER|PTEVALID;
     if(old&PTEVALID)
         flushpg(va);
-    if(getcr3() != up->mmupdb->pa)
-        print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupdb->pa);
+    if(getcr3() != up->mmupd->pa)
+        print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
     splx(s);
 }
 /*e: function putmmu */
@@ -525,7 +525,7 @@ putmmu(virt_addr va, phys_addr pa, Page*)
 void
 checkmmu(ulong va, ulong pa)
 {
-    if(up->mmupdb == nil)
+    if(up->mmupd == nil)
         return;
     if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
         return;
@@ -538,7 +538,7 @@ checkmmu(ulong va, ulong pa)
 
 /*s: function mmuwalk */
 /*
- * Walk the page-table pointed to by pdb and return a pointer
+ * Walk the page-table pointed to by pd and return a pointer
  * to the entry for virtual address va at the requested level.
  * If the entry is invalid and create isn't requested then bail
  * out early. Otherwise, for the 2nd level walk, allocate a new
@@ -547,12 +547,12 @@ checkmmu(ulong va, ulong pa)
  * so it's okay to use KADDR to look at the tables.
  */
 ulong*
-mmuwalk(ulong* pdb, virt_addr va, int level, bool create)
+mmuwalk(ulong* pd, virt_addr va, int level, bool create)
 {
     ulong *table;
     void *map;
 
-    table = &pdb[PDX(va)];
+    table = &pd[PDX(va)];
     if(!(*table & PTEVALID) && create == false)
         return nil;
 
@@ -587,7 +587,7 @@ mmuwalk(ulong* pdb, virt_addr va, int level, bool create)
 /*
  * Device mappings are shared by all procs and processors and
  * live in the virtual range VMAP to VMAP+VMAPSIZE.  The master
- * copy of the mappings is stored in cpu0->pdb, and they are
+ * copy of the mappings is stored in cpu0->pdproto, and they are
  * paged in from there as necessary by vmapsync during faults.
  */
 
@@ -620,7 +620,7 @@ vmap(ulong pa, int size)
     }
     ilock(&vmaplock);
     if((va = vmapalloc(size)) == 0 
-    || pdbmap(CPUS(0)->pdb, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
+    || pdbmap(CPUS(0)->pdproto, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
         iunlock(&vmaplock);
         return nil;
     }
@@ -665,7 +665,7 @@ vmapalloc(ulong size)
     ulong *vpdb;
     int vpdbsize;
     
-    vpdb = &CPUS(0)->pdb[PDX(VMAP)];
+    vpdb = &CPUS(0)->pdproto[PDX(VMAP)];
     vpdbsize = VMAPSIZE/(4*MB);
 
     if(size >= 4*MB){
@@ -717,7 +717,7 @@ vunmap(void *v, int size)
         panic("vunmap va=%#.8lux size=%#x pc=%#.8lux",
             va, size, getcallerpc(&v));
 
-    pdbunmap(CPUS(0)->pdb, va, size);
+    pdbunmap(CPUS(0)->pdproto, va, size);
     
     /*
      * Flush mapping from all the tlbs and copied pdbs.
@@ -728,7 +728,7 @@ vunmap(void *v, int size)
      * and return.
      */
     if(!active.main_reached_sched){
-        putcr3(PADDR(CPUS(0)->pdb));
+        putcr3(PADDR(CPUS(0)->pdproto));
         return;
     }
     for(i=0; i<conf.nproc; i++){
@@ -847,7 +847,7 @@ vmapsync(ulong va)
     if(va < VMAP || va >= VMAP+VMAPSIZE)
         return 0;
 
-    entry = CPUS(0)->pdb[PDX(va)];
+    entry = CPUS(0)->pdproto[PDX(va)];
     if(!(entry&PTEVALID))
         return 0;
     if(!(entry&PTESIZE)){
@@ -883,8 +883,8 @@ kmap(Page *page)
 
     if(up == nil)
         panic("kmap: up=0 pc=%#.8lux", getcallerpc(&page));
-    if(up->mmupdb == nil)
-        upallocpdb();
+    if(up->mmupd == nil)
+        upallocmmupd();
     if(up->nkmap < 0)
         panic("kmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
     
@@ -935,7 +935,7 @@ kunmap(KMap *k)
     ulong va;
 
     va = (ulong)k;
-    if(up->mmupdb == nil || !(vpd[PDX(KMAP)]&PTEVALID))
+    if(up->mmupd == nil || !(vpd[PDX(KMAP)]&PTEVALID))
         panic("kunmap: no kmaps");
     if(va < KMAP || va >= KMAP+KMAPSIZE)
         panic("kunmap: bad address %#.8lux pc=%#p", va, getcallerpc(&k));
@@ -972,7 +972,7 @@ tmpmap(Page *p)
     /*
      * PDX(TMPADDR) == PDX(CPUADDR), so this
      * entry is private to the processor and shared 
-     * between up->mmupdb (if any) and cpu->pdb.
+     * between up->mmupd (if any) and cpu->pd.
      */
     entry = &vpt[VPTX(TMPADDR)];
     if(!(*entry&PTEVALID)){
@@ -1051,18 +1051,18 @@ countpagerefs(ulong *ref, int print)
     n = 0;
     for(i=0; i<conf.nproc; i++){
         p = proctab(i);
-        if(p->mmupdb){
+        if(p->mmupd){
             if(print){
-                if(ref[pagenumber(p->mmupdb)])
-                    iprint("page %#.8lux is proc %d (pid %lud) pdb\n",
-                        p->mmupdb->pa, i, p->pid);
+                if(ref[pagenumber(p->mmupd)])
+                    iprint("page %#.8lux is proc %d (pid %lud) pd\n",
+                        p->mmupd->pa, i, p->pid);
                 continue;
             }
-            if(ref[pagenumber(p->mmupdb)]++ == 0)
+            if(ref[pagenumber(p->mmupd)]++ == 0)
                 n++;
             else
-                iprint("page %#.8lux is proc %d (pid %lud) pdb but has other refs!\n",
-                    p->mmupdb->pa, i, p->pid);
+                iprint("page %#.8lux is proc %d (pid %lud) pd but has other refs!\n",
+                    p->mmupd->pa, i, p->pid);
         }
         if(p->kmaptable){
             if(print){
@@ -1109,25 +1109,25 @@ countpagerefs(ulong *ref, int print)
     n = 0;
     for(i=0; i<conf.ncpu; i++){
         mm = CPUS(i);
-        for(pg=mm->pdbpool; pg; pg=pg->next){
+        for(pg=mm->mmupdpool; pg; pg=pg->next){
             if(print){
                 if(ref[pagenumber(pg)])
-                    iprint("page %#.8lux is in cpu%d pdbpool\n",
+                    iprint("page %#.8lux is in cpu%d mmupdpool\n",
                         pg->pa, i);
                 continue;
             }
             if(ref[pagenumber(pg)]++ == 0)
                 n++;
             else
-                iprint("page %#.8lux is in cpu%d pdbpool but has other refs!\n",
+                iprint("page %#.8lux is in cpu%d mmupdpool but has other refs!\n",
                     pg->pa, i);
         }
     }
     if(!print){
-        iprint("%d pages in cpu pdbpools\n", n);
+        iprint("%d pages in cpu mmupdpools\n", n);
         for(i=0; i<conf.ncpu; i++)
-            iprint("cpu%d: %d pdballoc, %d pdbfree\n",
-                i, CPUS(i)->pdballoc, CPUS(i)->pdbfree);
+            iprint("cpu%d: %d mmupdalloc, %d mmupdfree\n",
+                i, CPUS(i)->mmupdalloc, CPUS(i)->mmupdfree);
     }
 }
 /*e: function countpagerefs */

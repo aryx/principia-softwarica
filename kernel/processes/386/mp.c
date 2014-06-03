@@ -439,7 +439,7 @@ static void
 mpstartap(Apic* apic)
 {
     ulong *apbootp, *pdb, *pte;
-    Cpu *mach, *cpu0;
+    Cpu *cpu, *cpu0;
     int i, cpuno;
     uchar *p;
 
@@ -453,7 +453,7 @@ mpstartap(Apic* apic)
      */
     p = xspanalloc(4*BY2PG, BY2PG, 0);
     pdb = (ulong*)p;
-    memmove(pdb, cpu0->pdb, BY2PG);
+    memmove(pdb, cpu0->pdproto, BY2PG);
     p += BY2PG;
 
     if((pte = mmuwalk(pdb, CPUADDR, 1, false)) == nil)
@@ -464,22 +464,22 @@ mpstartap(Apic* apic)
         *pte |= PTEGLOBAL;
     p += BY2PG;
 
-    mach = (Cpu*)p;
+    cpu = (Cpu*)p;
     if((pte = mmuwalk(pdb, CPUADDR, 2, false)) == nil)
         return;
-    *pte = PADDR(mach)|PTEWRITE|PTEVALID;
+    *pte = PADDR(cpu)|PTEWRITE|PTEVALID;
     if(cpu0->havepge)
         *pte |= PTEGLOBAL;
     p += BY2PG;
 
     cpuno = apic->cpuno;
-    CPUS(cpuno) = mach; // !!!!
-    mach->cpuno = cpuno;
-    mach->pdb = pdb;
-    mach->gdt = (Segdesc*)p;    /* filled by mmuinit */
+    CPUS(cpuno) = cpu; // !!!!
+    cpu->cpuno = cpuno;
+    cpu->pdproto = pdb;
+    cpu->gdt = (Segdesc*)p;    /* filled by mmuinit */
 
     /*
-     * Tell the AP where its kernel vector and pdb are.
+     * Tell the AP where its kernel vector and pd are.
      * The offsets are known in the AP bootstrap code.
      */
     apbootp = (ulong*)(APBOOTSTRAP+0x08);
