@@ -525,7 +525,7 @@ ptecpy(Pagetable *old)
     Page **src, **dst;
 
     new = ptealloc();
-    dst = &new->pages[old->first-old->pages];
+    dst = &new->pagetab[old->first-old->pagetab];
     new->first = dst;
     for(src = old->first; src <= old->last; src++, dst++)
         if(*src) {
@@ -551,8 +551,8 @@ ptealloc(void)
     Pagetable *new;
 
     new = smalloc(sizeof(Pagetable));
-    new->first = &new->pages[PTEPERTAB];
-    new->last = new->pages;
+    new->first = &new->pagetab[PAGETABSIZE];
+    new->last = new->pagetab;
     return new;
 }
 /*e: constructor ptealloc */
@@ -568,9 +568,9 @@ freepte(Segment *s, Pagetable *p)
     switch(s->type&SG_TYPE) {
     case SG_PHYSICAL:
         fn = s->pseg->pgfree;
-        ptop = &p->pages[PTEPERTAB];
+        ptop = &p->pagetab[PAGETABSIZE];
         if(fn) {
-            for(pg = p->pages; pg < ptop; pg++) {
+            for(pg = p->pagetab; pg < ptop; pg++) {
                 if(*pg == 0)
                     continue;
                 (*fn)(*pg);
@@ -578,7 +578,7 @@ freepte(Segment *s, Pagetable *p)
             }
             break;
         }
-        for(pg = p->pages; pg < ptop; pg++) {
+        for(pg = p->pagetab; pg < ptop; pg++) {
             pt = *pg;
             if(pt == 0)
                 continue;

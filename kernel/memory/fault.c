@@ -94,7 +94,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         *p = ptealloc();
 
     etp = *p;
-    pg = &etp->pages[(soff&(PTEMAPMEM-1))/BY2PG];
+    pg = &etp->pagetab[(soff&(PTEMAPMEM-1))/BY2PG];
     type = s->type&SG_TYPE;
 
     if(pg < etp->first)
@@ -420,7 +420,7 @@ checkpages(void)
             p = s->pagedir[off/PTEMAPMEM];
             if(p == nil)
                 continue;
-            pg = p->pages[(off&(PTEMAPMEM-1))/BY2PG];
+            pg = p->pagetab[(off&(PTEMAPMEM-1))/BY2PG];
             if(pg == nil || pagedout(pg))
                 continue;
             checkmmu(addr, pg->pa);

@@ -76,7 +76,7 @@ newseg(int type, virt_addr base, ulong size)
     Segment *s;
     int mapsize;
 
-    if(size > (SEGMAPSIZE*PTEPERTAB))
+    if(size > (PAGEDIRSIZE*PAGETABSIZE))
         error(Enovmem);
 
     s = smalloc(sizeof(Segment));
@@ -90,11 +90,11 @@ newseg(int type, virt_addr base, ulong size)
     s->sema.prev = &s->sema;
     s->sema.next = &s->sema;
 
-    mapsize = ROUND(size, PTEPERTAB)/PTEPERTAB;
+    mapsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
     if(mapsize > nelem(s->smallpagedir)){
         mapsize *= 2;
-        if(mapsize > (SEGMAPSIZE*PTEPERTAB))
-            mapsize = (SEGMAPSIZE*PTEPERTAB); // Really? not SEGMAPSIZE MAX?
+        if(mapsize > (PAGEDIRSIZE*PAGETABSIZE))
+            mapsize = (PAGEDIRSIZE*PAGETABSIZE); // Really? not PAGEDIRSIZE MAX?
         s->pagedir = smalloc(mapsize*sizeof(Pagetable*));
         s->pagedirsize = mapsize;
     }
@@ -259,7 +259,7 @@ segpage(Segment *s, Page *p)
     if(*pte == 0)
         *pte = ptealloc();
 
-    pg = &(*pte)->pages[(off&(PTEMAPMEM-1))/BY2PG];
+    pg = &(*pte)->pagetab[(off&(PTEMAPMEM-1))/BY2PG];
     *pg = p;
     if(pg < (*pte)->first)
         (*pte)->first = pg;
@@ -531,11 +531,11 @@ ibrk(ulong addr, int seg)
         }
     }
 
-    if(newsize > (SEGMAPSIZE*PTEPERTAB)) {
+    if(newsize > (PAGEDIRSIZE*PAGETABSIZE)) {
         qunlock(&s->lk);
         error(Enovmem);
     }
-    mapsize = ROUND(newsize, PTEPERTAB)/PTEPERTAB;
+    mapsize = ROUND(newsize, PAGETABSIZE)/PAGETABSIZE;
     if(mapsize > s->pagedirsize){
         map = smalloc(mapsize*sizeof(Pagetable*));
         memmove(map, s->pagedir, s->pagedirsize*sizeof(Pagetable*));
@@ -573,12 +573,12 @@ mfreeseg(Segment *s, ulong start, int pages)
         if(pages <= 0)
             break;
         if(s->pagedir[i] == 0) {
-            pages -= PTEPERTAB-j;
+            pages -= PAGETABSIZE-j;
             j = 0;
             continue;
         }
-        while(j < PTEPERTAB) {
-            pg = s->pagedir[i]->pages[j];
+        while(j < PAGETABSIZE) {
+            pg = s->pagedir[i]->pagetab[j];
             /*
              * We want to zero s->pagedir[i]->page[j] and putpage(pg),
              * but we have to make sure other processors flush the
@@ -597,7 +597,7 @@ mfreeseg(Segment *s, ulong start, int pages)
                     pg->next = list;
                     list = pg;
                 }
-                s->pagedir[i]->pages[j] = 0;
+                s->pagedir[i]->pagetab[j] = 0;
             }
             if(--pages == 0)
                 goto out;

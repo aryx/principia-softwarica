@@ -32,7 +32,7 @@ enum cachectl
 /*s: struct Page */
 // Page metadata. We will allocate as many Page as to cover all physical memory
 // + swap "address space". Either pa or daddr should be valid at one time.
-// Should have been xalloc'ed in Palloc.pages
+// xalloc'ed in Palloc.pages
 struct Page
 {
     phys_addr pa;     /* Physical address in memory */
@@ -72,7 +72,7 @@ struct Page
 struct Pagetable
 {
     //array<option<ref<Page>> will map 1M of memory
-    Page  *pages[PTEPERTAB];  /* Page map for this chunk of pte */
+    Page  *pagetab[PAGETABSIZE];
   
     //to avoid iterate over all pages
     // ref<ref<Page>> in Pagetable.pages
@@ -134,7 +134,7 @@ enum segtype
 #define pagedout(s) (((ulong)s)==0 || onswap(s))
 #define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
 
-#define SEGMAXSIZE  (SEGMAPSIZE*PTEMAPMEM)
+#define SEGMAXSIZE  (PAGEDIRSIZE*PTEMAPMEM)
 
 /*s: struct Physseg */
 struct Physseg
@@ -167,13 +167,11 @@ struct Segment
     virt_addr top;    /* virtual top */
     ulong size;   /* size in pages */ // top - base / BY2PG?
   
-    // Kind of a page directory table
-    // SEGMAPSIZE max so 1984 * 1M via Pagetable =~ 2Go virtual mem per seg!
-    // array<option<ref_own<Pagetable>>>, smalloc'ed, point to smallpagedir if small enough
-    Pagetable **pagedir; 
-    // small page directory, used instead of pagedir if segment small enough
+    // Kind of a page directory table. Points to smallpagedir if small enough.
+    // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
+    Pagetable **pagedir; // PAGEDIRSIZE
     // array<option<ref_own<Pagetable>>
-    Pagetable *smallpagedir[SSEGMAPSIZE]; // 16
+    Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
   
     KImage  *image;   /* text in file attached to this segment */

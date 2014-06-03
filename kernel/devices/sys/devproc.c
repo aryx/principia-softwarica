@@ -1669,7 +1669,7 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
     pte = s->pagedir[soff/PTEMAPMEM];
     if(pte == 0)
         panic("procctlmemio");
-    pg = pte->pages[(soff&(PTEMAPMEM-1))/BY2PG];
+    pg = pte->pagetab[(soff&(PTEMAPMEM-1))/BY2PG];
     if(pagedout(pg))
         panic("procctlmemio1");
 

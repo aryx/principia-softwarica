@@ -20,7 +20,7 @@ pteflush(Pagetable *pte, int s, int e)
     Page *p;
 
     for(i = s; i < e; i++) {
-        p = pte->pages[i];
+        p = pte->pagetab[i];
         if(pagedout(p) == 0)
             memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
     }

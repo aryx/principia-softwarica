@@ -2809,7 +2809,7 @@ msize(void *v)
 <<struct Page>>=
 // Page metadata. We will allocate as many Page as to cover all physical memory
 // + swap "address space". Either pa or daddr should be valid at one time.
-// Should have been xalloc'ed in Palloc.pages
+// xalloc'ed in Palloc.pages
 struct Page
 {
     phys_addr pa;     /* Physical address in memory */
@@ -2843,14 +2843,11 @@ struct Page
 
 };
 @
-% note that not a Page! some metadata about a Page. It's actually a kind of
-% PTE if compare to the terminology in Intel MMU.
-% rename PageInfo? Pte?
-
-% Kind of a reverse of PTE actually. PTE is here to map
-% a va to a pa. Here it's the reverse, we store given a physical
-% page what is his virtual address (and the pointer to this info
-% is stored in different places).
+% Note that it's not a Page! It's some metadata about a Page. It's actually
+% a kind of PTE if compare to the terminology in Intel MMU.
+% But it does more than a PTE as it also the reverse index of va -> pa
+% by storing the pa -> va too.
+% less: rename PageInfo? Pte?
 
 % put kmap, kunmap here? apparently they are used when copying from
 % one another or doing memset 0. just to get pa -> kern_addr?
@@ -3435,13 +3432,11 @@ struct Segment
     virt_addr top;    /* virtual top */
     ulong size;   /* size in pages */ // top - base / BY2PG?
   
-    // Kind of a page directory table
-    // SEGMAPSIZE max so 1984 * 1M via Pagetable =~ 2Go virtual mem per seg!
-    // array<option<ref_own<Pagetable>>>, smalloc'ed, point to smallpagedir if small enough
-    Pagetable **pagedir; 
-    // small page directory, used instead of pagedir if segment small enough
+    // Kind of a page directory table. Points to smallpagedir if small enough.
+    // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
+    Pagetable **pagedir; // PAGEDIRSIZE
     // array<option<ref_own<Pagetable>>
-    Pagetable *smallpagedir[SSEGMAPSIZE]; // 16
+    Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
   
     KImage  *image;   /* text in file attached to this segment */
@@ -3460,19 +3455,17 @@ struct Segment
     Sema  sema;
 };
 @
+% Segment acts as a kind of Page directory per process, but
+% archi-independent.
 
-% Segment act as a kind of VPT, per process, but 
-% archi-independent mostly
-
-% why this size? SEGMAPSIZE*PTEPERTAB = ?
-<<constant SEGMAPSIZE>>=
-#define SEGMAPSIZE  1984
+<<constant PAGEDIRSIZE>>=
+#define PAGEDIRSIZE  1984
 @
+% why this size? 1984 Mo = 2Go - 16 Mo, not sure why
 
-<<constant SSEGMAPSIZE>>=
-#define SSEGMAPSIZE 16 // small segmap
+<<constant SMALLPAGEDIRSIZE>>=
+#define SMALLPAGEDIRSIZE 16 // small segmap
 @
-%rename SMALLSEGMAPSIZE
 
 
 
@@ -3482,7 +3475,7 @@ struct Segment
 struct Pagetable
 {
     //array<option<ref<Page>> will map 1M of memory
-    Page  *pages[PTEPERTAB];  /* Page map for this chunk of pte */
+    Page  *pagetab[PAGETABSIZE];
   
     //to avoid iterate over all pages
     // ref<ref<Page>> in Pagetable.pages
@@ -3498,10 +3491,10 @@ struct Pagetable
 #define PTEMAPMEM (1024*1024) // 1MB
 @
 
-<<constant PTEPERTAB>>=
-#define PTEPERTAB (PTEMAPMEM/BY2PG)
+<<constant PAGETABSIZE>>=
+#define PAGETABSIZE 256 // (PTEMAPMEM/BY2PG)
 @
-% = 256. Each Pagetable have PageInfo *pages[256]; so 256 pointers
+% Each Pagetable have PageInfo *pages[256]; so 256 pointers
 % to PageInfo. each PageInfo speak about a page of 4Ko. so
 % with 256 PageInfo you can speak about 256 * 4096 = 1M of memory.
 % then later will have a segment that can have 1984 Pt,
@@ -3516,8 +3509,8 @@ ptealloc(void)
     Pagetable *new;
 
     new = smalloc(sizeof(Pagetable));
-    new->first = &new->pages[PTEPERTAB];
-    new->last = new->pages;
+    new->first = &new->pagetab[PAGETABSIZE];
+    new->last = new->pagetab;
     return new;
 }
 @
@@ -3533,9 +3526,9 @@ freepte(Segment *s, Pagetable *p)
     switch(s->type&SG_TYPE) {
     case SG_PHYSICAL:
         fn = s->pseg->pgfree;
-        ptop = &p->pages[PTEPERTAB];
+        ptop = &p->pagetab[PAGETABSIZE];
         if(fn) {
-            for(pg = p->pages; pg < ptop; pg++) {
+            for(pg = p->pagetab; pg < ptop; pg++) {
                 if(*pg == 0)
                     continue;
                 (*fn)(*pg);
@@ -3543,7 +3536,7 @@ freepte(Segment *s, Pagetable *p)
             }
             break;
         }
-        for(pg = p->pages; pg < ptop; pg++) {
+        for(pg = p->pagetab; pg < ptop; pg++) {
             pt = *pg;
             if(pt == 0)
                 continue;
@@ -3574,7 +3567,7 @@ ptecpy(Pagetable *old)
     Page **src, **dst;
 
     new = ptealloc();
-    dst = &new->pages[old->first-old->pages];
+    dst = &new->pagetab[old->first-old->pagetab];
     new->first = dst;
     for(src = old->first; src <= old->last; src++, dst++)
         if(*src) {
@@ -3723,7 +3716,7 @@ newseg(int type, virt_addr base, ulong size)
     Segment *s;
     int mapsize;
 
-    if(size > (SEGMAPSIZE*PTEPERTAB))
+    if(size > (PAGEDIRSIZE*PAGETABSIZE))
         error(Enovmem);
 
     s = smalloc(sizeof(Segment));
@@ -3737,11 +3730,11 @@ newseg(int type, virt_addr base, ulong size)
     s->sema.prev = &s->sema;
     s->sema.next = &s->sema;
 
-    mapsize = ROUND(size, PTEPERTAB)/PTEPERTAB;
+    mapsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
     if(mapsize > nelem(s->smallpagedir)){
         mapsize *= 2;
-        if(mapsize > (SEGMAPSIZE*PTEPERTAB))
-            mapsize = (SEGMAPSIZE*PTEPERTAB); // Really? not SEGMAPSIZE MAX?
+        if(mapsize > (PAGEDIRSIZE*PAGETABSIZE))
+            mapsize = (PAGEDIRSIZE*PAGETABSIZE); // Really? not PAGEDIRSIZE MAX?
         s->pagedir = smalloc(mapsize*sizeof(Pagetable*));
         s->pagedirsize = mapsize;
     }
@@ -3818,7 +3811,7 @@ segpage(Segment *s, Page *p)
     if(*pte == 0)
         *pte = ptealloc();
 
-    pg = &(*pte)->pages[(off&(PTEMAPMEM-1))/BY2PG];
+    pg = &(*pte)->pagetab[(off&(PTEMAPMEM-1))/BY2PG];
     *pg = p;
     if(pg < (*pte)->first)
         (*pte)->first = pg;
@@ -4074,12 +4067,12 @@ mfreeseg(Segment *s, ulong start, int pages)
         if(pages <= 0)
             break;
         if(s->pagedir[i] == 0) {
-            pages -= PTEPERTAB-j;
+            pages -= PAGETABSIZE-j;
             j = 0;
             continue;
         }
-        while(j < PTEPERTAB) {
-            pg = s->pagedir[i]->pages[j];
+        while(j < PAGETABSIZE) {
+            pg = s->pagedir[i]->pagetab[j];
             /*
              * We want to zero s->pagedir[i]->page[j] and putpage(pg),
              * but we have to make sure other processors flush the
@@ -4098,7 +4091,7 @@ mfreeseg(Segment *s, ulong start, int pages)
                     pg->next = list;
                     list = pg;
                 }
-                s->pagedir[i]->pages[j] = 0;
+                s->pagedir[i]->pagetab[j] = 0;
             }
             if(--pages == 0)
                 goto out;
@@ -4503,11 +4496,11 @@ ibrk(ulong addr, int seg)
         }
     }
 
-    if(newsize > (SEGMAPSIZE*PTEPERTAB)) {
+    if(newsize > (PAGEDIRSIZE*PAGETABSIZE)) {
         qunlock(&s->lk);
         error(Enovmem);
     }
-    mapsize = ROUND(newsize, PTEPERTAB)/PTEPERTAB;
+    mapsize = ROUND(newsize, PAGETABSIZE)/PAGETABSIZE;
     if(mapsize > s->pagedirsize){
         map = smalloc(mapsize*sizeof(Pagetable*));
         memmove(map, s->pagedir, s->pagedirsize*sizeof(Pagetable*));
@@ -7813,7 +7806,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         *p = ptealloc();
 
     etp = *p;
-    pg = &etp->pages[(soff&(PTEMAPMEM-1))/BY2PG];
+    pg = &etp->pagetab[(soff&(PTEMAPMEM-1))/BY2PG];
     type = s->type&SG_TYPE;
 
     if(pg < etp->first)
@@ -7941,7 +7934,7 @@ checkpages(void)
             p = s->pagedir[off/PTEMAPMEM];
             if(p == nil)
                 continue;
-            pg = p->pages[(off&(PTEMAPMEM-1))/BY2PG];
+            pg = p->pagetab[(off&(PTEMAPMEM-1))/BY2PG];
             if(pg == nil || pagedout(pg))
                 continue;
             checkmmu(addr, pg->pa);
@@ -22264,7 +22257,7 @@ pteflush(Pagetable *pte, int s, int e)
     Page *p;
 
     for(i = s; i < e; i++) {
-        p = pte->pages[i];
+        p = pte->pagetab[i];
         if(pagedout(p) == 0)
             memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
     }
@@ -24458,7 +24451,7 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
     pte = s->pagedir[soff/PTEMAPMEM];
     if(pte == 0)
         panic("procctlmemio");
-    pg = pte->pages[(soff&(PTEMAPMEM-1))/BY2PG];
+    pg = pte->pagetab[(soff&(PTEMAPMEM-1))/BY2PG];
     if(pagedout(pg))
         panic("procctlmemio1");
 

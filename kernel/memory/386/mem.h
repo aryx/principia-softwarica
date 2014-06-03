@@ -204,15 +204,15 @@
 /*s: constant PTEMAPMEM */
 #define PTEMAPMEM (1024*1024) // 1MB
 /*e: constant PTEMAPMEM */
-/*s: constant PTEPERTAB */
-#define PTEPERTAB (PTEMAPMEM/BY2PG)
-/*e: constant PTEPERTAB */
-/*s: constant SEGMAPSIZE */
-#define SEGMAPSIZE  1984
-/*e: constant SEGMAPSIZE */
-/*s: constant SSEGMAPSIZE */
-#define SSEGMAPSIZE 16 // small segmap
-/*e: constant SSEGMAPSIZE */
+/*s: constant PAGETABSIZE */
+#define PAGETABSIZE 256 // (PTEMAPMEM/BY2PG)
+/*e: constant PAGETABSIZE */
+/*s: constant PAGEDIRSIZE */
+#define PAGEDIRSIZE  1984
+/*e: constant PAGEDIRSIZE */
+/*s: constant SMALLPAGEDIRSIZE */
+#define SMALLPAGEDIRSIZE 16 // small segmap
+/*e: constant SMALLPAGEDIRSIZE */
 
 #define PPN(x)    ((x)&~(BY2PG-1))
 
