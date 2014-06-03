@@ -67,7 +67,7 @@ typedef void* kern_addr3;
 #include "dat_core.h"
 #include "../port/portdat_core.h"
 
-// defines Page, Segment, KImage
+// defines Page, Pagetable, Segment, KImage
 #include "dat_memory.h"
 #include "../port/portdat_memory.h"
 

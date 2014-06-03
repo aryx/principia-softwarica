@@ -493,7 +493,7 @@ provides to the user programs.
 #include "dat_core.h"
 #include "../port/portdat_core.h"
 
-// defines Page, Segment, KImage
+// defines Page, Pagetable, Segment, KImage
 #include "dat_memory.h"
 #include "../port/portdat_memory.h"
 
@@ -644,7 +644,6 @@ typedef void* kern_addr3;
 // -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic
 #define MAXKPA (ulong)(-KZERO)
 @
-%    maxkpa = (u32int)-KZERO;    /* 2^32 - KZERO */
 % rename KEND? but it's not really kernel end. KADDREND? MAXKADDR? KADDREND?
 
 % pa must be <= MAXKPA, use kaddr to access kernel data.
@@ -3404,17 +3403,20 @@ lookpage(KImage *i, ulong daddr)
 
 \section{[[Segment]]}
 
+% a bit like CS, DS, SS, etc. Maybe we should use Intel advanced features!
 <<enum segtype>>=
 /* Segment types */
 enum segtype
 {
-    SG_TYPE   = 07,   /* Mask type of segment */
     SG_TEXT   = 00,
     SG_DATA   = 01,
     SG_BSS    = 02,
     SG_STACK  = 03,
+
     SG_SHARED = 04,
     SG_PHYSICAL = 05,
+
+    SG_TYPE   = 07,   /* Mask type of segment */
   
     SG_RONLY  = 0040,   /* Segment is read only */
     SG_CEXEC  = 0100,   /* Detach at exec */
@@ -3434,6 +3436,7 @@ struct Segment
   
     // Kind of a page directory table. Points to smallpagedir if small enough.
     // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
+    // can map up to 2G of memory
     Pagetable **pagedir; // PAGEDIRSIZE
     // array<option<ref_own<Pagetable>>
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
@@ -3485,20 +3488,19 @@ struct Pagetable
 };
 @
 % the pages can be really sparse, but first and last optimize a bit
-% todo: rename Pagetable?
 
-<<constant PTEMAPMEM>>=
-#define PTEMAPMEM (1024*1024) // 1MB
+<<constant PAGETABMAPMEM>>=
+#define PAGETABMAPMEM (1024*1024) // 1MB
 @
 
 <<constant PAGETABSIZE>>=
-#define PAGETABSIZE 256 // (PTEMAPMEM/BY2PG)
+#define PAGETABSIZE 256 // (PAGETABMAPMEM/BY2PG)
 @
-% Each Pagetable have PageInfo *pages[256]; so 256 pointers
+% Each Pagetable have PageInfo *pagetab[256]; so 256 pointers
 % to PageInfo. each PageInfo speak about a page of 4Ko. so
 % with 256 PageInfo you can speak about 256 * 4096 = 1M of memory.
-% then later will have a segment that can have 1984 Pt,
-% and each of this Pt have 256 PageInfo so 1984 * 256 * 4096 = 2Go
+% then later will have a segment that can have 1984 Pagetable,
+% and each of this Pagetable have 256 PageInfo so 1984 * 256 * 4096 = 2Go
 % of mapped virtual memory
 
 
@@ -3714,7 +3716,7 @@ Segment *
 newseg(int type, virt_addr base, ulong size)
 {
     Segment *s;
-    int mapsize;
+    int pagedirsize;
 
     if(size > (PAGEDIRSIZE*PAGETABSIZE))
         error(Enovmem);
@@ -3730,13 +3732,13 @@ newseg(int type, virt_addr base, ulong size)
     s->sema.prev = &s->sema;
     s->sema.next = &s->sema;
 
-    mapsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
-    if(mapsize > nelem(s->smallpagedir)){
-        mapsize *= 2;
-        if(mapsize > (PAGEDIRSIZE*PAGETABSIZE))
-            mapsize = (PAGEDIRSIZE*PAGETABSIZE); // Really? not PAGEDIRSIZE MAX?
-        s->pagedir = smalloc(mapsize*sizeof(Pagetable*));
-        s->pagedirsize = mapsize;
+    pagedirsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
+    if(pagedirsize > nelem(s->smallpagedir)){
+        pagedirsize *= 2;
+        if(pagedirsize > (PAGEDIRSIZE*PAGETABSIZE))
+            pagedirsize = (PAGEDIRSIZE*PAGETABSIZE); // Really? not PAGEDIRSIZE MAX?
+        s->pagedir = smalloc(pagedirsize*sizeof(Pagetable*));
+        s->pagedirsize = pagedirsize;
     }
     else{
         s->pagedir = s->smallpagedir;
@@ -3807,11 +3809,11 @@ segpage(Segment *s, Page *p)
         panic("segpage");
 
     off = p->va - s->base;
-    pte = &s->pagedir[off/PTEMAPMEM];
+    pte = &s->pagedir[off/PAGETABMAPMEM];
     if(*pte == 0)
         *pte = ptealloc();
 
-    pg = &(*pte)->pagetab[(off&(PTEMAPMEM-1))/BY2PG];
+    pg = &(*pte)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
     *pg = p;
     if(pg < (*pte)->first)
         (*pte)->first = pg;
@@ -4059,11 +4061,11 @@ mfreeseg(Segment *s, ulong start, int pages)
     Page *list;
 
     soff = start-s->base;
-    j = (soff&(PTEMAPMEM-1))/BY2PG;
+    j = (soff&(PAGETABMAPMEM-1))/BY2PG;
 
     size = s->pagedirsize;
     list = nil;
-    for(i = soff/PTEMAPMEM; i < size; i++) {
+    for(i = soff/PAGETABMAPMEM; i < size; i++) {
         if(pages <= 0)
             break;
         if(s->pagedir[i] == 0) {
@@ -7801,12 +7803,12 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 
     addr &= ~(BY2PG-1);
     soff = addr - s->base;
-    p = &s->pagedir[soff/PTEMAPMEM];
+    p = &s->pagedir[soff/PAGETABMAPMEM];
     if(*p == 0)
         *p = ptealloc();
 
     etp = *p;
-    pg = &etp->pagetab[(soff&(PTEMAPMEM-1))/BY2PG];
+    pg = &etp->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
     type = s->type&SG_TYPE;
 
     if(pg < etp->first)
@@ -7931,10 +7933,10 @@ checkpages(void)
         qlock(&s->lk);
         for(addr=s->base; addr<s->top; addr+=BY2PG){
             off = addr - s->base;
-            p = s->pagedir[off/PTEMAPMEM];
+            p = s->pagedir[off/PAGETABMAPMEM];
             if(p == nil)
                 continue;
-            pg = p->pagetab[(off&(PTEMAPMEM-1))/BY2PG];
+            pg = p->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
             if(pg == nil || pagedout(pg))
                 continue;
             checkmmu(addr, pg->pa);
@@ -22220,9 +22222,9 @@ syssegflush(ulong *arg)
             l = s->top - addr;
 
         ps = addr-s->base;
-        pte = s->pagedir[ps/PTEMAPMEM];
-        ps &= PTEMAPMEM-1;
-        pe = PTEMAPMEM;
+        pte = s->pagedir[ps/PAGETABMAPMEM];
+        ps &= PAGETABMAPMEM-1;
+        pe = PAGETABMAPMEM;
         if(pe-ps > l){
             pe = ps + l;
             pe = (pe+BY2PG-1)&~(BY2PG-1);
@@ -24448,10 +24450,10 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
         s->steal--;
     }
     poperror();
-    pte = s->pagedir[soff/PTEMAPMEM];
+    pte = s->pagedir[soff/PAGETABMAPMEM];
     if(pte == 0)
         panic("procctlmemio");
-    pg = pte->pagetab[(soff&(PTEMAPMEM-1))/BY2PG];
+    pg = pte->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
     if(pagedout(pg))
         panic("procctlmemio1");
 

@@ -89,12 +89,12 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 
     addr &= ~(BY2PG-1);
     soff = addr - s->base;
-    p = &s->pagedir[soff/PTEMAPMEM];
+    p = &s->pagedir[soff/PAGETABMAPMEM];
     if(*p == 0)
         *p = ptealloc();
 
     etp = *p;
-    pg = &etp->pagetab[(soff&(PTEMAPMEM-1))/BY2PG];
+    pg = &etp->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
     type = s->type&SG_TYPE;
 
     if(pg < etp->first)
@@ -417,10 +417,10 @@ checkpages(void)
         qlock(&s->lk);
         for(addr=s->base; addr<s->top; addr+=BY2PG){
             off = addr - s->base;
-            p = s->pagedir[off/PTEMAPMEM];
+            p = s->pagedir[off/PAGETABMAPMEM];
             if(p == nil)
                 continue;
-            pg = p->pagetab[(off&(PTEMAPMEM-1))/BY2PG];
+            pg = p->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
             if(pg == nil || pagedout(pg))
                 continue;
             checkmmu(addr, pg->pa);

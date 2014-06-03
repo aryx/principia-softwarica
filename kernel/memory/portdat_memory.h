@@ -116,13 +116,15 @@ struct KImage
 /* Segment types */
 enum segtype
 {
-    SG_TYPE   = 07,   /* Mask type of segment */
     SG_TEXT   = 00,
     SG_DATA   = 01,
     SG_BSS    = 02,
     SG_STACK  = 03,
+
     SG_SHARED = 04,
     SG_PHYSICAL = 05,
+
+    SG_TYPE   = 07,   /* Mask type of segment */
   
     SG_RONLY  = 0040,   /* Segment is read only */
     SG_CEXEC  = 0100,   /* Detach at exec */
@@ -134,7 +136,7 @@ enum segtype
 #define pagedout(s) (((ulong)s)==0 || onswap(s))
 #define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
 
-#define SEGMAXSIZE  (PAGEDIRSIZE*PTEMAPMEM)
+#define SEGMAXSIZE  (PAGEDIRSIZE*PAGETABMAPMEM)
 
 /*s: struct Physseg */
 struct Physseg
@@ -169,6 +171,7 @@ struct Segment
   
     // Kind of a page directory table. Points to smallpagedir if small enough.
     // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
+    // can map up to 2G of memory
     Pagetable **pagedir; // PAGEDIRSIZE
     // array<option<ref_own<Pagetable>>
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];

@@ -201,11 +201,11 @@
 /*
  *  virtual MMU
  */
-/*s: constant PTEMAPMEM */
-#define PTEMAPMEM (1024*1024) // 1MB
-/*e: constant PTEMAPMEM */
+/*s: constant PAGETABMAPMEM */
+#define PAGETABMAPMEM (1024*1024) // 1MB
+/*e: constant PAGETABMAPMEM */
 /*s: constant PAGETABSIZE */
-#define PAGETABSIZE 256 // (PTEMAPMEM/BY2PG)
+#define PAGETABSIZE 256 // (PAGETABMAPMEM/BY2PG)
 /*e: constant PAGETABSIZE */
 /*s: constant PAGEDIRSIZE */
 #define PAGEDIRSIZE  1984

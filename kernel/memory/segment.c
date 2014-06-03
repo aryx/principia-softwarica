@@ -74,7 +74,7 @@ Segment *
 newseg(int type, virt_addr base, ulong size)
 {
     Segment *s;
-    int mapsize;
+    int pagedirsize;
 
     if(size > (PAGEDIRSIZE*PAGETABSIZE))
         error(Enovmem);
@@ -90,13 +90,13 @@ newseg(int type, virt_addr base, ulong size)
     s->sema.prev = &s->sema;
     s->sema.next = &s->sema;
 
-    mapsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
-    if(mapsize > nelem(s->smallpagedir)){
-        mapsize *= 2;
-        if(mapsize > (PAGEDIRSIZE*PAGETABSIZE))
-            mapsize = (PAGEDIRSIZE*PAGETABSIZE); // Really? not PAGEDIRSIZE MAX?
-        s->pagedir = smalloc(mapsize*sizeof(Pagetable*));
-        s->pagedirsize = mapsize;
+    pagedirsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
+    if(pagedirsize > nelem(s->smallpagedir)){
+        pagedirsize *= 2;
+        if(pagedirsize > (PAGEDIRSIZE*PAGETABSIZE))
+            pagedirsize = (PAGEDIRSIZE*PAGETABSIZE); // Really? not PAGEDIRSIZE MAX?
+        s->pagedir = smalloc(pagedirsize*sizeof(Pagetable*));
+        s->pagedirsize = pagedirsize;
     }
     else{
         s->pagedir = s->smallpagedir;
@@ -255,11 +255,11 @@ segpage(Segment *s, Page *p)
         panic("segpage");
 
     off = p->va - s->base;
-    pte = &s->pagedir[off/PTEMAPMEM];
+    pte = &s->pagedir[off/PAGETABMAPMEM];
     if(*pte == 0)
         *pte = ptealloc();
 
-    pg = &(*pte)->pagetab[(off&(PTEMAPMEM-1))/BY2PG];
+    pg = &(*pte)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
     *pg = p;
     if(pg < (*pte)->first)
         (*pte)->first = pg;
@@ -565,11 +565,11 @@ mfreeseg(Segment *s, ulong start, int pages)
     Page *list;
 
     soff = start-s->base;
-    j = (soff&(PTEMAPMEM-1))/BY2PG;
+    j = (soff&(PAGETABMAPMEM-1))/BY2PG;
 
     size = s->pagedirsize;
     list = nil;
-    for(i = soff/PTEMAPMEM; i < size; i++) {
+    for(i = soff/PAGETABMAPMEM; i < size; i++) {
         if(pages <= 0)
             break;
         if(s->pagedir[i] == 0) {
