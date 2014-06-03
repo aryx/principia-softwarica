@@ -578,7 +578,7 @@ mmuwalk(ulong* pd, virt_addr va, int level, bool create)
                 panic("mmuwalk xspanalloc failed");
             *table = PADDR(map)|PTEWRITE|PTEVALID;
         }
-        table = KADDR(PPN(*table)); //todo: use page here? s/table/pte?
+        table = KADDR(PPN(*table));
         return &table[PTX(va)];
     }
 }

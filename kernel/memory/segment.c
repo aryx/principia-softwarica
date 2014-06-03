@@ -142,7 +142,7 @@ putseg(Segment *s)
     emap = &s->pagedir[s->pagedirsize];
     for(pp = s->pagedir; pp < emap; pp++)
         if(*pp)
-            freepte(s, *pp);
+            freept(s, *pp);
 
     qunlock(&s->lk);
     if(s->pagedir != s->smallpagedir)
@@ -226,7 +226,7 @@ dupseg(Segment **seg, int segno, bool share)
     size = s->pagedirsize;
     for(i = 0; i < size; i++)
         if(pt = s->pagedir[i])
-            n->pagedir[i] = ptecpy(pt);
+            n->pagedir[i] = ptcpy(pt);
 
     n->flushme = s->flushme;
     if(s->ref > 1)
@@ -257,7 +257,7 @@ segpage(Segment *s, Page *p)
     off = p->va - s->base;
     pt = &s->pagedir[off/PAGETABMAPMEM];
     if(*pt == nil)
-        *pt = ptealloc();
+        *pt = ptalloc();
 
     pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
     *pg = p;

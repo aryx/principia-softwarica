@@ -3474,7 +3474,7 @@ struct Segment
 
 
 <<struct Pagetable>>=
-// ptealloc'ed (malloc'ed)
+// ptalloc'ed (malloc'ed)
 struct Pagetable
 {
     //array<option<ref<Page>> will map 1M of memory
@@ -3504,9 +3504,9 @@ struct Pagetable
 % of mapped virtual memory
 
 
-<<constructor ptealloc>>=
+<<constructor ptalloc>>=
 Pagetable*
-ptealloc(void)
+ptalloc(void)
 {
     Pagetable *new;
 
@@ -3517,9 +3517,9 @@ ptealloc(void)
 }
 @
 
-<<destructor freepte>>=
+<<destructor freept>>=
 void
-freepte(Segment *s, Pagetable *p)
+freept(Segment *s, Pagetable *p)
 {
     int ref;
     void (*fn)(Page*);
@@ -3561,14 +3561,14 @@ freepte(Segment *s, Pagetable *p)
 @
 
 
-<<function ptecpy>>=
+<<function ptcpy>>=
 Pagetable*
-ptecpy(Pagetable *old)
+ptcpy(Pagetable *old)
 {
     Pagetable *new;
     Page **src, **dst;
 
-    new = ptealloc();
+    new = ptalloc();
     dst = &new->pagetab[old->first-old->pagetab];
     new->first = dst;
     for(src = old->first; src <= old->last; src++, dst++)
@@ -3785,7 +3785,7 @@ putseg(Segment *s)
     emap = &s->pagedir[s->pagedirsize];
     for(pp = s->pagedir; pp < emap; pp++)
         if(*pp)
-            freepte(s, *pp);
+            freept(s, *pp);
 
     qunlock(&s->lk);
     if(s->pagedir != s->smallpagedir)
@@ -3811,7 +3811,7 @@ segpage(Segment *s, Page *p)
     off = p->va - s->base;
     pt = &s->pagedir[off/PAGETABMAPMEM];
     if(*pt == nil)
-        *pt = ptealloc();
+        *pt = ptalloc();
 
     pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
     *pg = p;
@@ -4030,7 +4030,7 @@ dupseg(Segment **seg, int segno, bool share)
     size = s->pagedirsize;
     for(i = 0; i < size; i++)
         if(pt = s->pagedir[i])
-            n->pagedir[i] = ptecpy(pt);
+            n->pagedir[i] = ptcpy(pt);
 
     n->flushme = s->flushme;
     if(s->ref > 1)
@@ -7337,7 +7337,7 @@ mmuwalk(ulong* pd, virt_addr va, int level, bool create)
                 panic("mmuwalk xspanalloc failed");
             *table = PADDR(map)|PTEWRITE|PTEVALID;
         }
-        table = KADDR(PPN(*table)); //todo: use page here? s/table/pte?
+        table = KADDR(PPN(*table));
         return &table[PTX(va)];
     }
 }
@@ -7403,9 +7403,9 @@ upallocmmupd(void)
         splx(s);
         return;
     }
-    pd = tmpmap(page);
-    pd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)];
-    tmpunmap(pd);
+    mmupd = tmpmap(page);
+    mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)];
+    tmpunmap(mmupd);
     up->mmupd = page;
     putcr3(up->mmupd->pa); //!!!! bootstrap! putcr3 take a PA of course
     splx(s);
@@ -7802,7 +7802,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     soff = addr - s->base;
     p = &s->pagedir[soff/PAGETABMAPMEM];
     if(*p == 0)
-        *p = ptealloc();
+        *p = ptalloc();
 
     etp = *p;
     pg = &etp->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
@@ -8511,7 +8511,7 @@ pagepte(int type, Page **pg)
     switch(type) {
     case SG_TEXT:               /* Revert to demand load */
         putpage(outp);
-        *pg = 0;
+        *pg = nil;
         break;
 
     case SG_DATA:
@@ -10644,11 +10644,11 @@ meminit(void)
      * then scan for useful memory.
      */
     for(pa = 0xA0000; pa < 0xC0000; pa += BY2PG){
-        pte = mmuwalk(cpu->pdproto, (ulong)KADDR(pa), 2, false);
+        pte = mmuwalk(cpu->pdproto, (kern_addr)KADDR(pa), 2, false);
         *pte |= PTEWT;
     }
     for(pa = 0xC0000; pa < 0x100000; pa += BY2PG){
-        pte = mmuwalk(cpu->pdproto, (ulong)KADDR(pa), 2, false);
+        pte = mmuwalk(cpu->pdproto, (kern_addr)KADDR(pa), 2, false);
         *pte |= PTEUNCACHED;
     }
     mmuflushtlb(PADDR(cpu->pdproto));
@@ -22232,7 +22232,7 @@ syssegflush(ulong *arg)
         }
 
         if(pt)
-            pteflush(pt, ps/BY2PG, pe/BY2PG);
+            ptflush(pt, ps/BY2PG, pe/BY2PG);
 
         chunk = pe-ps;
         len -= chunk;
@@ -22248,9 +22248,9 @@ syssegflush(ulong *arg)
 }
 @
 
-<<function pteflush>>=
+<<function ptflush>>=
 void
-pteflush(Pagetable *pt, int s, int e)
+ptflush(Pagetable *pt, int s, int e)
 {
     int i;
     Page *p;

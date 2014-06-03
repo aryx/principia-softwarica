@@ -68,7 +68,7 @@ struct Page
 /*e: struct Page */
 
 /*s: struct Pagetable */
-// ptealloc'ed (malloc'ed)
+// ptalloc'ed (malloc'ed)
 struct Pagetable
 {
     //array<option<ref<Page>> will map 1M of memory

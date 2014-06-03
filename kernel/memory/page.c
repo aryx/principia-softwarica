@@ -517,14 +517,14 @@ lookpage(KImage *i, ulong daddr)
 }
 /*e: function lookpage */
 
-/*s: function ptecpy */
+/*s: function ptcpy */
 Pagetable*
-ptecpy(Pagetable *old)
+ptcpy(Pagetable *old)
 {
     Pagetable *new;
     Page **src, **dst;
 
-    new = ptealloc();
+    new = ptalloc();
     dst = &new->pagetab[old->first-old->pagetab];
     new->first = dst;
     for(src = old->first; src <= old->last; src++, dst++)
@@ -542,11 +542,11 @@ ptecpy(Pagetable *old)
 
     return new;
 }
-/*e: function ptecpy */
+/*e: function ptcpy */
 
-/*s: constructor ptealloc */
+/*s: constructor ptalloc */
 Pagetable*
-ptealloc(void)
+ptalloc(void)
 {
     Pagetable *new;
 
@@ -555,11 +555,11 @@ ptealloc(void)
     new->last = new->pagetab;
     return new;
 }
-/*e: constructor ptealloc */
+/*e: constructor ptalloc */
 
-/*s: destructor freepte */
+/*s: destructor freept */
 void
-freepte(Segment *s, Pagetable *p)
+freept(Segment *s, Pagetable *p)
 {
     int ref;
     void (*fn)(Page*);
@@ -598,7 +598,7 @@ freepte(Segment *s, Pagetable *p)
     }
     free(p);
 }
-/*e: destructor freepte */
+/*e: destructor freept */
 
 /*s: function pagenumber */
 ulong

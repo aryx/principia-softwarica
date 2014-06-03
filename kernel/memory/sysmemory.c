@@ -12,9 +12,9 @@
 
 // those functions used to be in segment.c
 
-/*s: function pteflush */
+/*s: function ptflush */
 void
-pteflush(Pagetable *pt, int s, int e)
+ptflush(Pagetable *pt, int s, int e)
 {
     int i;
     Page *p;
@@ -25,7 +25,7 @@ pteflush(Pagetable *pt, int s, int e)
             memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
     }
 }
-/*e: function pteflush */
+/*e: function ptflush */
 
 /*s: syscall segflush */
 long
@@ -64,7 +64,7 @@ syssegflush(ulong *arg)
         }
 
         if(pt)
-            pteflush(pt, ps/BY2PG, pe/BY2PG);
+            ptflush(pt, ps/BY2PG, pe/BY2PG);
 
         chunk = pe-ps;
         len -= chunk;

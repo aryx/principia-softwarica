@@ -91,7 +91,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     soff = addr - s->base;
     p = &s->pagedir[soff/PAGETABMAPMEM];
     if(*p == 0)
-        *p = ptealloc();
+        *p = ptalloc();
 
     etp = *p;
     pg = &etp->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];

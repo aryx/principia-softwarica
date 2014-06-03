@@ -323,7 +323,7 @@ pagepte(int type, Page **pg)
     switch(type) {
     case SG_TEXT:               /* Revert to demand load */
         putpage(outp);
-        *pg = 0;
+        *pg = nil;
         break;
 
     case SG_DATA:
