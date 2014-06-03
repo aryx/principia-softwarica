@@ -1637,7 +1637,7 @@ int
 procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
 {
     KMap *k;
-    Pagetable *pte;
+    Pagetable *pt;
     Page *pg;
     Segment *s;
     ulong soff, l;
@@ -1666,10 +1666,10 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
         s->steal--;
     }
     poperror();
-    pte = s->pagedir[soff/PAGETABMAPMEM];
-    if(pte == 0)
+    pt = s->pagedir[soff/PAGETABMAPMEM];
+    if(pt == nil)
         panic("procctlmemio");
-    pg = pte->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
+    pg = pt->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
     if(pagedout(pg))
         panic("procctlmemio1");
 

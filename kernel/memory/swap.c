@@ -239,12 +239,12 @@ pageout(Proc *p, Segment *s)
         return;
     }
 
-    /* Pass through the pte tables looking for memory pages to swap out */
+    /* Pass through the tables looking for memory pages to swap out */
     type = s->type&SG_TYPE;
     size = s->pagedirsize;
     for(i = 0; i < size; i++) {
         l = s->pagedir[i];
-        if(l == 0)
+        if(l == nil)
             continue;
         for(pg = l->first; pg < l->last; pg++) {
             entry = *pg;

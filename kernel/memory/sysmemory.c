@@ -14,13 +14,13 @@
 
 /*s: function pteflush */
 void
-pteflush(Pagetable *pte, int s, int e)
+pteflush(Pagetable *pt, int s, int e)
 {
     int i;
     Page *p;
 
     for(i = s; i < e; i++) {
-        p = pte->pagetab[i];
+        p = pt->pagetab[i];
         if(pagedout(p) == 0)
             memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
     }
@@ -33,7 +33,7 @@ syssegflush(ulong *arg)
 {
     Segment *s;
     ulong addr, l;
-    Pagetable *pte;
+    Pagetable *pt;
     int chunk, ps, pe, len;
 
     addr = arg[0];
@@ -51,7 +51,7 @@ syssegflush(ulong *arg)
             l = s->top - addr;
 
         ps = addr-s->base;
-        pte = s->pagedir[ps/PAGETABMAPMEM];
+        pt = s->pagedir[ps/PAGETABMAPMEM];
         ps &= PAGETABMAPMEM-1;
         pe = PAGETABMAPMEM;
         if(pe-ps > l){
@@ -63,8 +63,8 @@ syssegflush(ulong *arg)
             error(Ebadarg);
         }
 
-        if(pte)
-            pteflush(pte, ps/BY2PG, pe/BY2PG);
+        if(pt)
+            pteflush(pt, ps/BY2PG, pe/BY2PG);
 
         chunk = pe-ps;
         len -= chunk;

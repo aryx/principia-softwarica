@@ -181,7 +181,7 @@ static void
 memglobal(void)
 {
     int i, j;
-    ulong *pde, *pte;
+    ulong *pd, *pt;
 
     /* only need to do this once, on bootstrap processor */
     if(cpu->cpuno != 0)
@@ -190,15 +190,15 @@ memglobal(void)
     if(!cpu->havepge)
         return;
 
-    pde = cpu->pdb;
+    pd = cpu->pdb;
     for(i=PDX(KZERO); i<1024; i++){
-        if(pde[i] & PTEVALID){
-            pde[i] |= PTEGLOBAL;
-            if(!(pde[i] & PTESIZE)){
-                pte = KADDR(pde[i]&~(BY2PG-1));
+        if(pd[i] & PTEVALID){
+            pd[i] |= PTEGLOBAL;
+            if(!(pd[i] & PTESIZE)){
+                pt = KADDR(pd[i]&~(BY2PG-1));
                 for(j=0; j<1024; j++)
-                    if(pte[j] & PTEVALID)
-                        pte[j] |= PTEGLOBAL;
+                    if(pt[j] & PTEVALID)
+                        pt[j] |= PTEGLOBAL;
             }
         }
     }           

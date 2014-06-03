@@ -158,14 +158,14 @@ void
 relocateseg(Segment *s, ulong offset)
 {
     Page **pg, *x;
-    Pagetable *pte, **p, **endpte;
+    Pagetable *pt, **p, **endpt;
 
-    endpte = &s->pagedir[s->pagedirsize];
-    for(p = s->pagedir; p < endpte; p++) {
-        if(*p == 0)
+    endpt = &s->pagedir[s->pagedirsize];
+    for(p = s->pagedir; p < endpt; p++) {
+        if(*p == nil)
             continue;
-        pte = *p;
-        for(pg = pte->first; pg <= pte->last; pg++) {
+        pt = *p;
+        for(pg = pt->first; pg <= pt->last; pg++) {
             if(x = *pg)
                 x->va += offset;
         }
@@ -178,7 +178,7 @@ Segment*
 dupseg(Segment **seg, int segno, bool share)
 {
     int i, size;
-    Pagetable *pte;
+    Pagetable *pt;
     Segment *n, *s;
 
     SET(n); //????
@@ -191,7 +191,7 @@ dupseg(Segment **seg, int segno, bool share)
         nexterror();
     }
     switch(s->type&SG_TYPE) {
-    case SG_TEXT:       /* New segment shares pte set */
+    case SG_TEXT:       /* New segment shares pt set */
     case SG_SHARED:
     case SG_PHYSICAL:
         goto sameseg;
@@ -225,8 +225,8 @@ dupseg(Segment **seg, int segno, bool share)
     }
     size = s->pagedirsize;
     for(i = 0; i < size; i++)
-        if(pte = s->pagedir[i])
-            n->pagedir[i] = ptecpy(pte);
+        if(pt = s->pagedir[i])
+            n->pagedir[i] = ptecpy(pt);
 
     n->flushme = s->flushme;
     if(s->ref > 1)
@@ -247,7 +247,7 @@ sameseg:
 void
 segpage(Segment *s, Page *p)
 {
-    Pagetable **pte;
+    Pagetable **pt;
     ulong off;
     Page **pg;
 
@@ -255,16 +255,16 @@ segpage(Segment *s, Page *p)
         panic("segpage");
 
     off = p->va - s->base;
-    pte = &s->pagedir[off/PAGETABMAPMEM];
-    if(*pte == 0)
-        *pte = ptealloc();
+    pt = &s->pagedir[off/PAGETABMAPMEM];
+    if(*pt == nil)
+        *pt = ptealloc();
 
-    pg = &(*pte)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
+    pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
     *pg = p;
-    if(pg < (*pte)->first)
-        (*pte)->first = pg;
-    if(pg > (*pte)->last)
-        (*pte)->last = pg;
+    if(pg < (*pt)->first)
+        (*pt)->first = pg;
+    if(pg > (*pt)->last)
+        (*pt)->last = pg;
 }
 /*e: function segpage */
 

@@ -3641,7 +3641,7 @@ portcountpagerefs(ulong *ref, int print)
     ulong i, j, k, ns, n;
     Page **pg, *entry;
     Proc *p;
-    Pagetable *pte;
+    Pagetable *pt;
     Segment *s;
 
     /*
@@ -3665,10 +3665,10 @@ portcountpagerefs(ulong *ref, int print)
                 continue;
             ns++;
             for(k=0; k<s->pagedirsize; k++){
-                pte = s->pagedir[k];
-                if(pte == nil)
+                pt = s->pagedir[k];
+                if(pt == nil)
                     continue;
-                for(pg = pte->first; pg <= pte->last; pg++){
+                for(pg = pt->first; pg <= pt->last; pg++){
                     entry = *pg;
                     if(pagedout(entry))
                         continue;
@@ -3801,7 +3801,7 @@ putseg(Segment *s)
 void
 segpage(Segment *s, Page *p)
 {
-    Pagetable **pte;
+    Pagetable **pt;
     ulong off;
     Page **pg;
 
@@ -3809,16 +3809,16 @@ segpage(Segment *s, Page *p)
         panic("segpage");
 
     off = p->va - s->base;
-    pte = &s->pagedir[off/PAGETABMAPMEM];
-    if(*pte == 0)
-        *pte = ptealloc();
+    pt = &s->pagedir[off/PAGETABMAPMEM];
+    if(*pt == nil)
+        *pt = ptealloc();
 
-    pg = &(*pte)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
+    pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
     *pg = p;
-    if(pg < (*pte)->first)
-        (*pte)->first = pg;
-    if(pg > (*pte)->last)
-        (*pte)->last = pg;
+    if(pg < (*pt)->first)
+        (*pt)->first = pg;
+    if(pg > (*pt)->last)
+        (*pt)->last = pg;
 }
 @
 
@@ -3961,14 +3961,14 @@ void
 relocateseg(Segment *s, ulong offset)
 {
     Page **pg, *x;
-    Pagetable *pte, **p, **endpte;
+    Pagetable *pt, **p, **endpt;
 
-    endpte = &s->pagedir[s->pagedirsize];
-    for(p = s->pagedir; p < endpte; p++) {
-        if(*p == 0)
+    endpt = &s->pagedir[s->pagedirsize];
+    for(p = s->pagedir; p < endpt; p++) {
+        if(*p == nil)
             continue;
-        pte = *p;
-        for(pg = pte->first; pg <= pte->last; pg++) {
+        pt = *p;
+        for(pg = pt->first; pg <= pt->last; pg++) {
             if(x = *pg)
                 x->va += offset;
         }
@@ -3982,7 +3982,7 @@ Segment*
 dupseg(Segment **seg, int segno, bool share)
 {
     int i, size;
-    Pagetable *pte;
+    Pagetable *pt;
     Segment *n, *s;
 
     SET(n); //????
@@ -3995,7 +3995,7 @@ dupseg(Segment **seg, int segno, bool share)
         nexterror();
     }
     switch(s->type&SG_TYPE) {
-    case SG_TEXT:       /* New segment shares pte set */
+    case SG_TEXT:       /* New segment shares pt set */
     case SG_SHARED:
     case SG_PHYSICAL:
         goto sameseg;
@@ -4029,8 +4029,8 @@ dupseg(Segment **seg, int segno, bool share)
     }
     size = s->pagedirsize;
     for(i = 0; i < size; i++)
-        if(pte = s->pagedir[i])
-            n->pagedir[i] = ptecpy(pte);
+        if(pt = s->pagedir[i])
+            n->pagedir[i] = ptecpy(pt);
 
     n->flushme = s->flushme;
     if(s->ref > 1)
@@ -7191,7 +7191,7 @@ Segdesc *gdt;     /* gdt for this processor */
 % see Basic pagination intialization too
 
 % different levels:
-%  tlb, vpt, pdb, pte and then Segment itself have pte, page,
+%  tlb, vpt, pdb, pte and then Segment itself have pt, page,
 %  and cpu have pdb, and proc avec mmupdb ... very complex.
 % PDX, PTX (page directory idx?, page table idx?)
 
@@ -8428,12 +8428,12 @@ pageout(Proc *p, Segment *s)
         return;
     }
 
-    /* Pass through the pte tables looking for memory pages to swap out */
+    /* Pass through the tables looking for memory pages to swap out */
     type = s->type&SG_TYPE;
     size = s->pagedirsize;
     for(i = 0; i < size; i++) {
         l = s->pagedir[i];
-        if(l == 0)
+        if(l == nil)
             continue;
         for(pg = l->first; pg < l->last; pg++) {
             entry = *pg;
@@ -11715,7 +11715,7 @@ static void
 memglobal(void)
 {
     int i, j;
-    ulong *pde, *pte;
+    ulong *pd, *pt;
 
     /* only need to do this once, on bootstrap processor */
     if(cpu->cpuno != 0)
@@ -11724,15 +11724,15 @@ memglobal(void)
     if(!cpu->havepge)
         return;
 
-    pde = cpu->pdb;
+    pd = cpu->pdb;
     for(i=PDX(KZERO); i<1024; i++){
-        if(pde[i] & PTEVALID){
-            pde[i] |= PTEGLOBAL;
-            if(!(pde[i] & PTESIZE)){
-                pte = KADDR(pde[i]&~(BY2PG-1));
+        if(pd[i] & PTEVALID){
+            pd[i] |= PTEGLOBAL;
+            if(!(pd[i] & PTESIZE)){
+                pt = KADDR(pd[i]&~(BY2PG-1));
                 for(j=0; j<1024; j++)
-                    if(pte[j] & PTEVALID)
-                        pte[j] |= PTEGLOBAL;
+                    if(pt[j] & PTEVALID)
+                        pt[j] |= PTEGLOBAL;
             }
         }
     }           
@@ -22204,7 +22204,7 @@ syssegflush(ulong *arg)
 {
     Segment *s;
     ulong addr, l;
-    Pagetable *pte;
+    Pagetable *pt;
     int chunk, ps, pe, len;
 
     addr = arg[0];
@@ -22222,7 +22222,7 @@ syssegflush(ulong *arg)
             l = s->top - addr;
 
         ps = addr-s->base;
-        pte = s->pagedir[ps/PAGETABMAPMEM];
+        pt = s->pagedir[ps/PAGETABMAPMEM];
         ps &= PAGETABMAPMEM-1;
         pe = PAGETABMAPMEM;
         if(pe-ps > l){
@@ -22234,8 +22234,8 @@ syssegflush(ulong *arg)
             error(Ebadarg);
         }
 
-        if(pte)
-            pteflush(pte, ps/BY2PG, pe/BY2PG);
+        if(pt)
+            pteflush(pt, ps/BY2PG, pe/BY2PG);
 
         chunk = pe-ps;
         len -= chunk;
@@ -22253,13 +22253,13 @@ syssegflush(ulong *arg)
 
 <<function pteflush>>=
 void
-pteflush(Pagetable *pte, int s, int e)
+pteflush(Pagetable *pt, int s, int e)
 {
     int i;
     Page *p;
 
     for(i = s; i < e; i++) {
-        p = pte->pagetab[i];
+        p = pt->pagetab[i];
         if(pagedout(p) == 0)
             memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
     }
@@ -24421,7 +24421,7 @@ int
 procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
 {
     KMap *k;
-    Pagetable *pte;
+    Pagetable *pt;
     Page *pg;
     Segment *s;
     ulong soff, l;
@@ -24450,10 +24450,10 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
         s->steal--;
     }
     poperror();
-    pte = s->pagedir[soff/PAGETABMAPMEM];
-    if(pte == 0)
+    pt = s->pagedir[soff/PAGETABMAPMEM];
+    if(pt == nil)
         panic("procctlmemio");
-    pg = pte->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
+    pg = pt->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
     if(pagedout(pg))
         panic("procctlmemio1");
 

@@ -658,7 +658,7 @@ portcountpagerefs(ulong *ref, int print)
     ulong i, j, k, ns, n;
     Page **pg, *entry;
     Proc *p;
-    Pagetable *pte;
+    Pagetable *pt;
     Segment *s;
 
     /*
@@ -682,10 +682,10 @@ portcountpagerefs(ulong *ref, int print)
                 continue;
             ns++;
             for(k=0; k<s->pagedirsize; k++){
-                pte = s->pagedir[k];
-                if(pte == nil)
+                pt = s->pagedir[k];
+                if(pt == nil)
                     continue;
-                for(pg = pte->first; pg <= pte->last; pg++){
+                for(pg = pt->first; pg <= pt->last; pg++){
                     entry = *pg;
                     if(pagedout(entry))
                         continue;
