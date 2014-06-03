@@ -23,9 +23,7 @@ enum modref
 enum cachectl
 {
     PG_NOFLUSH  = 0,
-
     PG_TXTFLUSH = 1,    /* flush dcache and invalidate icache */
-    PG_NEWCOL = 3,    /* page has been recolored */
 };
 /*e: enum cachectl */
 
@@ -50,8 +48,6 @@ struct Page
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
 
-    // enum<cachectl>??
-    char  color;      /* Cache coloring */
     // array<enum<cachectl>>
     char  cachectl[MAXCPUS];  /* Cache flushing control for putmmu */
 

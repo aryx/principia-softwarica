@@ -4,9 +4,6 @@
 /*
  *  MMU stuff in proc
  */
-/*s: constant NCOLOR */
-#define NCOLOR 1
-/*e: constant NCOLOR */
 /*s: struct ArchProcMMU */
 //@Scheck: not dead, unnamed substructure
 struct ArchProcMMU

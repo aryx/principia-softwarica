@@ -21,7 +21,7 @@ void portcountpagerefs(ulong*, int);
 void
 pageinit(void)
 {
-    int color, i, j;
+    int i, j;
     Page *p;
     Pallocmem *pm;
     ulong m, np, k, vkb, pkb;
@@ -35,7 +35,6 @@ pageinit(void)
     if(palloc.pages == 0)
         panic("pageinit");
 
-    color = 0;
     palloc.head = palloc.pages;
     p = palloc.head;
     for(i=0; i<nelem(palloc.mem); i++){
@@ -44,9 +43,7 @@ pageinit(void)
             p->prev = p-1;
             p->next = p+1;
             p->pa = pm->base+j*BY2PG;
-            p->color = color;
             palloc.freecount++;
-            color = (color+1)%NCOLOR;
             p++;
         }
     }
@@ -151,12 +148,10 @@ newpage(bool clear, Segment **s, virt_addr va)
 {
     Page *p;
     KMap *k;
-    uchar ct;
-    int i, hw, color;
+    int i, hw;
     bool dontalloc;
 
     lock(&palloc);
-    color = getpgcolor(va);
     hw = swapalloc.highwater;
     for(;;) {
         if(palloc.freecount > hw)
@@ -195,17 +190,7 @@ newpage(bool clear, Segment **s, virt_addr va)
         lock(&palloc);
     }
 
-    /* First try for our colour */
-    for(p = palloc.head; p; p = p->next)
-        if(p->color == color)
-            break;
-
-    ct = PG_NOFLUSH;
-    if(p == nil) {
-        p = palloc.head;
-        p->color = color;
-        ct = PG_NEWCOL;
-    }
+    p = palloc.head;
 
     pageunchain(p);
 
@@ -218,7 +203,7 @@ newpage(bool clear, Segment **s, virt_addr va)
     p->va = va;
     p->modref = 0;
     for(i = 0; i < MAXCPUS; i++)
-        p->cachectl[i] = ct;
+        p->cachectl[i] = PG_NOFLUSH;
     unlock(p);
     unlock(&palloc);
 
@@ -310,7 +295,6 @@ int
 duppage(Page *p)
 {
     Page *np;
-    int color;
     int retries;
 
     retries = 0;
@@ -351,17 +335,7 @@ retry:
         return 1;
     }
 
-    color = getpgcolor(p->va);
-    for(np = palloc.head; np; np = np->next)
-        if(np->color == color)
-            break;
-
-    /* No page of the correct color */
-    if(np == nil) {
-        unlock(&palloc);
-        uncachepage(p);
-        return 1;
-    }
+    np = palloc.head;
 
     pageunchain(np);
     pagechaintail(np);
