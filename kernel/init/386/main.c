@@ -488,10 +488,8 @@ userinit(void)
      * Text
      */
     s = newseg(SG_TEXT, UTZERO, 1); // 1 page
-    s->flushme = true;
     p->seg[TSEG] = s;
     pg = newpage(false, 0, UTZERO);
-    memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
     segpage(s, pg);
     v = tmpmap(pg);
     memset(v, 0, BY2PG);

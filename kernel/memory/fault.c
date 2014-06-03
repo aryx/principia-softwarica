@@ -296,8 +296,7 @@ retry:
     }
 
 done:
-    if(s->flushme)
-        memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
+    ;
 }
 /*e: function pio */
 

@@ -464,7 +464,6 @@ sysexec(ulong *arg)
     img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
     ts = img->s;
     up->seg[TSEG] = ts;
-    ts->flushme = true;
     ts->fstart = 0;
     ts->flen = sizeof(Exec)+text;
     unlock(img);

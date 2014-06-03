@@ -2826,9 +2826,6 @@ struct Page
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
 
-    // array<enum<cachectl>>
-    char  cachectl[MAXCPUS];  /* Cache flushing control for putmmu */
-
     // extra
     Lock;
     // list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
@@ -2848,16 +2845,6 @@ struct Page
 
 % put kmap, kunmap here? apparently they are used when copying from
 % one another or doing memset 0. just to get pa -> kern_addr?
-
-<<enum cachectl>>=
-enum cachectl
-{
-    PG_NOFLUSH  = 0,
-    PG_TXTFLUSH = 1,    /* flush dcache and invalidate icache */
-};
-@
-% // PG_DATFLUSH = 2,    /* flush both i & d caches (UNUSED) */
-% // PG_NEWCOL = 3
 
 <<enum modref>>=
 enum modref 
@@ -2979,8 +2966,6 @@ newpage(bool clear, Segment **s, virt_addr va)
     p->ref++;
     p->va = va;
     p->modref = 0;
-    for(i = 0; i < MAXCPUS; i++)
-        p->cachectl[i] = PG_NOFLUSH;
     unlock(p);
     unlock(&palloc);
 
@@ -3419,7 +3404,6 @@ struct Segment
     ulong fstart;   /* start address in file for demand load */
     ulong flen;   /* length of segment in file */
   
-    bool flushme;  /* maintain icache for this segment */
     Physseg *pseg;
     ulong*  profile;  /* Tick profile area */
     ulong mark;   /* portcountrefs */
@@ -4005,7 +3989,6 @@ dupseg(Segment **seg, int segno, bool share)
         if(pt = s->pagedir[i])
             n->pagedir[i] = ptcpy(pt);
 
-    n->flushme = s->flushme;
     if(s->ref > 1)
         procflushseg(s);
     poperror();
@@ -5222,7 +5205,6 @@ sysexec(ulong *arg)
     img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
     ts = img->s;
     up->seg[TSEG] = ts;
-    ts->flushme = true;
     ts->fstart = 0;
     ts->flen = sizeof(Exec)+text;
     unlock(img);
@@ -8341,8 +8323,6 @@ retry:
     }
 
 done:
-    if(s->flushme)
-        memset((*p)->cachectl, PG_TXTFLUSH, sizeof((*p)->cachectl));
 }
 @
 
@@ -8472,6 +8452,9 @@ canflush(Proc *p, Segment *s)
 }
 @
 
+<<constant PG_ONSWAP>>=
+#define PG_ONSWAP 1
+@
 
 <<function pagepte>>=
 static void
@@ -11950,10 +11933,8 @@ userinit(void)
      * Text
      */
     s = newseg(SG_TEXT, UTZERO, 1); // 1 page
-    s->flushme = true;
     p->seg[TSEG] = s;
     pg = newpage(false, 0, UTZERO);
-    memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
     segpage(s, pg);
     v = tmpmap(pg);
     memset(v, 0, BY2PG);
@@ -22182,7 +22163,6 @@ syssegflush(ulong *arg)
         if(s == 0)
             error(Ebadarg);
 
-        s->flushme = 1;
     more:
         l = len;
         if(addr+l > s->top)
@@ -22201,8 +22181,9 @@ syssegflush(ulong *arg)
             error(Ebadarg);
         }
 
-        if(pt)
-            ptflush(pt, ps/BY2PG, pe/BY2PG);
+        // when had cachectl
+        //if(pt)
+        //    ptflush(pt, ps/BY2PG, pe/BY2PG);
 
         chunk = pe-ps;
         len -= chunk;
@@ -22218,20 +22199,6 @@ syssegflush(ulong *arg)
 }
 @
 
-<<function ptflush>>=
-void
-ptflush(Pagetable *pt, int s, int e)
-{
-    int i;
-    Page *p;
-
-    for(i = s; i < e; i++) {
-        p = pt->pagetab[i];
-        if(pagedout(p) == 0)
-            memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
-    }
-}
-@
 
 \subsection{Semaphore}
 
@@ -24443,10 +24410,6 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
     kunmap(k);
     poperror();
 
-    /* Ensure the process sees text page changes */
-    if(s->flushme)
-        memset(pg->cachectl, PG_TXTFLUSH, sizeof(pg->cachectl));
-
     s->steal--;
 
     if(read == 0)
@@ -24469,7 +24432,6 @@ txt2data(Proc *p, Segment *s)
     incref(ps->image);
     ps->fstart = s->fstart;
     ps->flen = s->flen;
-    ps->flushme = true;
 
     qlock(&p->seglock);
     for(i = 0; i < NSEG; i++)

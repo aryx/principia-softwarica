@@ -19,14 +19,6 @@ enum modref
 };
 /*e: enum modref */
 
-/*s: enum cachectl */
-enum cachectl
-{
-    PG_NOFLUSH  = 0,
-    PG_TXTFLUSH = 1,    /* flush dcache and invalidate icache */
-};
-/*e: enum cachectl */
-
 /*s: struct Page */
 // Page metadata. We will allocate as many Page as to cover all physical memory
 // + swap "address space". Either pa or daddr should be valid at one time.
@@ -47,9 +39,6 @@ struct Page
     ushort  ref;      /* Reference count */
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
-
-    // array<enum<cachectl>>
-    char  cachectl[MAXCPUS];  /* Cache flushing control for putmmu */
 
     // extra
     Lock;
@@ -127,7 +116,10 @@ enum segtype
 };
 /*e: enum segtype */
 
+/*s: constant PG_ONSWAP */
 #define PG_ONSWAP 1
+/*e: constant PG_ONSWAP */
+
 #define onswap(s) (((ulong)s)&PG_ONSWAP)
 #define pagedout(s) (((ulong)s)==0 || onswap(s))
 #define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
@@ -177,7 +169,6 @@ struct Segment
     ulong fstart;   /* start address in file for demand load */
     ulong flen;   /* length of segment in file */
   
-    bool flushme;  /* maintain icache for this segment */
     Physseg *pseg;
     ulong*  profile;  /* Tick profile area */
     ulong mark;   /* portcountrefs */

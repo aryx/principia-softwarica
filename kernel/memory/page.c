@@ -202,8 +202,6 @@ newpage(bool clear, Segment **s, virt_addr va)
     p->ref++;
     p->va = va;
     p->modref = 0;
-    for(i = 0; i < MAXCPUS; i++)
-        p->cachectl[i] = PG_NOFLUSH;
     unlock(p);
     unlock(&palloc);
 

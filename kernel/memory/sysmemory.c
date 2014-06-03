@@ -12,21 +12,6 @@
 
 // those functions used to be in segment.c
 
-/*s: function ptflush */
-void
-ptflush(Pagetable *pt, int s, int e)
-{
-    int i;
-    Page *p;
-
-    for(i = s; i < e; i++) {
-        p = pt->pagetab[i];
-        if(pagedout(p) == 0)
-            memset(p->cachectl, PG_TXTFLUSH, sizeof(p->cachectl));
-    }
-}
-/*e: function ptflush */
-
 /*s: syscall segflush */
 long
 syssegflush(ulong *arg)
@@ -44,7 +29,6 @@ syssegflush(ulong *arg)
         if(s == 0)
             error(Ebadarg);
 
-        s->flushme = 1;
     more:
         l = len;
         if(addr+l > s->top)
@@ -63,8 +47,9 @@ syssegflush(ulong *arg)
             error(Ebadarg);
         }
 
-        if(pt)
-            ptflush(pt, ps/BY2PG, pe/BY2PG);
+        // when had cachectl
+        //if(pt)
+        //    ptflush(pt, ps/BY2PG, pe/BY2PG);
 
         chunk = pe-ps;
         len -= chunk;
