@@ -85,7 +85,6 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     ulong mmuphys=0;
     ulong soff;
     Page **pg, *lkp, *new;
-    Page *(*fn)(Segment*, ulong);
 
     addr &= ~(BY2PG-1);
     soff = addr - s->base;
@@ -169,16 +168,11 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     /*s: [[fixfault()]] SG_PHYSICAL case */
         case SG_PHYSICAL:
             if(*pg == nil) {
-                fn = s->pseg->pgalloc;
-                if(fn)
-                    *pg = (*fn)(s, addr);
-                else {
-                    new = smalloc(sizeof(Page));
-                    new->va = addr;
-                    new->pa = s->pseg->pa+(addr-s->base);
-                    new->ref = 1;
-                    *pg = new;
-                }
+                new = smalloc(sizeof(Page));
+                new->va = addr;
+                new->pa = s->pseg->pa+(addr-s->base);
+                new->ref = 1;
+                *pg = new;
             }
 
             if (checkaddr && addr == addr2check)

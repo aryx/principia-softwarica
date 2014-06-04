@@ -533,23 +533,12 @@ void
 freept(Segment *s, Pagetable *p)
 {
     int ref;
-    void (*fn)(Page*);
     Page *pt, **pg, **ptop;
 
     switch(s->type&SG_TYPE) {
     /*s: [[freept()]] SG_PHYSICAL case */
         case SG_PHYSICAL:
-            fn = s->pseg->pgfree;
             ptop = &p->pagetab[PAGETABSIZE];
-            if(fn) {
-                for(pg = p->pagetab; pg < ptop; pg++) {
-                    if(*pg == nil)
-                        continue;
-                    (*fn)(*pg);
-                    *pg = 0;
-                }
-                break;
-            }
             for(pg = p->pagetab; pg < ptop; pg++) {
                 pt = *pg;
                 if(pt == nil)

@@ -30,17 +30,13 @@ static Physseg physseg[10] = {
       .name= "shared", 
       .pa= 0,
       .size= SEGMAXSIZE, 
-      .pgalloc = nil,  
-      .pgfree = nil 
     },
     { .attr= SG_BSS, 
       .name= "memory", 
       .pa = 0,
       .size = SEGMAXSIZE, 
-      .pgalloc = nil, 
-      .pgfree = nil 
     },
-    { 0,        0,      0,  0,      0,  0 },
+    { 0, 0, 0, 0},
 };
 /*e: global physseg */
 /*s: global physseglock */

@@ -137,10 +137,6 @@ struct Physseg
     char  *name;      /* Attach name */
     phys_addr pa;     /* Physical address */
     ulong size;     /* Maximum segment size in pages */
-
-    // seems dead, not even used by vga.c
-    Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
-    void  (*pgfree)(Page*);
 };
 /*e: struct Physseg */
 
