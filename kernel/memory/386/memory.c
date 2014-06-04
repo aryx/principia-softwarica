@@ -33,7 +33,7 @@ enum memkind {
 /*e: enum memkind */
 
 enum {
-    MemMin      = 8*MB,
+    MemMin      = 4*MB,
     MemMax      = (3*1024+768)*MB,
 };
 

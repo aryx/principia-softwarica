@@ -139,11 +139,6 @@ TEXT mode32bit(SB), $0
         MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
         ORL     BX, (AX)
 
-        ADDL    $4, AX
-        MOVL    $PADDR(CPU0PT1), (AX)          /* PTE's for KZERO+4MB */
-        MOVL    $(PTEWRITE|PTEVALID), BX        /* page permissions */
-        ORL     BX, (AX)
-
 
         MOVL    $PADDR(CPU0PT), AX             /* first page of page table */
         MOVL    $1024, CX                       /* 1024 pages in 4MB */
@@ -152,14 +147,6 @@ _setpte:
         ADDL    $(1<<PGSHIFT), BX
         ADDL    $4, AX
         LOOP    _setpte
-
-        MOVL    $PADDR(CPU0PT1), AX            /* second page of page table */
-        MOVL    $1024, CX                       /* 1024 pages in 4MB */
-_setpte1:
-        MOVL    BX, (AX)
-        ADDL    $(1<<PGSHIFT), BX
-        ADDL    $4, AX
-        LOOP    _setpte1
 
 
         MOVL    $PADDR(CPU0PT), AX

@@ -114,16 +114,14 @@
 #define CPU0CPU  (KZERO+0x16000)   /* Cpu for bootstrap processor */
 #define CPUSIZE  BY2PG
 
-#define CPU0PT1  (KZERO+0x17000)   /* bootstrap processor PTE's for 4MB-8MB */
-// needed?
-
-#define CPU0END   (CPU0PT1+BY2PG)
+#define CPU0END   (CPU0CPU+BY2PG)
 
 /*
- * N.B.  ramscan knows that CPU0END is the end of reserved data
+ * N.B.  ramscan() knows that CPU0END is the end of reserved data
  * N.B.  _startPADDR knows that CPU0PD is the first reserved page
  * and that there are 6 of them.
  */
+// MemMin in memory.c must start at the end of what CPU0PT covers (so 4MB)
 
 
 // could be an enum but this also used from assembly
