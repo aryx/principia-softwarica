@@ -156,7 +156,10 @@ Cmdtab proccmd[] = {
 /*e: global proccmd */
 
 /* Segment type from portdat.h */
-static char *sname[]={ "Text", "Data", "Bss", "Stack", "Shared", "Phys", };
+/*s: global sname */
+// hash<enum<segtype, string>>
+static char *sname[]={ "Text", "Data", "Bss", "Stack",   "Shared", "Phys", };
+/*e: global sname */
 
 /*s: devproc QXXX macros */
 /*
@@ -942,27 +945,29 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, statbuf+offset, n);
         return n;
 
-    case Qsegment:
-        j = 0;
-        for(i = 0; i < NSEG; i++) {
-            sg = p->seg[i];
-            if(sg == nil)
-                continue;
-            j += snprint(statbuf+j, sizeof statbuf - j,
-                "%-6s %c%c %.8lux %.8lux %4ld\n",
-                sname[sg->type&SG_TYPE],
-                sg->type&SG_RONLY ? 'R' : ' ',
-                sg->profile ? 'P' : ' ',
-                sg->base, sg->top, sg->ref);
-        }
-        if(offset >= j)
-            return 0;
-        if(offset+n > j)
-            n = j-offset;
-        if(n == 0 && offset == 0)
-            exhausted("segments");
-        memmove(a, &statbuf[offset], n);
-        return n;
+    /*s: [[procread()]] Qsegment case */
+        case Qsegment:
+            j = 0;
+            for(i = 0; i < NSEG; i++) {
+                sg = p->seg[i];
+                if(sg == nil)
+                    continue;
+                j += snprint(statbuf+j, sizeof statbuf - j,
+                    "%-6s %c%c %.8lux %.8lux %4ld\n",
+                    sname[sg->type&SG_TYPE],
+                    sg->type&SG_RONLY ? 'R' : ' ',
+                    sg->profile ? 'P' : ' ',
+                    sg->base, sg->top, sg->ref);
+            }
+            if(offset >= j)
+                return 0;
+            if(offset+n > j)
+                n = j-offset;
+            if(n == 0 && offset == 0)
+                exhausted("segments");
+            memmove(a, &statbuf[offset], n);
+            return n;
+    /*e: [[procread()]] Qsegment case */
 
     case Qwait:
         if(!canqlock(&p->qwaitr))
