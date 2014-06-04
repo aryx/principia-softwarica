@@ -722,7 +722,7 @@ memorysummary(void)
         conf.nproc*sizeof(Proc)
         );
   print("\n");
-  //memdebug();
+  memdebug();
 }
 /*e: function memorysummary */
 
