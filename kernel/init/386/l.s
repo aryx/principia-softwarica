@@ -161,7 +161,7 @@ _setpte:
  */
         MOVL    $PADDR(CPU0PD), CX             /* load address of page directory */
         MOVL    (PDO(KZERO))(CX), DX            /* double-map KZERO at 0 */
-        MOVL    DX, (PDO(0))(CX) // needed?? already mapped to 0
+        MOVL    DX, (PDO(0))(CX)
 
         MOVL    CX, CR3
         DELAY                                   /* JMP .+2 */
@@ -184,7 +184,7 @@ _setpte:
  * be initialised here.
  */
 TEXT _setup_bss_stack(SB), $0
-        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */ /* Why??? */
+        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */
         MOVL    CX, CR3                         /* load and flush the mmu */
 
 _clearbss:

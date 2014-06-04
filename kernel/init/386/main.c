@@ -218,17 +218,17 @@ cpuinit(void)
 void
 cpu0init(void)
 {
-        conf.ncpu = 1;
-        // note that cpu points to CPUADDR, which then is mapped to CPU0CPU
-        // via the page table on the first processor
-        CPUS(0) = (Cpu*)CPU0CPU;
-        cpu->pdproto = (ulong*)CPU0PD;
-        cpu->gdt = (Segdesc*)CPU0GDT;
+    conf.ncpu = 1;
+    // note that cpu points to CPUADDR, which then is mapped to CPU0CPU
+    // via the page directory/page table setup in cr3 on the first processor
+    CPUS(0) = (Cpu*)CPU0CPU;
+    cpu->pdproto = (kern_addr2)CPU0PD;
+    cpu->gdt = (Segdesc*)CPU0GDT;
 
-        cpuinit();
+    cpuinit();
 
-        active.cpus = 1;
-        active.exiting = false;
+    active.cpus = 1;
+    active.exiting = false;
 }
 /*e: function cpu0init */
 
@@ -930,7 +930,7 @@ main(void)
     cpuidentify(); // setup cpu, to know which advanced features we can enable
     cpuidprint();
 
-    meminit(); // setup conf.mem memory banks
+    meminit(); // setup conf.mem memory banks and setup more PDEs and PTEs
     confinit(); // setup conf
     archinit(); // setup arch
     xinit(); // setup xalloc memory allocator
@@ -947,9 +947,8 @@ main(void)
     timersinit();
     mathinit();
 
-    kbdenable(); // setup kdbq
-    //TODO: bad name, setup lineq = queue for keyboard for reading /dev/cons
-    printinit();  // setup lineq
+    kbdenable(); // setup kdbq (character keyboard queue)
+    lineqinit();  // setup lineq (line keyboard queue)
 
     if(arch->clockenable)
         arch->clockenable();
@@ -977,6 +976,7 @@ main(void)
     /*e: [[main()]] before schedinit() */
     cgapost(0x99); // done!
     schedinit();
+    panic("should never reach this point");
 }
 /*e: function main */
 /*e: main.c */

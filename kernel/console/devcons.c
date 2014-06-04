@@ -111,16 +111,16 @@ Cmdtab rebootmsg[] =
 };
 /*e: global rebootmsg */
 
-/*s: function printinit */
+/*s: function lineqinit */
 void
-printinit(void)
+lineqinit(void)
 {
     lineq = qopen(2*1024, 0, nil, nil);
     if(lineq == nil)
-        panic("printinit");
+        panic("lineqinit");
     qnoblock(lineq, 1);
 }
-/*e: function printinit */
+/*e: function lineqinit */
 
 /*s: function consactive */
 int

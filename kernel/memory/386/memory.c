@@ -43,17 +43,18 @@ typedef struct RMap RMap;
 /*e: memory.c forward decl */
 /*s: struct Map */
 struct Map {
-    ulong   size;
-    ulong   addr;
+    phys_addr addr;
+    ulong size; // in bytes
 };
 /*e: struct Map */
 
 /*s: struct RMap */
 struct RMap {
     char*   name;
+    //ref<Map> in mapram
     Map*    map;
+    //ref<Map> in mapram
     Map*    mapend;
-
     Lock;
 };
 /*e: struct RMap */
@@ -68,12 +69,14 @@ static RMap rmapupa = {
     &mapupa[nelem(mapupa)-1],
 };
 
+/*s: global mapram */
 static Map mapram[16];
 static RMap rmapram = {
     "physical memory",
     mapram,
     &mapram[nelem(mapram)-1],
 };
+/*e: global mapram */
 
 static Map mapumb[64];
 static RMap rmapumb = {
@@ -238,45 +241,11 @@ rampage(void)
     ulong m;
     
     m = mapalloc(&rmapram, 0, BY2PG, BY2PG);
-    if(m == 0)
+    if(m == nilptr)
         return nil;
     return KADDR(m);
 }
 /*e: function rampage */
-
-/*s: function umbexclude */
-static void
-umbexclude(void)
-{
-    int size;
-    ulong addr;
-    char *op, *p, *rptr;
-
-    if((p = getconf("umbexclude")) == nil)
-        return;
-
-    while(p && *p != '\0' && *p != '\n'){
-        op = p;
-        addr = strtoul(p, &rptr, 0);
-        if(rptr == nil || rptr == p || *rptr != '-'){
-            print("umbexclude: invalid argument <%s>\n", op);
-            break;
-        }
-        p = rptr+1;
-
-        size = strtoul(p, &rptr, 0) - addr + 1;
-        if(size <= 0){
-            print("umbexclude: bad range <%s>\n", op);
-            break;
-        }
-        if(rptr != nil && *rptr == ',')
-            *rptr++ = '\0';
-        p = rptr;
-
-        mapalloc(&rmapumb, addr, size, 0);
-    }
-}
-/*e: function umbexclude */
 
 /*s: function umbscan */
 static void
@@ -336,8 +305,6 @@ umbscan(void)
         if(p[0] != 0xCC && p[64*KB-1] != 0xCC)
             mapfree(&rmapumb, PADDR(p), 64*KB);
     }
-
-    umbexclude();
 }
 /*e: function umbscan */
 

@@ -573,7 +573,7 @@ mmuwalk(ulong* pd, virt_addr va, int level, bool create)
             if(didmmuinit)
                 map = xspanalloc(BY2PG, BY2PG, 0);
             else
-                map = rampage();  //todo: can happen?
+                map = rampage();  //when called from meminit()
             if(map == nil)
                 panic("mmuwalk xspanalloc failed");
             *table = PADDR(map)|PTEWRITE|PTEVALID;
