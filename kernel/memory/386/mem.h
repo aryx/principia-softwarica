@@ -77,7 +77,7 @@
 
 /*s: constant MAXKPA */
 // -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic
-#define MAXKPA (ulong)(-KZERO)
+#define MAXKPA (phys_addr)(-KZERO)
 /*e: constant MAXKPA */
 
 

@@ -459,7 +459,10 @@ provides to the user programs.
 
 % Kencc extension: anon field. e.g. Lock; 
 
-% the lock+0(FP) is intriguing
+% the lock+0(FP) is intriguing and must be used when using (FP).
+% it's probably forcing the user to give a name to what debugger
+% could then display when giving the list of parameters to an assembly
+% function?
 
 % maybe a bit of rappel on bit manip :) 2 complementary arithmetic,
 %  e.g. pa > -KZERO, or in bcm have  pa & ~KSEGM
@@ -643,7 +646,7 @@ typedef void* kern_addr3;
 //coupling: with mkfile KZERO_AND_HEADER
 #define KZERO   0xE0000000    /* base of kernel address space */
 @
-% last 256Mo of virtual memory space
+% last 512Mo of virtual memory space
 
 % why not use different segment? because convenient to be in same
 % virtual space, can read/write stuff on and from userspace
@@ -679,8 +682,8 @@ paddr(kern_addr3 v)
 @
 %less: not symetric, phys_addr vs kern_addr3
 
-% pa must be <= MAXKPA, use kaddr to access kernel data.
-% if want to access different pa, then must use tmpmap or kmap
+% pa must be <= MAXKPA, we use kaddr to access kernel data.
+% if want to access different pa, then must use tmpmap or kmap.
 <<function kaddr>>=
 /*
  * These could go back to being macros once the kernel is debugged,
@@ -694,11 +697,11 @@ kaddr(phys_addr pa)
     return (kern_addr3)(pa+KZERO);
 }
 @
-%//todo: should return a kern_addr
+%todo: should return a kern_addr
 
 <<constant MAXKPA>>=
 // -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic
-#define MAXKPA (ulong)(-KZERO)
+#define MAXKPA (phys_addr)(-KZERO)
 @
 % rename KEND? but it's not really kernel end. KADDREND? MAXKADDR? KADDREND?
 
@@ -713,13 +716,14 @@ kaddr(phys_addr pa)
 #define PADDR(ka)  paddr((kern_addr3)(ka))
 @
 %less: remove cast? more symetric with KADDR then
+% actually all those intermediate types are very ugly, could simplify!
 
 % in l.s:
 %#define PADDR(ka)        ((ka)&~KZERO)
 %#define KADDR(pa)        (KZERO|(pa))
 
 
-%CPUADDR here!! because we talk about it later with cpu and cpus
+%put CPUADDR here!! because we talk about it later with cpu and cpus
 % also IDT, GDT, VPT.
 
 \section{Syscall overview}
@@ -807,9 +811,9 @@ struct Conf
     <<[[Conf]] other fields>>
 };
 @ 
-% mem[4] to allow to have up to 4 free not contiguous memory regions
-% (on the PC we have 2, one in the low memory before the kernel, and
-% one after the kernel bss. On the bcm they just have 1)
+% mem[4] to allow to have up to 4 free not contiguous memory regions.
+% On the PC we have 2, one in the low memory before the kernel, and
+% one after the kernel bss. On the bcm they just have 1.
 
 <<global conf>>=
 Conf conf;
@@ -821,14 +825,10 @@ struct Confmem
 {
     phys_addr base;
     ulong npage;
-  
-    kern_addr kbase; // KADDR(base)
-    kern_addr klimit; // KADDR(base+npage*BY2PG)
+    <<[[Confmem]] other fields>>
 };
 @ 
 % show concrete value for qemu! see C-t C-t m
-% hmmm klimit can overflow and not be a kern_addr?
-
 
 <<globals confname and confvar>>=
 // conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
@@ -1040,6 +1040,7 @@ struct Proc
     <<[[Proc]] extra fields>>
 };
 @ 
+% apparently this uses 3004 bytes ... huge. procalloc is 6Mo!
 
 <<struct ArchProcMMU>>=
 //@Scheck: not dead, unnamed substructure
@@ -1288,6 +1289,7 @@ struct Dev
     int (*config)(int, char*, DevConf*);  /* returns nil on error */
 };
 @ 
+% does it match 9p?
 
 <<global devtab>>=
 Dev** devtab = nil;
@@ -1401,7 +1403,7 @@ PCArch archgeneric = {
 <<function tas>>=
 TEXT tas(SB), $0
         MOVL    $0xDEADDEAD, AX
-        MOVL    lock+0(FP), BX
+        MOVL    l+0(FP), BX
         // Exchange AX to lock->key. So:
         //  - if the lock was not held, lock->key was 0 and so AX will be 0
         //     and lock->key will be 0xdeaddead
@@ -11401,6 +11403,13 @@ xinit(void)
     }
 }
 @
+
+<<[[Confmem]] other fields>>=
+kern_addr kbase; // KADDR(base)
+kern_addr klimit; // KADDR(base+npage*BY2PG)
+@
+% mostly used for /proc/#/mem checking, could probably be removed
+
 
 <<function procinit>>=
 void
@@ -23043,9 +23052,9 @@ procread(Chan *c, void *va, long n, vlong off)
             error(Eperm);
 
         /* validate kernel addresses */
-        if(offset < (ulong)end) {
-            if(offset+n > (ulong)end)
-                n = (ulong)end - offset;
+        if(offset < (kern_addr)end) {
+            if(offset+n > (kern_addr)end)
+                n = (kern_addr)end - offset;
             memmove(a, (char*)offset, n);
             return n;
         }

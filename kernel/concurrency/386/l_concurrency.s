@@ -56,7 +56,7 @@ TEXT islo(SB), $0
 /*s: function tas */
 TEXT tas(SB), $0
         MOVL    $0xDEADDEAD, AX
-        MOVL    lock+0(FP), BX
+        MOVL    l+0(FP), BX
         // Exchange AX to lock->key. So:
         //  - if the lock was not held, lock->key was 0 and so AX will be 0
         //     and lock->key will be 0xdeaddead

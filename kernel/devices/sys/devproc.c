@@ -818,9 +818,9 @@ procread(Chan *c, void *va, long n, vlong off)
             error(Eperm);
 
         /* validate kernel addresses */
-        if(offset < (ulong)end) {
-            if(offset+n > (ulong)end)
-                n = (ulong)end - offset;
+        if(offset < (kern_addr)end) {
+            if(offset+n > (kern_addr)end)
+                n = (kern_addr)end - offset;
             memmove(a, (char*)offset, n);
             return n;
         }
