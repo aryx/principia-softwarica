@@ -35,8 +35,9 @@ clean:
 
 visual:
 	~/pfff/codemap.opt -no_legend -no_symlinks -filter cpp -ss 2 .
-
 graph:
+	~/pfff/codegraph -derived_data -lang clang2 -build .
+tags:
 	~/pfff/codegraph -derived_data -lang clang2 -build .
 
 #todo? add libc, lib_networking, lib_memlayer, lib_memdraw, lib_draw, libmp?
