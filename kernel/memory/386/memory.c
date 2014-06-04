@@ -26,7 +26,6 @@ enum memkind {
     MemUPA,        /* unbacked physical address */
     MemRAM,        /* physical memory */
     MemUMB,        /* upper memory block (<16MB) */
-    MemReserved,
 
     NMemType, // must be last
 };
@@ -125,7 +124,7 @@ memdebug(void)
 
 /*s: function mapfree */
 void
-mapfree(RMap* rmap, ulong addr, ulong size)
+mapfree(RMap* rmap, phys_addr addr, ulong size)
 {
     Map *mp;
     ulong t;

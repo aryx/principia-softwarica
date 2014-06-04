@@ -242,6 +242,8 @@ TEXT ltr(SB), $0                                /* TR - task register */
         MOVW    AX, TASK
         RET
 
+
+
 TEXT getcr0(SB), $0                             /* CR0 - processor control */
         MOVL    CR0, AX
         RET
@@ -254,6 +256,11 @@ TEXT getcr3(SB), $0                             /* CR3 - page directory base */
         MOVL    CR3, AX
         RET
 
+TEXT getcr4(SB), $0                             /* CR4 - extensions */
+        MOVL    CR4, AX
+        RET
+
+
 TEXT putcr0(SB), $0
         MOVL    cr0+0(FP), AX
         MOVL    AX, CR0
@@ -262,10 +269,6 @@ TEXT putcr0(SB), $0
 TEXT putcr3(SB), $0
         MOVL    cr3+0(FP), AX
         MOVL    AX, CR3
-        RET
-
-TEXT getcr4(SB), $0                             /* CR4 - extensions */
-        MOVL    CR4, AX
         RET
 
 TEXT putcr4(SB), $0
