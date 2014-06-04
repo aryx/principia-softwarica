@@ -537,30 +537,31 @@ freept(Segment *s, Pagetable *p)
     Page *pt, **pg, **ptop;
 
     switch(s->type&SG_TYPE) {
-
-    case SG_PHYSICAL:
-        fn = s->pseg->pgfree;
-        ptop = &p->pagetab[PAGETABSIZE];
-        if(fn) {
+    /*s: [[freept()]] SG_PHYSICAL case */
+        case SG_PHYSICAL:
+            fn = s->pseg->pgfree;
+            ptop = &p->pagetab[PAGETABSIZE];
+            if(fn) {
+                for(pg = p->pagetab; pg < ptop; pg++) {
+                    if(*pg == nil)
+                        continue;
+                    (*fn)(*pg);
+                    *pg = 0;
+                }
+                break;
+            }
             for(pg = p->pagetab; pg < ptop; pg++) {
-                if(*pg == nil)
+                pt = *pg;
+                if(pt == nil)
                     continue;
-                (*fn)(*pg);
-                *pg = 0;
+                lock(pt);
+                ref = --pt->ref;
+                unlock(pt);
+                if(ref == 0)
+                    free(pt); // because was smalloc'ed in fixfault
             }
             break;
-        }
-        for(pg = p->pagetab; pg < ptop; pg++) {
-            pt = *pg;
-            if(pt == nil)
-                continue;
-            lock(pt);
-            ref = --pt->ref;
-            unlock(pt);
-            if(ref == 0)
-                free(pt); // because was smalloc'ed in fixfault
-        }
-        break;
+    /*e: [[freept()]] SG_PHYSICAL case */
 
     default:
         for(pg = p->first; pg <= p->last; pg++)

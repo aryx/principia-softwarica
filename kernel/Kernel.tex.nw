@@ -43,7 +43,8 @@
 %    * syscall, interrupt callback, clock callback, kernel process, hook, 
 %      TODO dumper
 %    * xxx decl, xxx.c forward decl, xxx.c debugging macro, xxx.c Exxx errors,
-%    * [[xxx]] other fields, [[xxx]] extra fields, 
+%    * [[xxx]] other fields, [[xxx]] extra fields
+%    * [[xxx()]] yyy case>>, <<enum xxx cases>>
 % - distribute parts of the file before
 % - TODO add figures (hand made)
 
@@ -3384,8 +3385,7 @@ enum segtype
     SG_BSS    = 02,
     SG_STACK  = 03,
 
-    SG_SHARED = 04,
-    SG_PHYSICAL = 05,
+    <<enum segtype cases>>
 
     SG_TYPE   = 07,   /* Mask type of segment */
   
@@ -3393,9 +3393,7 @@ enum segtype
     SG_CEXEC  = 0100,   /* Detach at exec */
 };
 @
-% SG_PHYSICAL used only for vga/vesa apparently
 
-%TODO: LP split, especially Physseg
 <<struct Segment>>=
 // smalloc'ed by newseg()
 struct Segment
@@ -3418,11 +3416,8 @@ struct Segment
     KImage  *image;   /* text in file attached to this segment */
     ulong fstart;   /* start address in file for demand load */
     ulong flen;   /* length of segment in file */
-  
-    Physseg *pseg;
-    ulong*  profile;  /* Tick profile area */
-    ulong mark;   /* portcountrefs */
-    ushort  steal;    /* Page stealer lock */
+
+    <<[[Segment]] other fields>>  
   
     // extra
     Ref;
@@ -3432,6 +3427,13 @@ struct Segment
 @
 % Segment acts as a kind of Page directory per process, but
 % archi-independent.
+
+% ???
+<<[[Segment]] other fields>>=
+    ulong*  profile;  /* Tick profile area */
+    ulong mark;   /* portcountrefs */
+    ushort  steal;    /* Page stealer lock */
+@
 
 <<constant PAGEDIRSIZE>>=
 #define PAGEDIRSIZE  1984
@@ -3498,30 +3500,7 @@ freept(Segment *s, Pagetable *p)
     Page *pt, **pg, **ptop;
 
     switch(s->type&SG_TYPE) {
-
-    case SG_PHYSICAL:
-        fn = s->pseg->pgfree;
-        ptop = &p->pagetab[PAGETABSIZE];
-        if(fn) {
-            for(pg = p->pagetab; pg < ptop; pg++) {
-                if(*pg == nil)
-                    continue;
-                (*fn)(*pg);
-                *pg = 0;
-            }
-            break;
-        }
-        for(pg = p->pagetab; pg < ptop; pg++) {
-            pt = *pg;
-            if(pt == nil)
-                continue;
-            lock(pt);
-            ref = --pt->ref;
-            unlock(pt);
-            if(ref == 0)
-                free(pt); // because was smalloc'ed in fixfault
-        }
-        break;
+    <<[[freept()]] SG_PHYSICAL case>>
 
     default:
         for(pg = p->first; pg <= p->last; pg++)
@@ -4018,25 +3997,6 @@ procflushseg(Segment *s)
 }
 @ 
 
-
-
-
-
-
-%???
-<<struct Physseg>>=
-struct Physseg
-{
-    ulong attr;     /* Segment attributes */
-    char  *name;      /* Attach name */
-    phys_addr pa;     /* Physical address */
-    ulong size;     /* Maximum segment size in pages */
-
-    // seems dead, not even used by vga.c
-    Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
-    void  (*pgfree)(Page*);
-};
-@
 
 
 
@@ -7870,25 +7830,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         (*pg)->modref = PG_MOD|PG_REF;
         break;
 
-    case SG_PHYSICAL:
-        if(*pg == nil) {
-            fn = s->pseg->pgalloc;
-            if(fn)
-                *pg = (*fn)(s, addr);
-            else {
-                new = smalloc(sizeof(Page));
-                new->va = addr;
-                new->pa = s->pseg->pa+(addr-s->base);
-                new->ref = 1;
-                *pg = new;
-            }
-        }
-
-        if (checkaddr && addr == addr2check)
-            (*checkaddr)(addr, s, *pg);
-        mmuphys = PPN((*pg)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
-        (*pg)->modref = PG_MOD|PG_REF;
-        break;
+    <<[[fixfault()]] SG_PHYSICAL case>>
     }
     qunlock(&s->lk);
 
@@ -22005,6 +21947,8 @@ syssegbrk(ulong *arg)
 }
 @ 
 
+% put here physseg thing?
+
 <<syscall segattach>>=
 // void* segattach(int attr, char *class, void *va, ulong len);
 long
@@ -22076,6 +22020,7 @@ segattach(Proc *p, ulong attr, char *name, ulong va, ulong len)
 
     if(isoverlap(p, va, len) != nil)
         error(Esoverlap);
+
 
     for(ps = physseg; ps->name; ps++)
         if(strcmp(name, ps->name) == 0)
@@ -22824,14 +22769,6 @@ connectlocal(void)
 \section{SMP}
 
 \section{Advanced Virtual Memory}
-
-% page coloring, getpgcolor, cachectl, etc
-
-% large memory system: tmpmap, kmap, vmap
-% 9atom also provides patches for PAE support and amd64 support
-
-%#define CACHELINESZ 32      /* pentium & later */
-
 
 \section{Real-time scheduling}
 

@@ -744,6 +744,7 @@ segattach(Proc *p, ulong attr, char *name, ulong va, ulong len)
     if(isoverlap(p, va, len) != nil)
         error(Esoverlap);
 
+
     for(ps = physseg; ps->name; ps++)
         if(strcmp(name, ps->name) == 0)
             goto found;

@@ -105,8 +105,11 @@ enum segtype
     SG_BSS    = 02,
     SG_STACK  = 03,
 
-    SG_SHARED = 04,
-    SG_PHYSICAL = 05,
+    /*s: enum segtype cases */
+        SG_SHARED = 04,
+    /*x: enum segtype cases */
+        SG_PHYSICAL = 05,
+    /*e: enum segtype cases */
 
     SG_TYPE   = 07,   /* Mask type of segment */
   
@@ -170,11 +173,14 @@ struct Segment
     KImage  *image;   /* text in file attached to this segment */
     ulong fstart;   /* start address in file for demand load */
     ulong flen;   /* length of segment in file */
-  
+
+    /*s: [[Segment]] other fields */
+        ulong*  profile;  /* Tick profile area */
+        ulong mark;   /* portcountrefs */
+        ushort  steal;    /* Page stealer lock */
+    /*x: [[Segment]] other fields */
     Physseg *pseg;
-    ulong*  profile;  /* Tick profile area */
-    ulong mark;   /* portcountrefs */
-    ushort  steal;    /* Page stealer lock */
+    /*e: [[Segment]] other fields */
   
     // extra
     Ref;

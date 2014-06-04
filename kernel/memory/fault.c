@@ -166,25 +166,27 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         (*pg)->modref = PG_MOD|PG_REF;
         break;
 
-    case SG_PHYSICAL:
-        if(*pg == nil) {
-            fn = s->pseg->pgalloc;
-            if(fn)
-                *pg = (*fn)(s, addr);
-            else {
-                new = smalloc(sizeof(Page));
-                new->va = addr;
-                new->pa = s->pseg->pa+(addr-s->base);
-                new->ref = 1;
-                *pg = new;
+    /*s: [[fixfault()]] SG_PHYSICAL case */
+        case SG_PHYSICAL:
+            if(*pg == nil) {
+                fn = s->pseg->pgalloc;
+                if(fn)
+                    *pg = (*fn)(s, addr);
+                else {
+                    new = smalloc(sizeof(Page));
+                    new->va = addr;
+                    new->pa = s->pseg->pa+(addr-s->base);
+                    new->ref = 1;
+                    *pg = new;
+                }
             }
-        }
 
-        if (checkaddr && addr == addr2check)
-            (*checkaddr)(addr, s, *pg);
-        mmuphys = PPN((*pg)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
-        (*pg)->modref = PG_MOD|PG_REF;
-        break;
+            if (checkaddr && addr == addr2check)
+                (*checkaddr)(addr, s, *pg);
+            mmuphys = PPN((*pg)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
+            (*pg)->modref = PG_MOD|PG_REF;
+            break;
+    /*e: [[fixfault()]] SG_PHYSICAL case */
     }
     qunlock(&s->lk);
 

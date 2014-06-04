@@ -6581,63 +6581,6 @@ static struct Irstats  irstats;
 
 
 
-<<global physseg>>=
-/*
- * Attachable segment types
- */
-static Physseg physseg[10] = {
-    { .attr= SG_SHARED, 
-      .name= "shared", 
-      .pa= 0,
-      .size= SEGMAXSIZE, 
-      .pgalloc = nil,  
-      .pgfree = nil 
-    },
-    { .attr= SG_BSS, 
-      .name= "memory", 
-      .pa = 0,
-      .size = SEGMAXSIZE, 
-      .pgalloc = nil, 
-      .pgfree = nil 
-    },
-    { 0,        0,      0,  0,      0,  0 },
-};
-@
-
-<<global physseglock>>=
-static Lock physseglock;
-@
-
-% used by vga.c
-<<function addphysseg>>=
-int
-addphysseg(Physseg* new)
-{
-    Physseg *ps;
-
-    /*
-     * Check not already entered and there is room
-     * for a new entry and the terminating null entry.
-     */
-    lock(&physseglock);
-    for(ps = physseg; ps->name; ps++){
-        if(strcmp(ps->name, new->name) == 0){
-            unlock(&physseglock);
-            return -1;
-        }
-    }
-    if(ps-physseg >= nelem(physseg)-2){
-        unlock(&physseglock);
-        return -1;
-    }
-
-    *ps = *new;
-    unlock(&physseglock);
-
-    return 0;
-}
-@
-
 
 <<function isoverlap>>=
 Segment*
@@ -9887,18 +9830,174 @@ char *sysctab[] = {
 
 \section{SMP}
 
+
+
+
 \section{Advanced virtual memory}
+
+% large memory system: tmpmap, kmap, vmap
+% 9atom also provides patches for PAE support and amd64 support
+
+
+\subsection{Page coloring}
+% page coloring, getpgcolor, cachectl, etc
+% but I've removed the code actually
+
+\subsection{Cache line}
+
+%#define CACHELINESZ 32      /* pentium & later */
+
+\subsection{Extra segment types}
+
+<<enum segtype cases>>=
+    SG_SHARED = 04,
+@
+
+
+<<enum segtype cases>>=
+    SG_PHYSICAL = 05,
+@
+% SG_PHYSICAL used only for vga/vesa apparently
+
+
+<<struct Physseg>>=
+struct Physseg
+{
+    ulong attr;     /* Segment attributes */
+    char  *name;      /* Attach name */
+    phys_addr pa;     /* Physical address */
+    ulong size;     /* Maximum segment size in pages */
+
+    // seems dead, not even used by vga.c
+    Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
+    void  (*pgfree)(Page*);
+};
+@
+
+
+<<[[Segment]] other fields>>=
+Physseg *pseg;
+@
+
+
+<<global physseg>>=
+/*
+ * Attachable segment types
+ */
+static Physseg physseg[10] = {
+    { .attr= SG_SHARED, 
+      .name= "shared", 
+      .pa= 0,
+      .size= SEGMAXSIZE, 
+      .pgalloc = nil,  
+      .pgfree = nil 
+    },
+    { .attr= SG_BSS, 
+      .name= "memory", 
+      .pa = 0,
+      .size = SEGMAXSIZE, 
+      .pgalloc = nil, 
+      .pgfree = nil 
+    },
+    { 0,        0,      0,  0,      0,  0 },
+};
+@
+
+<<global physseglock>>=
+static Lock physseglock;
+@
+
+% used by vga.c
+<<function addphysseg>>=
+int
+addphysseg(Physseg* new)
+{
+    Physseg *ps;
+
+    /*
+     * Check not already entered and there is room
+     * for a new entry and the terminating null entry.
+     */
+    lock(&physseglock);
+    for(ps = physseg; ps->name; ps++){
+        if(strcmp(ps->name, new->name) == 0){
+            unlock(&physseglock);
+            return -1;
+        }
+    }
+    if(ps-physseg >= nelem(physseg)-2){
+        unlock(&physseglock);
+        return -1;
+    }
+
+    *ps = *new;
+    unlock(&physseglock);
+
+    return 0;
+}
+@
+
+
+
+<<[[freept()]] SG_PHYSICAL case>>=
+    case SG_PHYSICAL:
+        fn = s->pseg->pgfree;
+        ptop = &p->pagetab[PAGETABSIZE];
+        if(fn) {
+            for(pg = p->pagetab; pg < ptop; pg++) {
+                if(*pg == nil)
+                    continue;
+                (*fn)(*pg);
+                *pg = 0;
+            }
+            break;
+        }
+        for(pg = p->pagetab; pg < ptop; pg++) {
+            pt = *pg;
+            if(pt == nil)
+                continue;
+            lock(pt);
+            ref = --pt->ref;
+            unlock(pt);
+            if(ref == 0)
+                free(pt); // because was smalloc'ed in fixfault
+        }
+        break;
+@
+
+<<[[fixfault()]] SG_PHYSICAL case>>=
+    case SG_PHYSICAL:
+        if(*pg == nil) {
+            fn = s->pseg->pgalloc;
+            if(fn)
+                *pg = (*fn)(s, addr);
+            else {
+                new = smalloc(sizeof(Page));
+                new->va = addr;
+                new->pa = s->pseg->pa+(addr-s->base);
+                new->ref = 1;
+                *pg = new;
+            }
+        }
+
+        if (checkaddr && addr == addr2check)
+            (*checkaddr)(addr, s, *pg);
+        mmuphys = PPN((*pg)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
+        (*pg)->modref = PG_MOD|PG_REF;
+        break;
+@
+
+\subsection{[[kmap()]]}
 
 \subsection{[[tmpmap()]]}
 
-\subsection{[[kmap()]]}
+
 
 \subsection{[[vmap()]]}
 
 <<global vmaplock>>=
 static Lock vmaplock;
 @
-
 
 
 <<function vmap>>=
@@ -11198,9 +11297,10 @@ echoserialoq(char *buf, int n)
 
 \section{SCSI}
 
+
+
+
 \chapter{Extra Extra Extra}
-
-
 
 \subsection*{[[arch/386/io.h]]}
 
