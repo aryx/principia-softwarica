@@ -49,7 +49,6 @@ struct Page
     Page  *prev; 
     // hash<daddr, list<ref<Page>>> Palloc.hash
     Page  *hash; /* Image hash chains */ 
-
 };
 /*e: struct Page */
 
