@@ -224,7 +224,6 @@ mapalloc(RMap* rmap, ulong addr, int size, int align)
         return maddr;
     }
     unlock(rmap);
-
     return nilptr;
 }
 /*e: function mapalloc */
@@ -389,13 +388,16 @@ lowraminit(void)
 
 /*s: function ramscan */
 static void
-ramscan(ulong maxmem)
+ramscan(phys_addr maxmem)
 {
-    ulong *k0, kzero, map, maxkpa, maxpa, pa, *pte, *table, *va, vbase, x;
+    ulong *k0, kzero, map, *pte, *table, *va, vbase, x;
+    phys_addr pa, maxpa, maxkpa;
+
+    // hash<enum<memtype>, int> nb pages per memory type
     int nvalid[NMemType];
 
     /*
-     * The bootstrap code has has created a prototype page
+     * The bootstrap code has created a prototype page
      * table which maps the first MemMin of physical memory to KZERO.
      * The page directory is at cpu->pdproto and the first page of
      * free memory is after the per-processor MMU information.
@@ -421,7 +423,7 @@ ramscan(ulong maxmem)
     }else
         maxpa = maxmem;
 
-    maxkpa = (u32int)-KZERO;    /* 2^32 - KZERO */
+    maxkpa = MAXKPA; /* 2^32 - KZERO */
 
     /*
      * March up memory from MemMin to maxpa 1MB at a time,
@@ -429,7 +431,7 @@ ramscan(ulong maxmem)
      * be written and read correctly. The page tables are created here
      * on the fly, allocating from low memory as necessary.
      */
-    k0 = (ulong*)KADDR(0);
+    k0 = (kern_addr2)KADDR(0);
     kzero = *k0;
     map = 0;
     x = 0x12345678;
@@ -497,10 +499,10 @@ ramscan(ulong maxmem)
         else{
             nvalid[MemUPA] += MB/BY2PG;
             mapfree(&rmapupa, pa, MB);
-
             *pte = 0;
             pa += MB;
         }
+
         /*
          * Done with this 4MB chunk, review the options:
          * 1) not physical memory and >=16MB - invalidate the PD entry;
