@@ -725,6 +725,7 @@ void
 memorysummary(void)
 {
   int i;
+  int npallocpage = 0;
 
   print("\n");
   print("etext = 0x%luX, edata = 0x%luX, eend = 0x%luX, sizeof long = %d\n",
@@ -736,8 +737,25 @@ memorysummary(void)
           conf.mem[i].npage
           );
   }
+  for(i=0; i<nelem(palloc.mem); i++) {
+       print("palloc mem %d start = 0x%luX, npage = %ld\n", 
+          i,
+          palloc.mem[i].base,
+          palloc.mem[i].npage
+          );
+       npallocpage += palloc.mem[i].npage;
+  }
+  print("size of Page = %d, palloc size = %d\n", 
+        sizeof(Page),
+        npallocpage*sizeof(Page)
+        );
+
+  print("size of Proc = %d, procalloc size = %d\n",
+        sizeof(Proc),
+        conf.nproc*sizeof(Proc)
+        );
   print("\n");
-  memdebug();
+  //memdebug();
 }
 /*e: function memorysummary */
 
