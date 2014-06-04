@@ -10111,6 +10111,7 @@ TEXT _multibootentry(SB), $0
         ANDL    $~KZERO, AX
         JMP*    AX
 @
+% can't do simply        MOVL    $_setup_segmentation-KZERO(SB), AX ?
 
 <<lib.h exxx decl>>=
 extern  char  etext[];
@@ -10156,6 +10157,8 @@ TEXT _setup_segmentation(SB), $0
          LONG   $_setup_pagination-KZERO(SB)
          WORD   $(2<<3)
 @
+% 1 << 3 for 1 selector (data segment, see tgdt) and because
+% each entry is 8 bytes -> << 3.
 %was called _startPADDR, not sure why, not really a PADDR
 %old comment not valid anymore I think in qemu -kernel context
 % * Entered via a jump to PADDR(entry),
@@ -10253,7 +10256,7 @@ _setpte:
  */
         MOVL    $PADDR(CPU0PD), CX             /* load address of page directory */
         MOVL    (PDO(KZERO))(CX), DX            /* double-map KZERO at 0 */
-        MOVL    DX, (PDO(0))(CX) // needed?? already mapped to 0
+        MOVL    DX, (PDO(0))(CX)
 
         MOVL    CX, CR3
         DELAY                                   /* JMP .+2 */
@@ -10281,7 +10284,7 @@ _setpte:
  * be initialised here.
  */
 TEXT _setup_bss_stack(SB), $0
-        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */ /* Why??? */
+        MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */
         MOVL    CX, CR3                         /* load and flush the mmu */
 
 _clearbss:
@@ -10307,7 +10310,7 @@ _clearbss:
 
 \subsection{Jumping to C [[main()]]}
 
-% or do another function and in previous code to a JMP _last_before_main_KADDR?
+% or do another function and in previous code to a JMP _last_before_main?
 <<end of _setup_bss_stack>>=
 /*
  * Need to do one final thing to ensure a clean machine environment,
@@ -10354,7 +10357,7 @@ main(void)
     cpuidentify(); // setup cpu, to know which advanced features we can enable
     cpuidprint();
 
-    meminit(); // setup conf.mem memory banks
+    meminit(); // setup conf.mem memory banks and setup more PDEs and PTEs
     confinit(); // setup conf
     archinit(); // setup arch
     xinit(); // setup xalloc memory allocator
@@ -10371,9 +10374,8 @@ main(void)
     timersinit();
     mathinit();
 
-    kbdenable(); // setup kdbq
-    //TODO: bad name, setup lineq = queue for keyboard for reading /dev/cons
-    printinit();  // setup lineq
+    kbdenable(); // setup kdbq (character keyboard queue)
+    lineqinit();  // setup lineq (line keyboard queue)
 
     if(arch->clockenable)
         arch->clockenable();
@@ -10399,6 +10401,7 @@ main(void)
     <<[[main()]] before schedinit()>>
     cgapost(0x99); // done!
     schedinit();
+    panic("should never reach this point");
 }
 @
 
@@ -10408,21 +10411,21 @@ main(void)
 void
 cpu0init(void)
 {
-        conf.ncpu = 1;
-        // note that cpu points to CPUADDR, which then is mapped to CPU0CPU
-        // via the page table on the first processor
-        CPUS(0) = (Cpu*)CPU0CPU;
-        cpu->pdproto = (ulong*)CPU0PD;
-        cpu->gdt = (Segdesc*)CPU0GDT;
+    conf.ncpu = 1;
+    // note that cpu points to CPUADDR, which then is mapped to CPU0CPU
+    // via the page directory/page table setup in cr3 on the first processor
+    CPUS(0) = (Cpu*)CPU0CPU;
+    cpu->pdproto = (kern_addr2)CPU0PD;
+    cpu->gdt = (Segdesc*)CPU0GDT;
 
-        cpuinit();
+    cpuinit();
 
-        active.cpus = 1;
-        active.exiting = false;
+    active.cpus = 1;
+    active.exiting = false;
 }
 @
 
-% inline in previous func? no? because used in squidboy!
+% inline in previous func? no? because used in squidboy too!
 <<function cpuinit>>=
 void
 cpuinit(void)
@@ -18200,14 +18203,13 @@ Queue*  kbdq;           /* unprocessed console input */
 Queue*  lineq;          /* processed console input */
 @ 
 
-% bad name!
-<<function printinit>>=
+<<function lineqinit>>=
 void
-printinit(void)
+lineqinit(void)
 {
     lineq = qopen(2*1024, 0, nil, nil);
     if(lineq == nil)
-        panic("printinit");
+        panic("lineqinit");
     qnoblock(lineq, 1);
 }
 @ 
