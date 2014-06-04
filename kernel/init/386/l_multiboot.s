@@ -1,7 +1,7 @@
 /*s: l_multiboot.s */
 #include "mem.h"
         
-TEXT _startKADDR(SB), $0
+TEXT _start(SB), $0
 
 /*s: global _multibootheader */
 /*
@@ -13,7 +13,7 @@ TEXT _multibootheader(SB), $0
         LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
         
         LONG    $_multibootheader-KZERO(SB)     /* header_addr */
-        LONG    $_startKADDR-KZERO(SB)          /* load_addr */
+        LONG    $_start-KZERO(SB)          /* load_addr */
         LONG    $edata-KZERO(SB)                /* load_end_addr */
         LONG    $end-KZERO(SB)                  /* bss_end_addr */
         
@@ -45,8 +45,8 @@ TEXT _multibootentry(SB), $0
         CLD
         ADDL    $KZERO, BX
         MOVL    BX, multiboot-KZERO(SB)
-//      !!! Jump to _startPADDR (not _startKADDR anymore)!!!
-        MOVL    $_startPADDR(SB), AX
+//      !!! Jump !!!
+        MOVL    $_setup_segmentation(SB), AX
         ANDL    $~KZERO, AX
         JMP*    AX
 /*e: function _multibootentry */

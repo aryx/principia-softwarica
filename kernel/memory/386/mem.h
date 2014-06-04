@@ -118,8 +118,8 @@
 
 /*
  * N.B.  ramscan() knows that CPU0END is the end of reserved data
- * N.B.  _startPADDR knows that CPU0PD is the first reserved page
- * and that there are 6 of them.
+ * N.B.  _setup_pagination knows that CPU0PD is the first reserved page
+ * and that there are 5 of them.
  */
 // MemMin in memory.c must start at the end of what CPU0PT covers (so 4MB)
 

@@ -10043,16 +10043,13 @@ _nothingready:
 
 \subsection{Loading the kernel in physical memory}
 
-% rename _startKADDR? just _start? it's true
-% that the label is in in KADDR space as we call ld with -TKZERO...
-
 % output of inm -n 9qemu  is nice! 2879 symbols!
 % explain the text + data + bss part of the binary! see ksize 9qemu too
 
 <<l_multiboot.s>>=
 #include "mem.h"
         
-TEXT _startKADDR(SB), $0
+TEXT _start(SB), $0
 
 <<global _multibootheader>>
 
@@ -10071,7 +10068,7 @@ TEXT _multibootheader(SB), $0
         LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
         
         LONG    $_multibootheader-KZERO(SB)     /* header_addr */
-        LONG    $_startKADDR-KZERO(SB)          /* load_addr */
+        LONG    $_start-KZERO(SB)          /* load_addr */
         LONG    $edata-KZERO(SB)                /* load_end_addr */
         LONG    $end-KZERO(SB)                  /* bss_end_addr */
         
@@ -10083,6 +10080,7 @@ TEXT _multibootheader(SB), $0
         LONG    $0                              /* height */
         LONG    $0                              /* depth */
 @
+% was called _startKADDR
 
 % about the page-aligned requirment:
 % indeed, as we will see later binaries when exec'd are
@@ -10109,8 +10107,8 @@ TEXT _multibootentry(SB), $0
         CLD
         ADDL    $KZERO, BX
         MOVL    BX, multiboot-KZERO(SB)
-//      !!! Jump to _startPADDR (not _startKADDR anymore)!!!
-        MOVL    $_startPADDR(SB), AX
+//      !!! Jump !!!
+        MOVL    $_setup_segmentation(SB), AX
         ANDL    $~KZERO, AX
         JMP*    AX
 @
@@ -10132,28 +10130,8 @@ TEXT multiboot(SB), $0
 
 \subsection{Basic segmentation}
 
-% this comment below is still valid??? not when come from multiboot header
-% maybe should be rename this _startPADDR as it's not a physical addr
-% anyway
-% rename? setup_segmentation_KADDR
-<<function _startPADDR>>=
-/*
- * In protected mode with paging turned off and segment registers setup
- * to linear map all memory. Entered via a jump to PADDR(entry),
- * the physical address of the virtual kernel entry point of KADDR(entry).
- * Make the basic page tables for processor 0. Six pages are needed for
- * the basic set:
- *      a page directory;
- *      page tables for mapping the first 8MB of physical memory to KZERO;
- *      a page for the GDT;
- *      virtual and physical pages for mapping the Cpu structure.
- * The remaining PTEs will be allocated later when memory is sized.
- *
- * An identity mmu map is also needed for the switch to virtual mode.
- * This identity mapping is removed once the MMU is going and the JMP has
- * been made to virtual memory.
- */
-TEXT _startPADDR(SB), $0
+<<function _setup_segmentation>>=
+TEXT _setup_segmentation(SB), $0
         CLI                     /* make sure interrupts are off */
 
         /* set up the gdt so we have sane plan 9 style gdts. */
@@ -10174,11 +10152,15 @@ TEXT _startPADDR(SB), $0
         MOVW    AX, FS
         MOVW    AX, GS
 
-/*      JMP     $(2<<3):$mode32bit(SB) /**/
+/*      JMP     $(2<<3):$_setup_pagination(SB) /**/
          BYTE   $0xEA
-         LONG   $mode32bit-KZERO(SB)
+         LONG   $_setup_pagination-KZERO(SB)
          WORD   $(2<<3)
 @
+%was called _startPADDR, not sure why, not really a PADDR
+%old comment not valid anymore I think in qemu -kernel context
+% * Entered via a jump to PADDR(entry),
+% * the physical address of the virtual kernel entry point of KADDR(entry).
 
 
 
@@ -10216,9 +10198,23 @@ TEXT tgdtptr(SB), $0
 
 \subsection{Basic pagination}
 
-% again, rename? setup_pagination_KADDR?
-<<function mode32bits>>=
-TEXT mode32bit(SB), $0
+<<function _setup_pagination>>=
+/*
+ * In protected mode with paging turned off and segment registers setup
+ * to linear map all memory.
+ * Make the basic page tables for processor 0. Five pages are needed for
+ * the basic set:
+ *      a page directory;
+ *      page table for mapping the first 4MB of physical memory to KZERO;
+ *      a page for the GDT;
+ *      virtual and physical pages for mapping the Cpu structure.
+ * The remaining PTEs will be allocated later when memory is sized.
+ *
+ * An identity mmu map is also needed for the switch to virtual mode.
+ * This identity mapping is removed once the MMU is going and the JMP has
+ * been made to virtual memory.
+ */
+TEXT _setup_pagination(SB), $0
         /* At this point, the GDT setup is done. */
 
         MOVL    $PADDR(CPU0PD), DI             /* clear 4 pages for the tables etc. */
@@ -10267,7 +10263,7 @@ _setpte:
         ORL     $0x80010000, DX                 /* PG|WP */
         ANDL    $~0x6000000A, DX                /* ~(CD|NW|TS|MP) */
 
-        MOVL    $_startpg(SB), AX               /* this is a virtual address */
+        MOVL    $_setup_bss_stack(SB), AX       /* this is a virtual address */
         MOVL    DX, CR0                         /* turn on paging */
         JMP*    AX                              /* jump to the virtual nirvana */
 @
@@ -10275,10 +10271,9 @@ _setpte:
 
 \subsection{BSS and stack initialization}
 
-% rename, setup_bss_stack_KADDR
 % the x86 archi does not have multi register, so have to use same
 % pointer to differently mapped physical page
-<<function _startpg>>=
+<<function _setup_bss_stack>>=
 /*
  * Basic machine environment set, can clear BSS and create a stack.
  * The stack starts at the top of the page containing the Cpu structure.
@@ -10286,7 +10281,7 @@ _setpte:
  * each processor's Cpu structure, so the global Cpu pointer 'cpu' can
  * be initialised here.
  */
-TEXT _startpg(SB), $0
+TEXT _setup_bss_stack(SB), $0
         MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */ /* Why??? */
         MOVL    CX, CR3                         /* load and flush the mmu */
 
@@ -10307,14 +10302,14 @@ _clearbss:
 
         ADDL    $(CPUSIZE-4), SP               /* initialise stack */
 
-<<end of _startpg>>
+<<end of _setup_bss_stack>>
 @
 
 
 \subsection{Jumping to C [[main()]]}
 
 % or do another function and in previous code to a JMP _last_before_main_KADDR?
-<<end of _startpg>>=
+<<end of _setup_bss_stack>>=
 /*
  * Need to do one final thing to ensure a clean machine environment,
  * clear the EFLAGS register, which can only be done once there is a stack.
@@ -22453,7 +22448,7 @@ execinit(void)
   //this just need a regular vga driver
   //run("/bin/vga", "-l", "640x480x8", nil);
   //this need special drivers, such as the clgd424x.c in the kernel
-  run("/bin/vga", "-l", "1024x768x8", nil);
+  run("/bin/vga", "-l", "1024x768x8", nil); // can add -V to debug vga
   bind_safe("#i", "/dev", MAFTER);
 
   // for rio

@@ -27,24 +27,8 @@
 // Entry point!! (after jump from l_multiboot.s)
 //*****************************************************************************
 
-/*s: function _startPADDR */
-/*
- * In protected mode with paging turned off and segment registers setup
- * to linear map all memory. Entered via a jump to PADDR(entry),
- * the physical address of the virtual kernel entry point of KADDR(entry).
- * Make the basic page tables for processor 0. Six pages are needed for
- * the basic set:
- *      a page directory;
- *      page tables for mapping the first 8MB of physical memory to KZERO;
- *      a page for the GDT;
- *      virtual and physical pages for mapping the Cpu structure.
- * The remaining PTEs will be allocated later when memory is sized.
- *
- * An identity mmu map is also needed for the switch to virtual mode.
- * This identity mapping is removed once the MMU is going and the JMP has
- * been made to virtual memory.
- */
-TEXT _startPADDR(SB), $0
+/*s: function _setup_segmentation */
+TEXT _setup_segmentation(SB), $0
         CLI                     /* make sure interrupts are off */
 
         /* set up the gdt so we have sane plan 9 style gdts. */
@@ -65,11 +49,11 @@ TEXT _startPADDR(SB), $0
         MOVW    AX, FS
         MOVW    AX, GS
 
-/*      JMP     $(2<<3):$mode32bit(SB) /**/
+/*      JMP     $(2<<3):$_setup_pagination(SB) /**/
          BYTE   $0xEA
-         LONG   $mode32bit-KZERO(SB)
+         LONG   $_setup_pagination-KZERO(SB)
          WORD   $(2<<3)
-/*e: function _startPADDR */
+/*e: function _setup_segmentation */
 
 //*****************************************************************************
 // Gdts Data
@@ -121,8 +105,23 @@ TEXT m0idtptr(SB), $0
 // Assume protected 32 bit and GTD done
 //*****************************************************************************
 
-/*s: function mode32bits */
-TEXT mode32bit(SB), $0
+/*s: function _setup_pagination */
+/*
+ * In protected mode with paging turned off and segment registers setup
+ * to linear map all memory.
+ * Make the basic page tables for processor 0. Five pages are needed for
+ * the basic set:
+ *      a page directory;
+ *      page table for mapping the first 4MB of physical memory to KZERO;
+ *      a page for the GDT;
+ *      virtual and physical pages for mapping the Cpu structure.
+ * The remaining PTEs will be allocated later when memory is sized.
+ *
+ * An identity mmu map is also needed for the switch to virtual mode.
+ * This identity mapping is removed once the MMU is going and the JMP has
+ * been made to virtual memory.
+ */
+TEXT _setup_pagination(SB), $0
         /* At this point, the GDT setup is done. */
 
         MOVL    $PADDR(CPU0PD), DI             /* clear 4 pages for the tables etc. */
@@ -171,12 +170,12 @@ _setpte:
         ORL     $0x80010000, DX                 /* PG|WP */
         ANDL    $~0x6000000A, DX                /* ~(CD|NW|TS|MP) */
 
-        MOVL    $_startpg(SB), AX               /* this is a virtual address */
+        MOVL    $_setup_bss_stack(SB), AX       /* this is a virtual address */
         MOVL    DX, CR0                         /* turn on paging */
         JMP*    AX                              /* jump to the virtual nirvana */
-/*e: function mode32bits */
+/*e: function _setup_pagination */
 
-/*s: function _startpg */
+/*s: function _setup_bss_stack */
 /*
  * Basic machine environment set, can clear BSS and create a stack.
  * The stack starts at the top of the page containing the Cpu structure.
@@ -184,7 +183,7 @@ _setpte:
  * each processor's Cpu structure, so the global Cpu pointer 'cpu' can
  * be initialised here.
  */
-TEXT _startpg(SB), $0
+TEXT _setup_bss_stack(SB), $0
         MOVL    $0, (PDO(0))(CX)                /* undo double-map of KZERO at 0 */ /* Why??? */
         MOVL    CX, CR3                         /* load and flush the mmu */
 
@@ -205,7 +204,7 @@ _clearbss:
 
         ADDL    $(CPUSIZE-4), SP               /* initialise stack */
 
-/*s: end of _startpg */
+/*s: end of _setup_bss_stack */
 /*
  * Need to do one final thing to ensure a clean machine environment,
  * clear the EFLAGS register, which can only be done once there is a stack.
@@ -215,8 +214,8 @@ _clearbss:
         POPFL
 
         CALL    main(SB)
-/*e: end of _startpg */
-/*e: function _startpg */
+/*e: end of _setup_bss_stack */
+/*e: function _setup_bss_stack */
 
         
 //*****************************************************************************
