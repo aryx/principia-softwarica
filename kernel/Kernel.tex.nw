@@ -1412,7 +1412,8 @@ TEXT tas(SB), $0
         XCHGL   AX, (BX)                        /* lock->key */
         RET
 @ 
-% TODO: movl lock+0(FP) ??? what means this lock+0?
+% movl l+0(FP) is because we use 0(FP) and 8a forces the programmer
+% to give a name to accessed parameters. Used in debugger?
 
 \section{Atomic [[_xinc()]] and [[_xdec()]]}
 
@@ -11405,10 +11406,11 @@ xinit(void)
 @
 
 <<[[Confmem]] other fields>>=
-kern_addr kbase; // KADDR(base)
-kern_addr klimit; // KADDR(base+npage*BY2PG)
+kern_addr kbase; // KADDR(Confmem.base)
+kern_addr klimit; // KADDR(base+ x*BY2PG) where x <= Confmem.npage
 @
-% mostly used for /proc/#/mem checking, could probably be removed
+% mostly used for /proc/#/mem, could probably be removed because
+% I'm not sure why we want processes to read kernel memory
 
 
 <<function procinit>>=
@@ -23044,31 +23046,7 @@ procread(Chan *c, void *va, long n, vlong off)
 
     <<[[procread()]] Qsyscall case>>
 
-    case Qmem:
-        if(offset < KZERO)
-            return procctlmemio(p, offset, n, va, 1);
-
-        if(!iseve())
-            error(Eperm);
-
-        /* validate kernel addresses */
-        if(offset < (kern_addr)end) {
-            if(offset+n > (kern_addr)end)
-                n = (kern_addr)end - offset;
-            memmove(a, (char*)offset, n);
-            return n;
-        }
-        for(i=0; i<nelem(conf.mem); i++){
-            cm = &conf.mem[i];
-            /* klimit-1 because klimit might be zero! */
-            if(cm->kbase <= offset && offset <= cm->klimit-1){
-                if(offset+n >= cm->klimit-1)
-                    n = cm->klimit - offset;
-                memmove(a, (char*)offset, n);
-                return n;
-            }
-        }
-        error(Ebadarg);
+    <<[[procread()]] Qmem case>>
 
     case Qprofile:
         s = p->seg[TSEG];
@@ -23320,12 +23298,6 @@ procwrite(Chan *c, void *va, long n, vlong off)
         p->setargs = true;
         break;
 
-    case Qmem:
-        if(p->state != Stopped)
-            error(Ebadctl);
-
-        n = procctlmemio(p, offset, n, va, 0);
-        break;
 
     case Qregs:
         if(offset >= sizeof(Ureg))
@@ -24089,106 +24061,6 @@ procctlreq(Proc *p, char *va, int n)
 @
 
 
-
-<<function procctlmemio>>=
-int
-procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
-{
-    KMap *k;
-    Pagetable *pt;
-    Page *pg;
-    Segment *s;
-    ulong soff, l;
-    char *a = va, *b;
-
-    for(;;) {
-        s = seg(p, offset, 1);
-        if(s == 0)
-            error(Ebadarg);
-
-        if(offset+n >= s->top)
-            n = s->top-offset;
-
-        if(!read && (s->type&SG_TYPE) == SG_TEXT)
-            s = txt2data(p, s);
-
-        s->steal++;
-        soff = offset-s->base;
-        if(waserror()) {
-            s->steal--;
-            nexterror();
-        }
-        if(fixfault(s, offset, read, /*putmmu*/false) == 0)
-            break;
-        poperror();
-        s->steal--;
-    }
-    poperror();
-    pt = s->pagedir[soff/PAGETABMAPMEM];
-    if(pt == nil)
-        panic("procctlmemio");
-    pg = pt->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
-    if(pagedout(pg))
-        panic("procctlmemio1");
-
-    l = BY2PG - (offset&(BY2PG-1));
-    if(n > l)
-        n = l;
-
-    k = kmap(pg);
-    if(waserror()) {
-        s->steal--;
-        kunmap(k);
-        nexterror();
-    }
-    b = (char*)VA(k);
-    b += offset&(BY2PG-1);
-    if(read == 1)
-        memmove(a, b, n);   /* This can fault */
-    else
-        memmove(b, a, n);
-    kunmap(k);
-    poperror();
-
-    s->steal--;
-
-    if(read == 0)
-        p->newtlb = false;
-
-    return n;
-}
-@
-
-
-<<function txt2data>>=
-Segment*
-txt2data(Proc *p, Segment *s)
-{
-    int i;
-    Segment *ps;
-
-    ps = newseg(SG_DATA, s->base, s->size);
-    ps->image = s->image;
-    incref(ps->image);
-    ps->fstart = s->fstart;
-    ps->flen = s->flen;
-
-    qlock(&p->seglock);
-    for(i = 0; i < NSEG; i++)
-        if(p->seg[i] == s)
-            break;
-    if(i == NSEG)
-        panic("segment gone");
-
-    qunlock(&s->lk);
-    putseg(s);
-    qlock(&ps->lk);
-    p->seg[i] = ps;
-    qunlock(&p->seglock);
-
-    return ps;
-}
-@
 
 
 <<clock callback profclock>>=
@@ -25109,6 +24981,13 @@ void    (*consdebug)(void) = nil; // for rdb
 % there are 2 processes involved: the debuggee, and the debugger.
 % In the following, could call slave and master?
 
+% If want to implement a debugger or strace, what do you need?
+% Need a way to control and inspect another process. First for
+% the control you need a way to stop him.
+% For instance before it gets to his second syscall you got a chance
+% to print the trace of the first syscall. 
+
+
 \subsection{XTODO}
 
 <<[[Proc]] debugger fields>>=
@@ -25150,12 +25029,6 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
 \subsection{Stopping a process}
 
 % multi usage: strace, debugger
-
-% If want to implement a debugger or strace, what do you need?
-% Need a way to control and inspect another process. First for
-% the control you need a way to stop him.
-% For instance before it gets to his second syscall you got a chance
-% to print the trace of the first syscall. 
 
 <<enum procstate cases>>=
 Stopped,
@@ -25381,6 +25254,147 @@ bool hang;   /* hang at next exec for debug */
 
 
 
+\subsection{Inspecting process memory}
+
+<<[[procread()]] Qmem case>>=
+    case Qmem:
+        if(offset < KZERO)
+            return procctlmemio(p, offset, n, va, true);
+
+        if(!iseve())
+            error(Eperm);
+
+        // why allowing read access to kernel code or kernel memory? 
+        // who is using that?
+
+        /* validate kernel addresses */
+        if(offset < (kern_addr)end) {
+            if(offset+n > (kern_addr)end)
+                n = (kern_addr)end - offset;
+            memmove(a, (char*)offset, n);
+            return n;
+        }
+        for(i=0; i<nelem(conf.mem); i++){
+            cm = &conf.mem[i];
+            /* klimit-1 because klimit might be zero! */
+            if(cm->kbase <= offset && offset <= cm->klimit-1){
+                if(offset+n >= cm->klimit-1)
+                    n = cm->klimit - offset;
+                memmove(a, (char*)offset, n);
+                return n;
+            }
+        }
+        error(Ebadarg);
+@
+
+<<[[procwrite()]] Qmem case>>=
+    case Qmem:
+        if(p->state != Stopped)
+            error(Ebadctl);
+
+        n = procctlmemio(p, offset, n, va, false);
+        break;
+@
+
+<<function procctlmemio>>=
+int
+procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
+{
+    KMap *k;
+    Pagetable *pt;
+    Page *pg;
+    Segment *s;
+    ulong soff, l;
+    char *a = va, *b;
+
+    for(;;) {
+        s = seg(p, offset, 1);
+        if(s == nil)
+            error(Ebadarg);
+
+        if(offset+n >= s->top)
+            n = s->top-offset;
+
+        if(!read && (s->type&SG_TYPE) == SG_TEXT)
+            s = text2data(p, s);
+
+        s->steal++;
+        soff = offset-s->base;
+        if(waserror()) {
+            s->steal--;
+            nexterror();
+        }
+        if(fixfault(s, offset, read, /*putmmu*/false) == 0)
+            break;
+        poperror();
+        s->steal--;
+    }
+    poperror();
+    pt = s->pagedir[soff/PAGETABMAPMEM];
+    if(pt == nil)
+        panic("procctlmemio");
+    pg = pt->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
+    if(pagedout(pg))
+        panic("procctlmemio1");
+
+    l = BY2PG - (offset&(BY2PG-1));
+    if(n > l)
+        n = l;
+
+    k = kmap(pg);
+    if(waserror()) {
+        s->steal--;
+        kunmap(k);
+        nexterror();
+    }
+    b = (char*)VA(k);
+    b += offset&(BY2PG-1);
+    if(read == 1)
+        memmove(a, b, n);   /* This can fault */
+    else
+        memmove(b, a, n);
+    kunmap(k);
+    poperror();
+
+    s->steal--;
+
+    if(read == 0)
+        p->newtlb = false;
+
+    return n;
+}
+@
+
+% there is also data2txt
+<<function text2data>>=
+Segment*
+text2data(Proc *p, Segment *s)
+{
+    int i;
+    Segment *ps;
+
+    ps = newseg(SG_DATA, s->base, s->size);
+    ps->image = s->image;
+    incref(ps->image);
+    ps->fstart = s->fstart;
+    ps->flen = s->flen;
+
+    qlock(&p->seglock);
+    for(i = 0; i < NSEG; i++)
+        if(p->seg[i] == s)
+            break;
+    if(i == NSEG)
+        panic("segment gone");
+
+    qunlock(&s->lk);
+    putseg(s);
+    qlock(&ps->lk);
+    p->seg[i] = ps;
+    qunlock(&p->seglock);
+
+    return ps;
+}
+@
 
 
 
@@ -26092,6 +26106,7 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 
 % breakpoint?? via hardware exception? so trap? and in trap
 % we look for procctl no?
+
 
 \subsection{Other}
 

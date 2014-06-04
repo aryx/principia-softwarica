@@ -182,7 +182,7 @@ static char *sname[]={ "Text", "Data", "Bss", "Stack",   "Shared", "Phys", };
 void    procctlreq(Proc*, char*, int);
 int procctlmemio(Proc*, ulong, int, void*, int);
 Chan*   proctext(Chan*, Proc*);
-Segment* txt2data(Proc*, Segment*);
+Segment* text2data(Proc*, Segment*);
 int procstopped(void*);
 void    mntscan(Mntwalk*, Proc*);
 /*e: devproc.c forward decl */
@@ -810,31 +810,36 @@ procread(Chan *c, void *va, long n, vlong off)
             return n;
     /*e: [[procread()]] Qsyscall case */
 
-    case Qmem:
-        if(offset < KZERO)
-            return procctlmemio(p, offset, n, va, 1);
+    /*s: [[procread()]] Qmem case */
+        case Qmem:
+            if(offset < KZERO)
+                return procctlmemio(p, offset, n, va, true);
 
-        if(!iseve())
-            error(Eperm);
+            if(!iseve())
+                error(Eperm);
 
-        /* validate kernel addresses */
-        if(offset < (kern_addr)end) {
-            if(offset+n > (kern_addr)end)
-                n = (kern_addr)end - offset;
-            memmove(a, (char*)offset, n);
-            return n;
-        }
-        for(i=0; i<nelem(conf.mem); i++){
-            cm = &conf.mem[i];
-            /* klimit-1 because klimit might be zero! */
-            if(cm->kbase <= offset && offset <= cm->klimit-1){
-                if(offset+n >= cm->klimit-1)
-                    n = cm->klimit - offset;
+            // why allowing read access to kernel code or kernel memory? 
+            // who is using that?
+
+            /* validate kernel addresses */
+            if(offset < (kern_addr)end) {
+                if(offset+n > (kern_addr)end)
+                    n = (kern_addr)end - offset;
                 memmove(a, (char*)offset, n);
                 return n;
             }
-        }
-        error(Ebadarg);
+            for(i=0; i<nelem(conf.mem); i++){
+                cm = &conf.mem[i];
+                /* klimit-1 because klimit might be zero! */
+                if(cm->kbase <= offset && offset <= cm->klimit-1){
+                    if(offset+n >= cm->klimit-1)
+                        n = cm->klimit - offset;
+                    memmove(a, (char*)offset, n);
+                    return n;
+                }
+            }
+            error(Ebadarg);
+    /*e: [[procread()]] Qmem case */
 
     case Qprofile:
         s = p->seg[TSEG];
@@ -1148,12 +1153,6 @@ procwrite(Chan *c, void *va, long n, vlong off)
         p->setargs = true;
         break;
 
-    case Qmem:
-        if(p->state != Stopped)
-            error(Ebadctl);
-
-        n = procctlmemio(p, offset, n, va, 0);
-        break;
 
     case Qregs:
         if(offset >= sizeof(Ureg))
@@ -1639,7 +1638,7 @@ procstopped(void *a)
 
 /*s: function procctlmemio */
 int
-procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
+procctlmemio(Proc *p, ulong offset, int n, virt_addr3 va, bool read)
 {
     KMap *k;
     Pagetable *pt;
@@ -1650,14 +1649,14 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
 
     for(;;) {
         s = seg(p, offset, 1);
-        if(s == 0)
+        if(s == nil)
             error(Ebadarg);
 
         if(offset+n >= s->top)
             n = s->top-offset;
 
         if(!read && (s->type&SG_TYPE) == SG_TEXT)
-            s = txt2data(p, s);
+            s = text2data(p, s);
 
         s->steal++;
         soff = offset-s->base;
@@ -1706,9 +1705,9 @@ procctlmemio(Proc *p, ulong offset, int n, void *va, int read)
 }
 /*e: function procctlmemio */
 
-/*s: function txt2data */
+/*s: function text2data */
 Segment*
-txt2data(Proc *p, Segment *s)
+text2data(Proc *p, Segment *s)
 {
     int i;
     Segment *ps;
@@ -1734,5 +1733,5 @@ txt2data(Proc *p, Segment *s)
 
     return ps;
 }
-/*e: function txt2data */
+/*e: function text2data */
 /*e: devproc.c */

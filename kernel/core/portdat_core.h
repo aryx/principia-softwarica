@@ -15,8 +15,8 @@ struct Confmem
     phys_addr base;
     ulong npage;
     /*s: [[Confmem]] other fields */
-    kern_addr kbase; // KADDR(base)
-    kern_addr klimit; // KADDR(base+npage*BY2PG)
+    kern_addr kbase; // KADDR(Confmem.base)
+    kern_addr klimit; // KADDR(base+ x*BY2PG) where x <= Confmem.npage
     /*e: [[Confmem]] other fields */
 };
 /*e: struct Confmem */
