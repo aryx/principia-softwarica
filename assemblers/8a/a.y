@@ -141,6 +141,10 @@ nonrel:
 		$$.to = $1;
 	}
 
+
+
+
+
 spec1:	/* DATA */
 	nam '/' con ',' imm
 	{
@@ -237,6 +241,11 @@ spec8:	/* GLOBL */
 		$$.from.scale = $3;
 		$$.to = $5;
 	}
+
+
+
+
+
 
 rem:
 	reg
