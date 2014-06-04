@@ -726,7 +726,7 @@ syssegbrk(ulong *arg)
     addr = arg[0];
     for(i = 0; i < NSEG; i++) {
         s = up->seg[i];
-        if(s == 0 || addr < s->base || addr >= s->top)
+        if(s == nil || addr < s->base || addr >= s->top)
             continue;
         switch(s->type&SG_TYPE) {
         case SG_TEXT:

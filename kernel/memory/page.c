@@ -48,8 +48,8 @@ pageinit(void)
         }
     }
     palloc.tail = p - 1;
-    palloc.head->prev = 0;
-    palloc.tail->next = 0;
+    palloc.head->prev = nil;
+    palloc.tail->next = nil;
 
     palloc.user = p - palloc.pages; // TODO? should be np too no?
     pkb = palloc.user*BY2PG/1024;
@@ -83,7 +83,7 @@ pageunchain(Page *p)
     if(canlock(&palloc))
         panic("pageunchain (palloc %p)", &palloc);
 
-    // remove(p, palloc);
+    // remove_queue(p, palloc);
     if(p->prev)
         p->prev->next = p->next;
     else
@@ -112,7 +112,7 @@ pagechaintail(Page *p)
     }
     else {
         palloc.head = p;
-        p->prev = 0;
+        p->prev = nil;
     }
     palloc.tail = p;
     p->next = nil;
@@ -159,6 +159,8 @@ newpage(bool clear, Segment **s, virt_addr va)
         if(up->kp && palloc.freecount > 0)
             break;
 
+        // no free pages, need to wait
+
         unlock(&palloc);
         dontalloc = false;
         if(s && *s) {
@@ -191,7 +193,6 @@ newpage(bool clear, Segment **s, virt_addr va)
     }
 
     p = palloc.head;
-
     pageunchain(p);
 
     lock(p);
@@ -201,7 +202,7 @@ newpage(bool clear, Segment **s, virt_addr va)
     uncachepage(p);
     p->ref++;
     p->va = va;
-    p->modref = 0;
+    p->modref = PG_NOTHING;
     unlock(p);
     unlock(&palloc);
 
@@ -210,7 +211,6 @@ newpage(bool clear, Segment **s, virt_addr va)
         memset((void*)VA(k), 0, BY2PG);
         kunmap(k);
     }
-
     return p;
 }
 /*e: constructor newpage */
@@ -511,7 +511,6 @@ ptcpy(Pagetable *old)
             new->last = dst;
             *dst = *src;
         }
-
     return new;
 }
 /*e: function ptcpy */
@@ -538,12 +537,13 @@ freept(Segment *s, Pagetable *p)
     Page *pt, **pg, **ptop;
 
     switch(s->type&SG_TYPE) {
+
     case SG_PHYSICAL:
         fn = s->pseg->pgfree;
         ptop = &p->pagetab[PAGETABSIZE];
         if(fn) {
             for(pg = p->pagetab; pg < ptop; pg++) {
-                if(*pg == 0)
+                if(*pg == nil)
                     continue;
                 (*fn)(*pg);
                 *pg = 0;
@@ -552,20 +552,21 @@ freept(Segment *s, Pagetable *p)
         }
         for(pg = p->pagetab; pg < ptop; pg++) {
             pt = *pg;
-            if(pt == 0)
+            if(pt == nil)
                 continue;
             lock(pt);
             ref = --pt->ref;
             unlock(pt);
             if(ref == 0)
-                free(pt);
+                free(pt); // because was smalloc'ed in fixfault
         }
         break;
+
     default:
         for(pg = p->first; pg <= p->last; pg++)
             if(*pg) {
                 putpage(*pg);
-                *pg = 0;
+                *pg = nil;
             }
     }
     free(p);

@@ -77,7 +77,7 @@ struct RWlock
 // For reference counting shared things (e.g. a Page)
 struct Ref
 {
-    long  ref;
+    long ref;
     Lock;
 };
 /*e: struct Ref */

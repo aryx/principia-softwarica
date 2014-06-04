@@ -1518,9 +1518,9 @@ procdump(void)
 /*s: function procflushseg */
 /*
  *  wait till all processes have flushed their mmu
- *  state about segement s
+ *  state about segment s
  */
-//@Scheck: not dead, used in segment.c, weird
+//@Scheck: not dead, used in segment.c
 void
 procflushseg(Segment *s)
 {
@@ -1548,7 +1548,6 @@ procflushseg(Segment *s)
                 break;
             }
     }
-
     if(nwait == 0)
         return;
 

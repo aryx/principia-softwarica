@@ -946,7 +946,7 @@ procread(Chan *c, void *va, long n, vlong off)
         j = 0;
         for(i = 0; i < NSEG; i++) {
             sg = p->seg[i];
-            if(sg == 0)
+            if(sg == nil)
                 continue;
             j += snprint(statbuf+j, sizeof statbuf - j,
                 "%-6s %c%c %.8lux %.8lux %4ld\n",

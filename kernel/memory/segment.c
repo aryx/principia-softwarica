@@ -26,8 +26,20 @@ static struct Imagealloc imagealloc;
  * Attachable segment types
  */
 static Physseg physseg[10] = {
-    { SG_SHARED,    "shared",   0,  SEGMAXSIZE, 0,  0 },
-    { SG_BSS,   "memory",   0,  SEGMAXSIZE, 0,  0 },
+    { .attr= SG_SHARED, 
+      .name= "shared", 
+      .pa= 0,
+      .size= SEGMAXSIZE, 
+      .pgalloc = nil,  
+      .pgfree = nil 
+    },
+    { .attr= SG_BSS, 
+      .name= "memory", 
+      .pa = 0,
+      .size = SEGMAXSIZE, 
+      .pgalloc = nil, 
+      .pgfree = nil 
+    },
     { 0,        0,      0,  0,      0,  0 },
 };
 /*e: global physseg */
@@ -35,7 +47,6 @@ static Physseg physseg[10] = {
 static Lock physseglock;
 /*e: global physseglock */
 
-// for debugging?
 Segment* (*_globalsegattach)(Proc*, char*);
 
 /*s: segment.c forward decl */
@@ -59,7 +70,7 @@ initimage(void)
     ie = &imagealloc.free[conf.nimage-1];
     for(i = imagealloc.free; i < ie; i++)
         i->next = i+1;
-    i->next = 0;
+    i->next = nil;
     imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
     imagealloc.szfreechan = NFREECHAN;
 }
@@ -93,8 +104,8 @@ newseg(int type, virt_addr base, ulong size)
     pagedirsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
     if(pagedirsize > nelem(s->smallpagedir)){
         pagedirsize *= 2;
-        if(pagedirsize > (PAGEDIRSIZE*PAGETABSIZE))
-            pagedirsize = (PAGEDIRSIZE*PAGETABSIZE); // Really? not PAGEDIRSIZE MAX?
+        if(pagedirsize > PAGEDIRSIZE)
+            pagedirsize = PAGEDIRSIZE; // pad's first bugfix :)
         s->pagedir = smalloc(pagedirsize*sizeof(Pagetable*));
         s->pagedirsize = pagedirsize;
     }
@@ -115,14 +126,14 @@ putseg(Segment *s)
     KImage *i;
 
     if(s == nil)
-        return; // TODO: panic("putset") instead?
+        return; // TODO: panic("putseg") instead?
 
     i = s->image;
     if(i != nil) {
         lock(i);
         lock(s);
         if(i->s == s && s->ref == 1)
-            i->s = 0;
+            i->s = nil;
         unlock(i);
     }
     else
@@ -192,22 +203,10 @@ dupseg(Segment **seg, int segno, bool share)
     }
     switch(s->type&SG_TYPE) {
     case SG_TEXT:       /* New segment shares pt set */
-    case SG_SHARED:
-    case SG_PHYSICAL:
         goto sameseg;
 
-    case SG_STACK:
-        n = newseg(s->type, s->base, s->size);
-        break;
-
-    case SG_BSS:        /* Just copy on write */
-        if(share)
-            goto sameseg;
-        n = newseg(s->type, s->base, s->size);
-        break;
-
     case SG_DATA:       /* Copy on write plus demand load info */
-        if(segno == TSEG){
+        if(segno == TSEG){ // why not SG_TEXT then?
             poperror();
             qunlock(&s->lk);
             return data2txt(s);// ????
@@ -222,6 +221,21 @@ dupseg(Segment **seg, int segno, bool share)
         n->fstart = s->fstart;
         n->flen = s->flen;
         break;
+
+    case SG_BSS:        /* Just copy on write */
+        if(share)
+            goto sameseg;
+        n = newseg(s->type, s->base, s->size);
+        break;
+
+    case SG_STACK:
+        n = newseg(s->type, s->base, s->size);
+        break;
+
+    case SG_SHARED:
+    case SG_PHYSICAL:
+        goto sameseg;
+
     }
     size = s->pagedirsize;
     for(i = 0; i < size; i++)
@@ -254,11 +268,11 @@ segpage(Segment *s, Page *p)
         panic("segpage");
 
     off = p->va - s->base;
-    pt = &s->pagedir[off/PAGETABMAPMEM];
+    pt = &s->pagedir[off/PAGETABMAPMEM]; // PDX
     if(*pt == nil)
         *pt = ptalloc();
 
-    pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
+    pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG]; // PTX
     *pg = p;
     if(pg < (*pt)->first)
         (*pt)->first = pg;
@@ -483,7 +497,7 @@ ibrk(ulong addr, int seg)
     Pagetable **map;
 
     s = up->seg[seg];
-    if(s == 0)
+    if(s == nil)
         error(Ebadarg);
 
     if(addr == nilptr)
@@ -493,7 +507,7 @@ ibrk(ulong addr, int seg)
 
     /* We may start with the bss overlapping the data */
     if(addr < s->base) {
-        if(seg != BSEG || up->seg[DSEG] == 0 || addr < up->seg[DSEG]->base) {
+        if(seg != BSEG || up->seg[DSEG] == nil || addr < up->seg[DSEG]->base) {
             qunlock(&s->lk);
             error(Enovmem);
         }
@@ -522,7 +536,7 @@ ibrk(ulong addr, int seg)
 
     for(i = 0; i < NSEG; i++) {
         ns = up->seg[i];
-        if(ns == 0 || ns == s)
+        if(ns == nil || ns == s)
             continue;
         if(newtop >= ns->base && newtop < ns->top) {
             qunlock(&s->lk);
@@ -534,6 +548,7 @@ ibrk(ulong addr, int seg)
         qunlock(&s->lk);
         error(Enovmem);
     }
+
     mapsize = ROUND(newsize, PAGETABSIZE)/PAGETABSIZE;
     if(mapsize > s->pagedirsize){
         map = smalloc(mapsize*sizeof(Pagetable*));
@@ -571,7 +586,7 @@ mfreeseg(Segment *s, ulong start, int pages)
     for(i = soff/PAGETABMAPMEM; i < size; i++) {
         if(pages <= 0)
             break;
-        if(s->pagedir[i] == 0) {
+        if(s->pagedir[i] == nil) {
             pages -= PAGETABSIZE-j;
             j = 0;
             continue;
@@ -596,7 +611,7 @@ mfreeseg(Segment *s, ulong start, int pages)
                     pg->next = list;
                     list = pg;
                 }
-                s->pagedir[i]->pagetab[j] = 0;
+                s->pagedir[i]->pagetab[j] = nil;
             }
             if(--pages == 0)
                 goto out;

@@ -97,7 +97,7 @@ smalloc(ulong size)
         v = (ulong*)v+Npadlong;
         setmalloctag(v, getcallerpc(&size));
     }
-    memset(v, 0, size);
+    memset(v, 0, size); // clear
     return v;
 }
 /*e: function smalloc */

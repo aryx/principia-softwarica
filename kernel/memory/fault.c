@@ -167,7 +167,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         break;
 
     case SG_PHYSICAL:
-        if(*pg == 0) {
+        if(*pg == nil) {
             fn = s->pseg->pgalloc;
             if(fn)
                 *pg = (*fn)(s, addr);

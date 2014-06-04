@@ -105,7 +105,6 @@ chandevreset(void)
     int i;
 
     todinit();  /* avoid later reentry causing infinite recursion */
-    //debugstart = getconf("*debugstart") != nil;
     for(i=0; devtab[i] != nil; i++) {
         devtab[i]->reset();
     }

@@ -458,7 +458,7 @@ trap(Ureg* ureg)
                 if(0)print("cpu%d: spurious interrupt %d, last %d\n",
                     cpu->cpuno, vno, cpu->lastintr);
                 if(0)if(conf.ncpu > 1){
-                    for(i = 0; i < 32; i++){
+                    for(i = 0; i < MAXCPUS; i++){
                         if(!(active.cpus & (1<<i)))
                             continue;
                         mach = CPUS(i);

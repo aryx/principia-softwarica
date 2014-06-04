@@ -50,10 +50,10 @@ swapinit(void)
     swapalloc.last = swapalloc.swmap;
     swapalloc.free = conf.nswap;
     iolist = xalloc(conf.nswppo*sizeof(Page*));
-    if(swapalloc.swmap == 0 || iolist == 0)
+    if(swapalloc.swmap == nil || iolist == nil)
         panic("swapinit: not enough memory");
 
-    swapimage.notext = 1;
+    swapimage.notext = true;
 }
 /*e: function swapinit */
 

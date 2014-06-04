@@ -14,6 +14,7 @@
 /*s: enum modref */
 enum modref 
 {
+    PG_NOTHING = 0x00, // nothing
     PG_MOD    = 0x01,   /* software modified bit */
     PG_REF    = 0x02,   /* software referenced bit */
 };
@@ -34,9 +35,9 @@ struct Page
     ulong daddr;      /* Disc address on swap */
     ulong gen;      /* Generation counter for swap */
   
-    // Why not Ref? to save space probably (same reason they use char below)
+    // Why not Ref? to save space (same reason they use char below)
     // but that means needs to use Lock below to access this non-atomic ref.
-    ushort  ref;      /* Reference count */
+    ushort  ref;      /* Reference count */ // Pages are shared!
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
 
@@ -59,7 +60,7 @@ struct Pagetable
     //array<option<ref<Page>> will map 1M of memory
     Page  *pagetab[PAGETABSIZE];
   
-    //to avoid iterate over all pages
+    //to avoid iterate over all entries in pagetab
     // ref<ref<Page>> in Pagetable.pages
     Page  **first;    /* First used entry */
     // ref<ref<Page>> in Pagetable.pages
@@ -71,8 +72,6 @@ struct Pagetable
 /*s: struct KImage */
 // a KImage is essentially a channel to a text file (an image of a binary)
 // the image in memory for a portion of a given file.
-// (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
-//  ugly #define Image IMAGE each time one wants to use draw.h from a device driver)
 struct KImage
 {
     Chan  *c;     /* channel to text file */
@@ -120,7 +119,9 @@ enum segtype
 #define PG_ONSWAP 1
 /*e: constant PG_ONSWAP */
 
+/*s: function onswap */
 #define onswap(s) (((ulong)s)&PG_ONSWAP)
+/*e: function onswap */
 #define pagedout(s) (((ulong)s)==0 || onswap(s))
 #define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
 
@@ -134,6 +135,7 @@ struct Physseg
     phys_addr pa;     /* Physical address */
     ulong size;     /* Maximum segment size in pages */
 
+    // seems dead, not even used by vga.c
     Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
     void  (*pgfree)(Page*);
 };
@@ -160,7 +162,7 @@ struct Segment
     // Kind of a page directory table. Points to smallpagedir if small enough.
     // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
     // can map up to 2G of memory
-    Pagetable **pagedir; // PAGEDIRSIZE
+    Pagetable **pagedir; // array of PAGEDIRSIZE max
     // array<option<ref_own<Pagetable>>
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
@@ -326,7 +328,7 @@ struct Palloc
     Lock  hashlock;
   
     // extra
-    Lock; // LOCK ORDERING: always do lock(&palloc); lock(p)!!
+    Lock; // LOCK ORDERING: always do lock(&palloc); lock(&page)!!
     Rendez  freememr; /* Sleep for free mem */ // ispages()
     QLock pwait; /* Queue of procs waiting for memory */
 };

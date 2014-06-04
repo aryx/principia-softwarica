@@ -107,7 +107,7 @@ struct Cpu
 
     uvlong  cpuhz;
     int cpumhz; // cpuhz / 1_000_000
-    // = cpuhz if havetsc, 0 otherwise
+    // cyclefre == cpuhz if havetsc, 0 otherwise
     uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 
     /*s: [[Cpu]] stat fields */

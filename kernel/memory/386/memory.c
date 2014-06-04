@@ -455,6 +455,7 @@ ramscan(ulong maxmem)
             maxpa = 24*MB;
     }else
         maxpa = maxmem;
+
     maxkpa = (u32int)-KZERO;    /* 2^32 - KZERO */
 
     /*
@@ -876,7 +877,6 @@ meminit(void)
         lost += rmapram.map[i].size;
     if(lost)
         print("meminit - lost %lud bytes\n", lost);
-
     if(MEMDEBUG)
         memdebug();
 }
@@ -906,7 +906,7 @@ umbfree(ulong addr, int size)
 }
 /*e: function umbfree */
 
-/*s: function upalloc */
+/*s: function upaalloc */
 /*
  * Give out otherwise-unused physical address space
  * for use in configuring devices.  Note that unlike upamalloc
@@ -925,7 +925,7 @@ upaalloc(int size, int align)
     }
     return a;
 }
-/*e: function upalloc */
+/*e: function upaalloc */
 
 /*s: function upareserve */
 void
