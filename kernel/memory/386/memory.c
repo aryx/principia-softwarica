@@ -40,7 +40,6 @@ enum {
 /*s: memory.c forward decl */
 typedef struct Map Map;
 typedef struct RMap RMap;
-typedef struct Emap Emap;
 /*e: memory.c forward decl */
 /*s: struct Map */
 struct Map {
@@ -589,26 +588,6 @@ ramscan(ulong maxmem)
 }
 /*e: function ramscan */
 
-/*
- * BIOS Int 0x15 E820 memory map.
- */
-enum
-{
-    SMAP = ('S'<<24)|('M'<<16)|('A'<<8)|'P',
-    Ememory = 1,
-    Ereserved = 2,
-    Carry = 1,
-};
-
-struct Emap
-{
-    uvlong base;
-    uvlong len;
-    ulong type;
-};
-static Emap emap[16];
-int nemap;
-
 static char *etypes[] =
 {
     "type=0",
@@ -618,213 +597,6 @@ static char *etypes[] =
     "acpi nvs",
 };
 
-/*s: function emapcmp */
-static int
-emapcmp(const void *va, const void *vb)
-{
-    Emap *a, *b;
-    
-    a = (Emap*)va;
-    b = (Emap*)vb;
-    if(a->base < b->base)
-        return -1;
-    if(a->base > b->base)
-        return 1;
-    if(a->len < b->len)
-        return -1;
-    if(a->len > b->len)
-        return 1;
-    return a->type - b->type;
-}
-/*e: function emapcmp */
-
-/*s: function map */
-static void
-map(ulong base, ulong len, int type)
-{
-    ulong e, n;
-    ulong *table, flags, maxkpa;
-    
-    /*
-     * Split any call crossing MemMin to make below simpler.
-     */
-    if(base < MemMin && len > MemMin-base){
-        n = MemMin - base;
-        map(base, n, type);
-        map(MemMin, len-n, type);
-    }
-    
-    /*
-     * Let lowraminit and umbscan hash out the low MemMin.
-     */
-    if(base < MemMin)
-        return;
-
-    /*
-     * Any non-memory below 16*MB is used as upper mem blocks.
-     */
-    if(type == MemUPA && base < 16*MB && base+len > 16*MB){
-        map(base, 16*MB-base, MemUMB);
-        map(16*MB, len-(16*MB-base), MemUPA);
-        return;
-    }
-    
-    /*
-     * Memory below CPU0END is reserved for the kernel
-     * and already mapped.
-     */
-    if(base < PADDR(CPU0END)){
-        n = PADDR(CPU0END) - base;
-        if(len <= n)
-            return;
-        map(PADDR(CPU0END), len-n, type);
-        return;
-    }
-    
-    /*
-     * Memory between KTZERO and end is the kernel itself
-     * and is already mapped.
-     */
-    if(base < PADDR(KTZERO) && base+len > PADDR(KTZERO)){
-        map(base, PADDR(KTZERO)-base, type);
-        return;
-    }
-    if(PADDR(KTZERO) < base && base < PADDR(PGROUND((ulong)end))){
-        n = PADDR(PGROUND((ulong)end));
-        if(len <= n)
-            return;
-        map(PADDR(PGROUND((ulong)end)), len-n, type);
-        return;
-    }
-    
-    /*
-     * Now we have a simple case.
-     */
-    // print("map %.8lux %.8lux %d\n", base, base+len, type);
-    switch(type){
-    case MemRAM:
-        mapfree(&rmapram, base, len);
-        flags = PTEWRITE|PTEVALID;
-        break;
-    case MemUMB:
-        mapfree(&rmapumb, base, len);
-        flags = PTEWRITE|PTEUNCACHED|PTEVALID;
-        break;
-    case MemUPA:
-        mapfree(&rmapupa, base, len);
-        flags = 0;
-        break;
-    default:
-    case MemReserved:
-        flags = 0;
-        break;
-    }
-    
-    /*
-     * bottom MemMin is already mapped - just twiddle flags.
-     * (not currently used - see above)
-     */
-    if(base < MemMin){
-        table = KADDR(PPN(cpu->pdproto[PDX(base)]));
-        e = base+len;
-        base = PPN(base);
-        for(; base<e; base+=BY2PG)
-            table[PTX(base)] |= flags;
-        return;
-    }
-    
-    /*
-     * Only map from KZERO to 2^32.
-     */
-    if(flags){
-        maxkpa = -KZERO;
-        if(base >= maxkpa)
-            return;
-        if(len > maxkpa-base)
-            len = maxkpa - base;
-        pdbmap(cpu->pdproto, base|flags, base+KZERO, len);
-    }
-}
-/*e: function map */
-
-/*s: function e820scan */
-static int
-e820scan(void)
-{
-    int i;
-    Ureg u;
-    ulong cont, base, len;
-    uvlong last;
-    Emap *e;
-
-    if(getconf("*norealmode") || getconf("*noe820scan"))
-        return -1;
-
-    cont = 0;
-    for(i=0; i<nelem(emap); i++){
-        memset(&u, 0, sizeof u);
-        u.ax = 0xE820;
-        u.bx = cont;
-        u.cx = 20;
-        u.dx = SMAP;
-        u.es = (PADDR(RMBUF)>>4)&0xF000;
-        u.di = PADDR(RMBUF)&0xFFFF;
-        u.trap = 0x15;
-        realmode(&u);
-        cont = u.bx;
-        if((u.flags&Carry) || u.ax != SMAP || u.cx != 20)
-            break;
-        e = &emap[nemap++];
-        *e = *(Emap*)RMBUF;
-        if(u.bx == 0)
-            break;
-    }
-    if(nemap == 0)
-        return -1;
-    
-    qsort(emap, nemap, sizeof emap[0], emapcmp);
-
-    if(getconf("*noe820print") == nil){
-        for(i=0; i<nemap; i++){
-            e = &emap[i];
-            print("E820: %.8llux %.8llux ", e->base, e->base+e->len);
-            if(e->type < nelem(etypes))
-                print("%s\n", etypes[e->type]);
-            else
-                print("type=%lud\n", e->type);
-        }
-    }
-
-    last = 0;
-    for(i=0; i<nemap; i++){ 
-        e = &emap[i];
-        /*
-         * pull out the info but only about the low 32 bits...
-         */
-        if(e->base >= (1LL<<32))
-            break;
-        base = e->base;
-        if(base+e->len > (1LL<<32))
-            len = -base;
-        else
-            len = e->len;
-        /*
-         * If the map skips addresses, mark them available.
-         */
-        if(last < e->base)
-            map(last, e->base-last, MemUPA);
-        last = base+len;
-        if(e->type == Ememory)
-            map(base, len, MemRAM);
-        else
-            map(base, len, MemReserved);
-    }
-    if(last < (1LL<<32))
-        map(last, (u32int)-last, MemUPA);
-    return 0;
-}
-/*e: function e820scan */
-
 /*s: function meminit */
 void
 meminit(void)
@@ -832,8 +604,10 @@ meminit(void)
     int i;
     Map *mp;
     Confmem *cm;
-    ulong pa, *pte;
-    ulong maxmem, lost;
+    phys_addr pa;
+    kern_addr2 pte;
+    phys_addr maxmem;
+    ulong lost;
     char *p;
 
     if(p = getconf("*maxmem"))
@@ -859,8 +633,7 @@ meminit(void)
 
     umbscan();
     lowraminit();
-    if(e820scan() < 0)
-        ramscan(maxmem);
+    ramscan(maxmem);
 
     /*
      * Set the conf entries describing banks of allocatable memory.
