@@ -31,6 +31,7 @@
 %  - SEMI malloc internals
 %  - TODO time, user vs sys vs real
 %  - TODO debugger
+%  - TODO virtual memory
 
 %history LP-ization:
 % - skeleton; a not too bad TOC
@@ -213,6 +214,8 @@ version described in this book at:
 \url{https://github.com/aryx/fork-plan9}
 % did modifs, renamed, mv around, add types (bool, kern_addr, error, etc)
 % mostly to ease the presentation (and have ocaml spirit!)
+% all the // in the code are mine.
+% it's kinda of the opposite of 9atom! support less features :)
 
 
 Then you need to compile, using a regular C compiler (e.g. gcc),
@@ -373,6 +376,16 @@ provides to the user programs.
 #define	UNMOUNT		24
 @
 
+%plan9 specifics vs general os principles, e.g. namespace so have
+% nice /dev/cons, /dev/draw, which enable easier network and graphics
+
+% alternative to namespace and fileservers and uniondir?
+% once go to a "device is a file", and want a clean /dev/cons and 
+% clean xterm, that means you need to have programs that provides
+% a fake /dev/cons so need easy fileservers and namespace. Union dir
+% then is natural too, goes with having flexible namespace.
+% alternative would be if /dev/cons
+
 <<sys.h time syscalls>>=
 #define	SLEEP		4
 #define	ALARM		5
@@ -405,17 +418,6 @@ provides to the user programs.
 #define	FAUTH		39
 @
 
-
-% alternative to namespace and fileservers and uniondir?
-% once go to a "device is a file", and want a clean /dev/cons and 
-% clean xterm, that means you need to have programs that provides
-% a fake /dev/cons so need easy fileservers and namespace. Union dir
-% then is natural too, goes with having flexible namespace.
-% alternative would be if /dev/cons
-
-
-%plan9 specifics vs general os principles, e.g. namespace so have
-% nice /dev/cons, /dev/draw, which enable easier network and graphics
 
 %TODO
 %things plan9 make so much easier to implement/understand:
@@ -540,6 +542,24 @@ provides to the user programs.
 @
 
 
+\ifallcode
+<<pad basic types>>=
+typedef int bool;
+enum _bool {
+  false = 0,
+  true = 1
+};
+typedef ushort bool_ushort;
+
+typedef int retcode;
+enum _retcode {
+    OK = 0,
+    ERROR = 1,
+};
+@ 
+\fi
+
+
 \section{Booting overview}
 % kernel that creates first user process!
 % introduce dichotomy kernel/user
@@ -629,7 +649,9 @@ typedef void* kern_addr3;
 <<constant KTZERO>>=
 #define KTZERO    (KZERO+0x100000)  /* first address in kernel text */
 @
-
+% why + 0x100000? because will map kzero to physical memory,
+% and lots of address before 1Mo are reserved, used by device, e.g.
+% screen cga is at 0xb8000
 
 <<constant UZERO>>=
 #define UZERO   0     /* base of user address space */
@@ -640,11 +662,20 @@ typedef void* kern_addr3;
 #define UTZERO    (UZERO+BY2PG)   /* first address in user text */
 @
 
-<<constant MAXKPA>>=
-// -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic
-#define MAXKPA (ulong)(-KZERO)
+
+<<function paddr>>=
+phys_addr
+paddr(kern_addr3 v)
+{
+    kern_addr va;
+    
+    va = (kern_addr)v;
+    if(va < KZERO)
+        panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
+    return va-KZERO;
+}
 @
-% rename KEND? but it's not really kernel end. KADDREND? MAXKADDR? KADDREND?
+%less: not symetric, phys_addr vs kern_addr3
 
 % pa must be <= MAXKPA, use kaddr to access kernel data.
 % if want to access different pa, then must use tmpmap or kmap
@@ -663,19 +694,13 @@ kaddr(phys_addr pa)
 @
 %//todo: should return a kern_addr
 
-<<function paddr>>=
-phys_addr
-paddr(kern_addr3 v)
-{
-    kern_addr va;
-    
-    va = (kern_addr)v;
-    if(va < KZERO)
-        panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
-    return va-KZERO;
-}
+<<constant MAXKPA>>=
+// -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic
+#define MAXKPA (ulong)(-KZERO)
 @
-%less: not symetric, phys_addr vs kern_addr3
+% rename KEND? but it's not really kernel end. KADDREND? MAXKADDR? KADDREND?
+
+
 
 % why trivial macro? because in other archi can be different
 <<function KADDR>>=
@@ -843,7 +868,7 @@ struct Cpu
 
     uvlong  cpuhz;
     int cpumhz; // cpuhz / 1_000_000
-    // = cpuhz if havetsc, 0 otherwise
+    // cyclefre == cpuhz if havetsc, 0 otherwise
     uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 
     <<[[Cpu]] stat fields>>
@@ -863,6 +888,9 @@ struct ArchCpu {
 };
 @ 
 
+% more on ticks in Time chapter, number of clock interrupts
+% in hzclock():    cpu->ticks++;
+
 
 %history:
 % Cpu used to be called Mach, but in the end it didn't make sense.
@@ -873,9 +901,6 @@ struct ArchCpu {
 % A nice side effect is also that it avoids conflicts with libmach! 
 % There it acually makes sense to use the Mach name because they speak 
 % about a machine.
-
-% more on ticks in Time chapter, number of clock interrupts
-% in hzclock():    cpu->ticks++;
 
 
 % cpu must be "something" that is local to each processor. How to achieve
@@ -890,6 +915,11 @@ struct ArchCpu {
 %  spare. 
 %  So cpu is a variable holding an addr that points to an area that
 %  is different on each processor, thx to a trick involving the page table.
+% could also have instead of cpu and cpus have cpus and a Int *mycpu; where
+% mycpu points to the per-processor memory area and hold the value
+% of the processor, but then each access to cpu will be more costly
+% than a direct access as it's done above.
+
 % note that cpuinit just set cpus[0], not cpu, cpu is set in clearbss
 <<global cpu>>=
 // ref<Cpu>, assigned to CPUADDR in _clearbss
@@ -908,11 +938,6 @@ Cpu* cpus[MAXCPUS];
 @
 % note that cpus[0] will not be CPUADDR! it will be
 % CPU0CPU (this will defeat the purpose otherwise)
-
-% could have instead of cpu and cpus have cpus and a Int *mycpu; where
-% mycpu points to the per-processor memory area and hold the value
-% of the processor, but then each access to cpu will be more costly
-% than a direct access as it's done above.
 
 <<constant MAXCPUS>>=
 /*
@@ -1083,7 +1108,7 @@ char *statename[] =
 % - doing just (m->externup) was conflicting with some functions using
 %   a local variables called 'm'. Indeed up is a macro, not a closure so
 %   any code introducing a local variable 'm' will not be able to use up
-% - => rename m to cpu so less conflict and can now do (cpu->externup)
+%   => rename m to cpu so less conflict and can now do (cpu->externup)
 % - why externup? because in other architectures such as bcm one can do
 %     extern register Mach* m;			/* R10 */
 %     extern register Proc* up;			/* R9 */
@@ -2077,7 +2102,7 @@ canrlock(RWlock *q)
 // For reference counting shared things (e.g. a Page)
 struct Ref
 {
-    long  ref;
+    long ref;
     Lock;
 };
 @ 
@@ -2157,6 +2182,11 @@ deccnt(Ref *r)
 \subsection{Semaphore}
 % those are actually used for user-level locks, see libcore/libc/port/lock.c
 
+
+
+
+
+
 \chapter{Memory}
 \minitoc
 
@@ -2198,6 +2228,10 @@ deccnt(Ref *r)
 %  reduce Page data structure? less conf.nproc?
 
 \section{[[xalloc()]]}
+
+% kernel memory allocator. This is for the kernel! For user
+% it will be Pages, see later. Also all the memory here
+% can be only before MAXKPA? Confmem is about kernel memory only?
 
 % start with Confmem, huge bank, now we want to use some memory.
 % draw figure with idea. Draw also figures with many holes in memory. 
@@ -2242,12 +2276,13 @@ struct Xalloc
 % note that the hole entry is free means the metadata is free.
 % a used hole in table means actually the hole entry is valid
 % and describe some free memory there
-%TODO: rename flist and table? to free_hole_entries, and sorted_used_holes?
+%TODO: rename flist and table? to unused_slot_entries, and sorted_holes?
 
 
 <<[[Hole]] extra fields>>=
 Hole* link; // list<ref<Hole>> of Xalloc.flist or Xalloc.table
 @
+% rename next?
 
 <<global xlists>>=
 static Xalloc   xlists;
@@ -2256,7 +2291,7 @@ static Xalloc   xlists;
 % complex data structure, show concrete example, C-t C-t x
 % where does xalloc(1000); xalloc(1000) and then free first => new hole used
 %  see complex linking and role of table and flist,
-% recall what confmem was so can understand the small split of the first
+% recall what confmem was, so can understand the small split of the first
 %  bank and then the huge bank
 
 % this does not handle well many alloc/free, each free in the middle
@@ -2291,6 +2326,8 @@ struct Xhdr
     char  data[]; // memory pointer returned by xalloc
 };
 @
+% so Confmem will be essentially a succession of either Xhdr, or
+% some free mem represented by a used slot Hole.
 
 % can show a config where have big hole and then do 2 xalloc so that
 % this same hole will be smaller but have multiple xhdr inside it
@@ -2461,7 +2498,7 @@ xmerge(void *vp, void *vq)
 @
 \fi
 
-%??
+%?? used by mmuwalk
 <<function xspanalloc>>=
 void*
 xspanalloc(ulong size, int align, ulong span)
@@ -2596,7 +2633,7 @@ static Pool pmainmem = {
 
 
 % this is really for image ... for kernel draw, 16Mo, not for KImage
-% this is actually adjusted in confinit
+% this is also adjusted in confinit
 <<global pimagmem>>=
 static Private pimagpriv;
 static Pool pimagmem = {
@@ -2705,7 +2742,7 @@ smalloc(ulong size)
         v = (ulong*)v+Npadlong;
         setmalloctag(v, getcallerpc(&size));
     }
-    memset(v, 0, size);
+    memset(v, 0, size); // clear
     return v;
 }
 @
@@ -2773,16 +2810,6 @@ realloc(void *v, ulong size)
 @
 
 
-<<function msize>>=
-ulong
-msize(void *v)
-{
-    return poolmsize(mainmem, (ulong*)v-Npadlong)-Npadlong*sizeof(ulong);
-}
-@
-
-
-
 \section{User [[malloc()]]}
 %actually brk
 
@@ -2800,7 +2827,7 @@ msize(void *v)
 \section{[[Page]]}
 
 % TODO: lots of code is related to KImage, like cachedel, etc
-% so should move this code in the KImage section
+% so should move this code to the KImage section
 
 % will be used to share, copy on write!
 
@@ -2820,9 +2847,9 @@ struct Page
     ulong daddr;      /* Disc address on swap */
     ulong gen;      /* Generation counter for swap */
   
-    // Why not Ref? to save space probably (same reason they use char below)
+    // Why not Ref? to save space (same reason they use char below)
     // but that means needs to use Lock below to access this non-atomic ref.
-    ushort  ref;      /* Reference count */
+    ushort  ref;      /* Reference count */ // Pages are shared!
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
 
@@ -2840,19 +2867,32 @@ struct Page
 % Note that it's not a Page! It's some metadata about a Page. It's actually
 % a kind of PTE if compare to the terminology in Intel MMU.
 % But it does more than a PTE as it also the reverse index of va -> pa
-% by storing the pa -> va too.
+% by storing also the pa -> va binding.
 % less: rename PageInfo? Pte?
 
 % put kmap, kunmap here? apparently they are used when copying from
 % one another or doing memset 0. just to get pa -> kern_addr?
 
+
+%    KImage  *image;     /* Associated text or swap image */
+% because for TEXT, no need to swap and better to use free mem
+% for DATA or BSS than TEXT because TEXT can be retrieved!
+
+
 <<enum modref>>=
 enum modref 
 {
+    PG_NOTHING = 0x00, // nothing
     PG_MOD    = 0x01,   /* software modified bit */
     PG_REF    = 0x02,   /* software referenced bit */
 };
 @
+
+<<constant PG_ONSWAP>>=
+#define PG_ONSWAP 1
+@
+% Page* are words aligned, so last 4 bits are empty, and they use
+% the last bit to encore whether the page has been swapped out
 
 
 <<struct Palloc>>=
@@ -2879,11 +2919,13 @@ struct Palloc
     Lock  hashlock;
   
     // extra
-    Lock; // LOCK ORDERING: always do lock(&palloc); lock(p)!!
+    Lock; // LOCK ORDERING: always do lock(&palloc); lock(&page)!!
     Rendez  freememr; /* Sleep for free mem */ // ispages()
     QLock pwait; /* Queue of procs waiting for memory */
 };
 @
+% put Swapalloc here? pages cover swap space too? also
+% newpage() reference swapalloc.highwater
 
 <<function pagenumber>>=
 ulong
@@ -2923,6 +2965,8 @@ newpage(bool clear, Segment **s, virt_addr va)
         if(up->kp && palloc.freecount > 0)
             break;
 
+        // no free pages, need to wait
+
         unlock(&palloc);
         dontalloc = false;
         if(s && *s) {
@@ -2955,7 +2999,6 @@ newpage(bool clear, Segment **s, virt_addr va)
     }
 
     p = palloc.head;
-
     pageunchain(p);
 
     lock(p);
@@ -2965,7 +3008,7 @@ newpage(bool clear, Segment **s, virt_addr va)
     uncachepage(p);
     p->ref++;
     p->va = va;
-    p->modref = 0;
+    p->modref = PG_NOTHING;
     unlock(p);
     unlock(&palloc);
 
@@ -2974,7 +3017,6 @@ newpage(bool clear, Segment **s, virt_addr va)
         memset((void*)VA(k), 0, BY2PG);
         kunmap(k);
     }
-
     return p;
 }
 @
@@ -2987,7 +3029,7 @@ pageunchain(Page *p)
     if(canlock(&palloc))
         panic("pageunchain (palloc %p)", &palloc);
 
-    // remove(p, palloc);
+    // remove_queue(p, palloc);
     if(p->prev)
         p->prev->next = p->next;
     else
@@ -3000,31 +3042,6 @@ pageunchain(Page *p)
     palloc.freecount--;
 }
 @
-
-
-<<function pagechaintail>>=
-// assumes palloc is held
-void
-pagechaintail(Page *p)
-{
-    if(canlock(&palloc))
-        panic("pagechaintail");
-
-    // add_tail(p, palloc)
-    if(palloc.tail) {
-        p->prev = palloc.tail;
-        palloc.tail->next = p;
-    }
-    else {
-        palloc.head = p;
-        p->prev = 0;
-    }
-    palloc.tail = p;
-    p->next = nil;
-    palloc.freecount++;
-}
-@
-
 
 <<function pagechainhead>>=
 // assumes palloc is held
@@ -3047,6 +3064,31 @@ pagechainhead(Page *p)
     palloc.freecount++;
 }
 @
+
+<<function pagechaintail>>=
+// assumes palloc is held
+void
+pagechaintail(Page *p)
+{
+    if(canlock(&palloc))
+        panic("pagechaintail");
+
+    // add_tail(p, palloc)
+    if(palloc.tail) {
+        p->prev = palloc.tail;
+        palloc.tail->next = p;
+    }
+    else {
+        palloc.head = p;
+        p->prev = nil;
+    }
+    palloc.tail = p;
+    p->next = nil;
+    palloc.freecount++;
+}
+@
+
+
 
 
 
@@ -3093,35 +3135,6 @@ putpage(Page *p)
     unlock(&palloc);
 }
 @
-
-\ifallcode
-% used only by cache.c, could be moved there, also should be renamed, aux??
-<<function auxpage>>=
-Page*
-auxpage(void)
-{
-    Page *p;
-
-    lock(&palloc);
-    p = palloc.head;
-    if(palloc.freecount < swapalloc.highwater) {
-        unlock(&palloc);
-        return nil;
-    }
-    pageunchain(p);
-
-    lock(p);
-    if(p->ref != 0)
-        panic("auxpage");
-    p->ref++;
-    uncachepage(p);
-    unlock(p);
-    unlock(&palloc);
-
-    return p;
-}
-@
-\fi
 
 
 
@@ -3380,7 +3393,9 @@ enum segtype
     SG_CEXEC  = 0100,   /* Detach at exec */
 };
 @
+% SG_PHYSICAL used only for vga/vesa apparently
 
+%TODO: LP split, especially Physseg
 <<struct Segment>>=
 // smalloc'ed by newseg()
 struct Segment
@@ -3395,7 +3410,7 @@ struct Segment
     // Kind of a page directory table. Points to smallpagedir if small enough.
     // array<option<ref_own<Pagetable>>>, smalloc'ed (or smallpagedir alias)
     // can map up to 2G of memory
-    Pagetable **pagedir; // PAGEDIRSIZE
+    Pagetable **pagedir; // array of PAGEDIRSIZE max
     // array<option<ref_own<Pagetable>>
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
@@ -3437,14 +3452,14 @@ struct Pagetable
     //array<option<ref<Page>> will map 1M of memory
     Page  *pagetab[PAGETABSIZE];
   
-    //to avoid iterate over all pages
+    //to avoid iterate over all entries in pagetab
     // ref<ref<Page>> in Pagetable.pages
     Page  **first;    /* First used entry */
     // ref<ref<Page>> in Pagetable.pages
     Page  **last;     /* Last used entry */
 };
 @
-% the pages can be really sparse, but first and last optimize a bit
+% first and last optimize a bit as many of the Page* can be null in pagetab
 
 <<constant PAGETABMAPMEM>>=
 #define PAGETABMAPMEM (1024*1024) // 1MB
@@ -3483,12 +3498,13 @@ freept(Segment *s, Pagetable *p)
     Page *pt, **pg, **ptop;
 
     switch(s->type&SG_TYPE) {
+
     case SG_PHYSICAL:
         fn = s->pseg->pgfree;
         ptop = &p->pagetab[PAGETABSIZE];
         if(fn) {
             for(pg = p->pagetab; pg < ptop; pg++) {
-                if(*pg == 0)
+                if(*pg == nil)
                     continue;
                 (*fn)(*pg);
                 *pg = 0;
@@ -3497,20 +3513,21 @@ freept(Segment *s, Pagetable *p)
         }
         for(pg = p->pagetab; pg < ptop; pg++) {
             pt = *pg;
-            if(pt == 0)
+            if(pt == nil)
                 continue;
             lock(pt);
             ref = --pt->ref;
             unlock(pt);
             if(ref == 0)
-                free(pt);
+                free(pt); // because was smalloc'ed in fixfault
         }
         break;
+
     default:
         for(pg = p->first; pg <= p->last; pg++)
             if(*pg) {
                 putpage(*pg);
-                *pg = 0;
+                *pg = nil;
             }
     }
     free(p);
@@ -3540,10 +3557,487 @@ ptcpy(Pagetable *old)
             new->last = dst;
             *dst = *src;
         }
-
     return new;
 }
 @
+
+
+
+
+
+% size is in pages (we really need dimention types)
+<<constructor newseg>>=
+Segment *
+newseg(int type, virt_addr base, ulong size)
+{
+    Segment *s;
+    int pagedirsize;
+
+    if(size > (PAGEDIRSIZE*PAGETABSIZE))
+        error(Enovmem);
+
+    s = smalloc(sizeof(Segment));
+    s->ref = 1;
+    s->type = type;
+    s->base = base;
+    s->top = base+(size*BY2PG);
+    s->size = size;
+
+    // no list, just one sema
+    s->sema.prev = &s->sema;
+    s->sema.next = &s->sema;
+
+    pagedirsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
+    if(pagedirsize > nelem(s->smallpagedir)){
+        pagedirsize *= 2;
+        if(pagedirsize > PAGEDIRSIZE)
+            pagedirsize = PAGEDIRSIZE; // pad's first bugfix :)
+        s->pagedir = smalloc(pagedirsize*sizeof(Pagetable*));
+        s->pagedirsize = pagedirsize;
+    }
+    else{
+        s->pagedir = s->smallpagedir;
+        s->pagedirsize = nelem(s->smallpagedir);
+    }
+
+    return s;
+}
+@
+
+
+<<destructor putseg>>=
+void
+putseg(Segment *s)
+{
+    Pagetable **pp, **emap;
+    KImage *i;
+
+    if(s == nil)
+        return; // TODO: panic("putseg") instead?
+
+    i = s->image;
+    if(i != nil) {
+        lock(i);
+        lock(s);
+        if(i->s == s && s->ref == 1)
+            i->s = nil;
+        unlock(i);
+    }
+    else
+        lock(s);
+
+    s->ref--;
+    if(s->ref != 0) {
+        unlock(s);
+        return;
+    }
+    unlock(s);
+
+    qlock(&s->lk);
+    if(i)
+        putimage(i);
+
+    emap = &s->pagedir[s->pagedirsize];
+    for(pp = s->pagedir; pp < emap; pp++)
+        if(*pp)
+            freept(s, *pp);
+
+    qunlock(&s->lk);
+    if(s->pagedir != s->smallpagedir)
+        free(s->pagedir);
+    if(s->profile != nil)
+        free(s->profile);
+    free(s);
+}
+@
+
+% used by userinit(), explain well relation between a Page and a segment
+% rename attach_page_to_segment?
+<<function segpage>>=
+void
+segpage(Segment *s, Page *p)
+{
+    Pagetable **pt;
+    ulong off;
+    Page **pg;
+
+    if(p->va < s->base || p->va >= s->top)
+        panic("segpage");
+
+    off = p->va - s->base;
+    pt = &s->pagedir[off/PAGETABMAPMEM]; // PDX
+    if(*pt == nil)
+        *pt = ptalloc();
+
+    pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG]; // PTX
+    *pg = p;
+    if(pg < (*pt)->first)
+        (*pt)->first = pg;
+    if(pg > (*pt)->last)
+        (*pt)->last = pg;
+}
+@
+
+<<enum procseg>>=
+/*
+ *  process memory segments - NSEG always last !
+ */
+enum procseg
+{
+    SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
+    ESEG, // E = Extra (used for temporary stack segment),
+    _SEG0, _SEG1, _SEG2, _SEG3, _SEG4, // free slots for for segattach
+    NSEG // to count, see Proc.seg array
+};
+@ 
+% there was a LSEG, not sure why, I've renamed it to _SEG0
+
+<<[[Proc]] memory fields>>=
+// hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed? ref_counted?
+Segment *seg[NSEG];
+QLock seglock;  /* locked whenever seg[] changes */
+@ 
+
+% Qsegment here?
+
+
+
+<<function seg>>=
+Segment*
+seg(Proc *p, virt_addr addr, bool dolock)
+{
+    Segment **s, **et, *n;
+
+    et = &p->seg[NSEG];
+    for(s = p->seg; s < et; s++) {
+        n = *s;
+        if(n == nil)
+            continue;
+        if(addr >= n->base && addr < n->top) {
+            if(dolock == false)
+                return n;
+
+            qlock(&n->lk);
+            // can have a race, need to check again
+            if(addr >= n->base && addr < n->top)
+                return n;
+            qunlock(&n->lk);
+        }
+    }
+    return nil;
+}
+@
+
+<<function okaddr>>=
+/*
+ * Called only in a system call
+ */
+bool
+okaddr(virt_addr addr, ulong len, bool write)
+{
+    Segment *s;
+
+    if((long)len >= 0) {
+        for(;;) {
+            s = seg(up, addr, false);
+            if(s == nil || (write && (s->type&SG_RONLY)))
+                break;
+
+            if(addr+len > s->top) {
+                len -= s->top - addr;
+                addr = s->top;
+                continue;
+            }
+            return true;
+        }
+    }
+    pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
+    return false;
+}
+@
+
+
+<<function validaddr>>=
+void
+validaddr(virt_addr addr, ulong len, bool write)
+{
+    if(!okaddr(addr, len, write)){
+        postnote(up, 1, "sys: bad address in syscall", NDebug);
+        error(Ebadarg);
+    }
+}
+@
+
+
+
+
+% used by sysexec() and other syscalls
+% memchr on virtual address? and so that can span different pages, and 
+% even different segments!
+<<function vmemchr>>=
+/*
+ * &s[0] is known to be a valid address.
+ */
+void*
+vmemchr(virt_addr3 s, int c, int n)
+{
+    int m;
+    virt_addr a;
+    virt_addr3 t;
+
+    a = (virt_addr)s;
+    while(PGROUND(a) != PGROUND(a+n-1)){
+        /* spans pages; handle this page */
+        m = BY2PG - (a & (BY2PG-1));
+        t = memchr((void*)a, c, m);
+        if(t)
+            return t;
+        a += m;
+        n -= m;
+        if(a < KZERO)
+            validaddr(a, 1, false);
+    }
+
+    /* fits in one page */
+    return memchr((void*)a, c, n);
+}
+@
+
+
+% used by sysexec() to relocate the stack that was in ESEG
+<<function relocateseg>>=
+void
+relocateseg(Segment *s, ulong offset)
+{
+    Page **pg, *x;
+    Pagetable *pt, **p, **endpt;
+
+    endpt = &s->pagedir[s->pagedirsize];
+    for(p = s->pagedir; p < endpt; p++) {
+        if(*p == nil)
+            continue;
+        pt = *p;
+        for(pg = pt->first; pg <= pt->last; pg++) {
+            if(x = *pg)
+                x->va += offset;
+        }
+    }
+}
+@
+
+% used by sysfork()
+<<function dupseg>>=
+Segment*
+dupseg(Segment **seg, int segno, bool share)
+{
+    int i, size;
+    Pagetable *pt;
+    Segment *n, *s;
+
+    SET(n); //????
+
+    s = seg[segno];
+
+    qlock(&s->lk);
+    if(waserror()){
+        qunlock(&s->lk);
+        nexterror();
+    }
+    switch(s->type&SG_TYPE) {
+    case SG_TEXT:       /* New segment shares pt set */
+        goto sameseg;
+
+    case SG_DATA:       /* Copy on write plus demand load info */
+        if(segno == TSEG){ // why not SG_TEXT then?
+            poperror();
+            qunlock(&s->lk);
+            return data2txt(s);// ????
+        }
+
+        if(share)
+            goto sameseg;
+        n = newseg(s->type, s->base, s->size);
+
+        incref(s->image);
+        n->image = s->image;
+        n->fstart = s->fstart;
+        n->flen = s->flen;
+        break;
+
+    case SG_BSS:        /* Just copy on write */
+        if(share)
+            goto sameseg;
+        n = newseg(s->type, s->base, s->size);
+        break;
+
+    case SG_STACK:
+        n = newseg(s->type, s->base, s->size);
+        break;
+
+    case SG_SHARED:
+    case SG_PHYSICAL:
+        goto sameseg;
+
+    }
+    size = s->pagedirsize;
+    for(i = 0; i < size; i++)
+        if(pt = s->pagedir[i])
+            n->pagedir[i] = ptcpy(pt);
+
+    if(s->ref > 1)
+        procflushseg(s);
+    poperror();
+    qunlock(&s->lk);
+    return n;
+
+sameseg:
+    incref(s);
+    poperror();
+    qunlock(&s->lk);
+    return s;
+}
+@
+
+
+% used in ibrk() and segfree()
+<<function mfreeseg>>=
+/*
+ *  called with s->lk locked
+ */
+void
+mfreeseg(Segment *s, ulong start, int pages)
+{
+    int i, j, size;
+    ulong soff;
+    Page *pg;
+    Page *list;
+
+    soff = start-s->base;
+    j = (soff&(PAGETABMAPMEM-1))/BY2PG;
+
+    size = s->pagedirsize;
+    list = nil;
+    for(i = soff/PAGETABMAPMEM; i < size; i++) {
+        if(pages <= 0)
+            break;
+        if(s->pagedir[i] == nil) {
+            pages -= PAGETABSIZE-j;
+            j = 0;
+            continue;
+        }
+        while(j < PAGETABSIZE) {
+            pg = s->pagedir[i]->pagetab[j];
+            /*
+             * We want to zero s->pagedir[i]->page[j] and putpage(pg),
+             * but we have to make sure other processors flush the
+             * entry from their TLBs before the page is freed.
+             * We construct a list of the pages to be freed, zero
+             * the entries, then (below) call procflushseg, and call
+             * putpage on the whole list.
+             *
+             * Swapped-out pages don't appear in TLBs, so it's okay
+             * to putswap those pages before procflushseg.
+             */
+            if(pg){
+                if(onswap(pg))
+                    putswap(pg);
+                else{
+                    pg->next = list;
+                    list = pg;
+                }
+                s->pagedir[i]->pagetab[j] = nil;
+            }
+            if(--pages == 0)
+                goto out;
+            j++;
+        }
+        j = 0;
+    }
+out:
+    /* flush this seg in all other processes */
+    if(s->ref > 1)
+        procflushseg(s);
+
+    /* free the pages */
+    for(pg = list; pg != nil; pg = list){
+        list = list->next;
+        putpage(pg);
+    }
+}
+@
+
+<<[[Cpu]] other fields>>=
+bool flushmmu;   /* make current proc flush it's mmu state */
+@
+
+
+<<function procflushseg>>=
+/*
+ *  wait till all processes have flushed their mmu
+ *  state about segment s
+ */
+//@Scheck: not dead, used in segment.c
+void
+procflushseg(Segment *s)
+{
+    int i, ns, nm, nwait;
+    Proc *p;
+
+    /*
+     *  tell all processes with this
+     *  segment to flush their mmu's
+     */
+    nwait = 0;
+    for(i=0; i<conf.nproc; i++) {
+        p = &procalloc.arena[i];
+        if(p->state == Dead)
+            continue;
+        for(ns = 0; ns < NSEG; ns++)
+            if(p->seg[ns] == s){
+                p->newtlb = true;
+                for(nm = 0; nm < conf.ncpu; nm++){
+                    if(CPUS(nm)->proc == p){
+                        CPUS(nm)->flushmmu = true;
+                        nwait++;
+                    }
+                }
+                break;
+            }
+    }
+    if(nwait == 0)
+        return;
+
+    /*
+     *  wait for all processors to take a clock interrupt
+     *  and flush their mmu's
+     */
+    for(nm = 0; nm < conf.ncpu; nm++)
+        if(CPUS(nm) != cpu)
+            while(CPUS(nm)->flushmmu)
+                sched();
+}
+@ 
+
+
+
+
+
+
+%???
+<<struct Physseg>>=
+struct Physseg
+{
+    ulong attr;     /* Segment attributes */
+    char  *name;      /* Attach name */
+    phys_addr pa;     /* Physical address */
+    ulong size;     /* Maximum segment size in pages */
+
+    // seems dead, not even used by vga.c
+    Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
+    void  (*pgfree)(Page*);
+};
+@
+
 
 
 // called? mv in debugging section? with C-t C-t stuff?
@@ -3661,477 +4155,11 @@ portcountpagerefs(ulong *ref, int print)
 
 
 
-
-
-
-
-
-
-% size is in pages. (really need dimention types)
-<<constructor newseg>>=
-Segment *
-newseg(int type, virt_addr base, ulong size)
-{
-    Segment *s;
-    int pagedirsize;
-
-    if(size > (PAGEDIRSIZE*PAGETABSIZE))
-        error(Enovmem);
-
-    s = smalloc(sizeof(Segment));
-    s->ref = 1;
-    s->type = type;
-    s->base = base;
-    s->top = base+(size*BY2PG);
-    s->size = size;
-
-    // no list, just one sema
-    s->sema.prev = &s->sema;
-    s->sema.next = &s->sema;
-
-    pagedirsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
-    if(pagedirsize > nelem(s->smallpagedir)){
-        pagedirsize *= 2;
-        if(pagedirsize > (PAGEDIRSIZE*PAGETABSIZE))
-            pagedirsize = (PAGEDIRSIZE*PAGETABSIZE); // Really? not PAGEDIRSIZE MAX?
-        s->pagedir = smalloc(pagedirsize*sizeof(Pagetable*));
-        s->pagedirsize = pagedirsize;
-    }
-    else{
-        s->pagedir = s->smallpagedir;
-        s->pagedirsize = nelem(s->smallpagedir);
-    }
-
-    return s;
-}
-@
-
-
-<<destructor putseg>>=
-void
-putseg(Segment *s)
-{
-    Pagetable **pp, **emap;
-    KImage *i;
-
-    if(s == nil)
-        return; // TODO: panic("putset") instead?
-
-    i = s->image;
-    if(i != nil) {
-        lock(i);
-        lock(s);
-        if(i->s == s && s->ref == 1)
-            i->s = 0;
-        unlock(i);
-    }
-    else
-        lock(s);
-
-    s->ref--;
-    if(s->ref != 0) {
-        unlock(s);
-        return;
-    }
-    unlock(s);
-
-    qlock(&s->lk);
-    if(i)
-        putimage(i);
-
-    emap = &s->pagedir[s->pagedirsize];
-    for(pp = s->pagedir; pp < emap; pp++)
-        if(*pp)
-            freept(s, *pp);
-
-    qunlock(&s->lk);
-    if(s->pagedir != s->smallpagedir)
-        free(s->pagedir);
-    if(s->profile != nil)
-        free(s->profile);
-    free(s);
-}
-@
-
-% used by userinit(), explain well relation between a Page and a segment
-<<function segpage>>=
-void
-segpage(Segment *s, Page *p)
-{
-    Pagetable **pt;
-    ulong off;
-    Page **pg;
-
-    if(p->va < s->base || p->va >= s->top)
-        panic("segpage");
-
-    off = p->va - s->base;
-    pt = &s->pagedir[off/PAGETABMAPMEM];
-    if(*pt == nil)
-        *pt = ptalloc();
-
-    pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
-    *pg = p;
-    if(pg < (*pt)->first)
-        (*pt)->first = pg;
-    if(pg > (*pt)->last)
-        (*pt)->last = pg;
-}
-@
-
-<<enum procseg>>=
-/*
- *  process memory segments - NSEG always last !
- */
-enum procseg
-{
-    SSEG, TSEG, DSEG, BSEG, // Stack, Text, Data, Bss
-    ESEG, // E = Extra (used for temporary stack segment),
-    _SEG0, _SEG1, _SEG2, _SEG3, _SEG4, // free slots for for segattach
-    NSEG // to count, see Proc.seg array
-};
-@ 
-% there was a LSEG, not sure why, I've renamed it to _SEG0
-
-<<struct Physseg>>=
-struct Physseg
-{
-    ulong attr;     /* Segment attributes */
-    char  *name;      /* Attach name */
-    phys_addr pa;     /* Physical address */
-    ulong size;     /* Maximum segment size in pages */
-
-    Page  *(*pgalloc)(Segment*, ulong); /* Allocation if we need it */
-    void  (*pgfree)(Page*);
-};
-@
-
-
-<<[[Proc]] memory fields>>=
-// hash<enum<procseg>, option<ref_own<Segment>>>, elt smalloc'ed? ref_counted?
-Segment *seg[NSEG];
-QLock seglock;  /* locked whenever seg[] changes */
-@ 
-
-
-<<function seg>>=
-Segment*
-seg(Proc *p, virt_addr addr, bool dolock)
-{
-    Segment **s, **et, *n;
-
-    et = &p->seg[NSEG];
-    for(s = p->seg; s < et; s++) {
-        n = *s;
-        if(n == nil)
-            continue;
-        if(addr >= n->base && addr < n->top) {
-            if(dolock == false)
-                return n;
-
-            qlock(&n->lk);
-            // can have a race, need to check again
-            if(addr >= n->base && addr < n->top)
-                return n;
-            qunlock(&n->lk);
-        }
-    }
-    return nil;
-}
-@
-
-<<function okaddr>>=
-/*
- * Called only in a system call
- */
-bool
-okaddr(virt_addr addr, ulong len, bool write)
-{
-    Segment *s;
-
-    if((long)len >= 0) {
-        for(;;) {
-            s = seg(up, addr, false);
-            if(s == nil || (write && (s->type&SG_RONLY)))
-                break;
-
-            if(addr+len > s->top) {
-                len -= s->top - addr;
-                addr = s->top;
-                continue;
-            }
-            return true;
-        }
-    }
-    pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
-    return false;
-}
-@
-
-
-<<function validaddr>>=
-void
-validaddr(virt_addr addr, ulong len, bool write)
-{
-    if(!okaddr(addr, len, write)){
-        postnote(up, 1, "sys: bad address in syscall", NDebug);
-        error(Ebadarg);
-    }
-}
-@
-
-% memchr on virtual address? and so that can span different pages, and 
-% even different segments!
-<<function vmemchr>>=
-/*
- * &s[0] is known to be a valid address.
- */
-void*
-vmemchr(virt_addr3 s, int c, int n)
-{
-    int m;
-    virt_addr a;
-    virt_addr3 t;
-
-    a = (virt_addr)s;
-    while(PGROUND(a) != PGROUND(a+n-1)){
-        /* spans pages; handle this page */
-        m = BY2PG - (a & (BY2PG-1));
-        t = memchr((void*)a, c, m);
-        if(t)
-            return t;
-        a += m;
-        n -= m;
-        if(a < KZERO)
-            validaddr(a, 1, false);
-    }
-
-    /* fits in one page */
-    return memchr((void*)a, c, n);
-}
-@
-
-
-% used by sysexec()
-<<function relocateseg>>=
-void
-relocateseg(Segment *s, ulong offset)
-{
-    Page **pg, *x;
-    Pagetable *pt, **p, **endpt;
-
-    endpt = &s->pagedir[s->pagedirsize];
-    for(p = s->pagedir; p < endpt; p++) {
-        if(*p == nil)
-            continue;
-        pt = *p;
-        for(pg = pt->first; pg <= pt->last; pg++) {
-            if(x = *pg)
-                x->va += offset;
-        }
-    }
-}
-@
-
-% used by sysfork()
-<<function dupseg>>=
-Segment*
-dupseg(Segment **seg, int segno, bool share)
-{
-    int i, size;
-    Pagetable *pt;
-    Segment *n, *s;
-
-    SET(n); //????
-
-    s = seg[segno];
-
-    qlock(&s->lk);
-    if(waserror()){
-        qunlock(&s->lk);
-        nexterror();
-    }
-    switch(s->type&SG_TYPE) {
-    case SG_TEXT:       /* New segment shares pt set */
-    case SG_SHARED:
-    case SG_PHYSICAL:
-        goto sameseg;
-
-    case SG_STACK:
-        n = newseg(s->type, s->base, s->size);
-        break;
-
-    case SG_BSS:        /* Just copy on write */
-        if(share)
-            goto sameseg;
-        n = newseg(s->type, s->base, s->size);
-        break;
-
-    case SG_DATA:       /* Copy on write plus demand load info */
-        if(segno == TSEG){
-            poperror();
-            qunlock(&s->lk);
-            return data2txt(s);// ????
-        }
-
-        if(share)
-            goto sameseg;
-        n = newseg(s->type, s->base, s->size);
-
-        incref(s->image);
-        n->image = s->image;
-        n->fstart = s->fstart;
-        n->flen = s->flen;
-        break;
-    }
-    size = s->pagedirsize;
-    for(i = 0; i < size; i++)
-        if(pt = s->pagedir[i])
-            n->pagedir[i] = ptcpy(pt);
-
-    if(s->ref > 1)
-        procflushseg(s);
-    poperror();
-    qunlock(&s->lk);
-    return n;
-
-sameseg:
-    incref(s);
-    poperror();
-    qunlock(&s->lk);
-    return s;
-}
-@
-
-
-<<function mfreeseg>>=
-/*
- *  called with s->lk locked
- */
-void
-mfreeseg(Segment *s, ulong start, int pages)
-{
-    int i, j, size;
-    ulong soff;
-    Page *pg;
-    Page *list;
-
-    soff = start-s->base;
-    j = (soff&(PAGETABMAPMEM-1))/BY2PG;
-
-    size = s->pagedirsize;
-    list = nil;
-    for(i = soff/PAGETABMAPMEM; i < size; i++) {
-        if(pages <= 0)
-            break;
-        if(s->pagedir[i] == 0) {
-            pages -= PAGETABSIZE-j;
-            j = 0;
-            continue;
-        }
-        while(j < PAGETABSIZE) {
-            pg = s->pagedir[i]->pagetab[j];
-            /*
-             * We want to zero s->pagedir[i]->page[j] and putpage(pg),
-             * but we have to make sure other processors flush the
-             * entry from their TLBs before the page is freed.
-             * We construct a list of the pages to be freed, zero
-             * the entries, then (below) call procflushseg, and call
-             * putpage on the whole list.
-             *
-             * Swapped-out pages don't appear in TLBs, so it's okay
-             * to putswap those pages before procflushseg.
-             */
-            if(pg){
-                if(onswap(pg))
-                    putswap(pg);
-                else{
-                    pg->next = list;
-                    list = pg;
-                }
-                s->pagedir[i]->pagetab[j] = 0;
-            }
-            if(--pages == 0)
-                goto out;
-            j++;
-        }
-        j = 0;
-    }
-out:
-    /* flush this seg in all other processes */
-    if(s->ref > 1)
-        procflushseg(s);
-
-    /* free the pages */
-    for(pg = list; pg != nil; pg = list){
-        list = list->next;
-        putpage(pg);
-    }
-}
-@
-
-<<[[Cpu]] other fields>>=
-bool flushmmu;   /* make current proc flush it's mmu state */
-@
-
-
-<<function procflushseg>>=
-/*
- *  wait till all processes have flushed their mmu
- *  state about segement s
- */
-//@Scheck: not dead, used in segment.c, weird
-void
-procflushseg(Segment *s)
-{
-    int i, ns, nm, nwait;
-    Proc *p;
-
-    /*
-     *  tell all processes with this
-     *  segment to flush their mmu's
-     */
-    nwait = 0;
-    for(i=0; i<conf.nproc; i++) {
-        p = &procalloc.arena[i];
-        if(p->state == Dead)
-            continue;
-        for(ns = 0; ns < NSEG; ns++)
-            if(p->seg[ns] == s){
-                p->newtlb = true;
-                for(nm = 0; nm < conf.ncpu; nm++){
-                    if(CPUS(nm)->proc == p){
-                        CPUS(nm)->flushmmu = true;
-                        nwait++;
-                    }
-                }
-                break;
-            }
-    }
-
-    if(nwait == 0)
-        return;
-
-    /*
-     *  wait for all processors to take a clock interrupt
-     *  and flush their mmu's
-     */
-    for(nm = 0; nm < conf.ncpu; nm++)
-        if(CPUS(nm) != cpu)
-            while(CPUS(nm)->flushmmu)
-                sched();
-}
-@ 
-
-
-
 \section{[[KImage]]}
 
 <<struct KImage>>=
 // a KImage is essentially a channel to a text file (an image of a binary)
 // the image in memory for a portion of a given file.
-// (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
-//  ugly #define Image IMAGE each time one wants to use draw.h from a device driver)
 struct KImage
 {
     Chan  *c;     /* channel to text file */
@@ -4154,6 +4182,8 @@ struct KImage
     Segment *s;     /* TEXT segment for image if running */
 };
 @
+% (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
+%  ugly #define Image IMAGE each time one wants to use draw.h from a device driver)
 
 <<struct Imagealloc>>=
 // Image allocator (internal to segment.c, but important so here, singleton)
@@ -4187,6 +4217,7 @@ static struct Imagealloc imagealloc;
 // actually internal to page.c, but important so here
 #define ihash(s)  imagealloc.hash[s%IHASHSIZE]
 @
+% why not use the XXXLOG like the other hashes?
 
 <<function attachimage>>=
 KImage*
@@ -4407,7 +4438,7 @@ ibrk(ulong addr, int seg)
     Pagetable **map;
 
     s = up->seg[seg];
-    if(s == 0)
+    if(s == nil)
         error(Ebadarg);
 
     if(addr == nilptr)
@@ -4417,7 +4448,7 @@ ibrk(ulong addr, int seg)
 
     /* We may start with the bss overlapping the data */
     if(addr < s->base) {
-        if(seg != BSEG || up->seg[DSEG] == 0 || addr < up->seg[DSEG]->base) {
+        if(seg != BSEG || up->seg[DSEG] == nil || addr < up->seg[DSEG]->base) {
             qunlock(&s->lk);
             error(Enovmem);
         }
@@ -4446,7 +4477,7 @@ ibrk(ulong addr, int seg)
 
     for(i = 0; i < NSEG; i++) {
         ns = up->seg[i];
-        if(ns == 0 || ns == s)
+        if(ns == nil || ns == s)
             continue;
         if(newtop >= ns->base && newtop < ns->top) {
             qunlock(&s->lk);
@@ -4458,6 +4489,7 @@ ibrk(ulong addr, int seg)
         qunlock(&s->lk);
         error(Enovmem);
     }
+
     mapsize = ROUND(newsize, PAGETABSIZE)/PAGETABSIZE;
     if(mapsize > s->pagedirsize){
         map = smalloc(mapsize*sizeof(Pagetable*));
@@ -5466,6 +5498,9 @@ haswaitq(void *x)
 
 \section{[[sysexits()]]}
 
+% return a string! far more useful than an exit code
+% as anyway will have then to interpret this error code
+
 % semantic of exits? what happens if still have children?
 % the children will still be there! the parent closes all its
 % filedescriptor but if have pipe with children, then the pipe
@@ -5851,6 +5886,7 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
 @ 
 
 \section{Process control [[/proc/xxx/ctl]]}
+% /proc/#/ctl?
 
 % see /proc, /proc/x/ctl, procctl()
 % see section on Debugging where explain procctl
@@ -5894,6 +5930,9 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
         }
         break;
 @
+
+
+
 
 
 \chapter{Interrupts}
@@ -6980,7 +7019,7 @@ kexit(Ureg*)
         if(0)print("cpu%d: spurious interrupt %d, last %d\n",
             cpu->cpuno, vno, cpu->lastintr);
         if(0)if(conf.ncpu > 1){
-            for(i = 0; i < 32; i++){
+            for(i = 0; i < MAXCPUS; i++){
                 if(!(active.cpus & (1<<i)))
                     continue;
                 mach = CPUS(i);
@@ -7141,7 +7180,7 @@ Segdesc *gdt;     /* gdt for this processor */
 % could put code of tgdt of initialization here? but the real gdt
 % is the one above, the tgdt is just used at the beginning
 
-\section{Pagination and [[vpt]]} 
+\section{Pagination and [[mmupd]], [[mmupt]]} 
 
 % see Basic pagination intialization too
 
@@ -7177,7 +7216,7 @@ Segdesc *gdt;     /* gdt for this processor */
 #define PTEKERNEL (0<<2)
 #define PTEUSER   (1<<2)
 
-#define PTEWT       (1<<3)
+#define PTEWT       (1<<3) // Write Through, e.g. VGA memory
 #define PTEUNCACHED (1<<4)
 #define PTESIZE   (1<<7)
 #define PTEGLOBAL (1<<8)
@@ -7302,9 +7341,8 @@ mmuwalk(ulong* pd, virt_addr va, int level, bool create)
 
 
 
-% pd? kern_addr?
 <<[[Cpu]] [[Arch]] other fields>>=
-ulong*   pdproto;      /* page directory base for this processor (va) */
+kern_addr2   pdproto;      /* page directory base for this processor (va) */
 @
 % this pd is super important!! see mmuswitch, he's the one
 % that will map specially the CPUADDR for each CPU!
@@ -7329,7 +7367,7 @@ Page* mmupd;     /* page directory base */
 Page* mmufree;    /* unused page table pages */
 Page* mmuused;    /* used page table pages */
 @
-% rename! pt_used, pt_free
+% rename! pt_used, pt_free?
 
 <<function upallocmmupd>>=
 /*
@@ -7833,7 +7871,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         break;
 
     case SG_PHYSICAL:
-        if(*pg == 0) {
+        if(*pg == nil) {
             fn = s->pseg->pgalloc;
             if(fn)
                 *pg = (*fn)(s, addr);
@@ -8323,6 +8361,7 @@ retry:
     }
 
 done:
+    ;
 }
 @
 
@@ -8452,8 +8491,8 @@ canflush(Proc *p, Segment *s)
 }
 @
 
-<<constant PG_ONSWAP>>=
-#define PG_ONSWAP 1
+<<function onswap>>=
+#define onswap(s) (((ulong)s)&PG_ONSWAP)
 @
 
 <<function pagepte>>=
@@ -10629,11 +10668,16 @@ meminit(void)
         lost += rmapram.map[i].size;
     if(lost)
         print("meminit - lost %lud bytes\n", lost);
-
     if(MEMDEBUG)
         memdebug();
 }
 @
+
+<<function mmuflushtlb>>=
+#define mmuflushtlb(mmupd) putcr3(mmupd)
+@
+
+
 
 
 
@@ -10746,6 +10790,7 @@ mapalloc(RMap* rmap, ulong addr, int size, int align)
 @
 
 
+
 <<function rampage>>=
 /*
  * Allocate from the ram map directly to make page tables.
@@ -10763,40 +10808,6 @@ rampage(void)
 }
 @
 
-
-<<function umbexclude>>=
-static void
-umbexclude(void)
-{
-    int size;
-    ulong addr;
-    char *op, *p, *rptr;
-
-    if((p = getconf("umbexclude")) == nil)
-        return;
-
-    while(p && *p != '\0' && *p != '\n'){
-        op = p;
-        addr = strtoul(p, &rptr, 0);
-        if(rptr == nil || rptr == p || *rptr != '-'){
-            print("umbexclude: invalid argument <%s>\n", op);
-            break;
-        }
-        p = rptr+1;
-
-        size = strtoul(p, &rptr, 0) - addr + 1;
-        if(size <= 0){
-            print("umbexclude: bad range <%s>\n", op);
-            break;
-        }
-        if(rptr != nil && *rptr == ',')
-            *rptr++ = '\0';
-        p = rptr;
-
-        mapalloc(&rmapumb, addr, size, 0);
-    }
-}
-@
 
 
 <<function umbscan>>=
@@ -10862,58 +10873,43 @@ umbscan(void)
 }
 @
 
-
-<<function sigscan>>=
-static void*
-sigscan(uchar* addr, int len, char* signature)
+<<function umbexclude>>=
+static void
+umbexclude(void)
 {
-    int sl;
-    uchar *e, *p;
+    int size;
+    ulong addr;
+    char *op, *p, *rptr;
 
-    e = addr+len;
-    sl = strlen(signature);
-    for(p = addr; p+sl < e; p += 16)
-        if(memcmp(p, signature, sl) == 0)
-            return p;
-    return nil;
-}
-@
+    if((p = getconf("umbexclude")) == nil)
+        return;
 
-<<function sigsearch>>=
-void*
-sigsearch(char* signature)
-{
-    uintptr p;
-    uchar *bda;
-    void *r;
-
-    /*
-     * Search for the data structure:
-     * 1) within the first KiB of the Extended BIOS Data Area (EBDA), or
-     * 2) within the last KiB of system base memory if the EBDA segment
-     *    is undefined, or
-     * 3) within the BIOS ROM address space between 0xf0000 and 0xfffff
-     *    (but will actually check 0xe0000 to 0xfffff).
-     */
-    bda = BIOSSEG(0x40);
-    if(memcmp(KADDR(0xfffd9), "EISA", 4) == 0){
-        if((p = (bda[0x0f]<<8)|bda[0x0e]) != 0){
-            if((r = sigscan(BIOSSEG(p), 1024, signature)) != nil)
-                return r;
+    while(p && *p != '\0' && *p != '\n'){
+        op = p;
+        addr = strtoul(p, &rptr, 0);
+        if(rptr == nil || rptr == p || *rptr != '-'){
+            print("umbexclude: invalid argument <%s>\n", op);
+            break;
         }
-    }
+        p = rptr+1;
 
-    if((p = ((bda[0x14]<<8)|bda[0x13])*1024) != 0){
-        if((r = sigscan(KADDR(p-1024), 1024, signature)) != nil)
-            return r;
-    }
-    /* hack for virtualbox: look in KiB below 0xa0000 */
-    if((r = sigscan(KADDR(0xa0000-1024), 1024, signature)) != nil)
-        return r;
+        size = strtoul(p, &rptr, 0) - addr + 1;
+        if(size <= 0){
+            print("umbexclude: bad range <%s>\n", op);
+            break;
+        }
+        if(rptr != nil && *rptr == ',')
+            *rptr++ = '\0';
+        p = rptr;
 
-    return sigscan(BIOSSEG(0xe000), 0x20000, signature);
+        mapalloc(&rmapumb, addr, size, 0);
+    }
 }
 @
+
+
+
+
 
 <<function lowraminit>>=
 static void
@@ -10942,10 +10938,222 @@ lowraminit(void)
     memset(KADDR(x), 0, pa-x);      /* keep us honest */
 }
 @
+% >>
 
-<<function mmuflushtlb>>=
-#define mmuflushtlb(mmupd) putcr3(mmupd)
+<<function e820scan>>=
+static int
+e820scan(void)
+{
+    int i;
+    Ureg u;
+    ulong cont, base, len;
+    uvlong last;
+    Emap *e;
+
+    if(getconf("*norealmode") || getconf("*noe820scan"))
+        return -1;
+
+    cont = 0;
+    for(i=0; i<nelem(emap); i++){
+        memset(&u, 0, sizeof u);
+        u.ax = 0xE820;
+        u.bx = cont;
+        u.cx = 20;
+        u.dx = SMAP;
+        u.es = (PADDR(RMBUF)>>4)&0xF000;
+        u.di = PADDR(RMBUF)&0xFFFF;
+        u.trap = 0x15;
+        realmode(&u);
+        cont = u.bx;
+        if((u.flags&Carry) || u.ax != SMAP || u.cx != 20)
+            break;
+        e = &emap[nemap++];
+        *e = *(Emap*)RMBUF;
+        if(u.bx == 0)
+            break;
+    }
+    if(nemap == 0)
+        return -1;
+    
+    qsort(emap, nemap, sizeof emap[0], emapcmp);
+
+    if(getconf("*noe820print") == nil){
+        for(i=0; i<nemap; i++){
+            e = &emap[i];
+            print("E820: %.8llux %.8llux ", e->base, e->base+e->len);
+            if(e->type < nelem(etypes))
+                print("%s\n", etypes[e->type]);
+            else
+                print("type=%lud\n", e->type);
+        }
+    }
+
+    last = 0;
+    for(i=0; i<nemap; i++){ 
+        e = &emap[i];
+        /*
+         * pull out the info but only about the low 32 bits...
+         */
+        if(e->base >= (1LL<<32))
+            break;
+        base = e->base;
+        if(base+e->len > (1LL<<32))
+            len = -base;
+        else
+            len = e->len;
+        /*
+         * If the map skips addresses, mark them available.
+         */
+        if(last < e->base)
+            map(last, e->base-last, MemUPA);
+        last = base+len;
+        if(e->type == Ememory)
+            map(base, len, MemRAM);
+        else
+            map(base, len, MemReserved);
+    }
+    if(last < (1LL<<32))
+        map(last, (u32int)-last, MemUPA);
+    return 0;
+}
 @
+
+<<function emapcmp>>=
+static int
+emapcmp(const void *va, const void *vb)
+{
+    Emap *a, *b;
+    
+    a = (Emap*)va;
+    b = (Emap*)vb;
+    if(a->base < b->base)
+        return -1;
+    if(a->base > b->base)
+        return 1;
+    if(a->len < b->len)
+        return -1;
+    if(a->len > b->len)
+        return 1;
+    return a->type - b->type;
+}
+@
+
+<<function map>>=
+static void
+map(ulong base, ulong len, int type)
+{
+    ulong e, n;
+    ulong *table, flags, maxkpa;
+    
+    /*
+     * Split any call crossing MemMin to make below simpler.
+     */
+    if(base < MemMin && len > MemMin-base){
+        n = MemMin - base;
+        map(base, n, type);
+        map(MemMin, len-n, type);
+    }
+    
+    /*
+     * Let lowraminit and umbscan hash out the low MemMin.
+     */
+    if(base < MemMin)
+        return;
+
+    /*
+     * Any non-memory below 16*MB is used as upper mem blocks.
+     */
+    if(type == MemUPA && base < 16*MB && base+len > 16*MB){
+        map(base, 16*MB-base, MemUMB);
+        map(16*MB, len-(16*MB-base), MemUPA);
+        return;
+    }
+    
+    /*
+     * Memory below CPU0END is reserved for the kernel
+     * and already mapped.
+     */
+    if(base < PADDR(CPU0END)){
+        n = PADDR(CPU0END) - base;
+        if(len <= n)
+            return;
+        map(PADDR(CPU0END), len-n, type);
+        return;
+    }
+    
+    /*
+     * Memory between KTZERO and end is the kernel itself
+     * and is already mapped.
+     */
+    if(base < PADDR(KTZERO) && base+len > PADDR(KTZERO)){
+        map(base, PADDR(KTZERO)-base, type);
+        return;
+    }
+    if(PADDR(KTZERO) < base && base < PADDR(PGROUND((ulong)end))){
+        n = PADDR(PGROUND((ulong)end));
+        if(len <= n)
+            return;
+        map(PADDR(PGROUND((ulong)end)), len-n, type);
+        return;
+    }
+    
+    /*
+     * Now we have a simple case.
+     */
+    // print("map %.8lux %.8lux %d\n", base, base+len, type);
+    switch(type){
+    case MemRAM:
+        mapfree(&rmapram, base, len);
+        flags = PTEWRITE|PTEVALID;
+        break;
+    case MemUMB:
+        mapfree(&rmapumb, base, len);
+        flags = PTEWRITE|PTEUNCACHED|PTEVALID;
+        break;
+    case MemUPA:
+        mapfree(&rmapupa, base, len);
+        flags = 0;
+        break;
+    default:
+    case MemReserved:
+        flags = 0;
+        break;
+    }
+    
+    /*
+     * bottom MemMin is already mapped - just twiddle flags.
+     * (not currently used - see above)
+     */
+    if(base < MemMin){
+        table = KADDR(PPN(cpu->pdproto[PDX(base)]));
+        e = base+len;
+        base = PPN(base);
+        for(; base<e; base+=BY2PG)
+            table[PTX(base)] |= flags;
+        return;
+    }
+    
+    /*
+     * Only map from KZERO to 2^32.
+     */
+    if(flags){
+        maxkpa = -KZERO;
+        if(base >= maxkpa)
+            return;
+        if(len > maxkpa-base)
+            len = maxkpa - base;
+        pdbmap(cpu->pdproto, base|flags, base+KZERO, len);
+    }
+}
+@
+
+
+
+
+
+
+
+
 
 <<function ramscan>>=
 static void
@@ -10980,6 +11188,7 @@ ramscan(ulong maxmem)
             maxpa = 24*MB;
     }else
         maxpa = maxmem;
+
     maxkpa = (u32int)-KZERO;    /* 2^32 - KZERO */
 
     /*
@@ -11113,283 +11322,8 @@ ramscan(ulong maxmem)
 }
 @
 
-<<function emapcmp>>=
-static int
-emapcmp(const void *va, const void *vb)
-{
-    Emap *a, *b;
-    
-    a = (Emap*)va;
-    b = (Emap*)vb;
-    if(a->base < b->base)
-        return -1;
-    if(a->base > b->base)
-        return 1;
-    if(a->len < b->len)
-        return -1;
-    if(a->len > b->len)
-        return 1;
-    return a->type - b->type;
-}
-@
 
 
-<<function map>>=
-static void
-map(ulong base, ulong len, int type)
-{
-    ulong e, n;
-    ulong *table, flags, maxkpa;
-    
-    /*
-     * Split any call crossing MemMin to make below simpler.
-     */
-    if(base < MemMin && len > MemMin-base){
-        n = MemMin - base;
-        map(base, n, type);
-        map(MemMin, len-n, type);
-    }
-    
-    /*
-     * Let lowraminit and umbscan hash out the low MemMin.
-     */
-    if(base < MemMin)
-        return;
-
-    /*
-     * Any non-memory below 16*MB is used as upper mem blocks.
-     */
-    if(type == MemUPA && base < 16*MB && base+len > 16*MB){
-        map(base, 16*MB-base, MemUMB);
-        map(16*MB, len-(16*MB-base), MemUPA);
-        return;
-    }
-    
-    /*
-     * Memory below CPU0END is reserved for the kernel
-     * and already mapped.
-     */
-    if(base < PADDR(CPU0END)){
-        n = PADDR(CPU0END) - base;
-        if(len <= n)
-            return;
-        map(PADDR(CPU0END), len-n, type);
-        return;
-    }
-    
-    /*
-     * Memory between KTZERO and end is the kernel itself
-     * and is already mapped.
-     */
-    if(base < PADDR(KTZERO) && base+len > PADDR(KTZERO)){
-        map(base, PADDR(KTZERO)-base, type);
-        return;
-    }
-    if(PADDR(KTZERO) < base && base < PADDR(PGROUND((ulong)end))){
-        n = PADDR(PGROUND((ulong)end));
-        if(len <= n)
-            return;
-        map(PADDR(PGROUND((ulong)end)), len-n, type);
-        return;
-    }
-    
-    /*
-     * Now we have a simple case.
-     */
-    // print("map %.8lux %.8lux %d\n", base, base+len, type);
-    switch(type){
-    case MemRAM:
-        mapfree(&rmapram, base, len);
-        flags = PTEWRITE|PTEVALID;
-        break;
-    case MemUMB:
-        mapfree(&rmapumb, base, len);
-        flags = PTEWRITE|PTEUNCACHED|PTEVALID;
-        break;
-    case MemUPA:
-        mapfree(&rmapupa, base, len);
-        flags = 0;
-        break;
-    default:
-    case MemReserved:
-        flags = 0;
-        break;
-    }
-    
-    /*
-     * bottom MemMin is already mapped - just twiddle flags.
-     * (not currently used - see above)
-     */
-    if(base < MemMin){
-        table = KADDR(PPN(cpu->pdproto[PDX(base)]));
-        e = base+len;
-        base = PPN(base);
-        for(; base<e; base+=BY2PG)
-            table[PTX(base)] |= flags;
-        return;
-    }
-    
-    /*
-     * Only map from KZERO to 2^32.
-     */
-    if(flags){
-        maxkpa = -KZERO;
-        if(base >= maxkpa)
-            return;
-        if(len > maxkpa-base)
-            len = maxkpa - base;
-        pdbmap(cpu->pdproto, base|flags, base+KZERO, len);
-    }
-}
-@
-
-<<function e820scan>>=
-static int
-e820scan(void)
-{
-    int i;
-    Ureg u;
-    ulong cont, base, len;
-    uvlong last;
-    Emap *e;
-
-    if(getconf("*norealmode") || getconf("*noe820scan"))
-        return -1;
-
-    cont = 0;
-    for(i=0; i<nelem(emap); i++){
-        memset(&u, 0, sizeof u);
-        u.ax = 0xE820;
-        u.bx = cont;
-        u.cx = 20;
-        u.dx = SMAP;
-        u.es = (PADDR(RMBUF)>>4)&0xF000;
-        u.di = PADDR(RMBUF)&0xFFFF;
-        u.trap = 0x15;
-        realmode(&u);
-        cont = u.bx;
-        if((u.flags&Carry) || u.ax != SMAP || u.cx != 20)
-            break;
-        e = &emap[nemap++];
-        *e = *(Emap*)RMBUF;
-        if(u.bx == 0)
-            break;
-    }
-    if(nemap == 0)
-        return -1;
-    
-    qsort(emap, nemap, sizeof emap[0], emapcmp);
-
-    if(getconf("*noe820print") == nil){
-        for(i=0; i<nemap; i++){
-            e = &emap[i];
-            print("E820: %.8llux %.8llux ", e->base, e->base+e->len);
-            if(e->type < nelem(etypes))
-                print("%s\n", etypes[e->type]);
-            else
-                print("type=%lud\n", e->type);
-        }
-    }
-
-    last = 0;
-    for(i=0; i<nemap; i++){ 
-        e = &emap[i];
-        /*
-         * pull out the info but only about the low 32 bits...
-         */
-        if(e->base >= (1LL<<32))
-            break;
-        base = e->base;
-        if(base+e->len > (1LL<<32))
-            len = -base;
-        else
-            len = e->len;
-        /*
-         * If the map skips addresses, mark them available.
-         */
-        if(last < e->base)
-            map(last, e->base-last, MemUPA);
-        last = base+len;
-        if(e->type == Ememory)
-            map(base, len, MemRAM);
-        else
-            map(base, len, MemReserved);
-    }
-    if(last < (1LL<<32))
-        map(last, (u32int)-last, MemUPA);
-    return 0;
-}
-@
-
-
-
-<<function umbmalloc>>=
-/*
- * Allocate memory from the upper memory blocks.
- */
-kern_addr
-umbmalloc(ulong addr, int size, int align)
-{
-    ulong a;
-
-    if(a = mapalloc(&rmapumb, addr, size, align))
-        return (ulong)KADDR(a);
-
-    return nilptr;
-}
-@
-
-
-<<function umbfree>>=
-void
-umbfree(ulong addr, int size)
-{
-    mapfree(&rmapumb, PADDR(addr), size);
-}
-@
-
-
-<<function upalloc>>=
-/*
- * Give out otherwise-unused physical address space
- * for use in configuring devices.  Note that unlike upamalloc
- * before it, upaalloc does not map the physical address
- * into virtual memory.  Call vmap to do that.
- */
-ulong
-upaalloc(int size, int align)
-{
-    ulong a;
-
-    a = mapalloc(&rmapupa, 0, size, align);
-    if(a == 0){
-        print("out of physical address space allocating %d\n", size);
-        mapprint(&rmapupa);
-    }
-    return a;
-}
-@
-
-
-<<function upareserve>>=
-void
-upareserve(ulong pa, int size)
-{
-    ulong a;
-    
-    a = mapalloc(&rmapupa, pa, size, 0);
-    if(a != pa){
-        /*
-         * This can happen when we're using the E820
-         * map, which might have already reserved some
-         * of the regions claimed by the pci devices.
-         */
-    //  print("upareserve: cannot reserve pa=%#.8lux size=%d\n", pa, size);
-        if(a != 0)
-            mapfree(&rmapupa, a, size);
-    }
-}
-@
 
 \subsection{[[conf]] initialization}
 
@@ -11766,26 +11700,6 @@ procinit(void)
 }
 @ 
 
-<<function initimage>>=
-void
-initimage(void)
-{
-    KImage *i, *ie;
-
-    imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
-    if (imagealloc.free == nil)
-        panic("initimage: no memory");
-    ie = &imagealloc.free[conf.nimage-1];
-    for(i = imagealloc.free; i < ie; i++)
-        i->next = i+1;
-    i->next = 0;
-    imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
-    imagealloc.szfreechan = NFREECHAN;
-}
-@
-% was called initseg, not sure why
-
-
 <<function pageinit>>=
 void
 pageinit(void)
@@ -11817,8 +11731,8 @@ pageinit(void)
         }
     }
     palloc.tail = p - 1;
-    palloc.head->prev = 0;
-    palloc.tail->next = 0;
+    palloc.head->prev = nil;
+    palloc.tail->next = nil;
 
     palloc.user = p - palloc.pages; // TODO? should be np too no?
     pkb = palloc.user*BY2PG/1024;
@@ -11851,12 +11765,34 @@ swapinit(void)
     swapalloc.last = swapalloc.swmap;
     swapalloc.free = conf.nswap;
     iolist = xalloc(conf.nswppo*sizeof(Page*));
-    if(swapalloc.swmap == 0 || iolist == 0)
+    if(swapalloc.swmap == nil || iolist == nil)
         panic("swapinit: not enough memory");
 
-    swapimage.notext = 1;
+    swapimage.notext = true;
 }
 @
+
+
+
+<<function initimage>>=
+void
+initimage(void)
+{
+    KImage *i, *ie;
+
+    imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
+    if (imagealloc.free == nil)
+        panic("initimage: no memory");
+    ie = &imagealloc.free[conf.nimage-1];
+    for(i = imagealloc.free; i < ie; i++)
+        i->next = i+1;
+    i->next = nil;
+    imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
+    imagealloc.szfreechan = NFREECHAN;
+}
+@
+% was called initseg, not sure why
+
 
 
 \subsection{Device initialisation}
@@ -11868,12 +11804,12 @@ chandevreset(void)
     int i;
 
     todinit();  /* avoid later reentry causing infinite recursion */
-    //debugstart = getconf("*debugstart") != nil;
     for(i=0; devtab[i] != nil; i++) {
         devtab[i]->reset();
     }
 }
 @
+%    //debugstart = getconf("*debugstart") != nil;
 
 \section{The first process}
 
@@ -12112,6 +12048,9 @@ startboot(char *argv0, char **argv)
 % see section on Userspace system programs
 % when arrive here, we got the first process executing! and
 % a working kernel!
+
+
+
 
 \chapter{Files}
 \minitoc
@@ -12401,6 +12340,15 @@ _allocb(int size)
     return b;
 }
 @
+
+<<function msize>>=
+ulong
+msize(void *v)
+{
+    return poolmsize(mainmem, (ulong*)v-Npadlong)-Npadlong*sizeof(ulong);
+}
+@
+
 
 <<function allocb>>=
 Block*
@@ -22040,7 +21988,7 @@ syssegbrk(ulong *arg)
     addr = arg[0];
     for(i = 0; i < NSEG; i++) {
         s = up->seg[i];
-        if(s == 0 || addr < s->base || addr >= s->top)
+        if(s == nil || addr < s->base || addr >= s->top)
             continue;
         switch(s->type&SG_TYPE) {
         case SG_TEXT:
@@ -22065,6 +22013,91 @@ syssegattach(ulong *arg)
     return segattach(up, arg[0], (char*)arg[1], arg[2], arg[3]);
 }
 @ 
+
+
+<<function segattach>>=
+ulong
+segattach(Proc *p, ulong attr, char *name, ulong va, ulong len)
+{
+    int sno;
+    Segment *s, *os;
+    Physseg *ps;
+
+    if(va != 0 && va >= USTKTOP)
+        error(Ebadarg);
+
+    validaddr((ulong)name, 1, 0);
+    vmemchr(name, 0, ~0);
+
+    for(sno = 0; sno < NSEG; sno++)
+        if(p->seg[sno] == nil && sno != ESEG)
+            break;
+
+    if(sno == NSEG)
+        error(Enovmem);
+
+    /*
+     *  first look for a global segment with the
+     *  same name
+     */
+    if(_globalsegattach != nil){
+        s = (*_globalsegattach)(p, name);
+        if(s != nil){
+            p->seg[sno] = s;
+            return s->base;
+        }
+    }
+
+    len = PGROUND(len);
+    if(len == 0)
+        error(Ebadarg);
+
+    /*
+     * Find a hole in the address space.
+     * Starting at the lowest possible stack address - len,
+     * check for an overlapping segment, and repeat at the
+     * base of that segment - len until either a hole is found
+     * or the address space is exhausted.  Ensure that we don't
+     * map the zero page.
+     */
+    if(va == 0) {
+        for (os = p->seg[SSEG]; os != nil; os = isoverlap(p, va, len)) {
+            va = os->base;
+            if(len >= va)
+                error(Enovmem);
+            va -= len;
+        }
+        va &= ~(BY2PG-1);
+    } else {
+        va &= ~(BY2PG-1);
+        if(va == 0 || va >= USTKTOP)
+            error(Ebadarg);
+    }
+
+    if(isoverlap(p, va, len) != nil)
+        error(Esoverlap);
+
+    for(ps = physseg; ps->name; ps++)
+        if(strcmp(name, ps->name) == 0)
+            goto found;
+
+    error(Ebadarg);
+found:
+    if(len > ps->size)
+        error(Enovmem);
+
+    attr &= ~SG_TYPE;       /* Turn off what is not allowed */
+    attr |= ps->attr;       /* Copy in defaults */
+
+    s = newseg(attr, va, len/BY2PG);
+    s->pseg = ps;
+    p->seg[sno] = s;
+
+    return va;
+}
+@
+
+
 
 <<syscall segdetach>>=
 // int segdetach(void *addr);
@@ -22794,8 +22827,8 @@ connectlocal(void)
 
 % page coloring, getpgcolor, cachectl, etc
 
-% large memory system
-%   tmpmap kmap, vmap
+% large memory system: tmpmap, kmap, vmap
+% 9atom also provides patches for PAE support and amd64 support
 
 %#define CACHELINESZ 32      /* pentium & later */
 
@@ -23423,7 +23456,7 @@ procread(Chan *c, void *va, long n, vlong off)
         j = 0;
         for(i = 0; i < NSEG; i++) {
             sg = p->seg[i];
-            if(sg == 0)
+            if(sg == nil)
                 continue;
             j += snprint(statbuf+j, sizeof statbuf - j,
                 "%-6s %c%c %.8lux %.8lux %4ld\n",
@@ -24827,7 +24860,7 @@ Cmdtab rebootmsg[] =
 
 \chapter{Conclusion}
 
-% already 900 pages ... so network, graphics, security in another volume
+% already lots of pages ... so network, graphics, security in another volume
 % actually even fs in other volume, and advanced subjects like:
 %  SMP, storage (scsi, ata, floppy, ...) real time scheculing EDF, 
 
@@ -24863,7 +24896,7 @@ bool iseve(void) {
 % use of getconf("*debugstart*") to setup some global tracing stuff
 
 \section{[[cgapost()]]}
-%first line of "defense" (using sound could be nice too)
+%first line of "defense" (using sound could be nice too, like linus
 % printf style debugging, except when can't even printf :) have to access
 % directly the screen device :)
 

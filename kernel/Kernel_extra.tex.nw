@@ -5084,22 +5084,6 @@ typedef struct Fmt  Fmt;
 @
 \fi
 
-\ifallcode
-<<pad basic types>>=
-typedef int bool;
-enum _bool {
-  false = 0,
-  true = 1
-};
-typedef ushort bool_ushort;
-
-typedef int retcode;
-enum _retcode {
-    OK = 0,
-    ERROR = 1,
-};
-@ 
-\fi
 
 
 <<struct OWaitmsg>>=
@@ -5627,7 +5611,7 @@ static char *etypes[] =
 
 <<function umbfree>>
 
-<<function upalloc>>
+<<function upaalloc>>
 
 <<function upareserve>>
 
@@ -5680,6 +5664,57 @@ static char *etypes[] =
 %//  mapfree(&rmapumbrw, PADDR(addr), size);
 %//}
 
+
+% dead now? could remove
+<<function umbmalloc>>=
+/*
+ * Allocate memory from the upper memory blocks.
+ */
+kern_addr
+umbmalloc(ulong addr, int size, int align)
+{
+    ulong a;
+
+    if(a = mapalloc(&rmapumb, addr, size, align))
+        return (ulong)KADDR(a);
+
+    return nilptr;
+}
+@
+
+% dead?
+<<function umbfree>>=
+void
+umbfree(ulong addr, int size)
+{
+    mapfree(&rmapumb, PADDR(addr), size);
+}
+@
+
+% dead?
+<<function upaalloc>>=
+/*
+ * Give out otherwise-unused physical address space
+ * for use in configuring devices.  Note that unlike upamalloc
+ * before it, upaalloc does not map the physical address
+ * into virtual memory.  Call vmap to do that.
+ */
+ulong
+upaalloc(int size, int align)
+{
+    ulong a;
+
+    a = mapalloc(&rmapupa, 0, size, align);
+    if(a == 0){
+        print("out of physical address space allocating %d\n", size);
+        mapprint(&rmapupa);
+    }
+    return a;
+}
+@
+
+
+
 \subsection*{[[memory/386/mmu.c]]}
 
 \ifallcode
@@ -5691,6 +5726,7 @@ static ulong vmapalloc(ulong size);
 static void pdbunmap(ulong*, ulong, int);
 @
 \fi
+
 
 
 
@@ -6314,7 +6350,7 @@ KImage  swapimage;
 
 <<constant PG_ONSWAP>>
 
-#define onswap(s) (((ulong)s)&PG_ONSWAP)
+<<function onswap>>
 #define pagedout(s) (((ulong)s)==0 || onswap(s))
 #define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
 
@@ -6550,44 +6586,29 @@ static struct Irstats  irstats;
  * Attachable segment types
  */
 static Physseg physseg[10] = {
-    { SG_SHARED,    "shared",   0,  SEGMAXSIZE, 0,  0 },
-    { SG_BSS,   "memory",   0,  SEGMAXSIZE, 0,  0 },
+    { .attr= SG_SHARED, 
+      .name= "shared", 
+      .pa= 0,
+      .size= SEGMAXSIZE, 
+      .pgalloc = nil,  
+      .pgfree = nil 
+    },
+    { .attr= SG_BSS, 
+      .name= "memory", 
+      .pa = 0,
+      .size = SEGMAXSIZE, 
+      .pgalloc = nil, 
+      .pgfree = nil 
+    },
     { 0,        0,      0,  0,      0,  0 },
 };
 @
-
 
 <<global physseglock>>=
 static Lock physseglock;
 @
 
-
-
-
-
-
-<<function isoverlap>>=
-Segment*
-isoverlap(Proc *p, ulong va, int len)
-{
-    int i;
-    Segment *ns;
-    ulong newtop;
-
-    newtop = va+len;
-    for(i = 0; i < NSEG; i++) {
-        ns = p->seg[i];
-        if(ns == 0)
-            continue;
-        if((newtop > ns->base && newtop <= ns->top) ||
-           (va >= ns->base && va < ns->top))
-            return ns;
-    }
-    return nil;
-}
-@
-
-
+% used by vga.c
 <<function addphysseg>>=
 int
 addphysseg(Physseg* new)
@@ -6618,85 +6639,24 @@ addphysseg(Physseg* new)
 @
 
 
-<<function segattach>>=
-ulong
-segattach(Proc *p, ulong attr, char *name, ulong va, ulong len)
+<<function isoverlap>>=
+Segment*
+isoverlap(Proc *p, ulong va, int len)
 {
-    int sno;
-    Segment *s, *os;
-    Physseg *ps;
+    int i;
+    Segment *ns;
+    ulong newtop;
 
-    if(va != 0 && va >= USTKTOP)
-        error(Ebadarg);
-
-    validaddr((ulong)name, 1, 0);
-    vmemchr(name, 0, ~0);
-
-    for(sno = 0; sno < NSEG; sno++)
-        if(p->seg[sno] == nil && sno != ESEG)
-            break;
-
-    if(sno == NSEG)
-        error(Enovmem);
-
-    /*
-     *  first look for a global segment with the
-     *  same name
-     */
-    if(_globalsegattach != nil){
-        s = (*_globalsegattach)(p, name);
-        if(s != nil){
-            p->seg[sno] = s;
-            return s->base;
-        }
+    newtop = va+len;
+    for(i = 0; i < NSEG; i++) {
+        ns = p->seg[i];
+        if(ns == 0)
+            continue;
+        if((newtop > ns->base && newtop <= ns->top) ||
+           (va >= ns->base && va < ns->top))
+            return ns;
     }
-
-    len = PGROUND(len);
-    if(len == 0)
-        error(Ebadarg);
-
-    /*
-     * Find a hole in the address space.
-     * Starting at the lowest possible stack address - len,
-     * check for an overlapping segment, and repeat at the
-     * base of that segment - len until either a hole is found
-     * or the address space is exhausted.  Ensure that we don't
-     * map the zero page.
-     */
-    if(va == 0) {
-        for (os = p->seg[SSEG]; os != nil; os = isoverlap(p, va, len)) {
-            va = os->base;
-            if(len >= va)
-                error(Enovmem);
-            va -= len;
-        }
-        va &= ~(BY2PG-1);
-    } else {
-        va &= ~(BY2PG-1);
-        if(va == 0 || va >= USTKTOP)
-            error(Ebadarg);
-    }
-
-    if(isoverlap(p, va, len) != nil)
-        error(Esoverlap);
-
-    for(ps = physseg; ps->name; ps++)
-        if(strcmp(name, ps->name) == 0)
-            goto found;
-
-    error(Ebadarg);
-found:
-    if(len > ps->size)
-        error(Enovmem);
-
-    attr &= ~SG_TYPE;       /* Turn off what is not allowed */
-    attr |= ps->attr;       /* Copy in defaults */
-
-    s = newseg(attr, va, len/BY2PG);
-    s->pseg = ps;
-    p->seg[sno] = s;
-
-    return va;
+    return nil;
 }
 @
 
@@ -6755,7 +6715,6 @@ data2txt(Segment *s)
 <<global physseg>>
 <<global physseglock>>
 
-// for debugging?
 Segment* (*_globalsegattach)(Proc*, char*);
 
 <<segment.c forward decl>>
@@ -13690,6 +13649,27 @@ static Bridge southbridges[] = {
     { 0x1002, 0x4372, nil, nil },       /* ATI SB400 */
 };
 @ 
+
+
+<<function upareserve>>=
+void
+upareserve(ulong pa, int size)
+{
+    ulong a;
+    
+    a = mapalloc(&rmapupa, pa, size, 0);
+    if(a != pa){
+        /*
+         * This can happen when we're using the E820
+         * map, which might have already reserved some
+         * of the regions claimed by the pci devices.
+         */
+    //  print("upareserve: cannot reserve pa=%#.8lux size=%d\n", pa, size);
+        if(a != 0)
+            mapfree(&rmapupa, a, size);
+    }
+}
+@
 
 
 <<pci.c>>=
@@ -25373,6 +25353,35 @@ typedef struct Ecache Ecache;
 Mntcache* mcp;      /* Mount cache pointer */
 @
 
+% used only by cache.c
+<<function auxpage>>=
+Page*
+auxpage(void)
+{
+    Page *p;
+
+    lock(&palloc);
+    p = palloc.head;
+    if(palloc.freecount < swapalloc.highwater) {
+        unlock(&palloc);
+        return nil;
+    }
+    pageunchain(p);
+
+    lock(p);
+    if(p->ref != 0)
+        panic("auxpage");
+    p->ref++;
+    uncachepage(p);
+    unlock(p);
+    unlock(&palloc);
+
+    return p;
+}
+@
+
+
+
 <<cache.c>>=
 <<kernel basic includes>>
 
@@ -28009,6 +28018,60 @@ syncclock(void)
         wrmsr(0x10, CPUS(0)->tscticks);
         cycles(&cpu->tscticks);
     }
+}
+@
+
+
+
+<<function sigsearch>>=
+void*
+sigsearch(char* signature)
+{
+    uintptr p;
+    uchar *bda;
+    void *r;
+
+    /*
+     * Search for the data structure:
+     * 1) within the first KiB of the Extended BIOS Data Area (EBDA), or
+     * 2) within the last KiB of system base memory if the EBDA segment
+     *    is undefined, or
+     * 3) within the BIOS ROM address space between 0xf0000 and 0xfffff
+     *    (but will actually check 0xe0000 to 0xfffff).
+     */
+    bda = BIOSSEG(0x40);
+    if(memcmp(KADDR(0xfffd9), "EISA", 4) == 0){
+        if((p = (bda[0x0f]<<8)|bda[0x0e]) != 0){
+            if((r = sigscan(BIOSSEG(p), 1024, signature)) != nil)
+                return r;
+        }
+    }
+
+    if((p = ((bda[0x14]<<8)|bda[0x13])*1024) != 0){
+        if((r = sigscan(KADDR(p-1024), 1024, signature)) != nil)
+            return r;
+    }
+    /* hack for virtualbox: look in KiB below 0xa0000 */
+    if((r = sigscan(KADDR(0xa0000-1024), 1024, signature)) != nil)
+        return r;
+
+    return sigscan(BIOSSEG(0xe000), 0x20000, signature);
+}
+@
+
+<<function sigscan>>=
+static void*
+sigscan(uchar* addr, int len, char* signature)
+{
+    int sl;
+    uchar *e, *p;
+
+    e = addr+len;
+    sl = strlen(signature);
+    for(p = addr; p+sl < e; p += 16)
+        if(memcmp(p, signature, sl) == 0)
+            return p;
+    return nil;
 }
 @
 
