@@ -210,7 +210,7 @@ void  putcr0(ulong);
 void  putcr3(ulong);
 //@Scheck: Assembly
 void  putcr4(ulong);
-void* rampage(void);
+kern_addr3 rampage(void);
 //@Scheck: Assembly
 void  rdmsr(int, vlong*);
 void  realmode(Ureg*);

@@ -96,9 +96,9 @@ void    flushmmu(void);
 void checkmmu(ulong va, ulong pa);
 ulong cankaddr(ulong);
 // actually KADDR is used in port, but it's expanding to kaddr
-void* kaddr(ulong);
+kern_addr3 kaddr(phys_addr);
 // actually PADDR is used in port, but it's expanding to paddr
-ulong paddr(void*);
+phys_addr paddr(kern_addr3);
 void    putmmu(ulong, ulong, Page*);
 void    mmurelease(Proc*);
 void    mmuswitch(Proc*);

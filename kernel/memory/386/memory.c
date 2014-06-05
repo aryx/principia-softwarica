@@ -233,10 +233,10 @@ mapalloc(RMap* rmap, ulong addr, int size, int align)
  * Allocate from the ram map directly to make page tables.
  * Called by mmuwalk during e820scan.
  */
-void*
+kern_addr3
 rampage(void)
 {
-    ulong m;
+    phys_addr m;
     
     m = mapalloc(&rmapram, 0, BY2PG, BY2PG);
     if(m == nilptr)
@@ -266,7 +266,7 @@ umbscan(void)
      * for grabs; check anyway.
      */
     p = KADDR(0xD0000);
-    while(p < (uchar*)KADDR(0xE0000)){
+    while(p < KADDR(0xE0000)){
         /*
          * Check for the ROM signature, skip if valid.
          */

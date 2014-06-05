@@ -94,7 +94,7 @@ uchar *sp;      /* user stack of init proc */
 int delaylink = 0;
 
 //@Scheck: Assembly
-extern ulong *multiboot;
+extern phys_addr *multiboot;
 
 /*s: function options */
 static void
@@ -102,7 +102,8 @@ options(void)
 {
         long i, n;
         char *cp, *line[MAXCONF], *p, *q;
-        ulong *m, l;
+        ulong l;
+        kern_addr2 m;
 
         if(multiboot != nil){
                 cp = BOOTARGS;
@@ -192,7 +193,7 @@ void
 cpuinit(void)
 {
     int cpuno;
-    ulong *mmupd;
+    kern_addr2 mmupd;
     Segdesc *gdt;
 
     cpuno = cpu->cpuno;
@@ -738,10 +739,10 @@ main_exit(bool ispanic)
 
 /*s: function reboot */
 void
-reboot(void *entry, void *code, ulong size)
+reboot(kern_addr3 entry, kern_addr3 code, ulong size)
 {
     void (*f)(ulong, ulong, ulong);
-    ulong *mmupd;
+    kern_addr2 mmupd;
 
     writeconf();
 
