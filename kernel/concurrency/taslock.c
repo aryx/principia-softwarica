@@ -90,7 +90,7 @@ lock(Lock *l)
         l->pc = pc;
         l->p = up;
         l->isilock = false;
-        //TODO: not setting l->cpu = ??
+        l->cpu = CPUS(cpu->cpuno); // pad's third bugfix
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
         l->lockcycles = -lcycles();

@@ -321,7 +321,7 @@ confinit(void)
             + conf.nproc*sizeof(Proc)
             + conf.nimage*sizeof(KImage)
             + conf.nswap
-            + conf.nswppo*sizeof(Page); // BUG sizeof(Page*)
+            + conf.nswppo*sizeof(Page*); // pad's second bugfix :)
     mainmem->maxsize = kmem;
     if(!cpuserver){
         /*

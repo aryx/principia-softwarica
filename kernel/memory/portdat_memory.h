@@ -244,6 +244,7 @@ struct Xalloc
   
     // list<ref<Hole>> (next = Hole.link) list of free hole entries (addr=top=size=0)
     Hole* flist; 
+
     // list<ref<Hole>> (next = Hole.link) memory holes, sorted by their top addr
     Hole* table; 
   
