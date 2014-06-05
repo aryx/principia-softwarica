@@ -45,7 +45,7 @@ struct Page
     // extra
     Lock;
     /*s: [[Page]] extra fields */
-    // list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
+    // list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused, or in mfreeseg
     Page  *next; /* Lru free list */ 
     // list<ref<Page>> Palloc.tail
     Page  *prev; 
@@ -172,8 +172,6 @@ struct Segment
     int pagedirsize; // nelem(pagedir)
   
     /*s: [[Segment]] other fields */
-        ulong mark;   /* portcountrefs */
-    /*x: [[Segment]] other fields */
     ushort  steal;    /* Page stealer lock */
     /*x: [[Segment]] other fields */
         KImage  *image;   /* text in file attached to this segment */
@@ -182,11 +180,13 @@ struct Segment
     /*x: [[Segment]] other fields */
     ulong*  profile;  /* Tick profile area */
     /*x: [[Segment]] other fields */
+        ulong mark;   /* portcountrefs */
+    /*x: [[Segment]] other fields */
     Physseg *pseg;
     /*e: [[Segment]] other fields */
   
     // extra
-    Ref;
+    Ref; // LOCK ORDERING: always do lock(img); lock(s) ??
     QLock lk;
     Sema  sema;
 };

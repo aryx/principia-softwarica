@@ -314,9 +314,9 @@ okaddr(virt_addr addr, ulong len, bool write)
             if(addr+len > s->top) {
                 len -= s->top - addr;
                 addr = s->top;
-                continue;
+            }else{
+                return true;
             }
-            return true;
         }
     }
     pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
@@ -368,22 +368,22 @@ vmemchr(virt_addr3 s, int c, int n)
 Segment*
 seg(Proc *p, virt_addr addr, bool dolock)
 {
-    Segment **s, **et, *n;
+    Segment **s, **et, *sg;
 
     et = &p->seg[NSEG];
     for(s = p->seg; s < et; s++) {
-        n = *s;
-        if(n == nil)
+        sg = *s;
+        if(sg == nil)
             continue;
-        if(addr >= n->base && addr < n->top) {
+        if(addr >= sg->base && addr < sg->top) {
             if(dolock == false)
-                return n;
+                return sg;
 
-            qlock(&n->lk);
+            qlock(&sg->lk);
             // can have a race, need to check again
-            if(addr >= n->base && addr < n->top)
-                return n;
-            qunlock(&n->lk);
+            if(addr >= sg->base && addr < sg->top)
+                return sg;
+            qunlock(&sg->lk);
         }
     }
     return nil;

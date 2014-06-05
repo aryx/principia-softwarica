@@ -1524,14 +1524,15 @@ procdump(void)
 void
 procflushseg(Segment *s)
 {
-    int i, ns, nm, nwait;
+    int i, ns, nm;
+    bool wait;
     Proc *p;
 
     /*
      *  tell all processes with this
      *  segment to flush their mmu's
      */
-    nwait = 0;
+    wait = false;
     for(i=0; i<conf.nproc; i++) {
         p = &procalloc.arena[i];
         if(p->state == Dead)
@@ -1542,13 +1543,13 @@ procflushseg(Segment *s)
                 for(nm = 0; nm < conf.ncpu; nm++){
                     if(CPUS(nm)->proc == p){
                         CPUS(nm)->flushmmu = true;
-                        nwait++;
+                        wait = true;
                     }
                 }
                 break;
             }
     }
-    if(nwait == 0)
+    if(!wait)
         return;
 
     /*

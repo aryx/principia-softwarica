@@ -555,7 +555,6 @@ freept(Segment *s, Pagetable *p)
             }
             break;
     /*e: [[freept()]] SG_PHYSICAL case */
-
     default:
         for(pg = p->first; pg <= p->last; pg++)
             if(*pg) {

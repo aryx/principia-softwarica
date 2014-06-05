@@ -213,7 +213,7 @@
 #define PAGEDIRSIZE  1984
 /*e: constant PAGEDIRSIZE */
 /*s: constant SMALLPAGEDIRSIZE */
-#define SMALLPAGEDIRSIZE 16 // small segmap
+#define SMALLPAGEDIRSIZE 16
 /*e: constant SMALLPAGEDIRSIZE */
 
 #define PPN(x)    ((x)&~(BY2PG-1))

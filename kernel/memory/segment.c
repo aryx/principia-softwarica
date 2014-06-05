@@ -104,12 +104,10 @@ newseg(int type, virt_addr base, ulong size)
             pagedirsize = PAGEDIRSIZE; // pad's first bugfix :)
         s->pagedir = smalloc(pagedirsize*sizeof(Pagetable*));
         s->pagedirsize = pagedirsize;
-    }
-    else{
+    }else{
         s->pagedir = s->smallpagedir;
         s->pagedirsize = nelem(s->smallpagedir);
     }
-
     return s;
 }
 /*e: constructor newseg */
@@ -119,21 +117,22 @@ void
 putseg(Segment *s)
 {
     Pagetable **pp, **emap;
-    KImage *i;
+    KImage *img;
 
     if(s == nil)
         return; // TODO: panic("putseg") instead?
 
-    i = s->image;
-    if(i != nil) {
-        lock(i);
+    img = s->image;
+    if(img != nil) {
+        lock(img);
         lock(s);
-        if(i->s == s && s->ref == 1)
-            i->s = nil;
-        unlock(i);
+        if(img->s == s && s->ref == 1)
+            img->s = nil;
+        unlock(img);
     }
     else
         lock(s);
+
 
     s->ref--;
     if(s->ref != 0) {
@@ -143,8 +142,8 @@ putseg(Segment *s)
     unlock(s);
 
     qlock(&s->lk);
-    if(i)
-        putimage(i);
+    if(img)
+        putimage(img);
 
     emap = &s->pagedir[s->pagedirsize];
     for(pp = s->pagedir; pp < emap; pp++)
@@ -202,6 +201,7 @@ dupseg(Segment **seg, int segno, bool share)
         goto sameseg;
 
     case SG_DATA:       /* Copy on write plus demand load info */
+
         if(segno == TSEG){ // why not SG_TEXT then?
             poperror();
             qunlock(&s->lk);
@@ -209,10 +209,11 @@ dupseg(Segment **seg, int segno, bool share)
         }
 
         if(share)
-            goto sameseg;
+            goto sameseg; // threads! clone()
+
         n = newseg(s->type, s->base, s->size);
 
-        incref(s->image);
+        incref(s->image); // how sure non nil?
         n->image = s->image;
         n->fstart = s->fstart;
         n->flen = s->flen;
@@ -220,7 +221,8 @@ dupseg(Segment **seg, int segno, bool share)
 
     case SG_BSS:        /* Just copy on write */
         if(share)
-            goto sameseg;
+            goto sameseg; // threads! clone()
+
         n = newseg(s->type, s->base, s->size);
         break;
 
@@ -233,13 +235,15 @@ dupseg(Segment **seg, int segno, bool share)
         goto sameseg;
 
     }
+    // not sameseg, allocated a new seg in n
+
     size = s->pagedirsize;
     for(i = 0; i < size; i++)
         if(pt = s->pagedir[i])
-            n->pagedir[i] = ptcpy(pt);
+            n->pagedir[i] = ptcpy(pt); // will actually share the pages
 
     if(s->ref > 1)
-        procflushseg(s);
+        procflushseg(s); // ??
     poperror();
     qunlock(&s->lk);
     return n;
@@ -575,14 +579,14 @@ mfreeseg(Segment *s, ulong start, int pages)
     Page *list;
 
     soff = start-s->base;
-    j = (soff&(PAGETABMAPMEM-1))/BY2PG;
+    j = (soff&(PAGETABMAPMEM-1))/BY2PG; // PTX
 
     size = s->pagedirsize;
     list = nil;
-    for(i = soff/PAGETABMAPMEM; i < size; i++) {
+    for(i = soff/PAGETABMAPMEM; i < size; i++) { // PDX
         if(pages <= 0)
             break;
-        if(s->pagedir[i] == nil) {
+        if(s->pagedir[i] == nil) { // space was never accessed, good, easier
             pages -= PAGETABSIZE-j;
             j = 0;
             continue;

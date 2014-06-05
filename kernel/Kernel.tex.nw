@@ -2961,7 +2961,7 @@ struct Pallocmem
 
 
 <<[[Page]] extra fields>>=
-// list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
+// list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused, or in mfreeseg
 Page  *next; /* Lru free list */ 
 // list<ref<Page>> Palloc.tail
 Page  *prev; 
@@ -3075,7 +3075,7 @@ putpage(Page *p)
     unlock(&palloc);
 }
 @
-% LP split freememr? and p->image stuff?
+% LP split freememr? and p->image stuff? and onswap?
 
 
 
@@ -3179,7 +3179,7 @@ struct Segment
     <<[[Segment]] other fields>>
   
     // extra
-    Ref;
+    Ref; // LOCK ORDERING: always do lock(img); lock(s) ??
     QLock lk;
     Sema  sema;
 };
@@ -3194,9 +3194,8 @@ struct Segment
 % why this size? 1984 Mo = 2Go - 16 Mo, not sure why
 
 <<constant SMALLPAGEDIRSIZE>>=
-#define SMALLPAGEDIRSIZE 16 // small segmap
+#define SMALLPAGEDIRSIZE 16
 @
-
 
 
 
@@ -3214,7 +3213,8 @@ struct Pagetable
     Page  **last;     /* Last used entry */
 };
 @
-% first and last optimize a bit as many of the Page* can be null in pagetab
+% actually I think it's array<option<either<swappage, Page>>
+% (first and last optimize a bit as many of the Page* can be null in pagetab)
 
 <<constant PAGETABMAPMEM>>=
 #define PAGETABMAPMEM (1024*1024) // 1MB
@@ -3253,7 +3253,6 @@ freept(Segment *s, Pagetable *p)
 
     switch(s->type&SG_TYPE) {
     <<[[freept()]] SG_PHYSICAL case>>
-
     default:
         for(pg = p->first; pg <= p->last; pg++)
             if(*pg) {
@@ -3291,7 +3290,7 @@ ptcpy(Pagetable *old)
     return new;
 }
 @
-
+% LP split onswap?
 
 
 
@@ -3325,12 +3324,10 @@ newseg(int type, virt_addr base, ulong size)
             pagedirsize = PAGEDIRSIZE; // pad's first bugfix :)
         s->pagedir = smalloc(pagedirsize*sizeof(Pagetable*));
         s->pagedirsize = pagedirsize;
-    }
-    else{
+    }else{
         s->pagedir = s->smallpagedir;
         s->pagedirsize = nelem(s->smallpagedir);
     }
-
     return s;
 }
 @
@@ -3341,21 +3338,22 @@ void
 putseg(Segment *s)
 {
     Pagetable **pp, **emap;
-    KImage *i;
+    KImage *img;
 
     if(s == nil)
         return; // TODO: panic("putseg") instead?
 
-    i = s->image;
-    if(i != nil) {
-        lock(i);
+    img = s->image;
+    if(img != nil) {
+        lock(img);
         lock(s);
-        if(i->s == s && s->ref == 1)
-            i->s = nil;
-        unlock(i);
+        if(img->s == s && s->ref == 1)
+            img->s = nil;
+        unlock(img);
     }
     else
         lock(s);
+
 
     s->ref--;
     if(s->ref != 0) {
@@ -3365,8 +3363,8 @@ putseg(Segment *s)
     unlock(s);
 
     qlock(&s->lk);
-    if(i)
-        putimage(i);
+    if(img)
+        putimage(img);
 
     emap = &s->pagedir[s->pagedirsize];
     for(pp = s->pagedir; pp < emap; pp++)
@@ -3381,6 +3379,8 @@ putseg(Segment *s)
     free(s);
 }
 @
+% LP split image stuff
+
 
 % used by userinit(), explain well relation between a Page and a segment
 % rename attach_page_to_segment?
@@ -3460,22 +3460,22 @@ QLock seglock;  /* locked whenever seg[] changes */
 Segment*
 seg(Proc *p, virt_addr addr, bool dolock)
 {
-    Segment **s, **et, *n;
+    Segment **s, **et, *sg;
 
     et = &p->seg[NSEG];
     for(s = p->seg; s < et; s++) {
-        n = *s;
-        if(n == nil)
+        sg = *s;
+        if(sg == nil)
             continue;
-        if(addr >= n->base && addr < n->top) {
+        if(addr >= sg->base && addr < sg->top) {
             if(dolock == false)
-                return n;
+                return sg;
 
-            qlock(&n->lk);
+            qlock(&sg->lk);
             // can have a race, need to check again
-            if(addr >= n->base && addr < n->top)
-                return n;
-            qunlock(&n->lk);
+            if(addr >= sg->base && addr < sg->top)
+                return sg;
+            qunlock(&sg->lk);
         }
     }
     return nil;
@@ -3500,9 +3500,9 @@ okaddr(virt_addr addr, ulong len, bool write)
             if(addr+len > s->top) {
                 len -= s->top - addr;
                 addr = s->top;
-                continue;
+            }else{
+                return true;
             }
-            return true;
         }
     }
     pprint("suicide: invalid address %#lux/%lud in sys call pc=%#lux\n", addr, len, userpc());
@@ -3523,11 +3523,11 @@ validaddr(virt_addr addr, ulong len, bool write)
 @
 
 
-
+%-------------------------------------------------------------------------
 
 % used by sysexec() and other syscalls
 % memchr on virtual address? and so that can span different pages, and 
-% even different segments!
+% even different segments! can generate faults?
 <<function vmemchr>>=
 /*
  * &s[0] is known to be a valid address.
@@ -3602,6 +3602,7 @@ dupseg(Segment **seg, int segno, bool share)
         goto sameseg;
 
     case SG_DATA:       /* Copy on write plus demand load info */
+
         if(segno == TSEG){ // why not SG_TEXT then?
             poperror();
             qunlock(&s->lk);
@@ -3609,10 +3610,11 @@ dupseg(Segment **seg, int segno, bool share)
         }
 
         if(share)
-            goto sameseg;
+            goto sameseg; // threads! clone()
+
         n = newseg(s->type, s->base, s->size);
 
-        incref(s->image);
+        incref(s->image); // how sure non nil?
         n->image = s->image;
         n->fstart = s->fstart;
         n->flen = s->flen;
@@ -3620,7 +3622,8 @@ dupseg(Segment **seg, int segno, bool share)
 
     case SG_BSS:        /* Just copy on write */
         if(share)
-            goto sameseg;
+            goto sameseg; // threads! clone()
+
         n = newseg(s->type, s->base, s->size);
         break;
 
@@ -3633,13 +3636,15 @@ dupseg(Segment **seg, int segno, bool share)
         goto sameseg;
 
     }
+    // not sameseg, allocated a new seg in n
+
     size = s->pagedirsize;
     for(i = 0; i < size; i++)
         if(pt = s->pagedir[i])
-            n->pagedir[i] = ptcpy(pt);
+            n->pagedir[i] = ptcpy(pt); // will actually share the pages
 
     if(s->ref > 1)
-        procflushseg(s);
+        procflushseg(s); // ??
     poperror();
     qunlock(&s->lk);
     return n;
@@ -3667,14 +3672,14 @@ mfreeseg(Segment *s, ulong start, int pages)
     Page *list;
 
     soff = start-s->base;
-    j = (soff&(PAGETABMAPMEM-1))/BY2PG;
+    j = (soff&(PAGETABMAPMEM-1))/BY2PG; // PTX
 
     size = s->pagedirsize;
     list = nil;
-    for(i = soff/PAGETABMAPMEM; i < size; i++) {
+    for(i = soff/PAGETABMAPMEM; i < size; i++) { // PDX
         if(pages <= 0)
             break;
-        if(s->pagedir[i] == nil) {
+        if(s->pagedir[i] == nil) { // space was never accessed, good, easier
             pages -= PAGETABSIZE-j;
             j = 0;
             continue;
@@ -3720,11 +3725,13 @@ out:
 }
 @
 
+% put in virtual memory section?
 <<[[Cpu]] other fields>>=
 bool flushmmu;   /* make current proc flush it's mmu state */
 @
 
 
+% seems really expensive
 <<function procflushseg>>=
 /*
  *  wait till all processes have flushed their mmu
@@ -3734,14 +3741,15 @@ bool flushmmu;   /* make current proc flush it's mmu state */
 void
 procflushseg(Segment *s)
 {
-    int i, ns, nm, nwait;
+    int i, ns, nm;
+    bool wait;
     Proc *p;
 
     /*
      *  tell all processes with this
      *  segment to flush their mmu's
      */
-    nwait = 0;
+    wait = false;
     for(i=0; i<conf.nproc; i++) {
         p = &procalloc.arena[i];
         if(p->state == Dead)
@@ -3752,13 +3760,13 @@ procflushseg(Segment *s)
                 for(nm = 0; nm < conf.ncpu; nm++){
                     if(CPUS(nm)->proc == p){
                         CPUS(nm)->flushmmu = true;
-                        nwait++;
+                        wait = true;
                     }
                 }
                 break;
             }
     }
-    if(nwait == 0)
+    if(!wait)
         return;
 
     /*
@@ -3771,129 +3779,8 @@ procflushseg(Segment *s)
                 sched();
 }
 @ 
-
-
-%------------------------------------------------------------------------------
-
-
-%// called? mv in debugging section? with C-t C-t stuff?
-<<function checkpagerefs>>=
-void
-checkpagerefs(void)
-{
-    int s;
-    ulong i, np, nwrong;
-    ulong *ref;
-    
-    np = palloc.user;
-    ref = malloc(np*sizeof ref[0]);
-    if(ref == nil){
-        print("checkpagerefs: out of memory\n");
-        return;
-    }
-    
-    /*
-     * This may not be exact if there are other processes
-     * holding refs to pages on their stacks.  The hope is
-     * that if you run it on a quiescent system it will still
-     * be useful.
-     */
-    s = splhi();
-    lock(&palloc);
-    countpagerefs(ref, 0);
-    portcountpagerefs(ref, 0);
-    nwrong = 0;
-    for(i=0; i<np; i++){
-        if(palloc.pages[i].ref != ref[i]){
-            iprint("page %#.8lux ref %d actual %lud\n", 
-                palloc.pages[i].pa, palloc.pages[i].ref, ref[i]);
-            ref[i] = 1;
-            nwrong++;
-        }else
-            ref[i] = 0;
-    }
-    countpagerefs(ref, 1);
-    portcountpagerefs(ref, 1);
-    iprint("%lud mistakes found\n", nwrong);
-    unlock(&palloc);
-    splx(s);
-}
-@
-
-<<[[Segment]] other fields>>=
-    ulong mark;   /* portcountrefs */
-@
-
-<<function portcountpagerefs>>=
-void
-portcountpagerefs(ulong *ref, int print)
-{
-    ulong i, j, k, ns, n;
-    Page **pg, *entry;
-    Proc *p;
-    Pagetable *pt;
-    Segment *s;
-
-    /*
-     * Pages in segments.  s->mark avoids double-counting.
-     */
-    n = 0;
-    ns = 0;
-    for(i=0; i<conf.nproc; i++){
-        p = proctab(i);
-        for(j=0; j<NSEG; j++){
-            s = p->seg[j];
-            if(s)
-                s->mark = 0;
-        }
-    }
-    for(i=0; i<conf.nproc; i++){
-        p = proctab(i);
-        for(j=0; j<NSEG; j++){
-            s = p->seg[j];
-            if(s == nil || s->mark++)
-                continue;
-            ns++;
-            for(k=0; k<s->pagedirsize; k++){
-                pt = s->pagedir[k];
-                if(pt == nil)
-                    continue;
-                for(pg = pt->first; pg <= pt->last; pg++){
-                    entry = *pg;
-                    if(pagedout(entry))
-                        continue;
-                    if(print){
-                        if(ref[pagenumber(entry)])
-                            iprint("page %#.8lux in segment %#p\n", entry->pa, s);
-                        continue;
-                    }
-                    if(ref[pagenumber(entry)]++ == 0)
-                        n++;
-                }
-            }
-        }
-    }
-    if(!print){
-        iprint("%lud pages in %lud segments\n", n, ns);
-        for(i=0; i<conf.nproc; i++){
-            p = proctab(i);
-            for(j=0; j<NSEG; j++){
-                s = p->seg[j];
-                if(s == nil)
-                    continue;
-                if(s->ref != s->mark){
-                    iprint("segment %#p (used by proc %lud pid %lud) has bad ref count %lud actual %lud\n",
-                        s, i, p->pid, s->ref, s->mark);
-                }
-            }
-        }
-    }
-}
-@
-
-
-
-
+% but process could be allocated to different proc, so could loop forever
+% or miss? when reallocated probably the tlb is flush anyway so safe?
 
 
 \section{Swapping}
