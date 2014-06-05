@@ -215,7 +215,7 @@ struct Hole
     ulong size; // top - addr
     // extra
     /*s: [[Hole]] extra fields */
-    Hole* link; // list<ref<Hole>> of Xalloc.flist or Xalloc.table
+    Hole* next; // list<ref<Hole>> of Xalloc.flist or Xalloc.table
     /*e: [[Hole]] extra fields */
 };
 /*e: struct Hole */
@@ -243,10 +243,10 @@ struct Xalloc
     Hole  hole[Nhole];
   
     // list<ref<Hole>> (next = Hole.link) list of free hole entries (addr=top=size=0)
-    Hole* flist; 
+    Hole* unused_slots; 
 
     // list<ref<Hole>> (next = Hole.link) memory holes, sorted by their top addr
-    Hole* table; 
+    Hole* sorted_holes; 
   
     // extra
     Lock;

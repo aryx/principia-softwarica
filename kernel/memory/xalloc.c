@@ -1,6 +1,4 @@
 /*s: xalloc.c */
-// Memory allocator for long lived allocated structures
-// e.g. array or Proc (procalloc), array of Pages (palloc.pages), etc
 /*s: kernel basic includes */
 #include <u.h>
 #include "../port/lib.h"
@@ -40,9 +38,9 @@ xinit(void)
 
     eh = &xlists.hole[Nhole-1];
     for(h = xlists.hole; h < eh; h++)
-        h->link = h+1;
+        h->next = h+1;
 
-    xlists.flist = xlists.hole;
+    xlists.unused_slots = xlists.hole;
 
     kpages = conf.npage - conf.upages;
 
@@ -125,8 +123,8 @@ xallocz(ulong size, bool zero)
     size &= ~(BY2V-1);
 
     ilock(&xlists);
-    l = &xlists.table;
-    for(h = *l; h; h = h->link) {
+    l = &xlists.sorted_holes;
+    for(h = *l; h; h = h->next) {
         // found an appropriate hole
         if(h->size >= size) {
             p = (Xhdr*)KADDR(h->addr);
@@ -137,9 +135,9 @@ xallocz(ulong size, bool zero)
             // rarely does an xalloc with the remaining size of a hole).
             // We can put it back in the list of free hole entries.
             if(h->size == 0) {
-                *l = h->link;
-                h->link = xlists.flist;
-                xlists.flist = h;
+                *l = h->next;
+                h->next = xlists.unused_slots;
+                xlists.unused_slots = h;
             }
 
             iunlock(&xlists);
@@ -149,7 +147,7 @@ xallocz(ulong size, bool zero)
             p->size = size;
             return p->data;
         }
-        l = &h->link;
+        l = &h->next;
     }
     iunlock(&xlists);
     return nil;
@@ -228,25 +226,25 @@ xhole(phys_addr addr, ulong size)
 
     top = addr + size;
     ilock(&xlists);
-    l = &xlists.table;
-    for(h = *l; h; h = h->link) {
+    l = &xlists.sorted_holes;
+    for(h = *l; h; h = h->next) {
         if(h->top == addr) {
             h->size += size;
             h->top = h->addr+h->size;
-            c = h->link;
+            c = h->next;
             if(c && h->top == c->addr) {
                 h->top += c->size;
                 h->size += c->size;
-                h->link = c->link;
-                c->link = xlists.flist;
-                xlists.flist = c;
+                h->next = c->next;
+                c->next = xlists.unused_slots;
+                xlists.unused_slots = c;
             }
             iunlock(&xlists);
             return;
         }
         if(h->addr > addr)
             break;
-        l = &h->link;
+        l = &h->next;
     }
     if(h && top == h->addr) {
         h->addr -= size;
@@ -255,18 +253,18 @@ xhole(phys_addr addr, ulong size)
         return;
     }
 
-    if(xlists.flist == nil) {
+    if(xlists.unused_slots == nil) {
         iunlock(&xlists);
         print("xfree: no free holes, leaked %lud bytes\n", size);
         return;
     }
 
-    h = xlists.flist;
-    xlists.flist = h->link;
+    h = xlists.unused_slots;
+    xlists.unused_slots = h->next;
     h->addr = addr;
     h->top = top;
     h->size = size;
-    h->link = *l;
+    h->next = *l;
     *l = h;
     iunlock(&xlists);
 }
@@ -287,24 +285,24 @@ xsummary(void)
         print("|i| = %d (0x%luX), addr 0x%luX, top = 0x%luX, size = %ld, link = 0x%luX\n",
               i, &xlists.hole[i],
               xlists.hole[i].addr, xlists.hole[i].top, xlists.hole[i].size,
-              xlists.hole[i].link
+              xlists.hole[i].next
               );
     }
-    print("flists = 0x%luX, table = 0x%luX\n", xlists.flist, xlists.table);
+    print("flists = 0x%luX, sorted_holes = 0x%luX\n", xlists.unused_slots, xlists.sorted_holes);
     i = 0;
-    for(h = xlists.flist; h; h = h->link)
+    for(h = xlists.unused_slots; h; h = h->next)
         i++;
 
     print("%d holes free", i);
     i = 0;
-    for(h = xlists.table; h; h = h->link) {
+    for(h = xlists.sorted_holes; h; h = h->next) {
         if (0) {
             print("addr %#.8lux top %#.8lux size %lud\n",
                 h->addr, h->top, h->size);
             delay(10);
         }
         i += h->size;
-        if (h == h->link) {
+        if (h == h->next) {
             print("xsummary: infinite loop broken\n");
             break;
         }
