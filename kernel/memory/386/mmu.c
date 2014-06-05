@@ -1138,11 +1138,11 @@ countpagerefs(ulong *ref, int print)
  * If pa is not a valid argument to KADDR, return 0.
  */
 ulong
-cankaddr(ulong pa)
+cankaddr(phys_addr pa)
 {
-    if(pa >= -KZERO)
+    if(pa >= MAXKPA)
         return 0;
-    return -KZERO - pa;
+    return MAXKPA - pa;
 }
 /*e: function cankaddr */
 

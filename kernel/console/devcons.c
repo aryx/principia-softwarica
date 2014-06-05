@@ -308,7 +308,7 @@ iprintcanlock(Lock *l)
     for(i=0; i<1000; i++){
         if(canlock(l))
             return true;
-        if(l->m == CPUS(cpu->cpuno))
+        if(l->cpu == CPUS(cpu->cpuno))
             return false;
         microdelay(100);
     }

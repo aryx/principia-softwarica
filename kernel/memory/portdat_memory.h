@@ -22,18 +22,19 @@ enum modref
 
 /*s: struct Page */
 // Page metadata. We will allocate as many Page as to cover all physical memory
-// + swap "address space". Either pa or daddr should be valid at one time.
-// xalloc'ed in Palloc.pages
+// and swap "address space". xalloc'ed in Palloc.pages
 struct Page
 {
     phys_addr pa;     /* Physical address in memory */
     virt_addr va;     /* Virtual address for user */
-  
+
+    /*s: [[Page]] other fields */
     // option<ref<Kimage>>
     KImage  *image;     /* Associated text or swap image */
     // I think this is also abused to store PDX ???
     ulong daddr;      /* Disc address on swap */
     ulong gen;      /* Generation counter for swap */
+    /*e: [[Page]] other fields */
   
     // Why not Ref? to save space (same reason they use char below)
     // but that means needs to use Lock below to access this non-atomic ref.
@@ -43,12 +44,15 @@ struct Page
 
     // extra
     Lock;
+    /*s: [[Page]] extra fields */
     // list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
     Page  *next; /* Lru free list */ 
     // list<ref<Page>> Palloc.tail
     Page  *prev; 
+    /*x: [[Page]] extra fields */
     // hash<daddr, list<ref<Page>>> Palloc.hash
     Page  *hash; /* Image hash chains */ 
+    /*e: [[Page]] extra fields */
 };
 /*e: struct Page */
 
@@ -288,7 +292,7 @@ struct Xalloc
 //IMPORTANT: extern Pool*  imagmem;
 
 /*s: struct Pallocmem */
-// memory banks, similar to RMap, and Confmem, but page oriented, and portable
+// memory banks for user memory, similar to Confmem (and RMap)
 struct Pallocmem
 {
     phys_addr base;
@@ -309,7 +313,7 @@ enum
 // Page Allocator (singleton)
 struct Palloc
 {
-    Pallocmem mem[4]; // essentially the same as Conf.mem
+    Pallocmem mem[4]; // Conf.mem - memory allocated by the kernel
     // sum of mem.npage (which should be conf.upages)
     ulong user;     /* how many user pages */
   

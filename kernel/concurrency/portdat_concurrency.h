@@ -27,7 +27,7 @@ struct Lock
     /*e: [[Lock]] debugging fields */
     /*s: [[Lock]] other fields */
     // option<ref<Cpu>>, None when key = 0?
-    Cpu  *m; // not that used, only in iprintcanlock apparently
+    Cpu  *cpu; // not that used, only in iprintcanlock apparently
     /*e: [[Lock]] other fields */
 };
 /*e: struct Lock */

@@ -705,6 +705,21 @@ kaddr(phys_addr pa)
 @
 % rename KEND? but it's not really kernel end. KADDREND? MAXKADDR? KADDREND?
 
+<<function cankaddr>>=
+/*
+ * Return the number of bytes that can be accessed via KADDR(pa).
+ * If pa is not a valid argument to KADDR, return 0.
+ */
+ulong
+cankaddr(phys_addr pa)
+{
+    if(pa >= MAXKPA)
+        return 0;
+    return MAXKPA - pa;
+}
+@
+% used in xinit
+
 
 
 % why trivial macro? because in other archi can be different
@@ -725,6 +740,12 @@ kaddr(phys_addr pa)
 
 %put CPUADDR here!! because we talk about it later with cpu and cpus
 % also IDT, GDT, VPT.
+
+
+% start from Confmem + kernel binary.
+% then Confmem split in xlists and palloc.mem
+% then from xlists allocate nproc, pages (that will cover palloc.mem), 
+% swapimages, and rest for kernel malloc.
 
 \section{Syscall overview}
 % kernel vs user code
@@ -814,6 +835,8 @@ struct Conf
 % mem[4] to allow to have up to 4 free not contiguous memory regions.
 % On the PC we have 2, one in the low memory before the kernel, and
 % one after the kernel bss. On the bcm they just have 1.
+% note that the physical memory used by the kernel is excluded
+% because we well use mem for giving memory to kernel heap or user.
 
 <<global conf>>=
 Conf conf;
@@ -1523,7 +1546,7 @@ struct Lock
 \ifallcode
 <<[[Lock]] other fields>>=
 // option<ref<Cpu>>, None when key = 0?
-Cpu  *m; // not that used, only in iprintcanlock apparently
+Cpu  *cpu; // not that used, only in iprintcanlock apparently
 @
 \fi
 
@@ -1565,7 +1588,7 @@ lock(Lock *l)
         l->pc = pc;
         l->p = up;
         l->isilock = false;
-        //TODO: not setting l->m = ??
+        //TODO: not setting l->cpu = ??
 <<lock ifdef LOCKCYCLES>>
         return 0;
     }
@@ -1627,7 +1650,7 @@ unlock(Lock *l)
     if(l->p != up)
         print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
 
-    l->m = nil;
+    l->cpu = nil;
     l->key = 0;
     // for processor caches, to ensure the lock value is seen by other
     // processors so that if they were doing while(l->key) { ... } they
@@ -1659,7 +1682,7 @@ canlock(Lock *l)
         up->lastlock = l;
     l->pc = getcallerpc(&l);
     l->p = up;
-    l->m = CPUS(cpu->cpuno);
+    l->cpu = CPUS(cpu->cpuno);
     l->isilock = false;
 <<lock ifdef LOCKCYCLES>>
     return true;
@@ -1709,7 +1732,7 @@ ilock(Lock *l)
     if(tas(&l->key) != 0){
         lockstats.glare++;
         /*
-         * Cannot also check l->pc, l->m, or l->isilock here
+         * Cannot also check l->pc, l->cpu, or l->isilock here
          * because they might just not be set yet, or
          * (for pc and m) the lock might have just been unlocked.
          */
@@ -1732,8 +1755,8 @@ acquire:
     l->pc = pc;
     l->p = up;
     l->isilock = true;
-    //TODO: why not just l->m = m? 
-    l->m = CPUS(cpu->cpuno);
+    // why not just l->cpu = cpu? because it would always be the same addr!
+    l->cpu = CPUS(cpu->cpuno);
 <<lock ifdef LOCKCYCLES>>
 }
 @ 
@@ -1768,7 +1791,7 @@ iunlock(Lock *l)
         print("iunlock while lo: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
 
     sr = l->sr;
-    l->m = nil;
+    l->cpu = nil;
     l->key = 0;
     coherence();
     cpu->ilockdepth--;
@@ -2217,11 +2240,12 @@ deccnt(Ref *r)
 
 % approach: 
 % - end, edata fixed area
-% - confmem detection
+% - confmem detection (and mapram)
 % - xalloc static metadata about mem
 %  - then from it build pools
 %    - then from it get malloc
 %  - orthogonally also use xalloc for procs, pages, more??
+% - palloc.mem
 
 % then for user, pages is the granularity. see brk too.
 
@@ -2235,8 +2259,9 @@ deccnt(Ref *r)
 \section{[[xalloc()]]}
 
 % kernel memory allocator. This is for the kernel! For user
-% it will be Pages, see later. Also all the memory here
-% can be only before MAXKPA? Confmem is about kernel memory only?
+% it will be Palloc.mem (and Pages that is actually metadata about
+% pages that are in kernel memory). Also all the memory here
+% can be only before MAXKPA.
 
 % start with Confmem, huge bank, now we want to use some memory.
 % draw figure with idea. Draw also figures with many holes in memory. 
@@ -2261,6 +2286,8 @@ struct Hole
     <<[[Hole]] extra fields>>
 };
 @
+%phys_addr should be all < MAXKPA
+% they could use kern_addr, it would be simpler, require less conversions
 
 <<struct Xalloc>>=
 // Long lived data structure allocator (singleton)
@@ -2405,6 +2432,8 @@ xfree(kern_addr3 p)
 @
 
 % this may have to allocate a new Hole from the free list
+% called by xinit! this is the function that actually got memory
+% from Confmem
 <<function xhole>>=
 void
 xhole(phys_addr addr, ulong size)
@@ -2836,21 +2865,15 @@ realloc(void *v, ulong size)
 
 % will be used to share, copy on write!
 
-%TODO LP: split [[Page]] extra fields and distribute later
 <<struct Page>>=
 // Page metadata. We will allocate as many Page as to cover all physical memory
-// + swap "address space". Either pa or daddr should be valid at one time.
-// xalloc'ed in Palloc.pages
+// and swap "address space". xalloc'ed in Palloc.pages
 struct Page
 {
     phys_addr pa;     /* Physical address in memory */
     virt_addr va;     /* Virtual address for user */
-  
-    // option<ref<Kimage>>
-    KImage  *image;     /* Associated text or swap image */
-    // I think this is also abused to store PDX ???
-    ulong daddr;      /* Disc address on swap */
-    ulong gen;      /* Generation counter for swap */
+
+    <<[[Page]] other fields>>
   
     // Why not Ref? to save space (same reason they use char below)
     // but that means needs to use Lock below to access this non-atomic ref.
@@ -2860,14 +2883,10 @@ struct Page
 
     // extra
     Lock;
-    // list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
-    Page  *next; /* Lru free list */ 
-    // list<ref<Page>> Palloc.tail
-    Page  *prev; 
-    // hash<daddr, list<ref<Page>>> Palloc.hash
-    Page  *hash; /* Image hash chains */ 
+    <<[[Page]] extra fields>>
 };
 @
+
 % Note that it's not a Page! It's some metadata about a Page. It's actually
 % a kind of PTE if compare to the terminology in Intel MMU.
 % But it does more than a PTE as it also the reverse index of va -> pa
@@ -2878,11 +2897,6 @@ struct Page
 % one another or doing memset 0. just to get pa -> kern_addr?
 
 
-%    KImage  *image;     /* Associated text or swap image */
-% because for TEXT, no need to swap and better to use free mem
-% for DATA or BSS than TEXT because TEXT can be retrieved!
-
-
 <<enum modref>>=
 enum modref 
 {
@@ -2891,19 +2905,29 @@ enum modref
     PG_REF    = 0x02,   /* software referenced bit */
 };
 @
+% PG_REF is for LRU?
+% PG_MOD is for ?
 
-<<constant PG_ONSWAP>>=
-#define PG_ONSWAP 1
+
+%Either pa or daddr should be valid at one time.
+<<[[Page]] other fields>>=
+// option<ref<Kimage>>
+KImage  *image;     /* Associated text or swap image */
+// I think this is also abused to store PDX ???
+ulong daddr;      /* Disc address on swap */
+ulong gen;      /* Generation counter for swap */
 @
-% Page* are words aligned, so last 4 bits are empty, and they use
-% the last bit to encore whether the page has been swapped out
+%    KImage  *image;     /* Associated text or swap image */
+% because for TEXT, no need to swap and better to use free mem
+% for DATA or BSS than TEXT because TEXT can be retrieved!
+
 
 
 <<struct Palloc>>=
 // Page Allocator (singleton)
 struct Palloc
 {
-    Pallocmem mem[4]; // essentially the same as Conf.mem
+    Pallocmem mem[4]; // Conf.mem - memory allocated by the kernel
     // sum of mem.npage (which should be conf.upages)
     ulong user;     /* how many user pages */
   
@@ -2931,6 +2955,30 @@ struct Palloc
 % put Swapalloc here? pages cover swap space too? also
 % newpage() reference swapalloc.highwater
 
+<<constant PG_ONSWAP>>=
+#define PG_ONSWAP 1
+@
+% Page* are words aligned, so last 4 bits are empty, and they use
+% the last bit to encode whether the page has been swapped out?
+
+
+
+
+<<[[Page]] extra fields>>=
+// list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
+Page  *next; /* Lru free list */ 
+// list<ref<Page>> Palloc.tail
+Page  *prev; 
+@
+
+<<[[Page]] extra fields>>=
+// hash<daddr, list<ref<Page>>> Palloc.hash
+Page  *hash; /* Image hash chains */ 
+@
+
+
+
+
 <<function pagenumber>>=
 ulong
 pagenumber(Page *p)
@@ -2940,9 +2988,9 @@ pagenumber(Page *p)
 @
 
 
-%TODO: could merge with Confmem?
+% could merge with Confmem, because kbase and klimit could be removed
 <<struct Pallocmem>>=
-// memory banks, similar to RMap, and Confmem, but page oriented, and portable
+// memory banks for user memory, similar to Confmem (and RMap)
 struct Pallocmem
 {
     phys_addr base;
@@ -11355,11 +11403,15 @@ memglobal(void)
 
 \subsection{Memory initialisation}
 
+%setup kernel memory xlists and also palloc.mem which is all about user memory
+
 <<function xinit>>=
 void
 xinit(void)
 {
-    int i, n, upages, kpages;
+    int i;
+    int nkpages;
+    int kpages;
     ulong maxpages;
     Confmem *m;
     Pallocmem *pm;
@@ -11371,46 +11423,39 @@ xinit(void)
 
     xlists.flist = xlists.hole;
 
-    upages = conf.upages;
-    kpages = conf.npage - upages;
+    kpages = conf.npage - conf.upages;
+
     pm = palloc.mem;
     for(i=0; i<nelem(conf.mem); i++){
         m = &conf.mem[i];
-        n = m->npage;
-        if(n > kpages)
-            n = kpages;
+        nkpages = m->npage;
+        if(nkpages > kpages)
+            nkpages = kpages; // will be zero once kpages has been filled
         /* don't try to use non-KADDR-able memory for kernel */
         maxpages = cankaddr(m->base)/BY2PG;
-        if(n > maxpages)
-            n = maxpages;
+        if(nkpages > maxpages)
+            nkpages = maxpages;
 
         /* first give to kernel */
-        if(n > 0){
-            m->kbase = (ulong)KADDR(m->base);
-            m->klimit = (ulong)KADDR(m->base+n*BY2PG);
-            xhole(m->base, n*BY2PG);
-            kpages -= n;
+        if(nkpages > 0){
+            xhole(m->base, nkpages*BY2PG);
+            kpages -= nkpages;
+            <<[[xinit()]] nkpages kernel memory in m>>
         }
+
         /* if anything left over, give to user */
-        if(n < m->npage){
+        if(m->npage > nkpages){
             if(pm >= palloc.mem+nelem(palloc.mem)){
                 print("xinit: losing %lud pages\n", m->npage-n);
                 continue;
             }
-            pm->base = m->base+n*BY2PG;
-            pm->npage = m->npage - n;
+            pm->base = m->base+nkpages*BY2PG;
+            pm->npage = m->npage - nkpages;
             pm++;
         }
     }
 }
 @
-
-<<[[Confmem]] other fields>>=
-kern_addr kbase; // KADDR(Confmem.base)
-kern_addr klimit; // KADDR(base+ x*BY2PG) where x <= Confmem.npage
-@
-% mostly used for /proc/#/mem, could probably be removed because
-% I'm not sure why we want processes to read kernel memory
 
 
 <<function procinit>>=
@@ -18587,7 +18632,7 @@ iprintcanlock(Lock *l)
     for(i=0; i<1000; i++){
         if(canlock(l))
             return true;
-        if(l->m == CPUS(cpu->cpuno))
+        if(l->cpu == CPUS(cpu->cpuno))
             return false;
         microdelay(100);
     }
@@ -25286,6 +25331,20 @@ bool hang;   /* hang at next exec for debug */
         }
         error(Ebadarg);
 @
+
+<<[[xinit()]] nkpages kernel memory in m>>=
+m->kbase = (ulong)KADDR(m->base);
+m->klimit = (ulong)KADDR(m->base+nkpages*BY2PG);
+@
+
+<<[[Confmem]] other fields>>=
+kern_addr kbase; // KADDR(Confmem.base)
+kern_addr klimit; // KADDR(base+ x*BY2PG) where x <= Confmem.npage
+@
+% mostly used for /proc/#/mem, could probably be removed because
+% I'm not sure why we want processes to read kernel memory
+
+
 
 <<[[procwrite()]] Qmem case>>=
     case Qmem:

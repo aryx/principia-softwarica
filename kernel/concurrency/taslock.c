@@ -90,7 +90,7 @@ lock(Lock *l)
         l->pc = pc;
         l->p = up;
         l->isilock = false;
-        //TODO: not setting l->m = ??
+        //TODO: not setting l->cpu = ??
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
         l->lockcycles = -lcycles();
@@ -163,7 +163,7 @@ ilock(Lock *l)
     if(tas(&l->key) != 0){
         lockstats.glare++;
         /*
-         * Cannot also check l->pc, l->m, or l->isilock here
+         * Cannot also check l->pc, l->cpu, or l->isilock here
          * because they might just not be set yet, or
          * (for pc and m) the lock might have just been unlocked.
          */
@@ -186,8 +186,8 @@ acquire:
     l->pc = pc;
     l->p = up;
     l->isilock = true;
-    //TODO: why not just l->m = m? 
-    l->m = CPUS(cpu->cpuno);
+    // why not just l->cpu = cpu? because it would always be the same addr!
+    l->cpu = CPUS(cpu->cpuno);
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
         l->lockcycles = -lcycles();
@@ -212,7 +212,7 @@ canlock(Lock *l)
         up->lastlock = l;
     l->pc = getcallerpc(&l);
     l->p = up;
-    l->m = CPUS(cpu->cpuno);
+    l->cpu = CPUS(cpu->cpuno);
     l->isilock = false;
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
@@ -245,7 +245,7 @@ unlock(Lock *l)
     if(l->p != up)
         print("unlock: up changed: pc %#p, acquired at pc %lux, lock p %#p, unlock up %#p\n", getcallerpc(&l), l->pc, l->p, up);
 
-    l->m = nil;
+    l->cpu = nil;
     l->key = 0;
     // for processor caches, to ensure the lock value is seen by other
     // processors so that if they were doing while(l->key) { ... } they
@@ -290,7 +290,7 @@ iunlock(Lock *l)
         print("iunlock while lo: pc %#p, held by %#lux\n", getcallerpc(&l), l->pc);
 
     sr = l->sr;
-    l->m = nil;
+    l->cpu = nil;
     l->key = 0;
     coherence();
     cpu->ilockdepth--;

@@ -30,7 +30,9 @@ static Xalloc   xlists;
 void
 xinit(void)
 {
-    int i, n, upages, kpages;
+    int i;
+    int nkpages;
+    int kpages;
     ulong maxpages;
     Confmem *m;
     Pallocmem *pm;
@@ -42,34 +44,37 @@ xinit(void)
 
     xlists.flist = xlists.hole;
 
-    upages = conf.upages;
-    kpages = conf.npage - upages;
+    kpages = conf.npage - conf.upages;
+
     pm = palloc.mem;
     for(i=0; i<nelem(conf.mem); i++){
         m = &conf.mem[i];
-        n = m->npage;
-        if(n > kpages)
-            n = kpages;
+        nkpages = m->npage;
+        if(nkpages > kpages)
+            nkpages = kpages; // will be zero once kpages has been filled
         /* don't try to use non-KADDR-able memory for kernel */
         maxpages = cankaddr(m->base)/BY2PG;
-        if(n > maxpages)
-            n = maxpages;
+        if(nkpages > maxpages)
+            nkpages = maxpages;
 
         /* first give to kernel */
-        if(n > 0){
+        if(nkpages > 0){
+            xhole(m->base, nkpages*BY2PG);
+            kpages -= nkpages;
+            /*s: [[xinit()]] nkpages kernel memory in m */
             m->kbase = (ulong)KADDR(m->base);
-            m->klimit = (ulong)KADDR(m->base+n*BY2PG);
-            xhole(m->base, n*BY2PG);
-            kpages -= n;
+            m->klimit = (ulong)KADDR(m->base+nkpages*BY2PG);
+            /*e: [[xinit()]] nkpages kernel memory in m */
         }
+
         /* if anything left over, give to user */
-        if(n < m->npage){
+        if(m->npage > nkpages){
             if(pm >= palloc.mem+nelem(palloc.mem)){
-                print("xinit: losing %lud pages\n", m->npage-n);
+                print("xinit: losing %lud pages\n", m->npage-nkpages);
                 continue;
             }
-            pm->base = m->base+n*BY2PG;
-            pm->npage = m->npage - n;
+            pm->base = m->base+nkpages*BY2PG;
+            pm->npage = m->npage - nkpages;
             pm++;
         }
     }
