@@ -86,12 +86,12 @@ xinit(void)
 //*****************************************************************************
 
 /*s: function xspanalloc */
-void*
+kern_addr3
 xspanalloc(ulong size, int align, ulong span)
 {
     ulong a, v, t;
-    a = (ulong)xalloc(size+align+span);
-    if(a == 0)
+    a = (kern_addr)xalloc(size+align+span);
+    if(a == nilptr)
         panic("xspanalloc: %lud %d %lux", size, align, span);
 
     if(span > 2) {
@@ -157,7 +157,7 @@ xallocz(ulong size, bool zero)
 /*e: function xallocz */
 
 /*s: function xalloc */
-void*
+kern_addr3
 xalloc(ulong size)
 {
     return xallocz(size, true);
@@ -175,7 +175,7 @@ xfree(kern_addr3 p)
         xsummary();
         panic("xfree(%#p) %#ux != %#lux", p, Magichole, x->magix);
     }
-    xhole(PADDR((uintptr)x), x->size);
+    xhole(PADDR((kern_addr)x), x->size);
 }
 /*e: function xfree */
 

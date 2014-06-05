@@ -2336,7 +2336,7 @@ static Xalloc   xlists;
 
 
 <<function xalloc>>=
-void*
+kern_addr3
 xalloc(ulong size)
 {
     return xallocz(size, true);
@@ -2427,7 +2427,7 @@ xfree(kern_addr3 p)
         xsummary();
         panic("xfree(%#p) %#ux != %#lux", p, Magichole, x->magix);
     }
-    xhole(PADDR((uintptr)x), x->size);
+    xhole(PADDR((kern_addr)x), x->size);
 }
 @
 
@@ -2534,12 +2534,12 @@ xmerge(void *vp, void *vq)
 
 %?? used by mmuwalk
 <<function xspanalloc>>=
-void*
+kern_addr3
 xspanalloc(ulong size, int align, ulong span)
 {
     ulong a, v, t;
-    a = (ulong)xalloc(size+align+span);
-    if(a == 0)
+    a = (kern_addr)xalloc(size+align+span);
+    if(a == nilptr)
         panic("xspanalloc: %lud %d %lux", size, align, span);
 
     if(span > 2) {
@@ -2952,6 +2952,12 @@ struct Palloc
 @
 % put Swapalloc here? pages cover swap space too? also
 % newpage() reference swapalloc.highwater
+
+<<global palloc>>=
+// Page allocator
+struct Palloc palloc;
+@
+
 
 <<[[Page]] extra fields>>=
 // list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
@@ -4227,6 +4233,11 @@ struct Swapalloc
 };
 @
 
+<<global swapalloc>>=
+// Swap allocator
+struct Swapalloc swapalloc;
+@
+
 
 <<[[Conf]] other fields>>=
 ulong nswap;    /* number of swap pages */
@@ -4236,6 +4247,10 @@ int nswppo;   /* max # of pageouts per segment pass */
 <<global iolist>>=
 // array<ref<Page>>, xalloc'ed in swapinit, size = Conf.nswppo
 static  Page    **iolist;
+@
+
+<<global swapimage>>=
+KImage  swapimage;
 @
 
 
@@ -4254,7 +4269,7 @@ newswap(void)
     }
 
     look = memchr(swapalloc.last, 0, swapalloc.top-swapalloc.last);
-    if(look == 0)
+    if(look == nil)
         panic("inconsistent swap");
 
     *look = 1;
@@ -4837,10 +4852,12 @@ struct KImage
   
     // extra
     Ref;
+
     // list<ref<Kimage>> of Imagealloc.free?
     KImage  *next; /* Free list */ 
     // hash<?, list<ref<Kimage>>> Imagealloc.hash?
     KImage  *hash; /* Qid hash chains */ 
+
     // option<ref<Segment>>?
     Segment *s;     /* TEXT segment for image if running */
 };

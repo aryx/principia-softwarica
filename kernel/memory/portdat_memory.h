@@ -89,10 +89,12 @@ struct KImage
   
     // extra
     Ref;
+
     // list<ref<Kimage>> of Imagealloc.free?
     KImage  *next; /* Free list */ 
     // hash<?, list<ref<Kimage>>> Imagealloc.hash?
     KImage  *hash; /* Qid hash chains */ 
+
     // option<ref<Segment>>?
     Segment *s;     /* TEXT segment for image if running */
 };
@@ -379,13 +381,17 @@ extern  KImage  swapimage;
 struct Swapalloc
 {
     int free;     /* currently free swap pages */
+
     uchar*  swmap;      /* Base of swap map in memory */
+
     uchar*  alloc;      /* Round robin allocator */
     uchar*  last;     /* Speed swap allocation */
     uchar*  top;      /* Top of swap map */
-    Rendez r;      /* Pager kproc idle sleep */ // needpages()
+
     ulong highwater;    /* Pager start threshold */
     ulong headroom;   /* Space pager frees under highwater */
+
+    Rendez r;      /* Pager kproc idle sleep */ // needpages()
   
     //extra
     Lock;       /* Free map lock */

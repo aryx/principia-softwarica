@@ -255,12 +255,15 @@ confinit(void)
     for(i=0; i<nelem(conf.mem); i++)
         conf.npage += conf.mem[i].npage;
 
+    // 1 process per 250Ko of available memory
     conf.nproc = 100 + ((conf.npage*BY2PG)/MB)*5;
     if(cpuserver)
         conf.nproc *= 3;
     if(conf.nproc > 2000)
         conf.nproc = 2000;
+
     conf.nimage = 200;
+
     conf.nswap = conf.nproc*80;
     conf.nswppo = 4096;
 
@@ -301,10 +304,9 @@ confinit(void)
 
     /*
      * can't go past the end of virtual memory
-     * (ulong)-KZERO is 2^32 - KZERO
      */
-    if(kpages > ((ulong)-KZERO)/BY2PG)
-        kpages = ((ulong)-KZERO)/BY2PG;
+    if(kpages > MAXKPA/BY2PG)
+        kpages = MAXKPA/BY2PG;
 
     conf.upages = conf.npage - kpages;
     conf.ialloc = (kpages/2)*BY2PG;
@@ -319,7 +321,7 @@ confinit(void)
             + conf.nproc*sizeof(Proc)
             + conf.nimage*sizeof(KImage)
             + conf.nswap
-            + conf.nswppo*sizeof(Page);
+            + conf.nswppo*sizeof(Page); // BUG sizeof(Page*)
     mainmem->maxsize = kmem;
     if(!cpuserver){
         /*
@@ -931,9 +933,9 @@ main(void)
     cpuidprint();
 
     meminit(); // setup conf.mem memory banks and setup more PDEs and PTEs
-    confinit(); // setup conf
+    confinit(); // setup conf (and mainmem->maxsize, imagmem->maxsize)
     archinit(); // setup arch
-    xinit(); // setup xalloc memory allocator
+    xinit(); // setup xlists for xalloc() and palloc.mem for pageinit()
     if(i8237alloc != nil)
             i8237alloc(); // setup dma
 

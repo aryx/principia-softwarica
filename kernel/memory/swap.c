@@ -18,6 +18,7 @@ static void pager(void*);
 /*e: swap.c forward decl */
 
 /*s: global iolist */
+// array<ref<Page>>, xalloc'ed in swapinit, size = Conf.nswppo
 static  Page    **iolist;
 /*e: global iolist */
 /*s: globa ioptr */
@@ -71,7 +72,7 @@ newswap(void)
     }
 
     look = memchr(swapalloc.last, 0, swapalloc.top-swapalloc.last);
-    if(look == 0)
+    if(look == nil)
         panic("inconsistent swap");
 
     *look = 1;
