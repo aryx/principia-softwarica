@@ -45,7 +45,7 @@ Page*   newpage(int, Segment **, ulong);
 int   duppage(Page*);
 void checkpagerefs(void);
 //void    portcountpagerefs(ulong*, int);
-//int   ispages(void*);
+//int   hasfreepages(void*);
 
 // swap.c
 void    swapinit(void);

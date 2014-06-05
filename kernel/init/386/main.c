@@ -300,7 +300,7 @@ confinit(void)
          * 4MB on the first Image chunk allocation.
          */
         if(conf.npage*BY2PG < 16*MB)
-            imagmem->minarena = 4*1024*1024;
+            imagmem->minarena = 4*MB;
     }
 
     /*
@@ -938,7 +938,7 @@ main(void)
     archinit(); // setup arch
     xinit(); // setup xlists for xalloc() and palloc.mem for pageinit()
     if(i8237alloc != nil)
-            i8237alloc(); // setup dma
+            i8237alloc(); // setup DMA, need low memory below 16MB
 
     trapinit();
     mmuinit();

@@ -6,6 +6,10 @@
 /*
  * Sizes
  */
+//defined in dat.h misc_constants
+//#define KB      1024
+//#define MB      (KB*KB)
+
 #define BI2BY   8     /* bits per byte */
 #define BI2WD   32      /* bits per word */
 

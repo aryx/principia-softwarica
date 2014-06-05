@@ -899,7 +899,7 @@ procinit(void)
     if(procalloc.free == nil){
         xsummary();
         panic("cannot allocate %lud procs (%ludMB)\n", 
-                      conf.nproc, conf.nproc*sizeof(Proc)/(1024*1024));
+                      conf.nproc, conf.nproc*sizeof(Proc)/MB);
     }
     procalloc.arena = procalloc.free;
 

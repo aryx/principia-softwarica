@@ -290,13 +290,16 @@ procgen(Chan *c, char *name, Dirtab *tab, int, int s, Dir *dp)
     case Qwait:
         len = p->nwait; /* incorrect size, but >0 means there's something to read */
         break;
-    case Qprofile:
-        q = p->seg[TSEG];
-        if(q && q->profile) {
-            len = (q->top-q->base)>>LRESPROF;
-            len *= sizeof(*q->profile);
-        }
-        break;
+
+    /*s: [[procgen()]] Qprofile case */
+        case Qprofile:
+            q = p->seg[TSEG];
+            if(q && q->profile) {
+                len = (q->top-q->base)>>LRESPROF;
+                len *= sizeof(*q->profile);
+            }
+            break;
+    /*e: [[procgen()]] Qprofile case */
     }
 
     mkqid(&qid, path|tab->qid.path, c->qid.vers, QTFILE);
@@ -841,18 +844,20 @@ procread(Chan *c, void *va, long n, vlong off)
             error(Ebadarg);
     /*e: [[procread()]] Qmem case */
 
-    case Qprofile:
-        s = p->seg[TSEG];
-        if(s == 0 || s->profile == 0)
-            error("profile is off");
-        i = (s->top-s->base)>>LRESPROF;
-        i *= sizeof(*s->profile);
-        if(offset >= i)
-            return 0;
-        if(offset+n > i)
-            n = i - offset;
-        memmove(a, ((char*)s->profile)+offset, n);
-        return n;
+    /*s: [[procread()]] Qprofile case */
+        case Qprofile:
+            s = p->seg[TSEG];
+            if(s == 0 || s->profile == nil)
+                error("profile is off");
+            i = (s->top-s->base)>>LRESPROF;
+            i *= sizeof(*s->profile);
+            if(offset >= i)
+                return 0;
+            if(offset+n > i)
+                n = i - offset;
+            memmove(a, ((char*)s->profile)+offset, n);
+            return n;
+    /*e: [[procread()]] Qprofile case */
 
     case Qnote:
         qlock(&p->debug);
@@ -1527,17 +1532,19 @@ procctlreq(Proc *p, char *va, int n)
             break;
     /*e: [[procctlreq()]] CMevent case */
 
-    case CMprofile:
-        s = p->seg[TSEG];
-        if(s == 0 || (s->type&SG_TYPE) != SG_TEXT)
-            error(Ebadctl);
-        if(s->profile != 0)
-            free(s->profile);
-        npc = (s->top-s->base)>>LRESPROF;
-        s->profile = malloc(npc*sizeof(*s->profile));
-        if(s->profile == 0)
-            error(Enomem);
-        break;
+    /*s: [[procctlreq()]] CMprofile case */
+        case CMprofile:
+            s = p->seg[TSEG];
+            if(s == nil || (s->type&SG_TYPE) != SG_TEXT)
+                error(Ebadctl);
+            if(s->profile != nil)
+                free(s->profile);
+            npc = (s->top-s->base)>>LRESPROF;
+            s->profile = malloc(npc*sizeof(*s->profile));
+            if(s->profile == nil)
+                error(Enomem);
+            break;
+    /*e: [[procctlreq()]] CMprofile case */
 
 
     /*s: [[procctlreq()]] CMkill case */

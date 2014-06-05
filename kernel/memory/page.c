@@ -9,7 +9,7 @@
 /*e: kernel basic includes */
 
 /*s: page.c forward decl */
-int ispages(void*);
+int hasfreepages(void*);
 void portcountpagerefs(ulong*, int);
 /*e: page.c forward decl */
 
@@ -32,7 +32,7 @@ pageinit(void)
         np += pm->npage;
     }
     palloc.pages = xalloc(np*sizeof(Page));
-    if(palloc.pages == 0)
+    if(palloc.pages == nil)
         panic("pageinit");
 
     palloc.head = palloc.pages;
@@ -51,9 +51,11 @@ pageinit(void)
     palloc.head->prev = nil;
     palloc.tail->next = nil;
 
-    palloc.user = p - palloc.pages; // TODO? should be np too no?
-    pkb = palloc.user*BY2PG/1024;
-    vkb = pkb + (conf.nswap*BY2PG)/1024;
+    palloc.user = p - palloc.pages;
+    assert(palloc.user == np);
+
+    pkb = palloc.user*BY2PG/KB;
+    vkb = pkb + (conf.nswap*BY2PG)/KB;
 
     /* Paging numbers */
     swapalloc.highwater = (palloc.user*5)/100;
@@ -152,45 +154,47 @@ newpage(bool clear, Segment **s, virt_addr va)
     bool dontalloc;
 
     lock(&palloc);
-    hw = swapalloc.highwater;
-    for(;;) {
-        if(palloc.freecount > hw)
-            break;
-        if(up->kp && palloc.freecount > 0)
-            break;
 
-        // no free pages, need to wait
+    /*s: [[newpage()]] loop waiting freecount > highwater */
+        hw = swapalloc.highwater;
+        for(;;) {
+            if(palloc.freecount > hw)
+                break;
+            if(up->kp && palloc.freecount > 0)
+                break;
 
-        unlock(&palloc);
-        dontalloc = false;
-        if(s && *s) {
-            qunlock(&((*s)->lk));
-            *s = nil;// !!
-            dontalloc = true;
+            // in highwater, not so many free pages, need to wait
+
+            unlock(&palloc);
+            dontalloc = false;
+            if(s && *s) {
+                qunlock(&((*s)->lk));
+                *s = nil;// !!
+                dontalloc = true;
+            }
+            qlock(&palloc.pwait);   /* Hold memory requesters here */
+
+            while(waserror())   /* Ignore interrupts */
+                ;
+
+            kickpager();
+            tsleep(&palloc.freememr, hasfreepages, 0, 1000);
+
+            poperror();
+            qunlock(&palloc.pwait);
+
+            /*
+             * If called from fault and we lost the segment from
+             * underneath don't waste time allocating and freeing
+             * a page. Fault will call newpage again when it has
+             * reacquired the segment locks
+             */
+            if(dontalloc)
+                return nil;
+
+            lock(&palloc);
         }
-        qlock(&palloc.pwait);   /* Hold memory requesters here */
-
-        while(waserror())   /* Ignore interrupts */
-            ;
-
-        kickpager();
-        tsleep(&palloc.freememr, ispages, 0, 1000);
-
-        poperror();
-
-        qunlock(&palloc.pwait);
-
-        /*
-         * If called from fault and we lost the segment from
-         * underneath don't waste time allocating and freeing
-         * a page. Fault will call newpage again when it has
-         * reacquired the segment locks
-         */
-        if(dontalloc)
-            return nil;
-
-        lock(&palloc);
-    }
+    /*e: [[newpage()]] loop waiting freecount > highwater */
 
     p = palloc.head;
     pageunchain(p);
@@ -200,7 +204,7 @@ newpage(bool clear, Segment **s, virt_addr va)
         panic("newpage: p->ref %d != 0", p->ref);
 
     uncachepage(p);
-    p->ref++;
+    p->ref = 1;
     p->va = va;
     p->modref = PG_NOTHING;
     unlock(p);
@@ -215,13 +219,13 @@ newpage(bool clear, Segment **s, virt_addr va)
 }
 /*e: constructor newpage */
 
-/*s: function ispages */
+/*s: function hasfreepages */
 int
-ispages(void*)
+hasfreepages(void*)
 {
     return palloc.freecount >= swapalloc.highwater;
 }
-/*e: function ispages */
+/*e: function hasfreepages */
 
 /*s: destructor putpage */
 void

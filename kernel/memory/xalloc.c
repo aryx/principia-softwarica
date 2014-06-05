@@ -107,7 +107,7 @@ xspanalloc(ulong size, int align, ulong span)
     if(align > 1)
         v = (v + align) & ~(align-1);
 
-    return (void*)v;
+    return (kern_addr3)v;
 }
 /*e: function xspanalloc */
 
@@ -179,7 +179,7 @@ xfree(kern_addr3 p)
 
 /*s: function xmerge */
 bool
-xmerge(void *vp, void *vq)
+xmerge(kern_addr3 vp, kern_addr3 vq)
 {
     Xhdr *p, *q;
 

@@ -52,10 +52,10 @@ enum {
 
 /*s: function setmalloctag */
 void
-setmalloctag(void *v, ulong pc)
+setmalloctag(kern_addr3 v, kern_addr pc)
 {
-    ulong *u;
-    USED(v, pc);
+    kern_addr2 u;
+    USED(v, pc); //??
     if(Npadlong <= MallocOffset || v == nil)
         return;
     u = v;
@@ -65,9 +65,9 @@ setmalloctag(void *v, ulong pc)
 
 /*s: function setrealloctag */
 void
-setrealloctag(void *v, ulong pc)
+setrealloctag(kern_addr3 v, kern_addr pc)
 {
-    ulong *u;
+    kern_addr2 u;
     USED(v, pc);
     if(Npadlong <= ReallocOffset || v == nil)
         return;
@@ -82,10 +82,10 @@ setrealloctag(void *v, ulong pc)
 
 /*s: function smalloc */
 // non failing malloc! will repeat until it can
-void*
+kern_addr3
 smalloc(ulong size)
 {
-    void *v;
+    kern_addr3 v;
 
     for(;;) {
         v = poolalloc(mainmem, size + Npadlong*sizeof(ulong));
@@ -103,10 +103,10 @@ smalloc(ulong size)
 /*e: function smalloc */
 
 /*s: function malloc */
-void*
+kern_addr3
 malloc(ulong size)
 {
-    void *v;
+    kern_addr3 v;
 
     v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
     if(v == nil)
@@ -122,10 +122,10 @@ malloc(ulong size)
 /*e: function malloc */
 
 /*s: function mallocz */
-void*
+kern_addr3
 mallocz(ulong size, bool clr)
 {
-    void *v;
+    kern_addr3 v;
 
     v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
     if(Npadlong && v != nil){
@@ -140,10 +140,10 @@ mallocz(ulong size, bool clr)
 /*e: function mallocz */
 
 /*s: function mallocalign */
-void*
+kern_addr3
 mallocalign(ulong size, ulong align, long offset, ulong span)
 {
-    void *v;
+    kern_addr3 v;
 
     v = poolallocalign(mainmem, size+Npadlong*sizeof(ulong), align, 
                            offset-Npadlong*sizeof(ulong), span);
@@ -160,7 +160,7 @@ mallocalign(ulong size, ulong align, long offset, ulong span)
 
 /*s: function free */
 void
-free(void *v)
+free(kern_addr3 v)
 {
     if(v != nil)
         poolfree(mainmem, (ulong*)v-Npadlong);
@@ -168,10 +168,10 @@ free(void *v)
 /*e: function free */
 
 /*s: function realloc */
-void*
-realloc(void *v, ulong size)
+kern_addr3
+realloc(kern_addr3 v, ulong size)
 {
-    void *nv;
+    kern_addr3 nv;
 
     if(v != nil)
         v = (ulong*)v-Npadlong;

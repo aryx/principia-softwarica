@@ -22,7 +22,7 @@ enum modref
 
 /*s: struct Page */
 // Page metadata. We will allocate as many Page as to cover all physical memory
-// and swap "address space". xalloc'ed in Palloc.pages
+// available for the user. xalloc'ed in Palloc.pages
 struct Page
 {
     phys_addr pa;     /* Physical address in memory */
@@ -171,14 +171,16 @@ struct Segment
     Pagetable *smallpagedir[SMALLPAGEDIRSIZE];
     int pagedirsize; // nelem(pagedir)
   
-    KImage  *image;   /* text in file attached to this segment */
-    ulong fstart;   /* start address in file for demand load */
-    ulong flen;   /* length of segment in file */
-
     /*s: [[Segment]] other fields */
-        ulong*  profile;  /* Tick profile area */
         ulong mark;   /* portcountrefs */
-        ushort  steal;    /* Page stealer lock */
+    /*x: [[Segment]] other fields */
+    ushort  steal;    /* Page stealer lock */
+    /*x: [[Segment]] other fields */
+        KImage  *image;   /* text in file attached to this segment */
+        ulong fstart;   /* start address in file for demand load */
+        ulong flen;   /* length of segment in file */
+    /*x: [[Segment]] other fields */
+    ulong*  profile;  /* Tick profile area */
     /*x: [[Segment]] other fields */
     Physseg *pseg;
     /*e: [[Segment]] other fields */
@@ -215,7 +217,7 @@ struct Hole
     ulong size; // top - addr
     // extra
     /*s: [[Hole]] extra fields */
-    Hole* next; // list<ref<Hole>> of Xalloc.flist or Xalloc.table
+    Hole* next; // list<ref<Hole>> of Xalloc.sorted_holes or Xalloc.unused_slots
     /*e: [[Hole]] extra fields */
 };
 /*e: struct Hole */
@@ -242,10 +244,10 @@ struct Xalloc
     // array<Hole> where each Hole is linked to another hole
     Hole  hole[Nhole];
   
-    // list<ref<Hole>> (next = Hole.link) list of free hole entries (addr=top=size=0)
+    // list<ref<Hole>> (next = Hole.next) list of free hole entries (addr=top=size=0)
     Hole* unused_slots; 
 
-    // list<ref<Hole>> (next = Hole.link) memory holes, sorted by their top addr
+    // list<ref<Hole>> (next = Hole.next) memory holes, sorted by their top addr
     Hole* sorted_holes; 
   
     // extra
@@ -316,11 +318,11 @@ enum
 // Page Allocator (singleton)
 struct Palloc
 {
-    Pallocmem mem[4]; // Conf.mem - memory allocated by the kernel
+    Pallocmem mem[4]; // = Conf.mem minus memory allocated for the kernel
     // sum of mem.npage (which should be conf.upages)
     ulong user;     /* how many user pages */
   
-    // array<Page>, xalloc'ed in pageinit() (huge) cover physical+swap space???
+    // array<Page>, xalloc'ed in pageinit(), huge, cover physical user space
     Page  *pages; /* array of all pages */ 
   
     // list<ref<Page>> (next = Page.next), list of free pages
@@ -328,7 +330,6 @@ struct Palloc
     // list<ref<Page>> (prev = Page.prev), list of free pages (backward)
     Page  *tail;      /* least recently used */
 
-    //Does it cover also the pages on the swap?
     ulong freecount;    /* how many pages on free list now */
 
     /*s: [[Palloc]] other fields */
@@ -339,8 +340,10 @@ struct Palloc
   
     // extra
     Lock; // LOCK ORDERING: always do lock(&palloc); lock(&page)!!
-    Rendez  freememr; /* Sleep for free mem */ // ispages()
+    /*s: [[Palloc]] extra fields */
+    Rendez  freememr; /* Sleep for free mem */ // hasfreepages()
     QLock pwait; /* Queue of procs waiting for memory */
+    /*e: [[Palloc]] extra fields */
 };
 /*e: struct Palloc */
 extern  Palloc  palloc;
@@ -389,13 +392,12 @@ struct Swapalloc
     uchar*  last;     /* Speed swap allocation */
     uchar*  top;      /* Top of swap map */
 
-    ulong highwater;    /* Pager start threshold */
-    ulong headroom;   /* Space pager frees under highwater */
+    ulong highwater;    /* Pager start threshold */ // = 5% conf.upages
+    ulong headroom;   /* Space pager frees under highwater */ // = 1.25*hw
 
-    Rendez r;      /* Pager kproc idle sleep */ // needpages()
-  
     //extra
     Lock;       /* Free map lock */
+    Rendez r;      /* Pager kproc idle sleep */ // needpages()
 };
 /*e: struct Swapalloc */
 extern struct Swapalloc swapalloc;
