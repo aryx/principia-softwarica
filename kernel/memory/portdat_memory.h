@@ -327,10 +327,12 @@ struct Palloc
 
     //Does it cover also the pages on the swap?
     ulong freecount;    /* how many pages on free list now */
-  
-    // hash<?pghash(Page.daddr?), list<ref<Page>> (next = Page.hash)>
-    Page  *hash[PGHSIZE];
-    Lock  hashlock;
+
+    /*s: [[Palloc]] other fields */
+        // hash<?pghash(Page.daddr?), list<ref<Page>> (next = Page.hash)>
+        Page  *hash[PGHSIZE];
+        Lock  hashlock;
+    /*e: [[Palloc]] other fields */
   
     // extra
     Lock; // LOCK ORDERING: always do lock(&palloc); lock(&page)!!

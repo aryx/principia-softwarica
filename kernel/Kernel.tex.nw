@@ -2941,10 +2941,8 @@ struct Palloc
 
     //Does it cover also the pages on the swap?
     ulong freecount;    /* how many pages on free list now */
-  
-    // hash<?pghash(Page.daddr?), list<ref<Page>> (next = Page.hash)>
-    Page  *hash[PGHSIZE];
-    Lock  hashlock;
+
+    <<[[Palloc]] other fields>>
   
     // extra
     Lock; // LOCK ORDERING: always do lock(&palloc); lock(&page)!!
@@ -2955,6 +2953,14 @@ struct Palloc
 % put Swapalloc here? pages cover swap space too? also
 % newpage() reference swapalloc.highwater
 
+<<[[Page]] extra fields>>=
+// list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
+Page  *next; /* Lru free list */ 
+// list<ref<Page>> Palloc.tail
+Page  *prev; 
+@
+
+
 <<constant PG_ONSWAP>>=
 #define PG_ONSWAP 1
 @
@@ -2964,17 +2970,6 @@ struct Palloc
 
 
 
-<<[[Page]] extra fields>>=
-// list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused
-Page  *next; /* Lru free list */ 
-// list<ref<Page>> Palloc.tail
-Page  *prev; 
-@
-
-<<[[Page]] extra fields>>=
-// hash<daddr, list<ref<Page>>> Palloc.hash
-Page  *hash; /* Image hash chains */ 
-@
 
 
 
@@ -3301,6 +3296,18 @@ enum
 };
 #define pghash(daddr) palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
 @
+
+<<[[Palloc]] other fields>>=
+    // hash<?pghash(Page.daddr?), list<ref<Page>> (next = Page.hash)>
+    Page  *hash[PGHSIZE];
+    Lock  hashlock;
+@
+
+<<[[Page]] extra fields>>=
+// hash<daddr, list<ref<Page>>> Palloc.hash
+Page  *hash; /* Image hash chains */ 
+@
+
 
 
 
@@ -4544,6 +4551,10 @@ ibrk(ulong addr, int seg)
     return 0;
 }
 @
+
+
+
+
 
 \chapter{Processes}
 \minitoc
@@ -11446,7 +11457,7 @@ xinit(void)
         /* if anything left over, give to user */
         if(m->npage > nkpages){
             if(pm >= palloc.mem+nelem(palloc.mem)){
-                print("xinit: losing %lud pages\n", m->npage-n);
+                print("xinit: losing %lud pages\n", m->npage-nkpages);
                 continue;
             }
             pm->base = m->base+nkpages*BY2PG;
