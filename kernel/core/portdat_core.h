@@ -30,6 +30,7 @@ struct Conf
     ulong nproc;    /* processes */
     /*s: [[Conf]] other fields */
     ulong nswap;    /* number of swap pages */
+    /*x: [[Conf]] other fields */
     int nswppo;   /* max # of pageouts per segment pass */
     /*x: [[Conf]] other fields */
     bool copymode; /* 0 is copy on write, 1 is copy on reference */

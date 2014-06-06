@@ -68,14 +68,14 @@ newswap(void)
 
     if(swapalloc.free == 0){
         unlock(&swapalloc);
-        return ~0;
+        return ~0; //???
     }
 
-    look = memchr(swapalloc.last, 0, swapalloc.top-swapalloc.last);
+    look = memchr(swapalloc.last, false, swapalloc.top-swapalloc.last);
     if(look == nil)
         panic("inconsistent swap");
 
-    *look = 1;
+    *look = true;
     swapalloc.last = look;
     swapalloc.free--;
     unlock(&swapalloc);

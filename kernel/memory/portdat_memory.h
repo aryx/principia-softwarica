@@ -128,10 +128,14 @@ enum segtype
 /*e: constant PG_ONSWAP */
 
 /*s: function onswap */
-#define onswap(s) (((ulong)s)&PG_ONSWAP)
+#define onswap(s) (((kern_addr)s)&PG_ONSWAP)
 /*e: function onswap */
+/*s: function pagedout */
 #define pagedout(s) (((ulong)s)==0 || onswap(s))
+/*e: function pagedout */
+/*s: function swapaddr */
 #define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
+/*e: function swapaddr */
 
 #define SEGMAXSIZE  (PAGEDIRSIZE*PAGETABMAPMEM)
 
@@ -144,7 +148,6 @@ struct Physseg
     ulong size;     /* Maximum segment size in pages */
 };
 /*e: struct Physseg */
-
 
 enum
 {
@@ -175,9 +178,9 @@ struct Segment
     /*s: [[Segment]] other fields */
     ushort  steal;    /* Page stealer lock */
     /*x: [[Segment]] other fields */
-        KImage  *image;   /* text in file attached to this segment */
-        ulong fstart;   /* start address in file for demand load */
-        ulong flen;   /* length of segment in file */
+    KImage  *image;   /* text in file attached to this segment */
+    ulong fstart;   /* start address in file for demand load */
+    ulong flen;   /* length of segment in file */
     /*x: [[Segment]] other fields */
     kern_addr2  profile;  /* Tick profile area */ // for TSEG only
     /*x: [[Segment]] other fields */
@@ -192,7 +195,6 @@ struct Segment
     Sema  sema;
 };
 /*e: struct Segment */
-
 
 //*****************************************************************************
 // Internal to memory/
