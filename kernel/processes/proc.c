@@ -715,14 +715,14 @@ found:
 int
 canpage(Proc *p)
 {
-    int ok = 0;
+    bool ok = false;
 
     splhi();
     lock(runq);
     /* Only reliable way to see if we are Running */
     if(p->cpu == nil) {
         p->newtlb = true;
-        ok = 1;
+        ok = true;
     }
     unlock(runq);
     spllo();
@@ -1607,7 +1607,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     memmove(p->note, up->note, sizeof(p->note));
     p->nnote = up->nnote;
-    p->notified = 0;
+    p->notified = false;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = nil;
@@ -1619,7 +1619,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     kstrdup(&p->user, eve);
     kstrdup(&p->text, name);
-    if(kpgrp == 0)
+    if(kpgrp == nil)
         kpgrp = newpgrp();
     p->pgrp = kpgrp;
     incref(kpgrp);

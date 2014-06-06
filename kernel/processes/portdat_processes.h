@@ -442,9 +442,9 @@ struct Proc
     Segment *seg[NSEG];
     QLock seglock;  /* locked whenever seg[] changes */
     /*x: [[Proc]] memory fields */
-    bool noswap;   /* process is not swappable */
-    /*x: [[Proc]] memory fields */
     bool newtlb;   /* Pager has changed my pte's, I must flush */
+    /*x: [[Proc]] memory fields */
+    bool noswap;   /* process is not swappable */
     /*e: [[Proc]] memory fields */
 
     struct ArchProcMMU;
@@ -506,7 +506,7 @@ struct Proc
     short nnote;
 
     int (*notify)(void*, char*);
-    short notified; /* sysnoted is due */
+    bool_ushort notified; /* sysnoted is due */
 
     ulong noteid;   /* Equivalent of note group */
 

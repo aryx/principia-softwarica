@@ -1010,24 +1010,26 @@ consread(Chan *c, void *buf, long n, vlong off)
         poperror();
         return n;
 
-    case Qswap:
-        snprint(tmp, sizeof tmp,
-            "%lud memory\n"
-            "%d pagesize\n"
-            "%lud kernel\n"
-            "%lud/%lud user\n"
-            "%lud/%lud swap\n"
-            "%lud/%lud kernel malloc\n"
-            "%lud/%lud kernel draw\n",
-            conf.npage*BY2PG,
-            BY2PG,
-            conf.npage-conf.upages,
-            palloc.user-palloc.freecount, palloc.user,
-            conf.nswap-swapalloc.free, conf.nswap,
-            mainmem->cursize, mainmem->maxsize,
-            imagmem->cursize, imagmem->maxsize);
+    /*s: [[consread()]] Qswap case */
+        case Qswap:
+            snprint(tmp, sizeof tmp,
+                "%lud memory\n"
+                "%d pagesize\n"
+                "%lud kernel\n"
+                "%lud/%lud user\n"
+                "%lud/%lud swap\n"
+                "%lud/%lud kernel malloc\n"
+                "%lud/%lud kernel draw\n",
+                conf.npage*BY2PG,
+                BY2PG,
+                conf.npage-conf.upages,
+                palloc.user-palloc.freecount, palloc.user,
+                conf.nswap-swapalloc.free, conf.nswap,
+                mainmem->cursize, mainmem->maxsize,
+                imagmem->cursize, imagmem->maxsize);
 
-        return readstr((ulong)offset, buf, n, tmp);
+            return readstr((ulong)offset, buf, n, tmp);
+    /*e: [[consread()]] Qswap case */
 
     case Qsysname:
         if(sysname == nil)
@@ -1196,24 +1198,26 @@ conswrite(Chan *c, void *va, long n, vlong off)
         }
         break;
 
-    case Qswap:
-        if(n >= sizeof buf)
-            error(Egreg);
-        memmove(buf, va, n);    /* so we can NUL-terminate */
-        buf[n] = 0;
-        /* start a pager if not already started */
-        if(strncmp(buf, "start", 5) == 0){
-            kickpager();
+    /*s: [[conswrite()]] Qswap case */
+        case Qswap:
+            if(n >= sizeof buf)
+                error(Egreg);
+            memmove(buf, va, n);    /* so we can NUL-terminate */
+            buf[n] = 0;
+            /* start a pager if not already started */
+            if(strncmp(buf, "start", 5) == 0){
+                kickpager();
+                break;
+            }
+            if(!iseve())
+                error(Eperm);
+            if(buf[0]<'0' || '9'<buf[0])
+                error(Ebadarg);
+            fd = strtoul(buf, 0, 0);
+            swc = fdtochan(fd, -1, 1, 1);
+            setswapchan(swc);
             break;
-        }
-        if(!iseve())
-            error(Eperm);
-        if(buf[0]<'0' || '9'<buf[0])
-            error(Ebadarg);
-        fd = strtoul(buf, 0, 0);
-        swc = fdtochan(fd, -1, 1, 1);
-        setswapchan(swc);
-        break;
+    /*e: [[conswrite()]] Qswap case */
 
     case Qsysname:
         if(offset != 0)

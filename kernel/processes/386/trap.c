@@ -959,7 +959,7 @@ if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
     *(ulong*)(sp+0*BY2WD) = 0;          /* arg 0 is pc */
     ureg->usp = sp;
     ureg->pc = (ulong)up->notify;
-    up->notified = 1;
+    up->notified = true;
     up->nnote--;
     memmove(&up->lastnote, &up->note[0], sizeof(Note));
     memmove(&up->note[0], &up->note[1], up->nnote*sizeof(Note));
@@ -986,7 +986,7 @@ noted(Ureg* ureg, ulong arg0)
         pprint("call to noted() when not notified\n");
         pexit("Suicide", false);
     }
-    up->notified = 0;
+    up->notified = false;
 
     nureg = up->ureg;   /* pointer to user returned Ureg struct */
 
@@ -1134,7 +1134,6 @@ linkproc(void)
     up->kpfun(up->kparg);
     // should never reach this place?? kernel processes are supposed
     // to run forever??
-
     pexit("kproc dying", false); 
 }
 /*e: function linkproc */
@@ -1143,6 +1142,9 @@ linkproc(void)
 void
 kprocchild(Proc* p, void (*func)(void*), void* arg)
 {
+    p->kpfun = func;
+    p->kparg = arg;
+
     /*
      * gotolabel() needs a word on the stack in
      * which to place the return PC used to jump
@@ -1150,9 +1152,6 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
      */
     p->sched.pc = (ulong)linkproc;
     p->sched.sp = (ulong)p->kstack+KSTACK-BY2WD;
-
-    p->kpfun = func;
-    p->kparg = arg;
 }
 /*e: function kprocchild */
 

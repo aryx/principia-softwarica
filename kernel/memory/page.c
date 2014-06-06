@@ -61,6 +61,7 @@ pageinit(void)
     swapalloc.highwater = (palloc.user*5)/100;
     swapalloc.headroom = swapalloc.highwater + (swapalloc.highwater/4);
 
+    // diagnostic
     m = 0;
     for(i=0; i<nelem(conf.mem); i++)
         if(conf.mem[i].npage)

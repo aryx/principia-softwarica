@@ -969,8 +969,8 @@ main(void)
     chandevreset();
     cgapost(0xcd); // 0xcd, for chandev :)
 
-    pageinit();
-    swapinit();
+    pageinit(); // setup palloc.pages and swapalloc.highwater
+    swapinit(); // setup swapalloc
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();

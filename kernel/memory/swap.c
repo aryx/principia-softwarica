@@ -18,15 +18,18 @@ static void pager(void*);
 /*e: swap.c forward decl */
 
 /*s: global iolist */
-// array<ref<Page>>, xalloc'ed in swapinit, size = Conf.nswppo
+// array<ref<Page>>, xalloc'ed in swapinit(), size = Conf.nswppo
 static  Page    **iolist;
 /*e: global iolist */
-/*s: globa ioptr */
+/*s: global ioptr */
+// index in iolist
 static  int ioptr;
-/*e: globa ioptr */
+/*e: global ioptr */
 
+/*s: global genxxx */
 static  ulong   genage, genclock, gencount;
 static  uvlong  gensum;
+/*e: global genxxx */
 
 /*s: function gentick */
 static void
@@ -71,15 +74,15 @@ newswap(void)
         return ~0; //???
     }
 
-    look = memchr(swapalloc.last, false, swapalloc.top-swapalloc.last);
+    look = memchr(swapalloc.last, 0, swapalloc.top-swapalloc.last);
     if(look == nil)
-        panic("inconsistent swap");
+        panic("inconsistent swap"); // swapalloc.free != 0, should find a page
 
-    *look = true;
+    *look = 1;
     swapalloc.last = look;
     swapalloc.free--;
     unlock(&swapalloc);
-    return (look-swapalloc.swmap) * BY2PG;
+    return (look-swapalloc.swmap) * BY2PG; // offset in swapfile
 }
 /*e: function newswap */
 
@@ -153,7 +156,7 @@ pager(void *junk)
 loop:
     up->psstate = "Idle";
     wakeup(&palloc.freememr);
-    sleep(&swapalloc.r, needpages, 0);
+    sleep(&swapalloc.r, needpages, nil);
 
     while(needpages(junk)) {
         if(swapimage.c) {
@@ -177,8 +180,6 @@ loop:
 
                 if(s = p->seg[i]) {
                     switch(s->type&SG_TYPE) {
-                    default:
-                        break;
                     case SG_TEXT:
                         pageout(p, s);
                         break;
@@ -192,6 +193,8 @@ loop:
                             up->psstate = "I/O";
                             executeio();
                         }
+                        break;
+                    default:
                         break;
                     }
                 }
@@ -217,7 +220,7 @@ pageout(Proc *p, Segment *s)
 {
     int type, i, size;
     ulong age;
-    Pagetable *l;
+    Pagetable *pt;
     Page **pg, *entry;
 
     if(!canqlock(&s->lk))   /* We cannot afford to wait, we will surely deadlock */
@@ -244,18 +247,19 @@ pageout(Proc *p, Segment *s)
     type = s->type&SG_TYPE;
     size = s->pagedirsize;
     for(i = 0; i < size; i++) {
-        l = s->pagedir[i];
-        if(l == nil)
+        pt = s->pagedir[i];
+        if(pt == nil)
             continue;
-        for(pg = l->first; pg < l->last; pg++) {
+        for(pg = pt->first; pg < pt->last; pg++) {
             entry = *pg;
-            if(pagedout(entry))
+            if(pagedout(entry)) // already swapped, or nil
                 continue;
 
             if(entry->modref & PG_REF) {
                 entry->modref &= ~PG_REF;
                 entry->gen = genclock;
             }
+
 
             if(genclock < entry->gen)
                 age = ~(entry->gen - genclock);
@@ -265,6 +269,7 @@ pageout(Proc *p, Segment *s)
             gencount++;
             if(age <= genage)
                 continue;
+
 
             pagepte(type, pg);
 
@@ -337,7 +342,7 @@ pagepte(int type, Page **pg)
          */
         daddr = newswap();
         if(daddr == ~0)
-            break;
+            break; // return;
         cachedel(&swapimage, daddr);
 
         lock(outp);
@@ -416,7 +421,7 @@ executeio(void)
         if(waserror())
             panic("executeio: page out I/O error");
 
-        n = devtab[c->type]->write(c, kaddr, BY2PG, out->daddr);
+        n = devtab[c->type]->write(c, kaddr, BY2PG, out->daddr);// swap 1 page
         if(n != BY2PG)
             nexterror();
 

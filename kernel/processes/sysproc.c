@@ -120,7 +120,7 @@ sysrfork(ulong *arg)
     p->privatemem = up->privatemem;
     p->noswap = up->noswap;
     p->nnote = up->nnote;
-    p->notified = 0;
+    p->notified = false;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = up->ureg;
@@ -512,7 +512,7 @@ sysexec(ulong *arg)
     qlock(&up->debug);
     up->nnote = 0;
     up->notify = 0;
-    up->notified = 0;
+    up->notified = false;
     up->privatemem = false;
     procsetup(up);
     qunlock(&up->debug);

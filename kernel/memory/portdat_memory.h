@@ -29,11 +29,12 @@ struct Page
     virt_addr va;     /* Virtual address for user */
 
     /*s: [[Page]] other fields */
+    ulong daddr;      /* Disc address on swap */
+    /*x: [[Page]] other fields */
+    ulong gen;      /* Generation counter for swap */
+    /*x: [[Page]] other fields */
     // option<ref<Kimage>>
     KImage  *image;     /* Associated text or swap image */
-    // I think this is also abused to store PDX ???
-    ulong daddr;      /* Disc address on swap */
-    ulong gen;      /* Generation counter for swap */
     /*e: [[Page]] other fields */
   
     // Why not Ref? to save space (same reason they use char below)
@@ -176,11 +177,11 @@ struct Segment
     int pagedirsize; // nelem(pagedir)
   
     /*s: [[Segment]] other fields */
-    ushort  steal;    /* Page stealer lock */
-    /*x: [[Segment]] other fields */
     KImage  *image;   /* text in file attached to this segment */
     ulong fstart;   /* start address in file for demand load */
     ulong flen;   /* length of segment in file */
+    /*x: [[Segment]] other fields */
+    ushort  steal;    /* Page stealer lock */
     /*x: [[Segment]] other fields */
     kern_addr2  profile;  /* Tick profile area */ // for TSEG only
     /*x: [[Segment]] other fields */
@@ -336,7 +337,7 @@ struct Palloc
     ulong freecount;    /* how many pages on free list now */
 
     /*s: [[Palloc]] other fields */
-        // hash<?pghash(Page.daddr?), list<ref<Page>> (next = Page.hash)>
+        // hash<Page.daddr, list<ref<Page>> (next = Page.hash)>
         Page  *hash[PGHSIZE];
         Lock  hashlock;
     /*e: [[Palloc]] other fields */
@@ -387,13 +388,19 @@ extern  KImage  swapimage;
 // Swap allocator (singleton)
 struct Swapalloc
 {
-    int free;     /* currently free swap pages */
-
+    // array<byte> xalloc'ed in swapinit()
+    // each idx represents a chunk of swapimage, each value a ref count
     uchar*  swmap;      /* Base of swap map in memory */
 
-    uchar*  alloc;      /* Round robin allocator */
-    uchar*  last;     /* Speed swap allocation */
+    int free;     /* currently free swap pages */
+
+    // ref<byte> in swmap
+    uchar*  alloc;     /* Round robin allocator */
+    // ref<byte> in swmap
     uchar*  top;      /* Top of swap map */
+
+    // ref<byte> in swmap
+    uchar*  last;     /* Speed swap allocation */
 
     ulong highwater;    /* Pager start threshold */ // = 5% conf.upages
     ulong headroom;   /* Space pager frees under highwater */ // = 1.25*hw
