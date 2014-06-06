@@ -6,8 +6,8 @@
 %******************************************************************************
 \newif\iffinal
 \newif\ifverbose
-% see also other newif in Macros.tex
 \finaltrue\verbosefalse
+% see also other newif in Macros.tex
 
 %------------------------------------------------------------------------------
 %history: 
@@ -24,15 +24,16 @@
 %thx to codemap/codegraph:
 % - see pad.txt#reorganization section
 
-%thx to this manual, better understand unix:
+%thx to this manual, better understand Unix:
 %  - child/parent relation and zombie process, the fact that a parent
 %    exiting does not mean it will kill its children
 %  - SEMI malloc internals
-%  - TODO time, user vs sys vs real
-%  - strace
+%  - time, user vs sys vs real, and inherited time of children
 %  - TODO debugger
-%  - profiler
-%  - TODO virtual memory
+%  - strace
+%  - TODO profiler
+%  - coverage sample based profiler
+%  - SEMI virtual memory
 
 %history LP-ization:
 % - skeleton; a not too bad TOC
@@ -47,7 +48,8 @@
 %    * [[xxx]] other fields, [[xxx]] extra fields
 %    * [[xxx()]] yyy case>>, <<enum xxx cases>>
 % - distribute parts of the file before
-% - TODO add figures (hand made)
+% - TODO add figures (hand made), so many things will be easier to understand
+%   once you have a picture of data structures and their relations
 
 %TODO:
 % - lots of things could be reduces if C had better support for lists or hash;
@@ -221,7 +223,7 @@ version described in this book at:
 
 
 Then you need to compile, using a regular C compiler (e.g. gcc),
-and install the Plan9 C cross compilers written by Ken Thompson:
+and then install the Plan9 C cross compilers written by Ken Thompson:
  \url{https://github.com/aryx/fork-kencc}.
 
 Then you need to cross compile, e.g. from MacOS, the kernel
@@ -282,16 +284,17 @@ Plan9's kernel that was very useful.
 \section{Operating system principles}
 
 An operating system is a meta-program: A program that manages other
-programs. 
+programs.
+% a shell and windowing system is too a program managing other programs
 It provides convenient abstractions of the hardware and multiplex
-those hardware resources for the benefit of isolated user programs:
+those hardware resources for the benefit of user programs:
 \begin{itemize}
 \item a virtual CPU, so that each process thinks it has all the CPU 
-for himself
+for itself (via preemptive scheduling)
 \item a virtual memory, so that each process thinks it has all memory
-for himself
+for itself
 \item a virtual screen, so that each process thinks it has all the screen
-for himself (via the windowing system)
+for itself (via the windowing system)
 \item the file abstraction, so a process can read and store data
 on a disk, network, floppy, etc
 % continous even though spreaded on concrete disk (like mm)
@@ -335,6 +338,11 @@ provides to the user programs.
 #define	ERRSTR		40
 @ 
 
+% use an enum instead in sys.h? but then the script that generates
+%  the .s in libc/ will be more complicated and the syscall numbers
+% are access from assembly so need to use #define
+
+
 <<sys.h process syscalls>>=
 #define	RFORK		1
 #define	EXEC		2
@@ -352,6 +360,7 @@ provides to the user programs.
 % alternative to brk? if were using full segmentation power a la multics
 % then could have better scheme, and for instance hardware checked array
 % bound! if the array was in his own segment!
+% bad name btw, not sure what it means
 
 <<sys.h file syscalls>>=
 #define	OPEN		8
@@ -371,6 +380,7 @@ provides to the user programs.
 #define	WSTAT		16
 #define	FWSTAT		17
 @
+% why so many stat, ugly a bit
 
 <<sys.h namespace syscalls>>=
 #define	BIND		22
@@ -378,7 +388,7 @@ provides to the user programs.
 #define	UNMOUNT		24
 @
 
-%plan9 specifics vs general os principles, e.g. namespace so have
+%plan9 specific. vs general os principles, e.g. namespace so have
 % nice /dev/cons, /dev/draw, which enable easier network and graphics
 
 % alternative to namespace and fileservers and uniondir?
@@ -392,11 +402,14 @@ provides to the user programs.
 #define	SLEEP		4
 #define	ALARM		5
 @
+% alarm very useful, e.g. for timeout in a program
 
 <<sys.h ipc syscalls>>=
 #define	NOTIFY		30
 #define	NOTED		31
+
 #define	PIPE		21
+
 #define	SEGATTACH	33
 #define	SEGDETACH	34
 #define	SEGFREE		35
@@ -423,8 +436,8 @@ provides to the user programs.
 
 %TODO
 %things plan9 make so much easier to implement/understand:
-% tty
-% X11, xterm
+% tty, xterm
+% X11
 % nfs
 % fuse
 % ioctl
@@ -447,20 +460,21 @@ provides to the user programs.
 \section{The [[x86]] machine}
 %PC vs raspberry pi?
 
-% actually will take 386, not 486, or x86_64 or amd64 so simpler.
+% actually will take 386, not 486, nor x86_64 or amd64, so simpler.
 
 % little endian, big endian, the le2xxx function?
 
 % put Ureg here
 
+% intro segmentation and pagination? or ref to vm chapter?
 
 \section{C and assembly}
 
 % compilation scheme of kernel assumes pass parameters in stack,
 % return value in ax, and caller save registers it needs
-% after call before calling (so Label is simple)
+% after call before calling (so Label structure is simple).
 
-% Kencc extension: anon field. e.g. Lock; 
+% kencc extensions: anon field. e.g. Lock; but sugar, not that important.
 
 % the lock+0(FP) is intriguing and must be used when using (FP).
 % it's probably forcing the user to give a name to what debugger
@@ -469,6 +483,7 @@ provides to the user programs.
 
 % maybe a bit of rappel on bit manip :) 2 complementary arithmetic,
 %  e.g. pa > -KZERO, or in bcm have  pa & ~KSEGM
+% put portdat.h macros here? ROUND, etc
 
 \section{Code organization}
 % codemap and codegraph screenshot?
@@ -486,6 +501,7 @@ provides to the user programs.
 % u.h for uchar, uint, ... can be seen also as universal :)
 % lib.h =~ libc utilities, see Section XX
 % error.h see Section YY
+% mem.h see memory overview, important constants such as address kernel.
 
 <<dat.h>>=
 
@@ -523,11 +539,12 @@ provides to the user programs.
 #include "dat_buses.h"
 #include "../port/portdat_buses.h"
 
-// defines keyboard queue
+// defines keyboard queue, consdevtab
 #include "../port/portdat_console.h"
 
 // could be put in lib.h
 <<portdat.h macros>>
+
 <<portdat.h pragmas>>
 @
 
@@ -560,19 +577,22 @@ typedef ushort bool_ushort;
 
 typedef int retcode;
 enum _retcode {
-    OK = 0,
-    ERROR = 1,
+    OK0 = 0,
+    ERROR1 = 1,
 };
 @ 
 \fi
 
 
 \section{Booting overview}
+% there is
+%  - loading the kernel in memory
+%  - initializing the kernel environment
+%  - initializing the user environment
+%  - running first user program (boot/boot)
+
 % kernel that creates first user process!
 % introduce dichotomy kernel/user
-
-% there is booting the kernel, booting the kernel environment,
-%  and then booting the user environment, and finally booting user programs
 
 % see also:
 % http://arjunsreedharan.org/post/82710718100/kernel-101-lets-write-a-kernel
@@ -656,7 +676,7 @@ typedef void* kern_addr3;
 <<constant KTZERO>>=
 #define KTZERO    (KZERO+0x100000)  /* first address in kernel text */
 @
-% why + 0x100000? because will map kzero to physical memory,
+% why + 0x100000? because will map kzero to physical memory addr 0,
 % and lots of address before 1Mo are reserved, used by device, e.g.
 % screen cga is at 0xb8000
 
@@ -756,15 +776,6 @@ cankaddr(phys_addr pa)
 \section{Syscall overview}
 % kernel vs user code
 
-% sequence diagram?
-
-% use an enum instead in sys.h? but then the script that generates
-%  the .s in libc/ will be more complicated
-
-
-
-% show example of generated assembly code
-% maybe can even show an example where abuse sysnop so can see things :)
 
 <<typedef Syscall>>=
 typedef long Syscall(ulong*);
@@ -817,9 +828,18 @@ sysnop(ulong*)
 
 % show small ex of asm that call this hello world
 
+% sequence diagram?
+% show example of generated assembly code
+% maybe can even show an example where abuse sysnop so can see things :)
+
+
+
 %\section{File overview}
 % because everything is a fileserver can confuse things
 %  many concepts aggregated: device, filesystem, server
+
+
+
 
 \chapter{Core Data Structures}
 \minitoc
@@ -1004,6 +1024,8 @@ struct Active active;
 
 \section{[[Proc]] and [[up]]}
 
+% the big one
+
 <<struct Proc>>=
 struct Proc
 {
@@ -1159,7 +1181,7 @@ char *statename[] =
 <<struct Chan>>=
 struct Chan
 {
-    ushort type; // idx in devtab?
+    ushort type; // idx in devtab
     ulong dev;
     Qid qid;
 
@@ -1203,6 +1225,7 @@ struct Qid
   uchar type;
 };
 @ 
+%coupling: this structure ir also defined in libc.h
 
 <<enum qidtype>>=
 /* bits in Qid.type */
@@ -1329,6 +1352,8 @@ Dev** devtab = nil;
 %	&rootdevtab,
 %	&consdevtab,
 %       ...
+%  };
+% devtab = conf_devtab;
 
 \section{[[PCArch]] and [[arch]]}
 
@@ -1403,7 +1428,8 @@ PCArch archgeneric = {
 % There is no mutual exclusion need between user and kernel code. 
 % Same for init code as only one processor is used during the
 % uninterrupted sequential initialization.
-% There is also no need between different user processes.
+% There is also no need between different user processes (except
+% when they share segment, see IPC chapter)
 %
 % For the kernel code one wants mutual exclusion because of possible race 
 % on shared data structures between the syscalls themselves when run
@@ -1425,9 +1451,76 @@ PCArch archgeneric = {
 % For protecting kernel syscall code from interrupt kernel code: splhi(), splo()
 % For very small critical region: taslock
 % For bigger region, or when have lots of contention on a lock: qlock
-%
+%  where the process will actually go to sleep (useful e.g. for IO queues
+%  producer/consumer)
+
+
+\section{[[splhi()]], [[spllo()]]}
+
+<<[[Cpu]] second field>>=
+// must be second field at 0x04, used by splhi()
+ulong splpc;      /* pc of last caller to splhi */
+@ 
+
+<<function splhi>>=
+// bool   splhi(void);
+TEXT splhi(SB), $0
+shi:
+        PUSHFL
+        POPL    AX
+        TESTL   $0x200, AX // interrupt bit
+        JZ      alreadyhi
+        MOVL    $(CPUADDR+0x04), CX            /* save PC in cpu->splpc */
+        MOVL    (SP), BX
+        MOVL    BX, (CX)
+alreadyhi:
+        CLI
+        RET
+@ 
+%$
+% interrupt state is in x86 flags register, accessible via pushfl
+% this function is actually used quite a lot, not just internally in ilock
+
+<<function spllo>>=
+// bool   spllo(void);
+TEXT spllo(SB), $0
+slo:
+        PUSHFL
+        POPL    AX
+        TESTL   $0x200, AX
+        JNZ     alreadylo
+        MOVL    $(CPUADDR+0x04), CX            /* clear cpu->splpc */
+        MOVL    $0, (CX)
+alreadylo:
+        STI
+        RET
+@ 
+
+
+<<function splx>>=
+// void    splx(bool);
+TEXT splx(SB), $0
+        MOVL    s+0(FP), AX
+        TESTL   $0x200, AX
+        JNZ     slo
+        JMP     shi
+@ 
+% ref label in splhi and spllot
+
+<<function islo>>=
+// bool islo(void);
+TEXT islo(SB), $0
+        PUSHFL
+        POPL    AX
+        ANDL    $0x200, AX                      /* interrupt enable flag */
+        RET
+@ 
+%$
+
 
 \section{[[tas()]]}
+
+% building block of concurrency
 
 <<function tas>>=
 TEXT tas(SB), $0
@@ -1444,10 +1537,14 @@ TEXT tas(SB), $0
 % movl l+0(FP) is because we use 0(FP) and 8a forces the programmer
 % to give a name to accessed parameters. Used in debugger?
 
+% return in AX, see C conventions. So tas() == 0 mean? tas() == 1 mean?
+
 \section{Atomic [[_xinc()]] and [[_xdec()]]}
 
-% tas() is to make sure one arrive first on something
-% another operation is increment/decrement atomically
+% tas() is to make sure one arrive first on something.
+% another fundamental concurrency operation is increment/decrement atomically
+% (actually can simular second one with first, see Ref later, but can be
+% useful to have something faster on certain archi)
 
 <<function _xinc>>=
 /* void _xinc(long*); */
@@ -1474,68 +1571,6 @@ _xdeclt:
         DECL    AX
         RET
 @ 
-
-\section{[[splhi()]], [[spllo()]]}
-
-<<[[Cpu]] second field>>=
-// must be second field at 0x04, used by splhi()
-ulong splpc;      /* pc of last caller to splhi */
-@ 
-
-<<function splhi>>=
-// int   splhi(void);
-TEXT splhi(SB), $0
-shi:
-        PUSHFL
-        POPL    AX
-        TESTL   $0x200, AX
-        JZ      alreadyhi
-        MOVL    $(CPUADDR+0x04), CX            /* save PC in cpu->splpc */
-        MOVL    (SP), BX
-        MOVL    BX, (CX)
-alreadyhi:
-        CLI
-        RET
-@ 
-
-% this function is actually used quite a lot, not just internally in ilock
-
-<<function spllo>>=
-// int   spllo(void);
-TEXT spllo(SB), $0
-slo:
-        PUSHFL
-        POPL    AX
-        TESTL   $0x200, AX
-        JNZ     alreadylo
-        MOVL    $(CPUADDR+0x04), CX            /* clear cpu->splpc */
-        MOVL    $0, (CX)
-alreadylo:
-        STI
-        RET
-@ 
-
-
-<<function splx>>=
-// void    splx(int);
-TEXT splx(SB), $0
-        MOVL    s+0(FP), AX
-        TESTL   $0x200, AX
-        JNZ     slo
-        JMP     shi
-@ 
-
-
-<<function islo>>=
-// bool islo(void);
-TEXT islo(SB), $0
-        PUSHFL
-        POPL    AX
-        ANDL    $0x200, AX                      /* interrupt enable flag */
-        RET
-@ 
-%$
-
 
 \section{Spin [[Lock]]}
 
