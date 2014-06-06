@@ -808,7 +808,7 @@ newproc(void)
     /*e: [[newproc()]] inherit Proc_tracesyscall */
     p->syscalltrace = nil;    
     p->notepending = false;
-    p->ureg = 0;
+    p->ureg = nil;
     p->privatemem = false;
     p->noswap = false;
     p->errstr = p->errbuf0;
@@ -1610,7 +1610,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->notified = 0;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
-    p->ureg = 0;
+    p->ureg = nil;
     p->dbgreg = nil;
 
     procpriority(p, PriKproc, false);

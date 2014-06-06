@@ -146,10 +146,11 @@ struct Physseg
 /*e: struct Physseg */
 
 
-// often used as (q->top-q->base)>>LRESPROF
 enum
 {
+    /*s: constant LRESPROF */
     LRESPROF  = 3,
+    /*e: constant LRESPROF */
 };
 
 /*s: struct Segment */
@@ -178,7 +179,7 @@ struct Segment
         ulong fstart;   /* start address in file for demand load */
         ulong flen;   /* length of segment in file */
     /*x: [[Segment]] other fields */
-    ulong*  profile;  /* Tick profile area */
+    kern_addr2  profile;  /* Tick profile area */ // for TSEG only
     /*x: [[Segment]] other fields */
         ulong mark;   /* portcountrefs */
     /*x: [[Segment]] other fields */

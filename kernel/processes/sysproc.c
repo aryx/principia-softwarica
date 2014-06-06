@@ -833,7 +833,7 @@ syssegfree(ulong *arg)
 long
 sysbrk(ulong *arg)
 {
-    return ibrk(arg[0], BSEG);
+    return ibrk(arg[0], BSEG); // BSS, the heap size is changed
 }
 /*e: syscall brk */
 

@@ -201,7 +201,7 @@ profclock(Ureg *ur, Timer *)
 {
     Tos *tos;
 
-    if(up == 0 || up->state != Running)
+    if(up == nil || up->state != Running)
         return;
 
     /* user profiling clock */
@@ -335,7 +335,10 @@ proc_init(void)
 {
     if(conf.nproc >= (1<<(31-QSHIFT))-1)
         print("warning: too many procs for devproc\n");
+
+    /*s: [[proc_init()]] other init */
     addclock0link((void (*)(void))profclock, 113);  /* Relative prime to HZ */
+    /*e: [[proc_init()]] other init */
 }
 /*e: method procinit */
 
@@ -847,7 +850,7 @@ procread(Chan *c, void *va, long n, vlong off)
     /*s: [[procread()]] Qprofile case */
         case Qprofile:
             s = p->seg[TSEG];
-            if(s == 0 || s->profile == nil)
+            if(s == nil || s->profile == nil)
                 error("profile is off");
             i = (s->top-s->base)>>LRESPROF;
             i *= sizeof(*s->profile);

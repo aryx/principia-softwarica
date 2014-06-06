@@ -234,7 +234,9 @@ void  umbfree(ulong, int);
 ulong upaalloc(int, int);
 //void  upafree(ulong, int);
 void  upareserve(ulong, int);
+/*s: function userureg */
 #define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
+/*e: function userureg */
 //@Scheck: Assembly
 void  vectortable(void);
 void* vmap(ulong, int);

@@ -549,6 +549,7 @@ ibrk(ulong addr, int seg)
         error(Enovmem);
     }
 
+    // similar to code in newseg()
     mapsize = ROUND(newsize, PAGETABSIZE)/PAGETABSIZE;
     if(mapsize > s->pagedirsize){
         map = smalloc(mapsize*sizeof(Pagetable*));
@@ -773,7 +774,7 @@ segclock(ulong pc)
     Segment *s;
 
     s = up->seg[TSEG];
-    if(s == 0 || s->profile == 0)
+    if(s == nil || s->profile == nil)
         return;
 
     s->profile[0] += TK2MS(1);
