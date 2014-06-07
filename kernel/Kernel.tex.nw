@@ -1583,6 +1583,7 @@ struct Lock
     <<[[Lock]] other fields>>
 };
 @ 
+% rename SpinLock?
 
 \ifallcode
 <<[[Lock]] other fields>>=
@@ -1736,6 +1737,10 @@ canlock(Lock *l)
 % of the enclosing structure :) Palloc after Page!
 
 \section{Uninterruptable [[Lock]]}
+
+% can typedef SpinLock ILock;? do we always use a Lock
+% in a consistent way?
+
 % can formalize a checking rule? if access any field
 % accessed from a xxxintr, then need to use ilock
 
@@ -2314,6 +2319,9 @@ deccnt(Ref *r)
 % draw figure with idea. Draw also figures with many holes in memory. 
 % Can't support too much fragmentation (no compact() function)
 
+% alternatives? why not just free bitmaps? instead we use
+% free (linked) list below (and also for pages)
+
 <<constants holes>>=
 enum
 {
@@ -2671,6 +2679,7 @@ plock(Pool *p)
 }
 @
 
+% use ilock! don't want interrupt in middle of kernel malloc?
 
 <<function punlock>>=
 static void
@@ -6431,6 +6440,8 @@ kexit(Ureg*)
 % really? this go to user space?? how? what is Tos?
 
 
+
+
 \ifallcode
 <<[[trap()]] debugging>>=
         if(0)print("cpu%d: spurious interrupt %d, last %d\n",
@@ -6453,7 +6464,8 @@ kexit(Ureg*)
 
 
 \chapter{Virtual Memory}
-% rename x86 virtual memory?
+% rename x86 virtual memory? but now that have swapping and demand loading
+% here makes less sense to rename
 
 \section{Overview}
 
@@ -6501,6 +6513,10 @@ kexit(Ureg*)
 #define NGDT    10  /* number of GDT entries required */
 @
 
+% will do MOVE XXSEG, AX; MOVE AX, ES
+% can't do MOVE AX, CS, for that we do jmp XXSEG:ADDR
+% actually will use XXSEL, not XXSEG, see below
+
 % also used for IDT
 <<struct Segdesc>>=
 struct Segdesc
@@ -6509,35 +6525,9 @@ struct Segdesc
     ulong d1; // ??
 };
 @ 
+% rename, first is size and second is flag
 
 % #define ring0, ring3? instead of 0 and 3 below?
-<<global gdt>>=
-Segdesc gdt[NGDT] =
-{
-[NULLSEG]   { 0, 0},        /* null descriptor */
-[KDSEG]     DATASEGM(0),        /* kernel data/stack */
-[KESEG]     EXECSEGM(0),        /* kernel code */
-[UDSEG]     DATASEGM(3),        /* user data/stack */
-[UESEG]     EXECSEGM(3),        /* user code */
-[TSSSEG]    TSSSEGM(0,0),       /* tss segment */
-<<[[gdt]] other elements>>
-};
-@
-% copied in cpu->gdt (at CPU0GDT addresS) in mmuinit0
-% speaks about user! as opposed to the more basic tgdt in _setup_segmentation
-
-<<macros xxxSEGM>>=
-/*
- * Simple segment descriptors with no translation.
- */
-#define DATASEGM(p) { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
-#define EXECSEGM(p) { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-#define TSSSEGM(b,p) { ((b)<<16)|sizeof(Tss),\
-              ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
-<<macros other xxxSEGM>>
-@
-% maybe could define redundant C structure with bitfield to make
-% this clearer. (kencc supports bitfield?)
 
 
 <<constant segment field extractors>>=
@@ -6569,6 +6559,37 @@ Segdesc gdt[NGDT] =
 
 
 
+<<global gdt>>=
+Segdesc gdt[NGDT] =
+{
+[NULLSEG]   { 0, 0},        /* null descriptor */
+[KDSEG]     DATASEGM(0),        /* kernel data/stack */
+[KESEG]     EXECSEGM(0),        /* kernel code */
+[UDSEG]     DATASEGM(3),        /* user data/stack */
+[UESEG]     EXECSEGM(3),        /* user code */
+[TSSSEG]    TSSSEGM(0,0),       /* tss segment */
+<<[[gdt]] other elements>>
+};
+@
+% copied in cpu->gdt (at CPU0GDT addresS) in mmuinit0
+% speaks about user! as opposed to the more basic tgdt in _setup_segmentation
+
+<<macros xxxSEGM>>=
+/*
+ * Simple segment descriptors with no translation.
+ */
+#define DATASEGM(p) { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
+#define EXECSEGM(p) { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
+#define TSSSEGM(b,p) { ((b)<<16)|sizeof(Tss),\
+                   ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
+<<macros other xxxSEGM>>
+@
+% maybe could define redundant C structure with bitfield to make
+% this clearer. kencc supports bitfield? but has to be used from asm too no?
+
+
+
+
 
 <<[[Cpu]] [[Arch]] other fields>>=
 // array<Segdesc>
@@ -6588,6 +6609,7 @@ Segdesc *gdt;     /* gdt for this processor */
 #define TSSSEL  SELECTOR(TSSSEG, SELGDT, 0)
 <<constant x86 other segment selectors>>
 @
+% why need that?
 
 <<function userureg>>=
 #define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
@@ -6613,24 +6635,24 @@ Segdesc *gdt;     /* gdt for this processor */
 % see Basic pagination intialization too
 
 % different levels:
-%  tlb, pd, pt
+%  tlb, mmupd, mmupt
 %  Segment itself have pagedir, pagetab,
 %  and cpu have pdproto, and proc avec mmupd ... very complex.
 
 % glossary: 
-% PD, PDE (page directory entry), PDX (page directory idx)
-% PT, PTE (page table entry),     PTX (page table index)
+% PD (page directory), PDE (page directory entry), PDX (page directory idx)
+% PT (page table),     PTE (page table entry),     PTX (page table index)
 
 % page, 4096, so when give page address, don't need 12 low bits! PGSHIFT
+% PGSHIFT here?
 
-% VPT, per processor.
 % each time switch process, they have different segments, and
-% different pages they use, so will need to empty VPT and
+% different pages they use, so will need to empty tlb and
 % reassign based on per-process info?
 
 % sections: MMUPD section (=~ Segment), MMUPT section (=~ Pagetable)
 
-% 1 page properties, 1 byte
+% properties of 1 page, 1 byte
 % PTE = page table entry, so spec about one page (also for entries in PD)
 <<constant PTExxx>>=
 /*
@@ -6644,79 +6666,34 @@ Segdesc *gdt;     /* gdt for this processor */
 #define PTEKERNEL (0<<2)
 #define PTEUSER   (1<<2)
 
-#define PTEWT       (1<<3) // Write Through, e.g. VGA memory
+#define PTEWT       (1<<3) // Write Through, e.g. VGA memory, mean??
 #define PTEUNCACHED (1<<4)
 #define PTESIZE   (1<<7)
 #define PTEGLOBAL (1<<8)
 @
+% pa is aligned at page, so can use low 12 bytes hence 1<<8
 % in a PTE what is implicit is the va. the va is the index
 % in the PD (Page Directory) + index in the PT (Page table)
 
-%VPT! tmpmap, tmpunmap
 % how set 1-to-1 mapping for KZERO and more?
 
 % complicated to access to physical memory if have lots of memory :)
-<<function tmpmap>>=
-virt_addr3
-tmpmap(Page *p)
-{
-    ulong i;
-    ulong *entry;
-    
-    if(islo())
-        panic("tmpaddr: islo");
-
-    if(p->pa < MAXKPA)
-        return KADDR(p->pa);
+% so let's first do a simple version? see advanced memory chapter for more
 
 
 
-    /*
-     * PDX(TMPADDR) == PDX(CPUADDR), so this
-     * entry is private to the processor and shared 
-     * between up->mmupd (if any) and cpu->pd.
-     */
-    entry = &vpt[VPTX(TMPADDR)];
-    if(!(*entry&PTEVALID)){
-        for(i=KZERO; i<=CPU0CPU; i+=BY2PG)
-            print("%#p: *%#p=%#p (vpt=%#p index=%#p)\n", i, &vpt[VPTX(i)], vpt[VPTX(i)], vpt, VPTX(i));
-        panic("tmpmap: no entry");
-    }
-    if(PPN(*entry) != PPN(TMPADDR-KZERO))
-        panic("tmpmap: already mapped entry=%#.8lux", *entry);
-    *entry = p->pa|PTEWRITE|PTEVALID;
-    flushpg(TMPADDR);
-    return (virt_addr3)TMPADDR;
-}
-@
-% -KZERO, ugly a bit, too subtle use MAXKPA!
-%PPN = pure page number
-
-<<function tmpunmap>>=
-void
-tmpunmap(virt_addr3 v)
-{
-    ulong *entry;
-    
-    if(islo())
-        panic("tmpaddr: islo");
-    if((ulong)v >= KZERO && v != (void*)TMPADDR)
-        return;
-    if(v != (void*)TMPADDR)
-        panic("tmpunmap: bad address");
-
-    entry = &vpt[VPTX(TMPADDR)];
-    if(!(*entry&PTEVALID) || PPN(*entry) == PPN(PADDR(TMPADDR)))
-        panic("tmpmap: not mapped entry=%#.8lux", *entry);
-    *entry = PPN(TMPADDR-KZERO)|PTEWRITE|PTEVALID;
-    flushpg(TMPADDR);
-}
-@
+% on tmpmap, tmpunmap. For now assume just alias to XXX
+% on kmap, kunmap, VA. Assume alias to XXX.
+% see Advanced memory chapter for the actual definitions when
+% have machine with lots of memory where MAXKPA is not enough
+% and so can't just do KADDR(page->pa) to get a virtual address
+% when can access the content of a physical page.
 
 
 
-%todo: pd is a kern_addr? returns something created by xpanalloc so return
-% a kern_addr?
+
+%pd is always cpu->pdproto so a kern_addr.
+% returns something created by xpanalloc so return a kern_addr too.
 <<function mmuwalk>>=
 /*
  * Walk the page-table pointed to by pd and return a pointer
@@ -6727,8 +6704,8 @@ tmpunmap(virt_addr3 v)
  * only to edit kernel mappings, which use pages from kernel memory,
  * so it's okay to use KADDR to look at the tables.
  */
-ulong*
-mmuwalk(ulong* pd, virt_addr va, int level, bool create)
+kern_addr2
+mmuwalk(kern_addr2 pd, kern_addr va, int level, bool create)
 {
     ulong *table;
     void *map;
@@ -6806,7 +6783,7 @@ static void
 upallocmmupd(void)
 {
     int s;
-    ulong *mmupd;
+    kern_addr2 mmupd;
     Page *page;
     
     if(up->mmupd != nil)
@@ -6847,7 +6824,7 @@ mmupdalloc(void)
 {
     int s;
     Page *page;
-    ulong *mmupd;
+    kern_addr2 mmupd;
 
     s = splhi();
     cpu->mmupdalloc++;
@@ -6910,7 +6887,7 @@ static void
 mmuptefree(Proc* proc)
 {
     int s;
-    ulong *mmupd;
+    kern_addr2 mmupd;
     Page **last, *page;
 
     if(proc->mmupd == nil || proc->mmuused == nil)
@@ -6920,7 +6897,7 @@ mmuptefree(Proc* proc)
     mmupd = tmpmap(proc->mmupd);
     last = &proc->mmuused;
     for(page = *last; page; page = page->next){
-        mmupd[page->daddr] = 0;
+        mmupd[page->daddr] = 0; //???? use daddr??
         last = &page->next;
     }
     tmpunmap(mmupd);
@@ -6934,7 +6911,7 @@ mmuptefree(Proc* proc)
 
 <<function mmurelease>>=
 /*
- * Release any pages allocated for a page directory base or page-tables
+ * Release any pages allocated for a page directory or page-tables
  * for this process:
  *   switch to the prototype pd for this processor (cpu->pdproto);
  *   call mmuptefree() to place all pages used for page-tables (proc->mmuused)
@@ -6998,7 +6975,7 @@ mmurelease(Proc* proc)
 @
 
 
-
+% this is the fundamental operation, put earlier?
 <<function putmmu>>=
 /*
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
@@ -7044,8 +7021,10 @@ putmmu(virt_addr va, phys_addr pa, Page*)
         page->next = up->mmuused;
         up->mmuused = page;
     }
+
     old = vpt[VPTX(va)];
     vpt[VPTX(va)] = pa|PTEUSER|PTEVALID;
+
     if(old&PTEVALID)
         flushpg(va);
     if(getcr3() != up->mmupd->pa)
@@ -7053,7 +7032,7 @@ putmmu(virt_addr va, phys_addr pa, Page*)
     splx(s);
 }
 @
-
+% mv VPT stuff in advanced chapter
 
 
 
@@ -7110,11 +7089,15 @@ flushpg(virt_addr va)
 
 % insyscall saving? means can have trap in a syscall itself?
 
+% addr be kernel (virtual) address or user (virtual) address?
+% can it be kernel address? I don't think so. should panic in that case
+% at least to understand.
+
 <<function fault386>>=
 static void
 fault386(Ureg* ureg, void*)
 {
-    ulong addr; // could be kernel (virtual) address or user (virtual) address
+    ulong addr; 
     bool read, insyscall, user;
     int n; // ret_code
     char buf[ERRMAX];
@@ -7413,7 +7396,7 @@ retry:
 
 
 
-
+%-----------------------------------------------------------------------------
 
 <<function checkpages>>=
 void
@@ -7470,109 +7453,6 @@ checkmmu(ulong va, ulong pa)
             va, pa, vpt[VPTX(va)]);
 }
 @
-
-
-
-
-\section{[[Kmap]]}
-
-<<[[Proc]] [[Arch]] memory fields>>=
-Page* kmaptable;    /* page table used by kmap */
-uint  lastkmap;   /* last entry used by kmap */
-int nkmap;      /* number of current kmaps */
-@
-
-
-<<struct KMap>>=
-/*
- * KMap the structure doesn't exist, but the functions do.
- */
-typedef struct KMap   KMap;
-@
-% why not void like in bcm?
-
-<<macro VA>>=
-#define VA(k)   ((virt_addr3)(k))
-@
-
-
-<<function kmap>>=
-KMap*
-kmap(Page *page)
-{
-    int i, o, s;
-
-    if(up == nil)
-        panic("kmap: up=0 pc=%#.8lux", getcallerpc(&page));
-    if(up->mmupd == nil)
-        upallocmmupd();
-    if(up->nkmap < 0)
-        panic("kmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
-    
-    /*
-     * Splhi shouldn't be necessary here, but paranoia reigns.
-     * See comment in putmmu above.
-     */
-    s = splhi();
-    up->nkmap++;
-    if(!(vpd[PDX(KMAP)]&PTEVALID)){
-        /* allocate page directory */
-        if(KMAPSIZE > BY2XPG)
-            panic("bad kmapsize");
-        if(up->kmaptable != nil)
-            panic("kmaptable");
-        spllo();
-        up->kmaptable = newpage(0, 0, 0);
-        splhi();
-        vpd[PDX(KMAP)] = up->kmaptable->pa|PTEWRITE|PTEVALID;
-        flushpg((ulong)kpt);
-        memset(kpt, 0, BY2PG);
-        kpt[0] = page->pa|PTEWRITE|PTEVALID;
-        up->lastkmap = 0;
-        splx(s);
-        return (KMap*)KMAP;
-    }
-    if(up->kmaptable == nil)
-        panic("no kmaptable");
-    o = up->lastkmap+1;
-    for(i=0; i<NKPT; i++){
-        if(kpt[(i+o)%NKPT] == 0){
-            o = (i+o)%NKPT;
-            kpt[o] = page->pa|PTEWRITE|PTEVALID;
-            up->lastkmap = o;
-            splx(s);
-            return (KMap*)(KMAP+o*BY2PG);
-        }
-    }
-    panic("out of kmap");
-    return nil;
-}
-@
-
-
-<<function kunmap>>=
-void
-kunmap(KMap *k)
-{
-    ulong va;
-
-    va = (ulong)k;
-    if(up->mmupd == nil || !(vpd[PDX(KMAP)]&PTEVALID))
-        panic("kunmap: no kmaps");
-    if(va < KMAP || va >= KMAP+KMAPSIZE)
-        panic("kunmap: bad address %#.8lux pc=%#p", va, getcallerpc(&k));
-    if(!(vpt[VPTX(va)]&PTEVALID))
-        panic("kunmap: not mapped %#.8lux pc=%#p", va, getcallerpc(&k));
-    up->nkmap--;
-    if(up->nkmap < 0)
-        panic("kunmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
-    vpt[VPTX(va)] = 0;
-    flushpg(va);
-}
-@
-
-
-
 
 \section{Swapping}
 
@@ -27129,6 +27009,10 @@ ACPI = Advanced Configuration & Power Interface
 \url{http://padator.org/software/project-syncweb/readme.txt}
 
 % TECS, STEPS, MINIX, etc
+
+%balestero's notes
+%brian stuart book:
+%http://www.amazon.com/Principles-Operating-Systems-Applications-Advanced/dp/1418837695/
 
 \end{thebibliography}
 

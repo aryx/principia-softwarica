@@ -38,7 +38,9 @@
 /*s: sys.h ipc syscalls */
 #define	NOTIFY		30
 #define	NOTED		31
+
 #define	PIPE		21
+
 #define	SEGATTACH	33
 #define	SEGDETACH	34
 #define	SEGFREE		35

@@ -50,7 +50,7 @@
 #define DATASEGM(p) { 0xFFFF, SEGG|SEGB|(0xF<<16)|SEGP|SEGPL(p)|SEGDATA|SEGW }
 #define EXECSEGM(p) { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
 #define TSSSEGM(b,p) { ((b)<<16)|sizeof(Tss),\
-              ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
+                   ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
 /*s: macros other xxxSEGM */
 #define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
 /*e: macros other xxxSEGM */
@@ -248,7 +248,7 @@ mmupdalloc(void)
 {
     int s;
     Page *page;
-    ulong *mmupd;
+    kern_addr2 mmupd;
 
     s = splhi();
     cpu->mmupdalloc++;
@@ -301,7 +301,7 @@ static void
 mmuptefree(Proc* proc)
 {
     int s;
-    ulong *mmupd;
+    kern_addr2 mmupd;
     Page **last, *page;
 
     if(proc->mmupd == nil || proc->mmuused == nil)
@@ -311,7 +311,7 @@ mmuptefree(Proc* proc)
     mmupd = tmpmap(proc->mmupd);
     last = &proc->mmuused;
     for(page = *last; page; page = page->next){
-        mmupd[page->daddr] = 0;
+        mmupd[page->daddr] = 0; //???? use daddr??
         last = &page->next;
     }
     tmpunmap(mmupd);
@@ -363,7 +363,7 @@ mmuswitch(Proc* proc)
 
 /*s: function mmurelease */
 /*
- * Release any pages allocated for a page directory base or page-tables
+ * Release any pages allocated for a page directory or page-tables
  * for this process:
  *   switch to the prototype pd for this processor (cpu->pdproto);
  *   call mmuptefree() to place all pages used for page-tables (proc->mmuused)
@@ -435,7 +435,7 @@ static void
 upallocmmupd(void)
 {
     int s;
-    ulong *mmupd;
+    kern_addr2 mmupd;
     Page *page;
     
     if(up->mmupd != nil)
@@ -507,8 +507,10 @@ putmmu(virt_addr va, phys_addr pa, Page*)
         page->next = up->mmuused;
         up->mmuused = page;
     }
+
     old = vpt[VPTX(va)];
     vpt[VPTX(va)] = pa|PTEUSER|PTEVALID;
+
     if(old&PTEVALID)
         flushpg(va);
     if(getcr3() != up->mmupd->pa)
@@ -546,8 +548,8 @@ checkmmu(ulong va, ulong pa)
  * only to edit kernel mappings, which use pages from kernel memory,
  * so it's okay to use KADDR to look at the tables.
  */
-ulong*
-mmuwalk(ulong* pd, virt_addr va, int level, bool create)
+kern_addr2
+mmuwalk(kern_addr2 pd, kern_addr va, int level, bool create)
 {
     ulong *table;
     void *map;
@@ -998,6 +1000,7 @@ tmpunmap(virt_addr3 v)
         panic("tmpaddr: islo");
     if((ulong)v >= KZERO && v != (void*)TMPADDR)
         return;
+
     if(v != (void*)TMPADDR)
         panic("tmpunmap: bad address");
 

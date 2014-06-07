@@ -230,7 +230,7 @@
 #define PTEKERNEL (0<<2)
 #define PTEUSER   (1<<2)
 
-#define PTEWT       (1<<3) // Write Through, e.g. VGA memory
+#define PTEWT       (1<<3) // Write Through, e.g. VGA memory, mean??
 #define PTEUNCACHED (1<<4)
 #define PTESIZE   (1<<7)
 #define PTEGLOBAL (1<<8)

@@ -85,10 +85,13 @@ struct Perf
 {
     // intr-ts? interrupt time stamp?
     ulong intrts;   /* time of last interrupt */
+
     ulong inintr;   /* time since last clock tick in interrupt handlers */
     ulong avg_inintr; /* avg time per clock tick in interrupt handlers */
+
     ulong inidle;   /* time since last clock tick in idle loop */
     ulong avg_inidle; /* avg time per clock tick in idle loop */
+
     ulong last;   /* value of perfticks() at last clock tick */
     ulong period;   /* perfticks() per clock tick */
 };
@@ -119,9 +122,9 @@ struct Cpu
     int cs; // context switch, sched() and sleep() call
     int syscall;
     int load;
+    int pfault;
     int tlbfault;
     int tlbpurge;
-    int pfault;
     int intr;
     ulong spuriousintr;
     /*e: [[Cpu]] stat fields */

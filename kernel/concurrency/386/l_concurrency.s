@@ -2,12 +2,12 @@
 #include "mem.h"
 
 /*s: function splhi */
-// int   splhi(void);
+// bool   splhi(void);
 TEXT splhi(SB), $0
 shi:
         PUSHFL
         POPL    AX
-        TESTL   $0x200, AX
+        TESTL   $0x200, AX /* pad: interrupt bit */
         JZ      alreadyhi
         MOVL    $(CPUADDR+0x04), CX            /* save PC in cpu->splpc */
         MOVL    (SP), BX
@@ -18,7 +18,7 @@ alreadyhi:
 /*e: function splhi */
 
 /*s: function spllo */
-// int   spllo(void);
+// bool   spllo(void);
 TEXT spllo(SB), $0
 slo:
         PUSHFL
@@ -33,7 +33,7 @@ alreadylo:
 /*e: function spllo */
 
 /*s: function splx */
-// void    splx(int);
+// void    splx(bool);
 TEXT splx(SB), $0
         MOVL    s+0(FP), AX
         TESTL   $0x200, AX

@@ -20,8 +20,8 @@ typedef ushort bool_ushort;
 
 typedef int retcode;
 enum _retcode {
-    OK = 0,
-    ERROR = 1,
+    OK0 = 0,
+    ERROR1 = 1,
 };
 /*e: pad basic types */
 

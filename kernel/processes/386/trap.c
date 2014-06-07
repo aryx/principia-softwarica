@@ -693,7 +693,7 @@ extern void checkpages(void);
 static void
 fault386(Ureg* ureg, void*)
 {
-    ulong addr; // could be kernel (virtual) address or user (virtual) address
+    ulong addr; 
     bool read, insyscall, user;
     int n; // ret_code
     char buf[ERRMAX];

@@ -235,7 +235,7 @@ enum
 /*s: struct Chan */
 struct Chan
 {
-    ushort type; // idx in devtab?
+    ushort type; // idx in devtab
     ulong dev;
     Qid qid;
 

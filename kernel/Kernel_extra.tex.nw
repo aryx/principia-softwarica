@@ -9952,9 +9952,166 @@ addphysseg(Physseg* new)
         break;
 @
 
+\subsection{[[tmpmap()]]}
+
+% mv complicated part in other chapter (and put under a #ifdef BIG_MEM?)
+<<function tmpmap>>=
+virt_addr3
+tmpmap(Page *p)
+{
+    ulong i;
+    ulong *entry;
+    
+    if(islo())
+        panic("tmpaddr: islo");
+
+    if(p->pa < MAXKPA)
+        return KADDR(p->pa);
+
+
+
+    /*
+     * PDX(TMPADDR) == PDX(CPUADDR), so this
+     * entry is private to the processor and shared 
+     * between up->mmupd (if any) and cpu->pd.
+     */
+    entry = &vpt[VPTX(TMPADDR)];
+    if(!(*entry&PTEVALID)){
+        for(i=KZERO; i<=CPU0CPU; i+=BY2PG)
+            print("%#p: *%#p=%#p (vpt=%#p index=%#p)\n", i, &vpt[VPTX(i)], vpt[VPTX(i)], vpt, VPTX(i));
+        panic("tmpmap: no entry");
+    }
+    if(PPN(*entry) != PPN(TMPADDR-KZERO))
+        panic("tmpmap: already mapped entry=%#.8lux", *entry);
+    *entry = p->pa|PTEWRITE|PTEVALID;
+    flushpg(TMPADDR);
+    return (virt_addr3)TMPADDR;
+}
+@
+%PPN = pure page number
+
+<<function tmpunmap>>=
+void
+tmpunmap(virt_addr3 v)
+{
+    ulong *entry;
+    
+    if(islo())
+        panic("tmpaddr: islo");
+    if((ulong)v >= KZERO && v != (void*)TMPADDR)
+        return;
+
+    if(v != (void*)TMPADDR)
+        panic("tmpunmap: bad address");
+
+    entry = &vpt[VPTX(TMPADDR)];
+    if(!(*entry&PTEVALID) || PPN(*entry) == PPN(PADDR(TMPADDR)))
+        panic("tmpmap: not mapped entry=%#.8lux", *entry);
+    *entry = PPN(TMPADDR-KZERO)|PTEWRITE|PTEVALID;
+    flushpg(TMPADDR);
+}
+@
+
+
+
 \subsection{[[kmap()]]}
 
-\subsection{[[tmpmap()]]}
+
+<<struct KMap>>=
+/*
+ * KMap the structure doesn't exist, but the functions do.
+ */
+typedef struct KMap   KMap;
+@
+% why not void like in bcm?
+
+<<macro VA>>=
+#define VA(k)   ((virt_addr3)(k))
+@
+
+
+<<[[Proc]] [[Arch]] memory fields>>=
+Page* kmaptable;    /* page table used by kmap */
+uint  lastkmap;   /* last entry used by kmap */
+int nkmap;      /* number of current kmaps */
+@
+
+
+<<function kmap>>=
+KMap*
+kmap(Page *page)
+{
+    int i, o, s;
+
+    if(up == nil)
+        panic("kmap: up=0 pc=%#.8lux", getcallerpc(&page));
+    if(up->mmupd == nil)
+        upallocmmupd();
+    if(up->nkmap < 0)
+        panic("kmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
+    
+    /*
+     * Splhi shouldn't be necessary here, but paranoia reigns.
+     * See comment in putmmu above.
+     */
+    s = splhi();
+    up->nkmap++;
+    if(!(vpd[PDX(KMAP)]&PTEVALID)){
+        /* allocate page directory */
+        if(KMAPSIZE > BY2XPG)
+            panic("bad kmapsize");
+        if(up->kmaptable != nil)
+            panic("kmaptable");
+        spllo();
+        up->kmaptable = newpage(0, 0, 0);
+        splhi();
+        vpd[PDX(KMAP)] = up->kmaptable->pa|PTEWRITE|PTEVALID;
+        flushpg((ulong)kpt);
+        memset(kpt, 0, BY2PG);
+        kpt[0] = page->pa|PTEWRITE|PTEVALID;
+        up->lastkmap = 0;
+        splx(s);
+        return (KMap*)KMAP;
+    }
+    if(up->kmaptable == nil)
+        panic("no kmaptable");
+    o = up->lastkmap+1;
+    for(i=0; i<NKPT; i++){
+        if(kpt[(i+o)%NKPT] == 0){
+            o = (i+o)%NKPT;
+            kpt[o] = page->pa|PTEWRITE|PTEVALID;
+            up->lastkmap = o;
+            splx(s);
+            return (KMap*)(KMAP+o*BY2PG);
+        }
+    }
+    panic("out of kmap");
+    return nil;
+}
+@
+
+
+<<function kunmap>>=
+void
+kunmap(KMap *k)
+{
+    ulong va;
+
+    va = (ulong)k;
+    if(up->mmupd == nil || !(vpd[PDX(KMAP)]&PTEVALID))
+        panic("kunmap: no kmaps");
+    if(va < KMAP || va >= KMAP+KMAPSIZE)
+        panic("kunmap: bad address %#.8lux pc=%#p", va, getcallerpc(&k));
+    if(!(vpt[VPTX(va)]&PTEVALID))
+        panic("kunmap: not mapped %#.8lux pc=%#p", va, getcallerpc(&k));
+    up->nkmap--;
+    if(up->nkmap < 0)
+        panic("kunmap %lud %s: nkmap=%d", up->pid, up->text, up->nkmap);
+    vpt[VPTX(va)] = 0;
+    flushpg(va);
+}
+@
+
 
 
 

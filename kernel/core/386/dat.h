@@ -88,7 +88,7 @@ typedef void* kern_addr3;
 #include "dat_buses.h"
 #include "../port/portdat_buses.h"
 
-// defines keyboard queue
+// defines keyboard queue, consdevtab
 #include "../port/portdat_console.h"
 
 // could be put in lib.h
@@ -102,6 +102,7 @@ typedef void* kern_addr3;
 // BY2PG is defined in mem.h, which should always be included before "dat.h"!
 #define PGROUND(s)  ROUNDUP(s, BY2PG)
 /*e: portdat.h macros */
+
 /*s: portdat.h pragmas */
 #pragma varargck  type  "I" uchar*
 #pragma varargck  type  "V" uchar*
