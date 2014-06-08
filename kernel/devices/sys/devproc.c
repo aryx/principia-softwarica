@@ -199,13 +199,12 @@ static Lock tlock;
 static void
 profclock(Ureg *ur, Timer *)
 {
-    Tos *tos;
-
     if(up == nil || up->state != Running)
         return;
 
     /* user profiling clock */
     if(userureg(ur)){
+        Tos *tos;
         tos = (Tos*)(USTKTOP-sizeof(Tos));
         tos->clock += TK2MS(1);
         segclock(ur->pc);
