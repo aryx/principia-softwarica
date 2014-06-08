@@ -29,11 +29,11 @@ struct Conf
 
     ulong nproc;    /* processes */
     /*s: [[Conf]] other fields */
-    bool copymode; /* 0 is copy on write, 1 is copy on reference */
-    /*x: [[Conf]] other fields */
     ulong nswap;    /* number of swap pages */
     /*x: [[Conf]] other fields */
     int nswppo;   /* max # of pageouts per segment pass */
+    /*x: [[Conf]] other fields */
+    bool copymode; /* 0 is copy on write, 1 is copy on reference */
     /*x: [[Conf]] other fields */
     ulong npage;    /* total physical pages of memory */
 
@@ -131,8 +131,6 @@ struct Cpu
     /*s: [[Cpu]] other fields */
     int ilockdepth;
     /*x: [[Cpu]] other fields */
-    bool flushmmu;   /* make current proc flush it's mmu state */
-    /*x: [[Cpu]] other fields */
     int lastintr; // debugging
     /*x: [[Cpu]] other fields */
     Label sched;      /* scheduler wakeup */ // address of schedinit()
@@ -140,6 +138,8 @@ struct Cpu
     Proc* readied;    /* for runproc */
     /*x: [[Cpu]] other fields */
     ulong schedticks;   /* next forced context switch */
+    /*x: [[Cpu]] other fields */
+    bool flushmmu;   /* make current proc flush it's mmu state */
     /*e: [[Cpu]] other fields */
     struct ArchCpu;
   

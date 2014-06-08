@@ -18,13 +18,16 @@ enum rfork
     RFNAMEG     = (1<<0),
     RFENVG      = (1<<1),
     RFFDG       = (1<<2),
+
+    RFCNAMEG    = (1<<10),
+    RFCENVG     = (1<<11),
+    RFCFDG      = (1<<12),
+
     RFNOTEG     = (1<<3),
     RFPROC      = (1<<4),
     RFMEM       = (1<<5),
     RFNOWAIT    = (1<<6),
-    RFCNAMEG    = (1<<10),
-    RFCENVG     = (1<<11),
-    RFCFDG      = (1<<12),
+
     RFREND      = (1<<13),
     RFNOMNT     = (1<<14),
 };
@@ -76,7 +79,7 @@ sysrfork(ulong *arg)
                 up->fgrp = dupfgrp(ofg);
             else
                 up->fgrp = dupfgrp(nil);
-            closefgrp(ofg);
+            closefgrp(ofg); // why close?
         }
         if(flag & (RFNAMEG|RFCNAMEG)) {
             opg = up->pgrp;
@@ -88,7 +91,7 @@ sysrfork(ulong *arg)
             closepgrp(opg);
         }
         if(flag & RFNOMNT)
-            up->pgrp->noattach = 1;
+            up->pgrp->noattach = true;
         if(flag & RFREND) {
             org = up->rgrp;
             up->rgrp = newrgrp();
@@ -164,7 +167,7 @@ sysrfork(ulong *arg)
         incref(p->pgrp);
     }
     if(flag & RFNOMNT)
-        p->pgrp->noattach = 1;
+        p->pgrp->noattach = true;
 
     if(flag & RFREND)
         p->rgrp = newrgrp();

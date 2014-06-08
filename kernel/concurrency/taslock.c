@@ -84,7 +84,7 @@ lock(Lock *l)
     lockstats.locks++;
     if(up)
         inccnt(&up->nlocks);    /* prevent being scheded */
-    if(tas(&l->key) == 0){
+    if(tas(&l->key) == 0){ // lock old value was 0, the lock was not held
         if(up)
             up->lastlock = l;
         l->pc = pc;
@@ -98,6 +98,8 @@ lock(Lock *l)
 /*e: lock ifdef LOCKCYCLES */
         return 0;
     }
+
+    // the lock was already held, need to spin
     if(up)
         deccnt(&up->nlocks);
 
@@ -186,7 +188,6 @@ acquire:
     l->pc = pc;
     l->p = up;
     l->isilock = true;
-    // why not just l->cpu = cpu? because it would always be the same addr!
     l->cpu = CPUS(cpu->cpuno);
 /*s: lock ifdef LOCKCYCLES */
 #ifdef LOCKCYCLES
@@ -202,7 +203,7 @@ canlock(Lock *l)
 {
     if(up)
         inccnt(&up->nlocks);
-    if(tas(&l->key)){
+    if(tas(&l->key) != 0){ // lock old value != 0, lock was already held
         if(up)
             deccnt(&up->nlocks);
         return false;

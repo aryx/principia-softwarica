@@ -31,10 +31,10 @@ struct Page
     /*s: [[Page]] other fields */
     ulong daddr;      /* Disc address on swap */
     /*x: [[Page]] other fields */
-    ulong gen;      /* Generation counter for swap */
-    /*x: [[Page]] other fields */
     // option<ref<Kimage>>
     KImage  *image;     /* Associated text or swap image */
+    /*x: [[Page]] other fields */
+    ulong gen;      /* Generation counter for swap */
     /*e: [[Page]] other fields */
   
     // Why not Ref? to save space (same reason they use char below)
@@ -181,6 +181,8 @@ struct Segment
     ulong fstart;   /* start address in file for demand load */
     ulong flen;   /* length of segment in file */
     /*x: [[Segment]] other fields */
+    Sema sema;
+    /*x: [[Segment]] other fields */
     ushort  steal;    /* Page stealer lock */
     /*x: [[Segment]] other fields */
     kern_addr2  profile;  /* Tick profile area */ // for TSEG only
@@ -193,7 +195,6 @@ struct Segment
     // extra
     Ref; // LOCK ORDERING: always do lock(img); lock(s) ??
     QLock lk;
-    Sema  sema;
 };
 /*e: struct Segment */
 

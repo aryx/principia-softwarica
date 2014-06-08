@@ -422,6 +422,7 @@ struct Proc
 
     // enum<procstate> 
     int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate==nil)
+
     // some debugging information, e.g. "New", "PageOut", or name of syscall
     char  *psstate; /* used by /proc/#/status */
     bool insyscall; // true when process inside a syscall
@@ -570,6 +571,7 @@ struct Proc
     /*x: [[Proc]] error managment fields */
     char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
     /*e: [[Proc]] error managment fields */
+
 //--------------------------------------------------------------------
 // Stats, profiling
 //--------------------------------------------------------------------

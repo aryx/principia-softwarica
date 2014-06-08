@@ -157,9 +157,8 @@ newpage(bool clear, Segment **s, virt_addr va)
     lock(&palloc);
 
     /*s: [[newpage()]] loop waiting freecount > highwater */
-        hw = swapalloc.highwater;
         for(;;) {
-            if(palloc.freecount > hw)
+            if(palloc.freecount > swapalloc.highwater)
                 break;
             if(up->kp && palloc.freecount > 0)
                 break;
@@ -232,10 +231,12 @@ hasfreepages(void*)
 void
 putpage(Page *p)
 {
-    if(onswap(p)) {
-        putswap(p);
-        return;
-    }
+    /*s: [[putpage]] if p is a swap address */
+        if(onswap(p)) {
+            putswap(p);
+            return;
+        }
+    /*e: [[putpage]] if p is a swap address */
 
     lock(&palloc);
     lock(p);
@@ -475,7 +476,7 @@ lookpage(KImage *i, ulong daddr)
 
             lock(&palloc);
             lock(f);
-            if(f->image != i || f->daddr != daddr) {
+            if(f->image != i || f->daddr != daddr) { // race, not the one anymore
                 unlock(f);
                 unlock(&palloc);
                 return nil;
@@ -506,8 +507,10 @@ ptcpy(Pagetable *old)
     new->first = dst;
     for(src = old->first; src <= old->last; src++, dst++)
         if(*src) {
-            if(onswap(*src))
-                dupswap(*src);
+            /*s: [[ptcpy()]] if src is a swap page */
+                        if(onswap(*src))
+                            dupswap(*src);
+            /*e: [[ptcpy()]] if src is a swap page */
             else {
                 lock(*src);
                 (*src)->ref++;

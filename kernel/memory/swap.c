@@ -363,7 +363,7 @@ pagepte(int type, Page **pg)
          */
         outp->daddr = daddr;
         cachepage(outp, &swapimage);
-        *pg = (Page*)(daddr|PG_ONSWAP);
+        *pg = (Page*)(daddr|PG_ONSWAP); // turn a Page into a Swap
         unlock(outp);
 
         /* Add page to IO transaction list */

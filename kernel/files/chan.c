@@ -542,12 +542,13 @@ eqqid(Qid a, Qid b)
 
 /*s: function eqchan */
 bool
-eqchan(Chan *a, Chan *b, int skipvers)
+eqchan(Chan *a, Chan *b, bool skipvers)
 {
     if(a->qid.path != b->qid.path)
         return false;
     if(!skipvers && a->qid.vers!=b->qid.vers)
         return false;
+
     if(a->type != b->type)
         return false;
     if(a->dev != b->dev)
@@ -558,7 +559,7 @@ eqchan(Chan *a, Chan *b, int skipvers)
 
 /*s: function eqchantdqid */
 bool
-eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
+eqchantdqid(Chan *a, int type, int dev, Qid qid, bool skipvers)
 {
     if(a->qid.path != qid.path)
         return false;

@@ -222,7 +222,7 @@ version described in this book at:
 % it's kinda of the opposite of 9atom! support less features :)
 
 
-Then you need to compile, using a regular C compiler (e.g. gcc),
+Then you need to compile using a regular C compiler (e.g. gcc)
 and then install the Plan9 C cross compilers written by Ken Thompson:
  \url{https://github.com/aryx/fork-kencc}.
 
@@ -454,6 +454,9 @@ provides to the user programs.
 % missing stuff in plan9:
 % - shared library (help save some memory, but complicated)
 %   but: http://www.kix.in/2008/06/19/an-alternative-to-shared-libraries/ ??
+% missing stuff in 9 kernel compared to Linux:
+% - buffer cache (but because distributed nature, can have cache, but in fileserver)
+% - reuse kernel memory?
 
 % see also uriel plan9 slide 9, things plan9 does not have
 
@@ -768,6 +771,9 @@ cankaddr(phys_addr pa)
 % also IDT, GDT, VPT.
 
 
+% need to talk about Confmem, otherwise will not understand xalloc and palloc.mem
+% very well.
+
 % start from Confmem + kernel binary.
 % then Confmem split in xlists and palloc.mem
 % then from xlists allocate nproc, pages (that will cover palloc.mem), 
@@ -862,7 +868,7 @@ struct Conf
 % On the PC we have 2, one in the low memory before the kernel, and
 % one after the kernel bss. On the bcm they just have 1.
 % note that the physical memory used by the kernel is excluded
-% because we well use mem for giving memory to kernel heap or user.
+% because we will use mem for giving memory to kernel heap or user.
 
 <<global conf>>=
 Conf conf;
@@ -878,6 +884,7 @@ struct Confmem
 };
 @ 
 % show concrete value for qemu! see C-t C-t m
+% will use that later! set in main() in confinit(), and use for xalloc, and palloc
 
 <<globals confname and confvar>>=
 // conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
@@ -1067,6 +1074,7 @@ struct Proc
 // Error managment
 //--------------------------------------------------------------------
     <<[[Proc]] error managment fields>>
+
 //--------------------------------------------------------------------
 // Stats, profiling
 //--------------------------------------------------------------------
@@ -1108,6 +1116,7 @@ ulong parentpid;
 
 // enum<procstate> 
 int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate==nil)
+
 // some debugging information, e.g. "New", "PageOut", or name of syscall
 char  *psstate; /* used by /proc/#/status */
 bool insyscall; // true when process inside a syscall
@@ -1175,6 +1184,8 @@ char *statename[] =
 %   use cpu->proc for up!
 
 \section{[[Chan]]}
+% and proc->fd[]? in title?
+
 % everything is a file/Chan :)
 % diff with file descriptor? fd = index in chan table (fgrp), chan = opened file
 
@@ -1263,12 +1274,13 @@ mkqid(Qid *q, vlong path, ulong vers, int type)
 
 <<function eqchan>>=
 bool
-eqchan(Chan *a, Chan *b, int skipvers)
+eqchan(Chan *a, Chan *b, bool skipvers)
 {
     if(a->qid.path != b->qid.path)
         return false;
     if(!skipvers && a->qid.vers!=b->qid.vers)
         return false;
+
     if(a->type != b->type)
         return false;
     if(a->dev != b->dev)
@@ -1277,10 +1289,10 @@ eqchan(Chan *a, Chan *b, int skipvers)
 }
 @
 
-
+% mostly dupe, so could factorize? or put in ifallcode?
 <<function eqchantdqid>>=
 bool
-eqchantdqid(Chan *a, int type, int dev, Qid qid, int skipvers)
+eqchantdqid(Chan *a, int type, int dev, Qid qid, bool skipvers)
 {
     if(a->qid.path != qid.path)
         return false;
@@ -1395,6 +1407,7 @@ PCArch archgeneric = {
     <<[[archgeneric]] power methods>>
 };
 @
+% what ident is for?
 
 % SMP is more complex arch: 'archmp'
 
@@ -1403,11 +1416,11 @@ PCArch archgeneric = {
 
 % when think about concurrency in a userspace program, one have
 % shared memory of multiple program threads and need to mediate
-% access to shared data via semaphore/lock/whatever.
+% access to shared data via semaphore/lock/monitor/whatever.
 
 % well an OS is a kind of program and it has also mutiple
 % "threads" (different activities the processes) and lots of shared data
-% (kernel meta data about user processes and its own data).
+% (kernel meta data about user processes and its own data, shared resources, etc)
 % This is why lots of the concurrency issues arised first
 % for OS programmers long before the other.
 
@@ -1457,10 +1470,7 @@ PCArch archgeneric = {
 
 \section{[[splhi()]], [[spllo()]]}
 
-<<[[Cpu]] second field>>=
-// must be second field at 0x04, used by splhi()
-ulong splpc;      /* pc of last caller to splhi */
-@ 
+% cli
 
 <<function splhi>>=
 // bool   splhi(void);
@@ -1480,6 +1490,13 @@ alreadyhi:
 %$
 % interrupt state is in x86 flags register, accessible via pushfl
 % this function is actually used quite a lot, not just internally in ilock
+
+<<[[Cpu]] second field>>=
+// must be second field at 0x04, used by splhi()
+ulong splpc;      /* pc of last caller to splhi */
+@ 
+
+
 
 <<function spllo>>=
 // bool   spllo(void);
@@ -1522,29 +1539,37 @@ TEXT islo(SB), $0
 
 % building block of concurrency
 
+% call we will see later as tas(&lock->key)
 <<function tas>>=
 TEXT tas(SB), $0
         MOVL    $0xDEADDEAD, AX
         MOVL    l+0(FP), BX
-        // Exchange AX to lock->key. So:
-        //  - if the lock was not held, lock->key was 0 and so AX will be 0
-        //     and lock->key will be 0xdeaddead
-        //  - if the lock was held, AX will be 0xdeaddead and lock->key will
-        //    still be 0xdeaddead.
         XCHGL   AX, (BX)                        /* lock->key */
         RET
 @ 
+% XCHGL is atomic! can't have 2 cpu doing same thing at the same time
+% only one will win!
+
+%        // Exchange AX (0xDEADDEAD) to lock->key. So:
+%        //  - if the lock was not held, lock->key was 0 and so AX will be 0
+%        //     and lock->key will be 0xdeaddead
+%        //  - if the lock was held, AX will be 0xdeaddead and lock->key will
+%        //    still be 0xdeaddead.
+
+% return in AX, so can read that as what was the value in the lock, and if
+% nul then set it! So tas() == 0 mean? tas() == 0xDEADEAD mean?
+% return in AX see C conventions.
+
 % movl l+0(FP) is because we use 0(FP) and 8a forces the programmer
 % to give a name to accessed parameters. Used in debugger?
 
-% return in AX, see C conventions. So tas() == 0 mean? tas() == 1 mean?
 
 \section{Atomic [[_xinc()]] and [[_xdec()]]}
 
 % tas() is to make sure one arrive first on something.
 % another fundamental concurrency operation is increment/decrement atomically
-% (actually can simular second one with first, see Ref later, but can be
-% useful to have something faster on certain archi)
+% (actually can simulate second one with first, see Ref later, but can be
+% useful to have something faster on certain architecture)
 
 <<function _xinc>>=
 /* void _xinc(long*); */
@@ -1624,7 +1649,7 @@ lock(Lock *l)
     lockstats.locks++;
     if(up)
         inccnt(&up->nlocks);    /* prevent being scheded */
-    if(tas(&l->key) == 0){
+    if(tas(&l->key) == 0){ // lock old value was 0, the lock was not held
         if(up)
             up->lastlock = l;
         l->pc = pc;
@@ -1634,6 +1659,8 @@ lock(Lock *l)
 <<lock ifdef LOCKCYCLES>>
         return 0;
     }
+
+    // the lock was already held, need to spin
     if(up)
         deccnt(&up->nlocks);
 
@@ -1664,7 +1691,9 @@ lock(Lock *l)
             deccnt(&up->nlocks);
     }
 }
-@ 
+@
+% could maybe use a dowhile? could factorize code
+%    // why not just l->cpu = cpu? because it would always be the same addr!
 
 \ifallcode
 <<unlock ifdef LOCKCYCLES>>=
@@ -1702,10 +1731,8 @@ unlock(Lock *l)
     <<[[unlock()]] if delaysched>>
 }
 @ 
-% the last if is very subtle, have to understand sched() and delaysched
-% to understand. too early to show a scenario
 
-% does not spin if it can not get it
+% note that if it can it actually gets the lock. does not spin if it can not get it.
 % it can be used also to make sure your caller have the lock by doing
 %  if(canlock(x)) panic("lock not held by caller")
 <<function canlock>>=
@@ -1714,7 +1741,7 @@ canlock(Lock *l)
 {
     if(up)
         inccnt(&up->nlocks);
-    if(tas(&l->key)){
+    if(tas(&l->key) != 0){ // lock old value != 0, lock was already held
         if(up)
             deccnt(&up->nlocks);
         return false;
@@ -1759,6 +1786,7 @@ Lock  *lastilock;
 int ilockdepth;
 @ 
 
+% usage vs just splhi? for critical regions between different interrupt handlers?
 <<function ilock>>=
 // To provide mutual exclusion with interrupt code and avoiding deadlock.
 // By using splhi() we disable interrupts while running the critical region
@@ -1801,7 +1829,6 @@ acquire:
     l->pc = pc;
     l->p = up;
     l->isilock = true;
-    // why not just l->cpu = cpu? because it would always be the same addr!
     l->cpu = CPUS(cpu->cpuno);
 <<lock ifdef LOCKCYCLES>>
 }
@@ -1848,7 +1875,7 @@ iunlock(Lock *l)
 @ 
 
 \section{Waiting [[QLock]]}
-% can be seen also as a Waiting queue, Waiting lock? Sleepable Lock?
+% can be seen also as a Waiting queue, Sleepable Lock?
 
 <<struct QLock>>=
 // Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
@@ -1858,7 +1885,7 @@ struct KQLock
   
     // list<ref<Proc>> (next = Proc.qnext)
     Proc  *head;    /* next process waiting for object */
-    // ref<Proc> (direct access to tail, queue)
+    // option<ref<Proc>> (direct access to tail, queue)
     Proc  *tail;    /* last process waiting for object */
   
     kern_addr qpc;    /* pc of the holder */ // for debugging?
@@ -1866,6 +1893,7 @@ struct KQLock
     Lock  use;    /* to access Qlock structure */
 };
 @ 
+% note that QLock use Lock! building block!
 
 <<[[Proc]] debugging fields>>=
 ulong qpc;    /* pc calling last blocking qlock */
@@ -1956,7 +1984,6 @@ qunlock(QLock *q)
     }
 }
 @ 
-
 %call to ready() function! could put the Ready state here then?
 
 % does not sleep if can not get it (but if can get it then it does!)
@@ -1988,7 +2015,7 @@ struct RWlock
   
     // list<ref<Proc>> (next = Proc.qnext)
     Proc  *head;    /* list of waiting processes */
-    // list<ref<Proc>> (direct access to tail, queue)
+    // option<ref<Proc>> (direct access to tail, queue)
     Proc  *tail;
     // option<ref<Proc>> 
     Proc  *wproc;   /* writing proc */
@@ -2238,7 +2265,7 @@ deccnt(Ref *r)
     return x;
 }
 @ 
-
+% actually used in Lock ... mutually recursive, but used for nlocks
 
 \section{Synchronization}
 % different from critical regions
@@ -2756,7 +2783,7 @@ Pool*   imagmem = &pimagmem;
 
 \section{Kernel [[malloc()]]}
 
-% the memcpy, memmove, functions of libc use malloc?
+% the memcpy, memmove, functions of libc use malloc? probably not
 
 <<function malloc>>=
 kern_addr3
@@ -2838,7 +2865,9 @@ smalloc(ulong size)
     return v;
 }
 @
-
+% will see tsleep and rendez vous later. why use tsleep vs sched()?
+% because what state it would be? you want sleeping state, so that's what tsleep
+% is for!
 
 
 
@@ -2926,6 +2955,10 @@ realloc(kern_addr3 v, ulong size)
 % already kindof virtual memory! but generic one.
 % virtual because we have this indirection notion! of va vs pa. and segment
 % with pagedir and pagetab. but more on this later in virtual memory chapter.
+% cf famous quote on indirection
+
+% Page will be building blocks for memory for user. We'll see later that
+% they have a huge number of use.
 
 <<struct Page>>=
 // Page metadata. We will allocate as many Page as to cover all physical memory
@@ -2965,7 +2998,9 @@ enum modref
 };
 @
 % PG_REF is set in fixfault when access for the first time the page
+%  why useful?
 % PG_MOD is set in fixfault too when writing in the page
+%  why useful?
 
 
 
@@ -3092,7 +3127,7 @@ pageunchain(Page *p)
 }
 @
 
-
+%PageOrSwap
 <<destructor putpage>>=
 void
 putpage(Page *p)
@@ -3123,7 +3158,7 @@ putpage(Page *p)
     unlock(&palloc);
 }
 @
-% LP split freememr? and p->image stuff?
+% LP split freememr? and p->image stuff? in page cache?
 
 
 
@@ -3171,7 +3206,7 @@ pagechaintail(Page *p)
     palloc.freecount++;
 }
 @
-
+% why chaintail? for Page Cache! see later
 
 % far more about Pages in Page fault section in virtual memory chapter
 % but for now enough, we have some functions to allocate and free
@@ -3229,12 +3264,10 @@ struct Segment
     // extra
     Ref; // LOCK ORDERING: always do lock(img); lock(s) ??
     QLock lk;
-    Sema  sema;
 };
 @
 % Segment acts as a kind of Page directory per process, but
 % archi-independent.
-
 
 <<constant PAGEDIRSIZE>>=
 #define PAGEDIRSIZE  1984
@@ -3261,7 +3294,7 @@ struct Pagetable
     Page  **last;     /* Last used entry */
 };
 @
-% actually I think it's array<option<either<ref<swappage>, ref<Page>>>
+% actually I think it's array<option<ref<PageOrSwap>>>
 % (first and last optimize a bit as many of the Page* can be null in pagetab)
 
 <<constant PAGETABMAPMEM>>=
@@ -3278,6 +3311,8 @@ struct Pagetable
 % and each of this Pagetable have 256 PageInfo so 1984 * 256 * 4096 = 2Go
 % of mapped virtual memory
 
+% start here glossary about PD, PT, PDX, PTX? because we'll use it in segpage
+% below
 
 <<constructor ptalloc>>=
 Pagetable*
@@ -3291,6 +3326,8 @@ ptalloc(void)
     return new;
 }
 @
+% note that use kernel memory here! and then we will user memory for the actual
+% pages
 
 <<destructor freept>>=
 void
@@ -3312,7 +3349,7 @@ freept(Segment *s, Pagetable *p)
 }
 @
 
-
+% does not really copy, it's more about sharing and reference counting
 <<function ptcpy>>=
 Pagetable*
 ptcpy(Pagetable *old)
@@ -3360,9 +3397,7 @@ newseg(int type, virt_addr base, ulong size)
     s->top = base+(size*BY2PG);
     s->size = size;
 
-    // no list, just one sema
-    s->sema.prev = &s->sema;
-    s->sema.next = &s->sema;
+    <<[[newseg()]] sema initialization>>
 
     pagedirsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
     if(pagedirsize > nelem(s->smallpagedir)){
@@ -3378,7 +3413,9 @@ newseg(int type, virt_addr base, ulong size)
     return s;
 }
 @
-
+% ok but who actually allocate the pages? allocate just pagedir here?
+% about pagetable? and pages?  This will be done in fixfault later! Lazy!
+% for text it will be demand loaded, for memory it will be on read/write
 
 <<destructor putseg>>=
 void
@@ -3421,8 +3458,7 @@ putseg(Segment *s)
     qunlock(&s->lk);
     if(s->pagedir != s->smallpagedir)
         free(s->pagedir);
-    if(s->profile != nil)
-        free(s->profile);
+    <<[[putseg()]] free profile>>
     free(s);
 }
 @
@@ -3449,12 +3485,14 @@ segpage(Segment *s, Page *p)
 
     pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG]; // PTX
     *pg = p;
+
     if(pg < (*pt)->first)
         (*pt)->first = pg;
     if(pg > (*pt)->last)
         (*pt)->last = pg;
 }
 @
+% could assert old value of *pg was 0?
 
 <<enum procseg>>=
 /*
@@ -3556,6 +3594,8 @@ okaddr(virt_addr addr, ulong len, bool write)
     return false;
 }
 @
+% the loop show a bit the limitation of just-paging model where all segments
+% are put next to each other and are not in independent memory space.
 
 
 <<function validaddr>>=
@@ -3574,7 +3614,7 @@ validaddr(virt_addr addr, ulong len, bool write)
 
 % used by sysexec() and other syscalls
 % memchr on virtual address? and so that can span different pages, and 
-% even different segments! can generate faults?
+% even different segments! can generate faults? I think so.
 <<function vmemchr>>=
 /*
  * &s[0] is known to be a valid address.
@@ -3708,7 +3748,6 @@ sameseg:
 % used in ibrk() and segfree()
 % when called from ibrk() we know s->ref == 1, so the procflushseg
 % is really used only for extra segment and people using segfree()
-% todo: mv procflushseg thing in IPC section with segfree?
 <<function mfreeseg>>=
 /*
  *  called with s->lk locked
@@ -3773,63 +3812,6 @@ out:
     }
 }
 @
-
-% put in virtual memory section?
-<<[[Cpu]] other fields>>=
-bool flushmmu;   /* make current proc flush it's mmu state */
-@
-
-
-% seems really expensive
-<<function procflushseg>>=
-/*
- *  wait till all processes have flushed their mmu
- *  state about segment s
- */
-//@Scheck: not dead, used in segment.c
-void
-procflushseg(Segment *s)
-{
-    int i, ns, nm;
-    bool wait;
-    Proc *p;
-
-    /*
-     *  tell all processes with this
-     *  segment to flush their mmu's
-     */
-    wait = false;
-    for(i=0; i<conf.nproc; i++) {
-        p = &procalloc.arena[i];
-        if(p->state == Dead)
-            continue;
-        for(ns = 0; ns < NSEG; ns++)
-            if(p->seg[ns] == s){
-                p->newtlb = true;
-                for(nm = 0; nm < conf.ncpu; nm++){
-                    if(CPUS(nm)->proc == p){
-                        CPUS(nm)->flushmmu = true;
-                        wait = true;
-                    }
-                }
-                break;
-            }
-    }
-    if(!wait)
-        return;
-
-    /*
-     *  wait for all processors to take a clock interrupt
-     *  and flush their mmu's
-     */
-    for(nm = 0; nm < conf.ncpu; nm++)
-        if(CPUS(nm) != cpu)
-            while(CPUS(nm)->flushmmu)
-                sched();
-}
-@ 
-% but process could be allocated to different proc, so could loop forever
-% or miss? when reallocated probably the tlb is flush anyway so safe?
 
 
 \section{[[sysbrk()]]}
@@ -10033,6 +10015,10 @@ i8253clock(Ureg* ureg, void*)
 }
 @
 
+% put in virtual memory section?
+<<[[Cpu]] other fields>>=
+bool flushmmu;   /* make current proc flush it's mmu state */
+@
 
 
 <<clock callback hzclock>>=
@@ -22093,6 +22079,58 @@ syssegfree(ulong *arg)
 @ 
 
 
+% seems really expensive
+<<function procflushseg>>=
+/*
+ *  wait till all processes have flushed their mmu
+ *  state about segment s
+ */
+//@Scheck: not dead, used in segment.c
+void
+procflushseg(Segment *s)
+{
+    int i, ns, nm;
+    bool wait;
+    Proc *p;
+
+    /*
+     *  tell all processes with this
+     *  segment to flush their mmu's
+     */
+    wait = false;
+    for(i=0; i<conf.nproc; i++) {
+        p = &procalloc.arena[i];
+        if(p->state == Dead)
+            continue;
+        for(ns = 0; ns < NSEG; ns++)
+            if(p->seg[ns] == s){
+                p->newtlb = true;
+                for(nm = 0; nm < conf.ncpu; nm++){
+                    if(CPUS(nm)->proc == p){
+                        CPUS(nm)->flushmmu = true;
+                        wait = true;
+                    }
+                }
+                break;
+            }
+    }
+    if(!wait)
+        return;
+
+    /*
+     *  wait for all processors to take a clock interrupt
+     *  and flush their mmu's
+     */
+    for(nm = 0; nm < conf.ncpu; nm++)
+        if(CPUS(nm) != cpu)
+            while(CPUS(nm)->flushmmu)
+                sched();
+}
+@ 
+% but process could be allocated to different proc, so could loop forever
+% or miss? when reallocated probably the tlb is flush anyway so safe?
+
+
 
 
 <<syscall segflush>>=
@@ -22168,6 +22206,17 @@ struct Sema
     Rendez;
 };
 @ 
+
+<<[[Segment]] other fields>>=
+Sema sema;
+@
+
+<<[[newseg()]] sema initialization>>=
+    // no list, just one sema
+    s->sema.prev = &s->sema;
+    s->sema.next = &s->sema;
+@
+
 
 <<function cmpswap and default implementation>>=
 /*
@@ -26403,6 +26452,12 @@ kern_addr2  profile;  /* Tick profile area */ // for TSEG only
 % why not put that in Proc instead? it's true it speaks about
 % elements of text segment. Also because then it can be used
 % for multiprocess (or multithreads) programs that share the same text!
+
+<<[[putseg()]] free profile>>=
+    if(s->profile != nil)
+        free(s->profile);
+@
+
 
 % often used as (q->top-q->base)>>LRESPROF
 <<constant LRESPROF>>=

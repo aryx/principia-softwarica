@@ -93,9 +93,11 @@ newseg(int type, virt_addr base, ulong size)
     s->top = base+(size*BY2PG);
     s->size = size;
 
-    // no list, just one sema
-    s->sema.prev = &s->sema;
-    s->sema.next = &s->sema;
+    /*s: [[newseg()]] sema initialization */
+        // no list, just one sema
+        s->sema.prev = &s->sema;
+        s->sema.next = &s->sema;
+    /*e: [[newseg()]] sema initialization */
 
     pagedirsize = ROUND(size, PAGETABSIZE)/PAGETABSIZE;
     if(pagedirsize > nelem(s->smallpagedir)){
@@ -153,8 +155,10 @@ putseg(Segment *s)
     qunlock(&s->lk);
     if(s->pagedir != s->smallpagedir)
         free(s->pagedir);
-    if(s->profile != nil)
-        free(s->profile);
+    /*s: [[putseg()]] free profile */
+        if(s->profile != nil)
+            free(s->profile);
+    /*e: [[putseg()]] free profile */
     free(s);
 }
 /*e: destructor putseg */
@@ -274,6 +278,7 @@ segpage(Segment *s, Page *p)
 
     pg = &(*pt)->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG]; // PTX
     *pg = p;
+
     if(pg < (*pt)->first)
         (*pt)->first = pg;
     if(pg > (*pt)->last)
@@ -606,8 +611,10 @@ mfreeseg(Segment *s, ulong start, int pages)
              * to putswap those pages before procflushseg.
              */
             if(pg){
-                if(onswap(pg))
-                    putswap(pg);
+                /*s: [[mfreeseg]] if pg is a swap address */
+                                if(onswap(pg))
+                                    putswap(pg);
+                /*e: [[mfreeseg]] if pg is a swap address */
                 else{
                     pg->next = list;
                     list = pg;
