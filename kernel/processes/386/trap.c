@@ -385,12 +385,12 @@ trap(Ureg* ureg)
 
     user = (ureg->cs & 0xFFFF) == UESEL;
 
-    // if not user, then that means we interrupted a syscall() which should
-    // already have done those things, so no need for redundancy
     if(user){
         up->dbgreg = ureg;
         cycles(&up->kentry);
     }
+    // else if !user, then that means we interrupted a syscall() which should
+    // already have done those things, so no need for redundancy
 
     clockintr = false;
 

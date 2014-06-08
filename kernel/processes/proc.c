@@ -819,12 +819,7 @@ newproc(void)
     p->kp = false;
 
     p->pdbg = nil;
-    /*s: [[newproc()]] inherit Proc_tracesyscall */
-        if(up && up->procctl == Proc_tracesyscall)
-            p->procctl = Proc_tracesyscall;
-        else
-            p->procctl = Proc_nothing;
-    /*e: [[newproc()]] inherit Proc_tracesyscall */
+    p->procctl = Proc_nothing;
     p->syscalltrace = nil; 
     p->trace = false;
     p->dbgreg = nil;
@@ -1604,20 +1599,20 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->psstate = nil;
     p->procmode = 0640;
     p->kp = true; // Kernel Process
+    p->ureg = nil;
     p->noswap = true;
 
-    p->fpsave = up->fpsave;
-    p->sargs = up->sargs;
     p->slash = up->slash;
     p->dot = up->dot;
     if(p->dot)
         incref(p->dot);
 
+    p->fpsave = up->fpsave;
+    p->sargs = up->sargs;
     memmove(p->note, up->note, sizeof(p->note));
     p->nnote = up->nnote;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
-    p->ureg = nil;
 
     procpriority(p, PriKproc, false);
 
@@ -1625,6 +1620,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     kstrdup(&p->user, eve);
     kstrdup(&p->text, name);
+
     if(kpgrp == nil)
         kpgrp = newpgrp();
     p->pgrp = kpgrp;

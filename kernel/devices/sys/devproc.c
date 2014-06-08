@@ -898,6 +898,7 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, ((char*)p)+offset, n);
         return n;
 
+
     case Qregs:
         rptr = (uchar*)p->dbgreg;
         rsize = sizeof(Ureg);
@@ -914,7 +915,7 @@ procread(Chan *c, void *va, long n, vlong off)
         rptr = (uchar*)&p->fpsave;
         rsize = sizeof(ArchFPsave);
     regread:
-        if(rptr == 0)
+        if(rptr == nil)
             error(Enoreg);
         if(offset >= rsize)
             return 0;
@@ -922,6 +923,7 @@ procread(Chan *c, void *va, long n, vlong off)
             n = rsize - offset;
         memmove(a, rptr+offset, n);
         return n;
+
 
     case Qstatus:
         if(offset >= STATSIZE)

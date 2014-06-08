@@ -4080,7 +4080,7 @@ newproc(void)
     kstrdup(&p->user, "*nouser");
     kstrdup(&p->text, "*notext");
     kstrdup(&p->args, "");
-    memset(p->seg, nil, sizeof p->seg);
+    memset(p->seg, nilptr, sizeof p->seg);
     p->nargs = 0;
     p->setargs = false;
 
@@ -4106,7 +4106,7 @@ newproc(void)
     p->kp = false;
 
     p->pdbg = nil;
-    <<[[newproc()]] inherit Proc_tracesyscall>>
+    p->procctl = Proc_nothing;
     p->syscalltrace = nil; 
     p->trace = false;
     p->dbgreg = nil;
@@ -4357,7 +4357,7 @@ sysrfork(ulong *arg)
     p->parent = up;
     p->parentpid = up->pid;
     if(flag&RFNOWAIT)
-        p->parentpid = nil;
+        p->parentpid = 0;
     else {
         lock(&up->exl);
         up->nchild++;
@@ -4433,7 +4433,8 @@ TEXT forkret(SB), $0
         ADDL    $8, SP                  /* pop error code and trap type */
         IRETL
 @
-%??
+%?? POPAL? need to look at core code for returning from syscall as this is
+% what we emulate here
 
 \section{[[sysexec()]]}
 
@@ -5252,20 +5253,20 @@ kproc(char *name, void (*func)(void *), void *arg)
     p->psstate = nil;
     p->procmode = 0640;
     p->kp = true; // Kernel Process
+    p->ureg = nil;
     p->noswap = true;
 
-    p->fpsave = up->fpsave;
-    p->sargs = up->sargs;
     p->slash = up->slash;
     p->dot = up->dot;
     if(p->dot)
         incref(p->dot);
 
+    p->fpsave = up->fpsave;
+    p->sargs = up->sargs;
     memmove(p->note, up->note, sizeof(p->note));
     p->nnote = up->nnote;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
-    p->ureg = nil;
 
     procpriority(p, PriKproc, false);
 
@@ -5273,6 +5274,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     kstrdup(&p->user, eve);
     kstrdup(&p->text, name);
+
     if(kpgrp == nil)
         kpgrp = newpgrp();
     p->pgrp = kpgrp;
@@ -6317,12 +6319,12 @@ trap(Ureg* ureg)
 
     user = (ureg->cs & 0xFFFF) == UESEL;
 
-    // if not user, then that means we interrupted a syscall() which should
-    // already have done those things, so no need for redundancy
     if(user){
         up->dbgreg = ureg;
         cycles(&up->kentry);
     }
+    // else if !user, then that means we interrupted a syscall() which should
+    // already have done those things, so no need for redundancy
 
     clockintr = false;
 
@@ -23339,6 +23341,7 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, ((char*)p)+offset, n);
         return n;
 
+
     case Qregs:
         rptr = (uchar*)p->dbgreg;
         rsize = sizeof(Ureg);
@@ -23355,7 +23358,7 @@ procread(Chan *c, void *va, long n, vlong off)
         rptr = (uchar*)&p->fpsave;
         rsize = sizeof(ArchFPsave);
     regread:
-        if(rptr == 0)
+        if(rptr == nil)
             error(Enoreg);
         if(offset >= rsize)
             return 0;
@@ -23363,6 +23366,7 @@ procread(Chan *c, void *va, long n, vlong off)
             n = rsize - offset;
         memmove(a, rptr+offset, n);
         return n;
+
 
     case Qstatus:
         if(offset >= STATSIZE)
@@ -25202,6 +25206,7 @@ void    (*consdebug)(void) = nil; // for rdb
 <<[[Proc]] debugger fields>>=
 void  *dbgreg;  /* User registers for devproc */
 @
+% also saved register in syscalls copied when forking
 
 % old: int scallnr;  /* sys call number - known by db */
 % put back? db will still work?
@@ -25714,14 +25719,12 @@ text2data(Proc *p, Segment *s)
 % why protect procctl(up) with splhi here and not before?
 % both the entry and exit are not perfectly symetric :( TOFIX?
 
-<<[[newproc()]] inherit Proc_tracesyscall>>=
+<<[[sysfork()]] inherit Proc_tracesyscall>>=
     if(up && up->procctl == Proc_tracesyscall)
         p->procctl = Proc_tracesyscall;
-    else
-        p->procctl = Proc_nothing;
 @
-% why not mv that in sysrfork? only thing in newproc() that propagate
-% info from up; not very consistent
+% used to be in newproc, but I mved it in sysrfork? it was the only thing
+% in newproc() that propagate info from up; was not very consistent.
 
 
 % communicate info via syscalltrace! accessible at /proc/x/syscall
