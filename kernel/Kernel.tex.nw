@@ -771,7 +771,7 @@ cankaddr(phys_addr pa)
 % start from Confmem + kernel binary.
 % then Confmem split in xlists and palloc.mem
 % then from xlists allocate nproc, pages (that will cover palloc.mem), 
-% swapimages, and rest for kernel malloc.
+% images, and rest for kernel malloc.
 
 \section{Syscall overview}
 % kernel vs user code
@@ -1468,7 +1468,7 @@ TEXT splhi(SB), $0
 shi:
         PUSHFL
         POPL    AX
-        TESTL   $0x200, AX // interrupt bit
+        TESTL   $0x200, AX /* pad: interrupt bit */
         JZ      alreadyhi
         MOVL    $(CPUADDR+0x04), CX            /* save PC in cpu->splpc */
         MOVL    (SP), BX
@@ -2925,7 +2925,7 @@ realloc(kern_addr3 v, ulong size)
 
 % already kindof virtual memory! but generic one.
 % virtual because we have this indirection notion! of va vs pa. and segment
-% with pagedir and pagetab.
+% with pagedir and pagetab. but more on this later in virtual memory chapter.
 
 <<struct Page>>=
 // Page metadata. We will allocate as many Page as to cover all physical memory
@@ -3097,10 +3097,7 @@ pageunchain(Page *p)
 void
 putpage(Page *p)
 {
-    if(onswap(p)) {
-        putswap(p);
-        return;
-    }
+    <<[[putpage]] if p is a swap address>>
 
     lock(&palloc);
     lock(p);
@@ -3126,7 +3123,7 @@ putpage(Page *p)
     unlock(&palloc);
 }
 @
-% LP split freememr? and p->image stuff? and onswap?
+% LP split freememr? and p->image stuff?
 
 
 
@@ -3328,8 +3325,7 @@ ptcpy(Pagetable *old)
     new->first = dst;
     for(src = old->first; src <= old->last; src++, dst++)
         if(*src) {
-            if(onswap(*src))
-                dupswap(*src);
+            <<[[ptcpy()]] if src is a swap page>>
             else {
                 lock(*src);
                 (*src)->ref++;
@@ -3341,7 +3337,7 @@ ptcpy(Pagetable *old)
     return new;
 }
 @
-% LP split onswap?
+
 
 
 
@@ -3752,8 +3748,7 @@ mfreeseg(Segment *s, ulong start, int pages)
              * to putswap those pages before procflushseg.
              */
             if(pg){
-                if(onswap(pg))
-                    putswap(pg);
+                <<[[mfreeseg]] if pg is a swap address>>
                 else{
                     pg->next = list;
                     list = pg;
@@ -4192,55 +4187,22 @@ enum rfork
     RFNAMEG     = (1<<0),
     RFENVG      = (1<<1),
     RFFDG       = (1<<2),
+
+    RFCNAMEG    = (1<<10),
+    RFCENVG     = (1<<11),
+    RFCFDG      = (1<<12),
+
     RFNOTEG     = (1<<3),
     RFPROC      = (1<<4),
     RFMEM       = (1<<5),
     RFNOWAIT    = (1<<6),
-    RFCNAMEG    = (1<<10),
-    RFCENVG     = (1<<11),
-    RFCFDG      = (1<<12),
+
     RFREND      = (1<<13),
     RFNOMNT     = (1<<14),
 };
 @ 
+% explain?
 
-
-<<function forkchild>>=
-void
-forkchild(Proc *p, Ureg *ureg)
-{
-    Ureg *cureg;
-
-    /*
-     * Add 2*BY2WD to the stack to account for
-     *  - the return PC
-     *  - trap's argument (ur)
-     */
-    p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Ureg)+2*BY2WD);
-    p->sched.pc = (ulong)forkret;
-
-    cureg = (Ureg*)(p->sched.sp+2*BY2WD);
-    memmove(cureg, ureg, sizeof(Ureg));
-    /* return value of syscall in child */
-    cureg->ax = 0;
-
-    /* Things from bottom of syscall which were never executed */
-    p->psstate = nil;
-    p->insyscall = false;
-}
-@ 
-
-<<function forkret>>=
-TEXT forkret(SB), $0
-        POPL    AX
-        POPAL
-        POPL    GS
-        POPL    FS
-        POPL    ES
-        POPL    DS
-        ADDL    $8, SP                  /* pop error code and trap type */
-        IRETL
-@ 
 
 <<syscall rfork>>=
 // int rfork(int flags);
@@ -4274,7 +4236,7 @@ sysrfork(ulong *arg)
                 up->fgrp = dupfgrp(ofg);
             else
                 up->fgrp = dupfgrp(nil);
-            closefgrp(ofg);
+            closefgrp(ofg); // why close?
         }
         if(flag & (RFNAMEG|RFCNAMEG)) {
             opg = up->pgrp;
@@ -4286,7 +4248,7 @@ sysrfork(ulong *arg)
             closepgrp(opg);
         }
         if(flag & RFNOMNT)
-            up->pgrp->noattach = 1;
+            up->pgrp->noattach = true;
         if(flag & RFREND) {
             org = up->rgrp;
             up->rgrp = newrgrp();
@@ -4362,7 +4324,7 @@ sysrfork(ulong *arg)
         incref(p->pgrp);
     }
     if(flag & RFNOMNT)
-        p->pgrp->noattach = 1;
+        p->pgrp->noattach = true;
 
     if(flag & RFREND)
         p->rgrp = newrgrp();
@@ -4429,6 +4391,42 @@ sysrfork(ulong *arg)
 }
 @ 
 
+<<function forkchild>>=
+void
+forkchild(Proc *p, Ureg *ureg)
+{
+    Ureg *cureg;
+
+    /*
+     * Add 2*BY2WD to the stack to account for
+     *  - the return PC
+     *  - trap's argument (ur)
+     */
+    p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Ureg)+2*BY2WD);
+    p->sched.pc = (ulong)forkret;
+
+    cureg = (Ureg*)(p->sched.sp+2*BY2WD);
+    memmove(cureg, ureg, sizeof(Ureg));
+    /* return value of syscall in child */
+    cureg->ax = 0;
+
+    /* Things from bottom of syscall which were never executed */
+    p->psstate = nil;
+    p->insyscall = false;
+}
+@ 
+
+<<function forkret>>=
+TEXT forkret(SB), $0
+        POPL    AX
+        POPAL
+        POPL    GS
+        POPL    FS
+        POPL    ES
+        POPL    DS
+        ADDL    $8, SP                  /* pop error code and trap type */
+        IRETL
+@ 
 
 \section{[[sysexec()]]}
 
@@ -6470,10 +6468,12 @@ kexit(Ureg*)
 \section{Overview}
 
 % What a system would look like (including for a programmer) without VM?
-% Virtual memory enables many many things:
+% Virtual memory, via the indirection trick, enables many many things:
 % - isolated processes, safer! (see DOS ...) a malicious/buggy process 
 %   can't harm
 % - can access more than physical, hence virtual in some sense, swapping
+% - sharing optimization: in fork, copy on write exec, shared text pages
+% - lazy optimization: can have demand loading
 % - easier for loading programs, no need relocation, they all
 %   start at 0
 % - ??
@@ -7080,6 +7080,1381 @@ flushpg(virt_addr va)
 
 
 
+\section{Page cache}
+% maybe mv in Memory section? but it's an optimisation that we can delay to explain
+% have a section Sharing? Text Sharing? put here all forms of Sharing? Kimage
+
+% When we load(pagein) a page from the text of a binary, this page now
+% contains a "cache" of a portion of a file. If we do another exec
+% with the same binary  for instance we have multiple instance
+% of rc, then we want to share this page. We need to find it back.
+% Enter the "page cache".
+
+%note1: if we fork we will have the sharing for free, but not always case
+%note2: note that also do sharing when exec via copy on write
+
+% invalidate Kimage when text changes?
+
+% When we swap(pageout) a page, we plan to write it on the disk on
+% the swap file, and then we can free this page and reuse it for something else.
+% But it still contains the content of a file.
+% so when we free it we could actually put it in the tail of a queue.
+% then if we need to load back from the swap(pagein), we can actually
+% get it directly from the cache! hmmm but actually when we swap it's really
+% because we need space, so this free page will be in the tail but not for long
+
+
+
+% used temporarily, once we decided to swap out a page
+% but still we have not done it, takes time because of IO, so still need
+% to be around. Once it has been written, it is freed and said to be
+% in a "cache"
+<<[[Page]] other fields>>=
+ulong daddr;      /* Disc address on swap */
+@
+%// I think this is also abused to store PDX ???
+% this will be an offet in a file (binary or swap) at 4096 boundaries
+
+<<[[Page]] other fields>>=
+// option<ref<Kimage>>
+KImage  *image;     /* Associated text or swap image */
+@
+%    KImage  *image;     /* Associated text or swap image */
+% because for TEXT, no need to swap and better to use free mem
+% for DATA or BSS than TEXT because TEXT can be retrieved!
+
+
+
+% note that different from buffer cache. This is just cache of page of
+% executables.
+%For real buffer cache see cache.c?? not really, plan9 is a distributed
+% system so it's file server that have cache.
+
+
+<<function pghash>>=
+enum
+{
+    PGHLOG  = 9, // 2^9 = 512
+    PGHSIZE = 1<<PGHLOG,  /* Page hash for image lookup */
+};
+#define pghash(daddr) palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
+@
+
+<<[[Palloc]] other fields>>=
+    // hash<Page.daddr, list<ref<Page>> (next = Page.hash)>
+    Page  *hash[PGHSIZE];
+    Lock  hashlock;
+@
+% given daddr, give Page(s?) that must be swapped at this daddr?
+
+<<[[Page]] extra fields>>=
+// hash<daddr, list<ref<Page>>> Palloc.hash
+Page  *hash; /* Image hash chains */ 
+@
+% rename next? hashnext?
+
+
+
+
+% main idea is that when we swap, before we free it, we cache it.
+% assume p->daddr has been set and then call cachepage(p, &swapimage).
+% (put code of putpage here? see that does not reset its content,
+% not reset the daddr and image field!)
+
+%todo: always called with a locked page too? do the !canlock trick and panic?
+<<function cachepage>>=
+void
+cachepage(Page *p, KImage *i)
+{
+    Page **l;
+
+    /* If this ever happens it should be fixed by calling
+     * uncachepage instead of panic. I think there is a race
+     * with pio in which this can happen. Calling uncachepage is
+     * correct - I just wanted to see if we got here.
+     */
+    if(p->image)
+        panic("cachepage");
+
+    incref(i);
+    lock(&palloc.hashlock);
+    p->image = i;
+    // add_hash(palloc.hash, p->daddr, p)
+    l = &pghash(p->daddr);
+    p->hash = *l;
+    *l = p;
+    unlock(&palloc.hashlock);
+}
+@
+
+<<function uncachepage>>=
+/* Always called with a locked page */
+void
+uncachepage(Page *p)
+{
+    Page **l, *f;
+
+    if(p->image == nil)
+        return;
+
+    lock(&palloc.hashlock);
+    // remove_hash(palloc.hash, p->daddr, p)
+    l = &pghash(p->daddr);
+    for(f = *l; f; f = f->hash) {
+        if(f == p) {
+            *l = p->hash;
+            break;
+        }
+        l = &f->hash;
+    }
+    unlock(&palloc.hashlock);
+    putimage(p->image);
+    p->image = nil;
+    p->daddr = 0;
+}
+@
+
+
+
+<<function cachedel>>=
+void
+cachedel(KImage *i, ulong daddr)
+{
+    Page *f, **l;
+
+    lock(&palloc.hashlock);
+    l = &pghash(daddr);
+    for(f = *l; f; f = f->hash) {
+        if(f->image == i && f->daddr == daddr) {
+            lock(f);
+            // can have a race? things could have changed, so rested under lock
+            if(f->image == i && f->daddr == daddr){
+                *l = f->hash;
+                putimage(f->image); // =~ decref
+                f->image = nil;
+                f->daddr = 0;
+            }
+            unlock(f);
+            break;
+        }
+        l = &f->hash;
+    }
+    unlock(&palloc.hashlock);
+}
+@
+
+%!! find it back!
+<<function lookpage>>=
+Page *
+lookpage(KImage *i, ulong daddr)
+{
+    Page *f;
+
+    lock(&palloc.hashlock);
+    for(f = pghash(daddr); f; f = f->hash) {
+        if(f->image == i && f->daddr == daddr) {
+            unlock(&palloc.hashlock);
+
+            lock(&palloc);
+            lock(f);
+            if(f->image != i || f->daddr != daddr) { // race, not the one anymore
+                unlock(f);
+                unlock(&palloc);
+                return nil;
+            }
+            if(++f->ref == 1)
+                pageunchain(f);
+            unlock(&palloc);
+            unlock(f);
+
+            return f;
+        }
+    }
+    unlock(&palloc.hashlock);
+
+    return nil;
+}
+@
+
+
+
+\section{Swapping}
+
+\subsection{[[Swapalloc]]}
+
+% Palloc.pages contains refs to pages in physical memory allocated to user.
+% Swapalloc.swmap here will represent refs to pages in a huge file, the
+% swapimage.
+% How will adjust segment pagetables to point to swap pages?
+% how store meta-data about swap pages? simply address in swapimage?
+
+% lp split?
+<<struct Swapalloc>>=
+// Swap allocator (singleton)
+struct Swapalloc
+{
+    // array<byte> xalloc'ed in swapinit()
+    // each idx represents a chunk of swapimage, each value a ref count
+    uchar*  swmap;      /* Base of swap map in memory */
+
+    int free;     /* currently free swap pages */
+
+    // ref<byte> in swmap
+    uchar*  alloc;     /* Round robin allocator */
+    // ref<byte> in swmap
+    uchar*  top;      /* Top of swap map */
+
+    // ref<byte> in swmap
+    uchar*  last;     /* Speed swap allocation */
+
+    ulong highwater;    /* Pager start threshold */ // = 5% conf.upages
+    ulong headroom;   /* Space pager frees under highwater */ // = 1.25*hw
+
+    //extra
+    Lock;       /* Free map lock */
+    Rendez r;      /* Pager kproc idle sleep */ // needpages()
+};
+@
+% each idx represents a swap page of 4Ko in swapimage, and the number of
+% times this swap page is shared
+
+<<global swapalloc>>=
+// Swap allocator
+struct Swapalloc swapalloc;
+@
+
+
+<<[[Conf]] other fields>>=
+ulong nswap;    /* number of swap pages */
+@
+
+
+% good way to summary all we've seen
+<<[[consread()]] Qswap case>>=
+    case Qswap:
+        snprint(tmp, sizeof tmp,
+            "%lud memory\n"
+            "%d pagesize\n"
+            "%lud kernel\n"
+            "%lud/%lud user\n"
+            "%lud/%lud swap\n"
+            "%lud/%lud kernel malloc\n"
+            "%lud/%lud kernel draw\n",
+            conf.npage*BY2PG,
+            BY2PG,
+            conf.npage-conf.upages,
+            palloc.user-palloc.freecount, palloc.user,
+            conf.nswap-swapalloc.free, conf.nswap,
+            mainmem->cursize, mainmem->maxsize,
+            imagmem->cursize, imagmem->maxsize);
+
+        return readstr((ulong)offset, buf, n, tmp);
+@
+
+% at the beginning empty ... especially swapinit() set swaping.notext to true
+% rename KImage?
+<<global swapimage>>=
+KImage  swapimage;
+@
+
+
+
+
+% return offsset in swapfile, daddr
+% todo: introduce typedef?
+<<function newswap>>=
+ulong
+newswap(void)
+{
+    uchar *look;
+
+    lock(&swapalloc);
+
+    if(swapalloc.free == 0){
+        unlock(&swapalloc);
+        return ~0; //???
+    }
+
+    look = memchr(swapalloc.last, 0, swapalloc.top-swapalloc.last);
+    if(look == nil)
+        panic("inconsistent swap"); // swapalloc.free != 0, should find a page
+
+    *look = 1;
+    swapalloc.last = look;
+    swapalloc.free--;
+    unlock(&swapalloc);
+    return (look-swapalloc.swmap) * BY2PG; // offset in swapfile
+}
+@
+
+
+\subsection{[[PageOrSwap]]}
+
+% now that have a swap "page", essentially an offet in swapfile
+% at page boundary, how store that in pagetable, segment, etc?
+
+<<constant PG_ONSWAP>>=
+#define PG_ONSWAP 1
+@
+% Page* are pointer, so words aligned, so last 4 bits are empty, and they use
+% the last bit to encode whether this address space has been swapped out?
+
+% put typedef PageOrSwapAddr? or do a union?
+
+
+<<function onswap>>=
+#define onswap(s) (((kern_addr)s)&PG_ONSWAP)
+@
+
+
+
+% bad type ... it's really not a pointer to a Page ...
+<<function putswap>>=
+void
+putswap(Page *p)
+{
+    uchar *idx;
+
+    lock(&swapalloc);
+    idx = &swapalloc.swmap[((ulong)p)/BY2PG];
+    if(--(*idx) == 0) {
+        swapalloc.free++;
+        if(idx < swapalloc.last)
+            swapalloc.last = idx;
+    }
+    if(*idx >= 254)
+        panic("putswap %#p == %ud", p, *idx);
+    unlock(&swapalloc);
+}
+@
+
+<<[[putpage]] if p is a swap address>>=
+    if(onswap(p)) {
+        putswap(p);
+        return;
+    }
+@
+
+<<[[mfreeseg]] if pg is a swap address>>=
+                if(onswap(pg))
+                    putswap(pg);
+@
+
+
+<<function dupswap>>=
+void
+dupswap(Page *p)
+{
+    lock(&swapalloc);
+    if(++swapalloc.swmap[((ulong)p)/BY2PG] == 0)
+        panic("dupswap");
+    unlock(&swapalloc);
+}
+@
+
+<<[[ptcpy()]] if src is a swap page>>=
+            if(onswap(*src))
+                dupswap(*src);
+@
+
+
+<<function swapcount>>=
+int
+swapcount(ulong daddr)
+{
+    return swapalloc.swmap[daddr/BY2PG];
+}
+@
+
+
+\subsection{Swapping plan}
+
+% pg is a pte in pagetable of pagedir of a segment of type type
+% todo: use pte instead of pg below?
+% bad name of function? swappte better?
+<<function pagepte>>=
+static void
+pagepte(int type, Page **pg)
+{
+    ulong daddr;
+    Page *outp;
+
+    outp = *pg;
+    switch(type) {
+    case SG_TEXT:               /* Revert to demand load */
+        putpage(outp);
+        *pg = nil;
+        break;
+
+    case SG_DATA:
+    case SG_BSS:
+    case SG_STACK:
+    case SG_SHARED:
+        /*
+         *  get a new swap address and clear any pages
+         *  referring to it from the cache
+         */
+        daddr = newswap();
+        if(daddr == ~0)
+            break; // return;
+        cachedel(&swapimage, daddr);
+
+        lock(outp);
+
+        /* forget anything that it used to cache */
+        uncachepage(outp);
+
+        /*
+         *  incr the reference count to make sure it sticks around while
+         *  being written
+         */
+        outp->ref++;
+
+        /*
+         *  enter it into the cache so that a fault happening
+         *  during the write will grab the page from the cache
+         *  rather than one partially written to the disk
+         */
+        outp->daddr = daddr;
+        cachepage(outp, &swapimage);
+        *pg = (Page*)(daddr|PG_ONSWAP); // turn a Page into a Swap
+        unlock(outp);
+
+        /* Add page to IO transaction list */
+        iolist[ioptr++] = outp;
+        break;
+    }
+}
+@
+
+
+
+<<[[Conf]] other fields>>=
+int nswppo;   /* max # of pageouts per segment pass */
+@
+
+<<global iolist>>=
+// array<ref<Page>>, xalloc'ed in swapinit(), size = Conf.nswppo
+static  Page    **iolist;
+@
+
+<<global ioptr>>=
+// index in iolist
+static  int ioptr;
+@
+
+
+
+
+\subsection{The [[pager]]}
+
+% when swap is kicked in?
+
+<<[[newpage()]] loop waiting freecount > highwater>>=
+    for(;;) {
+        if(palloc.freecount > swapalloc.highwater)
+            break;
+        if(up->kp && palloc.freecount > 0)
+            break;
+
+        // in highwater, not so many free pages, need to wait
+
+        unlock(&palloc);
+        dontalloc = false;
+        if(s && *s) {
+            qunlock(&((*s)->lk));
+            *s = nil;// !!
+            dontalloc = true;
+        }
+        qlock(&palloc.pwait);   /* Hold memory requesters here */
+
+        while(waserror())   /* Ignore interrupts */
+            ;
+
+        kickpager();
+        tsleep(&palloc.freememr, hasfreepages, 0, 1000);
+
+        poperror();
+        qunlock(&palloc.pwait);
+
+        /*
+         * If called from fault and we lost the segment from
+         * underneath don't waste time allocating and freeing
+         * a page. Fault will call newpage again when it has
+         * reacquired the segment locks
+         */
+        if(dontalloc)
+            return nil;
+
+        lock(&palloc);
+    }
+@
+
+<<[[Palloc]] extra fields>>=
+Rendez  freememr; /* Sleep for free mem */ // hasfreepages()
+QLock pwait; /* Queue of procs waiting for memory */
+@
+
+
+<<function hasfreepages>>=
+int
+hasfreepages(void*)
+{
+    return palloc.freecount >= swapalloc.highwater;
+}
+@
+
+
+
+
+
+
+
+<<function kickpager>>=
+void
+kickpager(void)
+{
+    static bool started;
+
+    if(started)
+        wakeup(&swapalloc.r);
+    else {
+        kproc("pager", pager, nil);
+        started = true;
+    }
+}
+@
+
+
+<<function pager>>=
+static void
+pager(void *junk)
+{
+    int i;
+    Segment *s;
+    Proc *p, *ep;
+
+    if(waserror())
+        panic("pager: os error");
+
+    p = proctab(0);
+    ep = &p[conf.nproc];
+
+loop:
+    up->psstate = "Idle";
+    wakeup(&palloc.freememr);
+    sleep(&swapalloc.r, needpages, nil);
+
+    while(needpages(junk)) {
+        if(swapimage.c) {
+            p++;
+            if(p >= ep){
+                p = proctab(0);
+                gentick();          
+            }
+
+            if(p->state == Dead || p->noswap)
+                continue;
+
+            if(!canqlock(&p->seglock))
+                continue;       /* process changing its segments */
+
+            for(i = 0; i < NSEG; i++) {
+                if(!needpages(junk)){
+                    qunlock(&p->seglock);
+                    goto loop;
+                }
+
+                if(s = p->seg[i]) {
+                    switch(s->type&SG_TYPE) {
+                    case SG_TEXT:
+                        pageout(p, s);
+                        break;
+                    case SG_DATA:
+                    case SG_BSS:
+                    case SG_STACK:
+                    case SG_SHARED:
+                        up->psstate = "Pageout";
+                        pageout(p, s);
+                        if(ioptr != 0) {
+                            up->psstate = "I/O";
+                            executeio();
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+                }
+            }
+            qunlock(&p->seglock);
+        } else {
+            print("out of memory\n");
+            killbig("out of memory");
+            freebroken();       /* can use the memory */
+
+            /* Emulate the old system if no swap channel */
+            if(!swapimage.c)
+                tsleep(&up->sleepr, returnfalse, 0, 5000);
+        }
+    }
+    goto loop;
+}
+@
+
+<<function needpages>>=
+static bool
+needpages(void*)
+{
+    return palloc.freecount < swapalloc.headroom;
+}
+@
+
+
+<<[[Proc]] memory fields>>=
+bool noswap;   /* process is not swappable */
+@
+
+<<[[procctlreq()]] CMnoswap case>>=
+    case CMnoswap:
+        p->noswap = true;
+        break;
+@
+
+
+
+
+
+
+% rename, too close to pagedout, pageout_segment?
+<<function pageout>>=
+static void
+pageout(Proc *p, Segment *s)
+{
+    int type, i, size;
+    ulong age;
+    Pagetable *pt;
+    Page **pg, *entry;
+
+    if(!canqlock(&s->lk))   /* We cannot afford to wait, we will surely deadlock */
+        return;
+
+    if(s->steal) {      /* Protected by /dev/proc */
+        qunlock(&s->lk);
+        return;
+    }
+
+    if(!canflush(p, s)) {   /* Able to invalidate all tlbs with references */
+        qunlock(&s->lk);
+        putseg(s);
+        return;
+    }
+
+    if(waserror()) {
+        qunlock(&s->lk);
+        putseg(s);
+        return;
+    }
+
+    /* Pass through the tables looking for memory pages to swap out */
+    type = s->type&SG_TYPE;
+    size = s->pagedirsize;
+    for(i = 0; i < size; i++) {
+        pt = s->pagedir[i];
+        if(pt == nil)
+            continue;
+        for(pg = pt->first; pg < pt->last; pg++) {
+            entry = *pg;
+            if(pagedout(entry)) // already swapped, or nil
+                continue;
+
+            if(entry->modref & PG_REF) {
+                entry->modref &= ~PG_REF;
+                entry->gen = genclock;
+            }
+
+
+            if(genclock < entry->gen)
+                age = ~(entry->gen - genclock);
+            else
+                age = genclock - entry->gen;
+            gensum += age;
+            gencount++;
+            if(age <= genage)
+                continue;
+
+
+            pagepte(type, pg);
+
+            if(ioptr >= conf.nswppo)
+                goto out;
+        }
+    }
+out:
+    poperror();
+    qunlock(&s->lk);
+    putseg(s);
+}
+@
+
+<<function pagedout>>=
+#define pagedout(s) (((ulong)s)==0 || onswap(s))
+@
+
+
+
+
+<<function canflush>>=
+static bool
+canflush(Proc *p, Segment *s)
+{
+    int i;
+    Proc *ep;
+
+    lock(s);
+    if(s->ref == 1) {       /* Easy if we are the only user */
+        s->ref++;
+        unlock(s);
+        return canpage(p);
+    }
+    s->ref++;
+    unlock(s);
+
+    /* Now we must do hardwork to ensure all processes which have tlb
+     * entries for this segment will be flushed if we succeed in paging it out
+     */
+    p = proctab(0);
+    ep = &p[conf.nproc];
+    while(p < ep) {
+        if(p->state != Dead) {
+            for(i = 0; i < NSEG; i++)
+                if(p->seg[i] == s)
+                    if(!canpage(p))
+                        return false;
+        }
+        p++;
+    }
+    return true;
+}
+@
+
+<<function canpage>>=
+int
+canpage(Proc *p)
+{
+    bool ok = false;
+
+    splhi();
+    lock(runq);
+    /* Only reliable way to see if we are Running */
+    if(p->cpu == nil) {
+        p->newtlb = true;
+        ok = true;
+    }
+    unlock(runq);
+    spllo();
+
+    return ok;
+}
+@ 
+
+
+
+
+
+% generation, see later
+<<function gentick>>=
+static void
+gentick(void)
+{
+    genclock++;
+    if(gencount)
+        genage = gensum / gencount;
+    else
+        genage = 0;
+    gensum = gencount = 0;
+}
+@
+
+
+<<global genxxx>>=
+static  ulong   genage, genclock, gencount;
+static  uvlong  gensum;
+@
+
+<<[[Page]] other fields>>=
+ulong gen;      /* Generation counter for swap */
+@
+
+
+
+
+
+
+\subsection{Swapping execution}
+% Paging out, writing
+
+% called by pager once it has found some pages to swap, so cool
+% cos page is a kernel process, so this can happen in the background
+% (hmm but actually prio of kproc is high, so maybe not great)
+<<function executeio>>=
+static void
+executeio(void)
+{
+    Page *out;
+    int i, n;
+    Chan *c;
+    char *kaddr;
+    KMap *k;
+
+    c = swapimage.c;
+    qsort(iolist, ioptr, sizeof iolist[0], pageiocomp);
+    for(i = 0; i < ioptr; i++) {
+        if(ioptr > conf.nswppo)
+            panic("executeio: ioptr %d > %d", ioptr, conf.nswppo);
+        out = iolist[i];
+        k = kmap(out);
+        kaddr = (char*)VA(k);
+
+        if(waserror())
+            panic("executeio: page out I/O error");
+
+        n = devtab[c->type]->write(c, kaddr, BY2PG, out->daddr);// swap 1 page
+        if(n != BY2PG)
+            nexterror();
+
+        kunmap(k);
+        poperror();
+
+        /* Free up the page after I/O */
+        lock(out);
+        out->ref--;
+        unlock(out);
+        putpage(out);
+    }
+    ioptr = 0;
+}
+@
+
+<<function pageiocomp>>=
+static int
+pageiocomp(void *a, void *b)
+{
+    Page *p1, *p2;
+
+    p1 = *(Page **)a;
+    p2 = *(Page **)b;
+    if(p1->daddr > p2->daddr)
+        return 1;
+    else
+        return -1;
+}
+@
+
+
+\subsection{Setting up the swap file}
+
+<<[[conswrite()]] Qswap case>>=
+    case Qswap:
+        if(n >= sizeof buf)
+            error(Egreg);
+        memmove(buf, va, n);    /* so we can NUL-terminate */
+        buf[n] = 0;
+        /* start a pager if not already started */
+        if(strncmp(buf, "start", 5) == 0){
+            kickpager();
+            break;
+        }
+        if(!iseve())
+            error(Eperm);
+        if(buf[0]<'0' || '9'<buf[0])
+            error(Ebadarg);
+        fd = strtoul(buf, 0, 0);
+        swc = fdtochan(fd, -1, 1, 1);
+        setswapchan(swc);
+        break;
+@
+
+
+<<function setswapchan>>=
+void
+setswapchan(Chan *c)
+{
+    uchar dirbuf[sizeof(Dir)+100];
+    Dir d;
+    int n;
+
+    if(swapimage.c) {
+        if(swapalloc.free != conf.nswap){
+            cclose(c);
+            error(Einuse);
+        }
+        cclose(swapimage.c);
+    }
+
+    /*
+     *  if this isn't a file, set the swap space
+     *  to be at most the size of the partition
+     */
+    if(devtab[c->type]->dc != L'M'){
+        n = devtab[c->type]->stat(c, dirbuf, sizeof dirbuf);
+        if(n <= 0){
+            cclose(c);
+            error("stat failed in setswapchan");
+        }
+        convM2D(dirbuf, n, &d, nil);
+        if(d.length < conf.nswap*BY2PG){
+            conf.nswap = d.length/BY2PG;
+            swapalloc.top = &swapalloc.swmap[conf.nswap];
+            swapalloc.free = conf.nswap;
+        }
+    }
+
+    swapimage.c = c;
+}
+@
+
+
+
+\subsection{Page IO}
+% Paging in, reading
+
+% mv in demand loading section?
+
+% called by fixfault
+
+<<function pio>>=
+// page io on the text segment
+void
+pio(Segment *s, ulong addr, ulong soff, Page **p)
+{
+    Page *new;
+    KMap *k;
+    Chan *c;
+    int n, ask;
+    char *kaddr;
+    ulong daddr; // disk address
+    Page *loadrec;
+
+retry:
+    loadrec = *p;
+    if(loadrec == nil) {  /* from a text/data image */
+        daddr = s->fstart+soff;
+        new = lookpage(s->image, daddr);
+        if(new != nil) {
+            *p = new;
+            return;
+        }
+
+        c = s->image->c;
+        ask = s->flen-soff;
+        if(ask > BY2PG)
+            ask = BY2PG;
+    }
+    else {          /* from a swap image */
+        daddr = swapaddr(loadrec);
+        new = lookpage(&swapimage, daddr);
+        if(new != nil) {
+            putswap(loadrec);
+            *p = new;
+            return;
+        }
+
+        c = swapimage.c;
+        ask = BY2PG;
+    }
+    qunlock(&s->lk);
+
+    new = newpage(0, 0, addr);
+    k = kmap(new);
+    kaddr = (char*)VA(k);
+
+    while(waserror()) {
+        if(strcmp(up->errstr, Eintr) == 0)
+            continue;
+        kunmap(k);
+        putpage(new);
+        faulterror(Eioload, c, 0);
+    }
+
+    n = devtab[c->type]->read(c, kaddr, ask, daddr);
+    if(n != ask)
+        faulterror(Eioload, c, 0);
+    if(ask < BY2PG)
+        memset(kaddr+ask, 0, BY2PG-ask);
+
+    poperror();
+    kunmap(k);
+    qlock(&s->lk);
+    if(loadrec == 0) {  /* This is demand load */
+        /*
+         *  race, another proc may have gotten here first while
+         *  s->lk was unlocked
+         */
+        if(*p == 0) { 
+            new->daddr = daddr;
+            cachepage(new, s->image);
+            *p = new;
+        }
+        else
+            putpage(new);
+    }
+    else {          /* This is paged out */
+        /*
+         *  race, another proc may have gotten here first
+         *  (and the pager may have run on that page) while
+         *  s->lk was unlocked
+         */
+        if(*p != loadrec){
+            if(!pagedout(*p)){
+                /* another process did it for me */
+                putpage(new);
+                goto done;
+            } else {
+                /* another process and the pager got in */
+                putpage(new);
+                goto retry;
+            }
+        }
+
+        new->daddr = daddr;
+        cachepage(new, &swapimage);
+        *p = new;
+        putswap(loadrec);
+    }
+
+done:
+    ;
+}
+@
+
+<<function swapaddr>>=
+#define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
+@
+
+
+<<function faulterror>>=
+static void
+faulterror(char *s, Chan *c, bool freemem)
+{
+    char buf[ERRMAX];
+
+    if(c && c->path){
+        snprint(buf, sizeof buf, "%s accessing %s: %s", s, c->path->s, up->errstr);
+        s = buf;
+    }
+    if(up->nerrlab) {
+        postnote(up, 1, s, NDebug);
+        error(s);
+    }
+    pexit(s, freemem);
+}
+@
+
+
+
+
+
+
+\section{Demand loading}
+
+% KImage is demand loading? or just a form of sharing? so that 10 bash
+% dont pay for it (nice opti, but still no shared libs, but less
+% a pb because plan9 libs are small (and ld remove deadcode?))
+
+<<struct KImage>>=
+// a KImage is essentially a channel to a text file (an image of a binary)
+// the image in memory for a portion of a given file.
+struct KImage
+{
+    Chan  *c;     /* channel to text file */
+
+    Qid   qid;      /* Qid for page cache coherence */
+
+    Qid mqid;
+    Chan  *mchan;
+    ushort  type;     /* Device type of owning channel */
+  
+    bool  notext;     /* no file associated */
+  
+    // extra
+    Ref;
+
+    // list<ref<Kimage>> of Imagealloc.free?
+    KImage  *next; /* Free list */ 
+    // hash<?, list<ref<Kimage>>> Imagealloc.hash?
+    KImage  *hash; /* Qid hash chains */ 
+
+    // option<ref<Segment>>?
+    Segment *s;     /* TEXT segment for image if running */
+};
+@
+% (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
+%  ugly #define Image IMAGE each time one wants to use draw.h from a device driver)
+
+<<struct Imagealloc>>=
+// Image allocator (internal to segment.c, but important so here, singleton)
+struct Imagealloc
+{
+    // array<Kimage>?  xalloc'ed in initimage() (conf.nimage)
+    KImage  *free; 
+    // hash<?ihash(??), list<ref<Kimage>>
+    KImage  *hash[IHASHSIZE];
+    QLock ireclaim; /* mutex on reclaiming free images */
+  
+    Chan  **freechan; /* free image channels */
+    int nfreechan;  /* number of free channels */
+    int szfreechan; /* size of freechan array */
+    QLock fcreclaim;  /* mutex on reclaiming free channels */
+  
+    // extra
+    Lock;
+
+};
+@
+
+<<global imagealloc>>=
+static struct Imagealloc imagealloc;
+@
+
+
+
+
+
+
+<<[[Segment]] other fields>>=
+KImage  *image;   /* text in file attached to this segment */
+ulong fstart;   /* start address in file for demand load */
+ulong flen;   /* length of segment in file */
+@
+
+
+
+
+
+
+
+
+<<function ihash>>=
+#define IHASHSIZE 64
+// actually internal to page.c, but important so here
+#define ihash(s)  imagealloc.hash[s%IHASHSIZE]
+@
+% why not use the XXXLOG like the other hashes?
+
+<<function attachimage>>=
+KImage*
+attachimage(int type, Chan *c, ulong base, ulong len)
+{
+    KImage *i, **l;
+
+    /* reclaim any free channels from reclaimed segments */
+    if(imagealloc.nfreechan)
+        imagechanreclaim();
+
+    lock(&imagealloc);
+
+    /*
+     * Search the image cache for remains of the text from a previous
+     * or currently running incarnation
+     */
+    for(i = ihash(c->qid.path); i; i = i->hash) {
+        if(c->qid.path == i->qid.path) {
+            lock(i);
+            if(eqqid(c->qid, i->qid) &&
+               eqqid(c->mqid, i->mqid) &&
+               c->mchan == i->mchan &&
+               c->type == i->type) {
+                goto found;
+            }
+            unlock(i);
+        }
+    }
+
+    /*
+     * imagereclaim dumps pages from the free list which are cached by image
+     * structures. This should free some image structures.
+     */
+    while(!(i = imagealloc.free)) {
+        unlock(&imagealloc);
+        imagereclaim();
+        sched();
+        lock(&imagealloc);
+    }
+
+    imagealloc.free = i->next;
+
+    lock(i);
+    incref(c);
+    i->c = c;
+    i->type = c->type;
+    i->qid = c->qid;
+    i->mqid = c->mqid;
+    i->mchan = c->mchan;
+    l = &ihash(c->qid.path);
+    i->hash = *l;
+    *l = i;
+found:
+    unlock(&imagealloc);
+
+    if(i->s == 0) {
+        /* Disaster after commit in exec */
+        if(waserror()) {
+            unlock(i);
+            pexit(Enovmem, true);
+        }
+        i->s = newseg(type, base, len);
+        i->s->image = i;
+        i->ref++;
+        poperror();
+    }
+    else
+        incref(i->s);
+
+    return i;
+}
+@
+
+
+<<function imagereclaim>>=
+static void
+imagereclaim(void)
+{
+    int n;
+    Page *p;
+    uvlong ticks;
+
+    irstats.calls++;
+    /* Somebody is already cleaning the page cache */
+    if(!canqlock(&imagealloc.ireclaim))
+        return;
+
+    lock(&palloc);
+    ticks = fastticks(nil);
+    n = 0;
+    /*
+     * All the pages with images backing them are at the
+     * end of the list (see putpage) so start there and work
+     * backward.
+     */
+    for(p = palloc.tail; p && p->image && n<1000; p = p->prev) {
+        if(p->ref == 0 && canlock(p)) {
+            if(p->ref == 0) {
+                n++;
+                uncachepage(p);
+            }
+            unlock(p);
+        }
+    }
+    ticks = fastticks(nil) - ticks;
+    unlock(&palloc);
+    irstats.loops++;
+    irstats.ticks += ticks;
+    if(ticks > irstats.maxt)
+        irstats.maxt = ticks;
+    //print("T%llud+", ticks);
+    qunlock(&imagealloc.ireclaim);
+}
+@
+
+
+<<function imagechanreclaim>>=
+/*
+ *  since close can block, this has to be called outside of
+ *  spin locks.
+ */
+static void
+imagechanreclaim(void)
+{
+    Chan *c;
+
+    /* Somebody is already cleaning the image chans */
+    if(!canqlock(&imagealloc.fcreclaim))
+        return;
+
+    /*
+     * We don't have to recheck that nfreechan > 0 after we
+     * acquire the lock, because we're the only ones who decrement 
+     * it (the other lock contender increments it), and there's only
+     * one of us thanks to the qlock above.
+     */
+    while(imagealloc.nfreechan > 0){
+        lock(&imagealloc);
+        imagealloc.nfreechan--;
+        c = imagealloc.freechan[imagealloc.nfreechan];
+        unlock(&imagealloc);
+        cclose(c);
+    }
+
+    qunlock(&imagealloc.fcreclaim);
+}
+@
+
+
+<<destructor putimage>>=
+void
+putimage(KImage *i)
+{
+    Chan *c, **cp;
+    KImage *f, **l;
+
+    if(i->notext)
+        return;
+
+    lock(i);
+    if(--i->ref == 0) {
+        l = &ihash(i->qid.path);
+        mkqid(&i->qid, ~0, ~0, QTFILE);
+        unlock(i);
+        c = i->c;
+
+        lock(&imagealloc);
+        for(f = *l; f; f = f->hash) {
+            if(f == i) {
+                *l = i->hash;
+                break;
+            }
+            l = &f->hash;
+        }
+
+        i->next = imagealloc.free;
+        imagealloc.free = i;
+
+        /* defer freeing channel till we're out of spin lock's */
+        if(imagealloc.nfreechan == imagealloc.szfreechan){
+            imagealloc.szfreechan += NFREECHAN;
+            cp = malloc(imagealloc.szfreechan*sizeof(Chan*));
+            if(cp == nil)
+                panic("putimage");
+            memmove(cp, imagealloc.freechan, imagealloc.nfreechan*sizeof(Chan*));
+            free(imagealloc.freechan);
+            imagealloc.freechan = cp;
+        }
+        imagealloc.freechan[imagealloc.nfreechan++] = c;
+        unlock(&imagealloc);
+
+        return;
+    }
+    unlock(i);
+}
+@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 \section{Page fault}
 
 % split copy-on-write feature in another section?
@@ -7453,1317 +8828,6 @@ checkmmu(ulong va, ulong pa)
             va, pa, vpt[VPTX(va)]);
 }
 @
-
-\section{Swapping}
-
-\subsection{[[Swapalloc]]}
-
-% Palloc.pages contains refs to pages in physical memory allocated to user.
-% Swapalloc.swmap here will represent refs to pages in a huge file, the
-% swapimage.
-% How will adjust segment pagetables to point to swap pages?
-% how store meta-data about swap pages? simply address in swapimage?
-
-% lp split?
-<<struct Swapalloc>>=
-// Swap allocator (singleton)
-struct Swapalloc
-{
-    // array<byte> xalloc'ed in swapinit()
-    // each idx represents a chunk of swapimage, each value a ref count
-    uchar*  swmap;      /* Base of swap map in memory */
-
-    int free;     /* currently free swap pages */
-
-    // ref<byte> in swmap
-    uchar*  alloc;     /* Round robin allocator */
-    // ref<byte> in swmap
-    uchar*  top;      /* Top of swap map */
-
-    // ref<byte> in swmap
-    uchar*  last;     /* Speed swap allocation */
-
-    ulong highwater;    /* Pager start threshold */ // = 5% conf.upages
-    ulong headroom;   /* Space pager frees under highwater */ // = 1.25*hw
-
-    //extra
-    Lock;       /* Free map lock */
-    Rendez r;      /* Pager kproc idle sleep */ // needpages()
-};
-@
-% each idx represents a swap page of 4Ko in swapimage, and the number of
-% times this swap page is shared
-
-<<global swapalloc>>=
-// Swap allocator
-struct Swapalloc swapalloc;
-@
-
-
-<<[[Conf]] other fields>>=
-ulong nswap;    /* number of swap pages */
-@
-
-
-% good way to summary all we've seen
-<<[[consread()]] Qswap case>>=
-    case Qswap:
-        snprint(tmp, sizeof tmp,
-            "%lud memory\n"
-            "%d pagesize\n"
-            "%lud kernel\n"
-            "%lud/%lud user\n"
-            "%lud/%lud swap\n"
-            "%lud/%lud kernel malloc\n"
-            "%lud/%lud kernel draw\n",
-            conf.npage*BY2PG,
-            BY2PG,
-            conf.npage-conf.upages,
-            palloc.user-palloc.freecount, palloc.user,
-            conf.nswap-swapalloc.free, conf.nswap,
-            mainmem->cursize, mainmem->maxsize,
-            imagmem->cursize, imagmem->maxsize);
-
-        return readstr((ulong)offset, buf, n, tmp);
-@
-
-% at the beginning empty ... especially swapinit() set swaping.notext to true
-% rename KImage?
-<<global swapimage>>=
-KImage  swapimage;
-@
-
-
-
-
-% return offsset in swapfile, daddr
-% todo: introduce typedef?
-<<function newswap>>=
-ulong
-newswap(void)
-{
-    uchar *look;
-
-    lock(&swapalloc);
-
-    if(swapalloc.free == 0){
-        unlock(&swapalloc);
-        return ~0; //???
-    }
-
-    look = memchr(swapalloc.last, 0, swapalloc.top-swapalloc.last);
-    if(look == nil)
-        panic("inconsistent swap"); // swapalloc.free != 0, should find a page
-
-    *look = 1;
-    swapalloc.last = look;
-    swapalloc.free--;
-    unlock(&swapalloc);
-    return (look-swapalloc.swmap) * BY2PG; // offset in swapfile
-}
-@
-
-
-
-
-
-<<constant PG_ONSWAP>>=
-#define PG_ONSWAP 1
-@
-% Page* are words aligned, so last 4 bits are empty, and they use
-% the last bit to encode whether the page has been swapped out?
-
-% put typedef PageOrSwapAddr? or do a union?
-
-
-<<function onswap>>=
-#define onswap(s) (((kern_addr)s)&PG_ONSWAP)
-@
-
-
-
-
-<<function putswap>>=
-void
-putswap(Page *p)
-{
-    uchar *idx;
-
-    lock(&swapalloc);
-    idx = &swapalloc.swmap[((ulong)p)/BY2PG];
-    if(--(*idx) == 0) {
-        swapalloc.free++;
-        if(idx < swapalloc.last)
-            swapalloc.last = idx;
-    }
-    if(*idx >= 254)
-        panic("putswap %#p == %ud", p, *idx);
-    unlock(&swapalloc);
-}
-@
-
-<<function dupswap>>=
-void
-dupswap(Page *p)
-{
-    lock(&swapalloc);
-    if(++swapalloc.swmap[((ulong)p)/BY2PG] == 0)
-        panic("dupswap");
-    unlock(&swapalloc);
-}
-@
-
-<<function swapcount>>=
-int
-swapcount(ulong daddr)
-{
-    return swapalloc.swmap[daddr/BY2PG];
-}
-@
-
-
-\subsection{Swapping plan}
-
-% pg is a pte in pagetable of pagedir of a segment of type type
-<<function pagepte>>=
-static void
-pagepte(int type, Page **pg)
-{
-    ulong daddr;
-    Page *outp;
-
-    outp = *pg;
-    switch(type) {
-    case SG_TEXT:               /* Revert to demand load */
-        putpage(outp);
-        *pg = nil;
-        break;
-
-    case SG_DATA:
-    case SG_BSS:
-    case SG_STACK:
-    case SG_SHARED:
-        /*
-         *  get a new swap address and clear any pages
-         *  referring to it from the cache
-         */
-        daddr = newswap();
-        if(daddr == ~0)
-            break; // return;
-        cachedel(&swapimage, daddr);
-
-        lock(outp);
-
-        /* forget anything that it used to cache */
-        uncachepage(outp);
-
-        /*
-         *  incr the reference count to make sure it sticks around while
-         *  being written
-         */
-        outp->ref++;
-
-        /*
-         *  enter it into the cache so that a fault happening
-         *  during the write will grab the page from the cache
-         *  rather than one partially written to the disk
-         */
-        outp->daddr = daddr;
-        cachepage(outp, &swapimage);
-        *pg = (Page*)(daddr|PG_ONSWAP);
-        unlock(outp);
-
-        /* Add page to IO transaction list */
-        iolist[ioptr++] = outp;
-        break;
-    }
-}
-@
-
-% used temporarily, once we decided to swap out a page
-% but still we have not done it
-<<[[Page]] other fields>>=
-ulong daddr;      /* Disc address on swap */
-@
-%// I think this is also abused to store PDX ???
-
-
-
-<<function pghash>>=
-enum
-{
-    PGHLOG  = 9, // 2^9 = 512
-    PGHSIZE = 1<<PGHLOG,  /* Page hash for image lookup */
-};
-#define pghash(daddr) palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
-@
-
-<<[[Palloc]] other fields>>=
-    // hash<Page.daddr, list<ref<Page>> (next = Page.hash)>
-    Page  *hash[PGHSIZE];
-    Lock  hashlock;
-@
-% given daddr, give Page(s?) that must be swapped at this daddr
-
-<<[[Page]] extra fields>>=
-// hash<daddr, list<ref<Page>>> Palloc.hash
-Page  *hash; /* Image hash chains */ 
-@
-
-
-
-<<[[Conf]] other fields>>=
-int nswppo;   /* max # of pageouts per segment pass */
-@
-
-<<global iolist>>=
-// array<ref<Page>>, xalloc'ed in swapinit(), size = Conf.nswppo
-static  Page    **iolist;
-@
-
-<<global ioptr>>=
-// index in iolist
-static  int ioptr;
-@
-
-
-
-
-
-% should be called swappage? but Kimage can be a swapimage or a text binary?
-<<function cachepage>>=
-void
-cachepage(Page *p, KImage *i)
-{
-    Page **l;
-
-    /* If this ever happens it should be fixed by calling
-     * uncachepage instead of panic. I think there is a race
-     * with pio in which this can happen. Calling uncachepage is
-     * correct - I just wanted to see if we got here.
-     */
-    if(p->image)
-        panic("cachepage");
-
-    incref(i);
-    lock(&palloc.hashlock);
-    p->image = i;
-    // add_hash(palloc.hash, p->daddr, p)
-    l = &pghash(p->daddr);
-    p->hash = *l;
-    *l = p;
-    unlock(&palloc.hashlock);
-}
-@
-
-<<function uncachepage>>=
-/* Always called with a locked page */
-void
-uncachepage(Page *p)
-{
-    Page **l, *f;
-
-    if(p->image == nil)
-        return;
-
-    lock(&palloc.hashlock);
-    // remove_hash(palloc.hash, p->daddr, p)
-    l = &pghash(p->daddr);
-    for(f = *l; f; f = f->hash) {
-        if(f == p) {
-            *l = p->hash;
-            break;
-        }
-        l = &f->hash;
-    }
-    unlock(&palloc.hashlock);
-    putimage(p->image);
-    p->image = nil;
-    p->daddr = 0;
-}
-@
-
-
-
-<<function cachedel>>=
-void
-cachedel(KImage *i, ulong daddr)
-{
-    Page *f, **l;
-
-    lock(&palloc.hashlock);
-    l = &pghash(daddr);
-    for(f = *l; f; f = f->hash) {
-        if(f->image == i && f->daddr == daddr) {
-            lock(f);
-            // can have a race? things could have changed, so rested under lock
-            if(f->image == i && f->daddr == daddr){
-                *l = f->hash;
-                putimage(f->image); // =~ decref
-                f->image = nil;
-                f->daddr = 0;
-            }
-            unlock(f);
-            break;
-        }
-        l = &f->hash;
-    }
-    unlock(&palloc.hashlock);
-}
-@
-
-
-
-
-
-
-
-\subsection{The [[pager]]}
-
-% when swap is kicked in?
-
-<<[[newpage()]] loop waiting freecount > highwater>>=
-    hw = swapalloc.highwater;
-    for(;;) {
-        if(palloc.freecount > hw)
-            break;
-        if(up->kp && palloc.freecount > 0)
-            break;
-
-        // in highwater, not so many free pages, need to wait
-
-        unlock(&palloc);
-        dontalloc = false;
-        if(s && *s) {
-            qunlock(&((*s)->lk));
-            *s = nil;// !!
-            dontalloc = true;
-        }
-        qlock(&palloc.pwait);   /* Hold memory requesters here */
-
-        while(waserror())   /* Ignore interrupts */
-            ;
-
-        kickpager();
-        tsleep(&palloc.freememr, hasfreepages, 0, 1000);
-
-        poperror();
-        qunlock(&palloc.pwait);
-
-        /*
-         * If called from fault and we lost the segment from
-         * underneath don't waste time allocating and freeing
-         * a page. Fault will call newpage again when it has
-         * reacquired the segment locks
-         */
-        if(dontalloc)
-            return nil;
-
-        lock(&palloc);
-    }
-@
-
-<<[[Palloc]] extra fields>>=
-Rendez  freememr; /* Sleep for free mem */ // hasfreepages()
-QLock pwait; /* Queue of procs waiting for memory */
-@
-
-
-<<function hasfreepages>>=
-int
-hasfreepages(void*)
-{
-    return palloc.freecount >= swapalloc.highwater;
-}
-@
-
-
-
-
-
-
-
-<<function kickpager>>=
-void
-kickpager(void)
-{
-    static bool started;
-
-    if(started)
-        wakeup(&swapalloc.r);
-    else {
-        kproc("pager", pager, nil);
-        started = true;
-    }
-}
-@
-
-
-<<function pager>>=
-static void
-pager(void *junk)
-{
-    int i;
-    Segment *s;
-    Proc *p, *ep;
-
-    if(waserror())
-        panic("pager: os error");
-
-    p = proctab(0);
-    ep = &p[conf.nproc];
-
-loop:
-    up->psstate = "Idle";
-    wakeup(&palloc.freememr);
-    sleep(&swapalloc.r, needpages, nil);
-
-    while(needpages(junk)) {
-        if(swapimage.c) {
-            p++;
-            if(p >= ep){
-                p = proctab(0);
-                gentick();          
-            }
-
-            if(p->state == Dead || p->noswap)
-                continue;
-
-            if(!canqlock(&p->seglock))
-                continue;       /* process changing its segments */
-
-            for(i = 0; i < NSEG; i++) {
-                if(!needpages(junk)){
-                    qunlock(&p->seglock);
-                    goto loop;
-                }
-
-                if(s = p->seg[i]) {
-                    switch(s->type&SG_TYPE) {
-                    case SG_TEXT:
-                        pageout(p, s);
-                        break;
-                    case SG_DATA:
-                    case SG_BSS:
-                    case SG_STACK:
-                    case SG_SHARED:
-                        up->psstate = "Pageout";
-                        pageout(p, s);
-                        if(ioptr != 0) {
-                            up->psstate = "I/O";
-                            executeio();
-                        }
-                        break;
-                    default:
-                        break;
-                    }
-                }
-            }
-            qunlock(&p->seglock);
-        } else {
-            print("out of memory\n");
-            killbig("out of memory");
-            freebroken();       /* can use the memory */
-
-            /* Emulate the old system if no swap channel */
-            if(!swapimage.c)
-                tsleep(&up->sleepr, returnfalse, 0, 5000);
-        }
-    }
-    goto loop;
-}
-@
-
-<<function needpages>>=
-static bool
-needpages(void*)
-{
-    return palloc.freecount < swapalloc.headroom;
-}
-@
-
-
-<<[[Proc]] memory fields>>=
-bool noswap;   /* process is not swappable */
-@
-
-<<[[procctlreq()]] CMnoswap case>>=
-    case CMnoswap:
-        p->noswap = true;
-        break;
-@
-
-
-
-
-
-
-% rename, too close to pagedout, pageout_segment?
-<<function pageout>>=
-static void
-pageout(Proc *p, Segment *s)
-{
-    int type, i, size;
-    ulong age;
-    Pagetable *pt;
-    Page **pg, *entry;
-
-    if(!canqlock(&s->lk))   /* We cannot afford to wait, we will surely deadlock */
-        return;
-
-    if(s->steal) {      /* Protected by /dev/proc */
-        qunlock(&s->lk);
-        return;
-    }
-
-    if(!canflush(p, s)) {   /* Able to invalidate all tlbs with references */
-        qunlock(&s->lk);
-        putseg(s);
-        return;
-    }
-
-    if(waserror()) {
-        qunlock(&s->lk);
-        putseg(s);
-        return;
-    }
-
-    /* Pass through the tables looking for memory pages to swap out */
-    type = s->type&SG_TYPE;
-    size = s->pagedirsize;
-    for(i = 0; i < size; i++) {
-        pt = s->pagedir[i];
-        if(pt == nil)
-            continue;
-        for(pg = pt->first; pg < pt->last; pg++) {
-            entry = *pg;
-            if(pagedout(entry)) // already swapped, or nil
-                continue;
-
-            if(entry->modref & PG_REF) {
-                entry->modref &= ~PG_REF;
-                entry->gen = genclock;
-            }
-
-
-            if(genclock < entry->gen)
-                age = ~(entry->gen - genclock);
-            else
-                age = genclock - entry->gen;
-            gensum += age;
-            gencount++;
-            if(age <= genage)
-                continue;
-
-
-            pagepte(type, pg);
-
-            if(ioptr >= conf.nswppo)
-                goto out;
-        }
-    }
-out:
-    poperror();
-    qunlock(&s->lk);
-    putseg(s);
-}
-@
-
-<<function pagedout>>=
-#define pagedout(s) (((ulong)s)==0 || onswap(s))
-@
-
-
-
-
-<<function canflush>>=
-static bool
-canflush(Proc *p, Segment *s)
-{
-    int i;
-    Proc *ep;
-
-    lock(s);
-    if(s->ref == 1) {       /* Easy if we are the only user */
-        s->ref++;
-        unlock(s);
-        return canpage(p);
-    }
-    s->ref++;
-    unlock(s);
-
-    /* Now we must do hardwork to ensure all processes which have tlb
-     * entries for this segment will be flushed if we succeed in paging it out
-     */
-    p = proctab(0);
-    ep = &p[conf.nproc];
-    while(p < ep) {
-        if(p->state != Dead) {
-            for(i = 0; i < NSEG; i++)
-                if(p->seg[i] == s)
-                    if(!canpage(p))
-                        return false;
-        }
-        p++;
-    }
-    return true;
-}
-@
-
-<<function canpage>>=
-int
-canpage(Proc *p)
-{
-    bool ok = false;
-
-    splhi();
-    lock(runq);
-    /* Only reliable way to see if we are Running */
-    if(p->cpu == nil) {
-        p->newtlb = true;
-        ok = true;
-    }
-    unlock(runq);
-    spllo();
-
-    return ok;
-}
-@ 
-
-
-
-
-
-% generation, see later
-<<function gentick>>=
-static void
-gentick(void)
-{
-    genclock++;
-    if(gencount)
-        genage = gensum / gencount;
-    else
-        genage = 0;
-    gensum = gencount = 0;
-}
-@
-
-
-<<global genxxx>>=
-static  ulong   genage, genclock, gencount;
-static  uvlong  gensum;
-@
-
-<<[[Page]] other fields>>=
-ulong gen;      /* Generation counter for swap */
-@
-
-
-
-
-
-
-\subsection{Swapping execution}
-
-% called by pager once it has found some pages to swap
-<<function executeio>>=
-static void
-executeio(void)
-{
-    Page *out;
-    int i, n;
-    Chan *c;
-    char *kaddr;
-    KMap *k;
-
-    c = swapimage.c;
-    qsort(iolist, ioptr, sizeof iolist[0], pageiocomp);
-    for(i = 0; i < ioptr; i++) {
-        if(ioptr > conf.nswppo)
-            panic("executeio: ioptr %d > %d", ioptr, conf.nswppo);
-        out = iolist[i];
-        k = kmap(out);
-        kaddr = (char*)VA(k);
-
-        if(waserror())
-            panic("executeio: page out I/O error");
-
-        n = devtab[c->type]->write(c, kaddr, BY2PG, out->daddr);// swap 1 page
-        if(n != BY2PG)
-            nexterror();
-
-        kunmap(k);
-        poperror();
-
-        /* Free up the page after I/O */
-        lock(out);
-        out->ref--;
-        unlock(out);
-        putpage(out);
-    }
-    ioptr = 0;
-}
-@
-
-<<function pageiocomp>>=
-static int
-pageiocomp(void *a, void *b)
-{
-    Page *p1, *p2;
-
-    p1 = *(Page **)a;
-    p2 = *(Page **)b;
-    if(p1->daddr > p2->daddr)
-        return 1;
-    else
-        return -1;
-}
-@
-
-
-\subsection{Setting up the swap file}
-
-<<[[conswrite()]] Qswap case>>=
-    case Qswap:
-        if(n >= sizeof buf)
-            error(Egreg);
-        memmove(buf, va, n);    /* so we can NUL-terminate */
-        buf[n] = 0;
-        /* start a pager if not already started */
-        if(strncmp(buf, "start", 5) == 0){
-            kickpager();
-            break;
-        }
-        if(!iseve())
-            error(Eperm);
-        if(buf[0]<'0' || '9'<buf[0])
-            error(Ebadarg);
-        fd = strtoul(buf, 0, 0);
-        swc = fdtochan(fd, -1, 1, 1);
-        setswapchan(swc);
-        break;
-@
-
-
-<<function setswapchan>>=
-void
-setswapchan(Chan *c)
-{
-    uchar dirbuf[sizeof(Dir)+100];
-    Dir d;
-    int n;
-
-    if(swapimage.c) {
-        if(swapalloc.free != conf.nswap){
-            cclose(c);
-            error(Einuse);
-        }
-        cclose(swapimage.c);
-    }
-
-    /*
-     *  if this isn't a file, set the swap space
-     *  to be at most the size of the partition
-     */
-    if(devtab[c->type]->dc != L'M'){
-        n = devtab[c->type]->stat(c, dirbuf, sizeof dirbuf);
-        if(n <= 0){
-            cclose(c);
-            error("stat failed in setswapchan");
-        }
-        convM2D(dirbuf, n, &d, nil);
-        if(d.length < conf.nswap*BY2PG){
-            conf.nswap = d.length/BY2PG;
-            swapalloc.top = &swapalloc.swmap[conf.nswap];
-            swapalloc.free = conf.nswap;
-        }
-    }
-
-    swapimage.c = c;
-}
-@
-
-
-
-\subsection{Page IO}
-% mv in demand loading section?
-
-% called by fixfault
-
-<<function pio>>=
-// page io on the text segment
-void
-pio(Segment *s, ulong addr, ulong soff, Page **p)
-{
-    Page *new;
-    KMap *k;
-    Chan *c;
-    int n, ask;
-    char *kaddr;
-    ulong daddr; // disk address
-    Page *loadrec;
-
-retry:
-    loadrec = *p;
-    if(loadrec == nil) {  /* from a text/data image */
-        daddr = s->fstart+soff;
-        new = lookpage(s->image, daddr);
-        if(new != nil) {
-            *p = new;
-            return;
-        }
-
-        c = s->image->c;
-        ask = s->flen-soff;
-        if(ask > BY2PG)
-            ask = BY2PG;
-    }
-    else {          /* from a swap image */
-        daddr = swapaddr(loadrec);
-        new = lookpage(&swapimage, daddr);
-        if(new != nil) {
-            putswap(loadrec);
-            *p = new;
-            return;
-        }
-
-        c = swapimage.c;
-        ask = BY2PG;
-    }
-    qunlock(&s->lk);
-
-    new = newpage(0, 0, addr);
-    k = kmap(new);
-    kaddr = (char*)VA(k);
-
-    while(waserror()) {
-        if(strcmp(up->errstr, Eintr) == 0)
-            continue;
-        kunmap(k);
-        putpage(new);
-        faulterror(Eioload, c, 0);
-    }
-
-    n = devtab[c->type]->read(c, kaddr, ask, daddr);
-    if(n != ask)
-        faulterror(Eioload, c, 0);
-    if(ask < BY2PG)
-        memset(kaddr+ask, 0, BY2PG-ask);
-
-    poperror();
-    kunmap(k);
-    qlock(&s->lk);
-    if(loadrec == 0) {  /* This is demand load */
-        /*
-         *  race, another proc may have gotten here first while
-         *  s->lk was unlocked
-         */
-        if(*p == 0) { 
-            new->daddr = daddr;
-            cachepage(new, s->image);
-            *p = new;
-        }
-        else
-            putpage(new);
-    }
-    else {          /* This is paged out */
-        /*
-         *  race, another proc may have gotten here first
-         *  (and the pager may have run on that page) while
-         *  s->lk was unlocked
-         */
-        if(*p != loadrec){
-            if(!pagedout(*p)){
-                /* another process did it for me */
-                putpage(new);
-                goto done;
-            } else {
-                /* another process and the pager got in */
-                putpage(new);
-                goto retry;
-            }
-        }
-
-        new->daddr = daddr;
-        cachepage(new, &swapimage);
-        *p = new;
-        putswap(loadrec);
-    }
-
-done:
-    ;
-}
-@
-
-<<function swapaddr>>=
-#define swapaddr(s) (((ulong)s)&~PG_ONSWAP)
-@
-
-
-<<function faulterror>>=
-static void
-faulterror(char *s, Chan *c, bool freemem)
-{
-    char buf[ERRMAX];
-
-    if(c && c->path){
-        snprint(buf, sizeof buf, "%s accessing %s: %s", s, c->path->s, up->errstr);
-        s = buf;
-    }
-    if(up->nerrlab) {
-        postnote(up, 1, s, NDebug);
-        error(s);
-    }
-    pexit(s, freemem);
-}
-@
-
-
-
-
-
-
-\section{Demand loading}
-
-% KImage is demand loading? or just a form of sharing? so that 10 bash
-% dont pay for it (nice opti, but still no shared libs, but less
-% a pb because plan9 libs are small (and ld remove deadcode?))
-
-<<struct KImage>>=
-// a KImage is essentially a channel to a text file (an image of a binary)
-// the image in memory for a portion of a given file.
-struct KImage
-{
-    Chan  *c;     /* channel to text file */
-
-    Qid   qid;      /* Qid for page cache coherence */
-
-    Qid mqid;
-    Chan  *mchan;
-    ushort  type;     /* Device type of owning channel */
-  
-    bool  notext;     /* no file associated */
-  
-    // extra
-    Ref;
-
-    // list<ref<Kimage>> of Imagealloc.free?
-    KImage  *next; /* Free list */ 
-    // hash<?, list<ref<Kimage>>> Imagealloc.hash?
-    KImage  *hash; /* Qid hash chains */ 
-
-    // option<ref<Segment>>?
-    Segment *s;     /* TEXT segment for image if running */
-};
-@
-% (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
-%  ugly #define Image IMAGE each time one wants to use draw.h from a device driver)
-
-<<struct Imagealloc>>=
-// Image allocator (internal to segment.c, but important so here, singleton)
-struct Imagealloc
-{
-    // array<Kimage>?  xalloc'ed in initimage() (conf.nimage)
-    KImage  *free; 
-    // hash<?ihash(??), list<ref<Kimage>>
-    KImage  *hash[IHASHSIZE];
-    QLock ireclaim; /* mutex on reclaiming free images */
-  
-    Chan  **freechan; /* free image channels */
-    int nfreechan;  /* number of free channels */
-    int szfreechan; /* size of freechan array */
-    QLock fcreclaim;  /* mutex on reclaiming free channels */
-  
-    // extra
-    Lock;
-
-};
-@
-
-<<global imagealloc>>=
-static struct Imagealloc imagealloc;
-@
-
-
-
-
-
-
-<<[[Segment]] other fields>>=
-KImage  *image;   /* text in file attached to this segment */
-ulong fstart;   /* start address in file for demand load */
-ulong flen;   /* length of segment in file */
-@
-
-<<[[Page]] other fields>>=
-// option<ref<Kimage>>
-KImage  *image;     /* Associated text or swap image */
-@
-%    KImage  *image;     /* Associated text or swap image */
-% because for TEXT, no need to swap and better to use free mem
-% for DATA or BSS than TEXT because TEXT can be retrieved!
-
-
-
-
-
-
-
-<<function ihash>>=
-#define IHASHSIZE 64
-// actually internal to page.c, but important so here
-#define ihash(s)  imagealloc.hash[s%IHASHSIZE]
-@
-% why not use the XXXLOG like the other hashes?
-
-<<function attachimage>>=
-KImage*
-attachimage(int type, Chan *c, ulong base, ulong len)
-{
-    KImage *i, **l;
-
-    /* reclaim any free channels from reclaimed segments */
-    if(imagealloc.nfreechan)
-        imagechanreclaim();
-
-    lock(&imagealloc);
-
-    /*
-     * Search the image cache for remains of the text from a previous
-     * or currently running incarnation
-     */
-    for(i = ihash(c->qid.path); i; i = i->hash) {
-        if(c->qid.path == i->qid.path) {
-            lock(i);
-            if(eqqid(c->qid, i->qid) &&
-               eqqid(c->mqid, i->mqid) &&
-               c->mchan == i->mchan &&
-               c->type == i->type) {
-                goto found;
-            }
-            unlock(i);
-        }
-    }
-
-    /*
-     * imagereclaim dumps pages from the free list which are cached by image
-     * structures. This should free some image structures.
-     */
-    while(!(i = imagealloc.free)) {
-        unlock(&imagealloc);
-        imagereclaim();
-        sched();
-        lock(&imagealloc);
-    }
-
-    imagealloc.free = i->next;
-
-    lock(i);
-    incref(c);
-    i->c = c;
-    i->type = c->type;
-    i->qid = c->qid;
-    i->mqid = c->mqid;
-    i->mchan = c->mchan;
-    l = &ihash(c->qid.path);
-    i->hash = *l;
-    *l = i;
-found:
-    unlock(&imagealloc);
-
-    if(i->s == 0) {
-        /* Disaster after commit in exec */
-        if(waserror()) {
-            unlock(i);
-            pexit(Enovmem, true);
-        }
-        i->s = newseg(type, base, len);
-        i->s->image = i;
-        i->ref++;
-        poperror();
-    }
-    else
-        incref(i->s);
-
-    return i;
-}
-@
-
-
-<<function imagereclaim>>=
-static void
-imagereclaim(void)
-{
-    int n;
-    Page *p;
-    uvlong ticks;
-
-    irstats.calls++;
-    /* Somebody is already cleaning the page cache */
-    if(!canqlock(&imagealloc.ireclaim))
-        return;
-
-    lock(&palloc);
-    ticks = fastticks(nil);
-    n = 0;
-    /*
-     * All the pages with images backing them are at the
-     * end of the list (see putpage) so start there and work
-     * backward.
-     */
-    for(p = palloc.tail; p && p->image && n<1000; p = p->prev) {
-        if(p->ref == 0 && canlock(p)) {
-            if(p->ref == 0) {
-                n++;
-                uncachepage(p);
-            }
-            unlock(p);
-        }
-    }
-    ticks = fastticks(nil) - ticks;
-    unlock(&palloc);
-    irstats.loops++;
-    irstats.ticks += ticks;
-    if(ticks > irstats.maxt)
-        irstats.maxt = ticks;
-    //print("T%llud+", ticks);
-    qunlock(&imagealloc.ireclaim);
-}
-@
-
-
-<<function imagechanreclaim>>=
-/*
- *  since close can block, this has to be called outside of
- *  spin locks.
- */
-static void
-imagechanreclaim(void)
-{
-    Chan *c;
-
-    /* Somebody is already cleaning the image chans */
-    if(!canqlock(&imagealloc.fcreclaim))
-        return;
-
-    /*
-     * We don't have to recheck that nfreechan > 0 after we
-     * acquire the lock, because we're the only ones who decrement 
-     * it (the other lock contender increments it), and there's only
-     * one of us thanks to the qlock above.
-     */
-    while(imagealloc.nfreechan > 0){
-        lock(&imagealloc);
-        imagealloc.nfreechan--;
-        c = imagealloc.freechan[imagealloc.nfreechan];
-        unlock(&imagealloc);
-        cclose(c);
-    }
-
-    qunlock(&imagealloc.fcreclaim);
-}
-@
-
-
-<<destructor putimage>>=
-void
-putimage(KImage *i)
-{
-    Chan *c, **cp;
-    KImage *f, **l;
-
-    if(i->notext)
-        return;
-
-    lock(i);
-    if(--i->ref == 0) {
-        l = &ihash(i->qid.path);
-        mkqid(&i->qid, ~0, ~0, QTFILE);
-        unlock(i);
-        c = i->c;
-
-        lock(&imagealloc);
-        for(f = *l; f; f = f->hash) {
-            if(f == i) {
-                *l = i->hash;
-                break;
-            }
-            l = &f->hash;
-        }
-
-        i->next = imagealloc.free;
-        imagealloc.free = i;
-
-        /* defer freeing channel till we're out of spin lock's */
-        if(imagealloc.nfreechan == imagealloc.szfreechan){
-            imagealloc.szfreechan += NFREECHAN;
-            cp = malloc(imagealloc.szfreechan*sizeof(Chan*));
-            if(cp == nil)
-                panic("putimage");
-            memmove(cp, imagealloc.freechan, imagealloc.nfreechan*sizeof(Chan*));
-            free(imagealloc.freechan);
-            imagealloc.freechan = cp;
-        }
-        imagealloc.freechan[imagealloc.nfreechan++] = c;
-        unlock(&imagealloc);
-
-        return;
-    }
-    unlock(i);
-}
-@
-
-
-
-
-
-
-
-
-
-
-
-
-
-<<function lookpage>>=
-Page *
-lookpage(KImage *i, ulong daddr)
-{
-    Page *f;
-
-    lock(&palloc.hashlock);
-    for(f = pghash(daddr); f; f = f->hash) {
-        if(f->image == i && f->daddr == daddr) {
-            unlock(&palloc.hashlock);
-
-            lock(&palloc);
-            lock(f);
-            if(f->image != i || f->daddr != daddr) {
-                unlock(f);
-                unlock(&palloc);
-                return nil;
-            }
-            if(++f->ref == 1)
-                pageunchain(f);
-            unlock(&palloc);
-            unlock(f);
-
-            return f;
-        }
-    }
-    unlock(&palloc.hashlock);
-
-    return nil;
-}
-@
-
-
-
-
-
-
-
-
 
 \chapter{Scheduling}
 % virtual CPU?
