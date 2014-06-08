@@ -614,7 +614,7 @@ enum _retcode {
 % many dimenstions:
 % - physical vs virtual
 % - kernel vs user memory
-%   and even per-process kernel stack, user stack, main kernel stack
+%   and even per-process kernel stack kstack, user stack, main kernel stack
 % - dynamic vs static (the static allocator so can bootstrap things)
 
 
@@ -3374,6 +3374,10 @@ ptcpy(Pagetable *old)
     return new;
 }
 @
+% why called cpy? it looks like it shares, so when actually use copypage()?
+% because when not have RFMEM we do dupseg and ptcpy, but I don't see
+% how it's different since we still share. the pagedir and pagetab
+% are new, but they contain the same pointers ...
 
 
 
@@ -3414,8 +3418,10 @@ newseg(int type, virt_addr base, ulong size)
 }
 @
 % ok but who actually allocate the pages? allocate just pagedir here?
-% about pagetable? and pages?  This will be done in fixfault later! Lazy!
-% for text it will be demand loaded, for memory it will be on read/write
+% what about pagetable? and pages?  This will be done in fixfault later! Lazy!
+% for text it will be demand loaded, for memory it will be on read/write.
+% newpage() is called lazily, in fixfault or pio. Here just setup the limits
+% that fixfault will operate on.
 
 <<destructor putseg>>=
 void
@@ -3610,63 +3616,8 @@ validaddr(virt_addr addr, ulong len, bool write)
 @
 
 
-%-------------------------------------------------------------------------
 
-% used by sysexec() and other syscalls
-% memchr on virtual address? and so that can span different pages, and 
-% even different segments! can generate faults? I think so.
-<<function vmemchr>>=
-/*
- * &s[0] is known to be a valid address.
- */
-void*
-vmemchr(virt_addr3 s, int c, int n)
-{
-    int m;
-    virt_addr a;
-    virt_addr3 t;
-
-    a = (virt_addr)s;
-    while(PGROUND(a) != PGROUND(a+n-1)){
-        /* spans pages; handle this page */
-        m = BY2PG - (a & (BY2PG-1));
-        t = memchr((void*)a, c, m);
-        if(t)
-            return t;
-        a += m;
-        n -= m;
-        if(a < KZERO)
-            validaddr(a, 1, false);
-    }
-
-    /* fits in one page */
-    return memchr((void*)a, c, n);
-}
-@
-
-
-% used by sysexec() to relocate the stack that was in ESEG
-<<function relocateseg>>=
-void
-relocateseg(Segment *s, ulong offset)
-{
-    Page **pg, *x;
-    Pagetable *pt, **p, **endpt;
-
-    endpt = &s->pagedir[s->pagedirsize];
-    for(p = s->pagedir; p < endpt; p++) {
-        if(*p == nil)
-            continue;
-        pt = *p;
-        for(pg = pt->first; pg <= pt->last; pg++) {
-            if(x = *pg)
-                x->va += offset;
-        }
-    }
-}
-@
-
-% used by sysfork()
+% used by sysfork(), dup or share actually
 <<function dupseg>>=
 Segment*
 dupseg(Segment **seg, int segno, bool share)
@@ -3723,7 +3674,7 @@ dupseg(Segment **seg, int segno, bool share)
         goto sameseg;
 
     }
-    // not sameseg, allocated a new seg in n
+    // not sameseg, we have allocated a new seg in n above
 
     size = s->pagedirsize;
     for(i = 0; i < size; i++)
@@ -3744,6 +3695,27 @@ sameseg:
 }
 @
 
+
+% used by sysexec() to relocate the stack that was in ESEG
+<<function relocateseg>>=
+void
+relocateseg(Segment *s, ulong offset)
+{
+    Page **pg, *x;
+    Pagetable *pt, **p, **endpt;
+
+    endpt = &s->pagedir[s->pagedirsize];
+    for(p = s->pagedir; p < endpt; p++) {
+        if(*p == nil)
+            continue;
+        pt = *p;
+        for(pg = pt->first; pg <= pt->last; pg++) {
+            if(x = *pg)
+                x->va += offset;
+        }
+    }
+}
+@
 
 % used in ibrk() and segfree()
 % when called from ibrk() we know s->ref == 1, so the procflushseg
@@ -3812,6 +3784,43 @@ out:
     }
 }
 @
+
+%-------------------------------------------------------------------------
+
+% used by sysexec() and other syscalls
+% memchr on virtual address? and so that can span different pages, and 
+% even different segments! can generate faults? I think so.
+<<function vmemchr>>=
+/*
+ * &s[0] is known to be a valid address.
+ */
+void*
+vmemchr(virt_addr3 s, int c, int n)
+{
+    int m;
+    virt_addr a;
+    virt_addr3 t;
+
+    a = (virt_addr)s;
+    while(PGROUND(a) != PGROUND(a+n-1)){
+        /* spans pages; handle this page */
+        m = BY2PG - (a & (BY2PG-1));
+        t = memchr((void*)a, c, m);
+        if(t)
+            return t;
+        a += m;
+        n -= m;
+        if(a < KZERO)
+            validaddr(a, 1, false);
+    }
+
+    /* fits in one page */
+    return memchr((void*)a, c, n);
+}
+@
+
+
+
 
 
 \section{[[sysbrk()]]}
@@ -3959,7 +3968,6 @@ static Counter  pidalloc;
 
 % this is used to get from pid to the Proc. For instance
 % useful in /proc/x/... to get the Proc of x. 
-
 <<[[Proc]] extra fields>>=
 // hash<?, list<ref<Proc>> Procalloc.ht
 Proc  *pidhash; /* next proc in pid hash */ 
@@ -4020,7 +4028,7 @@ procindex(ulong pid)
     return s;
 }
 @ 
-
+%pid_or_errorneg
 
 
 
@@ -4055,6 +4063,7 @@ newproc(void)
     }
     procalloc.free = p->qnext;
     unlock(&procalloc);
+    p->qnext = nil;
 
     p->state = Scheding;
     p->pid = incref(&pidalloc);
@@ -4062,50 +4071,58 @@ newproc(void)
     if(p->pid==0 || p->noteid==0)
         panic("pidalloc");
     pidhash(p);
+    p->notepending = false;
+    p->notified = false;
     p->psstate = "New";
     p->cpu = nil;
     if(p->kstack == nil)
         p->kstack = smalloc(KSTACK);
+    kstrdup(&p->user, "*nouser");
+    kstrdup(&p->text, "*notext");
+    kstrdup(&p->args, "");
+    memset(p->seg, nil, sizeof p->seg);
+    p->nargs = 0;
+    p->setargs = false;
 
-    p->qnext = nil;
+    /* sched params */
+    procpriority(p, PriNormal, false);
+    p->lastcpu = nil;
+    p->wired = nil;
+    p->cpuavg = 0;
+    p->lastupdate = CPUS(0)->ticks*Scaling;
+    p->edf = nil;
+
+    p->parent = nil;
     p->nchild = 0;
     p->nwait = 0;
-    p->waitq = 0;
-    p->parent = nil;
+    p->waitq = nil;
+
     p->pgrp = nil;
     p->egrp = nil;
     p->fgrp = nil;
     p->rgrp = nil;
-    p->pdbg = nil;
+
     p->fpstate = FPinit;
     p->kp = false;
+
+    p->pdbg = nil;
     <<[[newproc()]] inherit Proc_tracesyscall>>
-    p->syscalltrace = nil;    
-    p->notepending = false;
+    p->syscalltrace = nil; 
+    p->trace = false;
+    p->dbgreg = nil;
+   
     p->ureg = nil;
     p->privatemem = false;
     p->noswap = false;
+
+    p->nerrlab = 0;
     p->errstr = p->errbuf0;
     p->syserrstr = p->errbuf1;
     p->errbuf0[0] = '\0';
     p->errbuf1[0] = '\0';
+
     p->nlocks.ref = 0;
     p->delaysched = 0;
-    p->trace = false;
-    kstrdup(&p->user, "*nouser");
-    kstrdup(&p->text, "*notext");
-    kstrdup(&p->args, "");
-    p->nargs = 0;
-    p->setargs = false;
-    memset(p->seg, 0, sizeof p->seg);
-
-    /* sched params */
-    p->lastcpu = nil;
-    p->wired = nil;
-    procpriority(p, PriNormal, false);
-    p->cpuavg = 0;
-    p->lastupdate = CPUS(0)->ticks*Scaling;
-    p->edf = nil;
 
     return p;
 }
@@ -4130,6 +4147,8 @@ noprocpanic(char *msg)
     panic(msg);
 }
 @ 
+% seems a bit rude to reboot because can't allocate newproc, why not just return
+% error?
 
 <<function resrcwait>>=
 void
@@ -4139,7 +4158,7 @@ resrcwait(char *reason)
     char *p;
     static ulong lastwhine;
 
-    if(up == 0)
+    if(up == nil)
         panic("resrcwait");
 
     p = up->psstate;
@@ -4152,7 +4171,6 @@ resrcwait(char *reason)
             print("%s\n", reason);
         }
     }
-
     tsleep(&up->sleepr, returnfalse, 0, 300);
     up->psstate = p;
 }
@@ -4160,30 +4178,32 @@ resrcwait(char *reason)
 
 \section{The user}
 
+% no really uid, gid in plan9, just char* user;
+
 \section{[[sysfork()]]}
 
 <<enum rfork>>=
 //coupling: with libc.h
 enum rfork
 {
-    RFNAMEG     = (1<<0),
-    RFENVG      = (1<<1),
-    RFFDG       = (1<<2),
+    RFPROC      = (1<<4), // fork a new process!! (if unset then set props for up)
+    RFMEM       = (1<<5), // share data and bss (kinda thread, a la Linux clone)
+    RFNOWAIT    = (1<<6), // child will not leave a waitmsg
 
-    RFCNAMEG    = (1<<10),
-    RFCENVG     = (1<<11),
-    RFCFDG      = (1<<12),
+    RFNAMEG     = (1<<0), // copy namespace (if unset then share)
+    RFENVG      = (1<<1), // copy environment variables (if unset then share)
+    RFFDG       = (1<<2), // copy file descriptor table (if unset then share)
 
-    RFNOTEG     = (1<<3),
-    RFPROC      = (1<<4),
-    RFMEM       = (1<<5),
-    RFNOWAIT    = (1<<6),
+    RFCNAMEG    = (1<<10), // clean new namespace
+    RFCENVG     = (1<<11), // clean new empty environment variables
+    RFCFDG      = (1<<12), // clean new file descriptor table
 
-    RFREND      = (1<<13),
-    RFNOMNT     = (1<<14),
+    RFNOTEG     = (1<<3), // start new group for notes
+    RFREND      = (1<<13), // start a new group for rendezvous
+    RFNOMNT     = (1<<14), // # paths forbidden
 };
 @ 
-% explain?
+% explain? RF = resource fork, G = ?
 
 
 <<syscall rfork>>=
@@ -4192,7 +4212,8 @@ long
 sysrfork(ulong *arg)
 {
     Proc *p;
-    int n, i;
+    int i;
+    bool share;
     Fgrp *ofg;
     Pgrp *opg;
     Rgrp *org;
@@ -4209,7 +4230,7 @@ sysrfork(ulong *arg)
     if((flag & (RFENVG|RFCENVG)) == (RFENVG|RFCENVG))
         error(Ebadarg);
 
-    if((flag&RFPROC) == 0) {
+    if((flag&RFPROC) == 0) { // not a fork, just setting properties for up
         if(flag & (RFMEM|RFNOWAIT))
             error(Ebadarg);
         if(flag & (RFFDG|RFCFDG)) {
@@ -4218,7 +4239,7 @@ sysrfork(ulong *arg)
                 up->fgrp = dupfgrp(ofg);
             else
                 up->fgrp = dupfgrp(nil);
-            closefgrp(ofg); // why close?
+            closefgrp(ofg);
         }
         if(flag & (RFNAMEG|RFCNAMEG)) {
             opg = up->pgrp;
@@ -4238,7 +4259,7 @@ sysrfork(ulong *arg)
         }
         if(flag & (RFENVG|RFCENVG)) {
             oeg = up->egrp;
-            up->egrp = smalloc(sizeof(Egrp));
+            up->egrp = smalloc(sizeof(Egrp)); // newegrp()
             up->egrp->ref = 1;
             if(flag & RFENVG)
                 envcpy(up->egrp, oeg);
@@ -4248,28 +4269,26 @@ sysrfork(ulong *arg)
             up->noteid = incref(&noteidalloc);
         return 0;
     }
+    // ok RFPROC is set, let's create a new process
 
     p = newproc();
+    pid = p->pid;
 
-    p->fpsave = up->fpsave;
     p->sargs = up->sargs;
-    p->nerrlab = 0;
     p->slash = up->slash;
     p->dot = up->dot;
     incref(p->dot);
-
     memmove(p->note, up->note, sizeof(p->note));
     p->privatemem = up->privatemem;
     p->noswap = up->noswap;
     p->nnote = up->nnote;
-    p->notified = false;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = up->ureg;
-    p->dbgreg = nil;
+    p->fpsave = up->fpsave;
 
     /* Make a new set of memory segments */
-    n = flag & RFMEM;
+    share = flag & RFMEM;
     qlock(&p->seglock);
     if(waserror()){
         qunlock(&p->seglock);
@@ -4277,7 +4296,7 @@ sysrfork(ulong *arg)
     }
     for(i = 0; i < NSEG; i++)
         if(up->seg[i])
-            p->seg[i] = dupseg(up->seg, i, n);
+            p->seg[i] = dupseg(up->seg, i, share);
     qunlock(&p->seglock);
     poperror();
 
@@ -4317,7 +4336,7 @@ sysrfork(ulong *arg)
 
     /* Environment group */
     if(flag & (RFENVG|RFCENVG)) {
-        p->egrp = smalloc(sizeof(Egrp));
+        p->egrp = smalloc(sizeof(Egrp)); // newegrp
         p->egrp->ref = 1;
         if(flag & RFENVG)
             envcpy(p->egrp, up->egrp);
@@ -4326,6 +4345,7 @@ sysrfork(ulong *arg)
         p->egrp = up->egrp;
         incref(p->egrp);
     }
+
     <<[[sysfork()]] inherit hang>>
     p->procmode = up->procmode;
 
@@ -4337,7 +4357,7 @@ sysrfork(ulong *arg)
     p->parent = up;
     p->parentpid = up->pid;
     if(flag&RFNOWAIT)
-        p->parentpid = 0;
+        p->parentpid = nil;
     else {
         lock(&up->exl);
         up->nchild++;
@@ -4348,18 +4368,20 @@ sysrfork(ulong *arg)
 
     /* don't penalize the child, it hasn't done FP in a note handler. */
     p->fpstate = up->fpstate & ~FPillegal;
-    pid = p->pid;
+
     memset(p->time, 0, sizeof(p->time));
     p->time[TReal] = CPUS(0)->ticks;
 
     kstrdup(&p->text, up->text);
     kstrdup(&p->user, up->user);
+
     /*
      *  since the bss/data segments are now shareable,
      *  any mmu info about this process is now stale
      *  (i.e. has bad properties) and has to be discarded.
      */
     flushmmu();
+
     p->basepri = up->basepri;
     p->priority = up->basepri;
     p->fixedpri = up->fixedpri;
@@ -4367,6 +4389,7 @@ sysrfork(ulong *arg)
     wm = up->wired;
     if(wm)
         procwired(p, wm->cpuno);
+
     ready(p);
     sched();
     return pid;
@@ -4396,7 +4419,8 @@ forkchild(Proc *p, Ureg *ureg)
     p->psstate = nil;
     p->insyscall = false;
 }
-@ 
+@
+% have to fake a return of syscall here, of sysrfork
 
 <<function forkret>>=
 TEXT forkret(SB), $0
@@ -4408,7 +4432,8 @@ TEXT forkret(SB), $0
         POPL    DS
         ADDL    $8, SP                  /* pop error code and trap type */
         IRETL
-@ 
+@
+%??
 
 \section{[[sysexec()]]}
 
@@ -5231,7 +5256,6 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     p->fpsave = up->fpsave;
     p->sargs = up->sargs;
-    p->nerrlab = 0;
     p->slash = up->slash;
     p->dot = up->dot;
     if(p->dot)
@@ -5239,11 +5263,9 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     memmove(p->note, up->note, sizeof(p->note));
     p->nnote = up->nnote;
-    p->notified = false;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = nil;
-    p->dbgreg = nil;
 
     procpriority(p, PriKproc, false);
 
@@ -6828,6 +6850,7 @@ mmupdalloc(void)
     return page;
 }
 @
+% why not using kernel memory for that?
 
 
 %dtor
@@ -9482,6 +9505,7 @@ struct Label
 Label sched;    /* known to l.s */
 char  *kstack;  /* known to l.s */
 @ 
+% kstack is smalloc'ed in newproc()
 
 <<constant KSTACK>>=
 #define KSTACK    4096      /* Size of kernel stack */

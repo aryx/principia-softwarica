@@ -776,6 +776,7 @@ newproc(void)
     }
     procalloc.free = p->qnext;
     unlock(&procalloc);
+    p->qnext = nil;
 
     p->state = Scheding;
     p->pid = incref(&pidalloc);
@@ -783,55 +784,63 @@ newproc(void)
     if(p->pid==0 || p->noteid==0)
         panic("pidalloc");
     pidhash(p);
+    p->notepending = false;
+    p->notified = false;
     p->psstate = "New";
     p->cpu = nil;
     if(p->kstack == nil)
         p->kstack = smalloc(KSTACK);
+    kstrdup(&p->user, "*nouser");
+    kstrdup(&p->text, "*notext");
+    kstrdup(&p->args, "");
+    memset(p->seg, nilptr, sizeof p->seg);
+    p->nargs = 0;
+    p->setargs = false;
 
-    p->qnext = nil;
+    /* sched params */
+    procpriority(p, PriNormal, false);
+    p->lastcpu = nil;
+    p->wired = nil;
+    p->cpuavg = 0;
+    p->lastupdate = CPUS(0)->ticks*Scaling;
+    p->edf = nil;
+
+    p->parent = nil;
     p->nchild = 0;
     p->nwait = 0;
-    p->waitq = 0;
-    p->parent = nil;
+    p->waitq = nil;
+
     p->pgrp = nil;
     p->egrp = nil;
     p->fgrp = nil;
     p->rgrp = nil;
-    p->pdbg = nil;
+
     p->fpstate = FPinit;
     p->kp = false;
+
+    p->pdbg = nil;
     /*s: [[newproc()]] inherit Proc_tracesyscall */
         if(up && up->procctl == Proc_tracesyscall)
             p->procctl = Proc_tracesyscall;
         else
             p->procctl = Proc_nothing;
     /*e: [[newproc()]] inherit Proc_tracesyscall */
-    p->syscalltrace = nil;    
-    p->notepending = false;
+    p->syscalltrace = nil; 
+    p->trace = false;
+    p->dbgreg = nil;
+   
     p->ureg = nil;
     p->privatemem = false;
     p->noswap = false;
+
+    p->nerrlab = 0;
     p->errstr = p->errbuf0;
     p->syserrstr = p->errbuf1;
     p->errbuf0[0] = '\0';
     p->errbuf1[0] = '\0';
+
     p->nlocks.ref = 0;
     p->delaysched = 0;
-    p->trace = false;
-    kstrdup(&p->user, "*nouser");
-    kstrdup(&p->text, "*notext");
-    kstrdup(&p->args, "");
-    p->nargs = 0;
-    p->setargs = false;
-    memset(p->seg, 0, sizeof p->seg);
-
-    /* sched params */
-    p->lastcpu = nil;
-    p->wired = nil;
-    procpriority(p, PriNormal, false);
-    p->cpuavg = 0;
-    p->lastupdate = CPUS(0)->ticks*Scaling;
-    p->edf = nil;
 
     return p;
 }
@@ -1599,7 +1608,6 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     p->fpsave = up->fpsave;
     p->sargs = up->sargs;
-    p->nerrlab = 0;
     p->slash = up->slash;
     p->dot = up->dot;
     if(p->dot)
@@ -1607,11 +1615,9 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     memmove(p->note, up->note, sizeof(p->note));
     p->nnote = up->nnote;
-    p->notified = false;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = nil;
-    p->dbgreg = nil;
 
     procpriority(p, PriKproc, false);
 

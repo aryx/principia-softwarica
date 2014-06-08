@@ -15,21 +15,21 @@
 //coupling: with libc.h
 enum rfork
 {
-    RFNAMEG     = (1<<0),
-    RFENVG      = (1<<1),
-    RFFDG       = (1<<2),
+    RFPROC      = (1<<4), // fork a new process!! (if unset then set props for up)
+    RFMEM       = (1<<5), // share data and bss (kinda thread, a la Linux clone)
+    RFNOWAIT    = (1<<6), // child will not leave a waitmsg
 
-    RFCNAMEG    = (1<<10),
-    RFCENVG     = (1<<11),
-    RFCFDG      = (1<<12),
+    RFNAMEG     = (1<<0), // copy namespace (if unset then share)
+    RFENVG      = (1<<1), // copy environment variables (if unset then share)
+    RFFDG       = (1<<2), // copy file descriptor table (if unset then share)
 
-    RFNOTEG     = (1<<3),
-    RFPROC      = (1<<4),
-    RFMEM       = (1<<5),
-    RFNOWAIT    = (1<<6),
+    RFCNAMEG    = (1<<10), // clean new namespace
+    RFCENVG     = (1<<11), // clean new empty environment variables
+    RFCFDG      = (1<<12), // clean new file descriptor table
 
-    RFREND      = (1<<13),
-    RFNOMNT     = (1<<14),
+    RFNOTEG     = (1<<3), // start new group for notes
+    RFREND      = (1<<13), // start a new group for rendezvous
+    RFNOMNT     = (1<<14), // # paths forbidden
 };
 /*e: enum rfork */
 
@@ -53,7 +53,8 @@ long
 sysrfork(ulong *arg)
 {
     Proc *p;
-    int n, i;
+    int i;
+    bool share;
     Fgrp *ofg;
     Pgrp *opg;
     Rgrp *org;
@@ -70,7 +71,7 @@ sysrfork(ulong *arg)
     if((flag & (RFENVG|RFCENVG)) == (RFENVG|RFCENVG))
         error(Ebadarg);
 
-    if((flag&RFPROC) == 0) {
+    if((flag&RFPROC) == 0) { // not a fork, just setting properties for up
         if(flag & (RFMEM|RFNOWAIT))
             error(Ebadarg);
         if(flag & (RFFDG|RFCFDG)) {
@@ -79,7 +80,7 @@ sysrfork(ulong *arg)
                 up->fgrp = dupfgrp(ofg);
             else
                 up->fgrp = dupfgrp(nil);
-            closefgrp(ofg); // why close?
+            closefgrp(ofg);
         }
         if(flag & (RFNAMEG|RFCNAMEG)) {
             opg = up->pgrp;
@@ -99,7 +100,7 @@ sysrfork(ulong *arg)
         }
         if(flag & (RFENVG|RFCENVG)) {
             oeg = up->egrp;
-            up->egrp = smalloc(sizeof(Egrp));
+            up->egrp = smalloc(sizeof(Egrp)); // newegrp()
             up->egrp->ref = 1;
             if(flag & RFENVG)
                 envcpy(up->egrp, oeg);
@@ -109,28 +110,26 @@ sysrfork(ulong *arg)
             up->noteid = incref(&noteidalloc);
         return 0;
     }
+    // ok RFPROC is set, let's create a new process
 
     p = newproc();
+    pid = p->pid;
 
-    p->fpsave = up->fpsave;
     p->sargs = up->sargs;
-    p->nerrlab = 0;
     p->slash = up->slash;
     p->dot = up->dot;
     incref(p->dot);
-
     memmove(p->note, up->note, sizeof(p->note));
     p->privatemem = up->privatemem;
     p->noswap = up->noswap;
     p->nnote = up->nnote;
-    p->notified = false;
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = up->ureg;
-    p->dbgreg = nil;
+    p->fpsave = up->fpsave;
 
     /* Make a new set of memory segments */
-    n = flag & RFMEM;
+    share = flag & RFMEM;
     qlock(&p->seglock);
     if(waserror()){
         qunlock(&p->seglock);
@@ -138,7 +137,7 @@ sysrfork(ulong *arg)
     }
     for(i = 0; i < NSEG; i++)
         if(up->seg[i])
-            p->seg[i] = dupseg(up->seg, i, n);
+            p->seg[i] = dupseg(up->seg, i, share);
     qunlock(&p->seglock);
     poperror();
 
@@ -178,7 +177,7 @@ sysrfork(ulong *arg)
 
     /* Environment group */
     if(flag & (RFENVG|RFCENVG)) {
-        p->egrp = smalloc(sizeof(Egrp));
+        p->egrp = smalloc(sizeof(Egrp)); // newegrp
         p->egrp->ref = 1;
         if(flag & RFENVG)
             envcpy(p->egrp, up->egrp);
@@ -187,6 +186,7 @@ sysrfork(ulong *arg)
         p->egrp = up->egrp;
         incref(p->egrp);
     }
+
     /*s: [[sysfork()]] inherit hang */
         p->hang = up->hang;
     /*e: [[sysfork()]] inherit hang */
@@ -211,18 +211,20 @@ sysrfork(ulong *arg)
 
     /* don't penalize the child, it hasn't done FP in a note handler. */
     p->fpstate = up->fpstate & ~FPillegal;
-    pid = p->pid;
+
     memset(p->time, 0, sizeof(p->time));
     p->time[TReal] = CPUS(0)->ticks;
 
     kstrdup(&p->text, up->text);
     kstrdup(&p->user, up->user);
+
     /*
      *  since the bss/data segments are now shareable,
      *  any mmu info about this process is now stale
      *  (i.e. has bad properties) and has to be discarded.
      */
     flushmmu();
+
     p->basepri = up->basepri;
     p->priority = up->basepri;
     p->fixedpri = up->fixedpri;
@@ -230,6 +232,7 @@ sysrfork(ulong *arg)
     wm = up->wired;
     if(wm)
         procwired(p, wm->cpuno);
+
     ready(p);
     sched();
     return pid;

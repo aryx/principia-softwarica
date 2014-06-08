@@ -239,7 +239,7 @@ dupseg(Segment **seg, int segno, bool share)
         goto sameseg;
 
     }
-    // not sameseg, allocated a new seg in n
+    // not sameseg, we have allocated a new seg in n above
 
     size = s->pagedirsize;
     for(i = 0; i < size; i++)

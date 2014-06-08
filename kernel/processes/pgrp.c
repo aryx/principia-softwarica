@@ -334,7 +334,7 @@ resrcwait(char *reason)
     char *p;
     static ulong lastwhine;
 
-    if(up == 0)
+    if(up == nil)
         panic("resrcwait");
 
     p = up->psstate;
@@ -347,7 +347,6 @@ resrcwait(char *reason)
             print("%s\n", reason);
         }
     }
-
     tsleep(&up->sleepr, returnfalse, 0, 300);
     up->psstate = p;
 }
