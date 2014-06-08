@@ -60,7 +60,7 @@ void    kickpager(void);
 // fault.c
 Segment*  seg(Proc*, ulong, int);
 void checkpages(void);
-void    validaddr(ulong, ulong, int);
+void    validaddr(ulong, ulong, bool);
 int   okaddr(ulong, ulong, int);
 int   fixfault(Segment*, ulong, int, int);
 void*   vmemchr(virt_addr3, int, int);

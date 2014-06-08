@@ -110,17 +110,17 @@ enum segtype
     SG_DATA   = 01,
     SG_BSS    = 02,
     SG_STACK  = 03,
-
-    /*s: enum segtype cases */
+    /*s: enum segtype other cases */
         SG_SHARED = 04,
-    /*x: enum segtype cases */
+    /*x: enum segtype other cases */
         SG_PHYSICAL = 05,
-    /*e: enum segtype cases */
-
+    /*e: enum segtype other cases */
     SG_TYPE   = 07,   /* Mask type of segment */
   
     SG_RONLY  = 0040,   /* Segment is read only */
-    SG_CEXEC  = 0100,   /* Detach at exec */
+    /*s: enum segtype other flags */
+        SG_CEXEC  = 0100,   /* Detach at exec */
+    /*e: enum segtype other flags */
 };
 /*e: enum segtype */
 

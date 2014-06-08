@@ -73,11 +73,17 @@
 #define UTZERO    (UZERO+BY2PG)   /* first address in user text */
 /*e: constant UTZERO */
 
+/*s: function UTROUND */
 #define UTROUND(t)  ROUNDUP((t), BY2PG)
+/*e: function UTROUND */
 #define USTKTOP   (VMAP-BY2PG)    /* byte just beyond user stack */
 #define USTKSIZE  (16*1024*1024)    /* size of user stack */
-#define TSTKTOP   (USTKTOP-USTKSIZE)  /* end of new stack in sysexec */
+/*s: constant TSTKTOP */
+#define TSTKTOP   (USTKTOP-USTKSIZE)  /* end of new stack in sysexec */ // just below
+/*e: constant TSTKTOP */
+/*s: constant TSTKSIZ */
 #define TSTKSIZ   100     /* pages in new stack; limits exec args */
+/*e: constant TSTKSIZ */
 
 /*s: constant MAXKPA */
 // -KZERO = 0xFFFFFFFF-KZERO in two's complement arithmetic

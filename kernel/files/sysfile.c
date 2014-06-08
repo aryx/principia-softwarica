@@ -137,7 +137,7 @@ sysfd2path(ulong *arg)
 {
     Chan *c;
 
-    validaddr(arg[1], arg[2], 1);
+    validaddr(arg[1], arg[2], true);
 
     c = fdtochan(arg[0], -1, 0, 1);
     snprint((char*)arg[1], arg[2], "%s", chanpath(c));
@@ -156,7 +156,7 @@ syspipe(ulong *arg)
     Dev *d;
     static char *datastr[] = {"data", "data1"};
 
-    validaddr(arg[0], 2*BY2WD, 1);
+    validaddr(arg[0], 2*BY2WD, true);
     evenaddr(arg[0]);
     d = devtab[devno('|', 0)];
     c[0] = namec("#|", Atodir, 0, 0);
@@ -240,7 +240,7 @@ sysopen(ulong *arg)
     Chan *c;
 
     openmode(arg[1]);   /* error check only */
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aopen, arg[1], 0);
     if(waserror()){
         cclose(c);
@@ -597,7 +597,7 @@ read(ulong *arg, vlong *offp)
     vlong off;
 
     n = arg[2];
-    validaddr(arg[1], n, 1);
+    validaddr(arg[1], n, true);
     p = (void*)arg[1];
     c = fdtochan(arg[0], OREAD, 1, 1);
 
@@ -685,7 +685,7 @@ write(ulong *arg, vlong *offp)
     long m, n;
     vlong off;
 
-    validaddr(arg[1], arg[2], 0);
+    validaddr(arg[1], arg[2], false);
     n = 0;
     c = fdtochan(arg[0], OWRITE, 1, 1);
     if(waserror()) {
@@ -825,7 +825,7 @@ sseek(ulong *arg)
 long
 sysseek(ulong *arg)
 {
-    validaddr(arg[0], BY2V, 1);
+    validaddr(arg[0], BY2V, true);
     sseek(arg);
     return 0;
 }
@@ -857,7 +857,7 @@ sysfstat(ulong *arg)
     uint l;
 
     l = arg[2];
-    validaddr(arg[1], l, 1);
+    validaddr(arg[1], l, true);
     c = fdtochan(arg[0], -1, 0, 1);
     if(waserror()) {
         cclose(c);
@@ -880,8 +880,8 @@ sysstat(ulong *arg)
     uint l;
 
     l = arg[2];
-    validaddr(arg[1], l, 1);
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[1], l, true);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aaccess, 0, 0);
     if(waserror()){
         cclose(c);
@@ -905,7 +905,7 @@ syschdir(ulong *arg)
 {
     Chan *c;
 
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
 
     c = namec((char*)arg[0], Atodir, 0, 0);
     cclose(up->dot);
@@ -931,7 +931,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
         error(Ebadarg);
 
     if(ismount){
-        validaddr((ulong)spec, 1, 0);
+        validaddr((ulong)spec, 1, false);
         spec = validnamedup(spec, 1);
         if(waserror()){
             free(spec);
@@ -965,7 +965,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
         cclose(bc);
     }else{
         spec = 0;
-        validaddr((ulong)arg0, 1, 0);
+        validaddr((ulong)arg0, 1, false);
         c0 = namec(arg0, Abind, 0, 0);
     }
 
@@ -974,7 +974,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
         nexterror();
     }
 
-    validaddr((ulong)arg1, 1, 0);
+    validaddr((ulong)arg1, 1, false);
     c1 = namec(arg1, Amount, 0, 0);
     if(waserror()){
         cclose(c1);
@@ -1023,7 +1023,7 @@ sysunmount(ulong *arg)
 
     cmounted = 0;
 
-    validaddr(arg[1], 1, 0);
+    validaddr(arg[1], 1, false);
     cmount = namec((char *)arg[1], Amount, 0, 0);
     if(waserror()) {
         cclose(cmount);
@@ -1039,7 +1039,7 @@ sysunmount(ulong *arg)
          * opening it is the only way to get at the real
          * Chan underneath.
          */
-        validaddr(arg[0], 1, 0);
+        validaddr(arg[0], 1, false);
         cmounted = namec((char*)arg[0], Aopen, OREAD, 0);
     }
     cunmount(cmount, cmounted);
@@ -1060,7 +1060,7 @@ syscreate(ulong *arg)
     Chan *c;
 
     openmode(arg[1]&~OEXCL);    /* error check only; OEXCL okay here */
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Acreate, arg[1], arg[2]);
     if(waserror()) {
         cclose(c);
@@ -1081,7 +1081,7 @@ sysremove(ulong *arg)
 {
     Chan *c;
 
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aremove, 0, 0);
     /*
      * Removing mount points is disallowed to avoid surprises
@@ -1144,9 +1144,9 @@ syswstat(ulong *arg)
     uint l;
 
     l = arg[2];
-    validaddr(arg[1], l, 0);
+    validaddr(arg[1], l, false);
     validstat((uchar*)arg[1], l);
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aaccess, 0, 0);
     return wstat(c, (uchar*)arg[1], l);
 }
@@ -1161,7 +1161,7 @@ sysfwstat(ulong *arg)
     uint l;
 
     l = arg[2];
-    validaddr(arg[1], l, 0);
+    validaddr(arg[1], l, false);
     validstat((uchar*)arg[1], l);
     c = fdtochan(arg[0], -1, 1, 1);
     return wstat(c, (uchar*)arg[1], l);

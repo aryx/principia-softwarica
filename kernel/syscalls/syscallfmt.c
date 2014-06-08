@@ -25,7 +25,7 @@ fmtrwdata(Fmt* f, char* a, int n, char* suffix)
         fmtprint(f, "0x0%s", suffix);
         return;
     }
-    validaddr((ulong)a, n, 0);
+    validaddr((ulong)a, n, false);
     t = smalloc(n+1);
     for(i = 0; i < n; i++)
         if(a[i] > 0x20 && a[i] < 0x7f)  /* printable ascii? */
@@ -49,7 +49,7 @@ fmtuserstring(Fmt* f, char* a, char* suffix)
         fmtprint(f, "0/\"\"%s", suffix);
         return;
     }
-    validaddr((ulong)a, 1, 0);
+    validaddr((ulong)a, 1, false);
     n = ((char*)vmemchr(a, 0, 0x7fffffff) - a) + 1;
     t = smalloc(n+1);
     memmove(t, a, n);
@@ -123,7 +123,7 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         argv = va_arg(list, char**);
         evenaddr(PTR2UINT(argv));
         for(;;){
-            validaddr((ulong)argv, sizeof(char**), 0);
+            validaddr((ulong)argv, sizeof(char**), false);
             a = *(char **)argv;
             if(a == nil)
                 break;

@@ -271,7 +271,7 @@ syssemacquire(ulong *arg)
     long *addr;
     Segment *s;
 
-    validaddr(arg[0], sizeof(long), 1);
+    validaddr(arg[0], sizeof(long), true);
     evenaddr(arg[0]);
     addr = (long*)arg[0];
     block = arg[1];
@@ -293,7 +293,7 @@ systsemacquire(ulong *arg)
     ulong ms;
     Segment *s;
 
-    validaddr(arg[0], sizeof(long), 1);
+    validaddr(arg[0], sizeof(long), true);
     evenaddr(arg[0]);
     addr = (long*)arg[0];
     ms = arg[1];
@@ -314,7 +314,7 @@ syssemrelease(ulong *arg)
     long *addr, delta;
     Segment *s;
 
-    validaddr(arg[0], sizeof(long), 1);
+    validaddr(arg[0], sizeof(long), true);
     evenaddr(arg[0]);
     addr = (long*)arg[0];
     delta = arg[1];

@@ -701,7 +701,7 @@ segattach(Proc *p, ulong attr, char *name, ulong va, ulong len)
     if(va != 0 && va >= USTKTOP)
         error(Ebadarg);
 
-    validaddr((ulong)name, 1, 0);
+    validaddr((ulong)name, 1, false);
     vmemchr(name, 0, ~0);
 
     for(sno = 0; sno < NSEG; sno++)

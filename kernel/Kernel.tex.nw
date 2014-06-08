@@ -3225,13 +3225,11 @@ enum segtype
     SG_DATA   = 01,
     SG_BSS    = 02,
     SG_STACK  = 03,
-
-    <<enum segtype cases>>
-
+    <<enum segtype other cases>>
     SG_TYPE   = 07,   /* Mask type of segment */
   
     SG_RONLY  = 0040,   /* Segment is read only */
-    SG_CEXEC  = 0100,   /* Detach at exec */
+    <<enum segtype other flags>>
 };
 @
 
@@ -3511,7 +3509,9 @@ enum procseg
     _SEG0, _SEG1, _SEG2, _SEG3, _SEG4, // free slots for for segattach
     NSEG // to count, see Proc.seg array
 };
-@ 
+@
+% a bit weird that SSEG first, but some code assumes that as they do
+% for i from SSEG to BSEG
 % there was a LSEG, not sure why, I've renamed it to _SEG0
 
 <<[[Proc]] memory fields>>=
@@ -4442,40 +4442,46 @@ TEXT forkret(SB), $0
 /*
  *  parameters for sysproc.c
  */
-// I_MAGIC is defined in include/a.out.h
+// I_MAGIC is defined in include/a.out.h, I for INTEL?
 #define AOUT_MAGIC  (I_MAGIC)
 @
+
+% struct Exec = binary header in include/a.out.h
 
 <<[[Proc]] state fields>>=
 char  *args;
 int nargs;    /* number of bytes of args */
 @
 
+
 <<syscall exec>>=
 // void* exec(char *name, char* argv[]);
 long
 sysexec(ulong *arg)
 {
-    Segment *s, *ts;
-    ulong t, d, b;
     int i;
-    Chan *tc;
-    char **argv, **argp;
-    char *a, *charp, *args, *file, *file0;
-    char *progarg[sizeof(Exec)/2+1], *elem, progelem[64];
-    ulong ssize, spage, nargs, nbytes, n, bssend;
-    int indir;
+    ulong t, d, b; // text, data, bss sizes in bytes rounded to pages
+    Segment *s, *ts;
+
+    char *file0, *file;
     Exec exec;
-    char line[sizeof(Exec)];
+    Chan *tc;
+    char *elem;
+
+    char **argv, **argp;
+    char *a, *charp, *args;
+
+    ulong ssize, spage, nargs, nbytes, n;
     Fgrp *f;
     KImage *img;
     ulong magic, text, entry, data, bss;
     Tos *tos;
 
-    indir = 0;
+    <<[[sysexec()]] locals>>
+
     elem = nil;
-    validaddr(arg[0], 1, 0);
-    file0 = validnamedup((char*)arg[0], 1);
+    validaddr(arg[0], 1, false);
+    file0 = validnamedup((char*)arg[0], true);
     if(waserror()){
         free(file0);
         free(elem);
@@ -4483,6 +4489,7 @@ sysexec(ulong *arg)
     }
     file = file0;
     for(;;){
+        // this will adjust up->genbuf to contain the full(?) path of file
         tc = namec(file, Aopen, OEXEC, 0);
         if(waserror()){
             cclose(tc);
@@ -4492,11 +4499,12 @@ sysexec(ulong *arg)
             kstrdup(&elem, up->genbuf);
 
         n = devtab[tc->type]->read(tc, &exec, sizeof(Exec), 0);
-        if(n < 2)
+        if(n < 2) // need at least 2 bytes to decide if a #! or real binary
             error(Ebadexec);
         magic = l2be(exec.magic);
         text = l2be(exec.text);
         entry = l2be(exec.entry);
+
         if(n==sizeof(Exec) && (magic == AOUT_MAGIC)){
             if(text >= USTKTOP-UTZERO
             || entry < UTZERO+sizeof(Exec)
@@ -4505,62 +4513,36 @@ sysexec(ulong *arg)
             break; /* for binary */
         }
 
-        /*
-         * Process #! /bin/sh args ...
-         */
-        memmove(line, &exec, sizeof(Exec));
-        if(indir || line[0]!='#' || line[1]!='!')
-            error(Ebadexec);
-        n = shargs(line, n, progarg);
-        if(n == 0)
-            error(Ebadexec);
-        indir = 1;
-        /*
-         * First arg becomes complete file name
-         */
-        progarg[n++] = file;
-        progarg[n] = 0;
-        validaddr(arg[1], BY2WD, 1);
-        arg[1] += BY2WD;
-        file = progarg[0];
-        if(strlen(elem) >= sizeof progelem)
-            error(Ebadexec);
-        strcpy(progelem, elem);
-        progarg[0] = progelem;
-        poperror();
-        cclose(tc);
+        <<[[sysexec()]] process #!>>
     }
 
     data = l2be(exec.data);
     bss = l2be(exec.bss);
     t = UTROUND(UTZERO+sizeof(Exec)+text);
+    // data is put at page boundary after text (see also _multibootentry)
     d = (t + data + (BY2PG-1)) & ~(BY2PG-1);
-    bssend = t + data + bss;
-    b = (bssend + (BY2PG-1)) & ~(BY2PG-1);
+    // note that not t + d + bss but t + data + bss here
+    b = (t + data + bss + (BY2PG-1)) & ~(BY2PG-1);
     if(t >= KZERO || d >= KZERO || b >= KZERO)
         error(Ebadexec);
 
     /*
      * Args: pass 1: count
      */
-    nbytes = sizeof(Tos);       /* hole for profiling clock at top of stack (and more) */
     nargs = 0;
-    if(indir){
-        argp = progarg;
-        while(*argp){
-            a = *argp++;
-            nbytes += strlen(a) + 1;
-            nargs++;
-        }
-    }
+    nbytes = 0;
+
+    nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
+    <<[[sysexec()]] if indir arg adjustments>>
+
     evenaddr(arg[1]);
     argp = (char**)arg[1];
-    validaddr((ulong)argp, BY2WD, 0);
+    validaddr((ulong)argp, BY2WD, false);
     while(*argp){
         a = *argp++;
         if(((ulong)argp&(BY2PG-1)) < BY2WD)
-            validaddr((ulong)argp, BY2WD, 0);
-        validaddr((ulong)a, 1, 0);
+            validaddr((ulong)argp, BY2WD, false);
+        validaddr((ulong)a, 1, false);
         nbytes += ((char*)vmemchr(a, 0, 0x7FFFFFFF) - a) + 1;
         nargs++;
     }
@@ -4585,30 +4567,35 @@ sysexec(ulong *arg)
         qunlock(&up->seglock);
         nexterror();
     }
+    // why ESEG? and why not TSTKTOP?? ESEG because will free later
+    // the current SSEG. If we have an error in sysexec we don't want
+    // to have messed up with the current stack. TSTKTOP-USTKSIZE for
+    // the same reason, because we don't want overwrite old stack
+    // all of that will be relocated later.
     up->seg[ESEG] = newseg(SG_STACK, TSTKTOP-USTKSIZE, USTKSIZE/BY2PG);
 
     /*
      * Args: pass 2: assemble; the pages will be faulted in
      */
+
     tos = (Tos*)(TSTKTOP - sizeof(Tos));
     tos->cyclefreq = cpu->cyclefreq;
     cycles((uvlong*)&tos->pcycles);
     tos->pcycles = -tos->pcycles;
     tos->kcycles = tos->pcycles;
     tos->clock = 0;
+    // what about other fields? like pid? will be set in kexit! but could be
+    // done here? what about sysfork? call kexit?
+
     argv = (char**)(TSTKTOP - ssize);
     charp = (char*)(TSTKTOP - nbytes);
     args = charp;
-    if(indir)
-        argp = progarg;
+    <<[[sysexec()]] if indir argp adjustments>>
     else
         argp = (char**)arg[1];
 
     for(i=0; i<nargs; i++){
-        if(indir && *argp==0) {
-            indir = 0;
-            argp = (char**)arg[1];
-        }
+        <<[[sysexec()]] if indir argp adjustments again>>
         *argv++ = charp + (USTKTOP-TSTKTOP);
         n = strlen(*argp) + 1;
         memmove(charp, *argp++, n);
@@ -4630,6 +4617,7 @@ sysexec(ulong *arg)
     free(a);
     up->args = smalloc(n);
     memmove(up->args, args, n);
+
     if(n>0 && up->args[n-1]!='\0'){
         /* make sure last arg is NUL-terminated */
         /* put NUL at UTF-8 character boundary */
@@ -4649,13 +4637,13 @@ sysexec(ulong *arg)
     for(i = SSEG; i <= BSEG; i++) {
         putseg(up->seg[i]);
         /* prevent a second free if we have an error */
-        up->seg[i] = 0;
+        up->seg[i] = nil;
     }
     for(i = BSEG+1; i < NSEG; i++) {
         s = up->seg[i];
-        if(s != 0 && (s->type&SG_CEXEC)) {
+        if(s != nil && (s->type&SG_CEXEC)) { // close on exec
             putseg(s);
-            up->seg[i] = 0;
+            up->seg[i] = nil;
         }
     }
 
@@ -4684,6 +4672,7 @@ sysexec(ulong *arg)
     s->image = img;
     s->fstart = ts->fstart+ts->flen;
     s->flen = data;
+    // data is also in binary
 
     /* BSS. Zero fill on demand */
     up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
@@ -4692,11 +4681,11 @@ sysexec(ulong *arg)
      * Move the stack
      */
     s = up->seg[ESEG];
-    up->seg[ESEG] = 0;
+    up->seg[ESEG] = nil;
     up->seg[SSEG] = s;
     qunlock(&up->seglock);
     poperror(); /* seglock */
-    poperror(); /* elem */
+    poperror(); /* elem */ // really? I think this matches more the cclose(tc)
     s->base = USTKTOP-USTKSIZE;
     s->top = USTKTOP;
     relocateseg(s, USTKTOP-TSTKTOP);
@@ -4718,10 +4707,10 @@ sysexec(ulong *arg)
 
     qlock(&up->debug);
     up->nnote = 0;
-    up->notify = 0;
+    up->notify = nil;
     up->notified = false;
     up->privatemem = false;
-    procsetup(up);
+    procsetup(up); // fpstate
     qunlock(&up->debug);
 
     <<[[sysexec()]] if hang>>
@@ -4730,6 +4719,7 @@ sysexec(ulong *arg)
 }
 @ 
 
+% could mv in lib.h? 
 <<function l2be>>=
 ulong
 l2be(long l)
@@ -4742,6 +4732,21 @@ l2be(long l)
 @ 
 % >> >> >>
 
+<<function UTROUND>>=
+#define UTROUND(t)  ROUNDUP((t), BY2PG)
+@
+
+<<constant TSTKTOP>>=
+#define TSTKTOP   (USTKTOP-USTKSIZE)  /* end of new stack in sysexec */ // just below
+@
+
+<<constant TSTKSIZ>>=
+#define TSTKSIZ   100     /* pages in new stack; limits exec args */
+@
+
+
+
+
 <<function execregs>>=
 long
 execregs(ulong entry, ulong ssize, ulong nargs)
@@ -4749,6 +4754,7 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ulong *sp;
     Ureg *ureg;
 
+    //procsetup(up), redundant?
     up->fpstate = FPinit;
     fpoff();
 
@@ -4759,39 +4765,6 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ureg->usp = (ulong)sp;
     ureg->pc = entry;
     return USTKTOP-sizeof(Tos);     /* address of kernel/user shared data */
-}
-@ 
-
-<<function shargs>>=
-int
-shargs(char *s, int n, char **ap)
-{
-    int i;
-
-    s += 2;
-    n -= 2;     /* skip #! */
-    for(i=0; s[i]!='\n'; i++)
-        if(i == n-1)
-            return 0;
-    s[i] = 0;
-    *ap = 0;
-    i = 0;
-    for(;;) {
-        while(*s==' ' || *s=='\t')
-            s++;
-        if(*s == 0)
-            break;
-        i++;
-        *ap++ = s;
-        *ap = 0;
-        while(*s && *s!=' ' && *s!='\t')
-            s++;
-        if(*s == 0)
-            break;
-        else
-            *s++ = 0;
-    }
-    return i;
 }
 @ 
 
@@ -4863,7 +4836,7 @@ sysawait(ulong *arg)
     ulong n;
 
     n = arg[1];
-    validaddr(arg[0], n, 1);
+    validaddr(arg[0], n, true);
     pid = pwait(&w);
     if(pid < 0)
         return -1;
@@ -4954,7 +4927,7 @@ sysexits(ulong *arg)
         if(waserror())
             status = inval;
         else{
-            validaddr((ulong)status, 1, 0);
+            validaddr((ulong)status, 1, false);
             if(vmemchr(status, 0, ERRMAX) == 0){
                 memmove(buf, status, ERRMAX);
                 buf[ERRMAX-1] = 0;
@@ -6190,7 +6163,7 @@ syscall(Ureg* ureg)
         }
 
         if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD))
-            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+            validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
         up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
@@ -6441,7 +6414,11 @@ kexit(Ureg*)
     tos->pid = up->pid;
 }
 @ 
-% really? this go to user space?? how? what is Tos?
+% lp split tos thing? also could setup tos->pid before?
+
+% should be called hook_before_exit_syscall note that
+% take Ureg*, so the address is in the stack and the actual
+% value are where?
 
 
 
@@ -14490,7 +14467,7 @@ sysopen(ulong *arg)
     Chan *c;
 
     openmode(arg[1]);   /* error check only */
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aopen, arg[1], 0);
     if(waserror()){
         cclose(c);
@@ -14564,7 +14541,7 @@ read(ulong *arg, vlong *offp)
     vlong off;
 
     n = arg[2];
-    validaddr(arg[1], n, 1);
+    validaddr(arg[1], n, true);
     p = (void*)arg[1];
     c = fdtochan(arg[0], OREAD, 1, 1);
 
@@ -14654,7 +14631,7 @@ write(ulong *arg, vlong *offp)
     long m, n;
     vlong off;
 
-    validaddr(arg[1], arg[2], 0);
+    validaddr(arg[1], arg[2], false);
     n = 0;
     c = fdtochan(arg[0], OWRITE, 1, 1);
     if(waserror()) {
@@ -14788,9 +14765,9 @@ syswstat(ulong *arg)
     uint l;
 
     l = arg[2];
-    validaddr(arg[1], l, 0);
+    validaddr(arg[1], l, false);
     validstat((uchar*)arg[1], l);
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aaccess, 0, 0);
     return wstat(c, (uchar*)arg[1], l);
 }
@@ -14806,7 +14783,7 @@ sysfwstat(ulong *arg)
     uint l;
 
     l = arg[2];
-    validaddr(arg[1], l, 0);
+    validaddr(arg[1], l, false);
     validstat((uchar*)arg[1], l);
     c = fdtochan(arg[0], -1, 1, 1);
     return wstat(c, (uchar*)arg[1], l);
@@ -14822,7 +14799,7 @@ sysfstat(ulong *arg)
     uint l;
 
     l = arg[2];
-    validaddr(arg[1], l, 1);
+    validaddr(arg[1], l, true);
     c = fdtochan(arg[0], -1, 0, 1);
     if(waserror()) {
         cclose(c);
@@ -14846,8 +14823,8 @@ sysstat(ulong *arg)
     uint l;
 
     l = arg[2];
-    validaddr(arg[1], l, 1);
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[1], l, true);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aaccess, 0, 0);
     if(waserror()){
         cclose(c);
@@ -14872,7 +14849,7 @@ sysstat(ulong *arg)
 long
 sysseek(ulong *arg)
 {
-    validaddr(arg[0], BY2V, 1);
+    validaddr(arg[0], BY2V, true);
     sseek(arg);
     return 0;
 }
@@ -16083,7 +16060,7 @@ nameerror(char *name, char *err)
  * to access unchecked addresses.) 
  */
 static char*
-validname0(char *aname, int slashok, int dup, ulong pc)
+validname0(char *aname, bool slashok, bool dup, ulong pc)
 {
     char *ename, *name, *s;
     int c, n;
@@ -16133,18 +16110,18 @@ validname0(char *aname, int slashok, int dup, ulong pc)
 
 <<function validname>>=
 void
-validname(char *aname, int slashok)
+validname(char *aname, bool slashok)
 {
-    validname0(aname, slashok, 0, getcallerpc(&aname));
+    validname0(aname, slashok, false, getcallerpc(&aname));
 }
 @
 
 
 <<function validnamedup>>=
 char*
-validnamedup(char *aname, int slashok)
+validnamedup(char *aname, bool slashok)
 {
-    return validname0(aname, slashok, 1, getcallerpc(&aname));
+    return validname0(aname, slashok, true, getcallerpc(&aname));
 }
 @
 
@@ -16174,7 +16151,7 @@ syscreate(ulong *arg)
     Chan *c;
 
     openmode(arg[1]&~OEXCL);    /* error check only; OEXCL okay here */
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Acreate, arg[1], arg[2]);
     if(waserror()) {
         cclose(c);
@@ -16196,7 +16173,7 @@ sysremove(ulong *arg)
 {
     Chan *c;
 
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aremove, 0, 0);
     /*
      * Removing mount points is disallowed to avoid surprises
@@ -16232,7 +16209,7 @@ syschdir(ulong *arg)
 {
     Chan *c;
 
-    validaddr(arg[0], 1, 0);
+    validaddr(arg[0], 1, false);
 
     c = namec((char*)arg[0], Atodir, 0, 0);
     cclose(up->dot);
@@ -16251,7 +16228,7 @@ sysfd2path(ulong *arg)
 {
     Chan *c;
 
-    validaddr(arg[1], arg[2], 1);
+    validaddr(arg[1], arg[2], true);
 
     c = fdtochan(arg[0], -1, 0, 1);
     snprint((char*)arg[1], arg[2], "%s", chanpath(c));
@@ -17193,7 +17170,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
         error(Ebadarg);
 
     if(ismount){
-        validaddr((ulong)spec, 1, 0);
+        validaddr((ulong)spec, 1, false);
         spec = validnamedup(spec, 1);
         if(waserror()){
             free(spec);
@@ -17227,7 +17204,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
         cclose(bc);
     }else{
         spec = 0;
-        validaddr((ulong)arg0, 1, 0);
+        validaddr((ulong)arg0, 1, false);
         c0 = namec(arg0, Abind, 0, 0);
     }
 
@@ -17236,7 +17213,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
         nexterror();
     }
 
-    validaddr((ulong)arg1, 1, 0);
+    validaddr((ulong)arg1, 1, false);
     c1 = namec(arg1, Amount, 0, 0);
     if(waserror()){
         cclose(c1);
@@ -17418,7 +17395,7 @@ sysunmount(ulong *arg)
 
     cmounted = 0;
 
-    validaddr(arg[1], 1, 0);
+    validaddr(arg[1], 1, false);
     cmount = namec((char *)arg[1], Amount, 0, 0);
     if(waserror()) {
         cclose(cmount);
@@ -17434,7 +17411,7 @@ sysunmount(ulong *arg)
          * opening it is the only way to get at the real
          * Chan underneath.
          */
-        validaddr(arg[0], 1, 0);
+        validaddr(arg[0], 1, false);
         cmounted = namec((char*)arg[0], Aopen, OREAD, 0);
     }
     cunmount(cmount, cmounted);
@@ -21063,7 +21040,7 @@ long
 sysnotify(ulong *arg)
 {
     if(arg[0] != 0)
-        validaddr(arg[0], sizeof(ulong), 0);
+        validaddr(arg[0], sizeof(ulong), false);
     up->notify = (int(*)(void*, char*))(arg[0]);
     return 0;
 }
@@ -21360,7 +21337,7 @@ syspipe(ulong *arg)
     Dev *d;
     static char *datastr[] = {"data", "data1"};
 
-    validaddr(arg[0], 2*BY2WD, 1);
+    validaddr(arg[0], 2*BY2WD, true);
     evenaddr(arg[0]);
     d = devtab[devno('|', 0)];
     c[0] = namec("#|", Atodir, 0, 0);
@@ -21881,6 +21858,11 @@ Dev pipedevtab = {
 
 \subsection{Segment}
 
+<<enum segtype other flags>>=
+    SG_CEXEC  = 0100,   /* Detach at exec */
+@
+% not used at all in whole plan9, maybe could remove support for it
+
 <<syscall segbrk>>=
 // void* segbrk(void *saddr, void *addr);
 long
@@ -21933,7 +21915,7 @@ segattach(Proc *p, ulong attr, char *name, ulong va, ulong len)
     if(va != 0 && va >= USTKTOP)
         error(Ebadarg);
 
-    validaddr((ulong)name, 1, 0);
+    validaddr((ulong)name, 1, false);
     vmemchr(name, 0, ~0);
 
     for(sno = 0; sno < NSEG; sno++)
@@ -22453,7 +22435,7 @@ syssemacquire(ulong *arg)
     long *addr;
     Segment *s;
 
-    validaddr(arg[0], sizeof(long), 1);
+    validaddr(arg[0], sizeof(long), true);
     evenaddr(arg[0]);
     addr = (long*)arg[0];
     block = arg[1];
@@ -22476,7 +22458,7 @@ systsemacquire(ulong *arg)
     ulong ms;
     Segment *s;
 
-    validaddr(arg[0], sizeof(long), 1);
+    validaddr(arg[0], sizeof(long), true);
     evenaddr(arg[0]);
     addr = (long*)arg[0];
     ms = arg[1];
@@ -22498,7 +22480,7 @@ syssemrelease(ulong *arg)
     long *addr, delta;
     Segment *s;
 
-    validaddr(arg[0], sizeof(long), 1);
+    validaddr(arg[0], sizeof(long), true);
     evenaddr(arg[0]);
     addr = (long*)arg[0];
     delta = arg[1];
@@ -22805,8 +22787,98 @@ connectlocal(void)
 \section{The shell}
 
 
+\subsection{[[#!]]}
+
+<<[[sysexec()]] locals>>=
+    char line[sizeof(Exec)];
+    char *progarg[sizeof(Exec)/2+1];
+    char progelem[64];
+
+    bool indir = false;
+@
+
+<<[[sysexec()]] process #!>>=
+        /*
+         * Process #! /bin/sh args ...
+         */
+        memmove(line, &exec, sizeof(Exec));
+        if(indir || line[0]!='#' || line[1]!='!')
+            error(Ebadexec);
+        n = shargs(line, n, progarg);
+        if(n == 0)
+            error(Ebadexec);
+        indir = true;
+        /*
+         * First arg becomes complete file name
+         */
+        progarg[n++] = file;
+        progarg[n] = 0;
+        validaddr(arg[1], BY2WD, true);
+        arg[1] += BY2WD;
+        file = progarg[0];
+        if(strlen(elem) >= sizeof progelem)
+            error(Ebadexec);
+        strcpy(progelem, elem);
+        progarg[0] = progelem;
+        poperror();
+        cclose(tc);
+@
+
+<<function shargs>>=
+int
+shargs(char *s, int n, char **ap)
+{
+    int i;
+
+    s += 2;
+    n -= 2;     /* skip #! */
+    for(i=0; s[i]!='\n'; i++)
+        if(i == n-1)
+            return 0;
+    s[i] = 0;
+    *ap = 0;
+    i = 0;
+    for(;;) {
+        while(*s==' ' || *s=='\t')
+            s++;
+        if(*s == 0)
+            break;
+        i++;
+        *ap++ = s;
+        *ap = 0;
+        while(*s && *s!=' ' && *s!='\t')
+            s++;
+        if(*s == 0)
+            break;
+        else
+            *s++ = 0;
+    }
+    return i;
+}
+@ 
 
 
+<<[[sysexec()]] if indir arg adjustments>>=
+    if(indir){
+        argp = progarg;
+        while(*argp){
+            a = *argp++;
+            nbytes += strlen(a) + 1;
+            nargs++;
+        }
+    }
+@
+<<[[sysexec()]] if indir argp adjustments>>=
+    if(indir)
+        argp = progarg;
+@
+
+<<[[sysexec()]] if indir argp adjustments again>>=
+        if(indir && *argp==nil) {
+            indir = false;
+            argp = (char**)arg[1];
+        }
+@
 
 
 \chapter{Advanced Topics}
@@ -25688,7 +25760,7 @@ text2data(Proc *p, Segment *s)
          * change in the future.
          */
         if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
-            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+            validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
         syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
         up->procctl = Proc_stopme;
@@ -25815,7 +25887,7 @@ syscallfmt(int syscallno, ulong pc, va_list list)
         argv = va_arg(list, char**);
         evenaddr(PTR2UINT(argv));
         for(;;){
-            validaddr((ulong)argv, sizeof(char**), 0);
+            validaddr((ulong)argv, sizeof(char**), false);
             a = *(char **)argv;
             if(a == nil)
                 break;
@@ -26082,7 +26154,7 @@ fmtrwdata(Fmt* f, char* a, int n, char* suffix)
         fmtprint(f, "0x0%s", suffix);
         return;
     }
-    validaddr((ulong)a, n, 0);
+    validaddr((ulong)a, n, false);
     t = smalloc(n+1);
     for(i = 0; i < n; i++)
         if(a[i] > 0x20 && a[i] < 0x7f)  /* printable ascii? */
@@ -26107,7 +26179,7 @@ fmtuserstring(Fmt* f, char* a, char* suffix)
         fmtprint(f, "0/\"\"%s", suffix);
         return;
     }
-    validaddr((ulong)a, 1, 0);
+    validaddr((ulong)a, 1, false);
     n = ((char*)vmemchr(a, 0, 0x7fffffff) - a) + 1;
     t = smalloc(n+1);
     memmove(t, a, n);
@@ -26797,7 +26869,7 @@ generrstr(char *buf, uint nbuf)
 
     if(nbuf == 0)
         error(Ebadarg);
-    validaddr((ulong)buf, nbuf, 1);
+    validaddr((ulong)buf, nbuf, true);
     if(nbuf > sizeof tmp)
         nbuf = sizeof tmp;
     memmove(tmp, buf, nbuf);

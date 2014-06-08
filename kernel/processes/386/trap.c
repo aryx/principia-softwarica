@@ -781,7 +781,7 @@ syscall(Ureg* ureg)
              * change in the future.
              */
             if(sp < (USTKTOP-BY2PG) || sp > (USTKTOP-sizeof(Sargs)-BY2WD))
-                validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+                validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
             syscallfmt(scallnr, ureg->pc, (va_list)(sp+BY2WD));
             up->procctl = Proc_stopme;
@@ -814,7 +814,7 @@ syscall(Ureg* ureg)
         }
 
         if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD))
-            validaddr(sp, sizeof(Sargs)+BY2WD, 0);
+            validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
         up->sargs = *((Sargs*)(sp+BY2WD));
         up->psstate = sysctab[scallnr];
@@ -1072,6 +1072,7 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ulong *sp;
     Ureg *ureg;
 
+    //procsetup(up), redundant?
     up->fpstate = FPinit;
     fpoff();
 

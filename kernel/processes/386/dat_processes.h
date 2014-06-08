@@ -4,7 +4,7 @@
 /*
  *  parameters for sysproc.c
  */
-// I_MAGIC is defined in include/a.out.h
+// I_MAGIC is defined in include/a.out.h, I for INTEL?
 #define AOUT_MAGIC  (I_MAGIC)
 /*e: constant AOUT_MAGIC */
 

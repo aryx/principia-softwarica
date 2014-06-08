@@ -28,7 +28,7 @@ sysfversion(ulong *arg)
     msize = arg[1];
     vers = (char*)arg[2];
     arglen = arg[3];
-    validaddr(arg[2], arglen, 1);
+    validaddr(arg[2], arglen, true);
     /* check there's a NUL in the version string */
     if(arglen==0 || memchr(vers, 0, arglen)==0)
         error(Ebadarg);
@@ -54,7 +54,7 @@ sysfauth(ulong *arg)
     char *aname;
     int fd;
 
-    validaddr(arg[1], 1, 0);
+    validaddr(arg[1], 1, false);
     aname = validnamedup((char*)arg[1], 1);
     if(waserror()){
         free(aname);

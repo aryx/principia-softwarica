@@ -1,11 +1,14 @@
 struct	Exec
 {
 	long	magic;		/* magic number */
+
 	long	text;	 	/* size of text segment */
 	long	data;	 	/* size of initialized data */
 	long	bss;	  	/* size of uninitialized data */
 	long	syms;	 	/* size of symbol table */
-	long	entry;	 	/* entry point */
+
+    // virtual address in [UTZERO+sizeof(Exec)..UTZERO+sizeof(Exec)+text]
+	long	entry;	 	/* entry point */ 
 	long	spsz;		/* size of pc/sp offset table */
 	long	pcsz;		/* size of pc/line number table */
 };

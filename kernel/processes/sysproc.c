@@ -255,26 +255,35 @@ l2be(long l)
 long
 sysexec(ulong *arg)
 {
-    Segment *s, *ts;
-    ulong t, d, b;
     int i;
-    Chan *tc;
-    char **argv, **argp;
-    char *a, *charp, *args, *file, *file0;
-    char *progarg[sizeof(Exec)/2+1], *elem, progelem[64];
-    ulong ssize, spage, nargs, nbytes, n, bssend;
-    int indir;
+    ulong t, d, b; // text, data, bss sizes in bytes rounded to pages
+    Segment *s, *ts;
+
+    char *file0, *file;
     Exec exec;
-    char line[sizeof(Exec)];
+    Chan *tc;
+    char *elem;
+
+    char **argv, **argp;
+    char *a, *charp, *args;
+
+    ulong ssize, spage, nargs, nbytes, n;
     Fgrp *f;
     KImage *img;
     ulong magic, text, entry, data, bss;
     Tos *tos;
 
-    indir = 0;
+    /*s: [[sysexec()]] locals */
+        char line[sizeof(Exec)];
+        char *progarg[sizeof(Exec)/2+1];
+        char progelem[64];
+
+        bool indir = false;
+    /*e: [[sysexec()]] locals */
+
     elem = nil;
-    validaddr(arg[0], 1, 0);
-    file0 = validnamedup((char*)arg[0], 1);
+    validaddr(arg[0], 1, false);
+    file0 = validnamedup((char*)arg[0], true);
     if(waserror()){
         free(file0);
         free(elem);
@@ -282,6 +291,7 @@ sysexec(ulong *arg)
     }
     file = file0;
     for(;;){
+        // this will adjust up->genbuf to contain the full(?) path of file
         tc = namec(file, Aopen, OEXEC, 0);
         if(waserror()){
             cclose(tc);
@@ -291,11 +301,12 @@ sysexec(ulong *arg)
             kstrdup(&elem, up->genbuf);
 
         n = devtab[tc->type]->read(tc, &exec, sizeof(Exec), 0);
-        if(n < 2)
+        if(n < 2) // need at least 2 bytes to decide if a #! or real binary
             error(Ebadexec);
         magic = l2be(exec.magic);
         text = l2be(exec.text);
         entry = l2be(exec.entry);
+
         if(n==sizeof(Exec) && (magic == AOUT_MAGIC)){
             if(text >= USTKTOP-UTZERO
             || entry < UTZERO+sizeof(Exec)
@@ -304,62 +315,70 @@ sysexec(ulong *arg)
             break; /* for binary */
         }
 
-        /*
-         * Process #! /bin/sh args ...
-         */
-        memmove(line, &exec, sizeof(Exec));
-        if(indir || line[0]!='#' || line[1]!='!')
-            error(Ebadexec);
-        n = shargs(line, n, progarg);
-        if(n == 0)
-            error(Ebadexec);
-        indir = 1;
-        /*
-         * First arg becomes complete file name
-         */
-        progarg[n++] = file;
-        progarg[n] = 0;
-        validaddr(arg[1], BY2WD, 1);
-        arg[1] += BY2WD;
-        file = progarg[0];
-        if(strlen(elem) >= sizeof progelem)
-            error(Ebadexec);
-        strcpy(progelem, elem);
-        progarg[0] = progelem;
-        poperror();
-        cclose(tc);
+        /*s: [[sysexec()]] process #! */
+                /*
+                 * Process #! /bin/sh args ...
+                 */
+                memmove(line, &exec, sizeof(Exec));
+                if(indir || line[0]!='#' || line[1]!='!')
+                    error(Ebadexec);
+                n = shargs(line, n, progarg);
+                if(n == 0)
+                    error(Ebadexec);
+                indir = true;
+                /*
+                 * First arg becomes complete file name
+                 */
+                progarg[n++] = file;
+                progarg[n] = 0;
+                validaddr(arg[1], BY2WD, true);
+                arg[1] += BY2WD;
+                file = progarg[0];
+                if(strlen(elem) >= sizeof progelem)
+                    error(Ebadexec);
+                strcpy(progelem, elem);
+                progarg[0] = progelem;
+                poperror();
+                cclose(tc);
+        /*e: [[sysexec()]] process #! */
     }
 
     data = l2be(exec.data);
     bss = l2be(exec.bss);
     t = UTROUND(UTZERO+sizeof(Exec)+text);
+    // data is put at page boundary after text (see also _multibootentry)
     d = (t + data + (BY2PG-1)) & ~(BY2PG-1);
-    bssend = t + data + bss;
-    b = (bssend + (BY2PG-1)) & ~(BY2PG-1);
+    // note that not t + d + bss but t + data + bss here
+    b = (t + data + bss + (BY2PG-1)) & ~(BY2PG-1);
     if(t >= KZERO || d >= KZERO || b >= KZERO)
         error(Ebadexec);
 
     /*
      * Args: pass 1: count
      */
-    nbytes = sizeof(Tos);       /* hole for profiling clock at top of stack (and more) */
     nargs = 0;
-    if(indir){
-        argp = progarg;
-        while(*argp){
-            a = *argp++;
-            nbytes += strlen(a) + 1;
-            nargs++;
+    nbytes = 0;
+
+    nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
+    /*s: [[sysexec()]] if indir arg adjustments */
+        if(indir){
+            argp = progarg;
+            while(*argp){
+                a = *argp++;
+                nbytes += strlen(a) + 1;
+                nargs++;
+            }
         }
-    }
+    /*e: [[sysexec()]] if indir arg adjustments */
+
     evenaddr(arg[1]);
     argp = (char**)arg[1];
-    validaddr((ulong)argp, BY2WD, 0);
+    validaddr((ulong)argp, BY2WD, false);
     while(*argp){
         a = *argp++;
         if(((ulong)argp&(BY2PG-1)) < BY2WD)
-            validaddr((ulong)argp, BY2WD, 0);
-        validaddr((ulong)a, 1, 0);
+            validaddr((ulong)argp, BY2WD, false);
+        validaddr((ulong)a, 1, false);
         nbytes += ((char*)vmemchr(a, 0, 0x7FFFFFFF) - a) + 1;
         nargs++;
     }
@@ -384,30 +403,43 @@ sysexec(ulong *arg)
         qunlock(&up->seglock);
         nexterror();
     }
+    // why ESEG? and why not TSTKTOP?? ESEG because will free later
+    // the current SSEG. If we have an error in sysexec we don't want
+    // to have messed up with the current stack. TSTKTOP-USTKSIZE for
+    // the same reason, because we don't want overwrite old stack
+    // all of that will be relocated later.
     up->seg[ESEG] = newseg(SG_STACK, TSTKTOP-USTKSIZE, USTKSIZE/BY2PG);
 
     /*
      * Args: pass 2: assemble; the pages will be faulted in
      */
+
     tos = (Tos*)(TSTKTOP - sizeof(Tos));
     tos->cyclefreq = cpu->cyclefreq;
     cycles((uvlong*)&tos->pcycles);
     tos->pcycles = -tos->pcycles;
     tos->kcycles = tos->pcycles;
     tos->clock = 0;
+    // what about other fields? like pid? will be set in kexit! but could be
+    // done here? what about sysfork? call kexit?
+
     argv = (char**)(TSTKTOP - ssize);
     charp = (char*)(TSTKTOP - nbytes);
     args = charp;
-    if(indir)
-        argp = progarg;
+    /*s: [[sysexec()]] if indir argp adjustments */
+        if(indir)
+            argp = progarg;
+    /*e: [[sysexec()]] if indir argp adjustments */
     else
         argp = (char**)arg[1];
 
     for(i=0; i<nargs; i++){
-        if(indir && *argp==0) {
-            indir = 0;
-            argp = (char**)arg[1];
-        }
+        /*s: [[sysexec()]] if indir argp adjustments again */
+                if(indir && *argp==nil) {
+                    indir = false;
+                    argp = (char**)arg[1];
+                }
+        /*e: [[sysexec()]] if indir argp adjustments again */
         *argv++ = charp + (USTKTOP-TSTKTOP);
         n = strlen(*argp) + 1;
         memmove(charp, *argp++, n);
@@ -429,6 +461,7 @@ sysexec(ulong *arg)
     free(a);
     up->args = smalloc(n);
     memmove(up->args, args, n);
+
     if(n>0 && up->args[n-1]!='\0'){
         /* make sure last arg is NUL-terminated */
         /* put NUL at UTF-8 character boundary */
@@ -448,13 +481,13 @@ sysexec(ulong *arg)
     for(i = SSEG; i <= BSEG; i++) {
         putseg(up->seg[i]);
         /* prevent a second free if we have an error */
-        up->seg[i] = 0;
+        up->seg[i] = nil;
     }
     for(i = BSEG+1; i < NSEG; i++) {
         s = up->seg[i];
-        if(s != 0 && (s->type&SG_CEXEC)) {
+        if(s != nil && (s->type&SG_CEXEC)) { // close on exec
             putseg(s);
-            up->seg[i] = 0;
+            up->seg[i] = nil;
         }
     }
 
@@ -483,6 +516,7 @@ sysexec(ulong *arg)
     s->image = img;
     s->fstart = ts->fstart+ts->flen;
     s->flen = data;
+    // data is also in binary
 
     /* BSS. Zero fill on demand */
     up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
@@ -491,11 +525,11 @@ sysexec(ulong *arg)
      * Move the stack
      */
     s = up->seg[ESEG];
-    up->seg[ESEG] = 0;
+    up->seg[ESEG] = nil;
     up->seg[SSEG] = s;
     qunlock(&up->seglock);
     poperror(); /* seglock */
-    poperror(); /* elem */
+    poperror(); /* elem */ // really? I think this matches more the cclose(tc)
     s->base = USTKTOP-USTKSIZE;
     s->top = USTKTOP;
     relocateseg(s, USTKTOP-TSTKTOP);
@@ -517,10 +551,10 @@ sysexec(ulong *arg)
 
     qlock(&up->debug);
     up->nnote = 0;
-    up->notify = 0;
+    up->notify = nil;
     up->notified = false;
     up->privatemem = false;
-    procsetup(up);
+    procsetup(up); // fpstate
     qunlock(&up->debug);
 
     /*s: [[sysexec()]] if hang */
@@ -611,7 +645,7 @@ sysexits(ulong *arg)
         if(waserror())
             status = inval;
         else{
-            validaddr((ulong)status, 1, 0);
+            validaddr((ulong)status, 1, false);
             if(vmemchr(status, 0, ERRMAX) == 0){
                 memmove(buf, status, ERRMAX);
                 buf[ERRMAX-1] = 0;
@@ -637,7 +671,7 @@ sysawait(ulong *arg)
     ulong n;
 
     n = arg[1];
-    validaddr(arg[0], n, 1);
+    validaddr(arg[0], n, true);
     pid = pwait(&w);
     if(pid < 0)
         return -1;
@@ -674,7 +708,7 @@ generrstr(char *buf, uint nbuf)
 
     if(nbuf == 0)
         error(Ebadarg);
-    validaddr((ulong)buf, nbuf, 1);
+    validaddr((ulong)buf, nbuf, true);
     if(nbuf > sizeof tmp)
         nbuf = sizeof tmp;
     memmove(tmp, buf, nbuf);
@@ -703,7 +737,7 @@ long
 sysnotify(ulong *arg)
 {
     if(arg[0] != 0)
-        validaddr(arg[0], sizeof(ulong), 0);
+        validaddr(arg[0], sizeof(ulong), false);
     up->notify = (int(*)(void*, char*))(arg[0]);
     return 0;
 }

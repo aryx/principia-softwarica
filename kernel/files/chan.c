@@ -1676,7 +1676,7 @@ char isfrog[256]={
  * to access unchecked addresses.) 
  */
 static char*
-validname0(char *aname, int slashok, int dup, ulong pc)
+validname0(char *aname, bool slashok, bool dup, ulong pc)
 {
     char *ename, *name, *s;
     int c, n;
@@ -1725,17 +1725,17 @@ validname0(char *aname, int slashok, int dup, ulong pc)
 
 /*s: function validname */
 void
-validname(char *aname, int slashok)
+validname(char *aname, bool slashok)
 {
-    validname0(aname, slashok, 0, getcallerpc(&aname));
+    validname0(aname, slashok, false, getcallerpc(&aname));
 }
 /*e: function validname */
 
 /*s: function validnamedup */
 char*
-validnamedup(char *aname, int slashok)
+validnamedup(char *aname, bool slashok)
 {
-    return validname0(aname, slashok, 1, getcallerpc(&aname));
+    return validname0(aname, slashok, true, getcallerpc(&aname));
 }
 /*e: function validnamedup */
 
