@@ -35,6 +35,8 @@ enum {
     MemMin      = 4*MB,
     MemMax      = (3*1024+768)*MB,
 };
+// coupling: with l.s for MemMin. 
+// Why MemMax is not 4Go? because iterate by 256MB each time?
 
 /*s: memory.c forward decl */
 typedef struct Map Map;
@@ -556,15 +558,6 @@ ramscan(phys_addr maxmem)
 }
 /*e: function ramscan */
 
-static char *etypes[] =
-{
-    "type=0",
-    "memory",
-    "reserved",
-    "acpi reclaim",
-    "acpi nvs",
-};
-
 /*s: function meminit */
 void
 meminit(void)
@@ -622,30 +615,6 @@ meminit(void)
         memdebug();
 }
 /*e: function meminit */
-
-/*s: function umbmalloc */
-/*
- * Allocate memory from the upper memory blocks.
- */
-kern_addr
-umbmalloc(ulong addr, int size, int align)
-{
-    ulong a;
-
-    if(a = mapalloc(&rmapumb, addr, size, align))
-        return (ulong)KADDR(a);
-
-    return nilptr;
-}
-/*e: function umbmalloc */
-
-/*s: function umbfree */
-void
-umbfree(ulong addr, int size)
-{
-    mapfree(&rmapumb, PADDR(addr), size);
-}
-/*e: function umbfree */
 
 /*s: function upaalloc */
 /*

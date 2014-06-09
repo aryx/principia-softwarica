@@ -1110,10 +1110,6 @@ void  touser(void*);
 void  trapenable(int, void (*)(Ureg*, void*), void*, char*);
 void  trapinit(void);
 void  trapinit0(void);
-ulong umbmalloc(ulong, int, int);
-void  umbfree(ulong, int);
-//ulong umbrwmalloc(ulong, int, int);
-//void  umbrwfree(ulong, int);
 ulong upaalloc(int, int);
 //void  upafree(ulong, int);
 void  upareserve(ulong, int);
@@ -5001,34 +4997,6 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 \subsection*{[[memory/386/mem.h]]}
 
-<<constant x86 other segments>>=
-#define APMCSEG   6 /* APM code segment */
-#define APMCSEG16 7 /* APM 16-bit code segment */
-#define APMDSEG   8 /* APM data segment */
-#define KESEG16   9 /* kernel executable 16-bit */
-@
-
-<<macros other xxxSEGM>>=
-#define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-@
-
-<<constant x86 other segment selectors>>=
-#define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
-#define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
-#define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
-/* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
-@
-
-<<[[gdt]] other elements>>=
-[KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
-@
-
-
-
-
-
-
-
 <<mem.h>>=
 /*
  * Memory and machine-specific definitions.  Used in C and assembler.
@@ -5046,13 +5014,15 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 #define BY2WD   4     /* bytes per word */
 #define BY2V    8     /* bytes per double word */
+
 #define BY2PG   4096      /* bytes per page */
-#define BY2XPG    (4096*1024)   /* bytes per big page */
-
 #define WD2PG   (BY2PG/BY2WD)   /* words per page */
-
 #define PGSHIFT   12      /* log(BY2PG) */
-#define BLOCKALIGN  8
+
+<<constant BLOCKALIGN>>
+
+// Intel specific
+#define BY2XPG    (4096*1024)   /* bytes per big page */
 
 <<constant FPalign>>
 
@@ -5108,7 +5078,9 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 #define CONFADDR  (KZERO+0x1200)    /* info passed from boot loader */
 
 #define TMPADDR   (KZERO+0x2000)    /* used for temporary mappings */
+
 #define APBOOTSTRAP (KZERO+0x3000)    /* AP bootstrap code */
+
 #define RMUADDR   (KZERO+0x7C00)    /* real mode Ureg */
 #define RMCODE    (KZERO+0x8000)    /* copy of first page of KTEXT */
 #define RMBUF   (KZERO+0x9000)    /* buffer for user space - known to vga */
@@ -5136,7 +5108,6 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 // could be an enum but this also used from assembly
 <<constant x86 segments>>
-/* #define  APM40SEG  8 /* APM segment 0x40 */
 
 <<constant SELGDT>>
 #define SELLDT  (1<<2)  /* selector is in ldt */
@@ -5165,7 +5136,7 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
  */
 #define PDX(va)   ((((virt_addr)(va))>>22) & 0x03FF)
 #define PTX(va)   ((((virt_addr)(va))>>12) & 0x03FF)
-// 0x03FF = 1023, so 10 bits
+// 0x03FF = 1023, so 10 bits, put 1024-1 no?
 
 <<constant VectorSYSCALL>>
 @
@@ -5183,8 +5154,6 @@ typedef struct RMap RMap;
 <<memory.c debugging macro>>=
 #define MEMDEBUG    0
 @
-
-
 
 
 
@@ -5208,6 +5177,8 @@ enum {
     MemMin      = 4*MB,
     MemMax      = (3*1024+768)*MB,
 };
+// coupling: with l.s for MemMin. 
+// Why MemMax is not 4Go? because iterate by 256MB each time?
 
 <<memory.c forward decl>>
 <<struct Map>>
@@ -5260,20 +5231,7 @@ static RMap rmapumbrw = {
 
 <<function ramscan>>
 
-static char *etypes[] =
-{
-    "type=0",
-    "memory",
-    "reserved",
-    "acpi reclaim",
-    "acpi nvs",
-};
-
 <<function meminit>>
-
-<<function umbmalloc>>
-
-<<function umbfree>>
 
 <<function upaalloc>>
 
@@ -5282,6 +5240,16 @@ static char *etypes[] =
 <<function memorysummary>>
 
 @
+
+
+%static char *etypes[] =
+%{
+%    "type=0",
+%    "memory",
+%    "reserved",
+%    "acpi reclaim",
+%    "acpi nvs",
+%};
 
 %
 %
@@ -5329,33 +5297,28 @@ static char *etypes[] =
 %//}
 
 
-% dead now? could remove
-<<function umbmalloc>>=
-/*
- * Allocate memory from the upper memory blocks.
- */
-kern_addr
-umbmalloc(ulong addr, int size, int align)
-{
-    ulong a;
+%/*
+% * Allocate memory from the upper memory blocks.
+% */
+%kern_addr
+%umbmalloc(ulong addr, int size, int align)
+%{
+%    ulong a;
+%
+%    if(a = mapalloc(&rmapumb, addr, size, align))
+%        return (ulong)KADDR(a);
+%
+%    return nilptr;
+%}
 
-    if(a = mapalloc(&rmapumb, addr, size, align))
-        return (ulong)KADDR(a);
+%void
+%umbfree(ulong addr, int size)
+%{
+%    mapfree(&rmapumb, PADDR(addr), size);
+%}
 
-    return nilptr;
-}
-@
 
-% dead?
-<<function umbfree>>=
-void
-umbfree(ulong addr, int size)
-{
-    mapfree(&rmapumb, PADDR(addr), size);
-}
-@
-
-% dead?
+% used by screen.c, devpccard.c
 <<function upaalloc>>=
 /*
  * Give out otherwise-unused physical address space
@@ -11281,6 +11244,22 @@ mathinit(void)
 
 \section{Power}
 
+% used by apm.c
+<<constant x86 other segments>>=
+#define APMCSEG   6 /* APM code segment */
+#define APMCSEG16 7 /* APM 16-bit code segment */
+#define APMDSEG   8 /* APM data segment */
+/* #define  APM40SEG  8 /* APM segment 0x40 */
+@
+
+
+<<constant x86 other segment selectors>>=
+#define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
+#define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
+#define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
+/* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
+@
+
 
 <<[[PCArch]] power methods fields>>=
 int (*serialpower)(int);  /* 1 == on, 0 == off */
@@ -12498,6 +12477,20 @@ bios32open(char* id)
 
 
 \subsection*{[[arch/386/l_realmode.s]]}
+
+<<constant x86 other segments>>=
+#define KESEG16   9 /* kernel executable 16-bit */
+@
+
+<<macros other xxxSEGM>>=
+#define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
+@
+
+<<[[gdt]] other elements>>=
+[KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
+@
+
+
 
 <<l_realmode.s>>=
 #include "mem.h"

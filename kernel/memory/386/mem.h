@@ -15,13 +15,17 @@
 
 #define BY2WD   4     /* bytes per word */
 #define BY2V    8     /* bytes per double word */
+
 #define BY2PG   4096      /* bytes per page */
-#define BY2XPG    (4096*1024)   /* bytes per big page */
-
 #define WD2PG   (BY2PG/BY2WD)   /* words per page */
-
 #define PGSHIFT   12      /* log(BY2PG) */
+
+/*s: constant BLOCKALIGN */
 #define BLOCKALIGN  8
+/*e: constant BLOCKALIGN */
+
+// Intel specific
+#define BY2XPG    (4096*1024)   /* bytes per big page */
 
 /*s: constant FPalign */
 #define FPalign   16      /* required for FXSAVE */
@@ -108,7 +112,9 @@
 #define CONFADDR  (KZERO+0x1200)    /* info passed from boot loader */
 
 #define TMPADDR   (KZERO+0x2000)    /* used for temporary mappings */
+
 #define APBOOTSTRAP (KZERO+0x3000)    /* AP bootstrap code */
+
 #define RMUADDR   (KZERO+0x7C00)    /* real mode Ureg */
 #define RMCODE    (KZERO+0x8000)    /* copy of first page of KTEXT */
 #define RMBUF   (KZERO+0x9000)    /* buffer for user space - known to vga */
@@ -151,11 +157,12 @@
 #define APMCSEG   6 /* APM code segment */
 #define APMCSEG16 7 /* APM 16-bit code segment */
 #define APMDSEG   8 /* APM data segment */
+/* #define  APM40SEG  8 /* APM segment 0x40 */
+/*x: constant x86 other segments */
 #define KESEG16   9 /* kernel executable 16-bit */
 /*e: constant x86 other segments */
 #define NGDT    10  /* number of GDT entries required */
 /*e: constant x86 segments */
-/* #define  APM40SEG  8 /* APM segment 0x40 */
 
 /*s: constant SELGDT */
 #define SELGDT  (0<<2)  /* selector is in gdt */
@@ -250,7 +257,7 @@
  */
 #define PDX(va)   ((((virt_addr)(va))>>22) & 0x03FF)
 #define PTX(va)   ((((virt_addr)(va))>>12) & 0x03FF)
-// 0x03FF = 1023, so 10 bits
+// 0x03FF = 1023, so 10 bits, put 1024-1 no?
 
 /*s: constant VectorSYSCALL */
 //!!! int 64 (0x40), way to jump in plan9 OS !!!
