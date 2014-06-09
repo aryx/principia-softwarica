@@ -11,8 +11,7 @@
 
 <<global arch>>
 
-void    (*fprestore)(ArchFPsave*);
-void    (*fpsave)(ArchFPsave*);
+<<hook fprestore and fpsave>>
 
 int (*_pcmspecial)(char*, ISAConf*);
 void (*_pcmspecialclose)(int);
@@ -159,50 +158,11 @@ extern PCArch archgeneric;
 // Co processor
 //*****************************************************************************
 
-//@Scheck: unnamed substructure
-struct  FPstate     /* x87 fpu state */
-{
-  ushort  control;
-  ushort  r1;
-  // enum<fpsavestatus>
-  ushort  status;
-  ushort  r2;
-  ushort  tag;
-  ushort  r3;
-  ulong pc;
-  ushort  selector;
-  ushort  r4;
-  ulong operand;
-  ushort  oselector;
-  ushort  r5;
-  uchar regs[80]; /* floating point registers */
-};
+<<struct FPstate>>
 
-//@Scheck: unnamed substructure
-struct  FPssestate    /* SSE fp state */
-{
-  ushort  fcw;    /* control */
-  ushort  fsw;    /* status */
-  ushort  ftw;    /* tag */
-  ushort  fop;    /* opcode */
-  ulong fpuip;    /* pc */
-  ushort  cs;   /* pc segment */
-  ushort  r1;   /* reserved */
-  ulong fpudp;    /* data pointer */
-  ushort  ds;   /* data pointer segment */
-  ushort  r2;
-  ulong mxcsr;    /* MXCSR register state */
-  ulong mxcsr_mask; /* MXCSR mask register */
-  uchar xregs[480]; /* extended registers */
-};
+<<struct FPssestate>>
 
-//@Scheck: unnamed substructure
-struct  SFPssestate   /* SSE fp state with alignment slop */
-{
-  FPssestate;
-  uchar alignpad[FPalign]; /* slop to allow copying to aligned addr */
-  ulong magic;    /* debugging: check for overrun */
-};
+<<struct  SFPssestate>>
 
 //*****************************************************************************
 // Misc
@@ -4671,167 +4631,6 @@ static char* mathmsg[] =
 @
 
 
-<<function mathstate>>=
-static void
-mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
-{
-        ulong sts, fpc, ctl;
-        ArchFPsave *f = &up->fpsave;
-
-        if(fpsave == fpx87save){
-                sts = f->status;
-                fpc = f->pc;
-                ctl = f->control;
-        } else {
-                sts = f->fsw;
-                fpc = f->fpuip;
-                ctl = f->fcw;
-        }
-        if(stsp)
-                *stsp = sts;
-        if(pcp)
-                *pcp = fpc;
-        if(ctlp)
-                *ctlp = ctl;
-}
-@
-
-<<function mathnote>>=
-static void
-mathnote(void)
-{
-        int i;
-        ulong status, pc;
-        char *msg, note[ERRMAX];
-
-        mathstate(&status, &pc, nil);
-
-        /*
-         * Some attention should probably be paid here to the
-         * exception masks and error summary.
-         */
-        msg = "unknown exception";
-        for(i = 1; i <= 5; i++){
-                if(!((1<<i) & status))
-                        continue;
-                msg = mathmsg[i];
-                break;
-        }
-        if(status & 0x01){
-                if(status & 0x40){
-                        if(status & 0x200)
-                                msg = "stack overflow";
-                        else
-                                msg = "stack underflow";
-                }else
-                        msg = "invalid operation";
-        }
-        snprint(note, sizeof note, "sys: fp: %s fppc=%#lux status=%#lux",
-                msg, pc, status);
-        postnote(up, 1, note, NDebug);
-}
-@
-
-<<function matherror>>=
-/*
- *  math coprocessor error
- */
-static void
-matherror(Ureg *ur, void*)
-{
-        ulong status, pc;
-
-        /*
-         *  a write cycle to port 0xF0 clears the interrupt latch attached
-         *  to the error# line from the 387
-         */
-        if(!(cpu->cpuiddx & Fpuonchip))
-                outb(0xF0, 0xFF);
-
-        /*
-         *  save floating point state to check out error
-         */
-        fpenv(&up->fpsave);     /* result ignored, but masks fp exceptions */
-        fpsave(&up->fpsave);            /* also turns fpu off */
-        fpon();
-        mathnote();
-
-        if((ur->pc & 0xf0000000) == KZERO){
-                mathstate(&status, &pc, nil);
-                panic("fp: status %#lux fppc=%#lux pc=%#lux", status, pc, ur->pc);
-        }
-}
-@
-
-
-<<function mathemu>>=
-/*
- *  math coprocessor emulation fault
- */
-static void
-mathemu(Ureg *ureg, void*)
-{
-        ulong status, control;
-
-        if(up->fpstate & FPillegal){
-                /* someone did floating point in a note handler */
-                postnote(up, 1, "sys: floating point in note handler", NDebug);
-                return;
-        }
-        switch(up->fpstate){
-        case FPinit:
-                fpinit();
-                up->fpstate = FPactive;
-                break;
-        case FPinactive:
-                /*
-                 * Before restoring the state, check for any pending
-                 * exceptions, there's no way to restore the state without
-                 * generating an unmasked exception.
-                 * More attention should probably be paid here to the
-                 * exception masks and error summary.
-                 */
-                mathstate(&status, nil, &control);
-                if((status & ~control) & 0x07F){
-                        mathnote();
-                        break;
-                }
-                fprestore(&up->fpsave);
-                up->fpstate = FPactive;
-                break;
-        case FPactive:
-                panic("math emu pid %ld %s pc %#lux",
-                        up->pid, up->text, ureg->pc);
-                break;
-        }
-}
-@
-
-
-<<function mathover>>=
-/*
- *  math coprocessor segment overrun
- */
-static void
-mathover(Ureg*, void*)
-{
-        pexit("math overrun", false);
-}
-@
-
-
-<<function mathinit>>=
-void
-mathinit(void)
-{
-        trapenable(VectorCERR, matherror, 0, "matherror");
-        if(X86FAMILY(cpu->cpuidax) == 3)
-                intrenable(IrqIRQ13, matherror, 0, BUSUNKNOWN, "matherror");
-        trapenable(VectorCNA, mathemu, 0, "mathemu");
-        trapenable(VectorCSO, mathover, 0, "mathover");
-}
-@
-
 
 <<function isaconfig>>=
 int
@@ -5362,7 +5161,7 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 #define PGSHIFT   12      /* log(BY2PG) */
 #define BLOCKALIGN  8
 
-#define FPalign   16      /* required for FXSAVE */
+<<constant FPalign>>
 
 <<constant MAXCPUS>>
 <<constant KSTACK>>
@@ -7151,25 +6950,7 @@ archrevert(void)
 
 \subsection*{[[processes/386/dat_processes.h]]}
 
-
-<<dat_processes.h>>=
-
-<<constant AOUT_MAGIC>>
-
-//*****************************************************************************
-// Proc extensions
-//*****************************************************************************
-
-/*
- * the FP regs must be stored here, not somewhere pointed to from here.
- * port code assumes this.
- */
-// could be renamed ArchProcFPSave (used both in Proc and Cpu though)
-union ArchFPsave {
-    FPstate;
-    SFPssestate;
-};
-
+<<struct ArchProcNotsave>>=
 /*
  *  things saved in the Proc structure during a notify
  */
@@ -7180,6 +6961,19 @@ struct ArchProcNotsave
     ulong svcs;
     ulong svss;
 };
+@
+
+<<dat_processes.h>>=
+
+<<constant AOUT_MAGIC>>
+
+//*****************************************************************************
+// Proc extensions
+//*****************************************************************************
+
+<<union ArchFPSave>>
+
+<<struct ArchProcNotsave>>
 
 //*****************************************************************************
 // Interrupts
@@ -7630,61 +7424,6 @@ int i8259elcr;              /* mask of level-triggered interrupts */
 
 
 \subsection*{[[processes/386/main_processes.c]]}
-
-
-
-<<function fpsavealloc>>=
-void
-fpsavealloc(void)
-{
-    cpu->fpsavalign = mallocalign(sizeof(FPssestate), FPalign, 0, 0);
-    if (cpu->fpsavalign == nil)
-        panic("cpu%d: can't allocate fpsavalign", cpu->cpuno);
-}
-@ 
-
-
-<<function fpssesave>>=
-/*
- * sse fp save and restore buffers have to be 16-byte (FPalign) aligned,
- * so we shuffle the data down as needed or make copies.
- */
-
-void
-fpssesave(ArchFPsave *fps)
-{
-    ArchFPsave *afps;
-
-    fps->magic = 0x1234;
-    afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
-    fpssesave0(afps);
-    if (fps != afps)  /* not aligned? shuffle down from aligned buffer */
-        memmove(fps, afps, sizeof(FPssestate));
-    if (fps->magic != 0x1234)
-        print("fpssesave: magic corrupted\n");
-}
-@ 
-
-
-<<function fpsserestore>>=
-void
-fpsserestore(ArchFPsave *fps)
-{
-    ArchFPsave *afps;
-
-    fps->magic = 0x4321;
-    afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
-    if (fps != afps) {
-        afps = cpu->fpsavalign;
-        memmove(afps, fps, sizeof(FPssestate)); /* make aligned copy */
-    }
-    fpsserestore0(afps);
-    if (fps->magic != 0x4321)
-        print("fpsserestore: magic corrupted\n");
-}
-@ 
-
-
 
 
 <<main_processes.c>>=
@@ -8382,7 +8121,6 @@ enum {
 //--------------------------------------------------------------------
 
 <<enum fpsavestatus>>
-
 
 //*****************************************************************************
 // Proc, the big one
@@ -11235,12 +10973,212 @@ testschedulability(Proc *theproc)
 \section{Floating Point}
 %{FP}
 
+<<enum fpsavestatus>>=
+/*
+ * FPsave.status
+ */
+enum fpsavestatus
+{
+    /* this is a state */
+    FPinit=   0,
+    FPactive= 1,
+    FPinactive= 2,
+  
+    /* the following is a bit that can be or'd into the state */
+    FPillegal=  0x100,
+};
+@ 
+
+<<[[Proc]] other fields>>=
+// enum<fpsavestatus>
+int fpstate;
+ArchFPsave  fpsave;   /* address of this is known by db */
+@
+
+<<union ArchFPSave>>=
+/*
+ * the FP regs must be stored here, not somewhere pointed to from here.
+ * port code assumes this.
+ */
+// could be renamed ArchProcFPSave (used both in Proc and Cpu though)
+union ArchFPsave {
+    FPstate;
+    SFPssestate;
+};
+@
+
+
+<<struct FPstate>>=
+//@Scheck: unnamed substructure
+struct  FPstate     /* x87 fpu state */
+{
+  ushort  control;
+  ushort  r1;
+  // enum<fpsavestatus>
+  ushort  status;
+  ushort  r2;
+  ushort  tag;
+  ushort  r3;
+  ulong pc;
+  ushort  selector;
+  ushort  r4;
+  ulong operand;
+  ushort  oselector;
+  ushort  r5;
+  uchar regs[80]; /* floating point registers */
+};
+@
+
+<<struct  SFPssestate>>=
+//@Scheck: unnamed substructure
+struct  SFPssestate   /* SSE fp state with alignment slop */
+{
+  FPssestate;
+  uchar alignpad[FPalign]; /* slop to allow copying to aligned addr */
+  ulong magic;    /* debugging: check for overrun */
+};
+@
+
+<<constant FPalign>>=
+#define FPalign   16      /* required for FXSAVE */
+@
+
+
+<<struct FPssestate>>=
+//@Scheck: unnamed substructure
+struct  FPssestate    /* SSE fp state */
+{
+  ushort  fcw;    /* control */
+  ushort  fsw;    /* status */
+  ushort  ftw;    /* tag */
+  ushort  fop;    /* opcode */
+  ulong fpuip;    /* pc */
+  ushort  cs;   /* pc segment */
+  ushort  r1;   /* reserved */
+  ulong fpudp;    /* data pointer */
+  ushort  ds;   /* data pointer segment */
+  ushort  r2;
+  ulong mxcsr;    /* MXCSR register state */
+  ulong mxcsr_mask; /* MXCSR mask register */
+  uchar xregs[480]; /* extended registers */
+};
+@
+
+
+<<[[Cpu]] [[Arch]] other fields>>=
+ArchFPsave *fpsavalign;
+@
+
+
+<<[[newproc()]] fb init>>=
+    p->fpstate = FPinit;
+@
+
+<<[[sysrfork()]] propagate fpsave>>=
+    p->fpsave = up->fpsave;
+@
+
+<<[[sysrfork()]] propagate fpstate>>=
+    /* don't penalize the child, it hasn't done FP in a note handler. */
+    p->fpstate = up->fpstate & ~FPillegal;
+@
+
+<<function fpsavealloc>>=
+void
+fpsavealloc(void)
+{
+    cpu->fpsavalign = mallocalign(sizeof(FPssestate), FPalign, 0, 0);
+    if (cpu->fpsavalign == nil)
+        panic("cpu%d: can't allocate fpsavalign", cpu->cpuno);
+}
+@ 
+
+
+<<hook fprestore and fpsave>>=
+void    (*fprestore)(ArchFPsave*);
+void    (*fpsave)(ArchFPsave*);
+@
+
+<<function fpssesave>>=
+/*
+ * sse fp save and restore buffers have to be 16-byte (FPalign) aligned,
+ * so we shuffle the data down as needed or make copies.
+ */
+
+void
+fpssesave(ArchFPsave *fps)
+{
+    ArchFPsave *afps;
+
+    fps->magic = 0x1234;
+    afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
+    fpssesave0(afps);
+    if (fps != afps)  /* not aligned? shuffle down from aligned buffer */
+        memmove(fps, afps, sizeof(FPssestate));
+    if (fps->magic != 0x1234)
+        print("fpssesave: magic corrupted\n");
+}
+@ 
+
+
+<<function fpsserestore>>=
+void
+fpsserestore(ArchFPsave *fps)
+{
+    ArchFPsave *afps;
+
+    fps->magic = 0x4321;
+    afps = (ArchFPsave *)ROUND(((uintptr)fps), FPalign);
+    if (fps != afps) {
+        afps = cpu->fpsavalign;
+        memmove(afps, fps, sizeof(FPssestate)); /* make aligned copy */
+    }
+    fpsserestore0(afps);
+    if (fps->magic != 0x4321)
+        print("fpsserestore: magic corrupted\n");
+}
+@ 
+
+
+
+
+
 <<[[procsetup()]] fp setup>>=
 /*
  *  set up floating point for a new process
  */
     p->fpstate = FPinit;
     fpoff();
+@
+
+<<[[userinit()]] fp setup>>=
+    p->fpstate = FPinit;
+    fpoff();
+@
+
+<<[[execregs()]] fp adjustments>>=
+    //procsetup(up), redundant?
+    up->fpstate = FPinit;
+    fpoff();
+@
+
+<<[[syscall()]] fp adjustments if fork>>=
+    if(scallnr == RFORK && up->fpstate == FPactive){
+        fpsave(&up->fpsave);
+        up->fpstate = FPinactive;
+    }
+@
+
+<<[[notify()]] fp adjustments>>=
+    if(up->fpstate == FPactive){
+        fpsave(&up->fpsave);
+        up->fpstate = FPinactive;
+    }
+    up->fpstate |= FPillegal;
+@
+
+<<[[noted()]] fp adjustments>>=
+    up->fpstate &= ~FPillegal;
 @
 
 <<[[procsave()]] fp adjustments>>=
@@ -11262,31 +11200,190 @@ testschedulability(Proc *theproc)
     }
 @
 
-<<enum fpsavestatus>>=
-/*
- * FPsave.status
- */
-enum fpsavestatus
+
+
+<<[[procread()]] Qfpregs case>>=
+    case Qfpregs:
+        rptr = (uchar*)&p->fpsave;
+        rsize = sizeof(ArchFPsave);
+        goto regread;
+@
+
+<<[[procwrite]] Qfpregs case>>=
+    case Qfpregs:
+        if(offset >= sizeof(ArchFPsave))
+            n = 0;
+        else if(offset+n > sizeof(ArchFPsave))
+            n = sizeof(ArchFPsave) - offset;
+        memmove((uchar*)&p->fpsave+offset, va, n);
+        break;
+@
+
+
+
+
+<<function mathstate>>=
+static void
+mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
 {
-    /* this is a state */
-    FPinit=   0,
-    FPactive= 1,
-    FPinactive= 2,
-  
-    /* the following is a bit that can be or'd into the state */
-    FPillegal=  0x100,
-};
-@ 
+        ulong sts, fpc, ctl;
+        ArchFPsave *f = &up->fpsave;
 
-<<[[Cpu]] [[Arch]] other fields>>=
-ArchFPsave *fpsavalign;
+        if(fpsave == fpx87save){
+                sts = f->status;
+                fpc = f->pc;
+                ctl = f->control;
+        } else {
+                sts = f->fsw;
+                fpc = f->fpuip;
+                ctl = f->fcw;
+        }
+        if(stsp)
+                *stsp = sts;
+        if(pcp)
+                *pcp = fpc;
+        if(ctlp)
+                *ctlp = ctl;
+}
 @
 
-<<[[Proc]] other fields>>=
-ArchFPsave  fpsave;   /* address of this is known by db */
-// enum<fpsavestatus>
-int fpstate;
+<<function mathnote>>=
+static void
+mathnote(void)
+{
+        int i;
+        ulong status, pc;
+        char *msg, note[ERRMAX];
+
+        mathstate(&status, &pc, nil);
+
+        /*
+         * Some attention should probably be paid here to the
+         * exception masks and error summary.
+         */
+        msg = "unknown exception";
+        for(i = 1; i <= 5; i++){
+                if(!((1<<i) & status))
+                        continue;
+                msg = mathmsg[i];
+                break;
+        }
+        if(status & 0x01){
+                if(status & 0x40){
+                        if(status & 0x200)
+                                msg = "stack overflow";
+                        else
+                                msg = "stack underflow";
+                }else
+                        msg = "invalid operation";
+        }
+        snprint(note, sizeof note, "sys: fp: %s fppc=%#lux status=%#lux",
+                msg, pc, status);
+        postnote(up, 1, note, NDebug);
+}
 @
+% >>
+
+<<function matherror>>=
+/*
+ *  math coprocessor error
+ */
+static void
+matherror(Ureg *ur, void*)
+{
+        ulong status, pc;
+
+        /*
+         *  a write cycle to port 0xF0 clears the interrupt latch attached
+         *  to the error# line from the 387
+         */
+        if(!(cpu->cpuiddx & Fpuonchip))
+                outb(0xF0, 0xFF);
+
+        /*
+         *  save floating point state to check out error
+         */
+        fpenv(&up->fpsave);     /* result ignored, but masks fp exceptions */
+        fpsave(&up->fpsave);            /* also turns fpu off */
+        fpon();
+        mathnote();
+
+        if((ur->pc & 0xf0000000) == KZERO){
+                mathstate(&status, &pc, nil);
+                panic("fp: status %#lux fppc=%#lux pc=%#lux", status, pc, ur->pc);
+        }
+}
+@
+
+
+<<function mathemu>>=
+/*
+ *  math coprocessor emulation fault
+ */
+static void
+mathemu(Ureg *ureg, void*)
+{
+        ulong status, control;
+
+        if(up->fpstate & FPillegal){
+                /* someone did floating point in a note handler */
+                postnote(up, 1, "sys: floating point in note handler", NDebug);
+                return;
+        }
+        switch(up->fpstate){
+        case FPinit:
+                fpinit();
+                up->fpstate = FPactive;
+                break;
+        case FPinactive:
+                /*
+                 * Before restoring the state, check for any pending
+                 * exceptions, there's no way to restore the state without
+                 * generating an unmasked exception.
+                 * More attention should probably be paid here to the
+                 * exception masks and error summary.
+                 */
+                mathstate(&status, nil, &control);
+                if((status & ~control) & 0x07F){
+                        mathnote();
+                        break;
+                }
+                fprestore(&up->fpsave);
+                up->fpstate = FPactive;
+                break;
+        case FPactive:
+                panic("math emu pid %ld %s pc %#lux",
+                        up->pid, up->text, ureg->pc);
+                break;
+        }
+}
+@
+
+
+<<function mathover>>=
+/*
+ *  math coprocessor segment overrun
+ */
+static void
+mathover(Ureg*, void*)
+{
+        pexit("math overrun", false);
+}
+@
+
+
+<<function mathinit>>=
+void
+mathinit(void)
+{
+        trapenable(VectorCERR, matherror, 0, "matherror");
+        if(X86FAMILY(cpu->cpuidax) == 3)
+                intrenable(IrqIRQ13, matherror, 0, BUSUNKNOWN, "matherror");
+        trapenable(VectorCNA, mathemu, 0, "mathemu");
+        trapenable(VectorCSO, mathover, 0, "mathover");
+}
+@
+
 
 
 \section{Power}

@@ -87,6 +87,7 @@ extern PCArch archgeneric;
 // Co processor
 //*****************************************************************************
 
+/*s: struct FPstate */
 //@Scheck: unnamed substructure
 struct  FPstate     /* x87 fpu state */
 {
@@ -105,7 +106,9 @@ struct  FPstate     /* x87 fpu state */
   ushort  r5;
   uchar regs[80]; /* floating point registers */
 };
+/*e: struct FPstate */
 
+/*s: struct FPssestate */
 //@Scheck: unnamed substructure
 struct  FPssestate    /* SSE fp state */
 {
@@ -123,7 +126,9 @@ struct  FPssestate    /* SSE fp state */
   ulong mxcsr_mask; /* MXCSR mask register */
   uchar xregs[480]; /* extended registers */
 };
+/*e: struct FPssestate */
 
+/*s: struct  SFPssestate */
 //@Scheck: unnamed substructure
 struct  SFPssestate   /* SSE fp state with alignment slop */
 {
@@ -131,6 +136,7 @@ struct  SFPssestate   /* SSE fp state with alignment slop */
   uchar alignpad[FPalign]; /* slop to allow copying to aligned addr */
   ulong magic;    /* debugging: check for overrun */
 };
+/*e: struct  SFPssestate */
 
 //*****************************************************************************
 // Misc

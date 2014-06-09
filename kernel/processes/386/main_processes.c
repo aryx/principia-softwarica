@@ -35,7 +35,6 @@ procsave(Proc *p)
         cycles(&t);
         p->pcycles += t;
     /*e: [[procsave()]] cycles adjustments */
-
     /*s: [[procsave()]] fp adjustments */
         if(p->fpstate == FPactive){
             if(p->state == Moribund)
@@ -54,7 +53,6 @@ procsave(Proc *p)
             p->fpstate = FPinactive;
         }
     /*e: [[procsave()]] fp adjustments */
-
     /*
      * While this processor is in the scheduler, the process could run
      * on another processor and exit, returning the page tables to

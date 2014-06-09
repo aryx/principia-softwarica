@@ -398,7 +398,6 @@ enum fpsavestatus
 };
 /*e: enum fpsavestatus */
 
-
 //*****************************************************************************
 // Proc, the big one
 //*****************************************************************************
@@ -646,9 +645,9 @@ struct Proc
     /*x: [[Proc]] other fields */
     bool privatemem; /* proc does not let anyone read mem */
     /*x: [[Proc]] other fields */
-    ArchFPsave  fpsave;   /* address of this is known by db */
     // enum<fpsavestatus>
     int fpstate;
+    ArchFPsave  fpsave;   /* address of this is known by db */
     /*e: [[Proc]] other fields */
 
     struct ArchProcNotsave;

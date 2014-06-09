@@ -23,7 +23,9 @@
 #define PGSHIFT   12      /* log(BY2PG) */
 #define BLOCKALIGN  8
 
+/*s: constant FPalign */
 #define FPalign   16      /* required for FXSAVE */
+/*e: constant FPalign */
 
 /*s: constant MAXCPUS */
 /*

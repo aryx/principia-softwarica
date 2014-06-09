@@ -4109,7 +4109,7 @@ newproc(void)
     p->fgrp = nil;
     p->rgrp = nil;
 
-    p->fpstate = FPinit;
+    <<[[newproc()]] fb init>>
     p->kp = false;
 
     p->pdbg = nil;
@@ -4292,7 +4292,7 @@ sysrfork(ulong* arg)
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = up->ureg;
-    p->fpsave = up->fpsave;
+    <<[[sysrfork()]] propagate fpsave>>
 
     /* Make a new set of memory segments */
     share = flag & RFMEM;
@@ -4373,8 +4373,8 @@ sysrfork(ulong* arg)
     if((flag&RFNOTEG) == 0)
         p->noteid = up->noteid;
 
-    /* don't penalize the child, it hasn't done FP in a note handler. */
-    p->fpstate = up->fpstate & ~FPillegal;
+    <<[[sysrfork()]] propagate fpstate>>
+
 
     memset(p->time, 0, sizeof(p->time));
     p->time[TReal] = CPUS(0)->ticks;
@@ -4763,9 +4763,7 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ulong *sp;
     Ureg *ureg;
 
-    //procsetup(up), redundant?
-    up->fpstate = FPinit;
-    fpoff();
+    <<[[execregs()]] fp adjustments>>
 
     sp = (ulong*)(USTKTOP - ssize);
     *--sp = nargs;
@@ -6156,10 +6154,7 @@ syscall(Ureg* ureg)
 
     <<[[syscall()]] Proc_tracesyscall if, syscall entry>>
 
-    if(scallnr == RFORK && up->fpstate == FPactive){
-        fpsave(&up->fpsave);
-        up->fpstate = FPinactive;
-    }
+    <<[[syscall()]] fp adjustments if fork>>
     spllo();
 
     up->nerrlab = 0;
@@ -9607,9 +9602,7 @@ void
 procsave(Proc *p)
 {
     <<[[procsave()]] cycles adjustments>>
-
     <<[[procsave()]] fp adjustments>>
-
     /*
      * While this processor is in the scheduler, the process could run
      * on another processor and exit, returning the page tables to
@@ -9693,7 +9686,7 @@ proc_ready(Proc *p)
     rq = &runq[pri];
     p->state = Ready;
     queueproc(rq, p);
-    <<ready()]] hook proctrace>>
+    <<[[ready()]] hook proctrace>>
     splx(s);
 }
 @ 
@@ -11797,8 +11790,7 @@ userinit(void)
     kstrdup(&p->text, "*init*");
     kstrdup(&p->user, eve);
 
-    p->fpstate = FPinit;
-    fpoff();
+    <<[[userinit()]] fp setup>>
 
     /*
      * Kernel Stack
@@ -21189,11 +21181,7 @@ notify(Ureg* ureg)
     if(up->nnote == 0)
         return 0;
 
-    if(up->fpstate == FPactive){
-        fpsave(&up->fpsave);
-        up->fpstate = FPinactive;
-    }
-    up->fpstate |= FPillegal;
+    <<[[notify()]] fp adjustments>>
 
     s = spllo();
     qlock(&up->debug);
@@ -21280,7 +21268,7 @@ noted(Ureg* ureg, ulong arg0)
 
     nureg = up->ureg;   /* pointer to user returned Ureg struct */
 
-    up->fpstate &= ~FPillegal;
+    <<[[noted()]] fp adjustments>>
 
     /* sanity clause */
     oureg = (ulong)nureg;
@@ -23459,9 +23447,8 @@ procread(Chan *c, void *va, long n, vlong off)
         rsize = sizeof(Ureg);
         goto regread;
 
-    case Qfpregs:
-        rptr = (uchar*)&p->fpsave;
-        rsize = sizeof(ArchFPsave);
+    <<[[procread()]] Qfpregs case>>
+
     regread:
         if(rptr == nil)
             error(Enoreg);
@@ -23660,13 +23647,7 @@ procwrite(Chan *c, void *va, long n, vlong off)
         setregisters(p->dbgreg, (char*)(p->dbgreg)+offset, va, n);
         break;
 
-    case Qfpregs:
-        if(offset >= sizeof(ArchFPsave))
-            n = 0;
-        else if(offset+n > sizeof(ArchFPsave))
-            n = sizeof(ArchFPsave) - offset;
-        memmove((uchar*)&p->fpsave+offset, va, n);
-        break;
+    <<[[procwrite]] Qfpregs case>>
 
 
     case Qnote:
@@ -26287,7 +26268,7 @@ struct Traceevent {
 
 % could draw automata :)
 
-<<ready()]] hook proctrace>>=
+<<[[ready()]] hook proctrace>>=
     pt = proctrace;
     if(pt)
         pt(p, SReady, 0);

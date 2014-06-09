@@ -559,11 +559,11 @@ proc_ready(Proc *p)
     rq = &runq[pri];
     p->state = Ready;
     queueproc(rq, p);
-    /*s: ready()]] hook proctrace */
+    /*s: [[ready()]] hook proctrace */
         pt = proctrace;
         if(pt)
             pt(p, SReady, 0);
-    /*e: ready()]] hook proctrace */
+    /*e: [[ready()]] hook proctrace */
     splx(s);
 }
 /*e: function ready */
@@ -815,7 +815,9 @@ newproc(void)
     p->fgrp = nil;
     p->rgrp = nil;
 
-    p->fpstate = FPinit;
+    /*s: [[newproc()]] fb init */
+        p->fpstate = FPinit;
+    /*e: [[newproc()]] fb init */
     p->kp = false;
 
     p->pdbg = nil;

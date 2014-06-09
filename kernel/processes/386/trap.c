@@ -802,10 +802,12 @@ syscall(Ureg* ureg)
         }
     /*e: [[syscall()]] Proc_tracesyscall if, syscall entry */
 
-    if(scallnr == RFORK && up->fpstate == FPactive){
-        fpsave(&up->fpsave);
-        up->fpstate = FPinactive;
-    }
+    /*s: [[syscall()]] fp adjustments if fork */
+        if(scallnr == RFORK && up->fpstate == FPactive){
+            fpsave(&up->fpsave);
+            up->fpstate = FPinactive;
+        }
+    /*e: [[syscall()]] fp adjustments if fork */
     spllo();
 
     up->nerrlab = 0;
@@ -907,11 +909,13 @@ notify(Ureg* ureg)
     if(up->nnote == 0)
         return 0;
 
-    if(up->fpstate == FPactive){
-        fpsave(&up->fpsave);
-        up->fpstate = FPinactive;
-    }
-    up->fpstate |= FPillegal;
+    /*s: [[notify()]] fp adjustments */
+        if(up->fpstate == FPactive){
+            fpsave(&up->fpsave);
+            up->fpstate = FPinactive;
+        }
+        up->fpstate |= FPillegal;
+    /*e: [[notify()]] fp adjustments */
 
     s = spllo();
     qlock(&up->debug);
@@ -997,7 +1001,9 @@ noted(Ureg* ureg, ulong arg0)
 
     nureg = up->ureg;   /* pointer to user returned Ureg struct */
 
-    up->fpstate &= ~FPillegal;
+    /*s: [[noted()]] fp adjustments */
+        up->fpstate &= ~FPillegal;
+    /*e: [[noted()]] fp adjustments */
 
     /* sanity clause */
     oureg = (ulong)nureg;
@@ -1079,9 +1085,11 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ulong *sp;
     Ureg *ureg;
 
-    //procsetup(up), redundant?
-    up->fpstate = FPinit;
-    fpoff();
+    /*s: [[execregs()]] fp adjustments */
+        //procsetup(up), redundant?
+        up->fpstate = FPinit;
+        fpoff();
+    /*e: [[execregs()]] fp adjustments */
 
     sp = (ulong*)(USTKTOP - ssize);
     *--sp = nargs;

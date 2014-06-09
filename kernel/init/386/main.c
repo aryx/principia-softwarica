@@ -459,8 +459,10 @@ userinit(void)
     kstrdup(&p->text, "*init*");
     kstrdup(&p->user, eve);
 
-    p->fpstate = FPinit;
-    fpoff();
+    /*s: [[userinit()]] fp setup */
+        p->fpstate = FPinit;
+        fpoff();
+    /*e: [[userinit()]] fp setup */
 
     /*
      * Kernel Stack

@@ -12,6 +12,7 @@
 // Proc extensions
 //*****************************************************************************
 
+/*s: union ArchFPSave */
 /*
  * the FP regs must be stored here, not somewhere pointed to from here.
  * port code assumes this.
@@ -21,7 +22,9 @@ union ArchFPsave {
     FPstate;
     SFPssestate;
 };
+/*e: union ArchFPSave */
 
+/*s: struct ArchProcNotsave */
 /*
  *  things saved in the Proc structure during a notify
  */
@@ -32,6 +35,7 @@ struct ArchProcNotsave
     ulong svcs;
     ulong svss;
 };
+/*e: struct ArchProcNotsave */
 
 //*****************************************************************************
 // Interrupts

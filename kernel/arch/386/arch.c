@@ -15,8 +15,10 @@
 PCArch* arch;
 /*e: global arch */
 
+/*s: hook fprestore and fpsave */
 void    (*fprestore)(ArchFPsave*);
 void    (*fpsave)(ArchFPsave*);
+/*e: hook fprestore and fpsave */
 
 int (*_pcmspecial)(char*, ISAConf*);
 void (*_pcmspecialclose)(int);

@@ -912,9 +912,13 @@ procread(Chan *c, void *va, long n, vlong off)
         rsize = sizeof(Ureg);
         goto regread;
 
-    case Qfpregs:
-        rptr = (uchar*)&p->fpsave;
-        rsize = sizeof(ArchFPsave);
+    /*s: [[procread()]] Qfpregs case */
+        case Qfpregs:
+            rptr = (uchar*)&p->fpsave;
+            rsize = sizeof(ArchFPsave);
+            goto regread;
+    /*e: [[procread()]] Qfpregs case */
+
     regread:
         if(rptr == nil)
             error(Enoreg);
@@ -1175,13 +1179,15 @@ procwrite(Chan *c, void *va, long n, vlong off)
         setregisters(p->dbgreg, (char*)(p->dbgreg)+offset, va, n);
         break;
 
-    case Qfpregs:
-        if(offset >= sizeof(ArchFPsave))
-            n = 0;
-        else if(offset+n > sizeof(ArchFPsave))
-            n = sizeof(ArchFPsave) - offset;
-        memmove((uchar*)&p->fpsave+offset, va, n);
-        break;
+    /*s: [[procwrite]] Qfpregs case */
+        case Qfpregs:
+            if(offset >= sizeof(ArchFPsave))
+                n = 0;
+            else if(offset+n > sizeof(ArchFPsave))
+                n = sizeof(ArchFPsave) - offset;
+            memmove((uchar*)&p->fpsave+offset, va, n);
+            break;
+    /*e: [[procwrite]] Qfpregs case */
 
 
     case Qnote:

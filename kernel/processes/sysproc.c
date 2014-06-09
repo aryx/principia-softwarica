@@ -126,7 +126,9 @@ sysrfork(ulong* arg)
     p->lastnote = up->lastnote;
     p->notify = up->notify;
     p->ureg = up->ureg;
-    p->fpsave = up->fpsave;
+    /*s: [[sysrfork()]] propagate fpsave */
+        p->fpsave = up->fpsave;
+    /*e: [[sysrfork()]] propagate fpsave */
 
     /* Make a new set of memory segments */
     share = flag & RFMEM;
@@ -209,8 +211,11 @@ sysrfork(ulong* arg)
     if((flag&RFNOTEG) == 0)
         p->noteid = up->noteid;
 
-    /* don't penalize the child, it hasn't done FP in a note handler. */
-    p->fpstate = up->fpstate & ~FPillegal;
+    /*s: [[sysrfork()]] propagate fpstate */
+        /* don't penalize the child, it hasn't done FP in a note handler. */
+        p->fpstate = up->fpstate & ~FPillegal;
+    /*e: [[sysrfork()]] propagate fpstate */
+
 
     memset(p->time, 0, sizeof(p->time));
     p->time[TReal] = CPUS(0)->ticks;
