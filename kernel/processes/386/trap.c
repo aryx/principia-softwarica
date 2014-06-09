@@ -343,15 +343,17 @@ intrtime(Cpu*, int vno)
 void
 kexit(Ureg*)
 {
-    uvlong t;
-    Tos *tos;
+    /*s: [[kexit()]] tos adjustments */
+        uvlong t;
+        Tos *tos;
 
-    /* precise time accounting, kernel exit */
-    tos = (Tos*)(USTKTOP-sizeof(Tos));
-    cycles(&t);
-    tos->kcycles += t - up->kentry;
-    tos->pcycles = up->pcycles;
-    tos->pid = up->pid;
+        /* precise time accounting, kernel exit */
+        tos = (Tos*)(USTKTOP-sizeof(Tos));
+        cycles(&t);
+        tos->kcycles += t - up->kentry;
+        tos->pcycles = up->pcycles;
+        tos->pid = up->pid;
+    /*e: [[kexit()]] tos adjustments */
 }
 /*e: function kexit */
 
@@ -387,7 +389,9 @@ trap(Ureg* ureg)
 
     if(user){
         up->dbgreg = ureg;
-        cycles(&up->kentry);
+        /*s: [[trap()]] adjust kentry when interrupt user */
+                cycles(&up->kentry);
+        /*e: [[trap()]] adjust kentry when interrupt user */
     }
     // else if !user, then that means we interrupted a syscall() which should
     // already have done those things, so no need for redundancy
@@ -760,7 +764,9 @@ syscall(Ureg* ureg)
     if((ureg->cs & 0xFFFF) != UESEL)
         panic("syscall: cs 0x%4.4luX", ureg->cs);
 
-    cycles(&up->kentry);
+    /*s: [[syscall()]] adjust kentry */
+        cycles(&up->kentry);
+    /*e: [[syscall()]] adjust kentry */
 
     cpu->syscall++;
     up->insyscall = true;
@@ -768,7 +774,7 @@ syscall(Ureg* ureg)
     up->dbgreg = ureg;
 
     sp = ureg->usp;
-    // syscall number
+    // syscall number!
     scallnr = ureg->ax;
 
     /*s: [[syscall()]] Proc_tracesyscall if, syscall entry */
@@ -806,17 +812,18 @@ syscall(Ureg* ureg)
     ret = -1;
 
     if(!waserror()){
-        if(scallnr >= nsyscall || systab[scallnr] == 0){
+        if(scallnr >= nsyscall || systab[scallnr] == nil){
             pprint("bad sys call number %lud pc %lux\n",
                 scallnr, ureg->pc);
             postnote(up, 1, "sys: bad sys call", NDebug);
             error(Ebadarg);
         }
 
-        if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD))
+        if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD)) // adjust Tos ?
             validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
-        up->sargs = *((Sargs*)(sp+BY2WD));
+        // copy syscall arguments from user stack to up->sargs
+        up->sargs = *((Sargs*)(sp+BY2WD)); // 1 word for? return pc?
         up->psstate = sysctab[scallnr];
 
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1082,7 +1089,11 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ureg = up->dbgreg;
     ureg->usp = (ulong)sp;
     ureg->pc = entry;
-    return USTKTOP-sizeof(Tos);     /* address of kernel/user shared data */
+    return USTKTOP
+     /*s: [[execregs()]] return adjustments */
+           -sizeof(Tos)
+     /*e: [[execregs()]] return adjustments */
+     ;     /* address of kernel/user shared data */
 }
 /*e: function execregs */
 
