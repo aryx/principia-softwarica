@@ -34,6 +34,7 @@ SRC_ORIG=Kernel.tex.nw Kernel_extra.tex.nw
 SRC_VIEWS= \
   ../lib_core/libc/9syscall/sys.h\
   ../include/trace.h\
+  ../include/tos.h\
   arch/386/arch.c \
   arch/386/bios32.c \
   arch/386/dat_arch.h \

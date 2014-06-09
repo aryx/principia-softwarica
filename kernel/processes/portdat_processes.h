@@ -576,6 +576,9 @@ struct Proc
 // Stats, profiling
 //--------------------------------------------------------------------
     /*s: [[Proc]] stats and profiling fields */
+    // hash<enum<proctime>, ulong>
+    ulong time[6];  /* User, Sys, Real; child U, S, R */
+    /*x: [[Proc]] stats and profiling fields */
     uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
     /*
      * pcycles: cycles spent in this process (updated on procsave/restore)
@@ -586,9 +589,6 @@ struct Proc
      * (procrestores and procsaves balance), it is pcycles.
      */
     vlong pcycles;
-    /*x: [[Proc]] stats and profiling fields */
-    // hash<enum<proctime>, ulong>
-    ulong time[6];  /* User, Sys, Real; child U, S, R */
     /*e: [[Proc]] stats and profiling fields */
 //--------------------------------------------------------------------
 // Debugging (the kernel itself)

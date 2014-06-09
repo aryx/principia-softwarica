@@ -446,6 +446,7 @@ sysexec(ulong *arg)
         charp += n;
     }
     free(file0);
+    // file0 = nil? to avoid double free?
 
     free(up->text);
     up->text = elem;
