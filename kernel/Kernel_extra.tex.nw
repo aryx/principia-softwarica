@@ -7631,75 +7631,6 @@ int i8259elcr;              /* mask of level-triggered interrupts */
 
 \subsection*{[[processes/386/main_processes.c]]}
 
-<<function procsetup>>=
-/*
- *  set up floating point for a new process
- */
-void
-procsetup(Proc*p)
-{
-    p->fpstate = FPinit;
-    fpoff();
-}
-@ 
-
-
-<<function procsave>>=
-/*
- *  Save the cpu dependent part of the process state.
- */
-void
-procsave(Proc *p)
-{
-    uvlong t;
-
-    cycles(&t);
-    p->pcycles += t;
-    if(p->fpstate == FPactive){
-        if(p->state == Moribund)
-            fpclear();
-        else{
-            /*
-             * Fpsave() stores without handling pending
-             * unmasked exeptions. Postnote() can't be called
-             * here as sleep() already has up->rlock, so
-             * the handling of pending exceptions is delayed
-             * until the process runs again and generates an
-             * emulation fault to activate the FPU.
-             */
-            fpsave(&p->fpsave);
-        }
-        p->fpstate = FPinactive;
-    }
-
-    /*
-     * While this processor is in the scheduler, the process could run
-     * on another processor and exit, returning the page tables to
-     * the free list where they could be reallocated and overwritten.
-     * When this processor eventually has to get an entry from the
-     * trashed page tables it will crash.
-     *
-     * If there's only one processor, this can't happen.
-     * You might think it would be a win not to do this in that case,
-     * especially on VMware, but it turns out not to matter.
-     */
-    mmuflushtlb(PADDR(cpu->pdproto));
-}
-@ 
-
-
-<<function procrestore>>=
-void
-procrestore(Proc *p)
-{
-    uvlong t;
-
-    if(p->kp)
-        return;
-    cycles(&t);
-    p->pcycles -= t;
-}
-@ 
 
 
 <<function fpsavealloc>>=
@@ -11303,6 +11234,33 @@ testschedulability(Proc *theproc)
 
 \section{Floating Point}
 %{FP}
+
+<<[[procsetup()]] fp setup>>=
+/*
+ *  set up floating point for a new process
+ */
+    p->fpstate = FPinit;
+    fpoff();
+@
+
+<<[[procsave()]] fp adjustments>>=
+    if(p->fpstate == FPactive){
+        if(p->state == Moribund)
+            fpclear();
+        else{
+            /*
+             * Fpsave() stores without handling pending
+             * unmasked exeptions. Postnote() can't be called
+             * here as sleep() already has up->rlock, so
+             * the handling of pending exceptions is delayed
+             * until the process runs again and generates an
+             * emulation fault to activate the FPU.
+             */
+            fpsave(&p->fpsave);
+        }
+        p->fpstate = FPinactive;
+    }
+@
 
 <<enum fpsavestatus>>=
 /*
@@ -25423,27 +25381,7 @@ typedef struct Traceevent	Traceevent;
 typedef struct Plink Plink;
 #pragma incomplete Plink
 
-struct Tos {
-	struct			/* Per process profiling */
-	{
-		Plink	*pp;	/* known to be 0(ptr) */
-		Plink	*next;	/* known to be 4(ptr) */
-		Plink	*last;
-		Plink	*first;
-		ulong	pid;
-		ulong	what;
-	} prof;
-
-	uvlong	cyclefreq;	/* cycle clock frequency if there is one, 0 otherwise */
-	vlong	kcycles;	/* cycles spent in kernel */
-	vlong	pcycles;	/* cycles spent in process (kernel + user) */
-	ulong	clock;
-
-	ulong	pid;		/* might as well put the pid here */
-	/* scratch space for kernel use (e.g., mips fp delay-slot execution) */
-	ulong	kscr[4];
-	/* top of stack is here */
-};
+<<struct Tos>>
 typedef struct Tos Tos;
 
 extern Tos *_tos;

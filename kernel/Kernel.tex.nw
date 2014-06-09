@@ -784,8 +784,9 @@ cankaddr(phys_addr pa)
 
 
 <<typedef Syscall>>=
-typedef long Syscall(ulong*);
+typedef long Syscall(virt_addr2);
 @
+% parameter = pointer in stack of user, start of array of parameters
 
 <<systab.h>>=
 // used by systab.c but also by trap.c for certain codes
@@ -826,6 +827,8 @@ sysnop(ulong*)
     return 0;
 }
 @ 
+% the parameter virt_addr2 should be a pointer to the stack to the start
+% of the arguments
 
 <<constant VectorSYSCALL>>=
 //!!! int 64 (0x40), way to jump in plan9 OS !!!
@@ -919,15 +922,13 @@ struct Cpu
     int cpuno;     /* physical id of processor (KNOWN TO ASSEMBLY) */
     <<[[Cpu]] second field>>
   
-    // ref<Proc>
+    // ref<Proc>, or None if halting?
     Proc* proc;     /* current process on this processor */
 
     ulong ticks;      /* of the clock since boot time */
 
     uvlong  cpuhz;
     int cpumhz; // cpuhz / 1_000_000
-    // cyclefre == cpuhz if havetsc, 0 otherwise
-    uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 
     <<[[Cpu]] stat fields>>
     <<[[Cpu]] other fields>>
@@ -938,6 +939,7 @@ struct Cpu
 };
 @ 
 % not that the stack actually is until CPUSIZE
+
 
 <<struct ArchCpu>>=
 struct ArchCpu {
@@ -3833,7 +3835,7 @@ vmemchr(virt_addr3 s, int c, int n)
 <<syscall brk>>=
 // int brk(void*);
 long
-sysbrk(ulong *arg)
+sysbrk(ulong* arg)
 {
     return ibrk(arg[0], BSEG); // BSS, the heap size is changed
 }
@@ -4214,7 +4216,7 @@ enum rfork
 <<syscall rfork>>=
 // int rfork(int flags);
 long
-sysrfork(ulong *arg)
+sysrfork(ulong* arg)
 {
     Proc *p;
     int i;
@@ -4462,7 +4464,7 @@ int nargs;    /* number of bytes of args */
 <<syscall exec>>=
 // void* exec(char *name, char* argv[]);
 long
-sysexec(ulong *arg)
+sysexec(ulong* arg)
 {
     int i;
     ulong t, d, b; // text, data, bss sizes in bytes rounded to pages
@@ -4480,7 +4482,6 @@ sysexec(ulong *arg)
     Fgrp *f;
     KImage *img;
     ulong magic, text, entry, data, bss;
-    Tos *tos;
 
     <<[[sysexec()]] locals>>
 
@@ -4537,7 +4538,7 @@ sysexec(ulong *arg)
     nargs = 0;
     nbytes = 0;
 
-    nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
+    <<[[sysexec()]] nbytes tos adjustments>>
     <<[[sysexec()]] if indir arg adjustments>>
 
     evenaddr(arg[1]);
@@ -4582,15 +4583,7 @@ sysexec(ulong *arg)
     /*
      * Args: pass 2: assemble; the pages will be faulted in
      */
-
-    tos = (Tos*)(TSTKTOP - sizeof(Tos));
-    tos->cyclefreq = cpu->cyclefreq;
-    cycles((uvlong*)&tos->pcycles);
-    tos->pcycles = -tos->pcycles;
-    tos->kcycles = tos->pcycles;
-    tos->clock = 0;
-    // what about other fields? like pid? will be set in kexit! but could be
-    // done here? what about sysfork? call kexit?
+    <<[[sysexec()]] tos settings>>
 
     argv = (char**)(TSTKTOP - ssize);
     charp = (char*)(TSTKTOP - nbytes);
@@ -4716,7 +4709,7 @@ sysexec(ulong *arg)
     up->notify = nil;
     up->notified = false;
     up->privatemem = false;
-    procsetup(up); // fpstate
+    procsetup(up); // archi specific hook
     qunlock(&up->debug);
 
     <<[[sysexec()]] if hang>>
@@ -4724,6 +4717,16 @@ sysexec(ulong *arg)
     return execregs(entry, ssize, nargs);
 }
 @ 
+
+
+<<function procsetup>>=
+void
+procsetup(Proc*p)
+{
+  <<[[procsetup()]] fp setup>>
+}
+@ 
+
 
 % could mv in lib.h? 
 <<function l2be>>=
@@ -4770,7 +4773,9 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ureg = up->dbgreg;
     ureg->usp = (ulong)sp;
     ureg->pc = entry;
-    return USTKTOP-sizeof(Tos);     /* address of kernel/user shared data */
+    return USTKTOP
+     <<[[execregs()]] return adjustments>>
+     ;     /* address of kernel/user shared data */
 }
 @ 
 
@@ -4834,7 +4839,7 @@ QLock qwaitr;
 <<syscall await>>=
 // int await(char *s, int n);
 long
-sysawait(ulong *arg)
+sysawait(ulong* arg)
 {
     int i;
     int pid;
@@ -4922,7 +4927,7 @@ haswaitq(void *x)
 <<syscall exits>>=
 // void exits(char *msg);
 long
-sysexits(ulong *arg)
+sysexits(ulong* arg)
 {
     char *status;
     char *inval = "invalid exit string";
@@ -6079,7 +6084,7 @@ MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
 @
 
 <<struct Sargs>>=
-// syscall arguments passed in kernel stack
+// syscall arguments copied from user stack
 struct Sargs
 {
     ulong args[MAXSYSARG];
@@ -6138,7 +6143,7 @@ syscall(Ureg* ureg)
     if((ureg->cs & 0xFFFF) != UESEL)
         panic("syscall: cs 0x%4.4luX", ureg->cs);
 
-    cycles(&up->kentry);
+    <<[[syscall()]] adjust kentry>>
 
     cpu->syscall++;
     up->insyscall = true;
@@ -6146,7 +6151,7 @@ syscall(Ureg* ureg)
     up->dbgreg = ureg;
 
     sp = ureg->usp;
-    // syscall number
+    // syscall number!
     scallnr = ureg->ax;
 
     <<[[syscall()]] Proc_tracesyscall if, syscall entry>>
@@ -6161,17 +6166,18 @@ syscall(Ureg* ureg)
     ret = -1;
 
     if(!waserror()){
-        if(scallnr >= nsyscall || systab[scallnr] == 0){
+        if(scallnr >= nsyscall || systab[scallnr] == nil){
             pprint("bad sys call number %lud pc %lux\n",
                 scallnr, ureg->pc);
             postnote(up, 1, "sys: bad sys call", NDebug);
             error(Ebadarg);
         }
 
-        if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD))
+        if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD)) // adjust Tos ?
             validaddr(sp, sizeof(Sargs)+BY2WD, false);
 
-        up->sargs = *((Sargs*)(sp+BY2WD));
+        // copy syscall arguments from user stack to up->sargs
+        up->sargs = *((Sargs*)(sp+BY2WD)); // 1 word for? return pc?
         up->psstate = sysctab[scallnr];
 
         //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -6300,7 +6306,7 @@ trap(Ureg* ureg)
 
     if(user){
         up->dbgreg = ureg;
-        cycles(&up->kentry);
+        <<[[trap()]] adjust kentry when interrupt user>>
     }
     // else if !user, then that means we interrupted a syscall() which should
     // already have done those things, so no need for redundancy
@@ -6409,19 +6415,9 @@ trap(Ureg* ureg)
 void
 kexit(Ureg*)
 {
-    uvlong t;
-    Tos *tos;
-
-    /* precise time accounting, kernel exit */
-    tos = (Tos*)(USTKTOP-sizeof(Tos));
-    cycles(&t);
-    tos->kcycles += t - up->kentry;
-    tos->pcycles = up->pcycles;
-    tos->pid = up->pid;
+    <<[[kexit()]] tos adjustments>>
 }
 @ 
-% lp split tos thing? also could setup tos->pid before?
-
 % should be called hook_before_exit_syscall note that
 % take Ureg*, so the address is in the stack and the actual
 % value are where?
@@ -9117,6 +9113,8 @@ proc_sched(void)
 % where we would do the p = runproc() ...? See below.
 
 
+
+
 % less: have a [[Cpu]] scheduler fields? 
 % this not really related to contextswitch
 % the sched of the Cpu is to jump to schedinit that eventually calls sched()
@@ -9599,6 +9597,46 @@ taskswitch(phys_addr mmupd, ulong stack)
     putcr3(mmupd);
 }
 @
+
+
+<<function procsave>>=
+/*
+ *  Save the cpu dependent part of the process state.
+ */
+void
+procsave(Proc *p)
+{
+    <<[[procsave()]] cycles adjustments>>
+
+    <<[[procsave()]] fp adjustments>>
+
+    /*
+     * While this processor is in the scheduler, the process could run
+     * on another processor and exit, returning the page tables to
+     * the free list where they could be reallocated and overwritten.
+     * When this processor eventually has to get an entry from the
+     * trashed page tables it will crash.
+     *
+     * If there's only one processor, this can't happen.
+     * You might think it would be a win not to do this in that case,
+     * especially on VMware, but it turns out not to matter.
+     */
+    mmuflushtlb(PADDR(cpu->pdproto));
+}
+@ 
+
+
+<<function procrestore>>=
+void
+procrestore(Proc *p)
+{
+    uvlong t;
+    if(p->kp)
+        return;
+    <<[[procrestore]] cycles adjustments>>
+}
+@ 
+
 
 
 \section{Cooperative scheduling}
@@ -14467,7 +14505,7 @@ newfd2(int fd[2], Chan *c[2])
 <<syscall open>>=
 // int open(char *file, int omode);
 long
-sysopen(ulong *arg)
+sysopen(ulong* arg)
 {
     int fd;
     Chan *c;
@@ -14492,7 +14530,7 @@ sysopen(ulong *arg)
 <<syscall close>>=
 // int close(int fd);
 long
-sysclose(ulong *arg)
+sysclose(ulong* arg)
 {
     fdtochan(arg[0], -1, 0, 0);
     fdclose(arg[0], 0);
@@ -14611,7 +14649,7 @@ read(ulong *arg, vlong *offp)
 <<syscall pread>>=
 // long pread(int fd, void *buf, long nbytes, vlong offset);
 long
-syspread(ulong *arg)
+syspread(ulong* arg)
 {
     vlong v;
     va_list list;
@@ -14685,7 +14723,7 @@ write(ulong *arg, vlong *offp)
 <<syscall pwrite>>=
 // long pwrite(int fd, void *buf, long nbytes, vlong offset);
 long
-syspwrite(ulong *arg)
+syspwrite(ulong* arg)
 {
     vlong v;
     va_list list;
@@ -14765,7 +14803,7 @@ wstat(Chan *c, uchar *d, int nd)
 <<syscall wstat>>=
 // int wstat(char *name, uchar *edir, int nedir);
 long
-syswstat(ulong *arg)
+syswstat(ulong* arg)
 {
     Chan *c;
     uint l;
@@ -14783,7 +14821,7 @@ syswstat(ulong *arg)
 <<syscall fwstat>>=
 // int fwstat(int fd, uchar *edir, int nedir);
 long
-sysfwstat(ulong *arg)
+sysfwstat(ulong* arg)
 {
     Chan *c;
     uint l;
@@ -14799,7 +14837,7 @@ sysfwstat(ulong *arg)
 <<syscall fstat>>=
 // int fstat(int fd, uchar *edir, int nedir);
 long
-sysfstat(ulong *arg)
+sysfstat(ulong* arg)
 {
     Chan *c;
     uint l;
@@ -14822,7 +14860,7 @@ sysfstat(ulong *arg)
 <<syscall stat>>=
 // int stat(char *name, uchar *edir, int nedir);
 long
-sysstat(ulong *arg)
+sysstat(ulong* arg)
 {
     char *name;
     Chan *c;
@@ -14853,7 +14891,7 @@ sysstat(ulong *arg)
 <<syscall seek>>=
 // vlong seek(int fd, vlong n, int type);
 long
-sysseek(ulong *arg)
+sysseek(ulong* arg)
 {
     validaddr(arg[0], BY2V, true);
     sseek(arg);
@@ -16151,7 +16189,7 @@ openmode(ulong o)
 <<syscall create>>=
 // int create(char *file, int omode, ulong perm);
 long
-syscreate(ulong *arg)
+syscreate(ulong* arg)
 {
     int fd;
     Chan *c;
@@ -16175,7 +16213,7 @@ syscreate(ulong *arg)
 <<syscall remove>>=
 // int remove(char *file);
 long
-sysremove(ulong *arg)
+sysremove(ulong* arg)
 {
     Chan *c;
 
@@ -16211,7 +16249,7 @@ sysremove(ulong *arg)
 <<syscall chdir>>=
 // int chdir(char *dirname);
 long
-syschdir(ulong *arg)
+syschdir(ulong* arg)
 {
     Chan *c;
 
@@ -16230,7 +16268,7 @@ syschdir(ulong *arg)
 <<syscall fd2path>>=
 // int fd2path(int fd, char *buf, int nbuf);
 long
-sysfd2path(ulong *arg)
+sysfd2path(ulong* arg)
 {
     Chan *c;
 
@@ -17367,7 +17405,7 @@ cmount(Chan **newp, Chan *old, int flag, char *spec)
 <<syscall bind>>=
 // int bind(char *name, char *old, int flag);
 long
-sysbind(ulong *arg)
+sysbind(ulong* arg)
 {
     return bindmount(0, -1, -1, (char*)arg[0], (char*)arg[1], arg[2], nil);
 }
@@ -17380,7 +17418,7 @@ sysbind(ulong *arg)
 <<syscall mount>>=
 // int mount(int fd, int afd, char *old, int flag, char *aname);
 long
-sysmount(ulong *arg)
+sysmount(ulong* arg)
 {
     return bindmount(1, arg[0], arg[1], nil, (char*)arg[2], arg[3], (char*)arg[4]);
 }
@@ -17395,7 +17433,7 @@ Chan* mchan;      /* channel to mounted server */
 <<syscall unmount>>=
 // int unmount(char *name, char *old);
 long
-sysunmount(ulong *arg)
+sysunmount(ulong* arg)
 {
     Chan *cmount, *cmounted;
 
@@ -20062,17 +20100,6 @@ devarch_fastticks(uvlong *hz)
 @
 
 
-<<function cycles and default implementation>>=
-static void
-simplecycles(uvlong*x)
-{
-    *x = cpu->ticks;
-}
-
-void    (*cycles)(uvlong*) = simplecycles;
-@ 
-
-
 \section{Timers}
 
 % capacity of machine is very low, just timer next point
@@ -20434,7 +20461,7 @@ Rendez  sleepr;    /* place for syssleep/debug/tsleep */
 <<syscall sleep>>=
 // int sleep(long millisecs);
 long
-syssleep(ulong *arg)
+syssleep(ulong* arg)
 {
     int n;
     n = arg[0];
@@ -20511,7 +20538,7 @@ static Alarms   alarms;
 <<syscall alarm>>=
 // long alarm(unsigned long millisecs);
 long
-sysalarm(ulong *arg)
+sysalarm(ulong* arg)
 {
     return procalarm(arg[0]);
 }
@@ -21043,7 +21070,7 @@ void  *ureg;    /* User registers for notes */
 <<syscall notify>>=
 // int notify(void (*f)(void*, char*));
 long
-sysnotify(ulong *arg)
+sysnotify(ulong* arg)
 {
     if(arg[0] != 0)
         validaddr(arg[0], sizeof(ulong), false);
@@ -21055,7 +21082,7 @@ sysnotify(ulong *arg)
 <<syscall noted>>=
 // int noted(int v);
 long
-sysnoted(ulong *arg)
+sysnoted(ulong* arg)
 {
     if(arg[0]!=NRSTR && !up->notified)
         error(Egreg);
@@ -21336,7 +21363,7 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
 <<syscall pipe>>=
 // int pipe(int fd[2]);
 long
-syspipe(ulong *arg)
+syspipe(ulong* arg)
 {
     int fd[2];
     Chan *c[2];
@@ -21872,7 +21899,7 @@ Dev pipedevtab = {
 <<syscall segbrk>>=
 // void* segbrk(void *saddr, void *addr);
 long
-syssegbrk(ulong *arg)
+syssegbrk(ulong* arg)
 {
     int i;
     ulong addr;
@@ -21903,7 +21930,7 @@ syssegbrk(ulong *arg)
 <<syscall segattach>>=
 // void* segattach(int attr, char *class, void *va, ulong len);
 long
-syssegattach(ulong *arg)
+syssegattach(ulong* arg)
 {
     return segattach(up, arg[0], (char*)arg[1], arg[2], arg[3]);
 }
@@ -22018,7 +22045,7 @@ isoverlap(Proc *p, ulong va, int len)
 <<syscall segdetach>>=
 // int segdetach(void *addr);
 long
-syssegdetach(ulong *arg)
+syssegdetach(ulong* arg)
 {
     int i;
     ulong addr;
@@ -22067,7 +22094,7 @@ found:
 <<syscall segfree>>=
 // int segfree(void *va, ulong len);
 long
-syssegfree(ulong *arg)
+syssegfree(ulong* arg)
 {
     Segment *s;
     ulong from, to;
@@ -22149,7 +22176,7 @@ procflushseg(Segment *s)
 
 <<syscall segflush>>=
 long
-syssegflush(ulong *arg)
+syssegflush(ulong* arg)
 {
     Segment *s;
     ulong addr, l;
@@ -22435,7 +22462,7 @@ tsemacquire(Segment *s, long *addr, ulong ms)
 <<syscall semacquire>>=
 // int semacquire(long *addr, int block);
 long
-syssemacquire(ulong *arg)
+syssemacquire(ulong* arg)
 {
     int block;
     long *addr;
@@ -22458,7 +22485,7 @@ syssemacquire(ulong *arg)
 <<syscall tsemacquire>>=
 // int tsemacquire(long *addr, ulong ms);
 long
-systsemacquire(ulong *arg)
+systsemacquire(ulong* arg)
 {
     long *addr;
     ulong ms;
@@ -22481,7 +22508,7 @@ systsemacquire(ulong *arg)
 <<syscall semrelease>>=
 // long semrelease(long *addr, long count);
 long
-syssemrelease(ulong *arg)
+syssemrelease(ulong* arg)
 {
     long *addr, delta;
     Segment *s;
@@ -22566,7 +22593,7 @@ Rendezvous,
 <<syscall rendezvous>>=
 // void* rendezvous(void* tag, void* value);
 long
-sysrendezvous(ulong *arg)
+sysrendezvous(ulong* arg)
 {
     uintptr tag, val;
     Proc *p, **l;
@@ -24384,7 +24411,7 @@ procctlreq(Proc *p, char *va, int n)
 <<syscall dup>>=
 // int dup(int oldfd, int newfd);
 long
-sysdup(ulong *arg)
+sysdup(ulong* arg)
 {
     int fd;
     Chan *c, *oc;
@@ -26570,9 +26597,7 @@ profclock(Ureg *ur, Timer *)
 
     /* user profiling clock */
     if(userureg(ur)){
-        Tos *tos;
-        tos = (Tos*)(USTKTOP-sizeof(Tos));
-        tos->clock += TK2MS(1);
+        <<[[profclock]] tos adjustments when user>>
         segclock(ur->pc);
     }
 }
@@ -26646,10 +26671,37 @@ segclock(ulong pc)
 
 % cooperation between compiler, loader, kernel, and then /bin/prof that interprets
 % data.
+% /include/tos.h, lib_core/libc/port/profile.c, linker/??, compilers/??
 
-% can't have compiled program do like I do in Common.profile_code and
-% do a syscall to each funcall to get the time ... would be too slow
+% can't have a compiled program do things like I do in Common.profile_code and
+% do a syscall to each funcall to get the time ... would be far too slow.
 % so need fast access to time in userspace! enter tos
+% note: other stuff we would like to put in tos to optimize kernel<->user comm?
+
+<<struct Tos>>=
+struct Tos {
+    <<[[Tos]] prof field>>
+    uvlong cyclefreq;	/* cycle clock frequency if there is one, 0 otherwise */
+
+    vlong kcycles;	/* cycles spent in kernel */
+    vlong pcycles;	/* cycles spent in process (kernel + user) */
+    ulong clock; // in ms
+
+    ulong pid;		/* might as well put the pid here */
+    <<[[Tos]] other fields>>
+    /* top of stack is here */
+};
+@
+% tos? time os?
+
+% idea is that Tos sits at the very top of user stack
+% Tos then sysexec args then regular process stack frames
+%    tos = (Tos*)(USTKTOP-sizeof(Tos));
+
+<<[[Cpu]] other fields>>=
+    // cyclefreq == cpuhz if havetsc, 0 otherwise
+    uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
+@
 
 <<[[Proc]] stats and profiling fields>>=
 uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
@@ -26663,6 +26715,112 @@ uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
  */
 vlong pcycles;
 @ 
+
+<<function cycles and default implementation>>=
+static void
+simplecycles(uvlong *x)
+{
+    *x = cpu->ticks;
+}
+
+void    (*cycles)(uvlong*) = simplecycles;
+@ 
+
+
+
+
+\ifallcode
+<<[[Tos]] prof field>>=
+struct			/* Per process profiling */
+{
+    Plink	*pp;	/* known to be 0(ptr) */
+    Plink	*next;	/* known to be 4(ptr) */
+    Plink	*last;
+    Plink	*first;
+    ulong	pid;
+    ulong	what;
+} prof;
+@
+% this is actually used by lib_core/port/profile.c
+\fi
+
+\ifallcode
+<<[[Tos]] other fields>>=
+/* scratch space for kernel use (e.g., mips fp delay-slot execution) */
+ulong	kscr[4];
+@
+\fi
+
+
+
+<<[[sysexec()]] locals>>=
+Tos *tos;
+@
+
+<<[[sysexec()]] tos settings>>=
+    tos = (Tos*)(TSTKTOP - sizeof(Tos));
+
+    tos->cyclefreq = cpu->cyclefreq;
+    cycles((uvlong*)&tos->pcycles);
+    tos->pcycles = -tos->pcycles; // see comment above on Proc->pcycle
+    tos->kcycles = tos->pcycles;
+    tos->clock = 0;
+    // what about other fields? like pid? will be set in kexit! but could be
+    // done here? what about sysfork? call kexit?
+@
+
+<<[[kexit()]] tos adjustments>>=
+    uvlong t;
+    Tos *tos;
+
+    /* precise time accounting, kernel exit */
+    tos = (Tos*)(USTKTOP-sizeof(Tos));
+    cycles(&t);
+    tos->kcycles += t - up->kentry;
+    tos->pcycles = up->pcycles;
+    tos->pid = up->pid;
+@
+
+<<[[profclock]] tos adjustments when user>>=
+Tos *tos;
+tos = (Tos*)(USTKTOP-sizeof(Tos));
+tos->clock += TK2MS(1);
+@
+
+
+
+<<[[syscall()]] adjust kentry>>=
+    cycles(&up->kentry);
+@
+
+<<[[trap()]] adjust kentry when interrupt user>>=
+        cycles(&up->kentry);
+@
+
+
+<<[[procsave()]] cycles adjustments>>=
+    uvlong t;
+
+    cycles(&t);
+    p->pcycles += t;
+@
+
+
+<<[[procrestore]] cycles adjustments>>=
+    cycles(&t);
+    p->pcycles -= t;
+@
+
+
+
+
+<<[[sysexec()]] nbytes tos adjustments>>=
+nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
+@
+<<[[execregs()]] return adjustments>>=
+      -sizeof(Tos)
+@
+
 
 
 \chapter{Error Managment}
@@ -26867,7 +27025,7 @@ char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
 <<syscall errstr>>=
 // int errstr(char *err, uint nerr);
 long
-syserrstr(ulong *arg)
+syserrstr(ulong* arg)
 {
     return generrstr((char*)arg[0], arg[1]);
 }
