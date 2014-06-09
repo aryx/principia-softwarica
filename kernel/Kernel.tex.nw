@@ -2812,6 +2812,11 @@ free(kern_addr3 v)
         poolfree(mainmem, (ulong*)v-Npadlong);
 }
 @
+% not that we do not panic when it's == nil, because at many places
+% we free(x); and then do x = nil; to avoid double free and because
+% we are not sure free will be called again on x (for instance in sysexec()
+% we have a waserror finally handler that free even though if free and
+% didn't pop the error yet.
 
 
 <<function setmalloctag>>=
@@ -4602,6 +4607,7 @@ sysexec(ulong *arg)
         charp += n;
     }
     free(file0);
+    // file0 = nil? to avoid double free?
 
     free(up->text);
     up->text = elem;
@@ -26438,20 +26444,6 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 
 \chapter{Profiling}
 
-%TODO: ranger ca
-<<[[Proc]] stats and profiling fields>>=
-uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
-/*
- * pcycles: cycles spent in this process (updated on procsave/restore)
- * when this is the current proc and we're in the kernel
- * (procrestores outnumber procsaves by one)
- * the number of cycles spent in the proc is pcycles + cycles()
- * when this is not the current process or we're in user mode
- * (procrestores and procsaves balance), it is pcycles.
- */
-vlong pcycles;
-@ 
-
 \section{Counters}
 
 <<[[Cpu]] stat fields>>=
@@ -26478,7 +26470,6 @@ struct Perf
 };
 @ 
 % how access those counters? /dev/??
-
 
 <<[[Cpu]] stat fields>>=
 int cs; // context switch, sched() and sleep() call
@@ -26652,6 +26643,22 @@ segclock(ulong pc)
 @
 
 \subsection{[[/bin/prof]]}
+
+% cooperation between compiler, loader, kernel, and then /bin/prof that interprets
+% data.
+
+<<[[Proc]] stats and profiling fields>>=
+uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
+/*
+ * pcycles: cycles spent in this process (updated on procsave/restore)
+ * when this is the current proc and we're in the kernel
+ * (procrestores outnumber procsaves by one)
+ * the number of cycles spent in the proc is pcycles + cycles()
+ * when this is not the current process or we're in user mode
+ * (procrestores and procsaves balance), it is pcycles.
+ */
+vlong pcycles;
+@ 
 
 
 \chapter{Error Managment}
