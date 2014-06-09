@@ -9,14 +9,16 @@
 /*e: kernel basic includes */
 
 /*s: function procsetup */
-/*
- *  set up floating point for a new process
- */
 void
 procsetup(Proc*p)
 {
-    p->fpstate = FPinit;
-    fpoff();
+  /*s: [[procsetup()]] fp setup */
+  /*
+   *  set up floating point for a new process
+   */
+      p->fpstate = FPinit;
+      fpoff();
+  /*e: [[procsetup()]] fp setup */
 }
 /*e: function procsetup */
 
@@ -27,26 +29,31 @@ procsetup(Proc*p)
 void
 procsave(Proc *p)
 {
-    uvlong t;
+    /*s: [[procsave()]] cycles adjustments */
+        uvlong t;
 
-    cycles(&t);
-    p->pcycles += t;
-    if(p->fpstate == FPactive){
-        if(p->state == Moribund)
-            fpclear();
-        else{
-            /*
-             * Fpsave() stores without handling pending
-             * unmasked exeptions. Postnote() can't be called
-             * here as sleep() already has up->rlock, so
-             * the handling of pending exceptions is delayed
-             * until the process runs again and generates an
-             * emulation fault to activate the FPU.
-             */
-            fpsave(&p->fpsave);
+        cycles(&t);
+        p->pcycles += t;
+    /*e: [[procsave()]] cycles adjustments */
+
+    /*s: [[procsave()]] fp adjustments */
+        if(p->fpstate == FPactive){
+            if(p->state == Moribund)
+                fpclear();
+            else{
+                /*
+                 * Fpsave() stores without handling pending
+                 * unmasked exeptions. Postnote() can't be called
+                 * here as sleep() already has up->rlock, so
+                 * the handling of pending exceptions is delayed
+                 * until the process runs again and generates an
+                 * emulation fault to activate the FPU.
+                 */
+                fpsave(&p->fpsave);
+            }
+            p->fpstate = FPinactive;
         }
-        p->fpstate = FPinactive;
-    }
+    /*e: [[procsave()]] fp adjustments */
 
     /*
      * While this processor is in the scheduler, the process could run
@@ -68,11 +75,12 @@ void
 procrestore(Proc *p)
 {
     uvlong t;
-
     if(p->kp)
         return;
-    cycles(&t);
-    p->pcycles -= t;
+    /*s: [[procrestore]] cycles adjustments */
+        cycles(&t);
+        p->pcycles -= t;
+    /*e: [[procrestore]] cycles adjustments */
 }
 /*e: function procrestore */
 
