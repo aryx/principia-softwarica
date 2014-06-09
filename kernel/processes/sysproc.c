@@ -189,9 +189,9 @@ sysrfork(ulong* arg)
         incref(p->egrp);
     }
 
-    /*s: [[sysfork()]] inherit hang */
+    /*s: [[sysrfork()]] inherit hang */
         p->hang = up->hang;
-    /*e: [[sysfork()]] inherit hang */
+    /*e: [[sysrfork()]] inherit hang */
     p->procmode = up->procmode;
 
     /* Craft a return frame which will cause the child to pop out of
@@ -321,7 +321,7 @@ sysexec(ulong* arg)
             break; /* for binary */
         }
 
-        /*s: [[sysexec()]] process #! */
+        /*s: [[sysexec()]] process sharpbang */
                 /*
                  * Process #! /bin/sh args ...
                  */
@@ -346,7 +346,7 @@ sysexec(ulong* arg)
                 progarg[0] = progelem;
                 poperror();
                 cclose(tc);
-        /*e: [[sysexec()]] process #! */
+        /*e: [[sysexec()]] process sharpbang */
     }
 
     data = l2be(exec.data);
@@ -430,7 +430,7 @@ sysexec(ulong* arg)
         tos->kcycles = tos->pcycles;
         tos->clock = 0;
         // what about other fields? like pid? will be set in kexit! but could be
-        // done here? what about sysfork? call kexit?
+        // done here? what about sysrfork? call kexit?
     /*e: [[sysexec()]] tos settings */
 
     argv = (char**)(TSTKTOP - ssize);

@@ -258,6 +258,7 @@ void  wrmsr(int, vlong);
 #define PADDR(ka)  paddr((kern_addr3)(ka))
 /*e: function PADDR */
 
+// used in devaudio, maybe could remove it
 #define dcflush(a, b)
 
 #define BIOSSEG(a)  KADDR(((uint)(a))<<4)

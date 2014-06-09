@@ -199,8 +199,9 @@ extern void (*kbdmouse)(int);
 /*s: global ccc */
 static uchar ccc;
 /*e: global ccc */
+/*s: hook auxputc */
 static void (*auxputc)(int, int);
-
+/*e: hook auxputc */
 
 /*s: function outready */
 /*

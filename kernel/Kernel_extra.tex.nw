@@ -109,8 +109,8 @@ struct X86type {
 
 <<struct Devport>>=
 struct Devport {
-  ulong port; 
-  int size;
+    ulong port; 
+    int size;
 };
 @ 
 
@@ -118,10 +118,10 @@ struct Devport {
 <<struct DevConf>>=
 struct DevConf
 {
-  ulong intnum;     /* interrupt number */
-  char  *type;      /* card type, malloced */
-  int nports;     /* Number of ports */
-  Devport *ports;     /* The ports themselves */
+    ulong intnum;     /* interrupt number */
+    char  *type;      /* card type, malloced */
+    int nports;     /* Number of ports */
+    Devport *ports;     /* The ports themselves */
 };
 @ 
 
@@ -246,6 +246,35 @@ extern X86type *cputype;
 //#ifdef LOCKCYCLES
 long  lockcycles;
 //#endif
+@ 
+\fi
+
+
+\ifallcode
+<<unlock ifdef LOCKCYCLES>>=
+#ifdef LOCKCYCLES
+    l->lockcycles += lcycles();
+    cumlockcycles += l->lockcycles;
+    if(l->lockcycles > maxlockcycles){
+        maxlockcycles = l->lockcycles;
+        maxlockpc = l->pc;
+    }
+#endif
+@ 
+\fi
+
+\ifallcode
+<<iunlock ifdef LOCKCYCLES>>=
+#ifdef LOCKCYCLES
+    l->lockcycles += lcycles();
+    cumilockcycles += l->lockcycles;
+    if(l->lockcycles > maxilockcycles){
+        maxilockcycles = l->lockcycles;
+        maxilockpc = l->pc;
+    }
+    if(l->lockcycles > 2400)
+        ilockpcs[n++ & 0xff]  = l->pc;
+#endif
 @ 
 \fi
 
@@ -421,21 +450,6 @@ static int n;
 #endif
 @
 
-<<function lockloop>>=
-void
-lockloop(Lock *l, ulong pc)
-{
-    Proc *p;
-
-    p = l->p;
-    print("lock %#p loop key %#lux pc %#lux held by pc %#lux proc %lud\n",
-        l, l->key, pc, l->pc, p ? p->pid : 0);
-    dumpaproc(up);
-    if(p != nil)
-        dumpaproc(p);
-}
-@ 
-
 \fi
 
 
@@ -465,19 +479,6 @@ lockloop(Lock *l, ulong pc)
 
 @
 
-%//unused:
-%//static void
-%//dumplockmem(char *tag, Lock *l)
-%//{
-%//  uchar *cp;
-%//  int i;
-%//
-%//  iprint("%s: ", tag);
-%//  cp = (uchar*)l;
-%//  for(i = 0; i < 64; i++)
-%//      iprint("%2.2ux ", cp[i]);
-%//  iprint("\n");
-%//}
 
 
 \section{[[console/]]}
@@ -493,93 +494,6 @@ static int  writetime(char*, int);
 static int  writebintime(char*, int);
 @
 \fi
-
-<<function kbdcr2nl>>=
-/*
- *  Called by a uart interrupt for console input.
- *
- *  turn '\r' into '\n' before putting it into the queue.
- */
-int
-kbdcr2nl(Queue*, int ch)
-{
-    char *next;
-
-    ilock(&kbd.lockputc);       /* just a mutex */
-    if(ch == '\r' && !kbd.raw)
-        ch = '\n';
-    next = kbd.iw+1;
-    if(next >= kbd.ie)
-        next = kbd.istage;
-    if(next != kbd.ir){
-        *kbd.iw = ch;
-        kbd.iw = next;
-    }
-    iunlock(&kbd.lockputc);
-    return 0;
-}
-@ 
-
-
-
-<<global uvorder>>=
-static uvlong uvorder = 0x0001020304050607ULL;
-@
-
-
-<<function le2vlong>>=
-static uchar*
-le2vlong(vlong *to, uchar *f)
-{
-    uchar *t, *o;
-    int i;
-
-    t = (uchar*)to;
-    o = (uchar*)&uvorder;
-    for(i = 0; i < sizeof(vlong); i++)
-        t[o[i]] = f[i];
-    return f+sizeof(vlong);
-}
-@
-
-
-<<function vlong2le>>=
-static uchar*
-vlong2le(uchar *t, vlong from)
-{
-    uchar *f, *o;
-    int i;
-
-    f = (uchar*)&from;
-    o = (uchar*)&uvorder;
-    for(i = 0; i < sizeof(vlong); i++)
-        t[i] = f[o[i]];
-    return t+sizeof(vlong);
-}
-@
-
-
-<<global order>>=
-static long order = 0x00010203;
-@
-
-
-<<function le2long>>=
-static uchar*
-le2long(long *to, uchar *f)
-{
-    uchar *t, *o;
-    int i;
-
-    t = (uchar*)to;
-    o = (uchar*)&order;
-    for(i = 0; i < sizeof(long); i++)
-        t[o[i]] = f[i];
-    return f+sizeof(long);
-}
-@
-
-
 
 
 <<devcons.c>>=
@@ -663,7 +577,7 @@ le2long(long *to, uchar *f)
 
 enum
 {
-    VLNUMSIZE=  22,
+    <<constant VLNUMSIZE>>
 };
 
 <<global consdir>>
@@ -840,13 +754,13 @@ typedef struct Pcidev Pcidev;
 typedef struct PCMmap PCMmap;
 typedef struct PCMslot  PCMslot;
 typedef struct Segdesc  Segdesc;
+
 typedef struct Ureg Ureg;
 typedef struct Vctl Vctl;
 
 // was not there, but seems more consistent
 typedef struct Tss Tss;
 typedef struct Devport Devport;
-typedef struct Vctl Vctl;
 typedef struct IOMap IOMap;
 typedef struct X86type X86type;
 typedef struct I8253 I8253;
@@ -897,6 +811,7 @@ typedef struct SDunit SDunit;
 
 \subsection*{[[core/386/fns.c]]}
 
+% used by isaconfig
 <<function cistrncmp>>=
 int
 cistrncmp(char *a, char *b, int n)
@@ -924,7 +839,7 @@ cistrncmp(char *a, char *b, int n)
 }
 @
 
-
+% used by getconf
 <<function cistrcmp>>=
 int
 cistrcmp(char *a, char *b)
@@ -971,6 +886,7 @@ int (*isaconfig)(char*, int, ISAConf*) = 0;
 <<function KADDR>>
 <<function PADDR>>
 
+// used in devaudio, maybe could remove it
 #define dcflush(a, b)
 
 #define BIOSSEG(a)  KADDR(((uint)(a))<<4)
@@ -1218,6 +1134,7 @@ void  wrmsr(int, vlong);
 <<fns.h macros>>
 @
 \fi
+%$
 
 \subsection*{[[core/error.h]]}
 
@@ -1319,7 +1236,7 @@ extern char Echange[];    /* media or partition has changed */
 <<function iseve>>
 
 @
-
+%$
 
 \subsection*{[[core/portdat.h]]}
 
@@ -1341,6 +1258,7 @@ enum misc_constants
     <<constant PRINTSIZE>>
     <<constant KMESGSIZE>>
     <<constant STAGESIZE>>
+
     NUMSIZE = 12,   /* size of formatted number */
     /* READSTR was 1000, which is way too small for usb's ctl file */
     READSTR = 4000,   /* temporary buffer size for device reads */
@@ -1365,12 +1283,8 @@ enum misc_constants
 @
 %  //  MAXCRYPT =  127,
 
-<<constant STAGESIZE>>=
-// used by devuart.c
-STAGESIZE = 2048, // default is 64
-@
-
 %//  Pae = 1<<6,   /* physical-addr extensions */
+
 %//  Cmpxchg8b = 1<<8,
 %//  Cpuapic = 1<<9,
 %//  Pse2  = 1<<17,  /* more page size extensions */
@@ -1503,7 +1417,7 @@ extern  char  hostdomain[];
 extern ulong    kerndate; 
 
 @
-
+%$
 
 \subsection*{[[core/portdat_forward.h]]}
 
@@ -1581,11 +1495,6 @@ typedef struct Label  Label;
 
 // was in cache.c
 typedef struct Extent Extent;
-typedef struct Mntcache Mntcache;
-// was in edf.h
-typedef struct Edf    Edf;
-// was in qio.c
-typedef struct Queue  Queue;
 // was in xallo.c
 typedef struct Hole Hole;
 typedef struct Xalloc Xalloc;
@@ -1596,16 +1505,6 @@ typedef struct Xhdr Xhdr;
 \fi
 
 \subsection*{[[core/portfns.c]]}
-
-
-<<function returnfalse>>=
-// usually used as default callback for sleep/tsleep
-bool
-returnfalse(void*)
-{
-    return false;
-}
-@
 
 <<portfns.c>>=
 <<kernel basic includes>>
@@ -1654,8 +1553,8 @@ void (*coherence)(void) = 0;
 uvlong (*fastticks)(uvlong*) = 0;
 
 // processes/386/i8253.c
-void (*microdelay)(int) = 0;
 void (*delay)(int) = 0;
+void (*microdelay)(int) = 0;
 
 <<function returnfalse>>
 
@@ -1730,10 +1629,8 @@ void    (*pexit)(char*, bool);
 void    (*cclose)(Chan*);
 // init/main.c
 void    (*exit)(int);
-//TODO?char* (*getconf)(char *name) = 0;
 //misc/386/devarch.c
 void  (*coherence)(void);
-//misc/386/devarch.c
 uvlong    (*fastticks)(uvlong*);
 // processes/386/i8253.c
 void    (*microdelay)(int);
@@ -1866,6 +1763,41 @@ kbdputmap(ushort m, ushort scanc, Rune r)
 }
 @
 
+% used by mouse.c
+<<function i8042auxenable>>=
+void
+i8042auxenable(void (*putc)(int, int))
+{
+    char *err = "i8042: aux init failed\n";
+
+    /* enable kbd/aux xfers and interrupts */
+    ccc &= ~Cauxdis;
+    ccc |= Cauxint;
+
+    ilock(&i8042lock);
+    if(outready() < 0)
+        print(err);
+    outb(Cmd, 0x60);            /* write control register */
+    if(outready() < 0)
+        print(err);
+    outb(Data, ccc);
+    if(outready() < 0)
+        print(err);
+    outb(Cmd, 0xA8);            /* auxiliary device enable */
+    if(outready() < 0){
+        iunlock(&i8042lock);
+        return;
+    }
+    auxputc = putc;
+    intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
+    iunlock(&i8042lock);
+}
+@
+
+<<hook auxputc>>=
+static void (*auxputc)(int, int);
+@
+
 
 <<kbd.c>>=
 /*
@@ -1935,8 +1867,7 @@ extern int mouseshifted;
 extern void (*kbdmouse)(int);
 
 <<global ccc>>
-static void (*auxputc)(int, int);
-
+<<hook auxputc>>
 
 <<function outready>>
 
@@ -3099,44 +3030,6 @@ enum
 
 @
 
-%//unused
-%//static void
-%//dumpmount(void)       /* DEBUGGING */
-%//{
-%//  Pgrp *pg;
-%//  Mount *t;
-%//  Mhead **h, **he, *f;
-%//
-%//  if(up == nil){
-%//      print("no process for dumpmount\n");
-%//      return;
-%//  }
-%//  pg = up->pgrp;
-%//  if(pg == nil){
-%//      print("no pgrp for dumpmount\n");
-%//      return;
-%//  }
-%//  rlock(&pg->ns);
-%//  if(waserror()){
-%//      runlock(&pg->ns);
-%//      nexterror();
-%//  }
-%//
-%//  he = &pg->mnthash[MNTHASH];
-%//  for(h = pg->mnthash; h < he; h++){
-%//      for(f = *h; f; f = f->hash){
-%//          print("head: %#p: %s %#llux.%lud %C %lud -> \n", f,
-%//              f->from->path->s, f->from->qid.path,
-%//              f->from->qid.vers, devtab[f->from->type]->dc,
-%//              f->from->dev);
-%//          for(t = f->mount; t; t = t->next)
-%//              print("\t%#p: %s (umh %#p) (path %#.8llux dev %C %lud)\n", t, t->to->path->s, t->to->umh, t->to->qid.path, devtab[t->to->type]->dc, t->to->dev);
-%//      }
-%//  }
-%//  poperror();
-%//  runlock(&pg->ns);
-%//}
-
 
 \subsection*{[[files/dev.c]]}
 
@@ -3220,7 +3113,7 @@ devconfig(int, char *, DevConf *)
     return 0;
 }
 @
-
+%$
 
 \subsection*{[[files/env.c]]}
 
@@ -4074,6 +3967,8 @@ extern void boot(int, char **);
 
 @
 \fi
+%$
+
 %// what boot$CONF.c used to expect
 %//typedef struct Method Method;
 %//struct Method
@@ -4136,6 +4031,7 @@ extern void boot(int, char **);
 
 <<global tgdtptr>>
 
+// realmode stuff
 TEXT m0rgdtptr(SB), $0
         WORD    $(NGDT*8-1)
         LONG    $(CPU0GDT-KZERO)
@@ -4216,7 +4112,8 @@ TEXT putcr4(SB), $0
         RET
 
 @
-
+%$
+% >> >>
 
 \subsection*{[[init/386/l_misc.s]]}
 
@@ -4880,7 +4777,6 @@ void    rebootcmd(int, char**);
 <<lib.h forward decl>>=
 typedef struct Qid  Qid;
 typedef struct Dir  Dir;
-typedef struct OWaitmsg OWaitmsg;
 typedef struct Waitmsg  Waitmsg;
 typedef struct Fmt  Fmt;
 @
@@ -4888,15 +4784,6 @@ typedef struct Fmt  Fmt;
 
 
 
-<<struct OWaitmsg>>=
-// dead?
-struct OWaitmsg
-{
-  char  pid[12];  /* of loved one */
-  char  time[3*12]; /* of loved one and descendants */
-  char  msg[64];  /* compatibility BUG */
-};
-@ 
 
 
 <<enum node>>=
@@ -5078,12 +4965,19 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 <<struct Waitmsg>>
 
-// for byteorder agnostic marshalling?
-<<struct OWaitmsg>>
-
 @
 %//unused: extern  int dec64(uchar*, int, char*, int);
 %//unused: extern  int encodefmt(Fmt*);
+
+%// for byteorder agnostic marshalling?
+%// dead?
+%struct OWaitmsg
+%{
+%  char  pid[12];  /* of loved one */
+%  char  time[3*12]; /* of loved one and descendants */
+%  char  msg[64];  /* compatibility BUG */
+%};
+%@ 
 
 
 
@@ -16260,12 +16154,43 @@ PhysUart isaphysuart = {
 
 \subsection*{[[buses/devuart.c]]}
 
+<<function kbdcr2nl>>=
+/*
+ *  Called by a uart interrupt for console input.
+ *
+ *  turn '\r' into '\n' before putting it into the queue.
+ */
+int
+kbdcr2nl(Queue*, int ch)
+{
+    char *next;
+
+    ilock(&kbd.lockputc);       /* just a mutex */
+    if(ch == '\r' && !kbd.raw)
+        ch = '\n';
+    next = kbd.iw+1;
+    if(next >= kbd.ie)
+        next = kbd.istage;
+    if(next != kbd.ir){
+        *kbd.iw = ch;
+        kbd.iw = next;
+    }
+    iunlock(&kbd.lockputc);
+    return 0;
+}
+@ 
+
 \ifallcode
 <<devuart.c forward decl>>=
 static void uartclock(void);
 static void uartflow(void*);
 @
 \fi
+
+<<constant STAGESIZE>>=
+// used by devuart.c
+STAGESIZE = 2048, // default is 64
+@
 
 <<devuart.c>>=
 <<kernel basic includes>>

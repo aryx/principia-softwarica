@@ -28,7 +28,6 @@ enum _retcode {
 /*s: lib.h forward decl */
 typedef struct Qid  Qid;
 typedef struct Dir  Dir;
-typedef struct OWaitmsg OWaitmsg;
 typedef struct Waitmsg  Waitmsg;
 typedef struct Fmt  Fmt;
 /*e: lib.h forward decl */
@@ -317,16 +316,5 @@ struct Waitmsg
   char  msg[ERRMAX];  /* actually variable-size in user mode */
 };
 /*e: struct Waitmsg */
-
-// for byteorder agnostic marshalling?
-/*s: struct OWaitmsg */
-// dead?
-struct OWaitmsg
-{
-  char  pid[12];  /* of loved one */
-  char  time[3*12]; /* of loved one and descendants */
-  char  msg[64];  /* compatibility BUG */
-};
-/*e: struct OWaitmsg */
 
 /*e: lib.h */

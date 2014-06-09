@@ -19,6 +19,7 @@ enum misc_constants
     // used by devuart.c
     STAGESIZE = 2048, // default is 64
     /*e: constant STAGESIZE */
+
     NUMSIZE = 12,   /* size of formatted number */
     /* READSTR was 1000, which is way too small for usb's ctl file */
     READSTR = 4000,   /* temporary buffer size for device reads */

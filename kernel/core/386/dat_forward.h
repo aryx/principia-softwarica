@@ -15,13 +15,13 @@ typedef struct Pcidev Pcidev;
 typedef struct PCMmap PCMmap;
 typedef struct PCMslot  PCMslot;
 typedef struct Segdesc  Segdesc;
+
 typedef struct Ureg Ureg;
 typedef struct Vctl Vctl;
 
 // was not there, but seems more consistent
 typedef struct Tss Tss;
 typedef struct Devport Devport;
-typedef struct Vctl Vctl;
 typedef struct IOMap IOMap;
 typedef struct X86type X86type;
 typedef struct I8253 I8253;

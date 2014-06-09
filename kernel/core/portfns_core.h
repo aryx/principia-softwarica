@@ -34,10 +34,8 @@ void    (*pexit)(char*, bool);
 void    (*cclose)(Chan*);
 // init/main.c
 void    (*exit)(int);
-//TODO?char* (*getconf)(char *name) = 0;
 //misc/386/devarch.c
 void  (*coherence)(void);
-//misc/386/devarch.c
 uvlong    (*fastticks)(uvlong*);
 // processes/386/i8253.c
 void    (*microdelay)(int);

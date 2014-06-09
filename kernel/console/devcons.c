@@ -715,7 +715,9 @@ enum{
 
 enum
 {
-    VLNUMSIZE=  22,
+    /*s: constant VLNUMSIZE */
+        VLNUMSIZE=  22,
+    /*e: constant VLNUMSIZE */
 };
 
 /*s: global consdir */

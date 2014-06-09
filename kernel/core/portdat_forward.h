@@ -60,11 +60,6 @@ typedef struct Label  Label;
 
 // was in cache.c
 typedef struct Extent Extent;
-typedef struct Mntcache Mntcache;
-// was in edf.h
-typedef struct Edf    Edf;
-// was in qio.c
-typedef struct Queue  Queue;
 // was in xallo.c
 typedef struct Hole Hole;
 typedef struct Xalloc Xalloc;

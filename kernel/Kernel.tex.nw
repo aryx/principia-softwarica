@@ -889,6 +889,8 @@ struct Confmem
 % show concrete value for qemu! see C-t C-t m
 % will use that later! set in main() in confinit(), and use for xalloc, and palloc
 
+
+
 <<globals confname and confvar>>=
 // conf (boot) parameters *e.g. { "*kernelpercent*" => "60" }
 // hash<string, string>
@@ -1697,18 +1699,6 @@ lock(Lock *l)
 % could maybe use a dowhile? could factorize code
 %    // why not just l->cpu = cpu? because it would always be the same addr!
 
-\ifallcode
-<<unlock ifdef LOCKCYCLES>>=
-#ifdef LOCKCYCLES
-    l->lockcycles += lcycles();
-    cumlockcycles += l->lockcycles;
-    if(l->lockcycles > maxlockcycles){
-        maxlockcycles = l->lockcycles;
-        maxlockpc = l->pc;
-    }
-#endif
-@ 
-\fi
 
 <<function unlock>>=
 void
@@ -1836,20 +1826,6 @@ acquire:
 }
 @ 
 
-\ifallcode
-<<iunlock ifdef LOCKCYCLES>>=
-#ifdef LOCKCYCLES
-    l->lockcycles += lcycles();
-    cumilockcycles += l->lockcycles;
-    if(l->lockcycles > maxilockcycles){
-        maxilockcycles = l->lockcycles;
-        maxilockpc = l->pc;
-    }
-    if(l->lockcycles > 2400)
-        ilockpcs[n++ & 0xff]  = l->pc;
-#endif
-@ 
-\fi
 
 <<function iunlock>>=
 void
@@ -2876,6 +2852,14 @@ smalloc(ulong size)
 % because what state it would be? you want sleeping state, so that's what tsleep
 % is for!
 
+<<function returnfalse>>=
+// usually used as default callback for sleep/tsleep
+bool
+returnfalse(void*)
+{
+    return false;
+}
+@
 
 
 <<function mallocz>>=
@@ -18103,36 +18087,6 @@ i8042auxcmd(int cmd)
 }
 @
 
-<<function i8042auxenable>>=
-void
-i8042auxenable(void (*putc)(int, int))
-{
-    char *err = "i8042: aux init failed\n";
-
-    /* enable kbd/aux xfers and interrupts */
-    ccc &= ~Cauxdis;
-    ccc |= Cauxint;
-
-    ilock(&i8042lock);
-    if(outready() < 0)
-        print(err);
-    outb(Cmd, 0x60);            /* write control register */
-    if(outready() < 0)
-        print(err);
-    outb(Data, ccc);
-    if(outready() < 0)
-        print(err);
-    outb(Cmd, 0xA8);            /* auxiliary device enable */
-    if(outready() < 0){
-        iunlock(&i8042lock);
-        return;
-    }
-    auxputc = putc;
-    intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
-    iunlock(&i8042lock);
-}
-@
-
 
 % to change keyboard: kbdputmap, kbdgetmap and probably /dev/kbmap
 
@@ -20690,6 +20644,10 @@ struct TOD tod;
 char *Ebadtimectl = "bad time control";
 @
 
+<<constant VLNUMSIZE>>=
+    VLNUMSIZE=  22,
+@
+
 <<function readtime>>=
 /*
  *  like the old #c/time but with added info.  Return
@@ -20716,7 +20674,6 @@ readtime(ulong off, char *buf, int n)
 }
 @
 
-
 <<function writetime>>=
 /*
  *  set the time in seconds
@@ -20741,6 +20698,7 @@ writetime(char *buf, int n)
 }
 @
 
+%----------------------------------------------------------------
 
 <<function readbintime>>=
 /*
@@ -20817,6 +20775,64 @@ writebintime(char *buf, int n)
     return n;
 }
 @
+
+<<global uvorder>>=
+static uvlong uvorder = 0x0001020304050607ULL;
+@
+
+
+<<function le2vlong>>=
+static uchar*
+le2vlong(vlong *to, uchar *f)
+{
+    uchar *t, *o;
+    int i;
+
+    t = (uchar*)to;
+    o = (uchar*)&uvorder;
+    for(i = 0; i < sizeof(vlong); i++)
+        t[o[i]] = f[i];
+    return f+sizeof(vlong);
+}
+@
+
+
+<<function vlong2le>>=
+static uchar*
+vlong2le(uchar *t, vlong from)
+{
+    uchar *f, *o;
+    int i;
+
+    f = (uchar*)&from;
+    o = (uchar*)&uvorder;
+    for(i = 0; i < sizeof(vlong); i++)
+        t[i] = f[o[i]];
+    return t+sizeof(vlong);
+}
+@
+
+
+<<global order>>=
+static long order = 0x00010203;
+@
+
+
+<<function le2long>>=
+static uchar*
+le2long(long *to, uchar *f)
+{
+    uchar *t, *o;
+    int i;
+
+    t = (uchar*)to;
+    o = (uchar*)&order;
+    for(i = 0; i < sizeof(long); i++)
+        t[o[i]] = f[i];
+    return f+sizeof(long);
+}
+@
+
 
 \section{[[/dev/rtc]]}
 
@@ -22694,14 +22710,15 @@ execinit(void)
 
   bind_safe("#v", "/dev", MAFTER); //devvga
   bind_safe("#m", "/dev", MAFTER); //devmouse
-  bind_safe("#P", "/dev", MAFTER);
+  bind_safe("#P", "/dev", MAFTER); //devarch
 
   run("/bin/mouse", "ps2", nil);
   //this just need a regular vga driver
   //run("/bin/vga", "-l", "640x480x8", nil);
   //this need special drivers, such as the clgd424x.c in the kernel
   run("/bin/vga", "-l", "1024x768x8", nil); // can add -V to debug vga
-  bind_safe("#i", "/dev", MAFTER);
+
+  bind_safe("#i", "/dev", MAFTER); //?
 
   // for rio
   run("/bin/ramfs", "-m", "/mnt", nil);
@@ -25087,6 +25104,75 @@ proc_dumpaproc(Proc *p)
 }
 @ 
 
+
+
+<<function lockloop>>=
+void
+lockloop(Lock *l, ulong pc)
+{
+    Proc *p;
+
+    p = l->p;
+    print("lock %#p loop key %#lux pc %#lux held by pc %#lux proc %lud\n",
+        l, l->key, pc, l->pc, p ? p->pid : 0);
+    dumpaproc(up);
+    if(p != nil)
+        dumpaproc(p);
+}
+@ 
+
+%//unused:
+%//static void
+%//dumplockmem(char *tag, Lock *l)
+%//{
+%//  uchar *cp;
+%//  int i;
+%//
+%//  iprint("%s: ", tag);
+%//  cp = (uchar*)l;
+%//  for(i = 0; i < 64; i++)
+%//      iprint("%2.2ux ", cp[i]);
+%//  iprint("\n");
+%//}
+
+%//unused
+%//static void
+%//dumpmount(void)       /* DEBUGGING */
+%//{
+%//  Pgrp *pg;
+%//  Mount *t;
+%//  Mhead **h, **he, *f;
+%//
+%//  if(up == nil){
+%//      print("no process for dumpmount\n");
+%//      return;
+%//  }
+%//  pg = up->pgrp;
+%//  if(pg == nil){
+%//      print("no pgrp for dumpmount\n");
+%//      return;
+%//  }
+%//  rlock(&pg->ns);
+%//  if(waserror()){
+%//      runlock(&pg->ns);
+%//      nexterror();
+%//  }
+%//
+%//  he = &pg->mnthash[MNTHASH];
+%//  for(h = pg->mnthash; h < he; h++){
+%//      for(f = *h; f; f = f->hash){
+%//          print("head: %#p: %s %#llux.%lud %C %lud -> \n", f,
+%//              f->from->path->s, f->from->qid.path,
+%//              f->from->qid.vers, devtab[f->from->type]->dc,
+%//              f->from->dev);
+%//          for(t = f->mount; t; t = t->next)
+%//              print("\t%#p: %s (umh %#p) (path %#.8llux dev %C %lud)\n", t, t->to->path->s, t->to->umh, t->to->qid.path, devtab[t->to->type]->dc, t->to->dev);
+%//      }
+%//  }
+%//  poperror();
+%//  runlock(&pg->ns);
+%//}
+
 \section{[[/bin/ktrace]]}
 
 % getcallerpc nice trick
@@ -27354,7 +27440,6 @@ TOD = Time Of Day
 APIC = Advanded Programmable Interrupt Controller (a next gen 8259)
 ACPI = Advanced Configuration & Power Interface
 \end{verbatim}
-%cistrcmp= ??
 
 
 \chapter*{Indexes}

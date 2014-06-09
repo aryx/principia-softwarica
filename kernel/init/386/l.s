@@ -89,6 +89,7 @@ TEXT tgdtptr(SB), $0
         LONG    $tgdt-KZERO(SB)
 /*e: global tgdtptr */
 
+// realmode stuff
 TEXT m0rgdtptr(SB), $0
         WORD    $(NGDT*8-1)
         LONG    $(CPU0GDT-KZERO)
