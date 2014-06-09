@@ -121,7 +121,7 @@ struct Pgrp
 //--------------------------------------------------------------------
 
 /*s: struct Sargs */
-// syscall arguments passed in kernel stack
+// syscall arguments copied from user stack
 struct Sargs
 {
     ulong args[MAXSYSARG];
