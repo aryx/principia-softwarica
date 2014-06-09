@@ -50,7 +50,7 @@ cpuidprint(void)
 
 /*s: function cycles and default implementation */
 static void
-simplecycles(uvlong*x)
+simplecycles(uvlong *x)
 {
     *x = cpu->ticks;
 }

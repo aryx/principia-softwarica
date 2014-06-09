@@ -14,7 +14,7 @@
 
 /*s: syscall segflush */
 long
-syssegflush(ulong *arg)
+syssegflush(ulong* arg)
 {
     Segment *s;
     ulong addr, l;

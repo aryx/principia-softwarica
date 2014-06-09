@@ -106,15 +106,13 @@ struct Cpu
     ulong splpc;      /* pc of last caller to splhi */
     /*e: [[Cpu]] second field */
   
-    // ref<Proc>
+    // ref<Proc>, or None if halting?
     Proc* proc;     /* current process on this processor */
 
     ulong ticks;      /* of the clock since boot time */
 
     uvlong  cpuhz;
     int cpumhz; // cpuhz / 1_000_000
-    // cyclefre == cpuhz if havetsc, 0 otherwise
-    uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
 
     /*s: [[Cpu]] stat fields */
     Perf  perf;     /* performance counters */
@@ -140,6 +138,9 @@ struct Cpu
     ulong schedticks;   /* next forced context switch */
     /*x: [[Cpu]] other fields */
     bool flushmmu;   /* make current proc flush it's mmu state */
+    /*x: [[Cpu]] other fields */
+        // cyclefreq == cpuhz if havetsc, 0 otherwise
+        uvlong  cyclefreq;    /* Frequency of user readable cycle counter */
     /*e: [[Cpu]] other fields */
     struct ArchCpu;
   

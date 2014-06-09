@@ -133,7 +133,7 @@ newfd2(int fd[2], Chan *c[2])
 /*s: syscall fd2path */
 // int fd2path(int fd, char *buf, int nbuf);
 long
-sysfd2path(ulong *arg)
+sysfd2path(ulong* arg)
 {
     Chan *c;
 
@@ -149,7 +149,7 @@ sysfd2path(ulong *arg)
 /*s: syscall pipe */
 // int pipe(int fd[2]);
 long
-syspipe(ulong *arg)
+syspipe(ulong* arg)
 {
     int fd[2];
     Chan *c[2];
@@ -190,7 +190,7 @@ syspipe(ulong *arg)
 /*s: syscall dup */
 // int dup(int oldfd, int newfd);
 long
-sysdup(ulong *arg)
+sysdup(ulong* arg)
 {
     int fd;
     Chan *c, *oc;
@@ -234,7 +234,7 @@ sysdup(ulong *arg)
 /*s: syscall open */
 // int open(char *file, int omode);
 long
-sysopen(ulong *arg)
+sysopen(ulong* arg)
 {
     int fd;
     Chan *c;
@@ -257,7 +257,7 @@ sysopen(ulong *arg)
 /*s: syscall close */
 // int close(int fd);
 long
-sysclose(ulong *arg)
+sysclose(ulong* arg)
 {
     fdtochan(arg[0], -1, 0, 0);
     fdclose(arg[0], 0);
@@ -660,7 +660,7 @@ read(ulong *arg, vlong *offp)
 /*s: syscall pread */
 // long pread(int fd, void *buf, long nbytes, vlong offset);
 long
-syspread(ulong *arg)
+syspread(ulong* arg)
 {
     vlong v;
     va_list list;
@@ -732,7 +732,7 @@ write(ulong *arg, vlong *offp)
 /*s: syscall pwrite */
 // long pwrite(int fd, void *buf, long nbytes, vlong offset);
 long
-syspwrite(ulong *arg)
+syspwrite(ulong* arg)
 {
     vlong v;
     va_list list;
@@ -823,7 +823,7 @@ sseek(ulong *arg)
 /*s: syscall seek */
 // vlong seek(int fd, vlong n, int type);
 long
-sysseek(ulong *arg)
+sysseek(ulong* arg)
 {
     validaddr(arg[0], BY2V, true);
     sseek(arg);
@@ -851,7 +851,7 @@ pathlast(Path *p)
 /*s: syscall fstat */
 // int fstat(int fd, uchar *edir, int nedir);
 long
-sysfstat(ulong *arg)
+sysfstat(ulong* arg)
 {
     Chan *c;
     uint l;
@@ -873,7 +873,7 @@ sysfstat(ulong *arg)
 /*s: syscall stat */
 // int stat(char *name, uchar *edir, int nedir);
 long
-sysstat(ulong *arg)
+sysstat(ulong* arg)
 {
     char *name;
     Chan *c;
@@ -901,7 +901,7 @@ sysstat(ulong *arg)
 /*s: syscall chdir */
 // int chdir(char *dirname);
 long
-syschdir(ulong *arg)
+syschdir(ulong* arg)
 {
     Chan *c;
 
@@ -999,7 +999,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
 /*s: syscall bind */
 // int bind(char *name, char *old, int flag);
 long
-sysbind(ulong *arg)
+sysbind(ulong* arg)
 {
     return bindmount(0, -1, -1, (char*)arg[0], (char*)arg[1], arg[2], nil);
 }
@@ -1008,7 +1008,7 @@ sysbind(ulong *arg)
 /*s: syscall mount */
 // int mount(int fd, int afd, char *old, int flag, char *aname);
 long
-sysmount(ulong *arg)
+sysmount(ulong* arg)
 {
     return bindmount(1, arg[0], arg[1], nil, (char*)arg[2], arg[3], (char*)arg[4]);
 }
@@ -1017,7 +1017,7 @@ sysmount(ulong *arg)
 /*s: syscall unmount */
 // int unmount(char *name, char *old);
 long
-sysunmount(ulong *arg)
+sysunmount(ulong* arg)
 {
     Chan *cmount, *cmounted;
 
@@ -1054,7 +1054,7 @@ sysunmount(ulong *arg)
 /*s: syscall create */
 // int create(char *file, int omode, ulong perm);
 long
-syscreate(ulong *arg)
+syscreate(ulong* arg)
 {
     int fd;
     Chan *c;
@@ -1077,7 +1077,7 @@ syscreate(ulong *arg)
 /*s: syscall remove */
 // int remove(char *file);
 long
-sysremove(ulong *arg)
+sysremove(ulong* arg)
 {
     Chan *c;
 
@@ -1138,7 +1138,7 @@ wstat(Chan *c, uchar *d, int nd)
 /*s: syscall wstat */
 // int wstat(char *name, uchar *edir, int nedir);
 long
-syswstat(ulong *arg)
+syswstat(ulong* arg)
 {
     Chan *c;
     uint l;
@@ -1155,7 +1155,7 @@ syswstat(ulong *arg)
 /*s: syscall fwstat */
 // int fwstat(int fd, uchar *edir, int nedir);
 long
-sysfwstat(ulong *arg)
+sysfwstat(ulong* arg)
 {
     Chan *c;
     uint l;

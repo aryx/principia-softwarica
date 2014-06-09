@@ -50,7 +50,7 @@ sysnop(ulong*)
 /*s: syscall rfork */
 // int rfork(int flags);
 long
-sysrfork(ulong *arg)
+sysrfork(ulong* arg)
 {
     Proc *p;
     int i;
@@ -253,7 +253,7 @@ l2be(long l)
 /*s: syscall exec */
 // void* exec(char *name, char* argv[]);
 long
-sysexec(ulong *arg)
+sysexec(ulong* arg)
 {
     int i;
     ulong t, d, b; // text, data, bss sizes in bytes rounded to pages
@@ -271,7 +271,6 @@ sysexec(ulong *arg)
     Fgrp *f;
     KImage *img;
     ulong magic, text, entry, data, bss;
-    Tos *tos;
 
     /*s: [[sysexec()]] locals */
         char line[sizeof(Exec)];
@@ -279,6 +278,8 @@ sysexec(ulong *arg)
         char progelem[64];
 
         bool indir = false;
+    /*x: [[sysexec()]] locals */
+    Tos *tos;
     /*e: [[sysexec()]] locals */
 
     elem = nil;
@@ -359,7 +360,9 @@ sysexec(ulong *arg)
     nargs = 0;
     nbytes = 0;
 
+    /*s: [[sysexec()]] nbytes tos adjustments */
     nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
+    /*e: [[sysexec()]] nbytes tos adjustments */
     /*s: [[sysexec()]] if indir arg adjustments */
         if(indir){
             argp = progarg;
@@ -413,15 +416,17 @@ sysexec(ulong *arg)
     /*
      * Args: pass 2: assemble; the pages will be faulted in
      */
+    /*s: [[sysexec()]] tos settings */
+        tos = (Tos*)(TSTKTOP - sizeof(Tos));
 
-    tos = (Tos*)(TSTKTOP - sizeof(Tos));
-    tos->cyclefreq = cpu->cyclefreq;
-    cycles((uvlong*)&tos->pcycles);
-    tos->pcycles = -tos->pcycles;
-    tos->kcycles = tos->pcycles;
-    tos->clock = 0;
-    // what about other fields? like pid? will be set in kexit! but could be
-    // done here? what about sysfork? call kexit?
+        tos->cyclefreq = cpu->cyclefreq;
+        cycles((uvlong*)&tos->pcycles);
+        tos->pcycles = -tos->pcycles; // see comment above on Proc->pcycle
+        tos->kcycles = tos->pcycles;
+        tos->clock = 0;
+        // what about other fields? like pid? will be set in kexit! but could be
+        // done here? what about sysfork? call kexit?
+    /*e: [[sysexec()]] tos settings */
 
     argv = (char**)(TSTKTOP - ssize);
     charp = (char*)(TSTKTOP - nbytes);
@@ -555,7 +560,7 @@ sysexec(ulong *arg)
     up->notify = nil;
     up->notified = false;
     up->privatemem = false;
-    procsetup(up); // fpstate
+    procsetup(up); // archi specific hook
     qunlock(&up->debug);
 
     /*s: [[sysexec()]] if hang */
@@ -603,7 +608,7 @@ shargs(char *s, int n, char **ap)
 /*s: syscall sleep */
 // int sleep(long millisecs);
 long
-syssleep(ulong *arg)
+syssleep(ulong* arg)
 {
     int n;
     n = arg[0];
@@ -626,7 +631,7 @@ syssleep(ulong *arg)
 /*s: syscall alarm */
 // long alarm(unsigned long millisecs);
 long
-sysalarm(ulong *arg)
+sysalarm(ulong* arg)
 {
     return procalarm(arg[0]);
 }
@@ -635,7 +640,7 @@ sysalarm(ulong *arg)
 /*s: syscall exits */
 // void exits(char *msg);
 long
-sysexits(ulong *arg)
+sysexits(ulong* arg)
 {
     char *status;
     char *inval = "invalid exit string";
@@ -664,7 +669,7 @@ sysexits(ulong *arg)
 /*s: syscall await */
 // int await(char *s, int n);
 long
-sysawait(ulong *arg)
+sysawait(ulong* arg)
 {
     int i;
     int pid;
@@ -726,7 +731,7 @@ generrstr(char *buf, uint nbuf)
 /*s: syscall errstr */
 // int errstr(char *err, uint nerr);
 long
-syserrstr(ulong *arg)
+syserrstr(ulong* arg)
 {
     return generrstr((char*)arg[0], arg[1]);
 }
@@ -735,7 +740,7 @@ syserrstr(ulong *arg)
 /*s: syscall notify */
 // int notify(void (*f)(void*, char*));
 long
-sysnotify(ulong *arg)
+sysnotify(ulong* arg)
 {
     if(arg[0] != 0)
         validaddr(arg[0], sizeof(ulong), false);
@@ -747,7 +752,7 @@ sysnotify(ulong *arg)
 /*s: syscall noted */
 // int noted(int v);
 long
-sysnoted(ulong *arg)
+sysnoted(ulong* arg)
 {
     if(arg[0]!=NRSTR && !up->notified)
         error(Egreg);
@@ -758,7 +763,7 @@ sysnoted(ulong *arg)
 /*s: syscall segbrk */
 // void* segbrk(void *saddr, void *addr);
 long
-syssegbrk(ulong *arg)
+syssegbrk(ulong* arg)
 {
     int i;
     ulong addr;
@@ -787,7 +792,7 @@ syssegbrk(ulong *arg)
 /*s: syscall segattach */
 // void* segattach(int attr, char *class, void *va, ulong len);
 long
-syssegattach(ulong *arg)
+syssegattach(ulong* arg)
 {
     return segattach(up, arg[0], (char*)arg[1], arg[2], arg[3]);
 }
@@ -796,7 +801,7 @@ syssegattach(ulong *arg)
 /*s: syscall segdetach */
 // int segdetach(void *addr);
 long
-syssegdetach(ulong *arg)
+syssegdetach(ulong* arg)
 {
     int i;
     ulong addr;
@@ -844,7 +849,7 @@ found:
 /*s: syscall segfree */
 // int segfree(void *va, ulong len);
 long
-syssegfree(ulong *arg)
+syssegfree(ulong* arg)
 {
     Segment *s;
     ulong from, to;
@@ -872,7 +877,7 @@ syssegfree(ulong *arg)
 /*s: syscall brk */
 // int brk(void*);
 long
-sysbrk(ulong *arg)
+sysbrk(ulong* arg)
 {
     return ibrk(arg[0], BSEG); // BSS, the heap size is changed
 }
@@ -881,7 +886,7 @@ sysbrk(ulong *arg)
 /*s: syscall rendezvous */
 // void* rendezvous(void* tag, void* value);
 long
-sysrendezvous(ulong *arg)
+sysrendezvous(ulong* arg)
 {
     uintptr tag, val;
     Proc *p, **l;

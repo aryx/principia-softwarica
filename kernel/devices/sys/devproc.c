@@ -204,9 +204,11 @@ profclock(Ureg *ur, Timer *)
 
     /* user profiling clock */
     if(userureg(ur)){
+        /*s: [[profclock]] tos adjustments when user */
         Tos *tos;
         tos = (Tos*)(USTKTOP-sizeof(Tos));
         tos->clock += TK2MS(1);
+        /*e: [[profclock]] tos adjustments when user */
         segclock(ur->pc);
     }
 }
