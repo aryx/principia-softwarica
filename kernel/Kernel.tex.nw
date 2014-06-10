@@ -4247,6 +4247,51 @@ resrcwait(char *reason)
 
 % no really uid, gid in plan9, just char* user;
 
+% put that in security section?
+<<function renameuser>>=
+/*
+ *  change ownership to 'new' of all processes owned by 'old'.  Used when
+ *  eve changes.
+ */
+void
+renameuser(char *old, char *new)
+{
+    Proc *p, *ep;
+
+    ep = procalloc.arena+conf.nproc;
+    for(p = procalloc.arena; p < ep; p++)
+        if(p->user!=nil && strcmp(old, p->user)==0)
+            kstrdup(&p->user, new);
+}
+@ 
+
+<<function hostownerwrite>>=
+/*
+ *  called by devcons() for host owner/domain
+ *
+ *  writing hostowner also sets user
+ */
+long
+hostownerwrite(char *a, int n)
+{
+    char buf[128];
+
+    if(!iseve())
+        error(Eperm);
+    if(n <= 0 || n >= sizeof buf)
+        error(Ebadarg);
+    memmove(buf, a, n);
+    buf[n] = 0;
+
+    renameuser(eve, buf);
+    kstrdup(&eve, buf);
+    kstrdup(&up->user, buf);
+    up->basepri = PriNormal;
+    return n;
+}
+@ 
+
+
 \section{[[sysrfork()]]}
 
 <<enum rfork>>=
@@ -6549,7 +6594,7 @@ intrtime(Cpu*, int vno)
     if(up == nil && cpu->perf.inidle > diff)
         cpu->perf.inidle -= diff;
 
-    diff /= cpu->cpumhz*100;      /* quantum = 100µsec */
+    diff /= cpu->cpumhz*100;      /* quantum = 100microsec */
     if(diff >= Ntimevec)
         diff = Ntimevec-1;
     intrtimes[vno][diff]++;
@@ -14420,6 +14465,10 @@ dupfgrp(Fgrp *f)
 }
 @ 
 
+<<constant DELTAFD>>=
+    DELTAFD = 20    /* incremental increase in Fgrp.fd's */
+@
+
 
 <<function closefgrp>>=
 void
@@ -20662,6 +20711,22 @@ proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms)
 }
 @ 
 
+<<function twakeup>>=
+//@Scheck: FP!! TODO because assigned in field of unnamed substructure
+void
+twakeup(Ureg*, Timer *t)
+{
+    Proc *p;
+    Rendez *trend;
+
+    p = t->ta;
+    trend = p->trend;
+    p->trend = nil;
+    if(trend)
+        wakeup(trend);
+}
+@ 
+
 
 \section{[[sysalarm()]]}
 %related? tsleep, tsemacquire
@@ -20819,6 +20884,8 @@ checkalarms(void)
 
 \section{Time of day}
 
+% see big comment at beginning of tod.c, in kernel_extra
+
 <<struct TOD>>=
 struct TOD {
     int init;       /* true if initialized */
@@ -20851,6 +20918,233 @@ char *Ebadtimectl = "bad time control";
 <<constant VLNUMSIZE>>=
     VLNUMSIZE=  22,
 @
+
+
+
+<<function todinit>>=
+void
+todinit(void)
+{
+    if(tod.init)
+        return;
+    ilock(&tod);
+    tod.init = 1;           /* prevent reentry via fastticks */
+    tod.last = fastticks((uvlong *)&tod.hz);
+    iunlock(&tod);
+    todsetfreq(tod.hz);
+    addclock0link(todfix, 100);
+}
+@ 
+
+
+<<function todsetfreq>>=
+/*
+ *  calculate multiplier
+ */
+void
+todsetfreq(vlong f)
+{
+    if (f <= 0)
+        panic("todsetfreq: freq %lld <= 0", f);
+    ilock(&tod);
+    tod.hz = f;
+
+    /* calculate multiplier for time conversion */
+    tod.multiplier = mk64fract(TODFREQ, f);
+    tod.divider = mk64fract(f, TODFREQ) + 1;
+    tod.umultiplier = mk64fract(MicroFREQ, f);
+    tod.udivider = mk64fract(f, MicroFREQ) + 1;
+    iunlock(&tod);
+}
+@ 
+
+
+<<function todset>>=
+/*
+ *  Set the time of day struct
+ */
+void
+todset(vlong t, vlong delta, int n)
+{
+    if(!tod.init)
+        todinit();
+
+    ilock(&tod);
+    if(t >= 0){
+        tod.off = t;
+        tod.last = fastticks(nil);
+        tod.lasttime = 0;
+        tod.delta = 0;
+        tod.sstart = tod.send;
+    } else {
+        if(n <= 0)
+            n = 1;
+        n *= HZ;
+        if(delta < 0 && n > -delta)
+            n = -delta;
+        if(delta > 0 && n > delta)
+            n = delta;
+        if (n == 0) {
+            iprint("todset: n == 0, delta == %lld\n", delta);
+            delta = 0;
+        } else
+            delta /= n;
+        tod.sstart = CPUS(0)->ticks;
+        tod.send = tod.sstart + n;
+        tod.delta = delta;
+    }
+    iunlock(&tod);
+}
+@ 
+
+
+<<function todget>>=
+/*
+ *  get time of day
+ */
+vlong
+todget(vlong *ticksp)
+{
+    uvlong x;
+    vlong ticks, diff;
+    ulong t;
+
+    if(!tod.init)
+        todinit();
+
+    /*
+     * we don't want time to pass twixt the measuring of fastticks
+     * and grabbing tod.last.  Also none of the vlongs are atomic so
+     * we have to look at them inside the lock.
+     */
+    ilock(&tod);
+    tod.cnt++;
+    ticks = fastticks(nil);
+
+    /* add in correction */
+    if(tod.sstart != tod.send){
+        t = CPUS(0)->ticks;
+        if(t >= tod.send)
+            t = tod.send;
+        tod.off = tod.off + tod.delta*(t - tod.sstart);
+        tod.sstart = t;
+    }
+
+    /* convert to epoch */
+    diff = ticks - tod.last;
+    if(diff < 0)
+        diff = 0;
+    mul64fract(&x, diff, tod.multiplier);
+    x += tod.off;
+
+    /* time can't go backwards */
+    if(x < tod.lasttime)
+        x = tod.lasttime;
+    else
+        tod.lasttime = x;
+
+    iunlock(&tod);
+
+    if(ticksp != nil)
+        *ticksp = ticks;
+
+    return x;
+}
+@ 
+
+
+<<function todfix>>=
+/*
+ *  called regularly to avoid calculation overflows
+ */
+static void
+todfix(void)
+{
+    vlong ticks, diff;
+    uvlong x;
+
+    ticks = fastticks(nil);
+
+    diff = ticks - tod.last;
+    if(diff > tod.hz){
+        ilock(&tod);
+
+        /* convert to epoch */
+        mul64fract(&x, diff, tod.multiplier);
+if(x > 30000000000ULL) iprint("todfix %llud\n", x);
+        x += tod.off;
+
+        /* protect against overflows */
+        tod.last = ticks;
+        tod.off = x;
+
+        iunlock(&tod);
+    }
+}
+@ 
+
+
+<<function seconds>>=
+long
+seconds(void)
+{
+    return (vlong)todget(nil) / TODFREQ;
+}
+@ 
+
+
+<<function fastticks2us>>=
+uvlong
+fastticks2us(uvlong ticks)
+{
+    uvlong res;
+
+    if(!tod.init)
+        todinit();
+    mul64fract(&res, ticks, tod.umultiplier);
+    return res;
+}
+@ 
+
+
+<<function ns2fastticks>>=
+/*
+ *  convert nanoseconds to fast ticks
+ */
+uvlong
+ns2fastticks(uvlong ns)
+{
+    uvlong res;
+
+    if(!tod.init)
+        todinit();
+    mul64fract(&res, ns, tod.divider);
+    return res;
+}
+@ 
+
+<<function mk64fract>>=
+/*
+ * Make a 64 bit fixed point number that has a decimal point
+ * to the left of the low order 32 bits.  This is used with
+ * mul64fract for converting twixt nanoseconds and fastticks.
+ *
+ *  multiplier = (to<<32)/from
+ */
+uvlong
+mk64fract(uvlong to, uvlong from)
+{
+    return (to<<32) / from;
+}
+@ 
+
+
+
+
+
+
+
+
 
 <<function readtime>>=
 /*
@@ -21280,6 +21574,10 @@ Note  lastnote;
 
 void  *ureg;    /* User registers for notes */
 @ 
+
+<<constant NNOTE>>=
+    NNOTE = 5,
+@
 
 <<syscall notify>>=
 // int notify(void (*f)(void*, char*));
@@ -23530,6 +23828,14 @@ Cmdtab proccmd[] = {
 #define NOTEID(q)   ((q).vers)
 @
 
+<<function proctab>>=
+Proc*
+proc_proctab(int i)
+{
+    return &procalloc.arena[i];
+}
+@ 
+
 <<[[Chan]] union other fields>>=
 Qid pgrpid;   /* for #p/notepg */
 @
@@ -25190,6 +25496,126 @@ bool iseve(void) {
 <<systab security syscalls>>=
     [FAUTH]     sysfauth,
     [FVERSION]  sysfversion,
+@ 
+
+
+<<global hostdomain>>=
+char    hostdomain[DOMLEN];
+@ 
+
+
+<<syscall fversion>>=
+long
+sysfversion(ulong *arg)
+{
+    char *vers;
+    uint arglen, m, msize;
+    Chan *c;
+
+    msize = arg[1];
+    vers = (char*)arg[2];
+    arglen = arg[3];
+    validaddr(arg[2], arglen, true);
+    /* check there's a NUL in the version string */
+    if(arglen==0 || memchr(vers, 0, arglen)==0)
+        error(Ebadarg);
+    c = fdtochan(arg[0], ORDWR, 0, 1);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+
+    m = mntversion(c, vers, msize, arglen);
+
+    cclose(c);
+    poperror();
+    return m;
+}
+@ 
+
+
+<<syscall fauth>>=
+long
+sysfauth(ulong *arg)
+{
+    Chan *c, *ac;
+    char *aname;
+    int fd;
+
+    validaddr(arg[1], 1, false);
+    aname = validnamedup((char*)arg[1], 1);
+    if(waserror()){
+        free(aname);
+        nexterror();
+    }
+    c = fdtochan(arg[0], ORDWR, 0, 1);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+
+    ac = mntauth(c, aname);
+    /* at this point ac is responsible for keeping c alive */
+    poperror(); /* c */
+    cclose(c);
+    poperror(); /* aname */
+    free(aname);
+
+    if(waserror()){
+        cclose(ac);
+        nexterror();
+    }
+
+    fd = newfd(ac);
+    if(fd < 0)
+        error(Enofd);
+    poperror(); /* ac */
+
+    /* always mark it close on exec */
+    ac->flag |= CCEXEC;
+
+    return fd;
+}
+@ 
+
+
+<<function userwrite>>=
+/*
+ *  called by devcons() for user device
+ *
+ *  anyone can become none
+ */
+long
+userwrite(char *a, int n)
+{
+    if(n!=4 || strncmp(a, "none", 4)!=0)
+        error(Eperm);
+    kstrdup(&up->user, "none");
+    up->basepri = PriNormal;
+    return n;
+}
+@ 
+
+
+
+
+<<function hostdomainwrite>>=
+long
+hostdomainwrite(char *a, int n)
+{
+    char buf[DOMLEN];
+
+    if(!iseve())
+        error(Eperm);
+    if(n >= DOMLEN)
+        error(Ebadarg);
+    memset(buf, 0, DOMLEN);
+    strncpy(buf, a, n);
+    if(buf[0] == 0)
+        error(Ebadarg);
+    memmove(hostdomain, buf, DOMLEN);
+    return n;
+}
 @ 
 
 \section{Network}
@@ -27550,6 +27976,10 @@ char  *errstr;  /* reason we're unwinding the error stack, errbuf1 or 0 */
 char  errbuf0[ERRMAX];
 char  errbuf1[ERRMAX];
 @ 
+
+<<constant NERR>>=
+    NERR = 64,
+@
 
 <<function error>>=
 void

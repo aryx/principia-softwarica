@@ -48,8 +48,6 @@ static Counter  pidalloc;
 
 enum
 {
-    Q=10,
-    DQ=4,
     /*s: constant Schedagain */
     schedgain = 30, /* units in seconds */
     /*e: constant Schedagain */
@@ -1027,7 +1025,7 @@ twakeup(Ureg*, Timer *t)
 
     p = t->ta;
     trend = p->trend;
-    p->trend = 0;
+    p->trend = nil;
     if(trend)
         wakeup(trend);
 }

@@ -71,7 +71,9 @@ enum procseg
 
 enum
 {
-    DELTAFD = 20    /* incremental increase in Fgrp.fd's */
+   /*s: constant DELTAFD */
+       DELTAFD = 20    /* incremental increase in Fgrp.fd's */
+   /*e: constant DELTAFD */
 };
 
 /*s: struct Fgrp */
@@ -128,13 +130,14 @@ struct Sargs
 };
 /*e: struct Sargs */
 
-
 //--------------------------------------------------------------------
 // Notes
 //--------------------------------------------------------------------
 
 enum {
-    NNOTE = 5,
+    /*s: constant NNOTE */
+        NNOTE = 5,
+    /*e: constant NNOTE */
 };
 
 /*s: enum notekind */
@@ -337,7 +340,9 @@ struct Edf {
 // Error managment
 //--------------------------------------------------------------------
 enum {
-    NERR = 64,
+    /*s: constant NERR */
+        NERR = 64,
+    /*e: constant NERR */
 };
 
 //--------------------------------------------------------------------
