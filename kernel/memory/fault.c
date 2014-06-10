@@ -71,7 +71,7 @@ faulterror(char *s, Chan *c, bool freemem)
 }
 /*e: function faulterror */
 
-// for debugging??
+// for debugging SG_PHYSICAL
 void    (*checkaddr)(ulong, Segment *, Page *);
 ulong   addr2check;
 

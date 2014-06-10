@@ -13,16 +13,22 @@
 #include <ureg.h>
 
 enum {
-    Maxtimerloops = 20*1000,
+   /*s: constant Maxtimerloops */
+       Maxtimerloops = 20*1000,
+   /*e: constant Maxtimerloops */
 };
 
 /*s: global timers */
 static Timers timers[MAXCPUS];
 /*e: global timers */
+/*s: global timersinited */
 static bool timersinited;
+/*e: global timersinited */
 
+/*s: clock.c statistics */
 ulong intrcount[MAXCPUS];
 ulong fcallcount[MAXCPUS];
+/*e: clock.c statistics */
 
 /*s: function tadd */
 static Tval

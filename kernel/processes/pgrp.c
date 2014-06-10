@@ -11,7 +11,9 @@
 /*e: kernel basic includes */
 
 enum {
-    Whinesecs = 10,     /* frequency of out-of-resources printing */
+   /*s: constant Whinesecs */
+       Whinesecs = 10,     /* frequency of out-of-resources printing */
+   /*e: constant Whinesecs */
 };
 
 /*s: global pgrpid */

@@ -5617,7 +5617,6 @@ countpagerefs(ulong *ref, int print)
 
 <<mmu.c forward decl>>
 
-
 #define vpt ((ulong*)VPT)
 #define VPTX(va)        (((ulong)(va))>>12)
 #define vpd (vpt+VPTX(VPT))
@@ -5843,7 +5842,7 @@ void        pio(Segment *, ulong, ulong, Page **);
 
 <<function faulterror>>
 
-// for debugging??
+// for debugging SG_PHYSICAL
 void    (*checkaddr)(ulong, Segment *, Page *);
 ulong   addr2check;
 
@@ -5871,7 +5870,6 @@ int hasfreepages(void*);
 void portcountpagerefs(ulong*, int);
 @
 \fi
-
 
 
 
@@ -5939,44 +5937,6 @@ void portcountpagerefs(ulong*, int);
 typedef struct Private  Private;
 @
 
-
-
-<<function poolprint>>=
-/*
- * because we can't print while we're holding the locks, 
- * we have the save the message and print it once we let go.
- */
-static void
-poolprint(Pool *p, char *fmt, ...)
-{
-    va_list v;
-    Private *pv;
-
-    pv = p->private;
-    va_start(v, fmt);
-    vseprint(pv->msg+strlen(pv->msg), pv->msg+sizeof pv->msg, fmt, v);
-    va_end(v);
-}
-@
-
-
-<<function ppanic>>=
-static void
-ppanic(Pool *p, char *fmt, ...)
-{
-    va_list v;
-    Private *pv;
-    char msg[sizeof pv->msg];
-
-    pv = p->private;
-    va_start(v, fmt);
-    vseprint(pv->msg+strlen(pv->msg), pv->msg+sizeof pv->msg, fmt, v);
-    va_end(v);
-    memmove(msg, pv->msg, sizeof msg);
-    iunlock(&pv->lk);
-    panic("%s", msg);
-}
-@
 
 
 <<pool.c>>=
@@ -6143,7 +6103,8 @@ enum
 <<struct Palloc>>
 extern  Palloc  palloc;
 
-#define NFREECHAN 64
+<<constant NFREECHAN>>
+
 <<function ihash>>
 
 <<struct Imagealloc>>
@@ -6292,29 +6253,6 @@ static struct Irstats  irstats;
 \fi
 
 
-
-
-
-
-
-
-<<function data2txt>>=
-Segment*
-data2txt(Segment *s)
-{
-    Segment *ps;
-
-    ps = newseg(SG_TEXT, s->base, s->size);
-    ps->image = s->image;
-    incref(ps->image);
-    ps->fstart = s->fstart;
-    ps->flen = s->flen;
-
-    return ps;
-}
-@
-
-
 <<segment.c>>=
 <<kernel basic includes>>
 #include "io.h"
@@ -6332,7 +6270,7 @@ data2txt(Segment *s)
 <<global physseg>>
 <<global physseglock>>
 
-Segment* (*_globalsegattach)(Proc*, char*);
+<<hook _globalsegattach>>
 
 <<segment.c forward decl>>
 
@@ -6415,9 +6353,6 @@ static void pager(void*);
 \fi
 
 
-
-
-
 <<swap.c>>=
 <<kernel basic includes>>
 
@@ -6472,9 +6407,6 @@ static void pager(void*);
 \subsection*{[[memory/sysmemory.c]]}
 
 
-
-
-
 <<sysmemory.c>>=
 <<kernel basic includes>>
 
@@ -6492,9 +6424,6 @@ static void pager(void*);
 void        xhole(ulong, ulong);
 @
 \fi
-
-
-
 
 
 
@@ -6587,161 +6516,6 @@ ulong   randomread(void*, ulong);
 
 \subsection*{[[misc/random.c]]}
 
-<<struct Rb>>=
-struct Rb
-{
-    QLock;
-    Rendez  producer;
-    Rendez  consumer;
-    ulong   randomcount;
-    uchar   buf[1024];
-    uchar   *ep;
-    uchar   *rp;
-    uchar   *wp;
-    uchar   next;
-    uchar   wakeme;
-    ushort  bits;
-    ulong   randn;
-};
-@
-
-
-<<global rb>>=
-struct Rb rb;
-@
-
-
-<<struct rbnotfull>>=
-static int
-rbnotfull(void*)
-{
-    int i;
-
-    i = rb.rp - rb.wp;
-    return i != 1 && i != (1 - sizeof(rb.buf));
-}
-@
-
-
-<<struct rbnotempty>>=
-static int
-rbnotempty(void*)
-{
-    return rb.wp != rb.rp;
-}
-@
-
-
-<<function genrandom>>=
-static void
-genrandom(void*)
-{
-    up->basepri = PriNormal;
-    up->priority = up->basepri;
-
-    for(;;){
-        for(;;)
-            if(++rb.randomcount > 100000)
-                break;
-        if(anyhigher())
-            sched();
-        if(!rbnotfull(0))
-            sleep(&rb.producer, rbnotfull, 0);
-    }
-}
-@
-
-<<clock callback randomclock>>=
-/*
- *  produce random bits in a circular buffer
- */
-static void
-randomclock(void)
-{
-    if(rb.randomcount == 0 || !rbnotfull(0))
-        return;
-
-    rb.bits = (rb.bits<<2) ^ rb.randomcount;
-    rb.randomcount = 0;
-
-    rb.next++;
-    if(rb.next != 8/2)
-        return;
-    rb.next = 0;
-
-    *rb.wp ^= rb.bits;
-    if(rb.wp+1 == rb.ep)
-        rb.wp = rb.buf;
-    else
-        rb.wp = rb.wp+1;
-
-    if(rb.wakeme)
-        wakeup(&rb.consumer);
-}
-@
-
-<<function randominit>>=
-void
-randominit(void)
-{
-    /* Frequency close but not equal to HZ */
-    addclock0link(randomclock, 13);
-    rb.ep = rb.buf + sizeof(rb.buf);
-    rb.rp = rb.wp = rb.buf;
-    kproc("genrandom", genrandom, 0);
-}
-@
-
-
-<<function randomread>>=
-/*
- *  consume random bytes from a circular buffer
- */
-ulong
-randomread(void *xp, ulong n)
-{
-    uchar *e, *p;
-    ulong x;
-
-    p = xp;
-
-    if(waserror()){
-        qunlock(&rb);
-        nexterror();
-    }
-
-    qlock(&rb);
-    for(e = p + n; p < e; ){
-        if(rb.wp == rb.rp){
-            rb.wakeme = 1;
-            wakeup(&rb.producer);
-            sleep(&rb.consumer, rbnotempty, 0);
-            rb.wakeme = 0;
-            continue;
-        }
-
-        /*
-         *  beating clocks will be predictable if
-         *  they are synchronized.  Use a cheap pseudo-
-         *  random number generator to obscure any cycles.
-         */
-        x = rb.randn*1103515245 ^ *rb.rp;
-        *p++ = rb.randn = x;
-
-        if(rb.rp+1 == rb.ep)
-            rb.rp = rb.buf;
-        else
-            rb.rp = rb.rp+1;
-    }
-    qunlock(&rb);
-    poperror();
-
-    wakeup(&rb.producer);
-
-    return n;
-}
-@
-
 
 <<random.c>>=
 <<kernel basic includes>>
@@ -6768,19 +6542,6 @@ randomread(void *xp, ulong n)
 
 \subsection*{[[processes/386/archgeneric.c]]}
 
-
-
-
-
-<<function archrevert>>=
-void
-archrevert(void)
-{
-    arch = &archgeneric;
-}
-@
-
-
 <<archgeneric.c>>=
 <<kernel basic includes>>
 
@@ -6806,6 +6567,7 @@ archrevert(void)
 
 \subsection*{[[processes/386/dat_processes.h]]}
 
+% dead code?
 <<struct ArchProcNotsave>>=
 /*
  *  things saved in the Proc structure during a notify
@@ -6856,14 +6618,13 @@ struct ArchProcNotsave
 // Actually used only in i8253.c but important so put here.
 
 <<struct I8253>>
-//IMPORTANT: I8253 i8253; (in i8253.c)
 
+//IMPORTANT: I8253 i8253; (in i8253.c)
 //IMPORTANT: also is interrupt i8253clock() calling clock.c:timerintr()
 @
 
 
 \subsection*{[[processes/386/i8253.c]]}
-
 
 <<struct Watchdog>>=
 struct Watchdog
@@ -7080,23 +6841,6 @@ i8253_microdelay(int microsecs)
 @
 
 
-<<function perfticks>>=
-/*  
- *  performance measurement ticks.  must be low overhead.
- *  doesn't have to count over a second.
- */
-ulong
-perfticks(void)
-{
-    uvlong x;
-
-    if(cpu->havetsc)
-        cycles(&x);
-    else
-        x = 0;
-    return x;
-}
-@
 
 
 <<i8253.c>>=
@@ -7255,7 +6999,7 @@ int i8259elcr;              /* mask of level-triggered interrupts */
 
 <<l_switch.s>>=
 
-// This file is used for task switching but also to emulate
+// This file is used for process switching but also to emulate
 // exceptions in C (via the waserror(), nexterror(), poperror() functions)
 
 <<function gotolabel>>
@@ -7314,16 +7058,11 @@ static void fault386(Ureg*, void*);
 static void doublefault(Ureg*, void*);
 static void unexpected(Ureg*, void*);
 static void _dumpstack(Ureg*);
+
+extern void checkpages(void);
 @ 
+//extern void checkfault(ulong, ulong);
 \fi
-
-<<global intrtimes>>=
-ulong intrtimes[256][Ntimevec];
-@ 
-
-
-
-
 
 
 <<function nmienable>>=
@@ -7341,213 +7080,6 @@ nmienable(void)
     x = inb(0x61) & 0x07;       /* Enable NMI */
     outb(0x61, 0x08|x);
     outb(0x61, x);
-}
-@ 
-
-
-
-
-<<global excname>>=
-static char* excname[32] = {
-    "divide error",
-    "debug exception",
-    "nonmaskable interrupt",
-    "breakpoint",
-    "overflow",
-    "bounds check",
-    "invalid opcode",
-    "coprocessor not available",
-    "double fault",
-    "coprocessor segment overrun",
-    "invalid TSS",
-    "segment not present",
-    "stack exception",
-    "general protection violation",
-    "page fault",
-    "15 (reserved)",
-    "coprocessor error",
-    "alignment check",
-    "machine check",
-    "19 (reserved)",
-    "20 (reserved)",
-    "21 (reserved)",
-    "22 (reserved)",
-    "23 (reserved)",
-    "24 (reserved)",
-    "25 (reserved)",
-    "26 (reserved)",
-    "27 (reserved)",
-    "28 (reserved)",
-    "29 (reserved)",
-    "30 (reserved)",
-    "31 (reserved)",
-};
-@ 
-
-
-<<function intrtime>>=
-/*
- *  keep histogram of interrupt service times
- */
-void
-intrtime(Cpu*, int vno)
-{
-    ulong diff;
-    ulong x;
-
-    x = perfticks();
-    diff = x - cpu->perf.intrts;
-    cpu->perf.intrts = x;
-
-    cpu->perf.inintr += diff;
-    if(up == nil && cpu->perf.inidle > diff)
-        cpu->perf.inidle -= diff;
-
-    diff /= cpu->cpumhz*100;      /* quantum = 100µsec */
-    if(diff >= Ntimevec)
-        diff = Ntimevec-1;
-    intrtimes[vno][diff]++;
-}
-@ 
-
-
-
-
-<<function dumpregs2>>=
-/*
- *  dump registers
- */
-void
-dumpregs2(Ureg* ureg)
-{
-    if(up)
-        iprint("cpu%d: registers for %s %lud\n",
-            cpu->cpuno, up->text, up->pid);
-    else
-        iprint("cpu%d: registers for kernel\n", cpu->cpuno);
-    iprint("FLAGS=%luX TRAP=%luX ECODE=%luX PC=%luX",
-        ureg->flags, ureg->trap, ureg->ecode, ureg->pc);
-    iprint(" SS=%4.4luX USP=%luX\n", ureg->ss & 0xFFFF, ureg->usp);
-    iprint("  AX %8.8luX  BX %8.8luX  CX %8.8luX  DX %8.8luX\n",
-        ureg->ax, ureg->bx, ureg->cx, ureg->dx);
-    iprint("  SI %8.8luX  DI %8.8luX  BP %8.8luX\n",
-        ureg->si, ureg->di, ureg->bp);
-    iprint("  CS %4.4luX  DS %4.4luX  ES %4.4luX  FS %4.4luX  GS %4.4luX\n",
-        ureg->cs & 0xFFFF, ureg->ds & 0xFFFF, ureg->es & 0xFFFF,
-        ureg->fs & 0xFFFF, ureg->gs & 0xFFFF);
-}
-@ 
-
-
-<<function dumpregs>>=
-void
-dumpregs(Ureg* ureg)
-{
-    vlong mca, mct;
-
-    dumpregs2(ureg);
-
-    /*
-     * Processor control registers.
-     * If machine check exception, time stamp counter, page size extensions
-     * or enhanced virtual 8086 mode extensions are supported, there is a
-     * CR4. If there is a CR4 and machine check extensions, read the machine
-     * check address and machine check type registers if RDMSR supported.
-     */
-    iprint("  CR0 %8.8lux CR2 %8.8lux CR3 %8.8lux",
-        getcr0(), getcr2(), getcr3());
-    if(cpu->cpuiddx & (Mce|Tsc|Pse|Vmex)){
-        iprint(" CR4 %8.8lux", getcr4());
-        if((cpu->cpuiddx & (Mce|Cpumsr)) == (Mce|Cpumsr)){
-            rdmsr(0x00, &mca);
-            rdmsr(0x01, &mct);
-            iprint("\n  MCA %8.8llux MCT %8.8llux", mca, mct);
-        }
-    }
-    iprint("\n  ur %#p up %#p\n", ureg, up);
-}
-@ 
-
-
-
-
-
-
-<<function debugbpt>>=
-static void
-debugbpt(Ureg* ureg, void*)
-{
-    char buf[ERRMAX];
-
-    if(up == 0)
-        panic("kernel bpt");
-    /* restore pc to instruction that caused the trap */
-    ureg->pc--;
-    snprint(buf, sizeof buf, "sys: breakpoint");
-    postnote(up, 1, buf, NDebug);
-}
-@ 
-
-
-<<function doublefault>>=
-static void
-doublefault(Ureg*, void*)
-{
-    panic("double fault");
-}
-@ 
-
-
-<<function unexpected>>=
-static void
-unexpected(Ureg* ureg, void*)
-{
-    print("unexpected trap %lud; ignoring\n", ureg->trap);
-}
-@ 
-
-
-
-<<function userpc>>=
-/*
- *  return the userpc the last exception happened at
- */
-ulong
-userpc(void)
-{
-    Ureg *ureg;
-
-    ureg = (Ureg*)up->dbgreg;
-    return ureg->pc;
-}
-@ 
-
-
-
-<<function setkernur>>=
-/* Give enough context in the ureg to produce a kernel stack for
- * a sleeping process
- */
-void
-setkernur(Ureg* ureg, Proc* p)
-{
-    ureg->pc = p->sched.pc;
-    ureg->sp = p->sched.sp+4;
-}
-@ 
-
-
-<<function dbgpc>>=
-ulong
-dbgpc(Proc *p)
-{
-    Ureg *ureg;
-
-    ureg = p->dbgreg;
-    if(ureg == 0)
-        return 0;
-
-    return ureg->pc;
 }
 @ 
 
@@ -7572,7 +7104,7 @@ dbgpc(Proc *p)
 
 enum
 {
-    Ntimevec = 20       /* number of time buckets for each intr */
+   <<constant Ntimevec>>
 };
 <<global intrtimes>>
 
@@ -7631,9 +7163,6 @@ enum
 
 <<function unexpected>>
 
-extern void checkpages(void);
-//extern void checkfault(ulong, ulong);
-
 <<function fault386>>
 
 //*****************************************************************************
@@ -7671,10 +7200,6 @@ extern void checkpages(void);
 
 \subsection*{[[processes/alarm.c]]}
 
-
-
-
-
 <<alarm.c>>=
 <<kernel basic includes>>
 
@@ -7688,13 +7213,7 @@ extern void checkpages(void);
 <<function procalarm>>
 @
 
-
 \subsection*{[[processes/clock.c]]}
-
-
-
-
-
 
 
 <<clock.c>>=
@@ -7705,14 +7224,13 @@ extern void checkpages(void);
 #include <ureg.h>
 
 enum {
-    Maxtimerloops = 20*1000,
+   <<constant Maxtimerloops>>
 };
 
 <<global timers>>
-static bool timersinited;
+<<global timersinited>>
 
-ulong intrcount[MAXCPUS];
-ulong fcallcount[MAXCPUS];
+<<clock.c statistics>>
 
 <<function tadd>>
 
@@ -7738,58 +7256,13 @@ ulong fcallcount[MAXCPUS];
 
 \subsection*{[[processes/pgrp.c]]}
 
-
-<<global mountid>>=
-static Counter mountid;
-@ 
-
-
-<<function pgrpnote>>=
-void
-pgrpnote(ulong noteid, char *a, long n, int flag)
-{
-    Proc *p, *ep;
-    char buf[ERRMAX];
-
-    if(n >= ERRMAX-1)
-        error(Etoobig);
-
-    memmove(buf, a, n);
-    buf[n] = 0;
-    p = proctab(0);
-    ep = p+conf.nproc;
-    for(; p < ep; p++) {
-        if(p->state == Dead)
-            continue;
-        if(up != p && p->noteid == noteid && p->kp == 0) {
-            qlock(&p->debug);
-            if(p->pid == 0 || p->noteid != noteid){
-                qunlock(&p->debug);
-                continue;
-            }
-            if(!waserror()) {
-                postnote(p, 0, buf, flag);
-                poperror();
-            }
-            qunlock(&p->debug);
-        }
-    }
-}
-@ 
-
-
-
-
-
-
-
 <<pgrp.c>>=
 // Process group, and Namespace.
 
 <<kernel basic includes>>
 
 enum {
-    Whinesecs = 10,     /* frequency of out-of-resources printing */
+   <<constant Whinesecs>>
 };
 
 <<global pgrpid>>
@@ -7826,7 +7299,6 @@ enum {
 \subsection*{[[processes/portdat_processes.c]]}
 
 
-
 <<portdat_processes.c>>=
 <<kernel basic includes>>
 
@@ -7845,8 +7317,6 @@ enum {
 #pragma varargck  type  "U"   uvlong
 @
 \fi
-
-
 
 
 
@@ -28368,6 +27838,15 @@ identify(void)
 
 
 \subsection*{[[processes/386/mp.c]]}
+
+<<function archrevert>>=
+void
+archrevert(void)
+{
+    arch = &archgeneric;
+}
+@
+
 
 <<[[Cpu]] [[Arch]] other fields>>=
 vlong mtrrcap;

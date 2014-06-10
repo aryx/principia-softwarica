@@ -31,7 +31,9 @@ static Vctl *vctl[256];
 
 enum
 {
-    Ntimevec = 20       /* number of time buckets for each intr */
+   /*s: constant Ntimevec */
+       Ntimevec = 20       /* number of time buckets for each intr */
+   /*e: constant Ntimevec */
 };
 /*s: global intrtimes */
 ulong intrtimes[256][Ntimevec];
@@ -50,6 +52,8 @@ static void fault386(Ureg*, void*);
 static void doublefault(Ureg*, void*);
 static void unexpected(Ureg*, void*);
 static void _dumpstack(Ureg*);
+
+extern void checkpages(void);
 /*e: trap.c forward decl */
 
 //*****************************************************************************
@@ -331,7 +335,7 @@ intrtime(Cpu*, int vno)
     if(up == nil && cpu->perf.inidle > diff)
         cpu->perf.inidle -= diff;
 
-    diff /= cpu->cpumhz*100;      /* quantum = 100µsec */
+    diff /= cpu->cpumhz*100;      /* quantum = 100microsec */
     if(diff >= Ntimevec)
         diff = Ntimevec-1;
     intrtimes[vno][diff]++;
@@ -665,7 +669,7 @@ debugbpt(Ureg* ureg, void*)
 {
     char buf[ERRMAX];
 
-    if(up == 0)
+    if(up == nil)
         panic("kernel bpt");
     /* restore pc to instruction that caused the trap */
     ureg->pc--;
@@ -689,9 +693,6 @@ unexpected(Ureg* ureg, void*)
     print("unexpected trap %lud; ignoring\n", ureg->trap);
 }
 /*e: function unexpected */
-
-extern void checkpages(void);
-//extern void checkfault(ulong, ulong);
 
 /*s: function fault386 */
 static void
@@ -1219,8 +1220,8 @@ dbgpc(Proc *p)
     Ureg *ureg;
 
     ureg = p->dbgreg;
-    if(ureg == 0)
-        return 0;
+    if(ureg == nil)
+        return nilptr;
 
     return ureg->pc;
 }

@@ -79,7 +79,6 @@ static ulong vmapalloc(ulong size);
 static void pdbunmap(ulong*, ulong, int);
 /*e: mmu.c forward decl */
 
-
 #define vpt ((ulong*)VPT)
 #define VPTX(va)        (((ulong)(va))>>12)
 #define vpd (vpt+VPTX(VPT))

@@ -353,7 +353,10 @@ struct Palloc
 /*e: struct Palloc */
 extern  Palloc  palloc;
 
+/*s: constant NFREECHAN */
 #define NFREECHAN 64
+/*e: constant NFREECHAN */
+
 /*s: function ihash */
 #define IHASHSIZE 64
 // actually internal to page.c, but important so here

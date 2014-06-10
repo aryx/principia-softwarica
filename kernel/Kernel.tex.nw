@@ -2758,6 +2758,46 @@ Pool*   mainmem = &pmainmem;
 Pool*   imagmem = &pimagmem;
 @
 
+%--------------------------------------------------------------------------
+
+<<function poolprint>>=
+/*
+ * because we can't print while we're holding the locks, 
+ * we have the save the message and print it once we let go.
+ */
+static void
+poolprint(Pool *p, char *fmt, ...)
+{
+    va_list v;
+    Private *pv;
+
+    pv = p->private;
+    va_start(v, fmt);
+    vseprint(pv->msg+strlen(pv->msg), pv->msg+sizeof pv->msg, fmt, v);
+    va_end(v);
+}
+@
+
+
+
+<<function ppanic>>=
+static void
+ppanic(Pool *p, char *fmt, ...)
+{
+    va_list v;
+    Private *pv;
+    char msg[sizeof pv->msg];
+
+    pv = p->private;
+    va_start(v, fmt);
+    vseprint(pv->msg+strlen(pv->msg), pv->msg+sizeof pv->msg, fmt, v);
+    va_end(v);
+    memmove(msg, pv->msg, sizeof msg);
+    iunlock(&pv->lk);
+    panic("%s", msg);
+}
+@
+
 
 \section{Kernel [[malloc()]]}
 
@@ -3594,6 +3634,20 @@ okaddr(virt_addr addr, ulong len, bool write)
 % the loop show a bit the limitation of just-paging model where all segments
 % are put next to each other and are not in independent memory space.
 
+<<function userpc>>=
+/*
+ *  return the userpc the last exception happened at
+ */
+ulong
+userpc(void)
+{
+    Ureg *ureg;
+
+    ureg = (Ureg*)up->dbgreg;
+    return ureg->pc;
+}
+@ 
+
 
 <<function validaddr>>=
 void
@@ -3686,6 +3740,23 @@ sameseg:
 }
 @
 
+
+<<function data2txt>>=
+Segment*
+data2txt(Segment *s)
+{
+    Segment *ps;
+
+    ps = newseg(SG_TEXT, s->base, s->size);
+    ps->image = s->image;
+    incref(ps->image);
+    ps->fstart = s->fstart;
+    ps->flen = s->flen;
+
+    return ps;
+}
+@
+% LP split that? what is that?
 
 % used by sysexec() to relocate the stack that was in ESEG
 <<function relocateseg>>=
@@ -4166,6 +4237,11 @@ resrcwait(char *reason)
     up->psstate = p;
 }
 @ 
+
+<<constant Whinesecs>>=
+    Whinesecs = 10,     /* frequency of out-of-resources printing */
+@
+
 
 \section{The user}
 
@@ -5782,6 +5858,43 @@ TEXT vectortable(SB), $0
 %$
 
 
+<<global excname>>=
+static char* excname[32] = {
+    "divide error",
+    "debug exception",
+    "nonmaskable interrupt",
+    "breakpoint",
+    "overflow",
+    "bounds check",
+    "invalid opcode",
+    "coprocessor not available",
+    "double fault",
+    "coprocessor segment overrun",
+    "invalid TSS",
+    "segment not present",
+    "stack exception",
+    "general protection violation",
+    "page fault",
+    "15 (reserved)",
+    "coprocessor error",
+    "alignment check",
+    "machine check",
+    "19 (reserved)",
+    "20 (reserved)",
+    "21 (reserved)",
+    "22 (reserved)",
+    "23 (reserved)",
+    "24 (reserved)",
+    "25 (reserved)",
+    "26 (reserved)",
+    "27 (reserved)",
+    "28 (reserved)",
+    "29 (reserved)",
+    "30 (reserved)",
+    "31 (reserved)",
+};
+@ 
+
 \section{Exceptions}
 
 <<enum vector>>=
@@ -6401,6 +6514,47 @@ kexit(Ureg*)
 % should be called hook_before_exit_syscall note that
 % take Ureg*, so the address is in the stack and the actual
 % value are where?
+
+
+% nmienable? nmi?
+
+
+% ---------------------------------------------------------------------------
+
+% mv in profiling section? who uses this info?
+
+<<global intrtimes>>=
+ulong intrtimes[256][Ntimevec];
+@ 
+
+<<constant Ntimevec>>=
+    Ntimevec = 20       /* number of time buckets for each intr */
+@
+
+<<function intrtime>>=
+/*
+ *  keep histogram of interrupt service times
+ */
+void
+intrtime(Cpu*, int vno)
+{
+    ulong diff;
+    ulong x;
+
+    x = perfticks();
+    diff = x - cpu->perf.intrts;
+    cpu->perf.intrts = x;
+
+    cpu->perf.inintr += diff;
+    if(up == nil && cpu->perf.inidle > diff)
+        cpu->perf.inidle -= diff;
+
+    diff /= cpu->cpumhz*100;      /* quantum = 100µsec */
+    if(diff >= Ntimevec)
+        diff = Ntimevec-1;
+    intrtimes[vno][diff]++;
+}
+@ 
 
 
 
@@ -11422,10 +11576,29 @@ trapinit(void)
     trapinited = true;
 }
 @ 
+% LP split! put debugpt line in debugging section
 
 <<global trapinited>>=
 static bool trapinited;
 @
+
+% ??
+<<function doublefault>>=
+static void
+doublefault(Ureg*, void*)
+{
+    panic("double fault");
+}
+@ 
+
+% ??
+<<function unexpected>>=
+static void
+unexpected(Ureg* ureg, void*)
+{
+    print("unexpected trap %lud; ignoring\n", ureg->trap);
+}
+@ 
 
 \subsection{Virtual memory initialisation}
 
@@ -11711,6 +11884,9 @@ swapinit(void)
 }
 @
 
+<<constant NFREECHAN>>=
+#define NFREECHAN 64
+@
 
 
 <<function initimage>>=
@@ -16460,6 +16636,10 @@ newmount(Mhead *mh, Chan *to, int flag, char *spec)
 }
 @ 
 
+<<global mountid>>=
+static Counter mountid;
+@ 
+
 
 <<destructor mountfree>>=
 void
@@ -19967,6 +20147,9 @@ struct Mntrpc
 bool havetsc;
 @
 
+% what about delay() and microdelay()? but seems used only in panic path
+% so maybe not that interesting
+
 \section{Overview}
 
 % different capabilities? timer, clock, rtc, ??
@@ -20288,6 +20471,10 @@ timerdel(Timer *dt)
 
 \subsection{Initialisation}
 
+<<global timersinited>>=
+static bool timersinited;
+@
+
 <<function timersinit>>=
 void
 timersinit(void)
@@ -20312,6 +20499,13 @@ timersinit(void)
 @ 
 
 \subsection{[[timerintr()]]}
+
+\ifallcode
+<<clock.c statistics>>=
+ulong intrcount[MAXCPUS];
+ulong fcallcount[MAXCPUS];
+@
+\fi
 
 <<interrupt callback timerintr>>=
 // called via i8253clock
@@ -20368,6 +20562,10 @@ timerintr(Ureg *u, Tval)
     iunlock(tt);
 }
 @ 
+
+<<constant Maxtimerloops>>=
+    Maxtimerloops = 20*1000,
+@
 
 \subsection{Clock callbacks}
 
@@ -21003,6 +21201,8 @@ sec2rtc(ulong secs, Rtc *rtc)
 }
 @
 
+
+% section{Watchdot} ?
 
 \chapter{IPC}
 \minitoc
@@ -21946,6 +22146,9 @@ syssegattach(ulong* arg)
 }
 @ 
 
+<<hook _globalsegattach>>=
+Segment* (*_globalsegattach)(Proc*, char*);
+@
 
 <<function segattach>>=
 ulong
@@ -23373,6 +23576,20 @@ Dev procdevtab = {
 @
 
 
+% todo LP split
+<<function setkernur>>=
+/* Give enough context in the ureg to produce a kernel stack for
+ * a sleeping process
+ */
+void
+setkernur(Ureg* ureg, Proc* p)
+{
+    ureg->pc = p->sched.pc;
+    ureg->sp = p->sched.sp+4;
+}
+@ 
+
+
 <<method procread>>=
 static long
 procread(Chan *c, void *va, long n, vlong off)
@@ -23712,6 +23929,40 @@ procwrite(Chan *c, void *va, long n, vlong off)
     return n;
 }
 @
+
+<<function pgrpnote>>=
+void
+pgrpnote(ulong noteid, char *a, long n, int flag)
+{
+    Proc *p, *ep;
+    char buf[ERRMAX];
+
+    if(n >= ERRMAX-1)
+        error(Etoobig);
+
+    memmove(buf, a, n);
+    buf[n] = 0;
+    p = proctab(0);
+    ep = p+conf.nproc;
+    for(; p < ep; p++) {
+        if(p->state == Dead)
+            continue;
+        if(up != p && p->noteid == noteid && p->kp == 0) {
+            qlock(&p->debug);
+            if(p->pid == 0 || p->noteid != noteid){
+                qunlock(&p->debug);
+                continue;
+            }
+            if(!waserror()) {
+                postnote(p, 0, buf, flag);
+                poperror();
+            }
+            qunlock(&p->debug);
+        }
+    }
+}
+@ 
+
 
 <<method procopen>>=
 static Chan*
@@ -24497,6 +24748,164 @@ nrand(int n)
 }
 @
 
+
+<<struct Rb>>=
+struct Rb
+{
+    QLock;
+    Rendez  producer;
+    Rendez  consumer;
+    ulong   randomcount;
+    uchar   buf[1024];
+    uchar   *ep;
+    uchar   *rp;
+    uchar   *wp;
+    uchar   next;
+    uchar   wakeme;
+    ushort  bits;
+    ulong   randn;
+};
+@
+
+
+<<global rb>>=
+struct Rb rb;
+@
+
+
+<<struct rbnotfull>>=
+static int
+rbnotfull(void*)
+{
+    int i;
+
+    i = rb.rp - rb.wp;
+    return i != 1 && i != (1 - sizeof(rb.buf));
+}
+@
+
+
+<<struct rbnotempty>>=
+static int
+rbnotempty(void*)
+{
+    return rb.wp != rb.rp;
+}
+@
+
+
+<<function genrandom>>=
+static void
+genrandom(void*)
+{
+    up->basepri = PriNormal;
+    up->priority = up->basepri;
+
+    for(;;){
+        for(;;)
+            if(++rb.randomcount > 100000)
+                break;
+        if(anyhigher())
+            sched();
+        if(!rbnotfull(0))
+            sleep(&rb.producer, rbnotfull, 0);
+    }
+}
+@
+
+<<clock callback randomclock>>=
+/*
+ *  produce random bits in a circular buffer
+ */
+static void
+randomclock(void)
+{
+    if(rb.randomcount == 0 || !rbnotfull(0))
+        return;
+
+    rb.bits = (rb.bits<<2) ^ rb.randomcount;
+    rb.randomcount = 0;
+
+    rb.next++;
+    if(rb.next != 8/2)
+        return;
+    rb.next = 0;
+
+    *rb.wp ^= rb.bits;
+    if(rb.wp+1 == rb.ep)
+        rb.wp = rb.buf;
+    else
+        rb.wp = rb.wp+1;
+
+    if(rb.wakeme)
+        wakeup(&rb.consumer);
+}
+@
+
+<<function randominit>>=
+void
+randominit(void)
+{
+    /* Frequency close but not equal to HZ */
+    addclock0link(randomclock, 13);
+    rb.ep = rb.buf + sizeof(rb.buf);
+    rb.rp = rb.wp = rb.buf;
+    kproc("genrandom", genrandom, 0);
+}
+@
+
+
+<<function randomread>>=
+/*
+ *  consume random bytes from a circular buffer
+ */
+ulong
+randomread(void *xp, ulong n)
+{
+    uchar *e, *p;
+    ulong x;
+
+    p = xp;
+
+    if(waserror()){
+        qunlock(&rb);
+        nexterror();
+    }
+
+    qlock(&rb);
+    for(e = p + n; p < e; ){
+        if(rb.wp == rb.rp){
+            rb.wakeme = 1;
+            wakeup(&rb.producer);
+            sleep(&rb.consumer, rbnotempty, 0);
+            rb.wakeme = 0;
+            continue;
+        }
+
+        /*
+         *  beating clocks will be predictable if
+         *  they are synchronized.  Use a cheap pseudo-
+         *  random number generator to obscure any cycles.
+         */
+        x = rb.randn*1103515245 ^ *rb.rp;
+        *p++ = rb.randn = x;
+
+        if(rb.rp+1 == rb.ep)
+            rb.rp = rb.buf;
+        else
+            rb.rp = rb.rp+1;
+    }
+    qunlock(&rb);
+    poperror();
+
+    wakeup(&rb.producer);
+
+    return n;
+}
+@
+
+
+
 %//int
 %//rand(void)
 %//{
@@ -25110,7 +25519,23 @@ proc_dumpaproc(Proc *p)
 }
 @ 
 
+% vs userpc?
+<<function dbgpc>>=
+ulong
+dbgpc(Proc *p)
+{
+    Ureg *ureg;
 
+    ureg = p->dbgreg;
+    if(ureg == nil)
+        return nilptr;
+
+    return ureg->pc;
+}
+@ 
+
+% ----------------------------------------------------------------------------
+% not used by C-t C-t but could, and related
 
 <<function lockloop>>=
 void
@@ -25126,6 +25551,63 @@ lockloop(Lock *l, ulong pc)
         dumpaproc(p);
 }
 @ 
+
+
+<<function dumpregs2>>=
+/*
+ *  dump registers
+ */
+void
+dumpregs2(Ureg* ureg)
+{
+    if(up)
+        iprint("cpu%d: registers for %s %lud\n",
+            cpu->cpuno, up->text, up->pid);
+    else
+        iprint("cpu%d: registers for kernel\n", cpu->cpuno);
+    iprint("FLAGS=%luX TRAP=%luX ECODE=%luX PC=%luX",
+        ureg->flags, ureg->trap, ureg->ecode, ureg->pc);
+    iprint(" SS=%4.4luX USP=%luX\n", ureg->ss & 0xFFFF, ureg->usp);
+    iprint("  AX %8.8luX  BX %8.8luX  CX %8.8luX  DX %8.8luX\n",
+        ureg->ax, ureg->bx, ureg->cx, ureg->dx);
+    iprint("  SI %8.8luX  DI %8.8luX  BP %8.8luX\n",
+        ureg->si, ureg->di, ureg->bp);
+    iprint("  CS %4.4luX  DS %4.4luX  ES %4.4luX  FS %4.4luX  GS %4.4luX\n",
+        ureg->cs & 0xFFFF, ureg->ds & 0xFFFF, ureg->es & 0xFFFF,
+        ureg->fs & 0xFFFF, ureg->gs & 0xFFFF);
+}
+@ 
+
+
+<<function dumpregs>>=
+void
+dumpregs(Ureg* ureg)
+{
+    vlong mca, mct;
+
+    dumpregs2(ureg);
+
+    /*
+     * Processor control registers.
+     * If machine check exception, time stamp counter, page size extensions
+     * or enhanced virtual 8086 mode extensions are supported, there is a
+     * CR4. If there is a CR4 and machine check extensions, read the machine
+     * check address and machine check type registers if RDMSR supported.
+     */
+    iprint("  CR0 %8.8lux CR2 %8.8lux CR3 %8.8lux",
+        getcr0(), getcr2(), getcr3());
+    if(cpu->cpuiddx & (Mce|Tsc|Pse|Vmex)){
+        iprint(" CR4 %8.8lux", getcr4());
+        if((cpu->cpuiddx & (Mce|Cpumsr)) == (Mce|Cpumsr)){
+            rdmsr(0x00, &mca);
+            rdmsr(0x01, &mct);
+            iprint("\n  MCA %8.8llux MCT %8.8llux", mca, mct);
+        }
+    }
+    iprint("\n  ur %#p up %#p\n", ureg, up);
+}
+@ 
+
 
 %//unused:
 %//static void
@@ -25377,6 +25859,22 @@ void    (*consdebug)(void) = nil; // for rdb
 % the control you need a way to stop him.
 % For instance before it gets to his second syscall you got a chance
 % to print the trace of the first syscall. 
+
+
+<<function debugbpt>>=
+static void
+debugbpt(Ureg* ureg, void*)
+{
+    char buf[ERRMAX];
+
+    if(up == nil)
+        panic("kernel bpt");
+    /* restore pc to instruction that caused the trap */
+    ureg->pc--;
+    snprint(buf, sizeof buf, "sys: breakpoint");
+    postnote(up, 1, buf, NDebug);
+}
+@ 
 
 
 \subsection{XTODO}
@@ -26571,6 +27069,26 @@ struct Perf
 @ 
 % how access those counters? /dev/??
 
+<<function perfticks>>=
+/*  
+ *  performance measurement ticks.  must be low overhead.
+ *  doesn't have to count over a second.
+ */
+ulong
+perfticks(void)
+{
+    uvlong x;
+
+    if(cpu->havetsc)
+        cycles(&x);
+    else
+        x = 0;
+    return x;
+}
+@
+% see cycles() below. essentially *x = cpu->ticks.
+
+
 <<[[Cpu]] stat fields>>=
 int cs; // context switch, sched() and sleep() call
 int syscall;
@@ -27435,6 +27953,7 @@ VPT = Virtual Page Table
 INTR = INTeRrupt (not INT, probably to avoid ambiguity with integer)
 VNO = Vector Number (interrupt)
 ISR = Interrupt Service Routine
+NMI = Non Maskable Interrupts (hardware error)
 AP = Application Processor
 EDF = Earliest Deadline First
 RPC = Remote Procedure Call
@@ -27471,9 +27990,9 @@ ACPI = Advanced Configuration & Power Interface
 
 % TECS, STEPS, MINIX, etc
 
-%balestero's notes
+%balestero's notes: url?
 %brian stuart book:
-%http://www.amazon.com/Principles-Operating-Systems-Applications-Advanced/dp/1418837695/
+% http://www.amazon.com/Principles-Operating-Systems-Applications-Advanced/dp/1418837695/
 
 \end{thebibliography}
 

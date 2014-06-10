@@ -43,7 +43,9 @@ static Physseg physseg[10] = {
 static Lock physseglock;
 /*e: global physseglock */
 
+/*s: hook _globalsegattach */
 Segment* (*_globalsegattach)(Proc*, char*);
+/*e: hook _globalsegattach */
 
 /*s: segment.c forward decl */
 static void imagereclaim(void);
