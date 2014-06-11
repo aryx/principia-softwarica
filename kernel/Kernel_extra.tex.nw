@@ -8529,31 +8529,33 @@ addphysseg(Physseg* new)
 
 
 <<[[putmmu()]] adjustments>>=
-//    if(!(vpd[PDX(va)]&PTEVALID)){
-//        if(up->mmufree == nil){
-//            spllo();
-//            page = newpage(false, nil, nilptr);
-//            splhi();
-//        }
-//        else{
-//            page = up->mmufree;
-//            up->mmufree = page->next;
-//        }
-//        vpd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
-//        /* page is now mapped into the VPT - clear it */
-//        memset((void*)(VPT+PDX(va)*BY2PG), 0, BY2PG);
-//        page->daddr = PDX(va); // ???
-//        page->next = up->mmuused;
-//        up->mmuused = page;
-//    }
-//
-//    old = vpt[VPTX(va)];
-//    vpt[VPTX(va)] = pa|PTEUSER|PTEVALID;
-//
-//    if(old&PTEVALID)
-//        flushpg(va);
-//    if(getcr3() != up->mmupd->pa)
-//        print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
+// pad's code for simplified virtual memory, no VPT
+mmupd = KADDR(up->mmupd->pa);
+if(!(mmupd[PDX(va)]&PTEVALID)) {
+    if(up->mmufree == nil){
+        spllo();
+        page = newpage(false, nil, nilptr);
+        splhi();
+    }
+    else{
+        page = up->mmufree;
+        up->mmufree = page->next;
+    }
+    mmupd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
+    mmupt = KADDR(page->pa);
+    memset(mmupt, 0, BY2PG);
+    page->daddr = PDX(va); // ???
+    page->next = up->mmuused;
+    up->mmuused = page;
+}
+mmupt = KADDR(PPN(mmupd[PDX(va)]));
+old = mmupt[PTX(va)];
+mmupt[PTX(va)] = pa|PTEUSER|PTEVALID;
+
+if(old&PTEVALID)
+    flushpg(va);
+if(getcr3() != up->mmupd->pa)
+     print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
 @
 % there are called to newpage, so use user memory for pagedir/pagetable
 % of process, which kinda make sense, but is it dangerous? can those
@@ -8572,7 +8574,15 @@ addphysseg(Physseg* new)
 @
 
 <<[[vmapsync()]] va set to entry>>=
-//TODO    vpd[PDX(va)] = entry;
+// pad's code for simplified virtual memory, no VPT
+if(up == nil) {
+    return 0;
+} else {
+   if(up->mmupd == nil)
+       upallocmmupd();
+    mmupd = KADDR(up->mmupd->pa);
+    mmupd[PDX(va)] = entry;
+}
 @
 
 %-------------------------------------------------------------------------
@@ -9253,6 +9263,7 @@ int
 vmapsync(ulong va)
 {
     ulong entry, *table;
+    kern_addr2 mmupd;
 
     if(va < VMAP || va >= VMAP+VMAPSIZE)
         return 0;

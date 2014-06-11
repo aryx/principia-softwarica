@@ -811,19 +811,19 @@ pdunmap(ulong *pd, ulong va, int size)
 int
 vmapsync(ulong va)
 {
-    ulong entry, *table;
+    ulong pde, *mmupt;
     kern_addr2 mmupd;
 
     if(va < VMAP || va >= VMAP+VMAPSIZE)
         return 0;
 
-    entry = CPUS(0)->pdproto[PDX(va)];
-    if(!(entry&PTEVALID))
+    pde = CPUS(0)->pdproto[PDX(va)];
+    if(!(pde&PTEVALID))
         return 0;
-    if(!(entry&PTESIZE)){
+    if(!(pde&PTESIZE)){
         /* make sure entry will help the fault */
-        table = KADDR(PPN(entry));
-        if(!(table[PTX(va)]&PTEVALID))
+        mmupt = KADDR(PPN(pde));
+        if(!(mmupt[PTX(va)]&PTEVALID))
             return 0;
     }
     /*s: [[vmapsync()]] va set to entry */
@@ -834,7 +834,7 @@ vmapsync(ulong va)
        if(up->mmupd == nil)
            upallocmmupd();
         mmupd = KADDR(up->mmupd->pa);
-        mmupd[PDX(va)] = entry;
+        mmupd[PDX(va)] = pde;
     }
     /*e: [[vmapsync()]] va set to entry */
     /*
