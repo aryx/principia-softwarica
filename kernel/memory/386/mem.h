@@ -96,20 +96,24 @@
 #define MAXKPA (phys_addr)(-KZERO)
 /*e: constant MAXKPA */
 
-
-#define VPTSIZE   BY2XPG
-#define VPT   (KZERO-VPTSIZE)
-#define NVPT    (VPTSIZE/BY2WD)
+/*s: constant VPTSIZE */
+#define VPTSIZE 0
+/*e: constant VPTSIZE */
+/*s: constant VPT */
+/*e: constant VPT */
 
 /*s: constant KMAPSIZE */
 #define KMAPSIZE 0
 /*e: constant KMAPSIZE */
 /*s: constant KMAP */
-#define KMAP VPT
 /*e: constant KMAP */
-#define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
-#define VMAP    (KMAP-VMAPSIZE)
 
+/*s: constant VMAPSIZE */
+#define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
+/*e: constant VMAPSIZE */
+/*s: constant VMAP */
+#define VMAP    (KZERO-VMAPSIZE)
+/*e: constant VMAP */
 /*
  * Fundamental addresses - bottom 64kB saved for return to real mode
  */

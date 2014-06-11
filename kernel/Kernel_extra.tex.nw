@@ -5062,16 +5062,14 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 
 <<constant MAXKPA>>
 
-
-#define VPTSIZE   BY2XPG
-#define VPT   (KZERO-VPTSIZE)
-#define NVPT    (VPTSIZE/BY2WD)
+<<constant VPTSIZE>>
+<<constant VPT>>
 
 <<constant KMAPSIZE>>
 <<constant KMAP>>
-#define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
-#define VMAP    (KMAP-VMAPSIZE)
 
+<<constant VMAPSIZE>>
+<<constant VMAP>>
 /*
  * Fundamental addresses - bottom 64kB saved for return to real mode
  */
@@ -5605,9 +5603,7 @@ countpagerefs(ulong *ref, int print)
 
 <<mmu.c forward decl>>
 
-#define vpt ((ulong*)VPT)
-#define VPTX(va)        (((ulong)(va))>>12)
-#define vpd (vpt+VPTX(VPT))
+<<global vpt and vpd>>
 
 <<function mmuinit0>>
 
@@ -8513,8 +8509,170 @@ addphysseg(Physseg* new)
 % it easy to map and then edit physical content of page tables or
 % page directory per process.
 
+<<constant VPTSIZE>>=
+#define VPTSIZE 0
+@
+
+<<constant VPT>>=
+@
+
+<<global vpt and vpd>>=
+@
+
+<<[[mmuinit()]] vpt adjusments>>=
+@
+
+
+<<[[mmupdalloc()]] vpt adjustments>>=
+@
+% the page->va used to be just after newpage() in mmupdalloc, not sure it matters
+
+
+<<[[putmmu()]] adjustments>>=
+//    if(!(vpd[PDX(va)]&PTEVALID)){
+//        if(up->mmufree == nil){
+//            spllo();
+//            page = newpage(false, nil, nilptr);
+//            splhi();
+//        }
+//        else{
+//            page = up->mmufree;
+//            up->mmufree = page->next;
+//        }
+//        vpd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
+//        /* page is now mapped into the VPT - clear it */
+//        memset((void*)(VPT+PDX(va)*BY2PG), 0, BY2PG);
+//        page->daddr = PDX(va); // ???
+//        page->next = up->mmuused;
+//        up->mmuused = page;
+//    }
+//
+//    old = vpt[VPTX(va)];
+//    vpt[VPTX(va)] = pa|PTEUSER|PTEVALID;
+//
+//    if(old&PTEVALID)
+//        flushpg(va);
+//    if(getcr3() != up->mmupd->pa)
+//        print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
+@
+% there are called to newpage, so use user memory for pagedir/pagetable
+% of process, which kinda make sense, but is it dangerous? can those
+% pages containing pagedir/pagetable data be swapped out? No because
+% the swapping procedure iterate over the pages used by segments of
+% processes, not on pages in Proc->mmupd or Proc->mmused. So it's safe.
+
+
+<<[[checkmmu()]] pd at pt check>>=
+//    if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
+//        return;
+//    if(PPN(vpt[VPTX(va)]) != pa)
+//        print("%ld %s: va=%#08lux pa=%#08lux pte=%#08lux\n",
+//            up->pid, up->text,
+//            va, pa, vpt[VPTX(va)]);
+@
+
+<<[[vmapsync()]] va set to entry>>=
+//TODO    vpd[PDX(va)] = entry;
+@
+
+%-------------------------------------------------------------------------
+
+<<constant VPTSIZETODO>>=
+#define VPTSIZE   BY2XPG
+@
+
+<<constant VPTTODO>>=
+#define VPT   (KZERO-VPTSIZE)
+@
+
+
+<<global vpt and vpdTODO>>=
+#define vpt ((ulong*)VPT)
+#define VPTX(va)        (((ulong)(va))>>12)
+#define vpd (vpt+VPTX(VPT))
+@
+
+<<[[mmuinit()]] vpt adjusmentsTODO>>=
+    cpu->pdproto[PDX(VPT)] = PADDR(cpu->pdproto)|PTEWRITE|PTEVALID; // setup VPT
+@
+
+
+<<[[mmupdalloc()]] vpt adjustmentsTODO>>=
+        page->va = (ulong)vpd; // needed? not part of a segment anyway no?
+        mmupd[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
+@
+% the page->va used to be just after newpage() in mmupdalloc, not sure it matters
+
+
+<<[[putmmu()]] adjustmentsTODO>>=
+    /*
+     * We should be able to get through this with interrupts
+     * turned on (if we get interrupted we'll just pick up 
+     * where we left off) but we get many faults accessing
+     * vpt[] near the end of this function, and they always happen
+     * after the process has been switched out and then 
+     * switched back, usually many times in a row (perhaps
+     * it cannot switch back successfully for some reason).
+     * 
+     * In any event, I'm tired of searching for this bug.  
+     * Turn off interrupts during putmmu even though
+     * we shouldn't need to.        - rsc
+     */
+    
+    s = splhi();
+    if(!(vpd[PDX(va)]&PTEVALID)){
+        if(up->mmufree == nil){
+            spllo();
+            page = newpage(false, nil, nilptr);
+            splhi();
+        }
+        else{
+            page = up->mmufree;
+            up->mmufree = page->next;
+        }
+        vpd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
+        /* page is now mapped into the VPT - clear it */
+        memset((void*)(VPT+PDX(va)*BY2PG), 0, BY2PG);
+        page->daddr = PDX(va); // ???
+        page->next = up->mmuused;
+        up->mmuused = page;
+    }
+
+    old = vpt[VPTX(va)];
+    vpt[VPTX(va)] = pa|PTEUSER|PTEVALID;
+
+    if(old&PTEVALID)
+        flushpg(va);
+    if(getcr3() != up->mmupd->pa)
+        print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
+    splx(s);
+@
+
+
+<<[[checkmmu()]] pd at pt checkTODO>>=
+    if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
+        return;
+    if(PPN(vpt[VPTX(va)]) != pa)
+        print("%ld %s: va=%#08lux pa=%#08lux pte=%#08lux\n",
+            up->pid, up->text,
+            va, pa, vpt[VPTX(va)]);
+@
+
+
+<<[[vmapsync()]] va set to entryTODO>>=
+    vpd[PDX(va)] = entry;
+@
+
+% in mmuinit
+%    //if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n", VPT, vpd, KMAP);
+
+
+
 
 \subsection{[[tmpmap()]]}
+
+<<constant TMPADDR>>=
+@
 
 <<function tmpmap>>=
 virt_addr3
@@ -8541,8 +8699,6 @@ tmpunmap(virt_addr3 v)
 }
 @
 
-<<constant TMPADDR>>=
-@
 
 %-------------------------------------------------------------
 
@@ -8629,6 +8785,19 @@ typedef struct KMap   KMap;
 
 
 
+<<constant KMAPSIZE>>=
+#define KMAPSIZE 0
+@
+<<constant KMAP>>=
+@
+
+<<global kpt>>=
+@
+
+<<constant NKPT>>=
+@
+
+
 % start of differences and simplificiations
 <<function kmap>>=
 KMap*
@@ -8664,19 +8833,6 @@ kunmap(KMap *k)
 <<[[countpagerefs()]] handle kmaptable>>=
 @
 
-% for VMAP, TEMPORAIRE, FIX
-<<constant KMAPSIZE>>=
-#define KMAPSIZE 0
-@
-<<constant KMAP>>=
-#define KMAP VPT
-@
-
-<<global kpt>>=
-@
-
-<<constant NKPT>>=
-@
 
 % -----------------------------------------------------------------------
 
@@ -8822,6 +8978,20 @@ kunmap(KMap *k)
 
 
 \subsection{[[vmap()]]}
+
+<<constant VMAP>>=
+#define VMAP    (KZERO-VMAPSIZE)
+@
+
+<<constant VMAPTODO>>=
+#define VMAP    (KMAP-VMAPSIZE)
+@
+
+
+<<constant VMAPSIZE>>=
+#define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
+@
+% 256Mo, enough for big framebuffers!
 
 % actually this is independent of vpt, tmpmap, kmap
 
@@ -9096,7 +9266,7 @@ vmapsync(ulong va)
         if(!(table[PTX(va)]&PTEVALID))
             return 0;
     }
-    vpd[PDX(va)] = entry;
+    <<[[vmapsync()]] va set to entry>>
     /*
      * TLB doesn't cache negative results, so no flush needed.
      */

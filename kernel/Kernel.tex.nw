@@ -7029,11 +7029,10 @@ mmupdalloc(void)
     if(cpu->mmupdpool == nil){
         spllo();
         page = newpage(false, nil, nilptr);
-        page->va = (ulong)vpd; // needed? not part of a segment anyway no?
         splhi();
         mmupd = tmpmap(page);
         memmove(mmupd, cpu->pdproto, BY2PG);
-        mmupd[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
+        <<[[mmupdalloc()]] vpt adjustments>>
         tmpunmap(mmupd);
     }else{
         page = cpu->mmupdpool;
@@ -7167,52 +7166,9 @@ putmmu(virt_addr va, phys_addr pa, Page*)
     if(up->mmupd == nil)
         upallocmmupd();
 
-    /*
-     * We should be able to get through this with interrupts
-     * turned on (if we get interrupted we'll just pick up 
-     * where we left off) but we get many faults accessing
-     * vpt[] near the end of this function, and they always happen
-     * after the process has been switched out and then 
-     * switched back, usually many times in a row (perhaps
-     * it cannot switch back successfully for some reason).
-     * 
-     * In any event, I'm tired of searching for this bug.  
-     * Turn off interrupts during putmmu even though
-     * we shouldn't need to.        - rsc
-     */
-    
-    s = splhi();
-    if(!(vpd[PDX(va)]&PTEVALID)){
-        if(up->mmufree == nil){
-            spllo();
-            page = newpage(false, nil, nilptr);
-            splhi();
-        }
-        else{
-            page = up->mmufree;
-            up->mmufree = page->next;
-        }
-        vpd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
-        /* page is now mapped into the VPT - clear it */
-        memset((void*)(VPT+PDX(va)*BY2PG), 0, BY2PG);
-        page->daddr = PDX(va); // ???
-        page->next = up->mmuused;
-        up->mmuused = page;
-    }
-
-    old = vpt[VPTX(va)];
-    vpt[VPTX(va)] = pa|PTEUSER|PTEVALID;
-
-    if(old&PTEVALID)
-        flushpg(va);
-    if(getcr3() != up->mmupd->pa)
-        print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
-    splx(s);
+    <<[[putmmu()]] adjustments>>
 }
 @
-% mv VPT stuff in advanced chapter
-
-
 
 
 
@@ -8987,12 +8943,7 @@ checkmmu(ulong va, ulong pa)
 {
     if(up->mmupd == nil)
         return;
-    if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
-        return;
-    if(PPN(vpt[VPTX(va)]) != pa)
-        print("%ld %s: va=%#08lux pa=%#08lux pte=%#08lux\n",
-            up->pid, up->text,
-            va, pa, vpt[VPTX(va)]);
+    <<[[checkmmu()]] pd at pt check>>
 }
 @
 
@@ -11671,10 +11622,8 @@ mmuinit(void)
 
     didmmuinit = true;
 
-    //if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n", VPT, vpd, KMAP);
-
     memglobal();
-    cpu->pdproto[PDX(VPT)] = PADDR(cpu->pdproto)|PTEWRITE|PTEVALID; // setup VPT
+    <<[[mmuinit()]] vpt adjusments>>
     
     cpu->tss = malloc(sizeof(Tss));
     if(cpu->tss == nil)

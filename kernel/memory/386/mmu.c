@@ -79,9 +79,8 @@ static ulong vmapalloc(ulong size);
 static void pdunmap(ulong*, ulong, int);
 /*e: mmu.c forward decl */
 
-#define vpt ((ulong*)VPT)
-#define VPTX(va)        (((ulong)(va))>>12)
-#define vpd (vpt+VPTX(VPT))
+/*s: global vpt and vpd */
+/*e: global vpt and vpd */
 
 /*s: function mmuinit0 */
 void
@@ -105,10 +104,9 @@ mmuinit(void)
 
     didmmuinit = true;
 
-    //if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n", VPT, vpd, KMAP);
-
     memglobal();
-    cpu->pdproto[PDX(VPT)] = PADDR(cpu->pdproto)|PTEWRITE|PTEVALID; // setup VPT
+    /*s: [[mmuinit()]] vpt adjusments */
+    /*e: [[mmuinit()]] vpt adjusments */
     
     cpu->tss = malloc(sizeof(Tss));
     if(cpu->tss == nil)
@@ -254,11 +252,11 @@ mmupdalloc(void)
     if(cpu->mmupdpool == nil){
         spllo();
         page = newpage(false, nil, nilptr);
-        page->va = (ulong)vpd; // needed? not part of a segment anyway no?
         splhi();
         mmupd = tmpmap(page);
         memmove(mmupd, cpu->pdproto, BY2PG);
-        mmupd[PDX(VPT)] = page->pa|PTEWRITE|PTEVALID; /* set up VPT */
+        /*s: [[mmupdalloc()]] vpt adjustments */
+        /*e: [[mmupdalloc()]] vpt adjustments */
         tmpunmap(mmupd);
     }else{
         page = cpu->mmupdpool;
@@ -449,26 +447,15 @@ putmmu(virt_addr va, phys_addr pa, Page*)
 {
     int old, s;
     Page *page;
+    kern_addr2 mmupd;
+    kern_addr2 mmupt;
 
     if(up->mmupd == nil)
         upallocmmupd();
-
-    /*
-     * We should be able to get through this with interrupts
-     * turned on (if we get interrupted we'll just pick up 
-     * where we left off) but we get many faults accessing
-     * vpt[] near the end of this function, and they always happen
-     * after the process has been switched out and then 
-     * switched back, usually many times in a row (perhaps
-     * it cannot switch back successfully for some reason).
-     * 
-     * In any event, I'm tired of searching for this bug.  
-     * Turn off interrupts during putmmu even though
-     * we shouldn't need to.        - rsc
-     */
-    
-    s = splhi();
-    if(!(vpd[PDX(va)]&PTEVALID)){
+    /*s: [[putmmu()]] adjustments */
+    // pad's code for simplified virtual memory, no VPT
+    mmupd = KADDR(up->mmupd->pa);
+    if(!(mmupd[PDX(va)]&PTEVALID)) {
         if(up->mmufree == nil){
             spllo();
             page = newpage(false, nil, nilptr);
@@ -478,22 +465,22 @@ putmmu(virt_addr va, phys_addr pa, Page*)
             page = up->mmufree;
             up->mmufree = page->next;
         }
-        vpd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
-        /* page is now mapped into the VPT - clear it */
-        memset((void*)(VPT+PDX(va)*BY2PG), 0, BY2PG);
+        mmupd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
+        mmupt = KADDR(page->pa);
+        memset(mmupt, 0, BY2PG);
         page->daddr = PDX(va); // ???
         page->next = up->mmuused;
         up->mmuused = page;
     }
-
-    old = vpt[VPTX(va)];
-    vpt[VPTX(va)] = pa|PTEUSER|PTEVALID;
+    mmupt = KADDR(PPN(mmupd[PDX(va)]));
+    old = mmupt[PTX(va)];
+    mmupt[PTX(va)] = pa|PTEUSER|PTEVALID;
 
     if(old&PTEVALID)
         flushpg(va);
     if(getcr3() != up->mmupd->pa)
-        print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
-    splx(s);
+         print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
+    /*e: [[putmmu()]] adjustments */
 }
 /*e: function putmmu */
 
@@ -507,12 +494,14 @@ checkmmu(ulong va, ulong pa)
 {
     if(up->mmupd == nil)
         return;
-    if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
-        return;
-    if(PPN(vpt[VPTX(va)]) != pa)
-        print("%ld %s: va=%#08lux pa=%#08lux pte=%#08lux\n",
-            up->pid, up->text,
-            va, pa, vpt[VPTX(va)]);
+    /*s: [[checkmmu()]] pd at pt check */
+    //    if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
+    //        return;
+    //    if(PPN(vpt[VPTX(va)]) != pa)
+    //        print("%ld %s: va=%#08lux pa=%#08lux pte=%#08lux\n",
+    //            up->pid, up->text,
+    //            va, pa, vpt[VPTX(va)]);
+    /*e: [[checkmmu()]] pd at pt check */
 }
 /*e: function checkmmu */
 
@@ -823,6 +812,7 @@ int
 vmapsync(ulong va)
 {
     ulong entry, *table;
+    kern_addr2 mmupd;
 
     if(va < VMAP || va >= VMAP+VMAPSIZE)
         return 0;
@@ -836,7 +826,17 @@ vmapsync(ulong va)
         if(!(table[PTX(va)]&PTEVALID))
             return 0;
     }
-    vpd[PDX(va)] = entry;
+    /*s: [[vmapsync()]] va set to entry */
+    // pad's code for simplified virtual memory, no VPT
+    if(up == nil) {
+        return 0;
+    } else {
+       if(up->mmupd == nil)
+           upallocmmupd();
+        mmupd = KADDR(up->mmupd->pa);
+        mmupd[PDX(va)] = entry;
+    }
+    /*e: [[vmapsync()]] va set to entry */
     /*
      * TLB doesn't cache negative results, so no flush needed.
      */
@@ -867,7 +867,7 @@ kmap(Page *p)
     if(p->pa < MAXKPA)
         return KADDR(p->pa);
     else
-      panic("kmap: system has too much memory");
+      panic("kmap: physical address too high");
 }
 /*e: function kmap */
 
@@ -881,7 +881,7 @@ kunmap(KMap *k)
 
     if((ulong)va >= KZERO)
         return;
-    panic("kunmap: system has too much memory");
+    panic("kunmap: physical address too high");
 }
 /*e: function kunmap */
 
@@ -899,7 +899,7 @@ tmpmap(Page *p)
     if(p->pa < MAXKPA)
         return KADDR(p->pa);
     else
-      panic("tmpmap: system has too much memory");
+      panic("tmpmap: physical address too high");
 }
 /*e: function tmpmap */
 
@@ -911,7 +911,7 @@ tmpunmap(virt_addr3 v)
         panic("tmpmap: islo");
     if((ulong)v >= KZERO)
         return;
-    panic("tmpmap: system has too much memory");
+    panic("tmpmap: physical address too high");
 }
 /*e: function tmpunmap */
 
