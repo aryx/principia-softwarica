@@ -52,14 +52,14 @@ enum {
     VectorCNA = 7,    /* coprocessor not available */
     Vector2F  = 8,    /* double fault */
     VectorCSO = 9,    /* coprocessor segment overrun */
-    VectorPF  = 14,   /* page fault */
+    VectorPF  = 14,   /* page fault */ //!!!!
     Vector15  = 15,   /* reserved */
     VectorCERR  = 16,   /* coprocessor error */
   
     VectorPIC = 32,   /* external i8259 interrupts */
     VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
 
-    //!!! int 64 = way to jump in plan9 OS !!!
+    //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
     // VectorSYSCALL = 64, in mem.h because used by Assembly too
   
     VectorAPIC  = 65,   /* external APIC interrupts */
@@ -112,9 +112,10 @@ struct Vctl {
     int (*eoi)(int);    /* eoi */
   
     // extra
-  
-    // list<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
+    /*s: [[Vctl]] extra fields */
+    // list<ref_own<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
     Vctl* next;     /* handlers on this vector */
+    /*e: [[Vctl]] extra fields */
 };
 /*e: struct Vctl */
 

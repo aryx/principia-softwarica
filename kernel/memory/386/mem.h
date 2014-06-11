@@ -101,8 +101,12 @@
 #define VPT   (KZERO-VPTSIZE)
 #define NVPT    (VPTSIZE/BY2WD)
 
-#define KMAPSIZE  BY2XPG
-#define KMAP    (VPT-KMAPSIZE)
+/*s: constant KMAPSIZE */
+#define KMAPSIZE 0
+/*e: constant KMAPSIZE */
+/*s: constant KMAP */
+#define KMAP VPT
+/*e: constant KMAP */
 #define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
 #define VMAP    (KMAP-VMAPSIZE)
 
@@ -111,7 +115,8 @@
  */
 #define CONFADDR  (KZERO+0x1200)    /* info passed from boot loader */
 
-#define TMPADDR   (KZERO+0x2000)    /* used for temporary mappings */
+/*s: constant TMPADDR */
+/*e: constant TMPADDR */
 
 #define APBOOTSTRAP (KZERO+0x3000)    /* AP bootstrap code */
 

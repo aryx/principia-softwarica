@@ -46,7 +46,7 @@ struct Page
     // extra
     Lock;
     /*s: [[Page]] extra fields */
-    // list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused, or in mfreeseg
+    // list<ref<Page>> Palloc.head, or Proc.mmuused or Proc.mmufree, or in mfreeseg
     Page  *next; /* Lru free list */ 
     // list<ref<Page>> Palloc.tail
     Page  *prev; 

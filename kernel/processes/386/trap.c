@@ -26,6 +26,7 @@ static bool trapinited;
 static Lock vctllock;
 /*e: global vctllock */
 /*s: global vctl */
+// array<list<ref_own<Vctl>>> (next = Vctl.next)
 static Vctl *vctl[256];
 /*e: global vctl */
 
@@ -83,7 +84,7 @@ intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
     v->name[KNAMELEN-1] = 0;
 
     ilock(&vctllock);
-    vno = arch->intrenable(v);
+    vno = arch->intrenable(v); // this should also set v->isr or v->eoi
     if(vno == -1){
         iunlock(&vctllock);
         print("intrenable: couldn't enable irq %d, tbdf 0x%uX for %s\n",
@@ -91,6 +92,7 @@ intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
         xfree(v);
         return;
     }
+    // add_list(vctl[vno], v) and extra check
     if(vctl[vno]){
         if(vctl[vno]->isr != v->isr || vctl[vno]->eoi != v->eoi)
             panic("intrenable: handler: %s %s %#p %#p %#p %#p",
@@ -190,14 +192,17 @@ trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
 
     if(vno < 0 || vno >= VectorPIC)
         panic("trapenable: vno %d", vno);
+
     v = xalloc(sizeof(Vctl));
     v->tbdf = BUSUNKNOWN;
     v->f = f;
     v->a = a;
+    v->isintr = false;
     strncpy(v->name, name, KNAMELEN);
     v->name[KNAMELEN-1] = 0;
 
     ilock(&vctllock);
+    //add_list(vctl[vno], v)
     v->next = vctl[vno];
     vctl[vno] = v;
     iunlock(&vctllock);
@@ -413,7 +418,7 @@ trap(Ureg* ureg)
         if(ctl->isr)
             ctl->isr(vno);
         for(v = ctl; v != nil; v = v->next){
-            if(v->f)
+            if(v->f) // this can be null?
                 v->f(ureg, v->a);
         }
         if(ctl->eoi)
@@ -428,7 +433,7 @@ trap(Ureg* ureg)
             if(up && !clockintr)
                 preempt();
         }
-    }
+    } // no Vctl?
     else if(vno < nelem(excname) && user){
         spllo();
         snprint(buf, sizeof buf, "sys: trap: %s", excname[vno]);
@@ -458,7 +463,7 @@ trap(Ureg* ureg)
             /* should we do this? */
             if(ctl->eoi)
                 ctl->eoi(i);
-        }
+        } // remove? ugly?
 
         /* clear the interrupt */
         i8259isr(vno);
@@ -482,8 +487,7 @@ trap(Ureg* ureg)
         if(user)
             kexit(ureg);
         return;
-    }
-    else{
+    }else{
         if(vno == VectorNMI){
             /*
              * Don't re-enable, it confuses the crash dumps.
@@ -502,7 +506,7 @@ trap(Ureg* ureg)
             panic("%s", excname[vno]);
         panic("unknown trap/intr: %d", vno);
     }
-    splhi();
+    splhi(); // possible spllo() done above
 
     /*s: [[trap()]] if delaysched */
     /* delaysched set because we held a lock or because our quantum ended */

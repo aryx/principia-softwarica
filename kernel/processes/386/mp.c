@@ -438,7 +438,7 @@ squidboy(Apic* apic)
 static void
 mpstartap(Apic* apic)
 {
-    ulong *apbootp, *pdb, *pte;
+    ulong *apbootp, *pd, *pte;
     Cpu *cpu, *cpu0;
     int i, cpuno;
     uchar *p;
@@ -452,11 +452,11 @@ mpstartap(Apic* apic)
      * Xspanalloc will panic if an allocation can't be made.
      */
     p = xspanalloc(4*BY2PG, BY2PG, 0);
-    pdb = (ulong*)p;
-    memmove(pdb, cpu0->pdproto, BY2PG);
+    pd = (ulong*)p;
+    memmove(pd, cpu0->pdproto, BY2PG);
     p += BY2PG;
 
-    if((pte = mmuwalk(pdb, CPUADDR, 1, false)) == nil)
+    if((pte = mmuwalk(pd, CPUADDR, 1, false)) == nil)
         return;
     memmove(p, KADDR(PPN(*pte)), BY2PG);
     *pte = PADDR(p)|PTEWRITE|PTEVALID;
@@ -465,7 +465,7 @@ mpstartap(Apic* apic)
     p += BY2PG;
 
     cpu = (Cpu*)p;
-    if((pte = mmuwalk(pdb, CPUADDR, 2, false)) == nil)
+    if((pte = mmuwalk(pd, CPUADDR, 2, false)) == nil)
         return;
     *pte = PADDR(cpu)|PTEWRITE|PTEVALID;
     if(cpu0->havepge)
@@ -475,7 +475,7 @@ mpstartap(Apic* apic)
     cpuno = apic->cpuno;
     CPUS(cpuno) = cpu; // !!!!
     cpu->cpuno = cpuno;
-    cpu->pdproto = pdb;
+    cpu->pdproto = pd;
     cpu->gdt = (Segdesc*)p;    /* filled by mmuinit */
 
     /*
@@ -484,7 +484,7 @@ mpstartap(Apic* apic)
      */
     apbootp = (ulong*)(APBOOTSTRAP+0x08);
     *apbootp++ = (ulong)squidboy;   /* assembler jumps here eventually */
-    *apbootp++ = PADDR(pdb);
+    *apbootp++ = PADDR(pd);
     *apbootp = (ulong)apic;
 
     /*

@@ -1023,7 +1023,7 @@ int ioalloc(int, int, int, char*);
 int (*isaconfig)(char*, int, ISAConf*);
 void  kbdenable(void);
 void  kbdinit(void);
-#define kmapinval()
+<<function kmapinval>>
 //@Scheck: Assembly
 void  lgdt(ushort[3]);
 //@Scheck: Assembly
@@ -1083,7 +1083,7 @@ int (*_pcmspecial)(char *, ISAConf *);
 //void  pcmspecialclose(int);
 void  (*_pcmspecialclose)(int);
 void  pcmunmap(int, PCMmap*);
-int pdbmap(ulong*, ulong, ulong, int);
+int pdmap(ulong*, ulong, ulong, int);
 void  procrestore(Proc*);
 void  procsave(Proc*);
 void  procsetup(Proc*);
@@ -5067,8 +5067,8 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
 #define VPT   (KZERO-VPTSIZE)
 #define NVPT    (VPTSIZE/BY2WD)
 
-#define KMAPSIZE  BY2XPG
-#define KMAP    (VPT-KMAPSIZE)
+<<constant KMAPSIZE>>
+<<constant KMAP>>
 #define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
 #define VMAP    (KMAP-VMAPSIZE)
 
@@ -5077,7 +5077,7 @@ extern  void  qsort(void*, long, long, int (*)(void*, void*));
  */
 #define CONFADDR  (KZERO+0x1200)    /* info passed from boot loader */
 
-#define TMPADDR   (KZERO+0x2000)    /* used for temporary mappings */
+<<constant TMPADDR>>
 
 #define APBOOTSTRAP (KZERO+0x3000)    /* AP bootstrap code */
 
@@ -5350,7 +5350,7 @@ static void taskswitch(ulong, ulong);
 static void memglobal(void);
 static int findhole(ulong *a, int n, int count);
 static ulong vmapalloc(ulong size);
-static void pdbunmap(ulong*, ulong, int);
+static void pdunmap(ulong*, ulong, int);
 @
 \fi
 
@@ -5502,19 +5502,7 @@ countpagerefs(ulong *ref, int print)
                 iprint("page %#.8lux is proc %d (pid %lud) pd but has other refs!\n",
                     p->mmupd->pa, i, p->pid);
         }
-        if(p->kmaptable){
-            if(print){
-                if(ref[pagenumber(p->kmaptable)])
-                    iprint("page %#.8lux is proc %d (pid %lud) kmaptable\n",
-                        p->kmaptable->pa, i, p->pid);
-                continue;
-            }
-            if(ref[pagenumber(p->kmaptable)]++ == 0)
-                n++;
-            else
-                iprint("page %#.8lux is proc %d (pid %lud) kmaptable but has other refs!\n",
-                    p->kmaptable->pa, i, p->pid);
-        }
+        <<[[countpagerefs()]] handle kmaptable>>
         for(pg=p->mmuused; pg; pg=pg->next){
             if(print){
                 if(ref[pagenumber(pg)])
@@ -5670,9 +5658,9 @@ countpagerefs(ulong *ref, int print)
 
 <<function vunmap>>
 
-<<function pdbmap>>
+<<function pdmap>>
 
-<<function pdbunmap>>
+<<function pdunmap>>
 
 <<function vmapsync>>
 
@@ -5684,8 +5672,9 @@ countpagerefs(ulong *ref, int print)
  * so we can use the same range of virtual address space for
  * all processes without any coordination.
  */
-#define kpt (vpt+VPTX(KMAP))
-#define NKPT (KMAPSIZE/BY2PG)
+
+<<global kpt>>
+<<constant NKPT>>
 
 <<function kmap>>
 
@@ -8384,9 +8373,9 @@ char *sysctab[] = {
 
 \section{Advanced virtual memory}
 
-% large memory system: tmpmap, kmap, vmap
+% large memory system: vpt/vpd, tmpmap, kmap
+% other: vmap? for devices? framebuffer related?
 % 9atom also provides patches for PAE support and amd64 support
-
 
 \subsection{Page coloring}
 % page coloring, getpgcolor, cachectl, etc
@@ -8516,10 +8505,52 @@ addphysseg(Physseg* new)
         break;
 @
 
+\subsection{[[vpt]], [[vpd]]}
+
+% tricks apparently borrowed from exokernel code.
+% the the toplevel comment in mmu.c
+% essentially just tricks abusing the long page feature of x86 to make
+% it easy to map and then edit physical content of page tables or
+% page directory per process.
+
+
 \subsection{[[tmpmap()]]}
 
-% mv complicated part in other chapter (and put under a #ifdef BIG_MEM?)
 <<function tmpmap>>=
+virt_addr3
+tmpmap(Page *p)
+{
+    if(islo())
+        panic("tmpmap: islo");
+    if(p->pa < MAXKPA)
+        return KADDR(p->pa);
+    else
+      panic("tmpmap: physical address too high");
+}
+@
+
+<<function tmpunmap>>=
+void
+tmpunmap(virt_addr3 v)
+{
+    if(islo())
+        panic("tmpmap: islo");
+    if((ulong)v >= KZERO)
+        return;
+    panic("tmpmap: physical address too high");
+}
+@
+
+<<constant TMPADDR>>=
+@
+
+%-------------------------------------------------------------
+
+<<constant TMPADDRTODO>>=
+#define TMPADDR   (KZERO+0x2000)    /* used for temporary mappings */
+@
+
+<<function tmpmapTODO>>=
 virt_addr3
 tmpmap(Page *p)
 {
@@ -8554,7 +8585,7 @@ tmpmap(Page *p)
 @
 %PPN = pure page number
 
-<<function tmpunmap>>=
+<<function tmpunmapTODO>>=
 void
 tmpunmap(virt_addr3 v)
 {
@@ -8580,7 +8611,6 @@ tmpunmap(virt_addr3 v)
 
 \subsection{[[kmap()]]}
 
-
 <<struct KMap>>=
 /*
  * KMap the structure doesn't exist, but the functions do.
@@ -8589,19 +8619,133 @@ typedef struct KMap   KMap;
 @
 % why not void like in bcm?
 
+<<function kmapinval>>=
+#define kmapinval()
+@
+
 <<macro VA>>=
 #define VA(k)   ((virt_addr3)(k))
 @
 
 
-<<[[Proc]] [[Arch]] memory fields>>=
+
+% start of differences and simplificiations
+<<function kmap>>=
+KMap*
+kmap(Page *p)
+{
+    if(up == nil)
+        panic("kmap: up=0 pc=%#.8lux", getcallerpc(&p));
+    if(p->pa < MAXKPA)
+        return KADDR(p->pa);
+    else
+      panic("kmap: physical address too high");
+}
+@
+
+<<function kunmap>>=
+void
+kunmap(KMap *k)
+{
+    ulong va;
+    va = (ulong)k;
+    flushpg(va); // not sure we need that
+
+    if((ulong)va >= KZERO)
+        return;
+    panic("kunmap: physical address too high");
+}
+@
+
+
+<<[[mmurelease()]] handle kmaptable>>=
+@
+
+<<[[countpagerefs()]] handle kmaptable>>=
+@
+
+% for VMAP, TEMPORAIRE, FIX
+<<constant KMAPSIZE>>=
+#define KMAPSIZE 0
+@
+<<constant KMAP>>=
+#define KMAP VPT
+@
+
+<<global kpt>>=
+@
+
+<<constant NKPT>>=
+@
+
+% -----------------------------------------------------------------------
+
+<<constant KMAPSIZETODO>>=
+#define KMAPSIZE  BY2XPG
+@
+
+<<constant KMAPTODO>>=
+#define KMAP    (VPT-KMAPSIZE)
+@
+
+<<global kptTODO>>=
+#define kpt (vpt+VPTX(KMAP))
+@
+<<constant NKPTTODO>>=
+#define NKPT (KMAPSIZE/BY2PG)
+@
+
+
+<<[[Proc]] [[Arch]] memory fieldsTODO>>=
 Page* kmaptable;    /* page table used by kmap */
 uint  lastkmap;   /* last entry used by kmap */
 int nkmap;      /* number of current kmaps */
 @
 
+<<[[countpagerefs()]] handle kmaptableTODO>>=
+        if(p->kmaptable){
+            if(print){
+                if(ref[pagenumber(p->kmaptable)])
+                    iprint("page %#.8lux is proc %d (pid %lud) kmaptable\n",
+                        p->kmaptable->pa, i, p->pid);
+                continue;
+            }
+            if(ref[pagenumber(p->kmaptable)]++ == 0)
+                n++;
+            else
+                iprint("page %#.8lux is proc %d (pid %lud) kmaptable but has other refs!\n",
+                    p->kmaptable->pa, i, p->pid);
+        }
 
-<<function kmap>>=
+@
+
+<<[[mmurelease()]] handle kmaptableTODO>>=
+    if(proc->kmaptable){
+        if(proc->mmupd == nil)
+            panic("mmurelease: no mmupd");
+        if(--proc->kmaptable->ref)
+            panic("mmurelease: kmap ref %d", proc->kmaptable->ref);
+        if(proc->nkmap)
+            panic("mmurelease: nkmap %d", proc->nkmap);
+        /*
+         * remove kmaptable from pd before putting pd up for reuse.
+         */
+        mmupd = tmpmap(proc->mmupd);
+        if(PPN(mmupd[PDX(KMAP)]) != proc->kmaptable->pa)
+            panic("mmurelease: bad kmap pde %#.8lux kmap %#.8lux",
+                mmupd[PDX(KMAP)], proc->kmaptable->pa);
+        mmupd[PDX(KMAP)] = 0;
+        tmpunmap(mmupd);
+        /*
+         * move kmaptable to free list.
+         */
+        pagechainhead(proc->kmaptable);
+        proc->kmaptable = nil;
+    }
+@
+
+
+<<function kmapTODO>>=
 KMap*
 kmap(Page *page)
 {
@@ -8655,7 +8799,7 @@ kmap(Page *page)
 @
 
 
-<<function kunmap>>=
+<<function kunmapTODO>>=
 void
 kunmap(KMap *k)
 {
@@ -8677,9 +8821,9 @@ kunmap(KMap *k)
 @
 
 
-
-
 \subsection{[[vmap()]]}
+
+% actually this is independent of vpt, tmpmap, kmap
 
 <<global vmaplock>>=
 static Lock vmaplock;
@@ -8711,7 +8855,7 @@ vmap(ulong pa, int size)
     }
     ilock(&vmaplock);
     if((va = vmapalloc(size)) == 0 
-    || pdbmap(CPUS(0)->pdproto, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
+    || pdmap(CPUS(0)->pdproto, pa|PTEUNCACHED|PTEWRITE, va, size) < 0){
         iunlock(&vmaplock);
         return nil;
     }
@@ -8726,12 +8870,12 @@ vmap(ulong pa, int size)
 }
 @
 
-<<function pdbmap>>=
+<<function pdmap>>=
 /*
  * Add kernel mappings for pa -> va for a section of size bytes.
  */
 int
-pdbmap(ulong *pdb, ulong pa, ulong va, int size)
+pdmap(ulong *pd, ulong pa, ulong va, int size)
 {
     int pse;
     ulong pgsz, *pte, *table;
@@ -8746,7 +8890,7 @@ pdbmap(ulong *pdb, ulong pa, ulong va, int size)
         pse = 0;
 
     for(off=0; off<size; off+=pgsz){
-        table = &pdb[PDX(va+off)];
+        table = &pd[PDX(va+off)];
         if((*table&PTEVALID) && (*table&PTESIZE))
             panic("vmap: va=%#.8lux pa=%#.8lux pde=%#.8lux",
                 va+off, pa+off, *table);
@@ -8759,7 +8903,7 @@ pdbmap(ulong *pdb, ulong pa, ulong va, int size)
             *table = (pa+off)|flag|PTESIZE|PTEVALID;
             pgsz = 4*MB;
         }else{
-            pte = mmuwalk(pdb, va+off, 2, true);
+            pte = mmuwalk(pd, va+off, 2, true);
             if(*pte&PTEVALID)
                 panic("vmap: va=%#.8lux pa=%#.8lux pte=%#.8lux",
                     va+off, pa+off, *pte);
@@ -8833,7 +8977,7 @@ vmapalloc(ulong size)
 <<function vunmap>>=
 /*
  * Remove a device mapping from the vmap range.
- * Since pdbunmap does not remove page tables, just entries,
+ * Since pdunmap does not remove page tables, just entries,
  * the call need not be interlocked with vmap.
  */
 void
@@ -8857,10 +9001,10 @@ vunmap(void *v, int size)
         panic("vunmap va=%#.8lux size=%#x pc=%#.8lux",
             va, size, getcallerpc(&v));
 
-    pdbunmap(CPUS(0)->pdproto, va, size);
+    pdunmap(CPUS(0)->pdproto, va, size);
     
     /*
-     * Flush mapping from all the tlbs and copied pdbs.
+     * Flush mapping from all the tlbs and copied pds.
      * This can be (and is) slow, since it is called only rarely.
      * It is possible for vunmap to be called with up == nil,
      * e.g. from the reset/init driver routines during system
@@ -8894,20 +9038,20 @@ vunmap(void *v, int size)
 @
 % >>
 
-<<function pdbunmap>>=
+<<function pdunmap>>=
 /*
  * Remove mappings.  Must already exist, for sanity.
  * Only used for kernel mappings, so okay to use KADDR.
  */
 static void
-pdbunmap(ulong *pdb, ulong va, int size)
+pdunmap(ulong *pd, ulong va, int size)
 {
     ulong vae;
     ulong *table;
     
     vae = va+size;
     while(va < vae){
-        table = &pdb[PDX(va)];
+        table = &pd[PDX(va)];
         if(!(*table & PTEVALID)){
             panic("vunmap: not mapped");
             /* 
@@ -8932,7 +9076,7 @@ pdbunmap(ulong *pdb, ulong va, int size)
 <<function vmapsync>>=
 /*
  * Handle a fault by bringing vmap up to date.
- * Only copy pdb entries and they never go away,
+ * Only copy pd entries and they never go away,
  * so no locking needed.
  */
 int
@@ -9868,6 +10012,10 @@ testschedulability(Proc *theproc)
 
 \section{Floating Point}
 %{FP}
+
+% apparently on 386 we have IrqIRQ13 for coprocessor, meaning the copro
+% is really outside and need to communicate with him?
+% simpler with 486?
 
 <<enum fpsavestatus>>=
 /*
@@ -12551,7 +12699,8 @@ rmemwrite(Chan*, void *a, long n, vlong off)
 #define OPSIZE		BYTE $0x66
 
 @
-
+%$
+% >> >>
 
 \subsection*{[[buses/386/dat_buses.h]]}
 
@@ -27872,7 +28021,7 @@ squidboy(Apic* apic)
 static void
 mpstartap(Apic* apic)
 {
-    ulong *apbootp, *pdb, *pte;
+    ulong *apbootp, *pd, *pte;
     Cpu *cpu, *cpu0;
     int i, cpuno;
     uchar *p;
@@ -27886,11 +28035,11 @@ mpstartap(Apic* apic)
      * Xspanalloc will panic if an allocation can't be made.
      */
     p = xspanalloc(4*BY2PG, BY2PG, 0);
-    pdb = (ulong*)p;
-    memmove(pdb, cpu0->pdproto, BY2PG);
+    pd = (ulong*)p;
+    memmove(pd, cpu0->pdproto, BY2PG);
     p += BY2PG;
 
-    if((pte = mmuwalk(pdb, CPUADDR, 1, false)) == nil)
+    if((pte = mmuwalk(pd, CPUADDR, 1, false)) == nil)
         return;
     memmove(p, KADDR(PPN(*pte)), BY2PG);
     *pte = PADDR(p)|PTEWRITE|PTEVALID;
@@ -27899,7 +28048,7 @@ mpstartap(Apic* apic)
     p += BY2PG;
 
     cpu = (Cpu*)p;
-    if((pte = mmuwalk(pdb, CPUADDR, 2, false)) == nil)
+    if((pte = mmuwalk(pd, CPUADDR, 2, false)) == nil)
         return;
     *pte = PADDR(cpu)|PTEWRITE|PTEVALID;
     if(cpu0->havepge)
@@ -27909,7 +28058,7 @@ mpstartap(Apic* apic)
     cpuno = apic->cpuno;
     CPUS(cpuno) = cpu; // !!!!
     cpu->cpuno = cpuno;
-    cpu->pdproto = pdb;
+    cpu->pdproto = pd;
     cpu->gdt = (Segdesc*)p;    /* filled by mmuinit */
 
     /*
@@ -27918,7 +28067,7 @@ mpstartap(Apic* apic)
      */
     apbootp = (ulong*)(APBOOTSTRAP+0x08);
     *apbootp++ = (ulong)squidboy;   /* assembler jumps here eventually */
-    *apbootp++ = PADDR(pdb);
+    *apbootp++ = PADDR(pd);
     *apbootp = (ulong)apic;
 
     /*

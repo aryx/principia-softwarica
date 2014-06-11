@@ -14,10 +14,6 @@ struct ArchProcMMU
   // type? list<ref<?? > >
   Page* mmufree;    /* unused page table pages */
   Page* mmuused;    /* used page table pages */
-  /*x: [[Proc]] [[Arch]] memory fields */
-  Page* kmaptable;    /* page table used by kmap */
-  uint  lastkmap;   /* last entry used by kmap */
-  int nkmap;      /* number of current kmaps */
   /*e: [[Proc]] [[Arch]] memory fields */
 };
 /*e: struct ArchProcMMU */

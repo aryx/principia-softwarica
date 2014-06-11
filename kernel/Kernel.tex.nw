@@ -768,7 +768,7 @@ cankaddr(phys_addr pa)
 
 
 %put CPUADDR here!! because we talk about it later with cpu and cpus
-% also IDT, GDT, VPT.
+% also IDT, GDT, PD0, PT0
 
 
 % need to talk about Confmem, otherwise will not understand xalloc and palloc.mem
@@ -3020,6 +3020,12 @@ struct Page
 % by storing also the pa -> va binding.
 % less: rename PageInfo? Pte?
 
+% when do we need va? 
+% - when it's part of a segment to check that in the boundary in segpage()
+%   (aka attach_page_to_segment) and put it at the right place in the pagedir
+%   and pagetab
+% - in dma transfer apparently
+
 <<enum modref>>=
 enum modref 
 {
@@ -3078,7 +3084,7 @@ struct Pallocmem
 
 
 <<[[Page]] extra fields>>=
-// list<ref<Page>> Palloc.head, or Proc.mmufree or Proc.mmuused, or in mfreeseg
+// list<ref<Page>> Palloc.head, or Proc.mmuused or Proc.mmufree, or in mfreeseg
 Page  *next; /* Lru free list */ 
 // list<ref<Page>> Palloc.tail
 Page  *prev; 
@@ -5458,8 +5464,15 @@ linkproc(void)
 
 \section{Overview}
 
-\section{[[Vctl]]}
+% fault/trap vs irq? irq is a request from "outside", generating an interrupt
+% fault/trap is also generating an interrupt, but more from "inside"
 
+% from wikipediage IRQ page:
+%  - at beginning had one PIC, IRQ0 ot IRQ7
+%  - then 2 PICs, IRQ0 to IRQ15 (and one IRQ used for the chaining I think)
+%  - then APIC, up to 255 IRQ lines per APIC
+
+\section{[[Vctl]]}
 
 <<struct Vctl>>=
 struct Vctl {
@@ -5478,19 +5491,100 @@ struct Vctl {
     int (*eoi)(int);    /* eoi */
   
     // extra
-  
-    // list<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
-    Vctl* next;     /* handlers on this vector */
+    <<[[Vctl]] extra fields>>
 };
 @
+% V?? Vector? Interrupt vector?
 
 <<global vctl>>=
+// array<list<ref_own<Vctl>>> (next = Vctl.next)
 static Vctl *vctl[256];
 @ 
+
+<<[[Vctl]] extra fields>>=
+// list<ref_own<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
+Vctl* next;     /* handlers on this vector */
+@
 
 <<global vctllock>>=
 static Lock vctllock;
 @ 
+
+
+
+% for /dev/irqalloc
+<<function irqallocread>>=
+static long
+irqallocread(Chan*, void *vbuf, long n, vlong offset)
+{
+    char *buf, *p, str[2*(11+1)+KNAMELEN+1+1];
+    int m, vno;
+    long oldn;
+    Vctl *v;
+
+    if(n < 0 || offset < 0)
+        error(Ebadarg);
+
+    oldn = n;
+    buf = vbuf;
+    for(vno=0; vno<nelem(vctl); vno++){
+        for(v=vctl[vno]; v; v=v->next){
+            m = snprint(str, sizeof str, "%11d %11d %.*s\n", vno, v->irq, KNAMELEN, v->name);
+            if(m <= offset) /* if do not want this, skip entry */
+                offset -= m;
+            else{
+                /* skip offset bytes */
+                m -= offset;
+                p = str+offset;
+                offset = 0;
+
+                /* write at most max(n,m) bytes */
+                if(m > n)
+                    m = n;
+                memmove(buf, p, m);
+                n -= m;
+                buf += m;
+
+                if(n == 0)
+                    return oldn;
+            }
+        }
+    }
+    return oldn - n;
+}
+@ 
+
+
+
+
+
+% called by trapinit() (trap vs intr?)
+<<function trapenable>>=
+void
+trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
+{
+    Vctl *v;
+
+    if(vno < 0 || vno >= VectorPIC)
+        panic("trapenable: vno %d", vno);
+
+    v = xalloc(sizeof(Vctl));
+    v->tbdf = BUSUNKNOWN;
+    v->f = f;
+    v->a = a;
+    v->isintr = false;
+    strncpy(v->name, name, KNAMELEN);
+    v->name[KNAMELEN-1] = 0;
+
+    ilock(&vctllock);
+    //add_list(vctl[vno], v)
+    v->next = vctl[vno];
+    vctl[vno] = v;
+    iunlock(&vctllock);
+}
+@ 
+
+
 
 <<function intrenable>>=
 void
@@ -5515,7 +5609,7 @@ intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
     v->name[KNAMELEN-1] = 0;
 
     ilock(&vctllock);
-    vno = arch->intrenable(v);
+    vno = arch->intrenable(v); // this should also set v->isr or v->eoi
     if(vno == -1){
         iunlock(&vctllock);
         print("intrenable: couldn't enable irq %d, tbdf 0x%uX for %s\n",
@@ -5523,6 +5617,7 @@ intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
         xfree(v);
         return;
     }
+    // add_list(vctl[vno], v) and extra check
     if(vctl[vno]){
         if(vctl[vno]->isr != v->isr || vctl[vno]->eoi != v->eoi)
             panic("intrenable: handler: %s %s %#p %#p %#p %#p",
@@ -5570,71 +5665,231 @@ intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
 }
 @ 
 
+<<[[PCArch]] interrupt methods fields>>=
+void  (*intrinit)(void);
+int (*intrenable)(Vctl*);
+int (*intrvecno)(int);
+int (*intrdisable)(int);
+void  (*introff)(void);
+void  (*intron)(void);
+@
 
-<<function irqallocread>>=
-static long
-irqallocread(Chan*, void *vbuf, long n, vlong offset)
+<<[[archgeneric]] interrupt methods>>=
+.intrinit=  i8259init,
+.intrenable=    i8259enable,
+.intrvecno= i8259vecno,
+.intrdisable=   i8259disable,
+.intron=    i8259on,
+.introff=   i8259off,
+@
+
+<<function i8259init>>=
+void
+i8259init(void)
 {
-    char *buf, *p, str[2*(11+1)+KNAMELEN+1+1];
-    int m, vno;
-    long oldn;
-    Vctl *v;
+    int x;
 
-    if(n < 0 || offset < 0)
-        error(Ebadarg);
+    ioalloc(Int0ctl, 2, 0, "i8259.0");
+    ioalloc(Int1ctl, 2, 0, "i8259.1");
+    ilock(&i8259lock);
 
-    oldn = n;
-    buf = vbuf;
-    for(vno=0; vno<nelem(vctl); vno++){
-        for(v=vctl[vno]; v; v=v->next){
-            m = snprint(str, sizeof str, "%11d %11d %.*s\n", vno, v->irq, KNAMELEN, v->name);
-            if(m <= offset) /* if do not want this, skip entry */
-                offset -= m;
-            else{
-                /* skip offset bytes */
-                m -= offset;
-                p = str+offset;
-                offset = 0;
+    /*
+     *  Set up the first 8259 interrupt processor.
+     *  Make 8259 interrupts start at CPU vector VectorPIC.
+     *  Set the 8259 as master with edge triggered
+     *  input with fully nested interrupts.
+     */
+    outb(Int0ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
+                           ICW4 will be sent */
+    outb(Int0aux, VectorPIC);       /* ICW2 - interrupt vector offset */
+    outb(Int0aux, 0x04);            /* ICW3 - have slave on level 2 */
+    outb(Int0aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
 
-                /* write at most max(n,m) bytes */
-                if(m > n)
-                    m = n;
-                memmove(buf, p, m);
-                n -= m;
-                buf += m;
+    /*
+     *  Set up the second 8259 interrupt processor.
+     *  Make 8259 interrupts start at CPU vector VectorPIC+8.
+     *  Set the 8259 as slave with edge triggered
+     *  input with fully nested interrupts.
+     */
+    outb(Int1ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
+                           ICW4 will be sent */
+    outb(Int1aux, VectorPIC+8);     /* ICW2 - interrupt vector offset */
+    outb(Int1aux, 0x02);            /* ICW3 - I am a slave on level 2 */
+    outb(Int1aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
+    outb(Int1aux, (i8259mask>>8) & 0xFF);
 
-                if(n == 0)
-                    return oldn;
-            }
+    /*
+     *  pass #2 8259 interrupts to #1
+     */
+    i8259mask &= ~0x04;
+    outb(Int0aux, i8259mask & 0xFF);
+
+    /*
+     * Set Ocw3 to return the ISR when ctl read.
+     * After initialisation status read is set to IRR.
+     * Read IRR first to possibly deassert an outstanding
+     * interrupt.
+     */
+    inb(Int0ctl);
+    outb(Int0ctl, Ocw3|0x03);
+    inb(Int1ctl);
+    outb(Int1ctl, Ocw3|0x03);
+
+    /*
+     * Check for Edge/Level register.
+     * This check may not work for all chipsets.
+     * First try a non-intrusive test - the bits for
+     * IRQs 13, 8, 2, 1 and 0 must be edge (0). If
+     * that's OK try a R/W test.
+     */
+    x = (inb(Elcr2)<<8)|inb(Elcr1);
+    if(!(x & 0x2107)){
+        outb(Elcr1, 0);
+        if(inb(Elcr1) == 0){
+            outb(Elcr1, 0x20);
+            if(inb(Elcr1) == 0x20)
+                i8259elcr = x;
+            outb(Elcr1, x & 0xFF);
+            print("ELCR: %4.4uX\n", i8259elcr);
         }
     }
-    return oldn - n;
+    iunlock(&i8259lock);
 }
-@ 
+@
+% >> >> >> >> >> >>
 
-<<function trapenable>>=
-void
-trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
+<<global i8259lock>>=
+static Lock i8259lock;
+@
+
+<<function i8259isr>>=
+int
+i8259isr(int vno)
 {
-    Vctl *v;
+    int irq, isr;
 
-    if(vno < 0 || vno >= VectorPIC)
-        panic("trapenable: vno %d", vno);
-    v = xalloc(sizeof(Vctl));
-    v->tbdf = BUSUNKNOWN;
-    v->f = f;
-    v->a = a;
-    strncpy(v->name, name, KNAMELEN);
-    v->name[KNAMELEN-1] = 0;
+    if(vno < VectorPIC || vno > VectorPIC+MaxIrqPIC)
+        return 0;
+    irq = vno-VectorPIC;
 
-    ilock(&vctllock);
-    v->next = vctl[vno];
-    vctl[vno] = v;
-    iunlock(&vctllock);
+    /*
+     *  tell the 8259 that we're done with the
+     *  highest level interrupt (interrupts are still
+     *  off at this point)
+     */
+    ilock(&i8259lock);
+    isr = inb(Int0ctl);
+    outb(Int0ctl, EOI);
+    if(irq >= 8){
+        isr |= inb(Int1ctl)<<8;
+        outb(Int1ctl, EOI);
+    }
+    iunlock(&i8259lock);
+
+    return isr & (1<<irq);
 }
-@ 
+@
+% >> >>
 
-\section{Interrupt table [[vectortable]] and [[idt]]}
+<<function i8259enable>>=
+int
+i8259enable(Vctl* v)
+{
+    int irq, irqbit;
+
+    /*
+     * Given an IRQ, enable the corresponding interrupt in the i8259
+     * and return the vector to be used. The i8259 is set to use a fixed
+     * range of vectors starting at VectorPIC.
+     */
+    irq = v->irq;
+    if(irq < 0 || irq > MaxIrqPIC){
+        print("i8259enable: irq %d out of range\n", irq);
+        return -1;
+    }
+    irqbit = 1<<irq;
+
+    ilock(&i8259lock);
+    if(!(i8259mask & irqbit) && !(i8259elcr & irqbit)){
+        print("i8259enable: irq %d shared but not level\n", irq);
+        iunlock(&i8259lock);
+        return -1;
+    }
+    i8259mask &= ~irqbit;
+    if(irq < 8)
+        outb(Int0aux, i8259mask & 0xFF);
+    else
+        outb(Int1aux, (i8259mask>>8) & 0xFF);
+
+    if(i8259elcr & irqbit)
+        v->eoi = i8259isr;
+    else
+        v->isr = i8259isr;
+    iunlock(&i8259lock);
+
+    return VectorPIC+irq;
+}
+@
+
+<<function i8259vecno>>=
+int
+i8259vecno(int irq)
+{
+    return VectorPIC+irq;
+}
+@
+
+<<function i8259disable>>=
+int
+i8259disable(int irq)
+{
+    int irqbit;
+
+    /*
+     * Given an IRQ, disable the corresponding interrupt
+     * in the 8259.
+     */
+    if(irq < 0 || irq > MaxIrqPIC){
+        print("i8259disable: irq %d out of range\n", irq);
+        return -1;
+    }
+    irqbit = 1<<irq;
+
+    ilock(&i8259lock);
+    if(!(i8259mask & irqbit)){
+        i8259mask |= irqbit;
+        if(irq < 8)
+            outb(Int0aux, i8259mask & 0xFF);
+        else
+            outb(Int1aux, (i8259mask>>8) & 0xFF);
+    }
+    iunlock(&i8259lock);
+    return 0;
+}
+@
+
+<<function i8259on>>=
+void
+i8259on(void)
+{
+    outb(Int0aux, i8259mask&0xFF);
+    outb(Int1aux, (i8259mask>>8)&0xFF);
+}
+@
+
+
+<<function i8259off>>=
+void
+i8259off(void)
+{
+    outb(Int0aux, 0xFF);
+    outb(Int1aux, 0xFF);
+}
+@
+
+
+
+\section{Interrupt [[vectortable]] and [[idt]]}
 
 <<constant IDTADDR>>=
 #define IDTADDR   (KZERO+0x10800)   /* idt */
@@ -5940,7 +6195,8 @@ static char* excname[32] = {
 };
 @ 
 
-\section{Exceptions}
+\section{Faults}
+% fault/trap/exceptions
 
 <<enum vector>>=
 enum {
@@ -5950,14 +6206,14 @@ enum {
     VectorCNA = 7,    /* coprocessor not available */
     Vector2F  = 8,    /* double fault */
     VectorCSO = 9,    /* coprocessor segment overrun */
-    VectorPF  = 14,   /* page fault */
+    VectorPF  = 14,   /* page fault */ //!!!!
     Vector15  = 15,   /* reserved */
     VectorCERR  = 16,   /* coprocessor error */
   
     VectorPIC = 32,   /* external i8259 interrupts */
     VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
 
-    //!!! int 64 = way to jump in plan9 OS !!!
+    //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
     // VectorSYSCALL = 64, in mem.h because used by Assembly too
   
     VectorAPIC  = 65,   /* external APIC interrupts */
@@ -5965,7 +6221,9 @@ enum {
 };
 @
 
-\section{Hardware interrupts}
+\section{IRQs}
+
+% exn vs irq? irq is a request!
 
 <<enum irq>>=
 enum {
@@ -5993,228 +6251,7 @@ enum {
     MaxIrqLAPIC = 31,
 };
 @
-
-<<[[PCArch]] interrupt methods fields>>=
-void  (*intrinit)(void);
-int (*intrenable)(Vctl*);
-int (*intrvecno)(int);
-int (*intrdisable)(int);
-void  (*introff)(void);
-void  (*intron)(void);
-@
-
-<<[[archgeneric]] interrupt methods>>=
-.intrinit=  i8259init,
-.intrenable=    i8259enable,
-.intrvecno= i8259vecno,
-.intrdisable=   i8259disable,
-.intron=    i8259on,
-.introff=   i8259off,
-@
-
-<<function i8259init>>=
-void
-i8259init(void)
-{
-    int x;
-
-    ioalloc(Int0ctl, 2, 0, "i8259.0");
-    ioalloc(Int1ctl, 2, 0, "i8259.1");
-    ilock(&i8259lock);
-
-    /*
-     *  Set up the first 8259 interrupt processor.
-     *  Make 8259 interrupts start at CPU vector VectorPIC.
-     *  Set the 8259 as master with edge triggered
-     *  input with fully nested interrupts.
-     */
-    outb(Int0ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
-                           ICW4 will be sent */
-    outb(Int0aux, VectorPIC);       /* ICW2 - interrupt vector offset */
-    outb(Int0aux, 0x04);            /* ICW3 - have slave on level 2 */
-    outb(Int0aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
-
-    /*
-     *  Set up the second 8259 interrupt processor.
-     *  Make 8259 interrupts start at CPU vector VectorPIC+8.
-     *  Set the 8259 as slave with edge triggered
-     *  input with fully nested interrupts.
-     */
-    outb(Int1ctl, (1<<4)|(0<<3)|(1<<0));    /* ICW1 - master, edge triggered,
-                           ICW4 will be sent */
-    outb(Int1aux, VectorPIC+8);     /* ICW2 - interrupt vector offset */
-    outb(Int1aux, 0x02);            /* ICW3 - I am a slave on level 2 */
-    outb(Int1aux, 0x01);            /* ICW4 - 8086 mode, not buffered */
-    outb(Int1aux, (i8259mask>>8) & 0xFF);
-
-    /*
-     *  pass #2 8259 interrupts to #1
-     */
-    i8259mask &= ~0x04;
-    outb(Int0aux, i8259mask & 0xFF);
-
-    /*
-     * Set Ocw3 to return the ISR when ctl read.
-     * After initialisation status read is set to IRR.
-     * Read IRR first to possibly deassert an outstanding
-     * interrupt.
-     */
-    inb(Int0ctl);
-    outb(Int0ctl, Ocw3|0x03);
-    inb(Int1ctl);
-    outb(Int1ctl, Ocw3|0x03);
-
-    /*
-     * Check for Edge/Level register.
-     * This check may not work for all chipsets.
-     * First try a non-intrusive test - the bits for
-     * IRQs 13, 8, 2, 1 and 0 must be edge (0). If
-     * that's OK try a R/W test.
-     */
-    x = (inb(Elcr2)<<8)|inb(Elcr1);
-    if(!(x & 0x2107)){
-        outb(Elcr1, 0);
-        if(inb(Elcr1) == 0){
-            outb(Elcr1, 0x20);
-            if(inb(Elcr1) == 0x20)
-                i8259elcr = x;
-            outb(Elcr1, x & 0xFF);
-            print("ELCR: %4.4uX\n", i8259elcr);
-        }
-    }
-    iunlock(&i8259lock);
-}
-@
-% >> >> >> >> >> >>
-
-<<global i8259lock>>=
-static Lock i8259lock;
-@
-
-<<function i8259isr>>=
-int
-i8259isr(int vno)
-{
-    int irq, isr;
-
-    if(vno < VectorPIC || vno > VectorPIC+MaxIrqPIC)
-        return 0;
-    irq = vno-VectorPIC;
-
-    /*
-     *  tell the 8259 that we're done with the
-     *  highest level interrupt (interrupts are still
-     *  off at this point)
-     */
-    ilock(&i8259lock);
-    isr = inb(Int0ctl);
-    outb(Int0ctl, EOI);
-    if(irq >= 8){
-        isr |= inb(Int1ctl)<<8;
-        outb(Int1ctl, EOI);
-    }
-    iunlock(&i8259lock);
-
-    return isr & (1<<irq);
-}
-@
-% >> >>
-
-<<function i8259enable>>=
-int
-i8259enable(Vctl* v)
-{
-    int irq, irqbit;
-
-    /*
-     * Given an IRQ, enable the corresponding interrupt in the i8259
-     * and return the vector to be used. The i8259 is set to use a fixed
-     * range of vectors starting at VectorPIC.
-     */
-    irq = v->irq;
-    if(irq < 0 || irq > MaxIrqPIC){
-        print("i8259enable: irq %d out of range\n", irq);
-        return -1;
-    }
-    irqbit = 1<<irq;
-
-    ilock(&i8259lock);
-    if(!(i8259mask & irqbit) && !(i8259elcr & irqbit)){
-        print("i8259enable: irq %d shared but not level\n", irq);
-        iunlock(&i8259lock);
-        return -1;
-    }
-    i8259mask &= ~irqbit;
-    if(irq < 8)
-        outb(Int0aux, i8259mask & 0xFF);
-    else
-        outb(Int1aux, (i8259mask>>8) & 0xFF);
-
-    if(i8259elcr & irqbit)
-        v->eoi = i8259isr;
-    else
-        v->isr = i8259isr;
-    iunlock(&i8259lock);
-
-    return VectorPIC+irq;
-}
-@
-
-<<function i8259vecno>>=
-int
-i8259vecno(int irq)
-{
-    return VectorPIC+irq;
-}
-@
-
-<<function i8259disable>>=
-int
-i8259disable(int irq)
-{
-    int irqbit;
-
-    /*
-     * Given an IRQ, disable the corresponding interrupt
-     * in the 8259.
-     */
-    if(irq < 0 || irq > MaxIrqPIC){
-        print("i8259disable: irq %d out of range\n", irq);
-        return -1;
-    }
-    irqbit = 1<<irq;
-
-    ilock(&i8259lock);
-    if(!(i8259mask & irqbit)){
-        i8259mask |= irqbit;
-        if(irq < 8)
-            outb(Int0aux, i8259mask & 0xFF);
-        else
-            outb(Int1aux, (i8259mask>>8) & 0xFF);
-    }
-    iunlock(&i8259lock);
-    return 0;
-}
-@
-
-<<function i8259on>>=
-void
-i8259on(void)
-{
-    outb(Int0aux, i8259mask&0xFF);
-    outb(Int1aux, (i8259mask>>8)&0xFF);
-}
-@
-
-
-<<function i8259off>>=
-void
-i8259off(void)
-{
-    outb(Int0aux, 0xFF);
-    outb(Int1aux, 0xFF);
-}
-@
+% LINT? PCINT?
 
 
 \section{Software interrupts (a.k.a syscalls)}
@@ -6462,7 +6499,7 @@ trap(Ureg* ureg)
         if(ctl->isr)
             ctl->isr(vno);
         for(v = ctl; v != nil; v = v->next){
-            if(v->f)
+            if(v->f) // this can be null?
                 v->f(ureg, v->a);
         }
         if(ctl->eoi)
@@ -6477,7 +6514,7 @@ trap(Ureg* ureg)
             if(up && !clockintr)
                 preempt();
         }
-    }
+    } // no Vctl?
     else if(vno < nelem(excname) && user){
         spllo();
         snprint(buf, sizeof buf, "sys: trap: %s", excname[vno]);
@@ -6507,7 +6544,7 @@ trap(Ureg* ureg)
             /* should we do this? */
             if(ctl->eoi)
                 ctl->eoi(i);
-        }
+        } // remove? ugly?
 
         /* clear the interrupt */
         i8259isr(vno);
@@ -6516,8 +6553,7 @@ trap(Ureg* ureg)
         if(user)
             kexit(ureg);
         return;
-    }
-    else{
+    }else{
         if(vno == VectorNMI){
             /*
              * Don't re-enable, it confuses the crash dumps.
@@ -6536,7 +6572,7 @@ trap(Ureg* ureg)
             panic("%s", excname[vno]);
         panic("unknown trap/intr: %d", vno);
     }
-    splhi();
+    splhi(); // possible spllo() done above
 
     <<[[trap()]] if delaysched>>
 
@@ -6559,9 +6595,6 @@ kexit(Ureg*)
 % should be called hook_before_exit_syscall note that
 % take Ureg*, so the address is in the stack and the actual
 % value are where?
-
-
-% nmienable? nmi?
 
 
 % ---------------------------------------------------------------------------
@@ -6602,8 +6635,6 @@ intrtime(Cpu*, int vno)
 @ 
 
 
-
-
 \ifallcode
 <<[[trap()]] debugging>>=
         if(0)print("cpu%d: spurious interrupt %d, last %d\n",
@@ -6622,6 +6653,8 @@ intrtime(Cpu*, int vno)
         }
 @
 \fi
+
+
 
 
 
@@ -6795,6 +6828,7 @@ Segdesc *gdt;     /* gdt for this processor */
 % is the one above, the tgdt is just used at the beginning
 
 \section{Pagination and [[mmupd]], [[mmupt]]} 
+%http://wiki.osdev.org/Paging
 
 % see Basic pagination intialization too
 
@@ -6995,7 +7029,7 @@ mmupdalloc(void)
     if(cpu->mmupdpool == nil){
         spllo();
         page = newpage(false, nil, nilptr);
-        page->va = (ulong)vpd;
+        page->va = (ulong)vpd; // needed? not part of a segment anyway no?
         splhi();
         mmupd = tmpmap(page);
         memmove(mmupd, cpu->pdproto, BY2PG);
@@ -7098,29 +7132,7 @@ mmurelease(Proc* proc)
     taskswitch(PADDR(cpu->pdproto), (ulong)cpu + BY2PG);
 
 
-    if(proc->kmaptable){
-        if(proc->mmupd == nil)
-            panic("mmurelease: no mmupd");
-        if(--proc->kmaptable->ref)
-            panic("mmurelease: kmap ref %d", proc->kmaptable->ref);
-        if(proc->nkmap)
-            panic("mmurelease: nkmap %d", proc->nkmap);
-        /*
-         * remove kmaptable from pd before putting pd up for reuse.
-         */
-        mmupd = tmpmap(proc->mmupd);
-        if(PPN(mmupd[PDX(KMAP)]) != proc->kmaptable->pa)
-            panic("mmurelease: bad kmap pde %#.8lux kmap %#.8lux",
-                mmupd[PDX(KMAP)], proc->kmaptable->pa);
-        mmupd[PDX(KMAP)] = 0;
-        tmpunmap(mmupd);
-        /*
-         * move kmaptable to free list.
-         */
-        pagechainhead(proc->kmaptable);
-        proc->kmaptable = nil;
-    }
-
+    <<[[mmurelease()]] handle kmaptable>>
 
     if(proc->mmupd){
         mmuptefree(proc);
@@ -7141,6 +7153,7 @@ mmurelease(Proc* proc)
 
 
 % this is the fundamental operation, put earlier?
+% can some of the code here generate itself a fault?
 <<function putmmu>>=
 /*
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
@@ -7182,7 +7195,7 @@ putmmu(virt_addr va, phys_addr pa, Page*)
         vpd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
         /* page is now mapped into the VPT - clear it */
         memset((void*)(VPT+PDX(va)*BY2PG), 0, BY2PG);
-        page->daddr = PDX(va);
+        page->daddr = PDX(va); // ???
         page->next = up->mmuused;
         up->mmuused = page;
     }
@@ -8602,17 +8615,6 @@ putimage(KImage *i)
     unlock(i);
 }
 @
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -10141,6 +10143,8 @@ preempt(void)
     return;
 }
 @ 
+% servicing an interrupt may have adjusted the readyness of higher priority
+% process so preempt!
 
 \subsection{Clock interrupt}
 
@@ -11621,7 +11625,7 @@ trapinit(void)
     trapinited = true;
 }
 @ 
-% LP split! put debugpt line in debugging section
+% LP split! put debugpt line in debugging section, VectorPF in Page fault?
 
 <<global trapinited>>=
 static bool trapinited;
@@ -11667,10 +11671,10 @@ mmuinit(void)
 
     didmmuinit = true;
 
-    if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n", VPT, vpd, KMAP);
+    //if(0) print("vpt=%#.8ux vpd=%#p kmap=%#.8ux\n", VPT, vpd, KMAP);
 
     memglobal();
-    cpu->pdproto[PDX(VPT)] = PADDR(cpu->pdproto)|PTEWRITE|PTEVALID;
+    cpu->pdproto[PDX(VPT)] = PADDR(cpu->pdproto)|PTEWRITE|PTEVALID; // setup VPT
     
     cpu->tss = malloc(sizeof(Tss));
     if(cpu->tss == nil)
@@ -28382,6 +28386,7 @@ PPN = Physical Page Number?
 VPT = Virtual Page Table
 INTR = INTeRrupt (not INT, probably to avoid ambiguity with integer)
 VNO = Vector Number (interrupt)
+IRQ = Interrupt Request
 ISR = Interrupt Service Routine
 NMI = Non Maskable Interrupts (hardware error)
 AP = Application Processor

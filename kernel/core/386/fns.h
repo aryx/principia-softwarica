@@ -138,7 +138,9 @@ int ioalloc(int, int, int, char*);
 int (*isaconfig)(char*, int, ISAConf*);
 void  kbdenable(void);
 void  kbdinit(void);
+/*s: function kmapinval */
 #define kmapinval()
+/*e: function kmapinval */
 //@Scheck: Assembly
 void  lgdt(ushort[3]);
 //@Scheck: Assembly
@@ -200,7 +202,7 @@ int (*_pcmspecial)(char *, ISAConf *);
 //void  pcmspecialclose(int);
 void  (*_pcmspecialclose)(int);
 void  pcmunmap(int, PCMmap*);
-int pdbmap(ulong*, ulong, ulong, int);
+int pdmap(ulong*, ulong, ulong, int);
 void  procrestore(Proc*);
 void  procsave(Proc*);
 void  procsetup(Proc*);
