@@ -8581,7 +8581,7 @@ if(up == nil) {
    if(up->mmupd == nil)
        upallocmmupd();
     mmupd = KADDR(up->mmupd->pa);
-    mmupd[PDX(va)] = entry;
+    mmupd[PDX(va)] = pde;
 }
 @
 
@@ -8590,6 +8590,9 @@ if(up == nil) {
 <<constant VPTSIZETODO>>=
 #define VPTSIZE   BY2XPG
 @
+% 4Mo because potentially a full page dir + page tables for 4Go
+% can take 4Mo (1pagedir + 1024 page table = 1025 * 4Ko = 4Mo
+
 
 <<constant VPTTODO>>=
 #define VPT   (KZERO-VPTSIZE)
@@ -8989,6 +8992,8 @@ kunmap(KMap *k)
 
 \subsection{[[vmap()]]}
 
+% used to map framebuffer for instance. the vga driver uses it!
+
 <<constant VMAP>>=
 #define VMAP    (KZERO-VMAPSIZE)
 @
@@ -9262,19 +9267,19 @@ pdunmap(ulong *pd, ulong va, int size)
 int
 vmapsync(ulong va)
 {
-    ulong entry, *table;
+    ulong pde, *mmupt;
     kern_addr2 mmupd;
 
     if(va < VMAP || va >= VMAP+VMAPSIZE)
         return 0;
 
-    entry = CPUS(0)->pdproto[PDX(va)];
-    if(!(entry&PTEVALID))
+    pde = CPUS(0)->pdproto[PDX(va)];
+    if(!(pde&PTEVALID))
         return 0;
-    if(!(entry&PTESIZE)){
+    if(!(pde&PTESIZE)){
         /* make sure entry will help the fault */
-        table = KADDR(PPN(entry));
-        if(!(table[PTX(va)]&PTEVALID))
+        mmupt = KADDR(PPN(pde));
+        if(!(mmupt[PTX(va)]&PTEVALID))
             return 0;
     }
     <<[[vmapsync()]] va set to entry>>
