@@ -106,13 +106,14 @@
 #define KMAPSIZE 0
 /*e: constant KMAPSIZE */
 /*s: constant KMAP */
+#define KMAP KZERO
 /*e: constant KMAP */
 
 /*s: constant VMAPSIZE */
 #define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
 /*e: constant VMAPSIZE */
 /*s: constant VMAP */
-#define VMAP    (KZERO-VMAPSIZE)
+#define VMAP    (KMAP-VMAPSIZE)
 /*e: constant VMAP */
 /*
  * Fundamental addresses - bottom 64kB saved for return to real mode

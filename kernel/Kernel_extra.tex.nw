@@ -8504,7 +8504,7 @@ addphysseg(Physseg* new)
 \subsection{[[vpt]], [[vpd]]}
 
 % tricks apparently borrowed from exokernel code.
-% the the toplevel comment in mmu.c
+% see the toplevel comment in mmu.c
 % essentially just tricks abusing the long page feature of x86 to make
 % it easy to map and then edit physical content of page tables or
 % page directory per process.
@@ -8802,6 +8802,7 @@ typedef struct KMap   KMap;
 #define KMAPSIZE 0
 @
 <<constant KMAP>>=
+#define KMAP KZERO
 @
 
 <<global kpt>>=
@@ -8995,13 +8996,8 @@ kunmap(KMap *k)
 % used to map framebuffer for instance. the vga driver uses it!
 
 <<constant VMAP>>=
-#define VMAP    (KZERO-VMAPSIZE)
-@
-
-<<constant VMAPTODO>>=
 #define VMAP    (KMAP-VMAPSIZE)
 @
-
 
 <<constant VMAPSIZE>>=
 #define VMAPSIZE  (0x10000000-VPTSIZE-KMAPSIZE)
@@ -9019,11 +9015,12 @@ static Lock vmaplock;
 /*
  * Add a device mapping to the vmap range.
  */
-void*
-vmap(ulong pa, int size)
+virt_addr3
+vmap(phys_addr pa, int size)
 {
     int osize;
-    ulong o, va;
+    virt_addr va;
+    ulong o;
     
     /*
      * might be asking for less than a page.
@@ -9060,35 +9057,36 @@ vmap(ulong pa, int size)
  * Add kernel mappings for pa -> va for a section of size bytes.
  */
 int
-pdmap(ulong *pd, ulong pa, ulong va, int size)
+pdmap(kern_addr2 mmupd, ulong pa, virt_addr va, int size)
 {
-    int pse;
-    ulong pgsz, *pte, *table;
+    bool pse;
+    ulong pgsz;
+    kern_addr2 pte, pde;
     ulong flag, off;
     
     flag = pa&0xFFF;
     pa &= ~0xFFF;
 
     if((CPUS(0)->cpuiddx & Pse) && (getcr4() & 0x10))
-        pse = 1;
+        pse = true;
     else
-        pse = 0;
+        pse = false;
 
     for(off=0; off<size; off+=pgsz){
-        table = &pd[PDX(va+off)];
-        if((*table&PTEVALID) && (*table&PTESIZE))
+        pde = &mmupd[PDX(va+off)];
+        if((*pde&PTEVALID) && (*pde&PTESIZE))
             panic("vmap: va=%#.8lux pa=%#.8lux pde=%#.8lux",
-                va+off, pa+off, *table);
+                va+off, pa+off, *pde);
 
         /*
          * Check if it can be mapped using a 4MB page:
          * va, pa aligned and size >= 4MB and processor can do it.
          */
         if(pse && (pa+off)%(4*MB) == 0 && (va+off)%(4*MB) == 0 && (size-off) >= 4*MB){
-            *table = (pa+off)|flag|PTESIZE|PTEVALID;
+            *pde = (pa+off)|flag|PTESIZE|PTEVALID;
             pgsz = 4*MB;
         }else{
-            pte = mmuwalk(pd, va+off, 2, true);
+            pte = mmuwalk(mmupd, va+off, 2, true);
             if(*pte&PTEVALID)
                 panic("vmap: va=%#.8lux pa=%#.8lux pte=%#.8lux",
                     va+off, pa+off, *pte);
@@ -9127,35 +9125,40 @@ findhole(ulong *a, int n, int count)
 /*
  * Look for free space in the vmap.
  */
-static ulong
+static virt_addr
 vmapalloc(ulong size)
 {
     int i, n, o;
-    ulong *vpdb;
-    int vpdbsize;
+    // this is really a page directory base, that spans a range of pdes
+    // starting to map from VMAP to VMAP+VMAPSIZE
+    kern_addr2 vpdb;
+    int vpdsize;
     
     vpdb = &CPUS(0)->pdproto[PDX(VMAP)];
-    vpdbsize = VMAPSIZE/(4*MB);
+    vpdsize = VMAPSIZE/(4*MB);
 
     if(size >= 4*MB){
         n = (size+4*MB-1) / (4*MB);
-        if((o = findhole(vpdb, vpdbsize, n)) != -1)
+        if((o = findhole(vpdb, vpdsize, n)) != -1)
             return VMAP + o*4*MB;
-        return 0;
+        return nilptr;
     }
+
+    // size <= 4MB
     n = (size+BY2PG-1) / BY2PG;
-    for(i=0; i<vpdbsize; i++)
+    for(i=0; i<vpdsize; i++)
         if((vpdb[i]&PTEVALID) && !(vpdb[i]&PTESIZE))
             if((o = findhole(KADDR(PPN(vpdb[i])), WD2PG, n)) != -1)
                 return VMAP + i*4*MB + o*BY2PG;
-    if((o = findhole(vpdb, vpdbsize, 1)) != -1)
+
+    if((o = findhole(vpdb, vpdsize, 1)) != -1)
         return VMAP + o*4*MB;
         
     /*
      * could span page directory entries, but not worth the trouble.
      * not going to be very much contention.
      */
-    return 0;
+    return nilptr;
 }
 @
 
@@ -9166,17 +9169,18 @@ vmapalloc(ulong size)
  * the call need not be interlocked with vmap.
  */
 void
-vunmap(void *v, int size)
+vunmap(virt_addr3 v, int size)
 {
     int i;
-    ulong va, o;
+    virt_addr va;
+    ulong o;
     Cpu *nm;
     Proc *p;
     
     /*
      * might not be aligned
      */
-    va = (ulong)v;
+    va = (virt_addr)v;
     o = va&(BY2PG-1);
     va -= o;
     size += o;
@@ -9229,30 +9233,30 @@ vunmap(void *v, int size)
  * Only used for kernel mappings, so okay to use KADDR.
  */
 static void
-pdunmap(ulong *pd, ulong va, int size)
+pdunmap(kern_addr2 mmupd, virt_addr va, int size)
 {
-    ulong vae;
-    ulong *table;
+    virt_addr vae;
+    kern_addr2 pde, pte;
     
     vae = va+size;
     while(va < vae){
-        table = &pd[PDX(va)];
-        if(!(*table & PTEVALID)){
+        pde = &mmupd[PDX(va)];
+        if(!(*pde & PTEVALID)){
             panic("vunmap: not mapped");
             /* 
             va = (va+4*MB-1) & ~(4*MB-1);
             continue;
             */
         }
-        if(*table & PTESIZE){
-            *table = 0;
+        if(*pde & PTESIZE){
+            *pde = 0;
             va = (va+4*MB-1) & ~(4*MB-1);
             continue;
         }
-        table = KADDR(PPN(*table));
-        if(!(table[PTX(va)] & PTEVALID))
+        pte = KADDR(PPN(*pde));
+        if(!(pte[PTX(va)] & PTEVALID))
             panic("vunmap: not mapped");
-        table[PTX(va)] = 0;
+        pte[PTX(va)] = 0;
         va += BY2PG;
     }
 }
@@ -9265,9 +9269,10 @@ pdunmap(ulong *pd, ulong va, int size)
  * so no locking needed.
  */
 int
-vmapsync(ulong va)
+vmapsync(virt_addr va)
 {
-    ulong pde, *mmupt;
+    ulong pde;
+    kern_addr2 mmupt;
     kern_addr2 mmupd;
 
     if(va < VMAP || va >= VMAP+VMAPSIZE)
@@ -9289,6 +9294,11 @@ vmapsync(ulong va)
     return 1;
 }
 @
+
+\subsection{Big pages }
+
+% pse? see code in vmap, could aspectize things
+% also does vpt/vpd uses this feature? I don't think so.
 
 
 \section{EDF}
