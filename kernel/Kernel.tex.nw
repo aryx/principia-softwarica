@@ -33,7 +33,7 @@
 %  - strace
 %  - TODO profiler
 %  - coverage sample based profiler
-%  - SEMI virtual memory
+%  - virtual memory
 
 %history LP-ization:
 % - skeleton; a not too bad TOC
@@ -1079,7 +1079,6 @@ struct Proc
 // Error managment
 //--------------------------------------------------------------------
     <<[[Proc]] error managment fields>>
-
 //--------------------------------------------------------------------
 // Stats, profiling
 //--------------------------------------------------------------------
@@ -3036,7 +3035,9 @@ enum modref
 % PG_REF is set in fixfault when access for the first time the page
 %  why useful?
 % PG_MOD is set in fixfault too when writing in the page
-%  why useful?
+%  why useful? 
+%   - for DATA? to know whether when we swapit whether we
+%     can maybe if it was not modified just retrived it back from an KImage?
 
 
 
@@ -3702,7 +3703,7 @@ dupseg(Segment **seg, int segno, bool share)
 
         n = newseg(s->type, s->base, s->size);
 
-        incref(s->image); // how sure non nil?
+        incref(s->image); // how sure non nil? data always attached to an img
         n->image = s->image;
         n->fstart = s->fstart;
         n->flen = s->flen;
@@ -4250,7 +4251,8 @@ resrcwait(char *reason)
 
 \section{The user}
 
-% no really uid, gid in plan9, just char* user;
+% no really uid, gid in plan9, just char* user; for process.
+% have a uid/gid in struct Dir but it's also a char*.
 
 % put that in security section?
 <<function renameuser>>=
@@ -4913,6 +4915,7 @@ int nwait;    /* Number of uncollected wait records */ // len(waitq)
 Lock  exl;    /* Lock count and waitq */
 @
 
+% also in libc.h
 <<struct Waitmsg>>=
 struct Waitmsg
 {
@@ -5466,7 +5469,7 @@ linkproc(void)
 % fault/trap vs irq? irq is a request from "outside", generating an interrupt
 % fault/trap is also generating an interrupt, but more from "inside"
 
-% from wikipediage IRQ page:
+% from wikipedia IRQ page:
 %  - at beginning had one PIC, IRQ0 ot IRQ7
 %  - then 2 PICs, IRQ0 to IRQ15 (and one IRQ used for the chaining I think)
 %  - then APIC, up to 255 IRQ lines per APIC
@@ -5494,6 +5497,7 @@ struct Vctl {
 };
 @
 % V?? Vector? Interrupt vector?
+% LP split isr eoi
 
 <<global vctl>>=
 // array<list<ref_own<Vctl>>> (next = Vctl.next)
@@ -5663,6 +5667,8 @@ intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
     return 0;
 }
 @ 
+
+\section{Interrupt controller [[i8259]]}
 
 <<[[PCArch]] interrupt methods fields>>=
 void  (*intrinit)(void);
@@ -6253,155 +6259,6 @@ enum {
 % LINT? PCINT?
 
 
-\section{Software interrupts (a.k.a syscalls)}
-
-<<constant MAXSYSARG>>=
-// used in Proc
-MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
-@
-
-<<struct Sargs>>=
-// syscall arguments copied from user stack
-struct Sargs
-{
-    ulong args[MAXSYSARG];
-};
-@ 
-
-<<[[Proc]] other fields>>=
-Sargs sargs;    /* address of this is known by db */
-@ 
-
-
-<<function _syscallintr>>=
-/*
- * This is merely _strayintr from l.s optimised to vector
- * to syscall() without going through trap().
- */
-TEXT _syscallintr(SB), $0
-        PUSHL   $VectorSYSCALL                  /* trap type */
-
-        PUSHL   DS
-        PUSHL   ES
-        PUSHL   FS
-        PUSHL   GS
-        PUSHAL
-        MOVL    $(KDSEL), AX
-        MOVW    AX, DS
-        MOVW    AX, ES
-        PUSHL   SP
-        CALL    syscall(SB)
-
-        POPL    AX
-        POPAL
-        POPL    GS
-        POPL    FS
-        POPL    ES
-        POPL    DS
-        ADDL    $8, SP                          /* pop error code and trap type */
-        IRETL
-@ 
-
-<<function syscall>>=
-/*
- *  Syscall is called directly from assembler without going through trap().
- */
-//@Scheck: not dead, called from assembly by _syscallintr
-void
-syscall(Ureg* ureg)
-{
-    char *e;
-    ulong   sp;
-    long    ret;
-    int i, s;
-    ulong scallnr;
-    vlong startns, stopns;
-
-    if((ureg->cs & 0xFFFF) != UESEL)
-        panic("syscall: cs 0x%4.4luX", ureg->cs);
-
-    <<[[syscall()]] adjust kentry>>
-
-    cpu->syscall++;
-    up->insyscall = true;
-    up->pc = ureg->pc;
-    up->dbgreg = ureg;
-
-    sp = ureg->usp;
-    // syscall number!
-    scallnr = ureg->ax;
-
-    <<[[syscall()]] Proc_tracesyscall if, syscall entry>>
-
-    <<[[syscall()]] fp adjustments if fork>>
-    spllo();
-
-    up->nerrlab = 0;
-    ret = -1;
-
-    if(!waserror()){
-        if(scallnr >= nsyscall || systab[scallnr] == nil){
-            pprint("bad sys call number %lud pc %lux\n",
-                scallnr, ureg->pc);
-            postnote(up, 1, "sys: bad sys call", NDebug);
-            error(Ebadarg);
-        }
-
-        if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD)) // adjust Tos ?
-            validaddr(sp, sizeof(Sargs)+BY2WD, false);
-
-        // copy syscall arguments from user stack to up->sargs
-        up->sargs = *((Sargs*)(sp+BY2WD)); // 1 word for? return pc?
-        up->psstate = sysctab[scallnr];
-
-        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        //IMPORTANT: The actual system call
-        ret = systab[scallnr](up->sargs.args);
-        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-        poperror();
-    }else{
-        /* failure: save the error buffer for errstr */
-        e = up->syserrstr;
-        up->syserrstr = up->errstr;
-        up->errstr = e;
-        //if(0 && up->pid == 1)
-        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
-    }
-
-    if(up->nerrlab){
-        print("bad errstack [%lud]: %d extra\n", scallnr, up->nerrlab);
-        for(i = 0; i < NERR; i++)
-            print("sp=%lux pc=%lux\n",
-                up->errlab[i].sp, up->errlab[i].pc);
-        panic("error stack");
-    }
-
-    /*
-     *  Put return value in frame.  On the x86 the syscall is
-     *  just another trap and the return value from syscall is
-     *  ignored.  On other machines the return value is put into
-     *  the results register by caller of syscall.
-     */
-    ureg->ax = ret;
-
-    <<[[syscall()]] Proc_tracesyscall if, syscall exit>>
-
-    up->insyscall = false;
-    up->psstate = nil;
-
-    if(scallnr == NOTED)
-        noted(ureg, *(ulong*)(sp+BY2WD));
-
-    if(scallnr!=RFORK && (up->procctl || up->nnote)){
-        splhi();
-        notify(ureg);
-    }
-    <<[[syscall()]] if delaysched>>
-    kexit(ureg);
-}
-@ 
-
 \section{[[trap()]]}
 
 <<function _strayintr>>=
@@ -6656,6 +6513,154 @@ intrtime(Cpu*, int vno)
 
 
 
+\section{Software interrupts (a.k.a syscalls)}
+
+<<constant MAXSYSARG>>=
+// used in Proc
+MAXSYSARG = 5, /* for mount(fd, afd, mpt, flag, arg) */
+@
+
+<<struct Sargs>>=
+// syscall arguments copied from user stack
+struct Sargs
+{
+    ulong args[MAXSYSARG];
+};
+@ 
+
+<<[[Proc]] other fields>>=
+Sargs sargs;    /* address of this is known by db */
+@ 
+
+
+<<function _syscallintr>>=
+/*
+ * This is merely _strayintr from l.s optimised to vector
+ * to syscall() without going through trap().
+ */
+TEXT _syscallintr(SB), $0
+        PUSHL   $VectorSYSCALL                  /* trap type */
+
+        PUSHL   DS
+        PUSHL   ES
+        PUSHL   FS
+        PUSHL   GS
+        PUSHAL
+        MOVL    $(KDSEL), AX
+        MOVW    AX, DS
+        MOVW    AX, ES
+        PUSHL   SP
+        CALL    syscall(SB)
+
+        POPL    AX
+        POPAL
+        POPL    GS
+        POPL    FS
+        POPL    ES
+        POPL    DS
+        ADDL    $8, SP                          /* pop error code and trap type */
+        IRETL
+@ 
+
+<<function syscall>>=
+/*
+ *  Syscall is called directly from assembler without going through trap().
+ */
+//@Scheck: not dead, called from assembly by _syscallintr
+void
+syscall(Ureg* ureg)
+{
+    char *e;
+    ulong   sp;
+    long    ret;
+    int i, s;
+    ulong scallnr;
+    vlong startns, stopns;
+
+    if((ureg->cs & 0xFFFF) != UESEL)
+        panic("syscall: cs 0x%4.4luX", ureg->cs);
+
+    <<[[syscall()]] adjust kentry>>
+
+    cpu->syscall++;
+    up->insyscall = true;
+    up->pc = ureg->pc;
+    up->dbgreg = ureg;
+
+    sp = ureg->usp;
+    // syscall number!
+    scallnr = ureg->ax;
+
+    <<[[syscall()]] Proc_tracesyscall if, syscall entry>>
+
+    <<[[syscall()]] fp adjustments if fork>>
+    spllo();
+
+    up->nerrlab = 0;
+    ret = -1;
+
+    if(!waserror()){
+        if(scallnr >= nsyscall || systab[scallnr] == nil){
+            pprint("bad sys call number %lud pc %lux\n",
+                scallnr, ureg->pc);
+            postnote(up, 1, "sys: bad sys call", NDebug);
+            error(Ebadarg);
+        }
+
+        if(sp<(USTKTOP-BY2PG) || sp>(USTKTOP-sizeof(Sargs)-BY2WD)) // adjust Tos ?
+            validaddr(sp, sizeof(Sargs)+BY2WD, false);
+
+        // copy syscall arguments from user stack to up->sargs
+        up->sargs = *((Sargs*)(sp+BY2WD)); // 1 word for? return pc?
+        up->psstate = sysctab[scallnr];
+
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        //IMPORTANT: The actual system call
+        ret = systab[scallnr](up->sargs.args);
+        //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        poperror();
+    }else{
+        /* failure: save the error buffer for errstr */
+        e = up->syserrstr;
+        up->syserrstr = up->errstr;
+        up->errstr = e;
+        //if(0 && up->pid == 1)
+        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
+    }
+
+    if(up->nerrlab){
+        print("bad errstack [%lud]: %d extra\n", scallnr, up->nerrlab);
+        for(i = 0; i < NERR; i++)
+            print("sp=%lux pc=%lux\n",
+                up->errlab[i].sp, up->errlab[i].pc);
+        panic("error stack");
+    }
+
+    /*
+     *  Put return value in frame.  On the x86 the syscall is
+     *  just another trap and the return value from syscall is
+     *  ignored.  On other machines the return value is put into
+     *  the results register by caller of syscall.
+     */
+    ureg->ax = ret;
+
+    <<[[syscall()]] Proc_tracesyscall if, syscall exit>>
+
+    up->insyscall = false;
+    up->psstate = nil;
+
+    if(scallnr == NOTED)
+        noted(ureg, *(ulong*)(sp+BY2WD));
+
+    if(scallnr!=RFORK && (up->procctl || up->nnote)){
+        splhi();
+        notify(ureg);
+    }
+    <<[[syscall()]] if delaysched>>
+    kexit(ureg);
+}
+@ 
 
 \chapter{Virtual Memory}
 % rename x86 virtual memory? but now that have swapping and demand loading
@@ -6864,9 +6869,9 @@ Segdesc *gdt;     /* gdt for this processor */
 #define PTEUSER   (1<<2)
 
 #define PTEWT       (1<<3) // Write Through, e.g. VGA memory, mean??
-#define PTEUNCACHED (1<<4)
-#define PTESIZE   (1<<7)
-#define PTEGLOBAL (1<<8)
+#define PTEUNCACHED (1<<4) // ??
+#define PTESIZE   (1<<7) // Big pages (x86 extension)
+#define PTEGLOBAL (1<<8) // do not clear from TLB kernel pages (x86 extension)
 @
 % pa is aligned at page, so can use low 12 bytes hence 1<<8
 % in a PTE what is implicit is the va. the va is the index
@@ -6941,7 +6946,7 @@ mmuwalk(kern_addr2 pd, kern_addr va, int level, bool create)
     }
 }
 @
-
+% s/table/pde_or_pte/?
 
 
 
@@ -6959,7 +6964,7 @@ Page* mmupdpool;
 int mmupdcnt;
 @
 %// TODO: have a ArchCpuMMU like in bcm/
-
+% mv later? when used? opti to not wait for newpage()
 
 
 % pointers in kern_addr? no! but the page->pa there is real mem.
@@ -6972,7 +6977,8 @@ Page* mmupd;     /* page directory base */
 Page* mmufree;    /* unused page table pages */
 Page* mmuused;    /* used page table pages */
 @
-% rename! pt_used, pt_free?
+% rename! mmupt_used, mmupt_free?
+% so mmu release should release mmupd and those pages
 
 <<function upallocmmupd>>=
 /*
@@ -7002,7 +7008,7 @@ upallocmmupd(void)
         return;
     }
     mmupd = tmpmap(page);
-    mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)];
+    mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)]; // for up
     tmpunmap(mmupd);
     up->mmupd = page;
     putcr3(up->mmupd->pa); //!!!! bootstrap! putcr3 take a PA of course
@@ -7045,7 +7051,10 @@ mmupdalloc(void)
     return page;
 }
 @
-% why not using kernel memory for that?
+% why not using kernel memory for that? after all use kernel memory
+% for Segment and Pagetable
+% how sure what is put back in the mmupdpool has virgin mapping?
+% because of mmurelease?
 
 
 %dtor
@@ -7173,7 +7182,40 @@ putmmu(virt_addr va, phys_addr pa, Page*)
 }
 @
 
+<<[[putmmu()]] adjustments>>=
+// pad's code for simplified virtual memory, no VPT
+mmupd = KADDR(up->mmupd->pa);
+if(!(mmupd[PDX(va)]&PTEVALID)) {
+    if(up->mmufree == nil){
+        spllo();
+        page = newpage(false, nil, nilptr);
+        splhi();
+    }
+    else{
+        page = up->mmufree;
+        up->mmufree = page->next;
+    }
+    mmupd[PDX(va)] = PPN(page->pa)|PTEUSER|PTEWRITE|PTEVALID;
+    mmupt = KADDR(page->pa);
+    memset(mmupt, 0, BY2PG);
+    page->daddr = PDX(va); // ???
+    page->next = up->mmuused;
+    up->mmuused = page;
+}
+mmupt = KADDR(PPN(mmupd[PDX(va)]));
+old = mmupt[PTX(va)];
+mmupt[PTX(va)] = pa|PTEUSER|PTEVALID;
 
+if(old&PTEVALID)
+    flushpg(va);
+if(getcr3() != up->mmupd->pa)
+     print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
+@
+% there are called to newpage, so use user memory for pagedir/pagetable
+% of process, which kinda make sense, but is it dangerous? can those
+% pages containing pagedir/pagetable data be swapped out? No because
+% the swapping procedure iterate over the pages used by segments of
+% processes, not on pages in Proc->mmupd or Proc->mmused. So it's safe.
 
 
 
@@ -7225,7 +7267,8 @@ flushpg(virt_addr va)
 % contains a "cache" of a portion of a file. If we do another exec
 % with the same binary  for instance we have multiple instance
 % of rc, then we want to share this page. We need to find it back.
-% Enter the "page cache".
+% Enter the "page cache". Same is true actually for the data section of a binary!
+% and can do demand loading.
 
 %note1: if we fork we will have the sharing for free, but not always case
 %note2: note that also do sharing when exec via copy on write
@@ -7239,7 +7282,8 @@ flushpg(virt_addr va)
 % then if we need to load back from the swap(pagein), we can actually
 % get it directly from the cache! hmmm but actually when we swap it's really
 % because we need space, so this free page will be in the tail but not for long
-
+% so the page cache is really useful only for the demand-loading and caching
+% of TEXT and DATA I think.
 
 
 %cinap:
@@ -7256,6 +7300,10 @@ flushpg(virt_addr va)
 %mutator so it cant invalidate the cache without going to
 %the fileserver."
 
+% note that different from buffer cache. This is just cache of page of
+% executables.
+%For real buffer cache see cache.c?? not really, plan9 is a distributed
+% system so it's file server that have cache.
 
 
 % used temporarily, once we decided to swap out a page
@@ -7274,14 +7322,12 @@ KImage  *image;     /* Associated text or swap image */
 @
 %    KImage  *image;     /* Associated text or swap image */
 % because for TEXT, no need to swap and better to use free mem
-% for DATA or BSS than TEXT because TEXT can be retrieved!
+% for DATA BSS than TEXT because TEXT can be retrieved!
+% actually for DATA at the beginning it can also be retrived, but once
+% modified you can't. hence the PG_MOD?
 
 
 
-% note that different from buffer cache. This is just cache of page of
-% executables.
-%For real buffer cache see cache.c?? not really, plan9 is a distributed
-% system so it's file server that have cache.
 
 
 <<function pghash>>=
@@ -7292,6 +7338,7 @@ enum
 };
 #define pghash(daddr) palloc.hash[(daddr>>PGSHIFT)&(PGHSIZE-1)]
 @
+% why this hash function? should put Kimage also in the equation no?
 
 <<[[Palloc]] other fields>>=
     // hash<Page.daddr, list<ref<Page>> (next = Page.hash)>
@@ -7309,8 +7356,9 @@ Page  *hash; /* Image hash chains */
 
 
 
-% main idea is that when we swap, before we free it, we cache it.
-% assume p->daddr has been set and then call cachepage(p, &swapimage).
+% main idea is that when we free some page of a TEXT or DATA, before we free it,
+% we cache it.
+% assume p->daddr has been set and then call cachepage(p, &image).
 % (put code of putpage here? see that does not reset its content,
 % not reset the daddr and image field!)
 
@@ -8334,7 +8382,7 @@ struct KImage
 
     // list<ref<Kimage>> of Imagealloc.free?
     KImage  *next; /* Free list */ 
-    // hash<?, list<ref<Kimage>>> Imagealloc.hash?
+    // hash<Qid.path, list<ref<Kimage>>> Imagealloc.hash
     KImage  *hash; /* Qid hash chains */ 
 
     // option<ref<Segment>>?
@@ -8343,6 +8391,7 @@ struct KImage
 @
 % (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
 %  ugly #define Image IMAGE each time one wants to use draw.h from a device driver)
+% LP split!
 
 <<struct Imagealloc>>=
 // Image allocator (internal to segment.c, but important so here, singleton)
@@ -8350,7 +8399,7 @@ struct Imagealloc
 {
     // array<Kimage>?  xalloc'ed in initimage() (conf.nimage)
     KImage  *free; 
-    // hash<?ihash(??), list<ref<Kimage>>
+    // hash<Qid.path, list<ref<Kimage>>
     KImage  *hash[IHASHSIZE];
     QLock ireclaim; /* mutex on reclaiming free images */
   
@@ -8614,7 +8663,7 @@ putimage(KImage *i)
 static void
 fault386(Ureg* ureg, void*)
 {
-    ulong addr; 
+    virt_addr addr; 
     bool read, insyscall, user;
     int n; // ret_code
     char buf[ERRMAX];
@@ -8714,7 +8763,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     int type;
     int ref;
     Pagetable **p, *etp;
-    ulong mmuphys=0;
+    phys_addr mmuphys=nilptr;
     ulong soff;
     Page **pg, *lkp, *new;
 
@@ -9687,9 +9736,8 @@ mmuswitch(Proc* proc)
 
     if(proc->mmupd){
         mmupd = tmpmap(proc->mmupd);
-        mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)];
+        mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)]; // for up
         tmpunmap(mmupd);
-
         taskswitch(proc->mmupd->pa, (ulong)(proc->kstack+KSTACK));
     }else
         taskswitch(PADDR(cpu->pdproto), (ulong)(proc->kstack+KSTACK));
@@ -15511,6 +15559,7 @@ struct Dir {
   char  *muid;  /* last modifier name */
 };
 @ 
+% gid here!
 
 <<enum dirmode>>=
 /* bits in Dir.mode */
