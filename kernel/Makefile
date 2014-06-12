@@ -99,6 +99,7 @@ SRC_VIEWS= \
   devices/sys/devproc.c \
   devices/sys/devroot.c \
   devices/sys/devsrv.c \
+  devices/sys/devsys.c \
   files/allocb.c \
   files/cache.c \
   files/chan.c \
