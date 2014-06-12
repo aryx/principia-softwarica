@@ -25,9 +25,9 @@ opencons(void)
 static void
 bindenvsrv(void)
 {
-  bind("#ec", "/env", MREPL);
-  bind("#e", "/env", MBEFORE|MCREATE);
-  bind("#s", "/srv/", MREPL|MCREATE);
+  bind("#ec", "/env", MREPL); // ec? 2 chars?
+  bind("#e", "/env", MBEFORE|MCREATE); // devenv
+  bind("#s", "/srv/", MREPL|MCREATE); // devsrv
 }
 
 static void
@@ -53,6 +53,7 @@ execinit(void)
   bind_safe("#p", "/proc", MREPL); //devproc
   // used by rc and many programs, e.g. via open("#d/0")
   bind_safe("#d", "/fd", MREPL); //devdup
+  bind_safe("#k", "/sys", MREPL); //devsys
 
   bind_safe("/root", "/", MAFTER|MCREATE);
   bind_safe("/386/bin", "/bin", MREPL);
@@ -68,7 +69,7 @@ execinit(void)
   //this need special drivers, such as the clgd424x.c in the kernel
   run("/bin/vga", "-l", "1024x768x8", nil); // can add -V to debug vga
 
-  bind_safe("#i", "/dev", MAFTER); //?
+  bind_safe("#i", "/dev", MAFTER); // devdraw
 
   // for rio
   run("/bin/ramfs", "-m", "/mnt", nil);
@@ -79,8 +80,8 @@ execinit(void)
   close(fd);
 
   // network
-  bind_safe("#I", "/net", MREPL);
-  bind_safe("#l0", "/net", MAFTER);
+  bind_safe("#I", "/net", MREPL); // devip
+  bind_safe("#l0", "/net", MAFTER); // ether (and dev 0)
 
   run("/bin/rc", nil);
 }

@@ -154,10 +154,10 @@ rootreset(void)
     addrootdir("fd");
     addrootdir("mnt");
     addrootdir("net");
-    addrootdir("net.alt");
     addrootdir("proc");
     addrootdir("root");
     addrootdir("srv");
+    addrootdir("sys");
 }
 /*e: method rootreset */
 
