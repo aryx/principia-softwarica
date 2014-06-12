@@ -575,7 +575,6 @@ struct Proc
     /*x: [[Proc]] error managment fields */
     char  *syserrstr; /* last error from a system call, errbuf0 or 1 */
     /*e: [[Proc]] error managment fields */
-
 //--------------------------------------------------------------------
 // Stats, profiling
 //--------------------------------------------------------------------

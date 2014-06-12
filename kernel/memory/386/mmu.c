@@ -349,9 +349,8 @@ mmuswitch(Proc* proc)
 
     if(proc->mmupd){
         mmupd = tmpmap(proc->mmupd);
-        mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)];
+        mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)]; // for up
         tmpunmap(mmupd);
-
         taskswitch(proc->mmupd->pa, (ulong)(proc->kstack+KSTACK));
     }else
         taskswitch(PADDR(cpu->pdproto), (ulong)(proc->kstack+KSTACK));
@@ -430,7 +429,7 @@ upallocmmupd(void)
         return;
     }
     mmupd = tmpmap(page);
-    mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)];
+    mmupd[PDX(CPUADDR)] = cpu->pdproto[PDX(CPUADDR)]; // for up
     tmpunmap(mmupd);
     up->mmupd = page;
     putcr3(up->mmupd->pa); //!!!! bootstrap! putcr3 take a PA of course

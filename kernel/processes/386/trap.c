@@ -702,7 +702,7 @@ unexpected(Ureg* ureg, void*)
 static void
 fault386(Ureg* ureg, void*)
 {
-    ulong addr; 
+    virt_addr addr; 
     bool read, insyscall, user;
     int n; // ret_code
     char buf[ERRMAX];

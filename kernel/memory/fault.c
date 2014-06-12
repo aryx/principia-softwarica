@@ -82,7 +82,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     int type;
     int ref;
     Pagetable **p, *etp;
-    ulong mmuphys=0;
+    phys_addr mmuphys=nilptr;
     ulong soff;
     Page **pg, *lkp, *new;
 

@@ -256,9 +256,9 @@
 #define PTEUSER   (1<<2)
 
 #define PTEWT       (1<<3) // Write Through, e.g. VGA memory, mean??
-#define PTEUNCACHED (1<<4)
-#define PTESIZE   (1<<7)
-#define PTEGLOBAL (1<<8)
+#define PTEUNCACHED (1<<4) // ??
+#define PTESIZE   (1<<7) // Big pages (x86 extension)
+#define PTEGLOBAL (1<<8) // do not clear from TLB kernel pages (x86 extension)
 /*e: constant PTExxx */
 
 /*

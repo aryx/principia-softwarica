@@ -93,7 +93,7 @@ struct KImage
 
     // list<ref<Kimage>> of Imagealloc.free?
     KImage  *next; /* Free list */ 
-    // hash<?, list<ref<Kimage>>> Imagealloc.hash?
+    // hash<Qid.path, list<ref<Kimage>>> Imagealloc.hash
     KImage  *hash; /* Qid hash chains */ 
 
     // option<ref<Segment>>?
@@ -369,7 +369,7 @@ struct Imagealloc
 {
     // array<Kimage>?  xalloc'ed in initimage() (conf.nimage)
     KImage  *free; 
-    // hash<?ihash(??), list<ref<Kimage>>
+    // hash<Qid.path, list<ref<Kimage>>
     KImage  *hash[IHASHSIZE];
     QLock ireclaim; /* mutex on reclaiming free images */
   

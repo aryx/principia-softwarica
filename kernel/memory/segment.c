@@ -219,7 +219,7 @@ dupseg(Segment **seg, int segno, bool share)
 
         n = newseg(s->type, s->base, s->size);
 
-        incref(s->image); // how sure non nil?
+        incref(s->image); // how sure non nil? data always attached to an img
         n->image = s->image;
         n->fstart = s->fstart;
         n->flen = s->flen;
