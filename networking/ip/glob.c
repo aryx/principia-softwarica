@@ -1,7 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <regexp.h>
-#include <String.h>
+#include <string.h>
 #include "glob.h"
 
 /*

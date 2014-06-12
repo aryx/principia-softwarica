@@ -6,7 +6,7 @@
 #include <libc.h>
 #include <regexp.h>
 #include <bio.h>
-#include "String.h"
+#include <string.h>
 
 /*
  *  for the lock routines in libsys.c

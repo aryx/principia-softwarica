@@ -1,5 +1,5 @@
-#pragma	src	"/sys/src/libString"
-#pragma	lib	"libString.a"
+#pragma	src	"/sys/src/libstring"
+#pragma	lib	"libstring.a"
 
 /* extensible Strings */
 typedef struct String {

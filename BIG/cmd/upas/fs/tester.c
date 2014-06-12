@@ -1,7 +1,8 @@
 #include <u.h>
 #include <libc.h>
 #include <ctype.h>
-#include <String.h>
+#include <string.h>
+
 #include "message.h"
 
 Message *root;

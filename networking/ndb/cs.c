@@ -6,7 +6,7 @@
 #include <ctype.h>
 #include <ndb.h>
 #include <ip.h>
-#include <String.h>
+#include <string.h>
 
 enum
 {

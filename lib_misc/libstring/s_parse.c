@@ -1,6 +1,6 @@
 #include <u.h>
 #include <libc.h>
-#include "String.h"
+#include <string.h>
 
 #define isspace(c) ((c)==' ' || (c)=='\t' || (c)=='\n')
 

@@ -10,7 +10,7 @@
 #include <libc.h>
 #include <ctype.h>
 #include <fcall.h>		/* for %M */
-#include <String.h>
+#include <string.h>
 
 /*
  * modified versions of those in libc.h; scans only the first arg for

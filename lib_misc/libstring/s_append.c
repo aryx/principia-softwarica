@@ -1,6 +1,6 @@
 #include <u.h>
 #include <libc.h>
-#include "String.h"
+#include <string.h>
 
 /* append a char array to a String */
 String *

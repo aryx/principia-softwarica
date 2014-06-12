@@ -7,7 +7,7 @@
 #include <auth.h>
 #include <fcall.h>
 #include <ctype.h>
-#include <String.h>
+#include <string.h>
 #include "ftpfs.h"
 
 enum

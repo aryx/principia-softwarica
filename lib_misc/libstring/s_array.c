@@ -1,6 +1,6 @@
 #include <u.h>
 #include <libc.h>
-#include "String.h"
+#include <string.h>
 
 extern String*	_s_alloc(void);
 

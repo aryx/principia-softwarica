@@ -11,7 +11,7 @@
 #include <libc.h>
 #include <ctype.h>
 #include <bio.h>
-#include <String.h>
+#include <string.h>
 
 #define CPP		"cpp -+"
 #define RINSTERR	((Rinst *)-1)	/* ugly; error but keep going */

@@ -2,7 +2,7 @@
 #include <libc.h>
 #include <regexp.h>
 #include <libsec.h>
-#include <String.h>
+#include <string.h>
 #include <bio.h>
 #include "dat.h"
 

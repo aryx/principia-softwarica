@@ -3,7 +3,7 @@
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
-#include <String.h>
+#include <string.h>
 
 int havefork = 1;
 
