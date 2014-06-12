@@ -1,7 +1,7 @@
 /*s: portdat_processes.h */
 
 // in lib.h: Waitmsg, ERRMAX
-// see also ArchProcMMU, ArchProcNotsave, MAXSYSARG in 386/
+// see also ArchProcMMU, MAXSYSARG in 386/
 
 //*****************************************************************************
 // Proc components
@@ -654,8 +654,6 @@ struct Proc
     int fpstate;
     ArchFPsave  fpsave;   /* address of this is known by db */
     /*e: [[Proc]] other fields */
-
-    struct ArchProcNotsave;
 //--------------------------------------------------------------------
 // Extra
 //--------------------------------------------------------------------

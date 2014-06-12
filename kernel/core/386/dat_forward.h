@@ -1,6 +1,5 @@
 /*s: dat_forward.h */
 typedef union ArchFPsave  ArchFPsave;
-typedef struct ArchProcNotsave  ArchProcNotsave;
 typedef struct ArchProcMMU ArchProcMMU;
 
 typedef struct BIOS32si BIOS32si;

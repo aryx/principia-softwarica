@@ -24,19 +24,6 @@ union ArchFPsave {
 };
 /*e: union ArchFPSave */
 
-/*s: struct ArchProcNotsave */
-/*
- *  things saved in the Proc structure during a notify
- */
-//@Scheck: not dead, FP because unnamed substructure
-struct ArchProcNotsave
-{
-    ulong svflags;
-    ulong svcs;
-    ulong svss;
-};
-/*e: struct ArchProcNotsave */
-
 //*****************************************************************************
 // Interrupts
 //*****************************************************************************
