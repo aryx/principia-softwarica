@@ -9,7 +9,6 @@
 /*e: kernel basic includes */
 
 #include    <pool.h>
-#include    <authsrv.h>
 
 // used also by edf.c
 /*s: global panicking */
@@ -672,8 +671,6 @@ enum{
     Qcputime,
     Qkmesg,
     Qkprint,
-    Qhostdomain,
-    Qhostowner,
     Qnull,
     Qpgrpid,
     Qpid,
@@ -702,8 +699,6 @@ static Dirtab consdir[]={
 
     "bintime",  {Qbintime}, 24,     0664,
     "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-    "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
-    "hostowner",    {Qhostowner},   0,      0664,
     "kmesg",    {Qkmesg},   0,      0440,
     "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
     "null",     {Qnull},    0,      0666,
@@ -906,6 +901,7 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qkprint:
         return qread(kprintoq, buf, n);
 
+
     case Qpgrpid:
         return readnum((ulong)offset, buf, n, up->pgrp->pgrpid, NUMSIZE);
 
@@ -922,12 +918,6 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qbintime:
         return readbintime(buf, n);
 
-
-    case Qhostowner:
-        return readstr((ulong)offset, buf, n, eve);
-
-    case Qhostdomain:
-        return readstr((ulong)offset, buf, n, hostdomain);
 
 
     case Quser:
@@ -1047,12 +1037,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
         return writebintime(a, n);
 
 
-    case Qhostowner:
-        return hostownerwrite(a, n);
-
-    case Qhostdomain:
-        return hostdomainwrite(a, n);
-
     case Quser:
         return userwrite(a, n);
 
@@ -1081,7 +1065,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
             setswapchan(swc);
             break;
     /*e: [[conswrite()]] Qswap case */
-
 
     default:
         print("conswrite: %#llux\n", c->qid.path);

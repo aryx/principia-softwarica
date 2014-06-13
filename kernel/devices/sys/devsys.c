@@ -8,6 +8,8 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
+#include    <authsrv.h>
+
 /*s: devsys.c enum Qxxx */
 enum{
     Qdir,
@@ -16,6 +18,9 @@ enum{
         Qosversion,
     /*x: devsys.c enum Qxxx cases */
         Qconfig,
+    /*x: devsys.c enum Qxxx cases */
+        Qhostowner,
+        Qhostdomain,
     /*x: devsys.c enum Qxxx cases */
         Qsysname,
     /*x: devsys.c enum Qxxx cases */
@@ -36,6 +41,9 @@ static Dirtab sysdir[]={
         "osversion",    {Qosversion},   0,      0444,
     /*x: [[sysdir]] fields */
         "config",   {Qconfig},  0,      0444,
+    /*x: [[sysdir]] fields */
+        "hostowner",    {Qhostowner},   0,      0664,
+        "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
     /*x: [[sysdir]] fields */
         "sysname",  {Qsysname}, 0,      0664,
     /*x: [[sysdir]] fields */
@@ -150,6 +158,12 @@ sysread(Chan *c, void *buf, long n, vlong off)
         case Qconfig:
             return readstr((ulong)offset, buf, n, (char*) configfile);
     /*x: [[sysread()]] cases */
+        case Qhostowner:
+            return readstr((ulong)offset, buf, n, eve);
+
+        case Qhostdomain:
+            return readstr((ulong)offset, buf, n, hostdomain);
+    /*x: [[sysread()]] cases */
         case Qsysname:
             if(sysname == nil)
                 return 0;
@@ -244,6 +258,12 @@ syswrite(Chan *c, void *va, long n, vlong off)
     switch((ulong)c->qid.path){
 
     /*s: [[syswrite()]] cases */
+        case Qhostowner:
+            return hostownerwrite(a, n);
+
+        case Qhostdomain:
+            return hostdomainwrite(a, n);
+    /*x: [[syswrite()]] cases */
         case Qsysname:
             if(offset != 0)
                 error(Ebadarg);

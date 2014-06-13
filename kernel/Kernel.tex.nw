@@ -18484,8 +18484,6 @@ enum{
     Qcputime,
     Qkmesg,
     Qkprint,
-    Qhostdomain,
-    Qhostowner,
     Qnull,
     Qpgrpid,
     Qpid,
@@ -18507,8 +18505,6 @@ static Dirtab consdir[]={
 
     "bintime",  {Qbintime}, 24,     0664,
     "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-    "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
-    "hostowner",    {Qhostowner},   0,      0664,
     "kmesg",    {Qkmesg},   0,      0440,
     "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
     "null",     {Qnull},    0,      0666,
@@ -19143,6 +19139,7 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qkprint:
         return qread(kprintoq, buf, n);
 
+
     case Qpgrpid:
         return readnum((ulong)offset, buf, n, up->pgrp->pgrpid, NUMSIZE);
 
@@ -19159,12 +19156,6 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qbintime:
         return readbintime(buf, n);
 
-
-    case Qhostowner:
-        return readstr((ulong)offset, buf, n, eve);
-
-    case Qhostdomain:
-        return readstr((ulong)offset, buf, n, hostdomain);
 
 
     case Quser:
@@ -19241,12 +19232,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
         return writebintime(a, n);
 
 
-    case Qhostowner:
-        return hostownerwrite(a, n);
-
-    case Qhostdomain:
-        return hostdomainwrite(a, n);
-
     case Quser:
         return userwrite(a, n);
 
@@ -19256,7 +19241,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
         break;
 
     <<[[conswrite()]] Qswap case>>
-
 
     default:
         print("conswrite: %#llux\n", c->qid.path);
@@ -23079,7 +23063,7 @@ execinit(void)
   run("/bin/ramfs", "-m", "/mnt", nil);
   run("/bin/mkdir", "/mnt/temp", nil); // see thread(2), used to create pipes
   run("/bin/mkdir", "/mnt/wsys", nil);
-  fd = open_safe("#c/hostowner", OWRITE);
+  fd = open_safe("#k/hostowner", OWRITE);
   print_safe(fd, "pad");
   close(fd);
 
@@ -24873,6 +24857,7 @@ sysdup(ulong* arg)
 % when /sys/ vs /dev/?
 % if can't write into it, then for sure should go for /sys/
 % if can write into it but it's hard to relate to a device notion then go for /sys/
+% if it depends on up then /dev; /sys should be for global system settings
 
 <<devsys.c enum Qxxx>>=
 enum{
@@ -25030,6 +25015,35 @@ extern uchar configfile[]; // in $CONF.c
     case Qconfig:
         return readstr((ulong)offset, buf, n, (char*) configfile);
 @
+
+\subsection{[[/sys/hosthowner]], [[/sys/hostdomain]]}
+
+<<devsys.c enum Qxxx cases>>=
+    Qhostowner,
+    Qhostdomain,
+@
+
+<<[[sysdir]] fields>>=
+    "hostowner",    {Qhostowner},   0,      0664,
+    "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
+@
+
+<<[[sysread()]] cases>>=
+    case Qhostowner:
+        return readstr((ulong)offset, buf, n, eve);
+
+    case Qhostdomain:
+        return readstr((ulong)offset, buf, n, hostdomain);
+@
+
+<<[[syswrite()]] cases>>=
+    case Qhostowner:
+        return hostownerwrite(a, n);
+
+    case Qhostdomain:
+        return hostdomainwrite(a, n);
+@
+
 
 \subsection{[[/sys/sysname]]}
 
