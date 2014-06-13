@@ -6455,41 +6455,6 @@ kexit(Ureg*)
 
 % ---------------------------------------------------------------------------
 
-% mv in profiling section? who uses this info?
-
-<<global intrtimes>>=
-ulong intrtimes[256][Ntimevec];
-@ 
-
-<<constant Ntimevec>>=
-    Ntimevec = 20       /* number of time buckets for each intr */
-@
-
-<<function intrtime>>=
-/*
- *  keep histogram of interrupt service times
- */
-void
-intrtime(Cpu*, int vno)
-{
-    ulong diff;
-    ulong x;
-
-    x = perfticks();
-    diff = x - cpu->perf.intrts;
-    cpu->perf.intrts = x;
-
-    cpu->perf.inintr += diff;
-    if(up == nil && cpu->perf.inidle > diff)
-        cpu->perf.inidle -= diff;
-
-    diff /= cpu->cpumhz*100;      /* quantum = 100microsec */
-    if(diff >= Ntimevec)
-        diff = Ntimevec-1;
-    intrtimes[vno][diff]++;
-}
-@ 
-
 
 \ifallcode
 <<[[trap()]] debugging>>=
@@ -18528,7 +18493,6 @@ enum{
     Qrandom,
     Qreboot,
     Qswap,
-    Qsysstat,
     Qtime,
     Quser,
     Qzero,
@@ -18555,7 +18519,6 @@ static Dirtab consdir[]={
     "random",   {Qrandom},  0,      0444,
     "reboot",   {Qreboot},  0,      0660,
     "swap",     {Qswap},    0,      0664,
-    "sysstat",  {Qsysstat}, 0,      0666,
     "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
     "user",     {Quser},    0,      0666,
     "zero",     {Qzero},    0,      0444,
@@ -19132,7 +19095,6 @@ static long
 consread(Chan *c, void *buf, long n, vlong off)
 {
     ulong l;
-    Cpu *mp;
     char *b, *bp, ch;
     char tmp[256];      /* must be >= 18*NUMSIZE (Qswap) */
     int i, k, id, send;
@@ -19219,48 +19181,6 @@ consread(Chan *c, void *buf, long n, vlong off)
         return n;
 
 
-    case Qsysstat:
-        b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
-        bp = b;
-        for(id = 0; id < MAXCPUS; id++) {
-            if(active.cpus & (1<<id)) {
-                mp = CPUS(id);
-                readnum(0, bp, NUMSIZE, id, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->intr, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->syscall, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->pfault, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->tlbfault, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->tlbpurge, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->load, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE,
-                    (mp->perf.avg_inidle*100)/mp->perf.period,
-                    NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE,
-                    (mp->perf.avg_inintr*100)/mp->perf.period,
-                    NUMSIZE);
-                bp += NUMSIZE;
-                *bp++ = '\n';
-            }
-        }
-        if(waserror()){
-            free(b);
-            nexterror();
-        }
-        n = readstr((ulong)offset, buf, n, b);
-        free(b);
-        poperror();
-        return n;
-
     <<[[consread()]] Qswap case>>
 
     case Qrandom:
@@ -19283,7 +19203,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
 
     char buf[256], ch;
     long l, bp;
-    Cpu *mp;
     int id, fd;
     Chan *swc;
     Cmdbuf *cb;
@@ -19368,20 +19287,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
         }
         poperror();
         free(cb);
-        break;
-
-    case Qsysstat:
-        for(id = 0; id < 32; id++) {
-            if(active.cpus & (1<<id)) {
-                mp = CPUS(id);
-                mp->cs = 0;
-                mp->intr = 0;
-                mp->syscall = 0;
-                mp->pfault = 0;
-                mp->tlbfault = 0;
-                mp->tlbpurge = 0;
-            }
-        }
         break;
 
     <<[[conswrite()]] Qswap case>>
@@ -25034,8 +24939,10 @@ sysread(Chan *c, void *buf, long n, vlong off)
 {
     vlong offset = off;
     char tmp[256];
-    char *b;
+    char *b, *bp;
     int i, k;
+    Cpu *mp;
+    int id;
 
     if(n <= 0)
         return n;
@@ -25062,6 +24969,8 @@ syswrite(Chan *c, void *va, long n, vlong off)
     ulong offset;
     char *a;
     char buf[256];
+    Cpu *mp;
+    int id;
 
     offset = off;
     a = va;
@@ -25135,6 +25044,7 @@ Dev sysdevtab = {
 <<devsys.c decls and globals>>=
 extern uchar configfile[]; // in $CONF.c
 @
+%$
 
 <<devsys.c enum Qxxx cases>>=
     Qconfig,
@@ -25217,8 +25127,6 @@ char    *sysname;
         return n;
 @
 
-<<[[syswrite()]] cases>>=
-@
 
 
 \subsection{[[/sys/xxx]]}
@@ -27683,7 +27591,7 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
 
 \chapter{Profiling}
 
-\section{Counters}
+\section{[[/sys/sysstat]]}
 
 <<[[Cpu]] stat fields>>=
 Perf  perf;     /* performance counters */
@@ -27708,7 +27616,32 @@ struct Perf
     ulong period;   /* perfticks() per clock tick */
 };
 @ 
-% how access those counters? /dev/??
+
+<<function intrtime>>=
+/*
+ *  keep histogram of interrupt service times
+ */
+void
+intrtime(Cpu*, int vno)
+{
+    ulong diff;
+    ulong x;
+
+    x = perfticks();
+    diff = x - cpu->perf.intrts;
+    cpu->perf.intrts = x;
+
+    cpu->perf.inintr += diff;
+    if(up == nil && cpu->perf.inidle > diff)
+        cpu->perf.inidle -= diff;
+
+    diff /= cpu->cpumhz*100;      /* quantum = 100microsec */
+    if(diff >= Ntimevec)
+        diff = Ntimevec-1;
+    intrtimes[vno][diff]++;
+}
+@ 
+
 
 <<function perfticks>>=
 /*  
@@ -27730,23 +27663,103 @@ perfticks(void)
 % see cycles() below. essentially *x = cpu->ticks.
 
 
+<<global intrtimes>>=
+ulong intrtimes[256][Ntimevec];
+@ 
+
+<<constant Ntimevec>>=
+    Ntimevec = 20       /* number of time buckets for each intr */
+@
+
+
 <<[[Cpu]] stat fields>>=
 int cs; // context switch, sched() and sleep() call
+int intr;
 int syscall;
-int load;
 int pfault;
 int tlbfault;
 int tlbpurge;
-int intr;
-ulong spuriousintr;
-@
+ulong spuriousintr; // not really used
 
-<<[[Cpu]] [[Arch]] other fields>>=
-int mmupdalloc;
-int mmupdfree;
+int load;
 @
 
 % also lockcycles here?
+
+
+
+
+
+<<devsys.c enum Qxxx cases>>=
+    Qsysstat,
+@
+
+<<[[sysdir]] fields>>=
+    "sysstat",  {Qsysstat}, 0,      0666,
+@
+
+<<[[sysread()]] cases>>=
+    case Qsysstat:
+        b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
+        bp = b;
+        for(id = 0; id < MAXCPUS; id++) {
+            if(active.cpus & (1<<id)) {
+                mp = CPUS(id);
+                readnum(0, bp, NUMSIZE, id, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->intr, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->syscall, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->pfault, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->tlbfault, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->tlbpurge, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE, mp->load, NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE,
+                    (mp->perf.avg_inidle*100)/mp->perf.period,
+                    NUMSIZE);
+                bp += NUMSIZE;
+                readnum(0, bp, NUMSIZE,
+                    (mp->perf.avg_inintr*100)/mp->perf.period,
+                    NUMSIZE);
+                bp += NUMSIZE;
+                *bp++ = '\n';
+            }
+        }
+        if(waserror()){
+            free(b);
+            nexterror();
+        }
+        n = readstr((ulong)offset, buf, n, b);
+        free(b);
+        poperror();
+        return n;
+@
+% >>
+
+<<[[syswrite()]] cases>>=
+    case Qsysstat:
+        for(id = 0; id < 32; id++) {
+            if(active.cpus & (1<<id)) {
+                mp = CPUS(id);
+                mp->cs = 0;
+                mp->intr = 0;
+                mp->syscall = 0;
+                mp->pfault = 0;
+                mp->tlbfault = 0;
+                mp->tlbpurge = 0;
+            }
+        }
+        break;
+
+@
+% >>
 
 \section{[[/dev/kprof]]}
 

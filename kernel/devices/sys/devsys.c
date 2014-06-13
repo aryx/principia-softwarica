@@ -21,6 +21,8 @@ enum{
     /*x: devsys.c enum Qxxx cases */
         Qdrivers,
     /*x: devsys.c enum Qxxx cases */
+    /*x: devsys.c enum Qxxx cases */
+        Qsysstat,
     /*e: devsys.c enum Qxxx cases */
 };
 /*e: devsys.c enum Qxxx */
@@ -38,6 +40,8 @@ static Dirtab sysdir[]={
     /*x: [[sysdir]] fields */
         "drivers",  {Qdrivers}, 0,      0444,
     /*x: [[sysdir]] fields */
+    /*x: [[sysdir]] fields */
+        "sysstat",  {Qsysstat}, 0,      0666,
     /*e: [[sysdir]] fields */
 };
 /*e: global sysdir */
@@ -107,8 +111,10 @@ sysread(Chan *c, void *buf, long n, vlong off)
 {
     vlong offset = off;
     char tmp[256];
-    char *b;
+    char *b, *bp;
     int i, k;
+    Cpu *mp;
+    int id;
 
     if(n <= 0)
         return n;
@@ -148,6 +154,48 @@ sysread(Chan *c, void *buf, long n, vlong off)
             poperror();
             return n;
     /*x: [[sysread()]] cases */
+    /*x: [[sysread()]] cases */
+        case Qsysstat:
+            b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
+            bp = b;
+            for(id = 0; id < MAXCPUS; id++) {
+                if(active.cpus & (1<<id)) {
+                    mp = CPUS(id);
+                    readnum(0, bp, NUMSIZE, id, NUMSIZE);
+                    bp += NUMSIZE;
+                    readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
+                    bp += NUMSIZE;
+                    readnum(0, bp, NUMSIZE, mp->intr, NUMSIZE);
+                    bp += NUMSIZE;
+                    readnum(0, bp, NUMSIZE, mp->syscall, NUMSIZE);
+                    bp += NUMSIZE;
+                    readnum(0, bp, NUMSIZE, mp->pfault, NUMSIZE);
+                    bp += NUMSIZE;
+                    readnum(0, bp, NUMSIZE, mp->tlbfault, NUMSIZE);
+                    bp += NUMSIZE;
+                    readnum(0, bp, NUMSIZE, mp->tlbpurge, NUMSIZE);
+                    bp += NUMSIZE;
+                    readnum(0, bp, NUMSIZE, mp->load, NUMSIZE);
+                    bp += NUMSIZE;
+                    readnum(0, bp, NUMSIZE,
+                        (mp->perf.avg_inidle*100)/mp->perf.period,
+                        NUMSIZE);
+                    bp += NUMSIZE;
+                    readnum(0, bp, NUMSIZE,
+                        (mp->perf.avg_inintr*100)/mp->perf.period,
+                        NUMSIZE);
+                    bp += NUMSIZE;
+                    *bp++ = '\n';
+                }
+            }
+            if(waserror()){
+                free(b);
+                nexterror();
+            }
+            n = readstr((ulong)offset, buf, n, b);
+            free(b);
+            poperror();
+            return n;
     /*e: [[sysread()]] cases */
 
     default:
@@ -165,6 +213,8 @@ syswrite(Chan *c, void *va, long n, vlong off)
     ulong offset;
     char *a;
     char buf[256];
+    Cpu *mp;
+    int id;
 
     offset = off;
     a = va;
@@ -187,6 +237,20 @@ syswrite(Chan *c, void *va, long n, vlong off)
             break;
     /*x: [[syswrite()]] cases */
     /*x: [[syswrite()]] cases */
+        case Qsysstat:
+            for(id = 0; id < 32; id++) {
+                if(active.cpus & (1<<id)) {
+                    mp = CPUS(id);
+                    mp->cs = 0;
+                    mp->intr = 0;
+                    mp->syscall = 0;
+                    mp->pfault = 0;
+                    mp->tlbfault = 0;
+                    mp->tlbpurge = 0;
+                }
+            }
+            break;
+
     /*e: [[syswrite()]] cases */
 
     case Qosversion:

@@ -699,7 +699,6 @@ enum{
     Qrandom,
     Qreboot,
     Qswap,
-    Qsysstat,
     Qtime,
     Quser,
     Qzero,
@@ -733,7 +732,6 @@ static Dirtab consdir[]={
     "random",   {Qrandom},  0,      0444,
     "reboot",   {Qreboot},  0,      0660,
     "swap",     {Qswap},    0,      0664,
-    "sysstat",  {Qsysstat}, 0,      0666,
     "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
     "user",     {Quser},    0,      0666,
     "zero",     {Qzero},    0,      0444,
@@ -833,7 +831,6 @@ static long
 consread(Chan *c, void *buf, long n, vlong off)
 {
     ulong l;
-    Cpu *mp;
     char *b, *bp, ch;
     char tmp[256];      /* must be >= 18*NUMSIZE (Qswap) */
     int i, k, id, send;
@@ -965,48 +962,6 @@ consread(Chan *c, void *buf, long n, vlong off)
         return n;
 
 
-    case Qsysstat:
-        b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
-        bp = b;
-        for(id = 0; id < MAXCPUS; id++) {
-            if(active.cpus & (1<<id)) {
-                mp = CPUS(id);
-                readnum(0, bp, NUMSIZE, id, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->cs, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->intr, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->syscall, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->pfault, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->tlbfault, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->tlbpurge, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE, mp->load, NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE,
-                    (mp->perf.avg_inidle*100)/mp->perf.period,
-                    NUMSIZE);
-                bp += NUMSIZE;
-                readnum(0, bp, NUMSIZE,
-                    (mp->perf.avg_inintr*100)/mp->perf.period,
-                    NUMSIZE);
-                bp += NUMSIZE;
-                *bp++ = '\n';
-            }
-        }
-        if(waserror()){
-            free(b);
-            nexterror();
-        }
-        n = readstr((ulong)offset, buf, n, b);
-        free(b);
-        poperror();
-        return n;
-
     /*s: [[consread()]] Qswap case */
         case Qswap:
             snprint(tmp, sizeof tmp,
@@ -1048,7 +1003,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
 
     char buf[256], ch;
     long l, bp;
-    Cpu *mp;
     int id, fd;
     Chan *swc;
     Cmdbuf *cb;
@@ -1149,20 +1103,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
         }
         poperror();
         free(cb);
-        break;
-
-    case Qsysstat:
-        for(id = 0; id < 32; id++) {
-            if(active.cpus & (1<<id)) {
-                mp = CPUS(id);
-                mp->cs = 0;
-                mp->intr = 0;
-                mp->syscall = 0;
-                mp->pfault = 0;
-                mp->tlbfault = 0;
-                mp->tlbpurge = 0;
-            }
-        }
         break;
 
     /*s: [[conswrite()]] Qswap case */

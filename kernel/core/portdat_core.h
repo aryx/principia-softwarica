@@ -118,13 +118,14 @@ struct Cpu
     Perf  perf;     /* performance counters */
     /*x: [[Cpu]] stat fields */
     int cs; // context switch, sched() and sleep() call
+    int intr;
     int syscall;
-    int load;
     int pfault;
     int tlbfault;
     int tlbpurge;
-    int intr;
-    ulong spuriousintr;
+    ulong spuriousintr; // not really used
+
+    int load;
     /*e: [[Cpu]] stat fields */
     /*s: [[Cpu]] other fields */
     int ilockdepth;
