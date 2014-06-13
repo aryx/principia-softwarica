@@ -19,6 +19,8 @@ enum{
     /*x: devsys.c enum Qxxx cases */
         Qsysname,
     /*x: devsys.c enum Qxxx cases */
+        Qdrivers,
+    /*x: devsys.c enum Qxxx cases */
     /*e: devsys.c enum Qxxx cases */
 };
 /*e: devsys.c enum Qxxx */
@@ -33,6 +35,8 @@ static Dirtab sysdir[]={
         "config",   {Qconfig},  0,      0444,
     /*x: [[sysdir]] fields */
         "sysname",  {Qsysname}, 0,      0664,
+    /*x: [[sysdir]] fields */
+        "drivers",  {Qdrivers}, 0,      0444,
     /*x: [[sysdir]] fields */
     /*e: [[sysdir]] fields */
 };
@@ -103,6 +107,8 @@ sysread(Chan *c, void *buf, long n, vlong off)
 {
     vlong offset = off;
     char tmp[256];
+    char *b;
+    int i, k;
 
     if(n <= 0)
         return n;
@@ -124,6 +130,23 @@ sysread(Chan *c, void *buf, long n, vlong off)
             if(sysname == nil)
                 return 0;
             return readstr((ulong)offset, buf, n, sysname);
+    /*x: [[sysread()]] cases */
+        case Qdrivers:
+            b = malloc(READSTR);
+            if(b == nil)
+                error(Enomem);
+            k = 0;
+            for(i = 0; devtab[i] != nil; i++)
+                k += snprint(b+k, READSTR-k, "#%C %s\n",
+                    devtab[i]->dc, devtab[i]->name);
+            if(waserror()){
+                free(b);
+                nexterror();
+            }
+            n = readstr((ulong)offset, buf, n, b);
+            free(b);
+            poperror();
+            return n;
     /*x: [[sysread()]] cases */
     /*e: [[sysread()]] cases */
 
@@ -162,6 +185,7 @@ syswrite(Chan *c, void *va, long n, vlong off)
                 buf[n-1] = 0;
             kstrdup(&sysname, buf);
             break;
+    /*x: [[syswrite()]] cases */
     /*x: [[syswrite()]] cases */
     /*e: [[syswrite()]] cases */
 

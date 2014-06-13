@@ -688,7 +688,6 @@ enum{
 
     Qbintime,
     Qcputime,
-    Qdrivers,
     Qkmesg,
     Qkprint,
     Qhostdomain,
@@ -723,7 +722,6 @@ static Dirtab consdir[]={
 
     "bintime",  {Qbintime}, 24,     0664,
     "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-    "drivers",  {Qdrivers}, 0,      0444,
     "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
     "hostowner",    {Qhostowner},   0,      0664,
     "kmesg",    {Qkmesg},   0,      0440,
@@ -1032,25 +1030,6 @@ consread(Chan *c, void *buf, long n, vlong off)
 
     case Qrandom:
         return randomread(buf, n);
-
-    case Qdrivers:
-        b = malloc(READSTR);
-        if(b == nil)
-            error(Enomem);
-        k = 0;
-        for(i = 0; devtab[i] != nil; i++)
-            k += snprint(b+k, READSTR-k, "#%C %s\n",
-                devtab[i]->dc, devtab[i]->name);
-        if(waserror()){
-            free(b);
-            nexterror();
-        }
-        n = readstr((ulong)offset, buf, n, b);
-        free(b);
-        poperror();
-        return n;
-
-
 
     default:
         print("consread %#llux\n", c->qid.path);
