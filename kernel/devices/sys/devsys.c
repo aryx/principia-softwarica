@@ -15,6 +15,7 @@ enum{
     /*s: devsys.c enum Qxxx cases */
         Qosversion,
     /*x: devsys.c enum Qxxx cases */
+        Qconfig,
     /*x: devsys.c enum Qxxx cases */
         Qsysname,
     /*x: devsys.c enum Qxxx cases */
@@ -29,6 +30,7 @@ static Dirtab sysdir[]={
     /*s: [[sysdir]] fields */
         "osversion",    {Qosversion},   0,      0444,
     /*x: [[sysdir]] fields */
+        "config",   {Qconfig},  0,      0444,
     /*x: [[sysdir]] fields */
         "sysname",  {Qsysname}, 0,      0664,
     /*x: [[sysdir]] fields */
@@ -36,6 +38,9 @@ static Dirtab sysdir[]={
 };
 /*e: global sysdir */
 
+/*s: devsys.c decls and globals */
+extern uchar configfile[]; // in $CONF.c
+/*e: devsys.c decls and globals */
 /*s: global sysname */
 char    *sysname;
 /*e: global sysname */
@@ -112,6 +117,8 @@ sysread(Chan *c, void *buf, long n, vlong off)
             n = readstr((ulong)offset, buf, n, tmp);
             return n;
     /*x: [[sysread()]] cases */
+        case Qconfig:
+            return readstr((ulong)offset, buf, n, (char*) configfile);
     /*x: [[sysread()]] cases */
         case Qsysname:
             if(sysname == nil)

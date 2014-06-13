@@ -704,7 +704,6 @@ enum{
     Qtime,
     Quser,
     Qzero,
-    Qconfig,
 };
 /*e: devcons.c enum Qxxx */
 
@@ -740,7 +739,6 @@ static Dirtab consdir[]={
     "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
     "user",     {Quser},    0,      0666,
     "zero",     {Qzero},    0,      0444,
-    "config",   {Qconfig},  0,      0444,
 };
 /*e: global consdir */
 
@@ -842,7 +840,6 @@ consread(Chan *c, void *buf, long n, vlong off)
     char tmp[256];      /* must be >= 18*NUMSIZE (Qswap) */
     int i, k, id, send;
     vlong offset = off;
-    extern char configfile[];
 
     if(n <= 0)
         return n;
@@ -969,9 +966,6 @@ consread(Chan *c, void *buf, long n, vlong off)
         memset(buf, 0, n);
         return n;
 
-
-    case Qconfig:
-        return readstr((ulong)offset, buf, n, configfile);
 
     case Qsysstat:
         b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
