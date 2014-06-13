@@ -78,9 +78,6 @@ static struct ConsKbd kbd =
 };
 /*e: global kbd */
 
-/*s: global sysname */
-char    *sysname;
-/*e: global sysname */
 /*s: global fasthz */
 vlong   fasthz;
 /*e: global fasthz */
@@ -687,9 +684,9 @@ enum{
     Qdir,
 
     Qcons,
+    Qconsctl,
 
     Qbintime,
-    Qconsctl,
     Qcputime,
     Qdrivers,
     Qkmesg,
@@ -697,14 +694,12 @@ enum{
     Qhostdomain,
     Qhostowner,
     Qnull,
-    Qosversion,
     Qpgrpid,
     Qpid,
     Qppid,
     Qrandom,
     Qreboot,
     Qswap,
-    Qsysname,
     Qsysstat,
     Qtime,
     Quser,
@@ -723,10 +718,11 @@ enum
 /*s: global consdir */
 static Dirtab consdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
+
     "cons",     {Qcons},    0,      0660,
+    "consctl",  {Qconsctl}, 0,      0220,
 
     "bintime",  {Qbintime}, 24,     0664,
-    "consctl",  {Qconsctl}, 0,      0220,
     "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
     "drivers",  {Qdrivers}, 0,      0444,
     "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
@@ -734,14 +730,12 @@ static Dirtab consdir[]={
     "kmesg",    {Qkmesg},   0,      0440,
     "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
     "null",     {Qnull},    0,      0666,
-    "osversion",    {Qosversion},   0,      0444,
     "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
     "pid",      {Qpid},     NUMSIZE,    0444,
     "ppid",     {Qppid},    NUMSIZE,    0444,
     "random",   {Qrandom},  0,      0444,
     "reboot",   {Qreboot},  0,      0660,
     "swap",     {Qswap},    0,      0664,
-    "sysname",  {Qsysname}, 0,      0664,
     "sysstat",  {Qsysstat}, 0,      0666,
     "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
     "user",     {Quser},    0,      0666,
@@ -949,11 +943,13 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qppid:
         return readnum((ulong)offset, buf, n, up->parentpid, NUMSIZE);
 
+
     case Qtime:
         return readtime((ulong)offset, buf, n);
 
     case Qbintime:
         return readbintime(buf, n);
+
 
     case Qhostowner:
         return readstr((ulong)offset, buf, n, eve);
@@ -961,11 +957,18 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qhostdomain:
         return readstr((ulong)offset, buf, n, hostdomain);
 
+
     case Quser:
         return readstr((ulong)offset, buf, n, up->user);
 
+
     case Qnull:
         return 0;
+
+    case Qzero:
+        memset(buf, 0, n);
+        return n;
+
 
     case Qconfig:
         return readstr((ulong)offset, buf, n, configfile);
@@ -1033,11 +1036,6 @@ consread(Chan *c, void *buf, long n, vlong off)
             return readstr((ulong)offset, buf, n, tmp);
     /*e: [[consread()]] Qswap case */
 
-    case Qsysname:
-        if(sysname == nil)
-            return 0;
-        return readstr((ulong)offset, buf, n, sysname);
-
     case Qrandom:
         return randomread(buf, n);
 
@@ -1058,14 +1056,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         poperror();
         return n;
 
-    case Qzero:
-        memset(buf, 0, n);
-        return n;
 
-    case Qosversion:
-        snprint(tmp, sizeof tmp, "2000");
-        n = readstr((ulong)offset, buf, n, tmp);
-        return n;
 
     default:
         print("consread %#llux\n", c->qid.path);
@@ -1079,13 +1070,14 @@ consread(Chan *c, void *buf, long n, vlong off)
 static long
 conswrite(Chan *c, void *va, long n, vlong off)
 {
+    char *a;
+    ulong offset;
+
     char buf[256], ch;
     long l, bp;
-    char *a;
     Cpu *mp;
     int id, fd;
     Chan *swc;
-    ulong offset;
     Cmdbuf *cb;
     Cmdtab *ct;
 
@@ -1135,6 +1127,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
         }
         break;
 
+
     case Qtime:
         if(!iseve())
             error(Eperm);
@@ -1145,6 +1138,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
             error(Eperm);
         return writebintime(a, n);
 
+
     case Qhostowner:
         return hostownerwrite(a, n);
 
@@ -1154,11 +1148,9 @@ conswrite(Chan *c, void *va, long n, vlong off)
     case Quser:
         return userwrite(a, n);
 
-    case Qnull:
-        break;
 
-    case Qconfig:
-        error(Eperm);
+    // > /dev/null :)
+    case Qnull:
         break;
 
     case Qreboot:
@@ -1221,17 +1213,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
             break;
     /*e: [[conswrite()]] Qswap case */
 
-    case Qsysname:
-        if(offset != 0)
-            error(Ebadarg);
-        if(n <= 0 || n >= sizeof buf)
-            error(Ebadarg);
-        strncpy(buf, a, n);
-        buf[n] = 0;
-        if(buf[n-1] == '\n')
-            buf[n-1] = 0;
-        kstrdup(&sysname, buf);
-        break;
 
     default:
         print("conswrite: %#llux\n", c->qid.path);

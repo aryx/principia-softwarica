@@ -18513,9 +18513,9 @@ enum{
     Qdir,
 
     Qcons,
+    Qconsctl,
 
     Qbintime,
-    Qconsctl,
     Qcputime,
     Qdrivers,
     Qkmesg,
@@ -18523,14 +18523,12 @@ enum{
     Qhostdomain,
     Qhostowner,
     Qnull,
-    Qosversion,
     Qpgrpid,
     Qpid,
     Qppid,
     Qrandom,
     Qreboot,
     Qswap,
-    Qsysname,
     Qsysstat,
     Qtime,
     Quser,
@@ -18542,10 +18540,11 @@ enum{
 <<global consdir>>=
 static Dirtab consdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
+
     "cons",     {Qcons},    0,      0660,
+    "consctl",  {Qconsctl}, 0,      0220,
 
     "bintime",  {Qbintime}, 24,     0664,
-    "consctl",  {Qconsctl}, 0,      0220,
     "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
     "drivers",  {Qdrivers}, 0,      0444,
     "hostdomain",   {Qhostdomain},  DOMLEN,     0664,
@@ -18553,14 +18552,12 @@ static Dirtab consdir[]={
     "kmesg",    {Qkmesg},   0,      0440,
     "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
     "null",     {Qnull},    0,      0666,
-    "osversion",    {Qosversion},   0,      0444,
     "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
     "pid",      {Qpid},     NUMSIZE,    0444,
     "ppid",     {Qppid},    NUMSIZE,    0444,
     "random",   {Qrandom},  0,      0444,
     "reboot",   {Qreboot},  0,      0660,
     "swap",     {Qswap},    0,      0664,
-    "sysname",  {Qsysname}, 0,      0664,
     "sysstat",  {Qsysstat}, 0,      0666,
     "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
     "user",     {Quser},    0,      0666,
@@ -19200,11 +19197,13 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qppid:
         return readnum((ulong)offset, buf, n, up->parentpid, NUMSIZE);
 
+
     case Qtime:
         return readtime((ulong)offset, buf, n);
 
     case Qbintime:
         return readbintime(buf, n);
+
 
     case Qhostowner:
         return readstr((ulong)offset, buf, n, eve);
@@ -19212,11 +19211,18 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qhostdomain:
         return readstr((ulong)offset, buf, n, hostdomain);
 
+
     case Quser:
         return readstr((ulong)offset, buf, n, up->user);
 
+
     case Qnull:
         return 0;
+
+    case Qzero:
+        memset(buf, 0, n);
+        return n;
+
 
     case Qconfig:
         return readstr((ulong)offset, buf, n, configfile);
@@ -19265,11 +19271,6 @@ consread(Chan *c, void *buf, long n, vlong off)
 
     <<[[consread()]] Qswap case>>
 
-    case Qsysname:
-        if(sysname == nil)
-            return 0;
-        return readstr((ulong)offset, buf, n, sysname);
-
     case Qrandom:
         return randomread(buf, n);
 
@@ -19290,14 +19291,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         poperror();
         return n;
 
-    case Qzero:
-        memset(buf, 0, n);
-        return n;
 
-    case Qosversion:
-        snprint(tmp, sizeof tmp, "2000");
-        n = readstr((ulong)offset, buf, n, tmp);
-        return n;
 
     default:
         print("consread %#llux\n", c->qid.path);
@@ -19311,13 +19305,14 @@ consread(Chan *c, void *buf, long n, vlong off)
 static long
 conswrite(Chan *c, void *va, long n, vlong off)
 {
+    char *a;
+    ulong offset;
+
     char buf[256], ch;
     long l, bp;
-    char *a;
     Cpu *mp;
     int id, fd;
     Chan *swc;
-    ulong offset;
     Cmdbuf *cb;
     Cmdtab *ct;
 
@@ -19351,6 +19346,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
         }
         break;
 
+
     case Qtime:
         if(!iseve())
             error(Eperm);
@@ -19361,6 +19357,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
             error(Eperm);
         return writebintime(a, n);
 
+
     case Qhostowner:
         return hostownerwrite(a, n);
 
@@ -19370,11 +19367,9 @@ conswrite(Chan *c, void *va, long n, vlong off)
     case Quser:
         return userwrite(a, n);
 
-    case Qnull:
-        break;
 
-    case Qconfig:
-        error(Eperm);
+    // > /dev/null :)
+    case Qnull:
         break;
 
     case Qreboot:
@@ -19418,17 +19413,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
 
     <<[[conswrite()]] Qswap case>>
 
-    case Qsysname:
-        if(offset != 0)
-            error(Ebadarg);
-        if(n <= 0 || n >= sizeof buf)
-            error(Ebadarg);
-        strncpy(buf, a, n);
-        buf[n] = 0;
-        if(buf[n-1] == '\n')
-            buf[n-1] = 0;
-        kstrdup(&sysname, buf);
-        break;
 
     default:
         print("conswrite: %#llux\n", c->qid.path);
@@ -19459,12 +19443,6 @@ Dev consdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
-@ 
-
-\subsection{Other}
-
-<<global sysname>>=
-char    *sysname;
 @ 
 
 \section{Special devices}
@@ -23451,7 +23429,7 @@ shargs(char *s, int n, char **ap)
 
 \section{SMP}
 
-\section{Advanced Virtual Memory}
+\section{Advanced virtual memory}
 
 \section{Real-time scheduling}
 
@@ -23460,6 +23438,9 @@ shargs(char *s, int n, char **ap)
 \section{Power managment}
 
 % other: Serial line, Scsi, see Kernel_extra.tex.nw
+
+
+
 
 \chapter{Special Fileservers}
 
@@ -25035,16 +25016,18 @@ sysdup(ulong* arg)
 
 \subsection{[[/fd/]]}
 
+
 \section{[[/sys/]]}
+
 % when /sys/ vs /dev/?
-% if can't write into it, then I would go for /sys/
+% if can't write into it, then for sure should go for /sys/
 % if can write into it but it's hard to relate to a device notion then go for /sys/
 
 <<devsys.c enum Qxxx>>=
 enum{
     Qdir,
 
-    Qmisc,
+    <<devsys.c enum Qxxx cases>>
 };
 @
 
@@ -25052,7 +25035,7 @@ enum{
 static Dirtab sysdir[]={
     ".",    {Qdir, 0, QTDIR},   0,      DMDIR|0555,
 
-    "misc", {Qmisc},    0,      0444,
+    <<[[sysdir]] fields>>
 };
 @
 
@@ -25077,6 +25060,7 @@ static long
 sysread(Chan *c, void *buf, long n, vlong off)
 {
     vlong offset = off;
+    char tmp[256];
 
     if(n <= 0)
         return n;
@@ -25085,10 +25069,7 @@ sysread(Chan *c, void *buf, long n, vlong off)
     case Qdir:
         return devdirread(c, buf, n, sysdir, nelem(sysdir), devgen);
 
-        
-    case Qmisc:
-        return readstr((ulong)offset, buf, n, up->user);
-
+    <<[[sysread()]] cases>>
 
     default:
         print("sysread %#llux\n", c->qid.path);
@@ -25104,10 +25085,21 @@ static long
 syswrite(Chan *c, void *va, long n, vlong off)
 {
     ulong offset;
+    char *a;
+    char buf[256];
 
     offset = off;
+    a = va;
 
     switch((ulong)c->qid.path){
+
+    <<[[syswrite()]] cases>>
+
+    case Qosversion:
+
+        error(Eperm);
+        break;
+
     default:
         print("syswrite: %#llux\n", c->qid.path);
         error(Egreg);
@@ -25115,6 +25107,10 @@ syswrite(Chan *c, void *va, long n, vlong off)
     return n;
 }
 @
+
+<<[[syswrite()]] cases>>=
+@
+
 
 <<global sysdevtab>>=
 Dev sysdevtab = {
@@ -25140,11 +25136,292 @@ Dev sysdevtab = {
 @
 
 
+\subsection{[[/sys/osversion]]}
+
+<<devsys.c enum Qxxx cases>>=
+    Qosversion,
+@
+
+<<[[sysdir]] fields>>=
+    "osversion",    {Qosversion},   0,      0444,
+@
+
+<<[[sysread()]] cases>>=
+    case Qosversion:
+        snprint(tmp, sizeof tmp, "pad's version");
+        n = readstr((ulong)offset, buf, n, tmp);
+        return n;
+@
+
+
+\subsection{[[/sys/config]]}
+% template
+
+<<devsys.c enum Qxxx cases>>=
+@
+
+<<[[sysdir]] fields>>=
+@
+
+<<[[sysread()]] cases>>=
+@
+
+<<[[syswrite()]] cases>>=
+@
+
+\subsection{[[/sys/sysname]]}
+
+<<global sysname>>=
+char    *sysname;
+@ 
+
+<<devsys.c enum Qxxx cases>>=
+    Qsysname,
+@
+
+<<[[sysdir]] fields>>=
+    "sysname",  {Qsysname}, 0,      0664,
+@
+
+<<[[sysread()]] cases>>=
+    case Qsysname:
+        if(sysname == nil)
+            return 0;
+        return readstr((ulong)offset, buf, n, sysname);
+@
+
+<<[[syswrite()]] cases>>=
+    case Qsysname:
+        if(offset != 0)
+            error(Ebadarg);
+        if(n <= 0 || n >= sizeof buf)
+            error(Ebadarg);
+        strncpy(buf, a, n);
+        buf[n] = 0;
+        if(buf[n-1] == '\n')
+            buf[n-1] = 0;
+        kstrdup(&sysname, buf);
+        break;
+@
+
+
+
 \subsection{[[/sys/xxx]]}
+% template
 
-% put here code from devcons.c
+<<devsys.c enum Qxxx cases>>=
+@
 
-\subsection{[[/sys/reboot]]}
+<<[[sysdir]] fields>>=
+@
+
+<<[[sysread()]] cases>>=
+@
+
+<<[[syswrite()]] cases>>=
+@
+
+
+\section{[[/dev/]]}
+
+\subsection{[[/dev/random]]}
+
+<<global randn>>=
+static  ulong   randn;
+@
+
+
+<<function seedrand>>=
+static void
+seedrand(void)
+{
+    if(!waserror()){
+        randomread((void*)&randn, sizeof(randn));
+        poperror();
+    }
+}
+@
+
+
+<<function nrand>>=
+int
+nrand(int n)
+{
+    if(randn == 0)
+        seedrand();
+    randn = randn*1103515245 + 12345 + CPUS(0)->ticks;
+    return (randn>>16) % n;
+}
+@
+
+
+<<struct Rb>>=
+struct Rb
+{
+    QLock;
+    Rendez  producer;
+    Rendez  consumer;
+    ulong   randomcount;
+    uchar   buf[1024];
+    uchar   *ep;
+    uchar   *rp;
+    uchar   *wp;
+    uchar   next;
+    uchar   wakeme;
+    ushort  bits;
+    ulong   randn;
+};
+@
+
+
+<<global rb>>=
+struct Rb rb;
+@
+
+
+<<struct rbnotfull>>=
+static int
+rbnotfull(void*)
+{
+    int i;
+
+    i = rb.rp - rb.wp;
+    return i != 1 && i != (1 - sizeof(rb.buf));
+}
+@
+
+
+<<struct rbnotempty>>=
+static int
+rbnotempty(void*)
+{
+    return rb.wp != rb.rp;
+}
+@
+
+
+<<function genrandom>>=
+static void
+genrandom(void*)
+{
+    up->basepri = PriNormal;
+    up->priority = up->basepri;
+
+    for(;;){
+        for(;;)
+            if(++rb.randomcount > 100000)
+                break;
+        if(anyhigher())
+            sched();
+        if(!rbnotfull(0))
+            sleep(&rb.producer, rbnotfull, 0);
+    }
+}
+@
+
+<<clock callback randomclock>>=
+/*
+ *  produce random bits in a circular buffer
+ */
+static void
+randomclock(void)
+{
+    if(rb.randomcount == 0 || !rbnotfull(0))
+        return;
+
+    rb.bits = (rb.bits<<2) ^ rb.randomcount;
+    rb.randomcount = 0;
+
+    rb.next++;
+    if(rb.next != 8/2)
+        return;
+    rb.next = 0;
+
+    *rb.wp ^= rb.bits;
+    if(rb.wp+1 == rb.ep)
+        rb.wp = rb.buf;
+    else
+        rb.wp = rb.wp+1;
+
+    if(rb.wakeme)
+        wakeup(&rb.consumer);
+}
+@
+
+<<function randominit>>=
+void
+randominit(void)
+{
+    /* Frequency close but not equal to HZ */
+    addclock0link(randomclock, 13);
+    rb.ep = rb.buf + sizeof(rb.buf);
+    rb.rp = rb.wp = rb.buf;
+    kproc("genrandom", genrandom, 0);
+}
+@
+
+
+<<function randomread>>=
+/*
+ *  consume random bytes from a circular buffer
+ */
+ulong
+randomread(void *xp, ulong n)
+{
+    uchar *e, *p;
+    ulong x;
+
+    p = xp;
+
+    if(waserror()){
+        qunlock(&rb);
+        nexterror();
+    }
+
+    qlock(&rb);
+    for(e = p + n; p < e; ){
+        if(rb.wp == rb.rp){
+            rb.wakeme = 1;
+            wakeup(&rb.producer);
+            sleep(&rb.consumer, rbnotempty, 0);
+            rb.wakeme = 0;
+            continue;
+        }
+
+        /*
+         *  beating clocks will be predictable if
+         *  they are synchronized.  Use a cheap pseudo-
+         *  random number generator to obscure any cycles.
+         */
+        x = rb.randn*1103515245 ^ *rb.rp;
+        *p++ = rb.randn = x;
+
+        if(rb.rp+1 == rb.ep)
+            rb.rp = rb.buf;
+        else
+            rb.rp = rb.rp+1;
+    }
+    qunlock(&rb);
+    poperror();
+
+    wakeup(&rb.producer);
+
+    return n;
+}
+@
+
+
+
+%//int
+%//rand(void)
+%//{
+%//  nrand(1);
+%//  return randn;
+%//}
+
+
+
+\subsection{[[/dev/reboot]]}
 
 <<function exit>>=
 void
@@ -25396,205 +25673,6 @@ Cmdtab rebootmsg[] =
     CMpanic,    "panic",    0,
 };
 @
-
-\section{[[/dev/]]}
-
-\subsection{[[/dev/random]]}
-
-<<global randn>>=
-static  ulong   randn;
-@
-
-
-<<function seedrand>>=
-static void
-seedrand(void)
-{
-    if(!waserror()){
-        randomread((void*)&randn, sizeof(randn));
-        poperror();
-    }
-}
-@
-
-
-<<function nrand>>=
-int
-nrand(int n)
-{
-    if(randn == 0)
-        seedrand();
-    randn = randn*1103515245 + 12345 + CPUS(0)->ticks;
-    return (randn>>16) % n;
-}
-@
-
-
-<<struct Rb>>=
-struct Rb
-{
-    QLock;
-    Rendez  producer;
-    Rendez  consumer;
-    ulong   randomcount;
-    uchar   buf[1024];
-    uchar   *ep;
-    uchar   *rp;
-    uchar   *wp;
-    uchar   next;
-    uchar   wakeme;
-    ushort  bits;
-    ulong   randn;
-};
-@
-
-
-<<global rb>>=
-struct Rb rb;
-@
-
-
-<<struct rbnotfull>>=
-static int
-rbnotfull(void*)
-{
-    int i;
-
-    i = rb.rp - rb.wp;
-    return i != 1 && i != (1 - sizeof(rb.buf));
-}
-@
-
-
-<<struct rbnotempty>>=
-static int
-rbnotempty(void*)
-{
-    return rb.wp != rb.rp;
-}
-@
-
-
-<<function genrandom>>=
-static void
-genrandom(void*)
-{
-    up->basepri = PriNormal;
-    up->priority = up->basepri;
-
-    for(;;){
-        for(;;)
-            if(++rb.randomcount > 100000)
-                break;
-        if(anyhigher())
-            sched();
-        if(!rbnotfull(0))
-            sleep(&rb.producer, rbnotfull, 0);
-    }
-}
-@
-
-<<clock callback randomclock>>=
-/*
- *  produce random bits in a circular buffer
- */
-static void
-randomclock(void)
-{
-    if(rb.randomcount == 0 || !rbnotfull(0))
-        return;
-
-    rb.bits = (rb.bits<<2) ^ rb.randomcount;
-    rb.randomcount = 0;
-
-    rb.next++;
-    if(rb.next != 8/2)
-        return;
-    rb.next = 0;
-
-    *rb.wp ^= rb.bits;
-    if(rb.wp+1 == rb.ep)
-        rb.wp = rb.buf;
-    else
-        rb.wp = rb.wp+1;
-
-    if(rb.wakeme)
-        wakeup(&rb.consumer);
-}
-@
-
-<<function randominit>>=
-void
-randominit(void)
-{
-    /* Frequency close but not equal to HZ */
-    addclock0link(randomclock, 13);
-    rb.ep = rb.buf + sizeof(rb.buf);
-    rb.rp = rb.wp = rb.buf;
-    kproc("genrandom", genrandom, 0);
-}
-@
-
-
-<<function randomread>>=
-/*
- *  consume random bytes from a circular buffer
- */
-ulong
-randomread(void *xp, ulong n)
-{
-    uchar *e, *p;
-    ulong x;
-
-    p = xp;
-
-    if(waserror()){
-        qunlock(&rb);
-        nexterror();
-    }
-
-    qlock(&rb);
-    for(e = p + n; p < e; ){
-        if(rb.wp == rb.rp){
-            rb.wakeme = 1;
-            wakeup(&rb.producer);
-            sleep(&rb.consumer, rbnotempty, 0);
-            rb.wakeme = 0;
-            continue;
-        }
-
-        /*
-         *  beating clocks will be predictable if
-         *  they are synchronized.  Use a cheap pseudo-
-         *  random number generator to obscure any cycles.
-         */
-        x = rb.randn*1103515245 ^ *rb.rp;
-        *p++ = rb.randn = x;
-
-        if(rb.rp+1 == rb.ep)
-            rb.rp = rb.buf;
-        else
-            rb.rp = rb.rp+1;
-    }
-    qunlock(&rb);
-    poperror();
-
-    wakeup(&rb.producer);
-
-    return n;
-}
-@
-
-
-
-%//int
-%//rand(void)
-%//{
-%//  nrand(1);
-%//  return randn;
-%//}
-
-
 
 \chapter{Conclusion}
 
