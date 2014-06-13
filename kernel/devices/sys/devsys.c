@@ -21,6 +21,7 @@ enum{
     /*x: devsys.c enum Qxxx cases */
         Qdrivers,
     /*x: devsys.c enum Qxxx cases */
+        Qreboot,
     /*x: devsys.c enum Qxxx cases */
         Qsysstat,
     /*e: devsys.c enum Qxxx cases */
@@ -40,6 +41,7 @@ static Dirtab sysdir[]={
     /*x: [[sysdir]] fields */
         "drivers",  {Qdrivers}, 0,      0444,
     /*x: [[sysdir]] fields */
+        "reboot",   {Qreboot},  0,      0660,
     /*x: [[sysdir]] fields */
         "sysstat",  {Qsysstat}, 0,      0666,
     /*e: [[sysdir]] fields */
@@ -48,6 +50,20 @@ static Dirtab sysdir[]={
 
 /*s: devsys.c decls and globals */
 extern uchar configfile[]; // in $CONF.c
+/*x: devsys.c decls and globals */
+enum
+{
+    CMhalt,
+    CMreboot,
+    CMpanic,
+};
+
+Cmdtab rebootmsg[] =
+{
+    CMhalt,     "halt",     1,
+    CMreboot,   "reboot",   0,
+    CMpanic,    "panic",    0,
+};
 /*e: devsys.c decls and globals */
 /*s: global sysname */
 char    *sysname;
@@ -111,10 +127,12 @@ sysread(Chan *c, void *buf, long n, vlong off)
 {
     vlong offset = off;
     char tmp[256];
-    char *b, *bp;
-    int i, k;
-    Cpu *mp;
-    int id;
+    /*s: [[sysread()]] locals */
+        char *b, *bp;
+        int i, k;
+        Cpu *mp;
+        int id;
+    /*e: [[sysread()]] locals */
 
     if(n <= 0)
         return n;
@@ -153,7 +171,6 @@ sysread(Chan *c, void *buf, long n, vlong off)
             free(b);
             poperror();
             return n;
-    /*x: [[sysread()]] cases */
     /*x: [[sysread()]] cases */
         case Qsysstat:
             b = smalloc(conf.ncpu*(NUMSIZE*11+1) + 1); /* +1 for NUL */
@@ -212,9 +229,14 @@ syswrite(Chan *c, void *va, long n, vlong off)
 {
     ulong offset;
     char *a;
-    char buf[256];
-    Cpu *mp;
-    int id;
+    /*s: [[syswrite()]] locals */
+        char buf[256];
+        Cpu *mp;
+        int id;
+    /*x: [[syswrite()]] locals */
+        Cmdbuf *cb;
+        Cmdtab *ct;
+    /*e: [[syswrite()]] locals */
 
     offset = off;
     a = va;
@@ -222,8 +244,6 @@ syswrite(Chan *c, void *va, long n, vlong off)
     switch((ulong)c->qid.path){
 
     /*s: [[syswrite()]] cases */
-    /*x: [[syswrite()]] cases */
-    /*x: [[syswrite()]] cases */
         case Qsysname:
             if(offset != 0)
                 error(Ebadarg);
@@ -236,6 +256,30 @@ syswrite(Chan *c, void *va, long n, vlong off)
             kstrdup(&sysname, buf);
             break;
     /*x: [[syswrite()]] cases */
+        case Qreboot:
+            if(!iseve())
+                error(Eperm);
+            cb = parsecmd(a, n);
+
+            if(waserror()) {
+                free(cb);
+                nexterror();
+            }
+            ct = lookupcmd(cb, rebootmsg, nelem(rebootmsg));
+            switch(ct->index) {
+            case CMhalt:
+                reboot(nil, 0, 0);
+                break;
+            case CMreboot:
+                rebootcmd(cb->nf-1, cb->f+1);
+                break;
+            case CMpanic:
+                *(ulong*)0=0;
+                panic("/dev/reboot");
+            }
+            poperror();
+            free(cb);
+            break;
     /*x: [[syswrite()]] cases */
         case Qsysstat:
             for(id = 0; id < 32; id++) {
@@ -252,11 +296,6 @@ syswrite(Chan *c, void *va, long n, vlong off)
             break;
 
     /*e: [[syswrite()]] cases */
-
-    case Qosversion:
-
-        error(Eperm);
-        break;
 
     default:
         print("syswrite: %#llux\n", c->qid.path);

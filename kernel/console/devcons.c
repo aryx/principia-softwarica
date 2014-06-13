@@ -90,24 +90,6 @@ static int  writetime(char*, int);
 static int  writebintime(char*, int);
 /*e: devcons.c forward decl */
 
-/*s: devcons.c enum Cmd */
-enum
-{
-    CMhalt,
-    CMreboot,
-    CMpanic,
-};
-/*e: devcons.c enum Cmd */
-
-/*s: global rebootmsg */
-Cmdtab rebootmsg[] =
-{
-    CMhalt,     "halt",     1,
-    CMreboot,   "reboot",   0,
-    CMpanic,    "panic",    0,
-};
-/*e: global rebootmsg */
-
 /*s: function lineqinit */
 void
 lineqinit(void)
@@ -697,7 +679,6 @@ enum{
     Qpid,
     Qppid,
     Qrandom,
-    Qreboot,
     Qswap,
     Qtime,
     Quser,
@@ -730,7 +711,6 @@ static Dirtab consdir[]={
     "pid",      {Qpid},     NUMSIZE,    0444,
     "ppid",     {Qppid},    NUMSIZE,    0444,
     "random",   {Qrandom},  0,      0444,
-    "reboot",   {Qreboot},  0,      0660,
     "swap",     {Qswap},    0,      0664,
     "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
     "user",     {Quser},    0,      0666,
@@ -961,7 +941,6 @@ consread(Chan *c, void *buf, long n, vlong off)
         memset(buf, 0, n);
         return n;
 
-
     /*s: [[consread()]] Qswap case */
         case Qswap:
             snprint(tmp, sizeof tmp,
@@ -983,8 +962,10 @@ consread(Chan *c, void *buf, long n, vlong off)
             return readstr((ulong)offset, buf, n, tmp);
     /*e: [[consread()]] Qswap case */
 
-    case Qrandom:
-        return randomread(buf, n);
+    /*s: [[consread()]] cases */
+        case Qrandom:
+            return randomread(buf, n);
+    /*e: [[consread()]] cases */
 
     default:
         print("consread %#llux\n", c->qid.path);
@@ -1001,12 +982,12 @@ conswrite(Chan *c, void *va, long n, vlong off)
     char *a;
     ulong offset;
 
-    char buf[256], ch;
-    long l, bp;
-    int id, fd;
-    Chan *swc;
-    Cmdbuf *cb;
-    Cmdtab *ct;
+    /*s: [[conswrite]] locals */
+        char buf[256], ch;
+        long l, bp;
+        int id, fd;
+        Chan *swc;
+    /*e: [[conswrite]] locals */
 
     a = va;
     offset = off;
@@ -1078,31 +1059,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
 
     // > /dev/null :)
     case Qnull:
-        break;
-
-    case Qreboot:
-        if(!iseve())
-            error(Eperm);
-        cb = parsecmd(a, n);
-
-        if(waserror()) {
-            free(cb);
-            nexterror();
-        }
-        ct = lookupcmd(cb, rebootmsg, nelem(rebootmsg));
-        switch(ct->index) {
-        case CMhalt:
-            reboot(nil, 0, 0);
-            break;
-        case CMreboot:
-            rebootcmd(cb->nf-1, cb->f+1);
-            break;
-        case CMpanic:
-            *(ulong*)0=0;
-            panic("/dev/reboot");
-        }
-        poperror();
-        free(cb);
         break;
 
     /*s: [[conswrite()]] Qswap case */
