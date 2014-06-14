@@ -353,9 +353,9 @@ sysexec(ulong* arg)
     bss = l2be(exec.bss);
     t = UTROUND(UTZERO+sizeof(Exec)+text);
     // data is put at page boundary after text (see also _multibootentry)
-    d = (t + data + (BY2PG-1)) & ~(BY2PG-1);
+    d = ROUND(t + data, BY2PG);
     // note that not t + d + bss but t + data + bss here
-    b = (t + data + bss + (BY2PG-1)) & ~(BY2PG-1);
+    b = ROUND(t + data + bss, BY2PG);
     if(t >= KZERO || d >= KZERO || b >= KZERO)
         error(Ebadexec);
 
@@ -390,7 +390,7 @@ sysexec(ulong* arg)
         nbytes += ((char*)vmemchr(a, 0, 0x7FFFFFFF) - a) + 1;
         nargs++;
     }
-    ssize = BY2WD*(nargs+1) + ((nbytes+(BY2WD-1)) & ~(BY2WD-1));
+    ssize = BY2WD*(nargs+1) + ROUND(nbytes, BY2WD);
 
     /*
      * 8-byte align SP for those (e.g. sparc) that need it.

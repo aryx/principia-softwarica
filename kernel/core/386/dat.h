@@ -94,11 +94,11 @@ typedef void* kern_addr3;
 
 // could be put in lib.h
 /*s: portdat.h macros */
+#define ROUND(s, sz)  (((s)+(sz-1))&~(sz-1))
+/*x: portdat.h macros */
 #define MIN(a, b) ((a) < (b)? (a): (b))
 #define HOWMANY(x, y) (((x)+((y)-1))/(y))
 #define ROUNDUP(x, y) (HOWMANY((x), (y))*(y)) /* ceiling */
-#define ROUND(s, sz)  (((s)+(sz-1))&~(sz-1))
-// ex: ROUND(??, ??) = ??
 
 // BY2PG is defined in mem.h, which should always be included before "dat.h"!
 #define PGROUND(s)  ROUNDUP(s, BY2PG)

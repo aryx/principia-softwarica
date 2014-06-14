@@ -40,7 +40,7 @@ syssegflush(ulong* arg)
         pe = PAGETABMAPMEM;
         if(pe-ps > l){
             pe = ps + l;
-            pe = (pe+BY2PG-1)&~(BY2PG-1);
+            pe = ROUND(pe, BY2PG);
         }
         if(pe == ps) {
             qunlock(&s->lk);

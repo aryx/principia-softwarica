@@ -307,7 +307,7 @@ pcibusmap(Pcidev *root, ulong *pmema, ulong *pioa, int wrreg)
         hole = tptr->siz;
         if(tptr->bar == -1)
             hole = 1<<12;
-        ioa = (ioa+hole-1) & ~(hole-1);
+        ioa = ROUND(ioa, hole);
 
         p = tptr->dev;
         if(tptr->bar == -1)
@@ -329,7 +329,7 @@ pcibusmap(Pcidev *root, ulong *pmema, ulong *pioa, int wrreg)
         hole = tptr->siz;
         if(tptr->bar == -1)
             hole = 1<<20;
-        mema = (mema+hole-1) & ~(hole-1);
+        mema = ROUND(mema,hole);
 
         p = tptr->dev;
         if(tptr->bar == -1)

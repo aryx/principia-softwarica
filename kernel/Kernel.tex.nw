@@ -487,7 +487,13 @@ provides to the user programs.
 
 % maybe a bit of rappel on bit manip :) 2 complementary arithmetic,
 %  e.g. pa > -KZERO, or in bcm have  pa & ~KSEGM
-% put portdat.h macros here? ROUND, etc
+
+<<portdat.h macros>>=
+#define ROUND(s, sz)  (((s)+(sz-1))&~(sz-1))
+@
+%ex: ROUND(2045, 1024) -> 3072 (3 * 1024), it rounds up
+% the round down would be just: s&~(sz-1), ex: va &= ~(BY2PG-1);
+
 
 \section{Code organization}
 % codemap and codegraph screenshot?
@@ -4638,9 +4644,9 @@ sysexec(ulong* arg)
     bss = l2be(exec.bss);
     t = UTROUND(UTZERO+sizeof(Exec)+text);
     // data is put at page boundary after text (see also _multibootentry)
-    d = (t + data + (BY2PG-1)) & ~(BY2PG-1);
+    d = ROUND(t + data, BY2PG);
     // note that not t + d + bss but t + data + bss here
-    b = (t + data + bss + (BY2PG-1)) & ~(BY2PG-1);
+    b = ROUND(t + data + bss, BY2PG);
     if(t >= KZERO || d >= KZERO || b >= KZERO)
         error(Ebadexec);
 
@@ -4664,7 +4670,7 @@ sysexec(ulong* arg)
         nbytes += ((char*)vmemchr(a, 0, 0x7FFFFFFF) - a) + 1;
         nargs++;
     }
-    ssize = BY2WD*(nargs+1) + ((nbytes+(BY2WD-1)) & ~(BY2WD-1));
+    ssize = BY2WD*(nargs+1) + ROUND(nbytes, BY2WD);
 
     /*
      * 8-byte align SP for those (e.g. sparc) that need it.
@@ -22544,7 +22550,7 @@ syssegflush(ulong* arg)
         pe = PAGETABMAPMEM;
         if(pe-ps > l){
             pe = ps + l;
-            pe = (pe+BY2PG-1)&~(BY2PG-1);
+            pe = ROUND(pe, BY2PG);
         }
         if(pe == ps) {
             qunlock(&s->lk);

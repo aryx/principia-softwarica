@@ -628,8 +628,7 @@ sbbufinit(void)
     int i;
     uchar *p;
 
-    p = (uchar*)(((ulong)xalloc((Nbuf+1) * Bufsize) + Bufsize-1) &
-        ~(Bufsize-1));
+    p = (uchar*)(ROUND((ulong)xalloc((Nbuf+1) * Bufsize), Bufsize));
     if (p == nil)
         panic("sbbufinit: no memory");
     for(i=0; i<Nbuf; i++) {
