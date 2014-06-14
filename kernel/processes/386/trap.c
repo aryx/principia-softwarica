@@ -775,10 +775,11 @@ syscall(Ureg* ureg)
 
     cpu->syscall++;
     up->insyscall = true;
+
     up->pc = ureg->pc;
     up->dbgreg = ureg;
-
     sp = ureg->usp;
+
     // syscall number!
     scallnr = ureg->ax;
 
@@ -844,8 +845,6 @@ syscall(Ureg* ureg)
         e = up->syserrstr;
         up->syserrstr = up->errstr;
         up->errstr = e;
-        //if(0 && up->pid == 1)
-        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
     }
 
     if(up->nerrlab){
@@ -881,13 +880,17 @@ syscall(Ureg* ureg)
     up->insyscall = false;
     up->psstate = nil;
 
-    if(scallnr == NOTED)
-        noted(ureg, *(ulong*)(sp+BY2WD));
+    /*s: [[syscall()]] call noted() */
+        if(scallnr == NOTED)
+            noted(ureg, *(ulong*)(sp+BY2WD));
+    /*e: [[syscall()]] call noted() */
+    /*s: [[syscall()]] call notify() */
+        if(scallnr!=RFORK && (up->procctl || up->nnote)){
+            splhi();
+            notify(ureg);
+        }
+    /*e: [[syscall()]] call notify() */
 
-    if(scallnr!=RFORK && (up->procctl || up->nnote)){
-        splhi();
-        notify(ureg);
-    }
     /*s: [[syscall()]] if delaysched */
     /* if we delayed sched because we held a lock, sched now */
     if(up->delaysched)

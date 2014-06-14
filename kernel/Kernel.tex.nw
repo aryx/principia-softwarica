@@ -6484,7 +6484,8 @@ kexit(Ureg*)
 
 
 
-\section{Software interrupts (a.k.a syscalls)}
+\section{[[syscall()]]}
+%Software interrupts (a.k.a syscalls)
 
 <<constant MAXSYSARG>>=
 // used in Proc
@@ -6555,10 +6556,11 @@ syscall(Ureg* ureg)
 
     cpu->syscall++;
     up->insyscall = true;
+
     up->pc = ureg->pc;
     up->dbgreg = ureg;
-
     sp = ureg->usp;
+
     // syscall number!
     scallnr = ureg->ax;
 
@@ -6596,8 +6598,6 @@ syscall(Ureg* ureg)
         e = up->syserrstr;
         up->syserrstr = up->errstr;
         up->errstr = e;
-        //if(0 && up->pid == 1)
-        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
     }
 
     if(up->nerrlab){
@@ -6621,17 +6621,15 @@ syscall(Ureg* ureg)
     up->insyscall = false;
     up->psstate = nil;
 
-    if(scallnr == NOTED)
-        noted(ureg, *(ulong*)(sp+BY2WD));
+    <<[[syscall()]] call noted()>>
+    <<[[syscall()]] call notify()>>
 
-    if(scallnr!=RFORK && (up->procctl || up->nnote)){
-        splhi();
-        notify(ureg);
-    }
     <<[[syscall()]] if delaysched>>
     kexit(ureg);
 }
 @ 
+%        //if(0 && up->pid == 1)
+%        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
 
 \chapter{Virtual Memory}
 % rename x86 virtual memory? but now that have swapping and demand loading
@@ -7230,6 +7228,375 @@ flushpg(virt_addr va)
 
 
 
+\section{Page fault}
+
+% split copy-on-write feature in another section?
+% have also demand-loading here
+
+% see also trapinit
+
+% insyscall saving? means can have trap in a syscall itself?
+
+% addr be kernel (virtual) address or user (virtual) address?
+% can it be kernel address? I don't think so. should panic in that case
+% at least to understand.
+
+<<function fault386>>=
+static void
+fault386(Ureg* ureg, void*)
+{
+    virt_addr addr; 
+    bool read, insyscall, user;
+    int n; // ret_code
+    char buf[ERRMAX];
+
+    addr = getcr2(); // faulting va
+    read = !(ureg->ecode & 2);
+    user = (ureg->cs & 0xFFFF) == UESEL;
+
+    if(!user){
+        if(vmapsync(addr))
+            return;
+        if(addr >= USTKTOP)
+            panic("kernel fault: bad address pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+        if(up == nil)
+            panic("kernel fault: no user process pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+    }
+    if(up == nil)
+        panic("user fault: up=0 pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
+
+    insyscall = up->insyscall;
+    up->insyscall = true; // really?
+
+    n = fault(addr, read); // portable code
+
+    if(n < 0){
+        if(!user){
+            dumpregs(ureg);
+            panic("fault: 0x%lux", addr);
+        }
+        checkpages();
+        //checkfault(addr, ureg->pc);
+        snprint(buf, sizeof buf, "sys: trap: fault %s addr=0x%lux",
+            read ? "read" : "write", addr);
+        postnote(up, 1, buf, NDebug);
+    }
+    up->insyscall = insyscall;
+}
+@ 
+
+
+
+
+
+% ret_code2?
+<<function fault>>=
+int
+fault(virt_addr addr, bool read)
+{
+    Segment *s;
+    char *sps;
+
+    if(up == nil)
+        panic("fault: nil up");
+    if(up->nlocks.ref)
+        print("fault: addr %#p: nlocks %ld\n", addr, up->nlocks.ref);
+
+    sps = up->psstate;
+    up->psstate = "Fault";
+    spllo();
+
+    cpu->pfault++;
+    for(;;) {
+        s = seg(up, addr, /*dolock*/true); /* leaves s->lk qlocked if seg != nil */
+        if(s == nil) {
+            up->psstate = sps;
+            return -1;
+        }
+
+        if(!read && (s->type&SG_RONLY)) {
+            qunlock(&s->lk);
+            up->psstate = sps;
+            return -1;
+        }
+
+        if(fixfault(s, addr, read, /*putmmu*/true) == 0) /* qunlocks s->lk */
+            break;
+
+        // else? try again?
+    }
+
+    up->psstate = sps;
+    return 0;
+}
+@
+
+
+<<[[Conf]] other fields>>=
+bool copymode; /* 0 is copy on write, 1 is copy on reference */
+@
+
+% The big one! very important function!
+%ret_code
+<<function fixfault>>=
+int
+fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
+{
+    int type;
+    int ref;
+    Pagetable **p, *etp;
+    phys_addr mmuphys=nilptr;
+    ulong soff;
+    Page **pg, *lkp, *new;
+
+    addr &= ~(BY2PG-1);
+    soff = addr - s->base;
+    p = &s->pagedir[soff/PAGETABMAPMEM];
+    if(*p == 0)
+        *p = ptalloc();
+
+    etp = *p;
+    pg = &etp->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
+    type = s->type&SG_TYPE;
+
+    if(pg < etp->first)
+        etp->first = pg;
+    if(pg > etp->last)
+        etp->last = pg;
+
+    switch(type) {
+    default:
+        panic("fault");
+        break;
+
+    case SG_TEXT:           /* Demand load */
+        if(pagedout(*pg))
+            pio(s, addr, soff, pg);
+
+        mmuphys = PPN((*pg)->pa) | PTERONLY|PTEVALID;
+        (*pg)->modref = PG_REF;
+        break;
+
+    case SG_BSS:
+    case SG_SHARED:         /* Zero fill on demand */
+    case SG_STACK:
+        if(*pg == 0) {
+            new = newpage(1, &s, addr);
+            if(s == nil) //?? when can be nil at exit?
+                return -1;
+            *pg = new;
+        }
+        goto common;
+
+    case SG_DATA:
+    common:         /* Demand load/pagein/copy on write */
+        if(pagedout(*pg))
+            pio(s, addr, soff, pg);
+
+        /*
+         *  It's only possible to copy on write if
+         *  we're the only user of the segment.
+         */
+        if(read && conf.copymode == false && s->ref == 1) {
+            mmuphys = PPN((*pg)->pa)|PTERONLY|PTEVALID;
+            (*pg)->modref |= PG_REF;
+            break;
+        }
+
+        lkp = *pg;
+        lock(lkp);
+
+        if(lkp->image == &swapimage)
+            ref = lkp->ref + swapcount(lkp->daddr);
+        else
+            ref = lkp->ref;
+        if(ref == 1 && lkp->image){
+            /* save a copy of the original for the image cache */
+            duppage(lkp);
+            ref = lkp->ref;
+        }
+        unlock(lkp);
+        if(ref > 1){
+            new = newpage(0, &s, addr);
+            if(s == nil)
+                return -1;
+            *pg = new;
+            copypage(lkp, *pg);
+            putpage(lkp);
+        }
+        mmuphys = PPN((*pg)->pa) | PTEWRITE | PTEVALID;
+        (*pg)->modref = PG_MOD|PG_REF;
+        break;
+
+    <<[[fixfault()]] SG_PHYSICAL case>>
+    }
+    qunlock(&s->lk);
+
+    if(doputmmu)
+        putmmu(addr, mmuphys, *pg);
+
+    return 0; // OK
+}
+@
+
+
+%\section{page copy?} for copy on write?
+
+% memmove? should be called memcopy no? also rename f -> src, t -> dst?
+<<function copypage>>=
+void
+copypage(Page *f, Page *t)
+{
+    KMap *ks, *kd;
+
+    ks = kmap(f);
+    kd = kmap(t);
+    memmove((void*)VA(kd), (void*)VA(ks), BY2PG);
+    kunmap(ks);
+    kunmap(kd);
+}
+@
+
+
+<<global dupretries>>=
+static int dupretries = 15000;
+@
+
+
+% called only from fixfault, move close to it? for copy-on-write?
+% type: ret_code?
+<<function duppage>>=
+/* Always call with p locked */
+int
+duppage(Page *p)
+{
+    Page *np;
+    int retries;
+
+    retries = 0;
+retry:
+
+    if(retries++ > dupretries){
+        print("duppage %d, up %p\n", retries, up);
+        dupretries += 100;
+        if(dupretries > 100000)
+            panic("duppage\n");
+        uncachepage(p);
+        return 1;
+    }
+        
+
+    /* don't dup pages with no image */
+    if(p->ref == 0 || p->image == nil || p->image->notext)
+        return 0;
+
+    /*
+     *  normal lock ordering is to call
+     *  lock(&palloc) before lock(p).
+     *  To avoid deadlock, we have to drop
+     *  our locks and try again.
+     */
+    if(!canlock(&palloc)){
+        unlock(p);
+        if(up)
+            sched();
+        lock(p);
+        goto retry;
+    }
+
+    /* No freelist cache when memory is very low */
+    if(palloc.freecount < swapalloc.highwater) {
+        unlock(&palloc);
+        uncachepage(p);
+        return 1;
+    }
+
+    np = palloc.head;
+
+    pageunchain(np);
+    pagechaintail(np);
+/*
+* XXX - here's a bug? - np is on the freelist but it's not really free.
+* when we unlock palloc someone else can come in, decide to
+* use np, and then try to lock it.  they succeed after we've 
+* run copypage and cachepage and unlock(np).  then what?
+* they call pageunchain before locking(np), so it's removed
+* from the freelist, but still in the cache because of
+* cachepage below.  if someone else looks in the cache
+* before they remove it, the page will have a nonzero ref
+* once they finally lock(np).
+*/
+    lock(np);
+    unlock(&palloc);
+
+    /* Cache the new version */
+    uncachepage(np);
+    np->va = p->va;
+    np->daddr = p->daddr;
+    copypage(p, np);
+    cachepage(np, p->image);
+    unlock(np);
+    uncachepage(p);
+
+    return 0;
+}
+@
+
+
+
+%-----------------------------------------------------------------------------
+
+<<function checkpages>>=
+void
+checkpages(void)
+{
+    int checked;
+    ulong addr, off;
+    Pagetable *p;
+    Page *pg;
+    Segment **sp, **ep, *s;
+    
+    if(up == nil)
+        return;
+
+    checked = 0;
+    // foreach(up->seg)
+    for(sp=up->seg, ep=&up->seg[NSEG]; sp<ep; sp++){
+        s = *sp;
+        if(s == nil)
+            continue;
+        qlock(&s->lk);
+        for(addr=s->base; addr<s->top; addr+=BY2PG){
+            off = addr - s->base;
+            p = s->pagedir[off/PAGETABMAPMEM];
+            if(p == nil)
+                continue;
+            pg = p->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
+            if(pg == nil || pagedout(pg))
+                continue;
+            checkmmu(addr, pg->pa);
+            checked++;
+        }
+        qunlock(&s->lk);
+    }
+    print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
+}
+@
+
+<<function checkmmu>>=
+/*
+ * Double-check the user MMU.
+ * Error checking only.
+ */
+void
+checkmmu(virt_addr va, phys_addr pa)
+{
+    if(up->mmupd == nil)
+        return;
+    <<[[checkmmu()]] pd at pt check>>
+}
+@
+
 \section{Page cache}
 % maybe mv in Memory section? but it's an optimisation that we can delay to explain
 % have a section Sharing? Text Sharing? put here all forms of Sharing? Kimage
@@ -7447,6 +7814,296 @@ lookpage(KImage *i, ulong daddr)
     return nil;
 }
 @
+
+
+
+\section{Demand loading}
+
+% KImage is demand loading? or just a form of sharing? so that 10 bash
+% dont pay for it (nice opti, but still no shared libs, but less
+% a pb because plan9 libs are small (and ld remove deadcode?))
+
+<<struct KImage>>=
+// a KImage is essentially a channel to a text file (an image of a binary)
+// the image in memory for a portion of a given file.
+struct KImage
+{
+    Chan  *c;     /* channel to text file */
+
+    Qid   qid;      /* Qid for page cache coherence */
+
+    Qid mqid;
+    Chan  *mchan;
+    ushort  type;     /* Device type of owning channel */
+  
+    bool  notext;     /* no file associated */
+  
+    // extra
+    Ref;
+
+    // list<ref<Kimage>> of Imagealloc.free?
+    KImage  *next; /* Free list */ 
+    // hash<Qid.path, list<ref<Kimage>>> Imagealloc.hash
+    KImage  *hash; /* Qid hash chains */ 
+
+    // option<ref<Segment>>?
+    Segment *s;     /* TEXT segment for image if running */
+};
+@
+% (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
+%  ugly #define Image IMAGE each time one wants to use draw.h from a device driver)
+% LP split!
+
+<<struct Imagealloc>>=
+// Image allocator (internal to segment.c, but important so here, singleton)
+struct Imagealloc
+{
+    // array<Kimage>?  xalloc'ed in initimage() (conf.nimage)
+    KImage  *free; 
+    // hash<Qid.path, list<ref<Kimage>>
+    KImage  *hash[IHASHSIZE];
+    QLock ireclaim; /* mutex on reclaiming free images */
+  
+    Chan  **freechan; /* free image channels */
+    int nfreechan;  /* number of free channels */
+    int szfreechan; /* size of freechan array */
+    QLock fcreclaim;  /* mutex on reclaiming free channels */
+  
+    // extra
+    Lock;
+
+};
+@
+
+<<global imagealloc>>=
+static struct Imagealloc imagealloc;
+@
+
+
+
+
+
+
+<<[[Segment]] other fields>>=
+KImage  *image;   /* text in file attached to this segment */
+ulong fstart;   /* start address in file for demand load */
+ulong flen;   /* length of segment in file */
+@
+
+
+
+
+
+
+
+
+<<function ihash>>=
+#define IHASHSIZE 64
+// actually internal to page.c, but important so here
+#define ihash(s)  imagealloc.hash[s%IHASHSIZE]
+@
+% why not use the XXXLOG like the other hashes?
+
+<<function attachimage>>=
+KImage*
+attachimage(int type, Chan *c, ulong base, ulong len)
+{
+    KImage *i, **l;
+
+    /* reclaim any free channels from reclaimed segments */
+    if(imagealloc.nfreechan)
+        imagechanreclaim();
+
+    lock(&imagealloc);
+
+    /*
+     * Search the image cache for remains of the text from a previous
+     * or currently running incarnation
+     */
+    for(i = ihash(c->qid.path); i; i = i->hash) {
+        if(c->qid.path == i->qid.path) {
+            lock(i);
+            if(eqqid(c->qid, i->qid) &&
+               eqqid(c->mqid, i->mqid) &&
+               c->mchan == i->mchan &&
+               c->type == i->type) {
+                goto found;
+            }
+            unlock(i);
+        }
+    }
+
+    /*
+     * imagereclaim dumps pages from the free list which are cached by image
+     * structures. This should free some image structures.
+     */
+    while(!(i = imagealloc.free)) {
+        unlock(&imagealloc);
+        imagereclaim();
+        sched();
+        lock(&imagealloc);
+    }
+
+    imagealloc.free = i->next;
+
+    lock(i);
+    incref(c);
+    i->c = c;
+    i->type = c->type;
+    i->qid = c->qid;
+    i->mqid = c->mqid;
+    i->mchan = c->mchan;
+    l = &ihash(c->qid.path);
+    i->hash = *l;
+    *l = i;
+found:
+    unlock(&imagealloc);
+
+    if(i->s == 0) {
+        /* Disaster after commit in exec */
+        if(waserror()) {
+            unlock(i);
+            pexit(Enovmem, true);
+        }
+        i->s = newseg(type, base, len);
+        i->s->image = i;
+        i->ref++;
+        poperror();
+    }
+    else
+        incref(i->s);
+
+    return i;
+}
+@
+
+
+<<function imagereclaim>>=
+static void
+imagereclaim(void)
+{
+    int n;
+    Page *p;
+    uvlong ticks;
+
+    irstats.calls++;
+    /* Somebody is already cleaning the page cache */
+    if(!canqlock(&imagealloc.ireclaim))
+        return;
+
+    lock(&palloc);
+    ticks = fastticks(nil);
+    n = 0;
+    /*
+     * All the pages with images backing them are at the
+     * end of the list (see putpage) so start there and work
+     * backward.
+     */
+    for(p = palloc.tail; p && p->image && n<1000; p = p->prev) {
+        if(p->ref == 0 && canlock(p)) {
+            if(p->ref == 0) {
+                n++;
+                uncachepage(p);
+            }
+            unlock(p);
+        }
+    }
+    ticks = fastticks(nil) - ticks;
+    unlock(&palloc);
+    irstats.loops++;
+    irstats.ticks += ticks;
+    if(ticks > irstats.maxt)
+        irstats.maxt = ticks;
+    //print("T%llud+", ticks);
+    qunlock(&imagealloc.ireclaim);
+}
+@
+
+
+<<function imagechanreclaim>>=
+/*
+ *  since close can block, this has to be called outside of
+ *  spin locks.
+ */
+static void
+imagechanreclaim(void)
+{
+    Chan *c;
+
+    /* Somebody is already cleaning the image chans */
+    if(!canqlock(&imagealloc.fcreclaim))
+        return;
+
+    /*
+     * We don't have to recheck that nfreechan > 0 after we
+     * acquire the lock, because we're the only ones who decrement 
+     * it (the other lock contender increments it), and there's only
+     * one of us thanks to the qlock above.
+     */
+    while(imagealloc.nfreechan > 0){
+        lock(&imagealloc);
+        imagealloc.nfreechan--;
+        c = imagealloc.freechan[imagealloc.nfreechan];
+        unlock(&imagealloc);
+        cclose(c);
+    }
+
+    qunlock(&imagealloc.fcreclaim);
+}
+@
+
+
+<<destructor putimage>>=
+void
+putimage(KImage *i)
+{
+    Chan *c, **cp;
+    KImage *f, **l;
+
+    if(i->notext)
+        return;
+
+    lock(i);
+    if(--i->ref == 0) {
+        l = &ihash(i->qid.path);
+        mkqid(&i->qid, ~0, ~0, QTFILE);
+        unlock(i);
+        c = i->c;
+
+        lock(&imagealloc);
+        for(f = *l; f; f = f->hash) {
+            if(f == i) {
+                *l = i->hash;
+                break;
+            }
+            l = &f->hash;
+        }
+
+        i->next = imagealloc.free;
+        imagealloc.free = i;
+
+        /* defer freeing channel till we're out of spin lock's */
+        if(imagealloc.nfreechan == imagealloc.szfreechan){
+            imagealloc.szfreechan += NFREECHAN;
+            cp = malloc(imagealloc.szfreechan*sizeof(Chan*));
+            if(cp == nil)
+                panic("putimage");
+            memmove(cp, imagealloc.freechan, imagealloc.nfreechan*sizeof(Chan*));
+            free(imagealloc.freechan);
+            imagealloc.freechan = cp;
+        }
+        imagealloc.freechan[imagealloc.nfreechan++] = c;
+        unlock(&imagealloc);
+
+        return;
+    }
+    unlock(i);
+}
+@
+
+
+
+
 
 
 
@@ -8326,665 +8983,6 @@ faulterror(char *s, Chan *c, bool freemem)
 
 
 
-
-\section{Demand loading}
-
-% KImage is demand loading? or just a form of sharing? so that 10 bash
-% dont pay for it (nice opti, but still no shared libs, but less
-% a pb because plan9 libs are small (and ld remove deadcode?))
-
-<<struct KImage>>=
-// a KImage is essentially a channel to a text file (an image of a binary)
-// the image in memory for a portion of a given file.
-struct KImage
-{
-    Chan  *c;     /* channel to text file */
-
-    Qid   qid;      /* Qid for page cache coherence */
-
-    Qid mqid;
-    Chan  *mchan;
-    ushort  type;     /* Device type of owning channel */
-  
-    bool  notext;     /* no file associated */
-  
-    // extra
-    Ref;
-
-    // list<ref<Kimage>> of Imagealloc.free?
-    KImage  *next; /* Free list */ 
-    // hash<Qid.path, list<ref<Kimage>>> Imagealloc.hash
-    KImage  *hash; /* Qid hash chains */ 
-
-    // option<ref<Segment>>?
-    Segment *s;     /* TEXT segment for image if running */
-};
-@
-% (renamed KImage to avoid name conflict with memdraw Image (picture) and avoid
-%  ugly #define Image IMAGE each time one wants to use draw.h from a device driver)
-% LP split!
-
-<<struct Imagealloc>>=
-// Image allocator (internal to segment.c, but important so here, singleton)
-struct Imagealloc
-{
-    // array<Kimage>?  xalloc'ed in initimage() (conf.nimage)
-    KImage  *free; 
-    // hash<Qid.path, list<ref<Kimage>>
-    KImage  *hash[IHASHSIZE];
-    QLock ireclaim; /* mutex on reclaiming free images */
-  
-    Chan  **freechan; /* free image channels */
-    int nfreechan;  /* number of free channels */
-    int szfreechan; /* size of freechan array */
-    QLock fcreclaim;  /* mutex on reclaiming free channels */
-  
-    // extra
-    Lock;
-
-};
-@
-
-<<global imagealloc>>=
-static struct Imagealloc imagealloc;
-@
-
-
-
-
-
-
-<<[[Segment]] other fields>>=
-KImage  *image;   /* text in file attached to this segment */
-ulong fstart;   /* start address in file for demand load */
-ulong flen;   /* length of segment in file */
-@
-
-
-
-
-
-
-
-
-<<function ihash>>=
-#define IHASHSIZE 64
-// actually internal to page.c, but important so here
-#define ihash(s)  imagealloc.hash[s%IHASHSIZE]
-@
-% why not use the XXXLOG like the other hashes?
-
-<<function attachimage>>=
-KImage*
-attachimage(int type, Chan *c, ulong base, ulong len)
-{
-    KImage *i, **l;
-
-    /* reclaim any free channels from reclaimed segments */
-    if(imagealloc.nfreechan)
-        imagechanreclaim();
-
-    lock(&imagealloc);
-
-    /*
-     * Search the image cache for remains of the text from a previous
-     * or currently running incarnation
-     */
-    for(i = ihash(c->qid.path); i; i = i->hash) {
-        if(c->qid.path == i->qid.path) {
-            lock(i);
-            if(eqqid(c->qid, i->qid) &&
-               eqqid(c->mqid, i->mqid) &&
-               c->mchan == i->mchan &&
-               c->type == i->type) {
-                goto found;
-            }
-            unlock(i);
-        }
-    }
-
-    /*
-     * imagereclaim dumps pages from the free list which are cached by image
-     * structures. This should free some image structures.
-     */
-    while(!(i = imagealloc.free)) {
-        unlock(&imagealloc);
-        imagereclaim();
-        sched();
-        lock(&imagealloc);
-    }
-
-    imagealloc.free = i->next;
-
-    lock(i);
-    incref(c);
-    i->c = c;
-    i->type = c->type;
-    i->qid = c->qid;
-    i->mqid = c->mqid;
-    i->mchan = c->mchan;
-    l = &ihash(c->qid.path);
-    i->hash = *l;
-    *l = i;
-found:
-    unlock(&imagealloc);
-
-    if(i->s == 0) {
-        /* Disaster after commit in exec */
-        if(waserror()) {
-            unlock(i);
-            pexit(Enovmem, true);
-        }
-        i->s = newseg(type, base, len);
-        i->s->image = i;
-        i->ref++;
-        poperror();
-    }
-    else
-        incref(i->s);
-
-    return i;
-}
-@
-
-
-<<function imagereclaim>>=
-static void
-imagereclaim(void)
-{
-    int n;
-    Page *p;
-    uvlong ticks;
-
-    irstats.calls++;
-    /* Somebody is already cleaning the page cache */
-    if(!canqlock(&imagealloc.ireclaim))
-        return;
-
-    lock(&palloc);
-    ticks = fastticks(nil);
-    n = 0;
-    /*
-     * All the pages with images backing them are at the
-     * end of the list (see putpage) so start there and work
-     * backward.
-     */
-    for(p = palloc.tail; p && p->image && n<1000; p = p->prev) {
-        if(p->ref == 0 && canlock(p)) {
-            if(p->ref == 0) {
-                n++;
-                uncachepage(p);
-            }
-            unlock(p);
-        }
-    }
-    ticks = fastticks(nil) - ticks;
-    unlock(&palloc);
-    irstats.loops++;
-    irstats.ticks += ticks;
-    if(ticks > irstats.maxt)
-        irstats.maxt = ticks;
-    //print("T%llud+", ticks);
-    qunlock(&imagealloc.ireclaim);
-}
-@
-
-
-<<function imagechanreclaim>>=
-/*
- *  since close can block, this has to be called outside of
- *  spin locks.
- */
-static void
-imagechanreclaim(void)
-{
-    Chan *c;
-
-    /* Somebody is already cleaning the image chans */
-    if(!canqlock(&imagealloc.fcreclaim))
-        return;
-
-    /*
-     * We don't have to recheck that nfreechan > 0 after we
-     * acquire the lock, because we're the only ones who decrement 
-     * it (the other lock contender increments it), and there's only
-     * one of us thanks to the qlock above.
-     */
-    while(imagealloc.nfreechan > 0){
-        lock(&imagealloc);
-        imagealloc.nfreechan--;
-        c = imagealloc.freechan[imagealloc.nfreechan];
-        unlock(&imagealloc);
-        cclose(c);
-    }
-
-    qunlock(&imagealloc.fcreclaim);
-}
-@
-
-
-<<destructor putimage>>=
-void
-putimage(KImage *i)
-{
-    Chan *c, **cp;
-    KImage *f, **l;
-
-    if(i->notext)
-        return;
-
-    lock(i);
-    if(--i->ref == 0) {
-        l = &ihash(i->qid.path);
-        mkqid(&i->qid, ~0, ~0, QTFILE);
-        unlock(i);
-        c = i->c;
-
-        lock(&imagealloc);
-        for(f = *l; f; f = f->hash) {
-            if(f == i) {
-                *l = i->hash;
-                break;
-            }
-            l = &f->hash;
-        }
-
-        i->next = imagealloc.free;
-        imagealloc.free = i;
-
-        /* defer freeing channel till we're out of spin lock's */
-        if(imagealloc.nfreechan == imagealloc.szfreechan){
-            imagealloc.szfreechan += NFREECHAN;
-            cp = malloc(imagealloc.szfreechan*sizeof(Chan*));
-            if(cp == nil)
-                panic("putimage");
-            memmove(cp, imagealloc.freechan, imagealloc.nfreechan*sizeof(Chan*));
-            free(imagealloc.freechan);
-            imagealloc.freechan = cp;
-        }
-        imagealloc.freechan[imagealloc.nfreechan++] = c;
-        unlock(&imagealloc);
-
-        return;
-    }
-    unlock(i);
-}
-@
-
-
-
-
-
-
-
-\section{Page fault}
-
-% split copy-on-write feature in another section?
-% have also demand-loading here
-
-% see also trapinit
-
-% insyscall saving? means can have trap in a syscall itself?
-
-% addr be kernel (virtual) address or user (virtual) address?
-% can it be kernel address? I don't think so. should panic in that case
-% at least to understand.
-
-<<function fault386>>=
-static void
-fault386(Ureg* ureg, void*)
-{
-    virt_addr addr; 
-    bool read, insyscall, user;
-    int n; // ret_code
-    char buf[ERRMAX];
-
-    addr = getcr2(); // faulting va
-    read = !(ureg->ecode & 2);
-    user = (ureg->cs & 0xFFFF) == UESEL;
-
-    if(!user){
-        if(vmapsync(addr))
-            return;
-        if(addr >= USTKTOP)
-            panic("kernel fault: bad address pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
-        if(up == nil)
-            panic("kernel fault: no user process pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
-    }
-    if(up == nil)
-        panic("user fault: up=0 pc=0x%.8lux addr=0x%.8lux", ureg->pc, addr);
-
-    insyscall = up->insyscall;
-    up->insyscall = true; // really?
-
-    n = fault(addr, read); // portable code
-
-    if(n < 0){
-        if(!user){
-            dumpregs(ureg);
-            panic("fault: 0x%lux", addr);
-        }
-        checkpages();
-        //checkfault(addr, ureg->pc);
-        snprint(buf, sizeof buf, "sys: trap: fault %s addr=0x%lux",
-            read ? "read" : "write", addr);
-        postnote(up, 1, buf, NDebug);
-    }
-    up->insyscall = insyscall;
-}
-@ 
-
-
-
-
-
-% ret_code2?
-<<function fault>>=
-int
-fault(virt_addr addr, bool read)
-{
-    Segment *s;
-    char *sps;
-
-    if(up == nil)
-        panic("fault: nil up");
-    if(up->nlocks.ref)
-        print("fault: addr %#p: nlocks %ld\n", addr, up->nlocks.ref);
-
-    sps = up->psstate;
-    up->psstate = "Fault";
-    spllo();
-
-    cpu->pfault++;
-    for(;;) {
-        s = seg(up, addr, /*dolock*/true); /* leaves s->lk qlocked if seg != nil */
-        if(s == nil) {
-            up->psstate = sps;
-            return -1;
-        }
-
-        if(!read && (s->type&SG_RONLY)) {
-            qunlock(&s->lk);
-            up->psstate = sps;
-            return -1;
-        }
-
-        if(fixfault(s, addr, read, /*putmmu*/true) == 0) /* qunlocks s->lk */
-            break;
-
-        // else? try again?
-    }
-
-    up->psstate = sps;
-    return 0;
-}
-@
-
-
-<<[[Conf]] other fields>>=
-bool copymode; /* 0 is copy on write, 1 is copy on reference */
-@
-
-% The big one! very important function!
-%ret_code
-<<function fixfault>>=
-int
-fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
-{
-    int type;
-    int ref;
-    Pagetable **p, *etp;
-    phys_addr mmuphys=nilptr;
-    ulong soff;
-    Page **pg, *lkp, *new;
-
-    addr &= ~(BY2PG-1);
-    soff = addr - s->base;
-    p = &s->pagedir[soff/PAGETABMAPMEM];
-    if(*p == 0)
-        *p = ptalloc();
-
-    etp = *p;
-    pg = &etp->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
-    type = s->type&SG_TYPE;
-
-    if(pg < etp->first)
-        etp->first = pg;
-    if(pg > etp->last)
-        etp->last = pg;
-
-    switch(type) {
-    default:
-        panic("fault");
-        break;
-
-    case SG_TEXT:           /* Demand load */
-        if(pagedout(*pg))
-            pio(s, addr, soff, pg);
-
-        mmuphys = PPN((*pg)->pa) | PTERONLY|PTEVALID;
-        (*pg)->modref = PG_REF;
-        break;
-
-    case SG_BSS:
-    case SG_SHARED:         /* Zero fill on demand */
-    case SG_STACK:
-        if(*pg == 0) {
-            new = newpage(1, &s, addr);
-            if(s == nil) //?? when can be nil at exit?
-                return -1;
-            *pg = new;
-        }
-        goto common;
-
-    case SG_DATA:
-    common:         /* Demand load/pagein/copy on write */
-        if(pagedout(*pg))
-            pio(s, addr, soff, pg);
-
-        /*
-         *  It's only possible to copy on write if
-         *  we're the only user of the segment.
-         */
-        if(read && conf.copymode == false && s->ref == 1) {
-            mmuphys = PPN((*pg)->pa)|PTERONLY|PTEVALID;
-            (*pg)->modref |= PG_REF;
-            break;
-        }
-
-        lkp = *pg;
-        lock(lkp);
-
-        if(lkp->image == &swapimage)
-            ref = lkp->ref + swapcount(lkp->daddr);
-        else
-            ref = lkp->ref;
-        if(ref == 1 && lkp->image){
-            /* save a copy of the original for the image cache */
-            duppage(lkp);
-            ref = lkp->ref;
-        }
-        unlock(lkp);
-        if(ref > 1){
-            new = newpage(0, &s, addr);
-            if(s == nil)
-                return -1;
-            *pg = new;
-            copypage(lkp, *pg);
-            putpage(lkp);
-        }
-        mmuphys = PPN((*pg)->pa) | PTEWRITE | PTEVALID;
-        (*pg)->modref = PG_MOD|PG_REF;
-        break;
-
-    <<[[fixfault()]] SG_PHYSICAL case>>
-    }
-    qunlock(&s->lk);
-
-    if(doputmmu)
-        putmmu(addr, mmuphys, *pg);
-
-    return 0; // OK
-}
-@
-
-
-%\section{page copy?} for copy on write?
-
-% memmove? should be called memcopy no? also rename f -> src, t -> dst?
-<<function copypage>>=
-void
-copypage(Page *f, Page *t)
-{
-    KMap *ks, *kd;
-
-    ks = kmap(f);
-    kd = kmap(t);
-    memmove((void*)VA(kd), (void*)VA(ks), BY2PG);
-    kunmap(ks);
-    kunmap(kd);
-}
-@
-
-
-<<global dupretries>>=
-static int dupretries = 15000;
-@
-
-
-% called only from fixfault, move close to it? for copy-on-write?
-% type: ret_code?
-<<function duppage>>=
-/* Always call with p locked */
-int
-duppage(Page *p)
-{
-    Page *np;
-    int retries;
-
-    retries = 0;
-retry:
-
-    if(retries++ > dupretries){
-        print("duppage %d, up %p\n", retries, up);
-        dupretries += 100;
-        if(dupretries > 100000)
-            panic("duppage\n");
-        uncachepage(p);
-        return 1;
-    }
-        
-
-    /* don't dup pages with no image */
-    if(p->ref == 0 || p->image == nil || p->image->notext)
-        return 0;
-
-    /*
-     *  normal lock ordering is to call
-     *  lock(&palloc) before lock(p).
-     *  To avoid deadlock, we have to drop
-     *  our locks and try again.
-     */
-    if(!canlock(&palloc)){
-        unlock(p);
-        if(up)
-            sched();
-        lock(p);
-        goto retry;
-    }
-
-    /* No freelist cache when memory is very low */
-    if(palloc.freecount < swapalloc.highwater) {
-        unlock(&palloc);
-        uncachepage(p);
-        return 1;
-    }
-
-    np = palloc.head;
-
-    pageunchain(np);
-    pagechaintail(np);
-/*
-* XXX - here's a bug? - np is on the freelist but it's not really free.
-* when we unlock palloc someone else can come in, decide to
-* use np, and then try to lock it.  they succeed after we've 
-* run copypage and cachepage and unlock(np).  then what?
-* they call pageunchain before locking(np), so it's removed
-* from the freelist, but still in the cache because of
-* cachepage below.  if someone else looks in the cache
-* before they remove it, the page will have a nonzero ref
-* once they finally lock(np).
-*/
-    lock(np);
-    unlock(&palloc);
-
-    /* Cache the new version */
-    uncachepage(np);
-    np->va = p->va;
-    np->daddr = p->daddr;
-    copypage(p, np);
-    cachepage(np, p->image);
-    unlock(np);
-    uncachepage(p);
-
-    return 0;
-}
-@
-
-
-
-%-----------------------------------------------------------------------------
-
-<<function checkpages>>=
-void
-checkpages(void)
-{
-    int checked;
-    ulong addr, off;
-    Pagetable *p;
-    Page *pg;
-    Segment **sp, **ep, *s;
-    
-    if(up == nil)
-        return;
-
-    checked = 0;
-    // foreach(up->seg)
-    for(sp=up->seg, ep=&up->seg[NSEG]; sp<ep; sp++){
-        s = *sp;
-        if(s == nil)
-            continue;
-        qlock(&s->lk);
-        for(addr=s->base; addr<s->top; addr+=BY2PG){
-            off = addr - s->base;
-            p = s->pagedir[off/PAGETABMAPMEM];
-            if(p == nil)
-                continue;
-            pg = p->pagetab[(off&(PAGETABMAPMEM-1))/BY2PG];
-            if(pg == nil || pagedout(pg))
-                continue;
-            checkmmu(addr, pg->pa);
-            checked++;
-        }
-        qunlock(&s->lk);
-    }
-    print("%ld %s: checked %d page table entries\n", up->pid, up->text, checked);
-}
-@
-
-<<function checkmmu>>=
-/*
- * Double-check the user MMU.
- * Error checking only.
- */
-void
-checkmmu(virt_addr va, phys_addr pa)
-{
-    if(up->mmupd == nil)
-        return;
-    <<[[checkmmu()]] pd at pt check>>
-}
-@
 
 \chapter{Scheduling}
 % virtual CPU?
@@ -19286,7 +19284,7 @@ Dev consdevtab = {
 };
 @ 
 
-\section{Special devices}
+\section{Other devices}
 %optional, advanced concepts
 
 % see also devpipe.c and devdup.c, devmnt.c, devsrv.c
@@ -20125,6 +20123,8 @@ devarch_fastticks(uvlong *hz)
 %  all of that on very limited hardware power
 
 
+
+\subsection{Programmable timer [[i8253]]}
 
 \subsection{[[timerset()]]}
 
@@ -21416,6 +21416,8 @@ void  *ureg;    /* User registers for notes */
     NNOTE = 5,
 @
 
+\subsection{[[sysnotify()]]}
+
 <<syscall notify>>=
 // int notify(void (*f)(void*, char*));
 long
@@ -21428,98 +21430,12 @@ sysnotify(ulong* arg)
 }
 @ 
 
-<<syscall noted>>=
-// int noted(int v);
-long
-sysnoted(ulong* arg)
-{
-    if(arg[0]!=NRSTR && !up->notified)
-        error(Egreg);
-    return 0;
-}
-@ 
-
-<<function postnote>>=
-/*
- *  if waking a sleeping process, this routine must hold both
- *  p->rlock and r->lock.  However, it can't know them in
- *  the same order as wakeup causing a possible lock ordering
- *  deadlock.  We break the deadlock by giving up the p->rlock
- *  lock if we can't get the r->lock and retrying.
- */
-int
-proc_postnote(Proc *p, int dolock, char *n, int flag)
-{
-    int s, ret;
-    Rendez *r;
-    Proc *d, **l;
-
-    if(dolock)
-        qlock(&p->debug);
-
-    if(flag != NUser && (p->notify == 0 || p->notified))
-        p->nnote = 0;
-
-    ret = 0;
-    if(p->nnote < NNOTE) {
-        strcpy(p->note[p->nnote].msg, n);
-        p->note[p->nnote++].flag = flag;
-        ret = 1;
+<<[[syscall()]] call notify()>>=
+    if(scallnr!=RFORK && (up->procctl || up->nnote)){
+        splhi();
+        notify(ureg);
     }
-    p->notepending = true;
-    if(dolock)
-        qunlock(&p->debug);
-
-    /* this loop is to avoid lock ordering problems. */
-    for(;;){
-        s = splhi();
-        lock(&p->rlock);
-        r = p->r;
-
-        /* waiting for a wakeup? */
-        if(r == nil)
-            break;  /* no */
-
-        /* try for the second lock */
-        if(canlock(r)){
-            if(p->state != Wakeme || r->p != p)
-                panic("postnote: state %d %d %d", r->p != p, p->r != r, p->state);
-            p->r = nil;
-            r->p = nil;
-            ready(p);
-            unlock(r);
-            break;
-        }
-
-        /* give other process time to get out of critical section and try again */
-        unlock(&p->rlock);
-        splx(s);
-        sched();
-    }
-    unlock(&p->rlock);
-    splx(s);
-
-    if(p->state != Rendezvous)
-        return ret;
-
-    /* Try and pull out of a rendezvous */
-    lock(p->rgrp);
-    if(p->state == Rendezvous) {
-        p->rendval = ~0;
-        l = &REND(p->rgrp, p->rendtag);
-        for(d = *l; d; d = d->rendhash) {
-            if(d == p) {
-                *l = p->rendhash;
-                break;
-            }
-            l = &d->rendhash;
-        }
-        ready(p);
-    }
-    unlock(p->rgrp);
-    return ret;
-}
-@ 
+@
 
 <<function notify>>=
 /*
@@ -21604,6 +21520,25 @@ if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
 }
 @ 
 
+
+
+\subsection{[[sysnoted()]]}
+
+<<syscall noted>>=
+// int noted(int v);
+long
+sysnoted(ulong* arg)
+{
+    if(arg[0]!=NRSTR && !up->notified)
+        error(Egreg);
+    return 0;
+}
+@ 
+
+<<[[syscall()]] call noted()>>=
+    if(scallnr == NOTED)
+        noted(ureg, *(ulong*)(sp+BY2WD));
+@
 
 <<function noted>>=
 /*
@@ -21699,6 +21634,92 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
     }
 }
 @ 
+
+
+\subsection{[[postnote()]]}
+
+<<function postnote>>=
+/*
+ *  if waking a sleeping process, this routine must hold both
+ *  p->rlock and r->lock.  However, it can't know them in
+ *  the same order as wakeup causing a possible lock ordering
+ *  deadlock.  We break the deadlock by giving up the p->rlock
+ *  lock if we can't get the r->lock and retrying.
+ */
+int
+proc_postnote(Proc *p, int dolock, char *n, int flag)
+{
+    int s, ret;
+    Rendez *r;
+    Proc *d, **l;
+
+    if(dolock)
+        qlock(&p->debug);
+
+    if(flag != NUser && (p->notify == 0 || p->notified))
+        p->nnote = 0;
+
+    ret = 0;
+    if(p->nnote < NNOTE) {
+        strcpy(p->note[p->nnote].msg, n);
+        p->note[p->nnote++].flag = flag;
+        ret = 1;
+    }
+    p->notepending = true;
+    if(dolock)
+        qunlock(&p->debug);
+
+    /* this loop is to avoid lock ordering problems. */
+    for(;;){
+        s = splhi();
+        lock(&p->rlock);
+        r = p->r;
+
+        /* waiting for a wakeup? */
+        if(r == nil)
+            break;  /* no */
+
+        /* try for the second lock */
+        if(canlock(r)){
+            if(p->state != Wakeme || r->p != p)
+                panic("postnote: state %d %d %d", r->p != p, p->r != r, p->state);
+            p->r = nil;
+            r->p = nil;
+            ready(p);
+            unlock(r);
+            break;
+        }
+
+        /* give other process time to get out of critical section and try again */
+        unlock(&p->rlock);
+        splx(s);
+        sched();
+    }
+    unlock(&p->rlock);
+    splx(s);
+
+    if(p->state != Rendezvous)
+        return ret;
+
+    /* Try and pull out of a rendezvous */
+    lock(p->rgrp);
+    if(p->state == Rendezvous) {
+        p->rendval = ~0;
+        l = &REND(p->rgrp, p->rendtag);
+        for(d = *l; d; d = d->rendhash) {
+            if(d == p) {
+                *l = p->rendhash;
+                break;
+            }
+            l = &d->rendhash;
+        }
+        ready(p);
+    }
+    unlock(p->rgrp);
+    return ret;
+}
+@ 
+
 
 
 \section{Pipes}
