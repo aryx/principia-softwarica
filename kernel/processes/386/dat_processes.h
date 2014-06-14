@@ -33,24 +33,26 @@ union ArchFPsave {
 
 /*s: enum vector */
 enum {
-    VectorNMI = 2,    /* non-maskable interrupt */
-    VectorBPT = 3,    /* breakpoint */
-    VectorUD  = 6,    /* invalid opcode exception */
-    VectorCNA = 7,    /* coprocessor not available */
-    Vector2F  = 8,    /* double fault */
-    VectorCSO = 9,    /* coprocessor segment overrun */
-    VectorPF  = 14,   /* page fault */ //!!!!
-    Vector15  = 15,   /* reserved */
-    VectorCERR  = 16,   /* coprocessor error */
-  
-    VectorPIC = 32,   /* external i8259 interrupts */
-    VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
-
-    //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
-    // VectorSYSCALL = 64, in mem.h because used by Assembly too
-  
-    VectorAPIC  = 65,   /* external APIC interrupts */
-    MaxVectorAPIC = 255,
+    /*s: enum vector cases */
+        VectorNMI = 2,    /* non-maskable interrupt */
+        VectorBPT = 3,    /* breakpoint */
+        VectorUD  = 6,    /* invalid opcode exception */
+        VectorCNA = 7,    /* coprocessor not available */
+        Vector2F  = 8,    /* double fault */
+        VectorCSO = 9,    /* coprocessor segment overrun */
+        VectorPF  = 14,   /* page fault */ //!!!!
+        Vector15  = 15,   /* reserved */
+        VectorCERR  = 16,   /* coprocessor error */
+    /*x: enum vector cases */
+        VectorPIC = 32,   /* external i8259 interrupts */
+        VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
+    /*x: enum vector cases */
+        VectorAPIC  = 65,   /* external APIC interrupts */
+        MaxVectorAPIC = 255,
+    /*x: enum vector cases */
+        //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
+        // VectorSYSCALL = 64, in mem.h because used by Assembly too
+    /*e: enum vector cases */
 };
 /*e: enum vector */
 

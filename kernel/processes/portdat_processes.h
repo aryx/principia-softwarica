@@ -31,13 +31,13 @@ enum procstate
     /*x: enum procstate cases */
     Moribund,
     /*x: enum procstate cases */
-    Broken,
-    /*x: enum procstate cases */
     Ready,
     /*x: enum procstate cases */
     Wakeme,
     /*x: enum procstate cases */
     Rendezvous,
+    /*x: enum procstate cases */
+    Broken,
     /*x: enum procstate cases */
     Stopped,
     /*x: enum procstate cases */
@@ -525,6 +525,7 @@ struct Proc
 // Process hierarchy
 //--------------------------------------------------------------------
     /*s: [[Proc]] hierarchy fields */
+    // option<ref<Proc>> nil for the boot process
     Proc  *parent;
     int nchild;   /* Number of living children */
     /*x: [[Proc]] hierarchy fields */

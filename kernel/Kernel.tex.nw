@@ -1168,6 +1168,7 @@ char *statename[] =
     "Waitrelease",
 };
 @ 
+% put /proc/#/status and part of Qstatus here?
 
 <<macro up>>=
 // up = user process
@@ -3038,6 +3039,8 @@ enum modref
     PG_REF    = 0x02,   /* software referenced bit */
 };
 @
+% TODO LP split, put just PG_NOTHING for now
+
 % PG_REF is set in fixfault when access for the first time the page
 %  why useful?
 % PG_MOD is set in fixfault too when writing in the page
@@ -4907,6 +4910,7 @@ execregs(ulong entry, ulong ssize, ulong nargs)
 % will have been closed
 
 <<[[Proc]] hierarchy fields>>=
+// option<ref<Proc>> nil for the boot process
 Proc  *parent;
 int nchild;   /* Number of living children */
 @
@@ -5066,7 +5070,7 @@ sysexits(ulong* arg)
         }
 
     }
-    pexit(status, true);
+    pexit(status, /*freemem*/true);
     panic("pexit: should never reach this point");
 }
 @ 
@@ -5084,7 +5088,7 @@ Moribund,
 @
 
 % todo: split in purely deallocate stuff and then the children/parent part
-% todo: rename freemem to addbroken? and reverse true to false and false to true
+% rename freemem to addbroken? hmmm no
 <<function pexit>>=
 void
 proc_pexit(char *exitstr, bool freemem)
@@ -5141,7 +5145,7 @@ proc_pexit(char *exitstr, bool freemem)
         p = up->parent;
         // no parent pointer, must be the very first process
         if(p == nil) {
-            if(exitstr == 0)
+            if(exitstr == nil)
                 exitstr = "unknown";
             panic("boot process died: %s", exitstr);
         }
@@ -5195,7 +5199,7 @@ proc_pexit(char *exitstr, bool freemem)
             free(wq);
     }
 
-    //?
+    // instead of a core dump we just keep the process around
     if(!freemem)
         addbroken(up); // will call sched()
 
@@ -5247,93 +5251,6 @@ proc_pexit(char *exitstr, bool freemem)
 % What about zombie process? There is no zombie in plan9!
 % Nicer design! the child write in the parent (if it has still one)
 % the information the parent may need and then die!
-
-\section{Broken processes}
-% zombie processes? no, it's different.
-
-<<enum procstate cases>>=
-Broken,
-@
-
-<<struct Broken>>=
-/*
- * weird thing: keep at most NBROKEN around
- */
-#define NBROKEN 4
-struct Broken
-{
-    // array<ref<Proc>>
-    Proc    *p[NBROKEN];
-    // number of entries used in p
-    int n;
-
-    // extra
-    QLock;
-};
-@ 
-
-<<global broken>>=
-struct Broken broken;
-@ 
-
-<<function addbroken>>=
-void
-addbroken(Proc *p)
-{
-    qlock(&broken);
-    if(broken.n == NBROKEN) {
-        ready(broken.p[0]);
-        memmove(&broken.p[0], &broken.p[1], sizeof(Proc*)*(NBROKEN-1));
-        --broken.n;
-    }
-    broken.p[broken.n++] = p;
-    qunlock(&broken);
-
-    edfstop(up);
-    p->state = Broken;
-    p->psstate = nil;
-    sched();
-}
-@ 
-
-
-<<function unbreak>>=
-void
-unbreak(Proc *p)
-{
-    int b;
-
-    qlock(&broken);
-    for(b=0; b < broken.n; b++)
-        if(broken.p[b] == p) {
-            broken.n--;
-            memmove(&broken.p[b], &broken.p[b+1],
-                    sizeof(Proc*)*(NBROKEN-(b+1)));
-            ready(p);
-            break;
-        }
-    qunlock(&broken);
-}
-@ 
-
-
-<<function freebroken>>=
-int
-freebroken(void)
-{
-    int i, n;
-
-    qlock(&broken);
-    n = broken.n;
-    for(i=0; i<n; i++) {
-        ready(broken.p[i]);
-        broken.p[i] = nil;
-    }
-    broken.n = 0;
-    qunlock(&broken);
-    return n;
-}
-@ 
 
 \section{Kernel processes}
 
@@ -5413,7 +5330,7 @@ linkproc(void)
     up->kpfun(up->kparg);
     // should never reach this place?? kernel processes are supposed
     // to run forever??
-    pexit("kproc dying", false); 
+    pexit("kproc dying", /*freemem*/false); 
 }
 @ 
 
@@ -5462,7 +5379,7 @@ linkproc(void)
         }
         break;
 @
-
+% could LP split Broken, anyway unbreak will make him really die and release memory
 
 
 
@@ -5510,6 +5427,13 @@ struct Vctl {
 static Vctl *vctl[256];
 @ 
 
+<<enum vector>>=
+enum {
+    <<enum vector cases>>
+};
+@
+
+
 <<[[Vctl]] extra fields>>=
 // list<ref_own<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
 Vctl* next;     /* handlers on this vector */
@@ -5521,7 +5445,7 @@ static Lock vctllock;
 
 
 
-% for /dev/irqalloc
+% for /dev/irqalloc via devarch.c addarchfile
 <<function irqallocread>>=
 static long
 irqallocread(Chan*, void *vbuf, long n, vlong offset)
@@ -5900,11 +5824,73 @@ i8259off(void)
 
 
 
+\section{Faults}
+% fault/trap/exceptions
+
+<<enum vector cases>>=
+    VectorNMI = 2,    /* non-maskable interrupt */
+    VectorBPT = 3,    /* breakpoint */
+    VectorUD  = 6,    /* invalid opcode exception */
+    VectorCNA = 7,    /* coprocessor not available */
+    Vector2F  = 8,    /* double fault */
+    VectorCSO = 9,    /* coprocessor segment overrun */
+    VectorPF  = 14,   /* page fault */ //!!!!
+    Vector15  = 15,   /* reserved */
+    VectorCERR  = 16,   /* coprocessor error */
+@
+
+
+\section{IRQs}
+
+<<enum vector cases>>=
+    VectorPIC = 32,   /* external i8259 interrupts */
+    VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
+@
+
+<<enum vector cases>>=
+    VectorAPIC  = 65,   /* external APIC interrupts */
+    MaxVectorAPIC = 255,
+@
+
+
+
+% exn vs irq? irq is a request!
+
+<<enum irq>>=
+enum {
+    IrqCLOCK  = 0,
+    IrqKBD    = 1,
+    IrqUART1  = 3,
+    IrqUART0  = 4,
+    IrqPCMCIA = 5,
+    IrqFLOPPY = 6,
+    IrqLPT    = 7,
+    IrqIRQ7   = 7,
+    IrqAUX    = 12,   /* PS/2 port */
+    IrqIRQ13  = 13,   /* coprocessor on 386 */
+    IrqATA0   = 14,
+    IrqATA1   = 15,
+    MaxIrqPIC = 15,
+  
+    IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
+    IrqLINT1  = 17,
+    IrqTIMER  = 18,
+    IrqERROR  = 19,
+    IrqPCINT  = 20,
+    IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
+
+    MaxIrqLAPIC = 31,
+};
+@
+% LINT? PCINT?
+
+
 \section{Interrupt [[vectortable]] and [[idt]]}
 
 <<constant IDTADDR>>=
 #define IDTADDR   (KZERO+0x10800)   /* idt */
 @
+
 
 <<global vectortable>>=
 TEXT vectortable(SB), $0
@@ -6206,65 +6192,6 @@ static char* excname[32] = {
 };
 @ 
 
-\section{Faults}
-% fault/trap/exceptions
-
-<<enum vector>>=
-enum {
-    VectorNMI = 2,    /* non-maskable interrupt */
-    VectorBPT = 3,    /* breakpoint */
-    VectorUD  = 6,    /* invalid opcode exception */
-    VectorCNA = 7,    /* coprocessor not available */
-    Vector2F  = 8,    /* double fault */
-    VectorCSO = 9,    /* coprocessor segment overrun */
-    VectorPF  = 14,   /* page fault */ //!!!!
-    Vector15  = 15,   /* reserved */
-    VectorCERR  = 16,   /* coprocessor error */
-  
-    VectorPIC = 32,   /* external i8259 interrupts */
-    VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
-
-    //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
-    // VectorSYSCALL = 64, in mem.h because used by Assembly too
-  
-    VectorAPIC  = 65,   /* external APIC interrupts */
-    MaxVectorAPIC = 255,
-};
-@
-
-\section{IRQs}
-
-% exn vs irq? irq is a request!
-
-<<enum irq>>=
-enum {
-    IrqCLOCK  = 0,
-    IrqKBD    = 1,
-    IrqUART1  = 3,
-    IrqUART0  = 4,
-    IrqPCMCIA = 5,
-    IrqFLOPPY = 6,
-    IrqLPT    = 7,
-    IrqIRQ7   = 7,
-    IrqAUX    = 12,   /* PS/2 port */
-    IrqIRQ13  = 13,   /* coprocessor on 386 */
-    IrqATA0   = 14,
-    IrqATA1   = 15,
-    MaxIrqPIC = 15,
-  
-    IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
-    IrqLINT1  = 17,
-    IrqTIMER  = 18,
-    IrqERROR  = 19,
-    IrqPCINT  = 20,
-    IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
-
-    MaxIrqLAPIC = 31,
-};
-@
-% LINT? PCINT?
-
-
 \section{[[trap()]]}
 
 <<function _strayintr>>=
@@ -6486,6 +6413,12 @@ kexit(Ureg*)
 
 \section{[[syscall()]]}
 %Software interrupts (a.k.a syscalls)
+
+<<enum vector cases>>=
+    //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
+    // VectorSYSCALL = 64, in mem.h because used by Assembly too
+@
+
 
 <<constant MAXSYSARG>>=
 // used in Proc
@@ -7963,7 +7896,7 @@ found:
         /* Disaster after commit in exec */
         if(waserror()) {
             unlock(i);
-            pexit(Enovmem, true);
+            pexit(Enovmem, /*freemem*/true);
         }
         i->s = newseg(type, base, len);
         i->s->image = i;
@@ -8902,12 +8835,12 @@ retry:
             continue;
         kunmap(k);
         putpage(new);
-        faulterror(Eioload, c, 0);
+        faulterror(Eioload, c, false);
     }
 
     n = devtab[c->type]->read(c, kaddr, ask, daddr);
     if(n != ask)
-        faulterror(Eioload, c, 0);
+        faulterror(Eioload, c, false);
     if(ask < BY2PG)
         memset(kaddr+ask, 0, BY2PG-ask);
 
@@ -8961,6 +8894,7 @@ done:
 @
 
 
+% actually always called with freemem = false so will generate a broken process
 <<function faulterror>>=
 static void
 faulterror(char *s, Chan *c, bool freemem)
@@ -13138,7 +13072,7 @@ closeproc(void*)
             }
             if(clunkq.head == nil){
                 qunlock(&clunkq.q);
-                pexit("no work", true);
+                pexit("no work", /*freemem*/true);
             }
         }
         lock(&clunkq.l);
@@ -21488,8 +21422,6 @@ notify(Ureg* ureg)
     sp = ureg->usp;
     sp -= 256;  /* debugging: preserve context causing problem */
     sp -= sizeof(Ureg);
-if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
-    up->text, up->pid, ureg->pc, ureg->usp, sp, n->msg);
 
     if(!okaddr((ulong)up->notify, 1, 0)
     || !okaddr(sp-ERRMAX-4*BY2WD, sizeof(Ureg)+ERRMAX+4*BY2WD, 1)){
@@ -21519,6 +21451,8 @@ if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
     return 1;
 }
 @ 
+%if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
+%    up->text, up->pid, ureg->pc, ureg->usp, sp, n->msg);
 
 
 
@@ -21554,7 +21488,7 @@ noted(Ureg* ureg, ulong arg0)
     if(arg0!=NRSTR && !up->notified) {
         qunlock(&up->debug);
         pprint("call to noted() when not notified\n");
-        pexit("Suicide", false);
+        pexit("Suicide", /*freemem*/false);
     }
     up->notified = false;
 
@@ -21593,8 +21527,6 @@ noted(Ureg* ureg, ulong arg0)
     switch(arg0){
     case NCONT:
     case NRSTR:
-if(0) print("%s %lud: noted %.8lux %.8lux\n",
-    up->text, up->pid, nureg->pc, nureg->usp);
         if(!okaddr(nureg->pc, 1, 0) || !okaddr(nureg->usp, BY2WD, 0)){
             qunlock(&up->debug);
             pprint("suicide: trap in noted\n");
@@ -21634,6 +21566,8 @@ if(0) print("%s %lud: noted %.8lux %.8lux\n",
     }
 }
 @ 
+%if(0) print("%s %lud: noted %.8lux %.8lux\n",
+%    up->text, up->pid, nureg->pc, nureg->usp);
 
 
 \subsection{[[postnote()]]}
@@ -23875,7 +23809,7 @@ procread(Chan *c, void *va, long n, vlong off)
             n = STATSIZE - offset;
 
         sps = p->psstate;
-        if(sps == 0)
+        if(sps == nil)
             sps = statename[p->state];
         memset(statbuf, ' ', sizeof statbuf);
         readstr(0, statbuf+0*KNAMELEN, KNAMELEN-1, p->text);
@@ -26466,7 +26400,8 @@ void    (*consdebug)(void) = nil; // for rdb
 
 % If want to implement a debugger or strace, what do you need?
 % Need a way to control and inspect another process. First for
-% the control you need a way to stop him.
+% the control you need a way to stop him (if it does not stop by himself
+% because of a suicide error in which case have core dumps(broken process))
 % For instance before it gets to his second syscall you got a chance
 % to print the trace of the first syscall. 
 
@@ -26522,6 +26457,100 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
     ureg->cs = cs;
     ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
     ureg->ss = ss;
+}
+@ 
+
+
+\subsection{Core dumps and broken processes}
+% When get a suicide, or a signal with NDEBUG, then put in a broken state.
+% Also when have faulterror in pio().
+% kinda of core dumps except don't pollute disk with it and keep everything
+% intact for post mortem analysis.
+
+<<enum procstate cases>>=
+Broken,
+@
+
+<<struct Broken>>=
+/*
+ * weird thing: keep at most NBROKEN around
+ */
+#define NBROKEN 4
+struct Broken
+{
+    // array<ref<Proc>>
+    Proc    *p[NBROKEN];
+    // number of entries used in p
+    int n;
+
+    // extra
+    QLock;
+};
+@ 
+
+<<global broken>>=
+struct Broken broken;
+@ 
+
+% when call via pexit(exitstr, freemem=false)
+<<function addbroken>>=
+void
+addbroken(Proc *p)
+{
+    qlock(&broken);
+    if(broken.n == NBROKEN) {
+        ready(broken.p[0]);
+        memmove(&broken.p[0], &broken.p[1], sizeof(Proc*)*(NBROKEN-1));
+        --broken.n;
+    }
+    broken.p[broken.n++] = p;
+    qunlock(&broken);
+
+    edfstop(up);
+    p->state = Broken;
+    p->psstate = nil;
+    sched();
+}
+@ 
+
+
+% usually unbreak will actually resume to pexit() ands and really finish the
+% process
+<<function unbreak>>=
+void
+unbreak(Proc *p)
+{
+    int b;
+
+    qlock(&broken);
+    for(b=0; b < broken.n; b++)
+        if(broken.p[b] == p) {
+            broken.n--;
+            memmove(&broken.p[b], &broken.p[b+1],
+                    sizeof(Proc*)*(NBROKEN-(b+1)));
+            ready(p);
+            break;
+        }
+    qunlock(&broken);
+}
+@ 
+
+% call by the pager when we really really need memory
+<<function freebroken>>=
+int
+freebroken(void)
+{
+    int i, n;
+
+    qlock(&broken);
+    n = broken.n;
+    for(i=0; i<n; i++) {
+        ready(broken.p[i]);
+        broken.p[i] = nil;
+    }
+    broken.n = 0;
+    qunlock(&broken);
+    return n;
 }
 @ 
 

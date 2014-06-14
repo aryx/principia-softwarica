@@ -347,7 +347,7 @@ found:
         /* Disaster after commit in exec */
         if(waserror()) {
             unlock(i);
-            pexit(Enovmem, true);
+            pexit(Enovmem, /*freemem*/true);
         }
         i->s = newseg(type, base, len);
         i->s->image = i;

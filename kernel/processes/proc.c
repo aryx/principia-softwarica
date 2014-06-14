@@ -1312,7 +1312,7 @@ proc_pexit(char *exitstr, bool freemem)
         p = up->parent;
         // no parent pointer, must be the very first process
         if(p == nil) {
-            if(exitstr == 0)
+            if(exitstr == nil)
                 exitstr = "unknown";
             panic("boot process died: %s", exitstr);
         }
@@ -1366,7 +1366,7 @@ proc_pexit(char *exitstr, bool freemem)
             free(wq);
     }
 
-    //?
+    // instead of a core dump we just keep the process around
     if(!freemem)
         addbroken(up); // will call sched()
 

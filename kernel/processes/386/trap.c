@@ -957,8 +957,6 @@ notify(Ureg* ureg)
     sp = ureg->usp;
     sp -= 256;  /* debugging: preserve context causing problem */
     sp -= sizeof(Ureg);
-if(0) print("%s %lud: notify %.8lux %.8lux %.8lux %s\n",
-    up->text, up->pid, ureg->pc, ureg->usp, sp, n->msg);
 
     if(!okaddr((ulong)up->notify, 1, 0)
     || !okaddr(sp-ERRMAX-4*BY2WD, sizeof(Ureg)+ERRMAX+4*BY2WD, 1)){
@@ -1003,7 +1001,7 @@ noted(Ureg* ureg, ulong arg0)
     if(arg0!=NRSTR && !up->notified) {
         qunlock(&up->debug);
         pprint("call to noted() when not notified\n");
-        pexit("Suicide", false);
+        pexit("Suicide", /*freemem*/false);
     }
     up->notified = false;
 
@@ -1044,8 +1042,6 @@ noted(Ureg* ureg, ulong arg0)
     switch(arg0){
     case NCONT:
     case NRSTR:
-if(0) print("%s %lud: noted %.8lux %.8lux\n",
-    up->text, up->pid, nureg->pc, nureg->usp);
         if(!okaddr(nureg->pc, 1, 0) || !okaddr(nureg->usp, BY2WD, 0)){
             qunlock(&up->debug);
             pprint("suicide: trap in noted\n");
@@ -1162,7 +1158,7 @@ linkproc(void)
     up->kpfun(up->kparg);
     // should never reach this place?? kernel processes are supposed
     // to run forever??
-    pexit("kproc dying", false); 
+    pexit("kproc dying", /*freemem*/false); 
 }
 /*e: function linkproc */
 

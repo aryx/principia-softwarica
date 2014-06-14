@@ -937,7 +937,7 @@ procread(Chan *c, void *va, long n, vlong off)
             n = STATSIZE - offset;
 
         sps = p->psstate;
-        if(sps == 0)
+        if(sps == nil)
             sps = statename[p->state];
         memset(statbuf, ' ', sizeof statbuf);
         readstr(0, statbuf+0*KNAMELEN, KNAMELEN-1, p->text);

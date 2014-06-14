@@ -242,12 +242,12 @@ retry:
             continue;
         kunmap(k);
         putpage(new);
-        faulterror(Eioload, c, 0);
+        faulterror(Eioload, c, false);
     }
 
     n = devtab[c->type]->read(c, kaddr, ask, daddr);
     if(n != ask)
-        faulterror(Eioload, c, 0);
+        faulterror(Eioload, c, false);
     if(ask < BY2PG)
         memset(kaddr+ask, 0, BY2PG-ask);
 

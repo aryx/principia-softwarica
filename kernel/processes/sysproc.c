@@ -666,7 +666,7 @@ sysexits(ulong* arg)
         }
 
     }
-    pexit(status, true);
+    pexit(status, /*freemem*/true);
     panic("pexit: should never reach this point");
 }
 /*e: syscall exits */
