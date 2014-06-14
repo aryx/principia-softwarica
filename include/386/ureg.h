@@ -1,3 +1,4 @@
+/*s: ureg.h */
 struct Ureg
 {
 	ulong	di;		/* general registers */
@@ -8,10 +9,12 @@ struct Ureg
 	ulong	dx;		/* ... */
 	ulong	cx;		/* ... */
 	ulong	ax;		/* ... */
+
 	ulong	gs;		/* data segments */
 	ulong	fs;		/* ... */
 	ulong	es;		/* ... */
 	ulong	ds;		/* ... */
+
 	ulong	trap;		/* trap type */
 	ulong	ecode;		/* error code (or zero) */
 	ulong	pc;		/* pc */
@@ -23,3 +26,4 @@ struct Ureg
 	};
 	ulong	ss;		/* old stack segment */
 };
+/*e: ureg.h */

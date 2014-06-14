@@ -40,25 +40,25 @@ enum {
         VectorCNA = 7,    /* coprocessor not available */
         Vector2F  = 8,    /* double fault */
         VectorCSO = 9,    /* coprocessor segment overrun */
-        VectorPF  = 14,   /* page fault */ //!!!!
+        VectorPF  = 14,   /* page fault */ //!!! page fault interrupt
         Vector15  = 15,   /* reserved */
         VectorCERR  = 16,   /* coprocessor error */
     /*x: enum vector cases */
         VectorPIC = 32,   /* external i8259 interrupts */
-        VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
-    /*x: enum vector cases */
-        VectorAPIC  = 65,   /* external APIC interrupts */
-        MaxVectorAPIC = 255,
     /*x: enum vector cases */
         //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
         // VectorSYSCALL = 64, in mem.h because used by Assembly too
+    /*x: enum vector cases */
+        VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
+        VectorAPIC  = 65,   /* external APIC interrupts */
+        MaxVectorAPIC = 255,
     /*e: enum vector cases */
 };
 /*e: enum vector */
 
 /*s: enum irq */
 enum {
-    IrqCLOCK  = 0,
+    IrqCLOCK  = 0, // !!! clock interrupt
     IrqKBD    = 1,
     IrqUART1  = 3,
     IrqUART0  = 4,
@@ -70,11 +70,12 @@ enum {
     IrqIRQ13  = 13,   /* coprocessor on 386 */
     IrqATA0   = 14,
     IrqATA1   = 15,
+
     MaxIrqPIC = 15,
   
     IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
     IrqLINT1  = 17,
-    IrqTIMER  = 18,
+    IrqTIMER  = 18, // for alarms
     IrqERROR  = 19,
     IrqPCINT  = 20,
     IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
@@ -88,7 +89,7 @@ enum {
 struct Vctl {
 
     bool isintr;     /* interrupt or fault/trap */
-    int irq;
+    int irq; // if interrupt
   
     void  (*f)(Ureg*, void*); /* handler to call */
     void* a;      /* argument to call it with */
@@ -96,10 +97,11 @@ struct Vctl {
     char  name[KNAMELEN];   /* of driver */
     int tbdf; // /* type+bus+device+function */ ??
   
-    // interrupt service routine
-    int (*isr)(int);    /* get isr bit for this irq */
-    int (*eoi)(int);    /* eoi */
-  
+    /*s: [[Vctl]] other fields */
+        // interrupt service routine
+        int (*isr)(int);    /* get isr bit for this irq */
+        int (*eoi)(int);    /* eoi */
+    /*e: [[Vctl]] other fields */
     // extra
     /*s: [[Vctl]] extra fields */
     // list<ref_own<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)

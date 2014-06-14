@@ -1,11 +1,12 @@
 #include "u.h"
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+
 #include "io.h"
-#include "ureg.h"
-#include "../port/error.h"
+#include <ureg.h>
 
 #include <draw.h>
 #include <memdraw.h>

@@ -468,7 +468,35 @@ provides to the user programs.
 
 % little endian, big endian, the le2xxx function?
 
-% put Ureg here
+<<ureg.h>>=
+struct Ureg
+{
+	ulong	di;		/* general registers */
+	ulong	si;		/* ... */
+	ulong	bp;		/* ... */
+	ulong	nsp;
+	ulong	bx;		/* ... */
+	ulong	dx;		/* ... */
+	ulong	cx;		/* ... */
+	ulong	ax;		/* ... */
+
+	ulong	gs;		/* data segments */
+	ulong	fs;		/* ... */
+	ulong	es;		/* ... */
+	ulong	ds;		/* ... */
+
+	ulong	trap;		/* trap type */
+	ulong	ecode;		/* error code (or zero) */
+	ulong	pc;		/* pc */
+	ulong	cs;		/* old context */
+	ulong	flags;		/* old flags */
+	union {
+		ulong	usp;
+		ulong	sp;
+	};
+	ulong	ss;		/* old stack segment */
+};
+@
 
 % intro segmentation and pagination? or ref to vm chapter?
 
@@ -3649,20 +3677,6 @@ okaddr(virt_addr addr, ulong len, bool write)
 % the loop show a bit the limitation of just-paging model where all segments
 % are put next to each other and are not in independent memory space.
 
-<<function userpc>>=
-/*
- *  return the userpc the last exception happened at
- */
-ulong
-userpc(void)
-{
-    Ureg *ureg;
-
-    ureg = (Ureg*)up->dbgreg;
-    return ureg->pc;
-}
-@ 
-
 
 <<function validaddr>>=
 void
@@ -5403,7 +5417,7 @@ linkproc(void)
 struct Vctl {
 
     bool isintr;     /* interrupt or fault/trap */
-    int irq;
+    int irq; // if interrupt
   
     void  (*f)(Ureg*, void*); /* handler to call */
     void* a;      /* argument to call it with */
@@ -5411,16 +5425,12 @@ struct Vctl {
     char  name[KNAMELEN];   /* of driver */
     int tbdf; // /* type+bus+device+function */ ??
   
-    // interrupt service routine
-    int (*isr)(int);    /* get isr bit for this irq */
-    int (*eoi)(int);    /* eoi */
-  
+    <<[[Vctl]] other fields>>
     // extra
     <<[[Vctl]] extra fields>>
 };
 @
 % V?? Vector? Interrupt vector?
-% LP split isr eoi
 
 <<global vctl>>=
 // array<list<ref_own<Vctl>>> (next = Vctl.next)
@@ -5488,8 +5498,21 @@ irqallocread(Chan*, void *vbuf, long n, vlong offset)
 @ 
 
 
+\section{Faults}
+% fault/trap/exceptions
 
-
+<<enum vector cases>>=
+    VectorNMI = 2,    /* non-maskable interrupt */
+    VectorBPT = 3,    /* breakpoint */
+    VectorUD  = 6,    /* invalid opcode exception */
+    VectorCNA = 7,    /* coprocessor not available */
+    Vector2F  = 8,    /* double fault */
+    VectorCSO = 9,    /* coprocessor segment overrun */
+    VectorPF  = 14,   /* page fault */ //!!! page fault interrupt
+    Vector15  = 15,   /* reserved */
+    VectorCERR  = 16,   /* coprocessor error */
+@
+% very important page fault, base of virtual memory
 
 % called by trapinit() (trap vs intr?)
 <<function trapenable>>=
@@ -5517,6 +5540,49 @@ trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
 }
 @ 
 
+
+\section{IRQs}
+
+<<enum vector cases>>=
+    VectorPIC = 32,   /* external i8259 interrupts */
+@
+
+<<enum irq>>=
+enum {
+    IrqCLOCK  = 0, // !!! clock interrupt
+    IrqKBD    = 1,
+    IrqUART1  = 3,
+    IrqUART0  = 4,
+    IrqPCMCIA = 5,
+    IrqFLOPPY = 6,
+    IrqLPT    = 7,
+    IrqIRQ7   = 7,
+    IrqAUX    = 12,   /* PS/2 port */
+    IrqIRQ13  = 13,   /* coprocessor on 386 */
+    IrqATA0   = 14,
+    IrqATA1   = 15,
+
+    MaxIrqPIC = 15,
+  
+    IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
+    IrqLINT1  = 17,
+    IrqTIMER  = 18, // for alarms
+    IrqERROR  = 19,
+    IrqPCINT  = 20,
+    IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
+
+    MaxIrqLAPIC = 31,
+};
+@
+% LINT? Low interrupt? PCINT?
+% very important clock interrupt, base of preemptive scheduling
+
+
+<<[[Vctl]] other fields>>=
+    // interrupt service routine
+    int (*isr)(int);    /* get isr bit for this irq */
+    int (*eoi)(int);    /* eoi */
+@
 
 
 <<function intrenable>>=
@@ -5598,7 +5664,7 @@ intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
 }
 @ 
 
-\section{Interrupt controller [[i8259]]}
+%\section{Interrupt controller [[i8259]]}
 
 <<[[PCArch]] interrupt methods fields>>=
 void  (*intrinit)(void);
@@ -5821,68 +5887,6 @@ i8259off(void)
     outb(Int1aux, 0xFF);
 }
 @
-
-
-
-\section{Faults}
-% fault/trap/exceptions
-
-<<enum vector cases>>=
-    VectorNMI = 2,    /* non-maskable interrupt */
-    VectorBPT = 3,    /* breakpoint */
-    VectorUD  = 6,    /* invalid opcode exception */
-    VectorCNA = 7,    /* coprocessor not available */
-    Vector2F  = 8,    /* double fault */
-    VectorCSO = 9,    /* coprocessor segment overrun */
-    VectorPF  = 14,   /* page fault */ //!!!!
-    Vector15  = 15,   /* reserved */
-    VectorCERR  = 16,   /* coprocessor error */
-@
-
-
-\section{IRQs}
-
-<<enum vector cases>>=
-    VectorPIC = 32,   /* external i8259 interrupts */
-    VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
-@
-
-<<enum vector cases>>=
-    VectorAPIC  = 65,   /* external APIC interrupts */
-    MaxVectorAPIC = 255,
-@
-
-
-
-% exn vs irq? irq is a request!
-
-<<enum irq>>=
-enum {
-    IrqCLOCK  = 0,
-    IrqKBD    = 1,
-    IrqUART1  = 3,
-    IrqUART0  = 4,
-    IrqPCMCIA = 5,
-    IrqFLOPPY = 6,
-    IrqLPT    = 7,
-    IrqIRQ7   = 7,
-    IrqAUX    = 12,   /* PS/2 port */
-    IrqIRQ13  = 13,   /* coprocessor on 386 */
-    IrqATA0   = 14,
-    IrqATA1   = 15,
-    MaxIrqPIC = 15,
-  
-    IrqLINT0  = 16,   /* LINT[01] must be offsets 0 and 1 */
-    IrqLINT1  = 17,
-    IrqTIMER  = 18,
-    IrqERROR  = 19,
-    IrqPCINT  = 20,
-    IrqSPURIOUS = 31,   /* must have bits [3-0] == 0x0F */
-
-    MaxIrqLAPIC = 31,
-};
-@
-% LINT? PCINT?
 
 
 \section{Interrupt [[vectortable]] and [[idt]]}
@@ -6563,6 +6567,20 @@ syscall(Ureg* ureg)
 @ 
 %        //if(0 && up->pid == 1)
 %        //    print("syscall %lud error %s\n", scallnr, up->syserrstr);
+
+<<function userpc>>=
+/*
+ *  return the userpc the last exception happened at
+ */
+ulong
+userpc(void)
+{
+    Ureg *ureg;
+
+    ureg = (Ureg*)up->dbgreg;
+    return ureg->pc;
+}
+@ 
 
 \chapter{Virtual Memory}
 % rename x86 virtual memory? but now that have swapping and demand loading
