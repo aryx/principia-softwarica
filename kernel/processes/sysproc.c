@@ -510,24 +510,27 @@ sysexec(ulong* arg)
         fdclose(i, CCEXEC);
 
     /* Text.  Shared. Attaches to cache image if possible */
-    /* attachimage returns a locked cache image */
-    img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
-    ts = img->s;
-    up->seg[TSEG] = ts;
-    ts->fstart = 0;
-    ts->flen = sizeof(Exec)+text;
-    unlock(img);
+    /*s: [[sysexec()]] get text segment ts via demand loading on tc */
+        /* attachimage returns a locked cache image */
+        img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
+        ts = img->s;
+        up->seg[TSEG] = ts;
+        ts->fstart = 0;
+        ts->flen = sizeof(Exec)+text;
+        unlock(img);
+    /*e: [[sysexec()]] get text segment ts via demand loading on tc */
 
     /* Data. Shared. */
     s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);
     up->seg[DSEG] = s;
-
-    /* Attached by hand */
-    incref(img);
-    s->image = img;
-    s->fstart = ts->fstart+ts->flen;
-    s->flen = data;
-    // data is also in binary
+    /*s: [[sysexec()]] adjust data segment s for demand loading on tc */
+        /* Attached by hand */
+        incref(img);
+        s->image = img;
+        s->fstart = ts->fstart+ts->flen;
+        s->flen = data;
+        // data is also in binary
+    /*e: [[sysexec()]] adjust data segment s for demand loading on tc */
 
     /* BSS. Zero fill on demand */
     up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);

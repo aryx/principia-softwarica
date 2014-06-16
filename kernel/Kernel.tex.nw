@@ -3499,23 +3499,15 @@ newseg(int type, virt_addr base, ulong size)
 void
 putseg(Segment *s)
 {
-    Pagetable **pp, **emap;
+    Pagetable **pde, **emap;
     KImage *img;
 
     if(s == nil)
         return; // TODO: panic("putseg") instead?
 
-    img = s->image;
-    if(img != nil) {
-        lock(img);
-        lock(s);
-        if(img->s == s && s->ref == 1)
-            img->s = nil;
-        unlock(img);
-    }
+    <<[[putseg()]] if s has an image>>
     else
         lock(s);
-
 
     s->ref--;
     if(s->ref != 0) {
@@ -3525,13 +3517,12 @@ putseg(Segment *s)
     unlock(s);
 
     qlock(&s->lk);
-    if(img)
-        putimage(img);
+    <<[[putseg()]] if s had an image>>
 
     emap = &s->pagedir[s->pagedirsize];
-    for(pp = s->pagedir; pp < emap; pp++)
-        if(*pp)
-            freept(s, *pp);
+    for(pde = s->pagedir; pde < emap; pde++)
+        if(*pde)
+            freept(s, *pde);
 
     qunlock(&s->lk);
     if(s->pagedir != s->smallpagedir)
@@ -3540,7 +3531,6 @@ putseg(Segment *s)
     free(s);
 }
 @
-% LP split image stuff
 
 
 % used by userinit(), explain well relation between a Page and a segment
@@ -3725,11 +3715,7 @@ dupseg(Segment **seg, int segno, bool share)
             goto sameseg; // threads! clone()
 
         n = newseg(s->type, s->base, s->size);
-
-        incref(s->image); // how sure non nil? data always attached to an img
-        n->image = s->image;
-        n->fstart = s->fstart;
-        n->flen = s->flen;
+        <<[[dupseg()]] SG_DATA case, attach image to new segment n>>
         break;
 
     case SG_BSS:        /* Just copy on write */
@@ -4791,24 +4777,12 @@ sysexec(ulong* arg)
         fdclose(i, CCEXEC);
 
     /* Text.  Shared. Attaches to cache image if possible */
-    /* attachimage returns a locked cache image */
-    img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
-    ts = img->s;
-    up->seg[TSEG] = ts;
-    ts->fstart = 0;
-    ts->flen = sizeof(Exec)+text;
-    unlock(img);
+    <<[[sysexec()]] get text segment ts via demand loading on tc>>
 
     /* Data. Shared. */
     s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);
     up->seg[DSEG] = s;
-
-    /* Attached by hand */
-    incref(img);
-    s->image = img;
-    s->fstart = ts->fstart+ts->flen;
-    s->flen = data;
-    // data is also in binary
+    <<[[sysexec()]] adjust data segment s for demand loading on tc>>
 
     /* BSS. Zero fill on demand */
     up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
@@ -7798,6 +7772,7 @@ cachedel(KImage *i, ulong daddr)
 % dont pay for it (nice opti, but still no shared libs, but less
 % a pb because plan9 libs are small (and ld remove deadcode?))
 
+\subsection{[[Kimage]] and the image cache}
 <<struct KImage>>=
 // a KImage is essentially a channel to an executable or swapfile
 struct KImage
@@ -7856,32 +7831,26 @@ static struct Imagealloc imagealloc;
 @
 
 
-
+\subsection{[[Segment]] and [[KImage]]}
 
 <<[[Segment]] other fields>>=
 KImage  *image;   /* text in file attached to this segment */
 @
 
+
 <<[[Kimage]] extra fields>>=
 // option<ref<Segment>>?
 Segment *s;     /* TEXT segment for image if running */
 @
-
-
-
-
-
-<<[[Kimage]] other fields>>=
-Qid   qid;      /* Qid for page cache coherence */
-Chan  *mchan;
-Qid   mqid;
-ushort  type;     /* Device type of owning channel */
-@
-% mostly inline of properties of chan Kimage.c no?
+%rename? textseg? nul for swapimage
+% the segment attached to an image will be shared so should be the same
+% everytime. Note that not have always seg->image->s == seg because
+% for DATA we just keep the seg->image link (for demand loading)
 
 
 % ctor
-% called by sysexec(), returns a locked img
+% called by sysexec(), returns a locked img that will then be assigned to a segment
+% always called with SG_TEXT; SG_DATA is handled differently.
 <<constructor attachimage>>=
 KImage*
 attachimage(int type, Chan *c, virt_addr base, ulong len)
@@ -7957,6 +7926,16 @@ found:
 }
 @
 
+<<[[Kimage]] other fields>>=
+Qid   qid;      /* Qid for page cache coherence */
+Chan  *mchan;
+Qid   mqid;
+ushort  type;     /* Device type of owning channel */
+@
+% mostly inline of properties of chan Kimage.c no?
+
+
+
 % code if exec() related to attachimage here?
 
 <<[[Segment]] other fields>>=
@@ -7965,9 +7944,36 @@ ulong flen;   /* length of segment in file */
 @
 % should get info from a.out header for size of Text or Data.
 
+<<[[sysexec()]] get text segment ts via demand loading on tc>>=
+    /* attachimage returns a locked cache image */
+    img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
+    ts = img->s;
+    up->seg[TSEG] = ts;
+    ts->fstart = 0;
+    ts->flen = sizeof(Exec)+text;
+    unlock(img);
+@
 
-% Paging in, reading
-% LP split for demand loading vs swapin
+<<[[sysexec()]] adjust data segment s for demand loading on tc>>=
+    /* Attached by hand */
+    incref(img);
+    s->image = img;
+    s->fstart = ts->fstart+ts->flen;
+    s->flen = data;
+    // data is also in binary
+@
+
+
+<<[[dupseg()]] SG_DATA case, attach image to new segment n>>=
+incref(s->image); // how sure non nil? data always attached to an img
+n->image = s->image;
+n->fstart = s->fstart;
+n->flen = s->flen;
+@
+% for SG_TEXT it was sameseg and so was shared (with its image)
+
+\subsection{Paging in}
+
 % called by fixfault
 % actually p is more SwapOrNil than PageOrSwap
 <<function pio>>=
@@ -8071,6 +8077,7 @@ retry:
     }
 }
 @
+% LP split for demand loading vs swapin
 
 % actually always called with freemem = false so will generate a broken process
 <<function faulterror>>=
@@ -8093,7 +8100,25 @@ faulterror(char *s, Chan *c, bool freemem)
 
 
 
+\subsection{Collecting images}
 
+<<[[putseg()]] if s has an image>>=
+    img = s->image;
+    if(img != nil) {
+        lock(img);
+        lock(s);
+        if(img->s == s && s->ref == 1) // race?
+            img->s = nil;
+        unlock(img);
+    }
+@
+% segment unattached when was last ref of segment because we will free it
+% how img->s can be <> s? what is the race?
+
+<<[[putseg()]] if s had an image>>=
+    if(img)
+        putimage(img);
+@
 
 
 

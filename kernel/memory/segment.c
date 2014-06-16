@@ -120,23 +120,24 @@ newseg(int type, virt_addr base, ulong size)
 void
 putseg(Segment *s)
 {
-    Pagetable **pp, **emap;
+    Pagetable **pde, **emap;
     KImage *img;
 
     if(s == nil)
         return; // TODO: panic("putseg") instead?
 
-    img = s->image;
-    if(img != nil) {
-        lock(img);
-        lock(s);
-        if(img->s == s && s->ref == 1)
-            img->s = nil;
-        unlock(img);
-    }
+    /*s: [[putseg()]] if s has an image */
+        img = s->image;
+        if(img != nil) {
+            lock(img);
+            lock(s);
+            if(img->s == s && s->ref == 1) // race?
+                img->s = nil;
+            unlock(img);
+        }
+    /*e: [[putseg()]] if s has an image */
     else
         lock(s);
-
 
     s->ref--;
     if(s->ref != 0) {
@@ -146,13 +147,15 @@ putseg(Segment *s)
     unlock(s);
 
     qlock(&s->lk);
-    if(img)
-        putimage(img);
+    /*s: [[putseg()]] if s had an image */
+        if(img)
+            putimage(img);
+    /*e: [[putseg()]] if s had an image */
 
     emap = &s->pagedir[s->pagedirsize];
-    for(pp = s->pagedir; pp < emap; pp++)
-        if(*pp)
-            freept(s, *pp);
+    for(pde = s->pagedir; pde < emap; pde++)
+        if(*pde)
+            freept(s, *pde);
 
     qunlock(&s->lk);
     if(s->pagedir != s->smallpagedir)
@@ -218,11 +221,12 @@ dupseg(Segment **seg, int segno, bool share)
             goto sameseg; // threads! clone()
 
         n = newseg(s->type, s->base, s->size);
-
+        /*s: [[dupseg()]] SG_DATA case, attach image to new segment n */
         incref(s->image); // how sure non nil? data always attached to an img
         n->image = s->image;
         n->fstart = s->fstart;
         n->flen = s->flen;
+        /*e: [[dupseg()]] SG_DATA case, attach image to new segment n */
         break;
 
     case SG_BSS:        /* Just copy on write */
