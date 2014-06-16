@@ -203,7 +203,9 @@ newpage(bool clear, Segment **s, virt_addr va)
     if(p->ref != 0)
         panic("newpage: p->ref %d != 0", p->ref);
 
-    uncachepage(p);
+    /*s: [[newpage()]] uncachepage */
+        uncachepage(p);
+    /*e: [[newpage()]] uncachepage */
     p->ref = 1;
     p->va = va;
     p->modref = PG_NOTHING;
@@ -229,7 +231,7 @@ hasfreepages(void*)
 
 /*s: destructor putpage */
 void
-putpage(Page *p)
+putpage(PageOrSwap *p)
 {
     /*s: [[putpage]] if p is a swap address */
         if(onswap(p)) {
@@ -250,8 +252,10 @@ putpage(Page *p)
         return;
     }
 
-    if(p->image && p->image != &swapimage)
-        pagechaintail(p);
+    /*s: [[putpage]] if p has an image */
+        if(p->image && p->image != &swapimage)
+            pagechaintail(p);
+    /*e: [[putpage]] if p has an image */
     else 
         pagechainhead(p);
 
@@ -415,7 +419,7 @@ uncachepage(Page *p)
 void
 cachepage(Page *p, KImage *i)
 {
-    Page **l;
+    Page **l; // list
 
     /* If this ever happens it should be fixed by calling
      * uncachepage instead of panic. I think there is a race
@@ -467,26 +471,26 @@ cachedel(KImage *i, ulong daddr)
 Page *
 lookpage(KImage *i, ulong daddr)
 {
-    Page *f;
+    Page *pg;
 
     lock(&palloc.hashlock);
-    for(f = pghash(daddr); f; f = f->hash) {
-        if(f->image == i && f->daddr == daddr) {
+    for(pg = pghash(daddr); pg; pg = pg->hash) {
+        if(pg->image == i && pg->daddr == daddr) {
             unlock(&palloc.hashlock);
 
             lock(&palloc);
-            lock(f);
-            if(f->image != i || f->daddr != daddr) { // race, not the one anymore
-                unlock(f);
+            lock(pg);
+            if(pg->image != i || pg->daddr != daddr) { // race, not the one anymore
+                unlock(pg);
                 unlock(&palloc);
                 return nil;
             }
-            if(++f->ref == 1)
-                pageunchain(f);
+            if(++pg->ref == 1)
+                pageunchain(pg);
             unlock(&palloc);
-            unlock(f);
+            unlock(pg);
 
-            return f;
+            return pg;
         }
     }
     unlock(&palloc.hashlock);
@@ -500,7 +504,7 @@ Pagetable*
 ptcpy(Pagetable *old)
 {
     Pagetable *new;
-    Page **src, **dst;
+    PageOrSwap **src, **dst;
 
     new = ptalloc();
     dst = &new->pagetab[old->first-old->pagetab];
@@ -540,15 +544,16 @@ ptalloc(void)
 void
 freept(Segment *s, Pagetable *p)
 {
+    PageOrSwap **pte;
     int ref;
-    Page *pt, **pg, **ptop;
+    Page *pt, **ptop;
 
     switch(s->type&SG_TYPE) {
     /*s: [[freept()]] SG_PHYSICAL case */
         case SG_PHYSICAL:
             ptop = &p->pagetab[PAGETABSIZE];
-            for(pg = p->pagetab; pg < ptop; pg++) {
-                pt = *pg;
+            for(pte = p->pagetab; pte < ptop; pte++) {
+                pt = *pte;
                 if(pt == nil)
                     continue;
                 lock(pt);
@@ -560,10 +565,10 @@ freept(Segment *s, Pagetable *p)
             break;
     /*e: [[freept()]] SG_PHYSICAL case */
     default:
-        for(pg = p->first; pg <= p->last; pg++)
-            if(*pg) {
-                putpage(*pg);
-                *pg = nil;
+        for(pte = p->first; pte <= p->last; pte++)
+            if(*pte) {
+                putpage(*pte);
+                *pte = nil;
             }
     }
     free(p);

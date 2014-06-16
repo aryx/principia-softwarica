@@ -661,7 +661,7 @@ struct Proc
     // list<ref<Proc>> KQlock.head or RWLock.head (or Procalloc.free)
     Proc  *qnext;   /* next process on queue for a QLock */
     /*x: [[Proc]] extra fields */
-    // hash<?, list<ref<Proc>> Procalloc.ht
+    // hash<Proc.pid, ref<Proc>> Procalloc.ht
     Proc  *pidhash; /* next proc in pid hash */ 
     /*x: [[Proc]] extra fields */
     // list<ref<Proc>> of Schedq.head
@@ -702,7 +702,7 @@ struct Procalloc
     // list<ref<Proc>> (next = Proc.qnext, hmmm abuse qnext)
     Proc* free;
 
-    // hash<Proc.pid, list<ref<Proc>> (next = Proc.pidhash)>
+    // hash<Proc.pid, ref<Proc>> (next = Proc.pidhash)>
     Proc* ht[128];
   
     // extra

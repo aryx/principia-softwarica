@@ -192,9 +192,8 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 /*e: function fixfault */
 
 /*s: function pio */
-// page io on the text segment
 void
-pio(Segment *s, ulong addr, ulong soff, Page **p)
+pio(Segment *s, virt_addr addr, ulong soff, PageOrSwap **p)
 {
     Page *new;
     KMap *k;
@@ -206,6 +205,7 @@ pio(Segment *s, ulong addr, ulong soff, Page **p)
 
 retry:
     loadrec = *p;
+
     if(loadrec == nil) {  /* from a text/data image */
         daddr = s->fstart+soff;
         new = lookpage(s->image, daddr);
@@ -218,8 +218,7 @@ retry:
         ask = s->flen-soff;
         if(ask > BY2PG)
             ask = BY2PG;
-    }
-    else {          /* from a swap image */
+    }else{          /* from a swap image */
         daddr = swapaddr(loadrec);
         new = lookpage(&swapimage, daddr);
         if(new != nil) {
@@ -227,13 +226,12 @@ retry:
             *p = new;
             return;
         }
-
         c = swapimage.c;
         ask = BY2PG;
     }
     qunlock(&s->lk);
 
-    new = newpage(0, 0, addr);
+    new = newpage(false, nil, addr);
     k = kmap(new);
     kaddr = (char*)VA(k);
 
@@ -245,7 +243,9 @@ retry:
         faulterror(Eioload, c, false);
     }
 
+    // reading the Page!! slow! which is why it's done without s->lk locked
     n = devtab[c->type]->read(c, kaddr, ask, daddr);
+
     if(n != ask)
         faulterror(Eioload, c, false);
     if(ask < BY2PG)
@@ -254,20 +254,20 @@ retry:
     poperror();
     kunmap(k);
     qlock(&s->lk);
-    if(loadrec == 0) {  /* This is demand load */
+
+    if(loadrec == nil) {  /* This is demand load */
         /*
          *  race, another proc may have gotten here first while
          *  s->lk was unlocked
          */
-        if(*p == 0) { 
+        if(*p == nil) { 
             new->daddr = daddr;
             cachepage(new, s->image);
             *p = new;
         }
         else
             putpage(new);
-    }
-    else {          /* This is paged out */
+    }else{          /* This is paged out */
         /*
          *  race, another proc may have gotten here first
          *  (and the pager may have run on that page) while
@@ -277,7 +277,7 @@ retry:
             if(!pagedout(*p)){
                 /* another process did it for me */
                 putpage(new);
-                goto done;
+                return;
             } else {
                 /* another process and the pager got in */
                 putpage(new);
@@ -290,9 +290,6 @@ retry:
         *p = new;
         putswap(loadrec);
     }
-
-done:
-    ;
 }
 /*e: function pio */
 

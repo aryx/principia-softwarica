@@ -288,11 +288,11 @@ segpage(Segment *s, Page *p)
 }
 /*e: function segpage */
 
-/*s: function attachimage */
+/*s: constructor attachimage */
 KImage*
-attachimage(int type, Chan *c, ulong base, ulong len)
+attachimage(int type, Chan *c, virt_addr base, ulong len)
 {
-    KImage *i, **l;
+    KImage *img, **l;
 
     /* reclaim any free channels from reclaimed segments */
     if(imagealloc.nfreechan)
@@ -304,16 +304,16 @@ attachimage(int type, Chan *c, ulong base, ulong len)
      * Search the image cache for remains of the text from a previous
      * or currently running incarnation
      */
-    for(i = ihash(c->qid.path); i; i = i->hash) {
-        if(c->qid.path == i->qid.path) {
-            lock(i);
-            if(eqqid(c->qid, i->qid) &&
-               eqqid(c->mqid, i->mqid) &&
-               c->mchan == i->mchan &&
-               c->type == i->type) {
+    for(img = ihash(c->qid.path); img; img = img->hash) {
+        if(c->qid.path == img->qid.path) {
+            lock(img);
+            if(eqqid(c->qid, img->qid) &&
+               eqqid(c->mqid, img->mqid) &&
+               c->mchan == img->mchan &&
+               c->type == img->type) {
                 goto found;
             }
-            unlock(i);
+            unlock(img);
         }
     }
 
@@ -321,45 +321,47 @@ attachimage(int type, Chan *c, ulong base, ulong len)
      * imagereclaim dumps pages from the free list which are cached by image
      * structures. This should free some image structures.
      */
-    while(!(i = imagealloc.free)) {
+    while(!(img = imagealloc.free)) {
         unlock(&imagealloc);
         imagereclaim();
         sched();
         lock(&imagealloc);
     }
 
-    imagealloc.free = i->next;
+    imagealloc.free = img->next;
 
-    lock(i);
+    lock(img);
     incref(c);
-    i->c = c;
-    i->type = c->type;
-    i->qid = c->qid;
-    i->mqid = c->mqid;
-    i->mchan = c->mchan;
+    img->c = c;
+    img->type = c->type;
+    img->qid = c->qid;
+    img->mqid = c->mqid;
+    img->mchan = c->mchan;
+    //add_hash(imagealloc.hash, c->qid.path, img)
     l = &ihash(c->qid.path);
-    i->hash = *l;
-    *l = i;
+    img->hash = *l;
+    *l = img;
+
 found:
     unlock(&imagealloc);
 
-    if(i->s == 0) {
+    if(img->s == nil) {
         /* Disaster after commit in exec */
         if(waserror()) {
-            unlock(i);
+            unlock(img);
             pexit(Enovmem, /*freemem*/true);
         }
-        i->s = newseg(type, base, len);
-        i->s->image = i;
-        i->ref++;
+        img->s = newseg(type, base, len);
+        img->s->image = img;
+        img->ref++;
         poperror();
     }
     else
-        incref(i->s);
+        incref(img->s);
 
-    return i;
+    return img;
 }
-/*e: function attachimage */
+/*e: constructor attachimage */
 
 /*s: struct Irstats */
 struct Irstats {
@@ -398,7 +400,7 @@ imagereclaim(void)
         if(p->ref == 0 && canlock(p)) {
             if(p->ref == 0) {
                 n++;
-                uncachepage(p);
+                uncachepage(p); // will call putimage()
             }
             unlock(p);
         }
@@ -448,35 +450,39 @@ imagechanreclaim(void)
 
 /*s: destructor putimage */
 void
-putimage(KImage *i)
+putimage(KImage *img)
 {
     Chan *c, **cp;
     KImage *f, **l;
 
-    if(i->notext)
+    if(img->notext)
         return;
 
-    lock(i);
-    if(--i->ref == 0) {
-        l = &ihash(i->qid.path);
-        mkqid(&i->qid, ~0, ~0, QTFILE);
-        unlock(i);
-        c = i->c;
+    lock(img);
+    if(--img->ref == 0) {
+        l = &ihash(img->qid.path);
+        mkqid(&img->qid, ~0, ~0, QTFILE);
+        unlock(img);
+        c = img->c;
 
         lock(&imagealloc);
+        //remove_hash(imagealloc.hash, img)
         for(f = *l; f; f = f->hash) {
-            if(f == i) {
-                *l = i->hash;
+            if(f == img) {
+                *l = img->hash;
                 break;
             }
             l = &f->hash;
         }
 
-        i->next = imagealloc.free;
-        imagealloc.free = i;
+        //add_list(imagealloc.free, img)
+        img->next = imagealloc.free;
+        imagealloc.free = img;
 
         /* defer freeing channel till we're out of spin lock's */
+
         if(imagealloc.nfreechan == imagealloc.szfreechan){
+            //realloc(imagealloc.freenchan, szfreechan+NFREECHAN)
             imagealloc.szfreechan += NFREECHAN;
             cp = malloc(imagealloc.szfreechan*sizeof(Chan*));
             if(cp == nil)
@@ -485,12 +491,13 @@ putimage(KImage *i)
             free(imagealloc.freechan);
             imagealloc.freechan = cp;
         }
+
         imagealloc.freechan[imagealloc.nfreechan++] = c;
         unlock(&imagealloc);
 
         return;
     }
-    unlock(i);
+    unlock(img);
 }
 /*e: destructor putimage */
 
@@ -583,7 +590,7 @@ mfreeseg(Segment *s, ulong start, int pages)
 {
     int i, j, size;
     ulong soff;
-    Page *pg;
+    PageOrSwap *pg;
     Page *list;
 
     soff = start-s->base;

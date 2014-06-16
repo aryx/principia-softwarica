@@ -18,7 +18,7 @@ static void pager(void*);
 /*e: swap.c forward decl */
 
 /*s: global iolist */
-// array<ref<Page>>, xalloc'ed in swapinit(), size = Conf.nswppo
+// array<option<ref<Page>>>, xalloc'ed in swapinit(), size = Conf.nswppo
 static  Page    **iolist;
 /*e: global iolist */
 /*s: global ioptr */
@@ -320,16 +320,16 @@ canflush(Proc *p, Segment *s)
 
 /*s: function pagepte */
 static void
-pagepte(int type, Page **pg)
+pagepte(int type, Page **pte)
 {
     ulong daddr;
     Page *outp;
 
-    outp = *pg;
+    outp = *pte;
     switch(type) {
     case SG_TEXT:               /* Revert to demand load */
         putpage(outp);
-        *pg = nil;
+        *pte = nil;
         break;
 
     case SG_DATA:
@@ -363,7 +363,7 @@ pagepte(int type, Page **pg)
          */
         outp->daddr = daddr;
         cachepage(outp, &swapimage);
-        *pg = (Page*)(daddr|PG_ONSWAP); // turn a Page into a Swap
+        *pte = (Page*)(daddr|PG_ONSWAP); // turn a Page into a Swap
         unlock(outp);
 
         /* Add page to IO transaction list */

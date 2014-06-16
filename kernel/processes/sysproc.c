@@ -552,7 +552,7 @@ sysexec(ulong* arg)
         up->basepri = PriRoot;
     up->priority = up->basepri;
     poperror();
-    cclose(tc);
+    cclose(tc); // tc has still a reference in the img
 
     /*
      *  At this point, the mmu contains info about the old address

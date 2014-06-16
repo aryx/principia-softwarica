@@ -15,6 +15,7 @@
 enum modref 
 {
     PG_NOTHING = 0x00, // nothing
+
     PG_MOD    = 0x01,   /* software modified bit */
     PG_REF    = 0x02,   /* software referenced bit */
 };
@@ -29,10 +30,9 @@ struct Page
     virt_addr va;     /* Virtual address for user */
 
     /*s: [[Page]] other fields */
-    ulong daddr;      /* Disc address on swap */
-    /*x: [[Page]] other fields */
     // option<ref<Kimage>>
-    KImage  *image;     /* Associated text or swap image */
+    KImage  *image;     /* Associated binary image or swap image */
+    ulong daddr;      /* Disc address on image */
     /*x: [[Page]] other fields */
     ulong gen;      /* Generation counter for swap */
     /*e: [[Page]] other fields */
@@ -51,18 +51,22 @@ struct Page
     // list<ref<Page>> Palloc.tail
     Page  *prev; 
     /*x: [[Page]] extra fields */
-    // hash<daddr, list<ref<Page>>> Palloc.hash
+    // hash<daddr, ref<Page>> Palloc.hash
     Page  *hash; /* Image hash chains */ 
     /*e: [[Page]] extra fields */
 };
 /*e: struct Page */
 
+/*s: type PageOrSwap */
+typedef Page PageOrSwap;
+/*e: type PageOrSwap */
+
 /*s: struct Pagetable */
 // ptalloc'ed (malloc'ed)
 struct Pagetable
 {
-    //array<option<ref<Page>> will map 1M of memory
-    Page  *pagetab[PAGETABSIZE];
+    //array<option<ref<PageOrSwap>> will map 1M of memory
+    PageOrSwap  *pagetab[PAGETABSIZE];
   
     //to avoid iterate over all entries in pagetab
     // ref<ref<Page>> in Pagetable.pages
@@ -72,35 +76,32 @@ struct Pagetable
 };
 /*e: struct Pagetable */
 
-
 /*s: struct KImage */
-// a KImage is essentially a channel to a text file (an image of a binary)
-// the image in memory for a portion of a given file.
+// a KImage is essentially a channel to an executable or swapfile
 struct KImage
 {
     Chan  *c;     /* channel to text file */
-
+    bool  notext;     /* no file associated */ // for swapfile
+    /*s: [[Kimage]] other fields */
     Qid   qid;      /* Qid for page cache coherence */
-
-    Qid mqid;
     Chan  *mchan;
+    Qid   mqid;
     ushort  type;     /* Device type of owning channel */
-  
-    bool  notext;     /* no file associated */
+    /*e: [[Kimage]] other fields */
   
     // extra
     Ref;
-
-    // list<ref<Kimage>> of Imagealloc.free?
+    /*s: [[Kimage]] extra fields */
+    // list<ref<Kimage>> of Imagealloc.free
     KImage  *next; /* Free list */ 
-    // hash<Qid.path, list<ref<Kimage>>> Imagealloc.hash
+    // hash<qid.path, ref<Kimage>> Imagealloc.hash
     KImage  *hash; /* Qid hash chains */ 
-
+    /*x: [[Kimage]] extra fields */
     // option<ref<Segment>>?
     Segment *s;     /* TEXT segment for image if running */
+    /*e: [[Kimage]] extra fields */
 };
 /*e: struct KImage */
-
 
 /*s: enum segtype */
 /* Segment types */
@@ -178,6 +179,7 @@ struct Segment
   
     /*s: [[Segment]] other fields */
     KImage  *image;   /* text in file attached to this segment */
+    /*x: [[Segment]] other fields */
     ulong fstart;   /* start address in file for demand load */
     ulong flen;   /* length of segment in file */
     /*x: [[Segment]] other fields */
@@ -338,7 +340,7 @@ struct Palloc
     ulong freecount;    /* how many pages on free list now */
 
     /*s: [[Palloc]] other fields */
-        // hash<Page.daddr, list<ref<Page>> (next = Page.hash)>
+        // hash<Page.daddr, ref<Page>> (next = Page.hash)>
         Page  *hash[PGHSIZE];
         Lock  hashlock;
     /*e: [[Palloc]] other fields */
@@ -360,27 +362,29 @@ extern  Palloc  palloc;
 /*s: function ihash */
 #define IHASHSIZE 64
 // actually internal to page.c, but important so here
-#define ihash(s)  imagealloc.hash[s%IHASHSIZE]
+#define ihash(qidpath)  imagealloc.hash[qidpath%IHASHSIZE]
 /*e: function ihash */
 
 /*s: struct Imagealloc */
 // Image allocator (internal to segment.c, but important so here, singleton)
 struct Imagealloc
 {
-    // array<Kimage>?  xalloc'ed in initimage() (conf.nimage)
-    KImage  *free; 
-    // hash<Qid.path, list<ref<Kimage>>
+    // hash<qid.path, ref<Kimage>> (next = Kimage.hash)
     KImage  *hash[IHASHSIZE];
+
+    // list<ref<Kimage> (next = Kimage.next)
+    KImage  *free; // originally  xalloc'ed in initimage() (conf.nimage)
     QLock ireclaim; /* mutex on reclaiming free images */
-  
-    Chan  **freechan; /* free image channels */
-    int nfreechan;  /* number of free channels */
-    int szfreechan; /* size of freechan array */
-    QLock fcreclaim;  /* mutex on reclaiming free channels */
-  
+
+    /*s: [[Imagealloc]] other fields */
+        Chan  **freechan; /* free image channels */
+        int nfreechan;  /* number of free channels */
+        int szfreechan; /* size of freechan array */
+        QLock fcreclaim;  /* mutex on reclaiming free channels */
+    /*e: [[Imagealloc]] other fields */
+ 
     // extra
     Lock;
-
 };
 /*e: struct Imagealloc */
 
