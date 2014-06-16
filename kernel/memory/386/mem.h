@@ -252,6 +252,7 @@
 #define PTEWRITE  (1<<1)
 #define PTERONLY  (0<<1)
 
+// x86 specific constants
 #define PTEKERNEL (0<<2)
 #define PTEUSER   (1<<2)
 

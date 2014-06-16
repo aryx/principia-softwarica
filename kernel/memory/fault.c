@@ -35,7 +35,6 @@ fault(virt_addr addr, bool read)
             up->psstate = sps;
             return -1;
         }
-
         if(!read && (s->type&SG_RONLY)) {
             qunlock(&s->lk);
             up->psstate = sps;
@@ -81,111 +80,125 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 {
     int type;
     int ref;
-    Pagetable **p, *etp;
-    phys_addr mmuphys=nilptr;
+    Pagetable **pde, *pt;
+    Page **pte, *lkp, *new;
+    ulong mmupte = nilptr;
     ulong soff;
-    Page **pg, *lkp, *new;
 
     addr &= ~(BY2PG-1);
     soff = addr - s->base;
-    p = &s->pagedir[soff/PAGETABMAPMEM];
-    if(*p == 0)
-        *p = ptalloc();
 
-    etp = *p;
-    pg = &etp->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
+    // walk
+    pde = &s->pagedir[soff/PAGETABMAPMEM];
+    if(*pde == nil)
+        *pde = ptalloc();
+    pt = *pde;
+    pte = &pt->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
+    if(pte < pt->first)
+        pt->first = pte;
+    if(pte > pt->last)
+        pt->last = pte;
+
     type = s->type&SG_TYPE;
 
-    if(pg < etp->first)
-        etp->first = pg;
-    if(pg > etp->last)
-        etp->last = pg;
-
     switch(type) {
-    default:
-        panic("fault");
-        break;
-
     case SG_TEXT:           /* Demand load */
-        if(pagedout(*pg))
-            pio(s, addr, soff, pg);
+        /*s: [[fixfault()]] page in for SG_TEXT pte if pagedout */
+                if(pagedout(*pte))
+                    pio(s, addr, soff, pte);
+        /*e: [[fixfault()]] page in for SG_TEXT pte if pagedout */
 
-        mmuphys = PPN((*pg)->pa) | PTERONLY|PTEVALID;
-        (*pg)->modref = PG_REF;
+        mmupte = PPN((*pte)->pa) | PTERONLY|PTEVALID;
+        (*pte)->modref = PG_REF;
         break;
 
     case SG_BSS:
     case SG_SHARED:         /* Zero fill on demand */
     case SG_STACK:
-        if(*pg == 0) {
-            new = newpage(1, &s, addr);
+        if(*pte == nil) {
+            new = newpage(true, &s, addr);
             if(s == nil) //?? when can be nil at exit?
                 return -1;
-            *pg = new;
+            *pte = new;
         }
         goto common;
 
     case SG_DATA:
     common:         /* Demand load/pagein/copy on write */
-        if(pagedout(*pg))
-            pio(s, addr, soff, pg);
+        /*s: [[fixfault()]] page in for SG_DATA or swapin (SG_BSS, etc) pte if pagedout */
+                if(pagedout(*pte))
+                    pio(s, addr, soff, pte);
+        /*e: [[fixfault()]] page in for SG_DATA or swapin (SG_BSS, etc) pte if pagedout */
 
-        /*
-         *  It's only possible to copy on write if
-         *  we're the only user of the segment.
-         */
-        if(read && conf.copymode == false && s->ref == 1) {
-            mmuphys = PPN((*pg)->pa)|PTERONLY|PTEVALID;
-            (*pg)->modref |= PG_REF;
-            break;
-        }
+        /*s: [[fixfault()]] if read and copy on write, adjust mmupte and break */
+                /*
+                 *  It's only possible to copy on write if
+                 *  we're the only user of the segment.
+                 */
+                if(read && conf.copymode == false && s->ref == 1) {
+                    mmupte = PPN((*pte)->pa)|PTERONLY|PTEVALID;
+                    (*pte)->modref |= PG_REF;
+                    break;
+                }
+        /*e: [[fixfault()]] if read and copy on write, adjust mmupte and break */
 
-        lkp = *pg;
+        lkp = *pte;
+
         lock(lkp);
 
         if(lkp->image == &swapimage)
             ref = lkp->ref + swapcount(lkp->daddr);
         else
             ref = lkp->ref;
-        if(ref == 1 && lkp->image){
-            /* save a copy of the original for the image cache */
-            duppage(lkp);
-            ref = lkp->ref;
-        }
+        /*s: [[fixfault()]] if one ref and page has an image */
+                if(ref == 1 && lkp->image){
+                    /* save a copy of the original for the image cache */
+                    duppage(lkp);
+                    ref = lkp->ref;
+                }
+        /*e: [[fixfault()]] if one ref and page has an image */
         unlock(lkp);
-        if(ref > 1){
-            new = newpage(0, &s, addr);
-            if(s == nil)
-                return -1;
-            *pg = new;
-            copypage(lkp, *pg);
-            putpage(lkp);
-        }
-        mmuphys = PPN((*pg)->pa) | PTEWRITE | PTEVALID;
-        (*pg)->modref = PG_MOD|PG_REF;
+
+        /*s: [[fixfault()]] if write and more than one ref then copy page */
+                if(ref > 1){
+                    new = newpage(false, &s, addr);
+                    if(s == nil)
+                        return -1;
+                    *pte = new;
+                    copypage(lkp, *pte);
+                    putpage(lkp); //why??
+                }
+        /*e: [[fixfault()]] if write and more than one ref then copy page */
+
+        mmupte = PPN((*pte)->pa) | PTEWRITE | PTEVALID;
+        (*pte)->modref = PG_MOD|PG_REF;
         break;
 
     /*s: [[fixfault()]] SG_PHYSICAL case */
         case SG_PHYSICAL:
-            if(*pg == nil) {
+            if(*pte == nil) {
                 new = smalloc(sizeof(Page));
                 new->va = addr;
                 new->pa = s->pseg->pa+(addr-s->base);
                 new->ref = 1;
-                *pg = new;
+                *pte = new;
             }
 
             if (checkaddr && addr == addr2check)
-                (*checkaddr)(addr, s, *pg);
-            mmuphys = PPN((*pg)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
-            (*pg)->modref = PG_MOD|PG_REF;
+                (*checkaddr)(addr, s, *pte);
+            mmupte = PPN((*pte)->pa) |PTEWRITE|PTEUNCACHED|PTEVALID;
+            (*pte)->modref = PG_MOD|PG_REF;
             break;
     /*e: [[fixfault()]] SG_PHYSICAL case */
+
+    default:
+        panic("fault");
+        break;
     }
     qunlock(&s->lk);
 
     if(doputmmu)
-        putmmu(addr, mmuphys, *pg);
+        putmmu(addr, mmupte, *pte);
 
     return 0; // OK
 }

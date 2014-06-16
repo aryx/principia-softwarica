@@ -442,7 +442,7 @@ upallocmmupd(void)
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
  */
 void
-putmmu(virt_addr va, phys_addr pa, Page*)
+putmmu(virt_addr va, ulong mmupte, Page*)
 {
     int old, s;
     Page *page;
@@ -473,7 +473,7 @@ putmmu(virt_addr va, phys_addr pa, Page*)
     }
     mmupt = KADDR(PPN(mmupd[PDX(va)]));
     old = mmupt[PTX(va)];
-    mmupt[PTX(va)] = pa|PTEUSER|PTEVALID;
+    mmupt[PTX(va)] = mmupte|PTEUSER|PTEVALID;
 
     if(old&PTEVALID)
         flushpg(va);

@@ -3446,7 +3446,7 @@ ptcpy(Pagetable *old)
     return new;
 }
 @
-% why called cpy? it looks like it shares, so when actually use copypage()?
+% why called copy? it looks like it shares, so when actually use copypage()?
 % because when not have RFMEM we do dupseg and ptcpy, but I don't see
 % how it's different since we still share. the pagedir and pagetab
 % are new, but they contain the same pointers ...
@@ -6560,7 +6560,7 @@ userpc(void)
 
 \chapter{Virtual Memory}
 % rename x86 virtual memory? but now that have swapping and demand loading
-% here makes less sense to rename.
+% sections here, it makes less sense to rename.
 % less: could add (page fault) in title to relate to Interrupt chapter
 
 \section{Overview}
@@ -6569,7 +6569,7 @@ userpc(void)
 % Virtual memory, via the indirection trick, enables many many things:
 % - isolated processes, safer! (see DOS ...) a malicious/buggy process can't harm
 % - can access more than physical, hence virtual in some sense, swapping
-% - sharing optimization: shared text pages, but also in fork copy on write exec
+% - sharing optimization: shared text pages, but also in fork copy on write
 % - lazy optimization: can have demand loading
 % - easier for loading programs, no need relocation, they all start at 0
 % - ??
@@ -6760,6 +6760,7 @@ Segdesc *gdt;     /* gdt for this processor */
 #define PTEWRITE  (1<<1)
 #define PTERONLY  (0<<1)
 
+// x86 specific constants
 #define PTEKERNEL (0<<2)
 #define PTEUSER   (1<<2)
 
@@ -7064,7 +7065,7 @@ mmurelease(Proc* proc)
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
  */
 void
-putmmu(virt_addr va, phys_addr pa, Page*)
+putmmu(virt_addr va, ulong mmupte, Page*)
 {
     int old, s;
     Page *page;
@@ -7099,7 +7100,7 @@ if(!(mmupd[PDX(va)]&PTEVALID)) {
 }
 mmupt = KADDR(PPN(mmupd[PDX(va)]));
 old = mmupt[PTX(va)];
-mmupt[PTX(va)] = pa|PTEUSER|PTEVALID;
+mmupt[PTX(va)] = mmupte|PTEUSER|PTEVALID;
 
 if(old&PTEVALID)
     flushpg(va);
@@ -7156,9 +7157,6 @@ flushpg(virt_addr va)
 
 \section{Page fault}
 
-% split copy-on-write feature in another section?
-% have also demand-loading here
-
 % see also trapinit
 
 % insyscall saving? means can have trap in a syscall itself?
@@ -7210,9 +7208,7 @@ fault386(Ureg* ureg, void*)
     up->insyscall = insyscall;
 }
 @ 
-
-
-
+% LP split hide error managment code in first pass
 
 
 % ret_code2?
@@ -7239,7 +7235,6 @@ fault(virt_addr addr, bool read)
             up->psstate = sps;
             return -1;
         }
-
         if(!read && (s->type&SG_RONLY)) {
             qunlock(&s->lk);
             up->psstate = sps;
@@ -7256,11 +7251,8 @@ fault(virt_addr addr, bool read)
     return 0;
 }
 @
+% why loop?
 
-
-<<[[Conf]] other fields>>=
-bool copymode; /* 0 is copy on write, 1 is copy on reference */
-@
 
 % The big one! very important function!
 %ret_code
@@ -7270,203 +7262,85 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
 {
     int type;
     int ref;
-    Pagetable **p, *etp;
-    phys_addr mmuphys=nilptr;
+    Pagetable **pde, *pt;
+    Page **pte, *lkp, *new;
+    ulong mmupte = nilptr;
     ulong soff;
-    Page **pg, *lkp, *new;
 
     addr &= ~(BY2PG-1);
     soff = addr - s->base;
-    p = &s->pagedir[soff/PAGETABMAPMEM];
-    if(*p == 0)
-        *p = ptalloc();
 
-    etp = *p;
-    pg = &etp->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
+    // walk
+    pde = &s->pagedir[soff/PAGETABMAPMEM];
+    if(*pde == nil)
+        *pde = ptalloc();
+    pt = *pde;
+    pte = &pt->pagetab[(soff&(PAGETABMAPMEM-1))/BY2PG];
+    if(pte < pt->first)
+        pt->first = pte;
+    if(pte > pt->last)
+        pt->last = pte;
+
     type = s->type&SG_TYPE;
 
-    if(pg < etp->first)
-        etp->first = pg;
-    if(pg > etp->last)
-        etp->last = pg;
-
     switch(type) {
-    default:
-        panic("fault");
-        break;
-
     case SG_TEXT:           /* Demand load */
-        if(pagedout(*pg))
-            pio(s, addr, soff, pg);
+        <<[[fixfault()]] page in for SG_TEXT pte if pagedout>>
 
-        mmuphys = PPN((*pg)->pa) | PTERONLY|PTEVALID;
-        (*pg)->modref = PG_REF;
+        mmupte = PPN((*pte)->pa) | PTERONLY|PTEVALID;
+        (*pte)->modref = PG_REF;
         break;
 
     case SG_BSS:
     case SG_SHARED:         /* Zero fill on demand */
     case SG_STACK:
-        if(*pg == 0) {
-            new = newpage(1, &s, addr);
+        if(*pte == nil) {
+            new = newpage(true, &s, addr);
             if(s == nil) //?? when can be nil at exit?
                 return -1;
-            *pg = new;
+            *pte = new;
         }
         goto common;
 
     case SG_DATA:
     common:         /* Demand load/pagein/copy on write */
-        if(pagedout(*pg))
-            pio(s, addr, soff, pg);
+        <<[[fixfault()]] page in for SG_DATA or swapin (SG_BSS, etc) pte if pagedout>>
 
-        /*
-         *  It's only possible to copy on write if
-         *  we're the only user of the segment.
-         */
-        if(read && conf.copymode == false && s->ref == 1) {
-            mmuphys = PPN((*pg)->pa)|PTERONLY|PTEVALID;
-            (*pg)->modref |= PG_REF;
-            break;
-        }
+        <<[[fixfault()]] if read and copy on write, adjust mmupte and break>>
 
-        lkp = *pg;
+        lkp = *pte;
+
         lock(lkp);
 
         if(lkp->image == &swapimage)
             ref = lkp->ref + swapcount(lkp->daddr);
         else
             ref = lkp->ref;
-        if(ref == 1 && lkp->image){
-            /* save a copy of the original for the image cache */
-            duppage(lkp);
-            ref = lkp->ref;
-        }
+        <<[[fixfault()]] if one ref and page has an image>>
         unlock(lkp);
-        if(ref > 1){
-            new = newpage(0, &s, addr);
-            if(s == nil)
-                return -1;
-            *pg = new;
-            copypage(lkp, *pg);
-            putpage(lkp);
-        }
-        mmuphys = PPN((*pg)->pa) | PTEWRITE | PTEVALID;
-        (*pg)->modref = PG_MOD|PG_REF;
+
+        <<[[fixfault()]] if write and more than one ref then copy page>>
+
+        mmupte = PPN((*pte)->pa) | PTEWRITE | PTEVALID;
+        (*pte)->modref = PG_MOD|PG_REF;
         break;
 
     <<[[fixfault()]] SG_PHYSICAL case>>
+
+    default:
+        panic("fault");
+        break;
     }
     qunlock(&s->lk);
 
     if(doputmmu)
-        putmmu(addr, mmuphys, *pg);
+        putmmu(addr, mmupte, *pte);
 
     return 0; // OK
 }
 @
 
 
-%\section{page copy?} for copy on write?
-
-% memmove? should be called memcopy no? also rename f -> src, t -> dst?
-<<function copypage>>=
-void
-copypage(Page *f, Page *t)
-{
-    KMap *ks, *kd;
-
-    ks = kmap(f);
-    kd = kmap(t);
-    memmove((void*)VA(kd), (void*)VA(ks), BY2PG);
-    kunmap(ks);
-    kunmap(kd);
-}
-@
-
-
-<<global dupretries>>=
-static int dupretries = 15000;
-@
-
-
-% called only from fixfault. for copy-on-write?
-% type: ret_code?
-<<function duppage>>=
-/* Always call with p locked */
-int
-duppage(Page *p)
-{
-    Page *np;
-    int retries;
-
-    retries = 0;
-retry:
-
-    if(retries++ > dupretries){
-        print("duppage %d, up %p\n", retries, up);
-        dupretries += 100;
-        if(dupretries > 100000)
-            panic("duppage\n");
-        uncachepage(p);
-        return 1;
-    }
-        
-
-    /* don't dup pages with no image */
-    if(p->ref == 0 || p->image == nil || p->image->notext)
-        return 0;
-
-    /*
-     *  normal lock ordering is to call
-     *  lock(&palloc) before lock(p).
-     *  To avoid deadlock, we have to drop
-     *  our locks and try again.
-     */
-    if(!canlock(&palloc)){
-        unlock(p);
-        if(up)
-            sched();
-        lock(p);
-        goto retry;
-    }
-
-    /* No freelist cache when memory is very low */
-    if(palloc.freecount < swapalloc.highwater) {
-        unlock(&palloc);
-        uncachepage(p);
-        return 1;
-    }
-
-    np = palloc.head;
-
-    pageunchain(np);
-    pagechaintail(np);
-/*
-* XXX - here's a bug? - np is on the freelist but it's not really free.
-* when we unlock palloc someone else can come in, decide to
-* use np, and then try to lock it.  they succeed after we've 
-* run copypage and cachepage and unlock(np).  then what?
-* they call pageunchain before locking(np), so it's removed
-* from the freelist, but still in the cache because of
-* cachepage below.  if someone else looks in the cache
-* before they remove it, the page will have a nonzero ref
-* once they finally lock(np).
-*/
-    lock(np);
-    unlock(&palloc);
-
-    /* Cache the new version */
-    uncachepage(np);
-    np->va = p->va;
-    np->daddr = p->daddr;
-    copypage(p, np);
-    cachepage(np, p->image);
-    unlock(np);
-    uncachepage(p);
-
-    return 0;
-}
-@
 
 
 
@@ -7522,6 +7396,53 @@ checkmmu(virt_addr va, phys_addr pa)
     <<[[checkmmu()]] pd at pt check>>
 }
 @
+
+\section{Copy on write}
+
+<<[[Conf]] other fields>>=
+bool copymode; /* 0 is copy on write, 1 is copy on reference */
+@
+% use enum?
+
+<<[[fixfault()]] if read and copy on write, adjust mmupte and break>>=
+        /*
+         *  It's only possible to copy on write if
+         *  we're the only user of the segment.
+         */
+        if(read && conf.copymode == false && s->ref == 1) {
+            mmupte = PPN((*pte)->pa)|PTERONLY|PTEVALID;
+            (*pte)->modref |= PG_REF;
+            break;
+        }
+@
+
+<<[[fixfault()]] if write and more than one ref then copy page>>=
+        if(ref > 1){
+            new = newpage(false, &s, addr);
+            if(s == nil)
+                return -1;
+            *pte = new;
+            copypage(lkp, *pte);
+            putpage(lkp); //why??
+        }
+@
+
+
+% memmove? should be called memcopy no? also rename f -> src, t -> dst?
+<<function copypage>>=
+void
+copypage(Page *f, Page *t)
+{
+    KMap *ks, *kd;
+
+    ks = kmap(f);
+    kd = kmap(t);
+    memmove((void*)VA(kd), (void*)VA(ks), BY2PG);
+    kunmap(ks);
+    kunmap(kd);
+}
+@
+
 
 \section{Page cache}
 % less: mv in Memory section? but it's an optimisation that we can delay to explain.
@@ -7762,6 +7683,7 @@ cachedel(KImage *i, ulong daddr)
 
 
 \section{Demand loading}
+% and text/data sharing
 
 % idea is to set to nil the PageOrSwap* entries in Pagetable or even
 % to nil the Pagetable* entries in pagedir of Segment.
@@ -7974,6 +7896,24 @@ n->flen = s->flen;
 
 \subsection{Paging in}
 
+<<function pagedout>>=
+#define pagedout(s) (((ulong)s)==0 || onswap(s))
+@
+% demand loading or on swap
+
+
+<<[[fixfault()]] page in for SG_TEXT pte if pagedout>>=
+        if(pagedout(*pte))
+            pio(s, addr, soff, pte);
+@
+
+<<[[fixfault()]] page in for SG_DATA or swapin (SG_BSS, etc) pte if pagedout>>=
+        if(pagedout(*pte))
+            pio(s, addr, soff, pte);
+@
+
+
+
 % called by fixfault
 % actually p is more SwapOrNil than PageOrSwap
 <<function pio>>=
@@ -8098,6 +8038,102 @@ faulterror(char *s, Chan *c, bool freemem)
 }
 @
 
+\subsection{[[duppage()]]}
+
+%??? don't get duppage
+
+
+<<[[fixfault()]] if one ref and page has an image>>=
+        if(ref == 1 && lkp->image){
+            /* save a copy of the original for the image cache */
+            duppage(lkp);
+            ref = lkp->ref;
+        }
+@
+
+<<global dupretries>>=
+static int dupretries = 15000;
+@
+
+
+% called only from fixfault.
+% type: ret_code?
+<<function duppage>>=
+/* Always call with p locked */
+int
+duppage(Page *p)
+{
+    Page *np;
+    int retries;
+
+    retries = 0;
+retry:
+
+    if(retries++ > dupretries){
+        print("duppage %d, up %p\n", retries, up);
+        dupretries += 100;
+        if(dupretries > 100000)
+            panic("duppage\n");
+        uncachepage(p);
+        return 1;
+    }
+        
+
+    /* don't dup pages with no image */
+    if(p->ref == 0 || p->image == nil || p->image->notext)
+        return 0;
+
+    /*
+     *  normal lock ordering is to call
+     *  lock(&palloc) before lock(p).
+     *  To avoid deadlock, we have to drop
+     *  our locks and try again.
+     */
+    if(!canlock(&palloc)){
+        unlock(p);
+        if(up)
+            sched();
+        lock(p);
+        goto retry;
+    }
+
+    /* No freelist cache when memory is very low */
+    if(palloc.freecount < swapalloc.highwater) {
+        unlock(&palloc);
+        uncachepage(p);
+        return 1;
+    }
+
+    np = palloc.head;
+
+    pageunchain(np);
+    pagechaintail(np);
+/*
+* XXX - here's a bug? - np is on the freelist but it's not really free.
+* when we unlock palloc someone else can come in, decide to
+* use np, and then try to lock it.  they succeed after we've 
+* run copypage and cachepage and unlock(np).  then what?
+* they call pageunchain before locking(np), so it's removed
+* from the freelist, but still in the cache because of
+* cachepage below.  if someone else looks in the cache
+* before they remove it, the page will have a nonzero ref
+* once they finally lock(np).
+*/
+    lock(np);
+    unlock(&palloc);
+
+    /* Cache the new version */
+    uncachepage(np);
+    np->va = p->va;
+    np->daddr = p->daddr;
+    copypage(p, np);
+    cachepage(np, p->image);
+    unlock(np);
+    uncachepage(p);
+
+    return 0;
+}
+@
 
 
 \subsection{Collecting images}
@@ -8509,7 +8545,7 @@ pagepte(int type, Page **pte)
          */
         outp->daddr = daddr;
         cachepage(outp, &swapimage);
-        *pte = (Page*)(daddr|PG_ONSWAP); // turn a Page into a Swap
+        *pte = (Page*)(daddr|PG_ONSWAP); // turn a Page pte into a Swap pte!
         unlock(outp);
 
         /* Add page to IO transaction list */
@@ -8607,14 +8643,6 @@ out:
     putseg(s);
 }
 @
-
-<<function pagedout>>=
-#define pagedout(s) (((ulong)s)==0 || onswap(s))
-@
-% demand loading or on swap
-
-
-
 
 
 
