@@ -35,6 +35,7 @@
 %  - coverage sample based profiler
 %  - virtual memory
 %  - SEMI the keyboard and the special accents :)
+%  - SEMI buffered input and the console and raw mode :)
 
 %history LP-ization:
 % - skeleton; a not too bad TOC
@@ -18276,6 +18277,49 @@ inready(void)
 @
 
 \ifallcode
+\subsection{Leds}
+
+<<function setleds>>=
+/*
+ * set keyboard's leds for lock states (scroll, numeric, caps).
+ *
+ * at least one keyboard (from Qtronics) also sets its numeric-lock
+ * behaviour to match the led state, though it has no numeric keypad,
+ * and some BIOSes bring the system up with numeric-lock set and no
+ * setting to change that.  this combination steals the keys for these
+ * characters and makes it impossible to generate them: uiolkjm&*().
+ * thus we'd like to be able to force the numeric-lock led (and behaviour) off.
+ */
+static void
+setleds(Kbscan *kbscan)
+{
+    int leds;
+
+    if(nokbd || kbscan != &kbscans[Int])
+        return;
+    leds = 0;
+    if(kbscan->num)
+        leds |= 1<<1;
+    if(0 && kbscan->caps)       /* we don't implement caps lock */
+        leds |= 1<<2;
+
+    ilock(&i8042lock);
+    outready();
+    outb(Data, 0xed);       /* `reset keyboard lock states' */
+    if(inready() == 0)
+        inb(Data);
+
+    outready();
+    outb(Data, leds);
+    if(inready() == 0)
+        inb(Data);
+
+    outready();
+    iunlock(&i8042lock);
+}
+@
+% >> >>
+
 \subsection{Esc}
 
 <<global kbtabesc1>>=
@@ -18329,6 +18373,67 @@ if(kbscan->esc1){
 }
 @
 
+
+\subsection{Changing keyboard}
+
+<<function kbdgetmap>>=
+int
+kbdgetmap(uint offset, int *t, int *sc, Rune *r)
+{
+    if ((int)offset < 0)
+        error(Ebadarg);
+    *t = offset/Nscan;
+    *sc = offset%Nscan;
+    switch(*t) {
+    default:
+        return 0;
+    case 0:
+        *r = kbtab[*sc];
+        return 1;
+    case 1:
+        *r = kbtabshift[*sc];
+        return 1;
+    case 2:
+        *r = kbtabesc1[*sc];
+        return 1;
+    case 3:
+        *r = kbtabaltgr[*sc];
+        return 1;
+    case 4:
+        *r = kbtabctrl[*sc];
+        return 1;
+    }
+}
+@
+
+
+<<function kbdputmap>>=
+void
+kbdputmap(ushort m, ushort scanc, Rune r)
+{
+    if(scanc >= Nscan)
+        error(Ebadarg);
+    switch(m) {
+    default:
+        error(Ebadarg);
+    case 0:
+        kbtab[scanc] = r;
+        break;
+    case 1:
+        kbtabshift[scanc] = r;
+        break;
+    case 2:
+        kbtabesc1[scanc] = r;
+        break;
+    case 3:
+        kbtabaltgr[scanc] = r;
+        break;
+    case 4: 
+        kbtabctrl[scanc] = r;
+        break;
+    }
+}
+@
 
 \fi
 
@@ -18557,7 +18662,9 @@ struct ConsKbd
     // extra
     QLock;
 };
-@ 
+@
+% why not using Rune line[1024] and Rune istage[1024]? will simplify thinfs
+% and anyway kputsc already handles unicode and produce unicode characters
 
 
 <<global kbd>>=
@@ -18569,7 +18676,6 @@ static struct ConsKbd kbd =
 };
 @ 
 
-% put before with kbdputsc?
 <<global kbdq>>=
 Queue*  kbdq;           /* unprocessed console input */
 @ 
@@ -18649,6 +18755,7 @@ kbdputcclock(void)
     }
 }
 @ 
+% actually echo will echo back on screen and add in kbdq
 
 <<[[consinit()]] initializing things>>=
     /*
@@ -18677,9 +18784,11 @@ kbdputcclock(void)
                 /* flush output on rawoff -> rawon */
                 if(kbd.x > 0)
                     send = !qcanread(kbdq);
+
             }else if(kbd.raw){
                 kbd.line[kbd.x++] = ch;
                 send = !qcanread(kbdq);
+
             }else{
                 switch(ch){
                 case '\b':
@@ -19299,6 +19408,54 @@ case Kmouse|5:
         kbdmouse(kbscan->buttons);
     break;
 @
+
+
+% used by mouse.c
+<<function i8042auxenable>>=
+void
+i8042auxenable(void (*putc)(int, int))
+{
+    char *err = "i8042: aux init failed\n";
+
+    /* enable kbd/aux xfers and interrupts */
+    ccc &= ~Cauxdis;
+    ccc |= Cauxint;
+
+    ilock(&i8042lock);
+    if(outready() < 0)
+        print(err);
+    outb(Cmd, 0x60);            /* write control register */
+    if(outready() < 0)
+        print(err);
+    outb(Data, ccc);
+    if(outready() < 0)
+        print(err);
+    outb(Cmd, 0xA8);            /* auxiliary device enable */
+    if(outready() < 0){
+        iunlock(&i8042lock);
+        return;
+    }
+    auxputc = putc;
+    intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
+    iunlock(&i8042lock);
+}
+@
+
+<<hook auxputc>>=
+static void (*auxputc)(int, int);
+@
+
+<<[[i8042intr()]] aux port handling>>=
+    /*
+     *  if it's the aux port...
+     */
+    if(s & Minready){
+        if(auxputc != nil)
+            auxputc(c, kbscans[Int].shift);
+        return;
+    }
+@
+
 
 
 % used by mouse, could be moved?
@@ -25948,6 +26105,10 @@ cgapost(int code)
 
 
 \section{Special keys}
+
+<<kbd.c debugging macro>>=
+static bool kdebug;
+@
 
 <<[[kbdputsc()]] special keyboard debug keys cases>>=
 case KF|11:

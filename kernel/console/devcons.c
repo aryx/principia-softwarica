@@ -868,9 +868,11 @@ consread(Chan *c, void *buf, long n, vlong off)
                     /* flush output on rawoff -> rawon */
                     if(kbd.x > 0)
                         send = !qcanread(kbdq);
+
                 }else if(kbd.raw){
                     kbd.line[kbd.x++] = ch;
                     send = !qcanread(kbdq);
+
                 }else{
                     switch(ch){
                     case '\b':
