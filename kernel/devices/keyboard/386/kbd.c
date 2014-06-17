@@ -36,24 +36,25 @@ enum {
 /*s: enum specialkey */
 enum {
     Spec=       0xF800,     /* Unicode private space */
-    KF=     0xF000,     /* function key (begin Unicode private space) */
+    KF=         0xF000,     /* function key (begin Unicode private space) */
 
     PF=         Spec|0x20,  /* num pad function key */
     View=       Spec|0x00,  /* view (shift window up) */
     Shift=      Spec|0x60,
     Break=      Spec|0x61,
     Ctrl=       Spec|0x62,
-    Alt=      Spec|0x63,
+    Alt=        Spec|0x63,
     Caps=       Spec|0x64,
     Num=        Spec|0x65,
     Middle=     Spec|0x66,
     Altgr=      Spec|0x67,
+
     Kmouse=     Spec|0x100,
 
-    No=     0x00,       /* peter */
+    No=         0x00,       /* peter */
 
     Home=       KF|13,
-    Up=     KF|14,
+    Up=         KF|14,
     Pgup=       KF|15,
     Print=      KF|16,
     Left=       KF|17,
@@ -82,10 +83,6 @@ enum kbscan {
 static char *initfailed = "i8042: kbdinit failed\n";
 
 /*s: global kbtab */
-/*
- * The codes at 0x79 and 0x7b are produced by the PFU Happy Hacking keyboard.
- * A 'standard' keyboard doesn't produce anything above 0x58.
- */
 Rune kbtab[Nscan] = 
 {
 [0x00]  No, 0x1b,   '1',    '2',    '3',    '4',    '5',    '6',
@@ -103,7 +100,7 @@ Rune kbtab[Nscan] =
 [0x60]  No, No, No, No, No, No, No, No,
 [0x68]  No, No, No, No, No, No, No, No,
 [0x70]  No, No, No, No, No, No, No, No,
-[0x78]  No, View,   No, Up, No, No, No, No,
+[0x78]  No, No, No, No, No, No, No, No,
 };
 /*e: global kbtab */
 
@@ -125,7 +122,7 @@ Rune kbtabshift[Nscan] =
 [0x60]  No, No, No, No, No, No, No, No,
 [0x68]  No, No, No, No, No, No, No, No,
 [0x70]  No, No, No, No, No, No, No, No,
-[0x78]  No, Up, No, Up, No, No, No, No,
+[0x78]  No, No, No, No, No, No, No, No,
 };
 /*e: global kbtabshift */
 
@@ -147,7 +144,7 @@ Rune kbtabesc1[Nscan] =
 [0x60]  No, No, No, No, No, No, No, No,
 [0x68]  No, No, No, No, No, No, No, No,
 [0x70]  No, No, No, No, No, No, No, No,
-[0x78]  No, Up, No, No, No, No, No, No,
+[0x78]  No, No, No, No, No, No, No, No,
 };
 /*e: global kbtabesc1 */
 
@@ -169,7 +166,7 @@ Rune kbtabaltgr[Nscan] =
 [0x60]  No, No, No, No, No, No, No, No,
 [0x68]  No, No, No, No, No, No, No, No,
 [0x70]  No, No, No, No, No, No, No, No,
-[0x78]  No, Up, No, No, No, No, No, No,
+[0x78]  No, No, No, No, No, No, No, No,
 };
 /*e: global kbtabaltgr */
 
@@ -322,21 +319,22 @@ i8042auxcmd(int cmd)
 
 /*s: struct Kbscan */
 struct Kbscan {
-    bool esc1;
-    int esc2;
-
     bool ctl;
     bool shift;
     bool caps;
     bool alt;
     bool altgr;
     bool num;
-
-    bool collecting;
-    int nk;
-    Rune    kc[5];
-
+    /*s: [[Kbscan]] other fields */
+    bool esc1;
+    int esc2;
+    /*x: [[Kbscan]] other fields */
     int buttons;
+    /*x: [[Kbscan]] other fields */
+        bool collecting;
+        int nk;
+        Rune    kc[5];
+    /*e: [[Kbscan]] other fields */
 };
 /*e: struct Kbscan */
 
@@ -404,8 +402,12 @@ kbdputsc(int c, int external)
     else
         kbscan = &kbscans[Int];
 
-    if(kdebug)
-        print("sc %x ms %d\n", c, mouseshifted);
+    /*s: [[kbdputsc()]] debugging */
+        if(kdebug)
+            print("sc %x ms %d\n", c, mouseshifted);
+    /*e: [[kbdputsc()]] debugging */
+
+    /*s: [[kbdputsc()]] esc key handling part1 and possible return */
     /*
      *  e0's is the first of a 2 character sequence, e1 the first
      *  of a 3 character sequence (on the safari)
@@ -417,9 +419,12 @@ kbdputsc(int c, int external)
         kbscan->esc2 = 2;
         return;
     }
+    /*e: [[kbdputsc()]] esc key handling part1 and possible return */
 
     keyup = c & 0x80; // key released
     c &= 0x7f;
+
+    /*s: [[kbdputsc()]] ensures c is in boundary */
     if(c > sizeof kbtab){
         // how could reach that? kbtab has 0x80 elts
         c |= keyup;
@@ -427,14 +432,18 @@ kbdputsc(int c, int external)
             print("unknown key %ux\n", c);
         return;
     }
+    /*e: [[kbdputsc()]] ensures c is in boundary */
 
+    /*s: [[kbdputsc()]] esc key handling part2 and possible return */
     if(kbscan->esc1){
         c = kbtabesc1[c];
         kbscan->esc1 = false;
     } else if(kbscan->esc2){
         kbscan->esc2--;
         return;
-    } else if(kbscan->shift)
+    }
+    /*e: [[kbdputsc()]] esc key handling part2 and possible return */
+    else if(kbscan->shift)
         c = kbtabshift[c];
     else if(kbscan->altgr)
         c = kbtabaltgr[c];
@@ -451,21 +460,26 @@ kbdputsc(int c, int external)
      */
     if(keyup){
         switch(c){
-        case Alt:
-            kbscan->alt = false;
-            break;
-        case Shift:
-            kbscan->shift = false;
-            mouseshifted = false;
-            if(kdebug)
-                print("shiftclr\n");
-            break;
         case Ctrl:
             kbscan->ctl = false;
+            break;
+        case Alt:
+            kbscan->alt = false;
             break;
         case Altgr:
             kbscan->altgr = false;
             break;
+        case Shift:
+            kbscan->shift = false;
+            /*s: [[kbdputsc()]] reset mouseshift */
+            mouseshifted = false;
+            /*e: [[kbdputsc()]] reset mouseshift */
+            /*s: [[kbdputsc()]] debugging up shift */
+                        if(kdebug)
+                            print("shiftclr\n");
+            /*e: [[kbdputsc()]] debugging up shift */
+            break;
+        /*s: [[kbdputsc()]] mouse keyup cases */
         case Kmouse|1:
         case Kmouse|2:
         case Kmouse|3:
@@ -475,6 +489,7 @@ kbdputsc(int c, int external)
             if(kbdmouse)
                 kbdmouse(kbscan->buttons);
             break;
+        /*e: [[kbdputsc()]] mouse keyup cases */
         }
         return;
     }
@@ -483,65 +498,74 @@ kbdputsc(int c, int external)
      *  normal character
      */
     if(!(c & (Spec|KF))){
-        if(kbscan->ctl)
-            if(kbscan->alt && c == Del) // Ctl-Alt-Del
-                exit(0);
-        if(!kbscan->collecting){
-            kbdputc(kbdq, c);
-            return;
+        /*s: [[kbdputsc()]] reboot if ctl-alt-del */
+                if(kbscan->ctl)
+                    if(kbscan->alt && c == Del) // Ctl-Alt-Del
+                        exit(0);
+        /*e: [[kbdputsc()]] reboot if ctl-alt-del */
+        /*s: [[kbdputsc()]] if collecting */
+        if(kbscan->collecting){
+            kbscan->kc[kbscan->nk++] = c;
+            c = latin1(kbscan->kc, kbscan->nk);
+            if(c < -1)  /* need more keystrokes */
+                return;
+            if(c != -1) /* valid sequence */
+                kbdputc(kbdq, c);
+            else    /* dump characters */
+                for(i=0; i<kbscan->nk; i++)
+                    kbdputc(kbdq, kbscan->kc[i]);
+            kbscan->nk = 0;
+            kbscan->collecting = false;
         }
-
-        kbscan->kc[kbscan->nk++] = c;
-        c = latin1(kbscan->kc, kbscan->nk);
-        if(c < -1)  /* need more keystrokes */
-            return;
-        if(c != -1) /* valid sequence */
-            kbdputc(kbdq, c);
-        else    /* dump characters */
-            for(i=0; i<kbscan->nk; i++)
-                kbdputc(kbdq, kbscan->kc[i]);
-        kbscan->nk = 0;
-        kbscan->collecting = false;
-        return;
-    } else {
+        /*e: [[kbdputsc()]] if collecting */
+        else
+            kbdputc(kbdq, c); //!! adding the character in the queue
+    }else{
         switch(c){
+        case Ctrl:
+            kbscan->ctl = true;
+            break;
+        case Alt:
+            kbscan->alt = true;
+            /*s: [[kbdputsc()]] start collecting */
+                        /*
+                         * VMware and Qemu use Ctl-Alt as the key combination
+                         * to make the VM give up keyboard and mouse focus.
+                         * This has the unfortunate side effect that when you
+                         * come back into focus, Plan 9 thinks you want to type
+                         * a compose sequence (you just typed alt). 
+                         *
+                         * As a clumsy hack around this, we look for ctl-alt
+                         * and don't treat it as the start of a compose sequence.
+                         */
+                        if(!kbscan->ctl){
+                            kbscan->collecting = true;
+                            kbscan->nk = 0;
+                        }
+            /*e: [[kbdputsc()]] start collecting */
+            break;
+        case Altgr:
+            kbscan->altgr = true;
+            break;
+        case Shift:
+            kbscan->shift = true;
+            /*s: [[kbdputsc()]] set mouseshift */
+            mouseshifted = true;
+            /*e: [[kbdputsc()]] set mouseshift */
+            /*s: [[kbdputsc()]] debugging down shift */
+                        if(kdebug)
+                            print("shift\n");
+            /*e: [[kbdputsc()]] debugging down shift */
+            break;
         case Caps:
             kbscan->caps ^= true;
-            return;
+            break;
         case Num:
             kbscan->num ^= true;
             if(!external)
                 setleds(kbscan);
-            return;
-        case Shift:
-            kbscan->shift = true;
-            if(kdebug)
-                print("shift\n");
-            mouseshifted = 1;
-            return;
-        case Alt:
-            kbscan->alt = true;
-            /*
-             * VMware and Qemu use Ctl-Alt as the key combination
-             * to make the VM give up keyboard and mouse focus.
-             * This has the unfortunate side effect that when you
-             * come back into focus, Plan 9 thinks you want to type
-             * a compose sequence (you just typed alt). 
-             *
-             * As a clumsy hack around this, we look for ctl-alt
-             * and don't treat it as the start of a compose sequence.
-             */
-            if(!kbscan->ctl){
-                kbscan->collecting = true;
-                kbscan->nk = 0;
-            }
-            return;
-        case Ctrl:
-            kbscan->ctl = true;
-            return;
-        case Altgr:
-            kbscan->altgr = true;
-            return;
+            break;
+        /*s: [[kbdputsc()]] mouse keydown cases */
         case Kmouse|1:
         case Kmouse|2:
         case Kmouse|3:
@@ -550,18 +574,21 @@ kbdputsc(int c, int external)
             kbscan->buttons |= 1<<(c-Kmouse-1);
             if(kbdmouse)
                 kbdmouse(kbscan->buttons);
-            return;
-
+            break;
+        /*e: [[kbdputsc()]] mouse keydown cases */
+        /*s: [[kbdputsc()]] special keyboard debug keys cases */
         case KF|11:
             print("kbd debug on, F12 turns it off\n");
             kdebug = true;
+            kbdputc(kbdq, c);
             break;
         case KF|12:
             kdebug = false;
+            kbdputc(kbdq, c);
             break;
+        /*e: [[kbdputsc()]] special keyboard debug keys cases */
         }
     }
-    kbdputc(kbdq, c); // executed only for F11 and F12, remove?
 }
 /*e: function kbdputsc */
 
