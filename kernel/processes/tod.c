@@ -51,8 +51,8 @@ struct TOD {
     Lock;
     uvlong  multiplier; /* ns = off + (multiplier*ticks)>>31 */
     uvlong  divider;    /* ticks = (divider*(ns-off))>>31 */
-    uvlong  umultiplier;    /* µs = (µmultiplier*ticks)>>31 */
-    uvlong  udivider;   /* ticks = (µdivider*µs)>>31 */
+    uvlong  umultiplier;    /* Âµs = (Âµmultiplier*ticks)>>31 */
+    uvlong  udivider;   /* ticks = (Âµdivider*Âµs)>>31 */
     vlong   hz;     /* frequency of fast clock */
     vlong   last;       /* last reading of fast clock */
     vlong   off;        /* offset from epoch to last */

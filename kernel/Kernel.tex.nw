@@ -34,6 +34,7 @@
 %  - TODO profiler
 %  - coverage sample based profiler
 %  - virtual memory
+%  - SEMI the keyboard and the special accents :)
 
 %history LP-ization:
 % - skeleton; a not too bad TOC
@@ -17816,13 +17817,11 @@ cunmount(Chan *mnt, Chan *mounted)
 
 \chapter{Devices}
 \minitoc
+% could we put Keyboard/Screen sections before? instead of after all those
+% File/Dir/Namespace sections? hmmm hard.
 
 % see docs/man/3/ for references on all "devices/fileservers"
-
 % often "one-level directory containing a single file" 
-
-% could we Keyboard/Screen before? instead of after all those
-% File/Dir/Namespace thing/
 
 \section{The keyboard}
 
@@ -17832,9 +17831,10 @@ cunmount(Chan *mnt, Chan *mounted)
 <<enum specialkey>>=
 enum {
     Spec=       0xF800,     /* Unicode private space */
-    PF=     Spec|0x20,  /* num pad function key */
-    View=       Spec|0x00,  /* view (shift window up) */
     KF=     0xF000,     /* function key (begin Unicode private space) */
+
+    PF=         Spec|0x20,  /* num pad function key */
+    View=       Spec|0x00,  /* view (shift window up) */
     Shift=      Spec|0x60,
     Break=      Spec|0x61,
     Ctrl=       Spec|0x62,
@@ -17844,6 +17844,7 @@ enum {
     Middle=     Spec|0x66,
     Altgr=      Spec|0x67,
     Kmouse=     Spec|0x100,
+
     No=     0x00,       /* peter */
 
     Home=       KF|13,
@@ -17912,7 +17913,7 @@ Rune kbtabshift[Nscan] =
 [0x78]  No, Up, No, Up, No, No, No, No,
 };
 @
-
+%$
 
 <<global kbtabesc1>>=
 Rune kbtabesc1[Nscan] =
@@ -17963,43 +17964,58 @@ Rune kbtabaltgr[Nscan] =
 <<global kbtabctrl decl>>=
 extern Rune kbtabctrl[];
 @
-%$
+% contain special ascii character like ^P so can't be included here
 
 
 <<struct Kbscan>>=
 struct Kbscan {
     bool esc1;
+    int esc2;
+
+    bool ctl;
+    bool shift;
+    bool caps;
     bool alt;
     bool altgr;
-    bool caps;
-    bool ctl;
     bool num;
-    bool shift;
-
-    int esc2;
 
     bool collecting;
     int nk;
     Rune    kc[5];
+
     int buttons;
 };
 @
 
 
+<<enum kbscan>>=
+/* kbscans indices */
+enum kbscan {
+    Int=    0,          
+    Ext,
+
+    Nscans,
+};
+@
+% always used Int actually. Ext is used only by devkbin.c so could simplify code
+
 <<global kbscans>>=
+// hash<enum<kbscan>, Kbscan>
 Kbscan kbscans[Nscans]; /* kernel and external scan code state */
 @
+
+
 
 
 <<global nokbd>>=
 static bool nokbd = true;           /* flag: no PS/2 keyboard */
 @
+% set to false in kbdinit
 
 <<global ccc>>=
 static uchar ccc;
 @
-
-
+% set by i8042auxenable for mouse on aux port?
 
 <<function kbdinit>>=
 void
@@ -18057,14 +18073,14 @@ kbdenable(void)
     kbdq = qopen(4*1024, 0, 0, 0);
     if(kbdq == nil)
         panic("kbdinit");
-    qnoblock(kbdq, 1);
+    qnoblock(kbdq, true);
 
     ioalloc(Data, 1, 0, "kbd");
     ioalloc(Cmd, 1, 0, "kbd");
 
     intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
 
-    kbscans[Int].num = 0;
+    kbscans[Int].num = false;
     setleds(&kbscans[Int]);
 }
 @
@@ -18099,14 +18115,7 @@ i8042intr(Ureg*, void*)
     c = inb(Data);
     iunlock(&i8042lock);
 
-    /*
-     *  if it's the aux port...
-     */
-    if(s & Minready){
-        if(auxputc != nil)
-            auxputc(c, kbscans[Int].shift);
-        return;
-    }
+    <<[[i8042intr()]] aux port handling>>
 
     kbdputsc(c, Int);
 }
@@ -18121,7 +18130,7 @@ i8042intr(Ureg*, void*)
  * Scan code processing
  */
 void
-kbdputsc(int c, bool external)
+kbdputsc(int c, int external)
 {
     int i, keyup;
     Kbscan *kbscan;
@@ -18138,16 +18147,17 @@ kbdputsc(int c, bool external)
      *  of a 3 character sequence (on the safari)
      */
     if(c == 0xe0){
-        kbscan->esc1 = 1;
+        kbscan->esc1 = true;
         return;
     } else if(c == 0xe1){
         kbscan->esc2 = 2;
         return;
     }
 
-    keyup = c & 0x80;
+    keyup = c & 0x80; // key released
     c &= 0x7f;
     if(c > sizeof kbtab){
+        // how could reach that? kbtab has 0x80 elts
         c |= keyup;
         if(c != 0xFF)   /* these come fairly often: CAPSLOCK U Y */
             print("unknown key %ux\n", c);
@@ -18156,7 +18166,7 @@ kbdputsc(int c, bool external)
 
     if(kbscan->esc1){
         c = kbtabesc1[c];
-        kbscan->esc1 = 0;
+        kbscan->esc1 = false;
     } else if(kbscan->esc2){
         kbscan->esc2--;
         return;
@@ -18178,19 +18188,19 @@ kbdputsc(int c, bool external)
     if(keyup){
         switch(c){
         case Latin:
-            kbscan->alt = 0;
+            kbscan->alt = false;
             break;
         case Shift:
-            kbscan->shift = 0;
+            kbscan->shift = false;
             mouseshifted = 0;
             if(kdebug)
                 print("shiftclr\n");
             break;
         case Ctrl:
-            kbscan->ctl = 0;
+            kbscan->ctl = false;
             break;
         case Altgr:
-            kbscan->altgr = 0;
+            kbscan->altgr = false;
             break;
         case Kmouse|1:
         case Kmouse|2:
@@ -18210,12 +18220,13 @@ kbdputsc(int c, bool external)
      */
     if(!(c & (Spec|KF))){
         if(kbscan->ctl)
-            if(kbscan->alt && c == Del)
+            if(kbscan->alt && c == Del) // Ctl-Alt-Del
                 exit(0);
         if(!kbscan->collecting){
             kbdputc(kbdq, c);
             return;
         }
+
         kbscan->kc[kbscan->nk++] = c;
         c = latin1(kbscan->kc, kbscan->nk);
         if(c < -1)  /* need more keystrokes */
@@ -18226,26 +18237,26 @@ kbdputsc(int c, bool external)
             for(i=0; i<kbscan->nk; i++)
                 kbdputc(kbdq, kbscan->kc[i]);
         kbscan->nk = 0;
-        kbscan->collecting = 0;
+        kbscan->collecting = false;
         return;
     } else {
         switch(c){
         case Caps:
-            kbscan->caps ^= 1;
+            kbscan->caps ^= true;
             return;
         case Num:
-            kbscan->num ^= 1;
+            kbscan->num ^= true;
             if(!external)
                 setleds(kbscan);
             return;
         case Shift:
-            kbscan->shift = 1;
+            kbscan->shift = true;
             if(kdebug)
                 print("shift\n");
             mouseshifted = 1;
             return;
         case Latin:
-            kbscan->alt = 1;
+            kbscan->alt = true;
             /*
              * VMware and Qemu use Ctl-Alt as the key combination
              * to make the VM give up keyboard and mouse focus.
@@ -18257,15 +18268,15 @@ kbdputsc(int c, bool external)
              * and don't treat it as the start of a compose sequence.
              */
             if(!kbscan->ctl){
-                kbscan->collecting = 1;
+                kbscan->collecting = true;
                 kbscan->nk = 0;
             }
             return;
         case Ctrl:
-            kbscan->ctl = 1;
+            kbscan->ctl = true;
             return;
         case Altgr:
-            kbscan->altgr = 1;
+            kbscan->altgr = true;
             return;
         case Kmouse|1:
         case Kmouse|2:
@@ -18276,18 +18287,68 @@ kbdputsc(int c, bool external)
             if(kbdmouse)
                 kbdmouse(kbscan->buttons);
             return;
+
         case KF|11:
             print("kbd debug on, F12 turns it off\n");
-            kdebug = 1;
+            kdebug = true;
             break;
         case KF|12:
-            kdebug = 0;
+            kdebug = false;
             break;
         }
     }
-    kbdputc(kbdq, c);
+    kbdputc(kbdq, c); // executed only for F11 and F12, remove?
 }
 @
+% LP split, mv mouse stuff elsewhere?
+
+
+% used by mouse, could be moved?
+<<function i8042auxcmd>>=
+int
+i8042auxcmd(int cmd)
+{
+    unsigned int c;
+    int tries;
+    static int badkbd;
+
+    if(badkbd)
+        return -1;
+    c = 0;
+    tries = 0;
+
+    ilock(&i8042lock);
+    do{
+        if(tries++ > 2)
+            break;
+        if(outready() < 0)
+            break;
+        outb(Cmd, 0xD4);
+        if(outready() < 0)
+            break;
+        outb(Data, cmd);
+        if(outready() < 0)
+            break;
+        if(inready() < 0)
+            break;
+        c = inb(Data);
+    } while(c == 0xFE || c == 0);
+    iunlock(&i8042lock);
+
+    if(c != 0xFA){
+        print("i8042: %2.2ux returned to the %2.2ux command\n", c, cmd);
+        badkbd = 1; /* don't keep trying; there might not be one */
+        return -1;
+    }
+    return 0;
+}
+@
+
+% to change keyboard: kbdputmap, kbdgetmap and probably /dev/kbmap
+% also devkbin.c??
+
+
+%-------------------------------------------------------------------------------
 
 %TODO: return bool instead? those outread < 0 seems bad no?
 <<function outbyte>>=
@@ -18341,48 +18402,110 @@ inready(void)
 @
 
 
-<<function i8042auxcmd>>=
-int
-i8042auxcmd(int cmd)
-{
-    unsigned int c;
-    int tries;
-    static int badkbd;
 
-    if(badkbd)
-        return -1;
-    c = 0;
-    tries = 0;
-
-    ilock(&i8042lock);
-    do{
-        if(tries++ > 2)
-            break;
-        if(outready() < 0)
-            break;
-        outb(Cmd, 0xD4);
-        if(outready() < 0)
-            break;
-        outb(Data, cmd);
-        if(outready() < 0)
-            break;
-        if(inready() < 0)
-            break;
-        c = inb(Data);
-    } while(c == 0xFE || c == 0);
-    iunlock(&i8042lock);
-
-    if(c != 0xFA){
-        print("i8042: %2.2ux returned to the %2.2ux command\n", c, cmd);
-        badkbd = 1; /* don't keep trying; there might not be one */
-        return -1;
-    }
-    return 0;
-}
+<<latin1.h>>=
+ " ", " i",	L"␣ı",
+ "!~", "-=~",	L"≄≇≉",
+ "!", "!<=>?bmp",	L"¡≮≠≯‽⊄∉⊅",
+ "\"*", "IUiu",	L"ΪΫϊϋ",
+ "\"", "\"AEIOUYaeiouy",	L"¨ÄËÏÖÜŸäëïöüÿ",
+ "$*", "fhk",	L"ϕϑϰ",
+ "$", "BEFHILMRVaefglopv",	L"ℬℰℱℋℐℒℳℛƲɑℯƒℊℓℴ℘ʋ",
+ "\'\"", "Uu",	L"Ǘǘ",
+ "\'", "\'ACEILNORSUYZacegilnorsuyz",	L"´ÁĆÉÍĹŃÓŔŚÚÝŹáćéģíĺńóŕśúýź",
+ "*", "*ABCDEFGHIKLMNOPQRSTUWXYZabcdefghiklmnopqrstuwxyz",	L"∗ΑΒΞΔΕΦΓΘΙΚΛΜΝΟΠΨΡΣΤΥΩΧΗΖαβξδεφγθικλμνοπψρστυωχηζ",
+ "+", "-O",	L"±⊕",
+ ",", ",ACEGIKLNORSTUacegiklnorstu",	L"¸ĄÇĘĢĮĶĻŅǪŖŞŢŲąçęģįķļņǫŗşţų",
+ "-*", "l",	L"ƛ",
+ "-", "+-2:>DGHILOTZbdghiltuz~",	L"∓­ƻ÷→ÐǤĦƗŁ⊖ŦƵƀðǥℏɨłŧʉƶ≂",
+ ".", ".CEGILOZceglz",	L"·ĊĖĠİĿ⊙Żċėġŀż",
+ "/", "Oo",	L"Øø",
+ "1", ".234568",	L"․½⅓¼⅕⅙⅛",
+ "2", "-.35",	L"ƻ‥⅔⅖",
+ "3", ".458",	L"…¾⅗⅜",
+ "4", "5",	L"⅘",
+ "5", "68",	L"⅚⅝",
+ "7", "8",	L"⅞",
+ ":", "()-=",	L"☹☺÷≔",
+ "<!", "=~",	L"≨⋦",
+ "<", "-<=>~",	L"←«≤≶≲",
+ "=", ":<=>OV",	L"≕⋜≡⋝⊜⇒",
+ ">!", "=~",	L"≩⋧",
+ ">", "<=>~",	L"≷≥»≳",
+ "?", "!?",	L"‽¿",
+ "@\'", "\'",	L"ъ",
+ "@@", "\'EKSTYZekstyz",	L"ьЕКСТЫЗекстыз",
+ "@C", "Hh",	L"ЧЧ",
+ "@E", "Hh",	L"ЭЭ",
+ "@K", "Hh",	L"ХХ",
+ "@S", "CHch",	L"ЩШЩШ",
+ "@T", "Ss",	L"ЦЦ",
+ "@Y", "AEOUaeou",	L"ЯЕЁЮЯЕЁЮ",
+ "@Z", "Hh",	L"ЖЖ",
+ "@c", "h",	L"ч",
+ "@e", "h",	L"э",
+ "@k", "h",	L"х",
+ "@s", "ch",	L"щш",
+ "@t", "s",	L"ц",
+ "@y", "aeou",	L"яеёю",
+ "@z", "h",	L"ж",
+ "@", "ABDFGIJLMNOPRUVXabdfgijlmnopruvx",	L"АБДФГИЙЛМНОПРУВХабдфгийлмнопрувх",
+ "A", "E",	L"Æ",
+ "C", "ACU",	L"⋂ℂ⋃",
+ "Dv", "Zz",	L"Ǆǅ",
+ "D", "-e",	L"Ð∆",
+ "G", "-",	L"Ǥ",
+ "H", "-H",	L"Ħℍ",
+ "I", "-J",	L"ƗĲ",
+ "L", "&-Jj|",	L"⋀ŁǇǈ⋁",
+ "M", "#48bs",	L"♮♩♪♭♯",
+ "N", "JNj",	L"Ǌℕǋ",
+ "O", "*+-./=EIcoprx",	L"⊛⊕⊖⊙⊘⊜ŒƢ©⊚℗®⊗",
+ "P", "P",	L"ℙ",
+ "Q", "Q",	L"ℚ",
+ "R", "R",	L"ℝ",
+ "S", "123S",	L"¹²³§",
+ "T", "-u",	L"Ŧ⊨",
+ "V", "=",	L"⇐",
+ "Y", "R",	L"Ʀ",
+ "Z", "-ACSZ",	L"Ƶℤ",
+ "^", "ACEGHIJOSUWYaceghijosuwy",	L"ÂĈÊĜĤÎĴÔŜÛŴŶâĉêĝĥîĵôŝûŵŷ",
+ "_\"", "AUau",	L"ǞǕǟǖ",
+ "_,", "Oo",	L"Ǭǭ",
+ "_.", "Aa",	L"Ǡǡ",
+ "_", "AEIOU_aeiou",	L"ĀĒĪŌŪ¯āēīōū",
+ "`\"", "Uu",	L"Ǜǜ",
+ "`", "AEIOUaeiou",	L"ÀÈÌÒÙàèìòù",
+ "a", "ben",	L"↔æ∠",
+ "b", "()+-0123456789=bknpqru",	L"₍₎₊₋₀₁₂₃₄₅₆₇₈₉₌♝♚♞♟♛♜•",
+ "c", "$Oagu",	L"¢©∩≅∪",
+ "dv", "z",	L"ǆ",
+ "d", "-adegz",	L"ð↓‡°†ʣ",
+ "e", "$lmns",	L"€⋯—–∅",
+ "f", "a",	L"∀",
+ "g", "$-r",	L"¤ǥ∇",
+ "h", "-v",	L"ℏƕ",
+ "i", "-bfjps",	L"ɨ⊆∞ĳ⊇∫",
+ "l", "\"$&\'-jz|",	L"“£∧‘łǉ⋄∨",
+ "m", "iou",	L"µ∈×",
+ "n", "jo",	L"ǌ¬",
+ "o", "AOUaeiu",	L"Å⊚Ůåœƣů",
+ "p", "Odgrt",	L"℗∂¶∏∝",
+ "r", "\"\'O",	L"”’®",
+ "s", "()+-0123456789=abnoprstu",	L"⁽⁾⁺⁻⁰ⁱ⁲⁳⁴⁵⁶⁷⁸⁹⁼ª⊂ⁿº⊃√ß∍∑",
+ "t", "-efmsu",	L"ŧ∃∴™ς⊢",
+ "u", "-AEGIOUaegiou",	L"ʉĂĔĞĬŎŬ↑ĕğĭŏŭ",
+ "v\"", "Uu",	L"Ǚǚ",
+ "v", "ACDEGIKLNORSTUZacdegijklnorstuz",	L"ǍČĎĚǦǏǨĽŇǑŘŠŤǓŽǎčďěǧǐǰǩľňǒřšťǔž",
+ "w", "bknpqr",	L"♗♔♘♙♕♖",
+ "x", "O",	L"⊗",
+ "y", "$",	L"¥",
+ "z", "-",	L"ƶ",
+ "|", "Pp|",	L"Þþ¦",
+ "~!", "=",	L"≆",
+ "~", "-=AINOUainou~",	L"≃≅ÃĨÑÕŨãĩñõũ≈",
 @
 
-
-% to change keyboard: kbdputmap, kbdgetmap and probably /dev/kbmap
 
 \section{The screen}
 % just cga.c here, see Window.tex.nw for the advanced vga kernel support
@@ -18553,21 +18676,10 @@ enum{
     Qcons,
     Qconsctl,
 
-    Qbintime,
-    Qcputime,
-    Qkmesg,
-    Qkprint,
-    Qnull,
-    Qpgrpid,
-    Qpid,
-    Qppid,
-    Qrandom,
-    Qswap,
-    Qtime,
-    Quser,
-    Qzero,
+    <<devcons.c enum Qxxx cases>>
 };
 @ 
+
 
 <<global consdir>>=
 static Dirtab consdir[]={
@@ -18576,21 +18688,10 @@ static Dirtab consdir[]={
     "cons",     {Qcons},    0,      0660,
     "consctl",  {Qconsctl}, 0,      0220,
 
-    "bintime",  {Qbintime}, 24,     0664,
-    "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-    "kmesg",    {Qkmesg},   0,      0440,
-    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
-    "null",     {Qnull},    0,      0666,
-    "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
-    "pid",      {Qpid},     NUMSIZE,    0444,
-    "ppid",     {Qppid},    NUMSIZE,    0444,
-    "random",   {Qrandom},  0,      0444,
-    "swap",     {Qswap},    0,      0664,
-    "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
-    "user",     {Quser},    0,      0666,
-    "zero",     {Qzero},    0,      0444,
+    <<[[consdir]] fields>>
 };
 @ 
+
 
 % here interested only in the "cons"! see other sections
 % for extra features of the "console"
@@ -18612,15 +18713,14 @@ struct ConsKbd
     /* a place to save up characters at interrupt time before dumping them in the queue */
     Lock    lockputc;
     char    istage[1024];
+    // pointers into istage
+    char    *iw; // write
+    char    *ir; // read
+    char    *ie; // end
 
     // extra
     QLock;
     Ref ctl;        /* number of opens to the control file */
-
-    //???
-    char    *iw;
-    char    *ir;
-    char    *ie;
 };
 @ 
 
@@ -18639,8 +18739,6 @@ Queue*  kbdq;           /* unprocessed console input */
 @ 
 
 
-
-
 <<global lineq>>=
 Queue*  lineq;          /* processed console input */
 @ 
@@ -18652,11 +18750,11 @@ lineqinit(void)
     lineq = qopen(2*1024, 0, nil, nil);
     if(lineq == nil)
         panic("lineqinit");
-    qnoblock(lineq, 1);
+    qnoblock(lineq, true);
 }
 @ 
 
-% return void?
+% return void? called from raw kbd functions in previous section
 <<function kbdputc>>=
 /*
  *  Put character, possibly a rune, into read queue at interrupt time.
@@ -18714,6 +18812,15 @@ kbdputcclock(void)
     }
 }
 @ 
+
+<<[[consinit()]] initializing things>>=
+    /*
+     * at 115200 baud, the 1024 char buffer takes 56 ms to process,
+     * processing it every 22 ms should be fine
+     */
+    addclock0link(kbdputcclock, 22);
+@
+
 
 % see also echo() below!
 
@@ -19089,15 +19196,10 @@ devcons_pprint(char *fmt, ...)
 static void
 consinit(void)
 {
-    todinit();
-    randominit();
-    /*
-     * at 115200 baud, the 1024 char buffer takes 56 ms to process,
-     * processing it every 22 ms should be fine
-     */
-    addclock0link(kbdputcclock, 22);
+    <<[[consinit()]] initializing things>>
 }
 @ 
+
 
 
 <<method consopen>>=
@@ -19122,7 +19224,7 @@ consopen(Chan *c, int omode)
                 c->flag &= ~COPEN;
                 error(Enomem);
             }
-            qnoblock(kprintoq, 1);
+            qnoblock(kprintoq, true);
         }else
             qreopen(kprintoq);
         c->iounit = qiomaxatomic;
@@ -19357,6 +19459,7 @@ Dev consdevtab = {
 %optional, advanced concepts
 
 % see also devpipe.c and devdup.c, devmnt.c, devsrv.c
+
 
 \chapter{Filesystems}
 
@@ -20166,7 +20269,7 @@ ms2tk(ulong ms)
 
 <<function us>>=
 ulong
-µs(void)
+us(void)
 {
     return fastticks2us((*arch->fastclock)(nil));
 }
@@ -20312,7 +20415,7 @@ tadd(Timers *tt, Timer *nt)
         nt->twhen = fastticks(nil) + ns2fastticks(nt->tns);
         break;
     case Tperiodic:
-        assert(nt->tns >= 100000);  /* At least 100 µs period */
+        assert(nt->tns >= 100000);  /* At least 100 Âµs period */
         if(nt->twhen == 0){
             /* look for another timer at same frequency for combining */
             for(t = tt->head; t; t = t->tnext){
@@ -20796,8 +20899,8 @@ struct TOD {
     Lock;
     uvlong  multiplier; /* ns = off + (multiplier*ticks)>>31 */
     uvlong  divider;    /* ticks = (divider*(ns-off))>>31 */
-    uvlong  umultiplier;    /* µs = (µmultiplier*ticks)>>31 */
-    uvlong  udivider;   /* ticks = (µdivider*µs)>>31 */
+    uvlong  umultiplier;    /* Âµs = (Âµmultiplier*ticks)>>31 */
+    uvlong  udivider;   /* ticks = (Âµdivider*Âµs)>>31 */
     vlong   hz;     /* frequency of fast clock */
     vlong   last;       /* last reading of fast clock */
     vlong   off;        /* offset from epoch to last */
@@ -24810,7 +24913,7 @@ parsetime(vlong *rt, char *s)
         ticks = 1000000000 * ticks + l;
     }else if (strcmp(e, "ms") == 0){
         ticks = 1000000 * ticks + l/1000;
-    }else if (strcmp(e, "µs") == 0 || strcmp(e, "us") == 0){
+    }else if (strcmp(e, "Âµs") == 0 || strcmp(e, "us") == 0){
         ticks = 1000 * ticks + l/1000000;
     }else if (strcmp(e, "ns") != 0)
         return "unrecognized unit";
@@ -25523,6 +25626,46 @@ Cmdtab rebootmsg[] =
 % saw /dev/cons, /dev/rtc, /dev/pipe??
 % see /dev/kmesg, /dev/kprintq in Debugging section
 % see /dev/kprof in Profiling section
+
+
+<<devcons.c enum Qxxx cases>>=
+    Qbintime,
+    Qcputime,
+    Qkmesg,
+    Qkprint,
+    Qnull,
+    Qpgrpid,
+    Qpid,
+    Qppid,
+    Qrandom,
+    Qswap,
+    Qtime,
+    Quser,
+    Qzero,
+@
+
+<<[[consdir]] fields>>=
+    "bintime",  {Qbintime}, 24,     0664,
+    "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
+    "kmesg",    {Qkmesg},   0,      0440,
+    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
+    "null",     {Qnull},    0,      0666,
+    "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
+    "pid",      {Qpid},     NUMSIZE,    0444,
+    "ppid",     {Qppid},    NUMSIZE,    0444,
+    "random",   {Qrandom},  0,      0444,
+    "swap",     {Qswap},    0,      0664,
+    "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
+    "user",     {Quser},    0,      0666,
+    "zero",     {Qzero},    0,      0444,
+@
+
+
+<<[[consinit()]] initializing things>>=
+    todinit();
+    randominit();
+@
+
 
 \subsection{[[/dev/random]]}
 

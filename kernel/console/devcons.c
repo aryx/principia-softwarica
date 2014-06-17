@@ -56,15 +56,14 @@ struct ConsKbd
     /* a place to save up characters at interrupt time before dumping them in the queue */
     Lock    lockputc;
     char    istage[1024];
+    // pointers into istage
+    char    *iw; // write
+    char    *ir; // read
+    char    *ie; // end
 
     // extra
     QLock;
     Ref ctl;        /* number of opens to the control file */
-
-    //???
-    char    *iw;
-    char    *ir;
-    char    *ie;
 };
 /*e: struct ConsKbd */
 
@@ -96,7 +95,7 @@ lineqinit(void)
     lineq = qopen(2*1024, 0, nil, nil);
     if(lineq == nil)
         panic("lineqinit");
-    qnoblock(lineq, 1);
+    qnoblock(lineq, true);
 }
 /*e: function lineqinit */
 
@@ -667,19 +666,21 @@ enum{
     Qcons,
     Qconsctl,
 
-    Qbintime,
-    Qcputime,
-    Qkmesg,
-    Qkprint,
-    Qnull,
-    Qpgrpid,
-    Qpid,
-    Qppid,
-    Qrandom,
-    Qswap,
-    Qtime,
-    Quser,
-    Qzero,
+    /*s: devcons.c enum Qxxx cases */
+        Qbintime,
+        Qcputime,
+        Qkmesg,
+        Qkprint,
+        Qnull,
+        Qpgrpid,
+        Qpid,
+        Qppid,
+        Qrandom,
+        Qswap,
+        Qtime,
+        Quser,
+        Qzero,
+    /*e: devcons.c enum Qxxx cases */
 };
 /*e: devcons.c enum Qxxx */
 
@@ -697,19 +698,21 @@ static Dirtab consdir[]={
     "cons",     {Qcons},    0,      0660,
     "consctl",  {Qconsctl}, 0,      0220,
 
-    "bintime",  {Qbintime}, 24,     0664,
-    "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-    "kmesg",    {Qkmesg},   0,      0440,
-    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
-    "null",     {Qnull},    0,      0666,
-    "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
-    "pid",      {Qpid},     NUMSIZE,    0444,
-    "ppid",     {Qppid},    NUMSIZE,    0444,
-    "random",   {Qrandom},  0,      0444,
-    "swap",     {Qswap},    0,      0664,
-    "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
-    "user",     {Quser},    0,      0666,
-    "zero",     {Qzero},    0,      0444,
+    /*s: [[consdir]] fields */
+        "bintime",  {Qbintime}, 24,     0664,
+        "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
+        "kmesg",    {Qkmesg},   0,      0440,
+        "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
+        "null",     {Qnull},    0,      0666,
+        "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
+        "pid",      {Qpid},     NUMSIZE,    0444,
+        "ppid",     {Qppid},    NUMSIZE,    0444,
+        "random",   {Qrandom},  0,      0444,
+        "swap",     {Qswap},    0,      0664,
+        "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
+        "user",     {Quser},    0,      0666,
+        "zero",     {Qzero},    0,      0444,
+    /*e: [[consdir]] fields */
 };
 /*e: global consdir */
 
@@ -717,13 +720,16 @@ static Dirtab consdir[]={
 static void
 consinit(void)
 {
-    todinit();
-    randominit();
-    /*
-     * at 115200 baud, the 1024 char buffer takes 56 ms to process,
-     * processing it every 22 ms should be fine
-     */
-    addclock0link(kbdputcclock, 22);
+    /*s: [[consinit()]] initializing things */
+        /*
+         * at 115200 baud, the 1024 char buffer takes 56 ms to process,
+         * processing it every 22 ms should be fine
+         */
+        addclock0link(kbdputcclock, 22);
+    /*x: [[consinit()]] initializing things */
+        todinit();
+        randominit();
+    /*e: [[consinit()]] initializing things */
 }
 /*e: method consinit */
 
@@ -767,7 +773,7 @@ consopen(Chan *c, int omode)
                 c->flag &= ~COPEN;
                 error(Enomem);
             }
-            qnoblock(kprintoq, 1);
+            qnoblock(kprintoq, true);
         }else
             qreopen(kprintoq);
         c->iounit = qiomaxatomic;

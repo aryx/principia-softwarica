@@ -1785,6 +1785,17 @@ i8042auxenable(void (*putc)(int, int))
 static void (*auxputc)(int, int);
 @
 
+<<[[i8042intr()]] aux port handling>>=
+    /*
+     *  if it's the aux port...
+     */
+    if(s & Minready){
+        if(auxputc != nil)
+            auxputc(c, kbscans[Int].shift);
+        return;
+    }
+@
+
 
 <<kbd.c>>=
 /*
@@ -1814,12 +1825,7 @@ enum {
 
 <<enum specialkey>>
 
-enum {
-    Int=    0,          /* kbscans indices */
-    Ext,
-
-    Nscans,
-};
+<<enum kbscan>>
 
 static char *initfailed = "i8042: kbdinit failed\n";
 
@@ -7669,7 +7675,7 @@ ulong   perfticks(void);
 
 // 386/devarch.c (but used in port)
 void    timerset(Tval);
-ulong   µs(void);
+ulong   us(void);
 
 // in 386/l.s (but used in port)
 //@Scheck: Assembly
@@ -9656,7 +9662,7 @@ edflock(Proc *p)
 #ifdef EDFCYCLES
         edfcycles -= lcycles();
 #endif
-        now = µs();
+        now = us();
         return e;
     }
     iunlock(&thelock);
@@ -9681,7 +9687,7 @@ edfinit(Proc*p)
         fmtinstall('t', timeconv);
         edfinited++;
     }
-    now = µs();
+    now = us();
     DPRINT("%lud edfinit %lud[%s]\n", now, p->pid, statename[p->state]);
     p->edf = malloc(sizeof(Edf));
     if(p->edf == nil)
@@ -9701,7 +9707,7 @@ deadlineintr(Ureg*, Timer *t)
         return;
 
     p = t->ta;
-    now = µs();
+    now = us();
     DPRINT("%lud deadlineintr %lud[%s]\n", now, p->pid, statename[p->state]);
     /* If we're interrupting something other than the proc pointed to by t->a,
      * we've already achieved recheduling, so we need not do anything
@@ -10012,7 +10018,7 @@ edfstop(Proc *p)
 static int
 yfn(void *)
 {
-    now = µs();
+    now = us();
     return up->trend == nil || now - up->edf->r >= 0;
 }
 
@@ -16763,6 +16769,7 @@ _efgfmt(Fmt*)
 <<latin1.c>>=
 #include    "u.h"
 #include    "../port/lib.h"
+
 /*
  * The code makes two assumptions: strlen(ld) is 1 or 2; latintab[i].ld can be a
  * prefix of latintab[j].ld only when j<i.
@@ -16772,7 +16779,9 @@ struct cvlist
     char    *ld;        /* must be seen before using this conversion */
     char    *si;        /* options for last input characters */
     Rune    *so;        /* the corresponding Rune for each si entry */
-} latintab[] = {
+};
+
+struct cvlist latintab[] = {
 #include "../port/latin1.h"
     0,  0,      0
 };
@@ -16823,6 +16832,7 @@ latin1(Rune *k, int n)
             return unicode(k, UTFmax*2+1);
         else
             return -(UTFmax+1);
+
     for(l=latintab; l->ld!=0; l++)
         if(k[0] == l->ld[0]){
             if(n == 1)
@@ -16847,8 +16857,6 @@ latin1(Rune *k, int n)
 
 \subsection*{[[devices/keyboard/386/latin1.h]]}
 
-<<latin1.h>>=
-@
 
 
 \subsection*{[[devices/storage/386/devfloppy.c]]}

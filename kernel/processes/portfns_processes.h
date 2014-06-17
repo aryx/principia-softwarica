@@ -131,7 +131,7 @@ ulong   perfticks(void);
 
 // 386/devarch.c (but used in port)
 void    timerset(Tval);
-ulong   µs(void);
+ulong   us(void);
 
 // in 386/l.s (but used in port)
 //@Scheck: Assembly

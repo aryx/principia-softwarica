@@ -108,7 +108,7 @@ timerset(Tval x)
 
 /*s: function us */
 ulong
-µs(void)
+us(void)
 {
     return fastticks2us((*arch->fastclock)(nil));
 }

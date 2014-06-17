@@ -1406,7 +1406,7 @@ parsetime(vlong *rt, char *s)
         ticks = 1000000000 * ticks + l;
     }else if (strcmp(e, "ms") == 0){
         ticks = 1000000 * ticks + l/1000;
-    }else if (strcmp(e, "µs") == 0 || strcmp(e, "us") == 0){
+    }else if (strcmp(e, "Âµs") == 0 || strcmp(e, "us") == 0){
         ticks = 1000 * ticks + l/1000000;
     }else if (strcmp(e, "ns") != 0)
         return "unrecognized unit";

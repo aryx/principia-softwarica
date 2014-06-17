@@ -1,6 +1,7 @@
 /*s: latin1.c */
 #include    "u.h"
 #include    "../port/lib.h"
+
 /*
  * The code makes two assumptions: strlen(ld) is 1 or 2; latintab[i].ld can be a
  * prefix of latintab[j].ld only when j<i.
@@ -10,7 +11,9 @@ struct cvlist
     char    *ld;        /* must be seen before using this conversion */
     char    *si;        /* options for last input characters */
     Rune    *so;        /* the corresponding Rune for each si entry */
-} latintab[] = {
+};
+
+struct cvlist latintab[] = {
 #include "../port/latin1.h"
     0,  0,      0
 };
@@ -61,6 +64,7 @@ latin1(Rune *k, int n)
             return unicode(k, UTFmax*2+1);
         else
             return -(UTFmax+1);
+
     for(l=latintab; l->ld!=0; l++)
         if(k[0] == l->ld[0]){
             if(n == 1)

@@ -36,9 +36,10 @@ enum {
 /*s: enum specialkey */
 enum {
     Spec=       0xF800,     /* Unicode private space */
-    PF=     Spec|0x20,  /* num pad function key */
-    View=       Spec|0x00,  /* view (shift window up) */
     KF=     0xF000,     /* function key (begin Unicode private space) */
+
+    PF=         Spec|0x20,  /* num pad function key */
+    View=       Spec|0x00,  /* view (shift window up) */
     Shift=      Spec|0x60,
     Break=      Spec|0x61,
     Ctrl=       Spec|0x62,
@@ -48,6 +49,7 @@ enum {
     Middle=     Spec|0x66,
     Altgr=      Spec|0x67,
     Kmouse=     Spec|0x100,
+
     No=     0x00,       /* peter */
 
     Home=       KF|13,
@@ -67,12 +69,15 @@ enum {
 };
 /*e: enum specialkey */
 
-enum {
-    Int=    0,          /* kbscans indices */
+/*s: enum kbscan */
+/* kbscans indices */
+enum kbscan {
+    Int=    0,          
     Ext,
 
     Nscans,
 };
+/*e: enum kbscan */
 
 static char *initfailed = "i8042: kbdinit failed\n";
 
@@ -318,23 +323,25 @@ i8042auxcmd(int cmd)
 /*s: struct Kbscan */
 struct Kbscan {
     bool esc1;
+    int esc2;
+
+    bool ctl;
+    bool shift;
+    bool caps;
     bool alt;
     bool altgr;
-    bool caps;
-    bool ctl;
     bool num;
-    bool shift;
-
-    int esc2;
 
     bool collecting;
     int nk;
     Rune    kc[5];
+
     int buttons;
 };
 /*e: struct Kbscan */
 
 /*s: global kbscans */
+// hash<enum<kbscan>, Kbscan>
 Kbscan kbscans[Nscans]; /* kernel and external scan code state */
 /*e: global kbscans */
 
@@ -387,7 +394,7 @@ setleds(Kbscan *kbscan)
  * Scan code processing
  */
 void
-kbdputsc(int c, bool external)
+kbdputsc(int c, int external)
 {
     int i, keyup;
     Kbscan *kbscan;
@@ -404,16 +411,17 @@ kbdputsc(int c, bool external)
      *  of a 3 character sequence (on the safari)
      */
     if(c == 0xe0){
-        kbscan->esc1 = 1;
+        kbscan->esc1 = true;
         return;
     } else if(c == 0xe1){
         kbscan->esc2 = 2;
         return;
     }
 
-    keyup = c & 0x80;
+    keyup = c & 0x80; // key released
     c &= 0x7f;
     if(c > sizeof kbtab){
+        // how could reach that? kbtab has 0x80 elts
         c |= keyup;
         if(c != 0xFF)   /* these come fairly often: CAPSLOCK U Y */
             print("unknown key %ux\n", c);
@@ -422,7 +430,7 @@ kbdputsc(int c, bool external)
 
     if(kbscan->esc1){
         c = kbtabesc1[c];
-        kbscan->esc1 = 0;
+        kbscan->esc1 = false;
     } else if(kbscan->esc2){
         kbscan->esc2--;
         return;
@@ -444,19 +452,19 @@ kbdputsc(int c, bool external)
     if(keyup){
         switch(c){
         case Latin:
-            kbscan->alt = 0;
+            kbscan->alt = false;
             break;
         case Shift:
-            kbscan->shift = 0;
+            kbscan->shift = false;
             mouseshifted = 0;
             if(kdebug)
                 print("shiftclr\n");
             break;
         case Ctrl:
-            kbscan->ctl = 0;
+            kbscan->ctl = false;
             break;
         case Altgr:
-            kbscan->altgr = 0;
+            kbscan->altgr = false;
             break;
         case Kmouse|1:
         case Kmouse|2:
@@ -476,12 +484,13 @@ kbdputsc(int c, bool external)
      */
     if(!(c & (Spec|KF))){
         if(kbscan->ctl)
-            if(kbscan->alt && c == Del)
+            if(kbscan->alt && c == Del) // Ctl-Alt-Del
                 exit(0);
         if(!kbscan->collecting){
             kbdputc(kbdq, c);
             return;
         }
+
         kbscan->kc[kbscan->nk++] = c;
         c = latin1(kbscan->kc, kbscan->nk);
         if(c < -1)  /* need more keystrokes */
@@ -492,26 +501,26 @@ kbdputsc(int c, bool external)
             for(i=0; i<kbscan->nk; i++)
                 kbdputc(kbdq, kbscan->kc[i]);
         kbscan->nk = 0;
-        kbscan->collecting = 0;
+        kbscan->collecting = false;
         return;
     } else {
         switch(c){
         case Caps:
-            kbscan->caps ^= 1;
+            kbscan->caps ^= true;
             return;
         case Num:
-            kbscan->num ^= 1;
+            kbscan->num ^= true;
             if(!external)
                 setleds(kbscan);
             return;
         case Shift:
-            kbscan->shift = 1;
+            kbscan->shift = true;
             if(kdebug)
                 print("shift\n");
             mouseshifted = 1;
             return;
         case Latin:
-            kbscan->alt = 1;
+            kbscan->alt = true;
             /*
              * VMware and Qemu use Ctl-Alt as the key combination
              * to make the VM give up keyboard and mouse focus.
@@ -523,15 +532,15 @@ kbdputsc(int c, bool external)
              * and don't treat it as the start of a compose sequence.
              */
             if(!kbscan->ctl){
-                kbscan->collecting = 1;
+                kbscan->collecting = true;
                 kbscan->nk = 0;
             }
             return;
         case Ctrl:
-            kbscan->ctl = 1;
+            kbscan->ctl = true;
             return;
         case Altgr:
-            kbscan->altgr = 1;
+            kbscan->altgr = true;
             return;
         case Kmouse|1:
         case Kmouse|2:
@@ -542,16 +551,17 @@ kbdputsc(int c, bool external)
             if(kbdmouse)
                 kbdmouse(kbscan->buttons);
             return;
+
         case KF|11:
             print("kbd debug on, F12 turns it off\n");
-            kdebug = 1;
+            kdebug = true;
             break;
         case KF|12:
-            kdebug = 0;
+            kdebug = false;
             break;
         }
     }
-    kbdputc(kbdq, c);
+    kbdputc(kbdq, c); // executed only for F11 and F12, remove?
 }
 /*e: function kbdputsc */
 
@@ -580,14 +590,16 @@ i8042intr(Ureg*, void*)
     c = inb(Data);
     iunlock(&i8042lock);
 
-    /*
-     *  if it's the aux port...
-     */
-    if(s & Minready){
-        if(auxputc != nil)
-            auxputc(c, kbscans[Int].shift);
-        return;
-    }
+    /*s: [[i8042intr()]] aux port handling */
+        /*
+         *  if it's the aux port...
+         */
+        if(s & Minready){
+            if(auxputc != nil)
+                auxputc(c, kbscans[Int].shift);
+            return;
+        }
+    /*e: [[i8042intr()]] aux port handling */
 
     kbdputsc(c, Int);
 }
@@ -691,14 +703,14 @@ kbdenable(void)
     kbdq = qopen(4*1024, 0, 0, 0);
     if(kbdq == nil)
         panic("kbdinit");
-    qnoblock(kbdq, 1);
+    qnoblock(kbdq, true);
 
     ioalloc(Data, 1, 0, "kbd");
     ioalloc(Cmd, 1, 0, "kbd");
 
     intrenable(IrqKBD, i8042intr, 0, BUSUNKNOWN, "kbd");
 
-    kbscans[Int].num = 0;
+    kbscans[Int].num = false;
     setleds(&kbscans[Int]);
 }
 /*e: function kbdenable */
