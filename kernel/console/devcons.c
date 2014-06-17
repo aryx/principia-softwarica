@@ -45,13 +45,10 @@ bool iprintscreenputs = true;
 /*s: struct ConsKbd */
 struct ConsKbd
 {
-    bool raw;        /* true if we shouldn't process input */
-
     char    line[1024]; /* current input line */
     int x;      /* index into line */
 
     int count;
-    bool ctlpoff; // ^P will not reboot if true
 
     /* a place to save up characters at interrupt time before dumping them in the queue */
     Lock    lockputc;
@@ -61,9 +58,13 @@ struct ConsKbd
     char    *ir; // read
     char    *ie; // end
 
+    /*s: [[ConsKbd]] other fields */
+    bool raw;        /* true if we shouldn't process input */
+    bool ctlpoff; // ^P will not reboot if true
+    Ref ctl;        /* number of opens to the control file */
+    /*e: [[ConsKbd]] other fields */
     // extra
     QLock;
-    Ref ctl;        /* number of opens to the control file */
 };
 /*e: struct ConsKbd */
 
@@ -758,9 +759,11 @@ consopen(Chan *c, int omode)
     c->aux = nil;
     c = devopen(c, omode, consdir, nelem(consdir), devgen);
     switch((ulong)c->qid.path){
-    case Qconsctl:
-        incref(&kbd.ctl);
-        break;
+    /*s: [[consopen()]] cases */
+        case Qconsctl:
+            incref(&kbd.ctl);
+            break;
+    /*e: [[consopen()]] cases */
 
     case Qkprint:
         if(tas(&kprintinuse) != 0){
@@ -788,13 +791,15 @@ static void
 consclose(Chan *c)
 {
     switch((ulong)c->qid.path){
+    /*s: [[consclose()]] cases */
+        case Qconsctl:
+            if(c->flag&COPEN){
+                if(decref(&kbd.ctl) == 0)
+                    kbd.raw = false;
+            }
+            break;
+    /*e: [[consclose()]] cases */
     /* last close of control file turns off raw */
-    case Qconsctl:
-        if(c->flag&COPEN){
-            if(decref(&kbd.ctl) == 0)
-                kbd.raw = false;
-        }
-        break;
 
     /* close of kprint allows other opens */
     case Qkprint:
@@ -1008,29 +1013,30 @@ conswrite(Chan *c, void *va, long n, vlong off)
             break;
     /*e: [[conswrite()]] Qcons case */
 
-    case Qconsctl:
-        if(n >= sizeof(buf))
-            n = sizeof(buf)-1;
-        strncpy(buf, a, n);
-        buf[n] = 0;
-        for(a = buf; a;){
-            if(strncmp(a, "rawon", 5) == 0){
-                kbd.raw = true;
-                /* clumsy hack - wake up reader */
-                ch = 0;
-                qwrite(kbdq, &ch, 1);           
-            } else if(strncmp(a, "rawoff", 6) == 0){
-                kbd.raw = false;
-            } else if(strncmp(a, "ctlpon", 6) == 0){
-                kbd.ctlpoff = false;
-            } else if(strncmp(a, "ctlpoff", 7) == 0){
-                kbd.ctlpoff = true;
+    /*s: [[conswrite()]] cases */
+        case Qconsctl:
+            if(n >= sizeof(buf))
+                n = sizeof(buf)-1;
+            strncpy(buf, a, n);
+            buf[n] = 0;
+            for(a = buf; a;){
+                if(strncmp(a, "rawon", 5) == 0){
+                    kbd.raw = true;
+                    /* clumsy hack - wake up reader */
+                    ch = 0;
+                    qwrite(kbdq, &ch, 1);           
+                } else if(strncmp(a, "rawoff", 6) == 0){
+                    kbd.raw = false;
+                } else if(strncmp(a, "ctlpon", 6) == 0){
+                    kbd.ctlpoff = false;
+                } else if(strncmp(a, "ctlpoff", 7) == 0){
+                    kbd.ctlpoff = true;
+                }
+                if(a = strchr(a, ' '))
+                    a++;
             }
-            if(a = strchr(a, ' '))
-                a++;
-        }
-        break;
-
+            break;
+    /*e: [[conswrite()]] cases */
 
     case Qtime:
         if(!iseve())

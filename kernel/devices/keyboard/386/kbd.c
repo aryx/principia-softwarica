@@ -456,7 +456,7 @@ kbdputsc(int c, int external)
             break;
         case Shift:
             kbscan->shift = false;
-            mouseshifted = 0;
+            mouseshifted = false;
             if(kdebug)
                 print("shiftclr\n");
             break;
