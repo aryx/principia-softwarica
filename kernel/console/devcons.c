@@ -902,7 +902,7 @@ consread(Chan *c, void *buf, long n, vlong off)
             return n;
     /*e: [[consread()]] Qcons case */
 
-    /*s: [[consread()]] Qswap case */
+    /*s: [[consread()]] cases */
         case Qswap:
             snprint(tmp, sizeof tmp,
                 "%lud memory\n"
@@ -921,9 +921,7 @@ consread(Chan *c, void *buf, long n, vlong off)
                 imagmem->cursize, imagmem->maxsize);
 
             return readstr((ulong)offset, buf, n, tmp);
-    /*e: [[consread()]] Qswap case */
-
-    /*s: [[consread()]] cases */
+    /*x: [[consread()]] cases */
         case Qrandom:
             return randomread(buf, n);
     /*x: [[consread()]] cases */
@@ -1042,6 +1040,25 @@ conswrite(Chan *c, void *va, long n, vlong off)
     /*e: [[conswrite()]] Qcons case */
 
     /*s: [[conswrite()]] cases */
+        case Qswap:
+            if(n >= sizeof buf)
+                error(Egreg);
+            memmove(buf, va, n);    /* so we can NUL-terminate */
+            buf[n] = 0;
+            /* start a pager if not already started */
+            if(strncmp(buf, "start", 5) == 0){
+                kickpager();
+                break;
+            }
+            if(!iseve())
+                error(Eperm);
+            if(buf[0]<'0' || '9'<buf[0])
+                error(Ebadarg);
+            fd = strtoul(buf, 0, 0);
+            swc = fdtochan(fd, -1, 1, 1);
+            setswapchan(swc);
+            break;
+    /*x: [[conswrite()]] cases */
         case Qconsctl:
             if(n >= sizeof(buf))
                 n = sizeof(buf)-1;
@@ -1055,6 +1072,7 @@ conswrite(Chan *c, void *va, long n, vlong off)
                     qwrite(kbdq, &ch, 1);           
                 } else if(strncmp(a, "rawoff", 6) == 0){
                     kbd.raw = false;
+
                 } else if(strncmp(a, "ctlpon", 6) == 0){
                     kbd.ctlpoff = false;
                 } else if(strncmp(a, "ctlpoff", 7) == 0){
@@ -1084,27 +1102,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
     // > /dev/null :)
     case Qnull:
         break;
-
-    /*s: [[conswrite()]] Qswap case */
-        case Qswap:
-            if(n >= sizeof buf)
-                error(Egreg);
-            memmove(buf, va, n);    /* so we can NUL-terminate */
-            buf[n] = 0;
-            /* start a pager if not already started */
-            if(strncmp(buf, "start", 5) == 0){
-                kickpager();
-                break;
-            }
-            if(!iseve())
-                error(Eperm);
-            if(buf[0]<'0' || '9'<buf[0])
-                error(Ebadarg);
-            fd = strtoul(buf, 0, 0);
-            swc = fdtochan(fd, -1, 1, 1);
-            setswapchan(swc);
-            break;
-    /*e: [[conswrite()]] Qswap case */
 
     default:
         print("conswrite: %#llux\n", c->qid.path);

@@ -8366,7 +8366,7 @@ ulong nswap;    /* number of swap pages */
 
 
 % good way to summary all we've seen
-<<[[consread()]] Qswap case>>=
+<<[[consread()]] cases>>=
     case Qswap:
         snprint(tmp, sizeof tmp,
             "%lud memory\n"
@@ -8994,7 +8994,7 @@ pageiocomp(void *a, void *b)
 
 \subsection{Setting up the swap file}
 
-<<[[conswrite()]] Qswap case>>=
+<<[[conswrite()]] cases>>=
     case Qswap:
         if(n >= sizeof buf)
             error(Egreg);
@@ -17826,11 +17826,20 @@ cunmount(Chan *mnt, Chan *mounted)
 
 \section{The keyboard}
 
-% http://www.computer-engineering.org/ps2keyboard/
+\subsection{Overview}
 
-% The main code here is the interrupt that will add character in a queue (kbdq)
-% after having handled the shift and other special key.
-% Note that the final character is actually a unicode character.
+
+% The main code here is the interrupt that will add characters in a cicular
+% buffer in kbd after having handled the shift and other special keys.
+% Note that the code here generates unicode characters.
+
+% interrupt i8042intr -> kbdputsc -> kbdputc (which add in kbdq and
+% also adjust stage Conskbd area that another regular interrupt clock
+% will read and echo back to the screen)
+
+\subsection{Scan code}
+
+% http://www.computer-engineering.org/ps2keyboard/
 
 <<enum specialkey>>=
 enum {
@@ -17983,64 +17992,6 @@ Kbscan kbscans[Nscans]; /* kernel and external scan code state */
 
 
 
-<<global nokbd>>=
-static bool nokbd = true;           /* flag: no PS/2 keyboard */
-@
-% set to false in kbdinit
-
-<<global ccc>>=
-static uchar ccc;
-@
-% set by i8042auxenable for mouse on aux port?
-
-
-<<function kbdinit>>=
-void
-kbdinit(void)
-{
-    int c, try;
-
-    /* wait for a quiescent controller */
-    try = 500;
-    while(try-- > 0 && (c = inb(Status)) & (Outbusy | Inready)) {
-        if(c & Inready)
-            inb(Data);
-        delay(1);
-    }
-    if (try <= 0) {
-        print(initfailed);
-        return;
-    }
-
-    /* get current controller command byte */
-    outb(Cmd, 0x20);
-    if(inready() < 0){
-        print("i8042: kbdinit can't read ccc\n");
-        ccc = 0;
-    } else
-        ccc = inb(Data);
-
-    /* enable kbd xfers and interrupts */
-    ccc &= ~Ckbddis;
-    ccc |= Csf | Ckbdint | Cscs1;
-    if(outready() < 0) {
-        print(initfailed);
-        return;
-    }
-
-    nokbd = false;
-
-    /* disable mouse */
-    if (outbyte(Cmd, 0x60) < 0 || outbyte(Data, ccc) < 0)
-        print("i8042: kbdinit mouse disable failed\n");
-
-    /* see http://www.computer-engineering.org/ps2keyboard for codes */
-    if(getconf("*typematic") != nil)
-        /* set typematic rate/delay (0 -> delay=250ms & rate=30cps) */
-        if(outbyte(Data, 0xf3) < 0 || outbyte(Data, 0) < 0)
-            print("i8042: kbdinit set typematic rate failed\n");
-}
-@
 
 % setup kbdq! the interrupt code will write into it so it can be read
 % from /dev/cons. An interrupt will also trigger the echoing of those characters
@@ -18068,10 +18019,6 @@ kbdenable(void)
 <<global i8042lock>>=
 static Lock i8042lock;
 @
-
-% interrupt i8042intr -> kbdputsc -> kbdputc (which add in kbdq and
-% also adjust stage Conskbd area that another regular interrupt clock
-% will read and echo back to the screen)
 
 <<interrupt callback i8042intr>>=
 /*
@@ -18206,12 +18153,72 @@ kbdputsc(int/*Rune*/ c, int external)
     }
 }
 @
-% for kbdputc see later
+
+\subsection{[[ConsKbd]]}
+
+\subsection{[[echo()]]}
 
 
-% to change keyboard: kbdputmap, kbdgetmap and probably /dev/kbmap
-% also devkbin.c??
+\subsection{Misc}
 
+<<global nokbd>>=
+static bool nokbd = true;           /* flag: no PS/2 keyboard */
+@
+% set to false in kbdinit
+
+<<global ccc>>=
+static uchar ccc;
+@
+% set by i8042auxenable for mouse on aux port?
+
+
+<<function kbdinit>>=
+void
+kbdinit(void)
+{
+    int c, try;
+
+    /* wait for a quiescent controller */
+    try = 500;
+    while(try-- > 0 && (c = inb(Status)) & (Outbusy | Inready)) {
+        if(c & Inready)
+            inb(Data);
+        delay(1);
+    }
+    if (try <= 0) {
+        print(initfailed);
+        return;
+    }
+
+    /* get current controller command byte */
+    outb(Cmd, 0x20);
+    if(inready() < 0){
+        print("i8042: kbdinit can't read ccc\n");
+        ccc = 0;
+    } else
+        ccc = inb(Data);
+
+    /* enable kbd xfers and interrupts */
+    ccc &= ~Ckbddis;
+    ccc |= Csf | Ckbdint | Cscs1;
+    if(outready() < 0) {
+        print(initfailed);
+        return;
+    }
+
+    nokbd = false;
+
+    /* disable mouse */
+    if (outbyte(Cmd, 0x60) < 0 || outbyte(Data, ccc) < 0)
+        print("i8042: kbdinit mouse disable failed\n");
+
+    /* see http://www.computer-engineering.org/ps2keyboard for codes */
+    if(getconf("*typematic") != nil)
+        /* set typematic rate/delay (0 -> delay=250ms & rate=30cps) */
+        if(outbyte(Data, 0xf3) < 0 || outbyte(Data, 0) < 0)
+            print("i8042: kbdinit set typematic rate failed\n");
+}
+@
 
 %-------------------------------------------------------------------------------
 
@@ -18375,6 +18382,10 @@ if(kbscan->esc1){
 
 
 \subsection{Changing keyboard}
+
+% to change keyboard: kbdputmap, kbdgetmap and probably /dev/kbmap
+% also devkbin.c??
+
 
 <<function kbdgetmap>>=
 int
@@ -18639,8 +18650,7 @@ static Dirtab consdir[]={
 % here interested only in the "cons"! see other sections
 % for extra features of the "console"
 
-\subsection{Input}
-%buffered input
+\subsection{Buffered input}
 
 <<struct ConsKbd>>=
 struct ConsKbd
@@ -18766,7 +18776,6 @@ kbdputcclock(void)
 @
 
 
-% see also echo() below!
 
 %!!! this is an important one!
 <<[[consread()]] Qcons case>>=
@@ -18829,8 +18838,6 @@ kbdputcclock(void)
 % rio does the right thing? how does not call cgascreenputs?
 % because screenputs has been redirected in rio! via vga controller?
 % and because rio actually create a new /dev/cons I think!
-
-\subsubsection{[[/dev/cons]]}
 
 %!!! this is an important one!
 <<[[conswrite()]] Qcons case>>=
@@ -18984,6 +18991,8 @@ echoscreen(char *buf, int n)
 }
 @ 
 
+
+\subsection{[[xxxprint()]]}
 
 \subsubsection{[[print()]]}
 
@@ -19182,8 +19191,6 @@ consread(Chan *c, void *buf, long n, vlong off)
 
     <<[[consread()]] Qcons case>>
 
-    <<[[consread()]] Qswap case>>
-
     <<[[consread()]] cases>>
 
     case Qcputime:
@@ -19280,8 +19287,6 @@ conswrite(Chan *c, void *va, long n, vlong off)
     case Qnull:
         break;
 
-    <<[[conswrite()]] Qswap case>>
-
     default:
         print("conswrite: %#llux\n", c->qid.path);
         error(Egreg);
@@ -19320,13 +19325,14 @@ Dev consdevtab = {
 };
 @ 
 
-\subsection{[[/dev/consctl]]}
+\subsection{[[/dev/consctl]] and raw input}
 
 <<[[ConsKbd]] other fields>>=
 bool raw;        /* true if we shouldn't process input */
 bool ctlpoff; // ^P will not reboot if true
 Ref ctl;        /* number of opens to the control file */
 @
+% put ctlpoff in reboot section too?
 
 
 <<[[consopen()]] cases>>=
@@ -19359,6 +19365,7 @@ Ref ctl;        /* number of opens to the control file */
                 qwrite(kbdq, &ch, 1);           
             } else if(strncmp(a, "rawoff", 6) == 0){
                 kbd.raw = false;
+
             } else if(strncmp(a, "ctlpon", 6) == 0){
                 kbd.ctlpoff = false;
             } else if(strncmp(a, "ctlpoff", 7) == 0){
