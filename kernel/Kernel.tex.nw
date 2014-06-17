@@ -18303,47 +18303,6 @@ kbdputsc(int c, int external)
 % LP split, mv mouse stuff elsewhere?
 
 
-% used by mouse, could be moved?
-<<function i8042auxcmd>>=
-int
-i8042auxcmd(int cmd)
-{
-    unsigned int c;
-    int tries;
-    static int badkbd;
-
-    if(badkbd)
-        return -1;
-    c = 0;
-    tries = 0;
-
-    ilock(&i8042lock);
-    do{
-        if(tries++ > 2)
-            break;
-        if(outready() < 0)
-            break;
-        outb(Cmd, 0xD4);
-        if(outready() < 0)
-            break;
-        outb(Data, cmd);
-        if(outready() < 0)
-            break;
-        if(inready() < 0)
-            break;
-        c = inb(Data);
-    } while(c == 0xFE || c == 0);
-    iunlock(&i8042lock);
-
-    if(c != 0xFA){
-        print("i8042: %2.2ux returned to the %2.2ux command\n", c, cmd);
-        badkbd = 1; /* don't keep trying; there might not be one */
-        return -1;
-    }
-    return 0;
-}
-@
-
 % to change keyboard: kbdputmap, kbdgetmap and probably /dev/kbmap
 % also devkbin.c??
 
@@ -18403,112 +18362,10 @@ inready(void)
 
 
 
-<<latin1.h>>=
- " ", " i",	L"␣ı",
- "!~", "-=~",	L"≄≇≉",
- "!", "!<=>?bmp",	L"¡≮≠≯‽⊄∉⊅",
- "\"*", "IUiu",	L"ΪΫϊϋ",
- "\"", "\"AEIOUYaeiouy",	L"¨ÄËÏÖÜŸäëïöüÿ",
- "$*", "fhk",	L"ϕϑϰ",
- "$", "BEFHILMRVaefglopv",	L"ℬℰℱℋℐℒℳℛƲɑℯƒℊℓℴ℘ʋ",
- "\'\"", "Uu",	L"Ǘǘ",
- "\'", "\'ACEILNORSUYZacegilnorsuyz",	L"´ÁĆÉÍĹŃÓŔŚÚÝŹáćéģíĺńóŕśúýź",
- "*", "*ABCDEFGHIKLMNOPQRSTUWXYZabcdefghiklmnopqrstuwxyz",	L"∗ΑΒΞΔΕΦΓΘΙΚΛΜΝΟΠΨΡΣΤΥΩΧΗΖαβξδεφγθικλμνοπψρστυωχηζ",
- "+", "-O",	L"±⊕",
- ",", ",ACEGIKLNORSTUacegiklnorstu",	L"¸ĄÇĘĢĮĶĻŅǪŖŞŢŲąçęģįķļņǫŗşţų",
- "-*", "l",	L"ƛ",
- "-", "+-2:>DGHILOTZbdghiltuz~",	L"∓­ƻ÷→ÐǤĦƗŁ⊖ŦƵƀðǥℏɨłŧʉƶ≂",
- ".", ".CEGILOZceglz",	L"·ĊĖĠİĿ⊙Żċėġŀż",
- "/", "Oo",	L"Øø",
- "1", ".234568",	L"․½⅓¼⅕⅙⅛",
- "2", "-.35",	L"ƻ‥⅔⅖",
- "3", ".458",	L"…¾⅗⅜",
- "4", "5",	L"⅘",
- "5", "68",	L"⅚⅝",
- "7", "8",	L"⅞",
- ":", "()-=",	L"☹☺÷≔",
- "<!", "=~",	L"≨⋦",
- "<", "-<=>~",	L"←«≤≶≲",
- "=", ":<=>OV",	L"≕⋜≡⋝⊜⇒",
- ">!", "=~",	L"≩⋧",
- ">", "<=>~",	L"≷≥»≳",
- "?", "!?",	L"‽¿",
- "@\'", "\'",	L"ъ",
- "@@", "\'EKSTYZekstyz",	L"ьЕКСТЫЗекстыз",
- "@C", "Hh",	L"ЧЧ",
- "@E", "Hh",	L"ЭЭ",
- "@K", "Hh",	L"ХХ",
- "@S", "CHch",	L"ЩШЩШ",
- "@T", "Ss",	L"ЦЦ",
- "@Y", "AEOUaeou",	L"ЯЕЁЮЯЕЁЮ",
- "@Z", "Hh",	L"ЖЖ",
- "@c", "h",	L"ч",
- "@e", "h",	L"э",
- "@k", "h",	L"х",
- "@s", "ch",	L"щш",
- "@t", "s",	L"ц",
- "@y", "aeou",	L"яеёю",
- "@z", "h",	L"ж",
- "@", "ABDFGIJLMNOPRUVXabdfgijlmnopruvx",	L"АБДФГИЙЛМНОПРУВХабдфгийлмнопрувх",
- "A", "E",	L"Æ",
- "C", "ACU",	L"⋂ℂ⋃",
- "Dv", "Zz",	L"Ǆǅ",
- "D", "-e",	L"Ð∆",
- "G", "-",	L"Ǥ",
- "H", "-H",	L"Ħℍ",
- "I", "-J",	L"ƗĲ",
- "L", "&-Jj|",	L"⋀ŁǇǈ⋁",
- "M", "#48bs",	L"♮♩♪♭♯",
- "N", "JNj",	L"Ǌℕǋ",
- "O", "*+-./=EIcoprx",	L"⊛⊕⊖⊙⊘⊜ŒƢ©⊚℗®⊗",
- "P", "P",	L"ℙ",
- "Q", "Q",	L"ℚ",
- "R", "R",	L"ℝ",
- "S", "123S",	L"¹²³§",
- "T", "-u",	L"Ŧ⊨",
- "V", "=",	L"⇐",
- "Y", "R",	L"Ʀ",
- "Z", "-ACSZ",	L"Ƶℤ",
- "^", "ACEGHIJOSUWYaceghijosuwy",	L"ÂĈÊĜĤÎĴÔŜÛŴŶâĉêĝĥîĵôŝûŵŷ",
- "_\"", "AUau",	L"ǞǕǟǖ",
- "_,", "Oo",	L"Ǭǭ",
- "_.", "Aa",	L"Ǡǡ",
- "_", "AEIOU_aeiou",	L"ĀĒĪŌŪ¯āēīōū",
- "`\"", "Uu",	L"Ǜǜ",
- "`", "AEIOUaeiou",	L"ÀÈÌÒÙàèìòù",
- "a", "ben",	L"↔æ∠",
- "b", "()+-0123456789=bknpqru",	L"₍₎₊₋₀₁₂₃₄₅₆₇₈₉₌♝♚♞♟♛♜•",
- "c", "$Oagu",	L"¢©∩≅∪",
- "dv", "z",	L"ǆ",
- "d", "-adegz",	L"ð↓‡°†ʣ",
- "e", "$lmns",	L"€⋯—–∅",
- "f", "a",	L"∀",
- "g", "$-r",	L"¤ǥ∇",
- "h", "-v",	L"ℏƕ",
- "i", "-bfjps",	L"ɨ⊆∞ĳ⊇∫",
- "l", "\"$&\'-jz|",	L"“£∧‘łǉ⋄∨",
- "m", "iou",	L"µ∈×",
- "n", "jo",	L"ǌ¬",
- "o", "AOUaeiu",	L"Å⊚Ůåœƣů",
- "p", "Odgrt",	L"℗∂¶∏∝",
- "r", "\"\'O",	L"”’®",
- "s", "()+-0123456789=abnoprstu",	L"⁽⁾⁺⁻⁰ⁱ⁲⁳⁴⁵⁶⁷⁸⁹⁼ª⊂ⁿº⊃√ß∍∑",
- "t", "-efmsu",	L"ŧ∃∴™ς⊢",
- "u", "-AEGIOUaegiou",	L"ʉĂĔĞĬŎŬ↑ĕğĭŏŭ",
- "v\"", "Uu",	L"Ǚǚ",
- "v", "ACDEGIKLNORSTUZacdegijklnorstuz",	L"ǍČĎĚǦǏǨĽŇǑŘŠŤǓŽǎčďěǧǐǰǩľňǒřšťǔž",
- "w", "bknpqr",	L"♗♔♘♙♕♖",
- "x", "O",	L"⊗",
- "y", "$",	L"¥",
- "z", "-",	L"ƶ",
- "|", "Pp|",	L"Þþ¦",
- "~!", "=",	L"≆",
- "~", "-=AINOUainou~",	L"≃≅ÃĨÑÕŨãĩñõũ≈",
-@
-%$
 
 \section{The screen}
 % just cga.c here, see Window.tex.nw for the advanced vga kernel support
+% that is also needed for full operation of the mouse actually
 
 <<cga.c enum color>>=
 enum color {
@@ -18570,35 +18427,27 @@ screeninit(void)
     screenputs = cgascreenputs;
 }
 @
+% see hook screenputs later
 
-
-<<function cgaregr>>=
-static uchar
-cgaregr(int index)
-{
-    outb(0x3D4, index);
-    return inb(0x3D4+1) & 0xFF;
-}
-@
-
-
-<<function cgaregw>>=
+<<function cgascreenputs>>=
 static void
-cgaregw(int index, int data)
+cgascreenputs(char* s, int n)
 {
-    outb(0x3D4, index);
-    outb(0x3D4+1, data);
-}
-@
+    if(!islo()){
+        /*
+         * Don't deadlock trying to
+         * print in an interrupt.
+         */
+        if(!canlock(&cgascreenlock))
+            return;
+    }
+    else
+        lock(&cgascreenlock);
 
+    while(n-- > 0)
+        cgascreenputc(*s++);
 
-<<function movecursor>>=
-static void
-movecursor(void)
-{
-    cgaregw(0x0E, (cgapos/2>>8) & 0xFF);
-    cgaregw(0x0F, cgapos/2 & 0xFF);
-    CGASCREENBASE[cgapos+1] = Attr;
+    unlock(&cgascreenlock);
 }
 @
 
@@ -18643,27 +18492,40 @@ cgascreenputc(int c)
 @
 
 
-<<function cgascreenputs>>=
+<<function movecursor>>=
 static void
-cgascreenputs(char* s, int n)
+movecursor(void)
 {
-    if(!islo()){
-        /*
-         * Don't deadlock trying to
-         * print in an interrupt.
-         */
-        if(!canlock(&cgascreenlock))
-            return;
-    }
-    else
-        lock(&cgascreenlock);
-
-    while(n-- > 0)
-        cgascreenputc(*s++);
-
-    unlock(&cgascreenlock);
+    cgaregw(0x0E, (cgapos/2>>8) & 0xFF);
+    cgaregw(0x0F, cgapos/2 & 0xFF);
+    CGASCREENBASE[cgapos+1] = Attr;
 }
 @
+
+%-------------------------------------------------------------------------------
+<<function cgaregr>>=
+static uchar
+cgaregr(int index)
+{
+    outb(0x3D4, index);
+    return inb(0x3D4+1) & 0xFF;
+}
+@
+
+
+<<function cgaregw>>=
+static void
+cgaregw(int index, int data)
+{
+    outb(0x3D4, index);
+    outb(0x3D4+1, data);
+}
+@
+
+
+
+
+
 
 \section{The console device [[/dev/cons]]}
 
@@ -18692,6 +18554,9 @@ static Dirtab consdir[]={
 };
 @ 
 
+
+% when keyboard key => have to print it back (echo())
+% when someone writes in /dev/cons => have to print it back (putstrn0)
 
 % here interested only in the "cons"! see other sections
 % for extra features of the "console"
@@ -18759,7 +18624,7 @@ lineqinit(void)
  *  Called at interrupt time to process a character.
  */
 int
-kbdputc(Queue*, int ch)
+kbdputc(Queue* _always_kbdq, int ch)
 {
     int i, n;
     char buf[3];
@@ -18919,26 +18784,10 @@ putstrn0(char *str, int n, bool usewrite)
     if(!islo())
         usewrite = false;
 
-    /*
-     *  how many different output devices do we need?
-     */
-    kmesgputs(str, n);
+    <<[[putstrn0()]] kmesg handling>>
 
-    /*
-     *  if someone is reading /dev/kprint,
-     *  put the message there.
-     *  if not and there's an attached bit mapped display,
-     *  put the message there.
-     *
-     *  if there's a serial line being used as a console,
-     *  put the message there.
-     */
-    if(kprintoq != nil && !qisclosed(kprintoq)){
-        if(usewrite)
-            qwrite(kprintoq, str, n);
-        else
-            qiwrite(kprintoq, str, n);
-    }else if(screenputs != nil)
+    <<[[putstrn0()]] if kprint>>
+    else if(screenputs != nil)
         screenputs(str, n);
 
     if(serialoq == nil){
@@ -19011,7 +18860,7 @@ echo(char *buf, int n)
     qproduce(kbdq, buf, n);
     if(kbd.raw)
         return;
-    kmesgputs(buf, n);
+    <<[[echo()]] kmesg handling>>
     if(screenputs != nil)
         echoscreen(buf, n);
     if(serialoq)
@@ -19080,7 +18929,7 @@ devcons_print(char *fmt, ...)
 void
 putstrn(char *str, int n)
 {
-    putstrn0(str, n, 0);
+    putstrn0(str, n, false);
 }
 @ 
 
@@ -19121,7 +18970,6 @@ devcons_iprint(char *fmt, ...)
     return n;
 }
 @
-% could kmesgputs() here too
 
 <<global iprintlock>>=
 /*
@@ -19201,32 +19049,15 @@ consinit(void)
 @ 
 
 
-
 <<method consopen>>=
 static Chan*
 consopen(Chan *c, int omode)
 {
     c->aux = nil;
     c = devopen(c, omode, consdir, nelem(consdir), devgen);
+
     switch((ulong)c->qid.path){
     <<[[consopen()]] cases>>
-
-    case Qkprint:
-        if(tas(&kprintinuse) != 0){
-            c->flag &= ~COPEN;
-            error(Einuse);
-        }
-        if(kprintoq == nil){
-            kprintoq = qopen(8*1024, Qcoalesce, 0, 0);
-            if(kprintoq == nil){
-                c->flag &= ~COPEN;
-                error(Enomem);
-            }
-            qnoblock(kprintoq, true);
-        }else
-            qreopen(kprintoq);
-        c->iounit = qiomaxatomic;
-        break;
     }
     return c;
 }
@@ -19239,18 +19070,10 @@ consclose(Chan *c)
 {
     switch((ulong)c->qid.path){
     <<[[consclose()]] cases>>
-    /* last close of control file turns off raw */
-
-    /* close of kprint allows other opens */
-    case Qkprint:
-        if(c->flag & COPEN){
-            kprintinuse = 0;
-            qhangup(kprintoq, nil);
-        }
-        break;
     }
 }
 @ 
+
 
 <<method consread>>=
 static long
@@ -19271,6 +19094,10 @@ consread(Chan *c, void *buf, long n, vlong off)
 
     <<[[consread()]] Qcons case>>
 
+    <<[[consread()]] Qswap case>>
+
+    <<[[consread()]] cases>>
+
     case Qcputime:
         k = offset;
         if(k >= 6*NUMSIZE)
@@ -19288,24 +19115,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         memmove(buf, tmp+k, n);
         return n;
 
-    case Qkmesg:
-        /*
-         * This is unlocked to avoid tying up a process
-         * that's writing to the buffer.  kmesg.n never 
-         * gets smaller, so worst case the reader will
-         * see a slurred buffer.
-         */
-        if(off >= kmesg.n)
-            n = 0;
-        else{
-            if(off+n > kmesg.n)
-                n = kmesg.n - off;
-            memmove(buf, kmesg.buf+off, n);
-        }
-        return n;
         
-    case Qkprint:
-        return qread(kprintoq, buf, n);
 
 
     case Qpgrpid:
@@ -19336,10 +19146,6 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qzero:
         memset(buf, 0, n);
         return n;
-
-    <<[[consread()]] Qswap case>>
-
-    <<[[consread()]] cases>>
 
     default:
         print("consread %#llux\n", c->qid.path);
@@ -19442,6 +19248,7 @@ Ref ctl;        /* number of opens to the control file */
 @
 
 <<[[consclose()]] cases>>=
+    /* last close of control file turns off raw */
     case Qconsctl:
         if(c->flag&COPEN){
             if(decref(&kbd.ctl) == 0)
@@ -19474,6 +19281,53 @@ Ref ctl;        /* number of opens to the control file */
         }
         break;
 @
+
+\section{The mouse}
+
+% used by mouse, could be moved?
+<<function i8042auxcmd>>=
+int
+i8042auxcmd(int cmd)
+{
+    unsigned int c;
+    int tries;
+    static int badkbd;
+
+    if(badkbd)
+        return -1;
+    c = 0;
+    tries = 0;
+
+    ilock(&i8042lock);
+    do{
+        if(tries++ > 2)
+            break;
+        if(outready() < 0)
+            break;
+        outb(Cmd, 0xD4);
+        if(outready() < 0)
+            break;
+        outb(Data, cmd);
+        if(outready() < 0)
+            break;
+        if(inready() < 0)
+            break;
+        c = inb(Data);
+    } while(c == 0xFE || c == 0);
+    iunlock(&i8042lock);
+
+    if(c != 0xFA){
+        print("i8042: %2.2ux returned to the %2.2ux command\n", c, cmd);
+        badkbd = 1; /* don't keep trying; there might not be one */
+        return -1;
+    }
+    return 0;
+}
+@
+
+
+
+\section{The floppy}
 
 \section{Other devices}
 %optional, advanced concepts
@@ -25644,15 +25498,13 @@ Cmdtab rebootmsg[] =
 \section{[[/dev/]]}
 
 % saw /dev/cons, /dev/rtc, /dev/pipe??
-% see /dev/kmesg, /dev/kprintq in Debugging section
+% see /dev/kmesg, /dev/kprint in Debugging section
 % see /dev/kprof in Profiling section
 
 
 <<devcons.c enum Qxxx cases>>=
     Qbintime,
     Qcputime,
-    Qkmesg,
-    Qkprint,
     Qnull,
     Qpgrpid,
     Qpid,
@@ -25667,8 +25519,6 @@ Cmdtab rebootmsg[] =
 <<[[consdir]] fields>>=
     "bintime",  {Qbintime}, 24,     0664,
     "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-    "kmesg",    {Qkmesg},   0,      0440,
-    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
     "null",     {Qnull},    0,      0666,
     "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
     "pid",      {Qpid},     NUMSIZE,    0444,
@@ -26108,18 +25958,6 @@ cgapost(int code)
         case 'm':
             memorysummary();
             return;
-        case 'd':
-            if(consdebug == nil)
-                consdebug = rdb;
-            else
-                consdebug = nil;
-            print("consdebug now %#p\n", consdebug);
-            return;
-        case 'D':
-            if(consdebug == nil)
-                consdebug = rdb;
-            consdebug();
-            return;
         case 'p':
             x = spllo();
             procdump();
@@ -26134,6 +25972,7 @@ cgapost(int code)
         case 'r':
             exit(0);
             return;
+        <<[[echo()]] C-t C-t special keys handler cases>>
         }
 @
 
@@ -26611,11 +26450,6 @@ callwithureg(void (*fn)(Ureg*))
 
 \section{[[/dev/kmesg]]}
 
-<<constant KMESGSIZE>>=
-// used in devcons.c
-KMESGSIZE = (16*1024),  /* put 256*1024 if want acpi debugging */
-@
-
 <<struct KMesg>>=
 /*
  * Log console output so it can be retrieved via /dev/kmesg.
@@ -26628,10 +26462,30 @@ struct KMesg {
 };
 @ 
 
-
 <<global kmesg>>=
 struct KMesg kmesg;
 @ 
+
+<<constant KMESGSIZE>>=
+// used in devcons.c
+KMESGSIZE = (16*1024),  /* put 256*1024 if want acpi debugging */
+@
+
+
+
+
+<<[[echo()]] kmesg handling>>=
+kmesgputs(buf, n);
+@
+% echoing back keyboard key
+
+<<[[putstrn0()]] kmesg handling>>=
+/*
+ *  how many different output devices do we need?
+ */
+kmesgputs(str, n);
+@
+% print what was written do /dev/cons
 
 
 <<function kmesgputs>>=
@@ -26665,8 +26519,43 @@ kmesgputs(char *str, int n)
 }
 @ 
 
+<<devcons.c enum Qxxx cases>>=
+Qkmesg,
+@
+
+<<[[consdir]] fields>>=
+"kmesg",    {Qkmesg},   0,      0440,
+@
+
+<<[[consread()]] cases>>=
+case Qkmesg:
+    /*
+     * This is unlocked to avoid tying up a process
+     * that's writing to the buffer.  kmesg.n never 
+     * gets smaller, so worst case the reader will
+     * see a slurred buffer.
+     */
+    if(off >= kmesg.n)
+        n = 0;
+    else{
+        if(off+n > kmesg.n)
+            n = kmesg.n - off;
+        memmove(buf, kmesg.buf+off, n);
+    }
+    return n;
+@
+
 \section{[[/dev/kprint]]}
 %TODO: I don't understand this
+
+<<devcons.c enum Qxxx cases>>=
+    Qkprint,
+@
+
+<<[[consdir]] fields>>=
+    "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
+@
+
 
 <<global kprintoq>>=
 Queue*  kprintoq;       /* console output, for /dev/kprint */
@@ -26676,6 +26565,62 @@ Queue*  kprintoq;       /* console output, for /dev/kprint */
 % so don't want to rely on anything fancy?
 <<global kprintinuse>>=
 ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
+@
+
+<<[[consopen()]] cases>>=
+    case Qkprint:
+        if(tas(&kprintinuse) != 0){
+            c->flag &= ~COPEN;
+            error(Einuse);
+        }
+        if(kprintoq == nil){
+            kprintoq = qopen(8*1024, Qcoalesce, 0, 0);
+            if(kprintoq == nil){
+                c->flag &= ~COPEN;
+                error(Enomem);
+            }
+            qnoblock(kprintoq, true);
+        }else
+            qreopen(kprintoq);
+        c->iounit = qiomaxatomic;
+        break;
+@
+
+<<[[consclose()]] cases>>=
+    /* close of kprint allows other opens */
+    case Qkprint:
+        if(c->flag & COPEN){
+            kprintinuse = 0;
+            qhangup(kprintoq, nil);
+        }
+        break;
+@
+
+<<[[consread()]] cases>>=
+    case Qkprint:
+        return qread(kprintoq, buf, n);
+@
+
+<<[[putstrn0()]] if kprint>>=
+    /*
+     *  if someone is reading /dev/kprint,
+     *  put the message there.
+     *  if not and there's an attached bit mapped display,
+     *  put the message there.
+     *
+     *  if there's a serial line being used as a console,
+     *  put the message there.
+     */
+    if(kprintoq != nil && !qisclosed(kprintoq)){
+        if(usewrite)
+            qwrite(kprintoq, str, n);
+        else
+            qiwrite(kprintoq, str, n);
+    }
+@
+
+<<[[panic()]] reset kprintoq>>=
+    kprintoq = nil; /* don't try to write to /dev/kprint */
 @
 
 
@@ -26688,6 +26633,26 @@ ulong   kprintinuse;        /* test and set whether /dev/kprint is open */
 <<hook consdebug>>=
 void    (*consdebug)(void) = nil; // for rdb
 @ 
+
+<<[[panic()]] run consdebug hook>>=
+    if(consdebug)
+        (*consdebug)();
+@
+
+<<[[echo()]] C-t C-t special keys handler cases>>=
+        case 'd':
+            if(consdebug == nil)
+                consdebug = rdb;
+            else
+                consdebug = nil;
+            print("consdebug now %#p\n", consdebug);
+            return;
+        case 'D':
+            if(consdebug == nil)
+                consdebug = rdb;
+            consdebug();
+            return;
+@
 
 \section{Debugging user processes}
 
@@ -28465,6 +28430,7 @@ nbytes += sizeof(Tos); /* hole for profiling clock at top of stack (and more) */
 bool panicking;
 @
 
+
 <<function panic>>=
 void
 devcons_panic(char *fmt, ...)
@@ -28473,7 +28439,7 @@ devcons_panic(char *fmt, ...)
     va_list arg;
     char buf[PRINTSIZE];
 
-    kprintoq = nil; /* don't try to write to /dev/kprint */
+    <<[[panic()]] reset kprintoq>>
 
     if(panicking)
         for(;;);
@@ -28485,8 +28451,7 @@ devcons_panic(char *fmt, ...)
     n = vseprint(buf+strlen(buf), buf+sizeof(buf), fmt, arg) - buf;
     va_end(arg);
     iprint("%s\n", buf);
-    if(consdebug)
-        (*consdebug)();
+    <<[[panic()]] run consdebug hook>>
     splx(s);
     prflush();
     buf[n] = '\n';
@@ -28969,6 +28934,111 @@ extern  int utfnlen(char*, long);
 %//unused: extern  int runelen(long);
 
 
+
+
+<<latin1.h>>=
+ " ", " i",	L"␣ı",
+ "!~", "-=~",	L"≄≇≉",
+ "!", "!<=>?bmp",	L"¡≮≠≯‽⊄∉⊅",
+ "\"*", "IUiu",	L"ΪΫϊϋ",
+ "\"", "\"AEIOUYaeiouy",	L"¨ÄËÏÖÜŸäëïöüÿ",
+ "$*", "fhk",	L"ϕϑϰ",
+ "$", "BEFHILMRVaefglopv",	L"ℬℰℱℋℐℒℳℛƲɑℯƒℊℓℴ℘ʋ",
+ "\'\"", "Uu",	L"Ǘǘ",
+ "\'", "\'ACEILNORSUYZacegilnorsuyz",	L"´ÁĆÉÍĹŃÓŔŚÚÝŹáćéģíĺńóŕśúýź",
+ "*", "*ABCDEFGHIKLMNOPQRSTUWXYZabcdefghiklmnopqrstuwxyz",	L"∗ΑΒΞΔΕΦΓΘΙΚΛΜΝΟΠΨΡΣΤΥΩΧΗΖαβξδεφγθικλμνοπψρστυωχηζ",
+ "+", "-O",	L"±⊕",
+ ",", ",ACEGIKLNORSTUacegiklnorstu",	L"¸ĄÇĘĢĮĶĻŅǪŖŞŢŲąçęģįķļņǫŗşţų",
+ "-*", "l",	L"ƛ",
+ "-", "+-2:>DGHILOTZbdghiltuz~",	L"∓­ƻ÷→ÐǤĦƗŁ⊖ŦƵƀðǥℏɨłŧʉƶ≂",
+ ".", ".CEGILOZceglz",	L"·ĊĖĠİĿ⊙Żċėġŀż",
+ "/", "Oo",	L"Øø",
+ "1", ".234568",	L"․½⅓¼⅕⅙⅛",
+ "2", "-.35",	L"ƻ‥⅔⅖",
+ "3", ".458",	L"…¾⅗⅜",
+ "4", "5",	L"⅘",
+ "5", "68",	L"⅚⅝",
+ "7", "8",	L"⅞",
+ ":", "()-=",	L"☹☺÷≔",
+ "<!", "=~",	L"≨⋦",
+ "<", "-<=>~",	L"←«≤≶≲",
+ "=", ":<=>OV",	L"≕⋜≡⋝⊜⇒",
+ ">!", "=~",	L"≩⋧",
+ ">", "<=>~",	L"≷≥»≳",
+ "?", "!?",	L"‽¿",
+ "@\'", "\'",	L"ъ",
+ "@@", "\'EKSTYZekstyz",	L"ьЕКСТЫЗекстыз",
+ "@C", "Hh",	L"ЧЧ",
+ "@E", "Hh",	L"ЭЭ",
+ "@K", "Hh",	L"ХХ",
+ "@S", "CHch",	L"ЩШЩШ",
+ "@T", "Ss",	L"ЦЦ",
+ "@Y", "AEOUaeou",	L"ЯЕЁЮЯЕЁЮ",
+ "@Z", "Hh",	L"ЖЖ",
+ "@c", "h",	L"ч",
+ "@e", "h",	L"э",
+ "@k", "h",	L"х",
+ "@s", "ch",	L"щш",
+ "@t", "s",	L"ц",
+ "@y", "aeou",	L"яеёю",
+ "@z", "h",	L"ж",
+ "@", "ABDFGIJLMNOPRUVXabdfgijlmnopruvx",	L"АБДФГИЙЛМНОПРУВХабдфгийлмнопрувх",
+ "A", "E",	L"Æ",
+ "C", "ACU",	L"⋂ℂ⋃",
+ "Dv", "Zz",	L"Ǆǅ",
+ "D", "-e",	L"Ð∆",
+ "G", "-",	L"Ǥ",
+ "H", "-H",	L"Ħℍ",
+ "I", "-J",	L"ƗĲ",
+ "L", "&-Jj|",	L"⋀ŁǇǈ⋁",
+ "M", "#48bs",	L"♮♩♪♭♯",
+ "N", "JNj",	L"Ǌℕǋ",
+ "O", "*+-./=EIcoprx",	L"⊛⊕⊖⊙⊘⊜ŒƢ©⊚℗®⊗",
+ "P", "P",	L"ℙ",
+ "Q", "Q",	L"ℚ",
+ "R", "R",	L"ℝ",
+ "S", "123S",	L"¹²³§",
+ "T", "-u",	L"Ŧ⊨",
+ "V", "=",	L"⇐",
+ "Y", "R",	L"Ʀ",
+ "Z", "-ACSZ",	L"Ƶℤ",
+ "^", "ACEGHIJOSUWYaceghijosuwy",	L"ÂĈÊĜĤÎĴÔŜÛŴŶâĉêĝĥîĵôŝûŵŷ",
+ "_\"", "AUau",	L"ǞǕǟǖ",
+ "_,", "Oo",	L"Ǭǭ",
+ "_.", "Aa",	L"Ǡǡ",
+ "_", "AEIOU_aeiou",	L"ĀĒĪŌŪ¯āēīōū",
+ "`\"", "Uu",	L"Ǜǜ",
+ "`", "AEIOUaeiou",	L"ÀÈÌÒÙàèìòù",
+ "a", "ben",	L"↔æ∠",
+ "b", "()+-0123456789=bknpqru",	L"₍₎₊₋₀₁₂₃₄₅₆₇₈₉₌♝♚♞♟♛♜•",
+ "c", "$Oagu",	L"¢©∩≅∪",
+ "dv", "z",	L"ǆ",
+ "d", "-adegz",	L"ð↓‡°†ʣ",
+ "e", "$lmns",	L"€⋯—–∅",
+ "f", "a",	L"∀",
+ "g", "$-r",	L"¤ǥ∇",
+ "h", "-v",	L"ℏƕ",
+ "i", "-bfjps",	L"ɨ⊆∞ĳ⊇∫",
+ "l", "\"$&\'-jz|",	L"“£∧‘łǉ⋄∨",
+ "m", "iou",	L"µ∈×",
+ "n", "jo",	L"ǌ¬",
+ "o", "AOUaeiu",	L"Å⊚Ůåœƣů",
+ "p", "Odgrt",	L"℗∂¶∏∝",
+ "r", "\"\'O",	L"”’®",
+ "s", "()+-0123456789=abnoprstu",	L"⁽⁾⁺⁻⁰ⁱ⁲⁳⁴⁵⁶⁷⁸⁹⁼ª⊂ⁿº⊃√ß∍∑",
+ "t", "-efmsu",	L"ŧ∃∴™ς⊢",
+ "u", "-AEGIOUaegiou",	L"ʉĂĔĞĬŎŬ↑ĕğĭŏŭ",
+ "v\"", "Uu",	L"Ǚǚ",
+ "v", "ACDEGIKLNORSTUZacdegijklnorstuz",	L"ǍČĎĚǦǏǨĽŇǑŘŠŤǓŽǎčďěǧǐǰǩľňǒřšťǔž",
+ "w", "bknpqr",	L"♗♔♘♙♕♖",
+ "x", "O",	L"⊗",
+ "y", "$",	L"¥",
+ "z", "-",	L"ƶ",
+ "|", "Pp|",	L"Þþ¦",
+ "~!", "=",	L"≆",
+ "~", "-=AINOUainou~",	L"≃≅ÃĨÑÕŨãĩñõũ≈",
+@
+%$
 
 
 \chapter{Extra Code}

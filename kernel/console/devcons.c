@@ -186,26 +186,31 @@ putstrn0(char *str, int n, bool usewrite)
     if(!islo())
         usewrite = false;
 
+    /*s: [[putstrn0()]] kmesg handling */
     /*
      *  how many different output devices do we need?
      */
     kmesgputs(str, n);
+    /*e: [[putstrn0()]] kmesg handling */
 
-    /*
-     *  if someone is reading /dev/kprint,
-     *  put the message there.
-     *  if not and there's an attached bit mapped display,
-     *  put the message there.
-     *
-     *  if there's a serial line being used as a console,
-     *  put the message there.
-     */
-    if(kprintoq != nil && !qisclosed(kprintoq)){
-        if(usewrite)
-            qwrite(kprintoq, str, n);
-        else
-            qiwrite(kprintoq, str, n);
-    }else if(screenputs != nil)
+    /*s: [[putstrn0()]] if kprint */
+        /*
+         *  if someone is reading /dev/kprint,
+         *  put the message there.
+         *  if not and there's an attached bit mapped display,
+         *  put the message there.
+         *
+         *  if there's a serial line being used as a console,
+         *  put the message there.
+         */
+        if(kprintoq != nil && !qisclosed(kprintoq)){
+            if(usewrite)
+                qwrite(kprintoq, str, n);
+            else
+                qiwrite(kprintoq, str, n);
+        }
+    /*e: [[putstrn0()]] if kprint */
+    else if(screenputs != nil)
         screenputs(str, n);
 
     if(serialoq == nil){
@@ -241,7 +246,7 @@ putstrn0(char *str, int n, bool usewrite)
 void
 putstrn(char *str, int n)
 {
-    putstrn0(str, n, 0);
+    putstrn0(str, n, false);
 }
 /*e: function putstrn */
 
@@ -332,7 +337,9 @@ devcons_panic(char *fmt, ...)
     va_list arg;
     char buf[PRINTSIZE];
 
-    kprintoq = nil; /* don't try to write to /dev/kprint */
+    /*s: [[panic()]] reset kprintoq */
+        kprintoq = nil; /* don't try to write to /dev/kprint */
+    /*e: [[panic()]] reset kprintoq */
 
     if(panicking)
         for(;;);
@@ -344,8 +351,10 @@ devcons_panic(char *fmt, ...)
     n = vseprint(buf+strlen(buf), buf+sizeof(buf), fmt, arg) - buf;
     va_end(arg);
     iprint("%s\n", buf);
-    if(consdebug)
-        (*consdebug)();
+    /*s: [[panic()]] run consdebug hook */
+        if(consdebug)
+            (*consdebug)();
+    /*e: [[panic()]] run consdebug hook */
     splx(s);
     prflush();
     buf[n] = '\n';
@@ -535,18 +544,6 @@ echo(char *buf, int n)
                 case 'm':
                     memorysummary();
                     return;
-                case 'd':
-                    if(consdebug == nil)
-                        consdebug = rdb;
-                    else
-                        consdebug = nil;
-                    print("consdebug now %#p\n", consdebug);
-                    return;
-                case 'D':
-                    if(consdebug == nil)
-                        consdebug = rdb;
-                    consdebug();
-                    return;
                 case 'p':
                     x = spllo();
                     procdump();
@@ -561,6 +558,20 @@ echo(char *buf, int n)
                 case 'r':
                     exit(0);
                     return;
+                /*s: [[echo()]] C-t C-t special keys handler cases */
+                        case 'd':
+                            if(consdebug == nil)
+                                consdebug = rdb;
+                            else
+                                consdebug = nil;
+                            print("consdebug now %#p\n", consdebug);
+                            return;
+                        case 'D':
+                            if(consdebug == nil)
+                                consdebug = rdb;
+                            consdebug();
+                            return;
+                /*e: [[echo()]] C-t C-t special keys handler cases */
                 }
         /*e: [[echo()]] C-t C-t special keys handler */
     }
@@ -568,7 +579,9 @@ echo(char *buf, int n)
     qproduce(kbdq, buf, n);
     if(kbd.raw)
         return;
+    /*s: [[echo()]] kmesg handling */
     kmesgputs(buf, n);
+    /*e: [[echo()]] kmesg handling */
     if(screenputs != nil)
         echoscreen(buf, n);
     if(serialoq)
@@ -608,7 +621,7 @@ kbdcr2nl(Queue*, int ch)
  *  Called at interrupt time to process a character.
  */
 int
-kbdputc(Queue*, int ch)
+kbdputc(Queue* _always_kbdq, int ch)
 {
     int i, n;
     char buf[3];
@@ -670,8 +683,6 @@ enum{
     /*s: devcons.c enum Qxxx cases */
         Qbintime,
         Qcputime,
-        Qkmesg,
-        Qkprint,
         Qnull,
         Qpgrpid,
         Qpid,
@@ -681,6 +692,10 @@ enum{
         Qtime,
         Quser,
         Qzero,
+    /*x: devcons.c enum Qxxx cases */
+    Qkmesg,
+    /*x: devcons.c enum Qxxx cases */
+        Qkprint,
     /*e: devcons.c enum Qxxx cases */
 };
 /*e: devcons.c enum Qxxx */
@@ -702,8 +717,6 @@ static Dirtab consdir[]={
     /*s: [[consdir]] fields */
         "bintime",  {Qbintime}, 24,     0664,
         "cputime",  {Qcputime}, 6*NUMSIZE,  0444,
-        "kmesg",    {Qkmesg},   0,      0440,
-        "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
         "null",     {Qnull},    0,      0666,
         "pgrpid",   {Qpgrpid},  NUMSIZE,    0444,
         "pid",      {Qpid},     NUMSIZE,    0444,
@@ -713,6 +726,10 @@ static Dirtab consdir[]={
         "time",     {Qtime},    NUMSIZE+3*VLNUMSIZE,    0664,
         "user",     {Quser},    0,      0666,
         "zero",     {Qzero},    0,      0444,
+    /*x: [[consdir]] fields */
+    "kmesg",    {Qkmesg},   0,      0440,
+    /*x: [[consdir]] fields */
+        "kprint",   {Qkprint, 0, QTEXCL},   0,  DMEXCL|0440,
     /*e: [[consdir]] fields */
 };
 /*e: global consdir */
@@ -758,29 +775,30 @@ consopen(Chan *c, int omode)
 {
     c->aux = nil;
     c = devopen(c, omode, consdir, nelem(consdir), devgen);
+
     switch((ulong)c->qid.path){
     /*s: [[consopen()]] cases */
         case Qconsctl:
             incref(&kbd.ctl);
             break;
-    /*e: [[consopen()]] cases */
-
-    case Qkprint:
-        if(tas(&kprintinuse) != 0){
-            c->flag &= ~COPEN;
-            error(Einuse);
-        }
-        if(kprintoq == nil){
-            kprintoq = qopen(8*1024, Qcoalesce, 0, 0);
-            if(kprintoq == nil){
+    /*x: [[consopen()]] cases */
+        case Qkprint:
+            if(tas(&kprintinuse) != 0){
                 c->flag &= ~COPEN;
-                error(Enomem);
+                error(Einuse);
             }
-            qnoblock(kprintoq, true);
-        }else
-            qreopen(kprintoq);
-        c->iounit = qiomaxatomic;
-        break;
+            if(kprintoq == nil){
+                kprintoq = qopen(8*1024, Qcoalesce, 0, 0);
+                if(kprintoq == nil){
+                    c->flag &= ~COPEN;
+                    error(Enomem);
+                }
+                qnoblock(kprintoq, true);
+            }else
+                qreopen(kprintoq);
+            c->iounit = qiomaxatomic;
+            break;
+    /*e: [[consopen()]] cases */
     }
     return c;
 }
@@ -792,22 +810,22 @@ consclose(Chan *c)
 {
     switch((ulong)c->qid.path){
     /*s: [[consclose()]] cases */
+        /* last close of control file turns off raw */
         case Qconsctl:
             if(c->flag&COPEN){
                 if(decref(&kbd.ctl) == 0)
                     kbd.raw = false;
             }
             break;
+    /*x: [[consclose()]] cases */
+        /* close of kprint allows other opens */
+        case Qkprint:
+            if(c->flag & COPEN){
+                kprintinuse = 0;
+                qhangup(kprintoq, nil);
+            }
+            break;
     /*e: [[consclose()]] cases */
-    /* last close of control file turns off raw */
-
-    /* close of kprint allows other opens */
-    case Qkprint:
-        if(c->flag & COPEN){
-            kprintinuse = 0;
-            qhangup(kprintoq, nil);
-        }
-        break;
     }
 }
 /*e: method consclose */
@@ -876,6 +894,51 @@ consread(Chan *c, void *buf, long n, vlong off)
             return n;
     /*e: [[consread()]] Qcons case */
 
+    /*s: [[consread()]] Qswap case */
+        case Qswap:
+            snprint(tmp, sizeof tmp,
+                "%lud memory\n"
+                "%d pagesize\n"
+                "%lud kernel\n"
+                "%lud/%lud user\n"
+                "%lud/%lud swap\n"
+                "%lud/%lud kernel malloc\n"
+                "%lud/%lud kernel draw\n",
+                conf.npage*BY2PG,
+                BY2PG,
+                conf.npage-conf.upages,
+                palloc.user-palloc.freecount, palloc.user,
+                conf.nswap-swapalloc.free, conf.nswap,
+                mainmem->cursize, mainmem->maxsize,
+                imagmem->cursize, imagmem->maxsize);
+
+            return readstr((ulong)offset, buf, n, tmp);
+    /*e: [[consread()]] Qswap case */
+
+    /*s: [[consread()]] cases */
+        case Qrandom:
+            return randomread(buf, n);
+    /*x: [[consread()]] cases */
+    case Qkmesg:
+        /*
+         * This is unlocked to avoid tying up a process
+         * that's writing to the buffer.  kmesg.n never 
+         * gets smaller, so worst case the reader will
+         * see a slurred buffer.
+         */
+        if(off >= kmesg.n)
+            n = 0;
+        else{
+            if(off+n > kmesg.n)
+                n = kmesg.n - off;
+            memmove(buf, kmesg.buf+off, n);
+        }
+        return n;
+    /*x: [[consread()]] cases */
+        case Qkprint:
+            return qread(kprintoq, buf, n);
+    /*e: [[consread()]] cases */
+
     case Qcputime:
         k = offset;
         if(k >= 6*NUMSIZE)
@@ -893,24 +956,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         memmove(buf, tmp+k, n);
         return n;
 
-    case Qkmesg:
-        /*
-         * This is unlocked to avoid tying up a process
-         * that's writing to the buffer.  kmesg.n never 
-         * gets smaller, so worst case the reader will
-         * see a slurred buffer.
-         */
-        if(off >= kmesg.n)
-            n = 0;
-        else{
-            if(off+n > kmesg.n)
-                n = kmesg.n - off;
-            memmove(buf, kmesg.buf+off, n);
-        }
-        return n;
         
-    case Qkprint:
-        return qread(kprintoq, buf, n);
 
 
     case Qpgrpid:
@@ -941,32 +987,6 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qzero:
         memset(buf, 0, n);
         return n;
-
-    /*s: [[consread()]] Qswap case */
-        case Qswap:
-            snprint(tmp, sizeof tmp,
-                "%lud memory\n"
-                "%d pagesize\n"
-                "%lud kernel\n"
-                "%lud/%lud user\n"
-                "%lud/%lud swap\n"
-                "%lud/%lud kernel malloc\n"
-                "%lud/%lud kernel draw\n",
-                conf.npage*BY2PG,
-                BY2PG,
-                conf.npage-conf.upages,
-                palloc.user-palloc.freecount, palloc.user,
-                conf.nswap-swapalloc.free, conf.nswap,
-                mainmem->cursize, mainmem->maxsize,
-                imagmem->cursize, imagmem->maxsize);
-
-            return readstr((ulong)offset, buf, n, tmp);
-    /*e: [[consread()]] Qswap case */
-
-    /*s: [[consread()]] cases */
-        case Qrandom:
-            return randomread(buf, n);
-    /*e: [[consread()]] cases */
 
     default:
         print("consread %#llux\n", c->qid.path);
