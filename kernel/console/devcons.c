@@ -172,10 +172,7 @@ kmesgputs(char *str, int n)
 
 /*s: function putstrn0 */
 /*
- *   Print a string on the console.  Convert \n to \r\n for serial
- *   line consoles.  Locking of the queues is left up to the screen
- *   or uart code.  Multi-line messages to serial consoles may get
- *   interspersed with other messages.
+ *   Print a string on the console.
  */
 static void
 putstrn0(char *str, int n, bool usewrite)
@@ -212,6 +209,13 @@ putstrn0(char *str, int n, bool usewrite)
     /*e: [[putstrn0()]] if kprint */
     else if(screenputs != nil)
         screenputs(str, n);
+
+    /*
+     *   Convert \n to \r\n for serial
+     *   line consoles.  Locking of the queues is left up to the screen
+     *   or uart code.  Multi-line messages to serial consoles may get
+     *   interspersed with other messages.
+     */
 
     if(serialoq == nil){
         uartputs(str, n);

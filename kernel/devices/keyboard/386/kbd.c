@@ -43,7 +43,7 @@ enum {
     Shift=      Spec|0x60,
     Break=      Spec|0x61,
     Ctrl=       Spec|0x62,
-    Latin=      Spec|0x63,
+    Alt=      Spec|0x63,
     Caps=       Spec|0x64,
     Num=        Spec|0x65,
     Middle=     Spec|0x66,
@@ -95,7 +95,7 @@ Rune kbtab[Nscan] =
 [0x20]  'd',    'f',    'g',    'h',    'j',    'k',    'l',    ';',
 [0x28]  '\'',   '`',    Shift,  '\\',   'z',    'x',    'c',    'v',
 [0x30]  'b',    'n',    'm',    ',',    '.',    '/',    Shift,  '*',
-[0x38]  Latin,  ' ',    Ctrl,   KF|1,   KF|2,   KF|3,   KF|4,   KF|5,
+[0x38]  Alt,  ' ',    Ctrl,   KF|1,   KF|2,   KF|3,   KF|4,   KF|5,
 [0x40]  KF|6,   KF|7,   KF|8,   KF|9,   KF|10,  Num,    Scroll, '7',
 [0x48]  '8',    '9',    '-',    '4',    '5',    '6',    '+',    '1',
 [0x50]  '2',    '3',    '0',    '.',    No, No, No, KF|11,
@@ -117,7 +117,7 @@ Rune kbtabshift[Nscan] =
 [0x20]  'D',    'F',    'G',    'H',    'J',    'K',    'L',    ':',
 [0x28]  '"',    '~',    Shift,  '|',    'Z',    'X',    'C',    'V',
 [0x30]  'B',    'N',    'M',    '<',    '>',    '?',    Shift,  '*',
-[0x38]  Latin,  ' ',    Ctrl,   KF|1,   KF|2,   KF|3,   KF|4,   KF|5,
+[0x38]  Alt,  ' ',    Ctrl,   KF|1,   KF|2,   KF|3,   KF|4,   KF|5,
 [0x40]  KF|6,   KF|7,   KF|8,   KF|9,   KF|10,  Num,    Scroll, '7',
 [0x48]  '8',    '9',    '-',    '4',    '5',    '6',    '+',    '1',
 [0x50]  '2',    '3',    '0',    '.',    No, No, No, KF|11,
@@ -451,7 +451,7 @@ kbdputsc(int c, int external)
      */
     if(keyup){
         switch(c){
-        case Latin:
+        case Alt:
             kbscan->alt = false;
             break;
         case Shift:
@@ -519,7 +519,7 @@ kbdputsc(int c, int external)
                 print("shift\n");
             mouseshifted = 1;
             return;
-        case Latin:
+        case Alt:
             kbscan->alt = true;
             /*
              * VMware and Qemu use Ctl-Alt as the key combination
