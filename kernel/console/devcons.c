@@ -52,7 +52,7 @@ struct ConsKbd
 
     /* a place to save up characters at interrupt time before dumping them in the queue */
     char    istage[1024];
-    // pointers into istage
+    // pointers into istage to implement a circular buffer
     char    *iw; // write
     char    *ir; // read
     char    *ie; // end
@@ -581,6 +581,7 @@ echo(char *buf, int n)
     }
 
     qproduce(kbdq, buf, n);
+
     if(kbd.raw)
         return;
     /*s: [[echo()]] kmesg handling */
@@ -628,7 +629,7 @@ void
 kbdputc(Queue* _always_kbdq, int/*Rune*/ ch)
 {
     int i, n;
-    char buf[3];
+    char buf[3]; // enough? UTFMAX is 4 so should be buf[4] no?
     Rune r;
     char *next;
 
@@ -640,9 +641,10 @@ kbdputc(Queue* _always_kbdq, int/*Rune*/ ch)
     n = runetochar(buf, &r);
     for(i = 0; i < n; i++){
         next = kbd.iw+1;
+        // circular buffer
         if(next >= kbd.ie)
             next = kbd.istage;
-        if(next == kbd.ir)
+        if(next == kbd.ir) // full
             break;
         *kbd.iw = buf[i];
         kbd.iw = next;

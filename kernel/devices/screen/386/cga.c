@@ -83,7 +83,7 @@ movecursor(void)
 
 /*s: function cgascreenputc */
 static void
-cgascreenputc(int c)
+cgascreenputc(char c)
 {
     int i;
     uchar *p;

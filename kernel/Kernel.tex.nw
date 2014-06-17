@@ -17827,8 +17827,9 @@ cunmount(Chan *mnt, Chan *mounted)
 
 % http://www.computer-engineering.org/ps2keyboard/
 
-% many of the code below references kbdq. Maybe it's harder
-% than for the screen to split ... 
+% The main code here is the interrupt that will add character in a queue (kbdq)
+% after having handled the shift and other special key.
+% Note that the final character is actually a unicode character.
 
 <<enum specialkey>>=
 enum {
@@ -17991,6 +17992,7 @@ static uchar ccc;
 @
 % set by i8042auxenable for mouse on aux port?
 
+
 <<function kbdinit>>=
 void
 kbdinit(void)
@@ -18039,7 +18041,10 @@ kbdinit(void)
 }
 @
 
-
+% setup kbdq! the interrupt code will write into it so it can be read
+% from /dev/cons. An interrupt will also trigger the echoing of those characters
+% it's not the job of the program that read /dev/cons to also echo back
+% those characters! this is done generically by cons device driver
 <<function kbdenable>>=
 void
 kbdenable(void)
@@ -18063,6 +18068,9 @@ kbdenable(void)
 static Lock i8042lock;
 @
 
+% interrupt i8042intr -> kbdputsc -> kbdputc (which add in kbdq and
+% also adjust stage Conskbd area that another regular interrupt clock
+% will read and echo back to the screen)
 
 <<interrupt callback i8042intr>>=
 /*
@@ -18197,6 +18205,7 @@ kbdputsc(int/*Rune*/ c, int external)
     }
 }
 @
+% for kbdputc see later
 
 
 % to change keyboard: kbdputmap, kbdgetmap and probably /dev/kbmap
@@ -18326,7 +18335,7 @@ if(kbscan->esc1){
 
 \section{The screen}
 % just cga.c here, see Window.tex.nw for the advanced vga kernel support
-% that is also needed for full operation of the mouse actually
+% (and also for full operation of the mouse)
 
 <<cga.c enum color>>=
 enum color {
@@ -18361,6 +18370,7 @@ enum {
     Postlen     = Poststrlen+Postcodelen,
 };
 @
+%>>
 
 <<constant CGASCREENBASE>>=
 #define CGASCREENBASE   ((uchar*)KADDR(0xB8000))
@@ -18412,11 +18422,12 @@ cgascreenputs(char* s, int n)
     unlock(&cgascreenlock);
 }
 @
+% note that this does not handle unicode strings nor unicode character
 
 
 <<function cgascreenputc>>=
 static void
-cgascreenputc(int c)
+cgascreenputc(char c)
 {
     int i;
     uchar *p;
@@ -18487,8 +18498,6 @@ cgaregw(int index, int data)
 
 
 
-
-
 \section{The console device [[/dev/cons]]}
 
 \subsection{Overview}
@@ -18538,7 +18547,7 @@ struct ConsKbd
 
     /* a place to save up characters at interrupt time before dumping them in the queue */
     char    istage[1024];
-    // pointers into istage
+    // pointers into istage to implement a circular buffer
     char    *iw; // write
     char    *ir; // read
     char    *ie; // end
@@ -18560,7 +18569,7 @@ static struct ConsKbd kbd =
 };
 @ 
 
-% put before with kbdputc
+% put before with kbdputsc?
 <<global kbdq>>=
 Queue*  kbdq;           /* unprocessed console input */
 @ 
@@ -18591,7 +18600,7 @@ void
 kbdputc(Queue* _always_kbdq, int/*Rune*/ ch)
 {
     int i, n;
-    char buf[3];
+    char buf[3]; // enough? UTFMAX is 4 so should be buf[4] no?
     Rune r;
     char *next;
 
@@ -18603,9 +18612,10 @@ kbdputc(Queue* _always_kbdq, int/*Rune*/ ch)
     n = runetochar(buf, &r);
     for(i = 0; i < n; i++){
         next = kbd.iw+1;
+        // circular buffer
         if(next >= kbd.ie)
             next = kbd.istage;
-        if(next == kbd.ir)
+        if(next == kbd.ir) // full
             break;
         *kbd.iw = buf[i];
         kbd.iw = next;
@@ -18826,6 +18836,7 @@ echo(char *buf, int n)
     }
 
     qproduce(kbdq, buf, n);
+
     if(kbd.raw)
         return;
     <<[[echo()]] kmesg handling>>
