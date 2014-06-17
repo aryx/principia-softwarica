@@ -51,12 +51,12 @@ struct ConsKbd
     int count;
 
     /* a place to save up characters at interrupt time before dumping them in the queue */
-    Lock    lockputc;
     char    istage[1024];
     // pointers into istage
     char    *iw; // write
     char    *ir; // read
     char    *ie; // end
+    ILock    lockputc;
 
     /*s: [[ConsKbd]] other fields */
     bool raw;        /* true if we shouldn't process input */
@@ -624,8 +624,8 @@ kbdcr2nl(Queue*, int ch)
  *  Put character, possibly a rune, into read queue at interrupt time.
  *  Called at interrupt time to process a character.
  */
-int
-kbdputc(Queue* _always_kbdq, int ch)
+void
+kbdputc(Queue* _always_kbdq, int/*Rune*/ ch)
 {
     int i, n;
     char buf[3];
@@ -633,7 +633,7 @@ kbdputc(Queue* _always_kbdq, int ch)
     char *next;
 
     if(kbd.ir == nil)
-        return 0;       /* in case we're not inited yet */
+        return;       /* in case we're not inited yet */
     
     ilock(&kbd.lockputc);       /* just a mutex */
     r = ch;
@@ -648,7 +648,7 @@ kbdputc(Queue* _always_kbdq, int ch)
         kbd.iw = next;
     }
     iunlock(&kbd.lockputc);
-    return 0;
+    return;
 }
 /*e: function kbdputc */
 

@@ -32,6 +32,10 @@ struct Lock
 };
 /*e: struct Lock */
 
+/*s: struct ILock */
+typedef Lock ILock;
+/*e: struct ILock */
+
 /*s: struct QLock */
 // Kernel basic lock with Queue (renamed to avoid ambiguity with libc.h QLock)
 struct KQLock
@@ -49,7 +53,6 @@ struct KQLock
 };
 /*e: struct QLock */
 
-// Read/Write lock
 /*s: struct RWlock */
 struct RWlock
 {

@@ -5,7 +5,7 @@
 //int   (*pprint)(char*, ...);
 //void    (*_assert)(char*);
 void    lineqinit(void);
-int   kbdputc(Queue*, int);
+void   kbdputc(Queue*, int);
 int   consactive(void);
 int   kbdcr2nl(Queue*, int);
 int   nrand(int);

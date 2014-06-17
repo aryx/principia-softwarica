@@ -392,7 +392,7 @@ setleds(Kbscan *kbscan)
  * Scan code processing
  */
 void
-kbdputsc(int c, int external)
+kbdputsc(int/*Rune*/ c, int external)
 {
     bool keyup;
     Kbscan *kbscan;
