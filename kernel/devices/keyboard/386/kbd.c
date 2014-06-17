@@ -394,7 +394,7 @@ setleds(Kbscan *kbscan)
 void
 kbdputsc(int c, int external)
 {
-    int i, keyup;
+    bool keyup;
     Kbscan *kbscan;
 
     if(external)
@@ -505,6 +505,7 @@ kbdputsc(int c, int external)
         /*e: [[kbdputsc()]] reboot if ctl-alt-del */
         /*s: [[kbdputsc()]] if collecting */
         if(kbscan->collecting){
+            int i;
             kbscan->kc[kbscan->nk++] = c;
             c = latin1(kbscan->kc, kbscan->nk);
             if(c < -1)  /* need more keystrokes */
