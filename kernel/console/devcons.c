@@ -222,39 +222,41 @@ putstrn0(char *str, int n, bool usewrite)
     else if(screenputs != nil)
         screenputs(str, n);
 
-    /*
-     *   Convert \n to \r\n for serial
-     *   line consoles.  Locking of the queues is left up to the screen
-     *   or uart code.  Multi-line messages to serial consoles may get
-     *   interspersed with other messages.
-     */
+    /*s: [[putstrn0()]] serialoq handling */
+        /*
+         *   Convert \n to \r\n for serial
+         *   line consoles.  Locking of the queues is left up to the screen
+         *   or uart code.  Multi-line messages to serial consoles may get
+         *   interspersed with other messages.
+         */
 
-    if(serialoq == nil){
-        uartputs(str, n);
-        return;
-    }
-
-    while(n > 0) {
-        t = memchr(str, '\n', n);
-        if(t && !kbd.raw) {
-            m = t-str;
-            if(usewrite){
-                qwrite(serialoq, str, m);
-                qwrite(serialoq, "\r\n", 2);
-            } else {
-                qiwrite(serialoq, str, m);
-                qiwrite(serialoq, "\r\n", 2);
-            }
-            n -= m+1;
-            str = t+1;
-        } else {
-            if(usewrite)
-                qwrite(serialoq, str, n);
-            else
-                qiwrite(serialoq, str, n);
-            break;
+        if(serialoq == nil){
+            uartputs(str, n);
+            return;
         }
-    }
+
+        while(n > 0) {
+            t = memchr(str, '\n', n);
+            if(t && !kbd.raw) {
+                m = t-str;
+                if(usewrite){
+                    qwrite(serialoq, str, m);
+                    qwrite(serialoq, "\r\n", 2);
+                } else {
+                    qiwrite(serialoq, str, m);
+                    qiwrite(serialoq, "\r\n", 2);
+                }
+                n -= m+1;
+                str = t+1;
+            } else {
+                if(usewrite)
+                    qwrite(serialoq, str, n);
+                else
+                    qiwrite(serialoq, str, n);
+                break;
+            }
+        }
+    /*e: [[putstrn0()]] serialoq handling */
 }
 /*e: function putstrn0 */
 
@@ -509,107 +511,112 @@ echo(char *buf, int n)
     void* tmp;
     int x;
     static int pid; //DEAD?
-    /*e: [[echo()]] locals */
     char *e, *p;
+    /*e: [[echo()]] locals */
 
     if(n == 0)
         return;
 
-    e = buf+n;
-    for(p = buf; p < e; p++){
-        switch(*p){
-        /*s: [[echo()]] special key C-p */
-                case 0x10:  /* ^P */
-                    if(cpuserver && !kbd.ctlpoff){
-                        active.exiting = true;
-                        return;
-                    }
-                    break;
-        /*e: [[echo()]] special key C-p */
-        /*s: [[echo()]] C-t C-t special keys handler */
-                case 0x14:  /* ^T */
-                    ctrlt++;
-                    if(ctrlt > 2)
-                        ctrlt = 2;
-                    continue;
-                }
-                if(ctrlt != 2)
-                    continue;
+    /*s: [[echo()]] special keys handler */
+        e = buf+n;
+        for(p = buf; p < e; p++){
+            switch(*p){
 
-                /* ^T escapes */
-                ctrlt = 0;
-                switch(*p){
-                case 's':
-                    dumpstack();
-                    return;
-                case 'S':
-                    x = splhi();
-                    dumpstack();
-                    procdump();
-                    splx(x);
-                    return;
-                case 'x':
-                    xsummary();
-                    tmp = xalloc(1000);
-                    xalloc(1000);
-                    xfree(tmp);
-                    xsummary();
-                    return;
-                case 'X':
-                    xsummary();
-                    ixsummary();
-                    mallocsummary();
-                    memorysummary();
-                    pagersummary();
-                    return;
-                case 'm':
-                    memorysummary();
-                    return;
-                case 'p':
-                    x = spllo();
-                    procdump();
-                    splx(x);
-                    return;
-                case 'q':
-                    scheddump();
-                    return;
-                case 'k':
-                    killbig("^t ^t k");
-                    return;
-                case 'r':
-                    exit(0);
-                    return;
-                /*s: [[echo()]] C-t C-t special keys handler cases */
-                        case 'd':
-                            if(consdebug == nil)
-                                consdebug = rdb;
-                            else
-                                consdebug = nil;
-                            print("consdebug now %#p\n", consdebug);
-                            return;
-                        case 'D':
-                            if(consdebug == nil)
-                                consdebug = rdb;
-                            consdebug();
-                            return;
-                /*e: [[echo()]] C-t C-t special keys handler cases */
-                }
-        /*e: [[echo()]] C-t C-t special keys handler */
-    }
+           /*s: [[echo()]] special key C-p */
+                   case 0x10:  /* ^P */
+                       if(cpuserver && !kbd.ctlpoff){
+                           active.exiting = true;
+                           return;
+                       }
+                       break;
+           /*e: [[echo()]] special key C-p */
+ 
+            case 0x14:  /* ^T */
+                ctrlt++;
+                if(ctrlt > 2)
+                    ctrlt = 2;
+                continue;
+            }
+            if(ctrlt != 2)
+                continue;
+
+            /* ^T escapes */
+            ctrlt = 0;
+            switch(*p){
+            case 's':
+                dumpstack();
+                return;
+            case 'S':
+                x = splhi();
+                dumpstack();
+                procdump();
+                splx(x);
+                return;
+            case 'x':
+                xsummary();
+                tmp = xalloc(1000);
+                xalloc(1000);
+                xfree(tmp);
+                xsummary();
+                return;
+            case 'X':
+                xsummary();
+                ixsummary();
+                mallocsummary();
+                memorysummary();
+                pagersummary();
+                return;
+            case 'm':
+                memorysummary();
+                return;
+            case 'p':
+                x = spllo();
+                procdump();
+                splx(x);
+                return;
+            case 'q':
+                scheddump();
+                return;
+            case 'k':
+                killbig("^t ^t k");
+                return;
+            case 'r':
+                exit(0);
+                return;
+            /*s: [[echo()]] C-t C-t special keys handler other cases */
+                    case 'd':
+                        if(consdebug == nil)
+                            consdebug = rdb;
+                        else
+                            consdebug = nil;
+                        print("consdebug now %#p\n", consdebug);
+                        return;
+                    case 'D':
+                        if(consdebug == nil)
+                            consdebug = rdb;
+                        consdebug();
+                        return;
+            /*e: [[echo()]] C-t C-t special keys handler other cases */
+            }
+        }
+    /*e: [[echo()]] special keys handler */
 
     qproduce(kbdq, buf, n); //!! add in kbd queue to be read from /dev/cons
 
     /*s: [[echo()]] return before any echoscreen if raw mode */
-        if(kbd.raw)
-            return;
+    if(kbd.raw)
+        return;
     /*e: [[echo()]] return before any echoscreen if raw mode */
-    /*s: [[echo()]] kmesg handling */
-    kmesgputs(buf, n);
-    /*e: [[echo()]] kmesg handling */
+
+    /*s: [[echo()]] hooks */
     if(screenputs != nil)
-        echoscreen(buf, n);
+       echoscreen(buf, n);
+    /*x: [[echo()]] hooks */
+    kmesgputs(buf, n);
+    /*x: [[echo()]] hooks */
     if(serialoq)
         echoserialoq(buf, n);
+    /*e: [[echo()]] hooks */
 }
 /*e: function echo */
 
@@ -803,9 +810,9 @@ consopen(Chan *c, int omode)
 
     switch((ulong)c->qid.path){
     /*s: [[consopen()]] cases */
-        case Qconsctl:
-            incref(&kbd.ctl);
-            break;
+    case Qconsctl:
+        incref(&kbd.ctl);
+        break;
     /*x: [[consopen()]] cases */
         case Qkprint:
             if(tas(&kprintinuse) != 0){
@@ -835,13 +842,13 @@ consclose(Chan *c)
 {
     switch((ulong)c->qid.path){
     /*s: [[consclose()]] cases */
-        /* last close of control file turns off raw */
-        case Qconsctl:
-            if(c->flag&COPEN){
-                if(decref(&kbd.ctl) == 0)
-                    kbd.raw = false;
-            }
-            break;
+    /* last close of control file turns off raw */
+    case Qconsctl:
+        if(c->flag&COPEN){
+            if(decref(&kbd.ctl) == 0)
+                kbd.raw = false;
+        }
+        break;
     /*x: [[consclose()]] cases */
         /* close of kprint allows other opens */
         case Qkprint:
@@ -889,10 +896,9 @@ consread(Chan *c, void *buf, long n, vlong off)
                         send = !qcanread(kbdq);
             
                 /*s: [[consread()]] else if raw mode */
-                            }else if(kbd.raw){
-                                kbd.line[kbd.x++] = ch;
-                                send = !qcanread(kbdq);
-
+                }else if(kbd.raw){
+                    kbd.line[kbd.x++] = ch;
+                    send = !qcanread(kbdq);
                 /*e: [[consread()]] else if raw mode */
                 }else{
                     switch(ch){
@@ -986,11 +992,16 @@ consread(Chan *c, void *buf, long n, vlong off)
         memmove(buf, tmp+k, n);
         return n;
 
+    case Qtime:
+        return readtime((ulong)offset, buf, n);
+
+    case Qbintime:
+        return readbintime(buf, n);
         
 
 
-    case Qpgrpid:
-        return readnum((ulong)offset, buf, n, up->pgrp->pgrpid, NUMSIZE);
+    case Quser:
+        return readstr((ulong)offset, buf, n, up->user);
 
     case Qpid:
         return readnum((ulong)offset, buf, n, up->pid, NUMSIZE);
@@ -998,17 +1009,8 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qppid:
         return readnum((ulong)offset, buf, n, up->parentpid, NUMSIZE);
 
-
-    case Qtime:
-        return readtime((ulong)offset, buf, n);
-
-    case Qbintime:
-        return readbintime(buf, n);
-
-
-
-    case Quser:
-        return readstr((ulong)offset, buf, n, up->user);
+    case Qpgrpid:
+        return readnum((ulong)offset, buf, n, up->pgrp->pgrpid, NUMSIZE);
 
 
     case Qnull:
@@ -1083,31 +1085,31 @@ conswrite(Chan *c, void *va, long n, vlong off)
             setswapchan(swc);
             break;
     /*x: [[conswrite()]] cases */
-        case Qconsctl:
-            if(n >= sizeof(buf))
-                n = sizeof(buf)-1;
-            strncpy(buf, a, n);
-            buf[n] = 0;
-            for(a = buf; a;){
-                if(strncmp(a, "rawon", 5) == 0){
-                    kbd.raw = true;
-                    /* clumsy hack - wake up reader */
-                    ch = 0;
-                    qwrite(kbdq, &ch, 1);           
-                } else if(strncmp(a, "rawoff", 6) == 0){
-                    kbd.raw = false;
-                }
-                /*s: [[conswrite()]] Qconsctl other ifs */
-                            else if(strncmp(a, "ctlpon", 6) == 0){
-                                kbd.ctlpoff = false;
-                            } else if(strncmp(a, "ctlpoff", 7) == 0){
-                                kbd.ctlpoff = true;
-                            }
-                /*e: [[conswrite()]] Qconsctl other ifs */
-                if(a = strchr(a, ' '))
-                    a++;
+    case Qconsctl:
+        if(n >= sizeof(buf))
+            n = sizeof(buf)-1;
+        strncpy(buf, a, n);
+        buf[n] = 0;
+        for(a = buf; a;){
+            if(strncmp(a, "rawon", 5) == 0){
+                kbd.raw = true;
+                /* clumsy hack - wake up reader */
+                ch = 0;
+                qwrite(kbdq, &ch, 1);           
+            } else if(strncmp(a, "rawoff", 6) == 0){
+                kbd.raw = false;
             }
-            break;
+            /*s: [[conswrite()]] Qconsctl other ifs */
+                        else if(strncmp(a, "ctlpon", 6) == 0){
+                            kbd.ctlpoff = false;
+                        } else if(strncmp(a, "ctlpoff", 7) == 0){
+                            kbd.ctlpoff = true;
+                        }
+            /*e: [[conswrite()]] Qconsctl other ifs */
+            if(a = strchr(a, ' '))
+                a++;
+        }
+        break;
     /*e: [[conswrite()]] cases */
 
     case Qtime:

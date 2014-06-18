@@ -114,7 +114,7 @@ void    devpower(int);
 int   devconfig(int, char *, DevConf *);//TODO? why fp no-deps?
 int   devstat(Chan*, uchar*, int, Dirtab*, int, Devgen*);
 Chan*   devopen(Chan*, int, Dirtab*, int, Devgen*);
-Chan*   devattach(int, char*);
+Chan*   devattach(Rune, char*);
 Walkqid*  devwalk(Chan*, Chan*, char**, int, Dirtab*, int, Devgen*);
 
 // env.c

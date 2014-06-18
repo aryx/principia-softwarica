@@ -3493,7 +3493,7 @@ void    devpower(int);
 int   devconfig(int, char *, DevConf *);//TODO? why fp no-deps?
 int   devstat(Chan*, uchar*, int, Dirtab*, int, Devgen*);
 Chan*   devopen(Chan*, int, Dirtab*, int, Devgen*);
-Chan*   devattach(int, char*);
+Chan*   devattach(Rune, char*);
 Walkqid*  devwalk(Chan*, Chan*, char**, int, Dirtab*, int, Devgen*);
 
 // env.c
@@ -10668,19 +10668,11 @@ consactive(void)
 }
 @ 
 
-% dead?
-<<function prflush>>=
-void
-prflush(void)
-{
-    ulong now;
+<<[[echo()]] hooks>>=
+if(serialoq)
+    echoserialoq(buf, n);
+@
 
-    now = cpu->ticks;
-    while(consactive())
-        if(cpu->ticks - now >= HZ)
-            break;
-}
-@ 
 
 <<function echoserialoq>>=
 static void
@@ -10713,6 +10705,64 @@ echoserialoq(char *buf, int n)
 }
 @ 
 % quite similar to echoscreen
+
+
+<<[[putstrn0()]] serialoq handling>>=
+    /*
+     *   Convert \n to \r\n for serial
+     *   line consoles.  Locking of the queues is left up to the screen
+     *   or uart code.  Multi-line messages to serial consoles may get
+     *   interspersed with other messages.
+     */
+
+    if(serialoq == nil){
+        uartputs(str, n);
+        return;
+    }
+
+    while(n > 0) {
+        t = memchr(str, '\n', n);
+        if(t && !kbd.raw) {
+            m = t-str;
+            if(usewrite){
+                qwrite(serialoq, str, m);
+                qwrite(serialoq, "\r\n", 2);
+            } else {
+                qiwrite(serialoq, str, m);
+                qiwrite(serialoq, "\r\n", 2);
+            }
+            n -= m+1;
+            str = t+1;
+        } else {
+            if(usewrite)
+                qwrite(serialoq, str, n);
+            else
+                qiwrite(serialoq, str, n);
+            break;
+        }
+    }
+@
+
+
+
+% dead?
+<<function prflush>>=
+void
+prflush(void)
+{
+    ulong now;
+
+    now = cpu->ticks;
+    while(consactive())
+        if(cpu->ticks - now >= HZ)
+            break;
+}
+@ 
+
+<<[[reboot()]] reset serialoq>>=
+/* turn off buffered serial console */
+serialoq = nil;
+@
 
 
 \section{SCSI}

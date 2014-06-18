@@ -138,7 +138,7 @@ devshutdown(void)
 
 /*s: function devattach */
 Chan*
-devattach(int tc, char *spec)
+devattach(Rune tc, char *spec)
 {
     int n;
     Chan *c;
@@ -149,7 +149,7 @@ devattach(int tc, char *spec)
     c->type = devno(tc, 0);
     if(spec == nil)
         spec = "";
-    n = 1+UTFmax+strlen(spec)+1;
+    n = 1+UTFmax+strlen(spec)+1; // '#' + Rune + strlen + '\0'
     buf = smalloc(n);
     snprint(buf, n, "#%C%s", tc, spec);
     c->path = newpath(buf);
@@ -186,7 +186,8 @@ devclone(Chan *c)
 Walkqid*
 devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen *gen)
 {
-    int i, j, alloc;
+    int i, j;
+    bool alloc;
     Walkqid *wq;
     char *n;
     Dir dir;
@@ -194,7 +195,7 @@ devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen
     if(nname > 0)
         isdir(c);
 
-    alloc = 0;
+    alloc = false;
     wq = smalloc(sizeof(Walkqid)+(nname-1)*sizeof(Qid));
     if(waserror()){
         if(alloc && wq->clone!=nil)
@@ -205,7 +206,7 @@ devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen
     if(nc == nil){
         nc = devclone(c);
         nc->type = 0;   /* device doesn't know about this channel yet */
-        alloc = 1;
+        alloc = true;
     }
     wq->clone = nc;
 

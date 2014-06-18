@@ -283,7 +283,7 @@ i8042auxcmd(int cmd)
 {
     unsigned int c;
     int tries;
-    static int badkbd;
+    static bool badkbd;
 
     if(badkbd)
         return -1;
@@ -310,7 +310,7 @@ i8042auxcmd(int cmd)
 
     if(c != 0xFA){
         print("i8042: %2.2ux returned to the %2.2ux command\n", c, cmd);
-        badkbd = 1; /* don't keep trying; there might not be one */
+        badkbd = true; /* don't keep trying; there might not be one */
         return -1;
     }
     return 0;
@@ -404,8 +404,8 @@ kbdputsc(uchar k, int external)
         kbscan = &kbscans[Int];
 
     /*s: [[kbdputsc()]] debugging */
-        if(kdebug)
-            print("sc %x ms %d\n", c, mouseshifted);
+    if(kdebug)
+        print("sc %x ms %d\n", c, mouseshifted);
     /*e: [[kbdputsc()]] debugging */
 
     /*s: [[kbdputsc()]] esc key handling part1 and possible return */
@@ -476,8 +476,8 @@ kbdputsc(uchar k, int external)
             mouseshifted = false;
             /*e: [[kbdputsc()]] reset mouseshift */
             /*s: [[kbdputsc()]] debugging up shift */
-                        if(kdebug)
-                            print("shiftclr\n");
+            if(kdebug)
+                print("shiftclr\n");
             /*e: [[kbdputsc()]] debugging up shift */
             break;
         /*s: [[kbdputsc()]] mouse keyup cases */
@@ -555,8 +555,8 @@ kbdputsc(uchar k, int external)
             mouseshifted = true;
             /*e: [[kbdputsc()]] set mouseshift */
             /*s: [[kbdputsc()]] debugging down shift */
-                        if(kdebug)
-                            print("shift\n");
+            if(kdebug)
+                print("shift\n");
             /*e: [[kbdputsc()]] debugging down shift */
             break;
         case Caps:

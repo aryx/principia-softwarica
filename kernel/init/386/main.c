@@ -786,8 +786,10 @@ reboot(kern_addr3 entry, kern_addr3 code, ulong size)
 
     splhi();
 
+    /*s: [[reboot()]] reset serialoq */
     /* turn off buffered serial console */
     serialoq = nil;
+    /*e: [[reboot()]] reset serialoq */
 
     /* shutdown devices */
     chandevshutdown();

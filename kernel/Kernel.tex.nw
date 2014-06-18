@@ -18146,6 +18146,18 @@ kbdputsc(uchar k, int external)
 }
 @
 
+\ifallcode
+<<[[kbdputsc()]] ensures c is in boundary>>=
+if(c > sizeof kbtab){
+    // how could reach that? kbtab has 0x80 elts
+    c |= keyup;
+    if(c != 0xFF)   /* these come fairly often: CAPSLOCK U Y */
+        print("unknown key %ux\n", c);
+    return;
+}
+@
+\fi
+
 \subsection{[[kbd]]}
 
 <<struct ConsKbd>>=
@@ -18260,30 +18272,25 @@ static void
 echo(char *buf, int n)
 {
     <<[[echo()]] locals>>
-    char *e, *p;
 
     if(n == 0)
         return;
 
-    e = buf+n;
-    for(p = buf; p < e; p++){
-        switch(*p){
-        <<[[echo()]] special key C-p>>
-        <<[[echo()]] C-t C-t special keys handler>>
-    }
+    <<[[echo()]] special keys handler>>
 
     qproduce(kbdq, buf, n); //!! add in kbd queue to be read from /dev/cons
 
     <<[[echo()]] return before any echoscreen if raw mode>>
 
-    <<[[echo()]] kmesg handling>>
-    if(serialoq)
-        echoserialoq(buf, n);
-    if(screenputs != nil)
-        echoscreen(buf, n);
+    <<[[echo()]] hooks>>
 }
 @ 
 % kbdq!!!!
+
+<<[[echo()]] hooks>>=
+if(screenputs != nil)
+   echoscreen(buf, n);
+@
 
 <<hook screenputs>>=
 void    (*screenputs)(char*, int) = nil;
@@ -18320,7 +18327,8 @@ echoscreen(char *buf, int n)
 % screenputs!
 
 
-\subsection{Misc}
+\ifallcode
+\subsection{Controller IO}
 
 <<global nokbd>>=
 static bool nokbd = true;           /* flag: no PS/2 keyboard */
@@ -18381,17 +18389,6 @@ kbdinit(void)
 }
 @
 
-%-------------------------------------------------------------------------------
-
-<<[[kbdputsc()]] ensures c is in boundary>>=
-if(c > sizeof kbtab){
-    // how could reach that? kbtab has 0x80 elts
-    c |= keyup;
-    if(c != 0xFF)   /* these come fairly often: CAPSLOCK U Y */
-        print("unknown key %ux\n", c);
-    return;
-}
-@
 
 %TODO: return bool instead? those outread < 0 seems bad no?
 <<function outbyte>>=
@@ -18444,7 +18441,6 @@ inready(void)
 }
 @
 
-\ifallcode
 \subsection{Leds}
 
 <<function setleds>>=
@@ -18740,6 +18736,7 @@ cgascreenputc(char c)
     movecursor();
 }
 @
+% does not handle unicode characters
 
 
 <<function movecursor>>=
@@ -18762,7 +18759,6 @@ cgaregr(int index)
 }
 @
 
-
 <<function cgaregw>>=
 static void
 cgaregw(int index, int data)
@@ -18771,7 +18767,6 @@ cgaregw(int index, int data)
     outb(0x3D4+1, data);
 }
 @
-
 
 
 
@@ -18952,44 +18947,12 @@ putstrn0(char *str, int n, bool usewrite)
     else if(screenputs != nil)
         screenputs(str, n);
 
-    /*
-     *   Convert \n to \r\n for serial
-     *   line consoles.  Locking of the queues is left up to the screen
-     *   or uart code.  Multi-line messages to serial consoles may get
-     *   interspersed with other messages.
-     */
-
-    if(serialoq == nil){
-        uartputs(str, n);
-        return;
-    }
-
-    while(n > 0) {
-        t = memchr(str, '\n', n);
-        if(t && !kbd.raw) {
-            m = t-str;
-            if(usewrite){
-                qwrite(serialoq, str, m);
-                qwrite(serialoq, "\r\n", 2);
-            } else {
-                qiwrite(serialoq, str, m);
-                qiwrite(serialoq, "\r\n", 2);
-            }
-            n -= m+1;
-            str = t+1;
-        } else {
-            if(usewrite)
-                qwrite(serialoq, str, n);
-            else
-                qiwrite(serialoq, str, n);
-            break;
-        }
-    }
+    <<[[putstrn0()]] serialoq handling>>
 }
 @ 
 
 
-\subsection{[[xxxprint()]]}
+\subsection{[[print()]], [[iprint()]], [[pprint()]]}
 
 \subsubsection{[[print()]]}
 
@@ -19026,7 +18989,7 @@ putstrn(char *str, int n)
     putstrn0(str, n, false);
 }
 @ 
-
+% false = usewrite = ??? related to interrupts?
 
 \subsubsection{[[iprint()]]}
 
@@ -19207,11 +19170,16 @@ consread(Chan *c, void *buf, long n, vlong off)
         memmove(buf, tmp+k, n);
         return n;
 
+    case Qtime:
+        return readtime((ulong)offset, buf, n);
+
+    case Qbintime:
+        return readbintime(buf, n);
         
 
 
-    case Qpgrpid:
-        return readnum((ulong)offset, buf, n, up->pgrp->pgrpid, NUMSIZE);
+    case Quser:
+        return readstr((ulong)offset, buf, n, up->user);
 
     case Qpid:
         return readnum((ulong)offset, buf, n, up->pid, NUMSIZE);
@@ -19219,17 +19187,8 @@ consread(Chan *c, void *buf, long n, vlong off)
     case Qppid:
         return readnum((ulong)offset, buf, n, up->parentpid, NUMSIZE);
 
-
-    case Qtime:
-        return readtime((ulong)offset, buf, n);
-
-    case Qbintime:
-        return readbintime(buf, n);
-
-
-
-    case Quser:
-        return readstr((ulong)offset, buf, n, up->user);
+    case Qpgrpid:
+        return readnum((ulong)offset, buf, n, up->pgrp->pgrpid, NUMSIZE);
 
 
     case Qnull:
@@ -19330,55 +19289,59 @@ Ref ctl;        /* number of opens to the control file */
 @
 
 
+<<[[consread()]] else if raw mode>>=
+}else if(kbd.raw){
+    kbd.line[kbd.x++] = ch;
+    send = !qcanread(kbdq);
+@
+% no buffered input, no lineq, send as soon as possible, do not wait for \n to send
+
+<<[[echo()]] return before any echoscreen if raw mode>>=
+if(kbd.raw)
+    return;
+@
+
+
+
+
 <<[[consopen()]] cases>>=
-    case Qconsctl:
-        incref(&kbd.ctl);
-        break;
+case Qconsctl:
+    incref(&kbd.ctl);
+    break;
 @
 
 <<[[consclose()]] cases>>=
-    /* last close of control file turns off raw */
-    case Qconsctl:
-        if(c->flag&COPEN){
-            if(decref(&kbd.ctl) == 0)
-                kbd.raw = false;
-        }
-        break;
+/* last close of control file turns off raw */
+case Qconsctl:
+    if(c->flag&COPEN){
+        if(decref(&kbd.ctl) == 0)
+            kbd.raw = false;
+    }
+    break;
 @
 
 <<[[conswrite()]] cases>>=
-    case Qconsctl:
-        if(n >= sizeof(buf))
-            n = sizeof(buf)-1;
-        strncpy(buf, a, n);
-        buf[n] = 0;
-        for(a = buf; a;){
-            if(strncmp(a, "rawon", 5) == 0){
-                kbd.raw = true;
-                /* clumsy hack - wake up reader */
-                ch = 0;
-                qwrite(kbdq, &ch, 1);           
-            } else if(strncmp(a, "rawoff", 6) == 0){
-                kbd.raw = false;
-            }
-            <<[[conswrite()]] Qconsctl other ifs>>
-            if(a = strchr(a, ' '))
-                a++;
+case Qconsctl:
+    if(n >= sizeof(buf))
+        n = sizeof(buf)-1;
+    strncpy(buf, a, n);
+    buf[n] = 0;
+    for(a = buf; a;){
+        if(strncmp(a, "rawon", 5) == 0){
+            kbd.raw = true;
+            /* clumsy hack - wake up reader */
+            ch = 0;
+            qwrite(kbdq, &ch, 1);           
+        } else if(strncmp(a, "rawoff", 6) == 0){
+            kbd.raw = false;
         }
-        break;
+        <<[[conswrite()]] Qconsctl other ifs>>
+        if(a = strchr(a, ' '))
+            a++;
+    }
+    break;
 @
 
-<<[[echo()]] return before any echoscreen if raw mode>>=
-    if(kbd.raw)
-        return;
-@
-
-<<[[consread()]] else if raw mode>>=
-            }else if(kbd.raw){
-                kbd.line[kbd.x++] = ch;
-                send = !qcanread(kbdq);
-
-@
 
 \section{The mouse}
 
@@ -19475,7 +19438,7 @@ i8042auxcmd(int cmd)
 {
     unsigned int c;
     int tries;
-    static int badkbd;
+    static bool badkbd;
 
     if(badkbd)
         return -1;
@@ -19502,7 +19465,7 @@ i8042auxcmd(int cmd)
 
     if(c != 0xFA){
         print("i8042: %2.2ux returned to the %2.2ux command\n", c, cmd);
-        badkbd = 1; /* don't keep trying; there might not be one */
+        badkbd = true; /* don't keep trying; there might not be one */
         return -1;
     }
     return 0;
@@ -19607,7 +19570,7 @@ devgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, Dir *dp)
 
 <<function devattach>>=
 Chan*
-devattach(int tc, char *spec)
+devattach(Rune tc, char *spec)
 {
     int n;
     Chan *c;
@@ -19618,7 +19581,7 @@ devattach(int tc, char *spec)
     c->type = devno(tc, 0);
     if(spec == nil)
         spec = "";
-    n = 1+UTFmax+strlen(spec)+1;
+    n = 1+UTFmax+strlen(spec)+1; // '#' + Rune + strlen + '\0'
     buf = smalloc(n);
     snprint(buf, n, "#%C%s", tc, spec);
     c->path = newpath(buf);
@@ -19657,7 +19620,8 @@ devclone(Chan *c)
 Walkqid*
 devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen *gen)
 {
-    int i, j, alloc;
+    int i, j;
+    bool alloc;
     Walkqid *wq;
     char *n;
     Dir dir;
@@ -19665,7 +19629,7 @@ devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen
     if(nname > 0)
         isdir(c);
 
-    alloc = 0;
+    alloc = false;
     wq = smalloc(sizeof(Walkqid)+(nname-1)*sizeof(Qid));
     if(waserror()){
         if(alloc && wq->clone!=nil)
@@ -19676,7 +19640,7 @@ devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen
     if(nc == nil){
         nc = devclone(c);
         nc->type = 0;   /* device doesn't know about this channel yet */
-        alloc = 1;
+        alloc = true;
     }
     wq->clone = nc;
 
@@ -25555,8 +25519,7 @@ reboot(kern_addr3 entry, kern_addr3 code, ulong size)
 
     splhi();
 
-    /* turn off buffered serial console */
-    serialoq = nil;
+    <<[[reboot()]] reset serialoq>>
 
     /* shutdown devices */
     chandevshutdown();
@@ -26157,32 +26120,37 @@ case KF|12:
 @
 
 <<[[kbdputsc()]] debugging>>=
-    if(kdebug)
-        print("sc %x ms %d\n", c, mouseshifted);
+if(kdebug)
+    print("sc %x ms %d\n", c, mouseshifted);
 @
 
 <<[[kbdputsc()]] debugging up shift>>=
-            if(kdebug)
-                print("shiftclr\n");
+if(kdebug)
+    print("shiftclr\n");
 @
 
 <<[[kbdputsc()]] debugging down shift>>=
-            if(kdebug)
-                print("shift\n");
+if(kdebug)
+    print("shift\n");
 @
 
 
-
-% Ctrl-t Ctrl-t <debugcode>
 
 <<[[echo()]] locals>>=
 static int ctrlt;
 void* tmp;
 int x;
 static int pid; //DEAD?
+char *e, *p;
 @
 
-<<[[echo()]] C-t C-t special keys handler>>=
+<<[[echo()]] special keys handler>>=
+    e = buf+n;
+    for(p = buf; p < e; p++){
+        switch(*p){
+
+       <<[[echo()]] special key C-p>>
+ 
         case 0x14:  /* ^T */
             ctrlt++;
             if(ctrlt > 2)
@@ -26235,8 +26203,9 @@ static int pid; //DEAD?
         case 'r':
             exit(0);
             return;
-        <<[[echo()]] C-t C-t special keys handler cases>>
+        <<[[echo()]] C-t C-t special keys handler other cases>>
         }
+    }
 @
 
 
@@ -26735,14 +26704,14 @@ struct KMesg kmesg;
 // used in devcons.c
 KMESGSIZE = (16*1024),  /* put 256*1024 if want acpi debugging */
 @
+% used to be 256Ko but was making the binary really big which could make it
+% harder to put a kernel on a floppy; no need for that much.
 
 
-
-
-<<[[echo()]] kmesg handling>>=
+<<[[echo()]] hooks>>=
 kmesgputs(buf, n);
 @
-% echoing back keyboard key
+% when a key was pressed, need to echo it back on screen and kmesg!
 
 <<[[putstrn0()]] kmesg handling>>=
 /*
@@ -26750,7 +26719,7 @@ kmesgputs(buf, n);
  */
 kmesgputs(str, n);
 @
-% print what was written do /dev/cons
+% print what was written do /dev/cons (hmm really the role of kmesg?)
 
 
 <<function kmesgputs>>=
@@ -26904,7 +26873,7 @@ void    (*consdebug)(void) = nil; // for rdb
         (*consdebug)();
 @
 
-<<[[echo()]] C-t C-t special keys handler cases>>=
+<<[[echo()]] C-t C-t special keys handler other cases>>=
         case 'd':
             if(consdebug == nil)
                 consdebug = rdb;
