@@ -45,11 +45,6 @@ bool iprintscreenputs = true;
 /*s: struct ConsKbd */
 struct ConsKbd
 {
-    char    line[1024]; /* current input line */
-    int x;      /* index into line */
-
-    int count;
-
     /* a place to save up characters at interrupt time before dumping them in the queue */
     char    istage[1024];
     // pointers into istage to implement a circular buffer
@@ -59,9 +54,15 @@ struct ConsKbd
     ILock    lockputc;
 
     /*s: [[ConsKbd]] other fields */
+        char    line[1024]; /* current input line */
+        int x;      /* index into line */
+
+        int count; // DEAD??
+    /*x: [[ConsKbd]] other fields */
     bool raw;        /* true if we shouldn't process input */
-    bool ctlpoff; // ^P will not reboot if true
     Ref ctl;        /* number of opens to the control file */
+    /*x: [[ConsKbd]] other fields */
+    bool ctlpoff; // ^P will not reboot if true
     /*e: [[ConsKbd]] other fields */
     // extra
     QLock;
@@ -89,10 +90,22 @@ static int  writetime(char*, int);
 static int  writebintime(char*, int);
 /*e: devcons.c forward decl */
 
+/*s: function kbdqinit */
+void
+kbdqinit(void)
+{
+    kbdq = qopen(4*1024, 0, 0, 0);
+    if(kbdq == nil)
+        panic("kbdinit");
+    qnoblock(kbdq, true);
+}
+/*e: function kbdqinit */
+
 /*s: function lineqinit */
 void
 lineqinit(void)
 {
+
     lineq = qopen(2*1024, 0, nil, nil);
     if(lineq == nil)
         panic("lineqinit");
@@ -189,7 +202,6 @@ putstrn0(char *str, int n, bool usewrite)
      */
     kmesgputs(str, n);
     /*e: [[putstrn0()]] kmesg handling */
-
     /*s: [[putstrn0()]] if kprint */
         /*
          *  if someone is reading /dev/kprint,
@@ -445,7 +457,7 @@ echoscreen(char *buf, int n)
             p = ebuf;
         }
         x = *buf++;
-        if(x == 0x15){
+        if(x == 0x15){ // ??
             *p++ = '^';
             *p++ = 'U';
             *p++ = '\n';
@@ -492,10 +504,13 @@ echoserialoq(char *buf, int n)
 static void
 echo(char *buf, int n)
 {
-    static int ctrlt, pid;
-    int x;
-    char *e, *p;
+    /*s: [[echo()]] locals */
+    static int ctrlt;
     void* tmp;
+    int x;
+    static int pid; //DEAD?
+    /*e: [[echo()]] locals */
+    char *e, *p;
 
     if(n == 0)
         return;
@@ -503,22 +518,24 @@ echo(char *buf, int n)
     e = buf+n;
     for(p = buf; p < e; p++){
         switch(*p){
-        case 0x10:  /* ^P */
-            if(cpuserver && !kbd.ctlpoff){
-                active.exiting = true;
-                return;
-            }
-            break;
-        case 0x14:  /* ^T */
-            ctrlt++;
-            if(ctrlt > 2)
-                ctrlt = 2;
-            continue;
-        }
-        if(ctrlt != 2)
-            continue;
-
+        /*s: [[echo()]] special key C-p */
+                case 0x10:  /* ^P */
+                    if(cpuserver && !kbd.ctlpoff){
+                        active.exiting = true;
+                        return;
+                    }
+                    break;
+        /*e: [[echo()]] special key C-p */
         /*s: [[echo()]] C-t C-t special keys handler */
+                case 0x14:  /* ^T */
+                    ctrlt++;
+                    if(ctrlt > 2)
+                        ctrlt = 2;
+                    continue;
+                }
+                if(ctrlt != 2)
+                    continue;
+
                 /* ^T escapes */
                 ctrlt = 0;
                 switch(*p){
@@ -580,10 +597,12 @@ echo(char *buf, int n)
         /*e: [[echo()]] C-t C-t special keys handler */
     }
 
-    qproduce(kbdq, buf, n);
+    qproduce(kbdq, buf, n); //!! add in kbd queue to be read from /dev/cons
 
-    if(kbd.raw)
-        return;
+    /*s: [[echo()]] return before any echoscreen if raw mode */
+        if(kbd.raw)
+            return;
+    /*e: [[echo()]] return before any echoscreen if raw mode */
     /*s: [[echo()]] kmesg handling */
     kmesgputs(buf, n);
     /*e: [[echo()]] kmesg handling */
@@ -622,11 +641,11 @@ kbdcr2nl(Queue*, int ch)
 
 /*s: function kbdputc */
 /*
- *  Put character, possibly a rune, into read queue at interrupt time.
+ *  Put character, possibly a rune, into kbd at interrupt time.
  *  Called at interrupt time to process a character.
  */
 void
-kbdputc(Queue* _always_kbdq, int/*Rune*/ ch)
+kbdputc(Rune ch)
 {
     int i, n;
     char buf[3]; // enough? UTFMAX is 4 so should be buf[4] no?
@@ -863,16 +882,18 @@ consread(Chan *c, void *buf, long n, vlong off)
             while(!qcanread(lineq)){
                 if(qread(kbdq, &ch, 1) == 0)
                     continue;
-                send = 0;
+                send = false;
                 if(ch == 0){
                     /* flush output on rawoff -> rawon */
                     if(kbd.x > 0)
                         send = !qcanread(kbdq);
+            
+                /*s: [[consread()]] else if raw mode */
+                            }else if(kbd.raw){
+                                kbd.line[kbd.x++] = ch;
+                                send = !qcanread(kbdq);
 
-                }else if(kbd.raw){
-                    kbd.line[kbd.x++] = ch;
-                    send = !qcanread(kbdq);
-
+                /*e: [[consread()]] else if raw mode */
                 }else{
                     switch(ch){
                     case '\b':
@@ -883,11 +904,14 @@ consread(Chan *c, void *buf, long n, vlong off)
                         kbd.x = 0;
                         break;
                     case '\n':
+                        send = true;
+                        kbd.line[kbd.x++] = ch;
+                        break;
                     case 0x04:  /* ^D */
-                        send = 1;
+                        send = true;
+                        break;
                     default:
-                        if(ch != 0x04)
-                            kbd.line[kbd.x++] = ch;
+                        kbd.line[kbd.x++] = ch;
                         break;
                     }
                 }
@@ -1072,12 +1096,14 @@ conswrite(Chan *c, void *va, long n, vlong off)
                     qwrite(kbdq, &ch, 1);           
                 } else if(strncmp(a, "rawoff", 6) == 0){
                     kbd.raw = false;
-
-                } else if(strncmp(a, "ctlpon", 6) == 0){
-                    kbd.ctlpoff = false;
-                } else if(strncmp(a, "ctlpoff", 7) == 0){
-                    kbd.ctlpoff = true;
                 }
+                /*s: [[conswrite()]] Qconsctl other ifs */
+                            else if(strncmp(a, "ctlpon", 6) == 0){
+                                kbd.ctlpoff = false;
+                            } else if(strncmp(a, "ctlpoff", 7) == 0){
+                                kbd.ctlpoff = true;
+                            }
+                /*e: [[conswrite()]] Qconsctl other ifs */
                 if(a = strchr(a, ' '))
                     a++;
             }

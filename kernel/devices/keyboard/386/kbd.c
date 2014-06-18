@@ -392,10 +392,11 @@ setleds(Kbscan *kbscan)
  * Scan code processing
  */
 void
-kbdputsc(int/*Rune*/ c, int external)
+kbdputsc(uchar k, int external)
 {
     bool keyup;
     Kbscan *kbscan;
+    Rune c = k;
 
     if(external)
         kbscan = &kbscans[Ext];
@@ -511,16 +512,16 @@ kbdputsc(int/*Rune*/ c, int external)
             if(c < -1)  /* need more keystrokes */
                 return;
             if(c != -1) /* valid sequence */
-                kbdputc(kbdq, c);
+                kbdputc(c);
             else    /* dump characters */
                 for(i=0; i<kbscan->nk; i++)
-                    kbdputc(kbdq, kbscan->kc[i]);
+                    kbdputc(kbscan->kc[i]);
             kbscan->nk = 0;
             kbscan->collecting = false;
         }
         /*e: [[kbdputsc()]] if collecting */
         else
-            kbdputc(kbdq, c); //!! adding the character in the queue
+            kbdputc(c); //!! adding the character in kbd staging area
     }else{
         switch(c){
         case Ctrl:
@@ -581,11 +582,11 @@ kbdputsc(int/*Rune*/ c, int external)
         case KF|11:
             print("kbd debug on, F12 turns it off\n");
             kdebug = true;
-            kbdputc(kbdq, c);
+            kbdputc(c);
             break;
         case KF|12:
             kdebug = false;
-            kbdputc(kbdq, c);
+            kbdputc(c);
             break;
         /*e: [[kbdputsc()]] special keyboard debug keys cases */
         }
@@ -600,7 +601,7 @@ kbdputsc(int/*Rune*/ c, int external)
 static void
 i8042intr(Ureg*, void*)
 {
-    int s, c;
+    uchar s, c;
 
     /*
      *  get status
@@ -728,11 +729,6 @@ kbdinit(void)
 void
 kbdenable(void)
 {
-    kbdq = qopen(4*1024, 0, 0, 0);
-    if(kbdq == nil)
-        panic("kbdinit");
-    qnoblock(kbdq, true);
-
     ioalloc(Data, 1, 0, "kbd");
     ioalloc(Cmd, 1, 0, "kbd");
 

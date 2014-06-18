@@ -952,8 +952,9 @@ main(void)
     timersinit();
     mathinit();
 
-    kbdenable(); // setup kdbq (character keyboard queue)
-    lineqinit();  // setup lineq (line keyboard queue)
+    kbdqinit(); // setup kbdq
+    kbdenable(); // enable interrupts
+    lineqinit(); // setup lineq
 
     if(arch->clockenable)
         arch->clockenable();

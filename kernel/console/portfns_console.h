@@ -4,8 +4,9 @@
 // in portfns_core.h, to remove some backward dependencies
 //int   (*pprint)(char*, ...);
 //void    (*_assert)(char*);
+void    kbdqinit(void);
 void    lineqinit(void);
-void   kbdputc(Queue*, int);
+void   kbdputc(Rune);
 int   consactive(void);
 int   kbdcr2nl(Queue*, int);
 int   nrand(int);

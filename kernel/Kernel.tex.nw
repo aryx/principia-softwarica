@@ -10845,8 +10845,9 @@ main(void)
     timersinit();
     mathinit();
 
-    kbdenable(); // setup kdbq (character keyboard queue)
-    lineqinit();  // setup lineq (line keyboard queue)
+    kbdqinit(); // setup kbdq
+    kbdenable(); // enable interrupts
+    lineqinit(); // setup lineq
 
     if(arch->clockenable)
         arch->clockenable();
@@ -17820,24 +17821,22 @@ cunmount(Chan *mnt, Chan *mounted)
 
 \chapter{Devices}
 \minitoc
-% Put Keyboard/Screen sections before File/Dir/Namespace sections? hmmm hard.
-
-% see docs/man/3/ for references on all "devices/fileservers"
+%less: Keyboard/Screen sections before File/Dir/Namespace sections? hmmm hard.
 
 \section{The keyboard}
 
 \subsection{Overview}
 
-
 % The main code here is the interrupt that will add characters in a cicular
 % buffer in kbd after having handled the shift and other special keys.
-% Note that the code here generates unicode characters.
 
-% interrupt i8042intr -> kbdputsc -> kbdputc (which add in kbdq and
-% also adjust stage Conskbd area that another regular interrupt clock
-% will read and echo back to the screen)
+% interrupt i8042intr -> kbdputsc -> kbdputc (which adjust kbd circular buffer)
+% interrupt kbdcclock -> echo() -> qproduce(kbdq) (and echoscreen!)
 
 \subsection{Scan code}
+
+% Note that the main function here generates unicode characters
+% (but then they are decomposed back in individual parts for later)
 
 % http://www.computer-engineering.org/ps2keyboard/
 
@@ -17877,7 +17876,7 @@ enum {
     Nscan=  128,
 };
 @
-% abuse unicode, hence the Spec| trick above, but it will allow
+% Use unicode! hence the Spec| it will allow
 % cool things like having C^P to be returned simply by looking in an array.
 % how would do it otherwise? would need a complex enum anyway
 
@@ -17983,6 +17982,7 @@ enum kbscan {
 };
 @
 % always used Int actually. Ext is used only by devkbin.c so could simplify code
+% but apparently devkbin is useful for usb keyboard
 
 <<global kbscans>>=
 // hash<enum<kbscan>, Kbscan>
@@ -17992,20 +17992,10 @@ Kbscan kbscans[Nscans]; /* kernel and external scan code state */
 
 
 
-
-% setup kbdq! the interrupt code will write into it so it can be read
-% from /dev/cons. An interrupt will also trigger the echoing of those characters
-% it's not the job of the program that read /dev/cons to also echo back
-% those characters! this is done generically by cons device driver
 <<function kbdenable>>=
 void
 kbdenable(void)
 {
-    kbdq = qopen(4*1024, 0, 0, 0);
-    if(kbdq == nil)
-        panic("kbdinit");
-    qnoblock(kbdq, true);
-
     ioalloc(Data, 1, 0, "kbd");
     ioalloc(Cmd, 1, 0, "kbd");
 
@@ -18015,6 +18005,7 @@ kbdenable(void)
     setleds(&kbscans[Int]);
 }
 @
+% used to have kdbq init here, but better to separate
 
 <<global i8042lock>>=
 static Lock i8042lock;
@@ -18027,7 +18018,7 @@ static Lock i8042lock;
 static void
 i8042intr(Ureg*, void*)
 {
-    int s, c;
+    uchar s, c;
 
     /*
      *  get status
@@ -18052,16 +18043,17 @@ i8042intr(Ureg*, void*)
 @
 
 
-% called from the interrupt, call kbdputc(kbdq, c)
+% called from the interrupt, call kbdputc(c)
 <<function kbdputsc>>=
 /*
  * Scan code processing
  */
 void
-kbdputsc(int/*Rune*/ c, int external)
+kbdputsc(uchar k, int external)
 {
     bool keyup;
     Kbscan *kbscan;
+    Rune c = k;
 
     if(external)
         kbscan = &kbscans[Ext];
@@ -18121,7 +18113,7 @@ kbdputsc(int/*Rune*/ c, int external)
         <<[[kbdputsc()]] reboot if ctl-alt-del>>
         <<[[kbdputsc()]] if collecting>>
         else
-            kbdputc(kbdq, c); //!! adding the character in the queue
+            kbdputc(c); //!! adding the character in kbd staging area
     }else{
         switch(c){
         case Ctrl:
@@ -18154,9 +18146,177 @@ kbdputsc(int/*Rune*/ c, int external)
 }
 @
 
-\subsection{[[ConsKbd]]}
+\subsection{[[kbd]]}
+
+<<struct ConsKbd>>=
+struct ConsKbd
+{
+    /* a place to save up characters at interrupt time before dumping them in the queue */
+    char    istage[1024];
+    // pointers into istage to implement a circular buffer
+    char    *iw; // write
+    char    *ir; // read
+    char    *ie; // end
+    ILock    lockputc;
+
+    <<[[ConsKbd]] other fields>>
+    // extra
+    QLock;
+};
+@
+% why not using Rune line[1024] and Rune istage[1024]? will simplify things
+% and anyway kputsc already handles unicode and produce unicode characters?
+% because plan9 managed queue of bytes, it's the code reading those bytes
+% that have the job to possibly call the rune functions on it.
+
+
+<<global kbd>>=
+static struct ConsKbd kbd = 
+{
+    .iw = kbd.istage,
+    .ir = kbd.istage,
+    .ie = kbd.istage + sizeof(kbd.istage),
+};
+@ 
+
+% called from raw kbd functions in previous section
+<<function kbdputc>>=
+/*
+ *  Put character, possibly a rune, into kbd at interrupt time.
+ *  Called at interrupt time to process a character.
+ */
+void
+kbdputc(Rune ch)
+{
+    int i, n;
+    char buf[3]; // enough? UTFMAX is 4 so should be buf[4] no?
+    Rune r;
+    char *next;
+
+    if(kbd.ir == nil)
+        return;       /* in case we're not inited yet */
+    
+    ilock(&kbd.lockputc);       /* just a mutex */
+    r = ch;
+    n = runetochar(buf, &r);
+    for(i = 0; i < n; i++){
+        next = kbd.iw+1;
+        // circular buffer
+        if(next >= kbd.ie)
+            next = kbd.istage;
+        if(next == kbd.ir) // full
+            break;
+        *kbd.iw = buf[i];
+        kbd.iw = next;
+    }
+    iunlock(&kbd.lockputc);
+    return;
+}
+@ 
+
+<<clock callback kbdputcclock>>=
+/*
+ *  we save up input characters till clock time to reduce
+ *  per character interrupt overhead.
+ */
+static void
+kbdputcclock(void)
+{
+    char *iw;
+
+    /* this amortizes cost of qproduce */
+    if(kbd.iw != kbd.ir){
+        iw = kbd.iw;
+        if(iw < kbd.ir){
+            echo(kbd.ir, kbd.ie-kbd.ir);
+            kbd.ir = kbd.istage;
+        }
+        if(kbd.ir != iw){
+            echo(kbd.ir, iw-kbd.ir);
+            kbd.ir = iw;
+        }
+    }
+}
+@ 
+% no ilock??? because no race possible?
+% actually echo will echo back on screen and add in kbdq !!
+
+<<[[consinit()]] initializing things>>=
+    /*
+     * at 115200 baud, the 1024 char buffer takes 56 ms to process,
+     * processing it every 22 ms should be fine
+     */
+    addclock0link(kbdputcclock, 22);
+@
+% todo: understand this comment ...
+
 
 \subsection{[[echo()]]}
+
+% double role! to add in kbdq and print on screen
+
+<<function echo>>=
+static void
+echo(char *buf, int n)
+{
+    <<[[echo()]] locals>>
+    char *e, *p;
+
+    if(n == 0)
+        return;
+
+    e = buf+n;
+    for(p = buf; p < e; p++){
+        switch(*p){
+        <<[[echo()]] special key C-p>>
+        <<[[echo()]] C-t C-t special keys handler>>
+    }
+
+    qproduce(kbdq, buf, n); //!! add in kbd queue to be read from /dev/cons
+
+    <<[[echo()]] return before any echoscreen if raw mode>>
+    <<[[echo()]] kmesg handling>>
+    if(screenputs != nil)
+        echoscreen(buf, n);
+    if(serialoq)
+        echoserialoq(buf, n);
+}
+@ 
+% kbdq!!!!
+
+<<hook screenputs>>=
+void    (*screenputs)(char*, int) = nil;
+@ 
+% see later set to cgascreenputs
+
+<<function echoscreen>>=
+static void
+echoscreen(char *buf, int n)
+{
+    char *e, *p;
+    char ebuf[128];
+    int x;
+
+    p = ebuf;
+    e = ebuf + sizeof(ebuf) - 4;
+    while(n-- > 0){
+        if(p >= e){
+            screenputs(ebuf, p - ebuf);
+            p = ebuf;
+        }
+        x = *buf++;
+        if(x == 0x15){ // ??
+            *p++ = '^';
+            *p++ = 'U';
+            *p++ = '\n';
+        } else
+            *p++ = x;
+    }
+    if(p != ebuf)
+        screenputs(ebuf, p - ebuf);
+}
+@ 
+% screenputs!
 
 
 \subsection{Misc}
@@ -18652,43 +18812,20 @@ static Dirtab consdir[]={
 
 \subsection{Buffered input}
 
-<<struct ConsKbd>>=
-struct ConsKbd
-{
-    char    line[1024]; /* current input line */
-    int x;      /* index into line */
-
-    int count;
-
-    /* a place to save up characters at interrupt time before dumping them in the queue */
-    char    istage[1024];
-    // pointers into istage to implement a circular buffer
-    char    *iw; // write
-    char    *ir; // read
-    char    *ie; // end
-    ILock    lockputc;
-
-    <<[[ConsKbd]] other fields>>
-    // extra
-    QLock;
-};
-@
-% why not using Rune line[1024] and Rune istage[1024]? will simplify thinfs
-% and anyway kputsc already handles unicode and produce unicode characters
-
-
-<<global kbd>>=
-static struct ConsKbd kbd = 
-{
-    .iw = kbd.istage,
-    .ir = kbd.istage,
-    .ie = kbd.istage + sizeof(kbd.istage),
-};
-@ 
-
 <<global kbdq>>=
 Queue*  kbdq;           /* unprocessed console input */
 @ 
+
+<<function kbdqinit>>=
+void
+kbdqinit(void)
+{
+    kbdq = qopen(4*1024, 0, 0, 0);
+    if(kbdq == nil)
+        panic("kbdinit");
+    qnoblock(kbdq, true);
+}
+@
 
 
 <<global lineq>>=
@@ -18699,6 +18836,7 @@ Queue*  lineq;          /* processed console input */
 void
 lineqinit(void)
 {
+
     lineq = qopen(2*1024, 0, nil, nil);
     if(lineq == nil)
         panic("lineqinit");
@@ -18706,76 +18844,12 @@ lineqinit(void)
 }
 @ 
 
-% called from raw kbd functions in previous section
-<<function kbdputc>>=
-/*
- *  Put character, possibly a rune, into read queue at interrupt time.
- *  Called at interrupt time to process a character.
- */
-void
-kbdputc(Queue* _always_kbdq, int/*Rune*/ ch)
-{
-    int i, n;
-    char buf[3]; // enough? UTFMAX is 4 so should be buf[4] no?
-    Rune r;
-    char *next;
+<<[[ConsKbd]] other fields>>=
+    char    line[1024]; /* current input line */
+    int x;      /* index into line */
 
-    if(kbd.ir == nil)
-        return;       /* in case we're not inited yet */
-    
-    ilock(&kbd.lockputc);       /* just a mutex */
-    r = ch;
-    n = runetochar(buf, &r);
-    for(i = 0; i < n; i++){
-        next = kbd.iw+1;
-        // circular buffer
-        if(next >= kbd.ie)
-            next = kbd.istage;
-        if(next == kbd.ir) // full
-            break;
-        *kbd.iw = buf[i];
-        kbd.iw = next;
-    }
-    iunlock(&kbd.lockputc);
-    return;
-}
-@ 
-
-<<clock callback kbdputcclock>>=
-/*
- *  we save up input characters till clock time to reduce
- *  per character interrupt overhead.
- */
-static void
-kbdputcclock(void)
-{
-    char *iw;
-
-    /* this amortizes cost of qproduce */
-    if(kbd.iw != kbd.ir){
-        iw = kbd.iw;
-        if(iw < kbd.ir){
-            echo(kbd.ir, kbd.ie-kbd.ir);
-            kbd.ir = kbd.istage;
-        }
-        if(kbd.ir != iw){
-            echo(kbd.ir, iw-kbd.ir);
-            kbd.ir = iw;
-        }
-    }
-}
-@ 
-% actually echo will echo back on screen and add in kbdq
-
-<<[[consinit()]] initializing things>>=
-    /*
-     * at 115200 baud, the 1024 char buffer takes 56 ms to process,
-     * processing it every 22 ms should be fine
-     */
-    addclock0link(kbdputcclock, 22);
+    int count; // DEAD??
 @
-
-
 
 %!!! this is an important one!
 <<[[consread()]] Qcons case>>=
@@ -18788,16 +18862,13 @@ kbdputcclock(void)
         while(!qcanread(lineq)){
             if(qread(kbdq, &ch, 1) == 0)
                 continue;
-            send = 0;
+            send = false;
             if(ch == 0){
                 /* flush output on rawoff -> rawon */
                 if(kbd.x > 0)
                     send = !qcanread(kbdq);
-
-            }else if(kbd.raw){
-                kbd.line[kbd.x++] = ch;
-                send = !qcanread(kbdq);
-
+            
+            <<[[consread()]] else if raw mode>>
             }else{
                 switch(ch){
                 case '\b':
@@ -18808,11 +18879,14 @@ kbdputcclock(void)
                     kbd.x = 0;
                     break;
                 case '\n':
+                    send = true;
+                    kbd.line[kbd.x++] = ch;
+                    break;
                 case 0x04:  /* ^D */
-                    send = 1;
+                    send = true;
+                    break;
                 default:
-                    if(ch != 0x04)
-                        kbd.line[kbd.x++] = ch;
+                    kbd.line[kbd.x++] = ch;
                     break;
                 }
             }
@@ -18826,6 +18900,7 @@ kbdputcclock(void)
         poperror();
         return n;
 @
+
 
 \subsection{Output}
 
@@ -18872,7 +18947,6 @@ putstrn0(char *str, int n, bool usewrite)
         usewrite = false;
 
     <<[[putstrn0()]] kmesg handling>>
-
     <<[[putstrn0()]] if kprint>>
     else if(screenputs != nil)
         screenputs(str, n);
@@ -18910,84 +18984,6 @@ putstrn0(char *str, int n, bool usewrite)
             break;
         }
     }
-}
-@ 
-
-<<hook screenputs>>=
-void    (*screenputs)(char*, int) = nil;
-@ 
-
-
-<<function echo>>=
-static void
-echo(char *buf, int n)
-{
-    static int ctrlt, pid;
-    int x;
-    char *e, *p;
-    void* tmp;
-
-    if(n == 0)
-        return;
-
-    e = buf+n;
-    for(p = buf; p < e; p++){
-        switch(*p){
-        case 0x10:  /* ^P */
-            if(cpuserver && !kbd.ctlpoff){
-                active.exiting = true;
-                return;
-            }
-            break;
-        case 0x14:  /* ^T */
-            ctrlt++;
-            if(ctrlt > 2)
-                ctrlt = 2;
-            continue;
-        }
-        if(ctrlt != 2)
-            continue;
-
-        <<[[echo()]] C-t C-t special keys handler>>
-    }
-
-    qproduce(kbdq, buf, n);
-
-    if(kbd.raw)
-        return;
-    <<[[echo()]] kmesg handling>>
-    if(screenputs != nil)
-        echoscreen(buf, n);
-    if(serialoq)
-        echoserialoq(buf, n);
-}
-@ 
-
-<<function echoscreen>>=
-static void
-echoscreen(char *buf, int n)
-{
-    char *e, *p;
-    char ebuf[128];
-    int x;
-
-    p = ebuf;
-    e = ebuf + sizeof(ebuf) - 4;
-    while(n-- > 0){
-        if(p >= e){
-            screenputs(ebuf, p - ebuf);
-            p = ebuf;
-        }
-        x = *buf++;
-        if(x == 0x15){
-            *p++ = '^';
-            *p++ = 'U';
-            *p++ = '\n';
-        } else
-            *p++ = x;
-    }
-    if(p != ebuf)
-        screenputs(ebuf, p - ebuf);
 }
 @ 
 
@@ -19329,10 +19325,8 @@ Dev consdevtab = {
 
 <<[[ConsKbd]] other fields>>=
 bool raw;        /* true if we shouldn't process input */
-bool ctlpoff; // ^P will not reboot if true
 Ref ctl;        /* number of opens to the control file */
 @
-% put ctlpoff in reboot section too?
 
 
 <<[[consopen()]] cases>>=
@@ -19365,16 +19359,24 @@ Ref ctl;        /* number of opens to the control file */
                 qwrite(kbdq, &ch, 1);           
             } else if(strncmp(a, "rawoff", 6) == 0){
                 kbd.raw = false;
-
-            } else if(strncmp(a, "ctlpon", 6) == 0){
-                kbd.ctlpoff = false;
-            } else if(strncmp(a, "ctlpoff", 7) == 0){
-                kbd.ctlpoff = true;
             }
+            <<[[conswrite()]] Qconsctl other ifs>>
             if(a = strchr(a, ' '))
                 a++;
         }
         break;
+@
+
+<<[[echo()]] return before any echoscreen if raw mode>>=
+    if(kbd.raw)
+        return;
+@
+
+<<[[consread()]] else if raw mode>>=
+            }else if(kbd.raw){
+                kbd.line[kbd.x++] = ch;
+                send = !qcanread(kbdq);
+
 @
 
 \section{The mouse}
@@ -20204,6 +20206,9 @@ print("[%d] kaddr %.8ulx base %.8ulx offset %ld (%.8ulx), n %d %.8ulx %.8ulx %.8
 % put after Devices? after all Device and file servers
 % are similar, they also implement the Dev interface
 % it's just that they provide a Dev on top of another Dev
+
+% see docs/man/3/ for references on all "devices/fileservers"
+
 
 \section{Overview}
 
@@ -25384,6 +25389,27 @@ main_exit(bool ispanic)
                 exit(0);
 @
 
+<<[[ConsKbd]] other fields>>=
+bool ctlpoff; // ^P will not reboot if true
+@
+
+<<[[conswrite()]] Qconsctl other ifs>>=
+            else if(strncmp(a, "ctlpon", 6) == 0){
+                kbd.ctlpoff = false;
+            } else if(strncmp(a, "ctlpoff", 7) == 0){
+                kbd.ctlpoff = true;
+            }
+@
+
+<<[[echo()]] special key C-p>>=
+        case 0x10:  /* ^P */
+            if(cpuserver && !kbd.ctlpoff){
+                active.exiting = true;
+                return;
+            }
+            break;
+@
+
 <<[[Active]] other fields>>=
 bool ispanic;    /* shutdown in response to a panic */
 @
@@ -26121,11 +26147,11 @@ static bool kdebug;
 case KF|11:
     print("kbd debug on, F12 turns it off\n");
     kdebug = true;
-    kbdputc(kbdq, c);
+    kbdputc(c);
     break;
 case KF|12:
     kdebug = false;
-    kbdputc(kbdq, c);
+    kbdputc(c);
     break;
 @
 
@@ -26148,7 +26174,23 @@ case KF|12:
 
 % Ctrl-t Ctrl-t <debugcode>
 
+<<[[echo()]] locals>>=
+static int ctrlt;
+void* tmp;
+int x;
+static int pid; //DEAD?
+@
+
 <<[[echo()]] C-t C-t special keys handler>>=
+        case 0x14:  /* ^T */
+            ctrlt++;
+            if(ctrlt > 2)
+                ctrlt = 2;
+            continue;
+        }
+        if(ctrlt != 2)
+            continue;
+
         /* ^T escapes */
         ctrlt = 0;
         switch(*p){
@@ -29172,10 +29214,10 @@ if(kbscan->collecting){
     if(c < -1)  /* need more keystrokes */
         return;
     if(c != -1) /* valid sequence */
-        kbdputc(kbdq, c);
+        kbdputc(c);
     else    /* dump characters */
         for(i=0; i<kbscan->nk; i++)
-            kbdputc(kbdq, kbscan->kc[i]);
+            kbdputc(kbscan->kc[i]);
     kbscan->nk = 0;
     kbscan->collecting = false;
 }
