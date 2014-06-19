@@ -56,8 +56,6 @@ struct ConsKbd
     /*s: [[ConsKbd]] other fields */
         char    line[1024]; /* current input line */
         int x;      /* index into line */
-
-        int count; // DEAD??
     /*x: [[ConsKbd]] other fields */
     bool raw;        /* true if we shouldn't process input */
     Ref ctl;        /* number of opens to the control file */
@@ -510,7 +508,6 @@ echo(char *buf, int n)
     static int ctrlt;
     void* tmp;
     int x;
-    static int pid; //DEAD?
     char *e, *p;
     /*e: [[echo()]] locals */
 
