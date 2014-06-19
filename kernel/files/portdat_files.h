@@ -189,9 +189,10 @@ struct Mnt
 struct Path
 {
   char  *s;
-  Chan  **mtpt;     /* mtpt history */
   int len;      /* strlen(s) */
   int alen;     /* allocated length of s */
+
+  Chan  **mtpt;     /* mtpt history */
   int mlen;     /* number of path elements */
   int malen;      /* allocated length of mtpt */
 

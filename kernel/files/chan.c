@@ -263,6 +263,7 @@ pathclose(Path *p)
 
     if(decref(p))
         return;
+
     decref(&npath);
     free(p->s);
     for(i=0; i<p->mlen; i++)
