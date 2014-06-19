@@ -27,6 +27,7 @@ run:
 #-fda ~/floppy.img
 #-hda ~/plan9.raw.img
 #-cdrom plan9.iso? does not work?
+#-vga cirrus
 
 clean:
 	cd sys/src; mk clean
