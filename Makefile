@@ -56,7 +56,9 @@ check2:
 
 # take quite some time :(
 clangfiles:
-	~/pfff/pfff -gen_clang compile_commands.json
+#	~/pfff/pfff -gen_clang compile_commands.json
+        # empty file because of segfault in clang-check, probably because unicode chars
+	rm -f kernel/devices/keyboard/386/latin1.clang 
 	~/pfff/pfff_test.opt -uninclude_clang .
 	cp sys/src/9/pc/apbootstrap.h kernel/init/386/
 	mv sys/src/9/pc/apbootstrap.h.clang2 kernel/init/386/
