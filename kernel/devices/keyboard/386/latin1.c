@@ -2,6 +2,10 @@
 #include    "u.h"
 #include    "../port/lib.h"
 
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
+
 /*
  * The code makes two assumptions: strlen(ld) is 1 or 2; latintab[i].ld can be a
  * prefix of latintab[j].ld only when j<i.
@@ -10,6 +14,7 @@ struct cvlist
 {
     char    *ld;        /* must be seen before using this conversion */
     char    *si;        /* options for last input characters */
+
     Rune    *so;        /* the corresponding Rune for each si entry */
 };
 
@@ -22,10 +27,10 @@ struct cvlist latintab[] = {
  * Given n characters k[0]..k[n-1], find the rune or return -1 for failure.
  */
 long
-unicode(Rune *k, int n)
+unicode(char *k, int n)
 {
     long c;
-    Rune *r;
+    char *r;
 
     c = 0;
     for(r = &k[1]; r<&k[n]; r++){       /* +1 to skip [Xx] */
@@ -48,11 +53,13 @@ unicode(Rune *k, int n)
  * is minus the required n.
  */
 long
-latin1(Rune *k, int n)
+latin1(char* k, int n)
 {
     struct cvlist *l;
-    int c;
+    char c;
     char* p;
+
+//    print("latin1: %d, %d\n", n, k[n-1]);
 
     if(k[0] == 'X')
         if(n>=5)
@@ -67,6 +74,7 @@ latin1(Rune *k, int n)
 
     for(l=latintab; l->ld!=0; l++)
         if(k[0] == l->ld[0]){
+//          print("found: %s, %s\n", l->ld, l->si);
             if(n == 1)
                 return -2;
             if(l->ld[1] == 0)
@@ -78,8 +86,10 @@ latin1(Rune *k, int n)
             else
                 c = k[2];
             for(p=l->si; *p!=0; p++)
-                if(*p == c)
+                if(*p == c) {
+                    print("found: %lud\n", l->so[p - l->si]);
                     return l->so[p - l->si];
+                }
             return -1;
         }
     return -1;

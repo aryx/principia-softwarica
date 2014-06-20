@@ -333,7 +333,7 @@ struct Kbscan {
     /*x: [[Kbscan]] other fields */
         bool collecting;
         int nk;
-        Rune    kc[5];
+        char    kc[5];
     /*e: [[Kbscan]] other fields */
 };
 /*e: struct Kbscan */
@@ -396,7 +396,9 @@ kbdputsc(uchar k, int external)
 {
     bool keyup;
     Kbscan *kbscan;
-    Rune c = k;
+    // essentially a Rune (uint) but used to get the result of functions
+    // like latin1 which can return negative numbers so have to use a long.
+    long c = k; 
 
     if(external)
         kbscan = &kbscans[Ext];
@@ -507,6 +509,11 @@ kbdputsc(uchar k, int external)
         /*s: [[kbdputsc()]] if collecting */
         if(kbscan->collecting){
             int i;
+            if(kbscan->nk >= nelem(kbscan->kc)) {
+              kbscan->nk = 0;
+              kbscan->collecting = false;
+              print("collecting overflow, possible bug in latin1()\n");
+            }
             kbscan->kc[kbscan->nk++] = c;
             c = latin1(kbscan->kc, kbscan->nk);
             if(c < -1)  /* need more keystrokes */
