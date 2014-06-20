@@ -652,9 +652,16 @@ void
 kbdputc(Rune ch)
 {
     int i, n;
-    char buf[3]; // enough? UTFMAX is 4 so should be buf[4] no?
+    char buf[UTFmax]; // pad's fourth bugfix :)
     Rune r;
     char *next;
+
+    /*s: [[kbdputc()]] debugging */
+    extern bool kdebug;
+
+    if(kdebug)
+        print("kbdputc(0x%x)\n", ch);
+    /*e: [[kbdputc()]] debugging */
 
     if(kbd.ir == nil)
         return;       /* in case we're not inited yet */
