@@ -970,16 +970,16 @@ consread(Chan *c, void *buf, long n, vlong off)
     /*x: [[consread()]] cases */
         case Qkprint:
             return qread(kprintoq, buf, n);
-    /*e: [[consread()]] cases */
-
+    /*x: [[consread()]] cases */
     case Qcputime:
         k = offset;
-        if(k >= 6*NUMSIZE)
+        if(k >= 5*NUMSIZE)
             return 0;
-        if(k+n > 6*NUMSIZE)
-            n = 6*NUMSIZE - k;
+        if(k+n > 5*NUMSIZE)
+            n = 5*NUMSIZE - k;
         /* easiest to format in a separate buffer and copy out */
-        for(i=0; i<6 && NUMSIZE*i<k+n; i++){
+
+        for(i=0; i<5 && NUMSIZE*i<k+n; i++){
             l = up->time[i];
             if(i == TReal)
                 l = CPUS(0)->ticks - l;
@@ -988,6 +988,7 @@ consread(Chan *c, void *buf, long n, vlong off)
         }
         memmove(buf, tmp+k, n);
         return n;
+    /*e: [[consread()]] cases */
 
     case Qtime:
         return readtime((ulong)offset, buf, n);

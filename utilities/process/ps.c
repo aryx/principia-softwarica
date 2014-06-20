@@ -72,26 +72,28 @@ ps(char *s)
 		return;
 	status[n] = '\0';
 
-	if((argc = tokenize(status, argv, nelem(argv)-1)) < 12)
+	if((argc = tokenize(status, argv, nelem(argv)-1)) < 11) {
+		error("not enough entries");
 		return;
+    }
 	argv[argc] = 0;
 
 	/*
 	 * 0  text
 	 * 1  user
 	 * 2  state
-	 * 3  cputime[6]
-	 * 9  memory
-	 * 10 basepri
-	 * 11 pri
+	 * 3  cputime[5]
+	 * 8  memory
+	 * 9 basepri
+	 * 10 pri
 	 */
 	utime = strtoul(argv[3], 0, 0)/1000;
 	stime = strtoul(argv[4], 0, 0)/1000;
 	rtime = strtoul(argv[5], 0, 0)/1000;
-	size  = strtoul(argv[9], 0, 0);
+	size  = strtoul(argv[8], 0, 0);
 	if(pflag){
-		basepri = strtoul(argv[10], 0, 0);
-		pri = strtoul(argv[11], 0, 0);
+		basepri = strtoul(argv[9], 0, 0);
+		pri = strtoul(argv[10], 0, 0);
 		sprint(pbuf, " %2d %2d", basepri, pri);
 	} else
 		pbuf[0] = 0;

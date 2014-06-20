@@ -930,28 +930,41 @@ procread(Chan *c, void *va, long n, vlong off)
         return n;
 
 
+    // coupling with ps.c
+ /*
+  * 0  text
+  * 1  user
+  * 2  state
+  * 3  cputime[5]
+  * 8  memory
+  * 9 basepri
+  * 10 pri
+  */
     case Qstatus:
         if(offset >= STATSIZE)
             return 0;
         if(offset+n > STATSIZE)
             n = STATSIZE - offset;
 
-        sps = p->psstate;
-        if(sps == nil)
-            sps = statename[p->state];
         memset(statbuf, ' ', sizeof statbuf);
         readstr(0, statbuf+0*KNAMELEN, KNAMELEN-1, p->text);
         readstr(0, statbuf+1*KNAMELEN, KNAMELEN-1, p->user);
+        sps = p->psstate;
+        if(sps == nil)
+            sps = statename[p->state];
         readstr(0, statbuf+2*KNAMELEN, 11, sps);
-        j = 2*KNAMELEN + 12;
 
-        for(i = 0; i < 6; i++) {
+        j = 2*KNAMELEN + 12;
+        /*s: [[procread()]] Qstatus case, time part */
+        for(i = 0; i < 5; i++) {
             l = p->time[i];
             if(i == TReal)
                 l = CPUS(0)->ticks - l;
             l = TK2MS(l);
             readnum(0, statbuf+j+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
         }
+        /*e: [[procread()]] Qstatus case, time part */
+
         /* ignore stack, which is mostly non-existent */
         l = 0;
         for(i=1; i<NSEG; i++){
@@ -959,9 +972,9 @@ procread(Chan *c, void *va, long n, vlong off)
             if(s)
                 l += s->top - s->base;
         }
-        readnum(0, statbuf+j+NUMSIZE*6, NUMSIZE, l>>10, NUMSIZE);
-        readnum(0, statbuf+j+NUMSIZE*7, NUMSIZE, p->basepri, NUMSIZE);
-        readnum(0, statbuf+j+NUMSIZE*8, NUMSIZE, p->priority, NUMSIZE);
+        readnum(0, statbuf+j+NUMSIZE*5, NUMSIZE, l>>10, NUMSIZE);
+        readnum(0, statbuf+j+NUMSIZE*6, NUMSIZE, p->basepri, NUMSIZE);
+        readnum(0, statbuf+j+NUMSIZE*7, NUMSIZE, p->priority, NUMSIZE);
         memmove(a, statbuf+offset, n);
         return n;
 
@@ -1020,7 +1033,9 @@ procread(Chan *c, void *va, long n, vlong off)
         poperror();
         n = snprint(a, n, "%d %lud %lud %lud %q",
             wq->w.pid,
+            /*s: [[procread()]] Qwait case, snprint time field arguments */
             wq->w.time[TUser], wq->w.time[TSys], wq->w.time[TReal],
+            /*e: [[procread()]] Qwait case, snprint time field arguments */
             wq->w.msg);
         free(wq);
         return n;

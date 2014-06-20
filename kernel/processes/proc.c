@@ -1324,11 +1324,14 @@ proc_pexit(char *exitstr, bool freemem)
         poperror();
 
         wq->w.pid = up->pid;
+        /*s: [[pexit()]] set wait msg time field */
         utime = up->time[TUser] + up->time[TCUser];
         stime = up->time[TSys] + up->time[TCSys];
+
         wq->w.time[TUser] = tk2ms(utime);
         wq->w.time[TSys] = tk2ms(stime);
         wq->w.time[TReal] = tk2ms(CPUS(0)->ticks - up->time[TReal]);
+        /*e: [[pexit()]] set wait msg time field */
         if(exitstr && exitstr[0])
             snprint(wq->w.msg, sizeof(wq->w.msg), "%s %lud: %s", up->text, up->pid, exitstr);
         else
@@ -1342,8 +1345,10 @@ proc_pexit(char *exitstr, bool freemem)
         // could have died and its slot reallocated to another process
         if(p->pid == up->parentpid && p->state != Broken) {
             p->nchild--;
+            /*s: [[pexit()]] update TC time of parent */
             p->time[TCUser] += utime;
             p->time[TCSys] += stime;
+            /*e: [[pexit()]] update TC time of parent */
             /*
              * If there would be more than 128 wait records
              * processes for my parent, then don't leave a wait
@@ -1494,7 +1499,7 @@ proc_dumpaproc(Proc *p)
         s = statename[p->state];
     print("%3lud:%10s pc %8lux dbgpc %8lux  %8s (%s) ut %ld st %ld bss %lux qpc %lux nl %lud nd %lud lpc %lux pri %lud\n",
         p->pid, p->text, p->pc, dbgpc(p),  s, statename[p->state],
-        p->time[0], p->time[1], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
+        p->time[TUser], p->time[TSys], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
 }
 /*e: function dumpaproc */
 
@@ -1596,6 +1601,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     static Pgrp *kpgrp;
 
     p = newproc();
+
     p->psstate = nil;
     p->procmode = 0640;
     p->kp = true; // Kernel Process
@@ -1609,6 +1615,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     p->fpsave = up->fpsave;
     p->sargs = up->sargs;
+
     memmove(p->note, up->note, sizeof(p->note));
     p->nnote = up->nnote;
     p->lastnote = up->lastnote;
@@ -1625,9 +1632,10 @@ kproc(char *name, void (*func)(void *), void *arg)
         kpgrp = newpgrp();
     p->pgrp = kpgrp;
     incref(kpgrp);
-
+    /*s: [[kproc()]] setting time field */
     memset(p->time, 0, sizeof(p->time));
     p->time[TReal] = CPUS(0)->ticks;
+    /*e: [[kproc()]] setting time field */
     ready(p);
 }
 /*e: function kproc */
@@ -1761,7 +1769,9 @@ accounttime(void)
     p = cpu->proc; // why not p = up?
     if(p) {
         nrun++;
-        p->time[p->insyscall]++;
+        /*s: [[accountime()]] update time of current process */
+        p->time[p->insyscall ? TSys : TUser]++;
+        /*e: [[accountime()]] update time of current process */
     }
 
     /* calculate decaying duty cycles */

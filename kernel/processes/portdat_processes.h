@@ -355,10 +355,9 @@ enum proctime
     TSys,
     TReal,
 
-    // accumulates also the time of its children
-    TCUser, 
-    TCSys, 
-    TCReal,
+    // to accumulate also the time of the children of the process
+    TCUser,
+    TCSys,
 };
 /*e: enum proctimer */
 
@@ -581,7 +580,7 @@ struct Proc
 //--------------------------------------------------------------------
     /*s: [[Proc]] stats and profiling fields */
     // hash<enum<proctime>, ulong>
-    ulong time[6];  /* User, Sys, Real; child U, S, R */
+    ulong time[5];  /* User, Sys, Real; child U, S */
     /*x: [[Proc]] stats and profiling fields */
     uvlong  kentry;   /* Kernel entry time stamp (for profiling) */
     /*

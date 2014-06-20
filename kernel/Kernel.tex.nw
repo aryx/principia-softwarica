@@ -4510,10 +4510,7 @@ sysrfork(ulong* arg)
         p->noteid = up->noteid;
 
     <<[[sysrfork()]] propagate fpstate>>
-
-
-    memset(p->time, 0, sizeof(p->time));
-    p->time[TReal] = CPUS(0)->ticks;
+    <<[[sysrfork()]] setting time field>>
 
     kstrdup(&p->text, up->text);
     kstrdup(&p->user, up->user);
@@ -4933,7 +4930,7 @@ Lock  exl;    /* Lock count and waitq */
 struct Waitmsg
 {
   int pid;    /* of loved one */ // pid of the child
-  ulong time[3];  /* of loved one and descendants */
+  <<[[Waitmsg]] time field>>
   char  msg[ERRMAX];  /* actually variable-size in user mode */
 };
 @ 
@@ -4978,7 +4975,7 @@ sysawait(ulong* arg)
         return -1;
     i = snprint((char*)arg[0], n, "%d %lud %lud %lud %q",
         w.pid,
-        w.time[TUser], w.time[TSys], w.time[TReal],
+        <<[[sysawait()]] snprint time field arguments>>
         w.msg);
 
     return i;
@@ -5160,11 +5157,7 @@ proc_pexit(char *exitstr, bool freemem)
         poperror();
 
         wq->w.pid = up->pid;
-        utime = up->time[TUser] + up->time[TCUser];
-        stime = up->time[TSys] + up->time[TCSys];
-        wq->w.time[TUser] = tk2ms(utime);
-        wq->w.time[TSys] = tk2ms(stime);
-        wq->w.time[TReal] = tk2ms(CPUS(0)->ticks - up->time[TReal]);
+        <<[[pexit()]] set wait msg time field>>
         if(exitstr && exitstr[0])
             snprint(wq->w.msg, sizeof(wq->w.msg), "%s %lud: %s", up->text, up->pid, exitstr);
         else
@@ -5178,8 +5171,7 @@ proc_pexit(char *exitstr, bool freemem)
         // could have died and its slot reallocated to another process
         if(p->pid == up->parentpid && p->state != Broken) {
             p->nchild--;
-            p->time[TCUser] += utime;
-            p->time[TCSys] += stime;
+            <<[[pexit()]] update TC time of parent>>
             /*
              * If there would be more than 128 wait records
              * processes for my parent, then don't leave a wait
@@ -5272,6 +5264,7 @@ kproc(char *name, void (*func)(void *), void *arg)
     static Pgrp *kpgrp;
 
     p = newproc();
+
     p->psstate = nil;
     p->procmode = 0640;
     p->kp = true; // Kernel Process
@@ -5285,6 +5278,7 @@ kproc(char *name, void (*func)(void *), void *arg)
 
     p->fpsave = up->fpsave;
     p->sargs = up->sargs;
+
     memmove(p->note, up->note, sizeof(p->note));
     p->nnote = up->nnote;
     p->lastnote = up->lastnote;
@@ -5301,9 +5295,7 @@ kproc(char *name, void (*func)(void *), void *arg)
         kpgrp = newpgrp();
     p->pgrp = kpgrp;
     incref(kpgrp);
-
-    memset(p->time, 0, sizeof(p->time));
-    p->time[TReal] = CPUS(0)->ticks;
+    <<[[kproc()]] setting time field>>
     ready(p);
 }
 @ 
@@ -5338,7 +5330,6 @@ linkproc(void)
 @ 
 
 \section{Process control [[/proc/#/ctl]]}
-% /proc/#/ctl?
 
 % see /proc, /proc/x/ctl, procctl()
 % see section on Debugging where explain procctl
@@ -10354,56 +10345,6 @@ hzclock(Ureg *ur)
 
 
 
-<<function accounttime>>=
-/*
- *  time accounting called by clock() splhi'd
- */
-void
-accounttime(void)
-{
-    Proc *p;
-    ulong n, per;
-    static ulong nrun;
-
-    p = cpu->proc; // why not p = up?
-    if(p) {
-        nrun++;
-        p->time[p->insyscall]++;
-    }
-
-    /* calculate decaying duty cycles */
-    n = perfticks();
-    per = n - cpu->perf.last;
-    cpu->perf.last = n;
-    per = (cpu->perf.period*(HZ-1) + per)/HZ;
-    if(per != 0)
-        cpu->perf.period = per;
-
-    cpu->perf.avg_inidle = (cpu->perf.avg_inidle*(HZ-1)+cpu->perf.inidle)/HZ;
-    cpu->perf.inidle = 0;
-
-    cpu->perf.avg_inintr = (cpu->perf.avg_inintr*(HZ-1)+cpu->perf.inintr)/HZ;
-    cpu->perf.inintr = 0;
-
-    /* only one processor gets to compute system load averages */
-    if(cpu->cpuno != 0)
-        return;
-
-    /*
-     * calculate decaying load average.
-     * if we decay by (n-1)/n then it takes
-     * n clock ticks to go from load L to .36 L once
-     * things quiet down.  it takes about 5 n clock
-     * ticks to go to zero.  so using HZ means this is
-     * approximately the load over the last second,
-     * with a tail lasting about 5 seconds.
-     */
-    n = nrun;
-    nrun = 0;
-    n = (nrdy+n)*1000;
-    cpu->load = (cpu->load*(HZ-1)+n)/HZ;
-}
-@ 
 
 \section{Customized scheduling}
 
@@ -19163,23 +19104,6 @@ consread(Chan *c, void *buf, long n, vlong off)
 
     <<[[consread()]] cases>>
 
-    case Qcputime:
-        k = offset;
-        if(k >= 6*NUMSIZE)
-            return 0;
-        if(k+n > 6*NUMSIZE)
-            n = 6*NUMSIZE - k;
-        /* easiest to format in a separate buffer and copy out */
-        for(i=0; i<6 && NUMSIZE*i<k+n; i++){
-            l = up->time[i];
-            if(i == TReal)
-                l = CPUS(0)->ticks - l;
-            l = TK2MS(l);
-            readnum(0, tmp+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
-        }
-        memmove(buf, tmp+k, n);
-        return n;
-
     case Qtime:
         return readtime((ulong)offset, buf, n);
 
@@ -24075,28 +23999,33 @@ procread(Chan *c, void *va, long n, vlong off)
         return n;
 
 
+    // coupling with ps.c
+ /*
+  * 0  text
+  * 1  user
+  * 2  state
+  * 3  cputime[5]
+  * 8  memory
+  * 9 basepri
+  * 10 pri
+  */
     case Qstatus:
         if(offset >= STATSIZE)
             return 0;
         if(offset+n > STATSIZE)
             n = STATSIZE - offset;
 
-        sps = p->psstate;
-        if(sps == nil)
-            sps = statename[p->state];
         memset(statbuf, ' ', sizeof statbuf);
         readstr(0, statbuf+0*KNAMELEN, KNAMELEN-1, p->text);
         readstr(0, statbuf+1*KNAMELEN, KNAMELEN-1, p->user);
+        sps = p->psstate;
+        if(sps == nil)
+            sps = statename[p->state];
         readstr(0, statbuf+2*KNAMELEN, 11, sps);
-        j = 2*KNAMELEN + 12;
 
-        for(i = 0; i < 6; i++) {
-            l = p->time[i];
-            if(i == TReal)
-                l = CPUS(0)->ticks - l;
-            l = TK2MS(l);
-            readnum(0, statbuf+j+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
-        }
+        j = 2*KNAMELEN + 12;
+        <<[[procread()]] Qstatus case, time part>>
+
         /* ignore stack, which is mostly non-existent */
         l = 0;
         for(i=1; i<NSEG; i++){
@@ -24104,9 +24033,9 @@ procread(Chan *c, void *va, long n, vlong off)
             if(s)
                 l += s->top - s->base;
         }
-        readnum(0, statbuf+j+NUMSIZE*6, NUMSIZE, l>>10, NUMSIZE);
-        readnum(0, statbuf+j+NUMSIZE*7, NUMSIZE, p->basepri, NUMSIZE);
-        readnum(0, statbuf+j+NUMSIZE*8, NUMSIZE, p->priority, NUMSIZE);
+        readnum(0, statbuf+j+NUMSIZE*5, NUMSIZE, l>>10, NUMSIZE);
+        readnum(0, statbuf+j+NUMSIZE*6, NUMSIZE, p->basepri, NUMSIZE);
+        readnum(0, statbuf+j+NUMSIZE*7, NUMSIZE, p->priority, NUMSIZE);
         memmove(a, statbuf+offset, n);
         return n;
 
@@ -24143,7 +24072,7 @@ procread(Chan *c, void *va, long n, vlong off)
         poperror();
         n = snprint(a, n, "%d %lud %lud %lud %q",
             wq->w.pid,
-            wq->w.time[TUser], wq->w.time[TSys], wq->w.time[TReal],
+            <<[[procread()]] Qwait case, snprint time field arguments>>
             wq->w.msg);
         free(wq);
         return n;
@@ -26439,7 +26368,7 @@ proc_dumpaproc(Proc *p)
         s = statename[p->state];
     print("%3lud:%10s pc %8lux dbgpc %8lux  %8s (%s) ut %ld st %ld bss %lux qpc %lux nl %lud nd %lud lpc %lux pri %lud\n",
         p->pid, p->text, p->pc, dbgpc(p),  s, statename[p->state],
-        p->time[0], p->time[1], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
+        p->time[TUser], p->time[TSys], bss, p->qpc, p->nlocks.ref, p->delaysched, p->lastlock ? p->lastlock->pc : 0, p->priority);
 }
 @ 
 
@@ -28213,6 +28142,74 @@ struct Perf
 };
 @ 
 
+<<[[Cpu]] stat fields>>=
+int load;
+@
+
+% called by hzclock, so every tick
+<<function accounttime>>=
+/*
+ *  time accounting called by clock() splhi'd
+ */
+void
+accounttime(void)
+{
+    Proc *p;
+    ulong n, per;
+    static ulong nrun;
+
+    p = cpu->proc; // why not p = up?
+    if(p) {
+        nrun++;
+        <<[[accountime()]] update time of current process>>
+    }
+
+    /* calculate decaying duty cycles */
+    n = perfticks();
+    per = n - cpu->perf.last;
+    cpu->perf.last = n;
+    per = (cpu->perf.period*(HZ-1) + per)/HZ;
+    if(per != 0)
+        cpu->perf.period = per;
+
+    cpu->perf.avg_inidle = (cpu->perf.avg_inidle*(HZ-1)+cpu->perf.inidle)/HZ;
+    cpu->perf.inidle = 0;
+
+    cpu->perf.avg_inintr = (cpu->perf.avg_inintr*(HZ-1)+cpu->perf.inintr)/HZ;
+    cpu->perf.inintr = 0;
+
+    /* only one processor gets to compute system load averages */
+    if(cpu->cpuno != 0)
+        return;
+
+    /*
+     * calculate decaying load average.
+     * if we decay by (n-1)/n then it takes
+     * n clock ticks to go from load L to .36 L once
+     * things quiet down.  it takes about 5 n clock
+     * ticks to go to zero.  so using HZ means this is
+     * approximately the load over the last second,
+     * with a tail lasting about 5 seconds.
+     */
+    n = nrun;
+    nrun = 0;
+    n = (nrdy+n)*1000;
+    cpu->load = (cpu->load*(HZ-1)+n)/HZ;
+}
+@ 
+
+
+
+
+<<global intrtimes>>=
+ulong intrtimes[256][Ntimevec];
+@ 
+% note really used, could hide it
+
+<<constant Ntimevec>>=
+    Ntimevec = 20       /* number of time buckets for each intr */
+@
+
 <<function intrtime>>=
 /*
  *  keep histogram of interrupt service times
@@ -28259,15 +28256,6 @@ perfticks(void)
 % see cycles() below. essentially *x = cpu->ticks.
 
 
-<<global intrtimes>>=
-ulong intrtimes[256][Ntimevec];
-@ 
-
-<<constant Ntimevec>>=
-    Ntimevec = 20       /* number of time buckets for each intr */
-@
-
-
 <<[[Cpu]] stat fields>>=
 int cs; // context switch, sched() and sleep() call
 int intr;
@@ -28276,8 +28264,6 @@ int pfault;
 int tlbfault;
 int tlbpurge;
 ulong spuriousintr; // not really used
-
-int load;
 @
 
 % also lockcycles here?
@@ -28369,7 +28355,7 @@ void (*kproftimer)(ulong);
 
 % should cooperate with Profiling.tex.nw at some point
 
-\subsection{[[/bin/time]]}
+\subsection{[[/dev/cputime]] and [[/proc/#/status]]}
 
 <<enum proctimer>>=
 enum proctime 
@@ -28378,24 +28364,100 @@ enum proctime
     TSys,
     TReal,
 
-    // accumulates also the time of its children
-    TCUser, 
-    TCSys, 
-    TCReal,
+    // to accumulate also the time of the children of the process
+    TCUser,
+    TCSys,
 };
 @ 
 
 <<[[Proc]] stats and profiling fields>>=
 // hash<enum<proctime>, ulong>
-ulong time[6];  /* User, Sys, Real; child U, S, R */
+ulong time[5];  /* User, Sys, Real; child U, S */
 @
 
-% actually waitmsg has time info, so /bin/time is pretty simple
+<<[[sysrfork()]] setting time field>>=
+memset(p->time, 0, sizeof(p->time));
+p->time[TReal] = CPUS(0)->ticks;
+@
+% could factorize in newproc? but maybe to be the most precise
+% they prefer to do that the closes to the point where they actually
+% ready the process?
 
-% LP split some of the code of sysawait here?
-% what is complicated is how to maintain the Proc.time info.
-% spreaded.
-% TODO: LP split!
+<<[[kproc()]] setting time field>>=
+memset(p->time, 0, sizeof(p->time));
+p->time[TReal] = CPUS(0)->ticks;
+@
+
+<<[[accountime()]] update time of current process>>=
+p->time[p->insyscall ? TSys : TUser]++;
+@
+% this is called by hzclock so every tick
+
+
+<<[[consread()]] cases>>=
+case Qcputime:
+    k = offset;
+    if(k >= 5*NUMSIZE)
+        return 0;
+    if(k+n > 5*NUMSIZE)
+        n = 5*NUMSIZE - k;
+    /* easiest to format in a separate buffer and copy out */
+
+    for(i=0; i<5 && NUMSIZE*i<k+n; i++){
+        l = up->time[i];
+        if(i == TReal)
+            l = CPUS(0)->ticks - l;
+        l = TK2MS(l);
+        readnum(0, tmp+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
+    }
+    memmove(buf, tmp+k, n);
+    return n;
+@
+% this is /dev/ so only the current process can see it
+
+<<[[procread()]] Qstatus case, time part>>=
+for(i = 0; i < 5; i++) {
+    l = p->time[i];
+    if(i == TReal)
+        l = CPUS(0)->ticks - l;
+    l = TK2MS(l);
+    readnum(0, statbuf+j+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
+}
+@
+% to see the time of other running processes
+
+\subsection{[[/bin/time]]}
+
+
+% actually waitmsg has time info, so /bin/time is pretty simple
+<<[[Waitmsg]] time field>>=
+  ulong time[3];  /* of loved one and descendants */
+@
+% 3 = user, sys, real
+
+<<[[pexit()]] set wait msg time field>>=
+utime = up->time[TUser] + up->time[TCUser];
+stime = up->time[TSys] + up->time[TCSys];
+
+wq->w.time[TUser] = tk2ms(utime);
+wq->w.time[TSys] = tk2ms(stime);
+wq->w.time[TReal] = tk2ms(CPUS(0)->ticks - up->time[TReal]);
+@
+
+<<[[pexit()]] update TC time of parent>>=
+p->time[TCUser] += utime;
+p->time[TCSys] += stime;
+@
+
+
+<<[[sysawait()]] snprint time field arguments>>=
+w.time[TUser], w.time[TSys], w.time[TReal],
+@
+
+<<[[procread()]] Qwait case, snprint time field arguments>>=
+wq->w.time[TUser], wq->w.time[TSys], wq->w.time[TReal],
+@
+
 
 \subsection{[[/bin/tprof]]}
 % oprofile, frequency count, sampling based

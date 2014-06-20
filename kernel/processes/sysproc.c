@@ -215,10 +215,10 @@ sysrfork(ulong* arg)
         /* don't penalize the child, it hasn't done FP in a note handler. */
         p->fpstate = up->fpstate & ~FPillegal;
     /*e: [[sysrfork()]] propagate fpstate */
-
-
+    /*s: [[sysrfork()]] setting time field */
     memset(p->time, 0, sizeof(p->time));
     p->time[TReal] = CPUS(0)->ticks;
+    /*e: [[sysrfork()]] setting time field */
 
     kstrdup(&p->text, up->text);
     kstrdup(&p->user, up->user);
@@ -691,7 +691,9 @@ sysawait(ulong* arg)
         return -1;
     i = snprint((char*)arg[0], n, "%d %lud %lud %lud %q",
         w.pid,
+        /*s: [[sysawait()]] snprint time field arguments */
         w.time[TUser], w.time[TSys], w.time[TReal],
+        /*e: [[sysawait()]] snprint time field arguments */
         w.msg);
 
     return i;
