@@ -598,6 +598,10 @@ kbdputsc(uchar k, int external)
             kbdputc(c);
             break;
         /*e: [[kbdputsc()]] special keyboard debug keys cases */
+        // e.g. Left, Right or other special key
+        default:
+            kbdputc(c);
+            break;
         }
     }
 }
