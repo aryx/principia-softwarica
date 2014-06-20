@@ -17789,7 +17789,7 @@ cunmount(Chan *mnt, Chan *mounted)
 \subsection{Scan code}
 
 % Note that the main function here generates unicode characters
-% (but then they are decomposed back in individual parts for later)
+% (but they are actually decomposed back in individual chars later)
 
 % http://www.computer-engineering.org/ps2keyboard/
 
@@ -17833,6 +17833,9 @@ enum {
 % cool things like having C^P to be returned simply by looking in an array.
 % how would do it otherwise? would need a complex enum anyway
 
+% according to http://en.wikipedia.org/wiki/Private_Use_Areas
+% Kmouse which is Spec|0x100 is out of private space though
+
 
 <<global kbtab>>=
 Rune kbtab[Nscan] = 
@@ -17855,6 +17858,8 @@ Rune kbtab[Nscan] =
 [0x78]  No, No, No, No, No, No, No, No,
 };
 @
+% hash<scan_code, Rune>, 
+% can see Ctrl, Shift, Alt here (but not Altgr? Altgr is in ktabesc1)
 
 
 <<global kbtabshift>>=
@@ -18006,7 +18011,9 @@ kbdputsc(uchar k, int external)
 {
     bool keyup;
     Kbscan *kbscan;
-    Rune c = k;
+    // Rune is (uint) but actually 'c' can get the result of functions
+    // like latin1() which can return negative numbers.
+    long c = k; 
 
     if(external)
         kbscan = &kbscans[Ext];
@@ -18065,8 +18072,9 @@ kbdputsc(uchar k, int external)
     if(!(c & (Spec|KF))){
         <<[[kbdputsc()]] reboot if ctl-alt-del>>
         <<[[kbdputsc()]] if collecting>>
-        else
+        else {
             kbdputc(c); //!! adding the character in kbd staging area
+        }
     }else{
         switch(c){
         case Ctrl:
@@ -18094,15 +18102,22 @@ kbdputsc(uchar k, int external)
             break;
         <<[[kbdputsc()]] mouse keydown cases>>
         <<[[kbdputsc()]] special keyboard debug keys cases>>
+        // e.g. Left, Right or other special key
+        default:
+            kbdputc(c);
+            break;
         }
     }
 }
 @
+% about keyup, when type 'a', get 1e, when release get 9e, so 1e+0x80
+% do not put char instead of uchar for 'k', otherwise will get weird
+% behavior like Left generating a 2.
 
 \ifallcode
 <<[[kbdputsc()]] ensures c is in boundary>>=
 if(c > sizeof kbtab){
-    // how could reach that? kbtab has 0x80 elts
+    // how could reach that? kbtab has 0x80 elts and do c&=0x7f.
     c |= keyup;
     if(c != 0xFF)   /* these come fairly often: CAPSLOCK U Y */
         print("unknown key %ux\n", c);
@@ -18110,6 +18125,64 @@ if(c > sizeof kbtab){
 }
 @
 \fi
+
+
+\subsection{Esc}
+% actually when type Left on keyboard, it generates e0 4b.
+% The esc1 esc2 here are not related to the Esc key.
+% The actual Esc key generates scan code 0x01
+
+<<global kbtabesc1>>=
+Rune kbtabesc1[Nscan] =
+{
+[0x00]  No, No, No, No, No, No, No, No,
+[0x08]  No, No, No, No, No, No, No, No,
+[0x10]  No, No, No, No, No, No, No, No,
+[0x18]  No, No, No, No, '\n',   Ctrl,   No, No,
+[0x20]  No, No, No, No, No, No, No, No,
+[0x28]  No, No, Shift,  No, No, No, No, No,
+[0x30]  No, No, No, No, No, '/',    No, Print,
+[0x38]  Altgr,  No, No, No, No, No, No, No,
+[0x40]  No, No, No, No, No, No, Break,  Home,
+[0x48]  Up, Pgup,   No, Left,   No, Right,  No, End,
+[0x50]  Down,   Pgdown, Ins,    Del,    No, No, No, No,
+[0x58]  No, No, No, No, No, No, No, No,
+[0x60]  No, No, No, No, No, No, No, No,
+[0x68]  No, No, No, No, No, No, No, No,
+[0x70]  No, No, No, No, No, No, No, No,
+[0x78]  No, No, No, No, No, No, No, No,
+};
+@
+
+<<[[Kbscan]] other fields>>=
+bool esc1;
+int esc2;
+@
+
+<<[[kbdputsc()]] esc key handling part1 and possible return>>=
+/*
+ *  e0's is the first of a 2 character sequence, e1 the first
+ *  of a 3 character sequence (on the safari)
+ */
+if(c == 0xe0){
+    kbscan->esc1 = true;
+    return;
+} else if(c == 0xe1){
+    kbscan->esc2 = 2;
+    return;
+}
+@
+
+<<[[kbdputsc()]] esc key handling part2 and possible return>>=
+if(kbscan->esc1){
+    c = kbtabesc1[c];
+    kbscan->esc1 = false;
+} else if(kbscan->esc2){
+    kbscan->esc2--;
+    return;
+}
+@
+
 
 \subsection{[[kbd]]}
 
@@ -18154,9 +18227,11 @@ void
 kbdputc(Rune ch)
 {
     int i, n;
-    char buf[3]; // enough? UTFMAX is 4 so should be buf[4] no?
+    char buf[UTFmax]; // pad's fourth bugfix :)
     Rune r;
     char *next;
+
+    <<[[kbdputc()]] debugging>>
 
     if(kbd.ir == nil)
         return;       /* in case we're not inited yet */
@@ -18436,59 +18511,6 @@ setleds(Kbscan *kbscan)
 }
 @
 % >> >>
-
-\subsection{Esc}
-
-<<global kbtabesc1>>=
-Rune kbtabesc1[Nscan] =
-{
-[0x00]  No, No, No, No, No, No, No, No,
-[0x08]  No, No, No, No, No, No, No, No,
-[0x10]  No, No, No, No, No, No, No, No,
-[0x18]  No, No, No, No, '\n',   Ctrl,   No, No,
-[0x20]  No, No, No, No, No, No, No, No,
-[0x28]  No, No, Shift,  No, No, No, No, No,
-[0x30]  No, No, No, No, No, '/',    No, Print,
-[0x38]  Altgr,  No, No, No, No, No, No, No,
-[0x40]  No, No, No, No, No, No, Break,  Home,
-[0x48]  Up, Pgup,   No, Left,   No, Right,  No, End,
-[0x50]  Down,   Pgdown, Ins,    Del,    No, No, No, No,
-[0x58]  No, No, No, No, No, No, No, No,
-[0x60]  No, No, No, No, No, No, No, No,
-[0x68]  No, No, No, No, No, No, No, No,
-[0x70]  No, No, No, No, No, No, No, No,
-[0x78]  No, No, No, No, No, No, No, No,
-};
-@
-
-<<[[Kbscan]] other fields>>=
-bool esc1;
-int esc2;
-@
-
-<<[[kbdputsc()]] esc key handling part1 and possible return>>=
-/*
- *  e0's is the first of a 2 character sequence, e1 the first
- *  of a 3 character sequence (on the safari)
- */
-if(c == 0xe0){
-    kbscan->esc1 = true;
-    return;
-} else if(c == 0xe1){
-    kbscan->esc2 = 2;
-    return;
-}
-@
-
-<<[[kbdputsc()]] esc key handling part2 and possible return>>=
-if(kbscan->esc1){
-    c = kbtabesc1[c];
-    kbscan->esc1 = false;
-} else if(kbscan->esc2){
-    kbscan->esc2--;
-    return;
-}
-@
 
 
 \subsection{Changing keyboard}
@@ -26043,7 +26065,7 @@ cgapost(int code)
 \section{Special keys}
 
 <<kbd.c debugging macro>>=
-static bool kdebug;
+bool kdebug;
 @
 
 <<[[kbdputsc()]] special keyboard debug keys cases>>=
@@ -26060,7 +26082,7 @@ case KF|12:
 
 <<[[kbdputsc()]] debugging>>=
 if(kdebug)
-    print("sc %x ms %d\n", c, mouseshifted);
+    print("sc %x (ms %d)\n", k, mouseshifted);
 @
 
 <<[[kbdputsc()]] debugging up shift>>=
@@ -26073,6 +26095,12 @@ if(kdebug)
     print("shift\n");
 @
 
+<<[[kbdputc()]] debugging>>=
+extern bool kdebug;
+
+if(kdebug)
+    print("kbdputc(0x%x)\n", ch);
+@
 
 
 <<[[echo()]] locals>>=
@@ -29238,6 +29266,7 @@ extern  int utfnlen(char*, long);
 %//unused: extern  int utflen(char*);
 %//unused: extern  int runelen(long);
 
+% unicode input from keyboard
 
 % see also Spec = 0xF800 in enum specialkey
 
@@ -29246,10 +29275,18 @@ extern  int utfnlen(char*, long);
     int nk;
     Rune    kc[5];
 @
+% used to be Rune kc[5]; but does not make sense; would make
+% more sense with char kc[5]
 
 <<[[kbdputsc()]] if collecting>>=
 if(kbscan->collecting){
     int i;
+    // pad's additional overflow checking, just to make sure
+    if(kbscan->nk >= nelem(kbscan->kc)) {
+      kbscan->nk = 0;
+      kbscan->collecting = false;
+      print("collecting overflow, possible bug in latin1()\n");
+    }
     kbscan->kc[kbscan->nk++] = c;
     c = latin1(kbscan->kc, kbscan->nk);
     if(c < -1)  /* need more keystrokes */
@@ -29265,20 +29302,20 @@ if(kbscan->collecting){
 @
 
 <<[[kbdputsc()]] start collecting>>=
-            /*
-             * VMware and Qemu use Ctl-Alt as the key combination
-             * to make the VM give up keyboard and mouse focus.
-             * This has the unfortunate side effect that when you
-             * come back into focus, Plan 9 thinks you want to type
-             * a compose sequence (you just typed alt). 
-             *
-             * As a clumsy hack around this, we look for ctl-alt
-             * and don't treat it as the start of a compose sequence.
-             */
-            if(!kbscan->ctl){
-                kbscan->collecting = true;
-                kbscan->nk = 0;
-            }
+/*
+ * VMware and Qemu use Ctl-Alt as the key combination
+ * to make the VM give up keyboard and mouse focus.
+ * This has the unfortunate side effect that when you
+ * come back into focus, Plan 9 thinks you want to type
+ * a compose sequence (you just typed alt). 
+ *
+ * As a clumsy hack around this, we look for ctl-alt
+ * and don't treat it as the start of a compose sequence.
+ */
+if(!kbscan->ctl){
+    kbscan->collecting = true;
+    kbscan->nk = 0;
+}
 @
 
 <<latin1.h>>=
