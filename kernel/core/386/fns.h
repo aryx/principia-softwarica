@@ -18,7 +18,7 @@
 void    bootlinks(void);
 
 // defined in lib/latin1.c, used only in 386
-long    latin1(char*, int);
+long    latin1(Rune*, int);
 
 // used by main.c
 void    cpuinit(void);

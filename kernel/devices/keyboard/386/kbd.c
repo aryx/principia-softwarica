@@ -333,7 +333,7 @@ struct Kbscan {
     /*x: [[Kbscan]] other fields */
         bool collecting;
         int nk;
-        char    kc[5];
+        Rune    kc[5];
     /*e: [[Kbscan]] other fields */
 };
 /*e: struct Kbscan */

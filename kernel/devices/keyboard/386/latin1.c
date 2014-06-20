@@ -27,10 +27,10 @@ struct cvlist latintab[] = {
  * Given n characters k[0]..k[n-1], find the rune or return -1 for failure.
  */
 long
-unicode(char *k, int n)
+unicode(Rune *k, int n)
 {
     long c;
-    char *r;
+    Rune *r;
 
     c = 0;
     for(r = &k[1]; r<&k[n]; r++){       /* +1 to skip [Xx] */
@@ -53,7 +53,7 @@ unicode(char *k, int n)
  * is minus the required n.
  */
 long
-latin1(char* k, int n)
+latin1(Rune* k, int n)
 {
     struct cvlist *l;
     char c;
@@ -87,7 +87,7 @@ latin1(char* k, int n)
                 c = k[2];
             for(p=l->si; *p!=0; p++)
                 if(*p == c) {
-                    print("found: %lud\n", l->so[p - l->si]);
+                    print("found: 0x%x\n", l->so[p - l->si]);
                     return l->so[p - l->si];
                 }
             return -1;
