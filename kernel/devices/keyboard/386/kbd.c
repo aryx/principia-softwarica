@@ -344,7 +344,7 @@ Kbscan kbscans[Nscans]; /* kernel and external scan code state */
 /*e: global kbscans */
 
 /*s: kbd.c debugging macro */
-static bool kdebug;
+bool kdebug;
 /*e: kbd.c debugging macro */
 
 /*s: function setleds */
@@ -396,8 +396,8 @@ kbdputsc(uchar k, int external)
 {
     bool keyup;
     Kbscan *kbscan;
-    // essentially a Rune (uint) but used to get the result of functions
-    // like latin1 which can return negative numbers so have to use a long.
+    // Rune is (uint) but actually 'c' can get the result of functions
+    // like latin1() which can return negative numbers.
     long c = k; 
 
     if(external)
@@ -407,7 +407,7 @@ kbdputsc(uchar k, int external)
 
     /*s: [[kbdputsc()]] debugging */
     if(kdebug)
-        print("sc %x ms %d\n", c, mouseshifted);
+        print("sc %x (ms %d)\n", k, mouseshifted);
     /*e: [[kbdputsc()]] debugging */
 
     /*s: [[kbdputsc()]] esc key handling part1 and possible return */
@@ -429,7 +429,7 @@ kbdputsc(uchar k, int external)
 
     /*s: [[kbdputsc()]] ensures c is in boundary */
     if(c > sizeof kbtab){
-        // how could reach that? kbtab has 0x80 elts
+        // how could reach that? kbtab has 0x80 elts and do c&=0x7f.
         c |= keyup;
         if(c != 0xFF)   /* these come fairly often: CAPSLOCK U Y */
             print("unknown key %ux\n", c);
@@ -509,6 +509,7 @@ kbdputsc(uchar k, int external)
         /*s: [[kbdputsc()]] if collecting */
         if(kbscan->collecting){
             int i;
+            // pad's additional overflow checking, just to make sure
             if(kbscan->nk >= nelem(kbscan->kc)) {
               kbscan->nk = 0;
               kbscan->collecting = false;
@@ -527,8 +528,9 @@ kbdputsc(uchar k, int external)
             kbscan->collecting = false;
         }
         /*e: [[kbdputsc()]] if collecting */
-        else
+        else {
             kbdputc(c); //!! adding the character in kbd staging area
+        }
     }else{
         switch(c){
         case Ctrl:
@@ -537,20 +539,20 @@ kbdputsc(uchar k, int external)
         case Alt:
             kbscan->alt = true;
             /*s: [[kbdputsc()]] start collecting */
-                        /*
-                         * VMware and Qemu use Ctl-Alt as the key combination
-                         * to make the VM give up keyboard and mouse focus.
-                         * This has the unfortunate side effect that when you
-                         * come back into focus, Plan 9 thinks you want to type
-                         * a compose sequence (you just typed alt). 
-                         *
-                         * As a clumsy hack around this, we look for ctl-alt
-                         * and don't treat it as the start of a compose sequence.
-                         */
-                        if(!kbscan->ctl){
-                            kbscan->collecting = true;
-                            kbscan->nk = 0;
-                        }
+            /*
+             * VMware and Qemu use Ctl-Alt as the key combination
+             * to make the VM give up keyboard and mouse focus.
+             * This has the unfortunate side effect that when you
+             * come back into focus, Plan 9 thinks you want to type
+             * a compose sequence (you just typed alt). 
+             *
+             * As a clumsy hack around this, we look for ctl-alt
+             * and don't treat it as the start of a compose sequence.
+             */
+            if(!kbscan->ctl){
+                kbscan->collecting = true;
+                kbscan->nk = 0;
+            }
             /*e: [[kbdputsc()]] start collecting */
             break;
         case Altgr:
