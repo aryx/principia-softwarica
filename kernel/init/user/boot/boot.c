@@ -59,16 +59,16 @@ execinit(void)
   bind_safe("/386/bin", "/bin", MREPL);
   bind_safe("/rc/bin", "/bin", MAFTER);
 
-  bind_safe("#v", "/dev", MAFTER); //devvga
-  bind_safe("#m", "/dev", MAFTER); //devmouse
   bind_safe("#P", "/dev", MAFTER); //devarch
 
+  bind_safe("#m", "/dev", MAFTER); //devmouse
   run("/bin/mouse", "ps2", nil);
+
+  bind_safe("#v", "/dev", MAFTER); //devvga
   //this just need a regular vga driver
   //run("/bin/vga", "-l", "640x480x8", nil);
   //this need special drivers, such as the clgd424x.c in the kernel
   run("/bin/vga", "-l", "1024x768x8", nil); // can add -V to debug vga
-
   bind_safe("#i", "/dev", MAFTER); // devdraw
 
   // for rio

@@ -8,11 +8,7 @@ struct Cursorinfo {
 /* devmouse.c */
 extern void mousetrack(int, int, int, int);
 extern Point mousexy(void);
-
 extern void mouseaccelerate(int);
-extern int m3mouseputc(Queue*, int);
-extern int m5mouseputc(Queue*, int);
-extern int mouseputc(Queue*, int);
 
 extern Cursorinfo cursor;
 extern Cursor arrow;
@@ -155,8 +151,8 @@ extern void swcursorinit(void);
 /* devdraw.c */
 extern void deletescreenimage(void);
 extern void resetscreenimage(void);
-//extern int    drawhasclients(void);
 extern ulong  blanktime;
+//extern int    drawhasclients(void);
 //extern void setscreenimageclipr(Rectangle);
 //extern void drawflush(void);
 extern int drawidletime(void);
