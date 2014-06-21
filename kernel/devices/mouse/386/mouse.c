@@ -1,15 +1,19 @@
-#include "u.h"
+/*s: mouse.c */
+/*s: kernel basic includes */
+#include <u.h>
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
-#include "../port/error.h"
+/*e: kernel basic includes */
 
 #include "io.h"
 
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
+
 #include "screen.h"
 
 /*
@@ -30,7 +34,7 @@ static int intellimouse;
 static int packetsize;
 static int resolution;
 static int accelerated;
-static int mousehwaccel;
+static bool mousehwaccel;
 static char mouseport[5];
 
 enum
@@ -177,7 +181,7 @@ ps2mouse(void)
 
     mousetype = MousePS2;
     packetsize = 3;
-    mousehwaccel = 1;
+    mousehwaccel = true;
 }
 
 /*
@@ -331,9 +335,9 @@ mousectl(Cmdbuf *cb)
         break;
     case CMhwaccel:
         if(strcmp(cb->f[1], "on")==0)
-            mousehwaccel = 1;
+            mousehwaccel = true;
         else if(strcmp(cb->f[1], "off")==0)
-            mousehwaccel = 0;
+            mousehwaccel = false;
         else
             cmderror(cb, "bad mouse control message");
     }
@@ -341,3 +345,4 @@ mousectl(Cmdbuf *cb)
     qunlock(&mousectlqlock);
     poperror();
 }
+/*e: mouse.c */

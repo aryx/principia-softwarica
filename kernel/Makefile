@@ -86,6 +86,8 @@ SRC_VIEWS= \
   devices/keyboard/386/kbd.c \
   devices/keyboard/386/latin1.c \
   devices/keyboard/386/latin1.h \
+  devices/mouse/386/mouse.c \
+  devices/mouse/devmouse.c \
   devices/portfns_devices.h \
   devices/screen/386/cga.c \
   devices/storage/386/devfloppy.c \

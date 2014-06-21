@@ -1,13 +1,17 @@
-#include    "u.h"
-#include    "../port/lib.h"
-#include    "mem.h"
-#include    "dat.h"
-#include    "fns.h"
-#include    "../port/error.h"
+/*s: devmouse.c */
+/*s: kernel basic includes */
+#include <u.h>
+#include "../port/lib.h"
+#include "../port/error.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+/*e: kernel basic includes */
 
 #include    <draw.h>
 #include    <memdraw.h>
 #include    <cursor.h>
+
 #include    "screen.h"
 
 enum {
@@ -34,15 +38,15 @@ struct Mouseinfo
     Mousestate;
     int dx;
     int dy;
-    int track;      /* dx & dy updated */
-    int redraw;     /* update cursor on screen */
+    bool track;      /* dx & dy updated */
+    bool redraw;     /* update cursor on screen */
     ulong   lastcounter;    /* value when /dev/mouse read */
     ulong   lastresize;
     ulong   resize;
     Rendez  r;
     Ref;
     QLock;
-    int open;
+    bool open;
     int acceleration;
     int maxacc;
     Mousestate  queue[16];  /* circular buffer of click events */
@@ -69,7 +73,7 @@ static Cmdtab mousectlmsg[] =
 
 Mouseinfo   mouse;
 Cursorinfo  cursor;
-int     mouseshifted;
+bool     mouseshifted;
 int     kbdbuttons;
 void        (*kbdmouse)(int);
 Cursor      curs;
@@ -78,7 +82,6 @@ void    Cursortocursor(Cursor*);
 int mousechanged(void*);
 
 static void mouseclock(void);
-//static void xkbdmouse(int);
 
 enum{
     Qdir,
@@ -99,8 +102,8 @@ static Dirtab mousedir[]={
 static uchar buttonmap[8] = {
     0, 1, 2, 3, 4, 5, 6, 7,
 };
-static int mouseswap;
-static int scrollswap;
+static bool mouseswap;
+static bool scrollswap;
 static ulong mousetime;
 
 extern Memimage* gscreen;
@@ -137,7 +140,7 @@ mouseinit(void)
 {
     curs = arrow;
     Cursortocursor(&arrow);
-    cursoron(1);
+    cursoron(true);
     kbdmouse = mousefromkbd;
     mousetime = seconds();
 }
@@ -183,7 +186,7 @@ mouseopen(Chan *c, int omode)
             unlock(&mouse);
             error(Einuse);
         }
-        mouse.open = 1;
+        mouse.open = true;
         mouse.ref++;
         mouse.lastresize = mouse.resize;
         unlock(&mouse);
@@ -215,12 +218,12 @@ mouseclose(Chan *c)
             return;
         lock(&mouse);
         if(c->qid.path == Qmouse)
-            mouse.open = 0;
+            mouse.open = false;
         if(--mouse.ref == 0){
-            cursoroff(1);
+            cursoroff(true);
             curs = arrow;
             Cursortocursor(&arrow);
-            cursoron(1);
+            cursoron(true);
         }
         unlock(&mouse);
     }
@@ -257,8 +260,8 @@ mouseread(Chan *c, void *va, long n, vlong off)
         return n;
 
     case Qmouse:
-        while(mousechanged(0) == 0)
-            sleep(&mouse.r, mousechanged, 0);
+        while(mousechanged(nil) == 0)
+            sleep(&mouse.r, mousechanged, nil);
 
         mouse.qfull = 0;
         mousetime = seconds();
@@ -367,7 +370,7 @@ mousewrite(Chan *c, void *va, long n, vlong)
         error(Eisdir);
 
     case Qcursor:
-        cursoroff(1);
+        cursoroff(true);
         if(n < 2*4+2*2*16){
             curs = arrow;
             Cursortocursor(&arrow);
@@ -380,10 +383,10 @@ mousewrite(Chan *c, void *va, long n, vlong)
             Cursortocursor(&curs);
         }
         qlock(&mouse);
-        mouse.redraw = 1;
+        mouse.redraw = true;
         mouseclock();
         qunlock(&mouse);
-        cursoron(1);
+        cursoron(true);
         return n;
 
     case Qmousectl:
@@ -401,11 +404,11 @@ mousewrite(Chan *c, void *va, long n, vlong)
                 setbuttonmap("123");
             else
                 setbuttonmap("321");
-            mouseswap ^= 1;
+            mouseswap ^= true;
             break;
 
         case CMscrollswap:
-            scrollswap ^= 1;
+            scrollswap ^= true;
             break;
 
         case CMbuttonmap:
@@ -416,7 +419,7 @@ mousewrite(Chan *c, void *va, long n, vlong)
             break;
 
         case CMwildcard:
-            mousectl(cb);
+            mousectl(cb); // device specific hook
             break;
         }
 
@@ -456,8 +459,8 @@ mousewrite(Chan *c, void *va, long n, vlong)
         qlock(&mouse);
         if(ptinrect(pt, gscreen->r)){
             mouse.xy = pt;
-            mouse.redraw = 1;
-            mouse.track = 1;
+            mouse.redraw = true;
+            mouse.track = true;
             mouseclock();
         }
         qunlock(&mouse);
@@ -507,17 +510,17 @@ mouseclock(void)
 {
     if(mouse.track){
         mousetrack(mouse.dx, mouse.dy, mouse.buttons, TK2MS(CPUS(0)->ticks));
-        mouse.track = 0;
+        mouse.track = false;
         mouse.dx = 0;
         mouse.dy = 0;
     }
     if(mouse.redraw && canlock(&cursor)){
-        mouse.redraw = 0;
-        cursoroff(0);
-        mouse.redraw = cursoron(0);
+        mouse.redraw = false;
+        cursoroff(false);
+        mouse.redraw = cursoron(false);
         unlock(&cursor);
     }
-    drawactive(0);
+    drawactive(false);
 }
 
 static int
@@ -578,7 +581,7 @@ mousetrack(int dx, int dy, int b, int msec)
     lastb = mouse.buttons;
     mouse.xy = Pt(x, y);
     mouse.buttons = b|kbdbuttons;
-    mouse.redraw = 1;
+    mouse.redraw = true;
     mouse.counter++;
     mouse.msec = msec;
 
@@ -594,7 +597,7 @@ mousetrack(int dx, int dy, int b, int msec)
             mouse.qfull = 1;
     }
     wakeup(&mouse.r);
-    drawactive(1);
+    drawactive(true);
 }
 
 /*
@@ -765,3 +768,4 @@ mouseresize(void)
     wakeup(&mouse.r);
 }
 
+/*e: devmouse.c */

@@ -319,7 +319,7 @@ setcolor(ulong p, ulong r, ulong g, ulong b)
 }
 
 int
-cursoron(int dolock)
+cursoron(bool dolock)
 {
     VGAscr *scr;
     int v;

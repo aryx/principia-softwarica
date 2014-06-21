@@ -18,7 +18,7 @@ char*   getconfenv(void);
 
 
 // screen/devdraw.c
-void    drawactive(int);
+void    drawactive(bool);
 void    drawcmap(void);
 // mouse/devmouse.c
 void    mouseresize(void);
