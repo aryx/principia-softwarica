@@ -4,61 +4,61 @@
 #define	RFORK		1
 #define	EXEC		2
 #define	EXITS		3
-#define	AWAIT		25
+#define	AWAIT		4
 /*e: sys.h process syscalls */
 /*s: sys.h memory syscalls */
-#define	BRK		32
+#define	BRK		5
 /*e: sys.h memory syscalls */
 /*s: sys.h file syscalls */
-#define	OPEN		8
-#define	CLOSE		9
-#define	PREAD		10
-#define	PWRITE		11
-#define	SEEK		12
+#define	OPEN		6
+#define	CLOSE		7
+#define	PREAD		8
+#define	PWRITE		9
+#define	SEEK		10
 /*e: sys.h file syscalls */
 /*s: sys.h directory syscalls */
-#define	CREATE		6
-#define	REMOVE		7
-#define	CHDIR		18
-#define	FD2PATH		19
-#define	STAT		14
-#define	FSTAT		15
-#define	WSTAT		16
-#define	FWSTAT		17
+#define	CREATE	        11
+#define	REMOVE		12
+#define	CHDIR		13
+#define	FD2PATH		14
+#define	STAT		15
+#define	FSTAT		16
+#define	WSTAT		17
+#define	FWSTAT		18
 /*e: sys.h directory syscalls */
 /*s: sys.h namespace syscalls */
-#define	BIND		22
-#define	MOUNT		23
-#define	UNMOUNT		24
+#define	BIND		19
+#define	MOUNT		20
+#define	UNMOUNT		21
 /*e: sys.h namespace syscalls */
 /*s: sys.h time syscalls */
-#define	SLEEP		4
-#define	ALARM		5
+#define	SLEEP		22
+#define	ALARM		23
 /*e: sys.h time syscalls */
 /*s: sys.h ipc syscalls */
-#define	NOTIFY		30
-#define	NOTED		31
+#define	NOTIFY		24
+#define	NOTED		25
 
-#define	PIPE		21
+#define	PIPE		26
 
-#define	SEGATTACH	33
-#define	SEGDETACH	34
-#define	SEGFREE		35
-#define	SEGFLUSH	36
-#define	SEGBRK		37
+#define	SEGATTACH	27
+#define	SEGDETACH	28
+#define	SEGFREE		29
+#define	SEGFLUSH	30
+#define	SEGBRK		31
 /*e: sys.h ipc syscalls */
 /*s: sys.h concurrency syscalls */
-#define	RENDEZVOUS	26
-#define	SEMACQUIRE	27
-#define	SEMRELEASE	28
-#define	TSEMACQUIRE	29
+#define	RENDEZVOUS	32
+#define	SEMACQUIRE	33
+#define	SEMRELEASE	34
+#define	TSEMACQUIRE	35
 /*e: sys.h concurrency syscalls */
 /*s: sys.h special file syscalls */
-#define	DUP		    20
+#define	DUP		    36
 /*e: sys.h special file syscalls */
 /*s: sys.h security syscalls */
-#define	FVERSION	38
-#define	FAUTH		39
+#define	FVERSION	37
+#define	FAUTH		38
 /*e: sys.h security syscalls */
-#define	ERRSTR		40
+#define	ERRSTR		39
 /*e: sys.h */
