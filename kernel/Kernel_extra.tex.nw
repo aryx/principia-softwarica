@@ -1778,6 +1778,112 @@ extern void (*kbdmouse)(int);
 %//  return i;
 %//}
 
+\subsection*{[[devices/keyboard/386/latin1.c]]}
+
+
+<<latin1.c>>=
+#include    "u.h"
+#include    "../port/lib.h"
+
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
+
+/*
+ * The code makes two assumptions: strlen(ld) is 1 or 2; latintab[i].ld can be a
+ * prefix of latintab[j].ld only when j<i.
+ */
+struct cvlist
+{
+    char    *ld;        /* must be seen before using this conversion */
+    char    *si;        /* options for last input characters */
+
+    Rune    *so;        /* the corresponding Rune for each si entry */
+};
+
+struct cvlist latintab[] = {
+#include "../port/latin1.h"
+    0,  0,      0
+};
+
+/*
+ * Given n characters k[0]..k[n-1], find the rune or return -1 for failure.
+ */
+long
+unicode(Rune *k, int n)
+{
+    long c;
+    Rune *r;
+
+    c = 0;
+    for(r = &k[1]; r<&k[n]; r++){       /* +1 to skip [Xx] */
+        c <<= 4;
+        if('0'<=*r && *r<='9')
+            c += *r-'0';
+        else if('a'<=*r && *r<='f')
+            c += 10 + *r-'a';
+        else if('A'<=*r && *r<='F')
+            c += 10 + *r-'A';
+        else
+            return -1;
+    }
+    return c;
+}
+
+/*
+ * Given n characters k[0]..k[n-1], find the corresponding rune or return -1 for
+ * failure, or something < -1 if n is too small.  In the latter case, the result
+ * is minus the required n.
+ */
+long
+latin1(Rune* k, int n)
+{
+    struct cvlist *l;
+    char c;
+    char* p;
+
+//    print("latin1: %d, %d\n", n, k[n-1]);
+
+    if(k[0] == 'X')
+        if(n>=5)
+            return unicode(k, 5);
+        else
+            return -5;
+    if(k[0] == 'x')
+        if(n>=UTFmax*2+1)
+            return unicode(k, UTFmax*2+1);
+        else
+            return -(UTFmax+1);
+
+    for(l=latintab; l->ld!=0; l++)
+        if(k[0] == l->ld[0]){
+//          print("found: %s, %s\n", l->ld, l->si);
+            if(n == 1)
+                return -2;
+            if(l->ld[1] == 0)
+                c = k[1];
+            else if(l->ld[1] != k[1])
+                continue;
+            else if(n == 2)
+                return -3;
+            else
+                c = k[2];
+            for(p=l->si; *p!=0; p++)
+                if(*p == c) {
+                    print("found: 0x%x\n", l->so[p - l->si]);
+                    return l->so[p - l->si];
+                }
+            return -1;
+        }
+    return -1;
+}
+@
+
+
+\subsection*{[[devices/keyboard/386/latin1.h]]}
+
+
+
 \subsection*{[[devices/portfns_devices.h]]}
 
 \ifallcode
@@ -1843,6 +1949,1317 @@ void    kbdputmap(ushort, ushort, Rune);
 <<function cgapost>>
 
 <<function screeninit>>
+@
+
+
+\subsection*{[[devices/storage/386/devfloppy.c]]}
+
+\ifallcode
+<<devfloppy.c forward decl>>=
+static void floppyintr(Ureg*);
+static int floppyon(FDrive*);
+static void floppyoff(FDrive*);
+static void floppysetdef(FDrive*);
+
+/*
+ *  predeclared
+ */
+static int  cmddone(void*);
+static void floppyformat(FDrive*, Cmdbuf*);
+static void floppykproc(void*);
+static void floppypos(FDrive*,long);
+static int  floppyrecal(FDrive*);
+static int  floppyresult(void);
+static void floppyrevive(void);
+static long floppyseek(FDrive*, long);
+static int  floppysense(void);
+static void floppywait(int);
+static long floppyxfer(FDrive*, int, void*, long, long);
+@
+
+<<devfloppy.c debugging macro>>=
+#define DPRINT if(floppydebug)print
+int floppydebug = 0;
+@ 
+\fi
+
+
+
+<<interrupt callback pcfloppyintr>>=
+static void
+pcfloppyintr(Ureg *ur, void *a)
+{
+    USED(a);
+
+    floppyintr(ur);
+}
+@
+
+
+<<global floppydevtab>>=
+Dev floppydevtab = {
+    .dc       =    'f',
+    .name     =    "floppy",
+               
+    .reset    =    floppyreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    floppyattach,
+    .walk     =    floppywalk,
+    .stat     =    floppystat,
+    .open     =    floppyopen,
+    .create   =    devcreate,
+    .close    =    floppyclose,
+    .read     =    floppyread,
+    .bread    =    devbread,
+    .write    =    floppywrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+};
+@
+
+
+<<devfloppy.c>>=
+<<kernel basic includes>>
+#include    "io.h"
+#include    "floppy.h"
+
+/* Intel 82077A (8272A compatible) floppy controller */
+
+/* This module expects the following functions to be defined
+ * elsewhere: 
+ * 
+ * inb()
+ * outb()
+ * floppyexec()
+ * floppyeject() 
+ * floppysetup0()
+ * floppysetup1()
+ * dmainit()
+ * dmasetup()
+ * dmaend()
+ * 
+ * On DMA systems, floppyexec() should be an empty function; 
+ * on non-DMA systems, dmaend() should be an empty function; 
+ * dmasetup() may enforce maximum transfer sizes. 
+ */
+
+<<devfloppy.c forward decl>>
+
+
+<<interrupt callback pcfloppyintr>>
+
+void
+floppysetup0(FController *fl)
+{
+    fl->ndrive = 0;
+    if(ioalloc(Psra, 6, 0, "floppy") < 0)
+        return;
+    if(ioalloc(Pdir, 1, 0, "floppy") < 0){
+        iofree(Psra);
+        return;
+    }
+    fl->ndrive = 2;
+}
+
+void
+floppysetup1(FController *fl)
+{
+    uchar equip;
+
+    /*
+     *  read nvram for types of floppies 0 & 1
+     */
+    equip = nvramread(0x10);
+    if(fl->ndrive > 0){
+        fl->d[0].dt = (equip >> 4) & 0xf;
+        floppysetdef(&fl->d[0]);
+    }
+    if(fl->ndrive > 1){
+        fl->d[1].dt = equip & 0xf;
+        floppysetdef(&fl->d[1]);
+    }
+    intrenable(IrqFLOPPY, pcfloppyintr, fl, BUSUNKNOWN, "floppy");
+}
+
+/*
+ *  eject disk ( unknown on safari )
+ */
+void
+floppyeject(FDrive *dp)
+{
+    floppyon(dp);
+    dp->vers++;
+    floppyoff(dp);
+}
+
+int 
+floppyexec(char *a, long b, int c)
+{
+    USED(a, b, c);
+    return b;
+}
+
+
+
+enum {
+    /* file types */
+    Qdir=       0, 
+    Qdata=      (1<<2),
+    Qctl=       (2<<2),
+    Qmask=      (3<<2),
+
+    DMAchan=    2,  /* floppy dma channel */
+};
+
+<<devfloppy.c debugging macro>>
+
+/*
+ *  types of drive (from PC equipment byte)
+ */
+enum
+{
+    Tnone=      0,
+    T360kb=     1,
+    T1200kb=    2,
+    T720kb=     3,
+    T1440kb=    4,
+};
+
+FType floppytype[] =
+{
+ { "3½HD", T1440kb, 512, 18, 2, 1, 80, 0x1B, 0x54, 0, },
+ { "3½DD", T1440kb, 512,  9, 2, 1, 80, 0x1B, 0x54, 2, },
+ { "3½DD", T720kb,  512,  9, 2, 1, 80, 0x1B, 0x54, 2, },
+ { "5¼HD", T1200kb, 512, 15, 2, 1, 80, 0x2A, 0x50, 0, },
+ { "5¼DD", T1200kb, 512,  9, 2, 2, 40, 0x2A, 0x50, 1, },
+ { "ATT3B1",    T1200kb, 512,  8, 2, 2, 48, 0x2A, 0x50, 1, },
+ { "5¼DD", T360kb,  512,  9, 2, 1, 40, 0x2A, 0x50, 2, },
+};
+
+/*
+ *  bytes per sector encoding for the controller.
+ *  - index for b2c is is (bytes per sector/128).
+ *  - index for c2b is code from b2c
+ */
+static int b2c[] =
+{
+[1] 0,
+[2] 1,
+[4] 2,
+[8] 3,
+};
+static int c2b[] =
+{
+    128,
+    256,
+    512,
+    1024,
+};
+
+FController fl;
+
+#define MOTORBIT(i) (1<<((i)+4))
+
+
+Dirtab floppydir[]={
+    ".",        {Qdir, 0, QTDIR},   0,  0550,
+    "fd0disk",      {Qdata + 0},    0,  0660,
+    "fd0ctl",       {Qctl + 0}, 0,  0660,
+    "fd1disk",      {Qdata + 1},    0,  0660,
+    "fd1ctl",       {Qctl + 1}, 0,  0660,
+    "fd2disk",      {Qdata + 2},    0,  0660,
+    "fd2ctl",       {Qctl + 2}, 0,  0660,
+    "fd3disk",      {Qdata + 3},    0,  0660,
+    "fd3ctl",       {Qctl + 3}, 0,  0660,
+};
+#define NFDIR   2   /* directory entries/drive */
+
+enum
+{
+    CMdebug,
+    CMnodebug,
+    CMeject,
+    CMformat,
+    CMreset,
+};
+
+static Cmdtab floppyctlmsg[] =
+{
+    CMdebug,    "debug",    1,
+    CMnodebug,  "nodebug", 1,
+    CMeject,    "eject",    1,
+    CMformat,   "format",   0,
+    CMreset,    "reset",    1,
+};
+
+static void
+fldump(void)
+{
+    DPRINT("sra %ux srb %ux dor %ux msr %ux dir %ux\n", inb(Psra), inb(Psrb),
+        inb(Pdor), inb(Pmsr), inb(Pdir));
+}
+
+/*
+ *  set floppy drive to its default type
+ */
+static void
+floppysetdef(FDrive *dp)
+{
+    FType *t;
+
+    for(t = floppytype; t < &floppytype[nelem(floppytype)]; t++)
+        if(dp->dt == t->dt){
+            dp->t = t;
+            floppydir[1+NFDIR*dp->dev].length = dp->t->cap;
+            break;
+        }
+}
+
+static void
+floppyreset(void)
+{
+    FDrive *dp;
+    FType *t;
+    ulong maxtsize;
+    
+    floppysetup0(&fl);
+    if(fl.ndrive == 0)
+        return;
+
+    /*
+     *  init dependent parameters
+     */
+    maxtsize = 0;
+    for(t = floppytype; t < &floppytype[nelem(floppytype)]; t++){
+        t->cap = t->bytes * t->heads * t->sectors * t->tracks;
+        t->bcode = b2c[t->bytes/128];
+        t->tsize = t->bytes * t->sectors;
+        if(maxtsize < t->tsize)
+            maxtsize = t->tsize;
+    }
+
+    /*
+     * Should check if this fails. Can do so
+     * if there is no space <= 16MB for the DMA
+     * bounce buffer.
+     */
+    dmainit(DMAchan, maxtsize);
+
+    /*
+     *  allocate the drive storage
+     */
+    fl.d = xalloc(fl.ndrive*sizeof(FDrive));
+    fl.selected = fl.d;
+
+    /*
+     *  stop the motors
+     */
+    fl.motor = 0;
+    delay(10);
+    outb(Pdor, fl.motor | Fintena | Fena);
+    delay(10);
+
+    /*
+     *  init drives
+     */
+    for(dp = fl.d; dp < &fl.d[fl.ndrive]; dp++){
+        dp->dev = dp - fl.d;
+        dp->dt = T1440kb;
+        floppysetdef(dp);
+        dp->cyl = -1;           /* because we don't know */
+        dp->cache = (uchar*)xspanalloc(maxtsize, BY2PG, 64*1024);
+        dp->ccyl = -1;
+        dp->vers = 0;
+    }
+
+    /*
+     *  first operation will recalibrate
+     */
+    fl.confused = 1;
+
+    floppysetup1(&fl);
+}
+
+static Chan*
+floppyattach(char *spec)
+{
+    static int kstarted;
+
+    if(fl.ndrive == 0)
+        error(Enodev);
+
+    if(kstarted == 0){
+        /*
+         *  watchdog to turn off the motors
+         */
+        kstarted = 1;
+        kproc("floppy", floppykproc, 0);
+    }
+    return devattach('f', spec);
+}
+
+static Walkqid*
+floppywalk(Chan *c, Chan *nc, char **name, int nname)
+{
+    return devwalk(c, nc, name, nname, floppydir, 1+fl.ndrive*NFDIR, devgen);
+}
+
+static int
+floppystat(Chan *c, uchar *dp, int n)
+{
+    return devstat(c, dp, n, floppydir, 1+fl.ndrive*NFDIR, devgen);
+}
+
+static Chan*
+floppyopen(Chan *c, int omode)
+{
+    return devopen(c, omode, floppydir, 1+fl.ndrive*NFDIR, devgen);
+}
+
+static void
+floppyclose(Chan *)
+{
+}
+
+static void
+islegal(ulong offset, long n, FDrive *dp)
+{
+    if(offset % dp->t->bytes)
+        error(Ebadarg);
+    if(n % dp->t->bytes)
+        error(Ebadarg);
+}
+
+/*
+ *  check if the floppy has been replaced under foot.  cause
+ *  an error if it has.
+ *
+ *  a seek and a read clears the condition.  this was determined
+ *  experimentally, there has to be a better way.
+ *
+ *  if the read fails, cycle through the possible floppy
+ *  density till one works or we've cycled through all
+ *  possibilities for this drive.
+ */
+static void
+changed(Chan *c, FDrive *dp)
+{
+    ulong old;
+    FType *start;
+
+    /*
+     *  if floppy has changed or first time through
+     */
+    if((inb(Pdir)&Fchange) || dp->vers == 0){
+        DPRINT("changed\n");
+        fldump();
+        dp->vers++;
+        start = dp->t;
+        dp->maxtries = 3;   /* limit it when we're probing */
+
+        /* floppyon will fail if there's a controller but no drive */
+        dp->confused = 1;   /* make floppyon recal */
+        if(floppyon(dp) < 0)
+            error(Eio);
+
+        /* seek to the first track */
+        floppyseek(dp, dp->t->heads*dp->t->tsize);
+        while(waserror()){
+            /*
+             *  if first attempt doesn't reset changed bit, there's
+             *  no floppy there
+             */
+            if(inb(Pdir)&Fchange)
+                nexterror();
+
+            while(++dp->t){
+                if(dp->t == &floppytype[nelem(floppytype)])
+                    dp->t = floppytype;
+                if(dp->dt == dp->t->dt)
+                    break;
+            }
+            floppydir[1+NFDIR*dp->dev].length = dp->t->cap;
+
+            /* floppyon will fail if there's a controller but no drive */
+            if(floppyon(dp) < 0)
+                error(Eio);
+
+            DPRINT("changed: trying %s\n", dp->t->name);
+            fldump();
+            if(dp->t == start)
+                nexterror();
+        }
+
+        /* if the read succeeds, we've got the density right */
+        floppyxfer(dp, Fread, dp->cache, 0, dp->t->tsize);
+        poperror();
+        dp->maxtries = 20;
+    }
+
+    old = c->qid.vers;
+    c->qid.vers = dp->vers;
+    if(old && old != dp->vers)
+        error(Eio);
+}
+
+static int
+readtrack(FDrive *dp, int cyl, int head)
+{
+    int i, nn, sofar;
+    ulong pos;
+
+    nn = dp->t->tsize;
+    if(dp->ccyl==cyl && dp->chead==head)
+        return nn;
+    pos = (cyl*dp->t->heads+head) * nn;
+    for(sofar = 0; sofar < nn; sofar += i){
+        dp->ccyl = -1;
+        i = floppyxfer(dp, Fread, dp->cache + sofar, pos + sofar, nn - sofar);
+        if(i <= 0)
+            return -1;
+    }
+    dp->ccyl = cyl;
+    dp->chead = head;
+    return nn;
+}
+
+static long
+floppyread(Chan *c, void *a, long n, vlong off)
+{
+    FDrive *dp;
+    long rv;
+    int sec, head, cyl;
+    long len;
+    uchar *aa;
+    ulong offset = off;
+
+    if(c->qid.type & QTDIR)
+        return devdirread(c, a, n, floppydir, 1+fl.ndrive*NFDIR, devgen);
+
+    rv = 0;
+    dp = &fl.d[c->qid.path & ~Qmask];
+    switch ((int)(c->qid.path & Qmask)) {
+    case Qdata:
+        islegal(offset, n, dp);
+        aa = a;
+
+        qlock(&fl);
+        if(waserror()){
+            qunlock(&fl);
+            nexterror();
+        }
+        floppyon(dp);
+        changed(c, dp);
+        for(rv = 0; rv < n; rv += len){
+            /*
+             *  all xfers come out of the track cache
+             */
+            dp->len = n - rv;
+            floppypos(dp, offset+rv);
+            cyl = dp->tcyl;
+            head = dp->thead;
+            len = dp->len;
+            sec = dp->tsec;
+            if(readtrack(dp, cyl, head) < 0)
+                break;
+            memmove(aa+rv, dp->cache + (sec-1)*dp->t->bytes, len);
+        }
+        qunlock(&fl);
+        poperror();
+
+        break;
+    case Qctl:
+        return readstr(offset, a, n, dp->t->name);
+    default:
+        panic("floppyread: bad qid");
+    }
+
+    return rv;
+}
+
+static long
+floppywrite(Chan *c, void *a, long n, vlong off)
+{
+    FDrive *dp;
+    long rv, i;
+    char *aa = a;
+    Cmdbuf *cb;
+    Cmdtab *ct;
+    ulong offset = off;
+
+    rv = 0;
+    dp = &fl.d[c->qid.path & ~Qmask];
+    switch ((int)(c->qid.path & Qmask)) {
+    case Qdata:
+        islegal(offset, n, dp);
+        qlock(&fl);
+        if(waserror()){
+            qunlock(&fl);
+            nexterror();
+        }
+        floppyon(dp);
+        changed(c, dp);
+        for(rv = 0; rv < n; rv += i){
+            floppypos(dp, offset+rv);
+            if(dp->tcyl == dp->ccyl)
+                dp->ccyl = -1;
+            i = floppyxfer(dp, Fwrite, aa+rv, offset+rv, n-rv);
+            if(i < 0)
+                break;
+            if(i == 0)
+                error(Eio);
+        }
+        qunlock(&fl);
+        poperror();
+        break;
+    case Qctl:
+        rv = n;
+        cb = parsecmd(a, n);
+        if(waserror()){
+            free(cb);
+            nexterror();
+        }
+        qlock(&fl);
+        if(waserror()){
+            qunlock(&fl);
+            nexterror();
+        }
+        ct = lookupcmd(cb, floppyctlmsg, nelem(floppyctlmsg));
+        switch(ct->index){
+        case CMeject:
+            floppyeject(dp);
+            break;
+        case CMformat:
+            floppyformat(dp, cb);
+            break;
+        case CMreset:
+            fl.confused = 1;
+            floppyon(dp);
+            break;
+        case CMdebug:
+            floppydebug = 1;
+            break;
+        case CMnodebug:
+            floppydebug = 0;
+            break;
+        }
+        poperror();
+        qunlock(&fl);
+        poperror();
+        free(cb);
+        break;
+    default:
+        panic("floppywrite: bad qid");
+    }
+
+    return rv;
+}
+
+static void
+floppykproc(void *)
+{
+    FDrive *dp;
+
+    while(waserror())
+        ;
+    for(;;){
+        for(dp = fl.d; dp < &fl.d[fl.ndrive]; dp++){
+            if((fl.motor&MOTORBIT(dp->dev))
+            && TK2SEC(cpu->ticks - dp->lasttouched) > 5
+            && canqlock(&fl)){
+                if(TK2SEC(cpu->ticks - dp->lasttouched) > 5)
+                    floppyoff(dp);
+                qunlock(&fl);
+            }
+        }
+        tsleep(&up->sleepr, returnfalse, 0, 1000);
+    }
+}
+
+/*
+ *  start a floppy drive's motor.
+ */
+static int
+floppyon(FDrive *dp)
+{
+    int alreadyon;
+    int tries;
+
+    if(fl.confused)
+        floppyrevive();
+
+    /* start motor and select drive */
+    alreadyon = fl.motor & MOTORBIT(dp->dev);
+    fl.motor |= MOTORBIT(dp->dev);
+    outb(Pdor, fl.motor | Fintena | Fena | dp->dev);
+    if(!alreadyon){
+        /* wait for drive to spin up */
+        tsleep(&up->sleepr, returnfalse, 0, 750);
+
+        /* clear any pending interrupts */
+        floppysense();
+    }
+
+    /* set transfer rate */
+    if(fl.rate != dp->t->rate){
+        fl.rate = dp->t->rate;
+        outb(Pdsr, fl.rate);
+    }
+
+    /* get drive to a known cylinder */
+    if(dp->confused)
+        for(tries = 0; tries < 4; tries++)
+            if(floppyrecal(dp) >= 0)
+                break;
+    dp->lasttouched = cpu->ticks;
+    fl.selected = dp;
+
+    /* return -1 if this didn't work */
+    if(dp->confused)
+        return -1;
+    return 0;
+}
+
+/*
+ *  stop the floppy if it hasn't been used in 5 seconds
+ */
+static void
+floppyoff(FDrive *dp)
+{
+    fl.motor &= ~MOTORBIT(dp->dev);
+    outb(Pdor, fl.motor | Fintena | Fena | dp->dev);
+}
+
+/*
+ *  send a command to the floppy
+ */
+static int
+floppycmd(void)
+{
+    int i;
+    int tries;
+
+    fl.nstat = 0;
+    for(i = 0; i < fl.ncmd; i++){
+        for(tries = 0; ; tries++){
+            if((inb(Pmsr)&(Ffrom|Fready)) == Fready)
+                break;
+            if(tries > 1000){
+                DPRINT("cmd %ux can't be sent (%d)\n", fl.cmd[0], i);
+                fldump();
+
+                /* empty fifo, might have been a bad command */
+                floppyresult();
+                return -1;
+            }
+            microdelay(8);  /* for machine independence */
+        }
+        outb(Pfdata, fl.cmd[i]);
+    }
+    return 0;
+}
+
+/*
+ *  get a command result from the floppy
+ *
+ *  when the controller goes ready waiting for a command
+ *  (instead of sending results), we're done
+ * 
+ */
+static int
+floppyresult(void)
+{
+    int i, s;
+    int tries;
+
+    /* get the result of the operation */
+    for(i = 0; i < sizeof(fl.stat); i++){
+        /* wait for status byte */
+        for(tries = 0; ; tries++){
+            s = inb(Pmsr)&(Ffrom|Fready);
+            if(s == Fready){
+                fl.nstat = i;
+                return fl.nstat;
+            }
+            if(s == (Ffrom|Fready))
+                break;
+            if(tries > 1000){
+                DPRINT("floppyresult: %d stats\n", i);
+                fldump();
+                fl.confused = 1;
+                return -1;
+            }
+            microdelay(8);  /* for machine independence */
+        }
+        fl.stat[i] = inb(Pfdata);
+    }
+    fl.nstat = sizeof(fl.stat);
+    return fl.nstat;
+}
+
+/*
+ *  calculate physical address of a logical byte offset into the disk
+ *
+ *  truncate dp->length if it crosses a track boundary
+ */
+static void
+floppypos(FDrive *dp, long off)
+{
+    int lsec;
+    int ltrack;
+    int end;
+
+    lsec = off/dp->t->bytes;
+    ltrack = lsec/dp->t->sectors;
+    dp->tcyl = ltrack/dp->t->heads;
+    dp->tsec = (lsec % dp->t->sectors) + 1;
+    dp->thead = (lsec/dp->t->sectors) % dp->t->heads;
+
+    /*
+     *  can't read across track boundaries.
+     *  if so, decrement the bytes to be read.
+     */
+    end = (ltrack+1)*dp->t->sectors*dp->t->bytes;
+    if(off+dp->len > end)
+        dp->len = end - off;
+}
+
+/*
+ *  get the interrupt cause from the floppy.
+ */
+static int
+floppysense(void)
+{
+    fl.ncmd = 0;
+    fl.cmd[fl.ncmd++] = Fsense;
+    if(floppycmd() < 0)
+        return -1;
+    if(floppyresult() < 2){
+        DPRINT("can't read sense response\n");
+        fldump();
+        fl.confused = 1;
+        return -1;
+    }
+    return 0;
+}
+
+static int
+cmddone(void *)
+{
+    return fl.ncmd == 0;
+}
+
+/*
+ *  Wait for a floppy interrupt.  If none occurs in 5 seconds, we
+ *  may have missed one.  This only happens on some portables which
+ *  do power management behind our backs.  Call the interrupt
+ *  routine to try to clear any conditions.
+ */
+static void
+floppywait(int slow)
+{
+    tsleep(&fl.r, cmddone, 0, slow ? 5000 : 1000);
+    if(!cmddone(0)){
+        floppyintr(0);
+        fl.confused = 1;
+    }
+}
+
+/*
+ *  we've lost the floppy position, go to cylinder 0.
+ */
+static int
+floppyrecal(FDrive *dp)
+{
+    dp->ccyl = -1;
+    dp->cyl = -1;
+
+    fl.ncmd = 0;
+    fl.cmd[fl.ncmd++] = Frecal;
+    fl.cmd[fl.ncmd++] = dp->dev;
+    if(floppycmd() < 0)
+        return -1;
+    floppywait(1);
+    if(fl.nstat < 2){
+        DPRINT("recalibrate: confused %ux\n", inb(Pmsr));
+        fl.confused = 1;
+        return -1;
+    }
+    if((fl.stat[0] & (Codemask|Seekend)) != Seekend){
+        DPRINT("recalibrate: failed\n");
+        dp->confused = 1;
+        return -1;
+    }
+    dp->cyl = fl.stat[1];
+    if(dp->cyl != 0){
+        DPRINT("recalibrate: wrong cylinder %d\n", dp->cyl);
+        dp->cyl = -1;
+        dp->confused = 1;
+        return -1;
+    }
+
+    dp->confused = 0;
+    return 0;
+}
+
+/*
+ *  if the controller or a specific drive is in a confused state,
+ *  reset it and get back to a known state
+ */
+static void
+floppyrevive(void)
+{
+    FDrive *dp;
+
+    /*
+     *  reset the controller if it's confused
+     */
+    if(fl.confused){
+        DPRINT("floppyrevive in\n");
+        fldump();
+
+        /* reset controller and turn all motors off */
+        splhi();
+        fl.ncmd = 1;
+        fl.cmd[0] = 0;
+        outb(Pdor, 0);
+        delay(10);
+        outb(Pdor, Fintena|Fena);
+        delay(10);
+        spllo();
+        fl.motor = 0;
+        fl.confused = 0;
+        floppywait(0);
+
+        /* mark all drives in an unknown state */
+        for(dp = fl.d; dp < &fl.d[fl.ndrive]; dp++)
+            dp->confused = 1;
+
+        /* set rate to a known value */
+        outb(Pdsr, 0);
+        fl.rate = 0;
+
+        DPRINT("floppyrevive out\n");
+        fldump();
+    }
+}
+
+/*
+ *  seek to the target cylinder
+ *
+ *  interrupt, no results
+ */
+static long
+floppyseek(FDrive *dp, long off)
+{
+    floppypos(dp, off);
+    if(dp->cyl == dp->tcyl)
+        return dp->tcyl;
+    dp->cyl = -1;
+
+    fl.ncmd = 0;
+    fl.cmd[fl.ncmd++] = Fseek;
+    fl.cmd[fl.ncmd++] = (dp->thead<<2) | dp->dev;
+    fl.cmd[fl.ncmd++] = dp->tcyl * dp->t->steps;
+    if(floppycmd() < 0)
+        return -1;
+    floppywait(1);
+    if(fl.nstat < 2){
+        DPRINT("seek: confused\n");
+        fl.confused = 1;
+        return -1;
+    }
+    if((fl.stat[0] & (Codemask|Seekend)) != Seekend){
+        DPRINT("seek: failed\n");
+        dp->confused = 1;
+        return -1;
+    }
+
+    dp->cyl = dp->tcyl;
+    return dp->tcyl;
+}
+
+/*
+ *  read or write to floppy.  try up to three times.
+ */
+static long
+floppyxfer(FDrive *dp, int cmd, void *a, long off, long n)
+{
+    long offset;
+    int tries;
+
+    if(off >= dp->t->cap)
+        return 0;
+    if(off + n > dp->t->cap)
+        n = dp->t->cap - off;
+
+    /* retry on error (until it gets ridiculous) */
+    tries = 0;
+    while(waserror()){
+        if(tries++ >= dp->maxtries)
+            nexterror();
+        DPRINT("floppyxfer: retrying\n");
+    }
+
+    dp->len = n;
+    if(floppyseek(dp, off) < 0){
+        DPRINT("xfer: seek failed\n");
+        dp->confused = 1;
+        error(Eio);
+    }
+
+    /*
+     *  set up the dma (dp->len may be trimmed)
+     */
+    if(waserror()){
+        dmaend(DMAchan);
+        nexterror();
+    }
+    dp->len = dmasetup(DMAchan, a, dp->len, cmd==Fread);
+    if(dp->len < 0)
+        error(Eio);
+
+    /*
+     *  start operation
+     */
+    fl.ncmd = 0;
+    fl.cmd[fl.ncmd++] = cmd | (dp->t->heads > 1 ? Fmulti : 0);
+    fl.cmd[fl.ncmd++] = (dp->thead<<2) | dp->dev;
+    fl.cmd[fl.ncmd++] = dp->tcyl;
+    fl.cmd[fl.ncmd++] = dp->thead;
+    fl.cmd[fl.ncmd++] = dp->tsec;
+    fl.cmd[fl.ncmd++] = dp->t->bcode;
+    fl.cmd[fl.ncmd++] = dp->t->sectors;
+    fl.cmd[fl.ncmd++] = dp->t->gpl;
+    fl.cmd[fl.ncmd++] = 0xFF;
+    if(floppycmd() < 0)
+        error(Eio);
+
+    /* Poll ready bits and transfer data */
+    floppyexec((char*)a, dp->len, cmd==Fread);
+
+    /*
+     *  give bus to DMA, floppyintr() will read result
+     */
+    floppywait(0);
+    dmaend(DMAchan);
+    poperror();
+
+    /*
+     *  check for errors
+     */
+    if(fl.nstat < 7){
+        DPRINT("xfer: confused\n");
+        fl.confused = 1;
+        error(Eio);
+    }
+    if((fl.stat[0] & Codemask)!=0 || fl.stat[1] || fl.stat[2]){
+        DPRINT("xfer: failed %ux %ux %ux\n", fl.stat[0],
+            fl.stat[1], fl.stat[2]);
+        DPRINT("offset %lud len %ld\n", off, dp->len);
+        if((fl.stat[0]&Codemask)==Cmdexec && fl.stat[1]==Overrun){
+            DPRINT("DMA overrun: retry\n");
+        } else
+            dp->confused = 1;
+        error(Eio);
+    }
+
+    /*
+     *  check for correct cylinder
+     */
+    offset = fl.stat[3] * dp->t->heads + fl.stat[4];
+    offset = offset*dp->t->sectors + fl.stat[5] - 1;
+    offset = offset * c2b[fl.stat[6]];
+    if(offset != off+dp->len){
+        DPRINT("xfer: ends on wrong cyl\n");
+        dp->confused = 1;
+        error(Eio);
+    }
+    poperror();
+
+    dp->lasttouched = cpu->ticks;
+    return dp->len;
+}
+
+/*
+ *  format a track
+ */
+static void
+floppyformat(FDrive *dp, Cmdbuf *cb)
+{
+    int cyl, h, sec;
+    ulong track;
+    uchar *buf, *bp;
+    FType *t;
+
+    /*
+     *  set the type
+     */
+    if(cb->nf == 2){
+        for(t = floppytype; t < &floppytype[nelem(floppytype)]; t++){
+            if(strcmp(cb->f[1], t->name)==0 && t->dt==dp->dt){
+                dp->t = t;
+                floppydir[1+NFDIR*dp->dev].length = dp->t->cap;
+                break;
+            }
+        }
+        if(t >= &floppytype[nelem(floppytype)])
+            error(Ebadarg);
+    } else if(cb->nf == 1){
+        floppysetdef(dp);
+        t = dp->t;
+    } else {
+        cmderror(cb, "invalid floppy format command");
+        SET(t);
+    }
+
+    /*
+     *  buffer for per track info
+     */
+    buf = smalloc(t->sectors*4);
+    if(waserror()){
+        free(buf);
+        nexterror();
+    }
+
+    /* force a recalibrate to cylinder 0 */
+    dp->confused = 1;
+    if(!waserror()){
+        floppyon(dp);
+        poperror();
+    }
+
+    /*
+     *  format a track at time
+     */
+    for(track = 0; track < t->tracks*t->heads; track++){
+        cyl = track/t->heads;
+        h = track % t->heads;
+
+        /*
+         *  seek to track, ignore errors
+         */
+        floppyseek(dp, track*t->tsize);
+        dp->cyl = cyl;
+        dp->confused = 0;
+
+        /*
+         *  set up the dma (dp->len may be trimmed)
+         */
+        bp = buf;
+        for(sec = 1; sec <= t->sectors; sec++){
+            *bp++ = cyl;
+            *bp++ = h;
+            *bp++ = sec;
+            *bp++ = t->bcode;
+        }
+        if(waserror()){
+            dmaend(DMAchan);
+            nexterror();
+        }
+        if(dmasetup(DMAchan, buf, bp-buf, 0) < 0)
+            error(Eio);
+
+        /*
+         *  start operation
+         */
+        fl.ncmd = 0;
+        fl.cmd[fl.ncmd++] = Fformat;
+        fl.cmd[fl.ncmd++] = (h<<2) | dp->dev;
+        fl.cmd[fl.ncmd++] = t->bcode;
+        fl.cmd[fl.ncmd++] = t->sectors;
+        fl.cmd[fl.ncmd++] = t->fgpl;
+        fl.cmd[fl.ncmd++] = 0x5a;
+        if(floppycmd() < 0)
+            error(Eio);
+
+        /* Poll ready bits and transfer data */
+        floppyexec((char *)buf, bp-buf, 0);
+
+        /*
+         *  give bus to DMA, floppyintr() will read result
+         */
+        floppywait(1);
+        dmaend(DMAchan);
+        poperror();
+
+        /*
+         *  check for errors
+         */
+        if(fl.nstat < 7){
+            DPRINT("format: confused\n");
+            fl.confused = 1;
+            error(Eio);
+        }
+        if((fl.stat[0]&Codemask)!=0 || fl.stat[1]|| fl.stat[2]){
+            DPRINT("format: failed %ux %ux %ux\n",
+                fl.stat[0], fl.stat[1], fl.stat[2]);
+            dp->confused = 1;
+            error(Eio);
+        }
+    }
+    free(buf);
+    dp->confused = 1;
+    poperror();
+}
+
+static void
+floppyintr(Ureg *)
+{
+    switch(fl.cmd[0]&~Fmulti){
+    case Fread:
+    case Fwrite:
+    case Fformat:
+    case Fdumpreg: 
+        floppyresult();
+        break;
+    case Fseek:
+    case Frecal:
+    default:
+        floppysense();  /* to clear interrupt */
+        break;
+    }
+    fl.ncmd = 0;
+    wakeup(&fl.r);
+}
+
+<<global floppydevtab>>
+@
+
+
+\subsection*{[[devices/storage/386/floppy.h]]}
+
+\ifallcode
+<<floppy.h forward decl>>=
+typedef struct FController FController;
+typedef struct FDrive FDrive;
+typedef struct FType FType;
+@
+\fi
+
+<<floppy.h>>=
+<<floppy.h forward decl>>
+
+// why not inlined in devfloppy.c? used by other programs?
+
+/*
+ *  a floppy drive
+ */
+struct FDrive
+{
+  FType *t;   /* floppy type */
+  int dt;   /* drive type */
+  int dev;
+
+  ulong lasttouched;  /* time last touched */
+  int cyl;    /* current arm position */
+  int confused; /* needs to be recalibrated */
+  int vers;
+  int maxtries; /* max read attempts before Eio */
+
+  int tcyl;   /* target cylinder */
+  int thead;    /* target head */
+  int tsec;   /* target sector */
+  long  len;    /* size of xfer */
+
+  uchar *cache;   /* track cache */
+  int ccyl;
+  int chead;
+};
+
+/*
+ *  controller for 4 floppys
+ */
+struct FController
+{
+  QLock;      /* exclusive access to the contoller */
+
+  int ndrive;
+  FDrive  *d;   /* the floppy drives */
+  FDrive  *selected;
+  int rate;   /* current rate selected */
+  uchar cmd[14];  /* command */
+  int ncmd;   /* # command bytes */
+  uchar stat[14]; /* command status */
+  int nstat;    /* # status bytes */
+  int confused; /* controler needs to be reset */
+  Rendez  r;    /* wait here for command termination */
+  int motor;    /* bit mask of spinning disks */
+};
+
+/*
+ *  floppy types (all MFM encoding)
+ */
+struct FType
+{
+  char  *name;
+  int dt;   /* compatible drive type */
+  int bytes;    /* bytes/sector */
+  int sectors;  /* sectors/track */
+  int heads;    /* number of heads */
+  int steps;    /* steps per cylinder */
+  int tracks;   /* tracks/disk */
+  int gpl;    /* intersector gap length for read/write */ 
+  int fgpl;   /* intersector gap length for format */
+  int rate;   /* rate code */
+
+  /*
+   *  these depend on previous entries and are set filled in
+   *  by floppyinit
+   */
+  int bcode;    /* coded version of bytes for the controller */
+  long  cap;    /* drive capacity in bytes */
+  long  tsize;    /* track size in bytes */
+};
+
+/* bits in the registers */
+enum
+{
+  /* status registers a & b */
+  Psra=   0x3f0,
+  Psrb=   0x3f1,
+
+  /* digital output register */
+  Pdor=   0x3f2,
+  Fintena=  0x8,  /* enable floppy interrupt */
+  Fena=   0x4,  /* 0 == reset controller */
+
+  /* main status register */
+  Pmsr=   0x3f4,
+  Fready=   0x80, /* ready to be touched */
+  Ffrom=    0x40, /* data from controller */
+  Ffloppybusy=  0x10, /* operation not over */
+
+  /* data register */
+  Pfdata=   0x3f5,
+  Frecal=   0x07, /* recalibrate cmd */
+  Fseek=    0x0f, /* seek cmd */
+  Fsense=   0x08, /* sense cmd */
+  Fread=    0x66, /* read cmd */
+  Freadid=  0x4a, /* read track id */
+  Fspec=    0x03, /* set hold times */
+  Fwrite=   0x45, /* write cmd */
+  Fformat=  0x4d, /* format cmd */
+  Fmulti=   0x80, /* or'd with Fread or Fwrite for multi-head */
+  Fdumpreg= 0x0e, /* dump internal registers */
+
+  /* digital input register */
+  Pdir=   0x3F7,  /* disk changed port (read only) */
+  Pdsr=   0x3F7,  /* data rate select port (write only) */
+  Fchange=  0x80, /* disk has changed */
+
+  /* status 0 byte */
+  Drivemask=  3<<0,
+  Seekend=  1<<5,
+  Codemask= (3<<6)|(3<<3),
+  Cmdexec=  1<<6,
+
+  /* status 1 byte */
+  Overrun=  0x10,
+};
+
 @
 
 
@@ -2778,6 +4195,505 @@ rootwrite(Chan*, void*, long, vlong)
 
 <<global rootdevtab>>
 
+@
+
+
+\subsection*{[[devices/sys/devenv.c]]}
+
+\ifallcode
+<<devenv.c forward decl>>=
+static Egrp *envgrp(Chan *c);
+static int  envwriteable(Chan *c);
+@
+\fi
+
+<<global envdevtab>>=
+Dev envdevtab = {
+    .dc       =    'e',
+    .name     =    "env",
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    envattach,
+    .walk     =    envwalk,
+    .stat     =    envstat,
+    .open     =    envopen,
+    .create   =    envcreate,
+    .close    =    envclose,
+    .read     =    envread,
+    .bread    =    devbread,
+    .write    =    envwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    envremove,
+    .wstat    =    devwstat,
+};
+@
+
+
+
+<<function envcpy>>=
+void
+envcpy(Egrp *to, Egrp *from)
+{
+    int i;
+    Evalue *ne, *e;
+
+    rlock(from);
+    to->ment = (from->nent+31)&~31;
+    to->ent = smalloc(to->ment*sizeof(to->ent[0]));
+    for(i=0; i<from->nent; i++){
+        e = from->ent[i];
+        ne = smalloc(sizeof(Evalue));
+        ne->name = smalloc(strlen(e->name)+1);
+        strcpy(ne->name, e->name);
+        if(e->value){
+            ne->value = smalloc(e->len);
+            memmove(ne->value, e->value, e->len);
+            ne->len = e->len;
+        }
+        ne->qid.path = ++to->path;
+        to->ent[i] = ne;
+    }
+    to->nent = from->nent;
+    runlock(from);
+}
+@
+
+
+<<function envgrp>>=
+static Egrp*
+envgrp(Chan *c)
+{
+    if(c->aux == nil)
+        return up->egrp;
+    return c->aux;
+}
+@
+
+
+<<function envwriteable>>=
+static int
+envwriteable(Chan *c)
+{
+    return iseve() || c->aux == nil;
+}
+@
+
+
+<<function getconfenv>>=
+/*
+ * Return a copy of configuration environment as a sequence of strings.
+ * The strings alternate between name and value.  A zero length name string
+ * indicates the end of the list
+ */
+char *
+getconfenv(void)
+{
+    Egrp *eg = &confegrp;
+    Evalue *e;
+    char *p, *q;
+    int i, n;
+
+    rlock(eg);
+    if(waserror()) {
+        runlock(eg);
+        nexterror();
+    }
+    
+    /* determine size */
+    n = 0;
+    for(i=0; i<eg->nent; i++){
+        e = eg->ent[i];
+        n += strlen(e->name) + e->len + 2;
+    }
+    p = malloc(n + 1);
+    if(p == nil)
+        error(Enomem);
+    q = p;
+    for(i=0; i<eg->nent; i++){
+        e = eg->ent[i];
+        strcpy(q, e->name);
+        q += strlen(q) + 1;
+        memmove(q, e->value, e->len);
+        q[e->len] = 0;
+        /* move up to the first null */
+        q += strlen(q) + 1;
+    }
+    *q = 0;
+    
+    poperror();
+    runlock(eg);
+    return p;
+}
+@
+
+
+<<devenv.c>>=
+<<kernel basic includes>>
+
+enum
+{
+    Maxenvsize = 16300,
+};
+
+<<devenv.c forward decl>>
+
+static Egrp confegrp;   /* global environment group containing the kernel configuration */
+
+static Evalue*
+envlookup(Egrp *eg, char *name, ulong qidpath)
+{
+    Evalue *e;
+    int i;
+
+    for(i=0; i<eg->nent; i++){
+        e = eg->ent[i];
+        if(e->qid.path == qidpath || (name && e->name[0]==name[0] && strcmp(e->name, name) == 0))
+            return e;
+    }
+    return nil;
+}
+
+static int
+envgen(Chan *c, char *name, Dirtab*, int, int s, Dir *dp)
+{
+    Egrp *eg;
+    Evalue *e;
+
+    if(s == DEVDOTDOT){
+        devdir(c, c->qid, "#e", 0, eve, DMDIR|0775, dp);
+        return 1;
+    }
+
+    eg = envgrp(c);
+    rlock(eg);
+    e = 0;
+    if(name)
+        e = envlookup(eg, name, -1);
+    else if(s < eg->nent)
+        e = eg->ent[s];
+
+    if(e == 0) {
+        runlock(eg);
+        return -1;
+    }
+
+    /* make sure name string continues to exist after we release lock */
+    kstrcpy(up->genbuf, e->name, sizeof up->genbuf);
+    devdir(c, e->qid, up->genbuf, e->len, eve, 0666, dp);
+    runlock(eg);
+    return 1;
+}
+
+static Chan*
+envattach(char *spec)
+{
+    Chan *c;
+    Egrp *egrp = nil;
+
+    if(spec && *spec) {
+        if(strcmp(spec, "c") == 0)
+            egrp = &confegrp;
+        if(egrp == nil)
+            error(Ebadarg);
+    }
+
+    c = devattach('e', spec);
+    c->aux = egrp;
+    return c;
+}
+
+static Walkqid*
+envwalk(Chan *c, Chan *nc, char **name, int nname)
+{
+    return devwalk(c, nc, name, nname, 0, 0, envgen);
+}
+
+static int
+envstat(Chan *c, uchar *db, int n)
+{
+    if(c->qid.type & QTDIR)
+        c->qid.vers = envgrp(c)->vers;
+    return devstat(c, db, n, 0, 0, envgen);
+}
+
+static Chan*
+envopen(Chan *c, int omode)
+{
+    Egrp *eg;
+    Evalue *e;
+    int trunc;
+
+    eg = envgrp(c);
+    if(c->qid.type & QTDIR) {
+        if(omode != OREAD)
+            error(Eperm);
+    }
+    else {
+        trunc = omode & OTRUNC;
+        if(omode != OREAD && !envwriteable(c))
+            error(Eperm);
+        if(trunc)
+            wlock(eg);
+        else
+            rlock(eg);
+        e = envlookup(eg, nil, c->qid.path);
+        if(e == 0) {
+            if(trunc)
+                wunlock(eg);
+            else
+                runlock(eg);
+            error(Enonexist);
+        }
+        if(trunc && e->value) {
+            e->qid.vers++;
+            free(e->value);
+            e->value = 0;
+            e->len = 0;
+        }
+        if(trunc)
+            wunlock(eg);
+        else
+            runlock(eg);
+    }
+    c->mode = openmode(omode);
+    c->flag |= COPEN;
+    c->offset = 0;
+    return c;
+}
+
+static void
+envcreate(Chan *c, char *name, int omode, ulong)
+{
+    Egrp *eg;
+    Evalue *e;
+    Evalue **ent;
+
+    if(c->qid.type != QTDIR)
+        error(Eperm);
+    if(strlen(name) >= sizeof up->genbuf)
+        error("name too long");         /* protect envgen */
+
+    omode = openmode(omode);
+    eg = envgrp(c);
+
+    wlock(eg);
+    if(waserror()) {
+        wunlock(eg);
+        nexterror();
+    }
+
+    if(envlookup(eg, name, -1))
+        error(Eexist);
+
+    e = smalloc(sizeof(Evalue));
+    e->name = smalloc(strlen(name)+1);
+    strcpy(e->name, name);
+
+    if(eg->nent == eg->ment){
+        eg->ment += 32;
+        ent = smalloc(sizeof(eg->ent[0])*eg->ment);
+        if(eg->nent)
+            memmove(ent, eg->ent, sizeof(eg->ent[0])*eg->nent);
+        free(eg->ent);
+        eg->ent = ent;
+    }
+    e->qid.path = ++eg->path;
+    e->qid.vers = 0;
+    eg->vers++;
+    eg->ent[eg->nent++] = e;
+    c->qid = e->qid;
+
+    wunlock(eg);
+    poperror();
+
+    c->offset = 0;
+    c->mode = omode;
+    c->flag |= COPEN;
+}
+
+static void
+envremove(Chan *c)
+{
+    int i;
+    Egrp *eg;
+    Evalue *e;
+
+    if(c->qid.type & QTDIR)
+        error(Eperm);
+
+    eg = envgrp(c);
+    wlock(eg);
+    e = 0;
+    for(i=0; i<eg->nent; i++){
+        if(eg->ent[i]->qid.path == c->qid.path){
+            e = eg->ent[i];
+            eg->nent--;
+            eg->ent[i] = eg->ent[eg->nent];
+            eg->vers++;
+            break;
+        }
+    }
+    wunlock(eg);
+    if(e == 0)
+        error(Enonexist);
+    free(e->name);
+    if(e->value)
+        free(e->value);
+    free(e);
+}
+
+static void
+envclose(Chan *c)
+{
+    /*
+     * cclose can't fail, so errors from remove will be ignored.
+     * since permissions aren't checked,
+     * envremove can't not remove it if its there.
+     */
+    if(c->flag & CRCLOSE)
+        envremove(c);
+}
+
+static long
+envread(Chan *c, void *a, long n, vlong off)
+{
+    Egrp *eg;
+    Evalue *e;
+    ulong offset = off;
+
+    if(c->qid.type & QTDIR)
+        return devdirread(c, a, n, 0, 0, envgen);
+
+    eg = envgrp(c);
+    rlock(eg);
+    e = envlookup(eg, nil, c->qid.path);
+    if(e == 0) {
+        runlock(eg);
+        error(Enonexist);
+    }
+
+    if(offset > e->len) /* protects against overflow converting vlong to ulong */
+        n = 0;
+    else if(offset + n > e->len)
+        n = e->len - offset;
+    if(n <= 0)
+        n = 0;
+    else
+        memmove(a, e->value+offset, n);
+    runlock(eg);
+    return n;
+}
+
+static long
+envwrite(Chan *c, void *a, long n, vlong off)
+{
+    char *s;
+    ulong len;
+    Egrp *eg;
+    Evalue *e;
+    ulong offset = off;
+
+    if(n <= 0)
+        return 0;
+    if(offset > Maxenvsize || n > (Maxenvsize - offset))
+        error(Etoobig);
+
+    eg = envgrp(c);
+    wlock(eg);
+    e = envlookup(eg, nil, c->qid.path);
+    if(e == 0) {
+        wunlock(eg);
+        error(Enonexist);
+    }
+
+    len = offset+n;
+    if(len > e->len) {
+        s = smalloc(len);
+        if(e->value){
+            memmove(s, e->value, e->len);
+            free(e->value);
+        }
+        e->value = s;
+        e->len = len;
+    }
+    memmove(e->value+offset, a, n);
+    e->qid.vers++;
+    eg->vers++;
+    wunlock(eg);
+    return n;
+}
+
+<<global envdevtab>>
+
+
+
+<<function envcpy>>
+
+<<function envgrp>>
+
+<<function envwriteable>>
+
+<<function ksetenv>>
+
+<<function getconfenv>>
+@
+
+\subsection*{[[devices/sys/devpipe.c]]}
+
+\ifallcode
+<<devpipe.c forward decl>>=
+typedef struct Pipe Pipe;
+@
+\fi
+
+
+<<devpipe.c>>=
+<<kernel basic includes>>
+
+// need that??
+#include    "netif.h"
+
+<<devpipe.c forward decl>>
+
+<<struct Pipe>>
+
+<<struct Pipealloc>>
+
+<<global pipealloc>>
+
+<<devpipe.c enum Qxxx>>
+
+<<global pipedir>>
+
+#define NPIPEDIR 3
+
+<<method pipeinit>>
+
+<<method pipeattach>>
+
+<<function pipegen>>
+
+<<method pipewalk>>
+
+<<method pipestat>>
+
+<<method pipewstat>>
+
+<<method pipeopen>>
+
+<<method pipeclose>>
+
+<<method piperead>>
+
+<<method pipebread>>
+
+<<method pipewrite>>
+
+<<method pipebwrite>>
+
+<<global pipedevtab>>
 @
 
 
@@ -8093,6 +10009,997 @@ static void todfix(void);
 %//  mul64fract(&res, ticks, tod.multiplier);
 %//  return res;
 %//}
+
+\subsection*{[[processes/386/mp.c]]}
+
+<<enum vector cases>>=
+    VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
+    VectorAPIC  = 65,   /* external APIC interrupts */
+    MaxVectorAPIC = 255,
+@
+
+<<function archrevert>>=
+void
+archrevert(void)
+{
+    arch = &archgeneric;
+}
+@
+
+
+<<[[Cpu]] [[Arch]] other fields>>=
+vlong mtrrcap;
+vlong mtrrdef;
+vlong mtrrfix[11];
+vlong mtrrvar[32];    /* 256 max. */
+@ 
+
+<<mp.c debugging macro>>=
+//#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
+#define dprint if(mpdebug) print
+int mpdebug;
+@ 
+
+
+<<[[Active]] other fields>>=
+bool main_reached_sched;/* lets the added processors continue to schedinit*/
+@
+% main_reached_sched was called thunderbirdsareago
+
+<<[[main()]] before schedinit()>>=
+active.main_reached_sched = true;
+@
+
+
+<<mp.c>>=
+<<kernel basic includes>>
+
+#include "io.h"
+#include "mp.h"
+
+#include "apbootstrap.h"
+
+#include <ureg.h>
+
+<<mp.c debugging macro>>
+
+/* from mpacpi.c */
+extern Apic *bootapic;
+
+extern void (*mpacpifunc)(void);
+
+static PCMP* mppcmp;
+static Bus* mpbus;
+static Bus* mpbuslast;
+static int mpisabus = -1;
+static int mpeisabus = -1;
+extern int i8259elcr;           /* mask of level-triggered interrupts */
+/* static */ Apic mpapic[MaxAPICNO+1];
+/* static */ int cpuno2apicno[MaxAPICNO+1];    /* inverse map: cpuno -> APIC ID */
+/* static */ Apic ioapic[MaxAPICNO+1];
+static Ref mpvnoref;            /* unique vector assignment */
+static int mpcpuno = 1;
+static Lock mpphysidlock;
+static int mpphysid;
+
+static char* buses[] = {
+    "CBUSI ",
+    "CBUSII",
+    "EISA  ",
+    "FUTURE",
+    "INTERN",
+    "ISA   ",
+    "MBI   ",
+    "MBII  ",
+    "MCA   ",
+    "MPI   ",
+    "MPSA  ",
+    "NUBUS ",
+    "PCI   ",
+    "PCMCIA",
+    "TC    ",
+    "VL    ",
+    "VME   ",
+    "XPRESS",
+    0,
+};
+
+static Apic*
+mkprocessor(PCMPprocessor* p)
+{
+    int apicno;
+    Apic *apic;
+
+    apicno = p->apicno;
+    if(!(p->flags & PcmpEN) || apicno > MaxAPICNO)
+        return 0;
+
+    apic = &mpapic[apicno];
+    apic->type = PcmpPROCESSOR;
+    apic->apicno = apicno;
+    apic->flags = p->flags;
+    apic->lintr[0] = ApicIMASK;
+    apic->lintr[1] = ApicIMASK;
+
+    if(p->flags & PcmpBP){
+        cpuno2apicno[0] = apicno;
+        apic->cpuno = 0;
+    }
+    else{
+        cpuno2apicno[mpcpuno] = apicno;
+        apic->cpuno = mpcpuno;
+        mpcpuno++;
+    }
+
+    return apic;
+}
+
+static Bus*
+mkbus(PCMPbus* p)
+{
+    Bus *bus;
+    int i;
+
+    for(i = 0; buses[i]; i++){
+        if(strncmp(buses[i], p->string, sizeof(p->string)) == 0)
+            break;
+    }
+    if(buses[i] == 0)
+        return 0;
+
+    bus = xalloc(sizeof(Bus));
+    if(mpbus)
+        mpbuslast->next = bus;
+    else
+        mpbus = bus;
+    mpbuslast = bus;
+
+    bus->type = i;
+    bus->busno = p->busno;
+    if(bus->type == BusEISA){
+        bus->po = PcmpLOW;
+        bus->el = PcmpLEVEL;
+        if(mpeisabus != -1)
+            print("mkbus: more than one EISA bus\n");
+        mpeisabus = bus->busno;
+    }
+    else if(bus->type == BusPCI){
+        bus->po = PcmpLOW;
+        bus->el = PcmpLEVEL;
+    }
+    else if(bus->type == BusISA){
+        bus->po = PcmpHIGH;
+        bus->el = PcmpEDGE;
+        if(mpisabus != -1)
+            print("mkbus: more than one ISA bus\n");
+        mpisabus = bus->busno;
+    }
+    else{
+        bus->po = PcmpHIGH;
+        bus->el = PcmpEDGE;
+    }
+
+    return bus;
+}
+
+static Bus*
+mpgetbus(int busno)
+{
+    Bus *bus;
+
+    for(bus = mpbus; bus; bus = bus->next){
+        if(bus->busno == busno)
+            return bus;
+    }
+    print("mpgetbus: can't find bus %d\n", busno);
+
+    return 0;
+}
+
+static Apic*
+mkioapic(PCMPioapic* p)
+{
+    void *va;
+    int apicno;
+    Apic *apic;
+
+    apicno = p->apicno;
+    if(!(p->flags & PcmpEN) || apicno > MaxAPICNO)
+        return 0;
+
+    /*
+     * Map the I/O APIC.
+     */
+    if((va = vmap(p->addr, 1024)) == nil)
+        return 0;
+
+    apic = &ioapic[apicno];
+    apic->type = PcmpIOAPIC;
+    apic->apicno = apicno;
+    apic->addr = va;
+    apic->paddr = p->addr;
+    apic->flags = p->flags;
+
+    return apic;
+}
+
+static Aintr*
+mkiointr(PCMPintr* p)
+{
+    Bus *bus;
+    Aintr *aintr;
+    PCMPintr* pcmpintr;
+
+    /*
+     * According to the MultiProcessor Specification, a destination
+     * I/O APIC of 0xFF means the signal is routed to all I/O APICs.
+     * It's unclear how that can possibly be correct so treat it as
+     * an error for now.
+     */
+    if(p->apicno == 0xFF)
+        return 0;
+    if((bus = mpgetbus(p->busno)) == 0)
+        return 0;
+
+    aintr = xalloc(sizeof(Aintr));
+    aintr->intr = p;
+
+    if(0)
+        dprint("mkiointr: type %d intr type %d flags %#o "
+            "bus %d irq %d apicno %d intin %d\n",
+            p->type, p->intr, p->flags,
+            p->busno, p->irq, p->apicno, p->intin);
+    /*
+     * Hack for Intel SR1520ML motherboard, which BIOS describes
+     * the i82575 dual ethernet controllers incorrectly.
+     */
+    if(mppcmp && memcmp(mppcmp->product, "INTEL   X38MLST     ", 20) == 0){
+        if(p->busno == 1 && p->intin == 16 && p->irq == 1){
+            pcmpintr = malloc(sizeof(PCMPintr));
+            if(pcmpintr == nil)
+                panic("mkiointr: no memory");
+            memmove(pcmpintr, p, sizeof(PCMPintr));
+            print("mkiointr: %20.20s bus %d intin %d irq %d\n",
+                (char*)mppcmp->product,
+                pcmpintr->busno, pcmpintr->intin,
+                pcmpintr->irq);
+            pcmpintr->intin = 17;
+            aintr->intr = pcmpintr;
+        }
+    }
+    if ((unsigned)p->apicno >= nelem(mpapic))
+        panic("mkiointr: apic %d out of range", p->apicno);
+    aintr->apic = &ioapic[p->apicno];
+    aintr->next = bus->aintr;
+    bus->aintr = aintr;
+
+    return aintr;
+}
+
+static int
+mpintrinit(Bus* bus, PCMPintr* intr, int vno, int /*irq*/)
+{
+    int el, po, v;
+
+    /*
+     * Parse an I/O or Local APIC interrupt table entry and
+     * return the encoded vector.
+     */
+    v = vno;
+
+    po = intr->flags & PcmpPOMASK;
+    el = intr->flags & PcmpELMASK;
+
+    switch(intr->intr){
+
+    default:                /* PcmpINT */
+        v |= ApicFIXED;         /* no-op */
+        break;
+
+    case PcmpNMI:
+        v |= ApicNMI;
+        po = PcmpHIGH;
+        el = PcmpEDGE;
+        break;
+
+    case PcmpSMI:
+        v |= ApicSMI;
+        break;
+
+    case PcmpExtINT:
+        v |= ApicExtINT;
+        /*
+         * The AMI Goliath doesn't boot successfully with it's LINTR0
+         * entry which decodes to low+level. The PPro manual says ExtINT
+         * should be level, whereas the Pentium is edge. Setting the
+         * Goliath to edge+high seems to cure the problem. Other PPro
+         * MP tables (e.g. ASUS P/I-P65UP5 have a entry which decodes
+         * to edge+high, so who knows.
+         * Perhaps it would be best just to not set an ExtINT entry at
+         * all, it shouldn't be needed for SMP mode.
+         */
+        po = PcmpHIGH;
+        el = PcmpEDGE;
+        break;
+    }
+
+    /*
+     */
+    if(bus->type == BusEISA && !po && !el /*&& !(i8259elcr & (1<<irq))*/){
+        po = PcmpHIGH;
+        el = PcmpEDGE;
+    }
+    if(!po)
+        po = bus->po;
+    if(po == PcmpLOW)
+        v |= ApicLOW;
+    else if(po != PcmpHIGH){
+        print("mpintrinit: bad polarity 0x%uX\n", po);
+        return ApicIMASK;
+    }
+
+    if(!el)
+        el = bus->el;
+    if(el == PcmpLEVEL)
+        v |= ApicLEVEL;
+    else if(el != PcmpEDGE){
+        print("mpintrinit: bad trigger 0x%uX\n", el);
+        return ApicIMASK;
+    }
+
+    return v;
+}
+
+static int
+mklintr(PCMPintr* p)
+{
+    Apic *apic;
+    Bus *bus;
+    int intin, v;
+
+    /*
+     * The offsets of vectors for LINT[01] are known to be
+     * 0 and 1 from the local APIC vector space at VectorLAPIC.
+     */
+    if((bus = mpgetbus(p->busno)) == 0)
+        return 0;
+    intin = p->intin;
+
+    /*
+     * Pentium Pros have problems if LINT[01] are set to ExtINT
+     * so just bag it, SMP mode shouldn't need ExtINT anyway.
+     */
+    if(p->intr == PcmpExtINT || p->intr == PcmpNMI)
+        v = ApicIMASK;
+    else
+        v = mpintrinit(bus, p, VectorLAPIC+intin, p->irq);
+
+    if(p->apicno == 0xFF){
+        for(apic = mpapic; apic <= &mpapic[MaxAPICNO]; apic++){
+            if((apic->flags & PcmpEN)
+            && apic->type == PcmpPROCESSOR)
+                apic->lintr[intin] = v;
+        }
+    }
+    else{
+        if ((unsigned)p->apicno >= nelem(mpapic))
+            panic("mklintr: ioapic %d out of range", p->apicno);
+        apic = &mpapic[p->apicno];
+        if((apic->flags & PcmpEN) && apic->type == PcmpPROCESSOR)
+            apic->lintr[intin] = v;
+    }
+
+    return v;
+}
+
+static void
+checkmtrr(void)
+{
+    int i, vcnt;
+    Cpu *cpu0;
+
+    /*
+     * If there are MTRR registers, snarf them for validation.
+     */
+    if(!(cpu->cpuiddx & Mtrr))
+        return;
+
+    rdmsr(0x0FE, &cpu->mtrrcap);
+    rdmsr(0x2FF, &cpu->mtrrdef);
+    if(cpu->mtrrcap & 0x0100){
+        rdmsr(0x250, &cpu->mtrrfix[0]);
+        rdmsr(0x258, &cpu->mtrrfix[1]);
+        rdmsr(0x259, &cpu->mtrrfix[2]);
+        for(i = 0; i < 8; i++)
+            rdmsr(0x268+i, &cpu->mtrrfix[(i+3)]);
+    }
+    vcnt = cpu->mtrrcap & 0x00FF;
+    if(vcnt > nelem(cpu->mtrrvar))
+        vcnt = nelem(cpu->mtrrvar);
+    for(i = 0; i < vcnt; i++)
+        rdmsr(0x200+i, &cpu->mtrrvar[i]);
+
+    /*
+     * If not the bootstrap processor, compare.
+     */
+    if(cpu->cpuno == 0)
+        return;
+
+    cpu0 = CPUS(0);
+    if(cpu0->mtrrcap != cpu->mtrrcap)
+        print("mtrrcap%d: %lluX %lluX\n",
+            cpu->cpuno, cpu0->mtrrcap, cpu->mtrrcap);
+    if(cpu0->mtrrdef != cpu->mtrrdef)
+        print("mtrrdef%d: %lluX %lluX\n",
+            cpu->cpuno, cpu0->mtrrdef, cpu->mtrrdef);
+    for(i = 0; i < 11; i++){
+        if(cpu0->mtrrfix[i] != cpu->mtrrfix[i])
+            print("mtrrfix%d: i%d: %lluX %lluX\n",
+                cpu->cpuno, i, cpu0->mtrrfix[i], cpu->mtrrfix[i]);
+    }
+    for(i = 0; i < vcnt; i++){
+        if(cpu0->mtrrvar[i] != cpu->mtrrvar[i])
+            print("mtrrvar%d: i%d: %lluX %lluX\n",
+                cpu->cpuno, i, cpu0->mtrrvar[i], cpu->mtrrvar[i]);
+    }
+}
+
+static void
+squidboy(Apic* apic)
+{
+//  iprint("Hello Squidboy\n");
+
+    cpuinit();
+    fpsavealloc();
+    mmuinit();
+
+    cpuidentify();
+    cpuidprint();
+    checkmtrr();
+
+    apic->online = 1;
+    coherence();
+
+    lapicinit(apic);
+    lapiconline();
+    syncclock();
+    timersinit();
+
+    fpoff();
+
+    lock(&active);
+    active.cpus |= 1<<cpu->cpuno;
+    unlock(&active);
+
+    while(!active.main_reached_sched)
+        microdelay(100);
+
+    schedinit();
+}
+
+static void
+mpstartap(Apic* apic)
+{
+    ulong *apbootp, *pd, *pte;
+    Cpu *cpu, *cpu0;
+    int i, cpuno;
+    uchar *p;
+
+    cpu0 = CPUS(0);
+
+    /*
+     * Initialise the AP page-tables and Cpu structure. The page-tables
+     * are the same as for the bootstrap processor with the exception of
+     * the PTE for the Cpu structure.
+     * Xspanalloc will panic if an allocation can't be made.
+     */
+    p = xspanalloc(4*BY2PG, BY2PG, 0);
+    pd = (ulong*)p;
+    memmove(pd, cpu0->pdproto, BY2PG);
+    p += BY2PG;
+
+    if((pte = mmuwalk(pd, CPUADDR, 1, false)) == nil)
+        return;
+    memmove(p, KADDR(PPN(*pte)), BY2PG);
+    *pte = PADDR(p)|PTEWRITE|PTEVALID;
+    if(cpu0->havepge)
+        *pte |= PTEGLOBAL;
+    p += BY2PG;
+
+    cpu = (Cpu*)p;
+    if((pte = mmuwalk(pd, CPUADDR, 2, false)) == nil)
+        return;
+    *pte = PADDR(cpu)|PTEWRITE|PTEVALID;
+    if(cpu0->havepge)
+        *pte |= PTEGLOBAL;
+    p += BY2PG;
+
+    cpuno = apic->cpuno;
+    CPUS(cpuno) = cpu; // !!!!
+    cpu->cpuno = cpuno;
+    cpu->pdproto = pd;
+    cpu->gdt = (Segdesc*)p;    /* filled by mmuinit */
+
+    /*
+     * Tell the AP where its kernel vector and pd are.
+     * The offsets are known in the AP bootstrap code.
+     */
+    apbootp = (ulong*)(APBOOTSTRAP+0x08);
+    *apbootp++ = (ulong)squidboy;   /* assembler jumps here eventually */
+    *apbootp++ = PADDR(pd);
+    *apbootp = (ulong)apic;
+
+    /*
+     * Universal Startup Algorithm.
+     */
+    p = KADDR(0x467);       /* warm-reset vector */
+    *p++ = PADDR(APBOOTSTRAP);
+    *p++ = PADDR(APBOOTSTRAP)>>8;
+    i = (PADDR(APBOOTSTRAP) & ~0xFFFF)/16;
+    /* code assumes i==0 */
+    if(i != 0)
+        print("mp: bad APBOOTSTRAP\n");
+    *p++ = i;
+    *p = i>>8;
+
+    coherence();
+
+    nvramwrite(0x0F, 0x0A); /* shutdown code: warm reset upon init ipi */
+    lapicstartap(apic, PADDR(APBOOTSTRAP));
+    for(i = 0; i < 1000; i++){
+        if(apic->online)
+            break;
+        delay(10);
+    }
+    nvramwrite(0x0F, 0x00);
+}
+
+static void
+trympacpi(void)
+{
+    if (mpacpifunc != nil) {
+        print("mpinit: scanning acpi madt for extra cpus\n");
+        (*mpacpifunc)();
+    }
+}
+
+void
+mpinit(void)
+{
+    int ncpu, cpuson;
+    char *cp;
+    PCMP *pcmp;
+    uchar *e, *p;
+    Apic *apic, *bpapic;
+    void *va;
+
+    mpdebug = getconf("*debugmp") != nil;
+    i8259init();
+    syncclock();
+
+    bpapic = nil;
+    cpuson = 0;
+
+    if(_mp_ == 0) {
+        /*
+         * We can easily get processor info from ACPI, but
+         * interrupt routing, etc. would require interpreting AML.
+         */
+        print("mpinit: no mp table found, assuming uniprocessor\n");
+        archrevert();
+        return;
+    }
+    pcmp = KADDR(_mp_->physaddr);
+
+    /*
+     * Map the local APIC.
+     */
+    if((va = vmap(pcmp->lapicbase, 1024)) == nil)
+        return;
+    mppcmp = pcmp;
+    print("LAPIC: %#lux %#lux\n", pcmp->lapicbase, (ulong)va);
+
+    /*
+     * Run through the table saving information needed for starting
+     * application processors and initialising any I/O APICs. The table
+     * is guaranteed to be in order such that only one pass is necessary.
+     */
+    p = ((uchar*)pcmp)+sizeof(PCMP);
+    e = ((uchar*)pcmp)+pcmp->length;
+    while(p < e) switch(*p){
+
+    default:
+        print("mpinit: unknown PCMP type 0x%uX (e-p 0x%luX)\n",
+            *p, e-p);
+        while(p < e){
+            print("%uX ", *p);
+            p++;
+        }
+        break;
+
+    case PcmpPROCESSOR:
+        if(apic = mkprocessor((PCMPprocessor*)p)){
+            /*
+             * Must take a note of bootstrap processor APIC
+             * now as it will be needed in order to start the
+             * application processors later and there's no
+             * guarantee that the bootstrap processor appears
+             * first in the table before the others.
+             */
+            apic->addr = va;
+            apic->paddr = pcmp->lapicbase;
+            if(apic->flags & PcmpBP)
+                bpapic = apic;
+            cpuson++;
+        }
+        p += sizeof(PCMPprocessor);
+        continue;
+
+    case PcmpBUS:
+        mkbus((PCMPbus*)p);
+        p += sizeof(PCMPbus);
+        continue;
+
+    case PcmpIOAPIC:
+        if(apic = mkioapic((PCMPioapic*)p))
+            ioapicinit(apic, ((PCMPioapic*)p)->apicno);
+        p += sizeof(PCMPioapic);
+        continue;
+
+    case PcmpIOINTR:
+        mkiointr((PCMPintr*)p);
+        p += sizeof(PCMPintr);
+        continue;
+
+    case PcmpLINTR:
+        mklintr((PCMPintr*)p);
+        p += sizeof(PCMPintr);
+        continue;
+    }
+
+    dprint("mpinit: mp table describes %d cpus\n", cpuson);
+
+    /* For now, always scan ACPI's MADT for processors that MP missed. */
+    trympacpi();
+
+    if (bpapic == nil)
+        bpapic = bootapic;
+
+    /*
+     * No bootstrap processor, no need to go further.
+     */
+    if(bpapic == 0)
+        return;
+    bpapic->online = 1;
+
+    lapicinit(bpapic);
+
+    /*
+     * These interrupts are local to the processor
+     * and do not appear in the I/O APIC so it is OK
+     * to set them now.
+     */
+    intrenable(IrqTIMER, lapicclock, 0, BUSUNKNOWN, "clock");
+    intrenable(IrqERROR, lapicerror, 0, BUSUNKNOWN, "lapicerror");
+    intrenable(IrqSPURIOUS, lapicspurious, 0, BUSUNKNOWN, "lapicspurious");
+    lapiconline();
+
+    checkmtrr();
+
+    /*
+     * Initialise the application processors.
+     */
+    if(cp = getconf("*ncpu")){
+        ncpu = strtol(cp, 0, 0);
+        if(ncpu < 1)
+            ncpu = 1;
+        else if(ncpu > MAXCPUS)
+            ncpu = MAXCPUS;
+    }
+    else
+        ncpu = MAXCPUS;
+    memmove((void*)APBOOTSTRAP, apbootstrap, sizeof(apbootstrap));
+    for(apic = mpapic; apic <= &mpapic[MaxAPICNO]; apic++){
+        if(ncpu <= 1)
+            break;
+        if((apic->flags & (PcmpBP|PcmpEN)) == PcmpEN
+        && apic->type == PcmpPROCESSOR){
+            mpstartap(apic);
+            conf.ncpu++;
+            ncpu--;
+        }
+    }
+
+    /*
+     *  we don't really know the number of processors till
+     *  here.
+     *
+     *  set conf.copymode here if ncpu > 1.
+     *  Should look for an ExtINT line and enable it.
+     */
+    if(X86FAMILY(cpu->cpuidax) == 3 || conf.ncpu > 1)
+        conf.copymode = 1;
+}
+
+static int
+mpintrcpu(void)
+{
+    int i;
+
+    /*
+     * The bulk of this code was written ~1995, when there was
+     * one architecture and one generation of hardware, the number
+     * of CPUs was up to 4(8) and the choices for interrupt routing
+     * were physical, or flat logical (optionally with lowest
+     * priority interrupt). Logical mode hasn't scaled well with
+     * the increasing number of packages/cores/threads, so the
+     * fall-back is to physical mode, which works across all processor
+     * generations, both AMD and Intel, using the APIC and xAPIC.
+     *
+     * Interrupt routing policy can be set here.
+     * Currently, just assign each interrupt to a different CPU on
+     * a round-robin basis. Some idea of the packages/cores/thread
+     * topology would be useful here, e.g. to not assign interrupts
+     * to more than one thread in a core, or to use a "noise" core.
+     * But, as usual, Intel make that an onerous task. 
+     */
+
+    /*
+     * temporary workaround for many-core intel (non-amd) systems:
+     * always use cpu 0.  (TODO)
+     */
+    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) != 0 && conf.ncpu > 8)
+        return 0;
+
+    lock(&mpphysidlock);
+    for(;;){
+        i = mpphysid++;
+        if(mpphysid >= MaxAPICNO+1)
+            mpphysid = 0;
+        if(mpapic[i].online)
+            break;
+    }
+    unlock(&mpphysidlock);
+
+    return mpapic[i].apicno;
+}
+
+static int
+mpintrenablex(Vctl* v, int tbdf)
+{
+    Bus *bus;
+    Aintr *aintr;
+    Apic *apic;
+    Pcidev *pcidev;
+    int bno, dno, hi, irq, lo, n, type, vno;
+    char *typenm;
+
+    /*
+     * Find the bus.
+     */
+    type = BUSTYPE(tbdf);
+    bno = BUSBNO(tbdf);
+    dno = BUSDNO(tbdf);
+    if(type == BusISA)
+        bno = mpisabus;
+    vno = -1;
+    for(bus = mpbus; bus != nil; bus = bus->next){
+        if(bus->type != type)
+            continue;
+        if(bus->busno == bno)
+            break;
+    }
+    if(bus == nil){
+        typenm = type < 0 || type >= nelem(buses)? "": buses[type];
+        print("mpintrenablex: can't find bus type %d (%s) for irq %d "
+            "%s busno %d\n", type, typenm, v->irq, v->name, bno);
+        return -1;
+    }
+
+    /*
+     * For PCI devices the interrupt pin (INT[ABCD]) and device
+     * number are encoded into the entry irq field, so create something
+     * to match on. The interrupt pin used by the device has to be
+     * obtained from the PCI config space.
+     */
+    if(bus->type == BusPCI){
+        pcidev = pcimatchtbdf(tbdf);
+        if(pcidev != nil && (n = pcicfgr8(pcidev, PciINTP)) != 0)
+            irq = (dno<<2)|(n-1);
+        else
+            irq = -1;
+        //print("pcidev %#uX: irq %#uX v->irq %#uX\n", tbdf, irq, v->irq);
+    }
+    else
+        irq = v->irq;
+
+    /*
+     * Find a matching interrupt entry from the list of interrupts
+     * attached to this bus.
+     */
+    for(aintr = bus->aintr; aintr; aintr = aintr->next){
+        if(aintr->intr->irq != irq)
+            continue;
+        if (0) {
+            PCMPintr* p = aintr->intr;
+
+            print("mpintrenablex: bus %d intin %d irq %d\n",
+                p->busno, p->intin, p->irq);
+        }
+        /*
+         * Check if already enabled. Multifunction devices may share
+         * INT[A-D]# so, if already enabled, check the polarity matches
+         * and the trigger is level.
+         *
+         * Should check the devices differ only in the function number,
+         * but that can wait for the planned enable/disable rewrite.
+         * The RDT read here is safe for now as currently interrupts
+         * are never disabled once enabled.
+         */
+        apic = aintr->apic;
+        ioapicrdtr(apic, aintr->intr->intin, 0, &lo);
+        if(!(lo & ApicIMASK)){
+            vno = lo & 0xFF;
+//print("%s vector %d (!imask)\n", v->name, vno);
+            n = mpintrinit(bus, aintr->intr, vno, v->irq);
+            n |= ApicPHYSICAL;      /* no-op */
+            lo &= ~(ApicRemoteIRR|ApicDELIVS);
+            if(n != lo || !(n & ApicLEVEL)){
+                print("mpintrenable: multiple botch irq%d, tbdf %uX, lo %8.8uX, n %8.8uX\n",
+                    v->irq, tbdf, lo, n);
+                return -1;
+            }
+            break;
+        }
+
+        /*
+         * With the APIC a unique vector can be assigned to each
+         * request to enable an interrupt. There are two reasons this
+         * is a good idea:
+         * 1) to prevent lost interrupts, no more than 2 interrupts
+         *    should be assigned per block of 16 vectors (there is an
+         *    in-service entry and a holding entry for each priority
+         *    level and there is one priority level per block of 16
+         *    interrupts).
+         * 2) each input pin on the IOAPIC will receive a different
+         *    vector regardless of whether the devices on that pin use
+         *    the same IRQ as devices on another pin.
+         */
+        vno = VectorAPIC + (incref(&mpvnoref)-1)*8;
+//print("%s vector %d (imask)\n", v->name, vno);
+        if(vno > MaxVectorAPIC){
+            print("mpintrenable: vno %d, irq %d, tbdf %uX\n",
+                vno, v->irq, tbdf);
+            return -1;
+        }
+
+        hi = mpintrcpu()<<24;
+        lo = mpintrinit(bus, aintr->intr, vno, v->irq);
+        //print("lo 0x%uX: busno %d intr %d vno %d irq %d elcr 0x%uX\n",
+        //  lo, bus->busno, aintr->intr->irq, vno,
+        //  v->irq, i8259elcr);
+        if(lo & ApicIMASK)
+            return -1;
+        lo |= ApicPHYSICAL;         /* no-op */
+
+        if((apic->flags & PcmpEN) && apic->type == PcmpIOAPIC)
+            ioapicrdtw(apic, aintr->intr->intin, hi, lo);
+        //else
+        //  print("lo not enabled 0x%uX %d\n",
+        //      apic->flags, apic->type);
+        break;
+    }
+    if (aintr) {
+        v->isr = lapicisr;
+        v->eoi = lapiceoi;
+    }
+    return vno;
+}
+
+int
+mpintrenable(Vctl* v)
+{
+    int irq, tbdf, vno;
+
+    /*
+     * If the bus is known, try it.
+     * BUSUNKNOWN is given both by [E]ISA devices and by
+     * interrupts local to the processor (local APIC, coprocessor
+     * breakpoint and page-fault).
+     */
+    tbdf = v->tbdf;
+    if(tbdf != BUSUNKNOWN && (vno = mpintrenablex(v, tbdf)) != -1)
+        return vno;
+
+    irq = v->irq;
+    if(irq >= IrqLINT0 && irq <= MaxIrqLAPIC){
+        if(irq != IrqSPURIOUS)
+            v->isr = lapiceoi;
+        return VectorPIC+irq;
+    }
+    if(irq < 0 || irq > MaxIrqPIC){
+        print("mpintrenable: irq %d out of range\n", irq);
+        return -1;
+    }
+
+    /*
+     * Either didn't find it or have to try the default buses
+     * (ISA and EISA). This hack is due to either over-zealousness 
+     * or laziness on the part of some manufacturers.
+     *
+     * The MP configuration table on some older systems
+     * (e.g. ASUS PCI/E-P54NP4) has an entry for the EISA bus
+     * but none for ISA. It also has the interrupt type and
+     * polarity set to 'default for this bus' which wouldn't
+     * be compatible with ISA.
+     */
+    if(mpeisabus != -1){
+        vno = mpintrenablex(v, MKBUS(BusEISA, 0, 0, 0));
+        if(vno != -1)
+            return vno;
+    }
+    if(mpisabus != -1){
+        vno = mpintrenablex(v, MKBUS(BusISA, 0, 0, 0));
+        if(vno != -1)
+            return vno;
+    }
+    print("mpintrenable: out of choices eisa %d isa %d tbdf %#ux irq %d\n",
+        mpeisabus, mpisabus, v->tbdf, v->irq);
+    return -1;
+}
+
+static Lock mpshutdownlock;
+
+void
+mpshutdown(void)
+{
+    /*
+     * To be done...
+     */
+    if(!canlock(&mpshutdownlock)){
+        /*
+         * If this processor received the CTRL-ALT-DEL from
+         * the keyboard, acknowledge it. Send an INIT to self.
+         */
+#ifdef FIXTHIS
+        if(lapicisr(VectorKBD))
+            lapiceoi(VectorKBD);
+#endif /* FIX THIS */
+        arch->introff();
+        idle();
+    }
+
+    if(active.rebooting)
+        return;
+    print("apshutdown: active = %#8.8ux\n", active.cpus);
+    delay(1000);
+    splhi();
+    arch->resetothers();
+
+    pcireset();
+    i8042reset();
+
+    /*
+     * Often the BIOS hangs during restart if a conventional 8042
+     * warm-boot sequence is tried. The following is Intel specific and
+     * seems to perform a cold-boot, but at least it comes back.
+     * And sometimes there is no keyboard...
+     *
+     * The reset register (0xcf9) is usually in one of the bridge
+     * chips. The actual location and sequence could be extracted from
+     * ACPI but why bother, this is the end of the line anyway.
+     */
+    print("no kbd; trying bios warm boot...");
+    *(ushort*)KADDR(0x472) = 0x1234;    /* BIOS warm-boot flag */
+    outb(0xCF9, 0x02);
+    outb(0xCF9, 0x06);
+
+    print("can't reset\n");
+    for(;;)
+        idle();
+}
+@
+
 
 \section{[[security/]]}
 
@@ -16665,1423 +19572,6 @@ _efgfmt(Fmt*)
 @
 
 
-\subsection*{[[devices/keyboard/386/latin1.c]]}
-
-
-<<latin1.c>>=
-#include    "u.h"
-#include    "../port/lib.h"
-
-#include    "mem.h"
-#include    "dat.h"
-#include    "fns.h"
-
-/*
- * The code makes two assumptions: strlen(ld) is 1 or 2; latintab[i].ld can be a
- * prefix of latintab[j].ld only when j<i.
- */
-struct cvlist
-{
-    char    *ld;        /* must be seen before using this conversion */
-    char    *si;        /* options for last input characters */
-
-    Rune    *so;        /* the corresponding Rune for each si entry */
-};
-
-struct cvlist latintab[] = {
-#include "../port/latin1.h"
-    0,  0,      0
-};
-
-/*
- * Given n characters k[0]..k[n-1], find the rune or return -1 for failure.
- */
-long
-unicode(Rune *k, int n)
-{
-    long c;
-    Rune *r;
-
-    c = 0;
-    for(r = &k[1]; r<&k[n]; r++){       /* +1 to skip [Xx] */
-        c <<= 4;
-        if('0'<=*r && *r<='9')
-            c += *r-'0';
-        else if('a'<=*r && *r<='f')
-            c += 10 + *r-'a';
-        else if('A'<=*r && *r<='F')
-            c += 10 + *r-'A';
-        else
-            return -1;
-    }
-    return c;
-}
-
-/*
- * Given n characters k[0]..k[n-1], find the corresponding rune or return -1 for
- * failure, or something < -1 if n is too small.  In the latter case, the result
- * is minus the required n.
- */
-long
-latin1(Rune* k, int n)
-{
-    struct cvlist *l;
-    char c;
-    char* p;
-
-//    print("latin1: %d, %d\n", n, k[n-1]);
-
-    if(k[0] == 'X')
-        if(n>=5)
-            return unicode(k, 5);
-        else
-            return -5;
-    if(k[0] == 'x')
-        if(n>=UTFmax*2+1)
-            return unicode(k, UTFmax*2+1);
-        else
-            return -(UTFmax+1);
-
-    for(l=latintab; l->ld!=0; l++)
-        if(k[0] == l->ld[0]){
-//          print("found: %s, %s\n", l->ld, l->si);
-            if(n == 1)
-                return -2;
-            if(l->ld[1] == 0)
-                c = k[1];
-            else if(l->ld[1] != k[1])
-                continue;
-            else if(n == 2)
-                return -3;
-            else
-                c = k[2];
-            for(p=l->si; *p!=0; p++)
-                if(*p == c) {
-                    print("found: 0x%x\n", l->so[p - l->si]);
-                    return l->so[p - l->si];
-                }
-            return -1;
-        }
-    return -1;
-}
-@
-
-
-\subsection*{[[devices/keyboard/386/latin1.h]]}
-
-
-
-\subsection*{[[devices/storage/386/devfloppy.c]]}
-
-\ifallcode
-<<devfloppy.c forward decl>>=
-static void floppyintr(Ureg*);
-static int floppyon(FDrive*);
-static void floppyoff(FDrive*);
-static void floppysetdef(FDrive*);
-
-/*
- *  predeclared
- */
-static int  cmddone(void*);
-static void floppyformat(FDrive*, Cmdbuf*);
-static void floppykproc(void*);
-static void floppypos(FDrive*,long);
-static int  floppyrecal(FDrive*);
-static int  floppyresult(void);
-static void floppyrevive(void);
-static long floppyseek(FDrive*, long);
-static int  floppysense(void);
-static void floppywait(int);
-static long floppyxfer(FDrive*, int, void*, long, long);
-@
-
-<<devfloppy.c debugging macro>>=
-#define DPRINT if(floppydebug)print
-int floppydebug = 0;
-@ 
-\fi
-
-
-
-<<interrupt callback pcfloppyintr>>=
-static void
-pcfloppyintr(Ureg *ur, void *a)
-{
-    USED(a);
-
-    floppyintr(ur);
-}
-@
-
-
-<<global floppydevtab>>=
-Dev floppydevtab = {
-    .dc       =    'f',
-    .name     =    "floppy",
-               
-    .reset    =    floppyreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .attach   =    floppyattach,
-    .walk     =    floppywalk,
-    .stat     =    floppystat,
-    .open     =    floppyopen,
-    .create   =    devcreate,
-    .close    =    floppyclose,
-    .read     =    floppyread,
-    .bread    =    devbread,
-    .write    =    floppywrite,
-    .bwrite   =    devbwrite,
-    .remove   =    devremove,
-    .wstat    =    devwstat,
-};
-@
-
-
-<<devfloppy.c>>=
-<<kernel basic includes>>
-#include    "io.h"
-#include    "floppy.h"
-
-/* Intel 82077A (8272A compatible) floppy controller */
-
-/* This module expects the following functions to be defined
- * elsewhere: 
- * 
- * inb()
- * outb()
- * floppyexec()
- * floppyeject() 
- * floppysetup0()
- * floppysetup1()
- * dmainit()
- * dmasetup()
- * dmaend()
- * 
- * On DMA systems, floppyexec() should be an empty function; 
- * on non-DMA systems, dmaend() should be an empty function; 
- * dmasetup() may enforce maximum transfer sizes. 
- */
-
-<<devfloppy.c forward decl>>
-
-
-<<interrupt callback pcfloppyintr>>
-
-void
-floppysetup0(FController *fl)
-{
-    fl->ndrive = 0;
-    if(ioalloc(Psra, 6, 0, "floppy") < 0)
-        return;
-    if(ioalloc(Pdir, 1, 0, "floppy") < 0){
-        iofree(Psra);
-        return;
-    }
-    fl->ndrive = 2;
-}
-
-void
-floppysetup1(FController *fl)
-{
-    uchar equip;
-
-    /*
-     *  read nvram for types of floppies 0 & 1
-     */
-    equip = nvramread(0x10);
-    if(fl->ndrive > 0){
-        fl->d[0].dt = (equip >> 4) & 0xf;
-        floppysetdef(&fl->d[0]);
-    }
-    if(fl->ndrive > 1){
-        fl->d[1].dt = equip & 0xf;
-        floppysetdef(&fl->d[1]);
-    }
-    intrenable(IrqFLOPPY, pcfloppyintr, fl, BUSUNKNOWN, "floppy");
-}
-
-/*
- *  eject disk ( unknown on safari )
- */
-void
-floppyeject(FDrive *dp)
-{
-    floppyon(dp);
-    dp->vers++;
-    floppyoff(dp);
-}
-
-int 
-floppyexec(char *a, long b, int c)
-{
-    USED(a, b, c);
-    return b;
-}
-
-
-
-enum {
-    /* file types */
-    Qdir=       0, 
-    Qdata=      (1<<2),
-    Qctl=       (2<<2),
-    Qmask=      (3<<2),
-
-    DMAchan=    2,  /* floppy dma channel */
-};
-
-<<devfloppy.c debugging macro>>
-
-/*
- *  types of drive (from PC equipment byte)
- */
-enum
-{
-    Tnone=      0,
-    T360kb=     1,
-    T1200kb=    2,
-    T720kb=     3,
-    T1440kb=    4,
-};
-
-FType floppytype[] =
-{
- { "3½HD", T1440kb, 512, 18, 2, 1, 80, 0x1B, 0x54, 0, },
- { "3½DD", T1440kb, 512,  9, 2, 1, 80, 0x1B, 0x54, 2, },
- { "3½DD", T720kb,  512,  9, 2, 1, 80, 0x1B, 0x54, 2, },
- { "5¼HD", T1200kb, 512, 15, 2, 1, 80, 0x2A, 0x50, 0, },
- { "5¼DD", T1200kb, 512,  9, 2, 2, 40, 0x2A, 0x50, 1, },
- { "ATT3B1",    T1200kb, 512,  8, 2, 2, 48, 0x2A, 0x50, 1, },
- { "5¼DD", T360kb,  512,  9, 2, 1, 40, 0x2A, 0x50, 2, },
-};
-
-/*
- *  bytes per sector encoding for the controller.
- *  - index for b2c is is (bytes per sector/128).
- *  - index for c2b is code from b2c
- */
-static int b2c[] =
-{
-[1] 0,
-[2] 1,
-[4] 2,
-[8] 3,
-};
-static int c2b[] =
-{
-    128,
-    256,
-    512,
-    1024,
-};
-
-FController fl;
-
-#define MOTORBIT(i) (1<<((i)+4))
-
-
-Dirtab floppydir[]={
-    ".",        {Qdir, 0, QTDIR},   0,  0550,
-    "fd0disk",      {Qdata + 0},    0,  0660,
-    "fd0ctl",       {Qctl + 0}, 0,  0660,
-    "fd1disk",      {Qdata + 1},    0,  0660,
-    "fd1ctl",       {Qctl + 1}, 0,  0660,
-    "fd2disk",      {Qdata + 2},    0,  0660,
-    "fd2ctl",       {Qctl + 2}, 0,  0660,
-    "fd3disk",      {Qdata + 3},    0,  0660,
-    "fd3ctl",       {Qctl + 3}, 0,  0660,
-};
-#define NFDIR   2   /* directory entries/drive */
-
-enum
-{
-    CMdebug,
-    CMnodebug,
-    CMeject,
-    CMformat,
-    CMreset,
-};
-
-static Cmdtab floppyctlmsg[] =
-{
-    CMdebug,    "debug",    1,
-    CMnodebug,  "nodebug", 1,
-    CMeject,    "eject",    1,
-    CMformat,   "format",   0,
-    CMreset,    "reset",    1,
-};
-
-static void
-fldump(void)
-{
-    DPRINT("sra %ux srb %ux dor %ux msr %ux dir %ux\n", inb(Psra), inb(Psrb),
-        inb(Pdor), inb(Pmsr), inb(Pdir));
-}
-
-/*
- *  set floppy drive to its default type
- */
-static void
-floppysetdef(FDrive *dp)
-{
-    FType *t;
-
-    for(t = floppytype; t < &floppytype[nelem(floppytype)]; t++)
-        if(dp->dt == t->dt){
-            dp->t = t;
-            floppydir[1+NFDIR*dp->dev].length = dp->t->cap;
-            break;
-        }
-}
-
-static void
-floppyreset(void)
-{
-    FDrive *dp;
-    FType *t;
-    ulong maxtsize;
-    
-    floppysetup0(&fl);
-    if(fl.ndrive == 0)
-        return;
-
-    /*
-     *  init dependent parameters
-     */
-    maxtsize = 0;
-    for(t = floppytype; t < &floppytype[nelem(floppytype)]; t++){
-        t->cap = t->bytes * t->heads * t->sectors * t->tracks;
-        t->bcode = b2c[t->bytes/128];
-        t->tsize = t->bytes * t->sectors;
-        if(maxtsize < t->tsize)
-            maxtsize = t->tsize;
-    }
-
-    /*
-     * Should check if this fails. Can do so
-     * if there is no space <= 16MB for the DMA
-     * bounce buffer.
-     */
-    dmainit(DMAchan, maxtsize);
-
-    /*
-     *  allocate the drive storage
-     */
-    fl.d = xalloc(fl.ndrive*sizeof(FDrive));
-    fl.selected = fl.d;
-
-    /*
-     *  stop the motors
-     */
-    fl.motor = 0;
-    delay(10);
-    outb(Pdor, fl.motor | Fintena | Fena);
-    delay(10);
-
-    /*
-     *  init drives
-     */
-    for(dp = fl.d; dp < &fl.d[fl.ndrive]; dp++){
-        dp->dev = dp - fl.d;
-        dp->dt = T1440kb;
-        floppysetdef(dp);
-        dp->cyl = -1;           /* because we don't know */
-        dp->cache = (uchar*)xspanalloc(maxtsize, BY2PG, 64*1024);
-        dp->ccyl = -1;
-        dp->vers = 0;
-    }
-
-    /*
-     *  first operation will recalibrate
-     */
-    fl.confused = 1;
-
-    floppysetup1(&fl);
-}
-
-static Chan*
-floppyattach(char *spec)
-{
-    static int kstarted;
-
-    if(fl.ndrive == 0)
-        error(Enodev);
-
-    if(kstarted == 0){
-        /*
-         *  watchdog to turn off the motors
-         */
-        kstarted = 1;
-        kproc("floppy", floppykproc, 0);
-    }
-    return devattach('f', spec);
-}
-
-static Walkqid*
-floppywalk(Chan *c, Chan *nc, char **name, int nname)
-{
-    return devwalk(c, nc, name, nname, floppydir, 1+fl.ndrive*NFDIR, devgen);
-}
-
-static int
-floppystat(Chan *c, uchar *dp, int n)
-{
-    return devstat(c, dp, n, floppydir, 1+fl.ndrive*NFDIR, devgen);
-}
-
-static Chan*
-floppyopen(Chan *c, int omode)
-{
-    return devopen(c, omode, floppydir, 1+fl.ndrive*NFDIR, devgen);
-}
-
-static void
-floppyclose(Chan *)
-{
-}
-
-static void
-islegal(ulong offset, long n, FDrive *dp)
-{
-    if(offset % dp->t->bytes)
-        error(Ebadarg);
-    if(n % dp->t->bytes)
-        error(Ebadarg);
-}
-
-/*
- *  check if the floppy has been replaced under foot.  cause
- *  an error if it has.
- *
- *  a seek and a read clears the condition.  this was determined
- *  experimentally, there has to be a better way.
- *
- *  if the read fails, cycle through the possible floppy
- *  density till one works or we've cycled through all
- *  possibilities for this drive.
- */
-static void
-changed(Chan *c, FDrive *dp)
-{
-    ulong old;
-    FType *start;
-
-    /*
-     *  if floppy has changed or first time through
-     */
-    if((inb(Pdir)&Fchange) || dp->vers == 0){
-        DPRINT("changed\n");
-        fldump();
-        dp->vers++;
-        start = dp->t;
-        dp->maxtries = 3;   /* limit it when we're probing */
-
-        /* floppyon will fail if there's a controller but no drive */
-        dp->confused = 1;   /* make floppyon recal */
-        if(floppyon(dp) < 0)
-            error(Eio);
-
-        /* seek to the first track */
-        floppyseek(dp, dp->t->heads*dp->t->tsize);
-        while(waserror()){
-            /*
-             *  if first attempt doesn't reset changed bit, there's
-             *  no floppy there
-             */
-            if(inb(Pdir)&Fchange)
-                nexterror();
-
-            while(++dp->t){
-                if(dp->t == &floppytype[nelem(floppytype)])
-                    dp->t = floppytype;
-                if(dp->dt == dp->t->dt)
-                    break;
-            }
-            floppydir[1+NFDIR*dp->dev].length = dp->t->cap;
-
-            /* floppyon will fail if there's a controller but no drive */
-            if(floppyon(dp) < 0)
-                error(Eio);
-
-            DPRINT("changed: trying %s\n", dp->t->name);
-            fldump();
-            if(dp->t == start)
-                nexterror();
-        }
-
-        /* if the read succeeds, we've got the density right */
-        floppyxfer(dp, Fread, dp->cache, 0, dp->t->tsize);
-        poperror();
-        dp->maxtries = 20;
-    }
-
-    old = c->qid.vers;
-    c->qid.vers = dp->vers;
-    if(old && old != dp->vers)
-        error(Eio);
-}
-
-static int
-readtrack(FDrive *dp, int cyl, int head)
-{
-    int i, nn, sofar;
-    ulong pos;
-
-    nn = dp->t->tsize;
-    if(dp->ccyl==cyl && dp->chead==head)
-        return nn;
-    pos = (cyl*dp->t->heads+head) * nn;
-    for(sofar = 0; sofar < nn; sofar += i){
-        dp->ccyl = -1;
-        i = floppyxfer(dp, Fread, dp->cache + sofar, pos + sofar, nn - sofar);
-        if(i <= 0)
-            return -1;
-    }
-    dp->ccyl = cyl;
-    dp->chead = head;
-    return nn;
-}
-
-static long
-floppyread(Chan *c, void *a, long n, vlong off)
-{
-    FDrive *dp;
-    long rv;
-    int sec, head, cyl;
-    long len;
-    uchar *aa;
-    ulong offset = off;
-
-    if(c->qid.type & QTDIR)
-        return devdirread(c, a, n, floppydir, 1+fl.ndrive*NFDIR, devgen);
-
-    rv = 0;
-    dp = &fl.d[c->qid.path & ~Qmask];
-    switch ((int)(c->qid.path & Qmask)) {
-    case Qdata:
-        islegal(offset, n, dp);
-        aa = a;
-
-        qlock(&fl);
-        if(waserror()){
-            qunlock(&fl);
-            nexterror();
-        }
-        floppyon(dp);
-        changed(c, dp);
-        for(rv = 0; rv < n; rv += len){
-            /*
-             *  all xfers come out of the track cache
-             */
-            dp->len = n - rv;
-            floppypos(dp, offset+rv);
-            cyl = dp->tcyl;
-            head = dp->thead;
-            len = dp->len;
-            sec = dp->tsec;
-            if(readtrack(dp, cyl, head) < 0)
-                break;
-            memmove(aa+rv, dp->cache + (sec-1)*dp->t->bytes, len);
-        }
-        qunlock(&fl);
-        poperror();
-
-        break;
-    case Qctl:
-        return readstr(offset, a, n, dp->t->name);
-    default:
-        panic("floppyread: bad qid");
-    }
-
-    return rv;
-}
-
-static long
-floppywrite(Chan *c, void *a, long n, vlong off)
-{
-    FDrive *dp;
-    long rv, i;
-    char *aa = a;
-    Cmdbuf *cb;
-    Cmdtab *ct;
-    ulong offset = off;
-
-    rv = 0;
-    dp = &fl.d[c->qid.path & ~Qmask];
-    switch ((int)(c->qid.path & Qmask)) {
-    case Qdata:
-        islegal(offset, n, dp);
-        qlock(&fl);
-        if(waserror()){
-            qunlock(&fl);
-            nexterror();
-        }
-        floppyon(dp);
-        changed(c, dp);
-        for(rv = 0; rv < n; rv += i){
-            floppypos(dp, offset+rv);
-            if(dp->tcyl == dp->ccyl)
-                dp->ccyl = -1;
-            i = floppyxfer(dp, Fwrite, aa+rv, offset+rv, n-rv);
-            if(i < 0)
-                break;
-            if(i == 0)
-                error(Eio);
-        }
-        qunlock(&fl);
-        poperror();
-        break;
-    case Qctl:
-        rv = n;
-        cb = parsecmd(a, n);
-        if(waserror()){
-            free(cb);
-            nexterror();
-        }
-        qlock(&fl);
-        if(waserror()){
-            qunlock(&fl);
-            nexterror();
-        }
-        ct = lookupcmd(cb, floppyctlmsg, nelem(floppyctlmsg));
-        switch(ct->index){
-        case CMeject:
-            floppyeject(dp);
-            break;
-        case CMformat:
-            floppyformat(dp, cb);
-            break;
-        case CMreset:
-            fl.confused = 1;
-            floppyon(dp);
-            break;
-        case CMdebug:
-            floppydebug = 1;
-            break;
-        case CMnodebug:
-            floppydebug = 0;
-            break;
-        }
-        poperror();
-        qunlock(&fl);
-        poperror();
-        free(cb);
-        break;
-    default:
-        panic("floppywrite: bad qid");
-    }
-
-    return rv;
-}
-
-static void
-floppykproc(void *)
-{
-    FDrive *dp;
-
-    while(waserror())
-        ;
-    for(;;){
-        for(dp = fl.d; dp < &fl.d[fl.ndrive]; dp++){
-            if((fl.motor&MOTORBIT(dp->dev))
-            && TK2SEC(cpu->ticks - dp->lasttouched) > 5
-            && canqlock(&fl)){
-                if(TK2SEC(cpu->ticks - dp->lasttouched) > 5)
-                    floppyoff(dp);
-                qunlock(&fl);
-            }
-        }
-        tsleep(&up->sleepr, returnfalse, 0, 1000);
-    }
-}
-
-/*
- *  start a floppy drive's motor.
- */
-static int
-floppyon(FDrive *dp)
-{
-    int alreadyon;
-    int tries;
-
-    if(fl.confused)
-        floppyrevive();
-
-    /* start motor and select drive */
-    alreadyon = fl.motor & MOTORBIT(dp->dev);
-    fl.motor |= MOTORBIT(dp->dev);
-    outb(Pdor, fl.motor | Fintena | Fena | dp->dev);
-    if(!alreadyon){
-        /* wait for drive to spin up */
-        tsleep(&up->sleepr, returnfalse, 0, 750);
-
-        /* clear any pending interrupts */
-        floppysense();
-    }
-
-    /* set transfer rate */
-    if(fl.rate != dp->t->rate){
-        fl.rate = dp->t->rate;
-        outb(Pdsr, fl.rate);
-    }
-
-    /* get drive to a known cylinder */
-    if(dp->confused)
-        for(tries = 0; tries < 4; tries++)
-            if(floppyrecal(dp) >= 0)
-                break;
-    dp->lasttouched = cpu->ticks;
-    fl.selected = dp;
-
-    /* return -1 if this didn't work */
-    if(dp->confused)
-        return -1;
-    return 0;
-}
-
-/*
- *  stop the floppy if it hasn't been used in 5 seconds
- */
-static void
-floppyoff(FDrive *dp)
-{
-    fl.motor &= ~MOTORBIT(dp->dev);
-    outb(Pdor, fl.motor | Fintena | Fena | dp->dev);
-}
-
-/*
- *  send a command to the floppy
- */
-static int
-floppycmd(void)
-{
-    int i;
-    int tries;
-
-    fl.nstat = 0;
-    for(i = 0; i < fl.ncmd; i++){
-        for(tries = 0; ; tries++){
-            if((inb(Pmsr)&(Ffrom|Fready)) == Fready)
-                break;
-            if(tries > 1000){
-                DPRINT("cmd %ux can't be sent (%d)\n", fl.cmd[0], i);
-                fldump();
-
-                /* empty fifo, might have been a bad command */
-                floppyresult();
-                return -1;
-            }
-            microdelay(8);  /* for machine independence */
-        }
-        outb(Pfdata, fl.cmd[i]);
-    }
-    return 0;
-}
-
-/*
- *  get a command result from the floppy
- *
- *  when the controller goes ready waiting for a command
- *  (instead of sending results), we're done
- * 
- */
-static int
-floppyresult(void)
-{
-    int i, s;
-    int tries;
-
-    /* get the result of the operation */
-    for(i = 0; i < sizeof(fl.stat); i++){
-        /* wait for status byte */
-        for(tries = 0; ; tries++){
-            s = inb(Pmsr)&(Ffrom|Fready);
-            if(s == Fready){
-                fl.nstat = i;
-                return fl.nstat;
-            }
-            if(s == (Ffrom|Fready))
-                break;
-            if(tries > 1000){
-                DPRINT("floppyresult: %d stats\n", i);
-                fldump();
-                fl.confused = 1;
-                return -1;
-            }
-            microdelay(8);  /* for machine independence */
-        }
-        fl.stat[i] = inb(Pfdata);
-    }
-    fl.nstat = sizeof(fl.stat);
-    return fl.nstat;
-}
-
-/*
- *  calculate physical address of a logical byte offset into the disk
- *
- *  truncate dp->length if it crosses a track boundary
- */
-static void
-floppypos(FDrive *dp, long off)
-{
-    int lsec;
-    int ltrack;
-    int end;
-
-    lsec = off/dp->t->bytes;
-    ltrack = lsec/dp->t->sectors;
-    dp->tcyl = ltrack/dp->t->heads;
-    dp->tsec = (lsec % dp->t->sectors) + 1;
-    dp->thead = (lsec/dp->t->sectors) % dp->t->heads;
-
-    /*
-     *  can't read across track boundaries.
-     *  if so, decrement the bytes to be read.
-     */
-    end = (ltrack+1)*dp->t->sectors*dp->t->bytes;
-    if(off+dp->len > end)
-        dp->len = end - off;
-}
-
-/*
- *  get the interrupt cause from the floppy.
- */
-static int
-floppysense(void)
-{
-    fl.ncmd = 0;
-    fl.cmd[fl.ncmd++] = Fsense;
-    if(floppycmd() < 0)
-        return -1;
-    if(floppyresult() < 2){
-        DPRINT("can't read sense response\n");
-        fldump();
-        fl.confused = 1;
-        return -1;
-    }
-    return 0;
-}
-
-static int
-cmddone(void *)
-{
-    return fl.ncmd == 0;
-}
-
-/*
- *  Wait for a floppy interrupt.  If none occurs in 5 seconds, we
- *  may have missed one.  This only happens on some portables which
- *  do power management behind our backs.  Call the interrupt
- *  routine to try to clear any conditions.
- */
-static void
-floppywait(int slow)
-{
-    tsleep(&fl.r, cmddone, 0, slow ? 5000 : 1000);
-    if(!cmddone(0)){
-        floppyintr(0);
-        fl.confused = 1;
-    }
-}
-
-/*
- *  we've lost the floppy position, go to cylinder 0.
- */
-static int
-floppyrecal(FDrive *dp)
-{
-    dp->ccyl = -1;
-    dp->cyl = -1;
-
-    fl.ncmd = 0;
-    fl.cmd[fl.ncmd++] = Frecal;
-    fl.cmd[fl.ncmd++] = dp->dev;
-    if(floppycmd() < 0)
-        return -1;
-    floppywait(1);
-    if(fl.nstat < 2){
-        DPRINT("recalibrate: confused %ux\n", inb(Pmsr));
-        fl.confused = 1;
-        return -1;
-    }
-    if((fl.stat[0] & (Codemask|Seekend)) != Seekend){
-        DPRINT("recalibrate: failed\n");
-        dp->confused = 1;
-        return -1;
-    }
-    dp->cyl = fl.stat[1];
-    if(dp->cyl != 0){
-        DPRINT("recalibrate: wrong cylinder %d\n", dp->cyl);
-        dp->cyl = -1;
-        dp->confused = 1;
-        return -1;
-    }
-
-    dp->confused = 0;
-    return 0;
-}
-
-/*
- *  if the controller or a specific drive is in a confused state,
- *  reset it and get back to a known state
- */
-static void
-floppyrevive(void)
-{
-    FDrive *dp;
-
-    /*
-     *  reset the controller if it's confused
-     */
-    if(fl.confused){
-        DPRINT("floppyrevive in\n");
-        fldump();
-
-        /* reset controller and turn all motors off */
-        splhi();
-        fl.ncmd = 1;
-        fl.cmd[0] = 0;
-        outb(Pdor, 0);
-        delay(10);
-        outb(Pdor, Fintena|Fena);
-        delay(10);
-        spllo();
-        fl.motor = 0;
-        fl.confused = 0;
-        floppywait(0);
-
-        /* mark all drives in an unknown state */
-        for(dp = fl.d; dp < &fl.d[fl.ndrive]; dp++)
-            dp->confused = 1;
-
-        /* set rate to a known value */
-        outb(Pdsr, 0);
-        fl.rate = 0;
-
-        DPRINT("floppyrevive out\n");
-        fldump();
-    }
-}
-
-/*
- *  seek to the target cylinder
- *
- *  interrupt, no results
- */
-static long
-floppyseek(FDrive *dp, long off)
-{
-    floppypos(dp, off);
-    if(dp->cyl == dp->tcyl)
-        return dp->tcyl;
-    dp->cyl = -1;
-
-    fl.ncmd = 0;
-    fl.cmd[fl.ncmd++] = Fseek;
-    fl.cmd[fl.ncmd++] = (dp->thead<<2) | dp->dev;
-    fl.cmd[fl.ncmd++] = dp->tcyl * dp->t->steps;
-    if(floppycmd() < 0)
-        return -1;
-    floppywait(1);
-    if(fl.nstat < 2){
-        DPRINT("seek: confused\n");
-        fl.confused = 1;
-        return -1;
-    }
-    if((fl.stat[0] & (Codemask|Seekend)) != Seekend){
-        DPRINT("seek: failed\n");
-        dp->confused = 1;
-        return -1;
-    }
-
-    dp->cyl = dp->tcyl;
-    return dp->tcyl;
-}
-
-/*
- *  read or write to floppy.  try up to three times.
- */
-static long
-floppyxfer(FDrive *dp, int cmd, void *a, long off, long n)
-{
-    long offset;
-    int tries;
-
-    if(off >= dp->t->cap)
-        return 0;
-    if(off + n > dp->t->cap)
-        n = dp->t->cap - off;
-
-    /* retry on error (until it gets ridiculous) */
-    tries = 0;
-    while(waserror()){
-        if(tries++ >= dp->maxtries)
-            nexterror();
-        DPRINT("floppyxfer: retrying\n");
-    }
-
-    dp->len = n;
-    if(floppyseek(dp, off) < 0){
-        DPRINT("xfer: seek failed\n");
-        dp->confused = 1;
-        error(Eio);
-    }
-
-    /*
-     *  set up the dma (dp->len may be trimmed)
-     */
-    if(waserror()){
-        dmaend(DMAchan);
-        nexterror();
-    }
-    dp->len = dmasetup(DMAchan, a, dp->len, cmd==Fread);
-    if(dp->len < 0)
-        error(Eio);
-
-    /*
-     *  start operation
-     */
-    fl.ncmd = 0;
-    fl.cmd[fl.ncmd++] = cmd | (dp->t->heads > 1 ? Fmulti : 0);
-    fl.cmd[fl.ncmd++] = (dp->thead<<2) | dp->dev;
-    fl.cmd[fl.ncmd++] = dp->tcyl;
-    fl.cmd[fl.ncmd++] = dp->thead;
-    fl.cmd[fl.ncmd++] = dp->tsec;
-    fl.cmd[fl.ncmd++] = dp->t->bcode;
-    fl.cmd[fl.ncmd++] = dp->t->sectors;
-    fl.cmd[fl.ncmd++] = dp->t->gpl;
-    fl.cmd[fl.ncmd++] = 0xFF;
-    if(floppycmd() < 0)
-        error(Eio);
-
-    /* Poll ready bits and transfer data */
-    floppyexec((char*)a, dp->len, cmd==Fread);
-
-    /*
-     *  give bus to DMA, floppyintr() will read result
-     */
-    floppywait(0);
-    dmaend(DMAchan);
-    poperror();
-
-    /*
-     *  check for errors
-     */
-    if(fl.nstat < 7){
-        DPRINT("xfer: confused\n");
-        fl.confused = 1;
-        error(Eio);
-    }
-    if((fl.stat[0] & Codemask)!=0 || fl.stat[1] || fl.stat[2]){
-        DPRINT("xfer: failed %ux %ux %ux\n", fl.stat[0],
-            fl.stat[1], fl.stat[2]);
-        DPRINT("offset %lud len %ld\n", off, dp->len);
-        if((fl.stat[0]&Codemask)==Cmdexec && fl.stat[1]==Overrun){
-            DPRINT("DMA overrun: retry\n");
-        } else
-            dp->confused = 1;
-        error(Eio);
-    }
-
-    /*
-     *  check for correct cylinder
-     */
-    offset = fl.stat[3] * dp->t->heads + fl.stat[4];
-    offset = offset*dp->t->sectors + fl.stat[5] - 1;
-    offset = offset * c2b[fl.stat[6]];
-    if(offset != off+dp->len){
-        DPRINT("xfer: ends on wrong cyl\n");
-        dp->confused = 1;
-        error(Eio);
-    }
-    poperror();
-
-    dp->lasttouched = cpu->ticks;
-    return dp->len;
-}
-
-/*
- *  format a track
- */
-static void
-floppyformat(FDrive *dp, Cmdbuf *cb)
-{
-    int cyl, h, sec;
-    ulong track;
-    uchar *buf, *bp;
-    FType *t;
-
-    /*
-     *  set the type
-     */
-    if(cb->nf == 2){
-        for(t = floppytype; t < &floppytype[nelem(floppytype)]; t++){
-            if(strcmp(cb->f[1], t->name)==0 && t->dt==dp->dt){
-                dp->t = t;
-                floppydir[1+NFDIR*dp->dev].length = dp->t->cap;
-                break;
-            }
-        }
-        if(t >= &floppytype[nelem(floppytype)])
-            error(Ebadarg);
-    } else if(cb->nf == 1){
-        floppysetdef(dp);
-        t = dp->t;
-    } else {
-        cmderror(cb, "invalid floppy format command");
-        SET(t);
-    }
-
-    /*
-     *  buffer for per track info
-     */
-    buf = smalloc(t->sectors*4);
-    if(waserror()){
-        free(buf);
-        nexterror();
-    }
-
-    /* force a recalibrate to cylinder 0 */
-    dp->confused = 1;
-    if(!waserror()){
-        floppyon(dp);
-        poperror();
-    }
-
-    /*
-     *  format a track at time
-     */
-    for(track = 0; track < t->tracks*t->heads; track++){
-        cyl = track/t->heads;
-        h = track % t->heads;
-
-        /*
-         *  seek to track, ignore errors
-         */
-        floppyseek(dp, track*t->tsize);
-        dp->cyl = cyl;
-        dp->confused = 0;
-
-        /*
-         *  set up the dma (dp->len may be trimmed)
-         */
-        bp = buf;
-        for(sec = 1; sec <= t->sectors; sec++){
-            *bp++ = cyl;
-            *bp++ = h;
-            *bp++ = sec;
-            *bp++ = t->bcode;
-        }
-        if(waserror()){
-            dmaend(DMAchan);
-            nexterror();
-        }
-        if(dmasetup(DMAchan, buf, bp-buf, 0) < 0)
-            error(Eio);
-
-        /*
-         *  start operation
-         */
-        fl.ncmd = 0;
-        fl.cmd[fl.ncmd++] = Fformat;
-        fl.cmd[fl.ncmd++] = (h<<2) | dp->dev;
-        fl.cmd[fl.ncmd++] = t->bcode;
-        fl.cmd[fl.ncmd++] = t->sectors;
-        fl.cmd[fl.ncmd++] = t->fgpl;
-        fl.cmd[fl.ncmd++] = 0x5a;
-        if(floppycmd() < 0)
-            error(Eio);
-
-        /* Poll ready bits and transfer data */
-        floppyexec((char *)buf, bp-buf, 0);
-
-        /*
-         *  give bus to DMA, floppyintr() will read result
-         */
-        floppywait(1);
-        dmaend(DMAchan);
-        poperror();
-
-        /*
-         *  check for errors
-         */
-        if(fl.nstat < 7){
-            DPRINT("format: confused\n");
-            fl.confused = 1;
-            error(Eio);
-        }
-        if((fl.stat[0]&Codemask)!=0 || fl.stat[1]|| fl.stat[2]){
-            DPRINT("format: failed %ux %ux %ux\n",
-                fl.stat[0], fl.stat[1], fl.stat[2]);
-            dp->confused = 1;
-            error(Eio);
-        }
-    }
-    free(buf);
-    dp->confused = 1;
-    poperror();
-}
-
-static void
-floppyintr(Ureg *)
-{
-    switch(fl.cmd[0]&~Fmulti){
-    case Fread:
-    case Fwrite:
-    case Fformat:
-    case Fdumpreg: 
-        floppyresult();
-        break;
-    case Fseek:
-    case Frecal:
-    default:
-        floppysense();  /* to clear interrupt */
-        break;
-    }
-    fl.ncmd = 0;
-    wakeup(&fl.r);
-}
-
-<<global floppydevtab>>
-@
-
-
-\subsection*{[[devices/storage/386/floppy.h]]}
-
-\ifallcode
-<<floppy.h forward decl>>=
-typedef struct FController FController;
-typedef struct FDrive FDrive;
-typedef struct FType FType;
-@
-\fi
-
-<<floppy.h>>=
-<<floppy.h forward decl>>
-
-// why not inlined in devfloppy.c? used by other programs?
-
-/*
- *  a floppy drive
- */
-struct FDrive
-{
-  FType *t;   /* floppy type */
-  int dt;   /* drive type */
-  int dev;
-
-  ulong lasttouched;  /* time last touched */
-  int cyl;    /* current arm position */
-  int confused; /* needs to be recalibrated */
-  int vers;
-  int maxtries; /* max read attempts before Eio */
-
-  int tcyl;   /* target cylinder */
-  int thead;    /* target head */
-  int tsec;   /* target sector */
-  long  len;    /* size of xfer */
-
-  uchar *cache;   /* track cache */
-  int ccyl;
-  int chead;
-};
-
-/*
- *  controller for 4 floppys
- */
-struct FController
-{
-  QLock;      /* exclusive access to the contoller */
-
-  int ndrive;
-  FDrive  *d;   /* the floppy drives */
-  FDrive  *selected;
-  int rate;   /* current rate selected */
-  uchar cmd[14];  /* command */
-  int ncmd;   /* # command bytes */
-  uchar stat[14]; /* command status */
-  int nstat;    /* # status bytes */
-  int confused; /* controler needs to be reset */
-  Rendez  r;    /* wait here for command termination */
-  int motor;    /* bit mask of spinning disks */
-};
-
-/*
- *  floppy types (all MFM encoding)
- */
-struct FType
-{
-  char  *name;
-  int dt;   /* compatible drive type */
-  int bytes;    /* bytes/sector */
-  int sectors;  /* sectors/track */
-  int heads;    /* number of heads */
-  int steps;    /* steps per cylinder */
-  int tracks;   /* tracks/disk */
-  int gpl;    /* intersector gap length for read/write */ 
-  int fgpl;   /* intersector gap length for format */
-  int rate;   /* rate code */
-
-  /*
-   *  these depend on previous entries and are set filled in
-   *  by floppyinit
-   */
-  int bcode;    /* coded version of bytes for the controller */
-  long  cap;    /* drive capacity in bytes */
-  long  tsize;    /* track size in bytes */
-};
-
-/* bits in the registers */
-enum
-{
-  /* status registers a & b */
-  Psra=   0x3f0,
-  Psrb=   0x3f1,
-
-  /* digital output register */
-  Pdor=   0x3f2,
-  Fintena=  0x8,  /* enable floppy interrupt */
-  Fena=   0x4,  /* 0 == reset controller */
-
-  /* main status register */
-  Pmsr=   0x3f4,
-  Fready=   0x80, /* ready to be touched */
-  Ffrom=    0x40, /* data from controller */
-  Ffloppybusy=  0x10, /* operation not over */
-
-  /* data register */
-  Pfdata=   0x3f5,
-  Frecal=   0x07, /* recalibrate cmd */
-  Fseek=    0x0f, /* seek cmd */
-  Fsense=   0x08, /* sense cmd */
-  Fread=    0x66, /* read cmd */
-  Freadid=  0x4a, /* read track id */
-  Fspec=    0x03, /* set hold times */
-  Fwrite=   0x45, /* write cmd */
-  Fformat=  0x4d, /* format cmd */
-  Fmulti=   0x80, /* or'd with Fread or Fwrite for multi-head */
-  Fdumpreg= 0x0e, /* dump internal registers */
-
-  /* digital input register */
-  Pdir=   0x3F7,  /* disk changed port (read only) */
-  Pdsr=   0x3F7,  /* data rate select port (write only) */
-  Fchange=  0x80, /* disk has changed */
-
-  /* status 0 byte */
-  Drivemask=  3<<0,
-  Seekend=  1<<5,
-  Codemask= (3<<6)|(3<<3),
-  Cmdexec=  1<<6,
-
-  /* status 1 byte */
-  Overrun=  0x10,
-};
-
-@
-
-
 \subsection*{[[devices/storage/386/sdata.c]]}
 
 \ifallcode
@@ -23858,63 +25348,6 @@ rpcattn(void *v)
 @
 
 
-\subsection*{[[devices/sys/devpipe.c]]}
-
-\ifallcode
-<<devpipe.c forward decl>>=
-typedef struct Pipe Pipe;
-@
-\fi
-
-
-<<devpipe.c>>=
-<<kernel basic includes>>
-
-// need that??
-#include    "netif.h"
-
-<<devpipe.c forward decl>>
-
-<<struct Pipe>>
-
-<<struct Pipealloc>>
-
-<<global pipealloc>>
-
-<<devpipe.c enum Qxxx>>
-
-<<global pipedir>>
-
-#define NPIPEDIR 3
-
-<<method pipeinit>>
-
-<<method pipeattach>>
-
-<<function pipegen>>
-
-<<method pipewalk>>
-
-<<method pipestat>>
-
-<<method pipewstat>>
-
-<<method pipeopen>>
-
-<<method pipeclose>>
-
-<<method piperead>>
-
-<<method pipebread>>
-
-<<method pipewrite>>
-
-<<method pipebwrite>>
-
-<<global pipedevtab>>
-@
-
-
 \subsection*{[[devices/sys/devsrv.c]]}
 
 \ifallcode
@@ -24358,448 +25791,6 @@ srvstat(Chan *c, uchar *db, int n)
 <<method srvwrite>>
 
 <<global srvdevtab>>
-@
-
-\subsection*{[[devices/sys/devenv.c]]}
-
-\ifallcode
-<<devenv.c forward decl>>=
-static Egrp *envgrp(Chan *c);
-static int  envwriteable(Chan *c);
-@
-\fi
-
-<<global envdevtab>>=
-Dev envdevtab = {
-    .dc       =    'e',
-    .name     =    "env",
-               
-    .reset    =    devreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .attach   =    envattach,
-    .walk     =    envwalk,
-    .stat     =    envstat,
-    .open     =    envopen,
-    .create   =    envcreate,
-    .close    =    envclose,
-    .read     =    envread,
-    .bread    =    devbread,
-    .write    =    envwrite,
-    .bwrite   =    devbwrite,
-    .remove   =    envremove,
-    .wstat    =    devwstat,
-};
-@
-
-
-
-<<function envcpy>>=
-void
-envcpy(Egrp *to, Egrp *from)
-{
-    int i;
-    Evalue *ne, *e;
-
-    rlock(from);
-    to->ment = (from->nent+31)&~31;
-    to->ent = smalloc(to->ment*sizeof(to->ent[0]));
-    for(i=0; i<from->nent; i++){
-        e = from->ent[i];
-        ne = smalloc(sizeof(Evalue));
-        ne->name = smalloc(strlen(e->name)+1);
-        strcpy(ne->name, e->name);
-        if(e->value){
-            ne->value = smalloc(e->len);
-            memmove(ne->value, e->value, e->len);
-            ne->len = e->len;
-        }
-        ne->qid.path = ++to->path;
-        to->ent[i] = ne;
-    }
-    to->nent = from->nent;
-    runlock(from);
-}
-@
-
-
-<<function envgrp>>=
-static Egrp*
-envgrp(Chan *c)
-{
-    if(c->aux == nil)
-        return up->egrp;
-    return c->aux;
-}
-@
-
-
-<<function envwriteable>>=
-static int
-envwriteable(Chan *c)
-{
-    return iseve() || c->aux == nil;
-}
-@
-
-
-<<function getconfenv>>=
-/*
- * Return a copy of configuration environment as a sequence of strings.
- * The strings alternate between name and value.  A zero length name string
- * indicates the end of the list
- */
-char *
-getconfenv(void)
-{
-    Egrp *eg = &confegrp;
-    Evalue *e;
-    char *p, *q;
-    int i, n;
-
-    rlock(eg);
-    if(waserror()) {
-        runlock(eg);
-        nexterror();
-    }
-    
-    /* determine size */
-    n = 0;
-    for(i=0; i<eg->nent; i++){
-        e = eg->ent[i];
-        n += strlen(e->name) + e->len + 2;
-    }
-    p = malloc(n + 1);
-    if(p == nil)
-        error(Enomem);
-    q = p;
-    for(i=0; i<eg->nent; i++){
-        e = eg->ent[i];
-        strcpy(q, e->name);
-        q += strlen(q) + 1;
-        memmove(q, e->value, e->len);
-        q[e->len] = 0;
-        /* move up to the first null */
-        q += strlen(q) + 1;
-    }
-    *q = 0;
-    
-    poperror();
-    runlock(eg);
-    return p;
-}
-@
-
-
-<<devenv.c>>=
-<<kernel basic includes>>
-
-enum
-{
-    Maxenvsize = 16300,
-};
-
-<<devenv.c forward decl>>
-
-static Egrp confegrp;   /* global environment group containing the kernel configuration */
-
-static Evalue*
-envlookup(Egrp *eg, char *name, ulong qidpath)
-{
-    Evalue *e;
-    int i;
-
-    for(i=0; i<eg->nent; i++){
-        e = eg->ent[i];
-        if(e->qid.path == qidpath || (name && e->name[0]==name[0] && strcmp(e->name, name) == 0))
-            return e;
-    }
-    return nil;
-}
-
-static int
-envgen(Chan *c, char *name, Dirtab*, int, int s, Dir *dp)
-{
-    Egrp *eg;
-    Evalue *e;
-
-    if(s == DEVDOTDOT){
-        devdir(c, c->qid, "#e", 0, eve, DMDIR|0775, dp);
-        return 1;
-    }
-
-    eg = envgrp(c);
-    rlock(eg);
-    e = 0;
-    if(name)
-        e = envlookup(eg, name, -1);
-    else if(s < eg->nent)
-        e = eg->ent[s];
-
-    if(e == 0) {
-        runlock(eg);
-        return -1;
-    }
-
-    /* make sure name string continues to exist after we release lock */
-    kstrcpy(up->genbuf, e->name, sizeof up->genbuf);
-    devdir(c, e->qid, up->genbuf, e->len, eve, 0666, dp);
-    runlock(eg);
-    return 1;
-}
-
-static Chan*
-envattach(char *spec)
-{
-    Chan *c;
-    Egrp *egrp = nil;
-
-    if(spec && *spec) {
-        if(strcmp(spec, "c") == 0)
-            egrp = &confegrp;
-        if(egrp == nil)
-            error(Ebadarg);
-    }
-
-    c = devattach('e', spec);
-    c->aux = egrp;
-    return c;
-}
-
-static Walkqid*
-envwalk(Chan *c, Chan *nc, char **name, int nname)
-{
-    return devwalk(c, nc, name, nname, 0, 0, envgen);
-}
-
-static int
-envstat(Chan *c, uchar *db, int n)
-{
-    if(c->qid.type & QTDIR)
-        c->qid.vers = envgrp(c)->vers;
-    return devstat(c, db, n, 0, 0, envgen);
-}
-
-static Chan*
-envopen(Chan *c, int omode)
-{
-    Egrp *eg;
-    Evalue *e;
-    int trunc;
-
-    eg = envgrp(c);
-    if(c->qid.type & QTDIR) {
-        if(omode != OREAD)
-            error(Eperm);
-    }
-    else {
-        trunc = omode & OTRUNC;
-        if(omode != OREAD && !envwriteable(c))
-            error(Eperm);
-        if(trunc)
-            wlock(eg);
-        else
-            rlock(eg);
-        e = envlookup(eg, nil, c->qid.path);
-        if(e == 0) {
-            if(trunc)
-                wunlock(eg);
-            else
-                runlock(eg);
-            error(Enonexist);
-        }
-        if(trunc && e->value) {
-            e->qid.vers++;
-            free(e->value);
-            e->value = 0;
-            e->len = 0;
-        }
-        if(trunc)
-            wunlock(eg);
-        else
-            runlock(eg);
-    }
-    c->mode = openmode(omode);
-    c->flag |= COPEN;
-    c->offset = 0;
-    return c;
-}
-
-static void
-envcreate(Chan *c, char *name, int omode, ulong)
-{
-    Egrp *eg;
-    Evalue *e;
-    Evalue **ent;
-
-    if(c->qid.type != QTDIR)
-        error(Eperm);
-    if(strlen(name) >= sizeof up->genbuf)
-        error("name too long");         /* protect envgen */
-
-    omode = openmode(omode);
-    eg = envgrp(c);
-
-    wlock(eg);
-    if(waserror()) {
-        wunlock(eg);
-        nexterror();
-    }
-
-    if(envlookup(eg, name, -1))
-        error(Eexist);
-
-    e = smalloc(sizeof(Evalue));
-    e->name = smalloc(strlen(name)+1);
-    strcpy(e->name, name);
-
-    if(eg->nent == eg->ment){
-        eg->ment += 32;
-        ent = smalloc(sizeof(eg->ent[0])*eg->ment);
-        if(eg->nent)
-            memmove(ent, eg->ent, sizeof(eg->ent[0])*eg->nent);
-        free(eg->ent);
-        eg->ent = ent;
-    }
-    e->qid.path = ++eg->path;
-    e->qid.vers = 0;
-    eg->vers++;
-    eg->ent[eg->nent++] = e;
-    c->qid = e->qid;
-
-    wunlock(eg);
-    poperror();
-
-    c->offset = 0;
-    c->mode = omode;
-    c->flag |= COPEN;
-}
-
-static void
-envremove(Chan *c)
-{
-    int i;
-    Egrp *eg;
-    Evalue *e;
-
-    if(c->qid.type & QTDIR)
-        error(Eperm);
-
-    eg = envgrp(c);
-    wlock(eg);
-    e = 0;
-    for(i=0; i<eg->nent; i++){
-        if(eg->ent[i]->qid.path == c->qid.path){
-            e = eg->ent[i];
-            eg->nent--;
-            eg->ent[i] = eg->ent[eg->nent];
-            eg->vers++;
-            break;
-        }
-    }
-    wunlock(eg);
-    if(e == 0)
-        error(Enonexist);
-    free(e->name);
-    if(e->value)
-        free(e->value);
-    free(e);
-}
-
-static void
-envclose(Chan *c)
-{
-    /*
-     * cclose can't fail, so errors from remove will be ignored.
-     * since permissions aren't checked,
-     * envremove can't not remove it if its there.
-     */
-    if(c->flag & CRCLOSE)
-        envremove(c);
-}
-
-static long
-envread(Chan *c, void *a, long n, vlong off)
-{
-    Egrp *eg;
-    Evalue *e;
-    ulong offset = off;
-
-    if(c->qid.type & QTDIR)
-        return devdirread(c, a, n, 0, 0, envgen);
-
-    eg = envgrp(c);
-    rlock(eg);
-    e = envlookup(eg, nil, c->qid.path);
-    if(e == 0) {
-        runlock(eg);
-        error(Enonexist);
-    }
-
-    if(offset > e->len) /* protects against overflow converting vlong to ulong */
-        n = 0;
-    else if(offset + n > e->len)
-        n = e->len - offset;
-    if(n <= 0)
-        n = 0;
-    else
-        memmove(a, e->value+offset, n);
-    runlock(eg);
-    return n;
-}
-
-static long
-envwrite(Chan *c, void *a, long n, vlong off)
-{
-    char *s;
-    ulong len;
-    Egrp *eg;
-    Evalue *e;
-    ulong offset = off;
-
-    if(n <= 0)
-        return 0;
-    if(offset > Maxenvsize || n > (Maxenvsize - offset))
-        error(Etoobig);
-
-    eg = envgrp(c);
-    wlock(eg);
-    e = envlookup(eg, nil, c->qid.path);
-    if(e == 0) {
-        wunlock(eg);
-        error(Enonexist);
-    }
-
-    len = offset+n;
-    if(len > e->len) {
-        s = smalloc(len);
-        if(e->value){
-            memmove(s, e->value, e->len);
-            free(e->value);
-        }
-        e->value = s;
-        e->len = len;
-    }
-    memmove(e->value+offset, a, n);
-    e->qid.vers++;
-    eg->vers++;
-    wunlock(eg);
-    return n;
-}
-
-<<global envdevtab>>
-
-
-
-<<function envcpy>>
-
-<<function envgrp>>
-
-<<function envwriteable>>
-
-<<function ksetenv>>
-
-<<function getconfenv>>
 @
 
 \subsection*{[[../include/trace.h]]}
@@ -27703,997 +28694,6 @@ identify(void)
 //Lock mpsynclock;
 
 <<function syncclock>>
-@
-
-
-\subsection*{[[processes/386/mp.c]]}
-
-<<enum vector cases>>=
-    VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
-    VectorAPIC  = 65,   /* external APIC interrupts */
-    MaxVectorAPIC = 255,
-@
-
-<<function archrevert>>=
-void
-archrevert(void)
-{
-    arch = &archgeneric;
-}
-@
-
-
-<<[[Cpu]] [[Arch]] other fields>>=
-vlong mtrrcap;
-vlong mtrrdef;
-vlong mtrrfix[11];
-vlong mtrrvar[32];    /* 256 max. */
-@ 
-
-<<mp.c debugging macro>>=
-//#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
-#define dprint if(mpdebug) print
-int mpdebug;
-@ 
-
-
-<<[[Active]] other fields>>=
-bool main_reached_sched;/* lets the added processors continue to schedinit*/
-@
-% main_reached_sched was called thunderbirdsareago
-
-<<[[main()]] before schedinit()>>=
-active.main_reached_sched = true;
-@
-
-
-<<mp.c>>=
-<<kernel basic includes>>
-
-#include "io.h"
-#include "mp.h"
-
-#include "apbootstrap.h"
-
-#include <ureg.h>
-
-<<mp.c debugging macro>>
-
-/* from mpacpi.c */
-extern Apic *bootapic;
-
-extern void (*mpacpifunc)(void);
-
-static PCMP* mppcmp;
-static Bus* mpbus;
-static Bus* mpbuslast;
-static int mpisabus = -1;
-static int mpeisabus = -1;
-extern int i8259elcr;           /* mask of level-triggered interrupts */
-/* static */ Apic mpapic[MaxAPICNO+1];
-/* static */ int cpuno2apicno[MaxAPICNO+1];    /* inverse map: cpuno -> APIC ID */
-/* static */ Apic ioapic[MaxAPICNO+1];
-static Ref mpvnoref;            /* unique vector assignment */
-static int mpcpuno = 1;
-static Lock mpphysidlock;
-static int mpphysid;
-
-static char* buses[] = {
-    "CBUSI ",
-    "CBUSII",
-    "EISA  ",
-    "FUTURE",
-    "INTERN",
-    "ISA   ",
-    "MBI   ",
-    "MBII  ",
-    "MCA   ",
-    "MPI   ",
-    "MPSA  ",
-    "NUBUS ",
-    "PCI   ",
-    "PCMCIA",
-    "TC    ",
-    "VL    ",
-    "VME   ",
-    "XPRESS",
-    0,
-};
-
-static Apic*
-mkprocessor(PCMPprocessor* p)
-{
-    int apicno;
-    Apic *apic;
-
-    apicno = p->apicno;
-    if(!(p->flags & PcmpEN) || apicno > MaxAPICNO)
-        return 0;
-
-    apic = &mpapic[apicno];
-    apic->type = PcmpPROCESSOR;
-    apic->apicno = apicno;
-    apic->flags = p->flags;
-    apic->lintr[0] = ApicIMASK;
-    apic->lintr[1] = ApicIMASK;
-
-    if(p->flags & PcmpBP){
-        cpuno2apicno[0] = apicno;
-        apic->cpuno = 0;
-    }
-    else{
-        cpuno2apicno[mpcpuno] = apicno;
-        apic->cpuno = mpcpuno;
-        mpcpuno++;
-    }
-
-    return apic;
-}
-
-static Bus*
-mkbus(PCMPbus* p)
-{
-    Bus *bus;
-    int i;
-
-    for(i = 0; buses[i]; i++){
-        if(strncmp(buses[i], p->string, sizeof(p->string)) == 0)
-            break;
-    }
-    if(buses[i] == 0)
-        return 0;
-
-    bus = xalloc(sizeof(Bus));
-    if(mpbus)
-        mpbuslast->next = bus;
-    else
-        mpbus = bus;
-    mpbuslast = bus;
-
-    bus->type = i;
-    bus->busno = p->busno;
-    if(bus->type == BusEISA){
-        bus->po = PcmpLOW;
-        bus->el = PcmpLEVEL;
-        if(mpeisabus != -1)
-            print("mkbus: more than one EISA bus\n");
-        mpeisabus = bus->busno;
-    }
-    else if(bus->type == BusPCI){
-        bus->po = PcmpLOW;
-        bus->el = PcmpLEVEL;
-    }
-    else if(bus->type == BusISA){
-        bus->po = PcmpHIGH;
-        bus->el = PcmpEDGE;
-        if(mpisabus != -1)
-            print("mkbus: more than one ISA bus\n");
-        mpisabus = bus->busno;
-    }
-    else{
-        bus->po = PcmpHIGH;
-        bus->el = PcmpEDGE;
-    }
-
-    return bus;
-}
-
-static Bus*
-mpgetbus(int busno)
-{
-    Bus *bus;
-
-    for(bus = mpbus; bus; bus = bus->next){
-        if(bus->busno == busno)
-            return bus;
-    }
-    print("mpgetbus: can't find bus %d\n", busno);
-
-    return 0;
-}
-
-static Apic*
-mkioapic(PCMPioapic* p)
-{
-    void *va;
-    int apicno;
-    Apic *apic;
-
-    apicno = p->apicno;
-    if(!(p->flags & PcmpEN) || apicno > MaxAPICNO)
-        return 0;
-
-    /*
-     * Map the I/O APIC.
-     */
-    if((va = vmap(p->addr, 1024)) == nil)
-        return 0;
-
-    apic = &ioapic[apicno];
-    apic->type = PcmpIOAPIC;
-    apic->apicno = apicno;
-    apic->addr = va;
-    apic->paddr = p->addr;
-    apic->flags = p->flags;
-
-    return apic;
-}
-
-static Aintr*
-mkiointr(PCMPintr* p)
-{
-    Bus *bus;
-    Aintr *aintr;
-    PCMPintr* pcmpintr;
-
-    /*
-     * According to the MultiProcessor Specification, a destination
-     * I/O APIC of 0xFF means the signal is routed to all I/O APICs.
-     * It's unclear how that can possibly be correct so treat it as
-     * an error for now.
-     */
-    if(p->apicno == 0xFF)
-        return 0;
-    if((bus = mpgetbus(p->busno)) == 0)
-        return 0;
-
-    aintr = xalloc(sizeof(Aintr));
-    aintr->intr = p;
-
-    if(0)
-        dprint("mkiointr: type %d intr type %d flags %#o "
-            "bus %d irq %d apicno %d intin %d\n",
-            p->type, p->intr, p->flags,
-            p->busno, p->irq, p->apicno, p->intin);
-    /*
-     * Hack for Intel SR1520ML motherboard, which BIOS describes
-     * the i82575 dual ethernet controllers incorrectly.
-     */
-    if(mppcmp && memcmp(mppcmp->product, "INTEL   X38MLST     ", 20) == 0){
-        if(p->busno == 1 && p->intin == 16 && p->irq == 1){
-            pcmpintr = malloc(sizeof(PCMPintr));
-            if(pcmpintr == nil)
-                panic("mkiointr: no memory");
-            memmove(pcmpintr, p, sizeof(PCMPintr));
-            print("mkiointr: %20.20s bus %d intin %d irq %d\n",
-                (char*)mppcmp->product,
-                pcmpintr->busno, pcmpintr->intin,
-                pcmpintr->irq);
-            pcmpintr->intin = 17;
-            aintr->intr = pcmpintr;
-        }
-    }
-    if ((unsigned)p->apicno >= nelem(mpapic))
-        panic("mkiointr: apic %d out of range", p->apicno);
-    aintr->apic = &ioapic[p->apicno];
-    aintr->next = bus->aintr;
-    bus->aintr = aintr;
-
-    return aintr;
-}
-
-static int
-mpintrinit(Bus* bus, PCMPintr* intr, int vno, int /*irq*/)
-{
-    int el, po, v;
-
-    /*
-     * Parse an I/O or Local APIC interrupt table entry and
-     * return the encoded vector.
-     */
-    v = vno;
-
-    po = intr->flags & PcmpPOMASK;
-    el = intr->flags & PcmpELMASK;
-
-    switch(intr->intr){
-
-    default:                /* PcmpINT */
-        v |= ApicFIXED;         /* no-op */
-        break;
-
-    case PcmpNMI:
-        v |= ApicNMI;
-        po = PcmpHIGH;
-        el = PcmpEDGE;
-        break;
-
-    case PcmpSMI:
-        v |= ApicSMI;
-        break;
-
-    case PcmpExtINT:
-        v |= ApicExtINT;
-        /*
-         * The AMI Goliath doesn't boot successfully with it's LINTR0
-         * entry which decodes to low+level. The PPro manual says ExtINT
-         * should be level, whereas the Pentium is edge. Setting the
-         * Goliath to edge+high seems to cure the problem. Other PPro
-         * MP tables (e.g. ASUS P/I-P65UP5 have a entry which decodes
-         * to edge+high, so who knows.
-         * Perhaps it would be best just to not set an ExtINT entry at
-         * all, it shouldn't be needed for SMP mode.
-         */
-        po = PcmpHIGH;
-        el = PcmpEDGE;
-        break;
-    }
-
-    /*
-     */
-    if(bus->type == BusEISA && !po && !el /*&& !(i8259elcr & (1<<irq))*/){
-        po = PcmpHIGH;
-        el = PcmpEDGE;
-    }
-    if(!po)
-        po = bus->po;
-    if(po == PcmpLOW)
-        v |= ApicLOW;
-    else if(po != PcmpHIGH){
-        print("mpintrinit: bad polarity 0x%uX\n", po);
-        return ApicIMASK;
-    }
-
-    if(!el)
-        el = bus->el;
-    if(el == PcmpLEVEL)
-        v |= ApicLEVEL;
-    else if(el != PcmpEDGE){
-        print("mpintrinit: bad trigger 0x%uX\n", el);
-        return ApicIMASK;
-    }
-
-    return v;
-}
-
-static int
-mklintr(PCMPintr* p)
-{
-    Apic *apic;
-    Bus *bus;
-    int intin, v;
-
-    /*
-     * The offsets of vectors for LINT[01] are known to be
-     * 0 and 1 from the local APIC vector space at VectorLAPIC.
-     */
-    if((bus = mpgetbus(p->busno)) == 0)
-        return 0;
-    intin = p->intin;
-
-    /*
-     * Pentium Pros have problems if LINT[01] are set to ExtINT
-     * so just bag it, SMP mode shouldn't need ExtINT anyway.
-     */
-    if(p->intr == PcmpExtINT || p->intr == PcmpNMI)
-        v = ApicIMASK;
-    else
-        v = mpintrinit(bus, p, VectorLAPIC+intin, p->irq);
-
-    if(p->apicno == 0xFF){
-        for(apic = mpapic; apic <= &mpapic[MaxAPICNO]; apic++){
-            if((apic->flags & PcmpEN)
-            && apic->type == PcmpPROCESSOR)
-                apic->lintr[intin] = v;
-        }
-    }
-    else{
-        if ((unsigned)p->apicno >= nelem(mpapic))
-            panic("mklintr: ioapic %d out of range", p->apicno);
-        apic = &mpapic[p->apicno];
-        if((apic->flags & PcmpEN) && apic->type == PcmpPROCESSOR)
-            apic->lintr[intin] = v;
-    }
-
-    return v;
-}
-
-static void
-checkmtrr(void)
-{
-    int i, vcnt;
-    Cpu *cpu0;
-
-    /*
-     * If there are MTRR registers, snarf them for validation.
-     */
-    if(!(cpu->cpuiddx & Mtrr))
-        return;
-
-    rdmsr(0x0FE, &cpu->mtrrcap);
-    rdmsr(0x2FF, &cpu->mtrrdef);
-    if(cpu->mtrrcap & 0x0100){
-        rdmsr(0x250, &cpu->mtrrfix[0]);
-        rdmsr(0x258, &cpu->mtrrfix[1]);
-        rdmsr(0x259, &cpu->mtrrfix[2]);
-        for(i = 0; i < 8; i++)
-            rdmsr(0x268+i, &cpu->mtrrfix[(i+3)]);
-    }
-    vcnt = cpu->mtrrcap & 0x00FF;
-    if(vcnt > nelem(cpu->mtrrvar))
-        vcnt = nelem(cpu->mtrrvar);
-    for(i = 0; i < vcnt; i++)
-        rdmsr(0x200+i, &cpu->mtrrvar[i]);
-
-    /*
-     * If not the bootstrap processor, compare.
-     */
-    if(cpu->cpuno == 0)
-        return;
-
-    cpu0 = CPUS(0);
-    if(cpu0->mtrrcap != cpu->mtrrcap)
-        print("mtrrcap%d: %lluX %lluX\n",
-            cpu->cpuno, cpu0->mtrrcap, cpu->mtrrcap);
-    if(cpu0->mtrrdef != cpu->mtrrdef)
-        print("mtrrdef%d: %lluX %lluX\n",
-            cpu->cpuno, cpu0->mtrrdef, cpu->mtrrdef);
-    for(i = 0; i < 11; i++){
-        if(cpu0->mtrrfix[i] != cpu->mtrrfix[i])
-            print("mtrrfix%d: i%d: %lluX %lluX\n",
-                cpu->cpuno, i, cpu0->mtrrfix[i], cpu->mtrrfix[i]);
-    }
-    for(i = 0; i < vcnt; i++){
-        if(cpu0->mtrrvar[i] != cpu->mtrrvar[i])
-            print("mtrrvar%d: i%d: %lluX %lluX\n",
-                cpu->cpuno, i, cpu0->mtrrvar[i], cpu->mtrrvar[i]);
-    }
-}
-
-static void
-squidboy(Apic* apic)
-{
-//  iprint("Hello Squidboy\n");
-
-    cpuinit();
-    fpsavealloc();
-    mmuinit();
-
-    cpuidentify();
-    cpuidprint();
-    checkmtrr();
-
-    apic->online = 1;
-    coherence();
-
-    lapicinit(apic);
-    lapiconline();
-    syncclock();
-    timersinit();
-
-    fpoff();
-
-    lock(&active);
-    active.cpus |= 1<<cpu->cpuno;
-    unlock(&active);
-
-    while(!active.main_reached_sched)
-        microdelay(100);
-
-    schedinit();
-}
-
-static void
-mpstartap(Apic* apic)
-{
-    ulong *apbootp, *pd, *pte;
-    Cpu *cpu, *cpu0;
-    int i, cpuno;
-    uchar *p;
-
-    cpu0 = CPUS(0);
-
-    /*
-     * Initialise the AP page-tables and Cpu structure. The page-tables
-     * are the same as for the bootstrap processor with the exception of
-     * the PTE for the Cpu structure.
-     * Xspanalloc will panic if an allocation can't be made.
-     */
-    p = xspanalloc(4*BY2PG, BY2PG, 0);
-    pd = (ulong*)p;
-    memmove(pd, cpu0->pdproto, BY2PG);
-    p += BY2PG;
-
-    if((pte = mmuwalk(pd, CPUADDR, 1, false)) == nil)
-        return;
-    memmove(p, KADDR(PPN(*pte)), BY2PG);
-    *pte = PADDR(p)|PTEWRITE|PTEVALID;
-    if(cpu0->havepge)
-        *pte |= PTEGLOBAL;
-    p += BY2PG;
-
-    cpu = (Cpu*)p;
-    if((pte = mmuwalk(pd, CPUADDR, 2, false)) == nil)
-        return;
-    *pte = PADDR(cpu)|PTEWRITE|PTEVALID;
-    if(cpu0->havepge)
-        *pte |= PTEGLOBAL;
-    p += BY2PG;
-
-    cpuno = apic->cpuno;
-    CPUS(cpuno) = cpu; // !!!!
-    cpu->cpuno = cpuno;
-    cpu->pdproto = pd;
-    cpu->gdt = (Segdesc*)p;    /* filled by mmuinit */
-
-    /*
-     * Tell the AP where its kernel vector and pd are.
-     * The offsets are known in the AP bootstrap code.
-     */
-    apbootp = (ulong*)(APBOOTSTRAP+0x08);
-    *apbootp++ = (ulong)squidboy;   /* assembler jumps here eventually */
-    *apbootp++ = PADDR(pd);
-    *apbootp = (ulong)apic;
-
-    /*
-     * Universal Startup Algorithm.
-     */
-    p = KADDR(0x467);       /* warm-reset vector */
-    *p++ = PADDR(APBOOTSTRAP);
-    *p++ = PADDR(APBOOTSTRAP)>>8;
-    i = (PADDR(APBOOTSTRAP) & ~0xFFFF)/16;
-    /* code assumes i==0 */
-    if(i != 0)
-        print("mp: bad APBOOTSTRAP\n");
-    *p++ = i;
-    *p = i>>8;
-
-    coherence();
-
-    nvramwrite(0x0F, 0x0A); /* shutdown code: warm reset upon init ipi */
-    lapicstartap(apic, PADDR(APBOOTSTRAP));
-    for(i = 0; i < 1000; i++){
-        if(apic->online)
-            break;
-        delay(10);
-    }
-    nvramwrite(0x0F, 0x00);
-}
-
-static void
-trympacpi(void)
-{
-    if (mpacpifunc != nil) {
-        print("mpinit: scanning acpi madt for extra cpus\n");
-        (*mpacpifunc)();
-    }
-}
-
-void
-mpinit(void)
-{
-    int ncpu, cpuson;
-    char *cp;
-    PCMP *pcmp;
-    uchar *e, *p;
-    Apic *apic, *bpapic;
-    void *va;
-
-    mpdebug = getconf("*debugmp") != nil;
-    i8259init();
-    syncclock();
-
-    bpapic = nil;
-    cpuson = 0;
-
-    if(_mp_ == 0) {
-        /*
-         * We can easily get processor info from ACPI, but
-         * interrupt routing, etc. would require interpreting AML.
-         */
-        print("mpinit: no mp table found, assuming uniprocessor\n");
-        archrevert();
-        return;
-    }
-    pcmp = KADDR(_mp_->physaddr);
-
-    /*
-     * Map the local APIC.
-     */
-    if((va = vmap(pcmp->lapicbase, 1024)) == nil)
-        return;
-    mppcmp = pcmp;
-    print("LAPIC: %#lux %#lux\n", pcmp->lapicbase, (ulong)va);
-
-    /*
-     * Run through the table saving information needed for starting
-     * application processors and initialising any I/O APICs. The table
-     * is guaranteed to be in order such that only one pass is necessary.
-     */
-    p = ((uchar*)pcmp)+sizeof(PCMP);
-    e = ((uchar*)pcmp)+pcmp->length;
-    while(p < e) switch(*p){
-
-    default:
-        print("mpinit: unknown PCMP type 0x%uX (e-p 0x%luX)\n",
-            *p, e-p);
-        while(p < e){
-            print("%uX ", *p);
-            p++;
-        }
-        break;
-
-    case PcmpPROCESSOR:
-        if(apic = mkprocessor((PCMPprocessor*)p)){
-            /*
-             * Must take a note of bootstrap processor APIC
-             * now as it will be needed in order to start the
-             * application processors later and there's no
-             * guarantee that the bootstrap processor appears
-             * first in the table before the others.
-             */
-            apic->addr = va;
-            apic->paddr = pcmp->lapicbase;
-            if(apic->flags & PcmpBP)
-                bpapic = apic;
-            cpuson++;
-        }
-        p += sizeof(PCMPprocessor);
-        continue;
-
-    case PcmpBUS:
-        mkbus((PCMPbus*)p);
-        p += sizeof(PCMPbus);
-        continue;
-
-    case PcmpIOAPIC:
-        if(apic = mkioapic((PCMPioapic*)p))
-            ioapicinit(apic, ((PCMPioapic*)p)->apicno);
-        p += sizeof(PCMPioapic);
-        continue;
-
-    case PcmpIOINTR:
-        mkiointr((PCMPintr*)p);
-        p += sizeof(PCMPintr);
-        continue;
-
-    case PcmpLINTR:
-        mklintr((PCMPintr*)p);
-        p += sizeof(PCMPintr);
-        continue;
-    }
-
-    dprint("mpinit: mp table describes %d cpus\n", cpuson);
-
-    /* For now, always scan ACPI's MADT for processors that MP missed. */
-    trympacpi();
-
-    if (bpapic == nil)
-        bpapic = bootapic;
-
-    /*
-     * No bootstrap processor, no need to go further.
-     */
-    if(bpapic == 0)
-        return;
-    bpapic->online = 1;
-
-    lapicinit(bpapic);
-
-    /*
-     * These interrupts are local to the processor
-     * and do not appear in the I/O APIC so it is OK
-     * to set them now.
-     */
-    intrenable(IrqTIMER, lapicclock, 0, BUSUNKNOWN, "clock");
-    intrenable(IrqERROR, lapicerror, 0, BUSUNKNOWN, "lapicerror");
-    intrenable(IrqSPURIOUS, lapicspurious, 0, BUSUNKNOWN, "lapicspurious");
-    lapiconline();
-
-    checkmtrr();
-
-    /*
-     * Initialise the application processors.
-     */
-    if(cp = getconf("*ncpu")){
-        ncpu = strtol(cp, 0, 0);
-        if(ncpu < 1)
-            ncpu = 1;
-        else if(ncpu > MAXCPUS)
-            ncpu = MAXCPUS;
-    }
-    else
-        ncpu = MAXCPUS;
-    memmove((void*)APBOOTSTRAP, apbootstrap, sizeof(apbootstrap));
-    for(apic = mpapic; apic <= &mpapic[MaxAPICNO]; apic++){
-        if(ncpu <= 1)
-            break;
-        if((apic->flags & (PcmpBP|PcmpEN)) == PcmpEN
-        && apic->type == PcmpPROCESSOR){
-            mpstartap(apic);
-            conf.ncpu++;
-            ncpu--;
-        }
-    }
-
-    /*
-     *  we don't really know the number of processors till
-     *  here.
-     *
-     *  set conf.copymode here if ncpu > 1.
-     *  Should look for an ExtINT line and enable it.
-     */
-    if(X86FAMILY(cpu->cpuidax) == 3 || conf.ncpu > 1)
-        conf.copymode = 1;
-}
-
-static int
-mpintrcpu(void)
-{
-    int i;
-
-    /*
-     * The bulk of this code was written ~1995, when there was
-     * one architecture and one generation of hardware, the number
-     * of CPUs was up to 4(8) and the choices for interrupt routing
-     * were physical, or flat logical (optionally with lowest
-     * priority interrupt). Logical mode hasn't scaled well with
-     * the increasing number of packages/cores/threads, so the
-     * fall-back is to physical mode, which works across all processor
-     * generations, both AMD and Intel, using the APIC and xAPIC.
-     *
-     * Interrupt routing policy can be set here.
-     * Currently, just assign each interrupt to a different CPU on
-     * a round-robin basis. Some idea of the packages/cores/thread
-     * topology would be useful here, e.g. to not assign interrupts
-     * to more than one thread in a core, or to use a "noise" core.
-     * But, as usual, Intel make that an onerous task. 
-     */
-
-    /*
-     * temporary workaround for many-core intel (non-amd) systems:
-     * always use cpu 0.  (TODO)
-     */
-    if(strncmp(cpu->cpuidid, "AuthenticAMD", 12) != 0 && conf.ncpu > 8)
-        return 0;
-
-    lock(&mpphysidlock);
-    for(;;){
-        i = mpphysid++;
-        if(mpphysid >= MaxAPICNO+1)
-            mpphysid = 0;
-        if(mpapic[i].online)
-            break;
-    }
-    unlock(&mpphysidlock);
-
-    return mpapic[i].apicno;
-}
-
-static int
-mpintrenablex(Vctl* v, int tbdf)
-{
-    Bus *bus;
-    Aintr *aintr;
-    Apic *apic;
-    Pcidev *pcidev;
-    int bno, dno, hi, irq, lo, n, type, vno;
-    char *typenm;
-
-    /*
-     * Find the bus.
-     */
-    type = BUSTYPE(tbdf);
-    bno = BUSBNO(tbdf);
-    dno = BUSDNO(tbdf);
-    if(type == BusISA)
-        bno = mpisabus;
-    vno = -1;
-    for(bus = mpbus; bus != nil; bus = bus->next){
-        if(bus->type != type)
-            continue;
-        if(bus->busno == bno)
-            break;
-    }
-    if(bus == nil){
-        typenm = type < 0 || type >= nelem(buses)? "": buses[type];
-        print("mpintrenablex: can't find bus type %d (%s) for irq %d "
-            "%s busno %d\n", type, typenm, v->irq, v->name, bno);
-        return -1;
-    }
-
-    /*
-     * For PCI devices the interrupt pin (INT[ABCD]) and device
-     * number are encoded into the entry irq field, so create something
-     * to match on. The interrupt pin used by the device has to be
-     * obtained from the PCI config space.
-     */
-    if(bus->type == BusPCI){
-        pcidev = pcimatchtbdf(tbdf);
-        if(pcidev != nil && (n = pcicfgr8(pcidev, PciINTP)) != 0)
-            irq = (dno<<2)|(n-1);
-        else
-            irq = -1;
-        //print("pcidev %#uX: irq %#uX v->irq %#uX\n", tbdf, irq, v->irq);
-    }
-    else
-        irq = v->irq;
-
-    /*
-     * Find a matching interrupt entry from the list of interrupts
-     * attached to this bus.
-     */
-    for(aintr = bus->aintr; aintr; aintr = aintr->next){
-        if(aintr->intr->irq != irq)
-            continue;
-        if (0) {
-            PCMPintr* p = aintr->intr;
-
-            print("mpintrenablex: bus %d intin %d irq %d\n",
-                p->busno, p->intin, p->irq);
-        }
-        /*
-         * Check if already enabled. Multifunction devices may share
-         * INT[A-D]# so, if already enabled, check the polarity matches
-         * and the trigger is level.
-         *
-         * Should check the devices differ only in the function number,
-         * but that can wait for the planned enable/disable rewrite.
-         * The RDT read here is safe for now as currently interrupts
-         * are never disabled once enabled.
-         */
-        apic = aintr->apic;
-        ioapicrdtr(apic, aintr->intr->intin, 0, &lo);
-        if(!(lo & ApicIMASK)){
-            vno = lo & 0xFF;
-//print("%s vector %d (!imask)\n", v->name, vno);
-            n = mpintrinit(bus, aintr->intr, vno, v->irq);
-            n |= ApicPHYSICAL;      /* no-op */
-            lo &= ~(ApicRemoteIRR|ApicDELIVS);
-            if(n != lo || !(n & ApicLEVEL)){
-                print("mpintrenable: multiple botch irq%d, tbdf %uX, lo %8.8uX, n %8.8uX\n",
-                    v->irq, tbdf, lo, n);
-                return -1;
-            }
-            break;
-        }
-
-        /*
-         * With the APIC a unique vector can be assigned to each
-         * request to enable an interrupt. There are two reasons this
-         * is a good idea:
-         * 1) to prevent lost interrupts, no more than 2 interrupts
-         *    should be assigned per block of 16 vectors (there is an
-         *    in-service entry and a holding entry for each priority
-         *    level and there is one priority level per block of 16
-         *    interrupts).
-         * 2) each input pin on the IOAPIC will receive a different
-         *    vector regardless of whether the devices on that pin use
-         *    the same IRQ as devices on another pin.
-         */
-        vno = VectorAPIC + (incref(&mpvnoref)-1)*8;
-//print("%s vector %d (imask)\n", v->name, vno);
-        if(vno > MaxVectorAPIC){
-            print("mpintrenable: vno %d, irq %d, tbdf %uX\n",
-                vno, v->irq, tbdf);
-            return -1;
-        }
-
-        hi = mpintrcpu()<<24;
-        lo = mpintrinit(bus, aintr->intr, vno, v->irq);
-        //print("lo 0x%uX: busno %d intr %d vno %d irq %d elcr 0x%uX\n",
-        //  lo, bus->busno, aintr->intr->irq, vno,
-        //  v->irq, i8259elcr);
-        if(lo & ApicIMASK)
-            return -1;
-        lo |= ApicPHYSICAL;         /* no-op */
-
-        if((apic->flags & PcmpEN) && apic->type == PcmpIOAPIC)
-            ioapicrdtw(apic, aintr->intr->intin, hi, lo);
-        //else
-        //  print("lo not enabled 0x%uX %d\n",
-        //      apic->flags, apic->type);
-        break;
-    }
-    if (aintr) {
-        v->isr = lapicisr;
-        v->eoi = lapiceoi;
-    }
-    return vno;
-}
-
-int
-mpintrenable(Vctl* v)
-{
-    int irq, tbdf, vno;
-
-    /*
-     * If the bus is known, try it.
-     * BUSUNKNOWN is given both by [E]ISA devices and by
-     * interrupts local to the processor (local APIC, coprocessor
-     * breakpoint and page-fault).
-     */
-    tbdf = v->tbdf;
-    if(tbdf != BUSUNKNOWN && (vno = mpintrenablex(v, tbdf)) != -1)
-        return vno;
-
-    irq = v->irq;
-    if(irq >= IrqLINT0 && irq <= MaxIrqLAPIC){
-        if(irq != IrqSPURIOUS)
-            v->isr = lapiceoi;
-        return VectorPIC+irq;
-    }
-    if(irq < 0 || irq > MaxIrqPIC){
-        print("mpintrenable: irq %d out of range\n", irq);
-        return -1;
-    }
-
-    /*
-     * Either didn't find it or have to try the default buses
-     * (ISA and EISA). This hack is due to either over-zealousness 
-     * or laziness on the part of some manufacturers.
-     *
-     * The MP configuration table on some older systems
-     * (e.g. ASUS PCI/E-P54NP4) has an entry for the EISA bus
-     * but none for ISA. It also has the interrupt type and
-     * polarity set to 'default for this bus' which wouldn't
-     * be compatible with ISA.
-     */
-    if(mpeisabus != -1){
-        vno = mpintrenablex(v, MKBUS(BusEISA, 0, 0, 0));
-        if(vno != -1)
-            return vno;
-    }
-    if(mpisabus != -1){
-        vno = mpintrenablex(v, MKBUS(BusISA, 0, 0, 0));
-        if(vno != -1)
-            return vno;
-    }
-    print("mpintrenable: out of choices eisa %d isa %d tbdf %#ux irq %d\n",
-        mpeisabus, mpisabus, v->tbdf, v->irq);
-    return -1;
-}
-
-static Lock mpshutdownlock;
-
-void
-mpshutdown(void)
-{
-    /*
-     * To be done...
-     */
-    if(!canlock(&mpshutdownlock)){
-        /*
-         * If this processor received the CTRL-ALT-DEL from
-         * the keyboard, acknowledge it. Send an INIT to self.
-         */
-#ifdef FIXTHIS
-        if(lapicisr(VectorKBD))
-            lapiceoi(VectorKBD);
-#endif /* FIX THIS */
-        arch->introff();
-        idle();
-    }
-
-    if(active.rebooting)
-        return;
-    print("apshutdown: active = %#8.8ux\n", active.cpus);
-    delay(1000);
-    splhi();
-    arch->resetothers();
-
-    pcireset();
-    i8042reset();
-
-    /*
-     * Often the BIOS hangs during restart if a conventional 8042
-     * warm-boot sequence is tried. The following is Intel specific and
-     * seems to perform a cold-boot, but at least it comes back.
-     * And sometimes there is no keyboard...
-     *
-     * The reset register (0xcf9) is usually in one of the bridge
-     * chips. The actual location and sequence could be extracted from
-     * ACPI but why bother, this is the end of the line anyway.
-     */
-    print("no kbd; trying bios warm boot...");
-    *(ushort*)KADDR(0x472) = 0x1234;    /* BIOS warm-boot flag */
-    outb(0xCF9, 0x02);
-    outb(0xCF9, 0x06);
-
-    print("can't reset\n");
-    for(;;)
-        idle();
-}
 @
 
 
