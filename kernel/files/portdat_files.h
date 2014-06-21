@@ -244,6 +244,7 @@ struct Chan
     Path* path;
 
     vlong offset;     /* in fd */
+    //enum<open>
     ushort mode;     /* read/write */
 
     bool ismtpt; // is a mount point
@@ -341,6 +342,10 @@ struct Dev
     char* name;
 
     /*s: [[Dev]] methods */
+    void  (*reset)(void); // done once at boot time
+    /*x: [[Dev]] methods */
+    void  (*init)(void);
+    /*x: [[Dev]] methods */
     Chan* (*open)(Chan*, int);
     /*x: [[Dev]] methods */
     void  (*close)(Chan*);
@@ -349,24 +354,27 @@ struct Dev
     /*x: [[Dev]] methods */
     long  (*write)(Chan*, void*, long, vlong);
     /*x: [[Dev]] methods */
+    void  (*create)(Chan*, char*, int, ulong);
+    /*x: [[Dev]] methods */
+    Walkqid*(*walk)(Chan*, Chan*, char**, int);
+    /*x: [[Dev]] methods */
+    void  (*remove)(Chan*);
+    /*x: [[Dev]] methods */
+    int (*stat)(Chan*, uchar*, int);
+    /*x: [[Dev]] methods */
+    int (*wstat)(Chan*, uchar*, int);
+    /*x: [[Dev]] methods */
+    Chan* (*attach)(char*);
+    /*x: [[Dev]] methods */
     Block* (*bread)(Chan*, long, ulong);
     long  (*bwrite)(Chan*, Block*, ulong);
-    /*e: [[Dev]] methods */
-    void  (*reset)(void);
-    void  (*init)(void);
+    /*x: [[Dev]] methods */
     void  (*shutdown)(void);
-    Chan* (*attach)(char*);
-
-    Walkqid*(*walk)(Chan*, Chan*, char**, int);
-
-    void  (*create)(Chan*, char*, int, ulong);
-    void  (*remove)(Chan*);
-
-    int (*stat)(Chan*, uchar*, int);
-    int (*wstat)(Chan*, uchar*, int);
-
-    void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
+    /*x: [[Dev]] methods */
     int (*config)(int, char*, DevConf*);  /* returns nil on error */
+    /*x: [[Dev]] methods */
+    void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
+    /*e: [[Dev]] methods */
 };
 /*e: struct Dev */
 

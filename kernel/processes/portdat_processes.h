@@ -421,20 +421,22 @@ struct Proc
 // State
 //--------------------------------------------------------------------
     /*s: [[Proc]] state fields */
-    ulong pid;
-    ulong parentpid;
-
     // enum<procstate> 
     int state; // Dead, Queuing, etc, (used by /proc/#/status if psstate==nil)
-
+    /*x: [[Proc]] state fields */
+    ulong pid;
+    /*x: [[Proc]] state fields */
     // some debugging information, e.g. "New", "PageOut", or name of syscall
     char  *psstate; /* used by /proc/#/status */
     bool insyscall; // true when process inside a syscall
 
     // e.g. "*init*", or name of executable
     char  *text;
+    /*x: [[Proc]] state fields */
     // e.g.. "eve" (no uid/gid in plan9, because of its distributed nature?)
     char  *user;
+    /*x: [[Proc]] state fields */
+    ulong parentpid;
     /*x: [[Proc]] state fields */
     char  *args;
     int nargs;    /* number of bytes of args */

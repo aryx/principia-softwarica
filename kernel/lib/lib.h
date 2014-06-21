@@ -255,11 +255,13 @@ enum miscsize {
 enum qidtype {
   QTFILE = 0x00,    /* plain file */
   QTDIR = 0x80,    /* type bit for directories */
-  QTMOUNT = 0x10,    /* type bit for mounted channel */
-
+  /*s: enum qidtype cases */
   QTAUTH = 0x08,    /* type bit for authentication file */
   QTAPPEND = 0x40,    /* type bit for append only files */
   QTEXCL = 0x20,    /* type bit for exclusive use files */
+  /*x: enum qidtype cases */
+  QTMOUNT = 0x10,    /* type bit for mounted channel */
+  /*e: enum qidtype cases */
 };
 /*e: enum qidtype */
 
