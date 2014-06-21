@@ -226,9 +226,12 @@ enum
   COPEN = 0x0001,   /* for i/o */
   CFREE = 0x0010,   /* not in use */
   /*s: enum channelflag cases */
-  CMSG  = 0x0002,   /* the message channel for a mount */
   CCEXEC  = 0x0008,   /* close on exec */
+  /*x: enum channelflag cases */
   CRCLOSE = 0x0020,   /* remove on close */
+  /*x: enum channelflag cases */
+  CMSG  = 0x0002,   /* the message channel for a mount */
+  /*x: enum channelflag cases */
   CCACHE  = 0x0080,   /* client cache */
   /*e: enum channelflag cases */
 };

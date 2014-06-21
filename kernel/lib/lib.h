@@ -219,11 +219,15 @@ enum open {
     OWRITE = 1, /* write */
     ORDWR = 2, /* read and write */
     /*s: enum open cases */
-    OEXEC = 3, /* execute, == read but check execute permission */
     OTRUNC = 16,  /* or'ed in (except for exec), truncate file first */
-    OCEXEC = 32,  /* or'ed in, close on exec */
-    ORCLOSE = 64,  /* or'ed in, remove on close */
+    /*x: enum open cases */
     OEXCL = 0x1000,  /* or'ed in, exclusive create */
+    /*x: enum open cases */
+    OCEXEC = 32,  /* or'ed in, close on exec */
+    /*x: enum open cases */
+    ORCLOSE = 64,  /* or'ed in, remove on close */
+    /*x: enum open cases */
+    OEXEC = 3, /* execute, == read but check execute permission */
     /*e: enum open cases */
 };
 /*e: enum open */

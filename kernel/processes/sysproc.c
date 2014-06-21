@@ -298,7 +298,9 @@ sysexec(ulong* arg)
     file = file0;
     for(;;){
         // this will adjust up->genbuf to contain the full(?) path of file
+        /*s: [[sysexec()]] call namec() to get a channel in tc from file */
         tc = namec(file, Aopen, OEXEC, 0);
+        /*e: [[sysexec()]] call namec() to get a channel in tc from file */
         if(waserror()){
             cclose(tc);
             nexterror();
@@ -502,12 +504,14 @@ sysexec(ulong* arg)
         }
     }
 
+    /*s: [[sysexec()]] close files marked as opened with close on exec */
     /*
      * Close on exec
      */
     f = up->fgrp;
     for(i=0; i<=f->maxfd; i++)
         fdclose(i, CCEXEC);
+    /*e: [[sysexec()]] close files marked as opened with close on exec */
 
     /* Text.  Shared. Attaches to cache image if possible */
     /*s: [[sysexec()]] get text segment ts via demand loading on tc */

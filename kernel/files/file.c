@@ -89,6 +89,7 @@ fdclose(int fd, int flag)
         }
     }
     f->fd[fd] = nil;
+
     if(fd == f->maxfd)
         for(i=fd; --i>=0 && f->fd[i]==nil; )
             f->maxfd = i;
