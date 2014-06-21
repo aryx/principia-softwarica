@@ -255,7 +255,7 @@ struct Chan
        /*x: [[Chan]] union other fields */
        Qid pgrpid;   /* for #p/notepg */
        /*x: [[Chan]] union other fields */
-         ulong mid;    /* for ns in devproc */
+       ulong mid;    /* for ns in devproc */
        /*e: [[Chan]] union other fields */
     };
     /*s: [[Chan]] other fields */
@@ -341,13 +341,13 @@ struct Dev
     char* name;
 
     /*s: [[Dev]] methods */
-        Chan* (*open)(Chan*, int);
+    Chan* (*open)(Chan*, int);
     /*x: [[Dev]] methods */
-        void  (*close)(Chan*);
+    void  (*close)(Chan*);
     /*x: [[Dev]] methods */
-        long  (*read)(Chan*, void*, long, vlong);
+    long  (*read)(Chan*, void*, long, vlong);
     /*x: [[Dev]] methods */
-        long  (*write)(Chan*, void*, long, vlong);
+    long  (*write)(Chan*, void*, long, vlong);
     /*x: [[Dev]] methods */
     Block* (*bread)(Chan*, long, ulong);
     long  (*bwrite)(Chan*, Block*, ulong);

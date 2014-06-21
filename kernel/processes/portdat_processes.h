@@ -88,7 +88,6 @@ struct Fgrp
     /*s: [[Fgrp]] other fields */
     int exceed;     /* debugging */
     /*e: [[Fgrp]] other fields */
-  
     // extra
     Ref;
 };
