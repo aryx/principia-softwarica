@@ -86,7 +86,7 @@ dupopen(Chan *c, int omode)
         f->offset = 0;
     }else{
         /* fd file */
-        f = fdtochan(fd, openmode(omode), 0, 1);
+        f = fdtochan(fd, openmode(omode), false, true);
         cclose(c);
     }
     if(omode & OCEXEC)
@@ -111,7 +111,7 @@ dupread(Chan *c, void *va, long n, vlong offset)
     twicefd = c->qid.path - 1;
     fd = twicefd/2;
     if(twicefd & 1){
-        c = fdtochan(fd, -1, 0, 1);
+        c = fdtochan(fd, -1, false, true);
         procfdprint(c, fd, 0, buf, sizeof buf);
         cclose(c);
         return readstr((ulong)offset, va, n, buf);

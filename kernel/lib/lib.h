@@ -218,6 +218,7 @@ enum open {
   OREAD = 0, /* open for read */
   OWRITE = 1, /* write */
   ORDWR = 2, /* read and write */
+
   OEXEC = 3, /* execute, == read but check execute permission */
   OTRUNC = 16,  /* or'ed in (except for exec), truncate file first */
   OCEXEC = 32,  /* or'ed in, close on exec */

@@ -10,19 +10,21 @@
 
 /*s: function fdtochan */
 Chan*
-fdtochan(int fd, int mode, int chkmnt, int iref)
+fdtochan(int fd, int mode, bool chkmnt, bool iref)
 {
     Chan *c;
     Fgrp *f;
 
-    c = 0;
+    c = nil;
     f = up->fgrp;
 
     lock(f);
-    if(fd<0 || f->nfd<=fd || (c = f->fd[fd])==0) {
+    if(fd<0 || f->nfd<=fd || (c = f->fd[fd])==nil) {
         unlock(f);
         error(Ebadfd);
     }
+    // c = f->fd[fd] != nil
+
     if(iref)
         incref(c);
     unlock(f);
@@ -74,21 +76,21 @@ fdclose(int fd, int flag)
     Fgrp *f = up->fgrp;
 
     lock(f);
-    c = f->fd[fd];
-    if(c == 0){
+    c = f->fd[fd]; // bound checking??
+    if(c == nil){
         /* can happen for users with shared fd tables */
         unlock(f);
         return;
     }
     if(flag){
-        if(c==0 || !(c->flag&flag)){
+        if(c==nil || !(c->flag&flag)){ // dead test c==nil? see above
             unlock(f);
             return;
         }
     }
-    f->fd[fd] = 0;
+    f->fd[fd] = nil;
     if(fd == f->maxfd)
-        for(i=fd; --i>=0 && f->fd[i]==0; )
+        for(i=fd; --i>=0 && f->fd[i]==nil; )
             f->maxfd = i;
 
     unlock(f);

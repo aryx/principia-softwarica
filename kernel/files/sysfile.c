@@ -33,9 +33,9 @@ growfd(Fgrp *f, int fd) /* fd is always >= 0 */
     Chan **newfd, **oldfd;
 
     if(fd < f->nfd)
-        return 0;
+        return 0; // should never happen no?
     if(fd >= f->nfd+DELTAFD)
-        return -1;  /* out of range */
+        return -1;  /* out of range */ // when can this happen? from sysdup?
     /*
      * Unbounded allocation is unwise
      */
@@ -44,8 +44,9 @@ growfd(Fgrp *f, int fd) /* fd is always >= 0 */
         print("no free file descriptors\n");
         return -1;
     }
+    // realloc
     newfd = malloc((f->nfd+DELTAFD)*sizeof(Chan*));
-    if(newfd == 0)
+    if(newfd == nil)
         goto Exhausted;
     oldfd = f->fd;
     memmove(newfd, oldfd, f->nfd*sizeof(Chan*));
@@ -71,7 +72,7 @@ findfreefd(Fgrp *f, int start)
     int fd;
 
     for(fd=start; fd<f->nfd; fd++)
-        if(f->fd[fd] == 0)
+        if(f->fd[fd] == nil)
             break;
     if(fd >= f->nfd && growfd(f, fd) < 0)
         return -1;
@@ -139,7 +140,7 @@ sysfd2path(ulong* arg)
 
     validaddr(arg[1], arg[2], true);
 
-    c = fdtochan(arg[0], -1, 0, 1);
+    c = fdtochan(arg[0], -1, false, true);
     snprint((char*)arg[1], arg[2], "%s", chanpath(c));
     cclose(c);
     return 0;
@@ -158,7 +159,7 @@ syspipe(ulong* arg)
 
     validaddr(arg[0], 2*BY2WD, true);
     evenaddr(arg[0]);
-    d = devtab[devno('|', 0)];
+    d = devtab[devno('|', false)];
     c[0] = namec("#|", Atodir, 0, 0);
     c[1] = nil;
     fd[0] = -1;
@@ -199,7 +200,7 @@ sysdup(ulong* arg)
     /*
      * Close after dup'ing, so date > #d/1 works
      */
-    c = fdtochan(arg[0], -1, 0, 1);
+    c = fdtochan(arg[0], -1, false, true);
     fd = arg[1];
     if(fd != -1){
         lock(f);
@@ -259,7 +260,7 @@ sysopen(ulong* arg)
 long
 sysclose(ulong* arg)
 {
-    fdtochan(arg[0], -1, 0, 0);
+    fdtochan(arg[0], -1, false, false); // for its error checking side effect
     fdclose(arg[0], 0);
     return 0;
 }
@@ -337,7 +338,7 @@ dirfixed(uchar *p, uchar *e, Dir *d)
         return -1;
 
     p += BIT16SZ;   /* ignore size */
-    d->type = devno(GBIT16(p), 1);
+    d->type = devno(GBIT16(p), true);
     p += BIT16SZ;
     d->dev = GBIT32(p);
     p += BIT32SZ;
@@ -588,6 +589,7 @@ mountfix(Chan *c, uchar *op, long n, long maxn)
 /*e: function mountfix */
 
 /*s: function read */
+// long pread(int fd, void *buf, long nbytes, vlong offset);
 static long
 read(ulong *arg, vlong *offp)
 {
@@ -599,22 +601,13 @@ read(ulong *arg, vlong *offp)
     n = arg[2];
     validaddr(arg[1], n, true);
     p = (void*)arg[1];
-    c = fdtochan(arg[0], OREAD, 1, 1);
+    c = fdtochan(arg[0], OREAD, true, true);
 
     if(waserror()){
         cclose(c);
         nexterror();
     }
 
-    /*
-     * The offset is passed through on directories, normally.
-     * Sysseek complains, but pread is used by servers like exportfs,
-     * that shouldn't need to worry about this issue.
-     *
-     * Notice that c->devoffset is the offset that c's dev is seeing.
-     * The number of bytes read on this fd (c->offset) may be different
-     * due to rewritings in rockfix.
-     */
     if(offp == nil) /* use and maintain channel's offset */
         off = c->offset;
     else
@@ -627,22 +620,36 @@ read(ulong *arg, vlong *offp)
             c->offset = 0;
             c->devoffset = 0;
         }
-        mountrewind(c);
-        unionrewind(c);
+        /*s: [[read()]] rewind when off == 0 */
+            /*
+             * The offset is passed through on directories, normally.
+             * Sysseek complains, but pread is used by servers like exportfs,
+             * that shouldn't need to worry about this issue.
+             *
+             * Notice that c->devoffset is the offset that c's dev is seeing.
+             * The number of bytes read on this fd (c->offset) may be different
+             * due to rewritings in rockfix.
+             */
+                mountrewind(c);
+                unionrewind(c);
+        /*e: [[read()]] rewind when off == 0 */
     }
 
-    if(c->qid.type & QTDIR){
-        if(mountrockread(c, p, n, &nn)){
-            /* do nothing: mountrockread filled buffer */
-        }else if(c->umh)
-            nn = unionread(c, p, n);
-        else{
-            if(off != c->offset)
-                error(Edirseek);
-            nn = devtab[c->type]->read(c, p, n, c->devoffset);
+    /*s: [[read()]] if c is a QTDIR */
+        if(c->qid.type & QTDIR){
+            if(mountrockread(c, p, n, &nn)){
+                /* do nothing: mountrockread filled buffer */
+            }else if(c->umh)
+                nn = unionread(c, p, n);
+            else{
+                if(off != c->offset)
+                    error(Edirseek);
+                nn = devtab[c->type]->read(c, p, n, c->devoffset);
+            }
+            nnn = mountfix(c, p, nn, n);
         }
-        nnn = mountfix(c, p, nn, n);
-    }else
+    /*e: [[read()]] if c is a QTDIR */
+    else
         nnn = nn = devtab[c->type]->read(c, p, n, off);
 
     lock(c);
@@ -678,6 +685,7 @@ syspread(ulong* arg)
 /*e: syscall pread */
 
 /*s: function write */
+// long pwrite(int fd, void *buf, long nbytes, vlong offset);
 static long
 write(ulong *arg, vlong *offp)
 {
@@ -687,7 +695,7 @@ write(ulong *arg, vlong *offp)
 
     validaddr(arg[1], arg[2], false);
     n = 0;
-    c = fdtochan(arg[0], OWRITE, 1, 1);
+    c = fdtochan(arg[0], OWRITE, true, true);
     if(waserror()) {
         if(offp == nil){
             lock(c);
@@ -750,6 +758,7 @@ syspwrite(ulong* arg)
 /*e: syscall pwrite */
 
 /*s: function sseek */
+// vlong seek(int fd, vlong n, int type);
 static void
 sseek(ulong *arg)
 {
@@ -763,30 +772,36 @@ sseek(ulong *arg)
         ulong u[2];
     } o;
 
-    c = fdtochan(arg[1], -1, 1, 1);
+    c = fdtochan(arg[1], -1, true, true);
     if(waserror()){
         cclose(c);
         nexterror();
     }
+    /*s: [[sseek()]] and pipes */
     if(devtab[c->type]->dc == '|')
         error(Eisstream);
+    /*e: [[sseek()]] and pipes */
 
     off = 0;
     o.u[0] = arg[2];
     o.u[1] = arg[3];
     switch(arg[4]){
-    case 0:
+    case 0: // from the start
         off = o.v;
-        if((c->qid.type & QTDIR) && off != 0)
-            error(Eisdir);
+        /*s: [[sseek()]] ensures off is 0 for directories */
+                if((c->qid.type & QTDIR) && off != 0)
+                    error(Eisdir);
+        /*e: [[sseek()]] ensures off is 0 for directories */
         if(off < 0)
             error(Enegoff);
-        c->offset = off;
+        c->offset = off; // just write, no need for lock
         break;
 
-    case 1:
-        if(c->qid.type & QTDIR)
-            error(Eisdir);
+    case 1: // from the current location
+        /*s: [[sseek()]] disallows seek type 1 or 2 for directories */
+                if(c->qid.type & QTDIR)
+                    error(Eisdir);
+        /*e: [[sseek()]] disallows seek type 1 or 2 for directories */
         lock(c);    /* lock for read/write update */
         off = o.v + c->offset;
         if(off < 0){
@@ -797,9 +812,11 @@ sseek(ulong *arg)
         unlock(c);
         break;
 
-    case 2:
-        if(c->qid.type & QTDIR)
-            error(Eisdir);
+    case 2: // from the end of the file
+        /*s: [[sseek()]] disallows seek type 1 or 2 for directories */
+                if(c->qid.type & QTDIR)
+                    error(Eisdir);
+        /*e: [[sseek()]] disallows seek type 1 or 2 for directories */
         n = devtab[c->type]->stat(c, buf, sizeof buf);
         if(convM2D(buf, n, &dir, nil) == 0)
             error("internal error: stat error in seek");
@@ -858,7 +875,7 @@ sysfstat(ulong* arg)
 
     l = arg[2];
     validaddr(arg[1], l, true);
-    c = fdtochan(arg[0], -1, 0, 1);
+    c = fdtochan(arg[0], -1, false, true);
     if(waserror()) {
         cclose(c);
         nexterror();
@@ -942,7 +959,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
             error(Enoattach);
 
         ac = nil;
-        bc = fdtochan(fd, ORDWR, 0, 1);
+        bc = fdtochan(fd, ORDWR, false, true);
         if(waserror()) {
             if(ac)
                 cclose(ac);
@@ -951,13 +968,13 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
         }
 
         if(afd >= 0)
-            ac = fdtochan(afd, ORDWR, 0, 1);
+            ac = fdtochan(afd, ORDWR, false, true);
 
         bogus.flags = flag & MCACHE;
         bogus.chan = bc;
         bogus.authchan = ac;
         bogus.spec = spec;
-        ret = devno('M', 0);
+        ret = devno('M', false);
         c0 = devtab[ret]->attach((char*)&bogus);
         poperror(); /* ac bc */
         if(ac)
@@ -1163,7 +1180,7 @@ sysfwstat(ulong* arg)
     l = arg[2];
     validaddr(arg[1], l, false);
     validstat((uchar*)arg[1], l);
-    c = fdtochan(arg[0], -1, 1, 1);
+    c = fdtochan(arg[0], -1, true, true);
     return wstat(c, (uchar*)arg[1], l);
 }
 /*e: syscall fwstat */

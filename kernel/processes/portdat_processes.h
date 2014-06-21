@@ -79,13 +79,15 @@ enum
 /*s: struct Fgrp */
 struct Fgrp
 {
-    // array<ref_counted<Chan>, smalloc'ed?
+    // array<option<ref_counted<Chan>>>
     Chan  **fd;
-    // nelem(fd) ?
+    // nelem(fd)
     int nfd;      /* number allocated */
-    int maxfd;      /* highest fd in use */
+    int maxfd;      /* highest fd in use */ // <= nfd
   
+    /*s: [[Fgrp]] other fields */
     int exceed;     /* debugging */
+    /*e: [[Fgrp]] other fields */
   
     // extra
     Ref;

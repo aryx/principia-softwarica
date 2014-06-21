@@ -998,8 +998,10 @@ proc_sleep(Rendez *r, bool (*f)(void*), void *arg)
     if(up->notepending) {
         up->notepending = false;
         splx(s);
+        /*s: [[sleep()]] forceclosefgrp */
         if(up->procctl == Proc_exitme && up->closingfgrp)
             forceclosefgrp();
+        /*e: [[sleep()]] forceclosefgrp */
         error(Eintr);
     }
 

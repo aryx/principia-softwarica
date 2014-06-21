@@ -88,14 +88,14 @@ Chan*   namec(char*, int, int, ulong);
 //long    unionread(Chan*, void*, long);
 
 // file.c
-Chan*   fdtochan(int, int, int, int);
+Chan*   fdtochan(int, int, bool, bool);
 int   openmode(ulong);
 void    fdclose(int, int);
 void    validstat(uchar*, int);
 
 // dev.c
 void    mkqid(Qid*, vlong, ulong, int);
-int   devno(int, int);
+int   devno(Rune, bool);
 void    devdir(Chan*, Qid, char*, vlong, char*, long, Dir*);
 void    devinit(void);
 void    devreset(void);

@@ -25,7 +25,7 @@ mkqid(Qid *q, vlong path, ulong vers, int type)
 
 /*s: function devno */
 int
-devno(int c, int user)
+devno(Rune c, bool user)
 {
     int i;
 
@@ -33,7 +33,7 @@ devno(int c, int user)
         if(devtab[i]->dc == c)
             return i;
     }
-    if(user == 0)
+    if(!user)
         panic("devno %C %#ux", c, c);
 
     return -1;
@@ -146,7 +146,7 @@ devattach(Rune tc, char *spec)
 
     c = newchan();
     mkqid(&c->qid, 0, 0, QTDIR);
-    c->type = devno(tc, 0);
+    c->type = devno(tc, false);
     if(spec == nil)
         spec = "";
     n = 1+UTFmax+strlen(spec)+1; // '#' + Rune + strlen + '\0'

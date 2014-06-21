@@ -224,12 +224,13 @@ enum
 enum 
 {
   COPEN = 0x0001,   /* for i/o */
-  CMSG  = 0x0002,   /* the message channel for a mount */
-/*rsc CCREATE = 0x0004,   /* permits creation if c->mnt */
-  CCEXEC  = 0x0008,   /* close on exec */
   CFREE = 0x0010,   /* not in use */
+  /*s: enum channelflag cases */
+  CMSG  = 0x0002,   /* the message channel for a mount */
+  CCEXEC  = 0x0008,   /* close on exec */
   CRCLOSE = 0x0020,   /* remove on close */
   CCACHE  = 0x0080,   /* client cache */
+  /*e: enum channelflag cases */
 };
 /*e: enum channelflag */
 
@@ -258,6 +259,7 @@ struct Chan
        /*e: [[Chan]] union other fields */
     };
     /*s: [[Chan]] other fields */
+    // enum<channelflag>
     ushort  flag;
     /*x: [[Chan]] other fields */
     vlong devoffset;    /* in underlying device; see read */
@@ -353,8 +355,10 @@ struct Dev
     long  (*read)(Chan*, void*, long, vlong);
     long  (*write)(Chan*, void*, long, vlong);
 
+    /*s: [[Dev]] block methods */
     Block* (*bread)(Chan*, long, ulong);
     long  (*bwrite)(Chan*, Block*, ulong);
+    /*e: [[Dev]] block methods */
 
     int (*stat)(Chan*, uchar*, int);
     int (*wstat)(Chan*, uchar*, int);

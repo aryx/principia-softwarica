@@ -34,10 +34,12 @@ enum
 struct Chanalloc
 {
     int fid; // could be a Counter, but already have a Lock anyway
-    //list<ref<Chan>> ???
+
+    //list<ref<Chan>> (next = Chan.next), the free one
     Chan    *free;
-    //list<ref<Chan>> ???
+    //list<ref<Chan>> (next = Chan.link), the used one
     Chan    *list;
+
     // extra
     Lock;
 };
@@ -144,7 +146,7 @@ newchan(void)
 
     lock(&chanalloc);
     c = chanalloc.free;
-    if(c != 0)
+    if(c != nil)
         chanalloc.free = c->next;
     unlock(&chanalloc);
 
@@ -174,7 +176,7 @@ newchan(void)
     c->mcp = nil;
     c->mux = nil;
     memset(&c->mqid, 0, sizeof(c->mqid));
-    c->path = 0;
+    c->path = nil;
     c->ismtpt = false;
     
     return c;
@@ -1349,7 +1351,7 @@ namec(char *aname, int amode, int omode, ulong perm)
             error(Enoattach);
         if(up->pgrp->noattach && utfrune("|decp", r)==nil)
             error(Enoattach);
-        t = devno(r, 1);
+        t = devno(r, true);
         if(t == -1)
             error(Ebadsharp);
 

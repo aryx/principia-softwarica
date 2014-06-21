@@ -346,7 +346,7 @@ srvwrite(Chan *c, void *va, long n, vlong)
     buf[n] = 0;
     fd = strtoul(buf, 0, 0);
 
-    c1 = fdtochan(fd, -1, 0, 1);    /* error check and inc ref */
+    c1 = fdtochan(fd, -1, false, true);    /* error check and inc ref */
 
     qlock(&srvlk);
     if(waserror()) {

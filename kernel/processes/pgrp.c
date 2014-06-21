@@ -237,7 +237,7 @@ closefgrp(Fgrp *f)
     int i;
     Chan *c;
 
-    if(f == 0)
+    if(f == nil)
         return;
 
     if(decref(f) != 0)

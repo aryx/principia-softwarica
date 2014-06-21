@@ -32,7 +32,7 @@ sysfversion(ulong *arg)
     /* check there's a NUL in the version string */
     if(arglen==0 || memchr(vers, 0, arglen)==0)
         error(Ebadarg);
-    c = fdtochan(arg[0], ORDWR, 0, 1);
+    c = fdtochan(arg[0], ORDWR, false, true);
     if(waserror()){
         cclose(c);
         nexterror();
@@ -60,7 +60,7 @@ sysfauth(ulong *arg)
         free(aname);
         nexterror();
     }
-    c = fdtochan(arg[0], ORDWR, 0, 1);
+    c = fdtochan(arg[0], ORDWR, false, true);
     if(waserror()){
         cclose(c);
         nexterror();
