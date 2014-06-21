@@ -12220,216 +12220,10 @@ startboot(char *argv0, char **argv)
 
 
 
-
-\chapter{Files}
+\chapter{IO Queue}
 \minitoc
 
-<<systab file syscalls>>=
-    [OPEN]      sysopen,
-    [CLOSE]     sysclose,
-    [PREAD]     syspread,
-    [PWRITE]    syspwrite,
-    [SEEK]      sysseek,
-@ 
-
-% note that files are used for many things, including devices!!
-% plan9 has actually lots of file servers
-%pike: interface is not everything is a file, but everything is
-% a file server interface!
-
 \section{Overview}
-
-\section{[[Chan]]nels}
-
-<<[[Chan]] other fields>>=
-ushort  flag;
-@
-
-<<enum channelflag>>=
-/*
- * channel flags
- */
-enum 
-{
-  COPEN = 0x0001,   /* for i/o */
-  CMSG  = 0x0002,   /* the message channel for a mount */
-/*rsc CCREATE = 0x0004,   /* permits creation if c->mnt */
-  CCEXEC  = 0x0008,   /* close on exec */
-  CFREE = 0x0010,   /* not in use */
-  CRCLOSE = 0x0020,   /* remove on close */
-  CCACHE  = 0x0080,   /* client cache */
-};
-@
-
-
-<<struct Chanalloc>>=
-struct Chanalloc
-{
-    int fid; // could be a Counter, but already have a Lock anyway
-    //list<ref<Chan>> ???
-    Chan    *free;
-    //list<ref<Chan>> ???
-    Chan    *list;
-    // extra
-    Lock;
-};
-@
-
-
-<<global chanalloc>>=
-struct Chanalloc chanalloc;
-@
-
-<<[[Chan]] extra fields>>=
-Chan* next;     /* allocation */
-Chan* link;
-@ 
-
-
-<<constructor newchan>>=
-Chan*
-newchan(void)
-{
-    Chan *c;
-
-    lock(&chanalloc);
-    c = chanalloc.free;
-    if(c != 0)
-        chanalloc.free = c->next;
-    unlock(&chanalloc);
-
-    if(c == nil){
-        c = smalloc(sizeof(Chan));
-        lock(&chanalloc);
-        c->fid = ++chanalloc.fid;
-        c->link = chanalloc.list;
-        chanalloc.list = c;
-        unlock(&chanalloc);
-    }
-
-    /* if you get an error before associating with a dev,
-       close calls rootclose, a nop */
-    c->type = 0;
-    c->flag = 0;
-    c->ref = 1;
-    c->dev = 0;
-    c->offset = 0;
-    c->devoffset = 0;
-    c->iounit = 0;
-    c->umh = nil;
-    c->uri = 0;
-    c->dri = 0;
-    c->aux = nil;
-    c->mchan = nil;
-    c->mcp = nil;
-    c->mux = nil;
-    memset(&c->mqid, 0, sizeof(c->mqid));
-    c->path = 0;
-    c->ismtpt = false;
-    
-    return c;
-}
-@
-
-<<destructor chanfree>>=
-void
-chanfree(Chan *c)
-{
-    c->flag = CFREE;
-
-    if(c->dirrock != nil){
-        free(c->dirrock);
-        c->dirrock = nil;
-        c->nrock = 0;
-        c->mrock = 0;
-    }
-    if(c->umh != nil){
-        putmhead(c->umh);
-        c->umh = nil;
-    }
-    if(c->umc != nil){
-        cclose(c->umc);
-        c->umc = nil;
-    }
-    if(c->mux != nil){
-        muxclose(c->mux);
-        c->mux = nil;
-    }
-    if(c->mchan != nil){
-        cclose(c->mchan);
-        c->mchan = nil;
-    }
-
-    pathclose(c->path);
-    c->path = nil;
-
-    lock(&chanalloc);
-    c->next = chanalloc.free;
-    chanalloc.free = c;
-    unlock(&chanalloc);
-}
-@
-
-
-<<function cclose>>=
-void
-chan_cclose(Chan *c)
-{
-    if(c->flag&CFREE)
-        panic("cclose %#p", getcallerpc(&c));
-
-    DBG("cclose %p name=%s ref=%ld\n", c, c->path->s, c->ref);
-    if(decref(c))
-        return;
-
-    if(!waserror()){
-        devtab[c->type]->close(c);
-        poperror();
-    }
-    chanfree(c);
-}
-@
-
-
-<<function cclone>>=
-Chan*
-cclone(Chan *c)
-{
-    Chan *nc;
-    Walkqid *wq;
-
-    wq = devtab[c->type]->walk(c, nil, nil, 0);
-    if(wq == nil)
-        error("clone failed");
-    nc = wq->clone;
-    free(wq);
-    nc->path = c->path;
-    if(c->path)
-        incref(c->path);
-    return nc;
-}
-@
-
-<<function cunique>>=
-/*
- * Make sure we have the only copy of c.  (Copy on write.)
- */
-Chan*
-cunique(Chan *c)
-{
-    Chan *nc;
-
-    if(c->ref != 1){
-        nc = cclone(c);
-        cclose(c);
-        c = nc;
-    }
-
-    return c;
-}
-@
-
-
 
 \section{[[Block]]}
 
@@ -13082,100 +12876,6 @@ bl2mem(uchar *p, Block *b, int n)
 }
 @
 
-
-\section{[[Clunkq]]}
-%?????
-
-<<struct Clunkq>>=
-/*
- * Queue a chan to be closed by one of the clunk procs.
- */
-struct Clunkq {
-    Chan *head;
-    Chan *tail;
-    int nqueued;
-    int nclosed;
-    Lock l;
-    QLock q;
-    Rendez r;
-};
-@
-
-
-<<global clunkq>>=
-struct Clunkq clunkq;
-@
-
-
-<<function ccloseq>>=
-void
-ccloseq(Chan *c)
-{
-    if(c->flag&CFREE)
-        panic("cclose %#p", getcallerpc(&c));
-
-    DBG("ccloseq %p name=%s ref=%ld\n", c, c->path->s, c->ref);
-
-    if(decref(c))
-        return;
-
-    lock(&clunkq.l);
-    clunkq.nqueued++;
-    c->next = nil;
-    if(clunkq.head)
-        clunkq.tail->next = c;
-    else
-        clunkq.head = c;
-    clunkq.tail = c;
-    unlock(&clunkq.l);
-
-    if(!wakeup(&clunkq.r))
-        kproc("closeproc", closeproc, nil); 
-}
-@
-
-
-<<function clunkwork>>=
-static int
-clunkwork(void*)
-{
-    return clunkq.head != nil;
-}
-@
-
-
-<<function closeproc>>=
-void
-closeproc(void*)
-{
-    Chan *c;
-
-    for(;;){
-        qlock(&clunkq.q);
-        if(clunkq.head == nil){
-            if(!waserror()){
-                tsleep(&clunkq.r, clunkwork, nil, 5000);
-                poperror();
-            }
-            if(clunkq.head == nil){
-                qunlock(&clunkq.q);
-                pexit("no work", /*freemem*/true);
-            }
-        }
-        lock(&clunkq.l);
-        c = clunkq.head;
-        clunkq.head = c->next;
-        clunkq.nclosed++;
-        unlock(&clunkq.l);
-        qunlock(&clunkq.q);
-        if(!waserror()){
-            devtab[c->type]->close(c);
-            poperror();
-        }
-        chanfree(c);
-    }
-}
-@
 
 \section{[[Queue]]}
 
@@ -14387,6 +14087,312 @@ qfull(Queue *q)
 @
 
 
+
+
+
+\chapter{Files}
+\minitoc
+
+<<systab file syscalls>>=
+    [OPEN]      sysopen,
+    [CLOSE]     sysclose,
+    [PREAD]     syspread,
+    [PWRITE]    syspwrite,
+    [SEEK]      sysseek,
+@ 
+
+% note that files are used for many things, including devices!!
+% plan9 has actually lots of file servers
+%pike: interface is not everything is a file, but everything is
+% a file server interface!
+
+\section{Overview}
+
+\section{[[Chan]]nels}
+
+<<[[Chan]] other fields>>=
+ushort  flag;
+@
+
+<<enum channelflag>>=
+/*
+ * channel flags
+ */
+enum 
+{
+  COPEN = 0x0001,   /* for i/o */
+  CMSG  = 0x0002,   /* the message channel for a mount */
+/*rsc CCREATE = 0x0004,   /* permits creation if c->mnt */
+  CCEXEC  = 0x0008,   /* close on exec */
+  CFREE = 0x0010,   /* not in use */
+  CRCLOSE = 0x0020,   /* remove on close */
+  CCACHE  = 0x0080,   /* client cache */
+};
+@
+
+
+<<struct Chanalloc>>=
+struct Chanalloc
+{
+    int fid; // could be a Counter, but already have a Lock anyway
+    //list<ref<Chan>> ???
+    Chan    *free;
+    //list<ref<Chan>> ???
+    Chan    *list;
+    // extra
+    Lock;
+};
+@
+
+
+<<global chanalloc>>=
+struct Chanalloc chanalloc;
+@
+
+<<[[Chan]] extra fields>>=
+Chan* next;     /* allocation */
+Chan* link;
+@ 
+
+
+<<constructor newchan>>=
+Chan*
+newchan(void)
+{
+    Chan *c;
+
+    lock(&chanalloc);
+    c = chanalloc.free;
+    if(c != 0)
+        chanalloc.free = c->next;
+    unlock(&chanalloc);
+
+    if(c == nil){
+        c = smalloc(sizeof(Chan));
+        lock(&chanalloc);
+        c->fid = ++chanalloc.fid;
+        c->link = chanalloc.list;
+        chanalloc.list = c;
+        unlock(&chanalloc);
+    }
+
+    /* if you get an error before associating with a dev,
+       close calls rootclose, a nop */
+    c->type = 0;
+    c->flag = 0;
+    c->ref = 1;
+    c->dev = 0;
+    c->offset = 0;
+    c->devoffset = 0;
+    c->iounit = 0;
+    c->umh = nil;
+    c->uri = 0;
+    c->dri = 0;
+    c->aux = nil;
+    c->mchan = nil;
+    c->mcp = nil;
+    c->mux = nil;
+    memset(&c->mqid, 0, sizeof(c->mqid));
+    c->path = 0;
+    c->ismtpt = false;
+    
+    return c;
+}
+@
+
+<<destructor chanfree>>=
+void
+chanfree(Chan *c)
+{
+    c->flag = CFREE;
+
+    if(c->dirrock != nil){
+        free(c->dirrock);
+        c->dirrock = nil;
+        c->nrock = 0;
+        c->mrock = 0;
+    }
+    if(c->umh != nil){
+        putmhead(c->umh);
+        c->umh = nil;
+    }
+    if(c->umc != nil){
+        cclose(c->umc);
+        c->umc = nil;
+    }
+    if(c->mux != nil){
+        muxclose(c->mux);
+        c->mux = nil;
+    }
+    if(c->mchan != nil){
+        cclose(c->mchan);
+        c->mchan = nil;
+    }
+
+    pathclose(c->path);
+    c->path = nil;
+
+    lock(&chanalloc);
+    c->next = chanalloc.free;
+    chanalloc.free = c;
+    unlock(&chanalloc);
+}
+@
+
+
+<<function cclose>>=
+void
+chan_cclose(Chan *c)
+{
+    if(c->flag&CFREE)
+        panic("cclose %#p", getcallerpc(&c));
+
+    DBG("cclose %p name=%s ref=%ld\n", c, c->path->s, c->ref);
+    if(decref(c))
+        return;
+
+    if(!waserror()){
+        devtab[c->type]->close(c);
+        poperror();
+    }
+    chanfree(c);
+}
+@
+
+
+<<function cclone>>=
+Chan*
+cclone(Chan *c)
+{
+    Chan *nc;
+    Walkqid *wq;
+
+    wq = devtab[c->type]->walk(c, nil, nil, 0);
+    if(wq == nil)
+        error("clone failed");
+    nc = wq->clone;
+    free(wq);
+    nc->path = c->path;
+    if(c->path)
+        incref(c->path);
+    return nc;
+}
+@
+
+<<function cunique>>=
+/*
+ * Make sure we have the only copy of c.  (Copy on write.)
+ */
+Chan*
+cunique(Chan *c)
+{
+    Chan *nc;
+
+    if(c->ref != 1){
+        nc = cclone(c);
+        cclose(c);
+        c = nc;
+    }
+
+    return c;
+}
+@
+
+
+
+\section{[[Clunkq]]}
+%?????
+
+<<struct Clunkq>>=
+/*
+ * Queue a chan to be closed by one of the clunk procs.
+ */
+struct Clunkq {
+    Chan *head;
+    Chan *tail;
+    int nqueued;
+    int nclosed;
+    Lock l;
+    QLock q;
+    Rendez r;
+};
+@
+
+
+<<global clunkq>>=
+struct Clunkq clunkq;
+@
+
+
+<<function ccloseq>>=
+void
+ccloseq(Chan *c)
+{
+    if(c->flag&CFREE)
+        panic("cclose %#p", getcallerpc(&c));
+
+    DBG("ccloseq %p name=%s ref=%ld\n", c, c->path->s, c->ref);
+
+    if(decref(c))
+        return;
+
+    lock(&clunkq.l);
+    clunkq.nqueued++;
+    c->next = nil;
+    if(clunkq.head)
+        clunkq.tail->next = c;
+    else
+        clunkq.head = c;
+    clunkq.tail = c;
+    unlock(&clunkq.l);
+
+    if(!wakeup(&clunkq.r))
+        kproc("closeproc", closeproc, nil); 
+}
+@
+
+
+<<function clunkwork>>=
+static int
+clunkwork(void*)
+{
+    return clunkq.head != nil;
+}
+@
+
+
+<<function closeproc>>=
+void
+closeproc(void*)
+{
+    Chan *c;
+
+    for(;;){
+        qlock(&clunkq.q);
+        if(clunkq.head == nil){
+            if(!waserror()){
+                tsleep(&clunkq.r, clunkwork, nil, 5000);
+                poperror();
+            }
+            if(clunkq.head == nil){
+                qunlock(&clunkq.q);
+                pexit("no work", /*freemem*/true);
+            }
+        }
+        lock(&clunkq.l);
+        c = clunkq.head;
+        clunkq.head = c->next;
+        clunkq.nclosed++;
+        unlock(&clunkq.l);
+        qunlock(&clunkq.q);
+        if(!waserror()){
+            devtab[c->type]->close(c);
+            poperror();
+        }
+        chanfree(c);
+    }
+}
+@
 
 \section{Devices table [[devtab]]}
 
