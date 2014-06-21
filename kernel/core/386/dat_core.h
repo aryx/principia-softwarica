@@ -72,16 +72,16 @@ struct ArchCpu {
     /*x: [[Cpu]] [[Arch]] other fields */
     int loopconst;
     /*x: [[Cpu]] [[Arch]] other fields */
+    vlong mtrrcap;
+    vlong mtrrdef;
+    vlong mtrrfix[11];
+    vlong mtrrvar[32];    /* 256 max. */
+    /*x: [[Cpu]] [[Arch]] other fields */
     ArchFPsave *fpsavalign;
     /*x: [[Cpu]] [[Arch]] other fields */
     Lock  apictimerlock;
     /*x: [[Cpu]] [[Arch]] other fields */
     uvlong tscticks;
-    /*x: [[Cpu]] [[Arch]] other fields */
-    vlong mtrrcap;
-    vlong mtrrdef;
-    vlong mtrrfix[11];
-    vlong mtrrvar[32];    /* 256 max. */
     /*e: [[Cpu]] [[Arch]] other fields */
 };
 /*e: struct ArchCpu */
