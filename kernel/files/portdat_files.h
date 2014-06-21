@@ -339,7 +339,19 @@ struct Dev
 {
     Rune dc; // dev character code, e.g. '/' (devroot), 'e' (devenv), ...
     char* name;
-    
+
+    /*s: [[Dev]] methods */
+        Chan* (*open)(Chan*, int);
+    /*x: [[Dev]] methods */
+        void  (*close)(Chan*);
+    /*x: [[Dev]] methods */
+        long  (*read)(Chan*, void*, long, vlong);
+    /*x: [[Dev]] methods */
+        long  (*write)(Chan*, void*, long, vlong);
+    /*x: [[Dev]] methods */
+    Block* (*bread)(Chan*, long, ulong);
+    long  (*bwrite)(Chan*, Block*, ulong);
+    /*e: [[Dev]] methods */
     void  (*reset)(void);
     void  (*init)(void);
     void  (*shutdown)(void);
@@ -349,16 +361,6 @@ struct Dev
 
     void  (*create)(Chan*, char*, int, ulong);
     void  (*remove)(Chan*);
-
-    Chan* (*open)(Chan*, int);
-    void  (*close)(Chan*);
-    long  (*read)(Chan*, void*, long, vlong);
-    long  (*write)(Chan*, void*, long, vlong);
-
-    /*s: [[Dev]] block methods */
-    Block* (*bread)(Chan*, long, ulong);
-    long  (*bwrite)(Chan*, Block*, ulong);
-    /*e: [[Dev]] block methods */
 
     int (*stat)(Chan*, uchar*, int);
     int (*wstat)(Chan*, uchar*, int);

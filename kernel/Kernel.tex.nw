@@ -1263,7 +1263,8 @@ struct Chan
     Ref; /* the Lock in this Ref is also Chan's lock */
     <<[[Chan]] extra fields>>
 };
-@ 
+@
+% more LP split? type put closer to devtab?
 
 <<[[Proc]] files fields>>=
 // ref<Chan>
@@ -1377,7 +1378,8 @@ struct Dev
 {
     Rune dc; // dev character code, e.g. '/' (devroot), 'e' (devenv), ...
     char* name;
-    
+
+    <<[[Dev]] methods>>
     void  (*reset)(void);
     void  (*init)(void);
     void  (*shutdown)(void);
@@ -1388,13 +1390,6 @@ struct Dev
     void  (*create)(Chan*, char*, int, ulong);
     void  (*remove)(Chan*);
 
-    Chan* (*open)(Chan*, int);
-    void  (*close)(Chan*);
-    long  (*read)(Chan*, void*, long, vlong);
-    long  (*write)(Chan*, void*, long, vlong);
-
-    <<[[Dev]] block methods>>
-
     int (*stat)(Chan*, uchar*, int);
     int (*wstat)(Chan*, uchar*, int);
 
@@ -1402,11 +1397,11 @@ struct Dev
     int (*config)(int, char*, DevConf*);  /* returns nil on error */
 };
 @ 
-% does it match 9p?
 % no seek? seek is managed generically? actually read and write take an
 % offset as a parameter. from read(2)
 %  "By combining the operations in a single atomic call, they more closely
 %   match the 9P protocol"
+% does it match 9p? I guess it closely match 9p
 
 <<global devtab>>=
 Dev** devtab = nil;
@@ -1419,6 +1414,11 @@ Dev** devtab = nil;
 %       ...
 %  };
 % devtab = conf_devtab;
+
+% ex of device:
+% Dev consdevtab = {
+%  ...
+% }
 
 \section{[[PCArch]] and [[arch]]}
 
@@ -12393,26 +12393,6 @@ chanfree(Chan *c)
 @
 
 
-<<function cclose>>=
-void
-chan_cclose(Chan *c)
-{
-    if(c->flag&CFREE)
-        panic("cclose %#p", getcallerpc(&c));
-
-    DBG("cclose %p name=%s ref=%ld\n", c, c->path->s, c->ref);
-    if(decref(c))
-        return;
-
-    if(!waserror()){
-        devtab[c->type]->close(c);
-        poperror();
-    }
-    chanfree(c);
-}
-@
-% see also ccloseq
-
 %-----------------------------------------------------------------------
 % todo: mv closer to where it's used
 
@@ -12459,7 +12439,7 @@ cunique(Chan *c)
 
 \section{Devices table [[devtab]]}
 
-% see chapter 3 too
+% see chapter 3 too, Dev and devtab global
 
 <<function devno>>=
 int
@@ -12704,6 +12684,11 @@ enum open {
 % LP split
 
 
+<<[[Dev]] methods>>=
+    Chan* (*open)(Chan*, int);
+@
+
+
 <<syscall open>>=
 // int open(char *file, int omode);
 long
@@ -12726,7 +12711,10 @@ sysopen(ulong* arg)
     return fd;
 }
 @
-% namec is very complex, will see later, related to Directories and mount
+% namec() is very complex, will see later, related to Directories and mount
+% as it needs to follow and find the appropriate device to
+% ultimately do the devtab->open()
+
 
 <<function openmode>>=
 int
@@ -12832,6 +12820,31 @@ fdclose(int fd, int flag)
 }
 @
 
+<<[[Dev]] methods>>=
+    void  (*close)(Chan*);
+@
+
+<<function cclose>>=
+void
+chan_cclose(Chan *c)
+{
+    if(c->flag&CFREE)
+        panic("cclose %#p", getcallerpc(&c));
+
+    DBG("cclose %p name=%s ref=%ld\n", c, c->path->s, c->ref);
+    if(decref(c))
+        return;
+
+    if(!waserror()){
+        devtab[c->type]->close(c);
+        poperror();
+    }
+    chanfree(c);
+}
+@
+% see also ccloseq
+
+
 \section{[[syspread()]], [[syspwrite()]]}
 
 <<[[Chan]] other fields>>=
@@ -12860,6 +12873,9 @@ syspread(ulong* arg)
 % vlong? because the ulong* arg sysargs trick does not like vlong?
 % why pread? for backward compatible reasons?
 
+<<[[Dev]] methods>>=
+    long  (*read)(Chan*, void*, long, vlong);
+@
 
 <<function read>>=
 // long pread(int fd, void *buf, long nbytes, vlong offset);
@@ -12939,6 +12955,10 @@ syspwrite(ulong* arg)
 }
 @
 
+
+<<[[Dev]] methods>>=
+    long  (*write)(Chan*, void*, long, vlong);
+@
 
 <<function write>>=
 // long pwrite(int fd, void *buf, long nbytes, vlong offset);
@@ -19893,7 +19913,7 @@ Return:
 @
 
 
-<<[[Dev]] block methods>>=
+<<[[Dev]] methods>>=
 Block* (*bread)(Chan*, long, ulong);
 long  (*bwrite)(Chan*, Block*, ulong);
 @
