@@ -3414,6 +3414,7 @@ freept(Segment *s, Pagetable *p)
 @
 
 % does not really copy, it's more about sharing and reference counting
+% why not called duppte? to be more consistent with the rest?
 <<function ptcpy>>=
 Pagetable*
 ptcpy(Pagetable *old)
@@ -4786,6 +4787,7 @@ sysexec(ulong* arg)
 
     /* Text.  Shared. Attaches to cache image if possible */
     <<[[sysexec()]] get text segment ts via demand loading on tc>>
+    up->seg[TSEG] = ts;
 
     /* Data. Shared. */
     s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);
@@ -4912,9 +4914,10 @@ execregs(ulong entry, ulong ssize, ulong nargs)
 Proc  *parent;
 int nchild;   /* Number of living children */
 @
-% subtle: I think it's useful to also have parentpid field because
+% subtle: it's useful to also have parentpid field because
 % the parent may have died, and so freed in procalloc and then
-% reused for another process!
+% reused for another process! so have to check that 
+% parent->pid == (saved)parentpid
 
 <<[[Proc]] hierarchy fields>>=
 // list<ref_own<Waitq>>> =~ list<ref_own<Waitmsg>>
@@ -5357,9 +5360,7 @@ linkproc(void)
 <<[[procctlreq()]] CMkill case>>=
     case CMkill:
         switch(p->state) {
-        case Broken:
-            unbreak(p);
-            break;
+        <<[[procctlreq()]] CMkill case, Broken case>>
         case Stopped:
             p->procctl = Proc_exitme;
             postnote(p, 0, "sys: killed", NExit);
@@ -5371,8 +5372,6 @@ linkproc(void)
         }
         break;
 @
-% could LP split Broken, anyway unbreak will make him really die and release memory
-
 
 
 
@@ -7872,11 +7871,12 @@ ulong flen;   /* length of segment in file */
     /* attachimage returns a locked cache image */
     img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
     ts = img->s;
-    up->seg[TSEG] = ts;
     ts->fstart = 0;
     ts->flen = sizeof(Exec)+text;
     unlock(img);
 @
+% the up->seg[TSEG] = ts used to be inslide the lock, but I don't think
+% it matters
 
 <<[[sysexec()]] adjust data segment s for demand loading on tc>>=
     /* Attached by hand */
@@ -8302,8 +8302,6 @@ imagereclaim(void)
     qunlock(&imagealloc.ireclaim);
 }
 @
-
-
 
 
 
@@ -9216,6 +9214,7 @@ queueproc(Schedq *rq, Proc *p)
     unlock(runq);
 }
 @ 
+%>>
 
 <<function dequeueproc>>=
 /*
@@ -9270,7 +9269,7 @@ dequeueproc(Schedq *rq, Proc *tp)
     return p;
 }
 @ 
-% >> >>
+% >>
 
 \section{[[sched()]]}
 
@@ -9440,7 +9439,7 @@ runproc(void)
 
     /* cooperative scheduling until the clock ticks */
     if((p=cpu->readied) && p->cpu==nil && p->state==Ready && 
-      (p->wired == nil || p->wired == cpu) && 
+      (p->wired == nil || p->wired == cpu) && // BUG? == MACHP(cpu->cpuno)
       <<[[runproc()]] test for empty real-time scheduling queue>>
     ){
         skipscheds++;
@@ -9920,7 +9919,7 @@ proc_ready(Proc *p)
     s = splhi();
     <<[[ready()]] optional [[edfready()]] for real-time scheduling>>
 
-    if(up != p && (p->wired == nil || p->wired == cpu))
+    if(up != p && (p->wired == nil || p->wired == cpu)) // BUG? == MACHP(cpu->cpuno)
         cpu->readied = p; /* group scheduling */
 
     updatecpu(p);
@@ -27240,6 +27239,13 @@ freebroken(void)
     return n;
 }
 @ 
+
+<<[[procctlreq()]] CMkill case, Broken case>>=
+        case Broken:
+            // will resume the broken process to finally die and free its mem
+            unbreak(p); 
+            break;
+@
 
 
 \subsection{Stopping a process}
