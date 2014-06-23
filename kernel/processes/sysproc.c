@@ -518,11 +518,11 @@ sysexec(ulong* arg)
         /* attachimage returns a locked cache image */
         img = attachimage(SG_TEXT|SG_RONLY, tc, UTZERO, (t-UTZERO)>>PGSHIFT);
         ts = img->s;
-        up->seg[TSEG] = ts;
         ts->fstart = 0;
         ts->flen = sizeof(Exec)+text;
         unlock(img);
     /*e: [[sysexec()]] get text segment ts via demand loading on tc */
+    up->seg[TSEG] = ts;
 
     /* Data. Shared. */
     s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);

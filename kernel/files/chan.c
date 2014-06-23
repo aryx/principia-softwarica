@@ -258,10 +258,12 @@ pathclose(Path *p)
     if(p == nil)
         return;
 
-    DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
-    for(i=0; i<p->mlen; i++)
-        DBG(" %p", p->mtpt[i]);
-    DBG("\n");
+    /*s: [[pathclose()]] debugging */
+        DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
+        for(i=0; i<p->mlen; i++)
+            DBG(" %p", p->mtpt[i]);
+        DBG("\n");
+    /*e: [[pathclose()]] debugging */
 
     if(decref(p))
         return;

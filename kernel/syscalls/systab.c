@@ -81,7 +81,7 @@ Syscall *systab[] = {
     [REMOVE]    sysremove,
 
     [CHDIR]     syschdir,
-    [FD2PATH]   sysfd2path, // pwd?
+    [FD2PATH]   sysfd2path, // =~ pwd
 
     [STAT]      sysstat,
     [FSTAT]     sysfstat,

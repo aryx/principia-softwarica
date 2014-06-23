@@ -548,7 +548,7 @@ proc_ready(Proc *p)
         }
     /*e: [[ready()]] optional [[edfready()]] for real-time scheduling */
 
-    if(up != p && (p->wired == nil || p->wired == cpu))
+    if(up != p && (p->wired == nil || p->wired == CPUS(cpu->cpuno))) // pad fix
         cpu->readied = p; /* group scheduling */
 
     updatecpu(p);
@@ -643,7 +643,7 @@ runproc(void)
 
     /* cooperative scheduling until the clock ticks */
     if((p=cpu->readied) && p->cpu==nil && p->state==Ready && 
-      (p->wired == nil || p->wired == cpu) && 
+      (p->wired == nil || p->wired == CPUS(cpu->cpuno)) && // pad's bugfix!
       /*s: [[runproc()]] test for empty real-time scheduling queue */
       runq[Nrq-1].head == nil && runq[Nrq-2].head == nil
       /*e: [[runproc()]] test for empty real-time scheduling queue */

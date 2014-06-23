@@ -1577,9 +1577,12 @@ procctlreq(Proc *p, char *va, int n)
     /*s: [[procctlreq()]] CMkill case */
         case CMkill:
             switch(p->state) {
-            case Broken:
-                unbreak(p);
-                break;
+            /*s: [[procctlreq()]] CMkill case, Broken case */
+                    case Broken:
+                        // will resume the broken process to finally die and free its mem
+                        unbreak(p); 
+                        break;
+            /*e: [[procctlreq()]] CMkill case, Broken case */
             case Stopped:
                 p->procctl = Proc_exitme;
                 postnote(p, 0, "sys: killed", NExit);
