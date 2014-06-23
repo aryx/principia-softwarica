@@ -12261,9 +12261,9 @@ enum
   <<enum channelflag cases>>
 };
 @
+%/*rsc CCREATE = 0x0004,   /* permits creation if c->mnt */
 % COPEN is set in devopen() generic helper. why not done in sysopen 
 %  generically?
-%/*rsc CCREATE = 0x0004,   /* permits creation if c->mnt */
 
 
 <<[[Chan]] other fields>>=
@@ -12291,6 +12291,8 @@ struct Chanalloc
 };
 @
 % not arena allocator, gradually allocated via malloc, but never freed
+% fid is for devmnt
+
 
 <<global chanalloc>>=
 struct Chanalloc chanalloc;
@@ -12346,7 +12348,6 @@ newchan(void)
     return c;
 }
 @
-% fid is for devmnt
 
 <<destructor chanfree>>=
 void
@@ -12633,6 +12634,7 @@ growfd(Fgrp *f, int fd) /* fd is always >= 0 */
     return 1;
 }
 @
+% define constant instead of hardcoded 5000?
 
 <<[[Fgrp]] other fields>>=
 int exceed;     /* debugging */
@@ -12675,7 +12677,8 @@ enum open {
 Chan* (*open)(Chan*, int);
 @
 % actually it's used in namec() Take a Chan? what is it?
-
+% what is the Chan parameter? does not take a string? namec does this
+% and the Chan is the root of the mount device?
 
 <<syscall open>>=
 // int open(char *file, int omode);
@@ -12839,6 +12842,8 @@ chan_cclose(Chan *c)
 <<[[Chan]] other fields>>=
 vlong devoffset;    /* in underlying device; see read */
 @
+
+% put offset field also here?
 
 <<syscall pread>>=
 // long pread(int fd, void *buf, long nbytes, vlong offset);
@@ -13241,7 +13246,7 @@ closeproc(void*)
     [REMOVE]    sysremove,
 
     [CHDIR]     syschdir,
-    [FD2PATH]   sysfd2path, // pwd?
+    [FD2PATH]   sysfd2path, // =~ pwd
 
     [STAT]      sysstat,
     [FSTAT]     sysfstat,
@@ -13292,6 +13297,8 @@ struct Path
   Ref;
 };
 @
+%LP split mtpt?
+
 
 \ifallcode
 % could delete, just used for statistics but never made accessible anywhere
@@ -13303,10 +13310,12 @@ Ref npath;
 <<constant PATHSLOP>>=
     PATHSLOP    = 20,
 @
+%?
 
 <<constant PATHMSLOP>>=
     PATHMSLOP   = 20,
 @
+%?
 
 
 <<constructor newpath>>=
@@ -13382,10 +13391,7 @@ pathclose(Path *p)
     if(p == nil)
         return;
 
-    DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
-    for(i=0; i<p->mlen; i++)
-        DBG(" %p", p->mtpt[i]);
-    DBG("\n");
+    <<[[pathclose()]] debugging>>
 
     if(decref(p))
         return;
@@ -13399,6 +13405,15 @@ pathclose(Path *p)
     free(p);
 }
 @
+
+\ifallcode
+<<[[pathclose()]] debugging>>=
+    DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
+    for(i=0; i<p->mlen; i++)
+        DBG(" %p", p->mtpt[i]);
+    DBG("\n");
+@
+\fi
 
 
 <<function fixdotdotname>>=
@@ -13429,6 +13444,8 @@ fixdotdotname(Path *p)
     p->len = strlen(p->s);
 }
 @
+
+% cleanname() is in libc
 
 
 <<function uniquepath>>=
