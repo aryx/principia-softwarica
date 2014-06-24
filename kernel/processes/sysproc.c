@@ -297,7 +297,7 @@ sysexec(ulong* arg)
     }
     file = file0;
     for(;;){
-        // this will adjust up->genbuf to contain the full(?) path of file
+        // this will also adjust up->genbuf to contain the last element of file path
         /*s: [[sysexec()]] call namec() to get a channel in tc from file */
         tc = namec(file, Aopen, OEXEC, 0);
         /*e: [[sysexec()]] call namec() to get a channel in tc from file */

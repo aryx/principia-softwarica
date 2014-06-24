@@ -219,6 +219,8 @@ enum open {
     OWRITE = 1, /* write */
     ORDWR = 2, /* read and write */
     /*s: enum open cases */
+    OEXEC = 3, /* execute, == read but check execute permission */
+    /*x: enum open cases */
     OTRUNC = 16,  /* or'ed in (except for exec), truncate file first */
     /*x: enum open cases */
     OEXCL = 0x1000,  /* or'ed in, exclusive create */
@@ -226,8 +228,6 @@ enum open {
     OCEXEC = 32,  /* or'ed in, close on exec */
     /*x: enum open cases */
     ORCLOSE = 64,  /* or'ed in, remove on close */
-    /*x: enum open cases */
-    OEXEC = 3, /* execute, == read but check execute permission */
     /*e: enum open cases */
 };
 /*e: enum open */
@@ -272,14 +272,16 @@ enum qidtype {
 /*s: enum dirmode */
 /* bits in Dir.mode */
 enum dirmode {
-  DMDIR = 0x80000000,  /* mode bit for directories */
-  DMAPPEND = 0x40000000,  /* mode bit for append only files */
-  DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
-  DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
+    DMDIR = 0x80000000,  /* mode bit for directories */
+    /*s: enum dirmode cases */
+    DMAPPEND = 0x40000000,  /* mode bit for append only files */
+    DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
+    DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
 
-  DMREAD = 0x4,   /* mode bit for read permission */
-  DMWRITE = 0x2,   /* mode bit for write permission */
-  DMEXEC = 0x1,   /* mode bit for execute permission */
+    DMREAD = 0x4,   /* mode bit for read permission */
+    DMWRITE = 0x2,   /* mode bit for write permission */
+    DMEXEC = 0x1,   /* mode bit for execute permission */
+    /*e: enum dirmode cases */
 };
 /*e: enum dirmode */
 
@@ -305,10 +307,13 @@ struct Dir {
   Qid qid;  /* unique id from server */
   // bitset<enum<dirmode>>
   ulong mode; /* permissions */
+
   ulong atime;  /* last read time */
   ulong mtime;  /* last write time */
+
   vlong length; /* file length: see <u.h> */
   char  *name;  /* last element of path */
+
   char  *uid; /* owner name */
   char  *gid; /* group name */
   char  *muid;  /* last modifier name */

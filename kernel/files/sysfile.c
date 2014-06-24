@@ -139,7 +139,6 @@ sysfd2path(ulong* arg)
     Chan *c;
 
     validaddr(arg[1], arg[2], true);
-
     c = fdtochan(arg[0], -1, false, true);
     snprint((char*)arg[1], arg[2], "%s", chanpath(c));
     cclose(c);
@@ -268,7 +267,7 @@ sysclose(ulong* arg)
 
 /*s: function unionread */
 long
-unionread(Chan *c, void *va, long n)
+unionread(Chan *c, virt_addr3 va, long n)
 {
     int i;
     long nr;
@@ -789,8 +788,8 @@ sseek(ulong *arg)
     case 0: // from the start
         off = o.v;
         /*s: [[sseek()]] ensures off is 0 for directories */
-                if((c->qid.type & QTDIR) && off != 0)
-                    error(Eisdir);
+        if((c->qid.type & QTDIR) && off != 0)
+            error(Eisdir);
         /*e: [[sseek()]] ensures off is 0 for directories */
         if(off < 0)
             error(Enegoff);
@@ -799,8 +798,8 @@ sseek(ulong *arg)
 
     case 1: // from the current location
         /*s: [[sseek()]] disallows seek type 1 or 2 for directories */
-                if(c->qid.type & QTDIR)
-                    error(Eisdir);
+        if(c->qid.type & QTDIR)
+            error(Eisdir);
         /*e: [[sseek()]] disallows seek type 1 or 2 for directories */
         lock(c);    /* lock for read/write update */
         off = o.v + c->offset;
@@ -814,8 +813,8 @@ sseek(ulong *arg)
 
     case 2: // from the end of the file
         /*s: [[sseek()]] disallows seek type 1 or 2 for directories */
-                if(c->qid.type & QTDIR)
-                    error(Eisdir);
+        if(c->qid.type & QTDIR)
+            error(Eisdir);
         /*e: [[sseek()]] disallows seek type 1 or 2 for directories */
         n = devtab[c->type]->stat(c, buf, sizeof buf);
         if(convM2D(buf, n, &dir, nil) == 0)
@@ -923,7 +922,6 @@ syschdir(ulong* arg)
     Chan *c;
 
     validaddr(arg[0], 1, false);
-
     c = namec((char*)arg[0], Atodir, 0, 0);
     cclose(up->dot);
     up->dot = c;
@@ -949,7 +947,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
 
     if(ismount){
         validaddr((ulong)spec, 1, false);
-        spec = validnamedup(spec, 1);
+        spec = validnamedup(spec, true);
         if(waserror()){
             free(spec);
             nexterror();
@@ -1079,7 +1077,7 @@ syscreate(ulong* arg)
     openmode(arg[1]&~OEXCL);    /* error check only; OEXCL okay here */
     validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Acreate, arg[1], arg[2]);
-    if(waserror()) {
+    if(waserror()){
         cclose(c);
         nexterror();
     }

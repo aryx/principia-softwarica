@@ -55,7 +55,7 @@ sysfauth(ulong *arg)
     int fd;
 
     validaddr(arg[1], 1, false);
-    aname = validnamedup((char*)arg[1], 1);
+    aname = validnamedup((char*)arg[1], true);
     if(waserror()){
         free(aname);
         nexterror();

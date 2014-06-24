@@ -53,10 +53,15 @@ struct Elemlist
 {
     char    *aname; /* original name */
     char    *name;  /* copy of name, so '/' can be overwritten */
+
+    //array<string> of name
+    char    **elems; // subparts
+    // size(elems)
     int nelems;
-    char    **elems;
+
     int *off;
-    int mustbedir;
+
+    bool mustbedir;
     int nerror;
     int prefix;
 };
@@ -337,6 +342,7 @@ addelem(Path *p, char *s, Chan *from)
     p = uniquepath(p);
 
     i = strlen(s);
+    // +1 for the \0?
     if(p->len+1+i+1 > p->alen){
         a = p->len+1+i+1 + PATHSLOP;
         t = smalloc(a);
@@ -350,6 +356,7 @@ addelem(Path *p, char *s, Chan *from)
         p->s[p->len++] = '/';
     memmove(p->s+p->len, s, i+1);
     p->len += i;
+
     if(isdotdot(s)){
         fixdotdotname(p);
         DBG("addelem %s .. => rm %p\n", p->s, p->mtpt[p->mlen-1]);
@@ -532,7 +539,6 @@ cunique(Chan *c)
         cclose(c);
         c = nc;
     }
-
     return c;
 }
 /*e: function cunique */
@@ -1159,7 +1165,7 @@ growparse(Elemlist *e)
  * Copy the name so slashes can be overwritten.
  * An empty string will set nelem=0.
  * A path ending in / or /. or /.//./ etc. will have
- * e.mustbedir = 1, so that we correctly
+ * e.mustbedir = true, so that we correctly
  * reject, e.g., "/adm/users/." when /adm/users is a file
  * rather than a directory.
  */
@@ -1178,7 +1184,7 @@ parsename(char *aname, Elemlist *e)
         name = skipslash(name);
         if(*name == '\0'){
             e->off[e->nelems] = name+strlen(name) - e->name;
-            e->mustbedir = 1;
+            e->mustbedir = true;
             break;
         }
         growparse(e);
@@ -1186,7 +1192,7 @@ parsename(char *aname, Elemlist *e)
         slash = utfrune(name, '/');
         if(slash == nil){
             e->off[e->nelems] = name+strlen(name) - e->name;
-            e->mustbedir = 0;
+            e->mustbedir = false;
             break;
         }
         e->off[e->nelems] = slash - e->name;
@@ -1194,14 +1200,6 @@ parsename(char *aname, Elemlist *e)
         name = slash;
     }
     
-    if(0 && chandebug){
-        int i;
-        
-        print("parsename %s:", e->name);
-        for(i=0; i<=e->nelems; i++)
-            print(" %d", e->off[i]);
-        print("\n");
-    }
 }
 /*e: function parsename */
 
@@ -1294,18 +1292,26 @@ nameerror(char *name, char *err)
 Chan*
 namec(char *aname, int amode, int omode, ulong perm)
 {
-    int len, n, t, nomount;
-    Chan *c, *cnew;
-    Path *path;
+    /*s: [[namec() locals */
+    char *name;
+    /*x: [[namec() locals */
     Elemlist e;
+    /*x: [[namec() locals */
+    Chan *c;
+    /*x: [[namec() locals */
+    Path *path;
+    /*x: [[namec() locals */
+    int len, n, t;
+    bool nomount;
+    Chan *cnew;
     Rune r;
     Mhead *m;
     char *createerr, tmperrbuf[ERRMAX];
-    char *name;
+    /*e: [[namec() locals */
 
     if(aname[0] == '\0')
         error("empty file name");
-    aname = validnamedup(aname, 1);
+    aname = validnamedup(aname, true);
     if(waserror()){
         free(aname);
         nexterror();
@@ -1318,15 +1324,11 @@ namec(char *aname, int amode, int omode, ulong perm)
      * a device tree, or the current dot) as well as the name to
      * evaluate starting there.
      */
-    nomount = 0;
+    nomount = false;
     switch(name[0]){
-    case '/':
-        c = up->slash;
-        incref(c);
-        break;
-    
+    /*s: [[namec()]] if name[0] == '#' */
     case '#':
-        nomount = 1;
+        nomount = true;
         up->genbuf[0] = '\0';
         n = 0;
         while(*name != '\0' && (*name != '/' || n < 2)){
@@ -1360,12 +1362,19 @@ namec(char *aname, int amode, int omode, ulong perm)
         c = devtab[t]->attach(up->genbuf+n);
         break;
 
+    /*e: [[namec()]] if name[0] == '#' */
+    case '/':
+        c = up->slash;
+        incref(c);
+        break;
+    
     default:
         c = up->dot;
         incref(c);
         break;
     }
 
+    /*s: [[namec()]] initializes Elemlist e */
     e.aname = aname;
     e.prefix = name - aname;
     e.name = nil;
@@ -1373,8 +1382,11 @@ namec(char *aname, int amode, int omode, ulong perm)
     e.off = nil;
     e.nelems = 0;
     e.nerror = 0;
+    /*e: [[namec()]] initializes Elemlist e */
+
     if(waserror()){
         cclose(c);
+        /*s: [[namec()]] if waserror free Elemlist e and prepare nice error */
         free(e.name);
         free(e.elems);
         /*
@@ -1384,13 +1396,11 @@ namec(char *aname, int amode, int omode, ulong perm)
             nexterror();
         strcpy(tmperrbuf, up->errstr);
         if(e.off[e.nerror]==0)
-            print("nerror=%d but off=%d\n",
-                e.nerror, e.off[e.nerror]);
-        if(0 && chandebug)
-            print("showing %d+%d/%d (of %d) of %s (%d %d)\n", e.prefix, e.off[e.nerror], e.nerror, e.nelems, aname, e.off[0], e.off[1]);
+            print("nerror=%d but off=%d\n",e.nerror, e.off[e.nerror]);
         len = e.prefix+e.off[e.nerror];
         free(e.off);
         namelenerror(aname, len, tmperrbuf);
+        /*e: [[namec()]] if waserror free Elemlist e and prepare nice error */
     }
 
     /*
@@ -1401,6 +1411,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     /*
      * On create, ....
      */
+    /*s: [[namec()]] adjust Elemlist e if Acreate */
     if(amode == Acreate){
         /* perm must have DMDIR if last element is / or /. */
         if(e.mustbedir && !(perm&DMDIR)){
@@ -1413,6 +1424,7 @@ namec(char *aname, int amode, int omode, ulong perm)
             error(Eexist);
         e.nelems--;
     }
+    /*e: [[namec()]] adjust Elemlist e if Acreate */
 
     if(walk(&c, e.elems, e.nelems, nomount, &e.nerror) < 0){
         if(e.nerror < 0 || e.nerror > e.nelems){
@@ -1425,59 +1437,57 @@ namec(char *aname, int amode, int omode, ulong perm)
     if(e.mustbedir && !(c->qid.type&QTDIR))
         error("not a directory");
 
-    if(amode == Aopen && (omode&3) == OEXEC && (c->qid.type&QTDIR))
+    if(amode == Aopen && (omode&OEXEC) == OEXEC && (c->qid.type&QTDIR))
         error("cannot exec directory");
 
     switch(amode){
-    case Abind:
-        /* no need to maintain path - cannot dotdot an Abind */
-        m = nil;
-        if(!nomount)
-            domount(&c, &m, nil);
-        if(c->umh != nil)
-            putmhead(c->umh);
-        c->umh = m;
-        break;
-
-    case Aaccess:
-    case Aremove:
+    /*s: [[namec()]] case Aopen, Acreate, Aremove, Aaccess */
     case Aopen:
+    case Aremove:
+    case Aaccess:
     Open:
-        /* save&update the name; domount might change c */
-        path = c->path;
-        incref(path);
-        m = nil;
-        if(!nomount)
-            domount(&c, &m, &path);
+        /*s: [[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1 */
+            /* save&update the name; domount might change c */
+            path = c->path;
+            incref(path);
 
-        /* our own copy to open or remove */
-        c = cunique(c);
+            m = nil;
+            if(!nomount)
+                domount(&c, &m, &path);
 
-        /* now it's our copy anyway, we can put the name back */
-        pathclose(c->path);
-        c->path = path;
+            /* our own copy to open or remove */
+            c = cunique(c);
 
-        /* record whether c is on a mount point */
-        c->ismtpt = (m!=nil);
+            /* now it's our copy anyway, we can put the name back */
+            pathclose(c->path);
+            c->path = path;
+
+            /* record whether c is on a mount point */
+            c->ismtpt = (m!=nil);
+        /*e: [[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1 */
 
         switch(amode){
         case Aaccess:
         case Aremove:
-            putmhead(m);
+           /*s: [[namec()]] case Aremove, Aaccess, handle mountpoint part2 */
+           putmhead(m);
+           /*e: [[namec()]] case Aremove, Aaccess, handle mountpoint part2 */
             break;
 
         case Aopen:
         case Acreate:
-if(c->umh != nil){
-    print("cunique umh Open\n");
-    putmhead(c->umh);
-    c->umh = nil;
-}
+            /*s: [[namec()]] case Aopen, Acreate, handle mountpoint part2 */
+            if(c->umh != nil){
+                print("cunique umh Open\n");
+                putmhead(c->umh);
+                c->umh = nil;
+            }
             /* only save the mount head if it's a multiple element union */
             if(m && m->mount && m->mount->next)
                 c->umh = m;
             else
                 putmhead(m);
+            /*e: [[namec()]] case Aopen, Acreate, handle mountpoint part2 */
 
             /* save registers else error() in open has wrong value of c saved */
             //old: saveregisters();
@@ -1494,24 +1504,8 @@ if(c->umh != nil){
             break;
         }
         break;
-
-    case Atodir:
-        /*
-         * Directories (e.g. for cd) are left before the mount point,
-         * so one may mount on / or . and see the effect.
-         */
-        if(!(c->qid.type & QTDIR))
-            error(Enotdir);
-        break;
-
-    case Amount:
-        /*
-         * When mounting on an already mounted upon directory,
-         * one wants subsequent mounts to be attached to the
-         * original directory, not the replacement.  Don't domount.
-         */
-        break;
-
+    /*e: [[namec()]] case Aopen, Acreate, Aremove, Aaccess */
+    /*s: [[namec()]] other cases */
     case Acreate:
         /*
          * We've already walked all but the last element.
@@ -1619,19 +1613,51 @@ if(c->umh != nil){
         up->errstr = createerr;
         omode |= OTRUNC;
         goto Open;
-
+    /*x: [[namec()]] other cases */
+    case Atodir:
+        /*
+         * Directories (e.g. for cd) are left before the mount point,
+         * so one may mount on / or . and see the effect.
+         */
+        if(!(c->qid.type & QTDIR))
+            error(Enotdir);
+        break;
+    /*x: [[namec()]] other cases */
+    case Abind:
+        /* no need to maintain path - cannot dotdot an Abind */
+        m = nil;
+        if(!nomount)
+            domount(&c, &m, nil);
+        if(c->umh != nil)
+            putmhead(c->umh);
+        c->umh = m;
+        break;
+    /*x: [[namec()]] other cases */
+    case Amount:
+        /*
+         * When mounting on an already mounted upon directory,
+         * one wants subsequent mounts to be attached to the
+         * original directory, not the replacement.  Don't domount.
+         */
+        break;
+    /*e: [[namec()]] other cases */
     default:
         panic("unknown namec access %d\n", amode);
     }
 
+    /*s: [[namec()]] set genbuf from Elemlist e */
     /* place final element in genbuf for e.g. exec */
     if(e.nelems > 0)
         kstrcpy(up->genbuf, e.elems[e.nelems-1], sizeof up->genbuf);
     else
         kstrcpy(up->genbuf, ".", sizeof up->genbuf);
+    /*e: [[namec()]] set genbuf from Elemlist e */
+    /*s: [[namec()]] free Elemlist e */
     free(e.name);
     free(e.elems);
     free(e.off);
+    /*e: [[namec()]] free Elemlist e */
+
     poperror(); /* e c */
     free(aname);
     poperror(); /* aname */

@@ -188,16 +188,16 @@ struct Mnt
 /*s: struct Path */
 struct Path
 {
-  char  *s;
-  int len;      /* strlen(s) */
-  int alen;     /* allocated length of s */
-
-  Chan  **mtpt;     /* mtpt history */
-  int mlen;     /* number of path elements */
-  int malen;      /* allocated length of mtpt */
-
-  // extra
-  Ref;
+    char  *s;
+    int len;      /* strlen(s) */
+    int alen;     /* allocated length of s */
+  
+    Chan  **mtpt;     /* mtpt history */
+    int mlen;     /* number of path elements */
+    int malen;      /* allocated length of mtpt */
+  
+    // extra
+    Ref;
 };
 /*e: struct Path */
 
@@ -207,13 +207,15 @@ struct Path
  */
 enum
 {
-  Aaccess,      /* as in stat, wstat */
-  Abind,        /* for left-hand-side of bind */
-  Atodir,       /* as in chdir */
   Aopen,        /* for i/o */
-  Amount,       /* to be mounted or mounted upon */
   Acreate,      /* is to be created */
   Aremove,      /* will be removed by caller */
+  Aaccess,      /* as in stat, wstat */
+  Atodir,       /* as in chdir */
+  /*s: enum accessnamec cases */
+  Abind,        /* for left-hand-side of bind */
+  Amount,       /* to be mounted or mounted upon */
+  /*e: enum accessnamec cases */
 };
 /*e: enum accessnamec */
 
@@ -268,17 +270,17 @@ struct Chan
     /*x: [[Chan]] other fields */
     vlong devoffset;    /* in underlying device; see read */
     /*x: [[Chan]] other fields */
-    Mhead*  umh;      /* mount point that derived Chan; used in unionread */
-    Chan* umc;      /* channel in union; held for union read */
-    QLock umqlock;    /* serialize unionreads */
-    int uri;      /* union read index */
-    /*x: [[Chan]] other fields */
     uchar*  dirrock;    /* directory entry rock for translations */
     int nrock;
     int mrock;
     QLock rockqlock;
     /*x: [[Chan]] other fields */
     Chan* mchan;      /* channel to mounted server */
+    /*x: [[Chan]] other fields */
+    Mhead*  umh;      /* mount point that derived Chan; used in unionread */
+    Chan* umc;      /* channel in union; held for union read */
+    QLock umqlock;    /* serialize unionreads */
+    int uri;      /* union read index */
     /*x: [[Chan]] other fields */
     int dri;      /* devdirread index */
     /*x: [[Chan]] other fields */
@@ -357,9 +359,9 @@ struct Dev
     /*x: [[Dev]] methods */
     long  (*write)(Chan*, void*, long, vlong);
     /*x: [[Dev]] methods */
-    void  (*create)(Chan*, char*, int, ulong);
-    /*x: [[Dev]] methods */
     Walkqid*(*walk)(Chan*, Chan*, char**, int);
+    /*x: [[Dev]] methods */
+    void  (*create)(Chan*, char*, int, ulong);
     /*x: [[Dev]] methods */
     void  (*remove)(Chan*);
     /*x: [[Dev]] methods */

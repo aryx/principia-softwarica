@@ -856,7 +856,7 @@ procwired(Proc *p, int bm)
     if(bm < 0){
         /* pick a processor to wire to */
         memset(nwired, 0, sizeof(nwired));
-        p->wired = 0;
+        p->wired = nil;
         pp = proctab(0);
         for(i=0; i<conf.nproc; i++, pp++){
             wm = pp->wired;

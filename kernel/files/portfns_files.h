@@ -79,7 +79,7 @@ Path*   newpath(char*);
 Chan*   newchan(void);
 void    chanfree(Chan*);
 //cchan_close => cclose
-char*   validnamedup(char*, int);
+char*   validnamedup(char*, bool);
 void    validname(char*, int);
 void    nameerror(char*, char*);
 int   walk(Chan**, char**, int, int, int*);
