@@ -10370,7 +10370,7 @@ procwired(Proc *p, int bm)
     if(bm < 0){
         /* pick a processor to wire to */
         memset(nwired, 0, sizeof(nwired));
-        p->wired = 0;
+        p->wired = nil;
         pp = proctab(0);
         for(i=0; i<conf.nproc; i++, pp++){
             wm = pp->wired;
@@ -12348,6 +12348,7 @@ newchan(void)
     return c;
 }
 @
+%dirrock = nil? umc = nil
 
 <<destructor chanfree>>=
 void
@@ -13265,6 +13266,7 @@ isdir(Chan *c)
     error(Enotdir);
 }
 @
+% rename: assert_isdir?
 
 % could put slash and dot Proc fields here
 
@@ -13298,6 +13300,9 @@ struct Path
 };
 @
 %LP split mtpt?
+% mtpt is for the components, the root from each component
+% so for /usr/pad/foo.c => path s = "/usr/pad/foo.c\0",
+% mlen = 3; chan = [slash; chan of /usr; chan of /usr/pad ]
 
 
 \ifallcode
@@ -13447,7 +13452,9 @@ fixdotdotname(Path *p)
 
 % cleanname() is in libc
 
-
+% usually call via p = uniquepath(p) hence the pathclose below
+% because you are cloning yourself and removing yourself from
+% the used refs
 <<function uniquepath>>=
 static Path*
 uniquepath(Path *p)
@@ -13464,7 +13471,7 @@ uniquepath(Path *p)
 }
 @
 
-
+% called from?
 <<function addelem>>=
 static Path*
 addelem(Path *p, char *s, Chan *from)
@@ -13479,6 +13486,7 @@ addelem(Path *p, char *s, Chan *from)
     p = uniquepath(p);
 
     i = strlen(s);
+    // +1 for the \0?
     if(p->len+1+i+1 > p->alen){
         a = p->len+1+i+1 + PATHSLOP;
         t = smalloc(a);
@@ -13492,6 +13500,7 @@ addelem(Path *p, char *s, Chan *from)
         p->s[p->len++] = '/';
     memmove(p->s+p->len, s, i+1);
     p->len += i;
+
     if(isdotdot(s)){
         fixdotdotname(p);
         DBG("addelem %s .. => rm %p\n", p->s, p->mtpt[p->mlen-1]);
@@ -13591,6 +13600,7 @@ isdotdot(char *p)
 
 \section{[[Dir]]}
 
+% also in libc.h (so if change here, need change also in libc.h)
 <<struct Dir>>=
 struct Dir {
   /* system-modified data */
@@ -13601,10 +13611,13 @@ struct Dir {
   Qid qid;  /* unique id from server */
   // bitset<enum<dirmode>>
   ulong mode; /* permissions */
+
   ulong atime;  /* last read time */
   ulong mtime;  /* last write time */
+
   vlong length; /* file length: see <u.h> */
   char  *name;  /* last element of path */
+
   char  *uid; /* owner name */
   char  *gid; /* group name */
   char  *muid;  /* last modifier name */
@@ -13617,6 +13630,7 @@ struct Dir {
 /* bits in Dir.mode */
 enum dirmode {
   DMDIR = 0x80000000,  /* mode bit for directories */
+
   DMAPPEND = 0x40000000,  /* mode bit for append only files */
   DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
   DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
@@ -13626,7 +13640,7 @@ enum dirmode {
   DMEXEC = 0x1,   /* mode bit for execute permission */
 };
 @ 
-
+% DMREAD, DMWRITE, DMEXEC seems dead; many things here seems dead
 
 
 
@@ -13656,8 +13670,10 @@ struct Elemlist
     char    *aname; /* original name */
     char    *name;  /* copy of name, so '/' can be overwritten */
     int nelems;
+
     char    **elems;
     int *off;
+
     int mustbedir;
     int nerror;
     int prefix;
@@ -13727,16 +13743,16 @@ parsename(char *aname, Elemlist *e)
         name = slash;
     }
     
-    if(0 && chandebug){
-        int i;
-        
-        print("parsename %s:", e->name);
-        for(i=0; i<=e->nelems; i++)
-            print(" %d", e->off[i]);
-        print("\n");
-    }
 }
 @
+%    if(0 && chandebug){
+%        int i;
+%        
+%        print("parsename %s:", e->name);
+%        for(i=0; i<=e->nelems; i++)
+%            print(" %d", e->off[i]);
+%        print("\n");
+%    }
 
 
 
@@ -13853,9 +13869,25 @@ QLock umqlock;    /* serialize unionreads */
 int uri;      /* union read index */
 @
 
+<<[[read()]] if c is a QTDIR>>=
+    if(c->qid.type & QTDIR){
+        if(mountrockread(c, p, n, &nn)){
+            /* do nothing: mountrockread filled buffer */
+        }else if(c->umh)
+            nn = unionread(c, p, n);
+        else{
+            if(off != c->offset)
+                error(Edirseek);
+            nn = devtab[c->type]->read(c, p, n, c->devoffset);
+        }
+        nnn = mountfix(c, p, nn, n);
+    }
+@
+% LP split more, mountrockread
+
 <<function unionread>>=
 long
-unionread(Chan *c, void *va, long n)
+unionread(Chan *c, virt_addr3 va, long n)
 {
     int i;
     long nr;
@@ -13901,6 +13933,20 @@ unionread(Chan *c, void *va, long n)
 @
 
 
+<<[[read()]] rewind when off == 0>>=
+    /*
+     * The offset is passed through on directories, normally.
+     * Sysseek complains, but pread is used by servers like exportfs,
+     * that shouldn't need to worry about this issue.
+     *
+     * Notice that c->devoffset is the offset that c's dev is seeing.
+     * The number of bytes read on this fd (c->offset) may be different
+     * due to rewritings in rockfix.
+     */
+        mountrewind(c);
+        unionrewind(c);
+@
+
 <<function unionrewind>>=
 static void
 unionrewind(Chan *c)
@@ -13917,7 +13963,7 @@ unionrewind(Chan *c)
 
 
 \section{[[namec()]]}
-% first part
+% big function ...
 
 <<enum open cases>>=
 OTRUNC = 16,  /* or'ed in (except for exec), truncate file first */
@@ -14009,7 +14055,8 @@ void  (*create)(Chan*, char*, int, ulong);
 Chan*
 namec(char *aname, int amode, int omode, ulong perm)
 {
-    int len, n, t, nomount;
+    int len, n, t;
+    bool nomount;
     Chan *c, *cnew;
     Path *path;
     Elemlist e;
@@ -14020,7 +14067,7 @@ namec(char *aname, int amode, int omode, ulong perm)
 
     if(aname[0] == '\0')
         error("empty file name");
-    aname = validnamedup(aname, 1);
+    aname = validnamedup(aname, true);
     if(waserror()){
         free(aname);
         nexterror();
@@ -14033,15 +14080,10 @@ namec(char *aname, int amode, int omode, ulong perm)
      * a device tree, or the current dot) as well as the name to
      * evaluate starting there.
      */
-    nomount = 0;
+    nomount = false;
     switch(name[0]){
-    case '/':
-        c = up->slash;
-        incref(c);
-        break;
-    
     case '#':
-        nomount = 1;
+        nomount = true;
         up->genbuf[0] = '\0';
         n = 0;
         while(*name != '\0' && (*name != '/' || n < 2)){
@@ -14075,6 +14117,11 @@ namec(char *aname, int amode, int omode, ulong perm)
         c = devtab[t]->attach(up->genbuf+n);
         break;
 
+    case '/':
+        c = up->slash;
+        incref(c);
+        break;
+    
     default:
         c = up->dot;
         incref(c);
@@ -14101,8 +14148,6 @@ namec(char *aname, int amode, int omode, ulong perm)
         if(e.off[e.nerror]==0)
             print("nerror=%d but off=%d\n",
                 e.nerror, e.off[e.nerror]);
-        if(0 && chandebug)
-            print("showing %d+%d/%d (of %d) of %s (%d %d)\n", e.prefix, e.off[e.nerror], e.nerror, e.nelems, aname, e.off[0], e.off[1]);
         len = e.prefix+e.off[e.nerror];
         free(e.off);
         namelenerror(aname, len, tmperrbuf);
@@ -14144,16 +14189,6 @@ namec(char *aname, int amode, int omode, ulong perm)
         error("cannot exec directory");
 
     switch(amode){
-    case Abind:
-        /* no need to maintain path - cannot dotdot an Abind */
-        m = nil;
-        if(!nomount)
-            domount(&c, &m, nil);
-        if(c->umh != nil)
-            putmhead(c->umh);
-        c->umh = m;
-        break;
-
     case Aaccess:
     case Aremove:
     case Aopen:
@@ -14183,11 +14218,11 @@ namec(char *aname, int amode, int omode, ulong perm)
 
         case Aopen:
         case Acreate:
-if(c->umh != nil){
-    print("cunique umh Open\n");
-    putmhead(c->umh);
-    c->umh = nil;
-}
+            if(c->umh != nil){
+                print("cunique umh Open\n");
+                putmhead(c->umh);
+                c->umh = nil;
+            }
             /* only save the mount head if it's a multiple element union */
             if(m && m->mount && m->mount->next)
                 c->umh = m;
@@ -14208,6 +14243,16 @@ if(c->umh != nil){
                 c->flag |= CRCLOSE;
             break;
         }
+        break;
+
+    case Abind:
+        /* no need to maintain path - cannot dotdot an Abind */
+        m = nil;
+        if(!nomount)
+            domount(&c, &m, nil);
+        if(c->umh != nil)
+            putmhead(c->umh);
+        c->umh = m;
         break;
 
     case Atodir:
@@ -14355,6 +14400,9 @@ if(c->umh != nil){
 }
 @
 
+%        if(0 && chandebug)
+%            print("showing %d+%d/%d (of %d) of %s (%d %d)\n", e.prefix, e.off[e.nerror], e.nerror, e.nelems, aname, e.off[0], e.off[1]);
+
 
 <<[[Proc]] other fields>>=
 char  genbuf[128];  /* buffer used e.g. for last name element from namec */
@@ -14492,7 +14540,7 @@ validname(char *aname, bool slashok)
 }
 @
 
-
+% seems always called with slashok=true
 <<function validnamedup>>=
 char*
 validnamedup(char *aname, bool slashok)
@@ -15546,20 +15594,6 @@ mountrock(Chan *c, uchar *p, uchar **pe)
 }
 @
 
-<<[[read()]] if c is a QTDIR>>=
-    if(c->qid.type & QTDIR){
-        if(mountrockread(c, p, n, &nn)){
-            /* do nothing: mountrockread filled buffer */
-        }else if(c->umh)
-            nn = unionread(c, p, n);
-        else{
-            if(off != c->offset)
-                error(Edirseek);
-            nn = devtab[c->type]->read(c, p, n, c->devoffset);
-        }
-        nnn = mountfix(c, p, nn, n);
-    }
-@
 
 <<function mountrockread>>=
 /*
@@ -15607,19 +15641,6 @@ mountrockread(Chan *c, uchar *op, long n, long *nn)
 @
 
 
-<<[[read()]] rewind when off == 0>>=
-    /*
-     * The offset is passed through on directories, normally.
-     * Sysseek complains, but pread is used by servers like exportfs,
-     * that shouldn't need to worry about this issue.
-     *
-     * Notice that c->devoffset is the offset that c's dev is seeing.
-     * The number of bytes read on this fd (c->offset) may be different
-     * due to rewritings in rockfix.
-     */
-        mountrewind(c);
-        unionrewind(c);
-@
 
 <<function mountrewind>>=
 static void
@@ -15754,7 +15775,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
 
     if(ismount){
         validaddr((ulong)spec, 1, false);
-        spec = validnamedup(spec, 1);
+        spec = validnamedup(spec, true);
         if(waserror()){
             free(spec);
             nexterror();
@@ -26187,7 +26208,7 @@ sysfauth(ulong *arg)
     int fd;
 
     validaddr(arg[1], 1, false);
-    aname = validnamedup((char*)arg[1], 1);
+    aname = validnamedup((char*)arg[1], true);
     if(waserror()){
         free(aname);
         nexterror();
