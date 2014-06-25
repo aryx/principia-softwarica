@@ -104,8 +104,8 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     switch(type) {
     case SG_TEXT:           /* Demand load */
         /*s: [[fixfault()]] page in for SG_TEXT pte if pagedout */
-                if(pagedout(*pte))
-                    pio(s, addr, soff, pte);
+        if(pagedout(*pte))
+            pio(s, addr, soff, pte);
         /*e: [[fixfault()]] page in for SG_TEXT pte if pagedout */
 
         mmupte = PPN((*pte)->pa) | PTERONLY|PTEVALID;
@@ -126,20 +126,20 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     case SG_DATA:
     common:         /* Demand load/pagein/copy on write */
         /*s: [[fixfault()]] page in for SG_DATA or swapin (SG_BSS, etc) pte if pagedout */
-                if(pagedout(*pte))
-                    pio(s, addr, soff, pte);
+        if(pagedout(*pte))
+            pio(s, addr, soff, pte);
         /*e: [[fixfault()]] page in for SG_DATA or swapin (SG_BSS, etc) pte if pagedout */
 
         /*s: [[fixfault()]] if read and copy on write, adjust mmupte and break */
-                /*
-                 *  It's only possible to copy on write if
-                 *  we're the only user of the segment.
-                 */
-                if(read && conf.copymode == false && s->ref == 1) {
-                    mmupte = PPN((*pte)->pa)|PTERONLY|PTEVALID;
-                    (*pte)->modref |= PG_REF;
-                    break;
-                }
+        /*
+         *  It's only possible to copy on write if
+         *  we're the only user of the segment.
+         */
+        if(read && conf.copymode == false && s->ref == 1) {
+            mmupte = PPN((*pte)->pa)|PTERONLY|PTEVALID;
+            (*pte)->modref |= PG_REF;
+            break;
+        }
         /*e: [[fixfault()]] if read and copy on write, adjust mmupte and break */
 
         lkp = *pte;
@@ -151,23 +151,23 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
         else
             ref = lkp->ref;
         /*s: [[fixfault()]] if one ref and page has an image */
-                if(ref == 1 && lkp->image){
-                    /* save a copy of the original for the image cache */
-                    duppage(lkp);
-                    ref = lkp->ref;
-                }
+        if(ref == 1 && lkp->image){
+            /* save a copy of the original for the image cache */
+            duppage(lkp);
+            ref = lkp->ref;
+        }
         /*e: [[fixfault()]] if one ref and page has an image */
         unlock(lkp);
 
         /*s: [[fixfault()]] if write and more than one ref then copy page */
-                if(ref > 1){
-                    new = newpage(false, &s, addr);
-                    if(s == nil)
-                        return -1;
-                    *pte = new;
-                    copypage(lkp, *pte);
-                    putpage(lkp); //why??
-                }
+        if(ref > 1){
+            new = newpage(false, &s, addr);
+            if(s == nil)
+                return -1;
+            *pte = new;
+            copypage(lkp, *pte);
+            putpage(lkp); //why??
+        }
         /*e: [[fixfault()]] if write and more than one ref then copy page */
 
         mmupte = PPN((*pte)->pa) | PTEWRITE | PTEVALID;

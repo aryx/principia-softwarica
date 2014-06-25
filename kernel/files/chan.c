@@ -54,11 +54,11 @@ struct Elemlist
     char    *aname; /* original name */
     char    *name;  /* copy of name, so '/' can be overwritten */
 
-    //array<string> of name
+    //array<string> pointing to subparts of name
     char    **elems; // subparts
     // size(elems)
     int nelems;
-
+    //array<int>, offset in name for the subparts of name in elems
     int *off;
 
     bool mustbedir;
@@ -947,7 +947,7 @@ static char Edoesnotexist[] = "does not exist";
  */
 
 int
-walk(Chan **cp, char **names, int nnames, int nomount, int *nerror)
+walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
 {
     int dev, didmount, dotdot, i, n, nhave, ntry, type;
     Chan *c, *nc, *mtpt;
@@ -1002,7 +1002,7 @@ walk(Chan **cp, char **names, int nnames, int nomount, int *nerror)
             }
         }
 
-        if(!dotdot && !nomount && !didmount)
+        if(!dotdot && mount && !didmount)
             domount(&c, &mh, &path);
         
         type = c->type;
@@ -1010,7 +1010,7 @@ walk(Chan **cp, char **names, int nnames, int nomount, int *nerror)
 
         if((wq = ewalk(c, nil, names+nhave, ntry)) == nil){
             /* try a union mount, if any */
-            if(mh && !nomount){
+            if(mh && mount){
                 /*
                  * mh->mount->to == c, so start at mh->mount->next
                  */
@@ -1048,7 +1048,7 @@ walk(Chan **cp, char **names, int nnames, int nomount, int *nerror)
         }else{
             nc = nil;
             nmh = nil;
-            if(!nomount){
+            if(mount){
                 for(i=0; i<wq->nqid && i<ntry-1; i++){
                     if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
                         didmount = 1;
@@ -1310,7 +1310,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     Chan *c;
     /*x: [[namec() locals */
     int len, n, t;
-    bool nomount;
+    bool mount;
     Chan *cnew;
     Rune r;
     Mhead *m;
@@ -1321,7 +1321,9 @@ namec(char *aname, int amode, int omode, ulong perm)
 
     if(aname[0] == '\0')
         error("empty file name");
+
     aname = validnamedup(aname, true);
+
     if(waserror()){
         free(aname);
         nexterror();
@@ -1334,11 +1336,11 @@ namec(char *aname, int amode, int omode, ulong perm)
      * a device tree, or the current dot) as well as the name to
      * evaluate starting there.
      */
-    nomount = false;
+    mount = true;
     switch(name[0]){
     /*s: [[namec()]] if name[0] == '#' */
     case '#':
-        nomount = true;
+        mount = false;
 
         up->genbuf[0] = '\0';
         n = 0;
@@ -1441,7 +1443,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     }
     /*e: [[namec()]] adjust Elemlist e if Acreate */
 
-    if(walk(&c, e.elems, e.nelems, nomount, &e.nerror) < 0){
+    if(walk(&c, e.elems, e.nelems, mount, &e.nerror) < 0){
         if(e.nerror < 0 || e.nerror > e.nelems){
             print("namec %s walk error nerror=%d\n", aname, e.nerror);
             e.nerror = 0;
@@ -1467,7 +1469,7 @@ namec(char *aname, int amode, int omode, ulong perm)
             incref(path);
 
             m = nil;
-            if(!nomount)
+            if(mount)
                 domount(&c, &m, &path);
 
             /* our own copy to open or remove */
@@ -1531,7 +1533,7 @@ namec(char *aname, int amode, int omode, ulong perm)
          */
         e.nelems++;
         e.nerror++;
-        if(walk(&c, e.elems+e.nelems-1, 1, nomount, nil) == 0){
+        if(walk(&c, e.elems+e.nelems-1, 1, mount, nil) == 0){
             if(omode&OEXCL)
                 error(Eexist);
             omode |= OTRUNC;
@@ -1581,7 +1583,7 @@ namec(char *aname, int amode, int omode, ulong perm)
         m = nil;
         cnew = nil; /* is this assignment necessary? */
         if(!waserror()){    /* try create */
-            if(!nomount && findmount(&cnew, &m, c->type, c->dev, c->qid))
+            if(mount && findmount(&cnew, &m, c->type, c->dev, c->qid))
                 cnew = createdir(cnew, m);
             else{
                 cnew = c;
@@ -1625,7 +1627,7 @@ namec(char *aname, int amode, int omode, ulong perm)
         createerr = up->errstr;
         up->errstr = tmperrbuf;
         /* note: we depend that walk does not error */
-        if(walk(&c, e.elems+e.nelems-1, 1, nomount, nil) < 0){
+        if(walk(&c, e.elems+e.nelems-1, 1, mount, nil) < 0){
             up->errstr = createerr;
             error(createerr);   /* report true error */
         }
@@ -1645,7 +1647,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     case Abind:
         /* no need to maintain path - cannot dotdot an Abind */
         m = nil;
-        if(!nomount)
+        if(mount)
             domount(&c, &m, nil);
         if(c->umh != nil)
             putmhead(c->umh);

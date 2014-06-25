@@ -344,42 +344,42 @@ confinit(void)
 void
 init0(void)
 {
-        int i;
-        char buf[2*KNAMELEN]; // has to be the same than in ksetenv?
-        
-        up->nerrlab = 0;
+    int i;
+    char buf[2*KNAMELEN]; // has to be the same than in ksetenv?
+    
+    up->nerrlab = 0;
 
-        spllo();
+    spllo();
 
-        /*
-         * These are o.k. because rootinit is null.
-         * Then early kproc's will have a root and dot.
-         */
-        up->slash = namec("#/", Atodir, 0, 0);
-        pathclose(up->slash->path);
-        up->slash->path = newpath("/"); // prefer / to #/
-        up->dot = cclone(up->slash);
+    /*
+     * These are o.k. because rootinit is null.
+     * Then early kproc's will have a root and dot.
+     */
+    up->slash = namec("#/", Atodir, 0, 0);
+    pathclose(up->slash->path);
+    up->slash->path = newpath("/"); // prefer / to #/
+    up->dot = cclone(up->slash);
 
-        chandevinit();
+    chandevinit();
 
-        if(!waserror()){
-                snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
-                ksetenv("terminal", buf, false);
-                ksetenv("cputype", "386", false); // used by mkfile! 
-                if(cpuserver)
-                        ksetenv("service", "cpu", false);
-                else
-                        ksetenv("service", "terminal", false);
-                for(i = 0; i < nconf; i++){
-                        if(confname[i][0] != '*')
-                                ksetenv(confname[i], confval[i], false);
-                        ksetenv(confname[i], confval[i], true);
-                }
-                poperror();
+    if(!waserror()){
+        snprint(buf, sizeof(buf), "%s %s", arch->id, conffile);
+        ksetenv("terminal", buf, false);
+        ksetenv("cputype", "386", false); // used by mkfile! 
+        if(cpuserver)
+                ksetenv("service", "cpu", false);
+        else
+                ksetenv("service", "terminal", false);
+        for(i = 0; i < nconf; i++){
+                if(confname[i][0] != '*')
+                        ksetenv(confname[i], confval[i], false);
+                ksetenv(confname[i], confval[i], true);
         }
-        kproc("alarm", alarmkproc, nil);
-        cgapost(0x9);
-        touser(sp);
+        poperror();
+    }
+    kproc("alarm", alarmkproc, nil);
+    cgapost(0x9);
+    touser(sp);
 }
 /*e: function init0 */
 
@@ -448,11 +448,13 @@ userinit(void)
     Page *pg;
 
     p = newproc();
+
     p->pgrp = newpgrp();
     p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
     p->egrp->ref = 1;
     p->fgrp = dupfgrp(nil);
     p->rgrp = newrgrp();
+
     p->procmode = 0640;
 
     kstrdup(&eve, "");
@@ -471,8 +473,8 @@ userinit(void)
      *      for valid args and 
      *      4 bytes for gotolabel's return PC
      */
-    p->sched.pc = (ulong)init0;
-    p->sched.sp = (ulong)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
+    p->sched.pc = (kern_addr)init0;
+    p->sched.sp = (kern_addr)p->kstack+KSTACK-(sizeof(Sargs)+BY2WD);
 
     /*
      * User Stack
@@ -482,7 +484,7 @@ userinit(void)
      */
     s = newseg(SG_STACK, USTKTOP-USTKSIZE, USTKSIZE/BY2PG);
     p->seg[SSEG] = s;
-    pg = newpage(false, 0, USTKTOP-BY2PG);
+    pg = newpage(false, nil, USTKTOP-BY2PG);
     v = tmpmap(pg);
     memset(v, 0, BY2PG);
     segpage(s, pg);
@@ -494,7 +496,7 @@ userinit(void)
      */
     s = newseg(SG_TEXT, UTZERO, 1); // 1 page
     p->seg[TSEG] = s;
-    pg = newpage(false, 0, UTZERO);
+    pg = newpage(false, nil, UTZERO);
     segpage(s, pg);
     v = tmpmap(pg);
     memset(v, 0, BY2PG);
@@ -863,7 +865,7 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 void
 main(void)
 {
-    /*s: [[main()]] initial assgnments for backward dependencies */
+    /*s: [[main()]] initial assignments for backward dependencies */
     // initial assignment made to avoid circular dependencies in codegraph
     print = devcons_print;
     iprint = devcons_iprint;
@@ -911,7 +913,7 @@ main(void)
     pexit = proc_pexit;
 
     hook_ioalloc = devarch_hook_ioalloc;
-    /*e: [[main()]] initial assgnments for backward dependencies */
+    /*e: [[main()]] initial assignments for backward dependencies */
     cgapost(0);
 
     cpu0init(); // cpu0 initialization (calls cpuinit())
@@ -962,7 +964,7 @@ main(void)
         arch->clockenable();
 
     procinit();
-    initimage();
+    imageinit();
 
     if(delaylink) {
        bootlinks();

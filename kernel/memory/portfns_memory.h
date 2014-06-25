@@ -79,7 +79,7 @@ long    ibrk(ulong, int);
 int   addphysseg(Physseg*);
 //int   isphysseg(char*);
 ulong   segattach(Proc*, ulong, char *, ulong, ulong);
-void    initimage(void);
+void    imageinit(void);
 KImage*   attachimage(int, Chan*, ulong, ulong);
 //Segment*  isoverlap(Proc*, ulong, int);
 Segment*  data2txt(Segment*);

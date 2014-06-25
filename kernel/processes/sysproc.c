@@ -528,12 +528,12 @@ sysexec(ulong* arg)
     s = newseg(SG_DATA, t, (d-t)>>PGSHIFT);
     up->seg[DSEG] = s;
     /*s: [[sysexec()]] adjust data segment s for demand loading on tc */
-        /* Attached by hand */
-        incref(img);
-        s->image = img;
-        s->fstart = ts->fstart+ts->flen;
-        s->flen = data;
-        // data is also in binary
+    /* Attached by hand */
+    incref(img);
+    s->image = img;
+    s->fstart = ts->fstart+ts->flen;
+    s->flen = data;
+    // data is also in binary
     /*e: [[sysexec()]] adjust data segment s for demand loading on tc */
 
     /* BSS. Zero fill on demand */

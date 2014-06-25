@@ -1457,30 +1457,30 @@ procctlreq(Proc *p, char *va, int n)
     switch(ct->index){
 
     /*s: [[procctlreq()]] CMpri case */
-        case CMpri:
-            pri = atoi(cb->f[1]);
-            if(pri > PriNormal && !iseve())
-                error(Eperm);
-            procpriority(p, pri, false);
-            break;
+    case CMpri:
+        pri = atoi(cb->f[1]);
+        if(pri > PriNormal && !iseve())
+            error(Eperm);
+        procpriority(p, pri, false);
+        break;
     /*e: [[procctlreq()]] CMpri case */
     /*s: [[procctlreq()]] CMfixedpri case */
-        case CMfixedpri:
-            pri = atoi(cb->f[1]);
-            if(pri > PriNormal && !iseve())
-                error(Eperm);
-            procpriority(p, pri, true);
-            break;
+    case CMfixedpri:
+        pri = atoi(cb->f[1]);
+        if(pri > PriNormal && !iseve())
+            error(Eperm);
+        procpriority(p, pri, true);
+        break;
     /*e: [[procctlreq()]] CMfixedpri case */
     /*s: [[procctlreq()]] CMwired case */
-        case CMwired:
-            procwired(p, atoi(cb->f[1]));
-            break;
+    case CMwired:
+        procwired(p, atoi(cb->f[1]));
+        break;
     /*e: [[procctlreq()]] CMwired case */
     /*s: [[procctlreq()]] CMnoswap case */
-        case CMnoswap:
-            p->noswap = true;
-            break;
+    case CMnoswap:
+        p->noswap = true;
+        break;
     /*e: [[procctlreq()]] CMnoswap case */
 
     /*s: [[procctlreq()]] CMprivate case */

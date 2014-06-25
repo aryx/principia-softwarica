@@ -272,6 +272,7 @@ trapinit(void)
      */
     trapenable(VectorBPT, debugbpt, 0, "debugpt");
     trapenable(VectorPF, fault386, 0, "fault386");
+
     trapenable(Vector2F, doublefault, 0, "doublefault");
     trapenable(Vector15, unexpected, 0, "unexpected");
     nmienable();

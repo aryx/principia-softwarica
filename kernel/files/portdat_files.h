@@ -191,7 +191,8 @@ struct Path
     char  *s;
     int len;      /* strlen(s) */
     int alen;     /* allocated length of s */
-  
+
+    // array<option<ref_counted<Chan>>, nil for elements which are not mount point
     Chan  **mtpt;     /* mtpt history */
     int mlen;     /* number of path elements */
     int malen;      /* allocated length of mtpt */

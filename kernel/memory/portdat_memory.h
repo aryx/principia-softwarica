@@ -341,9 +341,9 @@ struct Palloc
     ulong freecount;    /* how many pages on free list now */
 
     /*s: [[Palloc]] other fields */
-        // hash<Page.daddr, ref<Page>> (next = Page.hash)>
-        Page  *hash[PGHSIZE];
-        Lock  hashlock;
+    // hash<Page.daddr, ref<Page>> (next = Page.hash)>
+    Page  *hash[PGHSIZE];
+    Lock  hashlock;
     /*e: [[Palloc]] other fields */
   
     // extra
@@ -374,14 +374,14 @@ struct Imagealloc
     KImage  *hash[IHASHSIZE];
 
     // list<ref<Kimage> (next = Kimage.next)
-    KImage  *free; // originally  xalloc'ed in initimage() (conf.nimage)
+    KImage  *free; // originally  xalloc'ed in imageinit() (conf.nimage)
     QLock ireclaim; /* mutex on reclaiming free images */
 
     /*s: [[Imagealloc]] other fields */
-        Chan  **freechan; /* free image channels */
-        int nfreechan;  /* number of free channels */
-        int szfreechan; /* size of freechan array */
-        QLock fcreclaim;  /* mutex on reclaiming free channels */
+    Chan  **freechan; /* free image channels */
+    int nfreechan;  /* number of free channels */
+    int szfreechan; /* size of freechan array */
+    QLock fcreclaim;  /* mutex on reclaiming free channels */
     /*e: [[Imagealloc]] other fields */
  
     // extra

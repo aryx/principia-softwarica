@@ -204,7 +204,7 @@ newpage(bool clear, Segment **s, virt_addr va)
         panic("newpage: p->ref %d != 0", p->ref);
 
     /*s: [[newpage()]] uncachepage */
-        uncachepage(p);
+    uncachepage(p);
     /*e: [[newpage()]] uncachepage */
     p->ref = 1;
     p->va = va;
@@ -253,8 +253,8 @@ putpage(PageOrSwap *p)
     }
 
     /*s: [[putpage]] if p has an image */
-        if(p->image && p->image != &swapimage)
-            pagechaintail(p);
+    if(p->image && p->image != &swapimage)
+        pagechaintail(p);
     /*e: [[putpage]] if p has an image */
     else 
         pagechainhead(p);
@@ -512,8 +512,8 @@ ptcpy(Pagetable *old)
     for(src = old->first; src <= old->last; src++, dst++)
         if(*src) {
             /*s: [[ptcpy()]] if src is a swap page */
-                        if(onswap(*src))
-                            dupswap(*src);
+            if(onswap(*src))
+                dupswap(*src);
             /*e: [[ptcpy()]] if src is a swap page */
             else {
                 lock(*src);

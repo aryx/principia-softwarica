@@ -56,15 +56,15 @@ static void imagechanreclaim(void);
 // Initialization
 //*****************************************************************************
 
-/*s: function initimage */
+/*s: function imageinit */
 void
-initimage(void)
+imageinit(void)
 {
     KImage *i, *ie;
 
     imagealloc.free = xalloc(conf.nimage*sizeof(KImage));
     if (imagealloc.free == nil)
-        panic("initimage: no memory");
+        panic("imageinit: no memory");
     ie = &imagealloc.free[conf.nimage-1];
     for(i = imagealloc.free; i < ie; i++)
         i->next = i+1;
@@ -72,7 +72,7 @@ initimage(void)
     imagealloc.freechan = malloc(NFREECHAN * sizeof(Chan*));
     imagealloc.szfreechan = NFREECHAN;
 }
-/*e: function initimage */
+/*e: function imageinit */
 
 //*****************************************************************************
 // Functions
@@ -127,14 +127,14 @@ putseg(Segment *s)
         return; // TODO: panic("putseg") instead?
 
     /*s: [[putseg()]] if s has an image */
-        img = s->image;
-        if(img != nil) {
-            lock(img);
-            lock(s);
-            if(img->s == s && s->ref == 1) // race?
-                img->s = nil;
-            unlock(img);
-        }
+    img = s->image;
+    if(img != nil) {
+        lock(img);
+        lock(s);
+        if(img->s == s && s->ref == 1) // race?
+            img->s = nil;
+        unlock(img);
+    }
     /*e: [[putseg()]] if s has an image */
     else
         lock(s);
@@ -148,8 +148,8 @@ putseg(Segment *s)
 
     qlock(&s->lk);
     /*s: [[putseg()]] if s had an image */
-        if(img)
-            putimage(img);
+    if(img)
+        putimage(img);
     /*e: [[putseg()]] if s had an image */
 
     emap = &s->pagedir[s->pagedirsize];
@@ -625,8 +625,8 @@ mfreeseg(Segment *s, ulong start, int pages)
              */
             if(pg){
                 /*s: [[mfreeseg]] if pg is a swap address */
-                                if(onswap(pg))
-                                    putswap(pg);
+                if(onswap(pg))
+                    putswap(pg);
                 /*e: [[mfreeseg]] if pg is a swap address */
                 else{
                     pg->next = list;

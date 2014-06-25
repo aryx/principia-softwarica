@@ -1071,24 +1071,24 @@ conswrite(Chan *c, void *va, long n, vlong off)
     /*e: [[conswrite()]] Qcons case */
 
     /*s: [[conswrite()]] cases */
-        case Qswap:
-            if(n >= sizeof buf)
-                error(Egreg);
-            memmove(buf, va, n);    /* so we can NUL-terminate */
-            buf[n] = 0;
-            /* start a pager if not already started */
-            if(strncmp(buf, "start", 5) == 0){
-                kickpager();
-                break;
-            }
-            if(!iseve())
-                error(Eperm);
-            if(buf[0]<'0' || '9'<buf[0])
-                error(Ebadarg);
-            fd = strtoul(buf, 0, 0);
-            swc = fdtochan(fd, -1, 1, 1);
-            setswapchan(swc);
+    case Qswap:
+        if(n >= sizeof buf)
+            error(Egreg);
+        memmove(buf, va, n);    /* so we can NUL-terminate */
+        buf[n] = 0;
+        /* start a pager if not already started */
+        if(strncmp(buf, "start", 5) == 0){
+            kickpager();
             break;
+        }
+        if(!iseve())
+            error(Eperm);
+        if(buf[0]<'0' || '9'<buf[0])
+            error(Ebadarg);
+        fd = strtoul(buf, 0, 0);
+        swc = fdtochan(fd, -1, 1, 1);
+        setswapchan(swc);
+        break;
     /*x: [[conswrite()]] cases */
     case Qconsctl:
         if(n >= sizeof(buf))
