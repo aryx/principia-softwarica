@@ -297,7 +297,9 @@ struct Chan
     // extra
     Ref; /* the Lock in this Ref is also Chan's lock */
     /*s: [[Chan]] extra fields */
+    // list<ref<Chan> of Chanalloc.free
     Chan* next;     /* allocation */
+    // list<ref<Chan> of Chanalloc.list
     Chan* link;
     /*e: [[Chan]] extra fields */
 };

@@ -40,6 +40,7 @@ struct Page
     // Why not Ref? to save space (same reason they use char below)
     // but that means needs to use Lock below to access this non-atomic ref.
     ushort  ref;      /* Reference count */ // Pages are shared!
+
     // set<enum<modref>>
     char  modref;     /* Simulated modify/reference bits */
 

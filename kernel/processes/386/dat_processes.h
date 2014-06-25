@@ -98,9 +98,9 @@ struct Vctl {
     int tbdf; // /* type+bus+device+function */ ??
   
     /*s: [[Vctl]] other fields */
-        // interrupt service routine
-        int (*isr)(int);    /* get isr bit for this irq */
-        int (*eoi)(int);    /* eoi */
+    // interrupt service routine
+    int (*isr)(int);    /* get isr bit for this irq */
+    int (*eoi)(int);    /* eoi */
     /*e: [[Vctl]] other fields */
     // extra
     /*s: [[Vctl]] extra fields */

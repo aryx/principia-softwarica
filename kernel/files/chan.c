@@ -33,12 +33,12 @@ enum
 /*s: struct Chanalloc */
 struct Chanalloc
 {
-    int fid; // could be a Counter, but already have a Lock anyway
-
     //list<ref<Chan>> (next = Chan.next), the free one
     Chan    *free;
     //list<ref<Chan>> (next = Chan.link), the used one
     Chan    *list;
+
+    int fid; // could be a Counter, but already have a Lock anyway
 
     // extra
     Lock;
@@ -66,10 +66,6 @@ struct Elemlist
     int prefix;
 };
 /*e: struct Elemlist */
-
-/*s: macro SEP */
-#define SEP(c) ((c) == 0 || (c) == '/')
-/*e: macro SEP */
 
 /*s: function chanpath */
 char*
@@ -167,22 +163,33 @@ newchan(void)
     /* if you get an error before associating with a dev,
        close calls rootclose, a nop */
     c->type = 0;
-    c->flag = 0;
-    c->ref = 1;
     c->dev = 0;
+    // c->qid?
+
+    c->path = nil;
+
     c->offset = 0;
     c->devoffset = 0;
-    c->iounit = 0;
+    // c->mode?
+
+    c->flag = 0;
+    c->ref = 1;
+
+    c->ismtpt = false;
+
+
     c->umh = nil;
+    // c->umc?
+    c->mux = nil;
+    c->mchan = nil;
+
     c->uri = 0;
     c->dri = 0;
-    c->aux = nil;
-    c->mchan = nil;
+    c->iounit = 0;
     c->mcp = nil;
-    c->mux = nil;
     memset(&c->mqid, 0, sizeof(c->mqid));
-    c->path = nil;
-    c->ismtpt = false;
+
+    c->aux = nil;
     
     return c;
 }
@@ -387,28 +394,30 @@ chanfree(Chan *c)
 {
     c->flag = CFREE;
 
-    if(c->dirrock != nil){
-        free(c->dirrock);
-        c->dirrock = nil;
-        c->nrock = 0;
-        c->mrock = 0;
-    }
-    if(c->umh != nil){
-        putmhead(c->umh);
-        c->umh = nil;
-    }
-    if(c->umc != nil){
-        cclose(c->umc);
-        c->umc = nil;
-    }
-    if(c->mux != nil){
-        muxclose(c->mux);
-        c->mux = nil;
-    }
-    if(c->mchan != nil){
-        cclose(c->mchan);
-        c->mchan = nil;
-    }
+    /*s: [[chanfree()]] optional free */
+        if(c->dirrock != nil){
+            free(c->dirrock);
+            c->dirrock = nil;
+            c->nrock = 0;
+            c->mrock = 0;
+        }
+        if(c->umh != nil){
+            putmhead(c->umh);
+            c->umh = nil;
+        }
+        if(c->umc != nil){
+            cclose(c->umc);
+            c->umc = nil;
+        }
+        if(c->mux != nil){
+            muxclose(c->mux);
+            c->mux = nil;
+        }
+        if(c->mchan != nil){
+            cclose(c->mchan);
+            c->mchan = nil;
+        }
+    /*e: [[chanfree()]] optional free */
 
     pathclose(c->path);
     c->path = nil;
@@ -537,9 +546,10 @@ cunique(Chan *c)
     if(c->ref != 1){
         nc = cclone(c);
         cclose(c);
-        c = nc;
+        return nc;
+    }else{
+      return c;
     }
-    return c;
 }
 /*e: function cunique */
 
@@ -1299,14 +1309,14 @@ namec(char *aname, int amode, int omode, ulong perm)
     /*x: [[namec() locals */
     Chan *c;
     /*x: [[namec() locals */
-    Path *path;
-    /*x: [[namec() locals */
     int len, n, t;
     bool nomount;
     Chan *cnew;
     Rune r;
     Mhead *m;
     char *createerr, tmperrbuf[ERRMAX];
+    /*x: [[namec() locals */
+    Path *path;
     /*e: [[namec() locals */
 
     if(aname[0] == '\0')
@@ -1329,39 +1339,44 @@ namec(char *aname, int amode, int omode, ulong perm)
     /*s: [[namec()]] if name[0] == '#' */
     case '#':
         nomount = true;
+
         up->genbuf[0] = '\0';
         n = 0;
-        while(*name != '\0' && (*name != '/' || n < 2)){
+        while(*name != '\0' && (*name != '/' || n < 2)){ // #/ is ok hence n < 2
             if(n >= sizeof(up->genbuf)-1)
                 error(Efilename);
             up->genbuf[n++] = *name++;
         }
         up->genbuf[n] = '\0';
-        /*
-         *  noattach is sandboxing.
-         *
-         *  the OK exceptions are:
-         *  |  it only gives access to pipes you create
-         *  d  this process's file descriptors
-         *  e  this process's environment
-         *  the iffy exceptions are:
-         *  c  time and pid, but also cons and consctl
-         *  p  control of your own processes (and unfortunately
-         *     any others left unprotected)
-         */
-        n = chartorune(&r, up->genbuf+1)+1;
-        /* actually / is caught by parsing earlier */
-        if(utfrune("M", r))
-            error(Enoattach);
-        if(up->pgrp->noattach && utfrune("|decp", r)==nil)
-            error(Enoattach);
+
+        n = chartorune(&r, up->genbuf+1)+1; // +1 for the leading '#'
+
+        /*s: [[namec()]] noattach checking */
+            /*
+             *  noattach is sandboxing.
+             *
+             *  the OK exceptions are:
+             *  |  it only gives access to pipes you create
+             *  d  this process's file descriptors
+             *  e  this process's environment
+             *  the iffy exceptions are:
+             *  c  time and pid, but also cons and consctl
+             *  p  control of your own processes (and unfortunately
+             *     any others left unprotected)
+             */
+            /* actually / is caught by parsing earlier */
+            if(utfrune("M", r))
+                error(Enoattach);
+            if(up->pgrp->noattach && utfrune("|decp", r)==nil)
+                error(Enoattach);
+        /*e: [[namec()]] noattach checking */
+
         t = devno(r, true);
         if(t == -1)
             error(Ebadsharp);
 
         c = devtab[t]->attach(up->genbuf+n);
         break;
-
     /*e: [[namec()]] if name[0] == '#' */
     case '/':
         c = up->slash;
@@ -1492,15 +1507,17 @@ namec(char *aname, int amode, int omode, ulong perm)
             /* save registers else error() in open has wrong value of c saved */
             //old: saveregisters();
 
-            if(omode == OEXEC)
-                c->flag &= ~CCACHE;
-
+            /*s: [[namec()]] set channel flag before open */
+                    if(omode == OEXEC)
+                        c->flag &= ~CCACHE;
+            /*e: [[namec()]] set channel flag before open */
             c = devtab[c->type]->open(c, omode&~OCEXEC);
-
-            if(omode & OCEXEC)
-                c->flag |= CCEXEC;
-            if(omode & ORCLOSE)
-                c->flag |= CRCLOSE;
+            /*s: [[namec()]] set channel flag after open */
+                    if(omode & OCEXEC)
+                        c->flag |= CCEXEC;
+                    if(omode & ORCLOSE)
+                        c->flag |= CRCLOSE;
+            /*e: [[namec()]] set channel flag after open */
             break;
         }
         break;
@@ -1584,10 +1601,12 @@ namec(char *aname, int amode, int omode, ulong perm)
 
             devtab[cnew->type]->create(cnew, e.elems[e.nelems-1], omode&~(OEXCL|OCEXEC), perm);
             poperror();
-            if(omode & OCEXEC)
-                cnew->flag |= CCEXEC;
-            if(omode & ORCLOSE)
-                cnew->flag |= CRCLOSE;
+            /*s: [[namec()]] set channel flag after create */
+                    if(omode & OCEXEC)
+                        cnew->flag |= CCEXEC;
+                    if(omode & ORCLOSE)
+                        cnew->flag |= CRCLOSE;
+            /*e: [[namec()]] set channel flag after create */
             if(m)
                 putmhead(m);
             cclose(c);

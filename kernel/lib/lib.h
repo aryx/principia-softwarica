@@ -273,14 +273,14 @@ enum qidtype {
 /* bits in Dir.mode */
 enum dirmode {
     DMDIR = 0x80000000,  /* mode bit for directories */
-    /*s: enum dirmode cases */
-    DMAPPEND = 0x40000000,  /* mode bit for append only files */
-    DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
-    DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
 
     DMREAD = 0x4,   /* mode bit for read permission */
     DMWRITE = 0x2,   /* mode bit for write permission */
     DMEXEC = 0x1,   /* mode bit for execute permission */
+    /*s: enum dirmode cases */
+    DMMOUNT = 0x10000000,  /* mode bit for mounted channel */
+    /*x: enum dirmode cases */
+    DMEXCL = 0x20000000,  /* mode bit for exclusive use files */
     /*e: enum dirmode cases */
 };
 /*e: enum dirmode */
