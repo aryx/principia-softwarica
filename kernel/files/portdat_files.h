@@ -19,10 +19,10 @@ struct Block
   long  ref;
   Block*  next;
   Block*  list;
-  uchar*  rp;     /* first unconsumed byte */
-  uchar*  wp;     /* first empty byte */
-  uchar*  lim;      /* 1 past the end of the buffer */
-  uchar*  base;     /* start of the buffer */
+  byte*  rp;     /* first unconsumed byte */
+  byte*  wp;     /* first empty byte */
+  byte*  lim;      /* 1 past the end of the buffer */
+  byte*  base;     /* start of the buffer */
   void  (*free)(Block*);
   ushort  flag;
   ushort  checksum;   /* IP checksum of complete packet (minus media header) */
@@ -155,7 +155,7 @@ struct Mntrpc
   Fcall   reply;    /* Incoming reply */
   Mnt*  m;    /* Mount device during rpc */
   Rendez  r;    /* Place to hang out */
-  uchar*  rpc;    /* I/O Data buffer */
+  byte*  rpc;    /* I/O Data buffer */
   uint  rpclen;   /* len of buffer */
   Block *b;   /* reply blocks */
   char  done;   /* Rpc completed */
@@ -271,7 +271,7 @@ struct Chan
     /*x: [[Chan]] other fields */
     vlong devoffset;    /* in underlying device; see read */
     /*x: [[Chan]] other fields */
-    uchar*  dirrock;    /* directory entry rock for translations */
+    byte*  dirrock;    /* directory entry rock for translations */
     int nrock;
     int mrock;
     QLock rockqlock;
@@ -368,9 +368,9 @@ struct Dev
     /*x: [[Dev]] methods */
     void  (*remove)(Chan*);
     /*x: [[Dev]] methods */
-    int (*stat)(Chan*, uchar*, int);
+    int (*stat)(Chan*, byte*, int);
     /*x: [[Dev]] methods */
-    int (*wstat)(Chan*, uchar*, int);
+    int (*wstat)(Chan*, byte*, int);
     /*x: [[Dev]] methods */
     Chan* (*attach)(char*);
     /*x: [[Dev]] methods */

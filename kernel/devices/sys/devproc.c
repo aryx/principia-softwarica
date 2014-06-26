@@ -517,7 +517,7 @@ procopen(Chan *c, int omode)
 
 /*s: method procwstat */
 static int
-procwstat(Chan *c, uchar *db, int n)
+procwstat(Chan *c, byte *db, int n)
 {
     Proc *p;
     Dir *d;
@@ -754,7 +754,7 @@ procread(Chan *c, void *va, long n, vlong off)
     char *a, flag[10], *sps, *srv, statbuf[NSEG*64];
     int i, j, m, navail, ne, pid, rsize;
     long l;
-    uchar *rptr;
+    byte *rptr;
     ulong offset;
     Confmem *cm;
     Mntwalk *mw;
@@ -774,7 +774,7 @@ procread(Chan *c, void *va, long n, vlong off)
             if(!eventsavailable(nil))
                 return 0;
 
-            rptr = (uchar*)va;
+            rptr = (byte*)va;
             navail = tproduced - tconsumed;
             if(navail > n / sizeof(Traceevent))
                 navail = n / sizeof(Traceevent);
@@ -788,7 +788,7 @@ procread(Chan *c, void *va, long n, vlong off)
                 rptr += ne * sizeof(Traceevent);
                 navail -= ne;
             }
-            return rptr - (uchar*)va;
+            return rptr - (byte*)va;
         }
     /*e: [[procread()]] Qtrace if */
 
@@ -901,14 +901,14 @@ procread(Chan *c, void *va, long n, vlong off)
 
 
     case Qregs:
-        rptr = (uchar*)p->dbgreg;
+        rptr = (byte*)p->dbgreg;
         rsize = sizeof(Ureg);
         goto regread;
 
     case Qkregs:
         memset(&kur, 0, sizeof(Ureg));
         setkernur(&kur, p);
-        rptr = (uchar*)&kur;
+        rptr = (byte*)&kur;
         rsize = sizeof(Ureg);
         goto regread;
 

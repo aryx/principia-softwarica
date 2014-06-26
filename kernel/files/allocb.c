@@ -45,13 +45,13 @@ _allocb(int size)
     /* align start of data portion by rounding up */
     addr = (ulong)b;
     addr = ROUND(addr + sizeof(Block), BLOCKALIGN);
-    b->base = (uchar*)addr;
+    b->base = (byte*)addr;
 
     /* align end of data portion by rounding down */
-    b->lim = ((uchar*)b) + msize(b);
+    b->lim = ((byte*)b) + msize(b);
     addr = (ulong)(b->lim);
     addr = addr & ~(BLOCKALIGN-1);
-    b->lim = (uchar*)addr;
+    b->lim = (byte*)addr;
 
     /* leave sluff at beginning for added headers */
     b->rp = b->lim - ROUND(size, BLOCKALIGN);

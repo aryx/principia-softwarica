@@ -16,6 +16,7 @@ enum _bool {
   false = 0,
   true = 1
 };
+typedef uchar byte;
 typedef ushort bool_ushort;
 
 typedef int retcode;
@@ -103,7 +104,7 @@ extern  int abs(int);
 typedef int (*Fmts)(Fmt*);
 /*s: struct Fmt */
 struct Fmt{
-  uchar runes;      /* output buffer is runes or chars? */
+  byte runes;      /* output buffer is runes or chars? */
   void  *start;     /* of buffer */
   void  *to;      /* current place in the buffer */
   void  *stop;      /* end of the buffer; overwritten if flush fails */
@@ -293,7 +294,7 @@ struct Qid
   // for cache invalidation
   ulong vers;
   // enum<qidtype>
-  uchar type;
+  byte type;
 };
 /*e: struct Qid */
 

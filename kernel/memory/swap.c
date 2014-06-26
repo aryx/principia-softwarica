@@ -65,7 +65,7 @@ swapinit(void)
 ulong
 newswap(void)
 {
-    uchar *look;
+    byte *look;
 
     lock(&swapalloc);
 
@@ -90,7 +90,7 @@ newswap(void)
 void
 putswap(Page *p)
 {
-    uchar *idx;
+    byte *idx;
 
     lock(&swapalloc);
     idx = &swapalloc.swmap[((ulong)p)/BY2PG];
@@ -450,7 +450,7 @@ needpages(void*)
 void
 setswapchan(Chan *c)
 {
-    uchar dirbuf[sizeof(Dir)+100];
+    byte dirbuf[sizeof(Dir)+100];
     Dir d;
     int n;
 

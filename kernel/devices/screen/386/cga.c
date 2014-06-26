@@ -43,7 +43,7 @@ enum {
 /*e: cga.c enum misc */
 
 /*s: constant CGASCREENBASE */
-#define CGASCREENBASE   ((uchar*)KADDR(0xB8000))
+#define CGASCREENBASE   ((byte*)KADDR(0xB8000))
 /*e: constant CGASCREENBASE */
 
 /*s: global cgapos */
@@ -54,7 +54,7 @@ static Lock cgascreenlock;
 /*e: global cgascreenlock */
 
 /*s: function cgaregr */
-static uchar
+static byte
 cgaregr(int index)
 {
     outb(0x3D4, index);
@@ -86,7 +86,7 @@ static void
 cgascreenputc(char c)
 {
     int i;
-    uchar *p;
+    byte *p;
 
     if(c == '\n'){
         cgapos = cgapos/Width;
@@ -148,7 +148,7 @@ char hex[] = "0123456789ABCDEF";
 void
 cgapost(int code)
 {
-    uchar *cga;
+    byte *cga;
 
     cga = CGASCREENBASE;
     cga[Width*Height-Postcodelen*2] = hex[(code>>4) & 0x0F];

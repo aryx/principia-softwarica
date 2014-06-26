@@ -1220,7 +1220,7 @@ parsename(char *aname, Elemlist *e)
 void*
 memrchr(void *va, int c, long n)
 {
-    uchar *a, *e;
+    byte *a, *e;
 
     a = va;
     for(e=a+n-1; e>a; e--)
@@ -1345,7 +1345,7 @@ namec(char *aname, int amode, int omode, ulong perm)
      */
     mount = true;
     switch(name[0]){
-    /*s: [[namec()]] if name[0] == '#' */
+    /*s: [[namec()]] if name[0] is a sharp */
     case '#':
         mount = false;
 
@@ -1386,7 +1386,7 @@ namec(char *aname, int amode, int omode, ulong perm)
 
         c = devtab[t]->attach(up->genbuf+n);
         break;
-    /*e: [[namec()]] if name[0] == '#' */
+    /*e: [[namec()]] if name[0] is a sharp */
     case '/':
         c = up->slash;
         incref(c);
@@ -1766,7 +1766,7 @@ validname0(char *aname, bool slashok, bool dup, kern_addr pc)
     
     while(*name){
         /* all characters above '~' are ok */
-        c = *(uchar*)name;
+        c = *(byte*)name;
         if(c >= Runeself)
             name += chartorune(&r, name);
         else{

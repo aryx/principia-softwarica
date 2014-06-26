@@ -248,9 +248,9 @@ sysrfork(ulong* arg)
 ulong
 l2be(long l)
 {
-    uchar *cp;
+    byte *cp;
 
-    cp = (uchar*)&l;
+    cp = (byte*)&l;
     return (cp[0]<<24) | (cp[1]<<16) | (cp[2]<<8) | cp[3];
 }
 /*e: function l2be */

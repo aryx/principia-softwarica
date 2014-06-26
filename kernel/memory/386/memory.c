@@ -251,7 +251,7 @@ rampage(void)
 static void
 umbscan(void)
 {
-    uchar o[2], *p;
+    byte o[2], *p;
 
     /*
      * Scan the Upper Memory Blocks (0xA0000->0xF0000) for pieces
@@ -365,7 +365,7 @@ static void
 lowraminit(void)
 {
     ulong n, pa, x;
-    uchar *bda;
+    byte *bda;
 
     /*
      * Initialise the memory bank information for conventional memory
@@ -374,7 +374,7 @@ lowraminit(void)
      * the BIOS data area.
      */
     x = PADDR(CPU0END);
-    bda = (uchar*)KADDR(0x400);
+    bda = (byte*)KADDR(0x400);
     n = ((bda[0x14]<<8)|bda[0x13])*KB-x;
     mapfree(&rmapram, x, n);
     memset(KADDR(x), 0, n);         /* keep us honest */

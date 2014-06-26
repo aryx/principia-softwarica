@@ -206,7 +206,7 @@ xmerge(kern_addr3 vp, kern_addr3 vq)
         panic("xmerge(%#p, %#p) bad magic %#lux, %#lux",
             vp, vq, p->magix, q->magix);
     }
-    if((uchar*)p+p->size == (uchar*)q) {
+    if((byte*)p+p->size == (byte*)q) {
         p->size += q->size;
         return true;
     }

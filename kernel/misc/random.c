@@ -15,12 +15,12 @@ struct Rb
     Rendez  producer;
     Rendez  consumer;
     ulong   randomcount;
-    uchar   buf[1024];
-    uchar   *ep;
-    uchar   *rp;
-    uchar   *wp;
-    uchar   next;
-    uchar   wakeme;
+    byte   buf[1024];
+    byte   *ep;
+    byte   *rp;
+    byte   *wp;
+    byte   next;
+    byte   wakeme;
     ushort  bits;
     ulong   randn;
 };
@@ -116,7 +116,7 @@ randominit(void)
 ulong
 randomread(void *xp, ulong n)
 {
-    uchar *e, *p;
+    byte *e, *p;
     ulong x;
 
     p = xp;

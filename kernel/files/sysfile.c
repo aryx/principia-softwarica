@@ -328,7 +328,7 @@ unionrewind(Chan *c)
 
 /*s: function dirfixed */
 static int
-dirfixed(uchar *p, uchar *e, Dir *d)
+dirfixed(byte *p, byte *e, Dir *d)
 {
     int len;
 
@@ -361,7 +361,7 @@ dirfixed(uchar *p, uchar *e, Dir *d)
 
 /*s: function dirname */
 static char*
-dirname(uchar *p, int *n)
+dirname(byte *p, int *n)
 {
     p += BIT16SZ+BIT16SZ+BIT32SZ+BIT8SZ+BIT32SZ+BIT64SZ
         + BIT32SZ+BIT32SZ+BIT32SZ+BIT64SZ;
@@ -372,7 +372,7 @@ dirname(uchar *p, int *n)
 
 /*s: function dirsetname */
 static long
-dirsetname(char *name, int len, uchar *p, long n, long maxn)
+dirsetname(char *name, int len, byte *p, long n, long maxn)
 {
     char *oname;
     int olen;
@@ -389,8 +389,8 @@ dirsetname(char *name, int len, uchar *p, long n, long maxn)
         return BIT16SZ;
 
     if(len != olen)
-        memmove(oname+len, oname+olen, p+n-(uchar*)(oname+olen));
-    PBIT16((uchar*)(oname-2), len);
+        memmove(oname+len, oname+olen, p+n-(byte*)(oname+olen));
+    PBIT16((byte*)(oname-2), len);
     memmove(oname, name, len);
     return nn;
 }
@@ -402,9 +402,9 @@ dirsetname(char *name, int len, uchar *p, long n, long maxn)
  * to overflow the buffer.  Catch the overflow in c->dirrock.
  */
 static void
-mountrock(Chan *c, uchar *p, uchar **pe)
+mountrock(Chan *c, byte *p, byte **pe)
 {
-    uchar *e, *r;
+    byte *e, *r;
     int len, n;
 
     e = *pe;
@@ -441,10 +441,10 @@ mountrock(Chan *c, uchar *p, uchar **pe)
  * Satisfy a directory read with the results saved in c->dirrock.
  */
 static bool
-mountrockread(Chan *c, uchar *op, long n, long *nn)
+mountrockread(Chan *c, byte *op, long n, long *nn)
 {
     long dirlen;
-    uchar *rp, *erp, *ep, *p;
+    byte *rp, *erp, *ep, *p;
 
     /* common case */
     if(c->nrock == 0)
@@ -497,17 +497,17 @@ mountrewind(Chan *c)
  * of statting what is mounted there.  Except leave the old names.
  */
 static long
-mountfix(Chan *c, uchar *op, long n, long maxn)
+mountfix(Chan *c, byte *op, long n, long maxn)
 {
     char *name;
     int nbuf, nname;
     Chan *nc;
     Mhead *mh;
     Mount *m;
-    uchar *p;
+    byte *p;
     int dirlen, rest;
     long l;
-    uchar *buf, *e;
+    byte *buf, *e;
     Dir d;
 
     p = op;
@@ -593,7 +593,7 @@ static long
 read(ulong *arg, vlong *offp)
 {
     long n, nn, nnn;
-    uchar *p;
+    byte *p;
     Chan *c;
     vlong off;
 
@@ -762,7 +762,7 @@ static void
 sseek(ulong *arg)
 {
     Chan *c;
-    uchar buf[sizeof(Dir)+100];
+    byte buf[sizeof(Dir)+100];
     Dir dir;
     int n;
     vlong off;
@@ -865,7 +865,7 @@ pathlast(Path *p)
 /*e: function pathlast */
 
 /*s: syscall fstat */
-// int fstat(int fd, uchar *edir, int nedir);
+// int fstat(int fd, byte *edir, int nedir);
 long
 sysfstat(ulong* arg)
 {
@@ -879,7 +879,7 @@ sysfstat(ulong* arg)
         cclose(c);
         nexterror();
     }
-    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+    l = devtab[c->type]->stat(c, (byte*)arg[1], l);
     poperror();
     cclose(c);
     return l;
@@ -887,7 +887,7 @@ sysfstat(ulong* arg)
 /*e: syscall fstat */
 
 /*s: syscall stat */
-// int stat(char *name, uchar *edir, int nedir);
+// int stat(char *name, byte *edir, int nedir);
 long
 sysstat(ulong* arg)
 {
@@ -903,11 +903,11 @@ sysstat(ulong* arg)
         cclose(c);
         nexterror();
     }
-    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+    l = devtab[c->type]->stat(c, (byte*)arg[1], l);
 
     name = pathlast(c->path);
     if(name)
-        l = dirsetname(name, strlen(name), (uchar*)arg[1], l, arg[2]);
+        l = dirsetname(name, strlen(name), (byte*)arg[1], l, arg[2]);
 
     poperror();
     cclose(c);
@@ -1126,7 +1126,7 @@ sysremove(ulong* arg)
 
 /*s: function wstat */
 static long
-wstat(Chan *c, uchar *d, int nd)
+wstat(Chan *c, byte *d, int nd)
 {
     long l;
     int namelen;
@@ -1152,7 +1152,7 @@ wstat(Chan *c, uchar *d, int nd)
 /*e: function wstat */
 
 /*s: syscall wstat */
-// int wstat(char *name, uchar *edir, int nedir);
+// int wstat(char *name, byte *edir, int nedir);
 long
 syswstat(ulong* arg)
 {
@@ -1161,15 +1161,15 @@ syswstat(ulong* arg)
 
     l = arg[2];
     validaddr(arg[1], l, false);
-    validstat((uchar*)arg[1], l);
+    validstat((byte*)arg[1], l);
     validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aaccess, 0, 0);
-    return wstat(c, (uchar*)arg[1], l);
+    return wstat(c, (byte*)arg[1], l);
 }
 /*e: syscall wstat */
 
 /*s: syscall fwstat */
-// int fwstat(int fd, uchar *edir, int nedir);
+// int fwstat(int fd, byte *edir, int nedir);
 long
 sysfwstat(ulong* arg)
 {
@@ -1178,9 +1178,9 @@ sysfwstat(ulong* arg)
 
     l = arg[2];
     validaddr(arg[1], l, false);
-    validstat((uchar*)arg[1], l);
+    validstat((byte*)arg[1], l);
     c = fdtochan(arg[0], -1, true, true);
-    return wstat(c, (uchar*)arg[1], l);
+    return wstat(c, (byte*)arg[1], l);
 }
 /*e: syscall fwstat */
 

@@ -281,7 +281,7 @@ Done:
 
 /*s: function devstat */
 int
-devstat(Chan *c, uchar *db, int n, Dirtab *tab, int ntab, Devgen *gen)
+devstat(Chan *c, byte *db, int n, Dirtab *tab, int ntab, Devgen *gen)
 {
     int i;
     Dir dir;
@@ -340,7 +340,7 @@ devdirread(Chan *c, char *d, long n, Dirtab *tab, int ntab, Devgen *gen)
             break;
 
         case 1:
-            dsz = convD2M(&dir, (uchar*)d, n-m);
+            dsz = convD2M(&dir, (byte*)d, n-m);
             if(dsz <= BIT16SZ){ /* <= not < because this isn't stat; read is stuck */
                 if(m == 0)
                     error(Eshort);

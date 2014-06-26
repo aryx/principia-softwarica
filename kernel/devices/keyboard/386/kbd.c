@@ -199,7 +199,7 @@ extern int mouseshifted;
 extern void (*kbdmouse)(int);
 
 /*s: global ccc */
-static uchar ccc;
+static byte ccc;
 /*e: global ccc */
 /*s: hook auxputc */
 static void (*auxputc)(int, int);
@@ -392,7 +392,7 @@ setleds(Kbscan *kbscan)
  * Scan code processing
  */
 void
-kbdputsc(uchar k, int external)
+kbdputsc(byte k, int external)
 {
     bool keyup;
     Kbscan *kbscan;
@@ -614,7 +614,7 @@ kbdputsc(uchar k, int external)
 static void
 i8042intr(Ureg*, void*)
 {
-    uchar s, c;
+    byte s, c;
 
     /*
      *  get status

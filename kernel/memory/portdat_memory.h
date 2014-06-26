@@ -399,17 +399,17 @@ struct Swapalloc
 {
     // array<byte> xalloc'ed in swapinit()
     // each idx represents a chunk of swapimage, each value a ref count
-    uchar*  swmap;      /* Base of swap map in memory */
+    byte*  swmap;      /* Base of swap map in memory */
 
     int free;     /* currently free swap pages */
 
     // ref<byte> in swmap
-    uchar*  alloc;     /* Round robin allocator */
+    byte*  alloc;     /* Round robin allocator */
     // ref<byte> in swmap
-    uchar*  top;      /* Top of swap map */
+    byte*  top;      /* Top of swap map */
 
     // ref<byte> in swmap
-    uchar*  last;     /* Speed swap allocation */
+    byte*  last;     /* Speed swap allocation */
 
     ulong highwater;    /* Pager start threshold */ // = 5% conf.upages
     ulong headroom;   /* Space pager frees under highwater */ // = 1.25*hw

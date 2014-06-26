@@ -31,7 +31,7 @@ struct Dirlist
 {
     uint base; // for unique qids
     Dirtab *dir;
-    uchar **data;
+    byte **data;
     int ndir; // number of dir used
     int mdir; // max dir entries
 };
@@ -58,7 +58,7 @@ static Dirtab rootdir[Nrootfiles] = {
     .perm = DMDIR|0555,
   }
 };
-static uchar *rootdata[Nrootfiles];
+static byte *rootdata[Nrootfiles];
 static Dirlist rootlist = 
 {
   .base = 0,
@@ -83,7 +83,7 @@ static Dirtab bootdir[Nbootfiles] = {
   }
 };
 
-static uchar *bootdata[Nbootfiles];
+static byte *bootdata[Nbootfiles];
 static Dirlist bootlist =
 {
     .base = Qboot,
@@ -103,7 +103,7 @@ static Dirlist bootlist =
  *  add a file to the list
  */
 static void
-addlist(Dirlist *l, char *name, uchar *contents, ulong len, int perm)
+addlist(Dirlist *l, char *name, byte *contents, ulong len, int perm)
 {
     Dirtab *d;
 
@@ -127,7 +127,7 @@ addlist(Dirlist *l, char *name, uchar *contents, ulong len, int perm)
  *  add a boot file
  */
 void
-addbootfile(char *name, uchar *contents, ulong len)
+addbootfile(char *name, byte *contents, ulong len)
 {
     addlist(&bootlist, name, contents, len, 0555);
 }
@@ -249,7 +249,7 @@ rootread(Chan *c, void *buf, long n, vlong off)
     ulong t;
     Dirtab *d;
     Dirlist *l;
-    uchar *data;
+    byte *data;
     ulong offset = off;
 
     t = c->qid.path;

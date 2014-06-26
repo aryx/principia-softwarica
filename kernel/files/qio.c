@@ -505,7 +505,7 @@ qconsume(Queue *q, void *vp, int len)
 {
     Block *b;
     int n, dowakeup;
-    uchar *p = vp;
+    byte *p = vp;
     Block *tofree = nil;
 
     /* sync with qwrite */
@@ -707,7 +707,7 @@ qproduce(Queue *q, void *vp, int len)
 {
     Block *b;
     int dowakeup;
-    uchar *p = vp;
+    byte *p = vp;
 
     /* sync with qread */
     dowakeup = 0;
@@ -765,7 +765,7 @@ qcopy(Queue *q, int len, ulong offset)
     int sofar;
     int n;
     Block *b, *nb;
-    uchar *p;
+    byte *p;
 
     nb = allocb(len);
 
@@ -942,7 +942,7 @@ qremove(Queue *q)
  *  pointer to first unconsumed block.
  */
 Block*
-bl2mem(uchar *p, Block *b, int n)
+bl2mem(byte *p, Block *b, int n)
 {
     int i;
     Block *next;
@@ -1279,7 +1279,7 @@ qwrite(Queue *q, void *vp, int len)
 {
     int n, sofar;
     Block *b;
-    uchar *p = vp;
+    byte *p = vp;
 
     QDEBUG if(!islo())
         print("qwrite hi %#p\n", getcallerpc(&q));
@@ -1322,7 +1322,7 @@ qiwrite(Queue *q, void *vp, int len)
 {
     int n, sofar, dowakeup;
     Block *b;
-    uchar *p = vp;
+    byte *p = vp;
 
     dowakeup = 0;
 

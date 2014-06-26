@@ -1198,14 +1198,14 @@ static uvlong uvorder = 0x0001020304050607ULL;
 /*e: global uvorder */
 
 /*s: function le2vlong */
-static uchar*
-le2vlong(vlong *to, uchar *f)
+static byte*
+le2vlong(vlong *to, byte *f)
 {
-    uchar *t, *o;
+    byte *t, *o;
     int i;
 
-    t = (uchar*)to;
-    o = (uchar*)&uvorder;
+    t = (byte*)to;
+    o = (byte*)&uvorder;
     for(i = 0; i < sizeof(vlong); i++)
         t[o[i]] = f[i];
     return f+sizeof(vlong);
@@ -1213,14 +1213,14 @@ le2vlong(vlong *to, uchar *f)
 /*e: function le2vlong */
 
 /*s: function vlong2le */
-static uchar*
-vlong2le(uchar *t, vlong from)
+static byte*
+vlong2le(byte *t, vlong from)
 {
-    uchar *f, *o;
+    byte *f, *o;
     int i;
 
-    f = (uchar*)&from;
-    o = (uchar*)&uvorder;
+    f = (byte*)&from;
+    o = (byte*)&uvorder;
     for(i = 0; i < sizeof(vlong); i++)
         t[i] = f[o[i]];
     return t+sizeof(vlong);
@@ -1232,14 +1232,14 @@ static long order = 0x00010203;
 /*e: global order */
 
 /*s: function le2long */
-static uchar*
-le2long(long *to, uchar *f)
+static byte*
+le2long(long *to, byte *f)
 {
-    uchar *t, *o;
+    byte *t, *o;
     int i;
 
-    t = (uchar*)to;
-    o = (uchar*)&order;
+    t = (byte*)to;
+    o = (byte*)&order;
     for(i = 0; i < sizeof(long); i++)
         t[o[i]] = f[i];
     return f+sizeof(long);
@@ -1310,7 +1310,7 @@ readbintime(char *buf, int n)
 {
     int i;
     vlong nsec, ticks;
-    uchar *b = (uchar*)buf;
+    byte *b = (byte*)buf;
 
     i = 0;
     if(fasthz == 0LL)
@@ -1342,12 +1342,12 @@ readbintime(char *buf, int n)
 static int
 writebintime(char *buf, int n)
 {
-    uchar *p;
+    byte *p;
     vlong delta;
     long period;
 
     n--;
-    p = (uchar*)buf + 1;
+    p = (byte*)buf + 1;
     switch(*buf){
     case 'n':
         if(n < sizeof(vlong))

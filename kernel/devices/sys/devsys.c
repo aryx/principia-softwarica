@@ -57,7 +57,7 @@ static Dirtab sysdir[]={
 /*e: global sysdir */
 
 /*s: devsys.c decls and globals */
-extern uchar configfile[]; // in $CONF.c
+extern byte configfile[]; // in $CONF.c
 /*x: devsys.c decls and globals */
 enum
 {

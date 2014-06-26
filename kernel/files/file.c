@@ -106,7 +106,7 @@ fdclose(int fd, int flag)
 
 /*s: function validstat */
 void
-validstat(uchar *s, int n)
+validstat(byte *s, int n)
 {
     int m;
     char buf[64];

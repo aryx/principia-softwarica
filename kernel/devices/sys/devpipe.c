@@ -183,7 +183,7 @@ pipewalk(Chan *c, Chan *nc, char **name, int nname)
 
 /*s: method pipestat */
 static int
-pipestat(Chan *c, uchar *db, int n)
+pipestat(Chan *c, byte *db, int n)
 {
     Pipe *p;
     Dir dir;
@@ -212,7 +212,7 @@ pipestat(Chan *c, uchar *db, int n)
 
 /*s: method pipewstat */
 static int
-pipewstat(Chan* c, uchar* db, int n)
+pipewstat(Chan* c, byte* db, int n)
 {
     int m;
     Dir *dir;

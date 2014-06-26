@@ -632,6 +632,7 @@ enum _bool {
   false = 0,
   true = 1
 };
+typedef uchar byte;
 typedef ushort bool_ushort;
 
 typedef int retcode;
@@ -1281,7 +1282,7 @@ struct Qid
   // for cache invalidation
   ulong vers;
   // enum<qidtype>
-  uchar type;
+  byte type;
 };
 @ 
 %coupling: this structure ir also defined in libc.h
@@ -2596,7 +2597,7 @@ xmerge(kern_addr3 vp, kern_addr3 vq)
         panic("xmerge(%#p, %#p) bad magic %#lux, %#lux",
             vp, vq, p->magix, q->magix);
     }
-    if((uchar*)p+p->size == (uchar*)q) {
+    if((byte*)p+p->size == (byte*)q) {
         p->size += q->size;
         return true;
     }
@@ -4866,9 +4867,9 @@ procsetup(Proc*p)
 ulong
 l2be(long l)
 {
-    uchar *cp;
+    byte *cp;
 
-    cp = (uchar*)&l;
+    cp = (byte*)&l;
     return (cp[0]<<24) | (cp[1]<<16) | (cp[2]<<8) | cp[3];
 }
 @ 
@@ -8339,17 +8340,17 @@ struct Swapalloc
 {
     // array<byte> xalloc'ed in swapinit()
     // each idx represents a chunk of swapimage, each value a ref count
-    uchar*  swmap;      /* Base of swap map in memory */
+    byte*  swmap;      /* Base of swap map in memory */
 
     int free;     /* currently free swap pages */
 
     // ref<byte> in swmap
-    uchar*  alloc;     /* Round robin allocator */
+    byte*  alloc;     /* Round robin allocator */
     // ref<byte> in swmap
-    uchar*  top;      /* Top of swap map */
+    byte*  top;      /* Top of swap map */
 
     // ref<byte> in swmap
-    uchar*  last;     /* Speed swap allocation */
+    byte*  last;     /* Speed swap allocation */
 
     ulong highwater;    /* Pager start threshold */ // = 5% conf.upages
     ulong headroom;   /* Space pager frees under highwater */ // = 1.25*hw
@@ -8410,7 +8411,7 @@ KImage  swapimage;
 ulong
 newswap(void)
 {
-    uchar *look;
+    byte *look;
 
     lock(&swapalloc);
 
@@ -8460,7 +8461,7 @@ typedef Page PageOrSwap;
 void
 putswap(Page *p)
 {
-    uchar *idx;
+    byte *idx;
 
     lock(&swapalloc);
     idx = &swapalloc.swmap[((ulong)p)/BY2PG];
@@ -9029,7 +9030,7 @@ case Qswap:
 void
 setswapchan(Chan *c)
 {
-    uchar dirbuf[sizeof(Dir)+100];
+    byte dirbuf[sizeof(Dir)+100];
     Dir d;
     int n;
 
@@ -11214,7 +11215,7 @@ rampage(void)
 static void
 umbscan(void)
 {
-    uchar o[2], *p;
+    byte o[2], *p;
 
     /*
      * Scan the Upper Memory Blocks (0xA0000->0xF0000) for pieces
@@ -11279,7 +11280,7 @@ static void
 lowraminit(void)
 {
     ulong n, pa, x;
-    uchar *bda;
+    byte *bda;
 
     /*
      * Initialise the memory bank information for conventional memory
@@ -11288,7 +11289,7 @@ lowraminit(void)
      * the BIOS data area.
      */
     x = PADDR(CPU0END);
-    bda = (uchar*)KADDR(0x400);
+    bda = (byte*)KADDR(0x400);
     n = ((bda[0x14]<<8)|bda[0x13])*KB-x;
     mapfree(&rmapram, x, n);
     memset(KADDR(x), 0, n);         /* keep us honest */
@@ -12332,7 +12333,7 @@ struct Chanalloc chanalloc;
 
 
 
-
+% used by devattach(), devclone() (itself called from devwalk())
 <<constructor newchan>>=
 Chan*
 newchan(void)
@@ -12950,7 +12951,7 @@ namec(char *aname, int amode, int omode, ulong perm)
      */
     mount = true;
     switch(name[0]){
-    <<[[namec()]] if name[0] == '#'>>
+    <<[[namec()]] if name[0] is a sharp>>
     case '/':
         c = up->slash;
         incref(c);
@@ -13130,7 +13131,7 @@ validname0(char *aname, bool slashok, bool dup, kern_addr pc)
     
     while(*name){
         /* all characters above '~' are ok */
-        c = *(uchar*)name;
+        c = *(byte*)name;
         if(c >= Runeself)
             name += chartorune(&r, name);
         else{
@@ -13408,7 +13409,7 @@ static long
 read(ulong *arg, vlong *offp)
 {
     long n, nn, nnn;
-    uchar *p;
+    byte *p;
     Chan *c;
     vlong off;
 
@@ -13563,7 +13564,7 @@ static void
 sseek(ulong *arg)
 {
     Chan *c;
-    uchar buf[sizeof(Dir)+100];
+    byte buf[sizeof(Dir)+100];
     Dir dir;
     int n;
     vlong off;
@@ -14714,7 +14715,7 @@ enum dirmode {
 
 <<function dirsetname>>=
 static long
-dirsetname(char *name, int len, uchar *p, long n, long maxn)
+dirsetname(char *name, int len, byte *p, long n, long maxn)
 {
     char *oname;
     int olen;
@@ -14731,8 +14732,8 @@ dirsetname(char *name, int len, uchar *p, long n, long maxn)
         return BIT16SZ;
 
     if(len != olen)
-        memmove(oname+len, oname+olen, p+n-(uchar*)(oname+olen));
-    PBIT16((uchar*)(oname-2), len);
+        memmove(oname+len, oname+olen, p+n-(byte*)(oname+olen));
+    PBIT16((byte*)(oname-2), len);
     memmove(oname, name, len);
     return nn;
 }
@@ -14740,7 +14741,7 @@ dirsetname(char *name, int len, uchar *p, long n, long maxn)
 
 <<function dirname>>=
 static char*
-dirname(uchar *p, int *n)
+dirname(byte *p, int *n)
 {
     p += BIT16SZ+BIT16SZ+BIT32SZ+BIT8SZ+BIT32SZ+BIT64SZ
         + BIT32SZ+BIT32SZ+BIT32SZ+BIT64SZ;
@@ -14755,13 +14756,13 @@ dirname(uchar *p, int *n)
 \section{[[sysstat()]]}
 
 <<[[Dev]] methods>>=
-int (*stat)(Chan*, uchar*, int);
+int (*stat)(Chan*, byte*, int);
 @
 
-%uchar* actually a buffer containing a DirEntry I think
+%byte* actually a buffer containing a DirEntry I think
 % but platform independent?
 <<syscall stat>>=
-// int stat(char *name, uchar *edir, int nedir);
+// int stat(char *name, byte *edir, int nedir);
 long
 sysstat(ulong* arg)
 {
@@ -14777,11 +14778,11 @@ sysstat(ulong* arg)
         cclose(c);
         nexterror();
     }
-    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+    l = devtab[c->type]->stat(c, (byte*)arg[1], l);
 
     name = pathlast(c->path);
     if(name)
-        l = dirsetname(name, strlen(name), (uchar*)arg[1], l, arg[2]);
+        l = dirsetname(name, strlen(name), (byte*)arg[1], l, arg[2]);
 
     poperror();
     cclose(c);
@@ -14791,7 +14792,7 @@ sysstat(ulong* arg)
 
 % like stat but with a file descriptor instead of a filename
 <<syscall fstat>>=
-// int fstat(int fd, uchar *edir, int nedir);
+// int fstat(int fd, byte *edir, int nedir);
 long
 sysfstat(ulong* arg)
 {
@@ -14805,7 +14806,7 @@ sysfstat(ulong* arg)
         cclose(c);
         nexterror();
     }
-    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+    l = devtab[c->type]->stat(c, (byte*)arg[1], l);
     poperror();
     cclose(c);
     return l;
@@ -14835,13 +14836,13 @@ pathlast(Path *p)
 
 
 <<[[Dev]] methods>>=
-int (*wstat)(Chan*, uchar*, int);
+int (*wstat)(Chan*, byte*, int);
 @
 
 
 
 <<syscall wstat>>=
-// int wstat(char *name, uchar *edir, int nedir);
+// int wstat(char *name, byte *edir, int nedir);
 long
 syswstat(ulong* arg)
 {
@@ -14850,15 +14851,15 @@ syswstat(ulong* arg)
 
     l = arg[2];
     validaddr(arg[1], l, false);
-    validstat((uchar*)arg[1], l);
+    validstat((byte*)arg[1], l);
     validaddr(arg[0], 1, false);
     c = namec((char*)arg[0], Aaccess, 0, 0);
-    return wstat(c, (uchar*)arg[1], l);
+    return wstat(c, (byte*)arg[1], l);
 }
 @
 
 <<syscall fwstat>>=
-// int fwstat(int fd, uchar *edir, int nedir);
+// int fwstat(int fd, byte *edir, int nedir);
 long
 sysfwstat(ulong* arg)
 {
@@ -14867,9 +14868,9 @@ sysfwstat(ulong* arg)
 
     l = arg[2];
     validaddr(arg[1], l, false);
-    validstat((uchar*)arg[1], l);
+    validstat((byte*)arg[1], l);
     c = fdtochan(arg[0], -1, true, true);
-    return wstat(c, (uchar*)arg[1], l);
+    return wstat(c, (byte*)arg[1], l);
 }
 @
 
@@ -14877,7 +14878,7 @@ sysfwstat(ulong* arg)
 
 <<function validstat>>=
 void
-validstat(uchar *s, int n)
+validstat(byte *s, int n)
 {
     int m;
     char buf[64];
@@ -14907,7 +14908,7 @@ validstat(uchar *s, int n)
 
 <<function wstat>>=
 static long
-wstat(Chan *c, uchar *d, int nd)
+wstat(Chan *c, byte *d, int nd)
 {
     long l;
     int namelen;
@@ -14989,7 +14990,7 @@ createdir(Chan *c, Mhead *m)
 Rune r;
 @
 
-<<[[namec()]] if name[0] == '#'>>=
+<<[[namec()]] if name[0] is a sharp>>=
 case '#':
     mount = false;
 
@@ -15487,7 +15488,7 @@ pgrpcpy(Pgrp *to, Pgrp *from)
 \section{miscmount}
 
 <<[[Chan]] other fields>>=
-uchar*  dirrock;    /* directory entry rock for translations */
+byte*  dirrock;    /* directory entry rock for translations */
 int nrock;
 int mrock;
 QLock rockqlock;
@@ -15499,9 +15500,9 @@ QLock rockqlock;
  * to overflow the buffer.  Catch the overflow in c->dirrock.
  */
 static void
-mountrock(Chan *c, uchar *p, uchar **pe)
+mountrock(Chan *c, byte *p, byte **pe)
 {
-    uchar *e, *r;
+    byte *e, *r;
     int len, n;
 
     e = *pe;
@@ -15539,10 +15540,10 @@ mountrock(Chan *c, uchar *p, uchar **pe)
  * Satisfy a directory read with the results saved in c->dirrock.
  */
 static bool
-mountrockread(Chan *c, uchar *op, long n, long *nn)
+mountrockread(Chan *c, byte *op, long n, long *nn)
 {
     long dirlen;
-    uchar *rp, *erp, *ep, *p;
+    byte *rp, *erp, *ep, *p;
 
     /* common case */
     if(c->nrock == 0)
@@ -15598,17 +15599,17 @@ mountrewind(Chan *c)
  * of statting what is mounted there.  Except leave the old names.
  */
 static long
-mountfix(Chan *c, uchar *op, long n, long maxn)
+mountfix(Chan *c, byte *op, long n, long maxn)
 {
     char *name;
     int nbuf, nname;
     Chan *nc;
     Mhead *mh;
     Mount *m;
-    uchar *p;
+    byte *p;
     int dirlen, rest;
     long l;
-    uchar *buf, *e;
+    byte *buf, *e;
     Dir d;
 
     p = op;
@@ -15690,7 +15691,7 @@ mountfix(Chan *c, uchar *op, long n, long maxn)
 
 <<function dirfixed>>=
 static int
-dirfixed(uchar *p, uchar *e, Dir *d)
+dirfixed(byte *p, byte *e, Dir *d)
 {
     int len;
 
@@ -16408,7 +16409,7 @@ static Lock i8042lock;
 static void
 i8042intr(Ureg*, void*)
 {
-    uchar s, c;
+    byte s, c;
 
     /*
      *  get status
@@ -16439,7 +16440,7 @@ i8042intr(Ureg*, void*)
  * Scan code processing
  */
 void
-kbdputsc(uchar k, int external)
+kbdputsc(byte k, int external)
 {
     bool keyup;
     Kbscan *kbscan;
@@ -16543,7 +16544,7 @@ kbdputsc(uchar k, int external)
 }
 @
 % about keyup, when type 'a', get 1e, when release get 9e, so 1e+0x80
-% do not put char instead of uchar for 'k', otherwise will get weird
+% do not put char instead of byte for 'k', otherwise will get weird
 % behavior like Left generating a 2.
 
 \ifallcode
@@ -16797,7 +16798,7 @@ static bool nokbd = true;           /* flag: no PS/2 keyboard */
 % set to false in kbdinit
 
 <<global ccc>>=
-static uchar ccc;
+static byte ccc;
 @
 % set by i8042auxenable for mouse on aux port?
 
@@ -17054,7 +17055,7 @@ enum {
 %>>
 
 <<constant CGASCREENBASE>>=
-#define CGASCREENBASE   ((uchar*)KADDR(0xB8000))
+#define CGASCREENBASE   ((byte*)KADDR(0xB8000))
 @
 
 
@@ -17113,7 +17114,7 @@ static void
 cgascreenputc(char c)
 {
     int i;
-    uchar *p;
+    byte *p;
 
     if(c == '\n'){
         cgapos = cgapos/Width;
@@ -17161,7 +17162,7 @@ movecursor(void)
 
 %-------------------------------------------------------------------------------
 <<function cgaregr>>=
-static uchar
+static byte
 cgaregr(int index)
 {
     outb(0x3D4, index);
@@ -17905,10 +17906,10 @@ struct Block
   long  ref;
   Block*  next;
   Block*  list;
-  uchar*  rp;     /* first unconsumed byte */
-  uchar*  wp;     /* first empty byte */
-  uchar*  lim;      /* 1 past the end of the buffer */
-  uchar*  base;     /* start of the buffer */
+  byte*  rp;     /* first unconsumed byte */
+  byte*  wp;     /* first empty byte */
+  byte*  lim;      /* 1 past the end of the buffer */
+  byte*  base;     /* start of the buffer */
   void  (*free)(Block*);
   ushort  flag;
   ushort  checksum;   /* IP checksum of complete packet (minus media header) */
@@ -17949,13 +17950,13 @@ _allocb(int size)
     /* align start of data portion by rounding up */
     addr = (ulong)b;
     addr = ROUND(addr + sizeof(Block), BLOCKALIGN);
-    b->base = (uchar*)addr;
+    b->base = (byte*)addr;
 
     /* align end of data portion by rounding down */
-    b->lim = ((uchar*)b) + msize(b);
+    b->lim = ((byte*)b) + msize(b);
     addr = (ulong)(b->lim);
     addr = addr & ~(BLOCKALIGN-1);
-    b->lim = (uchar*)addr;
+    b->lim = (byte*)addr;
 
     /* leave sluff at beginning for added headers */
     b->rp = b->lim - ROUND(size, BLOCKALIGN);
@@ -18512,7 +18513,7 @@ pullblock(Block **bph, int count)
  *  pointer to first unconsumed block.
  */
 Block*
-bl2mem(uchar *p, Block *b, int n)
+bl2mem(byte *p, Block *b, int n)
 {
     int i;
     Block *next;
@@ -18610,7 +18611,7 @@ qwrite(Queue *q, void *vp, int len)
 {
     int n, sofar;
     Block *b;
-    uchar *p = vp;
+    byte *p = vp;
 
     QDEBUG if(!islo())
         print("qwrite hi %#p\n", getcallerpc(&q));
@@ -18749,7 +18750,7 @@ qconsume(Queue *q, void *vp, int len)
 {
     Block *b;
     int n, dowakeup;
-    uchar *p = vp;
+    byte *p = vp;
     Block *tofree = nil;
 
     /* sync with qwrite */
@@ -18927,7 +18928,7 @@ qproduce(Queue *q, void *vp, int len)
 {
     Block *b;
     int dowakeup;
-    uchar *p = vp;
+    byte *p = vp;
 
     /* sync with qread */
     dowakeup = 0;
@@ -18986,7 +18987,7 @@ qcopy(Queue *q, int len, ulong offset)
     int sofar;
     int n;
     Block *b, *nb;
-    uchar *p;
+    byte *p;
 
     nb = allocb(len);
 
@@ -19487,7 +19488,7 @@ qiwrite(Queue *q, void *vp, int len)
 {
     int n, sofar, dowakeup;
     Block *b;
-    uchar *p = vp;
+    byte *p = vp;
 
     dowakeup = 0;
 
@@ -19977,7 +19978,7 @@ Done:
 
 <<function devstat>>=
 int
-devstat(Chan *c, uchar *db, int n, Dirtab *tab, int ntab, Devgen *gen)
+devstat(Chan *c, byte *db, int n, Dirtab *tab, int ntab, Devgen *gen)
 {
     int i;
     Dir dir;
@@ -20046,7 +20047,7 @@ devdirread(Chan *c, char *d, long n, Dirtab *tab, int ntab, Devgen *gen)
             break;
 
         case 1:
-            dsz = convD2M(&dir, (uchar*)d, n-m);
+            dsz = convD2M(&dir, (byte*)d, n-m);
             if(dsz <= BIT16SZ){ /* <= not < because this isn't stat; read is stuck */
                 if(m == 0)
                     error(Eshort);
@@ -20214,7 +20215,7 @@ struct Dirlist
 {
     uint base; // for unique qids
     Dirtab *dir;
-    uchar **data;
+    byte **data;
     int ndir; // number of dir used
     int mdir; // max dir entries
 };
@@ -20236,7 +20237,7 @@ static Dirtab rootdir[Nrootfiles] = {
     .perm = DMDIR|0555,
   }
 };
-static uchar *rootdata[Nrootfiles];
+static byte *rootdata[Nrootfiles];
 static Dirlist rootlist = 
 {
   .base = 0,
@@ -20258,7 +20259,7 @@ static Dirtab bootdir[Nbootfiles] = {
   }
 };
 
-static uchar *bootdata[Nbootfiles];
+static byte *bootdata[Nbootfiles];
 static Dirlist bootlist =
 {
     .base = Qboot,
@@ -20275,7 +20276,7 @@ static Dirlist bootlist =
  *  add a file to the list
  */
 static void
-addlist(Dirlist *l, char *name, uchar *contents, ulong len, int perm)
+addlist(Dirlist *l, char *name, byte *contents, ulong len, int perm)
 {
     Dirtab *d;
 
@@ -20300,7 +20301,7 @@ addlist(Dirlist *l, char *name, uchar *contents, ulong len, int perm)
  *  add a boot file
  */
 void
-addbootfile(char *name, uchar *contents, ulong len)
+addbootfile(char *name, byte *contents, ulong len)
 {
     addlist(&bootlist, name, contents, len, 0555);
 }
@@ -20396,7 +20397,7 @@ rootread(Chan *c, void *buf, long n, vlong off)
     ulong t;
     Dirtab *d;
     Dirlist *l;
-    uchar *data;
+    byte *data;
     ulong offset = off;
 
     t = c->qid.path;
@@ -20601,7 +20602,7 @@ struct Mntrpc
   Fcall   reply;    /* Incoming reply */
   Mnt*  m;    /* Mount device during rpc */
   Rendez  r;    /* Place to hang out */
-  uchar*  rpc;    /* I/O Data buffer */
+  byte*  rpc;    /* I/O Data buffer */
   uint  rpclen;   /* len of buffer */
   Block *b;   /* reply blocks */
   char  done;   /* Rpc completed */
@@ -21651,7 +21652,7 @@ readbintime(char *buf, int n)
 {
     int i;
     vlong nsec, ticks;
-    uchar *b = (uchar*)buf;
+    byte *b = (byte*)buf;
 
     i = 0;
     if(fasthz == 0LL)
@@ -21684,12 +21685,12 @@ readbintime(char *buf, int n)
 static int
 writebintime(char *buf, int n)
 {
-    uchar *p;
+    byte *p;
     vlong delta;
     long period;
 
     n--;
-    p = (uchar*)buf + 1;
+    p = (byte*)buf + 1;
     switch(*buf){
     case 'n':
         if(n < sizeof(vlong))
@@ -21723,14 +21724,14 @@ static uvlong uvorder = 0x0001020304050607ULL;
 
 
 <<function le2vlong>>=
-static uchar*
-le2vlong(vlong *to, uchar *f)
+static byte*
+le2vlong(vlong *to, byte *f)
 {
-    uchar *t, *o;
+    byte *t, *o;
     int i;
 
-    t = (uchar*)to;
-    o = (uchar*)&uvorder;
+    t = (byte*)to;
+    o = (byte*)&uvorder;
     for(i = 0; i < sizeof(vlong); i++)
         t[o[i]] = f[i];
     return f+sizeof(vlong);
@@ -21739,14 +21740,14 @@ le2vlong(vlong *to, uchar *f)
 
 
 <<function vlong2le>>=
-static uchar*
-vlong2le(uchar *t, vlong from)
+static byte*
+vlong2le(byte *t, vlong from)
 {
-    uchar *f, *o;
+    byte *f, *o;
     int i;
 
-    f = (uchar*)&from;
-    o = (uchar*)&uvorder;
+    f = (byte*)&from;
+    o = (byte*)&uvorder;
     for(i = 0; i < sizeof(vlong); i++)
         t[i] = f[o[i]];
     return t+sizeof(vlong);
@@ -21760,14 +21761,14 @@ static long order = 0x00010203;
 
 
 <<function le2long>>=
-static uchar*
-le2long(long *to, uchar *f)
+static byte*
+le2long(long *to, byte *f)
 {
-    uchar *t, *o;
+    byte *t, *o;
     int i;
 
-    t = (uchar*)to;
-    o = (uchar*)&order;
+    t = (byte*)to;
+    o = (byte*)&order;
     for(i = 0; i < sizeof(long); i++)
         t[o[i]] = f[i];
     return f+sizeof(long);
@@ -22594,7 +22595,7 @@ pipewalk(Chan *c, Chan *nc, char **name, int nname)
 
 <<method pipestat>>=
 static int
-pipestat(Chan *c, uchar *db, int n)
+pipestat(Chan *c, byte *db, int n)
 {
     Pipe *p;
     Dir dir;
@@ -22624,7 +22625,7 @@ pipestat(Chan *c, uchar *db, int n)
 
 <<method pipewstat>>=
 static int
-pipewstat(Chan* c, uchar* db, int n)
+pipewstat(Chan* c, byte* db, int n)
 {
     int m;
     Dir *dir;
@@ -24407,7 +24408,7 @@ procread(Chan *c, void *va, long n, vlong off)
     char *a, flag[10], *sps, *srv, statbuf[NSEG*64];
     int i, j, m, navail, ne, pid, rsize;
     long l;
-    uchar *rptr;
+    byte *rptr;
     ulong offset;
     Confmem *cm;
     Mntwalk *mw;
@@ -24485,14 +24486,14 @@ procread(Chan *c, void *va, long n, vlong off)
 
 
     case Qregs:
-        rptr = (uchar*)p->dbgreg;
+        rptr = (byte*)p->dbgreg;
         rsize = sizeof(Ureg);
         goto regread;
 
     case Qkregs:
         memset(&kur, 0, sizeof(Ureg));
         setkernur(&kur, p);
-        rptr = (uchar*)&kur;
+        rptr = (byte*)&kur;
         rsize = sizeof(Ureg);
         goto regread;
 
@@ -24888,7 +24889,7 @@ procopen(Chan *c, int omode)
 
 <<method procwstat>>=
 static int
-procwstat(Chan *c, uchar *db, int n)
+procwstat(Chan *c, byte *db, int n)
 {
     Proc *p;
     Dir *d;
@@ -25677,7 +25678,7 @@ Dev sysdevtab = {
 \subsection{[[/sys/config]]}
 
 <<devsys.c decls and globals>>=
-extern uchar configfile[]; // in $CONF.c
+extern byte configfile[]; // in $CONF.c
 @
 %$
 
@@ -26207,12 +26208,12 @@ struct Rb
     Rendez  producer;
     Rendez  consumer;
     ulong   randomcount;
-    uchar   buf[1024];
-    uchar   *ep;
-    uchar   *rp;
-    uchar   *wp;
-    uchar   next;
-    uchar   wakeme;
+    byte   buf[1024];
+    byte   *ep;
+    byte   *rp;
+    byte   *wp;
+    byte   next;
+    byte   wakeme;
     ushort  bits;
     ulong   randn;
 };
@@ -26315,7 +26316,7 @@ randominit(void)
 ulong
 randomread(void *xp, ulong n)
 {
-    uchar *e, *p;
+    byte *e, *p;
     ulong x;
 
     p = xp;
@@ -26540,7 +26541,7 @@ char hex[] = "0123456789ABCDEF";
 void
 cgapost(int code)
 {
-    uchar *cga;
+    byte *cga;
 
     cga = CGASCREENBASE;
     cga[Width*Height-Postcodelen*2] = hex[(code>>4) & 0x0F];
@@ -26988,11 +26989,11 @@ dumpregs(Ureg* ureg)
 %//static void
 %//dumplockmem(char *tag, Lock *l)
 %//{
-%//  uchar *cp;
+%//  byte *cp;
 %//  int i;
 %//
 %//  iprint("%s: ", tag);
-%//  cp = (uchar*)l;
+%//  cp = (byte*)l;
 %//  for(i = 0; i < 64; i++)
 %//      iprint("%2.2ux ", cp[i]);
 %//  iprint("\n");
@@ -27090,9 +27091,9 @@ _dumpstack(Ureg *ureg)
         v = *(uintptr*)l;
         if((KTZERO < v && v < (uintptr)&etext) || estack-l < 32){
             /*
-             * Could Pick off general CALL (((uchar*)v)[-5] == 0xE8)
+             * Could Pick off general CALL (((byte*)v)[-5] == 0xE8)
              * and CALL indirect through AX
-             * (((uchar*)v)[-2] == 0xFF && ((uchar*)v)[-2] == 0xD0),
+             * (((byte*)v)[-2] == 0xFF && ((byte*)v)[-2] == 0xD0),
              * but this is too clever and misses faulting address.
              */
             x += iprint("%.8p=%.8p ", l, v);
@@ -28596,7 +28597,7 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
         if(!eventsavailable(nil))
             return 0;
 
-        rptr = (uchar*)va;
+        rptr = (byte*)va;
         navail = tproduced - tconsumed;
         if(navail > n / sizeof(Traceevent))
             navail = n / sizeof(Traceevent);
@@ -28610,7 +28611,7 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
             rptr += ne * sizeof(Traceevent);
             navail -= ne;
         }
-        return rptr - (uchar*)va;
+        return rptr - (byte*)va;
     }
 @
 
@@ -29535,7 +29536,7 @@ extern  void* memchr(void*, int, ulong);
 void*
 memrchr(void *va, int c, long n)
 {
-    uchar *a, *e;
+    byte *a, *e;
 
     a = va;
     for(e=a+n-1; e>a; e--)
@@ -29704,7 +29705,7 @@ extern  int sprint(char*, char*, ...);
 
 <<struct Fmt>>=
 struct Fmt{
-  uchar runes;      /* output buffer is runes or chars? */
+  byte runes;      /* output buffer is runes or chars? */
   void  *start;     /* of buffer */
   void  *to;      /* current place in the buffer */
   void  *stop;      /* end of the buffer; overwritten if flush fails */

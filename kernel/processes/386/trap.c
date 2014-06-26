@@ -627,9 +627,9 @@ _dumpstack(Ureg *ureg)
         v = *(uintptr*)l;
         if((KTZERO < v && v < (uintptr)&etext) || estack-l < 32){
             /*
-             * Could Pick off general CALL (((uchar*)v)[-5] == 0xE8)
+             * Could Pick off general CALL (((byte*)v)[-5] == 0xE8)
              * and CALL indirect through AX
-             * (((uchar*)v)[-2] == 0xFF && ((uchar*)v)[-2] == 0xD0),
+             * (((byte*)v)[-2] == 0xFF && ((byte*)v)[-2] == 0xD0),
              * but this is too clever and misses faulting address.
              */
             x += iprint("%.8p=%.8p ", l, v);
