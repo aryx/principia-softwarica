@@ -354,9 +354,9 @@ struct Dev
     /*x: [[Dev]] methods */
     void  (*init)(void);
     /*x: [[Dev]] methods */
-    Chan* (*open)(Chan*, int);
-    /*x: [[Dev]] methods */
     void  (*close)(Chan*);
+    /*x: [[Dev]] methods */
+    Chan* (*open)(Chan*, int);
     /*x: [[Dev]] methods */
     long  (*read)(Chan*, void*, long, vlong);
     /*x: [[Dev]] methods */

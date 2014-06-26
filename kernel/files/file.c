@@ -30,8 +30,10 @@ fdtochan(int fd, int mode, bool chkmnt, bool iref)
     unlock(f);
 
     if(chkmnt && (c->flag&CMSG)) {
+        /*s: [[fdtochan()]] undo iref incref */
         if(iref)
             cclose(c);
+        /*e: [[fdtochan()]] undo iref incref */
         error(Ebadusefd);
     }
 
@@ -39,14 +41,17 @@ fdtochan(int fd, int mode, bool chkmnt, bool iref)
         return c;
 
     if((mode&OTRUNC) && c->mode==OREAD) {
+        /*s: [[fdtochan()]] undo iref incref */
         if(iref)
             cclose(c);
+        /*e: [[fdtochan()]] undo iref incref */
         error(Ebadusefd);
     }
-
     if((mode&~OTRUNC) != c->mode) {
+        /*s: [[fdtochan()]] undo iref incref */
         if(iref)
             cclose(c);
+        /*e: [[fdtochan()]] undo iref incref */
         error(Ebadusefd);
     }
 

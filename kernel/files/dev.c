@@ -149,7 +149,7 @@ devattach(Rune tc, char *spec)
     c->type = devno(tc, false);
     if(spec == nil)
         spec = "";
-    n = 1+UTFmax+strlen(spec)+1; // '#' + Rune + strlen + '\0'
+    n = 1+UTFmax+strlen(spec)+1; // '#' + Rune + spec + '\0'
     buf = smalloc(n);
     snprint(buf, n, "#%C%s", tc, spec);
     c->path = newpath(buf);

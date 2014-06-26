@@ -904,6 +904,7 @@ sysstat(ulong* arg)
         nexterror();
     }
     l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+
     name = pathlast(c->path);
     if(name)
         l = dirsetname(name, strlen(name), (uchar*)arg[1], l, arg[2]);

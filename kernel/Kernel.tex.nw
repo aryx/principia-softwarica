@@ -12438,6 +12438,30 @@ cunique(Chan *c)
 
 % see chapter 3 too, Dev and devtab global
 
+% ex of attach? they call devattach no?
+<<function devattach>>=
+Chan*
+devattach(Rune tc, char *spec)
+{
+    int n;
+    Chan *c;
+    char *buf;
+
+    c = newchan();
+    mkqid(&c->qid, 0, 0, QTDIR);
+    c->type = devno(tc, false);
+    if(spec == nil)
+        spec = "";
+    n = 1+UTFmax+strlen(spec)+1; // '#' + Rune + spec + '\0'
+    buf = smalloc(n);
+    snprint(buf, n, "#%C%s", tc, spec);
+    c->path = newpath(buf);
+    free(buf);
+    return c;
+}
+@
+
+
 <<function devno>>=
 int
 devno(Rune c, bool user)
@@ -12457,7 +12481,11 @@ devno(Rune c, bool user)
 
 
 
+
 \section{File descriptors}
+
+% why fds? otherwise have to pass a string to each operations.
+% also allow redirection trick with the fd0, fd1 convention
 
 <<struct Fgrp>>=
 struct Fgrp
@@ -12674,17 +12702,6 @@ enum open {
 };
 @ 
 
-<<[[Dev]] methods>>=
-Chan* (*open)(Chan*, int);
-@
-% actually it's used in namec() Take a Chan? what is it?
-% what is the Chan parameter? does not take a string? namec does this
-% and the Chan is the root of the mount device?
-% it's actually called like
-%        c = devtab[c->type]->open(c, omode&~OCEXEC);
-% weird no? open is just here to give a hint to the file server
-% that this file was not only accessed but should now be open for business
-
 
 <<syscall open>>=
 // int open(char *file, int omode);
@@ -12760,8 +12777,7 @@ fdtochan(int fd, int mode, bool chkmnt, bool iref)
     unlock(f);
 
     if(chkmnt && (c->flag&CMSG)) {
-        if(iref)
-            cclose(c);
+        <<[[fdtochan()]] undo iref incref>>
         error(Ebadusefd);
     }
 
@@ -12769,14 +12785,11 @@ fdtochan(int fd, int mode, bool chkmnt, bool iref)
         return c;
 
     if((mode&OTRUNC) && c->mode==OREAD) {
-        if(iref)
-            cclose(c);
+        <<[[fdtochan()]] undo iref incref>>
         error(Ebadusefd);
     }
-
     if((mode&~OTRUNC) != c->mode) {
-        if(iref)
-            cclose(c);
+        <<[[fdtochan()]] undo iref incref>>
         error(Ebadusefd);
     }
 
@@ -12785,6 +12798,10 @@ fdtochan(int fd, int mode, bool chkmnt, bool iref)
 @
 % LP split chkmnt
 
+<<[[fdtochan()]] undo iref incref>>=
+if(iref)
+    cclose(c);
+@
 
 <<function fdclose>>=
 void
@@ -12841,6 +12858,514 @@ chan_cclose(Chan *c)
 }
 @
 % see also ccloseq
+
+
+\section{[[namec()]]}
+% big function ...
+% here now and not in Dir chapter cos don't need path, and LP splitted enough
+% now that mainly expose the open method so better closer to sysopen
+
+<<[[sysexec()]] call namec() to get a channel in tc from file>>=
+tc = namec(file, Aopen, OEXEC, 0);
+@
+
+% also have seen before:
+%        up->slash = namec("#/", Atodir, 0, 0); in init0
+% and
+%    c = namec((char*)arg[0], Aopen, arg[1], 0); in sysopen
+
+<<enum open cases>>=
+OEXEC = 3, /* execute, == read but check execute permission */
+@
+
+<<enum accessnamec>>=
+/*
+ * Access types in namec
+ */
+enum
+{
+  Aopen,        /* for i/o */
+  Acreate,      /* is to be created */
+  Aremove,      /* will be removed by caller */
+  Aaccess,      /* as in stat, wstat */
+  Atodir,       /* as in chdir */
+  <<enum accessnamec cases>>
+};
+@
+
+<<[[namec() locals>>=
+char *name;
+@
+
+<<[[namec() locals>>=
+Elemlist e;
+@
+
+<<[[namec() locals>>=
+Chan *c;
+@
+% that will also adjust c->path gradually
+
+
+% another big function ... actually calls 
+% dev->open, dev->create, dev->walk, dev->attach
+<<function namec>>=
+/*
+ * Turn a name into a channel.
+ * &name[0] is known to be a valid address.  It may be a kernel address.
+ *
+ * Opening with amode Aopen, Acreate, Aremove, or Aaccess guarantees
+ * that the result will be the only reference to that particular fid.
+ * This is necessary since we might pass the result to
+ * devtab[]->remove().
+ *
+ * Opening Atodir or Amount does not guarantee this.
+ *
+ * Under certain circumstances, opening Aaccess will cause
+ * an unnecessary clone in order to get a cunique Chan so it
+ * can attach the correct name.  Sysstat and sys_stat need the
+ * correct name so they can rewrite the stat info.
+ */
+Chan*
+namec(char *aname, int amode, int omode, ulong perm)
+{
+    <<[[namec() locals>>
+
+    if(aname[0] == '\0')
+        error("empty file name");
+
+    aname = validnamedup(aname, true);
+
+    if(waserror()){
+        free(aname);
+        nexterror();
+    }
+    DBG("namec %s %d %d\n", aname, amode, omode);
+    name = aname;
+
+    /*
+     * Find the starting off point (the current slash, the root of
+     * a device tree, or the current dot) as well as the name to
+     * evaluate starting there.
+     */
+    mount = true;
+    switch(name[0]){
+    <<[[namec()]] if name[0] == '#'>>
+    case '/':
+        c = up->slash;
+        incref(c);
+        break;
+    
+    default:
+        c = up->dot;
+        incref(c);
+        break;
+    }
+
+    <<[[namec()]] initializes Elemlist e>>
+
+    if(waserror()){
+        cclose(c);
+        <<[[namec()]] if waserror free Elemlist e and prepare nice error>>
+    }
+
+    /*
+     * Build a list of elements in the name.
+     */
+    parsename(name, &e);
+
+    /*
+     * On create, ....
+     */
+    <<[[namec()]] adjust Elemlist e if Acreate>>
+
+    if(walk(&c, e.elems, e.nelems, mount, &e.nerror) < 0){
+        if(e.nerror < 0 || e.nerror > e.nelems){
+            print("namec %s walk error nerror=%d\n", aname, e.nerror);
+            e.nerror = 0;
+        }
+        nexterror();
+    }
+
+    <<[[namec()]] error if not a directory or cannot exec directory>>
+
+    switch(amode){
+    case Aopen:
+    case Aremove:
+    case Aaccess:
+    Open:
+        <<[[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1>>
+    
+        switch(amode){
+        case Aopen:
+        case Acreate:
+            <<[[namec()]] case Aopen, Acreate, handle mountpoint part2>>
+   
+            <<[[namec()]] set channel flag before open>>
+            c = devtab[c->type]->open(c, omode&~OCEXEC);
+            <<[[namec()]] set channel flag after open>>
+            break;
+
+        case Aaccess:
+        case Aremove:
+           <<[[namec()]] case Aremove, Aaccess, handle mountpoint part2>>
+            break;
+    
+        }
+        break;
+    <<[[namec()]] other cases>>
+    default:
+        panic("unknown namec access %d\n", amode);
+    }
+
+    <<[[namec()]] set genbuf from Elemlist e>>
+    <<[[namec()]] free Elemlist e>>
+
+    poperror(); /* e c */
+    free(aname);
+    poperror(); /* aname */
+
+    return c;
+}
+@
+%        if(0 && chandebug)
+%            print("showing %d+%d/%d (of %d) of %s (%d %d)\n", e.prefix, e.off[e.nerror], e.nerror, e.nelems, aname, e.off[0], e.off[1]);
+
+
+<<[[Dev]] methods>>=
+Chan* (*open)(Chan*, int);
+@
+% it's actually called like
+%        c = devtab[c->type]->open(c, omode&~OCEXEC);
+% weird no? open is just here to give a hint to the file server
+% that this file was not only accessed but should now be open for business
+% walk was the one who already returned the channel
+
+
+<<[[namec()]] set genbuf from Elemlist e>>=
+/* place final element in genbuf for e.g. exec */
+if(e.nelems > 0)
+    kstrcpy(up->genbuf, e.elems[e.nelems-1], sizeof up->genbuf);
+else
+    kstrcpy(up->genbuf, ".", sizeof up->genbuf);
+@
+
+<<[[Proc]] other fields>>=
+char  genbuf[128];  /* buffer used e.g. for last name element from namec */
+@
+% for up->text. Could do cleaner and just use lastpath in sysexec no?
+
+
+
+<<[[namec() locals>>=
+int len, n, t;
+bool mount;
+Mhead *m;
+@
+
+\subsection{Checking valid filename string}
+
+% seems always called with slashok=true
+<<function validnamedup>>=
+char*
+validnamedup(char *aname, bool slashok)
+{
+    return validname0(aname, slashok, true, getcallerpc(&aname));
+}
+@
+
+<<function validname>>=
+void
+validname(char *aname, bool slashok)
+{
+    validname0(aname, slashok, false, getcallerpc(&aname));
+}
+@
+
+
+<<function validname0>>=
+/*
+ * Check that the name
+ *  a) is in valid memory.
+ *  b) is shorter than 2^16 bytes, so it can fit in a 9P string field.
+ *  c) contains no frogs.
+ * The first byte is known to be addressible by the requester, so the
+ * routine works for kernel and user memory both.
+ * The parameter slashok flags whether a slash character is an error
+ * or a valid character.
+ *
+ * The parameter dup flags whether the string should be copied
+ * out of user space before being scanned the second time.
+ * (Otherwise a malicious thread could remove the NUL, causing us
+ * to access unchecked addresses.) 
+ */
+static char*
+validname0(char *aname, bool slashok, bool dup, kern_addr pc)
+{
+    char *ename, *name, *s;
+    int c, n;
+    Rune r;
+
+    name = aname;
+    if((ulong)name < KZERO){
+        if(!dup)
+            print("warning: validname called from %#p with user pointer", pc);
+        ename = vmemchr(name, 0, (1<<16));
+    }else
+        ename = memchr(name, 0, (1<<16));
+
+    if(ename==nil || ename-name>=(1<<16))
+        error("name too long");
+
+    s = nil;
+    if(dup){
+        n = ename-name;
+        s = smalloc(n+1);
+        memmove(s, name, n);
+        s[n] = 0;
+        aname = s;
+        name = s;
+        setmalloctag(s, pc);
+    }
+    
+    while(*name){
+        /* all characters above '~' are ok */
+        c = *(uchar*)name;
+        if(c >= Runeself)
+            name += chartorune(&r, name);
+        else{
+            if(isfrog[c])
+                if(!slashok || c!='/'){
+                    snprint(up->genbuf, sizeof(up->genbuf), "%s: %q", Ebadchar, aname);
+                    free(s);
+                    error(up->genbuf);
+            }
+            name++;
+        }
+    }
+    return s;
+}
+@
+% >> >> >>
+
+
+
+<<global isfrog>>=
+char isfrog[256]={
+    /*NUL*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    /*BKS*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    /*DLE*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    /*CAN*/ 1, 1, 1, 1, 1, 1, 1, 1,
+    ['/']   1,
+    [0x7f]  1,
+};
+@
+
+\subsection{Parsing filename}
+
+% used internally by namec()
+<<struct Elemlist>>=
+struct Elemlist
+{
+    char    *aname; /* original name */
+    char    *name;  /* copy of name, so '/' can be overwritten */
+
+    //array<string> pointing to subparts of name
+    char    **elems; // subparts
+    // size(elems)
+    int nelems;
+    //array<int>, offset in name for the subparts of name in elems
+    int *off;
+
+    bool mustbedir;
+    int nerror;
+    int prefix;
+};
+@
+
+<<[[namec()]] initializes Elemlist e>>=
+e.aname = aname;
+e.prefix = name - aname;
+e.name = nil;
+e.elems = nil;
+e.off = nil;
+e.nelems = 0;
+e.nerror = 0;
+@
+
+<<[[namec()]] free Elemlist e>>=
+free(e.name);
+free(e.elems);
+free(e.off);
+@
+
+
+<<function parsename>>=
+/*
+ * The name is known to be valid.
+ * Copy the name so slashes can be overwritten.
+ * An empty string will set nelem=0.
+ * A path ending in / or /. or /.//./ etc. will have
+ * e.mustbedir = true, so that we correctly
+ * reject, e.g., "/adm/users/." when /adm/users is a file
+ * rather than a directory.
+ */
+static void
+parsename(char *aname, Elemlist *e)
+{
+    char *name, *slash;
+
+    kstrdup(&e->name, aname);
+    name = e->name;
+    e->nelems = 0;
+    e->elems = nil;
+    e->off = smalloc(sizeof(int));
+    e->off[0] = skipslash(name) - name;
+    for(;;){
+        name = skipslash(name);
+        if(*name == '\0'){
+            e->off[e->nelems] = name+strlen(name) - e->name;
+            e->mustbedir = true;
+            break;
+        }
+        growparse(e);
+        e->elems[e->nelems++] = name;
+        slash = utfrune(name, '/');
+        if(slash == nil){
+            e->off[e->nelems] = name+strlen(name) - e->name;
+            e->mustbedir = false;
+            break;
+        }
+        e->off[e->nelems] = slash - e->name;
+        *slash++ = '\0';
+        name = slash;
+    }
+    
+}
+@
+%    if(0 && chandebug){
+%        int i;
+%        
+%        print("parsename %s:", e->name);
+%        for(i=0; i<=e->nelems; i++)
+%            print(" %d", e->off[i]);
+%        print("\n");
+%    }
+
+
+<<function growparse>>=
+static void
+growparse(Elemlist *e)
+{
+    char **new;
+    int *inew;
+    enum { Delta = 8 };
+
+    if(e->nelems % Delta == 0){
+        new = smalloc((e->nelems+Delta) * sizeof(char*));
+        memmove(new, e->elems, e->nelems*sizeof(char*));
+        free(e->elems);
+        e->elems = new;
+        inew = smalloc((e->nelems+Delta+1) * sizeof(int));
+        memmove(inew, e->off, (e->nelems+1)*sizeof(int));
+        free(e->off);
+        e->off = inew;
+    }
+}
+@
+
+
+
+<<function skipslash>>=
+/*
+ * name is valid. skip leading / and ./ as much as possible
+ */
+char*
+skipslash(char *name)
+{
+    while(name[0]=='/' || (name[0]=='.' && (name[1]==0 || name[1]=='/')))
+        name++;
+    return name;
+}
+@
+
+\subsection{Error managment}
+
+<<[[namec() locals>>=
+char tmperrbuf[ERRMAX];
+@
+
+<<[[namec()]] if waserror free Elemlist e and prepare nice error>>=
+free(e.name);
+free(e.elems);
+/*
+ * Prepare nice error, showing first e.nerror elements of name.
+ */
+if(e.nerror == 0)
+    nexterror();
+strcpy(tmperrbuf, up->errstr);
+if(e.off[e.nerror]==0)
+    print("nerror=%d but off=%d\n",e.nerror, e.off[e.nerror]);
+len = e.prefix+e.off[e.nerror];
+free(e.off);
+namelenerror(aname, len, tmperrbuf);
+@
+
+<<function namelenerror>>=
+void
+namelenerror(char *aname, int len, char *err)
+{
+    char *ename, *name, *next;
+    int i, errlen;
+
+    /*
+     * If the name is short enough, just use the whole thing.
+     */
+    errlen = strlen(err);
+    if(len < ERRMAX/3 || len+errlen < 2*ERRMAX/3)
+        snprint(up->genbuf, sizeof up->genbuf, "%.*s", 
+            utfnlen(aname, len), aname);
+    else{
+        /*
+         * Print a suffix of the name, but try to get a little info.
+         */
+        ename = aname+len;
+        next = ename;
+        do{
+            name = next;
+            next = memrchr(aname, '/', name-aname);
+            if(next == nil)
+                next = aname;
+            len = ename-next;
+        }while(len < ERRMAX/3 || len + errlen < 2*ERRMAX/3);
+
+        /*
+         * If the name is ridiculously long, chop it.
+         */
+        if(name == ename){
+            name = ename-ERRMAX/4;
+            if(name <= aname)
+                panic("bad math in namelenerror");
+            /* walk out of current UTF sequence */
+            for(i=0; (*name&0xC0)==0x80 && i<UTFmax; i++)
+                name++;
+        }
+        snprint(up->genbuf, sizeof up->genbuf, "...%.*s",
+            utfnlen(name, ename-name), name);
+    }               
+    snprint(up->errstr, ERRMAX, "%#q %s", up->genbuf, err);
+    nexterror();
+}
+@
+
+% used by wstat later
+<<function nameerror>>=
+void
+nameerror(char *name, char *err)
+{
+    namelenerror(name, strlen(name), err);
+}
+@
 
 
 \section{[[syspread()]], [[syspwrite()]]}
@@ -13243,6 +13768,63 @@ closeproc(void*)
 @
 
 
+\section{Special opening modes}
+
+\subsection{Close on exec}
+
+<<enum open cases>>=
+OCEXEC = 32,  /* or'ed in, close on exec */
+@
+% usually negated before calling ->open()
+
+<<enum channelflag cases>>=
+CCEXEC  = 0x0008,   /* close on exec */
+@
+
+<<[[namec()]] set channel flag after open>>=
+if(omode & OCEXEC)
+    c->flag |= CCEXEC;
+@
+
+<<[[namec()]] set channel flag after create>>=
+if(omode & OCEXEC)
+    cnew->flag |= CCEXEC;
+@
+
+<<[[sysexec()]] close files marked as opened with close on exec>>=
+/*
+ * Close on exec
+ */
+f = up->fgrp;
+for(i=0; i<=f->maxfd; i++)
+    fdclose(i, CCEXEC);
+@
+
+\subsection{Remove on close}
+% for temporary files? convenient?
+
+<<enum open cases>>=
+ORCLOSE = 64,  /* or'ed in, remove on close */
+@
+
+<<enum channelflag cases>>=
+CRCLOSE = 0x0020,   /* remove on close */
+@
+
+
+<<[[namec()]] set channel flag after open>>=
+if(omode & ORCLOSE)
+    c->flag |= CRCLOSE;
+@
+
+<<[[namec()]] set channel flag after create>>=
+if(omode & ORCLOSE)
+    cnew->flag |= CRCLOSE;
+@
+
+% no generic code operating on CRCLOSE, each dev does differently
+% but why? why not call ->remove() in sysclose()?
+
 
 
 
@@ -13277,6 +13859,10 @@ isdir(Chan *c)
 
 % could put slash and dot Proc fields here
 
+% a few diffs between generic File and Dir, do certain
+% special things/checks for Dir
+
+
 <<[[sseek()]] ensures off is 0 for directories>>=
 if((c->qid.type & QTDIR) && off != 0)
     error(Eisdir);
@@ -13287,8 +13873,16 @@ if(c->qid.type & QTDIR)
     error(Eisdir);
 @
 
+<<[[namec()]] error if not a directory or cannot exec directory>>=
+if(e.mustbedir && !(c->qid.type&QTDIR))
+    error("not a directory");
+
+if(amode == Aopen && (omode&OEXEC) == OEXEC && (c->qid.type&QTDIR))
+    error("cannot exec directory");
+@
+
 \section{[[Path]]}
-% mv later? not used in namec directly
+% mv later?
 
 % see Path *path; in Chan
 
@@ -13308,10 +13902,17 @@ struct Path
     Ref;
 };
 @
+% why need path? for fd2path for sure, but also for error messages on channel
+%  in general. But then should do things lazily no?
+% why need this array of mtpt? I think just for reference counting the
+%  intermediate dirs so that you can't remove those intermediate dirs as
+%  there are still referenced in opened files? hmm not sure.
+% 
 %LP split mtpt?
 % mtpt is for the components, the chan from each sub dirs in the path
 % so for /usr/pad/foo.c => path s = "/usr/pad/foo.c\0",
 % mlen = 3; chan = [slash; chan of /usr; chan of /usr/pad ]
+
 
 
 \ifallcode
@@ -13545,581 +14146,6 @@ fixdotdotname(Path *p)
 % cleanname() is in libc
 
 
-\section{[[Dir]]}
-% mv later? not used in namec directly
-
-% also in libc.h (so if change here, need change also in libc.h)
-<<struct Dir>>=
-struct Dir {
-  /* system-modified data */
-  ushort  type; /* server type */
-  uint  dev;  /* server subtype */
-
-  /* file data */
-  Qid qid;  /* unique id from server */
-  // bitset<enum<dirmode>>
-  ulong mode; /* permissions */
-
-  ulong atime;  /* last read time */
-  ulong mtime;  /* last write time */
-
-  vlong length; /* file length: see <u.h> */
-  char  *name;  /* last element of path */
-
-  char  *uid; /* owner name */
-  char  *gid; /* group name */
-  char  *muid;  /* last modifier name */
-};
-@ 
-% gid here! cool muid
-% why call Dir? seems more like a DirEntry no?
-
-<<enum dirmode>>=
-/* bits in Dir.mode */
-enum dirmode {
-    DMDIR = 0x80000000,  /* mode bit for directories */
-
-    DMREAD = 0x4,   /* mode bit for read permission */
-    DMWRITE = 0x2,   /* mode bit for write permission */
-    DMEXEC = 0x1,   /* mode bit for execute permission */
-    <<enum dirmode cases>>
-};
-@ 
-% DMREAD, DMWRITE, DMEXEC are actually never used in the kernel.
-% I think the kernel does not really care except just passing around
-% and delegate. So those are defined in libc.h but do not need to
-% be defined here I think.
-%DMAPPEND = 0x40000000,  /* mode bit for append only files */
-
-
-
-\section{[[namec()]]}
-% big function ...
-
-<<[[sysexec()]] call namec() to get a channel in tc from file>>=
-tc = namec(file, Aopen, OEXEC, 0);
-@
-
-% also have seen before:
-%        up->slash = namec("#/", Atodir, 0, 0); in init0
-% and
-%    c = namec((char*)arg[0], Aopen, arg[1], 0); in sysopen
-
-<<enum open cases>>=
-OEXEC = 3, /* execute, == read but check execute permission */
-@
-
-<<enum accessnamec>>=
-/*
- * Access types in namec
- */
-enum
-{
-  Aopen,        /* for i/o */
-  Acreate,      /* is to be created */
-  Aremove,      /* will be removed by caller */
-  Aaccess,      /* as in stat, wstat */
-  Atodir,       /* as in chdir */
-  <<enum accessnamec cases>>
-};
-@
-
-<<[[namec() locals>>=
-char *name;
-@
-
-<<[[namec() locals>>=
-Elemlist e;
-@
-
-<<[[namec() locals>>=
-Chan *c;
-@
-% that will also adjust c->path gradually
-
-
-% another big function ... actually calls 
-% dev->open, dev->create dev->walk, dev->attach
-<<function namec>>=
-/*
- * Turn a name into a channel.
- * &name[0] is known to be a valid address.  It may be a kernel address.
- *
- * Opening with amode Aopen, Acreate, Aremove, or Aaccess guarantees
- * that the result will be the only reference to that particular fid.
- * This is necessary since we might pass the result to
- * devtab[]->remove().
- *
- * Opening Atodir or Amount does not guarantee this.
- *
- * Under certain circumstances, opening Aaccess will cause
- * an unnecessary clone in order to get a cunique Chan so it
- * can attach the correct name.  Sysstat and sys_stat need the
- * correct name so they can rewrite the stat info.
- */
-Chan*
-namec(char *aname, int amode, int omode, ulong perm)
-{
-    <<[[namec() locals>>
-
-    if(aname[0] == '\0')
-        error("empty file name");
-
-    aname = validnamedup(aname, true);
-
-    if(waserror()){
-        free(aname);
-        nexterror();
-    }
-    DBG("namec %s %d %d\n", aname, amode, omode);
-    name = aname;
-
-    /*
-     * Find the starting off point (the current slash, the root of
-     * a device tree, or the current dot) as well as the name to
-     * evaluate starting there.
-     */
-    mount = true;
-    switch(name[0]){
-    <<[[namec()]] if name[0] == '#'>>
-    case '/':
-        c = up->slash;
-        incref(c);
-        break;
-    
-    default:
-        c = up->dot;
-        incref(c);
-        break;
-    }
-
-    <<[[namec()]] initializes Elemlist e>>
-
-    if(waserror()){
-        cclose(c);
-        <<[[namec()]] if waserror free Elemlist e and prepare nice error>>
-    }
-
-    /*
-     * Build a list of elements in the name.
-     */
-    parsename(name, &e);
-
-    /*
-     * On create, ....
-     */
-    <<[[namec()]] adjust Elemlist e if Acreate>>
-
-    if(walk(&c, e.elems, e.nelems, mount, &e.nerror) < 0){
-        if(e.nerror < 0 || e.nerror > e.nelems){
-            print("namec %s walk error nerror=%d\n", aname, e.nerror);
-            e.nerror = 0;
-        }
-        nexterror();
-    }
-
-    if(e.mustbedir && !(c->qid.type&QTDIR))
-        error("not a directory");
-
-    if(amode == Aopen && (omode&OEXEC) == OEXEC && (c->qid.type&QTDIR))
-        error("cannot exec directory");
-
-    switch(amode){
-    <<[[namec()]] case Aopen, Acreate, Aremove, Aaccess>>
-    <<[[namec()]] other cases>>
-    default:
-        panic("unknown namec access %d\n", amode);
-    }
-
-    <<[[namec()]] set genbuf from Elemlist e>>
-    <<[[namec()]] free Elemlist e>>
-
-    poperror(); /* e c */
-    free(aname);
-    poperror(); /* aname */
-
-    return c;
-}
-@
-%        if(0 && chandebug)
-%            print("showing %d+%d/%d (of %d) of %s (%d %d)\n", e.prefix, e.off[e.nerror], e.nerror, e.nelems, aname, e.off[0], e.off[1]);
-
-
-<<[[namec()]] case Aopen, Acreate, Aremove, Aaccess>>=
-case Aopen:
-case Aremove:
-case Aaccess:
-Open:
-    <<[[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1>>
-
-    switch(amode){
-    case Aaccess:
-    case Aremove:
-       <<[[namec()]] case Aremove, Aaccess, handle mountpoint part2>>
-        break;
-
-    case Aopen:
-    case Acreate:
-        <<[[namec()]] case Aopen, Acreate, handle mountpoint part2>>
-
-        /* save registers else error() in open has wrong value of c saved */
-        //old: saveregisters();
-
-        <<[[namec()]] set channel flag before open>>
-        c = devtab[c->type]->open(c, omode&~OCEXEC);
-        <<[[namec()]] set channel flag after open>>
-        break;
-    }
-    break;
-@
-
-<<[[namec()]] set genbuf from Elemlist e>>=
-/* place final element in genbuf for e.g. exec */
-if(e.nelems > 0)
-    kstrcpy(up->genbuf, e.elems[e.nelems-1], sizeof up->genbuf);
-else
-    kstrcpy(up->genbuf, ".", sizeof up->genbuf);
-@
-
-
-<<[[Proc]] other fields>>=
-char  genbuf[128];  /* buffer used e.g. for last name element from namec */
-@
-% for up->text. Could do cleaner and just use lastpath in sysexec no?
-
-
-<<[[namec()]] if name[0] == '#'>>=
-case '#':
-    mount = false;
-
-    up->genbuf[0] = '\0';
-    n = 0;
-    while(*name != '\0' && (*name != '/' || n < 2)){ // #/ is ok hence n < 2
-        if(n >= sizeof(up->genbuf)-1)
-            error(Efilename);
-        up->genbuf[n++] = *name++;
-    }
-    up->genbuf[n] = '\0';
-
-    n = chartorune(&r, up->genbuf+1)+1; // +1 for the leading '#'
-
-    <<[[namec()]] noattach checking>>
-
-    t = devno(r, true);
-    if(t == -1)
-        error(Ebadsharp);
-
-    c = devtab[t]->attach(up->genbuf+n);
-    break;
-@
-
-<<[[namec() locals>>=
-int len, n, t;
-bool mount;
-Chan *cnew;
-Rune r;
-Mhead *m;
-char *createerr, tmperrbuf[ERRMAX];
-@
-
-
-\subsection{Checking valid filename string}
-
-<<function validname0>>=
-/*
- * Check that the name
- *  a) is in valid memory.
- *  b) is shorter than 2^16 bytes, so it can fit in a 9P string field.
- *  c) contains no frogs.
- * The first byte is known to be addressible by the requester, so the
- * routine works for kernel and user memory both.
- * The parameter slashok flags whether a slash character is an error
- * or a valid character.
- *
- * The parameter dup flags whether the string should be copied
- * out of user space before being scanned the second time.
- * (Otherwise a malicious thread could remove the NUL, causing us
- * to access unchecked addresses.) 
- */
-static char*
-validname0(char *aname, bool slashok, bool dup, ulong pc)
-{
-    char *ename, *name, *s;
-    int c, n;
-    Rune r;
-
-    name = aname;
-    if((ulong)name < KZERO){
-        if(!dup)
-            print("warning: validname called from %#p with user pointer", pc);
-        ename = vmemchr(name, 0, (1<<16));
-    }else
-        ename = memchr(name, 0, (1<<16));
-
-    if(ename==nil || ename-name>=(1<<16))
-        error("name too long");
-
-    s = nil;
-    if(dup){
-        n = ename-name;
-        s = smalloc(n+1);
-        memmove(s, name, n);
-        s[n] = 0;
-        aname = s;
-        name = s;
-        setmalloctag(s, pc);
-    }
-    
-    while(*name){
-        /* all characters above '~' are ok */
-        c = *(uchar*)name;
-        if(c >= Runeself)
-            name += chartorune(&r, name);
-        else{
-            if(isfrog[c])
-                if(!slashok || c!='/'){
-                    snprint(up->genbuf, sizeof(up->genbuf), "%s: %q", Ebadchar, aname);
-                    free(s);
-                    error(up->genbuf);
-            }
-            name++;
-        }
-    }
-    return s;
-}
-@
-% >> >> >>
-
-<<function validname>>=
-void
-validname(char *aname, bool slashok)
-{
-    validname0(aname, slashok, false, getcallerpc(&aname));
-}
-@
-
-% seems always called with slashok=true
-<<function validnamedup>>=
-char*
-validnamedup(char *aname, bool slashok)
-{
-    return validname0(aname, slashok, true, getcallerpc(&aname));
-}
-@
-
-<<global isfrog>>=
-char isfrog[256]={
-    /*NUL*/ 1, 1, 1, 1, 1, 1, 1, 1,
-    /*BKS*/ 1, 1, 1, 1, 1, 1, 1, 1,
-    /*DLE*/ 1, 1, 1, 1, 1, 1, 1, 1,
-    /*CAN*/ 1, 1, 1, 1, 1, 1, 1, 1,
-    ['/']   1,
-    [0x7f]  1,
-};
-@
-
-\subsection{Parsing filename}
-
-% used internally by namec()
-<<struct Elemlist>>=
-struct Elemlist
-{
-    char    *aname; /* original name */
-    char    *name;  /* copy of name, so '/' can be overwritten */
-
-    //array<string> pointing to subparts of name
-    char    **elems; // subparts
-    // size(elems)
-    int nelems;
-    //array<int>, offset in name for the subparts of name in elems
-    int *off;
-
-    bool mustbedir;
-    int nerror;
-    int prefix;
-};
-@
-
-<<[[namec()]] initializes Elemlist e>>=
-e.aname = aname;
-e.prefix = name - aname;
-e.name = nil;
-e.elems = nil;
-e.off = nil;
-e.nelems = 0;
-e.nerror = 0;
-@
-
-<<[[namec()]] if waserror free Elemlist e and prepare nice error>>=
-free(e.name);
-free(e.elems);
-/*
- * Prepare nice error, showing first e.nerror elements of name.
- */
-if(e.nerror == 0)
-    nexterror();
-strcpy(tmperrbuf, up->errstr);
-if(e.off[e.nerror]==0)
-    print("nerror=%d but off=%d\n",e.nerror, e.off[e.nerror]);
-len = e.prefix+e.off[e.nerror];
-free(e.off);
-namelenerror(aname, len, tmperrbuf);
-@
-
-<<[[namec()]] free Elemlist e>>=
-free(e.name);
-free(e.elems);
-free(e.off);
-@
-
-
-<<function parsename>>=
-/*
- * The name is known to be valid.
- * Copy the name so slashes can be overwritten.
- * An empty string will set nelem=0.
- * A path ending in / or /. or /.//./ etc. will have
- * e.mustbedir = true, so that we correctly
- * reject, e.g., "/adm/users/." when /adm/users is a file
- * rather than a directory.
- */
-static void
-parsename(char *aname, Elemlist *e)
-{
-    char *name, *slash;
-
-    kstrdup(&e->name, aname);
-    name = e->name;
-    e->nelems = 0;
-    e->elems = nil;
-    e->off = smalloc(sizeof(int));
-    e->off[0] = skipslash(name) - name;
-    for(;;){
-        name = skipslash(name);
-        if(*name == '\0'){
-            e->off[e->nelems] = name+strlen(name) - e->name;
-            e->mustbedir = true;
-            break;
-        }
-        growparse(e);
-        e->elems[e->nelems++] = name;
-        slash = utfrune(name, '/');
-        if(slash == nil){
-            e->off[e->nelems] = name+strlen(name) - e->name;
-            e->mustbedir = false;
-            break;
-        }
-        e->off[e->nelems] = slash - e->name;
-        *slash++ = '\0';
-        name = slash;
-    }
-    
-}
-@
-%    if(0 && chandebug){
-%        int i;
-%        
-%        print("parsename %s:", e->name);
-%        for(i=0; i<=e->nelems; i++)
-%            print(" %d", e->off[i]);
-%        print("\n");
-%    }
-
-
-<<function growparse>>=
-static void
-growparse(Elemlist *e)
-{
-    char **new;
-    int *inew;
-    enum { Delta = 8 };
-
-    if(e->nelems % Delta == 0){
-        new = smalloc((e->nelems+Delta) * sizeof(char*));
-        memmove(new, e->elems, e->nelems*sizeof(char*));
-        free(e->elems);
-        e->elems = new;
-        inew = smalloc((e->nelems+Delta+1) * sizeof(int));
-        memmove(inew, e->off, (e->nelems+1)*sizeof(int));
-        free(e->off);
-        e->off = inew;
-    }
-}
-@
-
-
-
-<<function skipslash>>=
-/*
- * name is valid. skip leading / and ./ as much as possible
- */
-char*
-skipslash(char *name)
-{
-    while(name[0]=='/' || (name[0]=='.' && (name[1]==0 || name[1]=='/')))
-        name++;
-    return name;
-}
-@
-
-
-<<function namelenerror>>=
-void
-namelenerror(char *aname, int len, char *err)
-{
-    char *ename, *name, *next;
-    int i, errlen;
-
-    /*
-     * If the name is short enough, just use the whole thing.
-     */
-    errlen = strlen(err);
-    if(len < ERRMAX/3 || len+errlen < 2*ERRMAX/3)
-        snprint(up->genbuf, sizeof up->genbuf, "%.*s", 
-            utfnlen(aname, len), aname);
-    else{
-        /*
-         * Print a suffix of the name, but try to get a little info.
-         */
-        ename = aname+len;
-        next = ename;
-        do{
-            name = next;
-            next = memrchr(aname, '/', name-aname);
-            if(next == nil)
-                next = aname;
-            len = ename-next;
-        }while(len < ERRMAX/3 || len + errlen < 2*ERRMAX/3);
-
-        /*
-         * If the name is ridiculously long, chop it.
-         */
-        if(name == ename){
-            name = ename-ERRMAX/4;
-            if(name <= aname)
-                panic("bad math in namelenerror");
-            /* walk out of current UTF sequence */
-            for(i=0; (*name&0xC0)==0x80 && i<UTFmax; i++)
-                name++;
-        }
-        snprint(up->genbuf, sizeof up->genbuf, "...%.*s",
-            utfnlen(name, ename-name), name);
-    }               
-    snprint(up->errstr, ERRMAX, "%#q %s", up->genbuf, err);
-    nexterror();
-}
-@
-
-<<function nameerror>>=
-void
-nameerror(char *name, char *err)
-{
-    namelenerror(name, strlen(name), err);
-}
-@
-
-
-
 \section{[[walk()]]}
 
 <<[[Dev]] methods>>=
@@ -14136,6 +14162,7 @@ struct Walkqid
 @
 
 
+% another big function, namec() and walk() are complicated
 <<function walk>>=
 /*
  * Either walks all the way or not at all.  No partial results in *cp.
@@ -14145,7 +14172,10 @@ struct Walkqid
 int
 walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
 {
-    int dev, didmount, dotdot, i, n, nhave, ntry, type;
+    int type, dev;
+    int i, n;
+    int nhave, ntry;
+    bool didmount, dotdot;
     Chan *c, *nc, *mtpt;
     Path *path;
     Mhead *mh, *nmh;
@@ -14167,11 +14197,11 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
      *
      * Each time through the loop:
      *
-     *  If didmount==0, c is on the undomount side of the mount point.
-     *  If didmount==1, c is on the domount side of the mount point.
+     *  If didmount==false, c is on the undomount side of the mount point.
+     *  If didmount==true, c is on the domount side of the mount point.
      *  Either way, c's full path is path.
      */
-    didmount = 0;
+    didmount = false;
     for(nhave=0; nhave<nnames; nhave+=n){
         if((c->qid.type&QTDIR)==0){
             if(nerror)
@@ -14186,11 +14216,11 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
         ntry = nnames - nhave;
         if(ntry > MAXWELEM)
             ntry = MAXWELEM;
-        dotdot = 0;
+        dotdot = false;
         for(i=0; i<ntry; i++){
             if(isdotdot(names[nhave+i])){
                 if(i==0){
-                    dotdot = 1;
+                    dotdot = true;
                     ntry = 1;
                 }else
                     ntry = i;
@@ -14232,7 +14262,7 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
             }
         }
 
-        didmount = 0;
+        didmount = false;
         if(dotdot){
             assert(wq->nqid == 1);
             assert(wq->clone != nil);
@@ -14247,7 +14277,7 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
             if(mount){
                 for(i=0; i<wq->nqid && i<ntry-1; i++){
                     if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
-                        didmount = 1;
+                        didmount = true;
                         break;
                     }
                 }
@@ -14273,7 +14303,7 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
                 n = wq->nqid;
                 nc = wq->clone;
             }else{      /* stopped early, at a mount point */
-                didmount = 1;
+                didmount = true;
                 if(wq->clone != nil){
                     cclose(wq->clone);
                     wq->clone = nil;
@@ -14314,6 +14344,25 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
     return 0;
 }
 @
+
+<<function ewalk>>=
+/*
+ * Call dev walk but catch errors.
+ */
+static Walkqid*
+ewalk(Chan *c, Chan *nc, char **name, int nname)
+{
+    Walkqid *wq;
+
+    if(waserror())
+        return nil;
+    wq = devtab[c->type]->walk(c, nc, name, nname);
+    poperror();
+    return wq;
+}
+@
+
+
 
 <<function cclone>>=
 Chan*
@@ -14379,6 +14428,21 @@ if(amode == Acreate){
         error(Eexist);
     e.nelems--;
 }
+@
+
+
+<<[[namec() locals>>=
+Chan *cnew;
+char *createerr;
+@
+
+<<enum open cases>>=
+OTRUNC = 16,  /* or'ed in (except for exec), truncate file first */
+@
+% lp split stuff using OTRUNC here?
+
+<<enum open cases>>=
+OEXCL = 0x1000,  /* or'ed in, exclusive create */
 @
 
 <<[[namec()]] other cases>>=
@@ -14475,6 +14539,7 @@ case Acreate:
         putmhead(m);
     if(omode & OEXCL)
         nexterror();
+
     /* save error */
     createerr = up->errstr;
     up->errstr = tmperrbuf;
@@ -14532,6 +14597,7 @@ sysremove(ulong* arg)
 }
 @
 % comment about clunks??
+% what about already opened files? can remove a used file?
 
 \section{[[syschdir()]]}
 
@@ -14551,6 +14617,7 @@ syschdir(ulong* arg)
 }
 @
 
+% after validated name, parsed name, walked name, got a ("unopened") channel
 <<[[namec()]] other cases>>=
 case Atodir:
     /*
@@ -14598,58 +14665,52 @@ chanpath(Chan *c)
 
 
 
-\section{[[sysstat()]]}
+\section{[[Dir]]}
+% mv later? not used in namec directly
 
-<<[[Dev]] methods>>=
-int (*stat)(Chan*, uchar*, int);
-@
+% also in libc.h (so if change here, need change also in libc.h)
+<<struct Dir>>=
+struct Dir {
+  /* system-modified data */
+  ushort  type; /* server type */
+  uint  dev;  /* server subtype */
 
-%uchar* actually a buffer containing a DirEntry I think
-% but platform independent?
-<<syscall stat>>=
-// int stat(char *name, uchar *edir, int nedir);
-long
-sysstat(ulong* arg)
-{
-    char *name;
-    Chan *c;
-    uint l;
+  /* file data */
+  Qid qid;  /* unique id from server */
+  // bitset<enum<dirmode>>
+  ulong mode; /* permissions */
 
-    l = arg[2];
-    validaddr(arg[1], l, true);
-    validaddr(arg[0], 1, false);
-    c = namec((char*)arg[0], Aaccess, 0, 0);
-    if(waserror()){
-        cclose(c);
-        nexterror();
-    }
-    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
-    name = pathlast(c->path);
-    if(name)
-        l = dirsetname(name, strlen(name), (uchar*)arg[1], l, arg[2]);
+  ulong atime;  /* last read time */
+  ulong mtime;  /* last write time */
 
-    poperror();
-    cclose(c);
-    return l;
-}
-@
+  vlong length; /* file length: see <u.h> */
+  char  *name;  /* last element of path */
 
-<<function pathlast>>=
-static char*
-pathlast(Path *p)
-{
-    char *s;
+  char  *uid; /* owner name */
+  char  *gid; /* group name */
+  char  *muid;  /* last modifier name */
+};
+@ 
+% gid here! cool muid
+% why call Dir? seems more like a DirEntry no?
+% vs walkqid? vs Dirtab?
 
-    if(p == nil)
-        return nil;
-    if(p->len == 0)
-        return nil;
-    s = strrchr(p->s, '/');
-    if(s)
-        return s+1;
-    return p->s;
-}
-@
+<<enum dirmode>>=
+/* bits in Dir.mode */
+enum dirmode {
+    DMDIR = 0x80000000,  /* mode bit for directories */
+
+    DMREAD = 0x4,   /* mode bit for read permission */
+    DMWRITE = 0x2,   /* mode bit for write permission */
+    DMEXEC = 0x1,   /* mode bit for execute permission */
+    <<enum dirmode cases>>
+};
+@ 
+% DMREAD, DMWRITE, DMEXEC are actually never used in the kernel.
+% I think the kernel does not really care except just passing around
+% and delegate. So those are defined in libc.h but do not need to
+% be defined here I think.
+%DMAPPEND = 0x40000000,  /* mode bit for append only files */
 
 <<function dirsetname>>=
 static long
@@ -14687,10 +14748,48 @@ dirname(uchar *p, int *n)
     return (char*)p+BIT16SZ;
 }
 @
+% ??????
 
 
 
-% like stat but with a file descriptor instead of afilename
+\section{[[sysstat()]]}
+
+<<[[Dev]] methods>>=
+int (*stat)(Chan*, uchar*, int);
+@
+
+%uchar* actually a buffer containing a DirEntry I think
+% but platform independent?
+<<syscall stat>>=
+// int stat(char *name, uchar *edir, int nedir);
+long
+sysstat(ulong* arg)
+{
+    char *name;
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, true);
+    validaddr(arg[0], 1, false);
+    c = namec((char*)arg[0], Aaccess, 0, 0);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    l = devtab[c->type]->stat(c, (uchar*)arg[1], l);
+
+    name = pathlast(c->path);
+    if(name)
+        l = dirsetname(name, strlen(name), (uchar*)arg[1], l, arg[2]);
+
+    poperror();
+    cclose(c);
+    return l;
+}
+@
+
+% like stat but with a file descriptor instead of a filename
 <<syscall fstat>>=
 // int fstat(int fd, uchar *edir, int nedir);
 long
@@ -14712,6 +14811,27 @@ sysfstat(ulong* arg)
     return l;
 }
 @
+% why don't do the same dirsetname thing?
+
+
+<<function pathlast>>=
+static char*
+pathlast(Path *p)
+{
+    char *s;
+
+    if(p == nil)
+        return nil;
+    if(p->len == 0)
+        return nil;
+    s = strrchr(p->s, '/');
+    if(s)
+        return s+1;
+    return p->s;
+}
+@
+
+
 
 
 <<[[Dev]] methods>>=
@@ -14720,32 +14840,40 @@ int (*wstat)(Chan*, uchar*, int);
 
 
 
-<<function wstat>>=
-static long
-wstat(Chan *c, uchar *d, int nd)
+<<syscall wstat>>=
+// int wstat(char *name, uchar *edir, int nedir);
+long
+syswstat(ulong* arg)
 {
-    long l;
-    int namelen;
+    Chan *c;
+    uint l;
 
-    if(waserror()){
-        cclose(c);
-        nexterror();
-    }
-    if(c->ismtpt){
-        /*
-         * Renaming mount points is disallowed to avoid surprises
-         * (which should be renamed? the mount point or the mounted Chan?).
-         */
-        dirname(d, &namelen);
-        if(namelen)
-            nameerror(chanpath(c), Eismtpt);
-    }
-    l = devtab[c->type]->wstat(c, d, nd);
-    poperror();
-    cclose(c);
-    return l;
+    l = arg[2];
+    validaddr(arg[1], l, false);
+    validstat((uchar*)arg[1], l);
+    validaddr(arg[0], 1, false);
+    c = namec((char*)arg[0], Aaccess, 0, 0);
+    return wstat(c, (uchar*)arg[1], l);
 }
 @
+
+<<syscall fwstat>>=
+// int fwstat(int fd, uchar *edir, int nedir);
+long
+sysfwstat(ulong* arg)
+{
+    Chan *c;
+    uint l;
+
+    l = arg[2];
+    validaddr(arg[1], l, false);
+    validstat((uchar*)arg[1], l);
+    c = fdtochan(arg[0], -1, true, true);
+    return wstat(c, (uchar*)arg[1], l);
+}
+@
+
+
 
 <<function validstat>>=
 void
@@ -14777,137 +14905,54 @@ validstat(uchar *s, int n)
 @
 
 
-
-<<syscall wstat>>=
-// int wstat(char *name, uchar *edir, int nedir);
-long
-syswstat(ulong* arg)
+<<function wstat>>=
+static long
+wstat(Chan *c, uchar *d, int nd)
 {
-    Chan *c;
-    uint l;
+    long l;
+    int namelen;
 
-    l = arg[2];
-    validaddr(arg[1], l, false);
-    validstat((uchar*)arg[1], l);
-    validaddr(arg[0], 1, false);
-    c = namec((char*)arg[0], Aaccess, 0, 0);
-    return wstat(c, (uchar*)arg[1], l);
+    if(waserror()){
+        cclose(c);
+        nexterror();
+    }
+    if(c->ismtpt){
+        /*
+         * Renaming mount points is disallowed to avoid surprises
+         * (which should be renamed? the mount point or the mounted Chan?).
+         */
+        dirname(d, &namelen);
+        if(namelen)
+            nameerror(chanpath(c), Eismtpt);
+    }
+    l = devtab[c->type]->wstat(c, d, nd);
+    poperror();
+    cclose(c);
+    return l;
 }
 @
 
 
-<<syscall fwstat>>=
-// int fwstat(int fd, uchar *edir, int nedir);
-long
-sysfwstat(ulong* arg)
-{
-    Chan *c;
-    uint l;
-
-    l = arg[2];
-    validaddr(arg[1], l, false);
-    validstat((uchar*)arg[1], l);
-    c = fdtochan(arg[0], -1, true, true);
-    return wstat(c, (uchar*)arg[1], l);
-}
-@
 
 
+
+
+
+
+\chapter{Namespace}
+\minitoc
+% Mount point, Namespace, Union directories
+
+% see names.ps
+% see lexnames.ps
+
+<<systab namespace syscalls>>=
+    [BIND]      sysbind,
+    [MOUNT]     sysmount,
+    [UNMOUNT]   sysunmount,
+@ 
 
 \section{XTODO}
-
-<<enum open cases>>=
-OTRUNC = 16,  /* or'ed in (except for exec), truncate file first */
-@
-
-<<enum open cases>>=
-OEXCL = 0x1000,  /* or'ed in, exclusive create */
-@
-
-
-
-
-<<enum open cases>>=
-OCEXEC = 32,  /* or'ed in, close on exec */
-@
-
-<<enum channelflag cases>>=
-CCEXEC  = 0x0008,   /* close on exec */
-@
-
-<<[[sysexec()]] close files marked as opened with close on exec>>=
-/*
- * Close on exec
- */
-f = up->fgrp;
-for(i=0; i<=f->maxfd; i++)
-    fdclose(i, CCEXEC);
-@
-
-<<[[namec()]] set channel flag after open>>=
-        if(omode & OCEXEC)
-            c->flag |= CCEXEC;
-        if(omode & ORCLOSE)
-            c->flag |= CRCLOSE;
-@
-
-<<[[namec()]] set channel flag after create>>=
-        if(omode & OCEXEC)
-            cnew->flag |= CCEXEC;
-        if(omode & ORCLOSE)
-            cnew->flag |= CRCLOSE;
-@
-
-
-
-
-<<enum open cases>>=
-ORCLOSE = 64,  /* or'ed in, remove on close */
-@
-
-<<enum channelflag cases>>=
-CRCLOSE = 0x0020,   /* remove on close */
-@
-
-
-
-
-<<function dirfixed>>=
-static int
-dirfixed(uchar *p, uchar *e, Dir *d)
-{
-    int len;
-
-    len = GBIT16(p)+BIT16SZ;
-    if(p + len > e)
-        return -1;
-
-    p += BIT16SZ;   /* ignore size */
-    d->type = devno(GBIT16(p), true);
-    p += BIT16SZ;
-    d->dev = GBIT32(p);
-    p += BIT32SZ;
-    d->qid.type = GBIT8(p);
-    p += BIT8SZ;
-    d->qid.vers = GBIT32(p);
-    p += BIT32SZ;
-    d->qid.path = GBIT64(p);
-    p += BIT64SZ;
-    d->mode = GBIT32(p);
-    p += BIT32SZ;
-    d->atime = GBIT32(p);
-    p += BIT32SZ;
-    d->mtime = GBIT32(p);
-    p += BIT32SZ;
-    d->length = GBIT64(p);
-
-    return len;
-}
-@
-
-
-
-
 
 
 <<function createdir>>=
@@ -14940,20 +14985,36 @@ createdir(Chan *c, Mhead *m)
 @
 
 
-\chapter{Namespace}
-\minitoc
-% Mount point, Namespace, Union directories
+<<[[namec() locals>>=
+Rune r;
+@
 
-% see names.ps
-% see lexnames.ps
+<<[[namec()]] if name[0] == '#'>>=
+case '#':
+    mount = false;
 
-<<systab namespace syscalls>>=
-    [BIND]      sysbind,
-    [MOUNT]     sysmount,
-    [UNMOUNT]   sysunmount,
-@ 
+    up->genbuf[0] = '\0';
+    n = 0;
+    while(*name != '\0' && (*name != '/' || n < 2)){ // #/ is ok hence n < 2
+        if(n >= sizeof(up->genbuf)-1)
+            error(Efilename);
+        up->genbuf[n++] = *name++;
+    }
+    up->genbuf[n] = '\0';
 
-\section{XTODO}
+    n = chartorune(&r, up->genbuf+1)+1; // +1 for the leading '#'
+
+    <<[[namec()]] noattach checking>>
+
+    t = devno(r, true);
+    if(t == -1)
+        error(Ebadsharp);
+
+    c = devtab[t]->attach(up->genbuf+n);
+    break;
+@
+% genbuf+n? for the deviceno?
+
 
 
 <<[[chanfree()]] optional free>>=
@@ -15208,7 +15269,7 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
 }
 @
 
-
+% return void, value never used
 <<function domount>>=
 /*
  * Calls findmount but also updates path.
@@ -15268,22 +15329,6 @@ DBG("undomount %p %s => remove %p\n", path, path->s, nc);
 @
 
 
-<<function ewalk>>=
-/*
- * Call dev walk but catch errors.
- */
-static Walkqid*
-ewalk(Chan *c, Chan *nc, char **name, int nname)
-{
-    Walkqid *wq;
-
-    if(waserror())
-        return nil;
-    wq = devtab[c->type]->walk(c, nc, name, nname);
-    poperror();
-    return wq;
-}
-@
 
 
 <<global Edoesnotexist>>=
@@ -15642,6 +15687,40 @@ mountfix(Chan *c, uchar *op, long n, long maxn)
     return e-op;
 }
 @
+
+<<function dirfixed>>=
+static int
+dirfixed(uchar *p, uchar *e, Dir *d)
+{
+    int len;
+
+    len = GBIT16(p)+BIT16SZ;
+    if(p + len > e)
+        return -1;
+
+    p += BIT16SZ;   /* ignore size */
+    d->type = devno(GBIT16(p), true);
+    p += BIT16SZ;
+    d->dev = GBIT32(p);
+    p += BIT32SZ;
+    d->qid.type = GBIT8(p);
+    p += BIT8SZ;
+    d->qid.vers = GBIT32(p);
+    p += BIT32SZ;
+    d->qid.path = GBIT64(p);
+    p += BIT64SZ;
+    d->mode = GBIT32(p);
+    p += BIT32SZ;
+    d->atime = GBIT32(p);
+    p += BIT32SZ;
+    d->mtime = GBIT32(p);
+    p += BIT32SZ;
+    d->length = GBIT64(p);
+
+    return len;
+}
+@
+
 
 
 \section{[[bindmount()]]}
@@ -17804,6 +17883,7 @@ QTAPPEND = 0x40,    /* type bit for append only files */
 QTEXCL = 0x20,    /* type bit for exclusive use files */
 @
 
+
 \section{[[Block]]}
 
 <<enum blockflag>>=
@@ -19770,27 +19850,6 @@ devgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, Dir *dp)
 @
 
 
-<<function devattach>>=
-Chan*
-devattach(Rune tc, char *spec)
-{
-    int n;
-    Chan *c;
-    char *buf;
-
-    c = newchan();
-    mkqid(&c->qid, 0, 0, QTDIR);
-    c->type = devno(tc, false);
-    if(spec == nil)
-        spec = "";
-    n = 1+UTFmax+strlen(spec)+1; // '#' + Rune + strlen + '\0'
-    buf = smalloc(n);
-    snprint(buf, n, "#%C%s", tc, spec);
-    c->path = newpath(buf);
-    free(buf);
-    return c;
-}
-@
 
 
 <<function devclone>>=

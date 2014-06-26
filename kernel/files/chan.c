@@ -949,7 +949,10 @@ static char Edoesnotexist[] = "does not exist";
 int
 walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
 {
-    int dev, didmount, dotdot, i, n, nhave, ntry, type;
+    int type, dev;
+    int i, n;
+    int nhave, ntry;
+    bool didmount, dotdot;
     Chan *c, *nc, *mtpt;
     Path *path;
     Mhead *mh, *nmh;
@@ -971,11 +974,11 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
      *
      * Each time through the loop:
      *
-     *  If didmount==0, c is on the undomount side of the mount point.
-     *  If didmount==1, c is on the domount side of the mount point.
+     *  If didmount==false, c is on the undomount side of the mount point.
+     *  If didmount==true, c is on the domount side of the mount point.
      *  Either way, c's full path is path.
      */
-    didmount = 0;
+    didmount = false;
     for(nhave=0; nhave<nnames; nhave+=n){
         if((c->qid.type&QTDIR)==0){
             if(nerror)
@@ -990,11 +993,11 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
         ntry = nnames - nhave;
         if(ntry > MAXWELEM)
             ntry = MAXWELEM;
-        dotdot = 0;
+        dotdot = false;
         for(i=0; i<ntry; i++){
             if(isdotdot(names[nhave+i])){
                 if(i==0){
-                    dotdot = 1;
+                    dotdot = true;
                     ntry = 1;
                 }else
                     ntry = i;
@@ -1036,7 +1039,7 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
             }
         }
 
-        didmount = 0;
+        didmount = false;
         if(dotdot){
             assert(wq->nqid == 1);
             assert(wq->clone != nil);
@@ -1051,7 +1054,7 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
             if(mount){
                 for(i=0; i<wq->nqid && i<ntry-1; i++){
                     if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
-                        didmount = 1;
+                        didmount = true;
                         break;
                     }
                 }
@@ -1077,7 +1080,7 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
                 n = wq->nqid;
                 nc = wq->clone;
             }else{      /* stopped early, at a mount point */
-                didmount = 1;
+                didmount = true;
                 if(wq->clone != nil){
                     cclose(wq->clone);
                     wq->clone = nil;
@@ -1311,10 +1314,14 @@ namec(char *aname, int amode, int omode, ulong perm)
     /*x: [[namec() locals */
     int len, n, t;
     bool mount;
-    Chan *cnew;
-    Rune r;
     Mhead *m;
-    char *createerr, tmperrbuf[ERRMAX];
+    /*x: [[namec() locals */
+    char tmperrbuf[ERRMAX];
+    /*x: [[namec() locals */
+    Chan *cnew;
+    char *createerr;
+    /*x: [[namec() locals */
+    Rune r;
     /*x: [[namec() locals */
     Path *path;
     /*e: [[namec() locals */
@@ -1451,14 +1458,15 @@ namec(char *aname, int amode, int omode, ulong perm)
         nexterror();
     }
 
+    /*s: [[namec()]] error if not a directory or cannot exec directory */
     if(e.mustbedir && !(c->qid.type&QTDIR))
         error("not a directory");
 
     if(amode == Aopen && (omode&OEXEC) == OEXEC && (c->qid.type&QTDIR))
         error("cannot exec directory");
+    /*e: [[namec()]] error if not a directory or cannot exec directory */
 
     switch(amode){
-    /*s: [[namec()]] case Aopen, Acreate, Aremove, Aaccess */
     case Aopen:
     case Aremove:
     case Aaccess:
@@ -1482,15 +1490,8 @@ namec(char *aname, int amode, int omode, ulong perm)
             /* record whether c is on a mount point */
             c->ismtpt = (m!=nil);
         /*e: [[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1 */
-
+    
         switch(amode){
-        case Aaccess:
-        case Aremove:
-           /*s: [[namec()]] case Aremove, Aaccess, handle mountpoint part2 */
-           putmhead(m);
-           /*e: [[namec()]] case Aremove, Aaccess, handle mountpoint part2 */
-            break;
-
         case Aopen:
         case Acreate:
             /*s: [[namec()]] case Aopen, Acreate, handle mountpoint part2 */
@@ -1505,25 +1506,30 @@ namec(char *aname, int amode, int omode, ulong perm)
             else
                 putmhead(m);
             /*e: [[namec()]] case Aopen, Acreate, handle mountpoint part2 */
-
-            /* save registers else error() in open has wrong value of c saved */
-            //old: saveregisters();
-
+   
             /*s: [[namec()]] set channel flag before open */
                     if(omode == OEXEC)
                         c->flag &= ~CCACHE;
             /*e: [[namec()]] set channel flag before open */
             c = devtab[c->type]->open(c, omode&~OCEXEC);
             /*s: [[namec()]] set channel flag after open */
-                    if(omode & OCEXEC)
-                        c->flag |= CCEXEC;
-                    if(omode & ORCLOSE)
-                        c->flag |= CRCLOSE;
+            if(omode & OCEXEC)
+                c->flag |= CCEXEC;
+            /*x: [[namec()]] set channel flag after open */
+            if(omode & ORCLOSE)
+                c->flag |= CRCLOSE;
             /*e: [[namec()]] set channel flag after open */
             break;
+
+        case Aaccess:
+        case Aremove:
+           /*s: [[namec()]] case Aremove, Aaccess, handle mountpoint part2 */
+           putmhead(m);
+           /*e: [[namec()]] case Aremove, Aaccess, handle mountpoint part2 */
+            break;
+    
         }
         break;
-    /*e: [[namec()]] case Aopen, Acreate, Aremove, Aaccess */
     /*s: [[namec()]] other cases */
     case Acreate:
         /*
@@ -1604,10 +1610,11 @@ namec(char *aname, int amode, int omode, ulong perm)
             devtab[cnew->type]->create(cnew, e.elems[e.nelems-1], omode&~(OEXCL|OCEXEC), perm);
             poperror();
             /*s: [[namec()]] set channel flag after create */
-                    if(omode & OCEXEC)
-                        cnew->flag |= CCEXEC;
-                    if(omode & ORCLOSE)
-                        cnew->flag |= CRCLOSE;
+            if(omode & OCEXEC)
+                cnew->flag |= CCEXEC;
+            /*x: [[namec()]] set channel flag after create */
+            if(omode & ORCLOSE)
+                cnew->flag |= CRCLOSE;
             /*e: [[namec()]] set channel flag after create */
             if(m)
                 putmhead(m);
@@ -1623,6 +1630,7 @@ namec(char *aname, int amode, int omode, ulong perm)
             putmhead(m);
         if(omode & OEXCL)
             nexterror();
+
         /* save error */
         createerr = up->errstr;
         up->errstr = tmperrbuf;
@@ -1728,7 +1736,7 @@ char isfrog[256]={
  * to access unchecked addresses.) 
  */
 static char*
-validname0(char *aname, bool slashok, bool dup, ulong pc)
+validname0(char *aname, bool slashok, bool dup, kern_addr pc)
 {
     char *ename, *name, *s;
     int c, n;

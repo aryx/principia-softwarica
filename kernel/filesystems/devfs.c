@@ -511,8 +511,8 @@ parsename(char *name, char *disk, char **tree, char **dev)
         *slash++ = 0;
         *dev = slash;
     }
-    validname(*tree, 0);
-    validname(*dev, 0);
+    validname(*tree, false);
+    validname(*dev, false);
 }
 
 static int
@@ -618,7 +618,7 @@ mconfig(char* a, long n)
     }
     parsename(cb->f[0], disk, &tname, &dname);
     for(i = 1; i < cb->nf; i++)
-        validname(cb->f[i], 1);
+        validname(cb->f[i], true);
 
     if(ct->index == Fdel){
         mdelctl(tname, dname);
