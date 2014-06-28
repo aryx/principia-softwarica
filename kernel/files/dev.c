@@ -145,8 +145,9 @@ devattach(Rune tc, char *spec)
     char *buf;
 
     c = newchan();
-    mkqid(&c->qid, 0, 0, QTDIR);
+    mkqid(&c->qid, 0, 0, QTDIR); // root of a device is a QTDIR
     c->type = devno(tc, false);
+
     if(spec == nil)
         spec = "";
     n = 1+UTFmax+strlen(spec)+1; // '#' + Rune + spec + '\0'
@@ -154,6 +155,7 @@ devattach(Rune tc, char *spec)
     snprint(buf, n, "#%C%s", tc, spec);
     c->path = newpath(buf);
     free(buf);
+
     return c;
 }
 /*e: function devattach */

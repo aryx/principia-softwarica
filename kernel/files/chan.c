@@ -924,13 +924,13 @@ DBG("undomount %p %s => remove %p\n", path, path->s, nc);
  * Call dev walk but catch errors.
  */
 static Walkqid*
-ewalk(Chan *c, Chan *nc, char **name, int nname)
+ewalk(Chan *c, Chan *nc, char **names, int nnames)
 {
     Walkqid *wq;
 
     if(waserror())
         return nil;
-    wq = devtab[c->type]->walk(c, nc, name, nname);
+    wq = devtab[c->type]->walk(c, nc, names, nnames);
     poperror();
     return wq;
 }
@@ -945,24 +945,31 @@ static char Edoesnotexist[] = "does not exist";
  * Either walks all the way or not at all.  No partial results in *cp.
  * *nerror is the number of names to display in an error message.
  */
-
 int
 walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
 {
-    int type, dev;
-    int i, n;
-    int nhave, ntry;
-    bool didmount, dotdot;
-    Chan *c, *nc, *mtpt;
-    Path *path;
-    Mhead *mh, *nmh;
-    Mount *f;
-    Walkqid *wq;
+   /*s: [[walk()]] locals */
+   Chan *c;
+   Path *path;
+   Walkqid *wq;
+   /*x: [[walk()]] locals */
+   int nhave, ntry;
+   bool didmount, dotdot;
+   /*x: [[walk()]] locals */
+   int i, n;
+   int type, dev;
+   Chan *nc, *mtpt;
+   /*x: [[walk()]] locals */
+   Mhead *mh;
+   Mhead *nmh;
+   Mount *f;
+   /*e: [[walk()]] locals */
 
     c = *cp;
     incref(c);
     path = c->path;
     incref(path);
+
     mh = nil;
 
     /*
@@ -980,103 +987,124 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
      */
     didmount = false;
     for(nhave=0; nhave<nnames; nhave+=n){
-        if((c->qid.type&QTDIR)==0){
-            if(nerror)
-                *nerror = nhave;
-            pathclose(path);
-            cclose(c);
-            strcpy(up->errstr, Enotdir);
-            if(mh != nil)
-                putmhead(mh);
-            return -1;
-        }
-        ntry = nnames - nhave;
-        if(ntry > MAXWELEM)
-            ntry = MAXWELEM;
-        dotdot = false;
-        for(i=0; i<ntry; i++){
-            if(isdotdot(names[nhave+i])){
-                if(i==0){
-                    dotdot = true;
-                    ntry = 1;
-                }else
-                    ntry = i;
-                break;
-            }
-        }
 
-        if(!dotdot && mount && !didmount)
+        /*s: [[walk()]] return error if channel c is not a dir */
+                if((c->qid.type&QTDIR)==0){
+                    if(nerror)
+                        *nerror = nhave;
+                    pathclose(path);
+                    cclose(c);
+                    if(mh != nil)
+                        putmhead(mh);
+                    strcpy(up->errstr, Enotdir);
+                    return -1;
+                }
+        /*e: [[walk()]] return error if channel c is not a dir */
+
+        dotdot = false;
+        /*s: [[walk()]] set dotdot and ntry to index of next '..' or nnames */
+                // remaining names
+                ntry = nnames - nhave;
+                if(ntry > MAXWELEM)
+                    ntry = MAXWELEM;
+
+                for(i=0; i<ntry; i++){
+                    if(isdotdot(names[nhave+i])){
+                        if(i==0){
+                            dotdot = true;
+                            ntry = 1;
+                        }else
+                            ntry = i;
+                        break;
+                    }
+                }
+                // ntry is now the index of the next '..' or nnames
+        /*e: [[walk()]] set dotdot and ntry to index of next '..' or nnames */
+
+        if(mount && !dotdot && !didmount)
             domount(&c, &mh, &path);
         
         type = c->type;
         dev = c->dev;
 
         if((wq = ewalk(c, nil, names+nhave, ntry)) == nil){
-            /* try a union mount, if any */
-            if(mh && mount){
-                /*
-                 * mh->mount->to == c, so start at mh->mount->next
-                 */
-                rlock(&mh->lock);
-                f = mh->mount;
-                for(f = (f? f->next: f); f; f = f->next)
-                    if((wq = ewalk(f->to, nil, names+nhave, ntry)) != nil)
-                        break;
-                runlock(&mh->lock);
-                if(f != nil){
-                    type = f->to->type;
-                    dev = f->to->dev;
-                }
-            }
+
+            /*s: [[walk()]] if c is a union mount, find and adjust type and dev */
+                        /* try a union mount, if any */
+                        if(mh && mount){
+                            /*
+                             * mh->mount->to == c, so start at mh->mount->next
+                             */
+                            rlock(&mh->lock);
+                            f = mh->mount;
+                            for(f = (f? f->next: f); f; f = f->next)
+                                if((wq = ewalk(f->to, nil, names+nhave, ntry)) != nil)
+                                    break;
+                            runlock(&mh->lock);
+                            if(f != nil){
+                                type = f->to->type;
+                                dev = f->to->dev;
+                            }
+                        }
+            /*e: [[walk()]] if c is a union mount, find and adjust type and dev */
+            /*s: [[walk()]] if wq is nil, close and return */
             if(wq == nil){
-                cclose(c);
                 pathclose(path);
+                cclose(c);
                 if(nerror)
                     *nerror = nhave+1;
                 if(mh != nil)
                     putmhead(mh);
                 return -1;
             }
+            /*e: [[walk()]] if wq is nil, close and return */
         }
 
         didmount = false;
         if(dotdot){
-            assert(wq->nqid == 1);
-            assert(wq->clone != nil);
+            /*s: [[walk()]] if dotdot adjust path and nc */
+                        assert(wq->nqid == 1);
+                        assert(wq->clone != nil);
 
-            path = addelem(path, "..", nil);
-            nc = undomount(wq->clone, path);
-            nmh = nil;
+                        path = addelem(path, "..", nil);
+                        nc = undomount(wq->clone, path);
+                        nmh = nil;
+            /*e: [[walk()]] if dotdot adjust path and nc */
             n = 1;
         }else{
             nc = nil;
             nmh = nil;
-            if(mount){
-                for(i=0; i<wq->nqid && i<ntry-1; i++){
-                    if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
-                        didmount = true;
-                        break;
-                    }
-                }
-            }
+            /*s: [[walk()]] if mount and findmount adjust nc, nmh, i and didmount = true */
+                        if(mount){
+                            for(i=0; i<wq->nqid && i<ntry-1; i++){
+                                if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
+                                    didmount = true;
+                                    break;
+                                }
+                            }
+                        }
+            /*e: [[walk()]] if mount and findmount adjust nc, nmh, i and didmount = true */
+
             if(nc == nil){  /* no mount points along path */
-                if(wq->clone == nil){
-                    cclose(c);
-                    pathclose(path);
-                    if(wq->nqid==0 || (wq->qid[wq->nqid-1].type&QTDIR)){
-                        if(nerror)
-                            *nerror = nhave+wq->nqid+1;
-                        strcpy(up->errstr, Edoesnotexist);
-                    }else{
-                        if(nerror)
-                            *nerror = nhave+wq->nqid;
-                        strcpy(up->errstr, Enotdir);
-                    }
-                    free(wq);
-                    if(mh != nil)
-                        putmhead(mh);
-                    return -1;
-                }
+                /*s: [[walk()]] if nc == nil and wq->clone == nil return error */
+                                if(wq->clone == nil){
+                                    cclose(c);
+                                    pathclose(path);
+                                    if(wq->nqid==0 || (wq->qid[wq->nqid-1].type&QTDIR)){
+                                        if(nerror)
+                                            *nerror = nhave+wq->nqid+1;
+                                        strcpy(up->errstr, Edoesnotexist);
+                                    }else{
+                                        if(nerror)
+                                            *nerror = nhave+wq->nqid;
+                                        strcpy(up->errstr, Enotdir);
+                                    }
+                                    free(wq);
+                                    if(mh != nil)
+                                        putmhead(mh);
+                                    return -1;
+                                }
+                /*e: [[walk()]] if nc == nil and wq->clone == nil return error */
                 n = wq->nqid;
                 nc = wq->clone;
             }else{      /* stopped early, at a mount point */
@@ -1105,11 +1133,13 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
 
     c = cunique(c);
 
-    if(c->umh != nil){  //BUG
-        print("walk umh\n");
-        putmhead(c->umh);
-        c->umh = nil;
-    }
+    /*s: [[walk()]] print error if c->umh != nil */
+        if(c->umh != nil){  //BUG
+            print("walk umh\n");
+            putmhead(c->umh);
+            c->umh = nil;
+        }
+    /*e: [[walk()]] print error if c->umh != nil */
 
     pathclose(c->path);
     c->path = path;
@@ -1212,7 +1242,6 @@ parsename(char *aname, Elemlist *e)
         *slash++ = '\0';
         name = slash;
     }
-    
 }
 /*e: function parsename */
 
@@ -1313,6 +1342,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     Chan *c;
     /*x: [[namec() locals */
     int len, n, t;
+    /*x: [[namec() locals */
     bool mount;
     Mhead *m;
     /*x: [[namec() locals */

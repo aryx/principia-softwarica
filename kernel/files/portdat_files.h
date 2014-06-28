@@ -250,6 +250,7 @@ struct Chan
     Path* path;
 
     vlong offset;     /* in fd */
+
     //enum<open>
     ushort mode;     /* read/write */
 
@@ -266,10 +267,8 @@ struct Chan
        /*e: [[Chan]] union other fields */
     };
     /*s: [[Chan]] other fields */
-    // enum<channelflag>
+    // enum<channelflag>> (actually a bitset for certain properties)
     ushort  flag;
-    /*x: [[Chan]] other fields */
-    vlong devoffset;    /* in underlying device; see read */
     /*x: [[Chan]] other fields */
     byte*  dirrock;    /* directory entry rock for translations */
     int nrock;
@@ -282,6 +281,8 @@ struct Chan
     Chan* umc;      /* channel in union; held for union read */
     QLock umqlock;    /* serialize unionreads */
     int uri;      /* union read index */
+    /*x: [[Chan]] other fields */
+    vlong devoffset;    /* in underlying device; see read */
     /*x: [[Chan]] other fields */
     int dri;      /* devdirread index */
     /*x: [[Chan]] other fields */
@@ -339,6 +340,7 @@ struct Walkqid
 {
   Chan  *clone;
   int nqid;
+  // variable array length, size = nqid
   Qid qid[1];
 };
 /*e: struct Walkqid */

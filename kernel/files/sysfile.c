@@ -611,6 +611,7 @@ read(ulong *arg, vlong *offp)
         off = c->offset;
     else
         off = *offp;
+
     if(off < 0)
         error(Enegoff);
 
@@ -652,8 +653,8 @@ read(ulong *arg, vlong *offp)
         nnn = nn = devtab[c->type]->read(c, p, n, off);
 
     lock(c);
-    c->devoffset += nn;
     c->offset += nnn;
+    c->devoffset += nn;
     unlock(c);
 
     poperror();

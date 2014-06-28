@@ -260,24 +260,30 @@ l2be(long l)
 long
 sysexec(ulong* arg)
 {
-    int i;
-    ulong t, d, b; // text, data, bss sizes in bytes rounded to pages
-    Segment *s, *ts;
-
-    char *file0, *file;
-    Exec exec;
-    Chan *tc;
-    char *elem;
-
-    char **argv, **argp;
-    char *a, *charp, *args;
-
-    ulong ssize, spage, nargs, nbytes, n;
-    Fgrp *f;
-    KImage *img;
-    ulong magic, text, entry, data, bss;
 
     /*s: [[sysexec()]] locals */
+    char *file;
+    char *elem; // last element of binary, for up->text
+    char *file0;
+    /*x: [[sysexec()]] locals */
+    Chan *tc;
+    /*x: [[sysexec()]] locals */
+    Exec exec;
+    ulong magic, text, entry, data, bss;
+    /*x: [[sysexec()]] locals */
+    ulong t, d, b; // text, data, bss sizes in bytes rounded to pages
+    Segment *s, *ts;
+    /*x: [[sysexec()]] locals */
+    char **argv, **argp;
+    char *a, *charp, *args;
+    ulong ssize, spage, nargs, nbytes;
+    /*x: [[sysexec()]] locals */
+    int i, n;
+    /*x: [[sysexec()]] locals */
+    KImage *img;
+    /*x: [[sysexec()]] locals */
+    Fgrp *f;
+    /*x: [[sysexec()]] locals */
         char line[sizeof(Exec)];
         char *progarg[sizeof(Exec)/2+1];
         char progelem[64];
