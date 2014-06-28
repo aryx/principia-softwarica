@@ -535,12 +535,12 @@ closeproc(void*)
 }
 /*e: function closeproc */
 
-/*s: function cunique */
+/*s: function uniquechan */
 /*
  * Make sure we have the only copy of c.  (Copy on write.)
  */
 Chan*
-cunique(Chan *c)
+uniquechan(Chan *c)
 {
     Chan *nc;
 
@@ -552,7 +552,7 @@ cunique(Chan *c)
       return c;
     }
 }
-/*e: function cunique */
+/*e: function uniquechan */
 
 /*s: function eqqid */
 bool
@@ -867,14 +867,14 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
 /*
  * Calls findmount but also updates path.
  */
-static int
+static void
 domount(Chan **cp, Mhead **mp, Path **path)
 {
     Chan **lc;
     Path *p;
 
     if(!findmount(cp, mp, (*cp)->type, (*cp)->dev, (*cp)->qid))
-        return 0;
+        return;
 
     if(path){
         p = *path;
@@ -891,7 +891,7 @@ DBG("domount %p %s => add %p (was %p)\n", p, p->s, (*mp)->from, p->mtpt[p->mlen-
         }
         *path = p;
     }
-    return 1;
+    return;
 }
 /*e: function domount */
 
@@ -925,13 +925,13 @@ DBG("undomount %p %s => remove %p\n", path, path->s, nc);
  * Call dev walk but catch errors.
  */
 static Walkqid*
-ewalk(Chan *c, Chan *nc, char **names, int nnames)
+ewalk(Chan *c, char **names, int nnames)
 {
     Walkqid *wq;
 
     if(waserror())
         return nil;
-    wq = devtab[c->type]->walk(c, nc, names, nnames);
+    wq = devtab[c->type]->walk(c, nil, names, nnames);
     poperror();
     return wq;
 }
@@ -947,7 +947,7 @@ static char Edoesnotexist[] = "does not exist";
  * *nerror is the number of names to display in an error message.
  */
 int
-walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
+walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
 {
     /*s: [[walk()]] locals */
     Chan *c;
@@ -1022,24 +1022,24 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
                 // ntry is now the index of the next '..' or nnames
         /*e: [[walk()]] set dotdot and ntry to index of next '..' or nnames */
 
-        if(mount && !dotdot && !didmount)
+        if(!sharppath && !dotdot && !didmount)
             domount(&c, &mh, &path);
         
         type = c->type;
         dev = c->dev;
 
-        if((wq = ewalk(c, nil, names+nhave, ntry)) == nil){
+        if((wq = ewalk(c, names+nhave, ntry)) == nil){
 
             /*s: [[walk()]] if c is a union mount, find and adjust type and dev */
                         /* try a union mount, if any */
-                        if(mh && mount){
+                        if(mh && !sharppath){
                             /*
                              * mh->mount->to == c, so start at mh->mount->next
                              */
                             rlock(&mh->lock);
                             f = mh->mount;
                             for(f = (f? f->next: f); f; f = f->next)
-                                if((wq = ewalk(f->to, nil, names+nhave, ntry)) != nil)
+                                if((wq = ewalk(f->to, names+nhave, ntry)) != nil)
                                     break;
                             runlock(&mh->lock);
                             if(f != nil){
@@ -1076,7 +1076,7 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
             nc = nil;
             nmh = nil;
             /*s: [[walk()]] if mount and findmount adjust nc, nmh, i and didmount = true */
-                        if(mount){
+                        if(!sharppath){
                             for(i=0; i<wq->nqid && i<ntry-1; i++){
                                 if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
                                     didmount = true;
@@ -1132,7 +1132,7 @@ walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
 
     putmhead(mh);
 
-    c = cunique(c);
+    c = uniquechan(c);
 
     /*s: [[walk()]] print error if c->umh != nil */
         if(c->umh != nil){  //BUG
@@ -1328,7 +1328,7 @@ nameerror(char *name, char *err)
  * Opening Atodir or Amount does not guarantee this.
  *
  * Under certain circumstances, opening Aaccess will cause
- * an unnecessary clone in order to get a cunique Chan so it
+ * an unnecessary clone in order to get a uniquechan Chan so it
  * can attach the correct name.  Sysstat and sys_stat need the
  * correct name so they can rewrite the stat info.
  */
@@ -1344,7 +1344,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     /*x: [[namec() locals */
     int len, n, t;
     /*x: [[namec() locals */
-    bool mount;
+    bool sharppath;
     Mhead *m;
     /*x: [[namec() locals */
     char tmperrbuf[ERRMAX];
@@ -1369,17 +1369,16 @@ namec(char *aname, int amode, int omode, ulong perm)
     DBG("namec %s %d %d\n", aname, amode, omode);
     name = aname;
 
+    sharppath = (name[0] == '#');
+
     /*
      * Find the starting off point (the current slash, the root of
      * a device tree, or the current dot) as well as the name to
      * evaluate starting there.
      */
-    mount = true;
     switch(name[0]){
     /*s: [[namec()]] if name[0] is a sharp */
     case '#':
-        mount = false;
-
         up->genbuf[0] = '\0';
         n = 0;
         while(*name != '\0' && (*name != '/' || n < 2)){ // #/ is ok hence n < 2
@@ -1481,7 +1480,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     }
     /*e: [[namec()]] adjust Elemlist e if Acreate */
 
-    if(walk(&c, e.elems, e.nelems, mount, &e.nerror) < 0){
+    if(walk(&c, e.elems, e.nelems, sharppath, &e.nerror) < 0){
         if(e.nerror < 0 || e.nerror > e.nelems){
             print("namec %s walk error nerror=%d\n", aname, e.nerror);
             e.nerror = 0;
@@ -1508,11 +1507,11 @@ namec(char *aname, int amode, int omode, ulong perm)
             incref(path);
 
             m = nil;
-            if(mount)
+            if(!sharppath)
                 domount(&c, &m, &path);
 
             /* our own copy to open or remove */
-            c = cunique(c);
+            c = uniquechan(c);
 
             /* now it's our copy anyway, we can put the name back */
             pathclose(c->path);
@@ -1527,7 +1526,7 @@ namec(char *aname, int amode, int omode, ulong perm)
         case Acreate:
             /*s: [[namec()]] case Aopen, Acreate, handle mountpoint part2 */
             if(c->umh != nil){
-                print("cunique umh Open\n");
+                print("uniquechan umh Open\n");
                 putmhead(c->umh);
                 c->umh = nil;
             }
@@ -1570,7 +1569,7 @@ namec(char *aname, int amode, int omode, ulong perm)
          */
         e.nelems++;
         e.nerror++;
-        if(walk(&c, e.elems+e.nelems-1, 1, mount, nil) == 0){
+        if(walk(&c, e.elems+e.nelems-1, 1, sharppath, nil) == 0){
             if(omode&OEXCL)
                 error(Eexist);
             omode |= OTRUNC;
@@ -1620,7 +1619,7 @@ namec(char *aname, int amode, int omode, ulong perm)
         m = nil;
         cnew = nil; /* is this assignment necessary? */
         if(!waserror()){    /* try create */
-            if(mount && findmount(&cnew, &m, c->type, c->dev, c->qid))
+            if(!sharppath && findmount(&cnew, &m, c->type, c->dev, c->qid))
                 cnew = createdir(cnew, m);
             else{
                 cnew = c;
@@ -1633,7 +1632,7 @@ namec(char *aname, int amode, int omode, ulong perm)
              * our own copy, we can fix the name, which might be wrong
              * if findmount gave us a new Chan.
              */
-            cnew = cunique(cnew);
+            cnew = uniquechan(cnew);
             pathclose(cnew->path);
             cnew->path = c->path;
             incref(cnew->path);
@@ -1666,7 +1665,7 @@ namec(char *aname, int amode, int omode, ulong perm)
         createerr = up->errstr;
         up->errstr = tmperrbuf;
         /* note: we depend that walk does not error */
-        if(walk(&c, e.elems+e.nelems-1, 1, mount, nil) < 0){
+        if(walk(&c, e.elems+e.nelems-1, 1, sharppath, nil) < 0){
             up->errstr = createerr;
             error(createerr);   /* report true error */
         }
@@ -1686,7 +1685,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     case Abind:
         /* no need to maintain path - cannot dotdot an Abind */
         m = nil;
-        if(mount)
+        if(!sharppath)
             domount(&c, &m, nil);
         if(c->umh != nil)
             putmhead(c->umh);
