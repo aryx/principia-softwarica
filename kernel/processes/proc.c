@@ -808,9 +808,9 @@ newproc(void)
     p->nwait = 0;
     p->waitq = nil;
 
+    p->fgrp = nil;
     p->pgrp = nil;
     p->egrp = nil;
-    p->fgrp = nil;
     p->rgrp = nil;
 
     /*s: [[newproc()]] fb init */

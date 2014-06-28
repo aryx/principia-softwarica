@@ -119,25 +119,25 @@ struct Mntcache
 /*s: struct Mount */
 struct Mount
 {
-  ulong mountid;
-  Mount*  next;
-  Mhead*  head;
-  Mount*  copy;
-  Mount*  order;
-  Chan* to;     /* channel replacing channel */
-  int mflag;
-  char  *spec;
+    ulong mountid;
+    Mount*  next;
+    Mhead*  head;
+    Mount*  copy;
+    Mount*  order;
+    Chan* to;     /* channel replacing channel */
+    int mflag;
+    char  *spec;
 };
 /*e: struct Mount */
 
 /*s: struct Mhead */
 struct Mhead
 {
-  Ref;
-  RWlock  lock;
-  Chan* from;     /* channel mounted upon */
-  Mount*  mount;      /* what's mounted upon it */
-  Mhead*  hash;     /* Hash chain */
+    Ref;
+    RWlock  lock;
+    Chan* from;     /* channel mounted upon */
+    Mount*  mount;      /* what's mounted upon it */
+    Mhead*  hash;     /* Hash chain */
 };
 /*e: struct Mhead */
 

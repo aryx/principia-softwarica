@@ -164,7 +164,6 @@ newchan(void)
        close calls rootclose, a nop */
     c->type = 0;
     c->dev = 0;
-    // c->qid?
 
     c->path = nil;
 
@@ -182,12 +181,12 @@ newchan(void)
     // c->umc?
     c->mux = nil;
     c->mchan = nil;
+    memset(&c->mqid, 0, sizeof(c->mqid));
 
     c->uri = 0;
     c->dri = 0;
     c->iounit = 0;
     c->mcp = nil;
-    memset(&c->mqid, 0, sizeof(c->mqid));
 
     c->aux = nil;
     
@@ -225,7 +224,7 @@ newpath(char *s)
 
     p->mlen = 1;
     p->malen = PATHMSLOP;
-    p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]);
+    p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]); // smalloc set to nil p->mtpt[0]
     return p;
 }
 /*e: constructor newpath */
@@ -282,10 +281,12 @@ pathclose(Path *p)
 
     decref(&npath);
     free(p->s);
+
     for(i=0; i<p->mlen; i++)
         if(p->mtpt[i])
             cclose(p->mtpt[i]);
     free(p->mtpt);
+
     free(p);
 }
 /*e: destructor pathclose */
@@ -824,7 +825,7 @@ cclone(Chan *c)
 
 /*s: function findmount */
 /* also used by sysfile.c:/^mountfix */
-int
+bool
 findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
 {
     Pgrp *pg;
@@ -839,7 +840,7 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
             runlock(&m->lock);
             continue;
         }
-        if(eqchantdqid(m->from, type, dev, qid, 1)){
+        if(eqchantdqid(m->from, type, dev, qid, true)){
             runlock(&pg->ns);
             if(mp != nil){
                 incref(m);
@@ -852,13 +853,13 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
             incref(m->mount->to);
             *cp = m->mount->to;
             runlock(&m->lock);
-            return 1;
+            return true;
         }
         runlock(&m->lock);
     }
 
     runlock(&pg->ns);
-    return 0;
+    return false;
 }
 /*e: function findmount */
 
@@ -872,7 +873,7 @@ domount(Chan **cp, Mhead **mp, Path **path)
     Chan **lc;
     Path *p;
 
-    if(findmount(cp, mp, (*cp)->type, (*cp)->dev, (*cp)->qid) == 0)
+    if(!findmount(cp, mp, (*cp)->type, (*cp)->dev, (*cp)->qid))
         return 0;
 
     if(path){
@@ -948,22 +949,22 @@ static char Edoesnotexist[] = "does not exist";
 int
 walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
 {
-   /*s: [[walk()]] locals */
-   Chan *c;
-   Path *path;
-   Walkqid *wq;
-   /*x: [[walk()]] locals */
-   int nhave, ntry;
-   bool didmount, dotdot;
-   /*x: [[walk()]] locals */
-   int i, n;
-   int type, dev;
-   Chan *nc, *mtpt;
-   /*x: [[walk()]] locals */
-   Mhead *mh;
-   Mhead *nmh;
-   Mount *f;
-   /*e: [[walk()]] locals */
+    /*s: [[walk()]] locals */
+    Chan *c;
+    Path *path;
+    Walkqid *wq;
+    /*x: [[walk()]] locals */
+    int nhave, ntry;
+    bool didmount, dotdot;
+    /*x: [[walk()]] locals */
+    int i, n;
+    int type, dev;
+    Chan *nc, *mtpt;
+    /*x: [[walk()]] locals */
+    Mhead *mh;
+    Mhead *nmh;
+    Mount *f;
+    /*e: [[walk()]] locals */
 
     c = *cp;
     incref(c);
@@ -1391,23 +1392,23 @@ namec(char *aname, int amode, int omode, ulong perm)
         n = chartorune(&r, up->genbuf+1)+1; // +1 for the leading '#'
 
         /*s: [[namec()]] noattach checking */
-            /*
-             *  noattach is sandboxing.
-             *
-             *  the OK exceptions are:
-             *  |  it only gives access to pipes you create
-             *  d  this process's file descriptors
-             *  e  this process's environment
-             *  the iffy exceptions are:
-             *  c  time and pid, but also cons and consctl
-             *  p  control of your own processes (and unfortunately
-             *     any others left unprotected)
-             */
-            /* actually / is caught by parsing earlier */
-            if(utfrune("M", r))
-                error(Enoattach);
-            if(up->pgrp->noattach && utfrune("|decp", r)==nil)
-                error(Enoattach);
+        /*
+         *  noattach is sandboxing.
+         *
+         *  the OK exceptions are:
+         *  |  it only gives access to pipes you create
+         *  d  this process's file descriptors
+         *  e  this process's environment
+         *  the iffy exceptions are:
+         *  c  time and pid, but also cons and consctl
+         *  p  control of your own processes (and unfortunately
+         *     any others left unprotected)
+         */
+        /* actually / is caught by parsing earlier */
+        if(utfrune("M", r))
+            error(Enoattach);
+        if(up->pgrp->noattach && utfrune("|decp", r)==nil)
+            error(Enoattach);
         /*e: [[namec()]] noattach checking */
 
         t = devno(r, true);

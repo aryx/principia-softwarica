@@ -62,7 +62,7 @@ int   qlen(Queue*);
 // chan.c
 Chan*   cclone(Chan*);
 void    putmhead(Mhead*);
-int   eqchantdqid(Chan*, int, int, Qid, int);
+int   eqchantdqid(Chan*, int, int, Qid, bool);
 Mhead*    newmhead(Chan*);
 void    isdir(Chan*);
 char*   chanpath(Chan*);
@@ -73,7 +73,7 @@ void    chandevreset(void);
 int   eqqid(Qid, Qid);
 int   cmount(Chan**, Chan*, int, char*);
 void    cunmount(Chan*, Chan*);
-int   findmount(Chan**, Mhead**, int, int, Qid);
+bool   findmount(Chan**, Mhead**, int, int, Qid);
 void    pathclose(Path*);
 Path*   newpath(char*);
 Chan*   newchan(void);

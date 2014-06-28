@@ -1234,7 +1234,8 @@ char *statename[] =
 % and proc->fd[]? in title?
 
 % everything is a file/Chan :)
-% diff with file descriptor? fd = index in chan table (fgrp), chan = opened file
+% diff with file descriptor? fd = index in chan table (fgrp), 
+% chan = opened/active file
 
 <<struct Chan>>=
 struct Chan
@@ -1264,6 +1265,7 @@ struct Chan
 };
 @
 % more LP split? type put closer to devtab?
+% could put 'dev' closer to device for fs where want more than just type
 
 <<[[Proc]] files fields>>=
 // ref<Chan>
@@ -1274,7 +1276,7 @@ Chan  *dot; // The current directory
 
 
 % rob pike: "q for unique"
-% qid =~ inode =~ internal representation of a file on a filesystem
+% qid =~ inode =~ internal representation of a file on a filesystem(fileserver)
 <<struct Qid>>=
 struct Qid
 {
@@ -4191,9 +4193,9 @@ newproc(void)
     p->nwait = 0;
     p->waitq = nil;
 
+    p->fgrp = nil;
     p->pgrp = nil;
     p->egrp = nil;
-    p->fgrp = nil;
     p->rgrp = nil;
 
     <<[[newproc()]] fb init>>
@@ -12045,9 +12047,9 @@ userinit(void)
     p = newproc();
 
     p->pgrp = newpgrp();
+    p->fgrp = dupfgrp(nil);
     p->egrp = smalloc(sizeof(Egrp)); //todo: newegrp()
     p->egrp->ref = 1;
-    p->fgrp = dupfgrp(nil);
     p->rgrp = newrgrp();
 
     p->procmode = 0640;
@@ -12321,6 +12323,7 @@ enum
 // enum<channelflag>> (actually a bitset for certain properties)
 ushort  flag;
 @
+% see also the 'mode' field of enum<open>
 
 
 
@@ -12384,7 +12387,6 @@ newchan(void)
        close calls rootclose, a nop */
     c->type = 0;
     c->dev = 0;
-    // c->qid?
 
     c->path = nil;
 
@@ -12402,12 +12404,12 @@ newchan(void)
     // c->umc?
     c->mux = nil;
     c->mchan = nil;
+    memset(&c->mqid, 0, sizeof(c->mqid));
 
     c->uri = 0;
     c->dri = 0;
     c->iounit = 0;
     c->mcp = nil;
-    memset(&c->mqid, 0, sizeof(c->mqid));
 
     c->aux = nil;
     
@@ -12415,7 +12417,11 @@ newchan(void)
 }
 @
 %dirrock = nil? umc = nil
+% what about ->qid? could do a memset 0 like for mqid no? the caller
+% of newchan will take care of that as he knows better the kind of qid
+% one wants, QTDIR or QTFILE for instance
 
+% but actually the real destructor managing references is cclose()
 <<destructor chanfree>>=
 void
 chanfree(Chan *c)
@@ -12463,7 +12469,8 @@ cunique(Chan *c)
 
 % see chapter 3 too, Dev and devtab global
 
-% ex of attach? they call devattach no?
+% ex of attach? they call devattach no? namec('#/', ...) will call devattach
+% of the root device
 <<function devattach>>=
 Chan*
 devattach(Rune tc, char *spec)
@@ -12487,7 +12494,7 @@ devattach(Rune tc, char *spec)
     return c;
 }
 @
-
+% what about c->dev? the specific attach should handle that?
 
 <<function devno>>=
 int
@@ -12890,7 +12897,7 @@ chan_cclose(Chan *c)
 \section{[[namec()]]}
 % big function ...
 % not in Dir chapter cos don't need path, and LP splitted enough
-% now that mainly expose the open method so better closer to sysopen
+% now that mainly expose the ->open() method so better closer to sysopen()
 
 % have seen before:
 %        up->slash = namec("#/", Atodir, 0, 0); in init0
@@ -12921,6 +12928,7 @@ enum
 };
 @
 
+% basic logical flow string -> Elemlist -> Chan
 <<[[namec() locals>>=
 char *name;
 @
@@ -12932,7 +12940,7 @@ Elemlist e;
 <<[[namec() locals>>=
 Chan *c;
 @
-% that will also adjust c->path gradually
+% (that will also adjust c->path gradually)
 
 
 % another big function ... actually calls 
@@ -13915,7 +13923,7 @@ if(amode == Aopen && (omode&OEXEC) == OEXEC && (c->qid.type&QTDIR))
 \section{[[Path]]}
 % mv later?
 
-% see lexnames.ps for the need of mtpt below
+% see lexnames.ps for the need of mtpt below!
 
 % see Path *path; in Chan
 
@@ -13937,9 +13945,10 @@ struct Path
 @
 % why need path? for fd2path for sure, but also for error messages on channel
 %  in general. But then should do things lazily no?
-% why need this array of mtpt? I think just for reference counting the
+% why need this array of mtpt? for reference counting the
 %  intermediate dirs so that you can't remove those intermediate dirs as
-%  there are still referenced in opened files? hmm not sure.
+%  there are still referenced in opened files? hmm no. It's mainly
+%  to get '..' right, see lexnames.ps
 % 
 %LP split mtpt?
 % mtpt is for the components, the chan from each sub dirs in the path
@@ -13991,7 +14000,7 @@ newpath(char *s)
 
     p->mlen = 1;
     p->malen = PATHMSLOP;
-    p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]);
+    p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]); // smalloc set to nil p->mtpt[0]
     return p;
 }
 @
@@ -14045,10 +14054,12 @@ pathclose(Path *p)
 
     decref(&npath);
     free(p->s);
+
     for(i=0; i<p->mlen; i++)
         if(p->mtpt[i])
             cclose(p->mtpt[i]);
     free(p->mtpt);
+
     free(p);
 }
 @
@@ -14148,6 +14159,7 @@ isdotdot(char *p)
 }
 @
 
+% essentially cleanname()
 <<function fixdotdotname>>=
 /*
  * In place, rewrite name to compress multiple /, eliminate ., and process ..
@@ -14176,14 +14188,15 @@ fixdotdotname(Path *p)
     p->len = strlen(p->s);
 }
 @
-% cleanname() is in libc
+% cleanname() is in libc, and modify in place. it only shortens
+% so no need to realloc there
 
 
 \section{[[walk()]]}
 
 % overview: get a list of names, walk as far as possible towards
-% next .. (cos handled generically here I thin) or end.
-% should return in walkqid the set of names went though that are
+% next .. (cos handled generically here I think) or end.
+% should return in walkqid the set of names went through that are
 % in this mountpoint
 
 % allows to do multiple walks at once, so avoid too many roundtrips
@@ -14191,6 +14204,7 @@ fixdotdotname(Path *p)
 <<[[Dev]] methods>>=
 Walkqid*(*walk)(Chan*, Chan*, char**, int);
 @
+% what is second chan parameter?
 
 <<struct Walkqid>>=
 struct Walkqid
@@ -14202,134 +14216,7 @@ struct Walkqid
 };
 @
 
-<<[[walk()]] locals>>=
-Chan *c;
-Path *path;
-Walkqid *wq;
-@
-
-<<[[walk()]] locals>>=
-int nhave, ntry;
-bool didmount, dotdot;
-@
-
-<<[[walk()]] locals>>=
-int i, n;
-int type, dev;
-Chan *nc, *mtpt;
-@
-
-<<[[walk()]] locals>>=
-Mhead *mh;
-Mhead *nmh;
-Mount *f;
-@
-
-% another big function ... namec() and walk() are complicated
-% called by namec():  if(walk(&c, e.elems, e.nelems, mount, &e.nerror) < 0){
-
-<<[[walk()]] return error if channel c is not a dir>>=
-        if((c->qid.type&QTDIR)==0){
-            if(nerror)
-                *nerror = nhave;
-            pathclose(path);
-            cclose(c);
-            if(mh != nil)
-                putmhead(mh);
-            strcpy(up->errstr, Enotdir);
-            return -1;
-        }
-@
-
-<<[[walk()]] if wq is nil, close and return>>=
-if(wq == nil){
-    pathclose(path);
-    cclose(c);
-    if(nerror)
-        *nerror = nhave+1;
-    if(mh != nil)
-        putmhead(mh);
-    return -1;
-}
-@
-
-<<[[walk()]] if c is a union mount, find and adjust type and dev>>=
-            /* try a union mount, if any */
-            if(mh && mount){
-                /*
-                 * mh->mount->to == c, so start at mh->mount->next
-                 */
-                rlock(&mh->lock);
-                f = mh->mount;
-                for(f = (f? f->next: f); f; f = f->next)
-                    if((wq = ewalk(f->to, nil, names+nhave, ntry)) != nil)
-                        break;
-                runlock(&mh->lock);
-                if(f != nil){
-                    type = f->to->type;
-                    dev = f->to->dev;
-                }
-            }
-@
-
-<<[[walk()]] set dotdot and ntry to index of next '..' or nnames>>=
-        // remaining names
-        ntry = nnames - nhave;
-        if(ntry > MAXWELEM)
-            ntry = MAXWELEM;
-
-        for(i=0; i<ntry; i++){
-            if(isdotdot(names[nhave+i])){
-                if(i==0){
-                    dotdot = true;
-                    ntry = 1;
-                }else
-                    ntry = i;
-                break;
-            }
-        }
-        // ntry is now the index of the next '..' or nnames
-@
-
-<<[[walk()]] if dotdot adjust path and nc>>=
-            assert(wq->nqid == 1);
-            assert(wq->clone != nil);
-
-            path = addelem(path, "..", nil);
-            nc = undomount(wq->clone, path);
-            nmh = nil;
-@
-
-<<[[walk()]] if mount and findmount adjust nc, nmh, i and didmount = true>>=
-            if(mount){
-                for(i=0; i<wq->nqid && i<ntry-1; i++){
-                    if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
-                        didmount = true;
-                        break;
-                    }
-                }
-            }
-@
-
-<<[[walk()]] if nc == nil and wq->clone == nil return error>>=
-                if(wq->clone == nil){
-                    cclose(c);
-                    pathclose(path);
-                    if(wq->nqid==0 || (wq->qid[wq->nqid-1].type&QTDIR)){
-                        if(nerror)
-                            *nerror = nhave+wq->nqid+1;
-                        strcpy(up->errstr, Edoesnotexist);
-                    }else{
-                        if(nerror)
-                            *nerror = nhave+wq->nqid;
-                        strcpy(up->errstr, Enotdir);
-                    }
-                    free(wq);
-                    if(mh != nil)
-                        putmhead(mh);
-                    return -1;
-                }
-@
+% logical flow?
 
 %mount is usually true. it's false only when was processing a device path
 % rename? device_path?
@@ -14344,7 +14231,7 @@ if(wq == nil){
 int
 walk(Chan **cp, char **names, int nnames, bool mount, int *nerror)
 {
-   <<[[walk()]] locals>>
+    <<[[walk()]] locals>>
 
     c = *cp;
     incref(c);
@@ -14483,6 +14370,141 @@ cclone(Chan *c)
         incref(c->path);
     return nc;
 }
+@
+
+% TODOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+<<[[walk()]] locals>>=
+Chan *c;
+Path *path;
+Walkqid *wq;
+@
+
+<<[[walk()]] locals>>=
+int nhave, ntry;
+bool didmount, dotdot;
+@
+
+<<[[walk()]] locals>>=
+int i, n;
+int type, dev;
+Chan *nc, *mtpt;
+@
+
+<<[[walk()]] locals>>=
+Mhead *mh;
+Mhead *nmh;
+Mount *f;
+@
+
+% another big function ... namec() and walk() are complicated
+% called by namec():  if(walk(&c, e.elems, e.nelems, mount, &e.nerror) < 0){
+
+<<[[walk()]] return error if channel c is not a dir>>=
+        if((c->qid.type&QTDIR)==0){
+            if(nerror)
+                *nerror = nhave;
+            pathclose(path);
+            cclose(c);
+            if(mh != nil)
+                putmhead(mh);
+            strcpy(up->errstr, Enotdir);
+            return -1;
+        }
+@
+
+<<[[walk()]] if wq is nil, close and return>>=
+if(wq == nil){
+    pathclose(path);
+    cclose(c);
+    if(nerror)
+        *nerror = nhave+1;
+    if(mh != nil)
+        putmhead(mh);
+    return -1;
+}
+@
+
+<<[[walk()]] if c is a union mount, find and adjust type and dev>>=
+            /* try a union mount, if any */
+            if(mh && mount){
+                /*
+                 * mh->mount->to == c, so start at mh->mount->next
+                 */
+                rlock(&mh->lock);
+                f = mh->mount;
+                for(f = (f? f->next: f); f; f = f->next)
+                    if((wq = ewalk(f->to, nil, names+nhave, ntry)) != nil)
+                        break;
+                runlock(&mh->lock);
+                if(f != nil){
+                    type = f->to->type;
+                    dev = f->to->dev;
+                }
+            }
+@
+
+<<[[walk()]] set dotdot and ntry to index of next '..' or nnames>>=
+        // remaining names
+        ntry = nnames - nhave;
+        if(ntry > MAXWELEM)
+            ntry = MAXWELEM;
+
+        for(i=0; i<ntry; i++){
+            if(isdotdot(names[nhave+i])){
+                if(i==0){
+                    dotdot = true;
+                    ntry = 1;
+                }else
+                    ntry = i;
+                break;
+            }
+        }
+        // ntry is now the index of the next '..' or nnames
+@
+
+<<[[walk()]] if dotdot adjust path and nc>>=
+            assert(wq->nqid == 1);
+            assert(wq->clone != nil);
+
+            path = addelem(path, "..", nil);
+            nc = undomount(wq->clone, path);
+            nmh = nil;
+@
+
+<<[[walk()]] if mount and findmount adjust nc, nmh, i and didmount = true>>=
+            if(mount){
+                for(i=0; i<wq->nqid && i<ntry-1; i++){
+                    if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
+                        didmount = true;
+                        break;
+                    }
+                }
+            }
+@
+
+<<[[walk()]] if nc == nil and wq->clone == nil return error>>=
+                if(wq->clone == nil){
+                    cclose(c);
+                    pathclose(path);
+                    if(wq->nqid==0 || (wq->qid[wq->nqid-1].type&QTDIR)){
+                        if(nerror)
+                            *nerror = nhave+wq->nqid+1;
+                        strcpy(up->errstr, Edoesnotexist);
+                    }else{
+                        if(nerror)
+                            *nerror = nhave+wq->nqid;
+                        strcpy(up->errstr, Enotdir);
+                    }
+                    free(wq);
+                    if(mh != nil)
+                        putmhead(mh);
+                    return -1;
+                }
+@
+
+<<global Edoesnotexist>>=
+static char Edoesnotexist[] = "does not exist";
 @
 
 \section{[[syscreate()]], [[sysremove()]]}
@@ -15222,14 +15244,14 @@ case Amount:
 <<struct Mount>>=
 struct Mount
 {
-  ulong mountid;
-  Mount*  next;
-  Mhead*  head;
-  Mount*  copy;
-  Mount*  order;
-  Chan* to;     /* channel replacing channel */
-  int mflag;
-  char  *spec;
+    ulong mountid;
+    Mount*  next;
+    Mhead*  head;
+    Mount*  copy;
+    Mount*  order;
+    Chan* to;     /* channel replacing channel */
+    int mflag;
+    char  *spec;
 };
 @
 
@@ -15237,11 +15259,11 @@ struct Mount
 <<struct Mhead>>=
 struct Mhead
 {
-  Ref;
-  RWlock  lock;
-  Chan* from;     /* channel mounted upon */
-  Mount*  mount;      /* what's mounted upon it */
-  Mhead*  hash;     /* Hash chain */
+    Ref;
+    RWlock  lock;
+    Chan* from;     /* channel mounted upon */
+    Mount*  mount;      /* what's mounted upon it */
+    Mhead*  hash;     /* Hash chain */
 };
 @
 
@@ -15330,10 +15352,10 @@ putmhead(Mhead *m)
 }
 @
 
-
+% first use of up->pgrp!
 <<function findmount>>=
 /* also used by sysfile.c:/^mountfix */
-int
+bool
 findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
 {
     Pgrp *pg;
@@ -15348,7 +15370,7 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
             runlock(&m->lock);
             continue;
         }
-        if(eqchantdqid(m->from, type, dev, qid, 1)){
+        if(eqchantdqid(m->from, type, dev, qid, true)){
             runlock(&pg->ns);
             if(mp != nil){
                 incref(m);
@@ -15361,13 +15383,13 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
             incref(m->mount->to);
             *cp = m->mount->to;
             runlock(&m->lock);
-            return 1;
+            return true;
         }
         runlock(&m->lock);
     }
 
     runlock(&pg->ns);
-    return 0;
+    return false;
 }
 @
 
@@ -15382,7 +15404,7 @@ domount(Chan **cp, Mhead **mp, Path **path)
     Chan **lc;
     Path *p;
 
-    if(findmount(cp, mp, (*cp)->type, (*cp)->dev, (*cp)->qid) == 0)
+    if(!findmount(cp, mp, (*cp)->type, (*cp)->dev, (*cp)->qid))
         return 0;
 
     if(path){
@@ -15433,9 +15455,6 @@ DBG("undomount %p %s => remove %p\n", path, path->s, nc);
 
 
 
-<<global Edoesnotexist>>=
-static char Edoesnotexist[] = "does not exist";
-@
 
 
 \section{[[Pgrp]]}
@@ -15447,7 +15466,7 @@ enum
     MNTHASH = 1<<MNTLOG,  /* Hash to walk mount table */
 };
 #define MOUNTH(p,qid) ((p)->mnthash[(qid).path&((1<<MNTLOG)-1)])
-@ 
+@
 
 <<struct Pgrp>>=
 // Namespace process group
@@ -15455,6 +15474,7 @@ struct Pgrp
 {
     // hash<qid.path, list<ref<Mhead> (next = Mhead.next)>
     Mhead *mnthash[MNTHASH];
+
     ulong pgrpid;
     bool noattach;
   
@@ -15728,7 +15748,7 @@ mountfix(Chan *c, byte *op, long n, long maxn)
              * in the union, don't rewrite anything.
              */
             for(m=mh->mount; m; m=m->next)
-                if(eqchantdqid(m->to, d.type, d.dev, d.qid, 1))
+                if(eqchantdqid(m->to, d.type, d.dev, d.qid, true))
                     goto Norewrite;
 
             name = dirname(p, &nname);
@@ -16290,23 +16310,23 @@ unionrewind(Chan *c)
 \section{Sandboxing}
 
 <<[[namec()]] noattach checking>>=
-    /*
-     *  noattach is sandboxing.
-     *
-     *  the OK exceptions are:
-     *  |  it only gives access to pipes you create
-     *  d  this process's file descriptors
-     *  e  this process's environment
-     *  the iffy exceptions are:
-     *  c  time and pid, but also cons and consctl
-     *  p  control of your own processes (and unfortunately
-     *     any others left unprotected)
-     */
-    /* actually / is caught by parsing earlier */
-    if(utfrune("M", r))
-        error(Enoattach);
-    if(up->pgrp->noattach && utfrune("|decp", r)==nil)
-        error(Enoattach);
+/*
+ *  noattach is sandboxing.
+ *
+ *  the OK exceptions are:
+ *  |  it only gives access to pipes you create
+ *  d  this process's file descriptors
+ *  e  this process's environment
+ *  the iffy exceptions are:
+ *  c  time and pid, but also cons and consctl
+ *  p  control of your own processes (and unfortunately
+ *     any others left unprotected)
+ */
+/* actually / is caught by parsing earlier */
+if(utfrune("M", r))
+    error(Enoattach);
+if(up->pgrp->noattach && utfrune("|decp", r)==nil)
+    error(Enoattach);
 @
 
 \chapter{Devices}

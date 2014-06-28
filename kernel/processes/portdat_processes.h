@@ -109,6 +109,7 @@ struct Pgrp
 {
     // hash<qid.path, list<ref<Mhead> (next = Mhead.next)>
     Mhead *mnthash[MNTHASH];
+
     ulong pgrpid;
     bool noattach;
   

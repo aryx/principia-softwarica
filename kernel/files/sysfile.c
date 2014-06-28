@@ -525,7 +525,7 @@ mountfix(Chan *c, byte *op, long n, long maxn)
              * in the union, don't rewrite anything.
              */
             for(m=mh->mount; m; m=m->next)
-                if(eqchantdqid(m->to, d.type, d.dev, d.qid, 1))
+                if(eqchantdqid(m->to, d.type, d.dev, d.qid, true))
                     goto Norewrite;
 
             name = dirname(p, &nname);
