@@ -27,6 +27,7 @@ startboot(char *argv0, char **argv)
     open(cons, OREAD);
     open(cons, OWRITE);
     open(cons, OWRITE);
+
     bind(c, dev, MAFTER);
     bind(ec, env, MAFTER);
     bind(e, env, MCREATE|MAFTER);

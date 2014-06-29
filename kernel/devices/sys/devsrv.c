@@ -326,7 +326,7 @@ srvclose(Chan *c)
 static long
 srvread(Chan *c, void *va, long n, vlong)
 {
-    isdir(c);
+    error_if_not_dir(c);
     return devdirread(c, va, n, 0, 0, srvgen);
 }
 /*e: method srvread */

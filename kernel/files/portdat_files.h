@@ -119,25 +119,37 @@ struct Mntcache
 /*s: struct Mount */
 struct Mount
 {
-    ulong mountid;
-    Mount*  next;
-    Mhead*  head;
-    Mount*  copy;
-    Mount*  order;
     Chan* to;     /* channel replacing channel */
+
+    // enum<??> MCREATE?
     int mflag;
     char  *spec;
+
+    ulong mountid;
+    /*s: [[Mount]] extra fields */
+        // ref<Mhead> reciproque of Mhead.mount
+        Mhead*  head;
+    /*x: [[Mount]] extra fields */
+        Mount*  next;
+        Mount*  copy;
+        Mount*  order;
+    /*e: [[Mount]] extra fields */
 };
 /*e: struct Mount */
 
 /*s: struct Mhead */
 struct Mhead
 {
+    Chan* from;     /* channel mounted upon */
+    // list<ref_owned<Mount>> because of union mount
+    Mount*  mount;      /* what's mounted upon it */
+
     Ref;
     RWlock  lock;
-    Chan* from;     /* channel mounted upon */
-    Mount*  mount;      /* what's mounted upon it */
-    Mhead*  hash;     /* Hash chain */
+    /*s: [[Mhead extra fields */
+        // hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
+        Mhead*  hash;     /* Hash chain */
+    /*e: [[Mhead extra fields */
 };
 /*e: struct Mhead */
 
@@ -192,11 +204,13 @@ struct Path
     int len;      /* strlen(s) */
     int alen;     /* allocated length of s */
 
-    // array<option<ref_counted<Chan>>, nil for elements which are not mount point
-    Chan  **mtpt;     /* mtpt history */
-    int mlen;     /* number of path elements */
-    int malen;      /* allocated length of mtpt */
-  
+    /*s: [[Path]] mtpt fields */
+        // array<option<ref_counted<Chan>>, nil for elements which are not mount point
+        Chan  **mtpt;     /* mtpt history */
+        int mlen;     /* number of path elements */
+        int malen;      /* allocated length of mtpt */
+    /*e: [[Path]] mtpt fields */
+ 
     // extra
     Ref;
 };
@@ -270,11 +284,6 @@ struct Chan
     // enum<channelflag>> (actually a bitset for certain properties)
     ushort  flag;
     /*x: [[Chan]] other fields */
-    byte*  dirrock;    /* directory entry rock for translations */
-    int nrock;
-    int mrock;
-    QLock rockqlock;
-    /*x: [[Chan]] other fields */
     Chan* mchan;      /* channel to mounted server */
     /*x: [[Chan]] other fields */
     Mhead*  umh;      /* mount point that derived Chan; used in unionread */
@@ -283,6 +292,11 @@ struct Chan
     int uri;      /* union read index */
     /*x: [[Chan]] other fields */
     vlong devoffset;    /* in underlying device; see read */
+    /*x: [[Chan]] other fields */
+    byte*  dirrock;    /* directory entry rock for translations */
+    int nrock;
+    int mrock;
+    QLock rockqlock;
     /*x: [[Chan]] other fields */
     int dri;      /* devdirread index */
     /*x: [[Chan]] other fields */

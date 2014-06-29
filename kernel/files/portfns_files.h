@@ -64,7 +64,7 @@ Chan*   cclone(Chan*);
 void    putmhead(Mhead*);
 int   eqchantdqid(Chan*, int, int, Qid, bool);
 Mhead*    newmhead(Chan*);
-void    isdir(Chan*);
+void    error_if_not_dir(Chan*);
 char*   chanpath(Chan*);
 int   emptystr(char*);
 void    chandevinit(void);
@@ -80,7 +80,7 @@ Chan*   newchan(void);
 void    chanfree(Chan*);
 //cchan_close => cclose
 char*   validnamedup(char*, bool);
-void    validname(char*, int);
+void    validname(char*, bool);
 void    nameerror(char*, char*);
 int   walk(Chan**, char**, int, int, int*);
 void    ccloseq(Chan*);

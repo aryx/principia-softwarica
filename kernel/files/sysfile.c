@@ -140,7 +140,8 @@ sysfd2path(ulong* arg)
 
     validaddr(arg[1], arg[2], true);
     c = fdtochan(arg[0], -1, false, true);
-    snprint((char*)arg[1], arg[2], "%s", chanpath(c));
+    snprint((char*)arg[1], arg[2], "%s", 
+              chanpath(c));
     cclose(c);
     return 0;
 }
@@ -933,7 +934,7 @@ syschdir(ulong* arg)
 
 /*s: function bindmount */
 long
-bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char* spec)
+bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char* spec)
 {
     int ret;
     Chan *c0, *c1, *ac, *bc;
@@ -980,8 +981,9 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
         if(ac)
             cclose(ac);
         cclose(bc);
+
     }else{
-        spec = 0;
+        spec = nil;
         validaddr((ulong)arg0, 1, false);
         c0 = namec(arg0, Abind, 0, 0);
     }
@@ -1018,7 +1020,7 @@ bindmount(int ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char
 long
 sysbind(ulong* arg)
 {
-    return bindmount(0, -1, -1, (char*)arg[0], (char*)arg[1], arg[2], nil);
+    return bindmount(false, -1, -1, (char*)arg[0], (char*)arg[1], arg[2], nil);
 }
 /*e: syscall bind */
 
@@ -1027,7 +1029,7 @@ sysbind(ulong* arg)
 long
 sysmount(ulong* arg)
 {
-    return bindmount(1, arg[0], arg[1], nil, (char*)arg[2], arg[3], (char*)arg[4]);
+    return bindmount(true, arg[0], arg[1], nil, (char*)arg[2], arg[3], (char*)arg[4]);
 }
 /*e: syscall mount */
 

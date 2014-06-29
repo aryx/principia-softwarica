@@ -128,7 +128,7 @@ pgrpinsert(Mount **order, Mount *m)
     Mount *f;
 
     m->order = 0;
-    if(*order == 0) {
+    if(*order == nil) {
         *order = m;
         return;
     }
@@ -300,11 +300,11 @@ newmount(Mhead *mh, Chan *to, int flag, char *spec)
 
     m = smalloc(sizeof(Mount));
     m->to = to;
-    m->head = mh;
     incref(to);
+    m->head = mh;
     m->mountid = incref(&mountid);
     m->mflag = flag;
-    if(spec != 0)
+    if(spec != nil)
         kstrdup(&m->spec, spec);
 
     return m;

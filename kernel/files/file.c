@@ -129,7 +129,7 @@ validstat(byte *s, int n)
     buf[m] = '\0';
     /* name could be '/' */
     if(strcmp(buf, "/") != 0)
-        validname(buf, 0);
+        validname(buf, false);
 }
 /*e: function validstat */
 

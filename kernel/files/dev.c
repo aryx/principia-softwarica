@@ -195,7 +195,7 @@ devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen
     Dir dir;
 
     if(nname > 0)
-        isdir(c);
+        error_if_not_dir(c);
 
     alloc = false;
     wq = smalloc(sizeof(Walkqid)+(nname-1)*sizeof(Qid));
