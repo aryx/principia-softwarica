@@ -14730,7 +14730,9 @@ chanpath(Chan *c)
 
 \section{[[DirEntry]]}
 
-% also in libc.h (so if change here, need change also in libc.h)
+% also in libc.h (but called Dir there)
+% so if change fields here, need to change also in libc.h but
+% there are code like direntry_setname that compute offsets so safer to not change
 <<struct DirEntry>>=
 struct DirEntry {
   /* system-modified data */
@@ -14773,9 +14775,9 @@ enum dirmode {
 % be defined here I think.
 %DMAPPEND = 0x40000000,  /* mode bit for append only files */
 
-<<function dirsetname>>=
+<<function direntry_setname>>=
 static long
-dirsetname(char *name, int len, byte *p, long n, long maxn)
+direntry_setname(char *name, int len, byte *p, long n, long maxn)
 {
     char *oname;
     int olen;
@@ -14784,7 +14786,7 @@ dirsetname(char *name, int len, byte *p, long n, long maxn)
     if(n == BIT16SZ)
         return BIT16SZ;
 
-    oname = dirname(p, &olen);
+    oname = offsetof_name_direntry(p, &olen);
 
     nn = n+len-olen;
     PBIT16(p, nn-BIT16SZ);
@@ -14798,12 +14800,11 @@ dirsetname(char *name, int len, byte *p, long n, long maxn)
     return nn;
 }
 @
-% ??? rename direntry_setname
 
-% find offset of name field in Dir?
-<<function dirname>>=
+% find offset of name field in DirEntry?
+<<function offsetof_name_direntry>>=
 static char*
-dirname(byte *p, int *n)
+offsetof_name_direntry(byte *p, int *n)
 {
     p += BIT16SZ+BIT16SZ+BIT32SZ +
           BIT8SZ+BIT32SZ+BIT64SZ +
@@ -14813,7 +14814,6 @@ dirname(byte *p, int *n)
     return (char*)p+BIT16SZ;
 }
 @
-% rename? offsetof_name_direntry
 
 
 
@@ -14846,7 +14846,7 @@ sysstat(ulong* arg)
 
     name = pathlast(c->path);
     if(name)
-        l = dirsetname(name, strlen(name), (byte*)arg[1], l, arg[2]);
+        l = direntry_setname(name, strlen(name), (byte*)arg[1], l, arg[2]);
 
     poperror();
     cclose(c);
@@ -14876,7 +14876,7 @@ sysfstat(ulong* arg)
     return l;
 }
 @
-% why don't do the same dirsetname thing?
+% why don't do the same direntry_setname thing?
 
 
 <<function pathlast>>=
@@ -14986,7 +14986,7 @@ wstat(Chan *c, byte *d, int nd)
          * Renaming mount points is disallowed to avoid surprises
          * (which should be renamed? the mount point or the mounted Chan?).
          */
-        dirname(d, &namelen);
+        offsetof_name_direntry(d, &namelen);
         if(namelen)
             nameerror(chanpath(c), Eismtpt);
     }
@@ -16345,7 +16345,7 @@ mountfix(Chan *c, byte *op, long n, long maxn)
                 if(eqchantdqid(m->to, d.type, d.dev, d.qid, true))
                     goto Norewrite;
 
-            name = dirname(p, &nname);
+            name = offsetof_name_direntry(p, &nname);
             /*
              * Do the stat but fix the name.  If it fails, leave old entry.
              * BUG: If it fails because there isn't room for the entry,
@@ -16358,9 +16358,9 @@ mountfix(Chan *c, byte *op, long n, long maxn)
             if(waserror())
                 goto Norewrite;
             l = devtab[nc->type]->stat(nc, buf, nbuf);
-            l = dirsetname(name, nname, buf, l, nbuf);
+            l = direntry_setname(name, nname, buf, l, nbuf);
             if(l == BIT16SZ)
-                error("dirsetname");
+                error("direntry_setname");
             poperror();
 
             /*

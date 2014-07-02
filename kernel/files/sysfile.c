@@ -360,9 +360,9 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 }
 /*e: function dirfixed */
 
-/*s: function dirname */
+/*s: function offsetof_name_direntry */
 static char*
-dirname(byte *p, int *n)
+offsetof_name_direntry(byte *p, int *n)
 {
     p += BIT16SZ+BIT16SZ+BIT32SZ +
           BIT8SZ+BIT32SZ+BIT64SZ +
@@ -371,11 +371,11 @@ dirname(byte *p, int *n)
     *n = GBIT16(p);
     return (char*)p+BIT16SZ;
 }
-/*e: function dirname */
+/*e: function offsetof_name_direntry */
 
-/*s: function dirsetname */
+/*s: function direntry_setname */
 static long
-dirsetname(char *name, int len, byte *p, long n, long maxn)
+direntry_setname(char *name, int len, byte *p, long n, long maxn)
 {
     char *oname;
     int olen;
@@ -384,7 +384,7 @@ dirsetname(char *name, int len, byte *p, long n, long maxn)
     if(n == BIT16SZ)
         return BIT16SZ;
 
-    oname = dirname(p, &olen);
+    oname = offsetof_name_direntry(p, &olen);
 
     nn = n+len-olen;
     PBIT16(p, nn-BIT16SZ);
@@ -397,7 +397,7 @@ dirsetname(char *name, int len, byte *p, long n, long maxn)
     memmove(oname, name, len);
     return nn;
 }
-/*e: function dirsetname */
+/*e: function direntry_setname */
 
 /*s: function mountrock */
 /*
@@ -531,7 +531,7 @@ mountfix(Chan *c, byte *op, long n, long maxn)
                 if(eqchantdqid(m->to, d.type, d.dev, d.qid, true))
                     goto Norewrite;
 
-            name = dirname(p, &nname);
+            name = offsetof_name_direntry(p, &nname);
             /*
              * Do the stat but fix the name.  If it fails, leave old entry.
              * BUG: If it fails because there isn't room for the entry,
@@ -544,9 +544,9 @@ mountfix(Chan *c, byte *op, long n, long maxn)
             if(waserror())
                 goto Norewrite;
             l = devtab[nc->type]->stat(nc, buf, nbuf);
-            l = dirsetname(name, nname, buf, l, nbuf);
+            l = direntry_setname(name, nname, buf, l, nbuf);
             if(l == BIT16SZ)
-                error("dirsetname");
+                error("direntry_setname");
             poperror();
 
             /*
@@ -911,7 +911,7 @@ sysstat(ulong* arg)
 
     name = pathlast(c->path);
     if(name)
-        l = dirsetname(name, strlen(name), (byte*)arg[1], l, arg[2]);
+        l = direntry_setname(name, strlen(name), (byte*)arg[1], l, arg[2]);
 
     poperror();
     cclose(c);
@@ -1145,7 +1145,7 @@ wstat(Chan *c, byte *d, int nd)
          * Renaming mount points is disallowed to avoid surprises
          * (which should be renamed? the mount point or the mounted Chan?).
          */
-        dirname(d, &namelen);
+        offsetof_name_direntry(d, &namelen);
         if(namelen)
             nameerror(chanpath(c), Eismtpt);
     }
