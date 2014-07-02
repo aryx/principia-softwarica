@@ -1248,7 +1248,7 @@ struct Chan
 
     vlong offset;     /* in fd */
 
-    //enum<open>
+    //enum<open>, actually restricted to the OREAD|OWRITE|ORDWR of open type
     ushort mode;     /* read/write */
 
     bool ismtpt; // is a mount point
@@ -9047,7 +9047,7 @@ case Qswap:
     if(buf[0]<'0' || '9'<buf[0])
         error(Ebadarg);
     fd = strtoul(buf, 0, 0);
-    swc = fdtochan(fd, -1, 1, 1);
+    swc = fdtochan(fd, -1, true, true);
     setswapchan(swc);
     break;
 @
@@ -9539,6 +9539,7 @@ found:
 }
 @ 
 
+\subsection{Adjusting priority}
 
 <<[[Proc]] scheduling fields>>=
 Cpu *lastcpu;    /* processor this process last ran on */
@@ -9671,7 +9672,6 @@ reprioritize(Proc *p)
     return ratio;
 }
 @ 
-
 
 
 \subsection{Delayed [[sched()]]}
@@ -10246,6 +10246,7 @@ preempt(void)
 % process so preempt!
 
 \subsection{Clock interrupt}
+% see also Time chapter
 
 % number of times per second we want to get a clock interrupt, called
 % also a tick
@@ -10491,6 +10492,7 @@ _nothingready:
         RET
 @
 
+% see halting just before initializing :)
 
 
 \chapter{Initialization}
@@ -12291,19 +12293,20 @@ startboot(char *argv0, char **argv)
     [SEEK]      sysseek,
 @ 
 
-% note that files are used for many things, including devices!!
+\section{Overview}
+
+% Chan, fds, Dev, devtab.
+% complications: dirs, mount table, namespace, "..", union directories, devmnt
+
+%note that files are used for many things, including devices!!
 % and actually in plan9 device drivers are really more file servers.
 %pike: interface is not everything is a file, but everything is
 % a file server interface!
 
-\section{Overview}
-
-% Chan, fds, Dev, devtab.
-% complications: mount table, namespace, "..", union directories, devmnt
 
 \section{[[Chan]]nels}
 
-% see chapter 3 to recall main fields of Chan (type, path, qid, etc)
+% see chapter 3 to recall main fields of Chan (type, dev, qid,  path, etc)
 
 <<enum channelflag>>=
 /*
@@ -12326,8 +12329,6 @@ enum
 ushort  flag;
 @
 % see also the 'mode' field of enum<open>
-
-
 
 
 
@@ -12541,6 +12542,9 @@ struct Fgrp
 Fgrp  *fgrp;    /* File descriptor group */
 @
 
+% newfgrp? it's duppgrp with nil
+% todo: could define such a function no?
+
 % a kind of constructor when pass nil as parameter
 <<function dupfgrp>>=
 Fgrp*
@@ -12588,6 +12592,8 @@ dupfgrp(Fgrp *f)
 <<constant DELTAFD>>=
     DELTAFD = 20    /* incremental increase in Fgrp.fd's */
 @
+% another thing where allocate first more to amortize realloc cost
+% define a growing_array type?
 
 % called by pexit()
 <<function closefgrp>>=
@@ -12661,6 +12667,7 @@ findfreefd(Fgrp *f, int start)
 }
 @
 
+% growing array
 <<function growfd>>=
 int
 growfd(Fgrp *f, int fd) /* fd is always >= 0 */
@@ -12734,7 +12741,10 @@ enum open {
     <<enum open cases>>
 };
 @ 
+% OWRITE will be checked later in syspwrite()
 
+% Chan has a field mode, but for many of the remaining enum open cases
+% the bit is actually put in the c->flag, not c->mode
 
 <<syscall open>>=
 // int open(char *file, int omode);
@@ -12760,8 +12770,8 @@ sysopen(ulong* arg)
 @
 % namec() is very complex, will see later, related to Directories and mount
 % as it needs to follow and find the appropriate device to
-% ultimately do the devtab->open()
-
+% ultimately do the device->open()
+% (note that device is really a file server, so it's kinda a call to VFS)
 
 <<function openmode>>=
 int
@@ -12775,6 +12785,8 @@ openmode(ulong o)
     return o;
 }
 @
+% normalize, the OCEXEC ORCLOSE are actually put in c->flag, not c->mode
+% could introduce another type?
 
 
 <<syscall close>>=
@@ -12788,6 +12800,8 @@ sysclose(ulong* arg)
 }
 @
 
+% the mode parameter is either -1 or OREAD|OWRITE|ORDRW, or 
+% openmode(omode) (in dupopen)
 <<function fdtochan>>=
 Chan*
 fdtochan(int fd, int mode, bool chkmnt, bool iref)
@@ -12814,13 +12828,14 @@ fdtochan(int fd, int mode, bool chkmnt, bool iref)
         error(Ebadusefd);
     }
 
-    if(mode<0 || c->mode==ORDWR)
+    if(mode<0 || c->mode==ORDWR) // mode < 0? mean no check?
         return c;
 
-    if((mode&OTRUNC) && c->mode==OREAD) {
+    if((mode&OTRUNC) && c->mode==OREAD) { // BUG impossible, dead code
         <<[[fdtochan()]] undo iref incref>>
         error(Ebadusefd);
     }
+    // the access mode must match the opening mode
     if((mode&~OTRUNC) != c->mode) {
         <<[[fdtochan()]] undo iref incref>>
         error(Ebadusefd);
@@ -12829,7 +12844,13 @@ fdtochan(int fd, int mode, bool chkmnt, bool iref)
     return c;
 }
 @
-% LP split chkmnt and other OXXX maybe
+%BUG? mode&~OTRUNK enough? what about OEXEC, ... cover all the cases?
+% why not just check that if ask for OREAD then check OREAD or ORWDR or OEXEC,
+% and for OWRITE check for OWRITE or ORWDR or OTRUNC?
+% why OTRUNK weird logic? LP split?
+%actually I think OTRUNC can't be passed to fdtochan(), there is no place
+% in the codebase passing OTRUNC I think
+% LP split chkmnt
 
 <<[[fdtochan()]] undo iref incref>>=
 if(iref)
@@ -12902,6 +12923,7 @@ chan_cclose(Chan *c)
 %        up->slash = namec("#/", Atodir, 0, 0); in init0
 % and
 %    c = namec((char*)arg[0], Aopen, arg[1], 0); in sysopen
+% LP aspectize different places where call namec()?
 
 <<[[sysexec()]] call namec() to get a channel in tc from file>>=
 tc = namec(file, Aopen, OEXEC, 0);
@@ -12942,8 +12964,7 @@ Chan *c;
 % (that will also adjust c->path gradually)
 
 
-% another big function ... actually calls 
-% dev->open, dev->create, dev->walk, dev->attach
+% another big function ... calls dev->open, dev->create, dev->walk, dev->attach
 <<function namec>>=
 /*
  * Turn a name into a channel.
@@ -13056,8 +13077,8 @@ namec(char *aname, int amode, int omode, ulong perm)
     }
 
     <<[[namec()]] set genbuf from Elemlist e>>
-    <<[[namec()]] free Elemlist e>>
 
+    <<[[namec()]] free Elemlist e>>
     poperror(); /* e c */
     free(aname);
     poperror(); /* aname */
@@ -13139,11 +13160,13 @@ static char*
 validname0(char *aname, bool slashok, bool dup, kern_addr pc)
 {
     char *ename, *name, *s;
-    int c, n;
+    int n;
+    int c;
     Rune r;
 
     name = aname;
-    if((ulong)name < KZERO){
+
+    if((virt_addr)name < KZERO){
         if(!dup)
             print("warning: validname called from %#p with user pointer", pc);
         ename = vmemchr(name, 0, (1<<16));
@@ -13158,12 +13181,13 @@ validname0(char *aname, bool slashok, bool dup, kern_addr pc)
         n = ename-name;
         s = smalloc(n+1);
         memmove(s, name, n);
-        s[n] = 0;
+        s[n] = '\0';
         aname = s;
         name = s;
         setmalloctag(s, pc);
     }
-    
+
+    // checking validity of name    
     while(*name){
         /* all characters above '~' are ok */
         c = *(byte*)name;
@@ -13196,6 +13220,7 @@ char isfrog[256]={
     [0x7f]  1,
 };
 @
+% Size must be Runeself, s/0x7f/Runeself - 1/ ?
 
 \subsection{Parsing filename}
 
@@ -13219,6 +13244,7 @@ struct Elemlist
     int prefix;
 };
 @
+% another growing array in elems
 
 <<[[namec()]] initializes Elemlist e>>=
 e.aname = aname;
@@ -13319,7 +13345,7 @@ growparse(Elemlist *e)
 char*
 skipslash(char *name)
 {
-    while(name[0]=='/' || (name[0]=='.' && (name[1]==0 || name[1]=='/')))
+    while(name[0]=='/' || (name[0]=='.' && (name[1]=='\0' || name[1]=='/')))
         name++;
     return name;
 }
@@ -13577,7 +13603,7 @@ write(ulong *arg, vlong *offp)
 
 % because return vlong and not just a long, arg[0] is a ref
 % to write into the vlong (need probably look at cc to understand?)
-% note that the mkfile in 9syscall has some special handling for seek
+% note that the mkfile in 9syscall/ has some special handling for seek
 <<syscall seek>>=
 // vlong seek(int fd, vlong n, int type);
 long
@@ -13914,9 +13940,10 @@ if(c->qid.type & QTDIR)
 if(e.mustbedir && !(c->qid.type & QTDIR))
     error(Enotdir);
 
-if(amode == Aopen && (omode&OEXEC) == OEXEC && (c->qid.type & QTDIR))
+if((amode == Aopen) && (omode & OEXEC) && (c->qid.type & QTDIR))
     error("cannot exec directory");
 @
+% was (omode&OEXEC) == OEXEC but does not make sense
 
 \section{[[Path]]}
 % mv later?
@@ -13937,9 +13964,9 @@ struct Path
 };
 @
 % why need path? for fd2path for sure, but also for error messages on channel
-%  in general. But then should do things lazily no? start from chan
+%  in general. But then could do things lazily no? start from chan
 %  and go '..' until slash then can compute full path? for full
-% explanation see lexnames.ps.
+%  explanation see lexnames.ps.
 
 
 
@@ -14011,9 +14038,7 @@ pathclose(Path *p)
     
     if(p == nil)
         return;
-
     <<[[pathclose()]] debugging>>
-
     if(decref(p))
         return;
 
@@ -14026,9 +14051,9 @@ pathclose(Path *p)
 @
 
 
-% usually call via p = uniquepath(p) hence the pathclose below
+% usually call via p = uniquepath(p) hence the pathclose() below
 % because you are cloning yourself and removing yourself from
-% the used refs
+% the used refs.
 <<function uniquepath>>=
 static Path*
 uniquepath(Path *p)
@@ -14061,7 +14086,7 @@ addelem(Path *p, char *s, Chan *from)
     p = uniquepath(p);
 
     i = strlen(s);
-    // +1 for the \0?
+    // +1 for the '\0'
     if(p->len+1+i+1 > p->alen){
         a = p->len+1+i+1 + PATHSLOP;
         t = smalloc(a);
@@ -14135,7 +14160,8 @@ fixdotdotname(Path *p)
 % overview: get a list of names, walk as far as possible towards
 % next .. (cos handled generically here I think) or end.
 % should return in walkqid the set of names went through that are
-% in this mountpoint
+% in this mountpoint. Then go through this list of names and make
+% sure there was no intermediate mountpoint on the way
 
 % taking a list of names allows to do multiple walks at once, so avoid too
 % many roundtrips to file server
@@ -14143,6 +14169,9 @@ fixdotdotname(Path *p)
 Walkqid*(*walk)(Chan*, Chan*, char**, int);
 @
 % what is second chan parameter?
+% have to explain semantic of this method. take an array of names
+% and its length (or sublength), and walk as much as possible it can?
+% and return number of elements handled
 
 <<struct Walkqid>>=
 struct Walkqid
@@ -14165,11 +14194,13 @@ Chan *nc;
 <<[[walk()]] locals>>=
 Mhead *mh;
 Mhead *nmh;
+int type, dev;
 @
 % more in later chapter, but hard to LP split more
 
 <<[[walk()]] locals>>=
 Chan *mtpt;
+bool didmount;
 @
 
 <<[[walk()]] locals>>=
@@ -14178,18 +14209,18 @@ bool dotdot;
 
 <<[[walk()]] locals>>=
 int nhave, ntry;
-bool didmount;
 @
+% ntry is passed the last elt to process? so len+1?
 
+\ifallcode
 <<[[walk()]] locals>>=
 int i, n;
-int type, dev;
 @
+\fi
 
 % another big function ... namec() and walk() are complicated
 % called by namec():  if(walk(&c, e.elems, e.nelems, mount, &e.nerror) < 0){
 % s/ntry/next?
-
 <<function walk>>=
 /*
  * Either walks all the way or not at all.  No partial results in *cp.
@@ -14225,7 +14256,7 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
 
         <<[[walk()]] return error if channel c is not a dir>>
 
-        <<[[walk()]] set dotdot and ntry to index of next '..' or nnames>>
+        <<[[walk()]] set dotdot and ntry to index of next '..' or end>>
 
         if(!sharppath && !dotdot && !didmount)
             domount(&c, &mh, &path);
@@ -14236,7 +14267,7 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
         if((wq = ewalk(c, names+nhave, ntry)) == nil){
             // didn't find the element, look in union mount
             <<[[walk()]] if c is a union mount, find and adjust type and dev>>
-            <<[[walk()]] if wq is nil, close and return>>
+            <<[[walk()]] if wq is still nil, close and return>>
         }
 
         didmount = false;
@@ -14251,6 +14282,7 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
             nc = nil;
             nmh = nil;
             if(!sharppath){
+                // mount points along path?
                 for(i=0; i<wq->nqid && i<ntry-1; i++){
                     if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
                         didmount = true;
@@ -14259,12 +14291,11 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
                 }
             }
 
-            if(nc == nil){  /* no mount points along path */
+            if(!didmount){  /* no mount points along path */
                 <<[[walk()]] if nc == nil and wq->clone == nil return error>>
                 n = wq->nqid;
                 nc = wq->clone;
             }else{      /* stopped early, at a mount point */
-                didmount = true; // necessary?
                 if(wq->clone != nil){
                     cclose(wq->clone);
                     wq->clone = nil;
@@ -14288,7 +14319,7 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
 
     putmhead(mh);
 
-    c = uniquechan(c);
+    c = uniquechan(c); // late? why now? we've modified in place c already
 
     <<[[walk()]] print error if c->umh != nil>>
 
@@ -14302,9 +14333,8 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
     return 0;
 }
 @
+% handle specially dotdot because of the mtpt and the getting dot dot right thing
 
-
-% remove nc parameter? usually called with nil
 <<function ewalk>>=
 /*
  * Call dev walk but catch errors.
@@ -14322,7 +14352,7 @@ ewalk(Chan *c, char **names, int nnames)
 }
 @
 
-<<[[walk()]] set dotdot and ntry to index of next '..' or nnames>>=
+<<[[walk()]] set dotdot and ntry to index of next '..' or end>>=
 dotdot = false;
 // remaining names
 ntry = nnames - nhave;
@@ -14339,15 +14369,15 @@ for(i=0; i<ntry; i++){
         break;
     }
 }
-// ntry is now the index of the next '..' or nnames
+// ntry is now the index of the next '..' or the remaining names to walk
 @
 
 <<[[walk()]] return error if channel c is not a dir>>=
-if((c->qid.type&QTDIR)==0){
-    if(nerror)
-        *nerror = nhave;
+if(!(c->qid.type & QTDIR)){
     pathclose(path);
     cclose(c);
+    if(nerror)
+        *nerror = nhave;
     if(mh != nil)
         putmhead(mh);
     strcpy(up->errstr, Enotdir);
@@ -14355,7 +14385,7 @@ if((c->qid.type&QTDIR)==0){
 }
 @
 
-<<[[walk()]] if wq is nil, close and return>>=
+<<[[walk()]] if wq is still nil, close and return>>=
 if(wq == nil){
     pathclose(path);
     cclose(c);
@@ -14369,8 +14399,8 @@ if(wq == nil){
 
 <<[[walk()]] if nc == nil and wq->clone == nil return error>>=
 if(wq->clone == nil){
-    cclose(c);
     pathclose(path);
+    cclose(c);
     if(wq->nqid==0 || (wq->qid[wq->nqid-1].type&QTDIR)){
         if(nerror)
             *nerror = nhave+wq->nqid+1;
@@ -14386,7 +14416,7 @@ if(wq->clone == nil){
     return -1;
 }
 @
-
+% (wq->qid[wq->nqid-1].type&QTDIR) ??? what is this for?
 
 <<function cclone>>=
 Chan*
@@ -14396,6 +14426,7 @@ cclone(Chan *c)
     Walkqid *wq;
 
     wq = devtab[c->type]->walk(c, nil, nil, 0);
+
     if(wq == nil)
         error("clone failed");
     nc = wq->clone;
@@ -14631,6 +14662,7 @@ sysremove(ulong* arg)
 
 \section{[[syschdir()]]}
 
+% could put dot Proc field here and LP split its use before
 
 <<syscall chdir>>=
 // int chdir(char *dirname);
@@ -14658,7 +14690,8 @@ case Atodir:
         error(Enotdir);
     break;
 @
-
+% comments can be understood only in relation to other cases and 
+% the understanding of domount()
 
 \section{[[sysfd2path()]] (a.k.a [[pwd()]])}
 % does a realpath? plan9 has symlinks?
@@ -14696,7 +14729,6 @@ chanpath(Chan *c)
 
 
 \section{[[Dir]]}
-% mv later? not used in namec directly
 
 % also in libc.h (so if change here, need change also in libc.h)
 <<struct Dir>>=
@@ -14721,8 +14753,7 @@ struct Dir {
   char  *muid;  /* last modifier name */
 };
 @ 
-% gid here! cool muid
-% why call Dir? seems more like a DirEntry no?
+% gid here! cool muid :)
 % vs walkqid? vs Dirtab?
 
 <<enum dirmode>>=
@@ -14767,18 +14798,22 @@ dirsetname(char *name, int len, byte *p, long n, long maxn)
     return nn;
 }
 @
+% ??? rename direntry_setname
 
+% find offset of name field in Dir?
 <<function dirname>>=
 static char*
 dirname(byte *p, int *n)
 {
-    p += BIT16SZ+BIT16SZ+BIT32SZ+BIT8SZ+BIT32SZ+BIT64SZ
-        + BIT32SZ+BIT32SZ+BIT32SZ+BIT64SZ;
+    p += BIT16SZ+BIT16SZ+BIT32SZ +
+          BIT8SZ+BIT32SZ+BIT64SZ +
+          BIT32SZ+BIT32SZ+BIT32SZ + 
+          BIT64SZ;
     *n = GBIT16(p);
     return (char*)p+BIT16SZ;
 }
 @
-% ??????
+% rename? offsetof_name_direntry
 
 
 
@@ -15650,6 +15685,8 @@ cunmount(Chan *mnt, Chan *mounted)
 
 \section{[[domount()]], [[undomount()]]}
 % namec() and walk() part2
+
+% could put chan mtpt field here
 
 <<[[namec()]] locals>>=
 Path *path;

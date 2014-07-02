@@ -265,7 +265,7 @@ struct Chan
 
     vlong offset;     /* in fd */
 
-    //enum<open>
+    //enum<open>, actually restricted to the OREAD|OWRITE|ORDWR of open type
     ushort mode;     /* read/write */
 
     bool ismtpt; // is a mount point

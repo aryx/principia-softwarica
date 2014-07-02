@@ -272,14 +272,12 @@ pathclose(Path *p)
     
     if(p == nil)
         return;
-
     /*s: [[pathclose()]] debugging */
         DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
         for(i=0; i<p->mlen; i++)
             DBG(" %p", p->mtpt[i]);
         DBG("\n");
     /*e: [[pathclose()]] debugging */
-
     if(decref(p))
         return;
 
@@ -355,7 +353,7 @@ addelem(Path *p, char *s, Chan *from)
     p = uniquepath(p);
 
     i = strlen(s);
-    // +1 for the \0?
+    // +1 for the '\0'
     if(p->len+1+i+1 > p->alen){
         a = p->len+1+i+1 + PATHSLOP;
         t = smalloc(a);
@@ -822,6 +820,7 @@ cclone(Chan *c)
     Walkqid *wq;
 
     wq = devtab[c->type]->walk(c, nil, nil, 0);
+
     if(wq == nil)
         error("clone failed");
     nc = wq->clone;
@@ -967,16 +966,16 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
     /*x: [[walk()]] locals */
     Mhead *mh;
     Mhead *nmh;
+    int type, dev;
     /*x: [[walk()]] locals */
     Chan *mtpt;
+    bool didmount;
     /*x: [[walk()]] locals */
     bool dotdot;
     /*x: [[walk()]] locals */
     int nhave, ntry;
-    bool didmount;
     /*x: [[walk()]] locals */
     int i, n;
-    int type, dev;
     /*x: [[walk()]] locals */
     Mount *f;
     /*e: [[walk()]] locals */
@@ -1005,11 +1004,11 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
     for(nhave=0; nhave<nnames; nhave+=n){
 
         /*s: [[walk()]] return error if channel c is not a dir */
-        if((c->qid.type&QTDIR)==0){
-            if(nerror)
-                *nerror = nhave;
+        if(!(c->qid.type & QTDIR)){
             pathclose(path);
             cclose(c);
+            if(nerror)
+                *nerror = nhave;
             if(mh != nil)
                 putmhead(mh);
             strcpy(up->errstr, Enotdir);
@@ -1017,7 +1016,7 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
         }
         /*e: [[walk()]] return error if channel c is not a dir */
 
-        /*s: [[walk()]] set dotdot and ntry to index of next '..' or nnames */
+        /*s: [[walk()]] set dotdot and ntry to index of next '..' or end */
         dotdot = false;
         // remaining names
         ntry = nnames - nhave;
@@ -1034,8 +1033,8 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
                 break;
             }
         }
-        // ntry is now the index of the next '..' or nnames
-        /*e: [[walk()]] set dotdot and ntry to index of next '..' or nnames */
+        // ntry is now the index of the next '..' or the remaining names to walk
+        /*e: [[walk()]] set dotdot and ntry to index of next '..' or end */
 
         if(!sharppath && !dotdot && !didmount)
             domount(&c, &mh, &path);
@@ -1063,7 +1062,7 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
                             }
                         }
             /*e: [[walk()]] if c is a union mount, find and adjust type and dev */
-            /*s: [[walk()]] if wq is nil, close and return */
+            /*s: [[walk()]] if wq is still nil, close and return */
             if(wq == nil){
                 pathclose(path);
                 cclose(c);
@@ -1073,7 +1072,7 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
                     putmhead(mh);
                 return -1;
             }
-            /*e: [[walk()]] if wq is nil, close and return */
+            /*e: [[walk()]] if wq is still nil, close and return */
         }
 
         didmount = false;
@@ -1088,6 +1087,7 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
             nc = nil;
             nmh = nil;
             if(!sharppath){
+                // mount points along path?
                 for(i=0; i<wq->nqid && i<ntry-1; i++){
                     if(findmount(&nc, &nmh, type, dev, wq->qid[i])){
                         didmount = true;
@@ -1096,11 +1096,11 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
                 }
             }
 
-            if(nc == nil){  /* no mount points along path */
+            if(!didmount){  /* no mount points along path */
                 /*s: [[walk()]] if nc == nil and wq->clone == nil return error */
                 if(wq->clone == nil){
-                    cclose(c);
                     pathclose(path);
+                    cclose(c);
                     if(wq->nqid==0 || (wq->qid[wq->nqid-1].type&QTDIR)){
                         if(nerror)
                             *nerror = nhave+wq->nqid+1;
@@ -1119,7 +1119,6 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
                 n = wq->nqid;
                 nc = wq->clone;
             }else{      /* stopped early, at a mount point */
-                didmount = true; // necessary?
                 if(wq->clone != nil){
                     cclose(wq->clone);
                     wq->clone = nil;
@@ -1143,7 +1142,7 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
 
     putmhead(mh);
 
-    c = uniquechan(c);
+    c = uniquechan(c); // late? why now? we've modified in place c already
 
     /*s: [[walk()]] print error if c->umh != nil */
     if(c->umh != nil){  //BUG
@@ -1503,7 +1502,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     if(e.mustbedir && !(c->qid.type & QTDIR))
         error(Enotdir);
 
-    if(amode == Aopen && (omode&OEXEC) == OEXEC && (c->qid.type & QTDIR))
+    if((amode == Aopen) && (omode & OEXEC) && (c->qid.type & QTDIR))
         error("cannot exec directory");
     /*e: [[namec()]] error if not a directory or cannot exec directory */
 
@@ -1724,12 +1723,12 @@ namec(char *aname, int amode, int omode, ulong perm)
     else
         kstrcpy(up->genbuf, ".", sizeof up->genbuf);
     /*e: [[namec()]] set genbuf from Elemlist e */
+
     /*s: [[namec()]] free Elemlist e */
     free(e.name);
     free(e.elems);
     free(e.off);
     /*e: [[namec()]] free Elemlist e */
-
     poperror(); /* e c */
     free(aname);
     poperror(); /* aname */
@@ -1745,7 +1744,7 @@ namec(char *aname, int amode, int omode, ulong perm)
 char*
 skipslash(char *name)
 {
-    while(name[0]=='/' || (name[0]=='.' && (name[1]==0 || name[1]=='/')))
+    while(name[0]=='/' || (name[0]=='.' && (name[1]=='\0' || name[1]=='/')))
         name++;
     return name;
 }
@@ -1782,11 +1781,13 @@ static char*
 validname0(char *aname, bool slashok, bool dup, kern_addr pc)
 {
     char *ename, *name, *s;
-    int c, n;
+    int n;
+    int c;
     Rune r;
 
     name = aname;
-    if((ulong)name < KZERO){
+
+    if((virt_addr)name < KZERO){
         if(!dup)
             print("warning: validname called from %#p with user pointer", pc);
         ename = vmemchr(name, 0, (1<<16));
@@ -1801,12 +1802,13 @@ validname0(char *aname, bool slashok, bool dup, kern_addr pc)
         n = ename-name;
         s = smalloc(n+1);
         memmove(s, name, n);
-        s[n] = 0;
+        s[n] = '\0';
         aname = s;
         name = s;
         setmalloctag(s, pc);
     }
-    
+
+    // checking validity of name    
     while(*name){
         /* all characters above '~' are ok */
         c = *(byte*)name;

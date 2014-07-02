@@ -364,8 +364,10 @@ dirfixed(byte *p, byte *e, Dir *d)
 static char*
 dirname(byte *p, int *n)
 {
-    p += BIT16SZ+BIT16SZ+BIT32SZ+BIT8SZ+BIT32SZ+BIT64SZ
-        + BIT32SZ+BIT32SZ+BIT32SZ+BIT64SZ;
+    p += BIT16SZ+BIT16SZ+BIT32SZ +
+          BIT8SZ+BIT32SZ+BIT64SZ +
+          BIT32SZ+BIT32SZ+BIT32SZ + 
+          BIT64SZ;
     *n = GBIT16(p);
     return (char*)p+BIT16SZ;
 }

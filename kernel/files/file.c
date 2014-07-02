@@ -37,16 +37,17 @@ fdtochan(int fd, int mode, bool chkmnt, bool iref)
         error(Ebadusefd);
     }
 
-    if(mode<0 || c->mode==ORDWR)
+    if(mode<0 || c->mode==ORDWR) // mode < 0? mean no check?
         return c;
 
-    if((mode&OTRUNC) && c->mode==OREAD) {
+    if((mode&OTRUNC) && c->mode==OREAD) { // BUG impossible, dead code
         /*s: [[fdtochan()]] undo iref incref */
         if(iref)
             cclose(c);
         /*e: [[fdtochan()]] undo iref incref */
         error(Ebadusefd);
     }
+    // the access mode must match the opening mode
     if((mode&~OTRUNC) != c->mode) {
         /*s: [[fdtochan()]] undo iref incref */
         if(iref)
