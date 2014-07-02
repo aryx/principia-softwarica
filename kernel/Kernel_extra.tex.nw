@@ -14548,6 +14548,172 @@ serialoq = nil;
 
 
 
+\section{Fileservers}
+
+% devmnt.c, devsrv.c
+
+\subsection{[[Mnt]]}
+
+<<struct Mnt>>=
+struct Mnt
+{
+  Lock;
+  /* references are counted using c->ref; channels on this mount point incref(c->mchan) == Mnt.c */
+  Chan  *c;   /* Channel to file service */
+  Proc  *rip;   /* Reader in progress */
+  Mntrpc  *queue;   /* Queue of pending requests on this channel */
+  ulong id;   /* Multiplexer id for channel check */
+  Mnt *list;    /* Free list */
+  int flags;    /* cache */
+  int msize;    /* data + IOHDRSZ */
+  char  *version; /* 9P version */
+  Queue *q;   /* input queue */
+};
+@
+
+<<struct Mntalloc>>=
+/*
+ * References are managed as follows:
+ * The channel to the server - a network connection or pipe - has one
+ * reference for every Chan open on the server.  The server channel has
+ * c->mux set to the Mnt used for muxing control to that server.  Mnts
+ * have no reference count; they go away when c goes away.
+ * Each channel derived from the mount point has mchan set to c,
+ * and increfs/decrefs mchan to manage references on the server
+ * connection.
+ */
+struct Mntalloc
+{
+    Mnt*    list;       /* Mount devices in use */
+    Mnt*    mntfree;    /* Free list */
+    Mntrpc* rpcfree;
+    int nrpcfree;
+    int nrpcused;
+    ulong   id;
+    ulong   tagmask[NMASK];
+
+    // extra
+    Lock;
+
+};
+@
+
+<<global mntalloc>>=
+struct Mntalloc mntalloc;
+@
+
+<<constants tags>>=
+enum
+{
+    TAGSHIFT = 5,           /* ulong has to be 32 bits */
+    TAGMASK = (1<<TAGSHIFT)-1,
+    NMASK = (64*1024)>>TAGSHIFT,
+};
+@
+
+<<function freetag>>=
+void
+freetag(int t)
+{
+    mntalloc.tagmask[t>>TAGSHIFT] &= ~(1<<(t&TAGMASK));
+}
+@
+
+% >>
+
+<<function mntfree>>=
+void
+mntfree(Mntrpc *r)
+{
+    if(r->b != nil)
+        freeblist(r->b);
+    lock(&mntalloc);
+    if(mntalloc.nrpcfree >= 10){
+        free(r->rpc);
+        freetag(r->request.tag);
+        free(r);
+    }
+    else{
+        r->list = mntalloc.rpcfree;
+        mntalloc.rpcfree = r;
+        mntalloc.nrpcfree++;
+    }
+    mntalloc.nrpcused--;
+    unlock(&mntalloc);
+}
+@
+
+<<function mntpntfree>>=
+void
+mntpntfree(Mnt *m)
+{
+    Mnt *f, **l;
+    Queue *q;
+
+    lock(&mntalloc);
+    l = &mntalloc.list;
+    for(f = *l; f; f = f->list) {
+        if(f == m) {
+            *l = m->list;
+            break;
+        }
+        l = &f->list;
+    }
+    m->list = mntalloc.mntfree;
+    mntalloc.mntfree = m;
+    q = m->q;
+    unlock(&mntalloc);
+
+    qfree(q);
+}
+@
+
+
+<<function muxclose>>=
+void
+muxclose(Mnt *m)
+{
+    Mntrpc *q, *r;
+
+    for(q = m->queue; q; q = r) {
+        r = q->list;
+        mntfree(q);
+    }
+    m->id = 0;
+    free(m->version);
+    m->version = nil;
+    mntpntfree(m);
+}
+@
+
+
+
+
+
+
+\subsection{[[MntRpc]]}
+
+<<struct Mntrpc>>=
+struct Mntrpc
+{
+  Chan* c;    /* Channel for whom we are working */
+  Mntrpc* list;   /* Free/pending list */
+  Fcall request;  /* Outgoing file system protocol message */
+  Fcall   reply;    /* Incoming reply */
+  Mnt*  m;    /* Mount device during rpc */
+  Rendez  r;    /* Place to hang out */
+  byte*  rpc;    /* I/O Data buffer */
+  uint  rpclen;   /* len of buffer */
+  Block *b;   /* reply blocks */
+  char  done;   /* Rpc completed */
+  uvlong  stime;    /* start time for mnt statistics */
+  ulong reqlen;   /* request length for mnt statistics */
+  ulong replen;   /* reply length for mnt statistics */
+  Mntrpc* flushed;  /* message this one flushes */
+};
+@
+
+
 \chapter{Extra Extra Extra}
 
 \subsection*{[[arch/386/io.h]]}
