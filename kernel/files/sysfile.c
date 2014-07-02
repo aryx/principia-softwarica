@@ -957,9 +957,10 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
             free(spec);
             nexterror();
         }
-
+        /*s: [[bindmount()]] error if noattach */
         if(up->pgrp->noattach)
             error(Enoattach);
+        /*e: [[bindmount()]] error if noattach */
 
         ac = nil;
         bc = fdtochan(fd, ORDWR, false, true);

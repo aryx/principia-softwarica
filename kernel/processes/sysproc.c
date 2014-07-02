@@ -29,7 +29,7 @@ enum rfork
 
     RFNOTEG     = (1<<3), // start new group for notes
     RFREND      = (1<<13), // start a new group for rendezvous
-    RFNOMNT     = (1<<14), // # paths forbidden
+    RFNOMNT     = (1<<14), // # paths forbidden, sandboxing
 };
 /*e: enum rfork */
 
@@ -87,12 +87,16 @@ sysrfork(ulong* arg)
             up->pgrp = newpgrp();
             if(flag & RFNAMEG)
                 pgrpcpy(up->pgrp, opg);
+            /*s: [[sysrfork()]] inherit noattach, RFPROC==0 case */
             /* inherit noattach */
             up->pgrp->noattach = opg->noattach;
+            /*e: [[sysrfork()]] inherit noattach, RFPROC==0 case */
             closepgrp(opg);
         }
-        if(flag & RFNOMNT)
-            up->pgrp->noattach = true;
+       /*s: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case */
+       if(flag & RFNOMNT)
+           up->pgrp->noattach = true;
+       /*e: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case */
         if(flag & RFREND) {
             org = up->rgrp;
             up->rgrp = newrgrp();
@@ -160,15 +164,19 @@ sysrfork(ulong* arg)
         p->pgrp = newpgrp();
         if(flag & RFNAMEG)
             pgrpcpy(p->pgrp, up->pgrp);
+        /*s: [[sysrfork()]] inherit noattach, RFPROC==1 case */
         /* inherit noattach */
         p->pgrp->noattach = up->pgrp->noattach;
+        /*e: [[sysrfork()]] inherit noattach, RFPROC==1 case */
     }
     else {
         p->pgrp = up->pgrp;
         incref(p->pgrp);
     }
+    /*s: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==1 case */
     if(flag & RFNOMNT)
         p->pgrp->noattach = true;
+    /*e: [[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==1 case */
 
     if(flag & RFREND)
         p->rgrp = newrgrp();

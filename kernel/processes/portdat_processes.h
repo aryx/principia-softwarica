@@ -111,7 +111,9 @@ struct Pgrp
     Mhead *mnthash[MNTHASH];
 
     ulong pgrpid;
+    /*s: [[Pgrp]] other fields */
     bool noattach;
+    /*e: [[Pgrp]] other fields */
   
     // extra
     Ref;        /* also used as a lock when mounting */

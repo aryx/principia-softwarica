@@ -4359,7 +4359,7 @@ enum rfork
 
     RFNOTEG     = (1<<3), // start new group for notes
     RFREND      = (1<<13), // start a new group for rendezvous
-    RFNOMNT     = (1<<14), // # paths forbidden
+    RFNOMNT     = (1<<14), // # paths forbidden, sandboxing
 };
 @ 
 % explain? RF = resource fork, G = ? group? because of Fgrp, Egrp, Pgrp?
@@ -4408,12 +4408,10 @@ sysrfork(ulong* arg)
             up->pgrp = newpgrp();
             if(flag & RFNAMEG)
                 pgrpcpy(up->pgrp, opg);
-            /* inherit noattach */
-            up->pgrp->noattach = opg->noattach;
+            <<[[sysrfork()]] inherit noattach, RFPROC==0 case>>
             closepgrp(opg);
         }
-        if(flag & RFNOMNT)
-            up->pgrp->noattach = true;
+       <<[[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case>>
         if(flag & RFREND) {
             org = up->rgrp;
             up->rgrp = newrgrp();
@@ -4479,15 +4477,13 @@ sysrfork(ulong* arg)
         p->pgrp = newpgrp();
         if(flag & RFNAMEG)
             pgrpcpy(p->pgrp, up->pgrp);
-        /* inherit noattach */
-        p->pgrp->noattach = up->pgrp->noattach;
+        <<[[sysrfork()]] inherit noattach, RFPROC==1 case>>
     }
     else {
         p->pgrp = up->pgrp;
         incref(p->pgrp);
     }
-    if(flag & RFNOMNT)
-        p->pgrp->noattach = true;
+    <<[[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==1 case>>
 
     if(flag & RFREND)
         p->rgrp = newrgrp();
@@ -15160,7 +15156,7 @@ struct Pgrp
     Mhead *mnthash[MNTHASH];
 
     ulong pgrpid;
-    bool noattach;
+    <<[[Pgrp]] other fields>>
   
     // extra
     Ref;        /* also used as a lock when mounting */
@@ -15342,9 +15338,7 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
             free(spec);
             nexterror();
         }
-
-        if(up->pgrp->noattach)
-            error(Enoattach);
+        <<[[bindmount()]] error if noattach>>
 
         ac = nil;
         bc = fdtochan(fd, ORDWR, false, true);
@@ -16137,6 +16131,16 @@ unionrewind(Chan *c)
 
 \section{Sandboxing}
 
+<<[[Pgrp]] other fields>>=
+bool noattach;
+@
+
+% this is in mount case. bind is allowed (but not bind to #path)
+<<[[bindmount()]] error if noattach>>=
+if(up->pgrp->noattach)
+    error(Enoattach);
+@
+
 <<[[namec()]] noattach checking>>=
 /*
  *  noattach is sandboxing.
@@ -16155,6 +16159,27 @@ if(utfrune("M", r))
     error(Enoattach);
 if(up->pgrp->noattach && utfrune("|decp", r)==nil)
     error(Enoattach);
+@
+
+
+<<[[sysrfork()]] inherit noattach, RFPROC==0 case>>=
+/* inherit noattach */
+up->pgrp->noattach = opg->noattach;
+@
+
+<<[[sysrfork()]] inherit noattach, RFPROC==1 case>>=
+/* inherit noattach */
+p->pgrp->noattach = up->pgrp->noattach;
+@
+
+<<[[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==0 case>>=
+if(flag & RFNOMNT)
+    up->pgrp->noattach = true;
+@
+
+<<[[sysrfork()]] set noattach to true when RFNOMNT, RFPROC==1 case>>=
+if(flag & RFNOMNT)
+    p->pgrp->noattach = true;
 @
 
 \section{XTODO}
