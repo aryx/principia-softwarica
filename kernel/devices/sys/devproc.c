@@ -216,7 +216,7 @@ profclock(Ureg *ur, Timer *)
 
 /*s: function procgen */
 static int
-procgen(Chan *c, char *name, Dirtab *tab, int, int s, Dir *dp)
+procgen(Chan *c, char *name, Dirtab *tab, int, int s, DirEntry *dp)
 {
     Qid qid;
     Proc *p;
@@ -520,7 +520,7 @@ static int
 procwstat(Chan *c, byte *db, int n)
 {
     Proc *p;
-    Dir *d;
+    DirEntry *d;
 
     if(c->qid.type&QTDIR)
         error(Eperm);
@@ -544,7 +544,7 @@ procwstat(Chan *c, byte *db, int n)
     if(strcmp(up->user, p->user) != 0 && strcmp(up->user, eve) != 0)
         error(Eperm);
 
-    d = smalloc(sizeof(Dir)+n);
+    d = smalloc(sizeof(DirEntry)+n);
     n = convM2D(db, n, &d[0], (char*)&d[1]);
     if(n == 0)
         error(Eshortstat);

@@ -28,7 +28,8 @@ enum _retcode {
 
 /*s: lib.h forward decl */
 typedef struct Qid  Qid;
-typedef struct Dir  Dir;
+typedef struct DirEntry  DirEntry;
+typedef struct DirEntry  Dir; // for fcall.h
 typedef struct Waitmsg  Waitmsg;
 typedef struct Fmt  Fmt;
 /*e: lib.h forward decl */
@@ -271,7 +272,7 @@ enum qidtype {
 /*e: enum qidtype */
 
 /*s: enum dirmode */
-/* bits in Dir.mode */
+/* bits in DirEntry.mode */
 enum dirmode {
     DMDIR = 0x80000000,  /* mode bit for directories */
 
@@ -298,8 +299,8 @@ struct Qid
 };
 /*e: struct Qid */
 
-/*s: struct Dir */
-struct Dir {
+/*s: struct DirEntry */
+struct DirEntry {
   /* system-modified data */
   ushort  type; /* server type */
   uint  dev;  /* server subtype */
@@ -319,7 +320,7 @@ struct Dir {
   char  *gid; /* group name */
   char  *muid;  /* last modifier name */
 };
-/*e: struct Dir */
+/*e: struct DirEntry */
 
 
 /*s: struct Waitmsg */

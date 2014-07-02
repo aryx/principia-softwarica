@@ -119,7 +119,7 @@ pipeattach(char *spec)
 
 /*s: function pipegen */
 static int
-pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, Dir *dp)
+pipegen(Chan *c, char*, Dirtab *tab, int ntab, int i, DirEntry *dp)
 {
     Qid q;
     int len;
@@ -186,7 +186,7 @@ static int
 pipestat(Chan *c, byte *db, int n)
 {
     Pipe *p;
-    Dir dir;
+    DirEntry dir;
 
     p = c->aux;
 
@@ -215,7 +215,7 @@ static int
 pipewstat(Chan* c, byte* db, int n)
 {
     int m;
-    Dir *dir;
+    DirEntry *dir;
     Pipe *p;
 
     p = c->aux;
@@ -224,7 +224,7 @@ pipewstat(Chan* c, byte* db, int n)
     if(NETTYPE(c->qid.path) == Qdir)
         error(Eisdir);
 
-    dir = smalloc(sizeof(Dir)+n);
+    dir = smalloc(sizeof(DirEntry)+n);
     if(waserror()){
         free(dir);
         nexterror();

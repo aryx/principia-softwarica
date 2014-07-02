@@ -36,7 +36,7 @@ static int  qidpath;
 
 /*s: method srvgen */
 static int
-srvgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
+srvgen(Chan *c, char*, Dirtab*, int, int s, DirEntry *dp)
 {
     Srv *sp;
     Qid q;
@@ -263,7 +263,7 @@ static int
 srvwstat(Chan *c, uchar *dp, int n)
 {
     char *strs;
-    Dir d;
+    DirEntry d;
     Srv *sp;
 
     if(c->qid.type & QTDIR)

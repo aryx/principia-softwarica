@@ -11,7 +11,7 @@
 /* Qid is (2*fd + (file is ctl))+1 */
 
 static int
-dupgen(Chan *c, char *, Dirtab*, int, int s, Dir *dp)
+dupgen(Chan *c, char *, Dirtab*, int, int s, DirEntry *dp)
 {
     Fgrp *fgrp = up->fgrp;
     Chan *f;

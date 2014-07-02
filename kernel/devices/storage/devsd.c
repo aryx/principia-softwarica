@@ -387,7 +387,7 @@ sdadddevs(SDev *sdev)
 }
 
 static int
-sd2gen(Chan* c, int i, Dir* dp)
+sd2gen(Chan* c, int i, DirEntry* dp)
 {
     Qid q;
     uvlong l;
@@ -444,7 +444,7 @@ sd2gen(Chan* c, int i, Dir* dp)
 }
 
 static int
-sd1gen(Chan* c, int i, Dir* dp)
+sd1gen(Chan* c, int i, DirEntry* dp)
 {
     Qid q;
 
@@ -458,7 +458,7 @@ sd1gen(Chan* c, int i, Dir* dp)
 }
 
 static int
-sdgen(Chan* c, char*, Dirtab*, int, int s, Dir* dp)
+sdgen(Chan* c, char*, Dirtab*, int, int s, DirEntry* dp)
 {
     Qid q;
     uvlong l;
@@ -1162,7 +1162,7 @@ sdwrite(Chan* c, void* a, long n, vlong off)
 static int
 sdwstat(Chan* c, uchar* dp, int n)
 {
-    Dir *d;
+    DirEntry *d;
     SDpart *pp;
     SDperm *perm;
     SDunit *unit;
@@ -1204,7 +1204,7 @@ sdwstat(Chan* c, uchar* dp, int n)
     if(strcmp(up->user, perm->user) && !iseve())
         error(Eperm);
 
-    d = smalloc(sizeof(Dir)+n);
+    d = smalloc(sizeof(DirEntry)+n);
     n = convM2D(dp, n, &d[0], (char*)&d[1]);
     if(n == 0)
         error(Eshortstat);

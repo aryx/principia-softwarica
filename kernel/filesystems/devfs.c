@@ -519,7 +519,7 @@ static int
 getattrs(Chan *c, vlong *lenp, int *permp)
 {
     uchar   buf[128];   /* old DIRLEN plus a little should be plenty */
-    Dir d;
+    DirEntry d;
     long    l;
 
     *lenp = 0;
@@ -772,7 +772,7 @@ rdconf(void)
 }
 
 static int
-mgen(Chan *c, char*, Dirtab*, int, int i, Dir *dp)
+mgen(Chan *c, char*, Dirtab*, int, int i, DirEntry *dp)
 {
     int treeno;
     Fsdev   *mp;
@@ -867,7 +867,7 @@ static int
 mstat(Chan *c, uchar *db, int n)
 {
     int p;
-    Dir d;
+    DirEntry d;
     Fsdev   *mp;
     Qid q;
     Tree    *t;

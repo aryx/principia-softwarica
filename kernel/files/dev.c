@@ -42,7 +42,7 @@ devno(Rune c, bool user)
 
 /*s: function devdir */
 void
-devdir(Chan *c, Qid qid, char *n, vlong length, char *user, long perm, Dir *db)
+devdir(Chan *c, Qid qid, char *n, vlong length, char *user, long perm, DirEntry *db)
 {
     db->name = n;
     if(c->flag&CMSG)
@@ -96,7 +96,7 @@ devdir(Chan *c, Qid qid, char *n, vlong length, char *user, long perm, Dir *db)
  * the zeroth element of the table MUST be the directory itself for ..
 */
 int
-devgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, Dir *dp)
+devgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, DirEntry *dp)
 {
     if(tab == 0)
         return -1;
@@ -192,7 +192,7 @@ devwalk(Chan *c, Chan *nc, char **name, int nname, Dirtab *tab, int ntab, Devgen
     bool alloc;
     Walkqid *wq;
     char *n;
-    Dir dir;
+    DirEntry dir;
 
     if(nname > 0)
         error_if_not_dir(c);
@@ -286,7 +286,7 @@ int
 devstat(Chan *c, byte *db, int n, Dirtab *tab, int ntab, Devgen *gen)
 {
     int i;
-    Dir dir;
+    DirEntry dir;
     char *p, *elem;
 
     for(i=0;; i++){
@@ -331,7 +331,7 @@ long
 devdirread(Chan *c, char *d, long n, Dirtab *tab, int ntab, Devgen *gen)
 {
     long m, dsz;
-    Dir dir;
+    DirEntry dir;
 
     for(m=0; m<n; c->dri++) {
         switch((*gen)(c, nil, tab, ntab, c->dri, &dir)){
@@ -387,7 +387,7 @@ Chan*
 devopen(Chan *c, int omode, Dirtab *tab, int ntab, Devgen *gen)
 {
     int i;
-    Dir dir;
+    DirEntry dir;
 
     for(i=0;; i++) {
         switch((*gen)(c, nil, tab, ntab, i, &dir)){

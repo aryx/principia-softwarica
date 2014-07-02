@@ -96,7 +96,7 @@ void    validstat(uchar*, int);
 // dev.c
 void    mkqid(Qid*, vlong, ulong, int);
 int   devno(Rune, bool);
-void    devdir(Chan*, Qid, char*, vlong, char*, long, Dir*);
+void    devdir(Chan*, Qid, char*, vlong, char*, long, DirEntry*);
 void    devinit(void);
 void    devreset(void);
 void    devshutdown(void);

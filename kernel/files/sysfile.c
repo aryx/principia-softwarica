@@ -329,7 +329,7 @@ unionrewind(Chan *c)
 
 /*s: function dirfixed */
 static int
-dirfixed(byte *p, byte *e, Dir *d)
+dirfixed(byte *p, byte *e, DirEntry *d)
 {
     int len;
 
@@ -511,7 +511,7 @@ mountfix(Chan *c, byte *op, long n, long maxn)
     int dirlen, rest;
     long l;
     byte *buf, *e;
-    Dir d;
+    DirEntry d;
 
     p = op;
     buf = nil;
@@ -766,8 +766,8 @@ static void
 sseek(ulong *arg)
 {
     Chan *c;
-    byte buf[sizeof(Dir)+100];
-    Dir dir;
+    byte buf[sizeof(DirEntry)+100];
+    DirEntry dir;
     int n;
     vlong off;
     union {

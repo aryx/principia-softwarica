@@ -450,8 +450,8 @@ needpages(void*)
 void
 setswapchan(Chan *c)
 {
-    byte dirbuf[sizeof(Dir)+100];
-    Dir d;
+    byte dirbuf[sizeof(DirEntry)+100];
+    DirEntry d;
     int n;
 
     if(swapimage.c) {

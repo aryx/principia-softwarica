@@ -169,7 +169,7 @@ rootattach(char *spec)
 
 /*s: function rootgen */
 static int
-rootgen(Chan *c, char *name, Dirtab*, int, int s, Dir *dp)
+rootgen(Chan *c, char *name, Dirtab*, int, int s, DirEntry *dp)
 {
     int t;
     Dirtab *d;

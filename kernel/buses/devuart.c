@@ -547,7 +547,7 @@ uartwrite(Chan *c, void *buf, long n, vlong)
 static int
 uartwstat(Chan *c, uchar *dp, int n)
 {
-    Dir d;
+    DirEntry d;
     Dirtab *dt;
 
     if(!iseve())

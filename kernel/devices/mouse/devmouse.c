@@ -125,7 +125,7 @@ mousefromkbd(int buttons)
 }
 
 static int
-mousedevgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, Dir *dp)
+mousedevgen(Chan *c, char *name, Dirtab *tab, int ntab, int i, DirEntry *dp)
 {
     int rc;
 

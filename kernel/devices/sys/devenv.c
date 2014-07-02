@@ -35,7 +35,7 @@ envlookup(Egrp *eg, char *name, ulong qidpath)
 }
 
 static int
-envgen(Chan *c, char *name, Dirtab*, int, int s, Dir *dp)
+envgen(Chan *c, char *name, Dirtab*, int, int s, DirEntry *dp)
 {
     Egrp *eg;
     Evalue *e;

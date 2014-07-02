@@ -49,7 +49,7 @@ typedef struct Waitq  Waitq;
 typedef struct Walkqid  Walkqid;
 typedef struct Watchdog Watchdog;
 
-typedef int    Devgen(Chan*, char*, Dirtab*, int, int, Dir*);
+typedef int    Devgen(Chan*, char*, Dirtab*, int, int, DirEntry*);
 
 // was in dat_forward.h
 typedef struct Conf Conf;
