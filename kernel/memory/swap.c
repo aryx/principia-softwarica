@@ -133,7 +133,7 @@ kickpager(void)
     if(started)
         wakeup(&swapalloc.r);
     else {
-        kproc("pager", pager, nil);
+        kproc("kpager", pager, nil);
         started = true;
     }
 }

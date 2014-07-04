@@ -498,7 +498,7 @@ ccloseq(Chan *c)
     unlock(&clunkq.l);
 
     if(!wakeup(&clunkq.r))
-        kproc("closeproc", closeproc, nil); 
+        kproc("kcloseproc", closeproc, nil); 
 }
 /*e: function ccloseq */
 
@@ -1359,12 +1359,12 @@ namec(char *aname, int amode, int omode, ulong perm)
     Chan *cnew;
     char *createerr;
     /*x: [[namec()]] locals */
-    Path *path;
-    Mhead *m;
-    /*x: [[namec()]] locals */
     bool sharppath;
     /*x: [[namec()]] locals */
     Rune r;
+    /*x: [[namec()]] locals */
+    Path *path;
+    Mhead *m;
     /*e: [[namec()]] locals */
 
     if(aname[0] == '\0')

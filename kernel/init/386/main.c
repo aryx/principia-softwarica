@@ -377,7 +377,7 @@ init0(void)
         }
         poperror();
     }
-    kproc("alarm", alarmkproc, nil);
+    kproc("kalarm", alarmkproc, nil);
     cgapost(0x9);
     touser(sp);
 }

@@ -1339,6 +1339,7 @@ eqchan(Chan *a, Chan *b, bool skipvers)
     return true;
 }
 @
+% have a gqid type? type + dev + qid?
 
 % mostly dupe, so could factorize? or put in ifallcode?
 <<function eqchantdqid>>=
@@ -1356,7 +1357,6 @@ eqchantdqid(Chan *a, int type, int dev, Qid qid, bool skipvers)
     return true;
 }
 @
-
 
 \section{[[Dev]] and [[devtab]]}
 % actually Device also plays the role of filesystem and even fileserver!
@@ -8765,7 +8765,7 @@ kickpager(void)
     if(started)
         wakeup(&swapalloc.r);
     else {
-        kproc("pager", pager, nil);
+        kproc("kpager", pager, nil);
         started = true;
     }
 }
@@ -12154,7 +12154,7 @@ init0(void)
         }
         poperror();
     }
-    kproc("alarm", alarmkproc, nil);
+    kproc("kalarm", alarmkproc, nil);
     cgapost(0x9);
     touser(sp);
 }
@@ -13779,7 +13779,7 @@ ccloseq(Chan *c)
     unlock(&clunkq.l);
 
     if(!wakeup(&clunkq.r))
-        kproc("closeproc", closeproc, nil); 
+        kproc("kcloseproc", closeproc, nil); 
 }
 @
 
@@ -15023,7 +15023,7 @@ wstat(Chan *c, byte *d, int nd)
 % see names.ps
 % see lexnames.ps
 
-\section{[[Mount]] table}
+\section{Mount point}
 
 <<struct Mhead>>=
 struct Mhead
@@ -15037,6 +15037,8 @@ struct Mhead
     <<[[Mhead extra fields>>
 };
 @
+% have Mhead and Mount instead of just Mount because of union mount.
+% but for can just think as one structure, Mountpoint
 % list sorted? or honor the MBEFORE/MAFTER?
 
 <<constructor newmhead>>=
@@ -15150,8 +15152,9 @@ putmhead(Mhead *m)
 
 
 
-\section{[[Pgrp]]}
+\section{Mount table}
 
+% rename?
 <<struct Pgrp>>=
 // Namespace process group
 struct Pgrp
@@ -15168,6 +15171,9 @@ struct Pgrp
     RWlock  ns;     /* Namespace n read/one write lock */
 };
 @ 
+% but would really like actually a hash from gqid (type+dev+qid) to Mhead
+% use of pgrpid? does not seem super used, could maybe remove it or aspectize
+% it with the code that actually uses it
 
 <<[[Mhead extra fields>>=
     // hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
@@ -15192,7 +15198,7 @@ Pgrp  *pgrp;    /* Process group for namespace */
 <<global pgrpid>>=
 static Counter pgrpid;
 @ 
-
+% LP aspectize?
 
 <<constructor newpgrp>>=
 Pgrp*
@@ -15206,6 +15212,7 @@ newpgrp(void)
     return p;
 }
 @ 
+% what is this pgrpid for?
 
 <<destructor closepgrp>>=
 void
@@ -15304,6 +15311,50 @@ pgrpcpy(Pgrp *to, Pgrp *from)
     wunlock(&from->ns);
 }
 @ 
+
+\section{Device path}
+% kind of bootstrapping the whole thing
+
+<<[[namec()]] locals>>=
+bool sharppath;
+@
+
+<<[[namec()]] locals>>=
+Rune r;
+@
+
+<<[[namec()]] if name[0] is a sharp>>=
+case '#':
+    up->genbuf[0] = '\0';
+    n = 0;
+    while(*name != '\0' && (*name != '/' || n < 2)){ // #/ is ok hence n < 2
+        if(n >= sizeof(up->genbuf)-1)
+            error(Efilename);
+        up->genbuf[n++] = *name++;
+    }
+    up->genbuf[n] = '\0';
+
+    n = chartorune(&r, up->genbuf+1)+1; // +1 for the leading '#'
+
+    <<[[namec()]] noattach checking>>
+
+    t = devno(r, true);
+    if(t == -1)
+        error(Ebadsharp);
+
+    c = devtab[t]->attach(up->genbuf+n);
+    break;
+@
+% genbuf+n? for the deviceno?
+
+<<[[Dev]] methods>>=
+Chan* (*attach)(char*);
+@
+% also called in namec()
+
+
+
+
 
 \section{[[sysbind()]]}
 
@@ -15913,50 +15964,6 @@ DBG("undomount %p %s => remove %p\n", path, path->s, nc);
             incref(from);
     }
 @
-
-
-
-\section{Device path}
-% kind of bootstrapping the whole thing
-
-<<[[namec()]] locals>>=
-bool sharppath;
-@
-
-<<[[namec()]] locals>>=
-Rune r;
-@
-
-<<[[namec()]] if name[0] is a sharp>>=
-case '#':
-    up->genbuf[0] = '\0';
-    n = 0;
-    while(*name != '\0' && (*name != '/' || n < 2)){ // #/ is ok hence n < 2
-        if(n >= sizeof(up->genbuf)-1)
-            error(Efilename);
-        up->genbuf[n++] = *name++;
-    }
-    up->genbuf[n] = '\0';
-
-    n = chartorune(&r, up->genbuf+1)+1; // +1 for the leading '#'
-
-    <<[[namec()]] noattach checking>>
-
-    t = devno(r, true);
-    if(t == -1)
-        error(Ebadsharp);
-
-    c = devtab[t]->attach(up->genbuf+n);
-    break;
-@
-% genbuf+n? for the deviceno?
-
-<<[[Dev]] methods>>=
-Chan* (*attach)(char*);
-@
-% also called in namec()
-
-
 
 
 
@@ -26550,7 +26557,7 @@ randominit(void)
     addclock0link(randomclock, 13);
     rb.ep = rb.buf + sizeof(rb.buf);
     rb.rp = rb.wp = rb.buf;
-    kproc("genrandom", genrandom, 0);
+    kproc("kgenrandom", genrandom, 0);
 }
 @
 

@@ -147,7 +147,7 @@ schedinit(void)     /* never returns */
                     edfrecord(up);
         /*e: [[schedinit()]] optional real-time [[edfrecord()]] */
         //old: cpu->proc = nil;
-        // but now that on PC up = cpu->proc and not cpu->externup
+        // but now that on x86 up = cpu->proc and not cpu->externup
         // we can't do that anymore. Is there a place that rely on
         // cpu->proc and cpu-externup to not be in sync?
         switch(up->state) {
@@ -243,7 +243,7 @@ proc_sched(void)
             procrestore(up);
             spllo();
             return;
-        } else {
+        }else{
             //
             // here to go to schedinit() (which will call sched() back)
             //
@@ -267,7 +267,7 @@ proc_sched(void)
     cpu->readied = nil;
 
     cpu->proc = p;
-    up = p; // same instruction than previous line on some archi (e.g. PC)
+    up = p; // same instruction than previous line on some archi (e.g. x86)
 
     up->state = Running;
     up->cpu = CPUS(cpu->cpuno);
@@ -671,7 +671,7 @@ loop:
         for(rq = &runq[Nrq-1]; rq >= runq; rq--){
             for(p = rq->head; p; p = p->rnext){
                 if(p->lastcpu == nil || p->lastcpu == CPUS(cpu->cpuno)
-                || (!p->wired && i > 0))
+                   || (p->wired == nil && i > 0)) // favor affinity for first round
                     goto found;
             }
         }
