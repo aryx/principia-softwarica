@@ -176,9 +176,8 @@ newchan(void)
     c->ref = 1;
 
     c->ismtpt = false;
-
-
     c->umh = nil;
+
     // c->umc?
     c->mux = nil;
     c->mchan = nil;
@@ -216,17 +215,17 @@ newpath(char *s)
     incref(&npath);
 
     /*s: [[newpath()]] mtpt handling */
-        /*
-         * Cannot use newpath for arbitrary names because the mtpt 
-         * array will not be populated correctly.  The names #/ and / are
-         * allowed, but other names with / in them draw warnings.
-         */
-        if(strchr(s, '/') && strcmp(s, "#/") != 0 && strcmp(s, "/") != 0)
-            print("newpath: %s from %#p\n", s, getcallerpc(&s));
+    /*
+     * Cannot use newpath for arbitrary names because the mtpt 
+     * array will not be populated correctly.  The names #/ and / are
+     * allowed, but other names with / in them draw warnings.
+     */
+    if(strchr(s, '/') && strcmp(s, "#/") != 0 && strcmp(s, "/") != 0)
+        print("newpath: %s from %#p\n", s, getcallerpc(&s));
 
-        p->mlen = 1;
-        p->malen = PATHMSLOP;
-        p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]); // smalloc set to nil p->mtpt[0]
+    p->mlen = 1;
+    p->malen = PATHMSLOP;
+    p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]); // smalloc set p->mtpt[0] = nil
     /*e: [[newpath()]] mtpt handling */
     return p;
 }
@@ -251,14 +250,14 @@ copypath(Path *p)
     memmove(pp->s, p->s, p->len+1);
     
     /*s: [[copypath()]] mtpt handling */
-        pp->mlen = p->mlen;
-        pp->malen = p->malen;
-        pp->mtpt = smalloc(p->malen*sizeof pp->mtpt[0]);
-        for(i=0; i<pp->mlen; i++){
-            pp->mtpt[i] = p->mtpt[i];
-            if(pp->mtpt[i])
-                incref(pp->mtpt[i]);
-        }
+    pp->mlen = p->mlen;
+    pp->malen = p->malen;
+    pp->mtpt = smalloc(p->malen*sizeof pp->mtpt[0]);
+    for(i=0; i<pp->mlen; i++){
+        pp->mtpt[i] = p->mtpt[i];
+        if(pp->mtpt[i])
+            incref(pp->mtpt[i]);
+    }
     /*e: [[copypath()]] mtpt handling */
     return pp;
 }
@@ -285,10 +284,10 @@ pathclose(Path *p)
     free(p->s);
 
     /*s: [[pathclose()]] mtpt handling */
-        for(i=0; i<p->mlen; i++)
-            if(p->mtpt[i])
-                cclose(p->mtpt[i]);
-        free(p->mtpt);
+    for(i=0; i<p->mlen; i++)
+        if(p->mtpt[i])
+            cclose(p->mtpt[i]);
+    free(p->mtpt);
     /*e: [[pathclose()]] mtpt handling */
     free(p);
 }
@@ -372,25 +371,26 @@ addelem(Path *p, char *s, Chan *from)
         fixdotdotname(p);
     }
     /*s: [[addelem()]] mtpt handling */
-        if(isdotdot(s)){
-            DBG("addelem %s .. => rm %p\n", p->s, p->mtpt[p->mlen-1]);
-            if(p->mlen>1 && (c = p->mtpt[--p->mlen])){
-                p->mtpt[p->mlen] = nil;
-                cclose(c);
-            }
-        }else{
-            if(p->mlen >= p->malen){
-                p->malen = p->mlen+1+PATHMSLOP;
-                tt = smalloc(p->malen*sizeof tt[0]);
-                memmove(tt, p->mtpt, p->mlen*sizeof tt[0]);
-                free(p->mtpt);
-                p->mtpt = tt;
-            }
-            DBG("addelem %s %s => add %p\n", p->s, s, from);
-            p->mtpt[p->mlen++] = from;
-            if(from)
-                incref(from);
+    if(isdotdot(s)){
+        DBG("addelem %s .. => rm %p\n", p->s, p->mtpt[p->mlen-1]);
+        if(p->mlen>1 && (c = p->mtpt[--p->mlen])){
+            p->mtpt[p->mlen] = nil;
+            cclose(c);
         }
+    }else{
+        if(p->mlen >= p->malen){
+            // realloc
+            p->malen = p->mlen+1+PATHMSLOP;
+            tt = smalloc(p->malen*sizeof tt[0]);
+            memmove(tt, p->mtpt, p->mlen*sizeof tt[0]);
+            free(p->mtpt);
+            p->mtpt = tt;
+        }
+        DBG("addelem %s %s => add %p\n", p->s, s, from);
+        p->mtpt[p->mlen++] = from;
+        if(from)
+            incref(from);
+    }
     /*e: [[addelem()]] mtpt handling */
 
     return p;
@@ -731,7 +731,6 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
     if(flag & MCREATE)
         m->mflag |= MCREATE;
 
-
     if(mh->mount && order == MAFTER){
         for(f = mh->mount; f->next; f = f->next)
             ;
@@ -856,6 +855,8 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
 
     pg = up->pgrp;
     rlock(&pg->ns);
+
+    // *mp = lookup(gqid, pg.mnthash); *cp = mp->mount->to
     for(m = MOUNTH(pg, qid); m; m = m->hash){
         rlock(&m->lock);
         if(m->from == nil){
@@ -866,15 +867,15 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
         if(eqchantdqid(m->from, type, dev, qid, true)){
             runlock(&pg->ns);
             if(mp != nil){
-                incref(m);
                 if(*mp != nil)
                     putmhead(*mp);
                 *mp = m;
+                incref(m);
             }
             if(*cp != nil)
                 cclose(*cp);
-            incref(m->mount->to);
             *cp = m->mount->to;
+            incref(m->mount->to);
             runlock(&m->lock);
             return true;
         }
@@ -906,11 +907,11 @@ domount(Chan **cp, Mhead **mp, Path **path)
             print("domount: path %s has mlen==%d\n", p->s, p->mlen);
         else{
             lc = &p->mtpt[p->mlen-1];
-DBG("domount %p %s => add %p (was %p)\n", p, p->s, (*mp)->from, p->mtpt[p->mlen-1]);
-            incref((*mp)->from);
+            DBG("domount %p %s => add %p (was %p)\n", p, p->s, (*mp)->from, p->mtpt[p->mlen-1]);
             if(*lc)
                 cclose(*lc);
             *lc = (*mp)->from;
+            incref((*mp)->from);
         }
         *path = p;
     }
@@ -934,9 +935,10 @@ undomount(Chan *c, Path *path)
             path->s, path->ref, path->mlen, getcallerpc(&c));
 
     if(path->mlen>0 && (nc=path->mtpt[path->mlen-1]) != nil){
-DBG("undomount %p %s => remove %p\n", path, path->s, nc);
+        DBG("undomount %p %s => remove %p\n", path, path->s, nc);
         cclose(c);
         path->mtpt[path->mlen-1] = nil;
+        // c = nc = mh->from
         c = nc;
     }
     return c;
@@ -1059,22 +1061,22 @@ walk(Chan **cp, char **names, int nnames, bool sharppath, int *nerror)
         if((wq = ewalk(c, names+nhave, ntry)) == nil){
             // didn't find the element, look in union mount
             /*s: [[walk()]] if c is a union mount, find and adjust type and dev */
-                        /* try a union mount, if any */
-                        if(mh && !sharppath){
-                            /*
-                             * mh->mount->to == c, so start at mh->mount->next
-                             */
-                            rlock(&mh->lock);
-                            f = mh->mount;
-                            for(f = (f? f->next: f); f; f = f->next)
-                                if((wq = ewalk(f->to, names+nhave, ntry)) != nil)
-                                    break;
-                            runlock(&mh->lock);
-                            if(f != nil){
-                                type = f->to->type;
-                                dev = f->to->dev;
-                            }
-                        }
+            /* try a union mount, if any */
+            if(mh && !sharppath){
+                /*
+                 * mh->mount->to == c, so start at mh->mount->next
+                 */
+                rlock(&mh->lock);
+                f = mh->mount;
+                for(f = (f? f->next: f); f; f = f->next)
+                    if((wq = ewalk(f->to, names+nhave, ntry)) != nil)
+                        break;
+                runlock(&mh->lock);
+                if(f != nil){
+                    type = f->to->type;
+                    dev = f->to->dev;
+                }
+            }
             /*e: [[walk()]] if c is a union mount, find and adjust type and dev */
             /*s: [[walk()]] if wq is still nil, close and return */
             if(wq == nil){
@@ -1370,15 +1372,15 @@ namec(char *aname, int amode, int omode, ulong perm)
     /*x: [[namec()]] locals */
     char tmperrbuf[ERRMAX];
     /*x: [[namec()]] locals */
+    bool sharppath;
+    /*x: [[namec()]] locals */
     Chan *cnew;
     char *createerr;
     /*x: [[namec()]] locals */
-    bool sharppath;
-    /*x: [[namec()]] locals */
     Rune r;
     /*x: [[namec()]] locals */
-    Path *path;
     Mhead *m;
+    Path *path;
     /*e: [[namec()]] locals */
 
     if(aname[0] == '\0')
@@ -1526,23 +1528,23 @@ namec(char *aname, int amode, int omode, ulong perm)
     case Aaccess:
     Open:
         /*s: [[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1 */
-            /* save&update the name; domount might change c */
-            path = c->path;
-            incref(path);
+        /* save&update the name; domount might change c */
+        path = c->path;
+        incref(path);
 
-            m = nil;
-            if(!sharppath)
-                domount(&c, &m, &path);
+        m = nil;
+        if(!sharppath)
+            domount(&c, &m, &path);
 
-            /* our own copy to open or remove */
-            c = uniquechan(c);
+        /* our own copy to open or remove */
+        c = uniquechan(c);
 
-            /* now it's our copy anyway, we can put the name back */
-            pathclose(c->path);
-            c->path = path;
+        /* now it's our copy anyway, we can put the name back */
+        pathclose(c->path);
+        c->path = path;
 
-            /* record whether c is on a mount point */
-            c->ismtpt = (m!=nil);
+        /* record whether c is on a mount point */
+        c->ismtpt = (m!=nil);
         /*e: [[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1 */
     
         switch(amode){
@@ -1709,9 +1711,9 @@ namec(char *aname, int amode, int omode, ulong perm)
         break;
     /*x: [[namec()]] other cases */
     case Abind:
-        /* no need to maintain path - cannot dotdot an Abind */
         m = nil;
         if(!sharppath)
+            /* no need to maintain path - cannot dotdot an Abind */ // so pass nil
             domount(&c, &m, nil);
         /*s: [[namec()]] set c->umh in Abind if mounted point */
             if(c->umh != nil)

@@ -1007,6 +1007,7 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
 
     validaddr((ulong)arg1, 1, false);
     c1 = namec(arg1, Amount, 0, 0);
+
     if(waserror()){
         cclose(c1);
         nexterror();

@@ -139,6 +139,7 @@ struct Mount
     Mhead*  head;
     /*x: [[Mount]] extra fields */
     Mount*  next;
+    /*x: [[Mount]] extra fields */
     Mount*  copy;
     /*e: [[Mount]] extra fields */
 };
@@ -149,15 +150,15 @@ struct Mhead
 {
     // ref<Chan>
     Chan* from;     /* channel mounted upon */
-    // list<ref_owned<Mount>> because of union mount, ordered via MBEFORE|MAFTER
+    // list<ref<Mount>> list because of union mount (ordered via MBEFORE|MAFTER)
     Mount*  mount;      /* what's mounted upon it */
 
     Ref;
     RWlock  lock;
-    /*s: [[Mhead extra fields */
+    /*s: [[Mhead]] extra fields */
     // hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
     Mhead*  hash;     /* Hash chain */
-    /*e: [[Mhead extra fields */
+    /*e: [[Mhead]] extra fields */
 };
 /*e: struct Mhead */
 
@@ -213,10 +214,10 @@ struct Path
     int alen;     /* allocated length of s */
 
     /*s: [[Path]] mtpt fields */
-        // array<option<ref_counted<Chan>>, nil for elements which are not mount point
-        Chan  **mtpt;     /* mtpt history */
-        int mlen;     /* number of path elements */
-        int malen;      /* allocated length of mtpt */
+    // array<option<ref_counted<Chan>>, nil for elements which are not mount point
+    Chan  **mtpt;     /* mtpt history */
+    int mlen;     /* number of path elements */
+    int malen;      /* allocated length of mtpt */
     /*e: [[Path]] mtpt fields */
  
     // extra

@@ -12963,7 +12963,7 @@ Chan *c;
 % (that will also adjust c->path gradually)
 
 
-% another big function ... calls dev->open, dev->create, dev->walk, dev->attach
+% another big function ... calls dev->attach, dev->walk, dev->open, dev->create
 <<function namec>>=
 /*
  * Turn a name into a channel.
@@ -14217,6 +14217,12 @@ int i, n;
 @
 \fi
 
+<<[[namec()]] locals>>=
+bool sharppath;
+@
+% remember:   sharppath = (name[0] == '#'); in namec()
+
+
 % another big function ... namec() and walk() are complicated
 % called by namec():  if(walk(&c, e.elems, e.nelems, mount, &e.nerror) < 0){
 % s/ntry/next?
@@ -15058,9 +15064,10 @@ struct Mhead
 @
 % have Mhead and Mount instead of just Mount because of union mount.
 % but for now can just think as one structure, Mountpoint
-% the list is sorted? to honor the MBEFORE/MAFTER?
+% the list is sorted? to honor the MBEFORE/MAFTER
 % it's not a list<ref_owned<Mount>> actually, see putmhead which does not
-%  call mountfree(). The owner is the mhead in mnthash, but not any mhead
+%  call mountfree(). The owner is the mhead in mnthash, but not any mhead.
+%  (but maybe Mount could have a Ref so it will be simpler)
 
 <<constructor newmhead>>=
 Mhead*
@@ -15106,11 +15113,9 @@ putmhead(Mhead *m)
 }
 @
 % ? cafebeef? for what? just to be sure if missed a ref then it will go haywire
-% quickly
+% quickly.
 % does not call mountfree(m->mount)? who owns the mount then??? closepgrp()
 % the main pb is that should put a counter on Mount ...
-
-
 
 
 <<struct Mount>>=
@@ -15130,13 +15135,13 @@ struct Mount
 };
 @
 % ex of spec? for special mount requests?
-% they should put a Ref.
+% they should put a Ref!
 
 <<[[Mount]] extra fields>>=
 // ref<Mhead> reciproque of Mhead.mount
 Mhead*  head;
 @
-% quick access to head
+% quick access to head, but needed?? TODO delete?
 
 % but does not insert it really in mh, for this you need to put it at
 % the right place, in the right order, and this is done by the caller
@@ -15187,7 +15192,7 @@ mountfree(Mount *m)
 
 % rename?
 <<struct Pgrp>>=
-// Namespace process group
+// Mount table, aka Namespace, aka process group
 struct Pgrp
 {
     // hash<qid.path, list<ref<Mhead> (next = Mhead.next)>
@@ -15207,11 +15212,12 @@ struct Pgrp
 % use of pgrpid? does not seem super used, could maybe remove it or aspectize
 % it with the code that actually uses it
 
-
-<<[[Mhead]] extra fields>>=
-// hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
-Mhead*  hash;     /* Hash chain */
+<<[[Proc]] files fields>>=
+// ref_counted<pgrp>
+Pgrp  *pgrp;    /* Process group for namespace */
 @
+
+
 
 <<function MOUNTH>>=
 enum
@@ -15223,17 +15229,22 @@ enum
 @
 % >> >>
 
-<<[[Proc]] files fields>>=
-// ref_counted<pgrp>
-Pgrp  *pgrp;    /* Process group for namespace */
+<<[[Mhead]] extra fields>>=
+// hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
+Mhead*  hash;     /* Hash chain */
 @
+
+
 
 
 
 <<global pgrpid>>=
 static Counter pgrpid;
 @ 
-% LP aspectize?
+% LP aspectize? remove? at least explain ... code using /dev/pgrpid?
+
+
+
 
 <<constructor newpgrp>>=
 Pgrp*
@@ -15294,10 +15305,6 @@ closepgrp(Pgrp *p)
 % alternative is hardcoded list of drivers and huge populated /dev/
 % via major/minor special file as in Linux
 
-<<[[namec()]] locals>>=
-bool sharppath;
-@
-% remember:   sharppath = (name[0] == '#'); in namec()
 
 
 <<[[namec()]] locals>>=
@@ -15419,9 +15426,9 @@ Amount,       /* to be mounted or mounted upon */
 
 <<[[namec()]] other cases>>=
 case Abind:
-    /* no need to maintain path - cannot dotdot an Abind */
     m = nil;
     if(!sharppath)
+        /* no need to maintain path - cannot dotdot an Abind */ // so pass nil
         domount(&c, &m, nil);
     <<[[namec()]] set c->umh in Abind if mounted point>>
     break;
@@ -15530,14 +15537,17 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
 
 
 
-\section{[[domount()]], [[undomount()]]}
+\section{[[findmount()]], [[domount()]]}
 % namec() and walk() part2
 
+% have seen how to create mount point, and mount table, now
+% see when access it: via namec()
 
 <<[[namec()]] locals>>=
 Mhead *m;
 Path *path;
 @
+
 
 <<[[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1>>=
 /* save&update the name; domount might change c */
@@ -15559,7 +15569,7 @@ c->path = path;
 c->ismtpt = (m!=nil);
 @
 % could put ismtpt chan field here, but also used before so ....
-
+% LP split the path related stuff?
 
 <<[[namec()]] case Aremove, Aaccess, handle mountpoint part2>>=
 putmhead(m);
@@ -15616,6 +15626,8 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
     return false;
 }
 @
+% could simplify the code if could do some assert cp != nil, mp != nil
+% and then even *mp == nil
 
 % rename mount_chan_from_to_if_mountpoint?
 <<function domount>>=
@@ -15639,14 +15651,114 @@ domount(Chan **cp, Mhead **mp, Path **path)
         else{
             lc = &p->mtpt[p->mlen-1];
             DBG("domount %p %s => add %p (was %p)\n", p, p->s, (*mp)->from, p->mtpt[p->mlen-1]);
-            incref((*mp)->from);
             if(*lc)
                 cclose(*lc);
             *lc = (*mp)->from;
+            incref((*mp)->from);
         }
         *path = p;
     }
     return;
+}
+@
+% LP split the path thing. don't increment mlen?
+% assert path != nil too? actually for Abind we pass nil
+
+
+
+\section{Path mount points and [[..]]}
+
+<<[[Path]] mtpt fields>>=
+// array<option<ref_counted<Chan>>, nil for elements which are not mount point
+Chan  **mtpt;     /* mtpt history */
+int mlen;     /* number of path elements */
+int malen;      /* allocated length of mtpt */
+@
+% mtpt is for the mounted points on the path
+% so for /usr/pad/foo.c => path s = "/usr/pad/foo.c\0", ??
+% mlen = 3; chan = [nil; from of /usr if /usr is a mntpoint; nil; nil ]
+
+% why need this array of mtpt? for reference counting the
+%  intermediate dirs so that you can't remove those intermediate dirs as
+%  there are still referenced in opened files? hmm no. It's mainly
+%  to get '..' right, 
+% see lexnames.ps
+
+
+<<constant PATHMSLOP>>=
+    PATHMSLOP   = 20,
+@
+
+
+<<[[newpath()]] mtpt handling>>=
+/*
+ * Cannot use newpath for arbitrary names because the mtpt 
+ * array will not be populated correctly.  The names #/ and / are
+ * allowed, but other names with / in them draw warnings.
+ */
+if(strchr(s, '/') && strcmp(s, "#/") != 0 && strcmp(s, "/") != 0)
+    print("newpath: %s from %#p\n", s, getcallerpc(&s));
+
+p->mlen = 1;
+p->malen = PATHMSLOP;
+p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]); // smalloc set p->mtpt[0] = nil
+@
+
+<<[[copypath()]] mtpt handling>>=
+pp->mlen = p->mlen;
+pp->malen = p->malen;
+pp->mtpt = smalloc(p->malen*sizeof pp->mtpt[0]);
+for(i=0; i<pp->mlen; i++){
+    pp->mtpt[i] = p->mtpt[i];
+    if(pp->mtpt[i])
+        incref(pp->mtpt[i]);
+}
+@
+
+<<[[pathclose()]] mtpt handling>>=
+for(i=0; i<p->mlen; i++)
+    if(p->mtpt[i])
+        cclose(p->mtpt[i]);
+free(p->mtpt);
+@
+
+\ifallcode
+<<[[pathclose()]] debugging>>=
+    DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
+    for(i=0; i<p->mlen; i++)
+        DBG(" %p", p->mtpt[i]);
+    DBG("\n");
+@
+\fi
+
+
+
+
+% in walk()
+%            path = addelem(path, "..", nil);
+%            nc = undomount(wq->clone, path);
+
+
+<<[[addelem()]] mtpt handling>>=
+if(isdotdot(s)){
+    DBG("addelem %s .. => rm %p\n", p->s, p->mtpt[p->mlen-1]);
+    if(p->mlen>1 && (c = p->mtpt[--p->mlen])){
+        p->mtpt[p->mlen] = nil;
+        cclose(c);
+    }
+}else{
+    if(p->mlen >= p->malen){
+        // realloc
+        p->malen = p->mlen+1+PATHMSLOP;
+        tt = smalloc(p->malen*sizeof tt[0]);
+        memmove(tt, p->mtpt, p->mlen*sizeof tt[0]);
+        free(p->mtpt);
+        p->mtpt = tt;
+    }
+    DBG("addelem %s %s => add %p\n", p->s, s, from);
+    p->mtpt[p->mlen++] = from;
+    if(from)
+        incref(from);
 }
 @
 
@@ -15667,9 +15779,10 @@ undomount(Chan *c, Path *path)
             path->s, path->ref, path->mlen, getcallerpc(&c));
 
     if(path->mlen>0 && (nc=path->mtpt[path->mlen-1]) != nil){
-DBG("undomount %p %s => remove %p\n", path, path->s, nc);
+        DBG("undomount %p %s => remove %p\n", path, path->s, nc);
         cclose(c);
         path->mtpt[path->mlen-1] = nil;
+        // c = nc = mh->from
         c = nc;
     }
     return c;
@@ -15677,123 +15790,33 @@ DBG("undomount %p %s => remove %p\n", path, path->s, nc);
 @
 % don't decrement path->mlen too?
 
-
-\section{Path mount points and [[..]]}
-
-<<[[Path]] mtpt fields>>=
-    // array<option<ref_counted<Chan>>, nil for elements which are not mount point
-    Chan  **mtpt;     /* mtpt history */
-    int mlen;     /* number of path elements */
-    int malen;      /* allocated length of mtpt */
-@
-% mtpt is for the components, the chan from each sub dirs in the path
-% so for /usr/pad/foo.c => path s = "/usr/pad/foo.c\0",
-% mlen = 3; chan = [slash; chan of /usr; chan of /usr/pad ]
-
-% why need this array of mtpt? for reference counting the
-%  intermediate dirs so that you can't remove those intermediate dirs as
-%  there are still referenced in opened files? hmm no. It's mainly
-%  to get '..' right, see lexnames.ps
-
-
-<<constant PATHMSLOP>>=
-    PATHMSLOP   = 20,
-@
-%?
-
-<<[[newpath()]] mtpt handling>>=
-    /*
-     * Cannot use newpath for arbitrary names because the mtpt 
-     * array will not be populated correctly.  The names #/ and / are
-     * allowed, but other names with / in them draw warnings.
-     */
-    if(strchr(s, '/') && strcmp(s, "#/") != 0 && strcmp(s, "/") != 0)
-        print("newpath: %s from %#p\n", s, getcallerpc(&s));
-
-    p->mlen = 1;
-    p->malen = PATHMSLOP;
-    p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]); // smalloc set to nil p->mtpt[0]
-@
-
-<<[[copypath()]] mtpt handling>>=
-    pp->mlen = p->mlen;
-    pp->malen = p->malen;
-    pp->mtpt = smalloc(p->malen*sizeof pp->mtpt[0]);
-    for(i=0; i<pp->mlen; i++){
-        pp->mtpt[i] = p->mtpt[i];
-        if(pp->mtpt[i])
-            incref(pp->mtpt[i]);
-    }
-@
-
-<<[[pathclose()]] mtpt handling>>=
-    for(i=0; i<p->mlen; i++)
-        if(p->mtpt[i])
-            cclose(p->mtpt[i]);
-    free(p->mtpt);
-@
-
-\ifallcode
-<<[[pathclose()]] debugging>>=
-    DBG("pathclose %p %s ref=%ld =>", p, p->s, p->ref);
-    for(i=0; i<p->mlen; i++)
-        DBG(" %p", p->mtpt[i]);
-    DBG("\n");
-@
-\fi
-
-<<[[addelem()]] mtpt handling>>=
-    if(isdotdot(s)){
-        DBG("addelem %s .. => rm %p\n", p->s, p->mtpt[p->mlen-1]);
-        if(p->mlen>1 && (c = p->mtpt[--p->mlen])){
-            p->mtpt[p->mlen] = nil;
-            cclose(c);
-        }
-    }else{
-        if(p->mlen >= p->malen){
-            p->malen = p->mlen+1+PATHMSLOP;
-            tt = smalloc(p->malen*sizeof tt[0]);
-            memmove(tt, p->mtpt, p->mlen*sizeof tt[0]);
-            free(p->mtpt);
-            p->mtpt = tt;
-        }
-        DBG("addelem %s %s => add %p\n", p->s, s, from);
-        p->mtpt[p->mlen++] = from;
-        if(from)
-            incref(from);
-    }
-@
-
-
-
 \section{Union mount}
 
 <<[[Mount]] extra fields>>=
 Mount*  copy;
 @
 
-
 <<[[walk()]] locals>>=
 Mount *f;
 @
 
 <<[[walk()]] if c is a union mount, find and adjust type and dev>>=
-            /* try a union mount, if any */
-            if(mh && !sharppath){
-                /*
-                 * mh->mount->to == c, so start at mh->mount->next
-                 */
-                rlock(&mh->lock);
-                f = mh->mount;
-                for(f = (f? f->next: f); f; f = f->next)
-                    if((wq = ewalk(f->to, names+nhave, ntry)) != nil)
-                        break;
-                runlock(&mh->lock);
-                if(f != nil){
-                    type = f->to->type;
-                    dev = f->to->dev;
-                }
-            }
+/* try a union mount, if any */
+if(mh && !sharppath){
+    /*
+     * mh->mount->to == c, so start at mh->mount->next
+     */
+    rlock(&mh->lock);
+    f = mh->mount;
+    for(f = (f? f->next: f); f; f = f->next)
+        if((wq = ewalk(f->to, names+nhave, ntry)) != nil)
+            break;
+    runlock(&mh->lock);
+    if(f != nil){
+        type = f->to->type;
+        dev = f->to->dev;
+    }
+}
 @
 
 
