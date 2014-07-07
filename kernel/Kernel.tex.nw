@@ -12401,9 +12401,8 @@ newchan(void)
     c->ref = 1;
 
     c->ismtpt = false;
-
-
     c->umh = nil;
+
     // c->umc?
     c->mux = nil;
     c->mchan = nil;
@@ -15015,14 +15014,32 @@ wstat(Chan *c, byte *d, int nd)
 
 \section{Overview}
 
-% Mount point, Mount table, Namespace (per process mount table), Union directories
+% Mount point, Mount table, Namespace (per process mount table), Union mount
+% (and union directories)
 
 % before and after mount point, from, to. you go through a mount point.
 % "being on the left part, right part of a mount point".
 
+% also in libc.h
+<<enum mount>>=
+enum mount {
+    MREPL = 0x0000,  /* mount replaces object */
+  
+    MBEFORE = 0x0001,  /* mount goes before others in union directory */
+    MAFTER = 0x0002,  /* mount goes after others in union directory */
+    MORDER =  0x0003,  /* mask for bits defining order of mounting */
+  
+    MCREATE = 0x0004,  /* permit creation in mounted directory */
+    <<enum mount cases>>
+  
+    MMASK = 0x0017,  /* all bits on */
+};
+@ 
+
 % see names.ps
 
 % relation with PL namespace concept? module A = Xxx.Yyyy.Zzz similar?
+
 
 \section{Mount point}
 
@@ -15031,17 +15048,19 @@ struct Mhead
 {
     // ref<Chan>
     Chan* from;     /* channel mounted upon */
-    // list<ref_owned<Mount>> because of union mount, ordered via MBEFORE|MAFTER
+    // list<ref<Mount>> list because of union mount (ordered via MBEFORE|MAFTER)
     Mount*  mount;      /* what's mounted upon it */
 
     Ref;
     RWlock  lock;
-    <<[[Mhead extra fields>>
+    <<[[Mhead]] extra fields>>
 };
 @
 % have Mhead and Mount instead of just Mount because of union mount.
 % but for now can just think as one structure, Mountpoint
 % the list is sorted? to honor the MBEFORE/MAFTER?
+% it's not a list<ref_owned<Mount>> actually, see putmhead which does not
+%  call mountfree(). The owner is the mhead in mnthash, but not any mhead
 
 <<constructor newmhead>>=
 Mhead*
@@ -15056,71 +15075,6 @@ newmhead(Chan *from)
     return mh;
 }
 @
-
-
-<<struct Mount>>=
-struct Mount
-{
-    // ref<Chan>
-    Chan* to;     /* channel replacing channel */
-
-    // enum<mount>, but mainly for MCREATE, the MBEFORE|MAFTER is encoded via list
-    int mflag;
-
-    // option<string>
-    char  *spec; // for mount(), nil for bind()
-    <<[[Mount]] other fields>>
-
-    <<[[Mount]] extra fields>>
-};
-@
-% ex of spec? for special mount requests?
-
-<<[[Mount]] extra fields>>=
-// ref<Mhead> reciproque of Mhead.mount
-Mhead*  head;
-@
-% quick access to head
-
-% but does not insert it really in mh, for this you need to put it at
-% the right place, in the right order, and this is done by the caller
-<<constructor newmount>>=
-Mount*
-newmount(Mhead *mh, Chan *to, int flag, char *spec)
-{
-    Mount *m;
-
-    m = smalloc(sizeof(Mount));
-    m->to = to;
-    incref(to);
-    m->head = mh;
-    m->mountid = incref(&mountid);
-    m->mflag = flag;
-    if(spec != nil)
-        kstrdup(&m->spec, spec);
-
-    return m;
-}
-@ 
-
-
-<<destructor mountfree>>=
-void
-mountfree(Mount *m)
-{
-    Mount *f;
-
-    while(m) {
-        f = m->next;
-        cclose(m->to);
-        m->mountid = 0;
-        free(m->spec);
-        free(m);
-        m = f;
-    }
-}
-@ 
-% no lock? owned by Mhead so the lock should be done on that?
 
 <<destructor putmhead>>=
 /*
@@ -15151,7 +15105,82 @@ putmhead(Mhead *m)
     }
 }
 @
-% ? cafebeef? for what?
+% ? cafebeef? for what? just to be sure if missed a ref then it will go haywire
+% quickly
+% does not call mountfree(m->mount)? who owns the mount then??? closepgrp()
+% the main pb is that should put a counter on Mount ...
+
+
+
+
+<<struct Mount>>=
+struct Mount
+{
+    // ref<Chan>
+    Chan* to;     /* channel replacing channel */
+
+    // enum<mount>, but mainly for MCREATE, the MBEFORE|MAFTER is encoded via list
+    int mflag;
+
+    // option<string>
+    char  *spec; // for mount(), nil for bind()
+    <<[[Mount]] other fields>>
+
+    <<[[Mount]] extra fields>>
+};
+@
+% ex of spec? for special mount requests?
+% they should put a Ref.
+
+<<[[Mount]] extra fields>>=
+// ref<Mhead> reciproque of Mhead.mount
+Mhead*  head;
+@
+% quick access to head
+
+% but does not insert it really in mh, for this you need to put it at
+% the right place, in the right order, and this is done by the caller
+<<constructor newmount>>=
+Mount*
+newmount(Mhead *mh, Chan *to, int flag, char *spec)
+{
+    Mount *m;
+
+    m = smalloc(sizeof(Mount));
+    m->to = to;
+    incref(to);
+    m->head = mh;
+    m->mountid = incref(&mountid);
+    m->mflag = flag;
+    if(spec != nil)
+        kstrdup(&m->spec, spec);
+
+    return m;
+}
+@ 
+
+<<[[Mount]] extra fields>>=
+Mount*  next;
+@
+% union mount, but will see later
+
+<<destructor mountfree>>=
+void
+mountfree(Mount *m)
+{
+    Mount *f;
+
+    while(m) {
+        f = m->next;
+        cclose(m->to);
+        m->mountid = 0;
+        free(m->spec);
+        free(m);
+        m = f;
+    }
+}
+@ 
+% no lock? owned by Mhead so the lock should be done on that?
 
 
 \section{Mount table}
@@ -15169,6 +15198,7 @@ struct Pgrp
   
     // extra
     Ref;        /* also used as a lock when mounting */
+    // ORDER OF LOCK: first debug and then ns
     QLock debug;      /* single access via devproc.c */
     RWlock  ns;     /* Namespace n read/one write lock */
 };
@@ -15177,7 +15207,8 @@ struct Pgrp
 % use of pgrpid? does not seem super used, could maybe remove it or aspectize
 % it with the code that actually uses it
 
-<<[[Mhead extra fields>>=
+
+<<[[Mhead]] extra fields>>=
 // hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
 Mhead*  hash;     /* Hash chain */
 @
@@ -15196,6 +15227,8 @@ enum
 // ref_counted<pgrp>
 Pgrp  *pgrp;    /* Process group for namespace */
 @
+
+
 
 <<global pgrpid>>=
 static Counter pgrpid;
@@ -15248,6 +15281,7 @@ closepgrp(Pgrp *p)
 @ 
 % s/p/mt? p is for process ...
 % s/f/head, s/h/heads/
+% should really just do putmhead(f) that then handle itself mountfree(f->mount)
 
 
 
@@ -15263,6 +15297,8 @@ closepgrp(Pgrp *p)
 <<[[namec()]] locals>>=
 bool sharppath;
 @
+% remember:   sharppath = (name[0] == '#'); in namec()
+
 
 <<[[namec()]] locals>>=
 Rune r;
@@ -15328,24 +15364,8 @@ Chan *c0;
 Chan *c1;
 @
 
-% also in libc.h
-<<enum mount>>=
-enum mount {
-    MREPL = 0x0000,  /* mount replaces object */
-  
-    MBEFORE = 0x0001,  /* mount goes before others in union directory */
-    MAFTER = 0x0002,  /* mount goes after others in union directory */
-    MORDER =  0x0003,  /* mask for bits defining order of mounting */
-  
-    MCREATE = 0x0004,  /* permit creation in mounted directory */
-    <<enum mount cases>>
-  
-    MMASK = 0x0017,  /* all bits on */
-};
-@ 
 
-
-% return mountid?
+% return mountid? what for?
 <<function bindmount>>=
 long
 bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char* spec)
@@ -15369,6 +15389,7 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
 
     validaddr((ulong)arg1, 1, false);
     c1 = namec(arg1, Amount, 0, 0);
+
     if(waserror()){
         cclose(c1);
         nexterror();
@@ -15488,7 +15509,6 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
     if(flag & MCREATE)
         m->mflag |= MCREATE;
 
-
     if(mh->mount && order == MAFTER){
         for(f = mh->mount; f->next; f = f->next)
             ;
@@ -15513,32 +15533,32 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
 \section{[[domount()]], [[undomount()]]}
 % namec() and walk() part2
 
-% could put chan mtpt field here
 
 <<[[namec()]] locals>>=
-Path *path;
 Mhead *m;
+Path *path;
 @
 
 <<[[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1>>=
-    /* save&update the name; domount might change c */
-    path = c->path;
-    incref(path);
+/* save&update the name; domount might change c */
+path = c->path;
+incref(path);
 
-    m = nil;
-    if(!sharppath)
-        domount(&c, &m, &path);
+m = nil;
+if(!sharppath)
+    domount(&c, &m, &path);
 
-    /* our own copy to open or remove */
-    c = uniquechan(c);
+/* our own copy to open or remove */
+c = uniquechan(c);
 
-    /* now it's our copy anyway, we can put the name back */
-    pathclose(c->path);
-    c->path = path;
+/* now it's our copy anyway, we can put the name back */
+pathclose(c->path);
+c->path = path;
 
-    /* record whether c is on a mount point */
-    c->ismtpt = (m!=nil);
+/* record whether c is on a mount point */
+c->ismtpt = (m!=nil);
 @
+% could put ismtpt chan field here, but also used before so ....
 
 
 <<[[namec()]] case Aremove, Aaccess, handle mountpoint part2>>=
@@ -15552,10 +15572,9 @@ if(m && m->mount && m->mount->next)
 else
     putmhead(m);
 @
+% LP split for umh again
 
 
-
-% first use of up->pgrp!
 <<function findmount>>=
 /* also used by sysfile.c:/^mountfix */
 bool
@@ -15566,6 +15585,8 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
 
     pg = up->pgrp;
     rlock(&pg->ns);
+
+    // *mp = lookup(gqid, pg.mnthash); *cp = mp->mount->to
     for(m = MOUNTH(pg, qid); m; m = m->hash){
         rlock(&m->lock);
         if(m->from == nil){
@@ -15576,15 +15597,15 @@ findmount(Chan **cp, Mhead **mp, int type, int dev, Qid qid)
         if(eqchantdqid(m->from, type, dev, qid, true)){
             runlock(&pg->ns);
             if(mp != nil){
-                incref(m);
                 if(*mp != nil)
                     putmhead(*mp);
                 *mp = m;
+                incref(m);
             }
             if(*cp != nil)
                 cclose(*cp);
-            incref(m->mount->to);
             *cp = m->mount->to;
+            incref(m->mount->to);
             runlock(&m->lock);
             return true;
         }
@@ -15617,7 +15638,7 @@ domount(Chan **cp, Mhead **mp, Path **path)
             print("domount: path %s has mlen==%d\n", p->s, p->mlen);
         else{
             lc = &p->mtpt[p->mlen-1];
-DBG("domount %p %s => add %p (was %p)\n", p, p->s, (*mp)->from, p->mtpt[p->mlen-1]);
+            DBG("domount %p %s => add %p (was %p)\n", p, p->s, (*mp)->from, p->mtpt[p->mlen-1]);
             incref((*mp)->from);
             if(*lc)
                 cclose(*lc);
@@ -15748,7 +15769,6 @@ DBG("undomount %p %s => remove %p\n", path, path->s, nc);
 \section{Union mount}
 
 <<[[Mount]] extra fields>>=
-Mount*  next;
 Mount*  copy;
 @
 
