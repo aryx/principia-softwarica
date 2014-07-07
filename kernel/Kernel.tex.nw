@@ -15074,7 +15074,7 @@ struct Mount
     <<[[Mount]] extra fields>>
 };
 @
-% spec? for special mount requests?
+% ex of spec? for special mount requests?
 
 <<[[Mount]] extra fields>>=
 // ref<Mhead> reciproque of Mhead.mount
@@ -15317,8 +15317,8 @@ sysbind(ulong* arg)
 @
 % why use name and old? would be better src and dest no? old in the sense
 % that it's a channel that will be mount upon and so people mentioning
-% the path of old will actually be redirected to the new chan
-% or use from and to?
+% the path of old will actually be redirected to the new chan.
+% or use 'from' and 'to'?
 
 % bind src dest flag: find chan c0 of src, find chan c1 of dest, and adjust
 % up->pgrp adding in mnthash a new mhead (if none before) for gqid
@@ -15420,8 +15420,8 @@ case Amount:
 
 <<[[cmount()]] locals>>=
 Pgrp *pg;
-Mhead *m;
-Mount *nm;
+Mhead *mh;
+Mount *m;
 int order;
 @
 
@@ -15445,66 +15445,66 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
     pg = up->pgrp;
     wlock(&pg->ns);
 
-    // m = lookup(old->gdid, pg.mnthash)
+    // mh = lookup(old->gdid, pg.mnthash)
     l = &MOUNTH(pg, old->qid);
-    for(m = *l; m; m = m->hash){
-        if(eqchan(m->from, old, true))
+    for(mh = *l; mh; mh = mh->hash){
+        if(eqchan(mh->from, old, true))
             break;
-        l = &m->hash;
+        l = &mh->hash;
     }
 
-    if(m == nil){
+    if(mh == nil){
         /*
          *  nothing mounted here yet.  create a mount
          *  head and add to the hash table.
          */
-        m = newmhead(old);
-        *l = m;
+        mh = newmhead(old);
+        *l = mh;
 
         /*
          *  if this is a union mount, add the old
          *  node to the mount chain.
          */
         if(order != MREPL)
-            m->mount = newmount(m, old, 0, nil);
+            mh->mount = newmount(mh, old, 0, nil);
     }
 
-    wlock(&m->lock);
+    wlock(&mh->lock);
     if(waserror()){
-        wunlock(&m->lock);
+        wunlock(&mh->lock);
         nexterror();
     }
     wunlock(&pg->ns);
 
-    nm = newmount(m, new, flag, spec);
+    m = newmount(mh, new, flag, spec);
 
     <<[[cmount()]] if new is itself a mount point, copy mounts>>
 
-    if(m->mount && order == MREPL){
-        mountfree(m->mount);
-        m->mount = nil;
+    if(mh->mount && order == MREPL){
+        mountfree(mh->mount);
+        mh->mount = nil;
     }
 
     if(flag & MCREATE)
-        nm->mflag |= MCREATE;
+        m->mflag |= MCREATE;
 
 
-    if(m->mount && order == MAFTER){
-        for(f = m->mount; f->next; f = f->next)
+    if(mh->mount && order == MAFTER){
+        for(f = mh->mount; f->next; f = f->next)
             ;
-        f->next = nm;
+        f->next = m;
     }else{ // MBEFORE or MREPL
         // when new was itself a mount point, can have union of mount again
-        for(f = nm; f->next; f = f->next)
+        for(f = m; f->next; f = f->next)
             ;
-        f->next = m->mount;
+        f->next = mh->mount;
 
-        m->mount = nm;
+        mh->mount = m;
     }
 
-    wunlock(&m->lock);
+    wunlock(&mh->lock);
     poperror();
-    return nm->mountid;
+    return m->mountid;
 }
 @
 
@@ -16076,18 +16076,18 @@ Mhead*  umh;      /* mount point that derived Chan; used in unionread */
 
 <<[[cmount()]] locals>>=
 int flg;
-Mhead *mh, **l;
+Mhead *umh, **l;
 Mount *f, *um, **h;
 @
 
 <<[[cmount()]] if new is itself a mount point, error if cant create there>>=
-    mh = new->umh;
+    umh = new->umh;
     /*
      * Not allowed to bind when the old directory is itself a union. 
      * (Maybe it should be allowed, but I don't see what the semantics
      * would be.)
      *
-     * We need to check mh->mount->next to tell unions apart from
+     * We need to check umh->mount->next to tell unions apart from
      * simple mount points, so that things like
      *  mount -c fd /root
      *  bind -c /root /
@@ -16100,23 +16100,23 @@ Mount *f, *um, **h;
      * This is far more complicated than it should be, but I don't
      * see an easier way at the moment.
      */
-    if((flag&MCREATE) && mh && mh->mount
-       && (mh->mount->next || !(mh->mount->mflag&MCREATE)))
+    if((flag&MCREATE) && umh && umh->mount
+       && (umh->mount->next || !(umh->mount->mflag&MCREATE)))
         error(Emount);
 @
 
 <<[[cmount()]] if new is itself a mount point, copy mounts>>=
-    if(mh != nil && mh->mount != nil){
+    if(umh != nil && umh->mount != nil){
         /*
          *  copy a union when binding it onto a directory
          */
         flg = order;
         if(order == MREPL)
             flg = MAFTER;
-        h = &nm->next;
-        um = mh->mount;
+        h = &m->next;
+        um = umh->mount;
         for(um = um->next; um; um = um->next){
-            f = newmount(m, um->to, flg, um->spec);
+            f = newmount(mh, um->to, flg, um->spec);
             *h = f;
             h = &f->next;
         }
