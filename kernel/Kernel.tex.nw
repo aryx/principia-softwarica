@@ -12402,16 +12402,15 @@ newchan(void)
 
     c->ismtpt = false;
     c->umh = nil;
-
     // c->umc?
+    c->uri = 0;
+
     c->mux = nil;
     c->mchan = nil;
     memset(&c->mqid, 0, sizeof(c->mqid));
-
-    c->uri = 0;
-    c->dri = 0;
-    c->iounit = 0;
     c->mcp = nil;
+    c->iounit = 0;
+    c->dri = 0;
 
     c->aux = nil;
     
@@ -15575,15 +15574,6 @@ c->ismtpt = (m!=nil);
 putmhead(m);
 @
 
-<<[[namec()]] case Aopen, Acreate, handle mountpoint part2>>=
-/* only save the mount head if it's a multiple element union */
-if(m && m->mount && m->mount->next)
-    c->umh = m;
-else
-    putmhead(m);
-@
-% LP split for umh again
-
 
 <<function findmount>>=
 /* also used by sysfile.c:/^mountfix */
@@ -15792,6 +15782,8 @@ undomount(Chan *c, Path *path)
 
 \section{Union mount}
 
+% seen list of Mount in Mhead with next field in Mount and MBEFORE, MAFTER.
+
 <<[[walk()]] locals>>=
 Mount *f;
 @
@@ -15816,15 +15808,66 @@ if(mh && !sharppath){
 @
 
 
+<<[[namec()]] case Aopen, Acreate, handle mountpoint part2>>=
+/* only save the mount head if it's a multiple element union */
+if(m && m->mount && m->mount->next)
+    c->umh = m;
+else
+    putmhead(m);
+@
+% LP split for umh again
+
+
+<<[[Chan]] other fields>>=
+Mhead*  umh;      /* mount point that derived Chan; used in unionread */
+@
+
+<<[[chanfree()]] optional free>>=
+if(c->umh != nil){
+    putmhead(c->umh);
+    c->umh = nil;
+}
+@
+
+
+
+
+<<[[cmount()]] print error if old->umh != nil>>=
+if(old->umh)
+    print("cmount: unexpected umh, caller %#p\n", getcallerpc(&new));
+@
+
+<<[[namec()]] print error if c->umh != nil>>=
+if(c->umh != nil){
+    print("uniquechan umh Open\n");
+    putmhead(c->umh);
+    c->umh = nil;
+}
+@
+
+<<[[walk()]] print error if c->umh != nil>>=
+if(c->umh != nil){  //BUG
+    print("walk umh\n");
+    putmhead(c->umh);
+    c->umh = nil;
+}
+@
+
+
 \subsection{[[syspread()]] for directories}
+
+<<[[Chan]] other fields>>=
+vlong devoffset;    /* in underlying device; see read */
+@
+%why need offset and devoffset? because of union dirs?
 
 <<[[read()]] if c is a QTDIR>>=
     if(c->qid.type & QTDIR){
         if(mountrockread(c, p, n, &nn)){
             /* do nothing: mountrockread filled buffer */
-        }else if(c->umh)
+        }else if(c->umh){
             nn = unionread(c, p, n);
-        else{
+        }else{
             if(off != c->offset)
                 error(Edirseek);
             nn = devtab[c->type]->read(c, p, n, c->devoffset);
@@ -15832,7 +15875,15 @@ if(mh && !sharppath){
         nnn = mountfix(c, p, nn, n);
     }
 @
-% LP split more, mountrockread
+% LP split more, mountrockread? mountfix?
+
+
+
+
+
+
+
+
 
 
 <<[[Chan]] other fields>>=
@@ -15840,11 +15891,14 @@ Chan* umc;      /* channel in union; held for union read */
 QLock umqlock;    /* serialize unionreads */
 int uri;      /* union read index */
 @
+% uri is index in list of Mount of c->umh
 
-<<[[Chan]] other fields>>=
-vlong devoffset;    /* in underlying device; see read */
+<<[[chanfree()]] optional free>>=
+if(c->umc != nil){
+    cclose(c->umc);
+    c->umc = nil;
+}
 @
-%why need offset and devoffset? because of union dirs?
 
 
 <<function unionread>>=
@@ -15860,6 +15914,7 @@ unionread(Chan *c, virt_addr3 va, long n)
     m = c->umh;
     rlock(&m->lock);
     mount = m->mount;
+
     /* bring mount in sync with c->uri and c->umc */
     for(i = 0; mount != nil && i < c->uri; i++)
         mount = mount->next;
@@ -15896,17 +15951,17 @@ unionread(Chan *c, virt_addr3 va, long n)
 
 
 <<[[read()]] rewind when off == 0>>=
-    /*
-     * The offset is passed through on directories, normally.
-     * Sysseek complains, but pread is used by servers like exportfs,
-     * that shouldn't need to worry about this issue.
-     *
-     * Notice that c->devoffset is the offset that c's dev is seeing.
-     * The number of bytes read on this fd (c->offset) may be different
-     * due to rewritings in rockfix.
-     */
-        mountrewind(c);
-        unionrewind(c);
+/*
+ * The offset is passed through on directories, normally.
+ * Sysseek complains, but pread is used by servers like exportfs,
+ * that shouldn't need to worry about this issue.
+ *
+ * Notice that c->devoffset is the offset that c's dev is seeing.
+ * The number of bytes read on this fd (c->offset) may be different
+ * due to rewritings in rockfix.
+ */
+    mountrewind(c);
+    unionrewind(c);
 @
 
 <<function unionrewind>>=
@@ -15954,6 +16009,72 @@ createdir(Chan *c, Mhead *m)
     panic("createdir: should not reach this point");
 }
 @
+
+
+\subsection{Union of union}
+
+<<[[namec()]] set c->umh in Abind if mounted point>>=
+    if(c->umh != nil)
+        putmhead(c->umh);
+    c->umh = m;
+@
+% set in Abind, other place where set?
+
+
+
+<<[[cmount()]] locals>>=
+int flg;
+Mhead *umh, **l;
+Mount *f, *um, **h;
+@
+
+<<[[cmount()]] if new is itself a mount point, error if cant create there>>=
+umh = new->umh;
+/*
+ * Not allowed to bind when the old directory is itself a union. 
+ * (Maybe it should be allowed, but I don't see what the semantics
+ * would be.)
+ *
+ * We need to check umh->mount->next to tell unions apart from
+ * simple mount points, so that things like
+ *  mount -c fd /root
+ *  bind -c /root /
+ * work.  
+ * 
+ * The check of mount->mflag allows things like
+ *  mount fd /root
+ *  bind -c /root /
+ * 
+ * This is far more complicated than it should be, but I don't
+ * see an easier way at the moment.
+ */
+if((flag&MCREATE) && umh && umh->mount
+   && (umh->mount->next || !(umh->mount->mflag&MCREATE)))
+    error(Emount);
+@
+
+<<[[cmount()]] if new is itself a mount point, copy mounts>>=
+if(umh != nil && umh->mount != nil){
+    /*
+     *  copy a union when binding it onto a directory
+     */
+    flg = order;
+    if(order == MREPL)
+        flg = MAFTER;
+    h = &m->next;
+    um = umh->mount;
+    for(um = um->next; um; um = um->next){
+        f = newmount(mh, um->to, flg, um->spec);
+        *h = f;
+        h = &f->next;
+    }
+}
+@
+
+
+
+
+
 
 
 \section{Sandboxing}
@@ -16104,105 +16225,6 @@ pgrpcpy(Pgrp *to, Pgrp *from)
 <<[[Mount]] extra fields>>=
 Mount*  copy;
 @
-
-
-\section{XTODO}
-
-<<[[Chan]] other fields>>=
-Mhead*  umh;      /* mount point that derived Chan; used in unionread */
-@
-
-<<[[namec()]] set c->umh in Abind if mounted point>>=
-    if(c->umh != nil)
-        putmhead(c->umh);
-    c->umh = m;
-@
-% set in Abind, other place where set?
-
-
-
-
-<<[[cmount()]] locals>>=
-int flg;
-Mhead *umh, **l;
-Mount *f, *um, **h;
-@
-
-<<[[cmount()]] if new is itself a mount point, error if cant create there>>=
-    umh = new->umh;
-    /*
-     * Not allowed to bind when the old directory is itself a union. 
-     * (Maybe it should be allowed, but I don't see what the semantics
-     * would be.)
-     *
-     * We need to check umh->mount->next to tell unions apart from
-     * simple mount points, so that things like
-     *  mount -c fd /root
-     *  bind -c /root /
-     * work.  
-     * 
-     * The check of mount->mflag allows things like
-     *  mount fd /root
-     *  bind -c /root /
-     * 
-     * This is far more complicated than it should be, but I don't
-     * see an easier way at the moment.
-     */
-    if((flag&MCREATE) && umh && umh->mount
-       && (umh->mount->next || !(umh->mount->mflag&MCREATE)))
-        error(Emount);
-@
-
-<<[[cmount()]] if new is itself a mount point, copy mounts>>=
-    if(umh != nil && umh->mount != nil){
-        /*
-         *  copy a union when binding it onto a directory
-         */
-        flg = order;
-        if(order == MREPL)
-            flg = MAFTER;
-        h = &m->next;
-        um = umh->mount;
-        for(um = um->next; um; um = um->next){
-            f = newmount(mh, um->to, flg, um->spec);
-            *h = f;
-            h = &f->next;
-        }
-    }
-@
-
-
-
-
-
-<<[[cmount()]] print error if old->umh != nil>>=
-if(old->umh)
-    print("cmount: unexpected umh, caller %#p\n", getcallerpc(&new));
-@
-
-<<[[namec()]] print error if c->umh != nil>>=
-if(c->umh != nil){
-    print("uniquechan umh Open\n");
-    putmhead(c->umh);
-    c->umh = nil;
-}
-@
-
-<<[[walk()]] print error if c->umh != nil>>=
-if(c->umh != nil){  //BUG
-    print("walk umh\n");
-    putmhead(c->umh);
-    c->umh = nil;
-}
-@
-
-<<[[chanfree()]] optional free>>=
-if(c->umh != nil){
-    putmhead(c->umh);
-    c->umh = nil;
-}
-@
-
 
 
 
@@ -16398,16 +16420,13 @@ cunmount(Chan *mnt, Chan *mounted)
 
 \section{XTODO}
 
+
 <<[[chanfree()]] optional free>>=
 if(c->dirrock != nil){
     free(c->dirrock);
     c->dirrock = nil;
     c->nrock = 0;
     c->mrock = 0;
-}
-if(c->umc != nil){
-    cclose(c->umc);
-    c->umc = nil;
 }
 if(c->mux != nil){
     muxclose(c->mux);

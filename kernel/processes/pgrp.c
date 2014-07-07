@@ -156,7 +156,7 @@ pgrpcpy(Pgrp *to, Pgrp *from)
     Mhead *f, **tom, **l, *mh;
 
     wlock(&from->ns);
-    order = 0;
+    order = nil;
     tom = to->mnthash;
     for(i = 0; i < MNTHASH; i++) {
         l = tom++;
@@ -168,8 +168,10 @@ pgrpcpy(Pgrp *to, Pgrp *from)
             link = &mh->mount;
             for(m = f->mount; m; m = m->next) {
                 n = newmount(mh, m->to, m->mflag, m->spec);
+
                 m->copy = n;
                 pgrpinsert(&order, m);
+
                 *link = n;
                 link = &n->next;
             }

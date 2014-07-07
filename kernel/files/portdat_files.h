@@ -293,13 +293,13 @@ struct Chan
     // enum<channelflag>> (actually a bitset for certain properties)
     ushort  flag;
     /*x: [[Chan]] other fields */
-    Chan* umc;      /* channel in union; held for union read */
-    QLock umqlock;    /* serialize unionreads */
-    int uri;      /* union read index */
+    Mhead*  umh;      /* mount point that derived Chan; used in unionread */
     /*x: [[Chan]] other fields */
     vlong devoffset;    /* in underlying device; see read */
     /*x: [[Chan]] other fields */
-    Mhead*  umh;      /* mount point that derived Chan; used in unionread */
+    Chan* umc;      /* channel in union; held for union read */
+    QLock umqlock;    /* serialize unionreads */
+    int uri;      /* union read index */
     /*x: [[Chan]] other fields */
     Chan* mchan;      /* channel to mounted server */
     /*x: [[Chan]] other fields */

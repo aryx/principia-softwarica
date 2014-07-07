@@ -279,6 +279,7 @@ unionread(Chan *c, virt_addr3 va, long n)
     m = c->umh;
     rlock(&m->lock);
     mount = m->mount;
+
     /* bring mount in sync with c->uri and c->umc */
     for(i = 0; mount != nil && i < c->uri; i++)
         mount = mount->next;
@@ -624,17 +625,17 @@ read(ulong *arg, vlong *offp)
             c->devoffset = 0;
         }
         /*s: [[read()]] rewind when off == 0 */
-            /*
-             * The offset is passed through on directories, normally.
-             * Sysseek complains, but pread is used by servers like exportfs,
-             * that shouldn't need to worry about this issue.
-             *
-             * Notice that c->devoffset is the offset that c's dev is seeing.
-             * The number of bytes read on this fd (c->offset) may be different
-             * due to rewritings in rockfix.
-             */
-                mountrewind(c);
-                unionrewind(c);
+        /*
+         * The offset is passed through on directories, normally.
+         * Sysseek complains, but pread is used by servers like exportfs,
+         * that shouldn't need to worry about this issue.
+         *
+         * Notice that c->devoffset is the offset that c's dev is seeing.
+         * The number of bytes read on this fd (c->offset) may be different
+         * due to rewritings in rockfix.
+         */
+            mountrewind(c);
+            unionrewind(c);
         /*e: [[read()]] rewind when off == 0 */
     }
 
@@ -642,9 +643,9 @@ read(ulong *arg, vlong *offp)
         if(c->qid.type & QTDIR){
             if(mountrockread(c, p, n, &nn)){
                 /* do nothing: mountrockread filled buffer */
-            }else if(c->umh)
+            }else if(c->umh){
                 nn = unionread(c, p, n);
-            else{
+            }else{
                 if(off != c->offset)
                     error(Edirseek);
                 nn = devtab[c->type]->read(c, p, n, c->devoffset);

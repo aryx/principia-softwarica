@@ -177,16 +177,15 @@ newchan(void)
 
     c->ismtpt = false;
     c->umh = nil;
-
     // c->umc?
+    c->uri = 0;
+
     c->mux = nil;
     c->mchan = nil;
     memset(&c->mqid, 0, sizeof(c->mqid));
-
-    c->uri = 0;
-    c->dri = 0;
-    c->iounit = 0;
     c->mcp = nil;
+    c->iounit = 0;
+    c->dri = 0;
 
     c->aux = nil;
     
@@ -409,15 +408,16 @@ chanfree(Chan *c)
         c->umh = nil;
     }
     /*x: [[chanfree()]] optional free */
+    if(c->umc != nil){
+        cclose(c->umc);
+        c->umc = nil;
+    }
+    /*x: [[chanfree()]] optional free */
     if(c->dirrock != nil){
         free(c->dirrock);
         c->dirrock = nil;
         c->nrock = 0;
         c->mrock = 0;
-    }
-    if(c->umc != nil){
-        cclose(c->umc);
-        c->umc = nil;
     }
     if(c->mux != nil){
         muxclose(c->mux);
@@ -645,28 +645,28 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
         error(Emount);
 
     /*s: [[cmount()]] if new is itself a mount point, error if cant create there */
-        umh = new->umh;
-        /*
-         * Not allowed to bind when the old directory is itself a union. 
-         * (Maybe it should be allowed, but I don't see what the semantics
-         * would be.)
-         *
-         * We need to check umh->mount->next to tell unions apart from
-         * simple mount points, so that things like
-         *  mount -c fd /root
-         *  bind -c /root /
-         * work.  
-         * 
-         * The check of mount->mflag allows things like
-         *  mount fd /root
-         *  bind -c /root /
-         * 
-         * This is far more complicated than it should be, but I don't
-         * see an easier way at the moment.
-         */
-        if((flag&MCREATE) && umh && umh->mount
-           && (umh->mount->next || !(umh->mount->mflag&MCREATE)))
-            error(Emount);
+    umh = new->umh;
+    /*
+     * Not allowed to bind when the old directory is itself a union. 
+     * (Maybe it should be allowed, but I don't see what the semantics
+     * would be.)
+     *
+     * We need to check umh->mount->next to tell unions apart from
+     * simple mount points, so that things like
+     *  mount -c fd /root
+     *  bind -c /root /
+     * work.  
+     * 
+     * The check of mount->mflag allows things like
+     *  mount fd /root
+     *  bind -c /root /
+     * 
+     * This is far more complicated than it should be, but I don't
+     * see an easier way at the moment.
+     */
+    if((flag&MCREATE) && umh && umh->mount
+       && (umh->mount->next || !(umh->mount->mflag&MCREATE)))
+        error(Emount);
     /*e: [[cmount()]] if new is itself a mount point, error if cant create there */
 
     pg = up->pgrp;
@@ -706,21 +706,21 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
     m = newmount(mh, new, flag, spec);
 
     /*s: [[cmount()]] if new is itself a mount point, copy mounts */
-        if(umh != nil && umh->mount != nil){
-            /*
-             *  copy a union when binding it onto a directory
-             */
-            flg = order;
-            if(order == MREPL)
-                flg = MAFTER;
-            h = &m->next;
-            um = umh->mount;
-            for(um = um->next; um; um = um->next){
-                f = newmount(mh, um->to, flg, um->spec);
-                *h = f;
-                h = &f->next;
-            }
+    if(umh != nil && umh->mount != nil){
+        /*
+         *  copy a union when binding it onto a directory
+         */
+        flg = order;
+        if(order == MREPL)
+            flg = MAFTER;
+        h = &m->next;
+        um = umh->mount;
+        for(um = um->next; um; um = um->next){
+            f = newmount(mh, um->to, flg, um->spec);
+            *h = f;
+            h = &f->next;
         }
+    }
     /*e: [[cmount()]] if new is itself a mount point, copy mounts */
 
     if(mh->mount && order == MREPL){
