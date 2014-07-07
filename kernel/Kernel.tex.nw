@@ -15792,10 +15792,6 @@ undomount(Chan *c, Path *path)
 
 \section{Union mount}
 
-<<[[Mount]] extra fields>>=
-Mount*  copy;
-@
-
 <<[[walk()]] locals>>=
 Mount *f;
 @
@@ -15820,51 +15816,7 @@ if(mh && !sharppath){
 @
 
 
-\subsection{[[MCREATE]]}
-
-<<function createdir>>=
-/*
- * c is a mounted non-creatable directory.  find a creatable one.
- */
-Chan*
-createdir(Chan *c, Mhead *m)
-{
-    Chan *nc;
-    Mount *f;
-
-    rlock(&m->lock);
-    if(waserror()){
-        runlock(&m->lock);
-        nexterror();
-    }
-    for(f = m->mount; f; f = f->next){
-        if(f->mflag&MCREATE){
-            nc = cclone(f->to);
-            runlock(&m->lock);
-            poperror();
-            cclose(c);
-            return nc;
-        }
-    }
-    error(Enocreate);
-    panic("createdir: should not reach this point");
-}
-@
-
-
-
-
-
-<<[[Chan]] other fields>>=
-Chan* umc;      /* channel in union; held for union read */
-QLock umqlock;    /* serialize unionreads */
-int uri;      /* union read index */
-@
-
-<<[[Chan]] other fields>>=
-vlong devoffset;    /* in underlying device; see read */
-@
-%why need offset and devoffset? because of union dirs?
+\subsection{[[syspread()]] for directories}
 
 <<[[read()]] if c is a QTDIR>>=
     if(c->qid.type & QTDIR){
@@ -15881,6 +15833,19 @@ vlong devoffset;    /* in underlying device; see read */
     }
 @
 % LP split more, mountrockread
+
+
+<<[[Chan]] other fields>>=
+Chan* umc;      /* channel in union; held for union read */
+QLock umqlock;    /* serialize unionreads */
+int uri;      /* union read index */
+@
+
+<<[[Chan]] other fields>>=
+vlong devoffset;    /* in underlying device; see read */
+@
+%why need offset and devoffset? because of union dirs?
+
 
 <<function unionread>>=
 long
@@ -15959,6 +15924,38 @@ unionrewind(Chan *c)
 @
 
 
+\subsection{[[MCREATE]]}
+
+<<function createdir>>=
+/*
+ * c is a mounted non-creatable directory.  find a creatable one.
+ */
+Chan*
+createdir(Chan *c, Mhead *m)
+{
+    Chan *nc;
+    Mount *f;
+
+    rlock(&m->lock);
+    if(waserror()){
+        runlock(&m->lock);
+        nexterror();
+    }
+    for(f = m->mount; f; f = f->next){
+        if(f->mflag&MCREATE){
+            nc = cclone(f->to);
+            runlock(&m->lock);
+            poperror();
+            cclose(c);
+            return nc;
+        }
+    }
+    error(Enocreate);
+    panic("createdir: should not reach this point");
+}
+@
+
+
 \section{Sandboxing}
 % can also do chroot with sysbind + noattach no?
 
@@ -16033,6 +16030,7 @@ static Counter mountid;
 Mount*  order;
 @
 
+% used by pgrpcpy
 <<function pgrpinsert>>=
 void
 pgrpinsert(Mount **order, Mount *m)
@@ -16070,7 +16068,7 @@ pgrpcpy(Pgrp *to, Pgrp *from)
     Mhead *f, **tom, **l, *mh;
 
     wlock(&from->ns);
-    order = 0;
+    order = nil;
     tom = to->mnthash;
     for(i = 0; i < MNTHASH; i++) {
         l = tom++;
@@ -16082,8 +16080,10 @@ pgrpcpy(Pgrp *to, Pgrp *from)
             link = &mh->mount;
             for(m = f->mount; m; m = m->next) {
                 n = newmount(mh, m->to, m->mflag, m->spec);
+
                 m->copy = n;
                 pgrpinsert(&order, m);
+
                 *link = n;
                 link = &n->next;
             }
@@ -16100,6 +16100,11 @@ pgrpcpy(Pgrp *to, Pgrp *from)
     wunlock(&from->ns);
 }
 @ 
+
+<<[[Mount]] extra fields>>=
+Mount*  copy;
+@
+
 
 \section{XTODO}
 
