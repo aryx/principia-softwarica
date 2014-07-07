@@ -938,18 +938,26 @@ syschdir(ulong* arg)
 long
 bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char* spec)
 {
+    /*s: [[bindmount()]] locals */
+    Chan *c0;
+    Chan *c1;
+    /*x: [[bindmount()]] locals */
     int ret;
-    Chan *c0, *c1, *ac, *bc;
-    struct{
+    /*x: [[bindmount()]] locals */
+    Chan *ac, *bc;
+
+    struct {
         Chan    *chan;
         Chan    *authchan;
         char    *spec;
         int flags;
-    }bogus;
+    } bogus;
+    /*e: [[bindmount()]] locals */
 
     if((flag&~MMASK) || (flag&MORDER)==(MBEFORE|MAFTER))
         error(Ebadarg);
 
+    /*s: [[bindmount()]] if ismount */
     if(ismount){
         validaddr((ulong)spec, 1, false);
         spec = validnamedup(spec, true);
@@ -984,8 +992,9 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
         if(ac)
             cclose(ac);
         cclose(bc);
-
-    }else{
+      }
+    /*e: [[bindmount()]] if ismount */
+    else{
         spec = nil;
         validaddr((ulong)arg0, 1, false);
         c0 = namec(arg0, Abind, 0, 0);
@@ -1009,11 +1018,13 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
     cclose(c1);
     poperror();
     cclose(c0);
+    /*s: [[bindmount()]] if ismount free */
     if(ismount){
         fdclose(fd, 0);
         poperror();
         free(spec);
     }
+    /*e: [[bindmount()]] if ismount free */
     return ret;
 }
 /*e: function bindmount */
@@ -1043,7 +1054,7 @@ sysunmount(ulong* arg)
 {
     Chan *cmount, *cmounted;
 
-    cmounted = 0;
+    cmounted = nil;
 
     validaddr(arg[1], 1, false);
     cmount = namec((char *)arg[1], Amount, 0, 0);

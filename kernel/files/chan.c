@@ -404,15 +404,16 @@ chanfree(Chan *c)
     c->flag = CFREE;
 
     /*s: [[chanfree()]] optional free */
+    if(c->umh != nil){
+        putmhead(c->umh);
+        c->umh = nil;
+    }
+    /*x: [[chanfree()]] optional free */
     if(c->dirrock != nil){
         free(c->dirrock);
         c->dirrock = nil;
         c->nrock = 0;
         c->mrock = 0;
-    }
-    if(c->umh != nil){
-        putmhead(c->umh);
-        c->umh = nil;
     }
     if(c->umc != nil){
         cclose(c->umc);
@@ -621,54 +622,63 @@ newmhead(Chan *from)
 int
 cmount(Chan **newp, Chan *old, int flag, char *spec)
 {
-    int order, flg;
+    /*s: [[cmount()]] locals */
     Chan *new;
-    Mhead *m, **l, *mh;
-    Mount *nm, *f, *um, **h;
     Pgrp *pg;
+    Mhead *m;
+    Mount *nm;
+    int order;
+    /*x: [[cmount()]] locals */
+    int flg;
+    Mhead *mh, **l;
+    Mount *f, *um, **h;
+    /*e: [[cmount()]] locals */
 
-    if(QTDIR & (old->qid.type^(*newp)->qid.type))
+    if((old->qid.type ^ (*newp)->qid.type) & QTDIR)
         error(Emount);
-
+    /*s: [[cmount()]] print error if old->umh != nil */
     if(old->umh)
         print("cmount: unexpected umh, caller %#p\n", getcallerpc(&newp));
+    /*e: [[cmount()]] print error if old->umh != nil */
 
     order = flag&MORDER;
-
-    if((old->qid.type&QTDIR)==0 && order != MREPL)
+    if(!(old->qid.type & QTDIR) && order != MREPL)
         error(Emount);
 
     new = *newp;
-    mh = new->umh;
 
-    /*
-     * Not allowed to bind when the old directory is itself a union. 
-     * (Maybe it should be allowed, but I don't see what the semantics
-     * would be.)
-     *
-     * We need to check mh->mount->next to tell unions apart from
-     * simple mount points, so that things like
-     *  mount -c fd /root
-     *  bind -c /root /
-     * work.  
-     * 
-     * The check of mount->mflag allows things like
-     *  mount fd /root
-     *  bind -c /root /
-     * 
-     * This is far more complicated than it should be, but I don't
-     * see an easier way at the moment.
-     */
-    if((flag&MCREATE) && mh && mh->mount
-    && (mh->mount->next || !(mh->mount->mflag&MCREATE)))
-        error(Emount);
+    /*s: [[cmount()]] if new is itself a mount point, error if cant create there */
+        mh = new->umh;
+        /*
+         * Not allowed to bind when the old directory is itself a union. 
+         * (Maybe it should be allowed, but I don't see what the semantics
+         * would be.)
+         *
+         * We need to check mh->mount->next to tell unions apart from
+         * simple mount points, so that things like
+         *  mount -c fd /root
+         *  bind -c /root /
+         * work.  
+         * 
+         * The check of mount->mflag allows things like
+         *  mount fd /root
+         *  bind -c /root /
+         * 
+         * This is far more complicated than it should be, but I don't
+         * see an easier way at the moment.
+         */
+        if((flag&MCREATE) && mh && mh->mount
+           && (mh->mount->next || !(mh->mount->mflag&MCREATE)))
+            error(Emount);
+    /*e: [[cmount()]] if new is itself a mount point, error if cant create there */
 
     pg = up->pgrp;
     wlock(&pg->ns);
 
+    // m = lookup(old->gdid, pg.mnthash)
     l = &MOUNTH(pg, old->qid);
     for(m = *l; m; m = m->hash){
-        if(eqchan(m->from, old, 1))
+        if(eqchan(m->from, old, true))
             break;
         l = &m->hash;
     }
@@ -686,8 +696,9 @@ cmount(Chan **newp, Chan *old, int flag, char *spec)
          *  node to the mount chain.
          */
         if(order != MREPL)
-            m->mount = newmount(m, old, 0, 0);
+            m->mount = newmount(m, old, 0, nil);
     }
+
     wlock(&m->lock);
     if(waserror()){
         wunlock(&m->lock);
@@ -696,38 +707,44 @@ cmount(Chan **newp, Chan *old, int flag, char *spec)
     wunlock(&pg->ns);
 
     nm = newmount(m, new, flag, spec);
-    if(mh != nil && mh->mount != nil){
-        /*
-         *  copy a union when binding it onto a directory
-         */
-        flg = order;
-        if(order == MREPL)
-            flg = MAFTER;
-        h = &nm->next;
-        um = mh->mount;
-        for(um = um->next; um; um = um->next){
-            f = newmount(m, um->to, flg, um->spec);
-            *h = f;
-            h = &f->next;
+
+    /*s: [[cmount()]] if new is itself a mount point, copy mounts */
+        if(mh != nil && mh->mount != nil){
+            /*
+             *  copy a union when binding it onto a directory
+             */
+            flg = order;
+            if(order == MREPL)
+                flg = MAFTER;
+            h = &nm->next;
+            um = mh->mount;
+            for(um = um->next; um; um = um->next){
+                f = newmount(m, um->to, flg, um->spec);
+                *h = f;
+                h = &f->next;
+            }
         }
-    }
+    /*e: [[cmount()]] if new is itself a mount point, copy mounts */
 
     if(m->mount && order == MREPL){
         mountfree(m->mount);
-        m->mount = 0;
+        m->mount = nil;
     }
 
     if(flag & MCREATE)
         nm->mflag |= MCREATE;
 
+
     if(m->mount && order == MAFTER){
         for(f = m->mount; f->next; f = f->next)
             ;
         f->next = nm;
-    }else{
+    }else{ // MBEFORE or MREPL
+        // when new was itself a mount point, can have union of mount again
         for(f = nm; f->next; f = f->next)
             ;
         f->next = m->mount;
+
         m->mount = nm;
     }
 
@@ -762,7 +779,7 @@ cunmount(Chan *mnt, Chan *mounted)
 
     l = &MOUNTH(pg, mnt->qid);
     for(m = *l; m; m = m->hash){
-        if(eqchan(m->from, mnt, 1))
+        if(eqchan(m->from, mnt, true))
             break;
         l = &m->hash;
     }
@@ -787,8 +804,8 @@ cunmount(Chan *mnt, Chan *mounted)
     p = &m->mount;
     for(f = *p; f; f = f->next){
         /* BUG: Needs to be 2 pass */
-        if(eqchan(f->to, mounted, 1) ||
-          (f->to->mchan && eqchan(f->to->mchan, mounted, 1))){
+        if(eqchan(f->to, mounted, true) ||
+          (f->to->mchan && eqchan(f->to->mchan, mounted, true))){
             *p = f->next;
             f->next = 0;
             mountfree(f);
@@ -1699,9 +1716,11 @@ namec(char *aname, int amode, int omode, ulong perm)
         m = nil;
         if(!sharppath)
             domount(&c, &m, nil);
-        if(c->umh != nil)
-            putmhead(c->umh);
-        c->umh = m;
+        /*s: [[namec()]] set c->umh in Abind if mounted point */
+            if(c->umh != nil)
+                putmhead(c->umh);
+            c->umh = m;
+        /*e: [[namec()]] set c->umh in Abind if mounted point */
         break;
     /*x: [[namec()]] other cases */
     case Amount:

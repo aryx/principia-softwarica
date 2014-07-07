@@ -119,20 +119,27 @@ struct Mntcache
 /*s: struct Mount */
 struct Mount
 {
+    // ref<Chan>
     Chan* to;     /* channel replacing channel */
 
-    // enum<??> MCREATE?
+    // enum<mount>, but mainly for MCREATE, the MBEFORE|MAFTER is encoded via list
     int mflag;
-    char  *spec;
 
+    // option<string>
+    char  *spec; // for mount(), nil for bind()
+    /*s: [[Mount]] other fields */
     ulong mountid;
+    /*x: [[Mount]] other fields */
+    // list<ref<Mount>> sorted list by mount->mountid
+    Mount*  order;
+    /*e: [[Mount]] other fields */
+
     /*s: [[Mount]] extra fields */
-        // ref<Mhead> reciproque of Mhead.mount
-        Mhead*  head;
+    // ref<Mhead> reciproque of Mhead.mount
+    Mhead*  head;
     /*x: [[Mount]] extra fields */
-        Mount*  next;
-        Mount*  copy;
-        Mount*  order;
+    Mount*  next;
+    Mount*  copy;
     /*e: [[Mount]] extra fields */
 };
 /*e: struct Mount */
@@ -140,15 +147,16 @@ struct Mount
 /*s: struct Mhead */
 struct Mhead
 {
+    // ref<Chan>
     Chan* from;     /* channel mounted upon */
-    // list<ref_owned<Mount>> because of union mount
+    // list<ref_owned<Mount>> because of union mount, ordered via MBEFORE|MAFTER
     Mount*  mount;      /* what's mounted upon it */
 
     Ref;
     RWlock  lock;
     /*s: [[Mhead extra fields */
-        // hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
-        Mhead*  hash;     /* Hash chain */
+    // hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
+    Mhead*  hash;     /* Hash chain */
     /*e: [[Mhead extra fields */
 };
 /*e: struct Mhead */
@@ -284,14 +292,15 @@ struct Chan
     // enum<channelflag>> (actually a bitset for certain properties)
     ushort  flag;
     /*x: [[Chan]] other fields */
-    Chan* mchan;      /* channel to mounted server */
-    /*x: [[Chan]] other fields */
-    Mhead*  umh;      /* mount point that derived Chan; used in unionread */
     Chan* umc;      /* channel in union; held for union read */
     QLock umqlock;    /* serialize unionreads */
     int uri;      /* union read index */
     /*x: [[Chan]] other fields */
     vlong devoffset;    /* in underlying device; see read */
+    /*x: [[Chan]] other fields */
+    Mhead*  umh;      /* mount point that derived Chan; used in unionread */
+    /*x: [[Chan]] other fields */
+    Chan* mchan;      /* channel to mounted server */
     /*x: [[Chan]] other fields */
     byte*  dirrock;    /* directory entry rock for translations */
     int nrock;

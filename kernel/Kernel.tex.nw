@@ -1322,7 +1322,7 @@ mkqid(Qid *q, vlong path, ulong vers, int type)
 }
 @
 
-
+% seems always called with skipvers == true
 <<function eqchan>>=
 bool
 eqchan(Chan *a, Chan *b, bool skipvers)
@@ -15015,21 +15015,23 @@ wstat(Chan *c, byte *d, int nd)
 
 \section{Overview}
 
-% before and after mount point, from, to. you go through a mount point.
-% "being on the left part, right part of a mount point.
+% Mount point, Mount table, Namespace (per process mount table), Union directories
 
-% Mount point, Namespace, Union directories
+% before and after mount point, from, to. you go through a mount point.
+% "being on the left part, right part of a mount point".
 
 % see names.ps
-% see lexnames.ps
+
+% relation with PL namespace concept? module A = Xxx.Yyyy.Zzz similar?
 
 \section{Mount point}
 
 <<struct Mhead>>=
 struct Mhead
 {
+    // ref<Chan>
     Chan* from;     /* channel mounted upon */
-    // list<ref_owned<Mount>> because of union mount
+    // list<ref_owned<Mount>> because of union mount, ordered via MBEFORE|MAFTER
     Mount*  mount;      /* what's mounted upon it */
 
     Ref;
@@ -15038,8 +15040,8 @@ struct Mhead
 };
 @
 % have Mhead and Mount instead of just Mount because of union mount.
-% but for can just think as one structure, Mountpoint
-% list sorted? or honor the MBEFORE/MAFTER?
+% but for now can just think as one structure, Mountpoint
+% the list is sorted? to honor the MBEFORE/MAFTER?
 
 <<constructor newmhead>>=
 Mhead*
@@ -15059,25 +15061,29 @@ newmhead(Chan *from)
 <<struct Mount>>=
 struct Mount
 {
+    // ref<Chan>
     Chan* to;     /* channel replacing channel */
 
-    // enum<??> MCREATE?
+    // enum<mount>, but mainly for MCREATE, the MBEFORE|MAFTER is encoded via list
     int mflag;
-    char  *spec;
 
-    ulong mountid;
+    // option<string>
+    char  *spec; // for mount(), nil for bind()
+    <<[[Mount]] other fields>>
+
     <<[[Mount]] extra fields>>
 };
 @
-% mountid? because have sorted list of mount?
 % spec? for special mount requests?
 
 <<[[Mount]] extra fields>>=
-    // ref<Mhead> reciproque of Mhead.mount
-    Mhead*  head;
+// ref<Mhead> reciproque of Mhead.mount
+Mhead*  head;
 @
 % quick access to head
 
+% but does not insert it really in mh, for this you need to put it at
+% the right place, in the right order, and this is done by the caller
 <<constructor newmount>>=
 Mount*
 newmount(Mhead *mh, Chan *to, int flag, char *spec)
@@ -15097,10 +15103,6 @@ newmount(Mhead *mh, Chan *to, int flag, char *spec)
 }
 @ 
 
-<<global mountid>>=
-static Counter mountid;
-@ 
-
 
 <<destructor mountfree>>=
 void
@@ -15118,7 +15120,7 @@ mountfree(Mount *m)
     }
 }
 @ 
-
+% no lock? owned by Mhead so the lock should be done on that?
 
 <<destructor putmhead>>=
 /*
@@ -15149,7 +15151,7 @@ putmhead(Mhead *m)
     }
 }
 @
-
+% ? cafebeef? for what?
 
 
 \section{Mount table}
@@ -15176,8 +15178,8 @@ struct Pgrp
 % it with the code that actually uses it
 
 <<[[Mhead extra fields>>=
-    // hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
-    Mhead*  hash;     /* Hash chain */
+// hash<qid.path, list<ref<Mhead>> of Pgrp.mnthash
+Mhead*  hash;     /* Hash chain */
 @
 
 <<function MOUNTH>>=
@@ -15212,7 +15214,7 @@ newpgrp(void)
     return p;
 }
 @ 
-% what is this pgrpid for?
+
 
 <<destructor closepgrp>>=
 void
@@ -15244,76 +15246,19 @@ closepgrp(Pgrp *p)
     free(p);
 }
 @ 
-
-<<function pgrpinsert>>=
-void
-pgrpinsert(Mount **order, Mount *m)
-{
-    Mount *f;
-
-    m->order = 0;
-    if(*order == nil) {
-        *order = m;
-        return;
-    }
-    for(f = *order; f; f = f->order) {
-        if(m->mountid < f->mountid) {
-            m->order = f;
-            *order = m;
-            return;
-        }
-        order = &f->order;
-    }
-    *order = m;
-}
-@ 
+% s/p/mt? p is for process ...
+% s/f/head, s/h/heads/
 
 
-<<function pgrpcpy>>=
-/*
- * pgrpcpy MUST preserve the mountid allocation order of the parent group
- */
-void
-pgrpcpy(Pgrp *to, Pgrp *from)
-{
-    int i;
-    Mount *n, *m, **link, *order;
-    Mhead *f, **tom, **l, *mh;
 
-    wlock(&from->ns);
-    order = 0;
-    tom = to->mnthash;
-    for(i = 0; i < MNTHASH; i++) {
-        l = tom++;
-        for(f = from->mnthash[i]; f; f = f->hash) {
-            rlock(&f->lock);
-            mh = newmhead(f->from);
-            *l = mh;
-            l = &mh->hash;
-            link = &mh->mount;
-            for(m = f->mount; m; m = m->next) {
-                n = newmount(mh, m->to, m->mflag, m->spec);
-                m->copy = n;
-                pgrpinsert(&order, m);
-                *link = n;
-                link = &n->next;
-            }
-            runlock(&f->lock);
-        }
-    }
-    /*
-     * Allocate mount ids in the same sequence as the parent group
-     */
-    lock(&mountid);
-    for(m = order; m; m = m->order)
-        m->copy->mountid = mountid.ref++;
-    unlock(&mountid);
-    wunlock(&from->ns);
-}
-@ 
 
 \section{Device path}
-% kind of bootstrapping the whole thing
+% kind of bootstrapping the whole thing, usually so
+%  bind #xxx /dev/, which will lead the the creation of a Mhead and Mount
+% and later if mention /dev again then we will add in the Mhead
+
+% alternative is hardcoded list of drivers and huge populated /dev/
+% via major/minor special file as in Linux
 
 <<[[namec()]] locals>>=
 bool sharppath;
@@ -15345,20 +15290,22 @@ case '#':
     c = devtab[t]->attach(up->genbuf+n);
     break;
 @
+% so c is the starting point (instead of up->slash, or up->dot)
 % genbuf+n? for the deviceno?
 
 <<[[Dev]] methods>>=
 Chan* (*attach)(char*);
 @
-% also called in namec()
-
+% called in namec() and bindmount()
 
 
 
 
 \section{[[sysbind()]]}
 
-% ex:  bind("#c", "/dev")
+% ex: bind("#c", "/dev", MREPL), kinda major/minor mode of Linux
+% ex: bind("/root/386/bin", "/bin", MREPL), kinda symlinks
+
 
 <<syscall bind>>=
 // int bind(char *name, char *old, int flag);
@@ -15368,57 +15315,48 @@ sysbind(ulong* arg)
     return bindmount(false, -1, -1, (char*)arg[0], (char*)arg[1], arg[2], nil);
 }
 @
+% why use name and old? would be better src and dest no? old in the sense
+% that it's a channel that will be mount upon and so people mentioning
+% the path of old will actually be redirected to the new chan
+% or use from and to?
+
+% bind src dest flag: find chan c0 of src, find chan c1 of dest, and adjust
+% up->pgrp adding in mnthash a new mhead (if none before) for gqid
+% of c1 and add Mount 'to' to be c0, and 'from' of mhead to be 'c1'
+<<[[bindmount()]] locals>>=
+Chan *c0;
+Chan *c1;
+@
+
+% also in libc.h
+<<enum mount>>=
+enum mount {
+    MREPL = 0x0000,  /* mount replaces object */
+  
+    MBEFORE = 0x0001,  /* mount goes before others in union directory */
+    MAFTER = 0x0002,  /* mount goes after others in union directory */
+    MORDER =  0x0003,  /* mask for bits defining order of mounting */
+  
+    MCREATE = 0x0004,  /* permit creation in mounted directory */
+    <<enum mount cases>>
+  
+    MMASK = 0x0017,  /* all bits on */
+};
+@ 
 
 
+% return mountid?
 <<function bindmount>>=
 long
 bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char* spec)
 {
-    int ret;
-    Chan *c0, *c1, *ac, *bc;
-    struct{
-        Chan    *chan;
-        Chan    *authchan;
-        char    *spec;
-        int flags;
-    }bogus;
+    <<[[bindmount()]] locals>>
 
     if((flag&~MMASK) || (flag&MORDER)==(MBEFORE|MAFTER))
         error(Ebadarg);
 
-    if(ismount){
-        validaddr((ulong)spec, 1, false);
-        spec = validnamedup(spec, true);
-        if(waserror()){
-            free(spec);
-            nexterror();
-        }
-        <<[[bindmount()]] error if noattach>>
-
-        ac = nil;
-        bc = fdtochan(fd, ORDWR, false, true);
-        if(waserror()) {
-            if(ac)
-                cclose(ac);
-            cclose(bc);
-            nexterror();
-        }
-
-        if(afd >= 0)
-            ac = fdtochan(afd, ORDWR, false, true);
-
-        bogus.flags = flag & MCACHE;
-        bogus.chan = bc;
-        bogus.authchan = ac;
-        bogus.spec = spec;
-        ret = devno('M', false);
-        c0 = devtab[ret]->attach((char*)&bogus);
-        poperror(); /* ac bc */
-        if(ac)
-            cclose(ac);
-        cclose(bc);
-
-    }else{
+    <<[[bindmount()]] if ismount>>
+    else{
         spec = nil;
         validaddr((ulong)arg0, 1, false);
         c0 = namec(arg0, Abind, 0, 0);
@@ -15442,67 +15380,78 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
     cclose(c1);
     poperror();
     cclose(c0);
-    if(ismount){
-        fdclose(fd, 0);
-        poperror();
-        free(spec);
-    }
+    <<[[bindmount()]] if ismount free>>
     return ret;
 }
 @
 
+\ifallcode
+<<[[bindmount()]] locals>>=
+int ret;
+@
+\fi
+
+<<enum accessnamec cases>>=
+Abind,        /* for left-hand-side of bind */
+Amount,       /* to be mounted or mounted upon */
+@
+
+<<[[namec()]] other cases>>=
+case Abind:
+    /* no need to maintain path - cannot dotdot an Abind */
+    m = nil;
+    if(!sharppath)
+        domount(&c, &m, nil);
+    <<[[namec()]] set c->umh in Abind if mounted point>>
+    break;
+@
+
+
+<<[[namec()]] other cases>>=
+case Amount:
+    /*
+     * When mounting on an already mounted upon directory,
+     * one wants subsequent mounts to be attached to the
+     * original directory, not the replacement.  Don't domount.
+     */
+    break;
+@
+
+
+<<[[cmount()]] locals>>=
+Chan *new;
+Pgrp *pg;
+Mhead *m;
+Mount *nm;
+int order;
+@
+
+% big function again
 <<function cmount>>=
 int
 cmount(Chan **newp, Chan *old, int flag, char *spec)
 {
-    int order, flg;
-    Chan *new;
-    Mhead *m, **l, *mh;
-    Mount *nm, *f, *um, **h;
-    Pgrp *pg;
+    <<[[cmount()]] locals>>
 
-    if(QTDIR & (old->qid.type^(*newp)->qid.type))
+    if((old->qid.type ^ (*newp)->qid.type) & QTDIR)
         error(Emount);
-
-    if(old->umh)
-        print("cmount: unexpected umh, caller %#p\n", getcallerpc(&newp));
+    <<[[cmount()]] print error if old->umh != nil>>
 
     order = flag&MORDER;
-
-    if((old->qid.type&QTDIR)==0 && order != MREPL)
+    if(!(old->qid.type & QTDIR) && order != MREPL)
         error(Emount);
 
     new = *newp;
-    mh = new->umh;
 
-    /*
-     * Not allowed to bind when the old directory is itself a union. 
-     * (Maybe it should be allowed, but I don't see what the semantics
-     * would be.)
-     *
-     * We need to check mh->mount->next to tell unions apart from
-     * simple mount points, so that things like
-     *  mount -c fd /root
-     *  bind -c /root /
-     * work.  
-     * 
-     * The check of mount->mflag allows things like
-     *  mount fd /root
-     *  bind -c /root /
-     * 
-     * This is far more complicated than it should be, but I don't
-     * see an easier way at the moment.
-     */
-    if((flag&MCREATE) && mh && mh->mount
-    && (mh->mount->next || !(mh->mount->mflag&MCREATE)))
-        error(Emount);
+    <<[[cmount()]] if new is itself a mount point, error if cant create there>>
 
     pg = up->pgrp;
     wlock(&pg->ns);
 
+    // m = lookup(old->gdid, pg.mnthash)
     l = &MOUNTH(pg, old->qid);
     for(m = *l; m; m = m->hash){
-        if(eqchan(m->from, old, 1))
+        if(eqchan(m->from, old, true))
             break;
         l = &m->hash;
     }
@@ -15520,8 +15469,9 @@ cmount(Chan **newp, Chan *old, int flag, char *spec)
          *  node to the mount chain.
          */
         if(order != MREPL)
-            m->mount = newmount(m, old, 0, 0);
+            m->mount = newmount(m, old, 0, nil);
     }
+
     wlock(&m->lock);
     if(waserror()){
         wunlock(&m->lock);
@@ -15530,38 +15480,28 @@ cmount(Chan **newp, Chan *old, int flag, char *spec)
     wunlock(&pg->ns);
 
     nm = newmount(m, new, flag, spec);
-    if(mh != nil && mh->mount != nil){
-        /*
-         *  copy a union when binding it onto a directory
-         */
-        flg = order;
-        if(order == MREPL)
-            flg = MAFTER;
-        h = &nm->next;
-        um = mh->mount;
-        for(um = um->next; um; um = um->next){
-            f = newmount(m, um->to, flg, um->spec);
-            *h = f;
-            h = &f->next;
-        }
-    }
+
+    <<[[cmount()]] if new is itself a mount point, copy mounts>>
 
     if(m->mount && order == MREPL){
         mountfree(m->mount);
-        m->mount = 0;
+        m->mount = nil;
     }
 
     if(flag & MCREATE)
         nm->mflag |= MCREATE;
 
+
     if(m->mount && order == MAFTER){
         for(f = m->mount; f->next; f = f->next)
             ;
         f->next = nm;
-    }else{
+    }else{ // MBEFORE or MREPL
+        // when new was itself a mount point, can have union of mount again
         for(f = nm; f->next; f = f->next)
             ;
         f->next = m->mount;
+
         m->mount = nm;
     }
 
@@ -15572,165 +15512,6 @@ cmount(Chan **newp, Chan *old, int flag, char *spec)
 @
 
 
-<<enum accessnamec cases>>=
-Abind,        /* for left-hand-side of bind */
-Amount,       /* to be mounted or mounted upon */
-@
-
-<<[[namec()]] other cases>>=
-case Abind:
-    /* no need to maintain path - cannot dotdot an Abind */
-    m = nil;
-    if(!sharppath)
-        domount(&c, &m, nil);
-    if(c->umh != nil)
-        putmhead(c->umh);
-    c->umh = m;
-    break;
-@
-
-
-<<[[namec()]] other cases>>=
-case Amount:
-    /*
-     * When mounting on an already mounted upon directory,
-     * one wants subsequent mounts to be attached to the
-     * original directory, not the replacement.  Don't domount.
-     */
-    break;
-@
-
-
-\section{[[sysmount()]]}
-
-<<syscall mount>>=
-// int mount(int fd, int afd, char *old, int flag, char *aname);
-long
-sysmount(ulong* arg)
-{
-    return bindmount(true, arg[0], arg[1], nil, (char*)arg[2], arg[3], (char*)arg[4]);
-}
-@
-
-\section{[[sysumount()]]}
-
-<<[[Chan]] other fields>>=
-Chan* mchan;      /* channel to mounted server */
-@
-
-<<syscall unmount>>=
-// int unmount(char *name, char *old);
-long
-sysunmount(ulong* arg)
-{
-    Chan *cmount, *cmounted;
-
-    cmounted = 0;
-
-    validaddr(arg[1], 1, false);
-    cmount = namec((char *)arg[1], Amount, 0, 0);
-    if(waserror()) {
-        cclose(cmount);
-        if(cmounted)
-            cclose(cmounted);
-        nexterror();
-    }
-
-    if(arg[0]) {
-        /*
-         * This has to be namec(..., Aopen, ...) because
-         * if arg[0] is something like /srv/cs or /fd/0,
-         * opening it is the only way to get at the real
-         * Chan underneath.
-         */
-        validaddr(arg[0], 1, false);
-        cmounted = namec((char*)arg[0], Aopen, OREAD, 0);
-    }
-    cunmount(cmount, cmounted);
-    poperror();
-    cclose(cmount);
-    if(cmounted)
-        cclose(cmounted);
-    return 0;
-}
-@
-
-
-
-<<function cunmount>>=
-void
-cunmount(Chan *mnt, Chan *mounted)
-{
-    Pgrp *pg;
-    Mhead *m, **l;
-    Mount *f, **p;
-
-    if(mnt->umh)    /* should not happen */
-        print("cunmount newp extra umh %p has %p\n", mnt, mnt->umh);
-
-    /*
-     * It _can_ happen that mounted->umh is non-nil, 
-     * because mounted is the result of namec(Aopen)
-     * (see sysfile.c:/^sysunmount).
-     * If we open a union directory, it will have a umh.
-     * Although surprising, this is okay, since the
-     * cclose will take care of freeing the umh.
-     */
-
-    pg = up->pgrp;
-    wlock(&pg->ns);
-
-    l = &MOUNTH(pg, mnt->qid);
-    for(m = *l; m; m = m->hash){
-        if(eqchan(m->from, mnt, 1))
-            break;
-        l = &m->hash;
-    }
-
-    if(m == 0){
-        wunlock(&pg->ns);
-        error(Eunmount);
-    }
-
-    wlock(&m->lock);
-    if(mounted == 0){
-        *l = m->hash;
-        wunlock(&pg->ns);
-        mountfree(m->mount);
-        m->mount = nil;
-        cclose(m->from);
-        wunlock(&m->lock);
-        putmhead(m);
-        return;
-    }
-
-    p = &m->mount;
-    for(f = *p; f; f = f->next){
-        /* BUG: Needs to be 2 pass */
-        if(eqchan(f->to, mounted, 1) ||
-          (f->to->mchan && eqchan(f->to->mchan, mounted, 1))){
-            *p = f->next;
-            f->next = 0;
-            mountfree(f);
-            if(m->mount == nil){
-                *l = m->hash;
-                cclose(m->from);
-                wunlock(&m->lock);
-                wunlock(&pg->ns);
-                putmhead(m);
-                return;
-            }
-            wunlock(&m->lock);
-            wunlock(&pg->ns);
-            return;
-        }
-        p = &f->next;
-    }
-    wunlock(&m->lock);
-    wunlock(&pg->ns);
-    error(Eunion);
-}
-@
 
 \section{[[domount()]], [[undomount()]]}
 % namec() and walk() part2
@@ -15970,9 +15751,8 @@ DBG("undomount %p %s => remove %p\n", path, path->s, nc);
 \section{Union mount}
 
 <<[[Mount]] extra fields>>=
-    Mount*  next;
-    Mount*  copy;
-    Mount*  order;
+Mount*  next;
+Mount*  copy;
 @
 
 
@@ -16036,7 +15816,6 @@ createdir(Chan *c, Mhead *m)
 
 
 <<[[Chan]] other fields>>=
-Mhead*  umh;      /* mount point that derived Chan; used in unionread */
 Chan* umc;      /* channel in union; held for union read */
 QLock umqlock;    /* serialize unionreads */
 int uri;      /* union read index */
@@ -16196,29 +15975,164 @@ if(flag & RFNOMNT)
 
 \section{XTODO}
 
-<<[[chanfree()]] optional free>>=
-if(c->dirrock != nil){
-    free(c->dirrock);
-    c->dirrock = nil;
-    c->nrock = 0;
-    c->mrock = 0;
+
+% put in union mount section?
+<<[[Mount]] other fields>>=
+ulong mountid;
+@
+
+<<global mountid>>=
+static Counter mountid;
+@ 
+
+% mountid? because have sorted list of mount? because mount on top of 
+%  something else?
+
+<<[[Mount]] other fields>>=
+// list<ref<Mount>> sorted list by mount->mountid
+Mount*  order;
+@
+
+<<function pgrpinsert>>=
+void
+pgrpinsert(Mount **order, Mount *m)
+{
+    Mount *f;
+
+    m->order = nil;
+    if(*order == nil) {
+        *order = m;
+        return;
+    }
+    for(f = *order; f; f = f->order) {
+        if(m->mountid < f->mountid) {
+            m->order = f;
+            *order = m;
+            return;
+        }
+        order = &f->order;
+    }
+    *order = m;
 }
-if(c->umh != nil){
-    putmhead(c->umh);
-    c->umh = nil;
+@ 
+
+
+% used by sysrfork
+<<function pgrpcpy>>=
+/*
+ * pgrpcpy MUST preserve the mountid allocation order of the parent group
+ */
+void
+pgrpcpy(Pgrp *to, Pgrp *from)
+{
+    int i;
+    Mount *n, *m, **link, *order;
+    Mhead *f, **tom, **l, *mh;
+
+    wlock(&from->ns);
+    order = 0;
+    tom = to->mnthash;
+    for(i = 0; i < MNTHASH; i++) {
+        l = tom++;
+        for(f = from->mnthash[i]; f; f = f->hash) {
+            rlock(&f->lock);
+            mh = newmhead(f->from);
+            *l = mh;
+            l = &mh->hash;
+            link = &mh->mount;
+            for(m = f->mount; m; m = m->next) {
+                n = newmount(mh, m->to, m->mflag, m->spec);
+                m->copy = n;
+                pgrpinsert(&order, m);
+                *link = n;
+                link = &n->next;
+            }
+            runlock(&f->lock);
+        }
+    }
+    /*
+     * Allocate mount ids in the same sequence as the parent group
+     */
+    lock(&mountid);
+    for(m = order; m; m = m->order)
+        m->copy->mountid = mountid.ref++;
+    unlock(&mountid);
+    wunlock(&from->ns);
 }
-if(c->umc != nil){
-    cclose(c->umc);
-    c->umc = nil;
-}
-if(c->mux != nil){
-    muxclose(c->mux);
-    c->mux = nil;
-}
-if(c->mchan != nil){
-    cclose(c->mchan);
-    c->mchan = nil;
-}
+@ 
+
+\section{XTODO}
+
+<<[[Chan]] other fields>>=
+Mhead*  umh;      /* mount point that derived Chan; used in unionread */
+@
+
+<<[[namec()]] set c->umh in Abind if mounted point>>=
+    if(c->umh != nil)
+        putmhead(c->umh);
+    c->umh = m;
+@
+% set in Abind, other place where set?
+
+
+
+
+<<[[cmount()]] locals>>=
+int flg;
+Mhead *mh, **l;
+Mount *f, *um, **h;
+@
+
+<<[[cmount()]] if new is itself a mount point, error if cant create there>>=
+    mh = new->umh;
+    /*
+     * Not allowed to bind when the old directory is itself a union. 
+     * (Maybe it should be allowed, but I don't see what the semantics
+     * would be.)
+     *
+     * We need to check mh->mount->next to tell unions apart from
+     * simple mount points, so that things like
+     *  mount -c fd /root
+     *  bind -c /root /
+     * work.  
+     * 
+     * The check of mount->mflag allows things like
+     *  mount fd /root
+     *  bind -c /root /
+     * 
+     * This is far more complicated than it should be, but I don't
+     * see an easier way at the moment.
+     */
+    if((flag&MCREATE) && mh && mh->mount
+       && (mh->mount->next || !(mh->mount->mflag&MCREATE)))
+        error(Emount);
+@
+
+<<[[cmount()]] if new is itself a mount point, copy mounts>>=
+    if(mh != nil && mh->mount != nil){
+        /*
+         *  copy a union when binding it onto a directory
+         */
+        flg = order;
+        if(order == MREPL)
+            flg = MAFTER;
+        h = &nm->next;
+        um = mh->mount;
+        for(um = um->next; um; um = um->next){
+            f = newmount(m, um->to, flg, um->spec);
+            *h = f;
+            h = &f->next;
+        }
+    }
+@
+
+
+
+
+
+<<[[cmount()]] print error if old->umh != nil>>=
+if(old->umh)
+    print("cmount: unexpected umh, caller %#p\n", getcallerpc(&newp));
 @
 
 <<[[namec()]] print error if c->umh != nil>>=
@@ -16234,6 +16148,229 @@ if(c->umh != nil){  //BUG
     print("walk umh\n");
     putmhead(c->umh);
     c->umh = nil;
+}
+@
+
+<<[[chanfree()]] optional free>>=
+if(c->umh != nil){
+    putmhead(c->umh);
+    c->umh = nil;
+}
+@
+
+
+
+
+\section{[[sysmount()]]}
+
+<<syscall mount>>=
+// int mount(int fd, int afd, char *old, int flag, char *aname);
+long
+sysmount(ulong* arg)
+{
+    return bindmount(true, arg[0], arg[1], nil, (char*)arg[2], arg[3], (char*)arg[4]);
+}
+@
+
+
+<<[[bindmount()]] locals>>=
+Chan *ac, *bc;
+
+struct {
+    Chan    *chan;
+    Chan    *authchan;
+    char    *spec;
+    int flags;
+} bogus;
+@
+
+<<[[bindmount()]] if ismount>>=
+if(ismount){
+    validaddr((ulong)spec, 1, false);
+    spec = validnamedup(spec, true);
+    if(waserror()){
+        free(spec);
+        nexterror();
+    }
+    <<[[bindmount()]] error if noattach>>
+
+    ac = nil;
+    bc = fdtochan(fd, ORDWR, false, true);
+    if(waserror()) {
+        if(ac)
+            cclose(ac);
+        cclose(bc);
+        nexterror();
+    }
+
+    if(afd >= 0)
+        ac = fdtochan(afd, ORDWR, false, true);
+
+    bogus.flags = flag & MCACHE;
+    bogus.chan = bc;
+    bogus.authchan = ac;
+    bogus.spec = spec;
+    ret = devno('M', false);
+    c0 = devtab[ret]->attach((char*)&bogus);
+    poperror(); /* ac bc */
+    if(ac)
+        cclose(ac);
+    cclose(bc);
+  }
+@
+
+<<enum mount cases>>=
+MCACHE = 0x0010,  /* cache some data */
+@
+
+<<[[bindmount()]] if ismount free>>=
+if(ismount){
+    fdclose(fd, 0);
+    poperror();
+    free(spec);
+}
+@
+
+\section{[[sysumount()]]}
+
+<<[[Chan]] other fields>>=
+Chan* mchan;      /* channel to mounted server */
+@
+
+<<syscall unmount>>=
+// int unmount(char *name, char *old);
+long
+sysunmount(ulong* arg)
+{
+    Chan *cmount, *cmounted;
+
+    cmounted = nil;
+
+    validaddr(arg[1], 1, false);
+    cmount = namec((char *)arg[1], Amount, 0, 0);
+    if(waserror()) {
+        cclose(cmount);
+        if(cmounted)
+            cclose(cmounted);
+        nexterror();
+    }
+
+    if(arg[0]) {
+        /*
+         * This has to be namec(..., Aopen, ...) because
+         * if arg[0] is something like /srv/cs or /fd/0,
+         * opening it is the only way to get at the real
+         * Chan underneath.
+         */
+        validaddr(arg[0], 1, false);
+        cmounted = namec((char*)arg[0], Aopen, OREAD, 0);
+    }
+    cunmount(cmount, cmounted);
+    poperror();
+    cclose(cmount);
+    if(cmounted)
+        cclose(cmounted);
+    return 0;
+}
+@
+
+
+
+<<function cunmount>>=
+void
+cunmount(Chan *mnt, Chan *mounted)
+{
+    Pgrp *pg;
+    Mhead *m, **l;
+    Mount *f, **p;
+
+    if(mnt->umh)    /* should not happen */
+        print("cunmount newp extra umh %p has %p\n", mnt, mnt->umh);
+
+    /*
+     * It _can_ happen that mounted->umh is non-nil, 
+     * because mounted is the result of namec(Aopen)
+     * (see sysfile.c:/^sysunmount).
+     * If we open a union directory, it will have a umh.
+     * Although surprising, this is okay, since the
+     * cclose will take care of freeing the umh.
+     */
+
+    pg = up->pgrp;
+    wlock(&pg->ns);
+
+    l = &MOUNTH(pg, mnt->qid);
+    for(m = *l; m; m = m->hash){
+        if(eqchan(m->from, mnt, true))
+            break;
+        l = &m->hash;
+    }
+
+    if(m == 0){
+        wunlock(&pg->ns);
+        error(Eunmount);
+    }
+
+    wlock(&m->lock);
+    if(mounted == 0){
+        *l = m->hash;
+        wunlock(&pg->ns);
+        mountfree(m->mount);
+        m->mount = nil;
+        cclose(m->from);
+        wunlock(&m->lock);
+        putmhead(m);
+        return;
+    }
+
+    p = &m->mount;
+    for(f = *p; f; f = f->next){
+        /* BUG: Needs to be 2 pass */
+        if(eqchan(f->to, mounted, true) ||
+          (f->to->mchan && eqchan(f->to->mchan, mounted, true))){
+            *p = f->next;
+            f->next = 0;
+            mountfree(f);
+            if(m->mount == nil){
+                *l = m->hash;
+                cclose(m->from);
+                wunlock(&m->lock);
+                wunlock(&pg->ns);
+                putmhead(m);
+                return;
+            }
+            wunlock(&m->lock);
+            wunlock(&pg->ns);
+            return;
+        }
+        p = &f->next;
+    }
+    wunlock(&m->lock);
+    wunlock(&pg->ns);
+    error(Eunion);
+}
+@
+
+\section{XTODO}
+
+<<[[chanfree()]] optional free>>=
+if(c->dirrock != nil){
+    free(c->dirrock);
+    c->dirrock = nil;
+    c->nrock = 0;
+    c->mrock = 0;
+}
+if(c->umc != nil){
+    cclose(c->umc);
+    c->umc = nil;
+}
+if(c->mux != nil){
+    muxclose(c->mux);
+    c->mux = nil;
+}
+if(c->mchan != nil){
+    cclose(c->mchan);
+    c->mchan = nil;
 }
 @
 
@@ -22092,6 +22229,16 @@ enum notekind
     NUser,        /* note provided externally */
     NExit,        /* deliver note quietly */
     NDebug,       /* print debug message */
+};
+@ 
+
+% also in libc.h?
+<<enum note>>=
+enum note {
+  NCONT = 0, /* continue after note */
+  NDFLT = 1, /* terminate after note */
+  NSAVE = 2, /* clear note but hold state */
+  NRSTR = 3, /* restore saved state */
 };
 @ 
 

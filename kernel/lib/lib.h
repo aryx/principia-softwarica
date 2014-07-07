@@ -204,14 +204,18 @@ extern  char  end[];
  */
 /*s: enum mount */
 enum mount {
-  MREPL = 0x0000,  /* mount replaces object */
-  MBEFORE = 0x0001,  /* mount goes before others in union directory */
-  MAFTER = 0x0002,  /* mount goes after others in union directory */
-  MCREATE = 0x0004,  /* permit creation in mounted directory */
-  MCACHE = 0x0010,  /* cache some data */
-
-  MORDER =  0x0003,  /* mask for bits defining order of mounting */
-  MMASK = 0x0017,  /* all bits on */
+    MREPL = 0x0000,  /* mount replaces object */
+  
+    MBEFORE = 0x0001,  /* mount goes before others in union directory */
+    MAFTER = 0x0002,  /* mount goes after others in union directory */
+    MORDER =  0x0003,  /* mask for bits defining order of mounting */
+  
+    MCREATE = 0x0004,  /* permit creation in mounted directory */
+    /*s: enum mount cases */
+    MCACHE = 0x0010,  /* cache some data */
+    /*e: enum mount cases */
+  
+    MMASK = 0x0017,  /* all bits on */
 };
 /*e: enum mount */
 
@@ -234,14 +238,14 @@ enum open {
 };
 /*e: enum open */
 
-/*s: enum node */
+/*s: enum note */
 enum note {
   NCONT = 0, /* continue after note */
   NDFLT = 1, /* terminate after note */
   NSAVE = 2, /* clear note but hold state */
   NRSTR = 3, /* restore saved state */
 };
-/*e: enum node */
+/*e: enum note */
 
 /*s: enum miscsize */
 enum miscsize {  

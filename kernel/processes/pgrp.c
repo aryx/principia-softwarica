@@ -127,7 +127,7 @@ pgrpinsert(Mount **order, Mount *m)
 {
     Mount *f;
 
-    m->order = 0;
+    m->order = nil;
     if(*order == nil) {
         *order = m;
         return;
