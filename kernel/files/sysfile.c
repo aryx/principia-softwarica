@@ -1012,7 +1012,7 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
         nexterror();
     }
 
-    ret = cmount(&c0, c1, flag, spec);
+    ret = cmount(c0, c1, flag, spec);
 
     poperror();
     cclose(c1);

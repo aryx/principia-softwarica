@@ -71,7 +71,7 @@ void    chandevinit(void);
 void    chandevshutdown(void);
 void    chandevreset(void);
 int   eqqid(Qid, Qid);
-int   cmount(Chan**, Chan*, int, char*);
+int   cmount(Chan*, Chan*, int, char*);
 void    cunmount(Chan*, Chan*);
 bool   findmount(Chan**, Mhead**, int, int, Qid);
 void    pathclose(Path*);

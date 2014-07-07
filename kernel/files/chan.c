@@ -620,10 +620,9 @@ newmhead(Chan *from)
 
 /*s: function cmount */
 int
-cmount(Chan **newp, Chan *old, int flag, char *spec)
+cmount(Chan *new, Chan *old, int flag, char *spec)
 {
     /*s: [[cmount()]] locals */
-    Chan *new;
     Pgrp *pg;
     Mhead *m;
     Mount *nm;
@@ -634,18 +633,16 @@ cmount(Chan **newp, Chan *old, int flag, char *spec)
     Mount *f, *um, **h;
     /*e: [[cmount()]] locals */
 
-    if((old->qid.type ^ (*newp)->qid.type) & QTDIR)
+    if((old->qid.type ^ new->qid.type) & QTDIR)
         error(Emount);
     /*s: [[cmount()]] print error if old->umh != nil */
     if(old->umh)
-        print("cmount: unexpected umh, caller %#p\n", getcallerpc(&newp));
+        print("cmount: unexpected umh, caller %#p\n", getcallerpc(&new));
     /*e: [[cmount()]] print error if old->umh != nil */
 
     order = flag&MORDER;
     if(!(old->qid.type & QTDIR) && order != MREPL)
         error(Emount);
-
-    new = *newp;
 
     /*s: [[cmount()]] if new is itself a mount point, error if cant create there */
         mh = new->umh;
