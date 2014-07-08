@@ -547,6 +547,9 @@ struct Ureg
 % fast language; no compromise here (but have to suffer and do lots
 % of things manually)
 
+% Some coding conventions: xxxp -> pointer on xxx, so cp is really
+% a ref pointer to a chang, mp = ref pointer to a mount (head)
+
 \section{Code organization}
 % codemap and codegraph screenshot?
 % graph dependencies? (where remove artificial edges, or use thickness of edge?)
@@ -2020,6 +2023,8 @@ canqlock(QLock *q)
 @ 
 
 \section{Readers/Writer [[RWLock]]}
+
+% used in Mhead, Pgrp, Egrp
 
 <<struct RWlock>>=
 struct RWlock
@@ -15032,11 +15037,11 @@ enum mount {
   
     MBEFORE = 0x0001,  /* mount goes before others in union directory */
     MAFTER = 0x0002,  /* mount goes after others in union directory */
-    MORDER =  0x0003,  /* mask for bits defining order of mounting */
   
     MCREATE = 0x0004,  /* permit creation in mounted directory */
     <<enum mount cases>>
   
+    MORDERMASK =  0x0003,  /* mask for bits defining order of mounting */
     MMASK = 0x0017,  /* all bits on */
 };
 @ 
@@ -15136,24 +15141,17 @@ struct Mount
 % ex of spec? for special mount requests?
 % they should put a Ref!
 
-<<[[Mount]] extra fields>>=
-// ref<Mhead> reciproque of Mhead.mount
-Mhead*  head;
-@
-% quick access to head, but needed?? TODO delete?
-
-% but does not insert it really in mh, for this you need to put it at
+% does not insert in any mh, for this you need to put it at
 % the right place, in the right order, and this is done by the caller
 <<constructor newmount>>=
 Mount*
-newmount(Mhead *mh, Chan *to, int flag, char *spec)
+newmount(Chan *to, int flag, char *spec)
 {
     Mount *m;
 
     m = smalloc(sizeof(Mount));
     m->to = to;
     incref(to);
-    m->head = mh;
     m->mountid = incref(&mountid);
     m->mflag = flag;
     if(spec != nil)
@@ -15202,6 +15200,7 @@ struct Pgrp
   
     // extra
     Ref;        /* also used as a lock when mounting */
+
     // ORDER OF LOCK: first debug and then ns
     QLock debug;      /* single access via devproc.c */
     RWlock  ns;     /* Namespace n read/one write lock */
@@ -15378,7 +15377,7 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
 {
     <<[[bindmount()]] locals>>
 
-    if((flag&~MMASK) || (flag&MORDER)==(MBEFORE|MAFTER))
+    if((flag&~MMASK) || (flag&MORDERMASK)==(MBEFORE|MAFTER))
         error(Ebadarg);
 
     <<[[bindmount()]] if ismount>>
@@ -15463,7 +15462,7 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
         error(Emount);
     <<[[cmount()]] print error if old->umh != nil>>
 
-    order = flag&MORDER;
+    order = flag&MORDERMASK;
     if(!(old->qid.type & QTDIR) && order != MREPL)
         error(Emount);
 
@@ -15493,7 +15492,7 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
          *  node to the mount chain.
          */
         if(order != MREPL)
-            mh->mount = newmount(mh, old, 0, nil);
+            mh->mount = newmount(old, 0, nil);
     }
 
     wlock(&mh->lock);
@@ -15503,7 +15502,7 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
     }
     wunlock(&pg->ns);
 
-    m = newmount(mh, new, flag, spec);
+    m = newmount(new, flag, spec);
 
     <<[[cmount()]] if new is itself a mount point, copy mounts>>
 
@@ -15546,6 +15545,8 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
 Mhead *m;
 Path *path;
 @
+% s/m/mh? but it's called that way because probably at the beginning
+% there was just Mount, and so they were using m
 
 
 <<[[namec()]] case Aopen, Acreate, Aremove, Aaccess, handle mountpoint part1>>=
@@ -15782,11 +15783,13 @@ undomount(Chan *c, Path *path)
 
 \section{Union mount}
 
-% seen list of Mount in Mhead with next field in Mount and MBEFORE, MAFTER.
+% seen already list of Mount in Mhead with next field in Mount and MBEFORE, MAFTER.
 
+% subsection{union lookup (walk)}
 <<[[walk()]] locals>>=
 Mount *f;
 @
+% rename, bad name 'f'
 
 <<[[walk()]] if c is a union mount, find and adjust type and dev>>=
 /* try a union mount, if any */
@@ -15821,6 +15824,7 @@ else
 <<[[Chan]] other fields>>=
 Mhead*  umh;      /* mount point that derived Chan; used in unionread */
 @
+% "that derived Chan" =~
 
 <<[[chanfree()]] optional free>>=
 if(c->umh != nil){
@@ -15830,13 +15834,10 @@ if(c->umh != nil){
 @
 
 
+% namec(), walk(), cmount()
 
-
-<<[[cmount()]] print error if old->umh != nil>>=
-if(old->umh)
-    print("cmount: unexpected umh, caller %#p\n", getcallerpc(&new));
-@
-
+% in Aopen|Acreate after walked, the walk should not set umh, need umh
+% to read so only when actually open the chan and will call syspread later
 <<[[namec()]] print error if c->umh != nil>>=
 if(c->umh != nil){
     print("uniquechan umh Open\n");
@@ -15852,6 +15853,12 @@ if(c->umh != nil){  //BUG
     c->umh = nil;
 }
 @
+
+<<[[cmount()]] print error if old->umh != nil>>=
+if(old->umh)
+    print("cmount: unexpected umh, caller %#p\n", getcallerpc(&new));
+@
+% old is accessed via namec(Amount), so should not do any domount()
 
 
 \subsection{[[syspread()]] for directories}
@@ -15875,7 +15882,8 @@ vlong devoffset;    /* in underlying device; see read */
         nnn = mountfix(c, p, nn, n);
     }
 @
-% LP split more, mountrockread? mountfix?
+% LP split more, mountrockread? mountfix? and mv the simple read of dir
+%  before? or put in Directory chapter? with devoffeset?
 
 
 
@@ -15964,6 +15972,8 @@ unionread(Chan *c, virt_addr3 va, long n)
     unionrewind(c);
 @
 
+% mountrewind? deal with nrock
+
 <<function unionrewind>>=
 static void
 unionrewind(Chan *c)
@@ -15977,6 +15987,7 @@ unionrewind(Chan *c)
     qunlock(&c->umqlock);
 }
 @
+
 
 
 \subsection{[[MCREATE]]}
@@ -16064,7 +16075,7 @@ if(umh != nil && umh->mount != nil){
     h = &m->next;
     um = umh->mount;
     for(um = um->next; um; um = um->next){
-        f = newmount(mh, um->to, flg, um->spec);
+        f = newmount(um->to, flg, um->spec);
         *h = f;
         h = &f->next;
     }
@@ -16130,103 +16141,6 @@ if(flag & RFNOMNT)
 if(flag & RFNOMNT)
     p->pgrp->noattach = true;
 @
-
-\section{XTODO}
-
-
-% put in union mount section?
-<<[[Mount]] other fields>>=
-ulong mountid;
-@
-
-<<global mountid>>=
-static Counter mountid;
-@ 
-
-% mountid? because have sorted list of mount? because mount on top of 
-%  something else?
-
-<<[[Mount]] other fields>>=
-// list<ref<Mount>> sorted list by mount->mountid
-Mount*  order;
-@
-
-% used by pgrpcpy
-<<function pgrpinsert>>=
-void
-pgrpinsert(Mount **order, Mount *m)
-{
-    Mount *f;
-
-    m->order = nil;
-    if(*order == nil) {
-        *order = m;
-        return;
-    }
-    for(f = *order; f; f = f->order) {
-        if(m->mountid < f->mountid) {
-            m->order = f;
-            *order = m;
-            return;
-        }
-        order = &f->order;
-    }
-    *order = m;
-}
-@ 
-
-
-% used by sysrfork
-<<function pgrpcpy>>=
-/*
- * pgrpcpy MUST preserve the mountid allocation order of the parent group
- */
-void
-pgrpcpy(Pgrp *to, Pgrp *from)
-{
-    int i;
-    Mount *n, *m, **link, *order;
-    Mhead *f, **tom, **l, *mh;
-
-    wlock(&from->ns);
-    order = nil;
-    tom = to->mnthash;
-    for(i = 0; i < MNTHASH; i++) {
-        l = tom++;
-        for(f = from->mnthash[i]; f; f = f->hash) {
-            rlock(&f->lock);
-            mh = newmhead(f->from);
-            *l = mh;
-            l = &mh->hash;
-            link = &mh->mount;
-            for(m = f->mount; m; m = m->next) {
-                n = newmount(mh, m->to, m->mflag, m->spec);
-
-                m->copy = n;
-                pgrpinsert(&order, m);
-
-                *link = n;
-                link = &n->next;
-            }
-            runlock(&f->lock);
-        }
-    }
-    /*
-     * Allocate mount ids in the same sequence as the parent group
-     */
-    lock(&mountid);
-    for(m = order; m; m = m->order)
-        m->copy->mountid = mountid.ref++;
-    unlock(&mountid);
-    wunlock(&from->ns);
-}
-@ 
-
-<<[[Mount]] extra fields>>=
-Mount*  copy;
-@
-
-
 
 \section{[[sysmount()]]}
 
@@ -16417,6 +16331,103 @@ cunmount(Chan *mnt, Chan *mounted)
     error(Eunion);
 }
 @
+
+\section{XTODO}
+
+
+% put in union mount section?
+<<[[Mount]] other fields>>=
+ulong mountid;
+@
+
+<<global mountid>>=
+static Counter mountid;
+@ 
+
+% mountid? because have sorted list of mount? because mount on top of 
+%  something else?
+
+<<[[Mount]] other fields>>=
+// list<ref<Mount>> sorted list by mount->mountid
+Mount*  order;
+@
+
+% used by pgrpcpy
+<<function pgrpinsert>>=
+void
+pgrpinsert(Mount **order, Mount *m)
+{
+    Mount *f;
+
+    m->order = nil;
+    if(*order == nil) {
+        *order = m;
+        return;
+    }
+    for(f = *order; f; f = f->order) {
+        if(m->mountid < f->mountid) {
+            m->order = f;
+            *order = m;
+            return;
+        }
+        order = &f->order;
+    }
+    *order = m;
+}
+@ 
+
+
+% used by sysrfork
+<<function pgrpcpy>>=
+/*
+ * pgrpcpy MUST preserve the mountid allocation order of the parent group
+ */
+void
+pgrpcpy(Pgrp *to, Pgrp *from)
+{
+    int i;
+    Mount *n, *m, **link, *order;
+    Mhead *f, **tom, **l, *mh;
+
+    wlock(&from->ns);
+    order = nil;
+    tom = to->mnthash;
+    for(i = 0; i < MNTHASH; i++) {
+        l = tom++;
+        for(f = from->mnthash[i]; f; f = f->hash) {
+            rlock(&f->lock);
+            mh = newmhead(f->from);
+            *l = mh;
+            l = &mh->hash;
+            link = &mh->mount;
+            for(m = f->mount; m; m = m->next) {
+                n = newmount(m->to, m->mflag, m->spec);
+
+                m->copy = n;
+                pgrpinsert(&order, m);
+
+                *link = n;
+                link = &n->next;
+            }
+            runlock(&f->lock);
+        }
+    }
+    /*
+     * Allocate mount ids in the same sequence as the parent group
+     */
+    lock(&mountid);
+    for(m = order; m; m = m->order)
+        m->copy->mountid = mountid.ref++;
+    unlock(&mountid);
+    wunlock(&from->ns);
+}
+@ 
+
+<<[[Mount]] extra fields>>=
+Mount*  copy;
+@
+
+
 
 \section{XTODO}
 
@@ -24573,13 +24584,15 @@ struct Evalue
 <<struct Egrp>>=
 struct Egrp
 {
-  Ref;
-  RWlock;
   Evalue  **ent;
   int nent;
   int ment;
   ulong path; /* qid.path of next Evalue to be allocated */
   ulong vers; /* of Egrp */
+
+  // extra
+  Ref;
+  RWlock;
 };
 @
 
@@ -29121,6 +29134,7 @@ int tlbfault;
 int tlbpurge;
 ulong spuriousintr; // not really used
 @
+% related: Linux perf software events
 
 % also lockcycles here?
 
@@ -29230,6 +29244,13 @@ enum proctime
 // hash<enum<proctime>, ulong>
 ulong time[5];  /* User, Sys, Real; child U, S */
 @
+% the ulong is number of ticks, so use Ttick? except for Real where it's
+%  the tick number when the process was started
+% used to be time[6] with a TCReal, but didn't make sense
+% because time[TCREal] was never used because the real time
+% is the full time of everything and we don't need to maintain
+% that info; it's very easy to compute ... it's the rest that is hard
+% to track.
 
 <<[[sysrfork()]] setting time field>>=
 memset(p->time, 0, sizeof(p->time));
@@ -29317,6 +29338,7 @@ wq->w.time[TUser], wq->w.time[TSys], wq->w.time[TReal],
 
 \subsection{[[/bin/tprof]]}
 % oprofile, frequency count, sampling based
+% tprof? why t? tickprof? meh
 
 % coverage data for Text segment! 
 % profile[0] will be total time in ms.

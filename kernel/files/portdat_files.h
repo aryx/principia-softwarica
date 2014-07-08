@@ -135,9 +135,6 @@ struct Mount
     /*e: [[Mount]] other fields */
 
     /*s: [[Mount]] extra fields */
-    // ref<Mhead> reciproque of Mhead.mount
-    Mhead*  head;
-    /*x: [[Mount]] extra fields */
     Mount*  next;
     /*x: [[Mount]] extra fields */
     Mount*  copy;

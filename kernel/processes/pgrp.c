@@ -167,7 +167,7 @@ pgrpcpy(Pgrp *to, Pgrp *from)
             l = &mh->hash;
             link = &mh->mount;
             for(m = f->mount; m; m = m->next) {
-                n = newmount(mh, m->to, m->mflag, m->spec);
+                n = newmount(m->to, m->mflag, m->spec);
 
                 m->copy = n;
                 pgrpinsert(&order, m);
@@ -296,14 +296,13 @@ forceclosefgrp(void)
 
 /*s: constructor newmount */
 Mount*
-newmount(Mhead *mh, Chan *to, int flag, char *spec)
+newmount(Chan *to, int flag, char *spec)
 {
     Mount *m;
 
     m = smalloc(sizeof(Mount));
     m->to = to;
     incref(to);
-    m->head = mh;
     m->mountid = incref(&mountid);
     m->mflag = flag;
     if(spec != nil)

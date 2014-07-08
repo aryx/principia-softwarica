@@ -693,7 +693,7 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
          *  node to the mount chain.
          */
         if(order != MREPL)
-            mh->mount = newmount(mh, old, 0, nil);
+            mh->mount = newmount(old, 0, nil);
     }
 
     wlock(&mh->lock);
@@ -703,7 +703,7 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
     }
     wunlock(&pg->ns);
 
-    m = newmount(mh, new, flag, spec);
+    m = newmount(new, flag, spec);
 
     /*s: [[cmount()]] if new is itself a mount point, copy mounts */
     if(umh != nil && umh->mount != nil){
@@ -716,7 +716,7 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
         h = &m->next;
         um = umh->mount;
         for(um = um->next; um; um = um->next){
-            f = newmount(mh, um->to, flg, um->spec);
+            f = newmount(um->to, flg, um->spec);
             *h = f;
             h = &f->next;
         }
