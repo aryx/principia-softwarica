@@ -343,13 +343,15 @@ struct Evalue
 /*s: struct Egrp */
 struct Egrp
 {
-  Ref;
-  RWlock;
   Evalue  **ent;
   int nent;
   int ment;
   ulong path; /* qid.path of next Evalue to be allocated */
   ulong vers; /* of Egrp */
+
+  // extra
+  Ref;
+  RWlock;
 };
 /*e: struct Egrp */
 

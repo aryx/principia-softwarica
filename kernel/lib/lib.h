@@ -208,13 +208,13 @@ enum mount {
   
     MBEFORE = 0x0001,  /* mount goes before others in union directory */
     MAFTER = 0x0002,  /* mount goes after others in union directory */
-    MORDER =  0x0003,  /* mask for bits defining order of mounting */
   
     MCREATE = 0x0004,  /* permit creation in mounted directory */
     /*s: enum mount cases */
     MCACHE = 0x0010,  /* cache some data */
     /*e: enum mount cases */
   
+    MORDERMASK =  0x0003,  /* mask for bits defining order of mounting */
     MMASK = 0x0017,  /* all bits on */
 };
 /*e: enum mount */

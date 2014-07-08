@@ -117,6 +117,7 @@ struct Pgrp
   
     // extra
     Ref;        /* also used as a lock when mounting */
+
     // ORDER OF LOCK: first debug and then ns
     QLock debug;      /* single access via devproc.c */
     RWlock  ns;     /* Namespace n read/one write lock */

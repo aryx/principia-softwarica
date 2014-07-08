@@ -640,7 +640,7 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
         print("cmount: unexpected umh, caller %#p\n", getcallerpc(&new));
     /*e: [[cmount()]] print error if old->umh != nil */
 
-    order = flag&MORDER;
+    order = flag&MORDERMASK;
     if(!(old->qid.type & QTDIR) && order != MREPL)
         error(Emount);
 

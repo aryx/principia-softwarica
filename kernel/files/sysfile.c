@@ -955,7 +955,7 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
     } bogus;
     /*e: [[bindmount()]] locals */
 
-    if((flag&~MMASK) || (flag&MORDER)==(MBEFORE|MAFTER))
+    if((flag&~MMASK) || (flag&MORDERMASK)==(MBEFORE|MAFTER))
         error(Ebadarg);
 
     /*s: [[bindmount()]] if ismount */
