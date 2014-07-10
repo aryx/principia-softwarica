@@ -993,7 +993,7 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
         if(ac)
             cclose(ac);
         cclose(bc);
-      }
+    }
     /*e: [[bindmount()]] if ismount */
     else{
         spec = nil;
@@ -1032,7 +1032,7 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
 /*e: function bindmount */
 
 /*s: syscall bind */
-// int bind(char *name, char *old, int flag);
+// int bind(char *to, char *from, int flag);
 long
 sysbind(ulong* arg)
 {

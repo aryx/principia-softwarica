@@ -1408,6 +1408,10 @@ Dev** devtab = nil;
 %  ...
 % }
 
+
+% ls -l /dev
+%  and will see the different device driver owner of the files
+
 \section{[[PCArch]] and [[arch]]}
 
 <<struct PCArch>>=
@@ -13102,6 +13106,10 @@ Chan* (*open)(Chan*, int);
 % that this file was not only accessed but should now be open for business.
 % walk() was the one who already returned the channel.
 
+% actually can return another channel! for instance cat /proc/#/text
+% is a redirect to the channel of the image of the binary! so open incref
+% and return another channel (and close the one passed in)
+
 
 <<[[namec()]] set genbuf from Elemlist e>>=
 /* place final element in genbuf for e.g. exec */
@@ -14451,10 +14459,6 @@ cclone(Chan *c)
 \section{[[syscreate()]]}
 
 
-<<[[Dev]] methods>>=
-void  (*create)(Chan*, char*, int, ulong);
-@
-
 <<syscall create>>=
 // int create(char *file, int omode, ulong perm);
 long
@@ -14495,6 +14499,15 @@ if(amode == Acreate){
 }
 @
 % not e.nerrors-- ?
+
+<<[[namec()]] locals>>=
+Chan *cnew;
+char *createerr;
+@
+
+<<[[Dev]] methods>>=
+void  (*create)(Chan*, char*, int, ulong);
+@
 
 <<[[namec()]] other cases>>=
 case Acreate:
@@ -14555,8 +14568,7 @@ case Acreate:
     m = nil;
     cnew = nil; /* is this assignment necessary? */
     if(!waserror()){    /* try create */
-        if(!sharppath && findmount(&cnew, &m, c->type, c->dev, c->qid))
-            cnew = createdir(cnew, m);
+        <<[[namec()]] Acreate case, if cnew is a mountpoint>>
         else{
             cnew = c;
             incref(cnew);
@@ -14581,7 +14593,7 @@ case Acreate:
         cclose(c);
         c = cnew;
         c->path = addelem(c->path, e.elems[e.nelems-1], nil);
-        break;
+        break; // switch
     }
 
     /* create failed */
@@ -14605,10 +14617,6 @@ case Acreate:
 @
 
 
-<<[[namec()]] locals>>=
-Chan *cnew;
-char *createerr;
-@
 
 
 
@@ -15027,7 +15035,7 @@ wstat(Chan *c, byte *d, int nd)
 % Mount point, Mount table, Namespace (per process mount table), Union mount
 % (and union directories)
 
-% before and after mount point, from, to. you go through a mount point.
+% before and after mount point, 'from', 'to'. you go through a mount point.
 % "being on the left part, right part of a mount point".
 
 % also in libc.h
@@ -15066,9 +15074,8 @@ struct Mhead
     <<[[Mhead]] extra fields>>
 };
 @
-% have Mhead and Mount instead of just Mount because of union mount.
-% but for now can just think as one structure, Mountpoint
-% the list is sorted? to honor the MBEFORE/MAFTER
+% have Mhead and Mount instead of just Mount because of union mount
+% but for now can just think as one structure: Mountpoint.
 % it's not a list<ref_owned<Mount>> actually, see putmhead which does not
 %  call mountfree(). The owner is the mhead in mnthash, but not any mhead.
 %  (but maybe Mount could have a Ref so it will be simpler)
@@ -15116,9 +15123,9 @@ putmhead(Mhead *m)
     }
 }
 @
-% ? cafebeef? for what? just to be sure if missed a ref then it will go haywire
+% cafebeef? for what? just to be sure if missed a ref then it will go haywire
 % quickly.
-% does not call mountfree(m->mount)? who owns the mount then??? closepgrp()
+% does not call mountfree(m->mount)? who owns the mount then? closepgrp()
 % the main pb is that should put a counter on Mount ...
 
 
@@ -15141,7 +15148,7 @@ struct Mount
 % ex of spec? for special mount requests?
 % they should put a Ref!
 
-% does not insert in any mh, for this you need to put it at
+% does not insert in any mh. for this you need to put it at
 % the right place, in the right order, and this is done by the caller
 <<constructor newmount>>=
 Mount*
@@ -15160,11 +15167,12 @@ newmount(Chan *to, int flag, char *spec)
     return m;
 }
 @ 
+% so have Mhead->from, and then Mhead->mount->to
 
 <<[[Mount]] extra fields>>=
 Mount*  next;
 @
-% union mount, but will see later
+% union mount, but will see later. Can aspectize? maybe too hard.
 
 <<destructor mountfree>>=
 void
@@ -15195,7 +15203,6 @@ struct Pgrp
     // hash<qid.path, list<ref<Mhead> (next = Mhead.next)>
     Mhead *mnthash[MNTHASH];
 
-    ulong pgrpid;
     <<[[Pgrp]] other fields>>
   
     // extra
@@ -15206,9 +15213,7 @@ struct Pgrp
     RWlock  ns;     /* Namespace n read/one write lock */
 };
 @ 
-% but would really like actually a hash from gqid (type+dev+qid) to Mhead
-% use of pgrpid? does not seem super used, could maybe remove it or aspectize
-% it with the code that actually uses it
+% but would really like actually a hash from gqid (type+dev+qid) to Mhead.
 
 <<[[Proc]] files fields>>=
 // ref_counted<pgrp>
@@ -15236,11 +15241,16 @@ Mhead*  hash;     /* Hash chain */
 
 
 
+<<[[Pgrp]] other fields>>=
+ulong pgrpid;
+@
+% use of pgrpid? does not seem super used, could maybe remove it or aspectize
+% it with the code that actually uses it
+
 <<global pgrpid>>=
 static Counter pgrpid;
 @ 
 % LP aspectize? remove? at least explain ... code using /dev/pgrpid?
-
 
 
 
@@ -15288,7 +15298,7 @@ closepgrp(Pgrp *p)
     free(p);
 }
 @ 
-% s/p/mt? p is for process ...
+% s/p/mt? p is for process ... or s/p/pg?
 % s/f/head, s/h/heads/
 % should really just do putmhead(f) that then handle itself mountfree(f->mount)
 
@@ -15296,9 +15306,10 @@ closepgrp(Pgrp *p)
 
 
 \section{Device path}
-% kind of bootstrapping the whole thing, usually so
-%  bind #xxx /dev/, which will lead the the creation of a Mhead and Mount
-% and later if mention /dev again then we will add in the Mhead
+
+% kind of bootstrapping the whole thing.
+% usually: bind #xxx /dev/, which will lead the the creation of a Mhead and Mount
+%  and later if mentions /dev again then we will add in the Mhead
 
 % alternative is hardcoded list of drivers and huge populated /dev/
 % via major/minor special file as in Linux
@@ -15308,12 +15319,14 @@ closepgrp(Pgrp *p)
 <<[[namec()]] locals>>=
 Rune r;
 @
+% devices use rune for codename of the device: e.g. '#c', '#I', etc
+% (better than char where it would then limit to 256 possible drivers)
 
 <<[[namec()]] if name[0] is a sharp>>=
 case '#':
     up->genbuf[0] = '\0';
     n = 0;
-    while(*name != '\0' && (*name != '/' || n < 2)){ // #/ is ok hence n < 2
+    while(*name != '\0' && (*name != '/' || n < 2)){ // "#/" is ok hence n < 2
         if(n >= sizeof(up->genbuf)-1)
             error(Efilename);
         up->genbuf[n++] = *name++;
@@ -15332,12 +15345,14 @@ case '#':
     break;
 @
 % so c is the starting point (instead of up->slash, or up->dot)
-% genbuf+n? for the deviceno?
+% genbuf+n? for the deviceno. chartorune modify &r and returns number of bytes
+% read to produce the rune, so genbuf+n = remaining chars in name
 
 <<[[Dev]] methods>>=
 Chan* (*attach)(char*);
 @
 % called in namec() and bindmount()
+% the char is a special string, kinda minor number, e.g. #ec, #e, (more?)
 
 
 
@@ -15349,19 +15364,19 @@ Chan* (*attach)(char*);
 
 
 <<syscall bind>>=
-// int bind(char *name, char *old, int flag);
+// int bind(char *to, char *from, int flag);
 long
 sysbind(ulong* arg)
 {
     return bindmount(false, -1, -1, (char*)arg[0], (char*)arg[1], arg[2], nil);
 }
 @
-% why use name and old? would be better src and dest no? old in the sense
+% was: // int bind(char *name, char *old, int flag);
+% but why use name and old? would be better src and dest no? old in the sense
 % that it's a channel that will be mount upon and so people mentioning
 % the path of old will actually be redirected to the new chan.
-% or use 'from' and 'to'?
 
-% bind src dest flag: find chan c0 of src, find chan c1 of dest, and adjust
+% bind to from flag: find chan c0 of to, find chan c1 of from, and adjust
 % up->pgrp adding in mnthash a new mhead (if none before) for gqid
 % of c1 and add Mount 'to' to be c0, and 'from' of mhead to be 'c1'
 <<[[bindmount()]] locals>>=
@@ -15510,7 +15525,6 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
         mountfree(mh->mount);
         mh->mount = nil;
     }
-
     if(flag & MCREATE)
         m->mflag |= MCREATE;
 
@@ -15522,8 +15536,7 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
         // when new was itself a mount point, can have union of mount again
         for(f = m; f->next; f = f->next)
             ;
-        f->next = mh->mount;
-
+        f->next = mh->mount; // =~ m->next = mh->mount for the most common case
         mh->mount = m;
     }
 
@@ -15785,7 +15798,7 @@ undomount(Chan *c, Path *path)
 
 % seen already list of Mount in Mhead with next field in Mount and MBEFORE, MAFTER.
 
-% subsection{union lookup (walk)}
+\subsection{Union walk}
 <<[[walk()]] locals>>=
 Mount *f;
 @
@@ -15809,6 +15822,8 @@ if(mh && !sharppath){
     }
 }
 @
+
+\subsection{[[->umh]]}
 
 
 <<[[namec()]] case Aopen, Acreate, handle mountpoint part2>>=
@@ -15992,6 +16007,11 @@ unionrewind(Chan *c)
 
 \subsection{[[MCREATE]]}
 
+<<[[namec()]] Acreate case, if cnew is a mountpoint>>=
+if(!sharppath && findmount(&cnew, &m, c->type, c->dev, c->qid))
+    cnew = createdir(cnew, m);
+@
+
 <<function createdir>>=
 /*
  * c is a mounted non-creatable directory.  find a creatable one.
@@ -16084,10 +16104,6 @@ if(umh != nil && umh->mount != nil){
 
 
 
-
-
-
-
 \section{Sandboxing}
 % can also do chroot with sysbind + noattach no?
 
@@ -16144,6 +16160,8 @@ if(flag & RFNOMNT)
 
 \section{[[sysmount()]]}
 
+%ex of cmd? with spec?
+
 <<syscall mount>>=
 // int mount(int fd, int afd, char *old, int flag, char *aname);
 long
@@ -16152,6 +16170,7 @@ sysmount(ulong* arg)
     return bindmount(true, arg[0], arg[1], nil, (char*)arg[2], arg[3], (char*)arg[4]);
 }
 @
+%// int mount(int fd, int afd, char *from, int flag, ???);
 
 
 <<[[bindmount()]] locals>>=
@@ -16164,6 +16183,7 @@ struct {
     int flags;
 } bogus;
 @
+% union for attach, attach should take a byte*, not char* really
 
 <<[[bindmount()]] if ismount>>=
 if(ismount){
@@ -16197,12 +16217,9 @@ if(ismount){
     if(ac)
         cclose(ac);
     cclose(bc);
-  }
+}
 @
-
-<<enum mount cases>>=
-MCACHE = 0x0010,  /* cache some data */
-@
+% poperror of spec?
 
 <<[[bindmount()]] if ismount free>>=
 if(ismount){
@@ -16212,11 +16229,15 @@ if(ismount){
 }
 @
 
+
+<<enum mount cases>>=
+MCACHE = 0x0010,  /* cache some data */
+@
+
+
 \section{[[sysumount()]]}
 
-<<[[Chan]] other fields>>=
-Chan* mchan;      /* channel to mounted server */
-@
+% ex of umount? can unbind #c from /dev for instance?
 
 <<syscall unmount>>=
 // int unmount(char *name, char *old);
@@ -16255,7 +16276,16 @@ sysunmount(ulong* arg)
 }
 @
 
+<<[[Chan]] other fields>>=
+Chan* mchan;      /* channel to mounted server */
+@
+% but who sets ->mchan? attach of 'M' device driver?
 
+
+<<[[cunmount()]] print error if mnt->umh>>=
+if(mnt->umh)    /* should not happen */
+    print("cunmount newp extra umh %p has %p\n", mnt, mnt->umh);
+@
 
 <<function cunmount>>=
 void
@@ -16265,8 +16295,7 @@ cunmount(Chan *mnt, Chan *mounted)
     Mhead *m, **l;
     Mount *f, **p;
 
-    if(mnt->umh)    /* should not happen */
-        print("cunmount newp extra umh %p has %p\n", mnt, mnt->umh);
+    <<[[cunmount()]] print error if mnt->umh>>
 
     /*
      * It _can_ happen that mounted->umh is non-nil, 
@@ -16287,13 +16316,13 @@ cunmount(Chan *mnt, Chan *mounted)
         l = &m->hash;
     }
 
-    if(m == 0){
+    if(m == nil){
         wunlock(&pg->ns);
         error(Eunmount);
     }
 
     wlock(&m->lock);
-    if(mounted == 0){
+    if(mounted == nil){
         *l = m->hash;
         wunlock(&pg->ns);
         mountfree(m->mount);
@@ -16310,7 +16339,7 @@ cunmount(Chan *mnt, Chan *mounted)
         if(eqchan(f->to, mounted, true) ||
           (f->to->mchan && eqchan(f->to->mchan, mounted, true))){
             *p = f->next;
-            f->next = 0;
+            f->next = nil;
             mountfree(f);
             if(m->mount == nil){
                 *l = m->hash;
@@ -16351,6 +16380,11 @@ static Counter mountid;
 // list<ref<Mount>> sorted list by mount->mountid
 Mount*  order;
 @
+
+<<[[Mount]] extra fields>>=
+Mount*  copy;
+@
+
 
 % used by pgrpcpy
 <<function pgrpinsert>>=
@@ -16423,22 +16457,12 @@ pgrpcpy(Pgrp *to, Pgrp *from)
 }
 @ 
 
-<<[[Mount]] extra fields>>=
-Mount*  copy;
-@
 
 
 
 \section{XTODO}
 
-
 <<[[chanfree()]] optional free>>=
-if(c->dirrock != nil){
-    free(c->dirrock);
-    c->dirrock = nil;
-    c->nrock = 0;
-    c->mrock = 0;
-}
 if(c->mux != nil){
     muxclose(c->mux);
     c->mux = nil;
@@ -16449,6 +16473,21 @@ if(c->mchan != nil){
 }
 @
 
+
+
+
+
+% ls -l /dev
+%  and will see the different device driver owner of the files
+
+<<[[chanfree()]] optional free>>=
+if(c->dirrock != nil){
+    free(c->dirrock);
+    c->dirrock = nil;
+    c->nrock = 0;
+    c->mrock = 0;
+}
+@
 
 
 <<[[Chan]] other fields>>=
@@ -29806,6 +29845,34 @@ proc_nexterror(void)
 @ 
 
 
+% different idioms:
+
+% RAII: finally
+% x = malloc();
+% if(waserror() {
+%   free(x);
+%   nexterror();
+% }
+% ...
+
+% try and swallow:
+% if(!waserror() {
+%   stuff_that_can_raise_error();
+%   poperror();
+% }
+% ...
+
+% try and catch
+% if(!waserror() {
+%   stuff_that_can_raise_error();
+%   poperror();
+% } else {
+%   free??
+% } 
+% ...
+
+
+
 \section{[[syserrstr()]]}
 
 <<[[Proc]] error managment fields>>=
@@ -30135,6 +30202,8 @@ extern  int utfnlen(char*, long);
 % unicode input from keyboard
 
 % see also Spec = 0xF800 in enum specialkey
+
+% chartorune() returns number of bytes actually read to produce the rune
 
 <<[[Kbscan]] other fields>>=
     bool collecting;

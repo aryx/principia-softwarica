@@ -413,12 +413,6 @@ chanfree(Chan *c)
         c->umc = nil;
     }
     /*x: [[chanfree()]] optional free */
-    if(c->dirrock != nil){
-        free(c->dirrock);
-        c->dirrock = nil;
-        c->nrock = 0;
-        c->mrock = 0;
-    }
     if(c->mux != nil){
         muxclose(c->mux);
         c->mux = nil;
@@ -426,6 +420,13 @@ chanfree(Chan *c)
     if(c->mchan != nil){
         cclose(c->mchan);
         c->mchan = nil;
+    }
+    /*x: [[chanfree()]] optional free */
+    if(c->dirrock != nil){
+        free(c->dirrock);
+        c->dirrock = nil;
+        c->nrock = 0;
+        c->mrock = 0;
     }
     /*e: [[chanfree()]] optional free */
 
@@ -727,7 +728,6 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
         mountfree(mh->mount);
         mh->mount = nil;
     }
-
     if(flag & MCREATE)
         m->mflag |= MCREATE;
 
@@ -739,8 +739,7 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
         // when new was itself a mount point, can have union of mount again
         for(f = m; f->next; f = f->next)
             ;
-        f->next = mh->mount;
-
+        f->next = mh->mount; // =~ m->next = mh->mount for the most common case
         mh->mount = m;
     }
 
@@ -758,8 +757,10 @@ cunmount(Chan *mnt, Chan *mounted)
     Mhead *m, **l;
     Mount *f, **p;
 
+    /*s: [[cunmount()]] print error if mnt->umh */
     if(mnt->umh)    /* should not happen */
         print("cunmount newp extra umh %p has %p\n", mnt, mnt->umh);
+    /*e: [[cunmount()]] print error if mnt->umh */
 
     /*
      * It _can_ happen that mounted->umh is non-nil, 
@@ -780,13 +781,13 @@ cunmount(Chan *mnt, Chan *mounted)
         l = &m->hash;
     }
 
-    if(m == 0){
+    if(m == nil){
         wunlock(&pg->ns);
         error(Eunmount);
     }
 
     wlock(&m->lock);
-    if(mounted == 0){
+    if(mounted == nil){
         *l = m->hash;
         wunlock(&pg->ns);
         mountfree(m->mount);
@@ -803,7 +804,7 @@ cunmount(Chan *mnt, Chan *mounted)
         if(eqchan(f->to, mounted, true) ||
           (f->to->mchan && eqchan(f->to->mchan, mounted, true))){
             *p = f->next;
-            f->next = 0;
+            f->next = nil;
             mountfree(f);
             if(m->mount == nil){
                 *l = m->hash;
@@ -1407,7 +1408,7 @@ namec(char *aname, int amode, int omode, ulong perm)
     case '#':
         up->genbuf[0] = '\0';
         n = 0;
-        while(*name != '\0' && (*name != '/' || n < 2)){ // #/ is ok hence n < 2
+        while(*name != '\0' && (*name != '/' || n < 2)){ // "#/" is ok hence n < 2
             if(n >= sizeof(up->genbuf)-1)
                 error(Efilename);
             up->genbuf[n++] = *name++;
@@ -1647,8 +1648,10 @@ namec(char *aname, int amode, int omode, ulong perm)
         m = nil;
         cnew = nil; /* is this assignment necessary? */
         if(!waserror()){    /* try create */
+            /*s: [[namec()]] Acreate case, if cnew is a mountpoint */
             if(!sharppath && findmount(&cnew, &m, c->type, c->dev, c->qid))
                 cnew = createdir(cnew, m);
+            /*e: [[namec()]] Acreate case, if cnew is a mountpoint */
             else{
                 cnew = c;
                 incref(cnew);
@@ -1679,7 +1682,7 @@ namec(char *aname, int amode, int omode, ulong perm)
             cclose(c);
             c = cnew;
             c->path = addelem(c->path, e.elems[e.nelems-1], nil);
-            break;
+            break; // switch
         }
 
         /* create failed */

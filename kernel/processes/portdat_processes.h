@@ -110,8 +110,9 @@ struct Pgrp
     // hash<qid.path, list<ref<Mhead> (next = Mhead.next)>
     Mhead *mnthash[MNTHASH];
 
-    ulong pgrpid;
     /*s: [[Pgrp]] other fields */
+    ulong pgrpid;
+    /*x: [[Pgrp]] other fields */
     bool noattach;
     /*e: [[Pgrp]] other fields */
   
