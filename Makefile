@@ -45,7 +45,7 @@ tags:
 graph2:
 	~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
 check2:
-	~/pfff/scheck -lang clang2 .
+	~/pfff/scheck -filter 3 -lang clang2 .
 
 #trace:
 #	mk clean

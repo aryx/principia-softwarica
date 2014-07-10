@@ -1,7 +1,6 @@
 /*s: portfns_buses.h */
 
 // devuart.c
-void    uartsetmouseputc(Uart*, int (*)(Queue*, int));
 int   uartstageoutput(Uart*);
 void    uartkick(void*);
 int   uartgetc(void);
@@ -9,6 +8,7 @@ int   uartgetc(void);
 void    uartputs(char*, int);
 void    uartrecv(Uart*, char);
 int   uartctl(Uart*, char*);
-void    uartmouse(Uart*, int (*)(Queue*, int), int);
+//void    uartmouse(Uart*, int (*)(Queue*, int), int);
+//void    uartsetmouseputc(Uart*, int (*)(Queue*, int));
 
 /*e: portfns_buses.h */
