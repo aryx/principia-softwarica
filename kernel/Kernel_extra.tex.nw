@@ -1498,50 +1498,7 @@ typedef struct Xhdr Xhdr;
 
 // backward dependencies breaker for non functional properties functions
 // (logging, security, error, profiling/timing)
-
-// console/devcons.c
-int (*print)(char*, ...) = 0;
-int (*iprint)(char*, ...) = 0;
-int (*pprint)(char *fmt, ...) = 0;
-
-void (*panic)(char*, ...) = 0;
-void (*_assert)(char *fmt) = 0;
-
-// process/386/trap.c
-void (*dumpstack)(void) = 0;
-// process/proc.c
-void (*dumpaproc)(Proc*) = 0;
-
-
-// process/proc.c
-void (*error)(char*) = 0;
-void (*nexterror)(void) = 0;
-
-void (*sched)(void) = 0;
-void (*ready)(Proc*) = 0;
-Proc* (*wakeup)(Rendez*) = 0;
-void (*sleep)(Rendez*, int(*)(void*), void*) = 0;
-void (*tsleep)(Rendez*, int (*)(void*), void*, ulong) = 0;
-
-Proc* (*proctab)(int) = 0;
-int (*postnote)(Proc*, int, char*, int) = 0;
-void (*pexit)(char*, bool) = 0;
-
-// files/chan.c
-void (*cclose)(Chan*);
-
-// init/main.c
-void (*exit)(int ispanic) = 0;
-
-// misc/386/devarch.c
-void (*coherence)(void) = 0;
-
-// misc/386/devarch.c
-uvlong (*fastticks)(uvlong*) = 0;
-
-// processes/386/i8253.c
-void (*delay)(int) = 0;
-void (*microdelay)(int) = 0;
+<<portfns.c backward deps breaker>>
 
 <<function returnfalse>>
 
@@ -1590,38 +1547,7 @@ void (*microdelay)(int) = 0;
 // int  cistrncmp(char*, char*, int);
 
 // portfns.c (mostly here just to remove some backward dependencies)
-// console/devcons.c
-int   (*iprint)(char*, ...);
-int   (*pprint)(char*, ...);
-void    (*panic)(char*, ...);
-void    (*_assert)(char*);
-// process/386/trap.c
-void    (*dumpstack)(void);
-// process/proc.c
-void    (*dumpaproc)(Proc*);
-// process/proc.c
-void    (*error)(char*);
-void    (*nexterror)(void);
-// process/proc.c
-void    (*sleep)(Rendez*, int(*)(void*), void*);
-void    (*tsleep)(Rendez*, int (*)(void*), void*, ulong);
-Proc*   (*wakeup)(Rendez*);
-void    (*sched)(void);
-void    (*ready)(Proc*);
-// process/proc.c
-Proc*   (*proctab)(int);
-int     (*postnote)(Proc*, int, char*, int);
-void    (*pexit)(char*, bool);
-// files/chan.c
-void    (*cclose)(Chan*);
-// init/main.c
-void    (*exit)(int);
-//misc/386/devarch.c
-void  (*coherence)(void);
-uvlong    (*fastticks)(uvlong*);
-// processes/386/i8253.c
-void    (*microdelay)(int);
-void    (*delay)(int);
+<<portfns_core.h backward deps breaker>>
 
 // portfns.c
 bool returnfalse(void*);
@@ -7041,36 +6967,7 @@ TEXT mul64fract(SB), $0
 
 \subsection*{[[init/386/main.c]]}
 
-\ifallcode
-<<main.c forward decl for backward dependencies>>=
-// part of a trick to remove some backward dependencies
-int devcons_print(char*, ...);
-int devcons_iprint(char*, ...);
-int devcons_pprint(char*, ...);
-void devcons_panic(char*, ...);
-void devcons__assert(char*);
-void trap_dumpstack(void);
-void proc_dumpaproc(Proc *p);
-void proc_error(char*);
-void proc_nexterror(void);
-void i8253_delay(int millisecs);
-void i8253_microdelay(int microsecs);
-void proc_sched(void);
-void proc_ready(Proc*);
-void proc_sleep(Rendez*, int(*)(void*), void*);
-void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
-Proc* proc_wakeup(Rendez*);
-void proc_pexit(char *exitstr, bool freemem);
-Proc* proc_proctab(int i);
-void main_exit(int ispanic);
-int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
-void nop(void);
-uvlong devarch_fastticks(uvlong *hz);
-void devarch_hook_ioalloc();
-void chan_cclose(Chan *c);
-int proc_postnote(Proc *p, int dolock, char *n, int flag);
-@ 
-\fi
+
 
 <<function options>>=
 static void
@@ -7270,58 +7167,6 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 @
 
 
-<<[[main()]] initial assignments for backward dependencies>>=
-// initial assignment made to avoid circular dependencies in codegraph
-print = devcons_print;
-iprint = devcons_iprint;
-pprint = devcons_pprint;
-
-panic = devcons_panic;
-_assert = devcons__assert;
-
-error = proc_error;
-nexterror = proc_nexterror;
-
-dumpstack = trap_dumpstack;
-dumpaproc = proc_dumpaproc;
-
-devtab = conf_devtab;
-
-delay = i8253_delay;
-microdelay = i8253_microdelay;
-
-wakeup = proc_wakeup;
-sched = proc_sched;
-ready = proc_ready;
-sleep = proc_sleep;
-tsleep = proc_tsleep;
-
-exit = main_exit;
-isaconfig = main_isaconfig;
-
-/*
- * On a uniprocessor, you'd think that coherence could be nop,
- * but it can't.  We still need a barrier when using coherence() in
- * device drivers.
- *
- * On VMware, it's safe (and a huge win) to set this to nop.
- * Aux/vmware does this via the #P/archctl file.
- */
-coherence = nop;
-
-fastticks = devarch_fastticks;
-
-cclose = chan_cclose;
-
-proctab = proc_proctab;
-postnote = proc_postnote;
-pexit = proc_pexit;
-
-hook_ioalloc = devarch_hook_ioalloc;
-@
-
-
-
 
 <<main.c>>=
 <<kernel basic includes>>
@@ -7340,7 +7185,8 @@ hook_ioalloc = devarch_hook_ioalloc;
 
 void bootargs(void*);
 
-<<main.c forward decl for backward dependencies>>
+// part of a trick to remove some backward dependencies
+<<main.c forward decl for backward deps>>
 
 // conf.c
 extern  Dev*  conf_devtab[];
@@ -19544,32 +19390,6 @@ uartdisable(Uart *p)
     iunlock(&uartalloc);
 }
 
-void
-uartmouse(Uart* p, int (*putc)(Queue*, int), int setb1200)
-{
-    qlock(p);
-    if(p->opens++ == 0 && uartenable(p) == nil){
-        qunlock(p);
-        error(Enodev);
-    }
-    if(setb1200)
-        uartctl(p, "b1200");
-    p->putc = putc;
-    p->special = 1;
-    qunlock(p);
-}
-
-void
-uartsetmouseputc(Uart* p, int (*putc)(Queue*, int))
-{
-    qlock(p);
-    if(p->opens == 0 || p->special == 0){
-        qunlock(p);
-        error(Enodev);
-    }
-    p->putc = putc;
-    qunlock(p);
-}
 
 static void
 setlength(int i)
@@ -20323,7 +20143,6 @@ extern  Uart* consuart;
 <<portfns_buses.h>>=
 
 // devuart.c
-void    uartsetmouseputc(Uart*, int (*)(Queue*, int));
 int   uartstageoutput(Uart*);
 void    uartkick(void*);
 int   uartgetc(void);
@@ -20331,7 +20150,8 @@ int   uartgetc(void);
 void    uartputs(char*, int);
 void    uartrecv(Uart*, char);
 int   uartctl(Uart*, char*);
-void    uartmouse(Uart*, int (*)(Queue*, int), int);
+//void    uartmouse(Uart*, int (*)(Queue*, int), int);
+//void    uartsetmouseputc(Uart*, int (*)(Queue*, int));
 
 @
 \fi

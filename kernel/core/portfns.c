@@ -10,7 +10,7 @@
 
 // backward dependencies breaker for non functional properties functions
 // (logging, security, error, profiling/timing)
-
+/*s: portfns.c backward deps breaker */
 // console/devcons.c
 int (*print)(char*, ...) = 0;
 int (*iprint)(char*, ...) = 0;
@@ -18,42 +18,43 @@ int (*pprint)(char *fmt, ...) = 0;
 
 void (*panic)(char*, ...) = 0;
 void (*_assert)(char *fmt) = 0;
-
+/*x: portfns.c backward deps breaker */
 // process/386/trap.c
 void (*dumpstack)(void) = 0;
+/*x: portfns.c backward deps breaker */
 // process/proc.c
 void (*dumpaproc)(Proc*) = 0;
-
-
+/*x: portfns.c backward deps breaker */
 // process/proc.c
 void (*error)(char*) = 0;
 void (*nexterror)(void) = 0;
-
+/*x: portfns.c backward deps breaker */
 void (*sched)(void) = 0;
 void (*ready)(Proc*) = 0;
 Proc* (*wakeup)(Rendez*) = 0;
 void (*sleep)(Rendez*, int(*)(void*), void*) = 0;
 void (*tsleep)(Rendez*, int (*)(void*), void*, ulong) = 0;
-
+/*x: portfns.c backward deps breaker */
 Proc* (*proctab)(int) = 0;
 int (*postnote)(Proc*, int, char*, int) = 0;
 void (*pexit)(char*, bool) = 0;
-
+/*x: portfns.c backward deps breaker */
 // files/chan.c
 void (*cclose)(Chan*);
-
+/*x: portfns.c backward deps breaker */
 // init/main.c
 void (*exit)(int ispanic) = 0;
-
+/*x: portfns.c backward deps breaker */
 // misc/386/devarch.c
 void (*coherence)(void) = 0;
-
+/*x: portfns.c backward deps breaker */
 // misc/386/devarch.c
 uvlong (*fastticks)(uvlong*) = 0;
-
+/*x: portfns.c backward deps breaker */
 // processes/386/i8253.c
 void (*delay)(int) = 0;
 void (*microdelay)(int) = 0;
+/*e: portfns.c backward deps breaker */
 
 /*s: function returnfalse */
 // usually used as default callback for sleep/tsleep

@@ -40,12 +40,13 @@ graph:
 	~/pfff/codegraph -derived_data -lang clang2 -build .
 tags:
 	~/pfff/codegraph -derived_data -lang clang2 -build .
-
 #todo? add libc, lib_networking, lib_memlayer, lib_memdraw, lib_draw, libmp?
 graph2:
 	~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
 check2:
 	~/pfff/scheck -filter 3 -lang clang2 .
+prolog2:
+	~/pfff/codequery -lang clang2 -build include/ kernel/
 
 #trace:
 #	mk clean

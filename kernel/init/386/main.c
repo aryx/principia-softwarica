@@ -22,34 +22,43 @@
 
 void bootargs(void*);
 
-/*s: main.c forward decl for backward dependencies */
 // part of a trick to remove some backward dependencies
+/*s: main.c forward decl for backward deps */
 int devcons_print(char*, ...);
 int devcons_iprint(char*, ...);
 int devcons_pprint(char*, ...);
 void devcons_panic(char*, ...);
 void devcons__assert(char*);
+/*x: main.c forward decl for backward deps */
 void trap_dumpstack(void);
 void proc_dumpaproc(Proc *p);
+/*x: main.c forward decl for backward deps */
 void proc_error(char*);
 void proc_nexterror(void);
+/*x: main.c forward decl for backward deps */
 void i8253_delay(int millisecs);
 void i8253_microdelay(int microsecs);
+/*x: main.c forward decl for backward deps */
 void proc_sched(void);
 void proc_ready(Proc*);
 void proc_sleep(Rendez*, int(*)(void*), void*);
 void proc_tsleep(Rendez *r, int (*fn)(void*), void *arg, ulong ms);
 Proc* proc_wakeup(Rendez*);
+/*x: main.c forward decl for backward deps */
 void proc_pexit(char *exitstr, bool freemem);
 Proc* proc_proctab(int i);
+int proc_postnote(Proc *p, int dolock, char *n, int flag);
+/*x: main.c forward decl for backward deps */
+void chan_cclose(Chan *c);
+/*x: main.c forward decl for backward deps */
 void main_exit(int ispanic);
+/*x: main.c forward decl for backward deps */
 int  main_isaconfig(char *class, int ctlrno, ISAConf *isa);
+/*x: main.c forward decl for backward deps */
 void nop(void);
 uvlong devarch_fastticks(uvlong *hz);
 void devarch_hook_ioalloc();
-void chan_cclose(Chan *c);
-int proc_postnote(Proc *p, int dolock, char *n, int flag);
-/*e: main.c forward decl for backward dependencies */
+/*e: main.c forward decl for backward deps */
 
 // conf.c
 extern  Dev*  conf_devtab[];
@@ -865,35 +874,35 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 void
 main(void)
 {
-    /*s: [[main()]] initial assignments for backward dependencies */
     // initial assignment made to avoid circular dependencies in codegraph
+    /*s: [[main()]] initial assignments for backward deps */
     print = devcons_print;
     iprint = devcons_iprint;
     pprint = devcons_pprint;
 
     panic = devcons_panic;
     _assert = devcons__assert;
-
+    /*x: [[main()]] initial assignments for backward deps */
     error = proc_error;
     nexterror = proc_nexterror;
-
+    /*x: [[main()]] initial assignments for backward deps */
     dumpstack = trap_dumpstack;
     dumpaproc = proc_dumpaproc;
-
+    /*x: [[main()]] initial assignments for backward deps */
     devtab = conf_devtab;
-
+    /*x: [[main()]] initial assignments for backward deps */
     delay = i8253_delay;
     microdelay = i8253_microdelay;
-
+    /*x: [[main()]] initial assignments for backward deps */
     wakeup = proc_wakeup;
     sched = proc_sched;
     ready = proc_ready;
     sleep = proc_sleep;
     tsleep = proc_tsleep;
-
+    /*x: [[main()]] initial assignments for backward deps */
     exit = main_exit;
     isaconfig = main_isaconfig;
-
+    /*x: [[main()]] initial assignments for backward deps */
     /*
      * On a uniprocessor, you'd think that coherence could be nop,
      * but it can't.  We still need a barrier when using coherence() in
@@ -903,17 +912,18 @@ main(void)
      * Aux/vmware does this via the #P/archctl file.
      */
     coherence = nop;
-
+    /*x: [[main()]] initial assignments for backward deps */
     fastticks = devarch_fastticks;
-
+    /*x: [[main()]] initial assignments for backward deps */
     cclose = chan_cclose;
-
+    /*x: [[main()]] initial assignments for backward deps */
     proctab = proc_proctab;
     postnote = proc_postnote;
     pexit = proc_pexit;
-
+    /*x: [[main()]] initial assignments for backward deps */
     hook_ioalloc = devarch_hook_ioalloc;
-    /*e: [[main()]] initial assignments for backward dependencies */
+    /*e: [[main()]] initial assignments for backward deps */
+
     cgapost(0);
 
     cpu0init(); // cpu0 initialization (calls cpuinit())
