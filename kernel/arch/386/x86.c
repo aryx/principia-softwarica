@@ -34,6 +34,7 @@ enum {              /* cpuid standard function codes */
 
 /*s: global x86intel */
 /* cpuid ax is 0x0ffMTFmS, where 0xffF is family, 0xMm is model */
+//@Scheck: not dead, used below
 static X86type x86intel[] =
 {
     { 4,    0,  22, "486DX", }, /* known chips */
@@ -99,6 +100,7 @@ static X86type x86intel[] =
  *  K6 3D   "AMD-K6(tm) 3D processor"
  *  K6 3D+  ?
  */
+//@Scheck: not dead, used below
 static X86type x86amd[] =
 {
     { 5,    0,  23, "AMD-K5", },    /* guesswork */
@@ -132,6 +134,7 @@ static X86type x86amd[] =
 /*
  * WinChip 240MHz
  */
+//@Scheck: not dead, used below
 static X86type x86winchip[] =
 {
     {5, 4,  23, "Winchip",},    /* guesswork */
@@ -146,6 +149,7 @@ static X86type x86winchip[] =
 /*
  * SiS 55x
  */
+//@Scheck: not dead, used below
 static X86type x86sis[] =
 {
     {5, 0,  23, "SiS 55x",},    /* guesswork */

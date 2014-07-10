@@ -269,46 +269,6 @@ struct PCMconftab
   ulong otherwait;
 };
 
-/* a card slot */
-struct PCMslot
-{
-  Lock;
-  int ref;
-
-  void  *cp;    /* controller for this slot */
-  long  memlen;   /* memory length */
-  uchar base;   /* index register base */
-  uchar slotno;   /* slot number */
-
-  /* status */
-  uchar special;  /* in use for a special device */
-  uchar already;  /* already inited */
-  uchar occupied;
-  uchar battery;
-  uchar wrprot;
-  uchar powered;
-  uchar configed;
-  uchar enabled;
-  uchar busy;
-
-  /* cis info */
-  ulong msec;   /* time of last slotinfo call */
-  char  verstr[512];  /* version string */
-  int ncfg;   /* number of configurations */
-  struct {
-    ushort  cpresent; /* config registers present */
-    ulong caddr;    /* relative address of config registers */
-  } cfg[8];
-  int nctab;    /* number of config table entries */
-  PCMconftab  ctab[8];
-  PCMconftab  *def; /* default conftab */
-
-  /* memory maps */
-  Lock  mlock;    /* lock down the maps */
-  int time;
-  PCMmap  mmap[4];  /* maps, last is always for the kernel */
-};
-
 /*s: io.h pragmas */
 #pragma varargck  type  "T" int
 #pragma varargck  type  "T" uint

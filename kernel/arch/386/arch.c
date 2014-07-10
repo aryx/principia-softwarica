@@ -21,7 +21,7 @@ void    (*fpsave)(ArchFPsave*);
 /*e: hook fprestore and fpsave */
 
 int (*_pcmspecial)(char*, ISAConf*);
-void (*_pcmspecialclose)(int);
+//void (*_pcmspecialclose)(int); // useful if use pccard device driver
 
 /*
  *  call either the pcmcia or pccard device setup

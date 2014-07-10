@@ -50,6 +50,7 @@ Segment* (*_globalsegattach)(Proc*, char*);
 /*s: segment.c forward decl */
 static void imagereclaim(void);
 static void imagechanreclaim(void);
+Segment* data2txt(Segment *s);
 /*e: segment.c forward decl */
 
 //*****************************************************************************

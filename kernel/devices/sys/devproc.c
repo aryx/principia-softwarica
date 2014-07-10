@@ -158,6 +158,7 @@ Cmdtab proccmd[] = {
 /* Segment type from portdat.h */
 /*s: global sname */
 // hash<enum<segtype, string>>
+//@Scheck: not dead
 static char *sname[]={ "Text", "Data", "Bss", "Stack",   "Shared", "Phys", };
 /*e: global sname */
 

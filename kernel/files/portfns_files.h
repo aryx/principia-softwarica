@@ -123,7 +123,7 @@ void    closeegrp(Egrp*);
 // mnt.c
 void    muxclose(Mnt*);
 void    mntfree(Mntrpc*);
-void    mntpntfree(Mnt*);
+//void    mntpntfree(Mnt*);
 
 // sysfile.c
 int   newfd(Chan*);

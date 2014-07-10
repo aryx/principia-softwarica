@@ -82,7 +82,7 @@ ulong   segattach(Proc*, ulong, char *, ulong, ulong);
 void    imageinit(void);
 KImage*   attachimage(int, Chan*, ulong, ulong);
 //Segment*  isoverlap(Proc*, ulong, int);
-Segment*  data2txt(Segment*);
+//Segment*  data2txt(Segment*);
 
 
 // sysfile.c

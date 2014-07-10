@@ -33,7 +33,6 @@ typedef struct Lock Lock;
 // was in io.h
 typedef struct Pcisiz Pcisiz;
 typedef struct Pcidev Pcidev;
-typedef struct PCMslot    PCMslot;
 typedef struct PCMconftab PCMconftab;
 
 // was in mp.h

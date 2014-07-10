@@ -207,7 +207,6 @@ struct Ilpriv
 /* state for query/dataquery messages */
 
 
-void	ilrcvmsg(Conv*, Block*);
 void	ilsendctl(Conv*, Ilhdr*, int, ulong, ulong, int);
 void	ilackq(Ilcb*, Block*);
 void	ilprocess(Conv*, Ilhdr*, Block*);
@@ -228,7 +227,6 @@ int	later(ulong, ulong, char*);
 void	ilreject(Fs*, Ilhdr*);
 void	illocalclose(Conv *c);
 	int 	ilcksum = 1;
-static 	int 	initseq = 25001;
 static	ulong	scalediv, scalemul;
 static	char	*etime = "connection timed out";
 
