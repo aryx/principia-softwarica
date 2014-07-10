@@ -38,7 +38,6 @@ char Econinuse[] = "connection in use";
 char Eintr[] = "interrupted";
 char Enomem[] = "kernel allocate failed";
 char Esoverlap[] = "segments overlap";
-char Emouseset[] = "mouse type already set";
 char Eshort[] = "i/o count too small";
 char Egreg[] = "jmk added reentrancy for threads";
 char Ebadspec[] = "bad attach specifier";

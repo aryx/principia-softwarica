@@ -233,41 +233,6 @@ enum
   SMBwordread,    /* sends address and cmd, recv's 2 bytes */
 };
 
-/*
- * PCMCIA support code.
- */
-
-/*
- * Map between ISA memory space and PCMCIA card memory space.
- */
-struct PCMmap {
-  ulong ca;     /* card address */
-  ulong cea;      /* card end address */
-  ulong isa;      /* ISA address */
-  int len;      /* length of the ISA area */
-  int attr;     /* attribute memory */
-  int ref;
-};
-
-/* configuration table entry */
-struct PCMconftab
-{
-  int index;
-  ushort  irqs;   /* legal irqs */
-  uchar irqtype;
-  uchar bit16;    /* true for 16 bit access */
-  struct {
-    ulong start;
-    ulong len;
-  } io[16];
-  int nio;
-  uchar vpp1;
-  uchar vpp2;
-  uchar memwait;
-  ulong maxwait;
-  ulong readywait;
-  ulong otherwait;
-};
 
 /*s: io.h pragmas */
 #pragma varargck  type  "T" int
