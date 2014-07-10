@@ -194,7 +194,7 @@ schedinit(void)     /* never returns */
  *  contains a copy of the guts of sched().
  */
 void
-proc_sched(void)
+sched(void)
 {
     Proc *p;
 

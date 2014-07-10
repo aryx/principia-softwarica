@@ -133,7 +133,7 @@ void  iofree(int);
 void  ioinit(void);
 int ioalloc(int, int, int, char*);
 //int ioreserve(int, int, int, char*);
-int (*isaconfig)(char*, int, ISAConf*);
+//int (*isaconfig)(char*, int, ISAConf*);
 void  kbdenable(void);
 void  kbdinit(void);
 /*s: function kmapinval */
