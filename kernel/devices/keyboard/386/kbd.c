@@ -331,9 +331,9 @@ struct Kbscan {
     /*x: [[Kbscan]] other fields */
     int buttons;
     /*x: [[Kbscan]] other fields */
-        bool collecting;
-        int nk;
-        Rune    kc[5];
+    bool collecting;
+    int nk;
+    Rune    kc[5];
     /*e: [[Kbscan]] other fields */
 };
 /*e: struct Kbscan */
