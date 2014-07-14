@@ -651,7 +651,7 @@ struct Proc
     /*x: [[Proc]] other fields */
     ulong alarm;    /* Time of call */
     /*x: [[Proc]] other fields */
-    // ref_counted<egrp>
+    // ref_counted<Egrp>
     Egrp  *egrp;    /* Environment group */
     /*x: [[Proc]] other fields */
     ulong procmode; /* proc device default file mode */

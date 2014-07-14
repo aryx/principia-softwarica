@@ -1292,8 +1292,8 @@ Dev fsdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 
-    .power    =    devpower,
-    .config   =    devconfig,
+//    .power    =    devpower,
+//    .config   =    devconfig,
 };
 /*e: global fsdevtab */
 /*e: devfs.c */

@@ -15,7 +15,7 @@ enum
 
 /*s: devenv.c forward decl */
 static Egrp *envgrp(Chan *c);
-static int  envwriteable(Chan *c);
+static bool envwriteable(Chan *c);
 /*e: devenv.c forward decl */
 
 static Egrp confegrp;   /* global environment group containing the kernel configuration */
@@ -47,13 +47,13 @@ envgen(Chan *c, char *name, Dirtab*, int, int s, DirEntry *dp)
 
     eg = envgrp(c);
     rlock(eg);
-    e = 0;
+    e = nil;
     if(name)
         e = envlookup(eg, name, -1);
     else if(s < eg->nent)
         e = eg->ent[s];
 
-    if(e == 0) {
+    if(e == nil) {
         runlock(eg);
         return -1;
     }
@@ -102,7 +102,7 @@ envopen(Chan *c, int omode)
 {
     Egrp *eg;
     Evalue *e;
-    int trunc;
+    bool trunc;
 
     eg = envgrp(c);
     if(c->qid.type & QTDIR) {
@@ -118,7 +118,7 @@ envopen(Chan *c, int omode)
         else
             rlock(eg);
         e = envlookup(eg, nil, c->qid.path);
-        if(e == 0) {
+        if(e == nil) {
             if(trunc)
                 wunlock(eg);
             else
@@ -128,7 +128,7 @@ envopen(Chan *c, int omode)
         if(trunc && e->value) {
             e->qid.vers++;
             free(e->value);
-            e->value = 0;
+            e->value = nil;
             e->len = 0;
         }
         if(trunc)
@@ -170,6 +170,7 @@ envcreate(Chan *c, char *name, int omode, ulong)
     e->name = smalloc(strlen(name)+1);
     strcpy(e->name, name);
 
+    // realloc
     if(eg->nent == eg->ment){
         eg->ment += 32;
         ent = smalloc(sizeof(eg->ent[0])*eg->ment);
@@ -204,7 +205,7 @@ envremove(Chan *c)
 
     eg = envgrp(c);
     wlock(eg);
-    e = 0;
+    e = nil;
     for(i=0; i<eg->nent; i++){
         if(eg->ent[i]->qid.path == c->qid.path){
             e = eg->ent[i];
@@ -215,7 +216,7 @@ envremove(Chan *c)
         }
     }
     wunlock(eg);
-    if(e == 0)
+    if(e == nil)
         error(Enonexist);
     free(e->name);
     if(e->value)
@@ -248,7 +249,7 @@ envread(Chan *c, void *a, long n, vlong off)
     eg = envgrp(c);
     rlock(eg);
     e = envlookup(eg, nil, c->qid.path);
-    if(e == 0) {
+    if(e == nil) {
         runlock(eg);
         error(Enonexist);
     }
@@ -268,7 +269,7 @@ envread(Chan *c, void *a, long n, vlong off)
 static long
 envwrite(Chan *c, void *a, long n, vlong off)
 {
-    char *s;
+    byte *s;
     ulong len;
     Egrp *eg;
     Evalue *e;
@@ -282,7 +283,7 @@ envwrite(Chan *c, void *a, long n, vlong off)
     eg = envgrp(c);
     wlock(eg);
     e = envlookup(eg, nil, c->qid.path);
-    if(e == 0) {
+    if(e == nil) {
         wunlock(eg);
         error(Enonexist);
     }
@@ -368,7 +369,7 @@ envgrp(Chan *c)
 /*e: function envgrp */
 
 /*s: function envwriteable */
-static int
+static bool
 envwriteable(Chan *c)
 {
     return iseve() || c->aux == nil;

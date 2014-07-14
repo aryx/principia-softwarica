@@ -332,10 +332,13 @@ struct Chan
 /*s: struct Evalue */
 struct Evalue
 {
+  // string
   char  *name;
-  char  *value;
+  // option<array<byte>, usually a string but can be something else
+  byte  *value;
+  // nelem(Evalue.value), 
   int len;
-  Evalue  *link;
+
   Qid qid;
 };
 /*e: struct Evalue */
@@ -343,9 +346,13 @@ struct Evalue
 /*s: struct Egrp */
 struct Egrp
 {
+  // array<ref_counted<Evalue>>
   Evalue  **ent;
+  // used entries, <= ment
   int nent;
-  int ment;
+  // nelem(Egrp.ent), malloc'ed entries
+  int ment; 
+
   ulong path; /* qid.path of next Evalue to be allocated */
   ulong vers; /* of Egrp */
 
@@ -403,10 +410,6 @@ struct Dev
     long  (*bwrite)(Chan*, Block*, ulong);
     /*x: [[Dev]] methods */
     void  (*shutdown)(void);
-    /*x: [[Dev]] methods */
-    int (*config)(int, char*, DevConf*);  /* returns nil on error */
-    /*x: [[Dev]] methods */
-    void  (*power)(bool);  /* power mgt: power(1) => on, power (0) => off */
     /*e: [[Dev]] methods */
 };
 /*e: struct Dev */

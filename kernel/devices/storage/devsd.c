@@ -1320,8 +1320,8 @@ Dev sddevtab = {
     .remove   =    devremove,
     .wstat    =    sdwstat,
 
-    .power    = devpower,
-    .config   = sdconfig,   /* probe; only called for pcmcia-like devices */
+//    .power    = devpower,
+//    .config   = sdconfig,   /* probe; only called for pcmcia-like devices */
 };
 /*e: global sddevtab */
 

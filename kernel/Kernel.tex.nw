@@ -549,6 +549,7 @@ struct Ureg
 
 % Some coding conventions: xxxp -> pointer on xxx, so cp is really
 % a ref pointer to a chang, mp = ref pointer to a mount (head)
+% nx, x = "new" x
 
 \section{Code organization}
 % codemap and codegraph screenshot?
@@ -1333,6 +1334,7 @@ char* getconf(char *name)
 }
 @
 
+% see also confegrp
 
 \section{[[Cpu]] and [[cpu]]}
 
@@ -3226,6 +3228,8 @@ malloc(ulong size)
 }
 @
 
+% note that don't need to precise the size here! because the size is stored
+% in section before the returned pointer in malloc
 <<function free>>=
 void
 free(kern_addr3 v)
@@ -24970,10 +24974,13 @@ ncmdfield(char *p, int n)
 <<struct Evalue>>=
 struct Evalue
 {
+  // string
   char  *name;
-  char  *value;
+  // option<array<byte>, usually a string but can be something else
+  byte  *value;
+  // nelem(Evalue.value), 
   int len;
-  Evalue  *link;
+
   Qid qid;
 };
 @
@@ -24982,9 +24989,13 @@ struct Evalue
 <<struct Egrp>>=
 struct Egrp
 {
+  // array<ref_counted<Evalue>>
   Evalue  **ent;
+  // used entries, <= ment
   int nent;
-  int ment;
+  // nelem(Egrp.ent), malloc'ed entries
+  int ment; 
+
   ulong path; /* qid.path of next Evalue to be allocated */
   ulong vers; /* of Egrp */
 
@@ -24995,7 +25006,7 @@ struct Egrp
 @
 
 <<[[Proc]] other fields>>=
-// ref_counted<egrp>
+// ref_counted<Egrp>
 Egrp  *egrp;    /* Environment group */
 @
 
@@ -25020,10 +25031,41 @@ closeegrp(Egrp *eg)
 }
 @
 
+<<function envcpy>>=
+void
+envcpy(Egrp *to, Egrp *from)
+{
+    int i;
+    Evalue *ne, *e;
+
+    rlock(from);
+    to->ment = (from->nent+31)&~31;
+    to->ent = smalloc(to->ment*sizeof(to->ent[0]));
+    for(i=0; i<from->nent; i++){
+        e = from->ent[i];
+        ne = smalloc(sizeof(Evalue));
+        ne->name = smalloc(strlen(e->name)+1);
+        strcpy(ne->name, e->name);
+        if(e->value){
+            ne->value = smalloc(e->len);
+            memmove(ne->value, e->value, e->len);
+            ne->len = e->len;
+        }
+        ne->qid.path = ++to->path;
+        to->ent[i] = ne;
+    }
+    to->nent = from->nent;
+    runlock(from);
+}
+@
+
+% could <<[[Chan]] union other fields>>=
+%  Egrp *egrp; // for chan of devenv
+%
+
 \subsection{[[/env/]]}
 
 %#e
-
 <<function ksetenv>>=
 /*
  *  to let the kernel set environment variables
@@ -25040,8 +25082,33 @@ ksetenv(char *ename, char *eval, bool conf)
     cclose(c);
 }
 @
+% no waserror?
 
 
+<<global envdevtab>>=
+Dev envdevtab = {
+    .dc       =    'e',
+    .name     =    "env",
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    envattach,
+    .walk     =    envwalk,
+    .stat     =    envstat,
+    .open     =    envopen,
+    .create   =    envcreate,
+    .close    =    envclose,
+    .read     =    envread,
+    .bread    =    devbread,
+    .write    =    envwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    envremove,
+    .wstat    =    devwstat,
+};
+@
+
+% put LP split of devenv.c here
 
 \section{[[/proc/]]}
 %#p
