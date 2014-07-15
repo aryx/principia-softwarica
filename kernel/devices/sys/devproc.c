@@ -751,6 +751,7 @@ eventsavailable(void *)
 static long
 procread(Chan *c, void *va, long n, vlong off)
 {
+    /*s: [[procread()]] locals */
     /* NSEG*32 was too small for worst cases */
     char *a, flag[10], *sps, *srv, statbuf[NSEG*64];
     int i, j, m, navail, ne, pid, rsize;
@@ -763,6 +764,7 @@ procread(Chan *c, void *va, long n, vlong off)
     Segment *sg, *s;
     Ureg kur;
     Waitq *wq;
+    /*e: [[procread()]] locals */
     
     a = va;
     offset = off;
@@ -799,6 +801,57 @@ procread(Chan *c, void *va, long n, vlong off)
         error(Eprocdied);
 
     switch(QID(c->qid)){
+
+    /*s: [[procread()]] cases */
+    case Qmem:
+        if(offset < KZERO)
+            return procctlmemio(p, offset, n, va, true);
+
+        if(!iseve())
+            error(Eperm);
+
+        // why allowing read access to kernel code or kernel memory? 
+        // who is using that?
+
+        /* validate kernel addresses */
+        if(offset < (kern_addr)end) {
+            if(offset+n > (kern_addr)end)
+                n = (kern_addr)end - offset;
+            memmove(a, (char*)offset, n);
+            return n;
+        }
+        for(i=0; i<nelem(conf.mem); i++){
+            cm = &conf.mem[i];
+            /* klimit-1 because klimit might be zero! */
+            if(cm->kbase <= offset && offset <= cm->klimit-1){
+                if(offset+n >= cm->klimit-1)
+                    n = cm->klimit - offset;
+                memmove(a, (char*)offset, n);
+                return n;
+            }
+        }
+        error(Ebadarg);
+    /*x: [[procread()]] cases */
+    case Qsyscall:
+        if(!p->syscalltrace)
+            return 0;
+        n = readstr(offset, a, n, p->syscalltrace);
+        return n;
+    /*x: [[procread()]] cases */
+    case Qprofile:
+        s = p->seg[TSEG];
+        if(s == nil || s->profile == nil)
+            error("profile is off");
+        i = (s->top-s->base)>>LRESPROF;
+        i *= sizeof(*s->profile);
+        if(offset >= i)
+            return 0;
+        if(offset+n > i)
+            n = i - offset;
+        memmove(a, ((char*)s->profile)+offset, n);
+        return n;
+    /*e: [[procread()]] cases */
+
     case Qargs:
         qlock(&p->debug);
         j = procargs(p, up->genbuf, sizeof up->genbuf);
@@ -810,59 +863,6 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, &up->genbuf[offset], n);
         return n;
 
-    /*s: [[procread()]] Qsyscall case */
-        case Qsyscall:
-            if(!p->syscalltrace)
-                return 0;
-            n = readstr(offset, a, n, p->syscalltrace);
-            return n;
-    /*e: [[procread()]] Qsyscall case */
-
-    /*s: [[procread()]] Qmem case */
-        case Qmem:
-            if(offset < KZERO)
-                return procctlmemio(p, offset, n, va, true);
-
-            if(!iseve())
-                error(Eperm);
-
-            // why allowing read access to kernel code or kernel memory? 
-            // who is using that?
-
-            /* validate kernel addresses */
-            if(offset < (kern_addr)end) {
-                if(offset+n > (kern_addr)end)
-                    n = (kern_addr)end - offset;
-                memmove(a, (char*)offset, n);
-                return n;
-            }
-            for(i=0; i<nelem(conf.mem); i++){
-                cm = &conf.mem[i];
-                /* klimit-1 because klimit might be zero! */
-                if(cm->kbase <= offset && offset <= cm->klimit-1){
-                    if(offset+n >= cm->klimit-1)
-                        n = cm->klimit - offset;
-                    memmove(a, (char*)offset, n);
-                    return n;
-                }
-            }
-            error(Ebadarg);
-    /*e: [[procread()]] Qmem case */
-
-    /*s: [[procread()]] Qprofile case */
-        case Qprofile:
-            s = p->seg[TSEG];
-            if(s == nil || s->profile == nil)
-                error("profile is off");
-            i = (s->top-s->base)>>LRESPROF;
-            i *= sizeof(*s->profile);
-            if(offset >= i)
-                return 0;
-            if(offset+n > i)
-                n = i - offset;
-            memmove(a, ((char*)s->profile)+offset, n);
-            return n;
-    /*e: [[procread()]] Qprofile case */
 
     case Qnote:
         qlock(&p->debug);
@@ -980,27 +980,27 @@ procread(Chan *c, void *va, long n, vlong off)
         return n;
 
     /*s: [[procread()]] Qsegment case */
-        case Qsegment:
-            j = 0;
-            for(i = 0; i < NSEG; i++) {
-                sg = p->seg[i];
-                if(sg == nil)
-                    continue;
-                j += snprint(statbuf+j, sizeof statbuf - j,
-                    "%-6s %c%c %.8lux %.8lux %4ld\n",
-                    sname[sg->type&SG_TYPE],
-                    sg->type&SG_RONLY ? 'R' : ' ',
-                    sg->profile ? 'P' : ' ',
-                    sg->base, sg->top, sg->ref);
-            }
-            if(offset >= j)
-                return 0;
-            if(offset+n > j)
-                n = j-offset;
-            if(n == 0 && offset == 0)
-                exhausted("segments");
-            memmove(a, &statbuf[offset], n);
-            return n;
+    case Qsegment:
+        j = 0;
+        for(i = 0; i < NSEG; i++) {
+            sg = p->seg[i];
+            if(sg == nil)
+                continue;
+            j += snprint(statbuf+j, sizeof statbuf - j,
+                "%-6s %c%c %.8lux %.8lux %4ld\n",
+                sname[sg->type&SG_TYPE],
+                sg->type&SG_RONLY ? 'R' : ' ',
+                sg->profile ? 'P' : ' ',
+                sg->base, sg->top, sg->ref);
+        }
+        if(offset >= j)
+            return 0;
+        if(offset+n > j)
+            n = j-offset;
+        if(n == 0 && offset == 0)
+            exhausted("segments");
+        memmove(a, &statbuf[offset], n);
+        return n;
     /*e: [[procread()]] Qsegment case */
 
     case Qwait:
