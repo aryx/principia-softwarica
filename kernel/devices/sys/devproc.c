@@ -15,7 +15,7 @@
 /*s: struct Mntwalk */
 struct Mntwalk              /* state for /proc/#/ns */
 {
-    int cddone;
+    bool cddone;
     Mhead*  mh;
     Mount*  cm;
 };
@@ -436,6 +436,14 @@ procopen(Chan *c, int omode)
     omode = openmode(omode);
 
     switch(QID(c->qid)){
+
+    /*s: [[procopen()]] cases */
+    case Qns:
+        if(omode != OREAD)
+            error(Eperm);
+        c->aux = malloc(sizeof(Mntwalk));
+        break;
+    /*e: [[procopen()]] cases */
     case Qtext:
         if(omode != OREAD)
             error(Eperm);
@@ -477,11 +485,6 @@ procopen(Chan *c, int omode)
         nonone(p);
         break;
 
-    case Qns:
-        if(omode != OREAD)
-            error(Eperm);
-        c->aux = malloc(sizeof(Mntwalk));
-        break;
 
     case Qnotepg:
         nonone(p);
@@ -684,9 +687,10 @@ procclose(Chan * c)
             unlock(&tlock);
         }
     /*e: [[procclose()]] Qtrace if */
-
-    if(QID(c->qid) == Qns && c->aux != 0)
+    /*s: [[procclose()]] hooks */
+    if(QID(c->qid) == Qns && c->aux != nil)
         free(c->aux);
+    /*e: [[procclose()]] hooks */
 }
 /*e: method procclose */
 
@@ -752,14 +756,16 @@ static long
 procread(Chan *c, void *va, long n, vlong off)
 {
     /*s: [[procread()]] locals */
+    Mntwalk *mw;
+    char flag[10];
+    /*x: [[procread()]] locals */
     /* NSEG*32 was too small for worst cases */
-    char *a, flag[10], *sps, *srv, statbuf[NSEG*64];
+    char *a, *sps, *srv, statbuf[NSEG*64];
     int i, j, m, navail, ne, pid, rsize;
     long l;
     byte *rptr;
     ulong offset;
     Confmem *cm;
-    Mntwalk *mw;
     Proc *p;
     Segment *sg, *s;
     Ureg kur;
@@ -796,13 +802,76 @@ procread(Chan *c, void *va, long n, vlong off)
     /*e: [[procread()]] Qtrace if */
 
     p = proctab(SLOT(c->qid));
-
     if(p->pid != PID(c->qid))
         error(Eprocdied);
 
     switch(QID(c->qid)){
 
     /*s: [[procread()]] cases */
+    case Qsegment:
+        j = 0;
+        for(i = 0; i < NSEG; i++) {
+            sg = p->seg[i];
+            if(sg == nil)
+                continue;
+            j += snprint(statbuf+j, sizeof statbuf - j,
+                "%-6s %c%c %.8lux %.8lux %4ld\n",
+                sname[sg->type&SG_TYPE],
+                sg->type&SG_RONLY ? 'R' : ' ',
+                sg->profile ? 'P' : ' ',
+                sg->base, sg->top, sg->ref);
+        }
+        if(offset >= j)
+            return 0;
+        if(offset+n > j)
+            n = j-offset;
+        if(n == 0 && offset == 0)
+            exhausted("segments");
+        memmove(a, &statbuf[offset], n);
+        return n;
+    /*x: [[procread()]] cases */
+    case Qns:
+        qlock(&p->debug);
+        if(waserror()){
+            qunlock(&p->debug);
+            nexterror();
+        }
+        if(p->pgrp == nil || p->pid != PID(c->qid))
+            error(Eprocdied);
+
+        mw = c->aux;
+        if(mw == nil)
+            error(Enomem);
+        if(mw->cddone){
+            qunlock(&p->debug);
+            poperror();
+            return 0;
+        }
+
+        mntscan(mw, p);
+
+        if(mw->mh == nil){
+            mw->cddone = true;
+            i = snprint(a, n, "cd %s\n", p->dot->path->s);
+            qunlock(&p->debug);
+            poperror();
+            return i;
+        }
+
+        int2flag(mw->cm->mflag, flag);
+        if(strcmp(mw->cm->to->path->s, "#M") == 0){
+            srv = srvname(mw->cm->to->mchan);
+            i = snprint(a, n, "mount %s %s %s %s\n", flag,
+                srv==nil? mw->cm->to->mchan->path->s : srv,
+                mw->mh->from->path->s, mw->cm->spec? mw->cm->spec : "");
+            free(srv);
+        }else
+            i = snprint(a, n, "bind %s %s %s\n", flag,
+                mw->cm->to->path->s, mw->mh->from->path->s);
+        qunlock(&p->debug);
+        poperror();
+        return i;
+    /*x: [[procread()]] cases */
     case Qmem:
         if(offset < KZERO)
             return procctlmemio(p, offset, n, va, true);
@@ -979,30 +1048,6 @@ procread(Chan *c, void *va, long n, vlong off)
         memmove(a, statbuf+offset, n);
         return n;
 
-    /*s: [[procread()]] Qsegment case */
-    case Qsegment:
-        j = 0;
-        for(i = 0; i < NSEG; i++) {
-            sg = p->seg[i];
-            if(sg == nil)
-                continue;
-            j += snprint(statbuf+j, sizeof statbuf - j,
-                "%-6s %c%c %.8lux %.8lux %4ld\n",
-                sname[sg->type&SG_TYPE],
-                sg->type&SG_RONLY ? 'R' : ' ',
-                sg->profile ? 'P' : ' ',
-                sg->base, sg->top, sg->ref);
-        }
-        if(offset >= j)
-            return 0;
-        if(offset+n > j)
-            n = j-offset;
-        if(n == 0 && offset == 0)
-            exhausted("segments");
-        memmove(a, &statbuf[offset], n);
-        return n;
-    /*e: [[procread()]] Qsegment case */
-
     case Qwait:
         if(!canqlock(&p->qwaitr))
             error(Einuse);
@@ -1041,43 +1086,6 @@ procread(Chan *c, void *va, long n, vlong off)
         free(wq);
         return n;
 
-    case Qns:
-        qlock(&p->debug);
-        if(waserror()){
-            qunlock(&p->debug);
-            nexterror();
-        }
-        if(p->pgrp == nil || p->pid != PID(c->qid))
-            error(Eprocdied);
-        mw = c->aux;
-        if(mw == nil)
-            error(Enomem);
-        if(mw->cddone){
-            qunlock(&p->debug);
-            poperror();
-            return 0;
-        }
-        mntscan(mw, p);
-        if(mw->mh == 0){
-            mw->cddone = 1;
-            i = snprint(a, n, "cd %s\n", p->dot->path->s);
-            qunlock(&p->debug);
-            poperror();
-            return i;
-        }
-        int2flag(mw->cm->mflag, flag);
-        if(strcmp(mw->cm->to->path->s, "#M") == 0){
-            srv = srvname(mw->cm->to->mchan);
-            i = snprint(a, n, "mount %s %s %s %s\n", flag,
-                srv==nil? mw->cm->to->mchan->path->s : srv,
-                mw->mh->from->path->s, mw->cm->spec? mw->cm->spec : "");
-            free(srv);
-        }else
-            i = snprint(a, n, "bind %s %s %s\n", flag,
-                mw->cm->to->path->s, mw->mh->from->path->s);
-        qunlock(&p->debug);
-        poperror();
-        return i;
 
     case Qnoteid:
         return readnum(offset, va, n, p->noteid, NUMSIZE);
@@ -1096,13 +1104,14 @@ mntscan(Mntwalk *mw, Proc *p)
     Pgrp *pg;
     Mount *t;
     Mhead *f;
-    int nxt, i;
+    int i;
+    bool nxt;
     ulong last, bestmid;
 
     pg = p->pgrp;
     rlock(&pg->ns);
 
-    nxt = 0;
+    nxt = false;
     bestmid = ~0;
 
     last = 0;
@@ -1112,18 +1121,18 @@ mntscan(Mntwalk *mw, Proc *p)
     for(i = 0; i < MNTHASH; i++) {
         for(f = pg->mnthash[i]; f; f = f->hash) {
             for(t = f->mount; t; t = t->next) {
-                if(mw->mh == 0 ||
+                if(mw->mh == nil ||
                   (t->mountid > last && t->mountid < bestmid)) {
                     mw->cm = t;
                     mw->mh = f;
                     bestmid = mw->cm->mountid;
-                    nxt = 1;
+                    nxt = true;
                 }
             }
         }
     }
-    if(nxt == 0)
-        mw->mh = 0;
+    if(nxt == false)
+        mw->mh = nil;
 
     runlock(&pg->ns);
 }
@@ -1165,7 +1174,6 @@ procwrite(Chan *c, void *va, long n, vlong off)
         procctlreq(p, va, n);
         break;
 
-
     case Qargs:
         if(n == 0)
             error(Eshort);
@@ -1204,7 +1212,6 @@ procwrite(Chan *c, void *va, long n, vlong off)
             memmove((uchar*)&p->fpsave+offset, va, n);
             break;
     /*e: [[procwrite]] Qfpregs case */
-
 
     case Qnote:
         if(p->kp)
@@ -1485,9 +1492,9 @@ procctlreq(Proc *p, char *va, int n)
     /*e: [[procctlreq()]] CMnoswap case */
 
     /*s: [[procctlreq()]] CMprivate case */
-        case CMprivate:
-            p->privatemem = true;
-            break;
+    case CMprivate:
+        p->privatemem = true;
+        break;
     /*e: [[procctlreq()]] CMprivate case */
 
     /*s: [[procctlreq()]] CMhang case */
