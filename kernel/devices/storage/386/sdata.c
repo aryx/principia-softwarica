@@ -2146,42 +2146,42 @@ atapnp(void)
         }
     }
 
-if(0){
-    int port;
-    ISAConf isa;
-
-    /*
-     * Hack for PCMCIA drives.
-     * This will be tidied once we figure out how the whole
-     * removeable device thing is going to work.
-     */
-    memset(&isa, 0, sizeof(isa));
-    isa.port = 0x180;       /* change this for your machine */
-    isa.irq = 11;           /* change this for your machine */
-
-    port = isa.port+0x0C;
-    channel = pcmspecial("MK2001MPL", &isa);
-    if(channel == -1)
-        channel = pcmspecial("SunDisk", &isa);
-    if(channel == -1){
-        isa.irq = 10;
-        channel = pcmspecial("CF", &isa);
-    }
-    if(channel == -1){
-        isa.irq = 10;
-        channel = pcmspecial("OLYMPUS", &isa);
-    }
-    if(channel == -1){
-        port = isa.port+0x204;
-        channel = pcmspecial("ATA/ATAPI", &isa);
-    }
-    if(channel >= 0 && (sdev = ataprobe(isa.port, port, isa.irq)) != nil){
-        if(head != nil)
-            tail->next = sdev;
-        else
-            head = sdev;
-    }
-}
+//if(0){
+//    int port;
+//    ISAConf isa;
+//
+//    /*
+//     * Hack for PCMCIA drives.
+//     * This will be tidied once we figure out how the whole
+//     * removeable device thing is going to work.
+//     */
+//    memset(&isa, 0, sizeof(isa));
+//    isa.port = 0x180;       /* change this for your machine */
+//    isa.irq = 11;           /* change this for your machine */
+//
+//    port = isa.port+0x0C;
+//    channel = pcmspecial("MK2001MPL", &isa);
+//    if(channel == -1)
+//        channel = pcmspecial("SunDisk", &isa);
+//    if(channel == -1){
+//        isa.irq = 10;
+//        channel = pcmspecial("CF", &isa);
+//    }
+//    if(channel == -1){
+//        isa.irq = 10;
+//        channel = pcmspecial("OLYMPUS", &isa);
+//    }
+//    if(channel == -1){
+//        port = isa.port+0x204;
+//        channel = pcmspecial("ATA/ATAPI", &isa);
+//    }
+//    if(channel >= 0 && (sdev = ataprobe(isa.port, port, isa.irq)) != nil){
+//        if(head != nil)
+//            tail->next = sdev;
+//        else
+//            head = sdev;
+//    }
+//}
     return head;
 }
 

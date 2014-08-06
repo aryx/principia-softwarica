@@ -75,7 +75,7 @@ padblock(Block *bp, int size)
     int n;
     Block *nbp;
 
-    QDEBUG checkb(bp, "padblock 1");
+//    QDEBUG checkb(bp, "padblock 1");
     if(size >= 0){
         if(bp->rp - bp->base >= size){
             bp->rp -= size;
@@ -109,7 +109,7 @@ padblock(Block *bp, int size)
         nbp->wp += n;
         freeb(bp);
     }
-    QDEBUG checkb(nbp, "padblock 1");
+//    QDEBUG checkb(nbp, "padblock 1");
     return nbp;
 }
 /*e: function padblock */
@@ -172,7 +172,7 @@ concatblock(Block *bp)
     }
     concatblockcnt += BLEN(nb);
     freeblist(bp);
-    QDEBUG checkb(nb, "concatblock 1");
+//    QDEBUG checkb(nb, "concatblock 1");
     return nb;
 }
 /*e: function concatblock */
@@ -215,7 +215,7 @@ pullupblock(Block *bp, int n)
             pullupblockcnt++;
             bp->wp += n;
             nbp->rp += n;
-            QDEBUG checkb(bp, "pullupblock 1");
+//            QDEBUG checkb(bp, "pullupblock 1");
             return bp;
         } else {
             /* shouldn't happen but why crash if it does */
@@ -232,7 +232,7 @@ pullupblock(Block *bp, int n)
             freeb(nbp);
             n -= i;
             if(n == 0){
-                QDEBUG checkb(bp, "pullupblock 2");
+//                QDEBUG checkb(bp, "pullupblock 2");
                 return bp;
             }
         }
@@ -271,7 +271,7 @@ trimblock(Block *bp, int offset, int len)
     ulong l;
     Block *nb, *startb;
 
-    QDEBUG checkb(bp, "trimblock 1");
+//    QDEBUG checkb(bp, "trimblock 1");
     if(blocklen(bp) < offset+len) {
         freeblist(bp);
         return nil;
@@ -314,7 +314,7 @@ copyblock(Block *bp, int count)
     int l;
     Block *nbp;
 
-    QDEBUG checkb(bp, "copyblock 0");
+//    QDEBUG checkb(bp, "copyblock 0");
     nbp = allocb(count);
     for(; count > 0 && bp != 0; bp = bp->next){
         l = BLEN(bp);
@@ -329,7 +329,7 @@ copyblock(Block *bp, int count)
         nbp->wp += count;
     }
     copyblockcnt++;
-    QDEBUG checkb(nbp, "copyblock 1");
+//    QDEBUG checkb(nbp, "copyblock 1");
 
     return nbp;
 }
@@ -350,7 +350,7 @@ adjustblock(Block* bp, int len)
     if(bp->rp+len > bp->lim){
         nbp = copyblock(bp, len);
         freeblist(bp);
-        QDEBUG checkb(nbp, "adjustblock 1");
+//        QDEBUG checkb(nbp, "adjustblock 1");
 
         return nbp;
     }
@@ -359,7 +359,7 @@ adjustblock(Block* bp, int len)
     if(len > n)
         memset(bp->wp, 0, len-n);
     bp->wp = bp->rp+len;
-    QDEBUG checkb(bp, "adjustblock 2");
+//    QDEBUG checkb(bp, "adjustblock 2");
 
     return bp;
 }
@@ -389,7 +389,7 @@ pullblock(Block **bph, int count)
         bytes += n;
         count -= n;
         bp->rp += n;
-        QDEBUG checkb(bp, "pullblock ");
+//        QDEBUG checkb(bp, "pullblock ");
         if(BLEN(bp) == 0) {
             *bph = bp->next;
             bp->next = nil;
@@ -423,7 +423,7 @@ qget(Queue *q)
     b->next = 0;
     q->len -= BALLOC(b);
     q->dlen -= BLEN(b);
-    QDEBUG checkb(b, "qget");
+//    QDEBUG checkb(b, "qget");
 
     /* if writer flow controlled, restart */
     if((q->state & Qflow) && q->len < q->limit/2){
@@ -456,7 +456,7 @@ qdiscard(Queue *q, int len)
         b = q->bfirst;
         if(b == nil)
             break;
-        QDEBUG checkb(b, "qdiscard");
+//        QDEBUG checkb(b, "qdiscard");
         n = BLEN(b);
         if(n <= len - sofar){
             q->bfirst = b->next;
@@ -518,7 +518,7 @@ qconsume(Queue *q, void *vp, int len)
             iunlock(q);
             return -1;
         }
-        QDEBUG checkb(b, "qconsume 1");
+//        QDEBUG checkb(b, "qconsume 1");
 
         n = BLEN(b);
         if(n > 0)
@@ -597,10 +597,10 @@ qpass(Queue *q, Block *b)
         q->bfirst = b;
     len = BALLOC(b);
     dlen = BLEN(b);
-    QDEBUG checkb(b, "qpass");
+//    QDEBUG checkb(b, "qpass");
     while(b->next){
         b = b->next;
-        QDEBUG checkb(b, "qpass");
+//        QDEBUG checkb(b, "qpass");
         len += BALLOC(b);
         dlen += BLEN(b);
     }
@@ -647,10 +647,10 @@ qpassnolim(Queue *q, Block *b)
         q->bfirst = b;
     len = BALLOC(b);
     dlen = BLEN(b);
-    QDEBUG checkb(b, "qpass");
+//    QDEBUG checkb(b, "qpass");
     while(b->next){
         b = b->next;
-        QDEBUG checkb(b, "qpass");
+//        QDEBUG checkb(b, "qpass");
         len += BALLOC(b);
         dlen += BLEN(b);
     }
@@ -737,7 +737,7 @@ qproduce(Queue *q, void *vp, int len)
     /* b->next = 0; done by iallocb() */
     q->len += BALLOC(b);
     q->dlen += BLEN(b);
-    QDEBUG checkb(b, "qproduce");
+//    QDEBUG checkb(b, "qproduce");
 
     if(q->state & Qstarve){
         q->state &= ~Qstarve;
@@ -784,7 +784,7 @@ qcopy(Queue *q, int len, ulong offset)
             n -= offset - sofar;
             break;
         }
-        QDEBUG checkb(b, "qcopy");
+//        QDEBUG checkb(b, "qcopy");
         b = b->next;
     }
 
@@ -930,7 +930,7 @@ qremove(Queue *q)
     b->next = nil;
     q->dlen -= BLEN(b);
     q->len -= BALLOC(b);
-    QDEBUG checkb(b, "qremove");
+//    QDEBUG checkb(b, "qremove");
     return b;
 }
 /*e: function qremove */
@@ -1218,7 +1218,7 @@ qbwrite(Queue *q, Block *b)
     b->next = 0;
     q->len += BALLOC(b);
     q->dlen += n;
-    QDEBUG checkb(b, "qbwrite");
+//    QDEBUG checkb(b, "qbwrite");
     b = nil;
 
     /* make sure other end gets awakened */
@@ -1281,8 +1281,7 @@ qwrite(Queue *q, void *vp, int len)
     Block *b;
     byte *p = vp;
 
-    QDEBUG if(!islo())
-        print("qwrite hi %#p\n", getcallerpc(&q));
+//    QDEBUG if(!islo())  print("qwrite hi %#p\n", getcallerpc(&q));
 
     sofar = 0;
     do {
@@ -1349,7 +1348,7 @@ qiwrite(Queue *q, void *vp, int len)
             break;
         }
 
-        QDEBUG checkb(b, "qiwrite");
+//        QDEBUG checkb(b, "qiwrite");
         if(q->bfirst)
             q->blast->next = b;
         else

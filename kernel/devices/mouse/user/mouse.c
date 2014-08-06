@@ -95,7 +95,7 @@ slowread(int fd, char *buf, int nbytes, char *msg)
     for(p = buf; nbytes > 1 && (c = readbyte(fd)) != -1; *p++ = c, nbytes--)
         ;
     *p = 0;
-    DEBUG dumpbuf(buf, p-buf, msg);
+//    DEBUG dumpbuf(buf, p-buf, msg);
     return p-buf;
 }
 
@@ -126,7 +126,7 @@ setupeia(int fd, char *baud, char *bits)
      * set the speed to 1200/2400/4800/9600 baud,
      * 7/8-bit data, one stop bit and no parity
      */
-    DEBUG print("setupeia(%s,%s)\n", baud, bits);
+//    DEBUG print("setupeia(%s,%s)\n", baud, bits);
     timedwrite(fd, baud, strlen(baud));
     timedwrite(fd, bits, strlen(bits));
     timedwrite(fd, "s1", 2);
@@ -204,7 +204,7 @@ C(int ctl, int data)
     
     sleep(100);
     for(s = speeds; *s; s++){
-        DEBUG print("%s\n", *s);
+//        DEBUG print("%s\n", *s);
         setupeia(ctl, *s, "l8");
         timedwrite(data, "s", 1);
         c = slowread(data, buf, sizeof(buf), "check C: ");
@@ -373,15 +373,15 @@ main(int argc, char *argv[])
             close(ctl);
             continue;
         case 'C':
-            DEBUG print("Logitech 5 byte mouse\n");
+//            DEBUG print("Logitech 5 byte mouse\n");
             Cbaud(ctl, data, baud);
             break;
         case 'W':
-            DEBUG print("Type W mouse\n");
+//            DEBUG print("Type W mouse\n");
             Wbaud(ctl, data, baud);
             break;
         case 'M':
-            DEBUG print("Microsoft compatible mouse\n");
+//            DEBUG print("Microsoft compatible mouse\n");
             strcat(buf, " M");
             break;
         }
@@ -392,7 +392,7 @@ main(int argc, char *argv[])
         exits("no mouse");
     }
 
-    DEBUG fprint(2, "mouse configured as '%s'\n", buf);
+//    DEBUG fprint(2, "mouse configured as '%s'\n", buf);
     if(dontset == 0 && write(conf, buf, strlen(buf)) < 0){
         fprint(2, "%s: error setting mouse type - %r\n", argv0);
         exits("write conf");

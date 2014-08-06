@@ -181,9 +181,9 @@ DigestState*	sha2_384(uchar*, ulong, uchar*, DigestState*);
 DigestState*	sha2_512(uchar*, ulong, uchar*, DigestState*);
 DigestState*	aes(uchar*, ulong, uchar*, DigestState*);
 DigestState*	hmac_x(uchar *p, ulong len, uchar *key, ulong klen,
-			uchar *digest, DigestState *s,
-			DigestState*(*x)(uchar*, ulong, uchar*, DigestState*),
-			int xlen);
+                       uchar *digest, DigestState *s,
+                       DigestState*(*x)(uchar*, ulong, uchar*, DigestState*),
+                       int xlen);
 DigestState*	hmac_md5(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
 DigestState*	hmac_sha1(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
 DigestState*	hmac_sha2_224(uchar*, ulong, uchar*, ulong, uchar*, DigestState*);
