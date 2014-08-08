@@ -4,7 +4,7 @@
 #pragma profile off
 
 void
-cycles(uvlong*u)
+cycles(uvlong* u)
 {
 	*u = 0LL;
 }

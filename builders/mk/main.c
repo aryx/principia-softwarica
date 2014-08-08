@@ -111,7 +111,7 @@ main(int argc, char **argv)
 	}
 #ifdef	PROF
 	{
-		extern etext();
+		extern int etext();
 		monitor(main, etext, buf, sizeof buf, 300);
 	}
 #endif

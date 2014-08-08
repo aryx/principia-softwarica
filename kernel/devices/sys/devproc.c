@@ -675,7 +675,7 @@ procfds(Proc *p, char *va, int count, long offset)
 
 /*s: method procclose */
 static void
-procclose(Chan * c)
+procclose(Chan* c)
 {
     /*s: [[procclose()]] Qtrace if */
         if(QID(c->qid) == Qtrace){

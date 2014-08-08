@@ -18,6 +18,7 @@ char note[NNOTE][ERRMAX];
 
 /* service routines for sub process control */
 
+int
 runpcs(int runmode, int keepnote)
 {
 	int rc;

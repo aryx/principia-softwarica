@@ -1020,7 +1020,7 @@ select(int *ap, long mode)
 	int n;
 
 	n = *ap++;
-	while(--n>=0 && (mode&*ap++)==0)
+	while(--n>=0 && (mode & (*ap++))==0)
 		ap++;
 	Bputc(&bout, *ap);
 }

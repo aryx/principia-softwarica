@@ -251,7 +251,7 @@ sum(ulong i)
 {
 	long j, dtime, time;
 	int k;
-	static indent;
+	static int indent;
 
 	if(i >= ndata){
 		fprint(2, "prof: index out of range %ld [max %ld]\n", i, ndata);

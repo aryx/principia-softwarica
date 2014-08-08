@@ -10,7 +10,7 @@
 
 /*s: function procsetup */
 void
-procsetup(Proc*p)
+procsetup(Proc* p)
 {
   /*s: [[procsetup()]] fp setup */
   /*

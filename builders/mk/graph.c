@@ -131,7 +131,7 @@ togo(Node *node)
 		}
 }
 
-static
+static int
 vacuous(Node *node)
 {
 	Arc *la, *a;

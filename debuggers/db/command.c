@@ -23,7 +23,7 @@ WORD	adrval, cntval, loopcnt;
 int	adrflg, cntflg;
 
 /* command decoding */
-
+int
 command(char *buf, int defcom)
 {
 	char	*reg;

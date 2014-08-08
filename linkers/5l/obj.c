@@ -1516,6 +1516,7 @@ nuxiinit(void)
 	Bflush(&bso);
 }
 
+int
 find1(long l, int c)
 {
 	char *p;

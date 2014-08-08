@@ -403,7 +403,7 @@ copy1(Adr *v1, Adr *v2, Reg *r, int f)
  * 4 if set and used
  * 0 otherwise (not touched)
  */
-copyu(Prog *p, Adr *v, Adr *s)
+int copyu(Prog *p, Adr *v, Adr *s)
 {
 
 	switch(p->as) {

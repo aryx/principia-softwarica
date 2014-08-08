@@ -1,7 +1,7 @@
 #include	"mk.h"
 
 static Rule *lr, *lmr;
-static rcmp(Rule *r, char *target, Word *tail);
+static int rcmp(Rule *r, char *target, Word *tail);
 static int nrules = 0;
 
 void

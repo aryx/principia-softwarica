@@ -32,8 +32,7 @@ struct builtin Builtin[] = {
 char **environp;
 
 struct word*
-enval(s)
-register char *s;
+enval(char *s)
 {
 	char *t, c;
 	struct word *v;
@@ -254,8 +253,7 @@ Waitfor(int pid, int persist)
 }
 
 char **
-mkargv(a)
-register struct word *a;
+mkargv(struct word *a)
 {
 	char **argv = (char **)emalloc((count(a)+2)*sizeof(char *));
 	char **argp = argv+1;	/* leave one at front for runcoms */
@@ -317,8 +315,8 @@ Bad:
 
 #define	NDIR	14		/* should get this from param.h */
 
-Globsize(p)
-register char *p;
+int
+Globsize(char *p)
 {
 	int isglob = 0, globlen = NDIR+1;
 	for(;*p;p++){
@@ -341,8 +339,8 @@ register char *p;
 
 DIR *dirlist[NDIRLIST];
 
-Opendir(name)
-char *name;
+int
+Opendir(char *name)
 {
 	DIR **dp;
 	for(dp = dirlist;dp!=&dirlist[NDIRLIST];dp++)
@@ -416,40 +414,49 @@ Trapinit(void)
 	}
 }
 
-Unlink(name)
-char *name;
+int
+Unlink(char *name)
 {
 	return unlink(name);
 }
-Write(fd, buf, cnt)
-char *buf;
+
+int
+Write(int fd, char *buf, int cnt)
 {
 	return write(fd, buf, cnt);
 }
-Read(fd, buf, cnt)
-char *buf;
+
+int
+Read(int fd, char *buf, int cnt)
 {
 	return read(fd, buf, cnt);
 }
-Seek(fd, cnt, whence)
-long cnt;
+
+int
+Seek(int fd, long cnt, int whence)
 {
 	return lseek(fd, cnt, whence);
 }
-Executable(file)
-char *file;
+
+int
+Executable(char *file)
 {
 	return(access(file, 01)==0);
 }
-Creat(file)
-char *file;
+
+int
+Creat(char *file)
 {
 	return creat(file, 0666);
 }
-Dup(a, b){
+
+int
+Dup(int a, int b){
 	return dup2(a, b);
 }
-Dup1(a){
+
+int
+Dup1(int a){
 	return dup(a);
 }
 /*
@@ -470,6 +477,8 @@ Exit(char *stat)
 	}
 	exit(n);
 }
+
+int
 Eintr(){
 	return errno==EINTR;
 }
@@ -479,7 +488,9 @@ Noerror()
 {
 	errno = 0;
 }
-Isatty(fd){
+
+int
+Isatty(int fd){
 	return isatty(fd);
 }
 
@@ -517,8 +528,7 @@ execumask(void)		/* wrong -- should fork before writing */
 }
 
 void
-Memcpy(a, b, n)
-char *a, *b;
+Memcpy(char *a, char *b, int n)
 {
 	memmove(a, b, n);
 }

@@ -291,7 +291,7 @@ static int setVers(TlsSec *sec, int version);
 
 static AuthRpc* factotum_rsa_open(uchar *cert, int certlen);
 static mpint* factotum_rsa_decrypt(AuthRpc *rpc, mpint *cipher);
-static void factotum_rsa_close(AuthRpc*rpc);
+static void factotum_rsa_close(AuthRpc* rpc);
 
 static void* emalloc(int);
 static void* erealloc(void*, int);
@@ -1655,7 +1655,7 @@ factotum_rsa_decrypt(AuthRpc *rpc, mpint *cipher)
 }
 
 static void
-factotum_rsa_close(AuthRpc*rpc)
+factotum_rsa_close(AuthRpc* rpc)
 {
 	if(!rpc)
 		return;

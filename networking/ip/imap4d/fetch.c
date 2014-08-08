@@ -393,17 +393,17 @@ findMsgSect(Msg *m, NList *sect)
 
 	for(; sect != nil; sect = sect->next){
 		id = sect->n;
-#ifdef HACK
-		/* HACK to solve extra level of structure not visible from upas/fs  */
-		if(m->kids == 0 && id == 1 && sect->next == nil){
-			if(m->mime.type->s && strcmp(m->mime.type->s, "message")==0)
-			if(m->mime.type->t && strcmp(m->mime.type->t, "rfc822")==0)
-			if(m->head.type->s && strcmp(m->head.type->s, "text")==0)
-			if(m->head.type->t && strcmp(m->head.type->t, "plain")==0)
-				break;
-		}
-		/* end of HACK */
-#endif HACK
+//#ifdef HACK
+//		/* HACK to solve extra level of structure not visible from upas/fs  */
+//		if(m->kids == 0 && id == 1 && sect->next == nil){
+//			if(m->mime.type->s && strcmp(m->mime.type->s, "message")==0)
+//			if(m->mime.type->t && strcmp(m->mime.type->t, "rfc822")==0)
+//			if(m->head.type->s && strcmp(m->head.type->s, "text")==0)
+//			if(m->head.type->t && strcmp(m->head.type->t, "plain")==0)
+//				break;
+//		}
+//		/* end of HACK */
+//#endif HACK
 		for(m = m->kids; m != nil; m = m->next)
 			if(m->id == id)
 				break;

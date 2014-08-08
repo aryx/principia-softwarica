@@ -33,7 +33,7 @@ enum
 	VMS=		5,
 	MVS=		6,
 	NetWare=	7,
-	OS½=		8,
+//	OS½=		8,
 	TSO=		9,
 	NT=		10,
 	Unknown=	11,

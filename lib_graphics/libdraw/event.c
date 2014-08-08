@@ -397,7 +397,7 @@ emouse(void)
 {
 	Mouse m;
 	Ebuf *eb;
-	static but[2];
+	static int but[2];
 	int b;
 
 	if(Smouse < 0)

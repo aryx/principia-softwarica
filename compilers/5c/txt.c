@@ -1137,7 +1137,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
 		print("%P\n", p);
 }
 
-samaddr(Node *f, Node *t)
+int samaddr(Node *f, Node *t)
 {
 
 	if(f->op != t->op)

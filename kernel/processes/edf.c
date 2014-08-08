@@ -138,7 +138,7 @@ edfunlock(void)
 }
 
 void
-edfinit(Proc*p)
+edfinit(Proc* p)
 {
     if(!edfinited){
         fmtinstall('t', timeconv);

@@ -51,6 +51,7 @@ defval(WORD w)
 		return (w);
 }
 
+int
 expr(int a)
 {	/* term | term dyadic expr |  */
 	int	rc;
@@ -117,6 +118,7 @@ expr(int a)
 	return(rc);
 }
 
+int
 term(int a)
 {	/* item | monadic item | (expr) | */
 	ADDR e;
@@ -159,6 +161,7 @@ term(int a)
 	}
 }
 
+int
 item(int a)
 {	/* name [ . local ] | number | . | ^  | <register | 'x | | */
 	char	*base;
@@ -250,6 +253,7 @@ item(int a)
 #define	MAXBASE	16
 
 /* service routines for expression reading */
+int
 getnum(int (*rdf)(void))
 {
 	char *cp;
@@ -345,6 +349,7 @@ readfname(char *filename)
 	reread();
 }
 
+int
 convdig(int c)
 {
 	if (isdigit(c))
@@ -357,6 +362,7 @@ convdig(int c)
 		return(c-'a'+10);
 }
 
+int
 symchar(int dig)
 {
 	if (lastc=='\\') {

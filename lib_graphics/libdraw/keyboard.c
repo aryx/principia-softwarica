@@ -13,11 +13,11 @@ closekeyboard(Keyboardctl *kc)
 
 	postnote(PNPROC, kc->pid, "kill");
 
-#ifdef BUG
-	/* Drain the channel */
-	while(?kc->c)
-		<-kc->c;
-#endif
+//#ifdef BUG
+//	/* Drain the channel */
+//	while(?kc->c)
+//		<-kc->c;
+//#endif
 
 	close(kc->ctlfd);
 	close(kc->consfd);

@@ -41,7 +41,7 @@
 */
 
 static short
-r16(Biobuf*b)
+r16(Biobuf* b)
 {
 	short s;
 
@@ -52,7 +52,7 @@ r16(Biobuf*b)
 
 
 static long
-r32(Biobuf*b)
+r32(Biobuf* b)
 {
 	long l;
 

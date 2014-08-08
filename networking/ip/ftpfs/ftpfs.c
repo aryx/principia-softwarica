@@ -72,7 +72,7 @@ OS oslist[] = {
 	{ MVS,		"MVS", },
 	{ NetWare,	"NetWare", },
 	{ NetWare,	"NETWARE", },
-	{ OS½,		"OS/2", },
+//	{ OS½,		"OS/2", },
 	{ TSO,		"TSO", },
 	{ NT,		"Windows_NT", },	/* DOS like interface */
 	{ NT,		"WINDOWS_NT", },	/* Unix like interface */

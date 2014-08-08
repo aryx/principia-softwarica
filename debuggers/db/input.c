@@ -15,6 +15,7 @@ int	eof;
 
 /* input routines */
 
+int
 eol(int c)
 {
 	return(c==EOR || c==';');
@@ -97,6 +98,7 @@ readchar(void)
 	return(lastc);
 }
 
+int
 nextchar(void)
 {
 	if (eol(rdc())) {
@@ -106,6 +108,7 @@ nextchar(void)
 	return(lastc);
 }
 
+int
 quotchar(void)
 {
 	if (readchar()=='\\')

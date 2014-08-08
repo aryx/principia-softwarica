@@ -495,7 +495,6 @@ enum
 /*
  * this is the simulated IEEE floating point
  */
-typedef	struct	ieee	Ieee;
 struct	ieee
 {
 	long	l;	/* contains ls-man	0xffffffff */
@@ -503,3 +502,4 @@ struct	ieee
 				    exp		0x7ff00000
 				    ms-man	0x000fffff */
 };
+typedef	struct	ieee	Ieee;

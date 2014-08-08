@@ -532,22 +532,22 @@ crackdir(char *p, String **remname)
 		d.length = 0;
 		d.atime = 0;
 		break;
-	case OS½:
-		s = s_copy(field[n-1]);
-		d.uid = "OS½";
-		d.gid = d.uid;
-		d.mode = 0666;
-		switch(n){
-		case 5:
-			if(strcmp(field[1], "DIR") == 0)
-				d.mode |= DMDIR;
-			d.length = atoll(field[0]);
-			dn = getfields(field[2], dfield, 4, 1, "-");
-			if(dn == 3)
-				d.atime = cracktime(dfield[0], dfield[1], dfield[2], field[3]);
-			break;
-		}
-		break;
+//	case OS½:
+//		s = s_copy(field[n-1]);
+//		d.uid = "OS½";
+//		d.gid = d.uid;
+//		d.mode = 0666;
+//		switch(n){
+//		case 5:
+//			if(strcmp(field[1], "DIR") == 0)
+//				d.mode |= DMDIR;
+//			d.length = atoll(field[0]);
+//			dn = getfields(field[2], dfield, 4, 1, "-");
+//			if(dn == 3)
+//				d.atime = cracktime(dfield[0], dfield[1], dfield[2], field[3]);
+//			break;
+//		}
+//		break;
 	case Tops:
 		if(n != 4){ /* tops directory name */
 			safecpy(topsdir, field[0], sizeof(topsdir));

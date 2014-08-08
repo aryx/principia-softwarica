@@ -255,7 +255,8 @@ void get_sos (int kind) {
 	printf ("\tah = %d, al = %d\n", ahal >> 4, ahal &0xf);
 }
 
-main (int argc, char *argv[]) {
+int
+main(int argc, char *argv[]) {
 	int l, stuff, i, j, c;
 	while (argc > 1 && argv[1][0] == '-') {
 		switch (argv[1][1]) {

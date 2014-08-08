@@ -5,8 +5,8 @@ void	warning(Mntdir*, char*, ...);
 #define	fbufalloc()	emalloc(BUFSIZE)
 #define	fbuffree(x)	free(x)
 
-void	plumblook(Plumbmsg*m);
-void	plumbshow(Plumbmsg*m);
+void	plumblook(Plumbmsg* m);
+void	plumbshow(Plumbmsg* m);
 void	putsnarf(void);
 void	getsnarf(void);
 int	tempfile(void);

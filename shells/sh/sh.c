@@ -212,7 +212,7 @@ int
 getch(void)
 {
 	unsigned char c;
-	static done=0;
+	static int done=0;
 
 	if(putback){
 		c = putback;
