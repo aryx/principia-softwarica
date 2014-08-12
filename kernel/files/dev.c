@@ -10,6 +10,7 @@
 
 // was in $CONF.c
 /*s: global devtab */
+// array<ref_own<Dev>>
 Dev** devtab = nil;
 /*e: global devtab */
 

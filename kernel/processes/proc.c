@@ -1489,7 +1489,7 @@ proc_dumpaproc(Proc *p)
     ulong bss;
     char *s;
 
-    if(p == 0)
+    if(p == nil)
         return;
 
     bss = 0;
@@ -1497,7 +1497,7 @@ proc_dumpaproc(Proc *p)
         bss = p->seg[BSEG]->top;
 
     s = p->psstate;
-    if(s == 0)
+    if(s == nil)
         s = statename[p->state];
     print("%3lud:%10s pc %8lux dbgpc %8lux  %8s (%s) ut %ld st %ld bss %lux qpc %lux nl %lud nd %lud lpc %lux pri %lud\n",
         p->pid, p->text, p->pc, dbgpc(p),  s, statename[p->state],

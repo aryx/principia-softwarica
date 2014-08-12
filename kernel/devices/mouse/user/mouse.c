@@ -21,7 +21,7 @@ char *speeds[] =
 
 int button2; 
 
-#define DEBUG if(debug)
+//#define DEBUG if(debug)
 
 int can9600;    /* true if type W mouse can be set to 9600 */
 int debug;

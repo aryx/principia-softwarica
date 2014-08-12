@@ -83,6 +83,7 @@ enum {
     Fgtf = 1<<5,        /* supports VESA GTF: see /public/doc/vesa/gtf10.pdf */
 };
 
+// pad: factorize with in-kernel and fcall.h?
 #define WORD(p) ((p)[0] | ((p)[1]<<8))
 #define LONG(p) ((p)[0] | ((p)[1]<<8) | ((p)[2]<<16) | ((p)[3]<<24))
 #define PWORD(p, v) (p)[0] = (v); (p)[1] = (v)>>8

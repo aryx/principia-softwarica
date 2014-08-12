@@ -10,5 +10,5 @@ enum
 #define seteisadma(a, b)  dmainit(a, Bufsize);
 #define UNCACHED(type, v) (type*)((ulong)(v))
 
-#define Int0vec
+#define Int0vec 0
 #define setvec(v, f, a)   intrenable(v, f, a, BUSUNKNOWN, "audio")

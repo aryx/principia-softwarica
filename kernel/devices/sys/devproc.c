@@ -407,7 +407,7 @@ procopen(Chan *c, int omode)
                 error("already open");
             topens++;
             if (tevents == nil){
-                tevents = (Traceevent*)malloc(sizeof(Traceevent) * Nevents);
+                tevents = (Traceevent*)malloc(Nevents * sizeof(Traceevent));
                 if(tevents == nil)
                     error(Enomem);
                 tproduced = tconsumed = 0;

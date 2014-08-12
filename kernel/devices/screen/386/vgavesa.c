@@ -26,6 +26,7 @@ enum {
 static void *hardscreen;
 static uchar modebuf[0x1000];
 
+// pad: seems similar to macros in fcall.h, factorize?
 #define WORD(p) ((p)[0] | ((p)[1]<<8))
 #define LONG(p) ((p)[0] | ((p)[1]<<8) | ((p)[2]<<16) | ((p)[3]<<24))
 #define PWORD(p, v) (p)[0] = (v); (p)[1] = (v)>>8

@@ -58,6 +58,8 @@
 % - lots of things could be reduces if C had better support for lists or hash;
 %   there are lots of duplicated code adding/removing stuff in list
 %   (e.g. tdel(), tadd(), etc)
+% - put some "lemma/theorem" in the code, which are prolog/datalog queries
+%   explaining some invariants :)
 
 %------------------------------------------------------------------------------
 % Packages
@@ -552,6 +554,20 @@ struct Ureg
 % Some coding conventions: xxxp -> pointer on xxx, so cp is really
 % a ref pointer to a chang, mp = ref pointer to a mount (head)
 % nx, x = "new" x
+
+
+% about C:
+% “Pretty much everything on the web uses those two things: C and
+% UNIX,” Pike tells Wired. “The browsers are written in C. The UNIX
+% kernel — that pretty much the entire Internet runs on — is written
+% in C. Web servers are written in C, and if they’re not, they’re
+% written in Java or C++, which are C derivatives, or Python or Ruby,
+% which are implemented in C. And all of the network hardware running
+% these programs I can almost guarantee were written in C.
+% http://www.wired.com/2011/10/thedennisritchieeffect/
+%
+% would be better at some point though to rewrite part of it in Rust,
+% the modern C.
 
 \section{Code organization}
 % codemap and codegraph screenshot?
@@ -1263,6 +1279,7 @@ sysnop(ulong*)
 % maybe can even show an example where abuse sysnop so can see things :)
 
 
+% related work: http://lwn.net/Articles/604287/
 
 %\section{File overview}
 % because everything is a fileserver can confuse things
@@ -1752,6 +1769,7 @@ struct Dev
 % does it match 9p? I guess it closely match 9p
 
 <<global devtab>>=
+// array<ref_own<Dev>>
 Dev** devtab = nil;
 @
 
@@ -5249,7 +5267,7 @@ sysexec(ulong* arg)
 
 <<function procsetup>>=
 void
-procsetup(Proc*p)
+procsetup(Proc* p)
 {
   <<[[procsetup()]] fp setup>>
 }
@@ -15137,8 +15155,9 @@ struct DirEntry {
   char  *muid;  /* last modifier name */
 };
 @ 
+% rename mode perm? and have a typedef perm? (and typedef openmode)
 % gid here! cool muid :)
-% vs walkqid? vs Dirtab?
+% vs walkqid? vs Dirtab? reorder so look closer to Dirtab (DirEntryShort)
 
 <<enum dirmode>>=
 /* bits in DirEntry.mode */
@@ -16209,6 +16228,7 @@ p->mlen = 1;
 p->malen = PATHMSLOP;
 p->mtpt = smalloc(p->malen*sizeof p->mtpt[0]); // smalloc set p->mtpt[0] = nil
 @
+% todo: sizeof could be simplified
 
 <<[[copypath()]] mtpt handling>>=
 pp->mlen = p->mlen;
@@ -18209,6 +18229,9 @@ cgaregw(int index, int data)
 
 \section{The console device [[/dev/cons]]}
 
+% should be able to answer the interview question: "what happens
+% when you type 'ls' on the keyboard" :)
+
 \subsection{Overview}
 
 <<devcons.c enum Qxxx>>=
@@ -18245,6 +18268,7 @@ static Dirtab consdir[]={
 
 \subsection{Buffered input}
 
+% see chapter later for queue IO
 <<global kbdq>>=
 Queue*  kbdq;           /* unprocessed console input */
 @ 
@@ -18701,6 +18725,8 @@ Dev consdevtab = {
 
 \subsection{[[/dev/consctl]] and raw input}
 
+% who needs raw input? well rio?
+
 <<[[ConsKbd]] other fields>>=
 bool raw;        /* true if we shouldn't process input */
 Ref ctl;        /* number of opens to the control file */
@@ -18908,8 +18934,26 @@ i8042auxcmd(int cmd)
 % form of file servers and can have inkernel file servers which are
 % really like filesystems in other OSes.
 
+
+% used by devgenxxx helpers
+<<struct Dirtab>>=
+struct Dirtab
+{
+  char  name[KNAMELEN];
+  Qid qid;
+  vlong length;
+  long  perm;
+};
+@
+% rename DirEntryShort? we alread have a DirEntry
+
 \section{The root filesystem}
 % root device, root filesystem
+
+% devroot
+%"to know how things get bootstrapped and having a
+%small set of files in the kernel image is a handy technique
+%for embedded applications." on 9fans
 
 % just with that we can already have a working environment
 % with a memory fs! where all binaries are processed via data2txt
@@ -18965,7 +19009,7 @@ struct Dirlist
     int mdir; // max dir entries
 };
 @
-
+% rename Dirlist to DirEntries ? or just Directory?
 
 <<globals rootdir, rootdata, rootlist>>=
 static Dirtab rootdir[Nrootfiles] = {
@@ -19169,13 +19213,13 @@ rootread(Chan *c, void *buf, long n, vlong off)
         return 0;
     if(offset+n > d->length)
         n = d->length - offset;
-#ifdef asdf
-print("[%d] kaddr %.8ulx base %.8ulx offset %ld (%.8ulx), n %d %.8ulx %.8ulx %.8ulx\n", 
-        t, buf, data, offset, offset, n,
-        ((ulong*)(data+offset))[0],
-        ((ulong*)(data+offset))[1],
-        ((ulong*)(data+offset))[2]);
-#endif asdf
+//#ifdef asdf
+//        print("[%d] kaddr %.8ulx base %.8ulx offset %ld (%.8ulx), n %d %.8ulx %.8ulx %.8ulx\n", 
+//        t, buf, data, offset, offset, n,
+//        ((ulong*)(data+offset))[0],
+//        ((ulong*)(data+offset))[1],
+//        ((ulong*)(data+offset))[2]);
+//#endif asdf
     memmove(buf, data+offset, n);
     return n;
 }
@@ -19209,16 +19253,6 @@ devdir(Chan *c, Qid qid, char *n, vlong length, char *user, long perm, DirEntry 
 @
 
 
-% used by devgenxxx helpers
-<<struct Dirtab>>=
-struct Dirtab
-{
-  char  name[KNAMELEN];
-  Qid qid;
-  vlong length;
-  long  perm;
-};
-@
 
 <<function devgen>>=
 /*
@@ -19878,7 +19912,7 @@ padblock(Block *bp, int size)
     int n;
     Block *nbp;
 
-    QDEBUG checkb(bp, "padblock 1");
+//    QDEBUG checkb(bp, "padblock 1");
     if(size >= 0){
         if(bp->rp - bp->base >= size){
             bp->rp -= size;
@@ -19912,7 +19946,7 @@ padblock(Block *bp, int size)
         nbp->wp += n;
         freeb(bp);
     }
-    QDEBUG checkb(nbp, "padblock 1");
+//    QDEBUG checkb(nbp, "padblock 1");
     return nbp;
 }
 @
@@ -19978,7 +20012,7 @@ concatblock(Block *bp)
     }
     concatblockcnt += BLEN(nb);
     freeblist(bp);
-    QDEBUG checkb(nb, "concatblock 1");
+//    QDEBUG checkb(nb, "concatblock 1");
     return nb;
 }
 @
@@ -20022,7 +20056,7 @@ pullupblock(Block *bp, int n)
             pullupblockcnt++;
             bp->wp += n;
             nbp->rp += n;
-            QDEBUG checkb(bp, "pullupblock 1");
+//            QDEBUG checkb(bp, "pullupblock 1");
             return bp;
         } else {
             /* shouldn't happen but why crash if it does */
@@ -20039,7 +20073,7 @@ pullupblock(Block *bp, int n)
             freeb(nbp);
             n -= i;
             if(n == 0){
-                QDEBUG checkb(bp, "pullupblock 2");
+//                QDEBUG checkb(bp, "pullupblock 2");
                 return bp;
             }
         }
@@ -20088,7 +20122,7 @@ trimblock(Block *bp, int offset, int len)
     ulong l;
     Block *nb, *startb;
 
-    QDEBUG checkb(bp, "trimblock 1");
+//    QDEBUG checkb(bp, "trimblock 1");
     if(blocklen(bp) < offset+len) {
         freeblist(bp);
         return nil;
@@ -20132,7 +20166,7 @@ copyblock(Block *bp, int count)
     int l;
     Block *nbp;
 
-    QDEBUG checkb(bp, "copyblock 0");
+//    QDEBUG checkb(bp, "copyblock 0");
     nbp = allocb(count);
     for(; count > 0 && bp != 0; bp = bp->next){
         l = BLEN(bp);
@@ -20147,7 +20181,7 @@ copyblock(Block *bp, int count)
         nbp->wp += count;
     }
     copyblockcnt++;
-    QDEBUG checkb(nbp, "copyblock 1");
+//    QDEBUG checkb(nbp, "copyblock 1");
 
     return nbp;
 }
@@ -20169,7 +20203,7 @@ adjustblock(Block* bp, int len)
     if(bp->rp+len > bp->lim){
         nbp = copyblock(bp, len);
         freeblist(bp);
-        QDEBUG checkb(nbp, "adjustblock 1");
+//        QDEBUG checkb(nbp, "adjustblock 1");
 
         return nbp;
     }
@@ -20178,7 +20212,7 @@ adjustblock(Block* bp, int len)
     if(len > n)
         memset(bp->wp, 0, len-n);
     bp->wp = bp->rp+len;
-    QDEBUG checkb(bp, "adjustblock 2");
+//    QDEBUG checkb(bp, "adjustblock 2");
 
     return bp;
 }
@@ -20209,7 +20243,7 @@ pullblock(Block **bph, int count)
         bytes += n;
         count -= n;
         bp->rp += n;
-        QDEBUG checkb(bp, "pullblock ");
+//        QDEBUG checkb(bp, "pullblock ");
         if(BLEN(bp) == 0) {
             *bph = bp->next;
             bp->next = nil;
@@ -20252,6 +20286,9 @@ bl2mem(byte *p, Block *b, int n)
 
 
 \section{[[Queue]]}
+
+% hmmm this is used by kbdq, so it's independent of fs actually
+% could be in separater chapter?
 
 <<enum queuestate>>=
 /* queue state bits,  Qmsg, Qcoalesce, and Qkick can be set in qopen */
@@ -20327,8 +20364,7 @@ qwrite(Queue *q, void *vp, int len)
     Block *b;
     byte *p = vp;
 
-    QDEBUG if(!islo())
-        print("qwrite hi %#p\n", getcallerpc(&q));
+//    QDEBUG if(!islo())  print("qwrite hi %#p\n", getcallerpc(&q));
 
     sofar = 0;
     do {
@@ -20380,7 +20416,7 @@ qget(Queue *q)
     b->next = 0;
     q->len -= BALLOC(b);
     q->dlen -= BLEN(b);
-    QDEBUG checkb(b, "qget");
+//    QDEBUG checkb(b, "qget");
 
     /* if writer flow controlled, restart */
     if((q->state & Qflow) && q->len < q->limit/2){
@@ -20414,7 +20450,7 @@ qdiscard(Queue *q, int len)
         b = q->bfirst;
         if(b == nil)
             break;
-        QDEBUG checkb(b, "qdiscard");
+//        QDEBUG checkb(b, "qdiscard");
         n = BLEN(b);
         if(n <= len - sofar){
             q->bfirst = b->next;
@@ -20477,7 +20513,7 @@ qconsume(Queue *q, void *vp, int len)
             iunlock(q);
             return -1;
         }
-        QDEBUG checkb(b, "qconsume 1");
+//        QDEBUG checkb(b, "qconsume 1");
 
         n = BLEN(b);
         if(n > 0)
@@ -20557,10 +20593,10 @@ qpass(Queue *q, Block *b)
         q->bfirst = b;
     len = BALLOC(b);
     dlen = BLEN(b);
-    QDEBUG checkb(b, "qpass");
+//    QDEBUG checkb(b, "qpass");
     while(b->next){
         b = b->next;
-        QDEBUG checkb(b, "qpass");
+//        QDEBUG checkb(b, "qpass");
         len += BALLOC(b);
         dlen += BLEN(b);
     }
@@ -20608,10 +20644,10 @@ qpassnolim(Queue *q, Block *b)
         q->bfirst = b;
     len = BALLOC(b);
     dlen = BLEN(b);
-    QDEBUG checkb(b, "qpass");
+//    QDEBUG checkb(b, "qpass");
     while(b->next){
         b = b->next;
-        QDEBUG checkb(b, "qpass");
+//        QDEBUG checkb(b, "qpass");
         len += BALLOC(b);
         dlen += BLEN(b);
     }
@@ -20672,7 +20708,7 @@ qproduce(Queue *q, void *vp, int len)
     /* b->next = 0; done by iallocb() */
     q->len += BALLOC(b);
     q->dlen += BLEN(b);
-    QDEBUG checkb(b, "qproduce");
+//    QDEBUG checkb(b, "qproduce");
 
     if(q->state & Qstarve){
         q->state &= ~Qstarve;
@@ -20720,7 +20756,7 @@ qcopy(Queue *q, int len, ulong offset)
             n -= offset - sofar;
             break;
         }
-        QDEBUG checkb(b, "qcopy");
+//        QDEBUG checkb(b, "qcopy");
         b = b->next;
     }
 
@@ -20872,7 +20908,7 @@ qremove(Queue *q)
     b->next = nil;
     q->dlen -= BLEN(b);
     q->len -= BALLOC(b);
-    QDEBUG checkb(b, "qremove");
+//    QDEBUG checkb(b, "qremove");
     return b;
 }
 @
@@ -21136,7 +21172,7 @@ qbwrite(Queue *q, Block *b)
     b->next = 0;
     q->len += BALLOC(b);
     q->dlen += n;
-    QDEBUG checkb(b, "qbwrite");
+//    QDEBUG checkb(b, "qbwrite");
     b = nil;
 
     /* make sure other end gets awakened */
@@ -21229,7 +21265,7 @@ qiwrite(Queue *q, void *vp, int len)
             break;
         }
 
-        QDEBUG checkb(b, "qiwrite");
+//        QDEBUG checkb(b, "qiwrite");
         if(q->bfirst)
             q->blast->next = b;
         else
@@ -26197,7 +26233,7 @@ procfds(Proc *p, char *va, int count, long offset)
 
 <<method procclose>>=
 static void
-procclose(Chan * c)
+procclose(Chan* c)
 {
     <<[[procclose()]] Qtrace if>>
     <<[[procclose()]] hooks>>
@@ -26449,6 +26485,9 @@ procctlreq(Proc *p, char *va, int n)
 
 
 \section{[[/fd/]]}
+
+% this is actually used more than I thought. I think during
+% booting it's used. todo: why?
 
 \subsection{[[sysdup()]]}
 
@@ -27714,7 +27753,7 @@ proc_dumpaproc(Proc *p)
     ulong bss;
     char *s;
 
-    if(p == 0)
+    if(p == nil)
         return;
 
     bss = 0;
@@ -27722,7 +27761,7 @@ proc_dumpaproc(Proc *p)
         bss = p->seg[BSEG]->top;
 
     s = p->psstate;
-    if(s == 0)
+    if(s == nil)
         s = statename[p->state];
     print("%3lud:%10s pc %8lux dbgpc %8lux  %8s (%s) ut %ld st %ld bss %lux qpc %lux nl %lud nd %lud lpc %lux pri %lud\n",
         p->pid, p->text, p->pc, dbgpc(p),  s, statename[p->state],
@@ -29400,7 +29439,7 @@ _proctrace(Proc* p, Tevent etype, vlong ts)
             error("already open");
         topens++;
         if (tevents == nil){
-            tevents = (Traceevent*)malloc(sizeof(Traceevent) * Nevents);
+            tevents = (Traceevent*)malloc(Nevents * sizeof(Traceevent));
             if(tevents == nil)
                 error(Enomem);
             tproduced = tconsumed = 0;

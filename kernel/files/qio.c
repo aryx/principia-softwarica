@@ -22,7 +22,7 @@ static ulong noblockcnt;
 /*s: qio.c global debugging */
 static int debugging;
 
-#define QDEBUG  if(0)
+//#define QDEBUG  if(0)
 /*e: qio.c global debugging */
 
 /*s: global qiomaxatomic */
