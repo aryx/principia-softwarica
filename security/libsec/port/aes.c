@@ -37,7 +37,7 @@ typedef uchar	u8;
 typedef ulong	u32;
 
 #define FULL_UNROLL
-#define const
+//#define const
 
 static const u32 Td0[256];
 static const u32 Td1[256];
