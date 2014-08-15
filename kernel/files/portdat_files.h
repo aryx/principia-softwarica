@@ -431,10 +431,17 @@ struct Dirtab
 };
 /*e: struct Dirtab */
 
+// used by with devmnt.c and sysfile.c
+struct Bogus {
+    Chan    *chan;
+    Chan    *authchan;
+    char    *spec;
+    int flags;
+};
 
 
 //*****************************************************************************
-// Internal to memory/
+// Internal to files/
 //*****************************************************************************
 
 /*s: constants tags */

@@ -553,7 +553,7 @@ ramscan(phys_addr maxmem)
     cpu->pdproto[PDX(vbase)] = 0;
     mmuflushtlb(PADDR(cpu->pdproto));
 
-    mapfree(&rmapupa, pa, (u32int)-pa);
+    mapfree(&rmapupa, pa, (u32int)(-pa));
     *k0 = kzero;
 }
 /*e: function ramscan */

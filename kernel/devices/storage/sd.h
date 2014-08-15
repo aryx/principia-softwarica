@@ -135,7 +135,8 @@ enum {
  * by making sure sd buffers are cache-aligned (some ARM systems) or
  * page-aligned (xen) for DMA.
  */
-#ifndef sdmalloc
+#ifdef sdmalloc
+#else
 #define sdmalloc(n) malloc(n)
 #define sdfree(p) free(p)
 #endif

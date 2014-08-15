@@ -762,6 +762,11 @@ syspwrite(ulong* arg)
 /*e: syscall pwrite */
 
 /*s: function sseek */
+union v_or_u2 {
+  vlong v;
+  ulong u[2];
+};
+
 // vlong seek(int fd, vlong n, int type);
 static void
 sseek(ulong *arg)
@@ -771,10 +776,7 @@ sseek(ulong *arg)
     DirEntry dir;
     int n;
     vlong off;
-    union {
-        vlong v;
-        ulong u[2];
-    } o;
+    union v_or_u2 o;
 
     c = fdtochan(arg[1], -1, true, true);
     if(waserror()){
@@ -936,6 +938,7 @@ syschdir(ulong* arg)
 /*e: syscall chdir */
 
 /*s: function bindmount */
+
 long
 bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, char* spec)
 {
@@ -947,12 +950,7 @@ bindmount(bool ismount, int fd, int afd, char* arg0, char* arg1, ulong flag, cha
     /*x: [[bindmount()]] locals */
     Chan *ac, *bc;
 
-    struct {
-        Chan    *chan;
-        Chan    *authchan;
-        char    *spec;
-        int flags;
-    } bogus;
+    struct Bogus bogus;
     /*e: [[bindmount()]] locals */
 
     if((flag&~MMASK) || (flag&MORDERMASK)==(MBEFORE|MAFTER))

@@ -102,14 +102,9 @@ mntattach(char *muxattach)
     Mnt *m;
     Chan *c;
     Mntrpc *r;
-    struct bogus{
-        Chan    *chan;
-        Chan    *authchan;
-        char    *spec;
-        int flags;
-    }bogus;
+    struct Bogus bogus;
 
-    bogus = *((struct bogus *)muxattach);
+    bogus = *((struct Bogus *)muxattach);
     c = bogus.chan;
 
     m = c->mux;

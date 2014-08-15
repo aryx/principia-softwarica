@@ -592,11 +592,11 @@ pcaudiosbintr(Ureg*, void*)
     blaster.intr();
 }
 
-//void
-//audiodmaintr(void)
-//{
-///*    print("#A: dma interrupt\n");   /**/
-//}
+void
+audiodmaintr(void)
+{
+/*    print("#A: dma interrupt\n");   /**/
+}
 
 static int
 anybuf(void*)

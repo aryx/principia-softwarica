@@ -616,16 +616,16 @@ _dumpstack(Ureg *ureg)
     && (uintptr)&l >= (uintptr)up->kstack
     && (uintptr)&l <= (uintptr)up->kstack+KSTACK)
         estack = (uintptr)up->kstack+KSTACK;
-    else if((uintptr)&l >= (uintptr)cpu->stack
-    && (uintptr)&l <= (uintptr)cpu+CPUSIZE)
-        estack = (uintptr)cpu+CPUSIZE;
+    else if((uintptr)(&l) >= (uintptr)(cpu->stack)
+    && (uintptr)(&l) <= (uintptr)(cpu+CPUSIZE))
+        estack = (uintptr)(cpu+CPUSIZE);
     else
         return;
     x += iprint("estackx %p\n", estack);
 
-    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
+    for(l = (uintptr)(&l); l < estack; l += sizeof(uintptr)){
         v = *(uintptr*)l;
-        if((KTZERO < v && v < (uintptr)&etext) || estack-l < 32){
+        if((KTZERO < v && v < (uintptr)(&etext)) || estack-l < 32){
             /*
              * Could Pick off general CALL (((byte*)v)[-5] == 0xE8)
              * and CALL indirect through AX
@@ -648,7 +648,7 @@ _dumpstack(Ureg *ureg)
         return;
 
     i = 0;
-    for(l = (uintptr)&l; l < estack; l += sizeof(uintptr)){
+    for(l = (uintptr)(&l); l < estack; l += sizeof(uintptr)){
         iprint("%.8p ", *(uintptr*)l);
         if(++i == 8){
             i = 0;
