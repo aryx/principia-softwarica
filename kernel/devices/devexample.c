@@ -94,7 +94,7 @@ syswrite(Chan *c, void *va, long n, vlong off)
 	return n;
 }
 
-Dev sysdevtab = {
+Dev exampledevtab = {
     .dc       =    'k',
     .name     =    "sys",
                
