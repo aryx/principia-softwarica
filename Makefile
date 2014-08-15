@@ -49,7 +49,7 @@ prolog2:
 	~/pfff/codequery -lang clang2 -build include/ kernel/
 
 graph3:
-	~/pfff/codegraph -lang c -build include/ kernel/
+	~/pfff/codegraph.opt -symlinks -derived_data -lang c -build include/ kernel/
 
 #trace:
 #	mk clean
