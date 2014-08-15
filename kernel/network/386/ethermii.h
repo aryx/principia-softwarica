@@ -80,7 +80,7 @@ enum {          /* Esr */
   Esr1000XFD  = 0x8000, /* 1000BASE-X FD Capable */
 };
 
-typedef struct Mii {
+struct Mii {
   Lock;
   int nphy;
   int mask;
@@ -90,9 +90,9 @@ typedef struct Mii {
   void* ctlr;
   int (*mir)(Mii*, int, int);
   int (*miw)(Mii*, int, int, int);
-} Mii;
+};
 
-typedef struct MiiPhy {
+struct MiiPhy {
   Mii*  mii;
   int oui;
   int phyno;

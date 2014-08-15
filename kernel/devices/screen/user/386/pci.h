@@ -85,7 +85,7 @@ enum {          /* type 1 pre-defined header */
 };
 
 typedef struct Pcidev Pcidev;
-typedef struct Pcidev {
+struct Pcidev {
   int tbdf;     /* type+bus+device+function */
   ushort  vid;      /* vendor ID */
   ushort  did;      /* device ID */

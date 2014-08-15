@@ -14,7 +14,7 @@ _MP_ *_mp_;
 
 /*s: archmp.c forward decl */
 // forward decl, mutual recursivity between archmp and identity
-PCArch archmp;
+extern PCArch archmp;
 /*e: archmp.c forward decl */
 
 
