@@ -17,7 +17,7 @@ char*		_ndbparsetuple(char*, Ndbtuple**);
 Ndbtuple*	_ndbparseline(char*);
 
 #define ISWHITE(x) ((x) == ' ' || (x) == '\t' || (x) == '\r')
-#define EATWHITE(x) while(ISWHITE(*(x)))(x)++
+#define EATWHITE(x) do{while(ISWHITE(*(x)))(x)++;}while(0)
 
 extern Ndbtuple *_ndbtfree;
 

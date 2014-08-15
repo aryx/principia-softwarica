@@ -111,9 +111,9 @@ journalv(int out, vlong v)
 	journal(out, buf);
 }
 #else
-#define	journal(a, b)
-#define journaln(a, b)
-#define journalv(a, b)
+#define	journal(a, b) nil
+#define journaln(a, b) nil
+#define journalv(a, b) nil
 #endif
 
 int

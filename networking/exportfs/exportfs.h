@@ -2,7 +2,7 @@
  * exportfs.h - definitions for exporting file server
  */
 
-#define DEBUG		if(!dbg){}else fprint
+#define DEBUG		if(dbg)fprint
 #define DFD		9
 #define fidhash(s)	fhash[s%FHASHSIZE]
 

@@ -44,7 +44,7 @@ typedef struct Fmt  Fmt;
 #define offsetof(s, m)  (ulong)(&(((s*)0)->m))
 /*e: function offsetof */
 /*s: function assert */
-#define assert(x) if(x){}else _assert("x")
+#define assert(x) do { if(x) {}else _assert("x");}while(0)
 /*e: function assert */
 
 /*

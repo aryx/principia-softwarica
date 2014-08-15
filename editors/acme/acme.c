@@ -53,6 +53,8 @@ derror(Display*, char *errorstr)
 	error(errorstr);
 }
 
+#define	WPERCOL	8
+
 void
 threadmain(int argc, char *argv[])
 {
@@ -185,7 +187,6 @@ threadmain(int argc, char *argv[])
 
 	fsysinit();
 
-	#define	WPERCOL	8
 	disk = diskinit();
 	if(!loadfile || !rowload(&row, loadfile, TRUE)){
 		rowinit(&row, screen->clipr);

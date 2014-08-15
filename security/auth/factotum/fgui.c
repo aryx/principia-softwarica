@@ -171,31 +171,31 @@ readreq(void *a)
 		send(rt->rc, &r);
 	}
 }
-#ifdef asdf
-static void
-readreq(void *a)
-{
-	RequestType *rt = a;
-	char *buf, *p;
-	int n;
-	Request r;
-
-	rt->fd = -1;
-	rt->cs = nil;
-
-	buf = malloc(Requestlen);
-	if(buf == nil)
-		sysfatal("allocating read buffer: %r");
-	r.rt = rt;
-
-	for(;;){
-		strcpy(buf, "adfasdf=afdasdf asdfasdf=asdfasdf");
-		r.a = _parseattr(buf);
-		send(rt->rc, &r);
-		sleep(5000);
-	}
-}
-#endif asdf
+//#ifdef asdf
+//static void
+//readreq(void *a)
+//{
+//	RequestType *rt = a;
+//	char *buf, *p;
+//	int n;
+//	Request r;
+//
+//	rt->fd = -1;
+//	rt->cs = nil;
+//
+//	buf = malloc(Requestlen);
+//	if(buf == nil)
+//		sysfatal("allocating read buffer: %r");
+//	r.rt = rt;
+//
+//	for(;;){
+//		strcpy(buf, "adfasdf=afdasdf asdfasdf=asdfasdf");
+//		r.a = _parseattr(buf);
+//		send(rt->rc, &r);
+//		sleep(5000);
+//	}
+//}
+//#endif asdf
 
 /*
  *  open/close the keyboard, mouse and resize channels

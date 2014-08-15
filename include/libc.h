@@ -3,7 +3,7 @@
 
 #define	nelem(x)	(sizeof(x)/sizeof((x)[0]))
 #define	offsetof(s, m)	(ulong)(&(((s*)0)->m))
-#define	assert(x)	if(x){}else _assert("x")
+#define	assert(x)	do{ if(x) {} else _assert("x"); }while(0)
 
 /*
  * mem routines
@@ -728,6 +728,7 @@ extern char *argv0;
 				while(*_args && (_args += chartorune(&_argc, _args)))\
 				switch(_argc)
 #define	ARGEND		SET(_argt);USED(_argt,_argc,_args);}USED(argv, argc);
+
 #define	ARGF()		(_argt=_args, _args="",\
 				(*_argt? _argt: argv[1]? (argc--, *++argv): 0))
 #define	EARGF(x)	(_argt=_args, _args="",\

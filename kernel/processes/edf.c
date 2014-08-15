@@ -23,9 +23,9 @@ extern int panicking;
 
 /*s: edf.c debugging macro */
 enum {
-    Dontprint = 1,
+    Dontprint = true,
 };
-#define DPRINT  if(Dontprint){}else print
+#define DPRINT  if(!Dontprint) print
 /*e: edf.c debugging macro */
 
 enum 

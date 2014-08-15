@@ -558,7 +558,7 @@ simpleaddr(void)
 		case '.':
 		case '$':
 		case '\'':
-			if(addr.type!='"')
+			if(addr.type!='"') //pad: ???
 		case '"':
 				error(Eaddress);
 			break;

@@ -8,7 +8,7 @@
  * necessary to back up the input stream up one byte after calling charstod.
  */
 
-#define ADVANCE *s++ = c; if(s>=e) return NaN(); c = (*f)(vp)
+#define ADVANCE do{*s++ = c; if(s>=e) return NaN(); c = (*f)(vp);}while(0)
 
 double
 charstod(int(*f)(void*), void *vp)

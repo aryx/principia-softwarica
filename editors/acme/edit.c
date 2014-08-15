@@ -630,7 +630,7 @@ simpleaddr(void)
 		case '.':
 		case '$':
 		case '\'':
-			if(addr.type!='"')
+			if(addr.type!='"') //pad: ????
 		case '"':
 				editerror("bad address syntax");
 			break;

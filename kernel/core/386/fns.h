@@ -57,7 +57,7 @@ void  (*cycles)(uvlong*);
 void  dmaend(int);
 int dmainit(int, int);
 long  dmasetup(int, void*, long, int);
-#define evenaddr(x)       /* x86 doesn't care */
+#define evenaddr(x) nil      /* x86 doesn't care */
 //@Scheck: Assembly
 void  fpclear(void);
 //@Scheck: Assembly
@@ -137,7 +137,7 @@ int ioalloc(int, int, int, char*);
 void  kbdenable(void);
 void  kbdinit(void);
 /*s: function kmapinval */
-#define kmapinval()
+#define kmapinval() nil
 /*e: function kmapinval */
 //@Scheck: Assembly
 void  lgdt(ushort[3]);
@@ -255,7 +255,7 @@ void  wrmsr(int, vlong);
 /*e: function PADDR */
 
 // used in devaudio, maybe could remove it
-#define dcflush(a, b)
+#define dcflush(a, b) nil
 
 #define BIOSSEG(a)  KADDR(((uint)(a))<<4)
 

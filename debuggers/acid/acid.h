@@ -55,7 +55,7 @@ Extern int	initialising;
 Extern int	quiet;
 
 extern void	(*expop[])(Node*, Node*);
-#define expr(n, r) (r)->comt=0; (*expop[(n)->op])(n, r);
+#define expr(n, r) do{(r)->comt=0; (*expop[(n)->op])(n, r);}while(0)
 extern int	fmtsize(Value *v) ;
 
 enum

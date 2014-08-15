@@ -472,8 +472,8 @@ decode(Header *h, Rawimage *i, Entry *tbl)
 				first = 0;
 				continue;
 			}
-			#define early 0 /* peculiar tiff feature here for reference */
-			if(nentry == maxentry-early) {
+			//#define early 0 /* peculiar tiff feature here for reference */
+			if(nentry == maxentry) { //-early) {
 				if(csize >= 12)
 					continue;
 				csize++;
