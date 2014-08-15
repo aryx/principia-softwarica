@@ -50,7 +50,7 @@ SRC_VIEWS= \
   arch/386/mpacpi.h \
   arch/386/nvram.c \
   arch/386/realmode.c \
-  arch/386/x16.h \
+  arch/386/x16.ha \
   arch/386/x86.c \
   buses/386/dat_buses.h \
   buses/386/dma.c \

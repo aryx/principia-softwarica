@@ -11,7 +11,7 @@
  */
 #include "mem.h"
 
-//TODO: mv in x16.h? or just case of instructions not handled by 8[al]?
+//TODO: mv in x16.ha? or just case of instructions not handled by 8[al]?
 #define NOP             BYTE $0x90              /* NOP */
 #define LGDT(gdtptr)    BYTE $0x0F;             /* LGDT */                      \
                         BYTE $0x01; BYTE $0x16;                                 \
