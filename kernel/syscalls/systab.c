@@ -51,8 +51,6 @@ extern Syscall sysawait;
 extern Syscall syspread;
 extern Syscall syspwrite;
 extern Syscall systsemacquire;
-//@Scheck: TODO? dead?
-extern Syscall sysdeath;
 /*e: systab.c forward decl */
 
 //coupling: debuggers/acid/conf/syscall

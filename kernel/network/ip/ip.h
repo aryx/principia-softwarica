@@ -550,7 +550,6 @@ struct Routewalk
   void  (*walk)(Route*, Routewalk*);
 };
 
-//@Scheck: unnamed substructure
 struct  RouteTree
 {
   Route*  right;

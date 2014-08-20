@@ -269,7 +269,6 @@ mmupdalloc(void)
 /*e: function mmupdalloc */
 
 /*s: function mmupdfree */
-//@Scheck: not dead
 static void
 mmupdfree(Proc *proc, Page *page)
 {
@@ -405,7 +404,6 @@ mmurelease(Proc* proc)
 /*
  * Allocate and install pd for the current process.
  */
-//@Scheck: no dead, called bellow
 static void
 upallocmmupd(void)
 {

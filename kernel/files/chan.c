@@ -230,7 +230,6 @@ newpath(char *s)
 /*e: constructor newpath */
 
 /*s: function copypath */
-//@Scheck: not dead, used below
 static Path*
 copypath(Path *p)
 {

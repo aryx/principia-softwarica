@@ -384,10 +384,9 @@ devcons_panic(char *fmt, ...)
 
 /*s: function sysfatal */
 /* libmp at least contains a few calls to sysfatal; simulate with panic */
-//@Scheck: no dead, override also sysfatal from libc/9sys/sysfatal.c
 // note that this is not a system call, even though it's prefixed with sys
-void
-sysfatal(char *fmt, ...)
+//@Scheck: no dead, override also sysfatal from libc/9sys/sysfatal.c
+void sysfatal(char *fmt, ...)
 {
     char err[256];
     va_list arg;

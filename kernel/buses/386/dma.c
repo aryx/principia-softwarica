@@ -31,7 +31,6 @@ struct DMAxfer
  *  the dma controllers.  the first half of this structure specifies
  *  the I/O ports used by the DMA controllers.
  */
-//@Scheck: unnamed substructure
 struct DMAport
 {
     uchar   addr[4];    /* current address (4 channels) */

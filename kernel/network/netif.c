@@ -630,7 +630,6 @@ hash(uchar *a, int len)
     return sum%Nmhash;
 }
 
-//@Scheck: not dead, used in devether.c but not in .clang, weird
 int
 activemulti(Netif *nif, uchar *addr, int alen)
 {

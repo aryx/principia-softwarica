@@ -1018,7 +1018,6 @@ tfn(void *arg)
 /*e: function tfn */
 
 /*s: function twakeup */
-//@Scheck: FP!! TODO because assigned in field of unnamed substructure
 void
 twakeup(Ureg*, Timer *t)
 {
@@ -1531,7 +1530,6 @@ procdump(void)
  *  wait till all processes have flushed their mmu
  *  state about segment s
  */
-//@Scheck: not dead, used in segment.c
 void
 procflushseg(Segment *s)
 {

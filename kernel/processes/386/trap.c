@@ -376,8 +376,7 @@ kexit(Ureg*)
  *  Trap is called with interrupts disabled via interrupt-gates.
  */
 //@Scheck: not dead, called from assembly by _strayintr
-void
-trap(Ureg* ureg)
+void trap(Ureg* ureg)
 {
     bool clockintr;
     bool user;
@@ -757,8 +756,7 @@ fault386(Ureg* ureg, void*)
  *  Syscall is called directly from assembler without going through trap().
  */
 //@Scheck: not dead, called from assembly by _syscallintr
-void
-syscall(Ureg* ureg)
+void syscall(Ureg* ureg)
 {
     char *e;
     ulong   sp;

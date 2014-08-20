@@ -88,7 +88,6 @@ extern PCArch archgeneric;
 //*****************************************************************************
 
 /*s: struct FPstate */
-//@Scheck: unnamed substructure
 struct  FPstate     /* x87 fpu state */
 {
   ushort  control;
@@ -109,7 +108,6 @@ struct  FPstate     /* x87 fpu state */
 /*e: struct FPstate */
 
 /*s: struct FPssestate */
-//@Scheck: unnamed substructure
 struct  FPssestate    /* SSE fp state */
 {
   ushort  fcw;    /* control */
@@ -129,7 +127,6 @@ struct  FPssestate    /* SSE fp state */
 /*e: struct FPssestate */
 
 /*s: struct  SFPssestate */
-//@Scheck: unnamed substructure
 struct  SFPssestate   /* SSE fp state with alignment slop */
 {
   FPssestate;

@@ -7,7 +7,6 @@
  * (including the table checksum).
  */
 
-//@Scheck: type deps on params
 struct Madt {       /* Multiple APIC DT */
   uchar sdthdr[36];   /* "MADT" + length[4] + [28] */
   uchar addr[4];    /* Local APIC Address */

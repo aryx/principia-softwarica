@@ -347,7 +347,6 @@ addethercard(char* t, int (*r)(Ether*))
     ncard++;
 }
 
-//@Scheck: not dead, used below, weird not in .clang for its use below
 int
 parseether(uchar *to, char *from)
 {

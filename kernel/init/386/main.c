@@ -837,8 +837,7 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 
 /*s: function main */
 //@Scheck: not dead, entry point :) jumped from assembly at _startpg() end
-void
-main(void)
+void main(void)
 {
     // initial assignment made to avoid circular dependencies in codegraph
     /*s: [[main()]] initial assignments for backward deps */

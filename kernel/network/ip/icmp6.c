@@ -88,7 +88,7 @@ struct IPICMP {
 
 #define IPICMPSZ offsetof(IPICMP, payload[0])
 
-//@Scheck: not dead, used though NDISCSZ macro below
+// used though NDISCSZ macro below
 struct NdiscC {
     ICMPHDR;
     uchar   target[IPaddrlen];

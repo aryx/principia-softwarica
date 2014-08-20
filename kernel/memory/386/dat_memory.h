@@ -5,7 +5,6 @@
  *  MMU stuff in proc
  */
 /*s: struct ArchProcMMU */
-//@Scheck: not dead, unnamed substructure
 struct ArchProcMMU
 {
   /*s: [[Proc]] [[Arch]] memory fields */

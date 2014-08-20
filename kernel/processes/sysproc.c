@@ -720,8 +720,7 @@ sysawait(ulong* arg)
 
 /*s: function werrstr */
 //@Scheck: this is also defined in libc, so it's supposed to override it? TODO
-void
-werrstr(char *fmt, ...)
+void werrstr(char *fmt, ...)
 {
     va_list va;
 

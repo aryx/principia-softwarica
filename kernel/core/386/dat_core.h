@@ -44,7 +44,6 @@ struct Segdesc
 /*e: struct Segdesc */
 
 /*s: struct ArchCpu */
-//@Scheck: not dead, inlined struct
 struct ArchCpu {
     /*s: [[Cpu]] [[Arch]] cpuid fields */
     char  cpuidid[16];

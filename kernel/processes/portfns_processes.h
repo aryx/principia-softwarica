@@ -62,7 +62,6 @@ void    scheddump(void);
 Proc*   dequeueproc(Schedq*, Proc*);
 void   preempt(void);
 void    killbig(char*);
-//@Scheck: not dead, used in segment.c, weird TODO
 void    procflushseg(Segment*); 
 void    procdump(void);
 void    renameuser(char*, char*);
@@ -102,7 +101,7 @@ int   edfready(Proc*);
 char*   edfadmit(Proc*);
 
 // sysproc.c
-//@Scheck: not useless, used by misc/rebootcmd.c, weird not recognized by cg
+// not useless, used by misc/rebootcmd.c, weird not recognized by cg
 ulong   l2be(long);
 // many sysxxx functions (used in syscalls/ without requiring extern decl)
 
