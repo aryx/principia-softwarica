@@ -50,6 +50,7 @@ check2:
 prolog2:
 	~/pfff/codequery -lang clang2 -build include/ kernel/
 
+# just kernel, but with new graph_code_c!
 graph3:
 	~/pfff/codegraph -derived_data -lang c -build include/ kernel/ lib_core/libc/9syscall
 check3:
