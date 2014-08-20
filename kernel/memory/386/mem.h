@@ -25,7 +25,7 @@
 /*e: constant BLOCKALIGN */
 
 // Intel specific
-#define BY2XPG    (4096*1024)   /* bytes per big page */
+//#define BY2XPG    (4096*1024)   /* bytes per big page */
 
 /*s: constant FPalign */
 #define FPalign   16      /* required for FXSAVE */
@@ -49,7 +49,7 @@
 /*s: constant HZ */
 #define HZ    (100)     /* clock frequency */
 /*e: constant HZ */
-#define MS2HZ   (1000/HZ)   /* millisec per clock tick */
+//#define MS2HZ   (1000/HZ)   /* millisec per clock tick */
 #define TK2SEC(t) ((t)/HZ)    /* ticks to seconds */
 
 /*
@@ -135,6 +135,7 @@
 #define REBOOTADDR  (0x11000)   /* reboot code - physical address */
 
 #define CPU0PD   (KZERO+0x12000)   /* bootstrap processor PD */
+//@Scheck: not dead, use in l.s
 #define CPU0PT   (KZERO+0x13000)   /* bootstrap processor PT for 0-4MB */
 #define CPU0GDT   (KZERO+0x14000)   /* bootstrap processor GDT */
 
@@ -164,9 +165,9 @@
 #define UESEG 4 /* user executable */
 #define TSSSEG  5 /* task segment */
 /*s: constant x86 other segments */
-#define APMCSEG   6 /* APM code segment */
-#define APMCSEG16 7 /* APM 16-bit code segment */
-#define APMDSEG   8 /* APM data segment */
+//#define APMCSEG   6 /* APM code segment */
+//#define APMCSEG16 7 /* APM 16-bit code segment */
+//#define APMDSEG   8 /* APM data segment */
 /* #define  APM40SEG  8 /* APM segment 0x40 */
 /*x: constant x86 other segments */
 #define KESEG16   9 /* kernel executable 16-bit */
@@ -177,23 +178,23 @@
 /*s: constant SELGDT */
 #define SELGDT  (0<<2)  /* selector is in gdt */
 /*e: constant SELGDT */
-#define SELLDT  (1<<2)  /* selector is in ldt */
+//#define SELLDT  (1<<2)  /* selector is in ldt */
 
 /*s: macro SELECTOR */
 #define SELECTOR(idx, type, prio) (((idx)<<3) | (type) | (prio))
 /*e: macro SELECTOR */
 
 /*s: constant x86 segment selectors */
-#define NULLSEL SELECTOR(NULLSEG, SELGDT, 0)
+//#define NULLSEL SELECTOR(NULLSEG, SELGDT, 0)
 #define KDSEL SELECTOR(KDSEG, SELGDT, 0)
 #define KESEL SELECTOR(KESEG, SELGDT, 0)
 #define UESEL SELECTOR(UESEG, SELGDT, 3)
 #define UDSEL SELECTOR(UDSEG, SELGDT, 3)
 #define TSSSEL  SELECTOR(TSSSEG, SELGDT, 0)
 /*s: constant x86 other segment selectors */
-#define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
-#define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
-#define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
+//#define APMCSEL   SELECTOR(APMCSEG, SELGDT, 0)
+//#define APMCSEL16 SELECTOR(APMCSEG16, SELGDT, 0)
+//#define APMDSEL   SELECTOR(APMDSEG, SELGDT, 0)
 /* #define  APM40SEL  SELECTOR(APM40SEG, SELGDT, 0) */
 /*e: constant x86 other segment selectors */
 /*e: constant x86 segment selectors */
@@ -205,11 +206,11 @@
 #define SEGDATA (0x10<<8) /* data/stack segment */
 #define SEGEXEC (0x18<<8) /* executable segment */
 #define SEGTSS  (0x9<<8)  /* TSS segment */
-#define SEGCG (0x0C<<8) /* call gate */
+//#define SEGCG (0x0C<<8) /* call gate */
 #define SEGIG (0x0E<<8) /* interrupt gate */
-#define SEGTG (0x0F<<8) /* trap gate */
+//#define SEGTG (0x0F<<8) /* trap gate */
 
-#define SEGTYPE (0x1F<<8)
+//#define SEGTYPE (0x1F<<8)
 
 #define SEGP  (1<<15)   /* segment present */
 
@@ -217,7 +218,7 @@
 
 #define SEGB  (1<<22)   /* granularity 1==4k (for expand-down) */
 #define SEGG  (1<<23)   /* granularity 1==4k (for other) */
-#define SEGE  (1<<10)   /* expand down */
+//#define SEGE  (1<<10)   /* expand down */
 
 #define SEGW  (1<<9)    /* writable (for data/stack) */
 #define SEGR  (1<<9)    /* readable (for code) */
@@ -253,7 +254,7 @@
 #define PTERONLY  (0<<1)
 
 // x86 specific constants
-#define PTEKERNEL (0<<2)
+//#define PTEKERNEL (0<<2)
 #define PTEUSER   (1<<2)
 
 #define PTEWT       (1<<3) // Write Through, e.g. VGA memory, mean??

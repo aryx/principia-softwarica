@@ -8,7 +8,7 @@
 #include "ip.h"
 #include "ipv6.h"
 
-#define DPRINT if(0)print
+//#define DPRINT if(0)print
 
 extern char*    ipifcadd6(Ipifc *ifc, char**argv, int argc);
 extern char*    ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp);

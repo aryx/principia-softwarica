@@ -94,6 +94,7 @@ syswrite(Chan *c, void *va, long n, vlong off)
 	return n;
 }
 
+//@Scheck: dead indeed, but used as an example
 Dev exampledevtab = {
     .dc       =    'k',
     .name     =    "sys",

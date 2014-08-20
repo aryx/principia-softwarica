@@ -41,6 +41,7 @@ typedef struct Fmt  Fmt;
 #define nelem(x)  (sizeof(x)/sizeof((x)[0]))
 /*e: function nelem */
 /*s: function offsetof */
+//@Scheck: not dead, actually exanded in macros.h
 #define offsetof(s, m)  (ulong)(&(((s*)0)->m))
 /*e: function offsetof */
 /*s: function assert */

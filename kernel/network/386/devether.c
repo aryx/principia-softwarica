@@ -531,7 +531,7 @@ ethershutdown(void)
 }
 
 
-#define POLY 0xedb88320
+//#define POLY 0xedb88320
 
 /* really slow 32 bit crc for ethers */
 //ulong

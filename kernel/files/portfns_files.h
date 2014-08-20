@@ -110,8 +110,8 @@ void    devremove(Chan*);
 int   devwstat(Chan*, uchar*, int);
 #define DEVDOTDOT -1
 Devgen    devgen;//TODO?
-void    devpower(int);
-int   devconfig(int, char *, DevConf *);//TODO? why fp no-deps?
+//void    devpower(int);
+//int   devconfig(int, char *, DevConf *);//TODO? why fp no-deps?
 int   devstat(Chan*, uchar*, int, Dirtab*, int, Devgen*);
 Chan*   devopen(Chan*, int, Dirtab*, int, Devgen*);
 Chan*   devattach(Rune, char*);

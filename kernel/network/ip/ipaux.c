@@ -191,7 +191,7 @@ enum
     Isprefix= 16,
 };
 
-#define CLASS(p) ((*(uchar*)(p))>>6)
+//#define CLASS(p) ((*(uchar*)(p))>>6)
 
 void
 ipv62smcast(uchar *smcast, uchar *a)

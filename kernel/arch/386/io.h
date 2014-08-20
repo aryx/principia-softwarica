@@ -214,8 +214,8 @@ enum {
 
 #define PCIWINDOW 0
 #define PCIWADDR(va)  (PADDR(va)+PCIWINDOW)
-#define ISAWINDOW 0
-#define ISAWADDR(va)  (PADDR(va)+ISAWINDOW)
+//#define ISAWINDOW 0
+//#define ISAWADDR(va)  (PADDR(va)+ISAWINDOW)
 
 /* SMBus transactions */
 enum

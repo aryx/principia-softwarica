@@ -45,7 +45,7 @@ enum {
 };
 
 #define VGAMEM()  0xA0000
-#define vgai(port)    inb(port)
+//#define vgai(port)    inb(port)
 #define vgao(port, data)  outb(port, data)
 
 extern int vgaxi(long, uchar);

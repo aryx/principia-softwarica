@@ -470,16 +470,16 @@ devwstat(Chan*, uchar*, int)
     return 0;
 }
 
-void
-devpower(int)
-{
-    error(Eperm);
-}
-
-int
-devconfig(int, char *, DevConf *)
-{
-    error(Eperm);
-    return 0;
-}
+//void
+//devpower(int)
+//{
+//    error(Eperm);
+//}
+//
+//int
+//devconfig(int, char *, DevConf *)
+//{
+//    error(Eperm);
+//    return 0;
+//}
 /*e: dev.c */

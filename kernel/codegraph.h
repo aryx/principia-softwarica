@@ -1,7 +1,7 @@
 
 // this is only for codegraph
 
-// sys.h symlink is also here for that.
+// see also include/*.h and lib_core/libc/9syscall/sys.h
 
 // tos.h, pragma incomplete
 struct Plink {

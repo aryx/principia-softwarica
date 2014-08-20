@@ -18,6 +18,7 @@
 void    bootlinks(void);
 
 // defined in lib/latin1.c, used only in 386
+//@Scheck: def currently skipped, see skip_list.txt, because of unicode
 long    latin1(Rune*, int);
 
 // used by main.c
@@ -200,7 +201,7 @@ int pcmspecial(char*, ISAConf*);
 //void  pcmspecialclose(int);
 //void  (*_pcmspecialclose)(int);
 //void  pcmunmap(int, PCMmap*);
-int pdmap(ulong*, ulong, ulong, int);
+//int pdmap(ulong*, ulong, ulong, int);
 void  procrestore(Proc*);
 void  procsave(Proc*);
 void  procsetup(Proc*);

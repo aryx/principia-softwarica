@@ -1,1 +1,0 @@
-../lib_core/libc/9syscall/sys.h

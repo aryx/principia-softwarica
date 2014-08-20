@@ -33,7 +33,7 @@ enum
 
 #define QID(q)      ((((ulong)(q).path)&0x0000000F)>>0)
 #define CLIENTPATH(q)   ((((ulong)q)&0x7FFFFFF0)>>QSHIFT)
-#define CLIENT(q)   CLIENTPATH((q).path)
+//#define CLIENT(q)   CLIENTPATH((q).path)
 
 #define NHASH       (1<<5)
 #define HASHMASK    (NHASH-1)
