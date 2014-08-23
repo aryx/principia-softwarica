@@ -50,11 +50,14 @@ check2:
 prolog2:
 	~/pfff/codequery -lang clang2 -build include/ kernel/
 
+KERNELSRC=include/ kernel/ lib_core/libc/9syscall
 # just kernel, but with new graph_code_c!
 graph3:
-	~/pfff/codegraph -derived_data -lang c -build include/ kernel/ lib_core/libc/9syscall
+	~/pfff/codegraph -derived_data -lang c -build $(KERNELSRC)
 check3:
 	~/pfff/scheck -filter 3 -lang c .
+prolog3:
+	~/pfff/codequery -lang c -build $(KERNELSRC)
 
 #trace:
 #	mk clean
