@@ -60,6 +60,8 @@ prolog3:
 	~/pfff/codequery -lang c -build $(KERNELSRC)
 datalog3:
 	~/pfff/codequery -datalog -lang c -build $(KERNELSRC)
+loc3:
+	~/pfff/codemap -filter cpp -test_loc kernel
 
 #trace:
 #	mk clean
