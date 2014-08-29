@@ -58,6 +58,8 @@ check3:
 	~/pfff/scheck -filter 3 -lang c .
 prolog3:
 	~/pfff/codequery -lang c -build $(KERNELSRC)
+datalog3:
+	~/pfff/codequery -datalog -lang c -build $(KERNELSRC)
 
 #trace:
 #	mk clean
