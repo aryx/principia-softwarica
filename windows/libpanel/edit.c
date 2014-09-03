@@ -165,15 +165,15 @@ void pl_typeedit(Panel *p, Rune c){
 		if(ep->sel0!=0) --ep->sel0;
 		twreplace(t, ep->sel0, ep->sel1, 0, 0);
 		break;
-	case Knack:	/* ^U: erase line */
-		while(ep->sel0!=0 && t->text[ep->sel0-1]!='\n') --ep->sel0;
-		twreplace(t, ep->sel0, ep->sel1, 0, 0);
-		break;
-	case Ketb:	/* ^W: erase word */
-		while(ep->sel0!=0 && !pl_idchar(t->text[ep->sel0-1])) --ep->sel0;
-		while(ep->sel0!=0 && pl_idchar(t->text[ep->sel0-1])) --ep->sel0;
-		twreplace(t, ep->sel0, ep->sel1, 0, 0);
-		break;
+//	case Knack:	/* ^U: erase line */
+//		while(ep->sel0!=0 && t->text[ep->sel0-1]!='\n') --ep->sel0;
+//		twreplace(t, ep->sel0, ep->sel1, 0, 0);
+//		break;
+//	case Ketb:	/* ^W: erase word */
+//		while(ep->sel0!=0 && !pl_idchar(t->text[ep->sel0-1])) --ep->sel0;
+//		while(ep->sel0!=0 && pl_idchar(t->text[ep->sel0-1])) --ep->sel0;
+//		twreplace(t, ep->sel0, ep->sel1, 0, 0);
+//		break;
 	default:
 		if((c & 0xFF00) == KF || (c & 0xFF00) == Spec)
 			break;

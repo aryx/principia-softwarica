@@ -109,21 +109,21 @@ void pl_typeentry(Panel *p, Rune c){
 		plsnarf(p);
 		/* no break */
 	case Kdel:	/* clear */
-	case Knack:	/* ^U: erase line */
-		ep->entp=ep->entry;
-		*ep->entp='\0';
-		break;
+//	case Knack:	/* ^U: erase line */
+//		ep->entp=ep->entry;
+//		*ep->entp='\0';
+//		break;
 	case Kbs:	/* ^H: erase character */
 		while(ep->entp!=ep->entry && !pl_rune1st(ep->entp[-1])) *--ep->entp='\0';
 		if(ep->entp!=ep->entry) *--ep->entp='\0';
 		break;
-	case Ketb:	/* ^W: erase word */
-		while(ep->entp!=ep->entry && !pl_idchar(ep->entp[-1]))
-			--ep->entp;
-		while(ep->entp!=ep->entry && pl_idchar(ep->entp[-1]))
-			--ep->entp;
-		*ep->entp='\0';
-		break;
+//	case Ketb:	/* ^W: erase word */
+//		while(ep->entp!=ep->entry && !pl_idchar(ep->entp[-1]))
+//			--ep->entp;
+//		while(ep->entp!=ep->entry && pl_idchar(ep->entp[-1]))
+//			--ep->entp;
+//		*ep->entp='\0';
+//		break;
 	default:
 		if(c < 0x20 || (c & 0xFF00) == KF || (c & 0xFF00) == Spec)
 			break;
