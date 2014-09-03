@@ -95,6 +95,10 @@ chopframe(Frame *f, Point pt, ulong p, int bn)
 		_frdelbox(f, (int)(b-f->box), f->nbox-1);
 }
 
+struct points_frinsert {
+    Point pt0, pt1;
+};
+
 void
 frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
 {
@@ -104,9 +108,7 @@ frinsert(Frame *f, Rune *sp, Rune *ep, ulong p0)
 	ulong cn0;
 	Image *col;
 	Rectangle r;
-	static struct{
-		Point pt0, pt1;
-	}*pts;
+	static struct points_frinsert *pts;
 	static int nalloc=0;
 	int npts;
 
