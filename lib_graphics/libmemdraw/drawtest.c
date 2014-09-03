@@ -4,7 +4,7 @@
 #include <draw.h>
 #include <memdraw.h>
 
-#define DBG if(0)
+//#define DBG if(0)
 #define RGB2K(r,g,b)	((299*((ulong)(r))+587*((ulong)(g))+114*((ulong)(b)))/1000)
 
 /*
@@ -691,7 +691,7 @@ verifyrectmaskrepl(int srcrepl, int maskrepl)
 	mp.x = nrand(Xrange);
 	mp.y = nrand(Yrange);
 
-DBG	print("smalldraws\n");
+    //DBG	print("smalldraws\n");
 	for(tp.y=sp.y,up.y=mp.y,y=dr.min.y; y<dr.max.y && tp.y<Yrange && up.y<Yrange; y++,tp.y++,up.y++)
 		for(tp.x=sp.x,up.x=mp.x,x=dr.min.x; x<dr.max.x && tp.x<Xrange && up.x<Xrange; x++,tp.x++,up.x++)
 			memimagedraw(dst, Rect(x, y, x+1, y+1), s, tp, m, up, SoverD);
@@ -699,7 +699,7 @@ DBG	print("smalldraws\n");
 
 	memmove(dst->data->bdata, dstbits, dst->width*sizeof(ulong)*Yrange);
 
-DBG	print("bigdraw\n");
+    //DBG	print("bigdraw\n");
 	memimagedraw(dst, dr, src, sp, mask, mp, SoverD);
 	for(y=0; y<Yrange; y++)
 		checkline(dr, drawrepl(src->r, sp), drawrepl(mask->r, mp), y, srcrepl?stmp:nil, maskrepl?mtmp:nil);
@@ -868,9 +868,9 @@ getmask(Memimage *img, Point pt)
 	else
 		return getgrey(img, pt);
 }
-#undef DBG
+//#undef DBG
+//#define DBG if(0)
 
-#define DBG if(0)
 /*
  * Write a pixel to img at point pt.
  * 
@@ -893,7 +893,7 @@ putpixel(Memimage *img, Point pt, ulong nv)
 	p = byteaddr(img, pt);
 	v = p[0]|(p[1]<<8)|(p[2]<<16)|(p[3]<<24);
 	bpp = img->depth;
-DBG print("v %.8lux...", v);
+    //DBG print("v %.8lux...", v);
 	if(bpp < 8){
 		/*
 		 * Sub-byte greyscale pixels.  We need to skip the leftmost pt.x%npack pixels,
@@ -902,13 +902,13 @@ DBG print("v %.8lux...", v);
 		npack = 8/bpp;
 		sh = bpp*(npack - pt.x%npack - 1);
 		bits = RGB2K(r,g,b);
-DBG print("repl %lux 8 %d = %lux...", bits, bpp, replbits(bits, 8, bpp));
+        //DBG print("repl %lux 8 %d = %lux...", bits, bpp, replbits(bits, 8, bpp));
 		bits = replbits(bits, 8, bpp);
 		mask = (1<<bpp)-1;
-DBG print("bits %lux mask %lux sh %d...", bits, mask, sh);
+        //DBG print("bits %lux mask %lux sh %d...", bits, mask, sh);
 		mask <<= sh;
 		bits <<= sh;
-DBG print("(%lux & %lux) | (%lux & %lux)", v, ~mask, bits, mask);
+        //DBG print("(%lux & %lux) | (%lux & %lux)", v, ~mask, bits, mask);
 		v = (v & ~mask) | (bits & mask);
 	} else {
 		/*
@@ -946,26 +946,26 @@ DBG print("(%lux & %lux) | (%lux & %lux)", v, ~mask, bits, mask);
 				abort();
 			}
 
-DBG print("repl %lux 8 %d = %lux...", bits, nbits, replbits(bits, 8, nbits));
+            //DBG print("repl %lux 8 %d = %lux...", bits, nbits, replbits(bits, 8, nbits));
 			if(TYPE(c) != CMap)
 				bits = replbits(bits, 8, nbits);
 			mask = (1<<nbits)-1;
-DBG print("bits %lux mask %lux sh %d...", bits, mask, sh);
+            //DBG print("bits %lux mask %lux sh %d...", bits, mask, sh);
 			bits <<= sh;
 			mask <<= sh;
 			v = (v & ~mask) | (bits & mask);
 			sh += nbits;
 		}
 	}
-DBG print("v %.8lux\n", v);
+    //DBG print("v %.8lux\n", v);
 	p[0] = v;
 	p[1] = v>>8;
 	p[2] = v>>16;
 	p[3] = v>>24;	
 }
-#undef DBG
+//#undef DBG
+//#define DBG if(0)
 
-#define DBG if(0)
 void
 drawonepixel(Memimage *dst, Point dp, Memimage *src, Point sp, Memimage *mask, Point mp)
 {
@@ -976,7 +976,7 @@ drawonepixel(Memimage *dst, Point dp, Memimage *src, Point sp, Memimage *mask, P
 	m = getmask(mask, mp);
 	M = 255-(sa*m)/255;
 
-DBG print("dst %x %x %x %x src %x %x %x %x m %x = ", dr,dg,db,da, sr,sg,sb,sa, m);
+    //DBG print("dst %x %x %x %x src %x %x %x %x m %x = ", dr,dg,db,da, sr,sg,sb,sa, m);
 	if(dst->flags&Fgrey){
 		/*
 		 * We need to do the conversion to grey before the alpha calculation
@@ -999,6 +999,6 @@ DBG print("dst %x %x %x %x src %x %x %x %x m %x = ", dr,dg,db,da, sr,sg,sb,sa, m
 		da = (sa*m + da*M)/255;
 	}
 
-DBG print("%x %x %x %x\n", dr,dg,db,da);
+    //DBG print("%x %x %x %x\n", dr,dg,db,da);
 	putpixel(dst, dp, rgbatopix(dr, dg, db, da));
 }
