@@ -2,12 +2,13 @@
 #include <libc.h>
 #include <draw.h>
 
+enum { Max = 64 };
+
 int
 _stringnwidth(Font *f, char *s, Rune *r, int len)
 {
 	int wid, twid, n, max, l;
 	char *name;
-	enum { Max = 64 };
 	ushort cbuf[Max];
 	Rune rune, **rptr;
 	char *subfontname, **sptr;

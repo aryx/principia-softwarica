@@ -460,6 +460,12 @@ keyboardhide(void)
 	send(wkeyboard->mc.c, mouse);
 }
 
+enum {
+    MReshape,
+    MMouse,
+    NALT
+};
+
 void
 mousethread(void*)
 {
@@ -469,11 +475,6 @@ mousethread(void*)
 	Rectangle r;
 	Point xy;
 	Mouse tmp;
-	enum {
-		MReshape,
-		MMouse,
-		NALT
-	};
 	static Alt alts[NALT+1];
 
 	threadsetname("mousethread");
