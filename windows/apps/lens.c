@@ -16,7 +16,7 @@ enum {
 	Mexit
 };
 
-char *menustr[] = {
+static char *menustr[] = {
 	"zoom",
 	"unzoom",
 	"grid",
@@ -25,22 +25,22 @@ char *menustr[] = {
 	nil
 };
 
-Menu menu = {
+static Menu menu = {
 	menustr,
 	nil,
 	-1
 };
 
-Point lastp;
-Image *red;
-Image *tmp;
-Image *grid;
-Image *chequer;
-int	screenfd;
-int	mag = 4;
-int	showgrid = 0;
-Rectangle	screenr;
-uchar	*screenbuf;
+static Point lastp;
+static Image *red;
+static Image *tmp;
+static Image *grid;
+static Image *chequer;
+static int	screenfd;
+static int	mag = 4;
+static int	showgrid = 0;
+static Rectangle	screenr;
+static uchar	*screenbuf;
 
 void	magnify(void);
 void makegrid(void);
@@ -56,7 +56,7 @@ drawit(void)
 	flushimage(display, 1);
 }
 
-int bypp;
+static int bypp;
 
 void
 main(int argc, char *argv[])

@@ -21,6 +21,7 @@ main(int argc, char **argv)
 	print("%s\n", q);
 }
 
+// ugly: override faces/main.c?
 void
 killall(char *s)
 {

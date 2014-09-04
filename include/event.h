@@ -54,6 +54,7 @@ extern int	 ekbd(void);
 extern int	 ecanread(ulong);
 extern int	 ecanmouse(void);
 extern int	 ecankbd(void);
+//ugly!!!
 extern void	 eresized(int);	/* supplied by user */
 extern int	 emenuhit(int, Mouse*, Menu*);
 extern int	eatomouse(Mouse*, char*, int);

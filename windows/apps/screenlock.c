@@ -6,16 +6,16 @@
 #include <thread.h>
 #include <auth.h>
 
-char pic[] = "/lib/bunny.bit";
+static char pic[] = "/lib/bunny.bit";
 
-int vgactl;
-int debug;
-int doblank;
-int chatty = 0;
+static int vgactl;
+static int debug;
+static int doblank;
+static int chatty = 0;
 
-char user[256];
+static char user[256];
 
-void
+static void
 blankscreen(int blank)
 {
 	if(vgactl < 0)
@@ -25,7 +25,7 @@ blankscreen(int blank)
 		fprint(2, "blankscreen: can't blank: %r\n");
 }
 
-void
+static void
 error(char *fmt, ...)
 {
 	Fmt f;
@@ -42,7 +42,7 @@ error(char *fmt, ...)
 	threadexitsall("fatal error");
 }
 
-void
+static void
 usage(void)
 {
 	fprint(2, "usage: %s\n", argv0);
@@ -50,7 +50,7 @@ usage(void)
 }
 
 
-void
+static void
 readfile(char *name, char *buf, int nbuf, int addnul)
 {
 	int fd;
@@ -66,7 +66,7 @@ readfile(char *name, char *buf, int nbuf, int addnul)
 		buf[nbuf] = '\0';
 }
 
-void
+static void
 readline(char *buf, int nbuf)
 {
 	char c;
@@ -88,7 +88,7 @@ readline(char *buf, int nbuf)
 	buf[i] = '\0';
 }
 
-void
+static void
 checkpassword(void)
 {
 	int fd, consctl, must;
@@ -145,7 +145,7 @@ checkpassword(void)
 	blankscreen(0);
 }
 
-void
+static void
 blanker(void *)
 {
 	int tics;
@@ -162,7 +162,7 @@ blanker(void *)
 	}
 }
 
-void
+static void
 grabmouse(void*)
 {
 	int fd, x, y;
@@ -198,7 +198,7 @@ screenstring(Point p, char *s)
 	flushimage(display, 1);
 }
 
-void
+static void
 lockscreen(void)
 {
 	enum { Nfld = 5, Fldlen = 12, Cursorlen = 2*4 + 2*2*16, };

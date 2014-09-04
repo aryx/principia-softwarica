@@ -14,21 +14,22 @@ struct Win {
 
 
 
-Reprog  *exclude  = nil;
-Win *win;
-int nwin;
-int mwin;
-int onwin;
-int rows, cols;
-Font *font;
-Image *lightblue;
+static Reprog  *exclude  = nil;
+static Win *win;
+static int nwin;
+static int mwin;
+static int onwin;
+static int rows, cols;
+static Image *lightblue;
+
+extern Font *font;
 
 enum {
 	PAD = 3,
 	MARGIN = 5
 };
 
-void*
+static void*
 erealloc(void *v, ulong n)
 {
 	v = realloc(v, n);
@@ -37,7 +38,7 @@ erealloc(void *v, ulong n)
 	return v;
 }
 
-void*
+static void*
 emalloc(ulong n)
 {
 	void *v;
@@ -49,7 +50,7 @@ emalloc(ulong n)
 	return v;
 }
 
-char*
+static char*
 estrdup(char *s)
 {
 	int l;
@@ -65,7 +66,7 @@ estrdup(char *s)
 }
 
 
-void
+static void
 refreshwin(void)
 {
 	char label[128];
@@ -119,7 +120,7 @@ refreshwin(void)
 	close(fd);
 }
 
-void
+static void
 drawnowin(int i)
 {
 	Rectangle r;
@@ -130,7 +131,7 @@ drawnowin(int i)
 	draw(screen, insetrect(r, -1), lightblue, nil, ZP);
 }
 
-void
+static void
 drawwin(int i)
 {
 	draw(screen, win[i].r, lightblue, nil, ZP);
@@ -141,7 +142,7 @@ drawwin(int i)
 	win[i].dirty = 0;
 }
 
-int
+static int
 geometry(void)
 {
 	int i, ncols, z;
@@ -165,7 +166,7 @@ geometry(void)
 	return z;
 }
 
-void
+static void
 redraw(Image *screen, int all)
 {
 	int i;
@@ -192,7 +193,7 @@ eresized(int new)
 	redraw(screen, 1);
 }
 
-void
+static void
 click(Mouse m)
 {
 	int fd, i, j;	
@@ -233,7 +234,7 @@ click(Mouse m)
 	close(fd);
 }
 
-void
+static void
 usage(void)
 {
 	fprint(2, "usage: winwatch [-e exclude] [-f font]\n");

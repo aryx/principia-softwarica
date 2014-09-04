@@ -3,10 +3,10 @@
 #include <draw.h>
 #include <event.h>
 
-Image *hrhand, *minhand;
-Image *dots, *back;
+static Image *hrhand, *minhand;
+static Image *dots, *back;
 
-Point
+static Point
 circlept(Point c, int r, int degrees)
 {
 	double rad;
@@ -16,7 +16,7 @@ circlept(Point c, int r, int degrees)
 	return c;
 }
 
-void
+static void
 redraw(Image *screen)
 {
 	static int tm, ntm;

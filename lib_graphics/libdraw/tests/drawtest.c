@@ -2,7 +2,6 @@
 #include <libc.h>
 #include <draw.h>
 
-
 void
 main(int argc, char **argv)
 {

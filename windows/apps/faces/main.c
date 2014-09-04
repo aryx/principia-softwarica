@@ -53,29 +53,29 @@ uchar rightdata[] = {
 	0x18, 0x00, 0x00, 0x10, 0x00
 };
 
-Image	*blue;		/* full arrow */
-Image	*bgrnd;		/* pale blue background color */
-Image	*left;		/* left-pointing arrow mask */
-Image	*right;		/* right-pointing arrow mask */
-Font	*tinyfont;
-Font	*mediumfont;
-Font	*datefont;
-int	first, last;	/* first and last visible face; last is first invisible */
-int	nfaces;
-int	mousefd;
-int	nacross;
-int	ndown;
+static Image	*blue;		/* full arrow */
+static Image	*bgrnd;		/* pale blue background color */
+static Image	*left;		/* left-pointing arrow mask */
+static Image	*right;		/* right-pointing arrow mask */
+static Font	*tinyfont;
+static Font	*mediumfont;
+static Font	*datefont;
+static int	first, last;	/* first and last visible face; last is first invisible */
+static int	nfaces;
+static int	mousefd;
+static int	nacross;
+static int	ndown;
 
 char	date[64];
-Face	**faces;
+static Face	**faces;
 char	*maildir = "/mail/fs/mbox";
-ulong	now;
+static ulong	now;
 
-Point	datep = { 8, 6 };
-Point	facep = { 8, 6+0+4 };	/* 0 updated to datefont->height in init() */
-Point	enddate;			/* where date ends on display; used to place arrows */
-Rectangle	leftr;			/* location of left arrow on display */
-Rectangle	rightr;		/* location of right arrow on display */
+static Point	datep = { 8, 6 };
+static Point	facep = { 8, 6+0+4 };	/* 0 updated to datefont->height in init() */
+static Point	enddate;			/* where date ends on display; used to place arrows */
+static Rectangle	leftr;			/* location of left arrow on display */
+static Rectangle	rightr;		/* location of right arrow on display */
 void updatetimes(void);
 
 void
@@ -672,7 +672,7 @@ startproc(void (*f)(void), int index)
 		pids[index] = pid;
 }
 
-void
+static void
 usage(void)
 {
 	fprint(2, "usage: faces [-hi] [-m maildir]\n");

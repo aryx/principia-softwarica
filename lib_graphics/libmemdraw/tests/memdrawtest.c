@@ -23,51 +23,49 @@ void	verifyrectrepl(int, int);
 void putpixel(Memimage *img, Point pt, ulong nv);
 ulong rgbatopix(uchar, uchar, uchar, uchar);
 
-char *dchan, *schan, *mchan;
-int dbpp, sbpp, mbpp;
+static char *dchan, *schan, *mchan;
+static int drawdebug=0;
+static int	seed;
+static int	niters = 100;
+static int	dbpp;	/* bits per pixel in destination */
+static int	sbpp;	/* bits per pixel in src */
+static int	mbpp;	/* bits per pixel in mask */
+static int	dpm;	/* pixel mask at high part of byte, in destination */
+static int	nbytes;	/* in destination */
 
-int drawdebug=0;
-int	seed;
-int	niters = 100;
-int	dbpp;	/* bits per pixel in destination */
-int	sbpp;	/* bits per pixel in src */
-int	mbpp;	/* bits per pixel in mask */
-int	dpm;	/* pixel mask at high part of byte, in destination */
-int	nbytes;	/* in destination */
+static int	Xrange	= 64;
+static int	Yrange	= 8;
 
-int	Xrange	= 64;
-int	Yrange	= 8;
+static Memimage	*dst;
+static Memimage	*src;
+static Memimage	*mask;
+static Memimage	*stmp;
+static Memimage	*mtmp;
+static Memimage	*ones;
+static uchar	*dstbits;
+static uchar	*srcbits;
+static uchar	*maskbits;
+static ulong	*savedstbits;
 
-Memimage	*dst;
-Memimage	*src;
-Memimage	*mask;
-Memimage	*stmp;
-Memimage	*mtmp;
-Memimage	*ones;
-uchar	*dstbits;
-uchar	*srcbits;
-uchar	*maskbits;
-ulong	*savedstbits;
-
-void
-rdb(void)
-{
-}
-
-int
-iprint(char *fmt, ...)
-{
-	int n;	
-	va_list va;
-	char buf[1024];
-
-	va_start(va, fmt);
-	n = vseprint(buf, buf+sizeof buf, fmt, va) - buf;
-	va_end(va);
-
-	write(1,buf,n);
-	return 1;
-}
+//void
+//rdb(void)
+//{
+//}
+//
+//int
+//iprint(char *fmt, ...)
+//{
+//	int n;	
+//	va_list va;
+//	char buf[1024];
+//
+//	va_start(va, fmt);
+//	n = vseprint(buf, buf+sizeof buf, fmt, va) - buf;
+//	va_end(va);
+//
+//	write(1,buf,n);
+//	return 1;
+//}
 
 void
 main(int argc, char *argv[])

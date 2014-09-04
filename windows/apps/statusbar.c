@@ -10,15 +10,15 @@ static char* rdenv(char*);
 int newwin(char*);
 Rectangle screenrect(void);
 
-int nokill;
-int textmode;
-char *title;
+static int nokill;
+static int textmode;
+static char *title;
 
-Image *light;
-Image *dark;
-Image *text;
+static Image *light;
+static Image *dark;
+static Image *text;
 
-void
+static void
 initcolor(void)
 {
 	text = display->black;
@@ -26,13 +26,13 @@ initcolor(void)
 	dark = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkgreen);
 }
 
-Rectangle rbar;
-Point ptext;
-vlong n, d;
-int last;
-int lastp = -1;
+static Rectangle rbar;
+static Point ptext;
+static vlong n, d;
+static int last;
+static int lastp = -1;
 
-char backup[80];
+static char backup[80];
 
 void
 drawbar(void)
@@ -160,7 +160,7 @@ bar(Biobuf *b)
 }
 
 
-void
+static void
 usage(void)
 {
 	fprint(2, "usage: aux/statusbar [-kt] [-w minx,miny,maxx,maxy] 'title'\n");

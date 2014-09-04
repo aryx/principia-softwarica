@@ -3,11 +3,10 @@
 #include <draw.h>
 #include <event.h>
 
-int nbit, npix;
-Image *pixel;
-Rectangle crect[256];
-
-Image *color[256];
+static int nbit, npix;
+static Image *pixel;
+static Rectangle crect[256];
+static Image *color[256];
 
 void
 eresized(int new)
@@ -46,13 +45,13 @@ eresized(int new)
 	flushimage(display, 1);
 }
 
-char *buttons[] =
+static char *buttons[] =
 {
 	"exit",
 	0
 };
 
-ulong
+static ulong
 grey(int i)
 {
 	if(i < 0)
@@ -62,12 +61,12 @@ grey(int i)
 	return (i<<16)+(i<<8)+i;
 }
 
-Menu menu =
+static Menu menu =
 {
 	buttons
 };
 
-int
+static int
 dither[16] =  {
 	0, 8, 2, 10,
 	12, 4, 14, 6,

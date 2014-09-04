@@ -2,7 +2,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <event.h>
-#include <panel.h>
+#include <../panel.h>
 Panel *root, *list;
 char *genlist(Panel *, int which){
 	static char buf[7];
