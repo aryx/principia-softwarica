@@ -104,7 +104,6 @@ timerinit(void)
  * timeralloc() and timerfree() don't lock, so can only be
  * called from the main proc.
  */
-
 Timer*
 timerstart(int dt)
 {
