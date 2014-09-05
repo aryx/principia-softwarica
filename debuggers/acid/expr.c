@@ -843,10 +843,10 @@ ocand(Node *n, Node *res)
 	res->ival = 0;
 	res->fmt = 'D';
 	expr(n->left, &l);
-	if(bool(&l) == 0)
+	if(fbool(&l) == 0)
 		return;
 	expr(n->right, &r);
-	if(bool(&r) == 0)
+	if(fbool(&r) == 0)
 		return;
 	res->ival = 1;
 }
@@ -861,7 +861,7 @@ onot(Node *n, Node *res)
 	res->ival = 0;
 	expr(n->left, &l);
 	res->fmt = l.fmt;
-	if(bool(&l) == 0)
+	if(fbool(&l) == 0)
 		res->ival = 1;
 }
 
@@ -875,12 +875,12 @@ ocor(Node *n, Node *res)
 	res->ival = 0;
 	res->fmt = 'D';
 	expr(n->left, &l);
-	if(bool(&l)) {
+	if(fbool(&l)) {
 		res->ival = 1;
 		return;
 	}
 	expr(n->right, &r);
-	if(bool(&r)) {
+	if(fbool(&r)) {
 		res->ival = 1;
 		return;
 	}

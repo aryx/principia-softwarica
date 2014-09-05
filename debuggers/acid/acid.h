@@ -174,7 +174,7 @@ List*	addlist(List*, List*);
 List*	al(int);
 Node*	an(int, Node*, Node*);
 void	append(Node*, Node*, Node*);
-int	bool(Node*);
+int	fbool(Node*);
 void	build(Node*);
 void	call(char*, Node*, Node*, Node*, Node*);
 void	catcher(void*, char*);

@@ -5,6 +5,14 @@
 #define	offsetof(s, m)	(ulong)(&(((s*)0)->m))
 #define	assert(x)	do{ if(x) {} else _assert("x"); }while(0)
 
+// pad's stuff, could also be in u.h
+typedef int bool;
+enum _bool {
+  false = 0,
+  true = 1
+};
+typedef uchar byte;
+
 /*
  * mem routines
  */

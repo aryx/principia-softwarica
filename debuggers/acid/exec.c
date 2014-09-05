@@ -125,18 +125,18 @@ execute(Node *n)
 	case OIF:
 		expr(l, &res);
 		if(r && r->op == OELSE) {
-			if(bool(&res))
+			if(fbool(&res))
 				execute(r->left);
 			else
 				execute(r->right);
 		}
-		else if(bool(&res))
+		else if(fbool(&res))
 			execute(r);
 		break;
 	case OWHILE:
 		for(;;) {
 			expr(l, &res);
-			if(!bool(&res))
+			if(!fbool(&res))
 				break;
 			execute(r);
 		}
@@ -157,12 +157,12 @@ execute(Node *n)
 }
 
 int
-bool(Node *n)
+fbool(Node *n)
 {
 	int true = 0;
 
 	if(n->op != OCONST)
-		fatal("bool: not const");
+		fatal("fbool: not const");
 
 	switch(n->type) {
 	case TINT:
