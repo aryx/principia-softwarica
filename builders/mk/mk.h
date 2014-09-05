@@ -1,3 +1,4 @@
+/*s: mk/mk.h */
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
@@ -5,143 +6,211 @@
 
 extern Biobuf bout;
 
+/*s: struct Bufblock */
 typedef struct Bufblock
 {
-	struct Bufblock *next;
-	char 		*start;
-	char 		*end;
-	char 		*current;
+    struct Bufblock *next;
+    char 		*start;
+    char 		*end;
+    char 		*current;
 } Bufblock;
+/*e: struct Bufblock */
 
+/*s: struct Word */
 typedef struct Word
 {
-	char 		*s;
-	struct Word 	*next;
+    char 		*s;
+    struct Word 	*next;
 } Word;
+/*e: struct Word */
 
+/*s: struct Envy */
 typedef struct Envy
 {
-	char 		*name;
-	Word 		*values;
+    char 		*name;
+    Word 		*values;
 } Envy;
+/*e: struct Envy */
 
 extern Envy *envy;
 
+/*s: struct Rule */
 typedef struct Rule
 {
-	char 		*target;	/* one target */
-	Word 		*tail;		/* constituents of targets */
-	char 		*recipe;	/* do it ! */
-	short 		attr;		/* attributes */
-	short 		line;		/* source line */
-	char 		*file;		/* source file */
-	Word 		*alltargets;	/* all the targets */
-	int 		rule;		/* rule number */
-	Reprog		*pat;		/* reg exp goo */
-	char		*prog;		/* to use in out of date */
-	struct Rule	*chain;		/* hashed per target */
-	struct Rule	*next;
+    char 		*target;	/* one target */
+    Word 		*tail;		/* constituents of targets */
+    char 		*recipe;	/* do it ! */
+    short 		attr;		/* attributes */
+    short 		line;		/* source line */
+    char 		*file;		/* source file */
+    Word 		*alltargets;	/* all the targets */
+    int 		rule;		/* rule number */
+    Reprog		*pat;		/* reg exp goo */
+    char		*prog;		/* to use in out of date */
+    struct Rule	*chain;		/* hashed per target */
+    struct Rule	*next;
 } Rule;
+/*e: struct Rule */
 
 extern Rule *rules, *metarules, *patrule;
 
+/*s: constant META */
 /*	Rule.attr	*/
 #define		META		0x0001
+/*e: constant META */
+/*s: constant UNUSED */
 #define		UNUSED		0x0002
+/*e: constant UNUSED */
+/*s: constant UPD */
 #define		UPD		0x0004
+/*e: constant UPD */
+/*s: constant QUIET */
 #define		QUIET		0x0008
+/*e: constant QUIET */
+/*s: constant VIR */
 #define		VIR		0x0010
+/*e: constant VIR */
+/*s: constant REGEXP */
 #define		REGEXP		0x0020
+/*e: constant REGEXP */
+/*s: constant NOREC */
 #define		NOREC		0x0040
+/*e: constant NOREC */
+/*s: constant DEL */
 #define		DEL		0x0080
+/*e: constant DEL */
+/*s: constant NOVIRT */
 #define		NOVIRT		0x0100
+/*e: constant NOVIRT */
 
+/*s: constant NREGEXP */
 #define		NREGEXP		10
+/*e: constant NREGEXP */
 
+/*s: struct Arc */
 typedef struct Arc
 {
-	short		flag;
-	struct Node	*n;
-	Rule		*r;
-	char		*stem;
-	char		*prog;
-	char		*match[NREGEXP];
-	struct Arc	*next;
+    short		flag;
+    struct Node	*n;
+    Rule		*r;
+    char		*stem;
+    char		*prog;
+    char		*match[NREGEXP];
+    struct Arc	*next;
 } Arc;
+/*e: struct Arc */
 
-	/* Arc.flag */
+    /* Arc.flag */
+/*s: constant TOGO */
 #define		TOGO		1
+/*e: constant TOGO */
 
+/*s: struct Node */
 typedef struct Node
 {
-	char		*name;
-	ulong		time;
-	ushort		flags;
-	Arc		*prereqs;
-	struct Node	*next;		/* list for a rule */
+    char		*name;
+    ulong		time;
+    ushort		flags;
+    Arc		*prereqs;
+    struct Node	*next;		/* list for a rule */
 } Node;
+/*e: struct Node */
 
-	/* Node.flags */
+    /* Node.flags */
+/*s: constant VIRTUAL */
 #define		VIRTUAL		0x0001
+/*e: constant VIRTUAL */
+/*s: constant CYCLE */
 #define		CYCLE		0x0002
+/*e: constant CYCLE */
+/*s: constant READY */
 #define		READY		0x0004
+/*e: constant READY */
+/*s: constant CANPRETEND */
 #define		CANPRETEND	0x0008
+/*e: constant CANPRETEND */
+/*s: constant PRETENDING */
 #define		PRETENDING	0x0010
+/*e: constant PRETENDING */
+/*s: constant NOTMADE */
 #define		NOTMADE		0x0020
+/*e: constant NOTMADE */
+/*s: constant BEINGMADE */
 #define		BEINGMADE	0x0040
+/*e: constant BEINGMADE */
+/*s: constant MADE */
 #define		MADE		0x0080
+/*e: constant MADE */
+/*s: function MADESET */
 #define		MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
+/*e: function MADESET */
+/*s: constant PROBABLE */
 #define		PROBABLE	0x0100
+/*e: constant PROBABLE */
+/*s: constant VACUOUS */
 #define		VACUOUS		0x0200
+/*e: constant VACUOUS */
+/*s: constant NORECIPE */
 #define		NORECIPE	0x0400
+/*e: constant NORECIPE */
+/*s: constant DELETE */
 #define		DELETE		0x0800
+/*e: constant DELETE */
+/*s: constant NOMINUSE */
 #define		NOMINUSE	0x1000
+/*e: constant NOMINUSE */
 
+/*s: struct Job */
 typedef struct Job
 {
-	Rule		*r;	/* master rule for job */
-	Node		*n;	/* list of node targets */
-	char		*stem;
-	char		**match;
-	Word		*p;	/* prerequistes */
-	Word		*np;	/* new prerequistes */
-	Word		*t;	/* targets */
-	Word		*at;	/* all targets */
-	int		nproc;	/* slot number */
-	struct Job	*next;
+    Rule		*r;	/* master rule for job */
+    Node		*n;	/* list of node targets */
+    char		*stem;
+    char		**match;
+    Word		*p;	/* prerequistes */
+    Word		*np;	/* new prerequistes */
+    Word		*t;	/* targets */
+    Word		*at;	/* all targets */
+    int		nproc;	/* slot number */
+    struct Job	*next;
 } Job;
+/*e: struct Job */
 
 extern Job *jobs;
 
+/*s: struct Symtab */
 typedef struct Symtab
 {
-	short		space;
-	char		*name;
-	union{
-		void		*ptr;
-		uintptr	value;
-	} u;
-	struct Symtab	*next;
+    short		space;
+    char		*name;
+    union{
+        void		*ptr;
+        uintptr	value;
+    } u;
+    struct Symtab	*next;
 } Symtab;
+/*e: struct Symtab */
 
+/*s: enum _anon_ */
 enum {
-	S_VAR,		/* variable -> value */
-	S_TARGET,	/* target -> rule */
-	S_TIME,		/* file -> time */
-	S_PID,		/* pid -> products */
-	S_NODE,		/* target name -> node */
-	S_AGG,		/* aggregate -> time */
-	S_BITCH,	/* bitched about aggregate not there */
-	S_NOEXPORT,	/* var -> noexport */
-	S_OVERRIDE,	/* can't override */
-	S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
-	S_MAKEFILE,	/* target -> node */
-	S_MAKEVAR,	/* dumpable mk variable */
-	S_EXPORTED,	/* var -> current exported value */
-	S_BULKED,	/* we have bulked this dir */
-	S_WESET,	/* variable; we set in the mkfile */
-	S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
+    S_VAR,		/* variable -> value */
+    S_TARGET,	/* target -> rule */
+    S_TIME,		/* file -> time */
+    S_PID,		/* pid -> products */
+    S_NODE,		/* target name -> node */
+    S_AGG,		/* aggregate -> time */
+    S_BITCH,	/* bitched about aggregate not there */
+    S_NOEXPORT,	/* var -> noexport */
+    S_OVERRIDE,	/* can't override */
+    S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
+    S_MAKEFILE,	/* target -> node */
+    S_MAKEVAR,	/* dumpable mk variable */
+    S_EXPORTED,	/* var -> current exported value */
+    S_BULKED,	/* we have bulked this dir */
+    S_WESET,	/* variable; we set in the mkfile */
+    S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
 };
+/*e: enum _anon_ */
 
 extern	int	debug;
 extern	int	nflag, tflag, iflag, kflag, aflag, mflag;
@@ -155,21 +224,46 @@ extern	char 	*shellname;
 extern	char 	*shflags;
 extern	int	IWS;
 
+/*s: function SYNERR */
 #define	SYNERR(l)	(fprint(2, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
+/*e: function SYNERR */
+/*s: function RERR */
 #define	RERR(r)		(fprint(2, "mk: %s:%d: rule error; ", (r)->file, (r)->line))
+/*e: function RERR */
+/*s: constant NAMEBLOCK */
 #define	NAMEBLOCK	1000
+/*e: constant NAMEBLOCK */
+/*s: constant BIGBLOCK */
 #define	BIGBLOCK	20000
+/*e: constant BIGBLOCK */
 
+/*s: function SEP */
 #define	SEP(c)		(((c)==' ')||((c)=='\t')||((c)=='\n'))
+/*e: function SEP */
+/*s: function WORDCHR */
 #define WORDCHR(r)	((r) > ' ' && !utfrune("!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~", (r)))
+/*e: function WORDCHR */
 
+/*s: function DEBUG */
 #define	DEBUG(x)	(debug&(x))
+/*e: function DEBUG */
+/*s: constant D_PARSE */
 #define		D_PARSE		0x01
+/*e: constant D_PARSE */
+/*s: constant D_GRAPH */
 #define		D_GRAPH		0x02
+/*e: constant D_GRAPH */
+/*s: constant D_EXEC */
 #define		D_EXEC		0x04
+/*e: constant D_EXEC */
 
+/*s: function LSEEK */
 #define	LSEEK(f,o,p)	seek(f,o,p)
+/*e: function LSEEK */
 
+/*s: function PERCENT */
 #define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
+/*e: function PERCENT */
 
 #include	"fns.h"
+/*e: mk/mk.h */

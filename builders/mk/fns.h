@@ -1,3 +1,4 @@
+/*s: mk/fns.h */
 void	addrule(char*, Word*, char*, Word*, int, int, char*);
 void	addrules(Word*, Word*, char*, int, int, char*);
 void	addw(Word*, char*);
@@ -80,3 +81,4 @@ int	waitup(int, int*);
 Word	*wdup(Word*);
 int	work(Node*, Node*, Arc*);
 char	*wtos(Word*, int);
+/*e: mk/fns.h */
