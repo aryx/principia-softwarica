@@ -1,3 +1,4 @@
+TOP=..
 
 all:
 	make sync
@@ -7,18 +8,7 @@ visual:
 visual2:
 	~/pfff/codemap -ss 2 -no_legend -filter nw -ft 0.001 -nblines_file 60000 .
 
-##############################################################################
-# Generic Literate programming variables
-##############################################################################
-
-SYNCFLAGS=-md5sum_in_auxfile -less_marks -lang C
-
-SYNCWEB=~/github/syncweb/syncweb.opt $(SYNCFLAGS)
-NOWEB=~/github/syncweb/scripts/noweblatex
-PDFLATEX=pdflatex --shell-escape 
-
-lpclean::
-	rm -f *.aux *.toc *.log *.brf *.out
+include $(TOP)/docs/latex/Makefile.common
 
 ##############################################################################
 # Literate Programming rules
@@ -183,19 +173,3 @@ SRC_VIEWS= \
   syscalls/systab.h \
 
 
-sync:
-	for i in $(SRC_VIEWS); do echo $$i; $(SYNCWEB) $(SRC_ORIG) $$i || exit 1; done 
-
-pdf:
-	$(NOWEB) $(TEXMAIN) > $(TEX)
-	pdflatex $(TEX)
-	pdflatex $(TEX)
-
-lpclean::
-	rm -f $(TEX)
-
-lpdistclean::
-	rm -f $(SRC_VIEWS) .md5sum_* $(TEX)
-
-clean::
-	rm -f *.aux *.toc *.log *.brf *.out

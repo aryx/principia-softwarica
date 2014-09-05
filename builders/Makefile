@@ -1,0 +1,47 @@
+TOP=..
+
+all:
+	echo todo
+
+include $(TOP)/docs/latex/Makefile.common
+
+##############################################################################
+# Literate Programming rules
+##############################################################################
+
+TEXMAIN=Make.tex.nw
+TEX=Make.tex
+
+# set of noweb (.nw) files
+
+# must be in the same order of the #include for syncweb multi files support
+# to work
+SRC_ORIG=Make.tex.nw Make_extra.tex.nw
+
+SRC_VIEWS= \
+    mk/fns.h\
+    mk/mk.h\
+    mk/globals.c\
+    mk/utils.c\
+    mk/bufblock.c\
+    mk/symtab.c\
+    mk/rc.c\
+    mk/word.c\
+    mk/var.c\
+    mk/plan9.c\
+    mk/archive.c\
+    mk/match.c\
+    mk/env.c\
+    mk/parse.c\
+    mk/shprint.c\
+    mk/job.c\
+    mk/arc.c\
+    mk/rule.c\
+    mk/lex.c\
+    mk/file.c\
+    mk/run.c\
+    mk/graph.c\
+    mk/mk.c\
+    mk/recipe.c\
+    mk/varsub.c\
+    mk/main.c\
