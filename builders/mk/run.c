@@ -1,11 +1,13 @@
 #include	"mk.h"
 
-typedef struct Event
+struct RunEvent
 {
 	int pid;
 	Job *job;
-} Event;
-static Event *events;
+};
+
+typedef struct RunEvent RunEvent;
+static RunEvent *events;
 static int nevents, nrunning, nproclimit;
 
 typedef struct Process
@@ -193,9 +195,9 @@ nproc(void)
 		fprint(1, "nprocs = %d\n", nproclimit);
 	if(nproclimit > nevents){
 		if(nevents)
-			events = (Event *)Realloc((char *)events, nproclimit*sizeof(Event));
+			events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
 		else
-			events = (Event *)Malloc(nproclimit*sizeof(Event));
+			events = (RunEvent *)Malloc(nproclimit*sizeof(RunEvent));
 		while(nevents < nproclimit)
 			events[nevents++].pid = 0;
 	}

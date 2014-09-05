@@ -3,20 +3,11 @@
 #define		MKFILE		"mkfile"
 
 static char *version = "@(#)mk general release 4 (plan 9)";
-int debug;
-Rule *rules, *metarules;
-int nflag = 0;
-int tflag = 0;
-int iflag = 0;
-int kflag = 0;
-int aflag = 0;
+
+// see also globals.c
 int uflag = 0;
-char *explain = 0;
 Word *target1;
-int nreps = 1;
-Job *jobs;
-Biobuf bout;
-Rule *patrule;
+
 void badusage(void);
 #ifdef	PROF
 short buf[10000];
@@ -239,33 +230,6 @@ badusage(void)
 
 	fprint(2, "Usage: mk [-f file] [-n] [-a] [-e] [-t] [-k] [-i] [-d[egp]] [targets ...]\n");
 	Exit();
-}
-
-void *
-Malloc(int n)
-{
-	register void *s;
-
-	s = malloc(n);
-	if(!s) {
-		fprint(2, "mk: cannot alloc %d bytes\n", n);
-		Exit();
-	}
-	return(s);
-}
-
-void *
-Realloc(void *s, int n)
-{
-	if(s)
-		s = realloc(s, n);
-	else
-		s = malloc(n);
-	if(!s) {
-		fprint(2, "mk: cannot alloc %d bytes\n", n);
-		Exit();
-	}
-	return(s);
 }
 
 void

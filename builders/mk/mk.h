@@ -110,6 +110,7 @@ typedef struct Job
 	int		nproc;	/* slot number */
 	struct Job	*next;
 } Job;
+
 extern Job *jobs;
 
 typedef struct Symtab
