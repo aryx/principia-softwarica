@@ -6,4 +6,13 @@
 //Pool *imagmem = &sbrkmem;
 Pool*   imagmem = nil;
 /*e: global imagmem */
+
+
+// for kernel stuff:
+// globals: screenputs, vgacur, vgadev, 
+// types: Pcidev
+// functions: addphysseg(), mouseresize()
+
+// and of course panic(), outb(), devxxx(), up, ...
+
 /*e: windows/codegraph.h */
