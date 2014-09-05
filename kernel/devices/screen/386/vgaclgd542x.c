@@ -1,3 +1,4 @@
+/*s: kernel/devices/screen/386/vgaclgd542x.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -11,6 +12,7 @@
 #include <cursor.h>
 #include "screen.h"
 
+/*s: function clgd542xpageset */
 static int
 clgd542xpageset(VGAscr*, int page)
 {
@@ -31,7 +33,9 @@ clgd542xpageset(VGAscr*, int page)
 
     return opage;
 }
+/*e: function clgd542xpageset */
 
+/*s: function clgd542xpage */
 static void
 clgd542xpage(VGAscr* scr, int page)
 {
@@ -39,13 +43,17 @@ clgd542xpage(VGAscr* scr, int page)
     clgd542xpageset(scr, page);
     unlock(&scr->devlock);
 }
+/*e: function clgd542xpage */
 
+/*s: function clgd542xlinear */
 static void
 clgd542xlinear(VGAscr* scr, int, int)
 {
     vgalinearpciid(scr, 0x1013, 0);
 }
+/*e: function clgd542xlinear */
 
+/*s: function clgd542xdisable */
 static void
 clgd542xdisable(VGAscr*)
 {
@@ -54,7 +62,9 @@ clgd542xdisable(VGAscr*)
     sr12 = vgaxi(Seqx, 0x12);
     vgaxo(Seqx, 0x12, sr12 & ~0x01);
 }
+/*e: function clgd542xdisable */
 
+/*s: function clgd542xenable */
 static void
 clgd542xenable(VGAscr* scr)
 {
@@ -142,7 +152,9 @@ clgd542xenable(VGAscr* scr)
     vgaxo(Seqx, 0x13, 0);
     vgaxo(Seqx, 0x12, sr12|0x05);
 }
+/*e: function clgd542xenable */
 
+/*s: function clgd542xinitcursor */
 static void
 clgd542xinitcursor(VGAscr* scr, int xo, int yo, int index)
 {
@@ -204,7 +216,9 @@ clgd542xinitcursor(VGAscr* scr, int xo, int yo, int index)
         unlock(&scr->devlock);
     }
 }
+/*e: function clgd542xinitcursor */
 
+/*s: function clgd542xload */
 static void
 clgd542xload(VGAscr* scr, Cursor* curs)
 {
@@ -225,7 +239,9 @@ clgd542xload(VGAscr* scr, Cursor* curs)
     vgaxo(Seqx, 0x13, 0);
     vgaxo(Seqx, 0x12, sr12|0x05);
 }
+/*e: function clgd542xload */
 
+/*s: function clgd542xmove */
 static int
 clgd542xmove(VGAscr* scr, Point p)
 {
@@ -256,7 +272,9 @@ clgd542xmove(VGAscr* scr, Point p)
 
     return 0;
 }
+/*e: function clgd542xmove */
 
+/*s: global vgaclgd542xdev */
 VGAdev vgaclgd542xdev = {
     "clgd542x",
 
@@ -265,7 +283,9 @@ VGAdev vgaclgd542xdev = {
     clgd542xpage,
     clgd542xlinear,
 };
+/*e: global vgaclgd542xdev */
 
+/*s: global vgaclgd542xcur */
 VGAcur vgaclgd542xcur = {
     "clgd542xhwgc",
 
@@ -274,3 +294,5 @@ VGAcur vgaclgd542xcur = {
     clgd542xload,
     clgd542xmove,
 };
+/*e: global vgaclgd542xcur */
+/*e: kernel/devices/screen/386/vgaclgd542x.c */

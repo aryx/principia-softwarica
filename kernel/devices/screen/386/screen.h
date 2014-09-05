@@ -1,9 +1,12 @@
+/*s: kernel/devices/screen/386/screen.h */
 typedef struct Cursor Cursor;
 typedef struct Cursorinfo Cursorinfo;
+/*s: struct Cursorinfo */
 struct Cursorinfo {
   Cursor;
   Lock;
 };
+/*e: struct Cursorinfo */
 
 /* devmouse.c */
 extern void mousetrack(int, int, int, int);
@@ -13,6 +16,7 @@ extern void mouseaccelerate(int);
 extern Cursorinfo cursor;
 extern Cursor arrow;
 
+/*s: enum _anon_ (kernel/devices/screen/386/screen.h) */
 /*
  * Generic VGA registers.
  */
@@ -43,10 +47,15 @@ enum {
   Pblack    = 0x00,
   Pwhite    = 0xFF,
 };
+/*e: enum _anon_ (kernel/devices/screen/386/screen.h) */
 
+/*s: function VGAMEM */
 #define VGAMEM()  0xA0000
+/*e: function VGAMEM */
+/*s: function vgao */
 //#define vgai(port)    inb(port)
 #define vgao(port, data)  outb(port, data)
+/*e: function vgao */
 
 extern int vgaxi(long, uchar);
 extern int vgaxo(long, uchar, uchar);
@@ -57,6 +66,7 @@ typedef struct VGAdev VGAdev;
 typedef struct VGAcur VGAcur;
 typedef struct VGAscr VGAscr;
 
+/*s: struct VGAdev */
 struct VGAdev {
   char* name;
 
@@ -70,7 +80,9 @@ struct VGAdev {
   int (*ovlwrite)(VGAscr*, void*, int, vlong);
   void (*flush)(VGAscr*, Rectangle);
 };
+/*e: struct VGAdev */
 
+/*s: struct VGAcur */
 struct VGAcur {
   char* name;
 
@@ -81,7 +93,9 @@ struct VGAcur {
 
   int doespanning;
 };
+/*e: struct VGAcur */
 
+/*s: struct VGAscr */
 /*
  */
 struct VGAscr {
@@ -116,12 +130,15 @@ struct VGAscr {
   int isblank;
   int overlayinit;
 };
+/*e: struct VGAscr */
 
 extern VGAscr vgascreen[];
 
+/*s: enum _anon_ (kernel/devices/screen/386/screen.h)2 */
 enum {
   Backgnd   = 0,  /* black */
 };
+/*e: enum _anon_ (kernel/devices/screen/386/screen.h)2 */
 
 /* mouse.c */
 extern void kmousectl(Cmdbuf*);
@@ -169,4 +186,7 @@ extern void vgablank(VGAscr*, int);
 
 extern Lock vgascreenlock;
 
+/*s: function ishwimage */
 #define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+/*e: function ishwimage */
+/*e: kernel/devices/screen/386/screen.h */

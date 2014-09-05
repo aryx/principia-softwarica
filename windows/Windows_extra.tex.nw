@@ -14350,26 +14350,7 @@ static	void	yscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Mem
 
 \subsection*{[[lib_graphics/libmemdraw/hwdraw.c]]}
 
-<<function hwdraw>>=
-int
-hwdraw(Memdrawparam*)
-{
-    return 0;	/* could not satisfy request */
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<lib_graphics/libmemdraw/hwdraw.c>>=
-#include <u.h>
-#include <libc.h>
-#include <draw.h>
-#include <memdraw.h>
-
-<<function hwdraw>>
-
-@
+% hmm actually prefer the one in kernel/
 
 
 \subsection*{[[lib_graphics/libmemdraw/iprint.c]]}
@@ -35358,6 +35339,5426 @@ plumbsendtext(int fd, char *src, char *dst, char *wdir, char *data)
 #include "plumb.h"
 
 <<function plumbsendtext>>
+@
+
+
+\section{[[kernel/devices/screen/386/]]}
+
+
+\subsection*{[[kernel/devices/screen/386/devvga.c]]}
+
+<<enum _anon_ (kernel/devices/screen/386/devvga.c)>>=
+enum {
+    Qdir,
+    Qvgabios,
+    Qvgactl,
+    Qvgaovl,
+    Qvgaovlctl,
+};
+@
+
+<<global vgadir>>=
+static Dirtab vgadir[] = {
+    ".",    { Qdir, 0, QTDIR },     0,  0550,
+    "vgabios",  { Qvgabios, 0 },    0x100000, 0440,
+    "vgactl",       { Qvgactl, 0 },     0,  0660,
+    "vgaovl",       { Qvgaovl, 0 },     0,  0660,
+    "vgaovlctl",    { Qvgaovlctl, 0 },  0,  0660,
+};
+@
+
+<<enum _anon_ (kernel/devices/screen/386/devvga.c)2>>=
+enum {
+    CMactualsize,
+    CMblank,
+    CMblanktime,
+    CMdrawinit,
+    CMhwaccel,
+    CMhwblank,
+    CMhwgc,
+    CMlinear,
+    CMpalettedepth,
+    CMpanning,
+    CMsize,
+    CMtextmode,
+    CMtype,
+    CMunblank,
+};
+@
+
+<<global vgactlmsg>>=
+static Cmdtab vgactlmsg[] = {
+    CMactualsize,   "actualsize",   2,
+    CMblank,    "blank",    1,
+    CMblanktime,    "blanktime",    2,
+    CMdrawinit, "drawinit", 1,
+    CMhwaccel,  "hwaccel",  2,
+    CMhwblank,  "hwblank",  2,
+    CMhwgc,     "hwgc",     2,
+    CMlinear,   "linear",   0,
+    CMpalettedepth, "palettedepth", 2,
+    CMpanning,  "panning",  2,
+    CMsize,     "size",     3,
+    CMtextmode, "textmode", 1,
+    CMtype,     "type",     2,
+    CMunblank,  "unblank",  1,
+};
+@
+
+<<function vgareset>>=
+static void
+vgareset(void)
+{
+    /* reserve the 'standard' vga registers */
+    if(ioalloc(0x2b0, 0x2df-0x2b0+1, 0, "vga") < 0)
+        panic("vga ports already allocated"); 
+    if(ioalloc(0x3c0, 0x3da-0x3c0+1, 0, "vga") < 0)
+        panic("vga ports already allocated"); 
+}
+@
+
+<<function vgaattach>>=
+static Chan*
+vgaattach(char* spec)
+{
+    if(*spec && strcmp(spec, "0"))
+        error(Eio);
+    return devattach('v', spec);
+}
+@
+
+<<function vgawalk>>=
+Walkqid*
+vgawalk(Chan* c, Chan *nc, char** name, int nname)
+{
+    return devwalk(c, nc, name, nname, vgadir, nelem(vgadir), devgen);
+}
+@
+
+<<function vgastat>>=
+static int
+vgastat(Chan* c, uchar* dp, int n)
+{
+    return devstat(c, dp, n, vgadir, nelem(vgadir), devgen);
+}
+@
+
+<<function vgaopen>>=
+static Chan*
+vgaopen(Chan* c, int omode)
+{
+    VGAscr *scr;
+    static char *openctl = "openctl\n";
+
+    scr = &vgascreen[0];
+    if ((ulong)c->qid.path == Qvgaovlctl) {
+        if (scr->dev && scr->dev->ovlctl)
+            scr->dev->ovlctl(scr, c, openctl, strlen(openctl));
+        else 
+            error(Enonexist);
+    }
+    return devopen(c, omode, vgadir, nelem(vgadir), devgen);
+}
+@
+
+<<function vgaclose>>=
+static void
+vgaclose(Chan* c)
+{
+    VGAscr *scr;
+    static char *closectl = "closectl\n";
+
+    scr = &vgascreen[0];
+    if((ulong)c->qid.path == Qvgaovlctl)
+        if(scr->dev && scr->dev->ovlctl){
+            if(waserror()){
+                print("ovlctl error: %s\n", up->errstr);
+                return;
+            }
+            scr->dev->ovlctl(scr, c, closectl, strlen(closectl));
+            poperror();
+        }
+}
+@
+
+<<function vgaread>>=
+//}
+
+static long
+vgaread(Chan* c, void* a, long n, vlong off)
+{
+    int len;
+    char *p, *s;
+    VGAscr *scr;
+    ulong offset = off;
+    char chbuf[30];
+
+    switch((ulong)c->qid.path){
+
+    case Qdir:
+        return devdirread(c, a, n, vgadir, nelem(vgadir), devgen);
+
+    case Qvgabios:
+        if(offset >= 0x100000)
+            return 0;
+        if(offset+n >= 0x100000)
+            n = 0x100000 - offset;
+        memmove(a, (uchar*)kaddr(0)+offset, n);
+        return n;
+
+    case Qvgactl:
+        scr = &vgascreen[0];
+
+        p = malloc(READSTR);
+        if(p == nil)
+            error(Enomem);
+        if(waserror()){
+            free(p);
+            nexterror();
+        }
+
+        len = 0;
+
+        if(scr->dev)
+            s = scr->dev->name;
+        else
+            s = "cga";
+        len += snprint(p+len, READSTR-len, "type %s\n", s);
+
+        if(scr->gscreen) {
+            len += snprint(p+len, READSTR-len, "size %dx%dx%d %s\n",
+                scr->gscreen->r.max.x, scr->gscreen->r.max.y,
+                scr->gscreen->depth, chantostr(chbuf, scr->gscreen->chan));
+
+            if(Dx(scr->gscreen->r) != Dx(physgscreenr) 
+            || Dy(scr->gscreen->r) != Dy(physgscreenr))
+                len += snprint(p+len, READSTR-len, "actualsize %dx%d\n",
+                    physgscreenr.max.x, physgscreenr.max.y);
+        }
+
+        len += snprint(p+len, READSTR-len, "blank time %lud idle %d state %s\n",
+            blanktime, drawidletime(), scr->isblank ? "off" : "on");
+        len += snprint(p+len, READSTR-len, "hwaccel %s\n", hwaccel ? "on" : "off");
+        len += snprint(p+len, READSTR-len, "hwblank %s\n", hwblank ? "on" : "off");
+        len += snprint(p+len, READSTR-len, "panning %s\n", panning ? "on" : "off");
+        len += snprint(p+len, READSTR-len, "addr p 0x%lux v 0x%p size 0x%ux\n", scr->paddr, scr->vaddr, scr->apsize);
+        USED(len);
+
+        n = readstr(offset, a, n, p);
+        poperror();
+        free(p);
+
+        return n;
+
+    case Qvgaovl:
+    case Qvgaovlctl:
+        error(Ebadusefd);
+        break;
+
+    default:
+        error(Egreg);
+        break;
+    }
+
+    return 0;
+}
+@
+
+<<function vgactl>>=
+//static char Ebusy[] = "vga already configured";
+
+static void
+vgactl(Cmdbuf *cb)
+{
+    int align, i, size, x, y, z;
+    char *chanstr, *p;
+    ulong chan;
+    Cmdtab *ct;
+    VGAscr *scr;
+    extern VGAdev *vgadev[];
+    extern VGAcur *vgacur[];
+
+    scr = &vgascreen[0];
+    ct = lookupcmd(cb, vgactlmsg, nelem(vgactlmsg));
+    switch(ct->index){
+    case CMhwgc:
+        if(strcmp(cb->f[1], "off") == 0){
+            lock(&cursor);
+            if(scr->cur){
+                if(scr->cur->disable)
+                    scr->cur->disable(scr);
+                scr->cur = nil;
+            }
+            unlock(&cursor);
+            return;
+        }
+        if(strcmp(cb->f[1], "soft") == 0){
+            lock(&cursor);
+            swcursorinit();
+            if(scr->cur && scr->cur->disable)
+                scr->cur->disable(scr);
+            scr->cur = &swcursor;
+            if(scr->cur->enable)
+                scr->cur->enable(scr);
+            unlock(&cursor);
+            return;
+        }
+        for(i = 0; vgacur[i]; i++){
+            if(strcmp(cb->f[1], vgacur[i]->name))
+                continue;
+            lock(&cursor);
+            if(scr->cur && scr->cur->disable)
+                scr->cur->disable(scr);
+            scr->cur = vgacur[i];
+            if(scr->cur->enable)
+                scr->cur->enable(scr);
+            unlock(&cursor);
+            return;
+        }
+        break;
+
+    case CMtype:
+        for(i = 0; vgadev[i]; i++){
+            if(strcmp(cb->f[1], vgadev[i]->name))
+                continue;
+            if(scr->dev && scr->dev->disable)
+                scr->dev->disable(scr);
+            scr->dev = vgadev[i];
+            if(scr->dev->enable)
+                scr->dev->enable(scr);
+            return;
+        }
+        break;
+
+    case CMtextmode:
+        screeninit();
+        return;
+
+    case CMsize:
+        x = strtoul(cb->f[1], &p, 0);
+        if(x == 0 || x > 10240)
+            error(Ebadarg);
+        if(*p)
+            p++;
+
+        y = strtoul(p, &p, 0);
+        if(y == 0 || y > 10240)
+            error(Ebadarg);
+        if(*p)
+            p++;
+
+        z = strtoul(p, &p, 0);
+
+        chanstr = cb->f[2];
+        if((chan = strtochan(chanstr)) == 0)
+            error("bad channel");
+
+        if(chantodepth(chan) != z)
+            error("depth, channel do not match");
+
+        cursoroff(1);
+        deletescreenimage();
+        if(screensize(x, y, z, chan))
+            error(Egreg);
+        vgascreenwin(scr);
+        resetscreenimage();
+        cursoron(1);
+        return;
+
+    case CMactualsize:
+        if(scr->gscreen == nil)
+            error("set the screen size first");
+
+        x = strtoul(cb->f[1], &p, 0);
+        if(x == 0 || x > 2048)
+            error(Ebadarg);
+        if(*p)
+            p++;
+
+        y = strtoul(p, nil, 0);
+        if(y == 0 || y > 2048)
+            error(Ebadarg);
+
+        if(x > scr->gscreen->r.max.x || y > scr->gscreen->r.max.y)
+            error("physical screen bigger than virtual");
+
+        physgscreenr = Rect(0,0,x,y);
+        scr->gscreen->clipr = physgscreenr;
+        return;
+    
+    case CMpalettedepth:
+        x = strtoul(cb->f[1], &p, 0);
+        if(x != 8 && x != 6)
+            error(Ebadarg);
+
+        scr->palettedepth = x;
+        return;
+
+    case CMdrawinit:
+        if(scr->gscreen == nil)
+            error("drawinit: no gscreen");
+        if(scr->dev && scr->dev->drawinit)
+            scr->dev->drawinit(scr);
+        return;
+    
+    case CMlinear:
+        if(cb->nf!=2 && cb->nf!=3)
+            error(Ebadarg);
+        size = strtoul(cb->f[1], 0, 0);
+        if(cb->nf == 2)
+            align = 0;
+        else
+            align = strtoul(cb->f[2], 0, 0);
+        if(screenaperture(size, align) < 0)
+            error("not enough free address space");
+        return;
+/*  
+    case CMmemset:
+        memset((void*)strtoul(cb->f[1], 0, 0), atoi(cb->f[2]), atoi(cb->f[3]));
+        return;
+*/
+
+    case CMblank:
+        drawblankscreen(1);
+        return;
+    
+    case CMunblank:
+        drawblankscreen(0);
+        return;
+    
+    case CMblanktime:
+        blanktime = strtoul(cb->f[1], 0, 0);
+        return;
+
+    case CMpanning:
+        if(strcmp(cb->f[1], "on") == 0){
+            if(scr == nil || scr->cur == nil)
+                error("set screen first");
+            if(!scr->cur->doespanning)
+                error("panning not supported");
+            scr->gscreen->clipr = scr->gscreen->r;
+            panning = 1;
+        }
+        else if(strcmp(cb->f[1], "off") == 0){
+            scr->gscreen->clipr = physgscreenr;
+            panning = 0;
+        }else
+            break;
+        return;
+
+    case CMhwaccel:
+        if(strcmp(cb->f[1], "on") == 0)
+            hwaccel = 1;
+        else if(strcmp(cb->f[1], "off") == 0)
+            hwaccel = 0;
+        else
+            break;
+        return;
+    
+    case CMhwblank:
+        if(strcmp(cb->f[1], "on") == 0)
+            hwblank = 1;
+        else if(strcmp(cb->f[1], "off") == 0)
+            hwblank = 0;
+        else
+            break;
+        return;
+    }
+
+    cmderror(cb, "bad VGA control message");
+}
+@
+
+<<global Enooverlay>>=
+char Enooverlay[] = "No overlay support";
+@
+
+<<function vgawrite>>=
+static long
+vgawrite(Chan* c, void* a, long n, vlong off)
+{
+    ulong offset = off;
+    Cmdbuf *cb;
+    VGAscr *scr;
+
+    switch((ulong)c->qid.path){
+
+    case Qdir:
+        error(Eperm);
+
+    case Qvgactl:
+        if(offset || n >= READSTR)
+            error(Ebadarg);
+        cb = parsecmd(a, n);
+        if(waserror()){
+            free(cb);
+            nexterror();
+        }
+        vgactl(cb);
+        poperror();
+        free(cb);
+        return n;
+
+    case Qvgaovl:
+        scr = &vgascreen[0];
+        if (scr->dev == nil || scr->dev->ovlwrite == nil) {
+            error(Enooverlay);
+            break;
+        }
+        return scr->dev->ovlwrite(scr, a, n, off);
+
+    case Qvgaovlctl:
+        scr = &vgascreen[0];
+        if (scr->dev == nil || scr->dev->ovlctl == nil) {
+            error(Enooverlay);
+            break;
+        }
+        scr->dev->ovlctl(scr, c, a, n);
+        return n;
+
+    default:
+        error(Egreg);
+        break;
+    }
+
+    return 0;
+}
+@
+
+<<global vgadevtab>>=
+Dev vgadevtab = {
+    .dc       =    'v',
+    .name     =    "vga",
+               
+    .reset    =    vgareset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    vgaattach,
+    .walk     =    vgawalk,
+    .stat     =    vgastat,
+    .open     =    vgaopen,
+    .create   =    devcreate,
+    .close    =    vgaclose,
+    .read     =    vgaread,
+    .bread    =    devbread,
+    .write    =    vgawrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+};
+@
+
+
+%-------------------------------------------------------------
+
+<<kernel/devices/screen/386/devvga.c>>=
+/*
+ * VGA controller
+ */
+#include "u.h"
+#include "../port/lib.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+#include "io.h"
+#include "../port/error.h"
+
+#include <draw.h>
+#include <memdraw.h>
+#include <cursor.h>
+#include "screen.h"
+
+<<enum _anon_ (kernel/devices/screen/386/devvga.c)>>
+
+<<global vgadir>>
+
+<<enum _anon_ (kernel/devices/screen/386/devvga.c)2>>
+
+<<global vgactlmsg>>
+
+<<function vgareset>>
+
+<<function vgaattach>>
+
+<<function vgawalk>>
+
+<<function vgastat>>
+
+<<function vgaopen>>
+
+<<function vgaclose>>
+
+//static void
+//checkport(int start, int end)
+//{
+//  /* standard vga regs are OK */
+//  if(start >= 0x2b0 && end <= 0x2df+1)
+//      return;
+//  if(start >= 0x3c0 && end <= 0x3da+1)
+//      return;
+//
+//  if(iounused(start, end))
+//      return;
+//  error(Eperm);
+<<function vgaread>>
+
+<<function vgactl>>
+
+<<global Enooverlay>>
+
+<<function vgawrite>>
+
+<<global vgadevtab>>
+@
+
+
+\subsection*{[[kernel/devices/screen/386/screen.c]]}
+
+<<global physgscreenr>>=
+//Point ZP = {0, 0};
+
+Rectangle physgscreenr;
+@
+
+<<global gscreendata>>=
+Memdata gscreendata;
+@
+
+<<global gscreen>>=
+Memimage *gscreen;
+@
+
+<<global vgascreen>>=
+VGAscr vgascreen[1];
+@
+
+<<global arrow>>=
+Cursor  arrow = {
+    { -1, -1 },
+    { 0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C, 
+      0x80, 0x10, 0x80, 0x10, 0x80, 0x08, 0x80, 0x04, 
+      0x80, 0x02, 0x80, 0x01, 0x80, 0x02, 0x8C, 0x04, 
+      0x92, 0x08, 0x91, 0x10, 0xA0, 0xA0, 0xC0, 0x40, 
+    },
+    { 0x00, 0x00, 0x7F, 0xFE, 0x7F, 0xFC, 0x7F, 0xF0, 
+      0x7F, 0xE0, 0x7F, 0xE0, 0x7F, 0xF0, 0x7F, 0xF8, 
+      0x7F, 0xFC, 0x7F, 0xFE, 0x7F, 0xFC, 0x73, 0xF8, 
+      0x61, 0xF0, 0x60, 0xE0, 0x40, 0x40, 0x00, 0x00, 
+    },
+};
+@
+
+<<global didswcursorinit>>=
+int didswcursorinit;
+@
+
+<<global softscreen>>=
+static void *softscreen;
+@
+
+<<function screensize>>=
+int
+screensize(int x, int y, int z, ulong chan)
+{
+    VGAscr *scr;
+    void *oldsoft;
+
+    lock(&vgascreenlock);
+    if(waserror()){
+        unlock(&vgascreenlock);
+        nexterror();
+    }
+
+    memimageinit();
+    scr = &vgascreen[0];
+    oldsoft = softscreen;
+
+    if(scr->paddr == 0){
+        int width = (x*z)/BI2WD;
+        void *p;
+
+        p = xalloc(width*BY2WD*y);
+        if(p == nil)
+            error("no memory for vga soft screen");
+        gscreendata.bdata = softscreen = p;
+        if(scr->dev && scr->dev->page){
+            scr->vaddr = KADDR(VGAMEM());
+            scr->apsize = 1<<16;
+        }
+        scr->useflush = 1;
+    }
+    else{
+        gscreendata.bdata = scr->vaddr;
+        scr->useflush = scr->dev && scr->dev->flush;
+    }
+
+    scr->gscreen = nil;
+    if(gscreen)
+        freememimage(gscreen);
+    gscreen = allocmemimaged(Rect(0,0,x,y), chan, &gscreendata);
+    if(gscreen == nil)
+        error("no memory for vga memimage");
+    vgaimageinit(chan);
+
+    scr->palettedepth = 6;  /* default */
+    scr->gscreendata = &gscreendata;
+    scr->memdefont = getmemdefont();
+    scr->gscreen = gscreen;
+
+    physgscreenr = gscreen->r;
+    unlock(&vgascreenlock);
+    poperror();
+    if(oldsoft)
+        xfree(oldsoft);
+
+    memimagedraw(gscreen, gscreen->r, memblack, ZP, nil, ZP, S);
+    flushmemscreen(gscreen->r);
+
+    if(didswcursorinit)
+        swcursorinit();
+    drawcmap();
+    return 0;
+}
+@
+
+<<function screenaperture>>=
+int
+screenaperture(int size, int align)
+{
+    VGAscr *scr;
+
+    scr = &vgascreen[0];
+
+    if(scr->paddr)  /* set up during enable */
+        return 0;
+
+    if(size == 0)
+        return 0;
+
+    if(scr->dev && scr->dev->linear){
+        scr->dev->linear(scr, size, align);
+        return 0;
+    }
+
+    /*
+     * Need to allocate some physical address space.
+     * The driver will tell the card to use it.
+     */
+    size = PGROUND(size);
+    scr->paddr = upaalloc(size, align);
+    if(scr->paddr == 0)
+        return -1;
+    scr->vaddr = vmap(scr->paddr, size);
+    if(scr->vaddr == nil)
+        return -1;
+    scr->apsize = size;
+
+    return 0;
+}
+@
+
+<<function attachscreen>>=
+uchar*
+attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
+{
+    VGAscr *scr;
+
+    scr = &vgascreen[0];
+    if(scr->gscreen == nil || scr->gscreendata == nil)
+        return nil;
+
+    *r = scr->gscreen->clipr;
+    *chan = scr->gscreen->chan;
+    *d = scr->gscreen->depth;
+    *width = scr->gscreen->width;
+    *softscreen = scr->useflush;
+
+    return scr->gscreendata->bdata;
+}
+@
+
+<<function flushmemscreen>>=
+/*
+ * It would be fair to say that this doesn't work for >8-bit screens.
+ */
+void
+flushmemscreen(Rectangle r)
+{
+    VGAscr *scr;
+    uchar *sp, *disp, *sdisp, *edisp;
+    int y, len, incs, off, page;
+
+    scr = &vgascreen[0];
+    if(scr->dev && scr->dev->flush){
+        scr->dev->flush(scr, r);
+        return;
+    }
+    if(scr->gscreen == nil || scr->useflush == 0)
+        return;
+    if(scr->dev == nil || scr->dev->page == nil)
+        return;
+
+    if(rectclip(&r, scr->gscreen->r) == 0)
+        return;
+
+    incs = scr->gscreen->width * BY2WD;
+
+    switch(scr->gscreen->depth){
+    default:
+        len = 0;
+        panic("flushmemscreen: depth\n");
+        break;
+    case 8:
+        len = Dx(r);
+        break;
+    }
+    if(len < 1)
+        return;
+
+    off = r.min.y*scr->gscreen->width*BY2WD+(r.min.x*scr->gscreen->depth)/8;
+    page = off/scr->apsize;
+    off %= scr->apsize;
+    disp = scr->vaddr;
+    sdisp = disp+off;
+    edisp = disp+scr->apsize;
+
+    off = r.min.y*scr->gscreen->width*BY2WD+(r.min.x*scr->gscreen->depth)/8;
+
+    sp = scr->gscreendata->bdata + off;
+
+    scr->dev->page(scr, page);
+    for(y = r.min.y; y < r.max.y; y++) {
+        if(sdisp + incs < edisp) {
+            memmove(sdisp, sp, len);
+            sp += incs;
+            sdisp += incs;
+        }
+        else {
+            off = edisp - sdisp;
+            page++;
+            if(off <= len){
+                if(off > 0)
+                    memmove(sdisp, sp, off);
+                scr->dev->page(scr, page);
+                if(len - off > 0)
+                    memmove(disp, sp+off, len - off);
+            }
+            else {
+                memmove(sdisp, sp, len);
+                scr->dev->page(scr, page);
+            }
+            sp += incs;
+            sdisp += incs - scr->apsize;
+        }
+    }
+}
+@
+
+<<function getcolor>>=
+void
+getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
+{
+    VGAscr *scr;
+    ulong x;
+
+    scr = &vgascreen[0];
+    if(scr->gscreen == nil)
+        return;
+
+    switch(scr->gscreen->depth){
+    default:
+        x = 0x0F;
+        break;
+    case 8:
+        x = 0xFF;
+        break;
+    }
+    p &= x;
+
+    lock(&cursor);
+    *pr = scr->colormap[p][0];
+    *pg = scr->colormap[p][1];
+    *pb = scr->colormap[p][2];
+    unlock(&cursor);
+}
+@
+
+<<function setpalette>>=
+int
+setpalette(ulong p, ulong r, ulong g, ulong b)
+{
+    VGAscr *scr;
+    int d;
+
+    scr = &vgascreen[0];
+    d = scr->palettedepth;
+
+    lock(&cursor);
+    scr->colormap[p][0] = r;
+    scr->colormap[p][1] = g;
+    scr->colormap[p][2] = b;
+    vgao(PaddrW, p);
+    vgao(Pdata, r>>(32-d));
+    vgao(Pdata, g>>(32-d));
+    vgao(Pdata, b>>(32-d));
+    unlock(&cursor);
+
+    return ~0;
+}
+@
+
+<<function setcolor>>=
+/*
+ * On some video cards (e.g. Mach64), the palette is used as the 
+ * DAC registers for >8-bit modes.  We don't want to set them when the user
+ * is trying to set a colormap and the card is in one of these modes.
+ */
+int
+setcolor(ulong p, ulong r, ulong g, ulong b)
+{
+    VGAscr *scr;
+    int x;
+
+    scr = &vgascreen[0];
+    if(scr->gscreen == nil)
+        return 0;
+
+    switch(scr->gscreen->depth){
+    case 1:
+    case 2:
+    case 4:
+        x = 0x0F;
+        break;
+    case 8:
+        x = 0xFF;
+        break;
+    default:
+        return 0;
+    }
+    p &= x;
+
+    return setpalette(p, r, g, b);
+}
+@
+
+<<function cursoron>>=
+int
+cursoron(bool dolock)
+{
+    VGAscr *scr;
+    int v;
+
+    scr = &vgascreen[0];
+    if(scr->cur == nil || scr->cur->move == nil)
+        return 0;
+
+    if(dolock)
+        lock(&cursor);
+    v = scr->cur->move(scr, mousexy());
+    if(dolock)
+        unlock(&cursor);
+
+    return v;
+}
+@
+
+<<function cursoroff>>=
+void
+cursoroff(int)
+{
+}
+@
+
+<<function ksetcursor>>=
+void
+ksetcursor(Cursor* curs)
+{
+    VGAscr *scr;
+
+    scr = &vgascreen[0];
+    if(scr->cur == nil || scr->cur->load == nil)
+        return;
+
+    scr->cur->load(scr, curs);
+}
+@
+
+<<global hwaccel>>=
+int hwaccel = 1;
+@
+
+<<global hwblank>>=
+int hwblank = 0;    /* turned on by drivers that are known good */
+@
+
+<<global panning>>=
+int panning = 0;
+@
+
+<<function hwdraw>>=
+//@Scheck: not dead, actually this is overriding some def in libmemdraw!! ugly
+int hwdraw(Memdrawparam *par)
+{
+    VGAscr *scr;
+    Memimage *dst, *src, *mask;
+    int m;
+
+    if(hwaccel == 0)
+        return 0;
+
+    scr = &vgascreen[0];
+    if((dst=par->dst) == nil || dst->data == nil)
+        return 0;
+    if((src=par->src) == nil || src->data == nil)
+        return 0;
+    if((mask=par->mask) == nil || mask->data == nil)
+        return 0;
+
+    if(scr->cur == &swcursor){
+        /*
+         * always calling swcursorhide here doesn't cure
+         * leaving cursor tracks nor failing to refresh menus
+         * with the latest libmemdraw/draw.c.
+         */
+        if(dst->data->bdata == gscreendata.bdata)
+            swcursoravoid(par->r);
+        if(src->data->bdata == gscreendata.bdata)
+            swcursoravoid(par->sr);
+        if(mask->data->bdata == gscreendata.bdata)
+            swcursoravoid(par->mr);
+    }
+    
+    if(dst->data->bdata != gscreendata.bdata)
+        return 0;
+
+    if(scr->fill==nil && scr->scroll==nil)
+        return 0;
+
+    /*
+     * If we have an opaque mask and source is one opaque
+     * pixel we can convert to the destination format and just
+     * replicate with memset.
+     */
+    m = Simplesrc|Simplemask|Fullmask;
+    if(scr->fill
+    && (par->state&m)==m
+    && ((par->srgba&0xFF) == 0xFF)
+    && (par->op&S) == S)
+        return scr->fill(scr, par->r, par->sdval);
+
+    /*
+     * If no source alpha, an opaque mask, we can just copy the
+     * source onto the destination.  If the channels are the same and
+     * the source is not replicated, memmove suffices.
+     */
+    m = Simplemask|Fullmask;
+    if(scr->scroll
+    && src->data->bdata==dst->data->bdata
+    && !(src->flags&Falpha)
+    && (par->state&m)==m
+    && (par->op&S) == S)
+        return scr->scroll(scr, par->r, par->sr);
+
+    return 0;   
+}
+@
+
+<<function blankscreen bis>>=
+void
+blankscreen(int blank)
+{
+    VGAscr *scr;
+
+    scr = &vgascreen[0];
+    if(hwblank){
+        if(scr->blank)
+            scr->blank(scr, blank);
+        else
+            vgablank(scr, blank);
+    }
+}
+@
+
+<<function vgalinearpciid>>=
+void
+vgalinearpciid(VGAscr *scr, int vid, int did)
+{
+    Pcidev *p;
+
+    p = nil;
+    while((p = pcimatch(p, vid, 0)) != nil){
+        if(p->ccrb != 3)    /* video card */
+            continue;
+        if(did != 0 && p->did != did)
+            continue;
+        break;
+    }
+    if(p == nil)
+        error("pci video card not found");
+
+    scr->pci = p;
+    vgalinearpci(scr);
+}
+@
+
+<<function vgalinearpci>>=
+void
+vgalinearpci(VGAscr *scr)
+{
+    ulong paddr;
+    int i, size, best;
+    Pcidev *p;
+    
+    p = scr->pci;
+    if(p == nil)
+        return;
+
+    /*
+     * Scan for largest memory region on card.
+     * Some S3 cards (e.g. Savage) have enormous
+     * mmio regions (but even larger frame buffers).
+     * Some 3dfx cards (e.g., Voodoo3) have mmio
+     * buffers the same size as the frame buffer,
+     * but only the frame buffer is marked as
+     * prefetchable (bar&8).  If a card doesn't fit
+     * into these heuristics, its driver will have to
+     * call vgalinearaddr directly.
+     */
+    best = -1;
+    for(i=0; i<nelem(p->mem); i++){
+        if(p->mem[i].bar&1) /* not memory */
+            continue;
+        if(p->mem[i].size < 640*480)    /* not big enough */
+            continue;
+        if(best==-1 
+        || p->mem[i].size > p->mem[best].size 
+        || (p->mem[i].size == p->mem[best].size 
+          && (p->mem[i].bar&8)
+          && !(p->mem[best].bar&8)))
+            best = i;
+    }
+    if(best >= 0){
+        paddr = p->mem[best].bar & ~0x0F;
+        size = p->mem[best].size;
+        vgalinearaddr(scr, paddr, size);
+        return;
+    }
+    error("no video memory found on pci card");
+}
+@
+
+<<function vgalinearaddr>>=
+void
+vgalinearaddr(VGAscr *scr, ulong paddr, int size)
+{
+    int x, nsize;
+    ulong npaddr;
+
+    /*
+     * new approach.  instead of trying to resize this
+     * later, let's assume that we can just allocate the
+     * entire window to start with.
+     */
+
+    if(scr->paddr == paddr && size <= scr->apsize)
+        return;
+
+    if(scr->paddr){
+        /*
+         * could call vunmap and vmap,
+         * but worried about dangling pointers in devdraw
+         */
+        error("cannot grow vga frame buffer");
+    }
+    
+    /* round to page boundary, just in case */
+    x = paddr&(BY2PG-1);
+    npaddr = paddr-x;
+    nsize = PGROUND(size+x);
+
+    /*
+     * Don't bother trying to map more than 4000x4000x32 = 64MB.
+     * We only have a 256MB window.
+     */
+    if(nsize > 64*MB)
+        nsize = 64*MB;
+    scr->vaddr = vmap(npaddr, nsize);
+    if(scr->vaddr == 0)
+        error("cannot allocate vga frame buffer");
+    scr->vaddr = (char*)scr->vaddr+x;
+    scr->paddr = paddr;
+    scr->apsize = nsize;
+    /* let mtrr harmlessly fail on old CPUs, e.g., P54C */
+    if(!waserror()){
+        //mtrr(npaddr, nsize, "wc"); disabled mtrr
+                error("mtrr disabled");
+        poperror();
+    }
+}
+@
+
+<<global swvisible>>=
+/*
+ * Software cursor. 
+ */
+int swvisible;  /* is the cursor visible? */
+@
+
+<<global swenabled>>=
+int swenabled;  /* is the cursor supposed to be on the screen? */
+@
+
+<<global swback>>=
+Memimage*   swback; /* screen under cursor */
+@
+
+<<global swimg>>=
+Memimage*   swimg;  /* cursor image */
+@
+
+<<global swmask>>=
+Memimage*   swmask; /* cursor mask */
+@
+
+<<global swimg1>>=
+Memimage*   swimg1;
+@
+
+<<global swmask1>>=
+Memimage*   swmask1;
+@
+
+<<global swoffset>>=
+Point   swoffset;
+@
+
+<<global swrect>>=
+Rectangle   swrect; /* screen rectangle in swback */
+@
+
+<<global swpt>>=
+Point   swpt;   /* desired cursor location */
+@
+
+<<global swvispt>>=
+Point   swvispt;    /* actual cursor location */
+@
+
+<<global swvers>>=
+int swvers; /* incremented each time cursor image changes */
+@
+
+<<global swvisvers>>=
+int swvisvers;  /* the version on the screen */
+@
+
+<<function swcursorhide>>=
+/*
+ * called with drawlock locked for us, most of the time.
+ * kernel prints at inopportune times might mean we don't
+ * hold the lock, but memimagedraw is now reentrant so
+ * that should be okay: worst case we get cursor droppings.
+ */
+void
+swcursorhide(void)
+{
+    if(swvisible == 0)
+        return;
+    if(swback == nil)
+        return;
+    swvisible = 0;
+    memimagedraw(gscreen, swrect, swback, ZP, memopaque, ZP, S);
+    flushmemscreen(swrect);
+}
+@
+
+<<function swcursoravoid>>=
+void
+swcursoravoid(Rectangle r)
+{
+    if(swvisible && rectXrect(r, swrect))
+        swcursorhide();
+}
+@
+
+<<function swcursordraw>>=
+void
+swcursordraw(void)
+{
+    if(swvisible)
+        return;
+    if(swenabled == 0)
+        return;
+    if(swback == nil || swimg1 == nil || swmask1 == nil)
+        return;
+    assert(!canqlock(&drawlock));
+    swvispt = swpt;
+    swvisvers = swvers;
+    swrect = rectaddpt(Rect(0,0,16,16), swvispt);
+    memimagedraw(swback, swback->r, gscreen, swpt, memopaque, ZP, S);
+    memimagedraw(gscreen, swrect, swimg1, ZP, swmask1, ZP, SoverD);
+    flushmemscreen(swrect);
+    swvisible = 1;
+}
+@
+
+<<function swenable>>=
+/*
+ * Need to lock drawlock for ourselves.
+ */
+void
+swenable(VGAscr*)
+{
+    swenabled = 1;
+    if(canqlock(&drawlock)){
+        swcursordraw();
+        qunlock(&drawlock);
+    }
+}
+@
+
+<<function swdisable>>=
+void
+swdisable(VGAscr*)
+{
+    swenabled = 0;
+    if(canqlock(&drawlock)){
+        swcursorhide();
+        qunlock(&drawlock);
+    }
+}
+@
+
+<<function swload>>=
+void
+swload(VGAscr*, Cursor *curs)
+{
+    uchar *ip, *mp;
+    int i, j, set, clr;
+
+    if(!swimg || !swmask || !swimg1 || !swmask1)
+        return;
+    /*
+     * Build cursor image and mask.
+     * Image is just the usual cursor image
+     * but mask is a transparent alpha mask.
+     * 
+     * The 16x16x8 memimages do not have
+     * padding at the end of their scan lines.
+     */
+    ip = byteaddr(swimg, ZP);
+    mp = byteaddr(swmask, ZP);
+    for(i=0; i<32; i++){
+        set = curs->set[i];
+        clr = curs->clr[i];
+        for(j=0x80; j; j>>=1){
+            *ip++ = set&j ? 0x00 : 0xFF;
+            *mp++ = (clr|set)&j ? 0xFF : 0x00;
+        }
+    }
+    swoffset = curs->offset;
+    swvers++;
+    memimagedraw(swimg1, swimg1->r, swimg, ZP, memopaque, ZP, S);
+    memimagedraw(swmask1, swmask1->r, swmask, ZP, memopaque, ZP, S);
+}
+@
+
+<<function swmove>>=
+int
+swmove(VGAscr*, Point p)
+{
+    swpt = addpt(p, swoffset);
+    return 0;
+}
+@
+
+<<function swcursorclock>>=
+void
+swcursorclock(void)
+{
+    int x;
+
+    if(!swenabled)
+        return;
+    if(swvisible && eqpt(swpt, swvispt) && swvers==swvisvers)
+        return;
+
+    x = splhi();
+    if(swenabled)
+    if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
+    if(canqlock(&drawlock)){
+        swcursorhide();
+        swcursordraw();
+        qunlock(&drawlock);
+    }
+    splx(x);
+}
+@
+
+<<function swcursorinit>>=
+void
+swcursorinit(void)
+{
+    static int init, warned;
+    VGAscr *scr;
+
+    didswcursorinit = 1;
+    if(!init){
+        init = 1;
+        addclock0link(swcursorclock, 10);
+    }
+    scr = &vgascreen[0];
+    if(scr==nil || scr->gscreen==nil)
+        return;
+
+    if(scr->dev == nil || scr->dev->linear == nil){
+        if(!warned){
+            print("cannot use software cursor on non-linear vga screen\n");
+            warned = 1;
+        }
+        return;
+    }
+
+    if(swback){
+        freememimage(swback);
+        freememimage(swmask);
+        freememimage(swmask1);
+        freememimage(swimg);
+        freememimage(swimg1);
+    }
+
+    swback = allocmemimage(Rect(0,0,32,32), gscreen->chan);
+    swmask = allocmemimage(Rect(0,0,16,16), GREY8);
+    swmask1 = allocmemimage(Rect(0,0,16,16), GREY1);
+    swimg = allocmemimage(Rect(0,0,16,16), GREY8);
+    swimg1 = allocmemimage(Rect(0,0,16,16), GREY1);
+    if(swback==nil || swmask==nil || swmask1==nil || swimg==nil || swimg1 == nil){
+        print("software cursor: allocmemimage fails");
+        return;
+    }
+
+    memfillcolor(swmask, DOpaque);
+    memfillcolor(swmask1, DOpaque);
+    memfillcolor(swimg, DBlack);
+    memfillcolor(swimg1, DBlack);
+}
+@
+
+<<global swcursor>>=
+VGAcur swcursor =
+{
+    "soft",
+    swenable,
+    swdisable,
+    swload,
+    swmove,
+};
+@
+
+
+%-------------------------------------------------------------
+
+<<kernel/devices/screen/386/screen.c>>=
+#include "u.h"
+#include "../port/lib.h"
+#include "../port/error.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+
+#include "io.h"
+#include <ureg.h>
+
+#include <draw.h>
+#include <memdraw.h>
+#include <cursor.h>
+#include "screen.h"
+
+//#define RGB2K(r,g,b)    ((156763*(r)+307758*(g)+59769*(b))>>19)
+
+extern void swcursorhide(void);
+extern void swcursoravoid(Rectangle);
+extern void vgalinearpci(VGAscr*);
+
+
+//already in libdraw/arith.c
+<<global physgscreenr>>
+
+<<global gscreendata>>
+<<global gscreen>>
+
+<<global vgascreen>>
+
+<<global arrow>>
+
+<<global didswcursorinit>>
+
+<<global softscreen>>
+
+<<function screensize>>
+
+<<function screenaperture>>
+
+<<function attachscreen>>
+
+<<function flushmemscreen>>
+
+<<function getcolor>>
+
+<<function setpalette>>
+
+<<function setcolor>>
+
+<<function cursoron>>
+
+<<function cursoroff>>
+
+<<function ksetcursor>>
+
+<<global hwaccel>>
+<<global hwblank>>
+<<global panning>>
+
+<<function hwdraw>>
+
+<<function blankscreen bis>>
+
+<<function vgalinearpciid>>
+
+<<function vgalinearpci>>
+
+<<function vgalinearaddr>>
+
+
+<<global swvisible>>
+<<global swenabled>>
+<<global swback>>
+<<global swimg>>
+<<global swmask>>
+<<global swimg1>>
+<<global swmask1>>
+
+<<global swoffset>>
+<<global swrect>>
+<<global swpt>>
+<<global swvispt>>
+<<global swvers>>
+<<global swvisvers>>
+
+<<function swcursorhide>>
+
+<<function swcursoravoid>>
+
+<<function swcursordraw>>
+
+<<function swenable>>
+
+<<function swdisable>>
+
+<<function swload>>
+
+<<function swmove>>
+
+<<function swcursorclock>>
+
+<<function swcursorinit>>
+
+<<global swcursor>>
+
+@
+
+
+\subsection*{[[kernel/devices/screen/386/screen.h]]}
+
+<<struct Cursorinfo>>=
+struct Cursorinfo {
+  Cursor;
+  Lock;
+};
+@
+
+<<enum _anon_ (kernel/devices/screen/386/screen.h)>>=
+/*
+ * Generic VGA registers.
+ */
+enum {
+  MiscW   = 0x03C2, /* Miscellaneous Output (W) */
+  MiscR   = 0x03CC, /* Miscellaneous Output (R) */
+  Status0   = 0x03C2, /* Input status 0 (R) */
+  Status1   = 0x03DA, /* Input Status 1 (R) */
+  FeatureR  = 0x03CA, /* Feature Control (R) */
+  FeatureW  = 0x03DA, /* Feature Control (W) */
+
+  Seqx    = 0x03C4, /* Sequencer Index, Data at Seqx+1 */
+  Crtx    = 0x03D4, /* CRT Controller Index, Data at Crtx+1 */
+  Grx   = 0x03CE, /* Graphics Controller Index, Data at Grx+1 */
+  Attrx   = 0x03C0, /* Attribute Controller Index and Data */
+
+  PaddrW    = 0x03C8, /* Palette Address Register, write */
+  Pdata   = 0x03C9, /* Palette Data Register */
+  Pixmask   = 0x03C6, /* Pixel Mask Register */
+  PaddrR    = 0x03C7, /* Palette Address Register, read */
+  Pstatus   = 0x03C7, /* DAC Status (RO) */
+
+  Pcolours  = 256,    /* Palette */
+  Pred    = 0,
+  Pgreen    = 1,
+  Pblue   = 2,
+
+  Pblack    = 0x00,
+  Pwhite    = 0xFF,
+};
+@
+
+<<function VGAMEM>>=
+#define VGAMEM()  0xA0000
+@
+
+<<function vgao>>=
+//#define vgai(port)    inb(port)
+#define vgao(port, data)  outb(port, data)
+@
+
+<<struct VGAdev>>=
+struct VGAdev {
+  char* name;
+
+  void  (*enable)(VGAscr*);
+  void  (*disable)(VGAscr*);
+  void  (*page)(VGAscr*, int);
+  void  (*linear)(VGAscr*, int, int);
+  void  (*drawinit)(VGAscr*);
+  int (*fill)(VGAscr*, Rectangle, ulong);
+  void  (*ovlctl)(VGAscr*, Chan*, void*, int);
+  int (*ovlwrite)(VGAscr*, void*, int, vlong);
+  void (*flush)(VGAscr*, Rectangle);
+};
+@
+
+<<struct VGAcur>>=
+struct VGAcur {
+  char* name;
+
+  void  (*enable)(VGAscr*);
+  void  (*disable)(VGAscr*);
+  void  (*load)(VGAscr*, Cursor*);
+  int (*move)(VGAscr*, Point);
+
+  int doespanning;
+};
+@
+
+<<struct VGAscr>>=
+/*
+ */
+struct VGAscr {
+  Lock  devlock;
+  VGAdev* dev;
+  Pcidev* pci;
+
+  VGAcur* cur;
+  ulong storage;
+  Cursor;
+
+  int useflush;
+
+  ulong paddr;    /* frame buffer */
+  void* vaddr;
+  int   apsize;
+
+  ulong io;       /* device specific registers */
+  ulong *mmio;
+  
+  ulong colormap[Pcolours][3];
+  int palettedepth;
+
+  Memimage* gscreen;
+  Memdata* gscreendata;
+  Memsubfont* memdefont;
+
+  int (*fill)(VGAscr*, Rectangle, ulong);
+  int (*scroll)(VGAscr*, Rectangle, Rectangle);
+  void  (*blank)(VGAscr*, int);
+  ulong id; /* internal identifier for driver use */
+  int isblank;
+  int overlayinit;
+};
+@
+
+<<enum _anon_ (kernel/devices/screen/386/screen.h)2>>=
+enum {
+  Backgnd   = 0,  /* black */
+};
+@
+
+<<function ishwimage>>=
+#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+@
+
+
+%-------------------------------------------------------------
+
+<<kernel/devices/screen/386/screen.h>>=
+typedef struct Cursor Cursor;
+typedef struct Cursorinfo Cursorinfo;
+<<struct Cursorinfo>>
+
+/* devmouse.c */
+extern void mousetrack(int, int, int, int);
+extern Point mousexy(void);
+extern void mouseaccelerate(int);
+
+extern Cursorinfo cursor;
+extern Cursor arrow;
+
+<<enum _anon_ (kernel/devices/screen/386/screen.h)>>
+
+<<function VGAMEM>>
+<<function vgao>>
+
+extern int vgaxi(long, uchar);
+extern int vgaxo(long, uchar, uchar);
+
+/*
+ */
+typedef struct VGAdev VGAdev;
+typedef struct VGAcur VGAcur;
+typedef struct VGAscr VGAscr;
+
+<<struct VGAdev>>
+
+<<struct VGAcur>>
+
+<<struct VGAscr>>
+
+extern VGAscr vgascreen[];
+
+<<enum _anon_ (kernel/devices/screen/386/screen.h)2>>
+
+/* mouse.c */
+extern void kmousectl(Cmdbuf*);
+//now in portfns_devices.h: extern void mouseresize(void);
+
+/* screen.c */
+extern int    hwaccel;  /* use hw acceleration; default on */
+extern int    hwblank;  /* use hw blanking; default on */
+extern int    panning;  /* use virtual screen panning; default off */
+extern void addvgaseg(char*, ulong, ulong);
+extern uchar* attachscreen(Rectangle*, ulong*, int*, int*, int*);
+extern void flushmemscreen(Rectangle);
+extern int  cursoron(int);
+extern void cursoroff(int);
+extern void ksetcursor(Cursor*);
+extern int  screensize(int, int, int, ulong);
+extern int  screenaperture(int, int);
+extern Rectangle physgscreenr;  /* actual monitor size */
+extern void blankscreen(int);
+
+extern VGAcur swcursor;
+extern void swcursorinit(void);
+//extern void swcursorhide(void);
+//extern void swcursoravoid(Rectangle);
+//extern void swcursorunhide(void);
+
+/* devdraw.c */
+extern void deletescreenimage(void);
+extern void resetscreenimage(void);
+extern ulong  blanktime;
+//extern int    drawhasclients(void);
+//extern void setscreenimageclipr(Rectangle);
+//extern void drawflush(void);
+extern int drawidletime(void);
+extern QLock  drawlock;
+
+/* vga.c */
+extern void vgascreenwin(VGAscr*);
+extern void vgaimageinit(ulong);
+extern void vgalinearpciid(VGAscr*, int, int);
+extern void vgalinearaddr(VGAscr*, ulong, int);
+
+extern void drawblankscreen(int);
+extern void vgablank(VGAscr*, int);
+
+extern Lock vgascreenlock;
+
+<<function ishwimage>>
+@
+
+
+\subsection*{[[kernel/devices/screen/386/vga.c]]}
+
+<<global back2>>=
+static Memimage* back;
+@
+
+<<global conscol>>=
+static Memimage *conscol;
+@
+
+<<global curpos>>=
+static Point curpos;
+@
+
+<<global window bis>>=
+static Rectangle window;
+@
+
+<<global xp>>=
+static int *xp;
+@
+
+<<global xbuf>>=
+static int xbuf[256];
+@
+
+<<global vgascreenlock>>=
+Lock vgascreenlock;
+@
+
+<<function vgaimageinit>>=
+//int drawdebug;
+
+void
+vgaimageinit(ulong chan)
+{
+    if(back == nil){
+        back = allocmemimage(Rect(0,0,1,1), chan);  /* RSC BUG */
+        if(back == nil)
+            panic("back alloc");        /* RSC BUG */
+        back->flags |= Frepl;
+        back->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+        memfillcolor(back, DBlack);
+    }
+
+    if(conscol == nil){
+        conscol = allocmemimage(Rect(0,0,1,1), chan);   /* RSC BUG */
+        if(conscol == nil)
+            panic("conscol alloc"); /* RSC BUG */
+        conscol->flags |= Frepl;
+        conscol->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+        memfillcolor(conscol, DWhite);
+    }
+}
+@
+
+<<function vgascroll>>=
+static void
+vgascroll(VGAscr* scr)
+{
+    int h, o;
+    Point p;
+    Rectangle r;
+
+    h = scr->memdefont->height;
+    o = 8*h;
+    r = Rpt(window.min, Pt(window.max.x, window.max.y-o));
+    p = Pt(window.min.x, window.min.y+o);
+    memimagedraw(scr->gscreen, r, scr->gscreen, p, nil, p, S);
+    r = Rpt(Pt(window.min.x, window.max.y-o), window.max);
+    memimagedraw(scr->gscreen, r, back, ZP, nil, ZP, S);
+
+    curpos.y -= o;
+}
+@
+
+<<function vgascreenputc>>=
+static void
+vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
+{
+    Point p;
+    int h, w, pos;
+    Rectangle r;
+
+//  drawdebug = 1;
+    if(xp < xbuf || xp >= &xbuf[sizeof(xbuf)])
+        xp = xbuf;
+
+    h = scr->memdefont->height;
+    switch(buf[0]){
+
+    case '\n':
+        if(curpos.y+h >= window.max.y){
+            vgascroll(scr);
+            *flushr = window;
+        }
+        curpos.y += h;
+        vgascreenputc(scr, "\r", flushr);
+        break;
+
+    case '\r':
+        xp = xbuf;
+        curpos.x = window.min.x;
+        break;
+
+    case '\t':
+        p = memsubfontwidth(scr->memdefont, " ");
+        w = p.x;
+        if(curpos.x >= window.max.x-4*w)
+            vgascreenputc(scr, "\n", flushr);
+
+        pos = (curpos.x-window.min.x)/w;
+        pos = 4-(pos%4);
+        *xp++ = curpos.x;
+        r = Rect(curpos.x, curpos.y, curpos.x+pos*w, curpos.y + h);
+        memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
+        curpos.x += pos*w;
+        break;
+
+    case '\b':
+        if(xp <= xbuf)
+            break;
+        xp--;
+        r = Rect(*xp, curpos.y, curpos.x, curpos.y+h);
+        memimagedraw(scr->gscreen, r, back, back->r.min, nil, ZP, S);
+        combinerect(flushr, r);
+        curpos.x = *xp;
+        break;
+
+    case '\0':
+        break;
+
+    default:
+        p = memsubfontwidth(scr->memdefont, buf);
+        w = p.x;
+
+        if(curpos.x >= window.max.x-w)
+            vgascreenputc(scr, "\n", flushr);
+
+        *xp++ = curpos.x;
+        r = Rect(curpos.x, curpos.y, curpos.x+w, curpos.y+h);
+        memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
+        memimagestring(scr->gscreen, curpos, conscol, ZP, scr->memdefont, buf);
+        combinerect(flushr, r);
+        curpos.x += w;
+    }
+//  drawdebug = 0;
+}
+@
+
+<<function vgascreenputs>>=
+static void
+vgascreenputs(char* s, int n)
+{
+    int i, gotdraw;
+    Rune r;
+    char buf[4];
+    VGAscr *scr;
+    Rectangle flushr;
+
+    scr = &vgascreen[0];
+
+    if(!islo()){
+        /*
+         * Don't deadlock trying to
+         * print in an interrupt.
+         */
+        if(!canlock(&vgascreenlock))
+            return;
+    }
+    else
+        lock(&vgascreenlock);
+
+    /*
+     * Be nice to hold this, but not going to deadlock
+     * waiting for it.  Just try and see.
+     */
+    gotdraw = canqlock(&drawlock);
+
+    flushr = Rect(10000, 10000, -10000, -10000);
+
+    while(n > 0){
+        i = chartorune(&r, s);
+        if(i == 0){
+            s++;
+            --n;
+            continue;
+        }
+        memmove(buf, s, i);
+        buf[i] = 0;
+        n -= i;
+        s += i;
+        vgascreenputc(scr, buf, &flushr);
+    }
+    flushmemscreen(flushr);
+
+    if(gotdraw)
+        qunlock(&drawlock);
+    unlock(&vgascreenlock);
+}
+@
+
+<<function vgascreenwin>>=
+void
+vgascreenwin(VGAscr* scr)
+{
+    int h, w;
+
+    h = scr->memdefont->height;
+    w = scr->memdefont->info[' '].width;
+
+    window = insetrect(scr->gscreen->r, 48);
+    window.max.x = window.min.x+((window.max.x-window.min.x)/w)*w;
+    window.max.y = window.min.y+((window.max.y-window.min.y)/h)*h;
+    curpos = window.min;
+
+    screenputs = vgascreenputs;
+}
+@
+
+<<function vgablank>>=
+/*
+ * Supposedly this is the way to turn DPMS
+ * monitors off using just the VGA registers.
+ * Unfortunately, it seems to mess up the video mode
+ * on the cards I've tried.
+ */
+void
+vgablank(VGAscr*, int blank)
+{
+    uchar seq1, crtc17;
+
+    if(blank) {
+        seq1 = 0x00;
+        crtc17 = 0x80;
+    } else {
+        seq1 = 0x20;
+        crtc17 = 0x00;
+    }
+
+    outs(Seqx, 0x0100);         /* synchronous reset */
+    seq1 |= vgaxi(Seqx, 1) & ~0x20;
+    vgaxo(Seqx, 1, seq1);
+    crtc17 |= vgaxi(Crtx, 0x17) & ~0x80;
+    delay(10);
+    vgaxo(Crtx, 0x17, crtc17);
+    outs(Crtx, 0x0300);             /* end synchronous reset */
+}
+@
+
+<<function addvgaseg>>=
+void
+addvgaseg(char *name, ulong pa, ulong size)
+{
+    Physseg seg;
+
+    memset(&seg, 0, sizeof seg);
+    seg.attr = SG_PHYSICAL;
+    seg.name = name;
+    seg.pa = pa;
+    seg.size = size;
+    addphysseg(&seg);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<kernel/devices/screen/386/vga.c>>=
+#include "u.h"
+#include "../port/lib.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+#include "io.h"
+#include "../port/error.h"
+
+#include <draw.h>
+#include <memdraw.h>
+#include <cursor.h>
+#include "screen.h"
+
+<<global back2>>
+<<global conscol>>
+
+<<global curpos>>
+<<global window bis>>
+<<global xp>>
+<<global xbuf>>
+<<global vgascreenlock>>
+<<function vgaimageinit>>
+
+<<function vgascroll>>
+
+<<function vgascreenputc>>
+
+<<function vgascreenputs>>
+
+<<function vgascreenwin>>
+
+<<function vgablank>>
+
+<<function addvgaseg>>
+
+//void
+//cornerstring(char *s)
+//{
+//  int h, w;
+//  VGAscr *scr;
+//  Rectangle r;
+//  Point p;
+//
+//  scr = &vgascreen[0];
+//  if(scr->vaddr == nil || screenputs != vgascreenputs)
+//      return;
+//  p = memsubfontwidth(scr->memdefont, s);
+//  w = p.x;
+//  h = scr->memdefont->height;
+//
+//  r = Rect(0, 0, w, h);
+//  memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
+//  memimagestring(scr->gscreen, r.min, conscol, ZP, scr->memdefont, s);
+////    flushmemscreen(r);
+//}
+@
+
+
+\subsection*{[[kernel/devices/screen/386/vgaclgd542x.c]]}
+
+<<function clgd542xpageset>>=
+static int
+clgd542xpageset(VGAscr*, int page)
+{
+    uchar gr09;
+    int opage;
+    
+    if(vgaxi(Seqx, 0x07) & 0xF0)
+        page = 0;
+    gr09 = vgaxi(Grx, 0x09);
+    if(vgaxi(Grx, 0x0B) & 0x20){
+        vgaxo(Grx, 0x09, page<<2);
+        opage = gr09>>2;
+    }
+    else{
+        vgaxo(Grx, 0x09, page<<4);
+        opage = gr09>>4;
+    }
+
+    return opage;
+}
+@
+
+<<function clgd542xpage>>=
+static void
+clgd542xpage(VGAscr* scr, int page)
+{
+    lock(&scr->devlock);
+    clgd542xpageset(scr, page);
+    unlock(&scr->devlock);
+}
+@
+
+<<function clgd542xlinear>>=
+static void
+clgd542xlinear(VGAscr* scr, int, int)
+{
+    vgalinearpciid(scr, 0x1013, 0);
+}
+@
+
+<<function clgd542xdisable>>=
+static void
+clgd542xdisable(VGAscr*)
+{
+    uchar sr12;
+
+    sr12 = vgaxi(Seqx, 0x12);
+    vgaxo(Seqx, 0x12, sr12 & ~0x01);
+}
+@
+
+<<function clgd542xenable>>=
+static void
+clgd542xenable(VGAscr* scr)
+{
+    uchar sr12;
+    int mem, x;
+ 
+    /*
+     * Disable the cursor.
+     */
+    sr12 = vgaxi(Seqx, 0x12);
+    vgaxo(Seqx, 0x12, sr12 & ~0x01);
+
+    /*
+     * Cursor colours.
+     * Can't call setcolor here as cursor is already locked.
+     */
+    vgaxo(Seqx, 0x12, sr12|0x02);
+    vgao(PaddrW, 0x00);
+    vgao(Pdata, Pwhite);
+    vgao(Pdata, Pwhite);
+    vgao(Pdata, Pwhite);
+    vgao(PaddrW, 0x0F);
+    vgao(Pdata, Pblack);
+    vgao(Pdata, Pblack);
+    vgao(Pdata, Pblack);
+    vgaxo(Seqx, 0x12, sr12);
+
+    mem = 0;
+    switch(vgaxi(Crtx, 0x27) & ~0x03){
+
+    case 0x88:              /* CL-GD5420 */
+    case 0x8C:              /* CL-GD5422 */
+    case 0x94:              /* CL-GD5424 */
+    case 0x80:              /* CL-GD5425 */
+    case 0x90:              /* CL-GD5426 */
+    case 0x98:              /* CL-GD5427 */
+    case 0x9C:              /* CL-GD5429 */
+        /*
+         * The BIOS leaves the memory size in Seq0A, bits 4 and 3.
+         * See Technical Reference Manual Appendix E1, Section 1.3.2.
+         *
+         * The storage area for the 64x64 cursors is the last 16Kb of
+         * display memory.
+         */
+        mem = (vgaxi(Seqx, 0x0A)>>3) & 0x03;
+        break;
+
+    case 0xA0:              /* CL-GD5430 */
+    case 0xA8:              /* CL-GD5434 */
+    case 0xAC:              /* CL-GD5436 */
+    case 0xB8:              /* CL-GD5446 */
+    case 0x30:              /* CL-GD7543 */
+        /*
+         * Attempt to intuit the memory size from the DRAM control
+         * register. Minimum is 512KB.
+         * If DRAM bank switching is on then there's double.
+         */
+        x = vgaxi(Seqx, 0x0F);
+        mem = (x>>3) & 0x03;
+        if(x & 0x80)
+            mem++;
+        break;
+
+    case 0xBC:              /* CL-GD5480 */
+        mem = 2;            /* 1024 = 256<<2 */
+        x = vgaxi(Seqx, 0x0F);
+        if((x & 0x18) == 0x18){
+            mem <<= 1;      /* 2048 = 256<<3 */
+            if(x & 0x80)
+                mem <<= 2;  /* 2048 = 256<<4 */
+        }
+        if(vgaxi(Seqx, 0x17) & 0x80)
+            mem <<= 1;
+        break;
+
+    default:                /* uh, ah dunno */
+        break;
+    }
+    scr->storage = ((256<<mem)-16)*1024;
+
+    /*
+     * Set the current cursor to index 0
+     * and turn the 64x64 cursor on.
+     */
+    vgaxo(Seqx, 0x13, 0);
+    vgaxo(Seqx, 0x12, sr12|0x05);
+}
+@
+
+<<function clgd542xinitcursor>>=
+static void
+clgd542xinitcursor(VGAscr* scr, int xo, int yo, int index)
+{
+    uchar *p, seq07;
+    uint p0, p1;
+    int opage, x, y;
+
+    /*
+     * Is linear addressing turned on? This will determine
+     * how we access the cursor storage.
+     */
+    seq07 = vgaxi(Seqx, 0x07);
+    opage = 0;
+    p = scr->vaddr;
+    if(!(seq07 & 0xF0)){
+        lock(&scr->devlock);
+        opage = clgd542xpageset(scr, scr->storage>>16);
+        p += (scr->storage & 0xFFFF);
+    }
+    else
+        p += scr->storage;
+    p += index*1024;
+
+    for(y = yo; y < 16; y++){
+        p0 = scr->set[2*y];
+        p1 = scr->set[2*y+1];
+        if(xo){
+            p0 = (p0<<xo)|(p1>>(8-xo));
+            p1 <<= xo;
+        }
+        *p++ = p0;
+        *p++ = p1;
+
+        for(x = 16; x < 64; x += 8)
+            *p++ = 0x00;
+
+        p0 = scr->clr[2*y]|scr->set[2*y];
+        p1 = scr->clr[2*y+1]|scr->set[2*y+1];
+        if(xo){
+            p0 = (p0<<xo)|(p1>>(8-xo));
+            p1 <<= xo;
+        }
+        *p++ = p0;
+        *p++ = p1;
+
+        for(x = 16; x < 64; x += 8)
+            *p++ = 0x00;
+    }
+    while(y < 64+yo){
+        for(x = 0; x < 64; x += 8){
+            *p++ = 0x00;
+            *p++ = 0x00;
+        }
+        y++;
+    }
+
+    if(!(seq07 & 0xF0)){
+        clgd542xpageset(scr, opage);
+        unlock(&scr->devlock);
+    }
+}
+@
+
+<<function clgd542xload>>=
+static void
+clgd542xload(VGAscr* scr, Cursor* curs)
+{
+    uchar sr12;
+
+    /*
+     * Disable the cursor.
+     */
+    sr12 = vgaxi(Seqx, 0x12);
+    vgaxo(Seqx, 0x12, sr12 & ~0x01);
+
+    memmove(&scr->Cursor, curs, sizeof(Cursor));
+    clgd542xinitcursor(scr, 0, 0, 0);
+
+    /*
+     * Enable the cursor.
+     */
+    vgaxo(Seqx, 0x13, 0);
+    vgaxo(Seqx, 0x12, sr12|0x05);
+}
+@
+
+<<function clgd542xmove>>=
+static int
+clgd542xmove(VGAscr* scr, Point p)
+{
+    int index, x, xo, y, yo;
+
+    index = 0;
+    if((x = p.x+scr->offset.x) < 0){
+        xo = -x;
+        x = 0;
+    }
+    else
+        xo = 0;
+    if((y = p.y+scr->offset.y) < 0){
+        yo = -y;
+        y = 0;
+    }
+    else
+        yo = 0;
+
+    if(xo || yo){
+        clgd542xinitcursor(scr, xo, yo, 1);
+        index = 1;
+    }
+    vgaxo(Seqx, 0x13, index<<2);
+    
+    vgaxo(Seqx, 0x10|((x & 0x07)<<5), (x>>3) & 0xFF);
+    vgaxo(Seqx, 0x11|((y & 0x07)<<5), (y>>3) & 0xFF);
+
+    return 0;
+}
+@
+
+<<global vgaclgd542xdev>>=
+VGAdev vgaclgd542xdev = {
+    "clgd542x",
+
+    0,
+    0,
+    clgd542xpage,
+    clgd542xlinear,
+};
+@
+
+<<global vgaclgd542xcur>>=
+VGAcur vgaclgd542xcur = {
+    "clgd542xhwgc",
+
+    clgd542xenable,
+    clgd542xdisable,
+    clgd542xload,
+    clgd542xmove,
+};
+@
+
+
+%-------------------------------------------------------------
+
+<<kernel/devices/screen/386/vgaclgd542x.c>>=
+#include "u.h"
+#include "../port/lib.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+#include "io.h"
+#include "../port/error.h"
+
+#include <draw.h>
+#include <memdraw.h>
+#include <cursor.h>
+#include "screen.h"
+
+<<function clgd542xpageset>>
+
+<<function clgd542xpage>>
+
+<<function clgd542xlinear>>
+
+<<function clgd542xdisable>>
+
+<<function clgd542xenable>>
+
+<<function clgd542xinitcursor>>
+
+<<function clgd542xload>>
+
+<<function clgd542xmove>>
+
+<<global vgaclgd542xdev>>
+
+<<global vgaclgd542xcur>>
+@
+
+
+\subsection*{[[kernel/devices/screen/386/vgavesa.c]]}
+
+<<enum _anon_ (kernel/devices/screen/386/vgavesa.c)>>=
+enum {
+    Usesoftscreen = 1,
+};
+@
+
+<<global hardscreen>>=
+static void *hardscreen;
+@
+
+<<global modebuf>>=
+static uchar modebuf[0x1000];
+@
+
+<<function WORD>>=
+// pad: seems similar to macros in fcall.h, factorize?
+#define WORD(p) ((p)[0] | ((p)[1]<<8))
+@
+
+<<function LONG>>=
+#define LONG(p) ((p)[0] | ((p)[1]<<8) | ((p)[2]<<16) | ((p)[3]<<24))
+@
+
+<<function vbesetup>>=
+//#define PLONG(p, v) do{(p)[0] = (v); (p)[1] = (v)>>8; (p)[2] = (v)>>16; (p)[3] = (v)>>24;}while(0)
+
+static uchar*
+vbesetup(Ureg *u, int ax)
+{
+    ulong pa;
+
+    pa = PADDR(RMBUF);
+    memset(modebuf, 0, sizeof modebuf);
+    memset(u, 0, sizeof *u);
+    u->ax = ax;
+    u->es = (pa>>4)&0xF000;
+    u->di = pa&0xFFFF;
+    return modebuf;
+}
+@
+
+<<function vbecall>>=
+static void
+vbecall(Ureg *u)
+{
+    Chan *creg, *cmem;
+    ulong pa;
+
+    cmem = namec("/dev/realmodemem", Aopen, ORDWR, 0);
+    if(waserror()){
+        cclose(cmem);
+        nexterror();
+    }
+    creg = namec("/dev/realmode", Aopen, ORDWR, 0);
+    if(waserror()){
+        cclose(creg);
+        nexterror();
+    }
+    pa = PADDR(RMBUF);
+    /* TODO: check read and write return values */
+    devtab[cmem->type]->write(cmem, modebuf, sizeof modebuf, pa);
+    u->trap = 0x10;
+    devtab[creg->type]->write(creg, u, sizeof *u, 0);
+
+    devtab[creg->type]->read(creg, u, sizeof *u, 0);
+    if((u->ax&0xFFFF) != 0x004F)
+        error("vesa bios error");
+    devtab[cmem->type]->read(cmem, modebuf, sizeof modebuf, pa);
+
+    poperror();
+    cclose(creg);
+    poperror();
+    cclose(cmem);
+}
+@
+
+<<function vbecheck>>=
+static void
+vbecheck(void)
+{
+    Ureg u;
+    uchar *p;
+
+    p = vbesetup(&u, 0x4F00);
+    strcpy((char*)p, "VBE2");
+    vbecall(&u);
+    if(memcmp((char*)p, "VESA", 4) != 0)
+        error("bad vesa signature");
+    if(p[5] < 2)
+        error("bad vesa version");
+}
+@
+
+<<function vbegetmode>>=
+static int
+vbegetmode(void)
+{
+    Ureg u;
+
+    vbesetup(&u, 0x4F03);
+    vbecall(&u);
+    return u.bx;
+}
+@
+
+<<function vbemodeinfo>>=
+static uchar*
+vbemodeinfo(int mode)
+{
+    uchar *p;
+    Ureg u;
+
+    p = vbesetup(&u, 0x4F01);
+    u.cx = mode;
+    vbecall(&u);
+    return p;
+}
+@
+
+<<function vesalinear>>=
+static void
+vesalinear(VGAscr *scr, int, int)
+{
+    int i, mode, size, havesize;
+    uchar *p;
+    ulong paddr;
+    Pcidev *pci;
+
+    if(hardscreen) {
+        scr->vaddr = 0;
+        scr->paddr = scr->apsize = 0;
+        return;
+    }
+
+    vbecheck();
+    mode = vbegetmode();
+    /*
+     * bochs loses the top bits - cannot use this
+    if((mode&(1<<14)) == 0)
+        error("not in linear graphics mode");
+     */
+    mode &= 0x3FFF;
+    p = vbemodeinfo(mode);
+    if(!(WORD(p+0) & (1<<4)))
+        error("not in VESA graphics mode");
+    if(!(WORD(p+0) & (1<<7)))
+        error("not in linear graphics mode");
+
+    paddr = LONG(p+40);
+    size = WORD(p+20)*WORD(p+16);
+    size = PGROUND(size);
+
+    /*
+     * figure out max size of memory so that we have
+     * enough if the screen is resized.
+     */
+    pci = nil;
+    havesize = 0;
+    while(!havesize && (pci = pcimatch(pci, 0, 0)) != nil){
+        if(pci->ccrb != Pcibcdisp)
+            continue;
+        for(i=0; i<nelem(pci->mem); i++)
+            if(paddr == (pci->mem[i].bar&~0x0F)){
+                if(pci->mem[i].size > size)
+                    size = pci->mem[i].size;
+                havesize = 1;
+                break;
+            }
+    }
+
+    /* no pci - heuristic guess */
+    if (!havesize)
+        if(size < 4*1024*1024)
+            size = 4*1024*1024;
+        else
+            size = ROUND(size, 1024*1024);
+    if(size > 16*1024*1024)     /* arbitrary */
+        size = 16*1024*1024;
+
+    vgalinearaddr(scr, paddr, size);
+    if(scr->apsize)
+        addvgaseg("vesascreen", scr->paddr, scr->apsize);
+
+    if(Usesoftscreen){
+        hardscreen = scr->vaddr;
+        scr->vaddr = 0;
+        scr->paddr = scr->apsize = 0;
+    }
+}
+@
+
+<<function vesaflush>>=
+static void
+vesaflush(VGAscr *scr, Rectangle r)
+{
+    int t, w, wid, off;
+    ulong *hp, *sp, *esp;
+
+    if(hardscreen == nil)
+        return;
+    if(rectclip(&r, scr->gscreen->r) == 0)
+        return;
+    sp = (ulong*)(scr->gscreendata->bdata + scr->gscreen->zero);
+    t = (r.max.x * scr->gscreen->depth + 2*BI2WD-1) / BI2WD;
+    w = (r.min.x * scr->gscreen->depth) / BI2WD;
+    w = (t - w) * BY2WD;
+    wid = scr->gscreen->width;
+    off = r.min.y * wid + (r.min.x * scr->gscreen->depth) / BI2WD;
+
+    hp = hardscreen;
+    hp += off;
+    sp += off;
+    esp = sp + Dy(r) * wid;
+    while(sp < esp){
+        memmove(hp, sp, w);
+        hp += wid;
+        sp += wid;
+    }
+}
+@
+
+<<global vgavesadev>>=
+VGAdev vgavesadev = {
+    "vesa",
+    0,
+    0,
+    0,
+    vesalinear,
+    0,
+    0,
+    0,
+    0,
+    vesaflush,
+};
+@
+
+
+%-------------------------------------------------------------
+
+<<kernel/devices/screen/386/vgavesa.c>>=
+/*
+ * vga driver using just vesa bios to set up.
+ *
+ * note that setting hwaccel to zero will cause cursor ghosts to be
+ * left behind.  hwaccel set non-zero repairs this.
+ */
+#include "u.h"
+#include "../port/lib.h"
+#include "../port/error.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+
+#include "io.h"
+#include <ureg.h>
+
+#include <draw.h>
+#include <memdraw.h>
+#include <cursor.h>
+#include "screen.h"
+
+<<enum _anon_ (kernel/devices/screen/386/vgavesa.c)>>
+
+<<global hardscreen>>
+<<global modebuf>>
+
+<<function WORD>>
+<<function LONG>>
+//#define PWORD(p, v) do{(p)[0] = (v); (p)[1] = (v)>>8;}while(0)
+<<function vbesetup>>
+
+<<function vbecall>>
+
+<<function vbecheck>>
+
+<<function vbegetmode>>
+
+<<function vbemodeinfo>>
+
+<<function vesalinear>>
+
+<<function vesaflush>>
+
+<<global vgavesadev>>
+@
+
+
+\subsection*{[[kernel/devices/screen/386/vgax.c]]}
+
+<<global vgaxlock>>=
+static Lock vgaxlock;           /* access to index registers */
+@
+
+<<function vgaxi>>=
+int
+vgaxi(long port, uchar index)
+{
+    uchar data;
+
+    ilock(&vgaxlock);
+    switch(port){
+
+    case Seqx:
+    case Crtx:
+    case Grx:
+        outb(port, index);
+        data = inb(port+1);
+        break;
+
+    case Attrx:
+        /*
+         * Allow processor access to the colour
+         * palette registers. Writes to Attrx must
+         * be preceded by a read from Status1 to
+         * initialise the register to point to the
+         * index register and not the data register.
+         * Processor access is allowed by turning
+         * off bit 0x20.
+         */
+        inb(Status1);
+        if(index < 0x10){
+            outb(Attrx, index);
+            data = inb(Attrx+1);
+            inb(Status1);
+            outb(Attrx, 0x20|index);
+        }
+        else{
+            outb(Attrx, 0x20|index);
+            data = inb(Attrx+1);
+        }
+        break;
+
+    default:
+        iunlock(&vgaxlock);
+        return -1;
+    }
+    iunlock(&vgaxlock);
+
+    return data & 0xFF;
+}
+@
+
+<<function vgaxo>>=
+int
+vgaxo(long port, uchar index, uchar data)
+{
+    ilock(&vgaxlock);
+    switch(port){
+
+    case Seqx:
+    case Crtx:
+    case Grx:
+        /*
+         * We could use an outport here, but some chips
+         * (e.g. 86C928) have trouble with that for some
+         * registers.
+         */
+        outb(port, index);
+        outb(port+1, data);
+        break;
+
+    case Attrx:
+        inb(Status1);
+        if(index < 0x10){
+            outb(Attrx, index);
+            outb(Attrx, data);
+            inb(Status1);
+            outb(Attrx, 0x20|index);
+        }
+        else{
+            outb(Attrx, 0x20|index);
+            outb(Attrx, data);
+        }
+        break;
+
+    default:
+        iunlock(&vgaxlock);
+        return -1;
+    }
+    iunlock(&vgaxlock);
+
+    return 0;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<kernel/devices/screen/386/vgax.c>>=
+#include "u.h"
+#include "../port/lib.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+#include "../port/error.h"
+
+#include "io.h"
+
+#include <draw.h>
+#include <memdraw.h>
+#include <cursor.h>
+#include "screen.h"
+
+<<global vgaxlock>>
+
+<<function vgaxi>>
+
+<<function vgaxo>>
+@
+
+
+\section{[[kernel/devices/screen/]]}
+
+\subsection*{[[kernel/devices/screen/devdraw.c]]}
+
+<<enum _anon_ (kernel/devices/screen/devdraw.c)>>=
+enum
+{
+    Qtopdir     = 0,
+    Qnew,
+    Qwinname,
+    Q3rd,
+    Q2nd,
+    Qcolormap,
+    Qctl,
+    Qdata,
+    Qrefresh,
+};
+@
+
+<<constant QSHIFT>>=
+/*
+ * Qid path is:
+ *   4 bits of file type (qids above)
+ *  24 bits of mux slot number +1; 0 means not attached to client
+ */
+#define QSHIFT  4   /* location in qid of client # */
+@
+
+<<function QID bis>>=
+#define QID(q)      ((((ulong)(q).path)&0x0000000F)>>0)
+@
+
+<<function CLIENTPATH>>=
+#define CLIENTPATH(q)   ((((ulong)q)&0x7FFFFFF0)>>QSHIFT)
+@
+
+<<constant NHASH bis>>=
+//#define CLIENT(q)   CLIENTPATH((q).path)
+
+#define NHASH       (1<<5)
+@
+
+<<constant HASHMASK>>=
+#define HASHMASK    (NHASH-1)
+@
+
+<<constant IOUNIT>>=
+#define IOUNIT      (64*1024)
+@
+
+<<global blanktime>>=
+ulong blanktime = 30;   /* in minutes; a half hour */
+@
+
+<<struct KDraw>>=
+struct KDraw
+{
+    int     clientid;
+    int     nclient;
+    Client**    client;
+    int     nname;
+    DName*      name;
+    int     vers;
+    int     softscreen;
+    int     blanked;    /* screen turned off */
+    ulong       blanktime;  /* time of last operation */
+    ulong       savemap[3*256];
+};
+@
+
+<<struct Client>>=
+struct Client
+{
+    Ref     r;
+    DImage*     dimage[NHASH];
+    CScreen*    cscreen;
+    Refresh*    refresh;
+    Rendez      refrend;
+    uchar*      readdata;
+    int     nreaddata;
+    int     busy;
+    int     clientid;
+    int     slot;
+    int     refreshme;
+    int     infoid;
+    int     op;
+};
+@
+
+<<struct Refresh>>=
+struct Refresh
+{
+    DImage*     dimage;
+    Rectangle   r;
+    Refresh*    next;
+};
+@
+
+<<struct Refx>>=
+struct Refx
+{
+    Client*     client;
+    DImage*     dimage;
+};
+@
+
+<<struct DName>>=
+struct DName
+{
+    char        *name;
+    Client      *client;
+    DImage*     dimage;
+    int     vers;
+};
+@
+
+<<struct FChar>>=
+struct FChar
+{
+    int     minx;   /* left edge of bits */
+    int     maxx;   /* right edge of bits */
+    uchar       miny;   /* first non-zero scan-line */
+    uchar       maxy;   /* last non-zero scan-line + 1 */
+    schar       left;   /* offset of baseline */
+    uchar       width;  /* width of baseline */
+};
+@
+
+<<struct DImage>>=
+/*
+ * Reference counts in DImages:
+ *  one per open by original client
+ *  one per screen image or fill
+ *  one per image derived from this one by name
+ */
+struct DImage
+{
+    int     id;
+    int     ref;
+    char        *name;
+    int     vers;
+    Memimage*   image;
+    int     ascent;
+    int     nfchar;
+    FChar*      fchar;
+    DScreen*    dscreen;    /* 0 if not a window */
+    DImage*     fromname;   /* image this one is derived from, by name */
+    DImage*     next;
+};
+@
+
+<<struct CScreen>>=
+struct CScreen
+{
+    DScreen*    dscreen;
+    CScreen*    next;
+};
+@
+
+<<struct DScreen>>=
+struct DScreen
+{
+    int     id;
+    int     public;
+    int     ref;
+    DImage      *dimage;
+    DImage      *dfill;
+    Memscreen*  screen;
+    Client*     owner;
+    DScreen*    next;
+};
+@
+
+<<global sdraw>>=
+static  KDraw        sdraw;
+@
+
+<<global drawlock>>=
+    QLock   drawlock;
+@
+
+<<global screenimage>>=
+static  Memimage    *screenimage;
+@
+
+<<global screendimage>>=
+static  DImage* screendimage;
+@
+
+<<global screenname>>=
+static  char    screenname[40];
+@
+
+<<global screennameid>>=
+static  int screennameid;
+@
+
+<<global flushrect>>=
+static  Rectangle   flushrect;
+@
+
+<<global waste>>=
+static  int     waste;
+@
+
+<<global dscreen>>=
+static  DScreen*    dscreen;
+@
+
+<<global Enodrawimage>>=
+static  char Enodrawimage[] =   "unknown id for draw image";
+@
+
+<<global Enodrawscreen>>=
+static  char Enodrawscreen[] =  "unknown id for draw screen";
+@
+
+<<global Eshortdraw>>=
+static  char Eshortdraw[] = "short draw message";
+@
+
+<<global Eshortread>>=
+static  char Eshortread[] = "draw read too short";
+@
+
+<<global Eimageexists>>=
+static  char Eimageexists[] =   "image id in use";
+@
+
+<<global Escreenexists>>=
+static  char Escreenexists[] =  "screen id in use";
+@
+
+<<global Edrawmem>>=
+static  char Edrawmem[] =   "image memory allocation failed";
+@
+
+<<global Ereadoutside>>=
+static  char Ereadoutside[] =   "readimage outside image";
+@
+
+<<global Ewriteoutside>>=
+static  char Ewriteoutside[] =  "writeimage outside image";
+@
+
+<<global Enotfont>>=
+static  char Enotfont[] =   "image not a font";
+@
+
+<<global Eindex>>=
+static  char Eindex[] =     "character index out of range";
+@
+
+<<global Enoclient>>=
+static  char Enoclient[] =  "no such draw client";
+@
+
+<<global Enameused>>=
+//static    char Edepth[] =     "image has bad depth";
+static  char Enameused[] =  "image name in use";
+@
+
+<<global Enoname>>=
+static  char Enoname[] =    "no image with that name";
+@
+
+<<global Eoldname>>=
+static  char Eoldname[] =   "named image no longer valid";
+@
+
+<<global Enamed>>=
+static  char Enamed[] =     "image already has name";
+@
+
+<<global Ewrongname>>=
+static  char Ewrongname[] =     "wrong name for image";
+@
+
+<<function dlock>>=
+static void
+dlock(void)
+{
+    qlock(&drawlock);
+}
+@
+
+<<function candlock>>=
+static int
+candlock(void)
+{
+    return canqlock(&drawlock);
+}
+@
+
+<<function dunlock>>=
+static void
+dunlock(void)
+{
+    qunlock(&drawlock);
+}
+@
+
+<<function drawgen>>=
+static int
+drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
+{
+    int t;
+    Qid q;
+    ulong path;
+    Client *cl;
+
+    q.vers = 0;
+
+    if(s == DEVDOTDOT){
+        switch(QID(c->qid)){
+        case Qtopdir:
+        case Q2nd:
+            mkqid(&q, Qtopdir, 0, QTDIR);
+            devdir(c, q, "#i", 0, eve, 0500, dp);
+            break;
+        case Q3rd:
+            cl = drawclientofpath(c->qid.path);
+            if(cl == nil)
+                strncpy(up->genbuf, "??", sizeof up->genbuf);
+            else
+                snprint(up->genbuf, sizeof up->genbuf,
+                    "%d", cl->clientid);
+            mkqid(&q, Q2nd, 0, QTDIR);
+            devdir(c, q, up->genbuf, 0, eve, 0500, dp);
+            break;
+        default:
+            panic("drawwalk %llux", c->qid.path);
+        }
+        return 1;
+    }
+
+    /*
+     * Top level directory contains the name of the device.
+     */
+    t = QID(c->qid);
+    if(t == Qtopdir){
+        switch(s){
+        case 0:
+            mkqid(&q, Q2nd, 0, QTDIR);
+            devdir(c, q, "draw", 0, eve, 0555, dp);
+            break;
+        case 1:
+            mkqid(&q, Qwinname, 0, QTFILE);
+            devdir(c, q, "winname", 0, eve, 0444, dp);
+            break;
+        default:
+            return -1;
+        }
+        return 1;
+    }
+
+    if(t == Qwinname){
+        mkqid(&q, Qwinname, 0, QTFILE);
+        devdir(c, q, "winname", 0, eve, 0444, dp);
+        return 1;
+    }
+
+    /*
+     * Second level contains "new" plus all the clients.
+     */
+    if(t == Q2nd || t == Qnew){
+        if(s == 0){
+            mkqid(&q, Qnew, 0, QTFILE);
+            devdir(c, q, "new", 0, eve, 0666, dp);
+        }
+        else if(s <= sdraw.nclient){
+            cl = sdraw.client[s-1];
+            if(cl == 0)
+                return 0;
+            snprint(up->genbuf, sizeof up->genbuf, "%d",
+                cl->clientid);
+            mkqid(&q, (s<<QSHIFT)|Q3rd, 0, QTDIR);
+            devdir(c, q, up->genbuf, 0, eve, 0555, dp);
+            return 1;
+        }
+        else
+            return -1;
+        return 1;
+    }
+
+    /*
+     * Third level.
+     */
+    path = c->qid.path&~((1<<QSHIFT)-1);    /* slot component */
+    q.vers = c->qid.vers;
+    q.type = QTFILE;
+    switch(s){
+    case 0:
+        q.path = path|Qcolormap;
+        devdir(c, q, "colormap", 0, eve, 0600, dp);
+        break;
+    case 1:
+        q.path = path|Qctl;
+        devdir(c, q, "ctl", 0, eve, 0600, dp);
+        break;
+    case 2:
+        q.path = path|Qdata;
+        devdir(c, q, "data", 0, eve, 0600, dp);
+        break;
+    case 3:
+        q.path = path|Qrefresh;
+        devdir(c, q, "refresh", 0, eve, 0400, dp);
+        break;
+    default:
+        return -1;
+    }
+    return 1;
+}
+@
+
+<<function drawrefactive>>=
+static
+int
+drawrefactive(void *a)
+{
+    Client *c;
+
+    c = a;
+    return c->refreshme || c->refresh!=0;
+}
+@
+
+<<function drawrefreshscreen>>=
+static
+void
+drawrefreshscreen(DImage *l, Client *client)
+{
+    while(l != nil && l->dscreen == nil)
+        l = l->fromname;
+    if(l != nil && l->dscreen->owner != client)
+        l->dscreen->owner->refreshme = 1;
+}
+@
+
+<<function drawrefresh>>=
+static
+void
+drawrefresh(Memimage*, Rectangle r, void *v)
+{
+    Refx *x;
+    DImage *d;
+    Client *c;
+    Refresh *ref;
+
+    if(v == 0)
+        return;
+    x = v;
+    c = x->client;
+    d = x->dimage;
+    for(ref=c->refresh; ref; ref=ref->next)
+        if(ref->dimage == d){
+            combinerect(&ref->r, r);
+            return;
+        }
+    ref = malloc(sizeof(Refresh));
+    if(ref){
+        ref->dimage = d;
+        ref->r = r;
+        ref->next = c->refresh;
+        c->refresh = ref;
+    }
+}
+@
+
+<<function addflush>>=
+static void
+addflush(Rectangle r)
+{
+    int abb, ar, anbb;
+    Rectangle nbb;
+
+    if(sdraw.softscreen==0 || !rectclip(&r, screenimage->r))
+        return;
+
+    if(flushrect.min.x >= flushrect.max.x){
+        flushrect = r;
+        waste = 0;
+        return;
+    }
+    nbb = flushrect;
+    combinerect(&nbb, r);
+    ar = Dx(r)*Dy(r);
+    abb = Dx(flushrect)*Dy(flushrect);
+    anbb = Dx(nbb)*Dy(nbb);
+    /*
+     * Area of new waste is area of new bb minus area of old bb,
+     * less the area of the new segment, which we assume is not waste.
+     * This could be negative, but that's OK.
+     */
+    waste += anbb-abb - ar;
+    if(waste < 0)
+        waste = 0;
+    /*
+     * absorb if:
+     *  total area is small
+     *  waste is less than half total area
+     *  rectangles touch
+     */
+    if(anbb<=1024 || waste*2<anbb || rectXrect(flushrect, r)){
+        flushrect = nbb;
+        return;
+    }
+    /* emit current state */
+    if(flushrect.min.x < flushrect.max.x)
+        flushmemscreen(flushrect);
+    flushrect = r;
+    waste = 0;
+}
+@
+
+<<function dstflush>>=
+static
+void
+dstflush(int dstid, Memimage *dst, Rectangle r)
+{
+    Memlayer *l;
+
+    if(dstid == 0){
+        combinerect(&flushrect, r);
+        return;
+    }
+    /* how can this happen? -rsc, dec 12 2002 */
+    if(dst == 0){
+        print("nil dstflush\n");
+        return;
+    }
+    l = dst->layer;
+    if(l == nil)
+        return;
+    do{
+        if(l->screen->image->data != screenimage->data)
+            return;
+        r = rectaddpt(r, l->delta);
+        l = l->screen->image->layer;
+    }while(l);
+    addflush(r);
+}
+@
+
+<<function drawflush>>=
+void
+drawflush(void)
+{
+    if(flushrect.min.x < flushrect.max.x)
+        flushmemscreen(flushrect);
+    flushrect = Rect(10000, 10000, -10000, -10000);
+}
+@
+
+<<function drawcmp>>=
+static
+int
+drawcmp(char *a, char *b, int n)
+{
+    if(strlen(a) != n)
+        return 1;
+    return memcmp(a, b, n);
+}
+@
+
+<<function drawlookupname>>=
+DName*
+drawlookupname(int n, char *str)
+{
+    DName *name, *ename;
+
+    name = sdraw.name;
+    ename = &name[sdraw.nname];
+    for(; name<ename; name++)
+        if(drawcmp(name->name, str, n) == 0)
+            return name;
+    return 0;
+}
+@
+
+<<function drawgoodname>>=
+int
+drawgoodname(DImage *d)
+{
+    DName *n;
+
+    /* if window, validate the screen's own images */
+    if(d->dscreen)
+        if(drawgoodname(d->dscreen->dimage) == 0
+        || drawgoodname(d->dscreen->dfill) == 0)
+            return 0;
+    if(d->name == nil)
+        return 1;
+    n = drawlookupname(strlen(d->name), d->name);
+    if(n==nil || n->vers!=d->vers)
+        return 0;
+    return 1;
+}
+@
+
+<<function drawlookup>>=
+DImage*
+drawlookup(Client *client, int id, int checkname)
+{
+    DImage *d;
+
+    d = client->dimage[id&HASHMASK];
+    while(d){
+        if(d->id == id){
+            if(checkname && !drawgoodname(d))
+                error(Eoldname);
+            return d;
+        }
+        d = d->next;
+    }
+    return 0;
+}
+@
+
+<<function drawlookupdscreen>>=
+DScreen*
+drawlookupdscreen(int id)
+{
+    DScreen *s;
+
+    s = dscreen;
+    while(s){
+        if(s->id == id)
+            return s;
+        s = s->next;
+    }
+    return 0;
+}
+@
+
+<<function drawlookupscreen>>=
+DScreen*
+drawlookupscreen(Client *client, int id, CScreen **cs)
+{
+    CScreen *s;
+
+    s = client->cscreen;
+    while(s){
+        if(s->dscreen->id == id){
+            *cs = s;
+            return s->dscreen;
+        }
+        s = s->next;
+    }
+    error(Enodrawscreen);
+    return 0;
+}
+@
+
+<<function allocdimage>>=
+DImage*
+allocdimage(Memimage *i)
+{
+    DImage *d;
+
+    d = malloc(sizeof(DImage));
+    if(d == 0)
+        return 0;
+    d->ref = 1;
+    d->name = 0;
+    d->vers = 0;
+    d->image = i;
+    d->nfchar = 0;
+    d->fchar = 0;
+    d->fromname = 0;
+    return d;
+}
+@
+
+<<function drawinstall>>=
+Memimage*
+drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
+{
+    DImage *d;
+
+    d = allocdimage(i);
+    if(d == 0)
+        return 0;
+    d->id = id;
+    d->dscreen = dscreen;
+    d->next = client->dimage[id&HASHMASK];
+    client->dimage[id&HASHMASK] = d;
+    return i;
+}
+@
+
+<<function drawinstallscreen>>=
+Memscreen*
+drawinstallscreen(Client *client, DScreen *d, int id, DImage *dimage, DImage *dfill, int public)
+{
+    Memscreen *s;
+    CScreen *c;
+
+    c = malloc(sizeof(CScreen));
+    if(dimage && dimage->image && dimage->image->chan == 0)
+        panic("bad image %p in drawinstallscreen", dimage->image);
+
+    if(c == 0)
+        return 0;
+    if(d == 0){
+        d = malloc(sizeof(DScreen));
+        if(d == 0){
+            free(c);
+            return 0;
+        }
+        s = malloc(sizeof(Memscreen));
+        if(s == 0){
+            free(c);
+            free(d);
+            return 0;
+        }
+        s->frontmost = 0;
+        s->rearmost = 0;
+        d->dimage = dimage;
+        if(dimage){
+            s->image = dimage->image;
+            dimage->ref++;
+        }
+        d->dfill = dfill;
+        if(dfill){
+            s->fill = dfill->image;
+            dfill->ref++;
+        }
+        d->ref = 0;
+        d->id = id;
+        d->screen = s;
+        d->public = public;
+        d->next = dscreen;
+        d->owner = client;
+        dscreen = d;
+    }
+    c->dscreen = d;
+    d->ref++;
+    c->next = client->cscreen;
+    client->cscreen = c;
+    return d->screen;
+}
+@
+
+<<function drawdelname>>=
+void
+drawdelname(DName *name)
+{
+    int i;
+
+    i = name-sdraw.name;
+    memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
+    sdraw.nname--;
+}
+@
+
+<<function drawfreedscreen>>=
+void
+drawfreedscreen(DScreen *this)
+{
+    DScreen *ds, *next;
+
+    this->ref--;
+    if(this->ref < 0)
+        print("negative ref in drawfreedscreen\n");
+    if(this->ref > 0)
+        return;
+    ds = dscreen;
+    if(ds == this){
+        dscreen = this->next;
+        goto Found;
+    }
+    while(next = ds->next){ /* assign = */
+        if(next == this){
+            ds->next = this->next;
+            goto Found;
+        }
+        ds = next;
+    }
+    error(Enodrawimage);
+
+    Found:
+    if(this->dimage)
+        drawfreedimage(this->dimage);
+    if(this->dfill)
+        drawfreedimage(this->dfill);
+    free(this->screen);
+    free(this);
+}
+@
+
+<<function drawfreedimage>>=
+void
+drawfreedimage(DImage *dimage)
+{
+    int i;
+    Memimage *l;
+    DScreen *ds;
+
+    dimage->ref--;
+    if(dimage->ref < 0)
+        print("negative ref in drawfreedimage\n");
+    if(dimage->ref > 0)
+        return;
+
+    /* any names? */
+    for(i=0; i<sdraw.nname; )
+        if(sdraw.name[i].dimage == dimage)
+            drawdelname(sdraw.name+i);
+        else
+            i++;
+    if(dimage->fromname){   /* acquired by name; owned by someone else*/
+        drawfreedimage(dimage->fromname);
+        goto Return;
+    }
+//  if(dimage->image == screenimage)    /* don't free the display */
+//      goto Return;
+    ds = dimage->dscreen;
+    if(ds){
+        l = dimage->image;
+        if(l->data == screenimage->data)
+            addflush(l->layer->screenr);
+        if(l->layer->refreshfn == drawrefresh)  /* else true owner will clean up */
+            free(l->layer->refreshptr);
+        l->layer->refreshptr = nil;
+        if(drawgoodname(dimage))
+            memldelete(l);
+        else
+            memlfree(l);
+        drawfreedscreen(ds);
+    }else
+        freememimage(dimage->image);
+    Return:
+    free(dimage->fchar);
+    free(dimage);
+}
+@
+
+<<function drawuninstallscreen>>=
+void
+drawuninstallscreen(Client *client, CScreen *this)
+{
+    CScreen *cs, *next;
+
+    cs = client->cscreen;
+    if(cs == this){
+        client->cscreen = this->next;
+        drawfreedscreen(this->dscreen);
+        free(this);
+        return;
+    }
+    while(next = cs->next){ /* assign = */
+        if(next == this){
+            cs->next = this->next;
+            drawfreedscreen(this->dscreen);
+            free(this);
+            return;
+        }
+        cs = next;
+    }
+}
+@
+
+<<function drawuninstall>>=
+void
+drawuninstall(Client *client, int id)
+{
+    DImage *d, *next;
+
+    d = client->dimage[id&HASHMASK];
+    if(d == 0)
+        error(Enodrawimage);
+    if(d->id == id){
+        client->dimage[id&HASHMASK] = d->next;
+        drawfreedimage(d);
+        return;
+    }
+    while(next = d->next){  /* assign = */
+        if(next->id == id){
+            d->next = next->next;
+            drawfreedimage(next);
+            return;
+        }
+        d = next;
+    }
+    error(Enodrawimage);
+}
+@
+
+<<function drawaddname>>=
+void
+drawaddname(Client *client, DImage *di, int n, char *str)
+{
+    DName *name, *ename, *new, *t;
+
+    name = sdraw.name;
+    ename = &name[sdraw.nname];
+    for(; name<ename; name++)
+        if(drawcmp(name->name, str, n) == 0)
+            error(Enameused);
+    t = smalloc((sdraw.nname+1)*sizeof(DName));
+    memmove(t, sdraw.name, sdraw.nname*sizeof(DName));
+    free(sdraw.name);
+    sdraw.name = t;
+    new = &sdraw.name[sdraw.nname++];
+    new->name = smalloc(n+1);
+    memmove(new->name, str, n);
+    new->name[n] = 0;
+    new->dimage = di;
+    new->client = client;
+    new->vers = ++sdraw.vers;
+}
+@
+
+<<function drawnewclient>>=
+Client*
+drawnewclient(void)
+{
+    Client *cl, **cp;
+    int i;
+
+    for(i=0; i<sdraw.nclient; i++){
+        cl = sdraw.client[i];
+        if(cl == 0)
+            break;
+    }
+    if(i == sdraw.nclient){
+        cp = malloc((sdraw.nclient+1)*sizeof(Client*));
+        if(cp == 0)
+            return 0;
+        memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
+        free(sdraw.client);
+        sdraw.client = cp;
+        sdraw.nclient++;
+        cp[i] = 0;
+    }
+    cl = malloc(sizeof(Client));
+    if(cl == 0)
+        return 0;
+    memset(cl, 0, sizeof(Client));
+    cl->slot = i;
+    cl->clientid = ++sdraw.clientid;
+    cl->op = SoverD;
+    sdraw.client[i] = cl;
+    return cl;
+}
+@
+
+<<function drawclientop>>=
+static int
+drawclientop(Client *cl)
+{
+    int op;
+
+    op = cl->op;
+    cl->op = SoverD;
+    return op;
+}
+@
+
+<<function drawclientofpath>>=
+//}
+
+Client*
+drawclientofpath(ulong path)
+{
+    Client *cl;
+    int slot;
+
+    slot = CLIENTPATH(path);
+    if(slot == 0)
+        return nil;
+    cl = sdraw.client[slot-1];
+    if(cl==0 || cl->clientid==0)
+        return nil;
+    return cl;
+}
+@
+
+<<function drawclient>>=
+Client*
+drawclient(Chan *c)
+{
+    Client *client;
+
+    client = drawclientofpath(c->qid.path);
+    if(client == nil)
+        error(Enoclient);
+    return client;
+}
+@
+
+<<function drawimage>>=
+Memimage*
+drawimage(Client *client, uchar *a)
+{
+    DImage *d;
+
+    d = drawlookup(client, BGLONG(a), 1);
+    if(d == nil)
+        error(Enodrawimage);
+    return d->image;
+}
+@
+
+<<function drawrectangle>>=
+void
+drawrectangle(Rectangle *r, uchar *a)
+{
+    r->min.x = BGLONG(a+0*4);
+    r->min.y = BGLONG(a+1*4);
+    r->max.x = BGLONG(a+2*4);
+    r->max.y = BGLONG(a+3*4);
+}
+@
+
+<<function drawpoint>>=
+void
+drawpoint(Point *p, uchar *a)
+{
+    p->x = BGLONG(a+0*4);
+    p->y = BGLONG(a+1*4);
+}
+@
+
+<<function drawchar>>=
+Point
+drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImage *font, int index, int op)
+{
+    FChar *fc;
+    Rectangle r;
+    Point sp1;
+    static Memimage *tmp;
+
+    fc = &font->fchar[index];
+    r.min.x = p.x+fc->left;
+    r.min.y = p.y-(font->ascent-fc->miny);
+    r.max.x = r.min.x+(fc->maxx-fc->minx);
+    r.max.y = r.min.y+(fc->maxy-fc->miny);
+    sp1.x = sp->x+fc->left;
+    sp1.y = sp->y+fc->miny;
+
+    /*
+     * If we're drawing greyscale fonts onto a VGA screen,
+     * it's very costly to read the screen memory to do the
+     * alpha blending inside memdraw.  If this is really a stringbg,
+     * then rdst is the bg image (in main memory) which we can
+     * refer to for the underlying dst pixels instead of reading dst
+     * directly.
+     */
+    if(ishwimage(dst) && !ishwimage(rdst) && font->image->depth > 1){
+        if(tmp == nil || tmp->chan != dst->chan || Dx(tmp->r) < Dx(r) || Dy(tmp->r) < Dy(r)){
+            if(tmp)
+                freememimage(tmp);
+            tmp = allocmemimage(Rect(0,0,Dx(r),Dy(r)), dst->chan);
+            if(tmp == nil)
+                goto fallback;
+        }
+        memdraw(tmp, Rect(0,0,Dx(r),Dy(r)), rdst, r.min, memopaque, ZP, S);
+        memdraw(tmp, Rect(0,0,Dx(r),Dy(r)), src, sp1, font->image, Pt(fc->minx, fc->miny), op);
+        memdraw(dst, r, tmp, ZP, memopaque, ZP, S);
+    }else{
+    fallback:
+        memdraw(dst, r, src, sp1, font->image, Pt(fc->minx, fc->miny), op);
+    }
+
+    p.x += fc->width;
+    sp->x += fc->width;
+    return p;
+}
+@
+
+<<function makescreenimage>>=
+static DImage*
+makescreenimage(void)
+{
+    int width, depth;
+    ulong chan;
+    DImage *di;
+    Memdata *md;
+    Memimage *i;
+    Rectangle r;
+
+    md = malloc(sizeof *md);
+    if(md == nil)
+        return nil;
+    md->allocd = 1;
+    md->base = nil;
+    md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
+    if(md->bdata == nil){
+        free(md);
+        return nil;
+    }
+    md->ref = 1;
+    i = allocmemimaged(r, chan, md);
+    if(i == nil){
+        free(md);
+        return nil;
+    }
+    i->width = width;
+    i->clipr = r;
+
+    di = allocdimage(i);
+    if(di == nil){
+        freememimage(i);    /* frees md */
+        return nil;
+    }
+    if(!waserror()){
+        snprint(screenname, sizeof screenname, "noborder.screen.%d", ++screennameid);
+        drawaddname(nil, di, strlen(screenname), screenname);
+        poperror();
+    }
+    return di;
+}
+@
+
+<<function initscreenimage>>=
+static int
+initscreenimage(void)
+{
+    if(screenimage != nil)
+        return 1;
+
+    screendimage = makescreenimage();
+    if(screendimage == nil)
+        return 0;
+    screenimage = screendimage->image;
+// iprint("initscreenimage %p %p\n", screendimage, screenimage);
+    mouseresize();
+    return 1;
+}
+@
+
+<<function deletescreenimage>>=
+void
+deletescreenimage(void)
+{
+    dlock();
+    if(screenimage){
+        /* will be freed via screendimage; disable */
+        screenimage->clipr = ZR;
+        screenimage = nil;
+    }
+    if(screendimage){
+        drawfreedimage(screendimage);
+        screendimage = nil;
+    }
+    dunlock();
+}
+@
+
+<<function resetscreenimage>>=
+void
+resetscreenimage(void)
+{
+    dlock();
+    initscreenimage();
+    dunlock();
+}
+@
+
+<<function drawattach>>=
+static Chan*
+drawattach(char *spec)
+{
+    dlock();
+    if(!initscreenimage()){
+        dunlock();
+        error("no frame buffer");
+    }
+    dunlock();
+    return devattach('i', spec);
+}
+@
+
+<<function drawwalk>>=
+static Walkqid*
+drawwalk(Chan *c, Chan *nc, char **name, int nname)
+{
+    if(screenimage == nil)
+        error("no frame buffer");
+    return devwalk(c, nc, name, nname, 0, 0, drawgen);
+}
+@
+
+<<function drawstat>>=
+static int
+drawstat(Chan *c, uchar *db, int n)
+{
+    return devstat(c, db, n, 0, 0, drawgen);
+}
+@
+
+<<function drawopen>>=
+static Chan*
+drawopen(Chan *c, int omode)
+{
+    Client *cl;
+    DName *dn;
+    DImage *di;
+
+    if(c->qid.type & QTDIR){
+        c = devopen(c, omode, 0, 0, drawgen);
+        c->iounit = IOUNIT;
+    }
+
+    dlock();
+    if(waserror()){
+        dunlock();
+        nexterror();
+    }
+
+    if(QID(c->qid) == Qnew){
+        cl = drawnewclient();
+        if(cl == 0)
+            error(Enodev);
+        c->qid.path = Qctl|((cl->slot+1)<<QSHIFT);
+    }
+
+    switch(QID(c->qid)){
+    case Qwinname:
+        break;
+
+    case Qnew:
+        break;
+
+    case Qctl:
+        cl = drawclient(c);
+        if(cl->busy)
+            error(Einuse);
+        cl->busy = 1;
+        flushrect = Rect(10000, 10000, -10000, -10000);
+        dn = drawlookupname(strlen(screenname), screenname);
+        if(dn == 0)
+            error("draw: cannot happen 2");
+        if(drawinstall(cl, 0, dn->dimage->image, 0) == 0)
+            error(Edrawmem);
+        di = drawlookup(cl, 0, 0);
+        if(di == 0)
+            error("draw: cannot happen 1");
+        di->vers = dn->vers;
+        di->name = smalloc(strlen(screenname)+1);
+        strcpy(di->name, screenname);
+        di->fromname = dn->dimage;
+        di->fromname->ref++;
+        incref(&cl->r);
+        break;
+
+    case Qcolormap:
+    case Qdata:
+    case Qrefresh:
+        cl = drawclient(c);
+        incref(&cl->r);
+        break;
+    }
+    dunlock();
+    poperror();
+    c->mode = openmode(omode);
+    c->flag |= COPEN;
+    c->offset = 0;
+    c->iounit = IOUNIT;
+    return c;
+}
+@
+
+<<function drawclose>>=
+static void
+drawclose(Chan *c)
+{
+    int i;
+    DImage *d, **dp;
+    Client *cl;
+    Refresh *r;
+
+    if(QID(c->qid) < Qcolormap) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
+        return;
+    dlock();
+    if(waserror()){
+        dunlock();
+        nexterror();
+    }
+
+    cl = drawclient(c);
+    if(QID(c->qid) == Qctl)
+        cl->busy = 0;
+    if((c->flag&COPEN) && (decref(&cl->r)==0)){
+        while(r = cl->refresh){ /* assign = */
+            cl->refresh = r->next;
+            free(r);
+        }
+        /* free names */
+        for(i=0; i<sdraw.nname; )
+            if(sdraw.name[i].client == cl)
+                drawdelname(sdraw.name+i);
+            else
+                i++;
+        while(cl->cscreen)
+            drawuninstallscreen(cl, cl->cscreen);
+        /* all screens are freed, so now we can free images */
+        dp = cl->dimage;
+        for(i=0; i<NHASH; i++){
+            while((d = *dp) != nil){
+                *dp = d->next;
+                drawfreedimage(d);
+            }
+            dp++;
+        }
+        sdraw.client[cl->slot] = 0;
+        drawflush();    /* to erase visible, now dead windows */
+        free(cl);
+    }
+    dunlock();
+    poperror();
+}
+@
+
+<<function drawread>>=
+long
+drawread(Chan *c, void *a, long n, vlong off)
+{
+    int index, m;
+    ulong red, green, blue;
+    Client *cl;
+    uchar *p;
+    Refresh *r;
+    DImage *di;
+    Memimage *i;
+    ulong offset = off;
+    char buf[16];
+
+    if(c->qid.type & QTDIR)
+        return devdirread(c, a, n, 0, 0, drawgen);
+    if(QID(c->qid) == Qwinname)
+        return readstr(off, a, n, screenname);
+
+    cl = drawclient(c);
+    dlock();
+    if(waserror()){
+        dunlock();
+        nexterror();
+    }
+    switch(QID(c->qid)){
+    case Qctl:
+        if(n < 12*12)
+            error(Eshortread);
+        if(cl->infoid < 0)
+            error(Enodrawimage);
+        if(cl->infoid == 0){
+            i = screenimage;
+            if(i == nil)
+                error(Enodrawimage);
+        }else{
+            di = drawlookup(cl, cl->infoid, 1);
+            if(di == nil)
+                error(Enodrawimage);
+            i = di->image;
+        }
+        n = snprint(a, n,
+            "%11d %11d %11s %11d %11d %11d %11d %11d %11d %11d %11d %11d ",
+            cl->clientid, cl->infoid, chantostr(buf, i->chan),
+            (i->flags&Frepl)==Frepl,
+            i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y,
+            i->clipr.min.x, i->clipr.min.y, i->clipr.max.x,
+            i->clipr.max.y);
+        cl->infoid = -1;
+        break;
+
+    case Qcolormap:
+        drawactive(1);  /* to restore map from backup */
+        p = malloc(4*12*256+1);
+        if(p == 0)
+            error(Enomem);
+        m = 0;
+        for(index = 0; index < 256; index++){
+            getcolor(index, &red, &green, &blue);
+            m += snprint((char*)p+m, 4*12*256+1 - m,
+                "%11d %11lud %11lud %11lud\n", index,
+                red>>24, green>>24, blue>>24);
+        }
+        n = readstr(offset, a, n, (char*)p);
+        free(p);
+        break;
+
+    case Qdata:
+        if(cl->readdata == nil)
+            error("no draw data");
+        if(n < cl->nreaddata)
+            error(Eshortread);
+        n = cl->nreaddata;
+        memmove(a, cl->readdata, cl->nreaddata);
+        free(cl->readdata);
+        cl->readdata = nil;
+        break;
+
+    case Qrefresh:
+        if(n < 5*4)
+            error(Ebadarg);
+        for(;;){
+            if(cl->refreshme || cl->refresh)
+                break;
+            dunlock();
+            if(waserror()){
+                dlock();    /* restore lock for waserror() above */
+                nexterror();
+            }
+            sleep(&cl->refrend, drawrefactive, cl);
+            poperror();
+            dlock();
+        }
+        p = a;
+        while(cl->refresh && n>=5*4){
+            r = cl->refresh;
+            BPLONG(p+0*4, r->dimage->id);
+            BPLONG(p+1*4, r->r.min.x);
+            BPLONG(p+2*4, r->r.min.y);
+            BPLONG(p+3*4, r->r.max.x);
+            BPLONG(p+4*4, r->r.max.y);
+            cl->refresh = r->next;
+            free(r);
+            p += 5*4;
+            n -= 5*4;
+        }
+        cl->refreshme = 0;
+        n = p-(uchar*)a;
+        break;
+    }
+    dunlock();
+    poperror();
+    return n;
+}
+@
+
+<<function drawwakeall>>=
+void
+drawwakeall(void)
+{
+    Client *cl;
+    int i;
+
+    for(i=0; i<sdraw.nclient; i++){
+        cl = sdraw.client[i];
+        if(cl && (cl->refreshme || cl->refresh))
+            wakeup(&cl->refrend);
+    }
+}
+@
+
+<<function drawwrite>>=
+static long
+drawwrite(Chan *c, void *a, long n, vlong)
+{
+    char buf[128], *fields[4], *q;
+    Client *cl;
+    int i, m, red, green, blue, x;
+
+    if(c->qid.type & QTDIR)
+        error(Eisdir);
+    cl = drawclient(c);
+    dlock();
+    if(waserror()){
+        drawwakeall();
+        dunlock();
+        nexterror();
+    }
+    switch(QID(c->qid)){
+    case Qctl:
+        if(n != 4)
+            error("unknown draw control request");
+        cl->infoid = BGLONG((uchar*)a);
+        break;
+
+    case Qcolormap:
+        drawactive(1);  /* to restore map from backup */
+        m = n;
+        n = 0;
+        while(m > 0){
+            x = m;
+            if(x > sizeof(buf)-1)
+                x = sizeof(buf)-1;
+            q = memccpy(buf, a, '\n', x);
+            if(q == 0)
+                break;
+            i = q-buf;
+            n += i;
+            a = (char*)a + i;
+            m -= i;
+            *q = 0;
+            if(tokenize(buf, fields, nelem(fields)) != 4)
+                error(Ebadarg);
+            i = strtoul(fields[0], 0, 0);
+            red = strtoul(fields[1], 0, 0);
+            green = strtoul(fields[2], 0, 0);
+            blue = strtoul(fields[3], &q, 0);
+            if(fields[3] == q)
+                error(Ebadarg);
+            if(red>255 || green>255 || blue>255 || i<0 || i>255)
+                error(Ebadarg);
+            red |= red<<8;
+            red |= red<<16;
+            green |= green<<8;
+            green |= green<<16;
+            blue |= blue<<8;
+            blue |= blue<<16;
+            setcolor(i, red, green, blue);
+        }
+        break;
+
+    case Qdata:
+        drawmesg(cl, a, n);
+        drawwakeall();
+        break;
+
+    default:
+        error(Ebadusefd);
+    }
+    dunlock();
+    poperror();
+    return n;
+}
+@
+
+<<function drawcoord>>=
+uchar*
+drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
+{
+    int b, x;
+
+    if(p >= maxp)
+        error(Eshortdraw);
+    b = *p++;
+    x = b & 0x7F;
+    if(b & 0x80){
+        if(p+1 >= maxp)
+            error(Eshortdraw);
+        x |= *p++ << 7;
+        x |= *p++ << 15;
+        if(x & (1<<22))
+            x |= ~0<<23;
+    }else{
+        if(b & 0x40)
+            x |= ~0<<7;
+        x += oldx;
+    }
+    *newx = x;
+    return p;
+}
+@
+
+<<function printmesg>>=
+static void
+printmesg(char *fmt, uchar *a, int plsprnt)
+{
+    char buf[256];
+    char *p, *q;
+    int s, left;
+
+    if(1|| plsprnt==0){
+        SET(s,q,p);
+        USED(fmt, a, buf, p, q, s);
+        return;
+    }
+    q = buf;
+    *q++ = *a++;
+    for(p=fmt; *p; p++){
+        left = sizeof buf - 2 - (q - buf);  /* 2 for \n\0 */
+        switch(*p){
+        case 'l':
+            q += snprint(q, left, " %ld", (long)BGLONG(a));
+            a += 4;
+            break;
+        case 'L':
+            q += snprint(q, left, " %.8lux", (ulong)BGLONG(a));
+            a += 4;
+            break;
+        case 'R':
+            q += snprint(q, left, " [%d %d %d %d]", BGLONG(a),
+                BGLONG(a+4), BGLONG(a+8), BGLONG(a+12));
+            a += 16;
+            break;
+        case 'P':
+            q += snprint(q, left, " [%d %d]", BGLONG(a), BGLONG(a+4));
+            a += 8;
+            break;
+        case 'b':
+            q += snprint(q, left, " %d", *a++);
+            break;
+        case 's':
+            q += snprint(q, left, " %d", BGSHORT(a));
+            a += 2;
+            break;
+        case 'S':
+            q += snprint(q, left, " %.4ux", BGSHORT(a));
+            a += 2;
+            break;
+        }
+    }
+    *q++ = '\n';
+    *q = 0;
+    iprint("%.*s", (int)(q-buf), buf);
+}
+@
+
+<<function drawmesg>>=
+void
+drawmesg(Client *client, void *av, int n)
+{
+    int c, repl, m, y, dstid, scrnid, ni, ci, j, nw, e0, e1, op, ox, oy, oesize, esize, doflush;
+    uchar *u, *a, refresh;
+    char *fmt;
+    ulong value, chan;
+    Rectangle r, clipr;
+    Point p, q, *pp, sp;
+    Memimage *i, *bg, *dst, *src, *mask;
+    Memimage *l, **lp;
+    Memscreen *scrn;
+    DImage *font, *ll, *di, *ddst, *dsrc;
+    DName *dn;
+    DScreen *dscrn;
+    FChar *fc;
+    Refx *refx;
+    CScreen *cs;
+    Refreshfn reffn;
+
+    a = av;
+    m = 0;
+    fmt = nil;
+    if(waserror()){
+        if(fmt) printmesg(fmt, a, 1);
+    /*  iprint("error: %s\n", up->errstr);  */
+        nexterror();
+    }
+    while((n-=m) > 0){
+        USED(fmt);
+        a += m;
+        switch(*a){
+        default:
+            error("bad draw command");
+        /* new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4] */
+        case 'b':
+            printmesg(fmt="LLbLbRRL", a, 0);
+            m = 1+4+4+1+4+1+4*4+4*4+4;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            scrnid = BGSHORT(a+5);
+            refresh = a[9];
+            chan = BGLONG(a+10);
+            repl = a[14];
+            drawrectangle(&r, a+15);
+            drawrectangle(&clipr, a+31);
+            value = BGLONG(a+47);
+            if(drawlookup(client, dstid, 0))
+                error(Eimageexists);
+            if(scrnid){
+                dscrn = drawlookupscreen(client, scrnid, &cs);
+                scrn = dscrn->screen;
+                if(repl || chan!=scrn->image->chan)
+                    error("image parameters incompatible with screen");
+                reffn = nil;
+                switch(refresh){
+                case Refbackup:
+                    break;
+                case Refnone:
+                    reffn = memlnorefresh;
+                    break;
+                case Refmesg:
+                    reffn = drawrefresh;
+                    break;
+                default:
+                    error("unknown refresh method");
+                }
+                l = memlalloc(scrn, r, reffn, 0, value);
+                if(l == 0)
+                    error(Edrawmem);
+                addflush(l->layer->screenr);
+                l->clipr = clipr;
+                rectclip(&l->clipr, r);
+                if(drawinstall(client, dstid, l, dscrn) == 0){
+                    memldelete(l);
+                    error(Edrawmem);
+                }
+                dscrn->ref++;
+                if(reffn){
+                    refx = nil;
+                    if(reffn == drawrefresh){
+                        refx = malloc(sizeof(Refx));
+                        if(refx == 0){
+                            drawuninstall(client, dstid);
+                            error(Edrawmem);
+                        }
+                        refx->client = client;
+                        refx->dimage = drawlookup(client, dstid, 1);
+                    }
+                    memlsetrefresh(l, reffn, refx);
+                }
+                continue;
+            }
+            i = allocmemimage(r, chan);
+            if(i == 0)
+                error(Edrawmem);
+            if(repl)
+                i->flags |= Frepl;
+            i->clipr = clipr;
+            if(!repl)
+                rectclip(&i->clipr, r);
+            if(drawinstall(client, dstid, i, 0) == 0){
+                freememimage(i);
+                error(Edrawmem);
+            }
+            memfillcolor(i, value);
+            continue;
+
+        /* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
+        case 'A':
+            printmesg(fmt="LLLb", a, 1);
+            m = 1+4+4+4+1;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            if(dstid == 0)
+                error(Ebadarg);
+            if(drawlookupdscreen(dstid))
+                error(Escreenexists);
+            ddst = drawlookup(client, BGLONG(a+5), 1);
+            dsrc = drawlookup(client, BGLONG(a+9), 1);
+            if(ddst==0 || dsrc==0)
+                error(Enodrawimage);
+            if(drawinstallscreen(client, 0, dstid, ddst, dsrc, a[13]) == 0)
+                error(Edrawmem);
+            continue;
+
+        /* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
+        case 'c':
+            printmesg(fmt="LbR", a, 0);
+            m = 1+4+1+4*4;
+            if(n < m)
+                error(Eshortdraw);
+            ddst = drawlookup(client, BGLONG(a+1), 1);
+            if(ddst == nil)
+                error(Enodrawimage);
+            if(ddst->name)
+                error("cannot change repl/clipr of shared image");
+            dst = ddst->image;
+            if(a[5])
+                dst->flags |= Frepl;
+            drawrectangle(&dst->clipr, a+6);
+            continue;
+
+        /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
+        case 'd':
+            printmesg(fmt="LLLRPP", a, 0);
+            m = 1+4+4+4+4*4+2*4+2*4;
+            if(n < m)
+                error(Eshortdraw);
+            dst = drawimage(client, a+1);
+            dstid = BGLONG(a+1);
+            src = drawimage(client, a+5);
+            mask = drawimage(client, a+9);
+            drawrectangle(&r, a+13);
+            drawpoint(&p, a+29);
+            drawpoint(&q, a+37);
+            op = drawclientop(client);
+            memdraw(dst, r, src, p, mask, q, op);
+            dstflush(dstid, dst, r);
+            continue;
+
+        /* toggle debugging: 'D' val[1] */
+        case 'D':
+            printmesg(fmt="b", a, 0);
+            m = 1+1;
+            if(n < m)
+                error(Eshortdraw);
+            drawdebug = a[1];
+            continue;
+
+        /* ellipse: 'e' dstid[4] srcid[4] center[2*4] a[4] b[4] thick[4] sp[2*4] alpha[4] phi[4]*/
+        case 'e':
+        case 'E':
+            printmesg(fmt="LLPlllPll", a, 0);
+            m = 1+4+4+2*4+4+4+4+2*4+2*4;
+            if(n < m)
+                error(Eshortdraw);
+            dst = drawimage(client, a+1);
+            dstid = BGLONG(a+1);
+            src = drawimage(client, a+5);
+            drawpoint(&p, a+9);
+            e0 = BGLONG(a+17);
+            e1 = BGLONG(a+21);
+            if(e0<0 || e1<0)
+                error("invalid ellipse semidiameter");
+            j = BGLONG(a+25);
+            if(j < 0)
+                error("negative ellipse thickness");
+            drawpoint(&sp, a+29);
+            c = j;
+            if(*a == 'E')
+                c = -1;
+            ox = BGLONG(a+37);
+            oy = BGLONG(a+41);
+            op = drawclientop(client);
+            /* high bit indicates arc angles are present */
+            if(ox & (1<<31)){
+                if((ox & (1<<30)) == 0)
+                    ox &= ~(1<<31);
+                memarc(dst, p, e0, e1, c, src, sp, ox, oy, op);
+            }else
+                memellipse(dst, p, e0, e1, c, src, sp, op);
+            dstflush(dstid, dst, Rect(p.x-e0-j, p.y-e1-j, p.x+e0+j+1, p.y+e1+j+1));
+            continue;
+
+        /* free: 'f' id[4] */
+        case 'f':
+            printmesg(fmt="L", a, 1);
+            m = 1+4;
+            if(n < m)
+                error(Eshortdraw);
+            ll = drawlookup(client, BGLONG(a+1), 0);
+            if(ll && ll->dscreen && ll->dscreen->owner != client)
+                ll->dscreen->owner->refreshme = 1;
+            drawuninstall(client, BGLONG(a+1));
+            continue;
+
+        /* free screen: 'F' id[4] */
+        case 'F':
+            printmesg(fmt="L", a, 1);
+            m = 1+4;
+            if(n < m)
+                error(Eshortdraw);
+            drawlookupscreen(client, BGLONG(a+1), &cs);
+            drawuninstallscreen(client, cs);
+            continue;
+
+        /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
+        case 'i':
+            printmesg(fmt="Llb", a, 1);
+            m = 1+4+4+1;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            if(dstid == 0)
+                error("cannot use display as font");
+            font = drawlookup(client, dstid, 1);
+            if(font == 0)
+                error(Enodrawimage);
+            if(font->image->layer)
+                error("cannot use window as font");
+            ni = BGLONG(a+5);
+            if(ni<=0 || ni>4096)
+                error("bad font size (4096 chars max)");
+            free(font->fchar);  /* should we complain if non-zero? */
+            font->fchar = malloc(ni*sizeof(FChar));
+            if(font->fchar == 0)
+                error("no memory for font");
+            memset(font->fchar, 0, ni*sizeof(FChar));
+            font->nfchar = ni;
+            font->ascent = a[9];
+            continue;
+
+        /* load character: 'l' fontid[4] srcid[4] index[2] R[4*4] P[2*4] left[1] width[1] */
+        case 'l':
+            printmesg(fmt="LLSRPbb", a, 0);
+            m = 1+4+4+2+4*4+2*4+1+1;
+            if(n < m)
+                error(Eshortdraw);
+            font = drawlookup(client, BGLONG(a+1), 1);
+            if(font == 0)
+                error(Enodrawimage);
+            if(font->nfchar == 0)
+                error(Enotfont);
+            src = drawimage(client, a+5);
+            ci = BGSHORT(a+9);
+            if(ci >= font->nfchar)
+                error(Eindex);
+            drawrectangle(&r, a+11);
+            drawpoint(&p, a+27);
+            memdraw(font->image, r, src, p, memopaque, p, S);
+            fc = &font->fchar[ci];
+            fc->minx = r.min.x;
+            fc->maxx = r.max.x;
+            fc->miny = r.min.y;
+            fc->maxy = r.max.y;
+            fc->left = a[35];
+            fc->width = a[36];
+            continue;
+
+        /* draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4] */
+        case 'L':
+            printmesg(fmt="LPPlllLP", a, 0);
+            m = 1+4+2*4+2*4+4+4+4+4+2*4;
+            if(n < m)
+                error(Eshortdraw);
+            dst = drawimage(client, a+1);
+            dstid = BGLONG(a+1);
+            drawpoint(&p, a+5);
+            drawpoint(&q, a+13);
+            e0 = BGLONG(a+21);
+            e1 = BGLONG(a+25);
+            j = BGLONG(a+29);
+            if(j < 0)
+                error("negative line width");
+            src = drawimage(client, a+33);
+            drawpoint(&sp, a+37);
+            op = drawclientop(client);
+            memline(dst, p, q, e0, e1, j, src, sp, op);
+            /* avoid memlinebbox if possible */
+            if(dstid==0 || dst->layer!=nil){
+                /* BUG: this is terribly inefficient: update maximal containing rect*/
+                r = memlinebbox(p, q, e0, e1, j);
+                dstflush(dstid, dst, insetrect(r, -(1+1+j)));
+            }
+            continue;
+
+        /* create image mask: 'm' newid[4] id[4] */
+/*
+ *
+        case 'm':
+            printmesg("LL", a, 0);
+            m = 4+4;
+            if(n < m)
+                error(Eshortdraw);
+            break;
+ *
+ */
+
+        /* attach to a named image: 'n' dstid[4] j[1] name[j] */
+        case 'n':
+            printmesg(fmt="Lz", a, 0);
+            m = 1+4+1;
+            if(n < m)
+                error(Eshortdraw);
+            j = a[5];
+            if(j == 0)  /* give me a non-empty name please */
+                error(Eshortdraw);
+            m += j;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            if(drawlookup(client, dstid, 0))
+                error(Eimageexists);
+            dn = drawlookupname(j, (char*)a+6);
+            if(dn == nil)
+                error(Enoname);
+            if(drawinstall(client, dstid, dn->dimage->image, 0) == 0)
+                error(Edrawmem);
+            di = drawlookup(client, dstid, 0);
+            if(di == 0)
+                error("draw: cannot happen");
+            di->vers = dn->vers;
+            di->name = smalloc(j+1);
+            di->fromname = dn->dimage;
+            di->fromname->ref++;
+            memmove(di->name, a+6, j);
+            di->name[j] = 0;
+            client->infoid = dstid;
+            continue;
+
+        /* name an image: 'N' dstid[4] in[1] j[1] name[j] */
+        case 'N':
+            printmesg(fmt="Lbz", a, 0);
+            m = 1+4+1+1;
+            if(n < m)
+                error(Eshortdraw);
+            c = a[5];
+            j = a[6];
+            if(j == 0)  /* give me a non-empty name please */
+                error(Eshortdraw);
+            m += j;
+            if(n < m)
+                error(Eshortdraw);
+            di = drawlookup(client, BGLONG(a+1), 0);
+            if(di == 0)
+                error(Enodrawimage);
+            if(di->name)
+                error(Enamed);
+            if(c)
+                drawaddname(client, di, j, (char*)a+7);
+            else{
+                dn = drawlookupname(j, (char*)a+7);
+                if(dn == nil)
+                    error(Enoname);
+                if(dn->dimage != di)
+                    error(Ewrongname);
+                drawdelname(dn);
+            }
+            continue;
+
+        /* position window: 'o' id[4] r.min [2*4] screenr.min [2*4] */
+        case 'o':
+            printmesg(fmt="LPP", a, 0);
+            m = 1+4+2*4+2*4;
+            if(n < m)
+                error(Eshortdraw);
+            dst = drawimage(client, a+1);
+            if(dst->layer){
+                drawpoint(&p, a+5);
+                drawpoint(&q, a+13);
+                r = dst->layer->screenr;
+                ni = memlorigin(dst, p, q);
+                if(ni < 0)
+                    error("image origin failed");
+                if(ni > 0){
+                    addflush(r);
+                    addflush(dst->layer->screenr);
+                    ll = drawlookup(client, BGLONG(a+1), 1);
+                    drawrefreshscreen(ll, client);
+                }
+            }
+            continue;
+
+        /* set compositing operator for next draw operation: 'O' op */
+        case 'O':
+            printmesg(fmt="b", a, 0);
+            m = 1+1;
+            if(n < m)
+                error(Eshortdraw);
+            client->op = a[1];
+            continue;
+
+        /* filled polygon: 'P' dstid[4] n[2] wind[4] ignore[2*4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n] */
+        /* polygon: 'p' dstid[4] n[2] end0[4] end1[4] radius[4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n] */
+        case 'p':
+        case 'P':
+            printmesg(fmt="LslllLPP", a, 0);
+            m = 1+4+2+4+4+4+4+2*4;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            dst = drawimage(client, a+1);
+            ni = BGSHORT(a+5);
+            if(ni < 0)
+                error("negative count in polygon");
+            e0 = BGLONG(a+7);
+            e1 = BGLONG(a+11);
+            j = 0;
+            if(*a == 'p'){
+                j = BGLONG(a+15);
+                if(j < 0)
+                    error("negative polygon line width");
+            }
+            src = drawimage(client, a+19);
+            drawpoint(&sp, a+23);
+            drawpoint(&p, a+31);
+            ni++;
+            pp = malloc(ni*sizeof(Point));
+            if(pp == nil)
+                error(Enomem);
+            doflush = 0;
+            if(dstid==0 || (dst->layer && dst->layer->screen->image->data == screenimage->data))
+                doflush = 1;    /* simplify test in loop */
+            ox = oy = 0;
+            esize = 0;
+            u = a+m;
+            for(y=0; y<ni; y++){
+                q = p;
+                oesize = esize;
+                u = drawcoord(u, a+n, ox, &p.x);
+                u = drawcoord(u, a+n, oy, &p.y);
+                ox = p.x;
+                oy = p.y;
+                if(doflush){
+                    esize = j;
+                    if(*a == 'p'){
+                        if(y == 0){
+                            c = memlineendsize(e0);
+                            if(c > esize)
+                                esize = c;
+                        }
+                        if(y == ni-1){
+                            c = memlineendsize(e1);
+                            if(c > esize)
+                                esize = c;
+                        }
+                    }
+                    if(*a=='P' && e0!=1 && e0 !=~0)
+                        r = dst->clipr;
+                    else if(y > 0){
+                        r = Rect(q.x-oesize, q.y-oesize, q.x+oesize+1, q.y+oesize+1);
+                        combinerect(&r, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
+                    }
+                    if(rectclip(&r, dst->clipr))        /* should perhaps be an arg to dstflush */
+                        dstflush(dstid, dst, r);
+                }
+                pp[y] = p;
+            }
+            if(y == 1)
+                dstflush(dstid, dst, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
+            op = drawclientop(client);
+            if(*a == 'p')
+                mempoly(dst, pp, ni, e0, e1, j, src, sp, op);
+            else
+                memfillpoly(dst, pp, ni, e0, src, sp, op);
+            free(pp);
+            m = u-a;
+            continue;
+
+        /* read: 'r' id[4] R[4*4] */
+        case 'r':
+            printmesg(fmt="LR", a, 0);
+            m = 1+4+4*4;
+            if(n < m)
+                error(Eshortdraw);
+            i = drawimage(client, a+1);
+            drawrectangle(&r, a+5);
+            if(!rectinrect(r, i->r))
+                error(Ereadoutside);
+            c = bytesperline(r, i->depth);
+            c *= Dy(r);
+            free(client->readdata);
+            client->readdata = mallocz(c, 0);
+            if(client->readdata == nil)
+                error("readimage malloc failed");
+            client->nreaddata = memunload(i, r, client->readdata, c);
+            if(client->nreaddata < 0){
+                free(client->readdata);
+                client->readdata = nil;
+                error("bad readimage call");
+            }
+            continue;
+
+        /* string: 's' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] ni*(index[2]) */
+        /* stringbg: 'x' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] bgid[4] bgpt[2*4] ni*(index[2]) */
+        case 's':
+        case 'x':
+            printmesg(fmt="LLLPRPs", a, 0);
+            m = 1+4+4+4+2*4+4*4+2*4+2;
+            if(*a == 'x')
+                m += 4+2*4;
+            if(n < m)
+                error(Eshortdraw);
+
+            dst = drawimage(client, a+1);
+            dstid = BGLONG(a+1);
+            src = drawimage(client, a+5);
+            font = drawlookup(client, BGLONG(a+9), 1);
+            if(font == 0)
+                error(Enodrawimage);
+            if(font->nfchar == 0)
+                error(Enotfont);
+            drawpoint(&p, a+13);
+            drawrectangle(&r, a+21);
+            drawpoint(&sp, a+37);
+            ni = BGSHORT(a+45);
+            u = a+m;
+            m += ni*2;
+            if(n < m)
+                error(Eshortdraw);
+            clipr = dst->clipr;
+            dst->clipr = r;
+            op = drawclientop(client);
+            bg = dst;
+            if(*a == 'x'){
+                /* paint background */
+                bg = drawimage(client, a+47);
+                drawpoint(&q, a+51);
+                r.min.x = p.x;
+                r.min.y = p.y-font->ascent;
+                r.max.x = p.x;
+                r.max.y = r.min.y+Dy(font->image->r);
+                j = ni;
+                while(--j >= 0){
+                    ci = BGSHORT(u);
+                    if(ci<0 || ci>=font->nfchar){
+                        dst->clipr = clipr;
+                        error(Eindex);
+                    }
+                    r.max.x += font->fchar[ci].width;
+                    u += 2;
+                }
+                memdraw(dst, r, bg, q, memopaque, ZP, op);
+                u -= 2*ni;
+            }
+            q = p;
+            while(--ni >= 0){
+                ci = BGSHORT(u);
+                if(ci<0 || ci>=font->nfchar){
+                    dst->clipr = clipr;
+                    error(Eindex);
+                }
+                q = drawchar(dst, bg, q, src, &sp, font, ci, op);
+                u += 2;
+            }
+            dst->clipr = clipr;
+            p.y -= font->ascent;
+            dstflush(dstid, dst, Rect(p.x, p.y, q.x, p.y+Dy(font->image->r)));
+            continue;
+
+        /* use public screen: 'S' id[4] chan[4] */
+        case 'S':
+            printmesg(fmt="Ll", a, 0);
+            m = 1+4+4;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            if(dstid == 0)
+                error(Ebadarg);
+            dscrn = drawlookupdscreen(dstid);
+            if(dscrn==0 || (dscrn->public==0 && dscrn->owner!=client))
+                error(Enodrawscreen);
+            if(dscrn->screen->image->chan != BGLONG(a+5))
+                error("inconsistent chan");
+            if(drawinstallscreen(client, dscrn, 0, 0, 0, 0) == 0)
+                error(Edrawmem);
+            continue;
+
+        /* top or bottom windows: 't' top[1] nw[2] n*id[4] */
+        case 't':
+            printmesg(fmt="bsL", a, 0);
+            m = 1+1+2;
+            if(n < m)
+                error(Eshortdraw);
+            nw = BGSHORT(a+2);
+            if(nw < 0)
+                error(Ebadarg);
+            if(nw == 0)
+                continue;
+            m += nw*4;
+            if(n < m)
+                error(Eshortdraw);
+            lp = malloc(nw*sizeof(Memimage*));
+            if(lp == 0)
+                error(Enomem);
+            if(waserror()){
+                free(lp);
+                nexterror();
+            }
+            for(j=0; j<nw; j++)
+                lp[j] = drawimage(client, a+1+1+2+j*4);
+            if(lp[0]->layer == 0)
+                error("images are not windows");
+            for(j=1; j<nw; j++)
+                if(lp[j]->layer->screen != lp[0]->layer->screen)
+                    error("images not on same screen");
+            if(a[1])
+                memltofrontn(lp, nw);
+            else
+                memltorearn(lp, nw);
+            if(lp[0]->layer->screen->image->data == screenimage->data)
+                for(j=0; j<nw; j++)
+                    addflush(lp[j]->layer->screenr);
+            ll = drawlookup(client, BGLONG(a+1+1+2), 1);
+            drawrefreshscreen(ll, client);
+            poperror();
+            free(lp);
+            continue;
+
+        /* visible: 'v' */
+        case 'v':
+            printmesg(fmt="", a, 0);
+            m = 1;
+            drawflush();
+            continue;
+
+        /* write: 'y' id[4] R[4*4] data[x*1] */
+        /* write from compressed data: 'Y' id[4] R[4*4] data[x*1] */
+        case 'y':
+        case 'Y':
+            printmesg(fmt="LR", a, 0);
+        //  iprint("load %c\n", *a);
+            m = 1+4+4*4;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            dst = drawimage(client, a+1);
+            drawrectangle(&r, a+5);
+            if(!rectinrect(r, dst->r))
+                error(Ewriteoutside);
+            y = memload(dst, r, a+m, n-m, *a=='Y');
+            if(y < 0)
+                error("bad writeimage call");
+            dstflush(dstid, dst, r);
+            m += y;
+            continue;
+        }
+    }
+    poperror();
+}
+@
+
+<<global drawdevtab>>=
+Dev drawdevtab = {
+    .dc       =    'i',
+    .name     =    "draw",
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .attach   =    drawattach,
+    .walk     =    drawwalk,
+    .stat     =    drawstat,
+    .open     =    drawopen,
+    .create   =    devcreate,
+    .close    =    drawclose,
+    .read     =    drawread,
+    .bread    =    devbread,
+    .write    =    drawwrite,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
+};
+@
+
+<<function drawcmap>>=
+/*
+ * On 8 bit displays, load the default color map
+ */
+void
+drawcmap(void)
+{
+    int r, g, b, cr, cg, cb, v;
+    int num, den;
+    int i, j;
+
+    drawactive(1);  /* to restore map from backup */
+    for(r=0,i=0; r!=4; r++)
+        for(v=0; v!=4; v++,i+=16){
+        for(g=0,j=v-r; g!=4; g++)
+            for(b=0;b!=4;b++,j++){
+            den = r;
+            if(g > den)
+                den = g;
+            if(b > den)
+                den = b;
+            if(den == 0)    /* divide check -- pick grey shades */
+                cr = cg = cb = v*17;
+            else{
+                num = 17*(4*den+v);
+                cr = r*num/den;
+                cg = g*num/den;
+                cb = b*num/den;
+            }
+            setcolor(i+(j&15),
+                cr*0x01010101, cg*0x01010101, cb*0x01010101);
+            }
+    }
+}
+@
+
+<<function drawblankscreen>>=
+void
+drawblankscreen(int blank)
+{
+    int i, nc;
+    ulong *p;
+
+    if(blank == sdraw.blanked)
+        return;
+    if(!candlock())
+        return;
+    if(screenimage == nil){
+        dunlock();
+        return;
+    }
+    p = sdraw.savemap;
+    nc = screenimage->depth > 8 ? 256 : 1<<screenimage->depth;
+
+    /*
+     * blankscreen uses the hardware to blank the screen
+     * when possible.  to help in cases when it is not possible,
+     * we set the color map to be all black.
+     */
+    if(blank == 0){ /* turn screen on */
+        for(i=0; i<nc; i++, p+=3)
+            setcolor(i, p[0], p[1], p[2]);
+        blankscreen(0);
+    }else{  /* turn screen off */
+        blankscreen(1);
+        for(i=0; i<nc; i++, p+=3){
+            getcolor(i, &p[0], &p[1], &p[2]);
+            setcolor(i, 0, 0, 0);
+        }
+    }
+    sdraw.blanked = blank;
+    dunlock();
+}
+@
+
+<<function drawactive>>=
+/*
+ * record activity on screen, changing blanking as appropriate
+ */
+void
+drawactive(int active)
+{
+    if(active){
+        drawblankscreen(0);
+        sdraw.blanktime = CPUS(0)->ticks;
+    }else{
+        if(blanktime && sdraw.blanktime && TK2SEC(CPUS(0)->ticks - sdraw.blanktime)/60 >= blanktime)
+            drawblankscreen(1);
+    }
+}
+@
+
+<<function drawidletime>>=
+int
+drawidletime(void)
+{
+    return TK2SEC(CPUS(0)->ticks - sdraw.blanktime)/60;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<kernel/devices/screen/devdraw.c>>=
+#include    "u.h"
+#include    "../port/lib.h"
+#include    "mem.h"
+#include    "dat.h"
+#include    "fns.h"
+#include    "../port/error.h"
+
+#include    <draw.h>
+#include    <memdraw.h>
+#include    <memlayer.h>
+#include    <cursor.h>
+#include    "screen.h"
+
+<<enum _anon_ (kernel/devices/screen/devdraw.c)>>
+
+<<constant QSHIFT>>
+
+<<function QID bis>>
+<<function CLIENTPATH>>
+<<constant NHASH bis>>
+<<constant HASHMASK>>
+<<constant IOUNIT>>
+
+typedef struct Client Client;
+typedef struct KDraw KDraw;
+typedef struct DImage DImage;
+typedef struct DScreen DScreen;
+typedef struct CScreen CScreen;
+typedef struct FChar FChar;
+typedef struct Refresh Refresh;
+typedef struct Refx Refx;
+typedef struct DName DName;
+
+<<global blanktime>>
+
+<<struct KDraw>>
+
+<<struct Client>>
+
+<<struct Refresh>>
+
+<<struct Refx>>
+
+<<struct DName>>
+
+<<struct FChar>>
+
+<<struct DImage>>
+
+<<struct CScreen>>
+
+<<struct DScreen>>
+
+<<global sdraw>>
+<<global drawlock>>
+
+<<global screenimage>>
+<<global screendimage>>
+<<global screenname>>
+<<global screennameid>>
+
+<<global flushrect>>
+<<global waste>>
+<<global dscreen>>
+extern  void        flushmemscreen(Rectangle);
+    void        drawmesg(Client*, void*, int);
+    void        drawuninstall(Client*, int);
+    void        drawfreedimage(DImage*);
+    Client*     drawclientofpath(ulong);
+    DImage* allocdimage(Memimage*);
+
+<<global Enodrawimage>>
+<<global Enodrawscreen>>
+<<global Eshortdraw>>
+<<global Eshortread>>
+<<global Eimageexists>>
+<<global Escreenexists>>
+<<global Edrawmem>>
+<<global Ereadoutside>>
+<<global Ewriteoutside>>
+<<global Enotfont>>
+<<global Eindex>>
+<<global Enoclient>>
+<<global Enameused>>
+<<global Enoname>>
+<<global Eoldname>>
+<<global Enamed>>
+<<global Ewrongname>>
+
+<<function dlock>>
+
+<<function candlock>>
+
+<<function dunlock>>
+
+<<function drawgen>>
+
+<<function drawrefactive>>
+
+<<function drawrefreshscreen>>
+
+<<function drawrefresh>>
+
+<<function addflush>>
+
+<<function dstflush>>
+
+<<function drawflush>>
+
+<<function drawcmp>>
+
+<<function drawlookupname>>
+
+<<function drawgoodname>>
+
+<<function drawlookup>>
+
+<<function drawlookupdscreen>>
+
+<<function drawlookupscreen>>
+
+<<function allocdimage>>
+
+<<function drawinstall>>
+
+<<function drawinstallscreen>>
+
+<<function drawdelname>>
+
+<<function drawfreedscreen>>
+
+<<function drawfreedimage>>
+
+<<function drawuninstallscreen>>
+
+<<function drawuninstall>>
+
+<<function drawaddname>>
+
+<<function drawnewclient>>
+
+<<function drawclientop>>
+
+//int
+//drawhasclients(void)
+//{
+//  /*
+//   * if draw has ever been used, we can't resize the frame buffer,
+//   * even if all clients have exited (nclients is cumulative); it's too
+//   * hard to make work.
+//   */
+//  return sdraw.nclient != 0;
+<<function drawclientofpath>>
+
+
+<<function drawclient>>
+
+<<function drawimage>>
+
+<<function drawrectangle>>
+
+<<function drawpoint>>
+
+<<function drawchar>>
+
+<<function makescreenimage>>
+
+<<function initscreenimage>>
+
+<<function deletescreenimage>>
+
+<<function resetscreenimage>>
+
+<<function drawattach>>
+
+<<function drawwalk>>
+
+<<function drawstat>>
+
+<<function drawopen>>
+
+<<function drawclose>>
+
+<<function drawread>>
+
+<<function drawwakeall>>
+
+<<function drawwrite>>
+
+<<function drawcoord>>
+
+<<function printmesg>>
+
+<<function drawmesg>>
+
+<<global drawdevtab>>
+
+<<function drawcmap>>
+
+<<function drawblankscreen>>
+
+<<function drawactive>>
+
+<<function drawidletime>>
 @
 
 

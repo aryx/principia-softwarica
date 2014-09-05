@@ -1,3 +1,4 @@
+/*s: kernel/devices/screen/386/screen.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
@@ -21,15 +22,24 @@ extern void vgalinearpci(VGAscr*);
 
 
 //already in libdraw/arith.c
+/*s: global physgscreenr */
 //Point ZP = {0, 0};
 
 Rectangle physgscreenr;
+/*e: global physgscreenr */
 
+/*s: global gscreendata */
 Memdata gscreendata;
+/*e: global gscreendata */
+/*s: global gscreen */
 Memimage *gscreen;
+/*e: global gscreen */
 
+/*s: global vgascreen */
 VGAscr vgascreen[1];
+/*e: global vgascreen */
 
+/*s: global arrow */
 Cursor  arrow = {
     { -1, -1 },
     { 0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C, 
@@ -43,11 +53,17 @@ Cursor  arrow = {
       0x61, 0xF0, 0x60, 0xE0, 0x40, 0x40, 0x00, 0x00, 
     },
 };
+/*e: global arrow */
 
+/*s: global didswcursorinit */
 int didswcursorinit;
+/*e: global didswcursorinit */
 
+/*s: global softscreen */
 static void *softscreen;
+/*e: global softscreen */
 
+/*s: function screensize */
 int
 screensize(int x, int y, int z, ulong chan)
 {
@@ -110,7 +126,9 @@ screensize(int x, int y, int z, ulong chan)
     drawcmap();
     return 0;
 }
+/*e: function screensize */
 
+/*s: function screenaperture */
 int
 screenaperture(int size, int align)
 {
@@ -144,7 +162,9 @@ screenaperture(int size, int align)
 
     return 0;
 }
+/*e: function screenaperture */
 
+/*s: function attachscreen */
 uchar*
 attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
 {
@@ -162,7 +182,9 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
 
     return scr->gscreendata->bdata;
 }
+/*e: function attachscreen */
 
+/*s: function flushmemscreen */
 /*
  * It would be fair to say that this doesn't work for >8-bit screens.
  */
@@ -237,7 +259,9 @@ flushmemscreen(Rectangle r)
         }
     }
 }
+/*e: function flushmemscreen */
 
+/*s: function getcolor */
 void
 getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
 {
@@ -264,7 +288,9 @@ getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
     *pb = scr->colormap[p][2];
     unlock(&cursor);
 }
+/*e: function getcolor */
 
+/*s: function setpalette */
 int
 setpalette(ulong p, ulong r, ulong g, ulong b)
 {
@@ -286,7 +312,9 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 
     return ~0;
 }
+/*e: function setpalette */
 
+/*s: function setcolor */
 /*
  * On some video cards (e.g. Mach64), the palette is used as the 
  * DAC registers for >8-bit modes.  We don't want to set them when the user
@@ -318,7 +346,9 @@ setcolor(ulong p, ulong r, ulong g, ulong b)
 
     return setpalette(p, r, g, b);
 }
+/*e: function setcolor */
 
+/*s: function cursoron */
 int
 cursoron(bool dolock)
 {
@@ -337,12 +367,16 @@ cursoron(bool dolock)
 
     return v;
 }
+/*e: function cursoron */
 
+/*s: function cursoroff */
 void
 cursoroff(int)
 {
 }
+/*e: function cursoroff */
 
+/*s: function ksetcursor */
 void
 ksetcursor(Cursor* curs)
 {
@@ -354,11 +388,19 @@ ksetcursor(Cursor* curs)
 
     scr->cur->load(scr, curs);
 }
+/*e: function ksetcursor */
 
+/*s: global hwaccel */
 int hwaccel = 1;
+/*e: global hwaccel */
+/*s: global hwblank */
 int hwblank = 0;    /* turned on by drivers that are known good */
+/*e: global hwblank */
+/*s: global panning */
 int panning = 0;
+/*e: global panning */
 
+/*s: function hwdraw */
 //@Scheck: not dead, actually this is overriding some def in libmemdraw!! ugly
 int hwdraw(Memdrawparam *par)
 {
@@ -424,7 +466,9 @@ int hwdraw(Memdrawparam *par)
 
     return 0;   
 }
+/*e: function hwdraw */
 
+/*s: function blankscreen bis */
 void
 blankscreen(int blank)
 {
@@ -438,7 +482,9 @@ blankscreen(int blank)
             vgablank(scr, blank);
     }
 }
+/*e: function blankscreen bis */
 
+/*s: function vgalinearpciid */
 void
 vgalinearpciid(VGAscr *scr, int vid, int did)
 {
@@ -458,7 +504,9 @@ vgalinearpciid(VGAscr *scr, int vid, int did)
     scr->pci = p;
     vgalinearpci(scr);
 }
+/*e: function vgalinearpciid */
 
+/*s: function vgalinearpci */
 void
 vgalinearpci(VGAscr *scr)
 {
@@ -502,7 +550,9 @@ vgalinearpci(VGAscr *scr)
     }
     error("no video memory found on pci card");
 }
+/*e: function vgalinearpci */
 
+/*s: function vgalinearaddr */
 void
 vgalinearaddr(VGAscr *scr, ulong paddr, int size)
 {
@@ -550,26 +600,54 @@ vgalinearaddr(VGAscr *scr, ulong paddr, int size)
         poperror();
     }
 }
+/*e: function vgalinearaddr */
 
 
+/*s: global swvisible */
 /*
  * Software cursor. 
  */
 int swvisible;  /* is the cursor visible? */
+/*e: global swvisible */
+/*s: global swenabled */
 int swenabled;  /* is the cursor supposed to be on the screen? */
+/*e: global swenabled */
+/*s: global swback */
 Memimage*   swback; /* screen under cursor */
+/*e: global swback */
+/*s: global swimg */
 Memimage*   swimg;  /* cursor image */
+/*e: global swimg */
+/*s: global swmask */
 Memimage*   swmask; /* cursor mask */
+/*e: global swmask */
+/*s: global swimg1 */
 Memimage*   swimg1;
+/*e: global swimg1 */
+/*s: global swmask1 */
 Memimage*   swmask1;
+/*e: global swmask1 */
 
+/*s: global swoffset */
 Point   swoffset;
+/*e: global swoffset */
+/*s: global swrect */
 Rectangle   swrect; /* screen rectangle in swback */
+/*e: global swrect */
+/*s: global swpt */
 Point   swpt;   /* desired cursor location */
+/*e: global swpt */
+/*s: global swvispt */
 Point   swvispt;    /* actual cursor location */
+/*e: global swvispt */
+/*s: global swvers */
 int swvers; /* incremented each time cursor image changes */
+/*e: global swvers */
+/*s: global swvisvers */
 int swvisvers;  /* the version on the screen */
+/*e: global swvisvers */
 
+/*s: function swcursorhide */
 /*
  * called with drawlock locked for us, most of the time.
  * kernel prints at inopportune times might mean we don't
@@ -587,14 +665,18 @@ swcursorhide(void)
     memimagedraw(gscreen, swrect, swback, ZP, memopaque, ZP, S);
     flushmemscreen(swrect);
 }
+/*e: function swcursorhide */
 
+/*s: function swcursoravoid */
 void
 swcursoravoid(Rectangle r)
 {
     if(swvisible && rectXrect(r, swrect))
         swcursorhide();
 }
+/*e: function swcursoravoid */
 
+/*s: function swcursordraw */
 void
 swcursordraw(void)
 {
@@ -613,7 +695,9 @@ swcursordraw(void)
     flushmemscreen(swrect);
     swvisible = 1;
 }
+/*e: function swcursordraw */
 
+/*s: function swenable */
 /*
  * Need to lock drawlock for ourselves.
  */
@@ -626,7 +710,9 @@ swenable(VGAscr*)
         qunlock(&drawlock);
     }
 }
+/*e: function swenable */
 
+/*s: function swdisable */
 void
 swdisable(VGAscr*)
 {
@@ -636,7 +722,9 @@ swdisable(VGAscr*)
         qunlock(&drawlock);
     }
 }
+/*e: function swdisable */
 
+/*s: function swload */
 void
 swload(VGAscr*, Cursor *curs)
 {
@@ -668,14 +756,18 @@ swload(VGAscr*, Cursor *curs)
     memimagedraw(swimg1, swimg1->r, swimg, ZP, memopaque, ZP, S);
     memimagedraw(swmask1, swmask1->r, swmask, ZP, memopaque, ZP, S);
 }
+/*e: function swload */
 
+/*s: function swmove */
 int
 swmove(VGAscr*, Point p)
 {
     swpt = addpt(p, swoffset);
     return 0;
 }
+/*e: function swmove */
 
+/*s: function swcursorclock */
 void
 swcursorclock(void)
 {
@@ -696,7 +788,9 @@ swcursorclock(void)
     }
     splx(x);
 }
+/*e: function swcursorclock */
 
+/*s: function swcursorinit */
 void
 swcursorinit(void)
 {
@@ -743,7 +837,9 @@ swcursorinit(void)
     memfillcolor(swimg, DBlack);
     memfillcolor(swimg1, DBlack);
 }
+/*e: function swcursorinit */
 
+/*s: global swcursor */
 VGAcur swcursor =
 {
     "soft",
@@ -752,4 +848,6 @@ VGAcur swcursor =
     swload,
     swmove,
 };
+/*e: global swcursor */
 
+/*e: kernel/devices/screen/386/screen.c */

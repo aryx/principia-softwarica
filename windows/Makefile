@@ -106,7 +106,6 @@ SRC_VIEWS= \
    ../lib_graphics/libmemdraw/draw.c\
    ../lib_graphics/libmemdraw/ellipse.c\
    ../lib_graphics/libmemdraw/fillpoly.c\
-   ../lib_graphics/libmemdraw/hwdraw.c\
    ../lib_graphics/libmemdraw/iprint.c\
    ../lib_graphics/libmemdraw/line.c\
    ../lib_graphics/libmemdraw/load.c\
@@ -191,7 +190,17 @@ SRC_VIEWS= \
    libplumb/event.c\
    libplumb/mesg.c\
    libplumb/plumbsendtext.c\
+   ../kernel/devices/screen/386/devvga.c\
+   ../kernel/devices/screen/386/screen.c\
+   ../kernel/devices/screen/386/screen.h\
+   ../kernel/devices/screen/386/vga.c\
+   ../kernel/devices/screen/386/vgaclgd542x.c\
+   ../kernel/devices/screen/386/vgavesa.c\
+   ../kernel/devices/screen/386/vgax.c\
+   ../kernel/devices/screen/devdraw.c\
 
+#   ../lib_graphics/libmemdraw/hwdraw.c\
+   ../kernel/devices/screen/386/cga.c\
 
 
 sync:

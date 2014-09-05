@@ -1,3 +1,4 @@
+/*s: kernel/devices/screen/386/vgax.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -12,8 +13,11 @@
 #include <cursor.h>
 #include "screen.h"
 
+/*s: global vgaxlock */
 static Lock vgaxlock;           /* access to index registers */
+/*e: global vgaxlock */
 
+/*s: function vgaxi */
 int
 vgaxi(long port, uchar index)
 {
@@ -60,7 +64,9 @@ vgaxi(long port, uchar index)
 
     return data & 0xFF;
 }
+/*e: function vgaxi */
 
+/*s: function vgaxo */
 int
 vgaxo(long port, uchar index, uchar data)
 {
@@ -101,3 +107,5 @@ vgaxo(long port, uchar index, uchar data)
 
     return 0;
 }
+/*e: function vgaxo */
+/*e: kernel/devices/screen/386/vgax.c */

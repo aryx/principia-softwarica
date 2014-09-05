@@ -1,3 +1,4 @@
+/*s: kernel/devices/screen/devdraw.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -11,6 +12,7 @@
 #include    <cursor.h>
 #include    "screen.h"
 
+/*s: enum _anon_ (kernel/devices/screen/devdraw.c) */
 enum
 {
     Qtopdir     = 0,
@@ -23,21 +25,34 @@ enum
     Qdata,
     Qrefresh,
 };
+/*e: enum _anon_ (kernel/devices/screen/devdraw.c) */
 
+/*s: constant QSHIFT */
 /*
  * Qid path is:
  *   4 bits of file type (qids above)
  *  24 bits of mux slot number +1; 0 means not attached to client
  */
 #define QSHIFT  4   /* location in qid of client # */
+/*e: constant QSHIFT */
 
+/*s: function QID bis */
 #define QID(q)      ((((ulong)(q).path)&0x0000000F)>>0)
+/*e: function QID bis */
+/*s: function CLIENTPATH */
 #define CLIENTPATH(q)   ((((ulong)q)&0x7FFFFFF0)>>QSHIFT)
+/*e: function CLIENTPATH */
+/*s: constant NHASH bis */
 //#define CLIENT(q)   CLIENTPATH((q).path)
 
 #define NHASH       (1<<5)
+/*e: constant NHASH bis */
+/*s: constant HASHMASK */
 #define HASHMASK    (NHASH-1)
+/*e: constant HASHMASK */
+/*s: constant IOUNIT */
 #define IOUNIT      (64*1024)
+/*e: constant IOUNIT */
 
 typedef struct Client Client;
 typedef struct KDraw KDraw;
@@ -49,8 +64,11 @@ typedef struct Refresh Refresh;
 typedef struct Refx Refx;
 typedef struct DName DName;
 
+/*s: global blanktime */
 ulong blanktime = 30;   /* in minutes; a half hour */
+/*e: global blanktime */
 
+/*s: struct KDraw */
 struct KDraw
 {
     int     clientid;
@@ -64,7 +82,9 @@ struct KDraw
     ulong       blanktime;  /* time of last operation */
     ulong       savemap[3*256];
 };
+/*e: struct KDraw */
 
+/*s: struct Client */
 struct Client
 {
     Ref     r;
@@ -81,20 +101,26 @@ struct Client
     int     infoid;
     int     op;
 };
+/*e: struct Client */
 
+/*s: struct Refresh */
 struct Refresh
 {
     DImage*     dimage;
     Rectangle   r;
     Refresh*    next;
 };
+/*e: struct Refresh */
 
+/*s: struct Refx */
 struct Refx
 {
     Client*     client;
     DImage*     dimage;
 };
+/*e: struct Refx */
 
+/*s: struct DName */
 struct DName
 {
     char        *name;
@@ -102,7 +128,9 @@ struct DName
     DImage*     dimage;
     int     vers;
 };
+/*e: struct DName */
 
+/*s: struct FChar */
 struct FChar
 {
     int     minx;   /* left edge of bits */
@@ -112,7 +140,9 @@ struct FChar
     schar       left;   /* offset of baseline */
     uchar       width;  /* width of baseline */
 };
+/*e: struct FChar */
 
+/*s: struct DImage */
 /*
  * Reference counts in DImages:
  *  one per open by original client
@@ -133,13 +163,17 @@ struct DImage
     DImage*     fromname;   /* image this one is derived from, by name */
     DImage*     next;
 };
+/*e: struct DImage */
 
+/*s: struct CScreen */
 struct CScreen
 {
     DScreen*    dscreen;
     CScreen*    next;
 };
+/*e: struct CScreen */
 
+/*s: struct DScreen */
 struct DScreen
 {
     int     id;
@@ -151,18 +185,37 @@ struct DScreen
     Client*     owner;
     DScreen*    next;
 };
+/*e: struct DScreen */
 
+/*s: global sdraw */
 static  KDraw        sdraw;
+/*e: global sdraw */
+/*s: global drawlock */
     QLock   drawlock;
+/*e: global drawlock */
 
+/*s: global screenimage */
 static  Memimage    *screenimage;
+/*e: global screenimage */
+/*s: global screendimage */
 static  DImage* screendimage;
+/*e: global screendimage */
+/*s: global screenname */
 static  char    screenname[40];
+/*e: global screenname */
+/*s: global screennameid */
 static  int screennameid;
+/*e: global screennameid */
 
+/*s: global flushrect */
 static  Rectangle   flushrect;
+/*e: global flushrect */
+/*s: global waste */
 static  int     waste;
+/*e: global waste */
+/*s: global dscreen */
 static  DScreen*    dscreen;
+/*e: global dscreen */
 extern  void        flushmemscreen(Rectangle);
     void        drawmesg(Client*, void*, int);
     void        drawuninstall(Client*, int);
@@ -170,43 +223,84 @@ extern  void        flushmemscreen(Rectangle);
     Client*     drawclientofpath(ulong);
     DImage* allocdimage(Memimage*);
 
+/*s: global Enodrawimage */
 static  char Enodrawimage[] =   "unknown id for draw image";
+/*e: global Enodrawimage */
+/*s: global Enodrawscreen */
 static  char Enodrawscreen[] =  "unknown id for draw screen";
+/*e: global Enodrawscreen */
+/*s: global Eshortdraw */
 static  char Eshortdraw[] = "short draw message";
+/*e: global Eshortdraw */
+/*s: global Eshortread */
 static  char Eshortread[] = "draw read too short";
+/*e: global Eshortread */
+/*s: global Eimageexists */
 static  char Eimageexists[] =   "image id in use";
+/*e: global Eimageexists */
+/*s: global Escreenexists */
 static  char Escreenexists[] =  "screen id in use";
+/*e: global Escreenexists */
+/*s: global Edrawmem */
 static  char Edrawmem[] =   "image memory allocation failed";
+/*e: global Edrawmem */
+/*s: global Ereadoutside */
 static  char Ereadoutside[] =   "readimage outside image";
+/*e: global Ereadoutside */
+/*s: global Ewriteoutside */
 static  char Ewriteoutside[] =  "writeimage outside image";
+/*e: global Ewriteoutside */
+/*s: global Enotfont */
 static  char Enotfont[] =   "image not a font";
+/*e: global Enotfont */
+/*s: global Eindex */
 static  char Eindex[] =     "character index out of range";
+/*e: global Eindex */
+/*s: global Enoclient */
 static  char Enoclient[] =  "no such draw client";
+/*e: global Enoclient */
+/*s: global Enameused */
 //static    char Edepth[] =     "image has bad depth";
 static  char Enameused[] =  "image name in use";
+/*e: global Enameused */
+/*s: global Enoname */
 static  char Enoname[] =    "no image with that name";
+/*e: global Enoname */
+/*s: global Eoldname */
 static  char Eoldname[] =   "named image no longer valid";
+/*e: global Eoldname */
+/*s: global Enamed */
 static  char Enamed[] =     "image already has name";
+/*e: global Enamed */
+/*s: global Ewrongname */
 static  char Ewrongname[] =     "wrong name for image";
+/*e: global Ewrongname */
 
+/*s: function dlock */
 static void
 dlock(void)
 {
     qlock(&drawlock);
 }
+/*e: function dlock */
 
+/*s: function candlock */
 static int
 candlock(void)
 {
     return canqlock(&drawlock);
 }
+/*e: function candlock */
 
+/*s: function dunlock */
 static void
 dunlock(void)
 {
     qunlock(&drawlock);
 }
+/*e: function dunlock */
 
+/*s: function drawgen */
 static int
 drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 {
@@ -317,7 +411,9 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
     }
     return 1;
 }
+/*e: function drawgen */
 
+/*s: function drawrefactive */
 static
 int
 drawrefactive(void *a)
@@ -327,7 +423,9 @@ drawrefactive(void *a)
     c = a;
     return c->refreshme || c->refresh!=0;
 }
+/*e: function drawrefactive */
 
+/*s: function drawrefreshscreen */
 static
 void
 drawrefreshscreen(DImage *l, Client *client)
@@ -337,7 +435,9 @@ drawrefreshscreen(DImage *l, Client *client)
     if(l != nil && l->dscreen->owner != client)
         l->dscreen->owner->refreshme = 1;
 }
+/*e: function drawrefreshscreen */
 
+/*s: function drawrefresh */
 static
 void
 drawrefresh(Memimage*, Rectangle r, void *v)
@@ -365,7 +465,9 @@ drawrefresh(Memimage*, Rectangle r, void *v)
         c->refresh = ref;
     }
 }
+/*e: function drawrefresh */
 
+/*s: function addflush */
 static void
 addflush(Rectangle r)
 {
@@ -409,7 +511,9 @@ addflush(Rectangle r)
     flushrect = r;
     waste = 0;
 }
+/*e: function addflush */
 
+/*s: function dstflush */
 static
 void
 dstflush(int dstid, Memimage *dst, Rectangle r)
@@ -436,7 +540,9 @@ dstflush(int dstid, Memimage *dst, Rectangle r)
     }while(l);
     addflush(r);
 }
+/*e: function dstflush */
 
+/*s: function drawflush */
 void
 drawflush(void)
 {
@@ -444,7 +550,9 @@ drawflush(void)
         flushmemscreen(flushrect);
     flushrect = Rect(10000, 10000, -10000, -10000);
 }
+/*e: function drawflush */
 
+/*s: function drawcmp */
 static
 int
 drawcmp(char *a, char *b, int n)
@@ -453,7 +561,9 @@ drawcmp(char *a, char *b, int n)
         return 1;
     return memcmp(a, b, n);
 }
+/*e: function drawcmp */
 
+/*s: function drawlookupname */
 DName*
 drawlookupname(int n, char *str)
 {
@@ -466,7 +576,9 @@ drawlookupname(int n, char *str)
             return name;
     return 0;
 }
+/*e: function drawlookupname */
 
+/*s: function drawgoodname */
 int
 drawgoodname(DImage *d)
 {
@@ -484,7 +596,9 @@ drawgoodname(DImage *d)
         return 0;
     return 1;
 }
+/*e: function drawgoodname */
 
+/*s: function drawlookup */
 DImage*
 drawlookup(Client *client, int id, int checkname)
 {
@@ -501,7 +615,9 @@ drawlookup(Client *client, int id, int checkname)
     }
     return 0;
 }
+/*e: function drawlookup */
 
+/*s: function drawlookupdscreen */
 DScreen*
 drawlookupdscreen(int id)
 {
@@ -515,7 +631,9 @@ drawlookupdscreen(int id)
     }
     return 0;
 }
+/*e: function drawlookupdscreen */
 
+/*s: function drawlookupscreen */
 DScreen*
 drawlookupscreen(Client *client, int id, CScreen **cs)
 {
@@ -532,7 +650,9 @@ drawlookupscreen(Client *client, int id, CScreen **cs)
     error(Enodrawscreen);
     return 0;
 }
+/*e: function drawlookupscreen */
 
+/*s: function allocdimage */
 DImage*
 allocdimage(Memimage *i)
 {
@@ -550,7 +670,9 @@ allocdimage(Memimage *i)
     d->fromname = 0;
     return d;
 }
+/*e: function allocdimage */
 
+/*s: function drawinstall */
 Memimage*
 drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
 {
@@ -565,7 +687,9 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
     client->dimage[id&HASHMASK] = d;
     return i;
 }
+/*e: function drawinstall */
 
+/*s: function drawinstallscreen */
 Memscreen*
 drawinstallscreen(Client *client, DScreen *d, int id, DImage *dimage, DImage *dfill, int public)
 {
@@ -616,7 +740,9 @@ drawinstallscreen(Client *client, DScreen *d, int id, DImage *dimage, DImage *df
     client->cscreen = c;
     return d->screen;
 }
+/*e: function drawinstallscreen */
 
+/*s: function drawdelname */
 void
 drawdelname(DName *name)
 {
@@ -626,7 +752,9 @@ drawdelname(DName *name)
     memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
     sdraw.nname--;
 }
+/*e: function drawdelname */
 
+/*s: function drawfreedscreen */
 void
 drawfreedscreen(DScreen *this)
 {
@@ -659,7 +787,9 @@ drawfreedscreen(DScreen *this)
     free(this->screen);
     free(this);
 }
+/*e: function drawfreedscreen */
 
+/*s: function drawfreedimage */
 void
 drawfreedimage(DImage *dimage)
 {
@@ -704,7 +834,9 @@ drawfreedimage(DImage *dimage)
     free(dimage->fchar);
     free(dimage);
 }
+/*e: function drawfreedimage */
 
+/*s: function drawuninstallscreen */
 void
 drawuninstallscreen(Client *client, CScreen *this)
 {
@@ -727,7 +859,9 @@ drawuninstallscreen(Client *client, CScreen *this)
         cs = next;
     }
 }
+/*e: function drawuninstallscreen */
 
+/*s: function drawuninstall */
 void
 drawuninstall(Client *client, int id)
 {
@@ -751,7 +885,9 @@ drawuninstall(Client *client, int id)
     }
     error(Enodrawimage);
 }
+/*e: function drawuninstall */
 
+/*s: function drawaddname */
 void
 drawaddname(Client *client, DImage *di, int n, char *str)
 {
@@ -774,7 +910,9 @@ drawaddname(Client *client, DImage *di, int n, char *str)
     new->client = client;
     new->vers = ++sdraw.vers;
 }
+/*e: function drawaddname */
 
+/*s: function drawnewclient */
 Client*
 drawnewclient(void)
 {
@@ -806,7 +944,9 @@ drawnewclient(void)
     sdraw.client[i] = cl;
     return cl;
 }
+/*e: function drawnewclient */
 
+/*s: function drawclientop */
 static int
 drawclientop(Client *cl)
 {
@@ -816,6 +956,7 @@ drawclientop(Client *cl)
     cl->op = SoverD;
     return op;
 }
+/*e: function drawclientop */
 
 //int
 //drawhasclients(void)
@@ -826,6 +967,7 @@ drawclientop(Client *cl)
 //   * hard to make work.
 //   */
 //  return sdraw.nclient != 0;
+/*s: function drawclientofpath */
 //}
 
 Client*
@@ -842,8 +984,10 @@ drawclientofpath(ulong path)
         return nil;
     return cl;
 }
+/*e: function drawclientofpath */
 
 
+/*s: function drawclient */
 Client*
 drawclient(Chan *c)
 {
@@ -854,7 +998,9 @@ drawclient(Chan *c)
         error(Enoclient);
     return client;
 }
+/*e: function drawclient */
 
+/*s: function drawimage */
 Memimage*
 drawimage(Client *client, uchar *a)
 {
@@ -865,7 +1011,9 @@ drawimage(Client *client, uchar *a)
         error(Enodrawimage);
     return d->image;
 }
+/*e: function drawimage */
 
+/*s: function drawrectangle */
 void
 drawrectangle(Rectangle *r, uchar *a)
 {
@@ -874,14 +1022,18 @@ drawrectangle(Rectangle *r, uchar *a)
     r->max.x = BGLONG(a+2*4);
     r->max.y = BGLONG(a+3*4);
 }
+/*e: function drawrectangle */
 
+/*s: function drawpoint */
 void
 drawpoint(Point *p, uchar *a)
 {
     p->x = BGLONG(a+0*4);
     p->y = BGLONG(a+1*4);
 }
+/*e: function drawpoint */
 
+/*s: function drawchar */
 Point
 drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImage *font, int index, int op)
 {
@@ -926,7 +1078,9 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
     sp->x += fc->width;
     return p;
 }
+/*e: function drawchar */
 
+/*s: function makescreenimage */
 static DImage*
 makescreenimage(void)
 {
@@ -968,7 +1122,9 @@ makescreenimage(void)
     }
     return di;
 }
+/*e: function makescreenimage */
 
+/*s: function initscreenimage */
 static int
 initscreenimage(void)
 {
@@ -983,7 +1139,9 @@ initscreenimage(void)
     mouseresize();
     return 1;
 }
+/*e: function initscreenimage */
 
+/*s: function deletescreenimage */
 void
 deletescreenimage(void)
 {
@@ -999,7 +1157,9 @@ deletescreenimage(void)
     }
     dunlock();
 }
+/*e: function deletescreenimage */
 
+/*s: function resetscreenimage */
 void
 resetscreenimage(void)
 {
@@ -1007,7 +1167,9 @@ resetscreenimage(void)
     initscreenimage();
     dunlock();
 }
+/*e: function resetscreenimage */
 
+/*s: function drawattach */
 static Chan*
 drawattach(char *spec)
 {
@@ -1019,7 +1181,9 @@ drawattach(char *spec)
     dunlock();
     return devattach('i', spec);
 }
+/*e: function drawattach */
 
+/*s: function drawwalk */
 static Walkqid*
 drawwalk(Chan *c, Chan *nc, char **name, int nname)
 {
@@ -1027,13 +1191,17 @@ drawwalk(Chan *c, Chan *nc, char **name, int nname)
         error("no frame buffer");
     return devwalk(c, nc, name, nname, 0, 0, drawgen);
 }
+/*e: function drawwalk */
 
+/*s: function drawstat */
 static int
 drawstat(Chan *c, uchar *db, int n)
 {
     return devstat(c, db, n, 0, 0, drawgen);
 }
+/*e: function drawstat */
 
+/*s: function drawopen */
 static Chan*
 drawopen(Chan *c, int omode)
 {
@@ -1103,7 +1271,9 @@ drawopen(Chan *c, int omode)
     c->iounit = IOUNIT;
     return c;
 }
+/*e: function drawopen */
 
+/*s: function drawclose */
 static void
 drawclose(Chan *c)
 {
@@ -1152,7 +1322,9 @@ drawclose(Chan *c)
     dunlock();
     poperror();
 }
+/*e: function drawclose */
 
+/*s: function drawread */
 long
 drawread(Chan *c, void *a, long n, vlong off)
 {
@@ -1266,7 +1438,9 @@ drawread(Chan *c, void *a, long n, vlong off)
     poperror();
     return n;
 }
+/*e: function drawread */
 
+/*s: function drawwakeall */
 void
 drawwakeall(void)
 {
@@ -1279,7 +1453,9 @@ drawwakeall(void)
             wakeup(&cl->refrend);
     }
 }
+/*e: function drawwakeall */
 
+/*s: function drawwrite */
 static long
 drawwrite(Chan *c, void *a, long n, vlong)
 {
@@ -1351,7 +1527,9 @@ drawwrite(Chan *c, void *a, long n, vlong)
     poperror();
     return n;
 }
+/*e: function drawwrite */
 
+/*s: function drawcoord */
 uchar*
 drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
 {
@@ -1376,7 +1554,9 @@ drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
     *newx = x;
     return p;
 }
+/*e: function drawcoord */
 
+/*s: function printmesg */
 static void
 printmesg(char *fmt, uchar *a, int plsprnt)
 {
@@ -1428,7 +1608,9 @@ printmesg(char *fmt, uchar *a, int plsprnt)
     *q = 0;
     iprint("%.*s", (int)(q-buf), buf);
 }
+/*e: function printmesg */
 
+/*s: function drawmesg */
 void
 drawmesg(Client *client, void *av, int n)
 {
@@ -2102,7 +2284,9 @@ drawmesg(Client *client, void *av, int n)
     }
     poperror();
 }
+/*e: function drawmesg */
 
+/*s: global drawdevtab */
 Dev drawdevtab = {
     .dc       =    'i',
     .name     =    "draw",
@@ -2123,7 +2307,9 @@ Dev drawdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
+/*e: global drawdevtab */
 
+/*s: function drawcmap */
 /*
  * On 8 bit displays, load the default color map
  */
@@ -2157,7 +2343,9 @@ drawcmap(void)
             }
     }
 }
+/*e: function drawcmap */
 
+/*s: function drawblankscreen */
 void
 drawblankscreen(int blank)
 {
@@ -2194,7 +2382,9 @@ drawblankscreen(int blank)
     sdraw.blanked = blank;
     dunlock();
 }
+/*e: function drawblankscreen */
 
+/*s: function drawactive */
 /*
  * record activity on screen, changing blanking as appropriate
  */
@@ -2209,9 +2399,13 @@ drawactive(int active)
             drawblankscreen(1);
     }
 }
+/*e: function drawactive */
 
+/*s: function drawidletime */
 int
 drawidletime(void)
 {
     return TK2SEC(CPUS(0)->ticks - sdraw.blanktime)/60;
 }
+/*e: function drawidletime */
+/*e: kernel/devices/screen/devdraw.c */

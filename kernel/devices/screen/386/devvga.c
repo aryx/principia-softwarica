@@ -1,3 +1,4 @@
+/*s: kernel/devices/screen/386/devvga.c */
 /*
  * VGA controller
  */
@@ -14,6 +15,7 @@
 #include <cursor.h>
 #include "screen.h"
 
+/*s: enum _anon_ (kernel/devices/screen/386/devvga.c) */
 enum {
     Qdir,
     Qvgabios,
@@ -21,7 +23,9 @@ enum {
     Qvgaovl,
     Qvgaovlctl,
 };
+/*e: enum _anon_ (kernel/devices/screen/386/devvga.c) */
 
+/*s: global vgadir */
 static Dirtab vgadir[] = {
     ".",    { Qdir, 0, QTDIR },     0,  0550,
     "vgabios",  { Qvgabios, 0 },    0x100000, 0440,
@@ -29,7 +33,9 @@ static Dirtab vgadir[] = {
     "vgaovl",       { Qvgaovl, 0 },     0,  0660,
     "vgaovlctl",    { Qvgaovlctl, 0 },  0,  0660,
 };
+/*e: global vgadir */
 
+/*s: enum _anon_ (kernel/devices/screen/386/devvga.c)2 */
 enum {
     CMactualsize,
     CMblank,
@@ -46,7 +52,9 @@ enum {
     CMtype,
     CMunblank,
 };
+/*e: enum _anon_ (kernel/devices/screen/386/devvga.c)2 */
 
+/*s: global vgactlmsg */
 static Cmdtab vgactlmsg[] = {
     CMactualsize,   "actualsize",   2,
     CMblank,    "blank",    1,
@@ -63,7 +71,9 @@ static Cmdtab vgactlmsg[] = {
     CMtype,     "type",     2,
     CMunblank,  "unblank",  1,
 };
+/*e: global vgactlmsg */
 
+/*s: function vgareset */
 static void
 vgareset(void)
 {
@@ -73,7 +83,9 @@ vgareset(void)
     if(ioalloc(0x3c0, 0x3da-0x3c0+1, 0, "vga") < 0)
         panic("vga ports already allocated"); 
 }
+/*e: function vgareset */
 
+/*s: function vgaattach */
 static Chan*
 vgaattach(char* spec)
 {
@@ -81,19 +93,25 @@ vgaattach(char* spec)
         error(Eio);
     return devattach('v', spec);
 }
+/*e: function vgaattach */
 
+/*s: function vgawalk */
 Walkqid*
 vgawalk(Chan* c, Chan *nc, char** name, int nname)
 {
     return devwalk(c, nc, name, nname, vgadir, nelem(vgadir), devgen);
 }
+/*e: function vgawalk */
 
+/*s: function vgastat */
 static int
 vgastat(Chan* c, uchar* dp, int n)
 {
     return devstat(c, dp, n, vgadir, nelem(vgadir), devgen);
 }
+/*e: function vgastat */
 
+/*s: function vgaopen */
 static Chan*
 vgaopen(Chan* c, int omode)
 {
@@ -109,7 +127,9 @@ vgaopen(Chan* c, int omode)
     }
     return devopen(c, omode, vgadir, nelem(vgadir), devgen);
 }
+/*e: function vgaopen */
 
+/*s: function vgaclose */
 static void
 vgaclose(Chan* c)
 {
@@ -127,6 +147,7 @@ vgaclose(Chan* c)
             poperror();
         }
 }
+/*e: function vgaclose */
 
 //static void
 //checkport(int start, int end)
@@ -140,6 +161,7 @@ vgaclose(Chan* c)
 //  if(iounused(start, end))
 //      return;
 //  error(Eperm);
+/*s: function vgaread */
 //}
 
 static long
@@ -220,7 +242,9 @@ vgaread(Chan* c, void* a, long n, vlong off)
 
     return 0;
 }
+/*e: function vgaread */
 
+/*s: function vgactl */
 //static char Ebusy[] = "vga already configured";
 
 static void
@@ -423,9 +447,13 @@ vgactl(Cmdbuf *cb)
 
     cmderror(cb, "bad VGA control message");
 }
+/*e: function vgactl */
 
+/*s: global Enooverlay */
 char Enooverlay[] = "No overlay support";
+/*e: global Enooverlay */
 
+/*s: function vgawrite */
 static long
 vgawrite(Chan* c, void* a, long n, vlong off)
 {
@@ -475,7 +503,9 @@ vgawrite(Chan* c, void* a, long n, vlong off)
 
     return 0;
 }
+/*e: function vgawrite */
 
+/*s: global vgadevtab */
 Dev vgadevtab = {
     .dc       =    'v',
     .name     =    "vga",
@@ -496,3 +526,5 @@ Dev vgadevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
+/*e: global vgadevtab */
+/*e: kernel/devices/screen/386/devvga.c */

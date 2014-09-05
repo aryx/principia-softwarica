@@ -1,3 +1,4 @@
+/*s: kernel/devices/screen/386/vgavesa.c */
 /*
  * vga driver using just vesa bios to set up.
  *
@@ -19,17 +20,28 @@
 #include <cursor.h>
 #include "screen.h"
 
+/*s: enum _anon_ (kernel/devices/screen/386/vgavesa.c) */
 enum {
     Usesoftscreen = 1,
 };
+/*e: enum _anon_ (kernel/devices/screen/386/vgavesa.c) */
 
+/*s: global hardscreen */
 static void *hardscreen;
+/*e: global hardscreen */
+/*s: global modebuf */
 static uchar modebuf[0x1000];
+/*e: global modebuf */
 
+/*s: function WORD */
 // pad: seems similar to macros in fcall.h, factorize?
 #define WORD(p) ((p)[0] | ((p)[1]<<8))
+/*e: function WORD */
+/*s: function LONG */
 #define LONG(p) ((p)[0] | ((p)[1]<<8) | ((p)[2]<<16) | ((p)[3]<<24))
+/*e: function LONG */
 //#define PWORD(p, v) do{(p)[0] = (v); (p)[1] = (v)>>8;}while(0)
+/*s: function vbesetup */
 //#define PLONG(p, v) do{(p)[0] = (v); (p)[1] = (v)>>8; (p)[2] = (v)>>16; (p)[3] = (v)>>24;}while(0)
 
 static uchar*
@@ -45,7 +57,9 @@ vbesetup(Ureg *u, int ax)
     u->di = pa&0xFFFF;
     return modebuf;
 }
+/*e: function vbesetup */
 
+/*s: function vbecall */
 static void
 vbecall(Ureg *u)
 {
@@ -78,7 +92,9 @@ vbecall(Ureg *u)
     poperror();
     cclose(cmem);
 }
+/*e: function vbecall */
 
+/*s: function vbecheck */
 static void
 vbecheck(void)
 {
@@ -93,7 +109,9 @@ vbecheck(void)
     if(p[5] < 2)
         error("bad vesa version");
 }
+/*e: function vbecheck */
 
+/*s: function vbegetmode */
 static int
 vbegetmode(void)
 {
@@ -103,7 +121,9 @@ vbegetmode(void)
     vbecall(&u);
     return u.bx;
 }
+/*e: function vbegetmode */
 
+/*s: function vbemodeinfo */
 static uchar*
 vbemodeinfo(int mode)
 {
@@ -115,7 +135,9 @@ vbemodeinfo(int mode)
     vbecall(&u);
     return p;
 }
+/*e: function vbemodeinfo */
 
+/*s: function vesalinear */
 static void
 vesalinear(VGAscr *scr, int, int)
 {
@@ -185,7 +207,9 @@ vesalinear(VGAscr *scr, int, int)
         scr->paddr = scr->apsize = 0;
     }
 }
+/*e: function vesalinear */
 
+/*s: function vesaflush */
 static void
 vesaflush(VGAscr *scr, Rectangle r)
 {
@@ -213,7 +237,9 @@ vesaflush(VGAscr *scr, Rectangle r)
         sp += wid;
     }
 }
+/*e: function vesaflush */
 
+/*s: global vgavesadev */
 VGAdev vgavesadev = {
     "vesa",
     0,
@@ -226,3 +252,5 @@ VGAdev vgavesadev = {
     0,
     vesaflush,
 };
+/*e: global vgavesadev */
+/*e: kernel/devices/screen/386/vgavesa.c */

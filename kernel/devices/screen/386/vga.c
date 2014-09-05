@@ -1,3 +1,4 @@
+/*s: kernel/devices/screen/386/vga.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -11,14 +12,29 @@
 #include <cursor.h>
 #include "screen.h"
 
+/*s: global back2 */
 static Memimage* back;
+/*e: global back2 */
+/*s: global conscol */
 static Memimage *conscol;
+/*e: global conscol */
 
+/*s: global curpos */
 static Point curpos;
+/*e: global curpos */
+/*s: global window bis */
 static Rectangle window;
+/*e: global window bis */
+/*s: global xp */
 static int *xp;
+/*e: global xp */
+/*s: global xbuf */
 static int xbuf[256];
+/*e: global xbuf */
+/*s: global vgascreenlock */
 Lock vgascreenlock;
+/*e: global vgascreenlock */
+/*s: function vgaimageinit */
 //int drawdebug;
 
 void
@@ -42,7 +58,9 @@ vgaimageinit(ulong chan)
         memfillcolor(conscol, DWhite);
     }
 }
+/*e: function vgaimageinit */
 
+/*s: function vgascroll */
 static void
 vgascroll(VGAscr* scr)
 {
@@ -60,7 +78,9 @@ vgascroll(VGAscr* scr)
 
     curpos.y -= o;
 }
+/*e: function vgascroll */
 
+/*s: function vgascreenputc */
 static void
 vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
 {
@@ -132,7 +152,9 @@ vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
     }
 //  drawdebug = 0;
 }
+/*e: function vgascreenputc */
 
+/*s: function vgascreenputs */
 static void
 vgascreenputs(char* s, int n)
 {
@@ -182,7 +204,9 @@ vgascreenputs(char* s, int n)
         qunlock(&drawlock);
     unlock(&vgascreenlock);
 }
+/*e: function vgascreenputs */
 
+/*s: function vgascreenwin */
 void
 vgascreenwin(VGAscr* scr)
 {
@@ -198,7 +222,9 @@ vgascreenwin(VGAscr* scr)
 
     screenputs = vgascreenputs;
 }
+/*e: function vgascreenwin */
 
+/*s: function vgablank */
 /*
  * Supposedly this is the way to turn DPMS
  * monitors off using just the VGA registers.
@@ -226,7 +252,9 @@ vgablank(VGAscr*, int blank)
     vgaxo(Crtx, 0x17, crtc17);
     outs(Crtx, 0x0300);             /* end synchronous reset */
 }
+/*e: function vgablank */
 
+/*s: function addvgaseg */
 void
 addvgaseg(char *name, ulong pa, ulong size)
 {
@@ -239,6 +267,7 @@ addvgaseg(char *name, ulong pa, ulong size)
     seg.size = size;
     addphysseg(&seg);
 }
+/*e: function addvgaseg */
 
 //void
 //cornerstring(char *s)
@@ -260,3 +289,4 @@ addvgaseg(char *name, ulong pa, ulong size)
 //  memimagestring(scr->gscreen, r.min, conscol, ZP, scr->memdefont, s);
 ////    flushmemscreen(r);
 //}
+/*e: kernel/devices/screen/386/vga.c */
