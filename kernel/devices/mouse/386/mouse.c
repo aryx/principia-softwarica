@@ -192,7 +192,7 @@ resetmouse(void)
 }
 
 void
-mousectl(Cmdbuf *cb)
+kmousectl(Cmdbuf *cb)
 {
     Cmdtab *ct;
 
@@ -239,3 +239,4 @@ mousectl(Cmdbuf *cb)
     poperror();
 }
 /*e: mouse.c */
+

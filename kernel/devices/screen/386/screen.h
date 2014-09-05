@@ -124,7 +124,7 @@ enum {
 };
 
 /* mouse.c */
-extern void mousectl(Cmdbuf*);
+extern void kmousectl(Cmdbuf*);
 //now in portfns_devices.h: extern void mouseresize(void);
 
 /* screen.c */

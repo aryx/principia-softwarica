@@ -419,7 +419,7 @@ mousewrite(Chan *c, void *va, long n, vlong)
             break;
 
         case CMwildcard:
-            mousectl(cb); // device specific hook
+            kmousectl(cb); // device specific hook
             break;
         }
 
