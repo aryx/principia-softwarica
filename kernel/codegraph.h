@@ -18,3 +18,8 @@ struct KMap {
 uchar initcode[]={
     0x00
 };
+
+// when add lib_graphics/
+#define fprint(x) x
+#define strdup(x) x
+#define abort(x) x

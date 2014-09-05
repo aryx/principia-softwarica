@@ -40,28 +40,31 @@ graph:
 	~/pfff/codegraph -derived_data -lang clang2 -build .
 tags:
 	~/pfff/codegraph -derived_data -lang clang2 -build .
-
-
-#todo? add libc, lib_networking, lib_memlayer, lib_memdraw, lib_draw, libmp?
-graph2:
-	~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
-check2:
-	~/pfff/scheck -filter 3 -lang clang2 .
-prolog2:
-	~/pfff/codequery -lang clang2 -build include/ kernel/
-
-KERNELSRC=include/ kernel/ lib_core/libc/9syscall
-# just kernel, but with new graph_code_c!
-graph3:
-	~/pfff/codegraph -derived_data -lang c -build $(KERNELSRC)
-check3:
+check:
 	~/pfff/scheck -filter 3 -lang c .
-prolog3:
+
+
+#todo? add libc, lib_networking, lib_memlayer/lib_memdraw/lib_draw, libmp?
+KERNELSRC=include/ kernel/ lib_core/libc/9syscall lib_graphics/
+# just kernel, but with new graph_code_c!
+graph_kernel:
+	~/pfff/codegraph -derived_data -lang c -build $(KERNELSRC)
+graph_kernel2:
+	~/pfff/codegraph -derived_data -lang c -build include/ kernel/ lib_core/libc/9syscall
+prolog_kernel:
 	~/pfff/codequery -lang c -build $(KERNELSRC)
-datalog3:
+datalog_kernel:
 	~/pfff/codequery -datalog -lang c -build $(KERNELSRC)
-loc3:
+loc_kernel:
 	~/pfff/codemap -filter cpp -test_loc kernel
+
+WINDOWSRC=include/ lib_graphics/ windows/ kernel/devices/screen/
+graph_windows:
+	~/pfff/codegraph -derived_data -lang c -build $(WINDOWSRC)
+graph_windows2:
+	~/pfff/codegraph -derived_data -lang c -build include/ lib_graphics/ windows/
+
+
 
 #trace:
 #	mk clean
@@ -70,22 +73,29 @@ loc3:
 #	mk cmds >> make_trace.txt
 #
 
+# when was using graph_code_clang
+#graph2:
+#	~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
+#check2:
+#	~/pfff/scheck -filter 3 -lang clang2 .
+#prolog2:
+#	~/pfff/codequery -lang clang2 -build include/ kernel/
 # take quite some time :(
-clangfiles:
-	~/pfff/pfff -gen_clang compile_commands.json
-        # empty file because of segfault in clang-check, probably because unicode chars
-	rm -f kernel/devices/keyboard/386/latin1.clang 
-	~/pfff/pfff_test.opt -uninclude_clang .
-	cp sys/src/9/pc/apbootstrap.h kernel/init/386/
-	mv sys/src/9/pc/apbootstrap.h.clang2 kernel/init/386/
-	cp sys/src/9/pc/init.h kernel/init/user/preboot
-	mv sys/src/9/pc/init.h.clang2 kernel/init/user/preboot
-	cp sys/src/9/pc/reboot.h kernel/init/386
-	mv sys/src/9/pc/reboot.h.clang2 kernel/init/386/
-	cp sys/src/9/pc/$(CONFIG).c kernel/conf
-	cp sys/src/9/pc/$(CONFIG).rootc.c kernel/conf
-	mv sys/src/9/pc/*.clang2 kernel/conf
-#	~/pfff/pfff_test -analyze_make_trace make_trace.txt > compile_commands.json
-
-clangclean:
-	find -name "*.clang*" -exec rm -f {} \;
+#clangfiles:
+#	~/pfff/pfff -gen_clang compile_commands.json
+#        # empty file because of segfault in clang-check, probably because unicode chars
+#	rm -f kernel/devices/keyboard/386/latin1.clang 
+#	~/pfff/pfff_test.opt -uninclude_clang .
+#	cp sys/src/9/pc/apbootstrap.h kernel/init/386/
+#	mv sys/src/9/pc/apbootstrap.h.clang2 kernel/init/386/
+#	cp sys/src/9/pc/init.h kernel/init/user/preboot
+#	mv sys/src/9/pc/init.h.clang2 kernel/init/user/preboot
+#	cp sys/src/9/pc/reboot.h kernel/init/386
+#	mv sys/src/9/pc/reboot.h.clang2 kernel/init/386/
+#	cp sys/src/9/pc/$(CONFIG).c kernel/conf
+#	cp sys/src/9/pc/$(CONFIG).rootc.c kernel/conf
+#	mv sys/src/9/pc/*.clang2 kernel/conf
+##	~/pfff/pfff_test -analyze_make_trace make_trace.txt > compile_commands.json
+#
+#clangclean:
+#	find -name "*.clang*" -exec rm -f {} \;
