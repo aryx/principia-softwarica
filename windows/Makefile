@@ -28,7 +28,7 @@ TEX=Windows.tex
 # to work
 SRC_ORIG=Windows.tex.nw Windows_extra.tex.nw
 
-# from list_windows
+# from list_windows originally
 SRC_VIEWS= \
    ../include/complete.h\
    ../include/cursor.h\
