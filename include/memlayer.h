@@ -1,29 +1,34 @@
+/*s: include/memlayer.h */
 #pragma src "/sys/src/libmemlayer"
 #pragma lib "libmemlayer.a"
 
 typedef struct Memscreen Memscreen;
 typedef void (*Refreshfn)(Memimage*, Rectangle, void*);
 
+/*s: struct Memscreen */
 struct Memscreen
 {
-	Memimage	*frontmost;	/* frontmost layer on screen */
-	Memimage	*rearmost;	/* rearmost layer on screen */
-	Memimage	*image;		/* upon which all layers are drawn */
-	Memimage	*fill;			/* if non-zero, picture to use when repainting */
+    Memimage	*frontmost;	/* frontmost layer on screen */
+    Memimage	*rearmost;	/* rearmost layer on screen */
+    Memimage	*image;		/* upon which all layers are drawn */
+    Memimage	*fill;			/* if non-zero, picture to use when repainting */
 };
+/*e: struct Memscreen */
 
+/*s: struct Memlayer */
 struct Memlayer
 {
-	Rectangle		screenr;	/* true position of layer on screen */
-	Point			delta;	/* add delta to go from image coords to screen */
-	Memscreen	*screen;	/* screen this layer belongs to */
-	Memimage	*front;	/* window in front of this one */
-	Memimage	*rear;	/* window behind this one*/
-	int		clear;	/* layer is fully visible */
-	Memimage	*save;	/* save area for obscured parts */
-	Refreshfn	refreshfn;		/* function to call to refresh obscured parts if save==nil */
-	void		*refreshptr;	/* argument to refreshfn */
+    Rectangle		screenr;	/* true position of layer on screen */
+    Point			delta;	/* add delta to go from image coords to screen */
+    Memscreen	*screen;	/* screen this layer belongs to */
+    Memimage	*front;	/* window in front of this one */
+    Memimage	*rear;	/* window behind this one*/
+    int		clear;	/* layer is fully visible */
+    Memimage	*save;	/* save area for obscured parts */
+    Refreshfn	refreshfn;		/* function to call to refresh obscured parts if save==nil */
+    void		*refreshptr;	/* argument to refreshfn */
 };
+/*e: struct Memlayer */
 
 /*
  * These functions accept local coordinates
@@ -49,3 +54,4 @@ void			memlexpose(Memimage*, Rectangle);
 void			_memlsetclear(Memscreen*);
 int			memlorigin(Memimage*, Point, Point);
 void			memlnorefresh(Memimage*, Rectangle, void*);
+/*e: include/memlayer.h */

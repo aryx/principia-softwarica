@@ -1,3 +1,4 @@
+/*s: include/draw.h */
 #pragma src "/sys/src/libdraw"
 #pragma lib "libdraw.a"
 
@@ -22,206 +23,249 @@ typedef struct	Subfont Subfont;
 extern	int	Rfmt(Fmt*);
 extern	int	Pfmt(Fmt*);
 
+/*s: enum _anon_ */
 enum
 {
-	DOpaque		= 0xFFFFFFFF,
-	DTransparent	= 0x00000000,		/* only useful for allocimage, memfillcolor */
-	DBlack		= 0x000000FF,
-	DWhite		= 0xFFFFFFFF,
-	DRed		= 0xFF0000FF,
-	DGreen		= 0x00FF00FF,
-	DBlue		= 0x0000FFFF,
-	DCyan		= 0x00FFFFFF,
-	DMagenta		= 0xFF00FFFF,
-	DYellow		= 0xFFFF00FF,
-	DPaleyellow	= 0xFFFFAAFF,
-	DDarkyellow	= 0xEEEE9EFF,
-	DDarkgreen	= 0x448844FF,
-	DPalegreen	= 0xAAFFAAFF,
-	DMedgreen	= 0x88CC88FF,
-	DDarkblue	= 0x000055FF,
-	DPalebluegreen= 0xAAFFFFFF,
-	DPaleblue		= 0x0000BBFF,
-	DBluegreen	= 0x008888FF,
-	DGreygreen	= 0x55AAAAFF,
-	DPalegreygreen	= 0x9EEEEEFF,
-	DYellowgreen	= 0x99994CFF,
-	DMedblue		= 0x000099FF,
-	DGreyblue	= 0x005DBBFF,
-	DPalegreyblue	= 0x4993DDFF,
-	DPurpleblue	= 0x8888CCFF,
+    DOpaque		= 0xFFFFFFFF,
+    DTransparent	= 0x00000000,		/* only useful for allocimage, memfillcolor */
+    DBlack		= 0x000000FF,
+    DWhite		= 0xFFFFFFFF,
+    DRed		= 0xFF0000FF,
+    DGreen		= 0x00FF00FF,
+    DBlue		= 0x0000FFFF,
+    DCyan		= 0x00FFFFFF,
+    DMagenta		= 0xFF00FFFF,
+    DYellow		= 0xFFFF00FF,
+    DPaleyellow	= 0xFFFFAAFF,
+    DDarkyellow	= 0xEEEE9EFF,
+    DDarkgreen	= 0x448844FF,
+    DPalegreen	= 0xAAFFAAFF,
+    DMedgreen	= 0x88CC88FF,
+    DDarkblue	= 0x000055FF,
+    DPalebluegreen= 0xAAFFFFFF,
+    DPaleblue		= 0x0000BBFF,
+    DBluegreen	= 0x008888FF,
+    DGreygreen	= 0x55AAAAFF,
+    DPalegreygreen	= 0x9EEEEEFF,
+    DYellowgreen	= 0x99994CFF,
+    DMedblue		= 0x000099FF,
+    DGreyblue	= 0x005DBBFF,
+    DPalegreyblue	= 0x4993DDFF,
+    DPurpleblue	= 0x8888CCFF,
 
-	DNotacolor	= 0xFFFFFF00,
-	DNofill		= DNotacolor,
-	
+    DNotacolor	= 0xFFFFFF00,
+    DNofill		= DNotacolor,
+    
 };
+/*e: enum _anon_ */
 
+/*s: enum _anon_ (include/draw.h) */
 enum
 {
-	Displaybufsize	= 8000,
-	ICOSSCALE	= 1024,
-	Borderwidth =	4,
+    Displaybufsize	= 8000,
+    ICOSSCALE	= 1024,
+    Borderwidth =	4,
 };
+/*e: enum _anon_ (include/draw.h) */
 
+/*s: enum _anon_ (include/draw.h)2 */
 enum
 {
-	/* refresh methods */
-	Refbackup	= 0,
-	Refnone		= 1,
-	Refmesg		= 2
+    /* refresh methods */
+    Refbackup	= 0,
+    Refnone		= 1,
+    Refmesg		= 2
 };
+/*e: enum _anon_ (include/draw.h)2 */
+/*s: constant NOREFRESH */
 #define	NOREFRESH	((void*)-1)
+/*e: constant NOREFRESH */
 
+/*s: enum _anon_ (include/draw.h)3 */
 enum
 {
-	/* line ends */
-	Endsquare	= 0,
-	Enddisc		= 1,
-	Endarrow	= 2,
-	Endmask		= 0x1F
+    /* line ends */
+    Endsquare	= 0,
+    Enddisc		= 1,
+    Endarrow	= 2,
+    Endmask		= 0x1F
 };
+/*e: enum _anon_ (include/draw.h)3 */
 
+/*s: function ARROW */
 #define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
+/*e: function ARROW */
 
 typedef enum
 {
-	/* Porter-Duff compositing operators */
-	Clear	= 0,
+    /* Porter-Duff compositing operators */
+    Clear	= 0,
 
-	SinD	= 8,
-	DinS	= 4,
-	SoutD	= 2,
-	DoutS	= 1,
+    SinD	= 8,
+    DinS	= 4,
+    SoutD	= 2,
+    DoutS	= 1,
 
-	S		= SinD|SoutD,
-	SoverD	= SinD|SoutD|DoutS,
-	SatopD	= SinD|DoutS,
-	SxorD	= SoutD|DoutS,
+    S		= SinD|SoutD,
+    SoverD	= SinD|SoutD|DoutS,
+    SatopD	= SinD|DoutS,
+    SxorD	= SoutD|DoutS,
 
-	D		= DinS|DoutS,
-	DoverS	= DinS|DoutS|SoutD,
-	DatopS	= DinS|SoutD,
-	DxorS	= DoutS|SoutD,	/* == SxorD */
+    D		= DinS|DoutS,
+    DoverS	= DinS|DoutS|SoutD,
+    DatopS	= DinS|SoutD,
+    DxorS	= DoutS|SoutD,	/* == SxorD */
 
-	Ncomp = 12,
+    Ncomp = 12,
 } Drawop;
 
+/*s: enum _anon_ (include/draw.h)4 */
 /*
  * image channel descriptors 
  */
 enum {
-	CRed = 0,
-	CGreen,
-	CBlue,
-	CGrey,
-	CAlpha,
-	CMap,
-	CIgnore,
-	NChan,
+    CRed = 0,
+    CGreen,
+    CBlue,
+    CGrey,
+    CAlpha,
+    CMap,
+    CIgnore,
+    NChan,
 };
+/*e: enum _anon_ (include/draw.h)4 */
 
+/*s: function __DC */
 #define __DC(type, nbits)	((((type)&15)<<4)|((nbits)&15))
+/*e: function __DC */
+/*s: function CHAN1 */
 #define CHAN1(a,b)	__DC(a,b)
+/*e: function CHAN1 */
+/*s: function CHAN2 */
 #define CHAN2(a,b,c,d)	(CHAN1((a),(b))<<8|__DC((c),(d)))
+/*e: function CHAN2 */
+/*s: function CHAN3 */
 #define CHAN3(a,b,c,d,e,f)	(CHAN2((a),(b),(c),(d))<<8|__DC((e),(f)))
+/*e: function CHAN3 */
+/*s: function CHAN4 */
 #define CHAN4(a,b,c,d,e,f,g,h)	(CHAN3((a),(b),(c),(d),(e),(f))<<8|__DC((g),(h)))
+/*e: function CHAN4 */
 
+/*s: function NBITS */
 #define NBITS(c) ((c)&15)
+/*e: function NBITS */
+/*s: function TYPE */
 #define TYPE(c) (((c)>>4)&15)
+/*e: function TYPE */
 
+/*s: enum _anon_ (include/draw.h)5 */
 enum {
-	GREY1	= CHAN1(CGrey, 1),
-	GREY2	= CHAN1(CGrey, 2),
-	GREY4	= CHAN1(CGrey, 4),
-	GREY8	= CHAN1(CGrey, 8),
-	CMAP8	= CHAN1(CMap, 8),
-	RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
-	RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
-	RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
-	RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8),
-	ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),	/* stupid VGAs */
-	XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
-	BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
-	ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
-	XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
+    GREY1	= CHAN1(CGrey, 1),
+    GREY2	= CHAN1(CGrey, 2),
+    GREY4	= CHAN1(CGrey, 4),
+    GREY8	= CHAN1(CGrey, 8),
+    CMAP8	= CHAN1(CMap, 8),
+    RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
+    RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
+    RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
+    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8),
+    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),	/* stupid VGAs */
+    XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
+    BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
+    ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
+    XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
 };
+/*e: enum _anon_ (include/draw.h)5 */
 
 extern	char*	chantostr(char*, ulong);
 extern	ulong	strtochan(char*);
 extern	int		chantodepth(ulong);
 
+/*s: struct Point */
 struct	Point
 {
-	int	x;
-	int	y;
+    int	x;
+    int	y;
 };
+/*e: struct Point */
 
+/*s: struct Rectangle */
 struct Rectangle
 {
-	Point	min;
-	Point	max;
+    Point	min;
+    Point	max;
 };
+/*e: struct Rectangle */
 
 typedef void	(*Reffn)(Image*, Rectangle, void*);
 
+/*s: struct Screen */
 struct Screen
 {
-	Display	*display;	/* display holding data */
-	int	id;		/* id of system-held Screen */
-	Image	*image;		/* unused; for reference only */
-	Image	*fill;		/* color to paint behind windows */
+    Display	*display;	/* display holding data */
+    int	id;		/* id of system-held Screen */
+    Image	*image;		/* unused; for reference only */
+    Image	*fill;		/* color to paint behind windows */
 };
+/*e: struct Screen */
 
+/*s: struct Display */
 struct Display
 {
-	QLock		qlock;
-	int		locking;	/*program is using lockdisplay */
-	int		dirno;
-	int		fd;
-	int		reffd;
-	int		ctlfd;
-	int		imageid;
-	int		local;
-	void		(*error)(Display*, char*);
-	char		*devdir;
-	char		*windir;
-	char		oldlabel[64];
-	ulong		dataqid;
-	Image		*white;
-	Image		*black;
-	Image		*opaque;
-	Image		*transparent;
-	Image		*image;
-	uchar		*buf;
-	int		bufsize;
-	uchar		*bufp;
-	Font		*defaultfont;
-	Subfont		*defaultsubfont;
-	Image		*windows;
-	Image		*screenimage;
-	int		_isnewdisplay;
+    QLock		qlock;
+    int		locking;	/*program is using lockdisplay */
+    int		dirno;
+    int		fd;
+    int		reffd;
+    int		ctlfd;
+    int		imageid;
+    int		local;
+    void		(*error)(Display*, char*);
+    char		*devdir;
+    char		*windir;
+    char		oldlabel[64];
+    ulong		dataqid;
+    Image		*white;
+    Image		*black;
+    Image		*opaque;
+    Image		*transparent;
+    Image		*image;
+    uchar		*buf;
+    int		bufsize;
+    uchar		*bufp;
+    Font		*defaultfont;
+    Subfont		*defaultsubfont;
+    Image		*windows;
+    Image		*screenimage;
+    int		_isnewdisplay;
 };
+/*e: struct Display */
 
+/*s: struct Image */
 struct Image
 {
-	Display		*display;	/* display holding data */
-	int		id;		/* id of system-held Image */
-	Rectangle	r;		/* rectangle in data area, local coords */
-	Rectangle 	clipr;		/* clipping region */
-	int		depth;		/* number of bits per pixel */
-	ulong		chan;
-	int		repl;		/* flag: data replicates to tile clipr */
-	Screen		*screen;	/* 0 if not a window */
-	Image		*next;	/* next in list of windows */
+    Display		*display;	/* display holding data */
+    int		id;		/* id of system-held Image */
+    Rectangle	r;		/* rectangle in data area, local coords */
+    Rectangle 	clipr;		/* clipping region */
+    int		depth;		/* number of bits per pixel */
+    ulong		chan;
+    int		repl;		/* flag: data replicates to tile clipr */
+    Screen		*screen;	/* 0 if not a window */
+    Image		*next;	/* next in list of windows */
 };
+/*e: struct Image */
 
+/*s: struct RGB */
 struct RGB
 {
-	ulong	red;
-	ulong	green;
-	ulong	blue;
+    ulong	red;
+    ulong	green;
+    ulong	blue;
 };
+/*e: struct RGB */
 
+/*s: struct Fontchar */
 /*
  * Subfonts
  *
@@ -236,86 +280,103 @@ struct RGB
 
 struct	Fontchar
 {
-	int		x;		/* left edge of bits */
-	uchar		top;		/* first non-zero scan-line */
-	uchar		bottom;		/* last non-zero scan-line + 1 */
-	char		left;		/* offset of baseline */
-	uchar		width;		/* width of baseline */
+    int		x;		/* left edge of bits */
+    uchar		top;		/* first non-zero scan-line */
+    uchar		bottom;		/* last non-zero scan-line + 1 */
+    char		left;		/* offset of baseline */
+    uchar		width;		/* width of baseline */
 };
+/*e: struct Fontchar */
 
+/*s: struct Subfont */
 struct	Subfont
 {
-	char		*name;
-	short		n;		/* number of chars in font */
-	uchar		height;		/* height of image */
-	char		ascent;		/* top of image to baseline */
-	Fontchar 	*info;		/* n+1 character descriptors */
-	Image		*bits;		/* of font */
-	int		ref;
+    char		*name;
+    short		n;		/* number of chars in font */
+    uchar		height;		/* height of image */
+    char		ascent;		/* top of image to baseline */
+    Fontchar 	*info;		/* n+1 character descriptors */
+    Image		*bits;		/* of font */
+    int		ref;
 };
+/*e: struct Subfont */
 
+/*s: enum _anon_ (include/draw.h)6 */
 enum
 {
-	/* starting values */
-	LOG2NFCACHE =	6,
-	NFCACHE =	(1<<LOG2NFCACHE),	/* #chars cached */
-	NFLOOK =	5,			/* #chars to scan in cache */
-	NFSUBF =	2,			/* #subfonts to cache */
-	/* max value */
-	MAXFCACHE =	1024+NFLOOK,		/* upper limit */
-	MAXSUBF =	50,			/* generous upper limit */
-	/* deltas */
-	DSUBF = 	4,
-	/* expiry ages */
-	SUBFAGE	=	10000,
-	CACHEAGE =	10000
+    /* starting values */
+    LOG2NFCACHE =	6,
+    NFCACHE =	(1<<LOG2NFCACHE),	/* #chars cached */
+    NFLOOK =	5,			/* #chars to scan in cache */
+    NFSUBF =	2,			/* #subfonts to cache */
+    /* max value */
+    MAXFCACHE =	1024+NFLOOK,		/* upper limit */
+    MAXSUBF =	50,			/* generous upper limit */
+    /* deltas */
+    DSUBF = 	4,
+    /* expiry ages */
+    SUBFAGE	=	10000,
+    CACHEAGE =	10000
 };
+/*e: enum _anon_ (include/draw.h)6 */
 
+/*s: struct Cachefont */
 struct Cachefont
 {
-	Rune		min;	/* lowest rune value to be taken from subfont */
-	Rune		max;	/* highest rune value+1 to be taken from subfont */
-	int		offset;	/* position in subfont of character at min */
-	char		*name;			/* stored in font */
-	char		*subfontname;		/* to access subfont */
+    Rune		min;	/* lowest rune value to be taken from subfont */
+    Rune		max;	/* highest rune value+1 to be taken from subfont */
+    int		offset;	/* position in subfont of character at min */
+    char		*name;			/* stored in font */
+    char		*subfontname;		/* to access subfont */
 };
+/*e: struct Cachefont */
 
+/*s: struct Cacheinfo */
 struct Cacheinfo
 {
-	ushort		x;		/* left edge of bits */
-	uchar		width;		/* width of baseline */
-	schar		left;		/* offset of baseline */
-	Rune		value;	/* value of character at this slot in cache */
-	ushort		age;
+    ushort		x;		/* left edge of bits */
+    uchar		width;		/* width of baseline */
+    schar		left;		/* offset of baseline */
+    Rune		value;	/* value of character at this slot in cache */
+    ushort		age;
 };
+/*e: struct Cacheinfo */
 
+/*s: struct Cachesubf */
 struct Cachesubf
 {
-	ulong		age;	/* for replacement */
-	Cachefont	*cf;	/* font info that owns us */
-	Subfont		*f;	/* attached subfont */
+    ulong		age;	/* for replacement */
+    Cachefont	*cf;	/* font info that owns us */
+    Subfont		*f;	/* attached subfont */
 };
+/*e: struct Cachesubf */
 
+/*s: struct Font */
 struct Font
 {
-	char		*name;
-	Display		*display;
-	short		height;	/* max height of image, interline spacing */
-	short		ascent;	/* top of image to baseline */
-	short		width;	/* widest so far; used in caching only */	
-	short		nsub;	/* number of subfonts */
-	ulong		age;	/* increasing counter; used for LRU */
-	int		maxdepth;	/* maximum depth of all loaded subfonts */
-	int		ncache;	/* size of cache */
-	int		nsubf;	/* size of subfont list */
-	Cacheinfo	*cache;
-	Cachesubf	*subf;
-	Cachefont	**sub;	/* as read from file */
-	Image		*cacheimage;
+    char		*name;
+    Display		*display;
+    short		height;	/* max height of image, interline spacing */
+    short		ascent;	/* top of image to baseline */
+    short		width;	/* widest so far; used in caching only */	
+    short		nsub;	/* number of subfonts */
+    ulong		age;	/* increasing counter; used for LRU */
+    int		maxdepth;	/* maximum depth of all loaded subfonts */
+    int		ncache;	/* size of cache */
+    int		nsubf;	/* size of subfont list */
+    Cacheinfo	*cache;
+    Cachesubf	*subf;
+    Cachefont	**sub;	/* as read from file */
+    Image		*cacheimage;
 };
+/*e: struct Font */
 
+/*s: function Dx */
 #define	Dx(r)	((r).max.x-(r).min.x)
+/*e: function Dx */
+/*s: function Dy */
 #define	Dy(r)	((r).max.y-(r).min.y)
+/*e: function Dy */
 
 /*
  * One of a kind
@@ -505,19 +566,37 @@ extern	int	_cursorfd;
 extern	int	_drawdebug;	/* set to 1 to see errors from flushimage */
 extern	void	_setdrawop(Display*, Drawop);
 
+/*s: function BGSHORT */
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
+/*e: function BGSHORT */
+/*s: function BGLONG */
 #define	BGLONG(p)		((BGSHORT(p)<<0) | (BGSHORT(p+2)<<16))
+/*e: function BGLONG */
+/*s: function BPSHORT */
 #define	BPSHORT(p, v)		((p)[0]=(v), (p)[1]=((v)>>8))
+/*e: function BPSHORT */
+/*s: function BPLONG */
 #define	BPLONG(p, v)		(BPSHORT(p, (v)), BPSHORT(p+2, (v)>>16))
+/*e: function BPLONG */
 
+/*s: constant NMATCH */
 /*
  * Compressed image file parameters and helper routines
  */
 #define	NMATCH	3		/* shortest match possible */
+/*e: constant NMATCH */
+/*s: constant NRUN */
 #define	NRUN	(NMATCH+31)	/* longest match possible */
+/*e: constant NRUN */
+/*s: constant NMEM */
 #define	NMEM	1024		/* window size */
+/*e: constant NMEM */
+/*s: constant NDUMP */
 #define	NDUMP	128		/* maximum length of dump */
+/*e: constant NDUMP */
+/*s: constant NCBLOCK */
 #define	NCBLOCK	6000		/* size of compressed blocks */
+/*e: constant NCBLOCK */
 extern	void	_twiddlecompressed(uchar*, int);
 extern	int	_compblocksize(Rectangle, int);
 
@@ -525,3 +604,4 @@ extern	int	_compblocksize(Rectangle, int);
 // extern	int		log2[];	/* was used by libmemlayer/line.c */
 extern	ulong	drawld2chan[];
 extern	void		drawsetdebug(int);
+/*e: include/draw.h */

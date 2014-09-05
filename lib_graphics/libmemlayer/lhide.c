@@ -1,9 +1,11 @@
+/*s: lib_graphics/libmemlayer/lhide.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <memdraw.h>
 #include <memlayer.h>
 
+/*s: function lhideop */
 /*
  * Hide puts that portion of screenr now on the screen into the window's save area.
  * Expose puts that portion of screenr now in the save area onto the screen.
@@ -18,50 +20,58 @@ static
 void
 lhideop(Memimage *src, Rectangle screenr, Rectangle clipr, void *etc, int insave)
 {
-	Rectangle r;
-	Memlayer *l;
+    Rectangle r;
+    Memlayer *l;
 
-	USED(clipr.min.x);
-	USED(insave);
-	l = etc;
-	if(src != l->save){	/* do nothing if src is already in save area */
-		r = rectsubpt(screenr, l->delta);
-		memdraw(l->save, r, src, screenr.min, nil, screenr.min, S);
-	}
+    USED(clipr.min.x);
+    USED(insave);
+    l = etc;
+    if(src != l->save){	/* do nothing if src is already in save area */
+        r = rectsubpt(screenr, l->delta);
+        memdraw(l->save, r, src, screenr.min, nil, screenr.min, S);
+    }
 }
+/*e: function lhideop */
 
+/*s: function memlhide */
 void
 memlhide(Memimage *i, Rectangle screenr)
 {
-	if(i->layer->save == nil)
-		return;
-	if(rectclip(&screenr, i->layer->screen->image->r) == 0)
-		return;
-	_memlayerop(lhideop, i, screenr, screenr, i->layer);
+    if(i->layer->save == nil)
+        return;
+    if(rectclip(&screenr, i->layer->screen->image->r) == 0)
+        return;
+    _memlayerop(lhideop, i, screenr, screenr, i->layer);
 }
+/*e: function memlhide */
 
+/*s: function lexposeop */
 static
 void
 lexposeop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave)
 {
-	Memlayer *l;
-	Rectangle r;
+    Memlayer *l;
+    Rectangle r;
 
-	USED(clipr.min.x);
-	if(insave)	/* if dst is save area, don't bother */
-		return;
-	l = etc;
-	r = rectsubpt(screenr, l->delta);
-	if(l->save)
-		memdraw(dst, screenr, l->save, r.min, nil, r.min, S);
-	else
-		l->refreshfn(dst, r, l->refreshptr);
+    USED(clipr.min.x);
+    if(insave)	/* if dst is save area, don't bother */
+        return;
+    l = etc;
+    r = rectsubpt(screenr, l->delta);
+    if(l->save)
+        memdraw(dst, screenr, l->save, r.min, nil, r.min, S);
+    else
+        l->refreshfn(dst, r, l->refreshptr);
 }
+/*e: function lexposeop */
 
+/*s: function memlexpose */
 void
 memlexpose(Memimage *i, Rectangle screenr)
 {
-	if(rectclip(&screenr, i->layer->screen->image->r) == 0)
-		return;
-	_memlayerop(lexposeop, i, screenr, screenr, i->layer);
+    if(rectclip(&screenr, i->layer->screen->image->r) == 0)
+        return;
+    _memlayerop(lexposeop, i, screenr, screenr, i->layer);
 }
+/*e: function memlexpose */
+/*e: lib_graphics/libmemlayer/lhide.c */

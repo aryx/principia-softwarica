@@ -1,3 +1,4 @@
+/*s: windows/libpanel/panel.h */
 //#pragma	src	"/sys/src/libpanel"
 //#pragma	lib	"libpanel.a"
 typedef struct Scroll Scroll;
@@ -5,105 +6,177 @@ typedef struct Panel Panel;		/* a Graphical User Interface element */
 typedef struct Rtext Rtext;		/* formattable text */
 typedef void Icon;			/* Always used as Icon * -- Image or char */
 typedef struct Idol Idol;		/* A picture/text combo */
+/*s: struct Scroll */
 struct Scroll{
-	Point pos, size;
+    Point pos, size;
 };
+/*e: struct Scroll */
+/*s: struct Rtext */
 struct Rtext{
-	int flags;		/* responds to hits? text selection? */
-	void *user;		/* user data */
-	int space;		/* how much space before, if no break */
-	int indent;		/* how much space before, after a break */
-	Image *b;		/* what to display, if nonzero */
-	Panel *p;		/* what to display, if nonzero and b==0 */
-	Font *font;		/* font in which to draw text */
-	char *text;		/* what to display, if b==0 and p==0 */
-	Rtext *next;		/* next piece */
-	/* private below */
-	Rtext *nextline;	/* links line to line */
-	Rtext *last;		/* last, for append */
-	Rectangle r;		/* where to draw, if origin were Pt(0,0) */
-	int topy;		/* y coord of top of line */
-	int wid;		/* not including space */
+    int flags;		/* responds to hits? text selection? */
+    void *user;		/* user data */
+    int space;		/* how much space before, if no break */
+    int indent;		/* how much space before, after a break */
+    Image *b;		/* what to display, if nonzero */
+    Panel *p;		/* what to display, if nonzero and b==0 */
+    Font *font;		/* font in which to draw text */
+    char *text;		/* what to display, if b==0 and p==0 */
+    Rtext *next;		/* next piece */
+    /* private below */
+    Rtext *nextline;	/* links line to line */
+    Rtext *last;		/* last, for append */
+    Rectangle r;		/* where to draw, if origin were Pt(0,0) */
+    int topy;		/* y coord of top of line */
+    int wid;		/* not including space */
 };
+/*e: struct Rtext */
+/*s: struct Panel */
 struct Panel{
-	Point ipad, pad;				/* extra space inside and outside */
-	Point fixedsize;				/* size of Panel, if FIXED */
-	int user;					/* available for user */
-	void *userp;					/* available for user */
-	Rectangle r;					/* where the Panel goes */
-	/* private below */
-	Panel *next;					/* It's a list! */
-	Panel *child, *echild, *parent;			/* No, it's a tree! */
-	Image *b;					/* where we're drawn */
-	int flags;					/* position flags, see below */
-	char *kind;					/* what kind of panel? */
-	int state;					/* for hitting & drawing purposes */
-	Point size;					/* space for this Panel */
-	Point sizereq;					/* size requested by this Panel */
-	Point childreq;					/* total size needed by children */
-	Panel *lastmouse;				/* who got the last mouse event? */
-	Panel *scrollee;				/* pointer to scrolled window */
-	Panel *xscroller, *yscroller;			/* pointers to scroll bars */
-	Scroll scr;					/* scroll data */
-	void *data;					/* kind-specific data */
-	void (*draw)(Panel *);				/* draw panel and children */
-	int (*pri)(Panel *, Point);			/* priority for hitting */
-	int (*hit)(Panel *, Mouse *);			/* process mouse event */
-	void (*type)(Panel *, Rune);			/* process keyboard event */
-	Point (*getsize)(Panel *, Point);		/* return size, given child size */
-	void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
-	void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
-	void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
-	void (*free)(Panel *);				/* free fields of data when done */
-	char* (*snarf)(Panel *);			/* snarf text from panel */
-	void (*paste)(Panel *, char *);			/* paste text into panel */
+    Point ipad, pad;				/* extra space inside and outside */
+    Point fixedsize;				/* size of Panel, if FIXED */
+    int user;					/* available for user */
+    void *userp;					/* available for user */
+    Rectangle r;					/* where the Panel goes */
+    /* private below */
+    Panel *next;					/* It's a list! */
+    Panel *child, *echild, *parent;			/* No, it's a tree! */
+    Image *b;					/* where we're drawn */
+    int flags;					/* position flags, see below */
+    char *kind;					/* what kind of panel? */
+    int state;					/* for hitting & drawing purposes */
+    Point size;					/* space for this Panel */
+    Point sizereq;					/* size requested by this Panel */
+    Point childreq;					/* total size needed by children */
+    Panel *lastmouse;				/* who got the last mouse event? */
+    Panel *scrollee;				/* pointer to scrolled window */
+    Panel *xscroller, *yscroller;			/* pointers to scroll bars */
+    Scroll scr;					/* scroll data */
+    void *data;					/* kind-specific data */
+    void (*draw)(Panel *);				/* draw panel and children */
+    int (*pri)(Panel *, Point);			/* priority for hitting */
+    int (*hit)(Panel *, Mouse *);			/* process mouse event */
+    void (*type)(Panel *, Rune);			/* process keyboard event */
+    Point (*getsize)(Panel *, Point);		/* return size, given child size */
+    void (*childspace)(Panel *, Point *, Point *);	/* child ul & size given our size */
+    void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
+    void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
+    void (*free)(Panel *);				/* free fields of data when done */
+    char* (*snarf)(Panel *);			/* snarf text from panel */
+    void (*paste)(Panel *, char *);			/* paste text into panel */
 };
+/*e: struct Panel */
+/*s: constant PACK */
 /*
  * Panel flags
  */
 #define	PACK	0x0007		/* which side of the parent is the Panel attached to? */
+/*e: constant PACK */
+/*s: constant PACKN */
 #define		PACKN	0x0000
+/*e: constant PACKN */
+/*s: constant PACKE */
 #define		PACKE	0x0001
+/*e: constant PACKE */
+/*s: constant PACKS */
 #define		PACKS	0x0002
+/*e: constant PACKS */
+/*s: constant PACKW */
 #define		PACKW	0x0003
+/*e: constant PACKW */
+/*s: constant PACKCEN */
 #define		PACKCEN	0x0004	/* only used by pulldown */
+/*e: constant PACKCEN */
+/*s: constant FILLX */
 #define	FILLX	0x0008		/* grow horizontally to fill the available space */
+/*e: constant FILLX */
+/*s: constant FILLY */
 #define	FILLY	0x0010		/* grow vertically to fill the available space */
+/*e: constant FILLY */
+/*s: constant PLACE */
 #define	PLACE	0x01e0		/* which side of its space should the Panel adhere to? */
+/*e: constant PLACE */
+/*s: constant PLACECEN */
 #define		PLACECEN 0x0000
+/*e: constant PLACECEN */
+/*s: constant PLACES */
 #define		PLACES	0x0020
+/*e: constant PLACES */
+/*s: constant PLACEE */
 #define		PLACEE	0x0040
+/*e: constant PLACEE */
+/*s: constant PLACEW */
 #define		PLACEW	0x0060
+/*e: constant PLACEW */
+/*s: constant PLACEN */
 #define		PLACEN	0x0080
+/*e: constant PLACEN */
+/*s: constant PLACENE */
 #define		PLACENE	0x00a0
+/*e: constant PLACENE */
+/*s: constant PLACENW */
 #define		PLACENW	0x00c0
+/*e: constant PLACENW */
+/*s: constant PLACESE */
 #define		PLACESE	0x00e0
+/*e: constant PLACESE */
+/*s: constant PLACESW */
 #define		PLACESW	0x0100
+/*e: constant PLACESW */
+/*s: constant EXPAND */
 #define	EXPAND	0x0200		/* use up all extra space in the parent */
+/*e: constant EXPAND */
+/*s: constant FIXED */
 #define	FIXED	0x0c00		/* don't pass children's size requests through to parent */
+/*e: constant FIXED */
+/*s: constant FIXEDX */
 #define	FIXEDX	0x0400
+/*e: constant FIXEDX */
+/*s: constant FIXEDY */
 #define	FIXEDY	0x0800
+/*e: constant FIXEDY */
+/*s: constant MAXX */
 #define	MAXX	0x1000		/* make x size as big as biggest sibling's */
+/*e: constant MAXX */
+/*s: constant MAXY */
 #define	MAXY	0x2000		/* make y size as big as biggest sibling's */
+/*e: constant MAXY */
+/*s: constant BITMAP */
 #define	BITMAP	0x4000		/* text argument is a bitmap, not a string */
+/*e: constant BITMAP */
+/*s: constant USERFL */
 #define USERFL	0x100000	/* start of user flag */
+/*e: constant USERFL */
 
+/*s: constant OUT */
 /*
  * An extra bit in Mouse.buttons
  */
 #define	OUT	8			/* Mouse.buttons bit, set when mouse leaves Panel */
+/*e: constant OUT */
+/*s: constant PRI_NORMAL */
 /*
  * Priorities
  */
 #define	PRI_NORMAL	0		/* ordinary panels */
+/*e: constant PRI_NORMAL */
+/*s: constant PRI_POPUP */
 #define	PRI_POPUP	1		/* popup menus */
+/*e: constant PRI_POPUP */
+/*s: constant PRI_SCROLLBAR */
 #define	PRI_SCROLLBAR	2		/* scroll bars */
+/*e: constant PRI_SCROLLBAR */
 
+/*s: constant PL_HOT */
 /* Rtext.flags */
 #define PL_HOT		1
+/*e: constant PL_HOT */
+/*s: constant PL_SEL */
 #define PL_SEL		2
+/*e: constant PL_SEL */
 
+/*s: global plkbfocus */
 Panel *plkbfocus;			/* the panel in keyboard focus */
+/*e: global plkbfocus */
 
 int plinit(int);			/* initialization */
 void plpack(Panel *, Rectangle);	/* figure out where to put the Panel & children */
@@ -195,3 +268,4 @@ void plputsnarf(char *);
 char *plgetsnarf(void);
 void plsnarf(Panel *);			/* snarf a panel */
 void plpaste(Panel *);			/* paste a panel */
+/*e: windows/libpanel/panel.h */

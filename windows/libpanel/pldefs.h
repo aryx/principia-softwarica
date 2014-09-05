@@ -1,3 +1,4 @@
+/*s: windows/libpanel/pldefs.h */
 /*
  * Definitions for internal use only
  */
@@ -9,40 +10,54 @@ int pl_rtfmt(Rtext *, int);
 void pl_rtdraw(Image *, Rectangle, Rtext *, int);
 void pl_rtredraw(Image *, Rectangle, Rtext *, int, int);
 Rtext *pl_rthit(Rtext *, int, Point, Point);
+/*s: constant HITME */
 #define	HITME	0x08000		/* tells ptinpanel not to look at children */
+/*e: constant HITME */
+/*s: constant LEAF */
 #define	LEAF	0x10000		/* newpanel will refuse to attach children */
+/*e: constant LEAF */
+/*s: constant INVIS */
 #define	INVIS	0x20000		/* don't draw this */
+/*e: constant INVIS */
+/*s: constant REMOUSE */
 #define	REMOUSE	0x40000		/* send next mouse event here, even if not inside */
+/*e: constant REMOUSE */
+/*s: enum _anon_ (windows/libpanel/pldefs.h) */
 /*
  * States, also styles
  */
 enum{
-	UP,
-	DOWN1,
-	DOWN2,
-	DOWN3,
-	DOWN,
-	PASSIVE,
-	FRAME
+    UP,
+    DOWN1,
+    DOWN2,
+    DOWN3,
+    DOWN,
+    PASSIVE,
+    FRAME
 };
+/*e: enum _anon_ (windows/libpanel/pldefs.h) */
+/*s: enum _anon_ (windows/libpanel/pldefs.h)2 */
 /*
  * Scroll flags
  */
 enum{
-	SCROLLUP,
-	SCROLLDOWN,
-	SCROLLABSY,
-	SCROLLLEFT,
-	SCROLLRIGHT,
-	SCROLLABSX,
+    SCROLLUP,
+    SCROLLDOWN,
+    SCROLLABSY,
+    SCROLLLEFT,
+    SCROLLRIGHT,
+    SCROLLABSX,
 };
+/*e: enum _anon_ (windows/libpanel/pldefs.h)2 */
+/*s: enum _anon_ (windows/libpanel/pldefs.h)3 */
 /*
  * Scrollbar, slider orientations
  */
 enum{
-	HORIZ,
-	VERT
+    HORIZ,
+    VERT
 };
+/*e: enum _anon_ (windows/libpanel/pldefs.h)3 */
 Panel *pl_newpanel(Panel *, int);	/* make a new Panel, given parent & data size */
 void *pl_emalloc(int);			/* allocate some space, exit on error */
 void *pl_erealloc(void*,int);		/* reallocate some space, exit on error */
@@ -80,18 +95,20 @@ int pl_runewidth(Font *, char *);
  * These could be separated out into a separate library.
  */
 typedef struct Textwin Textwin;
+/*s: struct Textwin */
 struct Textwin{
-	Rune *text, *etext, *eslack;	/* text, with some slack off the end */
-	int top, bot;			/* range of runes visible on screen */
-	int sel0, sel1;			/* selection */
-	Point *loc, *eloc;		/* ul corners of visible runes (+1 more at end!) */
-	Image *b;			/* bitmap the text is drawn in */
-	Rectangle r;			/* rectangle the text is drawn in */
-	Font *font;			/* font text is drawn in */
-	int hgt;			/* same as font->height */
-	int tabstop;			/* tab settings are every tabstop pixels */
-	int mintab;			/* the minimum size of a tab */
+    Rune *text, *etext, *eslack;	/* text, with some slack off the end */
+    int top, bot;			/* range of runes visible on screen */
+    int sel0, sel1;			/* selection */
+    Point *loc, *eloc;		/* ul corners of visible runes (+1 more at end!) */
+    Image *b;			/* bitmap the text is drawn in */
+    Rectangle r;			/* rectangle the text is drawn in */
+    Font *font;			/* font text is drawn in */
+    int hgt;			/* same as font->height */
+    int tabstop;			/* tab settings are every tabstop pixels */
+    int mintab;			/* the minimum size of a tab */
 };
+/*e: struct Textwin */
 Textwin *twnew(Image *, Font *, Rune *, int);
 void twfree(Textwin *);
 void twhilite(Textwin *, int, int, int);
@@ -102,3 +119,4 @@ int twpt2rune(Textwin *, Point);
 void twreshape(Textwin *, Rectangle);
 void twmove(Textwin *, Point);
 void plemove(Panel *, Point);
+/*e: windows/libpanel/pldefs.h */

@@ -1,3 +1,4 @@
+/*s: windows/rio/fns.h */
 void	keyboardsend(char*, int);
 int	whide(Window*);
 int	wunhide(int);
@@ -30,6 +31,13 @@ void	getsnarf(void);
 void	timerinit(void);
 int	goodrect(Rectangle);
 
+/*s: function runemalloc */
 #define	runemalloc(n)		malloc((n)*sizeof(Rune))
+/*e: function runemalloc */
+/*s: function runerealloc */
 #define	runerealloc(a, n)	realloc(a, (n)*sizeof(Rune))
+/*e: function runerealloc */
+/*s: function runemove */
 #define	runemove(a, b, n)	memmove(a, b, (n)*sizeof(Rune))
+/*e: function runemove */
+/*e: windows/rio/fns.h */

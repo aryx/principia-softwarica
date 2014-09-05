@@ -1,55 +1,64 @@
+/*s: include/frame.h */
 #pragma	src	"/sys/src/libframe"
 #pragma	lib	"libframe.a"
 
 typedef struct Frbox Frbox;
 typedef struct Frame Frame;
 
+/*s: enum _anon_ (include/frame.h) */
 enum{
-	BACK,
-	HIGH,
-	BORD,
-	TEXT,
-	HTEXT,
-	NCOL
+    BACK,
+    HIGH,
+    BORD,
+    TEXT,
+    HTEXT,
+    NCOL
 };
+/*e: enum _anon_ (include/frame.h) */
 
+/*s: constant FRTICKW */
 #define	FRTICKW	3
+/*e: constant FRTICKW */
 
+/*s: struct Frbox */
 struct Frbox
 {
-	long		wid;		/* in pixels */
-	long		nrune;		/* <0 ==> negate and treat as break char */
-	union{
-		uchar	*ptr;
-		struct{
-			short	bc;	/* break char */
-			short	minwid;
-		};
-	};
+    long		wid;		/* in pixels */
+    long		nrune;		/* <0 ==> negate and treat as break char */
+    union{
+        uchar	*ptr;
+        struct{
+            short	bc;	/* break char */
+            short	minwid;
+        };
+    };
 };
+/*e: struct Frbox */
 
+/*s: struct Frame */
 struct Frame
 {
-	Font		*font;		/* of chars in the frame */
-	Display		*display;	/* on which frame appears */
-	Image		*b;		/* on which frame appears */
-	Image		*cols[NCOL];	/* text and background colors */
-	Rectangle	r;		/* in which text appears */
-	Rectangle	entire;		/* of full frame */
-	void			(*scroll)(Frame*, int);	/* scroll function provided by application */
-	Frbox		*box;
-	ulong		p0, p1;		/* selection */
-	ushort		nbox, nalloc;
-	ushort		maxtab;		/* max size of tab, in pixels */
-	ushort		nchars;		/* # runes in frame */
-	ushort		nlines;		/* # lines with text */
-	ushort		maxlines;	/* total # lines in frame */
-	ushort		lastlinefull;	/* last line fills frame */
-	ushort		modified;	/* changed since frselect() */
-	Image		*tick;	/* typing tick */
-	Image		*tickback;	/* saved image under tick */
-	int			ticked;	/* flag: is tick onscreen? */
+    Font		*font;		/* of chars in the frame */
+    Display		*display;	/* on which frame appears */
+    Image		*b;		/* on which frame appears */
+    Image		*cols[NCOL];	/* text and background colors */
+    Rectangle	r;		/* in which text appears */
+    Rectangle	entire;		/* of full frame */
+    void			(*scroll)(Frame*, int);	/* scroll function provided by application */
+    Frbox		*box;
+    ulong		p0, p1;		/* selection */
+    ushort		nbox, nalloc;
+    ushort		maxtab;		/* max size of tab, in pixels */
+    ushort		nchars;		/* # runes in frame */
+    ushort		nlines;		/* # lines with text */
+    ushort		maxlines;	/* total # lines in frame */
+    ushort		lastlinefull;	/* last line fills frame */
+    ushort		modified;	/* changed since frselect() */
+    Image		*tick;	/* typing tick */
+    Image		*tickback;	/* saved image under tick */
+    int			ticked;	/* flag: is tick onscreen? */
 };
+/*e: struct Frame */
 
 ulong	frcharofpt(Frame*, Point);
 Point	frptofchar(Frame*, ulong);
@@ -89,5 +98,10 @@ void	frtick(Frame*, Point, int);
 void	frinittick(Frame*);
 void	frredraw(Frame*);
 
+/*s: function NRUNE */
 #define	NRUNE(b)	((b)->nrune<0? 1 : (b)->nrune)
+/*e: function NRUNE */
+/*s: function NBYTE */
 #define	NBYTE(b)	strlen((char*)(b)->ptr)
+/*e: function NBYTE */
+/*e: include/frame.h */

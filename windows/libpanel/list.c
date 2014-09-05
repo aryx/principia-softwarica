@@ -1,3 +1,4 @@
+/*s: windows/libpanel/list.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -5,186 +6,211 @@
 #include <panel.h>
 #include "pldefs.h"
 typedef struct List List;
+/*s: struct List */
 struct List{
-	void (*hit)(Panel *, int, int);	/* call user back on hit */
-	char *(*gen)(Panel *, int);	/* return text given index or 0 if out of range */
-	int lo;				/* indices of first, last items displayed */
-	int sel;			/* index of hilited item */
-	int len;			/* # of items in list */
-	Rectangle listr;
-	Point minsize;
-	int buttons;
+    void (*hit)(Panel *, int, int);	/* call user back on hit */
+    char *(*gen)(Panel *, int);	/* return text given index or 0 if out of range */
+    int lo;				/* indices of first, last items displayed */
+    int sel;			/* index of hilited item */
+    int len;			/* # of items in list */
+    Rectangle listr;
+    Point minsize;
+    int buttons;
 };
+/*e: struct List */
+/*s: constant MAXHGT */
 #define	MAXHGT	12
+/*e: constant MAXHGT */
+/*s: function pl_listsel */
 void pl_listsel(Panel *p, int sel, int on){
-	List *lp;
-	int hi;
-	Rectangle r;
-	lp=p->data;
-	hi=lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height;
-	if(lp->lo>=0 && lp->lo<=sel && sel<hi && sel<lp->len){
-		r=lp->listr;
-		r.min.y+=(sel-lp->lo)*font->height;
-		r.max.y=r.min.y+font->height;
-		if(on)
-			pl_highlight(p->b, r);
-		else{
-			pl_fill(p->b, r);
-			pl_drawicon(p->b, r, PLACEW, 0, lp->gen(p, sel));
-		}
-	}
+    List *lp;
+    int hi;
+    Rectangle r;
+    lp=p->data;
+    hi=lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height;
+    if(lp->lo>=0 && lp->lo<=sel && sel<hi && sel<lp->len){
+        r=lp->listr;
+        r.min.y+=(sel-lp->lo)*font->height;
+        r.max.y=r.min.y+font->height;
+        if(on)
+            pl_highlight(p->b, r);
+        else{
+            pl_fill(p->b, r);
+            pl_drawicon(p->b, r, PLACEW, 0, lp->gen(p, sel));
+        }
+    }
 }
+/*e: function pl_listsel */
+/*s: function pl_liststrings */
 void pl_liststrings(Panel *p, int lo, int hi, Rectangle r){
-	Panel *sb;
-	List *lp;
-	char *s;
-	int i;
-	lp=p->data;
-	for(i=lo;i!=hi && (s=lp->gen(p, i));i++){
-		r.max.y=r.min.y+font->height;
-		pl_drawicon(p->b, r, PLACEW, 0, s);
-		r.min.y+=font->height;
-	}
-	if(lo<=lp->sel && lp->sel<hi) pl_listsel(p, lp->sel, 1);
-	sb=p->yscroller;
-	if(sb && sb->setscrollbar)
-		sb->setscrollbar(sb, lp->lo,
-			lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height, lp->len);
+    Panel *sb;
+    List *lp;
+    char *s;
+    int i;
+    lp=p->data;
+    for(i=lo;i!=hi && (s=lp->gen(p, i));i++){
+        r.max.y=r.min.y+font->height;
+        pl_drawicon(p->b, r, PLACEW, 0, s);
+        r.min.y+=font->height;
+    }
+    if(lo<=lp->sel && lp->sel<hi) pl_listsel(p, lp->sel, 1);
+    sb=p->yscroller;
+    if(sb && sb->setscrollbar)
+        sb->setscrollbar(sb, lp->lo,
+            lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height, lp->len);
 }
+/*e: function pl_liststrings */
+/*s: function pl_drawlist */
 void pl_drawlist(Panel *p){
-	List *lp;
-	lp=p->data;
-	lp->listr=pl_box(p->b, p->r, UP);
-	pl_liststrings(p, lp->lo, lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height,
-		lp->listr);
+    List *lp;
+    lp=p->data;
+    lp->listr=pl_box(p->b, p->r, UP);
+    pl_liststrings(p, lp->lo, lp->lo+(lp->listr.max.y-lp->listr.min.y)/font->height,
+        lp->listr);
 }
+/*e: function pl_drawlist */
+/*s: function pl_hitlist */
 int pl_hitlist(Panel *p, Mouse *m){
-	int oldsel, hitme;
-	Point ul, size;
-	List *lp;
-	lp=p->data;
-	hitme=0;
-	ul=p->r.min;
-	size=subpt(p->r.max, p->r.min);
-	pl_interior(p->state, &ul, &size);
-	oldsel=lp->sel;
-	if(m->buttons&OUT){
-		p->state=UP;
-		if(m->buttons&~OUT) lp->sel=-1;
-	}
-	else if(p->state==DOWN || m->buttons&7){
-		lp->sel=(m->xy.y-ul.y)/font->height+lp->lo;
-		if(m->buttons&7){
-			lp->buttons=m->buttons;
-			p->state=DOWN;
-		}
-		else{
-			hitme=1;
-			p->state=UP;
-		}
-	}
-	if(oldsel!=lp->sel){
-		pl_listsel(p, oldsel, 0);
-		pl_listsel(p, lp->sel, 1);
-	}
-	if(hitme && 0<=lp->sel && lp->sel<lp->len && lp->hit)
-		lp->hit(p, lp->buttons, lp->sel);
-	return 0;
+    int oldsel, hitme;
+    Point ul, size;
+    List *lp;
+    lp=p->data;
+    hitme=0;
+    ul=p->r.min;
+    size=subpt(p->r.max, p->r.min);
+    pl_interior(p->state, &ul, &size);
+    oldsel=lp->sel;
+    if(m->buttons&OUT){
+        p->state=UP;
+        if(m->buttons&~OUT) lp->sel=-1;
+    }
+    else if(p->state==DOWN || m->buttons&7){
+        lp->sel=(m->xy.y-ul.y)/font->height+lp->lo;
+        if(m->buttons&7){
+            lp->buttons=m->buttons;
+            p->state=DOWN;
+        }
+        else{
+            hitme=1;
+            p->state=UP;
+        }
+    }
+    if(oldsel!=lp->sel){
+        pl_listsel(p, oldsel, 0);
+        pl_listsel(p, lp->sel, 1);
+    }
+    if(hitme && 0<=lp->sel && lp->sel<lp->len && lp->hit)
+        lp->hit(p, lp->buttons, lp->sel);
+    return 0;
 }
+/*e: function pl_hitlist */
+/*s: function pl_scrolllist */
 void pl_scrolllist(Panel *p, int dir, int buttons, int val, int len){
-	Point ul, size;
-	int nlist, oldlo, hi, nline, y;
-	List *lp;
-	Rectangle r;
-	lp=p->data;
-	ul=p->r.min;
-	size=subpt(p->r.max, p->r.min);
-	pl_interior(p->state, &ul, &size);
-	nlist=size.y/font->height;
-	oldlo=lp->lo;
-	if(dir==VERT) switch(buttons){
-	case 1: lp->lo-=nlist*val/len; break;
-	case 2: lp->lo=lp->len*val/len; break;
-	case 4:	lp->lo+=nlist*val/len; break;
-	}
-	if(lp->lo<0) lp->lo=0;
-	if(lp->lo>=lp->len) lp->lo=lp->len-1;
-	if(lp->lo==oldlo) return;
-	p->scr.pos.y=lp->lo;
-	r=lp->listr;
-	nline=(r.max.y-r.min.y)/font->height;
-	hi=lp->lo+nline;
-	if(hi<=oldlo || lp->lo>=oldlo+nline){
-		pl_box(p->b, r, PASSIVE);
-		pl_liststrings(p, lp->lo, hi, r);
-	}
-	else if(lp->lo<oldlo){
-		y=r.min.y+(oldlo-lp->lo)*font->height;
-		pl_cpy(p->b, Pt(r.min.x, y), 
-			Rect(r.min.x, r.min.y, r.max.x, r.min.y+(hi-oldlo)*font->height));
-		r.max.y=y;
-		pl_box(p->b, r, PASSIVE);
-		pl_liststrings(p, lp->lo, oldlo, r);
-	}
-	else{
-		pl_cpy(p->b, r.min, Rect(r.min.x, r.min.y+(lp->lo-oldlo)*font->height,
-			r.max.x, r.max.y));
-		r.min.y=r.min.y+(oldlo+nline-lp->lo)*font->height;
-		pl_box(p->b, r, PASSIVE);
-		pl_liststrings(p, oldlo+nline, hi, r);
-	}
+    Point ul, size;
+    int nlist, oldlo, hi, nline, y;
+    List *lp;
+    Rectangle r;
+    lp=p->data;
+    ul=p->r.min;
+    size=subpt(p->r.max, p->r.min);
+    pl_interior(p->state, &ul, &size);
+    nlist=size.y/font->height;
+    oldlo=lp->lo;
+    if(dir==VERT) switch(buttons){
+    case 1: lp->lo-=nlist*val/len; break;
+    case 2: lp->lo=lp->len*val/len; break;
+    case 4:	lp->lo+=nlist*val/len; break;
+    }
+    if(lp->lo<0) lp->lo=0;
+    if(lp->lo>=lp->len) lp->lo=lp->len-1;
+    if(lp->lo==oldlo) return;
+    p->scr.pos.y=lp->lo;
+    r=lp->listr;
+    nline=(r.max.y-r.min.y)/font->height;
+    hi=lp->lo+nline;
+    if(hi<=oldlo || lp->lo>=oldlo+nline){
+        pl_box(p->b, r, PASSIVE);
+        pl_liststrings(p, lp->lo, hi, r);
+    }
+    else if(lp->lo<oldlo){
+        y=r.min.y+(oldlo-lp->lo)*font->height;
+        pl_cpy(p->b, Pt(r.min.x, y), 
+            Rect(r.min.x, r.min.y, r.max.x, r.min.y+(hi-oldlo)*font->height));
+        r.max.y=y;
+        pl_box(p->b, r, PASSIVE);
+        pl_liststrings(p, lp->lo, oldlo, r);
+    }
+    else{
+        pl_cpy(p->b, r.min, Rect(r.min.x, r.min.y+(lp->lo-oldlo)*font->height,
+            r.max.x, r.max.y));
+        r.min.y=r.min.y+(oldlo+nline-lp->lo)*font->height;
+        pl_box(p->b, r, PASSIVE);
+        pl_liststrings(p, oldlo+nline, hi, r);
+    }
 }
+/*e: function pl_scrolllist */
+/*s: function pl_typelist */
 void pl_typelist(Panel *g, Rune c){
-	USED(g, c);
+    USED(g, c);
 }
+/*e: function pl_typelist */
+/*s: function pl_getsizelist */
 Point pl_getsizelist(Panel *p, Point children){
-	USED(children);
-	return pl_boxsize(((List *)p->data)->minsize, p->state);
+    USED(children);
+    return pl_boxsize(((List *)p->data)->minsize, p->state);
 }
+/*e: function pl_getsizelist */
+/*s: function pl_childspacelist */
 void pl_childspacelist(Panel *g, Point *ul, Point *size){
-	USED(g, ul, size);
+    USED(g, ul, size);
 }
+/*e: function pl_childspacelist */
+/*s: function plinitlist */
 void plinitlist(Panel *v, int flags, char *(*gen)(Panel *, int), int nlist, void (*hit)(Panel *, int, int)){
-	List *lp;
-	int wid, max;
-	char *str;
-	lp=v->data;
-	v->flags=flags|LEAF;
-	v->state=UP;
-	v->draw=pl_drawlist;
-	v->hit=pl_hitlist;
-	v->type=pl_typelist;
-	v->getsize=pl_getsizelist;
-	v->childspace=pl_childspacelist;
-	lp->gen=gen;
-	lp->hit=hit;
-	max=0;
-	for(lp->len=0;str=gen(v, lp->len);lp->len++){
-		wid=stringwidth(font, str);
-		if(wid>max) max=wid;
-	}
-	if(flags&(FILLX|EXPAND)){
-		for(lp->len=0;gen(v, lp->len);lp->len++);
-		lp->minsize=Pt(0, nlist*font->height);
-	}
-	else{
-		max=0;
-		for(lp->len=0;str=gen(v, lp->len);lp->len++){
-			wid=stringwidth(font, str);
-			if(wid>max) max=wid;
-		}
-		lp->minsize=Pt(max, nlist*font->height);
-	}
-	lp->sel=-1;
-	lp->lo=0;
-	v->scroll=pl_scrolllist;
-	v->scr.pos=Pt(0,0);
-	v->scr.size=Pt(0,lp->len);
-	v->kind="list";
+    List *lp;
+    int wid, max;
+    char *str;
+    lp=v->data;
+    v->flags=flags|LEAF;
+    v->state=UP;
+    v->draw=pl_drawlist;
+    v->hit=pl_hitlist;
+    v->type=pl_typelist;
+    v->getsize=pl_getsizelist;
+    v->childspace=pl_childspacelist;
+    lp->gen=gen;
+    lp->hit=hit;
+    max=0;
+    for(lp->len=0;str=gen(v, lp->len);lp->len++){
+        wid=stringwidth(font, str);
+        if(wid>max) max=wid;
+    }
+    if(flags&(FILLX|EXPAND)){
+        for(lp->len=0;gen(v, lp->len);lp->len++);
+        lp->minsize=Pt(0, nlist*font->height);
+    }
+    else{
+        max=0;
+        for(lp->len=0;str=gen(v, lp->len);lp->len++){
+            wid=stringwidth(font, str);
+            if(wid>max) max=wid;
+        }
+        lp->minsize=Pt(max, nlist*font->height);
+    }
+    lp->sel=-1;
+    lp->lo=0;
+    v->scroll=pl_scrolllist;
+    v->scr.pos=Pt(0,0);
+    v->scr.size=Pt(0,lp->len);
+    v->kind="list";
 }
+/*e: function plinitlist */
+/*s: function pllist */
 Panel *pllist(Panel *parent, int flags, char *(*gen)(Panel *, int), int nlist, void (*hit)(Panel *, int, int)){
-	Panel *v;
-	v=pl_newpanel(parent, sizeof(List));
-	plinitlist(v, flags, gen, nlist, hit);
-	return v;
+    Panel *v;
+    v=pl_newpanel(parent, sizeof(List));
+    plinitlist(v, flags, gen, nlist, hit);
+    return v;
 }
+/*e: function pllist */
+/*e: windows/libpanel/list.c */
