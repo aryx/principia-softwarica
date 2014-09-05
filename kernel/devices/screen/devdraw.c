@@ -40,7 +40,7 @@ enum
 #define IOUNIT      (64*1024)
 
 typedef struct Client Client;
-typedef struct Draw Draw;
+typedef struct KDraw KDraw;
 typedef struct DImage DImage;
 typedef struct DScreen DScreen;
 typedef struct CScreen CScreen;
@@ -51,7 +51,7 @@ typedef struct DName DName;
 
 ulong blanktime = 30;   /* in minutes; a half hour */
 
-struct Draw
+struct KDraw
 {
     int     clientid;
     int     nclient;
@@ -152,7 +152,7 @@ struct DScreen
     DScreen*    next;
 };
 
-static  Draw        sdraw;
+static  KDraw        sdraw;
     QLock   drawlock;
 
 static  Memimage    *screenimage;

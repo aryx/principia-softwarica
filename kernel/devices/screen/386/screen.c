@@ -20,7 +20,8 @@ extern void swcursoravoid(Rectangle);
 extern void vgalinearpci(VGAscr*);
 
 
-Point ZP = {0, 0};
+//already in libdraw/arith.c
+//Point ZP = {0, 0};
 
 Rectangle physgscreenr;
 

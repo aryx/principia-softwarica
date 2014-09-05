@@ -19,7 +19,7 @@ static Rectangle window;
 static int *xp;
 static int xbuf[256];
 Lock vgascreenlock;
-int drawdebug;
+//int drawdebug;
 
 void
 vgaimageinit(ulong chan)
