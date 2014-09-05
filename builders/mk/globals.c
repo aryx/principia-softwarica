@@ -4,7 +4,12 @@
 /*s: global debug */
 int debug;
 /*e: global debug */
-Rule *rules, *metarules;
+/*s: global rules */
+Rule *rules;
+/*e: global rules */
+/*s: global metarules */
+Rule *metarules;
+/*e: global metarules */
 /*s: global nflag */
 int nflag = 0;
 /*e: global nflag */
@@ -35,4 +40,8 @@ Biobuf bout;
 /*s: global patrule */
 Rule *patrule;
 /*e: global patrule */
+// was in main.c, but used also by parse.c
+/*s: global target1 */
+Word *target1;
+/*e: global target1 */
 /*e: mk/globals.c */

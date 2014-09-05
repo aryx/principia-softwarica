@@ -13,9 +13,6 @@ static char *version = "@(#)mk general release 4 (plan 9)";
 // see also globals.c
 int uflag = 0;
 /*e: global uflag */
-/*s: global target1 */
-Word *target1;
-/*e: global target1 */
 
 void badusage(void);
 #ifdef	PROF
@@ -177,12 +174,14 @@ main(int argc, char **argv)
     } else
         for(ff = files; ff < f; ff++)
             parse(*ff, open(*ff, 0), 0);
+
     if(DEBUG(D_PARSE)){
         dumpw("default targets", target1);
         dumpr("rules", rules);
         dumpr("metarules", metarules);
         dumpv("variables");
     }
+
     if(whatif){
         insert(whatif, 0);
         timeinit(whatif->start);

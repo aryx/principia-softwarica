@@ -7,9 +7,9 @@ char *infile;
 /*s: global mkinline */
 int mkinline;
 /*e: global mkinline */
+
 static int rhead(char *, Word **, Word **, int *, char **);
 static char *rbody(Biobuf*);
-extern Word *target1;
 
 /*s: function parse */
 void
@@ -280,6 +280,8 @@ struct input
 {
     char *file;
     int line;
+
+    // Extra
     struct input *next;
 };
 /*e: struct input */

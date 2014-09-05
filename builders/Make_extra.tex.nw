@@ -96,17 +96,22 @@ char	*wtos(Word*, int);
 <<struct Bufblock>>=
 typedef struct Bufblock
 {
-    struct Bufblock *next;
     char 		*start;
     char 		*end;
     char 		*current;
+
+    // Extra
+    struct Bufblock *next;
 } Bufblock;
 @
 
+% should be renamed words ...
 <<struct Word>>=
 typedef struct Word
 {
     char 		*s;
+
+    // Extra
     struct Word 	*next;
 } Word;
 @
@@ -125,18 +130,24 @@ typedef struct Rule
     char 		*target;	/* one target */
     Word 		*tail;		/* constituents of targets */
     char 		*recipe;	/* do it ! */
+    // enum<rule_attr>
     short 		attr;		/* attributes */
+
     short 		line;		/* source line */
     char 		*file;		/* source file */
+
     Word 		*alltargets;	/* all the targets */
     int 		rule;		/* rule number */
     Reprog		*pat;		/* reg exp goo */
     char		*prog;		/* to use in out of date */
+
+    // Extra
     struct Rule	*chain;		/* hashed per target */
     struct Rule	*next;
 } Rule;
 @
 
+% TODO use enum rule_attr
 <<constant META>>=
 /*	Rule.attr	*/
 #define		META		0x0001
@@ -181,17 +192,21 @@ typedef struct Rule
 <<struct Arc>>=
 typedef struct Arc
 {
+    //? enum<rule_flag>?
     short		flag;
     struct Node	*n;
     Rule		*r;
     char		*stem;
     char		*prog;
     char		*match[NREGEXP];
+    
+    //Extra
     struct Arc	*next;
 } Arc;
 @
 
 <<constant TOGO>>=
+/* Arc.flag */
 #define		TOGO		1
 @
 
@@ -200,13 +215,19 @@ typedef struct Node
 {
     char		*name;
     ulong		time;
+    // enum<node_flag>
     ushort		flags;
+
     Arc		*prereqs;
+
+    // Extra
     struct Node	*next;		/* list for a rule */
 } Node;
 @
 
+% TODO Node.flags
 <<constant VIRTUAL>>=
+/* Node.flags */
 #define		VIRTUAL		0x0001
 @
 
@@ -274,6 +295,8 @@ typedef struct Job
     Word		*t;	/* targets */
     Word		*at;	/* all targets */
     int		nproc;	/* slot number */
+
+    // Extra
     struct Job	*next;
 } Job;
 @
@@ -287,10 +310,13 @@ typedef struct Symtab
         void		*ptr;
         uintptr	value;
     } u;
+
+    // Extra
     struct Symtab	*next;
 } Symtab;
 @
 
+% for what?
 <<enum _anon_>>=
 enum {
     S_VAR,		/* variable -> value */
@@ -337,22 +363,6 @@ enum {
 @
 %$
 
-<<function DEBUG>>=
-#define	DEBUG(x)	(debug&(x))
-@
-
-<<constant D_PARSE>>=
-#define		D_PARSE		0x01
-@
-
-<<constant D_GRAPH>>=
-#define		D_GRAPH		0x02
-@
-
-<<constant D_EXEC>>=
-#define		D_EXEC		0x04
-@
-
 <<function LSEEK>>=
 #define	LSEEK(f,o,p)	seek(f,o,p)
 @
@@ -376,6 +386,10 @@ extern Biobuf bout;
 
 <<struct Word>>
 
+// used by main and parse.c
+extern Word *target1;
+
+
 <<struct Envy>>
 
 extern Envy *envy;
@@ -398,12 +412,10 @@ extern Rule *rules, *metarules, *patrule;
 
 <<struct Arc>>
 
-    /* Arc.flag */
 <<constant TOGO>>
 
 <<struct Node>>
 
-    /* Node.flags */
 <<constant VIRTUAL>>
 <<constant CYCLE>>
 <<constant READY>>
@@ -462,9 +474,6 @@ extern	int	IWS;
 
 \subsection*{[[mk/globals.c]]}
 
-<<global debug>>=
-int debug;
-@
 
 <<global nflag>>=
 int nflag = 0;
@@ -486,6 +495,8 @@ int kflag = 0;
 int aflag = 0;
 @
 
+
+
 <<global explain>>=
 char *explain = 0;
 @
@@ -494,17 +505,7 @@ char *explain = 0;
 int nreps = 1;
 @
 
-<<global jobs>>=
-Job *jobs;
-@
 
-<<global bout>>=
-Biobuf bout;
-@
-
-<<global patrule>>=
-Rule *patrule;
-@
 
 
 %-------------------------------------------------------------
@@ -513,7 +514,8 @@ Rule *patrule;
 #include	"mk.h"
 
 <<global debug>>
-Rule *rules, *metarules;
+<<global rules>>
+<<global metarules>>
 <<global nflag>>
 <<global tflag>>
 <<global iflag>>
@@ -524,6 +526,8 @@ Rule *rules, *metarules;
 <<global jobs>>
 <<global bout>>
 <<global patrule>>
+// was in main.c, but used also by parse.c
+<<global target1>>
 @
 
 
@@ -569,8 +573,6 @@ Realloc(void *s, int n)
 <<function Malloc>>
 
 <<function Realloc>>
-
-
 @
 
 
@@ -1298,27 +1300,6 @@ setvar(char *name, void *value)
 }
 @
 
-<<function print1>>=
-static void
-print1(Symtab *s)
-{
-    Word *w;
-
-    Bprint(&bout, "\t%s=", s->name);
-    for (w = s->u.ptr; w; w = w->next)
-        Bprint(&bout, "'%s'", w->s);
-    Bprint(&bout, "\n");
-}
-@
-
-<<function dumpv>>=
-void
-dumpv(char *s)
-{
-    Bprint(&bout, "%s:\n", s);
-    symtraverse(S_VAR, print1);
-}
-@
 
 <<function shname>>=
 char *
@@ -2614,6 +2595,8 @@ struct input
 {
     char *file;
     int line;
+
+    // Extra
     struct input *next;
 };
 @
@@ -2672,9 +2655,9 @@ ipop(void)
 
 <<global infile>>
 <<global mkinline>>
+
 static int rhead(char *, Word **, Word **, int *, char **);
 static char *rbody(Biobuf*);
-extern Word *target1;
 
 <<function parse>>
 
@@ -2832,21 +2815,6 @@ newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Wo
 }
 @
 
-<<function dumpj>>=
-void
-dumpj(char *s, Job *j, int all)
-{
-    Bprint(&bout, "%s\n", s);
-    while(j){
-        Bprint(&bout, "job@%p: r=%p n=%p stem='%s' nproc=%d\n",
-            j, j->r, j->n, j->stem, j->nproc);
-        Bprint(&bout, "\ttarget='%s' alltarget='%s' prereq='%s' nprereq='%s'\n",
-            wtos(j->t, ' '), wtos(j->at, ' '), wtos(j->p, ' '), wtos(j->np, ' '));
-        j = all? j->next : 0;
-    }
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -2879,24 +2847,6 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 }
 @
 
-<<function dumpa>>=
-void
-dumpa(char *s, Arc *a)
-{
-    char buf[1024];
-
-    Bprint(&bout, "%sArc@%p: n=%p r=%p flag=0x%x stem='%s'",
-        s, a, a->n, a->r, a->flag, a->stem);
-    if(a->prog)
-        Bprint(&bout, " prog='%s'", a->prog);
-    Bprint(&bout, "\n");
-
-    if(a->n){
-        snprint(buf, sizeof(buf), "%s    ", (*s == ' ')? s:"");
-        dumpn(buf, a->n);
-    }
-}
-@
 
 <<function nrep>>=
 void
@@ -3006,21 +2956,6 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
 }
 @
 
-<<function dumpr>>=
-void
-dumpr(char *s, Rule *r)
-{
-    Bprint(&bout, "%s: start=%p\n", s, r);
-    for(; r; r = r->next){
-        Bprint(&bout, "\tRule %p: %s:%d attr=%x next=%p chain=%p alltarget='%s'",
-            r, r->file, r->line, r->attr, r->next, r->chain, wtos(r->alltargets, ' '));
-        if(r->prog)
-            Bprint(&bout, " prog='%s'", r->prog);
-        Bprint(&bout, "\n\ttarget=%s: %s\n", r->target, wtos(r->tail,' '));
-        Bprint(&bout, "\trecipe@%p='%s'\n", r->recipe, r->recipe);
-    }
-}
-@
 
 <<function rcmp>>=
 static int
@@ -3344,11 +3279,11 @@ timeinit(char *s)
 \subsection*{[[mk/run.c]]}
 
 <<struct RunEvent>>=
-struct RunEvent
+typedef struct RunEvent
 {
     int pid;
     Job *job;
-};
+} RunEvent;
 @
 
 <<global events>>=
@@ -3674,7 +3609,6 @@ prusage(void)
 
 <<struct RunEvent>>
 
-typedef struct RunEvent RunEvent;
 <<global events>>
 static int nevents, nrunning, nproclimit;
 
@@ -3889,21 +3823,6 @@ newnode(char *name)
 }
 @
 
-<<function dumpn>>=
-void
-dumpn(char *s, Node *n)
-{
-    char buf[1024];
-    Arc *a;
-
-    Bprint(&bout, "%s%s@%p: time=%ld flags=0x%x next=%p\n",
-        s, n->name, n, n->time, n->flags, n->next);
-    for(a = n->prereqs; a; a = a->next){
-        snprint(buf, sizeof buf, "%s   ", (*s == ' ')? s:"");
-        dumpa(buf, a);
-    }
-}
-@
 
 <<function trace>>=
 static void
@@ -4289,7 +4208,7 @@ outofdate(Node *node, Arc *arc, int eval)
          * Treat equal times as out-of-date.
          * It's a race, and the safer option is to do
          * extra building rather than not enough.
-     	 */
+       */
         return node->time <= arc->n->time;
 }
 @
@@ -4747,21 +4666,9 @@ static	Word		*varmatch(char *);
 
 \subsection*{[[mk/main.c]]}
 
-<<constant MKFILE>>=
-#define		MKFILE		"mkfile"
-@
-
-<<global version>>=
-static char *version = "@(#)mk general release 4 (plan 9)";
-@
-
 <<global uflag>>=
 // see also globals.c
 int uflag = 0;
-@
-
-<<global target1>>=
-Word *target1;
 @
 
 <<global buf>>=
@@ -4921,12 +4828,14 @@ main(int argc, char **argv)
     } else
         for(ff = files; ff < f; ff++)
             parse(*ff, open(*ff, 0), 0);
+
     if(DEBUG(D_PARSE)){
         dumpw("default targets", target1);
         dumpr("rules", rules);
         dumpr("metarules", metarules);
         dumpv("variables");
     }
+
     if(whatif){
         insert(whatif, 0);
         timeinit(whatif->start);
@@ -5016,7 +4925,6 @@ regerror(char *s)
 <<global version>>
 
 <<global uflag>>
-<<global target1>>
 
 void badusage(void);
 #ifdef	PROF

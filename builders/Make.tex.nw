@@ -25,6 +25,7 @@
 %    * function, global, struct, enum, constant, macro(actually function)
 % - TODO read Extra section, identify concepts, first TOC
 % - TODO distribute parts of the file before
+% - TODO nullify, boolify, typeify,    scheckify
 % - TODO add figures
 
 %------------------------------------------------------------------------------
@@ -166,7 +167,16 @@ License.
 
 \section{mk services}
 
+<<global version>>=
+static char *version = "@(#)mk general release 4 (plan 9)";
+@
+
 \section{A simple [[mkfile]]}
+
+<<constant MKFILE>>=
+#define		MKFILE		"mkfile"
+@
+
 
 % actually could also show the mkfile of mk itself :)
 
@@ -178,11 +188,190 @@ License.
 
 \chapter{Core Data Structures}
 
+% core types: (see mk.h)
+% Word, Bufblock, Sym (a bit generic, could be in libc)
+% Rule (mk -dp?)
+% Node, Arc (mk -dg)
+% Job, (mk -de)
+% time
+
+% recipe?
+
+% core globals: (see mk.h externs)
+% bout, envy,    rules, metarules, patrule,    jobs
+
+% symbol hashtbl global
+
+
+<<global target1>>=
+Word *target1;
+@
+
+<<global rules>>=
+Rule *rules;
+@
+<<global metarules>>=
+Rule *metarules;
+@
+
+<<global patrule>>=
+Rule *patrule;
+@
+
+
+<<global jobs>>=
+Job *jobs;
+@
+
+
+<<global bout>>=
+Biobuf bout;
+@
+
+
+\chapter{[[mk()]]}
+
+\chapter{Parsing}
+
+\section{Lexing}
+
+\chapter{Time}
+
+\chapter{Rules}
+
+\chapter{The environment}
+
+\chapter{Dependency graph}
+
+\section{Cycle detection}
+
+\chapter{Shell interaction}
+
+\section{Escaping}
+
+\section{Variables expansion}
+
+\section{Jobs}
+
+\subsection{Scheduling}
+
+
 \chapter{Conclusion}
 
 \appendix
 
 \chapter{Debugging}
+
+<<global debug>>=
+int debug;
+@
+
+<<function DEBUG>>=
+#define	DEBUG(x)	(debug&(x))
+@
+
+<<constant D_PARSE>>=
+#define		D_PARSE		0x01
+@
+
+<<constant D_GRAPH>>=
+#define		D_GRAPH		0x02
+@
+
+<<constant D_EXEC>>=
+#define		D_EXEC		0x04
+@
+
+
+
+<<function print1>>=
+static void
+print1(Symtab *s)
+{
+    Word *w;
+
+    Bprint(&bout, "\t%s=", s->name);
+    for (w = s->u.ptr; w; w = w->next)
+        Bprint(&bout, "'%s'", w->s);
+    Bprint(&bout, "\n");
+}
+@
+
+<<function dumpv>>=
+void
+dumpv(char *s)
+{
+    Bprint(&bout, "%s:\n", s);
+    symtraverse(S_VAR, print1);
+}
+@
+
+<<function dumpj>>=
+void
+dumpj(char *s, Job *j, int all)
+{
+    Bprint(&bout, "%s\n", s);
+    while(j){
+        Bprint(&bout, "job@%p: r=%p n=%p stem='%s' nproc=%d\n",
+            j, j->r, j->n, j->stem, j->nproc);
+        Bprint(&bout, "\ttarget='%s' alltarget='%s' prereq='%s' nprereq='%s'\n",
+            wtos(j->t, ' '), wtos(j->at, ' '), wtos(j->p, ' '), wtos(j->np, ' '));
+        j = all? j->next : 0;
+    }
+}
+@
+
+
+<<function dumpn>>=
+void
+dumpn(char *s, Node *n)
+{
+    char buf[1024];
+    Arc *a;
+
+    Bprint(&bout, "%s%s@%p: time=%ld flags=0x%x next=%p\n",
+        s, n->name, n, n->time, n->flags, n->next);
+    for(a = n->prereqs; a; a = a->next){
+        snprint(buf, sizeof buf, "%s   ", (*s == ' ')? s:"");
+        dumpa(buf, a);
+    }
+}
+@
+
+<<function dumpa>>=
+void
+dumpa(char *s, Arc *a)
+{
+    char buf[1024];
+
+    Bprint(&bout, "%sArc@%p: n=%p r=%p flag=0x%x stem='%s'",
+        s, a, a->n, a->r, a->flag, a->stem);
+    if(a->prog)
+        Bprint(&bout, " prog='%s'", a->prog);
+    Bprint(&bout, "\n");
+
+    if(a->n){
+        snprint(buf, sizeof(buf), "%s    ", (*s == ' ')? s:"");
+        dumpn(buf, a->n);
+    }
+}
+@
+
+<<function dumpr>>=
+void
+dumpr(char *s, Rule *r)
+{
+    Bprint(&bout, "%s: start=%p\n", s, r);
+    for(; r; r = r->next){
+        Bprint(&bout, "\tRule %p: %s:%d attr=%x next=%p chain=%p alltarget='%s'",
+            r, r->file, r->line, r->attr, r->next, r->chain, wtos(r->alltargets, ' '));
+        if(r->prog)
+            Bprint(&bout, " prog='%s'", r->prog);
+        Bprint(&bout, "\n\ttarget=%s: %s\n", r->target, wtos(r->tail,' '));
+        Bprint(&bout, "\trecipe@%p='%s'\n", r->recipe, r->recipe);
+    }
+}
+@
 
 \chapter{Error Managment}
 

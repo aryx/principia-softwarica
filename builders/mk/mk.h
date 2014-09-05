@@ -9,10 +9,12 @@ extern Biobuf bout;
 /*s: struct Bufblock */
 typedef struct Bufblock
 {
-    struct Bufblock *next;
     char 		*start;
     char 		*end;
     char 		*current;
+
+    // Extra
+    struct Bufblock *next;
 } Bufblock;
 /*e: struct Bufblock */
 
@@ -20,9 +22,15 @@ typedef struct Bufblock
 typedef struct Word
 {
     char 		*s;
+
+    // Extra
     struct Word 	*next;
 } Word;
 /*e: struct Word */
+
+// used by main and parse.c
+extern Word *target1;
+
 
 /*s: struct Envy */
 typedef struct Envy
@@ -40,13 +48,18 @@ typedef struct Rule
     char 		*target;	/* one target */
     Word 		*tail;		/* constituents of targets */
     char 		*recipe;	/* do it ! */
+    // enum<rule_attr>
     short 		attr;		/* attributes */
+
     short 		line;		/* source line */
     char 		*file;		/* source file */
+
     Word 		*alltargets;	/* all the targets */
     int 		rule;		/* rule number */
     Reprog		*pat;		/* reg exp goo */
     char		*prog;		/* to use in out of date */
+
+    // Extra
     struct Rule	*chain;		/* hashed per target */
     struct Rule	*next;
 } Rule;
@@ -90,18 +103,21 @@ extern Rule *rules, *metarules, *patrule;
 /*s: struct Arc */
 typedef struct Arc
 {
+    //? enum<rule_flag>?
     short		flag;
     struct Node	*n;
     Rule		*r;
     char		*stem;
     char		*prog;
     char		*match[NREGEXP];
+    
+    //Extra
     struct Arc	*next;
 } Arc;
 /*e: struct Arc */
 
-    /* Arc.flag */
 /*s: constant TOGO */
+/* Arc.flag */
 #define		TOGO		1
 /*e: constant TOGO */
 
@@ -110,14 +126,18 @@ typedef struct Node
 {
     char		*name;
     ulong		time;
+    // enum<node_flag>
     ushort		flags;
+
     Arc		*prereqs;
+
+    // Extra
     struct Node	*next;		/* list for a rule */
 } Node;
 /*e: struct Node */
 
-    /* Node.flags */
 /*s: constant VIRTUAL */
+/* Node.flags */
 #define		VIRTUAL		0x0001
 /*e: constant VIRTUAL */
 /*s: constant CYCLE */
@@ -172,6 +192,8 @@ typedef struct Job
     Word		*t;	/* targets */
     Word		*at;	/* all targets */
     int		nproc;	/* slot number */
+
+    // Extra
     struct Job	*next;
 } Job;
 /*e: struct Job */
@@ -187,6 +209,8 @@ typedef struct Symtab
         void		*ptr;
         uintptr	value;
     } u;
+
+    // Extra
     struct Symtab	*next;
 } Symtab;
 /*e: struct Symtab */

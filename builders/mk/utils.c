@@ -31,6 +31,4 @@ Realloc(void *s, int n)
     return(s);
 }
 /*e: function Realloc */
-
-
 /*e: mk/utils.c */

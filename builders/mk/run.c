@@ -2,14 +2,13 @@
 #include	"mk.h"
 
 /*s: struct RunEvent */
-struct RunEvent
+typedef struct RunEvent
 {
     int pid;
     Job *job;
-};
+} RunEvent;
 /*e: struct RunEvent */
 
-typedef struct RunEvent RunEvent;
 /*s: global events */
 static RunEvent *events;
 /*e: global events */
