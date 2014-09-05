@@ -381,6 +381,7 @@ extern	double	modf(double, double*);
 extern	int	netcrypt(void*, void*);
 extern	void	notejmp(void*, jmp_buf, int);
 extern	void	perror(char*);
+// ugly redefined by user code? see statusbar.c
 extern	int	postnote(int, int, char *);
 extern	double	pow10(int);
 extern	int	putenv(char*, char*);
