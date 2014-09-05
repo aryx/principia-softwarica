@@ -239,4 +239,3 @@ kmousectl(Cmdbuf *cb)
     poperror();
 }
 /*e: mouse.c */
-
