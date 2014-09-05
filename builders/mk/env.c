@@ -8,6 +8,7 @@ enum {
 /*e: enum _anon_ (mk/env.c) */
 
 /*s: global envy */
+// list<ref_own<Envy>>
 Envy	*envy;
 /*e: global envy */
 /*s: global nextv */

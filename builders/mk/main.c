@@ -9,8 +9,9 @@
 static char *version = "@(#)mk general release 4 (plan 9)";
 /*e: global version */
 
-/*s: global uflag */
 // see also globals.c
+
+/*s: global uflag */
 int uflag = 0;
 /*e: global uflag */
 

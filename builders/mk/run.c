@@ -12,7 +12,9 @@ typedef struct RunEvent
 /*s: global events */
 static RunEvent *events;
 /*e: global events */
-static int nevents, nrunning, nproclimit;
+static int nevents;
+static int nrunning;
+static int nproclimit;
 
 /*s: struct Process */
 typedef struct Process
@@ -22,9 +24,16 @@ typedef struct Process
     struct Process *b, *f;
 } Process;
 /*e: struct Process */
-static Process *phead, *pfree;
+/*s: global phead */
+static Process *phead;
+/*e: global phead */
+/*s: global pfree */
+static Process *pfree;
+/*e: global pfree */
+
 static void sched(void);
-static void pnew(int, int), pdelete(Process *);
+static void pnew(int, int);
+static void pdelete(Process *);
 
 int pidslot(int);
 
