@@ -344,7 +344,7 @@ cursoroff(int)
 }
 
 void
-setcursor(Cursor* curs)
+ksetcursor(Cursor* curs)
 {
     VGAscr *scr;
 

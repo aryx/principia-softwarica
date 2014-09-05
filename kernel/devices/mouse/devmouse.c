@@ -497,7 +497,7 @@ Cursortocursor(Cursor *c)
 {
     lock(&cursor);
     memmove(&cursor.Cursor, c, sizeof(Cursor));
-    setcursor(c);
+    ksetcursor(c);
     unlock(&cursor);
 }
 

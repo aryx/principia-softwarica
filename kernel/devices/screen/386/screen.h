@@ -136,7 +136,7 @@ extern uchar* attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void flushmemscreen(Rectangle);
 extern int  cursoron(int);
 extern void cursoroff(int);
-extern void setcursor(Cursor*);
+extern void ksetcursor(Cursor*);
 extern int  screensize(int, int, int, ulong);
 extern int  screenaperture(int, int);
 extern Rectangle physgscreenr;  /* actual monitor size */
