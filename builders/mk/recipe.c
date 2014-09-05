@@ -1,6 +1,8 @@
 /*s: mk/recipe.c */
 #include	"mk.h"
 
+void	addw(Word*, char*);
+
 /*s: function dorecipe */
 int
 dorecipe(Node *node)

@@ -72,6 +72,7 @@ extern Rule *rules, *metarules, *patrule;
 #define		META		0x0001
 /*e: constant META */
 /*s: constant UNUSED */
+//@Scheck: dead indeed
 #define		UNUSED		0x0002
 /*e: constant UNUSED */
 /*s: constant UPD */
@@ -237,22 +238,22 @@ enum {
 /*e: enum _anon_ */
 
 extern	int	debug;
-extern	int	nflag, tflag, iflag, kflag, aflag, mflag;
+extern	int	nflag, tflag, iflag, kflag, aflag;
 extern	int	mkinline;
 extern	char	*infile;
 extern	int	nreps;
 extern	char	*explain;
 extern	char	*termchars;
-extern	char 	*shell;
-extern	char 	*shellname;
+//extern	char 	*shell;
+//extern	char 	*shellname;
 extern	char 	*shflags;
-extern	int	IWS;
+//extern	int	IWS;
 
 /*s: function SYNERR */
 #define	SYNERR(l)	(fprint(2, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
 /*e: function SYNERR */
 /*s: function RERR */
-#define	RERR(r)		(fprint(2, "mk: %s:%d: rule error; ", (r)->file, (r)->line))
+//#define	RERR(r)		(fprint(2, "mk: %s:%d: rule error; ", (r)->file, (r)->line))
 /*e: function RERR */
 /*s: constant NAMEBLOCK */
 #define	NAMEBLOCK	1000
@@ -262,7 +263,7 @@ extern	int	IWS;
 /*e: constant BIGBLOCK */
 
 /*s: function SEP */
-#define	SEP(c)		(((c)==' ')||((c)=='\t')||((c)=='\n'))
+//#define	SEP(c)		(((c)==' ')||((c)=='\t')||((c)=='\n'))
 /*e: function SEP */
 /*s: function WORDCHR */
 #define WORDCHR(r)	((r) > ' ' && !utfrune("!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~", (r)))

@@ -16,17 +16,18 @@
 
 %thx to codemap/codegraph:
 
-%thx to this manual, better understand X11?:
+%thx to this manual, better understand make?:
 
 %history LP-ization:
-% - skeleton, mostly copy paste of Kernel.tex.nw skeleton
+% - skeleton, mostly copy paste of Template.tex.nw skeleton
 % - put all content of files in the Extra section, via 'pfff -lpize'
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
-% - TODO read Extra section, identify concepts, first TOC
+% - read Extra section, identify concepts, first TOC
 % - TODO distribute parts of the file before
 % - TODO nullify, boolify, typeify,    scheckify
 % - TODO add figures
+% - TODO add explanations
 
 %------------------------------------------------------------------------------
 % Packages
@@ -143,9 +144,17 @@ Here are other candidates that were considered but ultimately discarded:
 
 % gyp, ninja, buck, ...
 
+
+
 \section{Getting started}
 
+% can get the one from kencc? or plan9port?
+% issues though with rc vs sh ...
+
 \section{Requirements}
+
+% read mk.ps! (and mk_successor_make.pdf if interested specifically 
+% of diff with make)
 
 \section{About this document}
 #include "About.tex.nw"
@@ -159,7 +168,8 @@ License.
 
 \section{Acknowledgments}
 
-% author of mk?
+I would like to acknowledge of course mk's authors who wrote
+most of this book: Andrew Hume and Bob Flandera.
 
 \chapter{Overview}
 
@@ -184,18 +194,18 @@ static char *version = "@(#)mk general release 4 (plan 9)";
 
 \section{Architecture overview}
 
+% graphviz of files? or of types?
+
 %###############################################################################
 
 \chapter{Core Data Structures}
 
 % core types: (see mk.h)
-% Word, Bufblock, Sym (a bit generic, could be in libc)
-% Rule (mk -dp?)
+% Word, Bufblock, Sym (a bit generic, could be in libc?)
+% Rule (mk -dp?), recipe? metarule, target, prerequiste (see mk.ps)
 % Node, Arc (mk -dg)
 % Job, (mk -de)
 % time
-
-% recipe?
 
 % core globals: (see mk.h externs)
 % bout, envy,    rules, metarules, patrule,    jobs
@@ -214,6 +224,7 @@ Rule *rules;
 Rule *metarules;
 @
 
+%?
 <<global patrule>>=
 Rule *patrule;
 @
@@ -235,15 +246,15 @@ Biobuf bout;
 
 \section{Lexing}
 
-\chapter{Time}
-
 \chapter{Rules}
-
-\chapter{The environment}
 
 \chapter{Dependency graph}
 
 \section{Cycle detection}
+
+\chapter{The environment}
+
+\chapter{Time}
 
 \chapter{Shell interaction}
 
@@ -251,10 +262,10 @@ Biobuf bout;
 
 \section{Variables expansion}
 
-\section{Jobs}
+\chapter{Jobs}
+% can do stuff in //! make originally didn't apparently
 
 \subsection{Scheduling}
-
 
 \chapter{Conclusion}
 
@@ -284,6 +295,15 @@ int debug;
 
 
 
+<<function dumpv>>=
+void
+dumpv(char *s)
+{
+    Bprint(&bout, "%s:\n", s);
+    symtraverse(S_VAR, print1);
+}
+@
+
 <<function print1>>=
 static void
 print1(Symtab *s)
@@ -297,29 +317,24 @@ print1(Symtab *s)
 }
 @
 
-<<function dumpv>>=
-void
-dumpv(char *s)
-{
-    Bprint(&bout, "%s:\n", s);
-    symtraverse(S_VAR, print1);
-}
-@
 
-<<function dumpj>>=
+<<function dumpr>>=
 void
-dumpj(char *s, Job *j, int all)
+dumpr(char *s, Rule *r)
 {
-    Bprint(&bout, "%s\n", s);
-    while(j){
-        Bprint(&bout, "job@%p: r=%p n=%p stem='%s' nproc=%d\n",
-            j, j->r, j->n, j->stem, j->nproc);
-        Bprint(&bout, "\ttarget='%s' alltarget='%s' prereq='%s' nprereq='%s'\n",
-            wtos(j->t, ' '), wtos(j->at, ' '), wtos(j->p, ' '), wtos(j->np, ' '));
-        j = all? j->next : 0;
+    Bprint(&bout, "%s: start=%p\n", s, r);
+    for(; r; r = r->next){
+        Bprint(&bout, "\tRule %p: %s:%d attr=%x next=%p chain=%p alltarget='%s'",
+            r, r->file, r->line, r->attr, r->next, r->chain, wtos(r->alltargets, ' '));
+        if(r->prog)
+            Bprint(&bout, " prog='%s'", r->prog);
+        Bprint(&bout, "\n\ttarget=%s: %s\n", r->target, wtos(r->tail,' '));
+        Bprint(&bout, "\trecipe@%p='%s'\n", r->recipe, r->recipe);
     }
 }
 @
+
+
 
 
 <<function dumpn>>=
@@ -357,21 +372,24 @@ dumpa(char *s, Arc *a)
 }
 @
 
-<<function dumpr>>=
+
+
+
+<<function dumpj>>=
 void
-dumpr(char *s, Rule *r)
+dumpj(char *s, Job *j, int all)
 {
-    Bprint(&bout, "%s: start=%p\n", s, r);
-    for(; r; r = r->next){
-        Bprint(&bout, "\tRule %p: %s:%d attr=%x next=%p chain=%p alltarget='%s'",
-            r, r->file, r->line, r->attr, r->next, r->chain, wtos(r->alltargets, ' '));
-        if(r->prog)
-            Bprint(&bout, " prog='%s'", r->prog);
-        Bprint(&bout, "\n\ttarget=%s: %s\n", r->target, wtos(r->tail,' '));
-        Bprint(&bout, "\trecipe@%p='%s'\n", r->recipe, r->recipe);
+    Bprint(&bout, "%s\n", s);
+    while(j){
+        Bprint(&bout, "job@%p: r=%p n=%p stem='%s' nproc=%d\n",
+            j, j->r, j->n, j->stem, j->nproc);
+        Bprint(&bout, "\ttarget='%s' alltarget='%s' prereq='%s' nprereq='%s'\n",
+            wtos(j->t, ' '), wtos(j->at, ' '), wtos(j->p, ' '), wtos(j->np, ' '));
+        j = all? j->next : 0;
     }
 }
 @
+
 
 \chapter{Error Managment}
 

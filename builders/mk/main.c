@@ -247,16 +247,16 @@ badusage(void)
 /*e: function badusage */
 
 /*s: function regerror */
-void
-regerror(char *s)
-{
-    if(patrule)
-        fprint(2, "mk: %s:%d: regular expression error; %s\n",
-            patrule->file, patrule->line, s);
-    else
-        fprint(2, "mk: %s:%d: regular expression error; %s\n",
-            infile, mkinline, s);
-    Exit();
-}
+//void
+//regerror(char *s)
+//{
+//    if(patrule)
+//        fprint(2, "mk: %s:%d: regular expression error; %s\n",
+//            patrule->file, patrule->line, s);
+//    else
+//        fprint(2, "mk: %s:%d: regular expression error; %s\n",
+//            infile, mkinline, s);
+//    Exit();
+//}
 /*e: function regerror */
 /*e: mk/main.c */

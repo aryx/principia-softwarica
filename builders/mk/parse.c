@@ -1,6 +1,9 @@
 /*s: mk/parse.c */
 #include	"mk.h"
 
+void	ipop(void);
+void	ipush(void);
+
 /*s: global infile */
 char *infile;
 /*e: global infile */

@@ -1,6 +1,9 @@
 /*s: mk/mk.c */
 #include	"mk.h"
 
+void	clrmade(Node*);
+int	work(Node*, Node*, Arc*);
+
 /*s: global runerrs */
 int runerrs;
 /*e: global runerrs */
