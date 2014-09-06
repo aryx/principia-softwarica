@@ -18,6 +18,7 @@ TEX=Debugger.tex
 # to work
 SRC_ORIG=Debugger.tex.nw Debugger_extra.tex.nw
 
+#TODO: acid/dbg.y
 SRC_VIEWS= \
    tracers/ktrace.c\
    tracers/strace.c\
@@ -49,4 +50,6 @@ SRC_VIEWS= \
    acid/print.c\
    acid/expr.c\
    acid/builtin.c\
+
+# not acid/y.tab.[ch]
 
