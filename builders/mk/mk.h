@@ -46,16 +46,17 @@ extern Envy *envy;
 typedef struct Rule
 {
     char 		*target;	/* one target */
-    Word 		*tail;		/* constituents of targets */
     char 		*recipe;	/* do it ! */
-    // enum<rule_attr>
-    short 		attr;		/* attributes */
+    Word 		*tail;		/* constituents of targets */
 
+    int 		rule;		/* rule number */
     short 		line;		/* source line */
     char 		*file;		/* source file */
 
+    // enum<rule_attr>
+    short 		attr;		/* attributes */
+
     Word 		*alltargets;	/* all the targets */
-    int 		rule;		/* rule number */
     Reprog		*pat;		/* reg exp goo */
     char		*prog;		/* to use in out of date */
 
@@ -204,8 +205,11 @@ extern Job *jobs;
 /*s: struct Symtab */
 typedef struct Symtab
 {
-    short		space;
     char		*name;
+
+    short		space;
+
+    // generic part
     union{
         void		*ptr;
         uintptr	value;
@@ -221,6 +225,7 @@ enum {
     S_VAR,		/* variable -> value */
     S_TARGET,	/* target -> rule */
     S_TIME,		/* file -> time */
+
     S_PID,		/* pid -> products */
     S_NODE,		/* target name -> node */
     S_AGG,		/* aggregate -> time */
@@ -243,6 +248,7 @@ extern	int	mkinline;
 extern	char	*infile;
 extern	int	nreps;
 extern	char	*explain;
+
 extern	char	*termchars;
 //extern	char 	*shell;
 //extern	char 	*shellname;

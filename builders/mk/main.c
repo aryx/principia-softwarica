@@ -16,6 +16,7 @@ int uflag = 0;
 /*e: global uflag */
 
 void badusage(void);
+
 #ifdef	PROF
 /*s: global buf */
 short buf[10000];
@@ -110,12 +111,14 @@ main(int argc, char **argv)
             badusage();
         }
     }
-#ifdef	PROF
-    {
-        extern int etext();
-        monitor(main, etext, buf, sizeof buf, 300);
-    }
-#endif
+    /*s: main profiling */
+    #ifdef	PROF
+        {
+            extern int etext();
+            monitor(main, etext, buf, sizeof buf, 300);
+        }
+    #endif
+    /*e: main profiling */
 
     if(aflag)
         iflag = 1;
@@ -188,6 +191,7 @@ main(int argc, char **argv)
         timeinit(whatif->start);
         freebuf(whatif);
     }
+
     execinit();
     /* skip assignment args */
     while(*argv && (**argv == 0))

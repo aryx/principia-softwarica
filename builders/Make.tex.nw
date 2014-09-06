@@ -186,24 +186,38 @@ between files or programs.
 
 \section{mk services}
 
-<<global version>>=
-static char *version = "@(#)mk general release 4 (plan 9)";
-@
-
-\section{A simple [[mkfile]]}
+% interface is pretty simple, go in dir, type 'mk'
+% or mk target
 
 <<constant MKFILE>>=
 #define		MKFILE		"mkfile"
 @
 
 
+<<global version>>=
+static char *version = "@(#)mk general release 4 (plan 9)";
+@
+
+% has also many -xxx options
+
+<<function badusage>>=
+void
+badusage(void)
+{
+
+    fprint(2, "Usage: mk [-f file] [-n] [-a] [-e] [-t] [-k] [-i] [-d[egp]] [targets ...]\n");
+    Exit();
+}
+@
+
+\section{A simple [[mkfile]]}
 % actually could also show the mkfile of mk itself :)
 
 \section{Code organization}
 
 \section{Architecture overview}
 
-% graphviz of files? or of types?
+% graphviz of files? or just of the types?
 
 %###############################################################################
 
@@ -214,11 +228,11 @@ static char *version = "@(#)mk general release 4 (plan 9)";
 % Word, Bufblock, 
 % Node, Arc (mk -dg)
 % Job, (mk -de)
+% Envy
 % Sym (a bit generic, could be in libc?)
 
 % core globals: (see mk.h externs)
 % bout, envy,    rules, metarules, patrule,    jobs
-
 % symbol hashtbl global
 
 <<global bout>>=
@@ -231,16 +245,17 @@ Biobuf bout;
 typedef struct Rule
 {
     char 		*target;	/* one target */
-    Word 		*tail;		/* constituents of targets */
     char 		*recipe;	/* do it ! */
-    // enum<rule_attr>
-    short 		attr;		/* attributes */
+    Word 		*tail;		/* constituents of targets */
 
+    int 		rule;		/* rule number */
     short 		line;		/* source line */
     char 		*file;		/* source file */
 
+    // enum<rule_attr>
+    short 		attr;		/* attributes */
+
     Word 		*alltargets;	/* all the targets */
-    int 		rule;		/* rule number */
     Reprog		*pat;		/* reg exp goo */
     char		*prog;		/* to use in out of date */
 
@@ -254,6 +269,10 @@ typedef struct Rule
 <<global rules>>=
 // list<ref_own<Rule>>
 Rule *rules;
+@
+
+<<global nrules>>=
+static int nrules = 0;
 @
 
 \section{[[Word]]}
@@ -304,25 +323,6 @@ typedef struct Arc
 #define		TOGO		1
 @
 
-
-
-<<function newarc>>=
-Arc *
-newarc(Node *n, Rule *r, char *stem, Resub *match)
-{
-    Arc *a;
-
-    a = (Arc *)Malloc(sizeof(Arc));
-    a->n = n;
-    a->r = r;
-    a->stem = strdup(stem);
-    rcopy(a->match, match, NREGEXP);
-    a->next = 0;
-    a->flag = 0;
-    a->prog = r->prog;
-    return(a);
-}
-@
 
 
 
@@ -468,30 +468,29 @@ Job *jobs;
 @
 
 
-<<function newjob>>=
-Job *
-newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
-{
-    register Job *j;
-
-    j = (Job *)Malloc(sizeof(Job));
-    j->r = r;
-    j->n = nlist;
-    j->stem = stem;
-    j->match = match;
-    j->p = pre;
-    j->np = npre;
-    j->t = tar;
-    j->at = atar;
-    j->nproc = -1;
-    j->next = 0;
-    return(j);
-}
-@
-
 
 
 \section{[[Symtab]] and [[hash]]}
+
+<<struct Symtab>>=
+typedef struct Symtab
+{
+    char		*name;
+
+    short		space;
+
+    // generic part
+    union{
+        void		*ptr;
+        uintptr	value;
+    } u;
+
+    // Extra
+    struct Symtab	*next;
+} Symtab;
+@
+
+
 
 % for what?
 <<enum _anon_>>=
@@ -499,6 +498,7 @@ enum {
     S_VAR,		/* variable -> value */
     S_TARGET,	/* target -> rule */
     S_TIME,		/* file -> time */
+
     S_PID,		/* pid -> products */
     S_NODE,		/* target name -> node */
     S_AGG,		/* aggregate -> time */
@@ -517,32 +517,18 @@ enum {
 
 
 
-<<struct Symtab>>=
-typedef struct Symtab
-{
-    short		space;
-    char		*name;
-    union{
-        void		*ptr;
-        uintptr	value;
-    } u;
-
-    // Extra
-    struct Symtab	*next;
-} Symtab;
-@
-
 
 <<constant NHASH>>=
 #define	NHASH	4099
 @
 
-<<constant HASHMUL>>=
-#define	HASHMUL	79L	/* this is a good value */
-@
-
 <<global hash>>=
 static Symtab *hash[NHASH];
+@
+
+
+<<constant HASHMUL>>=
+#define	HASHMUL	79L	/* this is a good value */
 @
 
 
@@ -616,11 +602,113 @@ setvar(char *name, void *value)
 
 \section{Simple rule}
 
+<<function addrule>>=
+void
+addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, char *prog)
+{
+    Rule *r;
+    Rule *rr;
+    Symtab *sym;
+    int reuse;
+
+    r = 0;
+    reuse = 0;
+    if(sym = symlook(head, S_TARGET, 0)){
+        for(r = sym->u.ptr; r; r = r->chain)
+            if(rcmp(r, head, tail) == 0){
+                reuse = 1;
+                break;
+            }
+    }
+    if(r == 0)
+        r = (Rule *)Malloc(sizeof(Rule));
+    r->target = head;
+    r->tail = tail;
+    r->recipe = body;
+    r->line = hline;
+    r->file = infile;
+    r->attr = attr;
+    r->alltargets = ahead;
+    r->prog = prog;
+    r->rule = nrules++;
+
+    if(!reuse){
+        rr = symlook(head, S_TARGET, r)->u.ptr;
+        if(rr != r){
+            r->chain = rr->chain;
+            rr->chain = r;
+        } else
+            r->chain = 0;
+    }
+    if(!reuse)
+        r->next = 0;
+    if((attr&REGEXP) || charin(head, "%&")){
+        r->attr |= META;
+        if(reuse)
+            return;
+        if(attr&REGEXP){
+            patrule = r;
+            r->pat = regcomp(head);
+        }
+        if(metarules == 0)
+            metarules = lmr = r;
+        else {
+            lmr->next = r;
+            lmr = r;
+        }
+    } else {
+        if(reuse)
+            return;
+        r->pat = 0;
+        if(rules == 0)
+            rules = lr = r;
+        else {
+            lr->next = r;
+            lr = r;
+        }
+    }
+}
+@
+
+
+<<function rcmp>>=
+static int
+rcmp(Rule *r, char *target, Word *tail)
+{
+    Word *w;
+
+    if(strcmp(r->target, target))
+        return 1;
+    for(w = r->tail; w && tail; w = w->next, tail = tail->next)
+        if(strcmp(w->s, tail->s))
+            return 1;
+    return(w || tail);
+}
+@
+
+<<function rulecnt>>=
+char *
+rulecnt(void)
+{
+    char *s;
+
+    s = Malloc(nrules);
+    memset(s, 0, nrules);
+    return(s);
+}
+@
+
+
+
 \section{Metarule}
 
 <<global metarules>>=
 // list<ref_own<Rule>>
 Rule *metarules;
+@
+
+<<function PERCENT>>=
+#define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
 @
 
 % see matching later, or put matching here?
@@ -684,145 +772,7 @@ char *infile;
 int mkinline;
 @
 
-\section{Lexing}
-
-<<function assline>>=
-/*
- *	Assemble a line skipping blank lines, comments, and eliding
- *	escaped newlines
- */
-int
-assline(Biobuf *bp, Bufblock *buf)
-{
-    int c;
-    int lastc;
-
-    buf->current=buf->start;
-    while ((c = nextrune(bp, 1)) >= 0){
-        switch(c)
-        {
-        case '\r':		/* consumes CRs for Win95 */
-            continue;
-        case '\n':
-            if (buf->current != buf->start) {
-                insert(buf, 0);
-                return 1;
-            }
-            break;		/* skip empty lines */
-        case '\\':
-        case '\'':
-        case '"':
-            rinsert(buf, c);
-            if (escapetoken(bp, buf, 1, c) == 0)
-                Exit();
-            break;
-        case '`':
-            if (bquote(bp, buf) == 0)
-                Exit();
-            break;
-        case '#':
-            lastc = '#';
-            while ((c = Bgetc(bp)) != '\n') {
-                if (c < 0)
-                    goto eof;
-                if(c != '\r')
-                    lastc = c;
-            }
-            mkinline++;
-            if (lastc == '\\')
-                break;		/* propagate escaped newlines??*/
-            if (buf->current != buf->start) {
-                insert(buf, 0);
-                return 1;
-            }
-            break;
-        default:
-            rinsert(buf, c);
-            break;
-        }
-    }
-eof:
-    insert(buf, 0);
-    return *buf->start != 0;
-}
-@
-
-<<function bquote>>=
-/*
- *	assemble a back-quoted shell command into a buffer
- */
-static int
-bquote(Biobuf *bp, Bufblock *buf)
-{
-    int c, line, term;
-    int start;
-
-    line = mkinline;
-    while((c = Bgetrune(bp)) == ' ' || c == '\t')
-            ;
-    if(c == '{'){
-        term = '}';		/* rc style */
-        while((c = Bgetrune(bp)) == ' ' || c == '\t')
-            ;
-    } else
-        term = '`';		/* sh style */
-
-    start = buf->current-buf->start;
-    for(;c > 0; c = nextrune(bp, 0)){
-        if(c == term){
-            insert(buf, '\n');
-            insert(buf,0);
-            buf->current = buf->start+start;
-            execinit();
-            execsh(0, buf->current, buf, envy);
-            return 1;
-        }
-        if(c == '\n')
-            break;
-        if(c == '\'' || c == '"' || c == '\\'){
-            insert(buf, c);
-            if(!escapetoken(bp, buf, 1, c))
-                return 0;
-            continue;
-        }
-        rinsert(buf, c);
-    }
-    SYNERR(line);
-    fprint(2, "missing closing %c after `\n", term);
-    return 0;
-}
-@
-
-<<function nextrune>>=
-/*
- *	get next character stripping escaped newlines
- *	the flag specifies whether escaped newlines are to be elided or
- *	replaced with a blank.
- */
-int
-nextrune(Biobuf *bp, int elide)
-{
-    int c;
-
-    for (;;) {
-        c = Bgetrune(bp);
-        if (c == '\\') {
-            if (Bgetrune(bp) == '\n') {
-                mkinline++;
-                if (elide)
-                    continue;
-                return ' ';
-            }
-            Bungetrune(bp);
-        }
-        if (c == '\n')
-            mkinline++;
-        return c;
-    }
-}
-@
-
-\section{Parsing}
+\section{Parsing a file}
 
 <<function parse>>=
 void
@@ -1145,9 +1095,344 @@ ipop(void)
 }
 @
 
+\section{Parsing a line}
+
+<<function assline>>=
+/*
+ *	Assemble a line skipping blank lines, comments, and eliding
+ *	escaped newlines
+ */
+int
+assline(Biobuf *bp, Bufblock *buf)
+{
+    int c;
+    int lastc;
+
+    buf->current=buf->start;
+    while ((c = nextrune(bp, 1)) >= 0){
+        switch(c)
+        {
+        case '\r':		/* consumes CRs for Win95 */
+            continue;
+        case '\n':
+            if (buf->current != buf->start) {
+                insert(buf, 0);
+                return 1;
+            }
+            break;		/* skip empty lines */
+        case '\\':
+        case '\'':
+        case '"':
+            rinsert(buf, c);
+            if (escapetoken(bp, buf, 1, c) == 0)
+                Exit();
+            break;
+        case '`':
+            if (bquote(bp, buf) == 0)
+                Exit();
+            break;
+        case '#':
+            lastc = '#';
+            while ((c = Bgetc(bp)) != '\n') {
+                if (c < 0)
+                    goto eof;
+                if(c != '\r')
+                    lastc = c;
+            }
+            mkinline++;
+            if (lastc == '\\')
+                break;		/* propagate escaped newlines??*/
+            if (buf->current != buf->start) {
+                insert(buf, 0);
+                return 1;
+            }
+            break;
+        default:
+            rinsert(buf, c);
+            break;
+        }
+    }
+eof:
+    insert(buf, 0);
+    return *buf->start != 0;
+}
+@
+
+<<function bquote>>=
+/*
+ *	assemble a back-quoted shell command into a buffer
+ */
+static int
+bquote(Biobuf *bp, Bufblock *buf)
+{
+    int c, line, term;
+    int start;
+
+    line = mkinline;
+    while((c = Bgetrune(bp)) == ' ' || c == '\t')
+            ;
+    if(c == '{'){
+        term = '}';		/* rc style */
+        while((c = Bgetrune(bp)) == ' ' || c == '\t')
+            ;
+    } else
+        term = '`';		/* sh style */
+
+    start = buf->current-buf->start;
+    for(;c > 0; c = nextrune(bp, 0)){
+        if(c == term){
+            insert(buf, '\n');
+            insert(buf,0);
+            buf->current = buf->start+start;
+            execinit();
+            execsh(0, buf->current, buf, envy);
+            return 1;
+        }
+        if(c == '\n')
+            break;
+        if(c == '\'' || c == '"' || c == '\\'){
+            insert(buf, c);
+            if(!escapetoken(bp, buf, 1, c))
+                return 0;
+            continue;
+        }
+        rinsert(buf, c);
+    }
+    SYNERR(line);
+    fprint(2, "missing closing %c after `\n", term);
+    return 0;
+}
+@
+
+<<function nextrune>>=
+/*
+ *	get next character stripping escaped newlines
+ *	the flag specifies whether escaped newlines are to be elided or
+ *	replaced with a blank.
+ */
+int
+nextrune(Biobuf *bp, int elide)
+{
+    int c;
+
+    for (;;) {
+        c = Bgetrune(bp);
+        if (c == '\\') {
+            if (Bgetrune(bp) == '\n') {
+                mkinline++;
+                if (elide)
+                    continue;
+                return ' ';
+            }
+            Bungetrune(bp);
+        }
+        if (c == '\n')
+            mkinline++;
+        return c;
+    }
+}
+@
+
+\section{Parsing a string}
+
+% string to word
+<<function stow>>=
+Word *
+stow(char *s)
+{
+    Word *head, *w, *new;
+
+    w = head = 0;
+    while(*s){
+        new = nextword(&s);
+        if(new == 0)
+            break;
+        if (w)
+            w->next = new;
+        else
+            head = w = new;
+        while(w->next)
+            w = w->next;
+        
+    }
+    if (!head)
+        head = newword("");
+    return(head);
+}
+@
+
+<<function newword>>=
+Word*
+newword(char *s)
+{
+    Word *w;
+
+    w = (Word *)Malloc(sizeof(Word));
+    w->s = strdup(s);
+    w->next = 0;
+    return(w);
+}
+@
+
+<<function delword>>=
+void
+delword(Word *w)
+{
+    Word *v;
+
+    while(v = w){
+        w = w->next;
+        if(v->s)
+            free(v->s);
+        free(v);
+    }
+}
+@
+
+<<function wdup>>=
+Word*
+wdup(Word *w)
+{
+    Word *v, *new, *base;
+
+    v = base = 0;
+    while(w){
+        new = newword(w->s);
+        if(v)
+            v->next = new;
+        else
+            base = new;
+        v = new;
+        w = w->next;
+    }
+    return base;
+}
+@
+
+% word to string
+<<function wtos>>=
+char *
+wtos(Word *w, int sep)
+{
+    Bufblock *buf;
+    char *cp;
+
+    buf = newbuf();
+    for(; w; w = w->next){
+        for(cp = w->s; *cp; cp++)
+            insert(buf, *cp);
+        if(w->next)
+            insert(buf, sep);
+    }
+    insert(buf, 0);
+    cp = strdup(buf->start);
+    freebuf(buf);
+    return(cp);
+}
+@
+
+
+
+<<function nextword>>=
+/*
+ *	break out a word from a string handling quotes, executions,
+ *	and variable expansions.
+ */
+static Word*
+nextword(char **s)
+{
+    Bufblock *b;
+    Word *head, *tail, *w;
+    Rune r;
+    char *cp;
+    int empty;
+
+    cp = *s;
+    b = newbuf();
+restart:
+    head = tail = 0;
+    while(*cp == ' ' || *cp == '\t')		/* leading white space */
+        cp++;
+    empty = 1;
+    while(*cp){
+        cp += chartorune(&r, cp);
+        switch(r)
+        {
+        case ' ':
+        case '\t':
+        case '\n':
+            goto out;
+        case '\\':
+        case '\'':
+        case '"':
+            empty = 0;
+            cp = expandquote(cp, r, b);
+            if(cp == 0){
+                fprint(2, "missing closing quote: %s\n", *s);
+                Exit();
+            }
+            break;
+        case '$':
+            w = varsub(&cp);
+            if(w == 0){
+                if(empty)
+                    goto restart;
+                break;
+            }
+            empty = 0;
+            if(b->current != b->start){
+                bufcpy(b, w->s, strlen(w->s));
+                insert(b, 0);
+                free(w->s);
+                w->s = strdup(b->start);
+                b->current = b->start;
+            }
+            if(head){
+                bufcpy(b, tail->s, strlen(tail->s));
+                bufcpy(b, w->s, strlen(w->s));
+                insert(b, 0);
+                free(tail->s);
+                tail->s = strdup(b->start);
+                tail->next = w->next;
+                free(w->s);
+                free(w);
+                b->current = b->start;
+            } else
+                tail = head = w;
+            while(tail->next)
+                tail = tail->next;
+            break;
+        default:
+            empty = 0;
+            rinsert(b, r);
+            break;
+        }
+    }
+out:
+    *s = cp;
+    if(b->current != b->start){
+        if(head){
+            cp = b->current;
+            bufcpy(b, tail->s, strlen(tail->s));
+            bufcpy(b, b->start, cp-b->start);
+            insert(b, 0);
+            free(tail->s);
+            tail->s = strdup(cp);
+        } else {
+            insert(b, 0);
+            head = newword(b->start);
+        }
+    }
+    freebuf(b);
+    return head;
+}
+@
+%$
+
 
 
 \chapter{Matching}
+
 
 <<function match>>=
 int
@@ -1226,6 +1511,27 @@ graph(char *target)
     ambiguous(node);
     attribute(node);
     return(node);
+}
+@
+
+<<function attribute>>=
+static void
+attribute(Node *n)
+{
+    register Arc *a;
+
+    for(a = n->prereqs; a; a = a->next){
+        if(a->r->attr&VIR)
+            n->flags |= VIRTUAL;
+        if(a->r->attr&NOREC)
+            n->flags |= NORECIPE;
+        if(a->r->attr&DEL)
+            n->flags |= DELETE;
+        if(a->n)
+            attribute(a->n);
+    }
+    if(n->flags&VIRTUAL)
+        n->time = 0;
 }
 @
 
@@ -1381,6 +1687,25 @@ newnode(char *name)
     node->flags = node->time? PROBABLE : 0;
     node->next = 0;
     return(node);
+}
+@
+
+
+<<function newarc>>=
+Arc *
+newarc(Node *n, Rule *r, char *stem, Resub *match)
+{
+    Arc *a;
+
+    a = (Arc *)Malloc(sizeof(Arc));
+    a->n = n;
+    a->r = r;
+    a->stem = strdup(stem);
+    rcopy(a->match, match, NREGEXP);
+    a->next = 0;
+    a->flag = 0;
+    a->prog = r->prog;
+    return(a);
 }
 @
 
@@ -1797,6 +2122,11 @@ varname(char **s)
     return b;
 }
 @
+
+<<function WORDCHR>>=
+#define WORDCHR(r)	((r) > ' ' && !utfrune("!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~", (r)))
+@
+%$
 
 <<function varmatch>>=
 static Word*
@@ -2319,6 +2649,29 @@ addw(Word *w, char *s)
 % can do stuff in //! make originally didn't apparently
 
 
+<<function newjob>>=
+Job *
+newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
+{
+    register Job *j;
+
+    j = (Job *)Malloc(sizeof(Job));
+    j->r = r;
+    j->n = nlist;
+    j->stem = stem;
+    j->match = match;
+    j->p = pre;
+    j->np = npre;
+    j->t = tar;
+    j->at = atar;
+    j->nproc = -1;
+    j->next = 0;
+    return(j);
+}
+@
+
+
+
 <<struct RunEvent>>=
 typedef struct RunEvent
 {
@@ -2423,6 +2776,7 @@ sched(void)
     }
 }
 @
+
 
 <<function waitup>>=
 int
@@ -2921,9 +3275,6 @@ outofdate(Node *node, Arc *arc, int eval)
 
 \chapter{[[main()]]}
 
-<<global buf>>=
-short buf[10000];
-@
 
 <<function main>>=
 void
@@ -3013,12 +3364,7 @@ main(int argc, char **argv)
             badusage();
         }
     }
-#ifdef	PROF
-    {
-        extern int etext();
-        monitor(main, etext, buf, sizeof buf, 300);
-    }
-#endif
+    <<main profiling>>
 
     if(aflag)
         iflag = 1;
@@ -3091,6 +3437,7 @@ main(int argc, char **argv)
         timeinit(whatif->start);
         freebuf(whatif);
     }
+
     execinit();
     /* skip assignment args */
     while(*argv && (**argv == 0))
@@ -3140,15 +3487,6 @@ main(int argc, char **argv)
 }
 @
 
-<<function badusage>>=
-void
-badusage(void)
-{
-
-    fprint(2, "Usage: mk [-f file] [-n] [-a] [-e] [-t] [-k] [-i] [-d[egp]] [targets ...]\n");
-    Exit();
-}
-@
 
 \chapter{Extra commands}
 % see also Debugging section
@@ -3233,6 +3571,27 @@ dumpv(char *s)
     symtraverse(S_VAR, print1);
 }
 @
+
+<<function symstat>>=
+void
+symstat(void)
+{
+    Symtab **s, *ss;
+    int n;
+    int l[1000];
+
+    memset((char *)l, 0, sizeof(l));
+    for(s = hash; s < &hash[NHASH]; s++){
+        for(ss = *s, n = 0; ss; ss = ss->next)
+            n++;
+        l[n]++;
+    }
+    for(n = 0; n < 1000; n++)
+        if(l[n]) Bprint(&bout, "%d of length %d\n", l[n], n);
+}
+@
+
+
 
 <<function print1>>=
 static void
@@ -3332,7 +3691,64 @@ char *explain = 0;
 int nflag = 0;
 @
 
+\chapter{Profiling}
+
+<<global buf>>=
+short buf[10000];
+@
+
+<<main profiling>>=
+#ifdef	PROF
+    {
+        extern int etext();
+        monitor(main, etext, buf, sizeof buf, 300);
+    }
+#endif
+@
+
 \chapter{Error Managment}
+
+<<function Malloc>>=
+void *
+Malloc(int n)
+{
+    register void *s;
+
+    s = malloc(n);
+    if(!s) {
+        fprint(2, "mk: cannot alloc %d bytes\n", n);
+        Exit();
+    }
+    return(s);
+}
+@
+
+<<function Realloc>>=
+void *
+Realloc(void *s, int n)
+{
+    if(s)
+        s = realloc(s, n);
+    else
+        s = malloc(n);
+    if(!s) {
+        fprint(2, "mk: cannot alloc %d bytes\n", n);
+        Exit();
+    }
+    return(s);
+}
+@
+
+<<function Exit>>=
+void
+Exit(void)
+{
+    while(waitpid() >= 0)
+        ;
+    exits("error");
+}
+@
+
 
 \chapter{Libc}
 
