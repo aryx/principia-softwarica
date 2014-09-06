@@ -23,14 +23,14 @@ print1(Symtab *s)
 }
 /*e: function print1 */
 
-/*s: function dumpv */
+/*s: dumper dumpv */
 void
 dumpv(char *s)
 {
     Bprint(&bout, "%s:\n", s);
     symtraverse(S_VAR, print1);
 }
-/*e: function dumpv */
+/*e: dumper dumpv */
 
 /*s: function shname */
 char *

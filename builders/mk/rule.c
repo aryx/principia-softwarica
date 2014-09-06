@@ -75,7 +75,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
 }
 /*e: function addrule */
 
-/*s: function dumpr */
+/*s: dumper dumpr */
 void
 dumpr(char *s, Rule *r)
 {
@@ -89,7 +89,7 @@ dumpr(char *s, Rule *r)
         Bprint(&bout, "\trecipe@%p='%s'\n", r->recipe, r->recipe);
     }
 }
-/*e: function dumpr */
+/*e: dumper dumpr */
 
 /*s: function rcmp */
 static int

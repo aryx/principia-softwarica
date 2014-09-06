@@ -1,7 +1,7 @@
 /*s: mk/job.c */
 #include	"mk.h"
 
-/*s: function newjob */
+/*s: constructor newjob */
 Job *
 newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
 {
@@ -20,9 +20,9 @@ newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Wo
     j->next = 0;
     return(j);
 }
-/*e: function newjob */
+/*e: constructor newjob */
 
-/*s: function dumpj */
+/*s: dumper dumpj */
 void
 dumpj(char *s, Job *j, int all)
 {
@@ -35,5 +35,5 @@ dumpj(char *s, Job *j, int all)
         j = all? j->next : 0;
     }
 }
-/*e: function dumpj */
+/*e: dumper dumpj */
 /*e: mk/job.c */

@@ -167,7 +167,7 @@ vacuous(Node *node)
 }
 /*e: function vacuous */
 
-/*s: function newnode */
+/*s: constructor newnode */
 static Node *
 newnode(char *name)
 {
@@ -182,9 +182,9 @@ newnode(char *name)
     node->next = 0;
     return(node);
 }
-/*e: function newnode */
+/*e: constructor newnode */
 
-/*s: function dumpn */
+/*s: dumper dumpn */
 void
 dumpn(char *s, Node *n)
 {
@@ -198,7 +198,7 @@ dumpn(char *s, Node *n)
         dumpa(buf, a);
     }
 }
-/*e: function dumpn */
+/*e: dumper dumpn */
 
 /*s: function trace */
 static void

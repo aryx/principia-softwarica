@@ -3,7 +3,7 @@
 
 static	Word	*nextword(char**);
 
-/*s: function newword */
+/*s: constructor newword */
 Word*
 newword(char *s)
 {
@@ -14,7 +14,7 @@ newword(char *s)
     w->next = 0;
     return(w);
 }
-/*e: function newword */
+/*e: constructor newword */
 
 /*s: function stow */
 Word *
@@ -82,7 +82,7 @@ wdup(Word *w)
 }
 /*e: function wdup */
 
-/*s: function delword */
+/*s: destructor delword */
 void
 delword(Word *w)
 {
@@ -95,7 +95,7 @@ delword(Word *w)
         free(v);
     }
 }
-/*e: function delword */
+/*e: destructor delword */
 
 /*s: function nextword */
 /*
@@ -192,7 +192,7 @@ out:
 }
 /*e: function nextword */
 
-/*s: function dumpw */
+/*s: dumper dumpw */
 void
 dumpw(char *s, Word *w)
 {
@@ -201,5 +201,5 @@ dumpw(char *s, Word *w)
         Bprint(&bout, " '%s'", w->s);
     Bputc(&bout, '\n');
 }
-/*e: function dumpw */
+/*e: dumper dumpw */
 /*e: mk/word.c */

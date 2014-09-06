@@ -1,7 +1,7 @@
 /*s: mk/arc.c */
 #include	"mk.h"
 
-/*s: function newarc */
+/*s: constructor newarc */
 Arc *
 newarc(Node *n, Rule *r, char *stem, Resub *match)
 {
@@ -17,9 +17,9 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->prog = r->prog;
     return(a);
 }
-/*e: function newarc */
+/*e: constructor newarc */
 
-/*s: function dumpa */
+/*s: dumper dumpa */
 void
 dumpa(char *s, Arc *a)
 {
@@ -36,7 +36,7 @@ dumpa(char *s, Arc *a)
         dumpn(buf, a->n);
     }
 }
-/*e: function dumpa */
+/*e: dumper dumpa */
 
 /*s: function nrep */
 void
