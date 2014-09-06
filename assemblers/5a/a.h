@@ -3,10 +3,6 @@
 #include <bio.h>
 #include "arm/5.out.h"
 
-#ifndef	EXTERN
-#define	EXTERN	extern
-#endif
-
 typedef	struct	Sym	Sym;
 typedef	struct	Gen	Gen;
 typedef	struct	Io	Io;
@@ -37,11 +33,12 @@ struct	Sym
 };
 #define	S	((Sym*)0)
 
-EXTERN	struct
+struct Fi
 {
 	char*	p;
 	int	c;
-} fi;
+};
+extern struct Fi fi;
 
 struct	Io
 {
@@ -53,11 +50,13 @@ struct	Io
 };
 #define	I	((Io*)0)
 
-EXTERN	struct
+struct Htab
 {
 	Sym*	sym;
 	short	type;
-} h[NSYM];
+};
+
+extern struct Htab h[NSYM];
 
 struct	Gen
 {
@@ -89,34 +88,34 @@ enum
 	Always	= 14,
 };
 
-EXTERN	char	debug[256];
-EXTERN	Sym*	hash[NHASH];
-EXTERN	char*	Dlist[30];
-EXTERN	int	nDlist;
-EXTERN	Hist*	ehist;
-EXTERN	int	newflag;
-EXTERN	Hist*	hist;
-EXTERN	char*	hunk;
-EXTERN	char*	include[NINCLUDE];
-EXTERN	Io*	iofree;
-EXTERN	Io*	ionext;
-EXTERN	Io*	iostack;
-EXTERN	long	lineno;
-EXTERN	int	nerrors;
-EXTERN	long	nhunk;
-EXTERN	int	ninclude;
-EXTERN	Gen	nullgen;
-EXTERN	char*	outfile;
-EXTERN	int	pass;
-EXTERN	char*	pathname;
-EXTERN	long	pc;
-EXTERN	int	peekc;
-EXTERN	int	sym;
-EXTERN	char	symb[NSYMB];
-EXTERN	int	thechar;
-EXTERN	char*	thestring;
-EXTERN	long	thunk;
-EXTERN	Biobuf	obuf;
+extern	char	debug[256];
+extern	Sym*	hash[NHASH];
+extern	char*	Dlist[30];
+extern	int	nDlist;
+extern	Hist*	ehist;
+extern	int	newflag;
+extern	Hist*	hist;
+extern	char*	hunk;
+extern	char*	include[NINCLUDE];
+extern	Io*	iofree;
+extern	Io*	ionext;
+extern	Io*	iostack;
+extern	long	lineno;
+extern	int	nerrors;
+extern	long	nhunk;
+extern	int	ninclude;
+extern	Gen	nullgen;
+extern	char*	outfile;
+extern	int	pass;
+extern	char*	pathname;
+extern	long	pc;
+extern	int	peekc;
+extern	int	sym;
+extern	char	symb[NSYMB];
+extern	int	thechar;
+extern	char*	thestring;
+extern	long	thunk;
+extern	Biobuf	obuf;
 
 void*	alloc(long);
 void*	allocn(void*, long, long);

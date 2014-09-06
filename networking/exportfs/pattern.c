@@ -3,7 +3,7 @@
 #include <fcall.h>
 #include <bio.h>
 #include <regexp.h>
-#define Extern
+
 #include "exportfs.h"
 
 Reprog	**exclude, **include;

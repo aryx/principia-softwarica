@@ -26,33 +26,33 @@ typedef struct Value	Value;
 typedef struct Type	Type;
 typedef struct Frtype	Frtype;
 
-Extern int	kernel;
-Extern int	remote;
-Extern int	text;
-Extern int	silent;
-Extern Fhdr	fhdr;
-Extern int	line;
-Extern Biobuf*	bout;
-Extern Biobuf*	io[32];
-Extern int	iop;
-Extern char	symbol[Strsize];
-Extern int	interactive;
-Extern int	na;
-Extern int	wtflag;
-Extern Map*	cormap;
-Extern Map*	symmap;
-Extern Lsym*	hash[Hashsize];
-Extern long	dogc;
-Extern Rplace*	ret;
-Extern char*	aout;
-Extern int	gotint;
-Extern Gc*	gcl;
-Extern int	stacked;
-Extern jmp_buf	err;
-Extern Node*	prnt;
-Extern List*	tracelist;
-Extern int	initialising;
-Extern int	quiet;
+extern int	kernel;
+extern int	remote;
+extern int	text;
+extern int	silent;
+extern Fhdr	fhdr;
+extern int	line;
+extern Biobuf*	bout;
+extern Biobuf*	io[32];
+extern int	iop;
+extern char	symbol[Strsize];
+extern int	interactive;
+extern int	na;
+extern int	wtflag;
+extern Map*	cormap;
+extern Map*	symmap;
+extern Lsym*	hash[Hashsize];
+extern long	dogc;
+extern Rplace*	ret;
+extern char*	aout;
+extern int	gotint;
+extern Gc*	gcl;
+extern int	stacked;
+extern jmp_buf	err;
+extern Node*	prnt;
+extern List*	tracelist;
+extern int	initialising;
+extern int	quiet;
 
 extern void	(*expop[])(Node*, Node*);
 #define expr(n, r) do{(r)->comt=0; (*expop[(n)->op])(n, r);}while(0)
@@ -90,7 +90,8 @@ struct Ptab
 	int	pid;
 	int	ctl;
 };
-Extern Ptab	ptab[Maxproc];
+
+extern Ptab	ptab[Maxproc];
 
 struct Rplace
 {

@@ -3,7 +3,7 @@
 #include <bio.h>
 #include <mach.h>
 #include <tos.h>
-#define Extern
+
 #include "mips.h"
 
 char	*file = "v.out";

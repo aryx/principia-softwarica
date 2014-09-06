@@ -4,10 +4,6 @@
 #include	"arm/5.out.h"
 #include	"../8l/elf.h"
 
-#ifndef	EXTERN
-#define	EXTERN	extern
-#endif
-
 #define	LIBNAMELEN	300
 
 void	addlibpath(char*);
@@ -207,7 +203,7 @@ enum
 	Rindex	= 10,		/* no. bits for index in relocation address */
 };
 
-EXTERN union
+union Buf
 {
 	struct
 	{
@@ -215,75 +211,76 @@ EXTERN union
 		uchar	ibuf[MAXIO];			/* input buffer */
 	} u;
 	char	dbuf[1];
-} buf;
+};
+extern union Buf buf;
 
 #define	cbuf	u.obuf
 #define	xbuf	u.ibuf
 
-EXTERN	long	HEADR;			/* length of header */
-EXTERN	int	HEADTYPE;		/* type of header */
-EXTERN	long	INITDAT;		/* data location */
-EXTERN	long	INITRND;		/* data round above text location */
-EXTERN	long	INITTEXT;		/* text location */
-EXTERN	long	INITTEXTP;		/* text location (physical) */
-EXTERN	char*	INITENTRY;		/* entry point */
-EXTERN	long	autosize;
-EXTERN	Biobuf	bso;
-EXTERN	long	bsssize;
-EXTERN	int	cbc;
-EXTERN	uchar*	cbp;
-EXTERN	int	cout;
-EXTERN	Auto*	curauto;
-EXTERN	Auto*	curhist;
-EXTERN	Prog*	curp;
-EXTERN	Prog*	curtext;
-EXTERN	Prog*	datap;
-EXTERN	long	datsize;
-EXTERN	char	debug[128];
-EXTERN	Prog*	etextp;
-EXTERN	Prog*	firstp;
-EXTERN	char	fnuxi4[4];
-EXTERN	char	fnuxi8[8];
-EXTERN	char*	noname;
-EXTERN	Sym*	hash[NHASH];
-EXTERN	Sym*	histfrog[MAXHIST];
-EXTERN	int	histfrogp;
-EXTERN	int	histgen;
-EXTERN	char*	library[50];
-EXTERN	char*	libraryobj[50];
-EXTERN	int	libraryp;
-EXTERN	int	xrefresolv;
-EXTERN	char*	hunk;
-EXTERN	char	inuxi1[1];
-EXTERN	char	inuxi2[2];
-EXTERN	char	inuxi4[4];
-EXTERN	Prog*	lastp;
-EXTERN	long	lcsize;
-EXTERN	char	literal[32];
-EXTERN	int	nerrors;
-EXTERN	long	nhunk;
-EXTERN	long	instoffset;
-EXTERN	Opcross	opcross[8];
-EXTERN	Oprang	oprange[ALAST];
-EXTERN	char*	outfile;
-EXTERN	long	pc;
-EXTERN	uchar	repop[ALAST];
-EXTERN	long	symsize;
-EXTERN	Prog*	textp;
-EXTERN	long	textsize;
-EXTERN	long	thunk;
-EXTERN	int	version;
-EXTERN	char	xcmp[C_GOK+1][C_GOK+1];
-EXTERN	Prog	zprg;
-EXTERN	int	dtype;
-EXTERN	int	armv4;
-EXTERN	int vfp;
+extern	long	HEADR;			/* length of header */
+extern	int	HEADTYPE;		/* type of header */
+extern	long	INITDAT;		/* data location */
+extern	long	INITRND;		/* data round above text location */
+extern	long	INITTEXT;		/* text location */
+extern	long	INITTEXTP;		/* text location (physical) */
+extern	char*	INITENTRY;		/* entry point */
+extern	long	autosize;
+extern	Biobuf	bso;
+extern	long	bsssize;
+extern	int	cbc;
+extern	uchar*	cbp;
+extern	int	cout;
+extern	Auto*	curauto;
+extern	Auto*	curhist;
+extern	Prog*	curp;
+extern	Prog*	curtext;
+extern	Prog*	datap;
+extern	long	datsize;
+extern	char	debug[128];
+extern	Prog*	etextp;
+extern	Prog*	firstp;
+extern	char	fnuxi4[4];
+extern	char	fnuxi8[8];
+extern	char*	noname;
+extern	Sym*	hash[NHASH];
+extern	Sym*	histfrog[MAXHIST];
+extern	int	histfrogp;
+extern	int	histgen;
+extern	char*	library[50];
+extern	char*	libraryobj[50];
+extern	int	libraryp;
+extern	int	xrefresolv;
+extern	char*	hunk;
+extern	char	inuxi1[1];
+extern	char	inuxi2[2];
+extern	char	inuxi4[4];
+extern	Prog*	lastp;
+extern	long	lcsize;
+extern	char	literal[32];
+extern	int	nerrors;
+extern	long	nhunk;
+extern	long	instoffset;
+extern	Opcross	opcross[8];
+extern	Oprang	oprange[ALAST];
+extern	char*	outfile;
+extern	long	pc;
+extern	uchar	repop[ALAST];
+extern	long	symsize;
+extern	Prog*	textp;
+extern	long	textsize;
+extern	long	thunk;
+extern	int	version;
+extern	char	xcmp[C_GOK+1][C_GOK+1];
+extern	Prog	zprg;
+extern	int	dtype;
+extern	int	armv4;
+extern	int vfp;
 
-EXTERN	int	doexp, dlm;
-EXTERN	int	imports, nimports;
-EXTERN	int	exports, nexports;
-EXTERN	char*	EXPTAB;
-EXTERN	Prog	undefp;
+extern	int	doexp, dlm;
+extern	int	imports, nimports;
+extern	int	exports, nexports;
+extern	char*	EXPTAB;
+extern	Prog	undefp;
 
 #define	UP	(&undefp)
 
@@ -291,14 +288,14 @@ extern	char*	anames[];
 extern	Optab	optab[];
 
 void	addpool(Prog*, Adr*);
-EXTERN	Prog*	blitrl;
-EXTERN	Prog*	elitrl;
+extern	Prog*	blitrl;
+extern	Prog*	elitrl;
 
 void	initdiv(void);
-EXTERN	Prog*	prog_div;
-EXTERN	Prog*	prog_divu;
-EXTERN	Prog*	prog_mod;
-EXTERN	Prog*	prog_modu;
+extern	Prog*	prog_div;
+extern	Prog*	prog_divu;
+extern	Prog*	prog_mod;
+extern	Prog*	prog_modu;
 
 #pragma	varargck	type	"A"	int
 #pragma	varargck	type	"A"	uint

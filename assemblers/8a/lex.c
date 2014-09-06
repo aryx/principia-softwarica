@@ -1,5 +1,4 @@
 #include <ctype.h>
-#define	EXTERN
 #include "a.h"
 #include "y.tab.h"
 

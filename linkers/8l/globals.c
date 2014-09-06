@@ -1,0 +1,72 @@
+#include	"l.h"
+
+union Buf buf;
+
+long	HEADR;
+long	HEADTYPE;
+long	INITDAT;
+long	INITRND;
+long	INITTEXT;
+long	INITTEXTP;
+char*	INITENTRY;		/* entry point */
+Biobuf	bso;
+long	bsssize;
+long	casepc;
+int	cbc;
+char*	cbp;
+char*	pcstr;
+int	cout;
+Auto*	curauto;
+Auto*	curhist;
+Prog*	curp;
+Prog*	curtext;
+Prog*	datap;
+Prog*	edatap;
+long	datsize;
+char	debug[128];
+char	literal[32];
+Prog*	etextp;
+Prog*	firstp;
+char	fnuxi8[8];
+char	fnuxi4[4];
+Sym*	hash[NHASH];
+Sym*	histfrog[MAXHIST];
+int	histfrogp;
+int	histgen;
+char*	library[50];
+char*	libraryobj[50];
+int	libraryp;
+int	xrefresolv;
+char*	hunk;
+char	inuxi1[1];
+char	inuxi2[2];
+char	inuxi4[4];
+char	ycover[Ymax*Ymax];
+uchar*	andptr;
+uchar	and[30];
+char	reg[D_NONE];
+Prog*	lastp;
+long	lcsize;
+int	nerrors;
+long	nhunk;
+long	nsymbol;
+char*	noname;
+char*	outfile;
+long	pc;
+long	spsize;
+Sym*	symlist;
+long	symsize;
+Prog*	textp;
+long	textsize;
+long	thunk;
+int	version;
+Prog	zprg;
+int	dtype;
+
+Adr*	reloca;
+int	doexp, dlm;
+int	imports, nimports;
+int	exports, nexports, allexport;
+char*	EXPTAB;
+Prog	undefp;
+

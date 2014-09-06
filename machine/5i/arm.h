@@ -1,9 +1,6 @@
 /*
  * arm.h
  */
-#ifndef	EXTERN
-#define	EXTERN	extern
-#endif
 
 typedef	struct	Registers	Registers;
 typedef	struct	Segment		Segment;
@@ -194,30 +191,30 @@ void		updateicache(ulong addr);
 void*		vaddr(ulong);
 
 /* Globals */
-EXTERN	Registers	reg;
-EXTERN	Memory		memory;
-EXTERN	int		text;
-EXTERN	int		trace;
-EXTERN	int		sysdbg;
-EXTERN	int		calltree;
-EXTERN	Inst		itab[];
-EXTERN	Inst		ispec[];
-EXTERN	Icache		icache;
-EXTERN	Tlb		tlb;
-EXTERN	int		count;
-EXTERN	jmp_buf		errjmp;
-EXTERN	Breakpoint*	bplist;
-EXTERN	int		atbpt;
-EXTERN	int		membpt;
-EXTERN	int		cmdcount;
-EXTERN	int		nopcount;
-EXTERN	ulong		dot;
-EXTERN	char*		file;
-EXTERN	Biobuf*		bioout;
-EXTERN	Biobuf*		bin;
-EXTERN	ulong*		iprof;
-EXTERN	int		datasize;
-EXTERN	Map*		symmap;	
+extern	Registers	reg;
+extern	Memory		memory;
+extern	int		text;
+extern	int		trace;
+extern	int		sysdbg;
+extern	int		calltree;
+extern	Inst		itab[];
+extern	Inst		ispec[];
+extern	Icache		icache;
+extern	Tlb		tlb;
+extern	int		count;
+extern	jmp_buf		errjmp;
+extern	Breakpoint*	bplist;
+extern	int		atbpt;
+extern	int		membpt;
+extern	int		cmdcount;
+extern	int		nopcount;
+extern	ulong		dot;
+extern	char*		file;
+extern	Biobuf*		bioout;
+extern	Biobuf*		bin;
+extern	ulong*		iprof;
+extern	int		datasize;
+extern	Map*		symmap;	
 
 /* Plan9 Kernel constants */
 enum

@@ -2,7 +2,6 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
-#define Extern
 #include "acid.h"
 #include "y.tab.h"
 

@@ -202,31 +202,32 @@ void		stktrace(int);
 void		iprofile(void);
 
 /* Globals */
-Extern 		Registers reg;
-Extern 		Memory memory;
-Extern		int text;
-Extern		int trace;
-Extern 		int sysdbg;
-Extern 		int calltree;
-Extern		Inst itab[];
-Extern		Inst ispec[];
-Extern		Icache icache;
-Extern		Tlb tlb;
-Extern		int count;
-Extern		jmp_buf errjmp;
-Extern		Breakpoint *bplist;
-Extern		int atbpt;
-Extern		int membpt;
-Extern		int cmdcount;
-Extern		int nopcount;
-Extern		ulong dot;
+extern 		Registers reg;
+extern 		Memory memory;
+extern		int text;
+extern		int trace;
+extern 		int sysdbg;
+extern 		int calltree;
+extern		Inst itab[];
+extern		Inst ispec[];
+extern		Icache icache;
+extern		Tlb tlb;
+extern		int count;
+extern		jmp_buf errjmp;
+extern		Breakpoint *bplist;
+extern		int atbpt;
+extern		int membpt;
+extern		int cmdcount;
+extern		int nopcount;
+extern		ulong dot;
+extern		Biobuf *bioout;
+extern		Biobuf *bin;
+extern		ulong *iprof;
+extern		Map *symmap;		
+extern		int rtrace;
+
 extern		char *file;
-Extern		Biobuf *bioout;
-Extern		Biobuf *bin;
-Extern		ulong *iprof;
 extern		int datasize;
-Extern		Map *symmap;		
-Extern		int rtrace;
 
 /* Plan9 Kernel constants */
 #define	BY2PG		(16*1024)

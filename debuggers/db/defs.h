@@ -108,3 +108,9 @@ extern	Map	*cormap, *symmap, *dotmap;
 extern	BKPT	*bkpthead;
 extern	int	kflag;
 extern	int	lastc, peekc;
+
+// new decl, was in main.c before
+extern char *errmsg;
+extern jmp_buf env;
+
+extern ADDR	ditto;

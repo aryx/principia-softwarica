@@ -4,10 +4,6 @@
 #include	"386/8.out.h"
 #include	"../8l/elf.h"
 
-#ifndef	EXTERN
-#define	EXTERN	extern
-#endif
-
 #define	P		((Prog*)0)
 #define	S		((Sym*)0)
 #define	TNAME		(curtext?curtext->from.sym->name:noname)
@@ -189,7 +185,7 @@ enum
 	Rindex	= 10,		/* no. bits for index in relocation address */
 };
 
-EXTERN union
+union Buf
 {
 	struct
 	{
@@ -197,7 +193,8 @@ EXTERN union
 		uchar	ibuf[MAXIO];			/* input buffer */
 	} u;
 	char	dbuf[1];
-} buf;
+};
+extern union Buf buf;
 
 #define	cbuf	u.obuf
 #define	xbuf	u.ibuf
@@ -212,73 +209,73 @@ EXTERN union
 
 #pragma	varargck	argpos	diag 1
 
-EXTERN	long	HEADR;
-EXTERN	long	HEADTYPE;
-EXTERN	long	INITDAT;
-EXTERN	long	INITRND;
-EXTERN	long	INITTEXT;
-EXTERN	long	INITTEXTP;
-EXTERN	char*	INITENTRY;		/* entry point */
-EXTERN	Biobuf	bso;
-EXTERN	long	bsssize;
-EXTERN	long	casepc;
-EXTERN	int	cbc;
-EXTERN	char*	cbp;
-EXTERN	char*	pcstr;
-EXTERN	int	cout;
-EXTERN	Auto*	curauto;
-EXTERN	Auto*	curhist;
-EXTERN	Prog*	curp;
-EXTERN	Prog*	curtext;
-EXTERN	Prog*	datap;
-EXTERN	Prog*	edatap;
-EXTERN	long	datsize;
-EXTERN	char	debug[128];
-EXTERN	char	literal[32];
-EXTERN	Prog*	etextp;
-EXTERN	Prog*	firstp;
-EXTERN	char	fnuxi8[8];
-EXTERN	char	fnuxi4[4];
-EXTERN	Sym*	hash[NHASH];
-EXTERN	Sym*	histfrog[MAXHIST];
-EXTERN	int	histfrogp;
-EXTERN	int	histgen;
-EXTERN	char*	library[50];
-EXTERN	char*	libraryobj[50];
-EXTERN	int	libraryp;
-EXTERN	int	xrefresolv;
-EXTERN	char*	hunk;
-EXTERN	char	inuxi1[1];
-EXTERN	char	inuxi2[2];
-EXTERN	char	inuxi4[4];
-EXTERN	char	ycover[Ymax*Ymax];
-EXTERN	uchar*	andptr;
-EXTERN	uchar	and[30];
-EXTERN	char	reg[D_NONE];
-EXTERN	Prog*	lastp;
-EXTERN	long	lcsize;
-EXTERN	int	nerrors;
-EXTERN	long	nhunk;
-EXTERN	long	nsymbol;
-EXTERN	char*	noname;
-EXTERN	char*	outfile;
-EXTERN	long	pc;
-EXTERN	long	spsize;
-EXTERN	Sym*	symlist;
-EXTERN	long	symsize;
-EXTERN	Prog*	textp;
-EXTERN	long	textsize;
-EXTERN	long	thunk;
-EXTERN	int	version;
-EXTERN	Prog	zprg;
-EXTERN	int	dtype;
+extern	long	HEADR;
+extern	long	HEADTYPE;
+extern	long	INITDAT;
+extern	long	INITRND;
+extern	long	INITTEXT;
+extern	long	INITTEXTP;
+extern	char*	INITENTRY;		/* entry point */
+extern	Biobuf	bso;
+extern	long	bsssize;
+extern	long	casepc;
+extern	int	cbc;
+extern	char*	cbp;
+extern	char*	pcstr;
+extern	int	cout;
+extern	Auto*	curauto;
+extern	Auto*	curhist;
+extern	Prog*	curp;
+extern	Prog*	curtext;
+extern	Prog*	datap;
+extern	Prog*	edatap;
+extern	long	datsize;
+extern	char	debug[128];
+extern	char	literal[32];
+extern	Prog*	etextp;
+extern	Prog*	firstp;
+extern	char	fnuxi8[8];
+extern	char	fnuxi4[4];
+extern	Sym*	hash[NHASH];
+extern	Sym*	histfrog[MAXHIST];
+extern	int	histfrogp;
+extern	int	histgen;
+extern	char*	library[50];
+extern	char*	libraryobj[50];
+extern	int	libraryp;
+extern	int	xrefresolv;
+extern	char*	hunk;
+extern	char	inuxi1[1];
+extern	char	inuxi2[2];
+extern	char	inuxi4[4];
+extern	char	ycover[Ymax*Ymax];
+extern	uchar*	andptr;
+extern	uchar	and[30];
+extern	char	reg[D_NONE];
+extern	Prog*	lastp;
+extern	long	lcsize;
+extern	int	nerrors;
+extern	long	nhunk;
+extern	long	nsymbol;
+extern	char*	noname;
+extern	char*	outfile;
+extern	long	pc;
+extern	long	spsize;
+extern	Sym*	symlist;
+extern	long	symsize;
+extern	Prog*	textp;
+extern	long	textsize;
+extern	long	thunk;
+extern	int	version;
+extern	Prog	zprg;
+extern	int	dtype;
 
-EXTERN	Adr*	reloca;
-EXTERN	int	doexp, dlm;
-EXTERN	int	imports, nimports;
-EXTERN	int	exports, nexports, allexport;
-EXTERN	char*	EXPTAB;
-EXTERN	Prog	undefp;
+extern	Adr*	reloca;
+extern	int	doexp, dlm;
+extern	int	imports, nimports;
+extern	int	exports, nexports, allexport;
+extern	char*	EXPTAB;
+extern	Prog	undefp;
 
 #define	UP	(&undefp)
 

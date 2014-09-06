@@ -101,18 +101,18 @@ enum
 	Fidchunk	= 1000,
 };
 
-Extern Fsrpc	*Workq;
-Extern int  	dbg;
-Extern File	*root;
-Extern Fid	**fhash;
-Extern Fid	*fidfree;
-Extern int	qid;
-Extern Proc	*Proclist;
-Extern int	done;
-Extern Stats	*stats;
-Extern Frec	*frhead;
-Extern Frec	*frtail;
-Extern int	myiounit;
+extern Fsrpc	*Workq;
+extern int  	dbg;
+extern File	*root;
+extern Fid	**fhash;
+extern Fid	*fidfree;
+extern int	qid;
+extern Proc	*Proclist;
+extern int	done;
+extern Stats	*stats;
+extern Frec	*frhead;
+extern Frec	*frtail;
+extern int	myiounit;
 
 /* File system protocol service procedures */
 void Xcreate(Fsrpc*), Xclunk(Fsrpc*); 

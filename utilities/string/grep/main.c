@@ -1,4 +1,3 @@
-#define	EXTERN
 #include	"grep.h"
 
 char *validflags = "bchiLlnsv";

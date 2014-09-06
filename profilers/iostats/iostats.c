@@ -5,7 +5,7 @@
 #include <libc.h>
 #include <auth.h>
 #include <fcall.h>
-#define Extern
+
 #include "statfs.h"
 
 void	runprog(char**);

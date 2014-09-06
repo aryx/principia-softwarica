@@ -2,7 +2,7 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
-#define	EXTERN
+
 #include "arm.h"
 
 #define	ODIRLEN	116	/* compatibility; used in _stat etc. */

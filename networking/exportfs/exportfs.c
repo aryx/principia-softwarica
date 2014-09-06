@@ -6,7 +6,7 @@
 #include <auth.h>
 #include <fcall.h>
 #include <libsec.h>
-#define Extern
+
 #include "exportfs.h"
 
 #define QIDPATH	((1LL<<48)-1)

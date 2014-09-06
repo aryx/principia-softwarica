@@ -4,10 +4,6 @@
 #include	"mips/v.out.h"
 #include	"../8l/elf.h"
 
-#ifndef	EXTERN
-#define	EXTERN	extern
-#endif
-
 #define	LIBNAMELEN	300
 
 typedef	struct	Adr	Adr;
@@ -172,7 +168,7 @@ enum
 	MAXHIST		= 20,				/* limit of path elements for history symbols */
 };
 
-EXTERN union
+union Buf
 {
 	struct
 	{
@@ -180,70 +176,72 @@ EXTERN union
 		uchar	ibuf[MAXIO];			/* input buffer */
 	} u;
 	char	dbuf[1];
-} buf;
+};
+
+extern union Buf buf;
 
 #define	cbuf	u.obuf
 #define	xbuf	u.ibuf
 
-EXTERN	long	HEADR;			/* length of header */
-EXTERN	int	HEADTYPE;		/* type of header */
-EXTERN	vlong	INITDAT;		/* data location */
-EXTERN	vlong	INITRND;		/* data round above text location */
-EXTERN	vlong	INITTEXT;		/* text location */
-EXTERN	vlong	INITTEXTP;		/* text location (physical) */
-EXTERN	char*	INITENTRY;		/* entry point */
-EXTERN	long	autosize;
-EXTERN	Biobuf	bso;
-EXTERN	long	bsssize;
-EXTERN	int	cbc;
-EXTERN	uchar*	cbp;
-EXTERN	int	cout;
-EXTERN	Auto*	curauto;
-EXTERN	Auto*	curhist;
-EXTERN	Prog*	curp;
-EXTERN	Prog*	curtext;
-EXTERN	Prog*	datap;
-EXTERN	long	datsize;
-EXTERN	char	debug[128];
-EXTERN	Prog*	etextp;
-EXTERN	Prog*	firstp;
-EXTERN	char	fnuxi4[4];	/* for 3l [sic] */
-EXTERN	char	fnuxi8[8];
-EXTERN	char*	noname;
-EXTERN	Sym*	hash[NHASH];
-EXTERN	Sym*	histfrog[MAXHIST];
-EXTERN	int	histfrogp;
-EXTERN	int	histgen;
-EXTERN	char*	library[50];
-EXTERN	char*	libraryobj[50];
-EXTERN	int	libraryp;
-EXTERN	int	xrefresolv;
-EXTERN	char*	hunk;
-EXTERN	char	inuxi1[1];
-EXTERN	char	inuxi2[2];
-EXTERN	char	inuxi4[4];
-EXTERN	Prog*	lastp;
-EXTERN	long	lcsize;
-EXTERN	char	literal[32];
-EXTERN	int	nerrors;
-EXTERN	long	nhunk;
-EXTERN	long	instoffset;
-EXTERN	Opcross	opcross[10];
-EXTERN	Oprang	oprange[ALAST];
-EXTERN	char*	outfile;
-EXTERN	vlong	pc;
-EXTERN	uchar	repop[ALAST];
-EXTERN	long	symsize;
-EXTERN	Prog*	textp;
-EXTERN	vlong	textsize;
-EXTERN	long	thunk;
-EXTERN	int	version;
-EXTERN	char	xcmp[32][32];
-EXTERN	Prog	zprg;
-EXTERN	int	dtype;
-EXTERN	int	little;
+extern	long	HEADR;			/* length of header */
+extern	int	HEADTYPE;		/* type of header */
+extern	vlong	INITDAT;		/* data location */
+extern	vlong	INITRND;		/* data round above text location */
+extern	vlong	INITTEXT;		/* text location */
+extern	vlong	INITTEXTP;		/* text location (physical) */
+extern	char*	INITENTRY;		/* entry point */
+extern	long	autosize;
+extern	Biobuf	bso;
+extern	long	bsssize;
+extern	int	cbc;
+extern	uchar*	cbp;
+extern	int	cout;
+extern	Auto*	curauto;
+extern	Auto*	curhist;
+extern	Prog*	curp;
+extern	Prog*	curtext;
+extern	Prog*	datap;
+extern	long	datsize;
+extern	char	debug[128];
+extern	Prog*	etextp;
+extern	Prog*	firstp;
+extern	char	fnuxi4[4];	/* for 3l [sic] */
+extern	char	fnuxi8[8];
+extern	char*	noname;
+extern	Sym*	hash[NHASH];
+extern	Sym*	histfrog[MAXHIST];
+extern	int	histfrogp;
+extern	int	histgen;
+extern	char*	library[50];
+extern	char*	libraryobj[50];
+extern	int	libraryp;
+extern	int	xrefresolv;
+extern	char*	hunk;
+extern	char	inuxi1[1];
+extern	char	inuxi2[2];
+extern	char	inuxi4[4];
+extern	Prog*	lastp;
+extern	long	lcsize;
+extern	char	literal[32];
+extern	int	nerrors;
+extern	long	nhunk;
+extern	long	instoffset;
+extern	Opcross	opcross[10];
+extern	Oprang	oprange[ALAST];
+extern	char*	outfile;
+extern	vlong	pc;
+extern	uchar	repop[ALAST];
+extern	long	symsize;
+extern	Prog*	textp;
+extern	vlong	textsize;
+extern	long	thunk;
+extern	int	version;
+extern	char	xcmp[32][32];
+extern	Prog	zprg;
+extern	int	dtype;
+extern	int	little;
 
-EXTERN	struct
+struct Nop
 {
 	Count	branch;
 	Count	fcmp;
@@ -252,7 +250,8 @@ EXTERN	struct
 	Count	page;
 	Count	jump;
 	Count	store;
-} nop;
+};
+extern struct Nop nop;
 
 extern	char*	anames[];
 extern	Optab	optab[];

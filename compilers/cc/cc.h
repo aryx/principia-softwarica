@@ -5,10 +5,6 @@
 
 #pragma	lib	"../cc/cc.a$O"
 
-#ifndef	EXTERN
-#define EXTERN	extern
-#endif
-
 typedef	struct	Node	Node;
 typedef	struct	SymCc	Sym;
 typedef	struct	Type	Type;
@@ -141,11 +137,12 @@ struct	Init			/* general purpose initialization */
 	char*	s;
 };
 
-EXTERN struct
+struct Fi
 {
 	char*	p;
 	int	c;
-} fi;
+};
+extern struct Fi fi;
 
 struct	Io
 {
@@ -165,7 +162,7 @@ struct	Hist
 	long	offset;
 };
 #define	H	((Hist*)0)
-EXTERN Hist*	hist;
+extern Hist*	hist;
 
 struct	Term
 {
@@ -418,76 +415,77 @@ struct	Funct
 	Sym*	castfr[NTYPE];
 };
 
-EXTERN struct
+struct En
 {
 	Type*	tenum;		/* type of entire enum */
 	Type*	cenum;		/* type of current enum run */
 	vlong	lastenum;	/* value of current enum */
 	double	floatenum;	/* value of current enum */
-} en;
+};
+extern struct En en;
 
-EXTERN	int	autobn;
-EXTERN	long	autoffset;
-EXTERN	int	blockno;
-EXTERN	Decl*	dclstack;
-EXTERN	char	debug[256];
-EXTERN	Hist*	ehist;
-EXTERN	long	firstbit;
-EXTERN	Sym*	firstarg;
-EXTERN	Type*	firstargtype;
-EXTERN	Decl*	firstdcl;
-EXTERN	int	fperror;
-EXTERN	Sym*	hash[NHASH];
-EXTERN	int	hasdoubled;
-EXTERN	char*	hunk;
-EXTERN	char**	include;
-EXTERN	Io*	iofree;
-EXTERN	Io*	ionext;
-EXTERN	Io*	iostack;
-EXTERN	long	lastbit;
-EXTERN	char	lastclass;
-EXTERN	Type*	lastdcl;
-EXTERN	long	lastfield;
-EXTERN	Type*	lasttype;
-EXTERN	long	lineno;
-EXTERN	long	nearln;
-EXTERN	int	maxinclude;
-EXTERN	int	nerrors;
-EXTERN	int	newflag;
-EXTERN	long	nhunk;
-EXTERN	int	ninclude;
-EXTERN	Node*	nodproto;
-EXTERN	Node*	nodcast;
-EXTERN	Biobuf	outbuf;
-EXTERN	Biobuf	diagbuf;
-EXTERN	char*	outfile;
-EXTERN	char*	pathname;
-EXTERN	int	peekc;
-EXTERN	long	stkoff;
-EXTERN	Type*	strf;
-EXTERN	Type*	strl;
-EXTERN	char	symb[NSYMB];
-EXTERN	Sym*	symstring;
-EXTERN	int	taggen;
-EXTERN	Type*	tfield;
-EXTERN	Type*	tufield;
-EXTERN	int	thechar;
-EXTERN	char*	thestring;
-EXTERN	Type*	thisfn;
-EXTERN	long	thunk;
-EXTERN	Type*	types[NTYPE];
-EXTERN	Type*	fntypes[NTYPE];
-EXTERN	Node*	initlist;
-EXTERN	Term	term[NTERM];
-EXTERN	int	nterm;
-EXTERN	int	packflg;
-EXTERN	int	fproundflg;
-EXTERN	int	profileflg;
-EXTERN	int	ncontin;
-EXTERN	int	newvlongcode;
-EXTERN	int	canreach;
-EXTERN	int	warnreach;
-EXTERN	Bits	zbits;
+extern	int	autobn;
+extern	long	autoffset;
+extern	int	blockno;
+extern	Decl*	dclstack;
+extern	char	debug[256];
+extern	Hist*	ehist;
+extern	long	firstbit;
+extern	Sym*	firstarg;
+extern	Type*	firstargtype;
+extern	Decl*	firstdcl;
+extern	int	fperror;
+extern	Sym*	hash[NHASH];
+extern	int	hasdoubled;
+extern	char*	hunk;
+extern	char**	include;
+extern	Io*	iofree;
+extern	Io*	ionext;
+extern	Io*	iostack;
+extern	long	lastbit;
+extern	char	lastclass;
+extern	Type*	lastdcl;
+extern	long	lastfield;
+extern	Type*	lasttype;
+extern	long	lineno;
+extern	long	nearln;
+extern	int	maxinclude;
+extern	int	nerrors;
+extern	int	newflag;
+extern	long	nhunk;
+extern	int	ninclude;
+extern	Node*	nodproto;
+extern	Node*	nodcast;
+extern	Biobuf	outbuf;
+extern	Biobuf	diagbuf;
+extern	char*	outfile;
+extern	char*	pathname;
+extern	int	peekc;
+extern	long	stkoff;
+extern	Type*	strf;
+extern	Type*	strl;
+extern	char	symb[NSYMB];
+extern	Sym*	symstring;
+extern	int	taggen;
+extern	Type*	tfield;
+extern	Type*	tufield;
+extern	int	thechar;
+extern	char*	thestring;
+extern	Type*	thisfn;
+extern	long	thunk;
+extern	Type*	types[NTYPE];
+extern	Type*	fntypes[NTYPE];
+extern	Node*	initlist;
+extern	Term	term[NTERM];
+extern	int	nterm;
+extern	int	packflg;
+extern	int	fproundflg;
+extern	int	profileflg;
+extern	int	ncontin;
+extern	int	newvlongcode;
+extern	int	canreach;
+extern	int	warnreach;
+extern	Bits	zbits;
 
 extern	char	*onames[], *tnames[], *gnames[];
 extern	char	*cnames[], *qnames[], *bnames[];
@@ -515,9 +513,9 @@ extern	char	typechlvp[];
 extern	char	typechlp[];
 extern	char	typechlpfd[];
 
-EXTERN	char*	typeswitch;
-EXTERN	char*	typeword;
-EXTERN	char*	typecmplx;
+extern	char*	typeswitch;
+extern	char*	typeword;
+extern	char*	typecmplx;
 
 extern	ulong	thash1;
 extern	ulong	thash2;

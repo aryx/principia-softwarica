@@ -24,14 +24,15 @@ typedef	struct	Reg	Reg;
 typedef	struct	Rgn	Rgn;
 typedef	struct	Renv	Renv;
 
-EXTERN	struct
+struct Idx
 {
 	Node*	regtree;
 	Node*	basetree;
 	short	scale;
 	short	reg;
 	short	ptr;
-} idx;
+};
+extern struct Idx idx;
 
 struct	Adr
 {
@@ -131,35 +132,35 @@ struct	Rgn
 	short	regno;
 };
 
-EXTERN	long	breakpc;
-EXTERN	long	nbreak;
-EXTERN	Case*	cases;
-EXTERN	Node	constnode;
-EXTERN	Node	fconstnode;
-EXTERN	long	continpc;
-EXTERN	long	curarg;
-EXTERN	long	cursafe;
-EXTERN	Prog*	firstp;
-EXTERN	Prog*	lastp;
-EXTERN	long	maxargsafe;
-EXTERN	int	mnstring;
-EXTERN	Node*	nodrat;
-EXTERN	Node*	nodret;
-EXTERN	Node*	nodsafe;
-EXTERN	long	nrathole;
-EXTERN	long	nstring;
-EXTERN	Prog*	p;
-EXTERN	long	pc;
-EXTERN	Node	regnode;
-EXTERN	Node	fregnode0;
-EXTERN	Node	fregnode1;
-EXTERN	char	string[NSNAME];
-EXTERN	Sym*	symrathole;
-EXTERN	Node	znode;
-EXTERN	Prog	zprog;
-EXTERN	int	reg[D_NONE];
-EXTERN	long	exregoffset;
-EXTERN	long	exfregoffset;
+extern	long	breakpc;
+extern	long	nbreak;
+extern	Case*	cases;
+extern	Node	constnode;
+extern	Node	fconstnode;
+extern	long	continpc;
+extern	long	curarg;
+extern	long	cursafe;
+extern	Prog*	firstp;
+extern	Prog*	lastp;
+extern	long	maxargsafe;
+extern	int	mnstring;
+extern	Node*	nodrat;
+extern	Node*	nodret;
+extern	Node*	nodsafe;
+extern	long	nrathole;
+extern	long	nstring;
+extern	Prog*	p;
+extern	long	pc;
+extern	Node	regnode;
+extern	Node	fregnode0;
+extern	Node	fregnode1;
+extern	char	string[NSNAME];
+extern	Sym*	symrathole;
+extern	Node	znode;
+extern	Prog	zprog;
+extern	int	reg[D_NONE];
+extern	long	exregoffset;
+extern	long	exfregoffset;
 
 #define	BLOAD(r)	band(bnot(r->refbehind), r->refahead)
 #define	BSTORE(r)	band(bnot(r->calbehind), r->calahead)
@@ -173,30 +174,30 @@ EXTERN	long	exfregoffset;
 #define	CINF	1000
 #define	LOOP	3
 
-EXTERN	Rgn	region[NRGN];
-EXTERN	Rgn*	rgp;
-EXTERN	int	nregion;
-EXTERN	int	nvar;
+extern	Rgn	region[NRGN];
+extern	Rgn*	rgp;
+extern	int	nregion;
+extern	int	nvar;
 
-EXTERN	Bits	externs;
-EXTERN	Bits	params;
-EXTERN	Bits	consts;
-EXTERN	Bits	addrs;
+extern	Bits	externs;
+extern	Bits	params;
+extern	Bits	consts;
+extern	Bits	addrs;
 
-EXTERN	long	regbits;
-EXTERN	long	exregbits;
+extern	long	regbits;
+extern	long	exregbits;
 
-EXTERN	int	change;
-EXTERN	int	suppress;
+extern	int	change;
+extern	int	suppress;
 
-EXTERN	Reg*	firstr;
-EXTERN	Reg*	lastr;
-EXTERN	Reg	zreg;
-EXTERN	Reg*	freer;
-EXTERN	Var	var[NVAR];
-EXTERN	long*	idom;
-EXTERN	Reg**	rpo2r;
-EXTERN	long	maxnr;
+extern	Reg*	firstr;
+extern	Reg*	lastr;
+extern	Reg	zreg;
+extern	Reg*	freer;
+extern	Var	var[NVAR];
+extern	long*	idom;
+extern	Reg**	rpo2r;
+extern	long	maxnr;
 
 extern	char*	anames[];
 

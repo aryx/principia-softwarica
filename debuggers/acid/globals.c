@@ -1,0 +1,35 @@
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <mach.h>
+#include "acid.h"
+
+int	kernel;
+int	remote;
+int	text;
+int	silent;
+Fhdr	fhdr;
+int	line;
+Biobuf*	bout;
+Biobuf*	io[32];
+int	iop;
+char	symbol[Strsize];
+int	interactive;
+int	na;
+int	wtflag;
+Map*	cormap;
+Map*	symmap;
+Lsym*	hash[Hashsize];
+long	dogc;
+Rplace*	ret;
+char*	aout;
+int	gotint;
+Gc*	gcl;
+int	stacked;
+jmp_buf	err;
+Node*	prnt;
+List*	tracelist;
+int	initialising;
+int	quiet;
+
+Ptab	ptab[Maxproc];

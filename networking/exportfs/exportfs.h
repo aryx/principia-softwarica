@@ -88,19 +88,19 @@ char Enomem[];
 char Emip[];
 char Enopsmt[];
 
-Extern Fsrpc	*Workq;
-Extern int  	dbg;
-Extern File	*root;
-Extern File	*psmpt;
-Extern Fid	**fhash;
-Extern Fid	*fidfree;
-Extern Proc	*Proclist;
-Extern char	psmap[Npsmpt];
-Extern Qidtab	*qidtab[Nqidtab];
-Extern ulong	messagesize;
-Extern char	Enomem[];
-Extern int	srvfd;
-Extern char*	patternfile;
+extern Fsrpc	*Workq;
+extern int  	dbg;
+extern File	*root;
+extern File	*psmpt;
+extern Fid	**fhash;
+extern Fid	*fidfree;
+extern Proc	*Proclist;
+extern char	psmap[Npsmpt];
+extern Qidtab	*qidtab[Nqidtab];
+extern ulong	messagesize;
+extern char	Enomem[];
+extern int	srvfd;
+extern char*	patternfile;
 
 /* File system protocol service procedures */
 void Xattach(Fsrpc*);

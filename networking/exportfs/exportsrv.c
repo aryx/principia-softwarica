@@ -2,7 +2,7 @@
 #include <libc.h>
 #include <auth.h>
 #include <fcall.h>
-#define Extern	extern
+
 #include "exportfs.h"
 
 extern char *netdir, *local, *remote;

@@ -4,7 +4,6 @@
 #include <ctype.h>
 #include <mach.h>
 #include <regexp.h>
-#define Extern extern
 #include "acid.h"
 #include "y.tab.h"
 

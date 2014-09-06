@@ -2,10 +2,6 @@
 #include	<libc.h>
 #include	<bio.h>
 
-#ifndef	EXTERN
-#define	EXTERN	extern
-#endif
-
 typedef	struct	Re	Re;
 typedef	struct	Re2	Re2;
 typedef	struct	State	State;
@@ -67,7 +63,7 @@ enum
 	Bflag		= 1<<8
 };
 
-EXTERN	union
+union U
 {
 	char	string[16*1024];
 	struct
@@ -82,24 +78,25 @@ EXTERN	union
 		uchar	pre[16*1024];	/* to save to previous '\n' */
 		uchar	buf[16*1024];	/* input buffer */
 	};
-} u;
+};
+extern union U u;
 
-EXTERN	char	*filename;
-EXTERN	char	*pattern;
-EXTERN	Biobuf	bout;
-EXTERN	char	flags[256];
-EXTERN	Re**	follow;
-EXTERN	ushort	gen;
-EXTERN	char*	input;
-EXTERN	long	lineno;
-EXTERN	int	literal;
-EXTERN	int	matched;
-EXTERN	long	maxfollow;
-EXTERN	long	nfollow;
-EXTERN	int	peekc;
-EXTERN	Biobuf*	rein;
-EXTERN	State*	state0;
-EXTERN	Re2	topre;
+extern	char	*filename;
+extern	char	*pattern;
+extern	Biobuf	bout;
+extern	char	flags[256];
+extern	Re**	follow;
+extern	ushort	gen;
+extern	char*	input;
+extern	long	lineno;
+extern	int	literal;
+extern	int	matched;
+extern	long	maxfollow;
+extern	long	nfollow;
+extern	int	peekc;
+extern	Biobuf*	rein;
+extern	State*	state0;
+extern	Re2	topre;
 
 extern	Re*	addcase(Re*);
 extern	void	appendnext(Re*, Re*);

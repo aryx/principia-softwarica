@@ -3,7 +3,7 @@
 #include <bio.h>
 #include <mach.h>
 #include <ctype.h>
-#define Extern extern
+
 #include "mips.h"
 
 void

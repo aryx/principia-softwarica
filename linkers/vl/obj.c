@@ -1,5 +1,4 @@
 /* vl - mips linker */
-#define	EXTERN
 #include	"l.h"
 #include	<ar.h>
 
