@@ -10,7 +10,6 @@
 static long	round(long, long);
 
 extern	ADDR	ditto;
-uvlong	expv;
 
 static WORD
 ascval(void)

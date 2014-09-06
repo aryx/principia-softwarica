@@ -4,13 +4,6 @@
 #include "defs.h"
 #include "fns.h"
 
-int wtflag = OREAD;
-BOOL kflag;
-
-BOOL mkfault;
-ADDR maxoff;
-
-int xargc;		/* bullshit */
 
 extern	BOOL	executing;
 extern	int	infile;
@@ -21,8 +14,8 @@ int	alldigs(char*);
 void	fault(void*, char*);
 
 extern	char	*Ipath;
-jmp_buf env;
-static char *errmsg;
+extern jmp_buf env;
+extern char *errmsg;
 
 void
 main(int argc, char **argv)
@@ -167,30 +160,6 @@ done(void)
 	exits(exitflg? "error": 0);
 }
 
-/*
- * An error occurred; save the message for later printing,
- * close open files, and reset to main command loop.
- */
-void
-error(char *n)
-{
-	errmsg = n;
-	iclose(0, 1);
-	oclose();
-	flush();
-	delbp();
-	ending = 0;
-	longjmp(env, 1);
-}
-
-void
-errors(char *m, char *n)
-{
-	static char buf[128];
-
-	sprint(buf, "%s: %s", m, n);
-	error(buf);
-}
 
 /*
  * An interrupt occurred;

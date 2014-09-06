@@ -10,7 +10,7 @@ int child;
 int msgfd = -1;
 int notefd = -1;
 int pcspid = -1;
-int pcsactive = 0;
+
 
 void
 setpcs(void)

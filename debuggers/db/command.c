@@ -15,12 +15,8 @@ extern	Rune	*lp;
 char	eqformat[ARB] = "z";
 char	stformat[ARB] = "zMi";
 
-ADDR	ditto;
 
-ADDR	dot;
-int	dotinc;
-WORD	adrval, cntval, loopcnt;
-int	adrflg, cntflg;
+WORD loopcnt;
 
 /* command decoding */
 int

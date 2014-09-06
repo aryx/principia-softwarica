@@ -7,14 +7,9 @@
 #include "defs.h"
 #include "fns.h"
 
-BKPT *bkpthead;
 
 BOOL bpin;
 
-int pid;
-int nnote;
-int ending;
-char note[NNOTE][ERRMAX];
 
 /* service routines for sub process control */
 

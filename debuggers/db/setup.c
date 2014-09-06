@@ -8,8 +8,6 @@
 char	*symfil;
 char	*corfil;
 
-Map	*symmap;
-Map	*cormap;
 Map	*dotmap;
 
 int fsym, fcor;
