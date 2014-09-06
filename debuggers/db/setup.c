@@ -73,13 +73,14 @@ setcor(void)
 	return;
 }
 
+extern Mach mi386;
+extern Machdata i386mach;
+
 Map *
 dumbmap(int fd)
 {
 	Map *dumb;
 
-	extern Mach mi386;
-	extern Machdata i386mach;
 
 	dumb = newmap(0, 1);
 	setmap(dumb, fd, 0, 0xffffffff, 0, "data");

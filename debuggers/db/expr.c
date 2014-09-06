@@ -25,6 +25,11 @@ ascval(void)
 	return((WORD) r);
 }
 
+union fpin_union {
+		WORD w;
+		float f;
+};
+
 /*
  * read a floating point number
  * the result must fit in a WORD
@@ -33,10 +38,7 @@ ascval(void)
 static WORD
 fpin(char *buf)
 {
-	union {
-		WORD w;
-		float f;
-	} x;
+  union fpin_union x;
 
 	x.f = atof(buf);
 	return (x.w);
