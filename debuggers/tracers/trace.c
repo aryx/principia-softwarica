@@ -4,6 +4,7 @@
 #include <thread.h>
 #include <ip.h>
 #include <bio.h>
+
 #include <draw.h>
 #include <mouse.h>
 #include <cursor.h>
@@ -90,12 +91,14 @@ char *schedstatename[] = {
 	[SInte] =	"Inte",
 };
 
-struct {
+struct scale {
 	vlong	scale;
 	vlong	bigtics;
 	vlong	littletics;
 	int	sleep;
-} scales[] = {
+};
+
+struct scale scales[] = {
 	{	US(500),	US(100),	US(50),		  0},
 	{	US(1000),	US(500),	US(100),	  0},
 	{	US(2000),	US(1000),	US(200),	  0},
