@@ -1,3 +1,4 @@
+/*s: db/fns.h */
 void		acommand(int);
 void		attachprocess(void);
 void		bkput(BKPT*, int);
@@ -87,3 +88,4 @@ int		valpr(long, int);
 
 #pragma	varargck	argpos	dprint	1
 #pragma	varargck	type	"t"	void
+/*e: db/fns.h */

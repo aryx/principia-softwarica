@@ -1,15 +1,18 @@
+/*s: acid/acid.h */
+/*s: enum _anon_ (acid/acid.h) */
 /* acid.h */
 enum
 {
-	Eof		= -1,
-	Strsize		= 4096,
-	Hashsize	= 128,
-	Maxarg		= 512,
-	NFD		= 100,
-	Maxproc		= 50,
-	Maxval		= 10,
-	Mempergc	= 1024*1024,
+    Eof		= -1,
+    Strsize		= 4096,
+    Hashsize	= 128,
+    Maxarg		= 512,
+    NFD		= 100,
+    Maxproc		= 50,
+    Maxval		= 10,
+    Mempergc	= 1024*1024,
 };
+/*e: enum _anon_ (acid/acid.h) */
 
 #pragma varargck type "L"	void
 
@@ -55,121 +58,149 @@ extern int	initialising;
 extern int	quiet;
 
 extern void	(*expop[])(Node*, Node*);
+/*s: macro expr */
 #define expr(n, r) do{(r)->comt=0; (*expop[(n)->op])(n, r);}while(0)
+/*e: macro expr */
 extern int	fmtsize(Value *v) ;
 
+/*s: enum _anon_ (acid/acid.h)2 */
 enum
 {
-	TINT,
-	TFLOAT,
-	TSTRING,
-	TLIST,
-	TCODE,
+    TINT,
+    TFLOAT,
+    TSTRING,
+    TLIST,
+    TCODE,
 };
+/*e: enum _anon_ (acid/acid.h)2 */
 
+/*s: struct Type */
 struct Type
 {
-	Type*	next;
-	int	offset;
-	char	fmt;
-	char	depth;
-	Lsym*	type;
-	Lsym*	tag;
-	Lsym*	base;
+    Type*	next;
+    int	offset;
+    char	fmt;
+    char	depth;
+    Lsym*	type;
+    Lsym*	tag;
+    Lsym*	base;
 };
+/*e: struct Type */
 
+/*s: struct Frtype */
 struct Frtype
 {
-	Lsym*	var;
-	Type*	type;
-	Frtype*	next;
+    Lsym*	var;
+    Type*	type;
+    Frtype*	next;
 };
+/*e: struct Frtype */
 
+/*s: struct Ptab */
 struct Ptab
 {
-	int	pid;
-	int	ctl;
+    int	pid;
+    int	ctl;
 };
+/*e: struct Ptab */
 
 extern Ptab	ptab[Maxproc];
 
+/*s: struct Rplace */
 struct Rplace
 {
-	jmp_buf	rlab;
-	Node*	stak;
-	Node*	val;
-	Lsym*	local;
-	Lsym**	tail;
+    jmp_buf	rlab;
+    Node*	stak;
+    Node*	val;
+    Lsym*	local;
+    Lsym**	tail;
 };
+/*e: struct Rplace */
 
+/*s: struct Gc */
 struct Gc
 {
-	char	gcmark;
-	Gc*	gclink;
+    char	gcmark;
+    Gc*	gclink;
 };
+/*e: struct Gc */
 
+/*s: struct Store */
 struct Store
 {
-	char	fmt;
-	Type*	comt;
-	union {
-		vlong	ival;
-		double	fval;
-		String*	string;
-		List*	l;
-		Node*	cc;
-	};
+    char	fmt;
+    Type*	comt;
+    union {
+        vlong	ival;
+        double	fval;
+        String*	string;
+        List*	l;
+        Node*	cc;
+    };
 };
+/*e: struct Store */
 
+/*s: struct List */
 struct List
 {
-	Gc;
-	List*	next;
-	char	type;
-	Store;
+    Gc;
+    List*	next;
+    char	type;
+    Store;
 };
+/*e: struct List */
 
+/*s: struct Value */
 struct Value
 {
-	char	set;
-	char	type;
-	Store;
-	Value*	pop;
-	Lsym*	scope;
-	Rplace*	ret;
+    char	set;
+    char	type;
+    Store;
+    Value*	pop;
+    Lsym*	scope;
+    Rplace*	ret;
 };
+/*e: struct Value */
 
+/*s: struct Lsym */
 struct Lsym
 {
-	char*	name;
-	int	lexval;
-	Lsym*	hash;
-	Value*	v;
-	Type*	lt;
-	Node*	proc;
-	Frtype*	local;
-	void	(*builtin)(Node*, Node*);
+    char*	name;
+    int	lexval;
+    Lsym*	hash;
+    Value*	v;
+    Type*	lt;
+    Node*	proc;
+    Frtype*	local;
+    void	(*builtin)(Node*, Node*);
 };
+/*e: struct Lsym */
 
+/*s: struct Node */
 struct Node
 {
-	Gc;
-	char	op;
-	char	type;
-	Node*	left;
-	Node*	right;
-	Lsym*	sym;
-	int	builtin;
-	Store;
+    Gc;
+    char	op;
+    char	type;
+    Node*	left;
+    Node*	right;
+    Lsym*	sym;
+    int	builtin;
+    Store;
 };
+/*e: struct Node */
+/*s: constant ZN */
 #define ZN	(Node*)0
+/*e: constant ZN */
 
+/*s: struct StringAcid */
 struct StringAcid
 {
-	Gc;
-	char	*string;
-	int	len;
+    Gc;
+    char	*string;
+    int	len;
 };
+/*e: struct StringAcid */
 
 List*	addlist(List*, List*);
 List*	al(int);
@@ -245,55 +276,58 @@ void	yyerror(char*, ...);
 int	yylex(void);
 int	yyparse(void);
 
+/*s: enum _anon_ (acid/acid.h)3 */
 enum
 {
-	ONAME,
-	OCONST,
-	OMUL,
-	ODIV,
-	OMOD,
-	OADD,
-	OSUB,
-	ORSH,
-	OLSH,
-	OLT,
-	OGT,
-	OLEQ,
-	OGEQ,
-	OEQ,
-	ONEQ,
-	OLAND,
-	OXOR,
-	OLOR,
-	OCAND,
-	OCOR,
-	OASGN,
-	OINDM,
-	OEDEC,
-	OEINC,
-	OPINC,
-	OPDEC,
-	ONOT,
-	OIF,
-	ODO,
-	OLIST,
-	OCALL,
-	OCTRUCT,
-	OWHILE,
-	OELSE,
-	OHEAD,
-	OTAIL,
-	OAPPEND,
-	ORET,
-	OINDEX,
-	OINDC,
-	ODOT,
-	OLOCAL,
-	OFRAME,
-	OCOMPLEX,
-	ODELETE,
-	OCAST,
-	OFMT,
-	OEVAL,
-	OWHAT,
+    ONAME,
+    OCONST,
+    OMUL,
+    ODIV,
+    OMOD,
+    OADD,
+    OSUB,
+    ORSH,
+    OLSH,
+    OLT,
+    OGT,
+    OLEQ,
+    OGEQ,
+    OEQ,
+    ONEQ,
+    OLAND,
+    OXOR,
+    OLOR,
+    OCAND,
+    OCOR,
+    OASGN,
+    OINDM,
+    OEDEC,
+    OEINC,
+    OPINC,
+    OPDEC,
+    ONOT,
+    OIF,
+    ODO,
+    OLIST,
+    OCALL,
+    OCTRUCT,
+    OWHILE,
+    OELSE,
+    OHEAD,
+    OTAIL,
+    OAPPEND,
+    ORET,
+    OINDEX,
+    OINDC,
+    ODOT,
+    OLOCAL,
+    OFRAME,
+    OCOMPLEX,
+    ODELETE,
+    OCAST,
+    OFMT,
+    OEVAL,
+    OWHAT,
 };
+/*e: enum _anon_ (acid/acid.h)3 */
+/*e: acid/acid.h */
