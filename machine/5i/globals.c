@@ -12,7 +12,8 @@ int text;
 int trace;
 int sysdbg;
 int calltree;
-Inst itab[];
+//in run.c
+//Inst itab[];
 Inst ispec[];
 Icache icache;
 Tlb tlb;
