@@ -26,6 +26,7 @@ static char	*myenv[] =
     "newprereq",
     "alltarget",
     "newmember",
+
     "stem0",		/* must be in order from here */
     "stem1",
     "stem2",
@@ -36,6 +37,7 @@ static char	*myenv[] =
     "stem7",
     "stem8",
     "stem9",
+
     0,
 };
 /*e: global myenv */

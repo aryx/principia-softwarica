@@ -36,6 +36,8 @@ extern Word *target1;
 typedef struct Envy
 {
     char 		*name;
+
+    // list<ref_own<Word>>
     Word 		*values;
 } Envy;
 /*e: struct Envy */
@@ -107,10 +109,15 @@ typedef struct Arc
 {
     //? enum<rule_flag>?
     short		flag;
+
+    // ref<node>, reverse of Node.prereq?
     struct Node	*n;
+
     Rule		*r;
+
     char		*stem;
     char		*prog;
+
     char		*match[NREGEXP];
     
     //Extra
@@ -128,9 +135,11 @@ typedef struct Node
 {
     char		*name;
     ulong		time;
+
     // enum<node_flag>
     ushort		flags;
 
+    // list<ref_own?<Arc>>
     Arc		*prereqs;
 
     // Extra
@@ -189,10 +198,12 @@ typedef struct Job
     Node		*n;	/* list of node targets */
     char		*stem;
     char		**match;
+
     Word		*p;	/* prerequistes */
     Word		*np;	/* new prerequistes */
     Word		*t;	/* targets */
     Word		*at;	/* all targets */
+
     int		nproc;	/* slot number */
 
     // Extra

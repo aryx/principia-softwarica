@@ -155,11 +155,11 @@ Here are other candidates that were considered but ultimately discarded:
 
 \section{Requirements}
 
+% mk.ps! 
 I assume you have read the [[mk.ps]] manual that introduces
 the concepts used in this document (e.g. what is a rule,
 a target, a recipe, etc).
 
-% read mk.ps! 
 %(and mk_successor_make.pdf if interested specifically of diff with make)
 
 \section{About this document}
@@ -181,8 +181,11 @@ most of this book: Andrew Hume and Bob Flandera.
 
 \section{Build system principles}
 
-The goal of a build system is to describe and maintain dependencies
-between files or programs.
+The goal of a build system is to describe concisely and maintain
+efficiently dependencies between files or programs.
+
+% conciseness => DSL
+% efficiency => graph and //
 
 \section{mk services}
 
@@ -213,6 +216,9 @@ badusage(void)
 \section{A simple [[mkfile]]}
 % actually could also show the mkfile of mk itself :)
 
+% running example
+% concepts: target, prerequiste, recipe
+
 \section{Code organization}
 
 \section{Architecture overview}
@@ -225,10 +231,10 @@ badusage(void)
 
 % core types: (see mk.h)
 % Rule (mk -dp?), recipe? metarule, target, prerequiste (see mk.ps)
-% Word, Bufblock, 
+% Word, Bufblock
 % Node, Arc (mk -dg)
-% Job, (mk -de)
 % Envy
+% Job, (mk -de)
 % Sym (a bit generic, could be in libc?)
 
 % core globals: (see mk.h externs)
@@ -271,6 +277,7 @@ typedef struct Rule
 Rule *rules;
 @
 
+% incremented by addrule()
 <<global nrules>>=
 static int nrules = 0;
 @
@@ -297,6 +304,27 @@ Word *target1;
 
 \section{[[Node]] and [[Arc]]}
 
+% Rule are general descriptions, patterns,
+% Node and Arc are concrete instantiation with existing files?
+
+<<struct Node>>=
+typedef struct Node
+{
+    char		*name;
+    ulong		time;
+
+    // enum<node_flag>
+    ushort		flags;
+
+    // list<ref_own?<Arc>>
+    Arc		*prereqs;
+
+    // Extra
+    struct Node	*next;		/* list for a rule */
+} Node;
+@
+
+
 
 <<constant NREGEXP>>=
 #define		NREGEXP		10
@@ -307,10 +335,15 @@ typedef struct Arc
 {
     //? enum<rule_flag>?
     short		flag;
+
+    // ref<node>, reverse of Node.prereq?
     struct Node	*n;
+
     Rule		*r;
+
     char		*stem;
     char		*prog;
+
     char		*match[NREGEXP];
     
     //Extra
@@ -327,20 +360,6 @@ typedef struct Arc
 
 
 
-<<struct Node>>=
-typedef struct Node
-{
-    char		*name;
-    ulong		time;
-    // enum<node_flag>
-    ushort		flags;
-
-    Arc		*prereqs;
-
-    // Extra
-    struct Node	*next;		/* list for a rule */
-} Node;
-@
 
 % TODO Node.flags
 <<constant VIRTUAL>>=
@@ -406,6 +425,8 @@ typedef struct Node
 typedef struct Envy
 {
     char 		*name;
+
+    // list<ref_own<Word>>
     Word 		*values;
 } Envy;
 @
@@ -427,6 +448,7 @@ static char	*myenv[] =
     "newprereq",
     "alltarget",
     "newmember",
+
     "stem0",		/* must be in order from here */
     "stem1",
     "stem2",
@@ -437,6 +459,7 @@ static char	*myenv[] =
     "stem7",
     "stem8",
     "stem9",
+
     0,
 };
 @
@@ -450,10 +473,12 @@ typedef struct Job
     Node		*n;	/* list of node targets */
     char		*stem;
     char		**match;
+
     Word		*p;	/* prerequistes */
     Word		*np;	/* new prerequistes */
     Word		*t;	/* targets */
     Word		*at;	/* all targets */
+
     int		nproc;	/* slot number */
 
     // Extra
@@ -491,8 +516,7 @@ typedef struct Symtab
 @
 
 
-
-% for what?
+% the "world" data structure
 <<enum _anon_>>=
 enum {
     S_VAR,		/* variable -> value */
@@ -600,8 +624,10 @@ setvar(char *name, void *value)
 
 \chapter{Rules}
 
+
 \section{Simple rule}
 
+% kind of ctor
 <<function addrule>>=
 void
 addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, char *prog)
@@ -686,17 +712,6 @@ rcmp(Rule *r, char *target, Word *tail)
 }
 @
 
-<<function rulecnt>>=
-char *
-rulecnt(void)
-{
-    char *s;
-
-    s = Malloc(nrules);
-    memset(s, 0, nrules);
-    return(s);
-}
-@
 
 
 
@@ -759,6 +774,7 @@ Rule *metarules;
 
 
 \chapter{Parsing}
+% could be done later?
 
 <<function SYNERR>>=
 #define	SYNERR(l)	(fprint(2, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
@@ -1038,6 +1054,8 @@ rbody(Biobuf *in)
 }
 @
 
+\section{Parsing included files}
+
 <<struct input>>=
 struct input
 {
@@ -1052,6 +1070,8 @@ struct input
 <<global inputs>>=
 static struct input *inputs = 0;
 @
+
+% can process many files, because of the </sys/src/... 
 
 <<function ipush>>=
 void
@@ -1235,32 +1255,6 @@ nextrune(Biobuf *bp, int elide)
 
 \section{Parsing a string}
 
-% string to word
-<<function stow>>=
-Word *
-stow(char *s)
-{
-    Word *head, *w, *new;
-
-    w = head = 0;
-    while(*s){
-        new = nextword(&s);
-        if(new == 0)
-            break;
-        if (w)
-            w->next = new;
-        else
-            head = w = new;
-        while(w->next)
-            w = w->next;
-        
-    }
-    if (!head)
-        head = newword("");
-    return(head);
-}
-@
-
 <<constructor newword>>=
 Word*
 newword(char *s)
@@ -1308,6 +1302,38 @@ wdup(Word *w)
     return base;
 }
 @
+
+
+
+
+
+% string to word
+<<function stow>>=
+Word *
+stow(char *s)
+{
+    Word *head, *w, *new;
+
+    w = head = 0;
+    while(*s){
+        new = nextword(&s);
+        if(new == 0)
+            break;
+        if (w)
+            w->next = new;
+        else
+            head = w = new;
+        while(w->next)
+            w = w->next;
+        
+    }
+    if (!head)
+        head = newword("");
+    return(head);
+}
+@
+
+
 
 % word to string
 <<function wtos>>=
@@ -1495,6 +1521,49 @@ subst(char *stem, char *template, char *dest, int dlen)
 
 \chapter{Dependency graph}
 
+% dtor = ?
+<<constructor newnode>>=
+static Node *
+newnode(char *name)
+{
+    register Node *node;
+
+    node = (Node *)Malloc(sizeof(Node));
+    symlook(name, S_NODE, (void *)node);
+    node->name = name;
+    node->time = timeof(name, 0);
+    node->prereqs = 0;
+    node->flags = node->time? PROBABLE : 0;
+    node->next = 0;
+    return(node);
+}
+@
+
+
+% dtor = ?
+<<constructor newarc>>=
+Arc *
+newarc(Node *n, Rule *r, char *stem, Resub *match)
+{
+    Arc *a;
+
+    a = (Arc *)Malloc(sizeof(Arc));
+    a->n = n;
+    a->r = r;
+    a->stem = strdup(stem);
+    rcopy(a->match, match, NREGEXP);
+    a->next = 0;
+    a->flag = 0;
+    a->prog = r->prog;
+    return(a);
+}
+@
+
+
+
+
+
+% constructor?
 <<function graph>>=
 Node *
 graph(char *target)
@@ -1513,6 +1582,20 @@ graph(char *target)
     return(node);
 }
 @
+
+% ???
+<<function rulecnt>>=
+char *
+rulecnt(void)
+{
+    char *s;
+
+    s = Malloc(nrules);
+    memset(s, 0, nrules);
+    return(s);
+}
+@
+
 
 <<function attribute>>=
 static void
@@ -1672,45 +1755,6 @@ vacuous(Node *node)
     return(vac);
 }
 @
-
-% dtor = ?
-<<constructor newnode>>=
-static Node *
-newnode(char *name)
-{
-    register Node *node;
-
-    node = (Node *)Malloc(sizeof(Node));
-    symlook(name, S_NODE, (void *)node);
-    node->name = name;
-    node->time = timeof(name, 0);
-    node->prereqs = 0;
-    node->flags = node->time? PROBABLE : 0;
-    node->next = 0;
-    return(node);
-}
-@
-
-
-% dtor = ?
-<<constructor newarc>>=
-Arc *
-newarc(Node *n, Rule *r, char *stem, Resub *match)
-{
-    Arc *a;
-
-    a = (Arc *)Malloc(sizeof(Arc));
-    a->n = n;
-    a->r = r;
-    a->stem = strdup(stem);
-    rcopy(a->match, match, NREGEXP);
-    a->next = 0;
-    a->flag = 0;
-    a->prog = r->prog;
-    return(a);
-}
-@
-
 
 
 \section{Cycle detection}
@@ -2977,46 +3021,6 @@ killchildren(char *msg)
 }
 @
 
-<<global tslot>>=
-static ulong tslot[1000];
-@
-
-<<global tick>>=
-static ulong tick;
-@
-
-<<function usage>>=
-void
-usage(void)
-{
-    ulong t;
-
-    t = time(0);
-    if(tick)
-        tslot[nrunning] += t - tick;
-    tick = t;
-}
-@
-
-<<function prusage>>=
-void
-prusage(void)
-{
-    int i;
-
-    usage();
-    for(i = 0; i <= nevents; i++)
-        fprint(1, "%d: %lud\n", i, tslot[i]);
-}
-@
-
-
-\section{[[mk -u]]}
-% utlilization
-
-<<global uflag>>=
-int uflag = 0;
-@
 
 
 \chapter{[[mk()]]}
@@ -3485,6 +3489,7 @@ main(int argc, char **argv)
     }
     if(uflag)
         prusage();
+
     exits(0);
 }
 @
@@ -3695,6 +3700,8 @@ int nflag = 0;
 
 \chapter{Profiling}
 
+\section{Profiling mk}
+
 <<global buf>>=
 short buf[10000];
 @
@@ -3707,6 +3714,47 @@ short buf[10000];
     }
 #endif
 @
+
+\section{Profiling the mkfile, [[mk -u]]}
+% utlilization
+
+<<global uflag>>=
+int uflag = 0;
+@
+
+<<global tslot>>=
+static ulong tslot[1000];
+@
+
+<<global tick>>=
+static ulong tick;
+@
+
+<<function usage>>=
+void
+usage(void)
+{
+    ulong t;
+
+    t = time(0);
+    if(tick)
+        tslot[nrunning] += t - tick;
+    tick = t;
+}
+@
+
+<<function prusage>>=
+void
+prusage(void)
+{
+    int i;
+
+    usage();
+    for(i = 0; i <= nevents; i++)
+        fprint(1, "%d: %lud\n", i, tslot[i]);
+}
+@
+
 
 \chapter{Error Managment}
 

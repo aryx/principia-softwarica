@@ -237,6 +237,7 @@ main(int argc, char **argv)
     }
     if(uflag)
         prusage();
+
     exits(0);
 }
 /*e: function main */
