@@ -157,14 +157,19 @@ void	zname(Biobuf*, Sym*, int);
 void	zaddr(Biobuf*, Adr*, int);
 void	outhist(Biobuf*);
 
+struct Htab { 
+  Sym *sym; 
+  short type; 
+};
+
 void
 outcode(void)
 {
-	struct { Sym *sym; short type; } h[NSYM];
 	Prog *p;
 	Sym *s;
 	int f, sf, st, t, sym;
 	Biobuf b;
+    struct Htab h[NSYM];
 
 	if(debug['S']) {
 		for(p = firstp; p != P; p = p->link)

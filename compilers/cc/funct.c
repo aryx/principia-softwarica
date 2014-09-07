@@ -14,8 +14,89 @@ struct	Gtab
 	char*	name;
 };
 
-Ftab	ftabinit[OEND];
-Gtab	gtabinit[NTYPE];
+//Ftab	ftabinit[OEND];
+//Gtab	gtabinit[NTYPE];
+
+Gtab	gtabinit[NTYPE] =
+{
+	TCHAR,		"c",
+	TUCHAR,		"uc",
+	TSHORT,		"h",
+	TUSHORT,	"uh",
+	TINT,		"i",
+	TUINT,		"ui",
+	TLONG,		"l",
+	TULONG,		"ul",
+	TVLONG,		"v",
+	TUVLONG,	"uv",
+	TFLOAT,		"f",
+	TDOUBLE,	"d",
+	TXXX
+};
+
+Ftab	ftabinit[OEND] =
+{
+	OADD,		"add",		1,
+	OAND,		"and",		1,
+	OASHL,		"ashl",		1,
+	OASHR,		"ashr",		1,
+	ODIV,		"div",		1,
+	OLDIV,		"ldiv",		1,
+	OLMOD,		"lmod",		1,
+	OLMUL,		"lmul",		1,
+	OLSHR,		"lshr",		1,
+	OMOD,		"mod",		1,
+	OMUL,		"mul",		1,
+	OOR,		"or",		1,
+	OSUB,		"sub",		1,
+	OXOR,		"xor",		1,
+
+	OEQ,		"eq",		2,
+	OGE,		"ge",		2,
+	OGT,		"gt",		2,
+	OHI,		"hi",		2,
+	OHS,		"hs",		2,
+	OLE,		"le",		2,
+	OLO,		"lo",		2,
+	OLS,		"ls",		2,
+	OLT,		"lt",		2,
+	ONE,		"ne",		2,
+
+	OASADD,		"asadd",	3,
+	OASAND,		"asand",	3,
+	OASASHL,	"asashl",	3,
+	OASASHR,	"asashr",	3,
+	OASDIV,		"asdiv",	3,
+	OASLDIV,	"asldiv",	3,
+	OASLMOD,	"aslmod",	3,
+	OASLMUL,	"aslmul",	3,
+	OASLSHR,	"aslshr",	3,
+	OASMOD,		"asmod",	3,
+	OASMUL,		"asmul",	3,
+	OASOR,		"asor",		3,
+	OASSUB,		"assub",	3,
+	OASXOR,		"asxor",	3,
+
+	OPOS,		"pos",		4,
+	ONEG,		"neg",		4,
+	OCOM,		"com",		4,
+	ONOT,		"not",		4,
+
+//	OPOSTDEC,
+//	OPOSTINC,
+//	OPREDEC,
+//	OPREINC,
+
+	OXXX,
+};
+
+//	Node*	nodtestv;
+
+//	Node*	nodvpp;
+//	Node*	nodppv;
+//	Node*	nodvmm;
+//	Node*	nodmmv;
+
 
 int
 isfunct(Node *n)
@@ -319,82 +400,3 @@ bad:
 	diag(Z, "dclfunct bad %T %s\n", t, s->name);
 }
 
-Gtab	gtabinit[NTYPE] =
-{
-	TCHAR,		"c",
-	TUCHAR,		"uc",
-	TSHORT,		"h",
-	TUSHORT,	"uh",
-	TINT,		"i",
-	TUINT,		"ui",
-	TLONG,		"l",
-	TULONG,		"ul",
-	TVLONG,		"v",
-	TUVLONG,	"uv",
-	TFLOAT,		"f",
-	TDOUBLE,	"d",
-	TXXX
-};
-
-Ftab	ftabinit[OEND] =
-{
-	OADD,		"add",		1,
-	OAND,		"and",		1,
-	OASHL,		"ashl",		1,
-	OASHR,		"ashr",		1,
-	ODIV,		"div",		1,
-	OLDIV,		"ldiv",		1,
-	OLMOD,		"lmod",		1,
-	OLMUL,		"lmul",		1,
-	OLSHR,		"lshr",		1,
-	OMOD,		"mod",		1,
-	OMUL,		"mul",		1,
-	OOR,		"or",		1,
-	OSUB,		"sub",		1,
-	OXOR,		"xor",		1,
-
-	OEQ,		"eq",		2,
-	OGE,		"ge",		2,
-	OGT,		"gt",		2,
-	OHI,		"hi",		2,
-	OHS,		"hs",		2,
-	OLE,		"le",		2,
-	OLO,		"lo",		2,
-	OLS,		"ls",		2,
-	OLT,		"lt",		2,
-	ONE,		"ne",		2,
-
-	OASADD,		"asadd",	3,
-	OASAND,		"asand",	3,
-	OASASHL,	"asashl",	3,
-	OASASHR,	"asashr",	3,
-	OASDIV,		"asdiv",	3,
-	OASLDIV,	"asldiv",	3,
-	OASLMOD,	"aslmod",	3,
-	OASLMUL,	"aslmul",	3,
-	OASLSHR,	"aslshr",	3,
-	OASMOD,		"asmod",	3,
-	OASMUL,		"asmul",	3,
-	OASOR,		"asor",		3,
-	OASSUB,		"assub",	3,
-	OASXOR,		"asxor",	3,
-
-	OPOS,		"pos",		4,
-	ONEG,		"neg",		4,
-	OCOM,		"com",		4,
-	ONOT,		"not",		4,
-
-//	OPOSTDEC,
-//	OPOSTINC,
-//	OPREDEC,
-//	OPREINC,
-
-	OXXX,
-};
-
-//	Node*	nodtestv;
-
-//	Node*	nodvpp;
-//	Node*	nodppv;
-//	Node*	nodvmm;
-//	Node*	nodmmv;

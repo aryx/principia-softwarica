@@ -1559,6 +1559,10 @@ out:
 		t->xoffset -= to;
 }
 
+#define	IMM(l, r)	((l) | ((r) << 1))
+
+#define	WW(l, r)	((l) | ((r) << 2))
+
 int
 cgen64(Node *n, Node *nn)
 {
@@ -1691,7 +1695,6 @@ twoop:
 		li = l->op == ONAME || l->op == OINDREG || l->op == OCONST;
 		ri = r->op == ONAME || r->op == OINDREG || r->op == OCONST;
 
-#define	IMM(l, r)	((l) | ((r) << 1))
 
 		lri = IMM(li, ri);
 
@@ -1758,7 +1761,6 @@ twoop:
 			break;
 		}
 
-#define	WW(l, r)	((l) | ((r) << 2))
 		d = Z;
 		dt = nn->type;
 		nn->type = types[TLONG];

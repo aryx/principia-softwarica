@@ -1303,20 +1303,22 @@ Oconv(Fmt *fp)
 	return fmtstrcpy(fp, onames[a]);
 }
 
-int
-Lconv(Fmt *fp)
-{
-	char str[STRINGSZ], s[STRINGSZ];
-	Hist *h;
-	struct
+struct Atab
 	{
 		Hist*	incl;	/* start of this include file */
 		long	idel;	/* delta line number to apply to include */
 		Hist*	line;	/* start of this #line directive */
 		long	ldel;	/* delta line number to apply to #line */
-	} a[HISTSZ];
+};
+
+int
+Lconv(Fmt *fp)
+{
+	char str[STRINGSZ], s[STRINGSZ];
+	Hist *h;
 	long l, d;
 	int i, n;
+    struct Atab  a[HISTSZ];
 
 	l = va_arg(fp->args, long);
 	n = 0;

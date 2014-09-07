@@ -30,6 +30,12 @@ rcmp(const void *a1, const void *a2)
 	return p2->varno - p1->varno;
 }
 
+struct Regopt_helper {
+		long	m;
+		long	c;
+		Reg*	p;
+};
+
 void
 regopt(Prog *p)
 {
@@ -39,12 +45,7 @@ regopt(Prog *p)
 	long initpc, val, npc;
 	ulong vreg;
 	Bits bit;
-	struct
-	{
-		long	m;
-		long	c;
-		Reg*	p;
-	} log5[6], *lp;
+    struct Regopt_helper log5[6], *lp;
 
 	firstr = R;
 	lastr = R;
