@@ -1,3 +1,4 @@
+/*s: cc/omachcap.c */
 #include	"cc.h"
 
 /* default, like old cc */
@@ -6,3 +7,4 @@
 //{
 //	return 0;
 //}
+/*e: cc/omachcap.c */

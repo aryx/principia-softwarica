@@ -1,19 +1,38 @@
+/*s: 8c/gc.h */
 #include	"../cc/cc.h"
 #include	"386/8.out.h"
 
+/*s: constant SZ_CHAR */
 /*
  * 8c/386
  * Intel 386
  */
 #define	SZ_CHAR		1
+/*e: constant SZ_CHAR */
+/*s: constant SZ_SHORT */
 #define	SZ_SHORT	2
+/*e: constant SZ_SHORT */
+/*s: constant SZ_INT */
 #define	SZ_INT		4
+/*e: constant SZ_INT */
+/*s: constant SZ_LONG */
 #define	SZ_LONG		4
+/*e: constant SZ_LONG */
+/*s: constant SZ_IND */
 #define	SZ_IND		4
+/*e: constant SZ_IND */
+/*s: constant SZ_FLOAT */
 #define	SZ_FLOAT	4
+/*e: constant SZ_FLOAT */
+/*s: constant SZ_VLONG */
 #define	SZ_VLONG	8
+/*e: constant SZ_VLONG */
+/*s: constant SZ_DOUBLE */
 #define	SZ_DOUBLE	8
+/*e: constant SZ_DOUBLE */
+/*s: constant FNX (8c/gc.h) */
 #define	FNX		100
+/*e: constant FNX (8c/gc.h) */
 
 typedef	struct	Adr	Adr;
 typedef	struct	Prog	Prog;
@@ -24,113 +43,143 @@ typedef	struct	Reg	Reg;
 typedef	struct	Rgn	Rgn;
 typedef	struct	Renv	Renv;
 
+/*s: struct Idx */
 struct Idx
 {
-	Node*	regtree;
-	Node*	basetree;
-	short	scale;
-	short	reg;
-	short	ptr;
+    Node*	regtree;
+    Node*	basetree;
+    short	scale;
+    short	reg;
+    short	ptr;
 };
+/*e: struct Idx */
 extern struct Idx idx;
 
+/*s: struct Adr */
 struct	Adr
 {
-	long	offset;
-	double	dval;
-	char	sval[NSNAME];
+    long	offset;
+    double	dval;
+    char	sval[NSNAME];
 
-	Sym*	sym;
-	uchar	type;
-	uchar	index;
-	uchar	etype;
-	uchar	scale;	/* doubles as width in DATA op */
+    Sym*	sym;
+    uchar	type;
+    uchar	index;
+    uchar	etype;
+    uchar	scale;	/* doubles as width in DATA op */
 };
+/*e: struct Adr */
+/*s: constant A */
 #define	A	((Adr*)0)
+/*e: constant A */
 
+/*s: constant INDEXED */
 #define	INDEXED	9
+/*e: constant INDEXED */
+/*s: struct Prog */
 struct	Prog
 {
-	Adr	from;
-	Adr	to;
-	Prog*	link;
-	long	lineno;
-	short	as;
+    Adr	from;
+    Adr	to;
+    Prog*	link;
+    long	lineno;
+    short	as;
 };
+/*e: struct Prog */
+/*s: constant P */
 #define	P	((Prog*)0)
+/*e: constant P */
 
+/*s: struct Case */
 struct	Case
 {
-	Case*	link;
-	vlong	val;
-	long	label;
-	char	def;
-	char isv;
+    Case*	link;
+    vlong	val;
+    long	label;
+    char	def;
+    char isv;
 };
+/*e: struct Case */
+/*s: constant C */
 #define	C	((Case*)0)
+/*e: constant C */
 
+/*s: struct C1 */
 struct	C1
 {
-	vlong	val;
-	long	label;
+    vlong	val;
+    long	label;
 };
+/*e: struct C1 */
 
+/*s: struct Var */
 struct	Var
 {
-	long	offset;
-	Sym*	sym;
-	char	name;
-	char	etype;
+    long	offset;
+    Sym*	sym;
+    char	name;
+    char	etype;
 };
+/*e: struct Var */
 
+/*s: struct Reg */
 struct	Reg
 {
-	long	pc;
-	long	rpo;		/* reverse post ordering */
+    long	pc;
+    long	rpo;		/* reverse post ordering */
 
-	Bits	set;
-	Bits	use1;
-	Bits	use2;
+    Bits	set;
+    Bits	use1;
+    Bits	use2;
 
-	Bits	refbehind;
-	Bits	refahead;
-	Bits	calbehind;
-	Bits	calahead;
-	Bits	regdiff;
-	Bits	act;
+    Bits	refbehind;
+    Bits	refahead;
+    Bits	calbehind;
+    Bits	calahead;
+    Bits	regdiff;
+    Bits	act;
 
-	long	regu;
-	long	loop;		/* could be shorter */
+    long	regu;
+    long	loop;		/* could be shorter */
 
-	Reg*	log5;
-	long	active;
+    Reg*	log5;
+    long	active;
 
-	Reg*	p1;
-	Reg*	p2;
-	Reg*	p2link;
-	Reg*	s1;
-	Reg*	s2;
-	Reg*	link;
-	Prog*	prog;
+    Reg*	p1;
+    Reg*	p2;
+    Reg*	p2link;
+    Reg*	s1;
+    Reg*	s2;
+    Reg*	link;
+    Prog*	prog;
 };
+/*e: struct Reg */
+/*s: constant R */
 #define	R	((Reg*)0)
+/*e: constant R */
 
+/*s: struct Renv */
 struct	Renv
 {
-	int	safe;
-	Node	base;
-	Node*	saved;
-	Node*	scope;
+    int	safe;
+    Node	base;
+    Node*	saved;
+    Node*	scope;
 };
+/*e: struct Renv */
 
+/*s: constant NRGN */
 #define	NRGN	600
+/*e: constant NRGN */
+/*s: struct Rgn */
 struct	Rgn
 {
-	Reg*	enter;
-	short	cost;
-	short	varno;
-	short	regno;
+    Reg*	enter;
+    short	cost;
+    short	varno;
+    short	regno;
 };
+/*e: struct Rgn */
 
 extern	long	breakpc;
 extern	long	nbreak;
@@ -162,17 +211,35 @@ extern	int	reg[D_NONE];
 extern	long	exregoffset;
 extern	long	exfregoffset;
 
+/*s: function BLOAD */
 #define	BLOAD(r)	band(bnot(r->refbehind), r->refahead)
+/*e: function BLOAD */
+/*s: function BSTORE */
 #define	BSTORE(r)	band(bnot(r->calbehind), r->calahead)
+/*e: function BSTORE */
+/*s: function LOAD */
 #define	LOAD(r)		(~r->refbehind.b[z] & r->refahead.b[z])
+/*e: function LOAD */
+/*s: function STORE */
 #define	STORE(r)	(~r->calbehind.b[z] & r->calahead.b[z])
+/*e: function STORE */
 
+/*s: macro bset */
 #define	bset(a,n)	((a).b[(n)/32]&(1L<<(n)%32))
+/*e: macro bset */
 
+/*s: constant CLOAD */
 #define	CLOAD	5
+/*e: constant CLOAD */
+/*s: constant CREF */
 #define	CREF	5
+/*e: constant CREF */
+/*s: constant CINF */
 #define	CINF	1000
+/*e: constant CINF */
+/*s: constant LOOP */
 #define	LOOP	3
+/*e: constant LOOP */
 
 extern	Rgn	region[NRGN];
 extern	Rgn*	rgp;
@@ -333,8 +400,12 @@ long	FtoB(int);
 int	BtoR(long);
 int	BtoF(long);
 
+/*s: constant D_HI */
 #define	D_HI	D_NONE
+/*e: constant D_HI */
+/*s: constant D_LO */
 #define	D_LO	D_NONE
+/*e: constant D_LO */
 
 /*
  * com64
@@ -366,6 +437,9 @@ void	shiftit(Type*, Node*, Node*);
 #pragma	varargck	type	"R"	int
 #pragma	varargck	type	"S"	char*
 
+/*s: constant rplink */
 /* wrecklessly steal a field */
 
 #define	rplink	label
+/*e: constant rplink */
+/*e: 8c/gc.h */
