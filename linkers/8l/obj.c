@@ -1135,8 +1135,8 @@ loop:
 		}
 		goto casdef;
 
-	casdef:
 	default:
+	casdef:
 		if(skip)
 			nopout(p);
 

@@ -124,17 +124,17 @@ builtin(Node *np)
 		else if(bind(np->argv[1], np->argv[2], 0)==-1)
 			error("bind failed", "");
 		return 1;
-#ifdef asdf
-	}else if(strcmp(np->argv[0], "unmount") == 0){
-		if(np->argv[1] == 0)
-			error("usage: unmount [new] old", "");
-		else if(np->argv[2] == 0){
-			if(unmount((char *)0, np->argv[1]) == -1)
-				error("unmount:", "");
-		}else if(unmount(np->argv[1], np->argv[2]) == -1)
-			error("unmount", "");
-		return 1;
-#endif
+//#ifdef asdf
+//	}else if(strcmp(np->argv[0], "unmount") == 0){
+//		if(np->argv[1] == 0)
+//			error("usage: unmount [new] old", "");
+//		else if(np->argv[2] == 0){
+//			if(unmount((char *)0, np->argv[1]) == -1)
+//				error("unmount:", "");
+//		}else if(unmount(np->argv[1], np->argv[2]) == -1)
+//			error("unmount", "");
+//		return 1;
+//#endif
 	}else if(strcmp(np->argv[0], "wait") == 0){
 		while((wmsg = wait()) != nil){
 			strncpy(status, wmsg->msg, sizeof(status)-1);

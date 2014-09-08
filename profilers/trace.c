@@ -223,6 +223,8 @@ colinit(void)
 	fg = display->black;
 }
 
+#define time2x(t)	((int)(((t) - oldestts) / ppp))
+
 static void
 redraw(int scaleno)
 {
@@ -232,8 +234,6 @@ redraw(int scaleno)
 	Rectangle r, rtime;
 	Task *t;
 	vlong ts, oldestts, newestts, period, ppp, scale, s, ss;
-
-#define time2x(t)	((int)(((t) - oldestts) / ppp))
 
 	scale = scales[scaleno].scale;
 	period = scale + scales[scaleno].littletics;
