@@ -3,7 +3,8 @@
 #include <draw.h>
 #include <event.h>
 #include <../panel.h>
-Panel *root, *list;
+static Panel *root, *list;
+
 char *genlist(Panel *, int which){
 	static char buf[7];
 	if(which<0 || 26<=which) return 0;

@@ -2,15 +2,15 @@
 #include <libc.h>
 #include <thread.h>
 
-static Lock l;
+static Lock xincport_lock;
 
 void
 _xinc(long *p)
 {
 
-	lock(&l);
+	lock(&xincport_lock);
 	(*p)++;
-	unlock(&l);
+	unlock(&xincport_lock);
 }
 
 long
@@ -18,8 +18,8 @@ _xdec(long *p)
 {
 	long r;
 
-	lock(&l);
+	lock(&xincport_lock);
 	r = --(*p);
-	unlock(&l);
+	unlock(&xincport_lock);
 	return r;
 }
