@@ -140,7 +140,7 @@ static Bhdr*	blocksetsize(Bhdr*, ulong);
 static ulong	bsize2asize(Pool*, ulong);
 static ulong	dsize2bsize(Pool*, ulong);
 static ulong	getdsize(Alloc*);
-static Alloc*	trim(Pool*, Alloc*, ulong);
+//static Alloc*	trim(Pool*, Alloc*, ulong);
 static Free*	listadd(Free*, Free*);
 static void		logstack(Pool*);
 static Free**	ltreewalk(Free**, ulong);
