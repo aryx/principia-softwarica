@@ -64,7 +64,15 @@ graph_windows:
 graph_windows2:
 	~/pfff/codegraph -derived_data -lang c -build include/ lib_graphics/ windows/
 
+NWDIRS=kernel windows    builders   compilers
+#TODO: assembler linker shell ...
 
+sync:
+	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i sync || exit 1; done 
+
+# take care!
+lpdistclean:
+	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i lpdistclean || exit 1; done 
 
 #trace:
 #	mk clean
