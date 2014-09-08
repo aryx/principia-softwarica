@@ -1,3 +1,4 @@
+/*s: rc/fns.h */
 void	Abort(void);
 void	Closedir(int);
 int	Creat(char*);
@@ -65,3 +66,4 @@ int	wordchr(int);
 void	yyerror(char*);
 int	yylex(void);
 int	yyparse(void);
+/*e: rc/fns.h */

@@ -1,0 +1,7977 @@
+\section{[[misc/]]}
+
+\subsection*{[[misc/echo.c]]}
+
+<<function main>>=
+void
+main(int argc, char *argv[])
+{
+    int nflag;
+    int i, len;
+    char *buf, *p;
+
+    nflag = 0;
+    if(argc > 1 && strcmp(argv[1], "-n") == 0)
+        nflag = 1;
+
+    len = 1;
+    for(i = 1+nflag; i < argc; i++)
+        len += strlen(argv[i])+1;
+
+    buf = malloc(len);
+    if(buf == 0)
+        exits("no memory");
+
+    p = buf;
+    for(i = 1+nflag; i < argc; i++){
+        strcpy(p, argv[i]);
+        p += strlen(p);
+        if(i < argc-1)
+            *p++ = ' ';
+    }
+        
+    if(!nflag)
+        *p++ = '\n';
+
+    if(write(1, buf, p-buf) < 0){
+        fprint(2, "echo: write error: %r\n");
+        exits("write error");
+    }
+
+    exits((char *)0);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<misc/echo.c>>=
+#include <u.h>
+#include <libc.h>
+
+<<function main>>
+@
+
+
+\subsection*{[[misc/pwd.c]]}
+
+<<function main (misc/pwd.c)>>=
+/*
+ * Print working (current) directory
+ */
+
+void
+main(int argc, char *argv[])
+{
+    char pathname[512];
+
+    USED(argc, argv);
+    if(getwd(pathname, sizeof(pathname)) == 0) {
+        fprint(2, "pwd: %r\n");
+        exits("getwd");
+    }
+    print("%s\n", pathname);
+    exits(0);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<misc/pwd.c>>=
+#include <u.h>
+#include <libc.h>
+<<function main (misc/pwd.c)>>
+@
+
+
+\subsection*{[[misc/test.c]]}
+
+<<function EQ>>=
+#define EQ(a,b)	((tmp=a)==0?0:(strcmp(tmp,b)==0))
+@
+
+<<global ap>>=
+int	ap;
+@
+
+<<global ac>>=
+int	ac;
+@
+
+<<global av>>=
+char	**av;
+@
+
+<<global tmp>>=
+static char	*tmp;
+@
+
+<<function main (misc/test.c)>>=
+void
+main(int argc, char *argv[])
+{
+    int r;
+    char *c;
+
+    ac = argc; av = argv; ap = 1;
+    if(EQ(argv[0],"[")) {
+        if(!EQ(argv[--ac],"]"))
+            synbad("] missing","");
+    }
+    argv[ac] = 0;
+    if (ac<=1)
+        exits("usage");
+    r = e();
+    /*
+     * nice idea but short-circuit -o and -a operators may have
+     * not consumed their right-hand sides.
+     */
+    if(0 && (c = nxtarg(1)) != nil)
+        synbad("unexpected operator/operand: ", c);
+    exits(r?0:"false");
+}
+@
+
+<<function nxtarg>>=
+char *
+nxtarg(int mt)
+{
+    if(ap>=ac){
+        if(mt){
+            ap++;
+            return(0);
+        }
+        synbad("argument expected","");
+    }
+    return(av[ap++]);
+}
+@
+
+<<function nxtintarg>>=
+int
+nxtintarg(int *pans)
+{
+    if(ap<ac && isint(av[ap], pans)){
+        ap++;
+        return 1;
+    }
+    return 0;
+}
+@
+
+<<function e>>=
+int
+e(void)
+{
+    int p1;
+
+    p1 = e1();
+    if (EQ(nxtarg(1), "-o"))
+        return(p1 || e());
+    ap--;
+    return(p1);
+}
+@
+
+<<function e1>>=
+int
+e1(void)
+{
+    int p1;
+
+    p1 = e2();
+    if (EQ(nxtarg(1), "-a"))
+        return (p1 && e1());
+    ap--;
+    return(p1);
+}
+@
+
+<<function e2>>=
+int
+e2(void)
+{
+    if (EQ(nxtarg(0), "!"))
+        return(!e2());
+    ap--;
+    return(e3());
+}
+@
+
+<<function e3>>=
+int
+e3(void)
+{
+    int p1, int1, int2;
+    char *a, *p2;
+
+    a = nxtarg(0);
+    if(EQ(a, "(")) {
+        p1 = e();
+        if(!EQ(nxtarg(0), ")"))
+            synbad(") expected","");
+        return(p1);
+    }
+
+    if(EQ(a, "-A"))
+        return(hasmode(nxtarg(0), DMAPPEND));
+
+    if(EQ(a, "-L"))
+        return(hasmode(nxtarg(0), DMEXCL));
+
+    if(EQ(a, "-T"))
+        return(hasmode(nxtarg(0), DMTMP));
+
+    if(EQ(a, "-f"))
+        return(isreg(nxtarg(0)));
+
+    if(EQ(a, "-d"))
+        return(isdir(nxtarg(0)));
+
+    if(EQ(a, "-r"))
+        return(tio(nxtarg(0), 4));
+
+    if(EQ(a, "-w"))
+        return(tio(nxtarg(0), 2));
+
+    if(EQ(a, "-x"))
+        return(tio(nxtarg(0), 1));
+
+    if(EQ(a, "-e"))
+        return(tio(nxtarg(0), 0));
+
+    if(EQ(a, "-c"))
+        return(0);
+
+    if(EQ(a, "-b"))
+        return(0);
+
+    if(EQ(a, "-u"))
+        return(0);
+
+    if(EQ(a, "-g"))
+        return(0);
+
+    if(EQ(a, "-s"))
+        return(fsizep(nxtarg(0)));
+
+    if(EQ(a, "-t"))
+        if(ap>=ac)
+            return(isatty(1));
+        else if(nxtintarg(&int1))
+            return(isatty(int1));
+        else
+            synbad("not a valid file descriptor number ", "");
+
+    if(EQ(a, "-n"))
+        return(!EQ(nxtarg(0), ""));
+    if(EQ(a, "-z"))
+        return(EQ(nxtarg(0), ""));
+
+    p2 = nxtarg(1);
+    if (p2==0)
+        return(!EQ(a,""));
+    if(EQ(p2, "="))
+        return(EQ(nxtarg(0), a));
+
+    if(EQ(p2, "!="))
+        return(!EQ(nxtarg(0), a));
+
+    if(EQ(p2, "-older"))
+        return(isolder(nxtarg(0), a));
+
+    if(EQ(p2, "-ot"))
+        return(isolderthan(nxtarg(0), a));
+
+    if(EQ(p2, "-nt"))
+        return(isnewerthan(nxtarg(0), a));
+
+    if(!isint(a, &int1))
+        synbad("unexpected operator/operand: ", p2);
+
+    if(nxtintarg(&int2)){
+        if(EQ(p2, "-eq"))
+            return(int1==int2);
+        if(EQ(p2, "-ne"))
+            return(int1!=int2);
+        if(EQ(p2, "-gt"))
+            return(int1>int2);
+        if(EQ(p2, "-lt"))
+            return(int1<int2);
+        if(EQ(p2, "-ge"))
+            return(int1>=int2);
+        if(EQ(p2, "-le"))
+            return(int1<=int2);
+    }
+
+    synbad("unknown operator ",p2);
+    return 0;		/* to shut ken up */
+}
+@
+
+<<function tio>>=
+int
+tio(char *a, int f)
+{
+    return access (a, f) >= 0;
+}
+@
+
+<<function hasmode>>=
+/*
+ * note that the name strings pointed to by Dir members are
+ * allocated with the Dir itself (by the same call to malloc),
+ * but are not included in sizeof(Dir), so copying a Dir won't
+ * copy the strings it points to.
+ */
+
+int
+hasmode(char *f, ulong m)
+{
+    int r;
+    Dir *dir;
+
+    dir = dirstat(f);
+    if (dir == nil)
+        return 0;
+    r = (dir->mode & m) != 0;
+    free(dir);
+    return r;
+}
+@
+
+<<function isdir>>=
+int
+isdir(char *f)
+{
+    return hasmode(f, DMDIR);
+}
+@
+
+<<function isreg>>=
+int
+isreg(char *f)
+{
+    int r;
+    Dir *dir;
+
+    dir = dirstat(f);
+    if (dir == nil)
+        return 0;
+    r = (dir->mode & DMDIR) == 0;
+    free(dir);
+    return r;
+}
+@
+
+<<function isatty>>=
+int
+isatty(int fd)
+{
+    int r;
+    Dir *d1, *d2;
+
+    d1 = dirfstat(fd);
+    d2 = dirstat("/dev/cons");
+    if (d1 == nil || d2 == nil)
+        r = 0;
+    else
+        r = d1->type == d2->type && d1->dev == d2->dev &&
+            d1->qid.path == d2->qid.path;
+    free(d1);
+    free(d2);
+    return r;
+}
+@
+
+<<function fsizep>>=
+int
+fsizep(char *f)
+{
+    int r;
+    Dir *dir;
+
+    dir = dirstat(f);
+    if (dir == nil)
+        return 0;
+    r = dir->length > 0;
+    free(dir);
+    return r;
+}
+@
+
+<<function synbad>>=
+void
+synbad(char *s1, char *s2)
+{
+    int len;
+
+    write(2, "test: ", 6);
+    if ((len = strlen(s1)) != 0)
+        write(2, s1, len);
+    if ((len = strlen(s2)) != 0)
+        write(2, s2, len);
+    write(2, "\n", 1);
+    exits("bad syntax");
+}
+@
+
+<<function isint>>=
+int
+isint(char *s, int *pans)
+{
+    char *ep;
+
+    *pans = strtol(s, &ep, 0);
+    return (*ep == 0);
+}
+@
+
+<<function isolder>>=
+int
+isolder(char *pin, char *f)
+{
+    int r, rel;
+    ulong n, m;
+    char *p = pin;
+    Dir *dir;
+
+    dir = dirstat(f);
+    if (dir == nil)
+        return 0;
+
+    /* parse time */
+    n = 0;
+    rel = 0;
+    while(*p){
+        m = strtoul(p, &p, 0);
+        switch(*p){
+        case 0:
+            n = m;
+            break;
+        case 'y':
+            m *= 12;
+            /* fall through */
+        case 'M':
+            m *= 30;
+            /* fall through */
+        case 'd':
+            m *= 24;
+            /* fall through */
+        case 'h':
+            m *= 60;
+            /* fall through */
+        case 'm':
+            m *= 60;
+            /* fall through */
+        case 's':
+            n += m;
+            p++;
+            rel = 1;
+            break;
+        default:
+            synbad("bad time syntax, ", pin);
+        }
+    }
+    if (!rel)
+        m = n;
+    else{
+        m = time(0);
+        if (n > m)		/* before epoch? */
+            m = 0;
+        else
+            m -= n;
+    }
+    r = dir->mtime < m;
+    free(dir);
+    return r;
+}
+@
+
+<<function isolderthan>>=
+int
+isolderthan(char *a, char *b)
+{
+    int r;
+    Dir *ad, *bd;
+
+    ad = dirstat(a);
+    bd = dirstat(b);
+    if (ad == nil || bd == nil)
+        r = 0;
+    else
+        r = ad->mtime > bd->mtime;
+    free(ad);
+    free(bd);
+    return r;
+}
+@
+
+<<function isnewerthan>>=
+int
+isnewerthan(char *a, char *b)
+{
+    int r;
+    Dir *ad, *bd;
+
+    ad = dirstat(a);
+    bd = dirstat(b);
+    if (ad == nil || bd == nil)
+        r = 0;
+    else
+        r = ad->mtime < bd->mtime;
+    free(ad);
+    free(bd);
+    return r;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<misc/test.c>>=
+/*
+ * POSIX standard
+ *	test expression
+ *	[ expression ]
+ *
+ * Plan 9 additions:
+ *	-A file exists and is append-only
+ *	-L file exists and is exclusive-use
+ *	-T file exists and is temporary
+ */
+
+#include <u.h>
+#include <libc.h>
+
+<<function EQ>>
+
+<<global ap>>
+<<global ac>>
+<<global av>>
+<<global tmp>>
+
+void	synbad(char *, char *);
+int	fsizep(char *);
+int	isdir(char *);
+int	isreg(char *);
+int	isatty(int);
+int	isint(char *, int *);
+int	isolder(char *, char *);
+int	isolderthan(char *, char *);
+int	isnewerthan(char *, char *);
+int	hasmode(char *, ulong);
+int	tio(char *, int);
+int	e(void), e1(void), e2(void), e3(void);
+char	*nxtarg(int);
+
+<<function main (misc/test.c)>>
+
+<<function nxtarg>>
+
+<<function nxtintarg>>
+
+<<function e>>
+
+<<function e1>>
+
+<<function e2>>
+
+<<function e3>>
+
+<<function tio>>
+
+<<function hasmode>>
+
+<<function isdir>>
+
+<<function isreg>>
+
+<<function isatty>>
+
+<<function fsizep>>
+
+<<function synbad>>
+
+<<function isint>>
+
+<<function isolder>>
+
+<<function isolderthan>>
+
+<<function isnewerthan>>
+@
+
+
+\section{[[sh/]]}
+
+\subsection*{[[sh/sh.c]]}
+
+<<constant MAXLINE>>=
+#define MAXLINE 200		/* maximum line length */
+@
+
+<<constant WORD>>=
+#define WORD 256		/* token code for words */
+@
+
+<<constant EOF>>=
+#define EOF -1			/* token code for end of file */
+@
+
+<<function ispunct>>=
+#define ispunct(c)		(c=='|' || c=='&' || c==';' || c=='<' || \
+                 c=='>' || c=='(' || c==')' || c=='\n')
+@
+
+<<function isspace>>=
+#define isspace(c)		(c==' ' || c=='\t')
+@
+
+<<function execute>>=
+#define execute(np)		(ignored = (np? (*(np)->op)(np) : 0))
+@
+
+<<struct Node>>=
+struct Node{			/* parse tree node */
+    int (*op)(Node *); 	/* operator function */
+    Node *args[2];		/* argument nodes */
+    char *argv[100];	/* argument pointers */
+    char *io[3];		/* i/o redirection */
+};
+@
+
+<<global nodes>>=
+Node	nodes[25];		/* node pool */
+@
+
+<<global nfree>>=
+Node	*nfree;			/* next available node */
+@
+
+<<global strspace>>=
+char	strspace[10*MAXLINE];	/* string storage */
+@
+
+<<global sfree>>=
+char	*sfree;			/* next free character in strspace */
+@
+
+<<global t>>=
+int	t;			/* current token code */
+@
+
+<<global token>>=
+char 	*token;			/* current token text (in strspace) */
+@
+
+<<global putback>>=
+int	putback = 0;		/* lookahead */
+@
+
+<<global status>>=
+char	status[256];		/* exit status of most recent command */
+@
+
+<<global cflag>>=
+int	cflag = 0;		/* command is argument to sh */
+@
+
+<<global tflag>>=
+int	tflag = 0;		/* read only one line */
+@
+
+<<global interactive>>=
+int	interactive = 0;	/* prompt */
+@
+
+<<global cflagp>>=
+char	*cflagp;		/* command line for cflag */
+@
+
+<<global path>>=
+char	*path[] ={"/bin", 0};
+@
+
+<<global ignored>>=
+int	ignored;
+@
+
+<<function main (sh/sh.c)>>=
+void
+main(int argc, char *argv[])
+{
+    Node *np;
+
+    if(argc>1 && strcmp(argv[1], "-t")==0)
+        tflag++;
+    else if(argc>2 && strcmp(argv[1], "-c")==0){
+        cflag++;
+        cflagp = argv[2];
+    }else if(argc>1){
+        close(0);
+        if(open(argv[1], 0) != 0){
+            error(": can't open", argv[1]);
+            exits("argument");
+        }
+    }else
+        interactive = 1;
+    for(;;){
+        if(interactive)
+            fprint(2, "%d$ ", getpid());
+        nfree = nodes;
+        sfree = strspace;
+        if((t=gettoken()) == EOF)
+            break;
+        if(t != '\n')
+            if(np = list())
+                execute(np);
+            else
+                error("syntax error", "");
+        while(t!=EOF && t!='\n')	/* flush syntax errors */
+            t = gettoken();
+    }
+    exits(status);
+}
+@
+
+<<function alloc>>=
+/* alloc - allocate for op and return a node */
+Node*
+alloc(int (*op)(Node *))
+{
+    if(nfree < nodes+sizeof(nodes)){
+        nfree->op = op;
+        nfree->args[0] = nfree->args[1] = 0;
+        nfree->argv[0] = nfree->argv[1] = 0;
+        nfree->io[0] = nfree->io[1] = nfree->io[2] = 0;
+        return nfree++;
+    }
+    error("node storage overflow", "");
+    exits("node storage overflow");
+    return nil;
+}
+@
+
+<<function builtin>>=
+/* builtin - check np for builtin command and, if found, execute it */
+int
+builtin(Node *np)
+{
+    int n = 0;
+    char name[MAXLINE];
+    Waitmsg *wmsg;
+
+    if(np->argv[1])
+        n = strtoul(np->argv[1], 0, 0);
+    if(strcmp(np->argv[0], "cd") == 0){
+        if(chdir(np->argv[1]? np->argv[1] : "/") == -1)
+            error(": bad directory", np->argv[0]);
+        return 1;
+    }else if(strcmp(np->argv[0], "exit") == 0)
+        exits(np->argv[1]? np->argv[1] : status);
+    else if(strcmp(np->argv[0], "bind") == 0){
+        if(np->argv[1]==0 || np->argv[2]==0)
+            error("usage: bind new old", "");
+        else if(bind(np->argv[1], np->argv[2], 0)==-1)
+            error("bind failed", "");
+        return 1;
+//#ifdef asdf
+//	}else if(strcmp(np->argv[0], "unmount") == 0){
+//		if(np->argv[1] == 0)
+//			error("usage: unmount [new] old", "");
+//		else if(np->argv[2] == 0){
+//			if(unmount((char *)0, np->argv[1]) == -1)
+//				error("unmount:", "");
+//		}else if(unmount(np->argv[1], np->argv[2]) == -1)
+//			error("unmount", "");
+//		return 1;
+//#endif
+    }else if(strcmp(np->argv[0], "wait") == 0){
+        while((wmsg = wait()) != nil){
+            strncpy(status, wmsg->msg, sizeof(status)-1);
+            if(n && wmsg->pid==n){
+                n = 0;
+                free(wmsg);
+                break;
+            }
+            free(wmsg);
+        }
+        if(n)
+            error("wait error", "");
+        return 1;
+    }else if(strcmp(np->argv[0], "rfork") == 0){
+        char *p;
+        int mask;
+
+        p = np->argv[1];
+        if(p == 0 || *p == 0)
+            p = "ens";
+        mask = 0;
+
+        while(*p)
+            switch(*p++){
+            case 'n': mask |= RFNAMEG; break;
+            case 'N': mask |= RFCNAMEG; break;
+            case 'e': mask |= RFENVG; break;
+            case 'E': mask |= RFCENVG; break;
+            case 's': mask |= RFNOTEG; break;
+            case 'f': mask |= RFFDG; break;
+            case 'F': mask |= RFCFDG; break;
+            case 'm': mask |= RFNOMNT; break;
+            default: error(np->argv[1], "bad rfork flag");
+            }
+        rfork(mask);
+
+        return 1;
+    }else if(strcmp(np->argv[0], "exec") == 0){
+        redirect(np);
+        if(np->argv[1] == (char *) 0)
+            return 1;
+        exec(np->argv[1], &np->argv[1]);
+        n = np->argv[1][0];
+        if(n!='/' && n!='#' && (n!='.' || np->argv[1][1]!='/'))
+            for(n = 0; path[n]; n++){
+                sprint(name, "%s/%s", path[n], np->argv[1]);
+                exec(name, &np->argv[1]);
+            }
+        error(": not found", np->argv[1]);
+        return 1;
+    }
+    return 0;
+}
+@
+
+<<function command>>=
+/* command - ( list ) [ ( < | > | >> ) word ]* | simple */
+Node*
+command(void)
+{
+    Node *np;
+
+    if(t != '(')
+        return simple();
+    np = alloc(xsubshell);
+    t = gettoken();
+    if((np->args[0]=list())==0 || t!=')')
+        return 0;
+    while((t=gettoken())=='<' || t=='>')
+        if(!setio(np))
+            return 0;
+    return np;
+}
+@
+
+<<function getch>>=
+/* getch - get next, possibly pushed back, input character */
+int
+getch(void)
+{
+    unsigned char c;
+    static int done=0;
+
+    if(putback){
+        c = putback;
+        putback = 0;
+    }else if(tflag){
+        if(done || read(0, &c, 1)!=1){
+            done = 1;
+            return EOF;
+        }
+        if(c == '\n')
+            done = 1;
+    }else if(cflag){
+        if(done)
+            return EOF;
+        if((c=*cflagp++) == 0){
+            done = 1;
+            c = '\n';
+        }
+    }else if(read(0, &c, 1) != 1)
+        return EOF;
+    return c;
+}
+@
+
+<<function gettoken>>=
+/* gettoken - get next token into string space, return token code */
+int
+gettoken(void)
+{
+    int c;
+
+    while((c = getch()) != EOF)
+        if(!isspace(c))
+            break;
+    if(c==EOF || ispunct(c))
+        return c;
+    token = sfree;
+    do{
+        if(sfree >= strspace+sizeof(strspace) - 1){
+            error("string storage overflow", "");
+            exits("string storage overflow");
+        }
+        *sfree++ = c;
+    }while((c=getch()) != EOF && !ispunct(c) && !isspace(c));
+    *sfree++ = 0;
+    putback = c;
+    return WORD;
+}
+@
+
+<<function list>>=
+/* list - pipeline ( ( ; | & ) pipeline )* [ ; | & ]  (not LL(1), but ok) */
+Node*
+list(void)
+{
+    Node *np, *np1;
+
+    np = alloc(0);
+    if((np->args[1]=pipeline()) == 0)
+        return 0;
+    while(t==';' || t=='&'){
+        np->op = (t==';')? xwait : xnowait;
+        t = gettoken();
+        if(t==')' || t=='\n')	/* tests ~first(pipeline) */
+            break;
+        np1 = alloc(0);
+        np1->args[0] = np;
+        if((np1->args[1]=pipeline()) == 0)
+            return 0;
+        np = np1;
+    }
+    if(np->op == 0)
+        np->op = xwait;
+    return np;
+}
+@
+
+<<function error>>=
+/* error - print error message s, prefixed by t */
+void
+error(char *s, char *t)
+{
+    char buf[256];
+
+    fprint(2, "%s%s", t, s);
+    errstr(buf, sizeof buf);
+    fprint(2, ": %s\n", buf);
+}
+@
+
+<<function pipeline>>=
+/* pipeline - command ( | command )* */
+Node*
+pipeline(void)
+{
+    Node *np, *np1;
+
+    if((np=command()) == 0)
+        return 0;
+    while(t == '|'){
+        np1 = alloc(xpipeline);
+        np1->args[0] = np;
+        t = gettoken();
+        if((np1->args[1]=command()) == 0)
+            return 0;
+        np = np1;
+    }
+    return np;
+}
+@
+
+<<function redirect>>=
+/* redirect - redirect i/o according to np->io[] values */
+void
+redirect(Node *np)
+{
+    int fd;
+
+    if(np->io[0]){
+        if((fd = open(np->io[0], 0)) < 0){
+            error(": can't open", np->io[0]);
+            exits("open");
+        }
+        dup(fd, 0);
+        close(fd);
+    }
+    if(np->io[1]){
+        if((fd = create(np->io[1], 1, 0666L)) < 0){
+            error(": can't create", np->io[1]);
+            exits("create");
+        }
+        dup(fd, 1);
+        close(fd);
+    }
+    if(np->io[2]){
+        if((fd = open(np->io[2], 1)) < 0 && (fd = create(np->io[2], 1, 0666L)) < 0){
+            error(": can't write", np->io[2]);
+            exits("write");
+        }
+        dup(fd, 1);
+        close(fd);
+        seek(1, 0, 2);
+    }
+}
+@
+
+<<function setio>>=
+/* setio - ( < | > | >> ) word; fill in np->io[] */
+int
+setio(Node *np)
+{
+    if(t == '<'){
+        t = gettoken();
+        np->io[0] = token;
+    }else if(t == '>'){
+        t = gettoken();
+        if(t == '>'){
+            t = gettoken();
+            np->io[2] = token;
+            }else
+            np->io[1] = token;
+    }else
+        return 0;
+    if(t != WORD)
+        return 0;
+    return 1;
+}
+@
+
+<<function simple>>=
+/* simple - word ( [ < | > | >> ] word )* */
+Node*
+simple(void)
+{
+    Node *np;
+    int n = 1;
+
+    if(t != WORD)
+        return 0;
+    np = alloc(xsimple);
+    np->argv[0] = token;
+    while((t = gettoken())==WORD || t=='<' || t=='>')
+        if(t == WORD)
+            np->argv[n++] = token;
+        else if(!setio(np))
+            return 0;
+    np->argv[n] = 0;
+    return np;
+}
+@
+
+<<function xpipeline>>=
+/* xpipeline - execute cmd | cmd */
+int
+xpipeline(Node *np)
+{
+    int pid, fd[2];
+
+    if(pipe(fd) < 0){
+        error("can't create pipe", "");
+        return 0;
+    }
+    if((pid=fork()) == 0){	/* left side; redirect stdout */
+        dup(fd[1], 1);
+        close(fd[0]);
+        close(fd[1]);
+        execute(np->args[0]);
+        exits(status);
+    }else if(pid == -1){
+        error("can't create process", "");
+        return 0;
+    }
+    if((pid=fork()) == 0){	/* right side; redirect stdin */
+        dup(fd[0], 0);
+        close(fd[0]);
+        close(fd[1]);
+        pid = execute(np->args[1]); /*BUG: this is wrong sometimes*/
+        if(pid > 0)
+            while(waitpid()!=pid)
+                ;
+        exits(0);
+    }else if(pid == -1){
+        error("can't create process", "");
+        return 0;
+    }
+    close(fd[0]);	/* avoid using up fd's */
+    close(fd[1]);
+    return pid;
+}
+@
+
+<<function xsimple>>=
+/* xsimple - execute a simple command */
+int
+xsimple(Node *np)
+{
+    char name[MAXLINE];
+    int pid, i;
+
+    if(builtin(np))
+        return 0;
+    if(pid = fork()){
+        if(pid == -1)
+            error(": can't create process", np->argv[0]);
+        return pid;
+    }
+    redirect(np);	/* child process */
+    exec(np->argv[0], &np->argv[0]);
+    i = np->argv[0][0];
+    if(i!='/' && i!='#' && (i!='.' || np->argv[0][1]!='/'))
+        for(i = 0; path[i]; i++){
+            sprint(name, "%s/%s", path[i], np->argv[0]);
+            exec(name, &np->argv[0]);
+        }
+    error(": not found", np->argv[0]);
+    exits("not found");
+    return -1;		// suppress compiler warnings
+}
+@
+
+<<function xsubshell>>=
+/* xsubshell - execute (cmd) */
+int
+xsubshell(Node *np)
+{
+    int pid;
+
+    if(pid = fork()){
+        if(pid == -1)
+            error("can't create process", "");
+        return pid;
+    }
+    redirect(np);	/* child process */
+    execute(np->args[0]);
+    exits(status);
+    return -1;		// suppress compiler warnings
+}
+@
+
+<<function xnowait>>=
+/* xnowait - execute cmd & */
+int
+xnowait(Node *np)
+{
+    int pid;
+
+    execute(np->args[0]);
+    pid = execute(np->args[1]);
+    if(interactive)
+        fprint(2, "%d\n", pid);
+    return 0;
+}
+@
+
+<<function xwait>>=
+/* xwait - execute cmd ; */
+int xwait(Node *np)
+{
+    int pid;
+    Waitmsg *wmsg;
+
+    execute(np->args[0]);
+    pid = execute(np->args[1]);
+    if(pid > 0){
+        while((wmsg = wait()) != nil){
+            if(wmsg->pid == pid)
+                break;
+            free(wmsg);
+        }
+        if(wmsg == nil)
+            error("wait error", "");
+        else {
+            strncpy(status, wmsg->msg, sizeof(status)-1);
+            free(wmsg);
+        }
+    }
+    return 0;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<sh/sh.c>>=
+/* sh - simple shell - great for early stages of porting */
+#include <u.h>
+#include <libc.h>
+
+<<constant MAXLINE>>
+<<constant WORD>>
+<<constant EOF>>
+<<function ispunct>>
+<<function isspace>>
+<<function execute>>
+
+typedef struct Node	Node;
+<<struct Node>>
+
+<<global nodes>>
+<<global nfree>>
+<<global strspace>>
+<<global sfree>>
+<<global t>>
+<<global token>>
+<<global putback>>
+<<global status>>
+<<global cflag>>
+<<global tflag>>
+<<global interactive>>
+<<global cflagp>>
+<<global path>>
+<<global ignored>>
+
+Node	*alloc(int (*op)(Node *));
+int	builtin(Node *np);
+Node	*command(void);
+int	getch(void);
+int	gettoken(void);
+Node	*list(void);
+void	error(char *s, char *t);
+Node	*pipeline(void);
+void	redirect(Node *np);
+int	setio(Node *np);
+Node	*simple(void);
+int	xpipeline(Node *np);
+int	xsimple(Node *np);
+int	xsubshell(Node *np);
+int	xnowait(Node *np);
+int	xwait(Node *np);
+
+<<function main (sh/sh.c)>>
+
+<<function alloc>>
+
+<<function builtin>>
+
+<<function command>>
+
+<<function getch>>
+
+<<function gettoken>>
+
+<<function list>>
+
+<<function error>>
+
+<<function pipeline>>
+
+<<function redirect>>
+
+<<function setio>>
+            
+<<function simple>>
+
+<<function xpipeline>>
+
+<<function xsimple>>
+
+<<function xsubshell>>
+
+<<function xnowait>>
+
+<<function xwait>>
+@
+
+
+\section{[[rc/]]}
+
+\subsection*{[[rc/fns.h]]}
+
+
+%-------------------------------------------------------------
+
+<<rc/fns.h>>=
+void	Abort(void);
+void	Closedir(int);
+int	Creat(char*);
+int	Dup(int, int);
+int	Dup1(int);
+int	Eintr(void);
+int	Executable(char*);
+void	Execute(word*,  word*);
+void	Exit(char*);
+int	ForkExecute(char*, char**, int, int, int);
+int	Globsize(char*);
+int	Isatty(int);
+void	Memcpy(void*, void*, long);
+void	Noerror(void);
+int	Opendir(char*);
+long	Read(int, void*, long);
+int	Readdir(int, void*, int);
+long	Seek(int, long, long);
+void	Trapinit(void);
+void	Unlink(char*);
+void	Updenv(void);
+void	Vinit(void);
+int	Waitfor(int, int);
+long	Write(int, void*, long);
+void	addwaitpid(int);
+int	advance(void);
+int	back(int);
+void	cleanhere(char*);
+void	codefree(code*);
+int	compile(tree*);
+char *	list2str(word*);
+int	count(word*);
+void	deglob(void*);
+void	delwaitpid(int);
+void	dotrap(void);
+void	freenodes(void);
+void	freewords(word*);
+void	globlist(void);
+int	havewaitpid(int);
+int	idchr(int);
+void	inttoascii(char*, long);
+void	kinit(void);
+int	mapfd(int);
+int	match(void*, void*, int);
+int	matchfn(void*, void*);
+char**	mkargv(word*);
+void	clearwaitpids(void);
+void	panic(char*, int);
+void	pathinit(void);
+void	poplist(void);
+void	popword(void);
+void	pprompt(void);
+void	pushlist(void);
+void	pushredir(int, int, int);
+void	pushword(char*);
+void	readhere(void);
+word*	searchpath(char*);
+void	setstatus(char*);
+void	setvar(char*, word*);
+void	skipnl(void);
+void	start(code*, int, var*);
+int	truestatus(void);
+void	usage(char*);
+int	wordchr(int);
+void	yyerror(char*);
+int	yylex(void);
+int	yyparse(void);
+@
+
+
+\subsection*{[[rc/getflags.h]]}
+
+<<constant NFLAG>>=
+#define	NFLAG	128
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/getflags.h>>=
+<<constant NFLAG>>
+
+extern char **flag[NFLAG];
+extern char *cmdname;
+extern char *flagset[];
+
+int getflags(int, char*[], char*, int);
+@
+
+
+\subsection*{[[rc/io.h]]}
+
+<<constant EOF (rc/io.h)>>=
+#define	EOF	(-1)
+@
+
+<<constant NBUF>>=
+#define	NBUF	512
+@
+
+<<struct io>>=
+struct io{
+    int	fd;
+    uchar	*bufp, *ebuf, *strp;
+    uchar	buf[NBUF];
+};
+@
+
+<<global err>>=
+io *err;
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/io.h>>=
+<<constant EOF (rc/io.h)>>
+<<constant NBUF>>
+
+<<struct io>>
+<<global err>>
+
+io *openfd(int), *openstr(void), *opencore(char *, int);
+int emptybuf(io*);
+void pchr(io*, int);
+int rchr(io*);
+int rutf(io*, char*, Rune*);
+void closeio(io*);
+void flush(io*);
+int fullbuf(io*, int);
+void pdec(io*, int);
+void poct(io*, unsigned);
+void pptr(io*, void*);
+void pquo(io*, char*);
+void pwrd(io*, char*);
+void pstr(io*, char*);
+void pcmd(io*, tree*);
+void pval(io*, word*);
+void pfnc(io*, thread*);
+void pfmt(io*, char*, ...);
+@
+
+
+\subsection*{[[rc/rc.h]]}
+
+<<constant NSIG>>=
+#define	NSIG	32
+@
+
+<<constant SIGINT>>=
+#define	SIGINT	2
+@
+
+<<constant SIGQUIT>>=
+#define	SIGQUIT	3
+@
+
+<<constant ERRMAX>>=
+#define ERRMAX 128
+@
+
+<<constant YYMAXDEPTH>>=
+#define	YYMAXDEPTH	500
+@
+
+<<struct tree>>=
+//#endif
+
+struct tree{
+    int	type;
+    int	rtype, fd0, fd1;	/* details of REDIR PIPE DUP tokens */
+    char	*str;
+    int	quoted;
+    int	iskw;
+    tree	*child[3];
+    tree	*next;
+};
+@
+
+<<global cmdtree>>=
+tree *cmdtree;
+@
+
+<<struct code>>=
+/*
+ * The first word of any code vector is a reference count.
+ * Always create a new reference to a code vector by calling codecopy(.).
+ * Always call codefree(.) when deleting a reference.
+ */
+union code{
+    void	(*f)(void);
+    int	i;
+    char	*s;
+};
+@
+
+<<global promptstr>>=
+char *promptstr;
+@
+
+<<global doprompt>>=
+int doprompt;
+@
+
+<<constant NTOK>>=
+#define	NTOK	8192		/* maximum bytes in a word (token) */
+@
+
+<<global tok>>=
+char tok[NTOK + UTFmax];
+@
+
+<<constant APPEND>>=
+#define	APPEND	1
+@
+
+<<constant WRITE>>=
+#define	WRITE	2
+@
+
+<<constant READ>>=
+#define	READ	3
+@
+
+<<constant HERE>>=
+#define	HERE	4
+@
+
+<<constant DUPFD>>=
+#define	DUPFD	5
+@
+
+<<constant CLOSE>>=
+#define	CLOSE	6
+@
+
+<<constant RDWR>>=
+#define RDWR	7
+@
+
+<<struct var>>=
+struct var{
+    char	*name;		/* ascii name */
+    word	*val;		/* value */
+    int	changed;
+    code	*fn;		/* pointer to function's code vector */
+    int	fnchanged;
+    int	pc;		/* pc of start of function */
+    var	*next;		/* next on hash or local list */
+};
+@
+
+<<constant NVAR>>=
+#define	NVAR	521
+@
+
+<<global gvar>>=
+var *gvar[NVAR];		/* hash for globals */
+@
+
+<<struct here>>=
+struct here{
+    tree	*tag;
+    char	*name;
+    struct here *next;
+};
+@
+
+<<global mypid>>=
+int mypid;
+@
+
+<<constant GLOB>>=
+/*
+ * Glob character escape in strings:
+ *	In a string, GLOB must be followed by *?[ or GLOB.
+ *	GLOB* matches any string
+ *	GLOB? matches any single character
+ *	GLOB[...] matches anything in the brackets
+ *	GLOBGLOB matches GLOB
+ */
+#define	GLOB	'\001'
+@
+
+<<global argp>>=
+char **argp;
+@
+
+<<global args>>=
+char **args;
+@
+
+<<global nerror>>=
+int nerror;		/* number of errors encountered during compilation */
+@
+
+<<global doprompt (rc/rc.h)>>=
+int doprompt;		/* is it time for a prompt? */
+@
+
+<<constant PRD>>=
+/*
+ * Which fds are the reading/writing end of a pipe?
+ * Unfortunately, this can vary from system to system.
+ * 9th edition Unix doesn't care, the following defines
+ * work on plan 9.
+ */
+#define	PRD	0
+@
+
+<<constant PWR>>=
+#define	PWR	1
+@
+
+<<global ndot>>=
+/*
+ * How many dot commands have we executed?
+ * Used to ensure that -v flag doesn't print rcmain.
+ */
+int ndot;
+@
+
+<<global lastc>>=
+int lastc;
+@
+
+<<global lastword>>=
+int lastword;
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/rc.h>>=
+/*
+ * Assume plan 9 by default; if Unix is defined, assume unix.
+ * Please don't litter the code with ifdefs.  The five below should be enough.
+ */
+
+//#ifndef Unix
+/* plan 9 */
+#include <u.h>
+#include <libc.h>
+
+<<constant NSIG>>
+<<constant SIGINT>>
+<<constant SIGQUIT>>
+
+//#define fcntl(fd, op, arg) /* unix compatibility */
+//#define F_SETFD  
+//#define FD_CLOEXEC 
+//#else
+//#include "unix.h"
+//#endif
+
+#ifndef ERRMAX
+<<constant ERRMAX>>
+#endif
+
+<<constant YYMAXDEPTH>>
+
+//#ifndef YYPREFIX
+#ifndef PAREN
+#include "x.tab.h"
+#endif
+//#endif
+
+typedef struct tree tree;
+typedef struct word word;
+typedef struct io io;
+typedef union code code;
+typedef struct var var;
+typedef struct list list;
+typedef struct redir redir;
+typedef struct thread thread;
+typedef struct builtin builtin;
+
+//#ifndef Unix
+#pragma incomplete word
+#pragma incomplete io
+<<struct tree>>
+tree *newtree(void);
+tree *token(char*, int), *klook(char*), *tree1(int, tree*);
+tree *tree2(int, tree*, tree*), *tree3(int, tree*, tree*, tree*);
+tree *mung1(tree*, tree*), *mung2(tree*, tree*, tree*);
+tree *mung3(tree*, tree*, tree*, tree*), *epimung(tree*, tree*);
+tree *simplemung(tree*), *heredoc(tree*);
+void freetree(tree*);
+<<global cmdtree>>
+
+<<struct code>>
+
+<<global promptstr>>
+<<global doprompt>>
+
+<<constant NTOK>>
+
+<<global tok>>
+
+<<constant APPEND>>
+<<constant WRITE>>
+<<constant READ>>
+<<constant HERE>>
+<<constant DUPFD>>
+<<constant CLOSE>>
+<<constant RDWR>>
+
+<<struct var>>
+var *vlook(char*), *gvlook(char*), *newvar(char*, var*);
+
+<<constant NVAR>>
+
+<<global gvar>>
+
+#define	new(type)	((type *)emalloc(sizeof(type)))
+
+void *emalloc(long);
+void *Malloc(ulong);
+void efree(void *);
+
+<<struct here>>
+<<global mypid>>
+
+<<constant GLOB>>
+
+<<global argp>>
+<<global args>>
+<<global nerror>>
+<<global doprompt (rc/rc.h)>>
+<<constant PRD>>
+<<constant PWR>>
+
+char *Rcmain, *Fdprefix;
+<<global ndot>>
+char *getstatus(void);
+<<global lastc>>
+<<global lastword>>
+@
+
+
+\subsection*{[[rc/exec.h]]}
+
+<<struct word>>=
+/*
+ * word lists are in correct order,
+ * i.e. word0->word1->word2->word3->0
+ */
+struct word{
+    char *word;
+    word *next;
+};
+@
+
+<<struct list>>=
+struct list{
+    word *words;
+    list *next;
+};
+@
+
+<<struct redir>>=
+struct redir{
+    char type;			/* what to do */
+    short from, to;			/* what to do it to */
+    struct redir *next;		/* what else to do (reverse order) */
+};
+@
+
+<<constant NSTATUS>>=
+#define	NSTATUS	ERRMAX			/* length of status (from plan 9) */
+@
+
+<<constant ROPEN>>=
+/*
+ * redir types
+ */
+#define	ROPEN	1			/* dup2(from, to); close(from); */
+@
+
+<<constant RDUP>>=
+#define	RDUP	2			/* dup2(from, to); */
+@
+
+<<constant RCLOSE>>=
+#define	RCLOSE	3			/* close(from); */
+@
+
+<<struct thread>>=
+struct thread{
+    union code *code;		/* code for this thread */
+    int pc;				/* code[pc] is the next instruction */
+    struct list *argv;		/* argument stack */
+    struct redir *redir;		/* redirection stack */
+    struct redir *startredir;	/* redir inheritance point */
+    struct var *local;		/* list of local variables */
+    char *cmdfile;			/* file name in Xrdcmd */
+    struct io *cmdfd;		/* file descriptor for Xrdcmd */
+    int iflast;			/* static `if not' checking */
+    int eof;			/* is cmdfd at eof? */
+    int iflag;			/* interactive? */
+    int lineno;			/* linenumber */
+    int pid;			/* process for Xpipewait to wait for */
+    char status[NSTATUS];		/* status for Xpipewait */
+    tree *treenodes;		/* tree nodes created by this process */
+    thread *ret;		/* who continues when this finishes */
+};
+@
+
+<<global runq>>=
+thread *runq;
+@
+
+<<global codebuf>>=
+code *codebuf;				/* compiler output */
+@
+
+<<global ntrap>>=
+int ntrap;				/* number of outstanding traps */
+@
+
+<<global trap>>=
+int trap[NSIG];				/* number of outstanding traps per type */
+@
+
+<<struct builtin>>=
+struct builtin{
+    char *name;
+    void (*fnc)(void);
+};
+@
+
+<<global eflagok>>=
+int eflagok;			/* kludge flag so that -e doesn't exit in startup */
+@
+
+<<global havefork>>=
+int havefork;
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/exec.h>>=
+/*
+ * Definitions used in the interpreter
+ */
+extern void Xappend(void), Xasync(void), Xbackq(void), Xbang(void), Xclose(void);
+extern void Xconc(void), Xcount(void), Xdelfn(void), Xdol(void), Xqdol(void), Xdup(void);
+extern void Xexit(void), Xfalse(void), Xfn(void), Xfor(void), Xglob(void);
+extern void Xjump(void), Xmark(void), Xmatch(void), Xpipe(void), Xread(void);
+extern void Xrdwr(void);
+extern void Xrdfn(void), Xunredir(void), Xstar(void), Xreturn(void), Xsubshell(void);
+extern void Xtrue(void), Xword(void), Xwrite(void), Xpipefd(void), Xcase(void);
+extern void Xlocal(void), Xunlocal(void), Xassign(void), Xsimple(void), Xpopm(void);
+extern void Xrdcmds(void), Xwastrue(void), Xif(void), Xifnot(void), Xpipewait(void);
+extern void Xdelhere(void), Xpopredir(void), Xsub(void), Xeflag(void), Xsettrue(void);
+extern void Xerror(char*);
+extern void Xerror1(char*);
+<<struct word>>
+<<struct list>>
+word *newword(char *, word *), *copywords(word *, word *);
+<<struct redir>>
+<<constant NSTATUS>>
+<<constant ROPEN>>
+<<constant RDUP>>
+<<constant RCLOSE>>
+<<struct thread>>
+<<global runq>>
+code *codecopy(code*);
+<<global codebuf>>
+<<global ntrap>>
+<<global trap>>
+<<struct builtin>>
+extern struct builtin Builtin[];
+<<global eflagok>>
+<<global havefork>>
+
+void execcd(void), execwhatis(void), execeval(void), execexec(void);
+int execforkexec(void);
+void execexit(void), execshift(void);
+void execwait(void), execumask(void), execdot(void), execflag(void);
+void execfunc(var*), execcmds(io *);
+@
+
+
+\subsection*{[[rc/getflags.c]]}
+
+<<global flagset>>=
+char *flagset[] = {"<flag>"};
+@
+
+<<global flag>>=
+char **flag[NFLAG];
+@
+
+<<global cmdname>>=
+char *cmdname;
+@
+
+<<global flagarg>>=
+static char *flagarg="";
+@
+
+<<global reason>>=
+static int reason;
+@
+
+<<constant RESET>>=
+#define	RESET	1
+@
+
+<<constant FEWARGS>>=
+#define	FEWARGS	2
+@
+
+<<constant FLAGSYN>>=
+#define	FLAGSYN	3
+@
+
+<<constant BADFLAG>>=
+#define	BADFLAG	4
+@
+
+<<global badflag>>=
+static int badflag;
+@
+
+<<function getflags>>=
+int
+getflags(int argc, char *argv[], char *flags, int stop)
+{
+    char *s;
+    int i, j, c, count;
+    flagarg = flags;
+    if(cmdname==0)
+        cmdname = argv[0];
+
+    i = 1;
+    while(i!=argc){
+        if(argv[i][0] != '-' || argv[i][1] == '\0'){
+            if(stop)		/* always true in rc */
+                return argc;
+            i++;
+            continue;
+        }
+        s = argv[i]+1;
+        while(*s){
+            c=*s++;
+            count = scanflag(c, flags);
+            if(count==-1)
+                return -1;
+            if(flag[c]){ reason = RESET; badflag = c; return -1; }
+            if(count==0){
+                flag[c] = flagset;
+                if(*s=='\0'){
+                    for(j = i+1;j<=argc;j++)
+                        argv[j-1] = argv[j];
+                    --argc;
+                }
+            }
+            else{
+                if(*s=='\0'){
+                    for(j = i+1;j<=argc;j++)
+                        argv[j-1] = argv[j];
+                    --argc;
+                    s = argv[i];
+                }
+                if(argc-i<count){
+                    reason = FEWARGS;
+                    badflag = c;
+                    return -1;
+                }
+                reverse(argv+i, argv+argc);
+                reverse(argv+i, argv+argc-count);
+                reverse(argv+argc-count+1, argv+argc);
+                argc-=count;
+                flag[c] = argv+argc+1;
+                flag[c][0] = s;
+                s="";
+            }
+        }
+    }
+    return argc;
+}
+@
+
+<<function reverse>>=
+static void
+reverse(char **p, char **q)
+{
+    char *t;
+    for(;p<q;p++,--q){ t=*p; *p=*q; *q = t; }
+}
+@
+
+<<function scanflag>>=
+static int
+scanflag(int c, char *f)
+{
+    int fc, count;
+    if(0<=c && c<NFLAG)
+        while(*f){
+            if(*f==' '){
+                f++;
+                continue;
+            }
+            fc=*f++;
+            if(*f==':'){
+                f++;
+                if(*f<'0' || '9'<*f){ reason = FLAGSYN; return -1; }
+                count = 0;
+                while('0'<=*f && *f<='9') count = count*10+*f++-'0';
+            }
+            else
+                count = 0;
+            if(*f=='['){
+                do{
+                    f++;
+                    if(*f=='\0'){ reason = FLAGSYN; return -1; }
+                }while(*f!=']');
+                f++;
+            }
+            if(c==fc)
+                return count;
+        }
+    reason = BADFLAG;
+    badflag = c;
+    return -1;
+}
+@
+
+<<function usage>>=
+void
+usage(char *tail)
+{
+    char *s, *t, c;
+    int count, nflag = 0;
+    switch(reason){
+    case RESET:
+        errs("Flag -");
+        errc(badflag);
+        errs(": set twice\n");
+        break;
+    case FEWARGS:
+        errs("Flag -");
+        errc(badflag);
+        errs(": too few arguments\n");
+        break;
+    case FLAGSYN:
+        errs("Bad argument to getflags!\n");
+        break;
+    case BADFLAG:
+        errs("Illegal flag -");
+        errc(badflag);
+        errc('\n');
+        break;
+    }
+    errs("Usage: ");
+    errs(cmdname);
+    for(s = flagarg;*s;){
+        c=*s;
+        if(*s++==' ')
+            continue;
+        if(*s==':'){
+            s++;
+            count = 0;
+            while('0'<=*s && *s<='9') count = count*10+*s++-'0';
+        }
+        else count = 0;
+        if(count==0){
+            if(nflag==0)
+                errs(" [-");
+            nflag++;
+            errc(c);
+        }
+        if(*s=='['){
+            s++;
+            while(*s!=']' && *s!='\0') s++;
+            if(*s==']')
+                s++;
+        }
+    }
+    if(nflag)
+        errs("]");
+    for(s = flagarg;*s;){
+        c=*s;
+        if(*s++==' ')
+            continue;
+        if(*s==':'){
+            s++;
+            count = 0;
+            while('0'<=*s && *s<='9') count = count*10+*s++-'0';
+        }
+        else count = 0;
+        if(count!=0){
+            errs(" [-");
+            errc(c);
+            if(*s=='['){
+                s++;
+                t = s;
+                while(*s!=']' && *s!='\0') s++;
+                errs(" ");
+                errn(t, s-t);
+                if(*s==']')
+                    s++;
+            }
+            else
+                while(count--) errs(" arg");
+            errs("]");
+        }
+        else if(*s=='['){
+            s++;
+            while(*s!=']' && *s!='\0') s++;
+            if(*s==']')
+                s++;
+        }
+    }
+    if(tail){
+        errs(" ");
+        errs(tail);
+    }
+    errs("\n");
+    Exit("bad flags");
+}
+@
+
+<<function errn>>=
+static void
+errn(char *s, int count)
+{
+    while(count){ errc(*s++); --count; }
+}
+@
+
+<<function errs>>=
+static void
+errs(char *s)
+{
+    while(*s) errc(*s++);
+}
+@
+
+<<constant NBUF (rc/getflags.c)>>=
+#define	NBUF	80
+@
+
+<<function errc>>=
+static void
+errc(int c)
+{
+    *bufp++=c;
+    if(bufp==&buf[NBUF] || c=='\n'){
+        Write(2, buf, bufp-buf);
+        bufp = buf;
+    }
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/getflags.c>>=
+#include "rc.h"
+#include "getflags.h"
+#include "fns.h"
+<<global flagset>>
+<<global flag>>
+<<global cmdname>>
+<<global flagarg>>
+static void reverse(char**, char**);
+static int scanflag(int, char*);
+static void errn(char*, int);
+static void errs(char*);
+static void errc(int);
+<<global reason>>
+<<constant RESET>>
+<<constant FEWARGS>>
+<<constant FLAGSYN>>
+<<constant BADFLAG>>
+<<global badflag>>
+
+<<function getflags>>
+
+<<function reverse>>
+
+<<function scanflag>>
+
+<<function usage>>
+
+<<function errn>>
+
+<<function errs>>
+<<constant NBUF (rc/getflags.c)>>
+static char buf[NBUF], *bufp = buf;
+
+<<function errc>>
+@
+
+
+\subsection*{[[rc/io.c]]}
+
+<<enum _anon_>>=
+enum { Stralloc = 100, };
+@
+
+<<global pfmtnest>>=
+int pfmtnest = 0;
+@
+
+<<function pfmt>>=
+void
+pfmt(io *f, char *fmt, ...)
+{
+    va_list ap;
+    char err[ERRMAX];
+
+    va_start(ap, fmt);
+    pfmtnest++;
+    for(;*fmt;fmt++) {
+        if(*fmt!='%') {
+            pchr(f, *fmt);
+            continue;
+        }
+        if(*++fmt == '\0')		/* "blah%"? */
+            break;
+        switch(*fmt){
+        case 'c':
+            pchr(f, va_arg(ap, int));
+            break;
+        case 'd':
+            pdec(f, va_arg(ap, int));
+            break;
+        case 'o':
+            poct(f, va_arg(ap, unsigned));
+            break;
+        case 'p':
+            pptr(f, va_arg(ap, void*));
+            break;
+        case 'Q':
+            pquo(f, va_arg(ap, char *));
+            break;
+        case 'q':
+            pwrd(f, va_arg(ap, char *));
+            break;
+        case 'r':
+            errstr(err, sizeof err); pstr(f, err);
+            break;
+        case 's':
+            pstr(f, va_arg(ap, char *));
+            break;
+        case 't':
+            pcmd(f, va_arg(ap, struct tree *));
+            break;
+        case 'v':
+            pval(f, va_arg(ap, struct word *));
+            break;
+        default:
+            pchr(f, *fmt);
+            break;
+        }
+    }
+    va_end(ap);
+    if(--pfmtnest==0)
+        flush(f);
+}
+@
+
+<<function pchr>>=
+void
+pchr(io *b, int c)
+{
+    if(b->bufp==b->ebuf)
+        fullbuf(b, c);
+    else *b->bufp++=c;
+}
+@
+
+<<function rchr>>=
+int
+rchr(io *b)
+{
+    if(b->bufp==b->ebuf)
+        return emptybuf(b);
+    return *b->bufp++;
+}
+@
+
+<<function rutf>>=
+int
+rutf(io *b, char *buf, Rune *r)
+{
+    int n, i, c;
+
+    c = rchr(b);
+    if(c == EOF)
+        return EOF;
+    *buf = c;
+    if(c < Runesync){
+        *r = c;
+        return 1;
+    }
+    for(i = 1; (c = rchr(b)) != EOF; ){
+        buf[i++] = c;
+        buf[i] = 0;
+        if(fullrune(buf, i)){
+            n = chartorune(r, buf);
+            b->bufp -= i - n;	/* push back unconsumed bytes */
+            assert(b->fd == -1 || b->bufp > b->buf);
+            return n;
+        }
+    }
+    /* at eof */
+    b->bufp -= i - 1;			/* consume 1 byte */
+    *r = Runeerror;
+    return runetochar(buf, r);
+}
+@
+
+<<function pquo>>=
+void
+pquo(io *f, char *s)
+{
+    pchr(f, '\'');
+    for(;*s;s++)
+        if(*s=='\'')
+            pfmt(f, "''");
+        else pchr(f, *s);
+    pchr(f, '\'');
+}
+@
+
+<<function pwrd>>=
+void
+pwrd(io *f, char *s)
+{
+    char *t;
+    for(t = s;*t;t++) if(*t >= 0 && needsrcquote(*t)) break;
+    if(t==s || *t)
+        pquo(f, s);
+    else pstr(f, s);
+}
+@
+
+<<function pptr>>=
+void
+pptr(io *f, void *v)
+{
+    int n;
+    uintptr p;
+
+    p = (uintptr)v;
+    if(sizeof(uintptr) == sizeof(uvlong) && p>>32)
+        for(n = 60;n>=32;n-=4) pchr(f, "0123456789ABCDEF"[(p>>n)&0xF]);
+
+    for(n = 28;n>=0;n-=4) pchr(f, "0123456789ABCDEF"[(p>>n)&0xF]);
+}
+@
+
+<<function pstr>>=
+void
+pstr(io *f, char *s)
+{
+    if(s==0)
+        s="(null)";
+    while(*s) pchr(f, *s++);
+}
+@
+
+<<function pdec>>=
+void
+pdec(io *f, int n)
+{
+    if(n<0){
+        n=-n;
+        if(n>=0){
+            pchr(f, '-');
+            pdec(f, n);
+            return;
+        }
+        /* n is two's complement minimum integer */
+        n = 1-n;
+        pchr(f, '-');
+        pdec(f, n/10);
+        pchr(f, n%10+'1');
+        return;
+    }
+    if(n>9)
+        pdec(f, n/10);
+    pchr(f, n%10+'0');
+}
+@
+
+<<function poct>>=
+void
+poct(io *f, unsigned n)
+{
+    if(n>7)
+        poct(f, n>>3);
+    pchr(f, (n&7)+'0');
+}
+@
+
+<<function pval>>=
+void
+pval(io *f, word *a)
+{
+    if(a){
+        while(a->next && a->next->word){
+            pwrd(f, (char *)a->word);
+            pchr(f, ' ');
+            a = a->next;
+        }
+        pwrd(f, (char *)a->word);
+    }
+}
+@
+
+<<function fullbuf>>=
+int
+fullbuf(io *f, int c)
+{
+    flush(f);
+    return *f->bufp++=c;
+}
+@
+
+<<function flush>>=
+void
+flush(io *f)
+{
+    int n;
+
+    if(f->strp){
+        n = f->ebuf - f->strp;
+        f->strp = realloc(f->strp, n+Stralloc+1);
+        if(f->strp==0)
+            panic("Can't realloc %d bytes in flush!", n+Stralloc+1);
+        f->bufp = f->strp + n;
+        f->ebuf = f->bufp + Stralloc;
+        memset(f->bufp, '\0', Stralloc+1);
+    }
+    else{
+        n = f->bufp-f->buf;
+        if(n && Write(f->fd, f->buf, n) != n){
+            Write(2, "Write error\n", 12);
+            if(ntrap)
+                dotrap();
+        }
+        f->bufp = f->buf;
+        f->ebuf = f->buf+NBUF;
+    }
+}
+@
+
+<<function openfd>>=
+io*
+openfd(int fd)
+{
+    io *f = new(struct io);
+    f->fd = fd;
+    f->bufp = f->ebuf = f->buf;
+    f->strp = 0;
+    return f;
+}
+@
+
+<<function openstr>>=
+io*
+openstr(void)
+{
+    io *f = new(struct io);
+
+    f->fd = -1;
+    f->bufp = f->strp = emalloc(Stralloc+1);
+    f->ebuf = f->bufp + Stralloc;
+    memset(f->bufp, '\0', Stralloc+1);
+    return f;
+}
+@
+
+<<function opencore>>=
+/*
+ * Open a corebuffer to read.  EOF occurs after reading len
+ * characters from buf.
+ */
+
+io*
+opencore(char *s, int len)
+{
+    io *f = new(struct io);
+    uchar *buf = emalloc(len);
+
+    f->fd = -1 /*open("/dev/null", 0)*/;
+    f->bufp = f->strp = buf;
+    f->ebuf = buf+len;
+    Memcpy(buf, s, len);
+    return f;
+}
+@
+
+<<function rewind>>=
+void
+rewind(io *io)
+{
+    if(io->fd==-1)
+        io->bufp = io->strp;
+    else{
+        io->bufp = io->ebuf = io->buf;
+        Seek(io->fd, 0L, 0);
+    }
+}
+@
+
+<<function closeio>>=
+void
+closeio(io *io)
+{
+    if(io->fd>=0)
+        close(io->fd);
+    if(io->strp)
+        efree(io->strp);
+    efree(io);
+}
+@
+
+<<function emptybuf>>=
+int
+emptybuf(io *f)
+{
+    int n;
+    if(f->fd==-1 || (n = Read(f->fd, f->buf, NBUF))<=0) return EOF;
+    f->bufp = f->buf;
+    f->ebuf = f->buf + n;
+    return *f->bufp++;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/io.c>>=
+#include "rc.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+
+<<enum _anon_>>
+
+<<global pfmtnest>>
+
+<<function pfmt>>
+
+<<function pchr>>
+
+<<function rchr>>
+
+<<function rutf>>
+
+<<function pquo>>
+
+<<function pwrd>>
+
+<<function pptr>>
+
+<<function pstr>>
+
+<<function pdec>>
+
+<<function poct>>
+
+<<function pval>>
+
+<<function fullbuf>>
+
+<<function flush>>
+
+<<function openfd>>
+
+<<function openstr>>
+<<function opencore>>
+
+<<function rewind>>
+
+<<function closeio>>
+
+<<function emptybuf>>
+@
+
+
+\subsection*{[[rc/var.c]]}
+
+<<function hash>>=
+unsigned
+hash(char *as, int n)
+{
+    int i = 1;
+    unsigned h = 0;
+    uchar *s;
+
+    s = (uchar *)as;
+    while (*s)
+        h += *s++ * i++;
+    return h % n;
+}
+@
+
+<<constant NKW>>=
+#define	NKW	30
+@
+
+<<global kw>>=
+struct kw{
+    char *name;
+    int type;
+    struct kw *next;
+}*kw[NKW];
+@
+
+<<function kenter>>=
+void
+kenter(int type, char *name)
+{
+    int h = hash(name, NKW);
+    struct kw *p = new(struct kw);
+    p->type = type;
+    p->name = name;
+    p->next = kw[h];
+    kw[h] = p;
+}
+@
+
+<<function kinit>>=
+void
+kinit(void)
+{
+    kenter(FOR, "for");
+    kenter(IN, "in");
+    kenter(WHILE, "while");
+    kenter(IF, "if");
+    kenter(NOT, "not");
+    kenter(TWIDDLE, "~");
+    kenter(BANG, "!");
+    kenter(SUBSHELL, "@");
+    kenter(SWITCH, "switch");
+    kenter(FN, "fn");
+}
+@
+
+<<function klook>>=
+tree*
+klook(char *name)
+{
+    struct kw *p;
+    tree *t = token(name, WORD);
+    for(p = kw[hash(name, NKW)];p;p = p->next)
+        if(strcmp(p->name, name)==0){
+            t->type = p->type;
+            t->iskw = 1;
+            break;
+        }
+    return t;
+}
+@
+
+<<function gvlook>>=
+var*
+gvlook(char *name)
+{
+    int h = hash(name, NVAR);
+    var *v;
+    for(v = gvar[h];v;v = v->next) if(strcmp(v->name, name)==0) return v;
+    return gvar[h] = newvar(strdup(name), gvar[h]);
+}
+@
+
+<<function vlook>>=
+var*
+vlook(char *name)
+{
+    var *v;
+    if(runq)
+        for(v = runq->local;v;v = v->next)
+            if(strcmp(v->name, name)==0) return v;
+    return gvlook(name);
+}
+@
+
+<<function setvar>>=
+void
+setvar(char *name, word *val)
+{
+    struct var *v = vlook(name);
+    freewords(v->val);
+    v->val = val;
+    v->changed = 1;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/var.c>>=
+#include "rc.h"
+#include "exec.h"
+#include "fns.h"
+
+<<function hash>>
+
+<<constant NKW>>
+<<global kw>>
+
+<<function kenter>>
+
+<<function kinit>>
+
+<<function klook>>
+
+<<function gvlook>>
+
+<<function vlook>>
+
+<<function setvar>>
+@
+
+
+\subsection*{[[rc/subr.c]]}
+
+<<function emalloc>>=
+void *
+emalloc(long n)
+{
+    void *p = Malloc(n);
+
+    if(p==0)
+        panic("Can't malloc %d bytes", n);
+/*	if(err){ pfmt(err, "malloc %d->%p\n", n, p); flush(err); } /**/
+    return p;
+}
+@
+
+<<function efree>>=
+void
+efree(void *p)
+{
+/*	pfmt(err, "free %p\n", p); flush(err); /**/
+    if(p)
+        free(p);
+    else pfmt(err, "free 0\n");
+}
+@
+
+<<function yyerror>>=
+void
+yyerror(char *m)
+{
+    pfmt(err, "rc: ");
+    if(runq->cmdfile && !runq->iflag)
+        pfmt(err, "%s:%d: ", runq->cmdfile, runq->lineno);
+    else if(runq->cmdfile)
+        pfmt(err, "%s: ", runq->cmdfile);
+    else if(!runq->iflag)
+        pfmt(err, "line %d: ", runq->lineno);
+    if(tok[0] && tok[0]!='\n')
+        pfmt(err, "token %q: ", tok);
+    pfmt(err, "%s\n", m);
+    flush(err);
+    lastword = 0;
+    lastdol = 0;
+    while(lastc!='\n' && lastc!=EOF) advance();
+    nerror++;
+    setvar("status", newword(m, (word *)0));
+}
+@
+
+<<global bp>>=
+char *bp;
+@
+
+<<function iacvt>>=
+static void
+iacvt(int n)
+{
+    if(n<0){
+        *bp++='-';
+        n=-n;	/* doesn't work for n==-inf */
+    }
+    if(n/10)
+        iacvt(n/10);
+    *bp++=n%10+'0';
+}
+@
+
+<<function inttoascii>>=
+void
+inttoascii(char *s, long n)
+{
+    bp = s;
+    iacvt(n);
+    *bp='\0';
+}
+@
+
+<<function panic>>=
+void
+panic(char *s, int n)
+{
+    pfmt(err, "rc: ");
+    pfmt(err, s, n);
+    pchr(err, '\n');
+    flush(err);
+    Abort();
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/subr.c>>=
+#include "rc.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+
+<<function emalloc>>
+
+<<function efree>>
+extern int lastword, lastdol;
+
+<<function yyerror>>
+<<global bp>>
+
+<<function iacvt>>
+
+<<function inttoascii>>
+
+<<function panic>>
+@
+
+
+\subsection*{[[rc/plan9.c]]}
+
+<<enum _anon_ (rc/plan9.c)>>=
+enum {
+    Maxenvname = 256,	/* undocumented limit */
+};
+@
+
+<<global Signame>>=
+char *Signame[] = {
+    "sigexit",	"sighup",	"sigint",	"sigquit",
+    "sigalrm",	"sigkill",	"sigfpe",	"sigterm",
+    0
+};
+@
+
+<<global syssigname>>=
+char *syssigname[] = {
+    "exit",		/* can't happen */
+    "hangup",
+    "interrupt",
+    "quit",		/* can't happen */
+    "alarm",
+    "kill",
+    "sys: fp: ",
+    "term",
+    0
+};
+@
+
+<<global Rcmain>>=
+char *Rcmain = "/rc/lib/rcmain";
+@
+
+<<global Fdprefix>>=
+char *Fdprefix = "/fd/";
+@
+
+<<global Builtin>>=
+builtin Builtin[] = {
+    "cd",		execcd,
+    "whatis",	execwhatis,
+    "eval",		execeval,
+    "exec",		execexec,	/* but with popword first */
+    "exit",		execexit,
+    "shift",	execshift,
+    "wait",		execwait,
+    ".",		execdot,
+    "finit",	execfinit,
+    "flag",		execflag,
+    "rfork",	execnewpgrp,
+    0
+};
+@
+
+<<function execnewpgrp>>=
+void
+execnewpgrp(void)
+{
+    int arg;
+    char *s;
+    switch(count(runq->argv->words)){
+    case 1:
+        arg = RFENVG|RFNAMEG|RFNOTEG;
+        break;
+    case 2:
+        arg = 0;
+        for(s = runq->argv->words->next->word;*s;s++) switch(*s){
+        default:
+            goto Usage;
+        case 'n':
+            arg|=RFNAMEG;  break;
+        case 'N':
+            arg|=RFCNAMEG;
+            break;
+        case 'm':
+            arg|=RFNOMNT;  break;
+        case 'e':
+            arg|=RFENVG;   break;
+        case 'E':
+            arg|=RFCENVG;  break;
+        case 's':
+            arg|=RFNOTEG;  break;
+        case 'f':
+            arg|=RFFDG;    break;
+        case 'F':
+            arg|=RFCFDG;   break;
+        }
+        break;
+    default:
+    Usage:
+        pfmt(err, "Usage: %s [fnesFNEm]\n", runq->argv->words->word);
+        setstatus("rfork usage");
+        poplist();
+        return;
+    }
+    if(rfork(arg)==-1){
+        pfmt(err, "rc: %s failed\n", runq->argv->words->word);
+        setstatus("rfork failed");
+    }
+    else
+        setstatus("");
+    poplist();
+}
+@
+
+<<function Vinit>>=
+void
+Vinit(void)
+{
+    int dir, f, len, i, n, nent;
+    char *buf, *s;
+    char envname[Maxenvname];
+    word *val;
+    Dir *ent;
+
+    dir = open("/env", OREAD);
+    if(dir<0){
+        pfmt(err, "rc: can't open /env: %r\n");
+        return;
+    }
+    ent = nil;
+    for(;;){
+        nent = dirread(dir, &ent);
+        if(nent <= 0)
+            break;
+        for(i = 0; i<nent; i++){
+            len = ent[i].length;
+            if(len && strncmp(ent[i].name, "fn#", 3)!=0){
+                snprint(envname, sizeof envname, "/env/%s", ent[i].name);
+                if((f = open(envname, 0))>=0){
+                    buf = emalloc(len+1);
+                    n = readn(f, buf, len);
+                    if (n <= 0)
+                        buf[0] = '\0';
+                    else
+                        buf[n] = '\0';
+                    val = 0;
+                    /* Charitably add a 0 at the end if need be */
+                    if(buf[len-1])
+                        buf[len++]='\0';
+                    s = buf+len-1;
+                    for(;;){
+                        while(s!=buf && s[-1]!='\0') --s;
+                        val = newword(s, val);
+                        if(s==buf)
+                            break;
+                        --s;
+                    }
+                    setvar(ent[i].name, val);
+                    vlook(ent[i].name)->changed = 0;
+                    close(f);
+                    efree(buf);
+                }
+            }
+        }
+        free(ent);
+    }
+    close(dir);
+}
+@
+
+<<global envdir>>=
+int envdir;
+@
+
+<<function Xrdfn>>=
+void
+Xrdfn(void)
+{
+    int f, len;
+    Dir *e;
+    char envname[Maxenvname];
+    static Dir *ent, *allocent;
+    static int nent;
+
+    for(;;){
+        if(nent == 0){
+            free(allocent);
+            nent = dirread(envdir, &allocent);
+            ent = allocent;
+        }
+        if(nent <= 0)
+            break;
+        while(nent){
+            e = ent++;
+            nent--;
+            len = e->length;
+            if(len && strncmp(e->name, "fn#", 3)==0){
+                snprint(envname, sizeof envname, "/env/%s", e->name);
+                if((f = open(envname, 0))>=0){
+                    execcmds(openfd(f));
+                    return;
+                }
+            }
+        }
+    }
+    close(envdir);
+    Xreturn();
+}
+@
+
+<<global rdfns>>=
+union code rdfns[4];
+@
+
+<<function execfinit>>=
+void
+execfinit(void)
+{
+    static int first = 1;
+    if(first){
+        rdfns[0].i = 1;
+        rdfns[1].f = Xrdfn;
+        rdfns[2].f = Xjump;
+        rdfns[3].i = 1;
+        first = 0;
+    }
+    Xpopm();
+    envdir = open("/env", 0);
+    if(envdir<0){
+        pfmt(err, "rc: can't open /env: %r\n");
+        return;
+    }
+    start(rdfns, 1, runq->local);
+}
+@
+
+<<function Waitfor>>=
+int
+Waitfor(int pid, int)
+{
+    thread *p;
+    Waitmsg *w;
+    char errbuf[ERRMAX];
+
+    if(pid >= 0 && !havewaitpid(pid))
+        return 0;
+
+    while((w = wait()) != nil){
+        delwaitpid(w->pid);
+        if(w->pid==pid){
+            setstatus(w->msg);
+            free(w);
+            return 0;
+        }
+        for(p = runq->ret;p;p = p->ret)
+            if(p->pid==w->pid){
+                p->pid=-1;
+                strcpy(p->status, w->msg);
+            }
+        free(w);
+    }
+
+    errstr(errbuf, sizeof errbuf);
+    if(strcmp(errbuf, "interrupted")==0) return -1;
+    return 0;
+}
+@
+
+<<function mkargv>>=
+char **
+mkargv(word *a)
+{
+    char **argv = (char **)emalloc((count(a)+2)*sizeof(char *));
+    char **argp = argv+1;	/* leave one at front for runcoms */
+    for(;a;a = a->next) *argp++=a->word;
+    *argp = 0;
+    return argv;
+}
+@
+
+<<function addenv>>=
+void
+addenv(var *v)
+{
+    char envname[Maxenvname];
+    word *w;
+    int f;
+    io *fd;
+    if(v->changed){
+        v->changed = 0;
+        snprint(envname, sizeof envname, "/env/%s", v->name);
+        if((f = Creat(envname))<0)
+            pfmt(err, "rc: can't open %s: %r\n", envname);
+        else{
+            for(w = v->val;w;w = w->next)
+                write(f, w->word, strlen(w->word)+1L);
+            close(f);
+        }
+    }
+    if(v->fnchanged){
+        v->fnchanged = 0;
+        snprint(envname, sizeof envname, "/env/fn#%s", v->name);
+        if((f = Creat(envname))<0)
+            pfmt(err, "rc: can't open %s: %r\n", envname);
+        else{
+            if(v->fn){
+                fd = openfd(f);
+                pfmt(fd, "fn %q %s\n", v->name, v->fn[v->pc-1].s);
+                closeio(fd);
+            }
+            close(f);
+        }
+    }
+}
+@
+
+<<function updenvlocal>>=
+void
+updenvlocal(var *v)
+{
+    if(v){
+        updenvlocal(v->next);
+        addenv(v);
+    }
+}
+@
+
+<<function Updenv>>=
+void
+Updenv(void)
+{
+    var *v, **h;
+    for(h = gvar;h!=&gvar[NVAR];h++)
+        for(v=*h;v;v = v->next)
+            addenv(v);
+    if(runq)
+        updenvlocal(runq->local);
+}
+@
+
+<<function ForkExecute>>=
+/* not used on plan 9 */
+int
+ForkExecute(char *file, char **argv, int sin, int sout, int serr)
+{
+    int pid;
+
+    if(access(file, 1) != 0)
+        return -1;
+    switch(pid = fork()){
+    case -1:
+        return -1;
+    case 0:
+        if(sin >= 0)
+            dup(sin, 0);
+        else
+            close(0);
+        if(sout >= 0)
+            dup(sout, 1);
+        else
+            close(1);
+        if(serr >= 0)
+            dup(serr, 2);
+        else
+            close(2);
+        exec(file, argv);
+        exits(file);
+    }
+    return pid;
+}
+@
+
+<<function Execute>>=
+void
+Execute(word *args, word *path)
+{
+    char **argv = mkargv(args);
+    char file[1024], errstr[1024];
+    int nc;
+
+    Updenv();
+    errstr[0] = '\0';
+    for(;path;path = path->next){
+        nc = strlen(path->word);
+        if(nc < sizeof file - 1){	/* 1 for / */
+            strcpy(file, path->word);
+            if(file[0]){
+                strcat(file, "/");
+                nc++;
+            }
+            if(nc + strlen(argv[1]) < sizeof file){
+                strcat(file, argv[1]);
+                exec(file, argv+1);
+                rerrstr(errstr, sizeof errstr);
+                /*
+                 * if file exists and is executable, exec should
+                 * have worked, unless it's a directory or an
+                 * executable for another architecture.  in
+                 * particular, if it failed due to lack of
+                 * swap/vm (e.g., arg. list too long) or other
+                 * allocation failure, stop searching and print
+                 * the reason for failure.
+                 */
+                if (strstr(errstr, " allocat") != nil ||
+                    strstr(errstr, " full") != nil)
+                    break;
+            }
+            else werrstr("command name too long");
+        }
+    }
+    pfmt(err, "%s: %s\n", argv[1], errstr);
+    efree((char *)argv);
+}
+@
+
+<<constant NDIR>>=
+#define	NDIR	256		/* shoud be a better way */
+@
+
+<<function Globsize>>=
+int
+Globsize(char *p)
+{
+    int isglob = 0, globlen = NDIR+1;
+    for(;*p;p++){
+        if(*p==GLOB){
+            p++;
+            if(*p!=GLOB)
+                isglob++;
+            globlen+=*p=='*'?NDIR:1;
+        }
+        else
+            globlen++;
+    }
+    return isglob?globlen:0;
+}
+@
+
+<<constant NFD>>=
+#define	NFD	50
+@
+
+<<global dir>>=
+struct{
+    Dir	*dbuf;
+    int	i;
+    int	n;
+}dir[NFD];
+@
+
+<<function Opendir>>=
+int
+Opendir(char *name)
+{
+    Dir *db;
+    int f;
+    f = open(name, 0);
+    if(f==-1)
+        return f;
+    db = dirfstat(f);
+    if(db!=nil && (db->mode&DMDIR)){
+        if(f<NFD){
+            dir[f].i = 0;
+            dir[f].n = 0;
+        }
+        free(db);
+        return f;
+    }
+    free(db);
+    close(f);
+    return -1;
+}
+@
+
+<<function trimdirs>>=
+static int
+trimdirs(Dir *d, int nd)
+{
+    int r, w;
+
+    for(r=w=0; r<nd; r++)
+        if(d[r].mode&DMDIR)
+            d[w++] = d[r];
+    return w;
+}
+@
+
+<<function Readdir>>=
+/*
+ * onlydirs is advisory -- it means you only
+ * need to return the directories.  it's okay to
+ * return files too (e.g., on unix where you can't
+ * tell during the readdir), but that just makes 
+ * the globber work harder.
+ */
+int
+Readdir(int f, void *p, int onlydirs)
+{
+    int n;
+
+    if(f<0 || f>=NFD)
+        return 0;
+Again:
+    if(dir[f].i==dir[f].n){	/* read */
+        free(dir[f].dbuf);
+        dir[f].dbuf = 0;
+        n = dirread(f, &dir[f].dbuf);
+        if(n>0){
+            if(onlydirs){
+                n = trimdirs(dir[f].dbuf, n);
+                if(n == 0)
+                    goto Again;
+            }	
+            dir[f].n = n;
+        }else
+            dir[f].n = 0;
+        dir[f].i = 0;
+    }
+    if(dir[f].i == dir[f].n)
+        return 0;
+    strcpy(p, dir[f].dbuf[dir[f].i].name);
+    dir[f].i++;
+    return 1;
+}
+@
+
+<<function Closedir>>=
+void
+Closedir(int f)
+{
+    if(f>=0 && f<NFD){
+        free(dir[f].dbuf);
+        dir[f].i = 0;
+        dir[f].n = 0;
+        dir[f].dbuf = 0;
+    }
+    close(f);
+}
+@
+
+<<global interrupted>>=
+int interrupted = 0;
+@
+
+<<function notifyf>>=
+void
+notifyf(void*, char *s)
+{
+    int i;
+    for(i = 0;syssigname[i];i++) if(strncmp(s, syssigname[i], strlen(syssigname[i]))==0){
+        if(strncmp(s, "sys: ", 5)!=0) interrupted = 1;
+        goto Out;
+    }
+    pfmt(err, "rc: note: %s\n", s);
+    noted(NDFLT);
+    return;
+Out:
+    if(strcmp(s, "interrupt")!=0 || trap[i]==0){
+        trap[i]++;
+        ntrap++;
+    }
+    if(ntrap>=32){	/* rc is probably in a trap loop */
+        pfmt(err, "rc: Too many traps (trap %s), aborting\n", s);
+        abort();
+    }
+    noted(NCONT);
+}
+@
+
+<<function Trapinit>>=
+void
+Trapinit(void)
+{
+    notify(notifyf);
+}
+@
+
+<<function Unlink>>=
+void
+Unlink(char *name)
+{
+    remove(name);
+}
+@
+
+<<function Write>>=
+long
+Write(int fd, void *buf, long cnt)
+{
+    return write(fd, buf, cnt);
+}
+@
+
+<<function Read>>=
+long
+Read(int fd, void *buf, long cnt)
+{
+    return read(fd, buf, cnt);
+}
+@
+
+<<function Seek>>=
+long
+Seek(int fd, long cnt, long whence)
+{
+    return seek(fd, cnt, whence);
+}
+@
+
+<<function Executable>>=
+int
+Executable(char *file)
+{
+    Dir *statbuf;
+    int ret;
+
+    statbuf = dirstat(file);
+    if(statbuf == nil)
+        return 0;
+    ret = ((statbuf->mode&0111)!=0 && (statbuf->mode&DMDIR)==0);
+    free(statbuf);
+    return ret;
+}
+@
+
+<<function Creat>>=
+int
+Creat(char *file)
+{
+    return create(file, 1, 0666L);
+}
+@
+
+<<function Dup>>=
+int
+Dup(int a, int b)
+{
+    return dup(a, b);
+}
+@
+
+<<function Dup1>>=
+int
+Dup1(int)
+{
+    return -1;
+}
+@
+
+<<function Exit>>=
+void
+Exit(char *stat)
+{
+    Updenv();
+    setstatus(stat);
+    exits(truestatus()?"":getstatus());
+}
+@
+
+<<function Eintr>>=
+int
+Eintr(void)
+{
+    return interrupted;
+}
+@
+
+<<function Noerror>>=
+void
+Noerror(void)
+{
+    interrupted = 0;
+}
+@
+
+<<function Isatty>>=
+int
+Isatty(int fd)
+{
+    char buf[64];
+
+    if(fd2path(fd, buf, sizeof buf) != 0)
+        return 0;
+
+    /* might be #c/cons during boot - fixed 22 april 2005, remove this later */
+    if(strcmp(buf, "#c/cons") == 0)
+        return 1;
+
+    /* might be /mnt/term/dev/cons */
+    return strlen(buf) >= 9 && strcmp(buf+strlen(buf)-9, "/dev/cons") == 0;
+}
+@
+
+<<function Abort>>=
+void
+Abort(void)
+{
+    pfmt(err, "aborting\n");
+    flush(err);
+    Exit("aborting");
+}
+@
+
+<<function Memcpy>>=
+void
+Memcpy(void *a, void *b, long n)
+{
+    memmove(a, b, n);
+}
+@
+
+<<function Malloc>>=
+void*
+Malloc(ulong n)
+{
+    return mallocz(n, 1);
+}
+@
+
+<<global waitpids>>=
+int *waitpids;
+@
+
+<<global nwaitpids>>=
+int nwaitpids;
+@
+
+<<function addwaitpid>>=
+void
+addwaitpid(int pid)
+{
+    waitpids = realloc(waitpids, (nwaitpids+1)*sizeof waitpids[0]);
+    if(waitpids == 0)
+        panic("Can't realloc %d waitpids", nwaitpids+1);
+    waitpids[nwaitpids++] = pid;
+}
+@
+
+<<function delwaitpid>>=
+void
+delwaitpid(int pid)
+{
+    int r, w;
+    
+    for(r=w=0; r<nwaitpids; r++)
+        if(waitpids[r] != pid)
+            waitpids[w++] = waitpids[r];
+    nwaitpids = w;
+}
+@
+
+<<function clearwaitpids>>=
+void
+clearwaitpids(void)
+{
+    nwaitpids = 0;
+}
+@
+
+<<function havewaitpid>>=
+int
+havewaitpid(int pid)
+{
+    int i;
+
+    for(i=0; i<nwaitpids; i++)
+        if(waitpids[i] == pid)
+            return 1;
+    return 0;
+}
+@
+
+<<function _efgfmt>>=
+/* avoid loading any floating-point library code */
+int
+_efgfmt(Fmt *)
+{
+    return -1;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/plan9.c>>=
+/*
+ * Plan 9 versions of system-specific functions
+ *	By convention, exported routines herein have names beginning with an
+ *	upper case letter.
+ */
+#include "rc.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+#include "getflags.h"
+
+<<enum _anon_ (rc/plan9.c)>>
+
+<<global Signame>>
+<<global syssigname>>
+<<global Rcmain>>
+<<global Fdprefix>>
+
+void execfinit(void);
+void execbind(void);
+void execmount(void);
+void execnewpgrp(void);
+
+<<global Builtin>>
+
+<<function execnewpgrp>>
+
+<<function Vinit>>
+<<global envdir>>
+
+<<function Xrdfn>>
+<<global rdfns>>
+
+<<function execfinit>>
+
+<<function Waitfor>>
+
+<<function mkargv>>
+
+<<function addenv>>
+
+<<function updenvlocal>>
+
+<<function Updenv>>
+
+<<function ForkExecute>>
+
+<<function Execute>>
+<<constant NDIR>>
+
+<<function Globsize>>
+<<constant NFD>>
+
+<<global dir>>
+
+<<function Opendir>>
+
+<<function trimdirs>>
+
+<<function Readdir>>
+
+<<function Closedir>>
+<<global interrupted>>
+<<function notifyf>>
+
+<<function Trapinit>>
+
+<<function Unlink>>
+
+<<function Write>>
+
+<<function Read>>
+
+<<function Seek>>
+
+<<function Executable>>
+
+<<function Creat>>
+
+<<function Dup>>
+
+<<function Dup1>>
+
+<<function Exit>>
+
+<<function Eintr>>
+
+<<function Noerror>>
+
+<<function Isatty>>
+
+<<function Abort>>
+
+<<function Memcpy>>
+
+<<function Malloc>>
+
+<<global waitpids>>
+<<global nwaitpids>>
+
+<<function addwaitpid>>
+
+<<function delwaitpid>>
+
+<<function clearwaitpids>>
+
+<<function havewaitpid>>
+
+<<function _efgfmt>>
+@
+
+
+\subsection*{[[rc/glob.c]]}
+
+<<global globname>>=
+char *globname;
+@
+
+<<global globv>>=
+struct word *globv;
+@
+
+<<function deglob>>=
+/*
+ * delete all the GLOB marks from s, in place
+ */
+
+void
+deglob(void *as)
+{
+    char *s = as;
+    char *t = s;
+    do{
+        if(*t==GLOB)
+            t++;
+        *s++=*t;
+    }while(*t++);
+}
+@
+
+<<function globcmp>>=
+int
+globcmp(const void *s, const void *t)
+{
+    return strcmp(*(char**)s, *(char**)t);
+}
+@
+
+<<function globsort>>=
+void
+globsort(word *left, word *right)
+{
+    char **list;
+    word *a;
+    int n = 0;
+    for(a = left;a!=right;a = a->next) n++;
+    list = (char **)emalloc(n*sizeof(char *));
+    for(a = left,n = 0;a!=right;a = a->next,n++) list[n] = a->word;
+    qsort((void *)list, n, sizeof(void *), globcmp);
+    for(a = left,n = 0;a!=right;a = a->next,n++) a->word = list[n];
+    efree((char *)list);
+}
+@
+
+<<function globdir>>=
+/*
+ * Push names prefixed by globname and suffixed by a match of p onto the astack.
+ * namep points to the end of the prefix in globname.
+ */
+
+void
+globdir(uchar *p, uchar *namep)
+{
+    uchar *t, *newp;
+    int f;
+    /* scan the pattern looking for a component with a metacharacter in it */
+    if(*p=='\0'){
+        globv = newword(globname, globv);
+        return;
+    }
+    t = namep;
+    newp = p;
+    while(*newp){
+        if(*newp==GLOB)
+            break;
+        *t=*newp++;
+        if(*t++=='/'){
+            namep = t;
+            p = newp;
+        }
+    }
+    /* If we ran out of pattern, append the name if accessible */
+    if(*newp=='\0'){
+        *t='\0';
+        if(access(globname, 0)==0)
+            globv = newword(globname, globv);
+        return;
+    }
+    /* read the directory and recur for any entry that matches */
+    *namep='\0';
+    if((f = Opendir(globname[0]?globname:"."))<0) return;
+    while(*newp!='/' && *newp!='\0') newp++;
+    while(Readdir(f, namep, *newp=='/')){
+        if(matchfn(namep, p)){
+            for(t = namep;*t;t++);
+            globdir(newp, t);
+        }
+    }
+    Closedir(f);
+}
+@
+
+<<function glob>>=
+/*
+ * Push all file names matched by p on the current thread's stack.
+ * If there are no matches, the list consists of p.
+ */
+
+void
+glob(void *ap)
+{
+    uchar *p = ap;
+    word *svglobv = globv;
+    int globlen = Globsize(ap);
+
+    if(!globlen){
+        deglob(p);
+        globv = newword((char *)p, globv);
+        return;
+    }
+    globname = emalloc(globlen);
+    globname[0]='\0';
+    globdir(p, (uchar *)globname);
+    efree(globname);
+    if(svglobv==globv){
+        deglob(p);
+        globv = newword((char *)p, globv);
+    }
+    else
+        globsort(globv, svglobv);
+}
+@
+
+<<function equtf>>=
+/*
+ * Do p and q point at equal utf codes
+ */
+int
+equtf(uchar *p, uchar *q)
+{
+    Rune pr, qr;
+    if(*p!=*q)
+        return 0;
+    
+    chartorune(&pr, (char*)p);
+    chartorune(&qr, (char*)q);
+    return pr == qr;
+}
+@
+
+<<function nextutf>>=
+/*
+ * Return a pointer to the next utf code in the string,
+ * not jumping past nuls in broken utf codes!
+ */
+
+uchar*
+nextutf(uchar *p)
+{
+    Rune dummy;
+    return p + chartorune(&dummy, (char*)p);
+}
+@
+
+<<function unicode>>=
+/*
+ * Convert the utf code at *p to a unicode value
+ */
+
+int
+unicode(uchar *p)
+{
+    Rune r;
+
+    chartorune(&r, (char*)p);
+    return r;
+}
+@
+
+<<function matchfn>>=
+/*
+ * Does the string s match the pattern p
+ * . and .. are only matched by patterns starting with .
+ * * matches any sequence of characters
+ * ? matches any single character
+ * [...] matches the enclosed list of characters
+ */
+
+int
+matchfn(void *as, void *ap)
+{
+    uchar *s = as, *p = ap;
+
+    if(s[0]=='.' && (s[1]=='\0' || s[1]=='.' && s[2]=='\0') && p[0]!='.')
+        return 0;
+    return match(s, p, '/');
+}
+@
+
+<<function match>>=
+int
+match(void *as, void *ap, int stop)
+{
+    int compl, hit, lo, hi, t, c;
+    uchar *s = as, *p = ap;
+
+    for(; *p!=stop && *p!='\0'; s = nextutf(s), p = nextutf(p)){
+        if(*p!=GLOB){
+            if(!equtf(p, s)) return 0;
+        }
+        else switch(*++p){
+        case GLOB:
+            if(*s!=GLOB)
+                return 0;
+            break;
+        case '*':
+            for(;;){
+                if(match(s, nextutf(p), stop)) return 1;
+                if(!*s)
+                    break;
+                s = nextutf(s);
+            }
+            return 0;
+        case '?':
+            if(*s=='\0')
+                return 0;
+            break;
+        case '[':
+            if(*s=='\0')
+                return 0;
+            c = unicode(s);
+            p++;
+            compl=*p=='~';
+            if(compl)
+                p++;
+            hit = 0;
+            while(*p!=']'){
+                if(*p=='\0')
+                    return 0;		/* syntax error */
+                lo = unicode(p);
+                p = nextutf(p);
+                if(*p!='-')
+                    hi = lo;
+                else{
+                    p++;
+                    if(*p=='\0')
+                        return 0;	/* syntax error */
+                    hi = unicode(p);
+                    p = nextutf(p);
+                    if(hi<lo){ t = lo; lo = hi; hi = t; }
+                }
+                if(lo<=c && c<=hi)
+                    hit = 1;
+            }
+            if(compl)
+                hit=!hit;
+            if(!hit)
+                return 0;
+            break;
+        }
+    }
+    return *s=='\0';
+}
+@
+
+<<function globlist1>>=
+void
+globlist1(word *gl)
+{
+    if(gl){
+        globlist1(gl->next);
+        glob(gl->word);
+    }
+}
+@
+
+<<function globlist>>=
+void
+globlist(void)
+{
+    word *a;
+    globv = 0;
+    globlist1(runq->argv->words);
+    poplist();
+    pushlist();
+    if(globv){
+        for(a = globv;a->next;a = a->next);
+        a->next = runq->argv->words;
+        runq->argv->words = globv;
+    }
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/glob.c>>=
+#include "rc.h"
+#include "exec.h"
+#include "fns.h"
+<<global globname>>
+<<global globv>>
+<<function deglob>>
+
+<<function globcmp>>
+
+<<function globsort>>
+<<function globdir>>
+<<function glob>>
+
+<<function equtf>>
+
+<<function nextutf>>
+
+<<function unicode>>
+
+<<function matchfn>>
+
+<<function match>>
+
+<<function globlist1>>
+
+<<function globlist>>
+@
+
+
+\subsection*{[[rc/exec.c]]}
+
+<<global argv0>>=
+/*
+ * Start executing the given code at the given pc with the given redirection
+ */
+char *argv0="rc";
+@
+
+<<function start>>=
+void
+start(code *c, int pc, var *local)
+{
+    struct thread *p = new(struct thread);
+
+    p->code = codecopy(c);
+    p->pc = pc;
+    p->argv = 0;
+    p->redir = p->startredir = runq?runq->redir:0;
+    p->local = local;
+    p->cmdfile = 0;
+    p->cmdfd = 0;
+    p->eof = 0;
+    p->iflag = 0;
+    p->lineno = 1;
+    p->ret = runq;
+    runq = p;
+}
+@
+
+<<function newword>>=
+word*
+newword(char *wd, word *next)
+{
+    word *p = new(word);
+    p->word = strdup(wd);
+    p->next = next;
+    return p;
+}
+@
+
+<<function pushword>>=
+void
+pushword(char *wd)
+{
+    if(runq->argv==0)
+        panic("pushword but no argv!", 0);
+    runq->argv->words = newword(wd, runq->argv->words);
+}
+@
+
+<<function popword>>=
+void
+popword(void)
+{
+    word *p;
+    if(runq->argv==0)
+        panic("popword but no argv!", 0);
+    p = runq->argv->words;
+    if(p==0)
+        panic("popword but no word!", 0);
+    runq->argv->words = p->next;
+    efree(p->word);
+    efree((char *)p);
+}
+@
+
+<<function freelist>>=
+void
+freelist(word *w)
+{
+    word *nw;
+    while(w){
+        nw = w->next;
+        efree(w->word);
+        efree((char *)w);
+        w = nw;
+    }
+}
+@
+
+<<function pushlist>>=
+void
+pushlist(void)
+{
+    list *p = new(list);
+    p->next = runq->argv;
+    p->words = 0;
+    runq->argv = p;
+}
+@
+
+<<function poplist>>=
+void
+poplist(void)
+{
+    list *p = runq->argv;
+    if(p==0)
+        panic("poplist but no argv", 0);
+    freelist(p->words);
+    runq->argv = p->next;
+    efree((char *)p);
+}
+@
+
+<<function count>>=
+int
+count(word *w)
+{
+    int n;
+    for(n = 0;w;n++) w = w->next;
+    return n;
+}
+@
+
+<<function pushredir>>=
+void
+pushredir(int type, int from, int to)
+{
+    redir * rp = new(redir);
+    rp->type = type;
+    rp->from = from;
+    rp->to = to;
+    rp->next = runq->redir;
+    runq->redir = rp;
+}
+@
+
+<<function newvar>>=
+var*
+newvar(char *name, var *next)
+{
+    var *v = new(var);
+    v->name = name;
+    v->val = 0;
+    v->fn = 0;
+    v->changed = 0;
+    v->fnchanged = 0;
+    v->next = next;
+    return v;
+}
+@
+
+<<function main (rc/exec.c)>>=
+/*
+ * get command line flags, initialize keywords & traps.
+ * get values from environment.
+ * set $pid, $cflag, $*
+ * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
+ * start interpreting code
+ */
+
+void
+main(int argc, char *argv[])
+{
+    code bootstrap[17];
+    char num[12], *rcmain;
+    int i;
+    argc = getflags(argc, argv, "SsrdiIlxepvVc:1m:1[command]", 1);
+    if(argc==-1)
+        usage("[file [arg ...]]");
+    if(argv[0][0]=='-')
+        flag['l'] = flagset;
+    if(flag['I'])
+        flag['i'] = 0;
+    else if(flag['i']==0 && argc==1 && Isatty(0)) flag['i'] = flagset;
+    rcmain = flag['m']?flag['m'][0]:Rcmain; 
+    err = openfd(2);
+    kinit();
+    Trapinit();
+    Vinit();
+    inttoascii(num, mypid = getpid());
+    setvar("pid", newword(num, (word *)0));
+    setvar("cflag", flag['c']?newword(flag['c'][0], (word *)0)
+                :(word *)0);
+    setvar("rcname", newword(argv[0], (word *)0));
+    i = 0;
+    memset(bootstrap, 0, sizeof bootstrap);
+    bootstrap[i++].i = 1;
+    bootstrap[i++].f = Xmark;
+    bootstrap[i++].f = Xword;
+    bootstrap[i++].s="*";
+    bootstrap[i++].f = Xassign;
+    bootstrap[i++].f = Xmark;
+    bootstrap[i++].f = Xmark;
+    bootstrap[i++].f = Xword;
+    bootstrap[i++].s="*";
+    bootstrap[i++].f = Xdol;
+    bootstrap[i++].f = Xword;
+    bootstrap[i++].s = rcmain;
+    bootstrap[i++].f = Xword;
+    bootstrap[i++].s=".";
+    bootstrap[i++].f = Xsimple;
+    bootstrap[i++].f = Xexit;
+    bootstrap[i].i = 0;
+    start(bootstrap, 1, (var *)0);
+    /* prime bootstrap argv */
+    pushlist();
+    argv0 = strdup(argv[0]);
+    for(i = argc-1;i!=0;--i) pushword(argv[i]);
+    for(;;){
+        if(flag['r'])
+            pfnc(err, runq);
+        runq->pc++;
+        (*runq->code[runq->pc-1].f)();
+        if(ntrap)
+            dotrap();
+    }
+}
+@
+
+<<function Xappend>>=
+/*
+ * Opcode routines
+ * Arguments on stack (...)
+ * Arguments in line [...]
+ * Code in line with jump around {...}
+ *
+ * Xappend(file)[fd]			open file to append
+ * Xassign(name, val)			assign val to name
+ * Xasync{... Xexit}			make thread for {}, no wait
+ * Xbackq{... Xreturn}			make thread for {}, push stdout
+ * Xbang				complement condition
+ * Xcase(pat, value){...}		exec code on match, leave (value) on
+ * 					stack
+ * Xclose[i]				close file descriptor
+ * Xconc(left, right)			concatenate, push results
+ * Xcount(name)				push var count
+ * Xdelfn(name)				delete function definition
+ * Xdelhere
+ * Xdol(name)				get variable value
+ * Xdup[i j]				dup file descriptor
+ * Xeflag
+ * Xerror
+ * Xexit				rc exits with status
+ * Xfalse{...}				execute {} if false
+ * Xfn(name){... Xreturn}			define function
+ * Xfor(var, list){... Xreturn}		for loop
+ * Xglob
+ * Xif
+ * Xifnot
+ * Xjump[addr]				goto
+ * Xlocal(name, val)			create local variable, assign value
+ * Xmark				mark stack
+ * Xmatch(pat, str)			match pattern, set status
+ * Xpipe[i j]{... Xreturn}{... Xreturn}	construct a pipe between 2 new threads,
+ * 					wait for both
+ * Xpipefd[type]{... Xreturn}		connect {} to pipe (input or output,
+ * 					depending on type), push /dev/fd/??
+ * Xpipewait
+ * Xpopm(value)				pop value from stack
+ * Xpopredir
+ * Xrdcmds
+ * Xrdfn
+ * Xrdwr(file)[fd]			open file for reading and writing
+ * Xread(file)[fd]			open file to read
+ * Xqdol(name)				concatenate variable components
+ * Xreturn				kill thread
+ * Xsimple(args)			run command and wait
+ * Xsub
+ * Xsubshell{... Xexit}			execute {} in a subshell and wait
+ * Xtrue{...}				execute {} if true
+ * Xunlocal				delete local variable
+ * Xwastrue
+ * Xword[string]			push string
+ * Xwrite(file)[fd]			open file to write
+ */
+
+void
+Xappend(void)
+{
+    char *file;
+    int f;
+    switch(count(runq->argv->words)){
+    default:
+        Xerror1(">> requires singleton");
+        return;
+    case 0:
+        Xerror1(">> requires file");
+        return;
+    case 1:
+        break;
+    }
+    file = runq->argv->words->word;
+    if((f = open(file, 1))<0 && (f = Creat(file))<0){
+        pfmt(err, "%s: ", file);
+        Xerror("can't open");
+        return;
+    }
+    Seek(f, 0L, 2);
+    pushredir(ROPEN, f, runq->code[runq->pc].i);
+    runq->pc++;
+    poplist();
+}
+@
+
+<<function Xsettrue>>=
+void
+Xsettrue(void)
+{
+    setstatus("");
+}
+@
+
+<<function Xbang>>=
+void
+Xbang(void)
+{
+    setstatus(truestatus()?"false":"");
+}
+@
+
+<<function Xclose>>=
+void
+Xclose(void)
+{
+    pushredir(RCLOSE, runq->code[runq->pc].i, 0);
+    runq->pc++;
+}
+@
+
+<<function Xdup>>=
+void
+Xdup(void)
+{
+    pushredir(RDUP, runq->code[runq->pc].i, runq->code[runq->pc+1].i);
+    runq->pc+=2;
+}
+@
+
+<<function Xeflag>>=
+void
+Xeflag(void)
+{
+    if(eflagok && !truestatus()) Xexit();
+}
+@
+
+<<function Xexit>>=
+void
+Xexit(void)
+{
+    struct var *trapreq;
+    struct word *starval;
+    static int beenhere = 0;
+    if(getpid()==mypid && !beenhere){
+        trapreq = vlook("sigexit");
+        if(trapreq->fn){
+            beenhere = 1;
+            --runq->pc;
+            starval = vlook("*")->val;
+            start(trapreq->fn, trapreq->pc, (struct var *)0);
+            runq->local = newvar(strdup("*"), runq->local);
+            runq->local->val = copywords(starval, (struct word *)0);
+            runq->local->changed = 1;
+            runq->redir = runq->startredir = 0;
+            return;
+        }
+    }
+    Exit(getstatus());
+}
+@
+
+<<function Xfalse>>=
+void
+Xfalse(void)
+{
+    if(truestatus()) runq->pc = runq->code[runq->pc].i;
+    else runq->pc++;
+}
+@
+
+<<global ifnot>>=
+int ifnot;		/* dynamic if not flag */
+@
+
+<<function Xifnot>>=
+void
+Xifnot(void)
+{
+    if(ifnot)
+        runq->pc++;
+    else
+        runq->pc = runq->code[runq->pc].i;
+}
+@
+
+<<function Xjump>>=
+void
+Xjump(void)
+{
+    runq->pc = runq->code[runq->pc].i;
+}
+@
+
+<<function Xmark>>=
+void
+Xmark(void)
+{
+    pushlist();
+}
+@
+
+<<function Xpopm>>=
+void
+Xpopm(void)
+{
+    poplist();
+}
+@
+
+<<function Xread>>=
+void
+Xread(void)
+{
+    char *file;
+    int f;
+    switch(count(runq->argv->words)){
+    default:
+        Xerror1("< requires singleton\n");
+        return;
+    case 0:
+        Xerror1("< requires file\n");
+        return;
+    case 1:
+        break;
+    }
+    file = runq->argv->words->word;
+    if((f = open(file, 0))<0){
+        pfmt(err, "%s: ", file);
+        Xerror("can't open");
+        return;
+    }
+    pushredir(ROPEN, f, runq->code[runq->pc].i);
+    runq->pc++;
+    poplist();
+}
+@
+
+<<function Xrdwr>>=
+void
+Xrdwr(void)
+{
+    char *file;
+    int f;
+
+    switch(count(runq->argv->words)){
+    default:
+        Xerror1("<> requires singleton\n");
+        return;
+    case 0:
+        Xerror1("<> requires file\n");
+        return;
+    case 1:
+        break;
+    }
+    file = runq->argv->words->word;
+    if((f = open(file, ORDWR))<0){
+        pfmt(err, "%s: ", file);
+        Xerror("can't open");
+        return;
+    }
+    pushredir(ROPEN, f, runq->code[runq->pc].i);
+    runq->pc++;
+    poplist();
+}
+@
+
+<<function turfredir>>=
+void
+turfredir(void)
+{
+    while(runq->redir!=runq->startredir)
+        Xpopredir();
+}
+@
+
+<<function Xpopredir>>=
+void
+Xpopredir(void)
+{
+    struct redir *rp = runq->redir;
+    if(rp==0)
+        panic("turfredir null!", 0);
+    runq->redir = rp->next;
+    if(rp->type==ROPEN)
+        close(rp->from);
+    efree((char *)rp);
+}
+@
+
+<<function Xreturn>>=
+void
+Xreturn(void)
+{
+    struct thread *p = runq;
+    turfredir();
+    while(p->argv) poplist();
+    codefree(p->code);
+    runq = p->ret;
+    efree((char *)p);
+    if(runq==0)
+        Exit(getstatus());
+}
+@
+
+<<function Xtrue>>=
+void
+Xtrue(void)
+{
+    if(truestatus()) runq->pc++;
+    else runq->pc = runq->code[runq->pc].i;
+}
+@
+
+<<function Xif>>=
+void
+Xif(void)
+{
+    ifnot = 1;
+    if(truestatus()) runq->pc++;
+    else runq->pc = runq->code[runq->pc].i;
+}
+@
+
+<<function Xwastrue>>=
+void
+Xwastrue(void)
+{
+    ifnot = 0;
+}
+@
+
+<<function Xword>>=
+void
+Xword(void)
+{
+    pushword(runq->code[runq->pc++].s);
+}
+@
+
+<<function Xwrite>>=
+void
+Xwrite(void)
+{
+    char *file;
+    int f;
+    switch(count(runq->argv->words)){
+    default:
+        Xerror1("> requires singleton\n");
+        return;
+    case 0:
+        Xerror1("> requires file\n");
+        return;
+    case 1:
+        break;
+    }
+    file = runq->argv->words->word;
+    if((f = Creat(file))<0){
+        pfmt(err, "%s: ", file);
+        Xerror("can't open");
+        return;
+    }
+    pushredir(ROPEN, f, runq->code[runq->pc].i);
+    runq->pc++;
+    poplist();
+}
+@
+
+<<function list2str>>=
+char*
+list2str(word *words)
+{
+    char *value, *s, *t;
+    int len = 0;
+    word *ap;
+    for(ap = words;ap;ap = ap->next)
+        len+=1+strlen(ap->word);
+    value = emalloc(len+1);
+    s = value;
+    for(ap = words;ap;ap = ap->next){
+        for(t = ap->word;*t;) *s++=*t++;
+        *s++=' ';
+    }
+    if(s==value)
+        *s='\0';
+    else s[-1]='\0';
+    return value;
+}
+@
+
+<<function Xmatch>>=
+void
+Xmatch(void)
+{
+    word *p;
+    char *subject;
+    subject = list2str(runq->argv->words);
+    setstatus("no match");
+    for(p = runq->argv->next->words;p;p = p->next)
+        if(match(subject, p->word, '\0')){
+            setstatus("");
+            break;
+        }
+    efree(subject);
+    poplist();
+    poplist();
+}
+@
+
+<<function Xcase>>=
+void
+Xcase(void)
+{
+    word *p;
+    char *s;
+    int ok = 0;
+    s = list2str(runq->argv->next->words);
+    for(p = runq->argv->words;p;p = p->next){
+        if(match(s, p->word, '\0')){
+            ok = 1;
+            break;
+        }
+    }
+    efree(s);
+    if(ok)
+        runq->pc++;
+    else
+        runq->pc = runq->code[runq->pc].i;
+    poplist();
+}
+@
+
+<<function conclist>>=
+word*
+conclist(word *lp, word *rp, word *tail)
+{
+    char *buf;
+    word *v;
+    if(lp->next || rp->next)
+        tail = conclist(lp->next==0? lp: lp->next,
+            rp->next==0? rp: rp->next, tail);
+    buf = emalloc(strlen(lp->word)+strlen((char *)rp->word)+1);
+    strcpy(buf, lp->word);
+    strcat(buf, rp->word);
+    v = newword(buf, tail);
+    efree(buf);
+    return v;
+}
+@
+
+<<function Xconc>>=
+void
+Xconc(void)
+{
+    word *lp = runq->argv->words;
+    word *rp = runq->argv->next->words;
+    word *vp = runq->argv->next->next->words;
+    int lc = count(lp), rc = count(rp);
+    if(lc!=0 || rc!=0){
+        if(lc==0 || rc==0){
+            Xerror1("null list in concatenation");
+            return;
+        }
+        if(lc!=1 && rc!=1 && lc!=rc){
+            Xerror1("mismatched list lengths in concatenation");
+            return;
+        }
+        vp = conclist(lp, rp, vp);
+    }
+    poplist();
+    poplist();
+    runq->argv->words = vp;
+}
+@
+
+<<function Xassign>>=
+void
+Xassign(void)
+{
+    var *v;
+    if(count(runq->argv->words)!=1){
+        Xerror1("variable name not singleton!");
+        return;
+    }
+    deglob(runq->argv->words->word);
+    v = vlook(runq->argv->words->word);
+    poplist();
+    globlist();
+    freewords(v->val);
+    v->val = runq->argv->words;
+    v->changed = 1;
+    runq->argv->words = 0;
+    poplist();
+}
+@
+
+<<function copywords>>=
+/*
+ * copy arglist a, adding the copy to the front of tail
+ */
+
+word*
+copywords(word *a, word *tail)
+{
+    word *v = 0, **end;
+    for(end=&v;a;a = a->next,end=&(*end)->next)
+        *end = newword(a->word, 0);
+    *end = tail;
+    return v;
+}
+@
+
+<<function Xdol>>=
+void
+Xdol(void)
+{
+    word *a, *star;
+    char *s, *t;
+    int n;
+    if(count(runq->argv->words)!=1){
+        Xerror1("variable name not singleton!");
+        return;
+    }
+    s = runq->argv->words->word;
+    deglob(s);
+    n = 0;
+    for(t = s;'0'<=*t && *t<='9';t++) n = n*10+*t-'0';
+    a = runq->argv->next->words;
+    if(n==0 || *t)
+        a = copywords(vlook(s)->val, a);
+    else{
+        star = vlook("*")->val;
+        if(star && 1<=n && n<=count(star)){
+            while(--n) star = star->next;
+            a = newword(star->word, a);
+        }
+    }
+    poplist();
+    runq->argv->words = a;
+}
+@
+
+<<function Xqdol>>=
+void
+Xqdol(void)
+{
+    word *a, *p;
+    char *s;
+    int n;
+    if(count(runq->argv->words)!=1){
+        Xerror1("variable name not singleton!");
+        return;
+    }
+    s = runq->argv->words->word;
+    deglob(s);
+    a = vlook(s)->val;
+    poplist();
+    n = count(a);
+    if(n==0){
+        pushword("");
+        return;
+    }
+    for(p = a;p;p = p->next) n+=strlen(p->word);
+    s = emalloc(n);
+    if(a){
+        strcpy(s, a->word);
+        for(p = a->next;p;p = p->next){
+            strcat(s, " ");
+            strcat(s, p->word);
+        }
+    }
+    else
+        s[0]='\0';
+    pushword(s);
+    efree(s);
+}
+@
+
+<<function copynwords>>=
+word*
+copynwords(word *a, word *tail, int n)
+{
+    word *v, **end;
+    
+    v = 0;
+    end = &v;
+    while(n-- > 0){
+        *end = newword(a->word, 0);
+        end = &(*end)->next;
+        a = a->next;
+    }
+    *end = tail;
+    return v;
+}
+@
+
+<<function subwords>>=
+word*
+subwords(word *val, int len, word *sub, word *a)
+{
+    int n, m;
+    char *s;
+    if(!sub)
+        return a;
+    a = subwords(val, len, sub->next, a);
+    s = sub->word;
+    deglob(s);
+    m = 0;
+    n = 0;
+    while('0'<=*s && *s<='9')
+        n = n*10+ *s++ -'0';
+    if(*s == '-'){
+        if(*++s == 0)
+            m = len - n;
+        else{
+            while('0'<=*s && *s<='9')
+                m = m*10+ *s++ -'0';
+            m -= n;
+        }
+    }
+    if(n<1 || n>len || m<0)
+        return a;
+    if(n+m>len)
+        m = len-n;
+    while(--n > 0)
+        val = val->next;
+    return copynwords(val, a, m+1);
+}
+@
+
+<<function Xsub>>=
+void
+Xsub(void)
+{
+    word *a, *v;
+    char *s;
+    if(count(runq->argv->next->words)!=1){
+        Xerror1("variable name not singleton!");
+        return;
+    }
+    s = runq->argv->next->words->word;
+    deglob(s);
+    a = runq->argv->next->next->words;
+    v = vlook(s)->val;
+    a = subwords(v, count(v), runq->argv->words, a);
+    poplist();
+    poplist();
+    runq->argv->words = a;
+}
+@
+
+<<function Xcount>>=
+void
+Xcount(void)
+{
+    word *a;
+    char *s, *t;
+    int n;
+    char num[12];
+    if(count(runq->argv->words)!=1){
+        Xerror1("variable name not singleton!");
+        return;
+    }
+    s = runq->argv->words->word;
+    deglob(s);
+    n = 0;
+    for(t = s;'0'<=*t && *t<='9';t++) n = n*10+*t-'0';
+    if(n==0 || *t){
+        a = vlook(s)->val;
+        inttoascii(num, count(a));
+    }
+    else{
+        a = vlook("*")->val;
+        inttoascii(num, a && 1<=n && n<=count(a)?1:0);
+    }
+    poplist();
+    pushword(num);
+}
+@
+
+<<function Xlocal>>=
+void
+Xlocal(void)
+{
+    if(count(runq->argv->words)!=1){
+        Xerror1("variable name must be singleton\n");
+        return;
+    }
+    deglob(runq->argv->words->word);
+    runq->local = newvar(strdup(runq->argv->words->word), runq->local);
+    poplist();
+    globlist();
+    runq->local->val = runq->argv->words;
+    runq->local->changed = 1;
+    runq->argv->words = 0;
+    poplist();
+}
+@
+
+<<function Xunlocal>>=
+void
+Xunlocal(void)
+{
+    var *v = runq->local, *hid;
+    if(v==0)
+        panic("Xunlocal: no locals!", 0);
+    runq->local = v->next;
+    hid = vlook(v->name);
+    hid->changed = 1;
+    efree(v->name);
+    freewords(v->val);
+    efree((char *)v);
+}
+@
+
+<<function freewords>>=
+void
+freewords(word *w)
+{
+    word *nw;
+    while(w){
+        efree(w->word);
+        nw = w->next;
+        efree((char *)w);
+        w = nw;
+    }
+}
+@
+
+<<function Xfn>>=
+void
+Xfn(void)
+{
+    var *v;
+    word *a;
+    int end;
+    end = runq->code[runq->pc].i;
+    globlist();
+    for(a = runq->argv->words;a;a = a->next){
+        v = gvlook(a->word);
+        if(v->fn)
+            codefree(v->fn);
+        v->fn = codecopy(runq->code);
+        v->pc = runq->pc+2;
+        v->fnchanged = 1;
+    }
+    runq->pc = end;
+    poplist();
+}
+@
+
+<<function Xdelfn>>=
+void
+Xdelfn(void)
+{
+    var *v;
+    word *a;
+    for(a = runq->argv->words;a;a = a->next){
+        v = gvlook(a->word);
+        if(v->fn)
+            codefree(v->fn);
+        v->fn = 0;
+        v->fnchanged = 1;
+    }
+    poplist();
+}
+@
+
+<<function concstatus>>=
+char*
+concstatus(char *s, char *t)
+{
+    static char v[NSTATUS+1];
+    int n = strlen(s);
+    strncpy(v, s, NSTATUS);
+    if(n<NSTATUS){
+        v[n]='|';
+        strncpy(v+n+1, t, NSTATUS-n-1);
+    }
+    v[NSTATUS]='\0';
+    return v;
+}
+@
+
+<<function Xpipewait>>=
+void
+Xpipewait(void)
+{
+    char status[NSTATUS+1];
+    if(runq->pid==-1)
+        setstatus(concstatus(runq->status, getstatus()));
+    else{
+        strncpy(status, getstatus(), NSTATUS);
+        status[NSTATUS]='\0';
+        Waitfor(runq->pid, 1);
+        runq->pid=-1;
+        setstatus(concstatus(getstatus(), status));
+    }
+}
+@
+
+<<function Xrdcmds>>=
+void
+Xrdcmds(void)
+{
+    struct thread *p = runq;
+    word *prompt;
+    flush(err);
+    nerror = 0;
+    if(flag['s'] && !truestatus())
+        pfmt(err, "status=%v\n", vlook("status")->val);
+    if(runq->iflag){
+        prompt = vlook("prompt")->val;
+        if(prompt)
+            promptstr = prompt->word;
+        else
+            promptstr="% ";
+    }
+    Noerror();
+    if(yyparse()){
+        if(!p->iflag || p->eof && !Eintr()){
+            if(p->cmdfile)
+                efree(p->cmdfile);
+            closeio(p->cmdfd);
+            Xreturn();	/* should this be omitted? */
+        }
+        else{
+            if(Eintr()){
+                pchr(err, '\n');
+                p->eof = 0;
+            }
+            --p->pc;	/* go back for next command */
+        }
+    }
+    else{
+        ntrap = 0;	/* avoid double-interrupts during blocked writes */
+        --p->pc;	/* re-execute Xrdcmds after codebuf runs */
+        start(codebuf, 1, runq->local);
+    }
+    freenodes();
+}
+@
+
+<<function Xerror>>=
+void
+Xerror(char *s)
+{
+    if(strcmp(argv0, "rc")==0 || strcmp(argv0, "/bin/rc")==0)
+        pfmt(err, "rc: %s: %r\n", s);
+    else
+        pfmt(err, "rc (%s): %s: %r\n", argv0, s);
+    flush(err);
+    setstatus("error");
+    while(!runq->iflag) Xreturn();
+}
+@
+
+<<function Xerror1>>=
+void
+Xerror1(char *s)
+{
+    if(strcmp(argv0, "rc")==0 || strcmp(argv0, "/bin/rc")==0)
+        pfmt(err, "rc: %s\n", s);
+    else
+        pfmt(err, "rc (%s): %s\n", argv0, s);
+    flush(err);
+    setstatus("error");
+    while(!runq->iflag) Xreturn();
+}
+@
+
+<<function setstatus>>=
+void
+setstatus(char *s)
+{
+    setvar("status", newword(s, (word *)0));
+}
+@
+
+<<function getstatus>>=
+char*
+getstatus(void)
+{
+    var *status = vlook("status");
+    return status->val?status->val->word:"";
+}
+@
+
+<<function truestatus>>=
+int
+truestatus(void)
+{
+    char *s;
+    for(s = getstatus();*s;s++)
+        if(*s!='|' && *s!='0')
+            return 0;
+    return 1;
+}
+@
+
+<<function Xdelhere>>=
+void
+Xdelhere(void)
+{
+    Unlink(runq->code[runq->pc++].s);
+}
+@
+
+<<function Xfor>>=
+void
+Xfor(void)
+{
+    if(runq->argv->words==0){
+        poplist();
+        runq->pc = runq->code[runq->pc].i;
+    }
+    else{
+        freelist(runq->local->val);
+        runq->local->val = runq->argv->words;
+        runq->local->changed = 1;
+        runq->argv->words = runq->argv->words->next;
+        runq->local->val->next = 0;
+        runq->pc++;
+    }
+}
+@
+
+<<function Xglob>>=
+void
+Xglob(void)
+{
+    globlist();
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/exec.c>>=
+#include "rc.h"
+#include "getflags.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+<<global argv0>>
+
+<<function start>>
+
+<<function newword>>
+
+<<function pushword>>
+
+<<function popword>>
+
+<<function freelist>>
+
+<<function pushlist>>
+
+<<function poplist>>
+
+<<function count>>
+
+<<function pushredir>>
+
+<<function newvar>>
+<<function main (rc/exec.c)>>
+<<function Xappend>>
+
+<<function Xsettrue>>
+
+<<function Xbang>>
+
+<<function Xclose>>
+
+<<function Xdup>>
+
+<<function Xeflag>>
+
+<<function Xexit>>
+
+<<function Xfalse>>
+<<global ifnot>>
+
+<<function Xifnot>>
+
+<<function Xjump>>
+
+<<function Xmark>>
+
+<<function Xpopm>>
+
+<<function Xread>>
+
+<<function Xrdwr>>
+
+<<function turfredir>>
+
+<<function Xpopredir>>
+
+<<function Xreturn>>
+
+<<function Xtrue>>
+
+<<function Xif>>
+
+<<function Xwastrue>>
+
+<<function Xword>>
+
+<<function Xwrite>>
+
+<<function list2str>>
+
+<<function Xmatch>>
+
+<<function Xcase>>
+
+<<function conclist>>
+
+<<function Xconc>>
+
+<<function Xassign>>
+<<function copywords>>
+
+<<function Xdol>>
+
+<<function Xqdol>>
+
+<<function copynwords>>
+
+<<function subwords>>
+
+<<function Xsub>>
+
+<<function Xcount>>
+
+<<function Xlocal>>
+
+<<function Xunlocal>>
+
+<<function freewords>>
+
+<<function Xfn>>
+
+<<function Xdelfn>>
+
+<<function concstatus>>
+
+<<function Xpipewait>>
+
+<<function Xrdcmds>>
+
+<<function Xerror>>
+
+<<function Xerror1>>
+
+<<function setstatus>>
+
+<<function getstatus>>
+
+<<function truestatus>>
+
+<<function Xdelhere>>
+
+<<function Xfor>>
+
+<<function Xglob>>
+@
+
+
+\subsection*{[[rc/havefork.c]]}
+
+<<global havefork (rc/havefork.c)>>=
+int havefork = 1;
+@
+
+<<function Xasync>>=
+void
+Xasync(void)
+{
+    int null = open("/dev/null", 0);
+    int pid;
+    char npid[10];
+    if(null<0){
+        Xerror("Can't open /dev/null\n");
+        return;
+    }
+    switch(pid = rfork(RFFDG|RFPROC|RFNOTEG)){
+    case -1:
+        close(null);
+        Xerror("try again");
+        break;
+    case 0:
+        clearwaitpids();
+        pushredir(ROPEN, null, 0);
+        start(runq->code, runq->pc+1, runq->local);
+        runq->ret = 0;
+        break;
+    default:
+        addwaitpid(pid);
+        close(null);
+        runq->pc = runq->code[runq->pc].i;
+        inttoascii(npid, pid);
+        setvar("apid", newword(npid, (word *)0));
+        break;
+    }
+}
+@
+
+<<function Xpipe>>=
+void
+Xpipe(void)
+{
+    struct thread *p = runq;
+    int pc = p->pc, forkid;
+    int lfd = p->code[pc++].i;
+    int rfd = p->code[pc++].i;
+    int pfd[2];
+    if(pipe(pfd)<0){
+        Xerror("can't get pipe");
+        return;
+    }
+    switch(forkid = fork()){
+    case -1:
+        Xerror("try again");
+        break;
+    case 0:
+        clearwaitpids();
+        start(p->code, pc+2, runq->local);
+        runq->ret = 0;
+        close(pfd[PRD]);
+        pushredir(ROPEN, pfd[PWR], lfd);
+        break;
+    default:
+        addwaitpid(forkid);
+        start(p->code, p->code[pc].i, runq->local);
+        close(pfd[PWR]);
+        pushredir(ROPEN, pfd[PRD], rfd);
+        p->pc = p->code[pc+1].i;
+        p->pid = forkid;
+        break;
+    }
+}
+@
+
+<<function Xbackq>>=
+/*
+ * Who should wait for the exit from the fork?
+ */
+
+void
+Xbackq(void)
+{
+    int n, pid;
+    int pfd[2];
+    char *stop;
+    char utf[UTFmax+1];
+    struct io *f;
+    var *ifs = vlook("ifs");
+    word *v, *nextv;
+    Rune r;
+    String *word;
+
+    stop = ifs->val? ifs->val->word: "";
+    if(pipe(pfd)<0){
+        Xerror("can't make pipe");
+        return;
+    }
+    switch(pid = fork()){
+    case -1:
+        Xerror("try again");
+        close(pfd[PRD]);
+        close(pfd[PWR]);
+        return;
+    case 0:
+        clearwaitpids();
+        close(pfd[PRD]);
+        start(runq->code, runq->pc+1, runq->local);
+        pushredir(ROPEN, pfd[PWR], 1);
+        return;
+    default:
+        addwaitpid(pid);
+        close(pfd[PWR]);
+        f = openfd(pfd[PRD]);
+        word = s_new();
+        v = nil;
+        /* rutf requires at least UTFmax+1 bytes in utf */
+        while((n = rutf(f, utf, &r)) != EOF){
+            utf[n] = '\0';
+            if(utfutf(stop, utf) == nil)
+                s_nappend(word, utf, n);
+            else
+                /*
+                 * utf/r is an ifs rune (e.g., \t, \n), thus
+                 * ends the current word, if any.
+                 */
+                if(s_len(word) > 0){
+                    v = newword(s_to_c(word), v);
+                    s_reset(word);
+                }
+        }
+        if(s_len(word) > 0)
+            v = newword(s_to_c(word), v);
+        s_free(word);
+        closeio(f);
+        Waitfor(pid, 0);
+        /* v points to reversed arglist -- reverse it onto argv */
+        while(v){
+            nextv = v->next;
+            v->next = runq->argv->words;
+            runq->argv->words = v;
+            v = nextv;
+        }
+        runq->pc = runq->code[runq->pc].i;
+        return;
+    }
+}
+@
+
+<<function Xpipefd>>=
+void
+Xpipefd(void)
+{
+    struct thread *p = runq;
+    int pc = p->pc, pid;
+    char name[40];
+    int pfd[2];
+    int sidefd, mainfd;
+    if(pipe(pfd)<0){
+        Xerror("can't get pipe");
+        return;
+    }
+    if(p->code[pc].i==READ){
+        sidefd = pfd[PWR];
+        mainfd = pfd[PRD];
+    }
+    else{
+        sidefd = pfd[PRD];
+        mainfd = pfd[PWR];
+    }
+    switch(pid = fork()){
+    case -1:
+        Xerror("try again");
+        break;
+    case 0:
+        clearwaitpids();
+        start(p->code, pc+2, runq->local);
+        close(mainfd);
+        pushredir(ROPEN, sidefd, p->code[pc].i==READ?1:0);
+        runq->ret = 0;
+        break;
+    default:
+        addwaitpid(pid);
+        close(sidefd);
+        pushredir(ROPEN, mainfd, mainfd);	/* isn't this a noop? */
+        strcpy(name, Fdprefix);
+        inttoascii(name+strlen(name), mainfd);
+        pushword(name);
+        p->pc = p->code[pc+1].i;
+        break;
+    }
+}
+@
+
+<<function Xsubshell>>=
+void
+Xsubshell(void)
+{
+    int pid;
+    switch(pid = fork()){
+    case -1:
+        Xerror("try again");
+        break;
+    case 0:
+        clearwaitpids();
+        start(runq->code, runq->pc+1, runq->local);
+        runq->ret = 0;
+        break;
+    default:
+        addwaitpid(pid);
+        Waitfor(pid, 1);
+        runq->pc = runq->code[runq->pc].i;
+        break;
+    }
+}
+@
+
+<<function execforkexec>>=
+int
+execforkexec(void)
+{
+    int pid;
+    int n;
+    char buf[ERRMAX];
+
+    switch(pid = fork()){
+    case -1:
+        return -1;
+    case 0:
+        clearwaitpids();
+        pushword("exec");
+        execexec();
+        strcpy(buf, "can't exec: ");
+        n = strlen(buf);
+        errstr(buf+n, ERRMAX-n);
+        Exit(buf);
+    }
+    addwaitpid(pid);
+    return pid;
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/havefork.c>>=
+#include "rc.h"
+#include "getflags.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+#include <string.h>
+
+<<global havefork (rc/havefork.c)>>
+
+<<function Xasync>>
+
+<<function Xpipe>>
+
+<<function Xbackq>>
+
+<<function Xpipefd>>
+
+<<function Xsubshell>>
+
+<<function execforkexec>>
+@
+
+
+\subsection*{[[rc/tree.c]]}
+
+<<global treenodes>>=
+tree *treenodes;
+@
+
+<<function newtree>>=
+/*
+ * create and clear a new tree node, and add it
+ * to the node list.
+ */
+
+tree*
+newtree(void)
+{
+    tree *t = new(tree);
+    t->iskw = 0;
+    t->str = 0;
+    t->child[0] = t->child[1] = t->child[2] = 0;
+    t->next = treenodes;
+    treenodes = t;
+    return t;
+}
+@
+
+<<function freenodes>>=
+void
+freenodes(void)
+{
+    tree *t, *u;
+    for(t = treenodes;t;t = u){
+        u = t->next;
+        if(t->str)
+            efree(t->str);
+        efree((char *)t);
+    }
+    treenodes = 0;
+}
+@
+
+<<function tree1>>=
+tree*
+tree1(int type, tree *c0)
+{
+    return tree3(type, c0, (tree *)0, (tree *)0);
+}
+@
+
+<<function tree2>>=
+tree*
+tree2(int type, tree *c0, tree *c1)
+{
+    return tree3(type, c0, c1, (tree *)0);
+}
+@
+
+<<function tree3>>=
+tree*
+tree3(int type, tree *c0, tree *c1, tree *c2)
+{
+    tree *t;
+    if(type==';'){
+        if(c0==0)
+            return c1;
+        if(c1==0)
+            return c0;
+    }
+    t = newtree();
+    t->type = type;
+    t->child[0] = c0;
+    t->child[1] = c1;
+    t->child[2] = c2;
+    return t;
+}
+@
+
+<<function mung1>>=
+tree*
+mung1(tree *t, tree *c0)
+{
+    t->child[0] = c0;
+    return t;
+}
+@
+
+<<function mung2>>=
+tree*
+mung2(tree *t, tree *c0, tree *c1)
+{
+    t->child[0] = c0;
+    t->child[1] = c1;
+    return t;
+}
+@
+
+<<function mung3>>=
+tree*
+mung3(tree *t, tree *c0, tree *c1, tree *c2)
+{
+    t->child[0] = c0;
+    t->child[1] = c1;
+    t->child[2] = c2;
+    return t;
+}
+@
+
+<<function epimung>>=
+tree*
+epimung(tree *comp, tree *epi)
+{
+    tree *p;
+    if(epi==0)
+        return comp;
+    for(p = epi;p->child[1];p = p->child[1]);
+    p->child[1] = comp;
+    return epi;
+}
+@
+
+<<function simplemung>>=
+/*
+ * Add a SIMPLE node at the root of t and percolate all the redirections
+ * up to the root.
+ */
+
+tree*
+simplemung(tree *t)
+{
+    tree *u;
+    struct io *s;
+
+    t = tree1(SIMPLE, t);
+    s = openstr();
+    pfmt(s, "%t", t);
+    t->str = strdup((char *)s->strp);
+    closeio(s);
+    for(u = t->child[0];u->type==ARGLIST;u = u->child[0]){
+        if(u->child[1]->type==DUP
+        || u->child[1]->type==REDIR){
+            u->child[1]->child[1] = t;
+            t = u->child[1];
+            u->child[1] = 0;
+        }
+    }
+    return t;
+}
+@
+
+<<function token>>=
+tree*
+token(char *str, int type)
+{
+    tree *t = newtree();
+
+    t->type = type;
+    t->str = strdup(str);
+    return t;
+}
+@
+
+<<function freetree>>=
+void
+freetree(tree *p)
+{
+    if(p==0)
+        return;	
+    freetree(p->child[0]);
+    freetree(p->child[1]);
+    freetree(p->child[2]);
+    if(p->str)
+        efree(p->str);
+    efree((char *)p);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/tree.c>>=
+#include "rc.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+<<global treenodes>>
+<<function newtree>>
+
+<<function freenodes>>
+
+<<function tree1>>
+
+<<function tree2>>
+
+<<function tree3>>
+
+<<function mung1>>
+
+<<function mung2>>
+
+<<function mung3>>
+
+<<function epimung>>
+<<function simplemung>>
+
+<<function token>>
+
+<<function freetree>>
+@
+
+
+\subsection*{[[rc/lex.c]]}
+
+<<function wordchr>>=
+int
+wordchr(int c)
+{
+    return !strchr("\n \t#;&|^$=`'{}()<>", c) && c!=EOF;
+}
+@
+
+<<function idchr>>=
+int
+idchr(int c)
+{
+    /*
+     * Formerly:
+     * return 'a'<=c && c<='z' || 'A'<=c && c<='Z' || '0'<=c && c<='9'
+     *	|| c=='_' || c=='*';
+     */
+    return c>' ' && !strchr("!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~", c);
+}
+@
+%$
+
+<<global future>>=
+int future = EOF;
+@
+
+<<global doprompt (rc/lex.c)>>=
+int doprompt = 1;
+@
+
+<<global inquote>>=
+int inquote;
+@
+
+<<global incomm>>=
+int incomm;
+@
+
+<<function nextc>>=
+/*
+ * Look ahead in the input stream
+ */
+
+int
+nextc(void)
+{
+    if(future==EOF)
+        future = getnext();
+    return future;
+}
+@
+
+<<function advance>>=
+/*
+ * Consume the lookahead character.
+ */
+
+int
+advance(void)
+{
+    int c = nextc();
+    lastc = future;
+    future = EOF;
+    return c;
+}
+@
+
+<<function getnext>>=
+/*
+ * read a character from the input stream
+ */	
+
+int
+getnext(void)
+{
+    int c;
+    static int peekc = EOF;
+    if(peekc!=EOF){
+        c = peekc;
+        peekc = EOF;
+        return c;
+    }
+    if(runq->eof)
+        return EOF;
+    if(doprompt)
+        pprompt();
+    c = rchr(runq->cmdfd);
+    if(!inquote && c=='\\'){
+        c = rchr(runq->cmdfd);
+        if(c=='\n' && !incomm){		/* don't continue a comment */
+            doprompt = 1;
+            c=' ';
+        }
+        else{
+            peekc = c;
+            c='\\';
+        }
+    }
+    doprompt = doprompt || c=='\n' || c==EOF;
+    if(c==EOF)
+        runq->eof++;
+    else if(flag['V'] || ndot>=2 && flag['v']) pchr(err, c);
+    return c;
+}
+@
+
+<<function pprompt>>=
+void
+pprompt(void)
+{
+    var *prompt;
+    if(runq->iflag){
+        pstr(err, promptstr);
+        flush(err);
+        prompt = vlook("prompt");
+        if(prompt->val && prompt->val->next)
+            promptstr = prompt->val->next->word;
+        else
+            promptstr="\t";
+    }
+    runq->lineno++;
+    doprompt = 0;
+}
+@
+
+<<function skipwhite>>=
+void
+skipwhite(void)
+{
+    int c;
+    for(;;){
+        c = nextc();
+        /* Why did this used to be  if(!inquote && c=='#') ?? */
+        if(c=='#'){
+            incomm = 1;
+            for(;;){
+                c = nextc();
+                if(c=='\n' || c==EOF) {
+                    incomm = 0;
+                    break;
+                }
+                advance();
+            }
+        }
+        if(c==' ' || c=='\t')
+            advance();
+        else return;
+    }
+}
+@
+
+<<function skipnl>>=
+void
+skipnl(void)
+{
+    int c;
+    for(;;){
+        skipwhite();
+        c = nextc();
+        if(c!='\n')
+            return;
+        advance();
+    }
+}
+@
+
+<<function nextis>>=
+int
+nextis(int c)
+{
+    if(nextc()==c){
+        advance();
+        return 1;
+    }
+    return 0;
+}
+@
+
+<<function addtok>>=
+char*
+addtok(char *p, int val)
+{
+    if(p==0)
+        return 0;
+    if(p >= &tok[NTOK]){
+        *p = 0;
+        yyerror("token buffer too short");
+        return 0;
+    }
+    *p++=val;
+    return p;
+}
+@
+
+<<function addutf>>=
+char*
+addutf(char *p, int c)
+{
+    uchar b, m;
+    int i;
+
+    p = addtok(p, c);	/* 1-byte UTF runes are special */
+    if(c < Runeself)
+        return p;
+
+    m = 0xc0;
+    b = 0x80;
+    for(i=1; i < UTFmax; i++){
+        if((c&m) == b)
+            break;
+        p = addtok(p, advance());
+        b = m;
+        m = (m >> 1)|0x80;
+    }
+    return p;
+}
+@
+
+<<global lastdol>>=
+int lastdol;	/* was the last token read '$' or '$#' or '"'? */
+@
+
+<<global lastword (rc/lex.c)>>=
+int lastword;	/* was the last token read a word or compound word terminator? */
+@
+
+<<function yylex>>=
+int
+yylex(void)
+{
+    int c, d = nextc();
+    char *w = tok;
+    struct tree *t;
+    yylval.tree = 0;
+    /*
+     * Embarassing sneakiness:  if the last token read was a quoted or unquoted
+     * WORD then we alter the meaning of what follows.  If the next character
+     * is `(', we return SUB (a subscript paren) and consume the `('.  Otherwise,
+     * if the next character is the first character of a simple or compound word,
+     * we insert a `^' before it.
+     */
+    if(lastword){
+        lastword = 0;
+        if(d=='('){
+            advance();
+            strcpy(tok, "( [SUB]");
+            return SUB;
+        }
+        if(wordchr(d) || d=='\'' || d=='`' || d=='$' || d=='"'){
+            strcpy(tok, "^");
+            return '^';
+        }
+    }
+    inquote = 0;
+    skipwhite();
+    switch(c = advance()){
+    case EOF:
+        lastdol = 0;
+        strcpy(tok, "EOF");
+        return EOF;
+    case '$':
+        lastdol = 1;
+        if(nextis('#')){
+            strcpy(tok, "$#");
+            return COUNT;
+        }
+        if(nextis('"')){
+            strcpy(tok, "$\"");
+            return '"';
+        }
+        strcpy(tok, "$");
+        return '$';
+    case '&':
+        lastdol = 0;
+        if(nextis('&')){
+            skipnl();
+            strcpy(tok, "&&");
+            return ANDAND;
+        }
+        strcpy(tok, "&");
+        return '&';
+    case '|':
+        lastdol = 0;
+        if(nextis(c)){
+            skipnl();
+            strcpy(tok, "||");
+            return OROR;
+        }
+    case '<':
+    case '>':
+        lastdol = 0;
+        /*
+         * funny redirection tokens:
+         *	redir:	arrow | arrow '[' fd ']'
+         *	arrow:	'<' | '<<' | '>' | '>>' | '|'
+         *	fd:	digit | digit '=' | digit '=' digit
+         *	digit:	'0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'
+         * some possibilities are nonsensical and get a message.
+         */
+        *w++=c;
+        t = newtree();
+        switch(c){
+        case '|':
+            t->type = PIPE;
+            t->fd0 = 1;
+            t->fd1 = 0;
+            break;
+        case '>':
+            t->type = REDIR;
+            if(nextis(c)){
+                t->rtype = APPEND;
+                *w++=c;
+            }
+            else t->rtype = WRITE;
+            t->fd0 = 1;
+            break;
+        case '<':
+            t->type = REDIR;
+            if(nextis(c)){
+                t->rtype = HERE;
+                *w++=c;
+            } else if (nextis('>')){
+                t->rtype = RDWR;
+                *w++=c;
+            } else t->rtype = READ;
+            t->fd0 = 0;
+            break;
+        }
+        if(nextis('[')){
+            *w++='[';
+            c = advance();
+            *w++=c;
+            if(c<'0' || '9'<c){
+            RedirErr:
+                *w = 0;
+                yyerror(t->type==PIPE?"pipe syntax"
+                        :"redirection syntax");
+                return EOF;
+            }
+            t->fd0 = 0;
+            do{
+                t->fd0 = t->fd0*10+c-'0';
+                *w++=c;
+                c = advance();
+            }while('0'<=c && c<='9');
+            if(c=='='){
+                *w++='=';
+                if(t->type==REDIR)
+                    t->type = DUP;
+                c = advance();
+                if('0'<=c && c<='9'){
+                    t->rtype = DUPFD;
+                    t->fd1 = t->fd0;
+                    t->fd0 = 0;
+                    do{
+                        t->fd0 = t->fd0*10+c-'0';
+                        *w++=c;
+                        c = advance();
+                    }while('0'<=c && c<='9');
+                }
+                else{
+                    if(t->type==PIPE)
+                        goto RedirErr;
+                    t->rtype = CLOSE;
+                }
+            }
+            if(c!=']'
+            || t->type==DUP && (t->rtype==HERE || t->rtype==APPEND))
+                goto RedirErr;
+            *w++=']';
+        }
+        *w='\0';
+        yylval.tree = t;
+        if(t->type==PIPE)
+            skipnl();
+        return t->type;
+    case '\'':
+        lastdol = 0;
+        lastword = 1;
+        inquote = 1;
+        for(;;){
+            c = advance();
+            if(c==EOF)
+                break;
+            if(c=='\''){
+                if(nextc()!='\'')
+                    break;
+                advance();
+            }
+            w = addutf(w, c);
+        }
+        if(w!=0)
+            *w='\0';
+        t = token(tok, WORD);
+        t->quoted = 1;
+        yylval.tree = t;
+        return t->type;
+    }
+    if(!wordchr(c)){
+        lastdol = 0;
+        tok[0] = c;
+        tok[1]='\0';
+        return c;
+    }
+    for(;;){
+        if(c=='*' || c=='[' || c=='?' || c==GLOB)
+            w = addtok(w, GLOB);
+        w = addutf(w, c);
+        c = nextc();
+        if(lastdol?!idchr(c):!wordchr(c)) break;
+        advance();
+    }
+
+    lastword = 1;
+    lastdol = 0;
+    if(w!=0)
+        *w='\0';
+    t = klook(tok);
+    if(t->type!=WORD)
+        lastword = 0;
+    t->quoted = 0;
+    yylval.tree = t;
+    return t->type;
+}
+@
+%$
+
+
+%-------------------------------------------------------------
+
+<<rc/lex.c>>=
+#include "rc.h"
+#include "exec.h"
+#include "io.h"
+#include "getflags.h"
+#include "fns.h"
+int getnext(void);
+
+<<function wordchr>>
+
+<<function idchr>>
+<<global future>>
+<<global doprompt (rc/lex.c)>>
+<<global inquote>>
+<<global incomm>>
+<<function nextc>>
+<<function advance>>
+<<function getnext>>
+
+<<function pprompt>>
+
+<<function skipwhite>>
+
+<<function skipnl>>
+
+<<function nextis>>
+
+<<function addtok>>
+
+<<function addutf>>
+
+<<global lastdol>>
+<<global lastword (rc/lex.c)>>
+
+<<function yylex>>
+@
+
+
+\subsection*{[[rc/trap.c]]}
+
+<<function dotrap>>=
+void
+dotrap(void)
+{
+    int i;
+    struct var *trapreq;
+    struct word *starval;
+    starval = vlook("*")->val;
+    while(ntrap) for(i = 0;i!=NSIG;i++) while(trap[i]){
+        --trap[i];
+        --ntrap;
+        if(getpid()!=mypid) Exit(getstatus());
+        trapreq = vlook(Signame[i]);
+        if(trapreq->fn){
+            start(trapreq->fn, trapreq->pc, (struct var *)0);
+            runq->local = newvar(strdup("*"), runq->local);
+            runq->local->val = copywords(starval, (struct word *)0);
+            runq->local->changed = 1;
+            runq->redir = runq->startredir = 0;
+        }
+        else if(i==SIGINT || i==SIGQUIT){
+            /*
+             * run the stack down until we uncover the
+             * command reading loop.  Xreturn will exit
+             * if there is none (i.e. if this is not
+             * an interactive rc.)
+             */
+            while(!runq->iflag) Xreturn();
+        }
+        else Exit(getstatus());
+    }
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/trap.c>>=
+#include "rc.h"
+#include "exec.h"
+#include "fns.h"
+#include "io.h"
+extern char *Signame[];
+
+<<function dotrap>>
+@
+
+
+\subsection*{[[rc/simple.c]]}
+
+<<function exitnext>>=
+/*
+ * Search through the following code to see if we're just going to exit.
+ */
+int
+exitnext(void){
+    union code *c=&runq->code[runq->pc];
+    while(c->f==Xpopredir) c++;
+    return c->f==Xexit;
+}
+@
+
+<<function Xsimple>>=
+void
+Xsimple(void)
+{
+    word *a;
+    thread *p = runq;
+    var *v;
+    struct builtin *bp;
+    int pid;
+    globlist();
+    a = runq->argv->words;
+    if(a==0){
+        Xerror1("empty argument list");
+        return;
+    }
+    if(flag['x'])
+        pfmt(err, "%v\n", p->argv->words); /* wrong, should do redirs */
+    v = gvlook(a->word);
+    if(v->fn)
+        execfunc(v);
+    else{
+        if(strcmp(a->word, "builtin")==0){
+            if(count(a)==1){
+                pfmt(err, "builtin: empty argument list\n");
+                setstatus("empty arg list");
+                poplist();
+                return;
+            }
+            a = a->next;
+            popword();
+        }
+        for(bp = Builtin;bp->name;bp++)
+            if(strcmp(a->word, bp->name)==0){
+                (*bp->fnc)();
+                return;
+            }
+        if(exitnext()){
+            /* fork and wait is redundant */
+            pushword("exec");
+            execexec();
+            Xexit();
+        }
+        else{
+            flush(err);
+            Updenv();	/* necessary so changes don't go out again */
+            if((pid = execforkexec()) < 0){
+                Xerror("try again");
+                return;
+            }
+
+            /* interrupts don't get us out */
+            poplist();
+            while(Waitfor(pid, 1) < 0)
+                ;
+        }
+    }
+}
+@
+
+<<global nullpath>>=
+struct word nullpath = { "", 0};
+@
+
+<<function doredir>>=
+void
+doredir(redir *rp)
+{
+    if(rp){
+        doredir(rp->next);
+        switch(rp->type){
+        case ROPEN:
+            if(rp->from!=rp->to){
+                Dup(rp->from, rp->to);
+                close(rp->from);
+            }
+            break;
+        case RDUP:
+            Dup(rp->from, rp->to);
+            break;
+        case RCLOSE:
+            close(rp->from);
+            break;
+        }
+    }
+}
+@
+
+<<function searchpath>>=
+word*
+searchpath(char *w)
+{
+    word *path;
+    if(strncmp(w, "/", 1)==0
+    || strncmp(w, "#", 1)==0
+    || strncmp(w, "./", 2)==0
+    || strncmp(w, "../", 3)==0
+    || (path = vlook("path")->val)==0)
+        path=&nullpath;
+    return path;
+}
+@
+
+<<function execexec>>=
+void
+execexec(void)
+{
+    popword();	/* "exec" */
+    if(runq->argv->words==0){
+        Xerror1("empty argument list");
+        return;
+    }
+    doredir(runq->redir);
+    Execute(runq->argv->words, searchpath(runq->argv->words->word));
+    poplist();
+}
+@
+
+<<function execfunc>>=
+void
+execfunc(var *func)
+{
+    word *starval;
+    popword();
+    starval = runq->argv->words;
+    runq->argv->words = 0;
+    poplist();
+    start(func->fn, func->pc, runq->local);
+    runq->local = newvar(strdup("*"), runq->local);
+    runq->local->val = starval;
+    runq->local->changed = 1;
+}
+@
+
+<<function dochdir>>=
+int
+dochdir(char *word)
+{
+    /* report to /dev/wdir if it exists and we're interactive */
+    static int wdirfd = -2;
+    if(chdir(word)<0) return -1;
+    if(flag['i']!=0){
+        if(wdirfd==-2)	/* try only once */
+            wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
+        if(wdirfd>=0) {
+            //fcntl(wdirfd, F_SETFD, FD_CLOEXEC);
+            write(wdirfd, word, strlen(word));
+        }
+    }
+    return 1;
+}
+@
+
+<<function appfile>>=
+static char *
+appfile(char *dir, char *comp)
+{
+    int dirlen, complen;
+    char *s, *p;
+
+    dirlen = strlen(dir);
+    complen = strlen(comp);
+    s = emalloc(dirlen + 1 + complen + 1);
+    memmove(s, dir, dirlen);
+    p = s + dirlen;
+    *p++ = '/';
+    memmove(p, comp, complen);
+    p[complen] = '\0';
+    return s;
+}
+@
+
+<<function execcd>>=
+void
+execcd(void)
+{
+    word *a = runq->argv->words;
+    word *cdpath;
+    char *dir;
+
+    setstatus("can't cd");
+    cdpath = vlook("cdpath")->val;
+    switch(count(a)){
+    default:
+        pfmt(err, "Usage: cd [directory]\n");
+        break;
+    case 2:
+        if(a->next->word[0]=='/' || cdpath==0)
+            cdpath = &nullpath;
+        for(; cdpath; cdpath = cdpath->next){
+            if(cdpath->word[0] != '\0')
+                dir = appfile(cdpath->word, a->next->word);
+            else
+                dir = strdup(a->next->word);
+
+            if(dochdir(dir) >= 0){
+                if(cdpath->word[0] != '\0' &&
+                    strcmp(cdpath->word, ".") != 0)
+                    pfmt(err, "%s\n", dir);
+                free(dir);
+                setstatus("");
+                break;
+            }
+            free(dir);
+        }
+        if(cdpath==0)
+            pfmt(err, "Can't cd %s: %r\n", a->next->word);
+        break;
+    case 1:
+        a = vlook("home")->val;
+        if(count(a)>=1){
+            if(dochdir(a->word)>=0)
+                setstatus("");
+            else
+                pfmt(err, "Can't cd %s: %r\n", a->word);
+        }
+        else
+            pfmt(err, "Can't cd -- $home empty\n");
+        break;
+    }
+    poplist();
+}
+@
+%$
+
+<<function execexit>>=
+void
+execexit(void)
+{
+    switch(count(runq->argv->words)){
+    default:
+        pfmt(err, "Usage: exit [status]\nExiting anyway\n");
+    case 2:
+        setstatus(runq->argv->words->next->word);
+    case 1:	Xexit();
+    }
+}
+@
+
+<<function execshift>>=
+void
+execshift(void)
+{
+    int n;
+    word *a;
+    var *star;
+    switch(count(runq->argv->words)){
+    default:
+        pfmt(err, "Usage: shift [n]\n");
+        setstatus("shift usage");
+        poplist();
+        return;
+    case 2:
+        n = atoi(runq->argv->words->next->word);
+        break;
+    case 1:
+        n = 1;
+        break;
+    }
+    star = vlook("*");
+    for(;n && star->val;--n){
+        a = star->val->next;
+        efree(star->val->word);
+        efree((char *)star->val);
+        star->val = a;
+        star->changed = 1;
+    }
+    setstatus("");
+    poplist();
+}
+@
+
+<<function octal>>=
+int
+octal(char *s)
+{
+    int n = 0;
+    while(*s==' ' || *s=='\t' || *s=='\n') s++;
+    while('0'<=*s && *s<='7') n = n*8+*s++-'0';
+    return n;
+}
+@
+
+<<function mapfd>>=
+int
+mapfd(int fd)
+{
+    redir *rp;
+    for(rp = runq->redir;rp;rp = rp->next){
+        switch(rp->type){
+        case RCLOSE:
+            if(rp->from==fd)
+                fd=-1;
+            break;
+        case RDUP:
+        case ROPEN:
+            if(rp->to==fd)
+                fd = rp->from;
+            break;
+        }
+    }
+    return fd;
+}
+@
+
+<<global rdcmds>>=
+union code rdcmds[4];
+@
+
+<<function execcmds>>=
+void
+execcmds(io *f)
+{
+    static int first = 1;
+    if(first){
+        rdcmds[0].i = 1;
+        rdcmds[1].f = Xrdcmds;
+        rdcmds[2].f = Xreturn;
+        first = 0;
+    }
+    start(rdcmds, 1, runq->local);
+    runq->cmdfd = f;
+    runq->iflast = 0;
+}
+@
+
+<<function execeval>>=
+void
+execeval(void)
+{
+    char *cmdline, *s, *t;
+    int len = 0;
+    word *ap;
+    if(count(runq->argv->words)<=1){
+        Xerror1("Usage: eval cmd ...");
+        return;
+    }
+    eflagok = 1;
+    for(ap = runq->argv->words->next;ap;ap = ap->next)
+        len+=1+strlen(ap->word);
+    cmdline = emalloc(len);
+    s = cmdline;
+    for(ap = runq->argv->words->next;ap;ap = ap->next){
+        for(t = ap->word;*t;) *s++=*t++;
+        *s++=' ';
+    }
+    s[-1]='\n';
+    poplist();
+    execcmds(opencore(cmdline, len));
+    efree(cmdline);
+}
+@
+
+<<global dotcmds>>=
+union code dotcmds[14];
+@
+
+<<function execdot>>=
+void
+execdot(void)
+{
+    int iflag = 0;
+    int fd;
+    list *av;
+    thread *p = runq;
+    char *zero, *file;
+    word *path;
+    static int first = 1;
+
+    if(first){
+        dotcmds[0].i = 1;
+        dotcmds[1].f = Xmark;
+        dotcmds[2].f = Xword;
+        dotcmds[3].s="0";
+        dotcmds[4].f = Xlocal;
+        dotcmds[5].f = Xmark;
+        dotcmds[6].f = Xword;
+        dotcmds[7].s="*";
+        dotcmds[8].f = Xlocal;
+        dotcmds[9].f = Xrdcmds;
+        dotcmds[10].f = Xunlocal;
+        dotcmds[11].f = Xunlocal;
+        dotcmds[12].f = Xreturn;
+        first = 0;
+    }
+    else
+        eflagok = 1;
+    popword();
+    if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
+        iflag = 1;
+        popword();
+    }
+    /* get input file */
+    if(p->argv->words==0){
+        Xerror1("Usage: . [-i] file [arg ...]");
+        return;
+    }
+    zero = strdup(p->argv->words->word);
+    popword();
+    fd = -1;
+    for(path = searchpath(zero); path; path = path->next){
+        if(path->word[0] != '\0')
+            file = appfile(path->word, zero);
+        else
+            file = strdup(zero);
+
+        fd = open(file, 0);
+        free(file);
+        if(fd >= 0)
+            break;
+        if(strcmp(file, "/dev/stdin")==0){	/* for sun & ucb */
+            fd = Dup1(0);
+            if(fd>=0)
+                break;
+        }
+    }
+    if(fd<0){
+        pfmt(err, "%s: ", zero);
+        setstatus("can't open");
+        Xerror(".: can't open");
+        return;
+    }
+    /* set up for a new command loop */
+    start(dotcmds, 1, (struct var *)0);
+    pushredir(RCLOSE, fd, 0);
+    runq->cmdfile = zero;
+    runq->cmdfd = openfd(fd);
+    runq->iflag = iflag;
+    runq->iflast = 0;
+    /* push $* value */
+    pushlist();
+    runq->argv->words = p->argv->words;
+    /* free caller's copy of $* */
+    av = p->argv;
+    p->argv = av->next;
+    efree((char *)av);
+    /* push $0 value */
+    pushlist();
+    pushword(zero);
+    ndot++;
+}
+@
+%$
+
+<<function execflag>>=
+void
+execflag(void)
+{
+    char *letter, *val;
+    switch(count(runq->argv->words)){
+    case 2:
+        setstatus(flag[(uchar)runq->argv->words->next->word[0]]?"":"flag not set");
+        break;
+    case 3:
+        letter = runq->argv->words->next->word;
+        val = runq->argv->words->next->next->word;
+        if(strlen(letter)==1){
+            if(strcmp(val, "+")==0){
+                flag[(uchar)letter[0]] = flagset;
+                break;
+            }
+            if(strcmp(val, "-")==0){
+                flag[(uchar)letter[0]] = 0;
+                break;
+            }
+        }
+    default:
+        Xerror1("Usage: flag [letter] [+-]");
+        return;
+    }
+    poplist();
+}
+@
+
+<<function execwhatis>>=
+void
+execwhatis(void){	/* mildly wrong -- should fork before writing */
+    word *a, *b, *path;
+    var *v;
+    struct builtin *bp;
+    char *file;
+    struct io out[1];
+    int found, sep;
+    a = runq->argv->words->next;
+    if(a==0){
+        Xerror1("Usage: whatis name ...");
+        return;
+    }
+    setstatus("");
+    memset(out, 0, sizeof out);
+    out->fd = mapfd(1);
+    out->bufp = out->buf;
+    out->ebuf = &out->buf[NBUF];
+    out->strp = 0;
+    for(;a;a = a->next){
+        v = vlook(a->word);
+        if(v->val){
+            pfmt(out, "%s=", a->word);
+            if(v->val->next==0)
+                pfmt(out, "%q\n", v->val->word);
+            else{
+                sep='(';
+                for(b = v->val;b && b->word;b = b->next){
+                    pfmt(out, "%c%q", sep, b->word);
+                    sep=' ';
+                }
+                pfmt(out, ")\n");
+            }
+            found = 1;
+        }
+        else
+            found = 0;
+        v = gvlook(a->word);
+        if(v->fn)
+            pfmt(out, "fn %q %s\n", v->name, v->fn[v->pc-1].s);
+        else{
+            for(bp = Builtin;bp->name;bp++)
+                if(strcmp(a->word, bp->name)==0){
+                    pfmt(out, "builtin %s\n", a->word);
+                    break;
+                }
+            if(!bp->name){
+                for(path = searchpath(a->word); path;
+                    path = path->next){
+                    if(path->word[0] != '\0')
+                        file = appfile(path->word,
+                            a->word);
+                    else
+                        file = strdup(a->word);
+                    if(Executable(file)){
+                        pfmt(out, "%s\n", file);
+                        free(file);
+                        break;
+                    }
+                    free(file);
+                }
+                if(!path && !found){
+                    pfmt(err, "%s: not found\n", a->word);
+                    setstatus("not found");
+                }
+            }
+        }
+    }
+    poplist();
+    flush(err);
+}
+@
+
+<<function execwait>>=
+void
+execwait(void)
+{
+    switch(count(runq->argv->words)){
+    default:
+        Xerror1("Usage: wait [pid]");
+        return;
+    case 2:
+        Waitfor(atoi(runq->argv->words->next->word), 0);
+        break;
+    case 1:
+        Waitfor(-1, 0);
+        break;
+    }
+    poplist();
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/simple.c>>=
+/*
+ * Maybe `simple' is a misnomer.
+ */
+#include "rc.h"
+#include "getflags.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+<<function exitnext>>
+
+<<function Xsimple>>
+<<global nullpath>>
+
+<<function doredir>>
+
+<<function searchpath>>
+
+<<function execexec>>
+
+<<function execfunc>>
+
+<<function dochdir>>
+
+<<function appfile>>
+
+<<function execcd>>
+
+<<function execexit>>
+
+<<function execshift>>
+
+<<function octal>>
+
+<<function mapfd>>
+<<global rdcmds>>
+
+<<function execcmds>>
+
+<<function execeval>>
+<<global dotcmds>>
+
+<<function execdot>>
+
+<<function execflag>>
+
+<<function execwhatis>>
+
+<<function execwait>>
+@
+
+
+\subsection*{[[rc/pcmd.c]]}
+
+<<global nl>>=
+char nl='\n';		/* change to semicolon for bourne-proofing */
+@
+
+<<constant c0>>=
+#define	c0	t->child[0]
+@
+
+<<constant c1>>=
+#define	c1	t->child[1]
+@
+
+<<constant c2>>=
+#define	c2	t->child[2]
+@
+
+<<function pdeglob>>=
+void
+pdeglob(io *f, char *s)
+{
+    while(*s){
+        if(*s==GLOB)
+            s++;
+        pchr(f, *s++);
+    }
+}
+@
+
+<<function pcmd>>=
+void
+pcmd(io *f, tree *t)
+{
+    if(t==0)
+        return;
+    assert(f != nil);
+    switch(t->type){
+    default:	pfmt(f, "bad cmd %d %p %p %p", t->type, c0, c1, c2);
+    break;
+    case '$':	pfmt(f, "$%t", c0);
+    break;
+    case '"':	pfmt(f, "$\"%t", c0);
+    break;
+    case '&':	pfmt(f, "%t&", c0);
+    break;
+    case '^':	pfmt(f, "%t^%t", c0, c1);
+    break;
+    case '`':	pfmt(f, "`%t", c0);
+    break;
+    case ANDAND:	pfmt(f, "%t && %t", c0, c1);
+    break;
+    case BANG:	pfmt(f, "! %t", c0);
+    break;
+    case BRACE:	pfmt(f, "{%t}", c0);
+    break;
+    case COUNT:	pfmt(f, "$#%t", c0);
+    break;
+    case FN:	pfmt(f, "fn %t %t", c0, c1);
+    break;
+    case IF:	pfmt(f, "if%t%t", c0, c1);
+    break;
+    case NOT:	pfmt(f, "if not %t", c0);
+    break;
+    case OROR:	pfmt(f, "%t || %t", c0, c1);
+    break;
+    case PCMD:
+    case PAREN:	pfmt(f, "(%t)", c0);
+    break;
+    case SUB:	pfmt(f, "$%t(%t)", c0, c1);
+    break;
+    case SIMPLE:	pfmt(f, "%t", c0);
+    break;
+    case SUBSHELL:	pfmt(f, "@ %t", c0);
+    break;
+    case SWITCH:	pfmt(f, "switch %t %t", c0, c1);
+    break;
+    case TWIDDLE:	pfmt(f, "~ %t %t", c0, c1);
+    break;
+    case WHILE:	pfmt(f, "while %t%t", c0, c1);
+    break;
+    case ARGLIST:
+        if(c0==0)
+            pfmt(f, "%t", c1);
+        else if(c1==0)
+            pfmt(f, "%t", c0);
+        else
+            pfmt(f, "%t %t", c0, c1);
+        break;
+    case ';':
+        if(c0){
+            if(c1)
+                pfmt(f, "%t%c%t", c0, nl, c1);
+            else pfmt(f, "%t", c0);
+        }
+        else pfmt(f, "%t", c1);
+        break;
+    case WORDS:
+        if(c0)
+            pfmt(f, "%t ", c0);
+        pfmt(f, "%t", c1);
+        break;
+    case FOR:
+        pfmt(f, "for(%t", c0);
+        if(c1)
+            pfmt(f, " in %t", c1);
+        pfmt(f, ")%t", c2);
+        break;
+    case WORD:
+        if(t->quoted)
+            pfmt(f, "%Q", t->str);
+        else pdeglob(f, t->str);
+        break;
+    case DUP:
+        if(t->rtype==DUPFD)
+            pfmt(f, ">[%d=%d]", t->fd1, t->fd0); /* yes, fd1, then fd0; read lex.c */
+        else
+            pfmt(f, ">[%d=]", t->fd0);
+        pfmt(f, "%t", c1);
+        break;
+    case PIPEFD:
+    case REDIR:
+        switch(t->rtype){
+        case HERE:
+            pchr(f, '<');
+        case READ:
+        case RDWR:
+            pchr(f, '<');
+            if(t->rtype==RDWR)
+                pchr(f, '>');
+            if(t->fd0!=0)
+                pfmt(f, "[%d]", t->fd0);
+            break;
+        case APPEND:
+            pchr(f, '>');
+        case WRITE:
+            pchr(f, '>');
+            if(t->fd0!=1)
+                pfmt(f, "[%d]", t->fd0);
+            break;
+        }
+        pfmt(f, "%t", c0);
+        if(c1)
+            pfmt(f, " %t", c1);
+        break;
+    case '=':
+        pfmt(f, "%t=%t", c0, c1);
+        if(c2)
+            pfmt(f, " %t", c2);
+        break;
+    case PIPE:
+        pfmt(f, "%t|", c0);
+        if(t->fd1==0){
+            if(t->fd0!=1)
+                pfmt(f, "[%d]", t->fd0);
+        }
+        else pfmt(f, "[%d=%d]", t->fd0, t->fd1);
+        pfmt(f, "%t", c1);
+        break;
+    }
+}
+@
+%$
+
+
+%-------------------------------------------------------------
+
+<<rc/pcmd.c>>=
+#include "rc.h"
+#include "io.h"
+#include "fns.h"
+<<global nl>>
+<<constant c0>>
+<<constant c1>>
+<<constant c2>>
+
+<<function pdeglob>>
+
+<<function pcmd>>
+@
+
+
+\subsection*{[[rc/here.c]]}
+
+<<global ser>>=
+int ser = 0;
+@
+
+<<global tmp (rc/here.c)>>=
+char tmp[] = "/tmp/here0000.0000";
+@
+
+<<global hex>>=
+char hex[] = "0123456789abcdef";
+@
+
+<<function hexnum>>=
+void
+hexnum(char *p, int n)
+{
+    *p++ = hex[(n>>12)&0xF];
+    *p++ = hex[(n>>8)&0xF];
+    *p++ = hex[(n>>4)&0xF];
+    *p = hex[n&0xF];
+}
+@
+
+<<function heredoc>>=
+tree*
+heredoc(tree *tag)
+{
+    struct here *h = new(struct here);
+
+    if(tag->type != WORD)
+        yyerror("Bad here tag");
+    h->next = 0;
+    if(here)
+        *ehere = h;
+    else
+        here = h;
+    ehere = &h->next;
+    h->tag = tag;
+    hexnum(&tmp[9], getpid());
+    hexnum(&tmp[14], ser++);
+    h->name = strdup(tmp);
+    return token(tmp, WORD);
+}
+@
+
+<<constant NLINE>>=
+/*
+ * bug: lines longer than NLINE get split -- this can cause spurious
+ * missubstitution, or a misrecognized EOF marker.
+ */
+#define	NLINE	4096
+@
+
+<<function readhere>>=
+void
+readhere(void)
+{
+    int c, subst;
+    char *s, *tag;
+    char line[NLINE+1];
+    io *f;
+    struct here *h, *nexth;
+
+    for(h = here; h; h = nexth){
+        subst = !h->tag->quoted;
+        tag = h->tag->str;
+        c = Creat(h->name);
+        if(c < 0)
+            yyerror("can't create here document");
+        f = openfd(c);
+        s = line;
+        pprompt();
+        while((c = rchr(runq->cmdfd)) != EOF){
+            if(c == '\n' || s == &line[NLINE]){
+                *s = '\0';
+                if(tag && strcmp(line, tag) == 0)
+                    break;
+                if(subst)
+                    psubst(f, (uchar *)line);
+                else
+                    pstr(f, line);
+                s = line;
+                if(c == '\n'){
+                    pprompt();
+                    pchr(f, c);
+                }else
+                    *s++ = c;
+            }else
+                *s++ = c;
+        }
+        flush(f);
+        closeio(f);
+        cleanhere(h->name);
+        nexth = h->next;
+        efree((char *)h);
+    }
+    here = 0;
+    doprompt = 1;
+}
+@
+
+<<function psubst>>=
+void
+psubst(io *f, uchar *s)
+{
+    int savec, n;
+    uchar *t, *u;
+    Rune r;
+    word *star;
+
+    while(*s){
+        if(*s != '$'){		/* copy plain text rune */
+            if(*s < Runeself)
+                pchr(f, *s++);
+            else{
+                n = chartorune(&r, (char *)s);
+                while(n-- > 0)
+                    pchr(f, *s++);
+            }
+        }else{			/* $something -- perform substitution */
+            t = ++s;
+            if(*t == '$')
+                pchr(f, *t++);
+            else{
+                while(*t && idchr(*t))
+                    t++;
+                savec = *t;
+                *t = '\0';
+                n = 0;
+                for(u = s; *u && '0' <= *u && *u <= '9'; u++)
+                    n = n*10 + *u - '0';
+                if(n && *u == '\0'){
+                    star = vlook("*")->val;
+                    if(star && 1 <= n && n <= count(star)){
+                        while(--n)
+                            star = star->next;
+                        pstr(f, star->word);
+                    }
+                }else
+                    pstrs(f, vlook((char *)s)->val);
+                *t = savec;
+                if(savec == '^')
+                    t++;
+            }
+            s = t;
+        }
+    }
+}
+@
+%$
+
+<<function pstrs>>=
+void
+pstrs(io *f, word *a)
+{
+    if(a){
+        while(a->next && a->next->word){
+            pstr(f, a->word);
+            pchr(f, ' ');
+            a = a->next;
+        }
+        pstr(f, a->word);
+    }
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/here.c>>=
+#include "rc.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+
+struct here *here, **ehere;
+<<global ser>>
+<<global tmp (rc/here.c)>>
+<<global hex>>
+
+void psubst(io*, uchar*);
+void pstrs(io*, word*);
+
+<<function hexnum>>
+
+<<function heredoc>>
+
+<<constant NLINE>>
+
+<<function readhere>>
+
+<<function psubst>>
+
+<<function pstrs>>
+@
+
+
+\subsection*{[[rc/code.c]]}
+
+<<constant c0 (rc/code.c)>>=
+#define	c0	t->child[0]
+@
+
+<<constant c1 (rc/code.c)>>=
+#define	c1	t->child[1]
+@
+
+<<constant c2 (rc/code.c)>>=
+#define	c2	t->child[2]
+@
+
+<<function emitf>>=
+#define	emitf(x) ((codep!=ncode || morecode()), codebuf[codep].f = (x), codep++)
+@
+
+<<function emiti>>=
+#define	emiti(x) ((codep!=ncode || morecode()), codebuf[codep].i = (x), codep++)
+@
+
+<<function emits>>=
+#define	emits(x) ((codep!=ncode || morecode()), codebuf[codep].s = (x), codep++)
+@
+
+<<function morecode>>=
+int
+morecode(void)
+{
+    ncode+=100;
+    codebuf = (code *)realloc((char *)codebuf, ncode*sizeof codebuf[0]);
+    if(codebuf==0)
+        panic("Can't realloc %d bytes in morecode!",
+                ncode*sizeof codebuf[0]);
+    return 0;
+}
+@
+
+<<function stuffdot>>=
+void
+stuffdot(int a)
+{
+    if(a<0 || codep<=a)
+        panic("Bad address %d in stuffdot", a);
+    codebuf[a].i = codep;
+}
+@
+
+<<function compile>>=
+int
+compile(tree *t)
+{
+    ncode = 100;
+    codebuf = (code *)emalloc(ncode*sizeof codebuf[0]);
+    codep = 0;
+    emiti(0);			/* reference count */
+    outcode(t, flag['e']?1:0);
+    if(nerror){
+        efree((char *)codebuf);
+        return 0;
+    }
+    readhere();
+    emitf(Xreturn);
+    emitf(0);
+    return 1;
+}
+@
+
+<<function cleanhere>>=
+void
+cleanhere(char *f)
+{
+    emitf(Xdelhere);
+    emits(strdup(f));
+}
+@
+
+<<function fnstr>>=
+char*
+fnstr(tree *t)
+{
+    io *f = openstr();
+    void *v;
+    extern char nl;
+    char svnl = nl;
+
+    nl = ';';
+    pfmt(f, "%t", t);
+    nl = svnl;
+    v = f->strp;
+    f->strp = 0;
+    closeio(f);
+    return v;
+}
+@
+
+<<function outcode>>=
+void
+outcode(tree *t, int eflag)
+{
+    int p, q;
+    tree *tt;
+    if(t==0)
+        return;
+    if(t->type!=NOT && t->type!=';')
+        runq->iflast = 0;
+    switch(t->type){
+    default:
+        pfmt(err, "bad type %d in outcode\n", t->type);
+        break;
+    case '$':
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xdol);
+        break;
+    case '"':
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xqdol);
+        break;
+    case SUB:
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xmark);
+        outcode(c1, eflag);
+        emitf(Xsub);
+        break;
+    case '&':
+        emitf(Xasync);
+        if(havefork){
+            p = emiti(0);
+            outcode(c0, eflag);
+            emitf(Xexit);
+            stuffdot(p);
+        } else
+            emits(fnstr(c0));
+        break;
+    case ';':
+        outcode(c0, eflag);
+        outcode(c1, eflag);
+        break;
+    case '^':
+        emitf(Xmark);
+        outcode(c1, eflag);
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xconc);
+        break;
+    case '`':
+        emitf(Xbackq);
+        if(havefork){
+            p = emiti(0);
+            outcode(c0, 0);
+            emitf(Xexit);
+            stuffdot(p);
+        } else
+            emits(fnstr(c0));
+        break;
+    case ANDAND:
+        outcode(c0, 0);
+        emitf(Xtrue);
+        p = emiti(0);
+        outcode(c1, eflag);
+        stuffdot(p);
+        break;
+    case ARGLIST:
+        outcode(c1, eflag);
+        outcode(c0, eflag);
+        break;
+    case BANG:
+        outcode(c0, eflag);
+        emitf(Xbang);
+        break;
+    case PCMD:
+    case BRACE:
+        outcode(c0, eflag);
+        break;
+    case COUNT:
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xcount);
+        break;
+    case FN:
+        emitf(Xmark);
+        outcode(c0, eflag);
+        if(c1){
+            emitf(Xfn);
+            p = emiti(0);
+            emits(fnstr(c1));
+            outcode(c1, eflag);
+            emitf(Xunlocal);	/* get rid of $* */
+            emitf(Xreturn);
+            stuffdot(p);
+        }
+        else
+            emitf(Xdelfn);
+        break;
+    case IF:
+        outcode(c0, 0);
+        emitf(Xif);
+        p = emiti(0);
+        outcode(c1, eflag);
+        emitf(Xwastrue);
+        stuffdot(p);
+        break;
+    case NOT:
+        if(!runq->iflast)
+            yyerror("`if not' does not follow `if(...)'");
+        emitf(Xifnot);
+        p = emiti(0);
+        outcode(c0, eflag);
+        stuffdot(p);
+        break;
+    case OROR:
+        outcode(c0, 0);
+        emitf(Xfalse);
+        p = emiti(0);
+        outcode(c1, eflag);
+        stuffdot(p);
+        break;
+    case PAREN:
+        outcode(c0, eflag);
+        break;
+    case SIMPLE:
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xsimple);
+        if(eflag)
+            emitf(Xeflag);
+        break;
+    case SUBSHELL:
+        emitf(Xsubshell);
+        if(havefork){
+            p = emiti(0);
+            outcode(c0, eflag);
+            emitf(Xexit);
+            stuffdot(p);
+        } else
+            emits(fnstr(c0));
+        if(eflag)
+            emitf(Xeflag);
+        break;
+    case SWITCH:
+        codeswitch(t, eflag);
+        break;
+    case TWIDDLE:
+        emitf(Xmark);
+        outcode(c1, eflag);
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xmatch);
+        if(eflag)
+            emitf(Xeflag);
+        break;
+    case WHILE:
+        q = codep;
+        outcode(c0, 0);
+        if(q==codep)
+            emitf(Xsettrue);	/* empty condition == while(true) */
+        emitf(Xtrue);
+        p = emiti(0);
+        outcode(c1, eflag);
+        emitf(Xjump);
+        emiti(q);
+        stuffdot(p);
+        break;
+    case WORDS:
+        outcode(c1, eflag);
+        outcode(c0, eflag);
+        break;
+    case FOR:
+        emitf(Xmark);
+        if(c1){
+            outcode(c1, eflag);
+            emitf(Xglob);
+        }
+        else{
+            emitf(Xmark);
+            emitf(Xword);
+            emits(strdup("*"));
+            emitf(Xdol);
+        }
+        emitf(Xmark);		/* dummy value for Xlocal */
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xlocal);
+        p = emitf(Xfor);
+        q = emiti(0);
+        outcode(c2, eflag);
+        emitf(Xjump);
+        emiti(p);
+        stuffdot(q);
+        emitf(Xunlocal);
+        break;
+    case WORD:
+        emitf(Xword);
+        emits(strdup(t->str));
+        break;
+    case DUP:
+        if(t->rtype==DUPFD){
+            emitf(Xdup);
+            emiti(t->fd0);
+            emiti(t->fd1);
+        }
+        else{
+            emitf(Xclose);
+            emiti(t->fd0);
+        }
+        outcode(c1, eflag);
+        emitf(Xpopredir);
+        break;
+    case PIPEFD:
+        emitf(Xpipefd);
+        emiti(t->rtype);
+        if(havefork){
+            p = emiti(0);
+            outcode(c0, eflag);
+            emitf(Xexit);
+            stuffdot(p);
+        } else {
+            emits(fnstr(c0));
+        }
+        break;
+    case REDIR:
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xglob);
+        switch(t->rtype){
+        case APPEND:
+            emitf(Xappend);
+            break;
+        case WRITE:
+            emitf(Xwrite);
+            break;
+        case READ:
+        case HERE:
+            emitf(Xread);
+            break;
+        case RDWR:
+            emitf(Xrdwr);
+            break;
+        }
+        emiti(t->fd0);
+        outcode(c1, eflag);
+        emitf(Xpopredir);
+        break;
+    case '=':
+        tt = t;
+        for(;t && t->type=='=';t = c2);
+        if(t){					/* var=value cmd */
+            for(t = tt;t->type=='=';t = c2){
+                emitf(Xmark);
+                outcode(c1, eflag);
+                emitf(Xmark);
+                outcode(c0, eflag);
+                emitf(Xlocal);		/* push var for cmd */
+            }
+            outcode(t, eflag);		/* gen. code for cmd */
+            for(t = tt; t->type == '='; t = c2)
+                emitf(Xunlocal);	/* pop var */
+        }
+        else{					/* var=value */
+            for(t = tt;t;t = c2){
+                emitf(Xmark);
+                outcode(c1, eflag);
+                emitf(Xmark);
+                outcode(c0, eflag);
+                emitf(Xassign);	/* set var permanently */
+            }
+        }
+        t = tt;	/* so tests below will work */
+        break;
+    case PIPE:
+        emitf(Xpipe);
+        emiti(t->fd0);
+        emiti(t->fd1);
+        if(havefork){
+            p = emiti(0);
+            q = emiti(0);
+            outcode(c0, eflag);
+            emitf(Xexit);
+            stuffdot(p);
+        } else {
+            emits(fnstr(c0));
+            q = emiti(0);
+        }
+        outcode(c1, eflag);
+        emitf(Xreturn);
+        stuffdot(q);
+        emitf(Xpipewait);
+        break;
+    }
+    if(t->type!=NOT && t->type!=';')
+        runq->iflast = t->type==IF;
+    else if(c0) runq->iflast = c0->type==IF;
+}
+@
+%$
+
+<<function codeswitch>>=
+/*
+ * switch code looks like this:
+ *	Xmark
+ *	(get switch value)
+ *	Xjump	1f
+ * out:	Xjump	leave
+ * 1:	Xmark
+ *	(get case values)
+ *	Xcase	1f
+ *	(commands)
+ *	Xjump	out
+ * 1:	Xmark
+ *	(get case values)
+ *	Xcase	1f
+ *	(commands)
+ *	Xjump	out
+ * 1:
+ * leave:
+ *	Xpopm
+ */
+
+void
+codeswitch(tree *t, int eflag)
+{
+    int leave;		/* patch jump address to leave switch */
+    int out;		/* jump here to leave switch */
+    int nextcase;	/* patch jump address to next case */
+    tree *tt;
+    if(c1->child[0]==nil
+    || c1->child[0]->type!=';'
+    || !iscase(c1->child[0]->child[0])){
+        yyerror("case missing in switch");
+        return;
+    }
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xjump);
+    nextcase = emiti(0);
+    out = emitf(Xjump);
+    leave = emiti(0);
+    stuffdot(nextcase);
+    t = c1->child[0];
+    while(t->type==';'){
+        tt = c1;
+        emitf(Xmark);
+        for(t = c0->child[0];t->type==ARGLIST;t = c0) outcode(c1, eflag);
+        emitf(Xcase);
+        nextcase = emiti(0);
+        t = tt;
+        for(;;){
+            if(t->type==';'){
+                if(iscase(c0)) break;
+                outcode(c0, eflag);
+                t = c1;
+            }
+            else{
+                if(!iscase(t)) outcode(t, eflag);
+                break;
+            }
+        }
+        emitf(Xjump);
+        emiti(out);
+        stuffdot(nextcase);
+    }
+    stuffdot(leave);
+    emitf(Xpopm);
+}
+@
+
+<<function iscase>>=
+int
+iscase(tree *t)
+{
+    if(t->type!=SIMPLE)
+        return 0;
+    do t = c0; while(t->type==ARGLIST);
+    return t->type==WORD && !t->quoted && strcmp(t->str, "case")==0;
+}
+@
+
+<<function codecopy>>=
+code*
+codecopy(code *cp)
+{
+    cp[0].i++;
+    return cp;
+}
+@
+
+<<function codefree>>=
+void
+codefree(code *cp)
+{
+    code *p;
+    if(--cp[0].i!=0)
+        return;
+    for(p = cp+1;p->f;p++){
+        if(p->f==Xappend || p->f==Xclose || p->f==Xread || p->f==Xwrite
+        || p->f==Xrdwr
+        || p->f==Xasync || p->f==Xbackq || p->f==Xcase || p->f==Xfalse
+        || p->f==Xfor || p->f==Xjump
+        || p->f==Xsubshell || p->f==Xtrue) p++;
+        else if(p->f==Xdup || p->f==Xpipefd) p+=2;
+        else if(p->f==Xpipe) p+=4;
+        else if(p->f==Xword || p->f==Xdelhere) efree((++p)->s);
+        else if(p->f==Xfn){
+            efree(p[2].s);
+            p+=2;
+        }
+    }
+    efree((char *)cp);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/code.c>>=
+#include "rc.h"
+#include "io.h"
+#include "exec.h"
+#include "fns.h"
+#include "getflags.h"
+<<constant c0 (rc/code.c)>>
+<<constant c1 (rc/code.c)>>
+<<constant c2 (rc/code.c)>>
+int codep, ncode;
+<<function emitf>>
+<<function emiti>>
+<<function emits>>
+void stuffdot(int);
+char *fnstr(tree*);
+void outcode(tree*, int);
+void codeswitch(tree*, int);
+int iscase(tree*);
+code *codecopy(code*);
+void codefree(code*);
+
+<<function morecode>>
+
+<<function stuffdot>>
+
+<<function compile>>
+
+<<function cleanhere>>
+
+<<function fnstr>>
+
+<<function outcode>>
+<<function codeswitch>>
+
+<<function iscase>>
+
+<<function codecopy>>
+
+<<function codefree>>
+@
+
+
+\subsection*{[[rc/pfnc.c]]}
+
+<<global fname>>=
+struct{
+    void	(*f)(void);
+    char	*name;
+} fname[] = {
+    Xappend, "Xappend",
+    Xassign, "Xassign",
+    Xasync, "Xasync",
+    Xbackq, "Xbackq",
+    Xbang, "Xbang",
+    Xcase, "Xcase",
+    Xclose, "Xclose",
+    Xconc, "Xconc",
+    Xcount, "Xcount",
+    Xdelfn, "Xdelfn",
+    Xdelhere, "Xdelhere",
+    Xdol, "Xdol",
+    Xdup, "Xdup",
+    Xeflag, "Xeflag",
+    (void (*)(void))Xerror, "Xerror",
+    Xexit, "Xexit",
+    Xfalse, "Xfalse",
+    Xfn, "Xfn",
+    Xfor, "Xfor",
+    Xglob, "Xglob",
+    Xif, "Xif",
+    Xifnot, "Xifnot",
+    Xjump, "Xjump",
+    Xlocal, "Xlocal",
+    Xmark, "Xmark",
+    Xmatch, "Xmatch",
+    Xpipe, "Xpipe",
+    Xpipefd, "Xpipefd",
+    Xpipewait, "Xpipewait",
+    Xpopm, "Xpopm",
+    Xpopredir, "Xpopredir",
+    Xqdol, "Xqdol",
+    Xrdcmds, "Xrdcmds",
+    Xrdfn, "Xrdfn",
+    Xrdwr, "Xrdwr",
+    Xread, "Xread",
+    Xreturn, "Xreturn",
+    Xsimple, "Xsimple",
+    Xsub, "Xsub",
+    Xsubshell, "Xsubshell",
+    Xtrue, "Xtrue",
+    Xunlocal, "Xunlocal",
+    Xwastrue, "Xwastrue",
+    Xword, "Xword",
+    Xwrite, "Xwrite",
+    0
+};
+@
+
+<<function pfnc>>=
+void
+pfnc(io *fd, thread *t)
+{
+    int i;
+    void (*fn)(void) = t->code[t->pc].f;
+    list *a;
+
+    pfmt(fd, "pid %d cycle %p %d ", getpid(), t->code, t->pc);
+    for (i = 0; fname[i].f; i++) 
+        if (fname[i].f == fn) {
+            pstr(fd, fname[i].name);
+            break;
+        }
+    if (!fname[i].f)
+        pfmt(fd, "%p", fn);
+    for (a = t->argv; a; a = a->next) 
+        pfmt(fd, " (%v)", a->words);
+    pchr(fd, '\n');
+    flush(fd);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<rc/pfnc.c>>=
+#include "rc.h"
+#include "exec.h"
+#include "io.h"
+#include "fns.h"
+
+<<global fname>>
+
+<<function pfnc>>
+@
+
+

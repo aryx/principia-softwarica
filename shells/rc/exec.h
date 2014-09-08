@@ -1,3 +1,4 @@
+/*s: rc/exec.h */
 /*
  * Definitions used in the interpreter
  */
@@ -13,64 +14,95 @@ extern void Xrdcmds(void), Xwastrue(void), Xif(void), Xifnot(void), Xpipewait(vo
 extern void Xdelhere(void), Xpopredir(void), Xsub(void), Xeflag(void), Xsettrue(void);
 extern void Xerror(char*);
 extern void Xerror1(char*);
+/*s: struct word */
 /*
  * word lists are in correct order,
  * i.e. word0->word1->word2->word3->0
  */
 struct word{
-	char *word;
-	word *next;
+    char *word;
+    word *next;
 };
+/*e: struct word */
+/*s: struct list */
 struct list{
-	word *words;
-	list *next;
+    word *words;
+    list *next;
 };
+/*e: struct list */
 word *newword(char *, word *), *copywords(word *, word *);
+/*s: struct redir */
 struct redir{
-	char type;			/* what to do */
-	short from, to;			/* what to do it to */
-	struct redir *next;		/* what else to do (reverse order) */
+    char type;			/* what to do */
+    short from, to;			/* what to do it to */
+    struct redir *next;		/* what else to do (reverse order) */
 };
+/*e: struct redir */
+/*s: constant NSTATUS */
 #define	NSTATUS	ERRMAX			/* length of status (from plan 9) */
+/*e: constant NSTATUS */
+/*s: constant ROPEN */
 /*
  * redir types
  */
 #define	ROPEN	1			/* dup2(from, to); close(from); */
+/*e: constant ROPEN */
+/*s: constant RDUP */
 #define	RDUP	2			/* dup2(from, to); */
+/*e: constant RDUP */
+/*s: constant RCLOSE */
 #define	RCLOSE	3			/* close(from); */
+/*e: constant RCLOSE */
+/*s: struct thread */
 struct thread{
-	union code *code;		/* code for this thread */
-	int pc;				/* code[pc] is the next instruction */
-	struct list *argv;		/* argument stack */
-	struct redir *redir;		/* redirection stack */
-	struct redir *startredir;	/* redir inheritance point */
-	struct var *local;		/* list of local variables */
-	char *cmdfile;			/* file name in Xrdcmd */
-	struct io *cmdfd;		/* file descriptor for Xrdcmd */
-	int iflast;			/* static `if not' checking */
-	int eof;			/* is cmdfd at eof? */
-	int iflag;			/* interactive? */
-	int lineno;			/* linenumber */
-	int pid;			/* process for Xpipewait to wait for */
-	char status[NSTATUS];		/* status for Xpipewait */
-	tree *treenodes;		/* tree nodes created by this process */
-	thread *ret;		/* who continues when this finishes */
+    union code *code;		/* code for this thread */
+    int pc;				/* code[pc] is the next instruction */
+    struct list *argv;		/* argument stack */
+    struct redir *redir;		/* redirection stack */
+    struct redir *startredir;	/* redir inheritance point */
+    struct var *local;		/* list of local variables */
+    char *cmdfile;			/* file name in Xrdcmd */
+    struct io *cmdfd;		/* file descriptor for Xrdcmd */
+    int iflast;			/* static `if not' checking */
+    int eof;			/* is cmdfd at eof? */
+    int iflag;			/* interactive? */
+    int lineno;			/* linenumber */
+    int pid;			/* process for Xpipewait to wait for */
+    char status[NSTATUS];		/* status for Xpipewait */
+    tree *treenodes;		/* tree nodes created by this process */
+    thread *ret;		/* who continues when this finishes */
 };
+/*e: struct thread */
+/*s: global runq */
 thread *runq;
+/*e: global runq */
 code *codecopy(code*);
+/*s: global codebuf */
 code *codebuf;				/* compiler output */
+/*e: global codebuf */
+/*s: global ntrap */
 int ntrap;				/* number of outstanding traps */
+/*e: global ntrap */
+/*s: global trap */
 int trap[NSIG];				/* number of outstanding traps per type */
+/*e: global trap */
+/*s: struct builtin */
 struct builtin{
-	char *name;
-	void (*fnc)(void);
+    char *name;
+    void (*fnc)(void);
 };
+/*e: struct builtin */
 extern struct builtin Builtin[];
+/*s: global eflagok */
 int eflagok;			/* kludge flag so that -e doesn't exit in startup */
+/*e: global eflagok */
+/*s: global havefork */
 int havefork;
+/*e: global havefork */
 
 void execcd(void), execwhatis(void), execeval(void), execexec(void);
 int execforkexec(void);
 void execexit(void), execshift(void);
 void execwait(void), execumask(void), execdot(void), execflag(void);
 void execfunc(var*), execcmds(io *);
+/*e: rc/exec.h */

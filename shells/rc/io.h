@@ -1,12 +1,21 @@
+/*s: rc/io.h */
+/*s: constant EOF (rc/io.h) */
 #define	EOF	(-1)
+/*e: constant EOF (rc/io.h) */
+/*s: constant NBUF */
 #define	NBUF	512
+/*e: constant NBUF */
 
+/*s: struct io */
 struct io{
-	int	fd;
-	uchar	*bufp, *ebuf, *strp;
-	uchar	buf[NBUF];
+    int	fd;
+    uchar	*bufp, *ebuf, *strp;
+    uchar	buf[NBUF];
 };
+/*e: struct io */
+/*s: global err */
 io *err;
+/*e: global err */
 
 io *openfd(int), *openstr(void), *opencore(char *, int);
 int emptybuf(io*);
@@ -26,3 +35,4 @@ void pcmd(io*, tree*);
 void pval(io*, word*);
 void pfnc(io*, thread*);
 void pfmt(io*, char*, ...);
+/*e: rc/io.h */
