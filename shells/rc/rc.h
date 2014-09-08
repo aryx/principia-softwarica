@@ -3,7 +3,7 @@
  * Please don't litter the code with ifdefs.  The five below should be enough.
  */
 
-#ifndef Unix
+//#ifndef Unix
 /* plan 9 */
 #include <u.h>
 #include <libc.h>
@@ -12,23 +12,24 @@
 #define	SIGINT	2
 #define	SIGQUIT	3
 
-#define fcntl(fd, op, arg)	/* unix compatibility */
-#define F_SETFD
-#define FD_CLOEXEC
-#else
-#include "unix.h"
-#endif
+//#define fcntl(fd, op, arg) /* unix compatibility */
+//#define F_SETFD  
+//#define FD_CLOEXEC 
+//#else
+//#include "unix.h"
+//#endif
 
 #ifndef ERRMAX
 #define ERRMAX 128
 #endif
 
 #define	YYMAXDEPTH	500
-#ifndef YYPREFIX
+
+//#ifndef YYPREFIX
 #ifndef PAREN
 #include "x.tab.h"
 #endif
-#endif
+//#endif
 
 typedef struct tree tree;
 typedef struct word word;
@@ -40,10 +41,10 @@ typedef struct redir redir;
 typedef struct thread thread;
 typedef struct builtin builtin;
 
-#ifndef Unix
+//#ifndef Unix
 #pragma incomplete word
 #pragma incomplete io
-#endif
+//#endif
 
 struct tree{
 	int	type;

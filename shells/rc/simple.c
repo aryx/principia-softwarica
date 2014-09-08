@@ -146,7 +146,7 @@ dochdir(char *word)
 		if(wdirfd==-2)	/* try only once */
 			wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
 		if(wdirfd>=0) {
-			fcntl(wdirfd, F_SETFD, FD_CLOEXEC);
+			//fcntl(wdirfd, F_SETFD, FD_CLOEXEC);
 			write(wdirfd, word, strlen(word));
 		}
 	}
