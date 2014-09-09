@@ -1011,9 +1011,9 @@ l1:
 		peekc = c;
 		return '.';
 
-	talph:
 	case '_':
 	case '@':
+	talph:
 		cp = symb;
 
 	aloop:

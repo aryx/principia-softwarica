@@ -4,8 +4,8 @@
 
 #include "386/8.out.h"
 
-typedef	struct	Sym8a	Sym;
-typedef	struct	Ref8a	Ref;
+typedef	struct	Sym	Sym;
+typedef	struct	Ref	Ref;
 typedef	struct	Io	Io;
 typedef	struct	Hist	Hist;
 typedef	struct	Gen	Gen;
@@ -25,7 +25,7 @@ typedef	struct	Gen2 	Gen2;
 #define	STRINGSZ	200
 #define	NMACRO		10
 
-struct	Sym8a
+struct	Sym
 {
 	Sym*	link;
 
@@ -39,7 +39,7 @@ struct	Sym8a
 };
 #define	S	((Sym*)0)
 
-struct	Ref8a
+struct	Ref
 {
 	int	class;
 };
