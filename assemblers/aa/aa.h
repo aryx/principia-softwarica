@@ -3,16 +3,35 @@
 #include <bio.h>
 #include <ctype.h>
 
-// NSYM
-#include "386/8.out.h"
-
 #pragma	lib	"../aa/aa.a$O"
 
-// most of this file was originally copy pasted in 8a/a.h, 5a/a.h, etc
+// aa.h  is the generic part, the specific #include xxx/yyy.out.h is done in a.h
+//#include "386/8.out.h"
+//#include "mips/v.out.h"
+//#include "arm/5.out.h"
+
+// was originally in a xxx/y.out.h (and was always the same in all archi)
+//
+#define	NSYM	50
+
+// was originally in a xxx/y.out.h (and was always the same in all archi)
+/*
+ * this is the simulated IEEE floating point
+ */
+typedef	struct	ieee	Ieee;
+struct	ieee
+{
+	long	l;	/* contains ls-man	0xffffffff */
+	long	h;	/* contains sign	0x80000000
+				    exp		0x7ff00000
+				    ms-man	0x000fffff */
+};
+
+// most of the content below was originally copy pasted in 8a/a.h, 5a/a.h, etc
 
 typedef	struct	Sym	Sym;
 typedef	struct	Ref	Ref;
-typedef struct Io Io;
+typedef struct  Io Io;
 typedef	struct	Hist	Hist;
 
 #define	NINCLUDE	10
