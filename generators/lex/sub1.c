@@ -1,4 +1,5 @@
-# include "ldefs.h"
+#include "ldefs.h"
+
 uchar *
 getl(uchar *p)	/* return next line of input, throw away trailing '\n' */
 	/* returns 0 if eof is had immediately */
@@ -36,17 +37,12 @@ error(char *s,...)
 	va_start(argl, s);
 	printerr("Error", s, argl);
 	va_end(argl);
-# ifdef DEBUG
 	if(debug && sect != ENDSECTION) {
 		sect1dump();
 		sect2dump();
 	}
-# endif
-	if(
-# ifdef DEBUG
-		debug ||
-# endif
-		report == 1) statistics();
+	if(debug ||	report == 1) 
+      statistics();
 	exits("error");	/* error return code */
 }
 
@@ -327,11 +323,9 @@ mn2(int a, int d, uintptr c)
 		parent[d] = tptr;
 		nullstr[tptr] = nullstr[d];
 		break;
-# ifdef DEBUG
 	default:
 		warning("bad switch mn2 %d %d",a,d);
 		break;
-# endif
 		}
 	if(tptr > treesize)
 		error("Parse tree too big %s",(treesize == TREESIZE?"\nTry using %e num":""));
@@ -381,14 +375,14 @@ mn1(int a, int d)
 	case S2FINAL:
 		nullstr[tptr] = TRUE;
 		break;
-# ifdef DEBUG
+//#ifdef DEBUG
 	case FINAL:
 	case S1FINAL:
 		break;
 	default:
 		warning("bad switch mn1 %d %d",a,d);
 		break;
-# endif
+//# endif
 	}
 	if(tptr > treesize)
 		error("Parse tree too big %s",(treesize == TREESIZE?"\nTry using %e num":""));
@@ -403,11 +397,9 @@ mn0(int a)
 	nullstr[tptr] = 0;
 	if(a >= NCH) switch(a){
 	case RNULLS: nullstr[tptr] = TRUE; break;
-# ifdef DEBUG
 	default:
 		warning("bad switch mn0 %d",a);
 		break;
-# endif
 	}
 	if(tptr > treesize)
 		error("Parse tree too big %s",(treesize == TREESIZE?"\nTry using %e num":""));
@@ -457,15 +449,12 @@ dupl(int n)
 		return(mn2(i,dupl(left[n]),right[n]));
 	case BAR: case RNEWE: case RCAT: case DIV:
 		return(mn2(i,dupl(left[n]),dupl(right[n])));
-# ifdef DEBUG
 	default:
 		warning("bad switch dupl %d",n);
-# endif
 	}
 	return(0);
 }
 
-# ifdef DEBUG
 void
 allprint(int c)
 {
@@ -561,11 +550,11 @@ treedump(void)
 				break;
 			case RCCL:
 				print("ccl ");
-				allprint(ptr[t]);
+				allprint((int)ptr[t]); // pad added cast, correct?
 				break;
 			case RNCCL:
 				print("nccl ");
-				allprint(ptr[t]);
+				allprint((int)ptr[t]); // pad added cast, correct?
 				break;
 			case DIV:
 				print("/ %d %d",left[t],right[t]);
@@ -618,4 +607,4 @@ treedump(void)
 		print("\n");
 	}
 }
-# endif
+

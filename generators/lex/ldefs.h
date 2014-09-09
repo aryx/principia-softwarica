@@ -1,68 +1,76 @@
-# include <u.h>
-# include <libc.h>
-# include <ctype.h>
-# include <bio.h>
-# define PP 1
+#include <u.h>
+#include <libc.h>
+#include <ctype.h>
+#include <bio.h>
 
-# define CWIDTH 8
-# define CMASK 0377
-# define NCH 256
+#define PP 1
+
+#define PC 1
+#define PS 1
+
+#define CWIDTH 8
+#define CMASK 0377
+#define NCH 256
 
 
-# define TOKENSIZE 1000
-# define DEFSIZE 40
-# define DEFCHAR 1000
-# define STARTCHAR 100
-# define STARTSIZE 256
-# define CCLSIZE 1000
+#define TOKENSIZE 1000
+#define DEFSIZE 40
+#define DEFCHAR 1000
+#define STARTCHAR 100
+#define STARTSIZE 256
+#define CCLSIZE 1000
 
-# define TREESIZE 1000
-# define NSTATES 500
-# define MAXPOS 2500
-# define NTRANS 2000
-# define NOUTPUT 5000
+#define TREESIZE 1000
+#define NSTATES 500
+#define MAXPOS 2500
+#define NTRANS 2000
+#define NOUTPUT 5000
 
-# define NACTIONS 100
-# define ALITTLEEXTRA 30
+#define NACTIONS 100
+#define ALITTLEEXTRA 30
 
-# define RCCL NCH+90
-# define RNCCL NCH+91
-# define RSTR NCH+92
-# define RSCON NCH+93
-# define RNEWE NCH+94
-# define FINAL NCH+95
-# define RNULLS NCH+96
-# define RCAT NCH+97
-# define STAR NCH+98
-# define PLUS NCH+99
-# define QUEST NCH+100
-# define DIV NCH+101
-# define BAR NCH+102
-# define CARAT NCH+103
-# define S1FINAL NCH+104
-# define S2FINAL NCH+105
+#define RCCL NCH+90
+#define RNCCL NCH+91
+#define RSTR NCH+92
+#define RSCON NCH+93
+#define RNEWE NCH+94
+#define FINAL NCH+95
+#define RNULLS NCH+96
+#define RCAT NCH+97
+#define STAR NCH+98
+#define PLUS NCH+99
+#define QUEST NCH+100
+#define DIV NCH+101
+#define BAR NCH+102
+#define CARAT NCH+103
+#define S1FINAL NCH+104
+#define S2FINAL NCH+105
 
-# define DEFSECTION 1
-# define RULESECTION 2
-# define ENDSECTION 5
-# define TRUE 1
-# define FALSE 0
+#define DEFSECTION 1
+#define RULESECTION 2
+#define ENDSECTION 5
 
-# define PC 1
-# define PS 1
+#define TRUE 1
+#define FALSE 0
 
-# ifdef DEBUG
-# define LINESIZE 110
-extern int yydebug;
+
+//#define DEBUG 1
+
+//#ifdef DEBUG
 extern int debug;		/* 1 = on */
 extern int charc;
-# endif
+#define LINESIZE 110
+//#endif
 
-# ifdef DEBUG
+#ifdef DEBUG
+extern int yydebug;
+#endif
+
+#ifdef DEBUG
 extern int	freturn(int);
-# else
-# define freturn(s) s
-# endif
+#else
+#define freturn(s) s
+#endif
 
 extern int sargc;
 extern char **sargv;
@@ -133,6 +141,8 @@ extern long rcount;
 extern int *verify, *advance, *stoff;
 extern int scon;
 extern uchar *psave;
+
+extern int nine;
 
 extern void	acompute(int);
 extern void	add(int **, int);

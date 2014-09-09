@@ -14,16 +14,20 @@ static void	get1core(void);
 static void	get2core(void);
 static void	get3core(void);
 
+#ifdef DEBUG
+#define SETYY() yydebug = TRUE
+#else
+#define SETYY() nil
+#endif
+
 void
 main(int argc, char **argv)
 {
 	int i;
 
 	ARGBEGIN {
-# ifdef DEBUG
 		case 'd': debug++; break;
-		case 'y': yydebug = TRUE; break;
-# endif
+		case 'y': SETYY(); break;
 		case 't': case 'T':
 			Binit(&fout, 1, OWRITE);
 			errorf= 2;
@@ -76,21 +80,15 @@ main(int argc, char **argv)
 	get2core();
 	ptail();
 	mkmatch();
-# ifdef DEBUG
 	if(debug) pccl();
-# endif
 	sect  = ENDSECTION;
 	if(tptr>0)cfoll(tptr-1);
-# ifdef DEBUG
 	if(debug)pfoll();
-# endif
 	cgoto();
-# ifdef DEBUG
 	if(debug){
 		print("Print %d states:\n",stnum+1);
 		for(i=0;i<=stnum;i++)stprt(i);
 		}
-# endif
 		/* may be disposed of: positions, tmpstat, foll, state, name, left, right, parent, ccl, stchar, sname */
 		/* may be gotten: verify, advance, stoff */
 	free2core();
@@ -98,9 +96,8 @@ main(int argc, char **argv)
 	layout();
 		/* may be disposed of: verify, advance, stoff, nexts, nchar,
 			gotof, atable, ccpackflg, sfall */
-# ifdef DEBUG
-	free3core();
-# endif
+    // was in #ifdef DEBUG before with no if(debug), so ok like this?
+	if(debug) free3core();
 	fother = Bopen(cname,OREAD);
 	if(fother == 0)
 		error("Lex driver missing, file %s: %r",cname);
@@ -109,11 +106,8 @@ main(int argc, char **argv)
 
 	Bterm(fother);
 	Bterm(&fout);
-	if(
-# ifdef DEBUG
-		debug   ||
-# endif
-			report == 1)statistics();
+	if(debug ||	report == 1)
+        statistics();
 	if (fin)
 		Bterm(fin);
 	exits(0);	/* success return code */
@@ -189,7 +183,7 @@ get3core(void)
 	if(verify == 0 || advance == 0 || stoff == 0)
 		error("Too little core for final packing");
 }
-# ifdef DEBUG
+
 static void
 free3core(void){
 	free(advance);
@@ -202,7 +196,7 @@ free3core(void){
 	free(sfall);
 	free(cpackflg);
 }
-# endif
+
 void *
 myalloc(int a, int b)
 {

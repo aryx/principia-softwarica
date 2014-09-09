@@ -1,4 +1,5 @@
-# include "ldefs.h"
+#include "ldefs.h"
+
 void
 cfoll(int v)
 {
@@ -12,12 +13,12 @@ cfoll(int v)
 				tmpstat[j] = FALSE;
 			count = 0;
 			follow(v);
-# ifdef PP
+//#ifdef PP (true in ldefs.h)
 			padd(foll,v);		/* packing version */
-# endif
-# ifndef PP
-			add(foll,v);		/* no packing version */
-# endif
+//#endif
+//#ifndef PP
+//			add(foll,v);		/* no packing version */
+//#endif
 			if(i == RSTR) cfoll(left[v]);
 			else if(i == RCCL || i == RNCCL){	/* compress ccl list */
 				for(j=1; j<NCH;j++)
@@ -38,14 +39,12 @@ cfoll(int v)
 					error("Too many packed character classes");
 				ptr[v] = p;
 				name[v] = RCCL;	/* RNCCL eliminated */
-# ifdef DEBUG
 				if(debug && *p){
 					print("ccl %d: %d",v,*p++);
 					while(*p)
 						print(", %d",*p++);
 					print("\n");
 				}
-# endif
 			}
 			break;
 		case CARAT:
@@ -58,18 +57,17 @@ cfoll(int v)
 			cfoll(left[v]);
 			cfoll(right[v]);
 			break;
-# ifdef DEBUG
+//#ifdef DEBUG
 		case FINAL:
 		case S1FINAL:
 		case S2FINAL:
 			break;
 		default:
 			warning("bad switch cfoll %d",v);
-# endif
+//#endif
 	}
 }
 
-# ifdef DEBUG
 void
 pfoll(void)
 	{
@@ -88,7 +86,6 @@ pfoll(void)
 			}
 		}
 }
-# endif
 
 void
 add(int **array, int n)
@@ -141,10 +138,8 @@ follow(int v)
 		case RSCON: case CARAT: 
 			follow(p);
 			break;
-# ifdef DEBUG
 		default:
 			warning("bad switch follow %d",p);
-# endif
 	}
 }
 
@@ -187,10 +182,8 @@ first(int v)	/* calculate set of positions with v as root which can be active in
 			if(nullstr[left[v]])
 				first(right[v]);
 			break;
-# ifdef DEBUG
 		default:
 			warning("bad switch first %d",v);
-# endif
 	}
 }
 
@@ -211,13 +204,11 @@ cgoto(void)
 		count = 0;
 		if(tptr > 0)first(tptr-1);
 		add(state,stnum);
-# ifdef DEBUG
 		if(debug){
 			if(stnum > 1)
 				print("%s:\n",sname[stnum/2]);
 			pstate(stnum);
 		}
-# endif
 		stnum++;
 	}
 	stnum--;
@@ -248,7 +239,8 @@ cgoto(void)
 			case RSTR:
 				symbol[right[curpos]] = TRUE;
 				break;
-# ifdef DEBUG
+
+//# ifdef DEBUG
 			case RNULLS:
 			case FINAL:
 			case S1FINAL:
@@ -257,10 +249,9 @@ cgoto(void)
 			default:
 				warning("bad switch cgoto %d state %d",curpos,s);
 				break;
-# endif
+//# endif
 			}
 		}
-# ifdef DEBUG
 		if(debug){
 			print("State %d transitions on:\n\t",s);
 			charc = 0;
@@ -273,7 +264,6 @@ cgoto(void)
 			}
 			print("\n");
 		}
-# endif
 		/* for each char, calculate next state */
 		n = 0;
 		for(i = 1; i<NCH; i++){
@@ -285,9 +275,7 @@ cgoto(void)
 					if(stnum >= nstates)
 						error("Too many states %s",(nstates == NSTATES ? "\nTry using %n num":""));
 					add(state,++stnum);
-# ifdef DEBUG
 					if(debug)pstate(stnum);
-# endif
 					tch[n] = i;
 					tst[n++] = stnum;
 				} else {		/* xstate >= 0 ==> state exists */
@@ -410,9 +398,7 @@ packtrans(int st, uchar *tch, int *tst, int cnt, int tryit)
 		for(i=1;i<NCH;i++)
 			if(temp[i] != -1)k++;
 		if(k <cnt){	/* compress by char */
-# ifdef DEBUG
 			if(debug) print("use compression  %d,  %d vs %d\n",st,k,cnt);
-# endif
 			k = 0;
 			for(i=1;i<NCH;i++)
 				if(temp[i] != -1){
@@ -420,12 +406,12 @@ packtrans(int st, uchar *tch, int *tst, int cnt, int tryit)
 					swork[k++] = (temp[i] == -2 ? -1 : temp[i]);
 				}
 			cwork[k] = 0;
-# ifdef PC
+//#ifdef PC (true in ldefs.h)
 			ach = cwork;
 			ast = swork;
 			cnt = k;
 			cpackflg[st] = TRUE;
-# endif
+//#endif
 		}
 	}
 	for(i=0; i<st; i++){	/* get most similar state */
@@ -460,10 +446,10 @@ packtrans(int st, uchar *tch, int *tst, int cnt, int tryit)
 		}
 	}
 	/* cmin = state "most like" state st */
-# ifdef DEBUG
-	if(debug)print("select st %d for st %d diff %d\n",cmin,st,cval);
-# endif
-# ifdef PS
+	if(debug)
+      print("select st %d for st %d diff %d\n",cmin,st,cval);
+
+//#ifdef PS (true in ldefs.h)
 	if(cmin != -1){ /* if we can use st cmin */
 		gotof[st] = nptr;
 		k = 0;
@@ -501,7 +487,8 @@ packtrans(int st, uchar *tch, int *tst, int cnt, int tryit)
 		nexts[gotof[st]] = cnt = k;
 		nchar[nptr++] = 0;
 	} else {
-# endif
+//#endif
+
 nopack:
 	/* stick it in */
 		gotof[st] = nptr;
@@ -511,9 +498,9 @@ nopack:
 			nexts[++nptr] = ast[i];
 		}
 		nchar[nptr++] = 0;
-# ifdef PS
+//#ifdef PS
 	}
-# endif
+//#endif
 	if(cnt < 1){
 		gotof[st] = -1;
 		nptr--;
@@ -522,7 +509,6 @@ nopack:
 			error("Too many transitions %s",(ntrans==NTRANS?"\nTry using %a num":""));
 }
 
-# ifdef DEBUG
 void
 pstate(int s)
 {
@@ -538,7 +524,6 @@ pstate(int s)
 	}
 	print("\n");
 }
-# endif
 
 int
 member(int d, uchar *t)
@@ -554,7 +539,6 @@ member(int d, uchar *t)
 	return(0);
 }
 
-# ifdef DEBUG
 void
 stprt(int i)
 {
@@ -587,7 +571,6 @@ stprt(int i)
 	}
 	print("\n");
 }
-# endif
 
 void
 acompute(int s)	/* compute action list = set of poss. actions */
@@ -612,9 +595,7 @@ acompute(int s)	/* compute action list = set of poss. actions */
 	}
 	atable[s] = -1;
 	if(k < 1 && n < 1) return;
-# ifdef DEBUG
 	if(debug) print("final %d actions:",s);
-# endif
 	/* sort action list */
 	for(i=0; i<k; i++)
 		for(j=i+1;j<k;j++)
@@ -628,34 +609,26 @@ acompute(int s)	/* compute action list = set of poss. actions */
 		if(temp[i] == temp[i+1]) temp[i] = 0;
 	/* copy to permanent quarters */
 	atable[s] = aptr;
-# ifdef DEBUG
-	Bprint(&fout,"/* actions for state %d */",s);
-# endif
+    if(debug) // was in #ifdef DEBUG with no if(debug) before, so good like this?
+    	Bprint(&fout,"/* actions for state %d */",s);
 	Bputc(&fout, '\n');
 	for(i=0;i<k;i++)
 		if(temp[i] != 0){
 			Bprint(&fout,"%d,\n",temp[i]);
-# ifdef DEBUG
 			if(debug)
 				print("%d ",temp[i]);
-# endif
 			aptr++;
 		}
 	for(i=0;i<n;i++){		/* copy fall back actions - all neg */
 		Bprint(&fout,"%d,\n",neg[i]);
 		aptr++;
-# ifdef DEBUG
 		if(debug)print("%d ",neg[i]);
-# endif
 	}
-# ifdef DEBUG
 	if(debug)print("\n");
-# endif
 	Bprint(&fout,"0,\n");
 	aptr++;
 }
 
-# ifdef DEBUG
 void
 pccl(void) {
 	/* print character class sets */
@@ -686,7 +659,6 @@ pccl(void) {
 	}
 	print("\n");
 }
-# endif
 
 void
 mkmatch(void)
@@ -724,7 +696,6 @@ layout(void)
 		bot = j;
 		while(nchar[j])j++;
 		top = j - 1;
-# ifdef DEBUG
 		if (debug) {
 			print("State %d: (layout)\n", i);
 			for(j=bot; j<=top;j++) {
@@ -733,12 +704,9 @@ layout(void)
 			}
 			print("\n");
 		}
-# endif
 		while(verify[omin+NCH]) omin++;
 		startup = omin;
-# ifdef DEBUG
 		if (debug) print("bot,top %d, %d startup begins %d\n",bot,top,startup);
-# endif
 		do {
 			startup += 1;
 			if(startup > outsize - NCH)
@@ -749,9 +717,7 @@ layout(void)
 			}
 		} while (j <= top);
 		/* have found place */
-# ifdef DEBUG
 		if (debug) print(" startup going to be %d\n", startup);
-# endif
 		for(j = bot; j<= top; j++){
 			k = startup + nchar[j];
 			verify[k] = i+1;			/* state number + 1*/
@@ -790,9 +756,8 @@ layout(void)
 		if(atable[i] != -1)
 			Bprint(&fout,"yyvstop+%d,",atable[i]);
 		else Bprint(&fout,"0,\t");
-# ifdef DEBUG
-		Bprint(&fout,"\t\t/* state %d */",i);
-# endif
+        if(debug) // was just in ifdef DEBUG before with no if(debug), good?
+     		Bprint(&fout,"\t\t/* state %d */",i);
 		Bputc(&fout, '\n');
 	}
 	Bprint(&fout,"0,\t0,\t0};\n");
@@ -824,7 +789,7 @@ layout(void)
 	Bprint(&fout,"0};\n");
 }
 
-# ifdef PP
+//#ifdef PP (true in ldefs.h)
 void
 padd(int **array, int n)
 {
@@ -848,4 +813,4 @@ padd(int **array, int n)
 	}
 	add(array,n);
 }
-# endif
+//#endif
