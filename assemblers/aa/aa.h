@@ -1,3 +1,4 @@
+/*s: assemblers/aa/aa.h */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -20,73 +21,113 @@ typedef	struct	Ref	Ref;
 typedef struct  Io Io;
 typedef	struct	Hist	Hist;
 
+/*s: constant MAXALIGN */
 #define MAXALIGN 7
+/*e: constant MAXALIGN */
+/*s: constant NSYMB */
 #define	NSYMB		500
+/*e: constant NSYMB */
+/*s: constant BUFSIZ */
 #define	BUFSIZ		8192
+/*e: constant BUFSIZ */
+/*s: constant HISTSZ */
 #define	HISTSZ		20
+/*e: constant HISTSZ */
+/*s: constant NINCLUDE */
 #define	NINCLUDE	10
+/*e: constant NINCLUDE */
+/*s: constant NHUNK */
 #define	NHUNK		10000
+/*e: constant NHUNK */
+/*s: constant EOF */
 #define	EOF		(-1)
+/*e: constant EOF */
+/*s: constant IGN */
 #define	IGN		(-2)
+/*e: constant IGN */
+/*s: function GETC */
 #define	GETC()		((--fi.c < 0)? filbuf(): *fi.p++ & 0xff)
+/*e: function GETC */
+/*s: constant NHASH */
 #define	NHASH		503
+/*e: constant NHASH */
+/*s: constant STRINGSZ */
 #define	STRINGSZ	200
+/*e: constant STRINGSZ */
 
 
+/*s: struct Sym */
 struct	Sym
 {
-	Sym*	link;
+    Sym*	link;
 
-	Ref*	ref; // unused for 5a, matters?
+    Ref*	ref; // unused for 5a, matters?
 
-	char*	macro;
-	long	value; // vlong in va!!
-	ushort	type;
-	char	*name;
-	char	sym;
+    char*	macro;
+    long	value; // vlong in va!!
+    ushort	type;
+    char	*name;
+    char	sym;
 };
+/*e: struct Sym */
+/*s: constant S */
 #define	S	((Sym*)0)
+/*e: constant S */
 
+/*s: struct Ref */
 // only for 8a actually
 struct	Ref
 {
-	int	class;
+    int	class;
 };
+/*e: struct Ref */
 
+/*s: struct Fi */
 struct Fi
 {
-	char*	p;
-	int	c;
+    char*	p;
+    int	c;
 };
+/*e: struct Fi */
 extern struct Fi fi;
 
+/*s: struct Io */
 struct	Io
 {
-	Io*	link;
-	char	b[BUFSIZ];
-	char*	p;
-	short	c;
-	short	f;
+    Io*	link;
+    char	b[BUFSIZ];
+    char*	p;
+    short	c;
+    short	f;
 };
+/*e: struct Io */
+/*s: constant I */
 #define	I	((Io*)0)
+/*e: constant I */
 
+/*s: struct Htab */
 struct Htab
 {
-	Sym*	sym;
-	short	type;
+    Sym*	sym;
+    short	type;
 };
+/*e: struct Htab */
 extern struct Htab h[NSYM];
 
+/*s: struct Hist */
 // Gen, Gen2?
 
 struct	Hist
 {
-	Hist*	link;
-	char*	name;
-	long	line;
-	long	offset;
+    Hist*	link;
+    char*	name;
+    long	line;
+    long	offset;
 };
+/*e: struct Hist */
+/*s: constant H */
 #define	H	((Hist*)0)
+/*e: constant H */
 
 
 
@@ -156,12 +197,15 @@ void	errorexit(void);
 // from lexbody.c
 void ieeedtod(Ieee *ieee, double native);
 
+/*s: enum _anon_ (assemblers/aa/aa.h) */
 /*
  *	system-dependent stuff from ../cc/compat.c
  */
 enum	/* keep in synch with ../cc/cc.h */
 {
-	Plan9	= 1<<0,
-	Unix	= 1<<1,
-	Windows	= 1<<2
+    Plan9	= 1<<0,
+    Unix	= 1<<1,
+    Windows	= 1<<2
 };
+/*e: enum _anon_ (assemblers/aa/aa.h) */
+/*e: assemblers/aa/aa.h */

@@ -1,38 +1,49 @@
+/*s: assemblers/8a/a.h */
 #include "../aa/aa.h"
 #include "386/8.out.h"
 
 typedef	struct	Gen	Gen;
 typedef	struct	Gen2 	Gen2;
 
+/*s: constant FPCHIP */
 #define	FPCHIP		1
+/*e: constant FPCHIP */
+/*s: constant NMACRO */
 #define	NMACRO		10
+/*e: constant NMACRO */
 
 
+/*s: struct Gen */
 struct	Gen
 {
-	double	dval;
-	char	sval[8];
-	long	offset;
-	long	offset2;
-	Sym*	sym;
-	short	type;
-	short	index;
-	short	scale;
+    double	dval;
+    char	sval[8];
+    long	offset;
+    long	offset2;
+    Sym*	sym;
+    short	type;
+    short	index;
+    short	scale;
 };
+/*e: struct Gen */
+/*s: struct Gen2 */
 struct	Gen2
 {
-	Gen	from;
-	Gen	to;
+    Gen	from;
+    Gen	to;
 };
+/*e: struct Gen2 */
 
 
+/*s: enum _anon_ (assemblers/8a/a.h) */
 enum
 {
-	CLAST,
-	CMACARG,
-	CMACRO,
-	CPREPROC,
+    CLAST,
+    CMACARG,
+    CMACRO,
+    CPREPROC,
 };
+/*e: enum _anon_ (assemblers/8a/a.h) */
 
 
 extern	char*	Dlist[30];
@@ -93,3 +104,4 @@ int	mydup(int, int);
 int	myfork(void);
 int	mypipe(int*);
 void*	mysbrk(ulong);
+/*e: assemblers/8a/a.h */
