@@ -64,8 +64,8 @@ graph_windows:
 graph_windows2:
 	~/pfff/codegraph -derived_data -lang c -build include/ lib_graphics/ windows/
 
-NWDIRS=kernel windows shells    builders   compilers
-#TODO: assembler linker ...
+NWDIRS=kernel windows shells    compilers linkers    builders debuggers
+#TODO: assembler ... profiler ...  lex yacc
 
 sync:
 	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i sync || exit 1; done 
