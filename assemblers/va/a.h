@@ -8,6 +8,7 @@ typedef	struct	Sym	Sym;
 typedef	struct	Gen	Gen;
 typedef	struct	Io	Io;
 typedef	struct	Hist	Hist;
+typedef struct  Ref Ref; // only for 8a originally
 
 #define	MAXALIGN	7
 #define	FPCHIP		1
@@ -26,13 +27,25 @@ typedef	struct	Hist	Hist;
 struct	Sym
 {
 	Sym*	link;
+
+	Ref*	ref; // not in original 5a/a.h
+
 	char*	macro;
-	vlong	value;
+
+//	vlong	value; // for compatibility with aa/, MAYBE BAD
+    long value;
+
 	ushort	type;
 	char	*name;
 	char	sym;
 };
 #define	S	((Sym*)0)
+
+// only for 8a actually
+struct	Ref
+{
+	int	class;
+};
 
 struct Fi
 {
@@ -74,7 +87,9 @@ struct	Hist
 	Hist*	link;
 	char*	name;
 	long	line;
-	vlong	offset;
+
+//	vlong	offset; // MAYBE BAD, for compatibility with aa
+    long offset; 
 };
 #define	H	((Hist*)0)
 

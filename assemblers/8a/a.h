@@ -1,13 +1,14 @@
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
+
 #include "386/8.out.h"
 
 typedef	struct	Sym8a	Sym;
 typedef	struct	Ref8a	Ref;
-typedef	struct	Gen	Gen;
 typedef	struct	Io	Io;
 typedef	struct	Hist	Hist;
+typedef	struct	Gen	Gen;
 typedef	struct	Gen2 	Gen2;
 
 #define	MAXALIGN	7
@@ -27,7 +28,9 @@ typedef	struct	Gen2 	Gen2;
 struct	Sym8a
 {
 	Sym*	link;
+
 	Ref*	ref;
+
 	char*	macro;
 	long	value;
 	ushort	type;
@@ -58,12 +61,15 @@ struct	Io
 };
 #define	I	((Io*)0)
 
+
 struct Htab
 {
 	Sym*	sym;
 	short	type;
 };
 extern struct Htab h[NSYM];
+
+
 
 struct	Gen
 {
@@ -129,48 +135,56 @@ extern	char*	thestring;
 extern	long	thunk;
 extern	Biobuf	obuf;
 
-void*	allocn(void*, long, long);
-void	errorexit(void);
-void	pushio(void);
-void	newio(void);
-void	newfile(char*, int);
-Sym*	slookup(char*);
-Sym*	lookup(void);
-void	syminit(Sym*);
 long	yylex(void);
-int	getc(void);
-int	getnsc(void);
-void	unget(int);
 int	escchar(int);
 void	cinit(void);
 void	checkscale(int);
-void	pinit(char*);
 void	cclean(void);
 int	isreg(Gen*);
 void	outcode(int, Gen2*);
 void	outhist(void);
 void	zaddr(Gen*, int);
 void	zname(char*, int, int);
-void	ieeedtod(Ieee*, double);
-int	filbuf(void);
 Sym*	getsym(void);
+int	assemble(char*);
+
+// used by lexbody.c
+void	gethunk(void);
+int	getnsc(void);
+void	linehist(char*, int);
+Sym*	lookup(void);
+void	syminit(Sym*);
+int	filbuf(void);
 void	domacro(void);
+void	macexpand(Sym*, char*);
+void	prfile(long);
+
+// for lexbody
+void	setinclude(char*);
+void*	allocn(void*, long, long);
+void	errorexit(void);
+Sym*	slookup(char*);
+void	pinit(char*);
+void	ieeedtod(Ieee*, double);
+void	dodefine(char*);
+void	yyerror(char*, ...);
+int	yyparse(void);
+
+// for macbody
+int	getc(void);
+void	unget(int);
 void	macund(void);
 void	macdef(void);
-void	macexpand(Sym*, char*);
 void	macinc(void);
 void	macprag(void);
 void	maclin(void);
 void	macif(int);
 void	macend(void);
-void	dodefine(char*);
-void	prfile(long);
-void	linehist(char*, int);
-void	gethunk(void);
-void	yyerror(char*, ...);
-int	yyparse(void);
-void	setinclude(char*);
-int	assemble(char*);
+void	pushio(void);
+void	newio(void);
+void	newfile(char*, int);
+
+// for macbody, was in lexbody
 
 /*
  *	system-dependent stuff from ../cc/compat.c

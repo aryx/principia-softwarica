@@ -691,6 +691,264 @@ outhist(void)
 	}
 }
 
-#include "../cc/lexbody"
-#include "../cc/macbody"
-#include "../cc/compat"
+// now use aa.a8
+//#include "../cc/lexbody"
+//#include "../cc/compat"
+
+// used to be in ../cc/lexbody and factorized between assemblers by
+// using #include, but ugly, so I copy pasted the function for now
+//
+long
+yylex(void)
+{
+	int c, c1;
+	char *cp;
+	Sym *s;
+
+	c = peekc;
+	if(c != IGN) {
+		peekc = IGN;
+		goto l1;
+	}
+l0:
+	c = GETC();
+
+l1:
+	if(c == EOF) {
+		peekc = EOF;
+		return -1;
+	}
+	if(isspace(c)) {
+		if(c == '\n') {
+			lineno++;
+			return ';';
+		}
+		goto l0;
+	}
+	if(isalpha(c))
+		goto talph;
+	if(isdigit(c))
+		goto tnum;
+	switch(c)
+	{
+	case '\n':
+		lineno++;
+		return ';';
+
+	case '#':
+		domacro();
+		goto l0;
+
+	case '.':
+		c = GETC();
+		if(isalpha(c)) {
+			cp = symb;
+			*cp++ = '.';
+			goto aloop;
+		}
+		if(isdigit(c)) {
+			cp = symb;
+			*cp++ = '.';
+			goto casedot;
+		}
+		peekc = c;
+		return '.';
+
+	talph:
+	case '_':
+	case '@':
+		cp = symb;
+
+	aloop:
+		*cp++ = c;
+		c = GETC();
+		if(isalpha(c) || isdigit(c) || c == '_' || c == '$')
+			goto aloop;
+		*cp = 0;
+		peekc = c;
+		s = lookup();
+		if(s->macro) {
+			newio();
+			cp = ionext->b;
+			macexpand(s, cp);
+			pushio();
+			ionext->link = iostack;
+			iostack = ionext;
+			fi.p = cp;
+			fi.c = strlen(cp);
+			if(peekc != IGN) {
+				cp[fi.c++] = peekc;
+				cp[fi.c] = 0;
+				peekc = IGN;
+			}
+			goto l0;
+		}
+		if(s->type == 0)
+			s->type = LNAME;
+		if(s->type == LNAME ||
+		   s->type == LVAR ||
+		   s->type == LLAB) {
+			yylval.sym = s;
+			return s->type;
+		}
+		yylval.lval = s->value;
+		return s->type;
+
+	tnum:
+		cp = symb;
+		if(c != '0')
+			goto dc;
+		*cp++ = c;
+		c = GETC();
+		c1 = 3;
+		if(c == 'x' || c == 'X') {
+			c1 = 4;
+			c = GETC();
+		} else
+		if(c < '0' || c > '7')
+			goto dc;
+		yylval.lval = 0;
+		for(;;) {
+			if(c >= '0' && c <= '9') {
+				if(c > '7' && c1 == 3)
+					break;
+				yylval.lval <<= c1;
+				yylval.lval += c - '0';
+				c = GETC();
+				continue;
+			}
+			if(c1 == 3)
+				break;
+			if(c >= 'A' && c <= 'F')
+				c += 'a' - 'A';
+			if(c >= 'a' && c <= 'f') {
+				yylval.lval <<= c1;
+				yylval.lval += c - 'a' + 10;
+				c = GETC();
+				continue;
+			}
+			break;
+		}
+		goto ncu;
+
+	dc:
+		for(;;) {
+			if(!isdigit(c))
+				break;
+			*cp++ = c;
+			c = GETC();
+		}
+		if(c == '.')
+			goto casedot;
+		if(c == 'e' || c == 'E')
+			goto casee;
+		*cp = 0;
+		if(sizeof(yylval.lval) == sizeof(vlong))
+			yylval.lval = strtoll(symb, nil, 10);
+		else
+			yylval.lval = strtol(symb, nil, 10);
+
+	ncu:
+		while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
+			c = GETC();
+		peekc = c;
+		return LCONST;
+
+	casedot:
+		for(;;) {
+			*cp++ = c;
+			c = GETC();
+			if(!isdigit(c))
+				break;
+		}
+		if(c == 'e' || c == 'E')
+			goto casee;
+		goto caseout;
+
+	casee:
+		*cp++ = 'e';
+		c = GETC();
+		if(c == '+' || c == '-') {
+			*cp++ = c;
+			c = GETC();
+		}
+		while(isdigit(c)) {
+			*cp++ = c;
+			c = GETC();
+		}
+
+	caseout:
+		*cp = 0;
+		peekc = c;
+		if(FPCHIP) {
+			yylval.dval = atof(symb);
+			return LFCONST;
+		}
+		yyerror("assembler cannot interpret fp constants");
+		yylval.lval = 1L;
+		return LCONST;
+
+	case '"':
+		memcpy(yylval.sval, nullgen.sval, sizeof(yylval.sval));
+		cp = yylval.sval;
+		c1 = 0;
+		for(;;) {
+			c = escchar('"');
+			if(c == EOF)
+				break;
+			if(c1 < sizeof(yylval.sval))
+				*cp++ = c;
+			c1++;
+		}
+		if(c1 > sizeof(yylval.sval))
+			yyerror("string constant too long");
+		return LSCONST;
+
+	case '\'':
+		c = escchar('\'');
+		if(c == EOF)
+			c = '\'';
+		if(escchar('\'') != EOF)
+			yyerror("missing '");
+		yylval.lval = c;
+		return LCONST;
+
+	case '/':
+		c1 = GETC();
+		if(c1 == '/') {
+			for(;;) {
+				c = GETC();
+				if(c == '\n')
+					goto l1;
+				if(c == EOF) {
+					yyerror("eof in comment");
+					errorexit();
+				}
+			}
+		}
+		if(c1 == '*') {
+			for(;;) {
+				c = GETC();
+				while(c == '*') {
+					c = GETC();
+					if(c == '/')
+						goto l0;
+				}
+				if(c == EOF) {
+					yyerror("eof in comment");
+					errorexit();
+				}
+				if(c == '\n')
+					lineno++;
+			}
+		}
+		break;
+
+	default:
+		return c;
+	}
+	peekc = c1;
+	return c;
+}
+
+// #include "../cc/macbody"
