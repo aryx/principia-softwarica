@@ -1,3 +1,4 @@
+/*s: linkers/libmach/8db.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -17,9 +18,16 @@ static	int	i386inst(Map*, uvlong, char, char*, int);
 static	int	i386das(Map*, uvlong, char*, int);
 static	int	i386instlen(Map*, uvlong);
 
+/*s: global STARTSYM */
 static	char	STARTSYM[] =	"_main";
+/*e: global STARTSYM */
+/*s: global PROFSYM */
 static	char	PROFSYM[] =	"_mainp";
+/*e: global PROFSYM */
+/*s: global FRAMENAME */
 static	char	FRAMENAME[] =	".frame";
+/*e: global FRAMENAME */
+/*s: global excname */
 static char *excname[] =
 {
 [0]	"divide error",
@@ -49,179 +57,194 @@ static char *excname[] =
 [38]	"hard disk",
 [64]	"system call",
 };
+/*e: global excname */
 
+/*s: global i386mach */
 Machdata i386mach =
 {
-	{0xCC, 0, 0, 0},	/* break point: INT 3 */
-	1,			/* break point size */
+    {0xCC, 0, 0, 0},	/* break point: INT 3 */
+    1,			/* break point size */
 
-	leswab,			/* convert short to local byte order */
-	leswal,			/* convert long to local byte order */
-	leswav,			/* convert vlong to local byte order */
-	i386trace,		/* C traceback */
-	i386frame,		/* frame finder */
-	i386excep,		/* print exception */
-	0,			/* breakpoint fixup */
-	leieeesftos,		/* single precision float printer */
-	leieeedftos,		/* double precision float printer */
-	i386foll,		/* following addresses */
-	i386inst,		/* print instruction */
-	i386das,		/* dissembler */
-	i386instlen,		/* instruction size calculation */
+    leswab,			/* convert short to local byte order */
+    leswal,			/* convert long to local byte order */
+    leswav,			/* convert vlong to local byte order */
+    i386trace,		/* C traceback */
+    i386frame,		/* frame finder */
+    i386excep,		/* print exception */
+    0,			/* breakpoint fixup */
+    leieeesftos,		/* single precision float printer */
+    leieeedftos,		/* double precision float printer */
+    i386foll,		/* following addresses */
+    i386inst,		/* print instruction */
+    i386das,		/* dissembler */
+    i386instlen,		/* instruction size calculation */
 };
+/*e: global i386mach */
 
+/*s: function i386excep */
 static char*
 i386excep(Map *map, Rgetter rget)
 {
-	ulong c;
-	uvlong pc;
-	static char buf[16];
+    ulong c;
+    uvlong pc;
+    static char buf[16];
 
-	c = (*rget)(map, "TRAP");
-	if(c > 64 || excname[c] == 0) {
-		if (c == 3) {
-			pc = (*rget)(map, "PC");
-			if (get1(map, pc, (uchar*)buf, machdata->bpsize) > 0)
-			if (memcmp(buf, machdata->bpinst, machdata->bpsize) == 0)
-				return "breakpoint";
-		}
-		snprint(buf, sizeof(buf), "exception %ld", c);
-		return buf;
-	} else
-		return excname[c];
+    c = (*rget)(map, "TRAP");
+    if(c > 64 || excname[c] == 0) {
+        if (c == 3) {
+            pc = (*rget)(map, "PC");
+            if (get1(map, pc, (uchar*)buf, machdata->bpsize) > 0)
+            if (memcmp(buf, machdata->bpinst, machdata->bpsize) == 0)
+                return "breakpoint";
+        }
+        snprint(buf, sizeof(buf), "exception %ld", c);
+        return buf;
+    } else
+        return excname[c];
 }
+/*e: function i386excep */
 
+/*s: function i386trace */
 static int
 i386trace(Map *map, uvlong pc, uvlong sp, uvlong link, Tracer trace)
 {
-	int i;
-	uvlong osp;
-	Symbol s, f;
+    int i;
+    uvlong osp;
+    Symbol s, f;
 
-	USED(link);
-	i = 0;
-	osp = 0;
-	while(findsym(pc, CTEXT, &s)) {
-		if (osp == sp)
-			break;
-		osp = sp;
+    USED(link);
+    i = 0;
+    osp = 0;
+    while(findsym(pc, CTEXT, &s)) {
+        if (osp == sp)
+            break;
+        osp = sp;
 
-		if(strcmp(STARTSYM, s.name) == 0 || strcmp(PROFSYM, s.name) == 0)
-			break;
+        if(strcmp(STARTSYM, s.name) == 0 || strcmp(PROFSYM, s.name) == 0)
+            break;
 
-		if(pc != s.value) {	/* not at first instruction */
-			if(findlocal(&s, FRAMENAME, &f) == 0)
-				break;
-			sp += f.value-mach->szaddr;
-		}
+        if(pc != s.value) {	/* not at first instruction */
+            if(findlocal(&s, FRAMENAME, &f) == 0)
+                break;
+            sp += f.value-mach->szaddr;
+        }
 
-		if (geta(map, sp, &pc) < 0)
-			break;
+        if (geta(map, sp, &pc) < 0)
+            break;
 
-		if(pc == 0)
-			break;
+        if(pc == 0)
+            break;
 
-		(*trace)(map, pc, sp, &s);
-		sp += mach->szaddr;
+        (*trace)(map, pc, sp, &s);
+        sp += mach->szaddr;
 
-		if(++i > 1000)
-			break;
-	}
-	return i;
+        if(++i > 1000)
+            break;
+    }
+    return i;
 }
+/*e: function i386trace */
 
+/*s: function i386frame */
 static uvlong
 i386frame(Map *map, uvlong addr, uvlong pc, uvlong sp, uvlong link)
 {
-	Symbol s, f;
+    Symbol s, f;
 
-	USED(link);
-	while (findsym(pc, CTEXT, &s)) {
-		if(strcmp(STARTSYM, s.name) == 0 || strcmp(PROFSYM, s.name) == 0)
-			break;
+    USED(link);
+    while (findsym(pc, CTEXT, &s)) {
+        if(strcmp(STARTSYM, s.name) == 0 || strcmp(PROFSYM, s.name) == 0)
+            break;
 
-		if(pc != s.value) {	/* not first instruction */
-			if(findlocal(&s, FRAMENAME, &f) == 0)
-				break;
-			sp += f.value-mach->szaddr;
-		}
+        if(pc != s.value) {	/* not first instruction */
+            if(findlocal(&s, FRAMENAME, &f) == 0)
+                break;
+            sp += f.value-mach->szaddr;
+        }
 
-		if (s.value == addr)
-			return sp;
+        if (s.value == addr)
+            return sp;
 
-		if (geta(map, sp, &pc) < 0)
-			break;
-		sp += mach->szaddr;
-	}
-	return 0;
+        if (geta(map, sp, &pc) < 0)
+            break;
+        sp += mach->szaddr;
+    }
+    return 0;
 }
+/*e: function i386frame */
 
-	/* I386/486 - Disassembler and related functions */
+    /* I386/486 - Disassembler and related functions */
 
 /*
  *  an instruction
  */
 typedef struct Instr Instr;
+/*s: struct Instr */
 struct	Instr
 {
-	uchar	mem[1+1+1+1+2+1+1+4+4];		/* raw instruction */
-	uvlong	addr;		/* address of start of instruction */
-	int	n;		/* number of bytes in instruction */
-	char	*prefix;	/* instr prefix */
-	char	*segment;	/* segment override */
-	uchar	jumptype;	/* set to the operand type for jump/ret/call */
-	uchar	amd64;
-	uchar	rex;		/* REX prefix (or zero) */
-	char	osize;		/* 'W' or 'L' (or 'Q' on amd64) */
-	char	asize;		/* address size 'W' or 'L' (or 'Q' or amd64) */
-	uchar	mod;		/* bits 6-7 of mod r/m field */
-	uchar	reg;		/* bits 3-5 of mod r/m field */
-	char	ss;		/* bits 6-7 of SIB */
-	char	index;		/* bits 3-5 of SIB */
-	char	base;		/* bits 0-2 of SIB */
-	char	rip;		/* RIP-relative in amd64 mode */
-	uchar	opre;		/* f2/f3 could introduce media */
-	short	seg;		/* segment of far address */
-	ulong	disp;		/* displacement */
-	ulong 	imm;		/* immediate */
-	ulong 	imm2;		/* second immediate operand */
-	uvlong	imm64;		/* big immediate */
-	char	*curr;		/* fill level in output buffer */
-	char	*end;		/* end of output buffer */
-	char	*err;		/* error message */
+    uchar	mem[1+1+1+1+2+1+1+4+4];		/* raw instruction */
+    uvlong	addr;		/* address of start of instruction */
+    int	n;		/* number of bytes in instruction */
+    char	*prefix;	/* instr prefix */
+    char	*segment;	/* segment override */
+    uchar	jumptype;	/* set to the operand type for jump/ret/call */
+    uchar	amd64;
+    uchar	rex;		/* REX prefix (or zero) */
+    char	osize;		/* 'W' or 'L' (or 'Q' on amd64) */
+    char	asize;		/* address size 'W' or 'L' (or 'Q' or amd64) */
+    uchar	mod;		/* bits 6-7 of mod r/m field */
+    uchar	reg;		/* bits 3-5 of mod r/m field */
+    char	ss;		/* bits 6-7 of SIB */
+    char	index;		/* bits 3-5 of SIB */
+    char	base;		/* bits 0-2 of SIB */
+    char	rip;		/* RIP-relative in amd64 mode */
+    uchar	opre;		/* f2/f3 could introduce media */
+    short	seg;		/* segment of far address */
+    ulong	disp;		/* displacement */
+    ulong 	imm;		/* immediate */
+    ulong 	imm2;		/* second immediate operand */
+    uvlong	imm64;		/* big immediate */
+    char	*curr;		/* fill level in output buffer */
+    char	*end;		/* end of output buffer */
+    char	*err;		/* error message */
 };
+/*e: struct Instr */
 
-	/* 386 register (ha!) set */
+    /* 386 register (ha!) set */
+/*s: enum _anon_ (linkers/libmach/8db.c) */
 enum{
-	AX=0,
-	CX,
-	DX,
-	BX,
-	SP,
-	BP,
-	SI,
-	DI,
+    AX=0,
+    CX,
+    DX,
+    BX,
+    SP,
+    BP,
+    SI,
+    DI,
 
-	/* amd64 */
-	R8,
-	R9,
-	R10,
-	R11,
-	R12,
-	R13,
-	R14,
-	R15
+    /* amd64 */
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15
 };
+/*e: enum _anon_ (linkers/libmach/8db.c) */
 
-	/* amd64 rex extension byte */
+    /* amd64 rex extension byte */
+/*s: enum _anon_ (linkers/libmach/8db.c)2 */
 enum{
-	REXW		= 1<<3,	/* =1, 64-bit operand size */
-	REXR		= 1<<2,	/* extend modrm reg */
-	REXX		= 1<<1,	/* extend sib index */
-	REXB		= 1<<0	/* extend modrm r/m, sib base, or opcode reg */
+    REXW		= 1<<3,	/* =1, 64-bit operand size */
+    REXR		= 1<<2,	/* extend modrm reg */
+    REXX		= 1<<1,	/* extend sib index */
+    REXB		= 1<<0	/* extend modrm r/m, sib base, or opcode reg */
 };
-	
-	/* Operand Format codes */
+/*e: enum _anon_ (linkers/libmach/8db.c)2 */
+    
+    /* Operand Format codes */
 /*
 %A	-	address size register modifier (!asize -> 'E')
 %C	-	Control register CR0/CR1/CR2
@@ -242,45 +265,50 @@ enum{
 */
 
 typedef struct Optable Optable;
+/*s: struct Optable */
 struct Optable
 {
-	char	operand[2];
-	void	*proto;		/* actually either (char*) or (Optable*) */
+    char	operand[2];
+    void	*proto;		/* actually either (char*) or (Optable*) */
 };
-	/* Operand decoding codes */
+/*e: struct Optable */
+    /* Operand decoding codes */
+/*s: enum _anon_ (linkers/libmach/8db.c)3 */
 enum {
-	Ib = 1,			/* 8-bit immediate - (no sign extension)*/
-	Ibs,			/* 8-bit immediate (sign extended) */
-	Jbs,			/* 8-bit sign-extended immediate in jump or call */
-	Iw,			/* 16-bit immediate -> imm */
-	Iw2,			/* 16-bit immediate -> imm2 */
-	Iwd,			/* Operand-sized immediate (no sign extension)*/
-	Iwdq,			/* Operand-sized immediate, possibly 64 bits */
-	Awd,			/* Address offset */
-	Iwds,			/* Operand-sized immediate (sign extended) */
-	RM,			/* Word or long R/M field with register (/r) */
-	RMB,			/* Byte R/M field with register (/r) */
-	RMOP,			/* Word or long R/M field with op code (/digit) */
-	RMOPB,			/* Byte R/M field with op code (/digit) */
-	RMR,			/* R/M register only (mod = 11) */
-	RMM,			/* R/M memory only (mod = 0/1/2) */
-	R0,			/* Base reg of Mod R/M is literal 0x00 */
-	R1,			/* Base reg of Mod R/M is literal 0x01 */
-	FRMOP,			/* Floating point R/M field with opcode */
-	FRMEX,			/* Extended floating point R/M field with opcode */
-	JUMP,			/* Jump or Call flag - no operand */
-	RET,			/* Return flag - no operand */
-	OA,			/* literal 0x0a byte */
-	PTR,			/* Seg:Displacement addr (ptr16:16 or ptr16:32) */
-	AUX,			/* Multi-byte op code - Auxiliary table */
-	AUXMM,			/* multi-byte op code - auxiliary table chosen by prefix */
-	PRE,			/* Instr Prefix */
-	OPRE,			/* Instr Prefix or media op extension */
-	SEG,			/* Segment Prefix */
-	OPOVER,			/* Operand size override */
-	ADDOVER,		/* Address size override */
+    Ib = 1,			/* 8-bit immediate - (no sign extension)*/
+    Ibs,			/* 8-bit immediate (sign extended) */
+    Jbs,			/* 8-bit sign-extended immediate in jump or call */
+    Iw,			/* 16-bit immediate -> imm */
+    Iw2,			/* 16-bit immediate -> imm2 */
+    Iwd,			/* Operand-sized immediate (no sign extension)*/
+    Iwdq,			/* Operand-sized immediate, possibly 64 bits */
+    Awd,			/* Address offset */
+    Iwds,			/* Operand-sized immediate (sign extended) */
+    RM,			/* Word or long R/M field with register (/r) */
+    RMB,			/* Byte R/M field with register (/r) */
+    RMOP,			/* Word or long R/M field with op code (/digit) */
+    RMOPB,			/* Byte R/M field with op code (/digit) */
+    RMR,			/* R/M register only (mod = 11) */
+    RMM,			/* R/M memory only (mod = 0/1/2) */
+    R0,			/* Base reg of Mod R/M is literal 0x00 */
+    R1,			/* Base reg of Mod R/M is literal 0x01 */
+    FRMOP,			/* Floating point R/M field with opcode */
+    FRMEX,			/* Extended floating point R/M field with opcode */
+    JUMP,			/* Jump or Call flag - no operand */
+    RET,			/* Return flag - no operand */
+    OA,			/* literal 0x0a byte */
+    PTR,			/* Seg:Displacement addr (ptr16:16 or ptr16:32) */
+    AUX,			/* Multi-byte op code - Auxiliary table */
+    AUXMM,			/* multi-byte op code - auxiliary table chosen by prefix */
+    PRE,			/* Instr Prefix */
+    OPRE,			/* Instr Prefix or media op extension */
+    SEG,			/* Segment Prefix */
+    OPOVER,			/* Operand size override */
+    ADDOVER,		/* Address size override */
 };
-	
+/*e: enum _anon_ (linkers/libmach/8db.c)3 */
+    
+/*s: global optab0F00 */
 static Optable optab0F00[8]=
 {
 [0x00]	0,0,		"MOVW	LDT,%e",
@@ -290,7 +318,9 @@ static Optable optab0F00[8]=
 [0x04]	0,0,		"VERR	%e",
 [0x05]	0,0,		"VERW	%e",
 };
+/*e: global optab0F00 */
 
+/*s: global optab0F01 */
 static Optable optab0F01[8]=
 {
 [0x00]	0,0,		"MOVL	GDTR,%e",
@@ -301,14 +331,18 @@ static Optable optab0F01[8]=
 [0x06]	0,0,		"MOVW	%e,MSW",	/* word */
 [0x07]	0,0,		"INVLPG	%e",		/* or SWAPGS */
 };
+/*e: global optab0F01 */
 
+/*s: global optab0F01F8 */
 static Optable optab0F01F8[1]=
 {
 [0x00]	0,0,		"SWAPGS",
 };
+/*e: global optab0F01F8 */
 
 /* 0F71 */
 /* 0F72 */
+/*s: global optab0FAE */
 /* 0F73 */
 
 static Optable optab0FAE[8]=
@@ -321,8 +355,10 @@ static Optable optab0FAE[8]=
 [0x06]	0,0,		"MFENCE",
 [0x07]	0,0,		"SFENCE",
 };
+/*e: global optab0FAE */
 
 /* 0F18 */
+/*s: global optab0FBA */
 /* 0F0D */
 
 static Optable optab0FBA[8]=
@@ -332,7 +368,9 @@ static Optable optab0FBA[8]=
 [0x06]	Ib,0,		"BTR%S	%i,%e",
 [0x07]	Ib,0,		"BTC%S	%i,%e",
 };
+/*e: global optab0FBA */
 
+/*s: global optab0F0F */
 static Optable optab0F0F[256]=
 {
 [0x0c]	0,0,		"PI2FW	%m,%M",
@@ -359,26 +397,34 @@ static Optable optab0F0F[256]=
 [0xb7]	0,0,		"PMULHRW	%m,%M",
 [0xbb]	0,0,		"PSWAPL	%m,%M",
 };
+/*e: global optab0F0F */
 
+/*s: global optab0FC7 */
 static Optable optab0FC7[8]=
 {
 [0x01]	0,0,		"CMPXCHG8B	%e",
 };
+/*e: global optab0FC7 */
 
+/*s: global optab660F71 */
 static Optable optab660F71[8]=
 {
 [0x02]	Ib,0,		"PSRLW	%i,%X",
 [0x04]	Ib,0,		"PSRAW	%i,%X",
 [0x06]	Ib,0,		"PSLLW	%i,%X",
 };
+/*e: global optab660F71 */
 
+/*s: global optab660F72 */
 static Optable optab660F72[8]=
 {
 [0x02]	Ib,0,		"PSRLL	%i,%X",
 [0x04]	Ib,0,		"PSRAL	%i,%X",
 [0x06]	Ib,0,		"PSLLL	%i,%X",
 };
+/*e: global optab660F72 */
 
+/*s: global optab660F73 */
 static Optable optab660F73[8]=
 {
 [0x02]	Ib,0,		"PSRLQ	%i,%X",
@@ -386,7 +432,9 @@ static Optable optab660F73[8]=
 [0x06]	Ib,0,		"PSLLQ	%i,%X",
 [0x07]	Ib,0,		"PSLLO	%i,%X",
 };
+/*e: global optab660F73 */
 
+/*s: global optab660F */
 static Optable optab660F[256]=
 {
 [0x2B]	RM,0,		"MOVNTPD	%x,%e",
@@ -415,7 +463,9 @@ static Optable optab660F[256]=
 [0xE7]	RM,0,		"MOVNTO	%X,%e",
 [0xF7]	RM,0,		"MASKMOVOU	%x,%X",
 };
+/*e: global optab660F */
 
+/*s: global optabF20F */
 static Optable optabF20F[256]=
 {
 [0x10]	RM,0,		"MOVSD	%x,%X",
@@ -430,7 +480,9 @@ static Optable optabF20F[256]=
 [0xD6]	RM,0,		"MOVQOZX	%M,%X",
 [0xE6]	RM,0,		"CVTPD2PL	%x,%X",
 };
+/*e: global optabF20F */
 
+/*s: global optabF30F */
 static Optable optabF30F[256]=
 {
 [0x10]	RM,0,		"MOVSS	%x,%X",
@@ -447,7 +499,9 @@ static Optable optabF30F[256]=
 [0xD6]	RM,0,		"MOVQOZX	%m*,%X",
 [0xE6]	RM,0,		"CVTPL2PD	%x,%X",
 };
+/*e: global optabF30F */
 
+/*s: global optab0F */
 static Optable optab0F[256]=
 {
 [0x00]	RMOP,0,		optab0F00,
@@ -655,7 +709,9 @@ static Optable optab0F[256]=
 [0xbf]	RM,0,		"MOVWSX	%e,%R",
 [0xc7]	RMOP,0,		optab0FC7,
 };
+/*e: global optab0F */
 
+/*s: global optab80 */
 static Optable optab80[8]=
 {
 [0x00]	Ib,0,		"ADDB	%i,%e",
@@ -667,7 +723,9 @@ static Optable optab80[8]=
 [0x06]	Ib,0,		"XORB	%i,%e",
 [0x07]	Ib,0,		"CMPB	%e,%i",
 };
+/*e: global optab80 */
 
+/*s: global optab81 */
 static Optable optab81[8]=
 {
 [0x00]	Iwd,0,		"ADD%S	%i,%e",
@@ -679,7 +737,9 @@ static Optable optab81[8]=
 [0x06]	Iwd,0,		"XOR%S	%i,%e",
 [0x07]	Iwd,0,		"CMP%S	%e,%i",
 };
+/*e: global optab81 */
 
+/*s: global optab83 */
 static Optable optab83[8]=
 {
 [0x00]	Ibs,0,		"ADD%S	%i,%e",
@@ -691,7 +751,9 @@ static Optable optab83[8]=
 [0x06]	Ibs,0,		"XOR%S	%i,%e",
 [0x07]	Ibs,0,		"CMP%S	%e,%i",
 };
+/*e: global optab83 */
 
+/*s: global optabC0 */
 static Optable optabC0[8] =
 {
 [0x00]	Ib,0,		"ROLB	%i,%e",
@@ -702,7 +764,9 @@ static Optable optabC0[8] =
 [0x05]	Ib,0,		"SHRB	%i,%e",
 [0x07]	Ib,0,		"SARB	%i,%e",
 };
+/*e: global optabC0 */
 
+/*s: global optabC1 */
 static Optable optabC1[8] =
 {
 [0x00]	Ib,0,		"ROL%S	%i,%e",
@@ -713,7 +777,9 @@ static Optable optabC1[8] =
 [0x05]	Ib,0,		"SHR%S	%i,%e",
 [0x07]	Ib,0,		"SAR%S	%i,%e",
 };
+/*e: global optabC1 */
 
+/*s: global optabD0 */
 static Optable optabD0[8] =
 {
 [0x00]	0,0,		"ROLB	%e",
@@ -724,7 +790,9 @@ static Optable optabD0[8] =
 [0x05]	0,0,		"SHRB	%e",
 [0x07]	0,0,		"SARB	%e",
 };
+/*e: global optabD0 */
 
+/*s: global optabD1 */
 static Optable optabD1[8] =
 {
 [0x00]	0,0,		"ROL%S	%e",
@@ -735,7 +803,9 @@ static Optable optabD1[8] =
 [0x05]	0,0,		"SHR%S	%e",
 [0x07]	0,0,		"SAR%S	%e",
 };
+/*e: global optabD1 */
 
+/*s: global optabD2 */
 static Optable optabD2[8] =
 {
 [0x00]	0,0,		"ROLB	CL,%e",
@@ -746,7 +816,9 @@ static Optable optabD2[8] =
 [0x05]	0,0,		"SHRB	CL,%e",
 [0x07]	0,0,		"SARB	CL,%e",
 };
+/*e: global optabD2 */
 
+/*s: global optabD3 */
 static Optable optabD3[8] =
 {
 [0x00]	0,0,		"ROL%S	CL,%e",
@@ -757,7 +829,9 @@ static Optable optabD3[8] =
 [0x05]	0,0,		"SHR%S	CL,%e",
 [0x07]	0,0,		"SAR%S	CL,%e",
 };
+/*e: global optabD3 */
 
+/*s: global optabD8 */
 static Optable optabD8[8+8] =
 {
 [0x00]	0,0,		"FADDF	%e,F0",
@@ -777,6 +851,8 @@ static Optable optabD8[8+8] =
 [0x0e]	0,0,		"FDIVD	%f,F0",
 [0x0f]	0,0,		"FDIVRD	%f,F0",
 };
+/*e: global optabD8 */
+/*s: global optabD9 */
 /*
  *	optabD9 and optabDB use the following encoding: 
  *	if (0 <= modrm <= 2) instruction = optabDx[modrm&0x07];
@@ -839,7 +915,9 @@ static Optable optabD9[64+8] =
 [0x46]	0,0,		"FSIN",
 [0x47]	0,0,		"FCOS",
 };
+/*e: global optabD9 */
 
+/*s: global optabDA */
 static Optable optabDA[8+8] =
 {
 [0x00]	0,0,		"FADDL	%e,F0",
@@ -852,7 +930,9 @@ static Optable optabDA[8+8] =
 [0x07]	0,0,		"FDIVRL	%e,F0",
 [0x0d]	R1,0,		"FUCOMPP",
 };
+/*e: global optabDA */
 
+/*s: global optabDB */
 static Optable optabDB[8+64] =
 {
 [0x00]	0,0,		"FMOVL	%e,F0",
@@ -863,7 +943,9 @@ static Optable optabDB[8+64] =
 [0x2a]	0,0,		"FCLEX",
 [0x2b]	0,0,		"FINIT",
 };
+/*e: global optabDB */
 
+/*s: global optabDC */
 static Optable optabDC[8+8] =
 {
 [0x00]	0,0,		"FADDD	%e,F0",
@@ -881,7 +963,9 @@ static Optable optabDC[8+8] =
 [0x0e]	0,0,		"FDIVRD	F0,%f",
 [0x0f]	0,0,		"FDIVD	F0,%f",
 };
+/*e: global optabDC */
 
+/*s: global optabDD */
 static Optable optabDD[8+8] =
 {
 [0x00]	0,0,		"FMOVD	%e,F0",
@@ -896,7 +980,9 @@ static Optable optabDD[8+8] =
 [0x0c]	0,0,		"FUCOMD	%f,F0",
 [0x0d]	0,0,		"FUCOMDP %f,F0",
 };
+/*e: global optabDD */
 
+/*s: global optabDE */
 static Optable optabDE[8+8] =
 {
 [0x00]	0,0,		"FADDW	%e,F0",
@@ -915,7 +1001,9 @@ static Optable optabDE[8+8] =
 [0x0e]	0,0,		"FDIVRDP F0,%f",
 [0x0f]	0,0,		"FDIVDP	F0,%f",
 };
+/*e: global optabDE */
 
+/*s: global optabDF */
 static Optable optabDF[8+8] =
 {
 [0x00]	0,0,		"FMOVW	%e,F0",
@@ -927,7 +1015,9 @@ static Optable optabDF[8+8] =
 [0x07]	0,0,		"FMOVLP	F0,%e",
 [0x0c]	R0,0,		"FSTSW	%OAX",
 };
+/*e: global optabDF */
 
+/*s: global optabF6 */
 static Optable optabF6[8] =
 {
 [0x00]	Ib,0,		"TESTB	%i,%e",
@@ -938,7 +1028,9 @@ static Optable optabF6[8] =
 [0x06]	0,0,		"DIVB	AL,%e",
 [0x07]	0,0,		"IDIVB	AL,%e",
 };
+/*e: global optabF6 */
 
+/*s: global optabF7 */
 static Optable optabF7[8] =
 {
 [0x00]	Iwd,0,		"TEST%S	%i,%e",
@@ -949,13 +1041,17 @@ static Optable optabF7[8] =
 [0x06]	0,0,		"DIV%S	%OAX,%e",
 [0x07]	0,0,		"IDIV%S	%OAX,%e",
 };
+/*e: global optabF7 */
 
+/*s: global optabFE */
 static Optable optabFE[8] =
 {
 [0x00]	0,0,		"INCB	%e",
 [0x01]	0,0,		"DECB	%e",
 };
+/*e: global optabFE */
 
+/*s: global optabFF */
 static Optable optabFF[8] =
 {
 [0x00]	0,0,		"INC%S	%e",
@@ -966,7 +1062,9 @@ static Optable optabFF[8] =
 [0x05]	JUMP,0,		"JMPF*	%e",
 [0x06]	0,0,		"PUSHL	%e",
 };
+/*e: global optabFF */
 
+/*s: global optable */
 static Optable optable[256+1] =
 {
 [0x00]	RMB,0,		"ADDB	%r,%e",
@@ -1224,495 +1322,513 @@ static Optable optable[256+1] =
 [0xff]	RMOP,0,		optabFF,
 [0x100]	RM,0,		"MOVLQSX	%r,%e",
 };
+/*e: global optable */
 
+/*s: function igetc */
 /*
  *  get a byte of the instruction
  */
 static int
 igetc(Map *map, Instr *ip, uchar *c)
 {
-	if(ip->n+1 > sizeof(ip->mem)){
-		werrstr("instruction too long");
-		return -1;
-	}
-	if (get1(map, ip->addr+ip->n, c, 1) < 0) {
-		werrstr("can't read instruction: %r");
-		return -1;
-	}
-	ip->mem[ip->n++] = *c;
-	return 1;
+    if(ip->n+1 > sizeof(ip->mem)){
+        werrstr("instruction too long");
+        return -1;
+    }
+    if (get1(map, ip->addr+ip->n, c, 1) < 0) {
+        werrstr("can't read instruction: %r");
+        return -1;
+    }
+    ip->mem[ip->n++] = *c;
+    return 1;
 }
+/*e: function igetc */
 
+/*s: function igets */
 /*
  *  get two bytes of the instruction
  */
 static int
 igets(Map *map, Instr *ip, ushort *sp)
 {
-	uchar c;
-	ushort s;
+    uchar c;
+    ushort s;
 
-	if (igetc(map, ip, &c) < 0)
-		return -1;
-	s = c;
-	if (igetc(map, ip, &c) < 0)
-		return -1;
-	s |= (c<<8);
-	*sp = s;
-	return 1;
+    if (igetc(map, ip, &c) < 0)
+        return -1;
+    s = c;
+    if (igetc(map, ip, &c) < 0)
+        return -1;
+    s |= (c<<8);
+    *sp = s;
+    return 1;
 }
+/*e: function igets */
 
+/*s: function igetl */
 /*
  *  get 4 bytes of the instruction
  */
 static int
 igetl(Map *map, Instr *ip, ulong *lp)
 {
-	ushort s;
-	long	l;
+    ushort s;
+    long	l;
 
-	if (igets(map, ip, &s) < 0)
-		return -1;
-	l = s;
-	if (igets(map, ip, &s) < 0)
-		return -1;
-	l |= (s<<16);
-	*lp = l;
-	return 1;
+    if (igets(map, ip, &s) < 0)
+        return -1;
+    l = s;
+    if (igets(map, ip, &s) < 0)
+        return -1;
+    l |= (s<<16);
+    *lp = l;
+    return 1;
 }
+/*e: function igetl */
 
+/*s: function igetq */
 /*
  *  get 8 bytes of the instruction
  */
 static int
 igetq(Map *map, Instr *ip, vlong *qp)
 {
-	ulong	l;
-	uvlong q;
+    ulong	l;
+    uvlong q;
 
-	if (igetl(map, ip, &l) < 0)
-		return -1;
-	q = l;
-	if (igetl(map, ip, &l) < 0)
-		return -1;
-	q |= ((uvlong)l<<32);
-	*qp = q;
-	return 1;
+    if (igetl(map, ip, &l) < 0)
+        return -1;
+    q = l;
+    if (igetl(map, ip, &l) < 0)
+        return -1;
+    q |= ((uvlong)l<<32);
+    *qp = q;
+    return 1;
 }
+/*e: function igetq */
 
+/*s: function getdisp */
 static int
 getdisp(Map *map, Instr *ip, int mod, int rm, int code, int pcrel)
 {
-	uchar c;
-	ushort s;
+    uchar c;
+    ushort s;
 
-	if (mod > 2)
-		return 1;
-	if (mod == 1) {
-		if (igetc(map, ip, &c) < 0)
-			return -1;
-		if (c&0x80)
-			ip->disp = c|0xffffff00;
-		else
-			ip->disp = c&0xff;
-	} else if (mod == 2 || rm == code) {
-		if (ip->asize == 'E') {
-			if (igetl(map, ip, &ip->disp) < 0)
-				return -1;
-			if (mod == 0)
-				ip->rip = pcrel;
-		} else {
-			if (igets(map, ip, &s) < 0)
-				return -1;
-			if (s&0x8000)
-				ip->disp = s|0xffff0000;
-			else
-				ip->disp = s;
-		}
-		if (mod == 0)
-			ip->base = -1;
-	}
-	return 1;
+    if (mod > 2)
+        return 1;
+    if (mod == 1) {
+        if (igetc(map, ip, &c) < 0)
+            return -1;
+        if (c&0x80)
+            ip->disp = c|0xffffff00;
+        else
+            ip->disp = c&0xff;
+    } else if (mod == 2 || rm == code) {
+        if (ip->asize == 'E') {
+            if (igetl(map, ip, &ip->disp) < 0)
+                return -1;
+            if (mod == 0)
+                ip->rip = pcrel;
+        } else {
+            if (igets(map, ip, &s) < 0)
+                return -1;
+            if (s&0x8000)
+                ip->disp = s|0xffff0000;
+            else
+                ip->disp = s;
+        }
+        if (mod == 0)
+            ip->base = -1;
+    }
+    return 1;
 }
+/*e: function getdisp */
 
+/*s: function modrm */
 static int
 modrm(Map *map, Instr *ip, uchar c)
 {
-	uchar rm, mod;
+    uchar rm, mod;
 
-	mod = (c>>6)&3;
-	rm = c&7;
-	ip->mod = mod;
-	ip->base = rm;
-	ip->reg = (c>>3)&7;
-	ip->rip = 0;
-	if (mod == 3)			/* register */
-		return 1;
-	if (ip->asize == 0) {		/* 16-bit mode */
-		switch(rm) {
-		case 0:
-			ip->base = BX; ip->index = SI;
-			break;
-		case 1:
-			ip->base = BX; ip->index = DI;
-			break;
-		case 2:
-			ip->base = BP; ip->index = SI;
-			break;
-		case 3:
-			ip->base = BP; ip->index = DI;
-			break;
-		case 4:
-			ip->base = SI;
-			break;
-		case 5:
-			ip->base = DI;
-			break;
-		case 6:
-			ip->base = BP;
-			break;
-		case 7:
-			ip->base = BX;
-			break;
-		default:
-			break;
-		}
-		return getdisp(map, ip, mod, rm, 6, 0);
-	}
-	if (rm == 4) {	/* scummy sib byte */
-		if (igetc(map, ip, &c) < 0)
-			return -1;
-		ip->ss = (c>>6)&0x03;
-		ip->index = (c>>3)&0x07;
-		if (ip->index == 4)
-			ip->index = -1;
-		ip->base = c&0x07;
-		return getdisp(map, ip, mod, ip->base, 5, 0);
-	}
-	return getdisp(map, ip, mod, rm, 5, ip->amd64);
+    mod = (c>>6)&3;
+    rm = c&7;
+    ip->mod = mod;
+    ip->base = rm;
+    ip->reg = (c>>3)&7;
+    ip->rip = 0;
+    if (mod == 3)			/* register */
+        return 1;
+    if (ip->asize == 0) {		/* 16-bit mode */
+        switch(rm) {
+        case 0:
+            ip->base = BX; ip->index = SI;
+            break;
+        case 1:
+            ip->base = BX; ip->index = DI;
+            break;
+        case 2:
+            ip->base = BP; ip->index = SI;
+            break;
+        case 3:
+            ip->base = BP; ip->index = DI;
+            break;
+        case 4:
+            ip->base = SI;
+            break;
+        case 5:
+            ip->base = DI;
+            break;
+        case 6:
+            ip->base = BP;
+            break;
+        case 7:
+            ip->base = BX;
+            break;
+        default:
+            break;
+        }
+        return getdisp(map, ip, mod, rm, 6, 0);
+    }
+    if (rm == 4) {	/* scummy sib byte */
+        if (igetc(map, ip, &c) < 0)
+            return -1;
+        ip->ss = (c>>6)&0x03;
+        ip->index = (c>>3)&0x07;
+        if (ip->index == 4)
+            ip->index = -1;
+        ip->base = c&0x07;
+        return getdisp(map, ip, mod, ip->base, 5, 0);
+    }
+    return getdisp(map, ip, mod, rm, 5, ip->amd64);
 }
+/*e: function modrm */
 
+/*s: function mkinstr */
 static Optable *
 mkinstr(Map *map, Instr *ip, uvlong pc)
 {
-	int i, n, norex;
-	uchar c;
-	ushort s;
-	Optable *op, *obase;
-	char buf[128];
+    int i, n, norex;
+    uchar c;
+    ushort s;
+    Optable *op, *obase;
+    char buf[128];
 
-	memset(ip, 0, sizeof(*ip));
-	norex = 1;
-	ip->base = -1;
-	ip->index = -1;
-	if(asstype == AI8086)
-		ip->osize = 'W';
-	else {
-		ip->osize = 'L';
-		ip->asize = 'E';
-		ip->amd64 = asstype != AI386;
-		norex = 0;
-	}
-	ip->addr = pc;
-	if (igetc(map, ip, &c) < 0)
-		return 0;
-	obase = optable;
+    memset(ip, 0, sizeof(*ip));
+    norex = 1;
+    ip->base = -1;
+    ip->index = -1;
+    if(asstype == AI8086)
+        ip->osize = 'W';
+    else {
+        ip->osize = 'L';
+        ip->asize = 'E';
+        ip->amd64 = asstype != AI386;
+        norex = 0;
+    }
+    ip->addr = pc;
+    if (igetc(map, ip, &c) < 0)
+        return 0;
+    obase = optable;
 newop:
-	if(ip->amd64 && !norex){
-		if(c >= 0x40 && c <= 0x4f) {
-			ip->rex = c;
-			if(igetc(map, ip, &c) < 0)
-				return 0;
-		}
-		if(c == 0x63){
-			op = &obase[0x100];	/* MOVLQSX */
-			goto hack;
-		}
-	}
-	op = &obase[c];
+    if(ip->amd64 && !norex){
+        if(c >= 0x40 && c <= 0x4f) {
+            ip->rex = c;
+            if(igetc(map, ip, &c) < 0)
+                return 0;
+        }
+        if(c == 0x63){
+            op = &obase[0x100];	/* MOVLQSX */
+            goto hack;
+        }
+    }
+    op = &obase[c];
 hack:
-	if (op->proto == 0) {
+    if (op->proto == 0) {
 badop:
-		n = snprint(buf, sizeof(buf), "opcode: ??");
-		for (i = 0; i < ip->n && n < sizeof(buf)-3; i++, n+=2)
-			_hexify(buf+n, ip->mem[i], 1);
-		strcpy(buf+n, "??");
-		werrstr(buf);
-		return 0;
-	}
-	for(i = 0; i < 2 && op->operand[i]; i++) {
-		switch(op->operand[i]) {
-		case Ib:	/* 8-bit immediate - (no sign extension)*/
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			ip->imm = c&0xff;
-			ip->imm64 = ip->imm;
-			break;
-		case Jbs:	/* 8-bit jump immediate (sign extended) */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (c&0x80)
-				ip->imm = c|0xffffff00;
-			else
-				ip->imm = c&0xff;
-			ip->imm64 = (long)ip->imm;
-			ip->jumptype = Jbs;
-			break;
-		case Ibs:	/* 8-bit immediate (sign extended) */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (c&0x80)
-				if (ip->osize == 'L')
-					ip->imm = c|0xffffff00;
-				else
-					ip->imm = c|0xff00;
-			else
-				ip->imm = c&0xff;
-			ip->imm64 = (long)ip->imm;
-			break;
-		case Iw:	/* 16-bit immediate -> imm */
-			if (igets(map, ip, &s) < 0)
-				return 0;
-			ip->imm = s&0xffff;
-			ip->imm64 = ip->imm;
-			ip->jumptype = Iw;
-			break;
-		case Iw2:	/* 16-bit immediate -> in imm2*/
-			if (igets(map, ip, &s) < 0)
-				return 0;
-			ip->imm2 = s&0xffff;
-			break;
-		case Iwd:	/* Operand-sized immediate (no sign extension unless 64 bits)*/
-			if (ip->osize == 'L') {
-				if (igetl(map, ip, &ip->imm) < 0)
-					return 0;
-				ip->imm64 = ip->imm;
-				if(ip->rex&REXW && (ip->imm & (1<<31)) != 0)
-					ip->imm64 |= (vlong)~0 << 32;
-			} else {
-				if (igets(map, ip, &s)< 0)
-					return 0;
-				ip->imm = s&0xffff;
-				ip->imm64 = ip->imm;
-			}
-			break;
-		case Iwdq:	/* Operand-sized immediate, possibly big */
-			if (ip->osize == 'L') {
-				if (igetl(map, ip, &ip->imm) < 0)
-					return 0;
-				ip->imm64 = ip->imm;
-				if (ip->rex & REXW) {
-					ulong l;
-					if (igetl(map, ip, &l) < 0)
-						return 0;
-					ip->imm64 |= (uvlong)l << 32;
-				}
-			} else {
-				if (igets(map, ip, &s)< 0)
-					return 0;
-				ip->imm = s&0xffff;
-			}
-			break;
-		case Awd:	/* Address-sized immediate (no sign extension)*/
-			if (ip->asize == 'E') {
-				if (igetl(map, ip, &ip->imm) < 0)
-					return 0;
-				/* TO DO: REX */
-			} else {
-				if (igets(map, ip, &s)< 0)
-					return 0;
-				ip->imm = s&0xffff;
-			}
-			break;
-		case Iwds:	/* Operand-sized immediate (sign extended) */
-			if (ip->osize == 'L') {
-				if (igetl(map, ip, &ip->imm) < 0)
-					return 0;
-			} else {
-				if (igets(map, ip, &s)< 0)
-					return 0;
-				if (s&0x8000)
-					ip->imm = s|0xffff0000;
-				else
-					ip->imm = s&0xffff;
-			}
-			ip->jumptype = Iwds;
-			break;
-		case OA:	/* literal 0x0a byte */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (c != 0x0a)
-				goto badop;
-			break;
-		case R0:	/* base register must be R0 */
-			if (ip->base != 0)
-				goto badop;
-			break;
-		case R1:	/* base register must be R1 */
-			if (ip->base != 1)
-				goto badop;
-			break;
-		case RMB:	/* R/M field with byte register (/r)*/
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (modrm(map, ip, c) < 0)
-				return 0;
-			ip->osize = 'B';
-			break;
-		case RM:	/* R/M field with register (/r) */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (modrm(map, ip, c) < 0)
-				return 0;
-			break;
-		case RMOPB:	/* R/M field with op code (/digit) */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (modrm(map, ip, c) < 0)
-				return 0;
-			c = ip->reg;		/* secondary op code */
-			obase = (Optable*)op->proto;
-			ip->osize = 'B';
-			goto newop;
-		case RMOP:	/* R/M field with op code (/digit) */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (modrm(map, ip, c) < 0)
-				return 0;
-			obase = (Optable*)op->proto;
-			if(ip->amd64 && obase == optab0F01 && c == 0xF8)
-				return optab0F01F8;
-			c = ip->reg;
-			goto newop;
-		case FRMOP:	/* FP R/M field with op code (/digit) */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (modrm(map, ip, c) < 0)
-				return 0;
-			if ((c&0xc0) == 0xc0)
-				c = ip->reg+8;		/* 16 entry table */
-			else
-				c = ip->reg;
-			obase = (Optable*)op->proto;
-			goto newop;
-		case FRMEX:	/* Extended FP R/M field with op code (/digit) */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (modrm(map, ip, c) < 0)
-				return 0;
-			if ((c&0xc0) == 0xc0)
-				c = (c&0x3f)+8;		/* 64-entry table */
-			else
-				c = ip->reg;
-			obase = (Optable*)op->proto;
-			goto newop;
-		case RMR:	/* R/M register only (mod = 11) */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if ((c&0xc0) != 0xc0) {
-				werrstr("invalid R/M register: %x", c);
-				return 0;
-			}
-			if (modrm(map, ip, c) < 0)
-				return 0;
-			break;
-		case RMM:	/* R/M register only (mod = 11) */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if ((c&0xc0) == 0xc0) {
-				werrstr("invalid R/M memory mode: %x", c);
-				return 0;
-			}
-			if (modrm(map, ip, c) < 0)
-				return 0;
-			break;
-		case PTR:	/* Seg:Displacement addr (ptr16:16 or ptr16:32) */
-			if (ip->osize == 'L') {
-				if (igetl(map, ip, &ip->disp) < 0)
-					return 0;
-			} else {
-				if (igets(map, ip, &s)< 0)
-					return 0;
-				ip->disp = s&0xffff;
-			}
-			if (igets(map, ip, (ushort*)&ip->seg) < 0)
-				return 0;
-			ip->jumptype = PTR;
-			break;
-		case AUXMM:	/* Multi-byte op code; prefix determines table selection */
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			obase = (Optable*)op->proto;
-			switch (ip->opre) {
-			case 0x66:	op = optab660F; break;
-			case 0xF2:	op = optabF20F; break;
-			case 0xF3:	op = optabF30F; break;
-			default:	op = nil; break;
-			}
-			if(op != nil && op[c].proto != nil)
-				obase = op;
-			norex = 1;	/* no more rex prefixes */
-			/* otherwise the optab entry captures it */
-			goto newop;
-		case AUX:	/* Multi-byte op code - Auxiliary table */
-			obase = (Optable*)op->proto;
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			goto newop;
-		case OPRE:	/* Instr Prefix or media op */
-			ip->opre = c;
-			/* fall through */
-		case PRE:	/* Instr Prefix */
-			ip->prefix = (char*)op->proto;
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (ip->opre && c == 0x0F)
-				ip->prefix = 0;
-			goto newop;
-		case SEG:	/* Segment Prefix */
-			ip->segment = (char*)op->proto;
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			goto newop;
-		case OPOVER:	/* Operand size override */
-			ip->opre = c;
-			ip->osize = 'W';
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			if (c == 0x0F)
-				ip->osize = 'L';
-			else if (ip->amd64 && (c&0xF0) == 0x40)
-				ip->osize = 'Q';
-			goto newop;
-		case ADDOVER:	/* Address size override */
-			ip->asize = 0;
-			if (igetc(map, ip, &c) < 0)
-				return 0;
-			goto newop;
-		case JUMP:	/* mark instruction as JUMP or RET */
-		case RET:
-			ip->jumptype = op->operand[i];
-			break;
-		default:
-			werrstr("bad operand type %d", op->operand[i]);
-			return 0;
-		}
-	}
-	return op;
+        n = snprint(buf, sizeof(buf), "opcode: ??");
+        for (i = 0; i < ip->n && n < sizeof(buf)-3; i++, n+=2)
+            _hexify(buf+n, ip->mem[i], 1);
+        strcpy(buf+n, "??");
+        werrstr(buf);
+        return 0;
+    }
+    for(i = 0; i < 2 && op->operand[i]; i++) {
+        switch(op->operand[i]) {
+        case Ib:	/* 8-bit immediate - (no sign extension)*/
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            ip->imm = c&0xff;
+            ip->imm64 = ip->imm;
+            break;
+        case Jbs:	/* 8-bit jump immediate (sign extended) */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (c&0x80)
+                ip->imm = c|0xffffff00;
+            else
+                ip->imm = c&0xff;
+            ip->imm64 = (long)ip->imm;
+            ip->jumptype = Jbs;
+            break;
+        case Ibs:	/* 8-bit immediate (sign extended) */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (c&0x80)
+                if (ip->osize == 'L')
+                    ip->imm = c|0xffffff00;
+                else
+                    ip->imm = c|0xff00;
+            else
+                ip->imm = c&0xff;
+            ip->imm64 = (long)ip->imm;
+            break;
+        case Iw:	/* 16-bit immediate -> imm */
+            if (igets(map, ip, &s) < 0)
+                return 0;
+            ip->imm = s&0xffff;
+            ip->imm64 = ip->imm;
+            ip->jumptype = Iw;
+            break;
+        case Iw2:	/* 16-bit immediate -> in imm2*/
+            if (igets(map, ip, &s) < 0)
+                return 0;
+            ip->imm2 = s&0xffff;
+            break;
+        case Iwd:	/* Operand-sized immediate (no sign extension unless 64 bits)*/
+            if (ip->osize == 'L') {
+                if (igetl(map, ip, &ip->imm) < 0)
+                    return 0;
+                ip->imm64 = ip->imm;
+                if(ip->rex&REXW && (ip->imm & (1<<31)) != 0)
+                    ip->imm64 |= (vlong)~0 << 32;
+            } else {
+                if (igets(map, ip, &s)< 0)
+                    return 0;
+                ip->imm = s&0xffff;
+                ip->imm64 = ip->imm;
+            }
+            break;
+        case Iwdq:	/* Operand-sized immediate, possibly big */
+            if (ip->osize == 'L') {
+                if (igetl(map, ip, &ip->imm) < 0)
+                    return 0;
+                ip->imm64 = ip->imm;
+                if (ip->rex & REXW) {
+                    ulong l;
+                    if (igetl(map, ip, &l) < 0)
+                        return 0;
+                    ip->imm64 |= (uvlong)l << 32;
+                }
+            } else {
+                if (igets(map, ip, &s)< 0)
+                    return 0;
+                ip->imm = s&0xffff;
+            }
+            break;
+        case Awd:	/* Address-sized immediate (no sign extension)*/
+            if (ip->asize == 'E') {
+                if (igetl(map, ip, &ip->imm) < 0)
+                    return 0;
+                /* TO DO: REX */
+            } else {
+                if (igets(map, ip, &s)< 0)
+                    return 0;
+                ip->imm = s&0xffff;
+            }
+            break;
+        case Iwds:	/* Operand-sized immediate (sign extended) */
+            if (ip->osize == 'L') {
+                if (igetl(map, ip, &ip->imm) < 0)
+                    return 0;
+            } else {
+                if (igets(map, ip, &s)< 0)
+                    return 0;
+                if (s&0x8000)
+                    ip->imm = s|0xffff0000;
+                else
+                    ip->imm = s&0xffff;
+            }
+            ip->jumptype = Iwds;
+            break;
+        case OA:	/* literal 0x0a byte */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (c != 0x0a)
+                goto badop;
+            break;
+        case R0:	/* base register must be R0 */
+            if (ip->base != 0)
+                goto badop;
+            break;
+        case R1:	/* base register must be R1 */
+            if (ip->base != 1)
+                goto badop;
+            break;
+        case RMB:	/* R/M field with byte register (/r)*/
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (modrm(map, ip, c) < 0)
+                return 0;
+            ip->osize = 'B';
+            break;
+        case RM:	/* R/M field with register (/r) */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (modrm(map, ip, c) < 0)
+                return 0;
+            break;
+        case RMOPB:	/* R/M field with op code (/digit) */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (modrm(map, ip, c) < 0)
+                return 0;
+            c = ip->reg;		/* secondary op code */
+            obase = (Optable*)op->proto;
+            ip->osize = 'B';
+            goto newop;
+        case RMOP:	/* R/M field with op code (/digit) */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (modrm(map, ip, c) < 0)
+                return 0;
+            obase = (Optable*)op->proto;
+            if(ip->amd64 && obase == optab0F01 && c == 0xF8)
+                return optab0F01F8;
+            c = ip->reg;
+            goto newop;
+        case FRMOP:	/* FP R/M field with op code (/digit) */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (modrm(map, ip, c) < 0)
+                return 0;
+            if ((c&0xc0) == 0xc0)
+                c = ip->reg+8;		/* 16 entry table */
+            else
+                c = ip->reg;
+            obase = (Optable*)op->proto;
+            goto newop;
+        case FRMEX:	/* Extended FP R/M field with op code (/digit) */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (modrm(map, ip, c) < 0)
+                return 0;
+            if ((c&0xc0) == 0xc0)
+                c = (c&0x3f)+8;		/* 64-entry table */
+            else
+                c = ip->reg;
+            obase = (Optable*)op->proto;
+            goto newop;
+        case RMR:	/* R/M register only (mod = 11) */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if ((c&0xc0) != 0xc0) {
+                werrstr("invalid R/M register: %x", c);
+                return 0;
+            }
+            if (modrm(map, ip, c) < 0)
+                return 0;
+            break;
+        case RMM:	/* R/M register only (mod = 11) */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if ((c&0xc0) == 0xc0) {
+                werrstr("invalid R/M memory mode: %x", c);
+                return 0;
+            }
+            if (modrm(map, ip, c) < 0)
+                return 0;
+            break;
+        case PTR:	/* Seg:Displacement addr (ptr16:16 or ptr16:32) */
+            if (ip->osize == 'L') {
+                if (igetl(map, ip, &ip->disp) < 0)
+                    return 0;
+            } else {
+                if (igets(map, ip, &s)< 0)
+                    return 0;
+                ip->disp = s&0xffff;
+            }
+            if (igets(map, ip, (ushort*)&ip->seg) < 0)
+                return 0;
+            ip->jumptype = PTR;
+            break;
+        case AUXMM:	/* Multi-byte op code; prefix determines table selection */
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            obase = (Optable*)op->proto;
+            switch (ip->opre) {
+            case 0x66:	op = optab660F; break;
+            case 0xF2:	op = optabF20F; break;
+            case 0xF3:	op = optabF30F; break;
+            default:	op = nil; break;
+            }
+            if(op != nil && op[c].proto != nil)
+                obase = op;
+            norex = 1;	/* no more rex prefixes */
+            /* otherwise the optab entry captures it */
+            goto newop;
+        case AUX:	/* Multi-byte op code - Auxiliary table */
+            obase = (Optable*)op->proto;
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            goto newop;
+        case OPRE:	/* Instr Prefix or media op */
+            ip->opre = c;
+            /* fall through */
+        case PRE:	/* Instr Prefix */
+            ip->prefix = (char*)op->proto;
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (ip->opre && c == 0x0F)
+                ip->prefix = 0;
+            goto newop;
+        case SEG:	/* Segment Prefix */
+            ip->segment = (char*)op->proto;
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            goto newop;
+        case OPOVER:	/* Operand size override */
+            ip->opre = c;
+            ip->osize = 'W';
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            if (c == 0x0F)
+                ip->osize = 'L';
+            else if (ip->amd64 && (c&0xF0) == 0x40)
+                ip->osize = 'Q';
+            goto newop;
+        case ADDOVER:	/* Address size override */
+            ip->asize = 0;
+            if (igetc(map, ip, &c) < 0)
+                return 0;
+            goto newop;
+        case JUMP:	/* mark instruction as JUMP or RET */
+        case RET:
+            ip->jumptype = op->operand[i];
+            break;
+        default:
+            werrstr("bad operand type %d", op->operand[i]);
+            return 0;
+        }
+    }
+    return op;
 }
+/*e: function mkinstr */
 
 #pragma	varargck	argpos	bprint		2
 
+/*s: function bprint */
 static void
 bprint(Instr *ip, char *fmt, ...)
 {
-	va_list arg;
+    va_list arg;
 
-	va_start(arg, fmt);
-	ip->curr = vseprint(ip->curr, ip->end, fmt, arg);
-	va_end(arg);
+    va_start(arg, fmt);
+    ip->curr = vseprint(ip->curr, ip->end, fmt, arg);
+    va_end(arg);
 }
+/*e: function bprint */
 
+/*s: function ANAME */
 /*
  *  if we want to call 16 bit regs AX,BX,CX,...
  *  and 32 bit regs EAX,EBX,ECX,... then
@@ -1721,8 +1837,12 @@ bprint(Instr *ip, char *fmt, ...)
  *  #define	ONAME(ip)	((ip)->osize == 'L' ? "E" : "")
  */
 #define	ANAME(ip)	""
+/*e: function ANAME */
+/*s: function ONAME */
 #define	ONAME(ip)	""
+/*e: function ONAME */
 
+/*s: global reg (linkers/libmach/8db.c) */
 static char *reg[] =  {
 [AX]	"AX",
 [CX]	"CX",
@@ -1733,7 +1853,7 @@ static char *reg[] =  {
 [SI]	"SI",
 [DI]	"DI",
 
-	/* amd64 */
+    /* amd64 */
 [R8]	"R8",
 [R9]	"R9",
 [R10]	"R10",
@@ -1743,54 +1863,66 @@ static char *reg[] =  {
 [R14]	"R14",
 [R15]	"R15",
 };
+/*e: global reg (linkers/libmach/8db.c) */
 
+/*s: global breg */
 static char *breg[] = { "AL", "CL", "DL", "BL", "AH", "CH", "DH", "BH" };
+/*e: global breg */
+/*s: global breg64 */
 static char *breg64[] = { "AL", "CL", "DL", "BL", "SPB", "BPB", "SIB", "DIB",
-	"R8B", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B" };
+    "R8B", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B" };
+/*e: global breg64 */
+/*s: global sreg */
 static char *sreg[] = { "ES", "CS", "SS", "DS", "FS", "GS" };
+/*e: global sreg */
 
+/*s: function plocal */
 static void
 plocal(Instr *ip)
 {
-	int ret;
-	long offset;
-	Symbol s;
-	char *reg;
+    int ret;
+    long offset;
+    Symbol s;
+    char *reg;
 
-	offset = ip->disp;
-	if (!findsym(ip->addr, CTEXT, &s) || !findlocal(&s, FRAMENAME, &s)) {
-		bprint(ip, "%lux(SP)", offset);
-		return;
-	}
+    offset = ip->disp;
+    if (!findsym(ip->addr, CTEXT, &s) || !findlocal(&s, FRAMENAME, &s)) {
+        bprint(ip, "%lux(SP)", offset);
+        return;
+    }
 
-	if (s.value > ip->disp) {
-		ret = getauto(&s, s.value-ip->disp-mach->szaddr, CAUTO, &s);
-		reg = "(SP)";
-	} else {
-		offset -= s.value;
-		ret = getauto(&s, offset, CPARAM, &s);
-		reg = "(FP)";
-	}
-	if (ret)
-		bprint(ip, "%s+", s.name);
-	else
-		offset = ip->disp;
-	bprint(ip, "%lux%s", offset, reg);
+    if (s.value > ip->disp) {
+        ret = getauto(&s, s.value-ip->disp-mach->szaddr, CAUTO, &s);
+        reg = "(SP)";
+    } else {
+        offset -= s.value;
+        ret = getauto(&s, offset, CPARAM, &s);
+        reg = "(FP)";
+    }
+    if (ret)
+        bprint(ip, "%s+", s.name);
+    else
+        offset = ip->disp;
+    bprint(ip, "%lux%s", offset, reg);
 }
+/*e: function plocal */
 
+/*s: function isjmp */
 static int
 isjmp(Instr *ip)
 {
-	switch(ip->jumptype){
-	case Iwds:
-	case Jbs:
-	case JUMP:
-		return 1;
-	default:
-		return 0;
-	}
+    switch(ip->jumptype){
+    case Iwds:
+    case Jbs:
+    case JUMP:
+        return 1;
+    default:
+        return 0;
+    }
 }
+/*e: function isjmp */
 
+/*s: function issymref */
 /*
  * This is too smart for its own good, but it really is nice
  * to have accurate translations when debugging, and it
@@ -1800,377 +1932,393 @@ isjmp(Instr *ip)
 static int
 issymref(Instr *ip, Symbol *s, long w, long val)
 {
-	Symbol next, tmp;
-	long isstring, size;
+    Symbol next, tmp;
+    long isstring, size;
 
-	if (isjmp(ip))
-		return 1;
-	if (s->class==CTEXT && w==0)
-		return 1;
-	if (s->class==CDATA) {
-		/* use first bss symbol (or "end") rather than edata */
-		if (s->name[0]=='e' && strcmp(s->name, "edata") == 0){
-			if((s ->index >= 0 && globalsym(&tmp, s->index+1) && tmp.value==s->value)
-			|| (s->index > 0 && globalsym(&tmp, s->index-1) && tmp.value==s->value))
-				*s = tmp;
-		}
-		if (w == 0)
-			return 1;
-		for (next=*s; next.value==s->value; next=tmp)
-			if (!globalsym(&tmp, next.index+1))
-				break;
-		size = next.value - s->value;
-		if (w >= size)
-			return 0;
-		if (w > size-w)
-			w = size-w;
-		/* huge distances are usually wrong except in .string */
-		isstring = (s->name[0]=='.' && strcmp(s->name, ".string") == 0);
-		if (w > 8192 && !isstring)
-			return 0;
-		/* medium distances are tricky - look for constants */
-		/* near powers of two */
-		if ((val&(val-1)) == 0 || (val&(val+1)) == 0)
-			return 0;
-		return 1;
-	}
-	return 0;
+    if (isjmp(ip))
+        return 1;
+    if (s->class==CTEXT && w==0)
+        return 1;
+    if (s->class==CDATA) {
+        /* use first bss symbol (or "end") rather than edata */
+        if (s->name[0]=='e' && strcmp(s->name, "edata") == 0){
+            if((s ->index >= 0 && globalsym(&tmp, s->index+1) && tmp.value==s->value)
+            || (s->index > 0 && globalsym(&tmp, s->index-1) && tmp.value==s->value))
+                *s = tmp;
+        }
+        if (w == 0)
+            return 1;
+        for (next=*s; next.value==s->value; next=tmp)
+            if (!globalsym(&tmp, next.index+1))
+                break;
+        size = next.value - s->value;
+        if (w >= size)
+            return 0;
+        if (w > size-w)
+            w = size-w;
+        /* huge distances are usually wrong except in .string */
+        isstring = (s->name[0]=='.' && strcmp(s->name, ".string") == 0);
+        if (w > 8192 && !isstring)
+            return 0;
+        /* medium distances are tricky - look for constants */
+        /* near powers of two */
+        if ((val&(val-1)) == 0 || (val&(val+1)) == 0)
+            return 0;
+        return 1;
+    }
+    return 0;
 }
+/*e: function issymref */
 
+/*s: function immediate */
 static void
 immediate(Instr *ip, vlong val)
 {
-	Symbol s;
-	long w;
+    Symbol s;
+    long w;
 
-	if (findsym(val, CANY, &s)) {		/* TO DO */
-		w = val - s.value;
-		if (w < 0)
-			w = -w;
-		if (issymref(ip, &s, w, val)) {
-			if (w)
-				bprint(ip, "%s+%lux(SB)", s.name, w);
-			else
-				bprint(ip, "%s(SB)", s.name);
-			return;
-		}
+    if (findsym(val, CANY, &s)) {		/* TO DO */
+        w = val - s.value;
+        if (w < 0)
+            w = -w;
+        if (issymref(ip, &s, w, val)) {
+            if (w)
+                bprint(ip, "%s+%lux(SB)", s.name, w);
+            else
+                bprint(ip, "%s(SB)", s.name);
+            return;
+        }
 /*
-		if (s.class==CDATA && globalsym(&s, s.index+1)) {
-			w = s.value - val;
-			if (w < 0)
-				w = -w;
-			if (w < 4096) {
-				bprint(ip, "%s-%lux(SB)", s.name, w);
-				return;
-			}
-		}
+        if (s.class==CDATA && globalsym(&s, s.index+1)) {
+            w = s.value - val;
+            if (w < 0)
+                w = -w;
+            if (w < 4096) {
+                bprint(ip, "%s-%lux(SB)", s.name, w);
+                return;
+            }
+        }
 */
-	}
-	if((ip->rex & REXW) == 0)
-		bprint(ip, "%lux", (long)val);
-	else
-		bprint(ip, "%llux", val);
+    }
+    if((ip->rex & REXW) == 0)
+        bprint(ip, "%lux", (long)val);
+    else
+        bprint(ip, "%llux", val);
 }
+/*e: function immediate */
 
+/*s: function pea */
 static void
 pea(Instr *ip)
 {
-	if (ip->mod == 3) {
-		if (ip->osize == 'B')
-			bprint(ip, (ip->rex & REXB? breg64: breg)[ip->base]);
-		else if(ip->rex & REXB)
-			bprint(ip, "%s%s", ANAME(ip), reg[ip->base+8]);
-		else
-			bprint(ip, "%s%s", ANAME(ip), reg[ip->base]);
-		return;
-	}
-	if (ip->segment)
-		bprint(ip, ip->segment);
-	if (ip->asize == 'E' && ip->base == SP)
-		plocal(ip);
-	else {
-		if (ip->base < 0)
-			immediate(ip, ip->disp);
-		else {
-			bprint(ip, "%lux", ip->disp);
-			if(ip->rip)
-				bprint(ip, "(RIP)");
-			bprint(ip,"(%s%s)", ANAME(ip), reg[ip->rex&REXB? ip->base+8: ip->base]);
-		}
-	}
-	if (ip->index >= 0)
-		bprint(ip,"(%s%s*%d)", ANAME(ip), reg[ip->rex&REXX? ip->index+8: ip->index], 1<<ip->ss);
+    if (ip->mod == 3) {
+        if (ip->osize == 'B')
+            bprint(ip, (ip->rex & REXB? breg64: breg)[ip->base]);
+        else if(ip->rex & REXB)
+            bprint(ip, "%s%s", ANAME(ip), reg[ip->base+8]);
+        else
+            bprint(ip, "%s%s", ANAME(ip), reg[ip->base]);
+        return;
+    }
+    if (ip->segment)
+        bprint(ip, ip->segment);
+    if (ip->asize == 'E' && ip->base == SP)
+        plocal(ip);
+    else {
+        if (ip->base < 0)
+            immediate(ip, ip->disp);
+        else {
+            bprint(ip, "%lux", ip->disp);
+            if(ip->rip)
+                bprint(ip, "(RIP)");
+            bprint(ip,"(%s%s)", ANAME(ip), reg[ip->rex&REXB? ip->base+8: ip->base]);
+        }
+    }
+    if (ip->index >= 0)
+        bprint(ip,"(%s%s*%d)", ANAME(ip), reg[ip->rex&REXX? ip->index+8: ip->index], 1<<ip->ss);
 }
+/*e: function pea */
 
+/*s: function prinstr */
 static void
 prinstr(Instr *ip, char *fmt)
 {
-	vlong v;
+    vlong v;
 
-	if (ip->prefix)
-		bprint(ip, "%s ", ip->prefix);
-	for (; *fmt && ip->curr < ip->end; fmt++) {
-		if (*fmt != '%'){
-			*ip->curr++ = *fmt;
-			continue;
-		}
-		switch(*++fmt){
-		case '%':
-			*ip->curr++ = '%';
-			break;
-		case 'A':
-			bprint(ip, "%s", ANAME(ip));
-			break;
-		case 'C':
-			bprint(ip, "CR%d", ip->reg);
-			break;
-		case 'D':
-			if (ip->reg < 4 || ip->reg == 6 || ip->reg == 7)
-				bprint(ip, "DR%d",ip->reg);
-			else
-				bprint(ip, "???");
-			break;
-		case 'I':
-			bprint(ip, "$");
-			immediate(ip, ip->imm2);
-			break;
-		case 'O':
-			bprint(ip,"%s", ONAME(ip));
-			break;
-		case 'i':
-			bprint(ip, "$");
-			v = ip->imm;
-			if(ip->rex & REXW)
-				v = ip->imm64;
-			immediate(ip, v);
-			break;
-		case 'R':
-			bprint(ip, "%s%s", ONAME(ip), reg[ip->rex&REXR? ip->reg+8: ip->reg]);
-			break;
-		case 'S':
-			if(ip->osize == 'Q' || ip->osize == 'L' && ip->rex & REXW)
-				bprint(ip, "Q");
-			else
-				bprint(ip, "%c", ip->osize);
-			break;
-		case 's':
-			if(ip->opre == 0 || ip->opre == 0x66)
-				bprint(ip, "P");
-			else
-				bprint(ip, "S");
-			if(ip->opre == 0xf2 || ip->opre == 0x66)
-				bprint(ip, "D");
-			else
-				bprint(ip, "S");
-			break;
-		case 'T':
-			if (ip->reg == 6 || ip->reg == 7)
-				bprint(ip, "TR%d",ip->reg);
-			else
-				bprint(ip, "???");
-			break;
-		case 'W':
-			if (ip->osize == 'Q' || ip->osize == 'L' && ip->rex & REXW)
-				bprint(ip, "CDQE");
-			else if (ip->osize == 'L')
-				bprint(ip,"CWDE");
-			else
-				bprint(ip, "CBW");
-			break;
-		case 'd':
-			bprint(ip,"%ux:%lux",ip->seg,ip->disp);
-			break;
-		case 'm':
-			if (ip->mod == 3 && ip->osize != 'B') {
-				if(fmt[1] != '*'){
-					if(ip->opre != 0) {
-						bprint(ip, "X%d", ip->rex&REXB? ip->base+8: ip->base);
-						break;
-					}
-				} else
-					fmt++;
-				bprint(ip, "M%d", ip->base);
-				break;
-			}
-			pea(ip);
-			break;
-		case 'e':
-			pea(ip);
-			break;
-		case 'f':
-			bprint(ip, "F%d", ip->base);
-			break;
-		case 'g':
-			if (ip->reg < 6)
-				bprint(ip,"%s",sreg[ip->reg]);
-			else
-				bprint(ip,"???");
-			break;
-		case 'p':
-			/*
-			 * signed immediate in the ulong ip->imm.
-			 */
-			v = (long)ip->imm;
-			immediate(ip, v+ip->addr+ip->n);
-			break;
-		case 'r':
-			if (ip->osize == 'B')
-				bprint(ip,"%s", (ip->rex? breg64: breg)[ip->rex&REXR? ip->reg+8: ip->reg]);
-			else
-				bprint(ip, reg[ip->rex&REXR? ip->reg+8: ip->reg]);
-			break;
-		case 'w':
-			if (ip->osize == 'Q' || ip->rex & REXW)
-				bprint(ip, "CQO");
-			else if (ip->osize == 'L')
-				bprint(ip,"CDQ");
-			else
-				bprint(ip, "CWD");
-			break;
-		case 'M':
-			if(ip->opre != 0)
-				bprint(ip, "X%d", ip->rex&REXR? ip->reg+8: ip->reg);
-			else
-				bprint(ip, "M%d", ip->reg);
-			break;
-		case 'x':
-			if (ip->mod == 3 && ip->osize != 'B') {
-				bprint(ip, "X%d", ip->rex&REXB? ip->base+8: ip->base);
-				break;
-			}
-			pea(ip);
-			break;
-		case 'X':
-			bprint(ip, "X%d", ip->rex&REXR? ip->reg+8: ip->reg);
-			break;
-		default:
-			bprint(ip, "%%%c", *fmt);
-			break;
-		}
-	}
-	*ip->curr = 0;		/* there's always room for 1 byte */
+    if (ip->prefix)
+        bprint(ip, "%s ", ip->prefix);
+    for (; *fmt && ip->curr < ip->end; fmt++) {
+        if (*fmt != '%'){
+            *ip->curr++ = *fmt;
+            continue;
+        }
+        switch(*++fmt){
+        case '%':
+            *ip->curr++ = '%';
+            break;
+        case 'A':
+            bprint(ip, "%s", ANAME(ip));
+            break;
+        case 'C':
+            bprint(ip, "CR%d", ip->reg);
+            break;
+        case 'D':
+            if (ip->reg < 4 || ip->reg == 6 || ip->reg == 7)
+                bprint(ip, "DR%d",ip->reg);
+            else
+                bprint(ip, "???");
+            break;
+        case 'I':
+            bprint(ip, "$");
+            immediate(ip, ip->imm2);
+            break;
+        case 'O':
+            bprint(ip,"%s", ONAME(ip));
+            break;
+        case 'i':
+            bprint(ip, "$");
+            v = ip->imm;
+            if(ip->rex & REXW)
+                v = ip->imm64;
+            immediate(ip, v);
+            break;
+        case 'R':
+            bprint(ip, "%s%s", ONAME(ip), reg[ip->rex&REXR? ip->reg+8: ip->reg]);
+            break;
+        case 'S':
+            if(ip->osize == 'Q' || ip->osize == 'L' && ip->rex & REXW)
+                bprint(ip, "Q");
+            else
+                bprint(ip, "%c", ip->osize);
+            break;
+        case 's':
+            if(ip->opre == 0 || ip->opre == 0x66)
+                bprint(ip, "P");
+            else
+                bprint(ip, "S");
+            if(ip->opre == 0xf2 || ip->opre == 0x66)
+                bprint(ip, "D");
+            else
+                bprint(ip, "S");
+            break;
+        case 'T':
+            if (ip->reg == 6 || ip->reg == 7)
+                bprint(ip, "TR%d",ip->reg);
+            else
+                bprint(ip, "???");
+            break;
+        case 'W':
+            if (ip->osize == 'Q' || ip->osize == 'L' && ip->rex & REXW)
+                bprint(ip, "CDQE");
+            else if (ip->osize == 'L')
+                bprint(ip,"CWDE");
+            else
+                bprint(ip, "CBW");
+            break;
+        case 'd':
+            bprint(ip,"%ux:%lux",ip->seg,ip->disp);
+            break;
+        case 'm':
+            if (ip->mod == 3 && ip->osize != 'B') {
+                if(fmt[1] != '*'){
+                    if(ip->opre != 0) {
+                        bprint(ip, "X%d", ip->rex&REXB? ip->base+8: ip->base);
+                        break;
+                    }
+                } else
+                    fmt++;
+                bprint(ip, "M%d", ip->base);
+                break;
+            }
+            pea(ip);
+            break;
+        case 'e':
+            pea(ip);
+            break;
+        case 'f':
+            bprint(ip, "F%d", ip->base);
+            break;
+        case 'g':
+            if (ip->reg < 6)
+                bprint(ip,"%s",sreg[ip->reg]);
+            else
+                bprint(ip,"???");
+            break;
+        case 'p':
+            /*
+             * signed immediate in the ulong ip->imm.
+             */
+            v = (long)ip->imm;
+            immediate(ip, v+ip->addr+ip->n);
+            break;
+        case 'r':
+            if (ip->osize == 'B')
+                bprint(ip,"%s", (ip->rex? breg64: breg)[ip->rex&REXR? ip->reg+8: ip->reg]);
+            else
+                bprint(ip, reg[ip->rex&REXR? ip->reg+8: ip->reg]);
+            break;
+        case 'w':
+            if (ip->osize == 'Q' || ip->rex & REXW)
+                bprint(ip, "CQO");
+            else if (ip->osize == 'L')
+                bprint(ip,"CDQ");
+            else
+                bprint(ip, "CWD");
+            break;
+        case 'M':
+            if(ip->opre != 0)
+                bprint(ip, "X%d", ip->rex&REXR? ip->reg+8: ip->reg);
+            else
+                bprint(ip, "M%d", ip->reg);
+            break;
+        case 'x':
+            if (ip->mod == 3 && ip->osize != 'B') {
+                bprint(ip, "X%d", ip->rex&REXB? ip->base+8: ip->base);
+                break;
+            }
+            pea(ip);
+            break;
+        case 'X':
+            bprint(ip, "X%d", ip->rex&REXR? ip->reg+8: ip->reg);
+            break;
+        default:
+            bprint(ip, "%%%c", *fmt);
+            break;
+        }
+    }
+    *ip->curr = 0;		/* there's always room for 1 byte */
 }
+/*e: function prinstr */
 
+/*s: function i386inst */
 static int
 i386inst(Map *map, uvlong pc, char modifier, char *buf, int n)
 {
-	Instr instr;
-	Optable *op;
+    Instr instr;
+    Optable *op;
 
-	USED(modifier);
-	op = mkinstr(map, &instr, pc);
-	if (op == 0) {
-		errstr(buf, n);
-		return -1;
-	}
-	instr.curr = buf;
-	instr.end = buf+n-1;
-	prinstr(&instr, op->proto);
-	return instr.n;
+    USED(modifier);
+    op = mkinstr(map, &instr, pc);
+    if (op == 0) {
+        errstr(buf, n);
+        return -1;
+    }
+    instr.curr = buf;
+    instr.end = buf+n-1;
+    prinstr(&instr, op->proto);
+    return instr.n;
 }
+/*e: function i386inst */
 
+/*s: function i386das */
 static int
 i386das(Map *map, uvlong pc, char *buf, int n)
 {
-	Instr instr;
-	int i;
+    Instr instr;
+    int i;
 
-	if (mkinstr(map, &instr, pc) == 0) {
-		errstr(buf, n);
-		return -1;
-	}
-	for(i = 0; i < instr.n && n > 2; i++) {
-		_hexify(buf, instr.mem[i], 1);
-		buf += 2;
-		n -= 2;
-	}
-	*buf = 0;
-	return instr.n;
+    if (mkinstr(map, &instr, pc) == 0) {
+        errstr(buf, n);
+        return -1;
+    }
+    for(i = 0; i < instr.n && n > 2; i++) {
+        _hexify(buf, instr.mem[i], 1);
+        buf += 2;
+        n -= 2;
+    }
+    *buf = 0;
+    return instr.n;
 }
+/*e: function i386das */
 
+/*s: function i386instlen */
 static int
 i386instlen(Map *map, uvlong pc)
 {
-	Instr i;
+    Instr i;
 
-	if (mkinstr(map, &i, pc))
-		return i.n;
-	return -1;
+    if (mkinstr(map, &i, pc))
+        return i.n;
+    return -1;
 }
+/*e: function i386instlen */
 
+/*s: function i386foll */
 static int
 i386foll(Map *map, uvlong pc, Rgetter rget, uvlong *foll)
 {
-	Instr i;
-	Optable *op;
-	ushort s;
-	uvlong l, addr;
-	vlong v;
-	int n;
+    Instr i;
+    Optable *op;
+    ushort s;
+    uvlong l, addr;
+    vlong v;
+    int n;
 
-	op = mkinstr(map, &i, pc);
-	if (!op)
-		return -1;
+    op = mkinstr(map, &i, pc);
+    if (!op)
+        return -1;
 
-	n = 0;
+    n = 0;
 
-	switch(i.jumptype) {
-	case RET:		/* RETURN or LEAVE */
-	case Iw:		/* RETURN */
-		if (strcmp(op->proto, "LEAVE") == 0) {
-			if (geta(map, (*rget)(map, "BP"), &l) < 0)
-				return -1;
-		} else if (geta(map, (*rget)(map, mach->sp), &l) < 0)
-			return -1;
-		foll[0] = l;
-		return 1;
-	case Iwds:		/* pc relative JUMP or CALL*/
-	case Jbs:		/* pc relative JUMP or CALL */
-		v = (long)i.imm;
-		foll[0] = pc+v+i.n;
-		n = 1;
-		break;
-	case PTR:		/* seg:displacement JUMP or CALL */
-		foll[0] = (i.seg<<4)+i.disp;
-		return 1;
-	case JUMP:		/* JUMP or CALL EA */
+    switch(i.jumptype) {
+    case RET:		/* RETURN or LEAVE */
+    case Iw:		/* RETURN */
+        if (strcmp(op->proto, "LEAVE") == 0) {
+            if (geta(map, (*rget)(map, "BP"), &l) < 0)
+                return -1;
+        } else if (geta(map, (*rget)(map, mach->sp), &l) < 0)
+            return -1;
+        foll[0] = l;
+        return 1;
+    case Iwds:		/* pc relative JUMP or CALL*/
+    case Jbs:		/* pc relative JUMP or CALL */
+        v = (long)i.imm;
+        foll[0] = pc+v+i.n;
+        n = 1;
+        break;
+    case PTR:		/* seg:displacement JUMP or CALL */
+        foll[0] = (i.seg<<4)+i.disp;
+        return 1;
+    case JUMP:		/* JUMP or CALL EA */
 
-		if(i.mod == 3) {
-			foll[0] = (*rget)(map, reg[i.rex&REXB? i.base+8: i.base]);
-			return 1;
-		}
-			/* calculate the effective address */
-		addr = i.disp;
-		if (i.base >= 0) {
-			if (geta(map, (*rget)(map, reg[i.rex&REXB? i.base+8: i.base]), &l) < 0)
-				return -1;
-			addr += l;
-		}
-		if (i.index >= 0) {
-			if (geta(map, (*rget)(map, reg[i.rex&REXX? i.index+8: i.index]), &l) < 0)
-				return -1;
-			addr += l*(1<<i.ss);
-		}
-			/* now retrieve a seg:disp value at that address */
-		if (get2(map, addr, &s) < 0)			/* seg */
-			return -1;
-		foll[0] = s<<4;
-		addr += 2;
-		if (i.asize == 'L') {
-			if (geta(map, addr, &l) < 0)		/* disp32 */
-				return -1;
-			foll[0] += l;
-		} else {					/* disp16 */
-			if (get2(map, addr, &s) < 0)
-				return -1;
-			foll[0] += s;
-		}
-		return 1;
-	default:
-		break;
-	}		
-	if (strncmp(op->proto,"JMP", 3) == 0 || strncmp(op->proto,"CALL", 4) == 0)
-		return 1;
-	foll[n++] = pc+i.n;
-	return n;
+        if(i.mod == 3) {
+            foll[0] = (*rget)(map, reg[i.rex&REXB? i.base+8: i.base]);
+            return 1;
+        }
+            /* calculate the effective address */
+        addr = i.disp;
+        if (i.base >= 0) {
+            if (geta(map, (*rget)(map, reg[i.rex&REXB? i.base+8: i.base]), &l) < 0)
+                return -1;
+            addr += l;
+        }
+        if (i.index >= 0) {
+            if (geta(map, (*rget)(map, reg[i.rex&REXX? i.index+8: i.index]), &l) < 0)
+                return -1;
+            addr += l*(1<<i.ss);
+        }
+            /* now retrieve a seg:disp value at that address */
+        if (get2(map, addr, &s) < 0)			/* seg */
+            return -1;
+        foll[0] = s<<4;
+        addr += 2;
+        if (i.asize == 'L') {
+            if (geta(map, addr, &l) < 0)		/* disp32 */
+                return -1;
+            foll[0] += l;
+        } else {					/* disp16 */
+            if (get2(map, addr, &s) < 0)
+                return -1;
+            foll[0] += s;
+        }
+        return 1;
+    default:
+        break;
+    }		
+    if (strncmp(op->proto,"JMP", 3) == 0 || strncmp(op->proto,"CALL", 4) == 0)
+        return 1;
+    foll[n++] = pc+i.n;
+    return n;
 }
+/*e: function i386foll */
+/*e: linkers/libmach/8db.c */
