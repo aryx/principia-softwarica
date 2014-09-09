@@ -100,6 +100,11 @@ enum
 	NOMORE		= -1000,
 };
 
+	/* command to clobber tempfiles after use */
+
+#define	ZAPFILE(x)	if(x) remove(x)
+
+
 	/* macros for getting associativity and precedence levels */
 
 #define ASSOC(i)	((i)&03)
@@ -122,10 +127,6 @@ enum
 #define WSLOOP(s,j)	for(j=s; j<cwp; j++)
 #define ITMLOOP(i,p,q)	for(q=pstate[i+1], p=pstate[i]; p<q; p++)
 #define SETLOOP(i)	for(i=0; i<tbitset; i++)
-
-	/* command to clobber tempfiles after use */
-
-#define	ZAPFILE(x)	if(x) remove(x)
 
 	/* I/O descriptors */
 
@@ -230,10 +231,9 @@ int	lastred; 		/* the number of the last reduction of a state */
 	/* lookahead set information */
 
 Lkset	lkst[LSETSIZE];
-int	nolook;			/* flag to turn off lookahead computations */
+int	nolook = 0;			/* flag to turn off lookahead computations */
 int	tbitset;		/* size of lookahead sets */
 int	nlset = 0;		/* next lookahead set index */
-int	nolook = 0;		/* flag to suppress lookahead computations */
 Lkset	clset;  		/* temporary storage for lookahead computations */
 
 	/* working set information */
@@ -256,12 +256,12 @@ int	nerrors = 0;		/* number of errors */
 
 	/* statistics collection variables */
 
-int	zzgoent;
-int	zzgobest;
-int	zzacent;
-int	zzexcp;
-int	zzclose;
-int	zzrrconf;
+int	zzgoent = 0;
+int	zzgobest = 0;
+int	zzacent = 0;
+int	zzexcp = 0;
+int	zzclose = 0;
+int	zzrrconf = 0;
 int	zzsrconf;
 
 int*	ggreed = lkst[0].lset;
@@ -286,14 +286,7 @@ int	pempty[NNONTERM+1];	/* vector of nonterminals nontrivially deriving e */
 
 int	indebug = 0;
 Wset*	zzcwp = wsets;
-int	zzgoent = 0;
-int	zzgobest = 0;
-int	zzacent = 0;
-int	zzexcp = 0;
-int	zzclose = 0;
-int	zzsrconf = 0;
 int*	zzmemsz = mem0;
-int	zzrrconf = 0;
 int	pidebug = 0;		/* debugging flag for putitem */
 int	gsdebug = 0;
 int	cldebug = 0;		/* debugging flag for closure */
