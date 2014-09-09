@@ -3,6 +3,7 @@
 #include <bio.h>
 
 #include "arm/5.out.h"
+//TODO: factorize with aa.h, see 8a/a.h
 
 typedef	struct	Sym	Sym;
 typedef	struct	Gen	Gen;

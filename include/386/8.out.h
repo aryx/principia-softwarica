@@ -1,4 +1,4 @@
-#define	NSYM	50
+
 #define	NSNAME	8
 #define NOPROF	(1<<0)
 #define DUPOK	(1<<1)
@@ -491,15 +491,3 @@ enum
  * this is the ranlib header
  */
 #define	SYMDEF	"__.SYMDEF"
-
-/*
- * this is the simulated IEEE floating point
- */
-struct	ieee
-{
-	long	l;	/* contains ls-man	0xffffffff */
-	long	h;	/* contains sign	0x80000000
-				    exp		0x7ff00000
-				    ms-man	0x000fffff */
-};
-typedef	struct	ieee	Ieee;

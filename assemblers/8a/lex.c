@@ -1,4 +1,3 @@
-#include <ctype.h>
 #include "a.h"
 #include "y.tab.h"
 

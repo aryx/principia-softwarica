@@ -3,29 +3,15 @@
 #include <bio.h>
 #include <ctype.h>
 
-#pragma	lib	"../aa/aa.a$O"
-
 // aa.h  is the generic part, the specific #include xxx/yyy.out.h is done in a.h
 //#include "386/8.out.h"
 //#include "mips/v.out.h"
 //#include "arm/5.out.h"
+#include <common.out.h>
+
+#pragma	lib	"../aa/aa.a$O"
 
 // was originally in a xxx/y.out.h (and was always the same in all archi)
-//
-#define	NSYM	50
-
-// was originally in a xxx/y.out.h (and was always the same in all archi)
-/*
- * this is the simulated IEEE floating point
- */
-typedef	struct	ieee	Ieee;
-struct	ieee
-{
-	long	l;	/* contains ls-man	0xffffffff */
-	long	h;	/* contains sign	0x80000000
-				    exp		0x7ff00000
-				    ms-man	0x000fffff */
-};
 
 // most of the content below was originally copy pasted in 8a/a.h, 5a/a.h, etc
 
@@ -34,17 +20,17 @@ typedef	struct	Ref	Ref;
 typedef struct  Io Io;
 typedef	struct	Hist	Hist;
 
-#define	NINCLUDE	10
 #define MAXALIGN 7
-#define	BUFSIZ		8192
-#define	NHASH		503
 #define	NSYMB		500
+#define	BUFSIZ		8192
+#define	HISTSZ		20
+#define	NINCLUDE	10
+#define	NHUNK		10000
 #define	EOF		(-1)
 #define	IGN		(-2)
 #define	GETC()		((--fi.c < 0)? filbuf(): *fi.p++ & 0xff)
-#define	HISTSZ		20
+#define	NHASH		503
 #define	STRINGSZ	200
-#define	NHUNK		10000
 
 
 struct	Sym
@@ -54,7 +40,7 @@ struct	Sym
 	Ref*	ref; // unused for 5a, matters?
 
 	char*	macro;
-	long	value; // vlong in va
+	long	value; // vlong in va!!
 	ushort	type;
 	char	*name;
 	char	sym;
@@ -105,23 +91,23 @@ struct	Hist
 
 
 // was in a.h
+extern	Sym*	hash[NHASH];
+extern	Hist*	hist;
 extern	char*	hunk;
+extern	char*	include[NINCLUDE];
+extern	Io*	iofree;
+extern	Io*	ionext;
+extern	Io*	iostack;
+extern	long	lineno;
+extern	int	nerrors;
 extern	long	nhunk;
 extern	int	ninclude;
 extern	char*	outfile;
-extern	Io*	iostack;
-extern	Io*	iofree;
-extern	Io*	ionext;
-extern	int	thechar;
-extern	char	symb[NSYMB];
-extern	Sym*	hash[NHASH];
-extern	int	peekc;
-extern	long	lineno;
-extern	int	nerrors;
-extern	char*	include[NINCLUDE];
 extern	long	pc;
+extern	int	peekc;
 extern	int	sym;
-extern	Hist*	hist;
+extern	char	symb[NSYMB];
+extern	int	thechar;
 
 // for macbody, was in a.h
 extern	char	debug[256];
@@ -166,6 +152,9 @@ void	pushio(void);
 void	newio(void);
 void	newfile(char*, int);
 void	errorexit(void);
+
+// from lexbody.c
+void ieeedtod(Ieee *ieee, double native);
 
 /*
  *	system-dependent stuff from ../cc/compat.c

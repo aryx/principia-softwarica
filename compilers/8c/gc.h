@@ -1,5 +1,6 @@
 /*s: 8c/gc.h */
 #include	"../cc/cc.h"
+#include	<common.out.h>
 #include	"386/8.out.h"
 
 /*s: constant SZ_CHAR */
