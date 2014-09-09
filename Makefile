@@ -67,7 +67,8 @@ graph_windows2:
 NWDIRS=kernel windows shells \
        assemblers compilers linkers\
        builders debuggers
-#TODO: ... profiler ...  lex yacc
+#TODO: ... profiler ...  generator lex yacc
+#LATER: network security
 
 sync:
 	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i sync || exit 1; done 
