@@ -1,7 +1,5 @@
 # include "ldefs.h"
 
-extern int nine;
-
 void
 phead1(void)
 {
