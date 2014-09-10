@@ -1,14 +1,18 @@
+/*s: generators/lex/liblex/allprint.c */
 #include	"../ldefs.h"
 //#include	<stdio.h>
 
+/*s: function printable */
 //extern	FILE*	yyout;
 
 int
 printable(int c)
 {
-	return 040 < c && c < 0177;
+    return 040 < c && c < 0177;
 }
+/*e: function printable */
 
+/*s: function allprint */
 void
 allprint(int c)
 {
@@ -36,3 +40,5 @@ allprint(int c)
 //	}
 //	return;
 }
+/*e: function allprint */
+/*e: generators/lex/liblex/allprint.c */

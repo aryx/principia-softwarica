@@ -1,3 +1,4 @@
+/*s: generators/lex/liblex/reject.c */
 #include	<u.h>
 #include	<libc.h>
 //#include	<stdio.h>
@@ -12,8 +13,8 @@ extern	int	yyleng;
 extern
 struct
 {
-	int *yyaa, *yybb;
-	int *yystops;
+    int *yyaa, *yybb;
+    int *yystops;
 } *yylstate [], **yylsp, **yyolsp;
 
 int	yyback(int *p, int m);
@@ -21,38 +22,43 @@ int	yyinput(void);
 void	yyoutput(int c);
 void	yyunput(int c);
 
+/*s: function yyracc */
 int
 yyracc(int m)
 {
 
-	yyolsp = yylsp;
-	if(yyextra[m]) {
-		while(yyback((*yylsp)->yystops, -m) != 1 && yylsp > yylstate) {
-			yylsp--;
-			yyunput(yytext[--yyleng]);
-		}
-	}
-	yyprevious = yytext[yyleng-1];
-	yytext[yyleng] = 0;
-	return m;
+    yyolsp = yylsp;
+    if(yyextra[m]) {
+        while(yyback((*yylsp)->yystops, -m) != 1 && yylsp > yylstate) {
+            yylsp--;
+            yyunput(yytext[--yyleng]);
+        }
+    }
+    yyprevious = yytext[yyleng-1];
+    yytext[yyleng] = 0;
+    return m;
 }
+/*e: function yyracc */
 
+/*s: function yyreject */
 int
 yyreject(void)
 {
-	for(; yylsp < yyolsp; yylsp++)
-		yytext[yyleng++] = yyinput();
-	if(*yyfnd > 0)
-		return yyracc(*yyfnd++);
-	while(yylsp-- > yylstate) {
-		yyunput(yytext[yyleng-1]);
-		yytext[--yyleng] = 0;
-		if(*yylsp != 0 && (yyfnd = (*yylsp)->yystops) && *yyfnd > 0)
-			return yyracc(*yyfnd++);
-	}
-	if(yytext[0] == 0)
-		return 0;
-	yyoutput(yyprevious = yyinput());
-	yyleng = 0;
-	return -1;
+    for(; yylsp < yyolsp; yylsp++)
+        yytext[yyleng++] = yyinput();
+    if(*yyfnd > 0)
+        return yyracc(*yyfnd++);
+    while(yylsp-- > yylstate) {
+        yyunput(yytext[yyleng-1]);
+        yytext[--yyleng] = 0;
+        if(*yylsp != 0 && (yyfnd = (*yylsp)->yystops) && *yyfnd > 0)
+            return yyracc(*yyfnd++);
+    }
+    if(yytext[0] == 0)
+        return 0;
+    yyoutput(yyprevious = yyinput());
+    yyleng = 0;
+    return -1;
 }
+/*e: function yyreject */
+/*e: generators/lex/liblex/reject.c */

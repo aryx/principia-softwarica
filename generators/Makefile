@@ -20,6 +20,19 @@ SRC_ORIG=CompilerGenerator.tex.nw CompilerGenerator_extra.tex.nw
 
 #TODO yacc/yaccpar lex/ncform (which then add pragma to libl.a)   lex/parser.y
 SRC_VIEWS= \
+  lex/ldefs.h\
+  lex/liblex/allprint.c\
+  lex/liblex/main.c\
+  lex/liblex/reject.c\
+  lex/liblex/yyless.c\
+  lex/liblex/yywrap.c\
+  lex/globals.c\
+  lex/header.c\
+  lex/sub1.c\
+  lex/sub2.c\
+  lex/lmain.c\
+  yacc/yacc.c\
 
+# y.tab.[ch]
 
 #less: can remove yaccpars, unix compatibility
