@@ -66,8 +66,8 @@ graph_windows2:
 
 NWDIRS=kernel windows shells \
        assemblers compilers linkers\
-       builders debuggers
-#TODO: ... profiler ...  generator lex yacc
+       builders debuggers generators
+#TODO: profiler
 #LATER: network security
 
 sync:
