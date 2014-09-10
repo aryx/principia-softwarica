@@ -103,7 +103,7 @@ char	symdef[] =	"__.SYMDEF";
 int	aflag;				/* command line flags */
 /*e: global aflag */
 /*s: global bflag */
-int	bflag;
+static int	bflag;
 /*e: global bflag */
 /*s: global cflag */
 int	cflag;

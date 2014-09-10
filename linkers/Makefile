@@ -18,7 +18,7 @@ TEX=Linker.tex
 # to work
 SRC_ORIG=Linker.tex.nw Linker_extra.tex.nw
 
-
+# actually also dependency to 8c/enam.c for anmes
 SRC_VIEWS= \
   ../include/a.out.h\
   ../include/ar.h\
