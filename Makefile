@@ -1,4 +1,3 @@
-
 # on a MAC
 DISK="/Volumes/DISK Image"
 
@@ -37,9 +36,9 @@ clean:
 visual:
 	~/pfff/codemap.opt -no_legend -no_symlinks -filter cpp -ss 2 .
 graph:
-	~/pfff/codegraph -derived_data -lang clang2 -build .
+	~/pfff/codegraph -derived_data -lang c -build .
 tags:
-	~/pfff/codegraph -derived_data -lang clang2 -build .
+	~/pfff/codegraph -derived_data -lang c -build .
 check:
 	~/pfff/scheck -filter 3 -lang c .
 
@@ -64,12 +63,13 @@ graph_windows:
 graph_windows2:
 	~/pfff/codegraph -derived_data -lang c -build include/ lib_graphics/ windows/
 
+
+
 NWDIRS=kernel windows shells \
        assemblers compilers linkers\
        builders debuggers profilers generators
-#TODO: lib_core (with libc, fmt, libthread, malloc, libregexp, libbio, libstring)
-#LATER: network security
-
+#TODO: lib (libc, fmt, libthread, malloc, libregexp, libbio, libstring, ...)
+#LATER: network/ security/
 
 sync:
 	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i sync || exit 1; done 
@@ -78,36 +78,13 @@ sync:
 lpdistclean:
 	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i lpdistclean || exit 1; done 
 
-#trace:
-#	mk clean
-#	mk libs > make_trace.txt
-#	mk kernels >> make_trace.txt
-#	mk cmds >> make_trace.txt
-#
+visual2:
+	~/pfff/codemap.opt -no_legend -no_symlinks -filter nw -ss 2 .
 
-# when was using graph_code_clang
-#graph2:
-#	~/pfff/codegraph -derived_data -lang clang2 -build include/ kernel/
-#check2:
-#	~/pfff/scheck -filter 3 -lang clang2 .
-#prolog2:
-#	~/pfff/codequery -lang clang2 -build include/ kernel/
-# take quite some time :(
-#clangfiles:
-#	~/pfff/pfff -gen_clang compile_commands.json
-#        # empty file because of segfault in clang-check, probably because unicode chars
-#	rm -f kernel/devices/keyboard/386/latin1.clang 
-#	~/pfff/pfff_test.opt -uninclude_clang .
+
 #	cp sys/src/9/pc/apbootstrap.h kernel/init/386/
-#	mv sys/src/9/pc/apbootstrap.h.clang2 kernel/init/386/
 #	cp sys/src/9/pc/init.h kernel/init/user/preboot
-#	mv sys/src/9/pc/init.h.clang2 kernel/init/user/preboot
 #	cp sys/src/9/pc/reboot.h kernel/init/386
-#	mv sys/src/9/pc/reboot.h.clang2 kernel/init/386/
 #	cp sys/src/9/pc/$(CONFIG).c kernel/conf
 #	cp sys/src/9/pc/$(CONFIG).rootc.c kernel/conf
 #	mv sys/src/9/pc/*.clang2 kernel/conf
-##	~/pfff/pfff_test -analyze_make_trace make_trace.txt > compile_commands.json
-#
-#clangclean:
-#	find -name "*.clang*" -exec rm -f {} \;
