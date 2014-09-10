@@ -5,7 +5,9 @@
 // I prefer a dupe to a wrong edge
 char* argv0 = nil;
 
-#define cycles(x) nil
+void cycles(int x) {
+}
 
 // in 9syscalls/
-#define sleep(x) nil
+void sleep(int x) {
+}

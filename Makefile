@@ -67,7 +67,9 @@ graph_windows2:
 NWDIRS=kernel windows shells \
        assemblers compilers linkers\
        builders debuggers profilers generators
+#TODO: lib_core (with libc, fmt, libthread, malloc, libregexp, libbio, libstring)
 #LATER: network security
+
 
 sync:
 	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i sync || exit 1; done 
