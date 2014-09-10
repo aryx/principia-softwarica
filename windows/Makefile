@@ -139,7 +139,6 @@ SRC_VIEWS= \
    apps/screenlock.c\
    apps/statusbar.c\
    apps/winwatch.c\
-   codegraph.h\
    libcomplete/complete.c\
    libframe/frbox.c\
    libframe/frdelete.c\
@@ -192,4 +191,5 @@ SRC_VIEWS= \
 
 #   ../lib_graphics/libmemdraw/hwdraw.c\
    ../kernel/devices/screen/386/cga.c\
+$   codegraph.h
 
