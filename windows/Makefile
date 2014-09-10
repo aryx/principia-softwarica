@@ -122,6 +122,7 @@ SRC_VIEWS= \
    ../lib_graphics/libmemlayer/ltorear.c\
    ../lib_graphics/libmemlayer/unload.c\
    rio/dat.h\
+   rio/globals.c\
    rio/data.c\
    rio/fns.h\
    rio/fsys.c\
