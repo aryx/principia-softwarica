@@ -140,7 +140,7 @@ static Bhdr*	blocksetsize(Bhdr*, ulong);
 static ulong	bsize2asize(Pool*, ulong);
 static ulong	dsize2bsize(Pool*, ulong);
 static ulong	getdsize(Alloc*);
-//static Alloc*	trim(Pool*, Alloc*, ulong);
+static Alloc*	trim(Pool*, Alloc*, ulong);
 static Free*	listadd(Free*, Free*);
 static void		logstack(Pool*);
 static Free**	ltreewalk(Free**, ulong);
@@ -531,7 +531,7 @@ blocksetdsize(Pool *p, Alloc *b, ulong dsize)
 }
 
 /* trim: trim a block down to what is needed to hold dsize bytes of user data */
-static Alloc*
+Alloc*
 trim(Pool *p, Alloc *b, ulong dsize)
 {
 	ulong extra, bsize;
