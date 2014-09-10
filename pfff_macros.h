@@ -24,7 +24,7 @@
 
 
 // generators/yacc/yacc.c
-// TODO: could improve loop heuristic finder in pp_hacks?
+// (could improve loop heuristic finder in pp_hacks?)
 #define TLOOP(i)	for(i=1; i<=ntokens; i++)
 #define NTLOOP(i)	for(i=0; i<=nnonter; i++)
 #define PLOOP(s,i)	for(i=s; i<nprod; i++)
@@ -33,3 +33,16 @@
 #define WSLOOP(s,j)	for(j=s; j<cwp; j++)
 #define ITMLOOP(i,p,q)	for(q=pstate[i+1], p=pstate[i]; p<q; p++)
 #define SETLOOP(i)	for(i=0; i<tbitset; i++)
+
+// lib_core/libc/port/pool.c
+#define antagonism	if(!(p->flags & POOL_ANTAGONISM)){}else
+#define paranoia	if(!(p->flags & POOL_PARANOIA)){}else
+#define verbosity	if(!(p->flags & POOL_VERBOSITY)){}else
+
+// linkers/libmach/8.c
+// otherwise get wrong dependency on the argument that looks like an entity
+#define	REGOFF(x)	(ulong)(&((struct Ureg *) 0)->x)
+
+// shells/rc/exec.c
+// otherwise get wrong dependency on the argument that looks like a global
+//#define	new(type)	((type *)emalloc(sizeof(type)))
