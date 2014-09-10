@@ -19,6 +19,7 @@ TEX=Debugger.tex
 SRC_ORIG=Debugger.tex.nw Debugger_extra.tex.nw
 
 #TODO: acid/dbg.y cc/acid.c?
+# TODO misc/leak misc/kmem? misc/umem? snap?
 SRC_VIEWS= \
    tracers/ktrace.c\
    tracers/strace.c\
