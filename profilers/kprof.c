@@ -11,7 +11,7 @@ struct COUNTER
 	long	time;		/* ticks spent there */
 };
 
-void
+static void
 error(int perr, char *s)
 {
 	fprint(2, "kprof: %s", s);
@@ -23,7 +23,7 @@ error(int perr, char *s)
 	exits(s);
 }
 
-int
+static int
 compar(void *va, void *vb)
 {
 	struct COUNTER *a, *b;

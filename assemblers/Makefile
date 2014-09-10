@@ -18,7 +18,7 @@ TEX=Assembler.tex
 # to work
 SRC_ORIG=Assembler.tex.nw Assembler_extra.tex.nw
 
-#TODO: a.y
+#TODO: 8a/a.y
 SRC_VIEWS= \
   ../include/386/8.out.h\
   ../include/common.out.h\
@@ -32,4 +32,4 @@ SRC_VIEWS= \
   8a/globals.c\
   8a/lex.c\
 
-#8a/y.tab.h
+#skip: 8a/y.tab.[ch], comes from 8a/a.y

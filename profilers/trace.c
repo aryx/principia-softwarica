@@ -30,9 +30,9 @@ enum {
 	MilliRound = US(1)/2LL,
 };
 
-typedef struct Event Event;
+typedef struct TEvent TEvent;
 typedef struct Task Task;
-struct Event {
+struct TEvent {
 	Traceevent;
 	vlong	etime;	/* length of block to draw */
 };
@@ -41,7 +41,7 @@ struct Task {
 	int	pid;
 	char	*name;
 	int	nevents;	
-	Event	*events;
+	TEvent	*events;
 	vlong	tstart;
 	vlong	total;
 	vlong	runtime;
@@ -68,7 +68,7 @@ int	lineht = 12;
 int	wctlfd;
 int	nevents;
 Traceevent *eventbuf;
-Event	*event;
+TEvent	*event;
 
 void drawtrace(void);
 int schedparse(char*, char*, char*);
@@ -121,10 +121,11 @@ struct scale scales[] = {
 	{	S(1000),	S(500),		S(100),		100},
 };
 
-int ntasks, verbose, triggerproc, paused;
+int ntasks, triggerproc, paused;
+static int verbose;
 Task *tasks;
-Image *cols[Ncolor][4];
-Font *mediumfont, *tinyfont;
+static Image *cols[Ncolor][4];
+static Font *mediumfont, *tinyfont;
 Image *grey, *red, *green, *blue, *bg, *fg;
 char*profdev = "/proc/trace";
 
@@ -305,12 +306,12 @@ redraw(int scaleno)
 				break;
 			
 		if (i > 0) {
-			memmove(t->events, t->events + i, (t->nevents - i) * sizeof(Event));
+			memmove(t->events, t->events + i, (t->nevents - i) * sizeof(TEvent));
 			t->nevents -= i;
 		}
 
 		for (i = 0; i != t->nevents; i++) {
-			Event *e = &t->events[i], *_e;
+			TEvent *e = &t->events[i], *_e;
 			int sx, ex;
 
 			switch (e->etype & 0xffff) {
@@ -505,12 +506,12 @@ void
 doevent(Task *t, Traceevent *ep)
 {
 	int i, n;
-	Event *event;
+	TEvent *event;
 	vlong runt;
 
 	t->tevents[ep->etype & 0xffff]++;
 	n = t->nevents++;
-	t->events = realloc(t->events, t->nevents*sizeof(Event));
+	t->events = realloc(t->events, t->nevents*sizeof(TEvent));
 	assert(t->events);
 	event = &t->events[n];
 	memmove(event, ep, sizeof(Traceevent));

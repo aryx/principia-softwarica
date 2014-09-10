@@ -11,7 +11,7 @@ struct COUNTER
 	long	time;		/* ticks spent there */
 };
 
-void
+static void
 error(int perr, char *s)
 {
 	fprint(2, "tprof: %s", s);

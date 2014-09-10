@@ -3,8 +3,15 @@
 
 char	output[4096];
 void	add(char*, ...);
-void	error(char*);
 void	notifyf(void*, char*);
+
+static void
+error(char *s)
+{
+
+	fprint(2, "time: %s: %r\n", s);
+	exits(s);
+}
 
 void
 main(int argc, char *argv[])
@@ -83,13 +90,6 @@ add(char *a, ...)
 	beenhere++;
 }
 
-void
-error(char *s)
-{
-
-	fprint(2, "time: %s: %r\n", s);
-	exits(s);
-}
 
 void
 notifyf(void *a, char *s)

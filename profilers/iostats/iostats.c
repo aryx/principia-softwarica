@@ -29,7 +29,7 @@ void (*fcalls[])(Fsrpc*) =
 
 int p[2];
 
-void
+static void
 usage(void)
 {
 	fprint(2, "usage: iostats [-d] [-f debugfile] cmds [args ...]\n");
