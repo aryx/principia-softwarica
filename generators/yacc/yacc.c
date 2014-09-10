@@ -2519,7 +2519,7 @@ apack(int *p, int n)
     q = p+n;
     for(pp = p, off = 0; *pp == 0 && pp <= q; ++pp, --off)
         ;
- 	/* no actions */
+  /* no actions */
     if(pp > q)
         return 0;
     p = pp;

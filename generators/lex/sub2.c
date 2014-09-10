@@ -636,7 +636,7 @@ acompute(int s)	/* compute action list = set of poss. actions */
     /* copy to permanent quarters */
     atable[s] = aptr;
     if(debug) // was in #ifdef DEBUG with no if(debug) before, so good like this?
-    	Bprint(&fout,"/* actions for state %d */",s);
+     Bprint(&fout,"/* actions for state %d */",s);
     Bputc(&fout, '\n');
     for(i=0;i<k;i++)
         if(temp[i] != 0){
@@ -789,7 +789,7 @@ layout(void)
             Bprint(&fout,"yyvstop+%d,",atable[i]);
         else Bprint(&fout,"0,\t");
         if(debug) // was just in ifdef DEBUG before with no if(debug), good?
-     		Bprint(&fout,"\t\t/* state %d */",i);
+       Bprint(&fout,"\t\t/* state %d */",i);
         Bputc(&fout, '\n');
     }
     Bprint(&fout,"0,\t0,\t0};\n");

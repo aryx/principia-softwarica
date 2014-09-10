@@ -74,9 +74,9 @@ phead1(void)
     else {
         Bprint(&fout,"# define output(c) putc(c,yyout)\n");
         Bprint(&fout, "%s%d%s\n",
- 		 "# define input() (((yytchar=yysptr>yysbuf?U(*--yysptr):getc(yyin))==",
+    "# define input() (((yytchar=yysptr>yysbuf?U(*--yysptr):getc(yyin))==",
         '\n',
- 		"?(yylineno++,yytchar):yytchar)==EOF?0:yytchar)");
+   "?(yylineno++,yytchar):yytchar)==EOF?0:yytchar)");
     }
 }
 /*e: function phead1 */
