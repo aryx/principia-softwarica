@@ -1,0 +1,317 @@
+
+These are the differences between the original code contained in
+the book "Scheme 9 from Empty Space" and the source code contained
+in this archive. --nmh 2009-02-01
+
+--- s9.c.old	2009-02-01 10:50:09.000000000 +0100
++++ s9.c	2009-02-01 11:03:25.000000000 +0100
+@@ -11,7 +11,7 @@
+ 
+ int	Debug_GC = 0;
+ 
+-#define VERSION	"2007-07-06"
++#define VERSION	"2007-07-06 (with errata of 2008)"
+ 
+ /*
+  * Tell later MSC compilers to let us use the standard CLIB API.
+@@ -542,12 +542,13 @@
+ }
+ 
+ int add_symbol(char *s) {
+-	int	y;
++	int	y, new;
+ 
+ 	y = find_symbol(s);
+ 	if (y != NIL) return y;
+ 	Symbols = alloc(NIL, Symbols);
+-	Car[Symbols] = make_symbol(s, strlen(s));
++	new = make_symbol(s, strlen(s));
++	Car[Symbols] = new;
+ 	return Car[Symbols];
+ }
+ 
+@@ -562,6 +563,7 @@
+ 		m,	/* List */
+ 		a,	/* Used to append nodes to m */
+ 		c;	/* Member counter */
++	int	new;
+ 	char	*badpair;
+ 
+ 	badpair = "bad pair";
+@@ -604,7 +606,8 @@
+ 		else
+ 			a = Cdr[a];	/* Following members: append */
+ 		Car[a] = n;
+-		Cdr[a] = alloc(NIL, NIL); /* Alloc space for next member */
++		new = alloc(NIL, NIL); /* Alloc space for next member */
++		Cdr[a] = new;
+ 		c = c+1;
+ 	}
+ 	Level = Level-1;
+@@ -698,6 +701,21 @@
+ 	return n;
+ }
+ 
++/* Clone an existing string.
++ * When copying a string to a string, the source string
++ * may get relocated during vector pool compaction.
++ * Hence this routine must be used instead of make_string().
++ */
++int clone_string(int s, int k) {
++	int	n;
++
++	save(s);
++	n = allocv(S_string, k+1);
++	strcpy(string(n), string(s));
++	unsave(1);
++	return n;
++}
++
+ /* Read a string literal. */
+ int string_literal(void) {
+ 	char	s[TEXT_LEN+1];
+@@ -1140,7 +1158,7 @@
+ }
+ 
+ int flat_copy(int n, int *lastp) {
+-	int     a, m, last;
++	int     a, m, last, new;
+ 
+ 	if (n == NIL) {
+ 		lastp[0] = NIL;
+@@ -1155,7 +1173,8 @@
+ 		last = a;
+ 		n = Cdr[n];
+ 		if (n != NIL) {
+-			Cdr[a] = alloc(NIL, NIL);
++			new = alloc(NIL, NIL);
++			Cdr[a] = new;
+ 			a = Cdr[a];
+ 		}
+ 	}
+@@ -1182,9 +1201,11 @@
+ 	int		i, p, *v;
+ 	unsigned int	h, k = length(e)-1;
+ 	char		*s;
++	int		new;
+ 
+ 	if (Program == NIL || k < HASH_THRESHOLD) return;
+-	Car[e] = allocv(S_vector, k * sizeof(int));
++	new = allocv(S_vector, k * sizeof(int));
++	Car[e] = new;
+ 	v = vector(Car[e]);
+ 	for (i=0; i<k; i++) v[i] = NIL;
+ 	p = Cdr[e];
+@@ -1198,11 +1219,12 @@
+ }
+ 
+ int extend(int v, int a, int e) {
+-	int	n;
++	int	n, new;
+ 
+ 	n = alloc(a, NIL);
+ 	n = alloc(v, n);
+-	Cdr[e] = alloc(n, Cdr[e]);
++	new = alloc(n, Cdr[e]);
++	Cdr[e] = new;
+ 	rehash(e);
+ 	return e;
+ }
+@@ -1452,7 +1474,7 @@
+ 
+ /* Extract variables or arguments from a set of DEFINEs. */
+ int extract_from_defines(int x, int part, int *restp) {
+-	int	a, n;
++	int	a, n, new;
+ 
+ 	a = NIL;
+ 	while (x != NIL) {
+@@ -1469,8 +1491,9 @@
+ 			else {
+ 				a = alloc(NIL, a);
+ 				save(a);
+-				Car[a] = alloc(cdadr(n), cddr(n));
+-				Car[a] = alloc(S_lambda, Car[a]);
++				new = alloc(cdadr(n), cddr(n));
++				new = alloc(S_lambda, new);
++				Car[a] = new;
+ 				unsave(1);
+ 			}
+ 		}
+@@ -1591,7 +1614,7 @@
+ }
+ 
+ int sf_define(int x, int *pc, int *ps) {
+-	int	v, a, n, k;
++	int	v, a, n, k, new;
+ 
+ 	if (Car[State_stack] == MARGS)
+ 		return error("define: bad local context", x);
+@@ -1613,7 +1636,8 @@
+ 	}
+ 	v = find_local_variable(n, Car[Environment]);
+ 	if (v == NIL) {
+-		Car[Environment] = extend(n, UNDEFINED, Car[Environment]);
++		new = extend(n, UNDEFINED, Car[Environment]);
++		Car[Environment] = new;
+ 		v = cadar(Environment);
+ 	}
+ 	save(Cdr[v]);
+@@ -1627,7 +1651,7 @@
+ }
+ 
+ int sf_define_syntax(int x, int *pc, int *ps) {
+-	int	a, n, v, k = length(x);
++	int	a, n, v, new, k = length(x);
+ 
+ 	if (k < 3) return too_few_args(x);
+ 	if (k > 3) return too_many_args(x);
+@@ -1637,7 +1661,8 @@
+ 	n = cadr(x);
+ 	v = lookup(n, Environment);
+ 	if (v == NIL) {
+-		Car[Environment] = extend(n, UNDEFINED, Car[Environment]);
++		new = extend(n, UNDEFINED, Car[Environment]);
++		Car[Environment] = new;
+ 		v = cadar(Environment);
+ 	}
+ 	save(Cdr[v]);
+@@ -2569,7 +2594,7 @@
+ 
+ int pp_string_to_list(int x) {
+ 	char	*s;
+-	int	n, a, k, i;
++	int	n, a, k, i, new;
+ 
+ 	s = string(cadr(x));
+ 	k = string_len(cadr(x));
+@@ -2581,7 +2606,8 @@
+ 			save(n);
+ 		}
+ 		else {
+-			Cdr[a] = alloc(make_char(s[i]), NIL);
++			new = alloc(make_char(s[i]), NIL);
++			Cdr[a] = new;
+ 			a = Cdr[a];
+ 		}
+ 	}
+@@ -2590,9 +2616,23 @@
+ }
+ 
+ int pp_string_to_symbol(int x) {
+-	return add_symbol(string(cadr(x)));
++	int	y, n;
++	char    *s = string(cadr(x));
++ 
++	y = find_symbol(s);
++	if (y != NIL) return y;
++	/*
++	 * Cannot use make_symbol(), because
++	 * string(cadr(x)) may move during GC.
++	*/
++	Symbols = alloc(NIL, Symbols);
++	n = allocv(S_symbol, strlen(s)+1);
++	Car[Symbols] = n;
++	strcpy(string(n), string(cadr(x)));
++	return Car[Symbols];
+ }
+ 
++
+ int pp_string_append(int x) {
+ 	int	p, k, n;
+ 	char	*s;
+@@ -2615,7 +2655,7 @@
+ }
+ 
+ int pp_string_copy(int x) {
+-	return make_string(string(cadr(x)), string_len(cadr(x))-1);
++	return clone_string(cadr(x), string_len(cadr(x))-1);
+ }
+ 
+ int pp_string_fill_b(int x) {
+@@ -2729,9 +2769,7 @@
+ }
+ 
+ int pp_symbol_to_string(int x) {
+-	char	*s = string(cadr(x));
+-
+-	return make_string(s, strlen(s));
++	return clone_string(cadr(x), (int) strlen(string(cadr(x))));
+ }
+ 
+ int pp_symbol_p(int x) {
+@@ -2776,7 +2814,7 @@
+ }
+ 
+ int pp_vector_to_list(int x) {
+-	int	*v, n, a, k, i;
++	int	*v, n, a, k, i, new;
+ 
+ 	v = vector(cadr(x));
+ 	k = vector_len(cadr(x));
+@@ -2788,7 +2826,8 @@
+ 			save(n);
+ 		}
+ 		else {
+-			Cdr[a] = alloc(v[i], NIL);
++			new = alloc(v[i], NIL);
++			Cdr[a] = new;
+ 			a = Cdr[a];
+ 		}
+ 	}
+@@ -3140,7 +3179,7 @@
+ int _eval(int x);
+ 
+ int expand_qq(int x, int app) {
+-	int	n, a;
++	int	n, a, new;
+ 
+ 	if (Error_flag) return x;
+ 	if (atom_p(x)) return x;
+@@ -3158,7 +3197,8 @@
+ 			a = n;
+ 		}
+ 		else {
+-			Cdr[a] = alloc(expand_qq(Car[x], app), NIL);
++			new = alloc(expand_qq(Car[x], app), NIL);
++			Cdr[a] = new;
+ 			a = Cdr[a];
+ 		}
+ 		x = Cdr[x];
+@@ -3183,7 +3223,7 @@
+ }
+ 
+ int expand_all_syntax(int x, int app) {
+-	int	y, n, a;
++	int	y, n, a, new;
+ 
+ 	if (Error_flag) return x;
+ 	if (atom_p(x)) return x;
+@@ -3204,7 +3244,8 @@
+ 			a = n;
+ 		}
+ 		else {
+-			Cdr[a] = alloc(expand_all_syntax(Car[x], app), NIL);
++			new = alloc(expand_all_syntax(Car[x], app), NIL);
++			Cdr[a] = new;
+ 			a = Cdr[a];
+ 		}
+ 		x = Cdr[x];
+@@ -3319,6 +3360,7 @@
+ 		s,	/* Current state */
+ 		c;	/* Continuation */
+ 	int	name;	/* Name of procedure to apply */
++	int	new;
+ 
+ 	save(x);
+ 	save(State_stack);
+@@ -3443,7 +3485,8 @@
+ 			}
+ 			else {		/* N =/= NIL: Append to list */
+ 				/* Create space for next argument */
+-				Cdr[a] = alloc(NIL, NIL);
++				new = alloc(NIL, NIL);
++				Cdr[a] = new;
+ 				rib_append(rib) = Cdr[a];
+ 				rib_args(rib) = Cdr[x];
+ 				x = Car[x];	/* Evaluate next member */
