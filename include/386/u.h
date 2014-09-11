@@ -1,25 +1,35 @@
 // called u.h mainly because of all those uxxx typedefs
 
 #define nil		((void*)0)
+
 typedef	unsigned short	ushort;
 typedef	unsigned char	uchar;
 typedef unsigned long	ulong;
 typedef unsigned int	uint;
+
 typedef   signed char	schar;
+
 typedef	long long	vlong;
 typedef	unsigned long long uvlong;
+
 typedef unsigned long	uintptr;
+
 typedef unsigned long	usize;
+
 typedef	uint		Rune;
+
 typedef union FPdbleword FPdbleword;
+
 typedef long		jmp_buf[2];
 #define	JMPBUFSP	0
 #define	JMPBUFPC	1
 #define	JMPBUFDPC	0
+
 typedef unsigned int	mpdigit;	/* for /sys/include/mp.h */
 typedef unsigned char	u8int;
 typedef unsigned short	u16int;
 typedef unsigned int	u32int;
+// and unsigned long? u32bit too?
 typedef unsigned long long u64int;
 
 /* FCR */
@@ -43,6 +53,7 @@ typedef unsigned long long u64int;
 #define	FPAUNFL	FPUNFL
 #define	FPAZDIV	FPZDIV
 #define	FPAINVAL	FPINVAL
+
 union FPdbleword
 {
 	double	x;
@@ -53,12 +64,15 @@ union FPdbleword
 };
 
 typedef	char*	va_list;
+
 #define va_start(list, start) list =\
 	(sizeof(start) < 4?\
 		(char*)((int*)&(start)+1):\
 		(char*)(&(start)+1))
+
 #define va_end(list)\
 	USED(list)
+
 #define va_arg(list, mode)\
 	((sizeof(mode) == 1)?\
 		((list += 4), (mode*)list)[-4]:\

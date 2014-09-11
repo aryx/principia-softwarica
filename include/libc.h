@@ -116,8 +116,8 @@ extern	void*	malloctopoolblock(void*);
 /*
  * print routines
  */
-typedef struct Fmt	Fmt;
-struct Fmt{
+typedef struct Fmt Fmt;
+struct Fmt {
 	uchar	runes;			/* output buffer is runes or chars? */
 	void	*start;			/* of buffer */
 	void	*to;			/* current place in the buffer */
@@ -317,8 +317,7 @@ extern	double	fmod(double, double);
  * Time-of-day
  */
 
-typedef
-struct Tm
+typedef struct Tm
 {
 	int	sec;
 	int	min;
@@ -411,7 +410,7 @@ extern	int	toupper(int);
 /*
  *  profiling
  */
-enum {
+enum prof {
 	Profoff,		/* No profiling */
 	Profuser,		/* Measure user time only (default) */
 	Profkernel,		/* Measure user + kernel time */
@@ -432,8 +431,7 @@ int	casl(ulong*, ulong, ulong);
 /*
  *  synchronization
  */
-typedef
-struct Lock {
+typedef struct Lock {
 	long	key;
 	long	sem;
 } Lock;
@@ -452,8 +450,7 @@ struct QLp
 	char	state;
 };
 
-typedef
-struct QLock
+typedef struct QLock
 {
 	Lock	lock;
 	int	locked;
@@ -466,8 +463,7 @@ extern	void	qunlock(QLock*);
 extern	int	canqlock(QLock*);
 extern	void	_qlockinit(void* (*)(void*, void*));	/* called only by the thread library */
 
-typedef
-struct RWLock
+typedef struct RWLock
 {
 	Lock	lock;
 	int	readers;	/* number of readers */
@@ -483,9 +479,7 @@ extern	void	wlock(RWLock*);
 extern	void	wunlock(RWLock*);
 extern	int	canwlock(RWLock*);
 
-typedef
-struct Rendez
-{
+typedef struct Rendez {
 	QLock	*l;
 	QLp	*head;
 	QLp	*tail;
@@ -519,8 +513,7 @@ extern	int	pushtls(int, char*, char*, int, char*, char*);
 /*
  *  network services
  */
-typedef struct NetConnInfo NetConnInfo;
-struct NetConnInfo
+typedef struct NetConnInfo
 {
 	char	*dir;		/* connection directory */
 	char	*root;		/* network root */
@@ -531,7 +524,7 @@ struct NetConnInfo
 	char	*rserv;		/* remote service */
 	char	*laddr;		/* local address */
 	char	*raddr;		/* remote address */
-};
+} NetConnInfo;
 extern	NetConnInfo*	getnetconninfo(char*, int);
 extern	void		freenetconninfo(NetConnInfo*);
 
@@ -613,16 +606,14 @@ enum
 };
 
 // Qid as in uniQue id
-typedef
-struct Qid
+typedef struct Qid
 {
 	uvlong	path;
 	ulong	vers;
 	uchar	type;
 } Qid;
 
-typedef
-struct Dir {
+typedef struct Dir {
 	/* system-modified data */
 	ushort	type;	/* server type */
 	uint	dev;	/* server subtype */
@@ -639,16 +630,14 @@ struct Dir {
 } Dir;
 
 /* keep /sys/src/ape/lib/ap/plan9/sys9.h in sync with this -rsc */
-typedef
-struct Waitmsg
+typedef struct Waitmsg
 {
 	int	pid;		/* of loved one */
 	ulong	time[3];	/* of loved one & descendants */
 	char	*msg;
 } Waitmsg;
 
-typedef
-struct IOchunk
+typedef struct IOchunk
 {
 	void	*addr;
 	ulong	len;
@@ -723,6 +712,7 @@ extern	char*	sysname(void);
 extern	void	werrstr(char*, ...);
 #pragma	varargck	argpos	werrstr	1
 
+// getopt like macros
 extern char *argv0;
 #define	ARGBEGIN	for((argv0||(argv0=*argv)),argv++,argc--;\
 			    argv[0] && argv[0][0]=='-' && argv[0][1];\

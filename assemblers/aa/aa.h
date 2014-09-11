@@ -4,7 +4,8 @@
 #include <bio.h>
 #include <ctype.h>
 
-// aa.h  is the generic part, the specific #include xxx/yyy.out.h is done in a.h
+// aa.h  is the generic part, the specific #include XXX/Y.out.h is done
+// in Ya/a.h, e.g.:
 //#include "386/8.out.h"
 //#include "mips/v.out.h"
 //#include "arm/5.out.h"
@@ -12,8 +13,7 @@
 
 #pragma	lib	"../aa/aa.a$O"
 
-// was originally in a xxx/y.out.h (and was always the same in all archi)
-
+// was originally in a XXX/Y.out.h (and was always the same in all archi)
 // most of the content below was originally copy pasted in 8a/a.h, 5a/a.h, etc
 
 typedef	struct	Sym	Sym;
