@@ -1,6 +1,9 @@
 /*
  * Scheme 9 from Empty Space
  * Copyright (C) 2007 Nils M Holm <nmh@t3x.org>
+ *
+ * Modified by pad to compile on plan9 by backporting
+ * code from s9 20140804.tgz
  */
 
 /*
@@ -11,38 +14,18 @@
 
 int	Debug_GC = 0;
 
-#define VERSION	"2007-07-06 (with errata of 2008)"
+#define VERSION	"2007-07-06 (with errata of 2008, and plan9 support)"
 
-/*
- * Tell later MSC compilers to let us use the standard CLIB API.
- * Blake McBride <blake@mcbride.name>
- */
-#ifdef _MSC_VER
- #if _MSC_VER > 1200
-  #ifndef _CRT_SECURE_NO_DEPRECATE
-   #define _CRT_SECURE_NO_DEPRECATE
-  #endif
- #endif
- #ifndef _POSIX_
-  #define _POSIX_
- #endif
-#endif
-
-#include <stdlib.h>
+// Plan9 support backport!
+#include <u.h>
+#include <libc.h>
 #include <stdio.h>
-#include <string.h>
 #include <ctype.h>
-#include <limits.h>
-#ifdef NO_SIGNALS
- #define signal(sig, fn)
-#else
- #include <signal.h>
- #ifdef _MSC_VER
-  #ifndef SIGQUIT
-   #define SIGQUIT SIGINT
-  #endif
- #endif
-#endif
+#define NO_SIGNALS
+#define signal(sig, fn)
+#define exit(x) exits((x)? "error": NULL)
+#define ptrdiff_t int
+
 
 #define TEXT_LEN	1024
 #define MAX_PORTS	32
@@ -52,16 +35,16 @@ int	Debug_GC = 0;
 /* Hard memory limit in K-Nodes, 0 = none */
 #define MEMORY_LIMIT_KN	1024
 
-#if INT_MAX >= 1000000000000000000		/* 64-bit */
- #define DIGITS_PER_WORD	18
- #define INT_SEG_LIMIT		1000000000000000000
-#elif INT_MAX >= 1000000000 			/* 32-bit */
+//#if INT_MAX >= 1000000000000000000		/* 64-bit */
+// #define DIGITS_PER_WORD	18
+// #define INT_SEG_LIMIT		1000000000000000000
+//#elif INT_MAX >= 1000000000 			/* 32-bit */
  #define DIGITS_PER_WORD	9
  #define INT_SEG_LIMIT		1000000000
-#elif INT_MAX >= 10000				/* 16-bit */
- #define DIGITS_PER_WORD	4
- #define INT_SEG_LIMIT		10000
-#endif
+//#elif INT_MAX >= 10000				/* 16-bit */
+// #define DIGITS_PER_WORD	4
+// #define INT_SEG_LIMIT		10000
+//#endif
 
 /* GC flags */
 #define	AFLAG	0x01	/* Atom, Car = type, CDR = next */
@@ -235,7 +218,7 @@ void pr(char *s) {
 		fwrite(s, 1, strlen(s), Ports[Output_port]);
 }
 
-void print(int n);
+void print2(int n);
 
 int error(char *msg, int expr) {
 	int	oport;
@@ -247,7 +230,7 @@ int error(char *msg, int expr) {
 	printf("error: %s", msg);
 	if (expr != NOEXPR) {
 		pr(": ");
-		print(expr);
+		print2(expr);
 	}
 	nl();
 	Output_port = oport;
@@ -951,7 +934,7 @@ int print_integer(int n) {
 	return -1;
 }
 
-void print(int n);
+void print2(int n);
 
 /* Print expressions of the form (QUOTE X) as 'X. */
 int print_quoted(int n) {
@@ -960,7 +943,7 @@ int print_quoted(int n) {
 		cddr(n) == NIL
 	) {
 		pr("'");
-		print(cadr(n));
+		print2(cadr(n));
 		return 1;
 	}
 	return 0;
@@ -969,11 +952,11 @@ int print_quoted(int n) {
 int print_procedure(int n) {
 	if (Car[n] == S_procedure) {
 		pr("#<procedure ");
-		print(cadr(n));
+		print2(cadr(n));
 	/*	pr(" ");		*/
-	/*	print(caddr(n));	*/
+	/*	print2(caddr(n));	*/
 	/*	pr(" ");		*/
-	/*	print(cdddr(n));	*/
+	/*	print2(cdddr(n));	*/
 		pr(">");
 		return -1;
 	}
@@ -1043,7 +1026,7 @@ int print_symbol(int n) {
 int print_primitive(int n) {
 	if (Car[n] != S_primitive) return 0;
 	pr("#<primitive ");
-	print(cddr(n));
+	print2(cddr(n));
 	pr(">");
 	return -1;
 }
@@ -1063,7 +1046,7 @@ int print_vector(int n) {
 	p = vector(n);
 	k = vector_len(n);
 	while (k--) {
-		print(*p++);
+		print2(*p++);
 		if (k) pr(" ");
 	}
 	pr(")");
@@ -1082,7 +1065,7 @@ int print_port(int n) {
 	return -1;
 }
 
-void print(int n) {
+void print2(int n) {
 	if (Ports[Output_port] == NULL) {
 		error("output port is not open", NOEXPR);
 		return;
@@ -1118,11 +1101,11 @@ void print(int n) {
 		if (print_port(n)) return;
 		pr("(");
 		while (n != NIL) {
-			print(Car[n]);
+			print2(Car[n]);
 			n = Cdr[n];
 			if (n != NIL && atom_p(n)) {
 				pr(" . ");
-				print(n);
+				print2(n);
 				n = NIL;
 			}
 			if (n != NIL) pr(" ");
@@ -2255,10 +2238,10 @@ int pp_cons(int x) {
 	return alloc(cadr(x), caddr(x));
 }
 
-int make_port(int port_no, int type) {
+int make_port(int portno, int type) {
 	int	n;
 
-	n = alloc3(port_no, NIL, AFLAG);
+	n = alloc3(portno, NIL, AFLAG);
 	return alloc3(type, n, AFLAG);
 }
 
@@ -2881,7 +2864,7 @@ int pp_write(int x) {
 		return error("bad output port", caddr(x));
 	old_port = Output_port;
 	Output_port = new_port;
-	print(cadr(x));
+	print2(cadr(x));
 	Output_port = old_port;
 	return UNSPECIFIC;
 }
@@ -3642,7 +3625,7 @@ void repl(void) {
 		if (Program == ENDOFFILE) break;
 		if (!Error_flag) n = eval(Program);
 		if (!Error_flag && n != UNSPECIFIC) {
-			print(n);
+			print2(n);
 			pr("\n");
 			Car[S_latest] = n;
 		}
