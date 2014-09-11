@@ -2,7 +2,7 @@
  * Scheme 9 from Empty Space
  * Copyright (C) 2007 Nils M Holm <nmh@t3x.org>
  *
- * Modified by pad to compile on plan9 by backporting
+ * Modified by pad to compile on plan9 mostly by backporting
  * code from s9 20140804.tgz
  */
 
@@ -21,10 +21,7 @@ int	Debug_GC = 0;
 #include <libc.h>
 #include <stdio.h>
 #include <ctype.h>
-#define NO_SIGNALS
-#define signal(sig, fn)
 #define exit(x) exits((x)? "error": NULL)
-#define ptrdiff_t int
 
 
 #define TEXT_LEN	1024
@@ -112,7 +109,7 @@ int	S_char, S_else, S_input_port, S_integer, S_latest,
 	S_quote, S_string, S_symbol, S_syntax, S_unquote,
 	S_unquote_splicing, S_vector;
 int	S_and, S_begin, S_cond, S_define, S_define_syntax, S_if,
-	S_lambda, S_let, S_letrec, S_or, S_quote, S_set_b,
+	S_lambda, S_let, S_letrec, S_or, S_set_b,
 	S_syntax_rules;
 
 int	*GC_root[] = { &Program, &Symbols, &Environment, &Tmp, &Tmp_car,
@@ -2169,18 +2166,19 @@ int char_predicate(char *name, int (*p)(int c1, int c2), int x) {
 	return TRUE;
 }
 
-#define R return
-int pp_char_ci_le_p(int x) { R char_predicate("char-ci<=?", char_ci_le, x); }
-int pp_char_ci_lt_p(int x) { R char_predicate("char-ci<?",  char_ci_lt, x); }
-int pp_char_ci_eq_p(int x) { R char_predicate("char-ci=?",  char_ci_eq, x); }
-int pp_char_ci_ge_p(int x) { R char_predicate("char-ci>=?", char_ci_ge, x); }
-int pp_char_ci_gt_p(int x) { R char_predicate("char-ci>?",  char_ci_gt, x); }
+//#define R return
 
-int pp_char_le_p(int x) { R char_predicate("char<=?", char_le, x); }
-int pp_char_lt_p(int x) { R char_predicate("char<?",  char_lt, x); }
-int pp_char_eq_p(int x) { R char_predicate("char=?",  char_eq, x); }
-int pp_char_ge_p(int x) { R char_predicate("char>=?", char_ge, x); }
-int pp_char_gt_p(int x) { R char_predicate("char>?",  char_gt, x); }
+int pp_char_ci_le_p(int x) { return char_predicate("char-ci<=?", char_ci_le, x); }
+int pp_char_ci_lt_p(int x) { return char_predicate("char-ci<?",  char_ci_lt, x); }
+int pp_char_ci_eq_p(int x) { return char_predicate("char-ci=?",  char_ci_eq, x); }
+int pp_char_ci_ge_p(int x) { return char_predicate("char-ci>=?", char_ci_ge, x); }
+int pp_char_ci_gt_p(int x) { return char_predicate("char-ci>?",  char_ci_gt, x); }
+
+int pp_char_le_p(int x) { return char_predicate("char<=?", char_le, x); }
+int pp_char_lt_p(int x) { return char_predicate("char<?",  char_lt, x); }
+int pp_char_eq_p(int x) { return char_predicate("char=?",  char_eq, x); }
+int pp_char_ge_p(int x) { return char_predicate("char>=?", char_ge, x); }
+int pp_char_gt_p(int x) { return char_predicate("char>?",  char_gt, x); }
 
 int pp_char_downcase(int x) {
 	return make_char(tolower(char_value(cadr(x))));
@@ -2734,18 +2732,19 @@ int string_predicate(char *name, int (*p)(char *s1, char *s2), int x) {
 	return TRUE;
 }
 
-#define SP return string_predicate
-int pp_string_ci_le_p(int x) { SP("string-ci<=?", string_ci_le, x); }
-int pp_string_ci_lt_p(int x) { SP("string-ci<?",  string_ci_lt, x); }
-int pp_string_ci_eq_p(int x) { SP("string-ci=?",  string_ci_eq, x); }
-int pp_string_ci_ge_p(int x) { SP("string-ci>=?", string_ci_ge, x); }
-int pp_string_ci_gt_p(int x) { SP("string-ci>?",  string_ci_gt, x); }
+//#define SP return string_predicate
 
-int pp_string_le_p(int x) { SP("string<=?", string_le, x); }
-int pp_string_lt_p(int x) { SP("string<?",  string_lt, x); }
-int pp_string_eq_p(int x) { SP("string=?",  string_eq, x); }
-int pp_string_ge_p(int x) { SP("string>=?", string_ge, x); }
-int pp_string_gt_p(int x) { SP("string>?",  string_gt, x); }
+int pp_string_ci_le_p(int x) { return string_predicate("string-ci<=?", string_ci_le, x); }
+int pp_string_ci_lt_p(int x) { return string_predicate("string-ci<?",  string_ci_lt, x); }
+int pp_string_ci_eq_p(int x) { return string_predicate("string-ci=?",  string_ci_eq, x); }
+int pp_string_ci_ge_p(int x) { return string_predicate("string-ci>=?", string_ci_ge, x); }
+int pp_string_ci_gt_p(int x) { return string_predicate("string-ci>?",  string_ci_gt, x); }
+
+int pp_string_le_p(int x) { return string_predicate("string<=?", string_le, x); }
+int pp_string_lt_p(int x) { return string_predicate("string<?",  string_lt, x); }
+int pp_string_eq_p(int x) { return string_predicate("string=?",  string_eq, x); }
+int pp_string_ge_p(int x) { return string_predicate("string>=?", string_ge, x); }
+int pp_string_gt_p(int x) { return string_predicate("string>?",  string_gt, x); }
 
 int pp_string_p(int x) {
 	return string_p(cadr(x))? TRUE: FALSE;
@@ -3594,16 +3593,16 @@ void clear_local_envs(void) {
 		Environment = Cdr[Environment];
 }
 
-#ifndef NO_SIGNALS
-void keyboard_interrupt(int sig) {
-	error("interrupted", NOEXPR);
-	signal(SIGINT, keyboard_interrupt);
-}
-
-void keyboard_quit(int sig) {
-	fatal("received quit signal, exiting");
-}
-#endif
+//#ifndef NO_SIGNALS
+//void keyboard_interrupt(int sig) {
+//	error("interrupted", NOEXPR);
+//	signal(SIGINT, keyboard_interrupt);
+//}
+//
+//void keyboard_quit(int sig) {
+//	fatal("received quit signal, exiting");
+//}
+//#endif
 
 void repl(void) {
 	int	n, sane_env;
@@ -3611,8 +3610,8 @@ void repl(void) {
 	sane_env = alloc(NIL, NIL);
 	save(sane_env);
 	if (!Quiet_mode) {
-		signal(SIGINT, keyboard_interrupt);
-		signal(SIGQUIT, keyboard_quit);
+		//signal(SIGINT, keyboard_interrupt);
+		//signal(SIGQUIT, keyboard_quit);
 	}
 	while (1) {
 		Error_flag = 0;
