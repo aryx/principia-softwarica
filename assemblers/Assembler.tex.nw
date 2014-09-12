@@ -170,27 +170,29 @@ License.
 
 \section{Assembler principles}
 
-% symbolic names -> machine code
+% mnemonic and symbolic addresses -> object/machine code
 
-% before assembler, binary ... then opcode then symbolic!
+% before assembler binary, then mnemonic but still hardcoded
+% address, then symbolic addresses
 
 % usually 2 passes as can reference stuff coming later
 % pretty simple.
+
+% TODO: look at TECS section on assembler?
 
 \section{[[8a]] services}
 
 % command line interface? -o,   -D -I,  -f -m for debug
 
 
-
 \section{x86}
-
-% opcode format, see my assembler in ml I wrote a long time ago! in xix-assembler/
 
 % specifics of 8a? like left to right or right to left for mv, intel
 % or AT&T syntax (I guess AT&T :) )
 
-% TODO: look at my own assembler? doc on machine code instruction
+
+% opcode format, see my assembler in ml I wrote a long time ago! in xix-assembler/?
+% hmm actually it's more the job of 8l and optab to do that
 
 \section{[[helloworld.s]]}
 
@@ -198,18 +200,39 @@ License.
 
 % show commands, 8a, ld, ./xxx
 
-% show binary format? hexdump?
+% show binary format? hexdump? actually not x86 binary instruction format!
+% see section below
+
+\section{Object format}
+
+% .8 format? a kind of .o, but 8l does actually the job to turn into x86 ISA
 
 \section{Code organization}
 
 \section{Architecture overview}
 
-%need 386/8.out.h!
+% arch generic: aa/, arch specific: xa/
+% same for header, common.out.h and 386/8.out.h!
 
 %actually lots of assembler related stuff is in libmach/
 %and even maybe some in the linker.
 
 % mac.x = macro :) non macos ...
+
+% relation with other tools: 8c, 8l, easy do for instance
+% git grep AADDB
+%assemblers/8a/lex.c:    "ADDB",		LTYPE3,	AADDB,
+%compilers/8c/peep.c:    case AADDB:	/* rhs rar */
+%compilers/8c/reg.c:        case AADDB:
+%compilers/8c/txt.c:            a = AADDB;
+%include/386/8.out.h:    AADDB,
+%linkers/8l/optab.c:    { AADDB,	yxorb,	Px, 0x04,0x80,(00),0x00,0x02 },
+
+% assembler actually generate a binary that is x86 specific, but not 
+% matching the x86 instruction set! optab.c is doing the real conversion
+% why? (because 8l does some inter-lib optimizations? a la llvm? nice design!)
+% it generates an "object", a kind of .o except it's really not a .o like
+% in Linux :)
 
 %###############################################################################
 
@@ -226,6 +249,10 @@ License.
 % hmmm but can reorder? the opcode generation rely on an order? or 
 % just ld and as need to agree with each other, the actual binary code
 % generation is done in the linker?
+
+% TODO maybe by playing with LP I can reproduce a kind of ADT?
+% e.g. by introducing LSREG, and then the part of the enum register related
+% to LSREG?
 
 <<enum as>>=
 enum	as
@@ -731,7 +758,20 @@ enum reg
 };
 @
 
-\section{[[Itab]] and [[itab]]}
+
+
+% for 8c! conventions! (not used at all by 8a, but in 8.out.h for other tools)
+<<enum misc3>>=
+enum misc3 {
+    REGARG		= -1,
+    REGRET		= D_AX,
+    FREGRET		= D_F0,
+    REGSP		= D_SP,
+    REGTMP		= D_DI,
+};
+@
+
+\section{[[Token]] and [[itab]]}
 
 <<enum misc1>>=
 // must start after enum register?
@@ -760,28 +800,6 @@ enum misc {
 };
 @
 
-<<enum misc2>>=
-enum misc2 {
-    T_TYPE		= 1<<0,
-    T_INDEX		= 1<<1,
-    T_OFFSET	= 1<<2,
-    T_FCONST	= 1<<3,
-    T_SYM		= 1<<4,
-    T_SCONST	= 1<<5,
-    T_OFFSET2	= 1<<6,
-    T_GOTYPE	= 1<<7,
-};
-@
-
-<<enum misc3>>=
-enum misc3 {
-    REGARG		= -1,
-    REGRET		= D_AX,
-    FREGRET		= D_F0,
-    REGSP		= D_SP,
-    REGTMP		= D_DI,
-};
-@
 
 
 % LTYPE0 et is defined in a.y, tokens with value 
@@ -790,12 +808,14 @@ enum misc3 {
 struct Itab
 {
     char	*name;
+
     ushort	type;
     ushort	value;
 };
 @
 
 % TODO: just put a subset with most relevant instr and registers
+% hmm ADT would be better than union and this
 <<global itab>>=
 struct Itab itab[] =
 {
@@ -3507,7 +3527,8 @@ expr:
 
 \chapter{Output}
 
-\chapter{Machine code generation}
+\chapter{Object Generation}
+% it's actually not machine code generation ... 8l/optab.c does this
 
 % it looks like outhist generate some header information,
 % where is the spec of the format? LD uses that I guess no?
@@ -3597,6 +3618,22 @@ zname(char *n, int t, int s)
 <<constant NSNAME>>=
 #define	NSNAME	8
 @
+
+
+% used also by 8c and 8l
+<<enum misc2>>=
+enum misc2 {
+    T_TYPE		= 1<<0,
+    T_INDEX		= 1<<1,
+    T_OFFSET	= 1<<2,
+    T_FCONST	= 1<<3,
+    T_SYM		= 1<<4,
+    T_SCONST	= 1<<5,
+    T_OFFSET2	= 1<<6,
+};
+@
+% >> >> >> >> >> >> >>
+%dead:    T_GOTYPE	= 1<<7,
 
 <<function zaddr>>=
 void
@@ -3994,6 +4031,7 @@ prfile(long l)
 \label{sec:glossary}
 
 \begin{verbatim}
+ISA Instruction Set Architecture
 \end{verbatim}
 
 \chapter*{Indexes}

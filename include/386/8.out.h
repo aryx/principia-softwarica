@@ -548,7 +548,6 @@ enum misc2 {
     T_SYM		= 1<<4,
     T_SCONST	= 1<<5,
     T_OFFSET2	= 1<<6,
-    T_GOTYPE	= 1<<7,
 };
 /*e: enum misc2 */
 /*s: enum misc3 */

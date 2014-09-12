@@ -183,6 +183,7 @@ assemble(char *file)
 struct Itab
 {
     char	*name;
+
     ushort	type;
     ushort	value;
 };
