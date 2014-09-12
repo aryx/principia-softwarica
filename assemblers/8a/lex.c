@@ -17,17 +17,13 @@ main(int argc, char *argv[])
     thechar = '8';
     thestring = "386";
 
-    memset(debug, 0, sizeof(debug));
+    memset(debug, false, sizeof(debug));
     cinit();
+
     outfile = nil;
     include[ninclude++] = ".";
-    ARGBEGIN {
-    default:
-        c = ARGC();
-        if(c >= 0 || c < sizeof(debug))
-            debug[c] = 1;
-        break;
 
+    ARGBEGIN {
     case 'o':
         outfile = ARGF();
         break;
@@ -42,6 +38,13 @@ main(int argc, char *argv[])
         p = ARGF();
         setinclude(p);
         break;
+
+    default:
+        c = ARGC();
+        if(c >= 0 || c < sizeof(debug))
+            debug[c] = true;
+        break;
+
     } ARGEND
 
     if(*argv == 0) {
@@ -88,6 +91,7 @@ main(int argc, char *argv[])
             nout--;
         }
     }
+
     if(assemble(argv[0]))
         errorexit();
     exits(0);
@@ -99,16 +103,19 @@ int
 assemble(char *file)
 {
     char ofile[100], incfile[20], *p;
-    int i, of;
+    int i;
+    fdt of;
 
     strcpy(ofile, file);
+
     p = utfrrune(ofile, pathchar());
     if(p) {
         include[0] = ofile;
         *p++ = 0;
     } else
         p = ofile;
-    if(outfile == 0) {
+
+    if(outfile == nil) {
         outfile = p;
         if(outfile){
             p = utfrrune(outfile, '.');
@@ -122,6 +129,7 @@ assemble(char *file)
         } else
             outfile = "/dev/null";
     }
+
     p = getenv("INCLUDE");
     if(p) {
         setinclude(p);
@@ -143,7 +151,7 @@ assemble(char *file)
     pinit(file);
     for(i=0; i<nDlist; i++)
         dodefine(Dlist[i]);
-    yyparse();
+    yyparse(); //!
     if(nerrors) {
         cclean();
         return nerrors;
@@ -161,12 +169,14 @@ assemble(char *file)
 /*e: function assemble */
 
 /*s: global itab */
-struct
+struct Itab
 {
     char	*name;
     ushort	type;
     ushort	value;
-} itab[] =
+};
+
+struct Itab itab[] =
 {
     "SP",		LSP,	D_AUTO,
     "SB",		LSB,	D_EXTERN,
@@ -675,6 +685,7 @@ cinit(void)
     nhunk = 0;
     for(i=0; i<NHASH; i++)
         hash[i] = S;
+
     for(i=0; itab[i].name; i++) {
         s = slookup(itab[i].name);
         if(s->type != LNAME)
@@ -684,9 +695,10 @@ cinit(void)
     }
 
     pathname = allocn(pathname, 0, 100);
-    if(mygetwd(pathname, 99) == 0) {
+
+    if(getwd(pathname, 99) == nil) {
         pathname = allocn(pathname, 100, 900);
-        if(mygetwd(pathname, 999) == 0)
+        if(getwd(pathname, 999) == nil)
             strcpy(pathname, "/???");
     }
 }
@@ -915,7 +927,7 @@ outhist(void)
     c = pathchar();
     for(h = hist; h != H; h = h->link) {
         p = h->name;
-        op = 0;
+        op = nil;
         if(p && p[0] != c && h->offset == 0 && pathname){
             if(pathname[0] == c){
                 op = p;

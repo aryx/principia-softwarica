@@ -59,15 +59,19 @@ typedef	struct	Hist	Hist;
 /*s: struct Sym */
 struct	Sym
 {
-    Sym*	link;
+    // see also itab[i].type and itab[i].value
+    ushort	type;
+    long	value; // vlong in va!!
+
+    char	*name;
+    char	sym;
+
+    char*	macro;
 
     Ref*	ref; // unused for 5a, matters?
 
-    char*	macro;
-    long	value; // vlong in va!!
-    ushort	type;
-    char	*name;
-    char	sym;
+    // Extra
+    Sym*	link;
 };
 /*e: struct Sym */
 /*s: constant S */

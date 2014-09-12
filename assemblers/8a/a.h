@@ -12,14 +12,21 @@ typedef	struct	Gen2 	Gen2;
 /*s: struct Gen */
 struct	Gen
 {
-    double	dval;
+    //??
+    Sym*	sym;
+
     char	sval[8];
     long	offset;
     long	offset2;
-    Sym*	sym;
+
+    // enum?
     short	type;
     short	index;
+
     short	scale;
+
+    // float
+    double	dval;
 };
 /*e: struct Gen */
 /*s: struct Gen2 */
@@ -44,8 +51,6 @@ void	checkscale(int);
 void	outcode(int, Gen2*);
 
 int	escchar(int);
-//void	zaddr(Gen*, int);
-//void	zname(char*, int, int);
 //Sym*	getsym(void);
 
 // for lexbody
@@ -72,7 +77,6 @@ int	mywait(int*);
 int	mycreat(char*, int);
 int	systemtype(int);
 int	pathchar(void);
-char*	mygetwd(char*, int);
 int	myfork(void);
 void*	mysbrk(ulong);
 /*e: assemblers/8a/a.h */

@@ -338,22 +338,6 @@ systemtype(int sys)
 }
 @
 
-<<function pathchar>>=
-int
-pathchar(void)
-{
-    return '/';
-}
-@
-
-<<function mygetwd>>=
-char*
-mygetwd(char *path, int len)
-{
-    return getwd(path, len);
-}
-@
-
 
 <<function myfork>>=
 int
@@ -379,8 +363,6 @@ myfork(void)
 <<function systemtype>>
 
 <<function pathchar>>
-
-<<function mygetwd>>
 
 <<function myfork>>
 @
@@ -408,13 +390,7 @@ long	nhunk;
 
 
 
-<<global pass>>=
-int	pass;
-@
 
-<<global pathname>>=
-char*	pathname;
-@
 
 
 
@@ -1045,38 +1021,6 @@ getcom(void)
 }
 @
 
-<<function dodefine>>=
-void
-dodefine(char *cp)
-{
-    Sym *s;
-    char *p;
-    long l;
-
-    strcpy(symb, cp);
-    p = strchr(symb, '=');
-    if(p) {
-        *p++ = 0;
-        s = lookup();
-        l = strlen(p) + 2;	/* +1 null, +1 nargs */
-        while(l & 3)
-            l++;
-        while(nhunk < l)
-            gethunk();
-        *hunk = 0;
-        strcpy(hunk+1, p);
-        s->macro = hunk;
-        hunk += l;
-        nhunk -= l;
-    } else {
-        s = lookup();
-        s->macro = "\0001";	/* \000 is nargs */
-    }
-    if(debug['m'])
-        print("#define (-D) %s %s\n", s->name, s->macro+1);
-}
-@
-
 
 <<function domacro>>=
 void
@@ -1374,8 +1318,6 @@ void	checkscale(int);
 void	outcode(int, Gen2*);
 
 int	escchar(int);
-//void	zaddr(Gen*, int);
-//void	zname(char*, int, int);
 //Sym*	getsym(void);
 
 // for lexbody
@@ -1402,7 +1344,6 @@ int	mywait(int*);
 int	mycreat(char*, int);
 int	systemtype(int);
 int	pathchar(void);
-char*	mygetwd(char*, int);
 int	myfork(void);
 void*	mysbrk(ulong);
 @
@@ -1460,238 +1401,6 @@ cclean(void)
 }
 @
 
-<<function zname>>=
-void
-zname(char *n, int t, int s)
-{
-
-    Bputc(&obuf, ANAME);		/* as(2) */
-    Bputc(&obuf, ANAME>>8);
-    Bputc(&obuf, t);		/* type */
-    Bputc(&obuf, s);		/* sym */
-    while(*n) {
-        Bputc(&obuf, *n);
-        n++;
-    }
-    Bputc(&obuf, 0);
-}
-@
-
-<<function zaddr>>=
-void
-zaddr(Gen *a, int s)
-{
-    long l;
-    int i, t;
-    char *n;
-    Ieee e;
-
-    t = 0;
-    if(a->index != D_NONE || a->scale != 0)
-        t |= T_INDEX;
-    if(a->offset != 0)
-        t |= T_OFFSET;
-    if(s != 0)
-        t |= T_SYM;
-
-    switch(a->type) {
-    default:
-        t |= T_TYPE;
-        break;
-    case D_FCONST:
-        t |= T_FCONST;
-        break;
-    case D_CONST2:
-        t |= T_OFFSET|T_OFFSET2;
-        break;
-    case D_SCONST:
-        t |= T_SCONST;
-        break;
-    case D_NONE:
-        break;
-    }
-    Bputc(&obuf, t);
-
-    if(t & T_INDEX) {	/* implies index, scale */
-        Bputc(&obuf, a->index);
-        Bputc(&obuf, a->scale);
-    }
-    if(t & T_OFFSET) {	/* implies offset */
-        l = a->offset;
-        Bputc(&obuf, l);
-        Bputc(&obuf, l>>8);
-        Bputc(&obuf, l>>16);
-        Bputc(&obuf, l>>24);
-    }
-    if(t & T_OFFSET2) {
-        l = a->offset2;
-        Bputc(&obuf, l);
-        Bputc(&obuf, l>>8);
-        Bputc(&obuf, l>>16);
-        Bputc(&obuf, l>>24);
-    }
-    if(t & T_SYM)		/* implies sym */
-        Bputc(&obuf, s);
-    if(t & T_FCONST) {
-        ieeedtod(&e, a->dval);
-        l = e.l;
-        Bputc(&obuf, l);
-        Bputc(&obuf, l>>8);
-        Bputc(&obuf, l>>16);
-        Bputc(&obuf, l>>24);
-        l = e.h;
-        Bputc(&obuf, l);
-        Bputc(&obuf, l>>8);
-        Bputc(&obuf, l>>16);
-        Bputc(&obuf, l>>24);
-        return;
-    }
-    if(t & T_SCONST) {
-        n = a->sval;
-        for(i=0; i<NSNAME; i++) {
-            Bputc(&obuf, *n);
-            n++;
-        }
-        return;
-    }
-    if(t & T_TYPE)
-        Bputc(&obuf, a->type);
-}
-@
-
-<<function outcode>>=
-void
-outcode(int a, Gen2 *g2)
-{
-    int sf, st, t;
-    Sym *s;
-
-    if(pass == 1)
-        goto out;
-
-jackpot:
-    sf = 0;
-    s = g2->from.sym;
-    while(s != S) {
-        sf = s->sym;
-        if(sf < 0 || sf >= NSYM)
-            sf = 0;
-        t = g2->from.type;
-        if(t == D_ADDR)
-            t = g2->from.index;
-        if(h[sf].type == t)
-        if(h[sf].sym == s)
-            break;
-        zname(s->name, t, sym);
-        s->sym = sym;
-        h[sym].sym = s;
-        h[sym].type = t;
-        sf = sym;
-        sym++;
-        if(sym >= NSYM)
-            sym = 1;
-        break;
-    }
-    st = 0;
-    s = g2->to.sym;
-    while(s != S) {
-        st = s->sym;
-        if(st < 0 || st >= NSYM)
-            st = 0;
-        t = g2->to.type;
-        if(t == D_ADDR)
-            t = g2->to.index;
-        if(h[st].type == t)
-        if(h[st].sym == s)
-            break;
-        zname(s->name, t, sym);
-        s->sym = sym;
-        h[sym].sym = s;
-        h[sym].type = t;
-        st = sym;
-        sym++;
-        if(sym >= NSYM)
-            sym = 1;
-        if(st == sf)
-            goto jackpot;
-        break;
-    }
-    Bputc(&obuf, a);
-    Bputc(&obuf, a>>8);
-    Bputc(&obuf, lineno);
-    Bputc(&obuf, lineno>>8);
-    Bputc(&obuf, lineno>>16);
-    Bputc(&obuf, lineno>>24);
-    zaddr(&g2->from, sf);
-    zaddr(&g2->to, st);
-
-out:
-    if(a != AGLOBL && a != ADATA)
-        pc++;
-}
-@
-
-<<function outhist>>=
-void
-outhist(void)
-{
-    Gen g;
-    Hist *h;
-    char *p, *q, *op, c;
-    int n;
-
-    g = nullgen;
-    c = pathchar();
-    for(h = hist; h != H; h = h->link) {
-        p = h->name;
-        op = 0;
-        if(p && p[0] != c && h->offset == 0 && pathname){
-            if(pathname[0] == c){
-                op = p;
-                p = pathname;
-            }
-        }
-        while(p) {
-            q = strchr(p, c);
-            if(q) {
-                n = q-p;
-                if(n == 0){
-                    n = 1;	/* leading "/" */
-                    *p = '/';	/* don't emit "\" on windows */
-                }
-                q++;
-            } else {
-                n = strlen(p);
-                q = 0;
-            }
-            if(n) {
-                Bputc(&obuf, ANAME);
-                Bputc(&obuf, ANAME>>8);
-                Bputc(&obuf, D_FILE);	/* type */
-                Bputc(&obuf, 1);	/* sym */
-                Bputc(&obuf, '<');
-                Bwrite(&obuf, p, n);
-                Bputc(&obuf, 0);
-            }
-            p = q;
-            if(p == 0 && op) {
-                p = op;
-                op = 0;
-            }
-        }
-        g.offset = h->offset;
-
-        Bputc(&obuf, AHISTORY);
-        Bputc(&obuf, AHISTORY>>8);
-        Bputc(&obuf, h->line);
-        Bputc(&obuf, h->line>>8);
-        Bputc(&obuf, h->line>>16);
-        Bputc(&obuf, h->line>>24);
-        zaddr(&nullgen, 0);
-        zaddr(&g, 0);
-    }
-}
-@
 
 
 %-------------------------------------------------------------

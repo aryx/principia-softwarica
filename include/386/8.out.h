@@ -71,7 +71,7 @@ enum	as
     AENTER,
     AGLOBL,
     AGOK,
-    AHISTORY,
+    AHISTORY, // for header
     AHLT,
     AIDIVB,
     AIDIVL,
@@ -142,7 +142,7 @@ enum	as
     AMULB,
     AMULL,
     AMULW,
-    ANAME,
+    ANAME, // seems important
     ANEGB,
     ANEGL,
     ANEGW,
@@ -421,7 +421,7 @@ enum	as
 /*e: enum as */
 
 /*s: enum _anon_ */
-enum
+enum register
 {
     D_AL		= 0,
     D_CL,
@@ -461,7 +461,11 @@ enum
     D_CR		= 35,
     D_DR		= 43,
     D_TR		= 51,
+};
 
+// must start after enum register?
+// Gen.type?
+enum misc {
     D_NONE		= 59,
 
     D_BRANCH	= 60,
@@ -482,7 +486,9 @@ enum
     D_CONST2 = D_INDIR+D_INDIR,
 
     D_SIZE,	/* 8l internal */
+};
 
+enum misc2 {
     T_TYPE		= 1<<0,
     T_INDEX		= 1<<1,
     T_OFFSET	= 1<<2,
@@ -491,7 +497,9 @@ enum
     T_SCONST	= 1<<5,
     T_OFFSET2	= 1<<6,
     T_GOTYPE	= 1<<7,
+};
 
+enum misc3 {
     REGARG		= -1,
     REGRET		= D_AX,
     FREGRET		= D_F0,

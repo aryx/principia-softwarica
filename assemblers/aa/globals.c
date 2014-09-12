@@ -9,7 +9,7 @@ struct Htab h[NSYM];
 /*e: global h */
 
 /*s: global debug */
-char	debug[256];
+bool	debug[256];
 /*e: global debug */
 /*s: global hash */
 Sym*	hash[NHASH];

@@ -12,6 +12,7 @@ enum _bool {
   true = 1
 };
 typedef uchar byte;
+typedef int fdt; // file descriptor type
 
 /*
  * mem routines

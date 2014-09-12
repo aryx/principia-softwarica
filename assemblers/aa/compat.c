@@ -55,14 +55,6 @@ pathchar(void)
 }
 /*e: function pathchar */
 
-/*s: function mygetwd */
-char*
-mygetwd(char *path, int len)
-{
-    return getwd(path, len);
-}
-/*e: function mygetwd */
-
 /*s: function myfork */
 int
 myfork(void)
