@@ -1,17 +1,18 @@
+/*s: 8a/a.y */
 %{
 #include "a.h"
 %}
 %union	{
-	Sym	*sym;
-	long	lval;
-	struct {
-		long v1;
-		long v2;
-	} con2;
-	double	dval;
-	char	sval[8];
-	Gen	gen;
-	Gen2	gen2;
+ Sym	*sym;
+ long	lval;
+ struct {
+  long v1;
+  long v2;
+ } con2;
+ double	dval;
+ char	sval[8];
+ Gen	gen;
+ Gen2	gen2;
 }
 %left	'|'
 %left	'^'
@@ -36,35 +37,35 @@ prog:
 |	prog line
 
 line:
-	LLAB ':'
-	{
-		if($1->value != pc)
-			yyerror("redeclaration of %s", $1->name);
-		$1->value = pc;
-	}
-	line
+ LLAB ':'
+ {
+  if($1->value != pc)
+   yyerror("redeclaration of %s", $1->name);
+  $1->value = pc;
+ }
+ line
 |	LNAME ':'
-	{
-		$1->type = LLAB;
-		$1->value = pc;
-	}
-	line
+ {
+  $1->type = LLAB;
+  $1->value = pc;
+ }
+ line
 |	';'
 |	inst ';'
 |	error ';'
 
 inst:
-	LNAME '=' expr
-	{
-		$1->type = LVAR;
-		$1->value = $3;
-	}
+ LNAME '=' expr
+ {
+  $1->type = LVAR;
+  $1->value = $3;
+ }
 |	LVAR '=' expr
-	{
-		if($1->value != $3)
-			yyerror("redeclaration of %s", $1->name);
-		$1->value = $3;
-	}
+ {
+  if($1->value != $3)
+   yyerror("redeclaration of %s", $1->name);
+  $1->value = $3;
+ }
 |	LTYPE0 nonnon	{ outcode($1, &$2); }
 |	LTYPE1 nonrem	{ outcode($1, &$2); }
 |	LTYPE2 rimnon	{ outcode($1, &$2); }
@@ -81,166 +82,166 @@ inst:
 |	LTYPEG spec8	{ outcode($1, &$2); }
 
 nonnon:
-	{
-		$$.from = nullgen;
-		$$.to = nullgen;
-	}
+ {
+  $$.from = nullgen;
+  $$.to = nullgen;
+ }
 |	','
-	{
-		$$.from = nullgen;
-		$$.to = nullgen;
-	}
+ {
+  $$.from = nullgen;
+  $$.to = nullgen;
+ }
 
 rimrem:
-	rim ',' rem
-	{
-		$$.from = $1;
-		$$.to = $3;
-	}
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
 
 remrim:
-	rem ',' rim
-	{
-		$$.from = $1;
-		$$.to = $3;
-	}
+ rem ',' rim
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
 
 rimnon:
-	rim ','
-	{
-		$$.from = $1;
-		$$.to = nullgen;
-	}
+ rim ','
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
 |	rim
-	{
-		$$.from = $1;
-		$$.to = nullgen;
-	}
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
 
 nonrem:
-	',' rem
-	{
-		$$.from = nullgen;
-		$$.to = $2;
-	}
+ ',' rem
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
 |	rem
-	{
-		$$.from = nullgen;
-		$$.to = $1;
-	}
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
 
 nonrel:
-	',' rel
-	{
-		$$.from = nullgen;
-		$$.to = $2;
-	}
+ ',' rel
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
 |	rel
-	{
-		$$.from = nullgen;
-		$$.to = $1;
-	}
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
 
 
 
 
 
 spec1:	/* DATA */
-	nam '/' con ',' imm
-	{
-		$$.from = $1;
-		$$.from.scale = $3;
-		$$.to = $5;
-	}
+ nam '/' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
 
 spec2:	/* TEXT */
-	mem ',' imm
-	{
-		$$.from = $1;
-		$$.to = $3;
-	}
+ mem ',' imm
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
 |	mem ',' con ',' imm
-	{
-		$$.from = $1;
-		$$.from.scale = $3;
-		$$.to = $5;
-	}
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
 
 spec3:	/* JMP/CALL */
-	',' rom
-	{
-		$$.from = nullgen;
-		$$.to = $2;
-	}
+ ',' rom
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
 |	rom
-	{
-		$$.from = nullgen;
-		$$.to = $1;
-	}
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
 
 spec4:	/* NOP */
-	nonnon
+ nonnon
 |	nonrem
 
 spec5:	/* SHL/SHR */
-	rim ',' rem
-	{
-		$$.from = $1;
-		$$.to = $3;
-	}
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
 |	rim ',' rem ':' LLREG
-	{
-		$$.from = $1;
-		$$.to = $3;
-		if($$.from.index != D_NONE)
-			yyerror("dp shift with lhs index");
-		$$.from.index = $5;
-	}
+ {
+  $$.from = $1;
+  $$.to = $3;
+  if($$.from.index != D_NONE)
+   yyerror("dp shift with lhs index");
+  $$.from.index = $5;
+ }
 
 spec6:	/* MOVW/MOVL */
-	rim ',' rem
-	{
-		$$.from = $1;
-		$$.to = $3;
-	}
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
 |	rim ',' rem ':' LSREG
-	{
-		$$.from = $1;
-		$$.to = $3;
-		if($$.to.index != D_NONE)
-			yyerror("dp move with lhs index");
-		$$.to.index = $5;
-	}
+ {
+  $$.from = $1;
+  $$.to = $3;
+  if($$.to.index != D_NONE)
+   yyerror("dp move with lhs index");
+  $$.to.index = $5;
+ }
 
 spec7:
-	rim ','
-	{
-		$$.from = $1;
-		$$.to = nullgen;
-	}
+ rim ','
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
 |	rim
-	{
-		$$.from = $1;
-		$$.to = nullgen;
-	}
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
 |	rim ',' rem
-	{
-		$$.from = $1;
-		$$.to = $3;
-	}
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
 
 spec8:	/* GLOBL */
-	mem ',' imm
-	{
-		$$.from = $1;
-		$$.to = $3;
-	}
+ mem ',' imm
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
 |	mem ',' con ',' imm
-	{
-		$$.from = $1;
-		$$.from.scale = $3;
-		$$.to = $5;
-	}
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
 
 
 
@@ -248,339 +249,341 @@ spec8:	/* GLOBL */
 
 
 rem:
-	reg
+ reg
 |	mem
 
 rom:
-	rel
+ rel
 |	nmem
 |	'*' reg
-	{
-		$$ = $2;
-	}
+ {
+  $$ = $2;
+ }
 |	'*' omem
-	{
-		$$ = $2;
-	}
+ {
+  $$ = $2;
+ }
 |	reg
 |	omem
 |	imm
 
 rim:
-	rem
+ rem
 |	imm
 
 rel:
-	con '(' LPC ')'
-	{
-		$$ = nullgen;
-		$$.type = D_BRANCH;
-		$$.offset = $1 + pc;
-	}
+ con '(' LPC ')'
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.offset = $1 + pc;
+ }
 |	LNAME offset
-	{
-		$$ = nullgen;
-		if(pass == 2)
-			yyerror("undefined label: %s", $1->name);
-		$$.type = D_BRANCH;
-		$$.sym = $1;
-		$$.offset = $2;
-	}
+ {
+  $$ = nullgen;
+  if(pass == 2)
+   yyerror("undefined label: %s", $1->name);
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $2;
+ }
 |	LLAB offset
-	{
-		$$ = nullgen;
-		$$.type = D_BRANCH;
-		$$.sym = $1;
-		$$.offset = $1->value + $2;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $1->value + $2;
+ }
 
 reg:
-	LBREG
-	{
-		$$ = nullgen;
-		$$.type = $1;
-	}
+ LBREG
+ {
+  $$ = nullgen;
+  $$.type = $1;
+ }
 |	LFREG
-	{
-		$$ = nullgen;
-		$$.type = $1;
-	}
+ {
+  $$ = nullgen;
+  $$.type = $1;
+ }
 |	LLREG
-	{
-		$$ = nullgen;
-		$$.type = $1;
-	}
+ {
+  $$ = nullgen;
+  $$.type = $1;
+ }
 |	LSP
-	{
-		$$ = nullgen;
-		$$.type = D_SP;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_SP;
+ }
 |	LSREG
-	{
-		$$ = nullgen;
-		$$.type = $1;
-	}
+ {
+  $$ = nullgen;
+  $$.type = $1;
+ }
 
 imm:
-	'$' con
-	{
-		$$ = nullgen;
-		$$.type = D_CONST;
-		$$.offset = $2;
-	}
+ '$' con
+ {
+  $$ = nullgen;
+  $$.type = D_CONST;
+  $$.offset = $2;
+ }
 |	'$' nam
-	{
-		$$ = $2;
-		$$.index = $2.type;
-		$$.type = D_ADDR;
-		/*
-		if($2.type == D_AUTO || $2.type == D_PARAM)
-			yyerror("constant cannot be automatic: %s",
-				$2.sym->name);
-		 */
-	}
+ {
+  $$ = $2;
+  $$.index = $2.type;
+  $$.type = D_ADDR;
+  /*
+  if($2.type == D_AUTO || $2.type == D_PARAM)
+   yyerror("constant cannot be automatic: %s",
+    $2.sym->name);
+   */
+ }
 |	'$' LSCONST
-	{
-		$$ = nullgen;
-		$$.type = D_SCONST;
-		memcpy($$.sval, $2, sizeof($$.sval));
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_SCONST;
+  memcpy($$.sval, $2, sizeof($$.sval));
+ }
 |	'$' LFCONST
-	{
-		$$ = nullgen;
-		$$.type = D_FCONST;
-		$$.dval = $2;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_FCONST;
+  $$.dval = $2;
+ }
 |	'$' '(' LFCONST ')'
-	{
-		$$ = nullgen;
-		$$.type = D_FCONST;
-		$$.dval = $3;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_FCONST;
+  $$.dval = $3;
+ }
 |	'$' '-' LFCONST
-	{
-		$$ = nullgen;
-		$$.type = D_FCONST;
-		$$.dval = -$3;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_FCONST;
+  $$.dval = -$3;
+ }
 
 imm2:
-	'$' con2
-	{
-		$$ = nullgen;
-		$$.type = D_CONST2;
-		$$.offset = $2.v1;
-		$$.offset2 = $2.v2;
-	}
+ '$' con2
+ {
+  $$ = nullgen;
+  $$.type = D_CONST2;
+  $$.offset = $2.v1;
+  $$.offset2 = $2.v2;
+ }
 
 con2:
-	LCONST
-	{
-		$$.v1 = $1;
-		$$.v2 = 0;
-	}
+ LCONST
+ {
+  $$.v1 = $1;
+  $$.v2 = 0;
+ }
 |	'-' LCONST
-	{
-		$$.v1 = -$2;
-		$$.v2 = 0;
-	}
+ {
+  $$.v1 = -$2;
+  $$.v2 = 0;
+ }
 |	LCONST '-' LCONST
-	{
-		$$.v1 = $1;
-		$$.v2 = $3;
-	}
+ {
+  $$.v1 = $1;
+  $$.v2 = $3;
+ }
 |	'-' LCONST '-' LCONST
-	{
-		$$.v1 = -$2;
-		$$.v2 = $4;
-	}
+ {
+  $$.v1 = -$2;
+  $$.v2 = $4;
+ }
 
 mem:
-	omem
+ omem
 |	nmem
 
 omem:
-	con
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+D_NONE;
-		$$.offset = $1;
-	}
+ con
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_NONE;
+  $$.offset = $1;
+ }
 |	con '(' LLREG ')'
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+$3;
-		$$.offset = $1;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$3;
+  $$.offset = $1;
+ }
 |	con '(' LSP ')'
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+D_SP;
-		$$.offset = $1;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_SP;
+  $$.offset = $1;
+ }
 |	con '(' LLREG '*' con ')'
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+D_NONE;
-		$$.offset = $1;
-		$$.index = $3;
-		$$.scale = $5;
-		checkscale($$.scale);
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_NONE;
+  $$.offset = $1;
+  $$.index = $3;
+  $$.scale = $5;
+  checkscale($$.scale);
+ }
 |	con '(' LLREG ')' '(' LLREG '*' con ')'
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+$3;
-		$$.offset = $1;
-		$$.index = $6;
-		$$.scale = $8;
-		checkscale($$.scale);
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$3;
+  $$.offset = $1;
+  $$.index = $6;
+  $$.scale = $8;
+  checkscale($$.scale);
+ }
 |	'(' LLREG ')'
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+$2;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$2;
+ }
 |	'(' LSP ')'
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+D_SP;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_SP;
+ }
 |	con '(' LSREG ')'
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+$3;
-		$$.offset = $1;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$3;
+  $$.offset = $1;
+ }
 |	'(' LLREG '*' con ')'
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+D_NONE;
-		$$.index = $2;
-		$$.scale = $4;
-		checkscale($$.scale);
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_NONE;
+  $$.index = $2;
+  $$.scale = $4;
+  checkscale($$.scale);
+ }
 |	'(' LLREG ')' '(' LLREG '*' con ')'
-	{
-		$$ = nullgen;
-		$$.type = D_INDIR+$2;
-		$$.index = $5;
-		$$.scale = $7;
-		checkscale($$.scale);
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$2;
+  $$.index = $5;
+  $$.scale = $7;
+  checkscale($$.scale);
+ }
 
 nmem:
-	nam
-	{
-		$$ = $1;
-	}
+ nam
+ {
+  $$ = $1;
+ }
 |	nam '(' LLREG '*' con ')'
-	{
-		$$ = $1;
-		$$.index = $3;
-		$$.scale = $5;
-		checkscale($$.scale);
-	}
+ {
+  $$ = $1;
+  $$.index = $3;
+  $$.scale = $5;
+  checkscale($$.scale);
+ }
 
 nam:
-	LNAME offset '(' pointer ')'
-	{
-		$$ = nullgen;
-		$$.type = $4;
-		$$.sym = $1;
-		$$.offset = $2;
-	}
+ LNAME offset '(' pointer ')'
+ {
+  $$ = nullgen;
+  $$.type = $4;
+  $$.sym = $1;
+  $$.offset = $2;
+ }
 |	LNAME '<' '>' offset '(' LSB ')'
-	{
-		$$ = nullgen;
-		$$.type = D_STATIC;
-		$$.sym = $1;
-		$$.offset = $4;
-	}
+ {
+  $$ = nullgen;
+  $$.type = D_STATIC;
+  $$.sym = $1;
+  $$.offset = $4;
+ }
 
 offset:
-	{
-		$$ = 0;
-	}
+ {
+  $$ = 0;
+ }
 |	'+' con
-	{
-		$$ = $2;
-	}
+ {
+  $$ = $2;
+ }
 |	'-' con
-	{
-		$$ = -$2;
-	}
+ {
+  $$ = -$2;
+ }
 
 pointer:
-	LSB
+ LSB
 |	LSP
-	{
-		$$ = D_AUTO;
-	}
+ {
+  $$ = D_AUTO;
+ }
 |	LFP
 
 con:
-	LCONST
+ LCONST
 |	LVAR
-	{
-		$$ = $1->value;
-	}
+ {
+  $$ = $1->value;
+ }
 |	'-' con
-	{
-		$$ = -$2;
-	}
+ {
+  $$ = -$2;
+ }
 |	'+' con
-	{
-		$$ = $2;
-	}
+ {
+  $$ = $2;
+ }
 |	'~' con
-	{
-		$$ = ~$2;
-	}
+ {
+  $$ = ~$2;
+ }
 |	'(' expr ')'
-	{
-		$$ = $2;
-	}
+ {
+  $$ = $2;
+ }
 
 expr:
-	con
+ con
 |	expr '+' expr
-	{
-		$$ = $1 + $3;
-	}
+ {
+  $$ = $1 + $3;
+ }
 |	expr '-' expr
-	{
-		$$ = $1 - $3;
-	}
+ {
+  $$ = $1 - $3;
+ }
 |	expr '*' expr
-	{
-		$$ = $1 * $3;
-	}
+ {
+  $$ = $1 * $3;
+ }
 |	expr '/' expr
-	{
-		$$ = $1 / $3;
-	}
+ {
+  $$ = $1 / $3;
+ }
 |	expr '%' expr
-	{
-		$$ = $1 % $3;
-	}
+ {
+  $$ = $1 % $3;
+ }
 |	expr '<' '<' expr
-	{
-		$$ = $1 << $4;
-	}
+ {
+  $$ = $1 << $4;
+ }
 |	expr '>' '>' expr
-	{
-		$$ = $1 >> $4;
-	}
+ {
+  $$ = $1 >> $4;
+ }
 |	expr '&' expr
-	{
-		$$ = $1 & $3;
-	}
+ {
+  $$ = $1 & $3;
+ }
 |	expr '^' expr
-	{
-		$$ = $1 ^ $3;
-	}
+ {
+  $$ = $1 ^ $3;
+ }
 |	expr '|' expr
-	{
-		$$ = $1 | $3;
-	}
+ {
+  $$ = $1 | $3;
+ }
+
+/*e: 8a/a.y */
