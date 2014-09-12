@@ -3,7 +3,7 @@
 struct Fi fi;
 struct Htab h[NSYM];
 
-char	debug[256];
+bool	debug[256];
 Sym*	hash[NHASH];
 char*	Dlist[30];
 int	nDlist;

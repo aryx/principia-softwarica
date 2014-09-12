@@ -27,15 +27,19 @@ typedef struct  Ref Ref; // only for 8a originally
 
 struct	Sym
 {
-	Sym*	link;
+    // see also itab[i].type and itab[i].value
+    ushort	type;
+    long	value; // vlong in va!!
 
-	Ref*	ref; // not in original 5a/a.h
+    char	*name;
+    char	sym;
 
-	char*	macro;
-	long	value;
-	ushort	type;
-	char	*name;
-	char	sym;
+    char*	macro;
+
+    Ref*	ref; // unused for 5a, matters?
+
+    // Extra
+    Sym*	link;
 };
 #define	S	((Sym*)0)
 
@@ -101,7 +105,7 @@ enum
 	Always	= 14,
 };
 
-extern	char	debug[256];
+extern	bool	debug[256];
 extern	Sym*	hash[NHASH];
 extern	char*	Dlist[30];
 extern	int	nDlist;
