@@ -72,6 +72,7 @@ long	pc;
 int	peekc;
 /*e: global peekc */
 /*s: global sym */
+// bool?
 int	sym;
 /*e: global sym */
 /*s: global symb */

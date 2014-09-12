@@ -155,7 +155,7 @@ extern	char	symb[NSYMB];
 extern	int	thechar;
 
 // for macbody, was in a.h
-extern	char	debug[256];
+extern	bool	debug[256];
 extern	Hist*	ehist;
 extern	int	newflag;
 extern	long	thunk;

@@ -24,27 +24,28 @@ main(int argc, char *argv[])
     include[ninclude++] = ".";
 
     ARGBEGIN {
+    /*s: [[main()]] command line processing */
     case 'o':
         outfile = ARGF();
         break;
-
+    /*x: [[main()]] command line processing */
+    case 'I':
+        p = ARGF();
+        setinclude(p);
+        break;
+    /*x: [[main()]] command line processing */
     case 'D':
         p = ARGF();
         if(p)
             Dlist[nDlist++] = p;
         break;
-
-    case 'I':
-        p = ARGF();
-        setinclude(p);
-        break;
-
+    /*x: [[main()]] command line processing */
     default:
         c = ARGC();
         if(c >= 0 || c < sizeof(debug))
             debug[c] = true;
         break;
-
+    /*e: [[main()]] command line processing */
     } ARGEND
 
     if(*argv == 0) {
@@ -52,6 +53,7 @@ main(int argc, char *argv[])
         errorexit();
     }
 
+    /*s: [[main()]] multiple files handling */
     if(argc > 1) {
         nproc = 1;
         if(p = getenv("NPROC"))
@@ -91,6 +93,7 @@ main(int argc, char *argv[])
             nout--;
         }
     }
+    /*e: [[main()]] multiple files handling */
 
     if(assemble(argv[0]))
         errorexit();
@@ -148,10 +151,14 @@ assemble(char *file)
     Binit(&obuf, of, OWRITE);
 
     pass = 1;
+
     pinit(file);
+    /*s: [[assembler()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
-        dodefine(Dlist[i]);
-    yyparse(); //!
+            dodefine(Dlist[i]);
+    /*e: [[assembler()]] init Dlist after pinit */
+    yyparse();
+
     if(nerrors) {
         cclean();
         return nerrors;
@@ -159,10 +166,14 @@ assemble(char *file)
 
     pass = 2;
     outhist();
+
     pinit(file);
+    /*s: [[assembler()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
-        dodefine(Dlist[i]);
+            dodefine(Dlist[i]);
+    /*e: [[assembler()]] init Dlist after pinit */
     yyparse();
+
     cclean();
     return nerrors;
 }
@@ -1015,6 +1026,7 @@ l1:
         goto talph;
     if(isdigit(c))
         goto tnum;
+
     switch(c)
     {
     case '\n':
@@ -1050,6 +1062,7 @@ l1:
         c = GETC();
         if(isalpha(c) || isdigit(c) || c == '_' || c == '$')
             goto aloop;
+
         *cp = 0;
         peekc = c;
         s = lookup();

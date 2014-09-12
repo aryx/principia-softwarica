@@ -46,45 +46,64 @@ enum	as
     ABTRW,
     ABTSL,
     ABTSW,
-    ABYTE,
-    ACALL,
+
+    ABYTE, //
+
+    ACALL, //
+
     ACLC,
     ACLD,
-    ACLI,
+
+    ACLI, //
+
     ACLTS,
     ACMC,
-    ACMPB,
+
+    ACMPB, //
     ACMPL,
     ACMPW,
+
     ACMPSB,
     ACMPSL,
     ACMPSW,
     ADAA,
     ADAS,
-    ADATA,
-    ADECB,
+
+    ADATA, //
+
+    ADECB, //
     ADECL,
     ADECW,
-    ADIVB,
+
+    ADIVB, //
     ADIVL,
     ADIVW,
-    AENTER,
-    AGLOBL,
+
+    AENTER, //
+
+    AGLOBL, //
+
     AGOK,
+
     AHISTORY, // for header
-    AHLT,
+
+    AHLT, //
+
     AIDIVB,
     AIDIVL,
     AIDIVW,
     AIMULB,
     AIMULL,
     AIMULW,
-    AINB,
+
+    AINB, //
     AINL,
     AINW,
-    AINCB,
+
+    AINCB, //
     AINCL,
     AINCW,
+
     AINSB,
     AINSL,
     AINSW,
@@ -92,7 +111,8 @@ enum	as
     AINTO,
     AIRETL,
     AIRETW,
-    AJCC,
+
+    AJCC, //
     AJCS,
     AJCXZ,
     AJEQ,
@@ -103,8 +123,11 @@ enum	as
     AJLS,
     AJLT,
     AJMI,
-    AJMP,
+
+    AJMP, //
+
     AJNE,
+
     AJOC,
     AJOS,
     AJPC,
@@ -117,19 +140,25 @@ enum	as
     ALEAW,
     ALEAVEL,
     ALEAVEW,
-    ALOCK,
-    ALODSB,
+
+    ALOCK, //
+
+    ALODSB, //
     ALODSL,
     ALODSW,
-    ALONG,
+
+    ALONG, //
+
     ALOOP,
     ALOOPEQ,
     ALOOPNE,
     ALSLL,
     ALSLW,
-    AMOVB,
+
+    AMOVB, //
     AMOVL,
     AMOVW,
+
     AMOVBLSX,
     AMOVBLZX,
     AMOVBWSX,
@@ -139,26 +168,35 @@ enum	as
     AMOVSB,
     AMOVSL,
     AMOVSW,
-    AMULB,
+
+    AMULB, //
     AMULL,
     AMULW,
+
     ANAME, // seems important
-    ANEGB,
+
+    ANEGB, //
     ANEGL,
     ANEGW,
-    ANOP,
-    ANOTB,
+
+    ANOP, //
+
+    ANOTB, //
     ANOTL,
     ANOTW,
-    AORB,
+
+    AORB, //
     AORL,
     AORW,
-    AOUTB,
+
+    AOUTB, //
     AOUTL,
     AOUTW,
+
     AOUTSB,
     AOUTSL,
     AOUTSW,
+
     APOPAL,
     APOPAW,
     APOPFL,
@@ -177,9 +215,13 @@ enum	as
     ARCRB,
     ARCRL,
     ARCRW,
+
     AREP,
+
     AREPN,
-    ARET,
+
+    ARET, //
+
     AROLB,
     AROLL,
     AROLW,
@@ -226,24 +268,32 @@ enum	as
     ASTC,
     ASTD,
     ASTI,
-    ASTOSB,
+
+    ASTOSB, //
     ASTOSL,
     ASTOSW,
-    ASUBB,
+
+    ASUBB, //
     ASUBL,
     ASUBW,
-    ASYSCALL,
+
+    ASYSCALL, // !!!!!!
+
     ATESTB,
     ATESTL,
     ATESTW,
-    ATEXT,
+
+    ATEXT, //
+
     AVERR,
     AVERW,
     AWAIT,
     AWORD,
-    AXCHGB,
+
+    AXCHGB, //
     AXCHGL,
     AXCHGW,
+
     AXLAT,
     AXORB,
     AXORL,
@@ -421,7 +471,7 @@ enum	as
 /*e: enum as */
 
 /*s: enum _anon_ */
-enum register
+enum reg
 {
     D_AL		= 0,
     D_CL,
