@@ -20,6 +20,7 @@
 %left	'<' '>'
 %left	'+' '-'
 %left	'*' '/' '%'
+
 %token	<lval>	LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
 %token	<lval>	LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
 %token	<lval>	LCONST LFP LPC LSB
@@ -27,6 +28,7 @@
 %token	<dval>	LFCONST
 %token	<sval>	LSCONST LSP
 %token	<sym>	LNAME LLAB LVAR
+
 %type	<lval>	con expr pointer offset
 %type	<con2>	con2
 %type	<gen>	mem imm imm2 reg nam rel rem rim rom omem nmem

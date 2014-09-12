@@ -179,14 +179,15 @@ assemble(char *file)
 }
 /*e: function assemble */
 
-/*s: global itab */
+/*s: struct Itab */
 struct Itab
 {
     char	*name;
     ushort	type;
     ushort	value;
 };
-
+/*e: struct Itab */
+/*s: global itab */
 struct Itab itab[] =
 {
     "SP",		LSP,	D_AUTO,

@@ -151,8 +151,10 @@ dodefine(char *cp)
         s = lookup();
         s->macro = "\0001";	/* \000 is nargs */
     }
-    if(debug['m'])
-        print("#define (-D) %s %s\n", s->name, s->macro+1);
+    /*s: [[dodefine()]] debug */
+        if(debug['m'])
+            print("#define (-D) %s %s\n", s->name, s->macro+1);
+    /*e: [[dodefine()]] debug */
 }
 /*e: function dodefine */
 
@@ -383,8 +385,10 @@ macdef(void)
     if(dots)
         *base |= VARMAC;
     s->macro = base;
-    if(debug['m'])
-        print("#define %s %s\n", s->name, s->macro+1);
+    /*s: [[macdef()]] debug */
+        if(debug['m'])
+            print("#define %s %s\n", s->name, s->macro+1);
+    /*e: [[macdef()]] debug */
     return;
 
 bad:
@@ -857,15 +861,17 @@ linehist(char *f, int offset)
             ehist->offset = offset;
             return;
         }
+    /*s: [[linehist()]] debug */
+        if(debug['f'])
+            if(f) {
+                if(offset)
+                    print("%4ld: %s (#line %d)\n", lineno, f, offset);
+                else
+                    print("%4ld: %s\n", lineno, f);
+            } else
+                print("%4ld: <pop>\n", lineno);
+    /*e: [[linehist()]] debug */
 
-    if(debug['f'])
-        if(f) {
-            if(offset)
-                print("%4ld: %s (#line %d)\n", lineno, f, offset);
-            else
-                print("%4ld: %s\n", lineno, f);
-        } else
-            print("%4ld: <pop>\n", lineno);
     newflag = 0;
 
     h = alloc(sizeof(Hist));

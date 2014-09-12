@@ -15,6 +15,7 @@
 %thx to LP, changed for the better a few things:
 
 %thx to codemap/codegraph:
+% - factorized code in aa/
 
 %thx to this manual, better understand assembly?:
 
@@ -150,7 +151,7 @@ Here are other candidates that were considered but ultimately discarded:
 \section{Requirements}
 
 % asm.ps
-% know an assembler
+% know at least an assembler
 
 \section{About this document}
 #include "../docs/latex/About.tex.nw"
@@ -167,8 +168,6 @@ License.
 
 \chapter{Overview}
 
-% TODO: look at my own assembler? go doc on machine code instruction
-
 \section{Assembler principles}
 
 % symbolic names -> machine code
@@ -180,17 +179,26 @@ License.
 
 \section{[[8a]] services}
 
-% command line interface?
+% command line interface? -o,   -D -I,  -f -m for debug
 
-% important -TText, see Kernel.tex.nw
+
 
 \section{x86}
 
 % opcode format, see my assembler in ml I wrote a long time ago! in xix-assembler/
 
-\section{A toy [[hello.s]]}
+% specifics of 8a? like left to right or right to left for mv, intel
+% or AT&T syntax (I guess AT&T :) )
+
+% TODO: look at my own assembler? doc on machine code instruction
+
+\section{[[helloworld.s]]}
 
 % print hello world with mv, call, int, etc?
+
+% show commands, 8a, ld, ./xxx
+
+% show binary format? hexdump?
 
 \section{Code organization}
 
@@ -210,7 +218,7 @@ License.
 % text -> AST -> symbols -> codegen 
 
 \section{[[Instruction]] and [[Register]]}
-
+% kind of AST
 
 %TODO: rename, and reorder to have first a set of mostly useful instr
 % e.g. MOV, MOVB, etc. Could maybe analyze *.s in plan9 and do some
@@ -721,7 +729,11 @@ enum reg
     D_DR		= 43,
     D_TR		= 51,
 };
+@
 
+\section{[[Itab]] and [[itab]]}
+
+<<enum misc1>>=
 // must start after enum register?
 // Gen.type?
 enum misc {
@@ -746,7 +758,9 @@ enum misc {
 
     D_SIZE,	/* 8l internal */
 };
+@
 
+<<enum misc2>>=
 enum misc2 {
     T_TYPE		= 1<<0,
     T_INDEX		= 1<<1,
@@ -757,7 +771,9 @@ enum misc2 {
     T_OFFSET2	= 1<<6,
     T_GOTYPE	= 1<<7,
 };
+@
 
+<<enum misc3>>=
 enum misc3 {
     REGARG		= -1,
     REGRET		= D_AX,
@@ -767,16 +783,20 @@ enum misc3 {
 };
 @
 
+
 % LTYPE0 et is defined in a.y, tokens with value 
 % instruction table conversion, string -> token
-<<global itab>>=
+<<struct Itab>>=
 struct Itab
 {
     char	*name;
     ushort	type;
     ushort	value;
 };
+@
 
+% TODO: just put a subset with most relevant instr and registers
+<<global itab>>=
 struct Itab itab[] =
 {
     "SP",		LSP,	D_AUTO,
@@ -2389,8 +2409,7 @@ dodefine(char *cp)
         s = lookup();
         s->macro = "\0001";	/* \000 is nargs */
     }
-    if(debug['m'])
-        print("#define (-D) %s %s\n", s->name, s->macro+1);
+    <<[[dodefine()]] debug>>
 }
 @
 
@@ -2564,8 +2583,7 @@ macdef(void)
     if(dots)
         *base |= VARMAC;
     s->macro = base;
-    if(debug['m'])
-        print("#define %s %s\n", s->name, s->macro+1);
+    <<[[macdef()]] debug>>
     return;
 
 bad:
@@ -2874,15 +2892,8 @@ linehist(char *f, int offset)
             ehist->offset = offset;
             return;
         }
+    <<[[linehist()]] debug>>
 
-    if(debug['f'])
-        if(f) {
-            if(offset)
-                print("%4ld: %s (#line %d)\n", lineno, f, offset);
-            else
-                print("%4ld: %s\n", lineno, f);
-        } else
-            print("%4ld: <pop>\n", lineno);
     newflag = 0;
 
     h = alloc(sizeof(Hist));
@@ -2924,6 +2935,7 @@ linehist(char *f, int offset)
 %left	'<' '>'
 %left	'+' '-'
 %left	'*' '/' '%'
+
 %token	<lval>	LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
 %token	<lval>	LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
 %token	<lval>	LCONST LFP LPC LSB
@@ -2931,6 +2943,7 @@ linehist(char *f, int offset)
 %token	<dval>	LFCONST
 %token	<sval>	LSCONST LSP
 %token	<sym>	LNAME LLAB LVAR
+
 %type	<lval>	con expr pointer offset
 %type	<con2>	con2
 %type	<gen>	mem imm imm2 reg nam rel rem rim rom omem nmem
@@ -3492,6 +3505,8 @@ expr:
 
 @
 
+\chapter{Output}
+
 \chapter{Machine code generation}
 
 % it looks like outhist generate some header information,
@@ -3840,7 +3855,6 @@ if(argc > 1) {
 
 \chapter{Debugging}
 
-
 % 'm', 'f', 256 so can have for each character a boolean value
 <<global debug>>=
 bool	debug[256];
@@ -3852,6 +3866,32 @@ default:
     if(c >= 0 || c < sizeof(debug))
         debug[c] = true;
     break;
+@
+
+\section{[[8a -m]]}
+% m for macro
+
+<<[[dodefine()]] debug>>=
+    if(debug['m'])
+        print("#define (-D) %s %s\n", s->name, s->macro+1);
+@
+
+<<[[macdef()]] debug>>=
+    if(debug['m'])
+        print("#define %s %s\n", s->name, s->macro+1);
+@
+
+\section{[[8a -f]]}
+
+<<[[linehist()]] debug>>=
+    if(debug['f'])
+        if(f) {
+            if(offset)
+                print("%4ld: %s (#line %d)\n", lineno, f, offset);
+            else
+                print("%4ld: %s\n", lineno, f);
+        } else
+            print("%4ld: <pop>\n", lineno);
 @
 
 \chapter{Error Managment}

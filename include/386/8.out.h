@@ -512,7 +512,8 @@ enum reg
     D_DR		= 43,
     D_TR		= 51,
 };
-
+/*e: enum _anon_ */
+/*s: enum misc1 */
 // must start after enum register?
 // Gen.type?
 enum misc {
@@ -537,7 +538,8 @@ enum misc {
 
     D_SIZE,	/* 8l internal */
 };
-
+/*e: enum misc1 */
+/*s: enum misc2 */
 enum misc2 {
     T_TYPE		= 1<<0,
     T_INDEX		= 1<<1,
@@ -548,7 +550,8 @@ enum misc2 {
     T_OFFSET2	= 1<<6,
     T_GOTYPE	= 1<<7,
 };
-
+/*e: enum misc2 */
+/*s: enum misc3 */
 enum misc3 {
     REGARG		= -1,
     REGRET		= D_AX,
@@ -556,7 +559,7 @@ enum misc3 {
     REGSP		= D_SP,
     REGTMP		= D_DI,
 };
-/*e: enum _anon_ */
+/*e: enum misc3 */
 
 /*s: constant SYMDEF */
 /*
