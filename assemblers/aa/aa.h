@@ -114,9 +114,9 @@ struct Htab
 /*e: struct Htab */
 extern struct Htab h[NSYM];
 
-/*s: struct Hist */
 // Gen, Gen2?
 
+/*s: struct Hist */
 struct	Hist
 {
     Hist*	link;
@@ -197,7 +197,6 @@ enum	/* keep in synch with ../cc/cc.h */
 {
     Plan9	= 1<<0,
     Unix	= 1<<1,
-    Windows	= 1<<2
 };
 /*e: enum _anon_ (assemblers/aa/aa.h) */
 /*e: assemblers/aa/aa.h */

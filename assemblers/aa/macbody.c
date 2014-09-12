@@ -163,11 +163,11 @@ struct
     void	(*macf)(void);
 } mactab[] =
 {
-    "ifdef",	0,	/* macif(0) */
-    "ifndef",	0,	/* macif(1) */
-    "else",		0,	/* macif(2) */
+    "ifdef",	nil,	/* macif(0) */
+    "ifndef",	nil,	/* macif(1) */
+    "else",	nil,	/* macif(2) */
 
-    "line",		maclin,
+    "line",	maclin,
     "define",	macdef,
     "include",	macinc,
     "undef",	macund,

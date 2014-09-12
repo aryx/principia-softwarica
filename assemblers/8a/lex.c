@@ -16,9 +16,10 @@ main(int argc, char *argv[])
 
     thechar = '8';
     thestring = "386";
+
     memset(debug, 0, sizeof(debug));
     cinit();
-    outfile = 0;
+    outfile = nil;
     include[ninclude++] = ".";
     ARGBEGIN {
     default:
@@ -42,15 +43,13 @@ main(int argc, char *argv[])
         setinclude(p);
         break;
     } ARGEND
+
     if(*argv == 0) {
         print("usage: %ca [-options] file.s\n", thechar);
         errorexit();
     }
-    if(argc > 1 && systemtype(Windows)){
-        print("can't assemble multiple files on windows\n");
-        errorexit();
-    }
-    if(argc > 1 && !systemtype(Windows)) {
+
+    if(argc > 1) {
         nproc = 1;
         if(p = getenv("NPROC"))
             nproc = atol(p);	/* */
@@ -917,18 +916,8 @@ outhist(void)
     for(h = hist; h != H; h = h->link) {
         p = h->name;
         op = 0;
-        /* on windows skip drive specifier in pathname */
-        if(systemtype(Windows) && p && p[1] == ':'){
-            p += 2;
-            c = *p;
-        }
         if(p && p[0] != c && h->offset == 0 && pathname){
-            /* on windows skip drive specifier in pathname */
-            if(systemtype(Windows) && pathname[1] == ':') {
-                op = p;
-                p = pathname+2;
-                c = *p;
-            } else if(pathname[0] == c){
+            if(pathname[0] == c){
                 op = p;
                 p = pathname;
             }

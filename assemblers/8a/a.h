@@ -8,10 +8,6 @@ typedef	struct	Gen2 	Gen2;
 /*s: constant FPCHIP */
 #define	FPCHIP		1
 /*e: constant FPCHIP */
-/*s: constant NMACRO */
-//#define	NMACRO		10
-/*e: constant NMACRO */
-
 
 /*s: struct Gen */
 struct	Gen
@@ -33,18 +29,6 @@ struct	Gen2
     Gen	to;
 };
 /*e: struct Gen2 */
-
-
-/*s: enum _anon_ (assemblers/8a/a.h) */
-enum
-{
-    CLAST,
-    CMACARG,
-    CMACRO,
-    CPREPROC,
-};
-/*e: enum _anon_ (assemblers/8a/a.h) */
-
 
 extern	char*	Dlist[30];
 extern	int	nDlist;
@@ -78,13 +62,6 @@ int	yyparse(void);
 // for macbody
 int	getc(void);
 void	unget(int);
-//void	macund(void);
-//void	macdef(void);
-//void	macinc(void);
-//void	macprag(void);
-//void	maclin(void);
-//void	macif(int);
-//void	macend(void);
 void	pushio(void);
 void	newio(void);
 void	newfile(char*, int);
@@ -96,9 +73,6 @@ int	mycreat(char*, int);
 int	systemtype(int);
 int	pathchar(void);
 char*	mygetwd(char*, int);
-//int	myexec(char*, char*[]);
-//int	mydup(int, int);
 int	myfork(void);
-//int	mypipe(int*);
 void*	mysbrk(ulong);
 /*e: assemblers/8a/a.h */

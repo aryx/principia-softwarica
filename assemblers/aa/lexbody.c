@@ -3,11 +3,11 @@
 
 void prfile(long l);
 
-/*s: function pragpack */
 /*
  * common code for all the assemblers
  */
 
+/*s: function pragpack */
 void
 pragpack(void)
 {
@@ -101,7 +101,7 @@ setinclude(char *p)
 {
     int i;
 
-    if(p == 0)
+    if(p == nil)
         return;
     for(i=1; i < ninclude; i++)
         if(strcmp(p, include[i]) == 0)
@@ -481,8 +481,11 @@ lookup(void)
 //	}
 //	peekc = c1;
 //	return c;
-/*s: function getc */
 //}
+
+
+
+/*s: function getc */
 
 int
 getc(void)

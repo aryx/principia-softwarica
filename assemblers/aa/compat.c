@@ -1,13 +1,6 @@
 /*s: assemblers/aa/compat.c */
 #include "aa.h"
 
-/*s: function myaccess */
-//int
-//myaccess(char *f)
-//{
-//    return access(f, AEXIST);
-//}
-/*e: function myaccess */
 
 /*s: function mysbrk */
 void*
@@ -46,22 +39,6 @@ mywait(int *s)
 }
 /*e: function mywait */
 
-/*s: function mydup */
-//int
-//mydup(int f1, int f2)
-//{
-//    return dup(f1,f2);
-//}
-/*e: function mydup */
-
-/*s: function mypipe */
-//int
-//mypipe(int *fd)
-//{
-//    return pipe(fd);
-//}
-/*e: function mypipe */
-
 /*s: function systemtype */
 int
 systemtype(int sys)
@@ -85,14 +62,6 @@ mygetwd(char *path, int len)
     return getwd(path, len);
 }
 /*e: function mygetwd */
-
-/*s: function myexec */
-//int
-//myexec(char *path, char *argv[])
-//{
-//    return exec(path, argv);
-//}
-/*e: function myexec */
 
 /*s: function myfork */
 int
