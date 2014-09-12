@@ -166,19 +166,11 @@ void	syminit(Sym*);
 int	filbuf(void);
 void	domacro(void);
 void	macexpand(Sym*, char*);
-void	prfile(long);
 
 // for macbody, was in a.h
 int	getc(void);
 void	unget(int);
 Sym*	slookup(char*);
-void	macund(void);
-void	macdef(void);
-void	macinc(void);
-void	macprag(void);
-void	maclin(void);
-void	macif(int);
-void	macend(void);
 void*	mysbrk(ulong);
 
 // for macbody, was in lexbody

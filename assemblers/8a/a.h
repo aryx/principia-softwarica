@@ -9,7 +9,7 @@ typedef	struct	Gen2 	Gen2;
 #define	FPCHIP		1
 /*e: constant FPCHIP */
 /*s: constant NMACRO */
-#define	NMACRO		10
+//#define	NMACRO		10
 /*e: constant NMACRO */
 
 
@@ -54,18 +54,15 @@ extern	char*	pathname;
 extern	char*	thestring;
 extern	Biobuf	obuf;
 
+// for a.y
 long	yylex(void);
-int	escchar(int);
-void	cinit(void);
 void	checkscale(int);
-void	cclean(void);
-int	isreg(Gen*);
 void	outcode(int, Gen2*);
-void	outhist(void);
-void	zaddr(Gen*, int);
-void	zname(char*, int, int);
-Sym*	getsym(void);
-int	assemble(char*);
+
+int	escchar(int);
+//void	zaddr(Gen*, int);
+//void	zname(char*, int, int);
+//Sym*	getsym(void);
 
 // for lexbody
 void	setinclude(char*);
@@ -81,13 +78,13 @@ int	yyparse(void);
 // for macbody
 int	getc(void);
 void	unget(int);
-void	macund(void);
-void	macdef(void);
-void	macinc(void);
-void	macprag(void);
-void	maclin(void);
-void	macif(int);
-void	macend(void);
+//void	macund(void);
+//void	macdef(void);
+//void	macinc(void);
+//void	macprag(void);
+//void	maclin(void);
+//void	macif(int);
+//void	macend(void);
 void	pushio(void);
 void	newio(void);
 void	newfile(char*, int);
@@ -99,9 +96,9 @@ int	mycreat(char*, int);
 int	systemtype(int);
 int	pathchar(void);
 char*	mygetwd(char*, int);
-int	myexec(char*, char*[]);
-int	mydup(int, int);
+//int	myexec(char*, char*[]);
+//int	mydup(int, int);
 int	myfork(void);
-int	mypipe(int*);
+//int	mypipe(int*);
 void*	mysbrk(ulong);
 /*e: assemblers/8a/a.h */

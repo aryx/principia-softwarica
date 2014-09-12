@@ -2,6 +2,11 @@
 #include "a.h"
 #include "y.tab.h"
 
+void	cinit(void);
+int	assemble(char*);
+void	cclean(void);
+void	outhist(void);
+
 /*s: function main (assemblers/8a/lex.c) */
 void
 main(int argc, char *argv[])

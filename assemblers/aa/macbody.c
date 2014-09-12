@@ -1,6 +1,14 @@
 /*s: assemblers/aa/macbody.c */
 #include "aa.h"
 
+void	macund(void);
+void	macdef(void);
+void	macinc(void);
+void	macprag(void);
+void	maclin(void);
+void	macif(int);
+void	macend(void);
+
 /*s: constant VARMAC */
 #define VARMAC 0x80
 /*e: constant VARMAC */

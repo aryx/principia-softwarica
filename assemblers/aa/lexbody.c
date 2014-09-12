@@ -1,6 +1,8 @@
 /*s: assemblers/aa/lexbody.c */
 #include "aa.h"
 
+void prfile(long l);
+
 /*s: function pragpack */
 /*
  * common code for all the assemblers
