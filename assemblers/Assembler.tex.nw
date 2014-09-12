@@ -238,21 +238,28 @@ License.
 
 \chapter{Core Data Structures}
 
-% text -> AST -> symbols -> codegen 
+% text -> grammar -> symbols -> codegen 
+% does not really use an AST, abuse tokens and the grammar to
+% do some computations (the classic old way to do things)
 
 \section{[[Instruction]] and [[Register]]}
-% kind of AST
 
 %TODO: rename, and reorder to have first a set of mostly useful instr
 % e.g. MOV, MOVB, etc. Could maybe analyze *.s in plan9 and do some
 % stats?
 % hmmm but can reorder? the opcode generation rely on an order? or 
-% just ld and as need to agree with each other, the actual binary code
-% generation is done in the linker?
+% just 'ld' and 'as' need to agree with each other; the actual binary code
+% generation is done in the linker. Hmm but can have some issues
+% if want to play with what is cross compiled!
 
-% TODO maybe by playing with LP I can reproduce a kind of ADT?
+% TODO maybe by playing with Literate Programming I can reproduce a kind of ADT?
 % e.g. by introducing LSREG, and then the part of the enum register related
 % to LSREG?
+% type instr = 
+%   ...
+% type reg = 
+%   ...
+
 
 <<enum as>>=
 enum	as
@@ -773,6 +780,32 @@ enum misc3 {
 
 \section{[[Token]] and [[itab]]}
 
+<<union token>>=
+%union	{
+ long	lval;
+ double	dval;
+ char	sval[8];
+ Sym	*sym;
+
+ <<[[Token]] other fields>>
+}
+@
+
+% the first part is essentially for keywords
+<<token declarations>>=
+%token	<lval>	LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
+%token	<lval>	LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
+%token  <lval>  LFP LPC LSB LSP
+%token	<lval>	LBREG LLREG LSREG LFREG
+
+%token	<lval>	LCONST 
+%token	<dval>	LFCONST
+%token	<sval>	LSCONST
+%token	<sym>	LNAME LLAB LVAR
+@
+%pad's bugfix? LSP was was LFCONST, does not make sense
+
+% kind of additional attributes
 <<enum misc1>>=
 // must start after enum register?
 // Gen.type?
@@ -2933,43 +2966,35 @@ linehist(char *f, int offset)
 
 \chapter{Parsing}
 
-<<8a/a.y>>=
-%{
-#include "a.h"
-%}
-%union	{
- Sym	*sym;
- long	lval;
+
+<<[[Token]] other fields>>=
  struct {
   long v1;
   long v2;
  } con2;
- double	dval;
- char	sval[8];
  Gen	gen;
  Gen2	gen2;
-}
+@
+
+<<priority and associativity declarations>>=
 %left	'|'
 %left	'^'
 %left	'&'
 %left	'<' '>'
 %left	'+' '-'
 %left	'*' '/' '%'
+@
 
-%token	<lval>	LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
-%token	<lval>	LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
-%token	<lval>	LCONST LFP LPC LSB
-%token	<lval>	LBREG LLREG LSREG LFREG
-%token	<dval>	LFCONST
-%token	<sval>	LSCONST LSP
-%token	<sym>	LNAME LLAB LVAR
 
+<<type declarations>>=
 %type	<lval>	con expr pointer offset
 %type	<con2>	con2
 %type	<gen>	mem imm imm2 reg nam rel rem rim rom omem nmem
 %type	<gen2>	nonnon nonrel nonrem rimnon rimrem remrim
 %type	<gen2>	spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
-%%
+@
+
+<<grammar>>=
 prog:
 |	prog line
 
@@ -3523,6 +3548,19 @@ expr:
   $$ = $1 | $3;
  }
 
+@
+
+<<8a/a.y>>=
+%{
+#include "a.h"
+%}
+<<union token>>
+<<priority and associativity declarations>>
+<<token declarations>>
+<<type declarations>>
+
+%%
+<<grammar>>
 @
 
 \chapter{Output}

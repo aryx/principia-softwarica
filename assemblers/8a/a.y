@@ -2,39 +2,52 @@
 %{
 #include "a.h"
 %}
+/*s: union token */
 %union	{
- Sym	*sym;
  long	lval;
- struct {
-  long v1;
-  long v2;
- } con2;
  double	dval;
  char	sval[8];
- Gen	gen;
- Gen2	gen2;
+ Sym	*sym;
+
+ /*s: [[Token]] other fields */
+  struct {
+   long v1;
+   long v2;
+  } con2;
+  Gen	gen;
+  Gen2	gen2;
+ /*e: [[Token]] other fields */
 }
+/*e: union token */
+/*s: priority and associativity declarations */
 %left	'|'
 %left	'^'
 %left	'&'
 %left	'<' '>'
 %left	'+' '-'
 %left	'*' '/' '%'
-
+/*e: priority and associativity declarations */
+/*s: token declarations */
 %token	<lval>	LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
 %token	<lval>	LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
-%token	<lval>	LCONST LFP LPC LSB
+%token  <lval>  LFP LPC LSB LSP
 %token	<lval>	LBREG LLREG LSREG LFREG
-%token	<dval>	LFCONST
-%token	<sval>	LSCONST LSP
-%token	<sym>	LNAME LLAB LVAR
 
+%token	<lval>	LCONST 
+%token	<dval>	LFCONST
+%token	<sval>	LSCONST
+%token	<sym>	LNAME LLAB LVAR
+/*e: token declarations */
+/*s: type declarations */
 %type	<lval>	con expr pointer offset
 %type	<con2>	con2
 %type	<gen>	mem imm imm2 reg nam rel rem rim rom omem nmem
 %type	<gen2>	nonnon nonrel nonrem rimnon rimrem remrim
 %type	<gen2>	spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
+/*e: type declarations */
+
 %%
+/*s: grammar */
 prog:
 |	prog line
 
@@ -588,4 +601,5 @@ expr:
   $$ = $1 | $3;
  }
 
+/*e: grammar */
 /*e: 8a/a.y */
