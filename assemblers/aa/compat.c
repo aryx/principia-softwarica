@@ -2,14 +2,6 @@
 #include "aa.h"
 
 
-/*s: function mysbrk */
-void*
-mysbrk(ulong size)
-{
-    return sbrk(size);
-}
-/*e: function mysbrk */
-
 /*s: function mycreat */
 int
 mycreat(char *n, int p)
@@ -55,11 +47,4 @@ pathchar(void)
 }
 /*e: function pathchar */
 
-/*s: function myfork */
-int
-myfork(void)
-{
-    return fork();
-}
-/*e: function myfork */
 /*e: assemblers/aa/compat.c */

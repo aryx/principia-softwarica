@@ -56,7 +56,7 @@ main(int argc, char *argv[])
 		nout = 0;
 		for(;;) {
 			while(nout < nproc && argc > 0) {
-				i = myfork();
+				i = fork();
 				if(i < 0) {
 					i = mywait(&status);
 					if(i < 0)

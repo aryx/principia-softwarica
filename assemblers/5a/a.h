@@ -191,5 +191,3 @@ int	mywait(int*);
 int	mycreat(char*, int);
 int	systemtype(int);
 int	pathchar(void);
-int	myfork(void);
-void*	mysbrk(ulong);

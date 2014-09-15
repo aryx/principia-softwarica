@@ -175,7 +175,6 @@ void	macexpand(Sym*, char*);
 int	getc(void);
 void	unget(int);
 Sym*	slookup(char*);
-void*	mysbrk(ulong);
 
 // for macbody, was in lexbody
 void pragpack(void);

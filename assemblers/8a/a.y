@@ -14,6 +14,7 @@
    long v1;
    long v2;
   } con2;
+
   Gen	gen;
   Gen2	gen2;
  /*e: [[Token]] other fields */
@@ -87,6 +88,7 @@ inst:
 |	LTYPE3 rimrem	{ outcode($1, &$2); }
 |	LTYPE4 remrim	{ outcode($1, &$2); }
 |	LTYPER nonrel	{ outcode($1, &$2); }
+
 |	LTYPED spec1	{ outcode($1, &$2); }
 |	LTYPET spec2	{ outcode($1, &$2); }
 |	LTYPEC spec3	{ outcode($1, &$2); }
