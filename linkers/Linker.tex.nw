@@ -141,7 +141,7 @@ you fully understand how things work under the hood.
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
-\item GNU ld
+\item GNU ld and the bfd library
 \item Gold
 \end{itemize}
 
@@ -199,7 +199,172 @@ License.
 
 \chapter{Error Managment}
 
+<<function errorexit>>=
+void
+errorexit(void)
+{
+
+    if(nerrors) {
+        if(cout >= 0)
+            remove(outfile);
+        exits("error");
+    }
+    exits(0);
+}
+@
+
 \chapter{Libc}
+
+\section{Memory managmnent}
+
+<<global nhunk>>=
+long	nhunk;
+@
+
+<<function malloc>>=
+/*
+ * fake malloc
+ */
+void*
+malloc(ulong n)
+{
+    void *p;
+
+    while(n & 7)
+        n++;
+    while(nhunk < n)
+        gethunk();
+    p = hunk;
+    nhunk -= n;
+    hunk += n;
+    return p;
+}
+@
+
+<<function free>>=
+void
+free(void *p)
+{
+    USED(p);
+}
+@
+
+% not sure why but if redefine malloc and free then have to
+% redefine this func too, otherwise get a link error
+<<function setmalloctag>>=
+//@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
+void setmalloctag(void *v, ulong pc)
+{
+    USED(v, pc);
+}
+@
+
+
+
+<<function mysbrk>>=
+void*
+mysbrk(ulong size)
+{
+    return sbrk(size);
+}
+@
+
+
+
+<<function gethunk>>=
+void
+gethunk(void)
+{
+    char *h;
+    long nh;
+
+    nh = NHUNK;
+    if(thunk >= 5L*NHUNK) {
+        nh = 5L*NHUNK;
+        if(thunk >= 25L*NHUNK)
+            nh = 25L*NHUNK;
+    }
+    h = mysbrk(nh);
+    if(h == (char*)-1) {
+        diag("out of memory");
+        errorexit();
+    }
+    hunk = h;
+    nhunk = nh;
+    thunk += nh;
+}
+@
+
+
+<<function prg>>=
+Prog*
+prg(void)
+{
+    Prog *p;
+
+    while(nhunk < sizeof(Prog))
+        gethunk();
+    p = (Prog*)hunk;
+    nhunk -= sizeof(Prog);
+    hunk += sizeof(Prog);
+
+    *p = zprg;
+    return p;
+}
+@
+
+<<function copyp>>=
+Prog*
+copyp(Prog *q)
+{
+    Prog *p;
+
+    p = prg();
+    *p = *q;
+    return p;
+}
+@
+
+<<function lookup>>=
+Sym*
+lookup(char *symb, int v)
+{
+    Sym *s;
+    char *p;
+    long h;
+    int l, c;
+
+    h = v;
+    for(p=symb; c = *p; p++)
+        h = h+h+h + c;
+    l = (p - symb) + 1;
+    h &= 0xffffff;
+    h %= NHASH;
+    for(s = hash[h]; s != S; s = s->link)
+        if(s->version == v)
+        if(memcmp(s->name, symb, l) == 0)
+            return s;
+
+    while(nhunk < sizeof(Sym))
+        gethunk();
+    s = (Sym*)hunk;
+    nhunk -= sizeof(Sym);
+    hunk += sizeof(Sym);
+
+    s->name = malloc(l + 1);
+    memmove(s->name, symb, l);
+
+    s->link = hash[h];
+    s->type = 0;
+    s->version = v;
+    s->value = 0;
+    s->sig = 0;
+    hash[h] = s;
+    nsymbol++;
+    return s;
+}
+@
+
 
 \chapter{Extra Code}
 

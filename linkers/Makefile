@@ -32,6 +32,7 @@ SRC_VIEWS= \
   8l/elf.h\
   8l/l.h\
   8l/globals.c\
+  8l/utils.c\
   8l/optab.c\
   8l/list.c\
   8l/compat.c\

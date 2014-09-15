@@ -3898,9 +3898,6 @@ long	lcsize;
 int	nerrors;
 @
 
-<<global nhunk>>=
-long	nhunk;
-@
 
 <<global nsymbol>>=
 long	nsymbol;
@@ -4208,6 +4205,7 @@ uchar	ymovl[] =
     0
 };
 @
+%$
 
 <<global ym_rl>>=
 uchar	ym_rl[] =
@@ -4894,6 +4892,23 @@ Optab optab[] =
 <<global optab>>
 @
 
+\subsection*{[[linkers/8l/utils.c]]}
+
+<<linkers/8l/utils.c>>=
+#include "l.h"
+
+<<function errorexit>>
+
+<<function gethunk>>
+
+<<function lookup>>
+
+<<function prg>>
+
+<<function copyp>>
+
+
+@
 
 \subsection*{[[linkers/8l/list.c]]}
 
@@ -5239,54 +5254,6 @@ int	Sconv(Fmt*);
 
 
 \subsection*{[[linkers/8l/compat.c]]}
-
-<<function malloc>>=
-/*
- * fake malloc
- */
-void*
-malloc(ulong n)
-{
-    void *p;
-
-    while(n & 7)
-        n++;
-    while(nhunk < n)
-        gethunk();
-    p = hunk;
-    nhunk -= n;
-    hunk += n;
-    return p;
-}
-@
-
-<<function free>>=
-void
-free(void *p)
-{
-    USED(p);
-}
-@
-
-% not sure why but if redefine malloc and free then have to
-% redefine this func too, otherwise get a link error
-<<function setmalloctag>>=
-//@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
-void setmalloctag(void *v, ulong pc)
-{
-    USED(v, pc);
-}
-@
-
-
-
-<<function mysbrk>>=
-void*
-mysbrk(ulong size)
-{
-    return sbrk(size);
-}
-@
 
 
 <<function fileexists>>=
@@ -5997,6 +5964,8 @@ ckoff(Sym *s, long v)
         diag("relocation offset %ld for %s out of range", v, s->name);
 }
 @
+
+% >>
 
 <<function newdata>>=
 static Prog*
@@ -6922,6 +6891,7 @@ putsymb(char *s, int t, long v, int ver)
     }
 }
 @
+%>>
 
 <<function asmsym>>=
 void
@@ -7290,6 +7260,7 @@ bad:
     return;
 }
 @
+%>> >> >> >> >>
 
 <<function put4>>=
 static void
@@ -8987,6 +8958,7 @@ main(int argc, char *argv[])
     errorexit();
 }
 @
+%$ 
 
 <<function addlibpath>>=
 void
@@ -9051,19 +9023,6 @@ loop:
 }
 @
 
-<<function errorexit>>=
-void
-errorexit(void)
-{
-
-    if(nerrors) {
-        if(cout >= 0)
-            remove(outfile);
-        exits("error");
-    }
-    exits(0);
-}
-@
 
 <<function objfile>>=
 void
@@ -9254,6 +9213,8 @@ zaddr(uchar *p, Adr *a, Sym *h[])
     return c;
 }
 @
+
+% >> >> >> >> >> >> >> >> >> >> >> >>
 
 <<function addlib>>=
 void
@@ -9804,74 +9765,6 @@ eof:
 }
 @
 
-<<function lookup>>=
-Sym*
-lookup(char *symb, int v)
-{
-    Sym *s;
-    char *p;
-    long h;
-    int l, c;
-
-    h = v;
-    for(p=symb; c = *p; p++)
-        h = h+h+h + c;
-    l = (p - symb) + 1;
-    h &= 0xffffff;
-    h %= NHASH;
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->version == v)
-        if(memcmp(s->name, symb, l) == 0)
-            return s;
-
-    while(nhunk < sizeof(Sym))
-        gethunk();
-    s = (Sym*)hunk;
-    nhunk -= sizeof(Sym);
-    hunk += sizeof(Sym);
-
-    s->name = malloc(l + 1);
-    memmove(s->name, symb, l);
-
-    s->link = hash[h];
-    s->type = 0;
-    s->version = v;
-    s->value = 0;
-    s->sig = 0;
-    hash[h] = s;
-    nsymbol++;
-    return s;
-}
-@
-
-<<function prg>>=
-Prog*
-prg(void)
-{
-    Prog *p;
-
-    while(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
-    *p = zprg;
-    return p;
-}
-@
-
-<<function copyp>>=
-Prog*
-copyp(Prog *q)
-{
-    Prog *p;
-
-    p = prg();
-    *p = *q;
-    return p;
-}
-@
 
 <<function appendp>>=
 Prog*
@@ -9887,29 +9780,6 @@ appendp(Prog *q)
 }
 @
 
-<<function gethunk>>=
-void
-gethunk(void)
-{
-    char *h;
-    long nh;
-
-    nh = NHUNK;
-    if(thunk >= 5L*NHUNK) {
-        nh = 5L*NHUNK;
-        if(thunk >= 25L*NHUNK)
-            nh = 25L*NHUNK;
-    }
-    h = mysbrk(nh);
-    if(h == (char*)-1) {
-        diag("out of memory");
-        errorexit();
-    }
-    hunk = h;
-    nhunk = nh;
-    thunk += nh;
-}
-@
 
 <<function doprof1>>=
 void
@@ -10357,8 +10227,6 @@ Prog*	brchain(Prog*);
 
 <<function loadlib>>
 
-<<function errorexit>>
-
 <<function objfile>>
 
 <<function zaddr>>
@@ -10377,15 +10245,7 @@ Prog*	brchain(Prog*);
 
 <<function ldobj>>
 
-<<function lookup>>
-
-<<function prg>>
-
-<<function copyp>>
-
 <<function appendp>>
-
-<<function gethunk>>
 
 <<function doprof1>>
 
@@ -10571,6 +10431,7 @@ struct Prog		/* info from .$O files */
     uint	sig;		/* type signature for symbol */
 };
 @
+%$
 
 <<constant UNKNOWN>>=
 #define UNKNOWN	'?'
@@ -14865,6 +14726,7 @@ static	void 	objupdate(int, int);
 <<function objreset>>
 @
 
+%$ 
 
 \subsection*{[[linkers/libmach/8db.c]]}
 
@@ -16186,6 +16048,7 @@ igets(Map *map, Instr *ip, ushort *sp)
     return 1;
 }
 @
+% >>
 
 <<function igetl>>=
 /*
@@ -16208,6 +16071,8 @@ igetl(Map *map, Instr *ip, ulong *lp)
 }
 @
 
+% >>
+
 <<function igetq>>=
 /*
  *  get 8 bytes of the instruction
@@ -16228,6 +16093,8 @@ igetq(Map *map, Instr *ip, vlong *qp)
     return 1;
 }
 @
+
+% >>
 
 <<function getdisp>>=
 static int
@@ -18124,5 +17991,3 @@ extern	Machdata	mipsmach, i386mach, armmach;
 <<function machbytype>>
 <<function machbyname>>
 @
-
-
