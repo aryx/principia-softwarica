@@ -215,7 +215,7 @@ macund(void)
         yyerror("syntax in #undef");
         return;
     }
-    s->macro = 0;
+    s->macro = nil;
 }
 /*e: function macund */
 
@@ -695,7 +695,7 @@ macif(int f)
         goto bad;
     if(getcom() != '\n')
         goto bad;
-    if((s->macro != 0) ^ f)
+    if((s->macro != nil) ^ f)
         return;
 
 skip:
@@ -899,7 +899,7 @@ gethunk(void)
     nh = NHUNK;
     if(thunk >= 10L*NHUNK)
         nh = 10L*NHUNK;
-    h = (char*)mysbrk(nh);
+    h = (char*)sbrk(nh);
     if(h == (char*)-1) {
         yyerror("out of memory");
         errorexit();

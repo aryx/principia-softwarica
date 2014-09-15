@@ -600,7 +600,7 @@ pinit(char *f)
     }
     for(i=0; i<NHASH; i++)
         for(s = hash[i]; s != S; s = s->link)
-            s->macro = 0;
+            s->macro = nil;
 }
 /*e: function pinit */
 

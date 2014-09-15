@@ -194,6 +194,10 @@ License.
 % opcode format, see my assembler in ml I wrote a long time ago! in xix-assembler/?
 % hmm actually it's more the job of 8l and optab to do that
 
+% the many different addressing modes. Actually I think 8a allows
+% more than what is allowed (optab handles the ugly restrictions
+% of intel?)
+
 \section{[[helloworld.s]]}
 
 % print hello world with mv, call, int, etc? with no libc!
@@ -264,6 +268,7 @@ License.
 
 
 <<enum as>>=
+// coupling with 8c/enam.c?
 enum	as
 {
     AXXX,
@@ -1430,6 +1435,7 @@ struct	Gen
 };
 @
 
+% usually MOVW AX, BX, 'from' AX, 'to' BX
 <<struct Gen2>>=
 struct	Gen2
 {
@@ -1516,7 +1522,9 @@ pathchar(void)
 }
 @
 
-% 2
+% 2, actually used outside assemble()? yes in the grammar! and outcode()
+% the idea is actually to parse two times, but do different things the
+% second time
 <<global pass>>=
 int	pass;
 @
@@ -1680,7 +1688,7 @@ pinit(char *f)
     }
     for(i=0; i<NHASH; i++)
         for(s = hash[i]; s != S; s = s->link)
-            s->macro = 0;
+            s->macro = nil;
 }
 @
 
@@ -2251,6 +2259,43 @@ loop:
 
 
 
+
+<<constant NSYMB>>=
+#define	NSYMB		500
+@
+
+<<global symb>>=
+char	symb[NSYMB];
+@
+
+<<function getsym>>=
+Sym*
+getsym(void)
+{
+    int c;
+    char *cp;
+
+    c = getnsc();
+    if(!isalpha(c) && c != '_' && c < Runeself) {
+        unget(c);
+        return S;
+    }
+    for(cp = symb;;) {
+        if(cp <= symb+NSYMB-4)
+            *cp++ = c;
+        c = getc();
+        if(isalnum(c) || c == '_' || c >= Runeself)
+            continue;
+        unget(c);
+        break;
+    }
+    *cp = 0;
+    if(cp > symb+NSYMB-4)
+        yyerror("symbol too large: %s", symb);
+    return lookup();
+}
+@
+
 \chapter{Preprocessing}
 
 <<global mactab>>=
@@ -2289,6 +2334,9 @@ macend(void)
 }
 @
 
+% keep track of where a token comes from, so that error
+% messages can look like
+%  xxx.h from xxx.h from xxx.c ...
 <<struct Hist>>=
 struct	Hist
 {
@@ -2353,6 +2401,10 @@ setinclude(char *p)
 }
 @
 
+
+<<constant STRINGSZ>>=
+#define	STRINGSZ	200
+@
 
 <<function macinc>>=
 void
@@ -2671,7 +2723,7 @@ macund(void)
         yyerror("syntax in #undef");
         return;
     }
-    s->macro = 0;
+    s->macro = nil;
 }
 @
 
@@ -2691,7 +2743,7 @@ macif(int f)
         goto bad;
     if(getcom() != '\n')
         goto bad;
-    if((s->macro != 0) ^ f)
+    if((s->macro != nil) ^ f)
         return;
 
 skip:
@@ -2736,51 +2788,6 @@ bad:
 @
 
 \section{[[#pragma]]}
-
-<<function pragpack>>=
-void
-pragpack(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
-
-<<function pragvararg>>=
-void
-pragvararg(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
-
-<<function pragfpround>>=
-void
-pragfpround(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
-
-<<function pragprofile>>=
-void
-pragprofile(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
-
-<<function pragincomplete>>=
-void
-pragincomplete(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
 
 <<function macprag>>=
 void
@@ -2875,6 +2882,53 @@ bad:
 @
 
 
+
+<<function pragpack>>=
+void
+pragpack(void)
+{
+    while(getnsc() != '\n')
+        ;
+}
+@
+
+<<function pragvararg>>=
+void
+pragvararg(void)
+{
+    while(getnsc() != '\n')
+        ;
+}
+@
+
+<<function pragfpround>>=
+void
+pragfpround(void)
+{
+    while(getnsc() != '\n')
+        ;
+}
+@
+
+<<function pragprofile>>=
+void
+pragprofile(void)
+{
+    while(getnsc() != '\n')
+        ;
+}
+@
+
+<<function pragincomplete>>=
+void
+pragincomplete(void)
+{
+    while(getnsc() != '\n')
+        ;
+}
+@
+
+
 \section{[[#line]]}
 
 <<function maclin>>=
@@ -2936,6 +2990,11 @@ bad:
 @
 
 
+% dead?
+<<global newflag>>=
+int	newflag;
+@
+
 <<function linehist>>=
 void
 linehist(char *f, int offset)
@@ -2973,12 +3032,12 @@ linehist(char *f, int offset)
 
 \chapter{Parsing}
 
-
 <<[[Token]] other fields>>=
  struct {
   long v1;
   long v2;
  } con2;
+
  Gen	gen;
  Gen2	gen2;
 @
@@ -3041,6 +3100,7 @@ inst:
 |	LTYPE3 rimrem	{ outcode($1, &$2); }
 |	LTYPE4 remrim	{ outcode($1, &$2); }
 |	LTYPER nonrel	{ outcode($1, &$2); }
+
 |	LTYPED spec1	{ outcode($1, &$2); }
 |	LTYPET spec2	{ outcode($1, &$2); }
 |	LTYPEC spec3	{ outcode($1, &$2); }
@@ -3898,7 +3958,7 @@ if(argc > 1) {
     nout = 0;
     for(;;) {
         while(nout < nproc && argc > 0) {
-            i = myfork();
+            i = fork();
             if(i < 0) {
                 i = mywait(&status);
                 if(i < 0)
@@ -4018,6 +4078,10 @@ yyerror(char *a, ...)
         errorexit();
     }
 }
+@
+
+<<constant HISTSZ>>=
+#define	HISTSZ		20
 @
 
 <<function prfile>>=
