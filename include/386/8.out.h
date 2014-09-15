@@ -520,17 +520,22 @@ enum misc {
     D_NONE		= 59,
 
     D_BRANCH	= 60,
-    D_EXTERN	= 61,
+
+    D_EXTERN	= 61, // unused by 8a
     D_STATIC	= 62,
     D_AUTO		= 63,
+
     D_PARAM		= 64,
+
     D_CONST		= 65,
     D_FCONST	= 66,
     D_SCONST	= 67,
+
     D_ADDR		= 68,
 
     D_FILE,
-    D_FILE1,
+
+    D_FILE1, // used by linker only
 
     D_INDIR,	/* additive */
 
