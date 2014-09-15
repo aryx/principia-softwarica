@@ -5,6 +5,8 @@
 #define	Dbufslop	100
 /*e: constant Dbufslop */
 
+void	datblk(long, long);
+
 /*s: function entryvalue */
 long
 entryvalue(void)

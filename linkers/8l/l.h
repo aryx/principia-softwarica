@@ -261,7 +261,6 @@ extern	long	INITTEXTP;
 extern	char*	INITENTRY;		/* entry point */
 extern	Biobuf	bso;
 extern	long	bsssize;
-extern	long	casepc;
 extern	int	cbc;
 extern	char*	cbp;
 extern	char*	pcstr;
@@ -300,11 +299,11 @@ extern	long	lcsize;
 extern	int	nerrors;
 extern	long	nhunk;
 extern	long	nsymbol;
+//@Scheck: used by TName, not useless
 extern	char*	noname;
 extern	char*	outfile;
 extern	long	pc;
 extern	long	spsize;
-extern	Sym*	symlist;
 extern	long	symsize;
 extern	Prog*	textp;
 extern	long	textsize;
@@ -325,52 +324,42 @@ extern	Prog	undefp;
 /*e: constant UP */
 
 extern	Optab	optab[];
+//@Scheck: defined in ../8c/enam.c
 extern	char*	anames[];
 
-int	Aconv(Fmt*);
-int	Dconv(Fmt*);
-int	Pconv(Fmt*);
-int	Rconv(Fmt*);
-int	Sconv(Fmt*);
-void	addhist(long, int);
-void	addlibpath(char*);
+
 Prog*	appendp(Prog*);
 void	asmb(void);
 void	asmdyn(void);
 void	asmins(Prog*);
 void	asmlc(void);
-void	asmsp(void);
+
 void	asmsym(void);
 long	atolwhex(char*);
-Prog*	brchain(Prog*);
-Prog*	brloop(Prog*);
+
 void	cflush(void);
 void	ckoff(Sym*, long);
 Prog*	copyp(Prog*);
-double	cputime(void);
-void	datblk(long, long);
+
+double	cputime(void); //?
+
+
 void	diag(char*, ...);
 void	dodata(void);
 void	doinit(void);
-void	doprof1(void);
-void	doprof2(void);
 void	dostkoff(void);
 void	dynreloc(Sym*, ulong, int);
-long	entryvalue(void);
+
 void	errorexit(void);
 void	export(void);
 int	fileexists(char*);
-int	find1(long, int);
-int	find2(long, int);
-char*	findlib(char*);
+
+
 void	follow(void);
 void	gethunk(void);
-void	histtoauto(void);
-double	ieeedtod(Ieee*);
 long	ieeedtof(Ieee*);
 void	import(void);
-void	ldobj(int, long, char*);
-void	loadlib(void);
+
 void	listinit(void);
 Sym*	lookup(char*, int);
 void	lput(long);
@@ -378,28 +367,26 @@ void	lputl(long);
 void	llput(vlong v);
 void	llputl(vlong v);
 void	main(int, char*[]);
-void	mkfwd(void);
+
 void*	mysbrk(ulong);
-void	nuxiinit(void);
-void	objfile(char*);
-int	opsize(Prog*);
+
+
 void	patch(void);
 Prog*	prg(void);
-void	readundefs(char*, int);
-int	relinv(int);
-long	reuse(Prog*, Sym*);
+
+
 long	rnd(long, long);
 void	span(void);
 void	strnput(char*, int);
 void	undef(void);
 void	undefsym(Sym*);
-long	vaddr(Adr*);
+
 void	wput(long);
 void	wputl(long);
 void	xdefine(char*, int, long);
-void	xfol(Prog*);
-int	zaddr(uchar*, Adr*, Sym*[]);
-void	zerosig(char*);
+
+
+
 
 #pragma	varargck	type	"D"	Adr*
 #pragma	varargck	type	"P"	Prog*

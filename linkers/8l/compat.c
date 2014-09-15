@@ -29,28 +29,13 @@ free(void *p)
 }
 /*e: function free */
 
-/*s: function calloc */
-void*
-calloc(ulong m, ulong n)
+/*s: function setmalloctag */
+//@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
+void setmalloctag(void *v, ulong pc)
 {
-    void *p;
-
-    n *= m;
-    p = malloc(n);
-    memset(p, 0, n);
-    return p;
+    USED(v, pc);
 }
-/*e: function calloc */
-
-/*s: function realloc */
-void*
-realloc(void*, ulong)
-{
-    fprint(2, "realloc called\n");
-    abort();
-    return 0;
-}
-/*e: function realloc */
+/*e: function setmalloctag */
 
 /*s: function mysbrk */
 void*
@@ -60,13 +45,6 @@ mysbrk(ulong size)
 }
 /*e: function mysbrk */
 
-/*s: function setmalloctag */
-void
-setmalloctag(void *v, ulong pc)
-{
-    USED(v, pc);
-}
-/*e: function setmalloctag */
 
 /*s: function fileexists */
 int

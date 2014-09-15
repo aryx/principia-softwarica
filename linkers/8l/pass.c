@@ -1,6 +1,11 @@
 /*s: linkers/8l/pass.c */
 #include	"l.h"
 
+void	xfol(Prog*);
+int	relinv(int);
+void	mkfwd(void);
+Prog*	brloop(Prog*);
+
 /*s: function dodata */
 void
 dodata(void)

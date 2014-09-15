@@ -14,6 +14,7 @@
 /*e: constant NOSPLIT */
 
 /*s: enum as */
+// coupling with 8c/enam.c?
 enum	as
 {
     AXXX,

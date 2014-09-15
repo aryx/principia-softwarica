@@ -8,6 +8,36 @@
 /*e: constant DEFAULT */
 #endif
 
+void	addlibpath(char*);
+char*	findlib(char*);
+void	loadlib(void);
+void	objfile(char*);
+
+int	zaddr(uchar*, Adr*, Sym*[]);
+long	vaddr(Adr*);
+
+void	addhist(long, int);
+void	histtoauto(void);
+void	ldobj(int, long, char*);
+
+void	doprof1(void);
+void	doprof2(void);
+void	nuxiinit(void);
+
+int	find1(long, int);
+//int	find2(long, int);
+
+double	ieeedtod(Ieee*);
+
+void	zerosig(char*);
+void	readundefs(char*, int);
+Prog*	brchain(Prog*);
+
+
+
+
+
+
 /*s: global noname (linkers/8l/obj.c) */
 char	*noname		= "<none>";
 /*e: global noname (linkers/8l/obj.c) */
@@ -1551,21 +1581,21 @@ find1(long l, int c)
 /*e: function find1 */
 
 /*s: function find2 */
-int
-find2(long l, int c)
-{
-    short *p;
-    int i;
-
-    p = (short*)&l;
-    for(i=0; i<4; i+=2) {
-        if(((*p >> 8) & 0xff) == c)
-            return i;
-        if((*p++ & 0xff) == c)
-            return i+1;
-    }
-    return 0;
-}
+//int
+//find2(long l, int c)
+//{
+//    short *p;
+//    int i;
+//
+//    p = (short*)&l;
+//    for(i=0; i<4; i+=2) {
+//        if(((*p >> 8) & 0xff) == c)
+//            return i;
+//        if((*p++ & 0xff) == c)
+//            return i+1;
+//    }
+//    return 0;
+//}
 /*e: function find2 */
 
 /*s: function ieeedtof */

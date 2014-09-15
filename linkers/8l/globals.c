@@ -32,9 +32,6 @@ Biobuf	bso;
 /*s: global bsssize */
 long	bsssize;
 /*e: global bsssize */
-/*s: global casepc */
-long	casepc;
-/*e: global casepc */
 /*s: global cbc */
 int	cbc;
 /*e: global cbc */
@@ -149,9 +146,6 @@ long	nhunk;
 /*s: global nsymbol */
 long	nsymbol;
 /*e: global nsymbol */
-/*s: global noname */
-char*	noname;
-/*e: global noname */
 /*s: global outfile */
 char*	outfile;
 /*e: global outfile */
@@ -161,9 +155,6 @@ long	pc;
 /*s: global spsize */
 long	spsize;
 /*e: global spsize */
-/*s: global symlist */
-Sym*	symlist;
-/*e: global symlist */
 /*s: global symsize */
 long	symsize;
 /*e: global symsize */
@@ -196,6 +187,7 @@ int	exports, nexports, allexport;
 char*	EXPTAB;
 /*e: global EXPTAB */
 /*s: global undefp */
+//@Scheck: not dead, used by UP
 Prog	undefp;
 /*e: global undefp */
 

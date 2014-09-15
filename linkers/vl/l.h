@@ -2,6 +2,7 @@
 #include	<libc.h>
 #include	<bio.h>
 #include	"mips/v.out.h"
+
 #include	"../8l/elf.h"
 
 #define	LIBNAMELEN	300

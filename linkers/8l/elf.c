@@ -5,6 +5,8 @@
  */
 #include "l.h"
 
+long	entryvalue(void);
+
 /*s: enum _anon_ (linkers/8l/elf.c) */
 enum {
     /* offsets into string table */
@@ -172,7 +174,6 @@ elf32(int mach, int bo, int addpsects, void (*putpsects)(Putl))
 /*
  * elf64
  */
-
 void
 elf64phdr(void (*putl)(long), void (*putll)(vlong), ulong type, uvlong off,
     uvlong vaddr, uvlong paddr, uvlong filesz, uvlong memsz, ulong prots,
@@ -225,8 +226,8 @@ elf64sectab(void (*putl)(long), void (*putll)(vlong))
 
 /*s: function elf64 */
 /* if addpsects > 0, putpsects must emit exactly that many psects. */
-void
-elf64(int mach, int bo, int addpsects, void (*putpsects)(Putl))
+//@Scheck: not dead, used by vl/
+void elf64(int mach, int bo, int addpsects, void (*putpsects)(Putl))
 {
     uvlong phydata;
     void (*putw)(long), (*putl)(long);
