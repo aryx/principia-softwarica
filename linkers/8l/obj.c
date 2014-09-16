@@ -153,6 +153,7 @@ main(int argc, char *argv[])
     cout = -1;
     listinit();
     memset(debug, 0, sizeof(debug));
+
     nerrors = 0;
     outfile = "8.out";
     HEADTYPE = -1;
@@ -161,6 +162,7 @@ main(int argc, char *argv[])
     INITDAT = -1;
     INITRND = -1;
     INITENTRY = 0;
+
     ARGBEGIN {
     default:
         c = ARGC();
@@ -220,12 +222,17 @@ main(int argc, char *argv[])
             readundefs(ARGF(), SIMPORT);
         break;
     } ARGEND
+
     USED(argc);
+
     if(*argv == 0)
         usage();
+
     if(!debug['9'] && !debug['U'] && !debug['B'])
         debug[DEFAULT] = 1;
+
     a = getenv("ccroot");
+
     if(a != nil && *a != '\0') {
         if(!fileexists(a)) {
             diag("nonexistent $ccroot: %s", a);
@@ -233,8 +240,10 @@ main(int argc, char *argv[])
         }
     }else
         a = "";
+
     snprint(name, sizeof(name), "%s/%s/lib", a, thestring);
     addlibpath(name);
+
     if(HEADTYPE == -1) {
         if(debug['U'])
             HEADTYPE = 1;
@@ -306,15 +315,20 @@ main(int argc, char *argv[])
             INITRND = 4096;
         break;
     }
+
     if (INITTEXTP == -1)
         INITTEXTP = INITTEXT;
+
     if(INITDAT != 0 && INITRND != 0)
         print("warning: -D0x%lux is ignored because of -R0x%lux\n",
             INITDAT, INITRND);
+
     if(debug['v'])
         Bprint(&bso, "HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
+
     Bflush(&bso);
+
     for(i=1; optab[i].as; i++)
         if(i != optab[i].as) {
             diag("phase error in optab: %d", i);
@@ -409,8 +423,10 @@ main(int argc, char *argv[])
 
     while(*argv)
         objfile(*argv++);
+
     if(!debug['l'])
         loadlib();
+
     firstp = firstp->link;
     if(firstp == P)
         errorexit();
@@ -429,19 +445,23 @@ main(int argc, char *argv[])
         }
         export();
     }
+
     patch();
     follow();
     dodata();
     dostkoff();
+
     if(debug['p'])
         if(debug['1'])
             doprof1();
         else
             doprof2();
+
     span();
     doinit();
     asmb();
     undef();
+
     if(debug['v']) {
         Bprint(&bso, "%5.2f cpu time\n", cputime());
         Bprint(&bso, "%ld symbols\n", nsymbol);
@@ -449,6 +469,7 @@ main(int argc, char *argv[])
         Bprint(&bso, "%d sizeof adr\n", sizeof(Adr));
         Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
     }
+
     Bflush(&bso);
 
     errorexit();
