@@ -82,12 +82,14 @@ struct	Prog
     Adr	from;
     Adr	to;
 
+    //enum<section>>
+    short	as;
+
     Prog	*forwd;
     Prog*	link;
     Prog*	pcond;	/* work on this */
     long	pc;
     long	line;
-    short	as;
     char	width;		/* fake for DATA */
     char	ft;		/* oclass cache */
     char	tt;
@@ -131,6 +133,7 @@ struct	Optab
 
     uchar*	ytab;
 
+    // enum<Pxxx>
     byte	prefix;
     // the actual x86 machine code for instruction optab.as
     byte	op[10];
@@ -161,7 +164,9 @@ enum yxxx {
     Yi1,
     Yi8,
     Yi32,
+
     Yiauto,
+
     Yal,
     Ycl,
     Yax,

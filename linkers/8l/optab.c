@@ -2,21 +2,21 @@
 #include	"l.h"
 
 /*s: global ynone */
-uchar	ynone[] =
+byte	ynone[] =
 {
     Ynone,	Ynone,	Zlit,	1,
     0
 };
 /*e: global ynone */
 /*s: global ytext */
-uchar	ytext[] =
+byte	ytext[] =
 {
     Ymb,	Yi32,	Zpseudo,1,
     0
 };
 /*e: global ytext */
 /*s: global ynop */
-uchar	ynop[] =
+byte	ynop[] =
 {
     Ynone,	Ynone,	Zpseudo,1,
     Ynone,	Yml,	Zpseudo,1,
@@ -27,7 +27,7 @@ uchar	ynop[] =
 };
 /*e: global ynop */
 /*s: global yxorb */
-uchar	yxorb[] =
+byte	yxorb[] =
 {
     Yi32,	Yal,	Zib_,	1,
     Yi32,	Ymb,	Zibo_m,	2,
@@ -37,7 +37,7 @@ uchar	yxorb[] =
 };
 /*e: global yxorb */
 /*s: global yxorl */
-uchar	yxorl[] =
+byte	yxorl[] =
 {
     Yi8,	Yml,	Zibo_m,	2,
     Yi32,	Yax,	Zil_,	1,
@@ -48,7 +48,7 @@ uchar	yxorl[] =
 };
 /*e: global yxorl */
 /*s: global yaddl */
-uchar	yaddl[] =
+byte	yaddl[] =
 {
     Yi8,	Yml,	Zibo_m,	2,
     Yi32,	Yax,	Zil_,	1,
@@ -59,14 +59,14 @@ uchar	yaddl[] =
 };
 /*e: global yaddl */
 /*s: global yincb */
-uchar	yincb[] =
+byte	yincb[] =
 {
     Ynone,	Ymb,	Zo_m,	2,
     0
 };
 /*e: global yincb */
 /*s: global yincl */
-uchar	yincl[] =
+byte	yincl[] =
 {
     Ynone,	Yrl,	Z_rp,	1,
     Ynone,	Yml,	Zo_m,	2,
@@ -74,7 +74,7 @@ uchar	yincl[] =
 };
 /*e: global yincl */
 /*s: global ycmpb */
-uchar	ycmpb[] =
+byte	ycmpb[] =
 {
     Yal,	Yi32,	Z_ib,	1,
     Ymb,	Yi32,	Zm_ibo,	2,
@@ -84,7 +84,7 @@ uchar	ycmpb[] =
 };
 /*e: global ycmpb */
 /*s: global ycmpl */
-uchar	ycmpl[] =
+byte	ycmpl[] =
 {
     Yml,	Yi8,	Zm_ibo,	2,
     Yax,	Yi32,	Z_il,	1,
@@ -95,7 +95,7 @@ uchar	ycmpl[] =
 };
 /*e: global ycmpl */
 /*s: global yshb */
-uchar	yshb[] =
+byte	yshb[] =
 {
     Yi1,	Ymb,	Zo_m,	2,
     Yi32,	Ymb,	Zibo_m,	2,
@@ -104,7 +104,7 @@ uchar	yshb[] =
 };
 /*e: global yshb */
 /*s: global yshl */
-uchar	yshl[] =
+byte	yshl[] =
 {
     Yi1,	Yml,	Zo_m,	2,
     Yi32,	Yml,	Zibo_m,	2,
@@ -114,7 +114,7 @@ uchar	yshl[] =
 };
 /*e: global yshl */
 /*s: global ytestb */
-uchar	ytestb[] =
+byte	ytestb[] =
 {
     Yi32,	Yal,	Zib_,	1,
     Yi32,	Ymb,	Zibo_m,	2,
@@ -124,7 +124,7 @@ uchar	ytestb[] =
 };
 /*e: global ytestb */
 /*s: global ytestl */
-uchar	ytestl[] =
+byte	ytestl[] =
 {
     Yi32,	Yax,	Zil_,	1,
     Yi32,	Yml,	Zilo_m,	2,
@@ -134,7 +134,7 @@ uchar	ytestl[] =
 };
 /*e: global ytestl */
 /*s: global ymovb */
-uchar	ymovb[] =
+byte	ymovb[] =
 {
     Yrb,	Ymb,	Zr_m,	1,
     Ymb,	Yrb,	Zm_r,	1,
@@ -144,7 +144,7 @@ uchar	ymovb[] =
 };
 /*e: global ymovb */
 /*s: global ymovl */
-uchar	ymovl[] =
+byte	ymovl[] =
 {
     Yrl,	Yml,	Zr_m,	1,
     Yml,	Yrl,	Zm_r,	1,
@@ -157,42 +157,42 @@ uchar	ymovl[] =
 };
 /*e: global ymovl */
 /*s: global ym_rl */
-uchar	ym_rl[] =
+byte	ym_rl[] =
 {
     Ym,	Yrl,	Zm_r,	1,
     0
 };
 /*e: global ym_rl */
 /*s: global yrl_m */
-uchar	yrl_m[] =
+byte	yrl_m[] =
 {
     Yrl,	Ym,	Zr_m,	1,
     0
 };
 /*e: global yrl_m */
 /*s: global ymb_rl */
-uchar	ymb_rl[] =
+byte	ymb_rl[] =
 {
     Ymb,	Yrl,	Zm_r,	1,
     0
 };
 /*e: global ymb_rl */
 /*s: global yml_rl */
-uchar	yml_rl[] =
+byte	yml_rl[] =
 {
     Yml,	Yrl,	Zm_r,	1,
     0
 };
 /*e: global yml_rl */
 /*s: global yrl_ml */
-uchar	yrl_ml[] =
+byte	yrl_ml[] =
 {
     Yrl,	Yml,	Zr_m,	1,
     0
 };
 /*e: global yrl_ml */
 /*s: global yml_mb */
-uchar	yml_mb[] =
+byte	yml_mb[] =
 {
     Yrb,	Ymb,	Zr_m,	1,
     Ymb,	Yrb,	Zm_r,	1,
@@ -200,7 +200,7 @@ uchar	yml_mb[] =
 };
 /*e: global yml_mb */
 /*s: global yml_ml */
-uchar	yml_ml[] =
+byte	yml_ml[] =
 {
     Yrl,	Yml,	Zr_m,	1,
     Yml,	Yrl,	Zm_r,	1,
@@ -208,21 +208,21 @@ uchar	yml_ml[] =
 };
 /*e: global yml_ml */
 /*s: global ydivl */
-uchar	ydivl[] =
+byte	ydivl[] =
 {
     Yml,	Ynone,	Zm_o,	2,
     0
 };
 /*e: global ydivl */
 /*s: global ydivb */
-uchar	ydivb[] =
+byte	ydivb[] =
 {
     Ymb,	Ynone,	Zm_o,	2,
     0
 };
 /*e: global ydivb */
 /*s: global yimul */
-uchar	yimul[] =
+byte	yimul[] =
 {
     Yml,	Ynone,	Zm_o,	2,
     Yi8,	Yrl,	Zib_rr,	1,
@@ -231,14 +231,14 @@ uchar	yimul[] =
 };
 /*e: global yimul */
 /*s: global ybyte */
-uchar	ybyte[] =
+byte	ybyte[] =
 {
     Yi32,	Ynone,	Zbyte,	1,
     0
 };
 /*e: global ybyte */
 /*s: global yin */
-uchar	yin[] =
+byte	yin[] =
 {
     Yi32,	Ynone,	Zib_,	1,
     Ynone,	Ynone,	Zlit,	1,
@@ -246,14 +246,14 @@ uchar	yin[] =
 };
 /*e: global yin */
 /*s: global yint */
-uchar	yint[] =
+byte	yint[] =
 {
     Yi32,	Ynone,	Zib_,	1,
     0
 };
 /*e: global yint */
 /*s: global ypushl */
-uchar	ypushl[] =
+byte	ypushl[] =
 {
     Yrl,	Ynone,	Zrp_,	1,
     Ym,	Ynone,	Zm_o,	2,
@@ -263,7 +263,7 @@ uchar	ypushl[] =
 };
 /*e: global ypushl */
 /*s: global ypopl */
-uchar	ypopl[] =
+byte	ypopl[] =
 {
     Ynone,	Yrl,	Z_rp,	1,
     Ynone,	Ym,	Zo_m,	2,
@@ -271,28 +271,28 @@ uchar	ypopl[] =
 };
 /*e: global ypopl */
 /*s: global yscond */
-uchar	yscond[] =
+byte	yscond[] =
 {
     Ynone,	Ymb,	Zo_m,	2,
     0
 };
 /*e: global yscond */
 /*s: global yjcond */
-uchar	yjcond[] =
+byte	yjcond[] =
 {
     Ynone,	Ybr,	Zbr,	1,
     0
 };
 /*e: global yjcond */
 /*s: global yloop */
-uchar	yloop[] =
+byte	yloop[] =
 {
     Ynone,	Ybr,	Zloop,	1,
     0
 };
 /*e: global yloop */
 /*s: global ycall */
-uchar	ycall[] =
+byte	ycall[] =
 {
     Ynone,	Yml,	Zo_m,	2,
     Ynone,	Ybr,	Zcall,	1,
@@ -300,7 +300,7 @@ uchar	ycall[] =
 };
 /*e: global ycall */
 /*s: global yjmp */
-uchar	yjmp[] =
+byte	yjmp[] =
 {
     Ynone,	Yml,	Zo_m,	2,
     Ynone,	Ybr,	Zjmp,	1,
@@ -309,7 +309,7 @@ uchar	yjmp[] =
 /*e: global yjmp */
 
 /*s: global yfmvd */
-uchar	yfmvd[] =
+byte	yfmvd[] =
 {
     Ym,	Yf0,	Zm_o,	2,
     Yf0,	Ym,	Zo_m,	2,
@@ -319,7 +319,7 @@ uchar	yfmvd[] =
 };
 /*e: global yfmvd */
 /*s: global yfmvdp */
-uchar	yfmvdp[] =
+byte	yfmvdp[] =
 {
     Yf0,	Ym,	Zo_m,	2,
     Yf0,	Yrf,	Zo_m,	2,
@@ -327,7 +327,7 @@ uchar	yfmvdp[] =
 };
 /*e: global yfmvdp */
 /*s: global yfmvf */
-uchar	yfmvf[] =
+byte	yfmvf[] =
 {
     Ym,	Yf0,	Zm_o,	2,
     Yf0,	Ym,	Zo_m,	2,
@@ -335,21 +335,21 @@ uchar	yfmvf[] =
 };
 /*e: global yfmvf */
 /*s: global yfmvx */
-uchar	yfmvx[] =
+byte	yfmvx[] =
 {
     Ym,	Yf0,	Zm_o,	2,
     0
 };
 /*e: global yfmvx */
 /*s: global yfmvp */
-uchar	yfmvp[] =
+byte	yfmvp[] =
 {
     Yf0,	Ym,	Zo_m,	2,
     0
 };
 /*e: global yfmvp */
 /*s: global yfadd */
-uchar	yfadd[] =
+byte	yfadd[] =
 {
     Ym,	Yf0,	Zm_o,	2,
     Yrf,	Yf0,	Zm_o,	2,
@@ -358,14 +358,14 @@ uchar	yfadd[] =
 };
 /*e: global yfadd */
 /*s: global yfaddp */
-uchar	yfaddp[] =
+byte	yfaddp[] =
 {
     Yf0,	Yrf,	Zo_m,	2,
     0
 };
 /*e: global yfaddp */
 /*s: global yfxch */
-uchar	yfxch[] =
+byte	yfxch[] =
 {
     Yf0,	Yrf,	Zo_m,	2,
     Yrf,	Yf0,	Zm_o,	2,
@@ -373,14 +373,14 @@ uchar	yfxch[] =
 };
 /*e: global yfxch */
 /*s: global ycompp */
-uchar	ycompp[] =
+byte	ycompp[] =
 {
     Yf0,	Yrf,	Zo_m,	2,	/* botch is really f0,f1 */
     0
 };
 /*e: global ycompp */
 /*s: global ystsw */
-uchar	ystsw[] =
+byte	ystsw[] =
 {
     Ynone,	Ym,	Zo_m,	2,
     Ynone,	Yax,	Zlit,	1,
@@ -388,7 +388,7 @@ uchar	ystsw[] =
 };
 /*e: global ystsw */
 /*s: global ystcw */
-uchar	ystcw[] =
+byte	ystcw[] =
 {
     Ynone,	Ym,	Zo_m,	2,
     Ym,	Ynone,	Zm_o,	2,
@@ -396,7 +396,7 @@ uchar	ystcw[] =
 };
 /*e: global ystcw */
 /*s: global ysvrs */
-uchar	ysvrs[] =
+byte	ysvrs[] =
 {
     Ynone,	Ym,	Zo_m,	2,
     Ym,	Ynone,	Zm_o,	2,

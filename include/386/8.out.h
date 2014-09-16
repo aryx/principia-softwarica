@@ -472,6 +472,7 @@ enum	as
 /*e: enum as */
 
 /*s: enum _anon_ */
+// coupling with 8l/list.c and regstr[]
 enum reg
 {
     D_AL		= 0,
@@ -509,9 +510,9 @@ enum reg
     D_MSW,		/* machine status word */
     D_TASK,		/* task register */
 
-    D_CR		= 35,
-    D_DR		= 43,
-    D_TR		= 51,
+    D_CR		= 35, // D_CR0 .. D_CR7
+    D_DR		= 43, // D_DR0 .. D_DR7
+    D_TR		= 51, // D_TR0 .. D_TR7
 };
 /*e: enum _anon_ */
 /*s: enum misc1 */

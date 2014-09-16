@@ -12,9 +12,10 @@ void
 listinit(void)
 {
 
-    fmtinstall('R', Rconv);
     fmtinstall('A', Aconv);
+    fmtinstall('R', Rconv);
     fmtinstall('D', Dconv);
+
     fmtinstall('S', Sconv);
     fmtinstall('P', Pconv);
 }
@@ -25,6 +26,7 @@ static	Prog	*bigP;
 /*e: global bigP */
 
 /*s: function Pconv */
+// Proc -> string
 int
 Pconv(Fmt *fp)
 {
@@ -57,6 +59,7 @@ Pconv(Fmt *fp)
 /*e: function Pconv */
 
 /*s: function Aconv */
+// enum<as> -> string
 int
 Aconv(Fmt *fp)
 {
@@ -68,6 +71,7 @@ Aconv(Fmt *fp)
 /*e: function Aconv */
 
 /*s: function Dconv */
+// enum<dxxx> -> string
 int
 Dconv(Fmt *fp)
 {
@@ -156,6 +160,7 @@ conv:
 /*e: function Dconv */
 
 /*s: global regstr */
+// coupling with enum regs in 8.out.h
 char*	regstr[] =
 {
     "AL",		/* [D_AL] */
@@ -230,6 +235,7 @@ char*	regstr[] =
 /*e: global regstr */
 
 /*s: function Rconv */
+// enum<register> -> string
 int
 Rconv(Fmt *fp)
 {
@@ -247,6 +253,7 @@ Rconv(Fmt *fp)
 /*e: function Rconv */
 
 /*s: function Sconv */
+// ??symbol? -> string
 int
 Sconv(Fmt *fp)
 {
@@ -297,7 +304,8 @@ Sconv(Fmt *fp)
 void
 diag(char *fmt, ...)
 {
-    char buf[STRINGSZ], *tn;
+    char buf[STRINGSZ];
+    char *tn;
     va_list arg;
 
     tn = "??none??";
