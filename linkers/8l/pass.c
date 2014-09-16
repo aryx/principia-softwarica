@@ -313,10 +313,13 @@ patch(void)
     if(debug['v'])
         Bprint(&bso, "%5.2f mkfwd\n", cputime());
     Bflush(&bso);
+
     mkfwd();
+
     if(debug['v'])
         Bprint(&bso, "%5.2f patch\n", cputime());
     Bflush(&bso);
+
     s = lookup("exit", 0);
     vexit = s->value;
     for(p = firstp; p != P; p = p->link) {
@@ -327,6 +330,7 @@ patch(void)
             if(s) {
                 if(debug['c'])
                     Bprint(&bso, "%s calls %s\n", TNAME, s->name);
+
                 switch(s->type) {
                 default:
                     /* diag prints TNAME first */
@@ -347,6 +351,7 @@ patch(void)
         }
         if(p->to.type != D_BRANCH || p->pcond == UP)
             continue;
+
         c = p->to.offset;
         for(q = firstp; q != P;) {
             if(q->forwd != P)

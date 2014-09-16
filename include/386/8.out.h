@@ -14,8 +14,8 @@
 /*e: constant NOSPLIT */
 
 /*s: enum as */
-// coupling with 8c/enam.c?
-enum	as
+// coupling with 8c/enam.c, 8l/obj.c#optab
+enum as
 {
     AXXX,
     AAAA,
@@ -471,8 +471,7 @@ enum	as
 };
 /*e: enum as */
 
-/*s: enum _anon_ */
-// coupling with 8l/list.c and regstr[]
+/*s: enum reg */
 enum reg
 {
     D_AL		= 0,
@@ -513,14 +512,14 @@ enum reg
     D_CR		= 35, // D_CR0 .. D_CR7
     D_DR		= 43, // D_DR0 .. D_DR7
     D_TR		= 51, // D_TR0 .. D_TR7
+
+    D_NONE		= 59,
 };
-/*e: enum _anon_ */
-/*s: enum misc1 */
+/*e: enum reg */
+/*s: enum dxxx */
 // must start after enum register?
 // Gen.type?
-enum misc {
-    D_NONE		= 59,
-
+enum dxxx {
     D_BRANCH	= 60,
 
     D_EXTERN	= 61, // unused by 8a
@@ -545,7 +544,7 @@ enum misc {
 
     D_SIZE,	/* 8l internal */
 };
-/*e: enum misc1 */
+/*e: enum dxxx */
 /*s: enum misc2 */
 enum misc2 {
     T_TYPE		= 1<<0,

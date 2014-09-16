@@ -86,7 +86,6 @@ struct	Prog
     short	as;
 
     Prog	*forwd;
-    Prog*	link;
     Prog*	pcond;	/* work on this */
     long	pc;
     long	line;
@@ -95,6 +94,9 @@ struct	Prog
     char	tt;
     uchar	mark;	/* work on these */
     uchar	back;
+
+    // Extra
+    Prog*	link;
 };
 /*e: struct Prog */
 /*s: struct Auto */
@@ -141,11 +143,12 @@ struct	Optab
 /*e: struct Optab */
 
 /*s: enum sxxx */
-enum sxxx
+enum section
 {
     STEXT		= 1,
     SDATA,
     SBSS,
+
     SDATA1,
     SXREF,
     SFILE,
@@ -258,6 +261,25 @@ enum misc1 {
     MAXHIST		= 20, /* limit of path elements for history symbols */
 };
 /*e: enum misc1 */
+
+/*s: enum headtype */
+/*
+ *	-H0 -T0x40004C -D0x10000000	is garbage unix
+ *	-H1 -T0xd0 -R4			is unix coff
+ *	-H2 -T4128 -R4096		is plan9 format
+ *	-H3 -Tx -Rx			is MS-DOS .COM
+ *	-H4 -Tx -Rx			is fake MS-DOS .EXE
+ *	-H5 -T0x80100020 -R4096		is ELF
+ */
+enum headtype {
+    H_GARBAGE = 0,
+    H_COFF = 1,
+    H_PLAN9 = 2,
+    H_COM = 3,
+    H_EXE = 4,
+    H_ELF = 5,
+};
+/*e: enum headtype */
 
 /*s: struct Buf */
 union Buf

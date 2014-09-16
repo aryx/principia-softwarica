@@ -42,7 +42,7 @@ char*	cbp;
 char*	pcstr;
 /*e: global pcstr */
 /*s: global cout */
-int	cout;
+fdt	cout;
 /*e: global cout */
 /*s: global curp */
 Prog*	curp;
@@ -141,7 +141,9 @@ int	dtype;
 /*s: global reloca */
 Adr*	reloca;
 /*e: global reloca */
+/*s: global dlm */
 bool dlm;
+/*e: global dlm */
 int	imports, nimports;
 int	exports, nexports, allexport;
 /*s: global EXPTAB */

@@ -162,19 +162,19 @@ asmb(void)
     switch(HEADTYPE) {
     default:
         diag("unknown header type %ld", HEADTYPE);
-    case 0:
+    case H_GARBAGE:
         seek(cout, rnd(HEADR+textsize, 8192), 0);
         break;
-    case 1:
+    case H_COFF:
         textsize = rnd(HEADR+textsize, 4096)-HEADR;
         seek(cout, textsize+HEADR, 0);
         break;
-    case 2:
-    case 5:
+    case H_PLAN9:
+    case H_ELF:
         seek(cout, HEADR+textsize, 0);
         break;
-    case 3:
-    case 4:
+    case H_COM:
+    case H_EXE:
         seek(cout, HEADR+rnd(textsize, INITRND), 0);
         break;
     }
@@ -206,18 +206,18 @@ asmb(void)
         Bflush(&bso);
         switch(HEADTYPE) {
         default:
-        case 0:
+        case H_GARBAGE:
             seek(cout, rnd(HEADR+textsize, 8192)+datsize, 0);
             break;
-        case 1:
+        case H_COFF:
             seek(cout, rnd(HEADR+textsize, INITRND)+datsize, 0);
             break;
-        case 2:
-        case 5:
+        case H_PLAN9:
+        case H_ELF:
             seek(cout, HEADR+textsize+datsize, 0);
             break;
-        case 3:
-        case 4:
+        case H_COM:
+        case H_EXE:
             debug['s'] = 1;
             break;
         }
@@ -246,7 +246,7 @@ asmb(void)
     seek(cout, 0L, 0);
     switch(HEADTYPE) {
     default:
-    case 0:	/* garbage */
+    case H_GARBAGE:	/* garbage */
         lput(0x160L<<16);		/* magic and sections */
         lput(0L);			/* time and date */
         lput(rnd(HEADR+textsize, 4096)+datsize);
@@ -267,7 +267,7 @@ asmb(void)
         lput(0L);
         lput(~0L);			/* gp value ?? */
         break;
-    case 1:	/* unix coff */
+    case H_COFF:	/* unix coff */
         /*
          * file header
          */
@@ -335,7 +335,7 @@ asmb(void)
         lputl(0);			/* relocation, line numbers */
         lputl(0x200);			/* flags comment only */
         break;
-    case 2:	/* plan9 */
+    case H_PLAN9:	/* plan9 */
         magic = 4*11*11+7;
         if(dlm)
             magic |= 0x80000000;
@@ -348,10 +348,10 @@ asmb(void)
         lput(spsize);			/* sp offsets */
         lput(lcsize);			/* line offsets */
         break;
-    case 3:
+    case H_COM:
         /* MS-DOS .COM */
         break;
-    case 4:
+    case H_EXE:
         /* fake MS-DOS .EXE */
         v = rnd(HEADR+textsize, INITRND)+datsize;
         wputl(0x5A4D);			/* 'MZ' */
@@ -373,7 +373,7 @@ asmb(void)
         wputl(0x003E);			/* reloc table offset */
         wputl(0x0000);			/* overlay number */
         break;
-    case 5:
+    case H_ELF:
         elf32(I386, ELFDATA2LSB, 0, nil);
         break;
     }

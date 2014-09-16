@@ -36,7 +36,7 @@ char*	libraryobj[50];
 int	libraryp;
 /*e: global libraryp */
 /*s: global xrefresolv */
-int	xrefresolv;
+bool	xrefresolv;
 /*e: global xrefresolv */
 /*s: global version */
 int	version;
@@ -44,8 +44,10 @@ int	version;
 /*s: global literal */
 char	literal[32];
 /*e: global literal */
+/*s: global doexp */
 // do export table, -x
 bool	doexp;
+/*e: global doexp */
 
 void	addlibpath(char*);
 char*	findlib(char*);
@@ -101,15 +103,6 @@ static	int	maxlibdir = 0;
 /*e: global maxlibdir */
 
 /*s: function usage (linkers/8l/obj.c) */
-/*
- *	-H0 -T0x40004C -D0x10000000	is garbage unix
- *	-H1 -T0xd0 -R4			is unix coff
- *	-H2 -T4128 -R4096		is plan9 format
- *	-H3 -Tx -Rx			is MS-DOS .COM
- *	-H4 -Tx -Rx			is fake MS-DOS .EXE
- *	-H5 -T0x80100020 -R4096		is ELF
- */
-
 void
 usage(void)
 {
@@ -146,65 +139,72 @@ isobjfile(char *f)
 void
 main(int argc, char *argv[])
 {
-    int i, c;
-    char *a;
-    char name[LIBNAMELEN];
+    /*s: [[main()]] locals */
+        int i, c;
+        char name[LIBNAMELEN];
+    /*x: [[main()]] locals */
+        char *a;
+    /*e: [[main()]] locals */
 
     Binit(&bso, 1, OWRITE);
     cout = -1;
-    listinit();
+
+    listinit(); // fmtinstall()
     memset(debug, 0, sizeof(debug));
 
     nerrors = 0;
     outfile = "8.out";
 
-    HEADTYPE = -1;
-    INITTEXT = -1;
-    INITTEXTP = -1;
-    INITDAT = -1;
-    INITRND = -1;
-    INITENTRY = nil;
+    /*s: [[main()]] initialize INITXXX */
+        HEADTYPE = -1;
+        INITTEXT = -1;
+        INITTEXTP = -1;
+        INITDAT = -1;
+        INITRND = -1;
+        INITENTRY = nil;
+    /*e: [[main()]] initialize INITXXX */
 
     ARGBEGIN {
     /*s: [[main()]] command line processing */
         case 'o': /* output to (next arg) */
             outfile = ARGF();
             break;
-
-        case 'E':
-            a = ARGF();
-            if(a)
-                INITENTRY = a;
-            break;
+    /*x: [[main()]] command line processing */
         case 'H':
             a = ARGF();
             if(a)
                 HEADTYPE = atolwhex(a);
-            break;
-        case 'L':
-            addlibpath(EARGF(usage()));
             break;
         case 'T':
             a = ARGF();
             if(a)
                 INITTEXT = atolwhex(a);
             break;
-        case 'P':
-            a = ARGF();
-            if(a)
-                INITTEXTP = atolwhex(a);
-            break;
         case 'D':
             a = ARGF();
             if(a)
                 INITDAT = atolwhex(a);
+            break;
+        case 'E':
+            a = ARGF();
+            if(a)
+                INITENTRY = a;
+            break;
+        case 'P':
+            a = ARGF();
+            if(a)
+                INITTEXTP = atolwhex(a);
             break;
         case 'R':
             a = ARGF();
             if(a)
                 INITRND = atolwhex(a);
             break;
-
+    /*x: [[main()]] command line processing */
+        case 'L':
+            addlibpath(EARGF(usage()));
+            break;
+    /*x: [[main()]] command line processing */
         case 'x':	/* produce export table */
             doexp = true;
             if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1])){
@@ -215,12 +215,14 @@ main(int argc, char *argv[])
                     readundefs(a, SEXPORT);
             }
             break;
+    /*x: [[main()]] command line processing */
         case 'u':	/* produce dynamically loadable module */
             dlm = true;
-            debug['l']++;
+            debug['l'] = true;
             if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
                 readundefs(ARGF(), SIMPORT);
             break;
+    /*x: [[main()]] command line processing */
         default:
             c = ARGC();
             if(c >= 0 && c < sizeof(debug))
@@ -230,13 +232,11 @@ main(int argc, char *argv[])
     } ARGEND
 
     USED(argc);
-
-    if(*argv == 0)
+    if(*argv == nil)
         usage();
 
-    if(!debug['9'] && !debug['U'] && !debug['B'])
-        debug[DEFAULT] = true;
-
+    /*s: [[main()]] addlibpath() */
+    /*s: [[main()]] change a if ccroot */
     a = getenv("ccroot");
 
     if(a != nil && *a != '\0') {
@@ -246,9 +246,16 @@ main(int argc, char *argv[])
         }
     }else
         a = "";
+    /*e: [[main()]] change a if ccroot */
 
+    // ccroot/386/lib/
     snprint(name, sizeof(name), "%s/%s/lib", a, thestring);
     addlibpath(name);
+    /*e: [[main()]] addlibpath() */
+
+    /*s: [[main()]] adjust HEADTYPE if debug flags */
+    if(!debug['9'] && !debug['U'] && !debug['B'])
+        debug[DEFAULT] = true;
 
     if(HEADTYPE == -1) {
         if(debug['U'])
@@ -258,89 +265,98 @@ main(int argc, char *argv[])
         if(debug['9'])
             HEADTYPE = 2;
     }
+    /*e: [[main()]] adjust HEADTYPE if debug flags */
     switch(HEADTYPE) {
+    /*s: [[main()]] switch HEADTYPE cases */
+        case H_GARBAGE:	/* this is garbage */
+            HEADR = 20L+56L;
+            if(INITTEXT == -1)
+                INITTEXT = 0x40004CL;
+            if(INITDAT == -1)
+                INITDAT = 0x10000000L;
+            if(INITRND == -1)
+                INITRND = 0;
+            break;
+        case H_COFF:	/* is unix coff */
+            HEADR = 0xd0L;
+            if(INITTEXT == -1)
+                INITTEXT = 0xd0;
+            if(INITDAT == -1)
+                INITDAT = 0x400000;
+            if(INITRND == -1)
+                INITRND = 0;
+            break;
+        case H_PLAN9:	/* plan 9 */
+            HEADR = 32L;
+            if(INITTEXT == -1)
+                INITTEXT = 4096+32;
+            if(INITDAT == -1)
+                INITDAT = 0;
+            if(INITRND == -1)
+                INITRND = 4096;
+            break;
+        case H_COM:	/* MS-DOS .COM */
+            HEADR = 0;
+            if(INITTEXT == -1)
+                INITTEXT = 0x0100;
+            if(INITDAT == -1)
+                INITDAT = 0;
+            if(INITRND == -1)
+                INITRND = 4;
+            break;
+        case H_EXE:	/* fake MS-DOS .EXE */
+            HEADR = 0x200;
+            if(INITTEXT == -1)
+                INITTEXT = 0x0100;
+            if(INITDAT == -1)
+                INITDAT = 0;
+            if(INITRND == -1)
+                INITRND = 4;
+            HEADR += (INITTEXT & 0xFFFF);
+            if(debug['v'])
+                Bprint(&bso, "HEADR = 0x%ld\n", HEADR);
+            break;
+        case H_ELF:	/* elf executable */
+            HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
+            if(INITTEXT == -1)
+                INITTEXT = 0x80100020L;
+            if(INITDAT == -1)
+                INITDAT = 0;
+            if(INITRND == -1)
+                INITRND = 4096;
+            break;
+    /*e: [[main()]] switch HEADTYPE cases */
     default:
         diag("unknown -H option");
         errorexit();
 
-    case 0:	/* this is garbage */
-        HEADR = 20L+56L;
-        if(INITTEXT == -1)
-            INITTEXT = 0x40004CL;
-        if(INITDAT == -1)
-            INITDAT = 0x10000000L;
-        if(INITRND == -1)
-            INITRND = 0;
-        break;
-    case 1:	/* is unix coff */
-        HEADR = 0xd0L;
-        if(INITTEXT == -1)
-            INITTEXT = 0xd0;
-        if(INITDAT == -1)
-            INITDAT = 0x400000;
-        if(INITRND == -1)
-            INITRND = 0;
-        break;
-    case 2:	/* plan 9 */
-        HEADR = 32L;
-        if(INITTEXT == -1)
-            INITTEXT = 4096+32;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4096;
-        break;
-    case 3:	/* MS-DOS .COM */
-        HEADR = 0;
-        if(INITTEXT == -1)
-            INITTEXT = 0x0100;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4;
-        break;
-    case 4:	/* fake MS-DOS .EXE */
-        HEADR = 0x200;
-        if(INITTEXT == -1)
-            INITTEXT = 0x0100;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4;
-        HEADR += (INITTEXT & 0xFFFF);
-        if(debug['v'])
-            Bprint(&bso, "HEADR = 0x%ld\n", HEADR);
-        break;
-    case 5:	/* elf executable */
-        HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
-        if(INITTEXT == -1)
-            INITTEXT = 0x80100020L;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4096;
-        break;
     }
+    /*s: [[main()]] last INITXXX adjustments */
+        if (INITTEXTP == -1)
+            INITTEXTP = INITTEXT;
 
-    if (INITTEXTP == -1)
-        INITTEXTP = INITTEXT;
+        if(INITDAT != 0 && INITRND != 0)
+            print("warning: -D0x%lux is ignored because of -R0x%lux\n",
+                INITDAT, INITRND);
+    /*e: [[main()]] last INITXXX adjustments */
 
-    if(INITDAT != 0 && INITRND != 0)
-        print("warning: -D0x%lux is ignored because of -R0x%lux\n",
-            INITDAT, INITRND);
-
+    /*s: [[main()]] debugging output HEADER=  */
     if(debug['v'])
         Bprint(&bso, "HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
+    /*e: [[main()]] debugging output HEADER=  */
 
     Bflush(&bso);
 
+    /*s: [[main()]] sanity check optab */
     for(i=1; optab[i].as; i++)
         if(i != optab[i].as) {
             diag("phase error in optab: %d", i);
             errorexit();
         }
+    /*e: [[main()]] sanity check optab */
 
+    /*s: [[main()]] set ycover */
     for(i=0; i<Ymax; i++)
         ycover[i*Ymax + i] = 1;
 
@@ -379,7 +395,8 @@ main(int argc, char *argv[])
     ycover[Yrx*Ymax + Yml] = 1;
     ycover[Yrl*Ymax + Yml] = 1;
     ycover[Ym*Ymax + Yml] = 1;
-
+    /*e: [[main()]] set ycover */
+    /*s: [[main()]] set reg */
     for(i=0; i<D_NONE; i++) {
         reg[i] = -1;
         if(i >= D_AL && i <= D_BH)
@@ -389,7 +406,8 @@ main(int argc, char *argv[])
         if(i >= D_F0 && i <= D_F0+7)
             reg[i] = (i-D_F0) & 7;
     }
-
+    /*e: [[main()]] set reg */
+    /*s: [[main()]] set zprg */
     zprg.link = P;
     zprg.pcond = P;
     zprg.back = 2;
@@ -398,27 +416,40 @@ main(int argc, char *argv[])
     zprg.from.index = D_NONE;
     zprg.from.scale = 1;
     zprg.to = zprg.from;
+    /*e: [[main()]] set zprg */
 
+    /*s: [[main()]] initialize globals */
     pcstr = "%.6lux ";
-    nuxiinit();
+
     histgen = 0;
+
     textp = P;
     datap = P;
     edatap = P;
+
     pc = 0;
     dtype = 4;
+
+    version = 0;
+
+    cbp = buf.cbuf;
+    cbc = sizeof(buf.cbuf);
+    /*e: [[main()]] initialize globals */
+
+    nuxiinit();
+
     cout = create(outfile, 1, 0775);
     if(cout < 0) {
         diag("cannot create %s: %r", outfile);
         errorexit();
     }
-    version = 0;
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
+
+    /*s: [[main()]] cout is ready, let's go */
     firstp = prg();
     lastp = firstp;
 
-    if(INITENTRY == 0) {
+    /*s: [[main()]] set INITENTRY */
+    if(INITENTRY == nil) {
         INITENTRY = "_main";
         if(debug['p'])
             INITENTRY = "_mainp";
@@ -426,6 +457,7 @@ main(int argc, char *argv[])
             lookup(INITENTRY, 0)->type = SXREF;
     } else if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
         lookup(INITENTRY, 0)->type = SXREF;
+    /*e: [[main()]] set INITENTRY */
 
     while(*argv)
         objfile(*argv++);
@@ -436,12 +468,15 @@ main(int argc, char *argv[])
     firstp = firstp->link;
     if(firstp == P)
         errorexit();
+
+    /*s: [[main()]] if export table or dynamic module */
     if(doexp || dlm){
         EXPTAB = "_exporttab";
         zerosig(EXPTAB);
         zerosig("etext");
         zerosig("edata");
         zerosig("end");
+
         if(dlm){
             import();
             HEADTYPE = 2;
@@ -449,25 +484,31 @@ main(int argc, char *argv[])
             INITRND = 8;
             INITENTRY = EXPTAB;
         }
+
         export();
     }
+    /*e: [[main()]] if export table or dynamic module */
 
     patch();
     follow();
     dodata();
     dostkoff();
 
+    /*s: [[main()]] if profiling */
     if(debug['p'])
         if(debug['1'])
             doprof1();
         else
             doprof2();
+    /*e: [[main()]] if profiling */
 
     span();
     doinit();
     asmb();
     undef();
+    /*e: [[main()]] cout is ready, let's go */
 
+    /*s: [[main()]] profile report */
     if(debug['v']) {
         Bprint(&bso, "%5.2f cpu time\n", cputime());
         Bprint(&bso, "%ld symbols\n", nsymbol);
@@ -475,9 +516,9 @@ main(int argc, char *argv[])
         Bprint(&bso, "%d sizeof adr\n", sizeof(Adr));
         Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
     }
+    /*e: [[main()]] profile report */
 
     Bflush(&bso);
-
     errorexit();
 }
 /*e: function main (linkers/8l/obj.c) */
@@ -488,6 +529,7 @@ addlibpath(char *arg)
 {
     char **p;
 
+    // growing array libdir
     if(nlibdir >= maxlibdir) {
         if(maxlibdir == 0)
             maxlibdir = 8;
@@ -502,6 +544,7 @@ addlibpath(char *arg)
         free(libdir);
         libdir = p;
     }
+
     libdir[nlibdir++] = strdup(arg);
 }
 /*e: function addlibpath */
@@ -531,17 +574,17 @@ loadlib(void)
     Sym *s;
 
 loop:
-    xrefresolv = 0;
+    xrefresolv = false;
     for(i=0; i<libraryp; i++) {
         if(debug['v'])
             Bprint(&bso, "%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
     if(xrefresolv)
-    for(h=0; h<nelem(hash); h++)
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->type == SXREF)
-            goto loop;
+        for(h=0; h<nelem(hash); h++)
+             for(s = hash[h]; s != S; s = s->link)
+                 if(s->type == SXREF)
+                     goto loop;
 }
 /*e: function loadlib */
 
@@ -550,7 +593,8 @@ void
 objfile(char *file)
 {
     long off, esym, cnt, l;
-    int f, work;
+    int f;
+    bool work;
     Sym *s;
     char magbuf[SARMAG];
     char name[LIBNAMELEN], pname[LIBNAMELEN];
@@ -560,6 +604,7 @@ objfile(char *file)
     if(debug['v'])
         Bprint(&bso, "%5.2f ldobj: %s\n", cputime(), file);
     Bflush(&bso);
+
     if(file[0] == '-' && file[1] == 'l') {
         snprint(pname, sizeof(pname), "lib%s.a", file+2);
         e = findlib(pname);
@@ -570,11 +615,13 @@ objfile(char *file)
         snprint(name, sizeof(name), "%s/%s", e, pname);
         file = name;
     }
+
     f = open(file, 0);
     if(f < 0) {
         diag("cannot open %s: %r", file);
         errorexit();
     }
+
     l = read(f, magbuf, SARMAG);
     if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
@@ -612,20 +659,25 @@ objfile(char *file)
     stop = &start[cnt];
     memset(stop, 0, 10);
 
-    work = 1;
+    work = true;
+
     while(work) {
+
         if(debug['v'])
             Bprint(&bso, "%5.2f library pass: %s\n", cputime(), file);
         Bflush(&bso);
-        work = 0;
+
+        work = false;
         for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
             s = lookup(e+5, 0);
             if(s->type != SXREF)
                 continue;
             sprint(pname, "%s(%s)", file, s->name);
+
             if(debug['v'])
                 Bprint(&bso, "%5.2f library: %s\n", cputime(), pname);
             Bflush(&bso);
+
             l = e[1] & 0xff;
             l |= (e[2] & 0xff) << 8;
             l |= (e[3] & 0xff) << 16;
@@ -643,8 +695,8 @@ objfile(char *file)
                 diag("%s: failed to load: %s", file, s->name);
                 errorexit();
             }
-            work = 1;
-            xrefresolv = 1;
+            work = true;
+            xrefresolv = true;
         }
     }
     return;
