@@ -4,7 +4,7 @@
 #include	<bio.h>
 
 #include	<common.out.h>
-#include	"386/8.out.h"
+#include	<386/8.out.h>
 #include	"../8l/elf.h"
 
 /*s: constant P */
@@ -30,7 +30,7 @@
 
 typedef	struct	Adr	Adr;
 typedef	struct	Prog	Prog;
-typedef	struct	Sym8l	Sym;
+typedef	struct	Sym	Sym;
 typedef	struct	Auto	Auto;
 typedef	struct	Optab	Optab;
 
@@ -49,6 +49,7 @@ struct	Adr
         Auto*	u1autom;
         Sym*	u1sym;
     } u1;
+
     short	type;
     uchar	index;
     char	scale;
@@ -80,6 +81,7 @@ struct	Prog
 {
     Adr	from;
     Adr	to;
+
     Prog	*forwd;
     Prog*	link;
     Prog*	pcond;	/* work on this */
@@ -97,16 +99,18 @@ struct	Prog
 struct	Auto
 {
     Sym*	asym;
+
     Auto*	link;
     long	aoffset;
     short	type;
 };
 /*e: struct Auto */
-/*s: struct Sym8l */
-struct	Sym8l
+/*s: struct Sym */
+struct	Sym
 {
     char	*name;
     short	type;
+
     short	version;
     short	become;
     short	frame;
@@ -114,21 +118,27 @@ struct	Sym8l
     ushort	file;
     long	value;
     long	sig;
+
+    // Extra
     Sym*	link;
 };
-/*e: struct Sym8l */
+/*e: struct Sym */
 /*s: struct Optab */
 struct	Optab
 {
+    // enum<as> from 8.out.h
     short	as;
+
     uchar*	ytab;
-    uchar	prefix;
-    uchar	op[10];
+
+    byte	prefix;
+    // the actual x86 machine code for instruction optab.as
+    byte	op[10];
 };
 /*e: struct Optab */
 
-/*s: enum _anon_ (linkers/8l/l.h) */
-enum
+/*s: enum sxxx */
+enum sxxx
 {
     STEXT		= 1,
     SDATA,
@@ -141,15 +151,10 @@ enum
 
     SIMPORT,
     SEXPORT,
-
-    NHASH		= 10007,
-    NHUNK		= 100000,
-    MINSIZ		= 4,
-    STRINGSZ	= 200,
-    MINLC		= 1,
-    MAXIO		= 8192,
-    MAXHIST		= 20,				/* limit of path elements for history symbols */
-
+};
+/*e: enum sxxx */
+/*s: enum yxxx */
+enum yxxx {
     Yxxx		= 0,
     Ynone,
     Yi0,
@@ -177,8 +182,12 @@ enum
     Ycr0,	Ycr1,	Ycr2,	Ycr3,	Ycr4,	Ycr5,	Ycr6,	Ycr7,
     Ydr0,	Ydr1,	Ydr2,	Ydr3,	Ydr4,	Ydr5,	Ydr6,	Ydr7,
     Ytr0,	Ytr1,	Ytr2,	Ytr3,	Ytr4,	Ytr5,	Ytr6,	Ytr7,
-    Ymax,
 
+    Ymax,
+};
+/*e: enum yxxx */
+/*s: enum zxxx */
+enum zxxx {
     Zxxx		= 0,
 
     Zlit,
@@ -210,17 +219,35 @@ enum
     Zbyte,
     Zmov,
     Zmax,
-
+};
+/*e: enum zxxx */
+/*s: enum pxxx */
+enum pxxx {
     Px		= 0,
     Pe		= 0x66,	/* operand escape */
     Pm		= 0x0f,	/* 2byte opcode escape */
     Pq		= 0xff,	/* both escape */
     Pb		= 0xfe,	/* byte operands */
-
+};
+/*e: enum pxxx */
+/*s: enum rxxx */
+enum rxxx {
     Roffset	= 22,		/* no. bits for offset in relocation address */
     Rindex	= 10,		/* no. bits for index in relocation address */
 };
-/*e: enum _anon_ (linkers/8l/l.h) */
+/*e: enum rxxx */
+
+/*s: enum misc1 */
+enum misc1 {
+    NHASH		= 10007,
+    NHUNK		= 100000,
+    MINSIZ		= 4,
+    STRINGSZ	= 200,
+    MINLC		= 1,
+    MAXIO		= 8192,
+    MAXHIST		= 20,				/* limit of path elements for history symbols */
+};
+/*e: enum misc1 */
 
 /*s: struct Buf */
 union Buf
@@ -384,7 +411,6 @@ void	undefsym(Sym*);
 void	wput(long);
 void	wputl(long);
 void	xdefine(char*, int, long);
-
 
 
 

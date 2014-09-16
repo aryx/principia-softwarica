@@ -89,7 +89,7 @@ typedef	struct	Exec	Exec;
 /*e: constant DYN_MAGIC */
 
 typedef	struct	Sym	Sym;
-/*s: struct Sym */
+/*s: struct Sym a.out.h */
 struct	Sym
 {
     vlong	value;
@@ -97,5 +97,5 @@ struct	Sym
     char	type;
     char	*name;
 };
-/*e: struct Sym */
+/*e: struct Sym a.out.h */
 /*e: include/a.out.h */

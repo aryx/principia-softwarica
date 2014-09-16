@@ -79,7 +79,7 @@ lookup(char *symb, int v)
 }
 /*e: function lookup */
 
-/*s: function prg */
+/*s: constructor prg */
 Prog*
 prg(void)
 {
@@ -94,7 +94,7 @@ prg(void)
     *p = zprg;
     return p;
 }
-/*e: function prg */
+/*e: constructor prg */
 
 /*s: function copyp */
 Prog*

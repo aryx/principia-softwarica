@@ -167,18 +167,32 @@ License.
 \section{Linker principles}
 % and loader? why the use the term loader instead of linker?
 
+% link together object files. Resolve external symbols.
+% (actually for plan9 the linker is also generating the
+% ISA binary code (what was usually done by the assembler))
+
+
 \section{[[8l]] services}
 
-% command line interface?
+% command line interface? -o
 
 % important -TText, see Kernel.tex.nw
 
 \section{Example}
 % show binary format? hexdump?
 
+\section{Object format}
+% the input this time (as opposed to 8a where it's the output)
+
+% nm foo.8 => ? U? D? T?
+
+% nm is using libmach, crachhdr, etc, generic API for object manip
+
 \section{Code organization}
 
 \section{Architecture overview}
+
+% depends on 8.out.h all assembly instructions, registers, etc
 
 % depends on 8c/ for some files
 %8c -FTVw -I/home/pad/plan9/include/386 -I/home/pad/plan9/include -. -I. ../8c/enam.c
@@ -189,7 +203,226 @@ License.
 
 \chapter{Core Data Structures}
 
+% in 8.out.h: Instruction (enum as), Register (enum reg)
+
+\section{[[Sym]]}
+
+% conflict with include/a.out.h
+<<struct Sym>>=
+struct	Sym
+{
+    char	*name;
+    short	type;
+
+    short	version;
+    short	become;
+    short	frame;
+    uchar	subtype;
+    ushort	file;
+    long	value;
+    long	sig;
+
+    // Extra
+    Sym*	link;
+};
+@
+
+<<constant S>>=
+#define	S		((Sym*)0)
+@
+
+\section{[[Adr]]}
+
+<<struct Adr>>=
+struct	Adr
+{
+    union
+    {
+        long	u0offset;
+        char	u0scon[8];
+        Prog	*u0cond;	/* not used, but should be D_BRANCH */
+        Ieee	u0ieee;
+    } u0;
+    union
+    {
+        Auto*	u1autom;
+        Sym*	u1sym;
+    } u1;
+
+    short	type;
+    uchar	index;
+    char	scale;
+};
+@
+
+<<constant offset>>=
+#define	offset	u0.u0offset
+@
+
+<<constant scon>>=
+#define	scon	u0.u0scon
+@
+
+<<constant cond>>=
+#define	cond	u0.u0cond
+@
+
+<<constant ieee>>=
+#define	ieee	u0.u0ieee
+@
+
+<<constant autom>>=
+#define	autom	u1.u1autom
+@
+
+<<constant sym>>=
+#define	sym	u1.u1sym
+@
+
+\section{[[Prog]] and [[curtext]]}
+
+<<struct Prog>>=
+struct	Prog
+{
+    Adr	from;
+    Adr	to;
+
+    Prog	*forwd;
+    Prog*	link;
+    Prog*	pcond;	/* work on this */
+    long	pc;
+    long	line;
+    short	as;
+    char	width;		/* fake for DATA */
+    char	ft;		/* oclass cache */
+    char	tt;
+    uchar	mark;	/* work on these */
+    uchar	back;
+};
+@
+
+
+<<constant P>>=
+#define	P		((Prog*)0)
+@
+
+<<global curtext>>=
+Prog*	curtext;
+@
+
+<<constant TNAME>>=
+#define	TNAME		(curtext?curtext->from.sym->name:noname)
+@
+
+
+
+<<global undefp>>=
+//@Scheck: not dead, used by UP
+Prog	undefp;
+@
+
+<<constant UP>>=
+#define	UP	(&undefp)
+@
+
+\section{[[Auto]]}
+
+<<struct Auto>>=
+struct	Auto
+{
+    Sym*	asym;
+
+    Auto*	link;
+    long	aoffset;
+    short	type;
+};
+@
+
+\section{[[Optab]] and [[optab]]}
+
+<<struct Optab>>=
+struct	Optab
+{
+    // enum<as> from 8.out.h
+    short	as;
+
+    uchar*	ytab;
+
+    byte	prefix;
+    // the actual x86 machine code for instruction optab.as
+    byte	op[10];
+};
+@
+
+\chapter{Libraries}
+
+% ar.h
+
+<<constant ARMAG>>=
+#define	ARMAG	"!<arch>\n"
+@
+
+<<constant SARMAG>>=
+#define	SARMAG	8
+@
+
+<<constant ARFMAG>>=
+#define	ARFMAG	"`\n"
+@
+
+<<constant SARNAME>>=
+#define SARNAME	16
+@
+
+<<struct ar_hdr>>=
+struct	ar_hdr
+{
+    char	name[SARNAME];
+    char	date[12];
+    char	uid[6];
+    char	gid[6];
+    char	mode[8];
+    char	size[10];
+    char	fmag[2];
+};
+@
+
+<<constant SAR_HDR>>=
+#define	SAR_HDR	(SARNAME+44)
+@
+
+
+% ar.c
+
+\chapter{Machine Code Generation}
+
+% done by 8l, not 8a, surprisingly
+% why? because allows more optimisations? cross libs? as in llvm?
+
+\chapter{Elf}
+
+<<enum _anon_ (linkers/8l/elf.h)>>=
+enum {
+    Ehdr32sz	= 52,
+    Phdr32sz	= 32,
+    Shdr32sz	= 40,
+
+    Ehdr64sz	= 64,
+    Phdr64sz	= 56,
+    Shdr64sz	= 64,
+};
+@
+
+\chapter{Profiling}
+% surprising that part of ld job, but it is
+
+% NOPROF of 8.out.h
+
 \chapter{Advanced Topics}
+
+\section{Float}
+
+% 8.out.h
 
 \chapter{Conclusion}
 
@@ -197,7 +430,15 @@ License.
 
 \chapter{Debugging}
 
+<<global debug>>=
+char	debug[128];
+@
+
 \chapter{Error Managment}
+
+<<global nerrors>>=
+int	nerrors;
+@
 
 <<function errorexit>>=
 void
@@ -219,6 +460,10 @@ errorexit(void)
 
 <<global nhunk>>=
 long	nhunk;
+@
+
+<<global hunk>>=
+char*	hunk;
 @
 
 <<function malloc>>=
@@ -296,7 +541,7 @@ gethunk(void)
 @
 
 
-<<function prg>>=
+<<constructor prg>>=
 Prog*
 prg(void)
 {
@@ -365,6 +610,28 @@ lookup(char *symb, int v)
 }
 @
 
+
+\section{Buffer managmnent}
+
+<<struct Buf>>=
+union Buf
+{
+    struct
+    {
+        char	obuf[MAXIO];			/* output buffer */
+        uchar	ibuf[MAXIO];			/* input buffer */
+    } u;
+    char	dbuf[1];
+};
+@
+
+<<constant cbuf>>=
+#define	cbuf	u.obuf
+@
+
+<<constant xbuf>>=
+#define	xbuf	u.ibuf
+@
 
 \chapter{Extra Code}
 
