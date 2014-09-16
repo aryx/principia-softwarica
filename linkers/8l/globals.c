@@ -141,7 +141,7 @@ int	dtype;
 /*s: global reloca */
 Adr*	reloca;
 /*e: global reloca */
-int dlm;
+bool dlm;
 int	imports, nimports;
 int	exports, nexports, allexport;
 /*s: global EXPTAB */

@@ -44,7 +44,8 @@ int	version;
 /*s: global literal */
 char	literal[32];
 /*e: global literal */
-int	doexp;
+// do export table, -x
+bool	doexp;
 
 void	addlibpath(char*);
 char*	findlib(char*);
@@ -156,71 +157,76 @@ main(int argc, char *argv[])
 
     nerrors = 0;
     outfile = "8.out";
+
     HEADTYPE = -1;
     INITTEXT = -1;
     INITTEXTP = -1;
     INITDAT = -1;
     INITRND = -1;
-    INITENTRY = 0;
+    INITENTRY = nil;
 
     ARGBEGIN {
-    default:
-        c = ARGC();
-        if(c >= 0 && c < sizeof(debug))
-            debug[c]++;
-        break;
-    case 'o': /* output to (next arg) */
-        outfile = ARGF();
-        break;
-    case 'E':
-        a = ARGF();
-        if(a)
-            INITENTRY = a;
-        break;
-    case 'H':
-        a = ARGF();
-        if(a)
-            HEADTYPE = atolwhex(a);
-        break;
-    case 'L':
-        addlibpath(EARGF(usage()));
-        break;
-    case 'T':
-        a = ARGF();
-        if(a)
-            INITTEXT = atolwhex(a);
-        break;
-    case 'P':
-        a = ARGF();
-        if(a)
-            INITTEXTP = atolwhex(a);
-        break;
-    case 'D':
-        a = ARGF();
-        if(a)
-            INITDAT = atolwhex(a);
-        break;
-    case 'R':
-        a = ARGF();
-        if(a)
-            INITRND = atolwhex(a);
-        break;
-    case 'x':	/* produce export table */
-        doexp = 1;
-        if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1])){
+    /*s: [[main()]] command line processing */
+        case 'o': /* output to (next arg) */
+            outfile = ARGF();
+            break;
+
+        case 'E':
             a = ARGF();
-            if(strcmp(a, "*") == 0)
-                allexport = 1;
-            else
-                readundefs(a, SEXPORT);
-        }
-        break;
-    case 'u':	/* produce dynamically loadable module */
-        dlm = 1;
-        debug['l']++;
-        if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
-            readundefs(ARGF(), SIMPORT);
-        break;
+            if(a)
+                INITENTRY = a;
+            break;
+        case 'H':
+            a = ARGF();
+            if(a)
+                HEADTYPE = atolwhex(a);
+            break;
+        case 'L':
+            addlibpath(EARGF(usage()));
+            break;
+        case 'T':
+            a = ARGF();
+            if(a)
+                INITTEXT = atolwhex(a);
+            break;
+        case 'P':
+            a = ARGF();
+            if(a)
+                INITTEXTP = atolwhex(a);
+            break;
+        case 'D':
+            a = ARGF();
+            if(a)
+                INITDAT = atolwhex(a);
+            break;
+        case 'R':
+            a = ARGF();
+            if(a)
+                INITRND = atolwhex(a);
+            break;
+
+        case 'x':	/* produce export table */
+            doexp = true;
+            if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1])){
+                a = ARGF();
+                if(strcmp(a, "*") == 0)
+                    allexport = true;
+                else
+                    readundefs(a, SEXPORT);
+            }
+            break;
+        case 'u':	/* produce dynamically loadable module */
+            dlm = true;
+            debug['l']++;
+            if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
+                readundefs(ARGF(), SIMPORT);
+            break;
+        default:
+            c = ARGC();
+            if(c >= 0 && c < sizeof(debug))
+                debug[c]++;
+            break;
+    /*e: [[main()]] command line processing */
     } ARGEND
 
     USED(argc);
@@ -229,7 +235,7 @@ main(int argc, char *argv[])
         usage();
 
     if(!debug['9'] && !debug['U'] && !debug['B'])
-        debug[DEFAULT] = 1;
+        debug[DEFAULT] = true;
 
     a = getenv("ccroot");
 

@@ -337,9 +337,10 @@ extern	Prog	zprg;
 extern	int	dtype;
 
 extern	Adr*	reloca;
-extern	int	dlm;
+extern	bool	dlm;
 extern	int	imports, nimports;
-extern	int	exports, nexports, allexport;
+extern	int	exports, nexports;
+bool allexport;
 extern	char*	EXPTAB;
 extern	Prog	undefp;
 
