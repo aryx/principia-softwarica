@@ -239,13 +239,18 @@ enum rxxx {
 
 /*s: enum misc1 */
 enum misc1 {
-    NHASH		= 10007,
+    /*s: constant NHASH 8l.h */
+        NHASH		= 10007,
+    /*e: constant NHASH 8l.h */
+    /*s: constant NHUNK */
     NHUNK		= 100000,
+    /*e: constant NHUNK */
+
     MINSIZ		= 4,
     STRINGSZ	= 200,
     MINLC		= 1,
     MAXIO		= 8192,
-    MAXHIST		= 20,				/* limit of path elements for history symbols */
+    MAXHIST		= 20, /* limit of path elements for history symbols */
 };
 /*e: enum misc1 */
 
@@ -292,27 +297,16 @@ extern	int	cbc;
 extern	char*	cbp;
 extern	char*	pcstr;
 extern	int	cout;
-extern	Auto*	curauto;
-extern	Auto*	curhist;
 extern	Prog*	curp;
 extern	Prog*	curtext;
 extern	Prog*	datap;
 extern	Prog*	edatap;
 extern	long	datsize;
 extern	char	debug[128];
-extern	char	literal[32];
-extern	Prog*	etextp;
 extern	Prog*	firstp;
 extern	char	fnuxi8[8];
 extern	char	fnuxi4[4];
 extern	Sym*	hash[NHASH];
-extern	Sym*	histfrog[MAXHIST];
-extern	int	histfrogp;
-extern	int	histgen;
-extern	char*	library[50];
-extern	char*	libraryobj[50];
-extern	int	libraryp;
-extern	int	xrefresolv;
 extern	char*	hunk;
 extern	char	inuxi1[1];
 extern	char	inuxi2[2];
@@ -330,17 +324,15 @@ extern	long	nsymbol;
 extern	char*	noname;
 extern	char*	outfile;
 extern	long	pc;
-extern	long	spsize;
 extern	long	symsize;
 extern	Prog*	textp;
 extern	long	textsize;
 extern	long	thunk;
-extern	int	version;
 extern	Prog	zprg;
 extern	int	dtype;
 
 extern	Adr*	reloca;
-extern	int	doexp, dlm;
+extern	int	dlm;
 extern	int	imports, nimports;
 extern	int	exports, nexports, allexport;
 extern	char*	EXPTAB;
@@ -394,9 +386,6 @@ void	lputl(long);
 void	llput(vlong v);
 void	llputl(vlong v);
 void	main(int, char*[]);
-
-void*	mysbrk(ulong);
-
 
 void	patch(void);
 Prog*	prg(void);

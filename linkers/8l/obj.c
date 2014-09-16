@@ -8,6 +8,44 @@
 /*e: constant DEFAULT */
 #endif
 
+/*s: global histfrog */
+Sym*	histfrog[MAXHIST];
+/*e: global histfrog */
+/*s: global curauto */
+Auto*	curauto;
+/*e: global curauto */
+/*s: global histfrogp */
+int	histfrogp;
+/*e: global histfrogp */
+/*s: global curhist */
+Auto*	curhist;
+/*e: global curhist */
+/*s: global etextp */
+Prog*	etextp;
+/*e: global etextp */
+/*s: global histgen */
+int	histgen;
+/*e: global histgen */
+/*s: global library */
+char*	library[50];
+/*e: global library */
+/*s: global libraryobj */
+char*	libraryobj[50];
+/*e: global libraryobj */
+/*s: global libraryp */
+int	libraryp;
+/*e: global libraryp */
+/*s: global xrefresolv */
+int	xrefresolv;
+/*e: global xrefresolv */
+/*s: global version */
+int	version;
+/*e: global version */
+/*s: global literal */
+char	literal[32];
+/*e: global literal */
+int	doexp;
+
 void	addlibpath(char*);
 char*	findlib(char*);
 void	loadlib(void);

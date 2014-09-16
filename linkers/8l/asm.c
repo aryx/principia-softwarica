@@ -5,6 +5,10 @@
 #define	Dbufslop	100
 /*e: constant Dbufslop */
 
+/*s: global spsize */
+long	spsize;
+/*e: global spsize */
+
 void	datblk(long, long);
 
 /*s: function entryvalue */

@@ -231,6 +231,56 @@ struct	Sym
 #define	S		((Sym*)0)
 @
 
+
+<<constant NHASH 8l.h>>=
+    NHASH		= 10007,
+@
+
+<<global hash (linkers/8l/globals.c)>>=
+Sym*	hash[NHASH];
+@
+
+<<function lookup>>=
+Sym*
+lookup(char *symb, int v)
+{
+    Sym *s;
+    char *p;
+    long h;
+    int l, c;
+
+    h = v;
+    for(p=symb; c = *p; p++)
+        h = h+h+h + c;
+    l = (p - symb) + 1;
+    h &= 0xffffff;
+    h %= NHASH;
+    for(s = hash[h]; s != S; s = s->link)
+        if(s->version == v)
+        if(memcmp(s->name, symb, l) == 0)
+            return s;
+
+    while(nhunk < sizeof(Sym))
+        gethunk();
+    s = (Sym*)hunk;
+    nhunk -= sizeof(Sym);
+    hunk += sizeof(Sym);
+
+    s->name = malloc(l + 1);
+    memmove(s->name, symb, l);
+
+    s->link = hash[h];
+    s->type = 0;
+    s->version = v;
+    s->value = 0;
+    s->sig = 0;
+    hash[h] = s;
+    nsymbol++;
+    return s;
+}
+@
+
+
 \section{[[Adr]]}
 
 <<struct Adr>>=
@@ -354,6 +404,25 @@ struct	Optab
 };
 @
 
+\chapter{Sections}
+
+<<enum sxxx>>=
+enum sxxx
+{
+    STEXT		= 1,
+    SDATA,
+    SBSS,
+    SDATA1,
+    SXREF,
+    SFILE,
+    SCONST,
+    SUNDEF,
+
+    SIMPORT,
+    SEXPORT,
+};
+@
+
 \chapter{Libraries}
 
 % ar.h
@@ -398,6 +467,88 @@ struct	ar_hdr
 
 % done by 8l, not 8a, surprisingly
 % why? because allows more optimisations? cross libs? as in llvm?
+
+
+<<enum yxxx>>=
+enum yxxx {
+    Yxxx		= 0,
+    Ynone,
+    Yi0,
+    Yi1,
+    Yi8,
+    Yi32,
+    Yiauto,
+    Yal,
+    Ycl,
+    Yax,
+    Ycx,
+    Yrb,
+    Yrl,
+    Yrf,
+    Yf0,
+    Yrx,
+    Ymb,
+    Yml,
+    Ym,
+    Ybr,
+    Ycol,
+
+    Ycs,	Yss,	Yds,	Yes,	Yfs,	Ygs,
+    Ygdtr,	Yidtr,	Yldtr,	Ymsw,	Ytask,
+    Ycr0,	Ycr1,	Ycr2,	Ycr3,	Ycr4,	Ycr5,	Ycr6,	Ycr7,
+    Ydr0,	Ydr1,	Ydr2,	Ydr3,	Ydr4,	Ydr5,	Ydr6,	Ydr7,
+    Ytr0,	Ytr1,	Ytr2,	Ytr3,	Ytr4,	Ytr5,	Ytr6,	Ytr7,
+
+    Ymax,
+};
+@
+
+
+<<enum zxxx>>=
+enum zxxx {
+    Zxxx		= 0,
+
+    Zlit,
+    Z_rp,
+    Zbr,
+    Zcall,
+    Zib_,
+    Zib_rp,
+    Zibo_m,
+    Zil_,
+    Zil_rp,
+    Zilo_m,
+    Zjmp,
+    Zloop,
+    Zm_o,
+    Zm_r,
+    Zaut_r,
+    Zo_m,
+    Zpseudo,
+    Zr_m,
+    Zrp_,
+    Z_ib,
+    Z_il,
+    Zm_ibo,
+    Zm_ilo,
+    Zib_rr,
+    Zil_rr,
+    Zclr,
+    Zbyte,
+    Zmov,
+    Zmax,
+};
+@
+
+<<enum pxxx>>=
+enum pxxx {
+    Px		= 0,
+    Pe		= 0x66,	/* operand escape */
+    Pm		= 0x0f,	/* 2byte opcode escape */
+    Pq		= 0xff,	/* both escape */
+    Pb		= 0xfe,	/* byte operands */
+};
+@
 
 \chapter{Elf}
 
@@ -505,16 +656,9 @@ void setmalloctag(void *v, ulong pc)
 @
 
 
-
-<<function mysbrk>>=
-void*
-mysbrk(ulong size)
-{
-    return sbrk(size);
-}
+<<constant NHUNK>>=
+NHUNK		= 100000,
 @
-
-
 
 <<function gethunk>>=
 void
@@ -529,7 +673,7 @@ gethunk(void)
         if(thunk >= 25L*NHUNK)
             nh = 25L*NHUNK;
     }
-    h = mysbrk(nh);
+    h = sbrk(nh);
     if(h == (char*)-1) {
         diag("out of memory");
         errorexit();
@@ -567,46 +711,6 @@ copyp(Prog *q)
     p = prg();
     *p = *q;
     return p;
-}
-@
-
-<<function lookup>>=
-Sym*
-lookup(char *symb, int v)
-{
-    Sym *s;
-    char *p;
-    long h;
-    int l, c;
-
-    h = v;
-    for(p=symb; c = *p; p++)
-        h = h+h+h + c;
-    l = (p - symb) + 1;
-    h &= 0xffffff;
-    h %= NHASH;
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->version == v)
-        if(memcmp(s->name, symb, l) == 0)
-            return s;
-
-    while(nhunk < sizeof(Sym))
-        gethunk();
-    s = (Sym*)hunk;
-    nhunk -= sizeof(Sym);
-    hunk += sizeof(Sym);
-
-    s->name = malloc(l + 1);
-    memmove(s->name, symb, l);
-
-    s->link = hash[h];
-    s->type = 0;
-    s->version = v;
-    s->value = 0;
-    s->sig = 0;
-    hash[h] = s;
-    nsymbol++;
-    return s;
 }
 @
 

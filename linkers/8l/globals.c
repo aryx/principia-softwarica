@@ -44,12 +44,6 @@ char*	pcstr;
 /*s: global cout */
 int	cout;
 /*e: global cout */
-/*s: global curauto */
-Auto*	curauto;
-/*e: global curauto */
-/*s: global curhist */
-Auto*	curhist;
-/*e: global curhist */
 /*s: global curp */
 Prog*	curp;
 /*e: global curp */
@@ -68,12 +62,6 @@ long	datsize;
 /*s: global debug */
 char	debug[128];
 /*e: global debug */
-/*s: global literal */
-char	literal[32];
-/*e: global literal */
-/*s: global etextp */
-Prog*	etextp;
-/*e: global etextp */
 /*s: global firstp */
 Prog*	firstp;
 /*e: global firstp */
@@ -86,27 +74,6 @@ char	fnuxi4[4];
 /*s: global hash (linkers/8l/globals.c) */
 Sym*	hash[NHASH];
 /*e: global hash (linkers/8l/globals.c) */
-/*s: global histfrog */
-Sym*	histfrog[MAXHIST];
-/*e: global histfrog */
-/*s: global histfrogp */
-int	histfrogp;
-/*e: global histfrogp */
-/*s: global histgen */
-int	histgen;
-/*e: global histgen */
-/*s: global library */
-char*	library[50];
-/*e: global library */
-/*s: global libraryobj */
-char*	libraryobj[50];
-/*e: global libraryobj */
-/*s: global libraryp */
-int	libraryp;
-/*e: global libraryp */
-/*s: global xrefresolv */
-int	xrefresolv;
-/*e: global xrefresolv */
 /*s: global hunk */
 char*	hunk;
 /*e: global hunk */
@@ -152,9 +119,6 @@ char*	outfile;
 /*s: global pc */
 long	pc;
 /*e: global pc */
-/*s: global spsize */
-long	spsize;
-/*e: global spsize */
 /*s: global symsize */
 long	symsize;
 /*e: global symsize */
@@ -167,9 +131,6 @@ long	textsize;
 /*s: global thunk */
 long	thunk;
 /*e: global thunk */
-/*s: global version */
-int	version;
-/*e: global version */
 /*s: global zprg */
 Prog	zprg;
 /*e: global zprg */
@@ -180,7 +141,7 @@ int	dtype;
 /*s: global reloca */
 Adr*	reloca;
 /*e: global reloca */
-int	doexp, dlm;
+int dlm;
 int	imports, nimports;
 int	exports, nexports, allexport;
 /*s: global EXPTAB */

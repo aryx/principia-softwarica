@@ -37,15 +37,6 @@ void setmalloctag(void *v, ulong pc)
 }
 /*e: function setmalloctag */
 
-/*s: function mysbrk */
-void*
-mysbrk(ulong size)
-{
-    return sbrk(size);
-}
-/*e: function mysbrk */
-
-
 /*s: function fileexists */
 int
 fileexists(char *s)
