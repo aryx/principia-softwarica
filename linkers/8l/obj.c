@@ -142,8 +142,9 @@ main(int argc, char *argv[])
     /*s: [[main()]] locals */
         int i, c;
         char name[LIBNAMELEN];
-    /*x: [[main()]] locals */
         char *a;
+    /*x: [[main()]] locals */
+        char *root;
     /*e: [[main()]] locals */
 
     Binit(&bso, 1, OWRITE);
@@ -216,17 +217,17 @@ main(int argc, char *argv[])
             }
             break;
     /*x: [[main()]] command line processing */
-        case 'u':	/* produce dynamically loadable module */
-            dlm = true;
-            debug['l'] = true;
-            if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
-                readundefs(ARGF(), SIMPORT);
-            break;
+    case 'u':	/* produce dynamically loadable module */
+        dlm = true;
+        debug['l'] = true;
+        if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
+            readundefs(ARGF(), SIMPORT);
+        break;
     /*x: [[main()]] command line processing */
         default:
             c = ARGC();
             if(c >= 0 && c < sizeof(debug))
-                debug[c]++;
+                debug[c] = true;
             break;
     /*e: [[main()]] command line processing */
     } ARGEND
@@ -236,20 +237,20 @@ main(int argc, char *argv[])
         usage();
 
     /*s: [[main()]] addlibpath() */
-    /*s: [[main()]] change a if ccroot */
-    a = getenv("ccroot");
+    /*s: [[main()]] change root if ccroot */
+    root = getenv("ccroot");
 
-    if(a != nil && *a != '\0') {
-        if(!fileexists(a)) {
-            diag("nonexistent $ccroot: %s", a);
+    if(root != nil && *root != '\0') {
+        if(!fileexists(root)) {
+            diag("nonexistent $ccroot: %s", root);
             errorexit();
         }
     }else
-        a = "";
-    /*e: [[main()]] change a if ccroot */
+        root = "";
+    /*e: [[main()]] change root if ccroot */
 
-    // ccroot/386/lib/
-    snprint(name, sizeof(name), "%s/%s/lib", a, thestring);
+    // usually /386/lib/ as root = ""
+    snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
     /*e: [[main()]] addlibpath() */
 
@@ -268,24 +269,6 @@ main(int argc, char *argv[])
     /*e: [[main()]] adjust HEADTYPE if debug flags */
     switch(HEADTYPE) {
     /*s: [[main()]] switch HEADTYPE cases */
-        case H_GARBAGE:	/* this is garbage */
-            HEADR = 20L+56L;
-            if(INITTEXT == -1)
-                INITTEXT = 0x40004CL;
-            if(INITDAT == -1)
-                INITDAT = 0x10000000L;
-            if(INITRND == -1)
-                INITRND = 0;
-            break;
-        case H_COFF:	/* is unix coff */
-            HEADR = 0xd0L;
-            if(INITTEXT == -1)
-                INITTEXT = 0xd0;
-            if(INITDAT == -1)
-                INITDAT = 0x400000;
-            if(INITRND == -1)
-                INITRND = 0;
-            break;
         case H_PLAN9:	/* plan 9 */
             HEADR = 32L;
             if(INITTEXT == -1)
@@ -295,36 +278,55 @@ main(int argc, char *argv[])
             if(INITRND == -1)
                 INITRND = 4096;
             break;
-        case H_COM:	/* MS-DOS .COM */
-            HEADR = 0;
-            if(INITTEXT == -1)
-                INITTEXT = 0x0100;
-            if(INITDAT == -1)
-                INITDAT = 0;
-            if(INITRND == -1)
-                INITRND = 4;
-            break;
-        case H_EXE:	/* fake MS-DOS .EXE */
-            HEADR = 0x200;
-            if(INITTEXT == -1)
-                INITTEXT = 0x0100;
-            if(INITDAT == -1)
-                INITDAT = 0;
-            if(INITRND == -1)
-                INITRND = 4;
-            HEADR += (INITTEXT & 0xFFFF);
-            if(debug['v'])
-                Bprint(&bso, "HEADR = 0x%ld\n", HEADR);
-            break;
-        case H_ELF:	/* elf executable */
-            HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
-            if(INITTEXT == -1)
-                INITTEXT = 0x80100020L;
-            if(INITDAT == -1)
-                INITDAT = 0;
-            if(INITRND == -1)
-                INITRND = 4096;
-            break;
+    /*x: [[main()]] switch HEADTYPE cases */
+    case H_GARBAGE:	/* this is garbage */
+        HEADR = 20L+56L;
+        if(INITTEXT == -1)
+            INITTEXT = 0x40004CL;
+        if(INITDAT == -1)
+            INITDAT = 0x10000000L;
+        if(INITRND == -1)
+            INITRND = 0;
+        break;
+    case H_COFF:	/* is unix coff */
+        HEADR = 0xd0L;
+        if(INITTEXT == -1)
+            INITTEXT = 0xd0;
+        if(INITDAT == -1)
+            INITDAT = 0x400000;
+        if(INITRND == -1)
+            INITRND = 0;
+        break;
+    case H_COM:	/* MS-DOS .COM */
+        HEADR = 0;
+        if(INITTEXT == -1)
+            INITTEXT = 0x0100;
+        if(INITDAT == -1)
+            INITDAT = 0;
+        if(INITRND == -1)
+            INITRND = 4;
+        break;
+    case H_EXE:	/* fake MS-DOS .EXE */
+        HEADR = 0x200;
+        if(INITTEXT == -1)
+            INITTEXT = 0x0100;
+        if(INITDAT == -1)
+            INITDAT = 0;
+        if(INITRND == -1)
+            INITRND = 4;
+        HEADR += (INITTEXT & 0xFFFF);
+        if(debug['v'])
+            Bprint(&bso, "HEADR = 0x%ld\n", HEADR);
+        break;
+    case H_ELF:	/* elf executable */
+        HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
+        if(INITTEXT == -1)
+            INITTEXT = 0x80100020L;
+        if(INITDAT == -1)
+            INITDAT = 0;
+        if(INITRND == -1)
+            INITRND = 4096;
+        break;
     /*e: [[main()]] switch HEADTYPE cases */
     default:
         diag("unknown -H option");
@@ -444,7 +446,8 @@ main(int argc, char *argv[])
         errorexit();
     }
 
-    /*s: [[main()]] cout is ready, let's go */
+    // ------ main functions  ------
+    /*s: [[main()]] cout is ready, LET'S GO */
     firstp = prg();
     lastp = firstp;
 
@@ -477,13 +480,15 @@ main(int argc, char *argv[])
         zerosig("edata");
         zerosig("end");
 
-        if(dlm){
-            import();
-            HEADTYPE = 2;
-            INITTEXT = INITDAT = 0;
-            INITRND = 8;
-            INITENTRY = EXPTAB;
-        }
+       /*s: [[main()]] if dynamic module */
+       if(dlm){
+           import();
+           HEADTYPE = 2;
+           INITTEXT = INITDAT = 0;
+           INITRND = 8;
+           INITENTRY = EXPTAB;
+       }
+       /*e: [[main()]] if dynamic module */
 
         export();
     }
@@ -493,20 +498,19 @@ main(int argc, char *argv[])
     follow();
     dodata();
     dostkoff();
-
-    /*s: [[main()]] if profiling */
+    /*s: [[main()]] call doprofxxx() if profiling */
     if(debug['p'])
         if(debug['1'])
             doprof1();
         else
             doprof2();
-    /*e: [[main()]] if profiling */
-
+    /*e: [[main()]] call doprofxxx() if profiling */
     span();
     doinit();
+
     asmb();
     undef();
-    /*e: [[main()]] cout is ready, let's go */
+    /*e: [[main()]] cout is ready, LET'S GO */
 
     /*s: [[main()]] profile report */
     if(debug['v']) {
@@ -592,12 +596,16 @@ loop:
 void
 objfile(char *file)
 {
-    long off, esym, cnt, l;
-    int f;
+    fdt f;
+    long l;
+
+    char magbuf[SARMAG];
+
+    long off, esym, cnt;
     bool work;
     Sym *s;
-    char magbuf[SARMAG];
-    char name[LIBNAMELEN], pname[LIBNAMELEN];
+    char pname[LIBNAMELEN];
+    char name[LIBNAMELEN];
     struct ar_hdr arhdr;
     char *e, *start, *stop;
 
@@ -623,6 +631,7 @@ objfile(char *file)
     }
 
     l = read(f, magbuf, SARMAG);
+
     if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
         l = seek(f, 0L, 2);
@@ -631,6 +640,7 @@ objfile(char *file)
         close(f);
         return;
     }
+
 
     l = read(f, &arhdr, SAR_HDR);
     if(l != SAR_HDR) {
@@ -1361,6 +1371,7 @@ doprof1(void)
     if(debug['v'])
         Bprint(&bso, "%5.2f profile 1\n", cputime());
     Bflush(&bso);
+
     s = lookup("__mcount", 0);
     n = 1;
     for(p = firstp->link; p != P; p = p->link) {

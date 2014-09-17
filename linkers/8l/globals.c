@@ -60,7 +60,7 @@ Prog*	edatap;
 long	datsize;
 /*e: global datsize */
 /*s: global debug */
-char	debug[128];
+bool	debug[128];
 /*e: global debug */
 /*s: global firstp */
 Prog*	firstp;

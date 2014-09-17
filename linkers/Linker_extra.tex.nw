@@ -3352,7 +3352,7 @@ extern	Prog*	curtext;
 extern	Prog*	datap;
 extern	Prog*	edatap;
 extern	long	datsize;
-extern	char	debug[128];
+extern	bool	debug[128];
 extern	Prog*	firstp;
 extern	char	fnuxi8[8];
 extern	char	fnuxi4[4];
@@ -3836,118 +3836,6 @@ brchain(Prog *p)
 @
 
 
-<<function xfol>>=
-void
-xfol(Prog *p)
-{
-    Prog *q;
-    int i;
-    enum as a;
-
-loop:
-    if(p == P)
-        return;
-    if(p->as == ATEXT)
-        curtext = p;
-    if(p->as == AJMP)
-    if((q = p->pcond) != P) {
-        p->mark = 1;
-        p = q;
-        if(p->mark == 0)
-            goto loop;
-    }
-    if(p->mark) {
-        /* copy up to 4 instructions to avoid branch */
-        for(i=0,q=p; i<4; i++,q=q->link) {
-            if(q == P)
-                break;
-            if(q == lastp)
-                break;
-            a = q->as;
-            if(a == ANOP) {
-                i--;
-                continue;
-            }
-            switch(a) {
-            case AJMP:
-            case ARET:
-            case AIRETL:
-
-            case APUSHL:
-            case APUSHFL:
-            case APUSHW:
-            case APUSHFW:
-            case APOPL:
-            case APOPFL:
-            case APOPW:
-            case APOPFW:
-                goto brk;
-            }
-            if(q->pcond == P || q->pcond->mark)
-                continue;
-            if(a == ACALL || a == ALOOP)
-                continue;
-            for(;;) {
-                if(p->as == ANOP) {
-                    p = p->link;
-                    continue;
-                }
-                q = copyp(p);
-                p = p->link;
-                q->mark = 1;
-                lastp->link = q;
-                lastp = q;
-                if(q->as != a || q->pcond == P || q->pcond->mark)
-                    continue;
-
-                q->as = relinv(q->as);
-                p = q->pcond;
-                q->pcond = q->link;
-                q->link = p;
-                xfol(q->link);
-                p = q->link;
-                if(p->mark)
-                    return;
-                goto loop;
-            }
-        } /* */
-    brk:;
-        q = prg();
-        q->as = AJMP;
-        q->line = p->line;
-        q->to.type = D_BRANCH;
-        q->to.offset = p->pc;
-        q->pcond = p;
-        p = q;
-    }
-    p->mark = 1;
-    lastp->link = p;
-    lastp = p;
-    a = p->as;
-    if(a == AJMP || a == ARET || a == AIRETL)
-        return;
-    if(p->pcond != P)
-    if(a != ACALL) {
-        q = brchain(p->link);
-        if(q != P && q->mark)
-        if(a != ALOOP) {
-            p->as = relinv(a);
-            p->link = p->pcond;
-            p->pcond = q;
-        }
-        xfol(p->link);
-        q = brchain(p->pcond);
-        if(q->mark) {
-            p->pcond = q;
-            return;
-        }
-        p = q;
-        goto loop;
-    }
-    p = p->link;
-    goto loop;
-}
-@
 
 <<function relinv>>=
 int
@@ -3979,44 +3867,6 @@ relinv(int a)
 
 
 
-<<constant LOG>>=
-#define	LOG	5
-@
-
-<<function mkfwd>>=
-void
-mkfwd(void)
-{
-    Prog *p;
-    int i;
-    long dwn[LOG], cnt[LOG];
-    Prog *lst[LOG];
-
-    for(i=0; i<LOG; i++) {
-        if(i == 0)
-            cnt[i] = 1; else
-            cnt[i] = LOG * cnt[i-1];
-        dwn[i] = 1;
-        lst[i] = P;
-    }
-    i = 0;
-    for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT)
-            curtext = p;
-        i--;
-        if(i < 0)
-            i = LOG-1;
-        p->forwd = P;
-        dwn[i]--;
-        if(dwn[i] <= 0) {
-            dwn[i] = cnt[i];
-            if(lst[i] != P)
-                lst[i]->forwd = p;
-            lst[i] = p;
-        }
-    }
-}
-@
 
 <<function brloop>>=
 Prog*
@@ -4605,21 +4455,6 @@ void	datblk(long, long);
 \subsection*{[[linkers/8l/span.c]]}
 
 
-<<function xdefine>>=
-void
-xdefine(char *p, int t, long v)
-{
-    Sym *s;
-
-    s = lookup(p, 0);
-    if(s->type == 0 || s->type == SXREF) {
-        s->type = t;
-        s->value = v;
-    }
-    if(s->type == STEXT && s->value == 0)
-        s->value = v;
-}
-@
 
 <<function putsymb>>=
 void
@@ -6248,6 +6083,8 @@ elf64sectab(void (*putl)(long), void (*putll)(vlong))
     elfstrtab();
 }
 @
+
+% >>
 
 <<function elf64>>=
 /* if addpsects > 0, putpsects must emit exactly that many psects. */

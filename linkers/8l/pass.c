@@ -18,6 +18,7 @@ dodata(void)
     if(debug['v'])
         Bprint(&bso, "%5.2f dodata\n", cputime());
     Bflush(&bso);
+
     for(p = datap; p != P; p = p->link) {
         s = p->from.sym;
         if(p->as == ADYNT || p->as == AINIT)
@@ -128,9 +129,12 @@ follow(void)
     if(debug['v'])
         Bprint(&bso, "%5.2f follow\n", cputime());
     Bflush(&bso);
+
     firstp = prg();
     lastp = firstp;
+
     xfol(textp);
+
     lastp->link = P;
     firstp = firstp->link;
 }
@@ -332,12 +336,6 @@ patch(void)
                     Bprint(&bso, "%s calls %s\n", TNAME, s->name);
 
                 switch(s->type) {
-                default:
-                    /* diag prints TNAME first */
-                    diag("undefined: %s", s->name);
-                    s->type = STEXT;
-                    s->value = vexit;
-                    break;	/* or fall through to set offset? */
                 case STEXT:
                     p->to.offset = s->value;
                     break;
@@ -345,6 +343,12 @@ patch(void)
                     p->pcond = UP;
                     p->to.offset = 0;
                     break;
+                default:
+                    /* diag prints TNAME first */
+                    diag("undefined: %s", s->name);
+                    s->type = STEXT;
+                    s->value = vexit;
+                    break;	/* or fall through to set offset? */
                 }
                 p->to.type = D_BRANCH;
             }
@@ -453,6 +457,7 @@ dostkoff(void)
     curbecome = 0;
     maxbecome = 0;
     curtext = 0;
+
     for(p = firstp; p != P; p = p->link) {
 
         /* find out how much arg space is used in this TEXT */
@@ -491,9 +496,11 @@ dostkoff(void)
 
     if(debug['b'])
         print("max become = %d\n", maxbecome);
+
     xdefine("ALEFbecome", STEXT, maxbecome);
 
     curtext = 0;
+
     for(p = firstp; p != P; p = p->link) {
         switch(p->as) {
         case ATEXT:
@@ -507,6 +514,7 @@ dostkoff(void)
                 /* calling a become or calling a variable */
                 if(p->to.sym == S || p->to.sym->become) {
                     curtext->to.offset += f;
+
                     if(debug['b']) {
                         curp = p;
                         print("%D calling %D increase %d\n",
@@ -651,9 +659,9 @@ undef(void)
     Sym *s;
 
     for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link)
-        if(s->type == SXREF)
-            diag("%s: not defined", s->name);
+        for(s = hash[i]; s != S; s = s->link)
+            if(s->type == SXREF)
+                diag("%s: not defined", s->name);
 }
 /*e: function undef */
 

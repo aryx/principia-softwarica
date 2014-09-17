@@ -274,7 +274,7 @@ enum misc1 {
 enum headtype {
     H_GARBAGE = 0,
     H_COFF = 1,
-    H_PLAN9 = 2,
+    H_PLAN9 = 2, // default
     H_COM = 3,
     H_EXE = 4,
     H_ELF = 5,
@@ -329,7 +329,7 @@ extern	Prog*	curtext;
 extern	Prog*	datap;
 extern	Prog*	edatap;
 extern	long	datsize;
-extern	char	debug[128];
+extern	bool	debug[128];
 extern	Prog*	firstp;
 extern	char	fnuxi8[8];
 extern	char	fnuxi4[4];

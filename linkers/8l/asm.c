@@ -131,8 +131,10 @@ asmb(void)
         if(p->as == ATEXT)
             curtext = p;
         if(p->pc != pc) {
+
             if(!debug['a'])
                 print("%P\n", curp);
+
             diag("phase error %lux sb %lux in %s", p->pc, pc, TNAME);
             pc = p->pc;
         }
@@ -141,27 +143,32 @@ asmb(void)
         if(cbc < sizeof(and))
             cflush();
         a = (andptr - and);
+
         if(debug['a']) {
             Bprint(&bso, pcstr, pc);
             for(op1 = and; op1 < andptr; op1++)
                 Bprint(&bso, "%.2ux", *op1 & 0xff);
             Bprint(&bso, "\t%P\n", curp);
         }
+
         if(dlm) {
             if(p->as == ATEXT)
                 reloca = nil;
             else if(reloca != nil)
                 diag("reloc failure: %P", curp);
         }
+
         memmove(cbp, and, a);
         cbp += a;
         pc += a;
         cbc -= a;
     }
     cflush();
+
     switch(HEADTYPE) {
-    default:
-        diag("unknown header type %ld", HEADTYPE);
+    case H_PLAN9:
+        seek(cout, HEADR+textsize, 0);
+        break;
     case H_GARBAGE:
         seek(cout, rnd(HEADR+textsize, 8192), 0);
         break;
@@ -169,14 +176,15 @@ asmb(void)
         textsize = rnd(HEADR+textsize, 4096)-HEADR;
         seek(cout, textsize+HEADR, 0);
         break;
-    case H_PLAN9:
-    case H_ELF:
+    case H_ELF: // like H_PLAN9
         seek(cout, HEADR+textsize, 0);
         break;
     case H_COM:
     case H_EXE:
         seek(cout, HEADR+rnd(textsize, INITRND), 0);
         break;
+    default:
+        diag("unknown header type %ld", HEADTYPE);
     }
 
     if(debug['v'])
@@ -200,10 +208,13 @@ asmb(void)
     symsize = 0;
     spsize = 0;
     lcsize = 0;
+
     if(!debug['s']) {
+
         if(debug['v'])
             Bprint(&bso, "%5.2f sym\n", cputime());
         Bflush(&bso);
+
         switch(HEADTYPE) {
         default:
         case H_GARBAGE:
@@ -221,18 +232,23 @@ asmb(void)
             debug['s'] = 1;
             break;
         }
+
         if(!debug['s'])
             asmsym();
+
         if(debug['v'])
             Bprint(&bso, "%5.2f sp\n", cputime());
         Bflush(&bso);
         if(debug['v'])
             Bprint(&bso, "%5.2f pc\n", cputime());
         Bflush(&bso);
+
         if(!debug['s'])
             asmlc();
+
         if(dlm)
             asmdyn();
+
         cflush();
     }
     else if(dlm){
@@ -240,10 +256,13 @@ asmb(void)
         asmdyn();
         cflush();
     }
+
     if(debug['v'])
         Bprint(&bso, "%5.2f headr\n", cputime());
     Bflush(&bso);
+
     seek(cout, 0L, 0);
+
     switch(HEADTYPE) {
     default:
     case H_GARBAGE:	/* garbage */

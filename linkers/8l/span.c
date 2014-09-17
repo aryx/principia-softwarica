@@ -39,9 +39,11 @@ span(void)
     n = 0;
 
 start:
+
     if(debug['v'])
         Bprint(&bso, "%5.2f span\n", cputime());
     Bflush(&bso);
+
     c = INITTEXT;
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT)
@@ -58,9 +60,11 @@ start:
 
 loop:
     n++;
+
     if(debug['v'])
         Bprint(&bso, "%5.2f span %d\n", cputime(), n);
     Bflush(&bso);
+
     if(n > 50) {
         print("span must be looping\n");
         errorexit();
@@ -95,9 +99,11 @@ loop:
         }
     }
     xdefine("etext", STEXT, c);
+
     if(debug['v'])
         Bprint(&bso, "etext = %lux\n", c);
     Bflush(&bso);
+
     for(p = textp; p != P; p = p->pcond)
         p->from.sym->value = p->pc;
     textsize = c - INITTEXT;
