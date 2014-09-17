@@ -24,10 +24,10 @@
 % - put all content of files in the Extra section, via 'pfff -lpize'
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
-% - TODO read Extra section, identify concepts, first TOC
-% - TODO distribute parts of the file before
-% - TODO understand main(), LP split main, improve TOC
-% - TODO understand main functions, LP split, cluster, improve TOC
+% - SEMI read Extra section, identify concepts, first TOC
+% - SEMI distribute parts of the file before
+% - understand main(), LP split main, improve TOC
+% - SEMI understand main functions, LP split, cluster, improve TOC
 % - TODO LP split the structures, use datalog for flow to field info
 % - TODO nullify, boolify, typeify,    scheckify
 % - TODO aspecify advanced features!
@@ -206,26 +206,7 @@ usage(void)
 
 % nm is actually using libmach, crachhdr, etc, generic API for object manip
 
-
-% put libmach/8obj.c
-
-<<function type2char>>=
-static char
-type2char(int t)
-{
-    switch(t){
-    case D_EXTERN:		return 'U';
-    case D_STATIC:		return 'b';
-    case D_AUTO:		return 'a';
-    case D_PARAM:		return 'p';
-    default:		return UNKNOWN;
-    }
-}
-@
-
-<<constant UNKNOWN>>=
-#define UNKNOWN	'?'
-@
+% put libmach/8obj.c?
 
 \section{Executable format}
 % the output,
@@ -263,6 +244,7 @@ enum headtype {
 % include/a.out.h
 % used by strip, libmach, but not 8l, should be 32 bytes (0x20)
 <<struct Exec>>=
+// a.out header format
 struct	Exec
 {
     long	magic;		/* magic number */
@@ -270,11 +252,15 @@ struct	Exec
     long	text;	 	/* size of text segment */
     long	data;	 	/* size of initialized data */
     long	bss;	  	/* size of uninitialized data */
+
     long	syms;	 	/* size of symbol table */
 
     // virtual address in [UTZERO+sizeof(Exec)..UTZERO+sizeof(Exec)+text]
     long	entry;	 	/* entry point */ 
+
+    // used only by 68020
     long	spsz;		/* size of pc/sp offset table */
+    // see a.out.h man page explaining how to compute the line of a PC
     long	pcsz;		/* size of pc/line number table */
 };
 @
@@ -286,9 +272,12 @@ struct	Exec
 % depends on 8.out.h all assembly instructions, registers, etc
 % depends on 8c/ for one file:
 %8c -FTVw -I/home/pad/plan9/include/386 -I/home/pad/plan9/include -. -I. ../8c/enam.c
-% actually does not depend on libmach/! because it's writing specific stuff
+
+% linker vs libmach, 
+% actually linker does not depend on libmach/! because it's writing specific stuff
 % and libmach is mostly about generic reading interface to many specifics
 % (and not just 8l)
+
 
 %###############################################################################
 
@@ -299,42 +288,58 @@ struct	Exec
 % see Aconv, Rconv, Dconv
 
 
-\section{[[Sym]]}
+\section{[[Sym]] and [[hash]]}
+
+% linker is all about resolving undefined symbols, and link to the right place
+% so symbols are pretty central!
 
 % conflict with include/a.out.h
 <<struct Sym>>=
 struct	Sym
 {
     char	*name;
+    short	version;
+
+    //enum<section> ?
     short	type;
 
-    short	version;
+    long	sig;
+    long	value;
+
+    // [[Sym]] other fields
     short	become;
     short	frame;
     uchar	subtype;
     ushort	file;
-    long	value;
-    long	sig;
 
     // Extra
+
+    // hash<Sym.name * Sym.version, ref<Sym>> of hash
     Sym*	link;
 };
 @
 % Sconv?
 
 <<constant S>>=
-#define	S		((Sym*)0)
+#define	S		((Sym*)nil)
 @
 
 
 <<constant NHASH 8l.h>>=
-    NHASH		= 10007,
+NHASH		= 10007,
 @
 
 <<global hash (linkers/8l/globals.c)>>=
+// hash<Sym.name * Sym.version, ref<Sym>> (next = Sym.link)
 Sym*	hash[NHASH];
 @
 
+<<global nsymbol>>=
+long	nsymbol;
+@
+
+% v is for version. we could have a typedef int version;? and VERSION0 = 0
+% so clearer to read?
 <<function lookup>>=
 Sym*
 lookup(char *symb, int v)
@@ -344,24 +349,29 @@ lookup(char *symb, int v)
     long h;
     int l, c;
 
+    // h = hash(symb, v)
     h = v;
     for(p=symb; c = *p; p++)
         h = h+h+h + c;
     l = (p - symb) + 1;
     h &= 0xffffff;
     h %= NHASH;
+    
+    // s = lookup(h, hash)
     for(s = hash[h]; s != S; s = s->link)
         if(s->version == v)
-        if(memcmp(s->name, symb, l) == 0)
-            return s;
+            if(memcmp(s->name, symb, l) == 0)
+                return s;
 
+
+    // s =~ malloc(sizeof(Sym)), TODO factorize this code
     while(nhunk < sizeof(Sym))
         gethunk();
     s = (Sym*)hunk;
     nhunk -= sizeof(Sym);
     hunk += sizeof(Sym);
 
-    s->name = malloc(l + 1);
+    s->name = malloc(l + 1); // +1 again?
     memmove(s->name, symb, l);
 
     s->link = hash[h];
@@ -378,6 +388,7 @@ lookup(char *symb, int v)
 
 \section{[[Adr]]}
 
+%????
 <<struct Adr>>=
 struct	Adr
 {
@@ -394,8 +405,11 @@ struct	Adr
         Sym*	u1sym;
     } u1;
 
+    //enum<dxxx>? D_NONE by default
     short	type;
+    //enum<dxxx>? D_NONE by default
     uchar	index;
+
     char	scale;
 };
 @
@@ -429,24 +443,28 @@ struct	Adr
 % good name? should it be Section?
 % and then Prog is just a Section list?
 
+% ???
 <<struct Prog>>=
 struct	Prog
 {
+    //enum<section>>? but AGOK in zprg
+    short	as;
+
+    // 2 by default in zprg, why?
+    uchar	back;
+
     Adr	from;
     Adr	to;
 
-    //enum<section>>
-    short	as;
-
-    Prog	*forwd;
-    Prog*	pcond;	/* work on this */
+    Prog*	forwd;
     long	pc;
     long	line;
     char	width;		/* fake for DATA */
     char	ft;		/* oclass cache */
     char	tt;
     uchar	mark;	/* work on these */
-    uchar	back;
+
+    Prog*	pcond;	/* work on this */
 
     // Extra
     Prog*	link;
@@ -474,7 +492,7 @@ enum section
 @
 
 <<constant P>>=
-#define	P		((Prog*)0)
+#define	P		((Prog*)nil)
 @
 
 <<global curtext>>=
@@ -498,14 +516,17 @@ Prog	undefp;
 
 \section{[[Auto]]}
 
+% ???
 <<struct Auto>>=
 struct	Auto
 {
     Sym*	asym;
 
-    Auto*	link;
     long	aoffset;
     short	type;
+
+    // Extra
+    Auto*	link;
 };
 @
 
@@ -536,9 +557,9 @@ char	thechar		= '8';
 char	*thestring 	= "386";
 @
 
-% -o, 8.out by default
+% -o, 
 <<global outfile>>=
-char*	outfile;
+char*	outfile = "8.out";
 @
 
 <<[[main()]] command line processing>>=
@@ -547,16 +568,12 @@ char*	outfile;
         break;
 @
 
-% create(outfile)
+% cout =~ create(outfile)
 <<global cout>>=
-fdt	cout;
+fdt	cout = -1;
 @
 
 
-%bso? for debug?
-<<global bso>>=
-Biobuf	bso;
-@
 
 
 
@@ -567,16 +584,7 @@ main(int argc, char *argv[])
 {
     <<[[main()]] locals>>
 
-    Binit(&bso, 1, OWRITE);
-    cout = -1;
-
-    listinit(); // fmtinstall()
-    memset(debug, 0, sizeof(debug));
-
-    nerrors = 0;
-    outfile = "8.out";
-
-    <<[[main()]] initialize INITXXX>>
+    <<[[main()]] debug initialization>>
 
     ARGBEGIN {
     <<[[main()]] command line processing>>
@@ -586,7 +594,7 @@ main(int argc, char *argv[])
     if(*argv == nil)
         usage();
 
-    <<[[main()]] addlibpath()>>
+    <<[[main()]] addlibpath("/386/lib")>>
 
     <<[[main()]] adjust HEADTYPE if debug flags>>
     switch(HEADTYPE) {
@@ -598,9 +606,8 @@ main(int argc, char *argv[])
     }
     <<[[main()]] last INITXXX adjustments>>
 
-    <<[[main()]] debugging output HEADER= >>
-
-    Bflush(&bso);
+    DBG("HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
+            HEADTYPE, INITTEXT, INITDAT, INITRND);
 
     <<[[main()]] sanity check optab>>
 
@@ -622,8 +629,6 @@ main(int argc, char *argv[])
     <<[[main()]] cout is ready, LET'S GO>>
 
     <<[[main()]] profile report>>
-
-    Bflush(&bso);
     errorexit();
 }
 @
@@ -633,42 +638,32 @@ main(int argc, char *argv[])
 
 % -H executable format (header type)
 <<global HEADTYPE>>=
-long	HEADTYPE;
+long	HEADTYPE = -1;
 @
 
 % -T text segment start virtual address (important! e.g. for kernel 0x7c00)
 <<global INITTEXT>>=
-long	INITTEXT;
+long	INITTEXT = -1;
 @
 
 % -D data segment start
 <<global INITDAT>>=
-long	INITDAT;
+long	INITDAT = -1;
 @
 
 % -E default _main or _mainp
 <<global INITENTRY>>=
-char*	INITENTRY;		/* entry point */
+char*	INITENTRY = nil;		/* entry point */
 @
 
 % start text physical address (elf only)
 <<global INITTEXTP>>=
-long	INITTEXTP;
+long	INITTEXTP = -1;
 @
 
 % -R text segment rounder at r multiple
 <<global INITRND>>=
-long	INITRND;
-@
-
-
-<<[[main()]] initialize INITXXX>>=
-    HEADTYPE = -1;
-    INITTEXT = -1;
-    INITTEXTP = -1;
-    INITDAT = -1;
-    INITRND = -1;
-    INITENTRY = nil;
+long	INITRND = -1;
 @
 
 
@@ -708,6 +703,7 @@ long	INITRND;
 
 
 
+% size of Header, 32 for a.out (0x20)
 <<global HEADR>>=
 long	HEADR;
 @
@@ -770,21 +766,6 @@ cbc = sizeof(buf.cbuf);
 @
 
 
-% ??
-<<global zprg>>=
-Prog	zprg;
-@
-
-<<[[main()]] set zprg>>=
-zprg.link = P;
-zprg.pcond = P;
-zprg.back = 2;
-zprg.as = AGOK;
-zprg.from.type = D_NONE;
-zprg.from.index = D_NONE;
-zprg.from.scale = 1;
-zprg.to = zprg.from;
-@
 
 \chapter{Main functions}
 
@@ -805,6 +786,7 @@ prg(void)
 {
     Prog *p;
 
+    // factorize with similar code in lookup but for Sym
     while(nhunk < sizeof(Prog))
         gethunk();
     p = (Prog*)hunk;
@@ -815,6 +797,23 @@ prg(void)
     return p;
 }
 @
+
+% empty prg, to initialize new Prog
+<<global zprg>>=
+Prog	zprg;
+@
+
+<<[[main()]] set zprg>>=
+zprg.link = P;
+zprg.pcond = P;
+zprg.back = 2;
+zprg.as = AGOK;
+zprg.from.type = D_NONE;
+zprg.from.index = D_NONE;
+zprg.from.scale = 1;
+zprg.to = zprg.from;
+@
+
 
 <<function copyp>>=
 Prog*
@@ -860,7 +859,9 @@ dostkoff();
 span();
 doinit();
 
+// write to cout, finally
 asmb();
+
 undef();
 @
 
@@ -2058,7 +2059,7 @@ undef(void)
     char *root;
 @
 
-<<[[main()]] addlibpath()>>=
+<<[[main()]] addlibpath("/386/lib")>>=
 <<[[main()]] change root if ccroot>>
 
 // usually /386/lib/ as root = ""
@@ -3491,12 +3492,25 @@ enum {
 
 \chapter{Debugging}
 
+\section{[[debug]]}
+
 % -A, see diag()
 
 % hmm actually it's used more than for debugging but for generic
 % options, e.g. for -l, -p, etc in addition to the main use which is -v
 <<global debug>>=
 bool	debug[128];
+@
+
+%bso? for debug?
+<<global bso>>=
+Biobuf	bso;
+@
+
+<<[[main()]] debug initialization>>=
+Binit(&bso, 1, OWRITE);
+listinit(); // fmtinstall()
+memset(debug, 0, sizeof(debug));
 @
 
 <<[[main()]] command line processing>>=
@@ -3507,6 +3521,7 @@ bool	debug[128];
         break;
 @
 
+\section{Fmt}
 
 % why called listinit??
 <<function listinit>>=
@@ -3812,10 +3827,29 @@ Sconv(Fmt *fp)
 
 \section{[[8l -v]]}
 
-<<[[main()]] debugging output HEADER= >>=
-if(debug['v'])
-    Bprint(&bso, "HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
-        HEADTYPE, INITTEXT, INITDAT, INITRND);
+%used to have lots of code like:
+%if(debug['v']) {
+%    Bprint(&bso, "HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
+%        HEADTYPE, INITTEXT, INITDAT, INITRND);
+%    Bflush(&bso);
+%}
+% (The Bflush was outside the if, but makes more sense like this I think)
+%but better to have a DBG macro for this
+
+<<macro DBG>>=
+#define DBG if(debug['v']) mylog
+@
+
+<<function log>>=
+void mylog(char *fmt, ...) {
+
+    va_list arg;
+
+    va_start(arg, fmt);
+    Bvprint(&bso, fmt, arg);
+    va_end(arg);
+    Bflush(&bso);
+}
 @
 
 \section{[[8l -9 -B -9]]}
@@ -3849,13 +3883,14 @@ if(debug['v']) {
     Bprint(&bso, "%ld memory used\n", thunk);
     Bprint(&bso, "%d sizeof adr\n", sizeof(Adr));
     Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
+    Bflush(&bso);
 }
 @
 
 \chapter{Error Managment}
 
 <<global nerrors>>=
-int	nerrors;
+int	nerrors = 0;
 @
 
 <<function errorexit>>=
@@ -3910,49 +3945,12 @@ long	nhunk;
 char*	hunk;
 @
 
-<<function malloc>>=
-/*
- * fake malloc
- */
-void*
-malloc(ulong n)
-{
-    void *p;
-
-    while(n & 7)
-        n++;
-    while(nhunk < n)
-        gethunk();
-    p = hunk;
-    nhunk -= n;
-    hunk += n;
-    return p;
-}
-@
-
-<<function free>>=
-void
-free(void *p)
-{
-    USED(p);
-}
-@
-
-% not sure why but if redefine malloc and free then have to
-% redefine this func too, otherwise get a link error
-<<function setmalloctag>>=
-//@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
-void setmalloctag(void *v, ulong pc)
-{
-    USED(v, pc);
-}
-@
-
-
 <<constant NHUNK>>=
 NHUNK		= 100000,
 @
 
+% not sure why don't use libc malloc and do low-level sbrk ...
+% to optimize things? as they do no free?
 <<function gethunk>>=
 void
 gethunk(void)
@@ -3976,6 +3974,51 @@ gethunk(void)
     thunk += nh;
 }
 @
+
+
+
+<<function malloc>>=
+/*
+ * fake malloc
+ */
+void*
+malloc(ulong n)
+{
+    void *p;
+
+    // upper_round(n, 8)
+    while(n & 7)
+        n++;
+
+    while(nhunk < n)
+        gethunk();
+    p = hunk;
+    nhunk -= n;
+    hunk += n;
+    return p;
+}
+@
+
+% no free ... 
+<<function free>>=
+void
+free(void *p)
+{
+    USED(p);
+}
+@
+
+% not sure why but if redefine malloc and free then have to
+% redefine this func too, otherwise get a link error
+<<function setmalloctag>>=
+//@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
+void setmalloctag(void *v, ulong pc)
+{
+    USED(v, pc);
+}
+@
+
+
 
 
 
@@ -4013,6 +4056,53 @@ fileexists(char *s)
     return stat(s, dirbuf, sizeof(dirbuf)) >= 0;
 }
 @
+
+\section{String processing}
+
+% could be put in libc, with the other atoxxx
+% atoxx? why a?
+<<function atolwhex>>=
+long
+atolwhex(char *s)
+{
+    long n;
+    int f;
+
+    n = 0;
+    f = 0;
+    while(*s == ' ' || *s == '\t')
+        s++;
+    if(*s == '-' || *s == '+') {
+        if(*s++ == '-')
+            f = 1;
+        while(*s == ' ' || *s == '\t')
+            s++;
+    }
+    if(s[0]=='0' && s[1]){
+        if(s[1]=='x' || s[1]=='X'){
+            s += 2;
+            for(;;){
+                if(*s >= '0' && *s <= '9')
+                    n = n*16 + *s++ - '0';
+                else if(*s >= 'a' && *s <= 'f')
+                    n = n*16 + *s++ - 'a' + 10;
+                else if(*s >= 'A' && *s <= 'F')
+                    n = n*16 + *s++ - 'A' + 10;
+                else
+                    break;
+            }
+        } else
+            while(*s >= '0' && *s <= '7')
+                n = n*8 + *s++ - '0';
+    } else
+        while(*s >= '0' && *s <= '9')
+            n = n*10 + *s++ - '0';
+    if(f)
+        n = -n;
+    return n;
+}
+@
+
 
 
 \chapter{Extra Code}

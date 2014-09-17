@@ -5,13 +5,17 @@
 
 #include	<common.out.h>
 #include	<386/8.out.h>
-#include	"../8l/elf.h"
+#include	"elf.h"
+
+/*s: macro DBG */
+#define DBG if(debug['v']) mylog
+/*e: macro DBG */
 
 /*s: constant P */
-#define	P		((Prog*)0)
+#define	P		((Prog*)nil)
 /*e: constant P */
 /*s: constant S */
-#define	S		((Sym*)0)
+#define	S		((Sym*)nil)
 /*e: constant S */
 /*s: constant TNAME */
 #define	TNAME		(curtext?curtext->from.sym->name:noname)
@@ -50,8 +54,11 @@ struct	Adr
         Sym*	u1sym;
     } u1;
 
+    //enum<dxxx>? D_NONE by default
     short	type;
+    //enum<dxxx>? D_NONE by default
     uchar	index;
+
     char	scale;
 };
 /*e: struct Adr */
@@ -79,21 +86,24 @@ struct	Adr
 /*s: struct Prog */
 struct	Prog
 {
+    //enum<section>>? but AGOK in zprg
+    short	as;
+
+    // 2 by default in zprg, why?
+    uchar	back;
+
     Adr	from;
     Adr	to;
 
-    //enum<section>>
-    short	as;
-
-    Prog	*forwd;
-    Prog*	pcond;	/* work on this */
+    Prog*	forwd;
     long	pc;
     long	line;
     char	width;		/* fake for DATA */
     char	ft;		/* oclass cache */
     char	tt;
     uchar	mark;	/* work on these */
-    uchar	back;
+
+    Prog*	pcond;	/* work on this */
 
     // Extra
     Prog*	link;
@@ -104,26 +114,34 @@ struct	Auto
 {
     Sym*	asym;
 
-    Auto*	link;
     long	aoffset;
     short	type;
+
+    // Extra
+    Auto*	link;
 };
 /*e: struct Auto */
 /*s: struct Sym */
 struct	Sym
 {
     char	*name;
+    short	version;
+
+    //enum<section> ?
     short	type;
 
-    short	version;
+    long	sig;
+    long	value;
+
+    // [[Sym]] other fields
     short	become;
     short	frame;
     uchar	subtype;
     ushort	file;
-    long	value;
-    long	sig;
 
     // Extra
+
+    // hash<Sym.name * Sym.version, ref<Sym>> of hash
     Sym*	link;
 };
 /*e: struct Sym */
@@ -248,7 +266,7 @@ enum rxxx {
 /*s: enum misc1 */
 enum misc1 {
     /*s: constant NHASH 8l.h */
-        NHASH		= 10007,
+    NHASH		= 10007,
     /*e: constant NHASH 8l.h */
     /*s: constant NHUNK */
     NHUNK		= 100000,
@@ -318,6 +336,7 @@ extern	long	INITRND;
 extern	long	INITTEXT;
 extern	long	INITTEXTP;
 extern	char*	INITENTRY;		/* entry point */
+
 extern	Biobuf	bso;
 extern	long	bsssize;
 extern	int	cbc;
@@ -429,6 +448,7 @@ void	wput(long);
 void	wputl(long);
 void	xdefine(char*, int, long);
 
+void mylog(char*, ...);
 
 
 #pragma	varargck	type	"D"	Adr*

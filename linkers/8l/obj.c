@@ -147,23 +147,11 @@ main(int argc, char *argv[])
         char *root;
     /*e: [[main()]] locals */
 
+    /*s: [[main()]] debug initialization */
     Binit(&bso, 1, OWRITE);
-    cout = -1;
-
     listinit(); // fmtinstall()
     memset(debug, 0, sizeof(debug));
-
-    nerrors = 0;
-    outfile = "8.out";
-
-    /*s: [[main()]] initialize INITXXX */
-        HEADTYPE = -1;
-        INITTEXT = -1;
-        INITTEXTP = -1;
-        INITDAT = -1;
-        INITRND = -1;
-        INITENTRY = nil;
-    /*e: [[main()]] initialize INITXXX */
+    /*e: [[main()]] debug initialization */
 
     ARGBEGIN {
     /*s: [[main()]] command line processing */
@@ -236,7 +224,7 @@ main(int argc, char *argv[])
     if(*argv == nil)
         usage();
 
-    /*s: [[main()]] addlibpath() */
+    /*s: [[main()]] addlibpath("/386/lib") */
     /*s: [[main()]] change root if ccroot */
     root = getenv("ccroot");
 
@@ -252,7 +240,7 @@ main(int argc, char *argv[])
     // usually /386/lib/ as root = ""
     snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
-    /*e: [[main()]] addlibpath() */
+    /*e: [[main()]] addlibpath("/386/lib") */
 
     /*s: [[main()]] adjust HEADTYPE if debug flags */
     if(!debug['9'] && !debug['U'] && !debug['B'])
@@ -342,13 +330,8 @@ main(int argc, char *argv[])
                 INITDAT, INITRND);
     /*e: [[main()]] last INITXXX adjustments */
 
-    /*s: [[main()]] debugging output HEADER=  */
-    if(debug['v'])
-        Bprint(&bso, "HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
+    DBG("HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
-    /*e: [[main()]] debugging output HEADER=  */
-
-    Bflush(&bso);
 
     /*s: [[main()]] sanity check optab */
     for(i=1; optab[i].as; i++)
@@ -508,7 +491,9 @@ main(int argc, char *argv[])
     span();
     doinit();
 
+    // write to cout, finally
     asmb();
+
     undef();
     /*e: [[main()]] cout is ready, LET'S GO */
 
@@ -519,10 +504,9 @@ main(int argc, char *argv[])
         Bprint(&bso, "%ld memory used\n", thunk);
         Bprint(&bso, "%d sizeof adr\n", sizeof(Adr));
         Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
+        Bflush(&bso);
     }
     /*e: [[main()]] profile report */
-
-    Bflush(&bso);
     errorexit();
 }
 /*e: function main (linkers/8l/obj.c) */

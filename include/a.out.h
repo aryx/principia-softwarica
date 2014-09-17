@@ -1,5 +1,6 @@
 /*s: include/a.out.h */
 /*s: struct Exec */
+// a.out header format
 struct	Exec
 {
     long	magic;		/* magic number */
@@ -7,11 +8,15 @@ struct	Exec
     long	text;	 	/* size of text segment */
     long	data;	 	/* size of initialized data */
     long	bss;	  	/* size of uninitialized data */
+
     long	syms;	 	/* size of symbol table */
 
     // virtual address in [UTZERO+sizeof(Exec)..UTZERO+sizeof(Exec)+text]
     long	entry;	 	/* entry point */ 
+
+    // used only by 68020
     long	spsz;		/* size of pc/sp offset table */
+    // see a.out.h man page explaining how to compute the line of a PC
     long	pcsz;		/* size of pc/line number table */
 };
 /*e: struct Exec */

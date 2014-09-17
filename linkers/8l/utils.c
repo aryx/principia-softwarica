@@ -1,6 +1,18 @@
 /*s: linkers/8l/utils.c */
 #include "l.h"
 
+/*s: function log */
+void mylog(char *fmt, ...) {
+
+    va_list arg;
+
+    va_start(arg, fmt);
+    Bvprint(&bso, fmt, arg);
+    va_end(arg);
+    Bflush(&bso);
+}
+/*e: function log */
+
 /*s: function errorexit */
 void
 errorexit(void)
@@ -48,24 +60,29 @@ lookup(char *symb, int v)
     long h;
     int l, c;
 
+    // h = hash(symb, v)
     h = v;
     for(p=symb; c = *p; p++)
         h = h+h+h + c;
     l = (p - symb) + 1;
     h &= 0xffffff;
     h %= NHASH;
+    
+    // s = lookup(h, hash)
     for(s = hash[h]; s != S; s = s->link)
         if(s->version == v)
-        if(memcmp(s->name, symb, l) == 0)
-            return s;
+            if(memcmp(s->name, symb, l) == 0)
+                return s;
 
+
+    // s =~ malloc(sizeof(Sym)), TODO factorize this code
     while(nhunk < sizeof(Sym))
         gethunk();
     s = (Sym*)hunk;
     nhunk -= sizeof(Sym);
     hunk += sizeof(Sym);
 
-    s->name = malloc(l + 1);
+    s->name = malloc(l + 1); // +1 again?
     memmove(s->name, symb, l);
 
     s->link = hash[h];
@@ -85,6 +102,7 @@ prg(void)
 {
     Prog *p;
 
+    // factorize with similar code in lookup but for Sym
     while(nhunk < sizeof(Prog))
         gethunk();
     p = (Prog*)hunk;

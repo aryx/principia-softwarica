@@ -84,7 +84,7 @@ enum as
 
     AGLOBL, //
 
-    AGOK,
+    AGOK, //?
 
     AHISTORY, // for header
 

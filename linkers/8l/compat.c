@@ -10,8 +10,10 @@ malloc(ulong n)
 {
     void *p;
 
+    // upper_round(n, 8)
     while(n & 7)
         n++;
+
     while(nhunk < n)
         gethunk();
     p = hunk;

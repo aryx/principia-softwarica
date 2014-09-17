@@ -9,22 +9,22 @@ union Buf buf;
 long	HEADR;
 /*e: global HEADR */
 /*s: global HEADTYPE */
-long	HEADTYPE;
+long	HEADTYPE = -1;
 /*e: global HEADTYPE */
 /*s: global INITDAT */
-long	INITDAT;
+long	INITDAT = -1;
 /*e: global INITDAT */
 /*s: global INITRND */
-long	INITRND;
+long	INITRND = -1;
 /*e: global INITRND */
 /*s: global INITTEXT */
-long	INITTEXT;
+long	INITTEXT = -1;
 /*e: global INITTEXT */
 /*s: global INITTEXTP */
-long	INITTEXTP;
+long	INITTEXTP = -1;
 /*e: global INITTEXTP */
 /*s: global INITENTRY */
-char*	INITENTRY;		/* entry point */
+char*	INITENTRY = nil;		/* entry point */
 /*e: global INITENTRY */
 /*s: global bso */
 Biobuf	bso;
@@ -42,7 +42,7 @@ char*	cbp;
 char*	pcstr;
 /*e: global pcstr */
 /*s: global cout */
-fdt	cout;
+fdt	cout = -1;
 /*e: global cout */
 /*s: global curp */
 Prog*	curp;
@@ -72,6 +72,7 @@ char	fnuxi8[8];
 char	fnuxi4[4];
 /*e: global fnuxi4 */
 /*s: global hash (linkers/8l/globals.c) */
+// hash<Sym.name * Sym.version, ref<Sym>> (next = Sym.link)
 Sym*	hash[NHASH];
 /*e: global hash (linkers/8l/globals.c) */
 /*s: global hunk */
@@ -105,7 +106,7 @@ Prog*	lastp;
 long	lcsize;
 /*e: global lcsize */
 /*s: global nerrors */
-int	nerrors;
+int	nerrors = 0;
 /*e: global nerrors */
 /*s: global nhunk */
 long	nhunk;
@@ -114,7 +115,7 @@ long	nhunk;
 long	nsymbol;
 /*e: global nsymbol */
 /*s: global outfile */
-char*	outfile;
+char*	outfile = "8.out";
 /*e: global outfile */
 /*s: global pc */
 long	pc;
