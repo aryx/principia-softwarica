@@ -120,9 +120,7 @@ asmb(void)
     int a;
     uchar *op1;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f asmb\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f asmb\n", cputime());
 
     seek(cout, HEADR, 0);
     pc = INITTEXT;
@@ -187,9 +185,7 @@ asmb(void)
         diag("unknown header type %ld", HEADTYPE);
     }
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f datblk\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f datblk\n", cputime());
 
     if(dlm){
         char buf[8];
@@ -211,9 +207,7 @@ asmb(void)
 
     if(!debug['s']) {
 
-        if(debug['v'])
-            Bprint(&bso, "%5.2f sym\n", cputime());
-        Bflush(&bso);
+        DBG("%5.2f sym\n", cputime());
 
         switch(HEADTYPE) {
         default:
@@ -236,12 +230,8 @@ asmb(void)
         if(!debug['s'])
             asmsym();
 
-        if(debug['v'])
-            Bprint(&bso, "%5.2f sp\n", cputime());
-        Bflush(&bso);
-        if(debug['v'])
-            Bprint(&bso, "%5.2f pc\n", cputime());
-        Bflush(&bso);
+        DBG("%5.2f sp\n", cputime());
+        DBG("%5.2f pc\n", cputime());
 
         if(!debug['s'])
             asmlc();
@@ -257,10 +247,7 @@ asmb(void)
         cflush();
     }
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f headr\n", cputime());
-    Bflush(&bso);
-
+    DBG("%5.2f headr\n", cputime());
 
     seek(cout, 0L, 0);
 

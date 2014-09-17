@@ -39,7 +39,7 @@ int	libraryp;
 bool	xrefresolv;
 /*e: global xrefresolv */
 /*s: global version */
-int	version;
+int	version = 0;
 /*e: global version */
 /*s: global literal */
 char	literal[32];
@@ -303,8 +303,7 @@ main(int argc, char *argv[])
         if(INITRND == -1)
             INITRND = 4;
         HEADR += (INITTEXT & 0xFFFF);
-        if(debug['v'])
-            Bprint(&bso, "HEADR = 0x%ld\n", HEADR);
+        DBG("HEADR = 0x%ld\n", HEADR);
         break;
     case H_ELF:	/* elf executable */
         HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
@@ -402,7 +401,6 @@ main(int argc, char *argv[])
     zprg.from.scale = 1;
     zprg.to = zprg.from;
     /*e: [[main()]] set zprg */
-
     /*s: [[main()]] initialize globals */
     pcstr = "%.6lux ";
 
@@ -414,8 +412,6 @@ main(int argc, char *argv[])
 
     pc = 0;
     dtype = 4;
-
-    version = 0;
 
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
@@ -437,8 +433,10 @@ main(int argc, char *argv[])
     /*s: [[main()]] set INITENTRY */
     if(INITENTRY == nil) {
         INITENTRY = "_main";
+        /*s: [[main()]] adjust INITENTRY if profiling */
         if(debug['p'])
             INITENTRY = "_mainp";
+        /*e: [[main()]] adjust INITENTRY if profiling */
         if(!debug['l'])
             lookup(INITENTRY, 0)->type = SXREF;
     } else if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
@@ -564,8 +562,7 @@ loadlib(void)
 loop:
     xrefresolv = false;
     for(i=0; i<libraryp; i++) {
-        if(debug['v'])
-            Bprint(&bso, "%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
+        DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
     if(xrefresolv)
@@ -582,9 +579,9 @@ objfile(char *file)
 {
     fdt f;
     long l;
-
     char magbuf[SARMAG];
 
+    /*s: [[objfile()]] locals */
     long off, esym, cnt;
     bool work;
     Sym *s;
@@ -592,11 +589,11 @@ objfile(char *file)
     char name[LIBNAMELEN];
     struct ar_hdr arhdr;
     char *e, *start, *stop;
+    /*e: [[objfile()]] locals */
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f ldobj: %s\n", cputime(), file);
-    Bflush(&bso);
+    DBG("%5.2f ldobj: %s\n", cputime(), file);
 
+    /*s: [[objfile()]] adjust file if -lxxx filename */
     if(file[0] == '-' && file[1] == 'l') {
         snprint(pname, sizeof(pname), "lib%s.a", file+2);
         e = findlib(pname);
@@ -607,6 +604,7 @@ objfile(char *file)
         snprint(name, sizeof(name), "%s/%s", e, pname);
         file = name;
     }
+    /*e: [[objfile()]] adjust file if -lxxx filename */
 
     f = open(file, 0);
     if(f < 0) {
@@ -616,89 +614,90 @@ objfile(char *file)
 
     l = read(f, magbuf, SARMAG);
 
+    // not a library
     if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
-        l = seek(f, 0L, 2);
+        l = seek(f, 0L, SEEK__END);
         seek(f, 0L, 0);
+
+        // the important call!
         ldobj(f, l, file);
+
         close(f);
         return;
     }
 
-
-    l = read(f, &arhdr, SAR_HDR);
-    if(l != SAR_HDR) {
-        diag("%s: short read on archive file symbol header", file);
-        goto out;
-    }
-    if(strncmp(arhdr.name, symname, strlen(symname))) {
-        diag("%s: first entry not symbol header", file);
-        goto out;
-    }
-
-    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
-    off = SARMAG + SAR_HDR;
-
-    /*
-     * just bang the whole symbol file into memory
-     */
-    seek(f, off, 0);
-    cnt = esym - off;
-    start = malloc(cnt + 10);
-    cnt = read(f, start, cnt);
-    if(cnt <= 0){
-        close(f);
-        return;
-    }
-    stop = &start[cnt];
-    memset(stop, 0, 10);
-
-    work = true;
-
-    while(work) {
-
-        if(debug['v'])
-            Bprint(&bso, "%5.2f library pass: %s\n", cputime(), file);
-        Bflush(&bso);
-
-        work = false;
-        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
-            s = lookup(e+5, 0);
-            if(s->type != SXREF)
-                continue;
-            sprint(pname, "%s(%s)", file, s->name);
-
-            if(debug['v'])
-                Bprint(&bso, "%5.2f library: %s\n", cputime(), pname);
-            Bflush(&bso);
-
-            l = e[1] & 0xff;
-            l |= (e[2] & 0xff) << 8;
-            l |= (e[3] & 0xff) << 16;
-            l |= (e[4] & 0xff) << 24;
-            seek(f, l, 0);
-            /* need readn to read the dumps (at least) */
-            l = readn(f, &arhdr, SAR_HDR);
-            if(l != SAR_HDR)
-                goto bad;
-            if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
-                goto bad;
-            l = atolwhex(arhdr.size);
-            ldobj(f, l, pname);
-            if(s->type == SXREF) {
-                diag("%s: failed to load: %s", file, s->name);
-                errorexit();
-            }
-            work = true;
-            xrefresolv = true;
+    /*s: [[objfile()]] when file is a library */
+        l = read(f, &arhdr, SAR_HDR);
+        if(l != SAR_HDR) {
+            diag("%s: short read on archive file symbol header", file);
+            goto out;
         }
-    }
-    return;
+        if(strncmp(arhdr.name, symname, strlen(symname))) {
+            diag("%s: first entry not symbol header", file);
+            goto out;
+        }
 
-bad:
-    diag("%s: bad or out of date archive", file);
-out:
-    close(f);
+        esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
+        off = SARMAG + SAR_HDR;
+
+        /*
+         * just bang the whole symbol file into memory
+         */
+        seek(f, off, 0);
+        cnt = esym - off;
+        start = malloc(cnt + 10);
+        cnt = read(f, start, cnt);
+        if(cnt <= 0){
+            close(f);
+            return;
+        }
+        stop = &start[cnt];
+        memset(stop, 0, 10);
+
+        work = true;
+
+        while(work) {
+
+            DBG("%5.2f library pass: %s\n", cputime(), file);
+
+            work = false;
+            for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
+                s = lookup(e+5, 0);
+                if(s->type != SXREF)
+                    continue;
+                sprint(pname, "%s(%s)", file, s->name);
+
+                DBG("%5.2f library: %s\n", cputime(), pname);
+
+                l = e[1] & 0xff;
+                l |= (e[2] & 0xff) << 8;
+                l |= (e[3] & 0xff) << 16;
+                l |= (e[4] & 0xff) << 24;
+                seek(f, l, 0);
+                /* need readn to read the dumps (at least) */
+                l = readn(f, &arhdr, SAR_HDR);
+                if(l != SAR_HDR)
+                    goto bad;
+                if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
+                    goto bad;
+                l = atolwhex(arhdr.size);
+                ldobj(f, l, pname);
+                if(s->type == SXREF) {
+                    diag("%s: failed to load: %s", file, s->name);
+                    errorexit();
+                }
+                work = true;
+                xrefresolv = true;
+            }
+        }
+        return;
+
+    bad:
+        diag("%s: bad or out of date archive", file);
+    out:
+        close(f);
+    /*e: [[objfile()]] when file is a library */
 }
 /*e: function objfile */
 
@@ -975,17 +974,25 @@ readsome(int f, uchar *buf, uchar *good, uchar *stop, int max)
 
 /*s: function ldobj */
 void
-ldobj(int f, long c, char *pn)
+ldobj(fdt f, long c, char *pn)
 {
+    /*s: [[ldobj()]] locals */
+    // enum<as>, the opcode
+    int o;
+    Prog *p;
+    /*x: [[ldobj()]] locals */
     long ipc;
-    Prog *p, *t;
+    Prog *t;
     uchar *bloc, *bsize, *stop;
-    int v, o, r, skip;
+    int v, r, skip;
     Sym *h[NSYM], *s, *di;
     ulong sig;
+    /*x: [[ldobj()]] locals */
     static int files;
     static char **filen;
+
     char **nfilen;
+    /*e: [[ldobj()]] locals */
 
     if((files&15) == 0){
         nfilen = malloc((files+16)*sizeof(char*));
@@ -997,6 +1004,7 @@ ldobj(int f, long c, char *pn)
 
     bsize = buf.xbuf;
     bloc = buf.xbuf;
+
     di = S;
 
 newloop:
@@ -1054,6 +1062,7 @@ loop:
         if(v == D_STATIC)
             r = version;
         s = lookup((char*)bloc, r);
+
         c -= &stop[1] - bloc;
         bloc = stop + 1;
 
@@ -1068,6 +1077,7 @@ loop:
 
         if(debug['W'])
             print("	ANAME	%s\n", s->name);
+
         h[o] = s;
         if((v == D_EXTERN || v == D_STATIC) && s->type == 0)
             s->type = SXREF;
@@ -1086,6 +1096,7 @@ loop:
         goto loop;
     }
 
+    //TODO: factorize
     while(nhunk < sizeof(Prog))
         gethunk();
     p = (Prog*)hunk;
@@ -1352,9 +1363,7 @@ doprof1(void)
     long n;
     Prog *p, *q;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f profile 1\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f profile 1\n", cputime());
 
     s = lookup("__mcount", 0);
     n = 1;
@@ -1413,9 +1422,7 @@ doprof2(void)
     Sym *s2, *s4;
     Prog *p, *q, *q2, *ps2, *ps4;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f profile 2\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f profile 2\n", cputime());
 
     if(debug['e']){
         s2 = lookup("_tracein", 0);

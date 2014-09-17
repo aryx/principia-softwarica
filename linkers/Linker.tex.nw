@@ -614,7 +614,6 @@ main(int argc, char *argv[])
     <<[[main()]] set ycover>>
     <<[[main()]] set reg>>
     <<[[main()]] set zprg>>
-
     <<[[main()]] initialize globals>>
 
     nuxiinit();
@@ -759,8 +758,6 @@ edatap = P;
 pc = 0;
 dtype = 4;
 
-version = 0;
-
 cbp = buf.cbuf;
 cbc = sizeof(buf.cbuf);
 @
@@ -771,10 +768,12 @@ cbc = sizeof(buf.cbuf);
 
 % good name? first_section better?
 <<global firstp>>=
+// ref_own?<Prog>
 Prog*	firstp;
 @
 
 <<global lastp>>=
+// ref<Prog>
 Prog*	lastp;
 @
 
@@ -786,7 +785,8 @@ prg(void)
 {
     Prog *p;
 
-    // factorize with similar code in lookup but for Sym
+    //todo: factorize with similar code in lookup but for Sym, 
+    // =~ malloc(sizeof(Procg))
     while(nhunk < sizeof(Prog))
         gethunk();
     p = (Prog*)hunk;
@@ -872,20 +872,17 @@ undef();
 <<[[main()]] set INITENTRY>>=
 if(INITENTRY == nil) {
     INITENTRY = "_main";
-    if(debug['p'])
-        INITENTRY = "_mainp";
+    <<[[main()]] adjust INITENTRY if profiling>>
     if(!debug['l'])
         lookup(INITENTRY, 0)->type = SXREF;
 } else if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
     lookup(INITENTRY, 0)->type = SXREF;
 @
-
+% 0_9 initentry means something special?
+% SXREF means?
 
 \section{Loading the objects, [[objfile()]]}
 
-<<global xrefresolv>>=
-bool	xrefresolv;
-@
 
 % essentially modify which globals?
 %  - will modify libraryp probably, the cool pragma "autolib"
@@ -898,31 +895,13 @@ objfile(char *file)
 {
     fdt f;
     long l;
-
     char magbuf[SARMAG];
 
-    long off, esym, cnt;
-    bool work;
-    Sym *s;
-    char pname[LIBNAMELEN];
-    char name[LIBNAMELEN];
-    struct ar_hdr arhdr;
-    char *e, *start, *stop;
+    <<[[objfile()]] locals>>
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f ldobj: %s\n", cputime(), file);
-    Bflush(&bso);
+    DBG("%5.2f ldobj: %s\n", cputime(), file);
 
-    if(file[0] == '-' && file[1] == 'l') {
-        snprint(pname, sizeof(pname), "lib%s.a", file+2);
-        e = findlib(pname);
-        if(e == nil) {
-            diag("cannot find library: %s", file);
-            errorexit();
-        }
-        snprint(name, sizeof(name), "%s/%s", e, pname);
-        file = name;
-    }
+    <<[[objfile()]] adjust file if -lxxx filename>>
 
     f = open(file, 0);
     if(f < 0) {
@@ -932,93 +911,30 @@ objfile(char *file)
 
     l = read(f, magbuf, SARMAG);
 
+    // not a library
     if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
-        l = seek(f, 0L, 2);
+        l = seek(f, 0L, SEEK__END);
         seek(f, 0L, 0);
+
+        // the important call!
         ldobj(f, l, file);
+
         close(f);
         return;
     }
 
-
-    l = read(f, &arhdr, SAR_HDR);
-    if(l != SAR_HDR) {
-        diag("%s: short read on archive file symbol header", file);
-        goto out;
-    }
-    if(strncmp(arhdr.name, symname, strlen(symname))) {
-        diag("%s: first entry not symbol header", file);
-        goto out;
-    }
-
-    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
-    off = SARMAG + SAR_HDR;
-
-    /*
-     * just bang the whole symbol file into memory
-     */
-    seek(f, off, 0);
-    cnt = esym - off;
-    start = malloc(cnt + 10);
-    cnt = read(f, start, cnt);
-    if(cnt <= 0){
-        close(f);
-        return;
-    }
-    stop = &start[cnt];
-    memset(stop, 0, 10);
-
-    work = true;
-
-    while(work) {
-
-        if(debug['v'])
-            Bprint(&bso, "%5.2f library pass: %s\n", cputime(), file);
-        Bflush(&bso);
-
-        work = false;
-        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
-            s = lookup(e+5, 0);
-            if(s->type != SXREF)
-                continue;
-            sprint(pname, "%s(%s)", file, s->name);
-
-            if(debug['v'])
-                Bprint(&bso, "%5.2f library: %s\n", cputime(), pname);
-            Bflush(&bso);
-
-            l = e[1] & 0xff;
-            l |= (e[2] & 0xff) << 8;
-            l |= (e[3] & 0xff) << 16;
-            l |= (e[4] & 0xff) << 24;
-            seek(f, l, 0);
-            /* need readn to read the dumps (at least) */
-            l = readn(f, &arhdr, SAR_HDR);
-            if(l != SAR_HDR)
-                goto bad;
-            if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
-                goto bad;
-            l = atolwhex(arhdr.size);
-            ldobj(f, l, pname);
-            if(s->type == SXREF) {
-                diag("%s: failed to load: %s", file, s->name);
-                errorexit();
-            }
-            work = true;
-            xrefresolv = true;
-        }
-    }
-    return;
-
-bad:
-    diag("%s: bad or out of date archive", file);
-out:
-    close(f);
+    <<[[objfile()]] when file is a library>>
 }
 @
 
+
+
 \section{Loading the libraries, [[loadlib()]]}
+
+<<global xrefresolv>>=
+bool	xrefresolv;
+@
 
 <<function loadlib>>=
 void
@@ -1031,8 +947,7 @@ loadlib(void)
 loop:
     xrefresolv = false;
     for(i=0; i<libraryp; i++) {
-        if(debug['v'])
-            Bprint(&bso, "%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
+        DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
     if(xrefresolv)
@@ -1055,15 +970,11 @@ patch(void)
     Sym *s;
     long vexit;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f mkfwd\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f mkfwd\n", cputime());
 
     mkfwd();
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f patch\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f patch\n", cputime());
 
     s = lookup("exit", 0);
     vexit = s->value;
@@ -1176,9 +1087,7 @@ void
 follow(void)
 {
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f follow\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f follow\n", cputime());
 
     firstp = prg();
     lastp = firstp;
@@ -1314,9 +1223,7 @@ dodata(void)
     Prog *p;
     long t, u;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f dodata\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f dodata\n", cputime());
 
     for(p = datap; p != P; p = p->link) {
         s = p->from.sym;
@@ -1629,9 +1536,7 @@ span(void)
 
 start:
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f span\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f span\n", cputime());
 
     c = INITTEXT;
     for(p = firstp; p != P; p = p->link) {
@@ -1650,9 +1555,7 @@ start:
 loop:
     n++;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f span %d\n", cputime(), n);
-    Bflush(&bso);
+    DBG("%5.2f span %d\n", cputime(), n);
 
     if(n > 50) {
         print("span must be looping\n");
@@ -1689,9 +1592,7 @@ loop:
     }
     xdefine("etext", STEXT, c);
 
-    if(debug['v'])
-        Bprint(&bso, "etext = %lux\n", c);
-    Bflush(&bso);
+    DBG("etext = %lux\n", c);
 
     for(p = textp; p != P; p = p->pcond)
         p->from.sym->value = p->pc;
@@ -1738,9 +1639,7 @@ asmb(void)
     int a;
     uchar *op1;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f asmb\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f asmb\n", cputime());
 
     seek(cout, HEADR, 0);
     pc = INITTEXT;
@@ -1805,9 +1704,7 @@ asmb(void)
         diag("unknown header type %ld", HEADTYPE);
     }
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f datblk\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f datblk\n", cputime());
 
     if(dlm){
         char buf[8];
@@ -1829,9 +1726,7 @@ asmb(void)
 
     if(!debug['s']) {
 
-        if(debug['v'])
-            Bprint(&bso, "%5.2f sym\n", cputime());
-        Bflush(&bso);
+        DBG("%5.2f sym\n", cputime());
 
         switch(HEADTYPE) {
         default:
@@ -1854,12 +1749,8 @@ asmb(void)
         if(!debug['s'])
             asmsym();
 
-        if(debug['v'])
-            Bprint(&bso, "%5.2f sp\n", cputime());
-        Bflush(&bso);
-        if(debug['v'])
-            Bprint(&bso, "%5.2f pc\n", cputime());
-        Bflush(&bso);
+        DBG("%5.2f sp\n", cputime());
+        DBG("%5.2f pc\n", cputime());
 
         if(!debug['s'])
             asmlc();
@@ -1875,10 +1766,7 @@ asmb(void)
         cflush();
     }
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f headr\n", cputime());
-    Bflush(&bso);
-
+    DBG("%5.2f headr\n", cputime());
 
     seek(cout, 0L, 0);
 
@@ -2039,12 +1927,492 @@ undef(void)
 @
 
 
+\chapter{Parsing Objects}
+
+% for the D_STATIC, to handle conflicts with different files
+% defining the same static entity. This is bumped for each
+% new object file so we're safe
+<<global version>>=
+int	version = 0;
+@
+
+
+<<[[ldobj()]] locals>>=
+// enum<as>, the opcode
+int o;
+Prog *p;
+@
+
+<<[[ldobj()]] locals>>=
+long ipc;
+Prog *t;
+uchar *bloc, *bsize, *stop;
+int v, r, skip;
+Sym *h[NSYM], *s, *di;
+ulong sig;
+@
+
+<<[[ldobj()]] locals>>=
+static int files;
+static char **filen;
+
+char **nfilen;
+@
+
+% main() -> objfile() -> ldbobj()
+<<function ldobj>>=
+void
+ldobj(fdt f, long c, char *pn)
+{
+    <<[[ldobj()]] locals>>
+
+    if((files&15) == 0){
+        nfilen = malloc((files+16)*sizeof(char*));
+        memmove(nfilen, filen, files*sizeof(char*));
+        free(filen);
+        filen = nfilen;
+    }
+    filen[files++] = strdup(pn);
+
+    bsize = buf.xbuf;
+    bloc = buf.xbuf;
+
+    di = S;
+
+newloop:
+    memset(h, 0, sizeof(h));
+    version++;
+    histfrogp = 0;
+    ipc = pc;
+    skip = 0;
+
+loop:
+    if(c <= 0)
+        goto eof;
+    r = bsize - bloc;
+    if(r < 100 && r < c) {		/* enough for largest prog */
+        bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+        if(bsize == 0)
+            goto eof;
+        bloc = buf.xbuf;
+        goto loop;
+    }
+    o = bloc[0] | (bloc[1] << 8);
+    if(o <= AXXX || o >= ALAST) {
+        if(o < 0)
+            goto eof;
+        diag("%s: opcode out of range %d", pn, o);
+        print("	probably not a .8 file\n");
+        errorexit();
+    }
+
+    if(o == ANAME || o == ASIGNAME) {
+        sig = 0;
+        if(o == ASIGNAME) {
+            sig = bloc[2] | (bloc[3]<<8) | (bloc[4]<<16) | (bloc[5]<<24);
+            bloc += 4;
+            c -= 4;
+        }
+        stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
+        if(stop == 0){
+            bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+            if(bsize == 0)
+                goto eof;
+            bloc = buf.xbuf;
+            stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
+            if(stop == 0){
+                fprint(2, "%s: name too long\n", pn);
+                errorexit();
+            }
+        }
+        v = bloc[2];	/* type */
+        o = bloc[3];	/* sym */
+        bloc += 4;
+        c -= 4;
+
+        r = 0;
+        if(v == D_STATIC)
+            r = version;
+        s = lookup((char*)bloc, r);
+
+        c -= &stop[1] - bloc;
+        bloc = stop + 1;
+
+        if(debug['S'] && r == 0)
+            sig = 1729;
+        if(sig != 0){
+            if(s->sig != 0 && s->sig != sig)
+                diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", s->sig, filen[s->file], sig, pn, s->name);
+            s->sig = sig;
+            s->file = files-1;
+        }
+
+        if(debug['W'])
+            print("	ANAME	%s\n", s->name);
+
+        h[o] = s;
+        if((v == D_EXTERN || v == D_STATIC) && s->type == 0)
+            s->type = SXREF;
+        if(v == D_FILE) {
+            if(s->type != SFILE) {
+                histgen++;
+                s->type = SFILE;
+                s->value = histgen;
+            }
+            if(histfrogp < MAXHIST) {
+                histfrog[histfrogp] = s;
+                histfrogp++;
+            } else
+                collapsefrog(s);
+        }
+        goto loop;
+    }
+
+    //TODO: factorize
+    while(nhunk < sizeof(Prog))
+        gethunk();
+    p = (Prog*)hunk;
+    nhunk -= sizeof(Prog);
+    hunk += sizeof(Prog);
+
+    p->as = o;
+    p->line = bloc[2] | (bloc[3] << 8) | (bloc[4] << 16) | (bloc[5] << 24);
+    p->back = 2;
+    r = zaddr(bloc+6, &p->from, h) + 6;
+    r += zaddr(bloc+r, &p->to, h);
+    bloc += r;
+    c -= r;
+
+    if(debug['W'])
+        print("%P\n", p);
+
+    switch(p->as) {
+    case AHISTORY:
+        if(p->to.offset == -1) {
+            addlib(pn);
+            histfrogp = 0;
+            goto loop;
+        }
+        addhist(p->line, D_FILE);		/* 'z' */
+        if(p->to.offset)
+            addhist(p->to.offset, D_FILE1);	/* 'Z' */
+        histfrogp = 0;
+        goto loop;
+
+    case AEND:
+        histtoauto();
+        if(curtext != P)
+            curtext->to.autom = curauto;
+        curauto = 0;
+        curtext = P;
+        if(c)
+            goto newloop;
+        return;
+
+    case AGLOBL:
+        s = p->from.sym;
+        if(s->type == 0 || s->type == SXREF) {
+            s->type = SBSS;
+            s->value = 0;
+        }
+        if(s->type != SBSS) {
+            diag("%s: redefinition: %s in %s",
+                pn, s->name, TNAME);
+            s->type = SBSS;
+            s->value = 0;
+        }
+        if(p->to.offset > s->value)
+            s->value = p->to.offset;
+        goto loop;
+
+    case ADYNT:
+        if(p->to.sym == S) {
+            diag("DYNT without a sym\n%P", p);
+            break;
+        }
+        di = p->to.sym;
+        p->from.scale = 4;
+        if(di->type == SXREF) {
+            if(debug['z'])
+                Bprint(&bso, "%P set to %d\n", p, dtype);
+            di->type = SCONST;
+            di->value = dtype;
+            dtype += 4;
+        }
+        if(p->from.sym == S)
+            break;
+
+        p->from.offset = di->value;
+        p->from.sym->type = SDATA;
+        if(curtext == P) {
+            diag("DYNT not in text: %P", p);
+            break;
+        }
+        p->to.sym = curtext->from.sym;
+        p->to.type = D_ADDR;
+        p->to.index = D_EXTERN;
+        goto data;
+
+    case AINIT:
+        if(p->from.sym == S) {
+            diag("INIT without a sym\n%P", p);
+            break;
+        }
+        if(di == S) {
+            diag("INIT without previous DYNT\n%P", p);
+            break;
+        }
+        p->from.offset = di->value;
+        p->from.sym->type = SDATA;
+        goto data;
+
+    case ADATA:
+    data:
+        if(edatap == P)
+            datap = p;
+        else
+            edatap->link = p;
+        edatap = p;
+        p->link = P;
+        goto loop;
+
+    case AGOK:
+        diag("%s: GOK opcode in %s", pn, TNAME);
+        pc++;
+        goto loop;
+
+    case ATEXT:
+        if(curtext != P) {
+            histtoauto();
+            curtext->to.autom = curauto;
+            curauto = 0;
+        }
+        skip = 0;
+        curtext = p;
+        s = p->from.sym;
+        if(s == S) {
+            diag("%s: no TEXT symbol: %P", pn, p);
+            errorexit();
+        }
+        if(s->type != 0 && s->type != SXREF) {
+            if(p->from.scale & DUPOK) {
+                skip = 1;
+                goto casdef;
+            }
+            diag("%s: redefinition: %s\n%P", pn, s->name, p);
+        }
+        s->type = STEXT;
+        s->value = pc;
+        lastp->link = p;
+        lastp = p;
+        p->pc = pc;
+        pc++;
+        if(textp == P) {
+            textp = p;
+            etextp = p;
+            goto loop;
+        }
+        etextp->pcond = p;
+        etextp = p;
+        goto loop;
+
+    case AFMOVF:
+    case AFADDF:
+    case AFSUBF:
+    case AFSUBRF:
+    case AFMULF:
+    case AFDIVF:
+    case AFDIVRF:
+    case AFCOMF:
+    case AFCOMFP:
+        if(skip)
+            goto casdef;
+        if(p->from.type == D_FCONST) {
+            /* size sb 9 max */
+            sprint(literal, "$%lux", ieeedtof(&p->from.ieee));
+            s = lookup(literal, 0);
+            if(s->type == 0) {
+                s->type = SBSS;
+                s->value = 4;
+                t = prg();
+                t->as = ADATA;
+                t->line = p->line;
+                t->from.type = D_EXTERN;
+                t->from.sym = s;
+                t->from.scale = 4;
+                t->to = p->from;
+                if(edatap == P)
+                    datap = t;
+                else
+                    edatap->link = t;
+                edatap = t;
+                t->link = P;
+            }
+            p->from.type = D_EXTERN;
+            p->from.sym = s;
+            p->from.offset = 0;
+        }
+        goto casdef;
+
+    case AFMOVD:
+    case AFADDD:
+    case AFSUBD:
+    case AFSUBRD:
+    case AFMULD:
+    case AFDIVD:
+    case AFDIVRD:
+    case AFCOMD:
+    case AFCOMDP:
+        if(skip)
+            goto casdef;
+        if(p->from.type == D_FCONST) {
+            /* size sb 18 max */
+            sprint(literal, "$%lux.%lux",
+                p->from.ieee.l, p->from.ieee.h);
+            s = lookup(literal, 0);
+            if(s->type == 0) {
+                s->type = SBSS;
+                s->value = 8;
+                t = prg();
+                t->as = ADATA;
+                t->line = p->line;
+                t->from.type = D_EXTERN;
+                t->from.sym = s;
+                t->from.scale = 8;
+                t->to = p->from;
+                if(edatap == P)
+                    datap = t;
+                else
+                    edatap->link = t;
+                edatap = t;
+                t->link = P;
+            }
+            p->from.type = D_EXTERN;
+            p->from.sym = s;
+            p->from.offset = 0;
+        }
+        goto casdef;
+
+    default:
+    casdef:
+        if(skip)
+            nopout(p);
+
+        if(p->to.type == D_BRANCH)
+            p->to.offset += ipc;
+        lastp->link = p;
+        lastp = p;
+        p->pc = pc;
+        pc++;
+        goto loop;
+    }
+    goto loop;
+
+eof:
+    diag("truncated object file: %s", pn);
+}
+@
 
 \chapter{Sections}
 % Segment?
 
 
 \chapter{Libraries}
+
+<<[[objfile()]] adjust file if -lxxx filename>>=
+if(file[0] == '-' && file[1] == 'l') {
+    snprint(pname, sizeof(pname), "lib%s.a", file+2);
+    e = findlib(pname);
+    if(e == nil) {
+        diag("cannot find library: %s", file);
+        errorexit();
+    }
+    snprint(name, sizeof(name), "%s/%s", e, pname);
+    file = name;
+}
+@
+
+<<[[objfile()]] locals>>=
+long off, esym, cnt;
+bool work;
+Sym *s;
+char pname[LIBNAMELEN];
+char name[LIBNAMELEN];
+struct ar_hdr arhdr;
+char *e, *start, *stop;
+@
+
+<<[[objfile()]] when file is a library>>=
+    l = read(f, &arhdr, SAR_HDR);
+    if(l != SAR_HDR) {
+        diag("%s: short read on archive file symbol header", file);
+        goto out;
+    }
+    if(strncmp(arhdr.name, symname, strlen(symname))) {
+        diag("%s: first entry not symbol header", file);
+        goto out;
+    }
+
+    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
+    off = SARMAG + SAR_HDR;
+
+    /*
+     * just bang the whole symbol file into memory
+     */
+    seek(f, off, 0);
+    cnt = esym - off;
+    start = malloc(cnt + 10);
+    cnt = read(f, start, cnt);
+    if(cnt <= 0){
+        close(f);
+        return;
+    }
+    stop = &start[cnt];
+    memset(stop, 0, 10);
+
+    work = true;
+
+    while(work) {
+
+        DBG("%5.2f library pass: %s\n", cputime(), file);
+
+        work = false;
+        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
+            s = lookup(e+5, 0);
+            if(s->type != SXREF)
+                continue;
+            sprint(pname, "%s(%s)", file, s->name);
+
+            DBG("%5.2f library: %s\n", cputime(), pname);
+
+            l = e[1] & 0xff;
+            l |= (e[2] & 0xff) << 8;
+            l |= (e[3] & 0xff) << 16;
+            l |= (e[4] & 0xff) << 24;
+            seek(f, l, 0);
+            /* need readn to read the dumps (at least) */
+            l = readn(f, &arhdr, SAR_HDR);
+            if(l != SAR_HDR)
+                goto bad;
+            if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
+                goto bad;
+            l = atolwhex(arhdr.size);
+            ldobj(f, l, pname);
+            if(s->type == SXREF) {
+                diag("%s: failed to load: %s", file, s->name);
+                errorexit();
+            }
+            work = true;
+            xrefresolv = true;
+        }
+    }
+    return;
+
+bad:
+    diag("%s: bad or out of date archive", file);
+out:
+    close(f);
+@
 
 \section{Library search path}
 
@@ -3149,6 +3517,11 @@ if(debug['p'])
         doprof2();
 @
 
+<<[[main()]] adjust INITENTRY if profiling>>=
+if(debug['p'])
+    INITENTRY = "_mainp";
+@
+
 
 
 <<function doprof1>>=
@@ -3159,9 +3532,7 @@ doprof1(void)
     long n;
     Prog *p, *q;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f profile 1\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f profile 1\n", cputime());
 
     s = lookup("__mcount", 0);
     n = 1;
@@ -3220,9 +3591,7 @@ doprof2(void)
     Sym *s2, *s4;
     Prog *p, *q, *q2, *ps2, *ps4;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f profile 2\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f profile 2\n", cputime());
 
     if(debug['e']){
         s2 = lookup("_tracein", 0);
@@ -3457,8 +3826,7 @@ case H_EXE:	/* fake MS-DOS .EXE */
     if(INITRND == -1)
         INITRND = 4;
     HEADR += (INITTEXT & 0xFFFF);
-    if(debug['v'])
-        Bprint(&bso, "HEADR = 0x%ld\n", HEADR);
+    DBG("HEADR = 0x%ld\n", HEADR);
     break;
 case H_ELF:	/* elf executable */
     HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
@@ -3875,6 +4243,8 @@ if(HEADTYPE == -1) {
 
 
 \chapter{Profiling}
+
+% had lots of cputime() too in calls to DBG, so a form of profiling
 
 <<[[main()]] profile report>>=
 if(debug['v']) {

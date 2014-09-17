@@ -102,7 +102,8 @@ prg(void)
 {
     Prog *p;
 
-    // factorize with similar code in lookup but for Sym
+    //todo: factorize with similar code in lookup but for Sym, 
+    // =~ malloc(sizeof(Procg))
     while(nhunk < sizeof(Prog))
         gethunk();
     p = (Prog*)hunk;

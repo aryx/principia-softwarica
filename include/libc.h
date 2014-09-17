@@ -681,6 +681,12 @@ extern	long	readn(int, void*, long);
 extern	long	readv(int, IOchunk*, int);
 extern	int	remove(char*);
 extern	void*	sbrk(ulong);
+// pad's stuff, but is actually also in stdio.h
+enum seek_cursor {
+    SEEK__START = 0,
+    SEEK__CUR = 1,
+    SEEK__END = 2,
+};
 extern	vlong	seek(int, vlong, int);
 extern	void*	segattach(int, char*, void*, ulong);
 extern	void*	segbrk(void*, void*);

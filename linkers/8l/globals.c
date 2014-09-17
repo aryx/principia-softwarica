@@ -63,6 +63,7 @@ long	datsize;
 bool	debug[128];
 /*e: global debug */
 /*s: global firstp */
+// ref_own?<Prog>
 Prog*	firstp;
 /*e: global firstp */
 /*s: global fnuxi8 */
@@ -100,6 +101,7 @@ uchar	and[30];
 char	reg[D_NONE];
 /*e: global reg */
 /*s: global lastp */
+// ref<Prog>
 Prog*	lastp;
 /*e: global lastp */
 /*s: global lcsize */

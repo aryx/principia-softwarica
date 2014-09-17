@@ -40,9 +40,7 @@ span(void)
 
 start:
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f span\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f span\n", cputime());
 
     c = INITTEXT;
     for(p = firstp; p != P; p = p->link) {
@@ -61,9 +59,7 @@ start:
 loop:
     n++;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f span %d\n", cputime(), n);
-    Bflush(&bso);
+    DBG("%5.2f span %d\n", cputime(), n);
 
     if(n > 50) {
         print("span must be looping\n");
@@ -100,9 +96,7 @@ loop:
     }
     xdefine("etext", STEXT, c);
 
-    if(debug['v'])
-        Bprint(&bso, "etext = %lux\n", c);
-    Bflush(&bso);
+    DBG("etext = %lux\n", c);
 
     for(p = textp; p != P; p = p->pcond)
         p->from.sym->value = p->pc;
@@ -1464,10 +1458,8 @@ asmdyn()
     seek(cout, off, 0);
     lput(t);
 
-    if(debug['v']){
-        Bprint(&bso, "import table entries = %d\n", imports);
-        Bprint(&bso, "export table entries = %d\n", exports);
-    }
+    DBG("import table entries = %d\n", imports);
+    DBG("export table entries = %d\n", exports);
 }
 /*e: function asmdyn */
 /*e: linkers/8l/span.c */
