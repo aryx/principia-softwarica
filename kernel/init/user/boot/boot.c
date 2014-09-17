@@ -53,7 +53,8 @@ execinit(void)
   bind_safe("#p", "/proc", MREPL); //devproc
   // used by rc and many programs, e.g. via open("#d/0")
   bind_safe("#d", "/fd", MREPL); //devdup
-  bind_safe("#k", "/sys", MREPL); //devsys
+  // can't use sys, because too much code assumes /sys/ have an include/, src/
+  bind_safe("#k", "/ksys", MREPL); //devsys
 
   bind_safe("/root", "/", MAFTER|MCREATE);
   bind_safe("/386/bin", "/bin", MREPL);
@@ -82,6 +83,9 @@ execinit(void)
   // network
   bind_safe("#I", "/net", MREPL); // devip
   bind_safe("#l0", "/net", MAFTER); // ether (and dev 0)
+
+  // for 8c, 8a, 8l
+  putenv("objtype", "386");
 
   run("/bin/rc", nil);
 }
