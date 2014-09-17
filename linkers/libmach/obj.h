@@ -27,5 +27,6 @@ struct Prog		/* info from .$O files */
 /*s: constant UNKNOWN */
 #define UNKNOWN	'?'
 /*e: constant UNKNOWN */
+
 void		_offset(int, vlong);
 /*e: linkers/libmach/obj.h */

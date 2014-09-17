@@ -202,10 +202,33 @@ usage(void)
 
 % nm is actually using libmach, crachhdr, etc, generic API for object manip
 
+
+% put libmach/8obj.c
+
+<<function type2char>>=
+static char
+type2char(int t)
+{
+    switch(t){
+    case D_EXTERN:		return 'U';
+    case D_STATIC:		return 'b';
+    case D_AUTO:		return 'a';
+    case D_PARAM:		return 'p';
+    default:		return UNKNOWN;
+    }
+}
+@
+
+<<constant UNKNOWN>>=
+#define UNKNOWN	'?'
+@
+
 \section{Executable format}
 % the output,
 
 %http://jvns.ca/blog/2014/09/06/how-to-read-an-executable/
+
+% plan9 is essential a.out.h? 
 
 
 <<enum headtype>>=
@@ -231,6 +254,26 @@ enum headtype {
 
 % so   .s -8a-> .o -8l-> .exe -libmach-> readable
 % (hmm libmach is also reading .o (.8)
+
+
+% include/a.out.h
+% used by strip, libmach, but not 8l, should be 32 bytes (0x20)
+<<struct Exec>>=
+struct	Exec
+{
+    long	magic;		/* magic number */
+
+    long	text;	 	/* size of text segment */
+    long	data;	 	/* size of initialized data */
+    long	bss;	  	/* size of uninitialized data */
+    long	syms;	 	/* size of symbol table */
+
+    // virtual address in [UTZERO+sizeof(Exec)..UTZERO+sizeof(Exec)+text]
+    long	entry;	 	/* entry point */ 
+    long	spsz;		/* size of pc/sp offset table */
+    long	pcsz;		/* size of pc/line number table */
+};
+@
 
 \section{Code organization}
 
@@ -1831,6 +1874,7 @@ asmb(void)
         Bprint(&bso, "%5.2f headr\n", cputime());
     Bflush(&bso);
 
+
     seek(cout, 0L, 0);
 
     switch(HEADTYPE) {
@@ -1924,6 +1968,8 @@ asmb(void)
         lputl(0);			/* relocation, line numbers */
         lputl(0x200);			/* flags comment only */
         break;
+
+    // see Exec in a.out.h
     case H_PLAN9:	/* plan9 */
         magic = 4*11*11+7;
         if(dlm)
@@ -1937,6 +1983,7 @@ asmb(void)
         lput(spsize);			/* sp offsets */
         lput(lcsize);			/* line offsets */
         break;
+
     case H_COM:
         /* MS-DOS .COM */
         break;

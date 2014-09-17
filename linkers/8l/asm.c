@@ -261,6 +261,7 @@ asmb(void)
         Bprint(&bso, "%5.2f headr\n", cputime());
     Bflush(&bso);
 
+
     seek(cout, 0L, 0);
 
     switch(HEADTYPE) {
@@ -354,6 +355,8 @@ asmb(void)
         lputl(0);			/* relocation, line numbers */
         lputl(0x200);			/* flags comment only */
         break;
+
+    // see Exec in a.out.h
     case H_PLAN9:	/* plan9 */
         magic = 4*11*11+7;
         if(dlm)
@@ -367,6 +370,7 @@ asmb(void)
         lput(spsize);			/* sp offsets */
         lput(lcsize);			/* line offsets */
         break;
+
     case H_COM:
         /* MS-DOS .COM */
         break;

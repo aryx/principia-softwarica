@@ -6,7 +6,7 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
-#include "386/8.out.h"
+#include <386/8.out.h>
 #include "obj.h"
 
 typedef struct Addr	Addr;
@@ -25,7 +25,7 @@ static	void	skip(Biobuf*, int);
 int
 _is8(char *t)
 {
-    uchar *s = (uchar*)t;
+    byte *s = (byte*)t;
 
     return  s[0] == (ANAME&0xff)			/* aslo = ANAME */
         && s[1] == ((ANAME>>8)&0xff)
