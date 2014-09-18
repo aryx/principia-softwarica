@@ -18,6 +18,7 @@
 enum as
 {
     AXXX,
+
     AAAA,
     AAAD,
     AAAM,

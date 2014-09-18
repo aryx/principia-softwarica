@@ -21,10 +21,11 @@ int	histfrogp;
 Auto*	curhist;
 /*e: global curhist */
 /*s: global etextp */
-Prog*	etextp;
+// ref<Prog>, end of textp?
+Prog*	etextp = P;
 /*e: global etextp */
 /*s: global histgen */
-int	histgen;
+int	histgen = 0;
 /*e: global histgen */
 /*s: global library */
 char*	library[50];
@@ -212,11 +213,11 @@ main(int argc, char *argv[])
             readundefs(ARGF(), SIMPORT);
         break;
     /*x: [[main()]] command line processing */
-        default:
-            c = ARGC();
-            if(c >= 0 && c < sizeof(debug))
-                debug[c] = true;
-            break;
+    default:
+        c = ARGC();
+        if(c >= 0 && c < sizeof(debug))
+            debug[c] = true;
+        break;
     /*e: [[main()]] command line processing */
     } ARGEND
 
@@ -402,14 +403,6 @@ main(int argc, char *argv[])
     zprg.to = zprg.from;
     /*e: [[main()]] set zprg */
     /*s: [[main()]] initialize globals */
-    pcstr = "%.6lux ";
-
-    histgen = 0;
-
-    textp = P;
-    datap = P;
-    edatap = P;
-
     pc = 0;
     dtype = 4;
 
@@ -843,6 +836,7 @@ addlib(char *obj)
         }
     }
 
+
     for(i=0; i<libraryp; i++)
         if(strcmp(name, library[i]) == 0)
             return;
@@ -980,18 +974,24 @@ ldobj(fdt f, long c, char *pn)
     // enum<as>, the opcode
     int o;
     Prog *p;
-    /*x: [[ldobj()]] locals */
+    Sym *h[NSYM];
+    Sym *di;
+    Sym *s;
     long ipc;
-    Prog *t;
-    uchar *bloc, *bsize, *stop;
-    int v, r, skip;
-    Sym *h[NSYM], *s, *di;
-    ulong sig;
-    /*x: [[ldobj()]] locals */
-    static int files;
-    static char **filen;
+    int skip;
 
+    byte *bloc;
+    byte *bsize;
+    /*x: [[ldobj()]] locals */
+    Prog *t;
+    byte *stop;
+    int v, r;
+    ulong sig;
     char **nfilen;
+    /*x: [[ldobj()]] locals */
+    // array<string>, length used = files, extended every 16
+    static char **filen;
+    static int files = 0;
     /*e: [[ldobj()]] locals */
 
     if((files&15) == 0){
@@ -1007,6 +1007,7 @@ ldobj(fdt f, long c, char *pn)
 
     di = S;
 
+// when comes from AEND too
 newloop:
     memset(h, 0, sizeof(h));
     version++;
@@ -1025,7 +1026,10 @@ loop:
         bloc = buf.xbuf;
         goto loop;
     }
+
+    // get the opcode
     o = bloc[0] | (bloc[1] << 8);
+
     if(o <= AXXX || o >= ALAST) {
         if(o < 0)
             goto eof;
@@ -1042,17 +1046,18 @@ loop:
             c -= 4;
         }
         stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
-        if(stop == 0){
+        if(stop == nil){
             bsize = readsome(f, buf.xbuf, bloc, bsize, c);
             if(bsize == 0)
                 goto eof;
             bloc = buf.xbuf;
             stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
-            if(stop == 0){
+            if(stop == nil){
                 fprint(2, "%s: name too long\n", pn);
                 errorexit();
             }
         }
+
         v = bloc[2];	/* type */
         o = bloc[3];	/* sym */
         bloc += 4;
@@ -1115,6 +1120,7 @@ loop:
         print("%P\n", p);
 
     switch(p->as) {
+
     case AHISTORY:
         if(p->to.offset == -1) {
             addlib(pn);

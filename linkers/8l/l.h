@@ -18,7 +18,7 @@
 #define	S		((Sym*)nil)
 /*e: constant S */
 /*s: constant TNAME */
-#define	TNAME		(curtext?curtext->from.sym->name:noname)
+#define	TNAME		(curtext ? curtext->from.sym->name : noname)
 /*e: constant TNAME */
 
 /*s: function cput */
@@ -48,6 +48,7 @@ struct	Adr
         Prog	*u0cond;	/* not used, but should be D_BRANCH */
         Ieee	u0ieee;
     } u0;
+
     union
     {
         Auto*	u1autom;
@@ -86,14 +87,14 @@ struct	Adr
 /*s: struct Prog */
 struct	Prog
 {
-    //enum<section>>? but AGOK in zprg
+    //enum<opcode>>
     short	as;
-
-    // 2 by default in zprg, why?
-    uchar	back;
 
     Adr	from;
     Adr	to;
+
+    // 2 by default in zprg, why?
+    uchar	back;
 
     Prog*	forwd;
     long	pc;
@@ -103,10 +104,14 @@ struct	Prog
     char	tt;
     uchar	mark;	/* work on these */
 
+    // Extra
+
+    // list<ref<Prog>> from firstp, datap, ... depending on the instr kind
+    Prog*	link;
+
+    // list<ref<Prog>> from textp?
     Prog*	pcond;	/* work on this */
 
-    // Extra
-    Prog*	link;
 };
 /*e: struct Prog */
 /*s: struct Auto */
@@ -125,10 +130,13 @@ struct	Auto
 struct	Sym
 {
     char	*name;
-    short	version;
+    short	version; // for static names, each sym has a different version
 
     //enum<section> ?
     short	type;
+
+    // enum<section> too?
+    byte	subtype;
 
     long	sig;
     long	value;
@@ -136,7 +144,6 @@ struct	Sym
     // [[Sym]] other fields
     short	become;
     short	frame;
-    uchar	subtype;
     ushort	file;
 
     // Extra
@@ -168,7 +175,7 @@ enum section
     SBSS,
 
     SDATA1,
-    SXREF,
+    SXREF, // means not defined (yet)
     SFILE,
     SCONST,
     SUNDEF,

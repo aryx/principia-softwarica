@@ -310,12 +310,11 @@ patch(void)
     Sym *s;
     long vexit;
 
+    // could be moved out of patch() in main()?
     DBG("%5.2f mkfwd\n", cputime());
-
     mkfwd();
 
     DBG("%5.2f patch\n", cputime());
-
     s = lookup("exit", 0);
     vexit = s->value;
     for(p = firstp; p != P; p = p->link) {
@@ -448,7 +447,7 @@ dostkoff(void)
     curframe = 0;
     curbecome = 0;
     maxbecome = 0;
-    curtext = 0;
+    curtext = nil;
 
     for(p = firstp; p != P; p = p->link) {
 
@@ -491,7 +490,7 @@ dostkoff(void)
 
     xdefine("ALEFbecome", STEXT, maxbecome);
 
-    curtext = 0;
+    curtext = nil;
 
     for(p = firstp; p != P; p = p->link) {
         switch(p->as) {

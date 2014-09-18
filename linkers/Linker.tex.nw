@@ -193,7 +193,6 @@ usage(void)
 }
 @
 
-
 \section{Example}
 % show binary format? hexdump?
 
@@ -283,11 +282,6 @@ struct	Exec
 
 \chapter{Core Data Structures}
 
-\section{[[Instruction]] and [[Register]]}
-% in 8.out.h: Instruction (enum as), Register (enum reg), enum dxxx
-% see Aconv, Rconv, Dconv
-
-
 \section{[[Sym]] and [[hash]]}
 
 % linker is all about resolving undefined symbols, and link to the right place
@@ -298,10 +292,13 @@ struct	Exec
 struct	Sym
 {
     char	*name;
-    short	version;
+    short	version; // for static names, each sym has a different version
 
     //enum<section> ?
     short	type;
+
+    // enum<section> too?
+    byte	subtype;
 
     long	sig;
     long	value;
@@ -309,7 +306,6 @@ struct	Sym
     // [[Sym]] other fields
     short	become;
     short	frame;
-    uchar	subtype;
     ushort	file;
 
     // Extra
@@ -322,6 +318,26 @@ struct	Sym
 
 <<constant S>>=
 #define	S		((Sym*)nil)
+@
+
+
+% SSTACK? not in exec :)
+<<enum sxxx>>=
+enum section
+{
+    STEXT		= 1,
+    SDATA,
+    SBSS,
+
+    SDATA1,
+    SXREF, // means not defined (yet)
+    SFILE,
+    SCONST,
+    SUNDEF,
+
+    SIMPORT,
+    SEXPORT,
+};
 @
 
 
@@ -338,8 +354,8 @@ Sym*	hash[NHASH];
 long	nsymbol;
 @
 
-% v is for version. we could have a typedef int version;? and VERSION0 = 0
-% so clearer to read?
+% v is for version, but really it's about handling static names
+% (we could have a typedef int version;? and VERSION0 = 0 so clearer to read?)
 <<function lookup>>=
 Sym*
 lookup(char *symb, int v)
@@ -386,9 +402,113 @@ lookup(char *symb, int v)
 @
 
 
+\section{[[Opcode]] and [[Register]]}
+% in 8.out.h: Opcode (enum as), Register (enum reg), enum dxxx
+% see Aconv, Rconv, Dconv
+
+% put major opcode here, AXXX, ALAST, etc
+
+\section{[[Prog]] and [[firstp]], [[textp]], [[datap]], etc}
+
+% bad name .... I think Prog is really a Instruction ... From and To
+% are when do MOV AX, BX,    then AX is the from, BX the to
+
+<<struct Prog>>=
+struct	Prog
+{
+    //enum<opcode>>
+    short	as;
+
+    Adr	from;
+    Adr	to;
+
+    // 2 by default in zprg, why?
+    uchar	back;
+
+    Prog*	forwd;
+    long	pc;
+    long	line;
+    char	width;		/* fake for DATA */
+    char	ft;		/* oclass cache */
+    char	tt;
+    uchar	mark;	/* work on these */
+
+    // Extra
+
+    // list<ref<Prog>> from firstp, datap, ... depending on the instr kind
+    Prog*	link;
+
+    // list<ref<Prog>> from textp?
+    Prog*	pcond;	/* work on this */
+
+};
+@
+% see Pconv, %P
+
+
+<<constant P>>=
+#define	P		((Prog*)nil)
+@
+
+% good name? first_instr better? also again there is strong
+% coupling between firstp and lastp that should be encapsulated
+% in a specific structure (like for datap, edatap)
+<<global firstp>>=
+// list<ref_own?<Prog>>, next = Prog.link
+Prog*	firstp;
+@
+
+<<global lastp>>=
+// ref<Prog>, last elt of firstp list
+Prog*	lastp;
+@
+
+
+
+<<global textp>>=
+// list<ref<Prog>>, next = Prog.cond?
+Prog*	textp = P;
+@
+
+<<global etextp>>=
+// ref<Prog>, end of textp?
+Prog*	etextp = P;
+@
+
+
+<<global datap>>=
+// list<ref<Prog>>, next = Prog.next
+Prog*	datap = P;
+@
+
+% todo could use a queue data structure, so have fast access to end of list?
+<<global edatap>>=
+// ref<Prog>>, end of datap list
+Prog*	edatap = P;
+@
+
+
+
+
+
+<<global curtext>>=
+Prog*	curtext;
+@
+
+
+<<global undefp>>=
+//@Scheck: not dead, used by UP
+Prog	undefp;
+@
+
+<<constant UP>>=
+#define	UP	(&undefp)
+@
+
 \section{[[Adr]]}
 
-%????
+% operand of instruction, e.g. in MOV AX, BX,  then AX is a form of Adr
+% would be better if had ADT so can have better Instruction type
 <<struct Adr>>=
 struct	Adr
 {
@@ -399,6 +519,7 @@ struct	Adr
         Prog	*u0cond;	/* not used, but should be D_BRANCH */
         Ieee	u0ieee;
     } u0;
+
     union
     {
         Auto*	u1autom;
@@ -414,6 +535,7 @@ struct	Adr
 };
 @
 
+% the main thing the linker does, to relocate at the right place
 <<constant offset>>=
 #define	offset	u0.u0offset
 @
@@ -438,83 +560,6 @@ struct	Adr
 #define	sym	u1.u1sym
 @
 
-\section{[[Prog]] and [[curtext]]}
-
-% good name? should it be Section?
-% and then Prog is just a Section list?
-
-% ???
-<<struct Prog>>=
-struct	Prog
-{
-    //enum<section>>? but AGOK in zprg
-    short	as;
-
-    // 2 by default in zprg, why?
-    uchar	back;
-
-    Adr	from;
-    Adr	to;
-
-    Prog*	forwd;
-    long	pc;
-    long	line;
-    char	width;		/* fake for DATA */
-    char	ft;		/* oclass cache */
-    char	tt;
-    uchar	mark;	/* work on these */
-
-    Prog*	pcond;	/* work on this */
-
-    // Extra
-    Prog*	link;
-};
-@
-% see Pconv, %P
-
-% SSTACK? not in exec :)
-<<enum sxxx>>=
-enum section
-{
-    STEXT		= 1,
-    SDATA,
-    SBSS,
-
-    SDATA1,
-    SXREF,
-    SFILE,
-    SCONST,
-    SUNDEF,
-
-    SIMPORT,
-    SEXPORT,
-};
-@
-
-<<constant P>>=
-#define	P		((Prog*)nil)
-@
-
-<<global curtext>>=
-Prog*	curtext;
-@
-
-<<constant TNAME>>=
-#define	TNAME		(curtext?curtext->from.sym->name:noname)
-@
-
-
-
-<<global undefp>>=
-//@Scheck: not dead, used by UP
-Prog	undefp;
-@
-
-<<constant UP>>=
-#define	UP	(&undefp)
-@
-
-\section{[[Auto]]}
 
 % ???
 <<struct Auto>>=
@@ -747,14 +792,6 @@ long	HEADR;
 
 
 <<[[main()]] initialize globals>>=
-pcstr = "%.6lux ";
-
-histgen = 0;
-
-textp = P;
-datap = P;
-edatap = P;
-
 pc = 0;
 dtype = 4;
 
@@ -766,16 +803,6 @@ cbc = sizeof(buf.cbuf);
 
 \chapter{Main functions}
 
-% good name? first_section better?
-<<global firstp>>=
-// ref_own?<Prog>
-Prog*	firstp;
-@
-
-<<global lastp>>=
-// ref<Prog>
-Prog*	lastp;
-@
 
 % essentially a malloc(sizeof(Prog), 
 % see section on Buffer managment to better understand
@@ -931,7 +958,24 @@ objfile(char *file)
 
 
 \section{Loading the libraries, [[loadlib()]]}
+% it loads the libraries mentioned in the .obj via the .h and #pragma magic!
+% see later section
 
+<<global library>>=
+char*	library[50];
+@
+
+<<global libraryp>>=
+int	libraryp;
+@
+
+
+<<global libraryobj>>=
+char*	libraryobj[50];
+@
+
+
+% ???
 <<global xrefresolv>>=
 bool	xrefresolv;
 @
@@ -961,6 +1005,11 @@ loop:
 
 \section{[[patch()]]}
 
+<<constant TNAME>>=
+#define	TNAME		(curtext ? curtext->from.sym->name : noname)
+@
+
+
 <<function patch>>=
 void
 patch(void)
@@ -970,12 +1019,11 @@ patch(void)
     Sym *s;
     long vexit;
 
+    // could be moved out of patch() in main()?
     DBG("%5.2f mkfwd\n", cputime());
-
     mkfwd();
 
     DBG("%5.2f patch\n", cputime());
-
     s = lookup("exit", 0);
     vexit = s->value;
     for(p = firstp; p != P; p = p->link) {
@@ -1342,7 +1390,7 @@ dostkoff(void)
     curframe = 0;
     curbecome = 0;
     maxbecome = 0;
-    curtext = 0;
+    curtext = nil;
 
     for(p = firstp; p != P; p = p->link) {
 
@@ -1385,7 +1433,7 @@ dostkoff(void)
 
     xdefine("ALEFbecome", STEXT, maxbecome);
 
-    curtext = 0;
+    curtext = nil;
 
     for(p = firstp; p != P; p = p->link) {
         switch(p->as) {
@@ -1602,6 +1650,7 @@ loop:
 
 \section{[[doinit()]]}
 
+% use INITDAT and relocate from there
 <<function doinit>>=
 void
 doinit(void)
@@ -1630,6 +1679,7 @@ doinit(void)
 
 % first function to actually use cout!
 
+% TODO LP split!
 <<function asmb>>=
 void
 asmb(void)
@@ -1912,6 +1962,7 @@ asmb(void)
 
 \section{[[undef()]]}
 
+% rename check_if_still_undefined_symbols?
 <<function undef>>=
 void
 undef(void)
@@ -1929,37 +1980,56 @@ undef(void)
 
 \chapter{Parsing Objects}
 
-% for the D_STATIC, to handle conflicts with different files
-% defining the same static entity. This is bumped for each
-% new object file so we're safe
+% essentially reverse operation than object generation in Assembler.tex.nw?
+% hmmm if C had proper ADT and Marshall module that would be easier ...
+% (but maybe less other-languages friendly)
+% could factorize code with libmach?
+
+% This is for the D_STATIC; to handle conflicts with different files
+% defining the same static entity. This is bumped each time
+% a new object file is parsed, so it's safe.
 <<global version>>=
 int	version = 0;
 @
+
+
 
 
 <<[[ldobj()]] locals>>=
 // enum<as>, the opcode
 int o;
 Prog *p;
-@
-
-<<[[ldobj()]] locals>>=
+Sym *h[NSYM];
+Sym *di;
+Sym *s;
 long ipc;
-Prog *t;
-uchar *bloc, *bsize, *stop;
-int v, r, skip;
-Sym *h[NSYM], *s, *di;
-ulong sig;
+int skip;
+
+byte *bloc;
+byte *bsize;
 @
 
 <<[[ldobj()]] locals>>=
-static int files;
-static char **filen;
-
+Prog *t;
+byte *stop;
+int v, r;
+ulong sig;
 char **nfilen;
 @
 
+<<[[ldobj()]] locals>>=
+// array<string>, length used = files, extended every 16
+static char **filen;
+static int files = 0;
+@
+
+<<global histfrogp>>=
+int	histfrogp;
+@
+
+
 % main() -> objfile() -> ldbobj()
+% TODO LP split
 <<function ldobj>>=
 void
 ldobj(fdt f, long c, char *pn)
@@ -1979,6 +2049,7 @@ ldobj(fdt f, long c, char *pn)
 
     di = S;
 
+// when comes from AEND too
 newloop:
     memset(h, 0, sizeof(h));
     version++;
@@ -1997,7 +2068,10 @@ loop:
         bloc = buf.xbuf;
         goto loop;
     }
+
+    // get the opcode
     o = bloc[0] | (bloc[1] << 8);
+
     if(o <= AXXX || o >= ALAST) {
         if(o < 0)
             goto eof;
@@ -2014,17 +2088,18 @@ loop:
             c -= 4;
         }
         stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
-        if(stop == 0){
+        if(stop == nil){
             bsize = readsome(f, buf.xbuf, bloc, bsize, c);
             if(bsize == 0)
                 goto eof;
             bloc = buf.xbuf;
             stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
-            if(stop == 0){
+            if(stop == nil){
                 fprint(2, "%s: name too long\n", pn);
                 errorexit();
             }
         }
+
         v = bloc[2];	/* type */
         o = bloc[3];	/* sym */
         bloc += 4;
@@ -2087,6 +2162,7 @@ loop:
         print("%P\n", p);
 
     switch(p->as) {
+
     case AHISTORY:
         if(p->to.offset == -1) {
             addlib(pn);
@@ -2313,106 +2389,7 @@ eof:
 }
 @
 
-\chapter{Sections}
-% Segment?
-
-
 \chapter{Libraries}
-
-<<[[objfile()]] adjust file if -lxxx filename>>=
-if(file[0] == '-' && file[1] == 'l') {
-    snprint(pname, sizeof(pname), "lib%s.a", file+2);
-    e = findlib(pname);
-    if(e == nil) {
-        diag("cannot find library: %s", file);
-        errorexit();
-    }
-    snprint(name, sizeof(name), "%s/%s", e, pname);
-    file = name;
-}
-@
-
-<<[[objfile()]] locals>>=
-long off, esym, cnt;
-bool work;
-Sym *s;
-char pname[LIBNAMELEN];
-char name[LIBNAMELEN];
-struct ar_hdr arhdr;
-char *e, *start, *stop;
-@
-
-<<[[objfile()]] when file is a library>>=
-    l = read(f, &arhdr, SAR_HDR);
-    if(l != SAR_HDR) {
-        diag("%s: short read on archive file symbol header", file);
-        goto out;
-    }
-    if(strncmp(arhdr.name, symname, strlen(symname))) {
-        diag("%s: first entry not symbol header", file);
-        goto out;
-    }
-
-    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
-    off = SARMAG + SAR_HDR;
-
-    /*
-     * just bang the whole symbol file into memory
-     */
-    seek(f, off, 0);
-    cnt = esym - off;
-    start = malloc(cnt + 10);
-    cnt = read(f, start, cnt);
-    if(cnt <= 0){
-        close(f);
-        return;
-    }
-    stop = &start[cnt];
-    memset(stop, 0, 10);
-
-    work = true;
-
-    while(work) {
-
-        DBG("%5.2f library pass: %s\n", cputime(), file);
-
-        work = false;
-        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
-            s = lookup(e+5, 0);
-            if(s->type != SXREF)
-                continue;
-            sprint(pname, "%s(%s)", file, s->name);
-
-            DBG("%5.2f library: %s\n", cputime(), pname);
-
-            l = e[1] & 0xff;
-            l |= (e[2] & 0xff) << 8;
-            l |= (e[3] & 0xff) << 16;
-            l |= (e[4] & 0xff) << 24;
-            seek(f, l, 0);
-            /* need readn to read the dumps (at least) */
-            l = readn(f, &arhdr, SAR_HDR);
-            if(l != SAR_HDR)
-                goto bad;
-            if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
-                goto bad;
-            l = atolwhex(arhdr.size);
-            ldobj(f, l, pname);
-            if(s->type == SXREF) {
-                diag("%s: failed to load: %s", file, s->name);
-                errorexit();
-            }
-            work = true;
-            xrefresolv = true;
-        }
-    }
-    return;
-
-bad:
-    diag("%s: bad or out of date archive", file);
-out:
-    close(f);
-@
 
 \section{Library search path}
 
@@ -2527,13 +2504,204 @@ struct	ar_hdr
 #define	SAR_HDR	(SARNAME+44)
 @
 
+\section{Loading libraries}
+
+\subsection{Loading libraries manually [[8l -lxxx]]}
+
+% when done manually by -l in command line of ld
+<<[[objfile()]] adjust file if -lxxx filename>>=
+if(file[0] == '-' && file[1] == 'l') {
+    snprint(pname, sizeof(pname), "lib%s.a", file+2);
+    e = findlib(pname);
+    if(e == nil) {
+        diag("cannot find library: %s", file);
+        errorexit();
+    }
+    snprint(name, sizeof(name), "%s/%s", e, pname);
+    file = name;
+}
+@
+
+
+<<[[objfile()]] locals>>=
+long off, esym, cnt;
+bool work;
+Sym *s;
+char pname[LIBNAMELEN];
+char name[LIBNAMELEN];
+struct ar_hdr arhdr;
+char *e, *start, *stop;
+@
+
+<<[[objfile()]] when file is a library>>=
+    l = read(f, &arhdr, SAR_HDR);
+    if(l != SAR_HDR) {
+        diag("%s: short read on archive file symbol header", file);
+        goto out;
+    }
+    if(strncmp(arhdr.name, symname, strlen(symname))) {
+        diag("%s: first entry not symbol header", file);
+        goto out;
+    }
+
+    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
+    off = SARMAG + SAR_HDR;
+
+    /*
+     * just bang the whole symbol file into memory
+     */
+    seek(f, off, 0);
+    cnt = esym - off;
+    start = malloc(cnt + 10);
+    cnt = read(f, start, cnt);
+    if(cnt <= 0){
+        close(f);
+        return;
+    }
+    stop = &start[cnt];
+    memset(stop, 0, 10);
+
+    work = true;
+
+    while(work) {
+
+        DBG("%5.2f library pass: %s\n", cputime(), file);
+
+        work = false;
+        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
+            s = lookup(e+5, 0);
+            if(s->type != SXREF)
+                continue;
+            sprint(pname, "%s(%s)", file, s->name);
+
+            DBG("%5.2f library: %s\n", cputime(), pname);
+
+            l = e[1] & 0xff;
+            l |= (e[2] & 0xff) << 8;
+            l |= (e[3] & 0xff) << 16;
+            l |= (e[4] & 0xff) << 24;
+            seek(f, l, 0);
+            /* need readn to read the dumps (at least) */
+            l = readn(f, &arhdr, SAR_HDR);
+            if(l != SAR_HDR)
+                goto bad;
+            if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
+                goto bad;
+            l = atolwhex(arhdr.size);
+            ldobj(f, l, pname);
+            if(s->type == SXREF) {
+                diag("%s: failed to load: %s", file, s->name);
+                errorexit();
+            }
+            work = true;
+            xrefresolv = true;
+        }
+    }
+    return;
+
+bad:
+    diag("%s: bad or out of date archive", file);
+out:
+    close(f);
+@
 
 
 
-\chapter{Machine Code Generation}
+\subsection{Loading libraries automagically [[#pragma src]]}
+
+% when done automatically
+
+% TODO LP split AHISTORY here
+
+<<function addlib>>=
+void
+addlib(char *obj)
+{
+    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN], *p, *name;
+    int i, search;
+
+    if(histfrogp <= 0)
+        return;
+
+    name = fn1;
+    search = 0;
+    if(histfrog[0]->name[1] == '/') {
+        sprint(name, "");
+        i = 1;
+    } else if(histfrog[0]->name[1] == '.') {
+        sprint(name, ".");
+        i = 0;
+    } else {
+        sprint(name, "");
+        i = 0;
+        search = 1;
+    }
+
+    for(; i<histfrogp; i++) {
+        snprint(comp, sizeof comp, histfrog[i]->name+1);
+        for(;;) {
+            p = strstr(comp, "$O");
+            if(p == 0)
+                break;
+            memmove(p+1, p+2, strlen(p+2)+1);
+            p[0] = thechar;
+        }
+        for(;;) {
+            p = strstr(comp, "$M");
+            if(p == 0)
+                break;
+            if(strlen(comp)+strlen(thestring)-2+1 >= sizeof comp) {
+                diag("library component too long");
+                return;
+            }
+            memmove(p+strlen(thestring), p+2, strlen(p+2)+1);
+            memmove(p, thestring, strlen(thestring));
+        }
+        if(strlen(fn1) + strlen(comp) + 3 >= sizeof(fn1)) {
+            diag("library component too long");
+            return;
+        }
+        if(i > 0 || !search)
+            strcat(fn1, "/");
+        strcat(fn1, comp);
+    }
+
+    cleanname(name);
+
+    if(search){
+        p = findlib(name);
+        if(p != nil){
+            snprint(fn2, sizeof(fn2), "%s/%s", p, name);
+            name = fn2;
+        }
+    }
+
+
+    for(i=0; i<libraryp; i++)
+        if(strcmp(name, library[i]) == 0)
+            return;
+    if(libraryp == nelem(library)){
+        diag("too many autolibs; skipping %s", name);
+        return;
+    }
+
+    p = malloc(strlen(name) + 1);
+    strcpy(p, name);
+    library[libraryp] = p;
+    p = malloc(strlen(obj) + 1);
+    strcpy(p, obj);
+    libraryobj[libraryp] = p;
+    libraryp++;
+}
+@
+
+
+
+\chapter{Machine Code Generation (x86)}
 % for x86
 
-% done by 8l, not 8a, surprisingly
+% done by 8l, not 8a, surprisingly!
+
 % why? because allows more optimisations? cross libs? as in llvm?
 % also more compact and simple object format? and more cross platform?
 
@@ -3499,11 +3667,10 @@ for(i=0; i<D_NONE; i++) {
 @
 
 \chapter{Profiling}
-% surprising that part of ld job, but it is
+% surprising again that it's also part of ld job to profile
 
-% interesting because insert extra obj code using
-% directly "AST" constructs, so help to understand the data structure
-
+% it is interesting because it insert extra obj code using
+% directly "AST" constructs, so help to understand the data structure!!
 
 % NOPROF of 8.out.h
 
@@ -3862,15 +4029,16 @@ enum {
 
 \section{[[debug]]}
 
-% -A, see diag()
-
 % hmm actually it's used more than for debugging but for generic
 % options, e.g. for -l, -p, etc in addition to the main use which is -v
 <<global debug>>=
 bool	debug[128];
 @
 
-%bso? for debug?
+
+% -A, see diag()
+
+%bso? 
 <<global bso>>=
 Biobuf	bso;
 @
@@ -3882,11 +4050,11 @@ memset(debug, 0, sizeof(debug));
 @
 
 <<[[main()]] command line processing>>=
-    default:
-        c = ARGC();
-        if(c >= 0 && c < sizeof(debug))
-            debug[c] = true;
-        break;
+default:
+    c = ARGC();
+    if(c >= 0 && c < sizeof(debug))
+        debug[c] = true;
+    break;
 @
 
 \section{Fmt}
@@ -4193,7 +4361,7 @@ Sconv(Fmt *fp)
 }
 @
 
-\section{[[8l -v]]}
+\section{[[8l -v]] and [[DBG()]]}
 
 %used to have lots of code like:
 %if(debug['v']) {
@@ -4221,6 +4389,7 @@ void mylog(char *fmt, ...) {
 @
 
 \section{[[8l -9 -B -9]]}
+% dead?
 
 <<constant DEFAULT>>=
 #define	DEFAULT	'9'
@@ -4369,7 +4538,7 @@ malloc(ulong n)
 }
 @
 
-% no free ... 
+% no free ...  hmmm
 <<function free>>=
 void
 free(void *p)

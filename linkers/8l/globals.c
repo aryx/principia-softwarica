@@ -39,7 +39,7 @@ int	cbc;
 char*	cbp;
 /*e: global cbp */
 /*s: global pcstr */
-char*	pcstr;
+char*	pcstr = "%.6lux ";
 /*e: global pcstr */
 /*s: global cout */
 fdt	cout = -1;
@@ -51,10 +51,12 @@ Prog*	curp;
 Prog*	curtext;
 /*e: global curtext */
 /*s: global datap */
-Prog*	datap;
+// list<ref<Prog>>, next = Prog.next
+Prog*	datap = P;
 /*e: global datap */
 /*s: global edatap */
-Prog*	edatap;
+// ref<Prog>>, end of datap list
+Prog*	edatap = P;
 /*e: global edatap */
 /*s: global datsize */
 long	datsize;
@@ -63,7 +65,7 @@ long	datsize;
 bool	debug[128];
 /*e: global debug */
 /*s: global firstp */
-// ref_own?<Prog>
+// list<ref_own?<Prog>>, next = Prog.link
 Prog*	firstp;
 /*e: global firstp */
 /*s: global fnuxi8 */
@@ -101,7 +103,7 @@ uchar	and[30];
 char	reg[D_NONE];
 /*e: global reg */
 /*s: global lastp */
-// ref<Prog>
+// ref<Prog>, last elt of firstp list
 Prog*	lastp;
 /*e: global lastp */
 /*s: global lcsize */
@@ -126,7 +128,8 @@ long	pc;
 long	symsize;
 /*e: global symsize */
 /*s: global textp */
-Prog*	textp;
+// list<ref<Prog>>, next = Prog.cond?
+Prog*	textp = P;
 /*e: global textp */
 /*s: global textsize */
 long	textsize;
