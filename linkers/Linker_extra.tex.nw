@@ -3157,20 +3157,6 @@ void	elf64(int mach, int bo, int addpsects, void (*putpsects)(Putl));
 
 \subsection*{[[linkers/8l/l.h]]}
 
-<<global cbc>>=
-int	cbc;
-@
-
-<<global cbp>>=
-char*	cbp;
-@
-
-<<function cput>>=
-#define	cput(c)\
-    { *cbp++ = c;\
-    if(--cbc <= 0)\
-        cflush(); }
-@
 
 <<constant LIBNAMELEN>>=
 #define	LIBNAMELEN	300
@@ -3186,7 +3172,7 @@ enum misc1 {
     MINSIZ		= 4,
     STRINGSZ	= 200,
     MINLC		= 1,
-    MAXIO		= 8192,
+    <<constant MAXIO>>
     MAXHIST		= 20, /* limit of path elements for history symbols */
 };
 @
@@ -3399,9 +3385,6 @@ void mylog(char*, ...);
 
 \subsection*{[[linkers/8l/globals.c]]}
 
-<<global buf>>=
-union Buf buf;
-@
 
 
 
@@ -3436,39 +3419,6 @@ char	literal[32];
 
 
 
-<<global fnuxi8>>=
-char	fnuxi8[8];
-@
-
-<<global fnuxi4>>=
-char	fnuxi4[4];
-@
-
-
-<<global histfrog>>=
-Sym*	histfrog[MAXHIST];
-@
-
-
-<<global histgen>>=
-int	histgen = 0;
-@
-
-
-
-
-<<global inuxi1>>=
-char	inuxi1[1];
-@
-
-<<global inuxi2>>=
-char	inuxi2[2];
-@
-
-<<global inuxi4>>=
-char	inuxi4[4];
-@
-
 
 <<global andptr>>=
 uchar*	andptr;
@@ -3481,24 +3431,8 @@ uchar	and[30];
 
 
 
-
-
-
-
-
 <<global pc>>=
 long	pc;
-@
-
-
-
-
-<<global textsize>>=
-long	textsize;
-@
-
-<<global thunk>>=
-long	thunk;
 @
 
 
@@ -3571,7 +3505,8 @@ Adr*	reloca;
 <<global nexports>>
 
 int	imports;
-int	exports, allexport;
+int	exports;
+int	allexport;
 <<global EXPTAB>>
 <<global undefp>>
 
@@ -3711,76 +3646,6 @@ int	Sconv(Fmt*);
 
 \subsection*{[[linkers/8l/pass.c]]}
 
-
-
-
-
-<<function relinv>>=
-int
-relinv(int a)
-{
-
-    switch(a) {
-    case AJEQ:	return AJNE;
-    case AJNE:	return AJEQ;
-    case AJLE:	return AJGT;
-    case AJLS:	return AJHI;
-    case AJLT:	return AJGE;
-    case AJMI:	return AJPL;
-    case AJGE:	return AJLT;
-    case AJPL:	return AJMI;
-    case AJGT:	return AJLE;
-    case AJHI:	return AJLS;
-    case AJCS:	return AJCC;
-    case AJCC:	return AJCS;
-    case AJPS:	return AJPC;
-    case AJPC:	return AJPS;
-    case AJOS:	return AJOC;
-    case AJOC:	return AJOS;
-    }
-    diag("unknown relation: %s in %s", anames[a], TNAME);
-    return a;
-}
-@
-
-
-
-
-<<function brloop>>=
-Prog*
-brloop(Prog *p)
-{
-    int c;
-    Prog *q;
-
-    c = 0;
-    for(q = p; q != P; q = q->pcond) {
-        if(q->as != AJMP)
-            break;
-        c++;
-        if(c >= 5000)
-            return P;
-    }
-    return q;
-}
-@
-
-
-
-
-<<function ckoff>>=
-void
-ckoff(Sym *s, long v)
-{
-    if(v < 0 || v >= 1<<Roffset)
-        diag("relocation offset %ld for %s out of range", v, s->name);
-}
-@
-
-% >>
-
-
-
 %-------------------------------------------------------------
 
 <<linkers/8l/pass.c>>=
@@ -3828,286 +3693,6 @@ Prog*	brloop(Prog*);
 
 \subsection*{[[linkers/8l/asm.c]]}
 
-<<constant Dbufslop>>=
-#define	Dbufslop	100
-@
-
-<<function entryvalue>>=
-long
-entryvalue(void)
-{
-    char *a;
-    Sym *s;
-
-    a = INITENTRY;
-    if(*a >= '0' && *a <= '9')
-        return atolwhex(a);
-    s = lookup(a, 0);
-    if(s->type == 0)
-        return INITTEXT;
-    switch(s->type) {
-    case STEXT:
-        break;
-    case SDATA:
-        if(dlm)
-            return s->value+INITDAT;
-    default:
-        diag("entry not text: %s", s->name);
-    }
-    return s->value;
-}
-@
-
-<<function wputl>>=
-/* these need to take long arguments to be compatible with elf.c */
-void
-wputl(long w)
-{
-    cput(w);
-    cput(w>>8);
-}
-@
-
-<<function wput>>=
-void
-wput(long w)
-{
-    cput(w>>8);
-    cput(w);
-}
-@
-
-<<function lput>>=
-void
-lput(long l)
-{
-    cput(l>>24);
-    cput(l>>16);
-    cput(l>>8);
-    cput(l);
-}
-@
-
-<<function lputl>>=
-void
-lputl(long l)
-{
-    cput(l);
-    cput(l>>8);
-    cput(l>>16);
-    cput(l>>24);
-}
-@
-
-<<function llput>>=
-void
-llput(vlong v)
-{
-    lput(v>>32);
-    lput(v);
-}
-@
-
-<<function llputl>>=
-void
-llputl(vlong v)
-{
-    lputl(v);
-    lputl(v>>32);
-}
-@
-
-<<function strnput>>=
-void
-strnput(char *s, int n)
-{
-    for(; *s && n > 0; s++){
-        cput(*s);
-        n--;
-    }
-    while(n > 0){
-        cput(0);
-        n--;
-    }
-}
-@
-
-
-<<function cflush>>=
-void
-cflush(void)
-{
-    int n;
-
-    n = sizeof(buf.cbuf) - cbc;
-    if(n)
-        write(cout, buf.cbuf, n);
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
-}
-@
-
-<<function datblk>>=
-void
-datblk(long s, long n)
-{
-    Prog *p;
-    char *cast;
-    long l, fl, j;
-    int i, c;
-
-    memset(buf.dbuf, 0, n+Dbufslop);
-    for(p = datap; p != P; p = p->link) {
-        curp = p;
-        l = p->from.sym->value + p->from.offset - s;
-        c = p->from.scale;
-        i = 0;
-        if(l < 0) {
-            if(l+c <= 0)
-                continue;
-            while(l < 0) {
-                l++;
-                i++;
-            }
-        }
-        if(l >= n)
-            continue;
-        if(p->as != AINIT && p->as != ADYNT) {
-            for(j=l+(c-i)-1; j>=l; j--)
-                if(buf.dbuf[j]) {
-                    print("%P\n", p);
-                    diag("multiple initialization");
-                    break;
-                }
-        }
-        switch(p->to.type) {
-        case D_FCONST:
-            switch(c) {
-            default:
-            case 4:
-                fl = ieeedtof(&p->to.ieee);
-                cast = (char*)&fl;
-                if(debug['a'] && i == 0) {
-                    Bprint(&bso, pcstr, l+s+INITDAT);
-                    for(j=0; j<c; j++)
-                        Bprint(&bso, "%.2ux", cast[fnuxi4[j]] & 0xff);
-                    Bprint(&bso, "\t%P\n", curp);
-                }
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[fnuxi4[i]];
-                    l++;
-                }
-                break;
-            case 8:
-                cast = (char*)&p->to.ieee;
-                if(debug['a'] && i == 0) {
-                    Bprint(&bso, pcstr, l+s+INITDAT);
-                    for(j=0; j<c; j++)
-                        Bprint(&bso, "%.2ux", cast[fnuxi8[j]] & 0xff);
-                    Bprint(&bso, "\t%P\n", curp);
-                }
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[fnuxi8[i]];
-                    l++;
-                }
-                break;
-            }
-            break;
-
-        case D_SCONST:
-            if(debug['a'] && i == 0) {
-                Bprint(&bso, pcstr, l+s+INITDAT);
-                for(j=0; j<c; j++)
-                    Bprint(&bso, "%.2ux", p->to.scon[j] & 0xff);
-                Bprint(&bso, "\t%P\n", curp);
-            }
-            for(; i<c; i++) {
-                buf.dbuf[l] = p->to.scon[i];
-                l++;
-            }
-            break;
-        default:
-            fl = p->to.offset;
-            if(p->to.type == D_ADDR) {
-                if(p->to.index != D_STATIC && p->to.index != D_EXTERN)
-                    diag("DADDR type%P", p);
-                if(p->to.sym) {
-                    if(p->to.sym->type == SUNDEF)
-                        ckoff(p->to.sym, fl);
-                    fl += p->to.sym->value;
-                    if(p->to.sym->type != STEXT && p->to.sym->type != SUNDEF)
-                        fl += INITDAT;
-                    if(dlm)
-                        dynreloc(p->to.sym, l+s+INITDAT, 1);
-                }
-            }
-            cast = (char*)&fl;
-            switch(c) {
-            default:
-                diag("bad nuxi %d %d\n%P", c, i, curp);
-                break;
-            case 1:
-                if(debug['a'] && i == 0) {
-                    Bprint(&bso, pcstr, l+s+INITDAT);
-                    for(j=0; j<c; j++)
-                        Bprint(&bso, "%.2ux", cast[inuxi1[j]] & 0xff);
-                    Bprint(&bso, "\t%P\n", curp);
-                }
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[inuxi1[i]];
-                    l++;
-                }
-                break;
-            case 2:
-                if(debug['a'] && i == 0) {
-                    Bprint(&bso, pcstr, l+s+INITDAT);
-                    for(j=0; j<c; j++)
-                        Bprint(&bso, "%.2ux", cast[inuxi2[j]] & 0xff);
-                    Bprint(&bso, "\t%P\n", curp);
-                }
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[inuxi2[i]];
-                    l++;
-                }
-                break;
-            case 4:
-                if(debug['a'] && i == 0) {
-                    Bprint(&bso, pcstr, l+s+INITDAT);
-                    for(j=0; j<c; j++)
-                        Bprint(&bso, "%.2ux", cast[inuxi4[j]] & 0xff);
-                    Bprint(&bso, "\t%P\n", curp);
-                }
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[inuxi4[i]];
-                    l++;
-                }
-                break;
-            }
-            break;
-        }
-    }
-    write(cout, buf.dbuf, n);
-}
-@
-
-<<function rnd>>=
-long
-rnd(long v, long r)
-{
-    long c;
-
-    if(r <= 0)
-        return v;
-    v += r - 1;
-    c = v % r;
-    if(c < 0)
-        c += r;
-    v -= c;
-    return v;
-}
-@
-
-
 %-------------------------------------------------------------
 
 <<linkers/8l/asm.c>>=
@@ -4147,25 +3732,6 @@ void	datblk(long, long);
 
 \subsection*{[[linkers/8l/span.c]]}
 
-<<function prefixof>>=
-int
-prefixof(Adr *a)
-{
-    switch(a->type) {
-    case D_INDIR+D_CS:
-        return 0x2e;
-    case D_INDIR+D_DS:
-        return 0x3e;
-    case D_INDIR+D_ES:
-        return 0x26;
-    case D_INDIR+D_FS:
-        return 0x64;
-    case D_INDIR+D_GS:
-        return 0x65;
-    }
-    return 0;
-}
-@
 
 <<function oclass>>=
 int
@@ -5121,6 +4687,28 @@ mfound:
 }
 @
 
+<<function prefixof>>=
+int
+prefixof(Adr *a)
+{
+    switch(a->type) {
+    case D_INDIR+D_CS:
+        return 0x2e;
+    case D_INDIR+D_DS:
+        return 0x3e;
+    case D_INDIR+D_ES:
+        return 0x26;
+    case D_INDIR+D_FS:
+        return 0x64;
+    case D_INDIR+D_GS:
+        return 0x65;
+    }
+    return 0;
+}
+@
+
+
+
 <<function asmins>>=
 void
 asmins(Prog *p)
@@ -5140,83 +4728,6 @@ enum{
 };
 @
 
-<<global modemap>>=
-int modemap[4] = { 0, 1, -1, 2, };
-@
-
-
-
-
-
-<<struct Reloc>>=
-struct Reloc
-{
-    int n;
-    int t;
-    uchar *m;
-    ulong *a;
-};
-@
-
-<<global rels>>=
-Reloc rels;
-@
-
-<<function grow>>=
-static void
-grow(Reloc *r)
-{
-    int t;
-    uchar *m, *nm;
-    ulong *a, *na;
-
-    t = r->t;
-    r->t += 64;
-    m = r->m;
-    a = r->a;
-    r->m = nm = malloc(r->t*sizeof(uchar));
-    r->a = na = malloc(r->t*sizeof(ulong));
-    memmove(nm, m, t*sizeof(uchar));
-    memmove(na, a, t*sizeof(ulong));
-    free(m);
-    free(a);
-}
-@
-
-<<function dynreloc>>=
-void
-dynreloc(Sym *s, ulong v, int abs)
-{
-    int i, k, n;
-    uchar *m;
-    ulong *a;
-    Reloc *r;
-
-    if(s->type == SUNDEF)
-        k = abs ? ABSU : RELU;
-    else
-        k = abs ? ABSD : RELD;
-    /* Bprint(&bso, "R %s a=%ld(%lx) %d\n", s->name, v, v, k); */
-    k = modemap[k];
-    r = &rels;
-    n = r->n;
-    if(n >= r->t)
-        grow(r);
-    m = r->m;
-    a = r->a;
-    for(i = n; i > 0; i--){
-        if(v < a[i-1]){	/* happens occasionally for data */
-            m[i] = m[i-1];
-            a[i] = a[i-1];
-        }
-        else
-            break;
-    }
-    m[i] = k;
-    a[i] = v;
-    r->n++;
-}
-@
 
 <<function sput>>=
 static int
@@ -5615,345 +5126,6 @@ long	entryvalue(void);
 
 
 \subsection*{[[linkers/8l/obj.c]]}
-
-
-<<global noname (linkers/8l/obj.c)>>=
-char	*noname		= "<none>";
-@
-
-<<global symname (linkers/8l/obj.c)>>=
-char	symname[]	= SYMDEF;
-@
-
-
-
-
-<<function isobjfile>>=
-static int
-isobjfile(char *f)
-{
-    int n, v;
-    Biobuf *b;
-    char buf1[5], buf2[SARMAG];
-
-    b = Bopen(f, OREAD);
-    if(b == nil)
-        return 0;
-    n = Bread(b, buf1, 5);
-    if(n == 5 && (buf1[2] == 1 && buf1[3] == '<' || buf1[3] == 1 && buf1[4] == '<'))
-        v = 1;	/* good enough for our purposes */
-    else{
-        Bseek(b, 0, 0);
-        n = Bread(b, buf2, SARMAG);
-        v = n == SARMAG && strncmp(buf2, ARMAG, SARMAG) == 0;
-    }
-    Bterm(b);
-    return v;
-}
-@
-
-
-
-<<function findlib>>=
-char*
-findlib(char *file)
-{
-    int i;
-    char name[LIBNAMELEN];
-
-    for(i = 0; i < nlibdir; i++) {
-        snprint(name, sizeof(name), "%s/%s", libdir[i], file);
-        if(fileexists(name))
-            return libdir[i];
-    }
-    return nil;
-}
-@
-
-
-<<function zaddr>>=
-int
-zaddr(uchar *p, Adr *a, Sym *h[])
-{
-    int c, t, i;
-    int l;
-    Sym *s;
-    Auto *u;
-
-    t = p[0];
-
-    c = 1;
-    if(t & T_INDEX) {
-        a->index = p[c];
-        a->scale = p[c+1];
-        c += 2;
-    } else {
-        a->index = D_NONE;
-        a->scale = 0;
-    }
-    a->offset = 0;
-    if(t & T_OFFSET) {
-        a->offset = p[c] | (p[c+1]<<8) | (p[c+2]<<16) | (p[c+3]<<24);
-        c += 4;
-    }
-    a->sym = S;
-    if(t & T_SYM) {
-        a->sym = h[p[c]];
-        c++;
-    }
-    a->type = D_NONE;
-    if(t & T_FCONST) {
-        a->ieee.l = p[c] | (p[c+1]<<8) | (p[c+2]<<16) | (p[c+3]<<24);
-        a->ieee.h = p[c+4] | (p[c+5]<<8) | (p[c+6]<<16) | (p[c+7]<<24);
-        c += 8;
-        a->type = D_FCONST;
-    } else
-    if(t & T_SCONST) {
-        for(i=0; i<NSNAME; i++)
-            a->scon[i] = p[c+i];
-        c += NSNAME;
-        a->type = D_SCONST;
-    }
-    if(t & T_TYPE) {
-        a->type = p[c];
-        c++;
-    }
-    s = a->sym;
-    if(s == S)
-        return c;
-
-    t = a->type;
-    if(t != D_AUTO && t != D_PARAM)
-        return c;
-    l = a->offset;
-    for(u=curauto; u; u=u->link) {
-        if(u->asym == s)
-        if(u->type == t) {
-            if(u->aoffset > l)
-                u->aoffset = l;
-            return c;
-        }
-    }
-
-    while(nhunk < sizeof(Auto))
-        gethunk();
-    u = (Auto*)hunk;
-    nhunk -= sizeof(Auto);
-    hunk += sizeof(Auto);
-
-    u->link = curauto;
-    curauto = u;
-    u->asym = s;
-    u->aoffset = l;
-    u->type = t;
-    return c;
-}
-@
-
-% >> >> >> >> >> >> >> >> >> >> >> >>
-
-
-<<function addhist>>=
-void
-addhist(long line, int type)
-{
-    Auto *u;
-    Sym *s;
-    int i, j, k;
-
-    u = malloc(sizeof(Auto));
-    s = malloc(sizeof(Sym));
-    s->name = malloc(2*(histfrogp+1) + 1);
-
-    u->asym = s;
-    u->type = type;
-    u->aoffset = line;
-    u->link = curhist;
-    curhist = u;
-
-    j = 1;
-    for(i=0; i<histfrogp; i++) {
-        k = histfrog[i]->value;
-        s->name[j+0] = k>>8;
-        s->name[j+1] = k;
-        j += 2;
-    }
-}
-@
-
-<<function histtoauto>>=
-void
-histtoauto(void)
-{
-    Auto *l;
-
-    while(l = curhist) {
-        curhist = l->link;
-        l->link = curauto;
-        curauto = l;
-    }
-}
-@
-
-<<function collapsefrog>>=
-void
-collapsefrog(Sym *s)
-{
-    int i;
-
-    /*
-     * bad encoding of path components only allows
-     * MAXHIST components. if there is an overflow,
-     * first try to collapse xxx/..
-     */
-    for(i=1; i<histfrogp; i++)
-        if(strcmp(histfrog[i]->name+1, "..") == 0) {
-            memmove(histfrog+i-1, histfrog+i+1,
-                (histfrogp-i-1)*sizeof(histfrog[0]));
-            histfrogp--;
-            goto out;
-        }
-
-    /*
-     * next try to collapse .
-     */
-    for(i=0; i<histfrogp; i++)
-        if(strcmp(histfrog[i]->name+1, ".") == 0) {
-            memmove(histfrog+i, histfrog+i+1,
-                (histfrogp-i-1)*sizeof(histfrog[0]));
-            goto out;
-        }
-
-    /*
-     * last chance, just truncate from front
-     */
-    memmove(histfrog+0, histfrog+1,
-        (histfrogp-1)*sizeof(histfrog[0]));
-
-out:
-    histfrog[histfrogp-1] = s;
-}
-@
-
-<<function nopout>>=
-void
-nopout(Prog *p)
-{
-    p->as = ANOP;
-    p->from.type = D_NONE;
-    p->to.type = D_NONE;
-}
-@
-
-<<function readsome>>=
-uchar*
-readsome(int f, uchar *buf, uchar *good, uchar *stop, int max)
-{
-    int n;
-
-    n = stop - good;
-    memmove(buf, good, stop - good);
-    stop = buf + n;
-    n = MAXIO - n;
-    if(n > max)
-        n = max;
-    n = read(f, stop, n);
-    if(n <= 0)
-        return 0;
-    return stop + n;
-}
-@
-
-
-
-<<function appendp>>=
-Prog*
-appendp(Prog *q)
-{
-    Prog *p;
-
-    p = prg();
-    p->link = q->link;
-    q->link = p;
-    p->line = q->line;
-    return p;
-}
-@
-
-
-
-<<function nuxiinit>>=
-void
-nuxiinit(void)
-{
-    int i, c;
-
-    for(i=0; i<4; i++) {
-        c = find1(0x04030201L, i+1);
-        if(i < 2)
-            inuxi2[i] = c;
-        if(i < 1)
-            inuxi1[i] = c;
-        inuxi4[i] = c;
-        fnuxi4[i] = c;
-        fnuxi8[i] = c;
-        fnuxi8[i+4] = c+4;
-    }
-    if(debug['v']) {
-        Bprint(&bso, "inuxi = ");
-        for(i=0; i<1; i++)
-            Bprint(&bso, "%d", inuxi1[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<2; i++)
-            Bprint(&bso, "%d", inuxi2[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", inuxi4[i]);
-        Bprint(&bso, "\nfnuxi = ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", fnuxi4[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<8; i++)
-            Bprint(&bso, "%d", fnuxi8[i]);
-        Bprint(&bso, "\n");
-    }
-    Bflush(&bso);
-}
-@
-
-<<function find1>>=
-int
-find1(long l, int c)
-{
-    char *p;
-    int i;
-
-    p = (char*)&l;
-    for(i=0; i<4; i++)
-        if(*p++ == c)
-            return i;
-    return 0;
-}
-@
-
-<<function find2>>=
-//int
-//find2(long l, int c)
-//{
-//    short *p;
-//    int i;
-//
-//    p = (short*)&l;
-//    for(i=0; i<4; i+=2) {
-//        if(((*p >> 8) & 0xff) == c)
-//            return i;
-//        if((*p++ & 0xff) == c)
-//            return i+1;
-//    }
-//    return 0;
-//}
-@
-
 
 
 
