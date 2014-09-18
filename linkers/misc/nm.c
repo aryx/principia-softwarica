@@ -342,6 +342,7 @@ printsyms(Sym **symptr, long nsym)
             Bprint(&bout, "%*llux ", wid, s->value);
         else
             Bprint(&bout, "%*s ", wid, "");
+
         Bprint(&bout, "%c %s\n", s->type, cp);
     }
 }

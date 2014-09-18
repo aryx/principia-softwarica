@@ -150,8 +150,15 @@ Adr*	reloca;
 /*s: global dlm */
 bool dlm;
 /*e: global dlm */
-int	imports, nimports;
-int	exports, nexports, allexport;
+/*s: global nimports */
+int nimports;
+/*e: global nimports */
+/*s: global nexports */
+int nexports;
+/*e: global nexports */
+
+int	imports;
+int	exports, allexport;
 /*s: global EXPTAB */
 char*	EXPTAB;
 /*e: global EXPTAB */

@@ -145,7 +145,7 @@ main(int argc, char *argv[])
         char name[LIBNAMELEN];
         char *a;
     /*x: [[main()]] locals */
-        char *root;
+    char *root;
     /*e: [[main()]] locals */
 
     /*s: [[main()]] debug initialization */
@@ -191,9 +191,9 @@ main(int argc, char *argv[])
                 INITRND = atolwhex(a);
             break;
     /*x: [[main()]] command line processing */
-        case 'L':
-            addlibpath(EARGF(usage()));
-            break;
+    case 'L':
+        addlibpath(EARGF(usage()));
+        break;
     /*x: [[main()]] command line processing */
         case 'x':	/* produce export table */
             doexp = true;
@@ -485,6 +485,7 @@ main(int argc, char *argv[])
     // write to cout, finally
     asmb();
 
+    // sanity check
     undef();
     /*e: [[main()]] cout is ready, LET'S GO */
 

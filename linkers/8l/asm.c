@@ -6,7 +6,7 @@
 /*e: constant Dbufslop */
 
 /*s: global spsize */
-long	spsize;
+long	spsize = 0;
 /*e: global spsize */
 
 void	datblk(long, long);
@@ -202,7 +202,6 @@ asmb(void)
     }
 
     symsize = 0;
-    spsize = 0;
     lcsize = 0;
 
     if(!debug['s']) {

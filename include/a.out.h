@@ -14,7 +14,7 @@ struct	Exec
     // virtual address in [UTZERO+sizeof(Exec)..UTZERO+sizeof(Exec)+text]
     long	entry;	 	/* entry point */ 
 
-    // used only by 68020
+    // used only by 68020, spsize set to 0 for 8l
     long	spsz;		/* size of pc/sp offset table */
     // see a.out.h man page explaining how to compute the line of a PC
     long	pcsz;		/* size of pc/line number table */

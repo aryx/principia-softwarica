@@ -8,7 +8,7 @@
 int
 size(char *file)
 {
-    int fd;
+    fdt fd;
     Fhdr f;
 
     if((fd = open(file, OREAD)) < 0){
@@ -41,7 +41,7 @@ main(int argc, char *argv[])
         exits("usage");
     } ARGEND;
 
-    err = 0;
+    err = nil;
     if(argc == 0)
         if(size("8.out"))
             err = "error";

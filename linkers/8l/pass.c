@@ -244,6 +244,7 @@ loop:
         p = q;
         goto loop;
     }
+
     p = p->link;
     goto loop;
 }
@@ -522,6 +523,7 @@ dostkoff(void)
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
             curtext = p;
+
             autoffset = p->to.offset;
             if(autoffset < 0)
                 autoffset = 0;
