@@ -145,7 +145,10 @@ asmb(void)
             pc = p->pc;
         }
         curp = p;
+
+        // generate instruction!
         asmins(p);
+
         if(cbc < sizeof(and))
             cflush();
         a = (andptr - and);
@@ -173,6 +176,8 @@ asmb(void)
     }
     cflush();
 
+    // DATA SECTION
+
     switch(HEADTYPE) {
     case H_PLAN9:
         seek(cout, HEADR+textsize, SEEK__START);
@@ -197,8 +202,6 @@ asmb(void)
         diag("unknown header type %ld", HEADTYPE);
     }
 
-    // DATA SECTION
-
     DBG("%5.2f datblk\n", cputime());
 
     /*s: [[asmb()]] if dynamic module, before datblk() */
@@ -219,8 +222,9 @@ asmb(void)
 
     // SYMBOL TABLE
 
+    // modified by asmsym()
     symsize = 0;
-    // modify by asmlc()
+    // modified by asmlc()
     lcsize = 0;
 
     if(!debug['s']) {
@@ -250,8 +254,10 @@ asmb(void)
         }
 
         asmsym();
+
         DBG("%5.2f sp\n", cputime());
         DBG("%5.2f pc\n", cputime());
+
         asmlc();
 
         /*s: [[asmb()]] if dynamic module, call asmdyn() */
@@ -268,11 +274,12 @@ asmb(void)
         }
         /*e: [[asmb()]] if dynamic module and no symbol table generation */
     }
+
+    // HEADER
+
     DBG("%5.2f headr\n", cputime());
 
     seek(cout, 0L, SEEK__START);
-
-    // HEADER
 
     switch(HEADTYPE) {
     // see Exec in a.out.h
@@ -287,7 +294,9 @@ asmb(void)
         lput(datsize);
         lput(bsssize);
         lput(symsize);			/* nsyms */
+
         lput(entryvalue());		/* va of entry */
+
         lput(spsize);			/* sp offsets */
         lput(lcsize);			/* line offsets */
         break;
@@ -412,6 +421,7 @@ asmb(void)
         break;
     /*e: [[asmb()]] switch HEADTYPE (for header generation) cases */
     }
+
     cflush();
 }
 /*e: function asmb */
@@ -509,6 +519,7 @@ datblk(long s, long n)
                 l++;
             }
             break;
+
         default:
             fl = p->to.offset;
             if(p->to.type == D_ADDR) {

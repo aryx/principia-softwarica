@@ -226,9 +226,9 @@ asmsym(void)
             if(a->type == D_PARAM)
                 putsymb(a->asym->name, 'p', a->aoffset, 0);
     }
+
     if(debug['v'] || debug['n'])
-        Bprint(&bso, "symsize = %lud\n", symsize);
-    Bflush(&bso);
+        DBG("symsize = %lud\n", symsize);
 }
 /*e: function asmsym */
 

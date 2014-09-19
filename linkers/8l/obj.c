@@ -579,8 +579,7 @@ objfile(char *file)
     fdt f;
     long l;
     char magbuf[SARMAG];
-
-    /*s: [[objfile()]] locals */
+    /*s: [[objfile()]] other locals */
     long off, esym, cnt;
     bool work;
     Sym *s;
@@ -588,7 +587,7 @@ objfile(char *file)
     char name[LIBNAMELEN];
     struct ar_hdr arhdr;
     char *e, *start, *stop;
-    /*e: [[objfile()]] locals */
+    /*e: [[objfile()]] other locals */
 
     DBG("%5.2f ldobj: %s\n", cputime(), file);
 
