@@ -209,6 +209,7 @@ main(int argc, char *argv[])
     case 'u':	/* produce dynamically loadable module */
         dlm = true;
         debug['l'] = true;
+
         if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
             readundefs(ARGF(), SIMPORT);
         break;
@@ -432,8 +433,12 @@ main(int argc, char *argv[])
         /*e: [[main()]] adjust INITENTRY if profiling */
         if(!debug['l'])
             lookup(INITENTRY, 0)->type = SXREF;
-    } else if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
-        lookup(INITENTRY, 0)->type = SXREF;
+    } else {
+        /*s: [[main()]] if digit INITENTRY */
+        if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
+           lookup(INITENTRY, 0)->type = SXREF;
+        /*e: [[main()]] if digit INITENTRY */
+    }
     /*e: [[main()]] set INITENTRY */
 
     while(*argv)
@@ -457,7 +462,7 @@ main(int argc, char *argv[])
        /*s: [[main()]] if dynamic module */
        if(dlm){
            import();
-           HEADTYPE = 2;
+           HEADTYPE = H_PLAN9;
            INITTEXT = INITDAT = 0;
            INITRND = 8;
            INITENTRY = EXPTAB;
@@ -612,7 +617,7 @@ objfile(char *file)
     if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
         l = seek(f, 0L, SEEK__END);
-        seek(f, 0L, 0);
+        seek(f, 0L, SEEK__START);
 
         // the important call!
         ldobj(f, l, file);

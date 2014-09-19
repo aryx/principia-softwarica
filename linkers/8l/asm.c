@@ -19,21 +19,28 @@ entryvalue(void)
     Sym *s;
 
     a = INITENTRY;
+
+    /*s: [[entryvalue()]] if digit INITENTRY */
     if(*a >= '0' && *a <= '9')
         return atolwhex(a);
+    /*e: [[entryvalue()]] if digit INITENTRY */
+
     s = lookup(a, 0);
+    // no _main found, maybe pure asm, start at beginning of TEXT section (va)
     if(s->type == 0)
         return INITTEXT;
+
     switch(s->type) {
     case STEXT:
-        break;
+        return s->value;
+    /*s: [[entryvalue()]] if dynamic module case */
     case SDATA:
         if(dlm)
             return s->value+INITDAT;
+    /*e: [[entryvalue()]] if dynamic module case */
     default:
         diag("entry not text: %s", s->name);
     }
-    return s->value;
 }
 /*e: function entryvalue */
 
@@ -122,17 +129,18 @@ asmb(void)
 
     DBG("%5.2f asmb\n", cputime());
 
-    seek(cout, HEADR, 0);
+    // TEXT SECTION
+
+    seek(cout, HEADR, SEEK__START);
     pc = INITTEXT;
     curp = firstp;
+
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT)
             curtext = p;
         if(p->pc != pc) {
-
             if(!debug['a'])
                 print("%P\n", curp);
-
             diag("phase error %lux sb %lux in %s", p->pc, pc, TNAME);
             pc = p->pc;
         }
@@ -149,12 +157,14 @@ asmb(void)
             Bprint(&bso, "\t%P\n", curp);
         }
 
+        /*s: [[asmb()]] if dynamic module, when iterate from firstp */
         if(dlm) {
             if(p->as == ATEXT)
                 reloca = nil;
             else if(reloca != nil)
                 diag("reloc failure: %P", curp);
         }
+        /*e: [[asmb()]] if dynamic module, when iterate from firstp */
 
         memmove(cbp, and, a);
         cbp += a;
@@ -165,8 +175,9 @@ asmb(void)
 
     switch(HEADTYPE) {
     case H_PLAN9:
-        seek(cout, HEADR+textsize, 0);
+        seek(cout, HEADR+textsize, SEEK__START);
         break;
+    /*s: [[asmb()]] switch HEADTYPE (to position after text) cases */
     case H_GARBAGE:
         seek(cout, rnd(HEADR+textsize, 8192), 0);
         break;
@@ -181,18 +192,23 @@ asmb(void)
     case H_EXE:
         seek(cout, HEADR+rnd(textsize, INITRND), 0);
         break;
+    /*e: [[asmb()]] switch HEADTYPE (to position after text) cases */
     default:
         diag("unknown header type %ld", HEADTYPE);
     }
 
+    // DATA SECTION
+
     DBG("%5.2f datblk\n", cputime());
 
+    /*s: [[asmb()]] if dynamic module, before datblk() */
     if(dlm){
         char buf[8];
 
         write(cout, buf, INITDAT-textsize);
         textsize = INITDAT;
     }
+    /*e: [[asmb()]] if dynamic module, before datblk() */
 
     for(v = 0; v < datsize; v += sizeof(buf)-Dbufslop) {
         if(datsize-v > sizeof(buf)-Dbufslop)
@@ -201,22 +217,25 @@ asmb(void)
             datblk(v, datsize-v);
     }
 
+    // SYMBOL TABLE
+
     symsize = 0;
+    // modify by asmlc()
     lcsize = 0;
 
     if(!debug['s']) {
-
         DBG("%5.2f sym\n", cputime());
 
         switch(HEADTYPE) {
-        default:
-        case H_GARBAGE:
-            seek(cout, rnd(HEADR+textsize, 8192)+datsize, 0);
+        case H_PLAN9:
+            seek(cout, HEADR+textsize+datsize, 0);
             break;
+        /*s: [[asmb()]] switch HEADTYPE (for symbol table generation) cases */
+        case H_GARBAGE:
         case H_COFF:
             seek(cout, rnd(HEADR+textsize, INITRND)+datsize, 0);
             break;
-        case H_PLAN9:
+        //case H_PLAN9:
         case H_ELF:
             seek(cout, HEADR+textsize+datsize, 0);
             break;
@@ -224,33 +243,55 @@ asmb(void)
         case H_EXE:
             debug['s'] = 1;
             break;
+        /*e: [[asmb()]] switch HEADTYPE (for symbol table generation) cases */
+        default:
+            seek(cout, rnd(HEADR+textsize, 8192)+datsize, 0);
+            break;
         }
 
-        if(!debug['s'])
-            asmsym();
-
+        asmsym();
         DBG("%5.2f sp\n", cputime());
         DBG("%5.2f pc\n", cputime());
+        asmlc();
 
-        if(!debug['s'])
-            asmlc();
-
+        /*s: [[asmb()]] if dynamic module, call asmdyn() */
         if(dlm)
             asmdyn();
-
+        /*e: [[asmb()]] if dynamic module, call asmdyn() */
         cflush();
+    } else {
+        /*s: [[asmb()]] if dynamic module and no symbol table generation */
+        if(dlm){
+            seek(cout, HEADR+textsize+datsize, 0);
+            asmdyn();
+            cflush();
+        }
+        /*e: [[asmb()]] if dynamic module and no symbol table generation */
     }
-    else if(dlm){
-        seek(cout, HEADR+textsize+datsize, 0);
-        asmdyn();
-        cflush();
-    }
-
     DBG("%5.2f headr\n", cputime());
 
-    seek(cout, 0L, 0);
+    seek(cout, 0L, SEEK__START);
+
+    // HEADER
 
     switch(HEADTYPE) {
+    // see Exec in a.out.h
+    case H_PLAN9:	/* plan9 */
+        magic = 4*11*11+7;
+        /*s: [[asmb()]] if dynamic module magic header adjustment */
+        if(dlm)
+            magic |= 0x80000000;
+        /*e: [[asmb()]] if dynamic module magic header adjustment */
+        lput(magic);			/* magic */
+        lput(textsize);			/* sizes */
+        lput(datsize);
+        lput(bsssize);
+        lput(symsize);			/* nsyms */
+        lput(entryvalue());		/* va of entry */
+        lput(spsize);			/* sp offsets */
+        lput(lcsize);			/* line offsets */
+        break;
+    /*s: [[asmb()]] switch HEADTYPE (for header generation) cases */
     default:
     case H_GARBAGE:	/* garbage */
         lput(0x160L<<16);		/* magic and sections */
@@ -341,22 +382,6 @@ asmb(void)
         lputl(0);			/* relocation, line numbers */
         lputl(0x200);			/* flags comment only */
         break;
-
-    // see Exec in a.out.h
-    case H_PLAN9:	/* plan9 */
-        magic = 4*11*11+7;
-        if(dlm)
-            magic |= 0x80000000;
-        lput(magic);			/* magic */
-        lput(textsize);			/* sizes */
-        lput(datsize);
-        lput(bsssize);
-        lput(symsize);			/* nsyms */
-        lput(entryvalue());		/* va of entry */
-        lput(spsize);			/* sp offsets */
-        lput(lcsize);			/* line offsets */
-        break;
-
     case H_COM:
         /* MS-DOS .COM */
         break;
@@ -385,6 +410,7 @@ asmb(void)
     case H_ELF:
         elf32(I386, ELFDATA2LSB, 0, nil);
         break;
+    /*e: [[asmb()]] switch HEADTYPE (for header generation) cases */
     }
     cflush();
 }
@@ -494,8 +520,10 @@ datblk(long s, long n)
                     fl += p->to.sym->value;
                     if(p->to.sym->type != STEXT && p->to.sym->type != SUNDEF)
                         fl += INITDAT;
+                    /*s: [[datblk()]] if dynamic module */
                     if(dlm)
                         dynreloc(p->to.sym, l+s+INITDAT, 1);
+                    /*e: [[datblk()]] if dynamic module */
                 }
             }
             cast = (char*)&fl;
