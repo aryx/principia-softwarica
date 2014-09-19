@@ -158,7 +158,8 @@ int nexports;
 /*e: global nexports */
 
 int	imports;
-int	exports, allexport;
+int	exports;
+int	allexport;
 /*s: global EXPTAB */
 char*	EXPTAB;
 /*e: global EXPTAB */

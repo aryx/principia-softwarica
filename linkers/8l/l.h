@@ -282,7 +282,9 @@ enum misc1 {
     MINSIZ		= 4,
     STRINGSZ	= 200,
     MINLC		= 1,
+    /*s: constant MAXIO */
     MAXIO		= 8192,
+    /*e: constant MAXIO */
     MAXHIST		= 20, /* limit of path elements for history symbols */
 };
 /*e: enum misc1 */
