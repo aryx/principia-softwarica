@@ -106,10 +106,10 @@ struct	Prog
 
     // Extra
 
-    // list<ref<Prog>> from firstp, datap, ... depending on the instr kind
+    // list<ref<Prog>> from firstp/lastp, or datap/edatap
     Prog*	link;
 
-    // list<ref<Prog>> from textp?
+    // list<ref<Prog>> from textp/etextp
     Prog*	pcond;	/* work on this */
 
 };
@@ -139,7 +139,7 @@ struct	Sym
     byte	subtype;
 
     long	sig;
-    long	value;
+    long	value; // e.g. pc for a TEXT procedure
 
     // [[Sym]] other fields
     short	become;

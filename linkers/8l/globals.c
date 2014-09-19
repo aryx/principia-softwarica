@@ -122,13 +122,13 @@ long	nsymbol;
 char*	outfile = "8.out";
 /*e: global outfile */
 /*s: global pc */
-long	pc;
+long	pc = 0;
 /*e: global pc */
 /*s: global symsize */
 long	symsize;
 /*e: global symsize */
 /*s: global textp */
-// list<ref<Prog>>, next = Prog.cond?
+// list<ref<Prog>>, next = Prog.cond
 Prog*	textp = P;
 /*e: global textp */
 /*s: global textsize */
