@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/keyboard/386/kbtab.c
+../../../../kernel/devices/keyboard/386/kbtab.c

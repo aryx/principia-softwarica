@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/core/386/dat_core.h
+../../../../kernel/core/386/dat_core.h

@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/buses/portdat_buses.h
+../../../../kernel/buses/portdat_buses.h

@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/processes/proc.c
+../../../../kernel/processes/proc.c

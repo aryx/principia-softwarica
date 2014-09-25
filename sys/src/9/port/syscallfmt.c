@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/syscalls/syscallfmt.c
+../../../../kernel/syscalls/syscallfmt.c

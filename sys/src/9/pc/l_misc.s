@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/init/386/l_misc.s
+../../../../kernel/init/386/l_misc.s

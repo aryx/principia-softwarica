@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/init/user/boot/boot.h
+../../../../kernel/init/user/boot/boot.h

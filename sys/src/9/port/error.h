@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/core/error.h
+../../../../kernel/core/error.h

@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/init/user/preboot/386/init9.c
+../../../../kernel/init/user/preboot/386/init9.c

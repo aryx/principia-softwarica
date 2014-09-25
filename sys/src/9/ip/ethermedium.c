@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/network/ip/ethermedium.c
+../../../../kernel/network/ip/ethermedium.c

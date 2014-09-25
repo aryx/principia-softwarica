@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/network/ip/ipv6.c
+../../../../kernel/network/ip/ipv6.c

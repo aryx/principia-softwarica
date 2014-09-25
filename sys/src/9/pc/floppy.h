@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/storage/386/floppy.h
+../../../../kernel/devices/storage/386/floppy.h

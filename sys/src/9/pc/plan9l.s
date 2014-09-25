@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/syscalls/386/plan9l.s
+../../../../kernel/syscalls/386/plan9l.s

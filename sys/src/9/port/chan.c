@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/files/chan.c
+../../../../kernel/files/chan.c

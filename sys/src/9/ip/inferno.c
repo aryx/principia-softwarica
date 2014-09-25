@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/network/ip/inferno.c
+../../../../kernel/network/ip/inferno.c

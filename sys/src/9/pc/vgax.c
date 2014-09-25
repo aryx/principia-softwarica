@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/screen/386/vgax.c
+../../../../kernel/devices/screen/386/vgax.c

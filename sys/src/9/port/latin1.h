@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/keyboard/386/latin1.h
+../../../../kernel/devices/keyboard/386/latin1.h

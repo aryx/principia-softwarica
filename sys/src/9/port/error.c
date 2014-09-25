@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/core/error.c
+../../../../kernel/core/error.c

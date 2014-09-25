@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/init/user/preboot/initcode.c
+../../../../kernel/init/user/preboot/initcode.c

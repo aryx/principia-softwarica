@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/lib/lib.h
+../../../../kernel/lib/lib.h

@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/init/portfns_init.h
+../../../../kernel/init/portfns_init.h

@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/memory/xalloc.c
+../../../../kernel/memory/xalloc.c

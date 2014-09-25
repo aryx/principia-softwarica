@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/sys/386/devarch.c
+../../../../kernel/devices/sys/386/devarch.c

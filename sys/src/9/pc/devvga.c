@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/screen/386/devvga.c
+../../../../kernel/devices/screen/386/devvga.c

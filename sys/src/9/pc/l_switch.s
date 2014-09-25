@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/processes/386/l_switch.s
+../../../../kernel/processes/386/l_switch.s

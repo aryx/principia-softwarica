@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/syscalls/systab.h
+../../../../kernel/syscalls/systab.h

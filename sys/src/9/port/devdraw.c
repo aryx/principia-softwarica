@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/devices/screen/devdraw.c
+../../../../kernel/devices/screen/devdraw.c

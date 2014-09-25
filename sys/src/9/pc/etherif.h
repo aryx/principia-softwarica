@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/network/386/etherif.h
+../../../../kernel/network/386/etherif.h

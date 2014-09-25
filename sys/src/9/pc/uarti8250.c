@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/buses/386/uarti8250.c
+../../../../kernel/buses/386/uarti8250.c

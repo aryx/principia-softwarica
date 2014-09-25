@@ -1,1 +1,1 @@
-/Users/yoann.padioleau/github/xix/xix-plan9/kernel/misc/parse.c
+../../../../kernel/misc/parse.c
