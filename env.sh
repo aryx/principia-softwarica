@@ -1,6 +1,7 @@
 export KENCC=/home/pad/kencc
-# need to modify plan9/src/cmd/mk/shell.c and put rcshell as default shell
-export PLAN9=/usr/local/plan9
+# remember to modify plan9/src/cmd/mk/shell.c and put rcshell as 
+# the default shell (the mkfiles in plan9 assumes rc)
+export PLAN9=/home/pad/Downloads/plan9port
 
 export PATH=$PLAN9/bin:$KENCC/bin:$PATH
 
@@ -8,5 +9,5 @@ export PATH=$PLAN9/bin:$KENCC/bin:$PATH
 PATH=$PATH:.
 
 export objtype=386
-#export objtype=arm
 export cputype=386
+#alt: export objtype=arm
