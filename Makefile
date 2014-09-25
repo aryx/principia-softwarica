@@ -6,6 +6,14 @@ CONFIG=qemu
 all:
 	make compile && make disk && make run
 
+# need also kencc and plan9port binaries in PATH
+setup_host:
+	sudo ln -s `pwd`/root/386 /386
+	sudo ln -s `pwd`/root/arm /arm
+	sudo ln -s `pwd`/root/mips /mips
+	sudo ln -s `pwd`/root/lib /lib
+	sudo ln -s `pwd`/sys /sys
+
 #assumes you have done source env.sh, or have a 'mk' wrapper that does that
 compile:
 	cd ROOT; mk
