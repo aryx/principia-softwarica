@@ -181,7 +181,9 @@ struct Itab
 {
     char	*name;
 
+    //token code
     ushort	type;
+    //enum<operand> | enum<opcode>
     ushort	value;
 };
 /*e: struct Itab */
@@ -683,7 +685,7 @@ cinit(void)
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)
-        nullgen.sval[i] = 0;
+        nullgen.sval[i] = '\0';
     nullgen.type = D_NONE;
     nullgen.index = D_NONE;
     nullgen.scale = 0;
@@ -1061,7 +1063,7 @@ l1:
     aloop:
         *cp++ = c;
         c = GETC();
-        if(isalpha(c) || isdigit(c) || c == '_' || c == '$')
+        if(isalpha(c) || isdigit(c) || c == '_' || c == '$') // $
             goto aloop;
 
         *cp = 0;

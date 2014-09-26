@@ -5,6 +5,7 @@
 struct Fi fi;
 /*e: global fi */
 /*s: global h */
+// hash<string, Sym>
 struct Htab h[NSYM];
 /*e: global h */
 
@@ -60,6 +61,7 @@ int	ninclude;
 char*	outfile;
 /*e: global outfile */
 /*s: global pass */
+// 1|2
 int	pass;
 /*e: global pass */
 /*s: global pathname */

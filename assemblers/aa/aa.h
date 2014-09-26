@@ -62,6 +62,7 @@ struct	Sym
     char	*name;
 
     // see also itab[i].type and itab[i].value
+    //enum???
     ushort	type;
     long	value; // vlong in va!!
 
@@ -113,7 +114,9 @@ struct	Io
 /*s: struct Htab */
 struct Htab
 {
+    //? list<Sym>, next = sym.link?
     Sym*	sym;
+    //enum???
     short	type;
 };
 /*e: struct Htab */

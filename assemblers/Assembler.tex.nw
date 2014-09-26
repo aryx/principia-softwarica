@@ -150,8 +150,8 @@ Here are other candidates that were considered but ultimately discarded:
 
 \section{Requirements}
 
+% know at least one assembler
 % asm.ps
-% know at least an assembler
 
 \section{About this document}
 #include "../docs/latex/About.tex.nw"
@@ -173,17 +173,16 @@ License.
 % mnemonic and symbolic addresses -> object/machine code
 
 % before assembler binary, then mnemonic but still hardcoded
-% address, then symbolic addresses
+% address, and then finally symbolic addresses
 
-% usually 2 passes as can reference stuff coming later
+% usually 2 passes as can reference stuff coming later.
 % pretty simple.
 
 % TODO: look at TECS section on assembler?
 
 \section{[[8a]] services}
 
-% command line interface? -o,   -D -I,  -f -m for debug
-% outfile
+% command line interface? -o outfile,   -D -I (cpp),  -f -m for debug
 
 \section{x86}
 
@@ -196,16 +195,17 @@ License.
 
 % the many different addressing modes. Actually I think 8a allows
 % more than what is allowed (optab handles the ugly restrictions
-% of intel?)
+% of Intel?)
 
 \section{[[helloworld.s]]}
 
 % print hello world with mv, call, int, etc? with no libc!
+% (and a _main)
 
 % show commands, 8a, ld, ./xxx
 
-% show binary format? hexdump? actually not x86 binary instruction format!
-% see section below
+% show binary format? hexdump? 
+% (actually not x86 binary instruction format! see section below)
 
 % can also maybe show one that use libc, use 8c -S hello.c
 
@@ -213,6 +213,8 @@ License.
 % the output
 
 % .8 format? a kind of .o, but 8l does actually the job to turn into x86 ISA
+% so it's really more a marshalled file of simple data structures that is
+% x86 specific only because of the set of opcode and registers really.
 
 \section{Code organization}
 
@@ -222,11 +224,11 @@ License.
 % same for header, common.out.h and 386/8.out.h!
 
 %actually lots of assembler related stuff is in libmach/
-%and even maybe some in the linker.
+%and lots in the linker.
 
-% mac.x = macro :) non macos ...
+% mac.c = macro :) non macos ...
 
-% relation with other tools: 8c, 8l, easy do for instance
+% relation with other tools? 8c, 8l? easy, do for instance:
 % git grep AADDB
 %assemblers/8a/lex.c:    "ADDB",		LTYPE3,	AADDB,
 %compilers/8c/peep.c:    case AADDB:	/* rhs rar */
@@ -237,27 +239,28 @@ License.
 
 % assembler actually generate a binary that is x86 specific, but not 
 % matching the x86 instruction set! optab.c is doing the real conversion
-% why? (because 8l does some inter-lib optimizations? a la llvm? nice design!)
+% (why? because 8l does some inter-lib optimizations? a la llvm? nice design!)
 % it generates an "object", a kind of .o except it's really not a .o like
 % in Linux :)
-
-%###############################################################################
-
-\chapter{Core Data Structures}
 
 % text -> grammar -> symbols -> codegen 
 % does not really use an AST, abuse tokens and the grammar to
 % do some computations (the classic old way to do things)
 
+%###############################################################################
+
+\chapter{Core Data Structures}
+
+
 \section{[[Opcode]] and [[Operand]]}
 
-%TODO: rename, and reorder to have first a set of mostly useful instr
+%TODO: reorder to have first a set of mostly useful instructions
 % e.g. MOV, MOVB, etc. Could maybe analyze *.s in plan9 and do some
 % stats?
 % hmmm but can reorder? the opcode generation rely on an order? or 
 % just 'ld' and 'as' need to agree with each other; the actual binary code
 % generation is done in the linker. Hmm but can have some issues
-% if want to play with what is cross compiled!
+% if want to play with what is cross-compiled!
 
 % TODO maybe by playing with Literate Programming I can reproduce a kind of ADT?
 % e.g. by introducing LSREG, and then the part of the enum register related
@@ -269,7 +272,7 @@ License.
 
 
 <<enum as>>=
-// coupling with 8c/enam.c, 8l/obj.c#optab
+// coupling: with 8c/enam.c, 8l/obj.c#optab
 enum opcode
 {
     AXXX,
@@ -730,7 +733,6 @@ enum opcode
 
 %\section{[[Register]]}
 
-% split, stuff are not really registers
 <<enum reg>>=
 enum operand
 {
@@ -740,7 +742,7 @@ enum operand
 };
 @
 
-
+%less: could have start at 1 here so could have D_NONE = 0
 <<[[operand]] register cases>>=
     D_AL		= 0,
     D_CL,
@@ -797,9 +799,10 @@ enum operand
     D_SCONST	= 67,
 
     D_ADDR		= 68,
+@
 
-    // TODO? lp split here?
-
+% ???
+<<[[operand]] non register cases>>=
     D_FILE,
 
     D_FILE1, // used by linker only
@@ -853,14 +856,16 @@ enum misc3 {
 
 
 
-% LTYPE0 et is defined in a.y, tokens with value 
+% LTYPE0 etc are defined in a.y, tokens with value 
 % instruction table conversion, string -> token
 <<struct Itab>>=
 struct Itab
 {
     char	*name;
 
+    //token code
     ushort	type;
+    //enum<operand> | enum<opcode>
     ushort	value;
 };
 @
@@ -1355,14 +1360,16 @@ struct Itab itab[] =
 
 \section{[[Sym]], [[h]] and [[hash]]}
 
-% assembling is all about symbolic name processing!
+% assembling is a lot about symbolic name processing!
 
+%TODO lp split!
 <<struct Sym>>=
 struct	Sym
 {
     char	*name;
 
     // see also itab[i].type and itab[i].value
+    //enum???
     ushort	type;
     long	value; // vlong in va!!
 
@@ -1377,6 +1384,7 @@ struct	Sym
 };
 @
 
+% what is the list it marks the end of?
 <<constant S>>=
 #define	S	((Sym*)0)
 @
@@ -1395,7 +1403,9 @@ struct	Ref
 <<struct Htab>>=
 struct Htab
 {
+    //? list<Sym>, next = sym.link?
     Sym*	sym;
+    //enum???
     short	type;
 };
 @
@@ -1405,7 +1415,9 @@ struct Htab
 @
 % hash function?
 
+
 <<global h>>=
+// hash<string, Sym>
 struct Htab h[NSYM];
 @
 
@@ -1417,26 +1429,27 @@ struct Htab h[NSYM];
 <<global hash>>=
 Sym*	hash[NHASH];
 @
+% diff with h?
 
 \section{[[Gen]], [[Gen2]]}
 
-
+% =~ Adr of Linker
 <<struct Gen>>=
 struct	Gen
 {
-    //??
-    Sym*	sym;
-
-    char	sval[8];
-    long	offset;
-    long	offset2;
-
-    // enum?
+    // enum<operand>
     short	type;
+
+    //enum<operand(register-only|D_NONE)>
     short	index;
 
     short	scale;
 
+    //??
+    Sym*	sym;
+    char	sval[8];
+    long	offset;
+    long	offset2;
     // float
     double	dval;
 };
@@ -1450,6 +1463,7 @@ struct	Gen2
     Gen	to;
 };
 @
+% related to Prog in Linker?
 
 <<global nullgen>>=
 Gen	nullgen;
@@ -1458,10 +1472,12 @@ Gen	nullgen;
 
 \chapter{[[main()]]}
 
+% default object suffix, to generate foo.8
 <<global thechar>>=
 int	thechar = '8';
 @
 
+% to find header files, /386/include/...
 <<global thestring>>=
 char*	thestring = "386";
 @
@@ -1472,6 +1488,7 @@ char*	outfile;
 @
 
 
+% output buf? of outfile?
 <<global obuf>>=
 Biobuf	obuf;
 @
@@ -1514,6 +1531,19 @@ case 'o':
 @
 
 
+
+
+
+% there is 2 passes.
+% actually used outside assemble() in the grammar! and outcode().
+% the idea is actually to parse two times, but to do different things the
+% second time. Abusing grammar actions (old style).
+<<global pass>>=
+// 1|2
+int	pass;
+@
+
+
 % on windows would be different, but we don't care
 % int -> Rune?
 <<function pathchar>>=
@@ -1524,15 +1554,7 @@ pathchar(void)
 }
 @
 
-% 2, actually used outside assemble()? yes in the grammar! and outcode()
-% the idea is actually to parse two times, but do different things the
-% second time
-<<global pass>>=
-int	pass;
-@
-
-
-
+%TODO lp split more
 <<function assemble>>=
 int
 assemble(char *file)
@@ -1622,7 +1644,7 @@ cinit(void)
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)
-        nullgen.sval[i] = 0;
+        nullgen.sval[i] = '\0';
     nullgen.type = D_NONE;
     nullgen.index = D_NONE;
     nullgen.scale = 0;
@@ -1876,7 +1898,7 @@ l1:
     aloop:
         *cp++ = c;
         c = GETC();
-        if(isalpha(c) || isdigit(c) || c == '_' || c == '$')
+        if(isalpha(c) || isdigit(c) || c == '_' || c == '$') // $
             goto aloop;
 
         *cp = 0;
@@ -3062,6 +3084,12 @@ linehist(char *f, int offset)
 %type	<gen2>	spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
 @
 
+%TODO lp split! give TOC overview
+% prog rules
+% addrmode rules
+% expr rules
+% ...
+
 <<grammar>>=
 prog:
 |	prog line
@@ -3638,7 +3666,7 @@ expr:
 % it's actually not machine code generation ... 8l/optab.c does this
 
 % it looks like outhist generate some header information,
-% where is the spec of the format? LD uses that I guess no?
+% where is the spec of the format? ld uses that I guess no?
 
 % ? out hist??
 <<function outhist>>=
@@ -3996,6 +4024,17 @@ if(argc > 1) {
 @
 
 \chapter{Conclusion}
+
+
+
+
+
+
+
+
+
+
+
 
 \appendix
 

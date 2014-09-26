@@ -14,7 +14,7 @@
 /*e: constant NOSPLIT */
 
 /*s: enum as */
-// coupling with 8c/enam.c, 8l/obj.c#optab
+// coupling: with 8c/enam.c, 8l/obj.c#optab
 enum opcode
 {
     AXXX,
@@ -531,9 +531,7 @@ enum operand
     D_SCONST	= 67,
 
     D_ADDR		= 68,
-
-    // TODO? lp split here?
-
+/*x: [[operand]] non register cases */
     D_FILE,
 
     D_FILE1, // used by linker only

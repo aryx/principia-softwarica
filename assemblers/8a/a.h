@@ -12,19 +12,19 @@ typedef	struct	Gen2 	Gen2;
 /*s: struct Gen */
 struct	Gen
 {
-    //??
-    Sym*	sym;
-
-    char	sval[8];
-    long	offset;
-    long	offset2;
-
-    // enum?
+    // enum<operand>
     short	type;
+
+    //enum<operand(register-only|D_NONE)>
     short	index;
 
     short	scale;
 
+    //??
+    Sym*	sym;
+    char	sval[8];
+    long	offset;
+    long	offset2;
     // float
     double	dval;
 };
