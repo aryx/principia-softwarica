@@ -147,7 +147,6 @@ Here are other candidates that were considered but ultimately discarded:
 \item GNU ld and the BFD library
 \item Gold
 \end{itemize}
-
 % Linker and Loader book, introduce his own ld?
 
 \section{Getting started}
@@ -267,6 +266,10 @@ struct	Exec
     long	pcsz;		/* size of pc/line number table */
 };
 @
+
+
+% entry: it's actually usually not main but _main (or _mainp) that does
+% some core initialization and then call main
 
 \section{Code organization}
 
@@ -560,6 +563,9 @@ struct	Adr
 #define	offset	u0.u0offset
 @
 
+% TODO I thought could have unamed union that then alleviate the need
+% for those macros! (just need to adapt graph_code_c to find those fields)
+
 <<constant scon>>=
 #define	scon	u0.u0scon
 @
@@ -654,7 +660,6 @@ main(int argc, char *argv[])
     ARGBEGIN {
     <<[[main()]] command line processing>>
     } ARGEND
-
     USED(argc);
     if(*argv == nil)
         usage();
@@ -675,10 +680,6 @@ main(int argc, char *argv[])
             HEADTYPE, INITTEXT, INITDAT, INITRND);
 
     <<[[main()]] sanity check optab>>
-
-    <<[[main()]] set ycover>>
-    <<[[main()]] set reg>>
-    <<[[main()]] set zprg>>
     <<[[main()]] initialize globals>>
 
     nuxiinit();
@@ -715,14 +716,9 @@ long	INITTEXT = -1;
 long	INITDAT = -1;
 @
 
-% -E default _main or _mainp
+% -E default _main (or _mainp when -p)
 <<global INITENTRY>>=
 char*	INITENTRY = nil;		/* entry point */
-@
-
-% start text physical address (elf only)
-<<global INITTEXTP>>=
-long	INITTEXTP = -1;
 @
 
 % -R text segment rounder at r multiple
@@ -732,36 +728,31 @@ long	INITRND = -1;
 
 
 <<[[main()]] command line processing>>=
-    case 'H':
-        a = ARGF();
-        if(a)
-            HEADTYPE = atolwhex(a);
-        break;
-    case 'T':
-        a = ARGF();
-        if(a)
-            INITTEXT = atolwhex(a);
-        break;
-    case 'D':
-        a = ARGF();
-        if(a)
-            INITDAT = atolwhex(a);
-        break;
-    case 'E':
-        a = ARGF();
-        if(a)
-            INITENTRY = a;
-        break;
-    case 'P':
-        a = ARGF();
-        if(a)
-            INITTEXTP = atolwhex(a);
-        break;
-    case 'R':
-        a = ARGF();
-        if(a)
-            INITRND = atolwhex(a);
-        break;
+case 'H':
+    a = ARGF();
+    if(a)
+        HEADTYPE = atolwhex(a);
+    break;
+case 'T':
+    a = ARGF();
+    if(a)
+        INITTEXT = atolwhex(a);
+    break;
+case 'D':
+    a = ARGF();
+    if(a)
+        INITDAT = atolwhex(a);
+    break;
+case 'E':
+    a = ARGF();
+    if(a)
+        INITENTRY = a;
+    break;
+case 'R':
+    a = ARGF();
+    if(a)
+        INITRND = atolwhex(a);
+    break;
 @
 
 
@@ -777,25 +768,25 @@ long	HEADR;
 %KTZERO_AND_HEADER=0xE0100020
 
 <<[[main()]] switch HEADTYPE cases>>=
-    case H_PLAN9:	/* plan 9 */
-        HEADR = 32L;
-        if(INITTEXT == -1)
-            INITTEXT = 4096+32;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4096;
-        break;
+case H_PLAN9:	/* plan 9 */
+    HEADR = 32L;
+    if(INITTEXT == -1)
+        INITTEXT = 4096+32;
+    if(INITDAT == -1)
+        INITDAT = 0;
+    if(INITRND == -1)
+        INITRND = 4096;
+    break;
 @
 
 % less important I think
 <<[[main()]] last INITXXX adjustments>>=
-    if (INITTEXTP == -1)
-        INITTEXTP = INITTEXT;
+if (INITTEXTP == -1)
+    INITTEXTP = INITTEXT;
 
-    if(INITDAT != 0 && INITRND != 0)
-        print("warning: -D0x%lux is ignored because of -R0x%lux\n",
-            INITDAT, INITRND);
+if(INITDAT != 0 && INITRND != 0)
+    print("warning: -D0x%lux is ignored because of -R0x%lux\n",
+        INITDAT, INITRND);
 @
 
 
@@ -812,6 +803,9 @@ long	HEADR;
 
 
 <<[[main()]] initialize globals>>=
+<<[[main()]] set ycover>>
+<<[[main()]] set reg>>
+<<[[main()]] set zprg>>
 dtype = 4;
 
 cbp = buf.cbuf;
@@ -875,11 +869,18 @@ copyp(Prog *q)
 }
 @
 
+<<[[main()]] locals>>=
+bool load_libs = true;
+@
 
+% -l means no automagic stdlibs
+<<[[main()]] initialize globals>>=
+load_libs = !debug['l'];
+@
 
-% TODO: all those xxx() are ugly, they use too much
-% globals, e.g. firstp, lastp, I should really rewrite
-% to be more functional
+% TODO: all those functions that take no args are ugly, they use too much
+% globals, e.g. firstp, lastp, I should really rewrite the code
+% to be more functional.
 
 <<[[main()]] cout is ready, LET'S GO>>=
 firstp = prg();
@@ -890,7 +891,7 @@ lastp = firstp;
 while(*argv)
     objfile(*argv++);
 
-if(!debug['l'])
+if(load_libs)
     loadlib();
 
 firstp = firstp->link;
@@ -916,18 +917,20 @@ undef();
 
 % when -l alone it means no startup lib
 % why firstp = firstp->link? the first prog is a fake?
+% and why ->link and not ->cond?
 
 
 <<[[main()]] set INITENTRY>>=
 if(INITENTRY == nil) {
     INITENTRY = "_main";
     <<[[main()]] adjust INITENTRY if profiling>>
-    if(!debug['l'])
+    if(load_libs)
         lookup(INITENTRY, 0)->type = SXREF;
 } else {
     <<[[main()]] if digit INITENTRY>>
 }
 @
+% _main! not main, because _main is defined in libc and then call your main?
 % SXREF means?
 
 \section{Loading the objects, [[objfile()]]}
@@ -4289,15 +4292,15 @@ asmlc(void)
 
 
 \chapter{Profiling Support}
-% surprising again that it's also part of ld job to profile
+% surprising again that it's ld's job to add profiling in plan9
 
-% it is interesting because it insert extra obj code using
-% directly "AST" constructs, so help to understand the data structure!!
+% The code below is interesting because it inserts extra object code using
+% directly "AST" constructs, so it helps to understand the data structure!!
 
-% NOPROF of 8.out.h
+% see NOPROF of 8.out.h in Assembler_extra.tex.nw
 
-% -p
-
+% 8l -p -1
+% after dostkoff(), before span(), matters?
 <<[[main()]] call doprofxxx() if profiling>>=
 if(debug['p'])
     if(debug['1'])
@@ -4306,6 +4309,7 @@ if(debug['p'])
         doprof2();
 @
 
+% where is defined _mainp? libc?
 <<[[main()]] adjust INITENTRY if profiling>>=
 if(debug['p'])
     INITENTRY = "_mainp";
@@ -4932,6 +4936,7 @@ bool dlm;
 <<[[main()]] command line processing>>=
 case 'u':	/* produce dynamically loadable module */
     dlm = true;
+    // do not load standard libraries
     debug['l'] = true;
 
     if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
@@ -5570,6 +5575,19 @@ case H_ELF:
 
 
 \subsection{Elf}
+
+% start text physical address (elf only)
+<<global INITTEXTP>>=
+long	INITTEXTP = -1;
+@
+
+<<[[main()]] command line processing>>=
+case 'P':
+    a = ARGF();
+    if(a)
+        INITTEXTP = atolwhex(a);
+    break;
+@
 
 <<enum _anon_ (linkers/8l/elf.h)>>=
 enum {

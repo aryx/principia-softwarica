@@ -145,6 +145,8 @@ main(int argc, char *argv[])
         char name[LIBNAMELEN];
         char *a;
     /*x: [[main()]] locals */
+    bool load_libs = true;
+    /*x: [[main()]] locals */
     char *root;
     /*e: [[main()]] locals */
 
@@ -160,36 +162,31 @@ main(int argc, char *argv[])
             outfile = ARGF();
             break;
     /*x: [[main()]] command line processing */
-        case 'H':
-            a = ARGF();
-            if(a)
-                HEADTYPE = atolwhex(a);
-            break;
-        case 'T':
-            a = ARGF();
-            if(a)
-                INITTEXT = atolwhex(a);
-            break;
-        case 'D':
-            a = ARGF();
-            if(a)
-                INITDAT = atolwhex(a);
-            break;
-        case 'E':
-            a = ARGF();
-            if(a)
-                INITENTRY = a;
-            break;
-        case 'P':
-            a = ARGF();
-            if(a)
-                INITTEXTP = atolwhex(a);
-            break;
-        case 'R':
-            a = ARGF();
-            if(a)
-                INITRND = atolwhex(a);
-            break;
+    case 'H':
+        a = ARGF();
+        if(a)
+            HEADTYPE = atolwhex(a);
+        break;
+    case 'T':
+        a = ARGF();
+        if(a)
+            INITTEXT = atolwhex(a);
+        break;
+    case 'D':
+        a = ARGF();
+        if(a)
+            INITDAT = atolwhex(a);
+        break;
+    case 'E':
+        a = ARGF();
+        if(a)
+            INITENTRY = a;
+        break;
+    case 'R':
+        a = ARGF();
+        if(a)
+            INITRND = atolwhex(a);
+        break;
     /*x: [[main()]] command line processing */
     case 'L':
         addlibpath(EARGF(usage()));
@@ -208,10 +205,17 @@ main(int argc, char *argv[])
     /*x: [[main()]] command line processing */
     case 'u':	/* produce dynamically loadable module */
         dlm = true;
+        // do not load standard libraries
         debug['l'] = true;
 
         if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
             readundefs(ARGF(), SIMPORT);
+        break;
+    /*x: [[main()]] command line processing */
+    case 'P':
+        a = ARGF();
+        if(a)
+            INITTEXTP = atolwhex(a);
         break;
     /*x: [[main()]] command line processing */
     default:
@@ -221,7 +225,6 @@ main(int argc, char *argv[])
         break;
     /*e: [[main()]] command line processing */
     } ARGEND
-
     USED(argc);
     if(*argv == nil)
         usage();
@@ -259,15 +262,15 @@ main(int argc, char *argv[])
     /*e: [[main()]] adjust HEADTYPE if debug flags */
     switch(HEADTYPE) {
     /*s: [[main()]] switch HEADTYPE cases */
-        case H_PLAN9:	/* plan 9 */
-            HEADR = 32L;
-            if(INITTEXT == -1)
-                INITTEXT = 4096+32;
-            if(INITDAT == -1)
-                INITDAT = 0;
-            if(INITRND == -1)
-                INITRND = 4096;
-            break;
+    case H_PLAN9:	/* plan 9 */
+        HEADR = 32L;
+        if(INITTEXT == -1)
+            INITTEXT = 4096+32;
+        if(INITDAT == -1)
+            INITDAT = 0;
+        if(INITRND == -1)
+            INITRND = 4096;
+        break;
     /*x: [[main()]] switch HEADTYPE cases */
     case H_GARBAGE:	/* this is garbage */
         HEADR = 20L+56L;
@@ -323,12 +326,12 @@ main(int argc, char *argv[])
 
     }
     /*s: [[main()]] last INITXXX adjustments */
-        if (INITTEXTP == -1)
-            INITTEXTP = INITTEXT;
+    if (INITTEXTP == -1)
+        INITTEXTP = INITTEXT;
 
-        if(INITDAT != 0 && INITRND != 0)
-            print("warning: -D0x%lux is ignored because of -R0x%lux\n",
-                INITDAT, INITRND);
+    if(INITDAT != 0 && INITRND != 0)
+        print("warning: -D0x%lux is ignored because of -R0x%lux\n",
+            INITDAT, INITRND);
     /*e: [[main()]] last INITXXX adjustments */
 
     DBG("HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
@@ -341,7 +344,7 @@ main(int argc, char *argv[])
             errorexit();
         }
     /*e: [[main()]] sanity check optab */
-
+    /*s: [[main()]] initialize globals */
     /*s: [[main()]] set ycover */
     for(i=0; i<Ymax; i++)
         ycover[i*Ymax + i] = 1;
@@ -403,11 +406,12 @@ main(int argc, char *argv[])
     zprg.from.scale = 1;
     zprg.to = zprg.from;
     /*e: [[main()]] set zprg */
-    /*s: [[main()]] initialize globals */
     dtype = 4;
 
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
+    /*x: [[main()]] initialize globals */
+    load_libs = !debug['l'];
     /*e: [[main()]] initialize globals */
 
     nuxiinit();
@@ -430,7 +434,7 @@ main(int argc, char *argv[])
         if(debug['p'])
             INITENTRY = "_mainp";
         /*e: [[main()]] adjust INITENTRY if profiling */
-        if(!debug['l'])
+        if(load_libs)
             lookup(INITENTRY, 0)->type = SXREF;
     } else {
         /*s: [[main()]] if digit INITENTRY */
@@ -443,7 +447,7 @@ main(int argc, char *argv[])
     while(*argv)
         objfile(*argv++);
 
-    if(!debug['l'])
+    if(load_libs)
         loadlib();
 
     firstp = firstp->link;
