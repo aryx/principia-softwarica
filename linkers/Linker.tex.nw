@@ -321,7 +321,7 @@ struct	Sym
     Sym*	link;
 };
 @
-% Sconv?
+
 
 <<constant S>>=
 #define	S		((Sym*)nil)
@@ -411,13 +411,12 @@ lookup(char *symb, int v)
 @
 
 
-\section{[[Opcode]] and [[Register]]}
-% in 8.out.h: Opcode (enum as), Register (enum reg), enum dxxx
+\section{[[Opcode]] and [[Operand]]}
+% in 8.out.h: Opcode (enum opcode), Operand (enum operand)
 % see Aconv, Rconv, Dconv
 
 % put major opcode here, AXXX, ALAST, etc
-% and also D_CS, ...
-% and also D_EXTERN,
+% and also D_CS, ... and also D_EXTERN,
 
 \section{[[Prog]] and [[firstp]], [[textp]], [[datap]], [[curtext]], etc}
 
@@ -534,10 +533,17 @@ Prog	undefp;
 \section{[[Adr]]}
 
 % operand of instruction, e.g. in MOV AX, BX,  then AX is a form of Adr
-% (would be better if had ADT so can have better Instruction type)
+% (would be better if had ADT so can have better Instruction type instead
+% of those opcode, operand, Adr, and unions and all comments)
+
+% give a few examples? show man page where have all the addressing modes
+
 <<struct Adr>>=
 struct	Adr
 {
+    //enum<operand> (D_NONE by default)
+    short	type;
+
     union
     {
         long	u0offset;
@@ -552,10 +558,8 @@ struct	Adr
         Sym*	u1sym;
     } u1;
 
-    //enum<dxxx>, D_NONE by default
-    short	type;
-    //enum<dxxx>? D_NONE by default
-    uchar	index;
+    //enum<operand(register-only|D_NONE)>
+    byte	index;
 
     // TODO: abused for NOPROF function attributes
     char	scale; // offset * scale give size of entity?
@@ -563,6 +567,10 @@ struct	Adr
 @
 
 % the main thing the linker does, to relocate at the right place
+% offset can be based on PC (for D_BRANCH), SB(for D_STATIC, D_EXTERN),
+% on FP(for D_PARAM), and on SP(for D_AUTO), 
+% or can be direct value (for D_CONST)
+see DConv
 <<constant offset>>=
 #define	offset	u0.u0offset
 @
@@ -570,6 +578,7 @@ struct	Adr
 % TODO I thought could have unamed union that then alleviate the need
 % for those macros! (just need to adapt graph_code_c to find those fields)
 
+% ??
 <<constant scon>>=
 #define	scon	u0.u0scon
 @
@@ -2481,6 +2490,7 @@ data:
 
 \section{[[ADYNT]]}
 % ???
+% mv with dlm?
 
 <<[[ldobj()]] switch as cases>>=
 case ADYNT:
@@ -5676,18 +5686,29 @@ if(*a >= '0' && *a <= '9')
 
 \chapter{Conclusion}
 
+
+
+
+
+
+
+
+
+
+
+
 \appendix
 
 \chapter{Debugging}
 
 \section{[[debug]]}
 
-% hmm actually it's used more than for debugging but for generic
+% hmm actually it's used not just for debugging but also for generic
 % options, e.g. for -l, -p, etc in addition to the main use which is -v
 <<global debug>>=
 bool	debug[128];
 @
-
+% why not 256 like in Assembler.tex.nw?
 
 % -A, see diag()
 
@@ -5699,7 +5720,7 @@ Biobuf	bso;
 <<[[main()]] debug initialization>>=
 Binit(&bso, 1, OWRITE);
 listinit(); // fmtinstall()
-memset(debug, 0, sizeof(debug));
+memset(debug, false, sizeof(debug));
 @
 
 <<[[main()]] command line processing>>=
@@ -5721,9 +5742,8 @@ listinit(void)
     fmtinstall('A', Aconv);
     fmtinstall('R', Rconv);
     fmtinstall('D', Dconv);
-
-    fmtinstall('S', Sconv);
     fmtinstall('P', Pconv);
+    fmtinstall('S', Sconv);
 }
 @
 
@@ -5731,7 +5751,7 @@ listinit(void)
 % extern	char*	anames[];
 
 <<function Aconv>>=
-// enum<as> -> string
+// enum<opcode> -> string
 int
 Aconv(Fmt *fp)
 {
@@ -5816,9 +5836,10 @@ char*	regstr[] =
     "NONE",		/* [D_NONE] */
 };
 @
+% NONE part of it? this can happen? not more part of enum<operand>?
 
 <<function Rconv>>=
-// enum<register> -> string
+// enum<operand(register-only)> -> string
 int
 Rconv(Fmt *fp)
 {
@@ -5834,6 +5855,7 @@ Rconv(Fmt *fp)
     return fmtstrcpy(fp, str);
 }
 @
+%gok??
 
 
 % used by PConv and Dconv as Dconv need access to enclosing Prog for branch
@@ -5841,8 +5863,12 @@ Rconv(Fmt *fp)
 static	Prog	*bigP;
 @
 
+<<constant STRINGSZ>>=
+STRINGSZ	= 200,
+@
+
 <<function Pconv>>=
-// Proc -> string
+// Prog -> string
 int
 Pconv(Fmt *fp)
 {
@@ -5853,20 +5879,24 @@ Pconv(Fmt *fp)
     bigP = p;
     switch(p->as) {
     case ATEXT:
+        // when this happens?
         if(p->from.scale) {
             snprint(str, sizeof(str), "(%ld)	%A	%D,%d,%D",
                 p->line, p->as, &p->from, p->from.scale, &p->to);
-            break;
+        } else {
+            snprint(str, sizeof(str), "(%ld)	%A	%D,%D",
+                p->line, p->as, &p->from, &p->to);
         }
-    default:
-        snprint(str, sizeof(str), "(%ld)	%A	%D,%D",
-            p->line, p->as, &p->from, &p->to);
         break;
     case ADATA:
     case AINIT:
     case ADYNT:
         snprint(str, sizeof(str), "(%ld)	%A	%D/%d,%D",
             p->line, p->as, &p->from, p->from.scale, &p->to);
+        break;
+    default:
+        snprint(str, sizeof(str), "(%ld)	%A	%D,%D",
+            p->line, p->as, &p->from, &p->to);
         break;
     }
     bigP = P;
@@ -5876,32 +5906,25 @@ Pconv(Fmt *fp)
 
 
 <<function Dconv>>=
-// enum<dxxx> -> string
+// enum<operand> -> string
 int
 Dconv(Fmt *fp)
 {
     char str[STRINGSZ+40], s[20];
     Adr *a;
+    //enum<operand>
     int i;
 
     a = va_arg(fp->args, Adr*);
     i = a->type;
-    if(i >= D_INDIR) {
-        if(a->offset)
-            snprint(str, sizeof(str), "%ld(%R)", a->offset, i-D_INDIR);
-        else
-            snprint(str, sizeof(str), "(%R)", i-D_INDIR);
-        goto brk;
-    }
+
+    <<[[Dconv()]] if i >= D_INDIR>>
+
     switch(i) {
-
-    default:
-        snprint(str, sizeof(str), "%R", i);
-        break;
-
     case D_NONE:
-        str[0] = 0;
+        str[0] = '\0';
         break;
+
 
     case D_BRANCH:
         if(bigP != P && bigP->pcond != P)
@@ -5917,16 +5940,13 @@ Dconv(Fmt *fp)
     case D_EXTERN:
         snprint(str, sizeof(str), "%s+%ld(SB)", a->sym->name, a->offset);
         break;
-
     case D_STATIC:
         snprint(str, sizeof(str), "%s<%d>+%ld(SB)", a->sym->name,
             a->sym->version, a->offset);
         break;
-
     case D_AUTO:
         snprint(str, sizeof(str), "%s+%ld(SP)", a->sym->name, a->offset);
         break;
-
     case D_PARAM:
         if(a->sym)
             snprint(str, sizeof(str), "%s+%ld(FP)", a->sym->name, a->offset);
@@ -5937,11 +5957,9 @@ Dconv(Fmt *fp)
     case D_CONST:
         snprint(str, sizeof(str), "$%ld", a->offset);
         break;
-
     case D_FCONST:
         snprint(str, sizeof(str), "$(%.8lux,%.8lux)", a->ieee.h, a->ieee.l);
         break;
-
     case D_SCONST:
         snprint(str, sizeof(str), "$\"%S\"", a->scon);
         break;
@@ -5953,6 +5971,11 @@ Dconv(Fmt *fp)
         a->index = a->type;
         a->type = D_ADDR;
         goto conv;
+
+    default:
+        snprint(str, sizeof(str), "%R", i);
+        break;
+
     }
 brk:
     if(a->index != D_NONE) {
@@ -5963,11 +5986,26 @@ conv:
     return fmtstrcpy(fp, str);
 }
 @
+% todo: could simplify flow, those brk: conv: and goto are ugly,
+% copy paste a bit and avoid complex flow instead
+
+%???
+<<[[Dconv()]] if i >= D_INDIR>>=
+if(i >= D_INDIR) {
+    if(a->offset)
+        snprint(str, sizeof(str), "%ld(%R)", a->offset, i-D_INDIR);
+    else
+        snprint(str, sizeof(str), "(%R)", i-D_INDIR);
+    goto brk;
+}
+@
 
 
-
+%????  %S not used that much here, but used a lot in optable, for things
+% like MOV%S, means MOVL, MOVB, MOVW?
+% for D_SCONST ?? but what is D_SCONST?
 <<function Sconv>>=
-// ??symbol? -> string
+// ?? -> string
 int
 Sconv(Fmt *fp)
 {
@@ -5985,6 +6023,7 @@ Sconv(Fmt *fp)
             continue;
         }
         *p++ = '\\';
+
         switch(c) {
         default:
             if(c < 040 || c >= 0177)
@@ -6013,6 +6052,7 @@ Sconv(Fmt *fp)
     return fmtstrcpy(fp, str);
 }
 @
+% what the fuck is this?
 
 \section{[[8l -v]] and [[DBG()]]}
 

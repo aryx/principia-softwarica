@@ -41,6 +41,9 @@ typedef	struct	Optab	Optab;
 /*s: struct Adr */
 struct	Adr
 {
+    //enum<operand> (D_NONE by default)
+    short	type;
+
     union
     {
         long	u0offset;
@@ -55,10 +58,8 @@ struct	Adr
         Sym*	u1sym;
     } u1;
 
-    //enum<dxxx>, D_NONE by default
-    short	type;
-    //enum<dxxx>? D_NONE by default
-    uchar	index;
+    //enum<operand(register-only|D_NONE)>
+    byte	index;
 
     // TODO: abused for NOPROF function attributes
     char	scale; // offset * scale give size of entity?
@@ -282,7 +283,9 @@ enum misc1 {
     /*e: constant NHUNK */
 
     MINSIZ		= 4,
+    /*s: constant STRINGSZ */
     STRINGSZ	= 200,
+    /*e: constant STRINGSZ */
     MINLC		= 1,
     /*s: constant MAXIO */
     MAXIO		= 8192,

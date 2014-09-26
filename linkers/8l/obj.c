@@ -153,7 +153,7 @@ main(int argc, char *argv[])
     /*s: [[main()]] debug initialization */
     Binit(&bso, 1, OWRITE);
     listinit(); // fmtinstall()
-    memset(debug, 0, sizeof(debug));
+    memset(debug, false, sizeof(debug));
     /*e: [[main()]] debug initialization */
 
     ARGBEGIN {

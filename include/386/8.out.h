@@ -15,7 +15,7 @@
 
 /*s: enum as */
 // coupling with 8c/enam.c, 8l/obj.c#optab
-enum as
+enum opcode
 {
     AXXX,
 
@@ -285,7 +285,7 @@ enum as
     ATESTL,
     ATESTW,
 
-    ATEXT, //
+    ATEXT, // procedure/function TODO rename to AFUNC?
 
     AVERR,
     AVERW,
@@ -473,8 +473,9 @@ enum as
 /*e: enum as */
 
 /*s: enum reg */
-enum reg
+enum operand
 {
+/*s: [[operand]] register cases */
     D_AL		= 0,
     D_CL,
     D_DL,
@@ -513,26 +514,25 @@ enum reg
     D_CR		= 35, // D_CR0 .. D_CR7
     D_DR		= 43, // D_DR0 .. D_DR7
     D_TR		= 51, // D_TR0 .. D_TR7
-
+/*e: [[operand]] register cases */
     D_NONE		= 59,
-};
-/*e: enum reg */
-/*s: enum dxxx */
-// must start after enum register?
-// Gen.type?
-enum dxxx {
-    D_BRANCH	= 60,
+/*s: [[operand]] non register cases */
+    // for ACALL, AJMP (from PC)
+    D_BRANCH	= 60, 
 
-    D_EXTERN	= 61, // unused by 8a
-    D_STATIC	= 62,
-    D_AUTO		= 63,
-    D_PARAM		= 64,
+    // For ADATA
+    D_EXTERN	= 61, // data/bss values (from SB?)
+    D_STATIC	= 62, // data static variables (from SB?)
+    D_AUTO		= 63, // stack values (from SP?)
+    D_PARAM		= 64, // parameter (from FP?)
 
     D_CONST		= 65,
     D_FCONST	= 66,
     D_SCONST	= 67,
 
     D_ADDR		= 68,
+
+    // TODO? lp split here?
 
     D_FILE,
 
@@ -543,8 +543,10 @@ enum dxxx {
     D_CONST2 = D_INDIR+D_INDIR,
 
     D_SIZE,	/* 8l internal */
+/*e: [[operand]] non register cases */
 };
-/*e: enum dxxx */
+/*e: enum reg */
+
 /*s: enum misc2 */
 enum misc2 {
     T_TYPE		= 1<<0,

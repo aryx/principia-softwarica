@@ -15,9 +15,8 @@ listinit(void)
     fmtinstall('A', Aconv);
     fmtinstall('R', Rconv);
     fmtinstall('D', Dconv);
-
-    fmtinstall('S', Sconv);
     fmtinstall('P', Pconv);
+    fmtinstall('S', Sconv);
 }
 /*e: function listinit */
 
@@ -26,7 +25,7 @@ static	Prog	*bigP;
 /*e: global bigP */
 
 /*s: function Pconv */
-// Proc -> string
+// Prog -> string
 int
 Pconv(Fmt *fp)
 {
@@ -37,20 +36,24 @@ Pconv(Fmt *fp)
     bigP = p;
     switch(p->as) {
     case ATEXT:
+        // when this happens?
         if(p->from.scale) {
             snprint(str, sizeof(str), "(%ld)	%A	%D,%d,%D",
                 p->line, p->as, &p->from, p->from.scale, &p->to);
-            break;
+        } else {
+            snprint(str, sizeof(str), "(%ld)	%A	%D,%D",
+                p->line, p->as, &p->from, &p->to);
         }
-    default:
-        snprint(str, sizeof(str), "(%ld)	%A	%D,%D",
-            p->line, p->as, &p->from, &p->to);
         break;
     case ADATA:
     case AINIT:
     case ADYNT:
         snprint(str, sizeof(str), "(%ld)	%A	%D/%d,%D",
             p->line, p->as, &p->from, p->from.scale, &p->to);
+        break;
+    default:
+        snprint(str, sizeof(str), "(%ld)	%A	%D,%D",
+            p->line, p->as, &p->from, &p->to);
         break;
     }
     bigP = P;
@@ -59,7 +62,7 @@ Pconv(Fmt *fp)
 /*e: function Pconv */
 
 /*s: function Aconv */
-// enum<as> -> string
+// enum<opcode> -> string
 int
 Aconv(Fmt *fp)
 {
@@ -71,16 +74,19 @@ Aconv(Fmt *fp)
 /*e: function Aconv */
 
 /*s: function Dconv */
-// enum<dxxx> -> string
+// enum<operand> -> string
 int
 Dconv(Fmt *fp)
 {
     char str[STRINGSZ+40], s[20];
     Adr *a;
+    //enum<operand>
     int i;
 
     a = va_arg(fp->args, Adr*);
     i = a->type;
+
+    /*s: [[Dconv()]] if i >= D_INDIR */
     if(i >= D_INDIR) {
         if(a->offset)
             snprint(str, sizeof(str), "%ld(%R)", a->offset, i-D_INDIR);
@@ -88,15 +94,13 @@ Dconv(Fmt *fp)
             snprint(str, sizeof(str), "(%R)", i-D_INDIR);
         goto brk;
     }
+    /*e: [[Dconv()]] if i >= D_INDIR */
+
     switch(i) {
-
-    default:
-        snprint(str, sizeof(str), "%R", i);
-        break;
-
     case D_NONE:
-        str[0] = 0;
+        str[0] = '\0';
         break;
+
 
     case D_BRANCH:
         if(bigP != P && bigP->pcond != P)
@@ -112,16 +116,13 @@ Dconv(Fmt *fp)
     case D_EXTERN:
         snprint(str, sizeof(str), "%s+%ld(SB)", a->sym->name, a->offset);
         break;
-
     case D_STATIC:
         snprint(str, sizeof(str), "%s<%d>+%ld(SB)", a->sym->name,
             a->sym->version, a->offset);
         break;
-
     case D_AUTO:
         snprint(str, sizeof(str), "%s+%ld(SP)", a->sym->name, a->offset);
         break;
-
     case D_PARAM:
         if(a->sym)
             snprint(str, sizeof(str), "%s+%ld(FP)", a->sym->name, a->offset);
@@ -132,11 +133,9 @@ Dconv(Fmt *fp)
     case D_CONST:
         snprint(str, sizeof(str), "$%ld", a->offset);
         break;
-
     case D_FCONST:
         snprint(str, sizeof(str), "$(%.8lux,%.8lux)", a->ieee.h, a->ieee.l);
         break;
-
     case D_SCONST:
         snprint(str, sizeof(str), "$\"%S\"", a->scon);
         break;
@@ -148,6 +147,11 @@ Dconv(Fmt *fp)
         a->index = a->type;
         a->type = D_ADDR;
         goto conv;
+
+    default:
+        snprint(str, sizeof(str), "%R", i);
+        break;
+
     }
 brk:
     if(a->index != D_NONE) {
@@ -235,7 +239,7 @@ char*	regstr[] =
 /*e: global regstr */
 
 /*s: function Rconv */
-// enum<register> -> string
+// enum<operand(register-only)> -> string
 int
 Rconv(Fmt *fp)
 {
@@ -253,7 +257,7 @@ Rconv(Fmt *fp)
 /*e: function Rconv */
 
 /*s: function Sconv */
-// ??symbol? -> string
+// ?? -> string
 int
 Sconv(Fmt *fp)
 {
@@ -271,6 +275,7 @@ Sconv(Fmt *fp)
             continue;
         }
         *p++ = '\\';
+
         switch(c) {
         default:
             if(c < 040 || c >= 0177)
