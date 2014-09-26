@@ -416,6 +416,8 @@ lookup(char *symb, int v)
 % see Aconv, Rconv, Dconv
 
 % put major opcode here, AXXX, ALAST, etc
+% and also D_CS, ...
+% and also D_EXTERN,
 
 \section{[[Prog]] and [[firstp]], [[textp]], [[datap]], [[curtext]], etc}
 
@@ -425,12 +427,13 @@ lookup(char *symb, int v)
 <<struct Prog>>=
 struct	Prog
 {
-    //enum<opcode>>
+    //enum<opcode>
     short	as;
 
     Adr	from;
     Adr	to;
 
+    // [[Prog]] other fields
     // 2 by default in zprg, why?
     uchar	back;
 
@@ -442,22 +445,18 @@ struct	Prog
     char	tt;
     uchar	mark;	/* work on these */
 
-    // Extra
+    // [[Prog]] Extra fields
 
     // list<ref<Prog>> from firstp/lastp, or datap/edatap
     Prog*	link;
 
-    // list<ref<Prog>> from textp/etextp
+    // list<ref<Prog>> from textp/etextp, to follow CALL xxx
     Prog*	pcond;	/* work on this */
 
 };
 @
 % see Pconv, %P
 
-
-<<constant P>>=
-#define	P		((Prog*)nil)
-@
 
 % list of instructions (ATEXT and its instrs, but not ADATA, AGLOBL, ...)
 % good name? first_instr better? also again there is strong
@@ -471,6 +470,10 @@ Prog*	firstp;
 <<global lastp>>=
 // ref<Prog>, last elt of firstp list
 Prog*	lastp;
+@
+
+<<constant P>>=
+#define	P		((Prog*)nil)
 @
 
 
@@ -531,7 +534,7 @@ Prog	undefp;
 \section{[[Adr]]}
 
 % operand of instruction, e.g. in MOV AX, BX,  then AX is a form of Adr
-% would be better if had ADT so can have better Instruction type
+% (would be better if had ADT so can have better Instruction type)
 <<struct Adr>>=
 struct	Adr
 {
@@ -549,12 +552,13 @@ struct	Adr
         Sym*	u1sym;
     } u1;
 
-    //enum<dxxx>? D_NONE by default
+    //enum<dxxx>, D_NONE by default
     short	type;
     //enum<dxxx>? D_NONE by default
     uchar	index;
 
-    char	scale;
+    // TODO: abused for NOPROF function attributes
+    char	scale; // offset * scale give size of entity?
 };
 @
 
@@ -4299,8 +4303,20 @@ asmlc(void)
 
 % see NOPROF of 8.out.h in Assembler_extra.tex.nw
 
+
+% seems to have different mechanisms, __mcount (very simple),
+% _tracein, and _profin, but only _profin seems to be valid and
+% referenced by other code
+
+
+% where is defined _mainp? libc? lib_core/libc/386/main9p.s
+<<[[main()]] adjust INITENTRY if profiling>>=
+if(debug['p'])
+    INITENTRY = "_mainp";
+@
+
 % 8l -p -1
-% after dostkoff(), before span(), matters?
+% after dostkoff(), before span() (matters?)
 <<[[main()]] call doprofxxx() if profiling>>=
 if(debug['p'])
     if(debug['1'])
@@ -4309,13 +4325,11 @@ if(debug['p'])
         doprof2();
 @
 
-% where is defined _mainp? libc?
-<<[[main()]] adjust INITENTRY if profiling>>=
-if(debug['p'])
-    INITENTRY = "_mainp";
-@
-
-
+\section{[[__mcount[]]]}
+% idea: add __mcount array, one index per function, and when
+% call it increments the array at the right place.
+% who is using this information then? profreport of what?
+% git grep __mcount does not seem to return stuff, maybe obsolete code?
 
 <<function doprof1>>=
 void
@@ -4333,12 +4347,15 @@ doprof1(void)
         if(p->as == ATEXT) {
             q = prg();
             q->line = p->line;
+
             q->link = datap;
             datap = q;
+
+            //asm: DATA __mcount ??? array? why need to declare it here too?
             q->as = ADATA;
             q->from.type = D_EXTERN;
             q->from.offset = n*4;
-            q->from.sym = s;
+            q->from.sym = s; // __mcount
             q->from.scale = 4;  // NOSPLIT?
             q->to = p->from;
             q->to.type = D_CONST;
@@ -4346,9 +4363,12 @@ doprof1(void)
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+
             q->link = p->link;
             p->link = q;
             p = q;
+
+            //asm: ADDL 1, __mcount[n]?
             p->as = AADDL;
             p->from.type = D_CONST;
             p->from.offset = 1;
@@ -4360,11 +4380,14 @@ doprof1(void)
             continue;
         }
     }
+
     q = prg();
     q->line = 0;
+
     q->link = datap;
     datap = q;
 
+    //asm: DATA __mcount ???
     q->as = ADATA;
     q->from.type = D_EXTERN;
     q->from.sym = s;
@@ -4373,23 +4396,32 @@ doprof1(void)
     q->to.offset = n;
 
     s->type = SBSS;
+    // 4 bytes counter for each functions
     s->value = n*4;
 }
 @
 
+\section{[[_profin()]]}
+
+% _profin is defined by lib_core/libc/port/profile.c
+% (_tracin is defined by you)
+
+% todo: why s2 and s4? why not sin, sout? and pin, pout?
 <<function doprof2>>=
 void
 doprof2(void)
 {
     Sym *s2, *s4;
-    Prog *p, *q, *q2, *ps2, *ps4;
+    Prog *p, *q, *q2;
+    Prog *ps2, *ps4;
 
     DBG("%5.2f profile 2\n", cputime());
 
     if(debug['e']){
         s2 = lookup("_tracein", 0);
         s4 = lookup("_traceout", 0);
-    }else{
+    }else
+    {
         s2 = lookup("_profin", 0);
         s4 = lookup("_profout", 0);
     }
@@ -4401,35 +4433,28 @@ doprof2(void)
         return;
     }
 
+    // finding ps2, ps4 = instruction (Prog) of s2 and s4
     ps2 = P;
     ps4 = P;
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
             if(p->from.sym == s2) {
-                p->from.scale = 1;
+                // do not profile the profling function itself ...
+                p->from.scale = NOPROF;
                 ps2 = p;
             }
             if(p->from.sym == s4) {
-                p->from.scale = 1;
+                p->from.scale = NOPROF;
                 ps4 = p;
             }
         }
     }
+
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
             curtext = p;
 
-            if(p->from.scale & NOPROF) {	/* dont profile */
-                for(;;) {
-                    q = p->link;
-                    if(q == P)
-                        break;
-                    if(q->as == ATEXT)
-                        break;
-                    p = q;
-                }
-                continue;
-            }
+            <<[[doprof2()]] if NOPROF p>>
 
             /*
              * JMPL	profin
@@ -4438,6 +4463,7 @@ doprof2(void)
             q->line = p->line;
             q->pc = p->pc;
             q->link = p->link;
+
             if(debug['e']){		/* embedded tracing */
                 q2 = prg();
                 p->link = q2;
@@ -4453,14 +4479,13 @@ doprof2(void)
             }else
                 p->link = q;
             p = q;
+            //asm: CALL _profin
             p->as = ACALL;
             p->to.type = D_BRANCH;
             p->pcond = ps2;
             p->to.sym = s2;
 
-            continue;
-        }
-        if(p->as == ARET) {
+        }else if(p->as == ARET) {
             /*
              * RET (default)
              */
@@ -4480,11 +4505,13 @@ doprof2(void)
             q->from = p->from;
             q->to = p->to;
             q->link = p->link;
+
             p->link = q;
 
             /*
              * JAL	profout
              */
+            //asm: CALL _profout
             p->as = ACALL;
             p->from = zprg.from;
             p->to = zprg.to;
@@ -4494,13 +4521,33 @@ doprof2(void)
 
             p = q;
 
-            continue;
         }
     }
 }
 @
 
+<<[[doprof2()]] if NOPROF p>>=
+if(p->from.scale & NOPROF) {	/* dont profile */
+    for(;;) {
+        q = p->link;
+        if(q == P)
+            break;
+        if(q->as == ATEXT)
+            break;
+        p = q;
+    }
+    continue;
+}
+@
+
+\section{[[_tracin()]]}
+
+% -p -e
+
+
 \section{[[NOPROF]] attribute}
+
+% from Assembler_extra.tex.nw
 
 \chapter{Nuxiinit}
 
