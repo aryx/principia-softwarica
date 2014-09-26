@@ -526,7 +526,6 @@ enum dxxx {
     D_EXTERN	= 61, // unused by 8a
     D_STATIC	= 62,
     D_AUTO		= 63,
-
     D_PARAM		= 64,
 
     D_CONST		= 65,

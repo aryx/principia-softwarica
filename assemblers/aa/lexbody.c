@@ -654,10 +654,13 @@ yyerror(char *a, ...)
         yyerror("syntax error, last name: %s", symb);
         return;
     }
+
     prfile(lineno);
+
     va_start(arg, a);
     vseprint(buf, buf+sizeof(buf), a, arg);
     va_end(arg);
+
     print("%s\n", buf);
     nerrors++;
     if(nerrors > 10) {

@@ -14,9 +14,6 @@ main(int argc, char *argv[])
     char *p;
     int nout, nproc, status, i, c;
 
-    thechar = '8';
-    thestring = "386";
-
     memset(debug, false, sizeof(debug));
     cinit();
 
@@ -979,10 +976,12 @@ outhist(void)
 
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, AHISTORY>>8);
+
         Bputc(&obuf, h->line);
         Bputc(&obuf, h->line>>8);
         Bputc(&obuf, h->line>>16);
         Bputc(&obuf, h->line>>24);
+
         zaddr(&nullgen, 0);
         zaddr(&g, 0);
     }

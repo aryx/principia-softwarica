@@ -59,11 +59,12 @@ typedef	struct	Hist	Hist;
 /*s: struct Sym */
 struct	Sym
 {
+    char	*name;
+
     // see also itab[i].type and itab[i].value
     ushort	type;
     long	value; // vlong in va!!
 
-    char	*name;
     char	sym;
 
     char*	macro;

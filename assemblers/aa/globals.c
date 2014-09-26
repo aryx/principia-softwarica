@@ -79,10 +79,10 @@ int	sym;
 char	symb[NSYMB];
 /*e: global symb */
 /*s: global thechar */
-int	thechar;
+int	thechar = '8';
 /*e: global thechar */
 /*s: global thestring */
-char*	thestring;
+char*	thestring = "386";
 /*e: global thestring */
 /*s: global thunk */
 long	thunk;

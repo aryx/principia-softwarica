@@ -21,6 +21,7 @@ static char	*myenv[] =
     "target",
     "stem",
     "prereq",
+
     "pid",
     "nproc",
     "newprereq",
