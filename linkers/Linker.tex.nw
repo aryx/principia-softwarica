@@ -4304,12 +4304,7 @@ asmlc(void)
 % see NOPROF of 8.out.h in Assembler_extra.tex.nw
 
 
-% seems to have different mechanisms, __mcount (very simple),
-% _tracein, and _profin, but only _profin seems to be valid and
-% referenced by other code
-
-
-% where is defined _mainp? libc? lib_core/libc/386/main9p.s
+% where is defined _mainp? lib_core/libc/386/main9p.s
 <<[[main()]] adjust INITENTRY if profiling>>=
 if(debug['p'])
     INITENTRY = "_mainp";
@@ -4326,9 +4321,11 @@ if(debug['p'])
 @
 
 \section{[[__mcount[]]]}
-% idea: add __mcount array, one index per function, and when
-% call it increments the array at the right place.
-% who is using this information then? profreport of what?
+
+% the idea o the code below is to add __mcount array, one index per function,
+% and when call it increments the array at the right place.
+
+% todo: who is using this information then? profreport of what?
 % git grep __mcount does not seem to return stuff, maybe obsolete code?
 
 <<function doprof1>>=
@@ -4403,8 +4400,8 @@ doprof1(void)
 
 \section{[[_profin()]]}
 
-% _profin is defined by lib_core/libc/port/profile.c
-% (_tracin is defined by you)
+% _profin() is defined by lib_core/libc/port/profile.c
+% (_tracin() is defined by you)
 
 % todo: why s2 and s4? why not sin, sout? and pin, pout?
 <<function doprof2>>=
@@ -4417,17 +4414,13 @@ doprof2(void)
 
     DBG("%5.2f profile 2\n", cputime());
 
-    if(debug['e']){
-        s2 = lookup("_tracein", 0);
-        s4 = lookup("_traceout", 0);
-    }else
-    {
+    <<[[doprof2()]] if embedded tracing>>
+    else{
         s2 = lookup("_profin", 0);
         s4 = lookup("_profout", 0);
     }
     if(s2->type != STEXT || s4->type != STEXT) {
-        if(debug['e'])
-            diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
+       <<[[doprof2()]] if embedded tracing diag()>>
         else
             diag("_profin/_profout not defined");
         return;
@@ -4464,19 +4457,8 @@ doprof2(void)
             q->pc = p->pc;
             q->link = p->link;
 
-            if(debug['e']){		/* embedded tracing */
-                q2 = prg();
-                p->link = q2;
-                q2->link = q;
-
-                q2->line = p->line;
-                q2->pc = p->pc;
-
-                q2->as = AJMP;
-                q2->to.type = D_BRANCH;
-                q2->to.sym = p->to.sym;
-                q2->pcond = q->link;
-            }else
+            <<[[doprof2()]] if embedded tracing ATEXT instrumentation>>
+             else
                 p->link = q;
             p = q;
             //asm: CALL _profin
@@ -4486,17 +4468,7 @@ doprof2(void)
             p->to.sym = s2;
 
         }else if(p->as == ARET) {
-            /*
-             * RET (default)
-             */
-            if(debug['e']){		/* embedded tracing */
-                q = prg();
-                q->line = p->line;
-                q->pc = p->pc;
-                q->link = p->link;
-                p->link = q;
-                p = q;
-            }
+            <<[[doprof2()]] if embedded tracing ARET instrumentation>>
             /*
              * RET
              */
@@ -4520,7 +4492,6 @@ doprof2(void)
             p->to.sym = s4;
 
             p = q;
-
         }
     }
 }
@@ -4542,8 +4513,49 @@ if(p->from.scale & NOPROF) {	/* dont profile */
 
 \section{[[_tracin()]]}
 
-% -p -e
+% -p -e, -e for embedded tracing
 
+<<[[doprof2()]] if embedded tracing>>=
+if(debug['e']){
+    s2 = lookup("_tracein", 0);
+    s4 = lookup("_traceout", 0);
+}
+@
+
+<<[[doprof2()]] if embedded tracing diag()>>=
+if(debug['e'])
+    diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
+@
+
+<<[[doprof2()]] if embedded tracing ATEXT instrumentation>>=
+if(debug['e']){		/* embedded tracing */
+    q2 = prg();
+    p->link = q2;
+    q2->link = q;
+
+    q2->line = p->line;
+    q2->pc = p->pc;
+
+    q2->as = AJMP;
+    q2->to.type = D_BRANCH;
+    q2->to.sym = p->to.sym;
+    q2->pcond = q->link;
+}
+@
+
+<<[[doprof2()]] if embedded tracing ARET instrumentation>>=
+/*
+ * RET (default)
+ */
+if(debug['e']){		/* embedded tracing */
+    q = prg();
+    q->line = p->line;
+    q->pc = p->pc;
+    q->link = p->link;
+    p->link = q;
+    p = q;
+}
+@
 
 \section{[[NOPROF]] attribute}
 

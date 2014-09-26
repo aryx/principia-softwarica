@@ -1414,12 +1414,15 @@ doprof1(void)
         if(p->as == ATEXT) {
             q = prg();
             q->line = p->line;
+
             q->link = datap;
             datap = q;
+
+            //asm: DATA __mcount ??? array? why need to declare it here too?
             q->as = ADATA;
             q->from.type = D_EXTERN;
             q->from.offset = n*4;
-            q->from.sym = s;
+            q->from.sym = s; // __mcount
             q->from.scale = 4;  // NOSPLIT?
             q->to = p->from;
             q->to.type = D_CONST;
@@ -1427,9 +1430,12 @@ doprof1(void)
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+
             q->link = p->link;
             p->link = q;
             p = q;
+
+            //asm: ADDL 1, __mcount[n]?
             p->as = AADDL;
             p->from.type = D_CONST;
             p->from.offset = 1;
@@ -1441,11 +1447,14 @@ doprof1(void)
             continue;
         }
     }
+
     q = prg();
     q->line = 0;
+
     q->link = datap;
     datap = q;
 
+    //asm: DATA __mcount ???
     q->as = ADATA;
     q->from.type = D_EXTERN;
     q->from.sym = s;
@@ -1454,6 +1463,7 @@ doprof1(void)
     q->to.offset = n;
 
     s->type = SBSS;
+    // 4 bytes counter for each functions
     s->value = n*4;
 }
 /*e: function doprof1 */
@@ -1463,43 +1473,53 @@ void
 doprof2(void)
 {
     Sym *s2, *s4;
-    Prog *p, *q, *q2, *ps2, *ps4;
+    Prog *p, *q, *q2;
+    Prog *ps2, *ps4;
 
     DBG("%5.2f profile 2\n", cputime());
 
+    /*s: [[doprof2()]] if embedded tracing */
     if(debug['e']){
         s2 = lookup("_tracein", 0);
         s4 = lookup("_traceout", 0);
-    }else{
+    }
+    /*e: [[doprof2()]] if embedded tracing */
+    else{
         s2 = lookup("_profin", 0);
         s4 = lookup("_profout", 0);
     }
     if(s2->type != STEXT || s4->type != STEXT) {
-        if(debug['e'])
-            diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
+       /*s: [[doprof2()]] if embedded tracing diag() */
+       if(debug['e'])
+           diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
+       /*e: [[doprof2()]] if embedded tracing diag() */
         else
             diag("_profin/_profout not defined");
         return;
     }
 
+    // finding ps2, ps4 = instruction (Prog) of s2 and s4
     ps2 = P;
     ps4 = P;
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
             if(p->from.sym == s2) {
-                p->from.scale = 1;
+                // do not profile the profling function itself ...
+                p->from.scale = NOPROF;
                 ps2 = p;
             }
             if(p->from.sym == s4) {
-                p->from.scale = 1;
+                p->from.scale = NOPROF;
                 ps4 = p;
             }
         }
     }
+
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
             curtext = p;
 
+            /*s: [[doprof2()]] if NOPROF p */
             if(p->from.scale & NOPROF) {	/* dont profile */
                 for(;;) {
                     q = p->link;
@@ -1511,6 +1531,7 @@ doprof2(void)
                 }
                 continue;
             }
+            /*e: [[doprof2()]] if NOPROF p */
 
             /*
              * JMPL	profin
@@ -1519,6 +1540,8 @@ doprof2(void)
             q->line = p->line;
             q->pc = p->pc;
             q->link = p->link;
+
+            /*s: [[doprof2()]] if embedded tracing ATEXT instrumentation */
             if(debug['e']){		/* embedded tracing */
                 q2 = prg();
                 p->link = q2;
@@ -1531,17 +1554,19 @@ doprof2(void)
                 q2->to.type = D_BRANCH;
                 q2->to.sym = p->to.sym;
                 q2->pcond = q->link;
-            }else
+            }
+            /*e: [[doprof2()]] if embedded tracing ATEXT instrumentation */
+             else
                 p->link = q;
             p = q;
+            //asm: CALL _profin
             p->as = ACALL;
             p->to.type = D_BRANCH;
             p->pcond = ps2;
             p->to.sym = s2;
 
-            continue;
-        }
-        if(p->as == ARET) {
+        }else if(p->as == ARET) {
+            /*s: [[doprof2()]] if embedded tracing ARET instrumentation */
             /*
              * RET (default)
              */
@@ -1553,6 +1578,7 @@ doprof2(void)
                 p->link = q;
                 p = q;
             }
+            /*e: [[doprof2()]] if embedded tracing ARET instrumentation */
             /*
              * RET
              */
@@ -1561,11 +1587,13 @@ doprof2(void)
             q->from = p->from;
             q->to = p->to;
             q->link = p->link;
+
             p->link = q;
 
             /*
              * JAL	profout
              */
+            //asm: CALL _profout
             p->as = ACALL;
             p->from = zprg.from;
             p->to = zprg.to;
@@ -1574,8 +1602,6 @@ doprof2(void)
             p->to.sym = s4;
 
             p = q;
-
-            continue;
         }
     }
 }

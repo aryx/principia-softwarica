@@ -55,12 +55,13 @@ struct	Adr
         Sym*	u1sym;
     } u1;
 
-    //enum<dxxx>? D_NONE by default
+    //enum<dxxx>, D_NONE by default
     short	type;
     //enum<dxxx>? D_NONE by default
     uchar	index;
 
-    char	scale;
+    // TODO: abused for NOPROF function attributes
+    char	scale; // offset * scale give size of entity?
 };
 /*e: struct Adr */
 
@@ -87,12 +88,13 @@ struct	Adr
 /*s: struct Prog */
 struct	Prog
 {
-    //enum<opcode>>
+    //enum<opcode>
     short	as;
 
     Adr	from;
     Adr	to;
 
+    // [[Prog]] other fields
     // 2 by default in zprg, why?
     uchar	back;
 
@@ -104,12 +106,12 @@ struct	Prog
     char	tt;
     uchar	mark;	/* work on these */
 
-    // Extra
+    // [[Prog]] Extra fields
 
     // list<ref<Prog>> from firstp/lastp, or datap/edatap
     Prog*	link;
 
-    // list<ref<Prog>> from textp/etextp
+    // list<ref<Prog>> from textp/etextp, to follow CALL xxx
     Prog*	pcond;	/* work on this */
 
 };
