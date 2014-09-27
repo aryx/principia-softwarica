@@ -8,7 +8,8 @@
 
 <<constant NSYM>>
 
-// was originally in a xxx/y.out.h (and was always the same in all archi)
+// was originally in a xxx/y.out.h (but was always the same in all archi)
+// hence the factorization here
 /*
  * this is the simulated IEEE floating point
  */
@@ -22,12 +23,13 @@ typedef	struct	ieee	Ieee;
 \subsection*{[[include/386/8.out.h]]}
 
 
-% todo: enum, not used by 8a, used by 8c
+% todo: transform in an enum? 
+% note that it's not used by 8a, used by 8c/8l
 <<constant NOPROF>>=
 #define NOPROF	(1<<0)
 @
 
-% used by 8l
+% used by 8l (to allow override existing symbol? 8l option?)
 <<constant DUPOK>>=
 #define DUPOK	(1<<1)
 @
@@ -155,6 +157,7 @@ enum	/* keep in synch with ../cc/cc.h */
 #include <common.out.h>
 
 #pragma	lib	"../aa/aa.a$O"
+//$
 
 // was originally in a XXX/Y.out.h (and was always the same in all archi)
 // most of the content below was originally copy pasted in 8a/a.h, 5a/a.h, etc
@@ -320,9 +323,6 @@ systemtype(int sys)
 \subsection*{[[assemblers/aa/globals.c]]}
 
 
-
-
-
 %-------------------------------------------------------------
 
 <<assemblers/aa/globals.c>>=
@@ -364,8 +364,6 @@ systemtype(int sys)
 \subsection*{[[assemblers/aa/lexbody.c]]}
 
 
-
-
 %-------------------------------------------------------------
 
 <<assemblers/aa/lexbody.c>>=
@@ -405,6 +403,8 @@ void prfile(long l);
 
 <<function lookup>>
 
+// this was hard to factorize in aa/, so this is copy pasted
+// in each assembler (8a/, va/, etc)
 //long
 //yylex(void)
 //{
@@ -682,263 +682,6 @@ void prfile(long l);
 
 \subsection*{[[assemblers/aa/macbody.c]]}
 
-<<constant VARMAC>>=
-#define VARMAC 0x80
-@
-
-<<function getnsn>>=
-long
-getnsn(void)
-{
-    long n;
-    int c;
-
-    c = getnsc();
-    if(c < '0' || c > '9')
-        return -1;
-    n = 0;
-    while(c >= '0' && c <= '9') {
-        n = n*10 + c-'0';
-        c = getc();
-    }
-    unget(c);
-    return n;
-}
-@
-
-
-<<function getsymdots>>=
-Sym*
-getsymdots(int *dots)
-{
-    int c;
-    Sym *s;
-
-    s = getsym();
-    if(s != S)
-        return s;
-
-    c = getnsc();
-    if(c != '.'){
-        unget(c);
-        return S;
-    }
-    if(getc() != '.' || getc() != '.')
-        yyerror("bad dots in macro");
-    *dots = 1;
-    return slookup("__VA_ARGS__");
-}
-@
-
-<<function getcom>>=
-int
-getcom(void)
-{
-    int c;
-
-    for(;;) {
-        c = getnsc();
-        if(c != '/')
-            break;
-        c = getc();
-        if(c == '/') {
-            while(c != '\n')
-                c = getc();
-            break;
-        }
-        if(c != '*')
-            break;
-        c = getc();
-        for(;;) {
-            if(c == '*') {
-                c = getc();
-                if(c != '/')
-                    continue;
-                c = getc();
-                break;
-            }
-            if(c == '\n') {
-                yyerror("comment across newline");
-                break;
-            }
-            c = getc();
-        }
-        if(c == '\n')
-            break;
-    }
-    return c;
-}
-@
-
-
-
-
-
-<<function macexpand>>=
-void
-macexpand(Sym *s, char *b)
-{
-    char buf[2000];
-    int n, l, c, nargs;
-    char *arg[NARG], *cp, *ob, *ecp, dots;
-
-    ob = b;
-    if(*s->macro == 0) {
-        strcpy(b, s->macro+1);
-        if(debug['m'])
-            print("#expand %s %s\n", s->name, ob);
-        return;
-    }
-    
-    nargs = (char)(*s->macro & ~VARMAC) - 1;
-    dots = *s->macro & VARMAC;
-
-    c = getnsc();
-    if(c != '(')
-        goto bad;
-    n = 0;
-    c = getc();
-    if(c != ')') {
-        unget(c);
-        l = 0;
-        cp = buf;
-        ecp = cp + sizeof(buf)-4;
-        arg[n++] = cp;
-        for(;;) {
-            if(cp >= ecp)
-                goto toobig;
-            c = getc();
-            if(c == '"')
-                for(;;) {
-                    if(cp >= ecp)
-                        goto toobig;
-                    *cp++ = c;
-                    c = getc();
-                    if(c == '\\') {
-                        *cp++ = c;
-                        c = getc();
-                        continue;
-                    }
-                    if(c == '\n')
-                        goto bad;
-                    if(c == '"')
-                        break;
-                }
-            if(c == '\'')
-                for(;;) {
-                    if(cp >= ecp)
-                        goto toobig;
-                    *cp++ = c;
-                    c = getc();
-                    if(c == '\\') {
-                        *cp++ = c;
-                        c = getc();
-                        continue;
-                    }
-                    if(c == '\n')
-                        goto bad;
-                    if(c == '\'')
-                        break;
-                }
-            if(c == '/') {
-                c = getc();
-                switch(c) {
-                case '*':
-                    for(;;) {
-                        c = getc();
-                        if(c == '*') {
-                            c = getc();
-                            if(c == '/')
-                                break;
-                        }
-                    }
-                    *cp++ = ' ';
-                    continue;
-                case '/':
-                    while((c = getc()) != '\n')
-                        ;
-                    break;
-                default:
-                    unget(c);
-                    c = '/';
-                }
-            }
-            if(l == 0) {
-                if(c == ',') {
-                    if(n == nargs && dots) {
-                        *cp++ = ',';
-                        continue;
-                    }
-                    *cp++ = 0;
-                    arg[n++] = cp;
-                    if(n > nargs)
-                        break;
-                    continue;
-                }
-                if(c == ')')
-                    break;
-            }
-            if(c == '\n')
-                c = ' ';
-            *cp++ = c;
-            if(c == '(')
-                l++;
-            if(c == ')')
-                l--;
-        }
-        *cp = 0;
-    }
-    if(n != nargs) {
-        yyerror("argument mismatch expanding: %s", s->name);
-        *b = 0;
-        return;
-    }
-    cp = s->macro+1;
-    for(;;) {
-        c = *cp++;
-        if(c == '\n')
-            c = ' ';
-        if(c != '#') {
-            *b++ = c;
-            if(c == 0)
-                break;
-            continue;
-        }
-        c = *cp++;
-        if(c == 0)
-            goto bad;
-        if(c == '#') {
-            *b++ = c;
-            continue;
-        }
-        c -= 'a';
-        if(c < 0 || c >= n)
-            continue;
-        strcpy(b, arg[c]);
-        b += strlen(arg[c]);
-    }
-    *b = 0;
-    if(debug['m'])
-        print("#expand %s %s\n", s->name, ob);
-    return;
-
-bad:
-    yyerror("syntax in macro expansion: %s", s->name);
-    *b = 0;
-    return;
-
-toobig:
-    yyerror("too much text in macro expansion: %s", s->name);
-    *b = 0;
-}
-@
-
-
-
-
-
-
-
 
 %-------------------------------------------------------------
 
@@ -1066,35 +809,8 @@ int	pathchar(void);
 
 \subsection*{[[assemblers/8a/lex.c]]}
 
-<<function checkscale>>=
-void
-checkscale(int scale)
-{
-
-    switch(scale) {
-    case 1:
-    case 2:
-    case 4:
-    case 8:
-        return;
-    }
-    yyerror("scale must be 1248: %d", scale);
-}
-@
 
 
-<<function cclean>>=
-void
-cclean(void)
-{
-    Gen2 g2;
-
-    g2.from = nullgen;
-    g2.to = nullgen;
-    outcode(AEND, &g2);
-    Bflush(&obuf);
-}
-@
 
 
 

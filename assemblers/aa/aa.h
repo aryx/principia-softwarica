@@ -12,6 +12,7 @@
 #include <common.out.h>
 
 #pragma	lib	"../aa/aa.a$O"
+//$
 
 // was originally in a XXX/Y.out.h (and was always the same in all archi)
 // most of the content below was originally copy pasted in 8a/a.h, 5a/a.h, etc

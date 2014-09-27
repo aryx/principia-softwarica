@@ -237,6 +237,8 @@ lookup(void)
 }
 /*e: function lookup */
 
+// this was hard to factorize in aa/, so this is copy pasted
+// in each assembler (8a/, va/, etc)
 //long
 //yylex(void)
 //{

@@ -209,6 +209,10 @@ License.
 % show binary format? hexdump? 
 % (actually not x86 binary instruction format! see section below)
 
+
+% try show code using TEXT, DATA, GLOBL, different addressing modes,
+% etc
+
 % can also maybe show one that use libc, use 8c -S hello.c
 
 \section{Object format}
@@ -332,6 +336,7 @@ enum opcode
     ADAS,
 
     ADATA, //
+
 
     ADECB, //
     ADECL,
@@ -1543,6 +1548,16 @@ struct	Gen
 };
 @
 
+% if look qemu.root.s from data2c result:
+% e.g. 
+% DATA boot_CONF_outcode+0(SB)/8, $"\z\z\1\353\z\z\213\33"
+% ...
+% DATA boot_CONF_outcode+67520(SB)/8, $"\1\201\1\z\z\z\z\z"
+% GLOBL boot_CONF_outcode+0(SB), $67528
+% GLOBL boot_CONF_outlen+0(SB), $4
+% DATA boot_CONF_outlen+0(SB)/4, $67523
+
+
 % usually MOVW AX, BX, 'from' AX, 'to' BX
 % =~ Prog of Linker (but without opcode)
 <<struct Gen2>>=
@@ -1552,6 +1567,24 @@ struct	Gen2
     Gen	to;
 };
 @
+
+
+<<function checkscale>>=
+void
+checkscale(int scale)
+{
+
+    switch(scale) {
+    case 1:
+    case 2:
+    case 4:
+    case 8:
+        return;
+    }
+    yyerror("scale must be 1248: %d", scale);
+}
+@
+
 
 % see cinit()
 <<global nullgen>>=
@@ -1694,7 +1727,7 @@ fdt of; // outfile
 int i;
 @
 
-% output buf? of outfile?
+% outfile(string) -> of(fd) -> obuf(biobuf)
 <<global obuf>>=
 Biobuf	obuf;
 @
@@ -1794,6 +1827,18 @@ if(p) {
 @
 
 
+<<function cclean>>=
+void
+cclean(void)
+{
+    Gen2 g2;
+
+    g2.from = nullgen;
+    g2.to = nullgen;
+    outcode(AEND, &g2);
+    Bflush(&obuf);
+}
+@
 
 
 \chapter{Input}
@@ -2293,7 +2338,11 @@ case '"':
 @
 
 
-\section{[[getc()]], [[getnsc()]], etc}
+\section{[[getc()]], [[unget()]], [[getnsc()]]}
+
+% from now on those functions are actually used by the preprocessing
+% code, not by the basic lexer (yylex) that actually implement
+% his own getnsc, getcom, getsym (hmmm maybe could factorize things?)
 
 % helpers for other functions
 
@@ -2320,6 +2369,16 @@ getc(void)
 @
 
 
+<<function unget>>=
+void
+unget(int c)
+{
+    peekc = c;
+    if(c == '\n')
+        lineno--;
+}
+@
+
 % get non space char
 <<function getnsc>>=
 int
@@ -2335,15 +2394,6 @@ getnsc(void)
 }
 @
 
-<<function unget>>=
-void
-unget(int c)
-{
-    peekc = c;
-    if(c == '\n')
-        lineno--;
-}
-@
 
 
 \section{[[getsym()]]}
@@ -2373,6 +2423,48 @@ getsym(void)
     if(cp > symb+NSYMB-4)
         yyerror("symbol too large: %s", symb);
     return lookup();
+}
+@
+
+\section{[[getcom()]]}
+
+<<function getcom>>=
+int
+getcom(void)
+{
+    int c;
+
+    for(;;) {
+        c = getnsc();
+        if(c != '/')
+            break;
+        c = getc();
+        if(c == '/') {
+            while(c != '\n')
+                c = getc();
+            break;
+        }
+        if(c != '*')
+            break;
+        c = getc();
+        for(;;) {
+            if(c == '*') {
+                c = getc();
+                if(c != '/')
+                    continue;
+                c = getc();
+                break;
+            }
+            if(c == '\n') {
+                yyerror("comment across newline");
+                break;
+            }
+            c = getc();
+        }
+        if(c == '\n')
+            break;
+    }
+    return c;
 }
 @
 
@@ -2905,6 +2997,34 @@ bad:
 }
 @
 
+<<constant VARMAC>>=
+#define VARMAC 0x80
+@
+
+
+<<function getsymdots>>=
+Sym*
+getsymdots(int *dots)
+{
+    int c;
+    Sym *s;
+
+    s = getsym();
+    if(s != S)
+        return s;
+
+    c = getnsc();
+    if(c != '.'){
+        unget(c);
+        return S;
+    }
+    if(getc() != '.' || getc() != '.')
+        yyerror("bad dots in macro");
+    *dots = 1;
+    return slookup("__VA_ARGS__");
+}
+@
+
 \subsection{Macro Expansion}
 
 <<[[yylex()]] if macro symbol>>=
@@ -2925,6 +3045,165 @@ if(s->macro) {
         peekc = IGN;
     }
     goto l0;
+}
+@
+
+<<function macexpand>>=
+void
+macexpand(Sym *s, char *b)
+{
+    char buf[2000];
+    int n, l, c, nargs;
+    char *arg[NARG], *cp, *ob, *ecp, dots;
+
+    ob = b;
+    if(*s->macro == 0) {
+        strcpy(b, s->macro+1);
+        if(debug['m'])
+            print("#expand %s %s\n", s->name, ob);
+        return;
+    }
+    
+    nargs = (char)(*s->macro & ~VARMAC) - 1;
+    dots = *s->macro & VARMAC;
+
+    c = getnsc();
+    if(c != '(')
+        goto bad;
+    n = 0;
+    c = getc();
+    if(c != ')') {
+        unget(c);
+        l = 0;
+        cp = buf;
+        ecp = cp + sizeof(buf)-4;
+        arg[n++] = cp;
+        for(;;) {
+            if(cp >= ecp)
+                goto toobig;
+            c = getc();
+            if(c == '"')
+                for(;;) {
+                    if(cp >= ecp)
+                        goto toobig;
+                    *cp++ = c;
+                    c = getc();
+                    if(c == '\\') {
+                        *cp++ = c;
+                        c = getc();
+                        continue;
+                    }
+                    if(c == '\n')
+                        goto bad;
+                    if(c == '"')
+                        break;
+                }
+            if(c == '\'')
+                for(;;) {
+                    if(cp >= ecp)
+                        goto toobig;
+                    *cp++ = c;
+                    c = getc();
+                    if(c == '\\') {
+                        *cp++ = c;
+                        c = getc();
+                        continue;
+                    }
+                    if(c == '\n')
+                        goto bad;
+                    if(c == '\'')
+                        break;
+                }
+            if(c == '/') {
+                c = getc();
+                switch(c) {
+                case '*':
+                    for(;;) {
+                        c = getc();
+                        if(c == '*') {
+                            c = getc();
+                            if(c == '/')
+                                break;
+                        }
+                    }
+                    *cp++ = ' ';
+                    continue;
+                case '/':
+                    while((c = getc()) != '\n')
+                        ;
+                    break;
+                default:
+                    unget(c);
+                    c = '/';
+                }
+            }
+            if(l == 0) {
+                if(c == ',') {
+                    if(n == nargs && dots) {
+                        *cp++ = ',';
+                        continue;
+                    }
+                    *cp++ = 0;
+                    arg[n++] = cp;
+                    if(n > nargs)
+                        break;
+                    continue;
+                }
+                if(c == ')')
+                    break;
+            }
+            if(c == '\n')
+                c = ' ';
+            *cp++ = c;
+            if(c == '(')
+                l++;
+            if(c == ')')
+                l--;
+        }
+        *cp = 0;
+    }
+    if(n != nargs) {
+        yyerror("argument mismatch expanding: %s", s->name);
+        *b = 0;
+        return;
+    }
+    cp = s->macro+1;
+    for(;;) {
+        c = *cp++;
+        if(c == '\n')
+            c = ' ';
+        if(c != '#') {
+            *b++ = c;
+            if(c == 0)
+                break;
+            continue;
+        }
+        c = *cp++;
+        if(c == 0)
+            goto bad;
+        if(c == '#') {
+            *b++ = c;
+            continue;
+        }
+        c -= 'a';
+        if(c < 0 || c >= n)
+            continue;
+        strcpy(b, arg[c]);
+        b += strlen(arg[c]);
+    }
+    *b = 0;
+    if(debug['m'])
+        print("#expand %s %s\n", s->name, ob);
+    return;
+
+bad:
+    yyerror("syntax in macro expansion: %s", s->name);
+    *b = 0;
+    return;
+
+toobig:
+    yyerror("too much text in macro expansion: %s", s->name);
+    *b = 0;
 }
 @
 
@@ -3216,14 +3495,37 @@ bad:
 @
 
 
+<<function getnsn>>=
+long
+getnsn(void)
+{
+    long n;
+    int c;
+
+    c = getnsc();
+    if(c < '0' || c > '9')
+        return -1;
+    n = 0;
+    while(c >= '0' && c <= '9') {
+        n = n*10 + c-'0';
+        c = getc();
+    }
+    unget(c);
+    return n;
+}
+@
+
 \chapter{Parsing}
 
+% this is from the %union
 <<[[Token]] other fields>>=
  struct {
   long v1;
   long v2;
  } con2;
+@
 
+<<[[Token]] other fields>>=
  Gen	gen;
  Gen2	gen2;
 @
@@ -3826,6 +4128,9 @@ expr:
 <<grammar>>
 @
 
+
+
+
 \chapter{Output}
 
 \chapter{Object Generation}
@@ -4094,11 +4399,9 @@ out:
 
 \chapter{Advanced Topics}
 
-\section{[[#pragma lib]] and automagic linking?}
+\section{[[#pragma lib]] and automagic linking}
 % this is very very nice! remove so much headach,
 % no need ocamlfind, no need pkg-config, so simple ...
-
-\section{Float}
 
 \section{Float}
 

@@ -14,7 +14,7 @@
    long v1;
    long v2;
   } con2;
-
+ /*x: [[Token]] other fields */
   Gen	gen;
   Gen2	gen2;
  /*e: [[Token]] other fields */
