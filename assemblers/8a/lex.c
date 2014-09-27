@@ -11,10 +11,13 @@ void	outhist(void);
 void
 main(int argc, char *argv[])
 {
+    /*s: [[main()]] locals */
     char *p;
     int nout, nproc, status, i, c;
-
+    /*e: [[main()]] locals */
+    /*s: [[main()]] debug initialization */
     memset(debug, false, sizeof(debug));
+    /*e: [[main()]] debug initialization */
     cinit();
 
     outfile = nil;
@@ -102,30 +105,34 @@ main(int argc, char *argv[])
 int
 assemble(char *file)
 {
-    char ofile[100], incfile[20], *p;
+    char ofile[100], incfile[20];
+    char *p;
     int i;
     fdt of;
 
     strcpy(ofile, file);
 
+    // p = basename(file)
+    // include[0] = dirname(file); 
     p = utfrrune(ofile, pathchar());
     if(p) {
         include[0] = ofile;
-        *p++ = 0;
+        *p++ = '\0';
     } else
         p = ofile;
 
+    // outfile =  p =~ s/.s/.8/;
     if(outfile == nil) {
         outfile = p;
         if(outfile){
             p = utfrrune(outfile, '.');
             if(p)
-                if(p[1] == 's' && p[2] == 0)
-                    p[0] = 0;
-            p = utfrune(outfile, 0);
+                if(p[1] == 's' && p[2] == '\0')
+                    p[0] = '\0';
+            p = utfrune(outfile, '\0');
             p[0] = '.';
             p[1] = thechar;
-            p[2] = 0;
+            p[2] = '\0';
         } else
             outfile = "/dev/null";
     }

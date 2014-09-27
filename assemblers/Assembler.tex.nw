@@ -667,7 +667,7 @@ enum opcode
     AFYL2X,
     AFYL2XP1,
 
-    AEND,
+    AEND, // ??
 
     ADYNT,
     AINIT,
@@ -784,6 +784,8 @@ enum operand
     D_TR		= 51, // D_TR0 .. D_TR7
 @
 
+% the remaining info, e.g. for D_BRANCH to get the symbol or int will
+% be in Gen.value
 <<[[operand]] non register cases>>=
     // for ACALL, AJMP (from PC)
     D_BRANCH	= 60, 
@@ -872,6 +874,8 @@ struct Itab
 
 % TODO: just put a subset with most relevant instr and registers
 % hmm ADT would be better than union and this
+%    // could put D_NONE as a.y actually redo the job of setting Gen.value
+%    // appropriately
 <<global itab>>=
 struct Itab itab[] =
 {
@@ -1363,16 +1367,20 @@ struct Itab itab[] =
 % assembling is a lot about symbolic name processing!
 
 %TODO lp split!
+% currently copy pasted in 5a/a.h and va/a.h so if reorder
+% may have to reorder there (or factorize code to avoid those pbs)
 <<struct Sym>>=
 struct	Sym
 {
     char	*name;
 
-    // see also itab[i].type and itab[i].value
-    //enum???
+    //enum??? token code?
     ushort	type;
-    long	value; // vlong in va!!
+    //enum<operand> ?
+    long	value; // archi: vlong in va/!!
+    // see also itab[i].type and itab[i].value
 
+    //??
     char	sym;
 
     char*	macro;
@@ -1447,11 +1455,10 @@ struct	Gen
 
     //??
     Sym*	sym;
-    char	sval[8];
     long	offset;
     long	offset2;
-    // float
     double	dval;
+    char	sval[8];
 };
 @
 
@@ -1494,14 +1501,17 @@ Biobuf	obuf;
 @
 
 
+<<[[main()]] locals>>=
+char *p;
+int nout, nproc, status, i, c;
+@
+
 <<function main (assemblers/8a/lex.c)>>=
 void
 main(int argc, char *argv[])
 {
-    char *p;
-    int nout, nproc, status, i, c;
-
-    memset(debug, false, sizeof(debug));
+    <<[[main()]] locals>>
+    <<[[main()]] debug initialization>>
     cinit();
 
     outfile = nil;
@@ -1559,30 +1569,34 @@ pathchar(void)
 int
 assemble(char *file)
 {
-    char ofile[100], incfile[20], *p;
+    char ofile[100], incfile[20];
+    char *p;
     int i;
     fdt of;
 
     strcpy(ofile, file);
 
+    // p = basename(file)
+    // include[0] = dirname(file); 
     p = utfrrune(ofile, pathchar());
     if(p) {
         include[0] = ofile;
-        *p++ = 0;
+        *p++ = '\0';
     } else
         p = ofile;
 
+    // outfile =  p =~ s/.s/.8/;
     if(outfile == nil) {
         outfile = p;
         if(outfile){
             p = utfrrune(outfile, '.');
             if(p)
-                if(p[1] == 's' && p[2] == 0)
-                    p[0] = 0;
-            p = utfrune(outfile, 0);
+                if(p[1] == 's' && p[2] == '\0')
+                    p[0] = '\0';
+            p = utfrune(outfile, '\0');
             p[0] = '.';
             p[1] = thechar;
-            p[2] = 0;
+            p[2] = '\0';
         } else
             outfile = "/dev/null";
     }
@@ -4043,6 +4057,10 @@ if(argc > 1) {
 % ex: 'm', 'f' (256 so can have for each character a boolean value)
 <<global debug>>=
 bool	debug[256];
+@
+
+<<[[main()]] debug initialization>>=
+memset(debug, false, sizeof(debug));
 @
 
 <<[[main()]] command line processing>>=

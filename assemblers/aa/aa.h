@@ -61,11 +61,13 @@ struct	Sym
 {
     char	*name;
 
-    // see also itab[i].type and itab[i].value
-    //enum???
+    //enum??? token code?
     ushort	type;
-    long	value; // vlong in va!!
+    //enum<operand> ?
+    long	value; // archi: vlong in va/!!
+    // see also itab[i].type and itab[i].value
 
+    //??
     char	sym;
 
     char*	macro;

@@ -22,11 +22,10 @@ struct	Gen
 
     //??
     Sym*	sym;
-    char	sval[8];
     long	offset;
     long	offset2;
-    // float
     double	dval;
+    char	sval[8];
 };
 /*e: struct Gen */
 /*s: struct Gen2 */

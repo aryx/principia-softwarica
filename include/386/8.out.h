@@ -409,7 +409,7 @@ enum opcode
     AFYL2X,
     AFYL2XP1,
 
-    AEND,
+    AEND, // ??
 
     ADYNT,
     AINIT,
