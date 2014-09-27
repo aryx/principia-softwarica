@@ -61,7 +61,7 @@ struct	Sym
 {
     char	*name;
 
-    //enum??? token code?
+    //token code (e.g. LNAME, LBREG, etc)
     ushort	type;
     //enum<operand> ?
     long	value; // archi: vlong in va/!!
@@ -79,7 +79,7 @@ struct	Sym
 };
 /*e: struct Sym */
 /*s: constant S */
-#define	S	((Sym*)0)
+#define	S	((Sym*)nil)
 /*e: constant S */
 
 /*s: struct Ref */
@@ -110,7 +110,7 @@ struct	Io
 };
 /*e: struct Io */
 /*s: constant I */
-#define	I	((Io*)0)
+#define	I	((Io*)nil)
 /*e: constant I */
 
 /*s: struct Htab */

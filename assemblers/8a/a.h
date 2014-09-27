@@ -6,7 +6,7 @@ typedef	struct	Gen	Gen;
 typedef	struct	Gen2 	Gen2;
 
 /*s: constant FPCHIP */
-#define	FPCHIP		1
+#define	FPCHIP		true
 /*e: constant FPCHIP */
 
 /*s: struct Gen */

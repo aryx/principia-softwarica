@@ -37,22 +37,22 @@ char*	hunk;
 char*	include[NINCLUDE];
 /*e: global include */
 /*s: global iofree */
-Io*	iofree;
+Io*	iofree = I;
 /*e: global iofree */
 /*s: global ionext */
 Io*	ionext;
 /*e: global ionext */
 /*s: global iostack */
-Io*	iostack;
+Io*	iostack = I;
 /*e: global iostack */
 /*s: global lineno */
 long	lineno;
 /*e: global lineno */
 /*s: global nerrors */
-int	nerrors;
+int	nerrors = 0;
 /*e: global nerrors */
 /*s: global nhunk */
-long	nhunk;
+long	nhunk = 0;
 /*e: global nhunk */
 /*s: global ninclude */
 int	ninclude;
@@ -71,7 +71,7 @@ char*	pathname;
 long	pc;
 /*e: global pc */
 /*s: global peekc */
-int	peekc;
+int	peekc = IGN;
 /*e: global peekc */
 /*s: global sym */
 // bool?

@@ -1377,7 +1377,7 @@ struct	Sym
 {
     char	*name;
 
-    //enum??? token code?
+    //token code (e.g. LNAME, LBREG, etc)
     ushort	type;
     //enum<operand> ?
     long	value; // archi: vlong in va/!!
@@ -1397,7 +1397,7 @@ struct	Sym
 
 % what is the list it marks the end of?
 <<constant S>>=
-#define	S	((Sym*)0)
+#define	S	((Sym*)nil)
 @
 
 
@@ -1442,6 +1442,8 @@ Sym*	hash[NHASH];
 @
 % diff with h?
 
+% could put lookup and slookup here
+
 \section{[[Gen]], [[Gen2]]}
 
 % =~ Adr of Linker
@@ -1466,6 +1468,7 @@ struct	Gen
 @
 
 % usually MOVW AX, BX, 'from' AX, 'to' BX
+% =~ Prog of Linker (but without opcode)
 <<struct Gen2>>=
 struct	Gen2
 {
@@ -1473,8 +1476,8 @@ struct	Gen2
     Gen	to;
 };
 @
-% related to Prog in Linker?
 
+% see cinit()
 <<global nullgen>>=
 Gen	nullgen;
 @
@@ -1669,6 +1672,9 @@ if(p) {
 @
 
 
+
+
+
 % cwd, for #include
 <<global pathname>>=
 char*	pathname;
@@ -1691,11 +1697,6 @@ cinit(void)
     nullgen.index = D_NONE;
     nullgen.scale = 0;
 
-    nerrors = 0;
-    iostack = I;
-    iofree = I;
-    peekc = IGN;
-    nhunk = 0;
     for(i=0; i<NHASH; i++)
         hash[i] = S;
 
@@ -1708,7 +1709,6 @@ cinit(void)
     }
 
     pathname = allocn(pathname, 0, 100);
-
     if(getwd(pathname, 99) == nil) {
         pathname = allocn(pathname, 100, 900);
         if(getwd(pathname, 999) == nil)
@@ -1731,9 +1731,9 @@ long	pc;
 
 % lookahead(1)
 <<global peekc>>=
-int	peekc;
+int	peekc = IGN;
 @
-
+% used to be set in cinit()
 
 <<function pinit>>=
 void
@@ -1840,20 +1840,23 @@ struct	Io
 };
 @
 
-<<global iofree>>=
-Io*	iofree;
+<<global iostack>>=
+Io*	iostack = I;
 @
+% used to be set in cinit()
+
+<<global iofree>>=
+Io*	iofree = I;
+@
+
 
 <<global ionext>>=
 Io*	ionext;
 @
 
-<<global iostack>>=
-Io*	iostack;
-@
 
 <<constant I>>=
-#define	I	((Io*)0)
+#define	I	((Io*)nil)
 @
 
 
@@ -2133,7 +2136,26 @@ l1:
 %$
 
 
-% use which global?
+<<constant NSYMB>>=
+#define	NSYMB		500
+@
+
+<<global symb>>=
+char	symb[NSYMB];
+@
+
+<<function slookup>>=
+Sym*
+slookup(char *s)
+{
+
+    strcpy(symb, s);
+    return lookup();
+}
+@
+
+
+% use which global? symb!
 <<function lookup>>=
 Sym*
 lookup(void)
@@ -2150,6 +2172,7 @@ lookup(void)
     if(h < 0)
         h = ~h;
     h %= NHASH;
+
     c = symb[0];
     for(s = hash[h]; s != S; s = s->link) {
         if(s->name[0] != c)
@@ -2168,6 +2191,15 @@ lookup(void)
 }
 @
 
+<<function syminit>>=
+void
+syminit(Sym *s)
+{
+
+    s->type = LNAME;
+    s->value = 0;
+}
+@
 
 
 
@@ -2326,13 +2358,6 @@ loop:
 
 
 
-<<constant NSYMB>>=
-#define	NSYMB		500
-@
-
-<<global symb>>=
-char	symb[NSYMB];
-@
 
 <<function getsym>>=
 Sym*
@@ -4015,7 +4040,7 @@ ieeedtod(Ieee *ieee, double native)
 @
 
 <<constant FPCHIP>>=
-#define	FPCHIP		1
+#define	FPCHIP		true
 @
 
 
@@ -4139,8 +4164,9 @@ errorexit(void)
 @
 
 <<global nerrors>>=
-int	nerrors;
+int	nerrors = 0;
 @
+% used to be in cinit
 
 <<function yyerror>>=
 void
@@ -4218,6 +4244,92 @@ prfile(long l)
 @
 
 \chapter{Libc}
+
+\section{Memory managment}
+
+<<constant MAXALIGN>>=
+#define MAXALIGN 7
+@
+
+<<global hunk>>=
+char*	hunk;
+@
+
+<<global nhunk>>=
+long	nhunk = 0;
+@
+% used to be set in cinit()
+
+<<global thunk>>=
+long	thunk;
+@
+
+
+<<function gethunk>>=
+void
+gethunk(void)
+{
+    char *h;
+    long nh;
+
+    nh = NHUNK;
+    if(thunk >= 10L*NHUNK)
+        nh = 10L*NHUNK;
+    h = (char*)sbrk(nh);
+    if(h == (char*)-1) {
+        yyerror("out of memory");
+        errorexit();
+    }
+    hunk = h;
+    nhunk = nh;
+    thunk += nh;
+}
+@
+
+
+
+<<function alloc>>=
+/*
+ * real allocs
+ */
+void*
+alloc(long n)
+{
+    void *p;
+
+    while((uintptr)hunk & MAXALIGN) {
+        hunk++;
+        nhunk--;
+    }
+    while(nhunk < n)
+        gethunk();
+    p = hunk;
+    nhunk -= n;
+    hunk += n;
+    return p;
+}
+@
+
+<<function allocn>>=
+void*
+allocn(void *p, long on, long n)
+{
+    void *q;
+
+    q = (uchar*)p + on;
+    if(q != hunk || nhunk < n) {
+        while(nhunk < on+n)
+            gethunk();
+        memmove(hunk, p, on);
+        p = hunk;
+        hunk += on;
+        nhunk -= on;
+    }
+    hunk += n;
+    nhunk -= n;
+    return p;
+}
+@
 
 \chapter{Extra Code}
 

@@ -707,11 +707,6 @@ cinit(void)
     nullgen.index = D_NONE;
     nullgen.scale = 0;
 
-    nerrors = 0;
-    iostack = I;
-    iofree = I;
-    peekc = IGN;
-    nhunk = 0;
     for(i=0; i<NHASH; i++)
         hash[i] = S;
 
@@ -724,7 +719,6 @@ cinit(void)
     }
 
     pathname = allocn(pathname, 0, 100);
-
     if(getwd(pathname, 99) == nil) {
         pathname = allocn(pathname, 100, 900);
         if(getwd(pathname, 999) == nil)

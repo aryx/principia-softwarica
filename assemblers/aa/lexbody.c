@@ -212,6 +212,7 @@ lookup(void)
     if(h < 0)
         h = ~h;
     h %= NHASH;
+
     c = symb[0];
     for(s = hash[h]; s != S; s = s->link) {
         if(s->name[0] != c)
