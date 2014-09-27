@@ -65,11 +65,13 @@ alloc(long n)
         hunk++;
         nhunk--;
     }
+
     while(nhunk < n)
         gethunk();
     p = hunk;
     nhunk -= n;
     hunk += n;
+
     return p;
 }
 /*e: function alloc */
@@ -82,12 +84,14 @@ allocn(void *p, long on, long n)
 
     q = (uchar*)p + on;
     if(q != hunk || nhunk < n) {
+
         while(nhunk < on+n)
             gethunk();
         memmove(hunk, p, on);
         p = hunk;
         hunk += on;
         nhunk -= on;
+
     }
     hunk += n;
     nhunk -= n;

@@ -140,6 +140,7 @@ dodefine(char *cp)
         l = strlen(p) + 2;	/* +1 null, +1 nargs */
         while(l & 3)
             l++;
+
         while(nhunk < l)
             gethunk();
         *hunk = 0;
@@ -147,6 +148,7 @@ dodefine(char *cp)
         s->macro = hunk;
         hunk += l;
         nhunk -= l;
+
     } else {
         s = lookup();
         s->macro = "\0001";	/* \000 is nargs */
@@ -607,12 +609,14 @@ macinc(void)
     c = strlen(symb) + 1;
     while(c & 3)
         c++;
+
     while(nhunk < c)
         gethunk();
     hp = hunk;
     memcpy(hunk, symb, c);
     nhunk -= c;
     hunk += c;
+
     newio();
     pushio();
     newfile(hp, f);
@@ -667,12 +671,14 @@ nn:
     c = strlen(symb) + 1;
     while(c & 3)
         c++;
+
     while(nhunk < c)
         gethunk();
     cp = hunk;
     memcpy(hunk, symb, c);
     nhunk -= c;
     hunk += c;
+
     linehist(cp, n);
     return;
 
@@ -806,6 +812,7 @@ praglib:
     c = strlen(symb) + 1;
     while(c & 3)
         c++;
+
     while(nhunk < c)
         gethunk();
     hp = hunk;

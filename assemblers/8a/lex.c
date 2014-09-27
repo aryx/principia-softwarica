@@ -1096,6 +1096,7 @@ l1:
         *cp = '\0';
         s = lookup();
 
+        /*s: [[yylex()]] if macro symbol */
         if(s->macro) {
             newio();
             cp = ionext->b;
@@ -1114,6 +1115,7 @@ l1:
             }
             goto l0;
         }
+        /*e: [[yylex()]] if macro symbol */
 
         if(s->type == 0)
             s->type = LNAME;
