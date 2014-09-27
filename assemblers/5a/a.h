@@ -27,11 +27,13 @@ typedef struct  Ref Ref; // only for 8a originally
 
 struct	Sym
 {
+    char	*name;
+
     // see also itab[i].type and itab[i].value
+    //enum???
     ushort	type;
     long	value; // vlong in va!!
 
-    char	*name;
     char	sym;
 
     char*	macro;
