@@ -156,7 +156,8 @@ newio(void)
             yyerror("macro/io expansion too deep");
             errorexit();
         }
-        i = alloc(sizeof(*i));
+        //todo: check error code?
+        i = alloc(sizeof(Io));
     } else
         iofree = i->link;
     i->c = 0;
@@ -174,8 +175,9 @@ newfile(char *s, int f)
     i = ionext;
     i->link = iostack;
     iostack = i;
+
     i->f = f;
-    if(f < 0)
+    if(i->f < 0)
         i->f = open(s, 0);
     if(i->f < 0) {
         yyerror("%ca: %r: %s", thechar, s);
@@ -487,7 +489,6 @@ lookup(void)
 
 
 /*s: function getc */
-
 int
 getc(void)
 {
@@ -527,7 +528,6 @@ getnsc(void)
 void
 unget(int c)
 {
-
     peekc = c;
     if(c == '\n')
         lineno--;
@@ -594,6 +594,7 @@ pinit(char *f)
     newfile(f, -1);
     pc = 0;
     peekc = IGN;
+
     sym = 1;
     for(i=0; i<NSYM; i++) {
         h[i].type = 0;

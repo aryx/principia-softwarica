@@ -190,9 +190,11 @@ domacro(void)
     s = getsym();
     if(s == S)
         s = slookup("endif");
+
     for(i=0; mactab[i].macname; i++)
         if(strcmp(s->name, mactab[i].macname) == 0) {
             if(mactab[i].macf)
+                // dispatcher
                 (*mactab[i].macf)();
             else
                 macif(i);
@@ -752,6 +754,7 @@ macprag(void)
 
     if(s && strcmp(s->name, "lib") == 0)
         goto praglib;
+
     if(s && strcmp(s->name, "pack") == 0) {
         pragpack();
         return;
@@ -899,6 +902,7 @@ gethunk(void)
     nh = NHUNK;
     if(thunk >= 10L*NHUNK)
         nh = 10L*NHUNK;
+
     h = (char*)sbrk(nh);
     if(h == (char*)-1) {
         yyerror("out of memory");

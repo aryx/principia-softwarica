@@ -46,7 +46,7 @@ typedef	struct	Hist	Hist;
 #define	IGN		(-2)
 /*e: constant IGN */
 /*s: function GETC */
-#define	GETC()		((--fi.c < 0)? filbuf(): *fi.p++ & 0xff)
+#define	GETC()		((--fi.c < 0) ? filbuf() : *fi.p++ & 0xff)
 /*e: function GETC */
 /*s: constant NHASH */
 #define	NHASH		503
@@ -63,13 +63,14 @@ struct	Sym
 
     //token code (e.g. LNAME, LBREG, etc)
     ushort	type;
-    //enum<operand> ?
+    //enum<operand> | enum<opcode>
     long	value; // archi: vlong in va/!!
     // see also itab[i].type and itab[i].value
 
-    //??
+    //?? seems used only by outcode
     char	sym;
 
+    //option<string>, for '#define FOO xxx' expansion
     char*	macro;
 
     Ref*	ref; // unused for 5a, matters?
@@ -93,7 +94,9 @@ struct	Ref
 /*s: struct Fi */
 struct Fi
 {
+    // pointer in buffer
     char*	p;
+    // remaining count
     int	c;
 };
 /*e: struct Fi */
@@ -102,11 +105,17 @@ extern struct Fi fi;
 /*s: struct Io */
 struct	Io
 {
-    Io*	link;
     char	b[BUFSIZ];
+
+    // -1 if not opened yet
+    fdt	f;
+
+    // like Fi, IO buffer status
     char*	p;
     short	c;
-    short	f;
+
+    // Extra
+    Io*	link;
 };
 /*e: struct Io */
 /*s: constant I */

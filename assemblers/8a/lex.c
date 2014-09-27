@@ -1008,11 +1008,11 @@ outhist(void)
 // used to be in ../cc/lexbody and factorized between assemblers by
 // using #include, but ugly, so I copy pasted the function for now
 /*s: function yylex */
-//
 long
 yylex(void)
 {
-    int c, c1;
+    int c;
+    int c1;
     char *cp;
     Sym *s;
 
@@ -1029,6 +1029,7 @@ l1:
         peekc = EOF;
         return -1;
     }
+
     if(isspace(c)) {
         if(c == '\n') {
             lineno++;
@@ -1036,38 +1037,51 @@ l1:
         }
         goto l0;
     }
+
     if(isalpha(c))
         goto talph;
     if(isdigit(c))
         goto tnum;
-
-    switch(c)
-    {
+    switch(c) {
+    /*s: [[yylex()]] switch c cases */
     case '\n':
         lineno++;
         return ';';
-
-    case '#':
-        domacro();
-        goto l0;
-
-    case '.':
-        c = GETC();
-        if(isalpha(c)) {
-            cp = symb;
-            *cp++ = '.';
-            goto aloop;
+    /*x: [[yylex()]] switch c cases */
+    case '/':
+        c1 = GETC();
+        if(c1 == '/') {
+            for(;;) {
+                c = GETC();
+                if(c == '\n')
+                    goto l1;
+                if(c == EOF) {
+                    yyerror("eof in comment");
+                    errorexit();
+                }
+            }
         }
-        if(isdigit(c)) {
-            cp = symb;
-            *cp++ = '.';
-            goto casedot;
+        if(c1 == '*') {
+            for(;;) {
+                c = GETC();
+                while(c == '*') {
+                    c = GETC();
+                    if(c == '/')
+                        goto l0;
+                }
+                if(c == EOF) {
+                    yyerror("eof in comment");
+                    errorexit();
+                }
+                if(c == '\n')
+                    lineno++;
+            }
         }
-        peekc = c;
-        return '.';
-
+        break;
+    /*x: [[yylex()]] switch c cases */
     case '_':
     case '@':
+    // case 'a'..'z' 'A'..'Z':
     talph:
         cp = symb;
 
@@ -1076,17 +1090,21 @@ l1:
         c = GETC();
         if(isalpha(c) || isdigit(c) || c == '_' || c == '$') // $
             goto aloop;
-
-        *cp = 0;
+        // went too far, yyback(1)
         peekc = c;
+
+        *cp = '\0';
         s = lookup();
+
         if(s->macro) {
             newio();
             cp = ionext->b;
             macexpand(s, cp);
             pushio();
+
             ionext->link = iostack;
             iostack = ionext;
+
             fi.p = cp;
             fi.c = strlen(cp);
             if(peekc != IGN) {
@@ -1096,6 +1114,7 @@ l1:
             }
             goto l0;
         }
+
         if(s->type == 0)
             s->type = LNAME;
         if(s->type == LNAME ||
@@ -1106,7 +1125,8 @@ l1:
         }
         yylval.lval = s->value;
         return s->type;
-
+    /*x: [[yylex()]] switch c cases */
+    // case '0'..'9'
     tnum:
         cp = symb;
         if(c != '0')
@@ -1200,7 +1220,31 @@ l1:
         yyerror("assembler cannot interpret fp constants");
         yylval.lval = 1L;
         return LCONST;
-
+    /*x: [[yylex()]] switch c cases */
+    case '.':
+        c = GETC();
+        if(isalpha(c)) {
+            cp = symb;
+            *cp++ = '.';
+            goto aloop;
+        }
+        if(isdigit(c)) {
+            cp = symb;
+            *cp++ = '.';
+            goto casedot;
+        }
+        peekc = c;
+        return '.';
+    /*x: [[yylex()]] switch c cases */
+    case '\'':
+        c = escchar('\'');
+        if(c == EOF)
+            c = '\'';
+        if(escchar('\'') != EOF)
+            yyerror("missing '");
+        yylval.lval = c;
+        return LCONST;
+    /*x: [[yylex()]] switch c cases */
     case '"':
         memcpy(yylval.sval, nullgen.sval, sizeof(yylval.sval));
         cp = yylval.sval;
@@ -1216,47 +1260,11 @@ l1:
         if(c1 > sizeof(yylval.sval))
             yyerror("string constant too long");
         return LSCONST;
-
-    case '\'':
-        c = escchar('\'');
-        if(c == EOF)
-            c = '\'';
-        if(escchar('\'') != EOF)
-            yyerror("missing '");
-        yylval.lval = c;
-        return LCONST;
-
-    case '/':
-        c1 = GETC();
-        if(c1 == '/') {
-            for(;;) {
-                c = GETC();
-                if(c == '\n')
-                    goto l1;
-                if(c == EOF) {
-                    yyerror("eof in comment");
-                    errorexit();
-                }
-            }
-        }
-        if(c1 == '*') {
-            for(;;) {
-                c = GETC();
-                while(c == '*') {
-                    c = GETC();
-                    if(c == '/')
-                        goto l0;
-                }
-                if(c == EOF) {
-                    yyerror("eof in comment");
-                    errorexit();
-                }
-                if(c == '\n')
-                    lineno++;
-            }
-        }
-        break;
-
+    /*x: [[yylex()]] switch c cases */
+    case '#':
+        domacro();
+        goto l0;
+    /*e: [[yylex()]] switch c cases */
     default:
         return c;
     }

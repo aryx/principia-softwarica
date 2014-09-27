@@ -37,12 +37,14 @@ char*	hunk;
 char*	include[NINCLUDE];
 /*e: global include */
 /*s: global iofree */
+// list<IO>, next = IO.link
 Io*	iofree = I;
 /*e: global iofree */
 /*s: global ionext */
 Io*	ionext;
 /*e: global ionext */
 /*s: global iostack */
+// list<Io> (next = Io.link)
 Io*	iostack = I;
 /*e: global iostack */
 /*s: global lineno */
@@ -74,7 +76,6 @@ long	pc;
 int	peekc = IGN;
 /*e: global peekc */
 /*s: global sym */
-// bool?
 int	sym;
 /*e: global sym */
 /*s: global symb */
