@@ -105,24 +105,31 @@ main(int argc, char *argv[])
 int
 assemble(char *file)
 {
-    char ofile[100], incfile[20];
+    /*s: [[assemble()]] locals */
     char *p;
+    fdt of; // outfile
     int i;
-    fdt of;
+    /*x: [[assemble()]] locals */
+    char ofile[100];
+    /*x: [[assemble()]] locals */
+    char incfile[20];
+    /*e: [[assemble()]] locals */
 
-    strcpy(ofile, file);
-
+    /*s: [[assemble()]] set p to basename(file) and adjust include */
     // p = basename(file)
     // include[0] = dirname(file); 
+    strcpy(ofile, file);
     p = utfrrune(ofile, pathchar());
     if(p) {
         include[0] = ofile;
         *p++ = '\0';
     } else
         p = ofile;
+    /*e: [[assemble()]] set p to basename(file) and adjust include */
 
-    // outfile =  p =~ s/.s/.8/;
     if(outfile == nil) {
+        /*s: [[assemble()]] set outfile to {basename(file)}.8 */
+        // outfile =  p =~ s/.s/.8/;
         outfile = p;
         if(outfile){
             p = utfrrune(outfile, '.');
@@ -135,8 +142,10 @@ assemble(char *file)
             p[2] = '\0';
         } else
             outfile = "/dev/null";
+        /*e: [[assemble()]] set outfile to {basename(file)}.8 */
     }
 
+    /*s: [[assemble()]] setinclude("/386/include") or INCLUDE */
     p = getenv("INCLUDE");
     if(p) {
         setinclude(p);
@@ -146,6 +155,7 @@ assemble(char *file)
             setinclude(strdup(incfile));
         }
     }
+    /*e: [[assemble()]] setinclude("/386/include") or INCLUDE */
 
     of = mycreat(outfile, 0664);
     if(of < 0) {
@@ -157,10 +167,10 @@ assemble(char *file)
     pass = 1;
 
     pinit(file);
-    /*s: [[assembler()]] init Dlist after pinit */
+    /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
-    /*e: [[assembler()]] init Dlist after pinit */
+    /*e: [[assemble()]] init Dlist after pinit */
     yyparse();
 
     if(nerrors) {
@@ -172,10 +182,10 @@ assemble(char *file)
     outhist();
 
     pinit(file);
-    /*s: [[assembler()]] init Dlist after pinit */
+    /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
-    /*e: [[assembler()]] init Dlist after pinit */
+    /*e: [[assemble()]] init Dlist after pinit */
     yyparse();
 
     cclean();

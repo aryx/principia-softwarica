@@ -184,6 +184,8 @@ License.
 
 % command line interface? -o outfile,   -D -I (cpp),  -f -m for debug
 
+% env: INCLUDE, NPROC
+
 \section{x86}
 
 % specifics of 8a? like left to right or right to left for mv, intel
@@ -733,6 +735,7 @@ enum opcode
 
 %\section{[[Register]]}
 
+% ADT would be far better than this and Sym
 <<enum reg>>=
 enum operand
 {
@@ -1495,10 +1498,6 @@ char*	outfile;
 @
 
 
-% output buf? of outfile?
-<<global obuf>>=
-Biobuf	obuf;
-@
 
 
 <<[[main()]] locals>>=
@@ -1564,52 +1563,30 @@ pathchar(void)
 }
 @
 
-%TODO lp split more
+<<[[assemble()]] locals>>=
+char *p;
+fdt of; // outfile
+int i;
+@
+
+% output buf? of outfile?
+<<global obuf>>=
+Biobuf	obuf;
+@
+
 <<function assemble>>=
 int
 assemble(char *file)
 {
-    char ofile[100], incfile[20];
-    char *p;
-    int i;
-    fdt of;
+    <<[[assemble()]] locals>>
 
-    strcpy(ofile, file);
+    <<[[assemble()]] set p to basename(file) and adjust include>>
 
-    // p = basename(file)
-    // include[0] = dirname(file); 
-    p = utfrrune(ofile, pathchar());
-    if(p) {
-        include[0] = ofile;
-        *p++ = '\0';
-    } else
-        p = ofile;
-
-    // outfile =  p =~ s/.s/.8/;
     if(outfile == nil) {
-        outfile = p;
-        if(outfile){
-            p = utfrrune(outfile, '.');
-            if(p)
-                if(p[1] == 's' && p[2] == '\0')
-                    p[0] = '\0';
-            p = utfrune(outfile, '\0');
-            p[0] = '.';
-            p[1] = thechar;
-            p[2] = '\0';
-        } else
-            outfile = "/dev/null";
+        <<[[assemble()]] set outfile to {basename(file)}.8>>
     }
 
-    p = getenv("INCLUDE");
-    if(p) {
-        setinclude(p);
-    } else {
-        if(systemtype(Plan9)) {
-            sprint(incfile,"/%s/include", thestring);
-            setinclude(strdup(incfile));
-        }
-    }
+    <<[[assemble()]] setinclude("/386/include") or INCLUDE>>
 
     of = mycreat(outfile, 0664);
     if(of < 0) {
@@ -1621,7 +1598,7 @@ assemble(char *file)
     pass = 1;
 
     pinit(file);
-    <<[[assembler()]] init Dlist after pinit>>
+    <<[[assemble()]] init Dlist after pinit>>
     yyparse();
 
     if(nerrors) {
@@ -1633,13 +1610,64 @@ assemble(char *file)
     outhist();
 
     pinit(file);
-    <<[[assembler()]] init Dlist after pinit>>
+    <<[[assemble()]] init Dlist after pinit>>
     yyparse();
 
     cclean();
     return nerrors;
 }
 @
+
+
+<<[[assemble()]] locals>>=
+char ofile[100];
+@
+
+<<[[assemble()]] set p to basename(file) and adjust include>>=
+// p = basename(file)
+// include[0] = dirname(file); 
+strcpy(ofile, file);
+p = utfrrune(ofile, pathchar());
+if(p) {
+    include[0] = ofile;
+    *p++ = '\0';
+} else
+    p = ofile;
+@
+
+<<[[assemble()]] set outfile to {basename(file)}.8>>=
+// outfile =  p =~ s/.s/.8/;
+outfile = p;
+if(outfile){
+    p = utfrrune(outfile, '.');
+    if(p)
+        if(p[1] == 's' && p[2] == '\0')
+            p[0] = '\0';
+    p = utfrune(outfile, '\0');
+    p[0] = '.';
+    p[1] = thechar;
+    p[2] = '\0';
+} else
+    outfile = "/dev/null";
+@
+
+
+<<[[assemble()]] locals>>=
+char incfile[20];
+@
+
+<<[[assemble()]] setinclude("/386/include") or INCLUDE>>=
+p = getenv("INCLUDE");
+if(p) {
+    setinclude(p);
+} else {
+    if(systemtype(Plan9)) {
+        sprint(incfile,"/%s/include", thestring);
+        setinclude(strdup(incfile));
+    }
+}
+@
+
 
 % cwd, for #include
 <<global pathname>>=
@@ -2527,7 +2555,7 @@ char*	Dlist[30];
 int	nDlist;
 @
 
-<<[[assembler()]] init Dlist after pinit>>=
+<<[[assemble()]] init Dlist after pinit>>=
 for(i=0; i<nDlist; i++)
         dodefine(Dlist[i]);
 @
