@@ -15,7 +15,7 @@
 %thx to LP, changed for the better a few things:
 %  - better organisation of the code, TOC better than the few existing
 %    files (that didn't have very good names)
-%  - removed deadcode (Ref)
+%  - removed deadcode (Ref, imm2, con2)
 %  - TODO rename types, clearer, Gen? Gen2? as?
 
 %thx to codemap/codegraph:
@@ -233,6 +233,7 @@ License.
 % 8 bytes limit for strings (so if longer have to split manually,
 % a bit annoying but can use data2s too)
 
+%concepts: labels, ...
 
 \section{Output object format}
 
@@ -853,33 +854,37 @@ enum misc3 {
 
 \section{[[Token]] and [[itab]]}
 
+% the first part is essentially for keywords
+<<token declarations>>=
+%token  <lval>  LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
+%token  <lval>  LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
+%token  <lval>  LFP LPC LSB LSP
+%token  <lval>  LBREG LLREG LSREG LFREG
+
+%token  <lval>  LCONST 
+%token  <dval>  LFCONST
+%token  <sval>  LSCONST
+%token  <sym>   LNAME LLAB LVAR
+@
+%pad's bugfix? LSP was was LFCONST, does not make sense
+
+
 <<union token>>=
-%union	{
- long	lval;
- double	dval;
- char	sval[8];
- Sym	*sym;
+%union  {
+ // enum<opcode> (for LTYPE/...) | enum<operand> (for LBREG/...) | long (for LCONST)
+ long   lval;
+ double dval;
+ char   sval[8];
+ Sym    *sym;
 
  <<[[Token]] other fields>>
 }
 @
 % sval[8]?? can't have string more than 8 bytes? hence the data2c
 % ugly list?
+% mutual ref with sym here where sym has itself a type that is the token code
 
 
-% the first part is essentially for keywords
-<<token declarations>>=
-%token	<lval>	LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
-%token	<lval>	LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
-%token  <lval>  LFP LPC LSB LSP
-%token	<lval>	LBREG LLREG LSREG LFREG
-
-%token	<lval>	LCONST 
-%token	<dval>	LFCONST
-%token	<sval>	LSCONST
-%token	<sym>	LNAME LLAB LVAR
-@
-%pad's bugfix? LSP was was LFCONST, does not make sense
 
 
 
@@ -1396,15 +1401,15 @@ struct Itab itab[] =
 <<struct Sym>>=
 struct	Sym
 {
-    // for user symbols? (foo, bar:, ?) but also abused(?) for
-    //  opcodes (AMOVB), operands (D_AL)
+    // for user symbols? (foo, bar:, ?) 
+    // but also used for opcodes (AMOVB) andoperands (D_AL) keywords (see itab)
     char	*name;
 
     //token code (e.g. LNAME, LBREG, etc)
     ushort	type;
-    //enum<operand> | enum<opcode>
-    long	value; // archi: vlong in va/!!
-    // see also itab[i].type and itab[i].value
+
+    //enum<operand> | enum<opcode> | long (e.g. pc for LLAB)
+    long	value;
 
     <<[[Sym]] other fields>>
     // Extra
@@ -1413,14 +1418,18 @@ struct	Sym
 @
 % this is used for user defined names (e.g. TEXT foo), but
 % abused also for keywords operand like AL, AX, and also for opcode
-% in which case the value is the 
+% in which case the value is the opcode.
+% note: because of hash below that means that all MOVB in a file
+% are shared when lexing
+%    // see also itab[i].type and itab[i].value
+% archi: not that in va/ value is a vlong, not a long // archi: vlong in va/!!
 
 <<constant NHASH>>=
 #define	NHASH		503
 @
 
 <<global hash>>=
-// hash<string, ref?<Sym>>, (next in bucket = Sym.link)
+// hash<string, ref_own?<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
 @
 % diff with h?
@@ -1435,11 +1444,6 @@ Sym*	link;
 <<constant S>>=
 #define	S	((Sym*)nil)
 @
-
-
-% could put lookup and slookup here
-
-
 
 
 
@@ -1566,6 +1570,8 @@ struct	Gen2
 };
 @
 
+% actually later do outcode(int a, Gen2 *x)
+% where both arguments are really like a Prog of Linker
 
 <<function checkscale>>=
 void
@@ -1850,11 +1856,6 @@ long	lineno;
 @
 
 % dead?
-<<global pc>>=
-long	pc;
-@
-
-% dead?
 <<global sym>>=
 int	sym;
 @
@@ -2130,7 +2131,7 @@ aloop:
     *cp = '\0';
     s = lookup();
 
-    <<[[yylex()]] if macro symbol>> 
+    <<[[yylex()]] if macro symbol>>
 
     if(s->type == 0)
         s->type = LNAME;
@@ -3561,34 +3562,21 @@ getnsn(void)
 
 \chapter{Parsing}
 
+\section{Overview}
+
 % this is the rest from the %union
 <<[[Token]] other fields>>=
- struct {
-  long v1;
-  long v2;
- } con2;
-@
-
-<<[[Token]] other fields>>=
- Gen	gen;
- Gen2	gen2;
-@
-
-<<priority and associativity declarations>>=
-%left	'|'
-%left	'^'
-%left	'&'
-%left	'<' '>'
-%left	'+' '-'
-%left	'*' '/' '%'
+ Gen   gen;
+ Gen2  gen2;
 @
 
 <<type declarations>>=
-%type	<lval>	con expr pointer offset
-%type	<con2>	con2
-%type	<gen>	mem imm imm2 reg nam rel rem rim rom omem nmem
-%type	<gen2>	nonnon nonrel nonrem rimnon rimrem remrim
-%type	<gen2>	spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
+%type   <lval>  con expr offset
+%type   <lval>  pointer
+%type   <gen>   reg imm mem 
+%type   <gen>   nam rel rem rim rom omem nmem
+%type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
+%type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
 @
 
 %TODO lp split! give TOC overview
@@ -3597,13 +3585,20 @@ getnsn(void)
 % expr rules
 % ...
 
+
+
+
 % note that newline are translated in ';' by the lexer
 % so can either pack in one line with ';' or use newline
 % (haskell spirit :) )
 
+% TODO: use (Gen2) { nullgen, nullgen }  C extension?
+% would lead to shorter actions!
+
 <<grammar>>=
 prog:
-|	prog line
+  /* empty */
+| prog line
 
 line:
  LLAB ':'
@@ -3613,15 +3608,16 @@ line:
   $1->value = pc;
  }
  line
-|	LNAME ':'
+| LNAME ':'
  {
   $1->type = LLAB;
   $1->value = pc;
  }
  line
-|	';'
-|	inst ';'
-|	error ';'
+| ';'
+| inst ';'
+| error ';'
+
 
 inst:
  LNAME '=' expr
@@ -3629,34 +3625,36 @@ inst:
   $1->type = LVAR;
   $1->value = $3;
  }
-|	LVAR '=' expr
+| LVAR '=' expr
  {
   if($1->value != $3)
    yyerror("redeclaration of %s", $1->name);
   $1->value = $3;
  }
-|	LTYPE0 nonnon	{ outcode($1, &$2); }
-|	LTYPE1 nonrem	{ outcode($1, &$2); }
-|	LTYPE2 rimnon	{ outcode($1, &$2); }
-|	LTYPE3 rimrem	{ outcode($1, &$2); }
-|	LTYPE4 remrim	{ outcode($1, &$2); }
-|	LTYPER nonrel	{ outcode($1, &$2); }
 
-|	LTYPED spec1	{ outcode($1, &$2); }
-|	LTYPET spec2	{ outcode($1, &$2); }
-|	LTYPEC spec3	{ outcode($1, &$2); }
-|	LTYPEN spec4	{ outcode($1, &$2); }
-|	LTYPES spec5	{ outcode($1, &$2); }
-|	LTYPEM spec6	{ outcode($1, &$2); }
-|	LTYPEI spec7	{ outcode($1, &$2); }
-|	LTYPEG spec8	{ outcode($1, &$2); }
+| LTYPE0 nonnon   { outcode($1, &$2); }
+| LTYPE1 nonrem   { outcode($1, &$2); }
+| LTYPE2 rimnon   { outcode($1, &$2); }
+| LTYPE3 rimrem   { outcode($1, &$2); }
+| LTYPE4 remrim   { outcode($1, &$2); }
+| LTYPER nonrel   { outcode($1, &$2); }
+
+| LTYPED spec1    { outcode($1, &$2); }
+| LTYPET spec2    { outcode($1, &$2); }
+| LTYPEC spec3    { outcode($1, &$2); }
+| LTYPEN spec4    { outcode($1, &$2); }
+| LTYPES spec5    { outcode($1, &$2); }
+| LTYPEM spec6    { outcode($1, &$2); }
+| LTYPEI spec7    { outcode($1, &$2); }
+| LTYPEG spec8    { outcode($1, &$2); }
 
 nonnon:
+ /* empty */
  {
   $$.from = nullgen;
   $$.to = nullgen;
  }
-|	','
+| ','
  {
   $$.from = nullgen;
   $$.to = nullgen;
@@ -3677,46 +3675,46 @@ remrim:
  }
 
 rimnon:
- rim ','
+  rim
  {
   $$.from = $1;
   $$.to = nullgen;
  }
-|	rim
+| rim ','
  {
   $$.from = $1;
   $$.to = nullgen;
  }
 
 nonrem:
- ',' rem
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-|	rem
+ rem
  {
   $$.from = nullgen;
   $$.to = $1;
+ }
+| ',' rem
+ {
+  $$.from = nullgen;
+  $$.to = $2;
  }
 
 nonrel:
- ',' rel
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-|	rel
+ rel
  {
   $$.from = nullgen;
   $$.to = $1;
  }
+| ',' rel
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
 
 
 
 
 
-spec1:	/* DATA */
+spec1:  /* DATA */
  nam '/' con ',' imm
  {
   $$.from = $1;
@@ -3724,42 +3722,42 @@ spec1:	/* DATA */
   $$.to = $5;
  }
 
-spec2:	/* TEXT */
+spec2:  /* TEXT */
  mem ',' imm
  {
   $$.from = $1;
   $$.to = $3;
  }
-|	mem ',' con ',' imm
+|   mem ',' con ',' imm
  {
   $$.from = $1;
   $$.from.scale = $3;
   $$.to = $5;
  }
 
-spec3:	/* JMP/CALL */
- ',' rom
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-|	rom
+spec3:  /* JMP/CALL */
+ rom
  {
   $$.from = nullgen;
   $$.to = $1;
  }
+| ',' rom
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
 
-spec4:	/* NOP */
- nonnon
-|	nonrem
+spec4:  /* NOP */
+  nonnon
+| nonrem
 
-spec5:	/* SHL/SHR */
+spec5:  /* SHL/SHR */
  rim ',' rem
  {
   $$.from = $1;
   $$.to = $3;
  }
-|	rim ',' rem ':' LLREG
+| rim ',' rem ':' LLREG
  {
   $$.from = $1;
   $$.to = $3;
@@ -3768,13 +3766,13 @@ spec5:	/* SHL/SHR */
   $$.from.index = $5;
  }
 
-spec6:	/* MOVW/MOVL */
+spec6:  /* MOVW/MOVL */
  rim ',' rem
  {
   $$.from = $1;
   $$.to = $3;
  }
-|	rim ',' rem ':' LSREG
+|   rim ',' rem ':' LSREG
  {
   $$.from = $1;
   $$.to = $3;
@@ -3784,29 +3782,29 @@ spec6:	/* MOVW/MOVL */
  }
 
 spec7:
- rim ','
+ rim
  {
   $$.from = $1;
   $$.to = nullgen;
  }
-|	rim
+| rim ','
  {
   $$.from = $1;
   $$.to = nullgen;
  }
-|	rim ',' rem
+| rim ',' rem
  {
   $$.from = $1;
   $$.to = $3;
  }
 
-spec8:	/* GLOBL */
+spec8:  /* GLOBL */
  mem ',' imm
  {
   $$.from = $1;
   $$.to = $3;
  }
-|	mem ',' con ',' imm
+| mem ',' con ',' imm
  {
   $$.from = $1;
   $$.from.scale = $3;
@@ -3819,27 +3817,27 @@ spec8:	/* GLOBL */
 
 
 rem:
- reg
-|	mem
+  reg
+| mem
 
 rom:
- rel
-|	nmem
-|	'*' reg
+  rel
+| nmem
+| '*' reg
  {
   $$ = $2;
  }
-|	'*' omem
+| '*' omem
  {
   $$ = $2;
  }
-|	reg
-|	omem
-|	imm
+| reg
+| omem
+| imm
 
 rim:
- rem
-|	imm
+  rem
+| imm
 
 rel:
  con '(' LPC ')'
@@ -3848,7 +3846,7 @@ rel:
   $$.type = D_BRANCH;
   $$.offset = $1 + pc;
  }
-|	LNAME offset
+| LNAME offset
  {
   $$ = nullgen;
   if(pass == 2)
@@ -3857,7 +3855,7 @@ rel:
   $$.sym = $1;
   $$.offset = $2;
  }
-|	LLAB offset
+| LLAB offset
  {
   $$ = nullgen;
   $$.type = D_BRANCH;
@@ -3871,22 +3869,22 @@ reg:
   $$ = nullgen;
   $$.type = $1;
  }
-|	LFREG
+| LFREG
  {
   $$ = nullgen;
   $$.type = $1;
  }
-|	LLREG
+| LLREG
  {
   $$ = nullgen;
   $$.type = $1;
  }
-|	LSP
+| LSP
  {
   $$ = nullgen;
   $$.type = D_SP;
  }
-|	LSREG
+| LSREG
  {
   $$ = nullgen;
   $$.type = $1;
@@ -3899,7 +3897,7 @@ imm:
   $$.type = D_CONST;
   $$.offset = $2;
  }
-|	'$' nam
+| '$' nam
  {
   $$ = $2;
   $$.index = $2.type;
@@ -3910,65 +3908,35 @@ imm:
     $2.sym->name);
    */
  }
-|	'$' LSCONST
+| '$' LSCONST
  {
   $$ = nullgen;
   $$.type = D_SCONST;
   memcpy($$.sval, $2, sizeof($$.sval));
  }
-|	'$' LFCONST
+| '$' LFCONST
  {
   $$ = nullgen;
   $$.type = D_FCONST;
   $$.dval = $2;
  }
-|	'$' '(' LFCONST ')'
+| '$' '(' LFCONST ')'
  {
   $$ = nullgen;
   $$.type = D_FCONST;
   $$.dval = $3;
  }
-|	'$' '-' LFCONST
+| '$' '-' LFCONST
  {
   $$ = nullgen;
   $$.type = D_FCONST;
   $$.dval = -$3;
  }
 
-imm2:
- '$' con2
- {
-  $$ = nullgen;
-  $$.type = D_CONST2;
-  $$.offset = $2.v1;
-  $$.offset2 = $2.v2;
- }
-
-con2:
- LCONST
- {
-  $$.v1 = $1;
-  $$.v2 = 0;
- }
-|	'-' LCONST
- {
-  $$.v1 = -$2;
-  $$.v2 = 0;
- }
-|	LCONST '-' LCONST
- {
-  $$.v1 = $1;
-  $$.v2 = $3;
- }
-|	'-' LCONST '-' LCONST
- {
-  $$.v1 = -$2;
-  $$.v2 = $4;
- }
 
 mem:
- omem
-|	nmem
+  omem
+| nmem
 
 omem:
  con
@@ -3977,19 +3945,19 @@ omem:
   $$.type = D_INDIR+D_NONE;
   $$.offset = $1;
  }
-|	con '(' LLREG ')'
+| con '(' LLREG ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$3;
   $$.offset = $1;
  }
-|	con '(' LSP ')'
+|   con '(' LSP ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_SP;
   $$.offset = $1;
  }
-|	con '(' LLREG '*' con ')'
+|   con '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_NONE;
@@ -3998,7 +3966,7 @@ omem:
   $$.scale = $5;
   checkscale($$.scale);
  }
-|	con '(' LLREG ')' '(' LLREG '*' con ')'
+|   con '(' LLREG ')' '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$3;
@@ -4007,23 +3975,23 @@ omem:
   $$.scale = $8;
   checkscale($$.scale);
  }
-|	'(' LLREG ')'
+|   '(' LLREG ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$2;
  }
-|	'(' LSP ')'
+|   '(' LSP ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_SP;
  }
-|	con '(' LSREG ')'
+|   con '(' LSREG ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$3;
   $$.offset = $1;
  }
-|	'(' LLREG '*' con ')'
+|   '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_NONE;
@@ -4031,7 +3999,7 @@ omem:
   $$.scale = $4;
   checkscale($$.scale);
  }
-|	'(' LLREG ')' '(' LLREG '*' con ')'
+|   '(' LLREG ')' '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$2;
@@ -4041,11 +4009,8 @@ omem:
  }
 
 nmem:
- nam
- {
-  $$ = $1;
- }
-|	nam '(' LLREG '*' con ')'
+  nam
+| nam '(' LLREG '*' con ')'
  {
   $$ = $1;
   $$.index = $3;
@@ -4054,14 +4019,14 @@ nmem:
  }
 
 nam:
- LNAME offset '(' pointer ')'
+  LNAME offset '(' pointer ')'
  {
   $$ = nullgen;
   $$.type = $4;
   $$.sym = $1;
   $$.offset = $2;
  }
-|	LNAME '<' '>' offset '(' LSB ')'
+| LNAME '<' '>' offset '(' LSB ')'
  {
   $$ = nullgen;
   $$.type = D_STATIC;
@@ -4070,91 +4035,36 @@ nam:
  }
 
 offset:
- {
-  $$ = 0;
- }
-|	'+' con
- {
-  $$ = $2;
- }
-|	'-' con
- {
-  $$ = -$2;
- }
+ /* empty */ { $$ = 0; }
+| '+' con    { $$ = $2; }
+| '-' con    { $$ = -$2; }
 
 pointer:
- LSB
-|	LSP
- {
-  $$ = D_AUTO;
- }
-|	LFP
+  LSB
+| LSP { $$ = D_AUTO; }
+| LFP
+
 
 con:
- LCONST
-|	LVAR
- {
-  $$ = $1->value;
- }
-|	'-' con
- {
-  $$ = -$2;
- }
-|	'+' con
- {
-  $$ = $2;
- }
-|	'~' con
- {
-  $$ = ~$2;
- }
-|	'(' expr ')'
- {
-  $$ = $2;
- }
+  LCONST
+| LVAR         { $$ = $1->value; }
+| '-' con      { $$ = -$2; }
+| '+' con      { $$ = $2; }
+| '~' con      { $$ = ~$2; }
+| '(' expr ')' { $$ = $2; }
 
 expr:
- con
-|	expr '+' expr
- {
-  $$ = $1 + $3;
- }
-|	expr '-' expr
- {
-  $$ = $1 - $3;
- }
-|	expr '*' expr
- {
-  $$ = $1 * $3;
- }
-|	expr '/' expr
- {
-  $$ = $1 / $3;
- }
-|	expr '%' expr
- {
-  $$ = $1 % $3;
- }
-|	expr '<' '<' expr
- {
-  $$ = $1 << $4;
- }
-|	expr '>' '>' expr
- {
-  $$ = $1 >> $4;
- }
-|	expr '&' expr
- {
-  $$ = $1 & $3;
- }
-|	expr '^' expr
- {
-  $$ = $1 ^ $3;
- }
-|	expr '|' expr
- {
-  $$ = $1 | $3;
- }
+  con
+| expr '+' expr     { $$ = $1 + $3; }
+| expr '-' expr     { $$ = $1 - $3; }
+| expr '*' expr     { $$ = $1 * $3; }
+| expr '/' expr     { $$ = $1 / $3; }
+| expr '%' expr     { $$ = $1 % $3; }
+| expr '<' '<' expr { $$ = $1 << $4; }
+| expr '>' '>' expr { $$ = $1 >> $4; }
+| expr '&' expr     { $$ = $1 & $3; }
+| expr '^' expr     { $$ = $1 ^ $3; }
+| expr '|' expr     { $$ = $1 | $3; }
 
 @
 
@@ -4171,8 +4081,76 @@ expr:
 <<grammar>>
 @
 
+\section{Instructions}
+
+\section{Labels}
+
+% dead?
+<<global pc>>=
+long	pc;
+@
+
+\section{Variables}
+% useful? cpp can do that too
+
+\section{Special instructions}
+% some of those are not really opcodes, they are entities 
+% just at the asm level.
+
+%hmm but nop? SHL? MOV? here because pseudo asm
+% that get translated in store/load on some archi?
+
+\subsection{[[TEXT]]}
+
+\subsection{[[DATA]]}
+
+\subsection{[[GLOBL]]}
+
+\subsection{[[JMP/CALL]]}
+
+\subsection{[[NOP]]}
+
+\subsection{[[SHL/SHR]]}
+
+\subsection{[[MOVW/MOVL]]}
+
+\section{Operands}
+
+% reg = register
+% imm = immediate
+% mem = memory (complex, omem | nmem)
+% con = constant
+% nam = ?
+
+% rem = register or memory
+% rim = register or memory or immediate
+% rel = ??
+
+% xxxyyy = first operand, second operand
+% nonnon = nothing first, nothing left
 
 
+% imm2 dead? yacc does not detect?
+
+\section{Constant expressions}
+% it's not Fortran, we're making an assembler :)
+% so it's constant expressions here!
+
+<<priority and associativity declarations>>=
+%left   '|'
+%left   '^'
+%left   '&'
+%left   '<' '>'
+%left   '+' '-'
+%left   '*' '/' '%'
+@
+
+\ifallcode
+\section{Optional commas}
+% the optional ',' why? because can ge generated by 8c -S that does
+% this? a bit ugly so maybe better to aspectize this
+
+\fi
 
 \chapter{Output}
 
@@ -4304,8 +4282,7 @@ zaddr(Gen *a, int s)
         t |= T_SYM;
 
     switch(a->type) {
-    default:
-        t |= T_TYPE;
+    case D_NONE:
         break;
     case D_FCONST:
         t |= T_FCONST;
@@ -4316,7 +4293,8 @@ zaddr(Gen *a, int s)
     case D_SCONST:
         t |= T_SCONST;
         break;
-    case D_NONE:
+    default:
+        t |= T_TYPE;
         break;
     }
     Bputc(&obuf, t);

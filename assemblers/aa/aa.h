@@ -60,15 +60,15 @@ typedef	struct	Hist	Hist;
 /*s: struct Sym */
 struct	Sym
 {
-    // for user symbols? (foo, bar:, ?) but also abused(?) for
-    //  opcodes (AMOVB), operands (D_AL)
+    // for user symbols? (foo, bar:, ?) 
+    // but also used for opcodes (AMOVB) andoperands (D_AL) keywords (see itab)
     char	*name;
 
     //token code (e.g. LNAME, LBREG, etc)
     ushort	type;
-    //enum<operand> | enum<opcode>
-    long	value; // archi: vlong in va/!!
-    // see also itab[i].type and itab[i].value
+
+    //enum<operand> | enum<opcode> | long (e.g. pc for LLAB)
+    long	value;
 
     /*s: [[Sym]] other fields */
     //option<string>, for '#define FOO xxx' expansion

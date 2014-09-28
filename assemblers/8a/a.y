@@ -3,54 +3,52 @@
 #include "a.h"
 %}
 /*s: union token */
-%union	{
- long	lval;
- double	dval;
- char	sval[8];
- Sym	*sym;
+%union  {
+ // enum<opcode> (for LTYPE/...) | enum<operand> (for LBREG/...) | long (for LCONST)
+ long   lval;
+ double dval;
+ char   sval[8];
+ Sym    *sym;
 
  /*s: [[Token]] other fields */
-  struct {
-   long v1;
-   long v2;
-  } con2;
- /*x: [[Token]] other fields */
-  Gen	gen;
-  Gen2	gen2;
+  Gen   gen;
+  Gen2  gen2;
  /*e: [[Token]] other fields */
 }
 /*e: union token */
 /*s: priority and associativity declarations */
-%left	'|'
-%left	'^'
-%left	'&'
-%left	'<' '>'
-%left	'+' '-'
-%left	'*' '/' '%'
+%left   '|'
+%left   '^'
+%left   '&'
+%left   '<' '>'
+%left   '+' '-'
+%left   '*' '/' '%'
 /*e: priority and associativity declarations */
 /*s: token declarations */
-%token	<lval>	LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
-%token	<lval>	LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
+%token  <lval>  LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
+%token  <lval>  LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
 %token  <lval>  LFP LPC LSB LSP
-%token	<lval>	LBREG LLREG LSREG LFREG
+%token  <lval>  LBREG LLREG LSREG LFREG
 
-%token	<lval>	LCONST 
-%token	<dval>	LFCONST
-%token	<sval>	LSCONST
-%token	<sym>	LNAME LLAB LVAR
+%token  <lval>  LCONST 
+%token  <dval>  LFCONST
+%token  <sval>  LSCONST
+%token  <sym>   LNAME LLAB LVAR
 /*e: token declarations */
 /*s: type declarations */
-%type	<lval>	con expr pointer offset
-%type	<con2>	con2
-%type	<gen>	mem imm imm2 reg nam rel rem rim rom omem nmem
-%type	<gen2>	nonnon nonrel nonrem rimnon rimrem remrim
-%type	<gen2>	spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
+%type   <lval>  con expr offset
+%type   <lval>  pointer
+%type   <gen>   reg imm mem 
+%type   <gen>   nam rel rem rim rom omem nmem
+%type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
+%type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
 /*e: type declarations */
 
 %%
 /*s: grammar */
 prog:
-|	prog line
+  /* empty */
+| prog line
 
 line:
  LLAB ':'
@@ -60,15 +58,16 @@ line:
   $1->value = pc;
  }
  line
-|	LNAME ':'
+| LNAME ':'
  {
   $1->type = LLAB;
   $1->value = pc;
  }
  line
-|	';'
-|	inst ';'
-|	error ';'
+| ';'
+| inst ';'
+| error ';'
+
 
 inst:
  LNAME '=' expr
@@ -76,34 +75,36 @@ inst:
   $1->type = LVAR;
   $1->value = $3;
  }
-|	LVAR '=' expr
+| LVAR '=' expr
  {
   if($1->value != $3)
    yyerror("redeclaration of %s", $1->name);
   $1->value = $3;
  }
-|	LTYPE0 nonnon	{ outcode($1, &$2); }
-|	LTYPE1 nonrem	{ outcode($1, &$2); }
-|	LTYPE2 rimnon	{ outcode($1, &$2); }
-|	LTYPE3 rimrem	{ outcode($1, &$2); }
-|	LTYPE4 remrim	{ outcode($1, &$2); }
-|	LTYPER nonrel	{ outcode($1, &$2); }
 
-|	LTYPED spec1	{ outcode($1, &$2); }
-|	LTYPET spec2	{ outcode($1, &$2); }
-|	LTYPEC spec3	{ outcode($1, &$2); }
-|	LTYPEN spec4	{ outcode($1, &$2); }
-|	LTYPES spec5	{ outcode($1, &$2); }
-|	LTYPEM spec6	{ outcode($1, &$2); }
-|	LTYPEI spec7	{ outcode($1, &$2); }
-|	LTYPEG spec8	{ outcode($1, &$2); }
+| LTYPE0 nonnon   { outcode($1, &$2); }
+| LTYPE1 nonrem   { outcode($1, &$2); }
+| LTYPE2 rimnon   { outcode($1, &$2); }
+| LTYPE3 rimrem   { outcode($1, &$2); }
+| LTYPE4 remrim   { outcode($1, &$2); }
+| LTYPER nonrel   { outcode($1, &$2); }
+
+| LTYPED spec1    { outcode($1, &$2); }
+| LTYPET spec2    { outcode($1, &$2); }
+| LTYPEC spec3    { outcode($1, &$2); }
+| LTYPEN spec4    { outcode($1, &$2); }
+| LTYPES spec5    { outcode($1, &$2); }
+| LTYPEM spec6    { outcode($1, &$2); }
+| LTYPEI spec7    { outcode($1, &$2); }
+| LTYPEG spec8    { outcode($1, &$2); }
 
 nonnon:
+ /* empty */
  {
   $$.from = nullgen;
   $$.to = nullgen;
  }
-|	','
+| ','
  {
   $$.from = nullgen;
   $$.to = nullgen;
@@ -124,46 +125,46 @@ remrim:
  }
 
 rimnon:
- rim ','
+  rim
  {
   $$.from = $1;
   $$.to = nullgen;
  }
-|	rim
+| rim ','
  {
   $$.from = $1;
   $$.to = nullgen;
  }
 
 nonrem:
- ',' rem
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-|	rem
+ rem
  {
   $$.from = nullgen;
   $$.to = $1;
+ }
+| ',' rem
+ {
+  $$.from = nullgen;
+  $$.to = $2;
  }
 
 nonrel:
- ',' rel
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-|	rel
+ rel
  {
   $$.from = nullgen;
   $$.to = $1;
  }
+| ',' rel
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
 
 
 
 
 
-spec1:	/* DATA */
+spec1:  /* DATA */
  nam '/' con ',' imm
  {
   $$.from = $1;
@@ -171,42 +172,42 @@ spec1:	/* DATA */
   $$.to = $5;
  }
 
-spec2:	/* TEXT */
+spec2:  /* TEXT */
  mem ',' imm
  {
   $$.from = $1;
   $$.to = $3;
  }
-|	mem ',' con ',' imm
+|   mem ',' con ',' imm
  {
   $$.from = $1;
   $$.from.scale = $3;
   $$.to = $5;
  }
 
-spec3:	/* JMP/CALL */
- ',' rom
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-|	rom
+spec3:  /* JMP/CALL */
+ rom
  {
   $$.from = nullgen;
   $$.to = $1;
  }
+| ',' rom
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
 
-spec4:	/* NOP */
- nonnon
-|	nonrem
+spec4:  /* NOP */
+  nonnon
+| nonrem
 
-spec5:	/* SHL/SHR */
+spec5:  /* SHL/SHR */
  rim ',' rem
  {
   $$.from = $1;
   $$.to = $3;
  }
-|	rim ',' rem ':' LLREG
+| rim ',' rem ':' LLREG
  {
   $$.from = $1;
   $$.to = $3;
@@ -215,13 +216,13 @@ spec5:	/* SHL/SHR */
   $$.from.index = $5;
  }
 
-spec6:	/* MOVW/MOVL */
+spec6:  /* MOVW/MOVL */
  rim ',' rem
  {
   $$.from = $1;
   $$.to = $3;
  }
-|	rim ',' rem ':' LSREG
+|   rim ',' rem ':' LSREG
  {
   $$.from = $1;
   $$.to = $3;
@@ -231,29 +232,29 @@ spec6:	/* MOVW/MOVL */
  }
 
 spec7:
- rim ','
+ rim
  {
   $$.from = $1;
   $$.to = nullgen;
  }
-|	rim
+| rim ','
  {
   $$.from = $1;
   $$.to = nullgen;
  }
-|	rim ',' rem
+| rim ',' rem
  {
   $$.from = $1;
   $$.to = $3;
  }
 
-spec8:	/* GLOBL */
+spec8:  /* GLOBL */
  mem ',' imm
  {
   $$.from = $1;
   $$.to = $3;
  }
-|	mem ',' con ',' imm
+| mem ',' con ',' imm
  {
   $$.from = $1;
   $$.from.scale = $3;
@@ -266,27 +267,27 @@ spec8:	/* GLOBL */
 
 
 rem:
- reg
-|	mem
+  reg
+| mem
 
 rom:
- rel
-|	nmem
-|	'*' reg
+  rel
+| nmem
+| '*' reg
  {
   $$ = $2;
  }
-|	'*' omem
+| '*' omem
  {
   $$ = $2;
  }
-|	reg
-|	omem
-|	imm
+| reg
+| omem
+| imm
 
 rim:
- rem
-|	imm
+  rem
+| imm
 
 rel:
  con '(' LPC ')'
@@ -295,7 +296,7 @@ rel:
   $$.type = D_BRANCH;
   $$.offset = $1 + pc;
  }
-|	LNAME offset
+| LNAME offset
  {
   $$ = nullgen;
   if(pass == 2)
@@ -304,7 +305,7 @@ rel:
   $$.sym = $1;
   $$.offset = $2;
  }
-|	LLAB offset
+| LLAB offset
  {
   $$ = nullgen;
   $$.type = D_BRANCH;
@@ -318,22 +319,22 @@ reg:
   $$ = nullgen;
   $$.type = $1;
  }
-|	LFREG
+| LFREG
  {
   $$ = nullgen;
   $$.type = $1;
  }
-|	LLREG
+| LLREG
  {
   $$ = nullgen;
   $$.type = $1;
  }
-|	LSP
+| LSP
  {
   $$ = nullgen;
   $$.type = D_SP;
  }
-|	LSREG
+| LSREG
  {
   $$ = nullgen;
   $$.type = $1;
@@ -346,7 +347,7 @@ imm:
   $$.type = D_CONST;
   $$.offset = $2;
  }
-|	'$' nam
+| '$' nam
  {
   $$ = $2;
   $$.index = $2.type;
@@ -357,65 +358,35 @@ imm:
     $2.sym->name);
    */
  }
-|	'$' LSCONST
+| '$' LSCONST
  {
   $$ = nullgen;
   $$.type = D_SCONST;
   memcpy($$.sval, $2, sizeof($$.sval));
  }
-|	'$' LFCONST
+| '$' LFCONST
  {
   $$ = nullgen;
   $$.type = D_FCONST;
   $$.dval = $2;
  }
-|	'$' '(' LFCONST ')'
+| '$' '(' LFCONST ')'
  {
   $$ = nullgen;
   $$.type = D_FCONST;
   $$.dval = $3;
  }
-|	'$' '-' LFCONST
+| '$' '-' LFCONST
  {
   $$ = nullgen;
   $$.type = D_FCONST;
   $$.dval = -$3;
  }
 
-imm2:
- '$' con2
- {
-  $$ = nullgen;
-  $$.type = D_CONST2;
-  $$.offset = $2.v1;
-  $$.offset2 = $2.v2;
- }
-
-con2:
- LCONST
- {
-  $$.v1 = $1;
-  $$.v2 = 0;
- }
-|	'-' LCONST
- {
-  $$.v1 = -$2;
-  $$.v2 = 0;
- }
-|	LCONST '-' LCONST
- {
-  $$.v1 = $1;
-  $$.v2 = $3;
- }
-|	'-' LCONST '-' LCONST
- {
-  $$.v1 = -$2;
-  $$.v2 = $4;
- }
 
 mem:
- omem
-|	nmem
+  omem
+| nmem
 
 omem:
  con
@@ -424,19 +395,19 @@ omem:
   $$.type = D_INDIR+D_NONE;
   $$.offset = $1;
  }
-|	con '(' LLREG ')'
+| con '(' LLREG ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$3;
   $$.offset = $1;
  }
-|	con '(' LSP ')'
+|   con '(' LSP ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_SP;
   $$.offset = $1;
  }
-|	con '(' LLREG '*' con ')'
+|   con '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_NONE;
@@ -445,7 +416,7 @@ omem:
   $$.scale = $5;
   checkscale($$.scale);
  }
-|	con '(' LLREG ')' '(' LLREG '*' con ')'
+|   con '(' LLREG ')' '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$3;
@@ -454,23 +425,23 @@ omem:
   $$.scale = $8;
   checkscale($$.scale);
  }
-|	'(' LLREG ')'
+|   '(' LLREG ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$2;
  }
-|	'(' LSP ')'
+|   '(' LSP ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_SP;
  }
-|	con '(' LSREG ')'
+|   con '(' LSREG ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$3;
   $$.offset = $1;
  }
-|	'(' LLREG '*' con ')'
+|   '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_NONE;
@@ -478,7 +449,7 @@ omem:
   $$.scale = $4;
   checkscale($$.scale);
  }
-|	'(' LLREG ')' '(' LLREG '*' con ')'
+|   '(' LLREG ')' '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$2;
@@ -488,11 +459,8 @@ omem:
  }
 
 nmem:
- nam
- {
-  $$ = $1;
- }
-|	nam '(' LLREG '*' con ')'
+  nam
+| nam '(' LLREG '*' con ')'
  {
   $$ = $1;
   $$.index = $3;
@@ -501,14 +469,14 @@ nmem:
  }
 
 nam:
- LNAME offset '(' pointer ')'
+  LNAME offset '(' pointer ')'
  {
   $$ = nullgen;
   $$.type = $4;
   $$.sym = $1;
   $$.offset = $2;
  }
-|	LNAME '<' '>' offset '(' LSB ')'
+| LNAME '<' '>' offset '(' LSB ')'
  {
   $$ = nullgen;
   $$.type = D_STATIC;
@@ -517,91 +485,36 @@ nam:
  }
 
 offset:
- {
-  $$ = 0;
- }
-|	'+' con
- {
-  $$ = $2;
- }
-|	'-' con
- {
-  $$ = -$2;
- }
+ /* empty */ { $$ = 0; }
+| '+' con    { $$ = $2; }
+| '-' con    { $$ = -$2; }
 
 pointer:
- LSB
-|	LSP
- {
-  $$ = D_AUTO;
- }
-|	LFP
+  LSB
+| LSP { $$ = D_AUTO; }
+| LFP
+
 
 con:
- LCONST
-|	LVAR
- {
-  $$ = $1->value;
- }
-|	'-' con
- {
-  $$ = -$2;
- }
-|	'+' con
- {
-  $$ = $2;
- }
-|	'~' con
- {
-  $$ = ~$2;
- }
-|	'(' expr ')'
- {
-  $$ = $2;
- }
+  LCONST
+| LVAR         { $$ = $1->value; }
+| '-' con      { $$ = -$2; }
+| '+' con      { $$ = $2; }
+| '~' con      { $$ = ~$2; }
+| '(' expr ')' { $$ = $2; }
 
 expr:
- con
-|	expr '+' expr
- {
-  $$ = $1 + $3;
- }
-|	expr '-' expr
- {
-  $$ = $1 - $3;
- }
-|	expr '*' expr
- {
-  $$ = $1 * $3;
- }
-|	expr '/' expr
- {
-  $$ = $1 / $3;
- }
-|	expr '%' expr
- {
-  $$ = $1 % $3;
- }
-|	expr '<' '<' expr
- {
-  $$ = $1 << $4;
- }
-|	expr '>' '>' expr
- {
-  $$ = $1 >> $4;
- }
-|	expr '&' expr
- {
-  $$ = $1 & $3;
- }
-|	expr '^' expr
- {
-  $$ = $1 ^ $3;
- }
-|	expr '|' expr
- {
-  $$ = $1 | $3;
- }
+  con
+| expr '+' expr     { $$ = $1 + $3; }
+| expr '-' expr     { $$ = $1 - $3; }
+| expr '*' expr     { $$ = $1 * $3; }
+| expr '/' expr     { $$ = $1 / $3; }
+| expr '%' expr     { $$ = $1 % $3; }
+| expr '<' '<' expr { $$ = $1 << $4; }
+| expr '>' '>' expr { $$ = $1 >> $4; }
+| expr '&' expr     { $$ = $1 & $3; }
+| expr '^' expr     { $$ = $1 ^ $3; }
+| expr '|' expr     { $$ = $1 | $3; }
 
 /*e: grammar */
 /*e: 8a/a.y */

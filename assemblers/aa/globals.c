@@ -13,7 +13,7 @@ struct Htab h[NSYM];
 bool	debug[256];
 /*e: global debug */
 /*s: global hash */
-// hash<string, ref?<Sym>>, (next in bucket = Sym.link)
+// hash<string, ref_own?<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
 /*e: global hash */
 /*s: global Dlist */

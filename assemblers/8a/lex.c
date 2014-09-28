@@ -801,8 +801,7 @@ zaddr(Gen *a, int s)
         t |= T_SYM;
 
     switch(a->type) {
-    default:
-        t |= T_TYPE;
+    case D_NONE:
         break;
     case D_FCONST:
         t |= T_FCONST;
@@ -813,7 +812,8 @@ zaddr(Gen *a, int s)
     case D_SCONST:
         t |= T_SCONST;
         break;
-    case D_NONE:
+    default:
+        t |= T_TYPE;
         break;
     }
     Bputc(&obuf, t);
