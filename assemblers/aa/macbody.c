@@ -777,7 +777,7 @@ macprag(void)
                 goto bad;
             *hp++ = c;
         }
-        *hp = 0;
+        *hp = '\0';
         c = getcom();
         if(c != '\n')
             goto bad;
@@ -800,6 +800,7 @@ macprag(void)
         h->name = hp;
         h->line = lineno;
         h->offset = -1;
+
         h->link = H;
         if(ehist == H) {
             hist = h;
@@ -808,6 +809,7 @@ macprag(void)
         }
         ehist->link = h;
         ehist = h;
+
         return;
 
 bad:
