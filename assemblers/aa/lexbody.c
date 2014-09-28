@@ -7,51 +7,6 @@ void prfile(long l);
  * common code for all the assemblers
  */
 
-/*s: function pragpack */
-void
-pragpack(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-/*e: function pragpack */
-
-/*s: function pragvararg */
-void
-pragvararg(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-/*e: function pragvararg */
-
-/*s: function pragfpround */
-void
-pragfpround(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-/*e: function pragfpround */
-
-/*s: function pragprofile */
-void
-pragprofile(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-/*e: function pragprofile */
-
-/*s: function pragincomplete */
-void
-pragincomplete(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-/*e: function pragincomplete */
-
 /*s: function alloc */
 /*
  * real allocs

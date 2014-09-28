@@ -196,7 +196,7 @@ domacro(void)
     for(i=0; mactab[i].macname; i++)
         if(strcmp(s->name, mactab[i].macname) == 0) {
             if(mactab[i].macf)
-                // dispatcher
+                // dispatcher!
                 (*mactab[i].macf)();
             else
                 macif(i);
@@ -600,9 +600,11 @@ macinc(void)
         if(strcmp(symb, "./") == 0)
             symb[0] = 0;
         strcat(symb, str);
+
         f = open(symb, 0);
         if(f >= 0)
             break;
+
     }
     if(f < 0)
         strcpy(symb, str);
@@ -693,7 +695,8 @@ bad:
 void
 macif(int f)
 {
-    int c, l, bol;
+    int c, l;
+    bool bol;
     Sym *s;
 
     if(f == 2)
@@ -707,15 +710,15 @@ macif(int f)
         return;
 
 skip:
-    bol = 1;
+    bol = true;
     l = 0;
     for(;;) {
         c = getc();
         if(c != '#') {
             if(!isspace(c))
-                bol = 0;
+                bol = false;
             if(c == '\n')
-                bol = 1;
+                bol = true;
             continue;
         }
         if(!bol)
@@ -758,86 +761,65 @@ macprag(void)
 
     s = getsym();
 
-    if(s && strcmp(s->name, "lib") == 0)
-        goto praglib;
-
-    if(s && strcmp(s->name, "pack") == 0) {
-        pragpack();
-        return;
-    }
-    if(s && strcmp(s->name, "fpround") == 0) {
-        pragfpround();
-        return;
-    }
-    if(s && strcmp(s->name, "profile") == 0) {
-        pragprofile();
-        return;
-    }
-    if(s && strcmp(s->name, "varargck") == 0) {
-        pragvararg();
-        return;
-    }
-    if(s && strcmp(s->name, "incomplete") == 0) {
-        pragincomplete();
-        return;
-    }
-    while(getnsc() != '\n')
-        ;
-    return;
-
-praglib:
-    c0 = getnsc();
-    if(c0 != '"') {
-        c = c0;
-        if(c0 != '<')
+    if(s && strcmp(s->name, "lib") == 0) {
+        c0 = getnsc();
+        if(c0 != '"') {
+            c = c0;
+            if(c0 != '<')
+                goto bad;
+            c0 = '>';
+        }
+        for(hp = symb;;) {
+            c = getc();
+            if(c == c0)
+                break;
+            if(c == '\n')
+                goto bad;
+            *hp++ = c;
+        }
+        *hp = 0;
+        c = getcom();
+        if(c != '\n')
             goto bad;
-        c0 = '>';
-    }
-    for(hp = symb;;) {
-        c = getc();
-        if(c == c0)
-            break;
-        if(c == '\n')
-            goto bad;
-        *hp++ = c;
-    }
-    *hp = 0;
-    c = getcom();
-    if(c != '\n')
-        goto bad;
-
-    /*
-     * put pragma-line in as a funny history 
-     */
-    c = strlen(symb) + 1;
-    while(c & 3)
-        c++;
-
-    while(nhunk < c)
-        gethunk();
-    hp = hunk;
-    memcpy(hunk, symb, c);
-    nhunk -= c;
-    hunk += c;
-
-    h = alloc(sizeof(Hist));
-    h->name = hp;
-    h->line = lineno;
-    h->offset = -1;
-    h->link = H;
-    if(ehist == H) {
-        hist = h;
+    
+        /*
+         * put pragma-line in as a funny history 
+         */
+        c = strlen(symb) + 1;
+        while(c & 3)
+            c++;
+    
+        while(nhunk < c)
+            gethunk();
+        hp = hunk;
+        memcpy(hunk, symb, c);
+        nhunk -= c;
+        hunk += c;
+    
+        h = alloc(sizeof(Hist));
+        h->name = hp;
+        h->line = lineno;
+        h->offset = -1;
+        h->link = H;
+        if(ehist == H) {
+            hist = h;
+            ehist = h;
+            return;
+        }
+        ehist->link = h;
         ehist = h;
         return;
-    }
-    ehist->link = h;
-    ehist = h;
-    return;
 
 bad:
-    unget(c);
-    yyerror("syntax in #pragma lib");
-    macend();
+        unget(c);
+        yyerror("syntax in #pragma lib");
+        macend();
+
+    } else {
+        while(getnsc() != '\n')
+            ;
+        return;
+    }
 }
 /*e: function macprag */
 

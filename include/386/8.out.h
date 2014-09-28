@@ -522,10 +522,10 @@ enum operand
     D_BRANCH	= 60, 
 
     // For ADATA
-    D_EXTERN	= 61, // data/bss values (from SB?)
-    D_STATIC	= 62, // data static variables (from SB?)
-    D_AUTO		= 63, // stack values (from SP?)
-    D_PARAM		= 64, // parameter (from FP?)
+    D_EXTERN	= 61, // data/bss values (from SB)
+    D_STATIC	= 62, // data static variables (from SB)
+    D_AUTO		= 63, // stack values (from SP)
+    D_PARAM		= 64, // parameter (from FP)
 
     D_CONST		= 65,
     D_FCONST	= 66,
@@ -534,13 +534,9 @@ enum operand
     D_ADDR		= 68,
 /*x: [[operand]] non register cases */
     D_FILE,
-
     D_FILE1, // used by linker only
-
     D_INDIR,	/* additive */
-
     D_CONST2 = D_INDIR+D_INDIR,
-
     D_SIZE,	/* 8l internal */
 /*e: [[operand]] non register cases */
 };

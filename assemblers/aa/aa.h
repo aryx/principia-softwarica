@@ -60,6 +60,8 @@ typedef	struct	Hist	Hist;
 /*s: struct Sym */
 struct	Sym
 {
+    // for user symbols? (foo, bar:, ?) but also abused(?) for
+    //  opcodes (AMOVB), operands (D_AL)
     char	*name;
 
     //token code (e.g. LNAME, LBREG, etc)
@@ -68,29 +70,23 @@ struct	Sym
     long	value; // archi: vlong in va/!!
     // see also itab[i].type and itab[i].value
 
-    //?? seems used only by outcode
-    char	sym;
-
+    /*s: [[Sym]] other fields */
     //option<string>, for '#define FOO xxx' expansion
     char*	macro;
-
-    Ref*	ref; // unused for 5a, matters?
-
+    /*x: [[Sym]] other fields */
+    //?? seems used only by outcode
+    char	sym;
+    /*e: [[Sym]] other fields */
     // Extra
+    /*s: [[Sym]] extra fields */
+    // list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
     Sym*	link;
+    /*e: [[Sym]] extra fields */
 };
 /*e: struct Sym */
 /*s: constant S */
 #define	S	((Sym*)nil)
 /*e: constant S */
-
-/*s: struct Ref */
-// only for 8a actually
-struct	Ref
-{
-    int	class;
-};
-/*e: struct Ref */
 
 /*s: struct Fi */
 struct Fi
@@ -111,7 +107,7 @@ struct	Io
     // -1 if not opened yet
     fdt	f;
 
-    // like Fi, IO buffer status
+    // like Fi, saved IO buffer status
     char*	p;
     short	c;
 
@@ -139,10 +135,13 @@ extern struct Htab h[NSYM];
 /*s: struct Hist */
 struct	Hist
 {
-    Hist*	link;
     char*	name;
+
     long	line;
     long	offset;
+
+    // Extra
+    Hist*	link;
 };
 /*e: struct Hist */
 /*s: constant H */

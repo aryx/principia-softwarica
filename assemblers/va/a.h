@@ -34,23 +34,14 @@ struct	Sym
     ushort	type;
     long	value; // vlong in va!!
 
-    char	sym;
-
     char*	macro;
-
-    Ref*	ref; // unused for 5a, matters?
+    char	sym;
 
     // Extra
     Sym*	link;
 };
 
 #define	S	((Sym*)0)
-
-// only for 8a actually
-struct	Ref
-{
-	int	class;
-};
 
 struct Fi
 {
@@ -61,11 +52,11 @@ extern struct Fi fi;
 
 struct	Io
 {
-	Io*	link;
 	char	b[BUFSIZ];
+	fdt	f;
 	char*	p;
 	short	c;
-	short	f;
+	Io*	link;
 };
 #define	I	((Io*)0)
 
@@ -89,12 +80,13 @@ struct	Gen
 
 struct	Hist
 {
-	Hist*	link;
 	char*	name;
-	long	line;
 
+	long	line;
 //	vlong	offset; // MAYBE BAD, for compatibility with aa
     long offset; 
+
+	Hist*	link;
 };
 #define	H	((Hist*)0)
 

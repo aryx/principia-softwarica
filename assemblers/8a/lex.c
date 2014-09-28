@@ -18,8 +18,8 @@ main(int argc, char *argv[])
     /*s: [[main()]] debug initialization */
     memset(debug, false, sizeof(debug));
     /*e: [[main()]] debug initialization */
-    cinit();
 
+    cinit();
     outfile = nil;
     include[ninclude++] = ".";
 

@@ -13,11 +13,17 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
+%  - better organisation of the code, TOC better than the few existing
+%    files (that didn't have very good names)
+%  - removed deadcode (Ref)
+%  - TODO rename types, clearer, Gen? Gen2? as?
 
 %thx to codemap/codegraph:
 % - factorized code in aa/
 
 %thx to this manual, better understand assembly?:
+% - DATA vs GLOBL?
+% - fpic?
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.tex.nw skeleton
@@ -25,6 +31,7 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, dumper
+%    * TODO [[xxx]] other fields, [[xxx]] extra fields
 % - read Extra section, identify concepts, first TOC
 % - distribute parts of the file before
 % - SEMI nullify, boolify, typeify,    scheckify
@@ -145,13 +152,18 @@ Here are other candidates that were considered but ultimately discarded:
 \item dev86
 \end{itemize}
 
-% there is also one in subc-2014
+% hex2c
+
+%todo? there is also one in subc-2014
 
 \section{Getting started}
+
+% see Kernel.tex.nw section?
 
 \section{Requirements}
 
 % know at least one assembler
+
 % asm.ps
 
 \section{About this document}
@@ -173,7 +185,7 @@ License.
 
 % mnemonic and symbolic addresses -> object/machine code
 
-% before assembler binary, then mnemonic but still hardcoded
+% before was writing binary, then mnemonic but still hardcoded
 % address, and then finally symbolic addresses
 
 % usually 2 passes as can reference stuff coming later.
@@ -187,23 +199,10 @@ License.
 
 % env: INCLUDE, NPROC
 
-\section{x86}
-
-% specifics of 8a? like left to right or right to left for mv, intel
-% or AT&T syntax (I guess AT&T :) )
-
-
-% opcode format, see my assembler in ml I wrote a long time ago! in xix-assembler/?
-% hmm actually it's more the job of 8l and optab to do that
-
-% the many different addressing modes. Actually I think 8a allows
-% more than what is allowed (optab handles the ugly restrictions
-% of Intel?)
-
 \section{[[helloworld.s]]}
 
-% print hello world with mv, call, int, etc? with no libc!
-% (and a _main)
+% print "hello world" with mv, call, int, etc? with no libc!
+% (and a _main (or even just _start?))
 
 % show commands, 8a, ld, ./xxx
 
@@ -216,8 +215,26 @@ License.
 
 % can also maybe show one that use libc, use 8c -S hello.c
 
-\section{Object format}
-% the output
+\section{x86}
+
+% opcode format, see my assembler in ml I wrote a long time ago! in xix-assembler/?
+% hmm actually it's more the job of 8l and optab to do that
+
+\section{Input assembly language}
+
+% specifics of 8a? like left to right or right to left for mv, intel
+% or AT&T syntax (I guess AT&T :) )
+
+% the many different addressing modes. Actually I think 8a allows
+% more than what is allowed (optab handles the ugly restrictions
+% of Intel?)
+
+
+% 8 bytes limit for strings (so if longer have to split manually,
+% a bit annoying but can use data2s too)
+
+
+\section{Output object format}
 
 % .8 format? a kind of .o, but 8l does actually the job to turn into x86 ISA
 % so it's really more a marshalled file of simple data structures that is
@@ -263,7 +280,7 @@ License.
 
 %TODO: reorder to have first a set of mostly useful instructions
 % e.g. MOV, MOVB, etc. Could maybe analyze *.s in plan9 and do some
-% stats?
+% stats? or use cg on the whole plan9 and see how much AXXX is used
 % hmmm but can reorder? the opcode generation rely on an order? or 
 % just 'ld' and 'as' need to agree with each other; the actual binary code
 % generation is done in the linker. Hmm but can have some issues
@@ -741,7 +758,7 @@ enum opcode
 
 %\section{[[Register]]}
 
-% ADT would be far better than this and Sym
+% ADT would be far better than this enum and separate Sym
 <<enum reg>>=
 enum operand
 {
@@ -793,17 +810,17 @@ enum operand
     D_TR		= 51, // D_TR0 .. D_TR7
 @
 
-% the remaining info, e.g. for D_BRANCH to get the symbol or int will
-% be in Gen.value
+% how get the remaining info? e.g. for D_BRANCH to get the symbol or int 
+% you'll have too look in Gen.value
 <<[[operand]] non register cases>>=
     // for ACALL, AJMP (from PC)
     D_BRANCH	= 60, 
 
     // For ADATA
-    D_EXTERN	= 61, // data/bss values (from SB?)
-    D_STATIC	= 62, // data static variables (from SB?)
-    D_AUTO		= 63, // stack values (from SP?)
-    D_PARAM		= 64, // parameter (from FP?)
+    D_EXTERN	= 61, // data/bss values (from SB)
+    D_STATIC	= 62, // data static variables (from SB)
+    D_AUTO		= 63, // stack values (from SP)
+    D_PARAM		= 64, // parameter (from FP)
 
     D_CONST		= 65,
     D_FCONST	= 66,
@@ -815,13 +832,9 @@ enum operand
 % ???
 <<[[operand]] non register cases>>=
     D_FILE,
-
     D_FILE1, // used by linker only
-
     D_INDIR,	/* additive */
-
     D_CONST2 = D_INDIR+D_INDIR,
-
     D_SIZE,	/* 8l internal */
 @
 
@@ -850,6 +863,9 @@ enum misc3 {
  <<[[Token]] other fields>>
 }
 @
+% sval[8]?? can't have string more than 8 bytes? hence the data2c
+% ugly list?
+
 
 % the first part is essentially for keywords
 <<token declarations>>=
@@ -1371,16 +1387,17 @@ struct Itab itab[] =
 };
 @
 
-\section{[[Sym]], [[h]] and [[hash]]}
+\section{[[Sym]] and [[hash]]}
 
 % assembling is a lot about symbolic name processing!
 
-%TODO lp split! macro field in PreProcessing!
 % currently copy pasted in 5a/a.h and va/a.h so if reorder
 % may have to reorder there (or factorize code to avoid those pbs)
 <<struct Sym>>=
 struct	Sym
 {
+    // for user symbols? (foo, bar:, ?) but also abused(?) for
+    //  opcodes (AMOVB), operands (D_AL)
     char	*name;
 
     //token code (e.g. LNAME, LBREG, etc)
@@ -1389,68 +1406,36 @@ struct	Sym
     long	value; // archi: vlong in va/!!
     // see also itab[i].type and itab[i].value
 
-    //?? seems used only by outcode
-    char	sym;
-
-    //option<string>, for '#define FOO xxx' expansion
-    char*	macro;
-
-    Ref*	ref; // unused for 5a, matters?
-
+    <<[[Sym]] other fields>>
     // Extra
-    Sym*	link;
+    <<[[Sym]] extra fields>>
 };
 @
 % this is used for user defined names (e.g. TEXT foo), but
 % abused also for keywords operand like AL, AX, and also for opcode
 % in which case the value is the 
 
-% what is the list it marks the end of?
-<<constant S>>=
-#define	S	((Sym*)nil)
-@
-
-
-<<struct Ref>>=
-// only for 8a actually
-struct	Ref
-{
-    int	class;
-};
-@
-
-
-
-<<struct Htab>>=
-struct Htab
-{
-    //? list<Sym>, next = sym.link?
-    Sym*	sym;
-    //enum???
-    short	type;
-};
-@
-
-<<constant NSYM>>=
-#define	NSYM	50
-@
-% hash function?
-
-
-<<global h>>=
-// hash<string, Sym>
-struct Htab h[NSYM];
-@
-
-
 <<constant NHASH>>=
 #define	NHASH		503
 @
 
 <<global hash>>=
+// hash<string, ref?<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
 @
 % diff with h?
+
+% what is the head? hash! and also h?
+<<[[Sym]] extra fields>>=
+// list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
+Sym*	link;
+@
+
+% what is the list it marks the end of? hash for sure, maybe also h and htab?
+<<constant S>>=
+#define	S	((Sym*)nil)
+@
+
 
 % could put lookup and slookup here
 
@@ -1466,18 +1451,8 @@ Sym*	hash[NHASH];
 char	symb[NSYMB];
 @
 
-<<function slookup>>=
-Sym*
-slookup(char *s)
-{
-
-    strcpy(symb, s);
-    return lookup();
-}
-@
-
-
-% use which global? symb!
+% use symb global, a bit ugly
+% TODO lp split, compute hash key of symb, find in hash global, etc
 <<function lookup>>=
 Sym*
 lookup(void)
@@ -1523,7 +1498,29 @@ syminit(Sym *s)
 }
 @
 
+<<function slookup>>=
+Sym*
+slookup(char *s)
+{
 
+    strcpy(symb, s);
+    return lookup();
+}
+@
+
+
+% old? dead?
+%<<[[Sym]] other fields>>=
+%Ref*	ref; // unused for 5a, matters?
+%@
+%
+%<<struct Ref>>=
+%// only for 8a actually
+%struct	Ref
+%{
+%    int	class;
+%};
+%@
 
 
 \section{[[Gen]], [[Gen2]]}
@@ -1600,7 +1597,7 @@ Gen	nullgen;
 int	thechar = '8';
 @
 
-% to find header files, /386/include/...
+% to find archi specific core header files, /386/include/...
 <<global thestring>>=
 char*	thestring = "386";
 @
@@ -1612,11 +1609,12 @@ char*	outfile;
 
 
 
-
+\ifallcode
 <<[[main()]] locals>>=
 char *p;
 int nout, nproc, status, i, c;
 @
+\fi
 
 <<function main (assemblers/8a/lex.c)>>=
 void
@@ -1624,8 +1622,8 @@ main(int argc, char *argv[])
 {
     <<[[main()]] locals>>
     <<[[main()]] debug initialization>>
-    cinit();
 
+    cinit();
     outfile = nil;
     include[ninclude++] = ".";
 
@@ -1661,6 +1659,7 @@ case 'o':
 char*	pathname;
 @
 
+% could split, nullgen init, hash init, h init? (via lookup)
 <<function cinit>>=
 void
 cinit(void)
@@ -1844,7 +1843,7 @@ cclean(void)
 
 \chapter{Input}
 
-% yyparse actually calls yylex?
+% yyparse() actually calls yylex?
 
 <<global lineno>>=
 long	lineno;
@@ -1854,6 +1853,12 @@ long	lineno;
 <<global pc>>=
 long	pc;
 @
+
+% dead?
+<<global sym>>=
+int	sym;
+@
+
 
 % =~ yyback(1) trick, used by yylex() and getc(), and?? cg?
 <<global peekc>>=
@@ -1870,11 +1875,8 @@ int	peekc = IGN;
 @
 
 
-% dead?
-<<global sym>>=
-int	sym;
-@
 
+% assemble() -> pinit() (before yyparse)
 % call at the beginning of each pass with the file to assemble
 <<function pinit>>=
 void
@@ -1916,7 +1918,7 @@ struct	Io
     // -1 if not opened yet
     fdt	f;
 
-    // like Fi, IO buffer status
+    // like Fi, saved IO buffer status
     char*	p;
     short	c;
 
@@ -2008,9 +2010,14 @@ newfile(char *s, int f)
 
 % GETC is essentially get next char in current opened file
 % (that is iostack->f )
+% #define	GETC()		((--fi.c < 0) ? filbuf() : *fi.p++ & 0xff)
+% type: unit -> int (-1 for EOF, 0 for?)
+
+
 
 % should use lex ... simpler, but maybe to avoid bootstrapping issues?
 
+% called by? yyparse() in generated code from a.y
 <<function yylex>>=
 long
 yylex(void)
@@ -2101,6 +2108,7 @@ case '/':
     break;
 @
 
+% put getcom() here too?
 
 \section{Keywords and identifiers}
 
@@ -2337,16 +2345,19 @@ case '"':
         yyerror("string constant too long");
     return LSCONST;
 @
+% limited to 8 bytes, hence the data2c script
 
 
 \section{[[getc()]], [[unget()]], [[getnsc()]]}
 
 % from now on those functions are actually used by the preprocessing
 % code, not by the basic lexer (yylex) that actually implement
-% his own getnsc, getcom, getsym (hmmm maybe could factorize things?)
+% his own getnsc(), getcom(), getsym() via cases
+% (hmmm maybe could factorize things?)
 
 % helpers for other functions
 
+% int? why not uint? GETC can return EOF but not this function!
 <<function getc>>=
 int
 getc(void)
@@ -2380,7 +2391,7 @@ unget(int c)
 }
 @
 
-% get non space char
+% get non space char (they really like short cryptic names)
 <<function getnsc>>=
 int
 getnsc(void)
@@ -2504,7 +2515,8 @@ case '#':
 % actually expanded or defined macros or undef, in any case
 % no token to return
 
-% dispatcher
+% dispatcher, should rename because it's not just about macro =>
+% parse_and_dispatch_pp_directive?
 <<function domacro>>=
 void
 domacro(void)
@@ -2519,7 +2531,7 @@ domacro(void)
     for(i=0; mactab[i].macname; i++)
         if(strcmp(s->name, mactab[i].macname) == 0) {
             if(mactab[i].macf)
-                // dispatcher
+                // dispatcher!
                 (*mactab[i].macf)();
             else
                 macif(i);
@@ -2529,6 +2541,8 @@ domacro(void)
     macend();
 }
 @
+% abuse getsym just to get an ident, don't have to go through
+% lookup really
 
 
 
@@ -2545,12 +2559,13 @@ macend(void)
     }
 }
 @
-
+% I don't think c can be < 0 here.
 
 \section{[[#include]] and [[-I]]}
 
 \subsection{Include path}
 
+% -I
 <<[[main()]] command line processing>>=
 case 'I':
     p = ARGF();
@@ -2562,6 +2577,7 @@ case 'I':
 #define	NINCLUDE	10
 @
 
+% hmm rename? include_paths?
 <<global include>>=
 char*	include[NINCLUDE];
 @
@@ -2570,7 +2586,6 @@ char*	include[NINCLUDE];
 int	ninclude;
 @
 
-% -I 
 <<function setinclude>>=
 void
 setinclude(char *p)
@@ -2594,26 +2609,36 @@ setinclude(char *p)
 
 \subsection{Tracing}
 
+% when error, need give line, but can be because of context,
+% so useful to give the full location of an error, that is the list
+% of files that included it
+% TODO give example of why it's useful to not just have the final names
+
 % keep track of where a token comes from, so that error
 % messages can look like
 %  xxx.h from xxx.h from xxx.c ...
 <<struct Hist>>=
 struct	Hist
 {
-    Hist*	link;
     char*	name;
+
     long	line;
     long	offset;
-};
-@
 
-<<global ehist>>=
-Hist*	ehist;
+    // Extra
+    Hist*	link;
+};
 @
 
 <<global hist>>=
 Hist*	hist;
 @
+
+<<global ehist>>=
+// ref<Hist>, end of hist list?
+Hist*	ehist;
+@
+
 
 <<constant H>>=
 #define	H	((Hist*)0)
@@ -2622,7 +2647,7 @@ Hist*	hist;
 
 
 
-% dead?
+% dead? seems just set to 0 ... just one write
 <<global newflag>>=
 int	newflag;
 @
@@ -2672,6 +2697,7 @@ linehist(char *f, int offset)
 #define	STRINGSZ	200
 @
 
+% LP split, and factorize code with gethunk
 <<function macinc>>=
 void
 macinc(void)
@@ -2709,9 +2735,11 @@ macinc(void)
         if(strcmp(symb, "./") == 0)
             symb[0] = 0;
         strcat(symb, str);
+
         f = open(symb, 0);
         if(f >= 0)
             break;
+
     }
     if(f < 0)
         strcpy(symb, str);
@@ -2781,7 +2809,10 @@ for(i=0; i<nDlist; i++)
         dodefine(Dlist[i]);
 @
 
-% Sym and macro here
+<<[[Sym]] other fields>>=
+//option<string>, for '#define FOO xxx' expansion
+char*	macro;
+@
 
 <<function dodefine>>=
 void
@@ -3050,7 +3081,9 @@ if(s->macro) {
     goto l0;
 }
 @
+% abuse newio()? it's not really a new file here
 
+% wow, complicated too
 <<function macexpand>>=
 void
 macexpand(Sym *s, char *b)
@@ -3235,7 +3268,8 @@ macund(void)
 void
 macif(int f)
 {
-    int c, l, bol;
+    int c, l;
+    bool bol;
     Sym *s;
 
     if(f == 2)
@@ -3249,15 +3283,15 @@ macif(int f)
         return;
 
 skip:
-    bol = 1;
+    bol = true;
     l = 0;
     for(;;) {
         c = getc();
         if(c != '#') {
             if(!isspace(c))
-                bol = 0;
+                bol = false;
             if(c == '\n')
-                bol = 1;
+                bol = true;
             continue;
         }
         if(!bol)
@@ -3291,8 +3325,6 @@ bad:
 
 \section{[[#pragma]]}
 
-% todo? most pragma seems to be discarded except #pragma lib,
-% remove deadcode? or simplif by calling each time prag_do_nothing()
 <<function macprag>>=
 void
 macprag(void)
@@ -3304,135 +3336,140 @@ macprag(void)
 
     s = getsym();
 
-    if(s && strcmp(s->name, "lib") == 0)
-        goto praglib;
-
-    if(s && strcmp(s->name, "pack") == 0) {
-        pragpack();
-        return;
-    }
-    if(s && strcmp(s->name, "fpround") == 0) {
-        pragfpround();
-        return;
-    }
-    if(s && strcmp(s->name, "profile") == 0) {
-        pragprofile();
-        return;
-    }
-    if(s && strcmp(s->name, "varargck") == 0) {
-        pragvararg();
-        return;
-    }
-    if(s && strcmp(s->name, "incomplete") == 0) {
-        pragincomplete();
-        return;
-    }
-    while(getnsc() != '\n')
-        ;
-    return;
-
-praglib:
-    c0 = getnsc();
-    if(c0 != '"') {
-        c = c0;
-        if(c0 != '<')
+    if(s && strcmp(s->name, "lib") == 0) {
+        c0 = getnsc();
+        if(c0 != '"') {
+            c = c0;
+            if(c0 != '<')
+                goto bad;
+            c0 = '>';
+        }
+        for(hp = symb;;) {
+            c = getc();
+            if(c == c0)
+                break;
+            if(c == '\n')
+                goto bad;
+            *hp++ = c;
+        }
+        *hp = 0;
+        c = getcom();
+        if(c != '\n')
             goto bad;
-        c0 = '>';
-    }
-    for(hp = symb;;) {
-        c = getc();
-        if(c == c0)
-            break;
-        if(c == '\n')
-            goto bad;
-        *hp++ = c;
-    }
-    *hp = 0;
-    c = getcom();
-    if(c != '\n')
-        goto bad;
-
-    /*
-     * put pragma-line in as a funny history 
-     */
-    c = strlen(symb) + 1;
-    while(c & 3)
-        c++;
-
-    while(nhunk < c)
-        gethunk();
-    hp = hunk;
-    memcpy(hunk, symb, c);
-    nhunk -= c;
-    hunk += c;
-
-    h = alloc(sizeof(Hist));
-    h->name = hp;
-    h->line = lineno;
-    h->offset = -1;
-    h->link = H;
-    if(ehist == H) {
-        hist = h;
+    
+        /*
+         * put pragma-line in as a funny history 
+         */
+        c = strlen(symb) + 1;
+        while(c & 3)
+            c++;
+    
+        while(nhunk < c)
+            gethunk();
+        hp = hunk;
+        memcpy(hunk, symb, c);
+        nhunk -= c;
+        hunk += c;
+    
+        h = alloc(sizeof(Hist));
+        h->name = hp;
+        h->line = lineno;
+        h->offset = -1;
+        h->link = H;
+        if(ehist == H) {
+            hist = h;
+            ehist = h;
+            return;
+        }
+        ehist->link = h;
         ehist = h;
         return;
-    }
-    ehist->link = h;
-    ehist = h;
-    return;
 
 bad:
-    unget(c);
-    yyerror("syntax in #pragma lib");
-    macend();
+        unget(c);
+        yyerror("syntax in #pragma lib");
+        macend();
+
+    } else {
+        while(getnsc() != '\n')
+            ;
+        return;
+    }
 }
 @
 
 
-
-<<function pragpack>>=
-void
-pragpack(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
-
-<<function pragvararg>>=
-void
-pragvararg(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
-
-<<function pragfpround>>=
-void
-pragfpround(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
-
-<<function pragprofile>>=
-void
-pragprofile(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
-
-<<function pragincomplete>>=
-void
-pragincomplete(void)
-{
-    while(getnsc() != '\n')
-        ;
-}
-@
+% most pragma seems to be discarded except #pragma lib, so
+% I removed it (could have aslo simplified by calling prag_do_nothing()).
+% is it because code was shared with cc? or because it's in aa/
+% and other archi do different things?
+%
+%    if(s && strcmp(s->name, "pack") == 0) {
+%        pragpack();
+%        return;
+%    }
+%    if(s && strcmp(s->name, "fpround") == 0) {
+%        pragfpround();
+%        return;
+%    }
+%    if(s && strcmp(s->name, "profile") == 0) {
+%        pragprofile();
+%        return;
+%    }
+%    if(s && strcmp(s->name, "varargck") == 0) {
+%        pragvararg();
+%        return;
+%    }
+%    if(s && strcmp(s->name, "incomplete") == 0) {
+%        pragincomplete();
+%        return;
+%    }
+%
+%old:
+%<<function pragpack>>=
+%void
+%pragpack(void)
+%{
+%    while(getnsc() != '\n')
+%        ;
+%}
+%@
+%
+%<<function pragvararg>>=
+%void
+%pragvararg(void)
+%{
+%    while(getnsc() != '\n')
+%        ;
+%}
+%@
+%
+%<<function pragfpround>>=
+%void
+%pragfpround(void)
+%{
+%    while(getnsc() != '\n')
+%        ;
+%}
+%@
+%
+%<<function pragprofile>>=
+%void
+%pragprofile(void)
+%{
+%    while(getnsc() != '\n')
+%        ;
+%}
+%@
+%
+%<<function pragincomplete>>=
+%void
+%pragincomplete(void)
+%{
+%    while(getnsc() != '\n')
+%        ;
+%}
+%@
 
 
 \section{[[#line]]}
@@ -3520,7 +3557,7 @@ getnsn(void)
 
 \chapter{Parsing}
 
-% this is from the %union
+% this is the rest from the %union
 <<[[Token]] other fields>>=
  struct {
   long v1;
@@ -3541,7 +3578,6 @@ getnsn(void)
 %left	'+' '-'
 %left	'*' '/' '%'
 @
-
 
 <<type declarations>>=
 %type	<lval>	con expr pointer offset
@@ -4327,6 +4363,38 @@ zaddr(Gen *a, int s)
         Bputc(&obuf, a->type);
 }
 @
+
+
+<<[[Sym]] other fields>>=
+//?? seems used only by outcode
+char	sym;
+@
+
+<<struct Htab>>=
+struct Htab
+{
+    //? list<Sym>, next = sym.link?
+    Sym*	sym;
+    //enum???
+    short	type;
+};
+@
+
+
+
+
+<<constant NSYM>>=
+#define	NSYM	50
+@
+% hash function?
+
+
+<<global h>>=
+// hash<string, Sym>
+struct Htab h[NSYM];
+@
+
+
 
 <<function outcode>>=
 void
