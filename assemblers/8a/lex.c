@@ -171,7 +171,7 @@ assemble(char *file)
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
     /*e: [[assemble()]] init Dlist after pinit */
-    yyparse(); // calls outcode() but does nothing
+    yyparse(); // calls outcode() but does nothing when pass == 1
 
     if(nerrors) {
         cclean();
@@ -756,10 +756,8 @@ syminit(Sym *s)
 void
 cclean(void)
 {
-    Gen2 g2;
+    Gen2 g2 = (Gen2) { nullgen, nullgen };
 
-    g2.from = nullgen;
-    g2.to = nullgen;
     outcode(AEND, &g2);
     Bflush(&obuf);
 }
@@ -1010,10 +1008,14 @@ outhist(void)
 long
 yylex(void)
 {
+    /*s: [[yylex()]] locals */
     int c;
+    /*x: [[yylex()]] locals */
     int c1;
+    /*x: [[yylex()]] locals */
     char *cp;
     Sym *s;
+    /*e: [[yylex()]] locals */
 
     c = peekc;
     if(c != IGN) {
@@ -1041,6 +1043,7 @@ l1:
         goto talph;
     if(isdigit(c))
         goto tnum;
+
     switch(c) {
     /*s: [[yylex()]] switch c cases */
     case '\n':
@@ -1089,6 +1092,7 @@ l1:
         c = GETC();
         if(isalpha(c) || isdigit(c) || c == '_' || c == '$') // $
             goto aloop;
+
         // went too far, yyback(1)
         peekc = c;
 
@@ -1118,13 +1122,12 @@ l1:
 
         if(s->type == 0)
             s->type = LNAME;
-        if(s->type == LNAME ||
-           s->type == LVAR ||
-           s->type == LLAB) {
+
+        if(s->type == LNAME || s->type == LVAR || s->type == LLAB) {
             yylval.sym = s;
-            return s->type;
+        } else {
+            yylval.lval = s->value;
         }
-        yylval.lval = s->value;
         return s->type;
     /*x: [[yylex()]] switch c cases */
     // case '0'..'9'
@@ -1132,6 +1135,7 @@ l1:
         cp = symb;
         if(c != '0')
             goto dc;
+
         *cp++ = c;
         c = GETC();
         c1 = 3;

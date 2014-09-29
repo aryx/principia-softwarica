@@ -460,7 +460,9 @@ getc(void)
         peekc = IGN;
         return c;
     }
+
     c = GETC();
+
     if(c == '\n')
         lineno++;
     if(c == EOF) {

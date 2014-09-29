@@ -145,6 +145,8 @@ an assembler.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
+% we gonna focus on plan9's assembler 8a.
+
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
 \item gas
@@ -767,7 +769,7 @@ enum opcode
 
 % ADT would be far better than this enum and separate Sym.
 % less: rename operand_part1, to show that need another part
-% to be a complete operand
+% to be a complete operand (which is Gen =~ Adr)
 <<enum reg>>=
 enum operand
 {
@@ -890,7 +892,8 @@ enum misc3 {
 @
 % sval[8]?? can't have string more than 8 bytes? hence the data2c
 % ugly list?
-% mutual ref with sym here where sym has itself a type that is the token code
+% note: mutual ref with sym here where sym has itself a type that is 
+% the token code
 
 
 
@@ -1559,6 +1562,12 @@ struct	Gen
 };
 @
 
+% see cinit()
+<<global nullgen>>=
+Gen	nullgen;
+@
+
+
 % if look qemu.root.s from data2c result:
 % e.g. 
 % DATA boot_CONF_outcode+0(SB)/8, $"\z\z\1\353\z\z\213\33"
@@ -1567,21 +1576,6 @@ struct	Gen
 % GLOBL boot_CONF_outcode+0(SB), $67528
 % GLOBL boot_CONF_outlen+0(SB), $4
 % DATA boot_CONF_outlen+0(SB)/4, $67523
-
-
-% usually MOVW AX, BX, 'from' AX, 'to' BX
-% =~ Prog of Linker (but without opcode)
-% rename operands?
-<<struct Gen2>>=
-struct	Gen2
-{
-    Gen	from;
-    Gen	to;
-};
-@
-
-% actually later do outcode(int a, Gen2 *x)
-% where both arguments are really like a Prog of Linker
 
 <<function checkscale>>=
 void
@@ -1600,10 +1594,22 @@ checkscale(int scale)
 @
 
 
-% see cinit()
-<<global nullgen>>=
-Gen	nullgen;
+
+% usually MOVW AX, BX, 'from' AX, 'to' BX
+% =~ Prog of Linker (but without opcode)
+% rename operands?
+<<struct Gen2>>=
+struct	Gen2
+{
+    Gen	from;
+    Gen	to;
+};
 @
+
+% actually later do outcode(int a, Gen2 *x)
+% where both arguments are really like a Prog of Linker
+
+
 
 
 \chapter{[[main()]]}
@@ -1672,6 +1678,7 @@ case 'o':
 
 % cwd, for #include "" (cwd can change as one include other files)
 %  =~ dirname(current_file)
+% less: rename? dirname_of_current_file?
 <<global pathname>>=
 char*	pathname;
 @
@@ -1773,7 +1780,7 @@ assemble(char *file)
 
     pinit(file);
     <<[[assemble()]] init Dlist after pinit>>
-    yyparse(); // calls outcode() but does nothing
+    yyparse(); // calls outcode() but does nothing when pass == 1
 
     if(nerrors) {
         cclean();
@@ -1847,10 +1854,8 @@ if(p) {
 void
 cclean(void)
 {
-    Gen2 g2;
+    Gen2 g2 = (Gen2) { nullgen, nullgen };
 
-    g2.from = nullgen;
-    g2.to = nullgen;
     outcode(AEND, &g2);
     Bflush(&obuf);
 }
@@ -1865,7 +1870,7 @@ cclean(void)
 long	lineno;
 @
 
-% dead?
+% dead???
 <<global sym>>=
 int	sym;
 @
@@ -2028,15 +2033,22 @@ newfile(char *s, int f)
 
 % should use lex ... simpler, but maybe to avoid bootstrapping issues?
 
+<<[[yylex()]] locals>>=
+int c;
+@
+
+<<[[yylex()]] locals>>=
+int c1;
+@
+% for peek
+
+
 % called by? yyparse() in generated code from a.y
 <<function yylex>>=
 long
 yylex(void)
 {
-    int c;
-    int c1;
-    char *cp;
-    Sym *s;
+    <<[[yylex()]] locals>>
 
     c = peekc;
     if(c != IGN) {
@@ -2064,6 +2076,7 @@ l1:
         goto talph;
     if(isdigit(c))
         goto tnum;
+
     switch(c) {
     <<[[yylex()]] switch c cases>>
     default:
@@ -2075,6 +2088,7 @@ l1:
 @
 %$
 
+% LP aspectize peekc? lp split more the func?
 
 \section{Newline}
 
@@ -2083,6 +2097,9 @@ case '\n':
     lineno++;
     return ';';
 @
+
+% newline are translated in ';' and this is used by
+% the grammar, see in Parsing subsection
 
 \section{Comments}
 
@@ -2123,6 +2140,12 @@ case '/':
 
 \section{Keywords and identifiers}
 
+<<[[yylex()]] locals>>=
+char *cp;
+Sym *s;
+@
+
+
 <<[[yylex()]] switch c cases>>=
 case '_':
 case '@':
@@ -2135,6 +2158,7 @@ aloop:
     c = GETC();
     if(isalpha(c) || isdigit(c) || c == '_' || c == '$') // $
         goto aloop;
+
     // went too far, yyback(1)
     peekc = c;
 
@@ -2145,15 +2169,16 @@ aloop:
 
     if(s->type == 0)
         s->type = LNAME;
-    if(s->type == LNAME ||
-       s->type == LVAR ||
-       s->type == LLAB) {
+
+    if(s->type == LNAME || s->type == LVAR || s->type == LLAB) {
         yylval.sym = s;
-        return s->type;
+    } else {
+        yylval.lval = s->value;
     }
-    yylval.lval = s->value;
     return s->type;
 @
+% possible to have s->type == 0? if new symbol then I think
+% it actually set to LNAME in syminit
 
 \section{Numbers}
 
@@ -2163,6 +2188,7 @@ tnum:
     cp = symb;
     if(c != '0')
         goto dc;
+
     *cp++ = c;
     c = GETC();
     c1 = 3;
@@ -2255,6 +2281,10 @@ caseout:
 @
 
 
+\subsection{Decimals}
+
+\subsection{Floats}
+
 <<[[yylex()]] switch c cases>>=
 case '.':
     c = GETC();
@@ -2288,6 +2318,7 @@ case '\'':
 
 \section{Escaping characters}
 
+% e is usually ' or "
 <<function escchar>>=
 int
 escchar(int e)
@@ -2380,7 +2411,9 @@ getc(void)
         peekc = IGN;
         return c;
     }
+
     c = GETC();
+
     if(c == '\n')
         lineno++;
     if(c == EOF) {
@@ -2392,6 +2425,8 @@ getc(void)
 @
 
 
+% what if had already a peekc? because called unget 2 times?
+% should raise Impossible!
 <<function unget>>=
 void
 unget(int c)
@@ -3549,7 +3584,7 @@ bad:
 }
 @
 
-
+% could move with the other getxxx()
 <<function getnsn>>=
 long
 getnsn(void)
@@ -4210,6 +4245,11 @@ expr:
 % this? a bit ugly so maybe better to aspectize this
 
 \fi
+
+\section{[[yyparse()]]}
+
+% essentially generated code by yacc, that is calling yylex
+
 
 \chapter{Output}
 
