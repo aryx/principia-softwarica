@@ -171,7 +171,7 @@ assemble(char *file)
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
     /*e: [[assemble()]] init Dlist after pinit */
-    yyparse();
+    yyparse(); // calls outcode() but does nothing
 
     if(nerrors) {
         cclean();
@@ -179,14 +179,14 @@ assemble(char *file)
     }
 
     pass = 2;
-    outhist();
+    outhist(); //??
 
     pinit(file);
     /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
     /*e: [[assemble()]] init Dlist after pinit */
-    yyparse();
+    yyparse(); // calls outcode() that now does things
 
     cclean();
     return nerrors;
@@ -709,7 +709,6 @@ cinit(void)
 
     for(i=0; i<NHASH; i++)
         hash[i] = S;
-
     for(i=0; itab[i].name; i++) {
         s = slookup(itab[i].name);
         if(s->type != LNAME)

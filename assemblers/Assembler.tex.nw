@@ -31,7 +31,7 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, dumper
-%    * TODO [[xxx]] other fields, [[xxx]] extra fields
+%    * SEMI [[xxx]] other fields, [[xxx]] extra fields
 % - read Extra section, identify concepts, first TOC
 % - distribute parts of the file before
 % - SEMI nullify, boolify, typeify,    scheckify
@@ -59,8 +59,8 @@
 \fi
 \usepackage[pageref]{backref}
  \def\backref{{\footnotesize cited page(s)}~}
-\usepackage{cleveref} %\cref
-\usepackage{multirow}
+%\usepackage{cleveref} %\cref
+%\usepackage{multirow}
 \usepackage{booktabs} 
  \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
 \usepackage{graphicx}
@@ -191,13 +191,16 @@ License.
 % usually 2 passes as can reference stuff coming later.
 % pretty simple.
 
+% can also have some simple constant expressions, macros, to be more
+% convenient.
+
 % TODO: look at TECS section on assembler?
 
 \section{[[8a]] services}
 
 % command line interface? -o outfile,   -D -I (cpp),  -f -m for debug
 
-% env: INCLUDE, NPROC
+% env: INCLUDE (for cpp, similar to -I), NPROC (when multi files?)
 
 \section{[[helloworld.s]]}
 
@@ -240,6 +243,9 @@ License.
 % .8 format? a kind of .o, but 8l does actually the job to turn into x86 ISA
 % so it's really more a marshalled file of simple data structures that is
 % x86 specific only because of the set of opcode and registers really.
+
+%note: should really simplify the code at some point and use Rust/Ocaml
+% and just marshall the ADT, and so same in linker => shorter code!
 
 \section{Code organization}
 
@@ -759,7 +765,9 @@ enum opcode
 
 %\section{[[Register]]}
 
-% ADT would be far better than this enum and separate Sym
+% ADT would be far better than this enum and separate Sym.
+% less: rename operand_part1, to show that need another part
+% to be a complete operand
 <<enum reg>>=
 enum operand
 {
@@ -1530,6 +1538,7 @@ slookup(char *s)
 \section{[[Gen]], [[Gen2]]}
 
 % =~ Adr of Linker
+% rename operand?
 <<struct Gen>>=
 struct	Gen
 {
@@ -1562,6 +1571,7 @@ struct	Gen
 
 % usually MOVW AX, BX, 'from' AX, 'to' BX
 % =~ Prog of Linker (but without opcode)
+% rename operands?
 <<struct Gen2>>=
 struct	Gen2
 {
@@ -1660,12 +1670,13 @@ case 'o':
 
 
 
-% cwd, for #include
+% cwd, for #include "" (cwd can change as one include other files)
+%  =~ dirname(current_file)
 <<global pathname>>=
 char*	pathname;
 @
 
-% could split, nullgen init, hash init, h init? (via lookup)
+% could split, nullgen init, hash init (via lookup), pathname init
 <<function cinit>>=
 void
 cinit(void)
@@ -1685,7 +1696,6 @@ cinit(void)
 
     for(i=0; i<NHASH; i++)
         hash[i] = S;
-
     for(i=0; itab[i].name; i++) {
         s = slookup(itab[i].name);
         if(s->type != LNAME)
@@ -1763,7 +1773,7 @@ assemble(char *file)
 
     pinit(file);
     <<[[assemble()]] init Dlist after pinit>>
-    yyparse();
+    yyparse(); // calls outcode() but does nothing
 
     if(nerrors) {
         cclean();
@@ -1771,11 +1781,11 @@ assemble(char *file)
     }
 
     pass = 2;
-    outhist();
+    outhist(); //??
 
     pinit(file);
     <<[[assemble()]] init Dlist after pinit>>
-    yyparse();
+    yyparse(); // calls outcode() that now does things
 
     cclean();
     return nerrors;
@@ -1910,7 +1920,7 @@ pinit(char *f)
 #define	BUFSIZ		8192
 @
 
-% hmm, shorter fieldnames?
+% hmm, shorter fieldnames? hmmm
 <<struct Io>>=
 struct	Io
 {
@@ -3560,48 +3570,74 @@ getnsn(void)
 }
 @
 
+
+
 \chapter{Parsing}
-
-\section{Overview}
-
-% this is the rest from the %union
-<<[[Token]] other fields>>=
- Gen   gen;
- Gen2  gen2;
-@
-
-<<type declarations>>=
-%type   <lval>  con expr offset
-%type   <lval>  pointer
-%type   <gen>   reg imm mem 
-%type   <gen>   nam rel rem rim rom omem nmem
-%type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
-%type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
-@
-
-%TODO lp split! give TOC overview
-% prog rules
-% addrmode rules
-% expr rules
-% ...
-
-
-
-
-% note that newline are translated in ';' by the lexer
-% so can either pack in one line with ';' or use newline
-% (haskell spirit :) )
 
 % TODO: use (Gen2) { nullgen, nullgen }  C extension?
 % would lead to shorter actions!
+
+\section{Overview}
+
+% assume understand yacc! if not read classic book on lex&yacc
+%  or docs/doc/unix/yacc.pdf
+% (or read CompilerGenerator.tex.nw :) )
+
+<<8a/a.y>>=
+%{
+#include "a.h"
+%}
+<<union token>>
+<<priority and associativity declarations>>
+<<token declarations>>
+<<type declarations>>
+
+%%
+<<grammar>>
+@
+
+% have seen token declaration in Core Data structures
 
 <<grammar>>=
 prog:
   /* empty */
 | prog line
 
+<<line rule>>
+<<inst rule>>
+<<special opcode operands rules>>
+<<operands rules>>
+<<operand rules>>
+<<constant expression rules>>
+@
+
+% assembly file is made of lines containing instructions or labels.
+% instructions are mostly a single opcode with 0, 1, or 2 operands
+% where each operand can be a register, or constant, or address, etc.
+
+% there are some special opcode like TEXT which don't translate
+% in binary code but are useful for symbol resolving.
+
+<<line rule>>=
 line:
- LLAB ':'
+  inst ';'
+| ';'
+| error ';'
+@
+
+% note that newline are translated in ';' by the lexer
+% so can either pack in one line with ';' or use newline
+% (haskell spirit :) )
+
+\section{Labels}
+
+% dead?
+<<global pc>>=
+long	pc;
+@
+
+<<line rule>>=
+| LLAB ':'
  {
   if($1->value != pc)
    yyerror("redeclaration of %s", $1->name);
@@ -3614,25 +3650,14 @@ line:
   $1->value = pc;
  }
  line
-| ';'
-| inst ';'
-| error ';'
+@
+%$
 
+\section{Instructions}
 
+<<inst rule>>=
 inst:
- LNAME '=' expr
- {
-  $1->type = LVAR;
-  $1->value = $3;
- }
-| LVAR '=' expr
- {
-  if($1->value != $3)
-   yyerror("redeclaration of %s", $1->name);
-  $1->value = $3;
- }
-
-| LTYPE0 nonnon   { outcode($1, &$2); }
+  LTYPE0 nonnon   { outcode($1, &$2); }
 | LTYPE1 nonrem   { outcode($1, &$2); }
 | LTYPE2 rimnon   { outcode($1, &$2); }
 | LTYPE3 rimrem   { outcode($1, &$2); }
@@ -3647,175 +3672,54 @@ inst:
 | LTYPEM spec6    { outcode($1, &$2); }
 | LTYPEI spec7    { outcode($1, &$2); }
 | LTYPEG spec8    { outcode($1, &$2); }
-
-nonnon:
- /* empty */
- {
-  $$.from = nullgen;
-  $$.to = nullgen;
- }
-| ','
- {
-  $$.from = nullgen;
-  $$.to = nullgen;
- }
-
-rimrem:
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-
-remrim:
- rem ',' rim
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-
-rimnon:
-  rim
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ','
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-
-nonrem:
- rem
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rem
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-
-nonrel:
- rel
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rel
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
+@
 
 
+\section{Variables}
+% useful? cpp can do that too
 
-
-
-spec1:  /* DATA */
- nam '/' con ',' imm
+<<inst rule>>=
+| LNAME '=' expr
  {
-  $$.from = $1;
-  $$.from.scale = $3;
-  $$.to = $5;
+  $1->type = LVAR;
+  $1->value = $3;
  }
+| LVAR '=' expr
+ {
+  if($1->value != $3)
+   yyerror("redeclaration of %s", $1->name);
+  $1->value = $3;
+ }
+@
 
-spec2:  /* TEXT */
- mem ',' imm
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-|   mem ',' con ',' imm
- {
-  $$.from = $1;
-  $$.from.scale = $3;
-  $$.to = $5;
- }
+\section{Operand}
 
-spec3:  /* JMP/CALL */
- rom
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rom
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
+% this is the rest from the %union
+<<[[Token]] other fields>>=
+ Gen   gen;
+@
 
-spec4:  /* NOP */
-  nonnon
-| nonrem
-
-spec5:  /* SHL/SHR */
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-| rim ',' rem ':' LLREG
- {
-  $$.from = $1;
-  $$.to = $3;
-  if($$.from.index != D_NONE)
-   yyerror("dp shift with lhs index");
-  $$.from.index = $5;
- }
-
-spec6:  /* MOVW/MOVL */
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-|   rim ',' rem ':' LSREG
- {
-  $$.from = $1;
-  $$.to = $3;
-  if($$.to.index != D_NONE)
-   yyerror("dp move with lhs index");
-  $$.to.index = $5;
- }
-
-spec7:
- rim
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ','
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-
-spec8:  /* GLOBL */
- mem ',' imm
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-| mem ',' con ',' imm
- {
-  $$.from = $1;
-  $$.from.scale = $3;
-  $$.to = $5;
- }
+<<type declarations>>=
+%type   <gen>   reg imm mem 
+%type   <gen>   nam rel rem rim rom omem nmem
+@
 
 
+% reg = register
+% imm = immediate
+% mem = memory (complex, omem | nmem)
+% con = constant
+% nam = ?
+
+% rem = register or memory
+% rim = register or memory or immediate
+% rel = ??
+% rom?
 
 
+% imm2 dead? yacc does not detect?
 
-
+<<operand rules>>=
 rem:
   reg
 | mem
@@ -4043,8 +3947,239 @@ pointer:
   LSB
 | LSP { $$ = D_AUTO; }
 | LFP
+@
 
 
+<<type declarations>>=
+%type   <lval>  offset
+%type   <lval>  pointer
+@
+
+
+
+\section{Operands}
+
+<<[[Token]] other fields>>=
+ Gen2  gen2;
+@
+
+<<type declarations>>=
+%type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
+@
+
+% xxxyyy = first operand, second operand
+% nonnon = nothing first, nothing left
+
+
+
+<<operands rules>>=
+nonnon:
+ /* empty */
+ {
+  $$.from = nullgen;
+  $$.to = nullgen;
+ }
+| ','
+ {
+  $$.from = nullgen;
+  $$.to = nullgen;
+ }
+
+rimrem:
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+
+remrim:
+ rem ',' rim
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+
+rimnon:
+  rim
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
+| rim ','
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
+
+nonrem:
+ rem
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
+| ',' rem
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
+
+nonrel:
+ rel
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
+| ',' rel
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
+@
+
+\section{Special instructions}
+% some of those are not really opcodes, they are entities 
+% just at the asm level.
+
+%hmm but nop? SHL? MOV? here because pseudo asm
+% that get translated in store/load on some archi?
+
+<<type declarations>>=
+%type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
+@
+
+%LTYPED
+<<special opcode operands rules>>=
+spec1:  /* DATA */
+ nam '/' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
+
+spec2:  /* TEXT */
+ mem ',' imm
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+|   mem ',' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
+
+spec3:  /* JMP/CALL */
+ rom
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
+| ',' rom
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
+
+spec4:  /* NOP */
+  nonnon
+| nonrem
+
+spec5:  /* SHL/SHR */
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+| rim ',' rem ':' LLREG
+ {
+  $$.from = $1;
+  $$.to = $3;
+  if($$.from.index != D_NONE)
+   yyerror("dp shift with lhs index");
+  $$.from.index = $5;
+ }
+
+spec6:  /* MOVW/MOVL */
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+|   rim ',' rem ':' LSREG
+ {
+  $$.from = $1;
+  $$.to = $3;
+  if($$.to.index != D_NONE)
+   yyerror("dp move with lhs index");
+  $$.to.index = $5;
+ }
+
+spec7:
+ rim
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
+| rim ','
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
+| rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+
+spec8:  /* GLOBL */
+ mem ',' imm
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+| mem ',' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
+@
+
+
+\subsection{[[TEXT]]}
+
+\subsection{[[DATA]]}
+
+\subsection{[[GLOBL]]}
+
+\subsection{[[JMP/CALL]]}
+
+\subsection{[[NOP]]}
+
+\subsection{[[SHL/SHR]]}
+
+\subsection{[[MOVW/MOVL]]}
+
+\section{Constant expressions}
+% it's not Fortran, we're making an assembler :)
+% so it's constant expressions here!
+
+<<type declarations>>=
+%type   <lval>  con expr
+@
+
+<<priority and associativity declarations>>=
+%left   '|'
+%left   '^'
+%left   '&'
+%left   '<' '>'
+%left   '+' '-'
+%left   '*' '/' '%'
+@
+
+<<constant expression rules>>=
 con:
   LCONST
 | LVAR         { $$ = $1->value; }
@@ -4068,82 +4203,6 @@ expr:
 
 @
 
-<<8a/a.y>>=
-%{
-#include "a.h"
-%}
-<<union token>>
-<<priority and associativity declarations>>
-<<token declarations>>
-<<type declarations>>
-
-%%
-<<grammar>>
-@
-
-\section{Instructions}
-
-\section{Labels}
-
-% dead?
-<<global pc>>=
-long	pc;
-@
-
-\section{Variables}
-% useful? cpp can do that too
-
-\section{Special instructions}
-% some of those are not really opcodes, they are entities 
-% just at the asm level.
-
-%hmm but nop? SHL? MOV? here because pseudo asm
-% that get translated in store/load on some archi?
-
-\subsection{[[TEXT]]}
-
-\subsection{[[DATA]]}
-
-\subsection{[[GLOBL]]}
-
-\subsection{[[JMP/CALL]]}
-
-\subsection{[[NOP]]}
-
-\subsection{[[SHL/SHR]]}
-
-\subsection{[[MOVW/MOVL]]}
-
-\section{Operands}
-
-% reg = register
-% imm = immediate
-% mem = memory (complex, omem | nmem)
-% con = constant
-% nam = ?
-
-% rem = register or memory
-% rim = register or memory or immediate
-% rel = ??
-
-% xxxyyy = first operand, second operand
-% nonnon = nothing first, nothing left
-
-
-% imm2 dead? yacc does not detect?
-
-\section{Constant expressions}
-% it's not Fortran, we're making an assembler :)
-% so it's constant expressions here!
-
-<<priority and associativity declarations>>=
-%left   '|'
-%left   '^'
-%left   '&'
-%left   '<' '>'
-%left   '+' '-'
-%left   '*' '/' '%'
-@
 
 \ifallcode
 \section{Optional commas}

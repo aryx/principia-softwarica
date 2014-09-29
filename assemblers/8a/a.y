@@ -12,6 +12,7 @@
 
  /*s: [[Token]] other fields */
   Gen   gen;
+ /*x: [[Token]] other fields */
   Gen2  gen2;
  /*e: [[Token]] other fields */
 }
@@ -36,12 +37,17 @@
 %token  <sym>   LNAME LLAB LVAR
 /*e: token declarations */
 /*s: type declarations */
-%type   <lval>  con expr offset
-%type   <lval>  pointer
 %type   <gen>   reg imm mem 
 %type   <gen>   nam rel rem rim rom omem nmem
+/*x: type declarations */
+%type   <lval>  offset
+%type   <lval>  pointer
+/*x: type declarations */
 %type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
+/*x: type declarations */
 %type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
+/*x: type declarations */
+%type   <lval>  con expr
 /*e: type declarations */
 
 %%
@@ -50,8 +56,13 @@ prog:
   /* empty */
 | prog line
 
+/*s: line rule */
 line:
- LLAB ':'
+  inst ';'
+| ';'
+| error ';'
+/*x: line rule */
+| LLAB ':'
  {
   if($1->value != pc)
    yyerror("redeclaration of %s", $1->name);
@@ -64,25 +75,10 @@ line:
   $1->value = pc;
  }
  line
-| ';'
-| inst ';'
-| error ';'
-
-
+/*e: line rule */
+/*s: inst rule */
 inst:
- LNAME '=' expr
- {
-  $1->type = LVAR;
-  $1->value = $3;
- }
-| LVAR '=' expr
- {
-  if($1->value != $3)
-   yyerror("redeclaration of %s", $1->name);
-  $1->value = $3;
- }
-
-| LTYPE0 nonnon   { outcode($1, &$2); }
+  LTYPE0 nonnon   { outcode($1, &$2); }
 | LTYPE1 nonrem   { outcode($1, &$2); }
 | LTYPE2 rimnon   { outcode($1, &$2); }
 | LTYPE3 rimrem   { outcode($1, &$2); }
@@ -97,73 +93,20 @@ inst:
 | LTYPEM spec6    { outcode($1, &$2); }
 | LTYPEI spec7    { outcode($1, &$2); }
 | LTYPEG spec8    { outcode($1, &$2); }
-
-nonnon:
- /* empty */
+/*x: inst rule */
+| LNAME '=' expr
  {
-  $$.from = nullgen;
-  $$.to = nullgen;
+  $1->type = LVAR;
+  $1->value = $3;
  }
-| ','
+| LVAR '=' expr
  {
-  $$.from = nullgen;
-  $$.to = nullgen;
+  if($1->value != $3)
+   yyerror("redeclaration of %s", $1->name);
+  $1->value = $3;
  }
-
-rimrem:
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-
-remrim:
- rem ',' rim
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-
-rimnon:
-  rim
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ','
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-
-nonrem:
- rem
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rem
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-
-nonrel:
- rel
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rel
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-
-
-
-
-
+/*e: inst rule */
+/*s: special opcode operands rules */
 spec1:  /* DATA */
  nam '/' con ',' imm
  {
@@ -260,12 +203,71 @@ spec8:  /* GLOBL */
   $$.from.scale = $3;
   $$.to = $5;
  }
+/*e: special opcode operands rules */
+/*s: operands rules */
+nonnon:
+ /* empty */
+ {
+  $$.from = nullgen;
+  $$.to = nullgen;
+ }
+| ','
+ {
+  $$.from = nullgen;
+  $$.to = nullgen;
+ }
 
+rimrem:
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
 
+remrim:
+ rem ',' rim
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
 
+rimnon:
+  rim
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
+| rim ','
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
 
+nonrem:
+ rem
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
+| ',' rem
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
 
-
+nonrel:
+ rel
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
+| ',' rel
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
+/*e: operands rules */
+/*s: operand rules */
 rem:
   reg
 | mem
@@ -493,8 +495,8 @@ pointer:
   LSB
 | LSP { $$ = D_AUTO; }
 | LFP
-
-
+/*e: operand rules */
+/*s: constant expression rules */
 con:
   LCONST
 | LVAR         { $$ = $1->value; }
@@ -516,5 +518,6 @@ expr:
 | expr '^' expr     { $$ = $1 ^ $3; }
 | expr '|' expr     { $$ = $1 | $3; }
 
+/*e: constant expression rules */
 /*e: grammar */
 /*e: 8a/a.y */
