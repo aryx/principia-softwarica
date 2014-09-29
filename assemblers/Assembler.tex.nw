@@ -3628,7 +3628,7 @@ getnsn(void)
 <<grammar>>
 @
 
-% have seen token declaration in Core Data structures
+% have seen token declaration in Core Data structures already.
 
 <<grammar>>=
 prog:
@@ -3653,38 +3653,18 @@ prog:
 <<line rule>>=
 line:
   inst ';'
-| ';'
-| error ';'
 @
+
 
 % note that newline are translated in ';' by the lexer
 % so can either pack in one line with ';' or use newline
 % (haskell spirit :) )
 
-\section{Labels}
-
-% dead?
-% used in second pass only?
-<<global pc>>=
-long	pc;
-@
-
 <<line rule>>=
-| LNAME ':'
- {
-  $1->type = LLAB;
-  $1->value = pc;
- }
- line
-| LLAB ':'
- {
-  if($1->value != pc)
-   yyerror("redeclaration of %s", $1->name);
-  $1->value = pc;
- }
- line
+| ';'
+| error ';'
 @
-%$
+% error? yacc trick for synchronization? to got until next ; (that is newline)?
 
 \section{Instructions}
 
@@ -3696,34 +3676,9 @@ inst:
 | LTYPE3 rimrem   { outcode($1, &$2); }
 | LTYPE4 remrim   { outcode($1, &$2); }
 | LTYPER nonrel   { outcode($1, &$2); }
-
-| LTYPED spec1    { outcode($1, &$2); }
-| LTYPET spec2    { outcode($1, &$2); }
-| LTYPEC spec3    { outcode($1, &$2); }
-| LTYPEN spec4    { outcode($1, &$2); }
-| LTYPES spec5    { outcode($1, &$2); }
-| LTYPEM spec6    { outcode($1, &$2); }
-| LTYPEI spec7    { outcode($1, &$2); }
-| LTYPEG spec8    { outcode($1, &$2); }
 @
 
-
-\section{Variables}
-% useful? cpp can do that too
-
-<<inst rule>>=
-| LNAME '=' expr
- {
-  $1->type = LVAR;
-  $1->value = $3;
- }
-| LVAR '=' expr
- {
-  if($1->value != $3)
-   yyerror("redeclaration of %s", $1->name);
-  $1->value = $3;
- }
-@
+% give apercu of nonnon, rem, but just quick
 
 \section{Operand}
 
@@ -3733,74 +3688,29 @@ inst:
 @
 
 <<type declarations>>=
-%type   <gen>   reg imm mem 
-%type   <gen>   nam rel rem rim rom omem nmem
+%type   <gen>   reg imm mem   omem nmem nam
 @
-
 
 % reg = register
 % imm = immediate
 % mem = memory (complex, omem | nmem)
-% con = constant
-% nam = ?
 
-% rem = register or memory
-% rim = register or memory or immediate
-% rel = ??
-% rom?
-
-
-% imm2 dead? yacc does not detect?
+\subsection{Registers}
 
 <<operand rules>>=
-rem:
-  reg
-| mem
-
-rom:
-  rel
-| nmem
-| '*' reg  { $$ = $2; }
-| '*' omem { $$ = $2; }
-| reg
-| omem
-| imm
-
-rim:
-  rem
-| imm
-
-rel:
- con '(' LPC ')'
- {
-  $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.offset = $1 + pc;
- }
-| LLAB offset
- {
-  $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.sym = $1;
-  $$.offset = $1->value + $2;
- }
-| LNAME offset
- {
-  $$ = nullgen;
-  if(pass == 2)
-   yyerror("undefined label: %s", $1->name);
-  $$.type = D_BRANCH;
-  $$.sym = $1;
-  $$.offset = $2;
- }
-
 reg:
   LBREG { $$ = nullgen; $$.type = $1; }
 | LFREG { $$ = nullgen; $$.type = $1; }
 | LLREG { $$ = nullgen; $$.type = $1; }
 | LSREG { $$ = nullgen; $$.type = $1; }
 | LSP   { $$ = nullgen; $$.type = D_SP; }
+@
 
+% con = constant
+
+\subsection{Constants}
+
+<<operand rules>>=
 imm:
  '$' con
  {
@@ -3843,12 +3753,20 @@ imm:
   $$.type = D_FCONST;
   $$.dval = -$3;
  }
+@
 
+\subsection{Memory references}
 
+<<operand rules>>=
 mem:
   omem
 | nmem
+@
 
+% omem = offset mem
+% nmem = named memory?
+
+<<operand rules>>=
 omem:
  con
  {
@@ -3918,7 +3836,12 @@ omem:
   $$.scale = $7;
   checkscale($$.scale);
  }
+@
+%$
 
+\subsection{Named memory references}
+
+<<operand rules>>=
 nmem:
   nam
 | nam '(' LLREG '*' con ')'
@@ -3928,7 +3851,10 @@ nmem:
   $$.scale = $5;
   checkscale($$.scale);
  }
+@
+%$
 
+<<operand rules>>=
 nam:
   LNAME offset '(' pointer ')'
  {
@@ -3944,25 +3870,95 @@ nam:
   $$.sym = $1;
   $$.offset = $4;
  }
+@
+%$
 
-offset:
- /* empty */ { $$ = 0; }
-| '+' con    { $$ = $2; }
-| '-' con    { $$ = -$2; }
+<<type declarations>>=
+%type   <lval>  pointer
+@
 
+<<operand rules>>=
 pointer:
   LSB
 | LFP
 | LSP { $$ = D_AUTO; }
 @
 
-% $
+\subsection{Relocation}
+
+% important one! rel for relocatable?
+<<operand rules>>=
+rel:
+ con '(' LPC ')'
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.offset = $1 + pc;
+ }
+| LLAB offset
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $1->value + $2;
+ }
+| LNAME offset
+ {
+  $$ = nullgen;
+  if(pass == 2)
+   yyerror("undefined label: %s", $1->name);
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $2;
+ }
+@
 
 <<type declarations>>=
 %type   <lval>  offset
-%type   <lval>  pointer
 @
 
+<<operand rules>>=
+offset:
+ /* empty */ { $$ = 0; }
+| '+' con    { $$ = $2; }
+| '-' con    { $$ = -$2; }
+@
+
+% $
+
+
+\subsection{Alternative forms}
+
+<<type declarations>>=
+%type   <gen>  rel rem rim rom 
+@
+
+% rem = register or memory
+% rim = register or memory or immediate
+% rel = ??
+% rom?
+
+
+% imm2 dead? yacc does not detect?
+
+<<operand rules>>=
+rem:
+  reg
+| mem
+
+rim:
+  rem
+| imm
+
+rom:
+  rel
+| nmem
+| '*' reg  { $$ = $2; }
+| '*' omem { $$ = $2; }
+| reg
+| omem
+| imm
+@
 
 
 \section{Operands}
@@ -4007,6 +4003,32 @@ nonrel:
 | ',' rel   { $$.from = nullgen; $$.to = $2; }
 @
 
+\section{Labels}
+
+% dead?
+% used in second pass only?
+<<global pc>>=
+long	pc;
+@
+
+<<line rule>>=
+| LNAME ':'
+ {
+  $1->type = LLAB;
+  $1->value = pc;
+ }
+ line
+| LLAB ':'
+ {
+  if($1->value != pc)
+   yyerror("redeclaration of %s", $1->name);
+  $1->value = pc;
+ }
+ line
+@
+%$
+
+
 \section{Special instructions}
 % some of those are not really opcodes, they are entities 
 % just at the asm level.
@@ -4014,20 +4036,24 @@ nonrel:
 %hmm but nop? SHL? MOV? here because pseudo asm
 % that get translated in store/load on some archi?
 
+<<inst rule>>=
+| LTYPED spec1    { outcode($1, &$2); }
+| LTYPET spec2    { outcode($1, &$2); }
+| LTYPEC spec3    { outcode($1, &$2); }
+| LTYPEN spec4    { outcode($1, &$2); }
+| LTYPES spec5    { outcode($1, &$2); }
+| LTYPEM spec6    { outcode($1, &$2); }
+| LTYPEI spec7    { outcode($1, &$2); }
+| LTYPEG spec8    { outcode($1, &$2); }
+@
+
 <<type declarations>>=
 %type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
 @
 
-%LTYPED
-<<special opcode operands rules>>=
-spec1:  /* DATA */
- nam '/' con ',' imm
- {
-  $$.from = $1;
-  $$.from.scale = $3;
-  $$.to = $5;
- }
+\subsection{[[TEXT]]}
 
+<<special opcode operands rules>>=
 spec2:  /* TEXT */
  mem ',' imm
  {
@@ -4040,70 +4066,27 @@ spec2:  /* TEXT */
   $$.from.scale = $3;
   $$.to = $5;
  }
+@
+%$
 
-spec3:  /* JMP/CALL */
- rom
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rom
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
+\subsection{[[DATA]]}
 
-spec4:  /* NOP */
-  nonnon
-| nonrem
+%LTYPED
+<<special opcode operands rules>>=
+spec1:  /* DATA */
+ nam '/' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
+@
+%$
 
-spec5:  /* SHL/SHR */
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-| rim ',' rem ':' LLREG
- {
-  $$.from = $1;
-  $$.to = $3;
-  if($$.from.index != D_NONE)
-   yyerror("dp shift with lhs index");
-  $$.from.index = $5;
- }
 
-spec6:  /* MOVW/MOVL */
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-|   rim ',' rem ':' LSREG
- {
-  $$.from = $1;
-  $$.to = $3;
-  if($$.to.index != D_NONE)
-   yyerror("dp move with lhs index");
-  $$.to.index = $5;
- }
+\subsection{[[GLOBL]]}
 
-spec7:
- rim
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ','
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-
+<<special opcode operands rules>>=
 spec8:  /* GLOBL */
  mem ',' imm
  {
@@ -4119,20 +4102,109 @@ spec8:  /* GLOBL */
 @
 %$
 
-
-\subsection{[[TEXT]]}
-
-\subsection{[[DATA]]}
-
-\subsection{[[GLOBL]]}
-
 \subsection{[[JMP/CALL]]}
+
+<<special opcode operands rules>>=
+spec3:  /* JMP/CALL */
+ rom
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
+| ',' rom
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
+@
 
 \subsection{[[NOP]]}
 
+<<special opcode operands rules>>=
+spec4:  /* NOP */
+  nonnon
+| nonrem
+@
+
 \subsection{[[SHL/SHR]]}
 
+<<special opcode operands rules>>=
+spec5:  /* SHL/SHR */
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+| rim ',' rem ':' LLREG
+ {
+  $$.from = $1;
+  $$.to = $3;
+  if($$.from.index != D_NONE)
+   yyerror("dp shift with lhs index");
+  $$.from.index = $5;
+ }
+@
+%$
+
 \subsection{[[MOVW/MOVL]]}
+
+
+<<special opcode operands rules>>=
+spec6:  /* MOVW/MOVL */
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+|   rim ',' rem ':' LSREG
+ {
+  $$.from = $1;
+  $$.to = $3;
+  if($$.to.index != D_NONE)
+   yyerror("dp move with lhs index");
+  $$.to.index = $5;
+ }
+@
+%$
+
+\subsection{[[IMUL]]}
+
+<<special opcode operands rules>>=
+spec7: /* IMUL */
+ rim
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
+| rim ','
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
+| rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+@
+
+
+\section{Variables}
+% useful? cpp can do that too
+
+<<inst rule>>=
+| LNAME '=' expr
+ {
+  $1->type = LVAR;
+  $1->value = $3;
+ }
+| LVAR '=' expr
+ {
+  if($1->value != $3)
+   yyerror("redeclaration of %s", $1->name);
+  $1->value = $3;
+ }
+@
 
 \section{Constant expressions}
 

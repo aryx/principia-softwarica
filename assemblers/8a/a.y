@@ -37,11 +37,13 @@
 %token  <sym>   LNAME LLAB LVAR
 /*e: token declarations */
 /*s: type declarations */
-%type   <gen>   reg imm mem 
-%type   <gen>   nam rel rem rim rom omem nmem
+%type   <gen>   reg imm mem   omem nmem nam
+/*x: type declarations */
+%type   <lval>  pointer
 /*x: type declarations */
 %type   <lval>  offset
-%type   <lval>  pointer
+/*x: type declarations */
+%type   <gen>  rel rem rim rom 
 /*x: type declarations */
 %type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
 /*x: type declarations */
@@ -59,6 +61,7 @@ prog:
 /*s: line rule */
 line:
   inst ';'
+/*x: line rule */
 | ';'
 | error ';'
 /*x: line rule */
@@ -84,7 +87,7 @@ inst:
 | LTYPE3 rimrem   { outcode($1, &$2); }
 | LTYPE4 remrim   { outcode($1, &$2); }
 | LTYPER nonrel   { outcode($1, &$2); }
-
+/*x: inst rule */
 | LTYPED spec1    { outcode($1, &$2); }
 | LTYPET spec2    { outcode($1, &$2); }
 | LTYPEC spec3    { outcode($1, &$2); }
@@ -107,14 +110,6 @@ inst:
  }
 /*e: inst rule */
 /*s: special opcode operands rules */
-spec1:  /* DATA */
- nam '/' con ',' imm
- {
-  $$.from = $1;
-  $$.from.scale = $3;
-  $$.to = $5;
- }
-
 spec2:  /* TEXT */
  mem ',' imm
  {
@@ -127,7 +122,28 @@ spec2:  /* TEXT */
   $$.from.scale = $3;
   $$.to = $5;
  }
-
+/*x: special opcode operands rules */
+spec1:  /* DATA */
+ nam '/' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
+/*x: special opcode operands rules */
+spec8:  /* GLOBL */
+ mem ',' imm
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+| mem ',' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
+/*x: special opcode operands rules */
 spec3:  /* JMP/CALL */
  rom
  {
@@ -139,11 +155,11 @@ spec3:  /* JMP/CALL */
   $$.from = nullgen;
   $$.to = $2;
  }
-
+/*x: special opcode operands rules */
 spec4:  /* NOP */
   nonnon
 | nonrem
-
+/*x: special opcode operands rules */
 spec5:  /* SHL/SHR */
  rim ',' rem
  {
@@ -158,7 +174,7 @@ spec5:  /* SHL/SHR */
    yyerror("dp shift with lhs index");
   $$.from.index = $5;
  }
-
+/*x: special opcode operands rules */
 spec6:  /* MOVW/MOVL */
  rim ',' rem
  {
@@ -173,8 +189,8 @@ spec6:  /* MOVW/MOVL */
    yyerror("dp move with lhs index");
   $$.to.index = $5;
  }
-
-spec7:
+/*x: special opcode operands rules */
+spec7: /* IMUL */
  rim
  {
   $$.from = $1;
@@ -189,19 +205,6 @@ spec7:
  {
   $$.from = $1;
   $$.to = $3;
- }
-
-spec8:  /* GLOBL */
- mem ',' imm
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-| mem ',' con ',' imm
- {
-  $$.from = $1;
-  $$.from.scale = $3;
-  $$.to = $5;
  }
 /*e: special opcode operands rules */
 /*s: operands rules */
@@ -228,54 +231,13 @@ nonrel:
 | ',' rel   { $$.from = nullgen; $$.to = $2; }
 /*e: operands rules */
 /*s: operand rules */
-rem:
-  reg
-| mem
-
-rom:
-  rel
-| nmem
-| '*' reg  { $$ = $2; }
-| '*' omem { $$ = $2; }
-| reg
-| omem
-| imm
-
-rim:
-  rem
-| imm
-
-rel:
- con '(' LPC ')'
- {
-  $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.offset = $1 + pc;
- }
-| LLAB offset
- {
-  $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.sym = $1;
-  $$.offset = $1->value + $2;
- }
-| LNAME offset
- {
-  $$ = nullgen;
-  if(pass == 2)
-   yyerror("undefined label: %s", $1->name);
-  $$.type = D_BRANCH;
-  $$.sym = $1;
-  $$.offset = $2;
- }
-
 reg:
   LBREG { $$ = nullgen; $$.type = $1; }
 | LFREG { $$ = nullgen; $$.type = $1; }
 | LLREG { $$ = nullgen; $$.type = $1; }
 | LSREG { $$ = nullgen; $$.type = $1; }
 | LSP   { $$ = nullgen; $$.type = D_SP; }
-
+/*x: operand rules */
 imm:
  '$' con
  {
@@ -318,12 +280,11 @@ imm:
   $$.type = D_FCONST;
   $$.dval = -$3;
  }
-
-
+/*x: operand rules */
 mem:
   omem
 | nmem
-
+/*x: operand rules */
 omem:
  con
  {
@@ -393,7 +354,7 @@ omem:
   $$.scale = $7;
   checkscale($$.scale);
  }
-
+/*x: operand rules */
 nmem:
   nam
 | nam '(' LLREG '*' con ')'
@@ -403,7 +364,7 @@ nmem:
   $$.scale = $5;
   checkscale($$.scale);
  }
-
+/*x: operand rules */
 nam:
   LNAME offset '(' pointer ')'
  {
@@ -419,16 +380,57 @@ nam:
   $$.sym = $1;
   $$.offset = $4;
  }
-
-offset:
- /* empty */ { $$ = 0; }
-| '+' con    { $$ = $2; }
-| '-' con    { $$ = -$2; }
-
+/*x: operand rules */
 pointer:
   LSB
 | LFP
 | LSP { $$ = D_AUTO; }
+/*x: operand rules */
+rel:
+ con '(' LPC ')'
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.offset = $1 + pc;
+ }
+| LLAB offset
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $1->value + $2;
+ }
+| LNAME offset
+ {
+  $$ = nullgen;
+  if(pass == 2)
+   yyerror("undefined label: %s", $1->name);
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $2;
+ }
+/*x: operand rules */
+offset:
+ /* empty */ { $$ = 0; }
+| '+' con    { $$ = $2; }
+| '-' con    { $$ = -$2; }
+/*x: operand rules */
+rem:
+  reg
+| mem
+
+rim:
+  rem
+| imm
+
+rom:
+  rel
+| nmem
+| '*' reg  { $$ = $2; }
+| '*' omem { $$ = $2; }
+| reg
+| omem
+| imm
 /*e: operand rules */
 /*s: constant expression rules */
 con:
