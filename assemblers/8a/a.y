@@ -62,16 +62,16 @@ line:
 | ';'
 | error ';'
 /*x: line rule */
+| LNAME ':'
+ {
+  $1->type = LLAB;
+  $1->value = pc;
+ }
+ line
 | LLAB ':'
  {
   if($1->value != pc)
    yyerror("redeclaration of %s", $1->name);
-  $1->value = pc;
- }
- line
-| LNAME ':'
- {
-  $1->type = LLAB;
   $1->value = pc;
  }
  line
@@ -206,66 +206,26 @@ spec8:  /* GLOBL */
 /*e: special opcode operands rules */
 /*s: operands rules */
 nonnon:
- /* empty */
- {
-  $$.from = nullgen;
-  $$.to = nullgen;
- }
-| ','
- {
-  $$.from = nullgen;
-  $$.to = nullgen;
- }
+ /* empty */ { $$.from = nullgen; $$.to = nullgen; }
+| ','        { $$.from = nullgen; $$.to = nullgen; }
 
 rimrem:
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
+ rim ',' rem { $$.from = $1; $$.to = $3; }
 
 remrim:
- rem ',' rim
- {
-  $$.from = $1;
-  $$.to = $3;
- }
+ rem ',' rim { $$.from = $1; $$.to = $3; }
 
 rimnon:
-  rim
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ','
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
+  rim       { $$.from = $1; $$.to = nullgen; }
+| rim ','   { $$.from = $1; $$.to = nullgen; }
 
 nonrem:
- rem
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rem
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
+ rem        { $$.from = nullgen; $$.to = $1; }
+| ',' rem   { $$.from = nullgen; $$.to = $2; }
 
 nonrel:
- rel
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rel
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
+ rel        { $$.from = nullgen; $$.to = $1; }
+| ',' rel   { $$.from = nullgen; $$.to = $2; }
 /*e: operands rules */
 /*s: operand rules */
 rem:
@@ -275,14 +235,8 @@ rem:
 rom:
   rel
 | nmem
-| '*' reg
- {
-  $$ = $2;
- }
-| '*' omem
- {
-  $$ = $2;
- }
+| '*' reg  { $$ = $2; }
+| '*' omem { $$ = $2; }
 | reg
 | omem
 | imm
@@ -298,6 +252,13 @@ rel:
   $$.type = D_BRANCH;
   $$.offset = $1 + pc;
  }
+| LLAB offset
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $1->value + $2;
+ }
 | LNAME offset
  {
   $$ = nullgen;
@@ -307,40 +268,13 @@ rel:
   $$.sym = $1;
   $$.offset = $2;
  }
-| LLAB offset
- {
-  $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.sym = $1;
-  $$.offset = $1->value + $2;
- }
 
 reg:
- LBREG
- {
-  $$ = nullgen;
-  $$.type = $1;
- }
-| LFREG
- {
-  $$ = nullgen;
-  $$.type = $1;
- }
-| LLREG
- {
-  $$ = nullgen;
-  $$.type = $1;
- }
-| LSP
- {
-  $$ = nullgen;
-  $$.type = D_SP;
- }
-| LSREG
- {
-  $$ = nullgen;
-  $$.type = $1;
- }
+  LBREG { $$ = nullgen; $$.type = $1; }
+| LFREG { $$ = nullgen; $$.type = $1; }
+| LLREG { $$ = nullgen; $$.type = $1; }
+| LSREG { $$ = nullgen; $$.type = $1; }
+| LSP   { $$ = nullgen; $$.type = D_SP; }
 
 imm:
  '$' con
@@ -493,8 +427,8 @@ offset:
 
 pointer:
   LSB
-| LSP { $$ = D_AUTO; }
 | LFP
+| LSP { $$ = D_AUTO; }
 /*e: operand rules */
 /*s: constant expression rules */
 con:

@@ -3609,9 +3609,6 @@ getnsn(void)
 
 \chapter{Parsing}
 
-% TODO: use (Gen2) { nullgen, nullgen }  C extension?
-% would lead to shorter actions!
-
 \section{Overview}
 
 % assume understand yacc! if not read classic book on lex&yacc
@@ -3667,21 +3664,22 @@ line:
 \section{Labels}
 
 % dead?
+% used in second pass only?
 <<global pc>>=
 long	pc;
 @
 
 <<line rule>>=
+| LNAME ':'
+ {
+  $1->type = LLAB;
+  $1->value = pc;
+ }
+ line
 | LLAB ':'
  {
   if($1->value != pc)
    yyerror("redeclaration of %s", $1->name);
-  $1->value = pc;
- }
- line
-| LNAME ':'
- {
-  $1->type = LLAB;
   $1->value = pc;
  }
  line
@@ -3762,14 +3760,8 @@ rem:
 rom:
   rel
 | nmem
-| '*' reg
- {
-  $$ = $2;
- }
-| '*' omem
- {
-  $$ = $2;
- }
+| '*' reg  { $$ = $2; }
+| '*' omem { $$ = $2; }
 | reg
 | omem
 | imm
@@ -3785,6 +3777,13 @@ rel:
   $$.type = D_BRANCH;
   $$.offset = $1 + pc;
  }
+| LLAB offset
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $1->value + $2;
+ }
 | LNAME offset
  {
   $$ = nullgen;
@@ -3794,40 +3793,13 @@ rel:
   $$.sym = $1;
   $$.offset = $2;
  }
-| LLAB offset
- {
-  $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.sym = $1;
-  $$.offset = $1->value + $2;
- }
 
 reg:
- LBREG
- {
-  $$ = nullgen;
-  $$.type = $1;
- }
-| LFREG
- {
-  $$ = nullgen;
-  $$.type = $1;
- }
-| LLREG
- {
-  $$ = nullgen;
-  $$.type = $1;
- }
-| LSP
- {
-  $$ = nullgen;
-  $$.type = D_SP;
- }
-| LSREG
- {
-  $$ = nullgen;
-  $$.type = $1;
- }
+  LBREG { $$ = nullgen; $$.type = $1; }
+| LFREG { $$ = nullgen; $$.type = $1; }
+| LLREG { $$ = nullgen; $$.type = $1; }
+| LSREG { $$ = nullgen; $$.type = $1; }
+| LSP   { $$ = nullgen; $$.type = D_SP; }
 
 imm:
  '$' con
@@ -3980,10 +3952,11 @@ offset:
 
 pointer:
   LSB
-| LSP { $$ = D_AUTO; }
 | LFP
+| LSP { $$ = D_AUTO; }
 @
 
+% $
 
 <<type declarations>>=
 %type   <lval>  offset
@@ -3998,6 +3971,10 @@ pointer:
  Gen2  gen2;
 @
 
+% I thought I could write code like
+% /* empty */ { (Gen2) { .from = nullgen; .to = nullgen; } }
+% but didn't work
+
 <<type declarations>>=
 %type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
 @
@@ -4006,69 +3983,28 @@ pointer:
 % nonnon = nothing first, nothing left
 
 
-
 <<operands rules>>=
 nonnon:
- /* empty */
- {
-  $$.from = nullgen;
-  $$.to = nullgen;
- }
-| ','
- {
-  $$.from = nullgen;
-  $$.to = nullgen;
- }
+ /* empty */ { $$.from = nullgen; $$.to = nullgen; }
+| ','        { $$.from = nullgen; $$.to = nullgen; }
 
 rimrem:
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
+ rim ',' rem { $$.from = $1; $$.to = $3; }
 
 remrim:
- rem ',' rim
- {
-  $$.from = $1;
-  $$.to = $3;
- }
+ rem ',' rim { $$.from = $1; $$.to = $3; }
 
 rimnon:
-  rim
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ','
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
+  rim       { $$.from = $1; $$.to = nullgen; }
+| rim ','   { $$.from = $1; $$.to = nullgen; }
 
 nonrem:
- rem
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rem
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
+ rem        { $$.from = nullgen; $$.to = $1; }
+| ',' rem   { $$.from = nullgen; $$.to = $2; }
 
 nonrel:
- rel
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rel
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
+ rel        { $$.from = nullgen; $$.to = $1; }
+| ',' rel   { $$.from = nullgen; $$.to = $2; }
 @
 
 \section{Special instructions}
@@ -4181,6 +4117,7 @@ spec8:  /* GLOBL */
   $$.to = $5;
  }
 @
+%$
 
 
 \subsection{[[TEXT]]}
@@ -4198,6 +4135,7 @@ spec8:  /* GLOBL */
 \subsection{[[MOVW/MOVL]]}
 
 \section{Constant expressions}
+
 % it's not Fortran, we're making an assembler :)
 % so it's constant expressions here!
 
