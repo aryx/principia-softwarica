@@ -12,10 +12,10 @@ typedef	struct	Gen2 	Gen2;
 /*s: struct Gen */
 struct	Gen
 {
-    // enum<operand>
+    // enum<operand_kind>
     short	type;
 
-    //enum<operand(register-only|D_NONE)>
+    //enum<operand_kind(register-only|D_NONE)>
     short	index;
 
     short	scale;

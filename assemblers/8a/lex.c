@@ -13,7 +13,9 @@ main(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
     char *p;
-    int nout, nproc, status, i, c;
+    /*x: [[main()]] locals */
+    int nout, nproc, status;
+    int i, c;
     /*e: [[main()]] locals */
     /*s: [[main()]] debug initialization */
     memset(debug, false, sizeof(debug));
@@ -179,7 +181,7 @@ assemble(char *file)
     }
 
     pass = 2;
-    outhist(); //??
+    outhist(); // header
 
     pinit(file);
     /*s: [[assemble()]] init Dlist after pinit */
@@ -200,7 +202,7 @@ struct Itab
 
     //token code
     ushort	type;
-    //enum<operand> | enum<opcode>
+    //enum<opcode> | enum<operand_kind>
     ushort	value;
 };
 /*e: struct Itab */
@@ -785,7 +787,8 @@ void
 zaddr(Gen *a, int s)
 {
     long l;
-    int i, t;
+    int i;
+    int t;
     char *n;
     Ieee e;
 
@@ -945,6 +948,7 @@ outhist(void)
 
     g = nullgen;
     c = pathchar();
+
     for(h = hist; h != H; h = h->link) {
         p = h->name;
         op = nil;

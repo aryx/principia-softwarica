@@ -4,8 +4,11 @@
 %}
 /*s: union token */
 %union  {
- // enum<opcode> (for LTYPE/...) | enum<operand> (for LBREG/...) | long (for LCONST)
+ //   enum<opcode> (for LTYPE/...) 
+ // | enum<operand_kind> (for LBREG/...) 
+ // | long (for LCONST)
  long   lval;
+
  double dval;
  char   sval[8];
  Sym    *sym;

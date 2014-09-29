@@ -67,7 +67,7 @@ struct	Sym
     //token code (e.g. LNAME, LBREG, etc)
     ushort	type;
 
-    //enum<operand> | enum<opcode> | long (e.g. pc for LLAB)
+    //enum<operand_kind> | enum<opcode> | long (e.g. pc for LLAB)
     long	value;
 
     /*s: [[Sym]] other fields */

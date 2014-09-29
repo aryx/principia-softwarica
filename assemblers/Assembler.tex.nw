@@ -240,6 +240,10 @@ License.
 
 %concepts: labels, ...
 
+
+% special registers for addressing: PC, SB, FP, SP
+% for text, data, param, locals
+
 \section{Output object format}
 
 % .8 format? a kind of .o, but 8l does actually the job to turn into x86 ISA
@@ -285,7 +289,7 @@ License.
 \chapter{Core Data Structures}
 
 
-\section{[[Opcode]] and [[Operand]]}
+\section{[[Opcode]] and [[Operand_kind]]}
 
 %TODO: reorder to have first a set of mostly useful instructions
 % e.g. MOV, MOVB, etc. Could maybe analyze *.s in plan9 and do some
@@ -771,16 +775,16 @@ enum opcode
 % less: rename operand_part1, to show that need another part
 % to be a complete operand (which is Gen =~ Adr)
 <<enum reg>>=
-enum operand
+enum operand_kind
 {
-<<[[operand]] register cases>>
+<<[[operand_kind]] register cases>>
     D_NONE		= 59,
-<<[[operand]] non register cases>>
+<<[[operand_kind]] non register cases>>
 };
 @
 
 %less: could have start at 1 here so could have D_NONE = 0
-<<[[operand]] register cases>>=
+<<[[operand_kind]] register cases>>=
     D_AL		= 0,
     D_CL,
     D_DL,
@@ -823,7 +827,7 @@ enum operand
 
 % how get the remaining info? e.g. for D_BRANCH to get the symbol or int 
 % you'll have too look in Gen.value
-<<[[operand]] non register cases>>=
+<<[[operand_kind]] non register cases>>=
     // for ACALL, AJMP (from PC)
     D_BRANCH	= 60, 
 
@@ -841,7 +845,7 @@ enum operand
 @
 
 % ???
-<<[[operand]] non register cases>>=
+<<[[operand_kind]] non register cases>>=
     D_FILE,
     D_FILE1, // used by linker only
     D_INDIR,	/* additive */
@@ -881,8 +885,11 @@ enum misc3 {
 
 <<union token>>=
 %union  {
- // enum<opcode> (for LTYPE/...) | enum<operand> (for LBREG/...) | long (for LCONST)
+ //   enum<opcode> (for LTYPE/...) 
+ // | enum<operand_kind> (for LBREG/...) 
+ // | long (for LCONST)
  long   lval;
+
  double dval;
  char   sval[8];
  Sym    *sym;
@@ -908,7 +915,7 @@ struct Itab
 
     //token code
     ushort	type;
-    //enum<operand> | enum<opcode>
+    //enum<opcode> | enum<operand_kind>
     ushort	value;
 };
 @
@@ -1419,7 +1426,7 @@ struct	Sym
     //token code (e.g. LNAME, LBREG, etc)
     ushort	type;
 
-    //enum<operand> | enum<opcode> | long (e.g. pc for LLAB)
+    //enum<operand_kind> | enum<opcode> | long (e.g. pc for LLAB)
     long	value;
 
     <<[[Sym]] other fields>>
@@ -1545,10 +1552,10 @@ slookup(char *s)
 <<struct Gen>>=
 struct	Gen
 {
-    // enum<operand>
+    // enum<operand_kind>
     short	type;
 
-    //enum<operand(register-only|D_NONE)>
+    //enum<operand_kind(register-only|D_NONE)>
     short	index;
 
     short	scale;
@@ -1630,13 +1637,6 @@ char*	outfile;
 @
 
 
-
-\ifallcode
-<<[[main()]] locals>>=
-char *p;
-int nout, nproc, status, i, c;
-@
-\fi
 
 <<function main (assemblers/8a/lex.c)>>=
 void
@@ -1788,7 +1788,7 @@ assemble(char *file)
     }
 
     pass = 2;
-    outhist(); //??
+    outhist(); // header
 
     pinit(file);
     <<[[assemble()]] init Dlist after pinit>>
@@ -2610,6 +2610,10 @@ macend(void)
 \section{[[#include]] and [[-I]]}
 
 \subsection{Include path}
+
+<<[[main()]] locals>>=
+char *p;
+@
 
 % -I
 <<[[main()]] command line processing>>=
@@ -3841,6 +3845,8 @@ omem:
 
 \subsection{Named memory references}
 
+% for data
+
 <<operand rules>>=
 nmem:
   nam
@@ -3884,9 +3890,8 @@ pointer:
 | LSP { $$ = D_AUTO; }
 @
 
-\subsection{Relocation}
 
-% important one! rel for relocatable?
+% for code (rel = ? relocatable?)
 <<operand rules>>=
 rel:
  con '(' LPC ')'
@@ -4281,6 +4286,7 @@ outhist(void)
 
     g = nullgen;
     c = pathchar();
+
     for(h = hist; h != H; h = h->link) {
         p = h->name;
         op = nil;
@@ -4378,7 +4384,8 @@ void
 zaddr(Gen *a, int s)
 {
     long l;
-    int i, t;
+    int i;
+    int t;
     char *n;
     Ieee e;
 
@@ -4562,7 +4569,8 @@ out:
 \chapter{Advanced Topics}
 
 \section{[[#pragma lib]] and automagic linking}
-% this is very very nice! remove so much headach,
+
+% this is very very nice! remove so much headache,
 % no need ocamlfind, no need pkg-config, so simple ...
 
 \section{Float}
@@ -4617,6 +4625,12 @@ ieeedtod(Ieee *ieee, double native)
 \section{Processing multiple files}
 
 % why need that?
+
+
+<<[[main()]] locals>>=
+int nout, nproc, status;
+int i, c;
+@
 
 <<[[main()]] multiple files handling>>=
 if(argc > 1) {

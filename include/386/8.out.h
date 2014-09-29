@@ -474,9 +474,9 @@ enum opcode
 /*e: enum as */
 
 /*s: enum reg */
-enum operand
+enum operand_kind
 {
-/*s: [[operand]] register cases */
+/*s: [[operand_kind]] register cases */
     D_AL		= 0,
     D_CL,
     D_DL,
@@ -515,9 +515,9 @@ enum operand
     D_CR		= 35, // D_CR0 .. D_CR7
     D_DR		= 43, // D_DR0 .. D_DR7
     D_TR		= 51, // D_TR0 .. D_TR7
-/*e: [[operand]] register cases */
+/*e: [[operand_kind]] register cases */
     D_NONE		= 59,
-/*s: [[operand]] non register cases */
+/*s: [[operand_kind]] non register cases */
     // for ACALL, AJMP (from PC)
     D_BRANCH	= 60, 
 
@@ -532,13 +532,13 @@ enum operand
     D_SCONST	= 67,
 
     D_ADDR		= 68,
-/*x: [[operand]] non register cases */
+/*x: [[operand_kind]] non register cases */
     D_FILE,
     D_FILE1, // used by linker only
     D_INDIR,	/* additive */
     D_CONST2 = D_INDIR+D_INDIR,
     D_SIZE,	/* 8l internal */
-/*e: [[operand]] non register cases */
+/*e: [[operand_kind]] non register cases */
 };
 /*e: enum reg */
 
