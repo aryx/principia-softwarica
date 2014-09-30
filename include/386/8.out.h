@@ -535,6 +535,7 @@ enum operand_kind
 /*x: [[operand_kind]] non register cases */
     D_FILE,
     D_FILE1, // used by linker only
+
     D_INDIR,	/* additive */
     D_CONST2 = D_INDIR+D_INDIR,
     D_SIZE,	/* 8l internal */

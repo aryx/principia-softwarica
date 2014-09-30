@@ -60,11 +60,12 @@ typedef	struct	Hist	Hist;
 /*s: struct Sym */
 struct	Sym
 {
-    // for user symbols? (foo, bar:, ?) 
-    // but also used for opcodes (AMOVB) andoperands (D_AL) keywords (see itab)
+    // for user labels (bar:), variables (VAR)
+    // but also used for opcodes (AMOVB) and register (D_AL) keywords 
+    // (see itab)
     char	*name;
 
-    //token code (e.g. LNAME, LBREG, etc)
+    //token code (e.g. LNAME, LLAB, LBREG, etc)
     ushort	type;
 
     //enum<operand_kind> | enum<opcode> | long (e.g. pc for LLAB)

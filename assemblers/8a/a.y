@@ -44,9 +44,11 @@
 /*x: type declarations */
 %type   <lval>  pointer
 /*x: type declarations */
+%type   <gen>  rel
+/*x: type declarations */
 %type   <lval>  offset
 /*x: type declarations */
-%type   <gen>  rel rem rim rom 
+%type   <gen>  rem rim rom 
 /*x: type declarations */
 %type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
 /*x: type declarations */
@@ -427,13 +429,13 @@ rim:
 | imm
 
 rom:
-  rel
-| nmem
+  reg
+| mem
+| imm
+
+| rel
 | '*' reg  { $$ = $2; }
 | '*' omem { $$ = $2; }
-| reg
-| omem
-| imm
 /*e: operand rules */
 /*s: constant expression rules */
 con:
