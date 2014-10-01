@@ -244,6 +244,9 @@ License.
 %concepts: 
 % - labels suffixed with :
 % - constants, prefixed with $ (why? to avoid ambiguity with what?)
+% - external symbols = fully unresolved! will be resolved at linking time
+%   but needs to keep the name in the symbol table and the place where it
+%   was referenced
 
 
 % special registers for addressing: PC, SB, FP, SP
@@ -1889,7 +1892,6 @@ long	lineno;
 @
 
 
-
 % =~ yyback(1) trick, used by yylex() and getc(), and?? cg?
 <<global peekc>>=
 int	peekc = IGN;
@@ -1933,7 +1935,10 @@ pinit(char *f)
 @
 
 
+\section{Files managment}
 
+% include so have to open files, close them
+% hmm better to separate concern and have cpp in a different program?
 
 <<constant BUFSIZ>>=
 #define	BUFSIZ		8192
@@ -2025,6 +2030,67 @@ newfile(char *s, int f)
     }
     fi.c = 0;
     linehist(s, 0);
+}
+@
+
+\section{Buffer managment}
+
+% buffered IO
+
+% File input?
+<<struct Fi>>=
+struct Fi
+{
+    // ref<char>, pointer in buffer (of Io.b)
+    char*	p;
+    // remaining count in buffer (of Io.b)
+    int	c;
+};
+@
+
+% global IO buffer
+<<global fi>>=
+struct Fi fi;
+@
+
+
+<<function GETC>>=
+#define	GETC()		((--fi.c < 0) ? filbuf() : *fi.p++ & 0xff)
+@
+
+<<function filbuf>>=
+int
+filbuf(void)
+{
+    Io *i;
+
+loop:
+    i = iostack;
+    if(i == I)
+        return EOF;
+    if(i->f < 0)
+        goto pop;
+    fi.c = read(i->f, i->b, BUFSIZ) - 1;
+    if(fi.c < 0) {
+        close(i->f);
+        linehist(0, 0);
+        goto pop;
+    }
+    fi.p = i->b + 1;
+    return i->b[0];
+
+pop:
+    iostack = i->link;
+    i->link = iofree;
+    iofree = i;
+    i = iostack;
+    if(i == I)
+        return EOF;
+    fi.p = i->p;
+    fi.c = i->c;
+    if(--fi.c < 0)
+        goto loop;
+    return *fi.p++;
 }
 @
 
@@ -4311,7 +4377,7 @@ expr:
 
 \section{Symbol table, [[h]] and [[sym]]}
 
-% when an instruction involve a symbol 
+% when an instruction involve a symbol
 % the generated code contain an int that is an index
 % in a symbol table!
 
@@ -4319,9 +4385,9 @@ expr:
 <<struct Htab>>=
 struct Htab
 {
-    //? list<Sym>, next = sym.link?
+    // ref<Sym>
     Sym*	sym;
-    //enum???
+    //enum<operand_kind>?
     short	type;
 };
 @
@@ -4329,15 +4395,17 @@ struct Htab
 <<constant NSYM>>=
 #define	NSYM	50
 @
-% hash function?
+% limit of number unresolved external symbols?
 
 
+% starts to be used at index 1
 <<global h>>=
-// hash<string, Sym>
+// array<ref<Sym>>
 struct Htab h[NSYM];
 @
 
 
+% next free entry in h (actually can be rested to 1)
 <<global sym>>=
 int	sym;
 @
@@ -4346,7 +4414,8 @@ int	sym;
 //?? seems used only by outcode
 char	sym;
 @
-
+% was called 'sym', but really it's an index in h, and it's confusing
+% to have so many fields called sym already (as well as the global sym)
 
 
 
@@ -4551,6 +4620,7 @@ zaddr(Gen *a, int s)
 }
 @
 
+% for unresolved symbol names?
 <<function zname>>=
 void
 zname(char *n, int t, int s)
@@ -4762,8 +4832,6 @@ if(argc > 1) {
 
 
 
-
-
 \appendix
 
 \chapter{Debugging}
@@ -4789,26 +4857,26 @@ default:
 % m for macro
 
 <<[[dodefine()]] debug>>=
-    if(debug['m'])
-        print("#define (-D) %s %s\n", s->name, s->macro+1);
+if(debug['m'])
+    print("#define (-D) %s %s\n", s->name, s->macro+1);
 @
 
 <<[[macdef()]] debug>>=
-    if(debug['m'])
-        print("#define %s %s\n", s->name, s->macro+1);
+if(debug['m'])
+    print("#define %s %s\n", s->name, s->macro+1);
 @
 
 \section{[[8a -f]], line information debugging}
 
 <<[[linehist()]] debug>>=
-    if(debug['f'])
-        if(f) {
-            if(offset)
-                print("%4ld: %s (#line %d)\n", lineno, f, offset);
-            else
-                print("%4ld: %s\n", lineno, f);
-        } else
-            print("%4ld: <pop>\n", lineno);
+if(debug['f'])
+    if(f) {
+        if(offset)
+            print("%4ld: %s (#line %d)\n", lineno, f, offset);
+        else
+            print("%4ld: %s\n", lineno, f);
+    } else
+        print("%4ld: <pop>\n", lineno);
 @
 
 \chapter{Error Managment}
@@ -4827,7 +4895,7 @@ errorexit(void)
 <<global nerrors>>=
 int	nerrors = 0;
 @
-% used to be in cinit
+% used to be initialized in cinit()
 
 <<function yyerror>>=
 void
@@ -4907,7 +4975,8 @@ prfile(long l)
 \chapter{Libc}
 
 \section{Memory managment}
-% same in Linker
+% same in Linker, not sure why they just don't use malloc?
+% to avoid dependencies to libc? for bootstrapping reasons?
 
 <<global hunk>>=
 char*	hunk;
@@ -4999,65 +5068,6 @@ allocn(void *p, long on, long n)
     hunk += n;
     nhunk -= n;
     return p;
-}
-@
-
-\section{Buffer managment}
-
-% buffered IO, put in appendix too?
-<<struct Fi>>=
-struct Fi
-{
-    // pointer in buffer
-    char*	p;
-    // remaining count
-    int	c;
-};
-@
-
-% global IO buffer
-<<global fi>>=
-struct Fi fi;
-@
-
-
-<<function GETC>>=
-#define	GETC()		((--fi.c < 0) ? filbuf() : *fi.p++ & 0xff)
-@
-
-<<function filbuf>>=
-int
-filbuf(void)
-{
-    Io *i;
-
-loop:
-    i = iostack;
-    if(i == I)
-        return EOF;
-    if(i->f < 0)
-        goto pop;
-    fi.c = read(i->f, i->b, BUFSIZ) - 1;
-    if(fi.c < 0) {
-        close(i->f);
-        linehist(0, 0);
-        goto pop;
-    }
-    fi.p = i->b + 1;
-    return i->b[0];
-
-pop:
-    iostack = i->link;
-    i->link = iofree;
-    iofree = i;
-    i = iostack;
-    if(i == I)
-        return EOF;
-    fi.p = i->p;
-    fi.c = i->c;
-    if(--fi.c < 0)
-        goto loop;
-    return *fi.p++;
 }
 @
 
