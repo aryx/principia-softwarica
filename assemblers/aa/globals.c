@@ -30,6 +30,7 @@ Hist*	ehist;
 int	newflag;
 /*e: global newflag */
 /*s: global hist */
+// list<ref_own<Hist>>, next = Hist.link
 Hist*	hist;
 /*e: global hist */
 /*s: global hunk */

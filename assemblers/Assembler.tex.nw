@@ -289,6 +289,9 @@ License.
 % does not really use an AST, abuse tokens and the grammar to
 % do some computations (the classic old way to do things)
 
+% main -> assemble -> yyparse -> yylex
+%                             -> outcode that increments pc and in pass2 output
+
 %###############################################################################
 
 \chapter{Core Data Structures}
@@ -388,7 +391,7 @@ enum opcode
 
     AGOK, //?
 
-    AHISTORY, // for header
+    AHISTORY, // for ?
 
     AHLT, //
 
@@ -910,7 +913,11 @@ enum misc3 {
 % note: mutual ref with sym here where sym has itself a type that is 
 % the token code
 
-
+% could use NSNAME here instead of char sval[8] ? and at a few other places?
+% from 8.out.h
+<<constant NSNAME>>=
+#define	NSNAME	8
+@
 
 
 
@@ -1628,7 +1635,7 @@ struct	Gen2
 % where both arguments are really like a Prog of Linker
 
 
-
+%section{[[pc]]} ?
 
 \chapter{[[main()]]}
 
@@ -1881,10 +1888,6 @@ cclean(void)
 long	lineno;
 @
 
-% dead???
-<<global sym>>=
-int	sym;
-@
 
 
 % =~ yyback(1) trick, used by yylex() and getc(), and?? cg?
@@ -2689,6 +2692,7 @@ struct	Hist
 @
 
 <<global hist>>=
+// list<ref_own<Hist>>, next = Hist.link
 Hist*	hist;
 @
 
@@ -3692,6 +3696,8 @@ inst:
 
 % give apercu of nonnon, rem, but just quick
 
+% outcode =~ pc++
+
 \section{Operand}
 
 % this is the rest from the %union
@@ -4038,8 +4044,8 @@ nonrel:
 
 \section{Labels}
 
-% dead?
-% used in second pass only?
+% this is incremented in outcode after each instruction 
+% except for ADATA and AGLOBL
 <<global pc>>=
 long	pc;
 @
@@ -4303,98 +4309,143 @@ expr:
 \chapter{Object Generation}
 % it's actually not machine code generation ... 8l/optab.c does this
 
-% it looks like outhist generate some header information,
-% where is the spec of the format? ld uses that I guess no?
+\section{Symbol table, [[h]] and [[sym]]}
 
-% ? out hist??
-<<function outhist>>=
-void
-outhist(void)
+% when an instruction involve a symbol 
+% the generated code contain an int that is an index
+% in a symbol table!
+
+
+<<struct Htab>>=
+struct Htab
 {
-    Gen g;
-    Hist *h;
-    char *p, *q, *op, c;
-    int n;
+    //? list<Sym>, next = sym.link?
+    Sym*	sym;
+    //enum???
+    short	type;
+};
+@
 
-    g = nullgen;
-    c = pathchar();
+<<constant NSYM>>=
+#define	NSYM	50
+@
+% hash function?
 
-    for(h = hist; h != H; h = h->link) {
-        p = h->name;
-        op = nil;
-        if(p && p[0] != c && h->offset == 0 && pathname){
-            if(pathname[0] == c){
-                op = p;
-                p = pathname;
-            }
-        }
-        while(p) {
-            q = strchr(p, c);
-            if(q) {
-                n = q-p;
-                if(n == 0){
-                    n = 1;	/* leading "/" */
-                    *p = '/';	/* don't emit "\" on windows */
-                }
-                q++;
-            } else {
-                n = strlen(p);
-                q = 0;
-            }
-            if(n) {
-                Bputc(&obuf, ANAME);
-                Bputc(&obuf, ANAME>>8);
-                Bputc(&obuf, D_FILE);	/* type */
-                Bputc(&obuf, 1);	/* sym */
-                Bputc(&obuf, '<');
-                Bwrite(&obuf, p, n);
-                Bputc(&obuf, 0);
-            }
-            p = q;
-            if(p == 0 && op) {
-                p = op;
-                op = 0;
-            }
-        }
-        g.offset = h->offset;
 
-        Bputc(&obuf, AHISTORY);
-        Bputc(&obuf, AHISTORY>>8);
+<<global h>>=
+// hash<string, Sym>
+struct Htab h[NSYM];
+@
 
-        Bputc(&obuf, h->line);
-        Bputc(&obuf, h->line>>8);
-        Bputc(&obuf, h->line>>16);
-        Bputc(&obuf, h->line>>24);
 
-        zaddr(&nullgen, 0);
-        zaddr(&g, 0);
+<<global sym>>=
+int	sym;
+@
+
+<<[[Sym]] other fields>>=
+//?? seems used only by outcode
+char	sym;
+@
+
+
+
+
+
+
+\section{[[outcode()]]}
+
+// a = opcode
+<<function outcode>>=
+void
+outcode(int a, Gen2 *g2)
+{
+    // symbol from, index in h[]
+    int sf;
+    // symbol to, index in h[]
+    int st;
+    // enum<operand_kind>
+    int t;
+    Sym *s;
+
+    if(pass == 1)
+        goto out;
+
+jackpot:
+    sf = 0;
+    s = g2->from.sym;
+
+    while(s != S) {
+        sf = s->sym;
+
+        if(sf < 0 || sf >= NSYM)
+            sf = 0;
+
+        t = g2->from.type;
+        if(t == D_ADDR)
+            t = g2->from.index;
+
+        if(h[sf].type == t)
+            if(h[sf].sym == s)
+                break;
+
+        zname(s->name, t, sym);
+        s->sym = sym;
+        h[sym].sym = s;
+        h[sym].type = t;
+        sf = sym;
+        sym++;
+        if(sym >= NSYM)
+            sym = 1;
+        break;
     }
+
+    st = 0;
+    s = g2->to.sym;
+
+    while(s != S) {
+        st = s->sym;
+
+        if(st < 0 || st >= NSYM)
+            st = 0;
+
+        t = g2->to.type;
+        if(t == D_ADDR)
+            t = g2->to.index;
+
+        if(h[st].type == t)
+            if(h[st].sym == s)
+                break;
+
+        zname(s->name, t, sym);
+        s->sym = sym;
+        h[sym].sym = s;
+        h[sym].type = t;
+        st = sym;
+        sym++;
+        if(sym >= NSYM)
+            sym = 1;
+
+        if(st == sf)
+            goto jackpot;
+        break;
+    }
+
+    Bputc(&obuf, a);
+    Bputc(&obuf, a>>8);
+    Bputc(&obuf, lineno);
+    Bputc(&obuf, lineno>>8);
+    Bputc(&obuf, lineno>>16);
+    Bputc(&obuf, lineno>>24);
+    zaddr(&g2->from, sf);
+    zaddr(&g2->to, st);
+
+out:
+    if(a != AGLOBL && a != ADATA)
+        pc++;
 }
 @
 
-
-
-<<function zname>>=
-void
-zname(char *n, int t, int s)
-{
-
-    Bputc(&obuf, ANAME);		/* as(2) */
-    Bputc(&obuf, ANAME>>8);
-    Bputc(&obuf, t);		/* type */
-    Bputc(&obuf, s);		/* sym */
-    while(*n) {
-        Bputc(&obuf, *n);
-        n++;
-    }
-    Bputc(&obuf, 0);
-}
-@
-
-<<constant NSNAME>>=
-#define	NSNAME	8
-@
-
+\section{[[zaddr()]]}
 
 % used also by 8c and 8l
 <<enum misc2>>=
@@ -4411,13 +4462,15 @@ enum misc2 {
 % >> >> >> >> >> >> >>
 %dead:    T_GOTYPE	= 1<<7,
 
+% s is index in h[] for symbol involved in the operand
 <<function zaddr>>=
 void
 zaddr(Gen *a, int s)
 {
+    // bitset<enum<misc2>>
+    int t;
     long l;
     int i;
-    int t;
     char *n;
     Ieee e;
 
@@ -4445,6 +4498,7 @@ zaddr(Gen *a, int s)
         t |= T_TYPE;
         break;
     }
+
     Bputc(&obuf, t);
 
     if(t & T_INDEX) {	/* implies index, scale */
@@ -4467,6 +4521,8 @@ zaddr(Gen *a, int s)
     }
     if(t & T_SYM)		/* implies sym */
         Bputc(&obuf, s);
+
+
     if(t & T_FCONST) {
         ieeedtod(&e, a->dval);
         l = e.l;
@@ -4483,118 +4539,107 @@ zaddr(Gen *a, int s)
     }
     if(t & T_SCONST) {
         n = a->sval;
-        for(i=0; i<NSNAME; i++) {
+        for(i=0; i<sizeof(nullgen.sval); i++) {
             Bputc(&obuf, *n);
             n++;
         }
         return;
     }
+
     if(t & T_TYPE)
         Bputc(&obuf, a->type);
 }
 @
 
-
-<<[[Sym]] other fields>>=
-//?? seems used only by outcode
-char	sym;
-@
-
-<<struct Htab>>=
-struct Htab
-{
-    //? list<Sym>, next = sym.link?
-    Sym*	sym;
-    //enum???
-    short	type;
-};
-@
-
-
-
-
-<<constant NSYM>>=
-#define	NSYM	50
-@
-% hash function?
-
-
-<<global h>>=
-// hash<string, Sym>
-struct Htab h[NSYM];
-@
-
-
-
-<<function outcode>>=
+<<function zname>>=
 void
-outcode(int a, Gen2 *g2)
+zname(char *n, int t, int s)
 {
-    int sf, st, t;
-    Sym *s;
 
-    if(pass == 1)
-        goto out;
-
-jackpot:
-    sf = 0;
-    s = g2->from.sym;
-    while(s != S) {
-        sf = s->sym;
-        if(sf < 0 || sf >= NSYM)
-            sf = 0;
-        t = g2->from.type;
-        if(t == D_ADDR)
-            t = g2->from.index;
-        if(h[sf].type == t)
-        if(h[sf].sym == s)
-            break;
-        zname(s->name, t, sym);
-        s->sym = sym;
-        h[sym].sym = s;
-        h[sym].type = t;
-        sf = sym;
-        sym++;
-        if(sym >= NSYM)
-            sym = 1;
-        break;
+    Bputc(&obuf, ANAME);		/* as(2) */
+    Bputc(&obuf, ANAME>>8);
+    Bputc(&obuf, t);		/* type */
+    Bputc(&obuf, s);		/* sym */
+    while(*n) {
+        Bputc(&obuf, *n);
+        n++;
     }
-    st = 0;
-    s = g2->to.sym;
-    while(s != S) {
-        st = s->sym;
-        if(st < 0 || st >= NSYM)
-            st = 0;
-        t = g2->to.type;
-        if(t == D_ADDR)
-            t = g2->to.index;
-        if(h[st].type == t)
-        if(h[st].sym == s)
-            break;
-        zname(s->name, t, sym);
-        s->sym = sym;
-        h[sym].sym = s;
-        h[sym].type = t;
-        st = sym;
-        sym++;
-        if(sym >= NSYM)
-            sym = 1;
-        if(st == sf)
-            goto jackpot;
-        break;
-    }
-    Bputc(&obuf, a);
-    Bputc(&obuf, a>>8);
-    Bputc(&obuf, lineno);
-    Bputc(&obuf, lineno>>8);
-    Bputc(&obuf, lineno>>16);
-    Bputc(&obuf, lineno>>24);
-    zaddr(&g2->from, sf);
-    zaddr(&g2->to, st);
+    Bputc(&obuf, '\0');
+}
+@
 
-out:
-    if(a != AGLOBL && a != ADATA)
-        pc++;
+\section{[[outhist()]]}
+
+% it looks like outhist generate some header information,
+% where is the spec of the format? ld uses that I guess no?
+
+% main() -> assemble() -> outhist() at begining of pass 2
+%out hist??
+<<function outhist>>=
+void
+outhist(void)
+{
+    Gen g;
+    Hist *h;
+    char *p, *q, *op, c;
+    int n;
+
+    g = nullgen;
+    c = pathchar();
+
+    for(h = hist; h != H; h = h->link) {
+        p = h->name;
+        op = nil;
+        // relative file?
+        if(p && p[0] != c && h->offset == 0 && pathname){
+            if(pathname[0] == c){
+                op = p;
+                p = pathname;
+            }
+        }
+        while(p) {
+            q = strchr(p, c);
+            if(q) {
+                n = q-p;
+                if(n == 0){
+                    n = 1;	/* leading "/" */
+                    *p = '/';	/* don't emit "\" on windows */
+                }
+                q++;
+            } else {
+                n = strlen(p);
+                q = nil;
+            }
+
+            if(n) {
+                Bputc(&obuf, ANAME);
+                Bputc(&obuf, ANAME>>8);
+                Bputc(&obuf, D_FILE);	/* type */
+                Bputc(&obuf, 1);	/* sym */
+                Bputc(&obuf, '<');
+                Bwrite(&obuf, p, n);
+                Bputc(&obuf, '\0');
+            }
+            p = q;
+            if(p == nil && op) {
+                p = op;
+                op = nil;
+            }
+        }
+
+        g.offset = h->offset;
+
+        Bputc(&obuf, AHISTORY);
+        Bputc(&obuf, AHISTORY>>8);
+
+        Bputc(&obuf, h->line);
+        Bputc(&obuf, h->line>>8);
+        Bputc(&obuf, h->line>>16);
+        Bputc(&obuf, h->line>>24);
+
+        zaddr(&nullgen, 0);
+        zaddr(&g, 0);
+    }
 }
 @
 

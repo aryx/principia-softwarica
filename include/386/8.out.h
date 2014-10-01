@@ -88,7 +88,7 @@ enum opcode
 
     AGOK, //?
 
-    AHISTORY, // for header
+    AHISTORY, // for ?
 
     AHLT, //
 

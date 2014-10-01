@@ -780,7 +780,7 @@ zname(char *n, int t, int s)
         Bputc(&obuf, *n);
         n++;
     }
-    Bputc(&obuf, 0);
+    Bputc(&obuf, '\0');
 }
 /*e: function zname */
 
@@ -788,9 +788,10 @@ zname(char *n, int t, int s)
 void
 zaddr(Gen *a, int s)
 {
+    // bitset<enum<misc2>>
+    int t;
     long l;
     int i;
-    int t;
     char *n;
     Ieee e;
 
@@ -818,6 +819,7 @@ zaddr(Gen *a, int s)
         t |= T_TYPE;
         break;
     }
+
     Bputc(&obuf, t);
 
     if(t & T_INDEX) {	/* implies index, scale */
@@ -840,6 +842,8 @@ zaddr(Gen *a, int s)
     }
     if(t & T_SYM)		/* implies sym */
         Bputc(&obuf, s);
+
+
     if(t & T_FCONST) {
         ieeedtod(&e, a->dval);
         l = e.l;
@@ -856,12 +860,13 @@ zaddr(Gen *a, int s)
     }
     if(t & T_SCONST) {
         n = a->sval;
-        for(i=0; i<NSNAME; i++) {
+        for(i=0; i<sizeof(nullgen.sval); i++) {
             Bputc(&obuf, *n);
             n++;
         }
         return;
     }
+
     if(t & T_TYPE)
         Bputc(&obuf, a->type);
 }
@@ -871,7 +876,12 @@ zaddr(Gen *a, int s)
 void
 outcode(int a, Gen2 *g2)
 {
-    int sf, st, t;
+    // symbol from, index in h[]
+    int sf;
+    // symbol to, index in h[]
+    int st;
+    // enum<operand_kind>
+    int t;
     Sym *s;
 
     if(pass == 1)
@@ -880,16 +890,21 @@ outcode(int a, Gen2 *g2)
 jackpot:
     sf = 0;
     s = g2->from.sym;
+
     while(s != S) {
         sf = s->sym;
+
         if(sf < 0 || sf >= NSYM)
             sf = 0;
+
         t = g2->from.type;
         if(t == D_ADDR)
             t = g2->from.index;
+
         if(h[sf].type == t)
-        if(h[sf].sym == s)
-            break;
+            if(h[sf].sym == s)
+                break;
+
         zname(s->name, t, sym);
         s->sym = sym;
         h[sym].sym = s;
@@ -900,18 +915,24 @@ jackpot:
             sym = 1;
         break;
     }
+
     st = 0;
     s = g2->to.sym;
+
     while(s != S) {
         st = s->sym;
+
         if(st < 0 || st >= NSYM)
             st = 0;
+
         t = g2->to.type;
         if(t == D_ADDR)
             t = g2->to.index;
+
         if(h[st].type == t)
-        if(h[st].sym == s)
-            break;
+            if(h[st].sym == s)
+                break;
+
         zname(s->name, t, sym);
         s->sym = sym;
         h[sym].sym = s;
@@ -920,10 +941,12 @@ jackpot:
         sym++;
         if(sym >= NSYM)
             sym = 1;
+
         if(st == sf)
             goto jackpot;
         break;
     }
+
     Bputc(&obuf, a);
     Bputc(&obuf, a>>8);
     Bputc(&obuf, lineno);
@@ -954,6 +977,7 @@ outhist(void)
     for(h = hist; h != H; h = h->link) {
         p = h->name;
         op = nil;
+        // relative file?
         if(p && p[0] != c && h->offset == 0 && pathname){
             if(pathname[0] == c){
                 op = p;
@@ -971,8 +995,9 @@ outhist(void)
                 q++;
             } else {
                 n = strlen(p);
-                q = 0;
+                q = nil;
             }
+
             if(n) {
                 Bputc(&obuf, ANAME);
                 Bputc(&obuf, ANAME>>8);
@@ -980,14 +1005,15 @@ outhist(void)
                 Bputc(&obuf, 1);	/* sym */
                 Bputc(&obuf, '<');
                 Bwrite(&obuf, p, n);
-                Bputc(&obuf, 0);
+                Bputc(&obuf, '\0');
             }
             p = q;
-            if(p == 0 && op) {
+            if(p == nil && op) {
                 p = op;
-                op = 0;
+                op = nil;
             }
         }
+
         g.offset = h->offset;
 
         Bputc(&obuf, AHISTORY);
