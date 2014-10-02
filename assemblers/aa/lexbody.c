@@ -558,7 +558,7 @@ pinit(char *f)
     pc = 0;
     peekc = IGN;
 
-    sym = 1;
+    symcounter = 1;
     for(i=0; i<NSYM; i++) {
         h[i].type = 0;
         h[i].sym = S;

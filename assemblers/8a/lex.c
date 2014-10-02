@@ -892,7 +892,7 @@ jackpot:
     s = g2->from.sym;
 
     while(s != S) {
-        sf = s->sym;
+        sf = s->symidx;
 
         if(sf < 0 || sf >= NSYM)
             sf = 0;
@@ -905,14 +905,14 @@ jackpot:
             if(h[sf].sym == s)
                 break;
 
-        zname(s->name, t, sym);
-        s->sym = sym;
-        h[sym].sym = s;
-        h[sym].type = t;
-        sf = sym;
-        sym++;
-        if(sym >= NSYM)
-            sym = 1;
+        zname(s->name, t, symcounter);
+        s->symidx = symcounter;
+        h[symcounter].sym = s;
+        h[symcounter].type = t;
+        sf = symcounter;
+        symcounter++;
+        if(symcounter >= NSYM)
+            symcounter = 1;
         break;
     }
 
@@ -920,7 +920,7 @@ jackpot:
     s = g2->to.sym;
 
     while(s != S) {
-        st = s->sym;
+        st = s->symidx;
 
         if(st < 0 || st >= NSYM)
             st = 0;
@@ -933,14 +933,14 @@ jackpot:
             if(h[st].sym == s)
                 break;
 
-        zname(s->name, t, sym);
-        s->sym = sym;
-        h[sym].sym = s;
-        h[sym].type = t;
-        st = sym;
-        sym++;
-        if(sym >= NSYM)
-            sym = 1;
+        zname(s->name, t, symcounter);
+        s->symidx = symcounter;
+        h[symcounter].sym = s;
+        h[symcounter].type = t;
+        st = symcounter;
+        symcounter++;
+        if(symcounter >= NSYM)
+            symcounter = 1;
 
         if(st == sf)
             goto jackpot;

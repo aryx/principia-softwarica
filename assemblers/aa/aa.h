@@ -76,7 +76,7 @@ struct	Sym
     char*	macro;
     /*x: [[Sym]] other fields */
     //?? seems used only by outcode
-    char	sym;
+    char	symidx;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */
@@ -92,9 +92,9 @@ struct	Sym
 /*s: struct Fi */
 struct Fi
 {
-    // pointer in buffer
+    // ref<char>, pointer in buffer (of Io.b)
     char*	p;
-    // remaining count
+    // remaining count in buffer (of Io.b)
     int	c;
 };
 /*e: struct Fi */
@@ -123,9 +123,9 @@ struct	Io
 /*s: struct Htab */
 struct Htab
 {
-    //? list<Sym>, next = sym.link?
+    // ref<Sym>
     Sym*	sym;
-    //enum???
+    //enum<operand_kind>?
     short	type;
 };
 /*e: struct Htab */
@@ -166,7 +166,7 @@ extern	int	ninclude;
 extern	char*	outfile;
 extern	long	pc;
 extern	int	peekc;
-extern	int	sym;
+extern	int	symcounter;
 extern	char	symb[NSYMB];
 extern	int	thechar;
 

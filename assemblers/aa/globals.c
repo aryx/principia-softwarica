@@ -5,7 +5,7 @@
 struct Fi fi;
 /*e: global fi */
 /*s: global h */
-// hash<string, Sym>
+// array<ref<Sym>>
 struct Htab h[NSYM];
 /*e: global h */
 
@@ -78,9 +78,9 @@ long	pc;
 /*s: global peekc */
 int	peekc = IGN;
 /*e: global peekc */
-/*s: global sym */
-int	sym;
-/*e: global sym */
+/*s: global symcounter */
+int	symcounter;
+/*e: global symcounter */
 /*s: global symb */
 char	symb[NSYMB];
 /*e: global symb */

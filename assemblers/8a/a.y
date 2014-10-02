@@ -432,8 +432,8 @@ rom:
   reg
 | mem
 | imm
-
 | rel
+
 | '*' reg  { $$ = $2; }
 | '*' omem { $$ = $2; }
 /*e: operand rules */
