@@ -300,16 +300,6 @@ compile(char *file, char **defs, int ndef)
 }
 /*e: function compile */
 
-/*s: function errorexit */
-void
-errorexit(void)
-{
-    if(outfile)
-        remove(outfile);
-    exits("error");
-}
-/*e: function errorexit */
-
 /*s: function pushio */
 void
 pushio(void)

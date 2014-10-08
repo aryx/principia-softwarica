@@ -1277,32 +1277,6 @@ warn(Node *n, char *fmt, ...)
 }
 /*e: function warn */
 
-/*s: function yyerror */
-void
-yyerror(char *fmt, ...)
-{
-    char buf[STRINGSZ];
-    va_list arg;
-
-    /*
-     * hack to intercept message from yaccpar
-     */
-    if(strcmp(fmt, "syntax error") == 0) {
-        yyerror("syntax error, last name: %s", symb);
-        return;
-    }
-    va_start(arg, fmt);
-    vseprint(buf, buf+sizeof(buf), fmt, arg);
-    va_end(arg);
-    Bprint(&diagbuf, "%L %s\n", lineno, buf);
-    nerrors++;
-    if(nerrors > 10) {
-        Bprint(&diagbuf, "too many errors\n");
-        errorexit();
-    }
-}
-/*e: function yyerror */
-
 /*s: function fatal */
 void
 fatal(Node *n, char *fmt, ...)

@@ -1,6 +1,16 @@
 /*s: cc/utils.c */
 #include "cc.h"
 
+/*s: function errorexit */
+void
+errorexit(void)
+{
+    if(outfile)
+        remove(outfile);
+    exits("error");
+}
+/*e: function errorexit */
+
 /*s: function gethunk */
 void
 gethunk(void)
@@ -65,5 +75,31 @@ allocn(void *p, long on, long n)
     return p;
 }
 /*e: function allocn */
+
+/*s: function yyerror */
+void
+yyerror(char *fmt, ...)
+{
+    char buf[STRINGSZ];
+    va_list arg;
+
+    /*
+     * hack to intercept message from yaccpar
+     */
+    if(strcmp(fmt, "syntax error") == 0) {
+        yyerror("syntax error, last name: %s", symb);
+        return;
+    }
+    va_start(arg, fmt);
+    vseprint(buf, buf+sizeof(buf), fmt, arg);
+    va_end(arg);
+    Bprint(&diagbuf, "%L %s\n", lineno, buf);
+    nerrors++;
+    if(nerrors > 10) {
+        Bprint(&diagbuf, "too many errors\n");
+        errorexit();
+    }
+}
+/*e: function yyerror */
 
 /*e: cc/utils.c */
