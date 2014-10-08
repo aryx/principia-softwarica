@@ -244,10 +244,15 @@ License.
 %concepts: 
 % - labels suffixed with :
 % - constants, prefixed with $ (why? to avoid ambiguity with what?)
+%   otherwise regular numbers are offset like 32(SP)
 % - external symbols = fully unresolved! will be resolved at linking time
 %   but needs to keep the name in the symbol table and the place where it
 %   was referenced
 
+%        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
+%vs
+%        LONG    $_start-KZERO(SB)          /* load_addr */
+%why need SB in second case? because it refers to symbol in certain section?
 
 % special registers for addressing: PC, SB, FP, SP
 % for text, data, param, locals
@@ -866,7 +871,8 @@ enum operand_kind
 @
 
 %INDIR? indirect? faux ami avec previous D_FILE ... it's probably not
-% about a directory ...
+% about a directory ... more about (AX) => =~ *AX, deref
+%  D_INDIR + D_AX
 
 
 % for 8c! conventions! (not used at all by 8a, but in 8.out.h for other tools)
@@ -1923,7 +1929,7 @@ pinit(char *f)
     pc = 0;
     peekc = IGN;
 
-    sym = 1;
+    symcounter = 1;
     for(i=0; i<NSYM; i++) {
         h[i].type = 0;
         h[i].sym = S;
@@ -3947,6 +3953,9 @@ nmem:
 
 % MOV foo(SB) ( AX * 8 ) ? =~ foo[ax] where sizeof foo element = 8?
 
+%        MOVL    count+8(FP), CX
+% this is just symbol for debugging help?
+
 <<operand rules>>=
 nam:
   LNAME offset '(' pointer ')'
@@ -4424,6 +4433,7 @@ char	symidx;
 
 \section{[[outcode()]]}
 
+% TODO LP split and transform while into if, easier flow
 // a = opcode
 <<function outcode>>=
 void
@@ -4445,7 +4455,7 @@ jackpot:
     s = g2->from.sym;
 
     while(s != S) {
-        sf = s->sym;
+        sf = s->symidx;
 
         if(sf < 0 || sf >= NSYM)
             sf = 0;
@@ -4458,14 +4468,14 @@ jackpot:
             if(h[sf].sym == s)
                 break;
 
-        zname(s->name, t, sym);
-        s->sym = sym;
-        h[sym].sym = s;
-        h[sym].type = t;
-        sf = sym;
-        sym++;
-        if(sym >= NSYM)
-            sym = 1;
+        zname(s->name, t, symcounter);
+        s->symidx = symcounter;
+        h[symcounter].sym = s;
+        h[symcounter].type = t;
+        sf = symcounter;
+        symcounter++;
+        if(symcounter >= NSYM)
+            symcounter = 1;
         break;
     }
 
@@ -4473,7 +4483,7 @@ jackpot:
     s = g2->to.sym;
 
     while(s != S) {
-        st = s->sym;
+        st = s->symidx;
 
         if(st < 0 || st >= NSYM)
             st = 0;
@@ -4486,14 +4496,14 @@ jackpot:
             if(h[st].sym == s)
                 break;
 
-        zname(s->name, t, sym);
-        s->sym = sym;
-        h[sym].sym = s;
-        h[sym].type = t;
-        st = sym;
-        sym++;
-        if(sym >= NSYM)
-            sym = 1;
+        zname(s->name, t, symcounter);
+        s->symidx = symcounter;
+        h[symcounter].sym = s;
+        h[symcounter].type = t;
+        st = symcounter;
+        symcounter++;
+        if(symcounter >= NSYM)
+            symcounter = 1;
 
         if(st == sf)
             goto jackpot;
