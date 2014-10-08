@@ -1,6 +1,12 @@
 /*s: cc/scon.c */
 #include "cc.h"
 
+void	acom1(vlong, Node*);
+void	acom2(Node*, Type*);
+int	acomcmp1(const void*, const void*);
+int	acomcmp2(const void*, const void*);
+int	addo(Node*);
+
 /*s: function acast */
 static Node*
 acast(Type *t, Node *n)

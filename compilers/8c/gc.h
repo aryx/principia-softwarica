@@ -215,6 +215,7 @@ extern	long	exfregoffset;
 /*e: function STORE */
 
 /*s: macro bset */
+//@Scheck: maybe dead, dupe with bits.c function
 #define	bset(a,n)	((a).b[(n)/32]&(1L<<(n)%32))
 /*e: macro bset */
 
@@ -262,12 +263,8 @@ extern	char*	anames[];
  * sgen.c
  */
 void	codgen(Node*, Node*);
-void	gen(Node*);
 void	noretval(int);
-void	usedset(Node*, int);
 void	xcom(Node*);
-void	indx(Node*);
-int	bcomplex(Node*, Node*);
 
 /*
  * cgen.c
@@ -276,7 +273,6 @@ void	zeroregm(Node*);
 void	cgen(Node*, Node*);
 void	reglcgen(Node*, Node*, Node*);
 void	lcgen(Node*, Node*);
-void	bcgen(Node*, int);
 void	boolgen(Node*, int, Node*);
 void	sugen(Node*, Node*, long);
 //int	needreg(Node*, int);
@@ -288,18 +284,17 @@ int	vaddr(Node*, int);
 void	loadpair(Node*, Node*);
 int	cgen64(Node*, Node*);
 void	testv(Node*, int);
+Node*	hi64(Node*);
+Node*	lo64(Node*);
 
 /*
  * txt.c
  */
 void	ginit(void);
 void	gclean(void);
-void	nextpc(void);
 void	gargs(Node*, Node*, Node*);
-void	garg1(Node*, Node*, Node*, int, Node**);
 Node*	nodconst(long);
 int	nareg(int);
-Node*	nodfconst(double);
 int	nodreg(Node*, Node*, int);
 int	isreg(Node*, int);
 void	regret(Node*, Node*);
@@ -307,16 +302,12 @@ void	regalloc(Node*, Node*, Node*);
 void	regfree(Node*);
 void	regialloc(Node*, Node*, Node*);
 void	regsalloc(Node*, Node*);
-void	regaalloc1(Node*, Node*);
-void	regaalloc(Node*, Node*);
 void	regind(Node*, Node*);
 //void	gprep(Node*, Node*);
-void	naddr(Node*, Adr*);
 void	gmove(Node*, Node*);
 void	gins(int a, Node*, Node*);
 void	fgopcode(int, Node*, Node*, int, int);
 void	gopcode(int, Type*, Node*, Node*);
-int	samaddr(Node*, Node*);
 void	gbranch(int);
 void	patch(Prog*, long);
 int	sconst(Node*);
@@ -325,7 +316,6 @@ void	gpseudo(int, Sym*, Node*);
 /*
  * swt.c
  */
-int	swcmp(const void*, const void*);
 void	doswit(Node*);
 void	swit1(C1*, int, long, Node*);
 void	casf(void);
@@ -341,52 +331,22 @@ void	ieeedtod(Ieee*, double);
  * list
  */
 void	listinit(void);
-int	Pconv(Fmt*);
-int	Aconv(Fmt*);
-int	Dconv(Fmt*);
-int	Sconv(Fmt*);
-int	Rconv(Fmt*);
-int	Bconv(Fmt*);
 
 /*
  * reg.c
  */
 Reg*	rega(void);
-int	rcmp(const void*, const void*);
 void	regopt(Prog*);
-void	addmove(Reg*, int, int, int);
-Bits	mkvar(Reg*, Adr*, int);
-void	prop(Reg*, Bits, Bits);
-void	loopit(Reg*, long);
-void	synch(Reg*, Bits);
-ulong	allreg(ulong, Rgn*);
-void	paint1(Reg*, int);
-ulong	paint2(Reg*, int);
-void	paint3(Reg*, int, long, int);
-void	addreg(Adr*, int);
+
 
 /*
  * peep.c
  */
 void	peep(void);
 void	excise(Reg*);
-Reg*	uniqp(Reg*);
-Reg*	uniqs(Reg*);
-int	regtyp(Adr*);
-int	subprop(Reg*);
-int	copyprop(Reg*);
-int	copy1(Adr*, Adr*, Reg*, int);
 int	copyu(Prog*, Adr*, Adr*);
 
-int	copyas(Adr*, Adr*);
-int	copyau(Adr*, Adr*);
-int	copysub(Adr*, Adr*, Adr*, int);
-//int	copysub1(Prog*, Adr*, Adr*, int);
 
-long	RtoB(int);
-//long	FtoB(int);
-int	BtoR(long);
-//int	BtoF(long);
 
 /*s: constant D_HI */
 //#define	D_HI	D_NONE
@@ -402,10 +362,6 @@ int	cond(int);
 int	com64(Node*);
 void	com64init(void);
 void	bool64(Node*);
-long	lo64v(Node*);
-long	hi64v(Node*);
-Node*	lo64(Node*);
-Node*	hi64(Node*);
 
 /*
  * div/mul

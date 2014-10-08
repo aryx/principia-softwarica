@@ -2,6 +2,23 @@
 #include	"cc.h"
 #include	"y.tab.h"
 
+int	compile(char*, char**, int);
+void	syminit(Sym*);
+int	mpatov(char*, vlong*);
+long	getr(void);
+long	escchar(long, int, int);
+void	cinit(void);
+
+int	Oconv(Fmt*);
+int	Lconv(Fmt*);
+int	Tconv(Fmt*);
+int	FNconv(Fmt*);
+int	Qconv(Fmt*);
+int	VBconv(Fmt*);
+
+void	setinclude(char*);
+
+
 #ifndef	CPP
 /*s: constant CPP */
 #define	CPP	"/bin/cpp"
@@ -37,8 +54,8 @@
  *	-.		Inhibit search for includes in source directory
  */
 
-void
-main(int argc, char *argv[])
+//@Scheck: not dead, entry point :)
+void main(int argc, char *argv[])
 {
     char **defs, **np, *p;
     int nproc, nout, status, i, c, ndef, maxdef;
@@ -451,6 +468,7 @@ enum
 /*e: enum _anon_ (cc/lex.c) */
 
 /*s: function yylex */
+//@Scheck: not dead, called by yyparse
 long yylex(void)
 {
     vlong vv;

@@ -1,6 +1,13 @@
 /*s: 8c/list.c */
 #include "gc.h"
 
+int	Pconv(Fmt*);
+int	Aconv(Fmt*);
+int	Dconv(Fmt*);
+int	Sconv(Fmt*);
+int	Rconv(Fmt*);
+int	Bconv(Fmt*);
+
 /*s: function listinit */
 void
 listinit(void)

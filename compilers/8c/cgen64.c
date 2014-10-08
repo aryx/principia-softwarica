@@ -1,6 +1,9 @@
 /*s: 8c/cgen64.c */
 #include "gc.h"
 
+long	lo64v(Node*);
+long	hi64v(Node*);
+
 /*s: function zeroregm */
 void
 zeroregm(Node *n)

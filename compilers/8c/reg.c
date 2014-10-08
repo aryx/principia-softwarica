@@ -1,6 +1,23 @@
 /*s: 8c/reg.c */
 #include "gc.h"
 
+void	addreg(Adr*, int);
+int	rcmp(const void*, const void*);
+void	addmove(Reg*, int, int, int);
+Bits	mkvar(Reg*, Adr*, int);
+void	prop(Reg*, Bits, Bits);
+void	loopit(Reg*, long);
+void	synch(Reg*, Bits);
+ulong	allreg(ulong, Rgn*);
+void	paint1(Reg*, int);
+ulong	paint2(Reg*, int);
+void	paint3(Reg*, int, long, int);
+
+long	RtoB(int);
+//long	FtoB(int);
+int	BtoR(long);
+//int	BtoF(long);
+
 /*s: function rega */
 Reg*
 rega(void)

@@ -1,6 +1,10 @@
 /*s: cc/com.c */
 #include "cc.h"
 
+int	tcomd(Node*);
+int	tcomx(Node*);
+int	tlvalue(Node*);
+
 typedef struct Com Com;
 /*s: struct Com */
 struct Com

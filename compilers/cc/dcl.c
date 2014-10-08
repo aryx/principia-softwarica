@@ -1,6 +1,24 @@
 /*s: cc/dcl.c */
 #include "cc.h"
 
+Sym*	mkstatic(Sym*);
+Type*	tcopy(Type*);
+Node*	doinit(Sym*, Type*, long, Node*);
+Node*	init1(Sym*, Type*, long, int);
+Node*	newlist(Node*, Node*);
+void	walkparam(Node*, int);
+Type*	fnproto(Node*);
+Type*	fnproto1(Node*);
+int	anyproto(Node*);
+void	dbgdecl(Sym*);
+Decl*	push(void);
+Decl*	push1(Sym*);
+int	rsametype(Type*, Type*, int, int);
+Type*	paramconv(Type*, int);
+void	adecl(int, Type*, Sym*);
+void	pdecl(int, Type*, Sym*);
+void	tmerge(Type*, Sym*);
+
 /*s: function dodecl */
 Node*
 dodecl(void (*f)(int,Type*,Sym*), int c, Type *t, Node *n)

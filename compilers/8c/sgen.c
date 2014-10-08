@@ -1,6 +1,8 @@
 /*s: 8c/sgen.c */
 #include "gc.h"
 
+void	indx(Node*);
+
 /*s: function noretval */
 void
 noretval(int n)

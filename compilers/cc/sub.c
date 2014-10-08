@@ -1,6 +1,14 @@
 /*s: cc/sub.c */
 #include	"cc.h"
 
+int	simpleg(long);
+long	dotoffset(Type*, Type*, Node*);
+
+extern	char	typechlvp[];
+extern	char	typec[];
+extern	char	typeh[];
+extern	char	tab[NTYPE][NTYPE];
+
 /*s: function new */
 Node*
 new(int t, Node *l, Node *r)

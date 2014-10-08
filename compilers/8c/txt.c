@@ -1,6 +1,14 @@
 /*s: 8c/txt.c */
 #include "gc.h"
 
+void	nextpc(void);
+void	garg1(Node*, Node*, Node*, int, Node**);
+Node*	nodfconst(double);
+void	regaalloc1(Node*, Node*);
+void	regaalloc(Node*, Node*);
+void	naddr(Node*, Adr*);
+int	samaddr(Node*, Node*);
+
 /*s: function ginit */
 void
 ginit(void)

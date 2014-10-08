@@ -38,6 +38,7 @@ typedef	Rune	TRune;	/* target system type */
 #define	HISTSZ		20
 /*e: constant HISTSZ */
 /*s: constant YYMAXDEPTH */
+//@Scheck: used in t.tab.c probably
 #define YYMAXDEPTH	1500
 /*e: constant YYMAXDEPTH */
 /*s: constant NTERM */
@@ -572,7 +573,6 @@ extern	Bits	zbits;
 
 extern	char	*onames[], *tnames[], *gnames[];
 extern	char	*cnames[], *qnames[], *bnames[];
-extern	char	tab[NTYPE][NTYPE];
 extern	char	comrel[], invrel[], logrel[];
 extern	long	ncast[], tadd[], tand[];
 extern	long	targ[], tasadd[], tasign[], tcast[];
@@ -586,13 +586,11 @@ extern	char	typesu[];
 extern	char	typesuv[];
 extern	char	typeu[];
 extern	char	typev[];
-extern	char	typec[];
-extern	char	typeh[];
 extern	char	typeil[];
 extern	char	typeilp[];
 extern	char	typechl[];
 extern	char	typechlv[];
-extern	char	typechlvp[];
+
 extern	char	typechlp[];
 extern	char	typechlpfd[];
 
@@ -622,90 +620,63 @@ int	mypipe(int*);
 /*
  *	parser
  */
+//@Scheck: def in y.tab.c from cc.y
 int	yyparse(void);
-int	mpatov(char*, vlong*);
 
 /*
  *	lex.c
  */
 void*	allocn(void*, long, long);
 void*	alloc(long);
-void	cinit(void);
-int	compile(char*, char**, int);
 void	errorexit(void);
 int	filbuf(void);
 int	getc(void);
-long	getr(void);
 int	getnsc(void);
 Sym*	lookup(void);
 void	main(int, char*[]);
 void	newfile(char*, int);
 void	newio(void);
 void	pushio(void);
-long	escchar(long, int, int);
 Sym*	slookup(char*);
-void	syminit(Sym*);
 void	unget(int);
 long	yylex(void);
-int	Lconv(Fmt*);
-int	Tconv(Fmt*);
-int	FNconv(Fmt*);
-int	Oconv(Fmt*);
-int	Qconv(Fmt*);
-int	VBconv(Fmt*);
-void	setinclude(char*);
+
 
 /*
  * mac.c
  */
 void	dodefine(char*);
 void	domacro(void);
-Sym*	getsym(void);
-long	getnsn(void);
 void	linehist(char*, int);
-void	macdef(void);
-void	macprag(void);
-void	macend(void);
 void	macexpand(Sym*, char*);
-void	macif(int);
-void	macinc(void);
-void	maclin(void);
-void	macund(void);
 
 /*
  * dcl.c
  */
-Node*	doinit(Sym*, Type*, long, Node*);
+//@Scheck: useful, used by cc.y
 Type*	tcopy(Type*);
-Node*	init1(Sym*, Type*, long, int);
-Node*	newlist(Node*, Node*);
+//@Scheck: useful, used by cc.y
+Node*	doinit(Sym*, Type*, long, Node*);
+//@Scheck: useful, used by cc.y
 void	adecl(int, Type*, Sym*);
-int	anyproto(Node*);
 void	argmark(Node*, int);
-void	dbgdecl(Sym*);
 Node*	dcllabel(Sym*, int);
 Node*	dodecl(void(*)(int, Type*, Sym*), int, Type*, Node*);
+//@Scheck: useful, used by cc.y
 Sym*	mkstatic(Sym*);
 void	doenum(Sym*, Node*);
 void	snap(Type*);
 Type*	dotag(Sym*, int, int);
 void	edecl(int, Type*, Sym*);
-Type*	fnproto(Node*);
-Type*	fnproto1(Node*);
 void	markdcl(void);
-Type*	paramconv(Type*, int);
+//@Scheck: useful, used by cc.y
 void	pdecl(int, Type*, Sym*);
-Decl*	push(void);
-Decl*	push1(Sym*);
 Node*	revertdcl(void);
 long	round(long, int);
-int	rsametype(Type*, Type*, int, int);
 int	sametype(Type*, Type*);
 ulong	sign(Sym*);
 ulong	signature(Type*);
 void	sualign(Type*);
-void	tmerge(Type*, Sym*);
-void	walkparam(Node*, int);
 void	xdecl(int, Type*, Sym*);
 Node*	contig(Sym*, Node*, long);
 
@@ -716,10 +687,7 @@ void	ccom(Node*);
 void	complex(Node*);
 int	tcom(Node*);
 int	tcoma(Node*, Node*, Type*, int);
-int	tcomd(Node*);
 int	tcomo(Node*, int);
-int	tcomx(Node*);
-int	tlvalue(Node*);
 void	constas(Node*, Type*, Type*);
 Node*	uncomma(Node*);
 
@@ -727,11 +695,6 @@ Node*	uncomma(Node*);
  * con.c
  */
 void	acom(Node*);
-void	acom1(vlong, Node*);
-void	acom2(Node*, Type*);
-int	acomcmp1(const void*, const void*);
-int	acomcmp2(const void*, const void*);
-int	addo(Node*);
 void	evconst(Node*);
 
 /*
@@ -746,7 +709,6 @@ void	dclfunct(Type*, Sym*);
 void	arith(Node*, int);
 int	deadheads(Node*);
 Type*	dotsearch(Sym*, Type*, Node*, long*);
-long	dotoffset(Type*, Type*, Node*);
 void	gethunk(void);
 Node*	invert(Node*);
 int	bitno(long);
@@ -760,6 +722,7 @@ void	prtree(Node*, char*);
 void	prtree1(Node*, int, int);
 void	relcon(Node*, Node*);
 int	relindex(int);
+//@Scheck: useful, used by cc.y
 int	simpleg(long);
 Type*	garbt(Type*, long);
 int	simplec(long);

@@ -1,6 +1,17 @@
 /*s: 8c/peep.c */
 #include "gc.h"
 
+Reg*	uniqp(Reg*);
+Reg*	uniqs(Reg*);
+int	regtyp(Adr*);
+int	subprop(Reg*);
+int	copyprop(Reg*);
+int	copy1(Adr*, Adr*, Reg*, int);
+int	copyas(Adr*, Adr*);
+int	copyau(Adr*, Adr*);
+int	copysub(Adr*, Adr*, Adr*, int);
+//int	copysub1(Prog*, Adr*, Adr*, int);
+
 /*s: function needc */
 static int
 needc(Prog *p)

@@ -1,6 +1,8 @@
 /*s: 8c/cgen.c */
 #include "gc.h"
 
+void	bcgen(Node*, int);
+
 /*s: function cgen */
 /* ,x/^(print|prtree)\(/i/\/\/ */
 

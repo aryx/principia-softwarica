@@ -1,6 +1,10 @@
 /*s: c2c/pgen.c */
 #include "gc.h"
 
+void	gen(Node*);
+void	usedset(Node*, int);
+int	bcomplex(Node*, Node*);
+
 /*s: function codgen */
 //@Scheck: used by cc.y
 void codgen(Node *n, Node *nn)

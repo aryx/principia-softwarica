@@ -1,6 +1,8 @@
 /*s: cc2/pswt.c */
 #include "gc.h"
 
+int	swcmp(const void*, const void*);
+
 /*s: function swcmp */
 int
 swcmp(const void *a1, const void *a2)

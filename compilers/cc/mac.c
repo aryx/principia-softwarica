@@ -13,6 +13,9 @@ void	maclin(void);
 void	macif(int);
 void	macend(void);
 
+long	getnsn(void);
+Sym*	getsym(void);
+
 /*s: constant VARMAC */
 #define VARMAC 0x80
 /*e: constant VARMAC */
