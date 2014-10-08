@@ -1,4 +1,4 @@
-/*s: cc/pgen.c */
+/*s: c2c/pgen.c */
 #include "gc.h"
 
 /*s: function codgen */
@@ -602,4 +602,4 @@ bcomplex(Node *n, Node *c)
     return 0;
 }
 /*e: function bcomplex */
-/*e: cc/pgen.c */
+/*e: c2c/pgen.c */

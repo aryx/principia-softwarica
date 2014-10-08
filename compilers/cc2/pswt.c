@@ -1,4 +1,4 @@
-/*s: cc/pswt.c */
+/*s: cc2/pswt.c */
 #include "gc.h"
 
 /*s: function swcmp */
@@ -210,4 +210,4 @@ ieeedtod(Ieee *ieee, double native)
     ieee->l |= (long)(fr*f);
 }
 /*e: function ieeedtod */
-/*e: cc/pswt.c */
+/*e: cc2/pswt.c */

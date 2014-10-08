@@ -31,13 +31,13 @@ SRC_VIEWS= \
    cc/acid.c\
    cc/pickle.c\
    cc/com64.c\
-   cc/pswt.c\
    cc/dcl.c\
    cc/funct.c\
    cc/scon.c\
    cc/dpchk.c\
    cc/com.c\
-   cc/pgen.c\
+   cc2/pswt.c\
+   cc2/pgen.c\
    8c/enam.c\
    8c/gc.h\
    8c/machcap.c\
