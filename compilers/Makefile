@@ -24,6 +24,7 @@ SRC_VIEWS= \
    cc/mac.c\
    cc/omachcap.c\
    cc/globals.c\
+   cc/utils.c\
    cc/sub.c\
    cc/bits.c\
    cc/lex.c\
