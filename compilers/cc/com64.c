@@ -697,37 +697,37 @@ bool64(Node *n)
  * this is common for 8,16,32,64 bit machines.
  * this is common for ieee machines.
  */
-double
-convvtof(vlong v)
-{
-    double d;
-
-    d = v;		/* BOTCH */
-    return d;
-}
+//double
+//convvtof(vlong v)
+//{
+//    double d;
+//
+//    d = v;		/* BOTCH */
+//    return d;
+//}
 /*e: function convvtof */
 
 /*s: function convftov */
-vlong
-convftov(double d)
-{
-    vlong v;
-
-
-    v = d;		/* BOTCH */
-    return v;
-}
+//vlong
+//convftov(double d)
+//{
+//    vlong v;
+//
+//
+//    v = d;		/* BOTCH */
+//    return v;
+//}
 /*e: function convftov */
 
 /*s: function convftox */
-double
-convftox(double d, int et)
-{
-
-    if(!typefd[et])
-        diag(Z, "bad type in castftox %s", tnames[et]);
-    return d;
-}
+//double
+//convftox(double d, int et)
+//{
+//
+//    if(!typefd[et])
+//        diag(Z, "bad type in castftox %s", tnames[et]);
+//    return d;
+//}
 /*e: function convftox */
 
 /*s: function convvtox */

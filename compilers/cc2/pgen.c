@@ -2,8 +2,8 @@
 #include "gc.h"
 
 /*s: function codgen */
-void
-codgen(Node *n, Node *nn)
+//@Scheck: used by cc.y
+void codgen(Node *n, Node *nn)
 {
     Prog *sp;
     Node *n1, nod, nod1;

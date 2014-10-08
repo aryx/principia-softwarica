@@ -42,7 +42,6 @@ typedef	struct	C1	C1;
 typedef	struct	Var	Var;
 typedef	struct	Reg	Reg;
 typedef	struct	Rgn	Rgn;
-typedef	struct	Renv	Renv;
 
 /*s: struct Idx */
 struct Idx
@@ -159,16 +158,6 @@ struct	Reg
 #define	R	((Reg*)0)
 /*e: constant R */
 
-/*s: struct Renv */
-struct	Renv
-{
-    int	safe;
-    Node	base;
-    Node*	saved;
-    Node*	scope;
-};
-/*e: struct Renv */
-
 /*s: constant NRGN */
 #define	NRGN	600
 /*e: constant NRGN */
@@ -213,10 +202,10 @@ extern	long	exregoffset;
 extern	long	exfregoffset;
 
 /*s: function BLOAD */
-#define	BLOAD(r)	band(bnot(r->refbehind), r->refahead)
+//#define	BLOAD(r)	band(bnot(r->refbehind), r->refahead)
 /*e: function BLOAD */
 /*s: function BSTORE */
-#define	BSTORE(r)	band(bnot(r->calbehind), r->calahead)
+//#define	BSTORE(r)	band(bnot(r->calbehind), r->calahead)
 /*e: function BSTORE */
 /*s: function LOAD */
 #define	LOAD(r)		(~r->refbehind.b[z] & r->refahead.b[z])
@@ -253,7 +242,7 @@ extern	Bits	consts;
 extern	Bits	addrs;
 
 extern	long	regbits;
-extern	long	exregbits;
+//extern	long	exregbits;
 
 extern	int	change;
 extern	int	suppress;
@@ -290,7 +279,7 @@ void	lcgen(Node*, Node*);
 void	bcgen(Node*, int);
 void	boolgen(Node*, int, Node*);
 void	sugen(Node*, Node*, long);
-int	needreg(Node*, int);
+//int	needreg(Node*, int);
 
 /*
  * cgen64.c
@@ -321,7 +310,7 @@ void	regsalloc(Node*, Node*);
 void	regaalloc1(Node*, Node*);
 void	regaalloc(Node*, Node*);
 void	regind(Node*, Node*);
-void	gprep(Node*, Node*);
+//void	gprep(Node*, Node*);
 void	naddr(Node*, Adr*);
 void	gmove(Node*, Node*);
 void	gins(int a, Node*, Node*);
@@ -357,7 +346,6 @@ int	Aconv(Fmt*);
 int	Dconv(Fmt*);
 int	Sconv(Fmt*);
 int	Rconv(Fmt*);
-int	Xconv(Fmt*);
 int	Bconv(Fmt*);
 
 /*
@@ -385,7 +373,6 @@ void	excise(Reg*);
 Reg*	uniqp(Reg*);
 Reg*	uniqs(Reg*);
 int	regtyp(Adr*);
-int	anyvar(Adr*);
 int	subprop(Reg*);
 int	copyprop(Reg*);
 int	copy1(Adr*, Adr*, Reg*, int);
@@ -394,18 +381,18 @@ int	copyu(Prog*, Adr*, Adr*);
 int	copyas(Adr*, Adr*);
 int	copyau(Adr*, Adr*);
 int	copysub(Adr*, Adr*, Adr*, int);
-int	copysub1(Prog*, Adr*, Adr*, int);
+//int	copysub1(Prog*, Adr*, Adr*, int);
 
 long	RtoB(int);
-long	FtoB(int);
+//long	FtoB(int);
 int	BtoR(long);
-int	BtoF(long);
+//int	BtoF(long);
 
 /*s: constant D_HI */
-#define	D_HI	D_NONE
+//#define	D_HI	D_NONE
 /*e: constant D_HI */
 /*s: constant D_LO */
-#define	D_LO	D_NONE
+//#define	D_LO	D_NONE
 /*e: constant D_LO */
 
 /*
@@ -438,9 +425,4 @@ void	shiftit(Type*, Node*, Node*);
 #pragma	varargck	type	"R"	int
 #pragma	varargck	type	"S"	char*
 
-/*s: constant rplink */
-/* wrecklessly steal a field */
-
-#define	rplink	label
-/*e: constant rplink */
 /*e: 8c/gc.h */

@@ -538,8 +538,8 @@ newlist(Node *l, Node *r)
 /*e: function newlist */
 
 /*s: function sualign */
-void
-sualign(Type *t)
+//@Scheck: not dead, used by cc.y
+void sualign(Type *t)
 {
     Type *l;
     long o, w;
@@ -658,8 +658,8 @@ ofnproto(Node *n)
 /*e: constant OLDPROTO */
 
 /*s: function argmark */
-void
-argmark(Node *n, int pass)
+//@Scheck: not dead, used by cc.y
+void argmark(Node *n, int pass)
 {
     Type *t;
 
@@ -758,8 +758,8 @@ loop:
 /*e: function walkparam */
 
 /*s: function markdcl */
-void
-markdcl(void)
+//@Scheck: used by cc.y
+void markdcl(void)
 {
     Decl *d;
 
@@ -773,8 +773,8 @@ markdcl(void)
 /*e: function markdcl */
 
 /*s: function revertdcl */
-Node*
-revertdcl(void)
+//@Scheck: used by cc.y
+Node* revertdcl(void)
 {
     Decl *d;
     Sym *s;
@@ -1176,8 +1176,8 @@ snap(Type *t)
 /*e: function snap */
 
 /*s: function dotag */
-Type*
-dotag(Sym *s, int et, int bn)
+//@Scheck: used by cc.y
+Type* dotag(Sym *s, int et, int bn)
 {
     Decl *d;
 
@@ -1203,8 +1203,8 @@ dotag(Sym *s, int et, int bn)
 /*e: function dotag */
 
 /*s: function dcllabel */
-Node*
-dcllabel(Sym *s, int f)
+//@Scheck: used by cc.y
+Node* dcllabel(Sym *s, int f)
 {
     Decl *d, d1;
     Node *n;
@@ -1491,8 +1491,8 @@ tmerge(Type *t1, Sym *s)
 /*e: function tmerge */
 
 /*s: function edecl */
-void
-edecl(int c, Type *t, Sym *s)
+//@Scheck: used by cc.y
+void edecl(int c, Type *t, Sym *s)
 {
     Type *t1;
 
@@ -1551,8 +1551,8 @@ maxtype(Type *t1, Type *t2)
 /*e: function maxtype */
 
 /*s: function doenum */
-void
-doenum(Sym *s, Node *n)
+//@Scheck: used by cc.y
+void doenum(Sym *s, Node *n)
 {
 
     if(n) {
@@ -1623,8 +1623,8 @@ symadjust(Sym *s, Node *n, long del)
 /*e: function symadjust */
 
 /*s: function contig */
-Node*
-contig(Sym *s, Node *n, long v)
+//@Scheck: used by cc.y
+Node* contig(Sym *s, Node *n, long v)
 {
     Node *p, *r, *q, *m;
     long w;

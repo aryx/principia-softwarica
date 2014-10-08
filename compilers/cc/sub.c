@@ -160,8 +160,8 @@ copytyp(Type *t)
 /*e: function copytyp */
 
 /*s: function garbt */
-Type*
-garbt(Type *t, long b)
+//@Scheck: used by cc.y
+Type* garbt(Type *t, long b)
 {
     Type *t1;
 
@@ -193,8 +193,8 @@ simpleg(long b)
 /*e: function simpleg */
 
 /*s: function simplec */
-int
-simplec(long b)
+//@Scheck: used by cc.y
+int simplec(long b)
 {
 
     b &= BCLASS;
@@ -1210,8 +1210,8 @@ bitno(long b)
 /*e: function bitno */
 
 /*s: function typebitor */
-long
-typebitor(long a, long b)
+//@Scheck: used by cc.y
+long typebitor(long a, long b)
 {
     long c;
 

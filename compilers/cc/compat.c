@@ -11,11 +11,6 @@ myaccess(char *f)
  return access(f, AEXIST);
 }
 
-void*
-mysbrk(ulong size)
-{
- return sbrk(size);
-}
 
 int
 mycreat(char *n, int p)
@@ -98,21 +93,21 @@ malloc(ulong n)
 /*e: function malloc */
 
 /*s: function calloc */
-void*
-calloc(ulong m, ulong n)
-{
-    return alloc(m*n);
-}
+//void*
+//calloc(ulong m, ulong n)
+//{
+//    return alloc(m*n);
+//}
 /*e: function calloc */
 
 /*s: function realloc */
-void*
-realloc(void*, ulong)
-{
-    fprint(2, "realloc called\n");
-    abort();
-    return 0;
-}
+//void*
+//realloc(void*, ulong)
+//{
+//    fprint(2, "realloc called\n");
+//    abort();
+//    return 0;
+//}
 /*e: function realloc */
 
 /*s: function free */
@@ -124,21 +119,21 @@ free(void*)
 
 /*s: function mallocz */
 /* needed when profiling */
-void*
-mallocz(ulong size, int clr)
-{
-    void *v;
-
-    v = alloc(size);
-    if(clr && v != nil)
-        memset(v, 0, size);
-    return v;
-}
+//void*
+//mallocz(ulong size, int clr)
+//{
+//    void *v;
+//
+//    v = alloc(size);
+//    if(clr && v != nil)
+//        memset(v, 0, size);
+//    return v;
+//}
 /*e: function mallocz */
 
 /*s: function setmalloctag */
-void
-setmalloctag(void*, ulong)
+//@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
+void setmalloctag(void*, ulong)
 {
 }
 /*e: function setmalloctag */

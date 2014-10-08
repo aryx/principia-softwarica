@@ -54,18 +54,18 @@ picklesue(Type *t)
 /*e: function picklesue */
 
 /*s: function picklefun */
-Sym*
-picklefun(Type *t)
-{
-    int h;
-    Sym *s;
-
-    for(h=0; h<nelem(hash); h++)
-        for(s = hash[h]; s != S; s = s->link)
-            if(s->type == t)
-                return s;
-    return 0;
-}
+//Sym*
+//picklefun(Type *t)
+//{
+//    int h;
+//    Sym *s;
+//
+//    for(h=0; h<nelem(hash); h++)
+//        for(s = hash[h]; s != S; s = s->link)
+//            if(s->type == t)
+//                return s;
+//    return 0;
+//}
 /*e: function picklefun */
 
 /*s: global picklechar */
@@ -235,58 +235,58 @@ pickletype(Type *t)
 /*e: function pickletype */
 
 /*s: function picklevar */
-void
-picklevar(Sym *s)
-{
-    int n;
-    Io *i;
-    Type *t;
-    Sym *s1, *s2;
-
-    if(!debug['P'] || debug['s'])
-        return;
-    if(debug['P'] > 1) {
-        n = 0;
-        for(i=iostack; i; i=i->link)
-            n++;
-        if(n > 1)
-            return;
-    }
-    t = s->type;
-    while(t && t->etype == TIND)
-        t = t->link;
-    if(t == T)
-        return;
-    if(t->etype == TENUM) {
-        Bprint(&outbuf, "%s = ", pmap(s->name));
-        if(!typefd[t->etype])
-            Bprint(&outbuf, "%lld;\n", s->vconst);
-        else
-            Bprint(&outbuf, "%f\n;", s->fconst);
-        return;
-    }
-    if(!typesu[t->etype])
-        return;
-    s1 = picklesue(t->link);
-    if(s1 == S)
-        return;
-    switch(s->class) {
-    case CAUTO:
-    case CPARAM:
-        s2 = picklefun(thisfn);
-        if(s2)
-            Bprint(&outbuf, "complex %s %s:%s;\n",
-                pmap(s1->name), pmap(s2->name), pmap(s->name));
-        break;
-    
-    case CSTATIC:
-    case CEXTERN:
-    case CGLOBL:
-    case CLOCAL:
-        Bprint(&outbuf, "complex %s %s;\n",
-            pmap(s1->name), pmap(s->name));
-        break;
-    }
-}
+//void
+//picklevar(Sym *s)
+//{
+//    int n;
+//    Io *i;
+//    Type *t;
+//    Sym *s1, *s2;
+//
+//    if(!debug['P'] || debug['s'])
+//        return;
+//    if(debug['P'] > 1) {
+//        n = 0;
+//        for(i=iostack; i; i=i->link)
+//            n++;
+//        if(n > 1)
+//            return;
+//    }
+//    t = s->type;
+//    while(t && t->etype == TIND)
+//        t = t->link;
+//    if(t == T)
+//        return;
+//    if(t->etype == TENUM) {
+//        Bprint(&outbuf, "%s = ", pmap(s->name));
+//        if(!typefd[t->etype])
+//            Bprint(&outbuf, "%lld;\n", s->vconst);
+//        else
+//            Bprint(&outbuf, "%f\n;", s->fconst);
+//        return;
+//    }
+//    if(!typesu[t->etype])
+//        return;
+//    s1 = picklesue(t->link);
+//    if(s1 == S)
+//        return;
+//    switch(s->class) {
+//    case CAUTO:
+//    case CPARAM:
+//        s2 = picklefun(thisfn);
+//        if(s2)
+//            Bprint(&outbuf, "complex %s %s:%s;\n",
+//                pmap(s1->name), pmap(s2->name), pmap(s->name));
+//        break;
+//    
+//    case CSTATIC:
+//    case CEXTERN:
+//    case CGLOBL:
+//    case CLOCAL:
+//        Bprint(&outbuf, "complex %s %s;\n",
+//            pmap(s1->name), pmap(s->name));
+//        break;
+//    }
+//}
 /*e: function picklevar */
 /*e: cc/pickle.c */

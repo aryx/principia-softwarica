@@ -123,7 +123,7 @@ Bits	addrs;
 long	regbits;
 /*e: global regbits */
 /*s: global exregbits */
-long	exregbits;
+//long	exregbits;
 /*e: global exregbits */
 
 /*s: global change */

@@ -451,8 +451,7 @@ enum
 /*e: enum _anon_ (cc/lex.c) */
 
 /*s: function yylex */
-long
-yylex(void)
+long yylex(void)
 {
     vlong vv;
     long c, c1, t;

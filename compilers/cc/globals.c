@@ -42,7 +42,7 @@ Type*	firstargtype;
 Decl*	firstdcl;
 /*e: global firstdcl */
 /*s: global fperror */
-int	fperror;
+//int	fperror;
 /*e: global fperror */
 /*s: global hash */
 Sym*	hash[NHASH];
@@ -69,6 +69,7 @@ Io*	iostack;
 long	lastbit;
 /*e: global lastbit */
 /*s: global lastclass */
+//@Scheck: y.tab.c
 char	lastclass;
 /*e: global lastclass */
 /*s: global lastdcl */
@@ -78,6 +79,7 @@ Type*	lastdcl;
 long	lastfield;
 /*e: global lastfield */
 /*s: global lasttype */
+//@Scheck: y.tab.c
 Type*	lasttype;
 /*e: global lasttype */
 /*s: global lineno */
@@ -138,6 +140,7 @@ char	symb[NSYMB];
 Sym*	symstring;
 /*e: global symstring */
 /*s: global taggen */
+//@Scheck: y.tab.c
 int	taggen;
 /*e: global taggen */
 /*s: global tfield */

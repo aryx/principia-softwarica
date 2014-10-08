@@ -517,7 +517,7 @@ extern	long	firstbit;
 extern	Sym*	firstarg;
 extern	Type*	firstargtype;
 extern	Decl*	firstdcl;
-extern	int	fperror;
+//extern	int	fperror;
 extern	Sym*	hash[NHASH];
 extern	int	hasdoubled;
 extern	char*	hunk;
@@ -618,7 +618,6 @@ int	myexec(char*, char*[]);
 int	mydup(int, int);
 int	myfork(void);
 int	mypipe(int*);
-void*	mysbrk(ulong);
 
 /*
  *	parser
@@ -723,7 +722,6 @@ int	tcomx(Node*);
 int	tlvalue(Node*);
 void	constas(Node*, Type*, Type*);
 Node*	uncomma(Node*);
-Node*	uncomargs(Node*);
 
 /*
  * con.c
@@ -800,8 +798,8 @@ void	pickletype(Type*);
  * bits.c
  */
 Bits	bor(Bits, Bits);
-Bits	band(Bits, Bits);
-Bits	bnot(Bits);
+//Bits	band(Bits, Bits);
+//Bits	bnot(Bits);
 int	bany(Bits*);
 int	bnum(Bits);
 Bits	blsh(uint);
@@ -813,11 +811,11 @@ int	bset(Bits, uint);
  */
 void	dpcheck(Node*);
 void	arginit(void);
-void	pragvararg(void);
-void	pragpack(void);
-void	pragfpround(void);
-void pragprofile(void);
-void	pragincomplete(void);
+//void	pragvararg(void);
+//void	pragpack(void);
+//void	pragfpround(void);
+//void pragprofile(void);
+//void	pragincomplete(void);
 
 /*
  * calls to machine depend part
@@ -841,9 +839,9 @@ extern	schar	ewidth[];
 int	com64(Node*);
 void	com64init(void);
 void	bool64(Node*);
-double	convvtof(vlong);
-vlong	convftov(double);
-double	convftox(double, int);
+//double	convvtof(vlong);
+//vlong	convftov(double);
+//double	convftox(double, int);
 vlong	convvtox(vlong, int);
 
 /*
