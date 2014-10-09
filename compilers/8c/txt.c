@@ -18,9 +18,11 @@ ginit(void)
 
     thechar = '8';
     thestring = "386";
+
     exregoffset = 0;
     exfregoffset = 0;
     listinit();
+
     nstring = 0;
     mnstring = 0;
     nrathole = 0;

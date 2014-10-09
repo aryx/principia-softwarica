@@ -25,7 +25,7 @@ new(int t, Node *l, Node *r)
         n->lineno = r->lineno;
     else
         n->lineno = lineno;
-    newflag = 1;
+    newflag = true;
     return n;
 }
 /*e: function new */
@@ -1377,6 +1377,7 @@ char*	tnames[NALLTYPES];
 Init	tnamesinit[] =
 {
     TXXX,		0,	"TXXX",
+
     TCHAR,		0,	"CHAR",
     TUCHAR,		0,	"UCHAR",
     TSHORT,		0,	"SHORT",
@@ -1399,6 +1400,7 @@ Init	tnamesinit[] =
     TFILE,		0,	"FILE",
     TOLD,		0,	"OLD",
     TDOT,		0,	"DOT",
+
     -1,		0,	0,
 };
 /*e: global tnamesinit */
@@ -1424,6 +1426,7 @@ char*	qnames[NALLTYPES];
 Init	qnamesinit[] =
 {
     TXXX,		0,	"TXXX",
+
     TCHAR,		0,	"CHAR",
     TUCHAR,		0,	"UCHAR",
     TSHORT,		0,	"SHORT",
@@ -1457,6 +1460,7 @@ Init	qnamesinit[] =
     TDOT,		0,	"DOT",
     TFILE,		0,	"FILE",
     TOLD,		0,	"OLD",
+
     -1,		0,	0,
 };
 /*e: global qnamesinit */

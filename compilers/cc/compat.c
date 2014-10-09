@@ -92,44 +92,12 @@ malloc(ulong n)
 }
 /*e: function malloc */
 
-/*s: function calloc */
-//void*
-//calloc(ulong m, ulong n)
-//{
-//    return alloc(m*n);
-//}
-/*e: function calloc */
-
-/*s: function realloc */
-//void*
-//realloc(void*, ulong)
-//{
-//    fprint(2, "realloc called\n");
-//    abort();
-//    return 0;
-//}
-/*e: function realloc */
-
 /*s: function free */
 void
 free(void*)
 {
 }
 /*e: function free */
-
-/*s: function mallocz */
-/* needed when profiling */
-//void*
-//mallocz(ulong size, int clr)
-//{
-//    void *v;
-//
-//    v = alloc(size);
-//    if(clr && v != nil)
-//        memset(v, 0, size);
-//    return v;
-//}
-/*e: function mallocz */
 
 /*s: function setmalloctag */
 //@Scheck: looks dead, but because we redefine malloc/free we must also redefine that

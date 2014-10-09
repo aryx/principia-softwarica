@@ -856,7 +856,7 @@ linehist(char *f, int offset)
      * overwrite the last #line directive if
      * no alloc has happened since the last one
      */
-    if(newflag == 0 && ehist != H && offset != 0 && ehist->offset != 0)
+    if(newflag == false && ehist != H && offset != 0 && ehist->offset != 0)
         if(f && ehist->name && strcmp(f, ehist->name) == 0) {
             ehist->line = lineno;
             ehist->offset = offset;
@@ -873,7 +873,7 @@ linehist(char *f, int offset)
             print("%4ld: <pop>\n", lineno);
     /*e: [[linehist()]] debug */
 
-    newflag = 0;
+    newflag = false;
 
     h = alloc(sizeof(Hist));
     h->name = f;

@@ -14,19 +14,6 @@ bor(Bits a, Bits b)
 }
 /*e: function bor */
 
-/*s: function band */
-//Bits
-//band(Bits a, Bits b)
-//{
-//    Bits c;
-//    int i;
-//
-//    for(i=0; i<BITS; i++)
-//        c.b[i] = a.b[i] & b.b[i];
-//    return c;
-//}
-/*e: function band */
-
 /*s: function bany */
 /*
 Bits

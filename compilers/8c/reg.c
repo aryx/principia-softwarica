@@ -695,7 +695,7 @@ mkvar(Reg *r, Adr *a, int isro)
             goto none;
         n = t;
         {static Sym er; a->sym = &er;}
-        a->sym->name = "$extreg";
+        a->sym->name = "$extreg"; // $
         break;
     case D_ADDR:
         a->type = a->index;
@@ -1170,7 +1170,7 @@ paint2(Reg *r, int bn)
     ulong bb, vreg, x;
 
     z = bn/32;
-    bb = 1L << (bn%32);
+    bb = 1L << (bn%32); // >>
     vreg = regbits;
     if(!(r->act.b[z] & bb))
         return vreg;
@@ -1233,7 +1233,7 @@ paint3(Reg *r, int bn, long rb, int rn)
     ulong bb;
 
     z = bn/32;
-    bb = 1L << (bn%32);
+    bb = 1L << (bn%32); // >>
     if(r->act.b[z] & bb)
         return;
     for(;;) {

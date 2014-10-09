@@ -1,7 +1,8 @@
 /*s: 8c/gc.h */
 #include	"../cc/cc.h"
+
 #include	<common.out.h>
-#include	"386/8.out.h"
+#include	<386/8.out.h>
 
 /*s: constant SZ_CHAR */
 /*
@@ -70,7 +71,7 @@ struct	Adr
 };
 /*e: struct Adr */
 /*s: constant A */
-#define	A	((Adr*)0)
+#define	A	((Adr*)nil)
 /*e: constant A */
 
 /*s: constant INDEXED */
@@ -87,7 +88,7 @@ struct	Prog
 };
 /*e: struct Prog */
 /*s: constant P */
-#define	P	((Prog*)0)
+#define	P	((Prog*)nil)
 /*e: constant P */
 
 /*s: struct Case */
@@ -101,7 +102,7 @@ struct	Case
 };
 /*e: struct Case */
 /*s: constant C */
-#define	C	((Case*)0)
+#define	C	((Case*)nil)
 /*e: constant C */
 
 /*s: struct C1 */
@@ -155,7 +156,7 @@ struct	Reg
 };
 /*e: struct Reg */
 /*s: constant R */
-#define	R	((Reg*)0)
+#define	R	((Reg*)nil)
 /*e: constant R */
 
 /*s: constant NRGN */
@@ -201,12 +202,6 @@ extern	int	reg[D_NONE];
 extern	long	exregoffset;
 extern	long	exfregoffset;
 
-/*s: function BLOAD */
-//#define	BLOAD(r)	band(bnot(r->refbehind), r->refahead)
-/*e: function BLOAD */
-/*s: function BSTORE */
-//#define	BSTORE(r)	band(bnot(r->calbehind), r->calahead)
-/*e: function BSTORE */
 /*s: function LOAD */
 #define	LOAD(r)		(~r->refbehind.b[z] & r->refahead.b[z])
 /*e: function LOAD */

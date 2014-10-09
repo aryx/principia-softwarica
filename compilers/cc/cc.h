@@ -4,10 +4,10 @@
 #include <bio.h>
 #include <ctype.h>
 
-#pragma	lib	"../cc/cc.a$O"
+#pragma	lib	"../cc/cc.a$O" //$
 
 typedef	struct	Node	Node;
-typedef	struct	SymCc	Sym;
+typedef	struct	Sym	Sym;
 typedef	struct	Type	Type;
 typedef	struct	Funct	Funct;
 typedef	struct	Decl	Decl;
@@ -71,8 +71,11 @@ struct	Bits
 /*s: struct Node */
 struct	Node
 {
+    char	op;
     Node*	left;
     Node*	right;
+
+    // Other fields
     void*	label;
     long	pc;
     int	reg;
@@ -85,7 +88,6 @@ struct	Node
     Sym*	sym;
     Type*	type;
     long	lineno;
-    char	op;
     char	oldop;
     char xcast;
     char	class;
@@ -94,14 +96,16 @@ struct	Node
     char	addable;
     char	scale;
     char	garb;
+
+    // Extra fields
 };
 /*e: struct Node */
 /*s: constant Z */
-#define	Z	((Node*)0)
+#define	Z	((Node*)nil)
 /*e: constant Z */
 
-/*s: struct SymCc */
-struct	SymCc
+/*s: struct Sym */
+struct	Sym
 {
     Sym*	link;
     Type*	type;
@@ -122,9 +126,9 @@ struct	SymCc
     char	aused;
     char	sig;
 };
-/*e: struct SymCc */
+/*e: struct Sym */
 /*s: constant S */
-#define	S	((Sym*)0)
+#define	S	((Sym*)nil)
 /*e: constant S */
 
 /*s: enum _anon_ */
@@ -152,7 +156,7 @@ struct	Decl
 };
 /*e: struct Decl */
 /*s: constant D */
-#define	D	((Decl*)0)
+#define	D	((Decl*)nil)
 /*e: constant D */
 
 /*s: struct Type */
@@ -174,10 +178,10 @@ struct	Type
 /*e: struct Type */
 
 /*s: constant T */
-#define	T	((Type*)0)
+#define	T	((Type*)nil)
 /*e: constant T */
 /*s: constant NODECL */
-#define	NODECL	((void(*)(int, Type*, Sym*))0)
+#define	NODECL	((void(*)(int, Type*, Sym*))nil)
 /*e: constant NODECL */
 
 /*s: struct Init */
@@ -209,7 +213,7 @@ struct	Io
 };
 /*e: struct Io */
 /*s: constant I */
-#define	I	((Io*)0)
+#define	I	((Io*)nil)
 /*e: constant I */
 
 /*s: struct Hist */
@@ -222,7 +226,7 @@ struct	Hist
 };
 /*e: struct Hist */
 /*s: constant H */
-#define	H	((Hist*)0)
+#define	H	((Hist*)nil)
 /*e: constant H */
 extern Hist*	hist;
 
@@ -271,6 +275,7 @@ enum
 enum
 {
     OXXX,
+
     OADD,
     OADDR,
     OAND,
@@ -373,6 +378,7 @@ enum
 enum
 {
     TXXX,
+
     TCHAR,
     TUCHAR,
     TSHORT,
@@ -385,6 +391,7 @@ enum
     TUVLONG,
     TFLOAT,
     TDOUBLE,
+
     TIND,
     TFUNC,
     TARRAY,
@@ -396,6 +403,7 @@ enum
     NTYPE,
 
     TAUTO	= NTYPE,
+
     TEXTERN,
     TSTATIC,
     TTYPEDEF,
@@ -405,8 +413,10 @@ enum
     TVOLATILE,
     TUNSIGNED,
     TSIGNED,
+
     TFILE,
     TOLD,
+
     NALLTYPES,
 
     /* adapt size of Rune to target system's size */
@@ -535,7 +545,7 @@ extern	long	lineno;
 extern	long	nearln;
 extern	int	maxinclude;
 extern	int	nerrors;
-extern	int	newflag;
+extern	bool	newflag;
 extern	long	nhunk;
 extern	int	ninclude;
 extern	Node*	nodproto;
@@ -617,6 +627,13 @@ int	mydup(int, int);
 int	myfork(void);
 int	mypipe(int*);
 
+// utils.c
+void	gethunk(void);
+void*	allocn(void*, long, long);
+void*	alloc(long);
+void	errorexit(void);
+void	yyerror(char*, ...);
+
 /*
  *	parser
  */
@@ -626,20 +643,19 @@ int	yyparse(void);
 /*
  *	lex.c
  */
-void*	allocn(void*, long, long);
-void*	alloc(long);
-void	errorexit(void);
 int	filbuf(void);
 int	getc(void);
 int	getnsc(void);
 Sym*	lookup(void);
-void	main(int, char*[]);
 void	newfile(char*, int);
 void	newio(void);
 void	pushio(void);
 Sym*	slookup(char*);
 void	unget(int);
 long	yylex(void);
+
+//!!!!
+void	main(int, char*[]);
 
 
 /*
@@ -709,7 +725,6 @@ void	dclfunct(Type*, Sym*);
 void	arith(Node*, int);
 int	deadheads(Node*);
 Type*	dotsearch(Sym*, Type*, Node*, long*);
-void	gethunk(void);
 Node*	invert(Node*);
 int	bitno(long);
 void	makedot(Node*, Type*, long);
@@ -743,7 +758,6 @@ void	simplifyshift(Node*);
 long	typebitor(long, long);
 void	diag(Node*, char*, ...);
 void	warn(Node*, char*, ...);
-void	yyerror(char*, ...);
 void	fatal(Node*, char*, ...);
 
 /*
@@ -783,6 +797,7 @@ void	arginit(void);
 /*
  * calls to machine depend part
  */
+//todo: could define an interface instantiated by each xc
 void	codgen(Node*, Node*);
 void	gclean(void);
 void	gextern(Sym*, Node*, long, long);

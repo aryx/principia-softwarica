@@ -63,7 +63,7 @@ indexshift(Node *n)
  *		CONST ==> 20		$value
  *		*(20) ==> 21		value
  *		&(10) ==> 13		$name+value(SB)
- *		&(11) ==> 1		$name+value(SP)
+ *		&(11) ==> 1		$name+value(SP) $
  *		(13) + (20) ==> 13	fold constants
  *		(1) + (20) ==> 1	fold constants
  *		*(13) ==> 10		back to name
@@ -74,6 +74,7 @@ indexshift(Node *n)
  *		(8) ==> &9(OINDEX)	index, almost addressable
  *
  *	calculate complexity (number of registers)
+ * 
  */
 void
 xcom(Node *n)

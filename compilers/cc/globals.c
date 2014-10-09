@@ -95,7 +95,7 @@ int	maxinclude;
 int	nerrors;
 /*e: global nerrors */
 /*s: global newflag */
-int	newflag;
+bool	newflag;
 /*e: global newflag */
 /*s: global nhunk */
 long	nhunk;
@@ -140,7 +140,7 @@ char	symb[NSYMB];
 Sym*	symstring;
 /*e: global symstring */
 /*s: global taggen */
-//@Scheck: y.tab.c
+//@Scheck: used by cc.y
 int	taggen;
 /*e: global taggen */
 /*s: global tfield */

@@ -105,9 +105,6 @@ Ftab	ftabinit[OEND] =
 //	Node*	nodppv;
 //	Node*	nodvmm;
 /*s: function isfunct */
-//	Node*	nodmmv;
-
-
 int
 isfunct(Node *n)
 {
