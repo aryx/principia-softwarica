@@ -15,7 +15,7 @@ new(int t, Node *l, Node *r)
 {
     Node *n;
 
-    n = alloc(sizeof(*n));
+    n = alloc(sizeof(Node));
     n->op = t;
     n->left = l;
     n->right = r;
@@ -48,34 +48,33 @@ prtree(Node *n, char *s)
 {
 
     print(" == %s ==\n", s);
-    prtree1(n, 0, 0);
+    prtree1(n, 0, false);
     print("\n");
 }
 /*e: function prtree */
 
 /*s: function prtree1 */
 void
-prtree1(Node *n, int d, int f)
+prtree1(Node *n, int d, bool f)
 {
     int i;
 
     if(f)
-    for(i=0; i<d; i++)
+      for(i=0; i<d; i++)
         print("   ");
     if(n == Z) {
         print("Z\n");
         return;
     }
     if(n->op == OLIST) {
-        prtree1(n->left, d, 0);
-        prtree1(n->right, d, 1);
+        prtree1(n->left, d, false);
+        prtree1(n->right, d, true);
         return;
     }
     d++;
     print("%O", n->op);
-    i = 3;
-    switch(n->op)
-    {
+    i = 3; // 1 || 2
+    switch(n->op) {
     case ONAME:
         print(" \"%F\"", n);
         print(" %ld", n->xoffset);
@@ -127,11 +126,13 @@ prtree1(Node *n, int d, int f)
         print(" %T", n->type);
     if(n->complex != 0)
         print(" (%d)", n->complex);
+
     print(" %L\n", n->lineno);
+
     if(i & 2)
-        prtree1(n->left, d, 1);
+        prtree1(n->left, d, true);
     if(i & 1)
-        prtree1(n->right, d, 1);
+        prtree1(n->right, d, true);
 }
 /*e: function prtree1 */
 
@@ -141,7 +142,7 @@ typ(int et, Type *d)
 {
     Type *t;
 
-    t = alloc(sizeof(*t));
+    t = alloc(sizeof(Type));
     t->etype = et;
     t->link = d;
     t->down = T;
@@ -161,7 +162,7 @@ copytyp(Type *t)
 {
     Type *nt;
 
-    nt = typ(TXXX, T);
+    nt = typ(TXXX, T); // could just do alloc(sizeof(Type))
     *nt = *t;
     return nt;
 }
@@ -1250,7 +1251,7 @@ diag(Node *n, char *fmt, ...)
         abort();
     }
     if(n != Z)
-    if(debug['v'])
+      if(debug['v'])
         prtree(n, "diagnostic");
 
     nerrors++;
@@ -1276,10 +1277,10 @@ warn(Node *n, char *fmt, ...)
             diag(n, "%s", buf);
             return;
         }
-        Bprint(&diagbuf, "warning: %L %s\n", (n==Z)? nearln: n->lineno, buf);
+        Bprint(&diagbuf, "warning: %L %s\n", (n==Z)? nearln : n->lineno, buf);
 
         if(n != Z)
-        if(debug['v'])
+          if(debug['v'])
             prtree(n, "warning");
     }
 }
@@ -1302,7 +1303,7 @@ fatal(Node *n, char *fmt, ...)
         abort();
     }
     if(n != Z)
-    if(debug['v'])
+      if(debug['v'])
         prtree(n, "diagnostic");
 
     nerrors++;

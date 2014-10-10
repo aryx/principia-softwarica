@@ -61,6 +61,7 @@ void main(int argc, char *argv[])
     int nproc, nout, status, i, c, ndef, maxdef;
 
     memset(debug, 0, sizeof(debug));
+
     tinit();
     cinit();
     ginit();
@@ -73,22 +74,8 @@ void main(int argc, char *argv[])
     outfile = 0;
     defs = nil;
     setinclude(".");
+
     ARGBEGIN {
-    default:
-        c = ARGC();
-        if(c >= 0 && c < sizeof(debug))
-            debug[c]++;
-        break;
-
-    case 'l':			/* for little-endian mips */
-        if(thechar != 'v'){
-            print("can only use -l with vc");
-            errorexit();
-        }
-        thechar = '0';
-        thestring = "spim";
-        break;
-
     case 'o':
         outfile = ARGF();
         break;
@@ -96,6 +83,7 @@ void main(int argc, char *argv[])
     case 'D':
         p = ARGF();
         if(p) {
+            // realloc, growing array
             if(ndef >= maxdef){
                 maxdef += 50;
                 np = alloc(maxdef * sizeof *np);
@@ -113,11 +101,30 @@ void main(int argc, char *argv[])
         if(p)
             setinclude(p);
         break;
+
+    case 'l':			/* for little-endian mips */
+        if(thechar != 'v'){
+            print("can only use -l with vc");
+            errorexit();
+        }
+        thechar = '0';
+        thestring = "spim";
+        break;
+
+    default:
+        c = ARGC();
+        if(c >= 0 && c < sizeof(debug))
+            debug[c]++;
+        break;
+
+
     } ARGEND
+
     if(argc < 1 && outfile == 0) {
         print("usage: %cc [-options] files\n", thechar);
         errorexit();
     }
+
     if(argc > 1 && systemtype(Windows)){
         print("can't compile multiple files on windows\n");
         errorexit();
@@ -1195,47 +1202,48 @@ struct
 {
     char	*name;
     ushort	lexical;
+    // option<enum<Type>>
     ushort	type;
 } itab[] =
 {
     "auto",		LAUTO,		0,
-    "break",	LBREAK,		0,
+    "break",		LBREAK,		0,
     "case",		LCASE,		0,
     "char",		LCHAR,		TCHAR,
-    "const",	LCONSTNT,	0,
-    "continue",	LCONTINUE,	0,
-    "default",	LDEFAULT,	0,
+    "const",		LCONSTNT,	0,
+    "continue",		LCONTINUE,	0,
+    "default",		LDEFAULT,	0,
     "do",		LDO,		0,
-    "double",	LDOUBLE,	TDOUBLE,
+    "double",		LDOUBLE,	TDOUBLE,
     "else",		LELSE,		0,
     "enum",		LENUM,		0,
-    "extern",	LEXTERN,	0,
-    "float",	LFLOAT,		TFLOAT,
+    "extern",		LEXTERN,	0,
+    "float",		LFLOAT,		TFLOAT,
     "for",		LFOR,		0,
     "goto",		LGOTO,		0,
     "if",		LIF,		0,
-    "inline",	LINLINE,	0,
+    "inline",		LINLINE,	0,
     "int",		LINT,		TINT,
     "long",		LLONG,		TLONG,
-    "register",	LREGISTER,	0,
-    "restrict",	LRESTRICT,	0,
-    "return",	LRETURN,	0,
+    "register",		LREGISTER,	0,
+    "restrict",		LRESTRICT,	0,
+    "return",		LRETURN,	0,
     "SET",		LSET,		0,
-    "short",	LSHORT,		TSHORT,
-    "signed",	LSIGNED,	0,
-    "signof",	LSIGNOF,	0,
-    "sizeof",	LSIZEOF,	0,
-    "static",	LSTATIC,	0,
-    "struct",	LSTRUCT,	0,
-    "switch",	LSWITCH,	0,
-    "typedef",	LTYPEDEF,	0,
-    "typestr",	LTYPESTR,	0,
-    "union",	LUNION,		0,
-    "unsigned",	LUNSIGNED,	0,
+    "short",		LSHORT,		TSHORT,
+    "signed",		LSIGNED,	0,
+    "signof",		LSIGNOF,	0,
+    "sizeof",		LSIZEOF,	0,
+    "static",		LSTATIC,	0,
+    "struct",		LSTRUCT,	0,
+    "switch",		LSWITCH,	0,
+    "typedef",		LTYPEDEF,	0,
+    "typestr",		LTYPESTR,	0,
+    "union",		LUNION,		0,
+    "unsigned",		LUNSIGNED,	0,
     "USED",		LUSED,		0,
     "void",		LVOID,		TVOID,
-    "volatile",	LVOLATILE,	0,
-    "while",	LWHILE,		0,
+    "volatile",		LVOLATILE,	0,
+    "while",		LWHILE,		0,
     0
 };
 /*e: global itab */
@@ -1350,8 +1358,8 @@ pop:
 /*e: function filbuf */
 
 /*s: function Oconv */
-int
-Oconv(Fmt *fp)
+// enum<node_kind> -> string
+int Oconv(Fmt *fp)
 {
     int a;
 
@@ -1374,6 +1382,7 @@ struct Atab
 /*e: struct Atab */
 
 /*s: function Lconv */
+// int -> string?
 int
 Lconv(Fmt *fp)
 {
@@ -1439,6 +1448,7 @@ Lconv(Fmt *fp)
 /*e: function Lconv */
 
 /*s: function Tconv */
+// option<Type> -> string
 int
 Tconv(Fmt *fp)
 {
@@ -1500,6 +1510,7 @@ Tconv(Fmt *fp)
 /*e: function Tconv */
 
 /*s: function FNconv */
+// option<Node identifier cases> -> string
 int
 FNconv(Fmt *fp)
 {
@@ -1515,6 +1526,7 @@ FNconv(Fmt *fp)
 /*e: function FNconv */
 
 /*s: function Qconv */
+// ??
 int
 Qconv(Fmt *fp)
 {
@@ -1538,6 +1550,7 @@ Qconv(Fmt *fp)
 /*e: function Qconv */
 
 /*s: function VBconv */
+// ??
 int
 VBconv(Fmt *fp)
 {
@@ -1557,7 +1570,7 @@ VBconv(Fmt *fp)
         str[i++] = ' ';
         pc++;
     }
-    str[i] = 0;
+    str[i] = '\0';
 
     return fmtstrcpy(fp, str);
 }

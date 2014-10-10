@@ -23,6 +23,7 @@ listinit(void)
 /*e: function listinit */
 
 /*s: function Bconv */
+// Bits -> string
 int
 Bconv(Fmt *fp)
 {
@@ -37,20 +38,21 @@ Bconv(Fmt *fp)
         if(str[0])
             strcat(str, " ");
         if(var[i].sym == S) {
-            snprint(ss, sizeof(ss), "$%ld", var[i].offset);
+            snprint(ss, sizeof(ss), "$%ld", var[i].offset); //$
             s = ss;
         } else
             s = var[i].sym->name;
         if(strlen(str) + strlen(s) + 1 >= STRINGSZ)
             break;
         strcat(str, s);
-        bits.b[i/32] &= ~(1L << (i%32));
+        bits.b[i/32] &= ~(1L << (i%32)); // >>
     }
     return fmtstrcpy(fp, str);
 }
 /*e: function Bconv */
 
 /*s: function Pconv */
+// Prog -> string
 int
 Pconv(Fmt *fp)
 {
@@ -83,6 +85,7 @@ Aconv(Fmt *fp)
 /*e: function Aconv */
 
 /*s: function Dconv */
+// Adr -> string
 int
 Dconv(Fmt *fp)
 {
@@ -103,13 +106,13 @@ Dconv(Fmt *fp)
 
     default:
         if(a->offset)
-            snprint(str, sizeof(str), "$%ld,%R", a->offset, i);
+            snprint(str, sizeof(str), "$%ld,%R", a->offset, i); // $
         else
             snprint(str, sizeof(str), "%R", i);
         break;
 
     case D_NONE:
-        str[0] = 0;
+        str[0] = '\0';
         break;
 
     case D_BRANCH:
@@ -121,8 +124,7 @@ Dconv(Fmt *fp)
         break;
 
     case D_STATIC:
-        snprint(str, sizeof(str), "%s<>+%ld(SB)", a->sym->name,
-            a->offset);
+        snprint(str, sizeof(str), "%s<>+%ld(SB)", a->sym->name, a->offset);
         break;
 
     case D_AUTO:
@@ -136,22 +138,24 @@ Dconv(Fmt *fp)
             snprint(str, sizeof(str), "%ld(FP)", a->offset);
         break;
 
+
     case D_CONST:
-        snprint(str, sizeof(str), "$%ld", a->offset);
+        snprint(str, sizeof(str), "$%ld", a->offset); //$
         break;
 
     case D_FCONST:
-        snprint(str, sizeof(str), "$(%.17e)", a->dval);
+        snprint(str, sizeof(str), "$(%.17e)", a->dval); //$
         break;
 
     case D_SCONST:
-        snprint(str, sizeof(str), "$\"%S\"", a->sval);
+        snprint(str, sizeof(str), "$\"%S\"", a->sval); //$
         break;
+
 
     case D_ADDR:
         a->type = a->index;
         a->index = D_NONE;
-        snprint(str, sizeof(str), "$%D", a);
+        snprint(str, sizeof(str), "$%D", a); //$
         a->index = a->type;
         a->type = D_ADDR;
         goto conv;
@@ -242,6 +246,7 @@ char*	regstr[] =
 /*e: global regstr */
 
 /*s: function Rconv */
+// enum<operand_kind(register-only)> -> string
 int
 Rconv(Fmt *fp)
 {
@@ -259,6 +264,7 @@ Rconv(Fmt *fp)
 /*e: function Rconv */
 
 /*s: function Sconv */
+// ?? -> string
 int
 Sconv(Fmt *fp)
 {

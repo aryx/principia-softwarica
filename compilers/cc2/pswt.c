@@ -1,8 +1,6 @@
 /*s: cc2/pswt.c */
 #include "gc.h"
 
-int	swcmp(const void*, const void*);
-
 /*s: function swcmp */
 int
 swcmp(const void *a1, const void *a2)
@@ -63,10 +61,12 @@ doswit(Node *n)
         q++;
     }
     qsort(iq, nc, sizeof(C1), swcmp);
+
     if(debug['K'])
-    for(i=0; i<nc; i++)
+     for(i=0; i<nc; i++)
         print("case %2ld: = %.8llux\n", i, (vlong)iq[i].val);
-    dup = 0;
+ 
+   dup = 0;
     for(i=0; i<nc-1; i++)
         if(iq[i].val == iq[i+1].val) {
             diag(n, "duplicate cases in switch %lld", (vlong)iq[i].val);

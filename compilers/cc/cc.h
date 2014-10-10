@@ -75,7 +75,9 @@ struct	Node
     Node*	left;
     Node*	right;
 
-    // Other fields
+    long	lineno;
+
+    // Other fields, TODO LP split
     void*	label;
     long	pc;
     int	reg;
@@ -87,7 +89,6 @@ struct	Node
 
     Sym*	sym;
     Type*	type;
-    long	lineno;
     char	oldop;
     char xcast;
     char	class;
@@ -107,18 +108,22 @@ struct	Node
 /*s: struct Sym */
 struct	Sym
 {
+    char	*name;
+
     Sym*	link;
+
     Type*	type;
     Type*	suetag;
     Type*	tenum;
+
     char*	macro;
+
     long	varlineno;
     long	offset;
     vlong	vconst;
     double	fconst;
     Node*	label;
     ushort	lexical;
-    char	*name;
     ushort	block;
     ushort	sueblock;
     char	class;
@@ -144,7 +149,6 @@ enum{
 /*s: struct Decl */
 struct	Decl
 {
-    Decl*	link;
     Sym*	sym;
     Type*	type;
     long	varlineno;
@@ -153,6 +157,9 @@ struct	Decl
     ushort	block;
     char	class;
     char	aused;
+
+    // Extra fields
+    Decl*	link;
 };
 /*e: struct Decl */
 /*s: constant D */
@@ -162,18 +169,23 @@ struct	Decl
 /*s: struct Type */
 struct	Type
 {
-    Sym*	sym;
-    Sym*	tag;
-    Funct*	funct;
+    char	etype;
+
     Type*	link;
     Type*	down;
+    Sym*	sym;
+
     long	width;
+
     long	offset;
-    long	lineno;
     schar	shift;
     char	nbits;
-    char	etype;
     char	garb;
+
+    long	lineno;
+
+    Sym*	tag;
+    Funct*	funct;
 };
 /*e: struct Type */
 
@@ -308,7 +320,9 @@ enum
     OCONST,
     OCONTINUE,
     ODIV,
+
     ODOT,
+
     ODOTDOT,
     ODWHILE,
     OENUM,
@@ -336,7 +350,9 @@ enum
     OLT,
     OMOD,
     OMUL,
+
     ONAME,
+
     ONE,
     ONOT,
     OOR,
@@ -363,6 +379,7 @@ enum
     ONEG,
     OCOM,
     OPOS,
+
     OELEM,
 
     OTST,		/* used in some compilers */
@@ -375,7 +392,7 @@ enum
 };
 /*e: enum _anon_ (cc/cc.h)4 */
 /*s: enum _anon_ (cc/cc.h)5 */
-enum
+enum type
 {
     TXXX,
 
@@ -399,6 +416,7 @@ enum
     TSTRUCT,
     TUNION,
     TENUM,
+
     TDOT,
     NTYPE,
 
