@@ -5,6 +5,11 @@
 	Node*	node;
 	Sym*	sym;
 	Type*	type;
+
+	long	lval;
+	double	dval;
+	vlong	vval;
+
 	struct
 	{
 		Type*	t;
@@ -22,9 +27,6 @@
 		char*	s;
 		long	l;
 	} sval;
-	long	lval;
-	double	dval;
-	vlong	vval;
 }
 %type	<sym>	ltag
 %type	<lval>	gctname gcname cname gname tname
@@ -59,14 +61,15 @@
 %token	<dval>	LFCONST LDCONST
 %token	<vval>	LCONST LLCONST LUCONST LULCONST LVLCONST LUVLCONST
 %token	<sval>	LSTRING LLSTRING
-%token		LAUTO LBREAK LCASE LCHAR LCONTINUE LDEFAULT LDO
-%token		LDOUBLE LELSE LEXTERN LFLOAT LFOR LGOTO
+%token	LAUTO LBREAK LCASE LCHAR LCONTINUE LDEFAULT LDO
+%token	LDOUBLE LELSE LEXTERN LFLOAT LFOR LGOTO
 %token	LIF LINT LLONG LREGISTER LRETURN LSHORT LSIZEOF LUSED
 %token	LSTATIC LSTRUCT LSWITCH LTYPEDEF LTYPESTR LUNION LUNSIGNED
 %token	LWHILE LVOID LENUM LSIGNED LCONSTNT LVOLATILE LSET LSIGNOF
 %token	LRESTRICT LINLINE
 %%
 prog:
+  /* empty */
 |	prog xdecl
 
 /*
@@ -132,31 +135,16 @@ xdecor:
 
 xdecor2:
 	tag
-|	'(' xdecor ')'
-	{
-		$$ = $2;
-	}
-|	xdecor2 '(' zarglist ')'
-	{
-		$$ = new(OFUNC, $1, $3);
-	}
-|	xdecor2 '[' zexpr ']'
-	{
-		$$ = new(OARRAY, $1, $3);
-	}
+|	'(' xdecor ')'	           { $$ = $2;	}
+|	xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
+|	xdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
 
 /*
  * automatic declarator
  */
 adecl:
-	ctlist ';'
-	{
-		$$ = dodecl(adecl, lastclass, lasttype, Z);
-	}
-|	ctlist adlist ';'
-	{
-		$$ = $2;
-	}
+	ctlist ';'        { $$ = dodecl(adecl, lastclass, lasttype, Z);	}
+|	ctlist adlist ';' { $$ = $2; }
 
 adlist:
 	xdecor
@@ -190,13 +178,11 @@ adlist:
  * parameter declarator
  */
 pdecl:
+  /* empty */
 |	pdecl ctlist pdlist ';'
 
 pdlist:
-	xdecor
-	{
-		dodecl(pdecl, lastclass, lasttype, $1);
-	}
+	xdecor	            { dodecl(pdecl, lastclass, lasttype, $1); }
 |	pdlist ',' pdlist
 
 /*
@@ -222,10 +208,7 @@ zedlist:					/* extension */
 |	edlist
 
 edlist:
-	edecor
-	{
-		dodecl(edecl, CXXX, lasttype, $1);
-	}
+	edecor            {	dodecl(edecl, CXXX, lasttype, $1); }
 |	edlist ',' edlist
 
 edecor:
@@ -234,22 +217,14 @@ edecor:
 		lastbit = 0;
 		firstbit = 1;
 	}
-|	tag ':' lexpr
-	{
-		$$ = new(OBIT, $1, $3);
-	}
-|	':' lexpr
-	{
-		$$ = new(OBIT, Z, $2);
-	}
+|	tag ':' lexpr	{ $$ = new(OBIT, $1, $3); }
+|	':' lexpr       { $$ = new(OBIT, Z, $2); }
 
 /*
  * abstract declarator
  */
 abdecor:
-	{
-		$$ = (Z);
-	}
+  /* empty */ { $$ = (Z); }
 |	abdecor1
 
 abdecor1:
@@ -267,41 +242,20 @@ abdecor1:
 
 abdecor2:
 	abdecor3
-|	abdecor2 '(' zarglist ')'
-	{
-		$$ = new(OFUNC, $1, $3);
-	}
-|	abdecor2 '[' zexpr ']'
-	{
-		$$ = new(OARRAY, $1, $3);
-	}
+|	abdecor2 '(' zarglist ')'	{ $$ = new(OFUNC, $1, $3); }
+|	abdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3);	}
 
 abdecor3:
-	'(' ')'
-	{
-		$$ = new(OFUNC, (Z), Z);
-	}
-|	'[' zexpr ']'
-	{
-		$$ = new(OARRAY, (Z), $2);
-	}
-|	'(' abdecor1 ')'
-	{
-		$$ = $2;
-	}
+	'(' ')'	          { $$ = new(OFUNC, (Z), Z); }
+|	'[' zexpr ']'	  { $$ = new(OARRAY, (Z), $2); }
+|	'(' abdecor1 ')'  { $$ = $2; }
 
 init:
 	expr
-|	'{' ilist '}'
-	{
-		$$ = new(OINIT, invert($2), Z);
-	}
+|	'{' ilist '}' { $$ = new(OINIT, invert($2), Z);	}
 
 qual:
-	'[' lexpr ']'
-	{
-		$$ = new(OARRAY, $2, Z);
-	}
+	'[' lexpr ']' { $$ = new(OARRAY, $2, Z); }
 |	'.' ltag
 	{
 		$$ = new(OELEM, Z, Z);
@@ -311,32 +265,18 @@ qual:
 
 qlist:
 	init ','
-|	qlist init ','
-	{
-		$$ = new(OLIST, $1, $2);
-	}
+|	qlist init ','  { $$ = new(OLIST, $1, $2); }
 |	qual
-|	qlist qual
-	{
-		$$ = new(OLIST, $1, $2);
-	}
+|	qlist qual      { $$ = new(OLIST, $1, $2); }
 
 ilist:
 	qlist
 |	init
-|	qlist init
-	{
-		$$ = new(OLIST, $1, $2);
-	}
+|	qlist init { $$ = new(OLIST, $1, $2); }
 
 zarglist:
-	{
-		$$ = Z;
-	}
-|	arglist
-	{
-		$$ = invert($1);
-	}
+  /* empty */ 	{ $$ = Z; }
+|	arglist     { $$ = invert($1); }
 
 
 arglist:
@@ -351,14 +291,8 @@ arglist:
 		$$ = new(OPROTO, $2, Z);
 		$$->type = $1;
 	}
-|	'.' '.' '.'
-	{
-		$$ = new(ODOTDOT, Z, Z);
-	}
-|	arglist ',' arglist
-	{
-		$$ = new(OLIST, $1, $3);
-	}
+|	'.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
+|	arglist ',' arglist  { $$ = new(OLIST, $1, $3);	}
 
 block:
 	'{' slist '}'
@@ -371,56 +305,27 @@ block:
 	}
 
 slist:
-	{
-		$$ = Z;
-	}
-|	slist adecl
-	{
-		$$ = new(OLIST, $1, $2);
-	}
-|	slist stmnt
-	{
-		$$ = new(OLIST, $1, $2);
-	}
+  /* empty */      { $$ = Z;	}
+|	slist adecl    { $$ = new(OLIST, $1, $2); }
+|	slist stmnt    { $$ = new(OLIST, $1, $2); }
 
 labels:
 	label
-|	labels label
-	{
-		$$ = new(OLIST, $1, $2);
-	}
+|	labels label  { $$ = new(OLIST, $1, $2); }
 
 label:
-	LCASE expr ':'
-	{
-		$$ = new(OCASE, $2, Z);
-	}
-|	LDEFAULT ':'
-	{
-		$$ = new(OCASE, Z, Z);
-	}
-|	LNAME ':'
-	{
-		$$ = new(OLABEL, dcllabel($1, 1), Z);
-	}
+	LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
+|	LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
+|	LNAME ':'       { $$ = new(OLABEL, dcllabel($1, 1), Z);	}
 
 stmnt:
-	error ';'
-	{
-		$$ = Z;
-	}
+	error ';'      { $$ = Z; }
 |	ulstmnt
-|	labels ulstmnt
-	{
-		$$ = new(OLIST, $1, $2);
-	}
+|	labels ulstmnt { $$ = new(OLIST, $1, $2); }
 
 forexpr:
 	zcexpr
-|	ctlist adlist
-	{
-		$$ = $2;
-	}
+|	ctlist adlist { $$ = $2; }
 
 ulstmnt:
 	zcexpr ';'
@@ -460,14 +365,8 @@ ulstmnt:
 		}
 		$$ = new(OFOR, new(OLIST, $6, new(OLIST, $4, $8)), $10);
 	}
-|	LWHILE '(' cexpr ')' stmnt
-	{
-		$$ = new(OWHILE, $3, $5);
-	}
-|	LDO stmnt LWHILE '(' cexpr ')' ';'
-	{
-		$$ = new(ODWHILE, $5, $2);
-	}
+|	LWHILE '(' cexpr ')' stmnt	        { $$ = new(OWHILE, $3, $5); }
+|	LDO stmnt LWHILE '(' cexpr ')' ';'	{ $$ = new(ODWHILE, $5, $2); }
 |	LRETURN zcexpr ';'
 	{
 		$$ = new(ORETURN, $2, Z);
@@ -487,37 +386,19 @@ ulstmnt:
 
 		$$ = new(OSWITCH, $3, $5);
 	}
-|	LBREAK ';'
-	{
-		$$ = new(OBREAK, Z, Z);
-	}
-|	LCONTINUE ';'
-	{
-		$$ = new(OCONTINUE, Z, Z);
-	}
-|	LGOTO ltag ';'
-	{
-		$$ = new(OGOTO, dcllabel($2, 0), Z);
-	}
-|	LUSED '(' zelist ')' ';'
-	{
-		$$ = new(OUSED, $3, Z);
-	}
-|	LSET '(' zelist ')' ';'
-	{
-		$$ = new(OSET, $3, Z);
-	}
+|	LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
+|	LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
+|	LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, 0), Z); }
+
+|	LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
+|	LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
 
 zcexpr:
-	{
-		$$ = Z;
-	}
+  /* empty */ { $$ = Z;	}
 |	cexpr
 
 zexpr:
-	{
-		$$ = Z;
-	}
+  /* empty */ { $$ = Z;	}
 |	lexpr
 
 lexpr:
@@ -529,133 +410,40 @@ lexpr:
 
 cexpr:
 	expr
-|	cexpr ',' cexpr
-	{
-		$$ = new(OCOMMA, $1, $3);
-	}
+|	cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3);	}
 
 expr:
 	xuexpr
-|	expr '*' expr
-	{
-		$$ = new(OMUL, $1, $3);
-	}
-|	expr '/' expr
-	{
-		$$ = new(ODIV, $1, $3);
-	}
-|	expr '%' expr
-	{
-		$$ = new(OMOD, $1, $3);
-	}
-|	expr '+' expr
-	{
-		$$ = new(OADD, $1, $3);
-	}
-|	expr '-' expr
-	{
-		$$ = new(OSUB, $1, $3);
-	}
-|	expr LRSH expr
-	{
-		$$ = new(OASHR, $1, $3);
-	}
-|	expr LLSH expr
-	{
-		$$ = new(OASHL, $1, $3);
-	}
-|	expr '<' expr
-	{
-		$$ = new(OLT, $1, $3);
-	}
-|	expr '>' expr
-	{
-		$$ = new(OGT, $1, $3);
-	}
-|	expr LLE expr
-	{
-		$$ = new(OLE, $1, $3);
-	}
-|	expr LGE expr
-	{
-		$$ = new(OGE, $1, $3);
-	}
-|	expr LEQ expr
-	{
-		$$ = new(OEQ, $1, $3);
-	}
-|	expr LNE expr
-	{
-		$$ = new(ONE, $1, $3);
-	}
-|	expr '&' expr
-	{
-		$$ = new(OAND, $1, $3);
-	}
-|	expr '^' expr
-	{
-		$$ = new(OXOR, $1, $3);
-	}
-|	expr '|' expr
-	{
-		$$ = new(OOR, $1, $3);
-	}
-|	expr LANDAND expr
-	{
-		$$ = new(OANDAND, $1, $3);
-	}
-|	expr LOROR expr
-	{
-		$$ = new(OOROR, $1, $3);
-	}
-|	expr '?' cexpr ':' expr
-	{
-		$$ = new(OCOND, $1, new(OLIST, $3, $5));
-	}
-|	expr '=' expr
-	{
-		$$ = new(OAS, $1, $3);
-	}
-|	expr LPE expr
-	{
-		$$ = new(OASADD, $1, $3);
-	}
-|	expr LME expr
-	{
-		$$ = new(OASSUB, $1, $3);
-	}
-|	expr LMLE expr
-	{
-		$$ = new(OASMUL, $1, $3);
-	}
-|	expr LDVE expr
-	{
-		$$ = new(OASDIV, $1, $3);
-	}
-|	expr LMDE expr
-	{
-		$$ = new(OASMOD, $1, $3);
-	}
-|	expr LLSHE expr
-	{
-		$$ = new(OASASHL, $1, $3);
-	}
-|	expr LRSHE expr
-	{
-		$$ = new(OASASHR, $1, $3);
-	}
-|	expr LANDE expr
-	{
-		$$ = new(OASAND, $1, $3);
-	}
-|	expr LXORE expr
-	{
-		$$ = new(OASXOR, $1, $3);
-	}
-|	expr LORE expr
-	{
-		$$ = new(OASOR, $1, $3);
-	}
+|	expr '*' expr { $$ = new(OMUL, $1, $3);	}
+|	expr '/' expr { $$ = new(ODIV, $1, $3);	}
+|	expr '%' expr { $$ = new(OMOD, $1, $3);	}
+|	expr '+' expr { $$ = new(OADD, $1, $3);	}
+|	expr '-' expr { $$ = new(OSUB, $1, $3);	}
+|	expr LRSH expr { $$ = new(OASHR, $1, $3); }
+|	expr LLSH expr { $$ = new(OASHL, $1, $3); }
+|	expr '<' expr  { $$ = new(OLT, $1, $3);	}
+|	expr '>' expr  { $$ = new(OGT, $1, $3);	}
+|	expr LLE expr  { $$ = new(OLE, $1, $3);	}
+|	expr LGE expr  { $$ = new(OGE, $1, $3);	}
+|	expr LEQ expr  { $$ = new(OEQ, $1, $3);	}
+|	expr LNE expr  { $$ = new(ONE, $1, $3);	}
+|	expr '&' expr  { $$ = new(OAND, $1, $3); }
+|	expr '^' expr  { $$ = new(OXOR, $1, $3); }
+|	expr '|' expr  { $$ = new(OOR, $1, $3); }
+|	expr LANDAND expr { $$ = new(OANDAND, $1, $3); }
+|	expr LOROR expr   { $$ = new(OOROR, $1, $3); }
+|	expr '?' cexpr ':' expr	{ $$ = new(OCOND, $1, new(OLIST, $3, $5)); }
+|	expr '=' expr  { $$ = new(OAS, $1, $3);	}
+|	expr LPE expr  { $$ = new(OASADD, $1, $3); }
+|	expr LME expr  { $$ = new(OASSUB, $1, $3); }
+|	expr LMLE expr { $$ = new(OASMUL, $1, $3); }
+|	expr LDVE expr { $$ = new(OASDIV, $1, $3); }
+|	expr LMDE expr { $$ = new(OASMOD, $1, $3); }
+|	expr LLSHE expr { $$ = new(OASASHL, $1, $3); }
+|	expr LRSHE expr { $$ = new(OASASHR, $1, $3); }
+|	expr LANDE expr { $$ = new(OASAND, $1, $3); }
+|	expr LXORE expr { $$ = new(OASXOR, $1, $3);	}
+|	expr LORE expr  { $$ = new(OASOR, $1, $3); }
 
 xuexpr:
 	uexpr
@@ -675,52 +463,19 @@ xuexpr:
 
 uexpr:
 	pexpr
-|	'*' xuexpr
-	{
-		$$ = new(OIND, $2, Z);
-	}
-|	'&' xuexpr
-	{
-		$$ = new(OADDR, $2, Z);
-	}
-|	'+' xuexpr
-	{
-		$$ = new(OPOS, $2, Z);
-	}
-|	'-' xuexpr
-	{
-		$$ = new(ONEG, $2, Z);
-	}
-|	'!' xuexpr
-	{
-		$$ = new(ONOT, $2, Z);
-	}
-|	'~' xuexpr
-	{
-		$$ = new(OCOM, $2, Z);
-	}
-|	LPP xuexpr
-	{
-		$$ = new(OPREINC, $2, Z);
-	}
-|	LMM xuexpr
-	{
-		$$ = new(OPREDEC, $2, Z);
-	}
-|	LSIZEOF uexpr
-	{
-		$$ = new(OSIZE, $2, Z);
-	}
-|	LSIGNOF uexpr
-	{
-		$$ = new(OSIGN, $2, Z);
-	}
+|	'*' xuexpr { $$ = new(OIND, $2, Z); }
+|	'&' xuexpr { $$ = new(OADDR, $2, Z); }
+|	'+' xuexpr { $$ = new(OPOS, $2, Z); }
+|	'-' xuexpr { $$ = new(ONEG, $2, Z); }
+|	'!' xuexpr { $$ = new(ONOT, $2, Z); }
+|	'~' xuexpr { $$ = new(OCOM, $2, Z); }
+|	LPP xuexpr { $$ = new(OPREINC, $2, Z); }
+|	LMM xuexpr { $$ = new(OPREDEC, $2, Z); }
+|	LSIZEOF uexpr { $$ = new(OSIZE, $2, Z);	}
+|	LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
 
 pexpr:
-	'(' cexpr ')'
-	{
-		$$ = $2;
-	}
+	'(' cexpr ')' { $$ = $2; }
 |	LSIZEOF '(' tlist abdecor ')'
 	{
 		$$ = new(OSIZE, Z, Z);
@@ -741,10 +496,7 @@ pexpr:
 			dodecl(xdecl, CXXX, types[TINT], $$);
 		$$->right = invert($3);
 	}
-|	pexpr '[' cexpr ']'
-	{
-		$$ = new(OIND, new(OADD, $1, $3), Z);
-	}
+|	pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
 |	pexpr LMG ltag
 	{
 		$$ = new(ODOT, new(OIND, $1, Z), Z);
@@ -755,14 +507,8 @@ pexpr:
 		$$ = new(ODOT, $1, Z);
 		$$->sym = $3;
 	}
-|	pexpr LPP
-	{
-		$$ = new(OPOSTINC, $1, Z);
-	}
-|	pexpr LMM
-	{
-		$$ = new(OPOSTDEC, $1, Z);
-	}
+|	pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
+|	pexpr LMM { $$ = new(OPOSTDEC, $1, Z); }
 |	name
 |	LCONST
 	{
@@ -880,17 +626,12 @@ lstring:
 	}
 
 zelist:
-	{
-		$$ = Z;
-	}
+  /* empty */ { $$ = Z; }
 |	elist
 
 elist:
 	expr
-|	elist ',' elist
-	{
-		$$ = new(OLIST, $1, $3);
-	}
+|	elist ',' elist { $$ = new(OLIST, $1, $3); }
 
 sbody:
 	'{'
@@ -906,7 +647,8 @@ sbody:
 		lastclass = CXXX;
 		lasttype = T;
 	}
-	edecl '}'
+	edecl 
+    '}'
 	{
 		$$ = strf;
 		strf = $<tyty>2.t1;
@@ -916,6 +658,7 @@ sbody:
 	}
 
 zctlist:
+ /* empty */
 	{
 		lastclass = CXXX;
 		lasttype = types[TINT];
@@ -1076,26 +819,15 @@ complex:
 	{
 		$$ = en.tenum;
 	}
-|	LTYPE
-	{
-		$$ = tcopy($1->type);
-	}
+|	LTYPE { $$ = tcopy($1->type); }
 
 gctnlist:
 	gctname
-|	gctnlist gctname
-	{
-		$$ = typebitor($1, $2);
-	}
+|	gctnlist gctname { $$ = typebitor($1, $2); }
 
 zgnlist:
-	{
-		$$ = 0;
-	}
-|	zgnlist gname
-	{
-		$$ = typebitor($1, $2);
-	}
+ /* empty */       { $$ = 0; }
+|	zgnlist gname  { $$ = typebitor($1, $2); }
 
 gctname:
 	tname
@@ -1104,49 +836,40 @@ gctname:
 
 gcnlist:
 	gcname
-|	gcnlist gcname
-	{
-		$$ = typebitor($1, $2);
-	}
+|	gcnlist gcname { $$ = typebitor($1, $2); }
 
 gcname:
 	gname
 |	cname
 
 enum:
-	LNAME
-	{
-		doenum($1, Z);
-	}
-|	LNAME '=' expr
-	{
-		doenum($1, $3);
-	}
+	LNAME           { doenum($1, Z); }
+|	LNAME '=' expr  { doenum($1, $3); }
 |	enum ','
 |	enum ',' enum
 
 tname:	/* type words */
-	LCHAR { $$ = BCHAR; }
-|	LSHORT { $$ = BSHORT; }
-|	LINT { $$ = BINT; }
-|	LLONG { $$ = BLONG; }
-|	LSIGNED { $$ = BSIGNED; }
+	LCHAR     { $$ = BCHAR; }
+|	LSHORT    { $$ = BSHORT; }
+|	LINT      { $$ = BINT; }
+|	LLONG     { $$ = BLONG; }
+|	LSIGNED   { $$ = BSIGNED; }
 |	LUNSIGNED { $$ = BUNSIGNED; }
-|	LFLOAT { $$ = BFLOAT; }
-|	LDOUBLE { $$ = BDOUBLE; }
-|	LVOID { $$ = BVOID; }
+|	LFLOAT    { $$ = BFLOAT; }
+|	LDOUBLE   { $$ = BDOUBLE; }
+|	LVOID     { $$ = BVOID; }
 
 cname:	/* class words */
-	LAUTO { $$ = BAUTO; }
-|	LSTATIC { $$ = BSTATIC; }
-|	LEXTERN { $$ = BEXTERN; }
-|	LTYPEDEF { $$ = BTYPEDEF; }
-|	LTYPESTR { $$ = BTYPESTR; }
+	LAUTO     { $$ = BAUTO; }
+|	LSTATIC   { $$ = BSTATIC; }
+|	LEXTERN   { $$ = BEXTERN; }
+|	LTYPEDEF  { $$ = BTYPEDEF; }
+|	LTYPESTR  { $$ = BTYPESTR; }
 |	LREGISTER { $$ = BREGISTER; }
-|	LINLINE { $$ = 0; }
+|	LINLINE   { $$ = 0; }
 
 gname:	/* garbage words */
-	LCONSTNT { $$ = BCONSTNT; }
+	LCONSTNT  { $$ = BCONSTNT; }
 |	LVOLATILE { $$ = BVOLATILE; }
 |	LRESTRICT { $$ = 0; }
 
@@ -1165,6 +888,7 @@ name:
 		$$->class = $1->class;
 		$1->aused = 1;
 	}
+
 tag:
 	ltag
 	{
@@ -1177,6 +901,7 @@ tag:
 		$$->xoffset = $1->offset;
 		$$->class = $1->class;
 	}
+
 ltag:
 	LNAME
 |	LTYPE
