@@ -80,11 +80,15 @@ struct	Adr
 /*s: struct Prog */
 struct	Prog
 {
+    // enum<opcode>
+    short	as;
+
     Adr	from;
     Adr	to;
-    Prog*	link;
+
     long	lineno;
-    short	as;
+
+    Prog*	link;
 };
 /*e: struct Prog */
 /*s: constant P */
@@ -298,7 +302,6 @@ void	regfree(Node*);
 void	regialloc(Node*, Node*, Node*);
 void	regsalloc(Node*, Node*);
 void	regind(Node*, Node*);
-//void	gprep(Node*, Node*);
 void	gmove(Node*, Node*);
 void	gins(int a, Node*, Node*);
 void	fgopcode(int, Node*, Node*, int, int);
@@ -307,6 +310,7 @@ void	gbranch(int);
 void	patch(Prog*, long);
 int	sconst(Node*);
 void	gpseudo(int, Sym*, Node*);
+//void	gprep(Node*, Node*);
 
 /*
  * swt.c

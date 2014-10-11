@@ -45,6 +45,7 @@ Decl*	firstdcl;
 //int	fperror;
 /*e: global fperror */
 /*s: global hash */
+// hash<string, ref_own?<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
 /*e: global hash */
 /*s: global hasdoubled */

@@ -145,7 +145,7 @@ void
 nextpc(void)
 {
 
-    p = alloc(sizeof(*p));
+    p = alloc(sizeof(Prog));
     *p = zprog;
     p->lineno = nearln;
     pc++;

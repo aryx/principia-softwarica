@@ -108,8 +108,11 @@ struct	Node
 /*s: struct Sym */
 struct	Sym
 {
+    // for? keywords? locals? parameters? struct/union? all names? fields?
     char	*name;
 
+
+    // Extra
     Sym*	link;
 
     Type*	type;
@@ -217,11 +220,14 @@ extern struct Fi fi;
 /*s: struct Io */
 struct	Io
 {
-    Io*	link;
-    char*	p;
     char	b[BUFSIZ];
-    short	c;
+
     short	f;
+
+    char*	p;
+    short	c;
+
+    Io*	link;
 };
 /*e: struct Io */
 /*s: constant I */
@@ -231,10 +237,12 @@ struct	Io
 /*s: struct Hist */
 struct	Hist
 {
-    Hist*	link;
     char*	name;
+
     long	line;
     long	offset;
+
+    Hist*	link;
 };
 /*e: struct Hist */
 /*s: constant H */
