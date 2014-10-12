@@ -1,3 +1,4 @@
+/*s: cc/cc.y */
 %{
 #include "cc.h"
 %}
@@ -906,3 +907,4 @@ ltag:
     LNAME
 |   LTYPE
 %%
+/*e: cc/cc.y */

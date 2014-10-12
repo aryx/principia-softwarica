@@ -20,6 +20,7 @@ SRC_ORIG=Compiler.tex.nw Compiler_extra.tex.nw
 
 #TODO: cc/cc.y
 SRC_VIEWS= \
+   cc/cc.y\
    cc/cc.h\
    cc/mac.c\
    cc/omachcap.c\
