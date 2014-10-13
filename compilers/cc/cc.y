@@ -2,33 +2,39 @@
 %{
 #include "cc.h"
 %}
+/*s: union token */
 %union  {
-    Node*   node;
     Sym*    sym;
-    Type*   type;
-
-    long    lval;
     double  dval;
     vlong   vval;
-
-    struct
-    {
-        Type*   t;
-        uchar   c;
-    } tycl;
-    struct
-    {
-        Type*   t1;
-        Type*   t2;
-        Type*   t3;
-        uchar   c;
-    } tyty;
     struct
     {
         char*   s;
         long    l;
     } sval;
+
+   /*s: [[Token]] other fields */
+   Node*   node;
+   Type*   type;
+   long    lval;
+
+   struct
+   {
+       Type*   t;
+       uchar   c;
+   } tycl;
+   struct
+   {
+       Type*   t1;
+       Type*   t2;
+       Type*   t3;
+       uchar   c;
+   } tyty;
+   /*e: [[Token]] other fields */
+
 }
+/*e: union token */
+/*s: type declarations */
 %type   <sym>   ltag
 %type   <lval>  gctname gcname cname gname tname
 %type   <lval>  gctnlist gcnlist zgnlist
@@ -41,7 +47,8 @@
 %type   <node>  adlist edecor tag qual qlist
 %type   <node>  abdecor abdecor1 abdecor2 abdecor3
 %type   <node>  zexpr lexpr init ilist forexpr
-
+/*e: type declarations */
+/*s: priority and associativity declarations */
 %left   ';'
 %left   ','
 %right  '=' LPE LME LMLE LDVE LMDE LRSHE LLSHE LANDE LXORE LORE
@@ -57,7 +64,8 @@
 %left   '+' '-'
 %left   '*' '/' '%'
 %right  LMM LPP LMG '.' '[' '('
-
+/*e: priority and associativity declarations */
+/*s: token declarations */
 %token  <sym>   LNAME LTYPE
 %token  <dval>  LFCONST LDCONST
 %token  <vval>  LCONST LLCONST LUCONST LULCONST LVLCONST LUVLCONST
@@ -68,7 +76,9 @@
 %token  LSTATIC LSTRUCT LSWITCH LTYPEDEF LTYPESTR LUNION LUNSIGNED
 %token  LWHILE LVOID LENUM LSIGNED LCONSTNT LVOLATILE LSET LSIGNOF
 %token  LRESTRICT LINLINE
+/*e: token declarations */
 %%
+/*s: grammar */
 prog:
   /* empty */
 |   prog xdecl
@@ -77,10 +87,7 @@ prog:
  * external declarator
  */
 xdecl:
-    zctlist ';'
-    {
-        dodecl(xdecl, lastclass, lasttype, Z);
-    }
+    zctlist ';'          { dodecl(xdecl, lastclass, lasttype, Z); }
 |   zctlist xdlist ';'
 |   zctlist xdecor
     {
@@ -112,10 +119,7 @@ xdecl:
     }
 
 xdlist:
-    xdecor
-    {
-        dodecl(xdecl, lastclass, lasttype, $1);
-    }
+    xdecor  { dodecl(xdecl, lastclass, lasttype, $1); }
 |   xdecor
     {
         $1 = dodecl(xdecl, lastclass, lasttype, $1);
@@ -296,11 +300,11 @@ arglist:
 |   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
 
 block:
-    '{' slist '}'
+ '{' slist '}'
     {
         $$ = invert($2);
-    //  if($2 != Z)
-    //      $$ = new(OLIST, $2, $$);
+        //  if($2 != Z)
+        //      $$ = new(OLIST, $2, $$);
         if($$ == Z)
             $$ = new(OLIST, Z, Z);
     }
@@ -393,6 +397,8 @@ ulstmnt:
 
 |   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
 |   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
+
+
 
 zcexpr:
   /* empty */ { $$ = Z; }
@@ -906,5 +912,6 @@ tag:
 ltag:
     LNAME
 |   LTYPE
+/*e: grammar */
 %%
 /*e: cc/cc.y */
