@@ -162,6 +162,8 @@ Here are other candidates that were considered but ultimately discarded:
 \item lcc 
 %maybe better actually, but already a book on it
 % also use a grammar? or handwritten?
+\item compcert
+% harder to understand coq :)
 \item tinycc, fbcc
 \item gcc
 %big
@@ -172,7 +174,6 @@ Here are other candidates that were considered but ultimately discarded:
 \end{itemize}
 
 % TODO bench 8c vs gcc and clang on benchmarks!
-
 
 \section{Getting started}
 
@@ -198,13 +199,14 @@ License.
 
 \section{Compiler principles}
 
-% from high level to low level (asm). E.g. expression like x+y*z
-% decomposed into multi mov, add, etc. Fortran!
+% from high level to low level (asm). 
+% expression like x+y*z decomposed into multi mov, add, etc. Fortran!
 % same for data, complex decomposed into smaller bytes, with symbolic names
 %  for subparts, e.g. fields.
-% more structured forms than jmp.
+% statements, more structured forms than jmp.
+% types! type checking!
 
-% innovation of C vs fortran/pascal/algo? simpler?
+% innovation of C vs fortran/pascal/algol? simpler?
 
 \section{[[8c]] services}
 
@@ -215,7 +217,7 @@ License.
 \section{Input C language}
 
 % mostly ANSI C. a few extension
-% see K&R
+% see K&R book
 
 \section{Output object format}
 
@@ -288,10 +290,9 @@ License.
 \subsection{[[Node]]}
 % = expr + stmt + decl?
 
-% node kind?
 % LP reorg, purely internal to cc, not marshalled, so safe (as opposed to 8a)
-<<enum _anon_ (cc/cc.h)4>>=
-enum
+<<enum node_kind>>=
+enum node_kind
 {
     OXXX,
 
@@ -405,36 +406,41 @@ enum
 <<struct Node>>=
 struct	Node
 {
+    // enum<node_kind>
     char	op;
+    // option<ref_own<Node>>
     Node*	left;
+    // option<ref_own<Node>>
     Node*	right;
 
     long	lineno;
 
-    // Other fields, TODO LP split
-    void*	label;
-    long	pc;
-    int		reg;
-    long	xoffset;
-    double	fconst;		/* fp constant */
-    vlong	vconst;		/* non fp const */
-    char*	cstring;	/* character string */
-    TRune*	rstring;	/* rune string */
-
-    Sym*	sym;
-    Type*	type;
-    char	oldop;
-    char 	xcast;
-    char	class;
-    char	etype;
-    char	complex;
-    char	addable;
-    char	scale;
-    char	garb;
-
-    // Extra fields
+    <<[[Node]] other fields>>
 };
 @
+
+<<[[Node]] other fields>>=
+void*	label;
+long	pc;
+int		reg;
+long	xoffset;
+double	fconst;		/* fp constant */
+vlong	vconst;		/* non fp const */
+char*	cstring;	/* character string */
+TRune*	rstring;	/* rune string */
+
+Sym*	sym;
+Type*	type;
+char	oldop;
+char 	xcast;
+char	class;
+char	etype;
+char	complex;
+char	addable;
+char	scale;
+char	garb;
+@
+
 
 <<constant Z>>=
 #define	Z	((Node*)nil)
@@ -489,8 +495,8 @@ new1(int o, Node *l, Node *r)
 \subsection{[[Type]]}
 
 % split?
-<<enum _anon_ (cc/cc.h)5>>=
-enum type
+<<enum type_kind>>=
+enum type_kind
 {
     TXXX,
 
@@ -603,12 +609,15 @@ copytyp(Type *t)
 
 \subsection{[[Decl]]}
 
+% for? locals? func?, params? typedefs? all entities?
 <<struct Decl>>=
 struct	Decl
 {
     Sym*	sym;
     Type*	type;
+
     long	varlineno;
+
     long	offset;
     short	val;
     ushort	block;
@@ -616,8 +625,12 @@ struct	Decl
     char	aused;
 
     // Extra fields
-    Decl*	link;
+    <<[[Decl]] extra fields>>
 };
+@
+
+<<[[Decl]] extra fields>>=
+Decl*	link;
 @
 
 <<constant D>>=
@@ -633,6 +646,9 @@ struct	Decl
 %token  <vval>  LCONST LLCONST LUCONST LULCONST LVLCONST LUVLCONST
 %token  <dval>  LFCONST LDCONST
 %token  <sval>  LSTRING LLSTRING
+@
+
+<<token declarations>>=
 %token  LAUTO LBREAK LCASE LCHAR LCONTINUE LDEFAULT LDO
 %token  LDOUBLE LELSE LEXTERN LFLOAT LFOR LGOTO
 %token  LIF LINT LLONG LREGISTER LRETURN LSHORT LSIZEOF LUSED
@@ -643,8 +659,6 @@ struct	Decl
 
 % LXXX  Lexer XXX? Lexeme XXX?
 % so have LDOUBLE and TDOUBLE
-
-
 
 <<union token>>=
 %union  {
@@ -658,7 +672,6 @@ struct	Decl
     } sval;
 
    <<[[Token]] other fields>>
-
 }
 @
 
@@ -768,6 +781,7 @@ lookup(void)
     if((long)h < 0)
         h = ~h;
     h %= NHASH;
+
     c = symb[0];
     for(s = hash[h]; s != S; s = s->link) {
         if(s->name[0] != c)
@@ -1935,7 +1949,7 @@ struct
 
 <<function escchar>>=
 long
-escchar(long e, int longflg, int escflg)
+escchar(long e, int longflg, bool escflg)
 {
     long c, l;
     int i;
@@ -2870,7 +2884,7 @@ macund(void)
 
 \section{[[#ifdef]]}
 
-% 0 = ifdef, 1 = ifndef, 2 = else, see mactab and domacro
+% 0 = ifdef, 1 = ifndef, 2 = else, see mactab and domacro()
 <<function macif>>=
 void
 macif(int f)
@@ -3084,6 +3098,9 @@ bad:
 
 
 \section{[[#line]]}
+
+% useful for code generator, to report error to original file, not generated
+% code, e.g. for lex&yacc
 
 <<function maclin>>=
 void
