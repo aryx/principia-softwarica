@@ -197,10 +197,17 @@ struct	Decl
 /*s: struct Type */
 struct	Type
 {
+    // enum<type_kind>
     char	etype;
 
+    // ??
     Type*	link;
+    // ??
     Type*	down;
+
+    long	lineno;
+
+    /*s: [[Type]] other fields */
     Sym*	sym;
 
     long	width;
@@ -210,10 +217,9 @@ struct	Type
     char	nbits;
     char	garb;
 
-    long	lineno;
-
     Sym*	tag;
     Funct*	funct;
+    /*e: [[Type]] other fields */
 };
 /*e: struct Type */
 
