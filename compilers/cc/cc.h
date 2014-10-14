@@ -94,7 +94,6 @@ struct	Node
 
     Sym*	sym;
     char	oldop;
-    char 	xcast;
     char	class;
     char	etype;
 
@@ -106,6 +105,8 @@ struct	Node
 
     char	scale;
     char	garb;
+    /*x: [[Node]] other fields */
+    bool 	xcast;
     /*x: [[Node]] other fields */
     Type*	type;
     /*e: [[Node]] other fields */

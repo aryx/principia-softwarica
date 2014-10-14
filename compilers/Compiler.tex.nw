@@ -436,7 +436,6 @@ TRune*	rstring;	/* rune string */
 
 Sym*	sym;
 char	oldop;
-char 	xcast;
 char	class;
 char	etype;
 
@@ -3307,11 +3306,269 @@ prog:
 <<ebnf grammar rules>>
 @
 
+\section{Declarations and definitions, part one}
+
+<<external declarator rules>>=
+/*
+ * external declarator
+ */
+xdecl:
+    zctlist ';'          { dodecl(xdecl, lastclass, lasttype, Z); }
+|   zctlist xdlist ';'
+<<xdecl function definition case>>
+@
+
+% do that because C sucks? but my parser_c.mly was also complicated
+% when it come to declaration handling
+<<global lastclass>>=
+//@Scheck: y.tab.c
+char	lastclass;
+@
+
+<<global lasttype>>=
+//@Scheck: y.tab.c
+Type*	lasttype;
+@
+
+
+
 \section{Function definition}
+
+<<global lastdcl>>=
+Type*	lastdcl;
+@
+
+<<global firstdcl>>=
+Decl*	firstdcl;
+@
+
 
 <<global thisfn>>=
 Type*	thisfn;
 @
+
+
+
+<<xdecl function definition case>>=
+|   zctlist xdecor
+    {
+        lastdcl = T;
+        firstarg = S;
+        dodecl(xdecl, lastclass, lasttype, $2);
+        if(lastdcl == T || lastdcl->etype != TFUNC) {
+            diag($2, "not a function");
+            lastdcl = types[TFUNC];
+        }
+        thisfn = lastdcl;
+        markdcl();
+        firstdcl = dclstack;
+        argmark($2, 0);
+    }
+    pdecl
+    {
+        argmark($2, 1);
+    }
+    block
+    {
+        Node *n;
+
+        n = revertdcl();
+        if(n)
+            $6 = new(OLIST, n, $6);
+
+        if(!debug['a'] && !debug['Z'])
+            codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
+    }
+@
+
+\subsection{Parameters}
+
+<<global firstarg>>=
+Sym*	firstarg;
+@
+
+<<global firstargtype>>=
+Type*	firstargtype;
+@
+
+<<global autoffset>>=
+long	autoffset;
+@
+
+<<global stkoff>>=
+long	stkoff;
+@
+
+
+% pass is 0 or 1
+<<function argmark>>=
+//@Scheck: not dead, used by cc.y
+void argmark(Node *n, int pass)
+{
+    Type *t;
+
+    autoffset = align(0, thisfn->link, Aarg0);
+    stkoff = 0;
+    for(; n->left != Z; n = n->left) {
+        if(n->op != OFUNC || n->left->op != ONAME)
+            continue;
+        walkparam(n->right, pass);
+        if(pass != 0 && anyproto(n->right) == OLDPROTO) {
+            t = typ(TFUNC, n->left->sym->type->link);
+            t->down = typ(TOLD, T);
+            t->down->down = ofnproto(n->right);
+            tmerge(t, n->left->sym);
+            n->left->sym->type = t;
+        }
+        break;
+    }
+    autoffset = 0;
+    stkoff = 0;
+}
+@
+
+<<function walkparam>>=
+void
+walkparam(Node *n, int pass)
+{
+    Sym *s;
+    Node *n1;
+
+    if(n != Z && n->op == OPROTO && n->left == Z && n->type == types[TVOID])
+        return;
+
+loop:
+    if(n == Z)
+        return;
+    switch(n->op) {
+    default:
+        diag(n, "argument not a name/prototype: %O", n->op);
+        break;
+
+    case OLIST:
+        walkparam(n->left, pass);
+        n = n->right;
+        goto loop;
+
+    case OPROTO:
+        for(n1 = n; n1 != Z; n1=n1->left)
+            if(n1->op == ONAME) {
+                if(pass == 0) {
+                    s = n1->sym;
+                    push1(s);
+                    s->offset = -1;
+                    break;
+                }
+                dodecl(pdecl, CPARAM, n->type, n->left);
+                break;
+            }
+        if(n1)
+            break;
+        if(pass == 0) {
+            /*
+             * extension:
+             *	allow no name in argument declaration
+            diag(Z, "no name in argument declaration");
+             */
+            break;
+        }
+        dodecl(NODECL, CPARAM, n->type, n->left);
+        pdecl(CPARAM, lastdcl, S);
+        break;
+
+    case ODOTDOT:
+        break;
+    
+    case ONAME:
+        s = n->sym;
+        if(pass == 0) {
+            push1(s);
+            s->offset = -1;
+            break;
+        }
+        if(s->offset != -1) {
+            if(autoffset == 0) {
+                firstarg = s;
+                firstargtype = s->type;
+            }
+            autoffset = align(autoffset, s->type, Aarg1);
+            s->offset = autoffset;
+            autoffset = align(autoffset, s->type, Aarg2);
+        } else
+            dodecl(pdecl, CXXX, types[TINT], n);
+        break;
+    }
+}
+@
+
+
+
+<<parameter declarator rules>>=
+/*
+ * parameter declarator
+ */
+pdecl:
+  /* empty */
+|   pdecl ctlist pdlist ';'
+
+pdlist:
+    xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
+|   pdlist ',' pdlist
+@
+%$
+% this is old style? pre-ansi?
+
+
+<<function pdecl>>=
+void
+pdecl(int c, Type *t, Sym *s)
+{
+    if(s && s->offset != -1) {
+        diag(Z, "not a parameter: %s", s->name);
+        return;
+    }
+    t = paramconv(t, c==CPARAM);
+    if(c == CXXX)
+        c = CPARAM;
+    if(c != CPARAM) {
+        diag(Z, "parameter cannot have class: %s", s->name);
+        c = CPARAM;
+    }
+    if(typesu[t->etype] && t->width <= 0)
+        diag(Z, "incomplete structure: %s", t->tag->name);
+    adecl(c, t, s);
+}
+@
+
+
+
+
+
+% called arg ... hmmm ... should be renamed zparamlist
+<<parameter declarator rules>>=
+zarglist:
+  /* empty */   { $$ = Z; }
+|   arglist     { $$ = invert($1); }
+
+
+arglist:
+    name
+|   tlist abdecor
+    {
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
+    }
+|   tlist xdecor
+    {
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
+    }
+|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
+|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
+@
+%$
+
+
 
 \section{Statements}
 
@@ -3533,6 +3790,7 @@ Node* dcllabel(Sym *s, bool f)
 <<expressions rules>>=
 expr:
     xuexpr
+
 |   expr '*' expr { $$ = new(OMUL, $1, $3); }
 |   expr '/' expr { $$ = new(ODIV, $1, $3); }
 |   expr '%' expr { $$ = new(OMOD, $1, $3); }
@@ -3576,8 +3834,19 @@ xuexpr:
         $$ = new(OCAST, $5, Z);
         dodecl(NODECL, CXXX, $2, $3);
         $$->type = lastdcl;
-        $$->xcast = 1;
+        $$->xcast = true;
     }
+<<xuexpr other cases>>
+@
+%$
+
+% extended unary expr? = cast expr
+
+<<[[Node]] other fields>>=
+bool 	xcast;
+@
+
+<<xuexpr other cases>>=
 |   '(' tlist abdecor ')' '{' ilist '}' /* extension */
     {
         $$ = new(OSTRUCT, $6, Z);
@@ -3585,20 +3854,24 @@ xuexpr:
         $$->type = lastdcl;
     }
 @
-% extended unary expr? = cast expr
+%$
+
 
 % unary expr
 <<expressions rules>>=
 uexpr:
     pexpr
+
 |   '*' xuexpr { $$ = new(OIND, $2, Z); }
 |   '&' xuexpr { $$ = new(OADDR, $2, Z); }
+
 |   '+' xuexpr { $$ = new(OPOS, $2, Z); }
 |   '-' xuexpr { $$ = new(ONEG, $2, Z); }
 |   '!' xuexpr { $$ = new(ONOT, $2, Z); }
 |   '~' xuexpr { $$ = new(OCOM, $2, Z); }
 |   LPP xuexpr { $$ = new(OPREINC, $2, Z); }
 |   LMM xuexpr { $$ = new(OPREDEC, $2, Z); }
+
 |   LSIZEOF uexpr { $$ = new(OSIZE, $2, Z); }
 |   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
 @
@@ -3613,6 +3886,7 @@ uexpr:
 pexpr:
     '(' cexpr ')' { $$ = $2; }
 @
+%$
 
 <<pexpr rule>>=
 |   LSIZEOF '(' tlist abdecor ')'
@@ -3628,6 +3902,8 @@ pexpr:
         $$->type = lastdcl;
     }
 @
+%$
+% again sizeof but this time not uexpr, but types!
 
 <<pexpr rule>>=
 |   pexpr '(' zelist ')'
@@ -4142,6 +4418,14 @@ edecor:
 @
 %$
 
+<<global lastfield>>=
+long	lastfield;
+@
+
+<<global lastbit>>=
+long	lastbit;
+@
+
 \subsection{Enum}
 
 <<complex types rules>>=
@@ -4153,7 +4437,7 @@ enum:
 @
 %$
 
-\section{Declarations and definitions}
+\section{Declarations and definitions, part two}
 
 <<global blockno>>=
 int	blockno;
@@ -4163,9 +4447,6 @@ int	blockno;
 int	autobn;
 @
 
-<<global autoffset>>=
-long	autoffset;
-@
 
 <<function markdcl>>=
 //@Scheck: used by cc.y
@@ -4267,7 +4548,175 @@ Node* revertdcl(void)
 
 
 
+<<function xdecl>>=
+void
+xdecl(int c, Type *t, Sym *s)
+{
+    long o;
 
+    o = 0;
+    switch(c) {
+    case CEXREG:
+        o = exreg(t);
+        if(o == 0)
+            c = CEXTERN;
+        if(s->class == CGLOBL)
+            c = CGLOBL;
+        break;
+
+    case CEXTERN:
+        if(s->class == CGLOBL)
+            c = CGLOBL;
+        break;
+
+    case CXXX:
+        c = CGLOBL;
+        if(s->class == CEXTERN)
+            s->class = CGLOBL;
+        break;
+
+    case CAUTO:
+        diag(Z, "overspecified class: %s %s %s", s->name, cnames[c], cnames[s->class]);
+        c = CEXTERN;
+        break;
+
+    case CTYPESTR:
+        if(!typesuv[t->etype]) {
+            diag(Z, "typestr must be struct/union: %s", s->name);
+            break;
+        }
+        dclfunct(t, s);
+        break;
+    }
+
+    if(s->class == CSTATIC)
+        if(c == CEXTERN || c == CGLOBL) {
+            warn(Z, "overspecified class: %s %s %s", s->name, cnames[c], cnames[s->class]);
+            c = CSTATIC;
+        }
+    if(s->type != T)
+        if(s->class != c || !sametype(t, s->type) || t->etype == TENUM) {
+            diag(Z, "external redeclaration of: %s", s->name);
+            Bprint(&diagbuf, "	%s %T %L\n", cnames[c], t, nearln);
+            Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
+        }
+    tmerge(t, s);
+    s->type = t;
+    s->class = c;
+    s->block = 0;
+    s->offset = o;
+}
+@
+
+
+<<function dodecl>>=
+Node*
+dodecl(void (*f)(int,Type*,Sym*), int c, Type *t, Node *n)
+{
+    Sym *s;
+    Node *n1;
+    long v;
+
+    nearln = lineno;
+    lastfield = 0;
+
+loop:
+    if(n != Z)
+    switch(n->op) {
+    default:
+        diag(n, "unknown declarator: %O", n->op);
+        break;
+
+    case OARRAY:
+        t = typ(TARRAY, t);
+        t->width = 0;
+        n1 = n->right;
+        n = n->left;
+        if(n1 != Z) {
+            complex(n1);
+            v = -1;
+            if(n1->op == OCONST)
+                v = n1->vconst;
+            if(v <= 0) {
+                diag(n, "array size must be a positive constant");
+                v = 1;
+            }
+            t->width = v * t->link->width;
+        }
+        goto loop;
+
+    case OIND:
+        t = typ(TIND, t);
+        t->garb = n->garb;
+        n = n->left;
+        goto loop;
+
+    case OFUNC:
+        t = typ(TFUNC, t);
+        t->down = fnproto(n);
+        n = n->left;
+        goto loop;
+
+    case OBIT:
+        n1 = n->right;
+        complex(n1);
+        lastfield = -1;
+        if(n1->op == OCONST)
+            lastfield = n1->vconst;
+        if(lastfield < 0) {
+            diag(n, "field width must be non-negative constant");
+            lastfield = 1;
+        }
+        if(lastfield == 0) {
+            lastbit = 0;
+            firstbit = 1;
+            if(n->left != Z) {
+                diag(n, "zero width named field");
+                lastfield = 1;
+            }
+        }
+        if(!typei[t->etype]) {
+            diag(n, "field type must be int-like");
+            t = types[TINT];
+            lastfield = 1;
+        }
+        if(lastfield > tfield->width*8) {
+            diag(n, "field width larger than field unit");
+            lastfield = 1;
+        }
+        lastbit += lastfield;
+        if(lastbit > tfield->width*8) {
+            lastbit = lastfield;
+            firstbit = 1;
+        }
+        n = n->left;
+        goto loop;
+
+    case ONAME:
+        if(f == NODECL)
+            break;
+        s = n->sym;
+        (*f)(c, t, s);
+        if(s->class == CLOCAL)
+            s = mkstatic(s);
+        firstbit = 0;
+        n->sym = s;
+        n->type = s->type;
+        n->xoffset = s->offset;
+        n->class = s->class;
+        n->etype = TVOID;
+        if(n->type != T)
+            n->etype = n->type->etype;
+        if(debug['d'])
+            dbgdecl(s);
+        acidvar(s);
+        s->varlineno = lineno;
+        break;
+    }
+    lastdcl = t;
+    return n;
+}
+@
 
 
 
@@ -4275,41 +4724,6 @@ Node* revertdcl(void)
 
 
 <<external declarator rules>>=
-/*
- * external declarator
- */
-xdecl:
-    zctlist ';'          { dodecl(xdecl, lastclass, lasttype, Z); }
-|   zctlist xdlist ';'
-|   zctlist xdecor
-    {
-        lastdcl = T;
-        firstarg = S;
-        dodecl(xdecl, lastclass, lasttype, $2);
-        if(lastdcl == T || lastdcl->etype != TFUNC) {
-            diag($2, "not a function");
-            lastdcl = types[TFUNC];
-        }
-        thisfn = lastdcl;
-        markdcl();
-        firstdcl = dclstack;
-        argmark($2, 0);
-    }
-    pdecl
-    {
-        argmark($2, 1);
-    }
-    block
-    {
-        Node *n;
-
-        n = revertdcl();
-        if(n)
-            $6 = new(OLIST, n, $6);
-        if(!debug['a'] && !debug['Z'])
-            codgen($6, $2);
-    }
-
 xdlist:
     xdecor  { dodecl(xdecl, lastclass, lasttype, $1); }
 |   xdecor
@@ -4426,47 +4840,6 @@ abdecor3:
     '(' ')'           { $$ = new(OFUNC, (Z), Z); }
 |   '[' zexpr ']'     { $$ = new(OARRAY, (Z), $2); }
 |   '(' abdecor1 ')'  { $$ = $2; }
-@
-%$
-
-\subsection{Functions}
-
-<<parameter declarator rules>>=
-/*
- * parameter declarator
- */
-pdecl:
-  /* empty */
-|   pdecl ctlist pdlist ';'
-
-pdlist:
-    xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
-|   pdlist ',' pdlist
-@
-%$
-% this is old style? pre-ansi?
-
-% called arg ... hmmm ... should be renamed zparamlist
-<<parameter declarator rules>>=
-zarglist:
-  /* empty */   { $$ = Z; }
-|   arglist     { $$ = invert($1); }
-
-
-arglist:
-    name
-|   tlist abdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
-|   tlist xdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
-|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
-|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
 @
 %$
 
@@ -4700,6 +5073,11 @@ usedset(Node *n, int o)
 % gbranch, gmove, etc?
 % nextpc()?
 % gxxx = generate Prog (=~ assembly code)
+
+
+% remember in cc.y for function definition case:
+%        if(!debug['a'] && !debug['Z'])
+%            codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
 
 \section{Sizes}
 %x86!

@@ -98,6 +98,7 @@ prog:
 xdecl:
     zctlist ';'          { dodecl(xdecl, lastclass, lasttype, Z); }
 |   zctlist xdlist ';'
+/*s: xdecl function definition case */
 |   zctlist xdecor
     {
         lastdcl = T;
@@ -123,10 +124,12 @@ xdecl:
         n = revertdcl();
         if(n)
             $6 = new(OLIST, n, $6);
-        if(!debug['a'] && !debug['Z'])
-            codgen($6, $2);
-    }
 
+        if(!debug['a'] && !debug['Z'])
+            codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
+    }
+/*e: xdecl function definition case */
+/*x: external declarator rules */
 xdlist:
     xdecor  { dodecl(xdecl, lastclass, lasttype, $1); }
 |   xdecor
@@ -397,6 +400,7 @@ forexpr:
 /*s: expressions rules */
 expr:
     xuexpr
+
 |   expr '*' expr { $$ = new(OMUL, $1, $3); }
 |   expr '/' expr { $$ = new(ODIV, $1, $3); }
 |   expr '%' expr { $$ = new(OMOD, $1, $3); }
@@ -437,25 +441,30 @@ xuexpr:
         $$ = new(OCAST, $5, Z);
         dodecl(NODECL, CXXX, $2, $3);
         $$->type = lastdcl;
-        $$->xcast = 1;
+        $$->xcast = true;
     }
+/*s: xuexpr other cases */
 |   '(' tlist abdecor ')' '{' ilist '}' /* extension */
     {
         $$ = new(OSTRUCT, $6, Z);
         dodecl(NODECL, CXXX, $2, $3);
         $$->type = lastdcl;
     }
+/*e: xuexpr other cases */
 /*x: expressions rules */
 uexpr:
     pexpr
+
 |   '*' xuexpr { $$ = new(OIND, $2, Z); }
 |   '&' xuexpr { $$ = new(OADDR, $2, Z); }
+
 |   '+' xuexpr { $$ = new(OPOS, $2, Z); }
 |   '-' xuexpr { $$ = new(ONEG, $2, Z); }
 |   '!' xuexpr { $$ = new(ONOT, $2, Z); }
 |   '~' xuexpr { $$ = new(OCOM, $2, Z); }
 |   LPP xuexpr { $$ = new(OPREINC, $2, Z); }
 |   LMM xuexpr { $$ = new(OPREDEC, $2, Z); }
+
 |   LSIZEOF uexpr { $$ = new(OSIZE, $2, Z); }
 |   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
 /*x: expressions rules */
