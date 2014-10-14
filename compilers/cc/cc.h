@@ -204,7 +204,7 @@ struct	Decl
 /*s: struct Type */
 struct	Type
 {
-    // enum<type_kind>
+    // enum<type_kind>  (the type cases only?)
     char	etype;
 
     // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
@@ -339,7 +339,9 @@ enum node_kind
     OADDR,
     OAND,
     OANDAND,
-    OARRAY,
+
+    OARRAY, // used for array decl and designator initializer array
+
     OAS,
     OASI,
     OASADD,
@@ -429,7 +431,7 @@ enum node_kind
     OCOM,
     OPOS,
 
-    OELEM,
+    OELEM, // field designator
 
     OTST,		/* used in some compilers */
     OINDEX,
@@ -445,6 +447,7 @@ enum type_kind
 {
     TXXX,
 
+    // type cases
     TCHAR,
     TUCHAR,
     TSHORT,
@@ -466,18 +469,23 @@ enum type_kind
     TUNION,
     TENUM,
 
-    TDOT,
+    TDOT, // ??
     NTYPE,
 
+    // storage class cases
     TAUTO	= NTYPE,
 
     TEXTERN,
     TSTATIC,
-    TTYPEDEF,
+    TTYPEDEF, // ugly, not really a storage class
     TTYPESTR,
     TREGISTER,
+
+    // qualifier cases
     TCONSTNT,
     TVOLATILE,
+
+    // other cases
     TUNSIGNED,
     TSIGNED,
 
@@ -501,8 +509,10 @@ enum
     CSTATIC,
 
     CLOCAL,
+
     CTYPEDEF,
     CTYPESTR,
+
     CPARAM,
     CSELEM,
     CLABEL,
@@ -522,8 +532,8 @@ enum
     GINCOMPLETE	= 1<<2,
 };
 /*e: enum _anon_ (cc/cc.h)7 */
-/*s: enum _anon_ (cc/cc.h)8 */
-enum
+/*s: enum bxxx */
+enum bxxx
 {
     BCHAR		= 1L<<TCHAR,
     BUCHAR		= 1L<<TUCHAR,
@@ -537,6 +547,7 @@ enum
     BUVLONG		= 1L<<TUVLONG,
     BFLOAT		= 1L<<TFLOAT,
     BDOUBLE		= 1L<<TDOUBLE,
+
     BIND		= 1L<<TIND,
     BFUNC		= 1L<<TFUNC,
     BARRAY		= 1L<<TARRAY,
@@ -544,15 +555,20 @@ enum
     BSTRUCT		= 1L<<TSTRUCT,
     BUNION		= 1L<<TUNION,
     BENUM		= 1L<<TENUM,
+
     BFILE		= 1L<<TFILE,
     BDOT		= 1L<<TDOT,
+
     BCONSTNT	= 1L<<TCONSTNT,
     BVOLATILE	= 1L<<TVOLATILE,
+
     BUNSIGNED	= 1L<<TUNSIGNED,
     BSIGNED		= 1L<<TSIGNED,
+
     BAUTO		= 1L<<TAUTO,
     BEXTERN		= 1L<<TEXTERN,
     BSTATIC		= 1L<<TSTATIC,
+
     BTYPEDEF	= 1L<<TTYPEDEF,
     BTYPESTR	= 1L<<TTYPESTR,
     BREGISTER	= 1L<<TREGISTER,
@@ -566,7 +582,7 @@ enum
     BCLASS		= BAUTO|BEXTERN|BSTATIC|BTYPEDEF|BTYPESTR|BREGISTER,
     BGARB		= BCONSTNT|BVOLATILE,
 };
-/*e: enum _anon_ (cc/cc.h)8 */
+/*e: enum bxxx */
 
 /*s: struct Funct */
 struct	Funct

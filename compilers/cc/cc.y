@@ -21,6 +21,7 @@
    struct
    {
        Type*   t;
+       // enum<node_kind> ?
        uchar   c;
    } tycl;
    /*x: [[union yacc]] other fields */
@@ -75,15 +76,17 @@
 %type   <node>  abdecor abdecor1 abdecor2 abdecor3
 %type   <node>  zexpr lexpr init ilist forexpr
 /*x: type declarations */
+%type   <lval>  tname cname gname
+/*x: type declarations */
+%type   <lval>   gcname   gctname
+/*x: type declarations */
 %type   <tycl>  types
+/*x: type declarations */
+%type   <lval>  gctnlist gcnlist zgnlist
 /*x: type declarations */
 %type   <type>  tlist sbody complex
 /*x: type declarations */
 %type   <sym>   ltag
-/*x: type declarations */
-%type   <lval>  tname cname gname   gcname   gctname
-/*x: type declarations */
-%type   <lval>  gctnlist gcnlist zgnlist
 /*e: type declarations */
 %%
 /*s: grammar */
@@ -676,13 +679,33 @@ qual:
 /*e: initializers rules */
 
 /*s: types rules */
+tname:  /* type words */
+    LCHAR     { $$ = BCHAR; }
+|   LSHORT    { $$ = BSHORT; }
+|   LINT      { $$ = BINT; }
+|   LLONG     { $$ = BLONG; }
+|   LSIGNED   { $$ = BSIGNED; }
+|   LUNSIGNED { $$ = BUNSIGNED; }
+|   LFLOAT    { $$ = BFLOAT; }
+|   LDOUBLE   { $$ = BDOUBLE; }
+|   LVOID     { $$ = BVOID; }
+/*x: types rules */
+cname:  /* class words */
+    LAUTO     { $$ = BAUTO; }
+|   LSTATIC   { $$ = BSTATIC; }
+|   LEXTERN   { $$ = BEXTERN; }
+|   LTYPEDEF  { $$ = BTYPEDEF; }
+|   LTYPESTR  { $$ = BTYPESTR; }
+|   LREGISTER { $$ = BREGISTER; }
+|   LINLINE   { $$ = 0; }
+/*x: types rules */
+gname:  /* garbage words */
+    LCONSTNT  { $$ = BCONSTNT; }
+|   LVOLATILE { $$ = BVOLATILE; }
+|   LRESTRICT { $$ = 0; }
+/*x: types rules */
 types:
-    complex
-    {
-        $$.t = $1;
-        $$.c = CXXX;
-    }
-|   tname
+   tname
     {
         $$.t = simplet($1);
         $$.c = CXXX;
@@ -693,25 +716,11 @@ types:
         $$.c = simplec($1);
         $$.t = garbt($$.t, $1);
     }
-|   complex gctnlist
-    {
-        $$.t = $1;
-        $$.c = simplec($2);
-        $$.t = garbt($$.t, $2);
-        if($2 & ~BCLASS & ~BGARB)
-            diag(Z, "duplicate types given: %T and %Q", $1, $2);
-    }
 |   tname gctnlist
     {
         $$.t = simplet(typebitor($1, $2));
         $$.c = simplec($2);
         $$.t = garbt($$.t, $2);
-    }
-|   gcnlist complex zgnlist
-    {
-        $$.t = $2;
-        $$.c = simplec($1);
-        $$.t = garbt($$.t, $1|$3);
     }
 |   gcnlist tname
     {
@@ -723,6 +732,26 @@ types:
     {
         $$.t = simplet(typebitor($2, $3));
         $$.c = simplec($1|$3);
+        $$.t = garbt($$.t, $1|$3);
+    }
+
+|  complex
+    {
+        $$.t = $1;
+        $$.c = CXXX;
+    }
+|  complex gctnlist
+    {
+        $$.t = $1;
+        $$.c = simplec($2);
+        $$.t = garbt($$.t, $2);
+        if($2 & ~BCLASS & ~BGARB)
+            diag(Z, "duplicate types given: %T and %Q", $1, $2);
+    }
+|   gcnlist complex zgnlist
+    {
+        $$.t = $2;
+        $$.c = simplec($1);
         $$.t = garbt($$.t, $1|$3);
     }
 /*e: types rules */
@@ -816,6 +845,7 @@ complex:
     {
         $$ = en.tenum;
     }
+
 |   LTYPE { $$ = tcopy($1->type); }
 
 
@@ -853,6 +883,27 @@ enum:
 /*e: complex types rules */
 
 /*s: names rules */
+gctname:
+    tname
+|   gname
+|   cname
+
+gcname:
+    gname
+|   cname
+/*x: names rules */
+gctnlist:
+    gctname
+|   gctnlist gctname { $$ = typebitor($1, $2); }
+
+zgnlist:
+ /* empty */       { $$ = 0; }
+|   zgnlist gname  { $$ = typebitor($1, $2); }
+
+gcnlist:
+    gcname
+|   gcnlist gcname { $$ = typebitor($1, $2); }
+/*x: names rules */
 tag:
     ltag
     {
@@ -885,52 +936,6 @@ name:
         $$->class = $1->class;
         $1->aused = 1;
     }
-/*x: names rules */
-tname:  /* type words */
-    LCHAR     { $$ = BCHAR; }
-|   LSHORT    { $$ = BSHORT; }
-|   LINT      { $$ = BINT; }
-|   LLONG     { $$ = BLONG; }
-|   LSIGNED   { $$ = BSIGNED; }
-|   LUNSIGNED { $$ = BUNSIGNED; }
-|   LFLOAT    { $$ = BFLOAT; }
-|   LDOUBLE   { $$ = BDOUBLE; }
-|   LVOID     { $$ = BVOID; }
-
-cname:  /* class words */
-    LAUTO     { $$ = BAUTO; }
-|   LSTATIC   { $$ = BSTATIC; }
-|   LEXTERN   { $$ = BEXTERN; }
-|   LTYPEDEF  { $$ = BTYPEDEF; }
-|   LTYPESTR  { $$ = BTYPESTR; }
-|   LREGISTER { $$ = BREGISTER; }
-|   LINLINE   { $$ = 0; }
-
-gname:  /* garbage words */
-    LCONSTNT  { $$ = BCONSTNT; }
-|   LVOLATILE { $$ = BVOLATILE; }
-|   LRESTRICT { $$ = 0; }
-/*x: names rules */
-gctname:
-    tname
-|   gname
-|   cname
-
-gcname:
-    gname
-|   cname
-/*x: names rules */
-gctnlist:
-    gctname
-|   gctnlist gctname { $$ = typebitor($1, $2); }
-
-zgnlist:
- /* empty */       { $$ = 0; }
-|   zgnlist gname  { $$ = typebitor($1, $2); }
-
-gcnlist:
-    gcname
-|   gcnlist gcname { $$ = typebitor($1, $2); }
 /*e: names rules */
 
 /*s: extra grammar rules */

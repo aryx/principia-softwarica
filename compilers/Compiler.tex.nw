@@ -300,7 +300,9 @@ enum node_kind
     OADDR,
     OAND,
     OANDAND,
-    OARRAY,
+
+    OARRAY, // used for array decl and designator initializer array
+
     OAS,
     OASI,
     OASADD,
@@ -390,7 +392,7 @@ enum node_kind
     OCOM,
     OPOS,
 
-    OELEM,
+    OELEM, // field designator
 
     OTST,		/* used in some compilers */
     OINDEX,
@@ -456,8 +458,10 @@ enum
     CSTATIC,
 
     CLOCAL,
+
     CTYPEDEF,
     CTYPESTR,
+
     CPARAM,
     CSELEM,
     CLABEL,
@@ -466,6 +470,7 @@ enum
     NCTYPES,
 };
 @
+% CSTATIC vs TSTATIC?
 
 <<[[Node]] other fields>>=
 // enum<cxxx>
@@ -547,12 +552,15 @@ new1(int o, Node *l, Node *r)
 
 \subsection{[[Type]]}
 
-% split?
+% split? hmm but would not work with enum<bxxx> then, ugly but
+% because of the way they handle type/qualifier/storage they all
+% have to be in the same enum (ugly)
 <<enum type_kind>>=
 enum type_kind
 {
     TXXX,
 
+    // type cases
     TCHAR,
     TUCHAR,
     TSHORT,
@@ -574,18 +582,23 @@ enum type_kind
     TUNION,
     TENUM,
 
-    TDOT,
+    TDOT, // ??
     NTYPE,
 
+    // storage class cases
     TAUTO	= NTYPE,
 
     TEXTERN,
     TSTATIC,
-    TTYPEDEF,
+    TTYPEDEF, // ugly, not really a storage class
     TTYPESTR,
     TREGISTER,
+
+    // qualifier cases
     TCONSTNT,
     TVOLATILE,
+
+    // other cases
     TUNSIGNED,
     TSIGNED,
 
@@ -599,11 +612,14 @@ enum type_kind
 };
 @
 
+% see also enum bxxx which is used only in grammar I think,
+% and seems to be a 64 bits bitset of the types above
+
 % char -> byte? but get some warnings (but we should fix that too)
 <<struct Type>>=
 struct	Type
 {
-    // enum<type_kind>
+    // enum<type_kind>  (the type cases only?)
     char	etype;
 
     // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
@@ -4242,14 +4258,123 @@ qual:
 %$
 
 
-\section{Types}
+\section{Types and storage classes}
 
-\subsection{Simple types}
+% temporary result, because need more keywords
+% to transform from 'unsigned char' -> TUCHAR?
+% seems actually a bitset! but prerequest is Txxx has less than 64 cases?
+<<enum bxxx>>=
+enum bxxx
+{
+    BCHAR		= 1L<<TCHAR,
+    BUCHAR		= 1L<<TUCHAR,
+    BSHORT		= 1L<<TSHORT,
+    BUSHORT		= 1L<<TUSHORT,
+    BINT		= 1L<<TINT,
+    BUINT		= 1L<<TUINT,
+    BLONG		= 1L<<TLONG,
+    BULONG		= 1L<<TULONG,
+    BVLONG		= 1L<<TVLONG,
+    BUVLONG		= 1L<<TUVLONG,
+    BFLOAT		= 1L<<TFLOAT,
+    BDOUBLE		= 1L<<TDOUBLE,
+
+    BIND		= 1L<<TIND,
+    BFUNC		= 1L<<TFUNC,
+    BARRAY		= 1L<<TARRAY,
+    BVOID		= 1L<<TVOID,
+    BSTRUCT		= 1L<<TSTRUCT,
+    BUNION		= 1L<<TUNION,
+    BENUM		= 1L<<TENUM,
+
+    BFILE		= 1L<<TFILE,
+    BDOT		= 1L<<TDOT,
+
+    BCONSTNT	= 1L<<TCONSTNT,
+    BVOLATILE	= 1L<<TVOLATILE,
+
+    BUNSIGNED	= 1L<<TUNSIGNED,
+    BSIGNED		= 1L<<TSIGNED,
+
+    BAUTO		= 1L<<TAUTO,
+    BEXTERN		= 1L<<TEXTERN,
+    BSTATIC		= 1L<<TSTATIC,
+
+    BTYPEDEF	= 1L<<TTYPEDEF,
+    BTYPESTR	= 1L<<TTYPESTR,
+    BREGISTER	= 1L<<TREGISTER,
+
+    BINTEGER	= BCHAR|BUCHAR|BSHORT|BUSHORT|BINT|BUINT|
+                BLONG|BULONG|BVLONG|BUVLONG,
+    BNUMBER		= BINTEGER|BFLOAT|BDOUBLE,
+
+/* these can be overloaded with complex types */
+
+    BCLASS		= BAUTO|BEXTERN|BSTATIC|BTYPEDEF|BTYPESTR|BREGISTER,
+    BGARB		= BCONSTNT|BVOLATILE,
+};
+@
+
+
+% enum<bxxx> actually
+<<type declarations>>=
+%type   <lval>  tname cname gname
+@
+
+<<types rules>>=
+tname:  /* type words */
+    LCHAR     { $$ = BCHAR; }
+|   LSHORT    { $$ = BSHORT; }
+|   LINT      { $$ = BINT; }
+|   LLONG     { $$ = BLONG; }
+|   LSIGNED   { $$ = BSIGNED; }
+|   LUNSIGNED { $$ = BUNSIGNED; }
+|   LFLOAT    { $$ = BFLOAT; }
+|   LDOUBLE   { $$ = BDOUBLE; }
+|   LVOID     { $$ = BVOID; }
+@
+
+<<types rules>>=
+cname:  /* class words */
+    LAUTO     { $$ = BAUTO; }
+|   LSTATIC   { $$ = BSTATIC; }
+|   LEXTERN   { $$ = BEXTERN; }
+|   LTYPEDEF  { $$ = BTYPEDEF; }
+|   LTYPESTR  { $$ = BTYPESTR; }
+|   LREGISTER { $$ = BREGISTER; }
+|   LINLINE   { $$ = 0; }
+@
+
+<<types rules>>=
+gname:  /* garbage words */
+    LCONSTNT  { $$ = BCONSTNT; }
+|   LVOLATILE { $$ = BVOLATILE; }
+|   LRESTRICT { $$ = 0; }
+@
+
+
+<<type declarations>>=
+%type   <lval>   gcname   gctname
+@
+
+<<names rules>>=
+gctname:
+    tname
+|   gname
+|   cname
+
+gcname:
+    gname
+|   cname
+@
+
+
 
 <<[[union yacc]] other fields>>=
 struct
 {
     Type*   t;
+    // enum<node_kind> ?
     uchar   c;
 } tycl;
 @
@@ -4258,14 +4383,12 @@ struct
 %type   <tycl>  types
 @
 
+
+\subsection{Simple types}
+
 <<types rules>>=
 types:
-    complex
-    {
-        $$.t = $1;
-        $$.c = CXXX;
-    }
-|   tname
+   tname
     {
         $$.t = simplet($1);
         $$.c = CXXX;
@@ -4276,25 +4399,11 @@ types:
         $$.c = simplec($1);
         $$.t = garbt($$.t, $1);
     }
-|   complex gctnlist
-    {
-        $$.t = $1;
-        $$.c = simplec($2);
-        $$.t = garbt($$.t, $2);
-        if($2 & ~BCLASS & ~BGARB)
-            diag(Z, "duplicate types given: %T and %Q", $1, $2);
-    }
 |   tname gctnlist
     {
         $$.t = simplet(typebitor($1, $2));
         $$.c = simplec($2);
         $$.t = garbt($$.t, $2);
-    }
-|   gcnlist complex zgnlist
-    {
-        $$.t = $2;
-        $$.c = simplec($1);
-        $$.t = garbt($$.t, $1|$3);
     }
 |   gcnlist tname
     {
@@ -4308,7 +4417,49 @@ types:
         $$.c = simplec($1|$3);
         $$.t = garbt($$.t, $1|$3);
     }
+
+|  complex
+    {
+        $$.t = $1;
+        $$.c = CXXX;
+    }
+|  complex gctnlist
+    {
+        $$.t = $1;
+        $$.c = simplec($2);
+        $$.t = garbt($$.t, $2);
+        if($2 & ~BCLASS & ~BGARB)
+            diag(Z, "duplicate types given: %T and %Q", $1, $2);
+    }
+|   gcnlist complex zgnlist
+    {
+        $$.t = $2;
+        $$.c = simplec($1);
+        $$.t = garbt($$.t, $1|$3);
+    }
 @
+
+
+<<type declarations>>=
+%type   <lval>  gctnlist gcnlist zgnlist
+@
+
+<<names rules>>=
+gctnlist:
+    gctname
+|   gctnlist gctname { $$ = typebitor($1, $2); }
+
+zgnlist:
+ /* empty */       { $$ = 0; }
+|   zgnlist gname  { $$ = typebitor($1, $2); }
+
+gcnlist:
+    gcname
+|   gcnlist gcname { $$ = typebitor($1, $2); }
+@
+
+
+
 
 % sizeof, cast, context
 <<extra grammar rules>>=
@@ -4444,6 +4595,7 @@ complex:
     {
         $$ = en.tenum;
     }
+
 |   LTYPE { $$ = tcopy($1->type); }
 
 
@@ -4977,66 +5129,7 @@ name:
     }
 @
 
-<<type declarations>>=
-%type   <lval>  tname cname gname   gcname   gctname
-@
 
-<<names rules>>=
-tname:  /* type words */
-    LCHAR     { $$ = BCHAR; }
-|   LSHORT    { $$ = BSHORT; }
-|   LINT      { $$ = BINT; }
-|   LLONG     { $$ = BLONG; }
-|   LSIGNED   { $$ = BSIGNED; }
-|   LUNSIGNED { $$ = BUNSIGNED; }
-|   LFLOAT    { $$ = BFLOAT; }
-|   LDOUBLE   { $$ = BDOUBLE; }
-|   LVOID     { $$ = BVOID; }
-
-cname:  /* class words */
-    LAUTO     { $$ = BAUTO; }
-|   LSTATIC   { $$ = BSTATIC; }
-|   LEXTERN   { $$ = BEXTERN; }
-|   LTYPEDEF  { $$ = BTYPEDEF; }
-|   LTYPESTR  { $$ = BTYPESTR; }
-|   LREGISTER { $$ = BREGISTER; }
-|   LINLINE   { $$ = 0; }
-
-gname:  /* garbage words */
-    LCONSTNT  { $$ = BCONSTNT; }
-|   LVOLATILE { $$ = BVOLATILE; }
-|   LRESTRICT { $$ = 0; }
-@
-
-
-<<names rules>>=
-gctname:
-    tname
-|   gname
-|   cname
-
-gcname:
-    gname
-|   cname
-@
-
-<<type declarations>>=
-%type   <lval>  gctnlist gcnlist zgnlist
-@
-
-<<names rules>>=
-gctnlist:
-    gctname
-|   gctnlist gctname { $$ = typebitor($1, $2); }
-
-zgnlist:
- /* empty */       { $$ = 0; }
-|   zgnlist gname  { $$ = typebitor($1, $2); }
-
-gcnlist:
-    gcname
-|   gcnlist gcname { $$ = typebitor($1, $2); }
-@
 
 \section{Helpers}
 
