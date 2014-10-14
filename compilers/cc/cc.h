@@ -93,7 +93,6 @@ struct	Node
     TRune*	rstring;	/* rune string */
 
     Sym*	sym;
-    Type*	type;
     char	oldop;
     char 	xcast;
     char	class;
@@ -107,6 +106,8 @@ struct	Node
 
     char	scale;
     char	garb;
+    /*x: [[Node]] other fields */
+    Type*	type;
     /*e: [[Node]] other fields */
 };
 /*e: struct Node */
@@ -372,7 +373,7 @@ enum node_kind
     OLABEL,
     OLDIV,
     OLE,
-    OLIST,
+    OLIST, // of stmts, labels, etc
     OLMOD,
     OLMUL,
     OLO,

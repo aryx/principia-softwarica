@@ -2,7 +2,7 @@
 %{
 #include "cc.h"
 %}
-/*s: union token */
+/*s: union yacc */
 %union  {
     Sym*    sym;
     vlong   vval;
@@ -13,19 +13,19 @@
         long    l;
     } sval;
 
-   /*s: [[Token]] other fields */
+   /*s: [[union yacc]] other fields */
    long    lval;
-   /*x: [[Token]] other fields */
+   /*x: [[union yacc]] other fields */
    Node*   node;
-   /*x: [[Token]] other fields */
+   /*x: [[union yacc]] other fields */
    struct
    {
        Type*   t;
        uchar   c;
    } tycl;
-   /*x: [[Token]] other fields */
+   /*x: [[union yacc]] other fields */
    Type*   type;
-   /*x: [[Token]] other fields */
+   /*x: [[union yacc]] other fields */
    struct
    {
        Type*   t1;
@@ -33,9 +33,9 @@
        Type*   t3;
        uchar   c;
    } tyty;
-   /*e: [[Token]] other fields */
+   /*e: [[union yacc]] other fields */
 }
-/*e: union token */
+/*e: union yacc */
 /*s: token declarations */
 %token  <sym>   LNAME LTYPE
 %token  <vval>  LCONST LLCONST LUCONST LULCONST LVLCONST LUVLCONST
@@ -334,11 +334,6 @@ ulstmnt:
         $$->type = types[TINT];
         $3 = new(OSUB, $$, $3);
 
-        $$ = new(OCONST, Z, Z);
-        $$->vconst = 0;
-        $$->type = types[TINT];
-        $3 = new(OSUB, $$, $3);
-
         $$ = new(OSWITCH, $3, $5);
     }
 /*x: ulstmnt rule */
@@ -420,7 +415,9 @@ expr:
 |   expr '|' expr  { $$ = new(OOR, $1, $3); }
 |   expr LANDAND expr { $$ = new(OANDAND, $1, $3); }
 |   expr LOROR expr   { $$ = new(OOROR, $1, $3); }
+
 |   expr '?' cexpr ':' expr { $$ = new(OCOND, $1, new(OLIST, $3, $5)); }
+
 |   expr '=' expr  { $$ = new(OAS, $1, $3); }
 |   expr LPE expr  { $$ = new(OASADD, $1, $3); }
 |   expr LME expr  { $$ = new(OASSUB, $1, $3); }
@@ -432,7 +429,7 @@ expr:
 |   expr LANDE expr { $$ = new(OASAND, $1, $3); }
 |   expr LXORE expr { $$ = new(OASXOR, $1, $3); }
 |   expr LORE expr  { $$ = new(OASOR, $1, $3); }
-
+/*x: expressions rules */
 xuexpr:
     uexpr
 |   '(' tlist abdecor ')' xuexpr
@@ -448,7 +445,7 @@ xuexpr:
         dodecl(NODECL, CXXX, $2, $3);
         $$->type = lastdcl;
     }
-
+/*x: expressions rules */
 uexpr:
     pexpr
 |   '*' xuexpr { $$ = new(OIND, $2, Z); }
@@ -461,9 +458,11 @@ uexpr:
 |   LMM xuexpr { $$ = new(OPREDEC, $2, Z); }
 |   LSIZEOF uexpr { $$ = new(OSIZE, $2, Z); }
 |   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
-
+/*x: expressions rules */
+/*s: pexpr rule */
 pexpr:
     '(' cexpr ')' { $$ = $2; }
+/*x: pexpr rule */
 |   LSIZEOF '(' tlist abdecor ')'
     {
         $$ = new(OSIZE, Z, Z);
@@ -476,6 +475,7 @@ pexpr:
         dodecl(NODECL, CXXX, $3, $4);
         $$->type = lastdcl;
     }
+/*x: pexpr rule */
 |   pexpr '(' zelist ')'
     {
         $$ = new(OFUNC, $1, Z);
@@ -484,7 +484,9 @@ pexpr:
             dodecl(xdecl, CXXX, types[TINT], $$);
         $$->right = invert($3);
     }
+/*x: pexpr rule */
 |   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
+/*x: pexpr rule */
 |   pexpr LMG ltag
     {
         $$ = new(ODOT, new(OIND, $1, Z), Z);
@@ -495,10 +497,12 @@ pexpr:
         $$ = new(ODOT, $1, Z);
         $$->sym = $3;
     }
+/*x: pexpr rule */
 |   pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
 |   pexpr LMM { $$ = new(OPOSTDEC, $1, Z); }
-
+/*x: pexpr rule */
 |   name
+/*x: pexpr rule */
 |   LCONST
     {
         $$ = new(OCONST, Z, Z);
@@ -555,9 +559,15 @@ pexpr:
         $$->vconst = $1;
         $$->cstring = strdup(symb);
     }
+/*x: pexpr rule */
 |   string
 |   lstring
-
+/*e: pexpr rule */
+/*x: expressions rules */
+elist:
+    expr
+|   elist ',' elist { $$ = new(OLIST, $1, $3); }
+/*x: expressions rules */
 string:
     LSTRING
     {
@@ -629,15 +639,6 @@ cexpr:
     expr
 |   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
 /*e: expressions rules */
-/*s: arguments rules */
-zelist:
-  /* empty */ { $$ = Z; }
-|   elist
-
-elist:
-    expr
-|   elist ',' elist { $$ = new(OLIST, $1, $3); }
-/*e: arguments rules */
 /*s: initializers rules */
 init:
     expr
@@ -942,6 +943,10 @@ ctlist:
 labels:
     label
 |   labels label  { $$ = new(OLIST, $1, $2); }
+/*x: ebnf grammar rules */
+zelist:
+  /* empty */ { $$ = Z; }
+|   elist
 /*x: ebnf grammar rules */
 zcexpr:
   /* empty */ { $$ = Z; }
