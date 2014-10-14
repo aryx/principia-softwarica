@@ -5,8 +5,8 @@
 /*s: union token */
 %union  {
     Sym*    sym;
-    double  dval;
     vlong   vval;
+    double  dval;
     struct
     {
         char*   s;
@@ -34,20 +34,18 @@
 
 }
 /*e: union token */
-/*s: type declarations */
-%type   <sym>   ltag
-%type   <lval>  gctname gcname cname gname tname
-%type   <lval>  gctnlist gcnlist zgnlist
-%type   <type>  tlist sbody complex
-%type   <tycl>  types
-%type   <node>  zarglist arglist zcexpr
-%type   <node>  name block stmnt cexpr expr xuexpr pexpr
-%type   <node>  zelist elist adecl slist uexpr string lstring
-%type   <node>  xdecor xdecor2 labels label ulstmnt
-%type   <node>  adlist edecor tag qual qlist
-%type   <node>  abdecor abdecor1 abdecor2 abdecor3
-%type   <node>  zexpr lexpr init ilist forexpr
-/*e: type declarations */
+/*s: token declarations */
+%token  <sym>   LNAME LTYPE
+%token  <vval>  LCONST LLCONST LUCONST LULCONST LVLCONST LUVLCONST
+%token  <dval>  LFCONST LDCONST
+%token  <sval>  LSTRING LLSTRING
+%token  LAUTO LBREAK LCASE LCHAR LCONTINUE LDEFAULT LDO
+%token  LDOUBLE LELSE LEXTERN LFLOAT LFOR LGOTO
+%token  LIF LINT LLONG LREGISTER LRETURN LSHORT LSIZEOF LUSED
+%token  LSTATIC LSTRUCT LSWITCH LTYPEDEF LTYPESTR LUNION LUNSIGNED
+%token  LWHILE LVOID LENUM LSIGNED LCONSTNT LVOLATILE LSET LSIGNOF
+%token  LRESTRICT LINLINE
+/*e: token declarations */
 /*s: priority and associativity declarations */
 %left   ';'
 %left   ','
@@ -65,24 +63,27 @@
 %left   '*' '/' '%'
 %right  LMM LPP LMG '.' '[' '('
 /*e: priority and associativity declarations */
-/*s: token declarations */
-%token  <sym>   LNAME LTYPE
-%token  <dval>  LFCONST LDCONST
-%token  <vval>  LCONST LLCONST LUCONST LULCONST LVLCONST LUVLCONST
-%token  <sval>  LSTRING LLSTRING
-%token  LAUTO LBREAK LCASE LCHAR LCONTINUE LDEFAULT LDO
-%token  LDOUBLE LELSE LEXTERN LFLOAT LFOR LGOTO
-%token  LIF LINT LLONG LREGISTER LRETURN LSHORT LSIZEOF LUSED
-%token  LSTATIC LSTRUCT LSWITCH LTYPEDEF LTYPESTR LUNION LUNSIGNED
-%token  LWHILE LVOID LENUM LSIGNED LCONSTNT LVOLATILE LSET LSIGNOF
-%token  LRESTRICT LINLINE
-/*e: token declarations */
+/*s: type declarations */
+%type   <sym>   ltag
+%type   <lval>  gctname gcname cname gname tname
+%type   <lval>  gctnlist gcnlist zgnlist
+%type   <type>  tlist sbody complex
+%type   <tycl>  types
+%type   <node>  zarglist arglist zcexpr
+%type   <node>  name block stmnt cexpr expr xuexpr pexpr
+%type   <node>  zelist elist adecl slist uexpr string lstring
+%type   <node>  xdecor xdecor2 labels label ulstmnt
+%type   <node>  adlist edecor tag qual qlist
+%type   <node>  abdecor abdecor1 abdecor2 abdecor3
+%type   <node>  zexpr lexpr init ilist forexpr
+/*e: type declarations */
 %%
 /*s: grammar */
 prog:
   /* empty */
 |   prog xdecl
 
+/*s: external declarator */
 /*
  * external declarator
  */
@@ -143,7 +144,8 @@ xdecor2:
 |   '(' xdecor ')'             { $$ = $2;   }
 |   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
 |   xdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
-
+/*e: external declarator */
+/*s: automatic declarator */
 /*
  * automatic declarator
  */
@@ -178,7 +180,8 @@ adlist:
                 $$ = new(OLIST, $1, $3);
         }
     }
-
+/*e: automatic declarator */
+/*s: parameter declarator */
 /*
  * parameter declarator
  */
@@ -189,42 +192,28 @@ pdecl:
 pdlist:
     xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
 |   pdlist ',' pdlist
+/*x: parameter declarator */
+zarglist:
+  /* empty */   { $$ = Z; }
+|   arglist     { $$ = invert($1); }
 
-/*
- * structure element declarator
- */
-edecl:
-    tlist
+
+arglist:
+    name
+|   tlist abdecor
     {
-        lasttype = $1;
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
     }
-    zedlist ';'
-|   edecl tlist
+|   tlist xdecor
     {
-        lasttype = $2;
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
     }
-    zedlist ';'
-
-zedlist:                    /* extension */
-    {
-        lastfield = 0;
-        edecl(CXXX, lasttype, S);
-    }
-|   edlist
-
-edlist:
-    edecor            { dodecl(edecl, CXXX, lasttype, $1); }
-|   edlist ',' edlist
-
-edecor:
-    xdecor
-    {
-        lastbit = 0;
-        firstbit = 1;
-    }
-|   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
-|   ':' lexpr       { $$ = new(OBIT, Z, $2); }
-
+|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
+|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
+/*e: parameter declarator */
+/*s: abstract declarator */
 /*
  * abstract declarator
  */
@@ -254,57 +243,50 @@ abdecor3:
     '(' ')'           { $$ = new(OFUNC, (Z), Z); }
 |   '[' zexpr ']'     { $$ = new(OARRAY, (Z), $2); }
 |   '(' abdecor1 ')'  { $$ = $2; }
-
-init:
-    expr
-|   '{' ilist '}' { $$ = new(OINIT, invert($2), Z); }
-
-qual:
-    '[' lexpr ']' { $$ = new(OARRAY, $2, Z); }
-|   '.' ltag
+/*e: abstract declarator */
+/*s: structure element declarator */
+/*
+ * structure element declarator
+ */
+edecl:
+    tlist
     {
-        $$ = new(OELEM, Z, Z);
-        $$->sym = $2;
+        lasttype = $1;
     }
-|   qual '='
-
-qlist:
-    init ','
-|   qlist init ','  { $$ = new(OLIST, $1, $2); }
-|   qual
-|   qlist qual      { $$ = new(OLIST, $1, $2); }
-
-ilist:
-    qlist
-|   init
-|   qlist init { $$ = new(OLIST, $1, $2); }
-
-zarglist:
-  /* empty */   { $$ = Z; }
-|   arglist     { $$ = invert($1); }
-
-
-arglist:
-    name
-|   tlist abdecor
+    zedlist ';'
+|   edecl tlist
     {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
+        lasttype = $2;
     }
-|   tlist xdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
-|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
-|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
+    zedlist ';'
 
+zedlist:                    /* extension */
+ /* empty */
+    {
+        lastfield = 0;
+        edecl(CXXX, lasttype, S);
+    }
+|   edlist
+
+edlist:
+    edecor            { dodecl(edecl, CXXX, lasttype, $1); }
+|   edlist ',' edlist
+
+edecor:
+    xdecor
+    {
+        lastbit = 0;
+        firstbit = 1;
+    }
+|   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
+|   ':' lexpr       { $$ = new(OBIT, Z, $2); }
+/*e: structure element declarator */
+
+/*s: statements */
 block:
  '{' slist '}'
     {
         $$ = invert($2);
-        //  if($2 != Z)
-        //      $$ = new(OLIST, $2, $$);
         if($$ == Z)
             $$ = new(OLIST, Z, Z);
     }
@@ -314,23 +296,15 @@ slist:
 |   slist adecl    { $$ = new(OLIST, $1, $2); }
 |   slist stmnt    { $$ = new(OLIST, $1, $2); }
 
-labels:
-    label
-|   labels label  { $$ = new(OLIST, $1, $2); }
+stmnt:
+    ulstmnt
+|   labels ulstmnt { $$ = new(OLIST, $1, $2); }
+|   error ';'      { $$ = Z; }
 
 label:
     LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
 |   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
 |   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, 1), Z); }
-
-stmnt:
-    error ';'      { $$ = Z; }
-|   ulstmnt
-|   labels ulstmnt { $$ = new(OLIST, $1, $2); }
-
-forexpr:
-    zcexpr
-|   ctlist adlist { $$ = $2; }
 
 ulstmnt:
     zcexpr ';'
@@ -359,7 +333,10 @@ ulstmnt:
         if($7 == Z)
             warn($3, "empty else body");
     }
-|   { markdcl(); } LFOR '(' forexpr ';' zcexpr ';' zcexpr ')' stmnt
+|   { 
+        markdcl(); 
+    } 
+    LFOR '(' forexpr ';' zcexpr ';' zcexpr ')' stmnt
     {
         $$ = revertdcl();
         if($$){
@@ -398,27 +375,12 @@ ulstmnt:
 |   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
 |   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
 
+forexpr:
+    zcexpr
+|   ctlist adlist { $$ = $2; }
+/*e: statements */
 
-
-zcexpr:
-  /* empty */ { $$ = Z; }
-|   cexpr
-
-zexpr:
-  /* empty */ { $$ = Z; }
-|   lexpr
-
-lexpr:
-    expr
-    {
-        $$ = new(OCAST, $1, Z);
-        $$->type = types[TLONG];
-    }
-
-cexpr:
-    expr
-|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
-
+/*s: expressions */
 expr:
     xuexpr
 |   expr '*' expr { $$ = new(OMUL, $1, $3); }
@@ -516,6 +478,7 @@ pexpr:
     }
 |   pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
 |   pexpr LMM { $$ = new(OPOSTDEC, $1, Z); }
+
 |   name
 |   LCONST
     {
@@ -631,7 +594,23 @@ lstring:
         $$->type->width += $2.l;
         $$->rstring = (TRune*)s;
     }
+/*x: expressions */
+zexpr:
+  /* empty */ { $$ = Z; }
+|   lexpr
 
+lexpr:
+    expr
+    {
+        $$ = new(OCAST, $1, Z);
+        $$->type = types[TLONG];
+    }
+
+cexpr:
+    expr
+|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
+/*e: expressions */
+/*s: arguments */
 zelist:
   /* empty */ { $$ = Z; }
 |   elist
@@ -639,39 +618,34 @@ zelist:
 elist:
     expr
 |   elist ',' elist { $$ = new(OLIST, $1, $3); }
+/*e: arguments */
+/*s: initializers */
+init:
+    expr
+|   '{' ilist '}' { $$ = new(OINIT, invert($2), Z); }
 
-sbody:
-    '{'
-    {
-        $<tyty>$.t1 = strf;
-        $<tyty>$.t2 = strl;
-        $<tyty>$.t3 = lasttype;
-        $<tyty>$.c = lastclass;
-        strf = T;
-        strl = T;
-        lastbit = 0;
-        firstbit = 1;
-        lastclass = CXXX;
-        lasttype = T;
-    }
-    edecl 
-    '}'
-    {
-        $$ = strf;
-        strf = $<tyty>2.t1;
-        strl = $<tyty>2.t2;
-        lasttype = $<tyty>2.t3;
-        lastclass = $<tyty>2.c;
-    }
+ilist:
+    qlist
+|   init
+|   qlist init { $$ = new(OLIST, $1, $2); }
 
-zctlist:
- /* empty */
-    {
-        lastclass = CXXX;
-        lasttype = types[TINT];
-    }
-|   ctlist
+qlist:
+    init ','
+|   qlist init ','  { $$ = new(OLIST, $1, $2); }
+|   qual
+|   qlist qual      { $$ = new(OLIST, $1, $2); }
 
+qual:
+    '[' lexpr ']' { $$ = new(OARRAY, $2, Z); }
+|   '.' ltag
+    {
+        $$ = new(OELEM, Z, Z);
+        $$->sym = $2;
+    }
+|   qual '='
+/*e: initializers */
+
+/*s: types */
 types:
     complex
     {
@@ -721,22 +695,8 @@ types:
         $$.c = simplec($1|$3);
         $$.t = garbt($$.t, $1|$3);
     }
-
-tlist:
-    types
-    {
-        $$ = $1.t;
-        if($1.c != CXXX)
-            diag(Z, "illegal combination of class 4: %s", cnames[$1.c]);
-    }
-
-ctlist:
-    types
-    {
-        lasttype = $1.t;
-        lastclass = $1.c;
-    }
-
+/*e: types */
+/*s: complex types */
 complex:
     LSTRUCT ltag
     {
@@ -828,33 +788,74 @@ complex:
     }
 |   LTYPE { $$ = tcopy($1->type); }
 
-gctnlist:
-    gctname
-|   gctnlist gctname { $$ = typebitor($1, $2); }
 
-zgnlist:
- /* empty */       { $$ = 0; }
-|   zgnlist gname  { $$ = typebitor($1, $2); }
 
-gctname:
-    tname
-|   gname
-|   cname
+sbody:
+    '{'
+    {
+        $<tyty>$.t1 = strf;
+        $<tyty>$.t2 = strl;
+        $<tyty>$.t3 = lasttype;
+        $<tyty>$.c = lastclass;
+        strf = T;
+        strl = T;
+        lastbit = 0;
+        firstbit = 1;
+        lastclass = CXXX;
+        lasttype = T;
+    }
+    edecl 
+    '}'
+    {
+        $$ = strf;
+        strf = $<tyty>2.t1;
+        strl = $<tyty>2.t2;
+        lasttype = $<tyty>2.t3;
+        lastclass = $<tyty>2.c;
+    }
 
-gcnlist:
-    gcname
-|   gcnlist gcname { $$ = typebitor($1, $2); }
-
-gcname:
-    gname
-|   cname
-
+/*x: complex types */
 enum:
     LNAME           { doenum($1, Z); }
 |   LNAME '=' expr  { doenum($1, $3); }
 |   enum ','
 |   enum ',' enum
+/*e: complex types */
 
+/*s: names */
+tag:
+    ltag
+    {
+        $$ = new(ONAME, Z, Z);
+        $$->sym = $1;
+        $$->type = $1->type;
+        $$->etype = TVOID;
+        if($$->type != T)
+            $$->etype = $$->type->etype;
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
+    }
+
+ltag:
+    LNAME
+|   LTYPE
+/*x: names */
+name:
+    LNAME
+    {
+        $$ = new(ONAME, Z, Z);
+        if($1->class == CLOCAL)
+            $1 = mkstatic($1);
+        $$->sym = $1;
+        $$->type = $1->type;
+        $$->etype = TVOID;
+        if($$->type != T)
+            $$->etype = $$->type->etype;
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
+        $1->aused = 1;
+    }
+/*x: names */
 tname:  /* type words */
     LCHAR     { $$ = BCHAR; }
 |   LSHORT    { $$ = BSHORT; }
@@ -879,39 +880,62 @@ gname:  /* garbage words */
     LCONSTNT  { $$ = BCONSTNT; }
 |   LVOLATILE { $$ = BVOLATILE; }
 |   LRESTRICT { $$ = 0; }
+/*x: names */
+gctname:
+    tname
+|   gname
+|   cname
 
-name:
-    LNAME
+gcname:
+    gname
+|   cname
+/*x: names */
+gctnlist:
+    gctname
+|   gctnlist gctname { $$ = typebitor($1, $2); }
+
+zgnlist:
+ /* empty */       { $$ = 0; }
+|   zgnlist gname  { $$ = typebitor($1, $2); }
+
+gcnlist:
+    gcname
+|   gcnlist gcname { $$ = typebitor($1, $2); }
+/*e: names */
+
+/*s: extra grammar rules */
+tlist:
+    types
     {
-        $$ = new(ONAME, Z, Z);
-        if($1->class == CLOCAL)
-            $1 = mkstatic($1);
-        $$->sym = $1;
-        $$->type = $1->type;
-        $$->etype = TVOID;
-        if($$->type != T)
-            $$->etype = $$->type->etype;
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
-        $1->aused = 1;
+        $$ = $1.t;
+        if($1.c != CXXX)
+            diag(Z, "illegal combination of class 4: %s", cnames[$1.c]);
     }
-
-tag:
-    ltag
+/*x: extra grammar rules */
+ctlist:
+    types
     {
-        $$ = new(ONAME, Z, Z);
-        $$->sym = $1;
-        $$->type = $1->type;
-        $$->etype = TVOID;
-        if($$->type != T)
-            $$->etype = $$->type->etype;
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
+        lasttype = $1.t;
+        lastclass = $1.c;
     }
-
-ltag:
-    LNAME
-|   LTYPE
+/*e: extra grammar rules */
+/*s: ebnf grammar rules */
+labels:
+    label
+|   labels label  { $$ = new(OLIST, $1, $2); }
+/*x: ebnf grammar rules */
+zcexpr:
+  /* empty */ { $$ = Z; }
+|   cexpr
+/*x: ebnf grammar rules */
+zctlist:
+ /* empty */
+    {
+        lastclass = CXXX;
+        lasttype = types[TINT];
+    }
+|   ctlist
+/*e: ebnf grammar rules */
 /*e: grammar */
 %%
 /*e: cc/cc.y */

@@ -184,7 +184,7 @@ int	packflg;
 int	fproundflg;
 /*e: global fproundflg */
 /*s: global profileflg */
-int	profileflg;
+bool	profileflg;
 /*e: global profileflg */
 /*s: global ncontin */
 int	ncontin;

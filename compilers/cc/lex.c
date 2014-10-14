@@ -67,11 +67,11 @@ void main(int argc, char *argv[])
     ginit();
     arginit();
 
-    profileflg = 1;	/* #pragma can turn it off */
+    profileflg = true;	/* #pragma can turn it off */
     tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
     maxdef = 0;
     ndef = 0;
-    outfile = 0;
+    outfile = nil;
     defs = nil;
     setinclude(".");
 
@@ -120,16 +120,12 @@ void main(int argc, char *argv[])
 
     } ARGEND
 
-    if(argc < 1 && outfile == 0) {
+    if(argc < 1 && outfile == nil) {
         print("usage: %cc [-options] files\n", thechar);
         errorexit();
     }
 
-    if(argc > 1 && systemtype(Windows)){
-        print("can't compile multiple files on windows\n");
-        errorexit();
-    }
-    if(argc > 1 && !systemtype(Windows)) {
+    if(argc > 1) {
         nproc = 1;
         /*
          * if we're writing acid to standard output, don't compile
@@ -205,7 +201,7 @@ compile(char *file, char **defs, int ndef)
     } else
         p = ofile;
 
-    if(outfile == 0) {
+    if(outfile == nil) {
         outfile = p;
         if(outfile) {
             if(p = utfrrune(outfile, '.'))
@@ -242,7 +238,7 @@ compile(char *file, char **defs, int ndef)
      */
     if((debug['a'] || debug['Z']) && !debug['n']) {
         if (first) {
-            outfile = 0;
+            outfile = nil;
             Binit(&outbuf, dup(1, -1), OWRITE);
             dup(2, 1);
         }
@@ -250,7 +246,7 @@ compile(char *file, char **defs, int ndef)
         c = mycreat(outfile, 0664);
         if(c < 0) {
             diag(Z, "cannot open %s - %r", outfile);
-            outfile = 0;
+            outfile = nil;
             errorexit();
         }
         Binit(&outbuf, c, OWRITE);
@@ -260,10 +256,6 @@ compile(char *file, char **defs, int ndef)
 
     /* Use an ANSI preprocessor */
     if(debug['p']) {
-        if(systemtype(Windows)) {
-            diag(Z, "-p option not supported on windows");
-            errorexit();
-        }
         if(myaccess(file) < 0) {
             diag(Z, "%s does not exist", file);
             errorexit();

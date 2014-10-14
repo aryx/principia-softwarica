@@ -62,8 +62,8 @@ struct	Adr
     long	offset;
     double	dval;
     char	sval[NSNAME];
-
     Sym*	sym;
+
     uchar	type;
     uchar	index;
     uchar	etype;
@@ -88,7 +88,10 @@ struct	Prog
 
     long	lineno;
 
+    // Extra
+    /*s: [[Prog]] extra fields */
     Prog*	link;
+    /*e: [[Prog]] extra fields */
 };
 /*e: struct Prog */
 /*s: constant P */

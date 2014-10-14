@@ -80,7 +80,7 @@ struct	Node
     // Other fields, TODO LP split
     void*	label;
     long	pc;
-    int	reg;
+    int		reg;
     long	xoffset;
     double	fconst;		/* fp constant */
     vlong	vconst;		/* non fp const */
@@ -90,7 +90,7 @@ struct	Node
     Sym*	sym;
     Type*	type;
     char	oldop;
-    char xcast;
+    char 	xcast;
     char	class;
     char	etype;
     char	complex;
@@ -112,9 +112,6 @@ struct	Sym
     char	*name;
 
 
-    // Extra
-    Sym*	link;
-
     Type*	type;
     Type*	suetag;
     Type*	tenum;
@@ -133,6 +130,12 @@ struct	Sym
     char	sym;
     char	aused;
     char	sig;
+
+    // Extra
+    /*s: [[Sym]] extra fields */
+    // list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
+    Sym*	link;
+    /*e: [[Sym]] extra fields */
 };
 /*e: struct Sym */
 /*s: constant S */
@@ -278,7 +281,7 @@ enum				/* also in ../{8a,0a}.h */
 {
     Plan9	= 1<<0,
     Unix	= 1<<1,
-    Windows	= 1<<2,
+    //Windows	= 1<<2,
 };
 /*e: enum _anon_ (cc/cc.h)2 */
 
@@ -600,7 +603,7 @@ extern	Term	term[NTERM];
 extern	int	nterm;
 extern	int	packflg;
 extern	int	fproundflg;
-extern	int	profileflg;
+extern	bool	profileflg;
 extern	int	ncontin;
 extern	int	newvlongcode;
 extern	int	canreach;

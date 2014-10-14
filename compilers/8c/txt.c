@@ -149,6 +149,7 @@ nextpc(void)
     *p = zprog;
     p->lineno = nearln;
     pc++;
+
     if(firstp == P) {
         firstp = p;
         lastp = p;

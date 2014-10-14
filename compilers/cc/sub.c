@@ -19,12 +19,14 @@ new(int t, Node *l, Node *r)
     n->op = t;
     n->left = l;
     n->right = r;
+
     if(l && t != OGOTO)
         n->lineno = l->lineno;
     else if(r)
         n->lineno = r->lineno;
     else
         n->lineno = lineno;
+
     newflag = true;
     return n;
 }

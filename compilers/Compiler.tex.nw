@@ -151,7 +151,8 @@ you fully understand how things work under the hood.
 
 % gonna present 8c, aka kencc, from ken thompson!
 
-% some cons: no IL ... very imperative ...
+% some cons though: no IL ... very imperative ... harder case to defend
+% than for the other software (8a, 8l, kernel, rio)
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
@@ -166,10 +167,11 @@ Here are other candidates that were considered but ultimately discarded:
 %big
 \item clang
 %cleaner but still very big
+% nice single binary that can cross compile for multiple targets, nice
+% interface (cleaner than 8c, 5c, vc, etc, interfaces are better!)
 \end{itemize}
 
 % TODO bench 8c vs gcc and clang on benchmarks!
-
 
 
 \section{Getting started}
@@ -190,14 +192,17 @@ License.
 
 % ken :)
 % mireille ducasse, marie jo pedrono
+% Aho, appel
 
 \chapter{Overview}
 
 \section{Compiler principles}
 
-% from high level to low level. E.g. expression like x+y*z
+% from high level to low level (asm). E.g. expression like x+y*z
 % decomposed into multi mov, add, etc. Fortran!
-% same for data, complex decomposed into smaller bytes.
+% same for data, complex decomposed into smaller bytes, with symbolic names
+%  for subparts, e.g. fields.
+% more structured forms than jmp.
 
 % innovation of C vs fortran/pascal/algo? simpler?
 
@@ -216,6 +221,8 @@ License.
 
 % assembly x86 object code. Not really machine code, and not asm
 % (even though can get asm via 8c -S)
+
+% put code for helloworld.c? (at least put an arithmetic expression?)
 
 \section{x86}
 
@@ -244,19 +251,19 @@ License.
 %  dcl.c = declaration
 %  funct.c = function
 %  swt.c = switch? (pswt = portable part of switch handling)
-%   but then why outcode, outhist is in this file? move it elsewhere!
+%   (but then why outcode, outhist is in this file? TODO move it elsewhere!)
 %  scon.c =  ?
 
 % -----------
 
 % gc.h (g??)
 % globals2.c
-% list.c = fmt.c (todo rename)
+% list.c = fmt.c (TODO rename)
 % machcap.c, omachcap.c = machine capability (attempt to have interface)
 
 % txt.c?
 % peep = peep optimizer?
-% xxxgen = sgen? cgen? (pgen.c = portable part of gen?)
+% xxxgen = sgen? cgen? (pgen.c = portable part of gen? sgen? cgen?)
 % mul.c, div.c
 % reg.c = register?
 
@@ -282,6 +289,7 @@ License.
 % = expr + stmt + decl?
 
 % node kind?
+% LP reorg, purely internal to cc, not marshalled, so safe (as opposed to 8a)
 <<enum _anon_ (cc/cc.h)4>>=
 enum
 {
@@ -406,7 +414,7 @@ struct	Node
     // Other fields, TODO LP split
     void*	label;
     long	pc;
-    int	reg;
+    int		reg;
     long	xoffset;
     double	fconst;		/* fp constant */
     vlong	vconst;		/* non fp const */
@@ -416,7 +424,7 @@ struct	Node
     Sym*	sym;
     Type*	type;
     char	oldop;
-    char xcast;
+    char 	xcast;
     char	class;
     char	etype;
     char	complex;
@@ -444,12 +452,14 @@ new(int t, Node *l, Node *r)
     n->op = t;
     n->left = l;
     n->right = r;
+
     if(l && t != OGOTO)
         n->lineno = l->lineno;
     else if(r)
         n->lineno = r->lineno;
     else
         n->lineno = lineno;
+
     newflag = true;
     return n;
 }
@@ -617,16 +627,11 @@ struct	Decl
 
 \section{[[Token]]}
 
-% see cc.y
-
-% LXXX  Lexer XXX? Lexeme XXX?
-% so have LDOUBLE and TDOUBLE
-
-
+% from cc.y
 <<token declarations>>=
 %token  <sym>   LNAME LTYPE
-%token  <dval>  LFCONST LDCONST
 %token  <vval>  LCONST LLCONST LUCONST LULCONST LVLCONST LUVLCONST
+%token  <dval>  LFCONST LDCONST
 %token  <sval>  LSTRING LLSTRING
 %token  LAUTO LBREAK LCASE LCHAR LCONTINUE LDEFAULT LDO
 %token  LDOUBLE LELSE LEXTERN LFLOAT LFOR LGOTO
@@ -636,11 +641,16 @@ struct	Decl
 %token  LRESTRICT LINLINE
 @
 
+% LXXX  Lexer XXX? Lexeme XXX?
+% so have LDOUBLE and TDOUBLE
+
+
+
 <<union token>>=
 %union  {
     Sym*    sym;
-    double  dval;
     vlong   vval;
+    double  dval;
     struct
     {
         char*   s;
@@ -685,9 +695,6 @@ struct	Sym
     char	*name;
 
 
-    // Extra
-    Sym*	link;
-
     Type*	type;
     Type*	suetag;
     Type*	tenum;
@@ -706,6 +713,9 @@ struct	Sym
     char	sym;
     char	aused;
     char	sig;
+
+    // Extra
+    <<[[Sym]] extra fields>>
 };
 @
 
@@ -718,11 +728,17 @@ struct	Sym
 Sym*	hash[NHASH];
 @
 
-% Sym link field here lp split
+<<[[Sym]] extra fields>>=
+// list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
+Sym*	link;
+@
 
 <<constant S>>=
 #define	S	((Sym*)nil)
 @
+
+
+
 
 
 <<constant NSYMB>>=
@@ -805,7 +821,7 @@ slookup(char *s)
 % see also opcode and operand_kind in Assembler.tex.nw
 % (and Aconv, Rconv, Dconv, ... in this file)
 
-% enum misc3 of 8.out.h with REGARG, REGRET, REGSP, REGTMP
+% see also enum misc3 of 8.out.h with REGARG, REGRET, REGSP, REGTMP
 
 <<struct Prog>>=
 struct	Prog
@@ -818,8 +834,13 @@ struct	Prog
 
     long	lineno;
 
-    Prog*	link;
+    // Extra
+    <<[[Prog]] extra fields>>
 };
+@
+
+<<[[Prog]] extra fields>>=
+Prog*	link;
 @
 
 <<constant P>>=
@@ -833,8 +854,8 @@ struct	Adr
     long	offset;
     double	dval;
     char	sval[NSNAME];
-
     Sym*	sym;
+
     uchar	type;
     uchar	index;
     uchar	etype;
@@ -878,6 +899,7 @@ nextpc(void)
     *p = zprog;
     p->lineno = nearln;
     pc++;
+
     if(firstp == P) {
         firstp = p;
         lastp = p;
@@ -947,11 +969,11 @@ void main(int argc, char *argv[])
     ginit();
     arginit();
 
-    profileflg = 1;	/* #pragma can turn it off */
+    profileflg = true;	/* #pragma can turn it off */
     tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
     maxdef = 0;
     ndef = 0;
-    outfile = 0;
+    outfile = nil;
     defs = nil;
     setinclude(".");
 
@@ -1000,16 +1022,12 @@ void main(int argc, char *argv[])
 
     } ARGEND
 
-    if(argc < 1 && outfile == 0) {
+    if(argc < 1 && outfile == nil) {
         print("usage: %cc [-options] files\n", thechar);
         errorexit();
     }
 
-    if(argc > 1 && systemtype(Windows)){
-        print("can't compile multiple files on windows\n");
-        errorexit();
-    }
-    if(argc > 1 && !systemtype(Windows)) {
+    if(argc > 1) {
         nproc = 1;
         /*
          * if we're writing acid to standard output, don't compile
@@ -1085,7 +1103,7 @@ compile(char *file, char **defs, int ndef)
     } else
         p = ofile;
 
-    if(outfile == 0) {
+    if(outfile == nil) {
         outfile = p;
         if(outfile) {
             if(p = utfrrune(outfile, '.'))
@@ -1122,7 +1140,7 @@ compile(char *file, char **defs, int ndef)
      */
     if((debug['a'] || debug['Z']) && !debug['n']) {
         if (first) {
-            outfile = 0;
+            outfile = nil;
             Binit(&outbuf, dup(1, -1), OWRITE);
             dup(2, 1);
         }
@@ -1130,7 +1148,7 @@ compile(char *file, char **defs, int ndef)
         c = mycreat(outfile, 0664);
         if(c < 0) {
             diag(Z, "cannot open %s - %r", outfile);
-            outfile = 0;
+            outfile = nil;
             errorexit();
         }
         Binit(&outbuf, c, OWRITE);
@@ -1140,10 +1158,6 @@ compile(char *file, char **defs, int ndef)
 
     /* Use an ANSI preprocessor */
     if(debug['p']) {
-        if(systemtype(Windows)) {
-            diag(Z, "-p option not supported on windows");
-            errorexit();
-        }
         if(myaccess(file) < 0) {
             diag(Z, "%s does not exist", file);
             errorexit();
@@ -1903,7 +1917,7 @@ struct
 
 % extension: SET/USED
 
-\section{Typedef tricks}
+\section{Typedef trick}
 
 %LTYPE!!
 
@@ -3158,7 +3172,7 @@ getnsn(void)
 
 \section{Overview}
 
-% assume understand yacc! if not read classic book on lex&yacc
+% I assume you understand yacc! if not read classic book on lex&yacc
 %  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.tex.nw :) )
 
 <<cc/cc.y>>=
@@ -3166,17 +3180,15 @@ getnsn(void)
 #include "cc.h"
 %}
 <<union token>>
-<<type declarations>>
-<<priority and associativity declarations>>
 <<token declarations>>
+<<priority and associativity declarations>>
+<<type declarations>>
 %%
 <<grammar>>
 %%
 @
 
-
 % have seen token declaration in Core Data structures already.
-
 
 % do not LP split, order matters!
 <<priority and associativity declarations>>=
@@ -3213,6 +3225,8 @@ getnsn(void)
 %type   <node>  zexpr lexpr init ilist forexpr
 @
 
+% in what follows a few conventions: 
+% zxxx means zero or more e.g. zctlist means list of ctl 0 or more
 
 
 <<grammar>>=
@@ -3220,228 +3234,36 @@ prog:
   /* empty */
 |   prog xdecl
 
-/*
- * external declarator
- */
-xdecl:
-    zctlist ';'          { dodecl(xdecl, lastclass, lasttype, Z); }
-|   zctlist xdlist ';'
-|   zctlist xdecor
-    {
-        lastdcl = T;
-        firstarg = S;
-        dodecl(xdecl, lastclass, lasttype, $2);
-        if(lastdcl == T || lastdcl->etype != TFUNC) {
-            diag($2, "not a function");
-            lastdcl = types[TFUNC];
-        }
-        thisfn = lastdcl;
-        markdcl();
-        firstdcl = dclstack;
-        argmark($2, 0);
-    }
-    pdecl
-    {
-        argmark($2, 1);
-    }
-    block
-    {
-        Node *n;
+<<external declarator>>
+<<automatic declarator>>
+<<parameter declarator>>
+<<abstract declarator>>
+<<structure element declarator>>
 
-        n = revertdcl();
-        if(n)
-            $6 = new(OLIST, n, $6);
-        if(!debug['a'] && !debug['Z'])
-            codgen($6, $2);
-    }
+<<statements>>
 
-xdlist:
-    xdecor  { dodecl(xdecl, lastclass, lasttype, $1); }
-|   xdecor
-    {
-        $1 = dodecl(xdecl, lastclass, lasttype, $1);
-    }
-    '=' init
-    {
-        doinit($1->sym, $1->type, 0L, $4);
-    }
-|   xdlist ',' xdlist
+<<expressions>>
+<<arguments>>
+<<initializers>>
 
-xdecor:
-    xdecor2
-|   '*' zgnlist xdecor
-    {
-        $$ = new(OIND, $3, Z);
-        $$->garb = simpleg($2);
-    }
+<<types>>
+<<complex types>>
 
-xdecor2:
-    tag
-|   '(' xdecor ')'             { $$ = $2;   }
-|   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
-|   xdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
+<<names>>
 
-/*
- * automatic declarator
- */
-adecl:
-    ctlist ';'        { $$ = dodecl(adecl, lastclass, lasttype, Z); }
-|   ctlist adlist ';' { $$ = $2; }
+<<extra grammar rules>>
+<<ebnf grammar rules>>
+@
 
-adlist:
-    xdecor
-    {
-        dodecl(adecl, lastclass, lasttype, $1);
-        $$ = Z;
-    }
-|   xdecor
-    {
-        $1 = dodecl(adecl, lastclass, lasttype, $1);
-    }
-    '=' init
-    {
-        long w;
+\section{Statements}
 
-        w = $1->sym->type->width;
-        $$ = doinit($1->sym, $1->type, 0L, $4);
-        $$ = contig($1->sym, $$, w);
-    }
-|   adlist ',' adlist
-    {
-        $$ = $1;
-        if($3 != Z) {
-            $$ = $3;
-            if($1 != Z)
-                $$ = new(OLIST, $1, $3);
-        }
-    }
+% in 'block', originally in comment too //  if($2 != Z) $$ = new(OLIST, $2, $$);
 
-/*
- * parameter declarator
- */
-pdecl:
-  /* empty */
-|   pdecl ctlist pdlist ';'
-
-pdlist:
-    xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
-|   pdlist ',' pdlist
-
-/*
- * structure element declarator
- */
-edecl:
-    tlist
-    {
-        lasttype = $1;
-    }
-    zedlist ';'
-|   edecl tlist
-    {
-        lasttype = $2;
-    }
-    zedlist ';'
-
-zedlist:                    /* extension */
-    {
-        lastfield = 0;
-        edecl(CXXX, lasttype, S);
-    }
-|   edlist
-
-edlist:
-    edecor            { dodecl(edecl, CXXX, lasttype, $1); }
-|   edlist ',' edlist
-
-edecor:
-    xdecor
-    {
-        lastbit = 0;
-        firstbit = 1;
-    }
-|   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
-|   ':' lexpr       { $$ = new(OBIT, Z, $2); }
-
-/*
- * abstract declarator
- */
-abdecor:
-  /* empty */ { $$ = (Z); }
-|   abdecor1
-
-abdecor1:
-    '*' zgnlist
-    {
-        $$ = new(OIND, (Z), Z);
-        $$->garb = simpleg($2);
-    }
-|   '*' zgnlist abdecor1
-    {
-        $$ = new(OIND, $3, Z);
-        $$->garb = simpleg($2);
-    }
-|   abdecor2
-
-abdecor2:
-    abdecor3
-|   abdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
-|   abdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
-
-abdecor3:
-    '(' ')'           { $$ = new(OFUNC, (Z), Z); }
-|   '[' zexpr ']'     { $$ = new(OARRAY, (Z), $2); }
-|   '(' abdecor1 ')'  { $$ = $2; }
-
-init:
-    expr
-|   '{' ilist '}' { $$ = new(OINIT, invert($2), Z); }
-
-qual:
-    '[' lexpr ']' { $$ = new(OARRAY, $2, Z); }
-|   '.' ltag
-    {
-        $$ = new(OELEM, Z, Z);
-        $$->sym = $2;
-    }
-|   qual '='
-
-qlist:
-    init ','
-|   qlist init ','  { $$ = new(OLIST, $1, $2); }
-|   qual
-|   qlist qual      { $$ = new(OLIST, $1, $2); }
-
-ilist:
-    qlist
-|   init
-|   qlist init { $$ = new(OLIST, $1, $2); }
-
-zarglist:
-  /* empty */   { $$ = Z; }
-|   arglist     { $$ = invert($1); }
-
-
-arglist:
-    name
-|   tlist abdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
-|   tlist xdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
-|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
-|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
-
+<<statements>>=
 block:
  '{' slist '}'
     {
         $$ = invert($2);
-        //  if($2 != Z)
-        //      $$ = new(OLIST, $2, $$);
         if($$ == Z)
             $$ = new(OLIST, Z, Z);
     }
@@ -3451,23 +3273,15 @@ slist:
 |   slist adecl    { $$ = new(OLIST, $1, $2); }
 |   slist stmnt    { $$ = new(OLIST, $1, $2); }
 
-labels:
-    label
-|   labels label  { $$ = new(OLIST, $1, $2); }
+stmnt:
+    ulstmnt
+|   labels ulstmnt { $$ = new(OLIST, $1, $2); }
+|   error ';'      { $$ = Z; }
 
 label:
     LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
 |   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
 |   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, 1), Z); }
-
-stmnt:
-    error ';'      { $$ = Z; }
-|   ulstmnt
-|   labels ulstmnt { $$ = new(OLIST, $1, $2); }
-
-forexpr:
-    zcexpr
-|   ctlist adlist { $$ = $2; }
 
 ulstmnt:
     zcexpr ';'
@@ -3496,7 +3310,10 @@ ulstmnt:
         if($7 == Z)
             warn($3, "empty else body");
     }
-|   { markdcl(); } LFOR '(' forexpr ';' zcexpr ';' zcexpr ')' stmnt
+|   { 
+        markdcl(); 
+    } 
+    LFOR '(' forexpr ';' zcexpr ';' zcexpr ')' stmnt
     {
         $$ = revertdcl();
         if($$){
@@ -3535,27 +3352,21 @@ ulstmnt:
 |   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
 |   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
 
+forexpr:
+    zcexpr
+|   ctlist adlist { $$ = $2; }
+@
+%$
 
+<<ebnf grammar rules>>=
+labels:
+    label
+|   labels label  { $$ = new(OLIST, $1, $2); }
+@
 
-zcexpr:
-  /* empty */ { $$ = Z; }
-|   cexpr
+\section{Expressions}
 
-zexpr:
-  /* empty */ { $$ = Z; }
-|   lexpr
-
-lexpr:
-    expr
-    {
-        $$ = new(OCAST, $1, Z);
-        $$->type = types[TLONG];
-    }
-
-cexpr:
-    expr
-|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
-
+<<expressions>>=
 expr:
     xuexpr
 |   expr '*' expr { $$ = new(OMUL, $1, $3); }
@@ -3653,6 +3464,7 @@ pexpr:
     }
 |   pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
 |   pexpr LMM { $$ = new(OPOSTDEC, $1, Z); }
+
 |   name
 |   LCONST
     {
@@ -3768,7 +3580,34 @@ lstring:
         $$->type->width += $2.l;
         $$->rstring = (TRune*)s;
     }
+@
 
+<<expressions>>=
+zexpr:
+  /* empty */ { $$ = Z; }
+|   lexpr
+
+lexpr:
+    expr
+    {
+        $$ = new(OCAST, $1, Z);
+        $$->type = types[TLONG];
+    }
+
+cexpr:
+    expr
+|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
+@
+%$
+% cexpr = comma expr
+
+<<ebnf grammar rules>>=
+zcexpr:
+  /* empty */ { $$ = Z; }
+|   cexpr
+@
+
+<<arguments>>=
 zelist:
   /* empty */ { $$ = Z; }
 |   elist
@@ -3776,39 +3615,43 @@ zelist:
 elist:
     expr
 |   elist ',' elist { $$ = new(OLIST, $1, $3); }
+@
 
-sbody:
-    '{'
-    {
-        $<tyty>$.t1 = strf;
-        $<tyty>$.t2 = strl;
-        $<tyty>$.t3 = lasttype;
-        $<tyty>$.c = lastclass;
-        strf = T;
-        strl = T;
-        lastbit = 0;
-        firstbit = 1;
-        lastclass = CXXX;
-        lasttype = T;
-    }
-    edecl 
-    '}'
-    {
-        $$ = strf;
-        strf = $<tyty>2.t1;
-        strl = $<tyty>2.t2;
-        lasttype = $<tyty>2.t3;
-        lastclass = $<tyty>2.c;
-    }
+\section{Initializers}
 
-zctlist:
- /* empty */
-    {
-        lastclass = CXXX;
-        lasttype = types[TINT];
-    }
-|   ctlist
+<<initializers>>=
+init:
+    expr
+|   '{' ilist '}' { $$ = new(OINIT, invert($2), Z); }
 
+ilist:
+    qlist
+|   init
+|   qlist init { $$ = new(OLIST, $1, $2); }
+
+qlist:
+    init ','
+|   qlist init ','  { $$ = new(OLIST, $1, $2); }
+|   qual
+|   qlist qual      { $$ = new(OLIST, $1, $2); }
+
+qual:
+    '[' lexpr ']' { $$ = new(OARRAY, $2, Z); }
+|   '.' ltag
+    {
+        $$ = new(OELEM, Z, Z);
+        $$->sym = $2;
+    }
+|   qual '='
+@
+%$
+
+
+\section{Types}
+
+\subsection{Simple types}
+
+<<types>>=
 types:
     complex
     {
@@ -3858,7 +3701,10 @@ types:
         $$.c = simplec($1|$3);
         $$.t = garbt($$.t, $1|$3);
     }
+@
 
+% sizeof, cast, context
+<<extra grammar rules>>=
 tlist:
     types
     {
@@ -3866,14 +3712,30 @@ tlist:
         if($1.c != CXXX)
             diag(Z, "illegal combination of class 4: %s", cnames[$1.c]);
     }
+@
 
-ctlist:
-    types
+\subsection{Structures and unions}
+
+<<names>>=
+tag:
+    ltag
     {
-        lasttype = $1.t;
-        lastclass = $1.c;
+        $$ = new(ONAME, Z, Z);
+        $$->sym = $1;
+        $$->type = $1->type;
+        $$->etype = TVOID;
+        if($$->type != T)
+            $$->etype = $$->type->etype;
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
     }
 
+ltag:
+    LNAME
+|   LTYPE
+@
+
+<<complex types>>=
 complex:
     LSTRUCT ltag
     {
@@ -3965,33 +3827,311 @@ complex:
     }
 |   LTYPE { $$ = tcopy($1->type); }
 
-gctnlist:
-    gctname
-|   gctnlist gctname { $$ = typebitor($1, $2); }
 
-zgnlist:
- /* empty */       { $$ = 0; }
-|   zgnlist gname  { $$ = typebitor($1, $2); }
 
-gctname:
-    tname
-|   gname
-|   cname
+sbody:
+    '{'
+    {
+        $<tyty>$.t1 = strf;
+        $<tyty>$.t2 = strl;
+        $<tyty>$.t3 = lasttype;
+        $<tyty>$.c = lastclass;
+        strf = T;
+        strl = T;
+        lastbit = 0;
+        firstbit = 1;
+        lastclass = CXXX;
+        lasttype = T;
+    }
+    edecl 
+    '}'
+    {
+        $$ = strf;
+        strf = $<tyty>2.t1;
+        strl = $<tyty>2.t2;
+        lasttype = $<tyty>2.t3;
+        lastclass = $<tyty>2.c;
+    }
 
-gcnlist:
-    gcname
-|   gcnlist gcname { $$ = typebitor($1, $2); }
+@
+%$
 
-gcname:
-    gname
-|   cname
+<<structure element declarator>>=
+/*
+ * structure element declarator
+ */
+edecl:
+    tlist
+    {
+        lasttype = $1;
+    }
+    zedlist ';'
+|   edecl tlist
+    {
+        lasttype = $2;
+    }
+    zedlist ';'
 
+zedlist:                    /* extension */
+ /* empty */
+    {
+        lastfield = 0;
+        edecl(CXXX, lasttype, S);
+    }
+|   edlist
+
+edlist:
+    edecor            { dodecl(edecl, CXXX, lasttype, $1); }
+|   edlist ',' edlist
+
+edecor:
+    xdecor
+    {
+        lastbit = 0;
+        firstbit = 1;
+    }
+|   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
+|   ':' lexpr       { $$ = new(OBIT, Z, $2); }
+@
+%$
+
+\subsection{Enum}
+
+<<complex types>>=
 enum:
     LNAME           { doenum($1, Z); }
 |   LNAME '=' expr  { doenum($1, $3); }
 |   enum ','
 |   enum ',' enum
+@
+%$
 
+\section{Declarations and definitions}
+
+<<external declarator>>=
+/*
+ * external declarator
+ */
+xdecl:
+    zctlist ';'          { dodecl(xdecl, lastclass, lasttype, Z); }
+|   zctlist xdlist ';'
+|   zctlist xdecor
+    {
+        lastdcl = T;
+        firstarg = S;
+        dodecl(xdecl, lastclass, lasttype, $2);
+        if(lastdcl == T || lastdcl->etype != TFUNC) {
+            diag($2, "not a function");
+            lastdcl = types[TFUNC];
+        }
+        thisfn = lastdcl;
+        markdcl();
+        firstdcl = dclstack;
+        argmark($2, 0);
+    }
+    pdecl
+    {
+        argmark($2, 1);
+    }
+    block
+    {
+        Node *n;
+
+        n = revertdcl();
+        if(n)
+            $6 = new(OLIST, n, $6);
+        if(!debug['a'] && !debug['Z'])
+            codgen($6, $2);
+    }
+
+xdlist:
+    xdecor  { dodecl(xdecl, lastclass, lasttype, $1); }
+|   xdecor
+    {
+        $1 = dodecl(xdecl, lastclass, lasttype, $1);
+    }
+    '=' init
+    {
+        doinit($1->sym, $1->type, 0L, $4);
+    }
+|   xdlist ',' xdlist
+
+xdecor:
+    xdecor2
+|   '*' zgnlist xdecor
+    {
+        $$ = new(OIND, $3, Z);
+        $$->garb = simpleg($2);
+    }
+
+xdecor2:
+    tag
+|   '(' xdecor ')'             { $$ = $2;   }
+|   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
+|   xdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
+@
+%$
+
+<<ebnf grammar rules>>=
+zctlist:
+ /* empty */
+    {
+        lastclass = CXXX;
+        lasttype = types[TINT];
+    }
+|   ctlist
+@
+
+<<extra grammar rules>>=
+ctlist:
+    types
+    {
+        lasttype = $1.t;
+        lastclass = $1.c;
+    }
+@
+
+<<automatic declarator>>=
+/*
+ * automatic declarator
+ */
+adecl:
+    ctlist ';'        { $$ = dodecl(adecl, lastclass, lasttype, Z); }
+|   ctlist adlist ';' { $$ = $2; }
+
+adlist:
+    xdecor
+    {
+        dodecl(adecl, lastclass, lasttype, $1);
+        $$ = Z;
+    }
+|   xdecor
+    {
+        $1 = dodecl(adecl, lastclass, lasttype, $1);
+    }
+    '=' init
+    {
+        long w;
+
+        w = $1->sym->type->width;
+        $$ = doinit($1->sym, $1->type, 0L, $4);
+        $$ = contig($1->sym, $$, w);
+    }
+|   adlist ',' adlist
+    {
+        $$ = $1;
+        if($3 != Z) {
+            $$ = $3;
+            if($1 != Z)
+                $$ = new(OLIST, $1, $3);
+        }
+    }
+@
+%$
+
+
+<<abstract declarator>>=
+/*
+ * abstract declarator
+ */
+abdecor:
+  /* empty */ { $$ = (Z); }
+|   abdecor1
+
+abdecor1:
+    '*' zgnlist
+    {
+        $$ = new(OIND, (Z), Z);
+        $$->garb = simpleg($2);
+    }
+|   '*' zgnlist abdecor1
+    {
+        $$ = new(OIND, $3, Z);
+        $$->garb = simpleg($2);
+    }
+|   abdecor2
+
+abdecor2:
+    abdecor3
+|   abdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
+|   abdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
+
+abdecor3:
+    '(' ')'           { $$ = new(OFUNC, (Z), Z); }
+|   '[' zexpr ']'     { $$ = new(OARRAY, (Z), $2); }
+|   '(' abdecor1 ')'  { $$ = $2; }
+@
+%$
+
+\subsection{Functions}
+
+<<parameter declarator>>=
+/*
+ * parameter declarator
+ */
+pdecl:
+  /* empty */
+|   pdecl ctlist pdlist ';'
+
+pdlist:
+    xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
+|   pdlist ',' pdlist
+@
+%$
+% this is old style? pre-ansi?
+
+% called arg ... hmmm ... should be renamed zparamlist
+<<parameter declarator>>=
+zarglist:
+  /* empty */   { $$ = Z; }
+|   arglist     { $$ = invert($1); }
+
+
+arglist:
+    name
+|   tlist abdecor
+    {
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
+    }
+|   tlist xdecor
+    {
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
+    }
+|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
+|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
+@
+%$
+
+\subsection{Local variables}
+
+
+\subsection{Other}
+
+
+
+\section{Names}
+
+<<names>>=
+name:
+    LNAME
+    {
+        $$ = new(ONAME, Z, Z);
+        if($1->class == CLOCAL)
+            $1 = mkstatic($1);
+        $$->sym = $1;
+        $$->type = $1->type;
+        $$->etype = TVOID;
+        if($$->type != T)
+            $$->etype = $$->type->etype;
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
+        $1->aused = 1;
+    }
+@
+
+<<names>>=
 tname:  /* type words */
     LCHAR     { $$ = BCHAR; }
 |   LSHORT    { $$ = BSHORT; }
@@ -4016,51 +4156,33 @@ gname:  /* garbage words */
     LCONSTNT  { $$ = BCONSTNT; }
 |   LVOLATILE { $$ = BVOLATILE; }
 |   LRESTRICT { $$ = 0; }
-
-name:
-    LNAME
-    {
-        $$ = new(ONAME, Z, Z);
-        if($1->class == CLOCAL)
-            $1 = mkstatic($1);
-        $$->sym = $1;
-        $$->type = $1->type;
-        $$->etype = TVOID;
-        if($$->type != T)
-            $$->etype = $$->type->etype;
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
-        $1->aused = 1;
-    }
-
-tag:
-    ltag
-    {
-        $$ = new(ONAME, Z, Z);
-        $$->sym = $1;
-        $$->type = $1->type;
-        $$->etype = TVOID;
-        if($$->type != T)
-            $$->etype = $$->type->etype;
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
-    }
-
-ltag:
-    LNAME
-|   LTYPE
 @
 
 
-\section{Translation unit}
+<<names>>=
+gctname:
+    tname
+|   gname
+|   cname
 
-\section{Expressions}
+gcname:
+    gname
+|   cname
+@
 
-\section{Statements}
+<<names>>=
+gctnlist:
+    gctname
+|   gctnlist gctname { $$ = typebitor($1, $2); }
 
-\section{Types}
+zgnlist:
+ /* empty */       { $$ = 0; }
+|   zgnlist gname  { $$ = typebitor($1, $2); }
 
-\section{Declarations}
+gcnlist:
+    gcname
+|   gcnlist gcname { $$ = typebitor($1, $2); }
+@
 
 \chapter{Checking}
 
@@ -4772,18 +4894,8 @@ outhist(Biobuf *b)
     for(h = hist; h != H; h = h->link) {
         p = h->name;
         op = 0;
-        /* on windows skip drive specifier in pathname */
-        if(systemtype(Windows) && p && p[1] == ':'){
-            p += 2;
-            c = *p;
-        }
         if(p && p[0] != c && h->offset == 0 && pathname){
-            /* on windows skip drive specifier in pathname */
-            if(systemtype(Windows) && pathname[1] == ':') {
-                op = p;
-                p = pathname+2;
-                c = *p;
-            } else if(pathname[0] == c){
+            if(pathname[0] == c){
                 op = p;
                 p = pathname;
             }
@@ -4952,8 +5064,9 @@ zaddr(Biobuf *b, Adr *a, int s)
 
 \chapter{Profiling Support}
 
+% actually always true, only way to disable it is via pragma locally
 <<global profileflg>>=
-int	profileflg;
+bool	profileflg;
 @
 
 \chapter{Advanced Topics}
