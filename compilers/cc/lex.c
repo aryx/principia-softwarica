@@ -1256,7 +1256,9 @@ cinit(void)
     peekc = IGN;
     nhunk = 0;
 
+    /*s: [[cinit()]] types initialization */
     types[TXXX] = T;
+
     types[TCHAR] = typ(TCHAR, T);
     types[TUCHAR] = typ(TUCHAR, T);
     types[TSHORT] = typ(TSHORT, T);
@@ -1273,6 +1275,7 @@ cinit(void)
     types[TENUM] = typ(TENUM, T);
     types[TFUNC] = typ(TFUNC, types[TINT]);
     types[TIND] = typ(TIND, types[TVOID]);
+    /*e: [[cinit()]] types initialization */
 
     for(i=0; i<NHASH; i++)
         hash[i] = S;

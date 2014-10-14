@@ -336,7 +336,9 @@ enum node_kind
     OENUM,
     OEQ,
     OFOR,
-    OFUNC,
+
+    OFUNC, // used for calls but also proto decls :(
+
     OGE,
     OGOTO,
     OGT,
@@ -349,7 +351,7 @@ enum node_kind
     OLABEL,
     OLDIV,
     OLE,
-    OLIST, // of stmts, labels, etc
+    OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
     OLMOD,
     OLMUL,
     OLO,
@@ -416,6 +418,11 @@ struct	Node
     // option<ref_own<Node>>
     Node*	right;
 
+    double	fconst;		/* fp constant */
+    vlong	vconst;		/* non fp const */ // abused in switch?
+    char*	cstring;	/* character string */ // also used for ints
+    TRune*	rstring;	/* rune string */
+
     long	lineno;
 
     <<[[Node]] other fields>>
@@ -425,21 +432,57 @@ struct	Node
 % arithmetic trees (a+b), but also for linked list (e.g. OLIST) with
 % double chaining
 
+% important field! typechecking! set in parsing when can
+% (e.g. for cast where have type, for return where have also spec)
+<<[[Node]] other fields>>=
+Type*	type;
+@
+
+% inline of type->etype? char->byte?
+<<[[Node]] other fields>>=
+// enum<type_kind>, inline of Node.type->etype?
+char	etype;
+@
+
+
+<<enum cxxx>>=
+enum
+{
+    CXXX,
+
+    CAUTO,
+    CEXTERN,
+    CGLOBL,
+    CSTATIC,
+
+    CLOCAL,
+    CTYPEDEF,
+    CTYPESTR,
+    CPARAM,
+    CSELEM,
+    CLABEL,
+    CEXREG,
+
+    NCTYPES,
+};
+@
+
+<<[[Node]] other fields>>=
+// enum<cxxx>
+char	class;
+@
+
 <<[[Node]] other fields>>=
 void*	label;
 
 long	pc;
 int		reg;
 long	xoffset;
-double	fconst;		/* fp constant */
-vlong	vconst;		/* non fp const */
-char*	cstring;	/* character string */
-TRune*	rstring;	/* rune string */
 
-Sym*	sym;
+
+Sym*	sym; // for ODOT access to field name
+
 char	oldop;
-char	class;
-char	etype;
 
 // (ab)used as bool for marker of label def (true) vs use (false),
 // FNX special value, register allocation value, etc
@@ -563,8 +606,9 @@ struct	Type
     // enum<type_kind>
     char	etype;
 
-    // ??
+    // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
     Type*	link;
+
     // ??
     Type*	down;
 
@@ -577,7 +621,7 @@ struct	Type
 <<[[Type]] other fields>>=
 Sym*	sym;
 
-long	width;
+long	width; // ewidth[Type.etype]
 
 long	offset;
 schar	shift;
@@ -623,6 +667,33 @@ copytyp(Type *t)
     *nt = *t;
     return nt;
 }
+@
+
+
+<<global types>>=
+Type*	types[NTYPE];
+@
+
+
+<<[[cinit()]] types initialization>>=
+types[TXXX] = T;
+
+types[TCHAR] = typ(TCHAR, T);
+types[TUCHAR] = typ(TUCHAR, T);
+types[TSHORT] = typ(TSHORT, T);
+types[TUSHORT] = typ(TUSHORT, T);
+types[TINT] = typ(TINT, T);
+types[TUINT] = typ(TUINT, T);
+types[TLONG] = typ(TLONG, T);
+types[TULONG] = typ(TULONG, T);
+types[TVLONG] = typ(TVLONG, T);
+types[TUVLONG] = typ(TUVLONG, T);
+types[TFLOAT] = typ(TFLOAT, T);
+types[TDOUBLE] = typ(TDOUBLE, T);
+types[TVOID] = typ(TVOID, T);
+types[TENUM] = typ(TENUM, T);
+types[TFUNC] = typ(TFUNC, types[TINT]);
+types[TIND] = typ(TIND, types[TVOID]);
 @
 
 \subsection{[[Decl]]}
@@ -3801,6 +3872,34 @@ Node* dcllabel(Sym *s, bool f)
 \section{Expressions}
 
 <<expressions rules>>=
+zexpr:
+  /* empty */ { $$ = Z; }
+|   lexpr
+
+lexpr:
+    expr
+    {
+        $$ = new(OCAST, $1, Z);
+        $$->type = types[TLONG];
+    }
+
+cexpr:
+    expr
+|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
+@
+%$
+% cexpr = comma expr
+
+<<ebnf grammar rules>>=
+zcexpr:
+  /* empty */ { $$ = Z; }
+|   cexpr
+@
+
+
+\subsection{Binary expressions}
+
+<<expressions rules>>=
 expr:
     xuexpr
 
@@ -3839,6 +3938,8 @@ expr:
 @
 %$
 
+\subsection{Cast}
+
 <<expressions rules>>=
 xuexpr:
     uexpr
@@ -3870,6 +3971,8 @@ bool 	xcast;
 %$
 
 
+\subsection{Unary expressions}
+
 % unary expr
 <<expressions rules>>=
 uexpr:
@@ -3889,6 +3992,8 @@ uexpr:
 |   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
 @
 % signof?
+
+\subsection{Primary expressions}
 
 <<expressions rules>>=
 <<pexpr rule>>
@@ -3923,7 +4028,7 @@ pexpr:
     {
         $$ = new(OFUNC, $1, Z);
         if($1->op == ONAME)
-        if($1->type == T)
+          if($1->type == T)
             dodecl(xdecl, CXXX, types[TINT], $$);
         $$->right = invert($3);
     }
@@ -3943,10 +4048,12 @@ elist:
 @
 
 
+% unsugar x[y] as *(x+y)
 <<pexpr rule>>=
 |   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
 @
 
+% unsugar x->y as (*x).y
 <<pexpr rule>>=
 |   pexpr LMG ltag
     {
@@ -3968,6 +4075,8 @@ elist:
 <<pexpr rule>>=
 |   name
 @
+
+\subsection{Numeric Constants}
 
 <<pexpr rule>>=
 |   LCONST
@@ -4005,6 +4114,10 @@ elist:
         $$->fconst = $1;
         $$->cstring = strdup(symb);
     }
+@
+%$
+
+<<pexpr rule>>=
 |   LFCONST
     {
         $$ = new(OCONST, Z, Z);
@@ -4027,6 +4140,10 @@ elist:
         $$->cstring = strdup(symb);
     }
 @
+%$
+
+\subsection{String constants}
+% char constant? unsugard in yylex?
 
 <<pexpr rule>>=
 |   string
@@ -4055,13 +4172,16 @@ string:
 
         memcpy(s, $1->cstring, n);
         memcpy(s+n, $2.s, $2.l);
-        s[n+$2.l] = 0;
+        s[n+$2.l] = '\0';
 
         $$ = $1;
         $$->type->width += $2.l;
         $$->cstring = s;
     }
+@
 
+% unicode
+<<expressions rules>>=
 lstring:
     LLSTRING
     {
@@ -4089,32 +4209,6 @@ lstring:
         $$->type->width += $2.l;
         $$->rstring = (TRune*)s;
     }
-@
-
-
-<<expressions rules>>=
-zexpr:
-  /* empty */ { $$ = Z; }
-|   lexpr
-
-lexpr:
-    expr
-    {
-        $$ = new(OCAST, $1, Z);
-        $$->type = types[TLONG];
-    }
-
-cexpr:
-    expr
-|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
-@
-%$
-% cexpr = comma expr
-
-<<ebnf grammar rules>>=
-zcexpr:
-  /* empty */ { $$ = Z; }
-|   cexpr
 @
 
 
@@ -5031,13 +5125,8 @@ fatal(Node *n, char *fmt, ...)
 
 \section{Typechecking}
 
-<<global types>>=
-Type*	types[NTYPE];
-@
+% remember type field in Node
 
-<<[[Node]] other fields>>=
-Type*	type;
-@
 
 \section{Lint checks}
 

@@ -398,6 +398,21 @@ forexpr:
 /*e: statements rules */
 
 /*s: expressions rules */
+zexpr:
+  /* empty */ { $$ = Z; }
+|   lexpr
+
+lexpr:
+    expr
+    {
+        $$ = new(OCAST, $1, Z);
+        $$->type = types[TLONG];
+    }
+
+cexpr:
+    expr
+|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
+/*x: expressions rules */
 expr:
     xuexpr
 
@@ -489,7 +504,7 @@ pexpr:
     {
         $$ = new(OFUNC, $1, Z);
         if($1->op == ONAME)
-        if($1->type == T)
+          if($1->type == T)
             dodecl(xdecl, CXXX, types[TINT], $$);
         $$->right = invert($3);
     }
@@ -547,6 +562,7 @@ pexpr:
         $$->fconst = $1;
         $$->cstring = strdup(symb);
     }
+/*x: pexpr rule */
 |   LFCONST
     {
         $$ = new(OCONST, Z, Z);
@@ -598,13 +614,13 @@ string:
 
         memcpy(s, $1->cstring, n);
         memcpy(s+n, $2.s, $2.l);
-        s[n+$2.l] = 0;
+        s[n+$2.l] = '\0';
 
         $$ = $1;
         $$->type->width += $2.l;
         $$->cstring = s;
     }
-
+/*x: expressions rules */
 lstring:
     LLSTRING
     {
@@ -632,21 +648,6 @@ lstring:
         $$->type->width += $2.l;
         $$->rstring = (TRune*)s;
     }
-/*x: expressions rules */
-zexpr:
-  /* empty */ { $$ = Z; }
-|   lexpr
-
-lexpr:
-    expr
-    {
-        $$ = new(OCAST, $1, Z);
-        $$->type = types[TLONG];
-    }
-
-cexpr:
-    expr
-|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
 /*e: expressions rules */
 /*s: initializers rules */
 init:
@@ -953,13 +954,13 @@ labels:
     label
 |   labels label  { $$ = new(OLIST, $1, $2); }
 /*x: ebnf grammar rules */
-zelist:
-  /* empty */ { $$ = Z; }
-|   elist
-/*x: ebnf grammar rules */
 zcexpr:
   /* empty */ { $$ = Z; }
 |   cexpr
+/*x: ebnf grammar rules */
+zelist:
+  /* empty */ { $$ = Z; }
+|   elist
 /*x: ebnf grammar rules */
 zctlist:
  /* empty */

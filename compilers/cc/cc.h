@@ -79,23 +79,32 @@ struct	Node
     // option<ref_own<Node>>
     Node*	right;
 
+    double	fconst;		/* fp constant */
+    vlong	vconst;		/* non fp const */ // abused in switch?
+    char*	cstring;	/* character string */ // also used for ints
+    TRune*	rstring;	/* rune string */
+
     long	lineno;
 
     /*s: [[Node]] other fields */
+    Type*	type;
+    /*x: [[Node]] other fields */
+    // enum<type_kind>, inline of Node.type->etype?
+    char	etype;
+    /*x: [[Node]] other fields */
+    // enum<cxxx>
+    char	class;
+    /*x: [[Node]] other fields */
     void*	label;
 
     long	pc;
     int		reg;
     long	xoffset;
-    double	fconst;		/* fp constant */
-    vlong	vconst;		/* non fp const */
-    char*	cstring;	/* character string */
-    TRune*	rstring;	/* rune string */
 
-    Sym*	sym;
+
+    Sym*	sym; // for ODOT access to field name
+
     char	oldop;
-    char	class;
-    char	etype;
 
     // (ab)used as bool for marker of label def (true) vs use (false),
     // FNX special value, register allocation value, etc
@@ -107,8 +116,6 @@ struct	Node
     char	garb;
     /*x: [[Node]] other fields */
     bool 	xcast;
-    /*x: [[Node]] other fields */
-    Type*	type;
     /*e: [[Node]] other fields */
 };
 /*e: struct Node */
@@ -200,8 +207,9 @@ struct	Type
     // enum<type_kind>
     char	etype;
 
-    // ??
+    // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
     Type*	link;
+
     // ??
     Type*	down;
 
@@ -210,7 +218,7 @@ struct	Type
     /*s: [[Type]] other fields */
     Sym*	sym;
 
-    long	width;
+    long	width; // ewidth[Type.etype]
 
     long	offset;
     schar	shift;
@@ -367,7 +375,9 @@ enum node_kind
     OENUM,
     OEQ,
     OFOR,
-    OFUNC,
+
+    OFUNC, // used for calls but also proto decls :(
+
     OGE,
     OGOTO,
     OGT,
@@ -380,7 +390,7 @@ enum node_kind
     OLABEL,
     OLDIV,
     OLE,
-    OLIST, // of stmts, labels, etc
+    OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
     OLMOD,
     OLMUL,
     OLO,
@@ -480,14 +490,16 @@ enum type_kind
     TRUNE = sizeof(TRune)==4? TUINT: TUSHORT,
 };
 /*e: enum type_kind */
-/*s: enum _anon_ (cc/cc.h)6 */
+/*s: enum cxxx */
 enum
 {
     CXXX,
+
     CAUTO,
     CEXTERN,
     CGLOBL,
     CSTATIC,
+
     CLOCAL,
     CTYPEDEF,
     CTYPESTR,
@@ -495,9 +507,10 @@ enum
     CSELEM,
     CLABEL,
     CEXREG,
+
     NCTYPES,
 };
-/*e: enum _anon_ (cc/cc.h)6 */
+/*e: enum cxxx */
 /*s: enum _anon_ (cc/cc.h)7 */
 enum
 {
