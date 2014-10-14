@@ -407,6 +407,7 @@ lookup(void)
     if((long)h < 0)
         h = ~h;
     h %= NHASH;
+
     c = symb[0];
     for(s = hash[h]; s != S; s = s->link) {
         if(s->name[0] != c)
@@ -1106,7 +1107,7 @@ unget(int c)
 
 /*s: function escchar */
 long
-escchar(long e, int longflg, int escflg)
+escchar(long e, int longflg, bool escflg)
 {
     long c, l;
     int i;

@@ -71,13 +71,16 @@ struct	Bits
 /*s: struct Node */
 struct	Node
 {
+    // enum<node_kind>
     char	op;
+    // option<ref_own<Node>>
     Node*	left;
+    // option<ref_own<Node>>
     Node*	right;
 
     long	lineno;
 
-    // Other fields, TODO LP split
+    /*s: [[Node]] other fields */
     void*	label;
     long	pc;
     int		reg;
@@ -97,8 +100,7 @@ struct	Node
     char	addable;
     char	scale;
     char	garb;
-
-    // Extra fields
+    /*e: [[Node]] other fields */
 };
 /*e: struct Node */
 /*s: constant Z */
@@ -157,7 +159,9 @@ struct	Decl
 {
     Sym*	sym;
     Type*	type;
+
     long	varlineno;
+
     long	offset;
     short	val;
     ushort	block;
@@ -165,7 +169,9 @@ struct	Decl
     char	aused;
 
     // Extra fields
+    /*s: [[Decl]] extra fields */
     Decl*	link;
+    /*e: [[Decl]] extra fields */
 };
 /*e: struct Decl */
 /*s: constant D */
@@ -294,8 +300,8 @@ enum
     DLABEL,
 };
 /*e: enum _anon_ (cc/cc.h)3 */
-/*s: enum _anon_ (cc/cc.h)4 */
-enum
+/*s: enum node_kind */
+enum node_kind
 {
     OXXX,
 
@@ -401,9 +407,9 @@ enum
 
     OEND
 };
-/*e: enum _anon_ (cc/cc.h)4 */
-/*s: enum _anon_ (cc/cc.h)5 */
-enum type
+/*e: enum node_kind */
+/*s: enum type_kind */
+enum type_kind
 {
     TXXX,
 
@@ -451,7 +457,7 @@ enum type
     /* adapt size of Rune to target system's size */
     TRUNE = sizeof(TRune)==4? TUINT: TUSHORT,
 };
-/*e: enum _anon_ (cc/cc.h)5 */
+/*e: enum type_kind */
 /*s: enum _anon_ (cc/cc.h)6 */
 enum
 {

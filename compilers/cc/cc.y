@@ -14,15 +14,18 @@
     } sval;
 
    /*s: [[Token]] other fields */
-   Node*   node;
-   Type*   type;
    long    lval;
-
+   /*x: [[Token]] other fields */
+   Node*   node;
+   /*x: [[Token]] other fields */
    struct
    {
        Type*   t;
        uchar   c;
    } tycl;
+   /*x: [[Token]] other fields */
+   Type*   type;
+   /*x: [[Token]] other fields */
    struct
    {
        Type*   t1;
@@ -31,7 +34,6 @@
        uchar   c;
    } tyty;
    /*e: [[Token]] other fields */
-
 }
 /*e: union token */
 /*s: token declarations */
@@ -39,6 +41,7 @@
 %token  <vval>  LCONST LLCONST LUCONST LULCONST LVLCONST LUVLCONST
 %token  <dval>  LFCONST LDCONST
 %token  <sval>  LSTRING LLSTRING
+/*x: token declarations */
 %token  LAUTO LBREAK LCASE LCHAR LCONTINUE LDEFAULT LDO
 %token  LDOUBLE LELSE LEXTERN LFLOAT LFOR LGOTO
 %token  LIF LINT LLONG LREGISTER LRETURN LSHORT LSIZEOF LUSED
@@ -64,11 +67,6 @@
 %right  LMM LPP LMG '.' '[' '('
 /*e: priority and associativity declarations */
 /*s: type declarations */
-%type   <sym>   ltag
-%type   <lval>  gctname gcname cname gname tname
-%type   <lval>  gctnlist gcnlist zgnlist
-%type   <type>  tlist sbody complex
-%type   <tycl>  types
 %type   <node>  zarglist arglist zcexpr
 %type   <node>  name block stmnt cexpr expr xuexpr pexpr
 %type   <node>  zelist elist adecl slist uexpr string lstring
@@ -76,6 +74,16 @@
 %type   <node>  adlist edecor tag qual qlist
 %type   <node>  abdecor abdecor1 abdecor2 abdecor3
 %type   <node>  zexpr lexpr init ilist forexpr
+/*x: type declarations */
+%type   <tycl>  types
+/*x: type declarations */
+%type   <type>  tlist sbody complex
+/*x: type declarations */
+%type   <sym>   ltag
+/*x: type declarations */
+%type   <lval>  tname cname gname   gcname   gctname
+/*x: type declarations */
+%type   <lval>  gctnlist gcnlist zgnlist
 /*e: type declarations */
 %%
 /*s: grammar */
