@@ -21,6 +21,7 @@ long	autoffset;
 int	blockno;
 /*e: global blockno */
 /*s: global dclstack */
+// list<ref_own<Decl>> (next = Decl.link)
 Decl*	dclstack;
 /*e: global dclstack */
 /*s: global debug */

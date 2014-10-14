@@ -782,10 +782,12 @@ void markdcl(void)
     Decl *d;
 
     blockno++;
+
     d = push();
     d->val = DMARK;
     d->offset = autoffset;
     d->block = autobn;
+
     autobn = blockno;
 }
 /*e: function markdcl */
@@ -959,7 +961,7 @@ push(void)
 {
     Decl *d;
 
-    d = alloc(sizeof(*d));
+    d = alloc(sizeof(Decl));
     d->link = dclstack;
     dclstack = d;
     return d;
@@ -1222,7 +1224,7 @@ Type* dotag(Sym *s, int et, int bn)
 
 /*s: function dcllabel */
 //@Scheck: used by cc.y
-Node* dcllabel(Sym *s, int f)
+Node* dcllabel(Sym *s, bool f)
 {
     Decl *d, d1;
     Node *n;
@@ -1241,6 +1243,7 @@ Node* dcllabel(Sym *s, int f)
     d = push();
     d->sym = s;
     d->val = DLABEL;
+
     dclstack = d->link;
 
     d1 = *firstdcl;
@@ -1254,6 +1257,7 @@ Node* dcllabel(Sym *s, int f)
     n->sym = s;
     n->complex = f;
     n->addable = !f;
+
     s->label = n;
 
     if(debug['d'])

@@ -73,6 +73,7 @@ struct	Node
 {
     // enum<node_kind>
     char	op;
+
     // option<ref_own<Node>>
     Node*	left;
     // option<ref_own<Node>>
@@ -82,6 +83,7 @@ struct	Node
 
     /*s: [[Node]] other fields */
     void*	label;
+
     long	pc;
     int		reg;
     long	xoffset;
@@ -96,8 +98,13 @@ struct	Node
     char 	xcast;
     char	class;
     char	etype;
-    char	complex;
+
+    // (ab)used as bool for marker of label def (true) vs use (false),
+    // FNX special value, register allocation value, etc
+    char	complex; 
+    // (ab)used as bool for marker of use of label, special 10, 11, 20 values
     char	addable;
+
     char	scale;
     char	garb;
     /*e: [[Node]] other fields */
@@ -113,6 +120,9 @@ struct	Sym
     // for? keywords? locals? parameters? struct/union? all names? fields?
     char	*name;
 
+    /*s: [[Sym]] other fields */
+    Node*	label;
+    /*e: [[Sym]] other fields */
 
     Type*	type;
     Type*	suetag;
@@ -124,7 +134,8 @@ struct	Sym
     long	offset;
     vlong	vconst;
     double	fconst;
-    Node*	label;
+
+
     ushort	lexical;
     ushort	block;
     ushort	sueblock;
@@ -162,14 +173,17 @@ struct	Decl
 
     long	varlineno;
 
-    long	offset;
+    // enum<dxxx>
     short	val;
+
+    long	offset;
     ushort	block;
     char	class;
     char	aused;
 
     // Extra fields
     /*s: [[Decl]] extra fields */
+    // list<ref_own<Decl> of dclstack
     Decl*	link;
     /*e: [[Decl]] extra fields */
 };
@@ -291,15 +305,15 @@ enum				/* also in ../{8a,0a}.h */
 };
 /*e: enum _anon_ (cc/cc.h)2 */
 
-/*s: enum _anon_ (cc/cc.h)3 */
-enum
+/*s: enum dxxx */
+enum dxxx
 {
     DMARK,
     DAUTO,
     DSUE,
     DLABEL,
 };
-/*e: enum _anon_ (cc/cc.h)3 */
+/*e: enum dxxx */
 /*s: enum node_kind */
 enum node_kind
 {

@@ -91,7 +91,7 @@ prog:
   /* empty */
 |   prog xdecl
 
-/*s: external declarator */
+/*s: external declarator rules */
 /*
  * external declarator
  */
@@ -152,8 +152,8 @@ xdecor2:
 |   '(' xdecor ')'             { $$ = $2;   }
 |   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
 |   xdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
-/*e: external declarator */
-/*s: automatic declarator */
+/*e: external declarator rules */
+/*s: automatic declarator rules */
 /*
  * automatic declarator
  */
@@ -188,8 +188,8 @@ adlist:
                 $$ = new(OLIST, $1, $3);
         }
     }
-/*e: automatic declarator */
-/*s: parameter declarator */
+/*e: automatic declarator rules */
+/*s: parameter declarator rules */
 /*
  * parameter declarator
  */
@@ -200,7 +200,7 @@ pdecl:
 pdlist:
     xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
 |   pdlist ',' pdlist
-/*x: parameter declarator */
+/*x: parameter declarator rules */
 zarglist:
   /* empty */   { $$ = Z; }
 |   arglist     { $$ = invert($1); }
@@ -220,8 +220,8 @@ arglist:
     }
 |   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
 |   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
-/*e: parameter declarator */
-/*s: abstract declarator */
+/*e: parameter declarator rules */
+/*s: abstract declarator rules */
 /*
  * abstract declarator
  */
@@ -251,8 +251,8 @@ abdecor3:
     '(' ')'           { $$ = new(OFUNC, (Z), Z); }
 |   '[' zexpr ']'     { $$ = new(OARRAY, (Z), $2); }
 |   '(' abdecor1 ')'  { $$ = $2; }
-/*e: abstract declarator */
-/*s: structure element declarator */
+/*e: abstract declarator rules */
+/*s: structure element declarator rules */
 /*
  * structure element declarator
  */
@@ -288,9 +288,9 @@ edecor:
     }
 |   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
 |   ':' lexpr       { $$ = new(OBIT, Z, $2); }
-/*e: structure element declarator */
+/*e: structure element declarator rules */
 
-/*s: statements */
+/*s: statements rules */
 block:
  '{' slist '}'
     {
@@ -303,17 +303,12 @@ slist:
   /* empty */      { $$ = Z;    }
 |   slist adecl    { $$ = new(OLIST, $1, $2); }
 |   slist stmnt    { $$ = new(OLIST, $1, $2); }
-
+/*x: statements rules */
 stmnt:
     ulstmnt
 |   labels ulstmnt { $$ = new(OLIST, $1, $2); }
 |   error ';'      { $$ = Z; }
-
-label:
-    LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
-|   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
-|   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, 1), Z); }
-
+/*x: statements rules */
 ulstmnt:
     zcexpr ';'
 |   {
@@ -378,7 +373,7 @@ ulstmnt:
     }
 |   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
 |   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
-|   LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, 0), Z); }
+|   LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, false), Z); }
 
 |   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
 |   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
@@ -386,9 +381,14 @@ ulstmnt:
 forexpr:
     zcexpr
 |   ctlist adlist { $$ = $2; }
-/*e: statements */
+/*x: statements rules */
+label:
+    LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
+|   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
+|   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
+/*e: statements rules */
 
-/*s: expressions */
+/*s: expressions rules */
 expr:
     xuexpr
 |   expr '*' expr { $$ = new(OMUL, $1, $3); }
@@ -602,7 +602,7 @@ lstring:
         $$->type->width += $2.l;
         $$->rstring = (TRune*)s;
     }
-/*x: expressions */
+/*x: expressions rules */
 zexpr:
   /* empty */ { $$ = Z; }
 |   lexpr
@@ -617,8 +617,8 @@ lexpr:
 cexpr:
     expr
 |   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
-/*e: expressions */
-/*s: arguments */
+/*e: expressions rules */
+/*s: arguments rules */
 zelist:
   /* empty */ { $$ = Z; }
 |   elist
@@ -626,8 +626,8 @@ zelist:
 elist:
     expr
 |   elist ',' elist { $$ = new(OLIST, $1, $3); }
-/*e: arguments */
-/*s: initializers */
+/*e: arguments rules */
+/*s: initializers rules */
 init:
     expr
 |   '{' ilist '}' { $$ = new(OINIT, invert($2), Z); }
@@ -651,9 +651,9 @@ qual:
         $$->sym = $2;
     }
 |   qual '='
-/*e: initializers */
+/*e: initializers rules */
 
-/*s: types */
+/*s: types rules */
 types:
     complex
     {
@@ -703,8 +703,8 @@ types:
         $$.c = simplec($1|$3);
         $$.t = garbt($$.t, $1|$3);
     }
-/*e: types */
-/*s: complex types */
+/*e: types rules */
+/*s: complex types rules */
 complex:
     LSTRUCT ltag
     {
@@ -822,15 +822,15 @@ sbody:
         lastclass = $<tyty>2.c;
     }
 
-/*x: complex types */
+/*x: complex types rules */
 enum:
     LNAME           { doenum($1, Z); }
 |   LNAME '=' expr  { doenum($1, $3); }
 |   enum ','
 |   enum ',' enum
-/*e: complex types */
+/*e: complex types rules */
 
-/*s: names */
+/*s: names rules */
 tag:
     ltag
     {
@@ -847,7 +847,7 @@ tag:
 ltag:
     LNAME
 |   LTYPE
-/*x: names */
+/*x: names rules */
 name:
     LNAME
     {
@@ -863,7 +863,7 @@ name:
         $$->class = $1->class;
         $1->aused = 1;
     }
-/*x: names */
+/*x: names rules */
 tname:  /* type words */
     LCHAR     { $$ = BCHAR; }
 |   LSHORT    { $$ = BSHORT; }
@@ -888,7 +888,7 @@ gname:  /* garbage words */
     LCONSTNT  { $$ = BCONSTNT; }
 |   LVOLATILE { $$ = BVOLATILE; }
 |   LRESTRICT { $$ = 0; }
-/*x: names */
+/*x: names rules */
 gctname:
     tname
 |   gname
@@ -897,7 +897,7 @@ gctname:
 gcname:
     gname
 |   cname
-/*x: names */
+/*x: names rules */
 gctnlist:
     gctname
 |   gctnlist gctname { $$ = typebitor($1, $2); }
@@ -909,7 +909,7 @@ zgnlist:
 gcnlist:
     gcname
 |   gcnlist gcname { $$ = typebitor($1, $2); }
-/*e: names */
+/*e: names rules */
 
 /*s: extra grammar rules */
 tlist:
