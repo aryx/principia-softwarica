@@ -291,26 +291,15 @@ edecor:
 /*e: structure element declarator rules */
 
 /*s: statements rules */
-block:
- '{' slist '}'
-    {
-        $$ = invert($2);
-        if($$ == Z)
-            $$ = new(OLIST, Z, Z);
-    }
-
-slist:
-  /* empty */      { $$ = Z;    }
-|   slist adecl    { $$ = new(OLIST, $1, $2); }
-|   slist stmnt    { $$ = new(OLIST, $1, $2); }
-/*x: statements rules */
 stmnt:
     ulstmnt
 |   labels ulstmnt { $$ = new(OLIST, $1, $2); }
 |   error ';'      { $$ = Z; }
 /*x: statements rules */
+/*s: ulstmnt rule */
 ulstmnt:
     zcexpr ';'
+/*x: ulstmnt rule */
 |   {
         markdcl();
     }
@@ -322,6 +311,7 @@ ulstmnt:
         else
             $$ = $2;
     }
+/*x: ulstmnt rule */
 |   LIF '(' cexpr ')' stmnt
     {
         $$ = new(OIF, $3, new(OLIST, $5, Z));
@@ -336,6 +326,30 @@ ulstmnt:
         if($7 == Z)
             warn($3, "empty else body");
     }
+/*x: ulstmnt rule */
+|   LSWITCH '(' cexpr ')' stmnt
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->vconst = 0;
+        $$->type = types[TINT];
+        $3 = new(OSUB, $$, $3);
+
+        $$ = new(OCONST, Z, Z);
+        $$->vconst = 0;
+        $$->type = types[TINT];
+        $3 = new(OSUB, $$, $3);
+
+        $$ = new(OSWITCH, $3, $5);
+    }
+/*x: ulstmnt rule */
+|   LRETURN zcexpr ';'
+    {
+        $$ = new(ORETURN, $2, Z);
+        $$->type = thisfn->link;
+    }
+|   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
+|   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
+/*x: ulstmnt rule */
 |   { 
         markdcl(); 
     } 
@@ -352,40 +366,37 @@ ulstmnt:
     }
 |   LWHILE '(' cexpr ')' stmnt          { $$ = new(OWHILE, $3, $5); }
 |   LDO stmnt LWHILE '(' cexpr ')' ';'  { $$ = new(ODWHILE, $5, $2); }
-|   LRETURN zcexpr ';'
-    {
-        $$ = new(ORETURN, $2, Z);
-        $$->type = thisfn->link;
-    }
-|   LSWITCH '(' cexpr ')' stmnt
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->vconst = 0;
-        $$->type = types[TINT];
-        $3 = new(OSUB, $$, $3);
-
-        $$ = new(OCONST, Z, Z);
-        $$->vconst = 0;
-        $$->type = types[TINT];
-        $3 = new(OSUB, $$, $3);
-
-        $$ = new(OSWITCH, $3, $5);
-    }
-|   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
-|   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
+/*x: ulstmnt rule */
 |   LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, false), Z); }
-
+/*x: ulstmnt rule */
 |   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
 |   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
-
-forexpr:
-    zcexpr
-|   ctlist adlist { $$ = $2; }
+/*e: ulstmnt rule */
 /*x: statements rules */
+/*s: label rule */
 label:
     LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
 |   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
+/*x: label rule */
 |   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
+/*e: label rule */
+/*x: statements rules */
+block:
+ '{' slist '}'
+    {
+        $$ = invert($2);
+        if($$ == Z)
+            $$ = new(OLIST, Z, Z);
+    }
+
+slist:
+  /* empty */      { $$ = Z;    }
+|   slist adecl    { $$ = new(OLIST, $1, $2); }
+|   slist stmnt    { $$ = new(OLIST, $1, $2); }
+/*x: statements rules */
+forexpr:
+    zcexpr
+|   ctlist adlist { $$ = $2; }
 /*e: statements rules */
 
 /*s: expressions rules */

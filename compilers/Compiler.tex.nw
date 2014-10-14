@@ -3281,6 +3281,8 @@ Node*   node;
 % in what follows a few conventions: 
 % zxxx means zero or more e.g. zctlist means list of ctl 0 or more
 
+% note that all terminal chars like ')' are acutally Node* too
+% so can pass them to warn() to get accurate error location
 
 <<grammar>>=
 prog:
@@ -3313,6 +3315,50 @@ prog:
 % in 'block', originally in comment too //  if($2 != Z) $$ = new(OLIST, $2, $$);
 
 <<statements rules>>=
+stmnt:
+    ulstmnt
+|   labels ulstmnt { $$ = new(OLIST, $1, $2); }
+|   error ';'      { $$ = Z; }
+@
+
+<<statements rules>>=
+<<ulstmnt rule>>
+@
+
+<<ulstmnt rule>>=
+ulstmnt:
+    zcexpr ';'
+@
+
+<<ebnf grammar rules>>=
+labels:
+    label
+|   labels label  { $$ = new(OLIST, $1, $2); }
+@
+
+<<statements rules>>=
+<<label rule>>
+@
+
+\subsection{Blocks}
+
+<<ulstmnt rule>>=
+|   {
+        markdcl();
+    }
+    block
+    {
+        $$ = revertdcl();
+        if($$)
+            $$ = new(OLIST, $$, $2);
+        else
+            $$ = $2;
+    }
+@
+% will explain later revertdcl() in Declaration section
+
+
+<<statements rules>>=
 block:
  '{' slist '}'
     {
@@ -3326,30 +3372,12 @@ slist:
 |   slist adecl    { $$ = new(OLIST, $1, $2); }
 |   slist stmnt    { $$ = new(OLIST, $1, $2); }
 @
+%$
 
 
-<<statements rules>>=
-stmnt:
-    ulstmnt
-|   labels ulstmnt { $$ = new(OLIST, $1, $2); }
-|   error ';'      { $$ = Z; }
-@
+\subsection{Conditionals}
 
-
-<<statements rules>>=
-ulstmnt:
-    zcexpr ';'
-|   {
-        markdcl();
-    }
-    block
-    {
-        $$ = revertdcl();
-        if($$)
-            $$ = new(OLIST, $$, $2);
-        else
-            $$ = $2;
-    }
+<<ulstmnt rule>>=
 |   LIF '(' cexpr ')' stmnt
     {
         $$ = new(OIF, $3, new(OLIST, $5, Z));
@@ -3364,6 +3392,54 @@ ulstmnt:
         if($7 == Z)
             warn($3, "empty else body");
     }
+@
+%$
+
+\subsection{Switch}
+
+<<ulstmnt rule>>=
+|   LSWITCH '(' cexpr ')' stmnt
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->vconst = 0;
+        $$->type = types[TINT];
+        $3 = new(OSUB, $$, $3);
+
+        $$ = new(OCONST, Z, Z);
+        $$->vconst = 0;
+        $$->type = types[TINT];
+        $3 = new(OSUB, $$, $3);
+
+        $$ = new(OSWITCH, $3, $5);
+    }
+@
+
+% note that labels so can have case 1: case 2: ...
+
+<<label rule>>=
+label:
+    LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
+|   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
+@
+%$
+
+\subsection{Control flow jumps}
+
+<<ulstmnt rule>>=
+|   LRETURN zcexpr ';'
+    {
+        $$ = new(ORETURN, $2, Z);
+        $$->type = thisfn->link;
+    }
+|   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
+|   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
+@
+%$
+
+
+\subsection{Loops}
+
+<<ulstmnt rule>>=
 |   { 
         markdcl(); 
     } 
@@ -3380,32 +3456,9 @@ ulstmnt:
     }
 |   LWHILE '(' cexpr ')' stmnt          { $$ = new(OWHILE, $3, $5); }
 |   LDO stmnt LWHILE '(' cexpr ')' ';'  { $$ = new(ODWHILE, $5, $2); }
-|   LRETURN zcexpr ';'
-    {
-        $$ = new(ORETURN, $2, Z);
-        $$->type = thisfn->link;
-    }
-|   LSWITCH '(' cexpr ')' stmnt
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->vconst = 0;
-        $$->type = types[TINT];
-        $3 = new(OSUB, $$, $3);
+@
 
-        $$ = new(OCONST, Z, Z);
-        $$->vconst = 0;
-        $$->type = types[TINT];
-        $3 = new(OSUB, $$, $3);
-
-        $$ = new(OSWITCH, $3, $5);
-    }
-|   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
-|   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
-|   LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, false), Z); }
-
-|   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
-|   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
-
+<<statements rules>>=
 forexpr:
     zcexpr
 |   ctlist adlist { $$ = $2; }
@@ -3414,18 +3467,15 @@ forexpr:
 
 \subsection{Labels}
 
-<<statements rules>>=
-label:
-    LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
-|   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
+<<label rule>>=
 |   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
 @
+%$
 
-<<ebnf grammar rules>>=
-labels:
-    label
-|   labels label  { $$ = new(OLIST, $1, $2); }
+<<ulstmnt rule>>=
+|   LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, false), Z); }
 @
+%$
 
 
 <<[[Sym]] other fields>>=
@@ -4086,6 +4136,95 @@ void markdcl(void)
 }
 @
 
+<<function revertdcl>>=
+//@Scheck: used by cc.y
+Node* revertdcl(void)
+{
+    Decl *d;
+    Sym *s;
+    Node *n, *n1;
+
+    n = Z;
+    for(;;) {
+        d = dclstack;
+        if(d == D) {
+            diag(Z, "pop off dcl stack");
+            break;
+        }
+        dclstack = d->link;
+        s = d->sym;
+        switch(d->val) {
+        case DMARK:
+            autoffset = d->offset;
+            autobn = d->block;
+            return n;
+
+        case DAUTO:
+            if(debug['d'])
+                print("revert1 \"%s\"\n", s->name);
+            if(s->aused == 0) {
+                nearln = s->varlineno;
+                if(s->class == CAUTO)
+                    warn(Z, "auto declared and not used: %s", s->name);
+                if(s->class == CPARAM)
+                    warn(Z, "param declared and not used: %s", s->name);
+            }
+            if(s->type && (s->type->garb & GVOLATILE)) {
+                n1 = new(ONAME, Z, Z);
+                n1->sym = s;
+                n1->type = s->type;
+                n1->etype = TVOID;
+                if(n1->type != T)
+                    n1->etype = n1->type->etype;
+                n1->xoffset = s->offset;
+                n1->class = s->class;
+
+                n1 = new(OADDR, n1, Z);
+                n1 = new(OUSED, n1, Z);
+                if(n == Z)
+                    n = n1;
+                else
+                    n = new(OLIST, n1, n);
+            }
+            s->type = d->type;
+            s->class = d->class;
+            s->offset = d->offset;
+            s->block = d->block;
+            s->varlineno = d->varlineno;
+            s->aused = d->aused;
+            break;
+
+        case DSUE:
+            if(debug['d'])
+                print("revert2 \"%s\"\n", s->name);
+            s->suetag = d->type;
+            s->sueblock = d->block;
+            break;
+
+        case DLABEL:
+            if(debug['d'])
+                print("revert3 \"%s\"\n", s->name);
+            if(s->label && s->label->addable == 0)
+                warn(s->label, "label declared and not used \"%s\"", s->name);
+            s->label = Z;
+            break;
+        }
+    }
+    return n;
+}
+@
+
+
+
+
+
+
+
+
+
+
+
+
 
 <<external declarator rules>>=
 /*
@@ -4463,7 +4602,13 @@ fatal(Node *n, char *fmt, ...)
 % 8c -V enable void* conversion warnings
 % 8c -w print warnings
 
+
 \subsection{[[SET/USED]]}
+
+<<ulstmnt rule>>=
+|   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
+|   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
+@
 
 
 <<function usedset>>=
