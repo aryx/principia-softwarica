@@ -21,8 +21,8 @@
    struct
    {
        Type*   t;
-       // enum<node_kind> ?
-       uchar   c;
+       // enum<cxxx>
+       byte   c;
    } tycl;
    /*x: [[union yacc]] other fields */
    Type*   type;
@@ -82,9 +82,11 @@
 /*x: type declarations */
 %type   <tycl>  types
 /*x: type declarations */
-%type   <type> tlist complex
+%type   <type> tlist
 /*x: type declarations */
 %type   <lval>  gctnlist gcnlist zgnlist
+/*x: type declarations */
+%type   <type>  complex
 /*x: type declarations */
 %type   <sym>   ltag
 /*x: type declarations */
@@ -96,6 +98,7 @@ prog:
   /* empty */
 |   prog xdecl
 
+/*s: declarator rules */
 /*s: external declarator rules */
 /*
  * external declarator
@@ -297,7 +300,7 @@ edecor:
 |   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
 |   ':' lexpr       { $$ = new(OBIT, Z, $2); }
 /*e: structure element declarator rules */
-
+/*e: declarator rules */
 /*s: statements rules */
 stmnt:
     ulstmnt
@@ -401,7 +404,6 @@ forexpr:
     zcexpr
 |   ctlist adlist { $$ = $2; }
 /*e: statements rules */
-
 /*s: expressions rules */
 zexpr:
   /* empty */ { $$ = Z; }
@@ -679,7 +681,6 @@ qual:
     }
 |   qual '='
 /*e: initializers rules */
-
 /*s: types rules */
 tname:  /* type words */
     LCHAR     { $$ = BCHAR; }
@@ -871,7 +872,8 @@ complex:
         en.tenum = T;
         en.cenum = T;
     }
-    enum '}'
+    enum 
+     '}'
     {
         $$ = $2->suetag;
         if($$->link != T)
@@ -900,7 +902,6 @@ enum:
 |   enum ','
 |   enum ',' enum
 /*e: types rules */
-
 /*s: names rules */
 name:
     LNAME
@@ -915,6 +916,7 @@ name:
             $$->etype = $$->type->etype;
         $$->xoffset = $1->offset;
         $$->class = $1->class;
+
         $1->aused = 1;
     }
 /*x: names rules */

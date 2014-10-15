@@ -148,12 +148,14 @@ typ(int et, Type *d)
     t->etype = et;
     t->link = d;
     t->down = T;
+    t->garb = 0;
     t->sym = S;
+
     t->width = ewidth[et];
     t->offset = 0;
     t->shift = 0;
     t->nbits = 0;
-    t->garb = 0;
+
     return t;
 }
 /*e: function typ */

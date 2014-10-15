@@ -435,8 +435,10 @@ syminit(Sym *s)
     s->lexical = LNAME;
     s->block = 0;
     s->offset = 0;
+
     s->type = T;
     s->suetag = T;
+
     s->class = CXXX;
     s->aused = 0;
     s->sig = SIGNONE;

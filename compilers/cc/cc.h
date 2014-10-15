@@ -95,14 +95,13 @@ struct	Node
     // enum<cxxx>
     char	class;
     /*x: [[Node]] other fields */
+    Sym*	sym; // for ODOT access to field name, 
+    /*x: [[Node]] other fields */
     void*	label;
 
     long	pc;
     int		reg;
     long	xoffset;
-
-
-    Sym*	sym; // for ODOT access to field name
 
     char	oldop;
 
@@ -131,10 +130,14 @@ struct	Sym
 
     /*s: [[Sym]] other fields */
     Node*	label;
+    /*x: [[Sym]] other fields */
+    Type*	suetag;
+    /*x: [[Sym]] other fields */
+    ushort	sueblock;
     /*e: [[Sym]] other fields */
 
+
     Type*	type;
-    Type*	suetag;
     Type*	tenum;
 
     char*	macro;
@@ -147,7 +150,7 @@ struct	Sym
 
     ushort	lexical;
     ushort	block;
-    ushort	sueblock;
+
     char	class;
     char	sym;
     char	aused;
@@ -216,18 +219,19 @@ struct	Type
     long	lineno;
 
     /*s: [[Type]] other fields */
+    char	garb;
+    /*x: [[Type]] other fields */
     Sym*	sym;
-
+    /*x: [[Type]] other fields */
     long	width; // ewidth[Type.etype]
 
     long	offset;
     schar	shift;
     char	nbits;
 
-    char	garb; // garbage? rename qualifier?
-
-    Sym*	tag;
     Funct*	funct;
+    /*x: [[Type]] other fields */
+    Sym*	tag;
     /*e: [[Type]] other fields */
 };
 /*e: struct Type */
@@ -502,8 +506,7 @@ enum type_kind
 /*s: enum cxxx */
 enum
 {
-    CXXX,
-
+    CXXX, // nothing specified
     CAUTO,
     CEXTERN,
     CGLOBL,
@@ -517,22 +520,23 @@ enum
     CPARAM,
     CSELEM,
     CLABEL,
-    CEXREG,
+
+    CEXREG, // extern register, kencc ext (used in kernel for mips)
 
     NCTYPES,
 };
 /*e: enum cxxx */
-/*s: enum _anon_ (cc/cc.h)7 */
-enum
+/*s: enum gxxx */
+enum gxxx
 {
     GXXX		= 0,
     GCONSTNT	= 1<<0,
     GVOLATILE	= 1<<1,
-    NGTYPES		= 1<<2,
 
+    NGTYPES		= 1<<2,
     GINCOMPLETE	= 1<<2,
 };
-/*e: enum _anon_ (cc/cc.h)7 */
+/*e: enum gxxx */
 /*s: enum bxxx */
 enum bxxx
 {
@@ -574,6 +578,7 @@ enum bxxx
     BTYPESTR	= 1L<<TTYPESTR,
     BREGISTER	= 1L<<TREGISTER,
 
+
     BINTEGER	= BCHAR|BUCHAR|BSHORT|BUSHORT|BINT|BUINT|
                 BLONG|BULONG|BVLONG|BUVLONG,
     BNUMBER		= BINTEGER|BFLOAT|BDOUBLE,
@@ -598,9 +603,11 @@ struct	Funct
 struct En
 {
     Type*	tenum;		/* type of entire enum */
+
     Type*	cenum;		/* type of current enum run */
+
     vlong	lastenum;	/* value of current enum */
-    double	floatenum;	/* value of current enum */
+    double	floatenum;	/* value of current enum */ // for floats enums
 };
 /*e: struct En */
 extern struct En en;

@@ -123,6 +123,7 @@ loop:
         s->varlineno = lineno;
         break;
     }
+
     lastdcl = t;
     return n;
 }
@@ -1209,6 +1210,7 @@ Type* dotag(Sym *s, int et, int bn)
         d->block = s->sueblock;
         s->suetag = T;
     }
+
     if(s->suetag == T) {
         s->suetag = typ(et, T);
         s->sueblock = autobn;
@@ -1216,6 +1218,7 @@ Type* dotag(Sym *s, int et, int bn)
     if(s->suetag->etype != et)
         diag(Z, "tag used for more than one type: %s",
             s->name);
+
     if(s->suetag->tag == S)
         s->suetag->tag = s;
     return s->suetag;

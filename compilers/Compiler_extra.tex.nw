@@ -107,17 +107,6 @@ enum				/* also in ../{8a,0a}.h */
 
 
 
-<<enum _anon_ (cc/cc.h)7>>=
-enum
-{
-    GXXX		= 0,
-    GCONSTNT	= 1<<0,
-    GVOLATILE	= 1<<1,
-    NGTYPES		= 1<<2,
-
-    GINCOMPLETE	= 1<<2,
-};
-@
 
 
 <<struct Funct>>=
@@ -129,15 +118,6 @@ struct	Funct
 };
 @
 
-<<struct En>>=
-struct En
-{
-    Type*	tenum;		/* type of entire enum */
-    Type*	cenum;		/* type of current enum run */
-    vlong	lastenum;	/* value of current enum */
-    double	floatenum;	/* value of current enum */
-};
-@
 
 
 %-------------------------------------------------------------
@@ -218,7 +198,7 @@ extern Hist*	hist;
 <<enum node_kind>>
 <<enum type_kind>>
 <<enum cxxx>>
-<<enum _anon_ (cc/cc.h)7>>
+<<enum gxxx>>
 <<enum bxxx>>
 
 <<struct Funct>>
@@ -646,22 +626,6 @@ Sym*	getsym(void);
 \subsection*{[[cc/globals.c]]}
 
 
-
-<<global en>>=
-struct En en;
-@
-
-
-
-
-
-
-<<global firstbit>>=
-long	firstbit;
-@
-
-
-
 <<global fperror>>=
 //int	fperror;
 @
@@ -710,23 +674,13 @@ char*	pathname;
 
 
 
-<<global strf>>=
-Type*	strf;
-@
 
-<<global strl>>=
-Type*	strl;
-@
 
 
 <<global symstring>>=
 Sym*	symstring;
 @
 
-<<global taggen>>=
-//@Scheck: used by cc.y
-int	taggen;
-@
 
 <<global tfield>>=
 Type*	tfield;
@@ -744,9 +698,6 @@ Type*	tufield;
 Type*	fntypes[NTYPE];
 @
 
-<<global initlist>>=
-Node*	initlist;
-@
 
 <<global term>>=
 Term	term[NTERM];
@@ -880,138 +831,8 @@ char*	typecmplx;
 
 
 
-<<function garbt>>=
-//@Scheck: used by cc.y
-Type* garbt(Type *t, long b)
-{
-    Type *t1;
 
-    if(b & BGARB) {
-        t1 = copytyp(t);
-        t1->garb = simpleg(b);
-        return t1;
-    }
-    return t;
-}
-@
 
-<<function simpleg>>=
-int
-simpleg(long b)
-{
-
-    b &= BGARB;
-    switch(b) {
-    case BCONSTNT:
-        return GCONSTNT;
-    case BVOLATILE:
-        return GVOLATILE;
-    case BVOLATILE|BCONSTNT:
-        return GCONSTNT|GVOLATILE;
-    }
-    return GXXX;
-}
-@
-
-<<function simplec>>=
-//@Scheck: used by cc.y
-int simplec(long b)
-{
-
-    b &= BCLASS;
-    switch(b) {
-    case 0:
-    case BREGISTER:
-        return CXXX;
-    case BAUTO:
-    case BAUTO|BREGISTER:
-        return CAUTO;
-    case BEXTERN:
-        return CEXTERN;
-    case BEXTERN|BREGISTER:
-        return CEXREG;
-    case BSTATIC:
-        return CSTATIC;
-    case BTYPEDEF:
-        return CTYPEDEF;
-    case BTYPESTR:
-        return CTYPESTR;
-    }
-    diag(Z, "illegal combination of classes %Q", b);
-    return CXXX;
-}
-@
-
-<<function simplet>>=
-Type*
-simplet(long b)
-{
-
-    b &= ~BCLASS & ~BGARB;
-    switch(b) {
-    case BCHAR:
-    case BCHAR|BSIGNED:
-        return types[TCHAR];
-
-    case BCHAR|BUNSIGNED:
-        return types[TUCHAR];
-
-    case BSHORT:
-    case BSHORT|BINT:
-    case BSHORT|BSIGNED:
-    case BSHORT|BINT|BSIGNED:
-        return types[TSHORT];
-
-    case BUNSIGNED|BSHORT:
-    case BUNSIGNED|BSHORT|BINT:
-        return types[TUSHORT];
-
-    case 0:
-    case BINT:
-    case BINT|BSIGNED:
-    case BSIGNED:
-        return types[TINT];
-
-    case BUNSIGNED:
-    case BUNSIGNED|BINT:
-        return types[TUINT];
-
-    case BLONG:
-    case BLONG|BINT:
-    case BLONG|BSIGNED:
-    case BLONG|BINT|BSIGNED:
-        return types[TLONG];
-
-    case BUNSIGNED|BLONG:
-    case BUNSIGNED|BLONG|BINT:
-        return types[TULONG];
-
-    case BVLONG|BLONG:
-    case BVLONG|BLONG|BINT:
-    case BVLONG|BLONG|BSIGNED:
-    case BVLONG|BLONG|BINT|BSIGNED:
-        return types[TVLONG];
-
-    case BVLONG|BLONG|BUNSIGNED:
-    case BVLONG|BLONG|BINT|BUNSIGNED:
-        return types[TUVLONG];
-
-    case BFLOAT:
-        return types[TFLOAT];
-
-    case BDOUBLE:
-    case BDOUBLE|BLONG:
-    case BFLOAT|BLONG:
-        return types[TDOUBLE];
-
-    case BVOID:
-        return types[TVOID];
-    }
-
-    diag(Z, "illegal combination of types %Q", b);
-    return types[TINT];
-}
-@
 
 <<function stcompat>>=
 int
@@ -3759,61 +3580,6 @@ acidtype(Type *t)
 }
 @
 
-<<function acidvar>>=
-void
-acidvar(Sym *s)
-{
-    int n;
-    Io *i;
-    Type *t;
-    Sym *s1, *s2;
-
-    if(!debug['a'] || debug['s'])
-        return;
-    if(debug['a'] > 1) {
-        n = 0;
-        for(i=iostack; i; i=i->link)
-            n++;
-        if(n > 1)
-            return;
-    }
-    t = s->type;
-    while(t && t->etype == TIND)
-        t = t->link;
-    if(t == T)
-        return;
-    if(t->etype == TENUM) {
-        Bprint(&outbuf, "%s = ", amap(s->name));
-        if(!typefd[t->etype])
-            Bprint(&outbuf, "%lld;\n", s->vconst);
-        else
-            Bprint(&outbuf, "%f\n;", s->fconst);
-        return;
-    }
-    if(!typesu[t->etype])
-        return;
-    s1 = acidsue(t->link);
-    if(s1 == S)
-        return;
-    switch(s->class) {
-    case CAUTO:
-    case CPARAM:
-        s2 = acidfun(thisfn);
-        if(s2)
-            Bprint(&outbuf, "complex %s %s:%s;\n",
-                amap(s1->name), amap(s2->name), amap(s->name));
-        break;
-    
-    case CSTATIC:
-    case CEXTERN:
-    case CGLOBL:
-    case CLOCAL:
-        Bprint(&outbuf, "complex %s %s;\n",
-            amap(s1->name), amap(s->name));
-        break;
-    }
-}
-@
 
 
 %-------------------------------------------------------------
@@ -5242,153 +5008,6 @@ nullwarn(Node *l, Node *r)
 \subsection*{[[cc/dcl.c]]}
 
 
-<<function mkstatic>>=
-Sym*
-mkstatic(Sym *s)
-{
-    Sym *s1;
-
-    if(s->class != CLOCAL)
-        return s;
-    snprint(symb, NSYMB, "%s$%d", s->name, s->block);
-    s1 = lookup();
-    if(s1->class != CSTATIC) {
-        s1->type = s->type;
-        s1->offset = s->offset;
-        s1->block = s->block;
-        s1->class = CSTATIC;
-    }
-    return s1;
-}
-@
-
-<<function tcopy>>=
-/*
- * make a copy of a typedef
- * the problem is to split out incomplete
- * arrays so that it is in the variable
- * rather than the typedef.
- */
-Type*
-tcopy(Type *t)
-{
-    Type *tl, *tx;
-    int et;
-
-    if(t == T)
-        return t;
-    et = t->etype;
-    if(typesu[et])
-        return t;
-    tl = tcopy(t->link);
-    if(tl != t->link ||
-      (et == TARRAY && t->width == 0)) {
-        tx = copytyp(t);
-        tx->link = tl;
-        return tx;
-    }
-    return t;
-}
-@
-
-<<function doinit>>=
-Node*
-doinit(Sym *s, Type *t, long o, Node *a)
-{
-    Node *n;
-
-    if(t == T)
-        return Z;
-    if(s->class == CEXTERN) {
-        s->class = CGLOBL;
-        if(debug['d'])
-            dbgdecl(s);
-    }
-    if(debug['i']) {
-        print("t = %T; o = %ld; n = %s\n", t, o, s->name);
-        prtree(a, "doinit value");
-    }
-
-
-    n = initlist;
-    if(a->op == OINIT)
-        a = a->left;
-    initlist = a;
-
-    a = init1(s, t, o, 0);
-    if(initlist != Z)
-        diag(initlist, "more initializers than structure: %s",
-            s->name);
-    initlist = n;
-
-    return a;
-}
-@
-
-<<function peekinit>>=
-/*
- * get next major operator,
- * dont advance initlist.
- */
-Node*
-peekinit(void)
-{
-    Node *a;
-
-    a = initlist;
-
-loop:
-    if(a == Z)
-        return a;
-    if(a->op == OLIST) {
-        a = a->left;
-        goto loop;
-    }
-    return a;
-}
-@
-
-<<function nextinit>>=
-/*
- * consume and return next element on
- * initlist. expand strings.
- */
-Node*
-nextinit(void)
-{
-    Node *a, *b, *n;
-
-    a = initlist;
-    n = Z;
-
-    if(a == Z)
-        return a;
-    if(a->op == OLIST) {
-        n = a->right;
-        a = a->left;
-    }
-    if(a->op == OUSED) {
-        a = a->left;
-        b = new(OCONST, Z, Z);
-        b->type = a->type->link;
-        if(a->op == OSTRING) {
-            b->vconst = convvtox(*a->cstring, TCHAR);
-            a->cstring++;
-        }
-        if(a->op == OLSTRING) {
-            b->vconst = convvtox(*a->rstring, TRUNE);
-            a->rstring++;
-        }
-        a->type->width -= b->type->width;
-        if(a->type->width <= 0)
-            initlist = n;
-        return b;
-    }
-    initlist = n;
-    return a;
-}
-@
-
 <<function isstruct>>=
 int
 isstruct(Node *a, Type *t)
@@ -5428,234 +5047,6 @@ isstruct(Node *a, Type *t)
 }
 @
 
-<<function init1>>=
-Node*
-init1(Sym *s, Type *t, long o, int exflag)
-{
-    Node *a, *l, *r, nod;
-    Type *t1;
-    long e, w, so, mw;
-
-    a = peekinit();
-    if(a == Z)
-        return Z;
-
-    if(debug['i']) {
-        print("t = %T; o = %ld; n = %s\n", t, o, s->name);
-        prtree(a, "init1 value");
-    }
-
-    if(exflag && a->op == OINIT)
-        return doinit(s, t, o, nextinit());
-
-    switch(t->etype) {
-    default:
-        diag(Z, "unknown type in initialization: %T to: %s", t, s->name);
-        return Z;
-
-    case TCHAR:
-    case TUCHAR:
-    case TINT:
-    case TUINT:
-    case TSHORT:
-    case TUSHORT:
-    case TLONG:
-    case TULONG:
-    case TVLONG:
-    case TUVLONG:
-    case TFLOAT:
-    case TDOUBLE:
-    case TIND:
-    single:
-        if(a->op == OARRAY || a->op == OELEM)
-            return Z;
-
-        a = nextinit();
-        if(a == Z)
-            return Z;
-
-        if(t->nbits)
-            diag(Z, "cannot initialize bitfields");
-        if(s->class == CAUTO) {
-            l = new(ONAME, Z, Z);
-            l->sym = s;
-            l->type = t;
-            l->etype = TVOID;
-            if(s->type)
-                l->etype = s->type->etype;
-            l->xoffset = s->offset + o;
-            l->class = s->class;
-
-            l = new(OASI, l, a);
-            return l;
-        }
-
-        complex(a);
-        if(a->type == T)
-            return Z;
-
-        if(a->op == OCONST) {
-            if(vconst(a) && t->etype == TIND && a->type && a->type->etype != TIND){
-                diag(a, "initialize pointer to an integer: %s", s->name);
-                return Z;
-            }
-            if(!sametype(a->type, t)) {
-                /* hoop jumping to save malloc */
-                if(nodcast == Z)
-                    nodcast = new(OCAST, Z, Z);
-                nod = *nodcast;
-                nod.left = a;
-                nod.type = t;
-                nod.lineno = a->lineno;
-                complex(&nod);
-                if(nod.type)
-                    *a = nod;
-            }
-            if(a->op != OCONST) {
-                diag(a, "initializer is not a constant: %s",
-                    s->name);
-                return Z;
-            }
-            if(vconst(a) == 0)
-                return Z;
-            goto gext;
-        }
-        if(t->etype == TIND) {
-            while(a->op == OCAST) {
-                warn(a, "CAST in initialization ignored");
-                a = a->left;
-            }
-            if(!sametype(t, a->type)) {
-                diag(a, "initialization of incompatible pointers: %s\n%T and %T",
-                    s->name, t, a->type);
-            }
-            if(a->op == OADDR)
-                a = a->left;
-            goto gext;
-        }
-
-        while(a->op == OCAST)
-            a = a->left;
-        if(a->op == OADDR) {
-            warn(a, "initialize pointer to an integer: %s", s->name);
-            a = a->left;
-            goto gext;
-        }
-        diag(a, "initializer is not a constant: %s", s->name);
-        return Z;
-
-    gext:
-        gextern(s, a, o, t->width);
-
-        return Z;
-
-    case TARRAY:
-        w = t->link->width;
-        if(a->op == OSTRING || a->op == OLSTRING)
-        if(typei[t->link->etype]) {
-            /*
-             * get rid of null if sizes match exactly
-             */
-            a = nextinit();
-            mw = t->width/w;
-            so = a->type->width/a->type->link->width;
-            if(mw && so > mw) {
-                if(so != mw+1)
-                    diag(a, "string initialization larger than array");
-                a->type->width -= a->type->link->width;
-            }
-
-            /*
-             * arrange strings to be expanded
-             * inside OINIT braces.
-             */
-            a = new(OUSED, a, Z);
-            return doinit(s, t, o, a);
-        }
-
-        mw = -w;
-        l = Z;
-        for(e=0;;) {
-            /*
-             * peek ahead for element initializer
-             */
-            a = peekinit();
-            if(a == Z)
-                break;
-            if(a->op == OELEM && t->link->etype != TSTRUCT)
-                break;
-            if(a->op == OARRAY) {
-                if(e && exflag)
-                    break;
-                a = nextinit();
-                r = a->left;
-                complex(r);
-                if(r->op != OCONST) {
-                    diag(r, "initializer subscript must be constant");
-                    return Z;
-                }
-                e = r->vconst;
-                if(t->width != 0)
-                    if(e < 0 || e*w >= t->width) {
-                        diag(a, "initialization index out of range: %ld", e);
-                        continue;
-                    }
-            }
-
-            so = e*w;
-            if(so > mw)
-                mw = so;
-            if(t->width != 0)
-                if(mw >= t->width)
-                    break;
-            r = init1(s, t->link, o+so, 1);
-            l = newlist(l, r);
-            e++;
-        }
-        if(t->width == 0)
-            t->width = mw+w;
-        return l;
-
-    case TUNION:
-    case TSTRUCT:
-        /*
-         * peek ahead to find type of rhs.
-         * if its a structure, then treat
-         * this element as a variable
-         * rather than an aggregate.
-         */
-        if(isstruct(a, t))
-            goto single;
-
-        if(t->width <= 0) {
-            diag(Z, "incomplete structure: %s", s->name);
-            return Z;
-        }
-        l = Z;
-
-    again:
-        for(t1 = t->link; t1 != T; t1 = t1->down) {
-            if(a->op == OARRAY && t1->etype != TARRAY)
-                break;
-            if(a->op == OELEM) {
-                if(t1->sym != a->sym)
-                    continue;
-                nextinit();
-            }
-            r = init1(s, t1, o+t1->offset, 1);
-            l = newlist(l, r);
-            a = peekinit();
-            if(a == Z)
-                break;
-            if(a->op == OELEM)
-                goto again;
-        }
-        if(a && a->op == OELEM)
-            diag(a, "structure element not found %F", a);
-        return l;
-    }
-}
-@
 
 <<function newlist>>=
 Node*
@@ -5669,75 +5060,6 @@ newlist(Node *l, Node *r)
 }
 @
 
-<<function sualign>>=
-//@Scheck: not dead, used by cc.y
-void sualign(Type *t)
-{
-    Type *l;
-    long o, w;
-
-    o = 0;
-    switch(t->etype) {
-
-    case TSTRUCT:
-        t->offset = 0;
-        w = 0;
-        for(l = t->link; l != T; l = l->down) {
-            if(l->nbits) {
-                if(l->shift <= 0) {
-                    l->shift = -l->shift;
-                    w = round(w, tfield->width);
-                    o = w;
-                    w += tfield->width;
-                }
-                l->offset = o;
-            } else {
-                if(l->width < 0 ||
-                   l->width == 0 && l->down != T)
-                    if(l->sym)
-                        diag(Z, "incomplete structure element: %s",
-                            l->sym->name);
-                    else
-                        diag(Z, "incomplete structure element");
-                w = align(w, l, Ael1);
-                l->offset = w;
-                w = align(w, l, Ael2);
-            }
-        }
-        w = align(w, t, Asu2);
-        t->width = w;
-        acidtype(t);
-        pickletype(t);
-        return;
-
-    case TUNION:
-        t->offset = 0;
-        w = 0;
-        for(l = t->link; l != T; l = l->down) {
-            if(l->width <= 0)
-                if(l->sym)
-                    diag(Z, "incomplete union element: %s",
-                        l->sym->name);
-                else
-                    diag(Z, "incomplete union element");
-            l->offset = 0;
-            l->shift = 0;
-            o = align(align(0, l, Ael1), l, Ael2);
-            if(o > w)
-                w = o;
-        }
-        w = align(w, t, Asu2);
-        t->width = w;
-        acidtype(t);
-        pickletype(t);
-        return;
-
-    default:
-        diag(Z, "unknown type in sualign: %T", t);
-        break;
-    }
-}
-@
 
 <<function round>>=
 long
@@ -6097,32 +5419,6 @@ snap(Type *t)
 }
 @
 
-<<function dotag>>=
-//@Scheck: used by cc.y
-Type* dotag(Sym *s, int et, int bn)
-{
-    Decl *d;
-
-    if(bn != 0 && bn != s->sueblock) {
-        d = push();
-        d->sym = s;
-        d->val = DSUE;
-        d->type = s->suetag;
-        d->block = s->sueblock;
-        s->suetag = T;
-    }
-    if(s->suetag == T) {
-        s->suetag = typ(et, T);
-        s->sueblock = autobn;
-    }
-    if(s->suetag->etype != et)
-        diag(Z, "tag used for more than one type: %s",
-            s->name);
-    if(s->suetag->tag == S)
-        s->suetag->tag = s;
-    return s->suetag;
-}
-@
 
 
 <<function paramconv>>=
@@ -6328,73 +5624,7 @@ void edecl(int c, Type *t, Sym *s)
 }
 @
 
-<<function maxtype>>=
-/*
- * this routine is very suspect.
- * ansi requires the enum type to
- * be represented as an 'int'
- * this means that 0x81234567
- * would be illegal. this routine
- * makes signed and unsigned go
- * to unsigned.
- */
-Type*
-maxtype(Type *t1, Type *t2)
-{
 
-    if(t1 == T)
-        return t2;
-    if(t2 == T)
-        return t1;
-    if(t1->etype > t2->etype)
-        return t1;
-    return t2;
-}
-@
-
-<<function doenum>>=
-//@Scheck: used by cc.y
-void doenum(Sym *s, Node *n)
-{
-
-    if(n) {
-        complex(n);
-        if(n->op != OCONST) {
-            diag(n, "enum not a constant: %s", s->name);
-            return;
-        }
-        en.cenum = n->type;
-        en.tenum = maxtype(en.cenum, en.tenum);
-
-        if(!typefd[en.cenum->etype])
-            en.lastenum = n->vconst;
-        else
-            en.floatenum = n->fconst;
-    }
-    if(dclstack)
-        push1(s);
-    xdecl(CXXX, types[TENUM], s);
-
-    if(en.cenum == T) {
-        en.tenum = types[TINT];
-        en.cenum = types[TINT];
-        en.lastenum = 0;
-    }
-    s->tenum = en.cenum;
-
-    if(!typefd[s->tenum->etype]) {
-        s->vconst = convvtox(en.lastenum, s->tenum->etype);
-        en.lastenum++;
-    } else {
-        s->fconst = en.floatenum;
-        en.floatenum++;
-    }
-
-    if(debug['d'])
-        dbgdecl(s);
-    acidvar(s);
-}
-@
 
 <<function symadjust>>=
 void
