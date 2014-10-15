@@ -223,7 +223,8 @@ struct	Type
     long	offset;
     schar	shift;
     char	nbits;
-    char	garb;
+
+    char	garb; // garbage? rename qualifier?
 
     Sym*	tag;
     Funct*	funct;

@@ -82,11 +82,13 @@
 /*x: type declarations */
 %type   <tycl>  types
 /*x: type declarations */
+%type   <type> tlist complex
+/*x: type declarations */
 %type   <lval>  gctnlist gcnlist zgnlist
 /*x: type declarations */
-%type   <type>  tlist sbody complex
-/*x: type declarations */
 %type   <sym>   ltag
+/*x: type declarations */
+%type   <type> sbody
 /*e: type declarations */
 %%
 /*s: grammar */
@@ -704,12 +706,14 @@ gname:  /* garbage words */
 |   LVOLATILE { $$ = BVOLATILE; }
 |   LRESTRICT { $$ = 0; }
 /*x: types rules */
+/*s: types rule */
 types:
    tname
     {
         $$.t = simplet($1);
         $$.c = CXXX;
     }
+/*x: types rule */
 |   gcnlist
     {
         $$.t = simplet($1);
@@ -734,7 +738,7 @@ types:
         $$.c = simplec($1|$3);
         $$.t = garbt($$.t, $1|$3);
     }
-
+/*x: types rule */
 |  complex
     {
         $$.t = $1;
@@ -754,14 +758,60 @@ types:
         $$.c = simplec($1);
         $$.t = garbt($$.t, $1|$3);
     }
-/*e: types rules */
-/*s: complex types rules */
+/*x: types rule */
+sbody:
+    '{'
+    {
+        $<tyty>$.t1 = strf;
+        $<tyty>$.t2 = strl;
+        $<tyty>$.t3 = lasttype;
+        $<tyty>$.c = lastclass;
+        strf = T;
+        strl = T;
+        lastbit = 0;
+        firstbit = 1;
+        lastclass = CXXX;
+        lasttype = T;
+    }
+    edecl 
+    '}'
+    {
+        $$ = strf;
+        strf = $<tyty>2.t1;
+        strl = $<tyty>2.t2;
+        lasttype = $<tyty>2.t3;
+        lastclass = $<tyty>2.c;
+    }
+
+/*e: types rule */
+/*x: types rules */
+gctnlist:
+    gctname
+|   gctnlist gctname { $$ = typebitor($1, $2); }
+
+zgnlist:
+ /* empty */       { $$ = 0; }
+|   zgnlist gname  { $$ = typebitor($1, $2); }
+
+gcnlist:
+    gcname
+|   gcnlist gcname { $$ = typebitor($1, $2); }
+/*x: types rules */
+/*s: complex rule */
 complex:
-    LSTRUCT ltag
+    LTYPE { $$ = tcopy($1->type); }
+/*x: complex rule */
+|   LSTRUCT ltag
     {
         dotag($2, TSTRUCT, 0);
         $$ = $2->suetag;
     }
+|   LUNION ltag
+    {
+        dotag($2, TUNION, 0);
+        $$ = $2->suetag;
+    }
+/*x: complex rule */
 |   LSTRUCT ltag
     {
         dotag($2, TSTRUCT, autobn);
@@ -773,19 +823,6 @@ complex:
             diag(Z, "redeclare tag: %s", $2->name);
         $$->link = $4;
         sualign($$);
-    }
-|   LSTRUCT sbody
-    {
-        taggen++;
-        sprint(symb, "_%d_", taggen);
-        $$ = dotag(lookup(), TSTRUCT, autobn);
-        $$->link = $2;
-        sualign($$);
-    }
-|   LUNION ltag
-    {
-        dotag($2, TUNION, 0);
-        $$ = $2->suetag;
     }
 |   LUNION ltag
     {
@@ -799,6 +836,15 @@ complex:
         $$->link = $4;
         sualign($$);
     }
+/*x: complex rule */
+|   LSTRUCT sbody
+    {
+        taggen++;
+        sprint(symb, "_%d_", taggen);
+        $$ = dotag(lookup(), TSTRUCT, autobn);
+        $$->link = $2;
+        sualign($$);
+    }
 |   LUNION sbody
     {
         taggen++;
@@ -807,6 +853,7 @@ complex:
         $$->link = $2;
         sualign($$);
     }
+/*x: complex rule */
 |   LENUM ltag
     {
         dotag($2, TENUM, 0);
@@ -845,44 +892,32 @@ complex:
     {
         $$ = en.tenum;
     }
-
-|   LTYPE { $$ = tcopy($1->type); }
-
-
-
-sbody:
-    '{'
-    {
-        $<tyty>$.t1 = strf;
-        $<tyty>$.t2 = strl;
-        $<tyty>$.t3 = lasttype;
-        $<tyty>$.c = lastclass;
-        strf = T;
-        strl = T;
-        lastbit = 0;
-        firstbit = 1;
-        lastclass = CXXX;
-        lasttype = T;
-    }
-    edecl 
-    '}'
-    {
-        $$ = strf;
-        strf = $<tyty>2.t1;
-        strl = $<tyty>2.t2;
-        lasttype = $<tyty>2.t3;
-        lastclass = $<tyty>2.c;
-    }
-
-/*x: complex types rules */
+/*e: complex rule */
+/*x: types rules */
 enum:
     LNAME           { doenum($1, Z); }
 |   LNAME '=' expr  { doenum($1, $3); }
 |   enum ','
 |   enum ',' enum
-/*e: complex types rules */
+/*e: types rules */
 
 /*s: names rules */
+name:
+    LNAME
+    {
+        $$ = new(ONAME, Z, Z);
+        if($1->class == CLOCAL)
+            $1 = mkstatic($1);
+        $$->sym = $1;
+        $$->type = $1->type;
+        $$->etype = TVOID;
+        if($$->type != T)
+            $$->etype = $$->type->etype;
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
+        $1->aused = 1;
+    }
+/*x: names rules */
 gctname:
     tname
 |   gname
@@ -891,18 +926,6 @@ gctname:
 gcname:
     gname
 |   cname
-/*x: names rules */
-gctnlist:
-    gctname
-|   gctnlist gctname { $$ = typebitor($1, $2); }
-
-zgnlist:
- /* empty */       { $$ = 0; }
-|   zgnlist gname  { $$ = typebitor($1, $2); }
-
-gcnlist:
-    gcname
-|   gcnlist gcname { $$ = typebitor($1, $2); }
 /*x: names rules */
 tag:
     ltag
@@ -920,22 +943,6 @@ tag:
 ltag:
     LNAME
 |   LTYPE
-/*x: names rules */
-name:
-    LNAME
-    {
-        $$ = new(ONAME, Z, Z);
-        if($1->class == CLOCAL)
-            $1 = mkstatic($1);
-        $$->sym = $1;
-        $$->type = $1->type;
-        $$->etype = TVOID;
-        if($$->type != T)
-            $$->etype = $$->type->etype;
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
-        $1->aused = 1;
-    }
 /*e: names rules */
 
 /*s: extra grammar rules */

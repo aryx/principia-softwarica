@@ -633,6 +633,7 @@ struct	Type
     <<[[Type]] other fields>>
 };
 @
+% contain storage class info too? and qualifier too?
 
 <<[[Type]] other fields>>=
 Sym*	sym;
@@ -642,7 +643,8 @@ long	width; // ewidth[Type.etype]
 long	offset;
 schar	shift;
 char	nbits;
-char	garb;
+
+char	garb; // garbage? rename qualifier?
 
 Sym*	tag;
 Funct*	funct;
@@ -3395,7 +3397,6 @@ prog:
 <<initializers rules>>
 
 <<types rules>>
-<<complex types rules>>
 
 <<names rules>>
 
@@ -3822,7 +3823,7 @@ forexpr:
 @
 %$
 
-\subsection{Labels}
+\subsection{Labels and goto}
 
 <<label rule>>=
 |   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
@@ -4092,6 +4093,28 @@ elist:
 |   name
 @
 
+\subsection{Entities}
+
+% use (def of entities use 'tag' in xdecor2)
+<<names rules>>=
+name:
+    LNAME
+    {
+        $$ = new(ONAME, Z, Z);
+        if($1->class == CLOCAL)
+            $1 = mkstatic($1);
+        $$->sym = $1;
+        $$->type = $1->type;
+        $$->etype = TVOID;
+        if($$->type != T)
+            $$->etype = $$->type->etype;
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
+        $1->aused = 1;
+    }
+@
+
+
 \subsection{Numeric Constants}
 
 <<pexpr rule>>=
@@ -4260,7 +4283,7 @@ qual:
 
 \section{Types and storage classes}
 
-% temporary result, because need more keywords
+% set, because need aggregate keywords
 % to transform from 'unsigned char' -> TUCHAR?
 % seems actually a bitset! but prerequest is Txxx has less than 64 cases?
 <<enum bxxx>>=
@@ -4345,6 +4368,7 @@ cname:  /* class words */
 |   LINLINE   { $$ = 0; }
 @
 
+% garbage?
 <<types rules>>=
 gname:  /* garbage words */
     LCONSTNT  { $$ = BCONSTNT; }
@@ -4384,15 +4408,43 @@ struct
 @
 
 
+<<types rules>>=
+<<types rule>>
+@
+
+% sizeof, cast, context
+<<extra grammar rules>>=
+tlist:
+    types
+    {
+        $$ = $1.t;
+        if($1.c != CXXX)
+            diag(Z, "illegal combination of class 4: %s", cnames[$1.c]);
+    }
+@
+
+<<[[union yacc]] other fields>>=
+Type*   type;
+@
+
+<<type declarations>>=
+%type   <type> tlist complex
+@
+
 \subsection{Simple types}
 
-<<types rules>>=
+<<types rule>>=
 types:
    tname
     {
         $$.t = simplet($1);
         $$.c = CXXX;
     }
+@
+%$
+
+
+<<types rule>>=
 |   gcnlist
     {
         $$.t = simplet($1);
@@ -4417,7 +4469,36 @@ types:
         $$.c = simplec($1|$3);
         $$.t = garbt($$.t, $1|$3);
     }
+@
 
+
+<<type declarations>>=
+%type   <lval>  gctnlist gcnlist zgnlist
+@
+
+<<types rules>>=
+gctnlist:
+    gctname
+|   gctnlist gctname { $$ = typebitor($1, $2); }
+
+zgnlist:
+ /* empty */       { $$ = 0; }
+|   zgnlist gname  { $$ = typebitor($1, $2); }
+
+gcnlist:
+    gcname
+|   gcnlist gcname { $$ = typebitor($1, $2); }
+@
+
+
+
+
+
+
+
+\subsection{Complex types}
+
+<<types rule>>=
 |  complex
     {
         $$.t = $1;
@@ -4438,52 +4519,42 @@ types:
         $$.t = garbt($$.t, $1|$3);
     }
 @
+%$
 
-
-<<type declarations>>=
-%type   <lval>  gctnlist gcnlist zgnlist
+<<types rules>>=
+<<complex rule>>
 @
 
-<<names rules>>=
-gctnlist:
-    gctname
-|   gctnlist gctname { $$ = typebitor($1, $2); }
+\subsection{Typedefs}
 
-zgnlist:
- /* empty */       { $$ = 0; }
-|   zgnlist gname  { $$ = typebitor($1, $2); }
-
-gcnlist:
-    gcname
-|   gcnlist gcname { $$ = typebitor($1, $2); }
+% uses
+<<complex rule>>=
+complex:
+    LTYPE { $$ = tcopy($1->type); }
 @
+%$
 
 
-
-
-% sizeof, cast, context
-<<extra grammar rules>>=
-tlist:
-    types
-    {
-        $$ = $1.t;
-        if($1.c != CXXX)
-            diag(Z, "illegal combination of class 4: %s", cnames[$1.c]);
-    }
-@
-
-<<[[union yacc]] other fields>>=
-Type*   type;
-@
-
-<<type declarations>>=
-%type   <type>  tlist sbody complex
-@
+% defs
 
 \subsection{Structures and unions}
 
 <<type declarations>>=
 %type   <sym>   ltag
+@
+
+%use
+<<complex rule>>=
+|   LSTRUCT ltag
+    {
+        dotag($2, TSTRUCT, 0);
+        $$ = $2->suetag;
+    }
+|   LUNION ltag
+    {
+        dotag($2, TUNION, 0);
+        $$ = $2->suetag;
+    }
 @
 
 <<names rules>>=
@@ -4505,13 +4576,9 @@ ltag:
 |   LTYPE
 @
 
-<<complex types rules>>=
-complex:
-    LSTRUCT ltag
-    {
-        dotag($2, TSTRUCT, 0);
-        $$ = $2->suetag;
-    }
+
+% defs
+<<complex rule>>=
 |   LSTRUCT ltag
     {
         dotag($2, TSTRUCT, autobn);
@@ -4523,19 +4590,6 @@ complex:
             diag(Z, "redeclare tag: %s", $2->name);
         $$->link = $4;
         sualign($$);
-    }
-|   LSTRUCT sbody
-    {
-        taggen++;
-        sprint(symb, "_%d_", taggen);
-        $$ = dotag(lookup(), TSTRUCT, autobn);
-        $$->link = $2;
-        sualign($$);
-    }
-|   LUNION ltag
-    {
-        dotag($2, TUNION, 0);
-        $$ = $2->suetag;
     }
 |   LUNION ltag
     {
@@ -4549,6 +4603,19 @@ complex:
         $$->link = $4;
         sualign($$);
     }
+@
+%$
+
+% anon defs
+<<complex rule>>=
+|   LSTRUCT sbody
+    {
+        taggen++;
+        sprint(symb, "_%d_", taggen);
+        $$ = dotag(lookup(), TSTRUCT, autobn);
+        $$->link = $2;
+        sualign($$);
+    }
 |   LUNION sbody
     {
         taggen++;
@@ -4557,49 +4624,17 @@ complex:
         $$->link = $2;
         sualign($$);
     }
-|   LENUM ltag
-    {
-        dotag($2, TENUM, 0);
-        $$ = $2->suetag;
-        if($$->link == T)
-            $$->link = types[TINT];
-        $$ = $$->link;
-    }
-|   LENUM ltag
-    {
-        dotag($2, TENUM, autobn);
-    }
-    '{'
-    {
-        en.tenum = T;
-        en.cenum = T;
-    }
-    enum '}'
-    {
-        $$ = $2->suetag;
-        if($$->link != T)
-            diag(Z, "redeclare tag: %s", $2->name);
-        if(en.tenum == T) {
-            diag(Z, "enum type ambiguous: %s", $2->name);
-            en.tenum = types[TINT];
-        }
-        $$->link = en.tenum;
-        $$ = en.tenum;
-    }
-|   LENUM '{'
-    {
-        en.tenum = T;
-        en.cenum = T;
-    }
-    enum '}'
-    {
-        $$ = en.tenum;
-    }
-
-|   LTYPE { $$ = tcopy($1->type); }
+@
 
 
 
+
+
+<<type declarations>>=
+%type   <type> sbody
+@
+
+<<types rule>>=
 sbody:
     '{'
     {
@@ -4626,6 +4661,7 @@ sbody:
 
 @
 %$
+
 
 <<[[union yacc]] other fields>>=
 struct
@@ -4687,7 +4723,48 @@ long	lastbit;
 
 \subsection{Enum}
 
-<<complex types rules>>=
+<<complex rule>>=
+|   LENUM ltag
+    {
+        dotag($2, TENUM, 0);
+        $$ = $2->suetag;
+        if($$->link == T)
+            $$->link = types[TINT];
+        $$ = $$->link;
+    }
+|   LENUM ltag
+    {
+        dotag($2, TENUM, autobn);
+    }
+    '{'
+    {
+        en.tenum = T;
+        en.cenum = T;
+    }
+    enum '}'
+    {
+        $$ = $2->suetag;
+        if($$->link != T)
+            diag(Z, "redeclare tag: %s", $2->name);
+        if(en.tenum == T) {
+            diag(Z, "enum type ambiguous: %s", $2->name);
+            en.tenum = types[TINT];
+        }
+        $$->link = en.tenum;
+        $$ = en.tenum;
+    }
+|   LENUM '{'
+    {
+        en.tenum = T;
+        en.cenum = T;
+    }
+    enum '}'
+    {
+        $$ = en.tenum;
+    }
+@
+
+<<types rules>>=
 enum:
     LNAME           { doenum($1, Z); }
 |   LNAME '=' expr  { doenum($1, $3); }
@@ -4979,8 +5056,7 @@ loop:
 
 
 
-
-
+\subsection{External declarator}
 
 <<external declarator rules>>=
 xdlist:
@@ -5030,6 +5106,8 @@ ctlist:
     }
 @
 
+\subsection{Automatic declarator}
+
 <<automatic declarator rules>>=
 /*
  * automatic declarator
@@ -5068,6 +5146,7 @@ adlist:
 @
 %$
 
+\subsection{Abstract declarator}
 
 <<abstract declarator rules>>=
 /*
@@ -5102,32 +5181,6 @@ abdecor3:
 @
 %$
 
-\subsection{Local variables}
-
-
-\subsection{Other}
-
-
-
-\section{Names}
-
-<<names rules>>=
-name:
-    LNAME
-    {
-        $$ = new(ONAME, Z, Z);
-        if($1->class == CLOCAL)
-            $1 = mkstatic($1);
-        $$->sym = $1;
-        $$->type = $1->type;
-        $$->etype = TVOID;
-        if($$->type != T)
-            $$->etype = $$->type->etype;
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
-        $1->aused = 1;
-    }
-@
 
 
 
