@@ -237,7 +237,7 @@ arglist:
  * abstract declarator
  */
 abdecor:
-  /* empty */ { $$ = (Z); }
+  /* empty */ { $$ = Z; }
 |   abdecor1
 
 abdecor1:
@@ -259,8 +259,8 @@ abdecor2:
 |   abdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
 
 abdecor3:
-    '(' ')'           { $$ = new(OFUNC, (Z), Z); }
-|   '[' zexpr ']'     { $$ = new(OARRAY, (Z), $2); }
+    '(' ')'           { $$ = new(OFUNC, Z, Z); }
+|   '[' zexpr ']'     { $$ = new(OARRAY, Z, $2); }
 |   '(' abdecor1 ')'  { $$ = $2; }
 /*e: abstract declarator rules */
 /*s: structure element declarator rules */
@@ -302,6 +302,19 @@ edecor:
 /*e: structure element declarator rules */
 /*e: declarator rules */
 /*s: statements rules */
+block:
+ '{' slist '}'
+    {
+        $$ = invert($2);
+        if($$ == Z)
+            $$ = new(OLIST, Z, Z);
+    }
+
+slist:
+  /* empty */      { $$ = Z;    }
+|   slist adecl    { $$ = new(OLIST, $1, $2); }
+|   slist stmnt    { $$ = new(OLIST, $1, $2); }
+/*x: statements rules */
 stmnt:
     ulstmnt
 |   labels ulstmnt { $$ = new(OLIST, $1, $2); }
@@ -387,19 +400,6 @@ label:
 |   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
 /*e: label rule */
 /*x: statements rules */
-block:
- '{' slist '}'
-    {
-        $$ = invert($2);
-        if($$ == Z)
-            $$ = new(OLIST, Z, Z);
-    }
-
-slist:
-  /* empty */      { $$ = Z;    }
-|   slist adecl    { $$ = new(OLIST, $1, $2); }
-|   slist stmnt    { $$ = new(OLIST, $1, $2); }
-/*x: statements rules */
 forexpr:
     zcexpr
 |   ctlist adlist { $$ = $2; }
@@ -408,14 +408,14 @@ forexpr:
 zexpr:
   /* empty */ { $$ = Z; }
 |   lexpr
-
+/*x: expressions rules */
 lexpr:
     expr
     {
         $$ = new(OCAST, $1, Z);
         $$->type = types[TLONG];
     }
-
+/*x: expressions rules */
 cexpr:
     expr
 |   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
@@ -518,14 +518,14 @@ pexpr:
 /*x: pexpr rule */
 |   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
 /*x: pexpr rule */
-|   pexpr LMG ltag
-    {
-        $$ = new(ODOT, new(OIND, $1, Z), Z);
-        $$->sym = $3;
-    }
 |   pexpr '.' ltag
     {
         $$ = new(ODOT, $1, Z);
+        $$->sym = $3;
+    }
+|   pexpr LMG ltag
+    {
+        $$ = new(ODOT, new(OIND, $1, Z), Z);
         $$->sym = $3;
     }
 /*x: pexpr rule */
@@ -548,6 +548,14 @@ pexpr:
         $$->vconst = $1;
         $$->cstring = strdup(symb);
     }
+|   LVLCONST
+    {
+        $$ = new(OCONST, Z, Z);
+        $$->type = types[TVLONG];
+        $$->vconst = $1;
+        $$->cstring = strdup(symb);
+    }
+/*x: pexpr rule */
 |   LUCONST
     {
         $$ = new(OCONST, Z, Z);
@@ -562,11 +570,11 @@ pexpr:
         $$->vconst = $1;
         $$->cstring = strdup(symb);
     }
-|   LDCONST
+|   LUVLCONST
     {
         $$ = new(OCONST, Z, Z);
-        $$->type = types[TDOUBLE];
-        $$->fconst = $1;
+        $$->type = types[TUVLONG];
+        $$->vconst = $1;
         $$->cstring = strdup(symb);
     }
 /*x: pexpr rule */
@@ -577,18 +585,11 @@ pexpr:
         $$->fconst = $1;
         $$->cstring = strdup(symb);
     }
-|   LVLCONST
+|   LDCONST
     {
         $$ = new(OCONST, Z, Z);
-        $$->type = types[TVLONG];
-        $$->vconst = $1;
-        $$->cstring = strdup(symb);
-    }
-|   LUVLCONST
-    {
-        $$ = new(OCONST, Z, Z);
-        $$->type = types[TUVLONG];
-        $$->vconst = $1;
+        $$->type = types[TDOUBLE];
+        $$->fconst = $1;
         $$->cstring = strdup(symb);
     }
 /*x: pexpr rule */
@@ -605,10 +606,10 @@ string:
     {
         $$ = new(OSTRING, Z, Z);
         $$->type = typ(TARRAY, types[TCHAR]);
+        $$->etype = TARRAY;
         $$->type->width = $1.l + 1;
         $$->cstring = $1.s;
         $$->sym = symstring;
-        $$->etype = TARRAY;
         $$->class = CSTATIC;
     }
 |   string LSTRING
@@ -633,10 +634,10 @@ lstring:
     {
         $$ = new(OLSTRING, Z, Z);
         $$->type = typ(TARRAY, types[TRUNE]);
+        $$->etype = TARRAY;
         $$->type->width = $1.l + sizeof(TRune);
         $$->rstring = (TRune*)$1.s;
         $$->sym = symstring;
-        $$->etype = TARRAY;
         $$->class = CSTATIC;
     }
 |   lstring LLSTRING
@@ -911,13 +912,15 @@ name:
             $1 = mkstatic($1);
         $$->sym = $1;
         $$->type = $1->type;
+
         $$->etype = TVOID;
         if($$->type != T)
             $$->etype = $$->type->etype;
+
         $$->xoffset = $1->offset;
         $$->class = $1->class;
 
-        $1->aused = 1;
+        $1->aused = true;
     }
 /*x: names rules */
 gctname:
@@ -934,14 +937,16 @@ tag:
     {
         $$ = new(ONAME, Z, Z);
         $$->sym = $1;
+
         $$->type = $1->type;
         $$->etype = TVOID;
         if($$->type != T)
             $$->etype = $$->type->etype;
+
         $$->xoffset = $1->offset;
         $$->class = $1->class;
     }
-
+/*x: names rules */
 ltag:
     LNAME
 |   LTYPE

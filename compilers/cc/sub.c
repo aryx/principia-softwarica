@@ -1277,10 +1277,12 @@ warn(Node *n, char *fmt, ...)
         va_start(arg, fmt);
         vseprint(buf, buf+sizeof(buf), fmt, arg);
         va_end(arg);
+
         if(debug['W']) {
             diag(n, "%s", buf);
             return;
         }
+
         Bprint(&diagbuf, "warning: %L %s\n", (n==Z)? nearln : n->lineno, buf);
 
         if(n != Z)
@@ -1364,6 +1366,7 @@ char*	bnames[NALIGN];
 Init	bnamesinit[] =
 {
     Axxx,	0,	"Axxx",
+
     Ael1,	0,	"el1",
     Ael2,	0,	"el2",
     Asu2,	0,	"su2",
@@ -1636,6 +1639,7 @@ int	typeuinit[] =
 /*e: global typeuinit */
 
 /*s: global typesuv */
+// bool
 char	typesuv[NTYPE];
 /*e: global typesuv */
 /*s: global typesuvinit */
@@ -2085,7 +2089,7 @@ tinit(void)
     }
     for(ip=typesuvinit; *ip>=0; ip++) {
         urk("typesuv", nelem(typesuv), *ip);
-        typesuv[*ip] = 1;
+        typesuv[*ip] = true;
     }
     for(ip=typeilpinit; *ip>=0; ip++) {
         urk("typeilp", nelem(typeilp), *ip);

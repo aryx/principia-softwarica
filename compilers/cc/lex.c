@@ -440,7 +440,7 @@ syminit(Sym *s)
     s->suetag = T;
 
     s->class = CXXX;
-    s->aused = 0;
+    s->aused = false;
     s->sig = SIGNONE;
 }
 /*e: function syminit */

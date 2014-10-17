@@ -137,8 +137,10 @@ mkstatic(Sym *s)
 
     if(s->class != CLOCAL)
         return s;
+
     snprint(symb, NSYMB, "%s$%d", s->name, s->block);
     s1 = lookup();
+
     if(s1->class != CSTATIC) {
         s1->type = s->type;
         s1->offset = s->offset;
@@ -819,7 +821,7 @@ Node* revertdcl(void)
         case DAUTO:
             if(debug['d'])
                 print("revert1 \"%s\"\n", s->name);
-            if(s->aused == 0) {
+            if(s->aused == false) {
                 nearln = s->varlineno;
                 if(s->class == CAUTO)
                     warn(Z, "auto declared and not used: %s", s->name);
@@ -1237,9 +1239,9 @@ Node* dcllabel(Sym *s, bool f)
         if(f) {
             if(n->complex)
                 diag(Z, "label reused: %s", s->name);
-            n->complex = 1;	// declared
+            n->complex = true;	// declared
         } else
-            n->addable = 1;	// used
+            n->addable = true;	// used
         return n;
     }
 

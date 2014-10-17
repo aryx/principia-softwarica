@@ -73,16 +73,20 @@ void codgen(Node *n, Node *nn)
         }
     }
 
-    canreach = 1;
-    warnreach = 1;
+    canreach = true;
+    warnreach = true;
+
     gen(n);
+
     if(canreach && thisfn->link->etype != TVOID){
         if(debug['B'])
             warn(Z, "no return at end of function: %s", n1->sym->name);
         else
             diag(Z, "no return at end of function: %s", n1->sym->name);
     }
+
     noretval(3);
+
     gbranch(ORETURN);
 
     if(!debug['N'] || debug['R'] || debug['P'])
@@ -186,7 +190,7 @@ loop:
         goto loop;
 
     case ORETURN:
-        canreach = 0;
+        canreach = false;
         warnreach = !suppress;
         complex(n);
         if(n->type == T)
@@ -234,7 +238,7 @@ loop:
         break;
 
     case OLABEL:
-        canreach = 1;
+        canreach = true;
         l = n->left;
         if(l) {
             l->pc = pc;
@@ -246,7 +250,7 @@ loop:
         goto rloop;
 
     case OGOTO:
-        canreach = 0;
+        canreach = false;
         warnreach = !suppress;
         n = n->left;
         if(n == Z)
@@ -268,7 +272,7 @@ loop:
         return;
 
     case OCASE:
-        canreach = 1;
+        canreach = true;
         l = n->left;
         if(cases == C)
             diag(n, "case/default outside a switch");
@@ -340,7 +344,7 @@ loop:
         cases = cn;
         breakpc = sbc;
         canreach = nbreak!=0;
-        if(canreach == 0)
+        if(canreach == false)
             warnreach = !suppress;
         nbreak = snbreak;
         break;
@@ -381,7 +385,7 @@ loop:
         continpc = scc;
         breakpc = sbc;
         canreach = nbreak!=0;
-        if(canreach == 0)
+        if(canreach == false)
             warnreach = !suppress;
         nbreak = snbreak;
         break;
@@ -428,7 +432,7 @@ loop:
             if(l->left->op != OCONST || vconst(l->left) == 0)
                 nbreak++;
         }
-        canreach = 1;
+        canreach = true;
         gen(n->right);		/* body */
         if(canreach){
             gbranch(OGOTO);
@@ -444,7 +448,7 @@ loop:
         continpc = scc;
         breakpc = sbc;
         canreach = nbreak!=0;
-        if(canreach == 0)
+        if(canreach == false)
             warnreach = !suppress;
         nbreak = snbreak;
         ncontin = sncontin;
@@ -458,7 +462,7 @@ loop:
         gbranch(OGOTO);
         patch(p, continpc);
         ncontin++;
-        canreach = 0;
+        canreach = false;
         warnreach = !suppress;
         break;
 
@@ -479,7 +483,7 @@ loop:
         gbranch(OGOTO);
         patch(p, breakpc);
         nbreak++;
-        canreach = 0;
+        canreach = false;
         warnreach = !suppress;
         break;
 
@@ -493,10 +497,10 @@ loop:
             if(debug['c'])
                 print("%L const if %s\n", nearln, f ? "false" : "true");
             if(f) {
-                canreach = 1;
+                canreach = true;
                 supgen(n->right->left);
                 oldreach = canreach;
-                canreach = 1;
+                canreach = true;
                 gen(n->right->right);
                 /*
                  * treat constant ifs as regular ifs for 
@@ -506,10 +510,10 @@ loop:
                     warnreach = 0;
             }
             else {
-                canreach = 1;
+                canreach = true;
                 gen(n->right->left);
                 oldreach = canreach;
-                canreach = 1;
+                canreach = true;
                 supgen(n->right->right);
                 /*
                  * treat constant ifs as regular ifs for 
@@ -522,11 +526,11 @@ loop:
         }
         else {
             sp = p;
-            canreach = 1;
+            canreach = true;
             if(n->right->left != Z)
                 gen(n->right->left);
             oldreach = canreach;
-            canreach = 1;
+            canreach = true;
             if(n->right->right != Z) {
                 gbranch(OGOTO);
                 patch(sp, pc);
@@ -535,7 +539,7 @@ loop:
             }
             patch(sp, pc);
             canreach = canreach || oldreach;
-            if(canreach == 0)
+            if(canreach == false)
                 warnreach = !suppress;
         }
         break;
@@ -557,7 +561,9 @@ usedset(Node *n, int o)
         usedset(n->right, o);
         return;
     }
+
     complex(n);
+
     switch(n->op) {
     case OADDR:	/* volatile */
         gins(ANOP, n, Z);

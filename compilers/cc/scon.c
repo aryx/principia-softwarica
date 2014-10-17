@@ -310,11 +310,13 @@ acom(Node *n)
     term[0].node = Z;
     nterm = 1;
     acom1(1, n);
+
     if(debug['m'])
-    for(i=0; i<nterm; i++) {
+     for(i=0; i<nterm; i++) {
         print("%d %3lld ", i, term[i].mult);
         prtree1(term[i].node, 1, 0);
     }
+
     if(nterm < NTERM)
         acom2(n, t);
     n->type = t;

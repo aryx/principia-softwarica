@@ -79,8 +79,10 @@ struct	Node
     // option<ref_own<Node>>
     Node*	right;
 
-    double	fconst;		/* fp constant */
+    // could be put in a union
     vlong	vconst;		/* non fp const */ // abused in switch?
+    double	fconst;		/* fp constant */
+
     char*	cstring;	/* character string */ // also used for ints
     TRune*	rstring;	/* rune string */
 
@@ -95,7 +97,7 @@ struct	Node
     // enum<cxxx>
     char	class;
     /*x: [[Node]] other fields */
-    Sym*	sym; // for ODOT access to field name, 
+    Sym*	sym; 
     /*x: [[Node]] other fields */
     void*	label;
 
@@ -108,13 +110,14 @@ struct	Node
     // (ab)used as bool for marker of label def (true) vs use (false),
     // FNX special value, register allocation value, etc
     char	complex; 
-    // (ab)used as bool for marker of use of label, special 10, 11, 20 values
-    char	addable;
 
     char	scale;
     char	garb;
     /*x: [[Node]] other fields */
     bool 	xcast;
+    /*x: [[Node]] other fields */
+    // (ab)used as bool for marker of use of label, special 10, 11, 20 values
+    char	addable;
     /*e: [[Node]] other fields */
 };
 /*e: struct Node */
@@ -126,35 +129,43 @@ struct	Node
 struct	Sym
 {
     // for? keywords? locals? parameters? struct/union? all names? fields?
+    // macros
     char	*name;
 
+    long	varlineno;
+
     /*s: [[Sym]] other fields */
+    Type*	type;
+    // enum<cxxx>?
+    char	class;
+    /*x: [[Sym]] other fields */
+    ushort	block;
+    /*x: [[Sym]] other fields */
+    char*	macro;
+    /*x: [[Sym]] other fields */
+    // enum<sigxxx>
+    char	sig;
+    /*x: [[Sym]] other fields */
+    long	offset;
+
+    vlong	vconst;
+    double	fconst;
+
+    ushort	lexical;
+
+    char	sym;
+    /*x: [[Sym]] other fields */
     Node*	label;
     /*x: [[Sym]] other fields */
     Type*	suetag;
     /*x: [[Sym]] other fields */
     ushort	sueblock;
-    /*e: [[Sym]] other fields */
-
-
-    Type*	type;
+    /*x: [[Sym]] other fields */
+    // ref<Type>
     Type*	tenum;
-
-    char*	macro;
-
-    long	varlineno;
-    long	offset;
-    vlong	vconst;
-    double	fconst;
-
-
-    ushort	lexical;
-    ushort	block;
-
-    char	class;
-    char	sym;
-    char	aused;
-    char	sig;
+    /*x: [[Sym]] other fields */
+    bool	aused;
+    /*e: [[Sym]] other fields */
 
     // Extra
     /*s: [[Sym]] extra fields */
@@ -173,6 +184,7 @@ enum{
     SIGDONE = 1,
     SIGINTERN = 2,
 
+    // ???
     SIGNINTERN = 1729*325*1729,
 };
 /*e: enum _anon_ */
@@ -181,17 +193,23 @@ enum{
 struct	Decl
 {
     Sym*	sym;
-    Type*	type;
-
-    long	varlineno;
 
     // enum<dxxx>
     short	val;
 
-    long	offset;
-    ushort	block;
+    Type*	type;
+    // enum<cxxx> storage class
     char	class;
-    char	aused;
+
+    long	varlineno;
+
+    /*s: [[Decl]] other fields */
+    ushort	block;
+    /*x: [[Decl]] other fields */
+    long	offset;
+    /*x: [[Decl]] other fields */
+    bool	aused;
+    /*e: [[Decl]] other fields */
 
     // Extra fields
     /*s: [[Decl]] extra fields */
@@ -229,6 +247,7 @@ struct	Type
     schar	shift;
     char	nbits;
 
+    /*x: [[Type]] other fields */
     Funct*	funct;
     /*x: [[Type]] other fields */
     Sym*	tag;
@@ -306,6 +325,7 @@ struct	Term
 enum
 {
     Axxx,
+
     Ael1,
     Ael2,
     Asu2,
@@ -313,6 +333,7 @@ enum
     Aarg1,
     Aarg2,
     Aaut3,
+
     NALIGN,
 };
 /*e: enum _anon_ (cc/cc.h) */
@@ -331,7 +352,7 @@ enum dxxx
 {
     DMARK,
     DAUTO,
-    DSUE,
+    DSUE, // struct/union/enum?
     DLABEL,
 };
 /*e: enum dxxx */
@@ -367,7 +388,7 @@ enum node_kind
     OASXOR,
     OBIT,
     OBREAK,
-    OCASE,
+    OCASE, // for default too, in which case Node.left is null
     OCAST,
     OCOMMA,
     OCOND,
@@ -418,7 +439,9 @@ enum node_kind
     OPREDEC,
     OPREINC,
     OPROTO,
-    OREGISTER,
+
+    OREGISTER, // after parsing only?
+
     ORETURN,
     OSET,
     OSIGN,
@@ -494,6 +517,7 @@ enum type_kind
     TUNSIGNED,
     TSIGNED,
 
+    // ????
     TFILE,
     TOLD,
 

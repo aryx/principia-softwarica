@@ -27,25 +27,37 @@ complex(Node *n)
         return;
 
     nearln = n->lineno;
+
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "pre complex");
+
     if(tcom(n))
         return;
-    if(debug['y'] || 1)
-        comma(n);
+
+
+
+    //if(debug['y'] || true)
+    comma(n);
+
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "t complex");
+
     ccom(n);
+
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "c complex");
+
     acom(n);
+
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "a complex");
+
     xcom(n);
+
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "x complex");
@@ -66,7 +78,7 @@ enum
 /*e: enum _anon_ (cc/com.c) */
 
 /*s: function tcom */
-int
+bool
 tcom(Node *n)
 {
 
@@ -75,7 +87,7 @@ tcom(Node *n)
 /*e: function tcom */
 
 /*s: function tcomo */
-int
+bool
 tcomo(Node *n, int f)
 {
     Node *l, *r;
@@ -92,10 +104,6 @@ tcomo(Node *n, int f)
     r = n->right;
 
     switch(n->op) {
-    default:
-        diag(n, "unknown op in type complex: %O", n->op);
-        goto bad;
-
     case ODOTDOT:
         /*
          * tcom has already been called on this subtree
@@ -715,7 +723,14 @@ tcomo(Node *n, int f)
         if(tcomx(n))
             goto bad;
         break;
+
+    default:
+        diag(n, "unknown op in type complex: %O", n->op);
+        goto bad;
+
     }
+
+
     t = n->type;
     if(t == T)
         goto bad;
@@ -735,7 +750,7 @@ tcomo(Node *n, int f)
         if(f & ADDROP)
             warn(n, "address of array/func ignored");
     }
-    return 0;
+    return false;
 
 addaddr:
     if(tlvalue(n))
@@ -750,11 +765,11 @@ addaddr:
     n->addable = 0;
     n->type = typ(TIND, l->type);
     n->type->width = types[TIND]->width;
-    return 0;
+    return false;
 
 bad:
     n->type = T;
-    return 1;
+    return true;
 }
 /*e: function tcomo */
 

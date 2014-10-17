@@ -71,6 +71,7 @@ Io*	iostack;
 long	lastbit;
 /*e: global lastbit */
 /*s: global lastclass */
+// enum<cxxx>
 //@Scheck: y.tab.c
 char	lastclass;
 /*e: global lastclass */
@@ -194,10 +195,10 @@ int	ncontin;
 int	newvlongcode;
 /*e: global newvlongcode */
 /*s: global canreach */
-int	canreach;
+bool	canreach;
 /*e: global canreach */
 /*s: global warnreach */
-int	warnreach;
+bool	warnreach;
 /*e: global warnreach */
 /*s: global zbits */
 Bits	zbits;
