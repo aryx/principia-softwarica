@@ -42,9 +42,6 @@ Type*	firstargtype;
 /*s: global firstdcl */
 Decl*	firstdcl;
 /*e: global firstdcl */
-/*s: global fperror */
-//int	fperror;
-/*e: global fperror */
 /*s: global hash */
 // hash<string, ref_own?<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
@@ -192,7 +189,7 @@ bool	profileflg;
 int	ncontin;
 /*e: global ncontin */
 /*s: global newvlongcode */
-int	newvlongcode;
+bool	newvlongcode;
 /*e: global newvlongcode */
 /*s: global canreach */
 bool	canreach;
@@ -205,12 +202,15 @@ Bits	zbits;
 /*e: global zbits */
 
 /*s: global typeswitch */
+// set<txxx>
 char*	typeswitch;
 /*e: global typeswitch */
 /*s: global typeword */
+// set<txxx>
 char*	typeword;
 /*e: global typeword */
 /*s: global typecmplx */
+// set<txxx>
 char*	typecmplx;
 /*e: global typecmplx */
 /*e: cc/globals.c */

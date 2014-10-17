@@ -254,6 +254,7 @@ compile(char *file, char **defs, int ndef)
     newio();
     first = 0;
 
+    /*s: [[compile()]] use ANSI preprocessor */
     /* Use an ANSI preprocessor */
     if(debug['p']) {
         if(myaccess(file) < 0) {
@@ -268,6 +269,7 @@ compile(char *file, char **defs, int ndef)
         case -1:
             diag(Z, "fork failed");
             errorexit();
+
         case 0:
             close(fd[0]);
             mydup(fd[1], 1);
@@ -295,15 +297,19 @@ compile(char *file, char **defs, int ndef)
                     fprint(2, "%s ", av[c]);
                 fprint(2, "\n");
             }
+
             myexec(av[0], av);
             fprint(2, "can't exec C preprocessor %s: %r\n", CPP);
             errorexit();
+
         default:
             close(fd[1]);
             newfile(file, fd[0]);
             break;
         }
-    } else {
+    }
+    /*e: [[compile()]] use ANSI preprocessor */
+    else {
         if(strcmp(file, "stdin") == 0)
             newfile(file, 0);
         else

@@ -306,7 +306,7 @@ simplet(long b)
 /*e: function simplet */
 
 /*s: function stcompat */
-int
+bool
 stcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
     int i;
@@ -323,19 +323,19 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
         if(ttab == tasign)
             if(b == BSTRUCT || b == BUNION)
                 if(!sametype(t1, t2))
-                    return 1;
+                    return true;
         if(n->op != OCAST)
           if(b == BIND && i == TIND)
                 if(!sametype(t1, t2))
-                    return 1;
-        return 0;
+                    return true;
+        return false;
     }
-    return 1;
+    return true;
 }
 /*e: function stcompat */
 
 /*s: function tcompat */
-int
+bool
 tcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
 
@@ -346,9 +346,9 @@ tcompat(Node *n, Type *t1, Type *t2, long ttab[])
         else
             diag(n, "incompatible types: \"%T\" and \"%T\" for op \"%O\"",
                 t1, t2, n->op);
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 /*e: function tcompat */
 
@@ -520,18 +520,18 @@ ambig:
 /*
  * look into tree for floating point constant expressions
  */
-int
+bool
 allfloat(Node *n, int flag)
 {
 
     if(n != Z) {
         if(n->type->etype != TDOUBLE)
-            return 1;
+            return true;
         switch(n->op) {
         case OCONST:
             if(flag)
                 n->type = types[TFLOAT];
-            return 1;
+            return true;
         case OADD:	/* no need to get more exotic than this */
         case OSUB:
         case OMUL:
@@ -543,10 +543,10 @@ allfloat(Node *n, int flag)
                 break;
             if(flag)
                 n->type = types[TFLOAT];
-            return 1;
+            return true;
         }
     }
-    return 0;
+    return false;
 }
 /*e: function allfloat */
 
@@ -655,13 +655,13 @@ typeext(Type *st, Node *l)
  * a cast that generates no code
  * (same size move)
  */
-int
+bool
 nocast(Type *t1, Type *t2)
 {
     int i, b;
 
     if(t1->nbits)
-        return 0;
+        return false;
     i = 0;
     if(t2 != T)
         i = t2->etype;
@@ -670,8 +670,8 @@ nocast(Type *t1, Type *t2)
     if(t1 != T)
         i = t1->etype;
     if(b & ncast[i])
-        return 1;
-    return 0;
+        return true;
+    return false;
 }
 /*e: function nocast */
 
@@ -680,32 +680,32 @@ nocast(Type *t1, Type *t2)
  * a cast that has a noop semantic
  * (small to large, convert)
  */
-int
+bool
 nilcast(Type *t1, Type *t2)
 {
     int et1, et2;
 
     if(t1 == T)
-        return 0;
+        return false;
     if(t1->nbits)
-        return 0;
+        return false;
     if(t2 == T)
-        return 0;
+        return false;
     et1 = t1->etype;
     et2 = t2->etype;
     if(et1 == et2)
-        return 1;
+        return true;
     if(typefd[et1] && typefd[et2]) {
         if(ewidth[et1] < ewidth[et2])
-            return 1;
-        return 0;
+            return true;
+        return false;
     }
     if(typechlp[et1] && typechlp[et2]) {
         if(ewidth[et1] < ewidth[et2])
-            return 1;
-        return 0;
+            return true;
+        return false;
     }
-    return 0;
+    return false;
 }
 /*e: function nilcast */
 
@@ -967,7 +967,7 @@ if(debug['<'])prtree(n, "rewrite2");
 /*e: function simplifyshift */
 
 /*s: function side */
-int
+bool
 side(Node *n)
 {
 
@@ -1021,9 +1021,9 @@ loop:
     case OSTRING:
     case OLSTRING:
     case ONAME:
-        return 0;
+        return false;
     }
-    return 1;
+    return true;
 }
 /*e: function side */
 

@@ -582,8 +582,7 @@ usedset(Node *n, int o)
 int
 bcomplex(Node *n, Node *c)
 {
-    Node *b, nod;
-
+//    Node *b, nod;
 
     complex(n);
     if(n->type != T)
@@ -595,18 +594,20 @@ bcomplex(Node *n, Node *c)
     }
     if(c != Z && n->op == OCONST && deadheads(c))
         return 1;
+
     /* this is not quite right yet, so ignore it for now */
-    if(0 && newvlongcode && typev[n->type->etype] && machcap(Z)) {
-        b = &nod;
-        b->op = ONE;
-        b->left = n;
-        b->right = new(0, Z, Z);
-        *b->right = *nodconst(0);
-        b->right->type = n->type;
-        b->type = types[TLONG];
-        cgen(b, Z);
-        return 0;
-    }
+//    if(0 && newvlongcode && typev[n->type->etype] && machcap(Z)) {
+//        b = &nod;
+//        b->op = ONE;
+//        b->left = n;
+//        b->right = new(0, Z, Z);
+//        *b->right = *nodconst(0);
+//        b->right->type = n->type;
+//        b->type = types[TLONG];
+//        cgen(b, Z);
+//        return 0;
+//    }
+
     bool64(n);
     boolgen(n, 1, Z);
     return 0;

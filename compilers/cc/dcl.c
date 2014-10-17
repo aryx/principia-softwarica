@@ -787,6 +787,7 @@ void markdcl(void)
     blockno++;
 
     d = push();
+
     d->val = DMARK;
     d->offset = autoffset;
     d->block = autobn;
@@ -811,6 +812,7 @@ Node* revertdcl(void)
             break;
         }
         dclstack = d->link;
+
         s = d->sym;
         switch(d->val) {
         case DMARK:
@@ -821,6 +823,7 @@ Node* revertdcl(void)
         case DAUTO:
             if(debug['d'])
                 print("revert1 \"%s\"\n", s->name);
+
             if(s->aused == false) {
                 nearln = s->varlineno;
                 if(s->class == CAUTO)
@@ -828,6 +831,7 @@ Node* revertdcl(void)
                 if(s->class == CPARAM)
                     warn(Z, "param declared and not used: %s", s->name);
             }
+
             if(s->type && (s->type->garb & GVOLATILE)) {
                 n1 = new(ONAME, Z, Z);
                 n1->sym = s;
@@ -845,24 +849,30 @@ Node* revertdcl(void)
                 else
                     n = new(OLIST, n1, n);
             }
+
+            // restore
             s->type = d->type;
             s->class = d->class;
             s->offset = d->offset;
             s->block = d->block;
             s->varlineno = d->varlineno;
             s->aused = d->aused;
+
             break;
 
         case DSUE:
             if(debug['d'])
                 print("revert2 \"%s\"\n", s->name);
+
             s->suetag = d->type;
             s->sueblock = d->block;
+
             break;
 
         case DLABEL:
             if(debug['d'])
                 print("revert3 \"%s\"\n", s->name);
+
             if(s->label && s->label->addable == 0)
                 warn(s->label, "label declared and not used \"%s\"", s->name);
             s->label = Z;

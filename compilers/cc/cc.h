@@ -102,7 +102,7 @@ struct	Node
     void*	label;
 
     long	pc;
-    int		reg;
+    int	reg;
     long	xoffset;
 
     char	oldop;
@@ -178,7 +178,7 @@ struct	Sym
 #define	S	((Sym*)nil)
 /*e: constant S */
 
-/*s: enum _anon_ */
+/*s: enum sigxxx */
 enum{
     SIGNONE = 0,
     SIGDONE = 1,
@@ -187,7 +187,7 @@ enum{
     // ???
     SIGNINTERN = 1729*325*1729,
 };
-/*e: enum _anon_ */
+/*e: enum sigxxx */
 
 /*s: struct Decl */
 struct	Decl
@@ -351,6 +351,7 @@ enum				/* also in ../{8a,0a}.h */
 enum dxxx
 {
     DMARK,
+
     DAUTO,
     DSUE, // struct/union/enum?
     DLABEL,
@@ -646,7 +647,6 @@ extern	long	firstbit;
 extern	Sym*	firstarg;
 extern	Type*	firstargtype;
 extern	Decl*	firstdcl;
-//extern	int	fperror;
 extern	Sym*	hash[NHASH];
 extern	int	hasdoubled;
 extern	char*	hunk;
@@ -694,7 +694,7 @@ extern	int	packflg;
 extern	int	fproundflg;
 extern	bool	profileflg;
 extern	int	ncontin;
-extern	int	newvlongcode;
+extern	bool	newvlongcode;
 extern	int	canreach;
 extern	int	warnreach;
 extern	Bits	zbits;
@@ -909,7 +909,7 @@ void	arginit(void);
 //void	pragvararg(void);
 //void	pragpack(void);
 //void	pragfpround(void);
-//void pragprofile(void);
+//void  pragprofile(void);
 //void	pragincomplete(void);
 
 /*
@@ -936,7 +936,7 @@ int	com64(Node*);
 void	com64init(void);
 void	bool64(Node*);
 //double	convvtof(vlong);
-//vlong	convftov(double);
+//vlong		convftov(double);
 //double	convftox(double, int);
 vlong	convvtox(vlong, int);
 

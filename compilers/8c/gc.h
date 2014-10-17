@@ -80,7 +80,7 @@ struct	Adr
 /*s: struct Prog */
 struct	Prog
 {
-    // enum<opcode>
+    // enum<opcode>, from 8.out.h
     short	as;
 
     Adr	from;

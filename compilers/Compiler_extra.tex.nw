@@ -2,9 +2,6 @@
 
 \subsection*{[[cc/cc.h]]}
 
-
-
-
 %-------------------------------------------------------------
 
 <<cc/cc.h>>=
@@ -51,7 +48,7 @@ typedef	Rune	TRune;	/* target system type */
 <<struct Sym>>
 <<constant S>>
 
-<<enum _anon_>>
+<<enum sigxxx>>
 
 <<struct Decl>>
 <<constant D>>
@@ -101,7 +98,6 @@ extern	long	firstbit;
 extern	Sym*	firstarg;
 extern	Type*	firstargtype;
 extern	Decl*	firstdcl;
-//extern	int	fperror;
 extern	Sym*	hash[NHASH];
 extern	int	hasdoubled;
 extern	char*	hunk;
@@ -149,7 +145,7 @@ extern	int	packflg;
 extern	int	fproundflg;
 extern	bool	profileflg;
 extern	int	ncontin;
-extern	int	newvlongcode;
+extern	bool	newvlongcode;
 extern	int	canreach;
 extern	int	warnreach;
 extern	Bits	zbits;
@@ -364,7 +360,7 @@ void	arginit(void);
 //void	pragvararg(void);
 //void	pragpack(void);
 //void	pragfpround(void);
-//void pragprofile(void);
+//void  pragprofile(void);
 //void	pragincomplete(void);
 
 /*
@@ -391,7 +387,7 @@ int	com64(Node*);
 void	com64init(void);
 void	bool64(Node*);
 //double	convvtof(vlong);
-//vlong	convftov(double);
+//vlong		convftov(double);
 //double	convftox(double, int);
 vlong	convvtox(vlong, int);
 
@@ -421,7 +417,7 @@ int	machcap(Node*);
 <<cc/mac.c>>=
 #include	"cc.h"
 
-//#include	"macbody"
+//old: #include	"macbody"
 //TODO copy paste with aa/, maybe could factorize with another lib?
 //
 
@@ -510,109 +506,9 @@ Sym*	getsym(void);
 
 \subsection*{[[cc/globals.c]]}
 
-
-<<global fperror>>=
-//int	fperror;
-@
-
-
-
-
-
-
-
-
-
-
-
-<<global maxinclude>>=
-int	maxinclude;
-@
-
-
-
-
-
-<<global nodproto>>=
-Node*	nodproto;
-@
-
-<<global nodcast>>=
-Node*	nodcast;
-@
-
-<<global outbuf>>=
-Biobuf	outbuf;
-@
-
-<<global diagbuf>>=
-Biobuf	diagbuf;
-@
-
-
-<<global pathname>>=
-char*	pathname;
-@
-
-
-
-
-
-
-<<global symstring>>=
-Sym*	symstring;
-@
-
-
-<<global tfield>>=
-Type*	tfield;
-@
-
-<<global tufield>>=
-Type*	tufield;
-@
-
-
-
-
-
-<<global fntypes>>=
-Type*	fntypes[NTYPE];
-@
-
-
-
-<<global packflg>>=
-int	packflg;
-@
-
-<<global fproundflg>>=
-int	fproundflg;
-@
-
-
-<<global ncontin>>=
-int	ncontin;
-@
-
-<<global newvlongcode>>=
-int	newvlongcode;
-@
-
-
-
-<<global typeswitch>>=
-char*	typeswitch;
-@
-
-<<global typeword>>=
-char*	typeword;
-@
-
-<<global typecmplx>>=
-char*	typecmplx;
-@
-
+%<<global fperror>>=
+%//int	fperror;
+%@
 
 %-------------------------------------------------------------
 
@@ -633,7 +529,6 @@ char*	typecmplx;
 <<global firstarg>>
 <<global firstargtype>>
 <<global firstdcl>>
-<<global fperror>>
 <<global hash>>
 <<global hasdoubled>>
 <<global hunk>>
@@ -695,12 +590,8 @@ char*	typecmplx;
 \subsection*{[[cc/sub.c]]}
 
 
-
-
-
-
 <<function stcompat>>=
-int
+bool
 stcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
     int i;
@@ -717,19 +608,19 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
         if(ttab == tasign)
             if(b == BSTRUCT || b == BUNION)
                 if(!sametype(t1, t2))
-                    return 1;
+                    return true;
         if(n->op != OCAST)
           if(b == BIND && i == TIND)
                 if(!sametype(t1, t2))
-                    return 1;
-        return 0;
+                    return true;
+        return false;
     }
-    return 1;
+    return true;
 }
 @
 
 <<function tcompat>>=
-int
+bool
 tcompat(Node *n, Type *t1, Type *t2, long ttab[])
 {
 
@@ -740,9 +631,9 @@ tcompat(Node *n, Type *t1, Type *t2, long ttab[])
         else
             diag(n, "incompatible types: \"%T\" and \"%T\" for op \"%O\"",
                 t1, t2, n->op);
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 @
 
@@ -914,18 +805,18 @@ ambig:
 /*
  * look into tree for floating point constant expressions
  */
-int
+bool
 allfloat(Node *n, int flag)
 {
 
     if(n != Z) {
         if(n->type->etype != TDOUBLE)
-            return 1;
+            return true;
         switch(n->op) {
         case OCONST:
             if(flag)
                 n->type = types[TFLOAT];
-            return 1;
+            return true;
         case OADD:	/* no need to get more exotic than this */
         case OSUB:
         case OMUL:
@@ -937,10 +828,10 @@ allfloat(Node *n, int flag)
                 break;
             if(flag)
                 n->type = types[TFLOAT];
-            return 1;
+            return true;
         }
     }
-    return 0;
+    return false;
 }
 @
 
@@ -1049,13 +940,13 @@ typeext(Type *st, Node *l)
  * a cast that generates no code
  * (same size move)
  */
-int
+bool
 nocast(Type *t1, Type *t2)
 {
     int i, b;
 
     if(t1->nbits)
-        return 0;
+        return false;
     i = 0;
     if(t2 != T)
         i = t2->etype;
@@ -1064,8 +955,8 @@ nocast(Type *t1, Type *t2)
     if(t1 != T)
         i = t1->etype;
     if(b & ncast[i])
-        return 1;
-    return 0;
+        return true;
+    return false;
 }
 @
 
@@ -1074,32 +965,32 @@ nocast(Type *t1, Type *t2)
  * a cast that has a noop semantic
  * (small to large, convert)
  */
-int
+bool
 nilcast(Type *t1, Type *t2)
 {
     int et1, et2;
 
     if(t1 == T)
-        return 0;
+        return false;
     if(t1->nbits)
-        return 0;
+        return false;
     if(t2 == T)
-        return 0;
+        return false;
     et1 = t1->etype;
     et2 = t2->etype;
     if(et1 == et2)
-        return 1;
+        return true;
     if(typefd[et1] && typefd[et2]) {
         if(ewidth[et1] < ewidth[et2])
-            return 1;
-        return 0;
+            return true;
+        return false;
     }
     if(typechlp[et1] && typechlp[et2]) {
         if(ewidth[et1] < ewidth[et2])
-            return 1;
-        return 0;
+            return true;
+        return false;
     }
-    return 0;
+    return false;
 }
 @
 
@@ -1361,7 +1252,7 @@ if(debug['<'])prtree(n, "rewrite2");
 @
 
 <<function side>>=
-int
+bool
 side(Node *n)
 {
 
@@ -1415,9 +1306,9 @@ loop:
     case OSTRING:
     case OLSTRING:
     case ONAME:
-        return 0;
+        return false;
     }
-    return 1;
+    return true;
 }
 @
 
@@ -1488,17 +1379,6 @@ bad:
 }
 @
 
-<<function topbit>>=
-int
-topbit(ulong v)
-{
-    int i;
-
-    for(i = -1; v; i++)
-        v >>= 1;
-    return i;
-}
-@
 
 <<function relcon>>=
 /*
@@ -1558,19 +1438,6 @@ relindex(int o)
 @
 
 
-<<function bitno>>=
-int
-bitno(long b)
-{
-    int i;
-
-    for(i=0; i<32; i++)
-        if(b & (1L<<i))
-            return i;
-    diag(Z, "bad in bitno");
-    return 0;
-}
-@
 
 
 
@@ -1620,112 +1487,6 @@ Init	thashinit[] =
 };
 @
 
-<<global bnames>>=
-char*	bnames[NALIGN];
-@
-
-<<global bnamesinit>>=
-Init	bnamesinit[] =
-{
-    Axxx,	0,	"Axxx",
-
-    Ael1,	0,	"el1",
-    Ael2,	0,	"el2",
-    Asu2,	0,	"su2",
-    Aarg0,	0,	"arg0",
-    Aarg1,	0,	"arg1",
-    Aarg2,	0,	"arg2",
-    Aaut3,	0,	"aut3",
-    -1,	0,	0,
-};
-@
-
-
-<<global gnames>>=
-char*	gnames[NGTYPES];
-@
-
-<<global gnamesinit>>=
-Init	gnamesinit[] =
-{
-    GXXX,			0,	"GXXX",
-    GCONSTNT,		0,	"CONST",
-    GVOLATILE,		0,	"VOLATILE",
-    GVOLATILE|GCONSTNT,	0,	"CONST-VOLATILE",
-    -1,			0,	0,
-};
-@
-
-<<global qnames>>=
-char*	qnames[NALLTYPES];
-@
-
-<<global qnamesinit>>=
-Init	qnamesinit[] =
-{
-    TXXX,		0,	"TXXX",
-
-    TCHAR,		0,	"CHAR",
-    TUCHAR,		0,	"UCHAR",
-    TSHORT,		0,	"SHORT",
-    TUSHORT,	0,	"USHORT",
-    TINT,		0,	"INT",
-    TUINT,		0,	"UINT",
-    TLONG,		0,	"LONG",
-    TULONG,		0,	"ULONG",
-    TVLONG,		0,	"VLONG",
-    TUVLONG,	0,	"UVLONG",
-    TFLOAT,		0,	"FLOAT",
-    TDOUBLE,	0,	"DOUBLE",
-    TIND,		0,	"IND",
-    TFUNC,		0,	"FUNC",
-    TARRAY,		0,	"ARRAY",
-    TVOID,		0,	"VOID",
-    TSTRUCT,	0,	"STRUCT",
-    TUNION,		0,	"UNION",
-    TENUM,		0,	"ENUM",
-
-    TAUTO,		0,	"AUTO",
-    TEXTERN,	0,	"EXTERN",
-    TSTATIC,	0,	"STATIC",
-    TTYPEDEF,	0,	"TYPEDEF",
-    TTYPESTR,	0,	"TYPESTR",
-    TREGISTER,	0,	"REGISTER",
-    TCONSTNT,	0,	"CONSTNT",
-    TVOLATILE,	0,	"VOLATILE",
-    TUNSIGNED,	0,	"UNSIGNED",
-    TSIGNED,	0,	"SIGNED",
-    TDOT,		0,	"DOT",
-    TFILE,		0,	"FILE",
-    TOLD,		0,	"OLD",
-
-    -1,		0,	0,
-};
-@
-
-<<global cnames>>=
-char*	cnames[NCTYPES];
-@
-
-<<global cnamesinit>>=
-Init	cnamesinit[] =
-{
-    CXXX,		0,	"CXXX",
-    CAUTO,		0,	"AUTO",
-    CEXTERN,	0,	"EXTERN",
-    CGLOBL,		0,	"GLOBL",
-    CSTATIC,	0,	"STATIC",
-    CLOCAL,		0,	"LOCAL",
-    CTYPEDEF,	0,	"TYPEDEF",
-    CTYPESTR,	0,	"TYPESTR",
-    CPARAM,		0,	"PARAM",
-    CSELEM,		0,	"SELEM",
-    CLABEL,		0,	"LABEL",
-    CEXREG,		0,	"EXREG",
-    -1,		0,	0,
-};
-@
-
 
 <<global comrel>>=
 /*	OEQ, ONE, OLE, OLS, OLT, OLO, OGE, OHS, OGT, OHI */
@@ -1749,168 +1510,20 @@ char	logrel[12] =
 };
 @
 
-<<global typei>>=
-char	typei[NTYPE];
-@
 
-<<global typeiinit>>=
-int	typeiinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TVLONG, TUVLONG, -1,
-};
-@
 
-<<global typeu>>=
-char	typeu[NTYPE];
-@
 
-<<global typeuinit>>=
-int	typeuinit[] =
-{
-    TUCHAR, TUSHORT, TUINT, TULONG, TUVLONG, TIND, -1,
-};
-@
 
-<<global typesuv>>=
-// bool
-char	typesuv[NTYPE];
-@
 
-<<global typesuvinit>>=
-int	typesuvinit[] =
-{
-    TVLONG, TUVLONG, TSTRUCT, TUNION, -1,
-};
-@
 
-<<global typeilp>>=
-char	typeilp[NTYPE];
-@
 
-<<global typeilpinit>>=
-int	typeilpinit[] =
-{
-    TINT, TUINT, TLONG, TULONG, TIND, -1
-};
-@
 
-<<global typechl>>=
-char	typechl[NTYPE];
-@
 
-<<global typechlv>>=
-char	typechlv[NTYPE];
-@
 
-<<global typechlvp>>=
-char typechlvp[NTYPE];
-@
 
-<<global typechlinit>>=
-int	typechlinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, -1,
-};
-@
 
-<<global typechlp>>=
-char	typechlp[NTYPE];
-@
 
-<<global typechlpinit>>=
-int	typechlpinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TIND, -1,
-};
-@
 
-<<global typechlpfd>>=
-char	typechlpfd[NTYPE];
-@
-
-<<global typechlpfdinit>>=
-int	typechlpfdinit[] =
-{
-    TCHAR, TUCHAR, TSHORT, TUSHORT, TINT, TUINT, TLONG, TULONG, TFLOAT, TDOUBLE, TIND, -1,
-};
-@
-
-<<global typec>>=
-char	typec[NTYPE];
-@
-
-<<global typecinit>>=
-int	typecinit[] =
-{
-    TCHAR, TUCHAR, -1
-};
-@
-
-<<global typeh>>=
-char	typeh[NTYPE];
-@
-
-<<global typehinit>>=
-int	typehinit[] =
-{
-    TSHORT, TUSHORT, -1,
-};
-@
-
-<<global typeil>>=
-char	typeil[NTYPE];
-@
-
-<<global typeilinit>>=
-int	typeilinit[] =
-{
-    TINT, TUINT, TLONG, TULONG, -1,
-};
-@
-
-<<global typev>>=
-char	typev[NTYPE];
-@
-
-<<global typevinit>>=
-int	typevinit[] =
-{
-    TVLONG,	TUVLONG, -1,
-};
-@
-
-<<global typefd>>=
-char	typefd[NTYPE];
-@
-
-<<global typefdinit>>=
-int	typefdinit[] =
-{
-    TFLOAT, TDOUBLE, -1,
-};
-@
-
-<<global typeaf>>=
-char	typeaf[NTYPE];
-@
-
-<<global typeafinit>>=
-int	typeafinit[] =
-{
-    TFUNC, TARRAY, -1,
-};
-@
-
-<<global typesu>>=
-char	typesu[NTYPE];
-@
-
-<<global typesuinit>>=
-int	typesuinit[] =
-{
-    TSTRUCT, TUNION, -1,
-};
-@
 
 <<global tasign>>=
 long	tasign[NTYPE];
@@ -2616,7 +2229,6 @@ extern	char	tab[NTYPE][NTYPE];
 
 \subsection*{[[cc/bits.c]]}
 
-
 %-------------------------------------------------------------
 
 <<cc/bits.c>>=
@@ -2637,16 +2249,6 @@ extern	char	tab[NTYPE][NTYPE];
 
 
 \subsection*{[[cc/lex.c]]}
-
-<<constant CPP>>=
-#define	CPP	"/bin/cpp"
-@
-
-
-
-
-
-
 
 
 <<constant ESC>>=
@@ -2772,6 +2374,13 @@ loop:
 
 
 
+<<global nodproto>>=
+Node*	nodproto;
+@
+
+<<global symstring>>=
+Sym*	symstring;
+@
 
 <<function cinit>>=
 void
@@ -3917,6 +3526,10 @@ Init	initetconv[] =
 };
 @
 
+<<global fntypes>>=
+Type*	fntypes[NTYPE];
+@
+
 <<function fvn>>=
 Node*
 fvn(char *name, int type)
@@ -4946,24 +4559,6 @@ fnproto1(Node *n)
 
 
 
-<<function push1>>=
-Decl*
-push1(Sym *s)
-{
-    Decl *d;
-
-    d = push();
-    d->sym = s;
-    d->val = DAUTO;
-    d->type = s->type;
-    d->class = s->class;
-    d->offset = s->offset;
-    d->block = s->block;
-    d->varlineno = s->varlineno;
-    d->aused = s->aused;
-    return d;
-}
-@
 
 <<function sametype>>=
 int
@@ -7787,8 +7382,7 @@ uncomma(Node *n)
 int
 bcomplex(Node *n, Node *c)
 {
-    Node *b, nod;
-
+//    Node *b, nod;
 
     complex(n);
     if(n->type != T)
@@ -7800,18 +7394,20 @@ bcomplex(Node *n, Node *c)
     }
     if(c != Z && n->op == OCONST && deadheads(c))
         return 1;
+
     /* this is not quite right yet, so ignore it for now */
-    if(0 && newvlongcode && typev[n->type->etype] && machcap(Z)) {
-        b = &nod;
-        b->op = ONE;
-        b->left = n;
-        b->right = new(0, Z, Z);
-        *b->right = *nodconst(0);
-        b->right->type = n->type;
-        b->type = types[TLONG];
-        cgen(b, Z);
-        return 0;
-    }
+//    if(0 && newvlongcode && typev[n->type->etype] && machcap(Z)) {
+//        b = &nod;
+//        b->op = ONE;
+//        b->left = n;
+//        b->right = new(0, Z, Z);
+//        *b->right = *nodconst(0);
+//        b->right->type = n->type;
+//        b->type = types[TLONG];
+//        cgen(b, Z);
+//        return 0;
+//    }
+
     bool64(n);
     boolgen(n, 1, Z);
     return 0;
@@ -9176,6 +8772,13 @@ naddr(Node *n, Adr *a)
 <<function CASE>>=
 #define	CASE(a,b)	((a<<8)|(b<<0))
 @
+
+% set via pragma
+<<global fproundflg>>=
+int	fproundflg;
+@
+
+
 
 <<function gmove>>=
 void
@@ -11239,6 +10842,11 @@ gextern(Sym *s, Node *a, long o, long w)
 }
 @
 
+% set via pragma
+% seems dead, not initialized so probably 0
+<<global packflg>>=
+int	packflg;
+@
 
 <<function align>>=
 long

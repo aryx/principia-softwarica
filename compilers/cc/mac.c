@@ -1,7 +1,7 @@
 /*s: cc/mac.c */
 #include	"cc.h"
 
-//#include	"macbody"
+//old: #include	"macbody"
 //TODO copy paste with aa/, maybe could factorize with another lib?
 //
 
@@ -557,6 +557,7 @@ macexpand(Sym *s, char *b)
     *b = 0;
     if(debug['m'])
         print("#expand %s %s\n", s->name, ob);
+
     return;
 
 bad:
