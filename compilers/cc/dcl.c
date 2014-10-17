@@ -1001,18 +1001,18 @@ push1(Sym *s)
 /*e: function push1 */
 
 /*s: function sametype */
-int
+bool
 sametype(Type *t1, Type *t2)
 {
 
     if(t1 == t2)
-        return 1;
+        return true;
     return rsametype(t1, t2, 5, 1);
 }
 /*e: function sametype */
 
 /*s: function rsametype */
-int
+bool
 rsametype(Type *t1, Type *t2, int n, int f)
 {
     int et;
@@ -1020,17 +1020,18 @@ rsametype(Type *t1, Type *t2, int n, int f)
     n--;
     for(;;) {
         if(t1 == t2)
-            return 1;
+            return true;
         if(t1 == T || t2 == T)
-            return 0;
+            return false;
         if(n <= 0)
-            return 1;
+            return true;
         et = t1->etype;
         if(et != t2->etype)
-            return 0;
+            return false;
+
         if(et == TFUNC) {
             if(!rsametype(t1->link, t2->link, n, 0))
-                return 0;
+                return false;
             t1 = t1->down;
             t2 = t2->down;
             while(t1 != T && t2 != T) {
@@ -1044,17 +1045,17 @@ rsametype(Type *t1, Type *t2, int n, int f)
                 }
                 while(t1 != T || t2 != T) {
                     if(!rsametype(t1, t2, n, 0))
-                        return 0;
+                        return false;
                     t1 = t1->down;
                     t2 = t2->down;
                 }
                 break;
             }
-            return 1;
+            return true;
         }
         if(et == TARRAY)
             if(t1->width != t2->width && t1->width != 0 && t2->width != 0)
-                return 0;
+                return false;
         if(typesu[et]) {
             if(t1->link == T)
                 snap(t1);
@@ -1064,15 +1065,15 @@ rsametype(Type *t1, Type *t2, int n, int f)
                 /* structs with missing or different tag names aren't considered equal */
                 if(t1->tag == nil || t2->tag == nil ||
                    strcmp(t1->tag->name, t2->tag->name) != 0)
-                    return 0;
+                    return false;
             }
             t1 = t1->link;
             t2 = t2->link;
             for(;;) {
                 if(t1 == t2)
-                    return 1;
+                    return true;
                 if(!rsametype(t1, t2, n, 0))
-                    return 0;
+                    return false;
                 t1 = t1->down;
                 t2 = t2->down;
             }
@@ -1081,9 +1082,9 @@ rsametype(Type *t1, Type *t2, int n, int f)
         t2 = t2->link;
         if((f || !debug['V']) && et == TIND) {
             if(t1 != T && t1->etype == TVOID)
-                return 1;
+                return true;
             if(t2 != T && t2->etype == TVOID)
-                return 1;
+                return true;
         }
     }
 }
@@ -1092,7 +1093,7 @@ rsametype(Type *t1, Type *t2, int n, int f)
 typedef struct Typetab Typetab;
 
 /*s: struct Typetab */
-struct Typetab{
+struct Typetab {
     int n;
     Type **a;
 };

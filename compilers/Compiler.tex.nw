@@ -38,7 +38,7 @@
 % - SEMI distribute parts of the Extra section in the main file
 % - TODO understand main(), LP split main, improve TOC
 % - TODO understand main functions, LP split, cluster, improve TOC
-% - TODO LP split the structures, use datalog to see what flows into fields
+% - SEMI LP split the structures, use datalog to see what flows into fields
 % - TODO nullify, boolify, enumify,  typeify,    scheckify, plan9ify
 % - TODO aspecify advanced features! remove useless features
 % - TODO add figures
@@ -249,9 +249,9 @@ License.
 
 % dpchk.c? pragma related? dpchk? check something? directive pragma check?
 
-% com.c = compile (not comment), com64 for 64 bits specific stuff
-%  dcl.c = declaration
-%  funct.c = function
+% com.c = compile (not comment), com64 for 64 bits stuff (for vlong)
+%  dcl.c = declarations (dodecl, xdecl, adecl, markdcl/revertdcl, etc)
+%  funct.c = ?? seems related to typestr
 %  swt.c = switch? (pswt = portable part of switch handling)
 %   (but then why outcode, outhist is in this file? TODO move it elsewhere!)
 %  scon.c =  ? constants expr? s?
@@ -268,6 +268,11 @@ License.
 % xxxgen = sgen? cgen? (pgen.c = portable part of gen? sgen? cgen?)
 % mul.c, div.c
 % reg.c = register?
+
+
+
+% a few conventions? see glossary?
+% SUE = struct union enum
 
 \section{Architecture overview}
 
@@ -494,17 +499,17 @@ Init	cnamesinit[] =
 {
     CXXX,		0,	"CXXX",
     CAUTO,		0,	"AUTO",
-    CEXTERN,	0,	"EXTERN",
+    CEXTERN,		0,	"EXTERN",
     CGLOBL,		0,	"GLOBL",
-    CSTATIC,	0,	"STATIC",
+    CSTATIC,		0,	"STATIC",
     CLOCAL,		0,	"LOCAL",
-    CTYPEDEF,	0,	"TYPEDEF",
-    CTYPESTR,	0,	"TYPESTR",
+    CTYPEDEF,		0,	"TYPEDEF",
+    CTYPESTR,		0,	"TYPESTR",
     CPARAM,		0,	"PARAM",
     CSELEM,		0,	"SELEM",
     CLABEL,		0,	"LABEL",
     CEXREG,		0,	"EXREG",
-    -1,		0,	0,
+    -1,			0,	0,
 };
 @
 
@@ -681,33 +686,33 @@ Init	qnamesinit[] =
     TCHAR,		0,	"CHAR",
     TUCHAR,		0,	"UCHAR",
     TSHORT,		0,	"SHORT",
-    TUSHORT,	0,	"USHORT",
+    TUSHORT,		0,	"USHORT",
     TINT,		0,	"INT",
     TUINT,		0,	"UINT",
     TLONG,		0,	"LONG",
     TULONG,		0,	"ULONG",
     TVLONG,		0,	"VLONG",
-    TUVLONG,	0,	"UVLONG",
+    TUVLONG,		0,	"UVLONG",
     TFLOAT,		0,	"FLOAT",
-    TDOUBLE,	0,	"DOUBLE",
+    TDOUBLE,		0,	"DOUBLE",
     TIND,		0,	"IND",
     TFUNC,		0,	"FUNC",
     TARRAY,		0,	"ARRAY",
     TVOID,		0,	"VOID",
-    TSTRUCT,	0,	"STRUCT",
+    TSTRUCT,		0,	"STRUCT",
     TUNION,		0,	"UNION",
     TENUM,		0,	"ENUM",
 
     TAUTO,		0,	"AUTO",
-    TEXTERN,	0,	"EXTERN",
-    TSTATIC,	0,	"STATIC",
-    TTYPEDEF,	0,	"TYPEDEF",
-    TTYPESTR,	0,	"TYPESTR",
-    TREGISTER,	0,	"REGISTER",
-    TCONSTNT,	0,	"CONSTNT",
-    TVOLATILE,	0,	"VOLATILE",
-    TUNSIGNED,	0,	"UNSIGNED",
-    TSIGNED,	0,	"SIGNED",
+    TEXTERN,		0,	"EXTERN",
+    TSTATIC,		0,	"STATIC",
+    TTYPEDEF,		0,	"TYPEDEF",
+    TTYPESTR,		0,	"TYPESTR",
+    TREGISTER,		0,	"REGISTER",
+    TCONSTNT,		0,	"CONSTNT",
+    TVOLATILE,		0,	"VOLATILE",
+    TUNSIGNED,		0,	"UNSIGNED",
+    TSIGNED,		0,	"SIGNED",
     TDOT,		0,	"DOT",
     TFILE,		0,	"FILE",
     TOLD,		0,	"OLD",
@@ -767,7 +772,7 @@ char*	gnames[NGTYPES];
 <<global gnamesinit>>=
 Init	gnamesinit[] =
 {
-    GXXX,			0,	"GXXX",
+    GXXX,		0,	"GXXX",
     GCONSTNT,		0,	"CONST",
     GVOLATILE,		0,	"VOLATILE",
     GVOLATILE|GCONSTNT,	0,	"CONST-VOLATILE",
@@ -1102,6 +1107,115 @@ int	typesuvinit[] =
 
 
 
+<<function sametype>>=
+bool
+sametype(Type *t1, Type *t2)
+{
+
+    if(t1 == t2)
+        return true;
+    return rsametype(t1, t2, 5, 1);
+}
+@
+
+% n = depth? so equal modulo a certain depth?? hmmm
+<<function rsametype>>=
+bool
+rsametype(Type *t1, Type *t2, int n, int f)
+{
+    int et;
+
+    n--;
+    for(;;) {
+        if(t1 == t2)
+            return true;
+        if(t1 == T || t2 == T)
+            return false;
+        if(n <= 0)
+            return true;
+        et = t1->etype;
+        if(et != t2->etype)
+            return false;
+
+        if(et == TFUNC) {
+            if(!rsametype(t1->link, t2->link, n, 0))
+                return false;
+            t1 = t1->down;
+            t2 = t2->down;
+            while(t1 != T && t2 != T) {
+                if(t1->etype == TOLD) {
+                    t1 = t1->down;
+                    continue;
+                }
+                if(t2->etype == TOLD) {
+                    t2 = t2->down;
+                    continue;
+                }
+                while(t1 != T || t2 != T) {
+                    if(!rsametype(t1, t2, n, 0))
+                        return false;
+                    t1 = t1->down;
+                    t2 = t2->down;
+                }
+                break;
+            }
+            return true;
+        }
+        if(et == TARRAY)
+            if(t1->width != t2->width && t1->width != 0 && t2->width != 0)
+                return false;
+        if(typesu[et]) {
+            if(t1->link == T)
+                snap(t1);
+            if(t2->link == T)
+                snap(t2);
+            if(t1 != t2 && t1->link == T && t2->link == T){
+                /* structs with missing or different tag names aren't considered equal */
+                if(t1->tag == nil || t2->tag == nil ||
+                   strcmp(t1->tag->name, t2->tag->name) != 0)
+                    return false;
+            }
+            t1 = t1->link;
+            t2 = t2->link;
+            for(;;) {
+                if(t1 == t2)
+                    return true;
+                if(!rsametype(t1, t2, n, 0))
+                    return false;
+                t1 = t1->down;
+                t2 = t2->down;
+            }
+        }
+        t1 = t1->link;
+        t2 = t2->link;
+        if((f || !debug['V']) && et == TIND) {
+            if(t1 != T && t1->etype == TVOID)
+                return true;
+            if(t2 != T && t2->etype == TVOID)
+                return true;
+        }
+    }
+}
+@
+
+<<function snap>>=
+void
+snap(Type *t)
+{
+    if(typesu[t->etype])
+    if(t->link == T && t->tag && t->tag->suetag) {
+        t->link = t->tag->suetag->link;
+        t->width = t->tag->suetag->width;
+    }
+}
+@
+
+%-------------------
+
+
+
+
+
 
 <<[[Type]] other fields>>=
 long	width; // ewidth[Type.etype]
@@ -1109,8 +1223,9 @@ long	width; // ewidth[Type.etype]
 long	offset;
 schar	shift;
 char	nbits;
-
 @
+
+%-------------------
 
 <<[[Type]] other fields>>=
 Funct*	funct;
@@ -1124,6 +1239,202 @@ struct	Funct
     Sym*	castfr[NTYPE];
 };
 @
+
+<<function isfunct>>=
+int
+isfunct(Node *n)
+{
+    Type *t, *t1;
+    Funct *f;
+    Node *l;
+    Sym *s;
+    int o;
+
+    o = n->op;
+    if(n->left == Z)
+        goto no;
+    t = n->left->type;
+    if(t == T)
+        goto no;
+    f = t->funct;
+
+    switch(o) {
+    case OAS:	// put cast on rhs
+    case OASI:
+    case OASADD:
+    case OASAND:
+    case OASASHL:
+    case OASASHR:
+    case OASDIV:
+    case OASLDIV:
+    case OASLMOD:
+    case OASLMUL:
+    case OASLSHR:
+    case OASMOD:
+    case OASMUL:
+    case OASOR:
+    case OASSUB:
+    case OASXOR:
+        if(n->right == Z)
+            goto no;
+        t1 = n->right->type;
+        if(t1 == T)
+            goto no;
+        if(t1->funct == f)
+            break;
+
+        l = new(OXXX, Z, Z);
+        *l = *n->right;
+
+        n->right->left = l;
+        n->right->right = Z;
+        n->right->type = t;
+        n->right->op = OCAST;
+
+        if(!isfunct(n->right))
+            prtree(n, "isfunc !");
+        break;
+
+    case OCAST:	// t f(T) or T f(t)
+        t1 = n->type;
+        if(t1 == T)
+            goto no;
+        if(f != nil) {
+            s = f->castfr[t1->etype];
+            if(s == S)
+                goto no;
+            n->right = n->left;
+            goto build;
+        }
+        f = t1->funct;
+        if(f != nil) {
+            s = f->castto[t->etype];
+            if(s == S)
+                goto no;
+            n->right = n->left;
+            goto build;
+        }
+        goto no;
+    }
+
+    if(f == nil)
+        goto no;
+    s = f->sym[o];
+    if(s == S)
+        goto no;
+
+    /*
+     * the answer is yes,
+     * now we rewrite the node
+     * and give diagnostics
+     */
+    switch(o) {
+    default:
+        diag(n, "isfunct op missing %O\n", o);
+        goto bad;
+
+    case OADD:	// T f(T, T)
+    case OAND:
+    case OASHL:
+    case OASHR:
+    case ODIV:
+    case OLDIV:
+    case OLMOD:
+    case OLMUL:
+    case OLSHR:
+    case OMOD:
+    case OMUL:
+    case OOR:
+    case OSUB:
+    case OXOR:
+
+    case OEQ:	// int f(T, T)
+    case OGE:
+    case OGT:
+    case OHI:
+    case OHS:
+    case OLE:
+    case OLO:
+    case OLS:
+    case OLT:
+    case ONE:
+        if(n->right == Z)
+            goto bad;
+        t1 = n->right->type;
+        if(t1 == T)
+            goto bad;
+        if(t1->funct != f)
+            goto bad;
+        n->right = new(OLIST, n->left, n->right);
+        break;
+
+    case OAS:	// structure copies done by the compiler
+    case OASI:
+        goto no;
+
+    case OASADD:	// T f(T*, T)
+    case OASAND:
+    case OASASHL:
+    case OASASHR:
+    case OASDIV:
+    case OASLDIV:
+    case OASLMOD:
+    case OASLMUL:
+    case OASLSHR:
+    case OASMOD:
+    case OASMUL:
+    case OASOR:
+    case OASSUB:
+    case OASXOR:
+        if(n->right == Z)
+            goto bad;
+        t1 = n->right->type;
+        if(t1 == T)
+            goto bad;
+        if(t1->funct != f)
+            goto bad;
+        n->right = new(OLIST, new(OADDR, n->left, Z), n->right);
+        break;
+
+    case OPOS:	// T f(T)
+    case ONEG:
+    case ONOT:
+    case OCOM:
+        n->right = n->left;
+        break;
+
+
+    }
+
+build:
+    l = new(ONAME, Z, Z);
+    l->sym = s;
+    l->type = s->type;
+    l->etype = s->type->etype;
+    l->xoffset = s->offset;
+    l->class = s->class;
+    tcomo(l, 0);
+
+    n->op = OFUNC;
+    n->left = l;
+    n->type = l->type->link;
+    if(tcompat(n, T, l->type, tfunct))
+        goto bad;
+    if(tcoma(n->left, n->right, l->type->down, 1))
+        goto bad;
+    return 1;
+
+no:
+    return 0;
+
+bad:
+    diag(n, "cant rewrite typestr for op %O\n", o);
+    prtree(n, "isfunct");
+    n->type = T;
+    return 1;
+}
+@
+
 
 
 \section{Symbol table, [[Sym]] and [[hash]]}
@@ -1271,22 +1582,6 @@ slookup(char *s)
 
 
 
-%???
-<<enum sigxxx>>=
-enum{
-    SIGNONE = 0,
-    SIGDONE = 1,
-    SIGINTERN = 2,
-
-    // ???
-    SIGNINTERN = 1729*325*1729,
-};
-@
-
-<<[[Sym]] other fields>>=
-// enum<sigxxx>
-char	sig;
-@
 
 
 
@@ -1814,7 +2109,7 @@ void main(int argc, char *argv[])
         nout = 0;
         for(;;) {
             while(nout < nproc && argc > 0) {
-                i = myfork();
+                i = fork();
                 if(i < 0) {
                     i = mywait(&status);
                     if(i < 0) {
@@ -1956,6 +2251,64 @@ compile(char *file, char **defs, int ndef)
 
 % main -> compile -> yyparse -> yylex -> macxxx
 %                            -> codgen (portable) -> gen
+
+
+
+
+
+
+<<function cinit>>=
+void
+cinit(void)
+{
+    Sym *s;
+    int i;
+    Type *t;
+
+    nerrors = 0;
+    lineno = 1;
+    iostack = I;
+    iofree = I;
+    peekc = IGN;
+    nhunk = 0;
+
+    <<[[cinit()]] types initialization>>
+
+    for(i=0; i<NHASH; i++)
+        hash[i] = S;
+    for(i=0; itab[i].name; i++) {
+        s = slookup(itab[i].name);
+        s->lexical = itab[i].lexical;
+        if(itab[i].type != 0)
+            s->type = types[itab[i].type];
+    }
+
+    blockno = 0;
+    autobn = 0;
+    autoffset = 0;
+
+    t = typ(TARRAY, types[TCHAR]);
+    t->width = 0;
+    symstring = slookup(".string");
+    symstring->class = CSTATIC;
+    symstring->type = t;
+
+    t = typ(TARRAY, types[TCHAR]);
+    t->width = 0;
+
+    nodproto = new(OPROTO, Z, Z);
+    dclstack = D;
+
+    pathname = allocn(pathname, 0, 100);
+    if(getwd(pathname, 99) == 0) {
+        pathname = allocn(pathname, 100, 900);
+        if(getwd(pathname, 999) == 0)
+            strcpy(pathname, "/???");
+    }
+    <<[[cinit()]] fmtinstall>>
+}
+@
+
 
 \chapter{Input}
 % similar to Assembler, could reuse
@@ -2117,6 +2470,11 @@ pop:
 % why not using lex? why handwritten?
 
 \section{[[yylex()]]}
+
+<<constant ESC>>=
+#define	ESC	(Runemask+1)		/* Rune flag: a literal byte */
+@
+
 
 <<function yylex>>=
 //@Scheck: not dead, called by yyparse
@@ -2663,6 +3021,89 @@ struct
 
 \section{Numbers}
 
+<<enum numxxx>>=
+enum numxxx
+{
+    Numdec		= 1<<0,
+    Numlong		= 1<<1,
+    Numuns		= 1<<2,
+    Numvlong	= 1<<3,
+    Numflt		= 1<<4,
+};
+@
+
+<<function mpatov>>=
+/*
+ * convert a string, s, to vlong in *v
+ * return conversion overflow.
+ * required syntax is [0[x]]d*
+ */
+int
+mpatov(char *s, vlong *v)
+{
+    vlong n, nn;
+    int c;
+
+    n = 0;
+    c = *s;
+    if(c == '0')
+        goto oct;
+    while(c = *s++) {
+        if(c >= '0' && c <= '9')
+            nn = n*10 + c-'0';
+        else
+            goto bad;
+        if(n < 0 && nn >= 0)
+            goto bad;
+        n = nn;
+    }
+    goto out;
+
+oct:
+    s++;
+    c = *s;
+    if(c == 'x' || c == 'X')
+        goto hex;
+    while(c = *s++) {
+        if(c >= '0' || c <= '7')
+            nn = n*8 + c-'0';
+        else
+            goto bad;
+        if(n < 0 && nn >= 0)
+            goto bad;
+        n = nn;
+    }
+    goto out;
+
+hex:
+    s++;
+    while(c = *s++) {
+        if(c >= '0' && c <= '9')
+            c += 0-'0';
+        else
+        if(c >= 'a' && c <= 'f')
+            c += 10-'a';
+        else
+        if(c >= 'A' && c <= 'F')
+            c += 10-'A';
+        else
+            goto bad;
+        nn = n*16 + c;
+        if(n < 0 && nn >= 0)
+            goto bad;
+        n = nn;
+    }
+out:
+    *v = n;
+    return 0;
+
+bad:
+    *v = ~0;
+    return 1;
+}
+@
+
+
 \subsection{Decimals}
 
 \subsection{Floats}
@@ -2753,6 +3194,39 @@ loop:
     case 'v':	return '\v';
     }
     return c;
+}
+@
+
+
+<<function getr>>=
+long
+getr(void)
+{
+    int c, i;
+    char str[UTFmax+1];
+    Rune rune;
+
+
+    c = getc();
+    if(c < Runeself)
+        return c;
+    i = 0;
+    str[i++] = c;
+
+loop:
+    c = getc();
+    str[i++] = c;
+    if(!fullrune(str, i))
+        goto loop;
+    c = chartorune(&rune, str);
+    if(rune == Runeerror && c == 1) {
+        nearln = lineno;
+        diag(Z, "illegal rune in string");
+        for(c=0; c<i; c++)
+            print(" %.2x", *(uchar*)(str+c));
+        print("\n");
+    }
+    return rune;
 }
 @
 
@@ -2906,18 +3380,18 @@ if(debug['p']) {
         diag(Z, "%s does not exist", file);
         errorexit();
     }
-    if(mypipe(fd) < 0) {
+    if(pipe(fd) < 0) {
         diag(Z, "pipe failed");
         errorexit();
     }
-    switch(myfork()) {
+    switch(fork()) {
     case -1:
         diag(Z, "fork failed");
         errorexit();
 
     case 0:
         close(fd[0]);
-        mydup(fd[1], 1);
+        dup(fd[1], 1);
         close(fd[1]);
         av = alloc((3 + ndef + ninclude + 2) * sizeof *av);
         av[0] = CPP;
@@ -2943,7 +3417,7 @@ if(debug['p']) {
             fprint(2, "\n");
         }
 
-        myexec(av[0], av);
+        exec(av[0], av);
         fprint(2, "can't exec C preprocessor %s: %r\n", CPP);
         errorexit();
 
@@ -4203,6 +4677,234 @@ void argmark(Node *n, int pass)
 }
 @
 
+<<function tmerge>>=
+void
+tmerge(Type *t1, Sym *s)
+{
+    Type *ta, *tb, *t2;
+
+    t2 = s->type;
+/*print("merge	%T; %T\n", t1, t2);/**/
+    for(;;) {
+        if(t1 == T || t2 == T || t1 == t2)
+            break;
+        if(t1->etype != t2->etype)
+            break;
+        switch(t1->etype) {
+        case TFUNC:
+            ta = t1->down;
+            tb = t2->down;
+            if(ta == T) {
+                t1->down = tb;
+                break;
+            }
+            if(tb == T)
+                break;
+            while(ta != T && tb != T) {
+                if(ta == tb)
+                    break;
+                /* ignore old-style flag */
+                if(ta->etype == TOLD) {
+                    ta = ta->down;
+                    continue;
+                }
+                if(tb->etype == TOLD) {
+                    tb = tb->down;
+                    continue;
+                }
+                /* checking terminated by ... */
+                if(ta->etype == TDOT && tb->etype == TDOT) {
+                    ta = T;
+                    tb = T;
+                    break;
+                }
+                if(!sametype(ta, tb))
+                    break;
+                ta = ta->down;
+                tb = tb->down;
+            }
+            if(ta != tb)
+                diag(Z, "function inconsistently declared: %s", s->name);
+
+            /* take new-style over old-style */
+            ta = t1->down;
+            tb = t2->down;
+            if(ta != T && ta->etype == TOLD)
+                if(tb != T && tb->etype != TOLD)
+                    t1->down = tb;
+            break;
+
+        case TARRAY:
+            /* should we check array size change? */
+            if(t2->width > t1->width)
+                t1->width = t2->width;
+            break;
+
+        case TUNION:
+        case TSTRUCT:
+            return;
+        }
+        t1 = t1->link;
+        t2 = t2->link;
+    }
+}
+@
+
+<<function ofnproto>>=
+Type*
+ofnproto(Node *n)
+{
+    Type *tl, *tr, *t;
+
+    if(n == Z)
+        return T;
+    switch(n->op) {
+    case OLIST:
+        tl = ofnproto(n->left);
+        tr = ofnproto(n->right);
+        if(tl == T)
+            return tr;
+        tl->down = tr;
+        return tl;
+
+    case ONAME:
+        t = copytyp(n->sym->type);
+        t->down = T;
+        return t;
+    }
+    return T;
+}
+@
+
+% TODO enum with bitset 1<<0, 1<<1
+<<constant ANSIPROTO>>=
+#define	ANSIPROTO	1
+@
+
+<<constant OLDPROTO>>=
+#define	OLDPROTO	2
+@
+
+
+
+
+
+<<function fnproto>>=
+Type*
+fnproto(Node *n)
+{
+    int r;
+
+    r = anyproto(n->right);
+    if(r == 0 || (r & OLDPROTO)) {
+        if(r & ANSIPROTO)
+            diag(n, "mixed ansi/old function declaration: %F", n->left);
+        return T;
+    }
+    return fnproto1(n->right);
+}
+@
+
+<<function anyproto>>=
+int
+anyproto(Node *n)
+{
+    int r;
+
+    r = 0;
+
+loop:
+    if(n == Z)
+        return r;
+    switch(n->op) {
+    case OLIST:
+        r |= anyproto(n->left);
+        n = n->right;
+        goto loop;
+
+    case ODOTDOT:
+    case OPROTO:
+        return r | ANSIPROTO;
+    }
+    return r | OLDPROTO;
+}
+@
+
+<<function fnproto1>>=
+Type*
+fnproto1(Node *n)
+{
+    Type *t;
+
+    if(n == Z)
+        return T;
+    switch(n->op) {
+    case OLIST:
+        t = fnproto1(n->left);
+        if(t != T)
+            t->down = fnproto1(n->right);
+        return t;
+
+    case OPROTO:
+        lastdcl = T;
+        dodecl(NODECL, CXXX, n->type, n->left);
+        t = typ(TXXX, T);
+        if(lastdcl != T)
+            *t = *paramconv(lastdcl, 1);
+        return t;
+
+    case ONAME:
+        diag(n, "incomplete argument prototype");
+        return typ(TINT, T);
+
+    case ODOTDOT:
+        return typ(TDOT, T);
+    }
+    diag(n, "unknown op in fnproto");
+    return T;
+}
+@
+
+
+<<function paramconv>>=
+Type*
+paramconv(Type *t, int f)
+{
+
+    switch(t->etype) {
+    case TARRAY:
+        t = typ(TIND, t->link);
+        t->width = types[TIND]->width;
+        break;
+
+    case TFUNC:
+        t = typ(TIND, t);
+        t->width = types[TIND]->width;
+        break;
+
+    case TFLOAT:
+        if(!f)
+            t = types[TDOUBLE];
+        break;
+
+    case TCHAR:
+    case TSHORT:
+        if(!f)
+            t = types[TINT];
+        break;
+
+    case TUCHAR:
+    case TUSHORT:
+        if(!f)
+            t = types[TUINT];
+        break;
+    }
+    return t;
+}
+@
+
+
+
 <<function walkparam>>=
 void
 walkparam(Node *n, int pass)
@@ -5292,6 +5994,56 @@ init1(Sym *s, Type *t, long o, int exflag)
 }
 @
 
+<<function newlist>>=
+Node*
+newlist(Node *l, Node *r)
+{
+    if(r == Z)
+        return l;
+    if(l == Z)
+        return r;
+    return new(OLIST, l, r);
+}
+@
+
+<<function isstruct>>=
+int
+isstruct(Node *a, Type *t)
+{
+    Node *n;
+
+    switch(a->op) {
+    case ODOTDOT:
+        n = a->left;
+        if(n && n->type && sametype(n->type, t))
+            return 1;
+    case OSTRING:
+    case OLSTRING:
+    case OCONST:
+    case OINIT:
+    case OELEM:
+        return 0;
+    }
+
+    n = new(ODOTDOT, Z, Z);
+    *n = *a;
+
+    /*
+     * ODOTDOT is a flag for tcom
+     * a second tcom will not be performed
+     */
+    a->op = ODOTDOT;
+    a->left = n;
+    a->right = Z;
+
+    if(tcom(n))
+        return 0;
+
+    if(sametype(n->type, t))
+        return 1;
+    return 0;
+}
+@
 
 <<function peekinit>>=
 /*
@@ -6064,6 +6816,43 @@ long	lastfield;
 @
 
 
+<<function edecl>>=
+//@Scheck: used by cc.y
+void edecl(int c, Type *t, Sym *s)
+{
+    Type *t1;
+
+    if(s == S) {
+        if(!typesu[t->etype])
+            diag(Z, "unnamed structure element must be struct/union");
+        if(c != CXXX)
+            diag(Z, "unnamed structure element cannot have class");
+    } else
+        if(c != CXXX)
+            diag(Z, "structure element cannot have class: %s", s->name);
+    t1 = t;
+    t = copytyp(t1);
+    t->sym = s;
+    t->down = T;
+    if(lastfield) {
+        t->shift = lastbit - lastfield;
+        t->nbits = lastfield;
+        if(firstbit)
+            t->shift = -t->shift;
+        if(typeu[t->etype])
+            t->etype = tufield->etype;
+        else
+            t->etype = tfield->etype;
+    }
+    if(strf == T)
+        strf = t;
+    else
+        strl->down = t;
+    strl = t;
+}
+@
+
+
 \subsection{Enum}
 
 <<struct En>>=
@@ -6487,6 +7276,196 @@ adlist:
     }
 @
 %$
+
+
+<<function adecl>>=
+void
+adecl(int c, Type *t, Sym *s)
+{
+
+    if(c == CSTATIC)
+        c = CLOCAL;
+    if(t->etype == TFUNC) {
+        if(c == CXXX)
+            c = CEXTERN;
+        if(c == CLOCAL)
+            c = CSTATIC;
+        if(c == CAUTO || c == CEXREG)
+            diag(Z, "function cannot be %s %s", cnames[c], s->name);
+    }
+    if(c == CXXX)
+        c = CAUTO;
+    if(s) {
+        if(s->class == CSTATIC)
+            if(c == CEXTERN || c == CGLOBL) {
+                warn(Z, "just say static: %s", s->name);
+                c = CSTATIC;
+            }
+        if(s->class == CAUTO || s->class == CPARAM || s->class == CLOCAL)
+        if(s->block == autobn)
+            diag(Z, "auto redeclaration of: %s", s->name);
+        if(c != CPARAM)
+            push1(s);
+        s->block = autobn;
+        s->offset = 0;
+        s->type = t;
+        s->class = c;
+        s->aused = 0;
+    }
+    switch(c) {
+    case CAUTO:
+        autoffset = align(autoffset, t, Aaut3);
+        stkoff = maxround(stkoff, autoffset);
+        s->offset = -autoffset;
+        break;
+
+    case CPARAM:
+        if(autoffset == 0) {
+            firstarg = s;
+            firstargtype = t;
+        }
+        autoffset = align(autoffset, t, Aarg1);
+        if(s)
+            s->offset = autoffset;
+        autoffset = align(autoffset, t, Aarg2);
+        break;
+    }
+}
+@
+
+
+
+<<function contig>>=
+//@Scheck: used by cc.y
+Node* contig(Sym *s, Node *n, long v)
+{
+    Node *p, *r, *q, *m;
+    long w;
+    Type *zt;
+
+    if(debug['i']) {
+        print("contig v = %ld; s = %s\n", v, s->name);
+        prtree(n, "doinit value");
+    }
+
+    if(n == Z)
+        goto no;
+    w = s->type->width;
+
+    /*
+     * nightmare: an automatic array whose size
+     * increases when it is initialized
+     */
+    if(v != w) {
+        if(v != 0)
+            diag(n, "automatic adjustable array: %s", s->name);
+        v = s->offset;
+        autoffset = align(autoffset, s->type, Aaut3);
+        s->offset = -autoffset;
+        stkoff = maxround(stkoff, autoffset);
+        symadjust(s, n, v - s->offset);
+    }
+    if(w <= ewidth[TIND])
+        goto no;
+    if(n->op == OAS)
+        diag(Z, "oops in contig");
+/*ZZZ this appears incorrect
+need to check if the list completely covers the data.
+if not, bail
+ */
+    if(n->op == OLIST)
+        goto no;
+    if(n->op == OASI)
+        if(n->left->type)
+        if(n->left->type->width == w)
+            goto no;
+    while(w & (ewidth[TIND]-1))
+        w++;
+/*
+ * insert the following code, where long becomes vlong if pointers are fat
+ *
+    *(long**)&X = (long*)((char*)X + sizeof(X));
+    do {
+        *(long**)&X -= 1;
+        **(long**)&X = 0;
+    } while(*(long**)&X);
+ */
+
+    for(q=n; q->op != ONAME; q=q->left)
+        ;
+
+    zt = ewidth[TIND] > ewidth[TLONG]? types[TVLONG]: types[TLONG];
+
+    p = new(ONAME, Z, Z);
+    *p = *q;
+    p->type = typ(TIND, zt);
+    p->xoffset = s->offset;
+
+    r = new(ONAME, Z, Z);
+    *r = *p;
+    r = new(OPOSTDEC, r, Z);
+
+    q = new(ONAME, Z, Z);
+    *q = *p;
+    q = new(OIND, q, Z);
+
+    m = new(OCONST, Z, Z);
+    m->vconst = 0;
+    m->type = zt;
+
+    q = new(OAS, q, m);
+
+    r = new(OLIST, r, q);
+
+    q = new(ONAME, Z, Z);
+    *q = *p;
+    r = new(ODWHILE, q, r);
+
+    q = new(ONAME, Z, Z);
+    *q = *p;
+    q->type = q->type->link;
+    q->xoffset += w;
+    q = new(OADDR, q, 0);
+
+    q = new(OASI, p, q);
+    r = new(OLIST, q, r);
+
+    n = new(OLIST, r, n);
+
+no:
+    return n;
+}
+@
+
+
+<<function symadjust>>=
+void
+symadjust(Sym *s, Node *n, long del)
+{
+
+    switch(n->op) {
+    default:
+        if(n->left)
+            symadjust(s, n->left, del);
+        if(n->right)
+            symadjust(s, n->right, del);
+        return;
+
+    case ONAME:
+        if(n->sym == s)
+            n->xoffset -= del;
+        return;
+
+    case OCONST:
+    case OSTRING:
+    case OLSTRING:
+    case OINDREG:
+    case OREGISTER:
+        return;
+    }
+}
+@
+
 
 \subsection{Abstract declarator}
 
@@ -8058,10 +9037,189 @@ loop:
 }
 @
 
+\subsection{Switch}
+
+<<function swcmp>>=
+int
+swcmp(const void *a1, const void *a2)
+{
+    C1 *p1, *p2;
+
+    p1 = (C1*)a1;
+    p2 = (C1*)a2;
+    if(p1->val < p2->val)
+        return -1;
+    return p1->val > p2->val;
+}
+@
+
+<<function doswit>>=
+void
+doswit(Node *n)
+{
+    Case *c;
+    C1 *q, *iq, *iqh, *iql;
+    long def, nc, i, j, isv, nh;
+    Prog *hsb;
+    Node *vr[2];
+    int dup;
+
+    def = 0;
+    nc = 0;
+    isv = 0;
+    for(c = cases; c->link != C; c = c->link) {
+        if(c->def) {
+            if(def)
+                diag(n, "more than one default in switch");
+            def = c->label;
+            continue;
+        }
+        isv |= c->isv;
+        nc++;
+    }
+    if(typev[n->type->etype])
+        isv = 1;
+    else if(isv){
+        warn(n, "32-bit switch expression with 64-bit case constant");
+        isv = 0;
+    }
+
+    iq = alloc(nc*sizeof(C1));
+    q = iq;
+    for(c = cases; c->link != C; c = c->link) {
+        if(c->def)
+            continue;
+        if(c->isv && !isv)
+            continue;	/* can never match */
+        q->label = c->label;
+        if(isv)
+            q->val = c->val;
+        else
+            q->val = (long)c->val;	/* cast ensures correct value for 32-bit switch on 64-bit architecture */
+        q++;
+    }
+    qsort(iq, nc, sizeof(C1), swcmp);
+
+    if(debug['K'])
+     for(i=0; i<nc; i++)
+        print("case %2ld: = %.8llux\n", i, (vlong)iq[i].val);
+ 
+   dup = 0;
+    for(i=0; i<nc-1; i++)
+        if(iq[i].val == iq[i+1].val) {
+            diag(n, "duplicate cases in switch %lld", (vlong)iq[i].val);
+            dup = 1;
+        }
+    if(dup)
+        return;
+    if(def == 0) {
+        def = breakpc;
+        nbreak++;
+    }
+    if(!isv || ewidth[TIND] > ewidth[TLONG] || n->op == OREGISTER) {
+        swit1(iq, nc, def, n);
+        return;
+    }
+
+    /*
+     * 64-bit case on 32-bit machine:
+     * switch on high-order words, and
+     * in each of those, switch on low-order words
+     */
+    if(n->op != OREGPAIR)
+        fatal(n, "internal: expected register pair");
+    if(thechar == '8'){	/* TO DO: need an enquiry function */
+        vr[0] = n->left;	/* low */
+        vr[1] = n->right;	/* high */
+    }else{
+        vr[0] = n->right;
+        vr[1] = n->left;
+    }
+    vr[0]->type = types[TLONG];
+    vr[1]->type = types[TLONG];
+    gbranch(OGOTO);
+    hsb = p;
+    iqh = alloc(nc*sizeof(C1));
+    iql = alloc(nc*sizeof(C1));
+    nh = 0;
+    for(i=0; i<nc;){
+        iqh[nh].val = iq[i].val >> 32;
+        q = iql;
+        /* iq is sorted, so equal top halves are adjacent */
+        for(j = i; j < nc; j++){
+            if((iq[j].val>>32) != iqh[nh].val)
+                break;
+            q->val = (long)iq[j].val;
+            q->label = iq[j].label;
+            q++;
+        }
+        qsort(iql,  q-iql, sizeof(C1), swcmp);
+                //if(0){for(int k=0; k<(q-iql); k++)print("nh=%ld k=%d h=%#llux l=%#llux lab=%ld\n", nh, k, (vlong)iqh[nh].val,  (vlong)iql[k].val, iql[k].label);}
+        iqh[nh].label = pc;
+        nh++;
+        swit1(iql, q-iql, def, vr[0]);
+        i = j;
+    }
+    patch(hsb, pc);
+        //if(0){for(int k=0; k<nh; k++)print("k*=%d h=%#llux lab=%ld\n", k, (vlong)iqh[k].val,  iqh[k].label);}
+    swit1(iqh, nh, def, vr[1]);
+}
+@
+
+<<function casf>>=
+void
+casf(void)
+{
+    Case *c;
+
+    c = alloc(sizeof(*c));
+    c->link = cases;
+    cases = c;
+}
+@
+
+
 \section{Expressions}
 
 
 \section{Initializers}
+
+\section{Strings}
+
+<<global symstring>>=
+Sym*	symstring;
+@
+
+
+<<function outlstring>>=
+long
+outlstring(TRune *s, long n)
+{
+    char buf[sizeof(TRune)];
+    uint c;
+    int i;
+    long r;
+
+    if(suppress)
+        return nstring;
+    while(nstring & (sizeof(TRune)-1))
+        outstring("", 1);
+    r = nstring;
+    while(n > 0) {
+        c = *s++;
+        if(align(0, types[TCHAR], Aarg1)) {
+            for(i = 0; i < sizeof(TRune); i++)
+                buf[i] = c>>(8*(sizeof(TRune) - i - 1));
+        } else {
+            for(i = 0; i < sizeof(TRune); i++)
+                buf[i] = c>>(8*i);
+        }
+        outstring(buf, sizeof(TRune));
+        n -= sizeof(TRune);
+    }
+    return r;
+}
+@
 
 \section{Sizes}
 %x86!
@@ -8122,6 +9280,7 @@ schar	ewidth[NTYPE] =
 #define	SZ_FLOAT	4
 @
 
+% 64 bits!
 <<constant SZ_VLONG>>=
 #define	SZ_VLONG	8
 @
@@ -8132,8 +9291,8 @@ schar	ewidth[NTYPE] =
 
 \section{Alignment}
 
-<<enum _anon_ (cc/cc.h)>>=
-enum
+<<enum axxx>>=
+enum axxx
 {
     Axxx,
 
@@ -9901,6 +11060,191 @@ zaddr(Biobuf *b, Adr *a, int s)
 @
 
 
+\chapter{Linking Support}
+
+\section{[[#pragma lib]] and automagic linking}
+
+\section{Safe linking with type signatures}
+
+
+% md5sum like in ocaml!
+
+% signature! for safe linking
+<<enum sigxxx>>=
+enum{
+    SIGNONE = 0,
+    SIGDONE = 1,
+    SIGINTERN = 2,
+
+    // ???
+    SIGNINTERN = 1729*325*1729,
+};
+@
+
+<<[[Sym]] other fields>>=
+// enum<sigxxx>
+char	sig;
+@
+% SIGNINTERN does not fit in a char ...
+
+
+<<global thash1>>=
+ulong	thash1	= 0x2edab8c9;
+@
+
+<<global thash2>>=
+ulong	thash2	= 0x1dc74fb8;
+@
+
+<<global thash3>>=
+ulong	thash3	= 0x1f241331;
+@
+
+<<global thash>>=
+ulong	thash[NALLTYPES];
+@
+
+<<global thashinit>>=
+Init	thashinit[] =
+{
+    TXXX,		0x17527bbd,	0,
+
+    TCHAR,		0x5cedd32b,	0,
+    TUCHAR,		0x552c4454,	0,
+    TSHORT,		0x63040b4b,	0,
+    TUSHORT,		0x32a45878,	0,
+    TINT,		0x4151d5bd,	0,
+    TUINT,		0x5ae707d6,	0,
+    TLONG,		0x5ef20f47,	0,
+    TULONG,		0x36d8eb8f,	0,
+    TVLONG,		0x6e5e9590,	0,
+    TUVLONG,		0x75910105,	0,
+    TFLOAT,		0x25fd7af1,	0,
+    TDOUBLE,		0x7c40a1b2,	0,
+
+    TIND,		0x1b832357,	0,
+    TFUNC,		0x6babc9cb,	0,
+    TARRAY,		0x7c50986d,	0,
+    TVOID,		0x44112eff,	0,
+    TSTRUCT,		0x7c2da3bf,	0,
+    TUNION,		0x3eb25e98,	0,
+    TENUM,		0x44b54f61,	0,
+
+    TFILE,		0x19242ac3,	0,
+    TOLD,		0x22b15988,	0,
+    TDOT,		0x0204f6b3,	0,
+
+    -1,		0,		0,
+};
+@
+
+
+<<struct Typetab>>=
+struct Typetab {
+    int n;
+    Type **a;
+};
+@
+
+<<function sigind>>=
+static int
+sigind(Type *t, Typetab *tt)
+{
+    int n;
+    Type **a, **na, **p, **e;
+
+    n = tt->n;
+    a = tt->a;
+    e = a+n;
+    /* linear search seems ok */
+    for(p = a ; p < e; p++)
+        if(sametype(*p, t))
+            return p-a;
+    if((n&15) == 0){
+        na = malloc((n+16)*sizeof(Type*));
+        memmove(na, a, n*sizeof(Type*));
+        free(a);
+        a = tt->a = na;
+    }
+    a[tt->n++] = t;
+    return -1;
+}
+@
+
+<<function signat>>=
+static ulong
+signat(Type *t, Typetab *tt)
+{
+    int i;
+    Type *t1;
+    long s;
+
+    s = 0;
+    for(; t; t=t->link) {
+        s = s*thash1 + thash[t->etype];
+        if(t->garb&GINCOMPLETE)
+            return s;
+        switch(t->etype) {
+        default:
+            return s;
+        case TARRAY:
+            s = s*thash2 + 0;	/* was t->width */
+            break;
+        case TFUNC:
+            for(t1=t->down; t1; t1=t1->down)
+                s = s*thash3 + signat(t1, tt);
+            break;
+        case TSTRUCT:
+        case TUNION:
+            if((i = sigind(t, tt)) >= 0){
+                s = s*thash2 + i;
+                return s;
+            }
+            for(t1=t->link; t1; t1=t1->down)
+                s = s*thash3 + signat(t1, tt);
+            return s;
+        case TIND:
+            break;
+        }
+    }
+    return s;
+}
+@
+
+<<function signature>>=
+ulong
+signature(Type *t)
+{
+    ulong s;
+    Typetab tt;
+
+    tt.n = 0;
+    tt.a = nil;
+    s = signat(t, &tt);
+    free(tt.a);
+    return s;
+}
+@
+
+<<function sign>>=
+ulong
+sign(Sym *s)
+{
+    ulong v;
+    Type *t;
+
+    if(s->sig == SIGINTERN)
+        return SIGNINTERN;
+    if((t = s->type) == T)
+        return 0;
+    v = signature(t);
+    if(v == 0)
+        v = SIGNINTERN;
+    return v;
+}
+@
+
+
 \chapter{Debugging Support}
 
 \section{Acid, [[8c -a]]}
@@ -9909,7 +11253,11 @@ zaddr(Biobuf *b, Adr *a, int s)
 %  -n print acid to file
 %  -s print structure offsets
 
-% called e.g. for enum constants
+
+\subsection{Entities}
+
+% called e.g. for enum constants in doenum() and dodecl()
+% exported in cc.h
 <<function acidvar>>=
 void
 acidvar(Sym *s)
@@ -9966,9 +11314,589 @@ acidvar(Sym *s)
 }
 @
 
+
+<<function acidsue>>=
+Sym*
+acidsue(Type *t)
+{
+    int h;
+    Sym *s;
+
+    if(t != T)
+    for(h=0; h<nelem(hash); h++)
+        for(s = hash[h]; s != S; s = s->link)
+            if(s->suetag && s->suetag->link == t)
+                return s;
+    return 0;
+}
+@
+
+<<function acidfun>>=
+Sym*
+acidfun(Type *t)
+{
+    int h;
+    Sym *s;
+
+    for(h=0; h<nelem(hash); h++)
+        for(s = hash[h]; s != S; s = s->link)
+            if(s->type == t)
+                return s;
+    return 0;
+}
+@
+
+
+
+<<global kwd>>=
+static char *kwd[] =
+{
+    "$adt", "$aggr", "$append", "$builtin", "$complex", "$defn",
+    "$delete", "$do", "$else", "$eval", "$head", "$if",
+    "$local", "$loop", "$return", "$tail", "$then",
+    "$union", "$whatis", "$while",
+};
+@
+% compared to Pickle.kwd ? $builtin en plus?
+
+<<function amap>>=
+char*
+amap(char *s)
+{
+    int i, bot, top, new;
+
+    bot = 0;
+    top = bot + nelem(kwd) - 1;
+    while(bot <= top){
+        new = bot + (top - bot)/2;
+        i = strcmp(kwd[new]+1, s);
+        if(i == 0)
+            return kwd[new];
+
+        if(i < 0)
+            bot = new + 1;
+        else
+            top = new - 1;
+    }
+    return s;
+}
+@
+
+
+
+
+
+
+
+
+
+\subsection{Structure/union definitions}
+
+% called from sualign, so for struct and union
+% exported in cc.h
+<<function acidtype>>=
+void
+acidtype(Type *t)
+{
+    Sym *s;
+    Type *l;
+    Io *i;
+    int n;
+    char *an;
+
+    if(!debug['a'])
+        return;
+    if(debug['a'] > 1) {
+        n = 0;
+        for(i=iostack; i; i=i->link)
+            n++;
+        if(n > 1)
+            return;
+    }
+    s = acidsue(t->link);
+    if(s == S)
+        return;
+    switch(t->etype) {
+    default:
+        Bprint(&outbuf, "T%d\n", t->etype);
+        return;
+
+    case TUNION:
+    case TSTRUCT:
+        if(debug['s'])
+            goto asmstr;
+        an = amap(s->name);
+        Bprint(&outbuf, "sizeof%s = %ld;\n", an, t->width);
+        Bprint(&outbuf, "aggr %s\n{\n", an);
+        for(l = t->link; l != T; l = l->down)
+            acidmember(l, 0, 1);
+        Bprint(&outbuf, "};\n\n");
+
+        Bprint(&outbuf, "defn\n%s(addr) {\n\tcomplex %s addr;\n", an, an);
+        for(l = t->link; l != T; l = l->down)
+            acidmember(l, 0, 0);
+        Bprint(&outbuf, "};\n\n");
+        break;
+    asmstr:
+        if(s == S)
+            break;
+        for(l = t->link; l != T; l = l->down)
+            if(l->sym != S)
+                Bprint(&outbuf, "#define\t%s.%s\t%ld\n",
+                    s->name,
+                    l->sym->name,
+                    l->offset);
+        break;
+    }
+}
+@
+
+<<global acidchar>>=
+char	acidchar[NTYPE];
+@
+
+<<global acidcinit>>=
+Init	acidcinit[] =
+{
+    TCHAR,		'C',	0,
+    TUCHAR,		'b',	0,
+    TSHORT,		'd',	0,
+    TUSHORT,	'u',	0,
+    TLONG,		'D',	0,
+    TULONG,		'U',	0,
+    TVLONG,		'V',	0,
+    TUVLONG,	'W',	0,
+    TFLOAT,		'f',	0,
+    TDOUBLE,	'F',	0,
+    TARRAY,		'a',	0,
+    TIND,		'X',	0,
+    -1,		0,	0,
+};
+@
+
+<<function acidinit>>=
+static void
+acidinit(void)
+{
+    Init *p;
+
+    for(p=acidcinit; p->code >= 0; p++)
+        acidchar[p->code] = p->value;
+
+    acidchar[TINT] = acidchar[TLONG];
+    acidchar[TUINT] = acidchar[TULONG];
+    if(types[TINT]->width != types[TLONG]->width) {
+        acidchar[TINT] = acidchar[TSHORT];
+        acidchar[TUINT] = acidchar[TUSHORT];
+        if(types[TINT]->width != types[TSHORT]->width)
+            warn(Z, "acidmember int not long or short");
+    }
+    if(types[TIND]->width == types[TUVLONG]->width)
+        acidchar[TIND] = 'Y';
+    
+}
+@
+
+<<function acidmember>>=
+void
+acidmember(Type *t, long off, int flag)
+{
+    Sym *s, *s1;
+    Type *l;
+    static bool acidcharinit = false;
+
+    if(acidcharinit == false) {
+        acidinit();
+        acidcharinit = true;
+    }
+    s = t->sym;
+    switch(t->etype) {
+    default:
+        Bprint(&outbuf, "	T%d\n", t->etype);
+        break;
+
+    case TIND:
+        if(s == S)
+            break;
+        if(flag) {
+            for(l=t; l->etype==TIND; l=l->link)
+                ;
+            if(typesu[l->etype]) {
+                s1 = acidsue(l->link);
+                if(s1 != S) {
+                    Bprint(&outbuf, "	'A' %s %ld %s;\n",
+                        amap(s1->name),
+                        t->offset+off, amap(s->name));
+                    break;
+                }
+            }
+        } else {
+            Bprint(&outbuf,
+                "\tprint(\"\t%s\t\", addr.%s\\X, \"\\n\");\n",
+                amap(s->name), amap(s->name));
+            break;
+        }
+
+    case TINT:
+    case TUINT:
+    case TCHAR:
+    case TUCHAR:
+    case TSHORT:
+    case TUSHORT:
+    case TLONG:
+    case TULONG:
+    case TVLONG:
+    case TUVLONG:
+    case TFLOAT:
+    case TDOUBLE:
+    case TARRAY:
+        if(s == S)
+            break;
+        if(flag) {
+            Bprint(&outbuf, "	'%c' %ld %s;\n",
+            acidchar[t->etype], t->offset+off, amap(s->name));
+        } else {
+            Bprint(&outbuf, "\tprint(\"\t%s\t\", addr.%s, \"\\n\");\n",
+                amap(s->name), amap(s->name));
+        }
+        break;
+
+    case TSTRUCT:
+    case TUNION:
+        s1 = acidsue(t->link);
+        if(s1 == S)
+            break;
+        if(flag) {
+            if(s == S) {
+                Bprint(&outbuf, "	{\n");
+                for(l = t->link; l != T; l = l->down)
+                    acidmember(l, t->offset+off, flag);
+                Bprint(&outbuf, "	};\n");
+            } else {
+                Bprint(&outbuf, "	%s %ld %s;\n",
+                    amap(s1->name),
+                    t->offset+off, amap(s->name));
+            }
+        } else {
+            if(s != S) {
+                Bprint(&outbuf, "\tprint(\"%s %s {\\n\");\n",
+                    amap(s1->name), amap(s->name));
+                Bprint(&outbuf, "\t%s(addr.%s);\n",
+                    amap(s1->name), amap(s->name));
+                Bprint(&outbuf, "\tprint(\"}\\n\");\n");
+            } else {
+                Bprint(&outbuf, "\tprint(\"%s {\\n\");\n",
+                    amap(s1->name));
+                Bprint(&outbuf, "\t\t%s(addr+%ld);\n",
+                    amap(s1->name), t->offset+off);
+                Bprint(&outbuf, "\tprint(\"}\\n\");\n");
+            }
+        }
+        break;
+    }
+}
+@
+
+
+
+
 \section{Pickle, [[8c -Z]]}
 
 % 8c -Z  and -n create _picke.c
+
+
+<<global kwd (cc/pickle.c)>>=
+static char *kwd[] =
+{
+    "$adt", "$aggr", "$append", "$complex", "$defn",
+    "$delete", "$do", "$else", "$eval", "$head", "$if",
+    "$local", "$loop", "$return", "$tail", "$then",
+    "$union", "$whatis", "$while",
+};
+@
+%$
+
+<<global picklestr>>=
+static char picklestr[] = "\tpickle(s, un, ";
+@
+
+<<function pmap>>=
+static char*
+pmap(char *s)
+{
+    int i, bot, top, new;
+
+    bot = 0;
+    top = bot + nelem(kwd) - 1;
+    while(bot <= top){
+        new = bot + (top - bot)/2;
+        i = strcmp(kwd[new]+1, s);
+        if(i == 0)
+            return kwd[new];
+
+        if(i < 0)
+            bot = new + 1;
+        else
+            top = new - 1;
+    }
+    return s;
+}
+@
+
+<<function picklesue>>=
+Sym*
+picklesue(Type *t)
+{
+    int h;
+    Sym *s;
+
+    if(t != T)
+    for(h=0; h<nelem(hash); h++)
+        for(s = hash[h]; s != S; s = s->link)
+            if(s->suetag && s->suetag->link == t)
+                return s;
+    return 0;
+}
+@
+
+<<global picklechar>>=
+char	picklechar[NTYPE];
+@
+
+<<global picklecinit>>=
+Init	picklecinit[] =
+{
+    TCHAR,		'C',	0,
+    TUCHAR,		'b',	0,
+    TSHORT,		'd',	0,
+    TUSHORT,		'u',	0,
+    TLONG,		'D',	0,
+    TULONG,		'U',	0,
+    TVLONG,		'V',	0,
+    TUVLONG,	'W',	0,
+    TFLOAT,		'f',	0,
+    TDOUBLE,		'F',	0,
+    TARRAY,		'a',	0,
+    TIND,		'X',	0,
+    -1,		0,	0,
+};
+@
+
+<<function pickleinit>>=
+static void
+pickleinit(void)
+{
+    Init *p;
+
+    for(p=picklecinit; p->code >= 0; p++)
+        picklechar[p->code] = p->value;
+
+    picklechar[TINT] = picklechar[TLONG];
+    picklechar[TUINT] = picklechar[TULONG];
+    if(types[TINT]->width != types[TLONG]->width) {
+        picklechar[TINT] = picklechar[TSHORT];
+        picklechar[TUINT] = picklechar[TUSHORT];
+        if(types[TINT]->width != types[TSHORT]->width)
+            warn(Z, "picklemember int not long or short");
+    }
+    
+}
+@
+
+<<function picklemember>>=
+void
+picklemember(Type *t, long off)
+{
+    Sym *s, *s1;
+    static int picklecharinit = 0;
+
+    if(picklecharinit == 0) {
+        pickleinit();
+        picklecharinit = 1;
+    }
+    s = t->sym;
+    switch(t->etype) {
+    default:
+        Bprint(&outbuf, "	T%d\n", t->etype);
+        break;
+
+    case TIND:
+        if(s == S)
+            Bprint(&outbuf,
+                "%s\"p\", (char*)addr+%ld+_i*%ld);\n",
+                picklestr, t->offset+off, t->width);
+        else
+            Bprint(&outbuf,
+                "%s\"p\", &addr->%s);\n",
+                picklestr, pmap(s->name));
+        break;
+
+    case TINT:
+    case TUINT:
+    case TCHAR:
+    case TUCHAR:
+    case TSHORT:
+    case TUSHORT:
+    case TLONG:
+    case TULONG:
+    case TVLONG:
+    case TUVLONG:
+    case TFLOAT:
+    case TDOUBLE:
+        if(s == S)
+            Bprint(&outbuf, "%s\"%c\", (char*)addr+%ld+_i*%ld);\n",
+                picklestr, picklechar[t->etype], t->offset+off, t->width);
+        else
+            Bprint(&outbuf, "%s\"%c\", &addr->%s);\n",
+                picklestr, picklechar[t->etype], pmap(s->name));
+        break;
+    case TARRAY:
+        Bprint(&outbuf, "\tfor(_i = 0; _i < %ld; _i++) {\n\t",
+            t->width/t->link->width);
+        picklemember(t->link, t->offset+off);
+        Bprint(&outbuf, "\t}\n\t_i = 0;\n\tUSED(_i);\n");
+        break;
+
+    case TSTRUCT:
+    case TUNION:
+        s1 = picklesue(t->link);
+        if(s1 == S)
+            break;
+        if(s == S) {
+            Bprint(&outbuf, "\tpickle_%s(s, un, (%s*)((char*)addr+%ld+_i*%ld));\n",
+                pmap(s1->name), pmap(s1->name), t->offset+off, t->width);
+        } else {
+            Bprint(&outbuf, "\tpickle_%s(s, un, &addr->%s);\n",
+                pmap(s1->name), pmap(s->name));
+        }
+        break;
+    }
+}
+@
+
+<<function pickletype>>=
+void
+pickletype(Type *t)
+{
+    Sym *s;
+    Type *l;
+    Io *i;
+    int n;
+    char *an;
+
+    if(!debug['P'])
+        return;
+    if(debug['P'] > 1) {
+        n = 0;
+        for(i=iostack; i; i=i->link)
+            n++;
+        if(n > 1)
+            return;
+    }
+    s = picklesue(t->link);
+    if(s == S)
+        return;
+    switch(t->etype) {
+    default:
+        Bprint(&outbuf, "T%d\n", t->etype);
+        return;
+
+    case TUNION:
+    case TSTRUCT:
+        if(debug['s'])
+            goto asmstr;
+        an = pmap(s->name);
+
+        Bprint(&outbuf, "void\npickle_%s(void *s, int un, %s *addr)\n{\n\tint _i = 0;\n\n\tUSED(_i);\n", an, an);
+        for(l = t->link; l != T; l = l->down)
+            picklemember(l, 0);
+        Bprint(&outbuf, "}\n\n");
+        break;
+    asmstr:
+        if(s == S)
+            break;
+        for(l = t->link; l != T; l = l->down)
+            if(l->sym != S)
+                Bprint(&outbuf, "#define\t%s.%s\t%ld\n",
+                    s->name,
+                    l->sym->name,
+                    l->offset);
+        break;
+    }
+}
+@
+
+%<<function picklefun>>=
+%//Sym*
+%//picklefun(Type *t)
+%//{
+%//    int h;
+%//    Sym *s;
+%//
+%//    for(h=0; h<nelem(hash); h++)
+%//        for(s = hash[h]; s != S; s = s->link)
+%//            if(s->type == t)
+%//                return s;
+%//    return 0;
+%//}
+%@
+%
+%<<function picklevar>>=
+%//void
+%//picklevar(Sym *s)
+%//{
+%//    int n;
+%//    Io *i;
+%//    Type *t;
+%//    Sym *s1, *s2;
+%//
+%//    if(!debug['P'] || debug['s'])
+%//        return;
+%//    if(debug['P'] > 1) {
+%//        n = 0;
+%//        for(i=iostack; i; i=i->link)
+%//            n++;
+%//        if(n > 1)
+%//            return;
+%//    }
+%//    t = s->type;
+%//    while(t && t->etype == TIND)
+%//        t = t->link;
+%//    if(t == T)
+%//        return;
+%//    if(t->etype == TENUM) {
+%//        Bprint(&outbuf, "%s = ", pmap(s->name));
+%//        if(!typefd[t->etype])
+%//            Bprint(&outbuf, "%lld;\n", s->vconst);
+%//        else
+%//            Bprint(&outbuf, "%f\n;", s->fconst);
+%//        return;
+%//    }
+%//    if(!typesu[t->etype])
+%//        return;
+%//    s1 = picklesue(t->link);
+%//    if(s1 == S)
+%//        return;
+%//    switch(s->class) {
+%//    case CAUTO:
+%//    case CPARAM:
+%//        s2 = picklefun(thisfn);
+%//        if(s2)
+%//            Bprint(&outbuf, "complex %s %s:%s;\n",
+%//                pmap(s1->name), pmap(s2->name), pmap(s->name));
+%//        break;
+%//    
+%//    case CSTATIC:
+%//    case CEXTERN:
+%//    case CGLOBL:
+%//    case CLOCAL:
+%//        Bprint(&outbuf, "complex %s %s;\n",
+%//            pmap(s1->name), pmap(s->name));
+%//        break;
+%//    }
+%//}
+%@
+
 
 \chapter{Profiling Support}
 
@@ -9979,7 +11907,219 @@ bool	profileflg;
 
 \chapter{Advanced Topics}
 
-\section{[[#pragma lib]] and automagic linking}
+\section{[[typestr]]}
+% ???
+
+<<function dclfunct>>=
+void
+dclfunct(Type *t, Sym *s)
+{
+    Funct *f;
+    Node *n;
+    Type *f1, *f2, *f3, *f4;
+    int o, i, c;
+    char str[100];
+
+    if(t->funct)
+        return;
+
+    // recognize generated tag of dorm _%d_
+    if(t->tag == S)
+        goto bad;
+    for(i=0; c = t->tag->name[i]; i++) {
+        if(c == '_') {
+            if(i == 0 || t->tag->name[i+1] == 0)
+                continue;
+            break;
+        }
+        if(c < '0' || c > '9')
+            break;
+    }
+    if(c == 0)
+        goto bad;
+
+    f = alloc(sizeof(*f));
+    for(o=0; o<sizeof(f->sym); o++)
+        f->sym[o] = S;
+
+    t->funct = f;
+
+    f1 = typ(TFUNC, t);
+    f1->down = copytyp(t);
+    f1->down->down = t;
+
+    f2 = typ(TFUNC, types[TINT]);
+    f2->down = copytyp(t);
+    f2->down->down = t;
+
+    f3 = typ(TFUNC, t);
+    f3->down = typ(TIND, t);
+    f3->down->down = t;
+
+    f4 = typ(TFUNC, t);
+    f4->down = t;
+
+    for(i=0;; i++) {
+        o = ftabinit[i].op;
+        if(o == OXXX)
+            break;
+        sprint(str, "%s_%s_", t->tag->name, ftabinit[i].name);
+        n = new(ONAME, Z, Z);
+        n->sym = slookup(str);
+        f->sym[o] = n->sym;
+        switch(ftabinit[i].typ) {
+        default:
+            diag(Z, "dclfunct op missing %d\n", ftabinit[i].typ);
+            break;
+
+        case 1:	// T f(T,T)	+
+            dodecl(xdecl, CEXTERN, f1, n);
+            break;
+
+        case 2:	// int f(T,T)	==
+            dodecl(xdecl, CEXTERN, f2, n);
+            break;
+
+        case 3:	// void f(T*,T)	+=
+            dodecl(xdecl, CEXTERN, f3, n);
+            break;
+
+        case 4:	// T f(T)	~
+            dodecl(xdecl, CEXTERN, f4, n);
+            break;
+        }
+    }
+    for(i=0;; i++) {
+        o = gtabinit[i].etype;
+        if(o == TXXX)
+            break;
+
+        /*
+         * OCAST types T1 _T2_T1_(T2)
+         */
+        sprint(str, "_%s%s_", gtabinit[i].name, t->tag->name);
+        n = new(ONAME, Z, Z);
+        n->sym = slookup(str);
+        f->castto[o] = n->sym;
+
+        f1 = typ(TFUNC, t);
+        f1->down = types[o];
+        dodecl(xdecl, CEXTERN, f1, n);
+
+        sprint(str, "%s_%s_", t->tag->name, gtabinit[i].name);
+        n = new(ONAME, Z, Z);
+        n->sym = slookup(str);
+        f->castfr[o] = n->sym;
+
+        f1 = typ(TFUNC, types[o]);
+        f1->down = t;
+        dodecl(xdecl, CEXTERN, f1, n);
+    }
+    return;
+bad:
+    diag(Z, "dclfunct bad %T %s\n", t, s->name);
+}
+@
+
+
+% why not use Init?
+<<struct Ftab>>=
+struct	Ftab
+{
+    char	op;
+    char*	name;
+    char	typ;
+};
+@
+
+% why not use Init?
+<<struct Gtab>>=
+struct	Gtab
+{
+    char	etype;
+    char*	name;
+};
+@
+
+<<global gtabinit>>=
+Gtab	gtabinit[NTYPE] =
+{
+    TCHAR,		"c",
+    TUCHAR,		"uc",
+    TSHORT,		"h",
+    TUSHORT,		"uh",
+    TINT,		"i",
+    TUINT,		"ui",
+    TLONG,		"l",
+    TULONG,		"ul",
+    TVLONG,		"v",
+    TUVLONG,		"uv",
+    TFLOAT,		"f",
+    TDOUBLE,		"d",
+
+    TXXX
+};
+@
+
+<<global ftabinit>>=
+Ftab	ftabinit[OEND] =
+{
+    OADD,		"add",		1,
+    OAND,		"and",		1,
+    OASHL,		"ashl",		1,
+    OASHR,		"ashr",		1,
+    ODIV,		"div",		1,
+    OLDIV,		"ldiv",		1,
+    OLMOD,		"lmod",		1,
+    OLMUL,		"lmul",		1,
+    OLSHR,		"lshr",		1,
+    OMOD,		"mod",		1,
+    OMUL,		"mul",		1,
+    OOR,		"or",		1,
+    OSUB,		"sub",		1,
+    OXOR,		"xor",		1,
+
+    OEQ,		"eq",		2,
+    OGE,		"ge",		2,
+    OGT,		"gt",		2,
+    OHI,		"hi",		2,
+    OHS,		"hs",		2,
+    OLE,		"le",		2,
+    OLO,		"lo",		2,
+    OLS,		"ls",		2,
+    OLT,		"lt",		2,
+    ONE,		"ne",		2,
+
+    OASADD,		"asadd",	3,
+    OASAND,		"asand",	3,
+    OASASHL,	"asashl",	3,
+    OASASHR,	"asashr",	3,
+    OASDIV,		"asdiv",	3,
+    OASLDIV,	"asldiv",	3,
+    OASLMOD,	"aslmod",	3,
+    OASLMUL,	"aslmul",	3,
+    OASLSHR,	"aslshr",	3,
+    OASMOD,		"asmod",	3,
+    OASMUL,		"asmul",	3,
+    OASOR,		"asor",		3,
+    OASSUB,		"assub",	3,
+    OASXOR,		"asxor",	3,
+
+    OPOS,		"pos",		4,
+    ONEG,		"neg",		4,
+    OCOM,		"com",		4,
+    ONOT,		"not",		4,
+
+//	OPOSTDEC,
+//	OPOSTINC,
+//	OPREDEC,
+//	OPREINC,
+
+    OXXX,
+};
+@
+
+
 
 \section{Float}
 
@@ -10015,7 +12155,846 @@ ieeedtod(Ieee *ieee, double native)
 @
 
 
+
+
+<<function allfloat>>=
+/*
+ * look into tree for floating point constant expressions
+ */
+bool
+allfloat(Node *n, int flag)
+{
+
+    if(n != Z) {
+        if(n->type->etype != TDOUBLE)
+            return true;
+        switch(n->op) {
+        case OCONST:
+            if(flag)
+                n->type = types[TFLOAT];
+            return true;
+        case OADD:	/* no need to get more exotic than this */
+        case OSUB:
+        case OMUL:
+        case ODIV:
+            if(!allfloat(n->right, flag))
+                break;
+        case OCAST:
+            if(!allfloat(n->left, flag))
+                break;
+            if(flag)
+                n->type = types[TFLOAT];
+            return true;
+        }
+    }
+    return false;
+}
+@
+
 \section{64 bits}
+
+
+% portable part, cc/com64.c
+% vlong is 64 bits, so how do on 32 bits?
+% do via builtins _xxxv, e.g. _addv, _mulv in lib_core/libc/xxx/vlop.c
+
+<<constant FNX>>=
+/*
+ * this is machine dependent, but it is totally
+ * common on all of the 64-bit symulating machines.
+ */
+
+#define	FNX	100	/* botch -- redefinition */
+@
+
+<<global nodaddv>>=
+Node*	nodaddv;
+@
+
+<<global nodsubv>>=
+Node*	nodsubv;
+@
+
+<<global nodmulv>>=
+Node*	nodmulv;
+@
+
+<<global noddivv>>=
+Node*	noddivv;
+@
+
+<<global noddivvu>>=
+Node*	noddivvu;
+@
+
+<<global nodmodv>>=
+Node*	nodmodv;
+@
+
+<<global nodmodvu>>=
+Node*	nodmodvu;
+@
+
+<<global nodlshv>>=
+Node*	nodlshv;
+@
+
+<<global nodrshav>>=
+Node*	nodrshav;
+@
+
+<<global nodrshlv>>=
+Node*	nodrshlv;
+@
+
+<<global nodandv>>=
+Node*	nodandv;
+@
+
+<<global nodorv>>=
+Node*	nodorv;
+@
+
+<<global nodxorv>>=
+Node*	nodxorv;
+@
+
+<<global nodnegv>>=
+Node*	nodnegv;
+@
+
+<<global nodcomv>>=
+Node*	nodcomv;
+@
+
+<<global nodtestv>>=
+Node*	nodtestv;
+@
+
+<<global nodeqv>>=
+Node*	nodeqv;
+@
+
+<<global nodnev>>=
+Node*	nodnev;
+@
+
+<<global nodlev>>=
+Node*	nodlev;
+@
+
+<<global nodltv>>=
+Node*	nodltv;
+@
+
+<<global nodgev>>=
+Node*	nodgev;
+@
+
+<<global nodgtv>>=
+Node*	nodgtv;
+@
+
+<<global nodhiv>>=
+Node*	nodhiv;
+@
+
+<<global nodhsv>>=
+Node*	nodhsv;
+@
+
+<<global nodlov>>=
+Node*	nodlov;
+@
+
+<<global nodlsv>>=
+Node*	nodlsv;
+@
+
+<<global nodf2v>>=
+Node*	nodf2v;
+@
+
+<<global nodd2v>>=
+Node*	nodd2v;
+@
+
+<<global nodp2v>>=
+Node*	nodp2v;
+@
+
+<<global nodsi2v>>=
+Node*	nodsi2v;
+@
+
+<<global nodui2v>>=
+Node*	nodui2v;
+@
+
+<<global nodsl2v>>=
+Node*	nodsl2v;
+@
+
+<<global nodul2v>>=
+Node*	nodul2v;
+@
+
+<<global nodsh2v>>=
+Node*	nodsh2v;
+@
+
+<<global noduh2v>>=
+Node*	noduh2v;
+@
+
+<<global nodsc2v>>=
+Node*	nodsc2v;
+@
+
+<<global noduc2v>>=
+Node*	noduc2v;
+@
+
+<<global nodv2f>>=
+Node*	nodv2f;
+@
+
+<<global nodv2d>>=
+Node*	nodv2d;
+@
+
+<<global nodv2ui>>=
+Node*	nodv2ui;
+@
+
+<<global nodv2si>>=
+Node*	nodv2si;
+@
+
+<<global nodv2ul>>=
+Node*	nodv2ul;
+@
+
+<<global nodv2sl>>=
+Node*	nodv2sl;
+@
+
+<<global nodv2uh>>=
+Node*	nodv2uh;
+@
+
+<<global nodv2sh>>=
+Node*	nodv2sh;
+@
+
+<<global nodv2uc>>=
+Node*	nodv2uc;
+@
+
+<<global nodv2sc>>=
+Node*	nodv2sc;
+@
+
+<<global nodvpp>>=
+Node*	nodvpp;
+@
+
+<<global nodppv>>=
+Node*	nodppv;
+@
+
+<<global nodvmm>>=
+Node*	nodvmm;
+@
+
+<<global nodmmv>>=
+Node*	nodmmv;
+@
+
+<<global nodvasop>>=
+Node*	nodvasop;
+@
+
+<<global etconv>>=
+char	etconv[NTYPE];	/* for _vasop */
+@
+
+<<global initetconv>>=
+Init	initetconv[] =
+{
+    TCHAR,		1,	0,
+    TUCHAR,		2,	0,
+    TSHORT,		3,	0,
+    TUSHORT,	4,	0,
+    TLONG,		5,	0,
+    TULONG,		6,	0,
+    TVLONG,		7,	0,
+    TUVLONG,	8,	0,
+    TINT,		9,	0,
+    TUINT,		10,	0,
+    -1,		0,	0,
+};
+@
+
+<<global fntypes>>=
+Type*	fntypes[NTYPE];
+@
+
+<<function fvn>>=
+Node*
+fvn(char *name, int type)
+{
+    Node *n;
+
+    n = new(ONAME, Z, Z);
+    n->sym = slookup(name);
+    n->sym->sig = SIGINTERN;
+    if(fntypes[type] == 0)
+        fntypes[type] = typ(TFUNC, types[type]);
+    n->type = fntypes[type];
+    n->etype = type;
+    n->class = CGLOBL;
+    n->addable = 10;
+    n->complex = 0;
+    return n;
+}
+@
+
+<<function com64init>>=
+void
+com64init(void)
+{
+    Init *p;
+
+    nodaddv = fvn("_addv", TVLONG);
+    nodsubv = fvn("_subv", TVLONG);
+    nodmulv = fvn("_mulv", TVLONG);
+    noddivv = fvn("_divv", TVLONG);
+    noddivvu = fvn("_divvu", TVLONG);
+    nodmodv = fvn("_modv", TVLONG);
+    nodmodvu = fvn("_modvu", TVLONG);
+    nodlshv = fvn("_lshv", TVLONG);
+    nodrshav = fvn("_rshav", TVLONG);
+    nodrshlv = fvn("_rshlv", TVLONG);
+    nodandv = fvn("_andv", TVLONG);
+    nodorv = fvn("_orv", TVLONG);
+    nodxorv = fvn("_xorv", TVLONG);
+    nodnegv = fvn("_negv", TVLONG);
+    nodcomv = fvn("_comv", TVLONG);
+
+    nodtestv = fvn("_testv", TLONG);
+    nodeqv = fvn("_eqv", TLONG);
+    nodnev = fvn("_nev", TLONG);
+    nodlev = fvn("_lev", TLONG);
+    nodltv = fvn("_ltv", TLONG);
+    nodgev = fvn("_gev", TLONG);
+    nodgtv = fvn("_gtv", TLONG);
+    nodhiv = fvn("_hiv", TLONG);
+    nodhsv = fvn("_hsv", TLONG);
+    nodlov = fvn("_lov", TLONG);
+    nodlsv = fvn("_lsv", TLONG);
+
+    nodf2v = fvn("_f2v", TVLONG);
+    nodd2v = fvn("_d2v", TVLONG);
+    nodp2v = fvn("_p2v", TVLONG);
+    nodsi2v = fvn("_si2v", TVLONG);
+    nodui2v = fvn("_ui2v", TVLONG);
+    nodsl2v = fvn("_sl2v", TVLONG);
+    nodul2v = fvn("_ul2v", TVLONG);
+    nodsh2v = fvn("_sh2v", TVLONG);
+    noduh2v = fvn("_uh2v", TVLONG);
+    nodsc2v = fvn("_sc2v", TVLONG);
+    noduc2v = fvn("_uc2v", TVLONG);
+
+    nodv2f = fvn("_v2f", TFLOAT);
+    nodv2d = fvn("_v2d", TDOUBLE);
+    nodv2sl = fvn("_v2sl", TLONG);
+    nodv2ul = fvn("_v2ul", TULONG);
+    nodv2si = fvn("_v2si", TINT);
+    nodv2ui = fvn("_v2ui", TUINT);
+    nodv2sh = fvn("_v2sh", TSHORT);
+    nodv2uh = fvn("_v2ul", TUSHORT);
+    nodv2sc = fvn("_v2sc", TCHAR);
+    nodv2uc = fvn("_v2uc", TUCHAR);
+
+    nodvpp = fvn("_vpp", TVLONG);
+    nodppv = fvn("_ppv", TVLONG);
+    nodvmm = fvn("_vmm", TVLONG);
+    nodmmv = fvn("_mmv", TVLONG);
+
+    nodvasop = fvn("_vasop", TVLONG);
+
+    for(p = initetconv; p->code >= 0; p++)
+        etconv[p->code] = p->value;
+}
+@
+
+<<function com64>>=
+int
+com64(Node *n)
+{
+    Node *l, *r, *a, *t;
+    int lv, rv;
+
+    if(n->type == 0)
+        return 0;
+
+    l = n->left;
+    r = n->right;
+
+    lv = 0;
+    if(l && l->type && typev[l->type->etype])
+        lv = 1;
+    rv = 0;
+    if(r && r->type && typev[r->type->etype])
+        rv = 1;
+
+    if(lv) {
+        switch(n->op) {
+        case OEQ:
+            a = nodeqv;
+            goto setbool;
+        case ONE:
+            a = nodnev;
+            goto setbool;
+        case OLE:
+            a = nodlev;
+            goto setbool;
+        case OLT:
+            a = nodltv;
+            goto setbool;
+        case OGE:
+            a = nodgev;
+            goto setbool;
+        case OGT:
+            a = nodgtv;
+            goto setbool;
+        case OHI:
+            a = nodhiv;
+            goto setbool;
+        case OHS:
+            a = nodhsv;
+            goto setbool;
+        case OLO:
+            a = nodlov;
+            goto setbool;
+        case OLS:
+            a = nodlsv;
+            goto setbool;
+
+        case OANDAND:
+        case OOROR:
+            if(machcap(n))
+                return 1;
+
+            if(rv) {
+                r = new(OFUNC, nodtestv, r);
+                n->right = r;
+                r->complex = FNX;
+                r->op = OFUNC;
+                r->type = types[TLONG];
+            }
+
+        case OCOND:
+        case ONOT:
+            if(machcap(n))
+                return 1;
+
+            l = new(OFUNC, nodtestv, l);
+            n->left = l;
+            l->complex = FNX;
+            l->op = OFUNC;
+            l->type = types[TLONG];
+            n->complex = FNX;
+            return 1;
+        }
+    }
+
+    if(rv) {
+        if(machcap(n))
+            return 1;
+        switch(n->op) {
+        case OANDAND:
+        case OOROR:
+            r = new(OFUNC, nodtestv, r);
+            n->right = r;
+            r->complex = FNX;
+            r->op = OFUNC;
+            r->type = types[TLONG];
+            return 1;
+        case OCOND:
+            return 1;
+        }
+    }
+
+    if(typev[n->type->etype]) {
+        if(machcap(n))
+            return 1;
+        switch(n->op) {
+        default:
+            diag(n, "unknown vlong %O", n->op);
+        case OFUNC:
+            n->complex = FNX;
+        case ORETURN:
+        case OAS:
+        case OIND:
+        case OLIST:
+        case OCOMMA:
+            return 1;
+        case OADD:
+            a = nodaddv;
+            goto setbop;
+        case OSUB:
+            a = nodsubv;
+            goto setbop;
+        case OMUL:
+        case OLMUL:
+            a = nodmulv;
+            goto setbop;
+        case ODIV:
+            a = noddivv;
+            goto setbop;
+        case OLDIV:
+            a = noddivvu;
+            goto setbop;
+        case OMOD:
+            a = nodmodv;
+            goto setbop;
+        case OLMOD:
+            a = nodmodvu;
+            goto setbop;
+        case OASHL:
+            a = nodlshv;
+            goto setbop;
+        case OASHR:
+            a = nodrshav;
+            goto setbop;
+        case OLSHR:
+            a = nodrshlv;
+            goto setbop;
+        case OAND:
+            a = nodandv;
+            goto setbop;
+        case OOR:
+            a = nodorv;
+            goto setbop;
+        case OXOR:
+            a = nodxorv;
+            goto setbop;
+        case OPOSTINC:
+            a = nodvpp;
+            goto setvinc;
+        case OPOSTDEC:
+            a = nodvmm;
+            goto setvinc;
+        case OPREINC:
+            a = nodppv;
+            goto setvinc;
+        case OPREDEC:
+            a = nodmmv;
+            goto setvinc;
+        case ONEG:
+            a = nodnegv;
+            goto setfnx;
+        case OCOM:
+            a = nodcomv;
+            goto setfnx;
+        case OCAST:
+            switch(l->type->etype) {
+            case TCHAR:
+                a = nodsc2v;
+                goto setfnxl;
+            case TUCHAR:
+                a = noduc2v;
+                goto setfnxl;
+            case TSHORT:
+                a = nodsh2v;
+                goto setfnxl;
+            case TUSHORT:
+                a = noduh2v;
+                goto setfnxl;
+            case TINT:
+                a = nodsi2v;
+                goto setfnx;
+            case TUINT:
+                a = nodui2v;
+                goto setfnx;
+            case TLONG:
+                a = nodsl2v;
+                goto setfnx;
+            case TULONG:
+                a = nodul2v;
+                goto setfnx;
+            case TFLOAT:
+                a = nodf2v;
+                goto setfnx;
+            case TDOUBLE:
+                a = nodd2v;
+                goto setfnx;
+            case TIND:
+                a = nodp2v;
+                goto setfnx;
+            }
+            diag(n, "unknown %T->vlong cast", l->type);
+            return 1;
+        case OASADD:
+            a = nodaddv;
+            goto setasop;
+        case OASSUB:
+            a = nodsubv;
+            goto setasop;
+        case OASMUL:
+        case OASLMUL:
+            a = nodmulv;
+            goto setasop;
+        case OASDIV:
+            a = noddivv;
+            goto setasop;
+        case OASLDIV:
+            a = noddivvu;
+            goto setasop;
+        case OASMOD:
+            a = nodmodv;
+            goto setasop;
+        case OASLMOD:
+            a = nodmodvu;
+            goto setasop;
+        case OASASHL:
+            a = nodlshv;
+            goto setasop;
+        case OASASHR:
+            a = nodrshav;
+            goto setasop;
+        case OASLSHR:
+            a = nodrshlv;
+            goto setasop;
+        case OASAND:
+            a = nodandv;
+            goto setasop;
+        case OASOR:
+            a = nodorv;
+            goto setasop;
+        case OASXOR:
+            a = nodxorv;
+            goto setasop;
+        }
+    }
+
+    if(typefd[n->type->etype] && l && l->op == OFUNC) {
+        switch(n->op) {
+        case OASADD:
+        case OASSUB:
+        case OASMUL:
+        case OASLMUL:
+        case OASDIV:
+        case OASLDIV:
+        case OASMOD:
+        case OASLMOD:
+        case OASASHL:
+        case OASASHR:
+        case OASLSHR:
+        case OASAND:
+        case OASOR:
+        case OASXOR:
+            if(l->right && typev[l->right->etype]) {
+                diag(n, "sorry float <asop> vlong not implemented\n");
+            }
+        }
+    }
+
+    if(n->op == OCAST) {
+        if(l->type && typev[l->type->etype]) {
+            if(machcap(n))
+                return 1;
+            switch(n->type->etype) {
+            case TDOUBLE:
+                a = nodv2d;
+                goto setfnx;
+            case TFLOAT:
+                a = nodv2f;
+                goto setfnx;
+            case TLONG:
+                a = nodv2sl;
+                goto setfnx;
+            case TULONG:
+                a = nodv2ul;
+                goto setfnx;
+            case TINT:
+                a = nodv2si;
+                goto setfnx;
+            case TUINT:
+                a = nodv2ui;
+                goto setfnx;
+            case TSHORT:
+                a = nodv2sh;
+                goto setfnx;
+            case TUSHORT:
+                a = nodv2uh;
+                goto setfnx;
+            case TCHAR:
+                a = nodv2sc;
+                goto setfnx;
+            case TUCHAR:
+                a = nodv2uc;
+                goto setfnx;
+            case TIND:	// small pun here
+                a = nodv2ul;
+                goto setfnx;
+            }
+            diag(n, "unknown vlong->%T cast", n->type);
+            return 1;
+        }
+    }
+
+    return 0;
+
+setbop:
+    n->left = a;
+    n->right = new(OLIST, l, r);
+    n->complex = FNX;
+    n->op = OFUNC;
+    return 1;
+
+setfnxl:
+    l = new(OCAST, l, 0);
+    l->type = types[TLONG];
+    l->complex = l->left->complex;
+
+setfnx:
+    n->left = a;
+    n->right = l;
+    n->complex = FNX;
+    n->op = OFUNC;
+    return 1;
+
+setvinc:
+    n->left = a;
+    l = new(OADDR, l, Z);
+    l->type = typ(TIND, l->left->type);
+    l->complex = l->left->complex;
+    n->right = new(OLIST, l, r);
+    n->complex = FNX;
+    n->op = OFUNC;
+    return 1;
+
+setbool:
+    if(machcap(n))
+        return 1;
+    n->left = a;
+    n->right = new(OLIST, l, r);
+    n->complex = FNX;
+    n->op = OFUNC;
+    n->type = types[TLONG];
+    return 1;
+
+setasop:
+    if(l->op == OFUNC) {
+        l = l->right;
+        goto setasop;
+    }
+
+    t = new(OCONST, 0, 0);
+    t->vconst = etconv[l->type->etype];
+    t->type = types[TLONG];
+    t->addable = 20;
+    r = new(OLIST, t, r);
+
+    t = new(OADDR, a, 0);
+    t->type = typ(TIND, a->type);
+    r = new(OLIST, t, r);
+
+    t = new(OADDR, l, 0);
+    t->type = typ(TIND, l->type);
+    t->complex = l->complex;
+    r = new(OLIST, t, r);
+
+    n->left = nodvasop;
+    n->right = r;
+    n->complex = FNX;
+    n->op = OFUNC;
+
+    return 1;
+}
+@
+
+<<function bool64>>=
+void
+bool64(Node *n)
+{
+    Node *n1;
+
+    if(machcap(Z))
+        return;
+    if(typev[n->type->etype]) {
+        n1 = new(OXXX, 0, 0);
+        *n1 = *n;
+
+        n->right = n1;
+        n->left = nodtestv;
+        n->complex = FNX;
+        n->addable = 0;
+        n->op = OFUNC;
+        n->type = types[TLONG];
+    }
+}
+@
+
+%<<function convvtof>>=
+%/*
+% * more machine depend stuff.
+% * this is common for 8,16,32,64 bit machines.
+% * this is common for ieee machines.
+% */
+%//double
+%//convvtof(vlong v)
+%//{
+%//    double d;
+%//
+%//    d = v;		/* BOTCH */
+%//    return d;
+%//}
+%@
+%
+%<<function convftov>>=
+%//vlong
+%//convftov(double d)
+%//{
+%//    vlong v;
+%//
+%//
+%//    v = d;		/* BOTCH */
+%//    return v;
+%//}
+%@
+%
+%<<function convftox>>=
+%//double
+%//convftox(double d, int et)
+%//{
+%//
+%//    if(!typefd[et])
+%//        diag(Z, "bad type in castftox %s", tnames[et]);
+%//    return d;
+%//}
+%@
+
+
+
+<<function convvtox>>=
+vlong
+convvtox(vlong c, int et)
+{
+    int n;
+
+    n = 8 * ewidth[et];
+    c &= MASK(n);
+    if(!typeu[et])
+        if(c & SIGN(n))
+            c |= ~MASK(n);
+    return c;
+}
+@
+
 
 \section{Endianness}
 % 8c -l, just for mips => switch from vc to 0c
@@ -10034,6 +13013,15 @@ char	debug[256];
 @
 
 \section{[[Fmt]]}
+
+<<[[cinit()]] fmtinstall>>=
+fmtinstall('O', Oconv);
+fmtinstall('T', Tconv);
+fmtinstall('F', FNconv);
+fmtinstall('L', Lconv);
+fmtinstall('Q', Qconv);
+fmtinstall('|', VBconv);
+@
 
 \subsection{[[cc/]]}
 
@@ -10159,6 +13147,16 @@ Init	onamesinit[] =
 
 <<constant HISTSZ>>=
 #define	HISTSZ		20
+@
+
+<<struct Atab>>=
+struct Atab
+    {
+        Hist*	incl;	/* start of this include file */
+        long	idel;	/* delta line number to apply to include */
+        Hist*	line;	/* start of this #line directive */
+        long	ldel;	/* delta line number to apply to #line */
+};
 @
 
 % location?
@@ -11095,6 +14093,24 @@ bitno(long b)
 
 \section{Mathematic functions}
 
+% use diag so could not really be put in libc
+<<function round>>=
+long
+round(long v, int w)
+{
+    int r;
+
+    if(w <= 0 || w > 8) {
+        diag(Z, "rounding by %d", w);
+        w = 1;
+    }
+    r = v%w;
+    if(r)
+        v += w-r;
+    return v;
+}
+@
+
 
 
 <<function log2>>=
@@ -11127,7 +14143,7 @@ log2(uvlong v)
 <<struct Init>>=
 struct	Init			/* general purpose initialization */
 {
-    int	code;
+    int		code;
     ulong	value;
     char*	s;
 };
@@ -11135,8 +14151,8 @@ struct	Init			/* general purpose initialization */
 
 \section{Portability}
 
-<<enum _anon_ (cc/cc.h)2>>=
-enum				/* also in ../{8a,0a}.h */
+<<enum os>>=
+enum os				/* also in ../{8a,0a}.h */
 {
     Plan9	= 1<<0,
     Unix	= 1<<1,
@@ -11186,4 +14202,3 @@ enum				/* also in ../{8a,0a}.h */
 %******************************************************************************
 
 \end{document}
-

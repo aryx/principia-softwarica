@@ -116,11 +116,11 @@ acidmember(Type *t, long off, int flag)
 {
     Sym *s, *s1;
     Type *l;
-    static int acidcharinit = 0;
+    static bool acidcharinit = false;
 
-    if(acidcharinit == 0) {
+    if(acidcharinit == false) {
         acidinit();
-        acidcharinit = 1;
+        acidcharinit = true;
     }
     s = t->sym;
     switch(t->etype) {

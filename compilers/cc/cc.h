@@ -143,9 +143,6 @@ struct	Sym
     /*x: [[Sym]] other fields */
     char*	macro;
     /*x: [[Sym]] other fields */
-    // enum<sigxxx>
-    char	sig;
-    /*x: [[Sym]] other fields */
     long	offset;
 
     vlong	vconst;
@@ -165,6 +162,9 @@ struct	Sym
     Type*	tenum;
     /*x: [[Sym]] other fields */
     bool	aused;
+    /*x: [[Sym]] other fields */
+    // enum<sigxxx>
+    char	sig;
     /*e: [[Sym]] other fields */
 
     // Extra
@@ -246,7 +246,6 @@ struct	Type
     long	offset;
     schar	shift;
     char	nbits;
-
     /*x: [[Type]] other fields */
     Funct*	funct;
     /*x: [[Type]] other fields */
@@ -254,7 +253,6 @@ struct	Type
     /*e: [[Type]] other fields */
 };
 /*e: struct Type */
-
 /*s: constant T */
 #define	T	((Type*)nil)
 /*e: constant T */
@@ -265,11 +263,12 @@ struct	Type
 /*s: struct Init */
 struct	Init			/* general purpose initialization */
 {
-    int	code;
+    int		code;
     ulong	value;
     char*	s;
 };
 /*e: struct Init */
+
 
 /*s: struct Fi */
 struct Fi
@@ -321,42 +320,14 @@ struct	Term
 };
 /*e: struct Term */
 
-/*s: enum _anon_ (cc/cc.h) */
-enum
-{
-    Axxx,
-
-    Ael1,
-    Ael2,
-    Asu2,
-    Aarg0,
-    Aarg1,
-    Aarg2,
-    Aaut3,
-
-    NALIGN,
-};
-/*e: enum _anon_ (cc/cc.h) */
-
-/*s: enum _anon_ (cc/cc.h)2 */
-enum				/* also in ../{8a,0a}.h */
+/*s: enum os */
+enum os				/* also in ../{8a,0a}.h */
 {
     Plan9	= 1<<0,
     Unix	= 1<<1,
     //Windows	= 1<<2,
 };
-/*e: enum _anon_ (cc/cc.h)2 */
-
-/*s: enum dxxx */
-enum dxxx
-{
-    DMARK,
-
-    DAUTO,
-    DSUE, // struct/union/enum?
-    DLABEL,
-};
-/*e: enum dxxx */
+/*e: enum os */
 /*s: enum node_kind */
 enum node_kind
 {
@@ -528,6 +499,32 @@ enum type_kind
     TRUNE = sizeof(TRune)==4? TUINT: TUSHORT,
 };
 /*e: enum type_kind */
+/*s: enum axxx */
+enum axxx
+{
+    Axxx,
+
+    Ael1,
+    Ael2,
+    Asu2,
+    Aarg0,
+    Aarg1,
+    Aarg2,
+    Aaut3,
+
+    NALIGN,
+};
+/*e: enum axxx */
+/*s: enum dxxx */
+enum dxxx
+{
+    DMARK,
+
+    DAUTO,
+    DSUE, // struct/union/enum?
+    DLABEL,
+};
+/*e: enum dxxx */
 /*s: enum cxxx */
 enum
 {
@@ -686,6 +683,7 @@ extern	char*	thestring;
 extern	Type*	thisfn;
 extern	long	thunk;
 extern	Type*	types[NTYPE];
+
 extern	Type*	fntypes[NTYPE];
 extern	Node*	initlist;
 extern	Term	term[NTERM];
@@ -701,6 +699,7 @@ extern	Bits	zbits;
 
 extern	char	*onames[], *tnames[], *gnames[];
 extern	char	*cnames[], *qnames[], *bnames[];
+
 extern	char	comrel[], invrel[], logrel[];
 extern	long	ncast[], tadd[], tand[];
 extern	long	targ[], tasadd[], tasign[], tcast[];
@@ -736,14 +735,9 @@ extern	ulong	thash[];
  */
 int	mywait(int*);
 int	mycreat(char*, int);
-int	systemtype(int);
-int	pathchar(void);
 int	myaccess(char*);
-char*	mygetwd(char*, int);
-int	myexec(char*, char*[]);
-int	mydup(int, int);
-int	myfork(void);
-int	mypipe(int*);
+int	pathchar(void);
+bool	systemtype(int);
 
 // utils.c
 void	gethunk(void);
@@ -772,7 +766,7 @@ Sym*	slookup(char*);
 void	unget(int);
 long	yylex(void);
 
-//!!!!
+//!!!! (hmmm in lex.c, as well as cinit(), compile())
 void	main(int, char*[]);
 
 

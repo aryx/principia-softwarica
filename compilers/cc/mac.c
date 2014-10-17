@@ -5,13 +5,13 @@
 //TODO copy paste with aa/, maybe could factorize with another lib?
 //
 
-void	macund(void);
 void	macdef(void);
 void	macinc(void);
 void	macprag(void);
 void	maclin(void);
 void	macif(int);
 void	macend(void);
+void	macund(void);
 
 long	getnsn(void);
 Sym*	getsym(void);

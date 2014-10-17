@@ -138,7 +138,7 @@ void main(int argc, char *argv[])
         nout = 0;
         for(;;) {
             while(nout < nproc && argc > 0) {
-                i = myfork();
+                i = fork();
                 if(i < 0) {
                     i = mywait(&status);
                     if(i < 0) {
@@ -261,18 +261,18 @@ compile(char *file, char **defs, int ndef)
             diag(Z, "%s does not exist", file);
             errorexit();
         }
-        if(mypipe(fd) < 0) {
+        if(pipe(fd) < 0) {
             diag(Z, "pipe failed");
             errorexit();
         }
-        switch(myfork()) {
+        switch(fork()) {
         case -1:
             diag(Z, "fork failed");
             errorexit();
 
         case 0:
             close(fd[0]);
-            mydup(fd[1], 1);
+            dup(fd[1], 1);
             close(fd[1]);
             av = alloc((3 + ndef + ninclude + 2) * sizeof *av);
             av[0] = CPP;
@@ -298,7 +298,7 @@ compile(char *file, char **defs, int ndef)
                 fprint(2, "\n");
             }
 
-            myexec(av[0], av);
+            exec(av[0], av);
             fprint(2, "can't exec C preprocessor %s: %r\n", CPP);
             errorexit();
 
@@ -321,6 +321,7 @@ compile(char *file, char **defs, int ndef)
     return nerrors;
 }
 /*e: function compile */
+
 
 /*s: function pushio */
 void
@@ -384,6 +385,7 @@ newfile(char *s, int f)
     linehist(s, 0);
 }
 /*e: function newfile */
+
 
 /*s: function slookup */
 Sym*
@@ -464,8 +466,8 @@ syminit(Sym *s)
 #define	GETC()	((--fi.c < 0)? filbuf(): (*fi.p++ & 0xff))
 /*e: function GETC */
 
-/*s: enum _anon_ (cc/lex.c) */
-enum
+/*s: enum numxxx */
+enum numxxx
 {
     Numdec		= 1<<0,
     Numlong		= 1<<1,
@@ -473,7 +475,7 @@ enum
     Numvlong	= 1<<3,
     Numflt		= 1<<4,
 };
-/*e: enum _anon_ (cc/lex.c) */
+/*e: enum numxxx */
 
 /*s: function yylex */
 //@Scheck: not dead, called by yyparse
@@ -955,6 +957,7 @@ caseout:
 }
 /*e: function yylex */
 
+
 /*s: function mpatov */
 /*
  * convert a string, s, to vlong in *v
@@ -1293,6 +1296,7 @@ cinit(void)
         if(itab[i].type != 0)
             s->type = types[itab[i].type];
     }
+
     blockno = 0;
     autobn = 0;
     autoffset = 0;
@@ -1310,18 +1314,19 @@ cinit(void)
     dclstack = D;
 
     pathname = allocn(pathname, 0, 100);
-    if(mygetwd(pathname, 99) == 0) {
+    if(getwd(pathname, 99) == 0) {
         pathname = allocn(pathname, 100, 900);
-        if(mygetwd(pathname, 999) == 0)
+        if(getwd(pathname, 999) == 0)
             strcpy(pathname, "/???");
     }
-
+    /*s: [[cinit()]] fmtinstall */
     fmtinstall('O', Oconv);
     fmtinstall('T', Tconv);
     fmtinstall('F', FNconv);
     fmtinstall('L', Lconv);
     fmtinstall('Q', Qconv);
     fmtinstall('|', VBconv);
+    /*e: [[cinit()]] fmtinstall */
 }
 /*e: function cinit */
 
@@ -1360,6 +1365,8 @@ pop:
     return *fi.p++ & 0xff;
 }
 /*e: function filbuf */
+
+
 
 /*s: function Oconv */
 // enum<node_kind> -> string

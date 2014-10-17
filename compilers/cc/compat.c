@@ -37,19 +37,7 @@ mywait(int *s)
  }
 }
 
-int
-mydup(int f1, int f2)
-{
- return dup(f1,f2);
-}
-
-int
-mypipe(int *fd)
-{
- return pipe(fd);
-}
-
-int
+bool
 systemtype(int sys)
 {
  return sys & Plan9;
@@ -60,26 +48,6 @@ pathchar(void)
 {
  return '/';
 }
-
-char*
-mygetwd(char *path, int len)
-{
- return getwd(path, len);
-}
-
-int
-myexec(char *path, char *argv[])
-{
- return exec(path, argv);
-}
-
-int
-myfork(void)
-{
- return fork();
-}
-
-
 
 /*s: function malloc */
 /*
