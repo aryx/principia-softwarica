@@ -4,8 +4,6 @@
 void	bcgen(Node*, int);
 
 /*s: function cgen */
-/* ,x/^(print|prtree)\(/i/\/\/ */
-
 void
 cgen(Node *n, Node *nn)
 {
@@ -52,8 +50,8 @@ cgen(Node *n, Node *nn)
     }
     curs = cursafe;
 
-    if(l->complex >= FNX)
-    if(r != Z && r->complex >= FNX)
+  if(l->complex >= FNX)
+   if(r != Z && r->complex >= FNX)
     switch(o) {
     default:
         if(cond(o) && typesuv[l->type->etype])

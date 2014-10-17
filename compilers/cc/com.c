@@ -6,6 +6,8 @@ int	tcomx(Node*);
 int	tlvalue(Node*);
 
 typedef struct Com Com;
+typedef struct Big Big;
+
 /*s: struct Com */
 struct Com
 {
@@ -924,15 +926,15 @@ tcomx(Node *n)
 /*e: function tcomx */
 
 /*s: function tlvalue */
-int
+bool
 tlvalue(Node *n)
 {
 
     if(!n->addable) {
         diag(n, "not an l-value");
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 /*e: function tlvalue */
 
@@ -1336,9 +1338,8 @@ static char *cmps[12] =
 };
 /*e: global cmps */
 
-/* 128-bit numbers */
-typedef struct Big Big;
 /*s: struct Big */
+/* 128-bit numbers */
 struct Big
 {
     vlong a;

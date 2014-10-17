@@ -2,10 +2,11 @@
 #include	"cc.h"
 #include	"y.tab.h"
 
-/*s: enum _anon_ (cc/dpchk.c) */
-enum
+/*s: enum fxxx */
+enum fxxx
 {
     Fnone	= 0,
+
     Fl,
     Fvl,
     Fignor,
@@ -14,7 +15,7 @@ enum
 
     Fverb	= 10,
 };
-/*e: enum _anon_ (cc/dpchk.c) */
+/*e: enum fxxx */
 
 typedef	struct	Tprot	Tprot;
 /*s: struct Tprot */

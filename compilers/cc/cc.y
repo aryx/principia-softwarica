@@ -353,6 +353,15 @@ ulstmnt:
 /*x: ulstmnt rule */
 |   LSWITCH '(' cexpr ')' stmnt
     {
+        // generate (0:int - (0:int - x))
+        // which will force the usual arithmetic conversions
+        // (and will later be simplified by later transformations)
+
+        $$ = new(OCONST, Z, Z);
+        $$->vconst = 0;
+        $$->type = types[TINT];
+        $3 = new(OSUB, $$, $3);
+
         $$ = new(OCONST, Z, Z);
         $$->vconst = 0;
         $$->type = types[TINT];

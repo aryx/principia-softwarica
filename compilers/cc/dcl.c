@@ -824,6 +824,7 @@ Node* revertdcl(void)
             if(debug['d'])
                 print("revert1 \"%s\"\n", s->name);
 
+            // TODO LP split!
             if(s->aused == false) {
                 nearln = s->varlineno;
                 if(s->class == CAUTO)
