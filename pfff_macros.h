@@ -1,10 +1,4 @@
-
-// include/libc.h
-#define ARGBEGIN switch(1) 
-#define ARGEND 
-#define EXTERN extern
-#define Extern extern
-
+// from include/386/u.h
 #define va_start(list, start) list =\
 	(sizeof(start) < 4?\
 		(char*)((int*)&(start)+1):\
@@ -20,7 +14,28 @@
 		((list += 4), (mode*)list)[-2]:\
 		((list += sizeof(mode)), (mode*)list)[-1])
 
+
+// from include/libc.h
+#define	ARGBEGIN	for((argv0||(argv0=*argv)),argv++,argc--;\
+			    argv[0] && argv[0][0]=='-' && argv[0][1];\
+			    argc--, argv++) {\
+				char *_args, *_argt;\
+				Rune _argc;\
+				_args = &argv[0][1];\
+				if(_args[0]=='-' && _args[1]==0){\
+					argc--; argv++; break;\
+				}\
+				_argc = 0;\
+				while(*_args && (_args += chartorune(&_argc, _args)))\
+				switch(_argc)
+#define	ARGEND		SET(_argt);USED(_argt,_argc,_args);}USED(argv, argc);
+
 #define offsetof(s, m)  (ulong)(&(((s*)0)->m))
+
+
+// misc adhoc stuff, maybe not needed anymore
+#define EXTERN extern
+#define Extern extern
 
 
 // generators/yacc/yacc.c
@@ -46,3 +61,4 @@
 // shells/rc/exec.c
 // otherwise get wrong dependency on the argument that looks like a global
 //#define	new(type)	((type *)emalloc(sizeof(type)))
+
