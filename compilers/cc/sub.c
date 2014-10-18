@@ -733,7 +733,9 @@ arith(Node *n, int f)
     j = TXXX;
     if(t2 != T)
         j = t2->etype;
+
     k = tab[i][j];
+
     if(k == TIND) {
         if(i == TIND)
             n->type = t1;
@@ -2145,6 +2147,8 @@ tinit(void)
         urk("typesu", nelem(typesu), *ip);
         typesu[*ip] = 1;
     }
+
+
     for(p=tasigninit; p->code >= 0; p++) {
         urk("tasign", nelem(tasign), p->code);
         tasign[p->code] = p->value;
@@ -2187,18 +2191,18 @@ tinit(void)
 
 /*s: function deadhead */
 /*
- * return 1 if it is impossible to jump into the middle of n.
+ * return true if it is impossible to jump into the middle of n.
  */
 static int
 deadhead(Node *n, int caseok)
 {
 loop:
     if(n == Z)
-        return 1;
+        return true;
     switch(n->op) {
     case OLIST:
         if(!deadhead(n->left, caseok))
-            return 0;
+            return false;
     rloop:
         n = n->right;
         goto loop;
@@ -2207,14 +2211,14 @@ loop:
         break;
 
     case OLABEL:
-        return 0;
+        return false;
 
     case OGOTO:
         break;
 
     case OCASE:
         if(!caseok)
-            return 0;
+            return false;
         goto rloop;
 
     case OSWITCH:
@@ -2240,12 +2244,12 @@ loop:
     case OUSED:
         break;
     }
-    return 1;
+    return true;
 }
 /*e: function deadhead */
 
 /*s: function deadheads */
-int
+bool
 deadheads(Node *c)
 {
     return deadhead(c->left, 0) && deadhead(c->right, 0);

@@ -112,6 +112,8 @@ struct	Node
     char	complex; 
 
     char	scale;
+    /*x: [[Node]] other fields */
+    // enum<gxxx>
     char	garb;
     /*x: [[Node]] other fields */
     bool 	xcast;
@@ -363,6 +365,7 @@ enum node_kind
     OASOR,
     OASSUB,
     OASXOR,
+
     OBIT,
     OBREAK,
     OCASE, // for default too, in which case Node.left is null
@@ -393,6 +396,7 @@ enum node_kind
     OINDREG,
     OINIT,
     OLABEL,
+
     OLDIV,
     OLE,
     OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
@@ -402,6 +406,7 @@ enum node_kind
     OLS,
     OLSHR,
     OLT,
+
     OMOD,
     OMUL,
 
@@ -411,10 +416,12 @@ enum node_kind
     ONOT,
     OOR,
     OOROR,
+
     OPOSTDEC,
     OPOSTINC,
     OPREDEC,
     OPREINC,
+
     OPROTO,
 
     OREGISTER, // after parsing only?
@@ -431,9 +438,12 @@ enum node_kind
     OUNION,
     OUSED,
     OWHILE,
+
     OXOR,
     ONEG,
+
     OCOM,
+
     OPOS,
 
     OELEM, // field designator
@@ -534,6 +544,7 @@ enum dxxx
 enum
 {
     CXXX, // nothing specified
+
     CAUTO,
     CEXTERN,
     CGLOBL,
