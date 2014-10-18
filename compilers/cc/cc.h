@@ -79,6 +79,7 @@ struct	Node
     // option<ref_own<Node>>
     Node*	right;
 
+    // for OCONST?
     // could be put in a union
     vlong	vconst;		/* non fp const */ // abused in switch?
     double	fconst;		/* fp constant */
@@ -105,7 +106,6 @@ struct	Node
     int	reg;
     long	xoffset;
 
-    char	oldop;
 
     // (ab)used as bool for marker of label def (true) vs use (false),
     // FNX special value, register allocation value, etc
@@ -116,8 +116,13 @@ struct	Node
     /*x: [[Node]] other fields */
     bool 	xcast;
     /*x: [[Node]] other fields */
-    // (ab)used as bool for marker of use of label, special 10, 11, 20 values
+    // used as a bool to mark lvalues.
+    // (ab)used as bool for marker of use of labels.
+    // (ab)used by xcom to assign ``addressibility''.
     char	addable;
+    /*x: [[Node]] other fields */
+    // enum<node_kind>
+    char	oldop;
     /*e: [[Node]] other fields */
 };
 /*e: struct Node */

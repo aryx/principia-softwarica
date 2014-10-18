@@ -67,10 +67,6 @@ complex(Node *n)
 /*e: function complex */
 
 /*s: enum _anon_ (cc/com.c) */
-/*
- * evaluate types
- * evaluate lvalues (addable == 1)
- */
 enum
 {
     ADDROF	= 1<<0,
@@ -80,6 +76,10 @@ enum
 /*e: enum _anon_ (cc/com.c) */
 
 /*s: function tcom */
+/*
+ * evaluate types
+ * evaluate lvalues (addable == 1)
+ */
 bool
 tcom(Node *n)
 {
@@ -1018,13 +1018,18 @@ comma(Node *n)
 
     com.n = 0;
     nn = commas(&com, n);
+
     if(com.n > 0){
+
 if(debug['y'])print("n=%d\n", com.n);
 if(debug['y']) prtree(nn, "res");
+
         if(nn != n)
             *n = *nn;
         while(com.n > 0){
+
 if(debug['y']) prtree(com.t[com.n-1], "tree");
+
             nn = new1(OXXX, Z, Z);
             *nn = *n;
             n->op = OCOMMA;
@@ -1034,6 +1039,7 @@ if(debug['y']) prtree(com.t[com.n-1], "tree");
             n->lineno = n->left->lineno;
         }
 if(debug['y']) prtree(n, "final");
+
     }else if(n != nn)
         fatal(n, "odd tree");
 }
@@ -1057,8 +1063,10 @@ ccom(Node *n)
 loop:
     if(n == Z)
         return;
+
     l = n->left;
     r = n->right;
+
     switch(n->op) {
 
     case OAS:
@@ -1079,7 +1087,7 @@ loop:
         ccom(l);
         ccom(r);
         if(n->op == OASLSHR || n->op == OASASHR || n->op == OASASHL)
-        if(r->op == OCONST) {
+          if(r->op == OCONST) {
             t = n->type->width * 8;	/* bits per byte */
             if(r->vconst >= t || r->vconst < 0)
                 warn(n, "stupid shift: %lld", r->vconst);
@@ -1094,7 +1102,8 @@ loop:
                 break;
         }
         if(nocast(l->type, n->type) &&
-           (!typefd[l->type->etype] || typeu[l->type->etype] && typeu[n->type->etype])) {
+           (!typefd[l->type->etype] || typeu[l->type->etype] && 
+           typeu[n->type->etype])) {
             l->type = n->type;
             *n = *l;
         }
@@ -1318,13 +1327,15 @@ loop:
             ccom(l);
         if(r != Z)
             ccom(r);
+
     common:
         if(l != Z)
-        if(l->op != OCONST)
+          if(l->op != OCONST)
             break;
         if(r != Z)
-        if(r->op != OCONST)
+          if(r->op != OCONST)
             break;
+
         evconst(n);
     }
 }

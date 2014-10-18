@@ -44,9 +44,7 @@ evconst(Node *n)
     v = 0;
 
     switch(n->op) {
-    default:
-        return;
-
+    // how knows l is a constant? no recursive call to evconst?
     case ONEG:
         if(isf)
             d = -l->fconst;
@@ -78,6 +76,7 @@ evconst(Node *n)
     case OCONST:
         break;
 
+    // assume have done explicit cast and balancing before?
     case OADD:
         if(isf)
             d = l->fconst + r->fconst;
@@ -243,7 +242,12 @@ evconst(Node *n)
         else
             v = l->vconst || r->vconst;
         break;
+
+    default:
+        return;
+
     }
+
     if(isf) {
         n->fconst = d;
     } else {

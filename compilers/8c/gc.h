@@ -101,11 +101,12 @@ struct	Prog
 /*s: struct Case */
 struct	Case
 {
-    Case*	link;
     vlong	val;
     long	label;
     char	def;
-    char isv;
+    char 	isv;
+
+    Case*	link;
 };
 /*e: struct Case */
 /*s: constant C */
