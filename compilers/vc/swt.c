@@ -369,17 +369,18 @@ outhist(Biobuf *b)
 		p = h->name;
 		op = 0;
 		/* on windows skip drive specifier in pathname */
-		if(systemtype(Windows) && p && p[1] == ':'){
-			p += 2;
-			c = *p;
-		}
+		//if(systemtype(Windows) && p && p[1] == ':'){
+		//	p += 2;
+		//	c = *p;
+		//}
 		if(p && p[0] != c && h->offset == 0 && pathname){
 			/* on windows skip drive specifier in pathname */
-			if(systemtype(Windows) && pathname[1] == ':') {
-				op = p;
-				p = pathname+2;
-				c = *p;
-			} else if(pathname[0] == c){
+			//if(systemtype(Windows) && pathname[1] == ':') {
+			//	op = p;
+			//	p = pathname+2;
+			//	c = *p;
+			//} else 
+            if(pathname[0] == c){
 				op = p;
 				p = pathname;
 			}

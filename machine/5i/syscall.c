@@ -496,6 +496,9 @@ sysnotify(void)
 	reg.r[REGRET] = 0;
 }
 
+
+
+
 void
 sys_wait(void)
 {
