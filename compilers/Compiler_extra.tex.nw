@@ -3139,81 +3139,6 @@ static Node*	commas(Com*, Node*);
 
 \subsection*{[[cc2/pgen.c]]}
 
-
-<<function supgen>>=
-void
-supgen(Node *n)
-{
-    int owarn;
-    long spc;
-    Prog *sp;
-
-    if(n == Z)
-        return;
-    suppress++;
-    owarn = warnreach;
-    warnreach = 0;
-    spc = pc;
-    sp = lastp;
-    gen(n);
-    lastp = sp;
-    pc = spc;
-    sp->link = nil;
-    suppress--;
-    warnreach = owarn;
-}
-@
-
-<<function uncomma>>=
-Node*
-uncomma(Node *n)
-{
-    while(n != Z && n->op == OCOMMA) {
-        cgen(n->left, Z);
-        n = n->right;
-    }
-    return n;
-}
-@
-
-
-<<function bcomplex>>=
-int
-bcomplex(Node *n, Node *c)
-{
-//    Node *b, nod;
-
-    complex(n);
-    if(n->type != T)
-    if(tcompat(n, T, n->type, tnot))
-        n->type = T;
-    if(n->type == T) {
-        gbranch(OGOTO);
-        return 0;
-    }
-    if(c != Z && n->op == OCONST && deadheads(c))
-        return 1;
-
-    /* this is not quite right yet, so ignore it for now */
-//    if(0 && newvlongcode && typev[n->type->etype] && machcap(Z)) {
-//        b = &nod;
-//        b->op = ONE;
-//        b->left = n;
-//        b->right = new(0, Z, Z);
-//        *b->right = *nodconst(0);
-//        b->right->type = n->type;
-//        b->type = types[TLONG];
-//        cgen(b, Z);
-//        return 0;
-//    }
-
-    bool64(n);
-    boolgen(n, 1, Z);
-    return 0;
-}
-@
-
-
 %-------------------------------------------------------------
 
 <<cc2/pgen.c>>=
@@ -3606,13 +3531,13 @@ void	shiftit(Type*, Node*, Node*);
 \subsection*{[[8c/machcap.c]]}
 
 <<function machcap>>=
-int
+bool
 machcap(Node *n)
 {
-//	return 0;
+//	return false;
 
     if(n == Z)
-        return 1;	/* test */
+        return true;	/* test */
 
     switch(n->op) {
     case OMUL:
@@ -3620,11 +3545,11 @@ machcap(Node *n)
     case OASMUL:
     case OASLMUL:
         if(typechl[n->type->etype])
-            return 1;
+            return true;
         if(typev[n->type->etype]) {
 //		if(typev[n->type->etype] && n->right->op == OCONST) {
 //			if(hi64v(n->right) == 0)
-                return 1;
+                return true;
         }
         break;
 
@@ -3639,17 +3564,17 @@ machcap(Node *n)
     case OLSHR:
     case OASHR:
         if(typechlv[n->left->type->etype])
-            return 1;
+            return true;
         break;
 
     case OCAST:
         if(typev[n->type->etype]) {
             if(typechlp[n->left->type->etype])
-                return 1;
+                return true;
         }
         else if(!typefd[n->type->etype]) {
             if(typev[n->left->type->etype])
-                return 1;
+                return true;
         }
         break;
 
@@ -3660,25 +3585,25 @@ machcap(Node *n)
     case OOROR:
     case ONOT:
     case ODOT:
-        return 1;
+        return true;
 
     case OASADD:
     case OASSUB:
     case OASAND:
     case OASOR:
     case OASXOR:
-        return 1;
+        return true;
 
     case OASASHL:
     case OASASHR:
     case OASLSHR:
-        return 1;
+        return true;
 
     case OPOSTINC:
     case OPOSTDEC:
     case OPREINC:
     case OPREDEC:
-        return 1;
+        return true;
 
     case OEQ:
     case ONE:
@@ -3691,9 +3616,9 @@ machcap(Node *n)
     case OLO:
     case OLS:
 //print("%O\n", n->op);
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 @
 
@@ -4085,10 +4010,12 @@ gclean(void)
             diag(Z, "reg %R left allocated", i);
     while(mnstring)
         outstring("", 1L);
+
     symstring->type->width = nstring;
     symrathole->type->width = nrathole;
+
     for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link) {
+     for(s = hash[i]; s != S; s = s->link) {
         if(s->type == T)
             continue;
         if(s->type->width == 0)
@@ -4101,7 +4028,7 @@ gclean(void)
     }
     nextpc();
     p->as = AEND;
-    outcode();
+    outcode(); // !!!!!!
 }
 @
 
@@ -5536,7 +5463,7 @@ int	samaddr(Node*, Node*);
 \subsection*{[[8c/peep.c]]}
 
 <<function needc>>=
-static int
+static bool
 needc(Prog *p)
 {
     while(p != P) {
@@ -5544,20 +5471,20 @@ needc(Prog *p)
         case AADCL:
         case ASBBL:
         case ARCRL:
-            return 1;
+            return true;
         case AADDL:
         case ASUBL:
         case AJMP:
         case ARET:
         case ACALL:
-            return 0;
+            return false;
         default:
             if(p->to.type == D_BRANCH)
-                return 0;
+                return false;
         }
         p = p->link;
     }
-    return 0;
+    return false;
 }
 @
 
@@ -9039,14 +8966,14 @@ reduxv(Node *n)
 @
 
 <<function cond>>=
-int
+bool
 cond(int op)
 {
     switch(op) {
     case OANDAND:
     case OOROR:
     case ONOT:
-        return 1;
+        return true;
 
     case OEQ:
     case ONE:
@@ -9058,9 +8985,9 @@ cond(int op)
     case OHS:
     case OLO:
     case OLS:
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 @
 

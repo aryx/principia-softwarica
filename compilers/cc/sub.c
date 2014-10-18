@@ -76,6 +76,7 @@ prtree1(Node *n, int d, bool f)
     d++;
     print("%O", n->op);
     i = 3; // 1 || 2
+
     switch(n->op) {
     case ONAME:
         print(" \"%F\"", n);

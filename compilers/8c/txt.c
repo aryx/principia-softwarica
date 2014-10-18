@@ -120,10 +120,12 @@ gclean(void)
             diag(Z, "reg %R left allocated", i);
     while(mnstring)
         outstring("", 1L);
+
     symstring->type->width = nstring;
     symrathole->type->width = nrathole;
+
     for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link) {
+     for(s = hash[i]; s != S; s = s->link) {
         if(s->type == T)
             continue;
         if(s->type->width == 0)
@@ -136,7 +138,7 @@ gclean(void)
     }
     nextpc();
     p->as = AEND;
-    outcode();
+    outcode(); // !!!!!!
 }
 /*e: function gclean */
 

@@ -18,6 +18,7 @@ cgen(Node *n, Node *nn)
         prtree(nn, "cgen lhs");
         prtree(n, "cgen");
     }
+
     if(n == Z || n->type == T)
         return;
     if(typesuv[n->type->etype]) {
@@ -1166,6 +1167,7 @@ lcgen(Node *n, Node *nn)
         prtree(nn, "lcgen lhs");
         prtree(n, "lcgen");
     }
+
     if(n == Z || n->type == T)
         return;
     if(nn == Z) {
@@ -1229,6 +1231,7 @@ boolgen(Node *n, int true, Node *nn)
         prtree(nn, "boolgen lhs");
         prtree(n, "boolgen");
     }
+
     curs = cursafe;
     l = n->left;
     r = n->right;
@@ -1450,6 +1453,7 @@ sugen(Node *n, Node *nn, long w)
         prtree(nn, "sugen lhs");
         prtree(n, "sugen");
     }
+
     if(nn == nodrat)
         if(w > nrathole)
             nrathole = w;

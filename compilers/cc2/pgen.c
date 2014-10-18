@@ -103,20 +103,23 @@ void
 supgen(Node *n)
 {
     int owarn;
-    long spc;
-    Prog *sp;
+    long opc;
+    Prog *olastp;
 
     if(n == Z)
         return;
+
     suppress++;
     owarn = warnreach;
     warnreach = 0;
-    spc = pc;
-    sp = lastp;
+    opc = pc;
+    olastp = lastp;
+
     gen(n);
-    lastp = sp;
-    pc = spc;
-    sp->link = nil;
+
+    lastp = olastp;
+    pc = opc;
+    olastp->link = nil;
     suppress--;
     warnreach = owarn;
 }

@@ -45,7 +45,7 @@ Bconv(Fmt *fp)
         if(strlen(str) + strlen(s) + 1 >= STRINGSZ)
             break;
         strcat(str, s);
-        bits.b[i/32] &= ~(1L << (i%32)); // >>
+        bits.b[i/32] &= ~(1L << (i%32));
     }
     return fmtstrcpy(fp, str);
 }
@@ -74,6 +74,7 @@ Pconv(Fmt *fp)
 /*e: function Pconv */
 
 /*s: function Aconv */
+// enum<opcode_kind> -> string
 int
 Aconv(Fmt *fp)
 {

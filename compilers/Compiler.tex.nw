@@ -270,10 +270,10 @@ License.
 % machcap.c, omachcap.c = machine capability (attempt to have interface)
 
 % txt.c?
-% peep = peep optimizer?
 % xxxgen = sgen? cgen? (pgen.c = portable part of gen? sgen? cgen?)
 % mul.c, div.c
-% reg.c = register?
+% peep.c = peep optimizer, on assembly!
+% reg.c = register, on assembly!
 
 % a few conventions? see glossary!
 
@@ -289,6 +289,7 @@ License.
 % main -> compile -> yyparse -> yylex -> macxxx
 %                            -> codgen (portable) -> gen
 
+% ast level opti, assembly level opti
 
 % "the compiler works by a series of tree
 % transformations, informed by attributes
@@ -600,6 +601,7 @@ new1(int o, Node *l, Node *r)
 
 
 
+%TODO archi independent  part for code generation, ex nod1.reg?
 
 <<[[Node]] other fields>>=
 void*	label;
@@ -8681,7 +8683,6 @@ bool	aused;
 
 
 % called by gen() (statement code generator) 
-
 <<function usedset>>=
 void
 usedset(Node *n, int o)
@@ -8708,22 +8709,1701 @@ usedset(Node *n, int o)
 }
 @
 
-\chapter{Code Generation}
+\chapter{AST-level Optimisations}
+% archi independent
+
+% see compcert list of optimisations? there are all of them here too?
+% and more?
+
+\section{AST simplifications}
+
+\subsection{[[ccom()]]}
+
+% called from complex(), after tcom()
+
+% cc/com.c
+<<function ccom>>=
+/*
+ *	general rewrite
+ *	(IND(ADDR x)) ==> x
+ *	(ADDR(IND x)) ==> x
+ *	remove some zero operands
+ *	remove no op casts
+ *	evaluate constants
+ */
+void
+ccom(Node *n)
+{
+    Node *l, *r;
+    int t;
+
+loop:
+    if(n == Z)
+        return;
+    l = n->left;
+    r = n->right;
+    switch(n->op) {
+
+    case OAS:
+    case OASXOR:
+    case OASAND:
+    case OASOR:
+    case OASMOD:
+    case OASLMOD:
+    case OASLSHR:
+    case OASASHR:
+    case OASASHL:
+    case OASDIV:
+    case OASLDIV:
+    case OASMUL:
+    case OASLMUL:
+    case OASSUB:
+    case OASADD:
+        ccom(l);
+        ccom(r);
+        if(n->op == OASLSHR || n->op == OASASHR || n->op == OASASHL)
+        if(r->op == OCONST) {
+            t = n->type->width * 8;	/* bits per byte */
+            if(r->vconst >= t || r->vconst < 0)
+                warn(n, "stupid shift: %lld", r->vconst);
+        }
+        break;
+
+    case OCAST:
+        ccom(l);
+        if(l->op == OCONST) {
+            evconst(n);
+            if(n->op == OCONST)
+                break;
+        }
+        if(nocast(l->type, n->type) &&
+           (!typefd[l->type->etype] || typeu[l->type->etype] && typeu[n->type->etype])) {
+            l->type = n->type;
+            *n = *l;
+        }
+        break;
+
+    case OCOND:
+        ccom(l);
+        ccom(r);
+        if(l->op == OCONST)
+            if(vconst(l) == 0)
+                *n = *r->right;
+            else
+                *n = *r->left;
+        break;
+
+    case OREGISTER:
+    case OINDREG:
+    case OCONST:
+    case ONAME:
+        break;
+
+    case OADDR:
+        ccom(l);
+        l->etype = TVOID;
+        if(l->op == OIND) {
+            l->left->type = n->type;
+            *n = *l->left;
+            break;
+        }
+        goto common;
+
+    case OIND:
+        ccom(l);
+        if(l->op == OADDR) {
+            l->left->type = n->type;
+            *n = *l->left;
+            break;
+        }
+        goto common;
+
+    case OEQ:
+    case ONE:
+
+    case OLE:
+    case OGE:
+    case OLT:
+    case OGT:
+
+    case OLS:
+    case OHS:
+    case OLO:
+    case OHI:
+        ccom(l);
+        ccom(r);
+        if(compar(n, 0) || compar(n, 1))
+            break;
+        relcon(l, r);
+        relcon(r, l);
+        goto common;
+
+    case OASHR:
+    case OASHL:
+    case OLSHR:
+        ccom(l);
+        if(vconst(l) == 0 && !side(r)) {
+            *n = *l;
+            break;
+        }
+        ccom(r);
+        if(vconst(r) == 0) {
+            *n = *l;
+            break;
+        }
+        if(r->op == OCONST) {
+            t = n->type->width * 8;	/* bits per byte */
+            if(r->vconst >= t || r->vconst <= -t)
+                warn(n, "stupid shift: %lld", r->vconst);
+        }
+        goto common;
+
+    case OMUL:
+    case OLMUL:
+        ccom(l);
+        t = vconst(l);
+        if(t == 0 && !side(r)) {
+            *n = *l;
+            break;
+        }
+        if(t == 1) {
+            *n = *r;
+            goto loop;
+        }
+        ccom(r);
+        t = vconst(r);
+        if(t == 0 && !side(l)) {
+            *n = *r;
+            break;
+        }
+        if(t == 1) {
+            *n = *l;
+            break;
+        }
+        goto common;
+
+    case ODIV:
+    case OLDIV:
+        ccom(l);
+        if(vconst(l) == 0 && !side(r)) {
+            *n = *l;
+            break;
+        }
+        ccom(r);
+        t = vconst(r);
+        if(t == 0) {
+            diag(n, "divide check");
+            *n = *r;
+            break;
+        }
+        if(t == 1) {
+            *n = *l;
+            break;
+        }
+        goto common;
+
+    case OSUB:
+        ccom(r);
+        if(r->op == OCONST) {
+            if(typefd[r->type->etype]) {
+                n->op = OADD;
+                r->fconst = -r->fconst;
+                goto loop;
+            } else {
+                n->op = OADD;
+                r->vconst = -r->vconst;
+                goto loop;
+            }
+        }
+        ccom(l);
+        goto common;
+
+    case OXOR:
+    case OOR:
+    case OADD:
+        ccom(l);
+        if(vconst(l) == 0) {
+            *n = *r;
+            goto loop;
+        }
+        ccom(r);
+        if(vconst(r) == 0) {
+            *n = *l;
+            break;
+        }
+        goto commute;
+
+    case OAND:
+        ccom(l);
+        ccom(r);
+        if(vconst(l) == 0 && !side(r)) {
+            *n = *l;
+            break;
+        }
+        if(vconst(r) == 0 && !side(l)) {
+            *n = *r;
+            break;
+        }
+
+    commute:
+        /* look for commutative constant */
+        if(r->op == OCONST) {
+            if(l->op == n->op) {
+                if(l->left->op == OCONST) {
+                    n->right = l->right;
+                    l->right = r;
+                    goto loop;
+                }
+                if(l->right->op == OCONST) {
+                    n->right = l->left;
+                    l->left = r;
+                    goto loop;
+                }
+            }
+        }
+        if(l->op == OCONST) {
+            if(r->op == n->op) {
+                if(r->left->op == OCONST) {
+                    n->left = r->right;
+                    r->right = l;
+                    goto loop;
+                }
+                if(r->right->op == OCONST) {
+                    n->left = r->left;
+                    r->left = l;
+                    goto loop;
+                }
+            }
+        }
+        goto common;
+
+    case OANDAND:
+        ccom(l);
+        if(vconst(l) == 0) {
+            *n = *l;
+            break;
+        }
+        ccom(r);
+        goto common;
+
+    case OOROR:
+        ccom(l);
+        if(l->op == OCONST && l->vconst != 0) {
+            *n = *l;
+            n->vconst = 1;
+            break;
+        }
+        ccom(r);
+        goto common;
+
+    default:
+        if(l != Z)
+            ccom(l);
+        if(r != Z)
+            ccom(r);
+    common:
+        if(l != Z)
+        if(l->op != OCONST)
+            break;
+        if(r != Z)
+        if(r->op != OCONST)
+            break;
+        evconst(n);
+    }
+}
+@
+
+
+\subsubsection{[[compar()]]}
+
+% could be moved in Checking section?
+
+<<struct Big>>=
+/* 128-bit numbers */
+struct Big
+{
+    vlong a;
+    uvlong b;
+};
+@
+
+%ctor
+<<function big>>=
+Big
+big(vlong a, uvlong b)
+{
+    Big x;
+
+    x.a = a;
+    x.b = b;
+    return x;
+}
+@
+
+
+<<function cmp>>=
+static int
+cmp(Big x, Big y)
+{
+    if(x.a != y.a){
+        if(x.a < y.a)
+            return -1;
+        return 1;
+    }
+    if(x.b != y.b){
+        if(x.b < y.b)
+            return -1;
+        return 1;
+    }
+    return 0;
+}
+@
+
+<<function add>>=
+static Big
+add(Big x, int y)
+{
+    uvlong ob;
+    
+    ob = x.b;
+    x.b += y;
+    if(y > 0 && x.b < ob)
+        x.a++;
+    if(y < 0 && x.b > ob)
+        x.a--;
+    return x;
+} 
+@
+
+
+
+<<global cmps>>=
+/*	OEQ, ONE, OLE, OLS, OLT, OLO, OGE, OHS, OGT, OHI */
+static char *cmps[12] = 
+{
+    "==", "!=", "<=", "<=", "<", "<", ">=", ">=", ">", ">",
+};
+@
+
+<<function compar>>=
+int
+compar(Node *n, int reverse)
+{
+    Big lo, hi, x;
+    int op;
+    char xbuf[40], cmpbuf[50];
+    Node *l, *r;
+    Type *lt, *rt;
+
+    /*
+     * The point of this function is to diagnose comparisons 
+     * that can never be true or that look misleading because
+     * of the `usual arithmetic conversions'.  As an example 
+     * of the latter, if x is a ulong, then if(x <= -1) really means
+     * if(x <= 0xFFFFFFFF), while if(x <= -1LL) really means
+     * what it says (but 8c compiles it wrong anyway).
+     */
+
+    if(reverse){
+        r = n->left;
+        l = n->right;
+        op = comrel[relindex(n->op)];
+    }else{
+        l = n->left;
+        r = n->right;
+        op = n->op;
+    }
+
+    /*
+     * Skip over left casts to find out the original expression range.
+     */
+    while(l->op == OCAST)
+        l = l->left;
+    if(l->op == OCONST)
+        return 0;
+    lt = l->type;
+    if(l->op == ONAME && l->sym->type){
+        lt = l->sym->type;
+        if(lt->etype == TARRAY)
+            lt = lt->link;
+    }
+    if(lt == T)
+        return 0;
+    if(lt->etype == TXXX || lt->etype > TUVLONG)
+        return 0;
+    
+    /*
+     * Skip over the right casts to find the on-screen value.
+     */
+    if(r->op != OCONST)
+        return 0;
+    while(r->oldop == OCAST && !r->xcast)
+        r = r->left;
+    rt = r->type;
+    if(rt == T)
+        return 0;
+
+    x.b = r->vconst;
+    x.a = 0;
+    if((rt->etype&1) && r->vconst < 0)	/* signed negative */
+        x.a = ~0ULL;
+
+    if((lt->etype&1)==0){
+        /* unsigned */
+        lo = big(0, 0);
+        if(lt->width == 8)
+            hi = big(0, ~0ULL);
+        else
+            hi = big(0, (1LL<<(l->type->width*8))-1);
+    }else{
+        lo = big(~0ULL, -(1LL<<(l->type->width*8-1)));
+        hi = big(0, (1LL<<(l->type->width*8-1))-1);
+    }
+
+    switch(op){
+    case OLT:
+    case OLO:
+    case OGE:
+    case OHS:
+        if(cmp(x, lo) <= 0)
+            goto useless;
+        if(cmp(x, add(hi, 1)) >= 0)
+            goto useless;
+        break;
+    case OLE:
+    case OLS:
+    case OGT:
+    case OHI:
+        if(cmp(x, add(lo, -1)) <= 0)
+            goto useless;
+        if(cmp(x, hi) >= 0)
+            goto useless;
+        break;
+    case OEQ:
+    case ONE:
+        /*
+         * Don't warn about comparisons if the expression
+         * is as wide as the value: the compiler-supplied casts
+         * will make both outcomes possible.
+         */
+        if(lt->width >= rt->width && debug['w'] < 2)
+            return 0;
+        if(cmp(x, lo) < 0 || cmp(x, hi) > 0)
+            goto useless;
+        break;
+    }
+    return 0;
+
+useless:
+    if((x.a==0 && x.b<=9) || (x.a==~0LL && x.b >= -9ULL))
+        snprint(xbuf, sizeof xbuf, "%lld", x.b);
+    else if(x.a == 0)
+        snprint(xbuf, sizeof xbuf, "%#llux", x.b);
+    else
+        snprint(xbuf, sizeof xbuf, "%#llx", x.b);
+    if(reverse)
+        snprint(cmpbuf, sizeof cmpbuf, "%s %s %T",
+            xbuf, cmps[relindex(n->op)], lt);
+    else
+        snprint(cmpbuf, sizeof cmpbuf, "%T %s %s",
+            lt, cmps[relindex(n->op)], xbuf);
+    if(debug['y']) 
+        prtree(n, "strange");
+    warn(n, "useless or misleading comparison: %s", cmpbuf);
+    return 0;
+}
+@
+% >> >> >>
+
+\subsection{Constant evaluation, [[evconst()]]}
+
+% evaluate constant?
+<<function evconst>>=
+void
+evconst(Node *n)
+{
+    Node *l, *r;
+    int et, isf;
+    vlong v;
+    double d;
+
+    if(n == Z || n->type == T)
+        return;
+
+    et = n->type->etype;
+    isf = typefd[et];
+
+    l = n->left;
+    r = n->right;
+
+    d = 0;
+    v = 0;
+
+    switch(n->op) {
+    default:
+        return;
+
+    case ONEG:
+        if(isf)
+            d = -l->fconst;
+        else
+            v = -l->vconst;
+        break;
+
+    case OCOM:
+        v = ~l->vconst;
+        break;
+
+    case OCAST:
+        if(et == TVOID)
+            return;
+        et = l->type->etype;
+        if(isf) {
+            if(typefd[et])
+                d = l->fconst;
+            else
+                d = l->vconst;
+        } else {
+            if(typefd[et])
+                v = l->fconst;
+            else
+                v = convvtox(l->vconst, n->type->etype);
+        }
+        break;
+
+    case OCONST:
+        break;
+
+    case OADD:
+        if(isf)
+            d = l->fconst + r->fconst;
+        else {
+            v = l->vconst + r->vconst;
+        }
+        break;
+
+    case OSUB:
+        if(isf)
+            d = l->fconst - r->fconst;
+        else
+            v = l->vconst - r->vconst;
+        break;
+
+    case OMUL:
+        if(isf)
+            d = l->fconst * r->fconst;
+        else {
+            v = l->vconst * r->vconst;
+        }
+        break;
+
+    case OLMUL:
+        v = (uvlong)l->vconst * (uvlong)r->vconst;
+        break;
+
+
+    case ODIV:
+        if(vconst(r) == 0) {
+            warn(n, "divide by zero");
+            return;
+        }
+        if(isf)
+            d = l->fconst / r->fconst;
+        else
+            v = l->vconst / r->vconst;
+        break;
+
+    case OLDIV:
+        if(vconst(r) == 0) {
+            warn(n, "divide by zero");
+            return;
+        }
+        v = (uvlong)l->vconst / (uvlong)r->vconst;
+        break;
+
+    case OMOD:
+        if(vconst(r) == 0) {
+            warn(n, "modulo by zero");
+            return;
+        }
+        v = l->vconst % r->vconst;
+        break;
+
+    case OLMOD:
+        if(vconst(r) == 0) {
+            warn(n, "modulo by zero");
+            return;
+        }
+        v = (uvlong)l->vconst % (uvlong)r->vconst;
+        break;
+
+    case OAND:
+        v = l->vconst & r->vconst;
+        break;
+
+    case OOR:
+        v = l->vconst | r->vconst;
+        break;
+
+    case OXOR:
+        v = l->vconst ^ r->vconst;
+        break;
+
+    case OLSHR:
+        v = (uvlong)l->vconst >> r->vconst;
+        break;
+
+    case OASHR:
+        v = l->vconst >> r->vconst;
+        break;
+
+    case OASHL:
+        v = l->vconst << r->vconst;
+        break;
+
+    case OLO:
+        v = (uvlong)l->vconst < (uvlong)r->vconst;
+        break;
+
+    case OLT:
+        if(typefd[l->type->etype])
+            v = l->fconst < r->fconst;
+        else
+            v = l->vconst < r->vconst;
+        break;
+
+    case OHI:
+        v = (uvlong)l->vconst > (uvlong)r->vconst;
+        break;
+
+    case OGT:
+        if(typefd[l->type->etype])
+            v = l->fconst > r->fconst;
+        else
+            v = l->vconst > r->vconst;
+        break;
+
+    case OLS:
+        v = (uvlong)l->vconst <= (uvlong)r->vconst;
+        break;
+
+    case OLE:
+        if(typefd[l->type->etype])
+            v = l->fconst <= r->fconst;
+        else
+            v = l->vconst <= r->vconst;
+        break;
+
+    case OHS:
+        v = (uvlong)l->vconst >= (uvlong)r->vconst;
+        break;
+
+    case OGE:
+        if(typefd[l->type->etype])
+            v = l->fconst >= r->fconst;
+        else
+            v = l->vconst >= r->vconst;
+        break;
+
+    case OEQ:
+        if(typefd[l->type->etype])
+            v = l->fconst == r->fconst;
+        else
+            v = l->vconst == r->vconst;
+        break;
+
+    case ONE:
+        if(typefd[l->type->etype])
+            v = l->fconst != r->fconst;
+        else
+            v = l->vconst != r->vconst;
+        break;
+
+    case ONOT:
+        if(typefd[l->type->etype])
+            v = !l->fconst;
+        else
+            v = !l->vconst;
+        break;
+
+    case OANDAND:
+        if(typefd[l->type->etype])
+            v = l->fconst && r->fconst;
+        else
+            v = l->vconst && r->vconst;
+        break;
+
+    case OOROR:
+        if(typefd[l->type->etype])
+            v = l->fconst || r->fconst;
+        else
+            v = l->vconst || r->vconst;
+        break;
+    }
+    if(isf) {
+        n->fconst = d;
+    } else {
+        n->vconst = convvtox(v, n->type->etype);
+    }
+    n->oldop = n->op;
+    n->op = OCONST;
+}
+@
+
+
+
+
+\subsection{Comma hoisting, [[comma()]]}
+
+<<function comargs>>=
+/*
+ * hoist comma operators out of expressions
+ *	(a,b) OP c => (a, b OP c)
+ *	OP(a,b) =>	(a, OP b)
+ *	a OP (b,c) => (b, a OP c)
+ */
+
+static Node*
+comargs(Com *com, Node *n)
+{
+    if(n != Z && n->op == OLIST){
+        n->left = comargs(com, n->left);
+        n->right = comargs(com, n->right);
+    }
+    return commas(com, n);
+}
+@
+
+<<function commas>>=
+static Node*
+commas(Com *com, Node *n)
+{
+    Node *t;
+
+    if(n == Z)
+        return n;
+    switch(n->op){
+    case OREGISTER:
+    case OINDREG:
+    case OCONST:
+    case ONAME:
+    case OSTRING:
+        /* leaf */
+        return n;
+
+    case OCOMMA:
+        t = commas(com, n->left);
+        if(com->n >= nelem(com->t))
+            fatal(n, "comma list overflow");
+        com->t[com->n++] = t;
+        return commas(com, n->right);
+
+    case OFUNC:
+        n->left = commas(com, n->left);
+        n->right = comargs(com, n->right);
+        return n;
+
+    case OCOND:
+        n->left = commas(com, n->left);
+        comma(n->right->left);
+        comma(n->right->right);
+        return n;
+
+    case OANDAND:
+    case OOROR:
+        n->left = commas(com, n->left);
+        comma(n->right);
+        return n;
+
+    case ORETURN:
+        comma(n->left);
+        return n;
+    }
+    n->left = commas(com, n->left);
+    if(n->right != Z)
+        n->right = commas(com, n->right);
+    return n;
+}
+@
+
+<<function comma>>=
+static void
+comma(Node *n)
+{
+    Com com;
+    Node *nn;
+
+    com.n = 0;
+    nn = commas(&com, n);
+    if(com.n > 0){
+if(debug['y'])print("n=%d\n", com.n);
+if(debug['y']) prtree(nn, "res");
+        if(nn != n)
+            *n = *nn;
+        while(com.n > 0){
+if(debug['y']) prtree(com.t[com.n-1], "tree");
+            nn = new1(OXXX, Z, Z);
+            *nn = *n;
+            n->op = OCOMMA;
+            n->type = nn->type;
+            n->left = com.t[--com.n];
+            n->right = nn;
+            n->lineno = n->left->lineno;
+        }
+if(debug['y']) prtree(n, "final");
+    }else if(n != nn)
+        fatal(n, "odd tree");
+}
+@
+
+
+
+\section{Arithmetic}
+% see also 8c -m, print add/mul/sub trees
+
+
+% "acom is Aho and Ullman's acommute (with all the exercises done).
+% basically it does code improvements taking advantage of
+% associative-commutative operations, and extends that to look for
+% further optimisations mentioned in Thompson's paper on the compiler.
+% Ritchie's PDP-11 C compiler did something similar (but he called it
+% acommute and distrib). comments such as "bust terms out" and "look
+% for factorable terms c1*i + c1*c2*j -> c1*(i + c2*j) suggest what
+% it's doing). essentially it flattens levels of an expression tree
+% using associative and commutative operators into an array and
+% rearranges them." - fortsith
+
+\subsection{[[Term]]}
+
+<<constant NTERM>>=
+#define	NTERM		10
+@
+
+<<struct Term>>=
+struct	Term
+{
+    vlong	mult;
+    Node	*node;
+};
+@
+
+<<global term>>=
+Term	term[NTERM];
+@
+
+<<global nterm>>=
+int	nterm;
+@
+
+
+\subsection{[[acom()]]}
+% cc/scon.c ??
+
+% arithmetic compile? arithmetic specific checks?
+
+<<function acom>>=
+void
+acom(Node *n)
+{
+    Type *t;
+    Node *l, *r;
+    int i;
+
+    switch(n->op)
+    {
+
+    case ONAME:
+    case OCONST:
+    case OSTRING:
+    case OINDREG:
+    case OREGISTER:
+        return;
+
+    case ONEG:
+        l = n->left;
+        if(addo(n) && addo(l))
+            break;
+        acom(l);
+        return;
+
+    case OADD:
+    case OSUB:
+    case OMUL:
+        l = n->left;
+        r = n->right;
+        if(addo(n)) {
+            if(addo(r))
+                break;
+            if(addo(l))
+                break;
+        }
+        acom(l);
+        acom(r);
+        return;
+
+    default:
+        l = n->left;
+        r = n->right;
+        if(l != Z)
+            acom(l);
+        if(r != Z)
+            acom(r);
+        return;
+    }
+
+    /* bust terms out */
+    t = n->type;
+    term[0].mult = 0;
+    term[0].node = Z;
+    nterm = 1;
+    acom1(1, n);
+
+    if(debug['m'])
+     for(i=0; i<nterm; i++) {
+        print("%d %3lld ", i, term[i].mult);
+        prtree1(term[i].node, 1, 0);
+    }
+
+    if(nterm < NTERM)
+        acom2(n, t);
+    n->type = t;
+}
+@
+% hmm 'm' already used for macro debugging => use M instead? or n?
+
+<<function addo>>=
+int
+addo(Node *n)
+{
+
+    if(n != Z)
+    if(!typefd[n->type->etype])
+    if(!typev[n->type->etype] || ewidth[TVLONG] == ewidth[TIND])
+    switch(n->op) {
+
+    case OCAST:
+        if(nilcast(n->left->type, n->type))
+            return 1;
+        break;
+
+    case ONEG:
+    case OADD:
+    case OSUB:
+        return 1;
+
+    case OMUL:
+        if(n->left->op == OCONST)
+            return 1;
+        if(n->right->op == OCONST)
+            return 1;
+    }
+    return 0;
+}
+@
+
+
+<<function acom1>>=
+void
+acom1(vlong v, Node *n)
+{
+    Node *l, *r;
+
+    if(v == 0 || nterm >= NTERM)
+        return;
+    if(!addo(n)) {
+        if(n->op == OCONST)
+        if(!typefd[n->type->etype]) {
+            term[0].mult += v*n->vconst;
+            return;
+        }
+        term[nterm].mult = v;
+        term[nterm].node = n;
+        nterm++;
+        return;
+    }
+    switch(n->op) {
+
+    case OCAST:
+        acom1(v, n->left);
+        break;
+
+    case ONEG:
+        acom1(-v, n->left);
+        break;
+
+    case OADD:
+        acom1(v, n->left);
+        acom1(v, n->right);
+        break;
+
+    case OSUB:
+        acom1(v, n->left);
+        acom1(-v, n->right);
+        break;
+
+    case OMUL:
+        l = n->left;
+        r = n->right;
+        if(l->op == OCONST)
+        if(!typefd[n->type->etype]) {
+            acom1(v*l->vconst, r);
+            break;
+        }
+        if(r->op == OCONST)
+        if(!typefd[n->type->etype]) {
+            acom1(v*r->vconst, l);
+            break;
+        }
+        break;
+
+    default:
+        diag(n, "not addo");
+    }
+}
+@
+
+
+
+<<function acast>>=
+static Node*
+acast(Type *t, Node *n)
+{
+    if(n->type->etype != t->etype || n->op == OBIT) {
+        n = new1(OCAST, n, Z);
+        if(nocast(n->left->type, t))
+            *n = *n->left;
+        n->type = t;
+    }
+    return n;
+}
+@
+
+
+
+<<function acomcmp1>>=
+int
+acomcmp1(const void *a1, const void *a2)
+{
+    vlong c1, c2;
+    Term *t1, *t2;
+
+    t1 = (Term*)a1;
+    t2 = (Term*)a2;
+    c1 = t1->mult;
+    if(c1 < 0)
+        c1 = -c1;
+    c2 = t2->mult;
+    if(c2 < 0)
+        c2 = -c2;
+    if(c1 > c2)
+        return 1;
+    if(c1 < c2)
+        return -1;
+    c1 = 1;
+    if(t1->mult < 0)
+        c1 = 0;
+    c2 = 1;
+    if(t2->mult < 0)
+        c2 = 0;
+    if(c2 -= c1)
+        return c2;
+    if(t2 > t1)
+        return 1;
+    return -1;
+}
+@
+
+<<function acomcmp2>>=
+int
+acomcmp2(const void *a1, const void *a2)
+{
+    vlong c1, c2;
+    Term *t1, *t2;
+
+    t1 = (Term*)a1;
+    t2 = (Term*)a2;
+    c1 = t1->mult;
+    c2 = t2->mult;
+    if(c1 > c2)
+        return 1;
+    if(c1 < c2)
+        return -1;
+    if(t2 > t1)
+        return 1;
+    return -1;
+}
+@
+
+<<function acom2>>=
+void
+acom2(Node *n, Type *t)
+{
+    Node *l, *r;
+    Term trm[NTERM];
+    int et, nt, i, j;
+    vlong c1, c2;
+
+    /*
+     * copy into automatic
+     */
+    c2 = 0;
+    nt = nterm;
+    for(i=0; i<nt; i++)
+        trm[i] = term[i];
+    /*
+     * recur on subtrees
+     */
+    j = 0;
+    for(i=1; i<nt; i++) {
+        c1 = trm[i].mult;
+        if(c1 == 0)
+            continue;
+        l = trm[i].node;
+        if(l != Z) {
+            j = 1;
+            acom(l);
+        }
+    }
+    c1 = trm[0].mult;
+    if(j == 0) {
+        n->oldop = n->op;
+        n->op = OCONST;
+        n->vconst = c1;
+        return;
+    }
+    et = t->etype;
+
+    /*
+     * prepare constant term,
+     * combine it with an addressing term
+     */
+    if(c1 != 0) {
+        l = new1(OCONST, Z, Z);
+        l->type = t;
+        l->vconst = c1;
+        trm[0].mult = 1;
+        for(i=1; i<nt; i++) {
+            if(trm[i].mult != 1)
+                continue;
+            r = trm[i].node;
+            if(r->op != OADDR)
+                continue;
+            r->type = t;
+            l = new1(OADD, r, l);
+            l->type = t;
+            trm[i].mult = 0;
+            break;
+        }
+        trm[0].node = l;
+    }
+    /*
+     * look for factorable terms
+     * c1*i + c1*c2*j -> c1*(i + c2*j)
+     */
+    qsort(trm+1, nt-1, sizeof(trm[0]), acomcmp1);
+    for(i=nt-1; i>=0; i--) {
+        c1 = trm[i].mult;
+        if(c1 < 0)
+            c1 = -c1;
+        if(c1 <= 1)
+            continue;
+        for(j=i+1; j<nt; j++) {
+            c2 = trm[j].mult;
+            if(c2 < 0)
+                c2 = -c2;
+            if(c2 <= 1)
+                continue;
+            if(c2 % c1)
+                continue;
+            r = trm[j].node;
+            if(r->type->etype != et)
+                r = acast(t, r);
+            c2 = trm[j].mult/trm[i].mult;
+            if(c2 != 1 && c2 != -1) {
+                r = new1(OMUL, r, new(OCONST, Z, Z));
+                r->type = t;
+                r->right->type = t;
+                r->right->vconst = c2;
+            }
+            l = trm[i].node;
+            if(l->type->etype != et)
+                l = acast(t, l);
+            r = new1(OADD, l, r);
+            r->type = t;
+            if(c2 == -1)
+                r->op = OSUB;
+            trm[i].node = r;
+            trm[j].mult = 0;
+        }
+    }
+    if(debug['m']) {
+        print("\n");
+        for(i=0; i<nt; i++) {
+            print("%d %3lld ", i, trm[i].mult);
+            prtree1(trm[i].node, 1, 0);
+        }
+    }
+
+    /*
+     * put it all back together
+     */
+    qsort(trm+1, nt-1, sizeof(trm[0]), acomcmp2);
+    l = Z;
+    for(i=nt-1; i>=0; i--) {
+        c1 = trm[i].mult;
+        if(c1 == 0)
+            continue;
+        r = trm[i].node;
+        if(r->type->etype != et || r->op == OBIT)
+            r = acast(t, r);
+        if(c1 != 1 && c1 != -1) {
+            r = new1(OMUL, r, new(OCONST, Z, Z));
+            r->type = t;
+            r->right->type = t;
+            if(c1 < 0) {
+                r->right->vconst = -c1;
+                c1 = -1;
+            } else {
+                r->right->vconst = c1;
+                c1 = 1;
+            }
+        }
+        if(l == Z) {
+            l = r;
+            c2 = c1;
+            continue;
+        }
+        if(c1 < 0)
+            if(c2 < 0)
+                l = new1(OADD, l, r);
+            else
+                l = new1(OSUB, l, r);
+        else
+            if(c2 < 0) {
+                l = new1(OSUB, r, l);
+                c2 = 1;
+            } else
+                l = new1(OADD, l, r);
+        l->type = t;
+    }
+    if(c2 < 0) {
+        r = new1(OCONST, 0, 0);
+        r->vconst = 0;
+        r->type = t;
+        l = new1(OSUB, r, l);
+        l->type = t;
+    }
+    *n = *l;
+}
+@
+
+
+
+
+
+\section{[[xcom()]]}
+
+% 8c/sgen.c
+
+% "xcom, which is machine-dependent, also has a comment. it assigns an
+% index of complexity to a sub-expression, which is usually expressed
+% as the number of registers needed to compute it (and good luck with
+% that on an x86), but it's also a good place to look for
+% machine-dependent aspects of machine addressing, such as indexing,
+% double-indexing, scaling, etc and it sets values in each tree node
+% to mark that." - forsith
+
+
+<<function xcom>>=
+/*
+ *	calculate addressability as follows
+ *		NAME ==> 10/11		name+value(SB/SP)
+ *		REGISTER ==> 12		register
+ *		CONST ==> 20		$value
+ *		*(20) ==> 21		value
+ *		&(10) ==> 13		$name+value(SB)
+ *		&(11) ==> 1		$name+value(SP) $
+ *		(13) + (20) ==> 13	fold constants
+ *		(1) + (20) ==> 1	fold constants
+ *		*(13) ==> 10		back to name
+ *		*(1) ==> 11		back to name
+ *
+ *		(20) * (X) ==> 7	multiplier in indexing
+ *		(X,7) + (13,1) ==> 8	adder in indexing (addresses)
+ *		(8) ==> &9(OINDEX)	index, almost addressable
+ *
+ *	calculate complexity (number of registers)
+ * 
+ */
+void
+xcom(Node *n)
+{
+    Node *l, *r;
+    int g;
+
+    if(n == Z)
+        return;
+    l = n->left;
+    r = n->right;
+    n->complex = 0;
+    n->addable = 0;
+    switch(n->op) {
+    case OCONST:
+        n->addable = 20;
+        break;
+
+    case ONAME:
+        n->addable = 10;
+        if(n->class == CPARAM || n->class == CAUTO)
+            n->addable = 11;
+        break;
+
+    case OEXREG:
+        n->addable = 12;
+        break;
+
+    case OREGISTER:
+        n->addable = 12;
+        break;
+
+    case OINDREG:
+        n->addable = 12;
+        break;
+
+    case OADDR:
+        xcom(l);
+        if(l->addable == 10)
+            n->addable = 13;
+        else
+        if(l->addable == 11)
+            n->addable = 1;
+        break;
+
+    case OADD:
+        xcom(l);
+        xcom(r);
+        if(n->type->etype != TIND)
+            break;
+
+        switch(r->addable) {
+        case 20:
+            switch(l->addable) {
+            case 1:
+            case 13:
+            commadd:
+                l->type = n->type;
+                *n = *l;
+                l = new(0, Z, Z);
+                *l = *(n->left);
+                l->xoffset += r->vconst;
+                n->left = l;
+                r = n->right;
+                goto brk;
+            }
+            break;
+
+        case 1:
+        case 13:
+        case 10:
+        case 11:
+            /* l is the base, r is the index */
+            if(l->addable != 20)
+                n->addable = 8;
+            break;
+        }
+        switch(l->addable) {
+        case 20:
+            switch(r->addable) {
+            case 13:
+            case 1:
+                r = n->left;
+                l = n->right;
+                n->left = l;
+                n->right = r;
+                goto commadd;
+            }
+            break;
+
+        case 13:
+        case 1:
+        case 10:
+        case 11:
+            /* r is the base, l is the index */
+            if(r->addable != 20)
+                n->addable = 8;
+            break;
+        }
+        if(n->addable == 8 && !side(n)) {
+            indx(n);
+            l = new1(OINDEX, idx.basetree, idx.regtree);
+            l->scale = idx.scale;
+            l->addable = 9;
+            l->complex = l->right->complex;
+            l->type = l->left->type;
+            n->op = OADDR;
+            n->left = l;
+            n->right = Z;
+            n->addable = 8;
+            break;
+        }
+        break;
+
+    case OINDEX:
+        xcom(l);
+        xcom(r);
+        n->addable = 9;
+        break;
+
+    case OIND:
+        xcom(l);
+        if(l->op == OADDR) {
+            l = l->left;
+            l->type = n->type;
+            *n = *l;
+            return;
+        }
+        switch(l->addable) {
+        case 20:
+            n->addable = 21;
+            break;
+        case 1:
+            n->addable = 11;
+            break;
+        case 13:
+            n->addable = 10;
+            break;
+        }
+        break;
+
+    case OASHL:
+        xcom(l);
+        xcom(r);
+        indexshift(n);
+        break;
+
+    case OMUL:
+    case OLMUL:
+        xcom(l);
+        xcom(r);
+        g = vlog(l);
+        if(g >= 0) {
+            n->left = r;
+            n->right = l;
+            l = r;
+            r = n->right;
+        }
+        g = vlog(r);
+        if(g >= 0) {
+            n->op = OASHL;
+            r->vconst = g;
+            r->type = types[TINT];
+            indexshift(n);
+            break;
+        }
+commute(n);
+        break;
+
+    case OASLDIV:
+        xcom(l);
+        xcom(r);
+        g = vlog(r);
+        if(g >= 0) {
+            n->op = OASLSHR;
+            r->vconst = g;
+            r->type = types[TINT];
+        }
+        break;
+
+    case OLDIV:
+        xcom(l);
+        xcom(r);
+        g = vlog(r);
+        if(g >= 0) {
+            n->op = OLSHR;
+            r->vconst = g;
+            r->type = types[TINT];
+            indexshift(n);
+            break;
+        }
+        break;
+
+    case OASLMOD:
+        xcom(l);
+        xcom(r);
+        g = vlog(r);
+        if(g >= 0) {
+            n->op = OASAND;
+            r->vconst--;
+        }
+        break;
+
+    case OLMOD:
+        xcom(l);
+        xcom(r);
+        g = vlog(r);
+        if(g >= 0) {
+            n->op = OAND;
+            r->vconst--;
+        }
+        break;
+
+    case OASMUL:
+    case OASLMUL:
+        xcom(l);
+        xcom(r);
+        g = vlog(r);
+        if(g >= 0) {
+            n->op = OASASHL;
+            r->vconst = g;
+        }
+        break;
+
+    case OLSHR:
+    case OASHR:
+        xcom(l);
+        xcom(r);
+        indexshift(n);
+        break;
+
+    default:
+        if(l != Z)
+            xcom(l);
+        if(r != Z)
+            xcom(r);
+        break;
+    }
+brk:
+    if(n->addable >= 10)
+        return;
+    if(l != Z)
+        n->complex = l->complex;
+    if(r != Z) {
+        if(r->complex == n->complex)
+            n->complex = r->complex+1;
+        else
+        if(r->complex > n->complex)
+            n->complex = r->complex;
+    }
+    if(n->complex == 0)
+        n->complex++;
+
+    if(com64(n))
+        return;
+
+    switch(n->op) {
+
+    case OFUNC:
+        n->complex = FNX;
+        break;
+
+    case OLMOD:
+    case OMOD:
+    case OLMUL:
+    case OLDIV:
+    case OMUL:
+    case ODIV:
+    case OASLMUL:
+    case OASLDIV:
+    case OASLMOD:
+    case OASMUL:
+    case OASDIV:
+    case OASMOD:
+        if(r->complex >= l->complex) {
+            n->complex = l->complex + 3;
+            if(r->complex > n->complex)
+                n->complex = r->complex;
+        } else {
+            n->complex = r->complex + 3;
+            if(l->complex > n->complex)
+                n->complex = l->complex;
+        }
+        break;
+
+    case OLSHR:
+    case OASHL:
+    case OASHR:
+    case OASLSHR:
+    case OASASHL:
+    case OASASHR:
+        if(r->complex >= l->complex) {
+            n->complex = l->complex + 2;
+            if(r->complex > n->complex)
+                n->complex = r->complex;
+        } else {
+            n->complex = r->complex + 2;
+            if(l->complex > n->complex)
+                n->complex = l->complex;
+        }
+        break;
+
+    case OADD:
+    case OXOR:
+    case OAND:
+    case OOR:
+        /*
+         * immediate operators, make const on right
+         */
+        if(l->op == OCONST) {
+            n->left = r;
+            n->right = l;
+        }
+        break;
+
+    case OEQ:
+    case ONE:
+    case OLE:
+    case OLT:
+    case OGE:
+    case OGT:
+    case OHI:
+    case OHS:
+    case OLO:
+    case OLS:
+        /*
+         * compare operators, make const on left
+         */
+        if(r->op == OCONST) {
+            n->left = r;
+            n->right = l;
+            n->op = invrel[relindex(n->op)];
+        }
+        break;
+    }
+}
+@
+%$
+
+
+\chapter{Assembly Generation}
+% hmm better name than code generation? Assembly generation?
+
+% what does gpseudo, etc?
 
 \section{Overview}
+
 % intermediate language? RTL? seems not :(
 % maybe lcc is cleaner
 
-% gbranch, gmove, gins, etc?
+% gbranch, gmove, mostly archi independent interface.
+%  cc2/pgen.c include gc.h where all archi define some archi independent
+%  stuff like ATEXT, ANOP, etc
+% gins seems more archi independent
+
 % nextpc()?
 % gxxx = generate Prog (=~ assembly code)
+% but in mostly portable way!
+
+%x86!
+% target language = Adr, Prog, as, etc, like in Linker and assembler
+% outcode, like in Assembler?
 
 
 % remember in cc.y for function definition case:
 %        if(!debug['a'] && !debug['Z'])
 %            codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
 
-% codgen (func) -> gen (statement) -> cgen (expr?)
+% codgen (func) -> gen (statement) 
+%                     -> cgen (expr?) x86 specific
 
 \section{Functions, [[codgen()]]}
 
@@ -8894,6 +10574,7 @@ bool	newvlongcode;
 @
 
 
+% cc2/pgen.c
 <<function gen>>=
 void
 gen(Node *n)
@@ -9312,6 +10993,34 @@ loop:
 }
 @
 
+<<function supgen>>=
+void
+supgen(Node *n)
+{
+    int owarn;
+    long opc;
+    Prog *olastp;
+
+    if(n == Z)
+        return;
+
+    suppress++;
+    owarn = warnreach;
+    warnreach = 0;
+    opc = pc;
+    olastp = lastp;
+
+    gen(n);
+
+    lastp = olastp;
+    pc = opc;
+    olastp->link = nil;
+    suppress--;
+    warnreach = owarn;
+}
+@
+
+
 \subsection{Switch}
 
 <<function swcmp>>=
@@ -9453,7 +11162,6 @@ casf(void)
 }
 @
 
-
 \section{[[cgen()]]}
 
 % this in cc/pswt.c but should be in a cc/pcgen.c
@@ -9472,7 +11180,6 @@ nullwarn(Node *l, Node *r)
 
 
 % 8c/cgen.c
-
 % was in comment before the func?? /* ,x/^(print|prtree)\(/i/\/\/ */
 <<function cgen>>=
 void
@@ -9489,6 +11196,7 @@ cgen(Node *n, Node *nn)
         prtree(nn, "cgen lhs");
         prtree(n, "cgen");
     }
+
     if(n == Z || n->type == T)
         return;
     if(typesuv[n->type->etype]) {
@@ -10638,6 +12346,7 @@ lcgen(Node *n, Node *nn)
         prtree(nn, "lcgen lhs");
         prtree(n, "lcgen");
     }
+
     if(n == Z || n->type == T)
         return;
     if(nn == Z) {
@@ -10676,6 +12385,57 @@ lcgen(Node *n, Node *nn)
 }
 @
 
+<<function uncomma>>=
+Node*
+uncomma(Node *n)
+{
+    while(n != Z && n->op == OCOMMA) {
+        cgen(n->left, Z);
+        n = n->right;
+    }
+    return n;
+}
+@
+
+\section{[[bcomplex()]]}
+
+<<function bcomplex>>=
+int
+bcomplex(Node *n, Node *c)
+{
+//    Node *b, nod;
+
+    complex(n);
+    if(n->type != T)
+    if(tcompat(n, T, n->type, tnot))
+        n->type = T;
+    if(n->type == T) {
+        gbranch(OGOTO);
+        return 0;
+    }
+    if(c != Z && n->op == OCONST && deadheads(c))
+        return 1;
+
+    /* this is not quite right yet, so ignore it for now */
+//    if(0 && newvlongcode && typev[n->type->etype] && machcap(Z)) {
+//        b = &nod;
+//        b->op = ONE;
+//        b->left = n;
+//        b->right = new(0, Z, Z);
+//        *b->right = *nodconst(0);
+//        b->right->type = n->type;
+//        b->type = types[TLONG];
+//        cgen(b, Z);
+//        return 0;
+//    }
+
+    bool64(n);
+    boolgen(n, 1, Z);
+    return 0;
+}
+@
+
+
 \section{[[boolgen()]]}
 
 <<function boolgen>>=
@@ -10691,6 +12451,7 @@ boolgen(Node *n, int true, Node *nn)
         prtree(nn, "boolgen lhs");
         prtree(n, "boolgen");
     }
+
     curs = cursafe;
     l = n->left;
     r = n->right;
@@ -10928,6 +12689,7 @@ sugen(Node *n, Node *nn, long w)
         prtree(nn, "sugen lhs");
         prtree(n, "sugen");
     }
+
     if(nn == nodrat)
         if(w > nrathole)
             nrathole = w;
@@ -11562,1663 +13324,9 @@ void sualign(Type *t)
 }
 @
 
-\chapter{Optimisations}
+\chapter{Assembly-level Optimisations}
 
-% see compcert list of optimisations? there are all of them here too?
-
-\section{AST rewriting}
-
-
-\subsection{[[ccom()]]}
-% cc/com.c
-
-% called from complex(), after tcom()
-
-<<function ccom>>=
-/*
- *	general rewrite
- *	(IND(ADDR x)) ==> x
- *	(ADDR(IND x)) ==> x
- *	remove some zero operands
- *	remove no op casts
- *	evaluate constants
- */
-void
-ccom(Node *n)
-{
-    Node *l, *r;
-    int t;
-
-loop:
-    if(n == Z)
-        return;
-    l = n->left;
-    r = n->right;
-    switch(n->op) {
-
-    case OAS:
-    case OASXOR:
-    case OASAND:
-    case OASOR:
-    case OASMOD:
-    case OASLMOD:
-    case OASLSHR:
-    case OASASHR:
-    case OASASHL:
-    case OASDIV:
-    case OASLDIV:
-    case OASMUL:
-    case OASLMUL:
-    case OASSUB:
-    case OASADD:
-        ccom(l);
-        ccom(r);
-        if(n->op == OASLSHR || n->op == OASASHR || n->op == OASASHL)
-        if(r->op == OCONST) {
-            t = n->type->width * 8;	/* bits per byte */
-            if(r->vconst >= t || r->vconst < 0)
-                warn(n, "stupid shift: %lld", r->vconst);
-        }
-        break;
-
-    case OCAST:
-        ccom(l);
-        if(l->op == OCONST) {
-            evconst(n);
-            if(n->op == OCONST)
-                break;
-        }
-        if(nocast(l->type, n->type) &&
-           (!typefd[l->type->etype] || typeu[l->type->etype] && typeu[n->type->etype])) {
-            l->type = n->type;
-            *n = *l;
-        }
-        break;
-
-    case OCOND:
-        ccom(l);
-        ccom(r);
-        if(l->op == OCONST)
-            if(vconst(l) == 0)
-                *n = *r->right;
-            else
-                *n = *r->left;
-        break;
-
-    case OREGISTER:
-    case OINDREG:
-    case OCONST:
-    case ONAME:
-        break;
-
-    case OADDR:
-        ccom(l);
-        l->etype = TVOID;
-        if(l->op == OIND) {
-            l->left->type = n->type;
-            *n = *l->left;
-            break;
-        }
-        goto common;
-
-    case OIND:
-        ccom(l);
-        if(l->op == OADDR) {
-            l->left->type = n->type;
-            *n = *l->left;
-            break;
-        }
-        goto common;
-
-    case OEQ:
-    case ONE:
-
-    case OLE:
-    case OGE:
-    case OLT:
-    case OGT:
-
-    case OLS:
-    case OHS:
-    case OLO:
-    case OHI:
-        ccom(l);
-        ccom(r);
-        if(compar(n, 0) || compar(n, 1))
-            break;
-        relcon(l, r);
-        relcon(r, l);
-        goto common;
-
-    case OASHR:
-    case OASHL:
-    case OLSHR:
-        ccom(l);
-        if(vconst(l) == 0 && !side(r)) {
-            *n = *l;
-            break;
-        }
-        ccom(r);
-        if(vconst(r) == 0) {
-            *n = *l;
-            break;
-        }
-        if(r->op == OCONST) {
-            t = n->type->width * 8;	/* bits per byte */
-            if(r->vconst >= t || r->vconst <= -t)
-                warn(n, "stupid shift: %lld", r->vconst);
-        }
-        goto common;
-
-    case OMUL:
-    case OLMUL:
-        ccom(l);
-        t = vconst(l);
-        if(t == 0 && !side(r)) {
-            *n = *l;
-            break;
-        }
-        if(t == 1) {
-            *n = *r;
-            goto loop;
-        }
-        ccom(r);
-        t = vconst(r);
-        if(t == 0 && !side(l)) {
-            *n = *r;
-            break;
-        }
-        if(t == 1) {
-            *n = *l;
-            break;
-        }
-        goto common;
-
-    case ODIV:
-    case OLDIV:
-        ccom(l);
-        if(vconst(l) == 0 && !side(r)) {
-            *n = *l;
-            break;
-        }
-        ccom(r);
-        t = vconst(r);
-        if(t == 0) {
-            diag(n, "divide check");
-            *n = *r;
-            break;
-        }
-        if(t == 1) {
-            *n = *l;
-            break;
-        }
-        goto common;
-
-    case OSUB:
-        ccom(r);
-        if(r->op == OCONST) {
-            if(typefd[r->type->etype]) {
-                n->op = OADD;
-                r->fconst = -r->fconst;
-                goto loop;
-            } else {
-                n->op = OADD;
-                r->vconst = -r->vconst;
-                goto loop;
-            }
-        }
-        ccom(l);
-        goto common;
-
-    case OXOR:
-    case OOR:
-    case OADD:
-        ccom(l);
-        if(vconst(l) == 0) {
-            *n = *r;
-            goto loop;
-        }
-        ccom(r);
-        if(vconst(r) == 0) {
-            *n = *l;
-            break;
-        }
-        goto commute;
-
-    case OAND:
-        ccom(l);
-        ccom(r);
-        if(vconst(l) == 0 && !side(r)) {
-            *n = *l;
-            break;
-        }
-        if(vconst(r) == 0 && !side(l)) {
-            *n = *r;
-            break;
-        }
-
-    commute:
-        /* look for commutative constant */
-        if(r->op == OCONST) {
-            if(l->op == n->op) {
-                if(l->left->op == OCONST) {
-                    n->right = l->right;
-                    l->right = r;
-                    goto loop;
-                }
-                if(l->right->op == OCONST) {
-                    n->right = l->left;
-                    l->left = r;
-                    goto loop;
-                }
-            }
-        }
-        if(l->op == OCONST) {
-            if(r->op == n->op) {
-                if(r->left->op == OCONST) {
-                    n->left = r->right;
-                    r->right = l;
-                    goto loop;
-                }
-                if(r->right->op == OCONST) {
-                    n->left = r->left;
-                    r->left = l;
-                    goto loop;
-                }
-            }
-        }
-        goto common;
-
-    case OANDAND:
-        ccom(l);
-        if(vconst(l) == 0) {
-            *n = *l;
-            break;
-        }
-        ccom(r);
-        goto common;
-
-    case OOROR:
-        ccom(l);
-        if(l->op == OCONST && l->vconst != 0) {
-            *n = *l;
-            n->vconst = 1;
-            break;
-        }
-        ccom(r);
-        goto common;
-
-    default:
-        if(l != Z)
-            ccom(l);
-        if(r != Z)
-            ccom(r);
-    common:
-        if(l != Z)
-        if(l->op != OCONST)
-            break;
-        if(r != Z)
-        if(r->op != OCONST)
-            break;
-        evconst(n);
-    }
-}
-@
-
-
-<<function evconst>>=
-void
-evconst(Node *n)
-{
-    Node *l, *r;
-    int et, isf;
-    vlong v;
-    double d;
-
-    if(n == Z || n->type == T)
-        return;
-
-    et = n->type->etype;
-    isf = typefd[et];
-
-    l = n->left;
-    r = n->right;
-
-    d = 0;
-    v = 0;
-
-    switch(n->op) {
-    default:
-        return;
-
-    case ONEG:
-        if(isf)
-            d = -l->fconst;
-        else
-            v = -l->vconst;
-        break;
-
-    case OCOM:
-        v = ~l->vconst;
-        break;
-
-    case OCAST:
-        if(et == TVOID)
-            return;
-        et = l->type->etype;
-        if(isf) {
-            if(typefd[et])
-                d = l->fconst;
-            else
-                d = l->vconst;
-        } else {
-            if(typefd[et])
-                v = l->fconst;
-            else
-                v = convvtox(l->vconst, n->type->etype);
-        }
-        break;
-
-    case OCONST:
-        break;
-
-    case OADD:
-        if(isf)
-            d = l->fconst + r->fconst;
-        else {
-            v = l->vconst + r->vconst;
-        }
-        break;
-
-    case OSUB:
-        if(isf)
-            d = l->fconst - r->fconst;
-        else
-            v = l->vconst - r->vconst;
-        break;
-
-    case OMUL:
-        if(isf)
-            d = l->fconst * r->fconst;
-        else {
-            v = l->vconst * r->vconst;
-        }
-        break;
-
-    case OLMUL:
-        v = (uvlong)l->vconst * (uvlong)r->vconst;
-        break;
-
-
-    case ODIV:
-        if(vconst(r) == 0) {
-            warn(n, "divide by zero");
-            return;
-        }
-        if(isf)
-            d = l->fconst / r->fconst;
-        else
-            v = l->vconst / r->vconst;
-        break;
-
-    case OLDIV:
-        if(vconst(r) == 0) {
-            warn(n, "divide by zero");
-            return;
-        }
-        v = (uvlong)l->vconst / (uvlong)r->vconst;
-        break;
-
-    case OMOD:
-        if(vconst(r) == 0) {
-            warn(n, "modulo by zero");
-            return;
-        }
-        v = l->vconst % r->vconst;
-        break;
-
-    case OLMOD:
-        if(vconst(r) == 0) {
-            warn(n, "modulo by zero");
-            return;
-        }
-        v = (uvlong)l->vconst % (uvlong)r->vconst;
-        break;
-
-    case OAND:
-        v = l->vconst & r->vconst;
-        break;
-
-    case OOR:
-        v = l->vconst | r->vconst;
-        break;
-
-    case OXOR:
-        v = l->vconst ^ r->vconst;
-        break;
-
-    case OLSHR:
-        v = (uvlong)l->vconst >> r->vconst;
-        break;
-
-    case OASHR:
-        v = l->vconst >> r->vconst;
-        break;
-
-    case OASHL:
-        v = l->vconst << r->vconst;
-        break;
-
-    case OLO:
-        v = (uvlong)l->vconst < (uvlong)r->vconst;
-        break;
-
-    case OLT:
-        if(typefd[l->type->etype])
-            v = l->fconst < r->fconst;
-        else
-            v = l->vconst < r->vconst;
-        break;
-
-    case OHI:
-        v = (uvlong)l->vconst > (uvlong)r->vconst;
-        break;
-
-    case OGT:
-        if(typefd[l->type->etype])
-            v = l->fconst > r->fconst;
-        else
-            v = l->vconst > r->vconst;
-        break;
-
-    case OLS:
-        v = (uvlong)l->vconst <= (uvlong)r->vconst;
-        break;
-
-    case OLE:
-        if(typefd[l->type->etype])
-            v = l->fconst <= r->fconst;
-        else
-            v = l->vconst <= r->vconst;
-        break;
-
-    case OHS:
-        v = (uvlong)l->vconst >= (uvlong)r->vconst;
-        break;
-
-    case OGE:
-        if(typefd[l->type->etype])
-            v = l->fconst >= r->fconst;
-        else
-            v = l->vconst >= r->vconst;
-        break;
-
-    case OEQ:
-        if(typefd[l->type->etype])
-            v = l->fconst == r->fconst;
-        else
-            v = l->vconst == r->vconst;
-        break;
-
-    case ONE:
-        if(typefd[l->type->etype])
-            v = l->fconst != r->fconst;
-        else
-            v = l->vconst != r->vconst;
-        break;
-
-    case ONOT:
-        if(typefd[l->type->etype])
-            v = !l->fconst;
-        else
-            v = !l->vconst;
-        break;
-
-    case OANDAND:
-        if(typefd[l->type->etype])
-            v = l->fconst && r->fconst;
-        else
-            v = l->vconst && r->vconst;
-        break;
-
-    case OOROR:
-        if(typefd[l->type->etype])
-            v = l->fconst || r->fconst;
-        else
-            v = l->vconst || r->vconst;
-        break;
-    }
-    if(isf) {
-        n->fconst = d;
-    } else {
-        n->vconst = convvtox(v, n->type->etype);
-    }
-    n->oldop = n->op;
-    n->op = OCONST;
-}
-@
-
-
-
-\subsubsection{[[compar()]]}
-
-% could be moved in Checking section?
-
-<<struct Big>>=
-/* 128-bit numbers */
-struct Big
-{
-    vlong a;
-    uvlong b;
-};
-@
-
-%ctor
-<<function big>>=
-Big
-big(vlong a, uvlong b)
-{
-    Big x;
-
-    x.a = a;
-    x.b = b;
-    return x;
-}
-@
-
-
-<<function cmp>>=
-static int
-cmp(Big x, Big y)
-{
-    if(x.a != y.a){
-        if(x.a < y.a)
-            return -1;
-        return 1;
-    }
-    if(x.b != y.b){
-        if(x.b < y.b)
-            return -1;
-        return 1;
-    }
-    return 0;
-}
-@
-
-<<function add>>=
-static Big
-add(Big x, int y)
-{
-    uvlong ob;
-    
-    ob = x.b;
-    x.b += y;
-    if(y > 0 && x.b < ob)
-        x.a++;
-    if(y < 0 && x.b > ob)
-        x.a--;
-    return x;
-} 
-@
-
-
-
-<<global cmps>>=
-/*	OEQ, ONE, OLE, OLS, OLT, OLO, OGE, OHS, OGT, OHI */
-static char *cmps[12] = 
-{
-    "==", "!=", "<=", "<=", "<", "<", ">=", ">=", ">", ">",
-};
-@
-
-<<function compar>>=
-int
-compar(Node *n, int reverse)
-{
-    Big lo, hi, x;
-    int op;
-    char xbuf[40], cmpbuf[50];
-    Node *l, *r;
-    Type *lt, *rt;
-
-    /*
-     * The point of this function is to diagnose comparisons 
-     * that can never be true or that look misleading because
-     * of the `usual arithmetic conversions'.  As an example 
-     * of the latter, if x is a ulong, then if(x <= -1) really means
-     * if(x <= 0xFFFFFFFF), while if(x <= -1LL) really means
-     * what it says (but 8c compiles it wrong anyway).
-     */
-
-    if(reverse){
-        r = n->left;
-        l = n->right;
-        op = comrel[relindex(n->op)];
-    }else{
-        l = n->left;
-        r = n->right;
-        op = n->op;
-    }
-
-    /*
-     * Skip over left casts to find out the original expression range.
-     */
-    while(l->op == OCAST)
-        l = l->left;
-    if(l->op == OCONST)
-        return 0;
-    lt = l->type;
-    if(l->op == ONAME && l->sym->type){
-        lt = l->sym->type;
-        if(lt->etype == TARRAY)
-            lt = lt->link;
-    }
-    if(lt == T)
-        return 0;
-    if(lt->etype == TXXX || lt->etype > TUVLONG)
-        return 0;
-    
-    /*
-     * Skip over the right casts to find the on-screen value.
-     */
-    if(r->op != OCONST)
-        return 0;
-    while(r->oldop == OCAST && !r->xcast)
-        r = r->left;
-    rt = r->type;
-    if(rt == T)
-        return 0;
-
-    x.b = r->vconst;
-    x.a = 0;
-    if((rt->etype&1) && r->vconst < 0)	/* signed negative */
-        x.a = ~0ULL;
-
-    if((lt->etype&1)==0){
-        /* unsigned */
-        lo = big(0, 0);
-        if(lt->width == 8)
-            hi = big(0, ~0ULL);
-        else
-            hi = big(0, (1LL<<(l->type->width*8))-1);
-    }else{
-        lo = big(~0ULL, -(1LL<<(l->type->width*8-1)));
-        hi = big(0, (1LL<<(l->type->width*8-1))-1);
-    }
-
-    switch(op){
-    case OLT:
-    case OLO:
-    case OGE:
-    case OHS:
-        if(cmp(x, lo) <= 0)
-            goto useless;
-        if(cmp(x, add(hi, 1)) >= 0)
-            goto useless;
-        break;
-    case OLE:
-    case OLS:
-    case OGT:
-    case OHI:
-        if(cmp(x, add(lo, -1)) <= 0)
-            goto useless;
-        if(cmp(x, hi) >= 0)
-            goto useless;
-        break;
-    case OEQ:
-    case ONE:
-        /*
-         * Don't warn about comparisons if the expression
-         * is as wide as the value: the compiler-supplied casts
-         * will make both outcomes possible.
-         */
-        if(lt->width >= rt->width && debug['w'] < 2)
-            return 0;
-        if(cmp(x, lo) < 0 || cmp(x, hi) > 0)
-            goto useless;
-        break;
-    }
-    return 0;
-
-useless:
-    if((x.a==0 && x.b<=9) || (x.a==~0LL && x.b >= -9ULL))
-        snprint(xbuf, sizeof xbuf, "%lld", x.b);
-    else if(x.a == 0)
-        snprint(xbuf, sizeof xbuf, "%#llux", x.b);
-    else
-        snprint(xbuf, sizeof xbuf, "%#llx", x.b);
-    if(reverse)
-        snprint(cmpbuf, sizeof cmpbuf, "%s %s %T",
-            xbuf, cmps[relindex(n->op)], lt);
-    else
-        snprint(cmpbuf, sizeof cmpbuf, "%T %s %s",
-            lt, cmps[relindex(n->op)], xbuf);
-if(debug['y']) prtree(n, "strange");
-    warn(n, "useless or misleading comparison: %s", cmpbuf);
-    return 0;
-}
-@
-
-
-\subsection{Comma hoisting, [[comma()]]}
-
-<<function comargs>>=
-/*
- * hoist comma operators out of expressions
- *	(a,b) OP c => (a, b OP c)
- *	OP(a,b) =>	(a, OP b)
- *	a OP (b,c) => (b, a OP c)
- */
-
-static Node*
-comargs(Com *com, Node *n)
-{
-    if(n != Z && n->op == OLIST){
-        n->left = comargs(com, n->left);
-        n->right = comargs(com, n->right);
-    }
-    return commas(com, n);
-}
-@
-
-<<function commas>>=
-static Node*
-commas(Com *com, Node *n)
-{
-    Node *t;
-
-    if(n == Z)
-        return n;
-    switch(n->op){
-    case OREGISTER:
-    case OINDREG:
-    case OCONST:
-    case ONAME:
-    case OSTRING:
-        /* leaf */
-        return n;
-
-    case OCOMMA:
-        t = commas(com, n->left);
-        if(com->n >= nelem(com->t))
-            fatal(n, "comma list overflow");
-        com->t[com->n++] = t;
-        return commas(com, n->right);
-
-    case OFUNC:
-        n->left = commas(com, n->left);
-        n->right = comargs(com, n->right);
-        return n;
-
-    case OCOND:
-        n->left = commas(com, n->left);
-        comma(n->right->left);
-        comma(n->right->right);
-        return n;
-
-    case OANDAND:
-    case OOROR:
-        n->left = commas(com, n->left);
-        comma(n->right);
-        return n;
-
-    case ORETURN:
-        comma(n->left);
-        return n;
-    }
-    n->left = commas(com, n->left);
-    if(n->right != Z)
-        n->right = commas(com, n->right);
-    return n;
-}
-@
-
-<<function comma>>=
-static void
-comma(Node *n)
-{
-    Com com;
-    Node *nn;
-
-    com.n = 0;
-    nn = commas(&com, n);
-    if(com.n > 0){
-if(debug['y'])print("n=%d\n", com.n);
-if(debug['y']) prtree(nn, "res");
-        if(nn != n)
-            *n = *nn;
-        while(com.n > 0){
-if(debug['y']) prtree(com.t[com.n-1], "tree");
-            nn = new1(OXXX, Z, Z);
-            *nn = *n;
-            n->op = OCOMMA;
-            n->type = nn->type;
-            n->left = com.t[--com.n];
-            n->right = nn;
-            n->lineno = n->left->lineno;
-        }
-if(debug['y']) prtree(n, "final");
-    }else if(n != nn)
-        fatal(n, "odd tree");
-}
-@
-
-
-
-\section{Arithmetic}
-% see also 8c -m, print add/mul/sub trees
-
-
-% "acom is Aho and Ullman's acommute (with all the exercises done).
-% basically it does code improvements taking advantage of
-% associative-commutative operations, and extends that to look for
-% further optimisations mentioned in Thompson's paper on the compiler.
-% Ritchie's PDP-11 C compiler did something similar (but he called it
-% acommute and distrib). comments such as "bust terms out" and "look
-% for factorable terms c1*i + c1*c2*j -> c1*(i + c2*j) suggest what
-% it's doing). essentially it flattens levels of an expression tree
-% using associative and commutative operators into an array and
-% rearranges them." - fortsith
-
-\subsection{[[Term]]}
-
-<<constant NTERM>>=
-#define	NTERM		10
-@
-
-<<struct Term>>=
-struct	Term
-{
-    vlong	mult;
-    Node	*node;
-};
-@
-
-<<global term>>=
-Term	term[NTERM];
-@
-
-<<global nterm>>=
-int	nterm;
-@
-
-
-\subsection{[[acom()]]}
-% cc/scon.c ??
-
-% arithmetic compile? arithmetic specific checks?
-
-<<function acom>>=
-void
-acom(Node *n)
-{
-    Type *t;
-    Node *l, *r;
-    int i;
-
-    switch(n->op)
-    {
-
-    case ONAME:
-    case OCONST:
-    case OSTRING:
-    case OINDREG:
-    case OREGISTER:
-        return;
-
-    case ONEG:
-        l = n->left;
-        if(addo(n) && addo(l))
-            break;
-        acom(l);
-        return;
-
-    case OADD:
-    case OSUB:
-    case OMUL:
-        l = n->left;
-        r = n->right;
-        if(addo(n)) {
-            if(addo(r))
-                break;
-            if(addo(l))
-                break;
-        }
-        acom(l);
-        acom(r);
-        return;
-
-    default:
-        l = n->left;
-        r = n->right;
-        if(l != Z)
-            acom(l);
-        if(r != Z)
-            acom(r);
-        return;
-    }
-
-    /* bust terms out */
-    t = n->type;
-    term[0].mult = 0;
-    term[0].node = Z;
-    nterm = 1;
-    acom1(1, n);
-
-    if(debug['m'])
-     for(i=0; i<nterm; i++) {
-        print("%d %3lld ", i, term[i].mult);
-        prtree1(term[i].node, 1, 0);
-    }
-
-    if(nterm < NTERM)
-        acom2(n, t);
-    n->type = t;
-}
-@
-
-
-<<function addo>>=
-int
-addo(Node *n)
-{
-
-    if(n != Z)
-    if(!typefd[n->type->etype])
-    if(!typev[n->type->etype] || ewidth[TVLONG] == ewidth[TIND])
-    switch(n->op) {
-
-    case OCAST:
-        if(nilcast(n->left->type, n->type))
-            return 1;
-        break;
-
-    case ONEG:
-    case OADD:
-    case OSUB:
-        return 1;
-
-    case OMUL:
-        if(n->left->op == OCONST)
-            return 1;
-        if(n->right->op == OCONST)
-            return 1;
-    }
-    return 0;
-}
-@
-
-
-<<function acom1>>=
-void
-acom1(vlong v, Node *n)
-{
-    Node *l, *r;
-
-    if(v == 0 || nterm >= NTERM)
-        return;
-    if(!addo(n)) {
-        if(n->op == OCONST)
-        if(!typefd[n->type->etype]) {
-            term[0].mult += v*n->vconst;
-            return;
-        }
-        term[nterm].mult = v;
-        term[nterm].node = n;
-        nterm++;
-        return;
-    }
-    switch(n->op) {
-
-    case OCAST:
-        acom1(v, n->left);
-        break;
-
-    case ONEG:
-        acom1(-v, n->left);
-        break;
-
-    case OADD:
-        acom1(v, n->left);
-        acom1(v, n->right);
-        break;
-
-    case OSUB:
-        acom1(v, n->left);
-        acom1(-v, n->right);
-        break;
-
-    case OMUL:
-        l = n->left;
-        r = n->right;
-        if(l->op == OCONST)
-        if(!typefd[n->type->etype]) {
-            acom1(v*l->vconst, r);
-            break;
-        }
-        if(r->op == OCONST)
-        if(!typefd[n->type->etype]) {
-            acom1(v*r->vconst, l);
-            break;
-        }
-        break;
-
-    default:
-        diag(n, "not addo");
-    }
-}
-@
-
-
-
-<<function acast>>=
-static Node*
-acast(Type *t, Node *n)
-{
-    if(n->type->etype != t->etype || n->op == OBIT) {
-        n = new1(OCAST, n, Z);
-        if(nocast(n->left->type, t))
-            *n = *n->left;
-        n->type = t;
-    }
-    return n;
-}
-@
-
-
-
-<<function acomcmp1>>=
-int
-acomcmp1(const void *a1, const void *a2)
-{
-    vlong c1, c2;
-    Term *t1, *t2;
-
-    t1 = (Term*)a1;
-    t2 = (Term*)a2;
-    c1 = t1->mult;
-    if(c1 < 0)
-        c1 = -c1;
-    c2 = t2->mult;
-    if(c2 < 0)
-        c2 = -c2;
-    if(c1 > c2)
-        return 1;
-    if(c1 < c2)
-        return -1;
-    c1 = 1;
-    if(t1->mult < 0)
-        c1 = 0;
-    c2 = 1;
-    if(t2->mult < 0)
-        c2 = 0;
-    if(c2 -= c1)
-        return c2;
-    if(t2 > t1)
-        return 1;
-    return -1;
-}
-@
-
-<<function acomcmp2>>=
-int
-acomcmp2(const void *a1, const void *a2)
-{
-    vlong c1, c2;
-    Term *t1, *t2;
-
-    t1 = (Term*)a1;
-    t2 = (Term*)a2;
-    c1 = t1->mult;
-    c2 = t2->mult;
-    if(c1 > c2)
-        return 1;
-    if(c1 < c2)
-        return -1;
-    if(t2 > t1)
-        return 1;
-    return -1;
-}
-@
-
-<<function acom2>>=
-void
-acom2(Node *n, Type *t)
-{
-    Node *l, *r;
-    Term trm[NTERM];
-    int et, nt, i, j;
-    vlong c1, c2;
-
-    /*
-     * copy into automatic
-     */
-    c2 = 0;
-    nt = nterm;
-    for(i=0; i<nt; i++)
-        trm[i] = term[i];
-    /*
-     * recur on subtrees
-     */
-    j = 0;
-    for(i=1; i<nt; i++) {
-        c1 = trm[i].mult;
-        if(c1 == 0)
-            continue;
-        l = trm[i].node;
-        if(l != Z) {
-            j = 1;
-            acom(l);
-        }
-    }
-    c1 = trm[0].mult;
-    if(j == 0) {
-        n->oldop = n->op;
-        n->op = OCONST;
-        n->vconst = c1;
-        return;
-    }
-    et = t->etype;
-
-    /*
-     * prepare constant term,
-     * combine it with an addressing term
-     */
-    if(c1 != 0) {
-        l = new1(OCONST, Z, Z);
-        l->type = t;
-        l->vconst = c1;
-        trm[0].mult = 1;
-        for(i=1; i<nt; i++) {
-            if(trm[i].mult != 1)
-                continue;
-            r = trm[i].node;
-            if(r->op != OADDR)
-                continue;
-            r->type = t;
-            l = new1(OADD, r, l);
-            l->type = t;
-            trm[i].mult = 0;
-            break;
-        }
-        trm[0].node = l;
-    }
-    /*
-     * look for factorable terms
-     * c1*i + c1*c2*j -> c1*(i + c2*j)
-     */
-    qsort(trm+1, nt-1, sizeof(trm[0]), acomcmp1);
-    for(i=nt-1; i>=0; i--) {
-        c1 = trm[i].mult;
-        if(c1 < 0)
-            c1 = -c1;
-        if(c1 <= 1)
-            continue;
-        for(j=i+1; j<nt; j++) {
-            c2 = trm[j].mult;
-            if(c2 < 0)
-                c2 = -c2;
-            if(c2 <= 1)
-                continue;
-            if(c2 % c1)
-                continue;
-            r = trm[j].node;
-            if(r->type->etype != et)
-                r = acast(t, r);
-            c2 = trm[j].mult/trm[i].mult;
-            if(c2 != 1 && c2 != -1) {
-                r = new1(OMUL, r, new(OCONST, Z, Z));
-                r->type = t;
-                r->right->type = t;
-                r->right->vconst = c2;
-            }
-            l = trm[i].node;
-            if(l->type->etype != et)
-                l = acast(t, l);
-            r = new1(OADD, l, r);
-            r->type = t;
-            if(c2 == -1)
-                r->op = OSUB;
-            trm[i].node = r;
-            trm[j].mult = 0;
-        }
-    }
-    if(debug['m']) {
-        print("\n");
-        for(i=0; i<nt; i++) {
-            print("%d %3lld ", i, trm[i].mult);
-            prtree1(trm[i].node, 1, 0);
-        }
-    }
-
-    /*
-     * put it all back together
-     */
-    qsort(trm+1, nt-1, sizeof(trm[0]), acomcmp2);
-    l = Z;
-    for(i=nt-1; i>=0; i--) {
-        c1 = trm[i].mult;
-        if(c1 == 0)
-            continue;
-        r = trm[i].node;
-        if(r->type->etype != et || r->op == OBIT)
-            r = acast(t, r);
-        if(c1 != 1 && c1 != -1) {
-            r = new1(OMUL, r, new(OCONST, Z, Z));
-            r->type = t;
-            r->right->type = t;
-            if(c1 < 0) {
-                r->right->vconst = -c1;
-                c1 = -1;
-            } else {
-                r->right->vconst = c1;
-                c1 = 1;
-            }
-        }
-        if(l == Z) {
-            l = r;
-            c2 = c1;
-            continue;
-        }
-        if(c1 < 0)
-            if(c2 < 0)
-                l = new1(OADD, l, r);
-            else
-                l = new1(OSUB, l, r);
-        else
-            if(c2 < 0) {
-                l = new1(OSUB, r, l);
-                c2 = 1;
-            } else
-                l = new1(OADD, l, r);
-        l->type = t;
-    }
-    if(c2 < 0) {
-        r = new1(OCONST, 0, 0);
-        r->vconst = 0;
-        r->type = t;
-        l = new1(OSUB, r, l);
-        l->type = t;
-    }
-    *n = *l;
-}
-@
-
-
-
-
-
-\section{[[xcom()]]}
-
-% 8c/sgen.c
-
-% "xcom, which is machine-dependent, also has a comment. it assigns an
-% index of complexity to a sub-expression, which is usually expressed
-% as the number of registers needed to compute it (and good luck with
-% that on an x86), but it's also a good place to look for
-% machine-dependent aspects of machine addressing, such as indexing,
-% double-indexing, scaling, etc and it sets values in each tree node
-% to mark that." - forsith
-
-
-<<function xcom>>=
-/*
- *	calculate addressability as follows
- *		NAME ==> 10/11		name+value(SB/SP)
- *		REGISTER ==> 12		register
- *		CONST ==> 20		$value
- *		*(20) ==> 21		value
- *		&(10) ==> 13		$name+value(SB)
- *		&(11) ==> 1		$name+value(SP) $
- *		(13) + (20) ==> 13	fold constants
- *		(1) + (20) ==> 1	fold constants
- *		*(13) ==> 10		back to name
- *		*(1) ==> 11		back to name
- *
- *		(20) * (X) ==> 7	multiplier in indexing
- *		(X,7) + (13,1) ==> 8	adder in indexing (addresses)
- *		(8) ==> &9(OINDEX)	index, almost addressable
- *
- *	calculate complexity (number of registers)
- * 
- */
-void
-xcom(Node *n)
-{
-    Node *l, *r;
-    int g;
-
-    if(n == Z)
-        return;
-    l = n->left;
-    r = n->right;
-    n->complex = 0;
-    n->addable = 0;
-    switch(n->op) {
-    case OCONST:
-        n->addable = 20;
-        break;
-
-    case ONAME:
-        n->addable = 10;
-        if(n->class == CPARAM || n->class == CAUTO)
-            n->addable = 11;
-        break;
-
-    case OEXREG:
-        n->addable = 12;
-        break;
-
-    case OREGISTER:
-        n->addable = 12;
-        break;
-
-    case OINDREG:
-        n->addable = 12;
-        break;
-
-    case OADDR:
-        xcom(l);
-        if(l->addable == 10)
-            n->addable = 13;
-        else
-        if(l->addable == 11)
-            n->addable = 1;
-        break;
-
-    case OADD:
-        xcom(l);
-        xcom(r);
-        if(n->type->etype != TIND)
-            break;
-
-        switch(r->addable) {
-        case 20:
-            switch(l->addable) {
-            case 1:
-            case 13:
-            commadd:
-                l->type = n->type;
-                *n = *l;
-                l = new(0, Z, Z);
-                *l = *(n->left);
-                l->xoffset += r->vconst;
-                n->left = l;
-                r = n->right;
-                goto brk;
-            }
-            break;
-
-        case 1:
-        case 13:
-        case 10:
-        case 11:
-            /* l is the base, r is the index */
-            if(l->addable != 20)
-                n->addable = 8;
-            break;
-        }
-        switch(l->addable) {
-        case 20:
-            switch(r->addable) {
-            case 13:
-            case 1:
-                r = n->left;
-                l = n->right;
-                n->left = l;
-                n->right = r;
-                goto commadd;
-            }
-            break;
-
-        case 13:
-        case 1:
-        case 10:
-        case 11:
-            /* r is the base, l is the index */
-            if(r->addable != 20)
-                n->addable = 8;
-            break;
-        }
-        if(n->addable == 8 && !side(n)) {
-            indx(n);
-            l = new1(OINDEX, idx.basetree, idx.regtree);
-            l->scale = idx.scale;
-            l->addable = 9;
-            l->complex = l->right->complex;
-            l->type = l->left->type;
-            n->op = OADDR;
-            n->left = l;
-            n->right = Z;
-            n->addable = 8;
-            break;
-        }
-        break;
-
-    case OINDEX:
-        xcom(l);
-        xcom(r);
-        n->addable = 9;
-        break;
-
-    case OIND:
-        xcom(l);
-        if(l->op == OADDR) {
-            l = l->left;
-            l->type = n->type;
-            *n = *l;
-            return;
-        }
-        switch(l->addable) {
-        case 20:
-            n->addable = 21;
-            break;
-        case 1:
-            n->addable = 11;
-            break;
-        case 13:
-            n->addable = 10;
-            break;
-        }
-        break;
-
-    case OASHL:
-        xcom(l);
-        xcom(r);
-        indexshift(n);
-        break;
-
-    case OMUL:
-    case OLMUL:
-        xcom(l);
-        xcom(r);
-        g = vlog(l);
-        if(g >= 0) {
-            n->left = r;
-            n->right = l;
-            l = r;
-            r = n->right;
-        }
-        g = vlog(r);
-        if(g >= 0) {
-            n->op = OASHL;
-            r->vconst = g;
-            r->type = types[TINT];
-            indexshift(n);
-            break;
-        }
-commute(n);
-        break;
-
-    case OASLDIV:
-        xcom(l);
-        xcom(r);
-        g = vlog(r);
-        if(g >= 0) {
-            n->op = OASLSHR;
-            r->vconst = g;
-            r->type = types[TINT];
-        }
-        break;
-
-    case OLDIV:
-        xcom(l);
-        xcom(r);
-        g = vlog(r);
-        if(g >= 0) {
-            n->op = OLSHR;
-            r->vconst = g;
-            r->type = types[TINT];
-            indexshift(n);
-            break;
-        }
-        break;
-
-    case OASLMOD:
-        xcom(l);
-        xcom(r);
-        g = vlog(r);
-        if(g >= 0) {
-            n->op = OASAND;
-            r->vconst--;
-        }
-        break;
-
-    case OLMOD:
-        xcom(l);
-        xcom(r);
-        g = vlog(r);
-        if(g >= 0) {
-            n->op = OAND;
-            r->vconst--;
-        }
-        break;
-
-    case OASMUL:
-    case OASLMUL:
-        xcom(l);
-        xcom(r);
-        g = vlog(r);
-        if(g >= 0) {
-            n->op = OASASHL;
-            r->vconst = g;
-        }
-        break;
-
-    case OLSHR:
-    case OASHR:
-        xcom(l);
-        xcom(r);
-        indexshift(n);
-        break;
-
-    default:
-        if(l != Z)
-            xcom(l);
-        if(r != Z)
-            xcom(r);
-        break;
-    }
-brk:
-    if(n->addable >= 10)
-        return;
-    if(l != Z)
-        n->complex = l->complex;
-    if(r != Z) {
-        if(r->complex == n->complex)
-            n->complex = r->complex+1;
-        else
-        if(r->complex > n->complex)
-            n->complex = r->complex;
-    }
-    if(n->complex == 0)
-        n->complex++;
-
-    if(com64(n))
-        return;
-
-    switch(n->op) {
-
-    case OFUNC:
-        n->complex = FNX;
-        break;
-
-    case OLMOD:
-    case OMOD:
-    case OLMUL:
-    case OLDIV:
-    case OMUL:
-    case ODIV:
-    case OASLMUL:
-    case OASLDIV:
-    case OASLMOD:
-    case OASMUL:
-    case OASDIV:
-    case OASMOD:
-        if(r->complex >= l->complex) {
-            n->complex = l->complex + 3;
-            if(r->complex > n->complex)
-                n->complex = r->complex;
-        } else {
-            n->complex = r->complex + 3;
-            if(l->complex > n->complex)
-                n->complex = l->complex;
-        }
-        break;
-
-    case OLSHR:
-    case OASHL:
-    case OASHR:
-    case OASLSHR:
-    case OASASHL:
-    case OASASHR:
-        if(r->complex >= l->complex) {
-            n->complex = l->complex + 2;
-            if(r->complex > n->complex)
-                n->complex = r->complex;
-        } else {
-            n->complex = r->complex + 2;
-            if(l->complex > n->complex)
-                n->complex = l->complex;
-        }
-        break;
-
-    case OADD:
-    case OXOR:
-    case OAND:
-    case OOR:
-        /*
-         * immediate operators, make const on right
-         */
-        if(l->op == OCONST) {
-            n->left = r;
-            n->right = l;
-        }
-        break;
-
-    case OEQ:
-    case ONE:
-    case OLE:
-    case OLT:
-    case OGE:
-    case OGT:
-    case OHI:
-    case OHS:
-    case OLO:
-    case OLS:
-        /*
-         * compare operators, make const on left
-         */
-        if(r->op == OCONST) {
-            n->left = r;
-            n->right = l;
-            n->op = invrel[relindex(n->op)];
-        }
-        break;
-    }
-}
-@
-%$
+\section{Peep optimizer}
 
 \section{Register allocation}
 % 8c -r? registerization
@@ -13413,19 +13521,8 @@ struct	Reg
 
 \section{Dominators}
 
-\section{Peep optimizer}
-
-\section{Copy propagation}
-
 
 \chapter{Object Generation}
-%x86!
-
-% target language = Adr, Prog, as, etc, like in Linker and assembler
-
-% outcode, like in Assembler?
-
-\chapter{Assembly Generation}
 
 % 8c -S
 
@@ -15229,9 +15326,9 @@ allfloat(Node *n, int flag)
 }
 @
 
-\section{64 bits}
+\section{64 bits operations}
 
-
+\subsection{[[cc/com64.c]]}
 % portable part, cc/com64.c
 % vlong is 64 bits, so how do on 32 bits?
 % do via builtins _xxxv, e.g. _addv, _mulv in lib_core/libc/xxx/vlop.c
@@ -16033,6 +16130,7 @@ convvtox(vlong c, int et)
 }
 @
 
+\subsection{[[8c/cgen64.c]]}
 
 \section{Endianness}
 % 8c -l, just for mips => switch from vc to 0c
@@ -16052,6 +16150,8 @@ char	debug[256];
 
 \section{[[Fmt]]}
 
+\subsection{[[cc/]]}
+
 <<[[cinit()]] fmtinstall>>=
 fmtinstall('O', Oconv);
 fmtinstall('T', Tconv);
@@ -16060,8 +16160,6 @@ fmtinstall('L', Lconv);
 fmtinstall('Q', Qconv);
 fmtinstall('|', VBconv);
 @
-
-\subsection{[[cc/]]}
 
 <<function Oconv>>=
 // enum<node_kind> -> string
@@ -16504,6 +16602,7 @@ Pconv(Fmt *fp)
 % why not switch?
 
 <<function Aconv>>=
+// enum<opcode_kind> -> string
 int
 Aconv(Fmt *fp)
 {
@@ -16743,7 +16842,7 @@ Sconv(Fmt *fp)
 @
 
 
-\section{[[prxxx()]]}
+\section{AST dumper, [[prtree()]]}
 
 <<function prtree>>=
 void
@@ -16777,6 +16876,7 @@ prtree1(Node *n, int d, bool f)
     d++;
     print("%O", n->op);
     i = 3; // 1 || 2
+
     switch(n->op) {
     case ONAME:
         print(" \"%F\"", n);
@@ -16893,6 +16993,9 @@ dbgdecl(Sym *s)
 \section{[[8c -m]], printing arithmetic trees}
 
 \section{[[8c -r]], printing registerization}
+
+\section{[[8c -g]], ???}
+% for cgen, print lhs and rhs
 
 \chapter{Error Managment}
 

@@ -13,7 +13,7 @@ int	copysub(Adr*, Adr*, Adr*, int);
 //int	copysub1(Prog*, Adr*, Adr*, int);
 
 /*s: function needc */
-static int
+static bool
 needc(Prog *p)
 {
     while(p != P) {
@@ -21,20 +21,20 @@ needc(Prog *p)
         case AADCL:
         case ASBBL:
         case ARCRL:
-            return 1;
+            return true;
         case AADDL:
         case ASUBL:
         case AJMP:
         case ARET:
         case ACALL:
-            return 0;
+            return false;
         default:
             if(p->to.type == D_BRANCH)
-                return 0;
+                return false;
         }
         p = p->link;
     }
-    return 0;
+    return false;
 }
 /*e: function needc */
 

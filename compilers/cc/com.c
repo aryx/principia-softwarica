@@ -1513,7 +1513,8 @@ useless:
     else
         snprint(cmpbuf, sizeof cmpbuf, "%T %s %s",
             lt, cmps[relindex(n->op)], xbuf);
-if(debug['y']) prtree(n, "strange");
+    if(debug['y']) 
+        prtree(n, "strange");
     warn(n, "useless or misleading comparison: %s", cmpbuf);
     return 0;
 }

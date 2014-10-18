@@ -252,14 +252,14 @@ reduxv(Node *n)
 /*e: function reduxv */
 
 /*s: function cond */
-int
+bool
 cond(int op)
 {
     switch(op) {
     case OANDAND:
     case OOROR:
     case ONOT:
-        return 1;
+        return true;
 
     case OEQ:
     case ONE:
@@ -271,9 +271,9 @@ cond(int op)
     case OHS:
     case OLO:
     case OLS:
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 /*e: function cond */
 
