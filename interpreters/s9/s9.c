@@ -11,9 +11,9 @@
  * Use -DNO_SIGNALS to disable POSIX signal handlers.
  */
 
-/*s: global Debug_GC */
 /*----- Miscellanea -----*/
 
+/*s: global Debug_GC */
 int	Debug_GC = 0;
 /*e: global Debug_GC */
 
@@ -43,7 +43,6 @@ int	Debug_GC = 0;
 /*s: constant HASH_THRESHOLD */
 #define HASH_THRESHOLD	64
 /*e: constant HASH_THRESHOLD */
-
 /*s: constant MEMORY_LIMIT_KN */
 /* Hard memory limit in K-Nodes, 0 = none */
 #define MEMORY_LIMIT_KN	1024
@@ -52,8 +51,8 @@ int	Debug_GC = 0;
 //#if INT_MAX >= 1000000000000000000		/* 64-bit */
 // #define DIGITS_PER_WORD	18
 // #define INT_SEG_LIMIT		1000000000000000000
-/*s: constant DIGITS_PER_WORD */
 //#elif INT_MAX >= 1000000000 			/* 32-bit */
+/*s: constant DIGITS_PER_WORD */
  #define DIGITS_PER_WORD	9
 /*e: constant DIGITS_PER_WORD */
 /*s: constant INT_SEG_LIMIT */
@@ -64,6 +63,7 @@ int	Debug_GC = 0;
 // #define INT_SEG_LIMIT		10000
 //#endif
 
+/*s: constant xxxlags */
 /*s: constant AFLAG */
 /* GC flags */
 #define	AFLAG	0x01	/* Atom, Car = type, CDR = next */
@@ -83,7 +83,7 @@ int	Debug_GC = 0;
 /*s: constant LFLAG */
 #define LFLAG	0x20	/* Port: locked (do not close) */
 /*e: constant LFLAG */
-
+/*e: constant xxxlags */
 /*s: enum EVAL_STATES */
 enum EVAL_STATES {
     MATOM,	/* Processing atom */
@@ -131,10 +131,18 @@ enum EVAL_STATES {
 #define NOEXPR		(-9)
 /*e: constant NOEXPR */
 
-int	Pool_size = 0,
-    Vpool_size = 0;
-int	*Car = NULL,
-    *Cdr = NULL;
+/*s: global Pool_size */
+int    Pool_size = 0;
+/*e: global Pool_size */
+/*s: global Vpool_size */
+int    Vpool_size = 0;
+/*e: global Vpool_size */
+/*s: global Car */
+int    *Car = NULL;
+/*e: global Car */
+/*s: global Cdr */
+int    *Cdr = NULL;
+/*e: global Cdr */
 /*s: global Tag */
 char	*Tag = NULL;
 /*e: global Tag */
@@ -144,14 +152,24 @@ int	*Vectors = NULL;
 /*s: global Free_vecs */
 int	Free_vecs = 0;
 /*e: global Free_vecs */
-int	Stack = NIL,
-    Stack_bottom = NIL;
+/*s: global Stack */
+int	Stack = NIL;
+/*e: global Stack */
+/*s: global Stack_bottom */
+int     Stack_bottom = NIL;
+/*e: global Stack_bottom */
 /*s: global State_stack */
 int	State_stack = NIL;
 /*e: global State_stack */
-int	Tmp_car = NIL,
-    Tmp_cdr = NIL,
-    Tmp = NIL;
+/*s: global Tmp_car */
+int    Tmp_car = NIL;
+/*e: global Tmp_car */
+/*s: global Tmp_cdr */
+int    Tmp_cdr = NIL;
+/*e: global Tmp_cdr */
+/*s: global Tmp */
+int    Tmp = NIL;
+/*e: global Tmp */
 /*s: global Free_list */
 int	Free_list = NIL;
 /*e: global Free_list */
@@ -173,8 +191,12 @@ FILE	*Ports[MAX_PORTS];
 /*s: global Port_flags */
 char	Port_flags[MAX_PORTS];
 /*e: global Port_flags */
-int	Input_port = 0,
-    Output_port = 1;
+/*s: global Input_port */
+int    Input_port = 0;
+/*e: global Input_port */
+/*s: global Output_port */
+int    Output_port = 1;
+/*e: global Output_port */
 /*s: global Level */
 int	Level = 0;
 /*e: global Level */
@@ -190,20 +212,66 @@ int	Displaying = 0;
 /*s: global Quiet_mode */
 int	Quiet_mode = 0;
 /*e: global Quiet_mode */
-
-int	S_char, S_else, S_input_port, S_integer, S_latest,
-    S_output_port, S_primitive, S_procedure, S_quasiquote,
-    S_quote, S_string, S_symbol, S_syntax, S_unquote,
-    S_unquote_splicing, S_vector;
-int	S_and, S_begin, S_cond, S_define, S_define_syntax, S_if,
-    S_lambda, S_let, S_letrec, S_or, S_set_b,
-    S_syntax_rules;
-
+/*s: global S_xxx */
+int S_latest;
+/*x: global S_xxx */
+int S_char;
+/*x: global S_xxx */
+int S_integer;
+/*x: global S_xxx */
+int S_string;
+/*x: global S_xxx */
+int S_vector;
+/*x: global S_xxx */
+int S_input_port;
+int S_output_port;
+/*x: global S_xxx */
+int S_procedure;
+int S_primitive;
+int S_syntax;
+/*x: global S_xxx */
+int S_symbol;
+/*x: global S_xxx */
+int S_if;
+int S_else;
+int S_cond;
+int S_and;
+int S_or;
+int S_begin;
+/*x: global S_xxx */
+int S_define;
+int S_lambda;
+int S_let;
+int S_letrec;
+/*x: global S_xxx */
+int S_set_b;
+/*x: global S_xxx */
+int S_quote;
+int S_quasiquote;
+int S_unquote;
+int S_unquote_splicing;
+/*x: global S_xxx */
+int S_define_syntax;
+int S_syntax_rules;
+/*e: global S_xxx */
 /*s: global GC_root */
 int	*GC_root[] = { &Program, &Symbols, &Environment, &Tmp, &Tmp_car,
             &Tmp_cdr, &Stack, &Stack_bottom, &State_stack,
             &Acc, NULL };
 /*e: global GC_root */
+
+void mark(int n);
+int error(char *msg, int expr);
+void print2(int n);
+int read_form(void);
+void print2(int n);
+int bignum_add(int a, int b);
+int bignum_subtract(int a, int b);
+int pp_write(int x);
+int eval(int x);
+int _eval(int x);
+
+
 
 /*s: function nl */
 #define nl()		pr("\n")
@@ -393,8 +461,6 @@ int	*GC_root[] = { &Program, &Symbols, &Environment, &Tmp, &Tmp_car,
 #define pair_p(x) (!atom_p(x))
 /*e: function pair_p */
 
-int error(char *msg, int expr);
-
 /*s: function pr */
 void pr(char *s) {
     if (Ports[Output_port] == NULL)
@@ -403,8 +469,6 @@ void pr(char *s) {
         fwrite(s, 1, strlen(s), Ports[Output_port]);
 }
 /*e: function pr */
-
-void print2(int n);
 
 /*s: function error */
 int error(char *msg, int expr) {
@@ -434,9 +498,9 @@ int fatal(char *msg) {
 }
 /*e: function fatal */
 
-/*s: function new_segment */
 /*----- GC -----*/
 
+/*s: function new_segment */
 void new_segment(void) {
     Car = realloc(Car, sizeof(int) * (Pool_size + SEGMENT_LEN));
     Cdr = realloc(Cdr, sizeof(int) * (Pool_size + SEGMENT_LEN));
@@ -455,8 +519,6 @@ void new_segment(void) {
     Vpool_size += SEGMENT_LEN;
 }
 /*e: function new_segment */
-
-void mark(int n);
 
 /*s: function mark_vector */
 /* Mark object at offset N in the Vectors */
@@ -714,9 +776,9 @@ int unsave(int k) {
 }
 /*e: function unsave */
 
-/*s: function find_symbol */
 /*----- Reader -----*/
 
+/*s: function find_symbol */
 int find_symbol(char *s) {
     int	y;
 
@@ -760,8 +822,6 @@ int add_symbol(char *s) {
 /*s: function read_c_ci */
 #define read_c_ci() tolower(read_c())
 /*e: function read_c_ci */
-
-int read_form(void);
 
 /*s: function read_list */
 int read_list(void) {
@@ -1192,8 +1252,6 @@ int print_integer(int n) {
 }
 /*e: function print_integer */
 
-void print2(int n);
-
 /*s: function print_quoted */
 /* Print expressions of the form (QUOTE X) as 'X. */
 int print_quoted(int n) {
@@ -1392,9 +1450,9 @@ void print2(int n) {
 }
 /*e: function print2 */
 
-/*s: function length */
 /*----- Miscellanea -----*/
 
+/*s: function length */
 int length(int n) {
     int	k = 0;
 
@@ -1521,8 +1579,11 @@ int make_env(int rib, int env) {
 }
 /*e: function make_env */
 
+/*s: global hash stats */
 /* hash stats */
-int coll = 0, hits = 0;
+int coll = 0;
+int hits = 0;
+/*e: global hash stats */
 
 /*s: function try_hash */
 int try_hash(int v, int e) {
@@ -1546,9 +1607,9 @@ int try_hash(int v, int e) {
 }
 /*e: function try_hash */
 
-/*s: function lookup */
 /*----- Evaluator -----*/
 
+/*s: function lookup */
 int lookup(int v, int env) {
     int	e, n;
 
@@ -1591,9 +1652,9 @@ int value_of(int v, int env) {
 }
 /*e: function value_of */
 
-/*s: function too_few_args */
 /*----- Specials -----*/
 
+/*s: function too_few_args */
 int too_few_args(int n) {
     return error("too few arguments", n);
 }
@@ -2028,9 +2089,9 @@ int sf_syntax_rules(int x) {
 }
 /*e: function sf_syntax_rules */
 
-/*s: function make_integer */
 /*----- Bignums -----*/
 
+/*s: function make_integer */
 int make_integer(int i) {
     int	n;
 
@@ -2093,9 +2154,6 @@ int reverse_segments(int n) {
     return m;
 }
 /*e: function reverse_segments */
-
-int bignum_add(int a, int b);
-int bignum_subtract(int a, int b);
 
 /*s: function _bignum_add */
 int _bignum_add(int a, int b) {
@@ -2477,9 +2535,9 @@ int bignum_divide(int x, int a, int b) {
 }
 /*e: function bignum_divide */
 
-/*s: function pp_apply */
 /*----- Primitives -----*/
 
+/*s: function pp_apply */
 int pp_apply(int x) {
     int	m, p, q, last;
     char	*err = "apply: improper argument list";
@@ -2730,8 +2788,6 @@ int pp_current_output_port(int x) {
 }
 /*e: function pp_current_output_port */
 
-int pp_write(int x);
-
 /*s: function pp_display */
 int pp_display(int x) {
     Displaying = 1;
@@ -2890,8 +2946,6 @@ int open_port(char *path, char *mode) {
     return -1;
 }
 /*e: function open_port */
-
-int eval(int x);
 
 /*s: function load */
 int load(char *file) {
@@ -3519,9 +3573,9 @@ int pp_wrong(int x) {
 }
 /*e: function pp_wrong */
 
-/*s: enum TYPES */
 /*----- Evaluator -----*/
 
+/*s: enum TYPES */
 enum TYPES {
     T_NONE,
     T_BOOLEAN,
@@ -3825,8 +3879,6 @@ int uses_quasiquote_p(int x) {
 }
 /*e: function uses_quasiquote_p */
 
-int _eval(int x);
-
 /*s: function expand_qq */
 int expand_qq(int x, int app) {
     int	n, a, new;
@@ -4036,6 +4088,7 @@ int _eval(int x) {
     save(State_stack);
     save(Stack_bottom);
     Stack_bottom = Stack;
+
     s = MATOM;
     c = 0;
     cbn = 0;
@@ -4277,9 +4330,9 @@ int eval(int x) {
 }
 /*e: function eval */
 
-/*s: function clear_local_envs */
 /*----- REPL -----*/
 
+/*s: function clear_local_envs */
 void clear_local_envs(void) {
     while (Cdr[Environment] != NIL)
         Environment = Cdr[Environment];
@@ -4295,9 +4348,9 @@ void clear_local_envs(void) {
 //void keyboard_quit(int sig) {
 //	fatal("received quit signal, exiting");
 //}
-/*s: function repl */
 //#endif
 
+/*s: function repl */
 void repl(void) {
     int	n, sane_env;
 
@@ -4329,9 +4382,9 @@ void repl(void) {
 }
 /*e: function repl */
 
-/*s: function make_primitive */
 /*----- Miscellanea -----*/
 
+/*s: function make_primitive */
 int make_primitive(char *s, int id) {
     int	n;
 
@@ -4355,6 +4408,7 @@ int make_initial_env(void) {
     Environment = alloc(NIL, NIL);
     Environment = extend(add_symbol("**"), NIL, Environment);
     S_latest = cdadr(Environment);
+
     add_primitive("*", PP_TIMES);
     add_primitive("+", PP_PLUS);
     add_primitive("-", PP_MINUS);
@@ -4450,6 +4504,7 @@ int make_initial_env(void) {
     add_primitive("write", PP_WRITE);
     add_primitive("write-char", PP_WRITE_CHAR);
     add_primitive("wrong", PP_WRONG);
+
     Environment = alloc(Environment, NIL);
     return Environment;
 }
@@ -4468,6 +4523,7 @@ void init(void) {
     Output_port = 1;
     new_segment();
     gc();
+
     S_char = add_symbol("#<char>");
     S_input_port = add_symbol("#<input-port>");
     S_integer = add_symbol("#<integer>");
@@ -4495,6 +4551,7 @@ void init(void) {
     S_or = add_symbol("or");
     S_set_b = add_symbol("set!");
     S_syntax_rules = add_symbol("syntax-rules");
+
     Environment = make_initial_env();
     Program = TRUE;
     rehash(Car[Environment]);
@@ -4555,9 +4612,11 @@ void usage(void) {
 
 /*s: function main */
 int main(int argc, char **argv) {
+
     init();
     argv++;
     load_library();
+
     while (*argv != NULL) {
         if (**argv != '-') break;
         (*argv)++;
