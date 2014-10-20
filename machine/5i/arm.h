@@ -140,6 +140,7 @@ struct Memory
 };
 
 void		Ssyscall(ulong);
+//@Scheck: in libmach.a
 int		armclass(long);
 void		breakpoint(char*, char*);
 void		brkchk(ulong, int);
@@ -160,35 +161,24 @@ ushort		getmem_h(ulong);
 uvlong		getmem_v(ulong);
 ulong		getmem_w(ulong);
 ulong		ifetch(ulong);
-void		inithdr(int);
-void		initicache(void);
-void		initmap(void);
 void		initstk(int, char**);
 void		iprofile(void);
 void		isum(void);
 void		itrace(char*, ...);
 long		lnrand(long);
 char*		memio(char*, ulong, int, int);
-int		_mipscoinst(Map*, ulong, char*, int);
-Mul		mul(long, long);
-Mulu		mulu(ulong, ulong);
 char*		nextc(char*);
-void		printlocals(Symbol*, ulong);
 void		printparams(Symbol*, ulong);
 void		printsource(long);
-void		procinit(int);
 void		putmem_b(ulong, uchar);
 void		putmem_h(ulong, ushort);
 void		putmem_v(ulong, uvlong);
 void		putmem_w(ulong, ulong);
-void		reset(void);
 void		run(void);
 void		segsum(void);
 void		stktrace(int);
 void		tlbsum(void);
-void		undef(ulong);
 void		updateicache(ulong addr);
-void*		vaddr(ulong);
 
 /* Globals */
 extern	Registers	reg;
@@ -198,7 +188,6 @@ extern	int		trace;
 extern	int		sysdbg;
 extern	int		calltree;
 extern	Inst		itab[];
-extern	Inst		ispec[];
 extern	Icache		icache;
 extern	Tlb		tlb;
 extern	int		count;
@@ -209,7 +198,7 @@ extern	int		membpt;
 extern	int		cmdcount;
 extern	int		nopcount;
 extern	ulong		dot;
-extern	char*		file;
+
 extern	Biobuf*		bioout;
 extern	Biobuf*		bin;
 extern	ulong*		iprof;

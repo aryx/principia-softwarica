@@ -14,7 +14,6 @@ int sysdbg;
 int calltree;
 //in run.c
 //Inst itab[];
-Inst ispec[];
 Icache icache;
 Tlb tlb;
 int count;
@@ -29,7 +28,6 @@ Biobuf *bioout;
 Biobuf *bin;
 ulong *iprof;
 Map *symmap;		
-int rtrace;
 
 int	datasize;
 ulong	textbase;

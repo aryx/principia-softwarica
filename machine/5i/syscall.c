@@ -5,7 +5,7 @@
 
 #include "arm.h"
 
-#define	ODIRLEN	116	/* compatibility; used in _stat etc. */
+//#define	ODIRLEN	116	/* compatibility; used in _stat etc. */
 #define	OERRLEN	64	/* compatibility; used in _stat etc. */
 
 char 	errbuf[ERRMAX];
@@ -500,12 +500,6 @@ sysnotify(void)
 
 
 void
-sys_wait(void)
-{
-	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-	exits(0);
-}
-void
 sysawait(void)
 {
 	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
@@ -571,18 +565,7 @@ sysunmount(void)
 	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
 	exits(0);
 }
-void
-sysfork(void)
-{
-	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-	exits(0);
-}
-void
-sysforkpgrp(void)
-{
-	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-	exits(0);
-}
+
 void
 syssegbrk(void)
 {
@@ -607,12 +590,7 @@ sysexec(void)
 	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
  	exits(0);
 }
-void
-sys_fsession(void)
-{
-	Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
- 	exits(0);
-}
+
 void
 sysfauth(void)
 {

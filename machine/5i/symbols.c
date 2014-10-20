@@ -6,6 +6,9 @@
 
 #define	STRINGSZ	128
 
+void		printlocals(Symbol*, ulong);
+
+
 /*
  *	print the value of dot as file:line
  */

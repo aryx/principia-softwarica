@@ -12,9 +12,6 @@ int	width = 60;
 int	inc;
 
 ulong	expr(char*);
-ulong	expr1(char*);
-char*	term(char*, ulong*);
-
 
 void
 reset(void)

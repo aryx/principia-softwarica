@@ -5,11 +5,6 @@
 #include "arm.h"
 
 void
-icacheinit(void)
-{
-}
-
-void
 updateicache(ulong addr)
 {
 	USED(addr);

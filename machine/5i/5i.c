@@ -10,8 +10,11 @@ char*	file = "5.out";
 Biobuf	bp, bi;
 Fhdr	fhdr;
 
-void
-main(int argc, char **argv)
+void		inithdr(int);
+void		initmap(void);
+
+//@Scheck: entry point!
+void main(int argc, char **argv)
 {
 
 	argc--;

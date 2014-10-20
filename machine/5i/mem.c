@@ -4,6 +4,8 @@
 #include <mach.h>
 #include "arm.h"
 
+void*		vaddr(ulong);
+
 ulong
 ifetch(ulong addr)
 {

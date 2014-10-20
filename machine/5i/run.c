@@ -6,7 +6,9 @@
 
 #define XCAST(a) (uvlong)(ulong)a
 
-static	int	dummy;
+void		undef(ulong);
+
+//static	int	dummy;
 static	char*	shtype[4] =
 {
 	"<<",

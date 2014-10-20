@@ -5,7 +5,6 @@
 #include "arm.h"
 
 #define Percent(num, max)	((max)?((num)*100)/(max):0)
-#define prof prof5i
 
 extern	Inst	itab[];
 Inst *tables[] = { itab, 0 };
@@ -138,7 +137,8 @@ struct Prof
 	Symbol	s;
 	long	count;
 };
-Prof	prof[5000];
+// can't use prof, conflict with libc.h prof()
+Prof	aprof[5000];
 
 int
 profcmp(void *va, void *vb)
@@ -158,7 +158,7 @@ iprofile(void)
 	ulong total;
 
 	i = 0;
-	p = prof;
+	p = aprof;
 	if(textsym(&p->s, i) == 0)
 		return;
 	i++;
@@ -178,20 +178,20 @@ iprofile(void)
 
 	total = 0;
 	for(b = 0; b < i; b++)
-		total += prof[b].count;
+		total += aprof[b].count;
 
 	Bprint(bioout, "  cycles     %% symbol          file\n");
 	for(b = 0; b < i; b++) {
-		if(prof[b].count == 0)
+		if(aprof[b].count == 0)
 			continue;
 
 		Bprint(bioout, "%8ld %3ld.%ld %-15s ",
-			prof[b].count,
-			100*prof[b].count/total,
-			(1000*prof[b].count/total)%10,
-			prof[b].s.name);
+			aprof[b].count,
+			100*aprof[b].count/total,
+			(1000*aprof[b].count/total)%10,
+			aprof[b].s.name);
 
-		printsource(prof[b].s.value);
+		printsource(aprof[b].s.value);
 		Bputc(bioout, '\n');
 	}
 	memset(prof, 0, sizeof(Prof)*i);
