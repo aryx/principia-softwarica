@@ -1,3 +1,4 @@
+/*s: machine/5i/bpt.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -5,124 +6,133 @@
 #include <ctype.h>
 #include "arm.h"
 
+/*s: function dobplist */
 void
 dobplist(void)
 {
-	Breakpoint *b;
-	char buf[512];
+    Breakpoint *b;
+    char buf[512];
 
-	for(b = bplist; b; b = b->next) {
-		switch(b->type) {
-		case Instruction:
-			Bprint(bioout, "0x%lux,%d:b %d done, at ", b->addr, b->count, b->done);
-			symoff(buf, sizeof(buf), b->addr, CTEXT);
-			Bprint(bioout, buf);
-			break;
+    for(b = bplist; b; b = b->next) {
+        switch(b->type) {
+        case Instruction:
+            Bprint(bioout, "0x%lux,%d:b %d done, at ", b->addr, b->count, b->done);
+            symoff(buf, sizeof(buf), b->addr, CTEXT);
+            Bprint(bioout, buf);
+            break;
 
-		case Access:
-			Bprint(bioout, "0x%lux,%d:ba %d done, at ", b->addr, b->count, b->done);
-			symoff(buf, sizeof(buf), b->addr, CDATA);
-			Bprint(bioout, buf);
-			break;
+        case Access:
+            Bprint(bioout, "0x%lux,%d:ba %d done, at ", b->addr, b->count, b->done);
+            symoff(buf, sizeof(buf), b->addr, CDATA);
+            Bprint(bioout, buf);
+            break;
 
-		case Read:
-			Bprint(bioout, "0x%lux,%d:br %d done, at ", b->addr, b->count, b->done);
-			symoff(buf, sizeof(buf), b->addr, CDATA);
-			Bprint(bioout, buf);
-			break;
+        case Read:
+            Bprint(bioout, "0x%lux,%d:br %d done, at ", b->addr, b->count, b->done);
+            symoff(buf, sizeof(buf), b->addr, CDATA);
+            Bprint(bioout, buf);
+            break;
 
-		case Write:
-			Bprint(bioout, "0x%lux,%d:bw %d done, at ", b->addr, b->count, b->done);
-			symoff(buf, sizeof(buf), b->addr, CDATA);
-			Bprint(bioout, buf);
-			break;
+        case Write:
+            Bprint(bioout, "0x%lux,%d:bw %d done, at ", b->addr, b->count, b->done);
+            symoff(buf, sizeof(buf), b->addr, CDATA);
+            Bprint(bioout, buf);
+            break;
 
-		case Equal:
-			Bprint(bioout, "0x%lux,%d:be at ", b->addr, b->count);
-			symoff(buf, sizeof(buf), b->addr, CDATA);
-			Bprint(bioout, buf);
-			break;
-		}
-		Bprint(bioout, "\n");
-	}
+        case Equal:
+            Bprint(bioout, "0x%lux,%d:be at ", b->addr, b->count);
+            symoff(buf, sizeof(buf), b->addr, CDATA);
+            Bprint(bioout, buf);
+            break;
+        }
+        Bprint(bioout, "\n");
+    }
 }
+/*e: function dobplist */
 
+/*s: function breakpoint */
 void
 breakpoint(char *addr, char *cp)
 {
-	Breakpoint *b;
-	int type;
+    Breakpoint *b;
+    int type;
 
-	cp = nextc(cp);
-	type = Instruction;
-	switch(*cp) {
-	case 'r':
-		membpt++;
-		type = Read;
-		break;
-	case 'a':
-		membpt++;
-		type = Access;
-		break;
-	case 'w':
-		membpt++;
-		type = Write;
-		break;
-	case 'e':
-		membpt++;
-		type = Equal;
-		break;
-	}
-	b = emalloc(sizeof(Breakpoint));
-	b->addr = expr(addr);
-	b->type = type;
-	b->count = cmdcount;
-	b->done = cmdcount;
+    cp = nextc(cp);
+    type = Instruction;
+    switch(*cp) {
+    case 'r':
+        membpt++;
+        type = Read;
+        break;
+    case 'a':
+        membpt++;
+        type = Access;
+        break;
+    case 'w':
+        membpt++;
+        type = Write;
+        break;
+    case 'e':
+        membpt++;
+        type = Equal;
+        break;
+    }
+    b = emalloc(sizeof(Breakpoint));
+    b->addr = expr(addr);
+    b->type = type;
+    b->count = cmdcount;
+    b->done = cmdcount;
 
-	b->next = bplist;
-	bplist = b;
+    b->next = bplist;
+    bplist = b;
 }
+/*e: function breakpoint */
 
+/*s: function delbpt */
 void
 delbpt(char *addr)
 {
-	Breakpoint *b, **l;
-	ulong baddr;
+    Breakpoint *b, **l;
+    ulong baddr;
 
-	baddr = expr(addr);
-	l = &bplist;
-	for(b = *l; b; b = b->next) {
-		if(b->addr == baddr) {
-			if(b->type != Instruction)
-				membpt++;
-			*l = b->next;
-			free(b);
-			return;
-		}
-		l = &b->next;	
-	}
+    baddr = expr(addr);
+    l = &bplist;
+    for(b = *l; b; b = b->next) {
+        if(b->addr == baddr) {
+            if(b->type != Instruction)
+                membpt++;
+            *l = b->next;
+            free(b);
+            return;
+        }
+        l = &b->next;	
+    }
 
-	Bprint(bioout, "no breakpoint\n");
+    Bprint(bioout, "no breakpoint\n");
 }
+/*e: function delbpt */
 
+/*s: function brkchk */
 void
 brkchk(ulong addr, int type)
 {
-	Breakpoint *b;
+    Breakpoint *b;
 
-	for(b = bplist; b; b = b->next) {
-		if(b->addr == addr && (b->type&type)) {
-			if(b->type == Equal && getmem_4(addr) == b->count) {
-				count = 1;
-				atbpt = 1;
-				return;
-			}
-			if(--b->done == 0) {
-				b->done = b->count;
-				count = 1;
-				atbpt = 1;
-				return;
-			}
-		}
-	}	
+    for(b = bplist; b; b = b->next) {
+        if(b->addr == addr && (b->type&type)) {
+            if(b->type == Equal && getmem_4(addr) == b->count) {
+                count = 1;
+                atbpt = 1;
+                return;
+            }
+            if(--b->done == 0) {
+                b->done = b->count;
+                count = 1;
+                atbpt = 1;
+                return;
+            }
+        }
+    }	
 }
+/*e: function brkchk */
+/*e: machine/5i/bpt.c */

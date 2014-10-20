@@ -1,3 +1,4 @@
+/*s: machine/5i/arm.h */
 /*
  * arm.h
  */
@@ -12,132 +13,160 @@ typedef	struct	Icache		Icache;
 typedef	struct	Tlb		Tlb;
 typedef	struct	Breakpoint	Breakpoint;
 
+/*s: enum _anon_ */
 enum
 {
-	Instruction	= 1,
-	Read		= 2,
-	Write		= 4,
-	Access		= 2|4,
-	Equal		= 4|8,
+    Instruction	= 1,
+    Read		= 2,
+    Write		= 4,
+    Access		= 2|4,
+    Equal		= 4|8,
 };
+/*e: enum _anon_ */
 
+/*s: struct Breakpoint */
 struct Breakpoint
 {
-	int		type;		/* Instruction/Read/Access/Write/Equal */
-	ulong		addr;		/* Place at address */
-	int		count;		/* To execute count times or value */
-	int		done;		/* How many times passed through */
-	Breakpoint*	next;		/* Link to next one */
+    int		type;		/* Instruction/Read/Access/Write/Equal */
+    ulong		addr;		/* Place at address */
+    int		count;		/* To execute count times or value */
+    int		done;		/* How many times passed through */
+    Breakpoint*	next;		/* Link to next one */
 };
+/*e: struct Breakpoint */
 
+/*s: enum _anon_ (machine/5i/arm.h) */
 enum
 {
-	Imem,
-	Iarith,
-	Ibranch,
-	Isyscall,
+    Imem,
+    Iarith,
+    Ibranch,
+    Isyscall,
 };
+/*e: enum _anon_ (machine/5i/arm.h) */
 
+/*s: enum _anon_ (machine/5i/arm.h)2 */
 enum
 {
-	Nmaxtlb = 64,
-	REGARG	= 0,
-	REGRET	= 0,
-	REGPC	= 15,
-	REGLINK	= 14,
-	REGSP	= 13,
+    Nmaxtlb = 64,
+    REGARG	= 0,
+    REGRET	= 0,
+    REGPC	= 15,
+    REGLINK	= 14,
+    REGSP	= 13,
 };
+/*e: enum _anon_ (machine/5i/arm.h)2 */
 
+/*s: struct Tlb */
 struct Tlb
 {
-	int	on;			/* Being updated */
-	int	tlbsize;		/* Number of entries */
-	ulong	tlbent[Nmaxtlb];	/* Virtual address tags */
-	int	hit;			/* Number of successful tag matches */
-	int	miss;			/* Number of failed tag matches */
+    int	on;			/* Being updated */
+    int	tlbsize;		/* Number of entries */
+    ulong	tlbent[Nmaxtlb];	/* Virtual address tags */
+    int	hit;			/* Number of successful tag matches */
+    int	miss;			/* Number of failed tag matches */
 };		
+/*e: struct Tlb */
 
+/*s: struct Icache */
 struct Icache
 {
-	int	on;			/* Turned on */
-	int	linesize;		/* Line size in bytes */
-	int	stall;			/* Cache stalls */
-	int*	lines;			/* Tag array */
-	int*	(*hash)(ulong);		/* Hash function */
-	char*	hashtext;		/* What the function looks like */
+    int	on;			/* Turned on */
+    int	linesize;		/* Line size in bytes */
+    int	stall;			/* Cache stalls */
+    int*	lines;			/* Tag array */
+    int*	(*hash)(ulong);		/* Hash function */
+    char*	hashtext;		/* What the function looks like */
 };
+/*e: struct Icache */
 
+/*s: struct Inst */
 struct Inst
 {
-	void 	(*func)(ulong);
-	char*	name;
-	int	type;
-	int	count;
-	int	taken;
-	int	useddelay;
+    void 	(*func)(ulong);
+    char*	name;
+    int	type;
+    int	count;
+    int	taken;
+    int	useddelay;
 };
+/*e: struct Inst */
 
+/*s: struct Registers */
 struct Registers
 {
-	ulong	ar;
-	ulong	ir;
-	Inst*	ip;
-	long	r[16];
-	long	cc1;
-	long	cc2;
-	int	class;
-	int	cond;
-	int	compare_op;
-	int	cbit;
-	int	cout;
+    ulong	ar;
+    ulong	ir;
+    Inst*	ip;
+    long	r[16];
+    long	cc1;
+    long	cc2;
+    int	class;
+    int	cond;
+    int	compare_op;
+    int	cbit;
+    int	cout;
 };
+/*e: struct Registers */
 
+/*s: enum _anon_ (machine/5i/arm.h)3 */
 enum
 {
-	FPd	= 0,
-	FPs,
-	FPmemory,
+    FPd	= 0,
+    FPs,
+    FPmemory,
 };
+/*e: enum _anon_ (machine/5i/arm.h)3 */
 
+/*s: enum _anon_ (machine/5i/arm.h)4 */
 enum
 {
-	MemRead,
-	MemReadstring,
-	MemWrite,
+    MemRead,
+    MemReadstring,
+    MemWrite,
 };
+/*e: enum _anon_ (machine/5i/arm.h)4 */
 
+/*s: enum _anon_ (machine/5i/arm.h)5 */
 enum
 {
-	CCcmp, 
-	CCtst,
-	CCteq,
+    CCcmp, 
+    CCtst,
+    CCteq,
 };
+/*e: enum _anon_ (machine/5i/arm.h)5 */
 
+/*s: enum _anon_ (machine/5i/arm.h)6 */
 enum
 {
-	Stack,
-	Text,
-	Data,
-	Bss,
-	Nseg,
+    Stack,
+    Text,
+    Data,
+    Bss,
+    Nseg,
 };
+/*e: enum _anon_ (machine/5i/arm.h)6 */
 
+/*s: struct Segment */
 struct Segment
 {
-	short	type;
-	ulong	base;
-	ulong	end;
-	ulong	fileoff;
-	ulong	fileend;
-	int	rss;
-	int	refs;
-	uchar**	table;
+    short	type;
+    ulong	base;
+    ulong	end;
+    ulong	fileoff;
+    ulong	fileend;
+    int	rss;
+    int	refs;
+    uchar**	table;
 };
+/*e: struct Segment */
 
+/*s: struct Memory */
 struct Memory
 {
-	Segment	seg[Nseg];
+    Segment	seg[Nseg];
 };
+/*e: struct Memory */
 
 void		Ssyscall(ulong);
 //@Scheck: in libmach.a
@@ -206,22 +235,25 @@ extern	int		datasize;
 extern	Map*		symmap;	
 extern ulong	textbase;
 
+/*s: enum _anon_ (machine/5i/arm.h)7 */
 /* Plan9 Kernel constants */
 enum
 {
-	BY2PG		= 4096,
-	BY2WD		= 4,
-	UTZERO		= 0x1000,
-	STACKTOP	= 0x80000000,
-	STACKSIZE	= 0x10000,
+    BY2PG		= 4096,
+    BY2WD		= 4,
+    UTZERO		= 0x1000,
+    STACKTOP	= 0x80000000,
+    STACKSIZE	= 0x10000,
 
-	PROFGRAN	= 4,
-	Sbit		= 1<<20,
-	SIGNBIT		= 0x80000000,
+    PROFGRAN	= 4,
+    Sbit		= 1<<20,
+    SIGNBIT		= 0x80000000,
 
-	FP_U		= 3,
-	FP_L		= 1,
-	FP_G		= 2,
-	FP_E		= 0,
-	FP_CBIT		= 1<<23,
+    FP_U		= 3,
+    FP_L		= 1,
+    FP_G		= 2,
+    FP_E		= 0,
+    FP_CBIT		= 1<<23,
 };
+/*e: enum _anon_ (machine/5i/arm.h)7 */
+/*e: machine/5i/arm.h */
