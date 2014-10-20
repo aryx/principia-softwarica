@@ -4,6 +4,8 @@
 #include <mach.h>
 #include "arm.h"
 
+#define XCAST(a) (uvlong)(ulong)a
+
 static	int	dummy;
 static	char*	shtype[4] =
 {
@@ -361,7 +363,7 @@ dpex(long inst, long o1, long o2, int rd)
 		}
 		reg.r[rd] = o1 + o2;
 		if(inst & Sbit) {
-			if(((uvlong)(ulong)o1 + (uvlong)(ulong)o2) & (1LL << 32))
+			if((XCAST(o1) + XCAST(o2)) & (1LL << 32))
 				reg.cbit = 1;
 			else
 				reg.cbit = 0;
@@ -580,7 +582,7 @@ Imull(ulong inst)
 		if(inst & (1 << 21))
 			v += reg.r[rn];
 	}else{
-		v = (uvlong)(ulong)reg.r[rm] * (uvlong)(ulong)reg.r[rs];
+		v = XCAST(reg.r[rm]) * XCAST(reg.r[rs]);
 		if(inst & (1 << 21))
 			v += (ulong)reg.r[rn];
 	}

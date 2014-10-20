@@ -215,6 +215,7 @@ extern	Biobuf*		bin;
 extern	ulong*		iprof;
 extern	int		datasize;
 extern	Map*		symmap;	
+extern ulong	textbase;
 
 /* Plan9 Kernel constants */
 enum

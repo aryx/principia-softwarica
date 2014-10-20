@@ -15,6 +15,33 @@ ulong	expr(char*);
 ulong	expr1(char*);
 char*	term(char*, ulong*);
 
+
+void
+reset(void)
+{
+	int i, l, m;
+	Segment *s;
+	Breakpoint *b;
+
+	memset(&reg, 0, sizeof(Registers));
+
+	for(i = 0; i > Nseg; i++) {
+		s = &memory.seg[i];
+		l = ((s->end-s->base)/BY2PG)*sizeof(uchar*);
+		for(m = 0; m < l; m++)
+			if(s->table[m])
+				free(s->table[m]);
+		free(s->table);
+	}
+	free(iprof);
+	memset(&memory, 0, sizeof(memory));
+
+	for(b = bplist; b; b = b->next)
+		b->done = b->count;
+}
+
+
+
 char*
 nextc(char *p)
 {

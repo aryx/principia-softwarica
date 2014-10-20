@@ -156,7 +156,6 @@ iprofile(void)
 	Prof *p, *n;
 	int i, b, e;
 	ulong total;
-	extern ulong textbase;
 
 	i = 0;
 	p = prof;

@@ -4,8 +4,6 @@
 #include <mach.h>
 #include "arm.h"
 
-extern ulong	textbase;
-
 ulong
 ifetch(ulong addr)
 {

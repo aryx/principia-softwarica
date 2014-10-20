@@ -7,8 +7,6 @@
 #include <tos.h>
 
 char*	file = "5.out";
-int	datasize;
-ulong	textbase;
 Biobuf	bp, bi;
 Fhdr	fhdr;
 
@@ -112,29 +110,6 @@ inithdr(int fd)
 	machdata = &armmach;
 }
 
-void
-reset(void)
-{
-	int i, l, m;
-	Segment *s;
-	Breakpoint *b;
-
-	memset(&reg, 0, sizeof(Registers));
-
-	for(i = 0; i > Nseg; i++) {
-		s = &memory.seg[i];
-		l = ((s->end-s->base)/BY2PG)*sizeof(uchar*);
-		for(m = 0; m < l; m++)
-			if(s->table[m])
-				free(s->table[m]);
-		free(s->table);
-	}
-	free(iprof);
-	memset(&memory, 0, sizeof(memory));
-
-	for(b = bplist; b; b = b->next)
-		b->done = b->count;
-}
 
 void
 initstk(int argc, char *argv[])
@@ -194,86 +169,4 @@ initstk(int argc, char *argv[])
 	/* Null terminate argv */
 	putmem_w(sp, 0);
 
-}
-
-void
-fatal(int syserr, char *fmt, ...)
-{
-	char buf[ERRMAX], *s;
-	va_list arg;
-
-	va_start(arg, fmt);
-	vseprint(buf, buf+sizeof(buf), fmt, arg);
-	va_end(arg);
-	s = "5i: %s\n";
-	if(syserr)
-		s = "5i: %s: %r\n";
-	fprint(2, s, buf);
-	exits(buf);
-}
-
-void
-itrace(char *fmt, ...)
-{
-	char buf[128];
-	va_list arg;
-
-	va_start(arg, fmt);
-	vseprint(buf, buf+sizeof(buf), fmt, arg);
-	va_end(arg);
-	Bprint(bioout, "%8lux %.8lux %2d %s\n", reg.ar, reg.ir, reg.class, buf);	
-}
-
-void
-dumpreg(void)
-{
-	int i;
-
-	Bprint(bioout, "PC  #%-8lux SP  #%-8lux \n",
-				reg.r[REGPC], reg.r[REGSP]);
-
-	for(i = 0; i < 16; i++) {
-		if((i%4) == 0 && i != 0)
-			Bprint(bioout, "\n");
-		Bprint(bioout, "R%-2d #%-8lux ", i, reg.r[i]);
-	}
-	Bprint(bioout, "\n");
-}
-
-void
-dumpfreg(void)
-{
-}
-
-void
-dumpdreg(void)
-{
-}
-
-void *
-emalloc(ulong size)
-{
-	void *a;
-
-	a = malloc(size);
-	if(a == 0)
-		fatal(0, "no memory");
-
-	memset(a, 0, size);
-	return a;
-}
-
-void *
-erealloc(void *a, ulong oldsize, ulong size)
-{
-	void *n;
-
-	n = malloc(size);
-	if(n == 0)
-		fatal(0, "no memory");
-	memset(n, 0, size);
-	if(size > oldsize)
-		size = oldsize;
-	memmove(n, a, size);
-	return n;
 }

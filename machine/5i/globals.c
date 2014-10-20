@@ -30,3 +30,6 @@ Biobuf *bin;
 ulong *iprof;
 Map *symmap;		
 int rtrace;
+
+int	datasize;
+ulong	textbase;
