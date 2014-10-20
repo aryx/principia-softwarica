@@ -213,15 +213,13 @@ int	Displaying = 0;
 int	Quiet_mode = 0;
 /*e: global Quiet_mode */
 /*s: global S_xxx */
-int S_latest;
-/*x: global S_xxx */
 int S_char;
 /*x: global S_xxx */
 int S_integer;
 /*x: global S_xxx */
-int S_string;
-/*x: global S_xxx */
 int S_vector;
+/*x: global S_xxx */
+int S_string;
 /*x: global S_xxx */
 int S_input_port;
 int S_output_port;
@@ -231,6 +229,8 @@ int S_primitive;
 int S_syntax;
 /*x: global S_xxx */
 int S_symbol;
+/*x: global S_xxx */
+int S_latest;
 /*x: global S_xxx */
 int S_if;
 int S_else;
@@ -1434,6 +1434,7 @@ void print2(int n) {
         if (print_syntax(n)) return;
         if (print_vector(n)) return;
         if (print_port(n)) return;
+
         pr("(");
         while (n != NIL) {
             print2(Car[n]);
@@ -2657,9 +2658,9 @@ int char_predicate(char *name, int (*p)(int c1, int c2), int x) {
 }
 /*e: function char_predicate */
 
-/*s: function pp_char_ci_le_p */
 //#define R return
 
+/*s: function pp_char_ci_le_p */
 int pp_char_ci_le_p(int x) { return char_predicate("char-ci<=?", char_ci_le, x); }
 /*e: function pp_char_ci_le_p */
 /*s: function pp_char_ci_lt_p */
@@ -4521,6 +4522,7 @@ void init(void) {
     Port_flags[1] = LFLAG;
     Input_port = 0;
     Output_port = 1;
+
     new_segment();
     gc();
 
@@ -4534,6 +4536,7 @@ void init(void) {
     S_symbol = add_symbol("#<symbol>");
     S_syntax = add_symbol("#<syntax>");
     S_vector = add_symbol("#<vector>");
+
     S_else = add_symbol("else");
     S_and = add_symbol("and");
     S_begin = add_symbol("begin");

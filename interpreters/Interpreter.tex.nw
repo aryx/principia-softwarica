@@ -15,6 +15,14 @@
 %thx to LP, changed for the better a few things:
 
 %thx to codemap/codegraph/scheck:
+% - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
+%   (harder to understand non layered code)
+% - TODO use cg to reduce number of globals by moving them closer to the
+%   relevant file (or even function), better cluster the code
+%   (harder to understand non functional code using lots of globals)
+% - TODO use scheck to remove deadcode, dead prototypes, useless export
+%   (or mv as forward decl)
+%   (harder to understand big interface files)
 
 %thx to this manual, better understand scheme and interpreter techno:
 
@@ -23,8 +31,13 @@
 % - put all content of files in the Extra section, via 'pfff -lpize'
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
-% - TODO read Extra section, identify concepts, first TOC
-% - TODO distribute parts of the file before
+%    * TODO ctor/dtor, dumper
+%    * TODO [[xxx]] other fields, [[xxx]] extra fields
+% - read Extra section, identify concepts, first TOC
+% - distribute parts of the Extra section in the main file
+% - TODO understand main(), LP split main, improve TOC
+% - TODO understand main functions, LP split, cluster, improve TOC
+% - TODO LP split the structures, use datalog for flow to field info
 % - TODO nullify, boolify, typeify,    scheckify
 % - TODO aspecify advanced features!
 % - TODO add figures
@@ -229,6 +242,8 @@ void usage(void) {
 % but as opposed to ocaml he use an int and negative value have
 % special meaning. so similar ...
 % typedef cell int;
+% or
+% typedef cellidx uint;
 
 %	/* Atom, Car = type, CDR = next */
 
@@ -260,6 +275,7 @@ void usage(void) {
 <<global Tag>>=
 char	*Tag = NULL;
 @
+% byte array
 
 % TODO use enum instead?
 <<constant xxxlags>>=
@@ -271,9 +287,6 @@ char	*Tag = NULL;
 <<constant LFLAG>>
 @
 
-<<constant MFLAG>>=
-#define	MFLAG	0x02	/* Mark */
-@
 
 <<constant SFLAG>>=
 #define SFLAG	0x04	/* State */
@@ -311,12 +324,14 @@ int    *Cdr = NULL;
 /* GC flags */
 #define	AFLAG	0x01	/* Atom, Car = type, CDR = next */
 @
+% type via S_xxx
 
 
 <<function atom_p>>=
 #define atom_p(n) \
     (special_value_p(n) || (Tag[n] & AFLAG) || (Tag[n] & VFLAG))
 @
+% it's a OR!
 
 <<function pair_p>>=
 #define pair_p(x) (!atom_p(x))
@@ -393,86 +408,6 @@ int    *Cdr = NULL;
 #define cddddr(x)	(Cdr[Cdr[Cdr[Cdr[x]]]])
 @
 
-\section{[[Symbols]] and [[S_xxx]]}
-
-<<global Symbols>>=
-int	Symbols = NIL;
-@
-
-
-
-<<function find_symbol>>=
-int find_symbol(char *s) {
-    int	y;
-
-    y = Symbols;
-    while (y != NIL) {
-        if (!strcmp(string(Car[y]), s))
-            return Car[y];
-        y = Cdr[y];
-    }
-    return NIL;
-}
-@
-
-<<function make_symbol>>=
-int make_symbol(char *s, int k) {
-    int	n;
-
-    n = allocv(S_symbol, k+1);
-    strcpy(string(n), s);
-    return n;
-}
-@
-
-<<function add_symbol>>=
-int add_symbol(char *s) {
-    int	y, new;
-
-    y = find_symbol(s);
-    if (y != NIL) return y;
-    Symbols = alloc(NIL, Symbols);
-    new = make_symbol(s, strlen(s));
-    Car[Symbols] = new;
-    return Car[Symbols];
-}
-@
-
-
-
-<<global S_xxx>>=
-int S_latest;
-@
-
-
-
-\section{[[Vectors]]}
-
-<<global Vectors>>=
-int	*Vectors = NULL;
-@
-
-<<function vector>>=
-#define vector(n)	(&Vectors[Cdr[n]])
-@
-
-<<function vector_size>>=
-#define vector_size(k)	(((k) + sizeof(int)-1) / sizeof(int) + 2)
-@
-
-<<function vector_len>>=
-#define vector_len(n)	(vector_size(string_len(n)) - 2)
-@
-
-
-<<function string>>=
-#define string(n)	((char *) &Vectors[Cdr[n]])
-@
-
-<<function string_len>>=
-#define string_len(n)	(Vectors[Cdr[n] - 1])
-@
-
 \section{Types}
 
 % actually not used until primitive()
@@ -495,28 +430,6 @@ enum TYPES {
 
 \subsection{Nil}
 % seen nil special integer
-
-\subsection{Pair}
-
-% (1 . 2)
-
-<<constant DOT>>=
-#define	DOT		(-7)
-@
-
-\subsection{List}
-
-<<function length>>=
-int length(int n) {
-    int	k = 0;
-
-    while (n != NIL) {
-        k++;
-        n = Cdr[n];
-    }
-    return k;
-}
-@
 
 
 \subsection{Boolean}
@@ -575,9 +488,9 @@ int length(int n) {
 
 \subsection{Character}
 
-<<function char_value>>=
-#define char_value(n)	(cadr(n))
-@
+% typing via kind to cell, via special code, symbol
+% why not using enum instead? because everything has to be
+% a cell(index to access the cell tag/car/cdr) or a basic int.
 
 <<global S_xxx>>=
 int S_char;
@@ -586,6 +499,10 @@ int S_char;
 <<function char_p>>=
 #define char_p(n) \
     (!special_value_p(n) && (Tag[n] & AFLAG) && Car[n] == S_char)
+@
+
+<<function char_value>>=
+#define char_value(n)	(cadr(n))
 @
 
 \subsection{Integers}
@@ -602,16 +519,6 @@ int S_integer;
 @
 
 
-\subsection{String}
-
-<<global S_xxx>>=
-int S_string;
-@
-
-<<function string_p>>=
-#define string_p(n) \
-    (!special_value_p(n) && (Tag[n] & VFLAG) && Car[n] == S_string)
-@
 
 \subsection{Vector}
 
@@ -622,6 +529,17 @@ int S_vector;
 <<function vector_p>>=
 #define vector_p(n) \
     (!special_value_p(n) && (Tag[n] & VFLAG) && Car[n] == S_vector)
+@
+
+\subsection{String}
+
+<<global S_xxx>>=
+int S_string;
+@
+
+<<function string_p>>=
+#define string_p(n) \
+    (!special_value_p(n) && (Tag[n] & VFLAG) && Car[n] == S_string)
 @
 
 \subsection{Port}
@@ -678,8 +596,113 @@ int S_symbol;
 #define symbol_p(n) \
     (!special_value_p(n) && (Tag[n] & VFLAG) && Car[n] == S_symbol)
 @
+% VFLAG?
 
 
+
+
+\subsection{Pair}
+% until now have seen mainly atoms.
+% now see composite!
+
+% (1 . 2)
+
+<<constant DOT>>=
+#define	DOT		(-7)
+@
+
+\subsection{List}
+
+<<function length>>=
+int length(int n) {
+    int	k = 0;
+
+    while (n != NIL) {
+        k++;
+        n = Cdr[n];
+    }
+    return k;
+}
+@
+
+
+\section{[[Symbols]] and [[S_xxx]]}
+
+% head of the list
+<<global Symbols>>=
+int	Symbols = NIL;
+@
+
+
+
+<<function find_symbol>>=
+int find_symbol(char *s) {
+    int	y;
+
+    y = Symbols;
+    while (y != NIL) {
+        if (!strcmp(string(Car[y]), s))
+            return Car[y];
+        y = Cdr[y];
+    }
+    return NIL;
+}
+@
+
+<<function make_symbol>>=
+int make_symbol(char *s, int k) {
+    int	n;
+
+    n = allocv(S_symbol, k+1);
+    strcpy(string(n), s);
+    return n;
+}
+@
+
+<<function add_symbol>>=
+int add_symbol(char *s) {
+    int	y, new;
+
+    y = find_symbol(s);
+    if (y != NIL) return y;
+    Symbols = alloc(NIL, Symbols);
+    new = make_symbol(s, strlen(s));
+    Car[Symbols] = new;
+    return Car[Symbols];
+}
+@
+
+
+
+
+
+
+\section{[[Vectors]]}
+
+<<global Vectors>>=
+int	*Vectors = NULL;
+@
+
+<<function vector>>=
+#define vector(n)	(&Vectors[Cdr[n]])
+@
+
+<<function vector_size>>=
+#define vector_size(k)	(((k) + sizeof(int)-1) / sizeof(int) + 2)
+@
+
+<<function vector_len>>=
+#define vector_len(n)	(vector_size(string_len(n)) - 2)
+@
+
+
+<<function string>>=
+#define string(n)	((char *) &Vectors[Cdr[n]])
+@
+
+<<function string_len>>=
+#define string_len(n)	(Vectors[Cdr[n] - 1])
+@
 
 \section{[[Program]]}
 
@@ -899,6 +922,7 @@ void init(void) {
     Port_flags[1] = LFLAG;
     Input_port = 0;
     Output_port = 1;
+
     new_segment();
     gc();
 
@@ -912,6 +936,7 @@ void init(void) {
     S_symbol = add_symbol("#<symbol>");
     S_syntax = add_symbol("#<syntax>");
     S_vector = add_symbol("#<vector>");
+
     S_else = add_symbol("else");
     S_and = add_symbol("and");
     S_begin = add_symbol("begin");
@@ -1098,6 +1123,12 @@ void clear_local_envs(void) {
         Environment = Cdr[Environment];
 }
 @
+
+% latest value
+<<global S_xxx>>=
+int S_latest;
+@
+
 
 <<function repl>>=
 void repl(void) {
@@ -2013,6 +2044,59 @@ void make_dynamic(int x) {
 
 \chapter{Print}
 
+<<function print2>>=
+void print2(int n) {
+    if (Ports[Output_port] == NULL) {
+        error("output port is not open", NOEXPR);
+        return;
+    }
+    else if (n == NIL) {
+        pr("()");
+    }
+    else if (n == ENDOFFILE) {
+        pr("#<eof>");
+    }
+    else if (n == FALSE) {
+        pr("#f");
+    }
+    else if (n == TRUE) {
+        pr("#t");
+    }
+    else if (n == UNDEFINED) {
+        pr("#<undefined>");
+    }
+    else if (n == UNSPECIFIC) {
+        pr("#<unspecific>");
+    }
+    else {
+        if (print_char(n)) return;
+        if (print_procedure(n)) return;
+        if (print_integer(n)) return;
+        if (print_primitive(n)) return;
+        if (print_quoted(n)) return;
+        if (print_string(n)) return;
+        if (print_symbol(n)) return;
+        if (print_syntax(n)) return;
+        if (print_vector(n)) return;
+        if (print_port(n)) return;
+
+        pr("(");
+        while (n != NIL) {
+            print2(Car[n]);
+            n = Cdr[n];
+            if (n != NIL && atom_p(n)) {
+                pr(" . ");
+                print2(n);
+                n = NIL;
+            }
+            if (n != NIL) pr(" ");
+        }
+        pr(")");
+    }
+}
+@
+
+
 <<function print_integer>>=
 /* Print bignum integer. */
 int print_integer(int n) {
@@ -2183,56 +2267,6 @@ int print_port(int n) {
 }
 @
 
-<<function print2>>=
-void print2(int n) {
-    if (Ports[Output_port] == NULL) {
-        error("output port is not open", NOEXPR);
-        return;
-    }
-    else if (n == NIL) {
-        pr("()");
-    }
-    else if (n == ENDOFFILE) {
-        pr("#<eof>");
-    }
-    else if (n == FALSE) {
-        pr("#f");
-    }
-    else if (n == TRUE) {
-        pr("#t");
-    }
-    else if (n == UNDEFINED) {
-        pr("#<undefined>");
-    }
-    else if (n == UNSPECIFIC) {
-        pr("#<unspecific>");
-    }
-    else {
-        if (print_char(n)) return;
-        if (print_procedure(n)) return;
-        if (print_integer(n)) return;
-        if (print_primitive(n)) return;
-        if (print_quoted(n)) return;
-        if (print_string(n)) return;
-        if (print_symbol(n)) return;
-        if (print_syntax(n)) return;
-        if (print_vector(n)) return;
-        if (print_port(n)) return;
-        pr("(");
-        while (n != NIL) {
-            print2(Car[n]);
-            n = Cdr[n];
-            if (n != NIL && atom_p(n)) {
-                pr(" . ");
-                print2(n);
-                n = NIL;
-            }
-            if (n != NIL) pr(" ");
-        }
-        pr(")");
-    }
-}
-@
 
 
 \chapter{Memory Allocator}
@@ -2244,10 +2278,6 @@ int    Pool_size = 0;
 
 <<global Vpool_size>>=
 int    Vpool_size = 0;
-@
-
-<<function alloc>>=
-#define alloc(pcar, pcdr) alloc3((pcar), (pcdr), 0)
 @
 
 <<global Free_list>>=
@@ -2269,6 +2299,12 @@ int    Tmp_car = NIL;
 int    Tmp_cdr = NIL;
 @
 
+<<function alloc>>=
+#define alloc(pcar, pcdr) alloc3((pcar), (pcdr), 0)
+@
+
+
+% =~ cons a b tag
 <<function alloc3>>=
 /* Allocate a fresh node and initialize with PCAR,PCDR,PTAG. */
 int alloc3(int pcar, int pcdr, int ptag) {
@@ -2362,6 +2398,44 @@ int	*GC_root[] = { &Program, &Symbols, &Environment, &Tmp, &Tmp_car,
             &Acc, NULL };
 @
 
+<<constant MFLAG>>=
+#define	MFLAG	0x02	/* Mark */
+@
+
+<<function gc>>=
+/* Mark and Sweep GC. */
+int gc(void) {
+    int	i, k;
+
+    if (Debug_GC) pr("GC called: ");
+    for (i=0; i<MAX_PORTS; i++)
+        if (Port_flags[i] & LFLAG)
+            Port_flags[i] |= UFLAG;
+        else
+            Port_flags[i] &= ~UFLAG;
+    for (i=0; GC_root[i] != NULL; i++) mark(GC_root[i][0]);
+    k = 0;
+    Free_list = NIL;
+    for (i=0; i<Pool_size; i++) {
+        if (!(Tag[i] & MFLAG)) {
+            Cdr[i] = Free_list;
+            Free_list = i;
+            k = k+1;
+        }
+        else {
+            Tag[i] &= ~MFLAG;
+        }
+    }
+    for (i=0; i<MAX_PORTS; i++) {
+        if (!(Port_flags[i] & UFLAG) && Ports[i] != NULL) {
+            fclose(Ports[i]);
+            Ports[i] = NULL;
+        }
+    }
+    if (Debug_GC) printf("%d nodes reclaimed\n", k);
+    return k;
+}
+@
 
 
 <<function mark>>=
@@ -2423,40 +2497,6 @@ void mark(int n) {
 }
 @
 
-<<function gc>>=
-/* Mark and Sweep GC. */
-int gc(void) {
-    int	i, k;
-
-    if (Debug_GC) pr("GC called: ");
-    for (i=0; i<MAX_PORTS; i++)
-        if (Port_flags[i] & LFLAG)
-            Port_flags[i] |= UFLAG;
-        else
-            Port_flags[i] &= ~UFLAG;
-    for (i=0; GC_root[i] != NULL; i++) mark(GC_root[i][0]);
-    k = 0;
-    Free_list = NIL;
-    for (i=0; i<Pool_size; i++) {
-        if (!(Tag[i] & MFLAG)) {
-            Cdr[i] = Free_list;
-            Free_list = i;
-            k = k+1;
-        }
-        else {
-            Tag[i] &= ~MFLAG;
-        }
-    }
-    for (i=0; i<MAX_PORTS; i++) {
-        if (!(Port_flags[i] & UFLAG) && Ports[i] != NULL) {
-            fclose(Ports[i]);
-            Ports[i] = NULL;
-        }
-    }
-    if (Debug_GC) printf("%d nodes reclaimed\n", k);
-    return k;
-}
-@
 
 \chapter{Vectors}
 % distribute in 2 previous chapters?
@@ -3125,115 +3165,6 @@ int sf_syntax_rules(int x) {
 % builtins
 
 
-<<function expected>>=
-int expected(int who, char *what, int got) {
-    char	msg[100];
-
-    sprintf(msg, "%s: expected %s, got",
-        string(cddr(who)), what);
-    return error(msg, got);
-}
-@
-
-<<function primitive>>=
-int primitive(int x) {
-    int	id, n, k, na, i, a;
-
-    id = cadar(x);
-    k = length(x);
-    if (k-1 < Primitives[id].min_args)
-        return too_few_args(x);
-    if (k-1 > Primitives[id].max_args && Primitives[id].max_args >= 0)
-        return too_many_args(x);
-    a = Cdr[x];
-    na = Primitives[id].max_args < 0? Primitives[id].min_args:
-                    Primitives[id].max_args;
-        if (na > k-1) na = k-1;
-    for (i=1; i<=na; i++) {
-        switch (Primitives[id].arg_types[i-1]) {
-        case T_NONE:
-            break;
-        case T_BOOLEAN:
-            if (!boolean_p(Car[a]))
-                return expected(Car[x], "boolean", Car[a]);
-            break;
-        case T_CHAR:
-            if (!char_p(Car[a]))
-                return expected(Car[x], "char", Car[a]);
-            break;
-        case T_INPUT_PORT:
-            if (!input_port_p(Car[a]))
-                return expected(Car[x], "input-port", Car[a]);
-            break;
-        case T_INTEGER:
-            if (!integer_p(Car[a]))
-                return expected(Car[x], "integer", Car[a]);
-            break;
-        case T_OUTPUT_PORT:
-            if (!output_port_p(Car[a]))
-                return expected(Car[x], "output-port", Car[a]);
-            break;
-        case T_PAIR:
-            if (atom_p(Car[a]))
-                return expected(Car[x], "pair", Car[a]);
-            break;
-        case T_PAIR_OR_NIL:
-            if (Car[a] != NIL && atom_p(Car[a]))
-                return expected(Car[x], "pair or ()", Car[a]);
-            break;
-        case T_PROCEDURE:
-            if (	!procedure_p(Car[a]) &&
-                !primitive_p(Car[a])
-            )
-                return expected(Car[x], "procedure", Car[a]);
-            break;
-        case T_STRING:
-            if (!string_p(Car[a]))
-                return expected(Car[x], "string", Car[a]);
-            break;
-        case T_SYMBOL:
-            if (!symbol_p(Car[a]))
-                return expected(Car[x], "symbol", Car[a]);
-            break;
-        case T_VECTOR:
-            if (!vector_p(Car[a]))
-                return expected(Car[x], "vector", Car[a]);
-            break;
-        }
-        a = Cdr[a];
-    }
-    n = (*Primitives[id].handler)(x);
-    return n;
-}
-@
-
-
-
-
-
-
-
-
-<<function make_primitive>>=
-int make_primitive(char *s, int id) {
-    int	n;
-
-    n = add_symbol(s);
-    n = alloc3(id, n, AFLAG);
-    return alloc3(S_primitive, n, AFLAG);
-}
-@
-
-<<function add_primitive>>=
-void add_primitive(char *s, int id) {
-    int	v;
-
-    v = add_symbol(s);
-    Environment = extend(v, make_primitive(s, id), Environment);
-}
-@
-
-
 <<struct Primitive_procedure>>=
 struct Primitive_procedure {
     int	(*handler)(int expr);
@@ -3378,16 +3309,118 @@ struct Primitive_procedure Primitives[] = {
 };
 @
 
+
+<<function expected>>=
+int expected(int who, char *what, int got) {
+    char	msg[100];
+
+    sprintf(msg, "%s: expected %s, got",
+        string(cddr(who)), what);
+    return error(msg, got);
+}
+@
+
+<<function primitive>>=
+int primitive(int x) {
+    int	id, n, k, na, i, a;
+
+    id = cadar(x);
+    k = length(x);
+    if (k-1 < Primitives[id].min_args)
+        return too_few_args(x);
+    if (k-1 > Primitives[id].max_args && Primitives[id].max_args >= 0)
+        return too_many_args(x);
+    a = Cdr[x];
+    na = Primitives[id].max_args < 0? Primitives[id].min_args:
+                    Primitives[id].max_args;
+        if (na > k-1) na = k-1;
+    for (i=1; i<=na; i++) {
+        switch (Primitives[id].arg_types[i-1]) {
+        case T_NONE:
+            break;
+        case T_BOOLEAN:
+            if (!boolean_p(Car[a]))
+                return expected(Car[x], "boolean", Car[a]);
+            break;
+        case T_CHAR:
+            if (!char_p(Car[a]))
+                return expected(Car[x], "char", Car[a]);
+            break;
+        case T_INPUT_PORT:
+            if (!input_port_p(Car[a]))
+                return expected(Car[x], "input-port", Car[a]);
+            break;
+        case T_INTEGER:
+            if (!integer_p(Car[a]))
+                return expected(Car[x], "integer", Car[a]);
+            break;
+        case T_OUTPUT_PORT:
+            if (!output_port_p(Car[a]))
+                return expected(Car[x], "output-port", Car[a]);
+            break;
+        case T_PAIR:
+            if (atom_p(Car[a]))
+                return expected(Car[x], "pair", Car[a]);
+            break;
+        case T_PAIR_OR_NIL:
+            if (Car[a] != NIL && atom_p(Car[a]))
+                return expected(Car[x], "pair or ()", Car[a]);
+            break;
+        case T_PROCEDURE:
+            if (	!procedure_p(Car[a]) &&
+                !primitive_p(Car[a])
+            )
+                return expected(Car[x], "procedure", Car[a]);
+            break;
+        case T_STRING:
+            if (!string_p(Car[a]))
+                return expected(Car[x], "string", Car[a]);
+            break;
+        case T_SYMBOL:
+            if (!symbol_p(Car[a]))
+                return expected(Car[x], "symbol", Car[a]);
+            break;
+        case T_VECTOR:
+            if (!vector_p(Car[a]))
+                return expected(Car[x], "vector", Car[a]);
+            break;
+        }
+        a = Cdr[a];
+    }
+    n = (*Primitives[id].handler)(x);
+    return n;
+}
+@
+
+
+
+
+
+
+
+
+<<function make_primitive>>=
+int make_primitive(char *s, int id) {
+    int	n;
+
+    n = add_symbol(s);
+    n = alloc3(id, n, AFLAG);
+    return alloc3(S_primitive, n, AFLAG);
+}
+@
+
+<<function add_primitive>>=
+void add_primitive(char *s, int id) {
+    int	v;
+
+    v = add_symbol(s);
+    Environment = extend(v, make_primitive(s, id), Environment);
+}
+@
+
+
+
 \chapter{IO}
-
-<<global Input_port>>=
-int    Input_port = 0;
-@
-
-<<global Output_port>>=
-int    Output_port = 1;
-@
-
 
 <<constant MAX_PORTS>>=
 #define MAX_PORTS	32
@@ -3400,6 +3433,21 @@ FILE	*Ports[MAX_PORTS];
 <<global Port_flags>>=
 char	Port_flags[MAX_PORTS];
 @
+
+
+
+<<global Input_port>>=
+int    Input_port = 0;
+@
+
+<<global Output_port>>=
+int    Output_port = 1;
+@
+
+
+
+
+
 
 <<function pr>>=
 void pr(char *s) {
@@ -3420,6 +3468,8 @@ void pr(char *s) {
 
 
 \chapter{Optimisations}
+
+% already seen some opti?
 
 % threaded code?
 % bytecode?
@@ -4217,8 +4267,6 @@ int char_predicate(char *name, int (*p)(int c1, int c2), int x) {
 @
 
 <<function pp_char_ci_le_p>>=
-//#define R return
-
 int pp_char_ci_le_p(int x) { return char_predicate("char-ci<=?", char_ci_le, x); }
 @
 
