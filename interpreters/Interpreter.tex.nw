@@ -154,9 +154,11 @@ you fully understand how things work under the hood.
 %  (missing: string typing, inference, ADTs, pattern matching, typeclasses)
 % Why interpreter? because different techno, and will see complex concepts
 %  so maybe easier to understand first in interpreter context.
+
 % we gonna present scheme 9. Why? There is even already a book on it in
 % LP form. So mainly redo here to have a consistent set of documents
-% with a friendly license.
+% with a friendly license. But book does not really use LP. It
+% describe code in the order of s9.c
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
@@ -194,6 +196,8 @@ License.
 \section{Acknowledgments}
 
 %Nils M Holm.
+
+% apparently started from another book by nils, Sketchy Lisp
 
 \chapter{Overview}
 
@@ -276,8 +280,10 @@ void usage(void) {
 char	*Tag = NULL;
 @
 % byte array
+% replaced by T_XXX with negative value in 2014? more efficient?
 
 % TODO use enum instead?
+% a form of tag
 <<constant xxxlags>>=
 <<constant AFLAG>>
 <<constant MFLAG>>
@@ -285,23 +291,6 @@ char	*Tag = NULL;
 <<constant VFLAG>>
 <<constant UFLAG>>
 <<constant LFLAG>>
-@
-
-
-<<constant SFLAG>>=
-#define SFLAG	0x04	/* State */
-@
-
-<<constant VFLAG>>=
-#define VFLAG	0x08	/* Vector, Car = type, CDR = content */
-@
-
-<<constant UFLAG>>=
-#define UFLAG	0x10	/* Port: used flag */
-@
-
-<<constant LFLAG>>=
-#define LFLAG	0x20	/* Port: locked (do not close) */
 @
 
 
@@ -427,6 +416,7 @@ enum TYPES {
     T_VECTOR
 };
 @
+% could replace the S_xxx. no need for actual cell for that.
 
 \subsection{Nil}
 % seen nil special integer
@@ -521,6 +511,10 @@ int S_integer;
 
 
 \subsection{Vector}
+
+<<constant VFLAG>>=
+#define VFLAG	0x08	/* Vector, Car = type, CDR = content */
+@
 
 <<global S_xxx>>=
 int S_vector;
@@ -1373,6 +1367,7 @@ int str_numeric_p(char *s) {
 <<constant DIGITS_PER_WORD>>=
  #define DIGITS_PER_WORD	9
 @
+% ????
 
 <<function string_to_bignum>>=
 int string_to_bignum(char *s) {
@@ -2279,9 +2274,14 @@ int    Pool_size = 0;
 <<global Vpool_size>>=
 int    Vpool_size = 0;
 @
+% vector?
 
 <<global Free_list>>=
 int	Free_list = NIL;
+@
+
+<<global Free_vecs>>=
+int	Free_vecs = 0;
 @
 
 
@@ -2289,6 +2289,7 @@ int	Free_list = NIL;
 /* Hard memory limit in K-Nodes, 0 = none */
 #define MEMORY_LIMIT_KN	1024
 @
+% k nodes???
 
 <<global Tmp_car>>=
 int    Tmp_car = NIL;
@@ -2304,7 +2305,7 @@ int    Tmp_cdr = NIL;
 @
 
 
-% =~ cons a b tag
+% =~ cons a b tag (actually called cons3 in 2014)
 <<function alloc3>>=
 /* Allocate a fresh node and initialize with PCAR,PCDR,PTAG. */
 int alloc3(int pcar, int pcdr, int ptag) {
@@ -2354,10 +2355,9 @@ void new_segment(void) {
     Car = realloc(Car, sizeof(int) * (Pool_size + SEGMENT_LEN));
     Cdr = realloc(Cdr, sizeof(int) * (Pool_size + SEGMENT_LEN));
     Tag = realloc(Tag, Pool_size + SEGMENT_LEN);
+
     Vectors = realloc(Vectors, sizeof(int) * (Vpool_size + SEGMENT_LEN));
-    if (	Car == NULL || Cdr == NULL || Tag == NULL ||
-        Vectors == NULL
-    ) {
+    if (Car == NULL || Cdr == NULL || Tag == NULL || Vectors == NULL) {
         fatal("out of memory");
     }
     memset(&Car[Pool_size], 0, SEGMENT_LEN * sizeof(int));
@@ -2368,7 +2368,45 @@ void new_segment(void) {
     Vpool_size += SEGMENT_LEN;
 }
 @
+% more adaptive in 2014, += xxx * 3 / 2.
 
+
+
+<<function allocv>>=
+/* Allocate vector from pool */
+int allocv(int type, int size) {
+    int	v, n, wsize, k;
+
+    wsize = vector_size(size);
+    if (Free_vecs + wsize >= Vpool_size) {
+        k = gcv();
+        if (	Free_vecs + wsize >=
+            Vpool_size - Vpool_size / 2
+        ) {
+            if (	MEMORY_LIMIT_KN &&
+                Pool_size + SEGMENT_LEN > MEMORY_LIMIT_KN*1024
+            ) {
+                if (Free_list == NIL)
+                    fatal("allocv(): hit memory limit");
+            }
+            else {
+                new_segment();
+                gcv();
+                if (Debug_GC)
+                    printf("Allocv: new segment,"
+                         " nodes = %d\n",
+                            Pool_size);
+            }
+        }
+    }
+    v = Free_vecs;
+    Free_vecs += wsize;
+    n = alloc3(type, v+2, VFLAG);
+    Vectors[v] = n;
+    Vectors[v+1] = size;
+    return n;
+}
+@
 
 
 <<function save>>=
@@ -2401,6 +2439,26 @@ int	*GC_root[] = { &Program, &Symbols, &Environment, &Tmp, &Tmp_car,
 <<constant MFLAG>>=
 #define	MFLAG	0x02	/* Mark */
 @
+
+<<constant SFLAG>>=
+#define SFLAG	0x04	/* State */
+@
+
+
+
+
+
+<<constant UFLAG>>=
+#define UFLAG	0x10	/* Port: used flag */
+@
+
+<<constant LFLAG>>=
+#define LFLAG	0x20	/* Port: locked (do not close) */
+@
+
+
+
+
 
 <<function gc>>=
 /* Mark and Sweep GC. */
@@ -2498,13 +2556,6 @@ void mark(int n) {
 @
 
 
-\chapter{Vectors}
-% distribute in 2 previous chapters?
-
-
-<<global Free_vecs>>=
-int	Free_vecs = 0;
-@
 
 <<function mark_vector>>=
 /* Mark object at offset N in the Vectors */
@@ -2571,41 +2622,6 @@ int gcv(void) {
 }
 @
 
-<<function allocv>>=
-/* Allocate vector from pool */
-int allocv(int type, int size) {
-    int	v, n, wsize, k;
-
-    wsize = vector_size(size);
-    if (Free_vecs + wsize >= Vpool_size) {
-        k = gcv();
-        if (	Free_vecs + wsize >=
-            Vpool_size - Vpool_size / 2
-        ) {
-            if (	MEMORY_LIMIT_KN &&
-                Pool_size + SEGMENT_LEN > MEMORY_LIMIT_KN*1024
-            ) {
-                if (Free_list == NIL)
-                    fatal("allocv(): hit memory limit");
-            }
-            else {
-                new_segment();
-                gcv();
-                if (Debug_GC)
-                    printf("Allocv: new segment,"
-                         " nodes = %d\n",
-                            Pool_size);
-            }
-        }
-    }
-    v = Free_vecs;
-    Free_vecs += wsize;
-    n = alloc3(type, v+2, VFLAG);
-    Vectors[v] = n;
-    Vectors[v+1] = size;
-    return n;
-}
-@
 
 \chapter{Error Managment}
 % usually in appendix but here it's different, it's not error managment
@@ -3204,6 +3220,7 @@ enum PRIMITIVES {
     PP_WRITE, PP_WRITE_CHAR, PP_WRONG
 };
 @
+% no need for this intermediate, see 2014 version
 
 <<global Primitives>>=
 /*
@@ -4103,6 +4120,10 @@ int bignum_divide(int x, int a, int b) {
     return a;
 }
 @
+
+\section{Y combinator}
+
+% reference excellent book by michaelsen?
 
 \chapter{Standard Primitives}
 
@@ -5231,6 +5252,23 @@ int	Debug_GC = 0;
 
 \chapter{Changelog}
 \label{sec:changelog}
+
+% 2014 version addons:
+%  - extensive scheme stdlib
+%  - more primitives
+%    - basic unix API (system, argv, environ)
+%    - reals
+%    - bit ext??
+%  - call/cc
+%  - tracing
+%  - image dump
+%  - stats
+%  - more portable, more OSes, more bits
+%  - simplified some code (no S_integer and T_INTEGER, just T_INTEGER,
+%    a nicer cell typedef, etc) slightly better names (cons3 vs alloc3, ...)
+%  - slightly better GC, more incremental?
+
+% see also s9-2014/CHANGES
 
 \chapter{Glossary}
 \label{sec:glossary}
