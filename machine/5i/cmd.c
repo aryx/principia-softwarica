@@ -184,15 +184,16 @@ colon(char *addr, char *cp)
 
     cp = nextc(cp);
     switch(*cp) {
-    default:
-        Bprint(bioout, "?\n");
-        return;
     case 'b':
         breakpoint(addr, cp+1);
         return;
 
     case 'd':
         delbpt(addr);
+        return;
+
+    default:
+        Bprint(bioout, "?\n");
         return;
 
     /* These fall through to print the stopped address */
@@ -223,6 +224,7 @@ colon(char *addr, char *cp)
 
     dot = reg.r[REGPC];
     Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
+
     symoff(tbuf, sizeof(tbuf), dot, CTEXT);
     Bprint(bioout, tbuf);
     if(fmt == 'z')
@@ -345,9 +347,6 @@ pfmt(char fmt, int mem, ulong val)
 
     c = 0;
     switch(fmt) {
-    default:
-        Bprint(bioout, "bad modifier\n");
-        return 0;
     case 'o':
         c = Bprint(bioout, "%-4lo ", mem? (ushort)getmem_2(dot): val);
         inc = 2;
@@ -498,6 +497,10 @@ pfmt(char fmt, int mem, ulong val)
         printsource(dot);
         inc = 0;
         break;
+
+    default:
+        Bprint(bioout, "bad modifier\n");
+        return 0;
     }
     return c;
 }
@@ -633,6 +636,7 @@ cmd(void)
         Bflush(bioout);
         p = buf;
         n = 0;
+
         for(;;) {
             i = Bgetc(bin);
             if(i < 0)
@@ -654,7 +658,7 @@ cmd(void)
 
         for(;;) {
             p = nextc(p);
-            if(*p == 0 || strchr(cmdlet, *p))
+            if(*p == '\0' || strchr(cmdlet, *p))
                 break;
             *a++ = *p++;
         }
@@ -662,7 +666,7 @@ cmd(void)
         *a = '\0';
         cmdcount = 1;
         cp = strchr(addr, ',');
-        if(cp != 0) {
+        if(cp != nil) {
             if(cp[1] == '#')
                 cmdcount = strtoul(cp+2, &gotint, 16);
             else
@@ -671,11 +675,12 @@ cmd(void)
         }
 
         switch(*p) {
-        case '$': //$
-            dollar(p+1);
-            break;
         case ':':
             colon(addr, p+1);
+            break;
+
+        case '$': //$
+            dollar(p+1);
             break;
         case '/':
         case '?':

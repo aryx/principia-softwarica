@@ -191,6 +191,9 @@ License.
 
 % actually also provide a debugger interface a la 'db'
 
+% so 5i 5.out, then at prompt type   ":c"
+% to continue (that is run the program)
+
 \section{Input binary exetutable}
 
 \section{ARM}
@@ -718,11 +721,208 @@ initstk(int argc, char *argv[])
 @
 
 
+\section{[[cmd()]]}
+
+<<global errjmp>>=
+jmp_buf errjmp;
+@
+
+<<global buf>>=
+char	buf[128];
+@
+
+<<global lastcmd>>=
+char lastcmd[128];
+@
+
+<<global dot>>=
+ulong dot;
+@
+
+% LP split, put most of it in debugger section
+<<function cmd>>=
+void
+cmd(void)
+{
+    char *p, *a, *cp, *gotint;
+    char addr[128];
+    static char *cmdlet = ":$?/=>"; //$
+    int n, i;
+
+    notify(catcher);
+
+    dot = reg.r[REGPC];
+    setjmp(errjmp);
+
+    for(;;) {
+        Bflush(bioout);
+        p = buf;
+        n = 0;
+
+        for(;;) {
+            i = Bgetc(bin);
+            if(i < 0)
+                exits(0);
+            *p++ = i;
+            n++;
+            if(i == '\n')
+                break;
+        }
+
+        if(buf[0] == '\n')
+            strcpy(buf, lastcmd);
+        else {
+            buf[n-1] = '\0';
+            strcpy(lastcmd, buf);
+        }
+        p = buf;
+        a = addr;
+
+        for(;;) {
+            p = nextc(p);
+            if(*p == '\0' || strchr(cmdlet, *p))
+                break;
+            *a++ = *p++;
+        }
+
+        *a = '\0';
+        cmdcount = 1;
+        cp = strchr(addr, ',');
+        if(cp != nil) {
+            if(cp[1] == '#')
+                cmdcount = strtoul(cp+2, &gotint, 16);
+            else
+                cmdcount = strtoul(cp+1, &gotint, 0);
+            *cp = '\0';
+        }
+
+        switch(*p) {
+        case ':':
+            colon(addr, p+1);
+            break;
+
+        case '$': //$
+            dollar(p+1);
+            break;
+        case '/':
+        case '?':
+            dot = expr(addr);
+            for(i = 0; i < cmdcount; i++)
+                quesie(p+1);
+            break;
+        case '=':
+            eval(addr, p+1);
+            break;
+        case '>':
+            setreg(addr, p+1);
+            break;
+        default:
+            Bprint(bioout, "?\n");
+            break;
+        }
+    }
+}
+@
 
 
 
+<<function nextc>>=
+char*
+nextc(char *p)
+{
+    while(*p && (*p == ' ' || *p == '\t') && *p != '\n')
+        p++;
+
+    if(*p == '\n')
+        *p = '\0';
+
+    return p;
+}
+@
 
 
+
+<<function catcher>>=
+void
+catcher(void *a, char *msg)
+{
+    static int hit = 0;
+
+    hit++;
+    if(hit > 5)
+        exits(0);
+    USED(a);
+    if(strcmp(msg, "interrupt") != 0)
+        noted(NDFLT);
+
+    count = 1;
+    print("5i\n");
+    noted(NCONT);
+}
+@
+
+
+
+% LP split, put most of it in debugger section
+<<function colon>>=
+void
+colon(char *addr, char *cp)
+{
+    int argc;
+    char *argv[100];
+    char tbuf[512];
+
+    cp = nextc(cp);
+    switch(*cp) {
+    case 'b':
+        breakpoint(addr, cp+1);
+        return;
+
+    case 'd':
+        delbpt(addr);
+        return;
+
+    default:
+        Bprint(bioout, "?\n");
+        return;
+
+    /* These fall through to print the stopped address */
+    case 'r':
+        reset();
+        argc = buildargv(cp+1, argv, 100);
+        initstk(argc, argv);
+        count = 0;
+        atbpt = 0;
+        run();
+        break;
+    case 'c':
+        count = 0;
+        atbpt = 0;
+        run();
+        break;
+    case 's':
+        cp = nextc(cp+1);
+        count = 0;
+        if(*cp)
+            count = strtoul(cp, 0, 0);
+        if(count == 0)
+            count = 1;
+        atbpt = 0;
+        run();
+        break;
+    }
+
+    dot = reg.r[REGPC];
+    Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
+
+    symoff(tbuf, sizeof(tbuf), dot, CTEXT);
+    Bprint(bioout, tbuf);
+    if(fmt == 'z')
+        printsource(dot);
+
+    Bprint(bioout, "\n");
+}
+@
 
 
 \chapter{Instruction Interpreter}
@@ -739,20 +939,8 @@ enum
 @
 
 
-<<global errjmp>>=
-jmp_buf errjmp;
-@
 
-<<function undef>>=
-void
-undef(ulong inst)
-{
-    Bprint(bioout, "undefined instruction trap pc #%lux inst %.8lux class %d\n",
-        reg.r[REGPC], inst, reg.class);
-    longjmp(errjmp, 0);
-}
-@
-
+% main -> cmd() -> colon() -> run()
 <<function run>>=
 void
 run(void)
@@ -799,6 +987,15 @@ run(void)
 @
 
 
+<<function undef>>=
+void
+undef(ulong inst)
+{
+    Bprint(bioout, "undefined instruction trap pc #%lux inst %.8lux class %d\n",
+        reg.r[REGPC], inst, reg.class);
+    longjmp(errjmp, 0);
+}
+@
 
 
 
@@ -2776,13 +2973,7 @@ int atbpt;
 int membpt;
 @
 
-<<global buf>>=
-char	buf[128];
-@
 
-<<global lastcmd>>=
-char lastcmd[128];
-@
 
 
 <<function dumpreg>>=
@@ -2938,7 +3129,7 @@ stktrace(int modif)
 <<enum _anon_>>=
 enum
 {
-    Instruction	= 1,
+    Instruction		= 1,
     Read		= 2,
     Write		= 4,
     Access		= Read|Write,
@@ -3135,23 +3326,7 @@ reset(void)
 }
 @
 
-<<function nextc>>=
-char*
-nextc(char *p)
-{
-    while(*p && (*p == ' ' || *p == '\t') && *p != '\n')
-        p++;
 
-    if(*p == '\n')
-        *p = '\0';
-
-    return p;
-}
-@
-
-<<global dot>>=
-ulong dot;
-@
 
 <<function numsym>>=
 char*
@@ -3260,63 +3435,6 @@ buildargv(char *str, char **args, int max)
 }
 @
 
-<<function colon>>=
-void
-colon(char *addr, char *cp)
-{
-    int argc;
-    char *argv[100];
-    char tbuf[512];
-
-    cp = nextc(cp);
-    switch(*cp) {
-    default:
-        Bprint(bioout, "?\n");
-        return;
-    case 'b':
-        breakpoint(addr, cp+1);
-        return;
-
-    case 'd':
-        delbpt(addr);
-        return;
-
-    /* These fall through to print the stopped address */
-    case 'r':
-        reset();
-        argc = buildargv(cp+1, argv, 100);
-        initstk(argc, argv);
-        count = 0;
-        atbpt = 0;
-        run();
-        break;
-    case 'c':
-        count = 0;
-        atbpt = 0;
-        run();
-        break;
-    case 's':
-        cp = nextc(cp+1);
-        count = 0;
-        if(*cp)
-            count = strtoul(cp, 0, 0);
-        if(count == 0)
-            count = 1;
-        atbpt = 0;
-        run();
-        break;
-    }
-
-    dot = reg.r[REGPC];
-    Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
-    symoff(tbuf, sizeof(tbuf), dot, CTEXT);
-    Bprint(bioout, tbuf);
-    if(fmt == 'z')
-        printsource(dot);
-
-    Bprint(bioout, "\n");
-}
-@
 
 <<function dollar>>=
 void
@@ -3431,9 +3549,6 @@ pfmt(char fmt, int mem, ulong val)
 
     c = 0;
     switch(fmt) {
-    default:
-        Bprint(bioout, "bad modifier\n");
-        return 0;
     case 'o':
         c = Bprint(bioout, "%-4lo ", mem? (ushort)getmem_2(dot): val);
         inc = 2;
@@ -3584,6 +3699,10 @@ pfmt(char fmt, int mem, ulong val)
         printsource(dot);
         inc = 0;
         break;
+
+    default:
+        Bprint(bioout, "bad modifier\n");
+        return 0;
     }
     return c;
 }
@@ -3655,24 +3774,6 @@ quesie(char *p)
 }
 @
 
-<<function catcher>>=
-void
-catcher(void *a, char *msg)
-{
-    static int hit = 0;
-
-    hit++;
-    if(hit > 5)
-        exits(0);
-    USED(a);
-    if(strcmp(msg, "interrupt") != 0)
-        noted(NDFLT);
-
-    count = 1;
-    print("5i\n");
-    noted(NCONT);
-}
-@
 
 <<function setreg>>=
 void
@@ -3701,88 +3802,6 @@ setreg(char *addr, char *cp)
 }
 @
 
-
-<<function cmd>>=
-void
-cmd(void)
-{
-    char *p, *a, *cp, *gotint;
-    char addr[128];
-    static char *cmdlet = ":$?/=>"; //$
-    int n, i;
-
-    notify(catcher);
-
-    dot = reg.r[REGPC];
-    setjmp(errjmp);
-
-    for(;;) {
-        Bflush(bioout);
-        p = buf;
-        n = 0;
-        for(;;) {
-            i = Bgetc(bin);
-            if(i < 0)
-                exits(0);
-            *p++ = i;
-            n++;
-            if(i == '\n')
-                break;
-        }
-
-        if(buf[0] == '\n')
-            strcpy(buf, lastcmd);
-        else {
-            buf[n-1] = '\0';
-            strcpy(lastcmd, buf);
-        }
-        p = buf;
-        a = addr;
-
-        for(;;) {
-            p = nextc(p);
-            if(*p == 0 || strchr(cmdlet, *p))
-                break;
-            *a++ = *p++;
-        }
-
-        *a = '\0';
-        cmdcount = 1;
-        cp = strchr(addr, ',');
-        if(cp != 0) {
-            if(cp[1] == '#')
-                cmdcount = strtoul(cp+2, &gotint, 16);
-            else
-                cmdcount = strtoul(cp+1, &gotint, 0);
-            *cp = '\0';
-        }
-
-        switch(*p) {
-        case '$': //$
-            dollar(p+1);
-            break;
-        case ':':
-            colon(addr, p+1);
-            break;
-        case '/':
-        case '?':
-            dot = expr(addr);
-            for(i = 0; i < cmdcount; i++)
-                quesie(p+1);
-            break;
-        case '=':
-            eval(addr, p+1);
-            break;
-        case '>':
-            setreg(addr, p+1);
-            break;
-        default:
-            Bprint(bioout, "?\n");
-            break;
-        }
-    }
-}
-@
 
 
 \chapter{Profiler}

@@ -16,7 +16,7 @@ typedef	struct	Breakpoint	Breakpoint;
 /*s: enum _anon_ */
 enum
 {
-    Instruction	= 1,
+    Instruction		= 1,
     Read		= 2,
     Write		= 4,
     Access		= Read|Write,
