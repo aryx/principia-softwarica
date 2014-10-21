@@ -20,7 +20,6 @@ ulong	nofunc;
 
 #include "/sys/src/libc/9syscall/sys.h"
 
-
 /*s: global sysctab */
 char*	sysctab[] =
 {

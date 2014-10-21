@@ -3,6 +3,7 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
+
 #include "arm.h"
 
 void*		vaddr(ulong);
@@ -275,7 +276,9 @@ vaddr(ulong addr)
             p = &s->table[off];
             if(*p)
                 return *p;
+
             s->rss++;
+
             switch(s->type) {
             default:
                 fatal(0, "vaddr");

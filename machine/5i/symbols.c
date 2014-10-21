@@ -3,6 +3,7 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
+
 #include "arm.h"
 
 /*s: constant STRINGSZ */
@@ -10,7 +11,6 @@
 /*e: constant STRINGSZ */
 
 void		printlocals(Symbol*, ulong);
-
 
 /*s: function printsource */
 /*

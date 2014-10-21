@@ -3,11 +3,20 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
+
 #include <ctype.h>
 
 #include "arm.h"
 
-char	buf[128], lastcmd[128];
+ulong	expr(char*);
+
+/*s: global buf */
+char	buf[128];
+/*e: global buf */
+/*s: global lastcmd */
+char lastcmd[128];
+/*e: global lastcmd */
+
 /*s: global fmt */
 char	fmt = 'X';
 /*e: global fmt */
@@ -17,8 +26,6 @@ int	width = 60;
 /*s: global inc */
 int	inc;
 /*e: global inc */
-
-ulong	expr(char*);
 
 /*s: function reset */
 void
@@ -45,8 +52,6 @@ reset(void)
         b->done = b->count;
 }
 /*e: function reset */
-
-
 
 /*s: function nextc */
 char*

@@ -3,14 +3,17 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
-#include "arm.h"
 
 #include <tos.h>
+
+#include "arm.h"
 
 /*s: global file */
 char*	file = "5.out";
 /*e: global file */
+/*s: global bxxx */
 Biobuf	bp, bi;
+/*e: global bxxx */
 /*s: global fhdr */
 Fhdr	fhdr;
 /*e: global fhdr */
@@ -123,7 +126,6 @@ inithdr(int fd)
     machdata = &armmach;
 }
 /*e: function inithdr */
-
 
 /*s: function initstk */
 void

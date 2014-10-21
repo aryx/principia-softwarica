@@ -19,7 +19,7 @@ enum
     Instruction	= 1,
     Read		= 2,
     Write		= 4,
-    Access		= 2|4,
+    Access		= Read|Write,
     Equal		= 4|8,
 };
 /*e: enum _anon_ */
@@ -28,7 +28,8 @@ enum
 struct Breakpoint
 {
     int		type;		/* Instruction/Read/Access/Write/Equal */
-    ulong		addr;		/* Place at address */
+
+    ulong	addr;		/* Place at address */
     int		count;		/* To execute count times or value */
     int		done;		/* How many times passed through */
     Breakpoint*	next;		/* Link to next one */
@@ -49,6 +50,7 @@ enum
 enum
 {
     Nmaxtlb = 64,
+
     REGARG	= 0,
     REGRET	= 0,
     REGPC	= 15,
@@ -72,6 +74,7 @@ struct Tlb
 struct Icache
 {
     int	on;			/* Turned on */
+
     int	linesize;		/* Line size in bytes */
     int	stall;			/* Cache stalls */
     int*	lines;			/* Tag array */
@@ -109,15 +112,6 @@ struct Registers
 };
 /*e: struct Registers */
 
-/*s: enum _anon_ (machine/5i/arm.h)3 */
-enum
-{
-    FPd	= 0,
-    FPs,
-    FPmemory,
-};
-/*e: enum _anon_ (machine/5i/arm.h)3 */
-
 /*s: enum _anon_ (machine/5i/arm.h)4 */
 enum
 {
@@ -143,6 +137,7 @@ enum
     Text,
     Data,
     Bss,
+
     Nseg,
 };
 /*e: enum _anon_ (machine/5i/arm.h)6 */
@@ -168,9 +163,10 @@ struct Memory
 };
 /*e: struct Memory */
 
-void		Ssyscall(ulong);
 //@Scheck: in libmach.a
 int		armclass(long);
+
+void		Ssyscall(ulong);
 void		breakpoint(char*, char*);
 void		brkchk(ulong, int);
 void		cmd(void);

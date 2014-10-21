@@ -3,7 +3,9 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
+
 #include <ctype.h>
+
 #include "arm.h"
 
 /*s: function dobplist */

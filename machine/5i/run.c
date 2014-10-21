@@ -3,31 +3,12 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
+
 #include "arm.h"
 
 #define XCAST(a) (uvlong)(ulong)a
 
 void		undef(ulong);
-
-/*s: global shtype */
-//static	int	dummy;
-static	char*	shtype[4] =
-{
-    "<<",
-    ">>",
-    "->",
-    "@>",
-};
-/*e: global shtype */
-/*s: global cond */
-static	char*	cond[16] =
-{
-    ".EQ",	".NE",	".HS",	".LO",
-    ".MI",	".PL",	".VS",	".VC",
-    ".HI",	".LS",	".GE",	".LT",
-    ".GT",	".LE",	"",	".NO",
-};
-/*e: global cond */
 
 void	Idp0(ulong);
 void	Idp1(ulong);
@@ -47,6 +28,27 @@ void	Ib(ulong);
 void	Ibl(ulong);
 
 void	Ssyscall(ulong);
+
+//static	int	dummy;
+
+/*s: global shtype */
+static	char*	shtype[4] =
+{
+    "<<",
+    ">>",
+    "->",
+    "@>",
+};
+/*e: global shtype */
+/*s: global cond */
+static	char*	cond[16] =
+{
+    ".EQ",	".NE",	".HS",	".LO",
+    ".MI",	".PL",	".VS",	".VC",
+    ".HI",	".LS",	".GE",	".LT",
+    ".GT",	".LE",	"",	".NO",
+};
+/*e: global cond */
 
 /*s: global itab */
 Inst itab[] =
@@ -158,6 +160,7 @@ Inst itab[] =
     { 0 }
 };
 /*e: global itab */
+
 
 /*s: function runcmp */
 int

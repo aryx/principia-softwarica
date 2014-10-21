@@ -9,6 +9,8 @@
 #define Percent(num, max)	((max)?((num)*100)/(max):0)
 /*e: function Percent */
 
+typedef struct Prof Prof;
+
 extern	Inst	itab[];
 /*s: global tables */
 Inst *tables[] = { itab, 0 };
@@ -144,7 +146,6 @@ segsum(void)
 }
 /*e: function segsum */
 
-typedef struct Prof Prof;
 /*s: struct Prof */
 struct Prof
 {

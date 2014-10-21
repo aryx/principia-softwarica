@@ -3,6 +3,7 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
+
 #include <tos.h>
 
 #include "arm.h"
@@ -26,8 +27,8 @@ int sysdbg;
 int calltree;
 /*e: global calltree */
 //in run.c
-/*s: global icache */
 //Inst itab[];
+/*s: global icache */
 Icache icache;
 /*e: global icache */
 /*s: global tlb */
