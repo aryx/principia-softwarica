@@ -6,8 +6,8 @@
 
 #include "arm.h"
 
-/*s: constant OERRLEN */
 //#define	ODIRLEN	116	/* compatibility; used in _stat etc. */
+/*s: constant OERRLEN */
 #define	OERRLEN	64	/* compatibility; used in _stat etc. */
 /*e: constant OERRLEN */
 
@@ -39,19 +39,19 @@ char*	sysctab[] =
     [RFORK]		"Rfork",
     [PIPE]		"Pipe",
     [CREATE]		"Create",
-    [FD2PATH]	"Fd2path",
+    [FD2PATH]		"Fd2path",
     [BRK]		"Brk",
     [REMOVE]		"Remove",
     [NOTIFY]		"Notify",
     [NOTED]		"Noted",
-    [SEGATTACH]	"Segattach",
-    [SEGDETACH]	"Segdetach",
+    [SEGATTACH]		"Segattach",
+    [SEGDETACH]		"Segdetach",
     [SEGFREE]		"Segfree",
-    [SEGFLUSH]	"Segflush",
+    [SEGFLUSH]		"Segflush",
     [RENDEZVOUS]	"Rendezvous",
-    [UNMOUNT]	"Unmount",
+    [UNMOUNT]		"Unmount",
     [SEEK]		"Seek",
-    [FVERSION]	"Fversion",
+    [FVERSION]		"Fversion",
     [ERRSTR]		"Errstr",
     [STAT]		"Stat",
     [FSTAT]		"Fstat",
@@ -351,7 +351,7 @@ void
 sysstat(void)
 {
     char nambuf[1024];
-    uchar buf[STATMAX];
+    byte buf[STATMAX];
     ulong edir, name;
     int n;
 
@@ -378,7 +378,7 @@ sysstat(void)
 void
 sysfstat(void)
 {
-    uchar buf[STATMAX];
+    byte buf[STATMAX];
     ulong edir;
     int n, fd;
 
@@ -505,10 +505,10 @@ sysbrk(void)
     }
     s = &memory.seg[Bss];
     if(addr > s->end) {
-        osize = ((s->end-s->base)/BY2PG)*sizeof(uchar*);
+        osize = ((s->end-s->base)/BY2PG)*sizeof(byte*);
         addr = ((addr)+(BY2PG-1))&~(BY2PG-1);
         s->end = addr;
-        nsize = ((s->end-s->base)/BY2PG)*sizeof(uchar*);
+        nsize = ((s->end-s->base)/BY2PG)*sizeof(byte*);
         s->table = erealloc(s->table, osize, nsize);
     }	
 

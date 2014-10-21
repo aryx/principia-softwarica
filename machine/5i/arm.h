@@ -27,6 +27,7 @@ enum
 /*s: struct Breakpoint */
 struct Breakpoint
 {
+    //enum<breakpoint_kind>
     int		type;		/* Instruction/Read/Access/Write/Equal */
 
     ulong	addr;		/* Place at address */
@@ -92,6 +93,7 @@ struct Inst
     // enum<ixxx>
     int	type;
 
+    // profiling info
     int	count;
     int	taken;
     int	useddelay;
@@ -101,17 +103,16 @@ struct Inst
 /*s: struct Registers */
 struct Registers
 {
-    ulong	ar;
-    ulong	ir;
-
-    Inst*	ip; // PC
-
     long	r[16];
+
+    ulong	ar;    // reg.r[REGPC]
+    ulong	ir;    // ifetch(reg.ar)
+    int		class; // armclass(reg.ir)
+    Inst*	ip;    // &itab[reg.class]
 
     long	cc1;
     long	cc2;
 
-    int	class;
     int	cond;
     int	compare_op;
     int	cbit;
@@ -161,6 +162,7 @@ struct Segment
     ulong	fileoff;
     ulong	fileend;
 
+    // ??
     int	rss;
     int	refs;
 

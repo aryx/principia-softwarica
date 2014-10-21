@@ -12,7 +12,7 @@ void*		vaddr(ulong);
 ulong
 ifetch(ulong addr)
 {
-    uchar *va;
+    byte *va;
 
     if(addr&3) {
         Bprint(bioout, "Address error (I-fetch) vaddr %.8lux\n", addr);
@@ -62,7 +62,7 @@ getmem_2(ulong addr)
 ulong
 getmem_w(ulong addr)
 {
-    uchar *va;
+    byte *va;
     ulong w;
 
     if(addr&3) {
@@ -87,7 +87,7 @@ getmem_w(ulong addr)
 ushort
 getmem_h(ulong addr)
 {
-    uchar *va;
+    byte *va;
     ulong w;
 
     if(addr&1) {
@@ -109,10 +109,10 @@ getmem_h(ulong addr)
 /*e: function getmem_h */
 
 /*s: function getmem_b */
-uchar
+byte
 getmem_b(ulong addr)
 {
-    uchar *va;
+    byte *va;
 
     if(membpt)
         brkchk(addr, Read);
@@ -135,7 +135,7 @@ getmem_v(ulong addr)
 void
 putmem_h(ulong addr, ushort data)
 {
-    uchar *va;
+    byte *va;
 
     if(addr&1) {
         Bprint(bioout, "Address error (Store) vaddr %.8lux\n", addr);
@@ -156,7 +156,7 @@ putmem_h(ulong addr, ushort data)
 void
 putmem_w(ulong addr, ulong data)
 {
-    uchar *va;
+    byte *va;
 
     if(addr&3) {
         Bprint(bioout, "Address error (Store) vaddr %.8lux\n", addr);
@@ -177,9 +177,9 @@ putmem_w(ulong addr, ulong data)
 
 /*s: function putmem_b */
 void
-putmem_b(ulong addr, uchar data)
+putmem_b(ulong addr, byte data)
 {
-    uchar *va;
+    byte *va;
 
     va = vaddr(addr);
     va += addr&(BY2PG-1);
@@ -263,7 +263,7 @@ vaddr(ulong addr)
 {
     Segment *s, *es;
     int off, foff, l, n;
-    uchar **p, *a;
+    byte **p, *a;
 
     if(tlb.on)
         dotlb(addr);
@@ -280,8 +280,6 @@ vaddr(ulong addr)
             s->rss++;
 
             switch(s->type) {
-            default:
-                fatal(0, "vaddr");
             case Text:
                 *p = emalloc(BY2PG);
                 if(seek(text, s->fileoff+(off*BY2PG), 0) < 0)
@@ -307,12 +305,14 @@ vaddr(ulong addr)
             case Stack:
                 *p = emalloc(BY2PG);
                 return *p;
+            default:
+                fatal(0, "vaddr");
             }
         }
     }
     Bprint(bioout, "User TLB miss vaddr 0x%.8lux\n", addr);
     longjmp(errjmp, 0);
-    return 0;		/*to stop compiler whining*/
+    return nil;		/*to stop compiler whining*/
 }
 /*e: function vaddr */
 /*e: machine/5i/mem.c */

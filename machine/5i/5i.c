@@ -159,6 +159,7 @@ initstk(int argc, char *argv[])
 
     sp -= size;
     sp &= ~7;
+
     reg.r[0] = tos;
     reg.r[REGSP] = sp;
     reg.r[1] = STACKTOP-4;	/* Plan 9 profiling clock (why & why in R1?) */

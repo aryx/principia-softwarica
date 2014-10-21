@@ -18,13 +18,13 @@ Memory memory;
 int text;
 /*e: global text */
 /*s: global trace */
-int trace;
+bool trace;
 /*e: global trace */
 /*s: global sysdbg */
-int sysdbg;
+bool sysdbg;
 /*e: global sysdbg */
 /*s: global calltree */
-int calltree;
+bool calltree;
 /*e: global calltree */
 //in run.c
 //Inst itab[];

@@ -39,7 +39,7 @@ reset(void)
 
     for(i = 0; i > Nseg; i++) {
         s = &memory.seg[i];
-        l = ((s->end-s->base)/BY2PG)*sizeof(uchar*);
+        l = ((s->end-s->base)/BY2PG)*sizeof(byte*);
         for(m = 0; m < l; m++)
             if(s->table[m])
                 free(s->table[m]);
@@ -240,6 +240,7 @@ void
 dollar(char *cp)
 {
     cp = nextc(cp);
+
     switch(*cp) {
     default:
         Bprint(bioout, "?\n");
@@ -289,21 +290,21 @@ dollar(char *cp)
             Bprint(bioout, ":t[0sic]\n");
             break;
         case '\0':
-            trace = 1;
+            trace = true;
             break;
         case '0':
-            trace = 0;
-            sysdbg = 0;
-            calltree = 0;
+            trace = false;
+            sysdbg = false;
+            calltree = false;
             break;
         case 's':
-            sysdbg = 1;
+            sysdbg = true;
             break;
         case 'i':
-            trace = 1;
+            trace = true;
             break;
         case 'c':
-            calltree = 1;
+            calltree = true;
             break;
         }
         break;

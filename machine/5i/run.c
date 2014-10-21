@@ -165,7 +165,7 @@ Inst itab[] =
 
 
 /*s: function runcmp */
-int
+bool
 runcmp(void)
 {
     switch(reg.cond) {
@@ -181,19 +181,19 @@ runcmp(void)
     case 0xb:	/* lt */	return (reg.cc1 < reg.cc2);
     case 0xc:	/* gt */	return (reg.cc1 > reg.cc2);
     case 0xd:	/* le */	return (reg.cc1 <= reg.cc2);
-    case 0xe:	/* al */	return 1;
-    case 0xf:	/* nv */	return 0;
+    case 0xe:	/* al */	return true;
+    case 0xf:	/* nv */	return false;
     default:
         Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
             reg.cond, reg.cc1, reg.cc2);
         undef(reg.ir);
-        return 0;
+        return false;
     }
 }
 /*e: function runcmp */
 
 /*s: function runteq */
-int
+bool
 runteq(void)
 {
     long res = reg.cc1 ^ reg.cc2;
@@ -202,19 +202,19 @@ runteq(void)
     case 0x1:	/* ne */	return res != 0;
     case 0x4:	/* mi */	return (res & SIGNBIT) != 0;
     case 0x5:	/* pl */	return (res & SIGNBIT) == 0;
-    case 0xe:	/* al */	return 1;
-    case 0xf:	/* nv */	return 0;
+    case 0xe:	/* al */	return true;
+    case 0xf:	/* nv */	return false;
     default:
         Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
             reg.cond, reg.cc1, reg.cc2);
         undef(reg.ir);
-        return 0;
+        return false;
     }
 }
 /*e: function runteq */
 
 /*s: function runtst */
-int
+bool
 runtst(void)
 {
     long res = reg.cc1 & reg.cc2;
@@ -223,13 +223,13 @@ runtst(void)
     case 0x1:	/* ne */	return res != 0;
     case 0x4:	/* mi */	return (res & SIGNBIT) != 0;
     case 0x5:	/* pl */	return (res & SIGNBIT) == 0;
-    case 0xe:	/* al */	return 1;
-    case 0xf:	/* nv */	return 0;
+    case 0xe:	/* al */	return true;
+    case 0xf:	/* nv */	return false;
     default:
         Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
             reg.cond, reg.cc1, reg.cc2);
         undef(reg.ir);
-        return 0;
+        return false;
     }
 }
 /*e: function runtst */
@@ -238,19 +238,23 @@ runtst(void)
 void
 run(void)
 {
-    int execute;
+    bool execute;
 
     do {
         if(trace)
             Bflush(bioout);
+
         reg.ar = reg.r[REGPC];
         reg.ir = ifetch(reg.ar);
+
         reg.class = armclass(reg.ir);
+
         reg.ip = &itab[reg.class];
         reg.cond = (reg.ir>>28) & 0xf;
+
         switch(reg.compare_op) {
         case CCcmp:
-            execute = runcmp();
+            execute = runcmp(); // use reg.cond
             break;
         case CCteq:
             execute = runteq();
@@ -266,13 +270,16 @@ run(void)
 
         if(execute) {
             reg.ip->count++;
+            // !!the dispatch!!
             (*reg.ip->func)(reg.ir);
         } else {
             if(trace)
                 itrace("%s%s	IGNORED",
                     reg.ip->name, cond[reg.cond]);
         }
-        reg.r[REGPC] += 4;
+
+        reg.r[REGPC] += 4; // simple architecture with fixed-size instruction!
+
         if(bplist)
             brkchk(reg.r[REGPC], Instruction);
     } while(--count);
