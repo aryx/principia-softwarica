@@ -670,7 +670,7 @@ void
 sysexec(void)
 {
     Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
- 	exits(0);
+  exits(0);
 }
 /*e: function sysexec */
 
@@ -679,7 +679,7 @@ void
 sysfauth(void)
 {
     Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
- 	exits(0);
+  exits(0);
 }
 /*e: function sysfauth */
 /*s: function sysfversion */
@@ -687,7 +687,7 @@ void
 sysfversion(void)
 {
     Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
- 	exits(0);
+  exits(0);
 }
 /*e: function sysfversion */
 
