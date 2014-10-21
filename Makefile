@@ -10,7 +10,6 @@ all:
 setup_host:
 	sudo ln -s `pwd`/root/386 /386
 	sudo ln -s `pwd`/root/arm /arm
-	sudo ln -s `pwd`/root/mips /mips
 	sudo ln -s `pwd`/root/lib /lib
 	sudo ln -s `pwd`/sys /sys
 
