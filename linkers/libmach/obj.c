@@ -8,6 +8,7 @@
 #include <bio.h>
 #include <ar.h>
 #include <mach.h>
+
 #include "obj.h"
 
 /*s: function islocal */
@@ -28,10 +29,8 @@ enum
 int			/* in [$OS].c */
   _is5(char*),
   _is8(char*),
-  _isv(char*),
   _read5(Biobuf*, Prog*),
-  _read8(Biobuf*, Prog*),
-  _readv(Biobuf*, Prog*);
+  _read8(Biobuf*, Prog*);
 
 
 typedef struct Obj	Obj;
@@ -51,7 +50,6 @@ static Obj	obj[] =
 {			/* functions to identify and parse each type of obj */
     [ObjArm]	"arm .5",	_is5, _read5,
     [Obj386]	"386 .8",	_is8, _read8,
-    [ObjMips]	"mips .v",	_isv, _readv,
     [Maxobjtype]	0, 0
 };
 /*e: global obj */
