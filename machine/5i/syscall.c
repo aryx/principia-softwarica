@@ -79,8 +79,8 @@ syserrstr(void)
     ulong str;
     int n;
 
-    str = getmem_w(reg.r[13]+4);
-    n = getmem_w(reg.r[13]+8);
+    str = getmem_w(reg.r[REGSP]+4);
+    n = getmem_w(reg.r[REGSP]+8);
     if(sysdbg)
         itrace("errstr(0x%lux, 0x%lux)", str, n);
 
@@ -100,9 +100,9 @@ sysbind(void)
     char name[1024], old[1024];
     int n;
 
-    pname = getmem_w(reg.r[13]+4);
-    pold = getmem_w(reg.r[13]+8);
-    flags = getmem_w(reg.r[13]+12);
+    pname = getmem_w(reg.r[REGSP]+4);
+    pold = getmem_w(reg.r[REGSP]+8);
+    flags = getmem_w(reg.r[REGSP]+12);
     memio(name, pname, sizeof(name), MemReadstring);
     memio(old, pold, sizeof(old), MemReadstring);
     if(sysdbg)
@@ -125,9 +125,9 @@ sysfd2path(void)
     ulong str;
     char buf[1024];
 
-    fd = getmem_w(reg.r[13]+4);
-    str = getmem_w(reg.r[13]+8);
-    n = getmem_w(reg.r[13]+12);
+    fd = getmem_w(reg.r[REGSP]+4);
+    str = getmem_w(reg.r[REGSP]+8);
+    n = getmem_w(reg.r[REGSP]+12);
     if(sysdbg)
         itrace("fd2path(0x%lux, 0x%lux, 0x%lux)", fd, str, n);
     reg.r[1] = -1;
@@ -153,7 +153,7 @@ syschdir(void)
     int n;
     ulong name;
 
-    name = getmem_w(reg.r[13]+4);
+    name = getmem_w(reg.r[REGSP]+4);
     memio(file, name, sizeof(file), MemReadstring);
     if(sysdbg)
         itrace("chdir(0x%lux='%s', 0x%lux)", name, file);
@@ -173,7 +173,7 @@ sysclose(void)
     int n;
     ulong fd;
 
-    fd = getmem_w(reg.r[13]+4);
+    fd = getmem_w(reg.r[REGSP]+4);
     if(sysdbg)
         itrace("close(%d)", fd);
 
@@ -191,8 +191,8 @@ sysdup(void)
     int oldfd, newfd;
     int n;
 
-    oldfd = getmem_w(reg.r[13]+4);
-    newfd = getmem_w(reg.r[13]+8);
+    oldfd = getmem_w(reg.r[REGSP]+4);
+    newfd = getmem_w(reg.r[REGSP]+8);
     if(sysdbg)
         itrace("dup(%d, %d)", oldfd, newfd);
 
@@ -210,7 +210,7 @@ sysexits(void)
     char buf[OERRLEN];
     ulong str;
 
-    str = getmem_w(reg.r[13]+4);
+    str = getmem_w(reg.r[REGSP]+4);
     if(sysdbg)
         itrace("exits(0x%lux)", str);
 
@@ -232,8 +232,8 @@ sysopen(void)
     int n;
     ulong mode, name;
 
-    name = getmem_w(reg.r[13]+4);
-    mode = getmem_w(reg.r[13]+8);
+    name = getmem_w(reg.r[REGSP]+4);
+    mode = getmem_w(reg.r[REGSP]+8);
     memio(file, name, sizeof(file), MemReadstring);
     
     n = open(file, mode);
@@ -257,9 +257,9 @@ sysread(vlong offset)
     char *buf, *p;
     int n, cnt, c;
 
-    fd = getmem_w(reg.r[13]+4);
-    a = getmem_w(reg.r[13]+8);
-    size = getmem_w(reg.r[13]+12);
+    fd = getmem_w(reg.r[REGSP]+4);
+    a = getmem_w(reg.r[REGSP]+8);
+    size = getmem_w(reg.r[REGSP]+12);
 
     buf = emalloc(size);
     if(fd == 0) {
@@ -298,7 +298,7 @@ sysread(vlong offset)
 void
 syspread(void)
 {
-    sysread(getmem_v(reg.r[13]+16));
+    sysread(getmem_v(reg.r[REGSP]+16));
 }
 /*e: function syspread */
 
@@ -311,10 +311,10 @@ sysseek(void)
     ulong retp;
     vlong v;
 
-    retp = getmem_w(reg.r[13]+4);
-    fd = getmem_w(reg.r[13]+8);
-    v = getmem_v(reg.r[13]+16);
-    mode = getmem_w(reg.r[13]+20);
+    retp = getmem_w(reg.r[REGSP]+4);
+    fd = getmem_w(reg.r[REGSP]+8);
+    v = getmem_v(reg.r[REGSP]+16);
+    mode = getmem_w(reg.r[REGSP]+20);
     if(sysdbg)
         itrace("seek(%d, %lld, %d)", fd, v, mode);
 
@@ -334,7 +334,7 @@ syssleep(void)
     ulong len;
     int n;
 
-    len = getmem_w(reg.r[13]+4);
+    len = getmem_w(reg.r[REGSP]+4);
     if(sysdbg)
         itrace("sleep(%d)", len);
 
@@ -355,9 +355,9 @@ sysstat(void)
     ulong edir, name;
     int n;
 
-    name = getmem_w(reg.r[13]+4);
-    edir = getmem_w(reg.r[13]+8);
-    n = getmem_w(reg.r[13]+12);
+    name = getmem_w(reg.r[REGSP]+4);
+    edir = getmem_w(reg.r[REGSP]+8);
+    n = getmem_w(reg.r[REGSP]+12);
     memio(nambuf, name, sizeof(nambuf), MemReadstring);
     if(sysdbg)
         itrace("stat(0x%lux='%s', 0x%lux, 0x%lux)", name, nambuf, edir, n);
@@ -382,9 +382,9 @@ sysfstat(void)
     ulong edir;
     int n, fd;
 
-    fd = getmem_w(reg.r[13]+4);
-    edir = getmem_w(reg.r[13]+8);
-    n = getmem_w(reg.r[13]+12);
+    fd = getmem_w(reg.r[REGSP]+4);
+    edir = getmem_w(reg.r[REGSP]+8);
+    n = getmem_w(reg.r[REGSP]+12);
     if(sysdbg)
         itrace("fstat(%d, 0x%lux, 0x%lux)", fd, edir, n);
 
@@ -411,9 +411,9 @@ syswrite(vlong offset)
     char *buf;
     int n;
 
-    fd = getmem_w(reg.r[13]+4);
-    a = getmem_w(reg.r[13]+8);
-    size = getmem_w(reg.r[13]+12);
+    fd = getmem_w(reg.r[REGSP]+4);
+    a = getmem_w(reg.r[REGSP]+8);
+    size = getmem_w(reg.r[REGSP]+12);
 
     Bflush(bioout);
     buf = memio(0, a, size, MemRead);
@@ -434,7 +434,7 @@ syswrite(vlong offset)
 void
 syspwrite(void)
 {
-    syswrite(getmem_v(reg.r[13]+16));
+    syswrite(getmem_v(reg.r[REGSP]+16));
 }
 /*e: function syspwrite */
 
@@ -445,7 +445,7 @@ syspipe(void)
     int n, p[2];
     ulong fd;
 
-    fd = getmem_w(reg.r[13]+4);
+    fd = getmem_w(reg.r[REGSP]+4);
     if(sysdbg)
         itrace("pipe(%lux)", fd);
 
@@ -468,9 +468,9 @@ syscreate(void)
     int n;
     ulong mode, name, perm;
 
-    name = getmem_w(reg.r[13]+4);
-    mode = getmem_w(reg.r[13]+8);
-    perm = getmem_w(reg.r[13]+12);
+    name = getmem_w(reg.r[REGSP]+4);
+    mode = getmem_w(reg.r[REGSP]+8);
+    perm = getmem_w(reg.r[REGSP]+12);
     memio(file, name, sizeof(file), MemReadstring);
     if(sysdbg)
         itrace("create(0x%lux='%s', 0x%lux, 0x%lux)", name, file, mode, perm);
@@ -490,7 +490,7 @@ sysbrk(void)
     ulong addr, osize, nsize;
     Segment *s;
 
-    addr = getmem_w(reg.r[13]+4);
+    addr = getmem_w(reg.r[REGSP]+4);
     if(sysdbg)
         itrace("brk(0x%lux)", addr);
 
@@ -524,7 +524,7 @@ sysremove(void)
     ulong name;
     int n;
 
-    name = getmem_w(reg.r[13]+4);
+    name = getmem_w(reg.r[REGSP]+4);
     memio(nambuf, name, sizeof(nambuf), MemReadstring);
     if(sysdbg)
         itrace("remove(0x%lux='%s')", name, nambuf);
@@ -540,7 +540,7 @@ sysremove(void)
 void
 sysnotify(void)
 {
-    nofunc = getmem_w(reg.r[13]+4);
+    nofunc = getmem_w(reg.r[REGSP]+4);
     if(sysdbg)
         itrace("notify(0x%lux)\n", nofunc);
 

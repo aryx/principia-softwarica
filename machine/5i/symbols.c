@@ -78,8 +78,8 @@ stktrace(int modif)
     int i;
     char buf[512];
 
-    pc = reg.r[15];
-    sp = reg.r[13];
+    pc = reg.r[REGPC];
+    sp = reg.r[REGSP];
     i = 0;
     while (findsym(pc, CTEXT, &s)) {
         if(strcmp(STARTSYM, s.name) == 0) {
@@ -91,7 +91,7 @@ stktrace(int modif)
         else if (findlocal(&s, FRAMENAME, &f) == 0)
             break;
         if (s.type == 'L' || s.type == 'l' || pc <= s.value+4)
-            pc = reg.r[14];
+            pc = reg.r[REGLINK];
         else pc = getmem_4(sp);
         sp += f.value;
         Bprint(bioout, "%s(", s.name);

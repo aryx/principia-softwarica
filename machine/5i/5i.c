@@ -34,7 +34,7 @@ void main(int argc, char **argv)
     Binit(bioout, 1, OWRITE);
     Binit(bin, 0, OREAD);
 
-    tlb.on = 1;
+    tlb.on = true;
     tlb.tlbsize = 24;
 
     if(argc)
@@ -47,7 +47,9 @@ void main(int argc, char **argv)
         fatal(1, "open text '%s'", file);
 
     Bprint(bioout, "5i\n");
+
     inithdr(text);
+    initmap();
     initstk(argc, argv);
 
     cmd();
@@ -72,10 +74,10 @@ initmap()
     s->end = t;
     s->fileoff = fhdr.txtoff - fhdr.hdrsz;
     s->fileend = s->fileoff + fhdr.txtsz;
-    s->table = emalloc(((s->end-s->base)/BY2PG)*sizeof(uchar*));
-
-    iprof = emalloc(((s->end-s->base)/PROFGRAN)*sizeof(long));
+    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
     textbase = s->base;
+
+    iprof = emalloc(((s->end - s->base)/PROFGRAN)*sizeof(long));
 
     s = &memory.seg[Data];
     s->type = Data;
@@ -83,20 +85,20 @@ initmap()
     s->end = t+(d-t);
     s->fileoff = fhdr.datoff;
     s->fileend = s->fileoff + fhdr.datsz;
+    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
     datasize = fhdr.datsz;
-    s->table = emalloc(((s->end-s->base)/BY2PG)*sizeof(uchar*));
 
     s = &memory.seg[Bss];
     s->type = Bss;
     s->base = d;
     s->end = d+(b-d);
-    s->table = emalloc(((s->end-s->base)/BY2PG)*sizeof(uchar*));
+    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
 
     s = &memory.seg[Stack];
     s->type = Stack;
     s->base = STACKTOP-STACKSIZE;
     s->end = STACKTOP;
-    s->table = emalloc(((s->end-s->base)/BY2PG)*sizeof(uchar*));
+    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
 
     reg.r[REGPC] = fhdr.entry;
 }
@@ -108,6 +110,7 @@ inithdr(int fd)
 {
     Symbol s;
 
+    // from libmach.a
     extern Machdata armmach;
 
     seek(fd, 0, 0);
@@ -121,6 +124,7 @@ inithdr(int fd)
         fatal(0, "%r\n");
 
     symmap = loadmap(symmap, fd, &fhdr);
+
     if (mach->sbreg && lookup(0, mach->sbreg, &s))
         mach->sb = s.value;
     machdata = &armmach;
@@ -136,7 +140,6 @@ initstk(int argc, char *argv[])
     int i;
     char *p;
 
-    initmap();
     tos = STACKTOP - sizeof(Tos)*2;	/* we'll assume twice the host's is big enough */
     sp = tos;
     for (i = 0; i < sizeof(Tos)*2; i++)
@@ -157,7 +160,7 @@ initstk(int argc, char *argv[])
     sp -= size;
     sp &= ~7;
     reg.r[0] = tos;
-    reg.r[13] = sp;
+    reg.r[REGSP] = sp;
     reg.r[1] = STACKTOP-4;	/* Plan 9 profiling clock (why & why in R1?) */
 
     /* Push argc */

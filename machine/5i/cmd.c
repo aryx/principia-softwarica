@@ -221,7 +221,7 @@ colon(char *addr, char *cp)
         break;
     }
 
-    dot = reg.r[15];
+    dot = reg.r[REGPC];
     Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
     symoff(tbuf, sizeof(tbuf), dot, CTEXT);
     Bprint(bioout, tbuf);
@@ -597,11 +597,11 @@ setreg(char *addr, char *cp)
     dot = expr(addr);
     cp = nextc(cp);
     if(strcmp(cp, "pc") == 0) {
-        reg.r[15] = dot;
+        reg.r[REGPC] = dot;
         return;
     }
     if(strcmp(cp, "sp") == 0) {
-        reg.r[13] = dot;
+        reg.r[REGSP] = dot;
         return;
     }
     if(*cp++ == 'r') {
@@ -621,12 +621,12 @@ cmd(void)
 {
     char *p, *a, *cp, *gotint;
     char addr[128];
-    static char *cmdlet = ":$?/=>";
+    static char *cmdlet = ":$?/=>"; //$
     int n, i;
 
     notify(catcher);
 
-    dot = reg.r[15];
+    dot = reg.r[REGPC];
     setjmp(errjmp);
 
     for(;;) {
@@ -671,7 +671,7 @@ cmd(void)
         }
 
         switch(*p) {
-        case '$':
+        case '$': //$
             dollar(p+1);
             break;
         case ':':

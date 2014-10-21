@@ -112,7 +112,7 @@ isum(void)
 void
 tlbsum(void)
 {
-    if(tlb.on == 0)
+    if(tlb.on == false)
         return;
 
     Bprint(bioout, "\n\nTlb summary\n");

@@ -63,18 +63,17 @@ Inst itab[] =
     { Idp0,		"RSC",	Iarith },	/* 07 */
     { Idp0,		"TST",	Iarith },	/* 08 */
     { Idp0,		"TEQ",	Iarith },	/* 09 */
-
     { Idp0,		"CMP",	Iarith },	/* 10 */
     { Idp0,		"CMN",	Iarith },	/* 11 */
     { Idp0,		"ORR",	Iarith },	/* 12 */
     { Idp0,		"MOV",	Iarith },	/* 13 */
     { Idp0,		"BIC",	Iarith },	/* 14 */
     { Idp0,		"MVN",	Iarith },	/* 15 */
+
     { Idp1,		"AND",	Iarith },	/* 16 */
     { Idp1,		"EOR",	Iarith },	/* 17 */
     { Idp1,		"SUB",	Iarith },	/* 18 */
     { Idp1,		"RSB",	Iarith },	/* 19 */
-
     { Idp1,		"ADD",	Iarith },	/* 20 */
     { Idp1,		"ADC",	Iarith },	/* 21 */
     { Idp1,		"SBC",	Iarith },	/* 22 */
@@ -85,9 +84,9 @@ Inst itab[] =
     { Idp1,		"CMN",	Iarith },	/* 27 */
     { Idp1,		"ORR",	Iarith },	/* 28 */
     { Idp1,		"MOV",	Iarith },	/* 29 */
-
     { Idp1,		"BIC",	Iarith },	/* 30 */
     { Idp1,		"MVN",	Iarith },	/* 31 */
+
     { Idp2,		"AND",	Iarith },	/* 32 */
     { Idp2,		"EOR",	Iarith },	/* 33 */
     { Idp2,		"SUB",	Iarith },	/* 34 */
@@ -96,7 +95,6 @@ Inst itab[] =
     { Idp2,		"ADC",	Iarith },	/* 37 */
     { Idp2,		"SBC",	Iarith },	/* 38 */
     { Idp2,		"RSC",	Iarith },	/* 39 */
-
     { Idp2,		"TST",	Iarith },	/* 40 */
     { Idp2,		"TEQ",	Iarith },	/* 41 */
     { Idp2,		"CMP",	Iarith },	/* 42 */
@@ -105,9 +103,9 @@ Inst itab[] =
     { Idp2,		"MOV",	Iarith },	/* 45 */
     { Idp2,		"BIC",	Iarith },	/* 46 */
     { Idp2,		"MVN",	Iarith },	/* 47 */
+
     { Idp3,		"AND",	Iarith },	/* 48 - i,r,r */
     { Idp3,		"EOR",	Iarith },	/* 49 */
-
     { Idp3,		"SUB",	Iarith },	/* 50 */
     { Idp3,		"RSB",	Iarith },	/* 51 */
     { Idp3,		"ADD",	Iarith },	/* 52 */
@@ -118,44 +116,48 @@ Inst itab[] =
     { Idp3,		"TEQ",	Iarith },	/* 57 */
     { Idp3,		"CMP",	Iarith },	/* 58 */
     { Idp3,		"CMN",	Iarith },	/* 59 */
-
     { Idp3,		"ORR",	Iarith },	/* 60 */
     { Idp3,		"MOV",	Iarith },	/* 61 */
     { Idp3,		"BIC",	Iarith },	/* 62 */
     { Idp3,		"MVN",	Iarith },	/* 63 */
+
+
     { Imul,		"MUL",	Iarith },	/* 64 */
-    { Imula,	"MULA",	Iarith },	/* 65 */
+    { Imula,		"MULA",	Iarith },	/* 65 */
 
-    { Iswap,	"SWPW",	Imem },	/* 66 */
-    { Iswap,	"SWPBU",	Imem },	/* 67 */
 
-    { Imem2,	"MOV",	Imem },	/* 68 load/store h/sb */
-    { Imem2,	"MOV",	Imem },	/* 69 */
-    { Imem2,	"MOV",	Imem },	/* 70 */
-    { Imem2,	"MOV",	Imem },	/* 71 */
-
-    { Imem1,	"MOVW",	Imem },	/* 72 load/store w/ub i,r */
-    { Imem1,	"MOVB",	Imem },	/* 73 */
-    { Imem1,	"MOVW",	Imem },	/* 74 */
-    { Imem1,	"MOVB",	Imem },	/* 75 */
-    { Imem1,	"MOVW",	Imem },	/* 76 load/store r,r */
-    { Imem1,	"MOVB",	Imem },	/* 77 */
-    { Imem1,	"MOVW",	Imem },	/* 78 */
-    { Imem1,	"MOVB",	Imem },	/* 79 */
-
+    { Iswap,		"SWPW",	Imem },		/* 66 */
+    { Iswap,		"SWPBU",Imem },		/* 67 */
+    { Imem2,		"MOV",	Imem },	/* 68 load/store h/sb */
+    { Imem2,		"MOV",	Imem },	/* 69 */
+    { Imem2,		"MOV",	Imem },	/* 70 */
+    { Imem2,		"MOV",	Imem },	/* 71 */
+    { Imem1,		"MOVW",	Imem },	/* 72 load/store w/ub i,r */
+    { Imem1,		"MOVB",	Imem },	/* 73 */
+    { Imem1,		"MOVW",	Imem },	/* 74 */
+    { Imem1,		"MOVB",	Imem },	/* 75 */
+    { Imem1,		"MOVW",	Imem },	/* 76 load/store r,r */
+    { Imem1,		"MOVB",	Imem },	/* 77 */
+    { Imem1,		"MOVW",	Imem },	/* 78 */
+    { Imem1,		"MOVB",	Imem },	/* 79 */
     { Ilsm,		"LDM",	Imem },	/* 80 block move r,r */
     { Ilsm,		"STM",	Imem },	/* 81 */
+
     { Ib,		"B",	Ibranch },		/* 82 branch */
     { Ibl,		"BL",	Ibranch },		/* 83 */
-    { Ssyscall,	"SWI",	Isyscall },	/* 84 co processor */
-    { undef,	"undef" },	/* 85 */
-    { undef,	"undef" },	/* 86 */
-    { undef,	"undef"  },	/* 87 */
-    { Imull,	"MULLU",	Iarith },	/* 88 */
-    { Imull,	"MULALU",	Iarith },	/* 89 */
-    { Imull,	"MULL",	Iarith  },	/* 90 */
-    { Imull,	"MULAL",	Iarith  },	/* 91 */
-    { undef,	"undef"  },	/* 92 */
+
+    { Ssyscall,		"SWI",	Isyscall },	/* 84 co processor */
+
+    { undef,		"undef" },	/* 85 */
+    { undef,		"undef" },	/* 86 */
+    { undef,		"undef"  },	/* 87 */
+
+    { Imull,		"MULLU",	Iarith },	/* 88 */
+    { Imull,		"MULALU",	Iarith },	/* 89 */
+    { Imull,		"MULL",		Iarith  },	/* 90 */
+    { Imull,		"MULAL",	Iarith  },	/* 91 */
+
+    { undef,		"undef"  },	/* 92 */
 
     { 0 }
 };
@@ -990,7 +992,7 @@ Ibl(ulong inst)
     if(calltree) {
         findsym(v, CTEXT, &s);
         Bprint(bioout, "%8lux %s(", reg.r[REGPC], s.name);
-        printparams(&s, reg.r[13]);
+        printparams(&s, reg.r[REGSP]);
         Bprint(bioout, "from ");
         printsource(reg.r[REGPC]);
         Bputc(bioout, '\n');

@@ -36,33 +36,34 @@ struct Breakpoint
 };
 /*e: struct Breakpoint */
 
-/*s: enum _anon_ (machine/5i/arm.h) */
-enum
+/*s: enum ixxx */
+enum ixxx
 {
     Imem,
     Iarith,
     Ibranch,
     Isyscall,
 };
-/*e: enum _anon_ (machine/5i/arm.h) */
+/*e: enum ixxx */
 
-/*s: enum _anon_ (machine/5i/arm.h)2 */
+/*s: constant Nmaxtlb */
+#define Nmaxtlb 64
+/*e: constant Nmaxtlb */
+/*s: enum regxxx */
 enum
 {
-    Nmaxtlb = 64,
-
     REGARG	= 0,
     REGRET	= 0,
     REGPC	= 15,
     REGLINK	= 14,
     REGSP	= 13,
 };
-/*e: enum _anon_ (machine/5i/arm.h)2 */
+/*e: enum regxxx */
 
 /*s: struct Tlb */
 struct Tlb
 {
-    int	on;			/* Being updated */
+    bool	on;			/* Being updated */
     int	tlbsize;		/* Number of entries */
     ulong	tlbent[Nmaxtlb];	/* Virtual address tags */
     int	hit;			/* Number of successful tag matches */
@@ -73,7 +74,7 @@ struct Tlb
 /*s: struct Icache */
 struct Icache
 {
-    int	on;			/* Turned on */
+    bool	on;			/* Turned on */
 
     int	linesize;		/* Line size in bytes */
     int	stall;			/* Cache stalls */
@@ -88,7 +89,9 @@ struct Inst
 {
     void 	(*func)(ulong);
     char*	name;
+    // enum<ixxx>
     int	type;
+
     int	count;
     int	taken;
     int	useddelay;
@@ -100,10 +103,14 @@ struct Registers
 {
     ulong	ar;
     ulong	ir;
-    Inst*	ip;
+
+    Inst*	ip; // PC
+
     long	r[16];
+
     long	cc1;
     long	cc2;
+
     int	class;
     int	cond;
     int	compare_op;
@@ -130,8 +137,8 @@ enum
 };
 /*e: enum _anon_ (machine/5i/arm.h)5 */
 
-/*s: enum _anon_ (machine/5i/arm.h)6 */
-enum
+/*s: enum segment_kind */
+enum segment_kind
 {
     Stack,
     Text,
@@ -140,25 +147,31 @@ enum
 
     Nseg,
 };
-/*e: enum _anon_ (machine/5i/arm.h)6 */
+/*e: enum segment_kind */
 
 /*s: struct Segment */
 struct Segment
 {
+    // enum<segment_kind>
     short	type;
+
     ulong	base;
     ulong	end;
+
     ulong	fileoff;
     ulong	fileend;
+
     int	rss;
     int	refs;
-    uchar**	table;
+
+    byte**	table;
 };
 /*e: struct Segment */
 
 /*s: struct Memory */
 struct Memory
 {
+    //map<enum<segment_kind>, Segment>
     Segment	seg[Nseg];
 };
 /*e: struct Memory */
