@@ -8,11 +8,13 @@
 
 #define	REGRET		0
 #define	REGARG		0
+
 /* compiler allocates R1 up as temps */
 /* compiler allocates register variables R2 up */
 #define	REGMIN		2
 #define	REGMAX		8
 #define	REGEXT		10
+
 /* compiler allocates external registers R10 down */
 #define	REGTMP		11
 #define	REGSB		12
@@ -46,8 +48,8 @@ enum	as
 	ACMP,
 	ACMN,
 	AORR,
+    //AMOV
 	ABIC,
-
 	AMVN,
 
 	AB,
@@ -59,20 +61,21 @@ enum	as
  */ 
 	ABEQ,
 	ABNE,
-	ABCS,
+	ABCS,//?
 	ABHS,
-	ABCC,
+	ABCC,//?
 	ABLO,
 	ABMI,
 	ABPL,
-	ABVS,
-	ABVC,
+	ABVS,//?
+	ABVC,//?
 	ABHI,
 	ABLS,
 	ABGE,
 	ABLT,
 	ABGT,
 	ABLE,
+    //AL? NV? see 5i/runcmp()
 
 	AMOVWD,
 	AMOVWF,
@@ -117,9 +120,10 @@ enum	as
 
 	ANOP,
 	ARFE,
-	ASWI,
+	ASWI, // syscall
 	AMULA,
 
+    // pseudo
 	ADATA,
 	AGLOBL,
 	AGOK,
