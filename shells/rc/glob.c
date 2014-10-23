@@ -13,7 +13,6 @@ struct Word *globv;
 /*
  * delete all the GLOB marks from s, in place
  */
-
 void
 deglob(void *as)
 {
@@ -55,7 +54,6 @@ globsort(word *left, word *right)
  * Push names prefixed by globname and suffixed by a match of p onto the astack.
  * namep points to the end of the prefix in globname.
  */
-
 void
 globdir(uchar *p, uchar *namep)
 {
@@ -102,7 +100,6 @@ globdir(uchar *p, uchar *namep)
  * Push all file names matched by p on the current thread's stack.
  * If there are no matches, the list consists of p.
  */
-
 void
 glob(void *ap)
 {
@@ -150,7 +147,6 @@ equtf(uchar *p, uchar *q)
  * Return a pointer to the next utf code in the string,
  * not jumping past nuls in broken utf codes!
  */
-
 uchar*
 nextutf(uchar *p)
 {
@@ -163,7 +159,6 @@ nextutf(uchar *p)
 /*
  * Convert the utf code at *p to a unicode value
  */
-
 int
 unicode(uchar *p)
 {
@@ -182,7 +177,6 @@ unicode(uchar *p)
  * ? matches any single character
  * [...] matches the enclosed list of characters
  */
-
 int
 matchfn(void *as, void *ap)
 {

@@ -68,6 +68,7 @@ struct Tree {
     tree	*next;
 };
 /*e: struct tree */
+
 tree *newtree(void);
 tree *token(char*, int), *klook(char*), *tree1(int, tree*);
 tree *tree2(int, tree*, tree*), *tree3(int, tree*, tree*, tree*);
@@ -75,9 +76,8 @@ tree *mung1(tree*, tree*), *mung2(tree*, tree*, tree*);
 tree *mung3(tree*, tree*, tree*, tree*), *epimung(tree*, tree*);
 tree *simplemung(tree*), *heredoc(tree*);
 void freetree(tree*);
-/*s: global cmdtree */
-tree *cmdtree;
-/*e: global cmdtree */
+
+extern tree *cmdtree;
 
 /*s: struct code */
 /*
@@ -93,9 +93,7 @@ union Code {
 /*e: struct code */
 
 extern char *promptstr;
-/*s: global doprompt */
 extern int doprompt;
-/*e: global doprompt */
 
 /*s: constant NTOK */
 #define	NTOK	8192		/* maximum bytes in a word (token) */
@@ -136,7 +134,10 @@ struct Var {
     var	*next;		/* next on hash or local list */
 };
 /*e: struct var */
-var *vlook(char*), *gvlook(char*), *newvar(char*, var*);
+
+var *vlook(char*);
+var *gvlook(char*);
+var *newvar(char*, var*);
 
 /*s: constant NVAR */
 #define	NVAR	521
@@ -157,7 +158,7 @@ struct Here {
     struct Here *next;
 };
 /*e: struct here */
-int mypid;
+extern int mypid;
 
 /*s: constant GLOB */
 /*
@@ -171,12 +172,8 @@ int mypid;
 #define	GLOB	'\001'
 /*e: constant GLOB */
 
-/*s: global argp */
 extern char **argp;
-/*e: global argp */
-/*s: global args */
 extern char **args;
-/*e: global args */
 extern int nerror;		/* number of errors encountered during compilation */
 /*s: constant PRD */
 /*
@@ -195,6 +192,7 @@ extern char *Rcmain, *Fdprefix;
 extern int ndot;
 char *getstatus(void);
 
-int lastc;
-int lastword;
+extern int lastc;
+extern int lastword;
+
 /*e: rc/rc.h */

@@ -26,18 +26,20 @@ idchr(int c)
     return c>' ' && !strchr("!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~", c);
 }
 /*e: function idchr */
+
 /*s: global future */
 int future = EOF;
 /*e: global future */
-/*s: global doprompt (rc/lex.c) */
+/*s: global doprompt */
 int doprompt = 1;
-/*e: global doprompt (rc/lex.c) */
+/*e: global doprompt */
 /*s: global inquote */
 int inquote;
 /*e: global inquote */
 /*s: global incomm */
 int incomm;
 /*e: global incomm */
+
 /*s: function nextc */
 /*
  * Look ahead in the input stream

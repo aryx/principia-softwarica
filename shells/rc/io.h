@@ -13,9 +13,9 @@ struct Io {
     uchar	buf[NBUF];
 };
 /*e: struct io */
-/*s: global err */
-io *err;
-/*e: global err */
+
+extern io *err;
+
 
 io *openfd(int), *openstr(void), *opencore(char *, int);
 int emptybuf(io*);

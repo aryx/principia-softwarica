@@ -73,19 +73,15 @@ struct Thread {
     thread *ret;		/* who continues when this finishes */
 };
 /*e: struct thread */
-/*s: global runq */
-thread *runq;
-/*e: global runq */
 code *codecopy(code*);
-/*s: global codebuf */
-code *codebuf;				/* compiler output */
-/*e: global codebuf */
-/*s: global ntrap */
-int ntrap;				/* number of outstanding traps */
-/*e: global ntrap */
-/*s: global trap */
-int trap[NSIG];				/* number of outstanding traps per type */
-/*e: global trap */
+
+extern thread *runq;
+extern code *codebuf;				/* compiler output */
+extern int ntrap;				/* number of outstanding traps */
+extern int trap[NSIG];				/* number of outstanding traps per type */
+extern int eflagok;			/* kludge flag so that -e doesn't exit in startup */
+extern int havefork;
+
 /*s: struct builtin */
 struct Builtin {
     char *name;
@@ -93,16 +89,18 @@ struct Builtin {
 };
 /*e: struct builtin */
 extern struct Builtin Builtin[];
-/*s: global eflagok */
-int eflagok;			/* kludge flag so that -e doesn't exit in startup */
-/*e: global eflagok */
-/*s: global havefork */
-int havefork;
-/*e: global havefork */
 
-void execcd(void), execwhatis(void), execeval(void), execexec(void);
-int execforkexec(void);
-void execexit(void), execshift(void);
-void execwait(void), execumask(void), execdot(void), execflag(void);
-void execfunc(var*), execcmds(io *);
+void execcd(void);
+void execwhatis(void);
+void execeval(void);
+void execexec(void);
+int  execforkexec(void);
+void execexit(void);
+void execshift(void);
+void execwait(void);
+void execumask(void);
+void execdot(void);
+void execflag(void);
+void execfunc(var*);
+void execcmds(io *);
 /*e: rc/exec.h */
