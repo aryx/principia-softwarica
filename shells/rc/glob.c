@@ -6,7 +6,7 @@
 char *globname;
 /*e: global globname */
 /*s: global globv */
-struct word *globv;
+struct Word *globv;
 /*e: global globv */
 /*s: function deglob */
 /*

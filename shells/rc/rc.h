@@ -42,23 +42,23 @@
 #endif
 //#endif
 
-typedef struct tree tree;
-typedef struct word word;
-typedef struct io io;
-typedef union code code;
-typedef struct var var;
-typedef struct list list;
-typedef struct redir redir;
-typedef struct thread thread;
-typedef struct builtin builtin;
+typedef struct Tree tree;
+typedef struct Word word;
+typedef struct Io io;
+typedef union Code code;
+typedef struct Var var;
+typedef struct List list;
+typedef struct Redir redir;
+typedef struct Thread thread;
+typedef struct Builtin builtin;
 
 //#ifndef Unix
 #pragma incomplete word
 #pragma incomplete io
-/*s: struct tree */
 //#endif
 
-struct tree{
+/*s: struct tree */
+struct Tree {
     int	type;
     int	rtype, fd0, fd1;	/* details of REDIR PIPE DUP tokens */
     char	*str;
@@ -85,7 +85,7 @@ tree *cmdtree;
  * Always create a new reference to a code vector by calling codecopy(.).
  * Always call codefree(.) when deleting a reference.
  */
-union code{
+union Code {
     void	(*f)(void);
     int	i;
     char	*s;
@@ -130,7 +130,7 @@ char tok[NTOK + UTFmax];
 /*e: constant RDWR */
 
 /*s: struct var */
-struct var{
+struct Var {
     char	*name;		/* ascii name */
     word	*val;		/* value */
     int	changed;
@@ -157,10 +157,10 @@ void *Malloc(ulong);
 void efree(void *);
 
 /*s: struct here */
-struct here{
+struct Here {
     tree	*tag;
     char	*name;
-    struct here *next;
+    struct Here *next;
 };
 /*e: struct here */
 /*s: global mypid */
@@ -188,9 +188,6 @@ char **args;
 /*s: global nerror */
 int nerror;		/* number of errors encountered during compilation */
 /*e: global nerror */
-/*s: global doprompt (rc/rc.h) */
-int doprompt;		/* is it time for a prompt? */
-/*e: global doprompt (rc/rc.h) */
 /*s: constant PRD */
 /*
  * Which fds are the reading/writing end of a pipe?

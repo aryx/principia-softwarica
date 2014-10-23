@@ -13,7 +13,7 @@
  */
 int
 exitnext(void){
-    union code *c=&runq->code[runq->pc];
+    union Code *c=&runq->code[runq->pc];
     while(c->f==Xpopredir) c++;
     return c->f==Xexit;
 }
@@ -26,7 +26,7 @@ Xsimple(void)
     word *a;
     thread *p = runq;
     var *v;
-    struct builtin *bp;
+    struct Builtin *bp;
     int pid;
     globlist();
     a = runq->argv->words;
@@ -78,7 +78,7 @@ Xsimple(void)
 }
 /*e: function Xsimple */
 /*s: global nullpath */
-struct word nullpath = { "", 0};
+struct Word nullpath = { "", 0};
 /*e: global nullpath */
 
 /*s: function doredir */
@@ -321,7 +321,7 @@ mapfd(int fd)
 }
 /*e: function mapfd */
 /*s: global rdcmds */
-union code rdcmds[4];
+union Code rdcmds[4];
 /*e: global rdcmds */
 
 /*s: function execcmds */
@@ -368,7 +368,7 @@ execeval(void)
 }
 /*e: function execeval */
 /*s: global dotcmds */
-union code dotcmds[14];
+union Code dotcmds[14];
 /*e: global dotcmds */
 
 /*s: function execdot */
@@ -437,7 +437,7 @@ execdot(void)
         return;
     }
     /* set up for a new command loop */
-    start(dotcmds, 1, (struct var *)0);
+    start(dotcmds, 1, (struct Var *)0);
     pushredir(RCLOSE, fd, 0);
     runq->cmdfile = zero;
     runq->cmdfd = openfd(fd);
@@ -492,9 +492,9 @@ void
 execwhatis(void){	/* mildly wrong -- should fork before writing */
     word *a, *b, *path;
     var *v;
-    struct builtin *bp;
+    struct Builtin *bp;
     char *file;
-    struct io out[1];
+    struct Io out[1];
     int found, sep;
     a = runq->argv->words->next;
     if(a==0){

@@ -128,7 +128,7 @@ tree*
 simplemung(tree *t)
 {
     tree *u;
-    struct io *s;
+    struct Io *s;
 
     t = tree1(SIMPLE, t);
     s = openstr();

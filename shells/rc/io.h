@@ -7,7 +7,7 @@
 /*e: constant NBUF */
 
 /*s: struct io */
-struct io{
+struct Io {
     int	fd;
     uchar	*bufp, *ebuf, *strp;
     uchar	buf[NBUF];

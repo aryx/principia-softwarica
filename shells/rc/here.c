@@ -4,7 +4,7 @@
 #include "io.h"
 #include "fns.h"
 
-struct here *here, **ehere;
+struct Here *here, **ehere;
 /*s: global ser */
 int ser = 0;
 /*e: global ser */
@@ -33,7 +33,7 @@ hexnum(char *p, int n)
 tree*
 heredoc(tree *tag)
 {
-    struct here *h = new(struct here);
+    struct Here *h = new(struct Here);
 
     if(tag->type != WORD)
         yyerror("Bad here tag");
@@ -67,7 +67,7 @@ readhere(void)
     char *s, *tag;
     char line[NLINE+1];
     io *f;
-    struct here *h, *nexth;
+    struct Here *h, *nexth;
 
     for(h = here; h; h = nexth){
         subst = !h->tag->quoted;

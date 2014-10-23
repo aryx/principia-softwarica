@@ -19,23 +19,23 @@ extern void Xerror1(char*);
  * word lists are in correct order,
  * i.e. word0->word1->word2->word3->0
  */
-struct word{
+struct Word {
     char *word;
     word *next;
 };
 /*e: struct word */
 /*s: struct list */
-struct list{
+struct List {
     word *words;
     list *next;
 };
 /*e: struct list */
 word *newword(char *, word *), *copywords(word *, word *);
 /*s: struct redir */
-struct redir{
+struct Redir {
     char type;			/* what to do */
     short from, to;			/* what to do it to */
-    struct redir *next;		/* what else to do (reverse order) */
+    struct Redir *next;		/* what else to do (reverse order) */
 };
 /*e: struct redir */
 /*s: constant NSTATUS */
@@ -54,15 +54,15 @@ struct redir{
 #define	RCLOSE	3			/* close(from); */
 /*e: constant RCLOSE */
 /*s: struct thread */
-struct thread{
-    union code *code;		/* code for this thread */
+struct Thread {
+    union Code *code;		/* code for this thread */
     int pc;				/* code[pc] is the next instruction */
-    struct list *argv;		/* argument stack */
-    struct redir *redir;		/* redirection stack */
-    struct redir *startredir;	/* redir inheritance point */
-    struct var *local;		/* list of local variables */
+    struct List *argv;		/* argument stack */
+    struct Redir *redir;		/* redirection stack */
+    struct Redir *startredir;	/* redir inheritance point */
+    struct Var *local;		/* list of local variables */
     char *cmdfile;			/* file name in Xrdcmd */
-    struct io *cmdfd;		/* file descriptor for Xrdcmd */
+    struct Io *cmdfd;		/* file descriptor for Xrdcmd */
     int iflast;			/* static `if not' checking */
     int eof;			/* is cmdfd at eof? */
     int iflag;			/* interactive? */
@@ -87,12 +87,12 @@ int ntrap;				/* number of outstanding traps */
 int trap[NSIG];				/* number of outstanding traps per type */
 /*e: global trap */
 /*s: struct builtin */
-struct builtin{
+struct Builtin {
     char *name;
     void (*fnc)(void);
 };
 /*e: struct builtin */
-extern struct builtin Builtin[];
+extern struct Builtin Builtin[];
 /*s: global eflagok */
 int eflagok;			/* kludge flag so that -e doesn't exit in startup */
 /*e: global eflagok */

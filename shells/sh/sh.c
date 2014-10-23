@@ -25,7 +25,7 @@
 
 typedef struct Node	Node;
 /*s: struct Node */
-struct Node{			/* parse tree node */
+struct Node {			/* parse tree node */
     int (*op)(Node *); 	/* operator function */
     Node *args[2];		/* argument nodes */
     char *argv[100];	/* argument pointers */

@@ -211,7 +211,7 @@ Xrdfn(void)
 }
 /*e: function Xrdfn */
 /*s: global rdfns */
-union code rdfns[4];
+union Code rdfns[4];
 /*e: global rdfns */
 
 /*s: function execfinit */

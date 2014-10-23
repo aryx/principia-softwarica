@@ -23,13 +23,14 @@ void	Updenv(void);
 void	Vinit(void);
 int	Waitfor(int, int);
 long	Write(int, void*, long);
+
 void	addwaitpid(int);
 int	advance(void);
 int	back(int);
 void	cleanhere(char*);
 void	codefree(code*);
 int	compile(tree*);
-char *	list2str(word*);
+char*	list2str(word*);
 int	count(word*);
 void	deglob(void*);
 void	delwaitpid(int);

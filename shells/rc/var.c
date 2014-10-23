@@ -22,11 +22,11 @@ hash(char *as, int n)
 #define	NKW	30
 /*e: constant NKW */
 /*s: global kw */
-struct kw{
+struct Kw {
     char *name;
     int type;
-    struct kw *next;
-}*kw[NKW];
+    struct Kw *next;
+} *kw[NKW];
 /*e: global kw */
 
 /*s: function kenter */
@@ -34,7 +34,7 @@ void
 kenter(int type, char *name)
 {
     int h = hash(name, NKW);
-    struct kw *p = new(struct kw);
+    struct Kw *p = new(struct Kw);
     p->type = type;
     p->name = name;
     p->next = kw[h];
@@ -63,7 +63,7 @@ kinit(void)
 tree*
 klook(char *name)
 {
-    struct kw *p;
+    struct Kw *p;
     tree *t = token(name, WORD);
     for(p = kw[hash(name, NKW)];p;p = p->next)
         if(strcmp(p->name, name)==0){
@@ -102,7 +102,7 @@ vlook(char *name)
 void
 setvar(char *name, word *val)
 {
-    struct var *v = vlook(name);
+    struct Var *v = vlook(name);
     freewords(v->val);
     v->val = val;
     v->changed = 1;

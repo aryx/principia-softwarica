@@ -15,7 +15,7 @@ char *argv0="rc";
 void
 start(code *c, int pc, var *local)
 {
-    struct thread *p = new(struct thread);
+    struct Thread *p = new(struct Thread);
 
     p->code = codecopy(c);
     p->pc = pc;
@@ -342,8 +342,8 @@ Xeflag(void)
 void
 Xexit(void)
 {
-    struct var *trapreq;
-    struct word *starval;
+    struct Var *trapreq;
+    struct Word *starval;
     static int beenhere = 0;
     if(getpid()==mypid && !beenhere){
         trapreq = vlook("sigexit");
@@ -351,9 +351,9 @@ Xexit(void)
             beenhere = 1;
             --runq->pc;
             starval = vlook("*")->val;
-            start(trapreq->fn, trapreq->pc, (struct var *)0);
+            start(trapreq->fn, trapreq->pc, (struct Var *)0);
             runq->local = newvar(strdup("*"), runq->local);
-            runq->local->val = copywords(starval, (struct word *)0);
+            runq->local->val = copywords(starval, (struct Word *)0);
             runq->local->changed = 1;
             runq->redir = runq->startredir = 0;
             return;
@@ -480,7 +480,7 @@ turfredir(void)
 void
 Xpopredir(void)
 {
-    struct redir *rp = runq->redir;
+    struct Redir *rp = runq->redir;
     if(rp==0)
         panic("turfredir null!", 0);
     runq->redir = rp->next;
@@ -494,7 +494,7 @@ Xpopredir(void)
 void
 Xreturn(void)
 {
-    struct thread *p = runq;
+    struct Thread *p = runq;
     turfredir();
     while(p->argv) poplist();
     codefree(p->code);
@@ -1004,7 +1004,7 @@ Xpipewait(void)
 void
 Xrdcmds(void)
 {
-    struct thread *p = runq;
+    struct Thread *p = runq;
     word *prompt;
     flush(err);
     nerror = 0;

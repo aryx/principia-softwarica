@@ -229,7 +229,7 @@ yylex(void)
 {
     int c, d = nextc();
     char *w = tok;
-    struct tree *t;
+    struct Tree *t;
     yylval.tree = 0;
     /*
      * Embarassing sneakiness:  if the last token read was a quoted or unquoted

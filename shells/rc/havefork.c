@@ -47,7 +47,7 @@ Xasync(void)
 void
 Xpipe(void)
 {
-    struct thread *p = runq;
+    struct Thread *p = runq;
     int pc = p->pc, forkid;
     int lfd = p->code[pc++].i;
     int rfd = p->code[pc++].i;
@@ -91,7 +91,7 @@ Xbackq(void)
     int pfd[2];
     char *stop;
     char utf[UTFmax+1];
-    struct io *f;
+    struct Io *f;
     var *ifs = vlook("ifs");
     word *v, *nextv;
     Rune r;
@@ -157,7 +157,7 @@ Xbackq(void)
 void
 Xpipefd(void)
 {
-    struct thread *p = runq;
+    struct Thread *p = runq;
     int pc = p->pc, pid;
     char name[40];
     int pfd[2];

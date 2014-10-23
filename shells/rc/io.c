@@ -54,10 +54,10 @@ pfmt(io *f, char *fmt, ...)
             pstr(f, va_arg(ap, char *));
             break;
         case 't':
-            pcmd(f, va_arg(ap, struct tree *));
+            pcmd(f, va_arg(ap, struct Tree *));
             break;
         case 'v':
-            pval(f, va_arg(ap, struct word *));
+            pval(f, va_arg(ap, struct Word *));
             break;
         default:
             pchr(f, *fmt);
@@ -261,7 +261,7 @@ flush(io *f)
 io*
 openfd(int fd)
 {
-    io *f = new(struct io);
+    io *f = new(struct Io);
     f->fd = fd;
     f->bufp = f->ebuf = f->buf;
     f->strp = 0;
@@ -273,7 +273,7 @@ openfd(int fd)
 io*
 openstr(void)
 {
-    io *f = new(struct io);
+    io *f = new(struct Io);
 
     f->fd = -1;
     f->bufp = f->strp = emalloc(Stralloc+1);
@@ -291,7 +291,7 @@ openstr(void)
 io*
 opencore(char *s, int len)
 {
-    io *f = new(struct io);
+    io *f = new(struct Io);
     uchar *buf = emalloc(len);
 
     f->fd = -1 /*open("/dev/null", 0)*/;
