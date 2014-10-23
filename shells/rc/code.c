@@ -32,8 +32,8 @@ code *codecopy(code*);
 void codefree(code*);
 
 /*s: function morecode */
-int
-morecode(void)
+//@Scheck: used by the macros above (why marked as dead then??? TODO)
+int morecode(void)
 {
     ncode+=100;
     codebuf = (code *)realloc((char *)codebuf, ncode*sizeof codebuf[0]);
@@ -55,8 +55,8 @@ stuffdot(int a)
 /*e: function stuffdot */
 
 /*s: function compile */
-int
-compile(tree *t)
+//@Scheck: called from syn.y
+int compile(tree *t)
 {
     ncode = 100;
     codebuf = (code *)emalloc(ncode*sizeof codebuf[0]);

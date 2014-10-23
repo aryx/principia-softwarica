@@ -4,7 +4,9 @@
 #include "io.h"
 #include "getflags.h"
 #include "fns.h"
+
 int getnext(void);
+
 
 /*s: function wordchr */
 int
@@ -226,8 +228,8 @@ int lastword;	/* was the last token read a word or compound word terminator? */
 /*e: global lastword (rc/lex.c) */
 
 /*s: function yylex */
-int
-yylex(void)
+//@Scheck: called from yyparse()
+int yylex(void)
 {
     int c, d = nextc();
     char *w = tok;

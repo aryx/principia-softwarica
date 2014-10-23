@@ -33,6 +33,7 @@
 #endif
 
 /*s: constant YYMAXDEPTH */
+//@Scheck: used in y.tab.c
 #define	YYMAXDEPTH	500
 /*e: constant YYMAXDEPTH */
 
@@ -70,14 +71,20 @@ struct Tree {
 /*e: struct tree */
 
 tree *newtree(void);
-tree *token(char*, int), *klook(char*), *tree1(int, tree*);
-tree *tree2(int, tree*, tree*), *tree3(int, tree*, tree*, tree*);
-tree *mung1(tree*, tree*), *mung2(tree*, tree*, tree*);
-tree *mung3(tree*, tree*, tree*, tree*), *epimung(tree*, tree*);
-tree *simplemung(tree*), *heredoc(tree*);
-void freetree(tree*);
+tree *token(char*, int);
+tree *klook(char*);
+//@Scheck: useful, for syn.y, and not just for tree.c
+tree *tree1(int, tree*);
+tree *tree2(int, tree*, tree*);
+//@Scheck: useful, for syn.y, and not just for tree.c
+tree *tree3(int, tree*, tree*, tree*);
+tree *mung1(tree*, tree*);
+tree *mung2(tree*, tree*, tree*);
+tree *mung3(tree*, tree*, tree*, tree*);
+tree *epimung(tree*, tree*);
+tree *simplemung(tree*);
+tree *heredoc(tree*);
 
-extern tree *cmdtree;
 
 /*s: struct code */
 /*
@@ -172,8 +179,6 @@ extern int mypid;
 #define	GLOB	'\001'
 /*e: constant GLOB */
 
-extern char **argp;
-extern char **args;
 extern int nerror;		/* number of errors encountered during compilation */
 /*s: constant PRD */
 /*

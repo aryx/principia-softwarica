@@ -3,6 +3,9 @@
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
+
+void freetree(tree*);
+
 /*s: global treenodes */
 tree *treenodes;
 /*e: global treenodes */
@@ -49,8 +52,8 @@ tree1(int type, tree *c0)
 /*e: function tree1 */
 
 /*s: function tree2 */
-tree*
-tree2(int type, tree *c0, tree *c1)
+//@Scheck: used by syn.y
+tree* tree2(int type, tree *c0, tree *c1)
 {
     return tree3(type, c0, c1, (tree *)0);
 }
@@ -77,8 +80,8 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 /*e: function tree3 */
 
 /*s: function mung1 */
-tree*
-mung1(tree *t, tree *c0)
+//@Scheck: used by syn.y
+tree* mung1(tree *t, tree *c0)
 {
     t->child[0] = c0;
     return t;
@@ -86,8 +89,8 @@ mung1(tree *t, tree *c0)
 /*e: function mung1 */
 
 /*s: function mung2 */
-tree*
-mung2(tree *t, tree *c0, tree *c1)
+//@Scheck: used by syn.y
+tree* mung2(tree *t, tree *c0, tree *c1)
 {
     t->child[0] = c0;
     t->child[1] = c1;
@@ -96,8 +99,8 @@ mung2(tree *t, tree *c0, tree *c1)
 /*e: function mung2 */
 
 /*s: function mung3 */
-tree*
-mung3(tree *t, tree *c0, tree *c1, tree *c2)
+//@Scheck: used by syn.y
+tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
 {
     t->child[0] = c0;
     t->child[1] = c1;
@@ -107,8 +110,8 @@ mung3(tree *t, tree *c0, tree *c1, tree *c2)
 /*e: function mung3 */
 
 /*s: function epimung */
-tree*
-epimung(tree *comp, tree *epi)
+//@Scheck: used by syn.y
+tree* epimung(tree *comp, tree *epi)
 {
     tree *p;
     if(epi==0)
@@ -123,9 +126,8 @@ epimung(tree *comp, tree *epi)
  * Add a SIMPLE node at the root of t and percolate all the redirections
  * up to the root.
  */
-
-tree*
-simplemung(tree *t)
+//@Scheck: used by syn.y
+tree* simplemung(tree *t)
 {
     tree *u;
     struct Io *s;

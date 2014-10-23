@@ -12,6 +12,16 @@ enum { Stralloc = 100, };
 int pfmtnest = 0;
 /*e: global pfmtnest */
 
+int emptybuf(io*);
+int fullbuf(io*, int);
+void pdec(io*, int);
+void poct(io*, unsigned);
+void pptr(io*, void*);
+void pval(io*, word*);
+void pquo(io*, char*);
+void pwrd(io*, char*);
+
+
 /*s: function pfmt */
 void
 pfmt(io *f, char *fmt, ...)
@@ -303,16 +313,6 @@ opencore(char *s, int len)
 /*e: function opencore */
 
 /*s: function rewind */
-void
-rewind(io *io)
-{
-    if(io->fd==-1)
-        io->bufp = io->strp;
-    else{
-        io->bufp = io->ebuf = io->buf;
-        Seek(io->fd, 0L, 0);
-    }
-}
 /*e: function rewind */
 
 /*s: function closeio */

@@ -10,6 +10,10 @@
 #include "fns.h"
 #include "getflags.h"
 
+char**	mkargv(word*);
+void	delwaitpid(int);
+int	havewaitpid(int);
+
 /*s: enum _anon_ (rc/plan9.c) */
 enum {
     Maxenvname = 256,	/* undocumented limit */
@@ -44,8 +48,6 @@ char *Fdprefix = "/fd/";
 /*e: global Fdprefix */
 
 void execfinit(void);
-void execbind(void);
-void execmount(void);
 void execnewpgrp(void);
 
 /*s: global Builtin */
@@ -341,35 +343,6 @@ Updenv(void)
 /*e: function Updenv */
 
 /*s: function ForkExecute */
-/* not used on plan 9 */
-int
-ForkExecute(char *file, char **argv, int sin, int sout, int serr)
-{
-    int pid;
-
-    if(access(file, 1) != 0)
-        return -1;
-    switch(pid = fork()){
-    case -1:
-        return -1;
-    case 0:
-        if(sin >= 0)
-            dup(sin, 0);
-        else
-            close(0);
-        if(sout >= 0)
-            dup(sout, 1);
-        else
-            close(1);
-        if(serr >= 0)
-            dup(serr, 2);
-        else
-            close(2);
-        exec(file, argv);
-        exits(file);
-    }
-    return pid;
-}
 /*e: function ForkExecute */
 
 /*s: function Execute */
@@ -769,8 +742,8 @@ havewaitpid(int pid)
 
 /*s: function _efgfmt */
 /* avoid loading any floating-point library code */
-int
-_efgfmt(Fmt *)
+//@Scheck: weird, probably linker trick
+int _efgfmt(Fmt *)
 {
     return -1;
 }

@@ -7,6 +7,11 @@
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
+
+word*	searchpath(char*);
+void execfunc(var*);
+int	mapfd(int);
+
 /*s: function exitnext */
 /*
  * Search through the following code to see if we're just going to exit.
@@ -289,14 +294,6 @@ execshift(void)
 /*e: function execshift */
 
 /*s: function octal */
-int
-octal(char *s)
-{
-    int n = 0;
-    while(*s==' ' || *s=='\t' || *s=='\n') s++;
-    while('0'<=*s && *s<='7') n = n*8+*s++-'0';
-    return n;
-}
 /*e: function octal */
 
 /*s: function mapfd */

@@ -30,8 +30,8 @@ hexnum(char *p, int n)
 /*e: function hexnum */
 
 /*s: function heredoc */
-tree*
-heredoc(tree *tag)
+//@Scheck: used by syn.y
+tree* heredoc(tree *tag)
 {
     struct Here *h = new(struct Here);
 

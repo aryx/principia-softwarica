@@ -3,6 +3,8 @@
 #include "exec.h"
 #include "fns.h"
 
+int	matchfn(void*, void*);
+
 /*s: global globname */
 char *globname;
 /*e: global globname */

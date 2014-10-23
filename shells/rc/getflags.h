@@ -4,7 +4,6 @@
 /*e: constant NFLAG */
 
 extern char **flag[NFLAG];
-extern char *cmdname;
 extern char *flagset[];
 
 int getflags(int, char*[], char*, int);

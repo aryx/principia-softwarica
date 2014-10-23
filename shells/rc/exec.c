@@ -4,6 +4,9 @@
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
+
+char*	list2str(word*);
+
 /*s: global argv0 */
 /*
  * Start executing the given code at the given pc with the given redirection
@@ -152,9 +155,8 @@ newvar(char *name, var *next)
  * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
  * start interpreting code
  */
-
-void
-main(int argc, char *argv[])
+//@Scheck: not dead! entry point!
+void main(int argc, char *argv[])
 {
     code bootstrap[17];
     char num[12], *rcmain;
