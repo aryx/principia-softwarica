@@ -31,8 +31,6 @@ int nerror;		/* number of errors encountered during compilation */
 /*s: global err */
 io *err;
 /*e: global err */
-/*s: global cmdtree */
-/*e: global cmdtree */
 
 // was in exec.h
 /*s: global runq */

@@ -213,7 +213,7 @@ void main(int argc, char *argv[])
     }
 }
 /*e: function main (rc/exec.c) */
-/*s: function Xappend */
+
 /*
  * Opcode routines
  * Arguments on stack (...)
@@ -270,6 +270,7 @@ void main(int argc, char *argv[])
  * Xwrite(file)[fd]			open file to write
  */
 
+/*s: function Xappend */
 void
 Xappend(void)
 {

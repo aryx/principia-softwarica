@@ -65,10 +65,11 @@ klook(char *name)
 {
     struct Kw *p;
     tree *t = token(name, WORD);
+
     for(p = kw[hash(name, NKW)];p;p = p->next)
         if(strcmp(p->name, name)==0){
             t->type = p->type;
-            t->iskw = 1;
+            t->iskw = true;
             break;
         }
     return t;

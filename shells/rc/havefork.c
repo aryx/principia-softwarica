@@ -83,7 +83,6 @@ Xpipe(void)
 /*
  * Who should wait for the exit from the fork?
  */
-
 void
 Xbackq(void)
 {

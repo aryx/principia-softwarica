@@ -293,9 +293,6 @@ execshift(void)
 }
 /*e: function execshift */
 
-/*s: function octal */
-/*e: function octal */
-
 /*s: function mapfd */
 int
 mapfd(int fd)

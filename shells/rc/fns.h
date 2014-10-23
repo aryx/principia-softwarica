@@ -47,7 +47,6 @@ void	pushlist(void);
 void	pushredir(int, int, int);
 void	pushword(char*);
 void	readhere(void);
-
 void	setstatus(char*);
 void	setvar(char*, word*);
 //@Scheck: used in syn.y

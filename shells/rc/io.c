@@ -312,9 +312,6 @@ opencore(char *s, int len)
 }
 /*e: function opencore */
 
-/*s: function rewind */
-/*e: function rewind */
-
 /*s: function closeio */
 void
 closeio(io *io)

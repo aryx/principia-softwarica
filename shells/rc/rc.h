@@ -22,6 +22,7 @@
 //#define fcntl(fd, op, arg) /* unix compatibility */
 //#define F_SETFD  
 //#define FD_CLOEXEC 
+
 //#else
 //#include "unix.h"
 //#endif
@@ -60,12 +61,21 @@ typedef struct Builtin builtin;
 
 /*s: struct tree */
 struct Tree {
+
+    // enum<token_kind>
     int	type;
-    int	rtype, fd0, fd1;	/* details of REDIR PIPE DUP tokens */
-    char	*str;
-    int	quoted;
-    int	iskw;
+
+    // array<option<ref_own<Tree>>
     tree	*child[3];
+
+    bool iskw;
+
+    //enum<redirection_kind>
+    int	rtype;
+    int fd0, fd1;	/* details of REDIR PIPE DUP tokens */
+    char *str;
+    int	quoted;
+
     tree	*next;
 };
 /*e: struct tree */
@@ -93,7 +103,7 @@ tree *heredoc(tree*);
  * Always call codefree(.) when deleting a reference.
  */
 union Code {
-    void	(*f)(void);
+    void	(*f)(void); // Xxxx()
     int	i;
     char	*s;
 };

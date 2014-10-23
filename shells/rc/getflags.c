@@ -2,6 +2,13 @@
 #include "rc.h"
 #include "getflags.h"
 #include "fns.h"
+
+static void reverse(char**, char**);
+static int scanflag(int, char*);
+static void errn(char*, int);
+static void errs(char*);
+static void errc(int);
+
 /*s: global flagset */
 char *flagset[] = {"<flag>"};
 /*e: global flagset */
@@ -14,14 +21,10 @@ char *cmdname;
 /*s: global flagarg */
 static char *flagarg="";
 /*e: global flagarg */
-static void reverse(char**, char**);
-static int scanflag(int, char*);
-static void errn(char*, int);
-static void errs(char*);
-static void errc(int);
 /*s: global reason */
 static int reason;
 /*e: global reason */
+
 /*s: constant RESET */
 #define	RESET	1
 /*e: constant RESET */
@@ -34,6 +37,7 @@ static int reason;
 /*s: constant BADFLAG */
 #define	BADFLAG	4
 /*e: constant BADFLAG */
+
 /*s: global badflag */
 static int badflag;
 /*e: global badflag */

@@ -7,6 +7,7 @@
 void freetree(tree*);
 
 /*s: global treenodes */
+// list<tree> (next = Tree.next)
 tree *treenodes;
 /*e: global treenodes */
 /*s: function newtree */
@@ -14,14 +15,13 @@ tree *treenodes;
  * create and clear a new tree node, and add it
  * to the node list.
  */
-
 tree*
 newtree(void)
 {
     tree *t = new(tree);
-    t->iskw = 0;
-    t->str = 0;
-    t->child[0] = t->child[1] = t->child[2] = 0;
+    t->iskw = false;
+    t->str = nil;
+    t->child[0] = t->child[1] = t->child[2] = nil;
     t->next = treenodes;
     treenodes = t;
     return t;
@@ -39,7 +39,7 @@ freenodes(void)
             efree(t->str);
         efree((char *)t);
     }
-    treenodes = 0;
+    treenodes = nil;
 }
 /*e: function freenodes */
 
@@ -47,7 +47,7 @@ freenodes(void)
 tree*
 tree1(int type, tree *c0)
 {
-    return tree3(type, c0, (tree *)0, (tree *)0);
+    return tree3(type, c0, (tree *)nil, (tree *)nil);
 }
 /*e: function tree1 */
 
@@ -55,7 +55,7 @@ tree1(int type, tree *c0)
 //@Scheck: used by syn.y
 tree* tree2(int type, tree *c0, tree *c1)
 {
-    return tree3(type, c0, c1, (tree *)0);
+    return tree3(type, c0, c1, (tree *)nil);
 }
 /*e: function tree2 */
 
@@ -65,9 +65,9 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 {
     tree *t;
     if(type==';'){
-        if(c0==0)
+        if(c0==nil)
             return c1;
-        if(c1==0)
+        if(c1==nil)
             return c0;
     }
     t = newtree();
@@ -165,7 +165,7 @@ token(char *str, int type)
 void
 freetree(tree *p)
 {
-    if(p==0)
+    if(p==nil)
         return;	
     freetree(p->child[0]);
     freetree(p->child[1]);

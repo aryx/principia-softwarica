@@ -56,19 +56,19 @@ struct Redir {
 /*s: struct thread */
 struct Thread {
     union Code *code;		/* code for this thread */
-    int pc;				/* code[pc] is the next instruction */
+    int pc;			/* code[pc] is the next instruction */
     struct List *argv;		/* argument stack */
-    struct Redir *redir;		/* redirection stack */
+    struct Redir *redir;	/* redirection stack */
     struct Redir *startredir;	/* redir inheritance point */
     struct Var *local;		/* list of local variables */
-    char *cmdfile;			/* file name in Xrdcmd */
+    char *cmdfile;		/* file name in Xrdcmd */
     struct Io *cmdfd;		/* file descriptor for Xrdcmd */
     int iflast;			/* static `if not' checking */
     int eof;			/* is cmdfd at eof? */
     int iflag;			/* interactive? */
     int lineno;			/* linenumber */
     int pid;			/* process for Xpipewait to wait for */
-    char status[NSTATUS];		/* status for Xpipewait */
+    char status[NSTATUS];	/* status for Xpipewait */
     tree *treenodes;		/* tree nodes created by this process */
     thread *ret;		/* who continues when this finishes */
 };

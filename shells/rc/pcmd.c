@@ -31,57 +31,37 @@ pdeglob(io *f, char *s)
 void
 pcmd(io *f, tree *t)
 {
-    if(t==0)
+    if(t==nil)
         return;
     assert(f != nil);
+
     switch(t->type){
-    default:	pfmt(f, "bad cmd %d %p %p %p", t->type, c0, c1, c2);
-    break;
-    case '$':	pfmt(f, "$%t", c0);
-    break;
-    case '"':	pfmt(f, "$\"%t", c0);
-    break;
-    case '&':	pfmt(f, "%t&", c0);
-    break;
-    case '^':	pfmt(f, "%t^%t", c0, c1);
-    break;
-    case '`':	pfmt(f, "`%t", c0);
-    break;
-    case ANDAND:	pfmt(f, "%t && %t", c0, c1);
-    break;
-    case BANG:	pfmt(f, "! %t", c0);
-    break;
-    case BRACE:	pfmt(f, "{%t}", c0);
-    break;
-    case COUNT:	pfmt(f, "$#%t", c0);
-    break;
-    case FN:	pfmt(f, "fn %t %t", c0, c1);
-    break;
-    case IF:	pfmt(f, "if%t%t", c0, c1);
-    break;
-    case NOT:	pfmt(f, "if not %t", c0);
-    break;
-    case OROR:	pfmt(f, "%t || %t", c0, c1);
-    break;
+    case '$':	pfmt(f, "$%t", c0); break;
+    case '"':	pfmt(f, "$\"%t", c0); break;
+    case '&':	pfmt(f, "%t&", c0); break;
+    case '^':	pfmt(f, "%t^%t", c0, c1); break;
+    case '`':	pfmt(f, "`%t", c0); break;
+    case ANDAND:pfmt(f, "%t && %t", c0, c1); break;
+    case OROR:	pfmt(f, "%t || %t", c0, c1); break;
+    case BANG:	pfmt(f, "! %t", c0); break;
+    case BRACE:	pfmt(f, "{%t}", c0); break;
+    case COUNT:	pfmt(f, "$#%t", c0); break;
+    case FN:	pfmt(f, "fn %t %t", c0, c1); break;
+    case IF:	pfmt(f, "if%t%t", c0, c1); break;
+    case NOT:	pfmt(f, "if not %t", c0); break;
     case PCMD:
-    case PAREN:	pfmt(f, "(%t)", c0);
-    break;
-    case SUB:	pfmt(f, "$%t(%t)", c0, c1);
-    break;
-    case SIMPLE:	pfmt(f, "%t", c0);
-    break;
-    case SUBSHELL:	pfmt(f, "@ %t", c0);
-    break;
-    case SWITCH:	pfmt(f, "switch %t %t", c0, c1);
-    break;
-    case TWIDDLE:	pfmt(f, "~ %t %t", c0, c1);
-    break;
-    case WHILE:	pfmt(f, "while %t%t", c0, c1);
-    break;
+    case PAREN:	pfmt(f, "(%t)", c0); break;
+    case SUB:	pfmt(f, "$%t(%t)", c0, c1); break;
+    case SIMPLE:	pfmt(f, "%t", c0); break;
+    case SUBSHELL:	pfmt(f, "@ %t", c0); break;
+    case SWITCH:	pfmt(f, "switch %t %t", c0, c1); break;
+    case TWIDDLE:	pfmt(f, "~ %t %t", c0, c1); break;
+    case WHILE:		pfmt(f, "while %t%t", c0, c1); break;
+
     case ARGLIST:
-        if(c0==0)
+        if(c0==nil)
             pfmt(f, "%t", c1);
-        else if(c1==0)
+        else if(c1==nil)
             pfmt(f, "%t", c0);
         else
             pfmt(f, "%t %t", c0, c1);
@@ -155,6 +135,10 @@ pcmd(io *f, tree *t)
         }
         else pfmt(f, "[%d=%d]", t->fd0, t->fd1);
         pfmt(f, "%t", c1);
+        break;
+
+    default:	
+        pfmt(f, "bad cmd %d %p %p %p", t->type, c0, c1, c2);
         break;
     }
 }
