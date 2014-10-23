@@ -80,7 +80,7 @@ extern code *codebuf;				/* compiler output */
 extern int ntrap;				/* number of outstanding traps */
 extern int trap[NSIG];				/* number of outstanding traps per type */
 extern int eflagok;			/* kludge flag so that -e doesn't exit in startup */
-extern int havefork;
+extern bool havefork;
 
 /*s: struct builtin */
 struct Builtin {

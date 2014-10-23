@@ -51,8 +51,5 @@ int trap[NSIG];				/* number of outstanding traps per type */
 /*s: global eflagok */
 int eflagok;			/* kludge flag so that -e doesn't exit in startup */
 /*e: global eflagok */
-/*s: global havefork */
-int havefork;
-/*e: global havefork */
 
 /*e: globals.c */

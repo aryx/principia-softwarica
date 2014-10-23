@@ -6,9 +6,9 @@
 #include "fns.h"
 #include <string.h>
 
-/*s: global havefork (rc/havefork.c) */
-int havefork = 1;
-/*e: global havefork (rc/havefork.c) */
+/*s: global havefork */
+bool havefork = true;
+/*e: global havefork */
 
 /*s: function Xasync */
 void
