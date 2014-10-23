@@ -92,20 +92,16 @@ union Code {
 };
 /*e: struct code */
 
-/*s: global promptstr */
-char *promptstr;
-/*e: global promptstr */
+extern char *promptstr;
 /*s: global doprompt */
-int doprompt;
+extern int doprompt;
 /*e: global doprompt */
 
 /*s: constant NTOK */
 #define	NTOK	8192		/* maximum bytes in a word (token) */
 /*e: constant NTOK */
 
-/*s: global tok */
-char tok[NTOK + UTFmax];
-/*e: global tok */
+extern char tok[NTOK + UTFmax];
 
 /*s: constant APPEND */
 #define	APPEND	1
@@ -146,9 +142,7 @@ var *vlook(char*), *gvlook(char*), *newvar(char*, var*);
 #define	NVAR	521
 /*e: constant NVAR */
 
-/*s: global gvar */
-var *gvar[NVAR];		/* hash for globals */
-/*e: global gvar */
+extern var *gvar[NVAR];		/* hash for globals */
 
 #define	new(type)	((type *)emalloc(sizeof(type)))
 
@@ -163,9 +157,7 @@ struct Here {
     struct Here *next;
 };
 /*e: struct here */
-/*s: global mypid */
 int mypid;
-/*e: global mypid */
 
 /*s: constant GLOB */
 /*
@@ -180,14 +172,12 @@ int mypid;
 /*e: constant GLOB */
 
 /*s: global argp */
-char **argp;
+extern char **argp;
 /*e: global argp */
 /*s: global args */
-char **args;
+extern char **args;
 /*e: global args */
-/*s: global nerror */
-int nerror;		/* number of errors encountered during compilation */
-/*e: global nerror */
+extern int nerror;		/* number of errors encountered during compilation */
 /*s: constant PRD */
 /*
  * Which fds are the reading/writing end of a pipe?
@@ -201,19 +191,10 @@ int nerror;		/* number of errors encountered during compilation */
 #define	PWR	1
 /*e: constant PWR */
 
-char *Rcmain, *Fdprefix;
-/*s: global ndot */
-/*
- * How many dot commands have we executed?
- * Used to ensure that -v flag doesn't print rcmain.
- */
-int ndot;
-/*e: global ndot */
+extern char *Rcmain, *Fdprefix;
+extern int ndot;
 char *getstatus(void);
-/*s: global lastc */
+
 int lastc;
-/*e: global lastc */
-/*s: global lastword */
 int lastword;
-/*e: global lastword */
 /*e: rc/rc.h */

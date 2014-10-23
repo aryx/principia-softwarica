@@ -30,6 +30,7 @@ SRC_VIEWS= \
   rc/io.h\
   rc/rc.h\
   rc/exec.h\
+  rc/globals.c\
   rc/getflags.c\
   rc/io.c\
   rc/var.c\

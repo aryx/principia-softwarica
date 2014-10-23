@@ -2,6 +2,7 @@
 #include "rc.h"
 #include "exec.h"
 #include "fns.h"
+
 /*s: global globname */
 char *globname;
 /*e: global globname */
