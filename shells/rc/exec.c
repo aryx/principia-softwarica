@@ -161,26 +161,37 @@ void main(int argc, char *argv[])
     code bootstrap[17];
     char num[12], *rcmain;
     int i;
+
     argc = getflags(argc, argv, "SsrdiIlxepvVc:1m:1[command]", 1);
+
     if(argc==-1)
         usage("[file [arg ...]]");
     if(argv[0][0]=='-')
         flag['l'] = flagset;
+
     if(flag['I'])
         flag['i'] = 0;
-    else if(flag['i']==0 && argc==1 && Isatty(0)) flag['i'] = flagset;
+    else 
+        if(flag['i']==0 && argc==1 && Isatty(0)) 
+           flag['i'] = flagset;
+
     rcmain = flag['m']?flag['m'][0]:Rcmain; 
     err = openfd(2);
+
     kinit();
     Trapinit();
     Vinit();
+
     inttoascii(num, mypid = getpid());
+
     setvar("pid", newword(num, (word *)0));
     setvar("cflag", flag['c']?newword(flag['c'][0], (word *)0)
                 :(word *)0);
     setvar("rcname", newword(argv[0], (word *)0));
-    i = 0;
+
     memset(bootstrap, 0, sizeof bootstrap);
+
+    i = 0;
     bootstrap[i++].i = 1;
     bootstrap[i++].f = Xmark;
     bootstrap[i++].f = Xword;
@@ -198,11 +209,15 @@ void main(int argc, char *argv[])
     bootstrap[i++].f = Xsimple;
     bootstrap[i++].f = Xexit;
     bootstrap[i].i = 0;
+
     start(bootstrap, 1, (var *)0);
+
     /* prime bootstrap argv */
     pushlist();
     argv0 = strdup(argv[0]);
-    for(i = argc-1;i!=0;--i) pushword(argv[i]);
+    for(i = argc-1;i!=0;--i) 
+        pushword(argv[i]);
+
     for(;;){
         if(flag['r'])
             pfnc(err, runq);

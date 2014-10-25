@@ -19,7 +19,7 @@ TEX=Shell.tex
 SRC_ORIG=Shell.tex.nw Shell_extra.tex.nw
 
 #rc/x.tab.h
-#TODO rc/syn.y
+
 SRC_VIEWS= \
   misc/echo.c\
   misc/pwd.c\
@@ -28,6 +28,7 @@ SRC_VIEWS= \
   rc/fns.h\
   rc/getflags.h\
   rc/io.h\
+  rc/syn.y\
   rc/rc.h\
   rc/exec.h\
   rc/globals.c\
