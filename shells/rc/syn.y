@@ -1,3 +1,4 @@
+/*s: rc/syn.y */
 %term FOR IN WHILE IF NOT TWIDDLE BANG SUBSHELL SWITCH FN
 %term WORD REDIR DUP PIPE SUB
 %term SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
@@ -95,3 +96,4 @@ comword: '$' word		{$$=tree1('$', $2);}
 keyword: FOR|IN|WHILE|IF|NOT|TWIDDLE|BANG|SUBSHELL|SWITCH|FN
 words:				{$$=(struct Tree*)0;}
 |	words word		{$$=tree2(WORDS, $1, $2);}
+/*e: rc/syn.y */
