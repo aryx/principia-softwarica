@@ -9,11 +9,12 @@
 };
 
 /*s: token declarations */
-%token FOR IN WHILE IF NOT SWITCH FN
-%token WORD
-%token TWIDDLE BANG SUBSHELL 
-%token REDIR DUP PIPE SUB
-%token ANDAND OROR COUNT
+%token <tree> FOR IN WHILE IF NOT SWITCH FN
+%token <tree> WORD
+%token <tree> TWIDDLE BANG SUBSHELL 
+%token <tree> REDIR DUP PIPE
+%token ANDAND OROR
+%token COUNT SUB
 %token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
 /*e: token declarations */
 /*s: priority and associativity declarations */
@@ -29,9 +30,6 @@
 /*s: type declarations */
 %type<tree> line paren brace body cmdsa cmdsan assign epilog redir
 %type<tree> cmd simple first word comword keyword words
-%type<tree> NOT FOR IN WHILE IF SWITCH FN
-%type<tree> TWIDDLE BANG SUBSHELL
-%type<tree> WORD REDIR DUP PIPE
 /*e: type declarations */
 
 %%
