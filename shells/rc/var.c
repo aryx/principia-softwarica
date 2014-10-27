@@ -106,7 +106,7 @@ setvar(char *name, word *val)
     struct Var *v = vlook(name);
     freewords(v->val);
     v->val = val;
-    v->changed = 1;
+    v->changed = true;
 }
 /*e: function setvar */
 /*e: rc/var.c */

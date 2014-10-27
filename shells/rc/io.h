@@ -8,9 +8,9 @@
 
 /*s: struct io */
 struct Io {
-    int	fd;
-    uchar	*bufp, *ebuf, *strp;
-    uchar	buf[NBUF];
+    fdt	fd;
+    byte	*bufp, *ebuf, *strp;
+    byte	buf[NBUF];
 };
 /*e: struct io */
 

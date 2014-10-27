@@ -14,6 +14,7 @@ extern void Xrdcmds(void), Xwastrue(void), Xif(void), Xifnot(void), Xpipewait(vo
 extern void Xdelhere(void), Xpopredir(void), Xsub(void), Xeflag(void), Xsettrue(void);
 extern void Xerror(char*);
 extern void Xerror1(char*);
+
 /*s: struct word */
 /*
  * word lists are in correct order,
@@ -21,16 +22,21 @@ extern void Xerror1(char*);
  */
 struct Word {
     char *word;
+
     word *next;
 };
 /*e: struct word */
 /*s: struct list */
 struct List {
+    // list<ref_own<Word>> (next = Word.next)
     word *words;
+
     list *next;
 };
 /*e: struct list */
-word *newword(char *, word *), *copywords(word *, word *);
+word *newword(char *, word *);
+word *copywords(word *, word *);
+
 /*s: struct redir */
 struct Redir {
     char type;			/* what to do */
@@ -38,6 +44,7 @@ struct Redir {
     struct Redir *next;		/* what else to do (reverse order) */
 };
 /*e: struct redir */
+
 /*s: constant NSTATUS */
 #define	NSTATUS	ERRMAX			/* length of status (from plan 9) */
 /*e: constant NSTATUS */
@@ -58,34 +65,38 @@ struct Thread {
     union Code *code;		/* code for this thread */
     int pc;			/* code[pc] is the next instruction */
 
+    int lineno;			/* linenumber */
+
+    // list<ref_own<Var>> (next = Var.next)
+    struct Var *local;		/* list of local variables */
+
     struct List *argv;		/* argument stack */
     struct Redir *redir;	/* redirection stack */
     struct Redir *startredir;	/* redir inheritance point */
-    struct Var *local;		/* list of local variables */
 
     char *cmdfile;		/* file name in Xrdcmd */
     struct Io *cmdfd;		/* file descriptor for Xrdcmd */
 
     int iflast;			/* static `if not' checking */
-    int eof;			/* is cmdfd at eof? */
-    int iflag;			/* interactive? */
-
-    int lineno;			/* linenumber */
+    bool eof;			/* is cmdfd at eof? */
+    bool iflag;			/* interactive? */
 
     int pid;			/* process for Xpipewait to wait for */
     char status[NSTATUS];	/* status for Xpipewait */
 
     tree *treenodes;		/* tree nodes created by this process */
+
     thread *ret;		/* who continues when this finishes */
 };
 /*e: struct thread */
+
 code *codecopy(code*);
 
 extern thread *runq;
 extern code *codebuf;				/* compiler output */
 extern int ntrap;				/* number of outstanding traps */
 extern int trap[NSIG];				/* number of outstanding traps per type */
-extern int eflagok;			/* kludge flag so that -e doesn't exit in startup */
+extern bool eflagok;			/* kludge flag so that -e doesn't exit in startup */
 extern bool havefork;
 
 /*s: struct builtin */

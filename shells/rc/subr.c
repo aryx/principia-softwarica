@@ -10,7 +10,7 @@ emalloc(long n)
 {
     void *p = Malloc(n);
 
-    if(p==0)
+    if(p==nil)
         panic("Can't malloc %d bytes", n);
 /*	if(err){ pfmt(err, "malloc %d->%p\n", n, p); flush(err); } /**/
     return p;

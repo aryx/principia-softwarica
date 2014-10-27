@@ -1347,9 +1347,6 @@ int	yyparse(void);
 
 \subsection*{[[rc/getflags.h]]}
 
-<<constant NFLAG>>=
-#define	NFLAG	128
-@
 
 
 %-------------------------------------------------------------
@@ -1425,24 +1422,6 @@ void pfmt(io*, char*, ...);
 #define RDWR	7
 @
 
-<<struct var>>=
-struct Var {
-    char	*name;		/* ascii name */
-    word	*val;		/* value */
-    int	changed;
-    code	*fn;		/* pointer to function's code vector */
-    int	fnchanged;
-    int	pc;		/* pc of start of function */
-
-    var	*next;		/* next on hash or local list */
-};
-@
-% #define V (struct Var*)nil
-% like for other soft, or use VarNil?
-
-<<constant NVAR>>=
-#define	NVAR	521
-@
 
 <<struct here>>=
 struct Here {
@@ -1603,25 +1582,6 @@ extern int lastword;
 
 \subsection*{[[rc/exec.h]]}
 
-<<struct word>>=
-/*
- * word lists are in correct order,
- * i.e. word0->word1->word2->word3->0
- */
-struct Word {
-    char *word;
-    word *next;
-};
-@
-% could define W = nil so avoid those (word*)nil
-
-<<struct list>>=
-struct List {
-    word *words;
-    list *next;
-};
-@
-
 
 <<constant NSTATUS>>=
 #define	NSTATUS	ERRMAX			/* length of status (from plan 9) */
@@ -1728,13 +1688,7 @@ int ndot;
 int lastc;
 @
 
-<<global mypid>>=
-int mypid;
-@
 
-<<global gvar>>=
-var *gvar[NVAR];		/* hash for globals */
-@
 
 
 
@@ -1763,13 +1717,7 @@ var *gvar[NVAR];		/* hash for globals */
 
 \subsection*{[[rc/getflags.c]]}
 
-<<global flagset>>=
-char *flagset[] = {"<flag>"};
-@
 
-<<global flag>>=
-char **flag[NFLAG];
-@
 
 <<global cmdname>>=
 char *cmdname;
@@ -2084,72 +2032,6 @@ static char buf[NBUF], *bufp = buf;
 
 \subsection*{[[rc/io.c]]}
 
-<<enum _anon_>>=
-enum { Stralloc = 100, };
-@
-
-<<global pfmtnest>>=
-int pfmtnest = 0;
-@
-
-% could use fmtinstall instead? or because wanted to be portable to other OSes?
-<<function pfmt>>=
-void
-pfmt(io *f, char *fmt, ...)
-{
-    va_list ap;
-    char err[ERRMAX];
-
-    va_start(ap, fmt);
-    pfmtnest++;
-    for(;*fmt;fmt++) {
-        if(*fmt!='%') {
-            pchr(f, *fmt);
-            continue;
-        }
-        if(*++fmt == '\0')		/* "blah%"? */
-            break;
-        switch(*fmt){
-        case 'c':
-            pchr(f, va_arg(ap, int));
-            break;
-        case 'd':
-            pdec(f, va_arg(ap, int));
-            break;
-        case 'o':
-            poct(f, va_arg(ap, unsigned));
-            break;
-        case 'p':
-            pptr(f, va_arg(ap, void*));
-            break;
-        case 'Q':
-            pquo(f, va_arg(ap, char *));
-            break;
-        case 'q':
-            pwrd(f, va_arg(ap, char *));
-            break;
-        case 'r':
-            errstr(err, sizeof err); pstr(f, err);
-            break;
-        case 's':
-            pstr(f, va_arg(ap, char *));
-            break;
-        case 't':
-            pcmd(f, va_arg(ap, struct Tree *));
-            break;
-        case 'v':
-            pval(f, va_arg(ap, struct Word *));
-            break;
-        default:
-            pchr(f, *fmt);
-            break;
-        }
-    }
-    va_end(ap);
-    if(--pfmtnest==0)
-        flush(f);
-}
-@
 
 <<function pchr>>=
 void
@@ -2310,45 +2192,7 @@ fullbuf(io *f, int c)
 }
 @
 
-<<function flush>>=
-void
-flush(io *f)
-{
-    int n;
 
-    if(f->strp){
-        n = f->ebuf - f->strp;
-        f->strp = realloc(f->strp, n+Stralloc+1);
-        if(f->strp==0)
-            panic("Can't realloc %d bytes in flush!", n+Stralloc+1);
-        f->bufp = f->strp + n;
-        f->ebuf = f->bufp + Stralloc;
-        memset(f->bufp, '\0', Stralloc+1);
-    }
-    else{
-        n = f->bufp-f->buf;
-        if(n && Write(f->fd, f->buf, n) != n){
-            Write(2, "Write error\n", 12);
-            if(ntrap)
-                dotrap();
-        }
-        f->bufp = f->buf;
-        f->ebuf = f->buf+NBUF;
-    }
-}
-@
-
-<<function openfd>>=
-io*
-openfd(int fd)
-{
-    io *f = new(struct Io);
-    f->fd = fd;
-    f->bufp = f->ebuf = f->buf;
-    f->strp = 0;
-    return f;
-}
-@
 
 <<function openstr>>=
 io*
@@ -2544,39 +2388,8 @@ klook(char *name)
 }
 @
 
-<<function gvlook>>=
-var*
-gvlook(char *name)
-{
-    int h = hash(name, NVAR);
-    var *v;
-    for(v = gvar[h];v;v = v->next) if(strcmp(v->name, name)==0) return v;
-    return gvar[h] = newvar(strdup(name), gvar[h]);
-}
-@
 
-<<function vlook>>=
-var*
-vlook(char *name)
-{
-    var *v;
-    if(runq)
-        for(v = runq->local;v;v = v->next)
-            if(strcmp(v->name, name)==0) return v;
-    return gvlook(name);
-}
-@
 
-<<function setvar>>=
-void
-setvar(char *name, word *val)
-{
-    struct Var *v = vlook(name);
-    freewords(v->val);
-    v->val = val;
-    v->changed = 1;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -2606,37 +2419,6 @@ setvar(char *name, word *val)
 
 
 \subsection*{[[rc/subr.c]]}
-
-
-
-<<global bp>>=
-char *bp;
-@
-
-<<function iacvt>>=
-static void
-iacvt(int n)
-{
-    if(n<0){
-        *bp++='-';
-        n=-n;	/* doesn't work for n==-inf */
-    }
-    if(n/10)
-        iacvt(n/10);
-    *bp++=n%10+'0';
-}
-@
-
-<<function inttoascii>>=
-void
-inttoascii(char *s, long n)
-{
-    bp = s;
-    iacvt(n);
-    *bp='\0';
-}
-@
-
 
 
 %-------------------------------------------------------------
@@ -2721,7 +2503,7 @@ Vinit(void)
                         --s;
                     }
                     setvar(ent[i].name, val);
-                    vlook(ent[i].name)->changed = 0;
+                    vlook(ent[i].name)->changed = false;
                     close(f);
                     efree(buf);
                 }
@@ -2852,7 +2634,7 @@ addenv(var *v)
     int f;
     io *fd;
     if(v->changed){
-        v->changed = 0;
+        v->changed = false;
         snprint(envname, sizeof envname, "/env/%s", v->name);
         if((f = Creat(envname))<0)
             pfmt(err, "rc: can't open %s: %r\n", envname);
@@ -3245,13 +3027,6 @@ Memcpy(void *a, void *b, long n)
 }
 @
 
-<<function Malloc>>=
-void*
-Malloc(ulong n)
-{
-    return mallocz(n, 1);
-}
-@
 
 <<global waitpids>>=
 int *waitpids;
@@ -3475,47 +3250,8 @@ int	matchfn(void*, void*);
 \subsection*{[[rc/exec.c]]}
 
 
-<<function start>>=
-void
-start(code *c, int pc, var *local)
-{
-    struct Thread *p = new(struct Thread);
 
-    p->code = codecopy(c);
-    p->pc = pc;
-    p->argv = 0;
-    p->redir = p->startredir = runq?runq->redir:0;
-    p->local = local;
-    p->cmdfile = 0;
-    p->cmdfd = 0;
-    p->eof = 0;
-    p->iflag = 0;
-    p->lineno = 1;
-    p->ret = runq;
-    runq = p;
-}
-@
 
-<<function newword>>=
-word*
-newword(char *wd, word *next)
-{
-    word *p = new(word);
-    p->word = strdup(wd);
-    p->next = next;
-    return p;
-}
-@
-
-<<function pushword>>=
-void
-pushword(char *wd)
-{
-    if(runq->argv==0)
-        panic("pushword but no argv!", 0);
-    runq->argv->words = newword(wd, runq->argv->words);
-}
-@
 
 <<function popword>>=
 void
@@ -3547,16 +3283,6 @@ freelist(word *w)
 }
 @
 
-<<function pushlist>>=
-void
-pushlist(void)
-{
-    list *p = new(list);
-    p->next = runq->argv;
-    p->words = 0;
-    runq->argv = p;
-}
-@
 
 <<function poplist>>=
 void
@@ -3602,7 +3328,7 @@ newvar(char *name, var *next)
     v->name = name;
     v->val = 0;
     v->fn = 0;
-    v->changed = 0;
+    v->changed = false;
     v->fnchanged = 0;
     v->next = next;
     return v;
@@ -3697,7 +3423,7 @@ Xexit(void)
             start(trapreq->fn, trapreq->pc, (struct Var *)0);
             runq->local = newvar(strdup("*"), runq->local);
             runq->local->val = copywords(starval, (struct Word *)0);
-            runq->local->changed = 1;
+            runq->local->changed = true;
             runq->redir = runq->startredir = 0;
             return;
         }
@@ -4034,7 +3760,7 @@ Xassign(void)
     globlist();
     freewords(v->val);
     v->val = runq->argv->words;
-    v->changed = 1;
+    v->changed = true;
     runq->argv->words = 0;
     poplist();
 }
@@ -4237,7 +3963,7 @@ Xlocal(void)
     poplist();
     globlist();
     runq->local->val = runq->argv->words;
-    runq->local->changed = 1;
+    runq->local->changed = true;
     runq->argv->words = 0;
     poplist();
 }
@@ -4252,26 +3978,13 @@ Xunlocal(void)
         panic("Xunlocal: no locals!", 0);
     runq->local = v->next;
     hid = vlook(v->name);
-    hid->changed = 1;
+    hid->changed = true;
     efree(v->name);
     freewords(v->val);
     efree((char *)v);
 }
 @
 
-<<function freewords>>=
-void
-freewords(word *w)
-{
-    word *nw;
-    while(w){
-        efree(w->word);
-        nw = w->next;
-        efree((char *)w);
-        w = nw;
-    }
-}
-@
 
 <<function Xfn>>=
 void
@@ -4373,7 +4086,7 @@ Xrdcmds(void)
         else{
             if(Eintr()){
                 pchr(err, '\n');
-                p->eof = 0;
+                p->eof = false;
             }
             --p->pc;	/* go back for next command */
         }
@@ -4463,7 +4176,7 @@ Xfor(void)
     else{
         freelist(runq->local->val);
         runq->local->val = runq->argv->words;
-        runq->local->changed = 1;
+        runq->local->changed = true;
         runq->argv->words = runq->argv->words->next;
         runq->local->val->next = 0;
         runq->pc++;
@@ -5167,7 +4880,7 @@ getnext(void)
     }
     doprompt = doprompt || c=='\n' || c==EOF;
     if(c==EOF)
-        runq->eof++;
+        runq->eof++; // ->eof = true cleaner no?
     else if(flag['V'] || ndot>=2 && flag['v']) pchr(err, c);
     return c;
 }
@@ -5497,7 +5210,7 @@ execfunc(var *func)
     start(func->fn, func->pc, runq->local);
     runq->local = newvar(strdup("*"), runq->local);
     runq->local->val = starval;
-    runq->local->changed = 1;
+    runq->local->changed = true;
 }
 @
 
@@ -5567,7 +5280,7 @@ execshift(void)
         efree(star->val->word);
         efree((char *)star->val);
         star->val = a;
-        star->changed = 1;
+        star->changed = true;
     }
     setstatus("");
     poplist();
@@ -5652,7 +5365,7 @@ union Code dotcmds[14];
 void
 execdot(void)
 {
-    int iflag = 0;
+    bool iflag = false;
     int fd;
     list *av;
     thread *p = runq;
@@ -5680,7 +5393,7 @@ execdot(void)
         eflagok = true;
     popword();
     if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
-        iflag = 1;
+        iflag = true;
         popword();
     }
     /* get input file */
@@ -6295,14 +6008,6 @@ iscase(tree *t)
 }
 @
 
-<<function codecopy>>=
-code*
-codecopy(code *cp)
-{
-    cp[0].i++;
-    return cp;
-}
-@
 
 <<function codefree>>=
 void

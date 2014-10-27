@@ -152,7 +152,7 @@ execfunc(var *func)
     start(func->fn, func->pc, runq->local);
     runq->local = newvar(strdup("*"), runq->local);
     runq->local->val = starval;
-    runq->local->changed = 1;
+    runq->local->changed = true;
 }
 /*e: function execfunc */
 
@@ -286,7 +286,7 @@ execshift(void)
         efree(star->val->word);
         efree((char *)star->val);
         star->val = a;
-        star->changed = 1;
+        star->changed = true;
     }
     setstatus("");
     poplist();
@@ -346,7 +346,7 @@ execeval(void)
         Xerror1("Usage: eval cmd ...");
         return;
     }
-    eflagok = 1;
+    eflagok = true;
     for(ap = runq->argv->words->next;ap;ap = ap->next)
         len+=1+strlen(ap->word);
     cmdline = emalloc(len);
@@ -369,7 +369,7 @@ union Code dotcmds[14];
 void
 execdot(void)
 {
-    int iflag = 0;
+    bool iflag = false;
     int fd;
     list *av;
     thread *p = runq;
@@ -394,10 +394,10 @@ execdot(void)
         first = 0;
     }
     else
-        eflagok = 1;
+        eflagok = true;
     popword();
     if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
-        iflag = 1;
+        iflag = true;
         popword();
     }
     /* get input file */

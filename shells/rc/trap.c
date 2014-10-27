@@ -22,7 +22,7 @@ dotrap(void)
             start(trapreq->fn, trapreq->pc, (struct Var *)0);
             runq->local = newvar(strdup("*"), runq->local);
             runq->local->val = copywords(starval, (struct Word *)0);
-            runq->local->changed = 1;
+            runq->local->changed = true;
             runq->redir = runq->startredir = 0;
         }
         else if(i==SIGINT || i==SIGQUIT){

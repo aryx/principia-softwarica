@@ -7,7 +7,7 @@
 void freetree(tree*);
 
 /*s: global treenodes */
-// list<tree> (next = Tree.next)
+// list<ref_own<tree>> (next = Tree.next)
 tree *treenodes;
 /*e: global treenodes */
 /*s: function newtree */

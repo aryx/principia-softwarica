@@ -13,6 +13,7 @@ int lastc;
 int mypid;
 /*e: global mypid */
 /*s: global gvar */
+// hash<string, ref<Var>> (next = Var.next)
 var *gvar[NVAR];		/* hash for globals */
 /*e: global gvar */
 /*s: global ndot */
@@ -34,6 +35,7 @@ io *err;
 
 // was in exec.h
 /*s: global runq */
+// list<ref_own<Thread>> (next = Thread.ret)
 thread *runq;
 /*e: global runq */
 /*s: global codebuf */
@@ -46,7 +48,7 @@ int ntrap;				/* number of outstanding traps */
 int trap[NSIG];				/* number of outstanding traps per type */
 /*e: global trap */
 /*s: global eflagok */
-int eflagok;			/* kludge flag so that -e doesn't exit in startup */
+bool eflagok;	/* kludge flag so that -e doesn't exit in startup */
 /*e: global eflagok */
 
 /*e: globals.c */

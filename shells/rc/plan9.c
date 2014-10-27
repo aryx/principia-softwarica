@@ -162,7 +162,7 @@ Vinit(void)
                         --s;
                     }
                     setvar(ent[i].name, val);
-                    vlook(ent[i].name)->changed = 0;
+                    vlook(ent[i].name)->changed = false;
                     close(f);
                     efree(buf);
                 }
@@ -291,7 +291,7 @@ addenv(var *v)
     int f;
     io *fd;
     if(v->changed){
-        v->changed = 0;
+        v->changed = false;
         snprint(envname, sizeof envname, "/env/%s", v->name);
         if((f = Creat(envname))<0)
             pfmt(err, "rc: can't open %s: %r\n", envname);

@@ -269,12 +269,12 @@ flush(io *f)
 
 /*s: function openfd */
 io*
-openfd(int fd)
+openfd(fdt fd)
 {
     io *f = new(struct Io);
     f->fd = fd;
     f->bufp = f->ebuf = f->buf;
-    f->strp = 0;
+    f->strp = nil;
     return f;
 }
 /*e: function openfd */

@@ -70,10 +70,11 @@ struct Tree {
 
     bool iskw;
 
+    char *str;
+
     //enum<redirection_kind>
     int	rtype;
     int fd0, fd1;	/* details of REDIR PIPE DUP tokens */
-    char *str;
     int	quoted;
 
     tree	*next;
@@ -144,10 +145,12 @@ extern char tok[NTOK + UTFmax];
 struct Var {
     char	*name;		/* ascii name */
     word	*val;		/* value */
-    int	changed;
+
+    bool	changed;
     code	*fn;		/* pointer to function's code vector */
     int	fnchanged;
     int	pc;		/* pc of start of function */
+
     var	*next;		/* next on hash or local list */
 };
 /*e: struct var */

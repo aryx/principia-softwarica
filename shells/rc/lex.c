@@ -102,7 +102,7 @@ getnext(void)
     }
     doprompt = doprompt || c=='\n' || c==EOF;
     if(c==EOF)
-        runq->eof++;
+        runq->eof++; // ->eof = true cleaner no?
     else if(flag['V'] || ndot>=2 && flag['v']) pchr(err, c);
     return c;
 }

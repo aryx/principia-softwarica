@@ -22,14 +22,16 @@ start(code *c, int pc, var *local)
 
     p->code = codecopy(c);
     p->pc = pc;
-    p->argv = 0;
-    p->redir = p->startredir = runq?runq->redir:0;
+
+    p->argv = nil;
+    p->redir = p->startredir = runq ? runq->redir : nil;
     p->local = local;
-    p->cmdfile = 0;
-    p->cmdfd = 0;
-    p->eof = 0;
-    p->iflag = 0;
+    p->cmdfile = nil;
+    p->cmdfd = nil;
+    p->eof = false;
+    p->iflag = false;
     p->lineno = 1;
+
     p->ret = runq;
     runq = p;
 }
@@ -39,7 +41,7 @@ start(code *c, int pc, var *local)
 word*
 newword(char *wd, word *next)
 {
-    word *p = new(word);
+    word *p = new(struct Word);
     p->word = strdup(wd);
     p->next = next;
     return p;
@@ -50,7 +52,7 @@ newword(char *wd, word *next)
 void
 pushword(char *wd)
 {
-    if(runq->argv==0)
+    if(runq->argv==nil)
         panic("pushword but no argv!", 0);
     runq->argv->words = newword(wd, runq->argv->words);
 }
@@ -92,7 +94,7 @@ pushlist(void)
 {
     list *p = new(list);
     p->next = runq->argv;
-    p->words = 0;
+    p->words = nil;
     runq->argv = p;
 }
 /*e: function pushlist */
@@ -141,7 +143,7 @@ newvar(char *name, var *next)
     v->name = name;
     v->val = 0;
     v->fn = 0;
-    v->changed = 0;
+    v->changed = false;
     v->fnchanged = 0;
     v->next = next;
     return v;
@@ -158,10 +160,17 @@ newvar(char *name, var *next)
 //@Scheck: not dead! entry point!
 void main(int argc, char *argv[])
 {
+    /*s: [[main()]] locals */
+    char *rcmain;
+    /*x: [[main()]] locals */
     code bootstrap[17];
-    char num[12], *rcmain;
+    /*x: [[main()]] locals */
+    char num[12];
+    /*x: [[main()]] locals */
     int i;
+    /*e: [[main()]] locals */
 
+    /*s: [[main()]] argc argv processing, modify flags */
     argc = getflags(argc, argv, "SsrdiIlxepvVc:1m:1[command]", 1);
 
     if(argc==-1)
@@ -174,25 +183,30 @@ void main(int argc, char *argv[])
     else 
         if(flag['i']==0 && argc==1 && Isatty(0)) 
            flag['i'] = flagset;
+    /*e: [[main()]] argc argv processing, modify flags */
+    
+    rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
 
-    rcmain = flag['m']?flag['m'][0]:Rcmain; 
     err = openfd(2);
 
+    /*s: [[main()]] initialisation */
     kinit();
     Trapinit();
     Vinit();
 
-    inttoascii(num, mypid = getpid());
+    mypid = getpid();
+    inttoascii(num, mypid);
 
-    setvar("pid", newword(num, (word *)0));
-    setvar("cflag", flag['c']?newword(flag['c'][0], (word *)0)
-                :(word *)0);
-    setvar("rcname", newword(argv[0], (word *)0));
-
+    setvar("pid", newword(num, (word *)nil));
+    setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
+    setvar("rcname", newword(argv[0], (word *)nil));
+    /*e: [[main()]] initialisation */
+    
+    /*s: [[main()]] initialize [[boostrap]] */
     memset(bootstrap, 0, sizeof bootstrap);
 
     i = 0;
-    bootstrap[i++].i = 1;
+    bootstrap[i++].i = 1; // reference count
     bootstrap[i++].f = Xmark;
     bootstrap[i++].f = Xword;
     bootstrap[i++].s="*";
@@ -209,22 +223,33 @@ void main(int argc, char *argv[])
     bootstrap[i++].f = Xsimple;
     bootstrap[i++].f = Xexit;
     bootstrap[i].i = 0;
+    /*e: [[main()]] initialize [[boostrap]] */
 
-    start(bootstrap, 1, (var *)0);
+    // initialize runq with bootstrap code
+    start(bootstrap, 1, (var *)nil);
 
+    // initialize runq->argv
+    /*s: [[main()]] bootstrap argv */
     /* prime bootstrap argv */
     pushlist();
     argv0 = strdup(argv[0]);
     for(i = argc-1;i!=0;--i) 
         pushword(argv[i]);
+    /*e: [[main()]] bootstrap argv */
 
     for(;;){
+        /*s: [[main()]] debug runq */
         if(flag['r'])
             pfnc(err, runq);
+        /*e: [[main()]] debug runq */
+
         runq->pc++;
         (*runq->code[runq->pc-1].f)();
+
+        /*s: [[main()]] handing trap if necessary */
         if(ntrap)
             dotrap();
+        /*e: [[main()]] handing trap if necessary */
     }
 }
 /*e: function main (rc/exec.c) */
@@ -372,7 +397,7 @@ Xexit(void)
             start(trapreq->fn, trapreq->pc, (struct Var *)0);
             runq->local = newvar(strdup("*"), runq->local);
             runq->local->val = copywords(starval, (struct Word *)0);
-            runq->local->changed = 1;
+            runq->local->changed = true;
             runq->redir = runq->startredir = 0;
             return;
         }
@@ -708,7 +733,7 @@ Xassign(void)
     globlist();
     freewords(v->val);
     v->val = runq->argv->words;
-    v->changed = 1;
+    v->changed = true;
     runq->argv->words = 0;
     poplist();
 }
@@ -910,7 +935,7 @@ Xlocal(void)
     poplist();
     globlist();
     runq->local->val = runq->argv->words;
-    runq->local->changed = 1;
+    runq->local->changed = true;
     runq->argv->words = 0;
     poplist();
 }
@@ -925,7 +950,7 @@ Xunlocal(void)
         panic("Xunlocal: no locals!", 0);
     runq->local = v->next;
     hid = vlook(v->name);
-    hid->changed = 1;
+    hid->changed = true;
     efree(v->name);
     freewords(v->val);
     efree((char *)v);
@@ -1046,7 +1071,7 @@ Xrdcmds(void)
         else{
             if(Eintr()){
                 pchr(err, '\n');
-                p->eof = 0;
+                p->eof = false;
             }
             --p->pc;	/* go back for next command */
         }
@@ -1136,7 +1161,7 @@ Xfor(void)
     else{
         freelist(runq->local->val);
         runq->local->val = runq->argv->words;
-        runq->local->changed = 1;
+        runq->local->changed = true;
         runq->argv->words = runq->argv->words->next;
         runq->local->val->next = 0;
         runq->pc++;
