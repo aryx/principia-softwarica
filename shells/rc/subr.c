@@ -27,7 +27,8 @@ efree(void *p)
     else pfmt(err, "free 0\n");
 }
 /*e: function efree */
-extern int lastword, lastdol;
+extern bool lastword;
+extern bool lastdol;
 
 /*s: function yyerror */
 void
@@ -44,8 +45,8 @@ yyerror(char *m)
         pfmt(err, "token %q: ", tok);
     pfmt(err, "%s\n", m);
     flush(err);
-    lastword = 0;
-    lastdol = 0;
+    lastword = false;
+    lastdol = false;
     while(lastc!='\n' && lastc!=EOF) advance();
     nerror++;
     setvar("status", newword(m, (word *)0));

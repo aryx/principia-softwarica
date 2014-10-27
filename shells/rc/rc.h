@@ -40,7 +40,8 @@
 
 //#ifndef YYPREFIX
 #ifndef PAREN
-#include "x.tab.h"
+//#include "x.tab.h"
+//pad: better like that, otherwise get some "redefined FOR macro" error
 #endif
 //#endif
 
@@ -75,7 +76,7 @@ struct Tree {
     //enum<redirection_kind>
     int	rtype;
     int fd0, fd1;	/* details of REDIR PIPE DUP tokens */
-    int	quoted;
+    bool	quoted;
 
     tree	*next;
 };
@@ -111,7 +112,7 @@ union Code {
 /*e: struct code */
 
 extern char *promptstr;
-extern int doprompt;
+extern bool doprompt;
 
 /*s: constant NTOK */
 #define	NTOK	8192		/* maximum bytes in a word (token) */
@@ -211,6 +212,6 @@ extern int ndot;
 char *getstatus(void);
 
 extern int lastc;
-extern int lastword;
+extern bool lastword;
 
 /*e: rc/rc.h */

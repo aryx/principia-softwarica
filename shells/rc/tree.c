@@ -3,6 +3,7 @@
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
+#include "x.tab.h"
 
 void freetree(tree*);
 

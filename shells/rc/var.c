@@ -2,6 +2,7 @@
 #include "rc.h"
 #include "exec.h"
 #include "fns.h"
+#include "x.tab.h"
 
 /*s: function hash */
 unsigned

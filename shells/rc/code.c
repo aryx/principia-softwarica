@@ -4,6 +4,8 @@
 #include "exec.h"
 #include "fns.h"
 #include "getflags.h"
+#include "x.tab.h"
+
 /*s: constant c0 (rc/code.c) */
 #define	c0	t->child[0]
 /*e: constant c0 (rc/code.c) */

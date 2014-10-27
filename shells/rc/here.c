@@ -3,6 +3,7 @@
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
+#include "x.tab.h"
 
 struct Here *here, **ehere;
 /*s: global ser */
@@ -103,7 +104,7 @@ readhere(void)
         efree((char *)h);
     }
     here = 0;
-    doprompt = 1;
+    doprompt = true;
 }
 /*e: function readhere */
 

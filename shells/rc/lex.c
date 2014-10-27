@@ -4,6 +4,7 @@
 #include "io.h"
 #include "getflags.h"
 #include "fns.h"
+#include "x.tab.h"
 
 int getnext(void);
 
@@ -33,20 +34,19 @@ idchr(int c)
 int future = EOF;
 /*e: global future */
 /*s: global doprompt */
-int doprompt = 1;
+bool doprompt = true;
 /*e: global doprompt */
 /*s: global inquote */
-int inquote;
+bool inquote;
 /*e: global inquote */
 /*s: global incomm */
-int incomm;
+bool incomm;
 /*e: global incomm */
 
 /*s: function nextc */
 /*
  * Look ahead in the input stream
  */
-
 int
 nextc(void)
 {
@@ -73,12 +73,12 @@ advance(void)
 /*
  * read a character from the input stream
  */	
-
 int
 getnext(void)
 {
     int c;
     static int peekc = EOF;
+
     if(peekc!=EOF){
         c = peekc;
         peekc = EOF;
@@ -88,11 +88,12 @@ getnext(void)
         return EOF;
     if(doprompt)
         pprompt();
+
     c = rchr(runq->cmdfd);
     if(!inquote && c=='\\'){
         c = rchr(runq->cmdfd);
         if(c=='\n' && !incomm){		/* don't continue a comment */
-            doprompt = 1;
+            doprompt = true;
             c=' ';
         }
         else{
@@ -103,7 +104,10 @@ getnext(void)
     doprompt = doprompt || c=='\n' || c==EOF;
     if(c==EOF)
         runq->eof++; // ->eof = true cleaner no?
-    else if(flag['V'] || ndot>=2 && flag['v']) pchr(err, c);
+    else 
+        if(flag['V'] || ndot>=2 && flag['v'])
+            pchr(err, c);
+
     return c;
 }
 /*e: function getnext */
@@ -123,7 +127,7 @@ pprompt(void)
             promptstr="\t";
     }
     runq->lineno++;
-    doprompt = 0;
+    doprompt = false;
 }
 /*e: function pprompt */
 
@@ -136,11 +140,11 @@ skipwhite(void)
         c = nextc();
         /* Why did this used to be  if(!inquote && c=='#') ?? */
         if(c=='#'){
-            incomm = 1;
+            incomm = true;
             for(;;){
                 c = nextc();
                 if(c=='\n' || c==EOF) {
-                    incomm = 0;
+                    incomm = false;
                     break;
                 }
                 advance();
@@ -169,14 +173,14 @@ skipnl(void)
 /*e: function skipnl */
 
 /*s: function nextis */
-int
+bool
 nextis(int c)
 {
     if(nextc()==c){
         advance();
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 /*e: function nextis */
 
@@ -221,19 +225,21 @@ addutf(char *p, int c)
 /*e: function addutf */
 
 /*s: global lastdol */
-int lastdol;	/* was the last token read '$' or '$#' or '"'? */
+bool lastdol;	/* was the last token read '$' or '$#' or '"'? */
 /*e: global lastdol */
 /*s: global lastword (rc/lex.c) */
-int lastword;	/* was the last token read a word or compound word terminator? */
+bool lastword;	/* was the last token read a word or compound word terminator? */
 /*e: global lastword (rc/lex.c) */
 
 /*s: function yylex */
 //@Scheck: called from yyparse()
 int yylex(void)
 {
-    int c, d = nextc();
+    int c;
+    int d = nextc();
     char *w = tok;
     struct Tree *t;
+
     yylval.tree = 0;
     /*
      * Embarassing sneakiness:  if the last token read was a quoted or unquoted
@@ -243,26 +249,27 @@ int yylex(void)
      * we insert a `^' before it.
      */
     if(lastword){
-        lastword = 0;
+        lastword = false;
         if(d=='('){
             advance();
             strcpy(tok, "( [SUB]");
             return SUB;
         }
-        if(wordchr(d) || d=='\'' || d=='`' || d=='$' || d=='"'){
+        if(wordchr(d) || d=='\'' || d=='`' || d=='$' || d=='"'){ //$
             strcpy(tok, "^");
             return '^';
         }
     }
-    inquote = 0;
+    inquote = false;
     skipwhite();
+
     switch(c = advance()){
     case EOF:
-        lastdol = 0;
+        lastdol = false;
         strcpy(tok, "EOF");
         return EOF;
     case '$':
-        lastdol = 1;
+        lastdol = true;
         if(nextis('#')){
             strcpy(tok, "$#");
             return COUNT;
@@ -272,9 +279,9 @@ int yylex(void)
             return '"';
         }
         strcpy(tok, "$");
-        return '$';
+        return '$'; //$
     case '&':
-        lastdol = 0;
+        lastdol = false;
         if(nextis('&')){
             skipnl();
             strcpy(tok, "&&");
@@ -283,15 +290,16 @@ int yylex(void)
         strcpy(tok, "&");
         return '&';
     case '|':
-        lastdol = 0;
-        if(nextis(c)){
+        lastdol = false;
+        if(nextis('|')){
             skipnl();
             strcpy(tok, "||");
             return OROR;
         }
+        // FALLTHROUGH
     case '<':
     case '>':
-        lastdol = 0;
+        lastdol = false;
         /*
          * funny redirection tokens:
          *	redir:	arrow | arrow '[' fd ']'
@@ -377,10 +385,11 @@ int yylex(void)
         if(t->type==PIPE)
             skipnl();
         return t->type;
+
     case '\'':
-        lastdol = 0;
-        lastword = 1;
-        inquote = 1;
+        lastdol = false;
+        lastword = true;
+        inquote = true;
         for(;;){
             c = advance();
             if(c==EOF)
@@ -392,15 +401,18 @@ int yylex(void)
             }
             w = addutf(w, c);
         }
-        if(w!=0)
+        if(w!=nil)
             *w='\0';
+
         t = token(tok, WORD);
-        t->quoted = 1;
+
+        t->quoted = true;
         yylval.tree = t;
         return t->type;
-    }
+    } // end switch
+
     if(!wordchr(c)){
-        lastdol = 0;
+        lastdol = false;
         tok[0] = c;
         tok[1]='\0';
         return c;
@@ -410,18 +422,18 @@ int yylex(void)
             w = addtok(w, GLOB);
         w = addutf(w, c);
         c = nextc();
-        if(lastdol?!idchr(c):!wordchr(c)) break;
+        if(lastdol ? !idchr(c) : !wordchr(c)) break;
         advance();
     }
 
-    lastword = 1;
-    lastdol = 0;
-    if(w!=0)
+    lastword = true;
+    lastdol = false;
+    if(w!=nil)
         *w='\0';
     t = klook(tok);
     if(t->type!=WORD)
-        lastword = 0;
-    t->quoted = 0;
+        lastword = false;
+    t->quoted = false;
     yylval.tree = t;
     return t->type;
 }

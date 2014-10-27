@@ -2,6 +2,7 @@
 #include "rc.h"
 #include "io.h"
 #include "fns.h"
+#include "x.tab.h"
 /*s: global nl */
 char nl='\n';		/* change to semicolon for bourne-proofing */
 /*e: global nl */

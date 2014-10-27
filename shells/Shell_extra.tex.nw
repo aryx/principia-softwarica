@@ -1491,7 +1491,8 @@ struct Here {
 
 //#ifndef YYPREFIX
 #ifndef PAREN
-#include "x.tab.h"
+//#include "x.tab.h"
+//pad: better like that, otherwise get some "redefined FOR macro" error
 #endif
 //#endif
 
@@ -1531,7 +1532,7 @@ tree *heredoc(tree*);
 <<struct code>>
 
 extern char *promptstr;
-extern int doprompt;
+extern bool doprompt;
 
 <<constant NTOK>>
 
@@ -1575,7 +1576,7 @@ extern int ndot;
 char *getstatus(void);
 
 extern int lastc;
-extern int lastword;
+extern bool lastword;
 
 @
 
@@ -1684,9 +1685,6 @@ int ndot;
 @
 
 
-<<global lastc>>=
-int lastc;
-@
 
 
 
@@ -2314,82 +2312,6 @@ void pwrd(io*, char*);
 
 \subsection*{[[rc/var.c]]}
 
-<<function hash>>=
-unsigned
-hash(char *as, int n)
-{
-    int i = 1;
-    unsigned h = 0;
-    uchar *s;
-
-    s = (uchar *)as;
-    while (*s)
-        h += *s++ * i++;
-    return h % n;
-}
-@
-
-<<constant NKW>>=
-#define	NKW	30
-@
-
-<<global kw>>=
-struct Kw {
-    char *name;
-    int type;
-    struct Kw *next;
-} *kw[NKW];
-@
-
-<<function kenter>>=
-void
-kenter(int type, char *name)
-{
-    int h = hash(name, NKW);
-    struct Kw *p = new(struct Kw);
-    p->type = type;
-    p->name = name;
-    p->next = kw[h];
-    kw[h] = p;
-}
-@
-
-<<function kinit>>=
-void
-kinit(void)
-{
-    kenter(FOR, "for");
-    kenter(IN, "in");
-    kenter(WHILE, "while");
-    kenter(IF, "if");
-    kenter(NOT, "not");
-    kenter(TWIDDLE, "~");
-    kenter(BANG, "!");
-    kenter(SUBSHELL, "@");
-    kenter(SWITCH, "switch");
-    kenter(FN, "fn");
-}
-@
-
-<<function klook>>=
-tree*
-klook(char *name)
-{
-    struct Kw *p;
-    tree *t = token(name, WORD);
-
-    for(p = kw[hash(name, NKW)];p;p = p->next)
-        if(strcmp(p->name, name)==0){
-            t->type = p->type;
-            t->iskw = true;
-            break;
-        }
-    return t;
-}
-@
-
-
-
 
 
 %-------------------------------------------------------------
@@ -2398,6 +2320,7 @@ klook(char *name)
 #include "rc.h"
 #include "exec.h"
 #include "fns.h"
+#include "x.tab.h"
 
 <<function hash>>
 
@@ -2432,7 +2355,8 @@ klook(char *name)
 <<function emalloc>>
 
 <<function efree>>
-extern int lastword, lastdol;
+extern bool lastword;
+extern bool lastdol;
 
 <<function yyerror>>
 <<global bp>>
@@ -4748,6 +4672,7 @@ token(char *str, int type)
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
+#include "x.tab.h"
 
 void freetree(tree*);
 
@@ -4779,14 +4704,6 @@ void freetree(tree*);
 
 \subsection*{[[rc/lex.c]]}
 
-<<function wordchr>>=
-int
-wordchr(int c)
-{
-    return !strchr("\n \t#;&|^$=`'{}()<>", c) && c!=EOF;
-}
-@
-%$
 
 <<function idchr>>=
 int
@@ -4802,89 +4719,8 @@ idchr(int c)
 @
 %$
 
-<<global future>>=
-int future = EOF;
-@
 
-<<global doprompt>>=
-int doprompt = 1;
-@
 
-<<global inquote>>=
-int inquote;
-@
-
-<<global incomm>>=
-int incomm;
-@
-
-<<function nextc>>=
-/*
- * Look ahead in the input stream
- */
-
-int
-nextc(void)
-{
-    if(future==EOF)
-        future = getnext();
-    return future;
-}
-@
-
-<<function advance>>=
-/*
- * Consume the lookahead character.
- */
-
-int
-advance(void)
-{
-    int c = nextc();
-    lastc = future;
-    future = EOF;
-    return c;
-}
-@
-
-<<function getnext>>=
-/*
- * read a character from the input stream
- */	
-
-int
-getnext(void)
-{
-    int c;
-    static int peekc = EOF;
-    if(peekc!=EOF){
-        c = peekc;
-        peekc = EOF;
-        return c;
-    }
-    if(runq->eof)
-        return EOF;
-    if(doprompt)
-        pprompt();
-    c = rchr(runq->cmdfd);
-    if(!inquote && c=='\\'){
-        c = rchr(runq->cmdfd);
-        if(c=='\n' && !incomm){		/* don't continue a comment */
-            doprompt = 1;
-            c=' ';
-        }
-        else{
-            peekc = c;
-            c='\\';
-        }
-    }
-    doprompt = doprompt || c=='\n' || c==EOF;
-    if(c==EOF)
-        runq->eof++; // ->eof = true cleaner no?
-    else if(flag['V'] || ndot>=2 && flag['v']) pchr(err, c);
-    return c;
-}
-@
 
 <<function pprompt>>=
 void
@@ -4901,62 +4737,12 @@ pprompt(void)
             promptstr="\t";
     }
     runq->lineno++;
-    doprompt = 0;
+    doprompt = false;
 }
 @
 
-<<function skipwhite>>=
-void
-skipwhite(void)
-{
-    int c;
-    for(;;){
-        c = nextc();
-        /* Why did this used to be  if(!inquote && c=='#') ?? */
-        if(c=='#'){
-            incomm = 1;
-            for(;;){
-                c = nextc();
-                if(c=='\n' || c==EOF) {
-                    incomm = 0;
-                    break;
-                }
-                advance();
-            }
-        }
-        if(c==' ' || c=='\t')
-            advance();
-        else return;
-    }
-}
-@
 
-<<function skipnl>>=
-void
-skipnl(void)
-{
-    int c;
-    for(;;){
-        skipwhite();
-        c = nextc();
-        if(c!='\n')
-            return;
-        advance();
-    }
-}
-@
 
-<<function nextis>>=
-int
-nextis(int c)
-{
-    if(nextc()==c){
-        advance();
-        return 1;
-    }
-    return 0;
-}
-@
 
 <<function addtok>>=
 char*
@@ -4998,15 +4784,6 @@ addutf(char *p, int c)
 }
 @
 
-<<global lastdol>>=
-int lastdol;	/* was the last token read '$' or '$#' or '"'? */
-@
-
-<<global lastword (rc/lex.c)>>=
-int lastword;	/* was the last token read a word or compound word terminator? */
-@
-
-
 %-------------------------------------------------------------
 
 <<rc/lex.c>>=
@@ -5015,6 +4792,7 @@ int lastword;	/* was the last token read a word or compound word terminator? */
 #include "io.h"
 #include "getflags.h"
 #include "fns.h"
+#include "x.tab.h"
 
 int getnext(void);
 
@@ -5638,6 +5416,7 @@ int	mapfd(int);
 #include "rc.h"
 #include "io.h"
 #include "fns.h"
+#include "x.tab.h"
 <<global nl>>
 <<constant c0>>
 <<constant c1>>
@@ -5748,7 +5527,7 @@ readhere(void)
         efree((char *)h);
     }
     here = 0;
-    doprompt = 1;
+    doprompt = true;
 }
 @
 
@@ -5825,6 +5604,7 @@ pstrs(io *f, word *a)
 #include "exec.h"
 #include "io.h"
 #include "fns.h"
+#include "x.tab.h"
 
 struct Here *here, **ehere;
 <<global ser>>
@@ -6043,6 +5823,8 @@ codefree(code *cp)
 #include "exec.h"
 #include "fns.h"
 #include "getflags.h"
+#include "x.tab.h"
+
 <<constant c0 (rc/code.c)>>
 <<constant c1 (rc/code.c)>>
 <<constant c2 (rc/code.c)>>
