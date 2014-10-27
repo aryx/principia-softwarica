@@ -4,14 +4,15 @@
 #include "fns.h"
 %}
 
-%union{
+%union {
  struct Tree *tree;
 };
 
 /*s: token declarations */
 %token FOR IN WHILE IF NOT SWITCH FN
+%token WORD
 %token TWIDDLE BANG SUBSHELL 
-%token WORD REDIR DUP PIPE SUB
+%token REDIR DUP PIPE SUB
 %token ANDAND OROR COUNT
 %token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
 /*e: token declarations */
