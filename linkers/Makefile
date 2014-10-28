@@ -53,5 +53,4 @@ SRC_VIEWS= \
   libmach/machdata.c\
   libmach/obj.c\
   libmach/8db.c\
-  libmach/vcodas.c\
   libmach/setmach.c\
