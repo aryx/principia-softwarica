@@ -149,14 +149,14 @@ nxtarg(int mt)
 @
 
 <<function nxtintarg>>=
-int
+bool
 nxtintarg(int *pans)
 {
     if(ap<ac && isint(av[ap], pans)){
         ap++;
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 @
 
@@ -200,7 +200,7 @@ e2(void)
 @
 
 <<function e3>>=
-int
+bool
 e3(void)
 {
     int p1, int1, int2;
@@ -242,16 +242,16 @@ e3(void)
         return(tio(nxtarg(0), 0));
 
     if(EQ(a, "-c"))
-        return(0);
+        return false;
 
     if(EQ(a, "-b"))
-        return(0);
+        return false;
 
     if(EQ(a, "-u"))
-        return(0);
+        return false;
 
     if(EQ(a, "-g"))
-        return(0);
+        return false;
 
     if(EQ(a, "-s"))
         return(fsizep(nxtarg(0)));
@@ -306,12 +306,12 @@ e3(void)
     }
 
     synbad("unknown operator ",p2);
-    return 0;		/* to shut ken up */
+    return false;		/* to shut ken up */
 }
 @
 
 <<function tio>>=
-int
+bool
 tio(char *a, int f)
 {
     return access (a, f) >= 0;
@@ -325,16 +325,15 @@ tio(char *a, int f)
  * but are not included in sizeof(Dir), so copying a Dir won't
  * copy the strings it points to.
  */
-
-int
+bool
 hasmode(char *f, ulong m)
 {
-    int r;
+    bool r;
     Dir *dir;
 
     dir = dirstat(f);
     if (dir == nil)
-        return 0;
+        return false;
     r = (dir->mode & m) != 0;
     free(dir);
     return r;
@@ -342,7 +341,7 @@ hasmode(char *f, ulong m)
 @
 
 <<function isdir>>=
-int
+bool
 isdir(char *f)
 {
     return hasmode(f, DMDIR);
@@ -350,15 +349,15 @@ isdir(char *f)
 @
 
 <<function isreg>>=
-int
+bool
 isreg(char *f)
 {
-    int r;
+    bool r;
     Dir *dir;
 
     dir = dirstat(f);
     if (dir == nil)
-        return 0;
+        return false;
     r = (dir->mode & DMDIR) == 0;
     free(dir);
     return r;
@@ -386,15 +385,15 @@ isatty(int fd)
 @
 
 <<function fsizep>>=
-int
+bool
 fsizep(char *f)
 {
-    int r;
+    bool r;
     Dir *dir;
 
     dir = dirstat(f);
     if (dir == nil)
-        return 0;
+        return false;
     r = dir->length > 0;
     free(dir);
     return r;
@@ -429,7 +428,7 @@ isint(char *s, int *pans)
 @
 
 <<function isolder>>=
-int
+bool
 isolder(char *pin, char *f)
 {
     int r, rel;
@@ -439,7 +438,7 @@ isolder(char *pin, char *f)
 
     dir = dirstat(f);
     if (dir == nil)
-        return 0;
+        return false;
 
     /* parse time */
     n = 0;
@@ -754,9 +753,10 @@ alloc(int (*op)(Node *))
 }
 @
 
+% return bool and do side effect of executing command before
 <<function builtin>>=
 /* builtin - check np for builtin command and, if found, execute it */
-int
+bool
 builtin(Node *np)
 {
     int n = 0;
@@ -768,7 +768,7 @@ builtin(Node *np)
     if(strcmp(np->argv[0], "cd") == 0){
         if(chdir(np->argv[1]? np->argv[1] : "/") == -1)
             error(": bad directory", np->argv[0]);
-        return 1;
+        return true;
     }else if(strcmp(np->argv[0], "exit") == 0)
         exits(np->argv[1]? np->argv[1] : status);
     else if(strcmp(np->argv[0], "bind") == 0){
@@ -776,7 +776,7 @@ builtin(Node *np)
             error("usage: bind new old", "");
         else if(bind(np->argv[1], np->argv[2], 0)==-1)
             error("bind failed", "");
-        return 1;
+        return true;
 //#ifdef asdf
 //	}else if(strcmp(np->argv[0], "unmount") == 0){
 //		if(np->argv[1] == 0)
@@ -786,7 +786,7 @@ builtin(Node *np)
 //				error("unmount:", "");
 //		}else if(unmount(np->argv[1], np->argv[2]) == -1)
 //			error("unmount", "");
-//		return 1;
+//		return true;
 //#endif
     }else if(strcmp(np->argv[0], "wait") == 0){
         while((wmsg = wait()) != nil){
@@ -800,7 +800,7 @@ builtin(Node *np)
         }
         if(n)
             error("wait error", "");
-        return 1;
+        return true;
     }else if(strcmp(np->argv[0], "rfork") == 0){
         char *p;
         int mask;
@@ -824,7 +824,7 @@ builtin(Node *np)
             }
         rfork(mask);
 
-        return 1;
+        return OK_1;
     }else if(strcmp(np->argv[0], "exec") == 0){
         redirect(np);
         if(np->argv[1] == (char *) 0)
@@ -837,9 +837,10 @@ builtin(Node *np)
                 exec(name, &np->argv[1]);
             }
         error(": not found", np->argv[1]);
-        return 1;
+        return true;
     }
-    return 0;
+    // no builtin found
+    return false;
 }
 @
 
@@ -855,10 +856,10 @@ command(void)
     np = alloc(xsubshell);
     t = gettoken();
     if((np->args[0]=list())==0 || t!=')')
-        return 0;
+        return nil;
     while((t=gettoken())=='<' || t=='>')
         if(!setio(np))
-            return 0;
+            return nil;
     return np;
 }
 @
@@ -929,7 +930,7 @@ list(void)
 
     np = alloc(0);
     if((np->args[1]=pipeline()) == 0)
-        return 0;
+        return nil;
     while(t==';' || t=='&'){
         np->op = (t==';')? xwait : xnowait;
         t = gettoken();
@@ -938,7 +939,7 @@ list(void)
         np1 = alloc(0);
         np1->args[0] = np;
         if((np1->args[1]=pipeline()) == 0)
-            return 0;
+            return nil;
         np = np1;
     }
     if(np->op == 0)
@@ -968,13 +969,13 @@ pipeline(void)
     Node *np, *np1;
 
     if((np=command()) == 0)
-        return 0;
+        return nil;
     while(t == '|'){
         np1 = alloc(xpipeline);
         np1->args[0] = np;
         t = gettoken();
         if((np1->args[1]=command()) == 0)
-            return 0;
+            return nil;
         np = np1;
     }
     return np;
@@ -1018,7 +1019,7 @@ redirect(Node *np)
 
 <<function setio>>=
 /* setio - ( < | > | >> ) word; fill in np->io[] */
-int
+errorcode0
 setio(Node *np)
 {
     if(t == '<'){
@@ -1032,10 +1033,10 @@ setio(Node *np)
             }else
             np->io[1] = token;
     }else
-        return 0;
+        return ERROR_0;
     if(t != WORD)
-        return 0;
-    return 1;
+        return ERROR_0;
+    return OK_1;
 }
 @
 
@@ -1048,14 +1049,14 @@ simple(void)
     int n = 1;
 
     if(t != WORD)
-        return 0;
+        return nil;
     np = alloc(xsimple);
     np->argv[0] = token;
     while((t = gettoken())==WORD || t=='<' || t=='>')
         if(t == WORD)
             np->argv[n++] = token;
         else if(!setio(np))
-            return 0;
+            return nil;
     np->argv[n] = 0;
     return np;
 }
@@ -1111,6 +1112,7 @@ xsimple(Node *np)
 
     if(builtin(np))
         return 0;
+
     if(pid = fork()){
         if(pid == -1)
             error(": can't create process", np->argv[0]);
@@ -2826,15 +2828,15 @@ Seek(int fd, long cnt, long whence)
 @
 
 <<function Executable>>=
-int
+bool
 Executable(char *file)
 {
     Dir *statbuf;
-    int ret;
+    bool ret;
 
     statbuf = dirstat(file);
     if(statbuf == nil)
-        return 0;
+        return false;
     ret = ((statbuf->mode&0111)!=0 && (statbuf->mode&DMDIR)==0);
     free(statbuf);
     return ret;
@@ -2892,17 +2894,17 @@ Noerror(void)
 @
 
 <<function Isatty>>=
-int
+bool
 Isatty(int fd)
 {
     char buf[64];
 
     if(fd2path(fd, buf, sizeof buf) != 0)
-        return 0;
+        return false;
 
     /* might be #c/cons during boot - fixed 22 april 2005, remove this later */
     if(strcmp(buf, "#c/cons") == 0)
-        return 1;
+        return true;
 
     /* might be /mnt/term/dev/cons */
     return strlen(buf) >= 9 && strcmp(buf+strlen(buf)-9, "/dev/cons") == 0;
@@ -2969,15 +2971,15 @@ clearwaitpids(void)
 @
 
 <<function havewaitpid>>=
-int
+bool
 havewaitpid(int pid)
 {
     int i;
 
     for(i=0; i<nwaitpids; i++)
         if(waitpids[i] == pid)
-            return 1;
-    return 0;
+            return true;
+    return false;
 }
 @
 
@@ -4005,14 +4007,14 @@ getstatus(void)
 @
 
 <<function truestatus>>=
-int
+bool
 truestatus(void)
 {
     char *s;
     for(s = getstatus();*s;s++)
         if(*s!='|' && *s!='0')
-            return 0;
-    return 1;
+            return false;
+    return true;
 }
 @
 
@@ -4682,12 +4684,12 @@ pprompt(void)
 char*
 addtok(char *p, int val)
 {
-    if(p==0)
-        return 0;
+    if(p==nil)
+        return nil;
     if(p >= &tok[NTOK]){
-        *p = 0;
+        *p = '\0';
         yyerror("token buffer too short");
-        return 0;
+        return nil;
     }
     *p++=val;
     return p;
@@ -5320,12 +5322,12 @@ codeswitch(tree *t, int eflag)
 @
 
 <<function iscase>>=
-int
+bool
 iscase(tree *t)
 {
     if(t->type!=SIMPLE)
-        return 0;
-    do t = c0; while(t->type==ARGLIST);
+        return false;
+    do { t = c0; } while(t->type==ARGLIST);
     return t->type==WORD && !t->quoted && strcmp(t->str, "case")==0;
 }
 @

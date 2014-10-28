@@ -35,7 +35,7 @@
 %%
 /*s: grammar */
 rc: 
-    /*empty*/       { return 1;}
+    /*empty*/       { return ERROR_1;}
 |   line '\n'       { return !compile($1);}
 
 line:   

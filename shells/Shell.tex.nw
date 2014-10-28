@@ -1579,7 +1579,7 @@ klook(char *name)
 % ??? -> yyparse() ?
 <<grammar>>=
 rc: 
-    /*empty*/       { return 1;}
+    /*empty*/       { return ERROR_1;}
 |   line '\n'       { return !compile($1);}
 
 line:   
@@ -1734,10 +1734,10 @@ int codep;
 int ncode;
 @
 
-% return 0 for error 1 for ok, modify codebuf!
+% modify codebuf!
 <<function compile>>=
 //@Scheck: called from syn.y
-int compile(tree *t)
+errorcode0 compile(tree *t)
 {
     ncode = 100;
     codep = 0;
@@ -1749,7 +1749,7 @@ int compile(tree *t)
 
     if(nerror){
         efree((char *)codebuf);
-        return 0;
+        return ERROR_0;
     }
 
     readhere();
@@ -1757,7 +1757,7 @@ int compile(tree *t)
     emitf(Xreturn);
     emitf(nil);
 
-    return 1;
+    return OK_1;
 }
 @
 
@@ -1784,7 +1784,7 @@ int morecode(void)
     codebuf = (code *)realloc((char *)codebuf, ncode*sizeof codebuf[0]);
     if(codebuf==nil)
         panic("Can't realloc %d bytes in morecode!", ncode*sizeof(code));
-    return 0;
+    return OK_0;
 }
 @
 
@@ -2232,7 +2232,7 @@ execcd(void)
 % /dev/wdir?
 
 <<function dochdir>>=
-int
+errorcodeneg1
 dochdir(char *word)
 {
     /* report to /dev/wdir if it exists and we're interactive */
@@ -2240,7 +2240,7 @@ dochdir(char *word)
 
     // the actual syscall
     if(chdir(word)<0) 
-        return -1;
+        return ERROR_NEG1;
 
     if(flag['i']!=nil){
         if(wdirfd==-2)	/* try only once */
@@ -2250,7 +2250,7 @@ dochdir(char *word)
             write(wdirfd, word, strlen(word));
         }
     }
-    return 1;
+    return OK_1;
 }
 @
 
@@ -2815,12 +2815,12 @@ glob(void *ap)
 /*
  * Do p and q point at equal utf codes
  */
-int
+bool
 equtf(uchar *p, uchar *q)
 {
     Rune pr, qr;
     if(*p!=*q)
-        return 0;
+        return false;
     
     chartorune(&pr, (char*)p);
     chartorune(&qr, (char*)q);
@@ -2863,19 +2863,19 @@ unicode(uchar *p)
  * ? matches any single character
  * [...] matches the enclosed list of characters
  */
-int
+bool
 matchfn(void *as, void *ap)
 {
     uchar *s = as, *p = ap;
 
     if(s[0]=='.' && (s[1]=='\0' || s[1]=='.' && s[2]=='\0') && p[0]!='.')
-        return 0;
+        return false;
     return match(s, p, '/');
 }
 @
 
 <<function match>>=
-int
+bool
 match(void *as, void *ap, int stop)
 {
     int compl, hit, lo, hi, t, c;
@@ -2883,12 +2883,12 @@ match(void *as, void *ap, int stop)
 
     for(; *p!=stop && *p!='\0'; s = nextutf(s), p = nextutf(p)){
         if(*p!=GLOB){
-            if(!equtf(p, s)) return 0;
+            if(!equtf(p, s)) return false;
         }
         else switch(*++p){
         case GLOB:
             if(*s!=GLOB)
-                return 0;
+                return false;
             break;
         case '*':
             for(;;){
@@ -2897,14 +2897,14 @@ match(void *as, void *ap, int stop)
                     break;
                 s = nextutf(s);
             }
-            return 0;
+            return false;
         case '?':
             if(*s=='\0')
-                return 0;
+                return false;
             break;
         case '[':
             if(*s=='\0')
-                return 0;
+                return false;
             c = unicode(s);
             p++;
             compl=*p=='~';
@@ -2913,7 +2913,7 @@ match(void *as, void *ap, int stop)
             hit = 0;
             while(*p!=']'){
                 if(*p=='\0')
-                    return 0;		/* syntax error */
+                    return false;		/* syntax error */
                 lo = unicode(p);
                 p = nextutf(p);
                 if(*p!='-')
@@ -2921,7 +2921,7 @@ match(void *as, void *ap, int stop)
                 else{
                     p++;
                     if(*p=='\0')
-                        return 0;	/* syntax error */
+                        return false;	/* syntax error */
                     hi = unicode(p);
                     p = nextutf(p);
                     if(hi<lo){ t = lo; lo = hi; hi = t; }
@@ -2932,7 +2932,7 @@ match(void *as, void *ap, int stop)
             if(compl)
                 hit=!hit;
             if(!hit)
-                return 0;
+                return false;
             break;
         }
     }

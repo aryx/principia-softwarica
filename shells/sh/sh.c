@@ -151,7 +151,7 @@ alloc(int (*op)(Node *))
 
 /*s: function builtin */
 /* builtin - check np for builtin command and, if found, execute it */
-int
+bool
 builtin(Node *np)
 {
     int n = 0;
@@ -163,7 +163,7 @@ builtin(Node *np)
     if(strcmp(np->argv[0], "cd") == 0){
         if(chdir(np->argv[1]? np->argv[1] : "/") == -1)
             error(": bad directory", np->argv[0]);
-        return 1;
+        return true;
     }else if(strcmp(np->argv[0], "exit") == 0)
         exits(np->argv[1]? np->argv[1] : status);
     else if(strcmp(np->argv[0], "bind") == 0){
@@ -171,7 +171,7 @@ builtin(Node *np)
             error("usage: bind new old", "");
         else if(bind(np->argv[1], np->argv[2], 0)==-1)
             error("bind failed", "");
-        return 1;
+        return true;
 //#ifdef asdf
 //	}else if(strcmp(np->argv[0], "unmount") == 0){
 //		if(np->argv[1] == 0)
@@ -181,7 +181,7 @@ builtin(Node *np)
 //				error("unmount:", "");
 //		}else if(unmount(np->argv[1], np->argv[2]) == -1)
 //			error("unmount", "");
-//		return 1;
+//		return true;
 //#endif
     }else if(strcmp(np->argv[0], "wait") == 0){
         while((wmsg = wait()) != nil){
@@ -195,7 +195,7 @@ builtin(Node *np)
         }
         if(n)
             error("wait error", "");
-        return 1;
+        return true;
     }else if(strcmp(np->argv[0], "rfork") == 0){
         char *p;
         int mask;
@@ -219,7 +219,7 @@ builtin(Node *np)
             }
         rfork(mask);
 
-        return 1;
+        return OK_1;
     }else if(strcmp(np->argv[0], "exec") == 0){
         redirect(np);
         if(np->argv[1] == (char *) 0)
@@ -232,9 +232,10 @@ builtin(Node *np)
                 exec(name, &np->argv[1]);
             }
         error(": not found", np->argv[1]);
-        return 1;
+        return true;
     }
-    return 0;
+    // no builtin found
+    return false;
 }
 /*e: function builtin */
 
@@ -250,10 +251,10 @@ command(void)
     np = alloc(xsubshell);
     t = gettoken();
     if((np->args[0]=list())==0 || t!=')')
-        return 0;
+        return nil;
     while((t=gettoken())=='<' || t=='>')
         if(!setio(np))
-            return 0;
+            return nil;
     return np;
 }
 /*e: function command */
@@ -324,7 +325,7 @@ list(void)
 
     np = alloc(0);
     if((np->args[1]=pipeline()) == 0)
-        return 0;
+        return nil;
     while(t==';' || t=='&'){
         np->op = (t==';')? xwait : xnowait;
         t = gettoken();
@@ -333,7 +334,7 @@ list(void)
         np1 = alloc(0);
         np1->args[0] = np;
         if((np1->args[1]=pipeline()) == 0)
-            return 0;
+            return nil;
         np = np1;
     }
     if(np->op == 0)
@@ -363,13 +364,13 @@ pipeline(void)
     Node *np, *np1;
 
     if((np=command()) == 0)
-        return 0;
+        return nil;
     while(t == '|'){
         np1 = alloc(xpipeline);
         np1->args[0] = np;
         t = gettoken();
         if((np1->args[1]=command()) == 0)
-            return 0;
+            return nil;
         np = np1;
     }
     return np;
@@ -413,7 +414,7 @@ redirect(Node *np)
 
 /*s: function setio */
 /* setio - ( < | > | >> ) word; fill in np->io[] */
-int
+errorcode0
 setio(Node *np)
 {
     if(t == '<'){
@@ -427,10 +428,10 @@ setio(Node *np)
             }else
             np->io[1] = token;
     }else
-        return 0;
+        return ERROR_0;
     if(t != WORD)
-        return 0;
-    return 1;
+        return ERROR_0;
+    return OK_1;
 }
 /*e: function setio */
             
@@ -443,14 +444,14 @@ simple(void)
     int n = 1;
 
     if(t != WORD)
-        return 0;
+        return nil;
     np = alloc(xsimple);
     np->argv[0] = token;
     while((t = gettoken())==WORD || t=='<' || t=='>')
         if(t == WORD)
             np->argv[n++] = token;
         else if(!setio(np))
-            return 0;
+            return nil;
     np->argv[n] = 0;
     return np;
 }
@@ -506,6 +507,7 @@ xsimple(Node *np)
 
     if(builtin(np))
         return 0;
+
     if(pid = fork()){
         if(pid == -1)
             error(": can't create process", np->argv[0]);

@@ -582,15 +582,15 @@ Seek(int fd, long cnt, long whence)
 /*e: function Seek */
 
 /*s: function Executable */
-int
+bool
 Executable(char *file)
 {
     Dir *statbuf;
-    int ret;
+    bool ret;
 
     statbuf = dirstat(file);
     if(statbuf == nil)
-        return 0;
+        return false;
     ret = ((statbuf->mode&0111)!=0 && (statbuf->mode&DMDIR)==0);
     free(statbuf);
     return ret;
@@ -648,17 +648,17 @@ Noerror(void)
 /*e: function Noerror */
 
 /*s: function Isatty */
-int
+bool
 Isatty(int fd)
 {
     char buf[64];
 
     if(fd2path(fd, buf, sizeof buf) != 0)
-        return 0;
+        return false;
 
     /* might be #c/cons during boot - fixed 22 april 2005, remove this later */
     if(strcmp(buf, "#c/cons") == 0)
-        return 1;
+        return true;
 
     /* might be /mnt/term/dev/cons */
     return strlen(buf) >= 9 && strcmp(buf+strlen(buf)-9, "/dev/cons") == 0;
@@ -731,15 +731,15 @@ clearwaitpids(void)
 /*e: function clearwaitpids */
 
 /*s: function havewaitpid */
-int
+bool
 havewaitpid(int pid)
 {
     int i;
 
     for(i=0; i<nwaitpids; i++)
         if(waitpids[i] == pid)
-            return 1;
-    return 0;
+            return true;
+    return false;
 }
 /*e: function havewaitpid */
 

@@ -131,12 +131,12 @@ glob(void *ap)
 /*
  * Do p and q point at equal utf codes
  */
-int
+bool
 equtf(uchar *p, uchar *q)
 {
     Rune pr, qr;
     if(*p!=*q)
-        return 0;
+        return false;
     
     chartorune(&pr, (char*)p);
     chartorune(&qr, (char*)q);
@@ -179,19 +179,19 @@ unicode(uchar *p)
  * ? matches any single character
  * [...] matches the enclosed list of characters
  */
-int
+bool
 matchfn(void *as, void *ap)
 {
     uchar *s = as, *p = ap;
 
     if(s[0]=='.' && (s[1]=='\0' || s[1]=='.' && s[2]=='\0') && p[0]!='.')
-        return 0;
+        return false;
     return match(s, p, '/');
 }
 /*e: function matchfn */
 
 /*s: function match */
-int
+bool
 match(void *as, void *ap, int stop)
 {
     int compl, hit, lo, hi, t, c;
@@ -199,12 +199,12 @@ match(void *as, void *ap, int stop)
 
     for(; *p!=stop && *p!='\0'; s = nextutf(s), p = nextutf(p)){
         if(*p!=GLOB){
-            if(!equtf(p, s)) return 0;
+            if(!equtf(p, s)) return false;
         }
         else switch(*++p){
         case GLOB:
             if(*s!=GLOB)
-                return 0;
+                return false;
             break;
         case '*':
             for(;;){
@@ -213,14 +213,14 @@ match(void *as, void *ap, int stop)
                     break;
                 s = nextutf(s);
             }
-            return 0;
+            return false;
         case '?':
             if(*s=='\0')
-                return 0;
+                return false;
             break;
         case '[':
             if(*s=='\0')
-                return 0;
+                return false;
             c = unicode(s);
             p++;
             compl=*p=='~';
@@ -229,7 +229,7 @@ match(void *as, void *ap, int stop)
             hit = 0;
             while(*p!=']'){
                 if(*p=='\0')
-                    return 0;		/* syntax error */
+                    return false;		/* syntax error */
                 lo = unicode(p);
                 p = nextutf(p);
                 if(*p!='-')
@@ -237,7 +237,7 @@ match(void *as, void *ap, int stop)
                 else{
                     p++;
                     if(*p=='\0')
-                        return 0;	/* syntax error */
+                        return false;	/* syntax error */
                     hi = unicode(p);
                     p = nextutf(p);
                     if(hi<lo){ t = lo; lo = hi; hi = t; }
@@ -248,7 +248,7 @@ match(void *as, void *ap, int stop)
             if(compl)
                 hit=!hit;
             if(!hit)
-                return 0;
+                return false;
             break;
         }
     }

@@ -13,6 +13,15 @@ enum _bool {
 };
 typedef uchar byte;
 typedef int fdt; // file descriptor type
+#define OK_0 0
+#define OK_1 1
+#define ERROR_0 0
+#define ERROR_1 1
+#define ERROR_NEG1 (-1)
+// later: unify all of that, be more consistent!
+typedef int errorcode0;
+typedef int errorcode1;
+typedef int errorcodeneg1;
 
 /*
  * mem routines
@@ -646,6 +655,7 @@ typedef struct IOchunk
 
 extern	void	_exits(char*);
 
+// syscalls
 extern	void	abort(void);
 extern	int	access(char*, int);
 extern	long	alarm(ulong);
@@ -681,6 +691,7 @@ extern	long	readn(int, void*, long);
 extern	long	readv(int, IOchunk*, int);
 extern	int	remove(char*);
 extern	void*	sbrk(ulong);
+
 // pad's stuff, but is actually also in stdio.h
 enum seek_cursor {
     SEEK__START = 0,

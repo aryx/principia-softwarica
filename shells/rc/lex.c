@@ -188,12 +188,12 @@ nextis(int c)
 char*
 addtok(char *p, int val)
 {
-    if(p==0)
-        return 0;
+    if(p==nil)
+        return nil;
     if(p >= &tok[NTOK]){
-        *p = 0;
+        *p = '\0';
         yyerror("token buffer too short");
-        return 0;
+        return nil;
     }
     *p++=val;
     return p;

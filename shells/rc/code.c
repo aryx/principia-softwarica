@@ -47,7 +47,7 @@ int morecode(void)
     codebuf = (code *)realloc((char *)codebuf, ncode*sizeof codebuf[0]);
     if(codebuf==nil)
         panic("Can't realloc %d bytes in morecode!", ncode*sizeof(code));
-    return 0;
+    return OK_0;
 }
 /*e: function morecode */
 
@@ -63,7 +63,7 @@ stuffdot(int a)
 
 /*s: function compile */
 //@Scheck: called from syn.y
-int compile(tree *t)
+errorcode0 compile(tree *t)
 {
     ncode = 100;
     codep = 0;
@@ -75,7 +75,7 @@ int compile(tree *t)
 
     if(nerror){
         efree((char *)codebuf);
-        return 0;
+        return ERROR_0;
     }
 
     readhere();
@@ -83,7 +83,7 @@ int compile(tree *t)
     emitf(Xreturn);
     emitf(nil);
 
-    return 1;
+    return OK_1;
 }
 /*e: function compile */
 
@@ -517,12 +517,12 @@ codeswitch(tree *t, int eflag)
 /*e: function codeswitch */
 
 /*s: function iscase */
-int
+bool
 iscase(tree *t)
 {
     if(t->type!=SIMPLE)
-        return 0;
-    do t = c0; while(t->type==ARGLIST);
+        return false;
+    do { t = c0; } while(t->type==ARGLIST);
     return t->type==WORD && !t->quoted && strcmp(t->str, "case")==0;
 }
 /*e: function iscase */

@@ -159,7 +159,7 @@ execfunc(var *func)
 /*e: function execfunc */
 
 /*s: function dochdir */
-int
+errorcodeneg1
 dochdir(char *word)
 {
     /* report to /dev/wdir if it exists and we're interactive */
@@ -167,7 +167,7 @@ dochdir(char *word)
 
     // the actual syscall
     if(chdir(word)<0) 
-        return -1;
+        return ERROR_NEG1;
 
     if(flag['i']!=nil){
         if(wdirfd==-2)	/* try only once */
@@ -177,7 +177,7 @@ dochdir(char *word)
             write(wdirfd, word, strlen(word));
         }
     }
-    return 1;
+    return OK_1;
 }
 /*e: function dochdir */
 

@@ -86,14 +86,14 @@ nxtarg(int mt)
 /*e: function nxtarg */
 
 /*s: function nxtintarg */
-int
+bool
 nxtintarg(int *pans)
 {
     if(ap<ac && isint(av[ap], pans)){
         ap++;
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 /*e: function nxtintarg */
 
@@ -137,7 +137,7 @@ e2(void)
 /*e: function e2 */
 
 /*s: function e3 */
-int
+bool
 e3(void)
 {
     int p1, int1, int2;
@@ -179,16 +179,16 @@ e3(void)
         return(tio(nxtarg(0), 0));
 
     if(EQ(a, "-c"))
-        return(0);
+        return false;
 
     if(EQ(a, "-b"))
-        return(0);
+        return false;
 
     if(EQ(a, "-u"))
-        return(0);
+        return false;
 
     if(EQ(a, "-g"))
-        return(0);
+        return false;
 
     if(EQ(a, "-s"))
         return(fsizep(nxtarg(0)));
@@ -243,12 +243,12 @@ e3(void)
     }
 
     synbad("unknown operator ",p2);
-    return 0;		/* to shut ken up */
+    return false;		/* to shut ken up */
 }
 /*e: function e3 */
 
 /*s: function tio */
-int
+bool
 tio(char *a, int f)
 {
     return access (a, f) >= 0;
@@ -262,16 +262,15 @@ tio(char *a, int f)
  * but are not included in sizeof(Dir), so copying a Dir won't
  * copy the strings it points to.
  */
-
-int
+bool
 hasmode(char *f, ulong m)
 {
-    int r;
+    bool r;
     Dir *dir;
 
     dir = dirstat(f);
     if (dir == nil)
-        return 0;
+        return false;
     r = (dir->mode & m) != 0;
     free(dir);
     return r;
@@ -279,7 +278,7 @@ hasmode(char *f, ulong m)
 /*e: function hasmode */
 
 /*s: function isdir */
-int
+bool
 isdir(char *f)
 {
     return hasmode(f, DMDIR);
@@ -287,15 +286,15 @@ isdir(char *f)
 /*e: function isdir */
 
 /*s: function isreg */
-int
+bool
 isreg(char *f)
 {
-    int r;
+    bool r;
     Dir *dir;
 
     dir = dirstat(f);
     if (dir == nil)
-        return 0;
+        return false;
     r = (dir->mode & DMDIR) == 0;
     free(dir);
     return r;
@@ -323,15 +322,15 @@ isatty(int fd)
 /*e: function isatty */
 
 /*s: function fsizep */
-int
+bool
 fsizep(char *f)
 {
-    int r;
+    bool r;
     Dir *dir;
 
     dir = dirstat(f);
     if (dir == nil)
-        return 0;
+        return false;
     r = dir->length > 0;
     free(dir);
     return r;
@@ -366,7 +365,7 @@ isint(char *s, int *pans)
 /*e: function isint */
 
 /*s: function isolder */
-int
+bool
 isolder(char *pin, char *f)
 {
     int r, rel;
@@ -376,7 +375,7 @@ isolder(char *pin, char *f)
 
     dir = dirstat(f);
     if (dir == nil)
-        return 0;
+        return false;
 
     /* parse time */
     n = 0;

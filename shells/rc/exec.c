@@ -1125,14 +1125,14 @@ getstatus(void)
 /*e: function getstatus */
 
 /*s: function truestatus */
-int
+bool
 truestatus(void)
 {
     char *s;
     for(s = getstatus();*s;s++)
         if(*s!='|' && *s!='0')
-            return 0;
-    return 1;
+            return false;
+    return true;
 }
 /*e: function truestatus */
 
