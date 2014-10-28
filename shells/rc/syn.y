@@ -50,6 +50,7 @@ cmdsa:
 cmd: 
     /*empty*/           {$$=nil;}
 |   simple              {$$=simplemung($1);}
+
 |   brace epilog        {$$=epimung($1, $2);}
 
 |   cmd ANDAND cmd      {$$=tree2(ANDAND, $1, $3);}

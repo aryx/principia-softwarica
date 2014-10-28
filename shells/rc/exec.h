@@ -23,6 +23,7 @@ extern void Xerror1(char*);
 struct Word {
     char *word;
 
+    // Extra
     word *next;
 };
 /*e: struct word */
@@ -31,6 +32,7 @@ struct List {
     // list<ref_own<Word>> (next = Word.next)
     word *words;
 
+    // Extra
     list *next;
 };
 /*e: struct list */
@@ -70,7 +72,9 @@ struct Thread {
     // list<ref_own<Var>> (next = Var.next)
     struct Var *local;		/* list of local variables */
 
+    // list<list<ref_own<word>>> (next = List.next)
     struct List *argv;		/* argument stack */
+
     struct Redir *redir;	/* redirection stack */
     struct Redir *startredir;	/* redir inheritance point */
 

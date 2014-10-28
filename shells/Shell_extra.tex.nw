@@ -1423,13 +1423,6 @@ void pfmt(io*, char*, ...);
 @
 
 
-<<struct here>>=
-struct Here {
-    tree	*tag;
-    char	*name;
-    struct Here *next;
-};
-@
 
 <<constant GLOB>>=
 /*
@@ -4857,14 +4850,16 @@ Xsimple(void)
     var *v;
     struct Builtin *bp;
     int pid;
+
     globlist();
     a = runq->argv->words;
-    if(a==0){
+    if(a==nil){
         Xerror1("empty argument list");
         return;
     }
     if(flag['x'])
         pfmt(err, "%v\n", p->argv->words); /* wrong, should do redirs */
+
     v = gvlook(a->word);
     if(v->fn)
         execfunc(v);
@@ -4950,20 +4945,6 @@ searchpath(char *w)
 }
 @
 
-<<function execexec>>=
-void
-execexec(void)
-{
-    popword();	/* "exec" */
-    if(runq->argv->words==0){
-        Xerror1("empty argument list");
-        return;
-    }
-    doredir(runq->redir);
-    Execute(runq->argv->words, searchpath(runq->argv->words->word));
-    poplist();
-}
-@
 
 <<function execfunc>>=
 void
@@ -4981,24 +4962,6 @@ execfunc(var *func)
 }
 @
 
-<<function dochdir>>=
-int
-dochdir(char *word)
-{
-    /* report to /dev/wdir if it exists and we're interactive */
-    static int wdirfd = -2;
-    if(chdir(word)<0) return -1;
-    if(flag['i']!=0){
-        if(wdirfd==-2)	/* try only once */
-            wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
-        if(wdirfd>=0) {
-            //fcntl(wdirfd, F_SETFD, FD_CLOEXEC);
-            write(wdirfd, word, strlen(word));
-        }
-    }
-    return 1;
-}
-@
 
 <<function appfile>>=
 static char *
@@ -5021,38 +4984,6 @@ appfile(char *dir, char *comp)
 
 
 
-<<function execshift>>=
-void
-execshift(void)
-{
-    int n;
-    word *a;
-    var *star;
-    switch(count(runq->argv->words)){
-    default:
-        pfmt(err, "Usage: shift [n]\n");
-        setstatus("shift usage");
-        poplist();
-        return;
-    case 2:
-        n = atoi(runq->argv->words->next->word);
-        break;
-    case 1:
-        n = 1;
-        break;
-    }
-    star = vlook("*");
-    for(;n && star->val;--n){
-        a = star->val->next;
-        efree(star->val->word);
-        efree((char *)star->val);
-        star->val = a;
-        star->changed = true;
-    }
-    setstatus("");
-    poplist();
-}
-@
 
 <<function mapfd>>=
 int
@@ -5097,246 +5028,10 @@ execcmds(io *f)
 }
 @
 
-<<function execeval>>=
-void
-execeval(void)
-{
-    char *cmdline, *s, *t;
-    int len = 0;
-    word *ap;
-    if(count(runq->argv->words)<=1){
-        Xerror1("Usage: eval cmd ...");
-        return;
-    }
-    eflagok = true;
-    for(ap = runq->argv->words->next;ap;ap = ap->next)
-        len+=1+strlen(ap->word);
-    cmdline = emalloc(len);
-    s = cmdline;
-    for(ap = runq->argv->words->next;ap;ap = ap->next){
-        for(t = ap->word;*t;) *s++=*t++;
-        *s++=' ';
-    }
-    s[-1]='\n';
-    poplist();
-    execcmds(opencore(cmdline, len));
-    efree(cmdline);
-}
-@
 
-<<global dotcmds>>=
-union Code dotcmds[14];
-@
 
-<<function execdot>>=
-void
-execdot(void)
-{
-    bool iflag = false;
-    int fd;
-    list *av;
-    thread *p = runq;
-    char *zero, *file;
-    word *path;
-    static int first = 1;
 
-    if(first){
-        dotcmds[0].i = 1;
-        dotcmds[1].f = Xmark;
-        dotcmds[2].f = Xword;
-        dotcmds[3].s="0";
-        dotcmds[4].f = Xlocal;
-        dotcmds[5].f = Xmark;
-        dotcmds[6].f = Xword;
-        dotcmds[7].s="*";
-        dotcmds[8].f = Xlocal;
-        dotcmds[9].f = Xrdcmds;
-        dotcmds[10].f = Xunlocal;
-        dotcmds[11].f = Xunlocal;
-        dotcmds[12].f = Xreturn;
-        first = 0;
-    }
-    else
-        eflagok = true;
-    popword();
-    if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
-        iflag = true;
-        popword();
-    }
-    /* get input file */
-    if(p->argv->words==0){
-        Xerror1("Usage: . [-i] file [arg ...]");
-        return;
-    }
-    zero = strdup(p->argv->words->word);
-    popword();
-    fd = -1;
-    for(path = searchpath(zero); path; path = path->next){
-        if(path->word[0] != '\0')
-            file = appfile(path->word, zero);
-        else
-            file = strdup(zero);
 
-        fd = open(file, 0);
-        free(file);
-        if(fd >= 0)
-            break;
-        if(strcmp(file, "/dev/stdin")==0){	/* for sun & ucb */
-            fd = Dup1(0);
-            if(fd>=0)
-                break;
-        }
-    }
-    if(fd<0){
-        pfmt(err, "%s: ", zero);
-        setstatus("can't open");
-        Xerror(".: can't open");
-        return;
-    }
-    /* set up for a new command loop */
-    start(dotcmds, 1, (struct Var *)0);
-    pushredir(RCLOSE, fd, 0);
-    runq->cmdfile = zero;
-    runq->cmdfd = openfd(fd);
-    runq->iflag = iflag;
-    runq->iflast = false;
-    /* push $* value */
-    pushlist();
-    runq->argv->words = p->argv->words;
-    /* free caller's copy of $* */
-    av = p->argv;
-    p->argv = av->next;
-    efree((char *)av);
-    /* push $0 value */
-    pushlist();
-    pushword(zero);
-    ndot++;
-}
-@
-%$
-
-<<function execflag>>=
-void
-execflag(void)
-{
-    char *letter, *val;
-    switch(count(runq->argv->words)){
-    case 2:
-        setstatus(flag[(uchar)runq->argv->words->next->word[0]]?"":"flag not set");
-        break;
-    case 3:
-        letter = runq->argv->words->next->word;
-        val = runq->argv->words->next->next->word;
-        if(strlen(letter)==1){
-            if(strcmp(val, "+")==0){
-                flag[(uchar)letter[0]] = flagset;
-                break;
-            }
-            if(strcmp(val, "-")==0){
-                flag[(uchar)letter[0]] = 0;
-                break;
-            }
-        }
-    default:
-        Xerror1("Usage: flag [letter] [+-]");
-        return;
-    }
-    poplist();
-}
-@
-
-<<function execwhatis>>=
-void
-execwhatis(void){	/* mildly wrong -- should fork before writing */
-    word *a, *b, *path;
-    var *v;
-    struct Builtin *bp;
-    char *file;
-    struct Io out[1];
-    int found, sep;
-    a = runq->argv->words->next;
-    if(a==0){
-        Xerror1("Usage: whatis name ...");
-        return;
-    }
-    setstatus("");
-    memset(out, 0, sizeof out);
-    out->fd = mapfd(1);
-    out->bufp = out->buf;
-    out->ebuf = &out->buf[NBUF];
-    out->strp = 0;
-    for(;a;a = a->next){
-        v = vlook(a->word);
-        if(v->val){
-            pfmt(out, "%s=", a->word);
-            if(v->val->next==0)
-                pfmt(out, "%q\n", v->val->word);
-            else{
-                sep='(';
-                for(b = v->val;b && b->word;b = b->next){
-                    pfmt(out, "%c%q", sep, b->word);
-                    sep=' ';
-                }
-                pfmt(out, ")\n");
-            }
-            found = 1;
-        }
-        else
-            found = 0;
-        v = gvlook(a->word);
-        if(v->fn)
-            pfmt(out, "fn %q %s\n", v->name, v->fn[v->pc-1].s);
-        else{
-            for(bp = Builtin;bp->name;bp++)
-                if(strcmp(a->word, bp->name)==0){
-                    pfmt(out, "builtin %s\n", a->word);
-                    break;
-                }
-            if(!bp->name){
-                for(path = searchpath(a->word); path;
-                    path = path->next){
-                    if(path->word[0] != '\0')
-                        file = appfile(path->word,
-                            a->word);
-                    else
-                        file = strdup(a->word);
-                    if(Executable(file)){
-                        pfmt(out, "%s\n", file);
-                        free(file);
-                        break;
-                    }
-                    free(file);
-                }
-                if(!path && !found){
-                    pfmt(err, "%s: not found\n", a->word);
-                    setstatus("not found");
-                }
-            }
-        }
-    }
-    poplist();
-    flush(err);
-}
-@
-
-<<function execwait>>=
-void
-execwait(void)
-{
-    switch(count(runq->argv->words)){
-    default:
-        Xerror1("Usage: wait [pid]");
-        return;
-    case 2:
-        Waitfor(atoi(runq->argv->words->next->word), 0);
-        break;
-    case 1:
-        Waitfor(-1, 0);
-        break;
-    }
-    poplist();
-}
-@
 
 
 %-------------------------------------------------------------
@@ -5464,61 +5159,6 @@ tree* heredoc(tree *tag)
 }
 @
 
-<<constant NLINE>>=
-/*
- * bug: lines longer than NLINE get split -- this can cause spurious
- * missubstitution, or a misrecognized EOF marker.
- */
-#define	NLINE	4096
-@
-
-<<function readhere>>=
-void
-readhere(void)
-{
-    int c, subst;
-    char *s, *tag;
-    char line[NLINE+1];
-    io *f;
-    struct Here *h, *nexth;
-
-    for(h = here; h; h = nexth){
-        subst = !h->tag->quoted;
-        tag = h->tag->str;
-        c = Creat(h->name);
-        if(c < 0)
-            yyerror("can't create here document");
-        f = openfd(c);
-        s = line;
-        pprompt();
-        while((c = rchr(runq->cmdfd)) != EOF){
-            if(c == '\n' || s == &line[NLINE]){
-                *s = '\0';
-                if(tag && strcmp(line, tag) == 0)
-                    break;
-                if(subst)
-                    psubst(f, (uchar *)line);
-                else
-                    pstr(f, line);
-                s = line;
-                if(c == '\n'){
-                    pprompt();
-                    pchr(f, c);
-                }else
-                    *s++ = c;
-            }else
-                *s++ = c;
-        }
-        flush(f);
-        closeio(f);
-        cleanhere(h->name);
-        nexth = h->next;
-        efree((char *)h);
-    }
-    here = 0;
-    doprompt = true;
-}
-@
 
 <<function psubst>>=
 void
@@ -5588,6 +5228,8 @@ pstrs(io *f, word *a)
 
 %-------------------------------------------------------------
 
+
+
 <<rc/here.c>>=
 #include "rc.h"
 #include "exec.h"
@@ -5595,7 +5237,8 @@ pstrs(io *f, word *a)
 #include "fns.h"
 #include "x.tab.h"
 
-struct Here *here, **ehere;
+<<global here>>
+<<global ehere>>
 <<global ser>>
 <<global tmp (rc/here.c)>>
 <<global hex>>
@@ -5631,30 +5274,7 @@ void pstrs(io*, word*);
 #define	c2	t->child[2]
 @
 
-<<function emitf>>=
-#define	emitf(x) ((codep!=ncode || morecode()), codebuf[codep].f = (x), codep++)
-@
 
-<<function emiti>>=
-#define	emiti(x) ((codep!=ncode || morecode()), codebuf[codep].i = (x), codep++)
-@
-
-<<function emits>>=
-#define	emits(x) ((codep!=ncode || morecode()), codebuf[codep].s = (x), codep++)
-@
-
-<<function morecode>>=
-//@Scheck: used by the macros above (why marked as dead then??? TODO)
-int morecode(void)
-{
-    ncode+=100;
-    codebuf = (code *)realloc((char *)codebuf, ncode*sizeof codebuf[0]);
-    if(codebuf==0)
-        panic("Can't realloc %d bytes in morecode!",
-                ncode*sizeof codebuf[0]);
-    return 0;
-}
-@
 
 <<function stuffdot>>=
 void
@@ -5806,6 +5426,7 @@ codefree(code *cp)
 
 %-------------------------------------------------------------
 
+
 <<rc/code.c>>=
 #include "rc.h"
 #include "io.h"
@@ -5817,7 +5438,8 @@ codefree(code *cp)
 <<constant c0 (rc/code.c)>>
 <<constant c1 (rc/code.c)>>
 <<constant c2 (rc/code.c)>>
-int codep, ncode;
+<<global codep>>
+<<global ncode>>
 <<function emitf>>
 <<function emiti>>
 <<function emits>>

@@ -23,7 +23,7 @@
 % - put all content of files in the Extra section, via 'pfff -lpize'
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
-%    * TODO ctor/dtor
+%    * TODO ctor/dtor, builtin, opcode
 % - TODO read Extra section, identify concepts, first TOC
 % - TODO distribute parts of the file before
 % - TODO nullify, boolify, typeify,    scheckify
@@ -176,6 +176,12 @@ License.
 % part of OS. With unix it changed and shell can be a regular
 % user program which then opened the way for complex job control language.
 
+
+% cf stevens book, shell basis = readline, fork, exec, wait!
+% and to handle pipe and redirection it's little variations
+
+% do a minishell before showing rc?
+
 \section{[[rc]] services}
 
 % run command
@@ -194,8 +200,31 @@ License.
 
 \section{Code organization}
 
-% getflags.c: getopt + specific
-% io.c: fmt + specific
+%getflags.c: getopt + specific flag setting
+%io.c: fmt + buffered IO + specific debug
+%pcmd.c: debugging
+%pfnc.c: debugging
+
+%plan9.c: for portability
+
+%globals.c:
+%subr.c: routines
+
+%tree.c: AST helpers
+%lex.c: lexer
+%syn.y: parser
+%code.c: opcode generation from tree
+%exec.c: opcode intepreter 
+%simple.c: Xsimple opcode interpreter, and builtins
+%havefork.c: opcodes related to process (Xpipe, Xasync, etc)
+
+%here.c: here document feature
+%glob.c: globbing?
+%trap.c: interrupt
+%var.c: variables
+
+
+
 
 \section{Architecture overview}
 
@@ -219,6 +248,8 @@ License.
 %Xxxx? bytecode?
 %execxxx? builtins?
 
+
+% chapter with a simple traduction of a simple command? like 'ls /' ?
 
 %###############################################################################
 
@@ -397,9 +428,75 @@ code *codebuf;				/* compiler output */
 % first element is a reference count, which is why codecopy()
 % does cp[0].i++;
 
-
 % show bootstrap code?
 % or show trace of rc -r ?
+
+
+% * Opcode routines
+% * Arguments on stack (...)
+% * Arguments in line [...]
+% * Code in line with jump around {...}
+
+
+% * Xsimple(args)			run command and wait
+
+% * Xmark				mark stack
+% * Xword[string]			push string
+% * Xpopm(value)			pop value from stack
+
+% * Xcount(name)			push var count
+% * Xconc(left, right)			concatenate, push results
+
+% * Xassign(name, val)			assign val to name
+% * Xlocal(name, val)			create local variable, assign value
+% * Xunlocal				delete local variable
+% * Xdol(name)				get variable value
+
+% * Xexit				rc exits with status
+% * Xreturn				kill thread
+% * Xerror
+
+% * Xread(file)[fd]			open file to read
+% * Xwrite(file)[fd]			open file to write
+% * Xrdwr(file)[fd]			open file for reading and writing
+% * Xappend(file)[fd]			open file to append
+% * Xclose[i]				close file descriptor
+% * Xdup[i j]				dup file descriptor
+
+% * Xif
+% * Xifnot
+% * Xbang				complement condition
+% * Xwastrue
+% * Xfalse{...}				execute {} if false
+% * Xtrue{...}				execute {} if true
+% * Xcase(pat, value){...}		exec code on match, leave (value) on stack
+% * Xmatch(pat, str)			match pattern, set status
+% * Xfor(var, list){... Xreturn}	for loop
+% * Xjump[addr]				goto
+
+% * Xpipe[i j]{... Xreturn}{... Xreturn}	construct a pipe between 2 new threads,	wait for both
+% * Xpipefd[type]{... Xreturn}		connect {} to pipe (input or output, depending on type), push /dev/fd/??
+
+% * Xfn(name){... Xreturn}			define function
+% * Xdelfn(name)				delete function definition
+
+% * Xsubshell{... Xexit}		execute {} in a subshell and wait
+% * Xasync{... Xexit}			make thread for {}, no wait
+% * Xbackq{... Xreturn}			make thread for {}, push stdout
+
+% * Xglob
+
+% * Xdelhere
+% * Xeflag
+% * Xpipewait
+% * Xpopredir
+% * Xrdcmds
+% * Xrdfn
+% * Xqdol(name)				concatenate variable components
+% * Xsub
+
+% list of opcodes with comments were in exec.c but sorted alphabetically
+% better to group them for explanation
 
 \section{[[Thread]] and [[runq]]}
 % manage subprocesses
@@ -414,7 +511,9 @@ struct Thread {
     // list<ref_own<Var>> (next = Var.next)
     struct Var *local;		/* list of local variables */
 
+    // list<list<ref_own<word>>> (next = List.next)
     struct List *argv;		/* argument stack */
+
     struct Redir *redir;	/* redirection stack */
     struct Redir *startredir;	/* redir inheritance point */
 
@@ -449,6 +548,7 @@ thread *runq;
 struct Word {
     char *word;
 
+    // Extra
     word *next;
 };
 @
@@ -489,6 +589,7 @@ struct List {
     // list<ref_own<Word>> (next = Word.next)
     word *words;
 
+    // Extra
     list *next;
 };
 @
@@ -496,6 +597,20 @@ struct List {
 
 % see pushlist() below
 
+<<function pushlist>>=
+void
+pushlist(void)
+{
+    list *p = new(list);
+    p->next = runq->argv;
+    p->words = nil;
+    runq->argv = p;
+}
+@
+
+% this list is actually manipulatd by Xmark, etc
+% so runq->argv is the argument to the opcodes, not just
+% to the simple command!
 
 
 \section{[[Var]] and [[gvar]]}
@@ -676,7 +791,7 @@ setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
 setvar("rcname", newword(argv[0], (word *)nil));
 @
 
-\section{Bootstrapping}
+\section{Bootstrapping opcodes}
 
 \ifallcode
 <<[[main()]] locals>>=
@@ -693,20 +808,28 @@ memset(bootstrap, 0, sizeof bootstrap);
 i = 0;
 bootstrap[i++].i = 1; // reference count
 bootstrap[i++].f = Xmark;
+
 bootstrap[i++].f = Xword;
 bootstrap[i++].s="*";
+
 bootstrap[i++].f = Xassign;
 bootstrap[i++].f = Xmark;
 bootstrap[i++].f = Xmark;
+
 bootstrap[i++].f = Xword;
 bootstrap[i++].s="*";
+
 bootstrap[i++].f = Xdol;
+
 bootstrap[i++].f = Xword;
 bootstrap[i++].s = rcmain;
+
 bootstrap[i++].f = Xword;
 bootstrap[i++].s=".";
+
 bootstrap[i++].f = Xsimple;
 bootstrap[i++].f = Xexit;
+
 bootstrap[i].i = 0;
 @
 
@@ -763,16 +886,6 @@ for(i = argc-1;i!=0;--i)
 @
 
 
-<<function pushlist>>=
-void
-pushlist(void)
-{
-    list *p = new(list);
-    p->next = runq->argv;
-    p->words = nil;
-    runq->argv = p;
-}
-@
 
 <<function pushword>>=
 void
@@ -784,7 +897,7 @@ pushword(char *wd)
 }
 @
 
-\section{Interpreter loop}
+\section{Opcode interpreter loop}
 
 \chapter{Lexing}
 % why not using lex?
@@ -1280,9 +1393,6 @@ klook(char *name)
 
 \section{Strings}
 
-\section{Here documents}
-
-
 \chapter{Parsing}
 
 \section{Overview}
@@ -1347,6 +1457,7 @@ cmdsa:
 cmd: 
     /*empty*/           {$$=nil;}
 |   simple              {$$=simplemung($1);}
+
 |   brace epilog        {$$=epimung($1, $2);}
 
 |   cmd ANDAND cmd      {$$=tree2(ANDAND, $1, $3);}
@@ -1455,15 +1566,34 @@ words:
 
 \section{Simple commands}
 
+\section{Operators}
+% && ||  |  &  !?
+% >> << > <
+
 \section{Statements}
+
+\section{XXX}
 
 \chapter{Opcode Generation}
 % in shell context???
 % or Code generation? or Bytecode generation?
+% or merge Opcode Generation and Intepretation?
+% because helps to see the code generated from a tree
 
 \section{Overview}
 
 \section{[[compile()]]}
+
+% see codebuf in Core DS chapter (could be moved here too)
+
+<<global codep>>=
+// idx in codebuf
+int codep;
+@
+
+<<global ncode>>=
+int ncode;
+@
 
 % return 0 for error 1 for ok
 <<function compile>>=
@@ -1471,8 +1601,9 @@ words:
 int compile(tree *t)
 {
     ncode = 100;
-    codebuf = (code *)emalloc(ncode*sizeof(code));
     codep = 0;
+    codebuf = (code *)emalloc(ncode*sizeof(code));
+
     emiti(0);			/* reference count */
 
     outcode(t, flag['e'] ? true : false);
@@ -1483,15 +1614,45 @@ int compile(tree *t)
     }
 
     readhere();
+
     emitf(Xreturn);
-    emitf(0);
+    emitf(nil);
 
     return 1;
 }
 @
 
+<<function emiti>>=
+#define	emiti(x) ((codep!=ncode || morecode()), codebuf[codep].i = (x), codep++)
+@
+% return codep before! so can store for creating jmp
+
+<<function emitf>>=
+#define	emitf(x) ((codep!=ncode || morecode()), codebuf[codep].f = (x), codep++)
+@
+
+<<function emits>>=
+#define	emits(x) ((codep!=ncode || morecode()), codebuf[codep].s = (x), codep++)
+@
+
+
+% growing array
+<<function morecode>>=
+//@Scheck: used by the macros above (why marked as dead then??? TODO)
+int morecode(void)
+{
+    ncode+=100;
+    codebuf = (code *)realloc((char *)codebuf, ncode*sizeof codebuf[0]);
+    if(codebuf==nil)
+        panic("Can't realloc %d bytes in morecode!", ncode*sizeof(code));
+    return 0;
+}
+@
+
+
 \section{[[outcode()]]}
 
+% modify codebuf via all those emitxxx()
 <<function outcode>>=
 void
 outcode(tree *t, bool eflag)
@@ -1505,6 +1666,15 @@ outcode(tree *t, bool eflag)
         runq->iflast = false;
 
     switch(t->type){
+    case SIMPLE:
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xsimple);
+        if(eflag)
+            emitf(Xeflag);
+        break;
+
+
     case '$': //$
         emitf(Xmark);
         outcode(c0, eflag);
@@ -1515,6 +1685,7 @@ outcode(tree *t, bool eflag)
         outcode(c0, eflag);
         emitf(Xqdol);
         break;
+
     case SUB:
         emitf(Xmark);
         outcode(c0, eflag);
@@ -1522,6 +1693,7 @@ outcode(tree *t, bool eflag)
         outcode(c1, eflag);
         emitf(Xsub);
         break;
+
     case '&':
         emitf(Xasync);
         if(havefork){
@@ -1536,6 +1708,7 @@ outcode(tree *t, bool eflag)
         outcode(c0, eflag);
         outcode(c1, eflag);
         break;
+
     case '^':
         emitf(Xmark);
         outcode(c1, eflag);
@@ -1553,6 +1726,7 @@ outcode(tree *t, bool eflag)
         } else
             emits(fnstr(c0));
         break;
+
     case ANDAND:
         outcode(c0, false);
         emitf(Xtrue);
@@ -1560,14 +1734,24 @@ outcode(tree *t, bool eflag)
         outcode(c1, eflag);
         stuffdot(p);
         break;
+    case OROR:
+        outcode(c0, 0);
+        emitf(Xfalse);
+        p = emiti(0);
+        outcode(c1, eflag);
+        stuffdot(p);
+        break;
+
     case ARGLIST:
         outcode(c1, eflag);
         outcode(c0, eflag);
         break;
+
     case BANG:
         outcode(c0, eflag);
         emitf(Xbang);
         break;
+
     case PCMD:
     case BRACE:
         outcode(c0, eflag);
@@ -1592,6 +1776,7 @@ outcode(tree *t, bool eflag)
         else
             emitf(Xdelfn);
         break;
+
     case IF:
         outcode(c0, false);
         emitf(Xif);
@@ -1608,23 +1793,12 @@ outcode(tree *t, bool eflag)
         outcode(c0, eflag);
         stuffdot(p);
         break;
-    case OROR:
-        outcode(c0, 0);
-        emitf(Xfalse);
-        p = emiti(0);
-        outcode(c1, eflag);
-        stuffdot(p);
-        break;
+
     case PAREN:
         outcode(c0, eflag);
         break;
-    case SIMPLE:
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xsimple);
-        if(eflag)
-            emitf(Xeflag);
-        break;
+
+
     case SUBSHELL:
         emitf(Xsubshell);
         if(havefork){
@@ -1637,9 +1811,11 @@ outcode(tree *t, bool eflag)
         if(eflag)
             emitf(Xeflag);
         break;
+
     case SWITCH:
         codeswitch(t, eflag);
         break;
+
     case TWIDDLE:
         emitf(Xmark);
         outcode(c1, eflag);
@@ -1649,6 +1825,7 @@ outcode(tree *t, bool eflag)
         if(eflag)
             emitf(Xeflag);
         break;
+
     case WHILE:
         q = codep;
         outcode(c0, false);
@@ -1661,10 +1838,12 @@ outcode(tree *t, bool eflag)
         emiti(q);
         stuffdot(p);
         break;
+
     case WORDS:
         outcode(c1, eflag);
         outcode(c0, eflag);
         break;
+
     case FOR:
         emitf(Xmark);
         if(c1){
@@ -1689,10 +1868,12 @@ outcode(tree *t, bool eflag)
         stuffdot(q);
         emitf(Xunlocal);
         break;
+
     case WORD:
         emitf(Xword);
         emits(strdup(t->str));
         break;
+
     case DUP:
         if(t->rtype==DUPFD){
             emitf(Xdup);
@@ -1706,6 +1887,7 @@ outcode(tree *t, bool eflag)
         outcode(c1, eflag);
         emitf(Xpopredir);
         break;
+
     case PIPEFD:
         emitf(Xpipefd);
         emiti(t->rtype);
@@ -1718,6 +1900,7 @@ outcode(tree *t, bool eflag)
             emits(fnstr(c0));
         }
         break;
+
     case REDIR:
         emitf(Xmark);
         outcode(c0, eflag);
@@ -1741,6 +1924,7 @@ outcode(tree *t, bool eflag)
         outcode(c1, eflag);
         emitf(Xpopredir);
         break;
+
     case '=':
         tt = t;
         for(;t && t->type=='=';t = c2);
@@ -1767,6 +1951,7 @@ outcode(tree *t, bool eflag)
         }
         t = tt;	/* so tests below will work */
         break;
+
     case PIPE:
         emitf(Xpipe);
         emiti(t->fd0);
@@ -1786,6 +1971,7 @@ outcode(tree *t, bool eflag)
         stuffdot(q);
         emitf(Xpipewait);
         break;
+
     default:
         pfmt(err, "bad type %d in outcode\n", t->type);
         break;
@@ -1793,7 +1979,9 @@ outcode(tree *t, bool eflag)
 
     if(t->type!=NOT && t->type!=';')
         runq->iflast = t->type==IF;
-    else if(c0) runq->iflast = c0->type==IF;
+    else 
+       if(c0) 
+           runq->iflast = c0->type==IF;
 }
 @
 %$
@@ -1837,13 +2025,14 @@ struct Redir {
 <<global Builtin>>=
 builtin Builtin[] = {
     "cd",		execcd,
-    "whatis",		execwhatis,
-    "eval",		execeval,
-    "exec",		execexec,	/* but with popword first */
     "exit",		execexit,
+    "exec",		execexec,	/* but with popword first */
+    ".",		execdot,
+    "eval",		execeval,
+    "whatis",		execwhatis,
+
     "shift",		execshift,
     "wait",		execwait,
-    ".",		execdot,
     "finit",		execfinit,
     "flag",		execflag,
     "rfork",		execnewpgrp,
@@ -1851,7 +2040,8 @@ builtin Builtin[] = {
 };
 @
 
-\section{[[cd]]}
+\section{[[$ cd]]}
+%$
 
 <<function execcd>>=
 void
@@ -1906,7 +2096,28 @@ execcd(void)
 @
 %$
 
-\section{[[exit]]}
+
+<<function dochdir>>=
+int
+dochdir(char *word)
+{
+    /* report to /dev/wdir if it exists and we're interactive */
+    static int wdirfd = -2;
+    if(chdir(word)<0) return -1;
+    if(flag['i']!=0){
+        if(wdirfd==-2)	/* try only once */
+            wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
+        if(wdirfd>=0) {
+            //fcntl(wdirfd, F_SETFD, FD_CLOEXEC);
+            write(wdirfd, word, strlen(word));
+        }
+    }
+    return 1;
+}
+@
+
+\section{[[$ exit]]}
+%$
 
 <<function execexit>>=
 void
@@ -1922,9 +2133,224 @@ execexit(void)
 }
 @
 
-\section{[[.]]}
+\section{[[$ exec]]}
+%$
 
-\section{[[eval]]}
+<<function execexec>>=
+void
+execexec(void)
+{
+    popword();	/* "exec" */
+    if(runq->argv->words==0){
+        Xerror1("empty argument list");
+        return;
+    }
+    doredir(runq->redir);
+    Execute(runq->argv->words, searchpath(runq->argv->words->word));
+    poplist();
+}
+@
+
+\section{[[$ .]]}
+%$ 
+
+<<global dotcmds>>=
+union Code dotcmds[14];
+@
+
+<<function execdot>>=
+void
+execdot(void)
+{
+    bool iflag = false;
+    int fd;
+    list *av;
+    thread *p = runq;
+    char *zero, *file;
+    word *path;
+    static int first = 1;
+
+    if(first){
+        dotcmds[0].i = 1;
+        dotcmds[1].f = Xmark;
+        dotcmds[2].f = Xword;
+        dotcmds[3].s="0";
+        dotcmds[4].f = Xlocal;
+        dotcmds[5].f = Xmark;
+        dotcmds[6].f = Xword;
+        dotcmds[7].s="*";
+        dotcmds[8].f = Xlocal;
+        dotcmds[9].f = Xrdcmds;
+        dotcmds[10].f = Xunlocal;
+        dotcmds[11].f = Xunlocal;
+        dotcmds[12].f = Xreturn;
+        first = 0;
+    }
+    else
+        eflagok = true;
+    popword();
+    if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
+        iflag = true;
+        popword();
+    }
+    /* get input file */
+    if(p->argv->words==0){
+        Xerror1("Usage: . [-i] file [arg ...]");
+        return;
+    }
+    zero = strdup(p->argv->words->word);
+    popword();
+    fd = -1;
+    for(path = searchpath(zero); path; path = path->next){
+        if(path->word[0] != '\0')
+            file = appfile(path->word, zero);
+        else
+            file = strdup(zero);
+
+        fd = open(file, 0);
+        free(file);
+        if(fd >= 0)
+            break;
+        if(strcmp(file, "/dev/stdin")==0){	/* for sun & ucb */
+            fd = Dup1(0);
+            if(fd>=0)
+                break;
+        }
+    }
+    if(fd<0){
+        pfmt(err, "%s: ", zero);
+        setstatus("can't open");
+        Xerror(".: can't open");
+        return;
+    }
+    /* set up for a new command loop */
+    start(dotcmds, 1, (struct Var *)0);
+    pushredir(RCLOSE, fd, 0);
+    runq->cmdfile = zero;
+    runq->cmdfd = openfd(fd);
+    runq->iflag = iflag;
+    runq->iflast = false;
+    /* push $* value */
+    pushlist();
+    runq->argv->words = p->argv->words;
+    /* free caller's copy of $* */
+    av = p->argv;
+    p->argv = av->next;
+    efree((char *)av);
+    /* push $0 value */
+    pushlist();
+    pushword(zero);
+    ndot++;
+}
+@
+%$
+
+\section{[[$ eval]]}
+%$
+
+<<function execeval>>=
+void
+execeval(void)
+{
+    char *cmdline, *s, *t;
+    int len = 0;
+    word *ap;
+    if(count(runq->argv->words)<=1){
+        Xerror1("Usage: eval cmd ...");
+        return;
+    }
+    eflagok = true;
+    for(ap = runq->argv->words->next;ap;ap = ap->next)
+        len+=1+strlen(ap->word);
+    cmdline = emalloc(len);
+    s = cmdline;
+    for(ap = runq->argv->words->next;ap;ap = ap->next){
+        for(t = ap->word;*t;) *s++=*t++;
+        *s++=' ';
+    }
+    s[-1]='\n';
+    poplist();
+    execcmds(opencore(cmdline, len));
+    efree(cmdline);
+}
+@
+
+\section{[[$ whatis]]}
+%$
+
+<<function execwhatis>>=
+void
+execwhatis(void){	/* mildly wrong -- should fork before writing */
+    word *a, *b, *path;
+    var *v;
+    struct Builtin *bp;
+    char *file;
+    struct Io out[1];
+    int found, sep;
+    a = runq->argv->words->next;
+    if(a==0){
+        Xerror1("Usage: whatis name ...");
+        return;
+    }
+    setstatus("");
+    memset(out, 0, sizeof out);
+    out->fd = mapfd(1);
+    out->bufp = out->buf;
+    out->ebuf = &out->buf[NBUF];
+    out->strp = 0;
+    for(;a;a = a->next){
+        v = vlook(a->word);
+        if(v->val){
+            pfmt(out, "%s=", a->word);
+            if(v->val->next==0)
+                pfmt(out, "%q\n", v->val->word);
+            else{
+                sep='(';
+                for(b = v->val;b && b->word;b = b->next){
+                    pfmt(out, "%c%q", sep, b->word);
+                    sep=' ';
+                }
+                pfmt(out, ")\n");
+            }
+            found = 1;
+        }
+        else
+            found = 0;
+        v = gvlook(a->word);
+        if(v->fn)
+            pfmt(out, "fn %q %s\n", v->name, v->fn[v->pc-1].s);
+        else{
+            for(bp = Builtin;bp->name;bp++)
+                if(strcmp(a->word, bp->name)==0){
+                    pfmt(out, "builtin %s\n", a->word);
+                    break;
+                }
+            if(!bp->name){
+                for(path = searchpath(a->word); path;
+                    path = path->next){
+                    if(path->word[0] != '\0')
+                        file = appfile(path->word,
+                            a->word);
+                    else
+                        file = strdup(a->word);
+                    if(Executable(file)){
+                        pfmt(out, "%s\n", file);
+                        free(file);
+                        break;
+                    }
+                    free(file);
+                }
+                if(!path && !found){
+                    pfmt(err, "%s: not found\n", a->word);
+                    setstatus("not found");
+                }
+            }
+        }
+    }
+    poplist();
+    flush(err);
+}
+@
 
 \section{Other builtins]}
 
@@ -1980,6 +2406,88 @@ execnewpgrp(void)
 }
 @
 
+
+<<function execwait>>=
+void
+execwait(void)
+{
+    switch(count(runq->argv->words)){
+    default:
+        Xerror1("Usage: wait [pid]");
+        return;
+    case 2:
+        Waitfor(atoi(runq->argv->words->next->word), 0);
+        break;
+    case 1:
+        Waitfor(-1, 0);
+        break;
+    }
+    poplist();
+}
+@
+
+<<function execflag>>=
+void
+execflag(void)
+{
+    char *letter, *val;
+    switch(count(runq->argv->words)){
+    case 2:
+        setstatus(flag[(uchar)runq->argv->words->next->word[0]]?"":"flag not set");
+        break;
+    case 3:
+        letter = runq->argv->words->next->word;
+        val = runq->argv->words->next->next->word;
+        if(strlen(letter)==1){
+            if(strcmp(val, "+")==0){
+                flag[(uchar)letter[0]] = flagset;
+                break;
+            }
+            if(strcmp(val, "-")==0){
+                flag[(uchar)letter[0]] = 0;
+                break;
+            }
+        }
+    default:
+        Xerror1("Usage: flag [letter] [+-]");
+        return;
+    }
+    poplist();
+}
+@
+
+<<function execshift>>=
+void
+execshift(void)
+{
+    int n;
+    word *a;
+    var *star;
+    switch(count(runq->argv->words)){
+    default:
+        pfmt(err, "Usage: shift [n]\n");
+        setstatus("shift usage");
+        poplist();
+        return;
+    case 2:
+        n = atoi(runq->argv->words->next->word);
+        break;
+    case 1:
+        n = 1;
+        break;
+    }
+    star = vlook("*");
+    for(;n && star->val;--n){
+        a = star->val->next;
+        efree(star->val->word);
+        efree((char *)star->val);
+        star->val = a;
+        star->changed = true;
+    }
+    setstatus("");
+    poplist();
+}
+@
 
 \chapter{Variables}
 
@@ -2373,6 +2881,82 @@ dotrap(void)
 
 
 \chapter{Advanced Topics}
+
+\section{Here documents}
+
+<<struct here>>=
+struct Here {
+    tree	*tag;
+    char	*name;
+    struct Here *next;
+};
+@
+
+<<global here>>=
+struct Here *here;
+@
+
+
+<<global ehere>>=
+struct Here **ehere;
+@
+
+
+<<constant NLINE>>=
+/*
+ * bug: lines longer than NLINE get split -- this can cause spurious
+ * missubstitution, or a misrecognized EOF marker.
+ */
+#define	NLINE	4096
+@
+
+<<function readhere>>=
+void
+readhere(void)
+{
+    int c, subst;
+    char *s, *tag;
+    char line[NLINE+1];
+    io *f;
+    struct Here *h, *nexth;
+
+    for(h = here; h; h = nexth){
+        subst = !h->tag->quoted;
+        tag = h->tag->str;
+        c = Creat(h->name);
+        if(c < 0)
+            yyerror("can't create here document");
+        f = openfd(c);
+        s = line;
+        pprompt();
+        while((c = rchr(runq->cmdfd)) != EOF){
+            if(c == '\n' || s == &line[NLINE]){
+                *s = '\0';
+                if(tag && strcmp(line, tag) == 0)
+                    break;
+                if(subst)
+                    psubst(f, (uchar *)line);
+                else
+                    pstr(f, line);
+                s = line;
+                if(c == '\n'){
+                    pprompt();
+                    pchr(f, c);
+                }else
+                    *s++ = c;
+            }else
+                *s++ = c;
+        }
+        flush(f);
+        closeio(f);
+        cleanhere(h->name);
+        nexth = h->next;
+        efree((char *)h);
+    }
+    here = nil;
+    doprompt = true;
+}
+@
 
 \chapter{Conclusion}
 

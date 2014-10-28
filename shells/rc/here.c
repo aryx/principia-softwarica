@@ -5,7 +5,12 @@
 #include "fns.h"
 #include "x.tab.h"
 
-struct Here *here, **ehere;
+/*s: global here */
+struct Here *here;
+/*e: global here */
+/*s: global ehere */
+struct Here **ehere;
+/*e: global ehere */
 /*s: global ser */
 int ser = 0;
 /*e: global ser */
@@ -103,7 +108,7 @@ readhere(void)
         nexth = h->next;
         efree((char *)h);
     }
-    here = 0;
+    here = nil;
     doprompt = true;
 }
 /*e: function readhere */

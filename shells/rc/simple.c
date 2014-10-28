@@ -33,14 +33,16 @@ Xsimple(void)
     var *v;
     struct Builtin *bp;
     int pid;
+
     globlist();
     a = runq->argv->words;
-    if(a==0){
+    if(a==nil){
         Xerror1("empty argument list");
         return;
     }
     if(flag['x'])
         pfmt(err, "%v\n", p->argv->words); /* wrong, should do redirs */
+
     v = gvlook(a->word);
     if(v->fn)
         execfunc(v);

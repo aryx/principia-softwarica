@@ -208,20 +208,28 @@ void main(int argc, char *argv[])
     i = 0;
     bootstrap[i++].i = 1; // reference count
     bootstrap[i++].f = Xmark;
+
     bootstrap[i++].f = Xword;
     bootstrap[i++].s="*";
+
     bootstrap[i++].f = Xassign;
     bootstrap[i++].f = Xmark;
     bootstrap[i++].f = Xmark;
+
     bootstrap[i++].f = Xword;
     bootstrap[i++].s="*";
+
     bootstrap[i++].f = Xdol;
+
     bootstrap[i++].f = Xword;
     bootstrap[i++].s = rcmain;
+
     bootstrap[i++].f = Xword;
     bootstrap[i++].s=".";
+
     bootstrap[i++].f = Xsimple;
     bootstrap[i++].f = Xexit;
+
     bootstrap[i].i = 0;
     /*e: [[main()]] initialize [[boostrap]] */
 
