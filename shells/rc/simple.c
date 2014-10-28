@@ -514,7 +514,7 @@ execwhatis(void){	/* mildly wrong -- should fork before writing */
     out->fd = mapfd(1);
     out->bufp = out->buf;
     out->ebuf = &out->buf[NBUF];
-    out->strp = 0;
+    out->strp = nil;
     for(;a;a = a->next){
         v = vlook(a->word);
         if(v->val){

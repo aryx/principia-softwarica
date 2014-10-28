@@ -209,14 +209,13 @@ void main(int argc, char *argv[])
     i = 0;
     bootstrap[i++].i = 1; // reference count
     bootstrap[i++].f = Xmark;
-
     bootstrap[i++].f = Xrdcmds;
     /*e: [[main()]] initialize [[boostrap]] */
     /*s: [[main()]] initialize runq with bootstrap code */
     start(bootstrap, 1, (var *)nil);
     /*x: [[main()]] initialize runq with bootstrap code */
-    runq->cmdfd = openfd(0);
-    runq->iflag = true;
+    runq->cmdfd = openfd(0); // reading from stdin
+    runq->iflag = true; // interactive mode; will print a prompt
     /*e: [[main()]] initialize runq with bootstrap code */
     /*s: [[main()]] initialize runq->argv */
     /* prime bootstrap argv */

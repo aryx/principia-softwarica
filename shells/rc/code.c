@@ -100,16 +100,16 @@ cleanhere(char *f)
 char*
 fnstr(tree *t)
 {
-    io *f = openstr();
     void *v;
     extern char nl;
     char svnl = nl;
+    io *f = openstr();
 
     nl = ';';
     pfmt(f, "%t", t);
     nl = svnl;
     v = f->strp;
-    f->strp = 0;
+    f->strp = nil;
     closeio(f);
     return v;
 }

@@ -200,6 +200,8 @@ License.
 
 % -r => debug opcodes output (convenient)
 
+% -e??
+
 \section{Input shell language}
 
 % rc PL
@@ -211,8 +213,8 @@ License.
 
 %getflags.c: getopt + specific flag setting
 %io.c: fmt + buffered IO + specific debug
-%pcmd.c: debugging (?)
-%pfnc.c: debugging (runq and opcode)
+%pcmd.c: debugging (tree) (should rename file and function name)
+%pfnc.c: debugging (runq and opcode) (should rename file too)
 
 %plan9.c: for portability
 
@@ -852,6 +854,8 @@ int i;
 % Xrdcmds (which will call yyparse()->compile()->outcode()
 %  which will read a line, compile it, and add a Xreturn
 
+%when want to experiment with simplified bootstrap
+% (don't forget to also modify mkfile and put 'rc2' for TARG
 %OPTIONAL
 <<[[main()]] initialize [[boostrap]]>>=
 memset(bootstrap, 0, sizeof bootstrap);
@@ -859,11 +863,10 @@ memset(bootstrap, 0, sizeof bootstrap);
 i = 0;
 bootstrap[i++].i = 1; // reference count
 bootstrap[i++].f = Xmark;
-
 bootstrap[i++].f = Xrdcmds;
 @
-
-
+%less: Xmark necessary?
+% 1 to reference count? why? they put 0 in compile() for new opcodes
 
 \section{Setting [[runq]]}
 % [[start()]]
@@ -959,8 +962,8 @@ bool iflag;		/* interactive? */
 
 %OPTIONAL
 <<[[main()]] initialize runq with bootstrap code>>=
-runq->cmdfd = openfd(0);
-runq->iflag = true;
+runq->cmdfd = openfd(0); // reading from stdin
+runq->iflag = true; // interactive mode; will print a prompt
 @
 
 
@@ -1123,11 +1126,6 @@ advance(void)
 @
 
 
-<<global doprompt>>=
-bool doprompt = true;
-@
-
-
 
 <<function nextis>>=
 bool
@@ -1147,6 +1145,11 @@ nextis(int c)
 <<global promptstr>>=
 char *promptstr;
 @
+
+<<global doprompt>>=
+bool doprompt = true;
+@
+
 
 
 \section{[[yylex()]]}
@@ -2146,6 +2149,8 @@ struct Redir {
 
 \section{Overview}
 
+% called from Xsimple when first word is actually recognized as a builtin
+
 % plan9.c
 <<global Builtin>>=
 builtin Builtin[] = {
@@ -2478,7 +2483,7 @@ execwhatis(void){	/* mildly wrong -- should fork before writing */
     out->fd = mapfd(1);
     out->bufp = out->buf;
     out->ebuf = &out->buf[NBUF];
-    out->strp = 0;
+    out->strp = nil;
     for(;a;a = a->next){
         v = vlook(a->word);
         if(v->val){
@@ -2671,11 +2676,11 @@ execshift(void)
 @
 
 \chapter{Variables}
+% and function definition?
 
 % diff with bash here, see rc design document
 
 %$#x
-
 
 \chapter{Globbing}
 % mv in advanced topics?
@@ -3215,6 +3220,7 @@ readhere(void)
 
 \chapter{Debugging}
 
+\section{[[rc -???]] printing AST}
 
 % pcmd.c
 
@@ -3234,6 +3240,7 @@ char nl='\n';		/* change to semicolon for bourne-proofing */
 #define	c2	t->child[2]
 @
 
+% called from pfmt %t
 <<function pcmd>>=
 void
 pcmd(io *f, tree *t)
@@ -3430,6 +3437,7 @@ struct{
 @
 
 % fnc??
+% called from main interpreter loop, also called from pfmt %?
 <<function pfnc>>=
 void
 pfnc(io *fd, thread *t)
@@ -3658,12 +3666,15 @@ pfmt(io *f, char *fmt, ...)
         case 's':
             pstr(f, va_arg(ap, char *));
             break;
+
+        // rc specific
         case 't':
             pcmd(f, va_arg(ap, struct Tree *));
             break;
         case 'v':
             pval(f, va_arg(ap, struct Word *));
             break;
+
         default:
             pchr(f, *fmt);
             break;
@@ -3674,7 +3685,7 @@ pfmt(io *f, char *fmt, ...)
         flush(f);
 }
 @
-
+% could add 'x' pcmd for the opcode
 
 \section{String conversions}
 

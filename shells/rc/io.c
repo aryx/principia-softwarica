@@ -63,12 +63,15 @@ pfmt(io *f, char *fmt, ...)
         case 's':
             pstr(f, va_arg(ap, char *));
             break;
+
+        // rc specific
         case 't':
             pcmd(f, va_arg(ap, struct Tree *));
             break;
         case 'v':
             pval(f, va_arg(ap, struct Word *));
             break;
+
         default:
             pchr(f, *fmt);
             break;
