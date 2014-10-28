@@ -65,6 +65,7 @@ struct Tree {
 
     // enum<token_kind>
     int	type;
+
     char *str;
 
     // array<option<ref_own<Tree>>
