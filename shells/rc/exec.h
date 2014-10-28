@@ -81,7 +81,7 @@ struct Thread {
     char *cmdfile;		/* file name in Xrdcmd */
     struct Io *cmdfd;		/* file descriptor for Xrdcmd */
 
-    bool iflast;			/* static `if not' checking */
+    bool iflast;		/* static `if not' checking */
     bool eof;			/* is cmdfd at eof? */
     bool iflag;			/* interactive? */
 

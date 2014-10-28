@@ -255,8 +255,10 @@ execexit(void)
     switch(count(runq->argv->words)){
     default:
         pfmt(err, "Usage: exit [status]\nExiting anyway\n");
+        // FALLTHROUGH
     case 2:
         setstatus(runq->argv->words->next->word);
+        // FALLTHROUGH
     case 1:	Xexit();
     }
 }

@@ -17,6 +17,7 @@
 %thx to codemap/codegraph/scheck:
 
 %thx to this manual, better understand sh:
+% - TODO fancy redirection syntax
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Kernel.tex.nw skeleton
@@ -184,7 +185,7 @@ License.
 
 \section{[[rc]] services}
 
-% run command
+% run command (obviously), argv
 % pipe, redirection, async
 % variable
 % mini language with control flow statement
@@ -233,22 +234,24 @@ License.
 % pipeline archi? like compiler?
 
 % string -> lexing(yylex) -> parsing(yyparse) -> ast(treexx) -> bytecode(compile)
+% (note that actually not lexing -> parsing  for efficiency parsing call lexer
+%  on demand, so need to keep only one token in memory)
 %
 % but how the parsing chain is called?
 % main() -> 
-%   - build boostrap
+%   - build boostrap (which has a Xsimple "." rcmain and so
+%      will run execdot which will run Xrdcmds the very first time)
 %   - start() setup runq
 %   - setup runq->argv
 %   - start interpreting bootstrap runq->code[pc-1].f()
-%   -
-%
-%  Xrdcmds() -> yyparse() -> yylex()
-%                         -> compile()
-% (note that not lexing -> parsing  for efficiency parsing call lexer
-%  on demand, so need to keep only one token in memory)
+%       -> Xrdcmds() -> yyparse() -> yylex()
+%                                 -> compile() -> outcode() (modify codebuf)
+%                    -> start(codebuf)
+%                    -> Xreturn and loop
 
-%Xxxx? bytecode?
-%execxxx? builtins?
+
+%Xxxx = opcodes
+%execxxx = builtins (Xsimple of specially interpreted command)
 
 
 % chapter with a simple traduction of a simple command? like 'ls /' ?
@@ -523,7 +526,7 @@ struct Thread {
     char *cmdfile;		/* file name in Xrdcmd */
     struct Io *cmdfd;		/* file descriptor for Xrdcmd */
 
-    bool iflast;			/* static `if not' checking */
+    bool iflast;		/* static `if not' checking */
     bool eof;			/* is cmdfd at eof? */
     bool iflag;			/* interactive? */
 
@@ -535,11 +538,15 @@ struct Thread {
     thread *ret;		/* who continues when this finishes */
 };
 @
+% TODO rename local -> locals?
 
 <<global runq>>=
 // list<ref_own<Thread>> (next = Thread.ret)
 thread *runq;
 @
+
+% runq->argv->words->next->word
+% todo define macro? argv1()? argv0() ?
 
 \section{[[Word]], [[List]]}
 
@@ -678,18 +685,13 @@ gvlook(char *name)
 }
 @
 
+
+
+
+
 \chapter{[[main()]]}
 
 \section{Overview}
-
-%plan9.c
-<<global Rcmain>>=
-char *Rcmain = "/rc/lib/rcmain";
-@
-
-<<[[main()]] locals>>=
-char *rcmain;
-@
 
 <<[[main()]] locals>>=
 code bootstrap[17];
@@ -698,7 +700,8 @@ code bootstrap[17];
 
 <<function main (rc/exec.c)>>=
 /*
- * get command line flags, initialize keywords & traps.
+ * get command line flags.
+ * initialize keywords & traps.
  * get values from environment.
  * set $pid, $cflag, $*
  * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
@@ -710,33 +713,13 @@ void main(int argc, char *argv[])
     <<[[main()]] locals>>
 
     <<[[main()]] argc argv processing, modify flags>>
-    
-    rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
-
-    err = openfd(2);
-
     <<[[main()]] initialisation>>
-    
     <<[[main()]] initialize [[boostrap]]>>
-
-    // initialize runq with bootstrap code
-    start(bootstrap, 1, (var *)nil);
-
-    // initialize runq->argv
-    <<[[main()]] bootstrap argv>>
-
-    for(;;){
-        <<[[main()]] debug runq>>
-
-        runq->pc++;
-        (*runq->code[runq->pc-1].f)();
-
-        <<[[main()]] handing trap if necessary>>
-    }
+    <<[[main()]] initialize runq with bootstrap code>>
+    <<[[main()]] initialize runq->argv>>
+    <<[[main()]] interpreter loop>>
 }
 @
-
-% err = openfd, use buffered IO lib, see appendix X.y
 
 \section{[[getflags()]]}
 
@@ -745,6 +728,7 @@ void main(int argc, char *argv[])
 @
 
 <<global flag>>=
+// hash<char, option<array<string>>>
 char **flag[NFLAG];
 @
 
@@ -758,13 +742,13 @@ argc = getflags(argc, argv, "SsrdiIlxepvVc:1m:1[command]", 1);
 
 if(argc==-1)
     usage("[file [arg ...]]");
+
 if(argv[0][0]=='-')
     flag['l'] = flagset;
-
 if(flag['I'])
-    flag['i'] = 0;
+    flag['i'] = nil;
 else 
-    if(flag['i']==0 && argc==1 && Isatty(0)) 
+    if(flag['i']==nil && argc==1 && Isatty(0)) 
        flag['i'] = flagset;
 @
 
@@ -781,7 +765,21 @@ int mypid;
 char num[12];
 @
 
+%plan9.c
+<<global Rcmain>>=
+char *Rcmain = "/rc/lib/rcmain";
+@
+
+<<[[main()]] locals>>=
+char *rcmain;
+@
+
+
 <<[[main()]] initialisation>>=
+rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
+
+err = openfd(2);
+
 kinit();
 Trapinit();
 Vinit();
@@ -794,6 +792,9 @@ setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
 setvar("rcname", newword(argv[0], (word *)nil));
 @
 
+% err = openfd, use buffered IO lib, see appendix X.y
+
+
 \section{Bootstrapping opcodes}
 
 \ifallcode
@@ -801,6 +802,11 @@ setvar("rcname", newword(argv[0], (word *)nil));
 int i;
 @
 \fi
+
+
+% simplified bootstrap:
+% Xrdcmds (which will call yyparse()->compile()->outcode()
+%  which will read a line, compile it, and add a Xreturn
 
 % see main() comment:
 % * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
@@ -837,6 +843,10 @@ bootstrap[i].i = 0;
 @
 
 \section{Setting [[runq]], [[start()]]}
+
+<<[[main()]] initialize runq with bootstrap code>>=
+start(bootstrap, 1, (var *)nil);
+@
 
 % modify runq!
 <<function start>>=
@@ -880,7 +890,7 @@ codecopy(code *cp)
 char *argv0="rc";
 @
 
-<<[[main()]] bootstrap argv>>=
+<<[[main()]] initialize runq->argv>>=
 /* prime bootstrap argv */
 pushlist();
 argv0 = strdup(argv[0]);
@@ -901,6 +911,73 @@ pushword(char *wd)
 @
 
 \section{Opcode interpreter loop}
+
+<<[[main()]] interpreter loop>>=
+for(;;){
+    <<[[main()]] debug runq>>
+
+    runq->pc++;
+    (*runq->code[runq->pc-1].f)();
+
+    <<[[main()]] handing trap if necessary>>
+}
+@
+\section{[[Xrdcmds()]]}
+
+% TODO lp split!
+<<function Xrdcmds>>=
+void
+Xrdcmds(void)
+{
+    struct Thread *p = runq;
+    word *prompt;
+    bool error;
+
+    flush(err);
+    nerror = 0;
+
+    if(flag['s'] && !truestatus())
+        pfmt(err, "status=%v\n", vlook("status")->val);
+
+    if(runq->iflag){
+        prompt = vlook("prompt")->val;
+        if(prompt)
+            promptstr = prompt->word;
+        else
+            promptstr="% ";
+    }
+    Noerror();
+    error = yyparse();
+    if(error){
+        if(!p->iflag || p->eof && !Eintr()){
+            if(p->cmdfile)
+                efree(p->cmdfile);
+            closeio(p->cmdfd);
+            Xreturn();	/* should this be omitted? */
+        }
+        else{
+            if(Eintr()){
+                pchr(err, '\n');
+                p->eof = false;
+            }
+            --p->pc;	/* go back for next command */
+        }
+    }
+    else{
+        ntrap = 0;	/* avoid double-interrupts during blocked writes */
+        --p->pc;	/* re-execute Xrdcmds after codebuf runs */
+        start(codebuf, 1, runq->local);
+    }
+    freenodes(); // allocated in yyparse()
+}
+@
+% will go back to Xrdcmds because of the Xreturn inserted in
+% the codebuf by compile()
+
+% flow a bit complicated, but
+% interpreter loop -> Xrdcmds -> yyparse() -> start(codebuf)
+%  will go back in loop with a new runq! and once the command is done
+%  with a Xreturn it will resume to Xrdcmds runq (the bootstrap queue)
 
 \chapter{Lexing}
 % why not using lex?
@@ -1017,6 +1094,13 @@ nextis(int c)
     return false;
 }
 @
+
+\section{Prompt}
+% could be moved in another section?
+<<global promptstr>>=
+char *promptstr;
+@
+
 
 \section{[[yylex()]]}
 
@@ -1598,7 +1682,7 @@ int codep;
 int ncode;
 @
 
-% return 0 for error 1 for ok
+% return 0 for error 1 for ok, modify codebuf!
 <<function compile>>=
 //@Scheck: called from syn.y
 int compile(tree *t)
@@ -2114,8 +2198,10 @@ execexit(void)
     switch(count(runq->argv->words)){
     default:
         pfmt(err, "Usage: exit [status]\nExiting anyway\n");
+        // FALLTHROUGH
     case 2:
         setstatus(runq->argv->words->next->word);
+        // FALLTHROUGH
     case 1:	Xexit();
     }
 }
@@ -2499,12 +2585,6 @@ execshift(void)
 %$#x
 
 
-\chapter{Prompt}
-
-<<global promptstr>>=
-char *promptstr;
-@
-
 \chapter{Environment}
 
 \chapter{Globbing}
@@ -2795,6 +2875,8 @@ globlist(void)
 
 \chapter{Signals}
 
+% C-d generate an Xsimple (exit 1) ?
+
 <<constant NSIG>>=
 #define	NSIG	32
 @
@@ -2855,16 +2937,20 @@ dotrap(void)
     int i;
     struct Var *trapreq;
     struct Word *starval;
+
     starval = vlook("*")->val;
-    while(ntrap) for(i = 0;i!=NSIG;i++) while(trap[i]){
+    while(ntrap) 
+     for(i = 0;i!=NSIG;i++) 
+      while(trap[i]){
         --trap[i];
         --ntrap;
-        if(getpid()!=mypid) Exit(getstatus());
+        if(getpid()!=mypid) 
+            Exit(getstatus());
         trapreq = vlook(Signame[i]);
         if(trapreq->fn){
-            start(trapreq->fn, trapreq->pc, (struct Var *)0);
+            start(trapreq->fn, trapreq->pc, (struct Var *)nil);
             runq->local = newvar(strdup("*"), runq->local);
-            runq->local->val = copywords(starval, (struct Word *)0);
+            runq->local->val = copywords(starval, (struct Word *)nil);
             runq->local->changed = true;
             runq->redir = runq->startredir = 0;
         }
@@ -3119,7 +3205,7 @@ pdeglob(io *f, char *s)
 
 
 
-\section{[[rc -r]] printing runqueue}
+\section{[[rc -r]] printing opcodes}
 
 <<[[main()]] debug runq>>=
 if(flag['r'])

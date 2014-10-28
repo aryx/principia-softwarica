@@ -151,7 +151,8 @@ newvar(char *name, var *next)
 /*e: function newvar */
 /*s: function main (rc/exec.c) */
 /*
- * get command line flags, initialize keywords & traps.
+ * get command line flags.
+ * initialize keywords & traps.
  * get values from environment.
  * set $pid, $cflag, $*
  * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
@@ -161,11 +162,11 @@ newvar(char *name, var *next)
 void main(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
-    char *rcmain;
-    /*x: [[main()]] locals */
     code bootstrap[17];
     /*x: [[main()]] locals */
     char num[12];
+    /*x: [[main()]] locals */
+    char *rcmain;
     /*x: [[main()]] locals */
     int i;
     /*e: [[main()]] locals */
@@ -175,21 +176,20 @@ void main(int argc, char *argv[])
 
     if(argc==-1)
         usage("[file [arg ...]]");
+
     if(argv[0][0]=='-')
         flag['l'] = flagset;
-
     if(flag['I'])
-        flag['i'] = 0;
+        flag['i'] = nil;
     else 
-        if(flag['i']==0 && argc==1 && Isatty(0)) 
+        if(flag['i']==nil && argc==1 && Isatty(0)) 
            flag['i'] = flagset;
     /*e: [[main()]] argc argv processing, modify flags */
-    
+    /*s: [[main()]] initialisation */
     rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
 
     err = openfd(2);
 
-    /*s: [[main()]] initialisation */
     kinit();
     Trapinit();
     Vinit();
@@ -201,7 +201,6 @@ void main(int argc, char *argv[])
     setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
     setvar("rcname", newword(argv[0], (word *)nil));
     /*e: [[main()]] initialisation */
-    
     /*s: [[main()]] initialize [[boostrap]] */
     memset(bootstrap, 0, sizeof bootstrap);
 
@@ -232,19 +231,17 @@ void main(int argc, char *argv[])
 
     bootstrap[i].i = 0;
     /*e: [[main()]] initialize [[boostrap]] */
-
-    // initialize runq with bootstrap code
+    /*s: [[main()]] initialize runq with bootstrap code */
     start(bootstrap, 1, (var *)nil);
-
-    // initialize runq->argv
-    /*s: [[main()]] bootstrap argv */
+    /*e: [[main()]] initialize runq with bootstrap code */
+    /*s: [[main()]] initialize runq->argv */
     /* prime bootstrap argv */
     pushlist();
     argv0 = strdup(argv[0]);
     for(i = argc-1;i!=0;--i) 
         pushword(argv[i]);
-    /*e: [[main()]] bootstrap argv */
-
+    /*e: [[main()]] initialize runq->argv */
+    /*s: [[main()]] interpreter loop */
     for(;;){
         /*s: [[main()]] debug runq */
         if(flag['r'])
@@ -259,6 +256,7 @@ void main(int argc, char *argv[])
             dotrap();
         /*e: [[main()]] handing trap if necessary */
     }
+    /*e: [[main()]] interpreter loop */
 }
 /*e: function main (rc/exec.c) */
 
@@ -1057,10 +1055,14 @@ Xrdcmds(void)
 {
     struct Thread *p = runq;
     word *prompt;
+    bool error;
+
     flush(err);
     nerror = 0;
+
     if(flag['s'] && !truestatus())
         pfmt(err, "status=%v\n", vlook("status")->val);
+
     if(runq->iflag){
         prompt = vlook("prompt")->val;
         if(prompt)
@@ -1069,7 +1071,8 @@ Xrdcmds(void)
             promptstr="% ";
     }
     Noerror();
-    if(yyparse()){
+    error = yyparse();
+    if(error){
         if(!p->iflag || p->eof && !Eintr()){
             if(p->cmdfile)
                 efree(p->cmdfile);
@@ -1089,7 +1092,7 @@ Xrdcmds(void)
         --p->pc;	/* re-execute Xrdcmds after codebuf runs */
         start(codebuf, 1, runq->local);
     }
-    freenodes();
+    freenodes(); // allocated in yyparse()
 }
 /*e: function Xrdcmds */
 

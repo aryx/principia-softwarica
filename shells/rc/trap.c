@@ -12,16 +12,20 @@ dotrap(void)
     int i;
     struct Var *trapreq;
     struct Word *starval;
+
     starval = vlook("*")->val;
-    while(ntrap) for(i = 0;i!=NSIG;i++) while(trap[i]){
+    while(ntrap) 
+     for(i = 0;i!=NSIG;i++) 
+      while(trap[i]){
         --trap[i];
         --ntrap;
-        if(getpid()!=mypid) Exit(getstatus());
+        if(getpid()!=mypid) 
+            Exit(getstatus());
         trapreq = vlook(Signame[i]);
         if(trapreq->fn){
-            start(trapreq->fn, trapreq->pc, (struct Var *)0);
+            start(trapreq->fn, trapreq->pc, (struct Var *)nil);
             runq->local = newvar(strdup("*"), runq->local);
-            runq->local->val = copywords(starval, (struct Word *)0);
+            runq->local->val = copywords(starval, (struct Word *)nil);
             runq->local->changed = true;
             runq->redir = runq->startredir = 0;
         }

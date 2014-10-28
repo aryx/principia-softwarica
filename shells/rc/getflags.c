@@ -13,6 +13,7 @@ static void errc(int);
 char *flagset[] = {"<flag>"};
 /*e: global flagset */
 /*s: global flag */
+// hash<char, option<array<string>>>
 char **flag[NFLAG];
 /*e: global flag */
 /*s: global cmdname */
