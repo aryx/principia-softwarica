@@ -65,10 +65,10 @@ struct	Sym
     // (see itab)
     char	*name;
 
-    //token code (e.g. LNAME, LLAB, LBREG, etc)
+    //enum<token_kind> (e.g. LNAME, LLAB, LBREG, etc)
     ushort	type;
 
-    //enum<operand_kind> | enum<opcode> | long (e.g. pc for LLAB)
+    //enum<operand_kind> | enum<opcode_kind> | long (e.g. pc for LLAB)
     long	value;
 
     /*s: [[Sym]] other fields */

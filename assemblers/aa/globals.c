@@ -27,7 +27,7 @@ int	nDlist;
 Hist*	ehist;
 /*e: global ehist */
 /*s: global newflag */
-int	newflag;
+bool	newflag;
 /*e: global newflag */
 /*s: global hist */
 // list<ref_own<Hist>>, next = Hist.link

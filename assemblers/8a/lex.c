@@ -200,9 +200,9 @@ struct Itab
 {
     char	*name;
 
-    //token code
+    //enum<token_kind>
     ushort	type;
-    //enum<opcode> | enum<operand_kind>
+    //enum<opcode_kind> | enum<operand_kind>
     ushort	value;
 };
 /*e: struct Itab */

@@ -4,7 +4,7 @@
 %}
 /*s: union token */
 %union  {
- //   enum<opcode> (for LTYPE/...) 
+ //   enum<opcode_kind> (for LTYPE/...) 
  // | enum<operand_kind> (for LBREG/...) 
  // | long (for LCONST)
  long   lval;

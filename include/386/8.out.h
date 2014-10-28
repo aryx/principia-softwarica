@@ -15,7 +15,7 @@
 
 /*s: enum as */
 // coupling: with 8c/enam.c, 8l/obj.c#optab
-enum opcode
+enum opcode_kind
 {
     AXXX,
 
@@ -524,20 +524,22 @@ enum operand_kind
     // For ADATA
     D_EXTERN	= 61, // data/bss values (from SB)
     D_STATIC	= 62, // data static variables (from SB)
-    D_AUTO		= 63, // stack values (from SP)
-    D_PARAM		= 64, // parameter (from FP)
+    D_AUTO	= 63, // stack values (from SP)
+    D_PARAM	= 64, // parameter (from FP)
 
-    D_CONST		= 65,
+    D_CONST	= 65,
     D_FCONST	= 66,
     D_SCONST	= 67,
 
-    D_ADDR		= 68,
+    D_ADDR	= 68,
 /*x: [[operand_kind]] non register cases */
     D_FILE,
     D_FILE1, // used by linker only
 
     D_INDIR,	/* additive */
+
     D_CONST2 = D_INDIR+D_INDIR,
+
     D_SIZE,	/* 8l internal */
 /*e: [[operand_kind]] non register cases */
 };

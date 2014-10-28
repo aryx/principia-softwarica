@@ -15,6 +15,10 @@ struct	Gen
     // enum<operand_kind>
     short	type;
 
+    long	offset; // generic value
+    double	dval;
+    char	sval[8];
+
     //enum<operand_kind(register-only|D_NONE)>
     short	index;
 
@@ -22,10 +26,8 @@ struct	Gen
 
     //??
     Sym*	sym;
-    long	offset;
+
     long	offset2;
-    double	dval;
-    char	sval[8];
 };
 /*e: struct Gen */
 /*s: struct Gen2 */
