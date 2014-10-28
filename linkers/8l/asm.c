@@ -125,7 +125,7 @@ asmb(void)
     Prog *p;
     long v, magic;
     int a;
-    uchar *op1;
+    byte *op1;
 
     DBG("%5.2f asmb\n", cputime());
 

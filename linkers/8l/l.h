@@ -41,7 +41,7 @@ typedef	struct	Optab	Optab;
 /*s: struct Adr */
 struct	Adr
 {
-    //enum<operand> (D_NONE by default)
+    //enum<operand_kind> (D_NONE by default)
     short	type;
 
     union
@@ -58,7 +58,7 @@ struct	Adr
         Sym*	u1sym;
     } u1;
 
-    //enum<operand(register-only|D_NONE)>
+    //enum<operand_kind(register-only|D_NONE)>
     byte	index;
 
     // TODO: abused for NOPROF function attributes
@@ -92,12 +92,13 @@ struct	Prog
     //enum<opcode>
     short	as;
 
+    // operands
     Adr	from;
     Adr	to;
 
     // [[Prog]] other fields
     // 2 by default in zprg, why?
-    uchar	back;
+    byte	back;
 
     Prog*	forwd;
     long	pc;
@@ -105,7 +106,7 @@ struct	Prog
     char	width;		/* fake for DATA */
     char	ft;		/* oclass cache */
     char	tt;
-    uchar	mark;	/* work on these */
+    byte	mark;	/* work on these */
 
     // [[Prog]] Extra fields
 
@@ -161,7 +162,7 @@ struct	Optab
     // enum<as> from 8.out.h
     short	as;
 
-    uchar*	ytab;
+    byte*	ytab;
 
     // enum<Pxxx>
     byte	prefix;
@@ -319,7 +320,7 @@ union Buf
     struct
     {
         char	obuf[MAXIO];			/* output buffer */
-        uchar	ibuf[MAXIO];			/* input buffer */
+        byte	ibuf[MAXIO];			/* input buffer */
     } u;
     char	dbuf[1];
 };

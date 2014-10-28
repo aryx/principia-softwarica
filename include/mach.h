@@ -246,25 +246,32 @@ struct	Machdata {		/* Machine-dependent debugger support */
 typedef struct Fhdr
 {
     char	*name;		/* identifier of executable */
-    uchar	type;		/* file type - see codes above */
-    uchar	hdrsz;		/* header size */
-    uchar	_magic;		/* _MAGIC() magic */
-    uchar	spare;
+    byte	type;		/* file type - see codes above */
+    byte	hdrsz;		/* header size */
+    byte	_magic;		/* _MAGIC() magic */
+    byte	spare;
+
     long	magic;		/* magic number */
+
     uvlong	txtaddr;	/* text address */
     vlong	txtoff;		/* start of text in file */
     uvlong	dataddr;	/* start of data segment */
     vlong	datoff;		/* offset to data seg in file */
     vlong	symoff;		/* offset of symbol table in file */
+
     uvlong	entry;		/* entry point */
+
     vlong	sppcoff;	/* offset of sp-pc table in file */
     vlong	lnpcoff;	/* offset of line number-pc table in file */
+
     long	txtsz;		/* text size */
     long	datsz;		/* size of data seg */
     long	bsssz;		/* size of bss */
+
     long	symsz;		/* size of symbol table */
     long	sppcsz;		/* size of sp-pc table */
     long	lnpcsz;		/* size of line number-pc table */
+
 } Fhdr;
 /*e: struct Fhdr */
 

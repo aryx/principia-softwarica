@@ -1316,7 +1316,7 @@ struct Reloc
 {
     int n;
     int t;
-    uchar *m;
+    byte *m;
     ulong *a;
 };
 /*e: struct Reloc */
@@ -1330,16 +1330,16 @@ static void
 grow(Reloc *r)
 {
     int t;
-    uchar *m, *nm;
+    byte *m, *nm;
     ulong *a, *na;
 
     t = r->t;
     r->t += 64;
     m = r->m;
     a = r->a;
-    r->m = nm = malloc(r->t*sizeof(uchar));
+    r->m = nm = malloc(r->t*sizeof(byte));
     r->a = na = malloc(r->t*sizeof(ulong));
-    memmove(nm, m, t*sizeof(uchar));
+    memmove(nm, m, t*sizeof(byte));
     memmove(na, a, t*sizeof(ulong));
     free(m);
     free(a);
@@ -1351,7 +1351,7 @@ void
 dynreloc(Sym *s, ulong v, int abs)
 {
     int i, k, n;
-    uchar *m;
+    byte *m;
     ulong *a;
     Reloc *r;
 
@@ -1403,7 +1403,7 @@ asmdyn()
     Sym *s;
     ulong la, ra, *a;
     vlong off;
-    uchar *m;
+    byte *m;
     Reloc *r;
 
     cflush();

@@ -229,7 +229,7 @@ main(int argc, char *argv[])
     if(*argv == nil)
         usage();
 
-    /*s: [[main()]] addlibpath("/386/lib") */
+    /*s: [[main()]] addlibpath("/386/lib") or ccroot */
     /*s: [[main()]] change root if ccroot */
     root = getenv("ccroot");
 
@@ -245,7 +245,7 @@ main(int argc, char *argv[])
     // usually /386/lib/ as root = ""
     snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
-    /*e: [[main()]] addlibpath("/386/lib") */
+    /*e: [[main()]] addlibpath("/386/lib") or ccroot */
 
     /*s: [[main()]] adjust HEADTYPE if debug flags */
     if(!debug['9'] && !debug['U'] && !debug['B'])
@@ -704,7 +704,7 @@ objfile(char *file)
 
 /*s: function zaddr */
 int
-zaddr(uchar *p, Adr *a, Sym *h[])
+zaddr(byte *p, Adr *a, Sym *h[])
 {
     int c, t, i;
     int l;
@@ -959,8 +959,8 @@ nopout(Prog *p)
 /*e: function nopout */
 
 /*s: function readsome */
-uchar*
-readsome(int f, uchar *buf, uchar *good, uchar *stop, int max)
+byte*
+readsome(int f, byte *buf, byte *good, byte *stop, int max)
 {
     int n;
 

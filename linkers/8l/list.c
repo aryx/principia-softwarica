@@ -74,13 +74,13 @@ Aconv(Fmt *fp)
 /*e: function Aconv */
 
 /*s: function Dconv */
-// enum<operand> -> string
+// Adr -> string
 int
 Dconv(Fmt *fp)
 {
     char str[STRINGSZ+40], s[20];
     Adr *a;
-    //enum<operand>
+    //enum<operand_kind>
     int i;
 
     a = va_arg(fp->args, Adr*);
@@ -239,7 +239,7 @@ char*	regstr[] =
 /*e: global regstr */
 
 /*s: function Rconv */
-// enum<operand(register-only)> -> string
+// enum<operand_kind(register-only)> -> string
 int
 Rconv(Fmt *fp)
 {
