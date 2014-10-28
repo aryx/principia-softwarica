@@ -377,7 +377,7 @@ execdot(void)
     thread *p = runq;
     char *zero, *file;
     word *path;
-    static int first = 1;
+    static bool first = true;
 
     if(first){
         dotcmds[0].i = 1;
@@ -393,7 +393,7 @@ execdot(void)
         dotcmds[10].f = Xunlocal;
         dotcmds[11].f = Xunlocal;
         dotcmds[12].f = Xreturn;
-        first = 0;
+        first = false;
     }
     else
         eflagok = true;
@@ -432,8 +432,10 @@ execdot(void)
         Xerror(".: can't open");
         return;
     }
+
     /* set up for a new command loop */
-    start(dotcmds, 1, (struct Var *)0);
+    start(dotcmds, 1, (struct Var *)nil);
+
     pushredir(RCLOSE, fd, 0);
     runq->cmdfile = zero;
     runq->cmdfd = openfd(fd);

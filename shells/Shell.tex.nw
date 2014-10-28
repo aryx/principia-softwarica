@@ -211,15 +211,17 @@ License.
 %subr.c: routines
 
 %tree.c: AST helpers
-%lex.c: lexer
-%syn.y: parser
-%code.c: opcode generation from tree
-%exec.c: opcode intepreter 
+%lex.c: lexer, yylex()
+%syn.y: parser, yyparse() in generated y.tab.c
+%code.c: opcode generation from tree, compile() and outcode()
+
+%exec.c: opcode interpreter and main()
 %simple.c: Xsimple opcode interpreter, and builtins
 %havefork.c: opcodes related to process (Xpipe, Xasync, etc)
 
 %here.c: here document feature
-%glob.c: globbing?
+%glob.c: globing feature
+
 %trap.c: interrupt
 %var.c: variables
 
@@ -439,6 +441,8 @@ code *codebuf;				/* compiler output */
 
 
 % * Xsimple(args)			run command and wait
+%
+% * Xrdcmds !!! call yyparse()
 
 % * Xmark				mark stack
 % * Xword[string]			push string
@@ -475,6 +479,7 @@ code *codebuf;				/* compiler output */
 % * Xjump[addr]				goto
 
 % * Xpipe[i j]{... Xreturn}{... Xreturn}	construct a pipe between 2 new threads,	wait for both
+% * Xpipewait
 % * Xpipefd[type]{... Xreturn}		connect {} to pipe (input or output, depending on type), push /dev/fd/??
 
 % * Xfn(name){... Xreturn}			define function
@@ -488,9 +493,7 @@ code *codebuf;				/* compiler output */
 
 % * Xdelhere
 % * Xeflag
-% * Xpipewait
 % * Xpopredir
-% * Xrdcmds
 % * Xrdfn
 % * Xqdol(name)				concatenate variable components
 % * Xsub
@@ -1570,11 +1573,11 @@ words:
 % && ||  |  &  !?
 % >> << > <
 
-\section{Statements}
+\section{Control flow statements}
 
 \section{XXX}
 
-\chapter{Opcode Generation}
+\chapter{Opcode Generation and Interpretation}
 % in shell context???
 % or Code generation? or Bytecode generation?
 % or merge Opcode Generation and Intepretation?
@@ -1992,21 +1995,6 @@ outcode(tree *t, bool eflag)
 
 \section{Redirection}
 
-\section{Statements}
-
-\section{XXX}
-
-\chapter{Opcode Interpretation}
-% Execution
-
-\section{Overview}
-
-\section{Simple commands}
-
-\section{Pipe}
-
-\section{Redirection}
-
 <<struct redir>>=
 struct Redir {
     char type;			/* what to do */
@@ -2015,7 +2003,7 @@ struct Redir {
 };
 @
 
-\section{Statements}
+\section{Control flow statements}
 
 \section{XXX}
 
@@ -2158,6 +2146,19 @@ execexec(void)
 union Code dotcmds[14];
 @
 
+<<global ndot>>=
+/*
+ * How many dot commands have we executed?
+ * Used to ensure that -v flag doesn't print rcmain.
+ */
+int ndot;
+@
+
+<<global eflagok>>=
+bool eflagok;	/* kludge flag so that -e doesn't exit in startup */
+@
+
+
 <<function execdot>>=
 void
 execdot(void)
@@ -2168,7 +2169,7 @@ execdot(void)
     thread *p = runq;
     char *zero, *file;
     word *path;
-    static int first = 1;
+    static bool first = true;
 
     if(first){
         dotcmds[0].i = 1;
@@ -2184,7 +2185,7 @@ execdot(void)
         dotcmds[10].f = Xunlocal;
         dotcmds[11].f = Xunlocal;
         dotcmds[12].f = Xreturn;
-        first = 0;
+        first = false;
     }
     else
         eflagok = true;
@@ -2223,8 +2224,10 @@ execdot(void)
         Xerror(".: can't open");
         return;
     }
+
     /* set up for a new command loop */
-    start(dotcmds, 1, (struct Var *)0);
+    start(dotcmds, 1, (struct Var *)nil);
+
     pushredir(RCLOSE, fd, 0);
     runq->cmdfile = zero;
     runq->cmdfd = openfd(fd);
