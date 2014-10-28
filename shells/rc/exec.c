@@ -24,6 +24,7 @@ start(code *c, int pc, var *local)
     p->pc = pc;
 
     p->argv = nil;
+
     p->redir = p->startredir = runq ? runq->redir : nil;
     p->local = local;
     p->cmdfile = nil;
@@ -149,7 +150,7 @@ newvar(char *name, var *next)
     return v;
 }
 /*e: function newvar */
-/*s: function main (rc/exec.c) */
+
 /*
  * get command line flags.
  * initialize keywords & traps.
@@ -158,17 +159,18 @@ newvar(char *name, var *next)
  * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
  * start interpreting code
  */
+/*s: function main (rc/exec.c) */
 //@Scheck: not dead! entry point!
 void main(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
     code bootstrap[17];
     /*x: [[main()]] locals */
-    char num[12];
+    int i;
     /*x: [[main()]] locals */
     char *rcmain;
     /*x: [[main()]] locals */
-    int i;
+    char num[12];
     /*e: [[main()]] locals */
 
     /*s: [[main()]] argc argv processing, modify flags */
@@ -186,18 +188,18 @@ void main(int argc, char *argv[])
            flag['i'] = flagset;
     /*e: [[main()]] argc argv processing, modify flags */
     /*s: [[main()]] initialisation */
-    rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
-
     err = openfd(2);
-
+    /*x: [[main()]] initialisation */
     kinit();
     Trapinit();
     Vinit();
-
+    /*x: [[main()]] initialisation */
+    rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
+    /*x: [[main()]] initialisation */
     mypid = getpid();
     inttoascii(num, mypid);
-
     setvar("pid", newword(num, (word *)nil));
+
     setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
     setvar("rcname", newword(argv[0], (word *)nil));
     /*e: [[main()]] initialisation */
@@ -208,31 +210,13 @@ void main(int argc, char *argv[])
     bootstrap[i++].i = 1; // reference count
     bootstrap[i++].f = Xmark;
 
-    bootstrap[i++].f = Xword;
-    bootstrap[i++].s="*";
-
-    bootstrap[i++].f = Xassign;
-    bootstrap[i++].f = Xmark;
-    bootstrap[i++].f = Xmark;
-
-    bootstrap[i++].f = Xword;
-    bootstrap[i++].s="*";
-
-    bootstrap[i++].f = Xdol;
-
-    bootstrap[i++].f = Xword;
-    bootstrap[i++].s = rcmain;
-
-    bootstrap[i++].f = Xword;
-    bootstrap[i++].s=".";
-
-    bootstrap[i++].f = Xsimple;
-    bootstrap[i++].f = Xexit;
-
-    bootstrap[i].i = 0;
+    bootstrap[i++].f = Xrdcmds;
     /*e: [[main()]] initialize [[boostrap]] */
     /*s: [[main()]] initialize runq with bootstrap code */
     start(bootstrap, 1, (var *)nil);
+    /*x: [[main()]] initialize runq with bootstrap code */
+    runq->cmdfd = openfd(0);
+    runq->iflag = true;
     /*e: [[main()]] initialize runq with bootstrap code */
     /*s: [[main()]] initialize runq->argv */
     /* prime bootstrap argv */

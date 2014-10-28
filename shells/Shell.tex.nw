@@ -174,7 +174,7 @@ License.
 
 \section{Shell principles}
 % for a long time actually there was no (external) shell. Shell was
-% part of OS. With unix it changed and shell can be a regular
+% part of OS. With Unix it changed and shell can be a regular
 % user program which then opened the way for complex job control language.
 
 
@@ -193,7 +193,15 @@ License.
 
 % job control?
 
+% see rc.ps
+
+% -i => interactive (default)
+% -I => not interactive (only diff is prompt not displayed)
+
+% -r => debug opcodes output (convenient)
+
 \section{Input shell language}
+
 % rc PL
 % quite similar to bash
 % main difference? for var stuff?
@@ -203,8 +211,8 @@ License.
 
 %getflags.c: getopt + specific flag setting
 %io.c: fmt + buffered IO + specific debug
-%pcmd.c: debugging
-%pfnc.c: debugging
+%pcmd.c: debugging (?)
+%pfnc.c: debugging (runq and opcode)
 
 %plan9.c: for portability
 
@@ -231,7 +239,7 @@ License.
 
 \section{Architecture overview}
 
-% pipeline archi? like compiler?
+% pipeline archi? like compiler? not exactly as it's actually an interpreter
 
 % string -> lexing(yylex) -> parsing(yyparse) -> ast(treexx) -> bytecode(compile)
 % (note that actually not lexing -> parsing  for efficiency parsing call lexer
@@ -239,12 +247,13 @@ License.
 %
 % but how the parsing chain is called?
 % main() -> 
-%   - build boostrap (which has a Xsimple "." rcmain and so
-%      will run execdot which will run Xrdcmds the very first time)
-%   - start() setup runq
+%   - build boostrap which essentially contain a Xrdcmds opcode
+%      (actually it has a Xsimple "." rcmain and so
+%      will run execdot which will run Xrdcmds)
+%   - start() setup runq from boostrap
 %   - setup runq->argv
 %   - start interpreting bootstrap runq->code[pc-1].f()
-%       -> Xrdcmds() -> yyparse() -> yylex()
+%       -> Xrdcmds() -> yyparse() -> yylex() (print prompt actually too)
 %                                 -> compile() -> outcode() (modify codebuf)
 %                    -> start(codebuf)
 %                    -> Xreturn and loop
@@ -264,16 +273,15 @@ License.
 
 <<token declarations>>=
 %token <tree> FOR IN WHILE IF NOT SWITCH FN
-%token <tree> WORD
 %token <tree> TWIDDLE BANG SUBSHELL 
 %token <tree> REDIR DUP PIPE
+%token <tree> WORD
 %token ANDAND OROR
 %token COUNT SUB
 %token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
 @
 % was using %term instead of %token (probably for %terminal?)
 % also ANDAND were mentioned only in %left, but better declare everything
-
 
 % can also be ';', see tree3() that actually look for that
 
@@ -308,20 +316,34 @@ struct Tree {
 
     bool iskw;
 
-    //enum<redirection_kind>
-    int	rtype;
-    int fd0, fd1;	/* details of REDIR PIPE DUP tokens */
-    bool	quoted;
+    <<[[Tree]] other fields>>
 
-    tree	*next;
+    // Extra
+    <<[[Tree]] extra fields>>
 };
 @
+
+
+
+<<[[Tree]] other fields>>=
+//enum<redirection_kind>
+int	rtype;
+int fd0, fd1;	/* details of REDIR PIPE DUP tokens */
+bool	quoted;
+@
+
 
 
 <<global treenodes>>=
 // list<ref_own<tree>> (next = Tree.next)
 tree *treenodes;
 @
+
+<<[[Tree]] extra fields>>=
+tree	*next;
+@
+
+
 
 <<function newtree>>=
 /*
@@ -413,30 +435,6 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 
 \section{Opcode [[Code]] and [[codebuf]]}
 
-<<struct code>>=
-/*
- * The first word of any code vector is a reference count.
- * Always create a new reference to a code vector by calling codecopy(.).
- * Always call codefree(.) when deleting a reference.
- */
-union Code {
-    void	(*f)(void); // Xxxx()
-    int	i;
-    char	*s;
-};
-@
-
-<<global codebuf>>=
-code *codebuf;				/* compiler output */
-@
-
-% first element is a reference count, which is why codecopy()
-% does cp[0].i++;
-
-% show bootstrap code?
-% or show trace of rc -r ?
-
-
 % * Opcode routines
 % * Arguments on stack (...)
 % * Arguments in line [...]
@@ -504,8 +502,40 @@ code *codebuf;				/* compiler output */
 % list of opcodes with comments were in exec.c but sorted alphabetically
 % better to group them for explanation
 
+<<global codebuf>>=
+code *codebuf;				/* compiler output */
+@
+
+
+
+% in ocaml maybe could just interpreter from AST itself.
+% not sure needs this intermediate opcode data structure
+
+<<struct code>>=
+/*
+ * The first word of any code vector is a reference count.
+ * Always create a new reference to a code vector by calling codecopy(.).
+ * Always call codefree(.) when deleting a reference.
+ */
+union Code {
+    void	(*f)(void); // Xxxx() opcode
+    int	i;
+    char	*s;
+};
+@
+
+
+% first element is a reference count, which is why codecopy()
+% does cp[0].i++;
+
+% show bootstrap code?
+% or show trace of rc -r ?
+
+
+
 \section{[[Thread]] and [[runq]]}
-% manage subprocesses
+% managing processes
+% (why called threads?)
 
 <<struct thread>>=
 struct Thread {
@@ -514,39 +544,59 @@ struct Thread {
 
     int lineno;			/* linenumber */
 
-    // list<ref_own<Var>> (next = Var.next)
-    struct Var *local;		/* list of local variables */
+    <<[[Thread]] other fields>>
 
-    // list<list<ref_own<word>>> (next = List.next)
-    struct List *argv;		/* argument stack */
-
-    struct Redir *redir;	/* redirection stack */
-    struct Redir *startredir;	/* redir inheritance point */
-
-    char *cmdfile;		/* file name in Xrdcmd */
-    struct Io *cmdfd;		/* file descriptor for Xrdcmd */
-
-    bool iflast;		/* static `if not' checking */
-    bool eof;			/* is cmdfd at eof? */
-    bool iflag;			/* interactive? */
-
-    int pid;			/* process for Xpipewait to wait for */
-    char status[NSTATUS];	/* status for Xpipewait */
-
-    tree *treenodes;		/* tree nodes created by this process */
-
-    thread *ret;		/* who continues when this finishes */
+    // Extra
+    <<[[Thread]] extra fields>>
 };
 @
-% TODO rename local -> locals?
+%dead:  tree *treenodes;		/* tree nodes created by this process */
 
 <<global runq>>=
 // list<ref_own<Thread>> (next = Thread.ret)
 thread *runq;
 @
 
+<<[[Thread]] extra fields>>=
+thread *ret;		/* who continues when this finishes */
+@
+
 % runq->argv->words->next->word
 % todo define macro? argv1()? argv0() ?
+
+
+% important one
+<<[[Thread]] other fields>>=
+// list<list<ref_own<word>>> (next = List.next)
+struct List *argv;		/* argument stack */
+@
+
+
+
+
+
+
+
+
+% TODO rename local -> locals?
+<<[[Thread]] other fields>>=
+// list<ref_own<Var>> (next = Var.next)
+struct Var *local;		/* list of local variables */
+
+
+struct Redir *redir;	/* redirection stack */
+struct Redir *startredir;	/* redir inheritance point */
+
+char *cmdfile;		/* file name in Xrdcmd */
+
+bool iflast;		/* static `if not' checking */
+bool eof;		/* is cmdfd at eof? */
+
+int pid;		/* process for Xpipewait to wait for */
+char status[NSTATUS];	/* status for Xpipewait */
+@
+
+
 
 \section{[[Word]], [[List]]}
 
@@ -623,6 +673,8 @@ pushlist(void)
 % to the simple command!
 
 
+
+
 \section{[[Var]] and [[gvar]]}
 
 <<struct var>>=
@@ -630,16 +682,26 @@ struct Var {
     char	*name;		/* ascii name */
     word	*val;		/* value */
 
-    bool	changed;
-    code	*fn;		/* pointer to function's code vector */
-    int	fnchanged;
-    int	pc;		/* pc of start of function */
+    <<[[Var]] other fields>>
 
-    var	*next;		/* next on hash or local list */
+    // Extra
+    <<[[Var]] extra fields>>
 };
 @
-% #define V (struct Var*)nil
-% like for other soft, or use VarNil?
+
+
+
+<<[[Var]] other fields>>=
+bool	changed;
+code	*fn;		/* pointer to function's code vector */
+int	fnchanged;
+int	pc;		/* pc of start of function */
+@
+
+
+
+
+
 
 <<constant NVAR>>=
 #define	NVAR	521
@@ -649,6 +711,14 @@ struct Var {
 // hash<string, ref<Var>> (next = Var.next)
 var *gvar[NVAR];		/* hash for globals */
 @
+
+<<[[Var]] extra fields>>=
+var	*next;		/* next on hash or local list */
+@
+% #define V (struct Var*)nil
+% like for other soft, or use VarNil?
+
+
 
 
 <<function setvar>>=
@@ -698,15 +768,17 @@ code bootstrap[17];
 @
 % indeed 17 lines below about bootstrap. A bit ugly though
 
+% mv comment back in Extra? less confusing with actual bootstrap vs simple one
+%/*
+% * get command line flags.
+% * initialize keywords & traps.
+% * get values from environment.
+% * set $pid, $cflag, $*
+% * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
+% * start interpreting code
+% */
+
 <<function main (rc/exec.c)>>=
-/*
- * get command line flags.
- * initialize keywords & traps.
- * get values from environment.
- * set $pid, $cflag, $*
- * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
- * start interpreting code
- */
 //@Scheck: not dead! entry point!
 void main(int argc, char *argv[])
 {
@@ -755,47 +827,19 @@ else
 
 \section{Initialisation}
 
-<<global mypid>>=
-int mypid;
+<<[[main()]] initialisation>>=
+err = openfd(2);
 @
-
-% if things was more functional I would not need those declarations ...
-% I would do 'let num = int_to_string(mypid)'
-<<[[main()]] locals>>=
-char num[12];
-@
-
-%plan9.c
-<<global Rcmain>>=
-char *Rcmain = "/rc/lib/rcmain";
-@
-
-<<[[main()]] locals>>=
-char *rcmain;
-@
-
+% err = openfd, use buffered IO lib, see appendix X.y
 
 <<[[main()]] initialisation>>=
-rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
-
-err = openfd(2);
-
 kinit();
 Trapinit();
 Vinit();
-
-mypid = getpid();
-inttoascii(num, mypid);
-
-setvar("pid", newword(num, (word *)nil));
-setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
-setvar("rcname", newword(argv[0], (word *)nil));
 @
 
-% err = openfd, use buffered IO lib, see appendix X.y
 
-
-\section{Bootstrapping opcodes}
+\section{Bootstrapping opcodes (simplified)}
 
 \ifallcode
 <<[[main()]] locals>>=
@@ -808,9 +852,7 @@ int i;
 % Xrdcmds (which will call yyparse()->compile()->outcode()
 %  which will read a line, compile it, and add a Xreturn
 
-% see main() comment:
-% * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
-
+%OPTIONAL
 <<[[main()]] initialize [[boostrap]]>>=
 memset(bootstrap, 0, sizeof bootstrap);
 
@@ -818,35 +860,18 @@ i = 0;
 bootstrap[i++].i = 1; // reference count
 bootstrap[i++].f = Xmark;
 
-bootstrap[i++].f = Xword;
-bootstrap[i++].s="*";
-
-bootstrap[i++].f = Xassign;
-bootstrap[i++].f = Xmark;
-bootstrap[i++].f = Xmark;
-
-bootstrap[i++].f = Xword;
-bootstrap[i++].s="*";
-
-bootstrap[i++].f = Xdol;
-
-bootstrap[i++].f = Xword;
-bootstrap[i++].s = rcmain;
-
-bootstrap[i++].f = Xword;
-bootstrap[i++].s=".";
-
-bootstrap[i++].f = Xsimple;
-bootstrap[i++].f = Xexit;
-
-bootstrap[i].i = 0;
+bootstrap[i++].f = Xrdcmds;
 @
 
-\section{Setting [[runq]], [[start()]]}
+
+
+\section{Setting [[runq]]}
+% [[start()]]
 
 <<[[main()]] initialize runq with bootstrap code>>=
 start(bootstrap, 1, (var *)nil);
 @
+% starts at 1, 0 is for the reference count
 
 % modify runq!
 <<function start>>=
@@ -859,6 +884,7 @@ start(code *c, int pc, var *local)
     p->pc = pc;
 
     p->argv = nil;
+
     p->redir = p->startredir = runq ? runq->redir : nil;
     p->local = local;
     p->cmdfile = nil;
@@ -871,6 +897,7 @@ start(code *c, int pc, var *local)
     runq = p;
 }
 @
+% not reset iflast to false?
 
 <<function codecopy>>=
 code*
@@ -880,6 +907,7 @@ codecopy(code *cp)
     return cp;
 }
 @
+
 
 \section{Setting [[runq->argv]]}
 
@@ -923,6 +951,24 @@ for(;;){
 }
 @
 \section{[[Xrdcmds()]]}
+
+<<[[Thread]] other fields>>=
+struct Io *cmdfd;	/* file descriptor for Xrdcmd */
+bool iflag;		/* interactive? */
+@
+
+%OPTIONAL
+<<[[main()]] initialize runq with bootstrap code>>=
+runq->cmdfd = openfd(0);
+runq->iflag = true;
+@
+
+
+
+% =~ repl, 
+%  read (yylex+yyparse), 
+%  eval (compile+outcode+return to interpreter)
+%  print? hmm partly in yylex for the prompt, the rest the program does it
 
 % TODO lp split!
 <<function Xrdcmds>>=
@@ -1096,6 +1142,7 @@ nextis(int c)
 @
 
 \section{Prompt}
+
 % could be moved in another section?
 <<global promptstr>>=
 char *promptstr;
@@ -1669,6 +1716,8 @@ words:
 
 \section{Overview}
 
+% recall main flow: main() -> ... yyparse() -> compile()
+
 \section{[[compile()]]}
 
 % see codebuf in Core DS chapter (could be moved here too)
@@ -2075,6 +2124,8 @@ outcode(tree *t, bool eflag)
 
 \section{Simple commands}
 
+% builtin hook here
+
 \section{Pipe}
 
 \section{Redirection}
@@ -2093,21 +2144,25 @@ struct Redir {
 
 \chapter{Builtins}
 
+\section{Overview}
+
 % plan9.c
 <<global Builtin>>=
 builtin Builtin[] = {
     "cd",		execcd,
     "exit",		execexit,
-    "exec",		execexec,	/* but with popword first */
     ".",		execdot,
     "eval",		execeval,
+
     "whatis",		execwhatis,
 
-    "shift",		execshift,
+    "exec",		execexec,	/* but with popword first */
+    "rfork",		execnewpgrp,
     "wait",		execwait,
+
+    "shift",		execshift,
     "finit",		execfinit,
     "flag",		execflag,
-    "rfork",		execnewpgrp,
     0
 };
 @
@@ -2125,12 +2180,21 @@ execcd(void)
 
     setstatus("can't cd");
     cdpath = vlook("cdpath")->val;
+
     switch(count(a)){
-    default:
-        pfmt(err, "Usage: cd [directory]\n");
+    case 1:
+        a = vlook("home")->val;
+        if(count(a)>=1){
+            if(dochdir(a->word)>=0)
+                setstatus("");
+            else
+                pfmt(err, "Can't cd %s: %r\n", a->word);
+        }
+        else
+            pfmt(err, "Can't cd -- $home empty\n"); //$
         break;
     case 2:
-        if(a->next->word[0]=='/' || cdpath==0)
+        if(a->next->word[0]=='/' || cdpath==nil)
             cdpath = &nullpath;
         for(; cdpath; cdpath = cdpath->next){
             if(cdpath->word[0] != '\0')
@@ -2148,19 +2212,11 @@ execcd(void)
             }
             free(dir);
         }
-        if(cdpath==0)
+        if(cdpath==nil)
             pfmt(err, "Can't cd %s: %r\n", a->next->word);
         break;
-    case 1:
-        a = vlook("home")->val;
-        if(count(a)>=1){
-            if(dochdir(a->word)>=0)
-                setstatus("");
-            else
-                pfmt(err, "Can't cd %s: %r\n", a->word);
-        }
-        else
-            pfmt(err, "Can't cd -- $home empty\n");
+    default:
+        pfmt(err, "Usage: cd [directory]\n");
         break;
     }
     poplist();
@@ -2168,6 +2224,7 @@ execcd(void)
 @
 %$
 
+% /dev/wdir?
 
 <<function dochdir>>=
 int
@@ -2175,8 +2232,12 @@ dochdir(char *word)
 {
     /* report to /dev/wdir if it exists and we're interactive */
     static int wdirfd = -2;
-    if(chdir(word)<0) return -1;
-    if(flag['i']!=0){
+
+    // the actual syscall
+    if(chdir(word)<0) 
+        return -1;
+
+    if(flag['i']!=nil){
         if(wdirfd==-2)	/* try only once */
             wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
         if(wdirfd>=0) {
@@ -2202,26 +2263,9 @@ execexit(void)
     case 2:
         setstatus(runq->argv->words->next->word);
         // FALLTHROUGH
-    case 1:	Xexit();
+    case 1:	
+        Xexit();
     }
-}
-@
-
-\section{[[$ exec]]}
-%$
-
-<<function execexec>>=
-void
-execexec(void)
-{
-    popword();	/* "exec" */
-    if(runq->argv->words==0){
-        Xerror1("empty argument list");
-        return;
-    }
-    doredir(runq->redir);
-    Execute(runq->argv->words, searchpath(runq->argv->words->word));
-    poplist();
 }
 @
 
@@ -2275,13 +2319,14 @@ execdot(void)
     }
     else
         eflagok = true;
+
     popword();
     if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
         iflag = true;
         popword();
     }
     /* get input file */
-    if(p->argv->words==0){
+    if(p->argv->words==nil){
         Xerror1("Usage: . [-i] file [arg ...]");
         return;
     }
@@ -2337,6 +2382,9 @@ execdot(void)
 \section{[[$ eval]]}
 %$
 
+% TODO What is the point of eval? the interpreter loop is already an
+% an eval that does call Xrdcmds ...
+
 <<function execeval>>=
 void
 execeval(void)
@@ -2344,6 +2392,7 @@ execeval(void)
     char *cmdline, *s, *t;
     int len = 0;
     word *ap;
+
     if(count(runq->argv->words)<=1){
         Xerror1("Usage: eval cmd ...");
         return;
@@ -2364,7 +2413,50 @@ execeval(void)
 }
 @
 
-\section{[[$ whatis]]}
+<<global rdcmds>>=
+union Code rdcmds[4];
+@
+
+<<function execcmds>>=
+void
+execcmds(io *f)
+{
+    static bool first = true;
+    if(first){
+        rdcmds[0].i = 1;
+        rdcmds[1].f = Xrdcmds;
+        rdcmds[2].f = Xreturn;
+        first = false;
+    }
+    start(rdcmds, 1, runq->local);
+    runq->cmdfd = f;
+    runq->iflast = false;
+}
+@
+
+\section{Other builtins]}
+% mv in Advanced topics section?
+% mv whatis too?
+
+\subsection{[[$ exec]]}
+%$
+
+<<function execexec>>=
+void
+execexec(void)
+{
+    popword();	/* "exec" */
+    if(runq->argv->words==nil){
+        Xerror1("empty argument list");
+        return;
+    }
+    doredir(runq->redir);
+    Execute(runq->argv->words, searchpath(runq->argv->words->word));
+    poplist();
+}
+@
+
+\subsection{[[$ whatis]]}
 %$
 
 <<function execwhatis>>=
@@ -2441,7 +2533,7 @@ execwhatis(void){	/* mildly wrong -- should fork before writing */
 }
 @
 
-\section{Other builtins]}
+\subsection{XXX}
 
 %rfork
 <<function execnewpgrp>>=
@@ -2585,9 +2677,8 @@ execshift(void)
 %$#x
 
 
-\chapter{Environment}
-
 \chapter{Globbing}
+% mv in advanced topics?
 
 <<global globname>>=
 char *globname;
@@ -2968,6 +3059,77 @@ dotrap(void)
 }
 @
 
+
+\chapter{Initialisation}
+
+\section{Actual bootstrapping}
+
+% see main() comment:
+% * fabricate bootstrap code and start it (*=(argv);. /usr/lib/rcmain $*)
+
+%plan9.c
+<<global Rcmain>>=
+char *Rcmain = "/rc/lib/rcmain";
+@
+
+<<[[main()]] locals>>=
+char *rcmain;
+@
+
+<<[[main()]] initialisation>>=
+rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
+@
+
+%OPTIONAL
+%<<[[main()]] initialize [[boostrap]]>>=
+%memset(bootstrap, 0, sizeof bootstrap);
+%
+%bootstrap[i++].f = Xword;
+%bootstrap[i++].s="*";
+%
+%bootstrap[i++].f = Xassign;
+%bootstrap[i++].f = Xmark;
+%bootstrap[i++].f = Xmark;
+%
+%bootstrap[i++].f = Xword;
+%bootstrap[i++].s="*";
+%
+%bootstrap[i++].f = Xdol;
+%
+%bootstrap[i++].f = Xword;
+%bootstrap[i++].s = rcmain;
+%
+%bootstrap[i++].f = Xword;
+%bootstrap[i++].s=".";
+%
+%bootstrap[i++].f = Xsimple;
+%
+%bootstrap[i++].f = Xexit;
+%
+%bootstrap[i].i = 0;
+%@
+
+
+\section{Actual environment}
+
+<<global mypid>>=
+int mypid;
+@
+
+% if things was more functional I would not need those declarations ...
+% I would do 'let num = int_to_string(mypid)'
+<<[[main()]] locals>>=
+char num[12];
+@
+
+<<[[main()]] initialisation>>=
+mypid = getpid();
+inttoascii(num, mypid);
+setvar("pid", newword(num, (word *)nil));
+
+setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
+setvar("rcname", newword(argv[0], (word *)nil));
+@
 
 \chapter{Advanced Topics}
 

@@ -132,7 +132,7 @@ void
 execexec(void)
 {
     popword();	/* "exec" */
-    if(runq->argv->words==0){
+    if(runq->argv->words==nil){
         Xerror1("empty argument list");
         return;
     }
@@ -164,8 +164,12 @@ dochdir(char *word)
 {
     /* report to /dev/wdir if it exists and we're interactive */
     static int wdirfd = -2;
-    if(chdir(word)<0) return -1;
-    if(flag['i']!=0){
+
+    // the actual syscall
+    if(chdir(word)<0) 
+        return -1;
+
+    if(flag['i']!=nil){
         if(wdirfd==-2)	/* try only once */
             wdirfd = open("/dev/wdir", OWRITE|OCEXEC);
         if(wdirfd>=0) {
@@ -206,12 +210,21 @@ execcd(void)
 
     setstatus("can't cd");
     cdpath = vlook("cdpath")->val;
+
     switch(count(a)){
-    default:
-        pfmt(err, "Usage: cd [directory]\n");
+    case 1:
+        a = vlook("home")->val;
+        if(count(a)>=1){
+            if(dochdir(a->word)>=0)
+                setstatus("");
+            else
+                pfmt(err, "Can't cd %s: %r\n", a->word);
+        }
+        else
+            pfmt(err, "Can't cd -- $home empty\n"); //$
         break;
     case 2:
-        if(a->next->word[0]=='/' || cdpath==0)
+        if(a->next->word[0]=='/' || cdpath==nil)
             cdpath = &nullpath;
         for(; cdpath; cdpath = cdpath->next){
             if(cdpath->word[0] != '\0')
@@ -229,19 +242,11 @@ execcd(void)
             }
             free(dir);
         }
-        if(cdpath==0)
+        if(cdpath==nil)
             pfmt(err, "Can't cd %s: %r\n", a->next->word);
         break;
-    case 1:
-        a = vlook("home")->val;
-        if(count(a)>=1){
-            if(dochdir(a->word)>=0)
-                setstatus("");
-            else
-                pfmt(err, "Can't cd %s: %r\n", a->word);
-        }
-        else
-            pfmt(err, "Can't cd -- $home empty\n");
+    default:
+        pfmt(err, "Usage: cd [directory]\n");
         break;
     }
     poplist();
@@ -259,7 +264,8 @@ execexit(void)
     case 2:
         setstatus(runq->argv->words->next->word);
         // FALLTHROUGH
-    case 1:	Xexit();
+    case 1:	
+        Xexit();
     }
 }
 /*e: function execexit */
@@ -326,12 +332,12 @@ union Code rdcmds[4];
 void
 execcmds(io *f)
 {
-    static int first = 1;
+    static bool first = true;
     if(first){
         rdcmds[0].i = 1;
         rdcmds[1].f = Xrdcmds;
         rdcmds[2].f = Xreturn;
-        first = 0;
+        first = false;
     }
     start(rdcmds, 1, runq->local);
     runq->cmdfd = f;
@@ -346,6 +352,7 @@ execeval(void)
     char *cmdline, *s, *t;
     int len = 0;
     word *ap;
+
     if(count(runq->argv->words)<=1){
         Xerror1("Usage: eval cmd ...");
         return;
@@ -399,13 +406,14 @@ execdot(void)
     }
     else
         eflagok = true;
+
     popword();
     if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
         iflag = true;
         popword();
     }
     /* get input file */
-    if(p->argv->words==0){
+    if(p->argv->words==nil){
         Xerror1("Usage: . [-i] file [arg ...]");
         return;
     }

@@ -69,28 +69,33 @@ struct Thread {
 
     int lineno;			/* linenumber */
 
+    /*s: [[Thread]] other fields */
+    // list<list<ref_own<word>>> (next = List.next)
+    struct List *argv;		/* argument stack */
+    /*x: [[Thread]] other fields */
     // list<ref_own<Var>> (next = Var.next)
     struct Var *local;		/* list of local variables */
 
-    // list<list<ref_own<word>>> (next = List.next)
-    struct List *argv;		/* argument stack */
 
     struct Redir *redir;	/* redirection stack */
     struct Redir *startredir;	/* redir inheritance point */
 
     char *cmdfile;		/* file name in Xrdcmd */
-    struct Io *cmdfd;		/* file descriptor for Xrdcmd */
 
     bool iflast;		/* static `if not' checking */
-    bool eof;			/* is cmdfd at eof? */
-    bool iflag;			/* interactive? */
+    bool eof;		/* is cmdfd at eof? */
 
-    int pid;			/* process for Xpipewait to wait for */
+    int pid;		/* process for Xpipewait to wait for */
     char status[NSTATUS];	/* status for Xpipewait */
+    /*x: [[Thread]] other fields */
+    struct Io *cmdfd;	/* file descriptor for Xrdcmd */
+    bool iflag;		/* interactive? */
+    /*e: [[Thread]] other fields */
 
-    tree *treenodes;		/* tree nodes created by this process */
-
+    // Extra
+    /*s: [[Thread]] extra fields */
     thread *ret;		/* who continues when this finishes */
+    /*e: [[Thread]] extra fields */
 };
 /*e: struct thread */
 

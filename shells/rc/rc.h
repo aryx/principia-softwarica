@@ -72,12 +72,17 @@ struct Tree {
 
     bool iskw;
 
+    /*s: [[Tree]] other fields */
     //enum<redirection_kind>
     int	rtype;
     int fd0, fd1;	/* details of REDIR PIPE DUP tokens */
     bool	quoted;
+    /*e: [[Tree]] other fields */
 
+    // Extra
+    /*s: [[Tree]] extra fields */
     tree	*next;
+    /*e: [[Tree]] extra fields */
 };
 /*e: struct tree */
 
@@ -104,7 +109,7 @@ tree *heredoc(tree*);
  * Always call codefree(.) when deleting a reference.
  */
 union Code {
-    void	(*f)(void); // Xxxx()
+    void	(*f)(void); // Xxxx() opcode
     int	i;
     char	*s;
 };
@@ -146,12 +151,17 @@ struct Var {
     char	*name;		/* ascii name */
     word	*val;		/* value */
 
+    /*s: [[Var]] other fields */
     bool	changed;
     code	*fn;		/* pointer to function's code vector */
     int	fnchanged;
     int	pc;		/* pc of start of function */
+    /*e: [[Var]] other fields */
 
+    // Extra
+    /*s: [[Var]] extra fields */
     var	*next;		/* next on hash or local list */
+    /*e: [[Var]] extra fields */
 };
 /*e: struct var */
 

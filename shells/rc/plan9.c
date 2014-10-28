@@ -54,16 +54,18 @@ void execnewpgrp(void);
 builtin Builtin[] = {
     "cd",		execcd,
     "exit",		execexit,
-    "exec",		execexec,	/* but with popword first */
     ".",		execdot,
     "eval",		execeval,
+
     "whatis",		execwhatis,
 
-    "shift",		execshift,
+    "exec",		execexec,	/* but with popword first */
+    "rfork",		execnewpgrp,
     "wait",		execwait,
+
+    "shift",		execshift,
     "finit",		execfinit,
     "flag",		execflag,
-    "rfork",		execnewpgrp,
     0
 };
 /*e: global Builtin */

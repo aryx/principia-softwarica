@@ -10,9 +10,9 @@
 
 /*s: token declarations */
 %token <tree> FOR IN WHILE IF NOT SWITCH FN
-%token <tree> WORD
 %token <tree> TWIDDLE BANG SUBSHELL 
 %token <tree> REDIR DUP PIPE
+%token <tree> WORD
 %token ANDAND OROR
 %token COUNT SUB
 %token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
