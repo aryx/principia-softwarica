@@ -178,6 +178,14 @@ License.
 
 \section{[[rc]] services}
 
+% run command
+% pipe, redirection, async
+% variable
+% mini language with control flow statement
+% globbing
+
+% job control?
+
 \section{Input shell language}
 % rc PL
 % quite similar to bash
@@ -193,10 +201,8 @@ License.
 
 % pipeline archi? like compiler?
 
-% lexing -> parsing -> ast -> bytecode? -> ???
-%  ??? ->  yyparse() -> yylex()
-%                    -> compile()
-
+% string -> lexing(yylex) -> parsing(yyparse) -> ast(treexx) -> bytecode(compile)
+%
 % but how the parsing chain is called?
 % main() -> 
 %   - build boostrap
@@ -204,9 +210,15 @@ License.
 %   - setup runq->argv
 %   - start interpreting bootstrap runq->code[pc-1].f()
 %   -
+%
+%  Xrdcmds() -> yyparse() -> yylex()
+%                         -> compile()
+% (note that not lexing -> parsing  for efficiency parsing call lexer
+%  on demand, so need to keep only one token in memory)
 
 %Xxxx? bytecode?
 %execxxx? builtins?
+
 
 %###############################################################################
 
@@ -363,7 +375,7 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 @
 % no check for c2 when use ';'? no because binary operator?
 
-\section{Bytecode [[Code]] and [[codebuf]]}
+\section{Opcode [[Code]] and [[codebuf]]}
 
 <<struct code>>=
 /*
@@ -409,7 +421,7 @@ struct Thread {
     char *cmdfile;		/* file name in Xrdcmd */
     struct Io *cmdfd;		/* file descriptor for Xrdcmd */
 
-    int iflast;			/* static `if not' checking */
+    bool iflast;			/* static `if not' checking */
     bool eof;			/* is cmdfd at eof? */
     bool iflag;			/* interactive? */
 
@@ -549,6 +561,8 @@ gvlook(char *name)
 @
 
 \chapter{[[main()]]}
+
+\section{Overview}
 
 %plan9.c
 <<global Rcmain>>=
@@ -774,6 +788,8 @@ pushword(char *wd)
 
 \chapter{Lexing}
 % why not using lex?
+
+\section{Overview}
 
 \section{Input}
 
@@ -1312,7 +1328,8 @@ klook(char *name)
 %type<tree> cmd simple first word comword keyword words
 @
 
-
+% if compile return 0 it's an error, so here 1 = an error
+% ??? -> yyparse() ?
 <<grammar>>=
 rc: 
     /*empty*/       { return 1;}
@@ -1329,7 +1346,8 @@ cmdsa:
 
 cmd: 
     /*empty*/           {$$=nil;}
-|   simple          {$$=simplemung($1);}
+|   simple              {$$=simplemung($1);}
+|   brace epilog        {$$=epimung($1, $2);}
 
 |   cmd ANDAND cmd      {$$=tree2(ANDAND, $1, $3);}
 |   cmd OROR cmd        {$$=tree2(OROR, $1, $3);}
@@ -1354,8 +1372,6 @@ cmd:
 
 |   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
 |   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
-
-|   brace epilog        {$$=epimung($1, $2);}
 
 |   TWIDDLE word words  {$$=mung2($1, $2, $3);}
 
@@ -1398,23 +1414,24 @@ simple:
 |   simple word         {$$=tree2(ARGLIST, $1, $2);}
 |   simple redir        {$$=tree2(ARGLIST, $1, $2);}
 
+/* diff with word? first cannot be a keyword */
 first:  
     comword 
 |   first '^' word      {$$=tree2('^', $1, $3);}
 
 word:   
     comword
-|   keyword             {lastword=true; $1->type=WORD;}
 |   word '^' word       {$$=tree2('^', $1, $3);}
+|   keyword             {lastword=true; $1->type=WORD;}
 
 comword: 
     WORD
 |   '$' word       {$$=tree1('$', $2);}
 |   '$' word SUB words ')'  {$$=tree2(SUB, $2, $4);}
-|   '"' word        {$$=tree1('"', $2);}
 |   COUNT word      {$$=tree1(COUNT, $2);}
+|   '"' word        {$$=tree1('"', $2);}
 |   '`' brace       {$$=tree1('`', $2);}
-|   '(' words ')'       {$$=tree1(PAREN, $2);}
+|   '(' words ')'   {$$=tree1(PAREN, $2);}
 |   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
 
 keyword: FOR|IN|WHILE|IF|NOT|TWIDDLE|BANG|SUBSHELL|SWITCH|FN
@@ -1433,44 +1450,62 @@ words:
 @
 \fi
 
-\chapter{Code Generation}
-% in shell context???
 
+\section{Line}
+
+\section{Simple commands}
+
+\section{Statements}
+
+\chapter{Opcode Generation}
+% in shell context???
+% or Code generation? or Bytecode generation?
+
+\section{Overview}
+
+\section{[[compile()]]}
+
+% return 0 for error 1 for ok
 <<function compile>>=
 //@Scheck: called from syn.y
 int compile(tree *t)
 {
     ncode = 100;
-    codebuf = (code *)emalloc(ncode*sizeof codebuf[0]);
+    codebuf = (code *)emalloc(ncode*sizeof(code));
     codep = 0;
     emiti(0);			/* reference count */
-    outcode(t, flag['e']?1:0);
+
+    outcode(t, flag['e'] ? true : false);
+
     if(nerror){
         efree((char *)codebuf);
         return 0;
     }
+
     readhere();
     emitf(Xreturn);
     emitf(0);
+
     return 1;
 }
 @
 
+\section{[[outcode()]]}
+
 <<function outcode>>=
 void
-outcode(tree *t, int eflag)
+outcode(tree *t, bool eflag)
 {
     int p, q;
     tree *tt;
-    if(t==0)
+
+    if(t==nil)
         return;
     if(t->type!=NOT && t->type!=';')
-        runq->iflast = 0;
+        runq->iflast = false;
+
     switch(t->type){
-    default:
-        pfmt(err, "bad type %d in outcode\n", t->type);
-        break;
-    case '$':
+    case '$': //$
         emitf(Xmark);
         outcode(c0, eflag);
         emitf(Xdol);
@@ -1519,7 +1554,7 @@ outcode(tree *t, int eflag)
             emits(fnstr(c0));
         break;
     case ANDAND:
-        outcode(c0, 0);
+        outcode(c0, false);
         emitf(Xtrue);
         p = emiti(0);
         outcode(c1, eflag);
@@ -1550,7 +1585,7 @@ outcode(tree *t, int eflag)
             p = emiti(0);
             emits(fnstr(c1));
             outcode(c1, eflag);
-            emitf(Xunlocal);	/* get rid of $* */
+            emitf(Xunlocal);	/* get rid of $* */ //$
             emitf(Xreturn);
             stuffdot(p);
         }
@@ -1558,7 +1593,7 @@ outcode(tree *t, int eflag)
             emitf(Xdelfn);
         break;
     case IF:
-        outcode(c0, 0);
+        outcode(c0, false);
         emitf(Xif);
         p = emiti(0);
         outcode(c1, eflag);
@@ -1616,7 +1651,7 @@ outcode(tree *t, int eflag)
         break;
     case WHILE:
         q = codep;
-        outcode(c0, 0);
+        outcode(c0, false);
         if(q==codep)
             emitf(Xsettrue);	/* empty condition == while(true) */
         emitf(Xtrue);
@@ -1751,7 +1786,11 @@ outcode(tree *t, int eflag)
         stuffdot(q);
         emitf(Xpipewait);
         break;
+    default:
+        pfmt(err, "bad type %d in outcode\n", t->type);
+        break;
     }
+
     if(t->type!=NOT && t->type!=';')
         runq->iflast = t->type==IF;
     else if(c0) runq->iflast = c0->type==IF;
@@ -1759,7 +1798,38 @@ outcode(tree *t, int eflag)
 @
 %$
 
-\chapter{Execution}
+\section{Simple commands}
+
+\section{Pipe}
+
+\section{Redirection}
+
+\section{Statements}
+
+\section{XXX}
+
+\chapter{Opcode Interpretation}
+% Execution
+
+\section{Overview}
+
+\section{Simple commands}
+
+\section{Pipe}
+
+\section{Redirection}
+
+<<struct redir>>=
+struct Redir {
+    char type;			/* what to do */
+    short from, to;			/* what to do it to */
+    struct Redir *next;		/* what else to do (reverse order) */
+};
+@
+
+\section{Statements}
+
+\section{XXX}
 
 \chapter{Builtins}
 
@@ -1925,18 +1995,6 @@ char *promptstr;
 @
 
 \chapter{Environment}
-
-\chapter{Redirection}
-
-<<struct redir>>=
-struct Redir {
-    char type;			/* what to do */
-    short from, to;			/* what to do it to */
-    struct Redir *next;		/* what else to do (reverse order) */
-};
-@
-
-\chapter{Pipe}
 
 \chapter{Globbing}
 

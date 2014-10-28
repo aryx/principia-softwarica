@@ -331,7 +331,7 @@ execcmds(io *f)
     }
     start(rdcmds, 1, runq->local);
     runq->cmdfd = f;
-    runq->iflast = 0;
+    runq->iflast = false;
 }
 /*e: function execcmds */
 
@@ -436,7 +436,7 @@ execdot(void)
     runq->cmdfile = zero;
     runq->cmdfd = openfd(fd);
     runq->iflag = iflag;
-    runq->iflast = 0;
+    runq->iflast = false;
     /* push $* value */
     pushlist();
     runq->argv->words = p->argv->words;

@@ -61,17 +61,21 @@ stuffdot(int a)
 int compile(tree *t)
 {
     ncode = 100;
-    codebuf = (code *)emalloc(ncode*sizeof codebuf[0]);
+    codebuf = (code *)emalloc(ncode*sizeof(code));
     codep = 0;
     emiti(0);			/* reference count */
-    outcode(t, flag['e']?1:0);
+
+    outcode(t, flag['e'] ? true : false);
+
     if(nerror){
         efree((char *)codebuf);
         return 0;
     }
+
     readhere();
     emitf(Xreturn);
     emitf(0);
+
     return 1;
 }
 /*e: function compile */
@@ -106,19 +110,18 @@ fnstr(tree *t)
 
 /*s: function outcode */
 void
-outcode(tree *t, int eflag)
+outcode(tree *t, bool eflag)
 {
     int p, q;
     tree *tt;
-    if(t==0)
+
+    if(t==nil)
         return;
     if(t->type!=NOT && t->type!=';')
-        runq->iflast = 0;
+        runq->iflast = false;
+
     switch(t->type){
-    default:
-        pfmt(err, "bad type %d in outcode\n", t->type);
-        break;
-    case '$':
+    case '$': //$
         emitf(Xmark);
         outcode(c0, eflag);
         emitf(Xdol);
@@ -167,7 +170,7 @@ outcode(tree *t, int eflag)
             emits(fnstr(c0));
         break;
     case ANDAND:
-        outcode(c0, 0);
+        outcode(c0, false);
         emitf(Xtrue);
         p = emiti(0);
         outcode(c1, eflag);
@@ -198,7 +201,7 @@ outcode(tree *t, int eflag)
             p = emiti(0);
             emits(fnstr(c1));
             outcode(c1, eflag);
-            emitf(Xunlocal);	/* get rid of $* */
+            emitf(Xunlocal);	/* get rid of $* */ //$
             emitf(Xreturn);
             stuffdot(p);
         }
@@ -206,7 +209,7 @@ outcode(tree *t, int eflag)
             emitf(Xdelfn);
         break;
     case IF:
-        outcode(c0, 0);
+        outcode(c0, false);
         emitf(Xif);
         p = emiti(0);
         outcode(c1, eflag);
@@ -264,7 +267,7 @@ outcode(tree *t, int eflag)
         break;
     case WHILE:
         q = codep;
-        outcode(c0, 0);
+        outcode(c0, false);
         if(q==codep)
             emitf(Xsettrue);	/* empty condition == while(true) */
         emitf(Xtrue);
@@ -399,7 +402,11 @@ outcode(tree *t, int eflag)
         stuffdot(q);
         emitf(Xpipewait);
         break;
+    default:
+        pfmt(err, "bad type %d in outcode\n", t->type);
+        break;
     }
+
     if(t->type!=NOT && t->type!=';')
         runq->iflast = t->type==IF;
     else if(c0) runq->iflast = c0->type==IF;

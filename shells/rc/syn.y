@@ -49,7 +49,8 @@ cmdsa:
 
 cmd: 
     /*empty*/           {$$=nil;}
-|   simple          {$$=simplemung($1);}
+|   simple              {$$=simplemung($1);}
+|   brace epilog        {$$=epimung($1, $2);}
 
 |   cmd ANDAND cmd      {$$=tree2(ANDAND, $1, $3);}
 |   cmd OROR cmd        {$$=tree2(OROR, $1, $3);}
@@ -74,8 +75,6 @@ cmd:
 
 |   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
 |   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
-
-|   brace epilog        {$$=epimung($1, $2);}
 
 |   TWIDDLE word words  {$$=mung2($1, $2, $3);}
 
@@ -118,23 +117,24 @@ simple:
 |   simple word         {$$=tree2(ARGLIST, $1, $2);}
 |   simple redir        {$$=tree2(ARGLIST, $1, $2);}
 
+/* diff with word? first cannot be a keyword */
 first:  
     comword 
 |   first '^' word      {$$=tree2('^', $1, $3);}
 
 word:   
     comword
-|   keyword             {lastword=true; $1->type=WORD;}
 |   word '^' word       {$$=tree2('^', $1, $3);}
+|   keyword             {lastword=true; $1->type=WORD;}
 
 comword: 
     WORD
 |   '$' word       {$$=tree1('$', $2);}
 |   '$' word SUB words ')'  {$$=tree2(SUB, $2, $4);}
-|   '"' word        {$$=tree1('"', $2);}
 |   COUNT word      {$$=tree1(COUNT, $2);}
+|   '"' word        {$$=tree1('"', $2);}
 |   '`' brace       {$$=tree1('`', $2);}
-|   '(' words ')'       {$$=tree1(PAREN, $2);}
+|   '(' words ')'   {$$=tree1(PAREN, $2);}
 |   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
 
 keyword: FOR|IN|WHILE|IF|NOT|TWIDDLE|BANG|SUBSHELL|SWITCH|FN
