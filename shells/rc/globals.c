@@ -13,7 +13,7 @@ int lastc;
 int mypid;
 /*e: global mypid */
 /*s: global gvar */
-// hash<string, ref<Var>> (next = Var.next)
+// hash<string, ref<Var>> (next = Var.next in bucket list)
 var *gvar[NVAR];		/* hash for globals */
 /*e: global gvar */
 /*s: global ndot */

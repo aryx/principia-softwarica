@@ -13,14 +13,14 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-%  - removed deadcode (Thread.treenodes, Tree.iskw? ...)
+%  - removed deadcode (Thread.treenodes, Tree.iskw?, freetree? ...)
 
 %thx to codemap/codegraph/scheck:
 %  - removed deadcode (many dead functions)
 
 %thx to this manual, better understand sh:
 % - TODO fancy redirection syntax
-% - $*
+% - TODO $*
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Kernel.tex.nw skeleton
@@ -28,9 +28,9 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, builtin, opcode
-% - TODO read Extra section, identify concepts, first TOC
-% - TODO distribute parts of the file before
-% - TODO nullify, boolify, typeify,    scheckify
+% - read Extra section, identify concepts, first TOC
+% - SEMI distribute parts of the file before
+% - SEMI nullify, boolify, typeify,    scheckify
 % - TODO aspecify advanced features!
 % - TODO add figures
 % - TODO add explanations
@@ -145,7 +145,7 @@ you fully understand how things work under the hood.
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
 \item sh
-\item bash
+\item bash, big codebase
 \item zsh
 \item scsh
 \end{itemize}
@@ -171,21 +171,24 @@ License.
 
 \section{Acknowledgments}
 
-% Tom Duff of course
+Tom Duff of course the author of [[rc]].
 
 \chapter{Overview}
 
 \section{Shell principles}
 % for a long time actually there was no (external) shell. Shell was
 % part of OS. With Unix it changed and shell can be a regular
-% user program which then opened the way for complex job control language.
+% user program. It then opened the way for complex job control language.
 
-% idea of universal repl! not like Lisp machine, squeak, etc.
+% shell is also idea of universal repl! not like Lisp machine, squeak, etc.
 % see Kernel.tex.nw note on this.
+% call function from repl, pass argument, modify globals. can even get
+% help via whatis :) or man :)
 
 
 % cf stevens book, shell basis = read a line, parse, fork, exec, wait!
-% and to handle pipe and redirection it's little variations
+% to handle pipe and redirection it's little variations that shows also
+% the beauty of fork!
 
 % do a minishell before showing rc?
 
@@ -244,8 +247,6 @@ License.
 %var.c: variables
 
 
-
-
 \section{Architecture overview}
 
 % pipeline archi? like compiler? not exactly as it's actually an interpreter
@@ -285,7 +286,7 @@ License.
 %token TWIDDLE BANG SUBSHELL /** ~ ! @ */
 %token REDIR DUP PIPE /** {>, <, <<, >>} DUP = ??? | */
 %token ANDAND OROR /** && || */
-%token COUNT SUB /** # SUB = ??? */
+%token COUNT SUB /** # SUB = ??? [? */
 %token WORD
 @
 % was using %term instead of %token (probably for %terminal?)
@@ -362,6 +363,7 @@ newtree(void)
 }
 @
 
+% dead?
 <<function freetree>>=
 void
 freetree(tree *p)
@@ -438,7 +440,7 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 
 % shell = interpreter. Actually source -> AST -> opcode
 % and then opcode interpreter, a bit like an actual processor
-% (or java).
+% (or Java). A little stack based interpreter.
 
 % * Opcode routines
 % * Arguments on stack (...)
@@ -447,20 +449,18 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 
 
 % * Xsimple(args)			run command and wait
-%
 % * Xrdcmds !!! call yyparse()
 
 % * Xmark				mark stack
 % * Xword[string]			push string
 % * Xpopm(value)			pop value from stack
-
 % * Xcount(name)			push var count
 % * Xconc(left, right)			concatenate, push results
 
 % * Xassign(name, val)			assign val to name
+% * Xdol(name)				get variable value
 % * Xlocal(name, val)			create local variable, assign value
 % * Xunlocal				delete local variable
-% * Xdol(name)				get variable value
 
 % * Xexit				rc exits with status
 % * Xreturn				kill thread
@@ -497,6 +497,7 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 
 % * Xglob
 
+% ???
 % * Xdelhere
 % * Xeflag
 % * Xpopredir
@@ -529,18 +530,58 @@ union Code {
 };
 @
 
+% show bootstrap code?
+% or show trace of rc -r ? with my simple bootstrap code!
+
+
 
 % first element is a reference count, which is why codecopy()
 % does cp[0].i++;
 
-% show bootstrap code?
-% or show trace of rc -r ?
+<<function codecopy>>=
+code*
+codecopy(code *cp)
+{
+    cp[0].i++;
+    return cp;
+}
+@
+
+<<function codefree>>=
+void
+codefree(code *cp)
+{
+    code *p;
+    if(--cp[0].i!=0)
+        return;
+
+    for(p = cp+1;p->f;p++){
+        if(p->f==Xappend || p->f==Xclose || p->f==Xread || p->f==Xwrite
+        || p->f==Xrdwr
+        || p->f==Xasync || p->f==Xbackq || p->f==Xcase || p->f==Xfalse
+        || p->f==Xfor || p->f==Xjump
+        || p->f==Xsubshell || p->f==Xtrue)
+            p++;
+        else if(p->f==Xdup || p->f==Xpipefd) 
+                 p+=2;
+        else if(p->f==Xpipe) 
+                 p+=4;
+        else if(p->f==Xword || p->f==Xdelhere) 
+                 efree((++p)->s);
+        else if(p->f==Xfn){
+                 efree(p[2].s);
+                 p+=2;
+              }
+    }
+    efree((char *)cp);
+}
+@
+
 
 
 
 \section{[[Thread]] and [[runq]]}
-% managing processes
-% (why called threads?)
+% managing processes (why called threads?)
 
 <<struct thread>>=
 struct Thread {
@@ -564,9 +605,8 @@ thread *runq;
 thread *ret;		/* who continues when this finishes */
 @
 
-% runq->argv->words->next->word
-% todo define macro? argv1()? argv0() ?
 
+% freethread? with reference count handling?
 
 % important one
 <<[[Thread]] other fields>>=
@@ -575,23 +615,32 @@ struct List *argv;		/* argument stack */
 @
 % list of list?
 
+% runq->argv->words->next->word
+% todo define macro? argv1()? argv0() ?
+
+
+% really intepreter small language, have locals!
+% TODO rename local -> locals?
+<<[[Thread]] other fields>>=
+// list<ref_own<Var>> (next = Var.next)
+struct Var *local;		/* list of local variables */
+@
 
 
 
 
 
 %XXXX
-% TODO rename local -> locals?
 <<[[Thread]] other fields>>=
-// list<ref_own<Var>> (next = Var.next)
-struct Var *local;		/* list of local variables */
-
-
 struct Redir *redir;	/* redirection stack */
 struct Redir *startredir;	/* redir inheritance point */
+@
 
+<<[[Thread]] other fields>>=
 bool iflast;		/* static `if not' checking */
+@
 
+<<[[Thread]] other fields>>=
 int pid;		/* process for Xpipewait to wait for */
 char status[NSTATUS];	/* status for Xpipewait */
 @
@@ -603,7 +652,7 @@ char status[NSTATUS];	/* status for Xpipewait */
 <<struct word>>=
 /*
  * word lists are in correct order,
- * i.e. word0->word1->word2->word3->0
+ * i.e. word0->word1->word2->word3->nil
  */
 struct Word {
     char *word;
@@ -624,6 +673,7 @@ newword(char *wd, word *next)
     return p;
 }
 @
+% cons?
 
 
 <<function freewords>>=
@@ -673,8 +723,6 @@ pushlist(void)
 % to the simple command!
 
 
-
-
 \section{[[Var]] and [[gvar]]}
 
 <<struct var>>=
@@ -705,7 +753,7 @@ bool	changed;
 @
 
 <<global gvar>>=
-// hash<string, ref<Var>> (next = Var.next)
+// hash<string, ref<Var>> (next = Var.next in bucket list)
 var *gvar[NVAR];		/* hash for globals */
 @
 
@@ -824,15 +872,17 @@ else
 
 \section{Initialisation}
 
+% put back global err here, with its Io type?
+
 <<[[main()]] initialisation>>=
 err = openfd(STDERR);
 @
 % err = openfd, use buffered IO lib, see appendix X.y
 
 <<[[main()]] initialisation>>=
-kinit();
-Trapinit();
-Vinit();
+kinit(); // initialize keywords
+Trapinit(); // notify() function setup
+Vinit(); // read environment variables and add them in gvar
 @
 
 
@@ -848,7 +898,6 @@ int i;
 % simplified bootstrap:
 % Xrdcmds (which will call yyparse()->compile()->outcode()
 %  which will read a line, compile it, and add a Xreturn
-
 %when want to experiment with simplified bootstrap
 % (don't forget to also modify mkfile and put 'rc2' for TARG
 %OPTIONAL
@@ -857,10 +906,11 @@ memset(bootstrap, 0, sizeof bootstrap);
 
 i = 0;
 bootstrap[i++].i = 1; // reference count
-bootstrap[i++].f = Xmark;
 bootstrap[i++].f = Xrdcmds;
+bootstrap[i].i = 0;
 @
-%less: Xmark necessary?
+%bootstrap[i++].f = XMark; ? necessary?
+%bootstrap[i++].f = Xexit; ? Xexit never reached I think.
 % 1 to reference count? why? they put 0 in compile() for new opcodes
 
 \section{Setting [[runq]]}
@@ -882,29 +932,20 @@ start(code *c, int pc, var *local)
     p->pc = pc;
 
     p->argv = nil;
+    p->local = local;
+    p->lineno = 1;
 
     p->redir = p->startredir = runq ? runq->redir : nil;
-    p->local = local;
     p->cmdfile = nil;
     p->cmdfd = nil;
     p->eof = false;
     p->iflag = false;
-    p->lineno = 1;
 
     p->ret = runq;
     runq = p;
 }
 @
 % not reset iflast to false?
-
-<<function codecopy>>=
-code*
-codecopy(code *cp)
-{
-    cp[0].i++;
-    return cp;
-}
-@
 
 
 \section{Setting [[runq->argv]]}
@@ -923,7 +964,8 @@ argv0 = strdup(argv[0]);
 for(i = argc-1;i!=0;--i) 
     pushword(argv[i]);
 @
-
+% start from end because stack so at the end the top of the stack will
+% be the first argument of the command
 
 
 <<function pushword>>=
@@ -951,25 +993,8 @@ for(;;){
 \section{[[Xrdcmds()]]}
 % X(opcode) read commands
 
-<<[[Thread]] other fields>>=
-struct Io *cmdfd;	/* file descriptor for Xrdcmd */
-char *cmdfile;		/* file name in Xrdcmd */
-bool iflag;		/* interactive? */
-bool eof;		/* is cmdfd at eof? */
-@
-
-%OPTIONAL
-<<[[main()]] initialize runq with bootstrap code>>=
-runq->cmdfd = openfd(STDIN); // reading from stdin
-runq->cmdfile = "<stdin>";
-runq->iflag = true; // interactive mode; will print a prompt
-@
-% eof set to false in start()
-% cmdfile setting is not necessary, but it's used in yyerror() so
-
-
-% =~ repl, 
-%  read (yylex+yyparse), 
+% Xrdcmds =~ REPL, 
+%  read (yylex+yyparse),
 %  eval (compile+outcode+return to interpreter)
 %  print? hmm partly in yylex for the prompt, the rest the program does it
 
@@ -988,12 +1013,14 @@ Xrdcmds(void)
     <<[[Xrdcmds()]] set promptstr if interactive mode>>
     <<[[Xrdcmds()]] calls Noerror() before yyparse()>>
 
+    // read cmd, compiles it, and modifies codebuf global
     error = yyparse();
 
     <<[[Xrdcmds()]] if yyparse() returned an error>>
     else{
         <<[[Xrdcmds()]] reset ntrap>>
         --p->pc;	/* re-execute Xrdcmds after codebuf runs */
+        // modifies runq, new thread (linked to bootstrap one)
         start(codebuf, 1, runq->local);
     }
     freenodes(); // allocated in yyparse()
@@ -1003,13 +1030,35 @@ Xrdcmds(void)
 % the codebuf by compile()
 
 % flow a bit complicated, but
-% interpreter loop -> Xrdcmds -> yyparse() -> start(codebuf)
+% interpreter loop on runq->code -> Xrdcmds() -> yyparse() -> start(codebuf)
 %  will go back in loop with a new runq! and once the command is done
 %  with a Xreturn it will resume to Xrdcmds runq (the bootstrap queue)
 
-% so where cmdfd is used? in yylex() getnextc(), called from yyparse()
+
+% yyparse() use runq global, and special additional fields:
+% (actually it's yylex())
+
+<<[[Thread]] other fields>>=
+struct Io *cmdfd;	/* file descriptor for Xrdcmd */
+char *cmdfile;		/* file name in Xrdcmd */
+bool iflag;		/* interactive? */
+@
+
+%OPTIONAL
+<<[[main()]] initialize runq with bootstrap code>>=
+runq->cmdfd = openfd(STDIN); // reading from stdin
+runq->cmdfile = "<stdin>";
+runq->iflag = true; // interactive mode; will print a prompt
+@
+% eof set to false in start()
+% cmdfile setting is not necessary, but it's used in yyerror() so why not set it
+
+% where cmdfd is used? in yylex() getnextc(), called from yyparse()
 
 
+<<[[Thread]] other fields>>=
+bool eof;		/* is cmdfd at eof? */
+@
 
 % C-d generates an EOF?
 <<[[Xrdcmds()]] if yyparse() returned an error>>=
@@ -1077,6 +1126,7 @@ getnext(void)
         peekc = EOF;
         return c;
     }
+
     if(runq->eof)
         return EOF;
     if(doprompt)
@@ -1084,6 +1134,7 @@ getnext(void)
 
     c = rchr(runq->cmdfd);
     if(!inquote && c=='\\'){
+
         c = rchr(runq->cmdfd);
         if(c=='\n' && !incomm){		/* don't continue a comment */
             doprompt = true;
@@ -1096,7 +1147,7 @@ getnext(void)
     }
     doprompt = doprompt || c=='\n' || c==EOF;
     if(c==EOF)
-        runq->eof++; // ->eof = true cleaner no?
+        runq->eof++; // = true cleaner no?
     else 
         if(flag['V'] || ndot>=2 && flag['v'])
             pchr(err, c);
@@ -1446,7 +1497,7 @@ skipwhite(void)
 }
 @
 
-
+% subtle! called from grammar, weird
 <<function skipnl>>=
 void
 skipnl(void)
@@ -1560,14 +1611,16 @@ token(char *str, int type)
 
 \section{Strings}
 
+
+
 \chapter{Parsing}
 
 \section{Overview}
 
 % I assume you understand yacc! if not read classic book on lex&yacc
 %  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.tex.nw :) )
-%(compared to ocamlyacc can have actions in the middle, and they count
-% as indexable elements for the $xxx ($1, $2, etc))
+%(compared to ocamlyacc can have actions in the middle, and those actions
+% count as indexable elements for the $xxx numbering ($1, $2, etc))
 
 <<rc/syn.y>>=
 %{
@@ -1601,40 +1654,209 @@ token(char *str, int type)
 
 
 <<type declarations>>=
-%type<tree> line paren brace body cmdsa cmdsan assign epilog redir
-%type<tree> cmd simple first word comword keyword words
-%type<tree> FOR IN WHILE IF NOT SWITCH FN
-%type<tree> TWIDDLE BANG SUBSHELL 
-%type<tree> REDIR DUP PIPE
-%type<tree> WORD
+%type<tree> line cmd simple word comword
 @
 
+% interesting DSL. must be easy to issue a command.
+% don't want to do 'system("ls");' like in other languages.
+% and want newline to have a special semantic role, a kind of implicit ';'
+% -xxx, /a/b, are treated as regular words! only ;&${[^ are specials
+%less: rename? cmd -> statement, simple -> expression, word -> argument?
+
 % if compile return 0 it's an error, so here 1 = an error
-% ??? -> yyparse() ?
+% TODO: be more consistent, return compile() would be cleaner so no need
+%  explanation
+% Xrdcmds -> yyparse() ?
 <<grammar>>=
 rc: 
     /*empty*/       { return ERROR_1;}
 |   line '\n'       { return !compile($1);}
 
+<<line rule>>
+<<cmd rule>>
+<<simple rule>>
+<<word rule>>
+<<comword rule>>
+
+<<other rules>>
+@
+%$
+
+% a line can have a single command (stmt)
+<<line rule>>=
 line:   
     cmd
-|   cmdsa line      {$$=tree2(';', $1, $2);}
+<<line rule other cases>>
+@
+% can have ; and & here (why not in cmd? because newline issue?)
 
-cmdsa:  
-    cmd ';'
-|   cmd '&'         {$$=tree1('&', $1);}
-
-
+% a (single) command can be a simple "expression"
+<<cmd rule>>=
 cmd: 
     /*empty*/           {$$=nil;}
 |   simple              {$$=simplemung($1);}
+<<cmd rule other cases>>
+@
+%$
+% can have complex stmt here
 
-|   brace epilog        {$$=epimung($1, $2);}
+% an expression can be a "funcall" which is a simple serie of words
+% (separated by spaces, curry style :) )
+% with first word has some restrictions
+<<simple rule>>=
+simple:
+    first
+|   simple word         {$$=tree2(ARGLIST, $1, $2);}
+<<simple rule other cases>>
+@
+% can have redirection here
 
+
+
+
+
+
+<<other rules>>=
+first:  
+    comword 
+|   first '^' word      {$$=tree2('^', $1, $3);}
+@
+%/* diff with word? first cannot be a keyword */
+
+% basic identifier, a kind of primary expression
+% -xxx, /a/b, are treated as regular words
+<<comword rule>>=
+comword: 
+    WORD
+<<comword rule other cases>>
+@
+% can have variables and other complex arguments
+
+
+% a word can be any identifier or symbol or integer (WORD)
+<<word rule>>=
+word:   
+    comword
+|   word '^' word       {$$=tree2('^', $1, $3);}
+|   keyword             {lastword=true; $1->type=WORD;}
+@
+%$
+
+
+<<other rules>>=
+keyword: FOR|IN|WHILE|IF|NOT|TWIDDLE|BANG|SUBSHELL|SWITCH|FN
+@
+
+
+<<other rules>>=
+words: 
+    /*empty*/       {$$=(struct Tree*)nil;}
+|   words word      {$$=tree2(WORDS, $1, $2);}
+@
+%$
+
+\ifallcode
+<<type declarations>>=
+%type<tree> first keyword words
+%type<tree> paren brace body cmdsa cmdsan assign epilog redir
+%type<tree> FOR IN WHILE IF NOT SWITCH FN
+%type<tree> TWIDDLE BANG SUBSHELL  REDIR DUP PIPE    WORD
+@
+\fi
+
+\ifallcode
+<<constant YYMAXDEPTH>>=
+//@Scheck: used in y.tab.c
+#define	YYMAXDEPTH	500
+@
+\fi
+
+
+\section{Operators}
+
+% actually operator are at different levels, line rule, cmd rule,
+% simple rule and so have different priotities.
+% redirection is lower, then pipe and logic operators, then sequence
+
+\subsection{Sequence}
+
+<<line rule other cases>>=
+|   cmdsa line      {$$=tree2(';', $1, $2);}
+@
+
+<<other rules>>=
+cmdsa:  
+    cmd ';'
+|   cmd '&'         {$$=tree1('&', $1);}
+@
+%$
+
+% x & y is really (x&); y
+
+\subsection{Logic operators}
+% Other operators?
+% && ||  |  &  !?
+% >> << > <
+
+<<cmd rule other cases>>=
 |   cmd ANDAND cmd      {$$=tree2(ANDAND, $1, $3);}
 |   cmd OROR cmd        {$$=tree2(OROR, $1, $3);}
-|   cmd PIPE cmd        {$$=mung2($2, $1, $3);}
+@
+% why not merge with ; and & ?
 
+<<cmd rule other cases>>=
+|   BANG cmd            {$$=mung1($1, $2);}
+|   TWIDDLE word words  {$$=mung2($1, $2, $3);}
+@
+%$
+
+% redir is in simple/expr, so has more prirority
+
+\subsection{Pipe}
+
+<<cmd rule other cases>>=
+|   cmd PIPE cmd        {$$=mung2($2, $1, $3);}
+@
+%$
+
+\subsection{Redirections}
+
+% at level of simple, below cmd, so higher prio than ||, &&, ;, etc
+<<simple rule other cases>>=
+|   simple redir        {$$=tree2(ARGLIST, $1, $2);}
+@
+
+<<other rules>>=
+redir:  
+    REDIR word      {$$=mung1($1, $1->rtype==HERE ? heredoc($2) : $2);}
+|   DUP
+@
+
+
+
+% other redirections!
+
+<<other rules>>=
+epilog: 
+    /*empty*/           {$$=nil;}
+|   redir epilog        {$$=mung2($1, $1->child[0], $2);}
+@
+%$
+
+<<comword rule other cases>>=
+|   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
+@
+
+<<cmd rule other cases>>=
+|   redir cmd  %prec BANG
+        {$$=mung2($1, $1->child[0], $2);}
+@
+%$
+
+
+\section{Control flow commands}
+
+<<cmd rule other cases>>=
 |   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
 |   IF NOT   {skipnl();} cmd  {$$=mung1($2, $4);}
 
@@ -1654,22 +1876,18 @@ cmd:
 
 |   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
 |   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
+@
 
-|   TWIDDLE word words  {$$=mung2($1, $2, $3);}
-
-|   redir cmd  %prec BANG   {$$=mung2($1, $1->child[0], $2);}
-|   assign cmd %prec BANG   {$$=mung3($1, $1->child[0], $1->child[1], $2);}
-
-|   BANG cmd            {$$=mung1($1, $2);}
-|   SUBSHELL cmd        {$$=mung1($1, $2);}
-
-|   FN words brace  {$$=tree2(FN, $2, $3);}
-|   FN words        {$$=tree1(FN, $2);}
-
-
-brace:  '{' body '}'        {$$=tree1(BRACE, $2);}
+<<other rules>>=
 paren:  '(' body ')'        {$$=tree1(PCMD, $2);}
+brace:  '{' body '}'        {$$=tree1(BRACE, $2);}
+@
+%$
 
+
+% so multiline, or ;
+% so first language using vertical layout :)
+<<other rules>>=
 body:   
     cmd
 |   cmdsan body     {$$=tree2(';', $1, $2);}
@@ -1677,73 +1895,67 @@ body:
 cmdsan: 
     cmdsa
 |   cmd '\n'
-
-epilog: 
-    /*empty*/           {$$=nil;}
-|   redir epilog        {$$=mung2($1, $1->child[0], $2);}
-
-
-assign: first '=' word      {$$=tree2('=', $1, $3);}
-
-
-redir:  
-    REDIR word      {$$=mung1($1, $1->rtype==HERE ? heredoc($2) : $2);}
-|   DUP
-
-
-simple:
-    first
-|   simple word         {$$=tree2(ARGLIST, $1, $2);}
-|   simple redir        {$$=tree2(ARGLIST, $1, $2);}
-
-/* diff with word? first cannot be a keyword */
-first:  
-    comword 
-|   first '^' word      {$$=tree2('^', $1, $3);}
-
-word:   
-    comword
-|   word '^' word       {$$=tree2('^', $1, $3);}
-|   keyword             {lastword=true; $1->type=WORD;}
-
-comword: 
-    WORD
-|   '$' word       {$$=tree1('$', $2);}
-|   '$' word SUB words ')'  {$$=tree2(SUB, $2, $4);}
-|   COUNT word      {$$=tree1(COUNT, $2);}
-|   '"' word        {$$=tree1('"', $2);}
-|   '`' brace       {$$=tree1('`', $2);}
-|   '(' words ')'   {$$=tree1(PAREN, $2);}
-|   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
-
-keyword: FOR|IN|WHILE|IF|NOT|TWIDDLE|BANG|SUBSHELL|SWITCH|FN
-
-words: 
-    /*empty*/       {$$=(struct Tree*)nil;}
-|   words word      {$$=tree2(WORDS, $1, $2);}
 @
 %$
 
 
-\ifallcode
-<<constant YYMAXDEPTH>>=
-//@Scheck: used in y.tab.c
-#define	YYMAXDEPTH	500
+
+
+<<cmd rule other cases>>=
+|   brace epilog        {$$=epimung($1, $2);}
 @
-\fi
+
+% ???
+<<cmd rule other cases>>=
+|   SUBSHELL cmd        {$$=mung1($1, $2);}
+@
 
 
-\section{Line}
+\section{Functions}
 
-\section{Simple commands}
+<<cmd rule other cases>>=
+|   FN words brace  {$$=tree2(FN, $2, $3);}
+|   FN words        {$$=tree1(FN, $2);}
+@
+%$
 
-\section{Operators}
-% && ||  |  &  !?
-% >> << > <
 
-\section{Control flow statements}
+\section{Variables}
 
-\section{XXX}
+% definitions
+
+<<cmd rule other cases>>=
+|   assign cmd %prec BANG   
+      {$$=mung3($1, $1->child[0], $1->child[1], $2);}
+@
+
+<<other rules>>=
+assign: first '=' word      {$$=tree2('=', $1, $3);}
+@
+%$
+
+
+% uses
+
+<<comword rule other cases>>=
+|   '$' word       {$$=tree1('$', $2);}
+|   COUNT word      {$$=tree1(COUNT, $2);}
+|   '$' word SUB words ')'  {$$=tree2(SUB, $2, $4);}
+@
+%$
+
+% SUB ???
+
+\section{Fancy arguments}
+
+<<comword rule other cases>>=
+|   '"' word        {$$=tree1('"', $2);}
+|   '`' brace       {$$=tree1('`', $2);}
+|   '(' words ')'   {$$=tree1(PAREN, $2);}
+@
+%$
+
+
 
 \chapter{Opcode Generation and Interpretation}
 % in shell context???
@@ -3620,6 +3832,7 @@ int nerror;		/* number of errors encountered during compilation */
 @
 
 
+% from yylex() (and also maybe yyparse?)
 <<function yyerror>>=
 void
 yyerror(char *m)
@@ -3637,12 +3850,14 @@ yyerror(char *m)
     flush(err);
     lastword = false;
     lastdol = false;
-    while(lastc!='\n' && lastc!=EOF) advance();
+    while(lastc!='\n' && lastc!=EOF) 
+        advance();
     nerror++;
-    setvar("status", newword(m, (word *)0));
+    setvar("status", newword(m, (word *)nil));
 }
 @
 
+% internal error, no more memory, etc, called from many places
 <<function panic>>=
 void
 panic(char *s, int n)
@@ -3652,6 +3867,28 @@ panic(char *s, int n)
     pchr(err, '\n');
     flush(err);
     Abort();
+}
+@
+
+% just called from panic(), so could be inlined there
+<<function Abort>>=
+void
+Abort(void)
+{
+    pfmt(err, "aborting\n");
+    flush(err);
+    Exit("aborting");
+}
+@
+
+% called from a few places, including Xexit
+<<function Exit>>=
+void
+Exit(char *stat)
+{
+    Updenv();
+    setstatus(stat);
+    exits(truestatus() ? "" : getstatus());
 }
 @
 

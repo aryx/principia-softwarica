@@ -84,6 +84,7 @@ getnext(void)
         peekc = EOF;
         return c;
     }
+
     if(runq->eof)
         return EOF;
     if(doprompt)
@@ -91,6 +92,7 @@ getnext(void)
 
     c = rchr(runq->cmdfd);
     if(!inquote && c=='\\'){
+
         c = rchr(runq->cmdfd);
         if(c=='\n' && !incomm){		/* don't continue a comment */
             doprompt = true;
@@ -103,7 +105,7 @@ getnext(void)
     }
     doprompt = doprompt || c=='\n' || c==EOF;
     if(c==EOF)
-        runq->eof++; // ->eof = true cleaner no?
+        runq->eof++; // = true cleaner no?
     else 
         if(flag['V'] || ndot>=2 && flag['v'])
             pchr(err, c);

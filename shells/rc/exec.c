@@ -24,14 +24,14 @@ start(code *c, int pc, var *local)
     p->pc = pc;
 
     p->argv = nil;
+    p->local = local;
+    p->lineno = 1;
 
     p->redir = p->startredir = runq ? runq->redir : nil;
-    p->local = local;
     p->cmdfile = nil;
     p->cmdfd = nil;
     p->eof = false;
     p->iflag = false;
-    p->lineno = 1;
 
     p->ret = runq;
     runq = p;
@@ -190,9 +190,9 @@ void main(int argc, char *argv[])
     /*s: [[main()]] initialisation */
     err = openfd(STDERR);
     /*x: [[main()]] initialisation */
-    kinit();
-    Trapinit();
-    Vinit();
+    kinit(); // initialize keywords
+    Trapinit(); // notify() function setup
+    Vinit(); // read environment variables and add them in gvar
     /*x: [[main()]] initialisation */
     rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
     /*x: [[main()]] initialisation */
@@ -209,8 +209,8 @@ void main(int argc, char *argv[])
 
     i = 0;
     bootstrap[i++].i = 1; // reference count
-    bootstrap[i++].f = Xmark;
     bootstrap[i++].f = Xrdcmds;
+    bootstrap[i].i = 0;
     /*e: [[main()]] initialize [[boostrap]] */
     /*s: [[main()]] initialize runq with bootstrap code */
     start(bootstrap, 1, (var *)nil);
@@ -1062,6 +1062,7 @@ Xrdcmds(void)
     Noerror();
     /*e: [[Xrdcmds()]] calls Noerror() before yyparse() */
 
+    // read cmd, compiles it, and modifies codebuf global
     error = yyparse();
 
     /*s: [[Xrdcmds()]] if yyparse() returned an error */
@@ -1085,6 +1086,7 @@ Xrdcmds(void)
         ntrap = 0;	/* avoid double-interrupts during blocked writes */
         /*e: [[Xrdcmds()]] reset ntrap */
         --p->pc;	/* re-execute Xrdcmds after codebuf runs */
+        // modifies runq, new thread (linked to bootstrap one)
         start(codebuf, 1, runq->local);
     }
     freenodes(); // allocated in yyparse()

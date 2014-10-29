@@ -47,9 +47,10 @@ yyerror(char *m)
     flush(err);
     lastword = false;
     lastdol = false;
-    while(lastc!='\n' && lastc!=EOF) advance();
+    while(lastc!='\n' && lastc!=EOF) 
+        advance();
     nerror++;
-    setvar("status", newword(m, (word *)0));
+    setvar("status", newword(m, (word *)nil));
 }
 /*e: function yyerror */
 /*s: global bp */

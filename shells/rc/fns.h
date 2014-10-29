@@ -27,7 +27,7 @@ void	addwaitpid(int);
 int	advance(void);
 void	cleanhere(char*);
 void	codefree(code*);
-int	compile(tree*);
+errorcode0	compile(tree*);
 int	count(word*);
 void	deglob(void*);
 void	dotrap(void);

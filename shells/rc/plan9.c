@@ -635,7 +635,7 @@ Exit(char *stat)
 {
     Updenv();
     setstatus(stat);
-    exits(truestatus()?"":getstatus());
+    exits(truestatus() ? "" : getstatus());
 }
 /*e: function Exit */
 

@@ -18,7 +18,7 @@ extern void Xerror1(char*);
 /*s: struct word */
 /*
  * word lists are in correct order,
- * i.e. word0->word1->word2->word3->0
+ * i.e. word0->word1->word2->word3->nil
  */
 struct Word {
     char *word;
@@ -74,19 +74,19 @@ struct Thread {
     /*x: [[Thread]] other fields */
     // list<ref_own<Var>> (next = Var.next)
     struct Var *local;		/* list of local variables */
-
-
+    /*x: [[Thread]] other fields */
     struct Redir *redir;	/* redirection stack */
     struct Redir *startredir;	/* redir inheritance point */
-
+    /*x: [[Thread]] other fields */
     bool iflast;		/* static `if not' checking */
-
+    /*x: [[Thread]] other fields */
     int pid;		/* process for Xpipewait to wait for */
     char status[NSTATUS];	/* status for Xpipewait */
     /*x: [[Thread]] other fields */
     struct Io *cmdfd;	/* file descriptor for Xrdcmd */
     char *cmdfile;		/* file name in Xrdcmd */
     bool iflag;		/* interactive? */
+    /*x: [[Thread]] other fields */
     bool eof;		/* is cmdfd at eof? */
     /*e: [[Thread]] other fields */
     // Extra

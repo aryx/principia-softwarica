@@ -543,19 +543,24 @@ codefree(code *cp)
     code *p;
     if(--cp[0].i!=0)
         return;
+
     for(p = cp+1;p->f;p++){
         if(p->f==Xappend || p->f==Xclose || p->f==Xread || p->f==Xwrite
         || p->f==Xrdwr
         || p->f==Xasync || p->f==Xbackq || p->f==Xcase || p->f==Xfalse
         || p->f==Xfor || p->f==Xjump
-        || p->f==Xsubshell || p->f==Xtrue) p++;
-        else if(p->f==Xdup || p->f==Xpipefd) p+=2;
-        else if(p->f==Xpipe) p+=4;
-        else if(p->f==Xword || p->f==Xdelhere) efree((++p)->s);
+        || p->f==Xsubshell || p->f==Xtrue)
+            p++;
+        else if(p->f==Xdup || p->f==Xpipefd) 
+                 p+=2;
+        else if(p->f==Xpipe) 
+                 p+=4;
+        else if(p->f==Xword || p->f==Xdelhere) 
+                 efree((++p)->s);
         else if(p->f==Xfn){
-            efree(p[2].s);
-            p+=2;
-        }
+                 efree(p[2].s);
+                 p+=2;
+              }
     }
     efree((char *)cp);
 }
