@@ -12,6 +12,9 @@ enum _bool {
   true = 1
 };
 typedef uchar byte;
+#define STDIN 0
+#define STDOUT 1
+#define STDERR 2
 typedef int fdt; // file descriptor type
 #define OK_0 0
 #define OK_1 1
