@@ -36,9 +36,11 @@ dotrap(void)
              * if there is none (i.e. if this is not
              * an interactive rc.)
              */
-            while(!runq->iflag) Xreturn();
+            while(!runq->iflag) 
+                Xreturn();
         }
-        else Exit(getstatus());
+        else 
+            Exit(getstatus());
     }
 }
 /*e: function dotrap */

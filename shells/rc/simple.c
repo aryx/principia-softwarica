@@ -546,8 +546,7 @@ execwhatis(void){	/* mildly wrong -- should fork before writing */
                 for(path = searchpath(a->word); path;
                     path = path->next){
                     if(path->word[0] != '\0')
-                        file = appfile(path->word,
-                            a->word);
+                        file = appfile(path->word, a->word);
                     else
                         file = strdup(a->word);
                     if(Executable(file)){

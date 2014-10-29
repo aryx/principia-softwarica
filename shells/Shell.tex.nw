@@ -282,15 +282,18 @@ License.
 
 <<token declarations>>=
 %token FOR IN WHILE IF NOT SWITCH FN
-%token TWIDDLE BANG SUBSHELL 
-%token REDIR DUP PIPE
+%token TWIDDLE BANG SUBSHELL /** ~ ! @ */
+%token REDIR DUP PIPE /** {>, <, <<, >>} DUP = ??? | */
+%token ANDAND OROR /** && || */
+%token COUNT SUB /** # SUB = ??? */
 %token WORD
-%token ANDAND OROR
-%token COUNT SUB
-%token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
 @
 % was using %term instead of %token (probably for %terminal?)
 % also ANDAND were mentioned only in %left, but better declare everything
+
+<<token declarations>>=
+%token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
+@
 
 %typedef int token_kind; (union { char; enum token_kind })
 % see x.tab.h (a set of #define but could be an enum)
@@ -690,9 +693,6 @@ struct Var {
 %XXXX
 <<[[Var]] other fields>>=
 bool	changed;
-code	*fn;		/* pointer to function's code vector */
-int	fnchanged;
-int	pc;		/* pc of start of function */
 @
 
 
@@ -940,12 +940,12 @@ pushword(char *wd)
 
 <<[[main()]] interpreter loop>>=
 for(;;){
-    <<[[main()]] debug runq>>
+    <<[[main()]] debug runq in interpreter loop>>
 
     runq->pc++;
     (*runq->code[runq->pc-1].f)();
 
-    <<[[main()]] handing trap if necessary>>
+    <<[[main()]] handing trap if necessary in interpreter loop>>
 }
 @
 \section{[[Xrdcmds()]]}
@@ -2549,8 +2549,7 @@ execwhatis(void){	/* mildly wrong -- should fork before writing */
                 for(path = searchpath(a->word); path;
                     path = path->next){
                     if(path->word[0] != '\0')
-                        file = appfile(path->word,
-                            a->word);
+                        file = appfile(path->word, a->word);
                     else
                         file = strdup(a->word);
                     if(Executable(file)){
@@ -3014,6 +3013,7 @@ globlist(void)
 
 \chapter{Signals}
 
+
 % C-d generate an Xsimple (exit 1) ?
 
 <<constant NSIG>>=
@@ -3028,29 +3028,6 @@ globlist(void)
 #define	SIGQUIT	3
 @
 
-<<global ntrap>>=
-int ntrap;				/* number of outstanding traps */
-@
-
-<<global trap>>=
-int trap[NSIG];				/* number of outstanding traps per type */
-@
-
-
-<<[[main()]] handing trap if necessary>>=
-if(ntrap)
-    dotrap();
-@
-
-
-% plan9.c
-<<global Signame>>=
-char *Signame[] = {
-    "sigexit",	"sighup",	"sigint",	"sigquit",
-    "sigalrm",	"sigkill",	"sigfpe",	"sigterm",
-    0
-};
-@
 
 % plan9.c
 <<global syssigname>>=
@@ -3066,6 +3043,77 @@ char *syssigname[] = {
     0
 };
 @
+
+% plan9.c
+<<global Signame>>=
+char *Signame[] = {
+    "sigexit",	
+    "sighup",	
+    "sigint",	
+    "sigquit",
+    "sigalrm",	
+    "sigkill",	
+    "sigfpe",	
+    "sigterm",
+    0
+};
+@
+
+
+<<global ntrap>>=
+int ntrap;				/* number of outstanding traps */
+@
+
+<<global trap>>=
+int trap[NSIG];				/* number of outstanding traps per type */
+@
+
+
+
+% main() -> Trapinit()
+<<function Trapinit>>=
+void
+Trapinit(void)
+{
+    notify(notifyf);
+}
+@
+
+<<function notifyf>>=
+void
+notifyf(void*, char *s)
+{
+    int i;
+    for(i = 0;syssigname[i];i++) 
+     if(strncmp(s, syssigname[i], strlen(syssigname[i]))==0){
+        if(strncmp(s, "sys: ", 5)!=0) 
+            interrupted = true;
+        goto Out;
+    }
+    pfmt(err, "rc: note: %s\n", s);
+    noted(NDFLT);
+    return;
+Out:
+    if(strcmp(s, "interrupt")!=0 || trap[i]==0){
+        trap[i]++;
+        ntrap++;
+    }
+    if(ntrap>=32){	/* rc is probably in a trap loop */
+        pfmt(err, "rc: Too many traps (trap %s), aborting\n", s);
+        abort();
+    }
+    noted(NCONT);
+}
+@
+
+
+<<[[main()]] handing trap if necessary in interpreter loop>>=
+if(ntrap)
+    dotrap();
+@
+
+
+
 
 % trap.c
 % main() -> dotrap() after having interpreter one bytecode
@@ -3100,9 +3148,11 @@ dotrap(void)
              * if there is none (i.e. if this is not
              * an interactive rc.)
              */
-            while(!runq->iflag) Xreturn();
+            while(!runq->iflag) 
+                Xreturn();
         }
-        else Exit(getstatus());
+        else 
+            Exit(getstatus());
     }
 }
 @
@@ -3210,10 +3260,19 @@ inttoascii(num, mypid);
 setvar("pid", newword(num, (word *)nil));
 
 setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
+
 setvar("rcname", newword(argv[0], (word *)nil));
 @
 
 \chapter{Advanced Topics}
+
+\section{Function definitions}
+
+<<[[Var]] other fields>>=
+code	*fn;		/* pointer to function's code vector */
+int	pc;		/* pc of start of function */
+int	fnchanged;
+@
 
 \section{Here documents}
 
@@ -3453,7 +3512,7 @@ pdeglob(io *f, char *s)
 
 \section{[[rc -r]] printing opcodes}
 
-<<[[main()]] debug runq>>=
+<<[[main()]] debug runq in interpreter loop>>=
 if(flag['r'])
     pfnc(err, runq);
 @

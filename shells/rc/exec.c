@@ -201,6 +201,7 @@ void main(int argc, char *argv[])
     setvar("pid", newword(num, (word *)nil));
 
     setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
+
     setvar("rcname", newword(argv[0], (word *)nil));
     /*e: [[main()]] initialisation */
     /*s: [[main()]] initialize [[boostrap]] */
@@ -227,18 +228,18 @@ void main(int argc, char *argv[])
     /*e: [[main()]] initialize runq->argv */
     /*s: [[main()]] interpreter loop */
     for(;;){
-        /*s: [[main()]] debug runq */
+        /*s: [[main()]] debug runq in interpreter loop */
         if(flag['r'])
             pfnc(err, runq);
-        /*e: [[main()]] debug runq */
+        /*e: [[main()]] debug runq in interpreter loop */
 
         runq->pc++;
         (*runq->code[runq->pc-1].f)();
 
-        /*s: [[main()]] handing trap if necessary */
+        /*s: [[main()]] handing trap if necessary in interpreter loop */
         if(ntrap)
             dotrap();
-        /*e: [[main()]] handing trap if necessary */
+        /*e: [[main()]] handing trap if necessary in interpreter loop */
     }
     /*e: [[main()]] interpreter loop */
 }

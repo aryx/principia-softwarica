@@ -151,9 +151,10 @@ struct Var {
 
     /*s: [[Var]] other fields */
     bool	changed;
+    /*x: [[Var]] other fields */
     code	*fn;		/* pointer to function's code vector */
-    int	fnchanged;
     int	pc;		/* pc of start of function */
+    int	fnchanged;
     /*e: [[Var]] other fields */
 
     // Extra

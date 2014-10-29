@@ -22,8 +22,14 @@ enum {
 
 /*s: global Signame */
 char *Signame[] = {
-    "sigexit",	"sighup",	"sigint",	"sigquit",
-    "sigalrm",	"sigkill",	"sigfpe",	"sigterm",
+    "sigexit",	
+    "sighup",	
+    "sigint",	
+    "sigquit",
+    "sigalrm",	
+    "sigkill",	
+    "sigfpe",	
+    "sigterm",
     0
 };
 /*e: global Signame */
@@ -521,8 +527,10 @@ void
 notifyf(void*, char *s)
 {
     int i;
-    for(i = 0;syssigname[i];i++) if(strncmp(s, syssigname[i], strlen(syssigname[i]))==0){
-        if(strncmp(s, "sys: ", 5)!=0) interrupted = true;
+    for(i = 0;syssigname[i];i++) 
+     if(strncmp(s, syssigname[i], strlen(syssigname[i]))==0){
+        if(strncmp(s, "sys: ", 5)!=0) 
+            interrupted = true;
         goto Out;
     }
     pfmt(err, "rc: note: %s\n", s);

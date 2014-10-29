@@ -10,11 +10,12 @@
 
 /*s: token declarations */
 %token FOR IN WHILE IF NOT SWITCH FN
-%token TWIDDLE BANG SUBSHELL 
-%token REDIR DUP PIPE
+%token TWIDDLE BANG SUBSHELL /** ~ ! @ */
+%token REDIR DUP PIPE /** {>, <, <<, >>} DUP = ??? | */
+%token ANDAND OROR /** && || */
+%token COUNT SUB /** # SUB = ??? */
 %token WORD
-%token ANDAND OROR
-%token COUNT SUB
+/*x: token declarations */
 %token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
 /*e: token declarations */
 /*s: priority and associativity declarations */
