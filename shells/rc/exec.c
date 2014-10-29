@@ -188,7 +188,7 @@ void main(int argc, char *argv[])
            flag['i'] = flagset;
     /*e: [[main()]] argc argv processing, modify flags */
     /*s: [[main()]] initialisation */
-    err = openfd(2);
+    err = openfd(STDERR);
     /*x: [[main()]] initialisation */
     kinit();
     Trapinit();
@@ -214,7 +214,8 @@ void main(int argc, char *argv[])
     /*s: [[main()]] initialize runq with bootstrap code */
     start(bootstrap, 1, (var *)nil);
     /*x: [[main()]] initialize runq with bootstrap code */
-    runq->cmdfd = openfd(0); // reading from stdin
+    runq->cmdfd = openfd(STDIN); // reading from stdin
+    runq->cmdfile = "<stdin>";
     runq->iflag = true; // interactive mode; will print a prompt
     /*e: [[main()]] initialize runq with bootstrap code */
     /*s: [[main()]] initialize runq->argv */
@@ -1043,9 +1044,11 @@ Xrdcmds(void)
     flush(err);
     nerror = 0;
 
+    /*s: [[Xrdcmds()]] print status if -s */
     if(flag['s'] && !truestatus())
         pfmt(err, "status=%v\n", vlook("status")->val);
-
+    /*e: [[Xrdcmds()]] print status if -s */
+    /*s: [[Xrdcmds()]] set promptstr if interactive mode */
     if(runq->iflag){
         prompt = vlook("prompt")->val;
         if(prompt)
@@ -1053,16 +1056,21 @@ Xrdcmds(void)
         else
             promptstr="% ";
     }
+    /*e: [[Xrdcmds()]] set promptstr if interactive mode */
+    /*s: [[Xrdcmds()]] calls Noerror() before yyparse() */
     Noerror();
+    /*e: [[Xrdcmds()]] calls Noerror() before yyparse() */
+
     error = yyparse();
+
+    /*s: [[Xrdcmds()]] if yyparse() returned an error */
     if(error){
-        if(!p->iflag || p->eof && !Eintr()){
+        if(!p->iflag  ||  p->eof && !Eintr()){
             if(p->cmdfile)
                 efree(p->cmdfile);
             closeio(p->cmdfd);
             Xreturn();	/* should this be omitted? */
-        }
-        else{
+        }else{
             if(Eintr()){
                 pchr(err, '\n');
                 p->eof = false;
@@ -1070,8 +1078,11 @@ Xrdcmds(void)
             --p->pc;	/* go back for next command */
         }
     }
+    /*e: [[Xrdcmds()]] if yyparse() returned an error */
     else{
+        /*s: [[Xrdcmds()]] reset ntrap */
         ntrap = 0;	/* avoid double-interrupts during blocked writes */
+        /*e: [[Xrdcmds()]] reset ntrap */
         --p->pc;	/* re-execute Xrdcmds after codebuf runs */
         start(codebuf, 1, runq->local);
     }

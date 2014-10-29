@@ -65,21 +65,18 @@ struct Tree {
 
     // enum<token_kind>
     int	type;
-
     char *str;
-
     // array<option<ref_own<Tree>>
     tree	*child[3];
-
-    bool iskw;
 
     /*s: [[Tree]] other fields */
     //enum<redirection_kind>
     int	rtype;
     int fd0, fd1;	/* details of REDIR PIPE DUP tokens */
     bool	quoted;
-    /*e: [[Tree]] other fields */
 
+    bool iskw; // dead?
+    /*e: [[Tree]] other fields */
     // Extra
     /*s: [[Tree]] extra fields */
     tree	*next;

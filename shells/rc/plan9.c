@@ -514,7 +514,7 @@ Closedir(int f)
 }
 /*e: function Closedir */
 /*s: global interrupted */
-int interrupted = 0;
+bool interrupted = false;
 /*e: global interrupted */
 /*s: function notifyf */
 void
@@ -522,7 +522,7 @@ notifyf(void*, char *s)
 {
     int i;
     for(i = 0;syssigname[i];i++) if(strncmp(s, syssigname[i], strlen(syssigname[i]))==0){
-        if(strncmp(s, "sys: ", 5)!=0) interrupted = 1;
+        if(strncmp(s, "sys: ", 5)!=0) interrupted = true;
         goto Out;
     }
     pfmt(err, "rc: note: %s\n", s);
@@ -632,7 +632,7 @@ Exit(char *stat)
 /*e: function Exit */
 
 /*s: function Eintr */
-int
+bool
 Eintr(void)
 {
     return interrupted;
@@ -643,7 +643,7 @@ Eintr(void)
 void
 Noerror(void)
 {
-    interrupted = 0;
+    interrupted = false;
 }
 /*e: function Noerror */
 

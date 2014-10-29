@@ -66,7 +66,6 @@ struct Redir {
 struct Thread {
     union Code *code;		/* code for this thread */
     int pc;			/* code[pc] is the next instruction */
-
     int lineno;			/* linenumber */
 
     /*s: [[Thread]] other fields */
@@ -80,18 +79,16 @@ struct Thread {
     struct Redir *redir;	/* redirection stack */
     struct Redir *startredir;	/* redir inheritance point */
 
-    char *cmdfile;		/* file name in Xrdcmd */
-
     bool iflast;		/* static `if not' checking */
-    bool eof;		/* is cmdfd at eof? */
 
     int pid;		/* process for Xpipewait to wait for */
     char status[NSTATUS];	/* status for Xpipewait */
     /*x: [[Thread]] other fields */
     struct Io *cmdfd;	/* file descriptor for Xrdcmd */
+    char *cmdfile;		/* file name in Xrdcmd */
     bool iflag;		/* interactive? */
+    bool eof;		/* is cmdfd at eof? */
     /*e: [[Thread]] other fields */
-
     // Extra
     /*s: [[Thread]] extra fields */
     thread *ret;		/* who continues when this finishes */

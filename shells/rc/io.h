@@ -16,7 +16,7 @@ struct Io {
 
 extern io *err;
 
-io *openfd(int);
+io *openfd(fdt);
 io *openstr(void);
 io *opencore(char *, int);
 void pchr(io*, int);
