@@ -13,8 +13,8 @@
 %token TWIDDLE BANG SUBSHELL /** ~ ! @ */
 %token REDIR DUP PIPE /** {>, <, <<, >>} DUP = ??? | */
 %token ANDAND OROR /** && || */
-%token COUNT SUB /** # SUB = ??? [? */
-%token WORD
+%token COUNT SUB /** $# ( */
+%token WORD /** anything else (e.g. foo, --help, 42, /a/b/c, etc) */
 /*x: token declarations */
 %token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
 /*e: token declarations */
@@ -69,6 +69,9 @@ cmd:
 |   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
 |   IF NOT   {skipnl();} cmd  {$$=mung1($2, $4);}
 
+|   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
+|   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
+
  /*
   * if ``words'' is nil, we need a tree element to distinguish between 
   * for(i in ) and for(i), the former being a loop over the empty set
@@ -83,8 +86,6 @@ cmd:
 |   FOR '(' word ')' {skipnl();} cmd
     {$$=mung3($1, $3, (struct Tree *)0, $6);}
 
-|   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
-|   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
 /*x: cmd rule other cases */
 |   brace epilog        {$$=epimung($1, $2);}
 /*x: cmd rule other cases */
@@ -151,6 +152,7 @@ epilog:
 |   redir epilog        {$$=mung2($1, $1->child[0], $2);}
 /*x: other rules */
 paren:  '(' body ')'        {$$=tree1(PCMD, $2);}
+/*x: other rules */
 brace:  '{' body '}'        {$$=tree1(BRACE, $2);}
 /*x: other rules */
 body:   

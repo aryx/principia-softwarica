@@ -66,7 +66,6 @@ struct Redir {
 struct Thread {
     union Code *code;		/* code for this thread */
     int pc;			/* code[pc] is the next instruction */
-    int lineno;			/* linenumber */
 
     /*s: [[Thread]] other fields */
     // list<list<ref_own<word>>> (next = List.next)
@@ -88,6 +87,8 @@ struct Thread {
     bool iflag;		/* interactive? */
     /*x: [[Thread]] other fields */
     bool eof;		/* is cmdfd at eof? */
+    /*x: [[Thread]] other fields */
+    int lineno;			/* linenumber */
     /*e: [[Thread]] other fields */
     // Extra
     /*s: [[Thread]] extra fields */

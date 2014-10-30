@@ -72,7 +72,8 @@ struct Tree {
     /*s: [[Tree]] other fields */
     //enum<redirection_kind>
     int	rtype;
-    int fd0, fd1;	/* details of REDIR PIPE DUP tokens */
+    fdt fd0;
+    fdt fd1;	/* details of REDIR PIPE DUP tokens */
     bool	quoted;
 
     bool iskw; // dead?
@@ -156,7 +157,6 @@ struct Var {
     int	pc;		/* pc of start of function */
     int	fnchanged;
     /*e: [[Var]] other fields */
-
     // Extra
     /*s: [[Var]] extra fields */
     var	*next;		/* next on hash or local list */

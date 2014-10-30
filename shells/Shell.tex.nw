@@ -20,10 +20,14 @@
 
 %thx to this manual, better understand sh:
 % - TODO fancy redirection syntax
+% - TODO operator priorities (; vs & vs | vs >)
 % - TODO $*
+% - TODO escaping nightmares
+% - TODO multiline editing
+% - TODO subshell power?
 
 %history LP-ization:
-% - skeleton, mostly copy paste of Kernel.tex.nw skeleton
+% - skeleton, mostly copy paste of Template.tex.nw skeleton
 % - put all content of files in the Extra section, via 'pfff -lpize'
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
@@ -93,7 +97,7 @@
 
 \title{
 {\Huge 
-Plan9 Shell
+Principia Softwarica: The Plan9 Shell [[rc]]
 }\\
 {version 0.1}
 }
@@ -176,6 +180,7 @@ Tom Duff of course the author of [[rc]].
 \chapter{Overview}
 
 \section{Shell principles}
+% shell is first to run commands (hence the name)!
 % for a long time actually there was no (external) shell. Shell was
 % part of OS. With Unix it changed and shell can be a regular
 % user program. It then opened the way for complex job control language.
@@ -185,13 +190,11 @@ Tom Duff of course the author of [[rc]].
 % call function from repl, pass argument, modify globals. can even get
 % help via whatis :) or man :)
 
-
 % cf stevens book, shell basis = read a line, parse, fork, exec, wait!
 % to handle pipe and redirection it's little variations that shows also
 % the beauty of fork!
 
 % do a minishell before showing rc?
-
 
 \section{[[rc]] services}
 
@@ -199,12 +202,14 @@ Tom Duff of course the author of [[rc]].
 % DSL for pipe, redirection, async, globbing
 % mini classic language with control flow statement and variables, globals
 
-% job control?
+% job control? has & but no fg/bg?
 
 % see rc.ps
 
-% -i => interactive (default)
-% -I => not interactive (only diff is prompt not displayed)
+% -l??
+
+% -i => interactive (default when no argument given and isatty, see main())
+% -I => not interactive (only diff is prompt not displayed between commands)
 
 % -r => debug opcodes output (convenient)
 % -s => debug returned status when error status from subprocess
@@ -215,9 +220,15 @@ Tom Duff of course the author of [[rc]].
 
 % rc PL =~ dynamic
 % basic DS = list of strings (List), with operator like ^
+% so different from bash here already. But better basis
+% to have list as core value, because no need PATH=: separator,
+% no need $@ I think. Just simpler.
 
 % quite similar to bash
 % main difference? for var stuff? 'if not' instead of 'else'.
+
+% do it needs the ugly "$@"?
+
 
 \section{Code organization}
 
@@ -245,7 +256,6 @@ Tom Duff of course the author of [[rc]].
 
 %trap.c: interrupt
 %var.c: variables
-
 
 \section{Architecture overview}
 
@@ -286,15 +296,11 @@ Tom Duff of course the author of [[rc]].
 %token TWIDDLE BANG SUBSHELL /** ~ ! @ */
 %token REDIR DUP PIPE /** {>, <, <<, >>} DUP = ??? | */
 %token ANDAND OROR /** && || */
-%token COUNT SUB /** # SUB = ??? [? */
-%token WORD
+%token COUNT SUB /** $# ( */
+%token WORD /** anything else (e.g. foo, --help, 42, /a/b/c, etc) */
 @
 % was using %term instead of %token (probably for %terminal?)
 % also ANDAND were mentioned only in %left, but better declare everything
-
-<<token declarations>>=
-%token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
-@
 
 %typedef int token_kind; (union { char; enum token_kind })
 % see x.tab.h (a set of #define but could be an enum)
@@ -321,12 +327,17 @@ struct Tree {
 };
 @
 
+<<token declarations>>=
+%token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
+@
+
 
 %XXXX
 <<[[Tree]] other fields>>=
 //enum<redirection_kind>
 int	rtype;
-int fd0, fd1;	/* details of REDIR PIPE DUP tokens */
+fdt fd0;
+fdt fd1;	/* details of REDIR PIPE DUP tokens */
 bool	quoted;
 
 bool iskw; // dead?
@@ -442,6 +453,32 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 % and then opcode interpreter, a bit like an actual processor
 % (or Java). A little stack based interpreter.
 
+<<global codebuf>>=
+code *codebuf;				/* compiler output */
+@
+
+
+% in ocaml maybe could just interpreter from AST itself.
+% not sure needs this intermediate opcode data structure
+
+<<struct code>>=
+/*
+ * The first word of any code vector is a reference count.
+ * Always create a new reference to a code vector by calling codecopy(.).
+ * Always call codefree(.) when deleting a reference.
+ */
+union Code {
+    void	(*f)(void); // Xxxx() opcode
+    int	i;
+    char	*s;
+};
+@
+
+% show bootstrap code?
+% or show trace of rc -r ? with my simple bootstrap code!
+
+
+
 % * Opcode routines
 % * Arguments on stack (...)
 % * Arguments in line [...]
@@ -459,6 +496,7 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 
 % * Xassign(name, val)			assign val to name
 % * Xdol(name)				get variable value
+% * Xsub
 % * Xlocal(name, val)			create local variable, assign value
 % * Xunlocal				delete local variable
 
@@ -503,36 +541,11 @@ tree3(int type, tree *c0, tree *c1, tree *c2)
 % * Xpopredir
 % * Xrdfn
 % * Xqdol(name)				concatenate variable components
-% * Xsub
 
 % list of opcodes with comments were in exec.c but sorted alphabetically
 % better to group them for explanation
 
-<<global codebuf>>=
-code *codebuf;				/* compiler output */
-@
-
-
-
-% in ocaml maybe could just interpreter from AST itself.
-% not sure needs this intermediate opcode data structure
-
-<<struct code>>=
-/*
- * The first word of any code vector is a reference count.
- * Always create a new reference to a code vector by calling codecopy(.).
- * Always call codefree(.) when deleting a reference.
- */
-union Code {
-    void	(*f)(void); // Xxxx() opcode
-    int	i;
-    char	*s;
-};
-@
-
-% show bootstrap code?
-% or show trace of rc -r ? with my simple bootstrap code!
-
+% dol = dollar
 
 
 % first element is a reference count, which is why codecopy()
@@ -587,26 +600,27 @@ codefree(code *cp)
 struct Thread {
     union Code *code;		/* code for this thread */
     int pc;			/* code[pc] is the next instruction */
-    int lineno;			/* linenumber */
 
     <<[[Thread]] other fields>>
     // Extra
     <<[[Thread]] extra fields>>
 };
 @
-%dead:  tree *treenodes;		/* tree nodes created by this process */
+%dead fld:  tree *treenodes;		/* tree nodes created by this process */
 
 <<global runq>>=
 // list<ref_own<Thread>> (next = Thread.ret)
 thread *runq;
 @
+% x; y; z  would form a list of threads with x at the top and linked to y
+% (and ultimately linked to the bootstrap thread)
 
 <<[[Thread]] extra fields>>=
 thread *ret;		/* who continues when this finishes */
 @
 
 
-% freethread? with reference count handling?
+% freethread()? with reference count handling?
 
 % important one
 <<[[Thread]] other fields>>=
@@ -644,6 +658,7 @@ bool iflast;		/* static `if not' checking */
 int pid;		/* process for Xpipewait to wait for */
 char status[NSTATUS];	/* status for Xpipewait */
 @
+
 
 
 
@@ -731,38 +746,17 @@ struct Var {
     word	*val;		/* value */
 
     <<[[Var]] other fields>>
-
     // Extra
     <<[[Var]] extra fields>>
 };
 @
 
 
-%XXXX
-<<[[Var]] other fields>>=
-bool	changed;
-@
-
-
-
-
-
-
-<<constant NVAR>>=
-#define	NVAR	521
-@
-
-<<global gvar>>=
-// hash<string, ref<Var>> (next = Var.next in bucket list)
-var *gvar[NVAR];		/* hash for globals */
-@
-
 <<[[Var]] extra fields>>=
 var	*next;		/* next on hash or local list */
 @
 % #define V (struct Var*)nil
 % like for other soft, or use VarNil?
-
 
 
 
@@ -789,6 +783,23 @@ vlook(char *name)
 }
 @
 
+
+
+
+
+<<constant NVAR>>=
+#define	NVAR	521
+@
+
+<<global gvar>>=
+// hash<string, ref<Var>> (next = Var.next in bucket list)
+var *gvar[NVAR];		/* hash for globals */
+@
+
+
+
+
+
 <<function gvlook>>=
 var*
 gvlook(char *name)
@@ -802,6 +813,13 @@ gvlook(char *name)
 
 
 % special variable, e.g. vlook("home"), vlook("*")
+
+
+
+%XXXX
+<<[[Var]] other fields>>=
+bool	changed;
+@
 
 
 \chapter{[[main()]]}
@@ -850,9 +868,11 @@ char **flag[NFLAG];
 @
 
 
+% =~ true (a bit ugly)
 <<global flagset>>=
 char *flagset[] = {"<flag>"};
 @
+%TODO: could transform global flag in bool flag[NFLAG] ?
 
 <<[[main()]] argc argv processing, modify flags>>=
 argc = getflags(argc, argv, "SsrdiIlxepvVc:1m:1[command]", 1);
@@ -868,7 +888,7 @@ else
     if(flag['i']==nil && argc==1 && Isatty(0)) 
        flag['i'] = flagset;
 @
-
+% interactive mode if no arguments!
 
 \section{Initialisation}
 
@@ -1048,7 +1068,7 @@ bool iflag;		/* interactive? */
 <<[[main()]] initialize runq with bootstrap code>>=
 runq->cmdfd = openfd(STDIN); // reading from stdin
 runq->cmdfile = "<stdin>";
-runq->iflag = true; // interactive mode; will print a prompt
+runq->iflag = flag['i']? true : false;// interactive mode; will print a prompt
 @
 % eof set to false in start()
 % cmdfile setting is not necessary, but it's used in yyerror() so why not set it
@@ -1079,7 +1099,9 @@ if(error){
 @
 
 \chapter{Lexing}
-% why not using lex?
+% why not using lex? they like yacc but not lex apparently
+% (because lex != flex? or because of multiline editing tricks
+% that may be harder to implement with lex?)
 
 \section{Overview}
 
@@ -1110,7 +1132,9 @@ nextc(void)
 @
 
 
+% future and peekc??
 
+% why return an int and not a char? because unicode? then use Rune!
 <<function getnext>>=
 /*
  * read a character from the input stream
@@ -1126,13 +1150,14 @@ getnext(void)
         peekc = EOF;
         return c;
     }
-
     if(runq->eof)
         return EOF;
+
     if(doprompt)
         pprompt();
 
     c = rchr(runq->cmdfd);
+
     if(!inquote && c=='\\'){
 
         c = rchr(runq->cmdfd);
@@ -1147,7 +1172,7 @@ getnext(void)
     }
     doprompt = doprompt || c=='\n' || c==EOF;
     if(c==EOF)
-        runq->eof++; // = true cleaner no?
+        runq->eof = true;
     else 
         if(flag['V'] || ndot>=2 && flag['v'])
             pchr(err, c);
@@ -1155,21 +1180,20 @@ getnext(void)
     return c;
 }
 @
+% was runq->eof++; ugly
 
 
 
-
+% future, peekc, lastc, hmmm
 <<global lastc>>=
 int lastc;
 @
-
 
 
 <<function advance>>=
 /*
  * Consume the lookahead character.
  */
-
 int
 advance(void)
 {
@@ -1179,8 +1203,6 @@ advance(void)
     return c;
 }
 @
-
-
 
 <<function nextis>>=
 bool
@@ -1195,6 +1217,9 @@ nextis(int c)
 @
 
 \section{Prompt}
+
+% so $prompt is actually a 2 words list, first word = original
+% and second word when it's a multiline command?
 
 % could be moved in another section?
 <<global promptstr>>=
@@ -1225,6 +1250,7 @@ pprompt(void)
     if(runq->iflag){
         pstr(err, promptstr);
         flush(err);
+
         prompt = vlook("prompt");
         if(prompt->val && prompt->val->next)
             promptstr = prompt->val->next->word;
@@ -1235,7 +1261,36 @@ pprompt(void)
     doprompt = false;
 }
 @
+% ?? why not % for the prompt? why changing the promptstr here?
+% when multiline command! enter if(ls) ENTER => get a \t prompt
 
+% so can display in prompt which command we are. useful also for history?
+% to run a past command?
+<<[[Thread]] other fields>>=
+int lineno;			/* linenumber */
+@
+
+\section{Multiline editing}
+
+% special prompt, cf above.
+% if enter {, then also special prompt indent (but just one level,
+% does not handle more depth)
+
+% subtle! called from grammar, weird
+<<function skipnl>>=
+void
+skipnl(void)
+{
+    int c;
+    for(;;){
+        skipwhite();
+        c = nextc();
+        if(c!='\n')
+            return;
+        advance();
+    }
+}
+@
 
 
 \section{[[yylex()]]}
@@ -1256,6 +1311,7 @@ bool lastword;	/* was the last token read a word or compound word terminator? */
 <<global lastdol>>=
 bool lastdol;	/* was the last token read '$' or '$#' or '"'? */
 @
+% dol = dollar
 
 <<global inquote>>=
 bool inquote;
@@ -1283,7 +1339,7 @@ int yylex(void)
     char *w = tok;
     struct Tree *t;
 
-    yylval.tree = 0;
+    yylval.tree = nil;
     /*
      * Embarassing sneakiness:  if the last token read was a quoted or unquoted
      * WORD then we alter the meaning of what follows.  If the next character
@@ -1305,6 +1361,7 @@ int yylex(void)
     }
     inquote = false;
     skipwhite();
+    // lastdol = false; factorize code?
 
     switch(c = advance()){
     case EOF:
@@ -1477,6 +1534,7 @@ int yylex(void)
     if(t->type!=WORD)
         lastword = false;
     t->quoted = false;
+
     yylval.tree = t;
     return t->type;
 }
@@ -1509,30 +1567,6 @@ addtok(char *p, int val)
         return nil;
     }
     *p++=val;
-    return p;
-}
-@
-
-<<function addutf>>=
-char*
-addutf(char *p, int c)
-{
-    uchar b, m;
-    int i;
-
-    p = addtok(p, c);	/* 1-byte UTF runes are special */
-    if(c < Runeself)
-        return p;
-
-    m = 0xc0;
-    b = 0x80;
-    for(i=1; i < UTFmax; i++){
-        if((c&m) == b)
-            break;
-        p = addtok(p, advance());
-        b = m;
-        m = (m >> 1)|0x80;
-    }
     return p;
 }
 @
@@ -1571,22 +1605,6 @@ skipwhite(void)
 }
 @
 
-% subtle! called from grammar, weird
-<<function skipnl>>=
-void
-skipnl(void)
-{
-    int c;
-    for(;;){
-        skipwhite();
-        c = nextc();
-        if(c!='\n')
-            return;
-        advance();
-    }
-}
-@
-
 \section{Keywords and identifiers}
 
 <<constant NKW>>=
@@ -1597,6 +1615,7 @@ skipnl(void)
 struct Kw {
     char *name;
     int type;
+
     struct Kw *next;
 } *kw[NKW];
 @
@@ -1734,6 +1753,8 @@ token(char *str, int type)
 % interesting DSL. must be easy to issue a command.
 % don't want to do 'system("ls");' like in other languages.
 % and want newline to have a special semantic role, a kind of implicit ';'
+% but also want to have multiline statements ... so newline must be allowed
+%  and not run the command sometimes.
 % -xxx, /a/b, are treated as regular words! only ;&${[^ are specials
 %less: rename? cmd -> statement, simple -> expression, word -> argument?
 
@@ -1776,7 +1797,7 @@ cmd:
 
 % an expression can be a "funcall" which is a simple serie of words
 % (separated by spaces, curry style :) )
-% with first word has some restrictions
+% with first word has some restrictions (the "function" name)
 <<simple rule>>=
 simple:
     first
@@ -1882,7 +1903,7 @@ tree* simplemung(tree *t)
 
 \section{Operators}
 
-% actually operator are at different levels, line rule, cmd rule,
+% actually operators are at different levels, line rule, cmd rule,
 % simple rule and so have different priotities.
 % redirection is lower, then pipe and logic operators, then sequence
 
@@ -1901,6 +1922,8 @@ cmdsa:
 
 % x & y is really (x&); y
 
+% newline is also a form of sequence when in the body { } of something
+
 \subsection{Logic operators}
 % Other operators?
 % && ||  |  &  !?
@@ -1912,11 +1935,13 @@ cmdsa:
 @
 % why not merge with ; and & ?
 
+% when argument of if/while in general
 <<cmd rule other cases>>=
 |   BANG cmd            {$$=mung1($1, $2);}
 |   TWIDDLE word words  {$$=mung2($1, $2, $3);}
 @
 %$
+% could also just do tree2(BANG, $2) I think
 
 % redir is in simple/expr, so has more prirority
 
@@ -1964,6 +1989,7 @@ tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
 <<simple rule other cases>>=
 |   simple redir        {$$=tree2(ARGLIST, $1, $2);}
 @
+% means can have multiple redir, ls < foo > bar, but after the funcall!
 
 <<other rules>>=
 redir:  
@@ -1986,6 +2012,7 @@ epilog:
 |   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
 @
 
+% infix style
 <<cmd rule other cases>>=
 |   redir cmd  %prec BANG
         {$$=mung2($1, $1->child[0], $2);}
@@ -1998,6 +2025,9 @@ epilog:
 <<cmd rule other cases>>=
 |   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
 |   IF NOT   {skipnl();} cmd  {$$=mung1($2, $4);}
+
+|   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
+|   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
 
  /*
   * if ``words'' is nil, we need a tree element to distinguish between 
@@ -2013,19 +2043,27 @@ epilog:
 |   FOR '(' word ')' {skipnl();} cmd
     {$$=mung3($1, $3, (struct Tree *)0, $6);}
 
-|   WHILE paren {skipnl();} cmd    {$$=mung2($1, $2, $4);}
-|   SWITCH word {skipnl();} brace  {$$=tree2(SWITCH, $2, $4);}
 @
 
 <<other rules>>=
 paren:  '(' body ')'        {$$=tree1(PCMD, $2);}
+@
+%$
+
+
+<<cmd rule other cases>>=
+|   brace epilog        {$$=epimung($1, $2);}
+@
+
+<<other rules>>=
 brace:  '{' body '}'        {$$=tree1(BRACE, $2);}
 @
 %$
 
 
+
 % so multiline, or ;
-% so first language using vertical layout :)
+% so first language using vertical layout :) not haskell :)
 <<other rules>>=
 body:   
     cmd
@@ -2037,17 +2075,6 @@ cmdsan:
 @
 %$
 
-
-
-
-<<cmd rule other cases>>=
-|   brace epilog        {$$=epimung($1, $2);}
-@
-
-% ???
-<<cmd rule other cases>>=
-|   SUBSHELL cmd        {$$=mung1($1, $2);}
-@
 
 
 <<function epimung>>=
@@ -2064,6 +2091,17 @@ tree* epimung(tree *comp, tree *epi)
 @
 
 
+
+
+
+% ???
+<<cmd rule other cases>>=
+|   SUBSHELL cmd        {$$=mung1($1, $2);}
+@
+
+
+
+
 \section{Functions}
 
 <<cmd rule other cases>>=
@@ -2071,7 +2109,8 @@ tree* epimung(tree *comp, tree *epi)
 |   FN words        {$$=tree1(FN, $2);}
 @
 %$
-
+% delfn for second line?
+% words? fn with multiple words??
 
 \section{Variables}
 
@@ -2081,6 +2120,7 @@ tree* epimung(tree *comp, tree *epi)
 |   assign cmd %prec BANG   
       {$$=mung3($1, $1->child[0], $1->child[1], $2);}
 @
+% just add cmd as third child of =
 
 <<other rules>>=
 assign: first '=' word      {$$=tree2('=', $1, $3);}
@@ -2097,7 +2137,7 @@ assign: first '=' word      {$$=tree2('=', $1, $3);}
 @
 %$
 
-% SUB ???
+% SUB = '(' when after a word, subscript
 
 \section{Fancy arguments}
 
@@ -2107,18 +2147,20 @@ assign: first '=' word      {$$=tree2('=', $1, $3);}
 |   '(' words ')'   {$$=tree1(PAREN, $2);}
 @
 %$
-
+% no ending "? because lexer changes mode when encounter a "?
 
 
 \chapter{Opcode Generation and Interpretation}
-% in shell context???
 % or Code generation? or Bytecode generation?
-% or merge Opcode Generation and Intepretation?
-% because helps to see the code generated from a tree
+
+% We merged Opcode Generation and Intepretation in one chapter
+% because it helps to see the code generated from a tree.
+% We could also group with the related parsing, but maybe it would
+% be too much, and parsing can be understood in isolation.
 
 \section{Overview}
 
-% recall main flow: main() -> ... yyparse() -> compile()
+% recall main flow: main() -> ... -> Xrdcmds() -> yyparse() -> compile()
 
 \section{[[compile()]]}
 
@@ -2129,6 +2171,7 @@ assign: first '=' word      {$$=tree2('=', $1, $3);}
 int codep;
 @
 
+% for the emitxxx() to realloc when necessary
 <<global ncode>>=
 int ncode;
 @
@@ -2205,6 +2248,7 @@ int morecode(void)
 
 
 % modify codebuf via all those emitxxx()
+% todo: could return errorcode instead of using nerror global
 <<function outcode>>=
 void
 outcode(tree *t, bool eflag)
@@ -3145,6 +3189,9 @@ execshift(void)
 
 %$#x
 
+\section{Interpolation}
+% looks like "" actually distribute to the element in a list
+
 \section{Special variables}
 
 %vlook("xxx"):
@@ -3855,6 +3902,32 @@ setvar("rcname", newword(argv[0], (word *)nil));
 code	*fn;		/* pointer to function's code vector */
 int	pc;		/* pc of start of function */
 int	fnchanged;
+@
+
+\section{Unicode}
+
+<<function addutf>>=
+char*
+addutf(char *p, int c)
+{
+    uchar b, m;
+    int i;
+
+    p = addtok(p, c);	/* 1-byte UTF runes are special */
+    if(c < Runeself)
+        return p;
+
+    m = 0xc0;
+    b = 0x80;
+    for(i=1; i < UTFmax; i++){
+        if((c&m) == b)
+            break;
+        p = addtok(p, advance());
+        b = m;
+        m = (m >> 1)|0x80;
+    }
+    return p;
+}
 @
 
 \section{Here documents}

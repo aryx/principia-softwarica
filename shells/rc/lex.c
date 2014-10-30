@@ -59,7 +59,6 @@ nextc(void)
 /*
  * Consume the lookahead character.
  */
-
 int
 advance(void)
 {
@@ -84,13 +83,14 @@ getnext(void)
         peekc = EOF;
         return c;
     }
-
     if(runq->eof)
         return EOF;
+
     if(doprompt)
         pprompt();
 
     c = rchr(runq->cmdfd);
+
     if(!inquote && c=='\\'){
 
         c = rchr(runq->cmdfd);
@@ -105,7 +105,7 @@ getnext(void)
     }
     doprompt = doprompt || c=='\n' || c==EOF;
     if(c==EOF)
-        runq->eof++; // = true cleaner no?
+        runq->eof = true;
     else 
         if(flag['V'] || ndot>=2 && flag['v'])
             pchr(err, c);
@@ -122,6 +122,7 @@ pprompt(void)
     if(runq->iflag){
         pstr(err, promptstr);
         flush(err);
+
         prompt = vlook("prompt");
         if(prompt->val && prompt->val->next)
             promptstr = prompt->val->next->word;
@@ -242,7 +243,7 @@ int yylex(void)
     char *w = tok;
     struct Tree *t;
 
-    yylval.tree = 0;
+    yylval.tree = nil;
     /*
      * Embarassing sneakiness:  if the last token read was a quoted or unquoted
      * WORD then we alter the meaning of what follows.  If the next character
@@ -264,6 +265,7 @@ int yylex(void)
     }
     inquote = false;
     skipwhite();
+    // lastdol = false; factorize code?
 
     switch(c = advance()){
     case EOF:
@@ -436,6 +438,7 @@ int yylex(void)
     if(t->type!=WORD)
         lastword = false;
     t->quoted = false;
+
     yylval.tree = t;
     return t->type;
 }

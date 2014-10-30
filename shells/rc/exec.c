@@ -217,7 +217,7 @@ void main(int argc, char *argv[])
     /*x: [[main()]] initialize runq with bootstrap code */
     runq->cmdfd = openfd(STDIN); // reading from stdin
     runq->cmdfile = "<stdin>";
-    runq->iflag = true; // interactive mode; will print a prompt
+    runq->iflag = flag['i']? true : false;// interactive mode; will print a prompt
     /*e: [[main()]] initialize runq with bootstrap code */
     /*s: [[main()]] initialize runq->argv */
     /* prime bootstrap argv */

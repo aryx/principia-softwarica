@@ -26,6 +26,7 @@ hash(char *as, int n)
 struct Kw {
     char *name;
     int type;
+
     struct Kw *next;
 } *kw[NKW];
 /*e: global kw */
