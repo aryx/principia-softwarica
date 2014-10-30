@@ -6,10 +6,6 @@
 #include "fns.h"
 #include <string.h>
 
-/*s: global havefork */
-bool havefork = true;
-/*e: global havefork */
-
 /*s: function Xasync */
 void
 Xasync(void)

@@ -158,13 +158,10 @@ outcode(tree *t, bool eflag)
 
     case '&':
         emitf(Xasync);
-        if(havefork){
-            p = emiti(0);
-            outcode(c0, eflag);
-            emitf(Xexit);
-            stuffdot(p);
-        } else
-            emits(fnstr(c0));
+        p = emiti(0);
+        outcode(c0, eflag);
+        emitf(Xexit);
+        stuffdot(p);
         break;
     case ';':
         outcode(c0, eflag);
@@ -180,13 +177,10 @@ outcode(tree *t, bool eflag)
         break;
     case '`':
         emitf(Xbackq);
-        if(havefork){
-            p = emiti(0);
-            outcode(c0, 0);
-            emitf(Xexit);
-            stuffdot(p);
-        } else
-            emits(fnstr(c0));
+        p = emiti(0);
+        outcode(c0, 0);
+        emitf(Xexit);
+        stuffdot(p);
         break;
 
     case ANDAND:
@@ -263,13 +257,10 @@ outcode(tree *t, bool eflag)
 
     case SUBSHELL:
         emitf(Xsubshell);
-        if(havefork){
-            p = emiti(0);
-            outcode(c0, eflag);
-            emitf(Xexit);
-            stuffdot(p);
-        } else
-            emits(fnstr(c0));
+        p = emiti(0);
+        outcode(c0, eflag);
+        emitf(Xexit);
+        stuffdot(p);
         if(eflag)
             emitf(Xeflag);
         break;
@@ -353,14 +344,10 @@ outcode(tree *t, bool eflag)
     case PIPEFD:
         emitf(Xpipefd);
         emiti(t->rtype);
-        if(havefork){
-            p = emiti(0);
-            outcode(c0, eflag);
-            emitf(Xexit);
-            stuffdot(p);
-        } else {
-            emits(fnstr(c0));
-        }
+        p = emiti(0);
+        outcode(c0, eflag);
+        emitf(Xexit);
+        stuffdot(p);
         break;
 
     case REDIR:
@@ -418,16 +405,11 @@ outcode(tree *t, bool eflag)
         emitf(Xpipe);
         emiti(t->fd0);
         emiti(t->fd1);
-        if(havefork){
-            p = emiti(0);
-            q = emiti(0);
-            outcode(c0, eflag);
-            emitf(Xexit);
-            stuffdot(p);
-        } else {
-            emits(fnstr(c0));
-            q = emiti(0);
-        }
+        p = emiti(0);
+        q = emiti(0);
+        outcode(c0, eflag);
+        emitf(Xexit);
+        stuffdot(p);
         outcode(c1, eflag);
         emitf(Xreturn);
         stuffdot(q);
