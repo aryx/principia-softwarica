@@ -65,6 +65,7 @@ struct Tree {
 
     // enum<token_kind>
     int	type;
+    // string of the token or AST dump the whole subtree for certain nodes
     char *str;
     // array<option<ref_own<Tree>>
     tree	*child[3];

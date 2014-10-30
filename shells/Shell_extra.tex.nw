@@ -1838,37 +1838,6 @@ extern bool lastdol;
 \subsection*{[[rc/plan9.c]]}
 
 
-<<function Waitfor>>=
-int
-Waitfor(int pid, int)
-{
-    thread *p;
-    Waitmsg *w;
-    char errbuf[ERRMAX];
-
-    if(pid >= 0 && !havewaitpid(pid))
-        return 0;
-
-    while((w = wait()) != nil){
-        delwaitpid(w->pid);
-        if(w->pid==pid){
-            setstatus(w->msg);
-            free(w);
-            return 0;
-        }
-        for(p = runq->ret;p;p = p->ret)
-            if(p->pid==w->pid){
-                p->pid=-1;
-                strcpy(p->status, w->msg);
-            }
-        free(w);
-    }
-
-    errstr(errbuf, sizeof errbuf);
-    if(strcmp(errbuf, "interrupted")==0) return -1;
-    return 0;
-}
-@
 
 <<function mkargv>>=
 char **
@@ -2219,58 +2188,6 @@ Memcpy(void *a, void *b, long n)
 @
 
 
-<<global waitpids>>=
-int *waitpids;
-@
-
-<<global nwaitpids>>=
-int nwaitpids;
-@
-
-<<function addwaitpid>>=
-void
-addwaitpid(int pid)
-{
-    waitpids = realloc(waitpids, (nwaitpids+1)*sizeof waitpids[0]);
-    if(waitpids == 0)
-        panic("Can't realloc %d waitpids", nwaitpids+1);
-    waitpids[nwaitpids++] = pid;
-}
-@
-
-<<function delwaitpid>>=
-void
-delwaitpid(int pid)
-{
-    int r, w;
-    
-    for(r=w=0; r<nwaitpids; r++)
-        if(waitpids[r] != pid)
-            waitpids[w++] = waitpids[r];
-    nwaitpids = w;
-}
-@
-
-<<function clearwaitpids>>=
-void
-clearwaitpids(void)
-{
-    nwaitpids = 0;
-}
-@
-
-<<function havewaitpid>>=
-bool
-havewaitpid(int pid)
-{
-    int i;
-
-    for(i=0; i<nwaitpids; i++)
-        if(waitpids[i] == pid)
-            return true;
-    return false;
-}
-@
 
 <<function _efgfmt>>=
 /* avoid loading any floating-point library code */
@@ -2441,21 +2358,6 @@ int	matchfn(void*, void*);
 
 
 
-<<function popword>>=
-void
-popword(void)
-{
-    word *p;
-    if(runq->argv==0)
-        panic("popword but no argv!", 0);
-    p = runq->argv->words;
-    if(p==0)
-        panic("popword but no word!", 0);
-    runq->argv->words = p->next;
-    efree(p->word);
-    efree((char *)p);
-}
-@
 
 <<function freelist>>=
 void
@@ -3755,30 +3657,6 @@ Xsubshell(void)
 }
 @
 
-<<function execforkexec>>=
-int
-execforkexec(void)
-{
-    int pid;
-    int n;
-    char buf[ERRMAX];
-
-    switch(pid = fork()){
-    case -1:
-        return -1;
-    case 0:
-        clearwaitpids();
-        pushword("exec");
-        execexec();
-        strcpy(buf, "can't exec: ");
-        n = strlen(buf);
-        errstr(buf+n, ERRMAX-n);
-        Exit(buf);
-    }
-    addwaitpid(pid);
-    return pid;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -3911,18 +3789,6 @@ extern char *Signame[];
 
 \subsection*{[[rc/simple.c]]}
 
-<<function exitnext>>=
-/*
- * Search through the following code to see if we're just going to exit.
- */
-int
-exitnext(void){
-    union Code *c=&runq->code[runq->pc];
-    while(c->f==Xpopredir) c++;
-    return c->f==Xexit;
-}
-@
-
 
 <<global nullpath>>=
 struct Word nullpath = { "", 0};
@@ -3968,21 +3834,6 @@ searchpath(char *w)
 @
 
 
-<<function execfunc>>=
-void
-execfunc(var *func)
-{
-    word *starval;
-    popword();
-    starval = runq->argv->words;
-    runq->argv->words = 0;
-    poplist();
-    start(func->fn, func->pc, runq->local);
-    runq->local = newvar(strdup("*"), runq->local);
-    runq->local->val = starval;
-    runq->local->changed = true;
-}
-@
 
 
 <<function appfile>>=

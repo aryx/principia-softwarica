@@ -16,7 +16,8 @@
 %token COUNT SUB /** $# ( */
 %token WORD /** anything else (e.g. foo, --help, 42, /a/b/c, etc) */
 /*x: token declarations */
-%token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
+%token SIMPLE ARGLIST WORDS
+%token BRACE PAREN PCMD PIPEFD /* not used in syntax */
 /*e: token declarations */
 /*s: priority and associativity declarations */
 /* operator priorities -- lowest first */

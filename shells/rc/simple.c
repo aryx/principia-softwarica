@@ -19,7 +19,8 @@ int	mapfd(int);
 int
 exitnext(void){
     union Code *c=&runq->code[runq->pc];
-    while(c->f==Xpopredir) c++;
+    while(c->f==Xpopredir) 
+        c++;
     return c->f==Xexit;
 }
 /*e: function exitnext */
@@ -30,11 +31,15 @@ Xsimple(void)
 {
     word *a;
     thread *p = runq;
-    var *v;
-    struct Builtin *bp;
     int pid;
+    /*s: [[Xsimple()]] other locals */
+    var *v;
+    /*x: [[Xsimple()]] other locals */
+    struct Builtin *bp;
+    /*e: [[Xsimple()]] other locals */
 
     globlist();
+
     a = runq->argv->words;
     if(a==nil){
         Xerror1("empty argument list");
@@ -43,10 +48,13 @@ Xsimple(void)
     if(flag['x'])
         pfmt(err, "%v\n", p->argv->words); /* wrong, should do redirs */
 
+    /*s: [[Xsimple()]] if argv0 is a function */
     v = gvlook(a->word);
     if(v->fn)
         execfunc(v);
+    /*e: [[Xsimple()]] if argv0 is a function */
     else{
+        /*s: [[Xsimple()]] if argv0 is a builtin */
         if(strcmp(a->word, "builtin")==0){
             if(count(a)==1){
                 pfmt(err, "builtin: empty argument list\n");
@@ -62,12 +70,15 @@ Xsimple(void)
                 (*bp->fnc)();
                 return;
             }
+        /*e: [[Xsimple()]] if argv0 is a builtin */
+        /*s: [[Xsimple()]] if exitnext() */
         if(exitnext()){
             /* fork and wait is redundant */
             pushword("exec");
             execexec();
             Xexit();
         }
+        /*e: [[Xsimple()]] if exitnext() */
         else{
             flush(err);
             Updenv();	/* necessary so changes don't go out again */
@@ -147,6 +158,7 @@ void
 execfunc(var *func)
 {
     word *starval;
+
     popword();
     starval = runq->argv->words;
     runq->argv->words = 0;

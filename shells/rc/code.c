@@ -133,7 +133,7 @@ outcode(tree *t, bool eflag)
     /*s: [[outcode()]] cases */
     case SIMPLE:
         emitf(Xmark);
-        outcode(c0, eflag);
+        outcode(c0, eflag); // the arguments and argv0
         emitf(Xsimple);
         if(eflag)
             emitf(Xeflag);

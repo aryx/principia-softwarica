@@ -134,6 +134,7 @@ tree* simplemung(tree *t)
     struct Io *s;
 
     t = tree1(SIMPLE, t);
+
     s = openstr();
     pfmt(s, "%t", t);
     t->str = strdup((char *)s->strp);

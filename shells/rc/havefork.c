@@ -227,15 +227,18 @@ execforkexec(void)
     switch(pid = fork()){
     case -1:
         return -1;
-    case 0:
+    case 0: // child
         clearwaitpids();
         pushword("exec");
         execexec();
+
+        // should not be reached!
         strcpy(buf, "can't exec: ");
         n = strlen(buf);
         errstr(buf+n, ERRMAX-n);
         Exit(buf);
     }
+    // parent
     addwaitpid(pid);
     return pid;
 }

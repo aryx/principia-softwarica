@@ -317,6 +317,7 @@ struct Tree {
 
     // enum<token_kind>
     int	type;
+    // string of the token or AST dump the whole subtree for certain nodes
     char *str;
     // array<option<ref_own<Tree>>
     tree	*child[3];
@@ -328,7 +329,8 @@ struct Tree {
 @
 
 <<token declarations>>=
-%token SIMPLE ARGLIST WORDS BRACE PAREN PCMD PIPEFD /* not used in syntax */
+%token SIMPLE ARGLIST WORDS
+%token BRACE PAREN PCMD PIPEFD /* not used in syntax */
 @
 
 
@@ -1885,6 +1887,7 @@ tree* simplemung(tree *t)
     struct Io *s;
 
     t = tree1(SIMPLE, t);
+
     s = openstr();
     pfmt(s, "%t", t);
     t->str = strdup((char *)s->strp);
@@ -2164,7 +2167,7 @@ assign: first '=' word      {$$=tree2('=', $1, $3);}
 
 % recall main flow: main() -> ... -> Xrdcmds() -> yyparse() -> compile()
 
-\section{[[compile()]]}
+\subsection{[[compile()]]}
 
 % see codebuf in Core DS chapter (could be moved here too)
 
@@ -2233,7 +2236,7 @@ int morecode(void)
 @
 
 
-\section{[[outcode()]]}
+\subsection{[[outcode()]]}
 
 %UGLY
 <<constant c0 (rc/code.c)>>=
@@ -2273,19 +2276,98 @@ outcode(tree *t, bool eflag)
 @
 %$
 
+\subsection{Stack managment}
 
-\section{Simple commands or builtins}
+<<function popword>>=
+void
+popword(void)
+{
+    word *p;
+    if(runq->argv==0)
+        panic("popword but no argv!", 0);
+    p = runq->argv->words;
+    if(p==0)
+        panic("popword but no word!", 0);
+    runq->argv->words = p->next;
+    efree(p->word);
+    efree((char *)p);
+}
+@
+
+\subsection{Process managment}
+
+<<global waitpids>>=
+// list<pid>
+int *waitpids;
+@
+
+<<global nwaitpids>>=
+int nwaitpids;
+@
+
+<<function addwaitpid>>=
+void
+addwaitpid(int pid)
+{
+    waitpids = realloc(waitpids, (nwaitpids+1)*sizeof waitpids[0]);
+    if(waitpids == nil)
+        panic("Can't realloc %d waitpids", nwaitpids+1);
+    waitpids[nwaitpids++] = pid;
+}
+@
+
+<<function delwaitpid>>=
+void
+delwaitpid(int pid)
+{
+    int r, w;
+    
+    for(r=w=0; r<nwaitpids; r++)
+        if(waitpids[r] != pid)
+            waitpids[w++] = waitpids[r];
+    nwaitpids = w;
+}
+@
+
+<<function clearwaitpids>>=
+void
+clearwaitpids(void)
+{
+    nwaitpids = 0;
+}
+@
+
+<<function havewaitpid>>=
+bool
+havewaitpid(int pid)
+{
+    int i;
+
+    for(i=0; i<nwaitpids; i++)
+        if(waitpids[i] == pid)
+            return true;
+    return false;
+}
+@
+
+\section{Simple commands}
+% or builtins or functions
+
+% SIMPLE node built in simplemung()
 
 <<[[outcode()]] cases>>=
 case SIMPLE:
     emitf(Xmark);
-    outcode(c0, eflag);
+    outcode(c0, eflag); // the arguments and argv0
     emitf(Xsimple);
     if(eflag)
         emitf(Xeflag);
     break;
 @
 
+% ARGLIST is for the parameters of the simple command, the arguments,
+% which are mostly word and so push in the stack (runq->argv)
+% and also final = argv0
 <<[[outcode()]] cases>>=
 case ARGLIST:
     outcode(c1, eflag);
@@ -2308,19 +2390,20 @@ case WORD:
 @
 
 
-% builtin hook also here
 
+
+% * Xsimple(args)			run command and wait
 <<function Xsimple>>=
 void
 Xsimple(void)
 {
     word *a;
     thread *p = runq;
-    var *v;
-    struct Builtin *bp;
     int pid;
+    <<[[Xsimple()]] other locals>>
 
     globlist();
+
     a = runq->argv->words;
     if(a==nil){
         Xerror1("empty argument list");
@@ -2329,31 +2412,10 @@ Xsimple(void)
     if(flag['x'])
         pfmt(err, "%v\n", p->argv->words); /* wrong, should do redirs */
 
-    v = gvlook(a->word);
-    if(v->fn)
-        execfunc(v);
+    <<[[Xsimple()]] if argv0 is a function>>
     else{
-        if(strcmp(a->word, "builtin")==0){
-            if(count(a)==1){
-                pfmt(err, "builtin: empty argument list\n");
-                setstatus("empty arg list");
-                poplist();
-                return;
-            }
-            a = a->next;
-            popword();
-        }
-        for(bp = Builtin;bp->name;bp++)
-            if(strcmp(a->word, bp->name)==0){
-                (*bp->fnc)();
-                return;
-            }
-        if(exitnext()){
-            /* fork and wait is redundant */
-            pushword("exec");
-            execexec();
-            Xexit();
-        }
+        <<[[Xsimple()]] if argv0 is a builtin>>
+        <<[[Xsimple()]] if exitnext()>>
         else{
             flush(err);
             Updenv();	/* necessary so changes don't go out again */
@@ -2371,6 +2433,107 @@ Xsimple(void)
 }
 @
 
+% fundamental of a shell! fork exec wait
+<<function execforkexec>>=
+int
+execforkexec(void)
+{
+    int pid;
+    int n;
+    char buf[ERRMAX];
+
+    switch(pid = fork()){
+    case -1:
+        return -1;
+    case 0: // child
+        clearwaitpids();
+        pushword("exec");
+        execexec();
+
+        // should not be reached!
+        strcpy(buf, "can't exec: ");
+        n = strlen(buf);
+        errstr(buf+n, ERRMAX-n);
+        Exit(buf);
+    }
+    // parent
+    addwaitpid(pid);
+    return pid;
+}
+@
+
+<<function execexec>>=
+void
+execexec(void)
+{
+    popword();	/* "exec" */
+    if(runq->argv->words==nil){
+        Xerror1("empty argument list");
+        return;
+    }
+    doredir(runq->redir);
+    Execute(runq->argv->words, searchpath(runq->argv->words->word));
+    poplist();
+}
+@
+
+
+<<function Waitfor>>=
+int
+Waitfor(int pid, int)
+{
+    thread *p;
+    Waitmsg *w;
+    char errbuf[ERRMAX];
+
+    if(pid >= 0 && !havewaitpid(pid))
+        return 0;
+
+    while((w = wait()) != nil){
+        delwaitpid(w->pid);
+        if(w->pid==pid){
+            setstatus(w->msg);
+            free(w);
+            return 0;
+        }
+        for(p = runq->ret;p;p = p->ret)
+            if(p->pid==w->pid){
+                p->pid=-1;
+                strcpy(p->status, w->msg);
+            }
+        free(w);
+    }
+
+    errstr(errbuf, sizeof errbuf);
+    if(strcmp(errbuf, "interrupted")==0) 
+        return -1;
+    return 0;
+}
+@
+
+
+\subsection{XXX}
+<<[[Xsimple()]] if exitnext()>>=
+if(exitnext()){
+    /* fork and wait is redundant */
+    pushword("exec");
+    execexec();
+    Xexit();
+}
+@
+
+<<function exitnext>>=
+/*
+ * Search through the following code to see if we're just going to exit.
+ */
+int
+exitnext(void){
+    union Code *c=&runq->code[runq->pc];
+    while(c->f==Xpopredir) 
+        c++;
+    return c->f==Xexit;
+}
+@
 
 \section{Operators}
 
@@ -2653,6 +2816,8 @@ case SUBSHELL:
 \section{Functions}
 
 
+% * Xfn(name){... Xreturn}			define function
+% * Xdelfn(name)				delete function definition
 <<[[outcode()]] cases>>=
 case FN:
     emitf(Xmark);
@@ -2669,6 +2834,34 @@ case FN:
     else
         emitf(Xdelfn);
     break;
+@
+
+
+<<[[Xsimple()]] other locals>>=
+var *v;
+@
+
+<<[[Xsimple()]] if argv0 is a function>>=
+v = gvlook(a->word);
+if(v->fn)
+    execfunc(v);
+@
+
+<<function execfunc>>=
+void
+execfunc(var *func)
+{
+    word *starval;
+
+    popword();
+    starval = runq->argv->words;
+    runq->argv->words = 0;
+    poplist();
+    start(func->fn, func->pc, runq->local);
+    runq->local = newvar(strdup("*"), runq->local);
+    runq->local->val = starval;
+    runq->local->changed = true;
+}
 @
 
 \section{Variables}
@@ -2774,6 +2967,7 @@ struct Builtin {
 @
 
 % plan9.c
+% rename Builtin -> builtins
 <<global Builtin>>=
 builtin Builtin[] = {
     "cd",		execcd,
@@ -2793,6 +2987,31 @@ builtin Builtin[] = {
     0
 };
 @
+
+<<[[Xsimple()]] other locals>>=
+struct Builtin *bp;
+@
+
+% 2 ways to call, either directly 'xxx' or via 'builtin xxx'
+% (not sure why need the first form)
+<<[[Xsimple()]] if argv0 is a builtin>>=
+if(strcmp(a->word, "builtin")==0){
+    if(count(a)==1){
+        pfmt(err, "builtin: empty argument list\n");
+        setstatus("empty arg list");
+        poplist();
+        return;
+    }
+    a = a->next;
+    popword();
+}
+for(bp = Builtin;bp->name;bp++)
+    if(strcmp(a->word, bp->name)==0){
+        (*bp->fnc)();
+        return;
+    }
+@
+
 
 \section{[[$ cd]]}
 %$
@@ -3068,20 +3287,6 @@ execcmds(io *f)
 \subsection{[[$ exec]]}
 %$
 
-<<function execexec>>=
-void
-execexec(void)
-{
-    popword();	/* "exec" */
-    if(runq->argv->words==nil){
-        Xerror1("empty argument list");
-        return;
-    }
-    doredir(runq->redir);
-    Execute(runq->argv->words, searchpath(runq->argv->words->word));
-    poplist();
-}
-@
 
 \subsection{[[$ whatis]]}
 %$

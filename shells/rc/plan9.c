@@ -274,7 +274,8 @@ Waitfor(int pid, int)
     }
 
     errstr(errbuf, sizeof errbuf);
-    if(strcmp(errbuf, "interrupted")==0) return -1;
+    if(strcmp(errbuf, "interrupted")==0) 
+        return -1;
     return 0;
 }
 /*e: function Waitfor */
@@ -700,6 +701,7 @@ Malloc(ulong n)
 /*e: function Malloc */
 
 /*s: global waitpids */
+// list<pid>
 int *waitpids;
 /*e: global waitpids */
 /*s: global nwaitpids */
@@ -711,7 +713,7 @@ void
 addwaitpid(int pid)
 {
     waitpids = realloc(waitpids, (nwaitpids+1)*sizeof waitpids[0]);
-    if(waitpids == 0)
+    if(waitpids == nil)
         panic("Can't realloc %d waitpids", nwaitpids+1);
     waitpids[nwaitpids++] = pid;
 }
