@@ -124,10 +124,13 @@ outcode(tree *t, bool eflag)
 
     if(t==nil)
         return;
+
+    /*s: [[outcode()]] set iflast before switch */
     if(t->type!=NOT && t->type!=';')
         runq->iflast = false;
-
+    /*e: [[outcode()]] set iflast before switch */
     switch(t->type){
+    /*s: [[outcode()]] cases */
     case SIMPLE:
         emitf(Xmark);
         outcode(c0, eflag);
@@ -135,27 +138,27 @@ outcode(tree *t, bool eflag)
         if(eflag)
             emitf(Xeflag);
         break;
-
-
-    case '$': //$
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xdol);
-        break;
-    case '"':
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xqdol);
-        break;
-
-    case SUB:
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xmark);
+    /*x: [[outcode()]] cases */
+    case ARGLIST:
         outcode(c1, eflag);
-        emitf(Xsub);
+        outcode(c0, eflag);
         break;
-
+    /*x: [[outcode()]] cases */
+    case WORDS:
+        outcode(c1, eflag);
+        outcode(c0, eflag);
+        break;
+    /*x: [[outcode()]] cases */
+    case WORD:
+        emitf(Xword);
+        emits(strdup(t->str));
+        break;
+    /*x: [[outcode()]] cases */
+    case ';':
+        outcode(c0, eflag);
+        outcode(c1, eflag);
+        break;
+    /*x: [[outcode()]] cases */
     case '&':
         emitf(Xasync);
         p = emiti(0);
@@ -163,26 +166,7 @@ outcode(tree *t, bool eflag)
         emitf(Xexit);
         stuffdot(p);
         break;
-    case ';':
-        outcode(c0, eflag);
-        outcode(c1, eflag);
-        break;
-
-    case '^':
-        emitf(Xmark);
-        outcode(c1, eflag);
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xconc);
-        break;
-    case '`':
-        emitf(Xbackq);
-        p = emiti(0);
-        outcode(c0, 0);
-        emitf(Xexit);
-        stuffdot(p);
-        break;
-
+    /*x: [[outcode()]] cases */
     case ANDAND:
         outcode(c0, false);
         emitf(Xtrue);
@@ -190,6 +174,7 @@ outcode(tree *t, bool eflag)
         outcode(c1, eflag);
         stuffdot(p);
         break;
+    /*x: [[outcode()]] cases */
     case OROR:
         outcode(c0, 0);
         emitf(Xfalse);
@@ -197,78 +182,12 @@ outcode(tree *t, bool eflag)
         outcode(c1, eflag);
         stuffdot(p);
         break;
-
-    case ARGLIST:
-        outcode(c1, eflag);
-        outcode(c0, eflag);
-        break;
-
+    /*x: [[outcode()]] cases */
     case BANG:
         outcode(c0, eflag);
         emitf(Xbang);
         break;
-
-    case PCMD:
-    case BRACE:
-        outcode(c0, eflag);
-        break;
-    case COUNT:
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xcount);
-        break;
-    case FN:
-        emitf(Xmark);
-        outcode(c0, eflag);
-        if(c1){
-            emitf(Xfn);
-            p = emiti(0);
-            emits(fnstr(c1));
-            outcode(c1, eflag);
-            emitf(Xunlocal);	/* get rid of $* */ //$
-            emitf(Xreturn);
-            stuffdot(p);
-        }
-        else
-            emitf(Xdelfn);
-        break;
-
-    case IF:
-        outcode(c0, false);
-        emitf(Xif);
-        p = emiti(0);
-        outcode(c1, eflag);
-        emitf(Xwastrue);
-        stuffdot(p);
-        break;
-    case NOT:
-        if(!runq->iflast)
-            yyerror("`if not' does not follow `if(...)'");
-        emitf(Xifnot);
-        p = emiti(0);
-        outcode(c0, eflag);
-        stuffdot(p);
-        break;
-
-    case PAREN:
-        outcode(c0, eflag);
-        break;
-
-
-    case SUBSHELL:
-        emitf(Xsubshell);
-        p = emiti(0);
-        outcode(c0, eflag);
-        emitf(Xexit);
-        stuffdot(p);
-        if(eflag)
-            emitf(Xeflag);
-        break;
-
-    case SWITCH:
-        codeswitch(t, eflag);
-        break;
-
+    /*x: [[outcode()]] cases */
     case TWIDDLE:
         emitf(Xmark);
         outcode(c1, eflag);
@@ -278,7 +197,87 @@ outcode(tree *t, bool eflag)
         if(eflag)
             emitf(Xeflag);
         break;
-
+    /*x: [[outcode()]] cases */
+    case PIPE:
+        emitf(Xpipe);
+        emiti(t->fd0);
+        emiti(t->fd1);
+        p = emiti(0);
+        q = emiti(0);
+        outcode(c0, eflag);
+        emitf(Xexit);
+        stuffdot(p);
+        outcode(c1, eflag);
+        emitf(Xreturn);
+        stuffdot(q);
+        emitf(Xpipewait);
+        break;
+    /*x: [[outcode()]] cases */
+    case PIPEFD:
+        emitf(Xpipefd);
+        emiti(t->rtype);
+        p = emiti(0);
+        outcode(c0, eflag);
+        emitf(Xexit);
+        stuffdot(p);
+        break;
+    /*x: [[outcode()]] cases */
+    case REDIR:
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xglob);
+        switch(t->rtype){
+        case APPEND:
+            emitf(Xappend);
+            break;
+        case WRITE:
+            emitf(Xwrite);
+            break;
+        case READ:
+        case HERE:
+            emitf(Xread);
+            break;
+        case RDWR:
+            emitf(Xrdwr);
+            break;
+        }
+        emiti(t->fd0);
+        outcode(c1, eflag);
+        emitf(Xpopredir);
+        break;
+    /*x: [[outcode()]] cases */
+    case DUP:
+        if(t->rtype==DUPFD){
+            emitf(Xdup);
+            emiti(t->fd0);
+            emiti(t->fd1);
+        }
+        else{
+            emitf(Xclose);
+            emiti(t->fd0);
+        }
+        outcode(c1, eflag);
+        emitf(Xpopredir);
+        break;
+    /*x: [[outcode()]] cases */
+    case IF:
+        outcode(c0, false);
+        emitf(Xif);
+        p = emiti(0);
+        outcode(c1, eflag);
+        emitf(Xwastrue);
+        stuffdot(p);
+        break;
+    /*x: [[outcode()]] cases */
+    case NOT:
+        if(!runq->iflast)
+            yyerror("`if not' does not follow `if(...)'");
+        emitf(Xifnot);
+        p = emiti(0);
+        outcode(c0, eflag);
+        stuffdot(p);
+        break;
+    /*x: [[outcode()]] cases */
     case WHILE:
         q = codep;
         outcode(c0, false);
@@ -291,12 +290,7 @@ outcode(tree *t, bool eflag)
         emiti(q);
         stuffdot(p);
         break;
-
-    case WORDS:
-        outcode(c1, eflag);
-        outcode(c0, eflag);
-        break;
-
+    /*x: [[outcode()]] cases */
     case FOR:
         emitf(Xmark);
         if(c1){
@@ -321,59 +315,46 @@ outcode(tree *t, bool eflag)
         stuffdot(q);
         emitf(Xunlocal);
         break;
-
-    case WORD:
-        emitf(Xword);
-        emits(strdup(t->str));
+    /*x: [[outcode()]] cases */
+    case SWITCH:
+        codeswitch(t, eflag);
         break;
-
-    case DUP:
-        if(t->rtype==DUPFD){
-            emitf(Xdup);
-            emiti(t->fd0);
-            emiti(t->fd1);
-        }
-        else{
-            emitf(Xclose);
-            emiti(t->fd0);
-        }
-        outcode(c1, eflag);
-        emitf(Xpopredir);
+    /*x: [[outcode()]] cases */
+    case PAREN:
+        outcode(c0, eflag);
         break;
-
-    case PIPEFD:
-        emitf(Xpipefd);
-        emiti(t->rtype);
+    /*x: [[outcode()]] cases */
+    case PCMD:
+    case BRACE:
+        outcode(c0, eflag);
+        break;
+    /*x: [[outcode()]] cases */
+    case SUBSHELL:
+        emitf(Xsubshell);
         p = emiti(0);
         outcode(c0, eflag);
         emitf(Xexit);
         stuffdot(p);
+        if(eflag)
+            emitf(Xeflag);
         break;
-
-    case REDIR:
+    /*x: [[outcode()]] cases */
+    case FN:
         emitf(Xmark);
         outcode(c0, eflag);
-        emitf(Xglob);
-        switch(t->rtype){
-        case APPEND:
-            emitf(Xappend);
-            break;
-        case WRITE:
-            emitf(Xwrite);
-            break;
-        case READ:
-        case HERE:
-            emitf(Xread);
-            break;
-        case RDWR:
-            emitf(Xrdwr);
-            break;
+        if(c1){
+            emitf(Xfn);
+            p = emiti(0);
+            emits(fnstr(c1));
+            outcode(c1, eflag);
+            emitf(Xunlocal);	/* get rid of $* */ //$
+            emitf(Xreturn);
+            stuffdot(p);
         }
-        emiti(t->fd0);
-        outcode(c1, eflag);
-        emitf(Xpopredir);
+        else
+            emitf(Xdelfn);
         break;
-
+    /*x: [[outcode()]] cases */
     case '=':
         tt = t;
         for(;t && t->type=='=';t = c2);
@@ -400,32 +381,60 @@ outcode(tree *t, bool eflag)
         }
         t = tt;	/* so tests below will work */
         break;
-
-    case PIPE:
-        emitf(Xpipe);
-        emiti(t->fd0);
-        emiti(t->fd1);
-        p = emiti(0);
-        q = emiti(0);
+    /*x: [[outcode()]] cases */
+    case '$': //$
+        emitf(Xmark);
         outcode(c0, eflag);
+        emitf(Xdol);
+        break;
+    /*x: [[outcode()]] cases */
+    case COUNT:
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xcount);
+        break;
+    /*x: [[outcode()]] cases */
+    case SUB:
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xmark);
+        outcode(c1, eflag);
+        emitf(Xsub);
+        break;
+    /*x: [[outcode()]] cases */
+    case '^':
+        emitf(Xmark);
+        outcode(c1, eflag);
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xconc);
+        break;
+    /*x: [[outcode()]] cases */
+    case '"':
+        emitf(Xmark);
+        outcode(c0, eflag);
+        emitf(Xqdol);
+        break;
+    /*x: [[outcode()]] cases */
+    case '`':
+        emitf(Xbackq);
+        p = emiti(0);
+        outcode(c0, 0);
         emitf(Xexit);
         stuffdot(p);
-        outcode(c1, eflag);
-        emitf(Xreturn);
-        stuffdot(q);
-        emitf(Xpipewait);
         break;
-
+    /*e: [[outcode()]] cases */
     default:
         pfmt(err, "bad type %d in outcode\n", t->type);
         break;
     }
-
+    /*s: [[outcode()]] set iflast after switch */
     if(t->type!=NOT && t->type!=';')
         runq->iflast = t->type==IF;
     else 
        if(c0) 
            runq->iflast = c0->type==IF;
+    /*e: [[outcode()]] set iflast after switch */
 }
 /*e: function outcode */
 /*s: function codeswitch */

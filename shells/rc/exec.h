@@ -77,8 +77,6 @@ struct Thread {
     struct Redir *redir;	/* redirection stack */
     struct Redir *startredir;	/* redir inheritance point */
     /*x: [[Thread]] other fields */
-    bool iflast;		/* static `if not' checking */
-    /*x: [[Thread]] other fields */
     int pid;		/* process for Xpipewait to wait for */
     char status[NSTATUS];	/* status for Xpipewait */
     /*x: [[Thread]] other fields */
@@ -89,6 +87,8 @@ struct Thread {
     bool eof;		/* is cmdfd at eof? */
     /*x: [[Thread]] other fields */
     int lineno;			/* linenumber */
+    /*x: [[Thread]] other fields */
+    bool iflast;		/* static `if not' checking */
     /*e: [[Thread]] other fields */
     // Extra
     /*s: [[Thread]] extra fields */

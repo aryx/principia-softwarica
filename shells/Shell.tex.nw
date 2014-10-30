@@ -650,9 +650,6 @@ struct Redir *redir;	/* redirection stack */
 struct Redir *startredir;	/* redir inheritance point */
 @
 
-<<[[Thread]] other fields>>=
-bool iflast;		/* static `if not' checking */
-@
 
 <<[[Thread]] other fields>>=
 int pid;		/* process for Xpipewait to wait for */
@@ -1097,6 +1094,9 @@ if(error){
     }
 }
 @
+
+% chapter{Input}?
+% so Lexing chapter cleaner?
 
 \chapter{Lexing}
 % why not using lex? they like yacc but not lex apparently
@@ -1777,6 +1777,25 @@ rc:
 @
 %$
 
+\ifallcode
+<<type declarations>>=
+%type<tree> first keyword words
+%type<tree> paren brace body cmdsa cmdsan assign epilog redir
+%type<tree> FOR IN WHILE IF NOT SWITCH FN
+%type<tree> TWIDDLE BANG SUBSHELL  REDIR DUP PIPE    WORD
+@
+\fi
+
+\ifallcode
+<<constant YYMAXDEPTH>>=
+//@Scheck: used in y.tab.c
+#define	YYMAXDEPTH	500
+@
+\fi
+
+
+\section{Simple commands}
+
 % a line can have a single command (stmt)
 <<line rule>>=
 line:   
@@ -1884,22 +1903,6 @@ tree* simplemung(tree *t)
 @
 
 
-\ifallcode
-<<type declarations>>=
-%type<tree> first keyword words
-%type<tree> paren brace body cmdsa cmdsan assign epilog redir
-%type<tree> FOR IN WHILE IF NOT SWITCH FN
-%type<tree> TWIDDLE BANG SUBSHELL  REDIR DUP PIPE    WORD
-@
-\fi
-
-\ifallcode
-<<constant YYMAXDEPTH>>=
-//@Scheck: used in y.tab.c
-#define	YYMAXDEPTH	500
-@
-\fi
-
 
 \section{Operators}
 
@@ -1924,7 +1927,7 @@ cmdsa:
 
 % newline is also a form of sequence when in the body { } of something
 
-\subsection{Logic operators}
+\subsection{Logical operators}
 % Other operators?
 % && ||  |  &  !?
 % >> << > <
@@ -2020,7 +2023,7 @@ epilog:
 %$
 
 
-\section{Control flow commands}
+\section{Control flow statements}
 
 <<cmd rule other cases>>=
 |   IF paren {skipnl();} cmd  {$$=mung2($1, $2, $4);}
@@ -2042,7 +2045,6 @@ epilog:
 
 |   FOR '(' word ')' {skipnl();} cmd
     {$$=mung3($1, $3, (struct Tree *)0, $6);}
-
 @
 
 <<other rules>>=
@@ -2258,315 +2260,55 @@ outcode(tree *t, bool eflag)
 
     if(t==nil)
         return;
-    if(t->type!=NOT && t->type!=';')
-        runq->iflast = false;
 
+    <<[[outcode()]] set iflast before switch>>
     switch(t->type){
-    case SIMPLE:
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xsimple);
-        if(eflag)
-            emitf(Xeflag);
-        break;
-
-
-    case '$': //$
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xdol);
-        break;
-    case '"':
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xqdol);
-        break;
-
-    case SUB:
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xmark);
-        outcode(c1, eflag);
-        emitf(Xsub);
-        break;
-
-    case '&':
-        emitf(Xasync);
-        p = emiti(0);
-        outcode(c0, eflag);
-        emitf(Xexit);
-        stuffdot(p);
-        break;
-    case ';':
-        outcode(c0, eflag);
-        outcode(c1, eflag);
-        break;
-
-    case '^':
-        emitf(Xmark);
-        outcode(c1, eflag);
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xconc);
-        break;
-    case '`':
-        emitf(Xbackq);
-        p = emiti(0);
-        outcode(c0, 0);
-        emitf(Xexit);
-        stuffdot(p);
-        break;
-
-    case ANDAND:
-        outcode(c0, false);
-        emitf(Xtrue);
-        p = emiti(0);
-        outcode(c1, eflag);
-        stuffdot(p);
-        break;
-    case OROR:
-        outcode(c0, 0);
-        emitf(Xfalse);
-        p = emiti(0);
-        outcode(c1, eflag);
-        stuffdot(p);
-        break;
-
-    case ARGLIST:
-        outcode(c1, eflag);
-        outcode(c0, eflag);
-        break;
-
-    case BANG:
-        outcode(c0, eflag);
-        emitf(Xbang);
-        break;
-
-    case PCMD:
-    case BRACE:
-        outcode(c0, eflag);
-        break;
-    case COUNT:
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xcount);
-        break;
-    case FN:
-        emitf(Xmark);
-        outcode(c0, eflag);
-        if(c1){
-            emitf(Xfn);
-            p = emiti(0);
-            emits(fnstr(c1));
-            outcode(c1, eflag);
-            emitf(Xunlocal);	/* get rid of $* */ //$
-            emitf(Xreturn);
-            stuffdot(p);
-        }
-        else
-            emitf(Xdelfn);
-        break;
-
-    case IF:
-        outcode(c0, false);
-        emitf(Xif);
-        p = emiti(0);
-        outcode(c1, eflag);
-        emitf(Xwastrue);
-        stuffdot(p);
-        break;
-    case NOT:
-        if(!runq->iflast)
-            yyerror("`if not' does not follow `if(...)'");
-        emitf(Xifnot);
-        p = emiti(0);
-        outcode(c0, eflag);
-        stuffdot(p);
-        break;
-
-    case PAREN:
-        outcode(c0, eflag);
-        break;
-
-
-    case SUBSHELL:
-        emitf(Xsubshell);
-        p = emiti(0);
-        outcode(c0, eflag);
-        emitf(Xexit);
-        stuffdot(p);
-        if(eflag)
-            emitf(Xeflag);
-        break;
-
-    case SWITCH:
-        codeswitch(t, eflag);
-        break;
-
-    case TWIDDLE:
-        emitf(Xmark);
-        outcode(c1, eflag);
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xmatch);
-        if(eflag)
-            emitf(Xeflag);
-        break;
-
-    case WHILE:
-        q = codep;
-        outcode(c0, false);
-        if(q==codep)
-            emitf(Xsettrue);	/* empty condition == while(true) */
-        emitf(Xtrue);
-        p = emiti(0);
-        outcode(c1, eflag);
-        emitf(Xjump);
-        emiti(q);
-        stuffdot(p);
-        break;
-
-    case WORDS:
-        outcode(c1, eflag);
-        outcode(c0, eflag);
-        break;
-
-    case FOR:
-        emitf(Xmark);
-        if(c1){
-            outcode(c1, eflag);
-            emitf(Xglob);
-        }
-        else{
-            emitf(Xmark);
-            emitf(Xword);
-            emits(strdup("*"));
-            emitf(Xdol);
-        }
-        emitf(Xmark);		/* dummy value for Xlocal */
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xlocal);
-        p = emitf(Xfor);
-        q = emiti(0);
-        outcode(c2, eflag);
-        emitf(Xjump);
-        emiti(p);
-        stuffdot(q);
-        emitf(Xunlocal);
-        break;
-
-    case WORD:
-        emitf(Xword);
-        emits(strdup(t->str));
-        break;
-
-    case DUP:
-        if(t->rtype==DUPFD){
-            emitf(Xdup);
-            emiti(t->fd0);
-            emiti(t->fd1);
-        }
-        else{
-            emitf(Xclose);
-            emiti(t->fd0);
-        }
-        outcode(c1, eflag);
-        emitf(Xpopredir);
-        break;
-
-    case PIPEFD:
-        emitf(Xpipefd);
-        emiti(t->rtype);
-        p = emiti(0);
-        outcode(c0, eflag);
-        emitf(Xexit);
-        stuffdot(p);
-        break;
-
-    case REDIR:
-        emitf(Xmark);
-        outcode(c0, eflag);
-        emitf(Xglob);
-        switch(t->rtype){
-        case APPEND:
-            emitf(Xappend);
-            break;
-        case WRITE:
-            emitf(Xwrite);
-            break;
-        case READ:
-        case HERE:
-            emitf(Xread);
-            break;
-        case RDWR:
-            emitf(Xrdwr);
-            break;
-        }
-        emiti(t->fd0);
-        outcode(c1, eflag);
-        emitf(Xpopredir);
-        break;
-
-    case '=':
-        tt = t;
-        for(;t && t->type=='=';t = c2);
-        if(t){					/* var=value cmd */
-            for(t = tt;t->type=='=';t = c2){
-                emitf(Xmark);
-                outcode(c1, eflag);
-                emitf(Xmark);
-                outcode(c0, eflag);
-                emitf(Xlocal);		/* push var for cmd */
-            }
-            outcode(t, eflag);		/* gen. code for cmd */
-            for(t = tt; t->type == '='; t = c2)
-                emitf(Xunlocal);	/* pop var */
-        }
-        else{					/* var=value */
-            for(t = tt;t;t = c2){
-                emitf(Xmark);
-                outcode(c1, eflag);
-                emitf(Xmark);
-                outcode(c0, eflag);
-                emitf(Xassign);	/* set var permanently */
-            }
-        }
-        t = tt;	/* so tests below will work */
-        break;
-
-    case PIPE:
-        emitf(Xpipe);
-        emiti(t->fd0);
-        emiti(t->fd1);
-        p = emiti(0);
-        q = emiti(0);
-        outcode(c0, eflag);
-        emitf(Xexit);
-        stuffdot(p);
-        outcode(c1, eflag);
-        emitf(Xreturn);
-        stuffdot(q);
-        emitf(Xpipewait);
-        break;
-
+    <<[[outcode()]] cases>>
     default:
         pfmt(err, "bad type %d in outcode\n", t->type);
         break;
     }
-
-    if(t->type!=NOT && t->type!=';')
-        runq->iflast = t->type==IF;
-    else 
-       if(c0) 
-           runq->iflast = c0->type==IF;
+    <<[[outcode()]] set iflast after switch>>
 }
 @
 %$
 
-\section{Simple commands}
 
-% builtin hook here
+\section{Simple commands or builtins}
+
+<<[[outcode()]] cases>>=
+case SIMPLE:
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xsimple);
+    if(eflag)
+        emitf(Xeflag);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case ARGLIST:
+    outcode(c1, eflag);
+    outcode(c0, eflag);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case WORDS:
+    outcode(c1, eflag);
+    outcode(c0, eflag);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case WORD:
+    emitf(Xword);
+    emits(strdup(t->str));
+    break;
+@
+
+
+% builtin hook also here
 
 <<function Xsimple>>=
 void
@@ -2630,9 +2372,101 @@ Xsimple(void)
 @
 
 
-\section{Pipe}
+\section{Operators}
 
-\section{Redirection}
+\subsection{Sequence}
+
+<<[[outcode()]] cases>>=
+case ';':
+    outcode(c0, eflag);
+    outcode(c1, eflag);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case '&':
+    emitf(Xasync);
+    p = emiti(0);
+    outcode(c0, eflag);
+    emitf(Xexit);
+    stuffdot(p);
+    break;
+@
+
+\subsection{Logical operators}
+
+<<[[outcode()]] cases>>=
+case ANDAND:
+    outcode(c0, false);
+    emitf(Xtrue);
+    p = emiti(0);
+    outcode(c1, eflag);
+    stuffdot(p);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case OROR:
+    outcode(c0, 0);
+    emitf(Xfalse);
+    p = emiti(0);
+    outcode(c1, eflag);
+    stuffdot(p);
+    break;
+@
+
+
+<<[[outcode()]] cases>>=
+case BANG:
+    outcode(c0, eflag);
+    emitf(Xbang);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case TWIDDLE:
+    emitf(Xmark);
+    outcode(c1, eflag);
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xmatch);
+    if(eflag)
+        emitf(Xeflag);
+    break;
+@
+
+
+\subsection{Pipe}
+
+<<[[outcode()]] cases>>=
+case PIPE:
+    emitf(Xpipe);
+    emiti(t->fd0);
+    emiti(t->fd1);
+    p = emiti(0);
+    q = emiti(0);
+    outcode(c0, eflag);
+    emitf(Xexit);
+    stuffdot(p);
+    outcode(c1, eflag);
+    emitf(Xreturn);
+    stuffdot(q);
+    emitf(Xpipewait);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case PIPEFD:
+    emitf(Xpipefd);
+    emiti(t->rtype);
+    p = emiti(0);
+    outcode(c0, eflag);
+    emitf(Xexit);
+    stuffdot(p);
+    break;
+@
+
+\subsection{Redirection}
 
 <<struct redir>>=
 struct Redir {
@@ -2642,9 +2476,289 @@ struct Redir {
 };
 @
 
+<<[[outcode()]] cases>>=
+case REDIR:
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xglob);
+    switch(t->rtype){
+    case APPEND:
+        emitf(Xappend);
+        break;
+    case WRITE:
+        emitf(Xwrite);
+        break;
+    case READ:
+    case HERE:
+        emitf(Xread);
+        break;
+    case RDWR:
+        emitf(Xrdwr);
+        break;
+    }
+    emiti(t->fd0);
+    outcode(c1, eflag);
+    emitf(Xpopredir);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case DUP:
+    if(t->rtype==DUPFD){
+        emitf(Xdup);
+        emiti(t->fd0);
+        emiti(t->fd1);
+    }
+    else{
+        emitf(Xclose);
+        emiti(t->fd0);
+    }
+    outcode(c1, eflag);
+    emitf(Xpopredir);
+    break;
+@
+
 \section{Control flow statements}
 
-\section{XXX}
+\subsection{If}
+
+<<[[Thread]] other fields>>=
+bool iflast;		/* static `if not' checking */
+@
+
+<<[[outcode()]] set iflast after switch>>=
+if(t->type!=NOT && t->type!=';')
+    runq->iflast = t->type==IF;
+else 
+   if(c0) 
+       runq->iflast = c0->type==IF;
+@
+
+<<[[outcode()]] set iflast before switch>>=
+if(t->type!=NOT && t->type!=';')
+    runq->iflast = false;
+@
+
+
+
+<<[[outcode()]] cases>>=
+case IF:
+    outcode(c0, false);
+    emitf(Xif);
+    p = emiti(0);
+    outcode(c1, eflag);
+    emitf(Xwastrue);
+    stuffdot(p);
+    break;
+@
+
+
+<<[[outcode()]] cases>>=
+case NOT:
+    if(!runq->iflast)
+        yyerror("`if not' does not follow `if(...)'");
+    emitf(Xifnot);
+    p = emiti(0);
+    outcode(c0, eflag);
+    stuffdot(p);
+    break;
+@
+
+
+
+\subsection{While}
+
+
+
+<<[[outcode()]] cases>>=
+case WHILE:
+    q = codep;
+    outcode(c0, false);
+    if(q==codep)
+        emitf(Xsettrue);	/* empty condition == while(true) */
+    emitf(Xtrue);
+    p = emiti(0);
+    outcode(c1, eflag);
+    emitf(Xjump);
+    emiti(q);
+    stuffdot(p);
+    break;
+@
+
+\subsection{For}
+
+<<[[outcode()]] cases>>=
+case FOR:
+    emitf(Xmark);
+    if(c1){
+        outcode(c1, eflag);
+        emitf(Xglob);
+    }
+    else{
+        emitf(Xmark);
+        emitf(Xword);
+        emits(strdup("*"));
+        emitf(Xdol);
+    }
+    emitf(Xmark);		/* dummy value for Xlocal */
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xlocal);
+    p = emitf(Xfor);
+    q = emiti(0);
+    outcode(c2, eflag);
+    emitf(Xjump);
+    emiti(p);
+    stuffdot(q);
+    emitf(Xunlocal);
+    break;
+@
+
+
+\subsection{Switch}
+
+<<[[outcode()]] cases>>=
+case SWITCH:
+    codeswitch(t, eflag);
+    break;
+@
+
+\subsection{Blocks}
+
+<<[[outcode()]] cases>>=
+case PAREN:
+    outcode(c0, eflag);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case PCMD:
+case BRACE:
+    outcode(c0, eflag);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case SUBSHELL:
+    emitf(Xsubshell);
+    p = emiti(0);
+    outcode(c0, eflag);
+    emitf(Xexit);
+    stuffdot(p);
+    if(eflag)
+        emitf(Xeflag);
+    break;
+@
+
+\section{Functions}
+
+
+<<[[outcode()]] cases>>=
+case FN:
+    emitf(Xmark);
+    outcode(c0, eflag);
+    if(c1){
+        emitf(Xfn);
+        p = emiti(0);
+        emits(fnstr(c1));
+        outcode(c1, eflag);
+        emitf(Xunlocal);	/* get rid of $* */ //$
+        emitf(Xreturn);
+        stuffdot(p);
+    }
+    else
+        emitf(Xdelfn);
+    break;
+@
+
+\section{Variables}
+
+<<[[outcode()]] cases>>=
+case '=':
+    tt = t;
+    for(;t && t->type=='=';t = c2);
+    if(t){					/* var=value cmd */
+        for(t = tt;t->type=='=';t = c2){
+            emitf(Xmark);
+            outcode(c1, eflag);
+            emitf(Xmark);
+            outcode(c0, eflag);
+            emitf(Xlocal);		/* push var for cmd */
+        }
+        outcode(t, eflag);		/* gen. code for cmd */
+        for(t = tt; t->type == '='; t = c2)
+            emitf(Xunlocal);	/* pop var */
+    }
+    else{					/* var=value */
+        for(t = tt;t;t = c2){
+            emitf(Xmark);
+            outcode(c1, eflag);
+            emitf(Xmark);
+            outcode(c0, eflag);
+            emitf(Xassign);	/* set var permanently */
+        }
+    }
+    t = tt;	/* so tests below will work */
+    break;
+@
+
+
+<<[[outcode()]] cases>>=
+case '$': //$
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xdol);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case COUNT:
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xcount);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case SUB:
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xmark);
+    outcode(c1, eflag);
+    emitf(Xsub);
+    break;
+@
+
+<<[[outcode()]] cases>>=
+case '^':
+    emitf(Xmark);
+    outcode(c1, eflag);
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xconc);
+    break;
+@
+
+\section{Fancy arguments}
+
+<<[[outcode()]] cases>>=
+case '"':
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xqdol);
+    break;
+@
+
+
+<<[[outcode()]] cases>>=
+case '`':
+    emitf(Xbackq);
+    p = emiti(0);
+    outcode(c0, 0);
+    emitf(Xexit);
+    stuffdot(p);
+    break;
+@
 
 \chapter{Builtins}
 

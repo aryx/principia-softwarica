@@ -85,7 +85,6 @@ cmd:
 
 |   FOR '(' word ')' {skipnl();} cmd
     {$$=mung3($1, $3, (struct Tree *)0, $6);}
-
 /*x: cmd rule other cases */
 |   brace epilog        {$$=epimung($1, $2);}
 /*x: cmd rule other cases */
