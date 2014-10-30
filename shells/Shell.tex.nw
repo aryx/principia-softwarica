@@ -1217,6 +1217,26 @@ bool doprompt = true;
 @
 
 
+<<function pprompt>>=
+void
+pprompt(void)
+{
+    var *prompt;
+    if(runq->iflag){
+        pstr(err, promptstr);
+        flush(err);
+        prompt = vlook("prompt");
+        if(prompt->val && prompt->val->next)
+            promptstr = prompt->val->next->word;
+        else
+            promptstr="\t";
+    }
+    runq->lineno++;
+    doprompt = false;
+}
+@
+
+
 
 \section{[[yylex()]]}
 
@@ -1462,6 +1482,60 @@ int yylex(void)
 }
 @
 %$
+
+<<function idchr>>=
+int
+idchr(int c)
+{
+    /*
+     * Formerly:
+     * return 'a'<=c && c<='z' || 'A'<=c && c<='Z' || '0'<=c && c<='9'
+     *	|| c=='_' || c=='*';
+     */
+    return c>' ' && !strchr("!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~", c);
+}
+@
+%$
+
+<<function addtok>>=
+char*
+addtok(char *p, int val)
+{
+    if(p==nil)
+        return nil;
+    if(p >= &tok[NTOK]){
+        *p = '\0';
+        yyerror("token buffer too short");
+        return nil;
+    }
+    *p++=val;
+    return p;
+}
+@
+
+<<function addutf>>=
+char*
+addutf(char *p, int c)
+{
+    uchar b, m;
+    int i;
+
+    p = addtok(p, c);	/* 1-byte UTF runes are special */
+    if(c < Runeself)
+        return p;
+
+    m = 0xc0;
+    b = 0x80;
+    for(i=1; i < UTFmax; i++){
+        if((c&m) == b)
+            break;
+        p = addtok(p, advance());
+        b = m;
+        m = (m >> 1)|0x80;
+    }
+    return p;
+}
+@
 
 
 
@@ -1755,6 +1829,40 @@ words:
 @
 %$
 
+
+
+
+
+<<function simplemung>>=
+/*
+ * Add a SIMPLE node at the root of t and percolate all the redirections
+ * up to the root.
+ */
+//@Scheck: used by syn.y
+tree* simplemung(tree *t)
+{
+    tree *u;
+    struct Io *s;
+
+    t = tree1(SIMPLE, t);
+    s = openstr();
+    pfmt(s, "%t", t);
+    t->str = strdup((char *)s->strp);
+    closeio(s);
+
+    for(u = t->child[0];u->type==ARGLIST;u = u->child[0]){
+        if(u->child[1]->type==DUP
+        || u->child[1]->type==REDIR){
+            u->child[1]->child[1] = t;
+            t = u->child[1];
+            u->child[1] = 0;
+        }
+    }
+    return t;
+}
+@
+
+
 \ifallcode
 <<type declarations>>=
 %type<tree> first keyword words
@@ -1811,6 +1919,37 @@ cmdsa:
 %$
 
 % redir is in simple/expr, so has more prirority
+
+
+<<function mung1>>=
+//@Scheck: used by syn.y
+tree* mung1(tree *t, tree *c0)
+{
+    t->child[0] = c0;
+    return t;
+}
+@
+
+<<function mung2>>=
+//@Scheck: used by syn.y
+tree* mung2(tree *t, tree *c0, tree *c1)
+{
+    t->child[0] = c0;
+    t->child[1] = c1;
+    return t;
+}
+@
+
+<<function mung3>>=
+//@Scheck: used by syn.y
+tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
+{
+    t->child[0] = c0;
+    t->child[1] = c1;
+    t->child[2] = c2;
+    return t;
+}
+@
 
 \subsection{Pipe}
 
@@ -1908,6 +2047,20 @@ cmdsan:
 % ???
 <<cmd rule other cases>>=
 |   SUBSHELL cmd        {$$=mung1($1, $2);}
+@
+
+
+<<function epimung>>=
+//@Scheck: used by syn.y
+tree* epimung(tree *comp, tree *epi)
+{
+    tree *p;
+    if(epi==0)
+        return comp;
+    for(p = epi;p->child[1];p = p->child[1]);
+    p->child[1] = comp;
+    return epi;
+}
 @
 
 
@@ -2036,6 +2189,20 @@ int morecode(void)
 
 
 \section{[[outcode()]]}
+
+%UGLY
+<<constant c0 (rc/code.c)>>=
+#define	c0	t->child[0]
+@
+
+<<constant c1 (rc/code.c)>>=
+#define	c1	t->child[1]
+@
+
+<<constant c2 (rc/code.c)>>=
+#define	c2	t->child[2]
+@
+
 
 % modify codebuf via all those emitxxx()
 <<function outcode>>=
@@ -2357,6 +2524,68 @@ outcode(tree *t, bool eflag)
 
 % builtin hook here
 
+<<function Xsimple>>=
+void
+Xsimple(void)
+{
+    word *a;
+    thread *p = runq;
+    var *v;
+    struct Builtin *bp;
+    int pid;
+
+    globlist();
+    a = runq->argv->words;
+    if(a==nil){
+        Xerror1("empty argument list");
+        return;
+    }
+    if(flag['x'])
+        pfmt(err, "%v\n", p->argv->words); /* wrong, should do redirs */
+
+    v = gvlook(a->word);
+    if(v->fn)
+        execfunc(v);
+    else{
+        if(strcmp(a->word, "builtin")==0){
+            if(count(a)==1){
+                pfmt(err, "builtin: empty argument list\n");
+                setstatus("empty arg list");
+                poplist();
+                return;
+            }
+            a = a->next;
+            popword();
+        }
+        for(bp = Builtin;bp->name;bp++)
+            if(strcmp(a->word, bp->name)==0){
+                (*bp->fnc)();
+                return;
+            }
+        if(exitnext()){
+            /* fork and wait is redundant */
+            pushword("exec");
+            execexec();
+            Xexit();
+        }
+        else{
+            flush(err);
+            Updenv();	/* necessary so changes don't go out again */
+            if((pid = execforkexec()) < 0){
+                Xerror("try again");
+                return;
+            }
+
+            /* interrupts don't get us out */
+            poplist();
+            while(Waitfor(pid, 1) < 0)
+                ;
+        }
+    }
+}
+@
+
+
 \section{Pipe}
 
 \section{Redirection}
@@ -2378,6 +2607,13 @@ struct Redir {
 \section{Overview}
 
 % called from Xsimple when first word is actually recognized as a builtin
+
+<<struct builtin>>=
+struct Builtin {
+    char *name;
+    void (*fnc)(void);
+};
+@
 
 % plan9.c
 <<global Builtin>>=
@@ -2918,8 +3154,161 @@ execshift(void)
 % status, sigexit
 % ifs?
 
+\section{Environment}
+
+<<enum _anon_ (rc/plan9.c)>>=
+enum {
+    Maxenvname = 256,	/* undocumented limit */
+};
+@
+
+
+<<global Fdprefix>>=
+char *Fdprefix = "/fd/";
+@
+
+
+<<function Vinit>>=
+void
+Vinit(void)
+{
+    int dir, f, len, i, n, nent;
+    char *buf, *s;
+    char envname[Maxenvname];
+    word *val;
+    Dir *ent;
+
+    dir = open("/env", OREAD);
+    if(dir<0){
+        pfmt(err, "rc: can't open /env: %r\n");
+        return;
+    }
+    ent = nil;
+    for(;;){
+        nent = dirread(dir, &ent);
+        if(nent <= 0)
+            break;
+        for(i = 0; i<nent; i++){
+            len = ent[i].length;
+            if(len && strncmp(ent[i].name, "fn#", 3)!=0){
+                snprint(envname, sizeof envname, "/env/%s", ent[i].name);
+                if((f = open(envname, 0))>=0){
+                    buf = emalloc(len+1);
+                    n = readn(f, buf, len);
+                    if (n <= 0)
+                        buf[0] = '\0';
+                    else
+                        buf[n] = '\0';
+                    val = 0;
+                    /* Charitably add a 0 at the end if need be */
+                    if(buf[len-1])
+                        buf[len++]='\0';
+                    s = buf+len-1;
+                    for(;;){
+                        while(s!=buf && s[-1]!='\0') --s;
+                        val = newword(s, val);
+                        if(s==buf)
+                            break;
+                        --s;
+                    }
+                    setvar(ent[i].name, val);
+                    vlook(ent[i].name)->changed = false;
+                    close(f);
+                    efree(buf);
+                }
+            }
+        }
+        free(ent);
+    }
+    close(dir);
+}
+@
+
+<<global envdir>>=
+int envdir;
+@
+
+
+
+
+<<function Xrdfn>>=
+void
+Xrdfn(void)
+{
+    int f, len;
+    Dir *e;
+    char envname[Maxenvname];
+    static Dir *ent, *allocent;
+    static int nent;
+
+    for(;;){
+        if(nent == 0){
+            free(allocent);
+            nent = dirread(envdir, &allocent);
+            ent = allocent;
+        }
+        if(nent <= 0)
+            break;
+        while(nent){
+            e = ent++;
+            nent--;
+            len = e->length;
+            if(len && strncmp(e->name, "fn#", 3)==0){
+                snprint(envname, sizeof envname, "/env/%s", e->name);
+                if((f = open(envname, 0))>=0){
+                    execcmds(openfd(f));
+                    return;
+                }
+            }
+        }
+    }
+    close(envdir);
+    Xreturn();
+}
+@
+
+<<global rdfns>>=
+union Code rdfns[4];
+@
+
+<<function execfinit>>=
+void
+execfinit(void)
+{
+    static int first = 1;
+    if(first){
+        rdfns[0].i = 1;
+        rdfns[1].f = Xrdfn;
+        rdfns[2].f = Xjump;
+        rdfns[3].i = 1;
+        first = 0;
+    }
+    Xpopm();
+    envdir = open("/env", 0);
+    if(envdir<0){
+        pfmt(err, "rc: can't open /env: %r\n");
+        return;
+    }
+    start(rdfns, 1, runq->local);
+}
+@
+
+
 \chapter{Globbing}
 % mv in advanced topics?
+
+<<constant GLOB>>=
+/*
+ * Glob character escape in strings:
+ *	In a string, GLOB must be followed by *?[ or GLOB.
+ *	GLOB* matches any string
+ *	GLOB? matches any single character
+ *	GLOB[...] matches anything in the brackets
+ *	GLOBGLOB matches GLOB
+ */
+#define	GLOB	'\001'
+@
+% ???
 
 <<global globname>>=
 char *globname;
@@ -3544,6 +3933,121 @@ readhere(void)
 }
 @
 
+
+
+<<global ser>>=
+int ser = 0;
+@
+
+<<global tmp (rc/here.c)>>=
+char tmp[] = "/tmp/here0000.0000";
+@
+
+<<global hex>>=
+char hex[] = "0123456789abcdef";
+@
+
+<<function hexnum>>=
+void
+hexnum(char *p, int n)
+{
+    *p++ = hex[(n>>12)&0xF];
+    *p++ = hex[(n>>8)&0xF];
+    *p++ = hex[(n>>4)&0xF];
+    *p = hex[n&0xF];
+}
+@
+
+<<function heredoc>>=
+//@Scheck: used by syn.y
+tree* heredoc(tree *tag)
+{
+    struct Here *h = new(struct Here);
+
+    if(tag->type != WORD)
+        yyerror("Bad here tag");
+    h->next = 0;
+    if(here)
+        *ehere = h;
+    else
+        here = h;
+    ehere = &h->next;
+    h->tag = tag;
+    hexnum(&tmp[9], getpid());
+    hexnum(&tmp[14], ser++);
+    h->name = strdup(tmp);
+    return token(tmp, WORD);
+}
+@
+
+
+<<function psubst>>=
+void
+psubst(io *f, uchar *s)
+{
+    int savec, n;
+    uchar *t, *u;
+    Rune r;
+    word *star;
+
+    while(*s){
+        if(*s != '$'){		/* copy plain text rune */
+            if(*s < Runeself)
+                pchr(f, *s++);
+            else{
+                n = chartorune(&r, (char *)s);
+                while(n-- > 0)
+                    pchr(f, *s++);
+            }
+        }else{			/* $something -- perform substitution */
+            t = ++s;
+            if(*t == '$')
+                pchr(f, *t++);
+            else{
+                while(*t && idchr(*t))
+                    t++;
+                savec = *t;
+                *t = '\0';
+                n = 0;
+                for(u = s; *u && '0' <= *u && *u <= '9'; u++)
+                    n = n*10 + *u - '0';
+                if(n && *u == '\0'){
+                    star = vlook("*")->val;
+                    if(star && 1 <= n && n <= count(star)){
+                        while(--n)
+                            star = star->next;
+                        pstr(f, star->word);
+                    }
+                }else
+                    pstrs(f, vlook((char *)s)->val);
+                *t = savec;
+                if(savec == '^')
+                    t++;
+            }
+            s = t;
+        }
+    }
+}
+@
+%$
+
+<<function pstrs>>=
+void
+pstrs(io *f, word *a)
+{
+    if(a){
+        while(a->next && a->next->word){
+            pstr(f, a->word);
+            pchr(f, ' ');
+            a = a->next;
+        }
+        pstr(f, a->word);
+    }
+}
+@
+
+
+
 \chapter{Conclusion}
 
 \appendix
@@ -3558,6 +4062,7 @@ readhere(void)
 char nl='\n';		/* change to semicolon for bourne-proofing */
 @
 
+% TODO ugly and dupe with the one in code.c
 <<constant c0>>=
 #define	c0	t->child[0]
 @
@@ -3918,6 +4423,273 @@ efree(void *p)
 \section{Command line arguments processing}
 % getopt
 
+<<global cmdname>>=
+char *cmdname;
+@
+
+<<global flagarg>>=
+static char *flagarg="";
+@
+
+
+
+
+<<global reason>>=
+static int reason;
+@
+
+<<constant RESET>>=
+#define	RESET	1
+@
+
+<<constant FEWARGS>>=
+#define	FEWARGS	2
+@
+
+<<constant FLAGSYN>>=
+#define	FLAGSYN	3
+@
+
+<<constant BADFLAG>>=
+#define	BADFLAG	4
+@
+
+<<global badflag>>=
+static int badflag;
+@
+
+<<function getflags>>=
+int
+getflags(int argc, char *argv[], char *flags, int stop)
+{
+    char *s;
+    int i, j, c, count;
+    flagarg = flags;
+    if(cmdname==0)
+        cmdname = argv[0];
+
+    i = 1;
+    while(i!=argc){
+        if(argv[i][0] != '-' || argv[i][1] == '\0'){
+            if(stop)		/* always true in rc */
+                return argc;
+            i++;
+            continue;
+        }
+        s = argv[i]+1;
+        while(*s){
+            c=*s++;
+            count = scanflag(c, flags);
+            if(count==-1)
+                return -1;
+            if(flag[c]){ reason = RESET; badflag = c; return -1; }
+            if(count==0){
+                flag[c] = flagset;
+                if(*s=='\0'){
+                    for(j = i+1;j<=argc;j++)
+                        argv[j-1] = argv[j];
+                    --argc;
+                }
+            }
+            else{
+                if(*s=='\0'){
+                    for(j = i+1;j<=argc;j++)
+                        argv[j-1] = argv[j];
+                    --argc;
+                    s = argv[i];
+                }
+                if(argc-i<count){
+                    reason = FEWARGS;
+                    badflag = c;
+                    return -1;
+                }
+                reverse(argv+i, argv+argc);
+                reverse(argv+i, argv+argc-count);
+                reverse(argv+argc-count+1, argv+argc);
+                argc-=count;
+                flag[c] = argv+argc+1;
+                flag[c][0] = s;
+                s="";
+            }
+        }
+    }
+    return argc;
+}
+@
+
+<<function reverse>>=
+static void
+reverse(char **p, char **q)
+{
+    char *t;
+    for(;p<q;p++,--q){ t=*p; *p=*q; *q = t; }
+}
+@
+
+<<function scanflag>>=
+static int
+scanflag(int c, char *f)
+{
+    int fc, count;
+    if(0<=c && c<NFLAG)
+        while(*f){
+            if(*f==' '){
+                f++;
+                continue;
+            }
+            fc=*f++;
+            if(*f==':'){
+                f++;
+                if(*f<'0' || '9'<*f){ reason = FLAGSYN; return -1; }
+                count = 0;
+                while('0'<=*f && *f<='9') count = count*10+*f++-'0';
+            }
+            else
+                count = 0;
+            if(*f=='['){
+                do{
+                    f++;
+                    if(*f=='\0'){ reason = FLAGSYN; return -1; }
+                }while(*f!=']');
+                f++;
+            }
+            if(c==fc)
+                return count;
+        }
+    reason = BADFLAG;
+    badflag = c;
+    return -1;
+}
+@
+
+<<function usage>>=
+void
+usage(char *tail)
+{
+    char *s, *t, c;
+    int count, nflag = 0;
+    switch(reason){
+    case RESET:
+        errs("Flag -");
+        errc(badflag);
+        errs(": set twice\n");
+        break;
+    case FEWARGS:
+        errs("Flag -");
+        errc(badflag);
+        errs(": too few arguments\n");
+        break;
+    case FLAGSYN:
+        errs("Bad argument to getflags!\n");
+        break;
+    case BADFLAG:
+        errs("Illegal flag -");
+        errc(badflag);
+        errc('\n');
+        break;
+    }
+    errs("Usage: ");
+    errs(cmdname);
+    for(s = flagarg;*s;){
+        c=*s;
+        if(*s++==' ')
+            continue;
+        if(*s==':'){
+            s++;
+            count = 0;
+            while('0'<=*s && *s<='9') count = count*10+*s++-'0';
+        }
+        else count = 0;
+        if(count==0){
+            if(nflag==0)
+                errs(" [-");
+            nflag++;
+            errc(c);
+        }
+        if(*s=='['){
+            s++;
+            while(*s!=']' && *s!='\0') s++;
+            if(*s==']')
+                s++;
+        }
+    }
+    if(nflag)
+        errs("]");
+    for(s = flagarg;*s;){
+        c=*s;
+        if(*s++==' ')
+            continue;
+        if(*s==':'){
+            s++;
+            count = 0;
+            while('0'<=*s && *s<='9') count = count*10+*s++-'0';
+        }
+        else count = 0;
+        if(count!=0){
+            errs(" [-");
+            errc(c);
+            if(*s=='['){
+                s++;
+                t = s;
+                while(*s!=']' && *s!='\0') s++;
+                errs(" ");
+                errn(t, s-t);
+                if(*s==']')
+                    s++;
+            }
+            else
+                while(count--) errs(" arg");
+            errs("]");
+        }
+        else if(*s=='['){
+            s++;
+            while(*s!=']' && *s!='\0') s++;
+            if(*s==']')
+                s++;
+        }
+    }
+    if(tail){
+        errs(" ");
+        errs(tail);
+    }
+    errs("\n");
+    Exit("bad flags");
+}
+@
+
+<<function errn>>=
+static void
+errn(char *s, int count)
+{
+    while(count){ errc(*s++); --count; }
+}
+@
+
+<<function errs>>=
+static void
+errs(char *s)
+{
+    while(*s) errc(*s++);
+}
+@
+
+<<constant NBUF (rc/getflags.c)>>=
+#define	NBUF	80
+@
+
+<<function errc>>=
+static void
+errc(int c)
+{
+    *bufp++=c;
+    if(bufp==&buf[NBUF] || c=='\n'){
+        Write(2, buf, bufp-buf);
+        bufp = buf;
+    }
+}
+@
+
+
 
 \section{Buffered IO}
 % again, reimplement the same thing
@@ -3979,6 +4751,137 @@ flush(io *f)
 }
 @
 
+<<function pchr>>=
+void
+pchr(io *b, int c)
+{
+    if(b->bufp==b->ebuf)
+        fullbuf(b, c);
+    else *b->bufp++=c;
+}
+@
+
+<<function fullbuf>>=
+int
+fullbuf(io *f, int c)
+{
+    flush(f);
+    return *f->bufp++=c;
+}
+@
+
+
+<<function rchr>>=
+int
+rchr(io *b)
+{
+    if(b->bufp==b->ebuf)
+        return emptybuf(b);
+    return *b->bufp++;
+}
+@
+
+<<function emptybuf>>=
+int
+emptybuf(io *f)
+{
+    int n;
+    if(f->fd==-1 || (n = Read(f->fd, f->buf, NBUF))<=0) return EOF;
+    f->bufp = f->buf;
+    f->ebuf = f->buf + n;
+    return *f->bufp++;
+}
+@
+
+
+<<function rutf>>=
+int
+rutf(io *b, char *buf, Rune *r)
+{
+    int n, i, c;
+
+    c = rchr(b);
+    if(c == EOF)
+        return EOF;
+    *buf = c;
+    if(c < Runesync){
+        *r = c;
+        return 1;
+    }
+    for(i = 1; (c = rchr(b)) != EOF; ){
+        buf[i++] = c;
+        buf[i] = 0;
+        if(fullrune(buf, i)){
+            n = chartorune(r, buf);
+            b->bufp -= i - n;	/* push back unconsumed bytes */
+            assert(b->fd == -1 || b->bufp > b->buf);
+            return n;
+        }
+    }
+    /* at eof */
+    b->bufp -= i - 1;			/* consume 1 byte */
+    *r = Runeerror;
+    return runetochar(buf, r);
+}
+@
+
+
+
+
+
+
+
+<<function closeio>>=
+void
+closeio(io *io)
+{
+    if(io->fd>=0)
+        close(io->fd);
+    if(io->strp)
+        efree(io->strp);
+    efree(io);
+}
+@
+
+
+
+<<function openstr>>=
+io*
+openstr(void)
+{
+    io *f = new(struct Io);
+
+    f->fd = -1;
+    f->bufp = f->strp = emalloc(Stralloc+1);
+    f->ebuf = f->bufp + Stralloc;
+    memset(f->bufp, '\0', Stralloc+1);
+    return f;
+}
+@
+
+<<function opencore>>=
+/*
+ * Open a corebuffer to read.  EOF occurs after reading len
+ * characters from buf.
+ */
+
+io*
+opencore(char *s, int len)
+{
+    io *f = new(struct Io);
+    uchar *buf = emalloc(len);
+
+    f->fd = -1 /*open("/dev/null", 0)*/;
+    f->bufp = f->strp = buf;
+    f->ebuf = buf+len;
+    Memcpy(buf, s, len);
+    return f;
+}
+@
+
+
+
+
 \section{Format}
 
 <<global pfmtnest>>=
@@ -4029,7 +4932,7 @@ pfmt(io *f, char *fmt, ...)
             pstr(f, va_arg(ap, char *));
             break;
 
-        // rc specific
+        // rc specific, TODO LP split here
         case 't':
             pcmd(f, va_arg(ap, struct Tree *));
             break;
@@ -4048,6 +4951,110 @@ pfmt(io *f, char *fmt, ...)
 }
 @
 % could add 'x' pcmd for the opcode
+
+
+
+
+<<function pstr>>=
+void
+pstr(io *f, char *s)
+{
+    if(s==0)
+        s="(null)";
+    while(*s) pchr(f, *s++);
+}
+@
+
+<<function pdec>>=
+void
+pdec(io *f, int n)
+{
+    if(n<0){
+        n=-n;
+        if(n>=0){
+            pchr(f, '-');
+            pdec(f, n);
+            return;
+        }
+        /* n is two's complement minimum integer */
+        n = 1-n;
+        pchr(f, '-');
+        pdec(f, n/10);
+        pchr(f, n%10+'1');
+        return;
+    }
+    if(n>9)
+        pdec(f, n/10);
+    pchr(f, n%10+'0');
+}
+@
+
+<<function poct>>=
+void
+poct(io *f, unsigned n)
+{
+    if(n>7)
+        poct(f, n>>3);
+    pchr(f, (n&7)+'0');
+}
+@
+
+<<function pquo>>=
+void
+pquo(io *f, char *s)
+{
+    pchr(f, '\'');
+    for(;*s;s++)
+        if(*s=='\'')
+            pfmt(f, "''");
+        else pchr(f, *s);
+    pchr(f, '\'');
+}
+@
+
+<<function pwrd>>=
+void
+pwrd(io *f, char *s)
+{
+    char *t;
+    for(t = s;*t;t++) if(*t >= 0 && needsrcquote(*t)) break;
+    if(t==s || *t)
+        pquo(f, s);
+    else pstr(f, s);
+}
+@
+
+<<function pptr>>=
+void
+pptr(io *f, void *v)
+{
+    int n;
+    uintptr p;
+
+    p = (uintptr)v;
+    if(sizeof(uintptr) == sizeof(uvlong) && p>>32)
+        for(n = 60;n>=32;n-=4) pchr(f, "0123456789ABCDEF"[(p>>n)&0xF]);
+
+    for(n = 28;n>=0;n-=4) pchr(f, "0123456789ABCDEF"[(p>>n)&0xF]);
+}
+@
+
+
+<<function pval>>=
+void
+pval(io *f, word *a)
+{
+    if(a){
+        while(a->next && a->next->word){
+            pwrd(f, (char *)a->word);
+            pchr(f, ' ');
+            a = a->next;
+        }
+        pwrd(f, (char *)a->word);
+    }
+}
+@
+
 
 \section{String conversions}
 

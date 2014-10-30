@@ -64,7 +64,7 @@ int	cflag = 0;		/* command is argument to sh */
 int	tflag = 0;		/* read only one line */
 /*e: global tflag */
 /*s: global interactive */
-int	interactive = 0;	/* prompt */
+bool	interactive = false;	/* prompt */
 /*e: global interactive */
 /*s: global cflagp */
 char	*cflagp;		/* command line for cflag */
@@ -111,7 +111,7 @@ main(int argc, char *argv[])
             exits("argument");
         }
     }else
-        interactive = 1;
+        interactive = true;
     for(;;){
         if(interactive)
             fprint(2, "%d$ ", getpid());

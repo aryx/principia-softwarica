@@ -449,7 +449,6 @@ outcode(tree *t, bool eflag)
  * leave:
  *	Xpopm
  */
-
 void
 codeswitch(tree *t, int eflag)
 {

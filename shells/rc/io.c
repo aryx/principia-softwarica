@@ -64,7 +64,7 @@ pfmt(io *f, char *fmt, ...)
             pstr(f, va_arg(ap, char *));
             break;
 
-        // rc specific
+        // rc specific, TODO LP split here
         case 't':
             pcmd(f, va_arg(ap, struct Tree *));
             break;
