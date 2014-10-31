@@ -118,7 +118,8 @@ int
 count(word *w)
 {
     int n;
-    for(n = 0;w;n++) w = w->next;
+    for(n = 0;w;n++) 
+        w = w->next;
     return n;
 }
 /*e: function count */
@@ -342,7 +343,7 @@ Xsettrue(void)
 void
 Xbang(void)
 {
-    setstatus(truestatus()?"false":"");
+    setstatus(truestatus()? "false" : "");
 }
 /*e: function Xbang */
 
@@ -406,7 +407,7 @@ Xfalse(void)
 }
 /*e: function Xfalse */
 /*s: global ifnot */
-int ifnot;		/* dynamic if not flag */
+bool ifnot;		/* dynamic if not flag */
 /*e: global ifnot */
 
 /*s: function Xifnot */
@@ -552,9 +553,11 @@ Xtrue(void)
 void
 Xif(void)
 {
-    ifnot = 1;
-    if(truestatus()) runq->pc++;
-    else runq->pc = runq->code[runq->pc].i;
+    ifnot = true;
+    if(truestatus()) 
+        runq->pc++;
+    else 
+        runq->pc = runq->code[runq->pc].i;
 }
 /*e: function Xif */
 
@@ -562,7 +565,7 @@ Xif(void)
 void
 Xwastrue(void)
 {
-    ifnot = 0;
+    ifnot = false;
 }
 /*e: function Xwastrue */
 
@@ -969,6 +972,7 @@ Xfn(void)
     var *v;
     word *a;
     int end;
+
     end = runq->code[runq->pc].i;
     globlist();
     for(a = runq->argv->words;a;a = a->next){
@@ -977,7 +981,7 @@ Xfn(void)
             codefree(v->fn);
         v->fn = codecopy(runq->code);
         v->pc = runq->pc+2;
-        v->fnchanged = 1;
+        v->fnchanged = true;
     }
     runq->pc = end;
     poplist();

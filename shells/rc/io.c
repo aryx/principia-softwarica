@@ -21,7 +21,6 @@ void pval(io*, word*);
 void pquo(io*, char*);
 void pwrd(io*, char*);
 
-
 /*s: function pfmt */
 void
 pfmt(io *f, char *fmt, ...)

@@ -260,7 +260,12 @@ errs(char *s)
 /*s: constant NBUF (rc/getflags.c) */
 #define	NBUF	80
 /*e: constant NBUF (rc/getflags.c) */
-static char buf[NBUF], *bufp = buf;
+/*s: global buf */
+static char buf[NBUF];
+/*e: global buf */
+/*s: global bufp */
+static char *bufp = buf;
+/*e: global bufp */
 
 /*s: function errc */
 static void

@@ -1382,9 +1382,10 @@ int rutf(io*, char*, Rune*);
 void closeio(io*);
 void flush(io*);
 void pstr(io*, char*);
+void pfmt(io*, char*, ...);
+
 void pcmd(io*, tree*);
 void pfnc(io*, thread*);
-void pfmt(io*, char*, ...);
 @
 
 
@@ -1486,7 +1487,6 @@ var *gvlook(char*);
 var *newvar(char*, var*);
 
 <<constant NVAR>>
-
 extern var *gvar[NVAR];		/* hash for globals */
 
 #define	new(type)	((type *)emalloc(sizeof(type)))
@@ -1500,11 +1500,12 @@ extern int mypid;
 
 <<constant GLOB>>
 
-extern int nerror;		/* number of errors encountered during compilation */
+extern int nerror;	/* number of errors encountered during compilation */
 <<constant PRD>>
 <<constant PWR>>
 
-extern char *Rcmain, *Fdprefix;
+extern char *Rcmain;
+extern char *Fdprefix;
 extern int ndot;
 char *getstatus(void);
 
@@ -1516,25 +1517,6 @@ extern bool lastword;
 
 \subsection*{[[rc/exec.h]]}
 
-
-<<constant NSTATUS>>=
-#define	NSTATUS	ERRMAX			/* length of status (from plan 9) */
-@
-
-<<constant ROPEN>>=
-/*
- * redir types
- */
-#define	ROPEN	1			/* dup2(from, to); close(from); */
-@
-
-<<constant RDUP>>=
-#define	RDUP	2			/* dup2(from, to); */
-@
-
-<<constant RCLOSE>>=
-#define	RCLOSE	3			/* close(from); */
-@
 
 %-------------------------------------------------------------
 
@@ -1571,10 +1553,10 @@ word *copywords(word *, word *);
 code *codecopy(code*);
 
 extern thread *runq;
-extern code *codebuf;				/* compiler output */
-extern int ntrap;				/* number of outstanding traps */
-extern int trap[NSIG];				/* number of outstanding traps per type */
-extern bool eflagok;			/* kludge flag so that -e doesn't exit in startup */
+extern code *codebuf;		/* compiler output */
+extern int ntrap;		/* number of outstanding traps */
+extern int trap[NSIG];		/* number of outstanding traps per type */
+extern bool eflagok;		/* kludge flag so that -e doesn't exit in startup */
 
 <<struct builtin>>
 extern struct Builtin Builtin[];
@@ -1660,7 +1642,8 @@ static void errc(int);
 
 <<function errs>>
 <<constant NBUF (rc/getflags.c)>>
-static char buf[NBUF], *bufp = buf;
+<<global buf>>
+<<global bufp>>
 
 <<function errc>>
 @
@@ -1689,7 +1672,6 @@ void pptr(io*, void*);
 void pval(io*, word*);
 void pquo(io*, char*);
 void pwrd(io*, char*);
-
 
 <<function pfmt>>
 
@@ -1729,7 +1711,6 @@ void pwrd(io*, char*);
 
 
 \subsection*{[[rc/var.c]]}
-
 
 
 %-------------------------------------------------------------
@@ -2011,16 +1992,6 @@ Isatty(int fd)
 @
 
 
-<<function Memcpy>>=
-void
-Memcpy(void *a, void *b, long n)
-{
-    memmove(a, b, n);
-}
-@
-
-
-
 <<function _efgfmt>>=
 /* avoid loading any floating-point library code */
 //@Scheck: weird, probably linker trick
@@ -2188,42 +2159,13 @@ int	matchfn(void*, void*);
 \subsection*{[[rc/exec.c]]}
 
 
-
-
-<<function freelist>>=
-void
-freelist(word *w)
-{
-    word *nw;
-    while(w){
-        nw = w->next;
-        efree(w->word);
-        efree((char *)w);
-        w = nw;
-    }
-}
-@
-
-
-<<function poplist>>=
-void
-poplist(void)
-{
-    list *p = runq->argv;
-    if(p==0)
-        panic("poplist but no argv", 0);
-    freelist(p->words);
-    runq->argv = p->next;
-    efree((char *)p);
-}
-@
-
 <<function count>>=
 int
 count(word *w)
 {
     int n;
-    for(n = 0;w;n++) w = w->next;
+    for(n = 0;w;n++) 
+        w = w->next;
     return n;
 }
 @
@@ -2257,68 +2199,10 @@ newvar(char *name, var *next)
 @
 
 
-<<function Xappend>>=
-void
-Xappend(void)
-{
-    char *file;
-    int f;
-    switch(count(runq->argv->words)){
-    default:
-        Xerror1(">> requires singleton");
-        return;
-    case 0:
-        Xerror1(">> requires file");
-        return;
-    case 1:
-        break;
-    }
-    file = runq->argv->words->word;
-    if((f = open(file, 1))<0 && (f = Creat(file))<0){
-        pfmt(err, "%s: ", file);
-        Xerror("can't open");
-        return;
-    }
-    Seek(f, 0L, 2);
-    pushredir(ROPEN, f, runq->code[runq->pc].i);
-    runq->pc++;
-    poplist();
-}
-@
 
-<<function Xsettrue>>=
-void
-Xsettrue(void)
-{
-    setstatus("");
-}
-@
 
-<<function Xbang>>=
-void
-Xbang(void)
-{
-    setstatus(truestatus()?"false":"");
-}
-@
 
-<<function Xclose>>=
-void
-Xclose(void)
-{
-    pushredir(RCLOSE, runq->code[runq->pc].i, 0);
-    runq->pc++;
-}
-@
 
-<<function Xdup>>=
-void
-Xdup(void)
-{
-    pushredir(RDUP, runq->code[runq->pc].i, runq->code[runq->pc+1].i);
-    runq->pc+=2;
-}
-@
 
 <<function Xeflag>>=
 void
@@ -2353,110 +2237,9 @@ Xexit(void)
 }
 @
 
-<<function Xfalse>>=
-void
-Xfalse(void)
-{
-    if(truestatus()) runq->pc = runq->code[runq->pc].i;
-    else runq->pc++;
-}
-@
 
-<<global ifnot>>=
-int ifnot;		/* dynamic if not flag */
-@
 
-<<function Xifnot>>=
-void
-Xifnot(void)
-{
-    if(ifnot)
-        runq->pc++;
-    else
-        runq->pc = runq->code[runq->pc].i;
-}
-@
 
-<<function Xjump>>=
-void
-Xjump(void)
-{
-    runq->pc = runq->code[runq->pc].i;
-}
-@
-
-<<function Xmark>>=
-void
-Xmark(void)
-{
-    pushlist();
-}
-@
-
-<<function Xpopm>>=
-void
-Xpopm(void)
-{
-    poplist();
-}
-@
-
-<<function Xread>>=
-void
-Xread(void)
-{
-    char *file;
-    int f;
-    switch(count(runq->argv->words)){
-    default:
-        Xerror1("< requires singleton\n");
-        return;
-    case 0:
-        Xerror1("< requires file\n");
-        return;
-    case 1:
-        break;
-    }
-    file = runq->argv->words->word;
-    if((f = open(file, 0))<0){
-        pfmt(err, "%s: ", file);
-        Xerror("can't open");
-        return;
-    }
-    pushredir(ROPEN, f, runq->code[runq->pc].i);
-    runq->pc++;
-    poplist();
-}
-@
-
-<<function Xrdwr>>=
-void
-Xrdwr(void)
-{
-    char *file;
-    int f;
-
-    switch(count(runq->argv->words)){
-    default:
-        Xerror1("<> requires singleton\n");
-        return;
-    case 0:
-        Xerror1("<> requires file\n");
-        return;
-    case 1:
-        break;
-    }
-    file = runq->argv->words->word;
-    if((f = open(file, ORDWR))<0){
-        pfmt(err, "%s: ", file);
-        Xerror("can't open");
-        return;
-    }
-    pushredir(ROPEN, f, runq->code[runq->pc].i);
-    runq->pc++;
-    poplist();
-}
-@
 
 <<function turfredir>>=
 void
@@ -2496,68 +2279,10 @@ Xreturn(void)
 }
 @
 
-<<function Xtrue>>=
-void
-Xtrue(void)
-{
-    if(truestatus()) runq->pc++;
-    else runq->pc = runq->code[runq->pc].i;
-}
-@
 
-<<function Xif>>=
-void
-Xif(void)
-{
-    ifnot = 1;
-    if(truestatus()) runq->pc++;
-    else runq->pc = runq->code[runq->pc].i;
-}
-@
 
-<<function Xwastrue>>=
-void
-Xwastrue(void)
-{
-    ifnot = 0;
-}
-@
 
-<<function Xword>>=
-void
-Xword(void)
-{
-    pushword(runq->code[runq->pc++].s);
-}
-@
 
-<<function Xwrite>>=
-void
-Xwrite(void)
-{
-    char *file;
-    int f;
-    switch(count(runq->argv->words)){
-    default:
-        Xerror1("> requires singleton\n");
-        return;
-    case 0:
-        Xerror1("> requires file\n");
-        return;
-    case 1:
-        break;
-    }
-    file = runq->argv->words->word;
-    if((f = Creat(file))<0){
-        pfmt(err, "%s: ", file);
-        Xerror("can't open");
-        return;
-    }
-    pushredir(ROPEN, f, runq->code[runq->pc].i);
-    runq->pc++;
-    poplist();
-}
-@
 
 <<function list2str>>=
 char*
@@ -2600,28 +2325,6 @@ Xmatch(void)
 }
 @
 
-<<function Xcase>>=
-void
-Xcase(void)
-{
-    word *p;
-    char *s;
-    int ok = 0;
-    s = list2str(runq->argv->next->words);
-    for(p = runq->argv->words;p;p = p->next){
-        if(match(s, p->word, '\0')){
-            ok = 1;
-            break;
-        }
-    }
-    efree(s);
-    if(ok)
-        runq->pc++;
-    else
-        runq->pc = runq->code[runq->pc].i;
-    poplist();
-}
-@
 
 <<function conclist>>=
 word*
@@ -2641,30 +2344,6 @@ conclist(word *lp, word *rp, word *tail)
 }
 @
 
-<<function Xconc>>=
-void
-Xconc(void)
-{
-    word *lp = runq->argv->words;
-    word *rp = runq->argv->next->words;
-    word *vp = runq->argv->next->next->words;
-    int lc = count(lp), rc = count(rp);
-    if(lc!=0 || rc!=0){
-        if(lc==0 || rc==0){
-            Xerror1("null list in concatenation");
-            return;
-        }
-        if(lc!=1 && rc!=1 && lc!=rc){
-            Xerror1("mismatched list lengths in concatenation");
-            return;
-        }
-        vp = conclist(lp, rp, vp);
-    }
-    poplist();
-    poplist();
-    runq->argv->words = vp;
-}
-@
 
 <<function Xassign>>=
 void
@@ -2703,71 +2382,7 @@ copywords(word *a, word *tail)
 }
 @
 
-<<function Xdol>>=
-void
-Xdol(void)
-{
-    word *a, *star;
-    char *s, *t;
-    int n;
-    if(count(runq->argv->words)!=1){
-        Xerror1("variable name not singleton!");
-        return;
-    }
-    s = runq->argv->words->word;
-    deglob(s);
-    n = 0;
-    for(t = s;'0'<=*t && *t<='9';t++) n = n*10+*t-'0';
-    a = runq->argv->next->words;
-    if(n==0 || *t)
-        a = copywords(vlook(s)->val, a);
-    else{
-        star = vlook("*")->val;
-        if(star && 1<=n && n<=count(star)){
-            while(--n) star = star->next;
-            a = newword(star->word, a);
-        }
-    }
-    poplist();
-    runq->argv->words = a;
-}
-@
 
-<<function Xqdol>>=
-void
-Xqdol(void)
-{
-    word *a, *p;
-    char *s;
-    int n;
-    if(count(runq->argv->words)!=1){
-        Xerror1("variable name not singleton!");
-        return;
-    }
-    s = runq->argv->words->word;
-    deglob(s);
-    a = vlook(s)->val;
-    poplist();
-    n = count(a);
-    if(n==0){
-        pushword("");
-        return;
-    }
-    for(p = a;p;p = p->next) n+=strlen(p->word);
-    s = emalloc(n);
-    if(a){
-        strcpy(s, a->word);
-        for(p = a->next;p;p = p->next){
-            strcat(s, " ");
-            strcat(s, p->word);
-        }
-    }
-    else
-        s[0]='\0';
-    pushword(s);
-    efree(s);
-}
-@
 
 <<function copynwords>>=
 word*
@@ -2821,130 +2436,12 @@ subwords(word *val, int len, word *sub, word *a)
 }
 @
 
-<<function Xsub>>=
-void
-Xsub(void)
-{
-    word *a, *v;
-    char *s;
-    if(count(runq->argv->next->words)!=1){
-        Xerror1("variable name not singleton!");
-        return;
-    }
-    s = runq->argv->next->words->word;
-    deglob(s);
-    a = runq->argv->next->next->words;
-    v = vlook(s)->val;
-    a = subwords(v, count(v), runq->argv->words, a);
-    poplist();
-    poplist();
-    runq->argv->words = a;
-}
-@
-
-<<function Xcount>>=
-void
-Xcount(void)
-{
-    word *a;
-    char *s, *t;
-    int n;
-    char num[12];
-    if(count(runq->argv->words)!=1){
-        Xerror1("variable name not singleton!");
-        return;
-    }
-    s = runq->argv->words->word;
-    deglob(s);
-    n = 0;
-    for(t = s;'0'<=*t && *t<='9';t++) n = n*10+*t-'0';
-    if(n==0 || *t){
-        a = vlook(s)->val;
-        inttoascii(num, count(a));
-    }
-    else{
-        a = vlook("*")->val;
-        inttoascii(num, a && 1<=n && n<=count(a)?1:0);
-    }
-    poplist();
-    pushword(num);
-}
-@
-
-<<function Xlocal>>=
-void
-Xlocal(void)
-{
-    if(count(runq->argv->words)!=1){
-        Xerror1("variable name must be singleton\n");
-        return;
-    }
-    deglob(runq->argv->words->word);
-    runq->local = newvar(strdup(runq->argv->words->word), runq->local);
-    poplist();
-    globlist();
-    runq->local->val = runq->argv->words;
-    runq->local->changed = true;
-    runq->argv->words = 0;
-    poplist();
-}
-@
-
-<<function Xunlocal>>=
-void
-Xunlocal(void)
-{
-    var *v = runq->local, *hid;
-    if(v==0)
-        panic("Xunlocal: no locals!", 0);
-    runq->local = v->next;
-    hid = vlook(v->name);
-    hid->changed = true;
-    efree(v->name);
-    freewords(v->val);
-    efree((char *)v);
-}
-@
 
 
-<<function Xfn>>=
-void
-Xfn(void)
-{
-    var *v;
-    word *a;
-    int end;
-    end = runq->code[runq->pc].i;
-    globlist();
-    for(a = runq->argv->words;a;a = a->next){
-        v = gvlook(a->word);
-        if(v->fn)
-            codefree(v->fn);
-        v->fn = codecopy(runq->code);
-        v->pc = runq->pc+2;
-        v->fnchanged = 1;
-    }
-    runq->pc = end;
-    poplist();
-}
-@
 
-<<function Xdelfn>>=
-void
-Xdelfn(void)
-{
-    var *v;
-    word *a;
-    for(a = runq->argv->words;a;a = a->next){
-        v = gvlook(a->word);
-        if(v->fn)
-            codefree(v->fn);
-        v->fn = 0;
-        v->fnchanged = 1;
-    }
-    poplist();
-}
-@
+
+
+
 
 <<function concstatus>>=
 char*
@@ -2962,22 +2459,6 @@ concstatus(char *s, char *t)
 }
 @
 
-<<function Xpipewait>>=
-void
-Xpipewait(void)
-{
-    char status[NSTATUS+1];
-    if(runq->pid==-1)
-        setstatus(concstatus(runq->status, getstatus()));
-    else{
-        strncpy(status, getstatus(), NSTATUS);
-        status[NSTATUS]='\0';
-        Waitfor(runq->pid, 1);
-        runq->pid=-1;
-        setstatus(concstatus(getstatus(), status));
-    }
-}
-@
 
 
 <<function Xerror>>=
@@ -3008,34 +2489,6 @@ Xerror1(char *s)
 }
 @
 
-<<function setstatus>>=
-void
-setstatus(char *s)
-{
-    setvar("status", newword(s, (word *)0));
-}
-@
-
-<<function getstatus>>=
-char*
-getstatus(void)
-{
-    var *status = vlook("status");
-    return status->val?status->val->word:"";
-}
-@
-
-<<function truestatus>>=
-bool
-truestatus(void)
-{
-    char *s;
-    for(s = getstatus();*s;s++)
-        if(*s!='|' && *s!='0')
-            return false;
-    return true;
-}
-@
 
 <<function Xdelhere>>=
 void
@@ -3045,24 +2498,6 @@ Xdelhere(void)
 }
 @
 
-<<function Xfor>>=
-void
-Xfor(void)
-{
-    if(runq->argv->words==0){
-        poplist();
-        runq->pc = runq->code[runq->pc].i;
-    }
-    else{
-        freelist(runq->local->val);
-        runq->local->val = runq->argv->words;
-        runq->local->changed = true;
-        runq->argv->words = runq->argv->words->next;
-        runq->local->val->next = 0;
-        runq->pc++;
-    }
-}
-@
 
 <<function Xglob>>=
 void
@@ -3277,217 +2712,6 @@ char*	list2str(word*);
 
 
 \subsection*{[[rc/havefork.c]]}
-
-<<function Xasync>>=
-void
-Xasync(void)
-{
-    int null = open("/dev/null", 0);
-    int pid;
-    char npid[10];
-    if(null<0){
-        Xerror("Can't open /dev/null\n");
-        return;
-    }
-    switch(pid = rfork(RFFDG|RFPROC|RFNOTEG)){
-    case -1:
-        close(null);
-        Xerror("try again");
-        break;
-    case 0:
-        clearwaitpids();
-        pushredir(ROPEN, null, 0);
-        start(runq->code, runq->pc+1, runq->local);
-        runq->ret = 0;
-        break;
-    default:
-        addwaitpid(pid);
-        close(null);
-        runq->pc = runq->code[runq->pc].i;
-        inttoascii(npid, pid);
-        setvar("apid", newword(npid, (word *)0));
-        break;
-    }
-}
-@
-
-<<function Xpipe>>=
-void
-Xpipe(void)
-{
-    struct Thread *p = runq;
-    int pc = p->pc, forkid;
-    int lfd = p->code[pc++].i;
-    int rfd = p->code[pc++].i;
-    int pfd[2];
-    if(pipe(pfd)<0){
-        Xerror("can't get pipe");
-        return;
-    }
-    switch(forkid = fork()){
-    case -1:
-        Xerror("try again");
-        break;
-    case 0:
-        clearwaitpids();
-        start(p->code, pc+2, runq->local);
-        runq->ret = 0;
-        close(pfd[PRD]);
-        pushredir(ROPEN, pfd[PWR], lfd);
-        break;
-    default:
-        addwaitpid(forkid);
-        start(p->code, p->code[pc].i, runq->local);
-        close(pfd[PWR]);
-        pushredir(ROPEN, pfd[PRD], rfd);
-        p->pc = p->code[pc+1].i;
-        p->pid = forkid;
-        break;
-    }
-}
-@
-
-<<function Xbackq>>=
-/*
- * Who should wait for the exit from the fork?
- */
-void
-Xbackq(void)
-{
-    int n, pid;
-    int pfd[2];
-    char *stop;
-    char utf[UTFmax+1];
-    struct Io *f;
-    var *ifs = vlook("ifs");
-    word *v, *nextv;
-    Rune r;
-    String *word;
-
-    stop = ifs->val? ifs->val->word: "";
-    if(pipe(pfd)<0){
-        Xerror("can't make pipe");
-        return;
-    }
-    switch(pid = fork()){
-    case -1:
-        Xerror("try again");
-        close(pfd[PRD]);
-        close(pfd[PWR]);
-        return;
-    case 0:
-        clearwaitpids();
-        close(pfd[PRD]);
-        start(runq->code, runq->pc+1, runq->local);
-        pushredir(ROPEN, pfd[PWR], 1);
-        return;
-    default:
-        addwaitpid(pid);
-        close(pfd[PWR]);
-        f = openfd(pfd[PRD]);
-        word = s_new();
-        v = nil;
-        /* rutf requires at least UTFmax+1 bytes in utf */
-        while((n = rutf(f, utf, &r)) != EOF){
-            utf[n] = '\0';
-            if(utfutf(stop, utf) == nil)
-                s_nappend(word, utf, n);
-            else
-                /*
-                 * utf/r is an ifs rune (e.g., \t, \n), thus
-                 * ends the current word, if any.
-                 */
-                if(s_len(word) > 0){
-                    v = newword(s_to_c(word), v);
-                    s_reset(word);
-                }
-        }
-        if(s_len(word) > 0)
-            v = newword(s_to_c(word), v);
-        s_free(word);
-        closeio(f);
-        Waitfor(pid, 0);
-        /* v points to reversed arglist -- reverse it onto argv */
-        while(v){
-            nextv = v->next;
-            v->next = runq->argv->words;
-            runq->argv->words = v;
-            v = nextv;
-        }
-        runq->pc = runq->code[runq->pc].i;
-        return;
-    }
-}
-@
-
-<<function Xpipefd>>=
-void
-Xpipefd(void)
-{
-    struct Thread *p = runq;
-    int pc = p->pc, pid;
-    char name[40];
-    int pfd[2];
-    int sidefd, mainfd;
-    if(pipe(pfd)<0){
-        Xerror("can't get pipe");
-        return;
-    }
-    if(p->code[pc].i==READ){
-        sidefd = pfd[PWR];
-        mainfd = pfd[PRD];
-    }
-    else{
-        sidefd = pfd[PRD];
-        mainfd = pfd[PWR];
-    }
-    switch(pid = fork()){
-    case -1:
-        Xerror("try again");
-        break;
-    case 0:
-        clearwaitpids();
-        start(p->code, pc+2, runq->local);
-        close(mainfd);
-        pushredir(ROPEN, sidefd, p->code[pc].i==READ?1:0);
-        runq->ret = 0;
-        break;
-    default:
-        addwaitpid(pid);
-        close(sidefd);
-        pushredir(ROPEN, mainfd, mainfd);	/* isn't this a noop? */
-        strcpy(name, Fdprefix);
-        inttoascii(name+strlen(name), mainfd);
-        pushword(name);
-        p->pc = p->code[pc+1].i;
-        break;
-    }
-}
-@
-
-<<function Xsubshell>>=
-void
-Xsubshell(void)
-{
-    int pid;
-    switch(pid = fork()){
-    case -1:
-        Xerror("try again");
-        break;
-    case 0:
-        clearwaitpids();
-        start(runq->code, runq->pc+1, runq->local);
-        runq->ret = 0;
-        break;
-    default:
-        addwaitpid(pid);
-        Waitfor(pid, 1);
-        runq->pc = runq->code[runq->pc].i;
-        break;
-    }
-}
-@
-
 
 
 %-------------------------------------------------------------
@@ -3827,17 +3051,6 @@ void pstrs(io*, word*);
 \subsection*{[[rc/code.c]]}
 
 
-<<function stuffdot>>=
-void
-stuffdot(int a)
-{
-    if(a<0 || codep<=a)
-        panic("Bad address %d in stuffdot", a);
-    codebuf[a].i = codep;
-}
-@
-
-
 <<function cleanhere>>=
 void
 cleanhere(char *f)
@@ -3865,8 +3078,6 @@ fnstr(tree *t)
     return v;
 }
 @
-
-
 
 
 %-------------------------------------------------------------

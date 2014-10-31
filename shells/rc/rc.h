@@ -173,7 +173,6 @@ var *newvar(char*, var*);
 /*s: constant NVAR */
 #define	NVAR	521
 /*e: constant NVAR */
-
 extern var *gvar[NVAR];		/* hash for globals */
 
 #define	new(type)	((type *)emalloc(sizeof(type)))
@@ -203,7 +202,7 @@ extern int mypid;
 #define	GLOB	'\001'
 /*e: constant GLOB */
 
-extern int nerror;		/* number of errors encountered during compilation */
+extern int nerror;	/* number of errors encountered during compilation */
 /*s: constant PRD */
 /*
  * Which fds are the reading/writing end of a pipe?
@@ -217,7 +216,8 @@ extern int nerror;		/* number of errors encountered during compilation */
 #define	PWR	1
 /*e: constant PWR */
 
-extern char *Rcmain, *Fdprefix;
+extern char *Rcmain;
+extern char *Fdprefix;
 extern int ndot;
 char *getstatus(void);
 

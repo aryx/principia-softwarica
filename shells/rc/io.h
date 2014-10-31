@@ -25,7 +25,8 @@ int rutf(io*, char*, Rune*);
 void closeio(io*);
 void flush(io*);
 void pstr(io*, char*);
+void pfmt(io*, char*, ...);
+
 void pcmd(io*, tree*);
 void pfnc(io*, thread*);
-void pfmt(io*, char*, ...);
 /*e: rc/io.h */

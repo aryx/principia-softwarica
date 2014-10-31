@@ -41,9 +41,12 @@ word *copywords(word *, word *);
 
 /*s: struct redir */
 struct Redir {
-    // enum<redirection_kind>
-    char type;			/* what to do */
-    short from, to;			/* what to do it to */
+    // enum<redirection_kind_bis>
+    char type;	/* what to do */
+
+    /* what to do it to */
+    short from;
+    short to;
 
     struct Redir *next;		/* what else to do (reverse order) */
 };
@@ -102,10 +105,10 @@ struct Thread {
 code *codecopy(code*);
 
 extern thread *runq;
-extern code *codebuf;				/* compiler output */
-extern int ntrap;				/* number of outstanding traps */
-extern int trap[NSIG];				/* number of outstanding traps per type */
-extern bool eflagok;			/* kludge flag so that -e doesn't exit in startup */
+extern code *codebuf;		/* compiler output */
+extern int ntrap;		/* number of outstanding traps */
+extern int trap[NSIG];		/* number of outstanding traps per type */
+extern bool eflagok;		/* kludge flag so that -e doesn't exit in startup */
 
 /*s: struct builtin */
 struct Builtin {
