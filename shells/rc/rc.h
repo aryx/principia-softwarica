@@ -75,6 +75,7 @@ struct Tree {
     int	rtype;
     fdt fd0;
     fdt fd1;	/* details of REDIR PIPE DUP tokens */
+    /*x: [[Tree]] other fields */
     bool	quoted;
 
     bool iskw; // dead?
@@ -152,11 +153,11 @@ struct Var {
     word	*val;		/* value */
 
     /*s: [[Var]] other fields */
-    bool	changed;
-    /*x: [[Var]] other fields */
     code	*fn;		/* pointer to function's code vector */
     int	pc;		/* pc of start of function */
-    int	fnchanged;
+    bool	fnchanged;
+    /*x: [[Var]] other fields */
+    bool	changed;
     /*e: [[Var]] other fields */
     // Extra
     /*s: [[Var]] extra fields */

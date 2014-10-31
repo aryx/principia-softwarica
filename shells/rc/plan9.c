@@ -258,6 +258,7 @@ Waitfor(int pid, int)
     if(pid >= 0 && !havewaitpid(pid))
         return 0;
 
+    // wait()!!
     while((w = wait()) != nil){
         delwaitpid(w->pid);
         if(w->pid==pid){
@@ -286,8 +287,9 @@ mkargv(word *a)
 {
     char **argv = (char **)emalloc((count(a)+2)*sizeof(char *));
     char **argp = argv+1;	/* leave one at front for runcoms */
-    for(;a;a = a->next) *argp++=a->word;
-    *argp = 0;
+    for(;a;a = a->next) 
+        *argp++=a->word;
+    *argp = nil;
     return argv;
 }
 /*e: function mkargv */
@@ -300,6 +302,7 @@ addenv(var *v)
     word *w;
     int f;
     io *fd;
+
     if(v->changed){
         v->changed = false;
         snprint(envname, sizeof envname, "/env/%s", v->name);
@@ -312,7 +315,7 @@ addenv(var *v)
         }
     }
     if(v->fnchanged){
-        v->fnchanged = 0;
+        v->fnchanged = false;
         snprint(envname, sizeof envname, "/env/fn#%s", v->name);
         if((f = Creat(envname))<0)
             pfmt(err, "rc: can't open %s: %r\n", envname);
@@ -344,6 +347,7 @@ void
 Updenv(void)
 {
     var *v, **h;
+
     for(h = gvar;h!=&gvar[NVAR];h++)
         for(v=*h;v;v = v->next)
             addenv(v);
@@ -352,8 +356,6 @@ Updenv(void)
 }
 /*e: function Updenv */
 
-/*s: function ForkExecute */
-/*e: function ForkExecute */
 
 /*s: function Execute */
 void
@@ -365,6 +367,7 @@ Execute(word *args, word *path)
 
     Updenv();
     errstr[0] = '\0';
+
     for(;path;path = path->next){
         nc = strlen(path->word);
         if(nc < sizeof file - 1){	/* 1 for / */
@@ -375,7 +378,10 @@ Execute(word *args, word *path)
             }
             if(nc + strlen(argv[1]) < sizeof file){
                 strcat(file, argv[1]);
+
+                // The actual exec() system call!
                 exec(file, argv+1);
+
                 rerrstr(errstr, sizeof errstr);
                 /*
                  * if file exists and is executable, exec should

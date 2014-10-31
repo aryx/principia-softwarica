@@ -1349,8 +1349,6 @@ int	yyparse(void);
 
 \subsection*{[[rc/getflags.h]]}
 
-
-
 %-------------------------------------------------------------
 
 <<rc/getflags.h>>=
@@ -1391,52 +1389,6 @@ void pfmt(io*, char*, ...);
 
 
 \subsection*{[[rc/rc.h]]}
-
-% TODO enum!! redirection_kind?
-<<constant APPEND>>=
-#define	APPEND	1
-@
-
-<<constant WRITE>>=
-#define	WRITE	2
-@
-
-<<constant READ>>=
-#define	READ	3
-@
-
-<<constant HERE>>=
-#define	HERE	4
-@
-
-<<constant DUPFD>>=
-#define	DUPFD	5
-@
-
-<<constant CLOSE>>=
-#define	CLOSE	6
-@
-
-<<constant RDWR>>=
-#define RDWR	7
-@
-
-
-
-
-<<constant PRD>>=
-/*
- * Which fds are the reading/writing end of a pipe?
- * Unfortunately, this can vary from system to system.
- * 9th edition Unix doesn't care, the following defines
- * work on plan 9.
- */
-#define	PRD	0
-@
-
-<<constant PWR>>=
-#define	PWR	1
-@
 
 
 %-------------------------------------------------------------
@@ -1837,126 +1789,6 @@ extern bool lastdol;
 
 \subsection*{[[rc/plan9.c]]}
 
-
-
-<<function mkargv>>=
-char **
-mkargv(word *a)
-{
-    char **argv = (char **)emalloc((count(a)+2)*sizeof(char *));
-    char **argp = argv+1;	/* leave one at front for runcoms */
-    for(;a;a = a->next) *argp++=a->word;
-    *argp = 0;
-    return argv;
-}
-@
-
-<<function addenv>>=
-void
-addenv(var *v)
-{
-    char envname[Maxenvname];
-    word *w;
-    int f;
-    io *fd;
-    if(v->changed){
-        v->changed = false;
-        snprint(envname, sizeof envname, "/env/%s", v->name);
-        if((f = Creat(envname))<0)
-            pfmt(err, "rc: can't open %s: %r\n", envname);
-        else{
-            for(w = v->val;w;w = w->next)
-                write(f, w->word, strlen(w->word)+1L);
-            close(f);
-        }
-    }
-    if(v->fnchanged){
-        v->fnchanged = 0;
-        snprint(envname, sizeof envname, "/env/fn#%s", v->name);
-        if((f = Creat(envname))<0)
-            pfmt(err, "rc: can't open %s: %r\n", envname);
-        else{
-            if(v->fn){
-                fd = openfd(f);
-                pfmt(fd, "fn %q %s\n", v->name, v->fn[v->pc-1].s);
-                closeio(fd);
-            }
-            close(f);
-        }
-    }
-}
-@
-
-<<function updenvlocal>>=
-void
-updenvlocal(var *v)
-{
-    if(v){
-        updenvlocal(v->next);
-        addenv(v);
-    }
-}
-@
-
-<<function Updenv>>=
-void
-Updenv(void)
-{
-    var *v, **h;
-    for(h = gvar;h!=&gvar[NVAR];h++)
-        for(v=*h;v;v = v->next)
-            addenv(v);
-    if(runq)
-        updenvlocal(runq->local);
-}
-@
-
-<<function ForkExecute>>=
-@
-
-<<function Execute>>=
-void
-Execute(word *args, word *path)
-{
-    char **argv = mkargv(args);
-    char file[1024], errstr[1024];
-    int nc;
-
-    Updenv();
-    errstr[0] = '\0';
-    for(;path;path = path->next){
-        nc = strlen(path->word);
-        if(nc < sizeof file - 1){	/* 1 for / */
-            strcpy(file, path->word);
-            if(file[0]){
-                strcat(file, "/");
-                nc++;
-            }
-            if(nc + strlen(argv[1]) < sizeof file){
-                strcat(file, argv[1]);
-                exec(file, argv+1);
-                rerrstr(errstr, sizeof errstr);
-                /*
-                 * if file exists and is executable, exec should
-                 * have worked, unless it's a directory or an
-                 * executable for another architecture.  in
-                 * particular, if it failed due to lack of
-                 * swap/vm (e.g., arg. list too long) or other
-                 * allocation failure, stop searching and print
-                 * the reason for failure.
-                 */
-                if (strstr(errstr, " allocat") != nil ||
-                    strstr(errstr, " full") != nil)
-                    break;
-            }
-            else werrstr("command name too long");
-        }
-    }
-    pfmt(err, "%s: %s\n", argv[1], errstr);
-    efree((char *)argv);
-}
-@
-
 <<constant NDIR>>=
 #define	NDIR	256		/* shoud be a better way */
 @
@@ -2249,7 +2081,6 @@ void execnewpgrp(void);
 
 <<function Updenv>>
 
-<<function ForkExecute>>
 
 <<function Execute>>
 <<constant NDIR>>
@@ -4036,85 +3867,6 @@ fnstr(tree *t)
 @
 
 
-<<function codeswitch>>=
-/*
- * switch code looks like this:
- *	Xmark
- *	(get switch value)
- *	Xjump	1f
- * out:	Xjump	leave
- * 1:	Xmark
- *	(get case values)
- *	Xcase	1f
- *	(commands)
- *	Xjump	out
- * 1:	Xmark
- *	(get case values)
- *	Xcase	1f
- *	(commands)
- *	Xjump	out
- * 1:
- * leave:
- *	Xpopm
- */
-void
-codeswitch(tree *t, int eflag)
-{
-    int leave;		/* patch jump address to leave switch */
-    int out;		/* jump here to leave switch */
-    int nextcase;	/* patch jump address to next case */
-    tree *tt;
-    if(c1->child[0]==nil
-    || c1->child[0]->type!=';'
-    || !iscase(c1->child[0]->child[0])){
-        yyerror("case missing in switch");
-        return;
-    }
-    emitf(Xmark);
-    outcode(c0, eflag);
-    emitf(Xjump);
-    nextcase = emiti(0);
-    out = emitf(Xjump);
-    leave = emiti(0);
-    stuffdot(nextcase);
-    t = c1->child[0];
-    while(t->type==';'){
-        tt = c1;
-        emitf(Xmark);
-        for(t = c0->child[0];t->type==ARGLIST;t = c0) outcode(c1, eflag);
-        emitf(Xcase);
-        nextcase = emiti(0);
-        t = tt;
-        for(;;){
-            if(t->type==';'){
-                if(iscase(c0)) break;
-                outcode(c0, eflag);
-                t = c1;
-            }
-            else{
-                if(!iscase(t)) outcode(t, eflag);
-                break;
-            }
-        }
-        emitf(Xjump);
-        emiti(out);
-        stuffdot(nextcase);
-    }
-    stuffdot(leave);
-    emitf(Xpopm);
-}
-@
-
-<<function iscase>>=
-bool
-iscase(tree *t)
-{
-    if(t->type!=SIMPLE)
-        return false;
-    do { t = c0; } while(t->type==ARGLIST);
-    return t->type==WORD && !t->quoted && strcmp(t->str, "case")==0;
-}
-@
 
 
 %-------------------------------------------------------------

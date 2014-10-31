@@ -224,6 +224,7 @@ execforkexec(void)
     int n;
     char buf[ERRMAX];
 
+    // fork()!!
     switch(pid = fork()){
     case -1:
         return -1;

@@ -334,12 +334,49 @@ struct Tree {
 @
 
 
-%XXXX
+%an important one is for redirection, when type = REDIR
+% in which case the kind of registration is in rtype
 <<[[Tree]] other fields>>=
 //enum<redirection_kind>
 int	rtype;
 fdt fd0;
 fdt fd1;	/* details of REDIR PIPE DUP tokens */
+@
+
+% TODO enum!! redirection_kind?
+<<constant APPEND>>=
+#define	APPEND	1
+@
+
+<<constant WRITE>>=
+#define	WRITE	2
+@
+
+<<constant READ>>=
+#define	READ	3
+@
+
+<<constant HERE>>=
+#define	HERE	4
+@
+
+<<constant DUPFD>>=
+#define	DUPFD	5
+@
+
+<<constant CLOSE>>=
+#define	CLOSE	6
+@
+
+<<constant RDWR>>=
+#define RDWR	7
+@
+
+
+
+
+%XXXXXXXXXX
+<<[[Tree]] other fields>>=
 bool	quoted;
 
 bool iskw; // dead?
@@ -815,10 +852,6 @@ gvlook(char *name)
 
 
 
-%XXXX
-<<[[Var]] other fields>>=
-bool	changed;
-@
 
 
 \chapter{[[main()]]}
@@ -1704,6 +1737,8 @@ token(char *str, int type)
 
 \section{Operators}
 
+
+
 \section{Strings}
 
 
@@ -2294,7 +2329,8 @@ popword(void)
 }
 @
 
-\subsection{Process managment}
+\subsection{Subprocesses managment}
+% children
 
 <<global waitpids>>=
 // list<pid>
@@ -2353,6 +2389,9 @@ havewaitpid(int pid)
 \section{Simple commands}
 % or builtins or functions
 
+
+\subsection{Opcode generation}
+
 % SIMPLE node built in simplemung()
 
 <<[[outcode()]] cases>>=
@@ -2390,7 +2429,7 @@ case WORD:
 @
 
 
-
+\subsection{[[Xsimple()]]}
 
 % * Xsimple(args)			run command and wait
 <<function Xsimple>>=
@@ -2433,6 +2472,8 @@ Xsimple(void)
 }
 @
 
+\subsection{Fork}
+
 % fundamental of a shell! fork exec wait
 <<function execforkexec>>=
 int
@@ -2442,6 +2483,7 @@ execforkexec(void)
     int n;
     char buf[ERRMAX];
 
+    // fork()!!
     switch(pid = fork()){
     case -1:
         return -1;
@@ -2462,6 +2504,8 @@ execforkexec(void)
 }
 @
 
+\subsection{Exec}
+
 <<function execexec>>=
 void
 execexec(void)
@@ -2478,6 +2522,68 @@ execexec(void)
 @
 
 
+<<function Execute>>=
+void
+Execute(word *args, word *path)
+{
+    char **argv = mkargv(args);
+    char file[1024], errstr[1024];
+    int nc;
+
+    Updenv();
+    errstr[0] = '\0';
+
+    for(;path;path = path->next){
+        nc = strlen(path->word);
+        if(nc < sizeof file - 1){	/* 1 for / */
+            strcpy(file, path->word);
+            if(file[0]){
+                strcat(file, "/");
+                nc++;
+            }
+            if(nc + strlen(argv[1]) < sizeof file){
+                strcat(file, argv[1]);
+
+                // The actual exec() system call!
+                exec(file, argv+1);
+
+                rerrstr(errstr, sizeof errstr);
+                /*
+                 * if file exists and is executable, exec should
+                 * have worked, unless it's a directory or an
+                 * executable for another architecture.  in
+                 * particular, if it failed due to lack of
+                 * swap/vm (e.g., arg. list too long) or other
+                 * allocation failure, stop searching and print
+                 * the reason for failure.
+                 */
+                if (strstr(errstr, " allocat") != nil ||
+                    strstr(errstr, " full") != nil)
+                    break;
+            }
+            else werrstr("command name too long");
+        }
+    }
+    pfmt(err, "%s: %s\n", argv[1], errstr);
+    efree((char *)argv);
+}
+@
+
+<<function mkargv>>=
+char **
+mkargv(word *a)
+{
+    char **argv = (char **)emalloc((count(a)+2)*sizeof(char *));
+    char **argp = argv+1;	/* leave one at front for runcoms */
+    for(;a;a = a->next) 
+        *argp++=a->word;
+    *argp = nil;
+    return argv;
+}
+@
+
+\subsection{Wait}
+
 <<function Waitfor>>=
 int
 Waitfor(int pid, int)
@@ -2489,6 +2595,7 @@ Waitfor(int pid, int)
     if(pid >= 0 && !havewaitpid(pid))
         return 0;
 
+    // wait()!!
     while((w = wait()) != nil){
         delwaitpid(w->pid);
         if(w->pid==pid){
@@ -2545,6 +2652,7 @@ case ';':
     outcode(c1, eflag);
     break;
 @
+% simple :)
 
 <<[[outcode()]] cases>>=
 case '&':
@@ -2601,6 +2709,7 @@ case TWIDDLE:
 
 \subsection{Pipe}
 
+
 <<[[outcode()]] cases>>=
 case PIPE:
     emitf(Xpipe);
@@ -2629,12 +2738,30 @@ case PIPEFD:
     break;
 @
 
+
+<<constant PRD>>=
+/*
+ * Which fds are the reading/writing end of a pipe?
+ * Unfortunately, this can vary from system to system.
+ * 9th edition Unix doesn't care, the following defines
+ * work on plan 9.
+ */
+#define	PRD	0
+@
+
+<<constant PWR>>=
+#define	PWR	1
+@
+
+
 \subsection{Redirection}
 
 <<struct redir>>=
 struct Redir {
+    // enum<redirection_kind>
     char type;			/* what to do */
     short from, to;			/* what to do it to */
+
     struct Redir *next;		/* what else to do (reverse order) */
 };
 @
@@ -2645,9 +2772,6 @@ case REDIR:
     outcode(c0, eflag);
     emitf(Xglob);
     switch(t->rtype){
-    case APPEND:
-        emitf(Xappend);
-        break;
     case WRITE:
         emitf(Xwrite);
         break;
@@ -2657,6 +2781,9 @@ case REDIR:
         break;
     case RDWR:
         emitf(Xrdwr);
+        break;
+    case APPEND:
+        emitf(Xappend);
         break;
     }
     emiti(t->fd0);
@@ -2731,8 +2858,6 @@ case NOT:
 
 \subsection{While}
 
-
-
 <<[[outcode()]] cases>>=
 case WHILE:
     q = codep;
@@ -2786,6 +2911,87 @@ case SWITCH:
     break;
 @
 
+<<function codeswitch>>=
+/*
+ * switch code looks like this:
+ *	Xmark
+ *	(get switch value)
+ *	Xjump	1f
+ * out:	Xjump	leave
+ * 1:	Xmark
+ *	(get case values)
+ *	Xcase	1f
+ *	(commands)
+ *	Xjump	out
+ * 1:	Xmark
+ *	(get case values)
+ *	Xcase	1f
+ *	(commands)
+ *	Xjump	out
+ * 1:
+ * leave:
+ *	Xpopm
+ */
+void
+codeswitch(tree *t, int eflag)
+{
+    int leave;		/* patch jump address to leave switch */
+    int out;		/* jump here to leave switch */
+    int nextcase;	/* patch jump address to next case */
+    tree *tt;
+    if(c1->child[0]==nil
+    || c1->child[0]->type!=';'
+    || !iscase(c1->child[0]->child[0])){
+        yyerror("case missing in switch");
+        return;
+    }
+    emitf(Xmark);
+    outcode(c0, eflag);
+    emitf(Xjump);
+    nextcase = emiti(0);
+    out = emitf(Xjump);
+    leave = emiti(0);
+    stuffdot(nextcase);
+    t = c1->child[0];
+    while(t->type==';'){
+        tt = c1;
+        emitf(Xmark);
+        for(t = c0->child[0];t->type==ARGLIST;t = c0) outcode(c1, eflag);
+        emitf(Xcase);
+        nextcase = emiti(0);
+        t = tt;
+        for(;;){
+            if(t->type==';'){
+                if(iscase(c0)) break;
+                outcode(c0, eflag);
+                t = c1;
+            }
+            else{
+                if(!iscase(t)) outcode(t, eflag);
+                break;
+            }
+        }
+        emitf(Xjump);
+        emiti(out);
+        stuffdot(nextcase);
+    }
+    stuffdot(leave);
+    emitf(Xpopm);
+}
+@
+
+<<function iscase>>=
+bool
+iscase(tree *t)
+{
+    if(t->type!=SIMPLE)
+        return false;
+    do { t = c0; } while(t->type==ARGLIST);
+    return t->type==WORD && !t->quoted && strcmp(t->str, "case")==0;
+}
+@
+
+
 \subsection{Blocks}
 
 <<[[outcode()]] cases>>=
@@ -2816,6 +3022,14 @@ case SUBSHELL:
 \section{Functions}
 
 
+<<[[Var]] other fields>>=
+code	*fn;		/* pointer to function's code vector */
+int	pc;		/* pc of start of function */
+bool	fnchanged;
+@
+
+% defs
+
 % * Xfn(name){... Xreturn}			define function
 % * Xdelfn(name)				delete function definition
 <<[[outcode()]] cases>>=
@@ -2835,6 +3049,8 @@ case FN:
         emitf(Xdelfn);
     break;
 @
+
+% uses
 
 
 <<[[Xsimple()]] other locals>>=
@@ -2866,6 +3082,8 @@ execfunc(var *func)
 
 \section{Variables}
 
+% def
+
 <<[[outcode()]] cases>>=
 case '=':
     tt = t;
@@ -2895,6 +3113,8 @@ case '=':
     break;
 @
 
+
+% use
 
 <<[[outcode()]] cases>>=
 case '$': //$
@@ -3284,9 +3504,12 @@ execcmds(io *f)
 % mv in Advanced topics section?
 % mv whatis too?
 
+% env? does not have to be a builtin.
+
 \subsection{[[$ exec]]}
 %$
 
+% actually called from Xsimple()
 
 \subsection{[[$ whatis]]}
 %$
@@ -3508,25 +3731,88 @@ execshift(void)
 
 %$#x
 
-\section{Interpolation}
-% looks like "" actually distribute to the element in a list
-
-\section{Special variables}
-
-%vlook("xxx"):
-% home, cdpath, path
-% prompt, 
-% *, 
-% status, sigexit
-% ifs?
-
 \section{Environment}
+
+
+% called from Xsimple() and Execute()
+% why double? anyway with 'changed' field it should be ok
+<<function Updenv>>=
+void
+Updenv(void)
+{
+    var *v, **h;
+
+    for(h = gvar;h!=&gvar[NVAR];h++)
+        for(v=*h;v;v = v->next)
+            addenv(v);
+    if(runq)
+        updenvlocal(runq->local);
+}
+@
+
+<<function updenvlocal>>=
+void
+updenvlocal(var *v)
+{
+    if(v){
+        updenvlocal(v->next);
+        addenv(v);
+    }
+}
+@
+
 
 <<enum _anon_ (rc/plan9.c)>>=
 enum {
     Maxenvname = 256,	/* undocumented limit */
 };
 @
+
+<<[[Var]] other fields>>=
+bool	changed;
+@
+
+<<function addenv>>=
+void
+addenv(var *v)
+{
+    char envname[Maxenvname];
+    word *w;
+    int f;
+    io *fd;
+
+    if(v->changed){
+        v->changed = false;
+        snprint(envname, sizeof envname, "/env/%s", v->name);
+        if((f = Creat(envname))<0)
+            pfmt(err, "rc: can't open %s: %r\n", envname);
+        else{
+            for(w = v->val;w;w = w->next)
+                write(f, w->word, strlen(w->word)+1L);
+            close(f);
+        }
+    }
+    if(v->fnchanged){
+        v->fnchanged = false;
+        snprint(envname, sizeof envname, "/env/fn#%s", v->name);
+        if((f = Creat(envname))<0)
+            pfmt(err, "rc: can't open %s: %r\n", envname);
+        else{
+            if(v->fn){
+                fd = openfd(f);
+                pfmt(fd, "fn %q %s\n", v->name, v->fn[v->pc-1].s);
+                closeio(fd);
+            }
+            close(f);
+        }
+    }
+}
+@
+
+
+
+
+
 
 
 <<global Fdprefix>>=
@@ -3659,6 +3945,18 @@ execfinit(void)
 }
 @
 
+
+\section{Interpolation}
+% looks like "" actually distribute to the element in a list
+
+\section{Special variables}
+
+%vlook("xxx"):
+% home, cdpath, path
+% prompt, 
+% *, 
+% status, sigexit
+% ifs?
 
 \chapter{Globbing}
 % mv in advanced topics?
@@ -4214,14 +4512,6 @@ setvar("rcname", newword(argv[0], (word *)nil));
 @
 
 \chapter{Advanced Topics}
-
-\section{Function definitions}
-
-<<[[Var]] other fields>>=
-code	*fn;		/* pointer to function's code vector */
-int	pc;		/* pc of start of function */
-int	fnchanged;
-@
 
 \section{Unicode}
 

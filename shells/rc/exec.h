@@ -41,8 +41,10 @@ word *copywords(word *, word *);
 
 /*s: struct redir */
 struct Redir {
+    // enum<redirection_kind>
     char type;			/* what to do */
     short from, to;			/* what to do it to */
+
     struct Redir *next;		/* what else to do (reverse order) */
 };
 /*e: struct redir */

@@ -227,9 +227,6 @@ outcode(tree *t, bool eflag)
         outcode(c0, eflag);
         emitf(Xglob);
         switch(t->rtype){
-        case APPEND:
-            emitf(Xappend);
-            break;
         case WRITE:
             emitf(Xwrite);
             break;
@@ -239,6 +236,9 @@ outcode(tree *t, bool eflag)
             break;
         case RDWR:
             emitf(Xrdwr);
+            break;
+        case APPEND:
+            emitf(Xappend);
             break;
         }
         emiti(t->fd0);
