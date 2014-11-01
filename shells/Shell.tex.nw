@@ -741,6 +741,51 @@ pushword(char *wd)
 }
 @
 
+<<function count>>=
+int
+count(word *w)
+{
+    int n;
+    for(n = 0;w;n++) 
+        w = w->next;
+    return n;
+}
+@
+
+<<function copywords>>=
+/*
+ * copy arglist a, adding the copy to the front of tail
+ */
+word*
+copywords(word *a, word *tail)
+{
+    word *v = 0, **end;
+    for(end=&v;a;a = a->next,end=&(*end)->next)
+        *end = newword(a->word, 0);
+    *end = tail;
+    return v;
+}
+@
+
+
+<<function copynwords>>=
+word*
+copynwords(word *a, word *tail, int n)
+{
+    word *v, **end;
+    
+    v = 0;
+    end = &v;
+    while(n-- > 0){
+        *end = newword(a->word, 0);
+        end = &(*end)->next;
+        a = a->next;
+    }
+    *end = tail;
+    return v;
+}
+@
+
 
 
 <<function freewords>>=
@@ -863,6 +908,22 @@ gvlook(char *name)
 }
 @
 
+<<function newvar>>=
+var*
+newvar(char *name, var *next)
+{
+    var *v = new(var);
+    v->name = name;
+    v->val = 0;
+    v->fn = nil;
+    v->changed = false;
+    v->fnchanged = false;
+
+    v->next = next;
+    return v;
+}
+@
+
 
 % special variable, e.g. vlook("home"), vlook("*")
 
@@ -933,10 +994,28 @@ if(argv[0][0]=='-')
 if(flag['I'])
     flag['i'] = nil;
 else 
-    if(flag['i']==nil && argc==1 && Isatty(0)) 
+    if(flag['i']==nil && argc==1 && Isatty(STDIN)) 
        flag['i'] = flagset;
 @
 % interactive mode if no arguments!
+
+<<function Isatty>>=
+bool
+Isatty(fdt fd)
+{
+    char buf[64];
+
+    if(fd2path(fd, buf, sizeof buf) != 0)
+        return false;
+
+    /* might be #c/cons during boot - fixed 22 april 2005, remove this later */
+    if(strcmp(buf, "#c/cons") == 0)
+        return true;
+
+    /* might be /mnt/term/dev/cons */
+    return strlen(buf) >= 9 && strcmp(buf+strlen(buf)-9, "/dev/cons") == 0;
+}
+@
 
 \section{Initialisation}
 
@@ -2577,6 +2656,35 @@ Xsimple(void)
 }
 @
 
+<<function Xerror>>=
+void
+Xerror(char *s)
+{
+    if(strcmp(argv0, "rc")==0 || strcmp(argv0, "/bin/rc")==0)
+        pfmt(err, "rc: %s: %r\n", s);
+    else
+        pfmt(err, "rc (%s): %s: %r\n", argv0, s);
+    flush(err);
+    setstatus("error");
+    while(!runq->iflag) Xreturn();
+}
+@
+
+
+<<function Xerror1>>=
+void
+Xerror1(char *s)
+{
+    if(strcmp(argv0, "rc")==0 || strcmp(argv0, "/bin/rc")==0)
+        pfmt(err, "rc: %s\n", s);
+    else
+        pfmt(err, "rc (%s): %s\n", argv0, s);
+    flush(err);
+    setstatus("error");
+    while(!runq->iflag) Xreturn();
+}
+@
+
 \subsection{Fork}
 
 % fundamental of a shell! fork exec wait
@@ -2624,6 +2732,27 @@ execexec(void)
     Execute(runq->argv->words, searchpath(runq->argv->words->word));
     // should not be reached!
     poplist();
+}
+@
+
+<<global nullpath>>=
+struct Word nullpath = { "", nil};
+@
+
+
+<<function searchpath>>=
+word*
+searchpath(char *w)
+{
+    word *path;
+
+    if(strncmp(w, "/", 1)==0
+    || strncmp(w, "#", 1)==0
+    || strncmp(w, "./", 2)==0
+    || strncmp(w, "../", 3)==0
+    || (path = vlook("path")->val)==nil)
+        path=&nullpath;
+    return path;
 }
 @
 
@@ -2806,6 +2935,32 @@ Xasync(void)
 }
 @
 
+<<function Xexit>>=
+void
+Xexit(void)
+{
+    struct Var *trapreq;
+    struct Word *starval;
+    static int beenhere = 0;
+    if(getpid()==mypid && !beenhere){
+        trapreq = vlook("sigexit");
+        if(trapreq->fn){
+            beenhere = 1;
+            --runq->pc;
+            starval = vlook("*")->val;
+            start(trapreq->fn, trapreq->pc, (struct Var *)0);
+            runq->local = newvar(strdup("*"), runq->local);
+            runq->local->val = copywords(starval, (struct Word *)0);
+            runq->local->changed = true;
+            runq->redir = runq->startredir = 0;
+            return;
+        }
+    }
+    Exit(getstatus());
+}
+@
+
+
 
 
 \subsection{Logical operators}
@@ -2879,6 +3034,27 @@ case TWIDDLE:
     break;
 @
 
+<<function Xmatch>>=
+void
+Xmatch(void)
+{
+    word *p;
+    char *subject;
+    subject = list2str(runq->argv->words);
+    setstatus("no match");
+    for(p = runq->argv->next->words;p;p = p->next)
+        if(match(subject, p->word, '\0')){
+            setstatus("");
+            break;
+        }
+    efree(subject);
+    poplist();
+    poplist();
+}
+@
+
+
+
 % see also /bin/test! often used as argument to if()
 
 \subsection{Pipe}
@@ -2908,6 +3084,47 @@ case PIPE:
 @
 
 
+<<function Xreturn>>=
+void
+Xreturn(void)
+{
+    struct Thread *p = runq;
+    turfredir();
+    while(p->argv) poplist();
+    codefree(p->code);
+    runq = p->ret;
+    efree((char *)p);
+    if(runq==0)
+        Exit(getstatus());
+}
+@
+
+
+<<function turfredir>>=
+void
+turfredir(void)
+{
+    while(runq->redir!=runq->startredir)
+        Xpopredir();
+}
+@
+
+<<function Xpopredir>>=
+void
+Xpopredir(void)
+{
+    struct Redir *rp = runq->redir;
+    if(rp==0)
+        panic("turfredir null!", 0);
+    runq->redir = rp->next;
+    if(rp->type==ROPEN)
+        close(rp->from);
+    efree((char *)rp);
+}
+@
+
+
+
 <<function Xpipewait>>=
 void
 Xpipewait(void)
@@ -2924,6 +3141,25 @@ Xpipewait(void)
     }
 }
 @
+
+<<function concstatus>>=
+char*
+concstatus(char *s, char *t)
+{
+    static char v[NSTATUS+1];
+    int n = strlen(s);
+    strncpy(v, s, NSTATUS);
+    if(n<NSTATUS){
+        v[n]='|';
+        strncpy(v+n+1, t, NSTATUS-n-1);
+    }
+    v[NSTATUS]='\0';
+    return v;
+}
+@
+
+
+
 
 <<function Xpipe>>=
 void
@@ -2958,6 +3194,19 @@ Xpipe(void)
         p->pid = forkid;
         break;
     }
+}
+@
+
+<<function pushredir>>=
+void
+pushredir(int type, int from, int to)
+{
+    redir * rp = new(redir);
+    rp->type = type;
+    rp->from = from;
+    rp->to = to;
+    rp->next = runq->redir;
+    runq->redir = rp;
 }
 @
 
@@ -3037,6 +3286,34 @@ Xpipefd(void)
 
 
 \subsection{Redirection}
+
+
+
+<<function doredir>>=
+void
+doredir(redir *rp)
+{
+    if(rp){
+        doredir(rp->next);
+        switch(rp->type){
+        case ROPEN:
+            if(rp->from!=rp->to){
+                Dup(rp->from, rp->to);
+                close(rp->from);
+            }
+            break;
+        case RDUP:
+            Dup(rp->from, rp->to);
+            break;
+        case RCLOSE:
+            close(rp->from);
+            break;
+        }
+    }
+}
+@
+
+
 
 <<constant ROPEN>>=
 /*
@@ -3527,6 +3804,28 @@ Xcase(void)
 }
 @
 
+<<function list2str>>=
+char*
+list2str(word *words)
+{
+    char *value, *s, *t;
+    int len = 0;
+    word *ap;
+    for(ap = words;ap;ap = ap->next)
+        len+=1+strlen(ap->word);
+    value = emalloc(len+1);
+    s = value;
+    for(ap = words;ap;ap = ap->next){
+        for(t = ap->word;*t;) *s++=*t++;
+        *s++=' ';
+    }
+    if(s==value)
+        *s='\0';
+    else s[-1]='\0';
+    return value;
+}
+@
+
 
 \subsection{Blocks}
 
@@ -3610,6 +3909,25 @@ case FN:
     else
         emitf(Xdelfn);
     break;
+@
+
+<<function fnstr>>=
+char*
+fnstr(tree *t)
+{
+    void *v;
+    extern char nl;
+    char svnl = nl;
+    io *f = openstr();
+
+    nl = ';';
+    pfmt(f, "%t", t);
+    nl = svnl;
+    v = f->strp;
+    f->strp = nil;
+    closeio(f);
+    return v;
+}
 @
 
 
@@ -3717,6 +4035,29 @@ case '=':
     t = tt;	/* so tests below will work */
     break;
 @
+
+<<function Xassign>>=
+void
+Xassign(void)
+{
+    var *v;
+    if(count(runq->argv->words)!=1){
+        Xerror1("variable name not singleton!");
+        return;
+    }
+    deglob(runq->argv->words->word);
+    v = vlook(runq->argv->words->word);
+    poplist();
+    globlist();
+    freewords(v->val);
+    v->val = runq->argv->words;
+    v->changed = true;
+    runq->argv->words = 0;
+    poplist();
+}
+@
+
+
 
 <<function Xlocal>>=
 void
@@ -3869,6 +4210,41 @@ Xsub(void)
 }
 @
 
+<<function subwords>>=
+word*
+subwords(word *val, int len, word *sub, word *a)
+{
+    int n, m;
+    char *s;
+    if(!sub)
+        return a;
+    a = subwords(val, len, sub->next, a);
+    s = sub->word;
+    deglob(s);
+    m = 0;
+    n = 0;
+    while('0'<=*s && *s<='9')
+        n = n*10+ *s++ -'0';
+    if(*s == '-'){
+        if(*++s == 0)
+            m = len - n;
+        else{
+            while('0'<=*s && *s<='9')
+                m = m*10+ *s++ -'0';
+            m -= n;
+        }
+    }
+    if(n<1 || n>len || m<0)
+        return a;
+    if(n+m>len)
+        m = len-n;
+    while(--n > 0)
+        val = val->next;
+    return copynwords(val, a, m+1);
+}
+@
+
+
 
 <<[[outcode()]] cases>>=
 case '^':
@@ -3902,6 +4278,24 @@ Xconc(void)
     poplist();
     poplist();
     runq->argv->words = vp;
+}
+@
+
+<<function conclist>>=
+word*
+conclist(word *lp, word *rp, word *tail)
+{
+    char *buf;
+    word *v;
+    if(lp->next || rp->next)
+        tail = conclist(lp->next==0? lp: lp->next,
+            rp->next==0? rp: rp->next, tail);
+    buf = emalloc(strlen(lp->word)+strlen((char *)rp->word)+1);
+    strcpy(buf, lp->word);
+    strcat(buf, rp->word);
+    v = newword(buf, tail);
+    efree(buf);
+    return v;
 }
 @
 
@@ -4159,6 +4553,26 @@ execcd(void)
 @
 %$
 
+<<function appfile>>=
+static char *
+appfile(char *dir, char *comp)
+{
+    int dirlen, complen;
+    char *s, *p;
+
+    dirlen = strlen(dir);
+    complen = strlen(comp);
+    s = emalloc(dirlen + 1 + complen + 1);
+    memmove(s, dir, dirlen);
+    p = s + dirlen;
+    *p++ = '/';
+    memmove(p, comp, complen);
+    p[complen] = '\0';
+    return s;
+}
+@
+
+
 % /dev/wdir?
 
 <<function dochdir>>=
@@ -4219,9 +4633,6 @@ union Code dotcmds[14];
 int ndot;
 @
 
-<<global eflagok>>=
-bool eflagok;	/* kludge flag so that -e doesn't exit in startup */
-@
 
 
 <<function execdot>>=
@@ -4313,6 +4724,14 @@ execdot(void)
 }
 @
 %$
+
+<<function Dup1>>=
+int
+Dup1(int)
+{
+    return -1;
+}
+@
 
 \section{[[$ eval]]}
 %$
@@ -4455,6 +4874,46 @@ execwhatis(void){	/* mildly wrong -- should fork before writing */
     flush(err);
 }
 @
+
+<<function mapfd>>=
+int
+mapfd(int fd)
+{
+    redir *rp;
+    for(rp = runq->redir;rp;rp = rp->next){
+        switch(rp->type){
+        case RCLOSE:
+            if(rp->from==fd)
+                fd=-1;
+            break;
+        case RDUP:
+        case ROPEN:
+            if(rp->to==fd)
+                fd = rp->from;
+            break;
+        }
+    }
+    return fd;
+}
+@
+
+
+<<function Executable>>=
+bool
+Executable(char *file)
+{
+    Dir *statbuf;
+    bool ret;
+
+    statbuf = dirstat(file);
+    if(statbuf == nil)
+        return false;
+    ret = ((statbuf->mode&0111)!=0 && (statbuf->mode&DMDIR)==0);
+    free(statbuf);
+    return ret;
+}
+@
+
 
 \subsection{XXX}
 
@@ -4830,6 +5289,19 @@ execfinit(void)
 \chapter{Globbing}
 % mv in advanced topics?
 
+
+<<function Xglob>>=
+void
+Xglob(void)
+{
+    globlist();
+}
+@
+
+
+
+
+
 <<constant GLOB>>=
 /*
  * Glob character escape in strings:
@@ -5127,6 +5599,136 @@ globlist(void)
 @
 
 
+
+
+<<constant NDIR>>=
+#define	NDIR	256		/* shoud be a better way */
+@
+
+<<function Globsize>>=
+int
+Globsize(char *p)
+{
+    int isglob = 0, globlen = NDIR+1;
+    for(;*p;p++){
+        if(*p==GLOB){
+            p++;
+            if(*p!=GLOB)
+                isglob++;
+            globlen+=*p=='*'?NDIR:1;
+        }
+        else
+            globlen++;
+    }
+    return isglob?globlen:0;
+}
+@
+
+
+<<constant NFD>>=
+#define	NFD	50
+@
+
+<<global dir>>=
+struct{
+    Dir	*dbuf;
+    int	i;
+    int	n;
+}dir[NFD];
+@
+
+<<function Opendir>>=
+int
+Opendir(char *name)
+{
+    Dir *db;
+    int f;
+    f = open(name, 0);
+    if(f==-1)
+        return f;
+    db = dirfstat(f);
+    if(db!=nil && (db->mode&DMDIR)){
+        if(f<NFD){
+            dir[f].i = 0;
+            dir[f].n = 0;
+        }
+        free(db);
+        return f;
+    }
+    free(db);
+    close(f);
+    return -1;
+}
+@
+
+
+<<function trimdirs>>=
+static int
+trimdirs(Dir *d, int nd)
+{
+    int r, w;
+
+    for(r=w=0; r<nd; r++)
+        if(d[r].mode&DMDIR)
+            d[w++] = d[r];
+    return w;
+}
+@
+
+<<function Readdir>>=
+/*
+ * onlydirs is advisory -- it means you only
+ * need to return the directories.  it's okay to
+ * return files too (e.g., on unix where you can't
+ * tell during the readdir), but that just makes 
+ * the globber work harder.
+ */
+int
+Readdir(int f, void *p, int onlydirs)
+{
+    int n;
+
+    if(f<0 || f>=NFD)
+        return 0;
+Again:
+    if(dir[f].i==dir[f].n){	/* read */
+        free(dir[f].dbuf);
+        dir[f].dbuf = 0;
+        n = dirread(f, &dir[f].dbuf);
+        if(n>0){
+            if(onlydirs){
+                n = trimdirs(dir[f].dbuf, n);
+                if(n == 0)
+                    goto Again;
+            }	
+            dir[f].n = n;
+        }else
+            dir[f].n = 0;
+        dir[f].i = 0;
+    }
+    if(dir[f].i == dir[f].n)
+        return 0;
+    strcpy(p, dir[f].dbuf[dir[f].i].name);
+    dir[f].i++;
+    return 1;
+}
+@
+
+<<function Closedir>>=
+void
+Closedir(int f)
+{
+    if(f>=0 && f<NFD){
+        free(dir[f].dbuf);
+        dir[f].i = 0;
+        dir[f].n = 0;
+        dir[f].dbuf = 0;
+    }
+    close(f);
+}
+@
+
+
 \chapter{Signals}
 
 
@@ -5382,6 +5984,23 @@ setvar("rcname", newword(argv[0], (word *)nil));
 
 \chapter{Advanced Topics}
 
+\section{[[rc -e]]}
+
+<<global eflagok>>=
+bool eflagok;	/* kludge flag so that -e doesn't exit in startup */
+@
+
+<<function Xeflag>>=
+void
+Xeflag(void)
+{
+    if(eflagok && !truestatus()) Xexit();
+}
+@
+
+% exit at first error
+% kind of a 'use strict;' :)
+
 \section{Unicode}
 
 <<function addutf>>=
@@ -5483,6 +6102,33 @@ readhere(void)
     doprompt = true;
 }
 @
+
+
+<<function cleanhere>>=
+void
+cleanhere(char *f)
+{
+    emitf(Xdelhere);
+    emits(strdup(f));
+}
+@
+
+<<function Xdelhere>>=
+void
+Xdelhere(void)
+{
+    Unlink(runq->code[runq->pc++].s);
+}
+@
+
+<<function Unlink>>=
+void
+Unlink(char *name)
+{
+    remove(name);
+}
+@
+
 
 
 
@@ -5938,6 +6584,15 @@ Exit(char *stat)
 
 
 \chapter{Libc}
+
+<<function _efgfmt>>=
+/* avoid loading any floating-point library code */
+//@Scheck: weird, probably linker trick
+int _efgfmt(Fmt *)
+{
+    return -1;
+}
+@
 
 \section{Memory managment}
 
@@ -6655,6 +7310,50 @@ iacvt(int n)
     if(n/10)
         iacvt(n/10);
     *bp++=n%10+'0';
+}
+@
+
+\section{Portable wrappers}
+
+%less: could delete them, I don't care about other OSes
+
+<<function Write>>=
+long
+Write(int fd, void *buf, long cnt)
+{
+    return write(fd, buf, cnt);
+}
+@
+
+<<function Read>>=
+long
+Read(int fd, void *buf, long cnt)
+{
+    return read(fd, buf, cnt);
+}
+@
+
+<<function Seek>>=
+long
+Seek(int fd, long cnt, long whence)
+{
+    return seek(fd, cnt, whence);
+}
+@
+
+<<function Creat>>=
+int
+Creat(char *file)
+{
+    return create(file, 1, 0666L);
+}
+@
+
+<<function Dup>>=
+int
+Dup(int a, int b)
+{
+    return dup(a, b);
 }
 @
 
