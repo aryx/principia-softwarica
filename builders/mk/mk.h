@@ -259,11 +259,10 @@ extern	int	mkinline;
 extern	char	*infile;
 extern	int	nreps;
 extern	char	*explain;
-
 extern	char	*termchars;
+extern	char 	*shflags;
 //extern	char 	*shell;
 //extern	char 	*shellname;
-extern	char 	*shflags;
 //extern	int	IWS;
 
 /*s: function SYNERR */

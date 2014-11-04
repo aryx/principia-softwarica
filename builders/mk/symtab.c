@@ -53,32 +53,6 @@ symlook(char *sym, int space, void *install)
 }
 /*e: function symlook */
 
-/*s: function symdel */
-//void
-//symdel(char *sym, int space)
-//{
-//    long h;
-//    char *p;
-//    Symtab *s, *ls;
-//
-//    /* multiple memory leaks */
-//
-//    for(p = sym, h = space; *p; h += *p++)
-//        h *= HASHMUL;
-//    if(h < 0)
-//        h = ~h;
-//    h %= NHASH;
-//    for(s = hash[h], ls = 0; s; ls = s, s = s->next)
-//        if((s->space == space) && (strcmp(s->name, sym) == 0)){
-//            if(ls)
-//                ls->next = s->next;
-//            else
-//                hash[h] = s->next;
-//            free((char *)s);
-//        }
-//}
-/*e: function symdel */
-
 /*s: function symtraverse */
 void
 symtraverse(int space, void (*fn)(Symtab*))

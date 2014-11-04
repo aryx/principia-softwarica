@@ -150,7 +150,7 @@ work(Node *node, Node *p, Arc *parc)
     /*
         can we pretend to be made?
     */
-    if((iflag == 0) && (node->time == 0) && (node->flags&(PRETENDING|CANPRETEND))
+    if((iflag == false) && (node->time == 0) && (node->flags&(PRETENDING|CANPRETEND))
             && p && ra->n && !outofdate(p, ra, 0)){
         node->flags &= ~CANPRETEND;
         MADESET(node, MADE);

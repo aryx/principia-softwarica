@@ -247,9 +247,12 @@ badusage(void)
 % bout, envy,    rules, metarules, patrule,    jobs
 % symbol hashtbl global
 
+% draw diagram showing relations to each other, what includes what
+
 <<global bout>>=
 Biobuf bout;
 @
+
 
 \section{[[Rule]] and [[rules]]}
 
@@ -632,6 +635,477 @@ setvar(char *name, void *value)
 }
 @
 
+
+\chapter{[[main()]]}
+
+
+<<function main>>=
+void
+main(int argc, char **argv)
+{
+    Word *w;
+    char *s, *temp;
+    char *files[256], **f = files, **ff;
+    int sflag = 0;
+    int i;
+    int tfd = -1;
+    Biobuf tb;
+    Bufblock *buf;
+    Bufblock *whatif;
+
+    /*
+     *  start with a copy of the current environment variables
+     *  instead of sharing them
+     */
+
+    Binit(&bout, 1, OWRITE);
+    buf = newbuf();
+    whatif = 0;
+    USED(argc);
+    for(argv++; *argv && (**argv == '-'); argv++)
+    {
+        bufcpy(buf, argv[0], strlen(argv[0]));
+        insert(buf, ' ');
+        switch(argv[0][1])
+        {
+        case 'a':
+            aflag = 1;
+            break;
+        case 'd':
+            if(*(s = &argv[0][2]))
+                while(*s) switch(*s++)
+                {
+                case 'p':	debug |= D_PARSE; break;
+                case 'g':	debug |= D_GRAPH; break;
+                case 'e':	debug |= D_EXEC; break;
+                }
+            else
+                debug = 0xFFFF;
+            break;
+        case 'e':
+            explain = &argv[0][2];
+            break;
+        case 'f':
+            if(*++argv == 0)
+                badusage();
+            *f++ = *argv;
+            bufcpy(buf, argv[0], strlen(argv[0]));
+            insert(buf, ' ');
+            break;
+        case 'i':
+            iflag = true;
+            break;
+        case 'k':
+            kflag = true;
+            break;
+        case 'n':
+            nflag = 1;
+            break;
+        case 's':
+            sflag = 1;
+            break;
+        case 't':
+            tflag = 1;
+            break;
+        case 'u':
+            uflag = 1;
+            break;
+        case 'w':
+            if(whatif == 0)
+                whatif = newbuf();
+            else
+                insert(whatif, ' ');
+            if(argv[0][2])
+                bufcpy(whatif, &argv[0][2], strlen(&argv[0][2]));
+            else {
+                if(*++argv == 0)
+                    badusage();
+                bufcpy(whatif, &argv[0][0], strlen(&argv[0][0]));
+            }
+            break;
+        default:
+            badusage();
+        }
+    }
+    <<main profiling>>
+
+    if(aflag)
+        iflag = true;
+    usage();
+    syminit();
+    initenv();
+    usage();
+
+    /*
+        assignment args become null strings
+    */
+    temp = 0;
+    for(i = 0; argv[i]; i++) if(utfrune(argv[i], '=')){
+        bufcpy(buf, argv[i], strlen(argv[i]));
+        insert(buf, ' ');
+        if(tfd < 0){
+            temp = maketmp();
+            if(temp == 0) {
+                perror("temp file");
+                Exit();
+            }
+            if((tfd = create(temp, ORDWR, 0600)) < 0){
+                perror(temp);
+                Exit();
+            }
+            Binit(&tb, tfd, OWRITE);
+        }
+        Bprint(&tb, "%s\n", argv[i]);
+        *argv[i] = 0;
+    }
+    if(tfd >= 0){
+        Bflush(&tb);
+        LSEEK(tfd, 0L, 0);
+        parse("command line args", tfd, 1);
+        remove(temp);
+    }
+
+    if (buf->current != buf->start) {
+        buf->current--;
+        insert(buf, 0);
+    }
+    symlook("MKFLAGS", S_VAR, (void *) stow(buf->start));
+    buf->current = buf->start;
+    for(i = 0; argv[i]; i++){
+        if(*argv[i] == 0) continue;
+        if(i)
+            insert(buf, ' ');
+        bufcpy(buf, argv[i], strlen(argv[i]));
+    }
+    insert(buf, 0);
+    symlook("MKARGS", S_VAR, (void *) stow(buf->start));
+    freebuf(buf);
+
+    if(f == files){
+        if(access(MKFILE, 4) == 0)
+            parse(MKFILE, open(MKFILE, 0), 0);
+    } else
+        for(ff = files; ff < f; ff++)
+            parse(*ff, open(*ff, 0), 0);
+
+    if(DEBUG(D_PARSE)){
+        dumpw("default targets", target1);
+        dumpr("rules", rules);
+        dumpr("metarules", metarules);
+        dumpv("variables");
+    }
+
+    if(whatif){
+        insert(whatif, 0);
+        timeinit(whatif->start);
+        freebuf(whatif);
+    }
+
+    execinit();
+    /* skip assignment args */
+    while(*argv && (**argv == 0))
+        argv++;
+
+    catchnotes();
+    if(*argv == 0){
+        if(target1)
+            for(w = target1; w; w = w->next)
+                mk(w->s);
+        else {
+            fprint(2, "mk: nothing to mk\n");
+            Exit();
+        }
+    } else {
+        if(sflag){
+            for(; *argv; argv++)
+                if(**argv)
+                    mk(*argv);
+        } else {
+            Word *head, *tail, *t;
+
+            /* fake a new rule with all the args as prereqs */
+            tail = 0;
+            t = 0;
+            for(; *argv; argv++)
+                if(**argv){
+                    if(tail == 0)
+                        tail = t = newword(*argv);
+                    else {
+                        t->next = newword(*argv);
+                        t = t->next;
+                    }
+                }
+            if(tail->next == 0)
+                mk(tail->s);
+            else {
+                head = newword("command line arguments");
+                addrules(head, tail, strdup(""), VIR, mkinline, 0);
+                mk(head->s);
+            }
+        }
+    }
+    if(uflag)
+        prusage();
+
+    exits(0);
+}
+@
+
+\chapter{[[mk()]]}
+
+<<global runerrs>>=
+int runerrs;
+@
+
+<<function mk>>=
+void
+mk(char *target)
+{
+    Node *node;
+    int did = 0;
+
+    nproc();		/* it can be updated dynamically */
+    nrep();			/* it can be updated dynamically */
+    runerrs = 0;
+    node = graph(target);
+    if(DEBUG(D_GRAPH)){
+        dumpn("new target\n", node);
+        Bflush(&bout);
+    }
+    clrmade(node);
+    while(node->flags&NOTMADE){
+        if(work(node, (Node *)0, (Arc *)0))
+            did = 1;	/* found something to do */
+        else {
+            if(waitup(1, (int *)0) > 0){
+                if(node->flags&(NOTMADE|BEINGMADE)){
+                    assert(/*must be run errors*/ runerrs);
+                    break;	/* nothing more waiting */
+                }
+            }
+        }
+    }
+    if(node->flags&BEINGMADE)
+        waitup(-1, (int *)0);
+    while(jobs)
+        waitup(-2, (int *)0);
+    assert(/*target didnt get done*/ runerrs || (node->flags&MADE));
+    if(did == 0)
+        Bprint(&bout, "mk: '%s' is up to date\n", node->name);
+}
+@
+
+
+<<function clrmade>>=
+void
+clrmade(Node *n)
+{
+    Arc *a;
+
+    n->flags &= ~(CANPRETEND|PRETENDING);
+    if(strchr(n->name, '(') ==0 || n->time)
+        n->flags |= CANPRETEND;
+    MADESET(n, NOTMADE);
+    for(a = n->prereqs; a; a = a->next)
+        if(a->n)
+            clrmade(a->n);
+}
+@
+
+<<function unpretend>>=
+static void
+unpretend(Node *n)
+{
+    MADESET(n, NOTMADE);
+    n->flags &= ~(CANPRETEND|PRETENDING);
+    n->time = 0;
+}
+@
+
+
+
+<<function work>>=
+int
+work(Node *node, Node *p, Arc *parc)
+{
+    Arc *a, *ra;
+    int weoutofdate;
+    int ready;
+    int did = 0;
+    char cwd[256];
+
+    /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
+    if(node->flags&BEINGMADE)
+        return(did);
+    if((node->flags&MADE) && (node->flags&PRETENDING) && p && outofdate(p, parc, 0)){
+        if(explain)
+            fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
+                node->name, node->time, p->name, p->time);
+        unpretend(node);
+    }
+    /*
+        have a look if we are pretending in case
+        someone has been unpretended out from underneath us
+    */
+    if(node->flags&MADE){
+        if(node->flags&PRETENDING){
+            node->time = 0;
+        }else
+            return(did);
+    }
+    /* consider no prerequisite case */
+    if(node->prereqs == 0){
+        if(node->time == 0){
+            if(getwd(cwd, sizeof cwd))
+                fprint(2, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
+            else
+                fprint(2, "mk: don't know how to make '%s'\n", node->name);
+            if(kflag){
+                node->flags |= BEINGMADE;
+                runerrs++;
+            } else
+                Exit();
+        } else
+            MADESET(node, MADE);
+        return(did);
+    }
+    /*
+        now see if we are out of date or what
+    */
+    ready = 1;
+    weoutofdate = aflag;
+    ra = 0;
+    for(a = node->prereqs; a; a = a->next)
+        if(a->n){
+            did = work(a->n, node, a) || did;
+            if(a->n->flags&(NOTMADE|BEINGMADE))
+                ready = 0;
+            if(outofdate(node, a, 0)){
+                weoutofdate = 1;
+                if((ra == 0) || (ra->n == 0)
+                        || (ra->n->time < a->n->time))
+                    ra = a;
+            }
+        } else {
+            if(node->time == 0){
+                if(ra == 0)
+                    ra = a;
+                weoutofdate = 1;
+            }
+        }
+    if(ready == 0)	/* can't do anything now */
+        return(did);
+    if(weoutofdate == 0){
+        MADESET(node, MADE);
+        return(did);
+    }
+    /*
+        can we pretend to be made?
+    */
+    if((iflag == false) && (node->time == 0) && (node->flags&(PRETENDING|CANPRETEND))
+            && p && ra->n && !outofdate(p, ra, 0)){
+        node->flags &= ~CANPRETEND;
+        MADESET(node, MADE);
+        if(explain && ((node->flags&PRETENDING) == 0))
+            fprint(1, "pretending %s has time %lud\n", node->name, node->time);
+        node->flags |= PRETENDING;
+        return(did);
+    }
+    /*
+        node is out of date and we REALLY do have to do something.
+        quickly rescan for pretenders
+    */
+    for(a = node->prereqs; a; a = a->next)
+        if(a->n && (a->n->flags&PRETENDING)){
+            if(explain)
+                Bprint(&bout, "unpretending %s because of %s because of %s\n",
+                a->n->name, node->name, ra->n? ra->n->name : "rule with no prerequisites");
+
+            unpretend(a->n);
+            did = work(a->n, node, a) || did;
+            ready = 0;
+        }
+    if(ready == 0)	/* try later unless nothing has happened for -k's sake */
+        return(did || work(node, p, parc));
+    did = dorecipe(node) || did;
+    return(did);
+}
+@
+
+<<function update>>=
+void
+update(int fake, Node *node)
+{
+    Arc *a;
+
+    MADESET(node, fake? BEINGMADE : MADE);
+    if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
+        node->time = timeof(node->name, 1);
+        node->flags &= ~(CANPRETEND|PRETENDING);
+        for(a = node->prereqs; a; a = a->next)
+            if(a->prog)
+                outofdate(node, a, 1);
+    } else {
+        node->time = 1;
+        for(a = node->prereqs; a; a = a->next)
+            if(a->n && outofdate(node, a, 1))
+                node->time = a->n->time;
+    }
+/*	print("----node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);/**/
+}
+@
+
+<<function pcmp>>=
+static int
+pcmp(char *prog, char *p, char *q)
+{
+    char buf[3*NAMEBLOCK];
+    int pid;
+
+    Bflush(&bout);
+    snprint(buf, sizeof buf, "%s '%s' '%s'\n", prog, p, q);
+    pid = pipecmd(buf, 0, 0);
+    while(waitup(-3, &pid) >= 0)
+        ;
+    return(pid? 2:1);
+}
+@
+
+<<function outofdate>>=
+int
+outofdate(Node *node, Arc *arc, int eval)
+{
+    char buf[3*NAMEBLOCK], *str;
+    Symtab *sym;
+    int ret;
+
+    str = 0;
+    if(arc->prog){
+        snprint(buf, sizeof buf, "%s%c%s", node->name, 0377,
+            arc->n->name);
+        sym = symlook(buf, S_OUTOFDATE, 0);
+        if(sym == 0 || eval){
+            if(sym == 0)
+                str = strdup(buf);
+            ret = pcmp(arc->prog, node->name, arc->n->name);
+            if(sym)
+                sym->u.value = ret;
+            else
+                symlook(str, S_OUTOFDATE, (void *)ret);
+        } else
+            ret = sym->u.value;
+        return(ret-1);
+    } else if(strchr(arc->n->name, '(') && arc->n->time == 0)  /* missing archive member */
+        return 1;
+    else
+        /*
+         * Treat equal times as out-of-date.
+         * It's a race, and the safer option is to do
+         * extra building rather than not enough.
+       */
+        return node->time <= arc->n->time;
+}
+@
 
 \chapter{Rules}
 
@@ -3021,7 +3495,7 @@ killchildren(char *msg)
 {
     Process *p;
 
-    kflag = 1;	/* to make sure waitup doesn't exit */
+    kflag = true;	/* to make sure waitup doesn't exit */
     jobs = 0;	/* make sure no more get scheduled */
     for(p = phead; p; p = p->f)
         expunge(p->pid, msg);
@@ -3034,476 +3508,22 @@ killchildren(char *msg)
 
 
 
-\chapter{[[mk()]]}
+\chapter{Debugging Support}
 
-<<global runerrs>>=
-int runerrs;
+\section{Explain mode, [[mk -e]]}
+
+<<global explain>>=
+char *explain = 0;
 @
 
-<<function mk>>=
-void
-mk(char *target)
-{
-    Node *node;
-    int did = 0;
+\section{Dry mode, [[mk -n]]}
 
-    nproc();		/* it can be updated dynamically */
-    nrep();			/* it can be updated dynamically */
-    runerrs = 0;
-    node = graph(target);
-    if(DEBUG(D_GRAPH)){
-        dumpn("new target\n", node);
-        Bflush(&bout);
-    }
-    clrmade(node);
-    while(node->flags&NOTMADE){
-        if(work(node, (Node *)0, (Arc *)0))
-            did = 1;	/* found something to do */
-        else {
-            if(waitup(1, (int *)0) > 0){
-                if(node->flags&(NOTMADE|BEINGMADE)){
-                    assert(/*must be run errors*/ runerrs);
-                    break;	/* nothing more waiting */
-                }
-            }
-        }
-    }
-    if(node->flags&BEINGMADE)
-        waitup(-1, (int *)0);
-    while(jobs)
-        waitup(-2, (int *)0);
-    assert(/*target didnt get done*/ runerrs || (node->flags&MADE));
-    if(did == 0)
-        Bprint(&bout, "mk: '%s' is up to date\n", node->name);
-}
+% just print recipe, do not execute them
+<<global nflag>>=
+int nflag = 0;
 @
 
-
-<<function clrmade>>=
-void
-clrmade(Node *n)
-{
-    Arc *a;
-
-    n->flags &= ~(CANPRETEND|PRETENDING);
-    if(strchr(n->name, '(') ==0 || n->time)
-        n->flags |= CANPRETEND;
-    MADESET(n, NOTMADE);
-    for(a = n->prereqs; a; a = a->next)
-        if(a->n)
-            clrmade(a->n);
-}
-@
-
-<<function unpretend>>=
-static void
-unpretend(Node *n)
-{
-    MADESET(n, NOTMADE);
-    n->flags &= ~(CANPRETEND|PRETENDING);
-    n->time = 0;
-}
-@
-
-
-
-<<function work>>=
-int
-work(Node *node, Node *p, Arc *parc)
-{
-    Arc *a, *ra;
-    int weoutofdate;
-    int ready;
-    int did = 0;
-    char cwd[256];
-
-    /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
-    if(node->flags&BEINGMADE)
-        return(did);
-    if((node->flags&MADE) && (node->flags&PRETENDING) && p && outofdate(p, parc, 0)){
-        if(explain)
-            fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
-                node->name, node->time, p->name, p->time);
-        unpretend(node);
-    }
-    /*
-        have a look if we are pretending in case
-        someone has been unpretended out from underneath us
-    */
-    if(node->flags&MADE){
-        if(node->flags&PRETENDING){
-            node->time = 0;
-        }else
-            return(did);
-    }
-    /* consider no prerequisite case */
-    if(node->prereqs == 0){
-        if(node->time == 0){
-            if(getwd(cwd, sizeof cwd))
-                fprint(2, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
-            else
-                fprint(2, "mk: don't know how to make '%s'\n", node->name);
-            if(kflag){
-                node->flags |= BEINGMADE;
-                runerrs++;
-            } else
-                Exit();
-        } else
-            MADESET(node, MADE);
-        return(did);
-    }
-    /*
-        now see if we are out of date or what
-    */
-    ready = 1;
-    weoutofdate = aflag;
-    ra = 0;
-    for(a = node->prereqs; a; a = a->next)
-        if(a->n){
-            did = work(a->n, node, a) || did;
-            if(a->n->flags&(NOTMADE|BEINGMADE))
-                ready = 0;
-            if(outofdate(node, a, 0)){
-                weoutofdate = 1;
-                if((ra == 0) || (ra->n == 0)
-                        || (ra->n->time < a->n->time))
-                    ra = a;
-            }
-        } else {
-            if(node->time == 0){
-                if(ra == 0)
-                    ra = a;
-                weoutofdate = 1;
-            }
-        }
-    if(ready == 0)	/* can't do anything now */
-        return(did);
-    if(weoutofdate == 0){
-        MADESET(node, MADE);
-        return(did);
-    }
-    /*
-        can we pretend to be made?
-    */
-    if((iflag == 0) && (node->time == 0) && (node->flags&(PRETENDING|CANPRETEND))
-            && p && ra->n && !outofdate(p, ra, 0)){
-        node->flags &= ~CANPRETEND;
-        MADESET(node, MADE);
-        if(explain && ((node->flags&PRETENDING) == 0))
-            fprint(1, "pretending %s has time %lud\n", node->name, node->time);
-        node->flags |= PRETENDING;
-        return(did);
-    }
-    /*
-        node is out of date and we REALLY do have to do something.
-        quickly rescan for pretenders
-    */
-    for(a = node->prereqs; a; a = a->next)
-        if(a->n && (a->n->flags&PRETENDING)){
-            if(explain)
-                Bprint(&bout, "unpretending %s because of %s because of %s\n",
-                a->n->name, node->name, ra->n? ra->n->name : "rule with no prerequisites");
-
-            unpretend(a->n);
-            did = work(a->n, node, a) || did;
-            ready = 0;
-        }
-    if(ready == 0)	/* try later unless nothing has happened for -k's sake */
-        return(did || work(node, p, parc));
-    did = dorecipe(node) || did;
-    return(did);
-}
-@
-
-<<function update>>=
-void
-update(int fake, Node *node)
-{
-    Arc *a;
-
-    MADESET(node, fake? BEINGMADE : MADE);
-    if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
-        node->time = timeof(node->name, 1);
-        node->flags &= ~(CANPRETEND|PRETENDING);
-        for(a = node->prereqs; a; a = a->next)
-            if(a->prog)
-                outofdate(node, a, 1);
-    } else {
-        node->time = 1;
-        for(a = node->prereqs; a; a = a->next)
-            if(a->n && outofdate(node, a, 1))
-                node->time = a->n->time;
-    }
-/*	print("----node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);/**/
-}
-@
-
-<<function pcmp>>=
-static int
-pcmp(char *prog, char *p, char *q)
-{
-    char buf[3*NAMEBLOCK];
-    int pid;
-
-    Bflush(&bout);
-    snprint(buf, sizeof buf, "%s '%s' '%s'\n", prog, p, q);
-    pid = pipecmd(buf, 0, 0);
-    while(waitup(-3, &pid) >= 0)
-        ;
-    return(pid? 2:1);
-}
-@
-
-<<function outofdate>>=
-int
-outofdate(Node *node, Arc *arc, int eval)
-{
-    char buf[3*NAMEBLOCK], *str;
-    Symtab *sym;
-    int ret;
-
-    str = 0;
-    if(arc->prog){
-        snprint(buf, sizeof buf, "%s%c%s", node->name, 0377,
-            arc->n->name);
-        sym = symlook(buf, S_OUTOFDATE, 0);
-        if(sym == 0 || eval){
-            if(sym == 0)
-                str = strdup(buf);
-            ret = pcmp(arc->prog, node->name, arc->n->name);
-            if(sym)
-                sym->u.value = ret;
-            else
-                symlook(str, S_OUTOFDATE, (void *)ret);
-        } else
-            ret = sym->u.value;
-        return(ret-1);
-    } else if(strchr(arc->n->name, '(') && arc->n->time == 0)  /* missing archive member */
-        return 1;
-    else
-        /*
-         * Treat equal times as out-of-date.
-         * It's a race, and the safer option is to do
-         * extra building rather than not enough.
-       */
-        return node->time <= arc->n->time;
-}
-@
-
-\chapter{[[main()]]}
-
-
-<<function main>>=
-void
-main(int argc, char **argv)
-{
-    Word *w;
-    char *s, *temp;
-    char *files[256], **f = files, **ff;
-    int sflag = 0;
-    int i;
-    int tfd = -1;
-    Biobuf tb;
-    Bufblock *buf;
-    Bufblock *whatif;
-
-    /*
-     *  start with a copy of the current environment variables
-     *  instead of sharing them
-     */
-
-    Binit(&bout, 1, OWRITE);
-    buf = newbuf();
-    whatif = 0;
-    USED(argc);
-    for(argv++; *argv && (**argv == '-'); argv++)
-    {
-        bufcpy(buf, argv[0], strlen(argv[0]));
-        insert(buf, ' ');
-        switch(argv[0][1])
-        {
-        case 'a':
-            aflag = 1;
-            break;
-        case 'd':
-            if(*(s = &argv[0][2]))
-                while(*s) switch(*s++)
-                {
-                case 'p':	debug |= D_PARSE; break;
-                case 'g':	debug |= D_GRAPH; break;
-                case 'e':	debug |= D_EXEC; break;
-                }
-            else
-                debug = 0xFFFF;
-            break;
-        case 'e':
-            explain = &argv[0][2];
-            break;
-        case 'f':
-            if(*++argv == 0)
-                badusage();
-            *f++ = *argv;
-            bufcpy(buf, argv[0], strlen(argv[0]));
-            insert(buf, ' ');
-            break;
-        case 'i':
-            iflag = 1;
-            break;
-        case 'k':
-            kflag = 1;
-            break;
-        case 'n':
-            nflag = 1;
-            break;
-        case 's':
-            sflag = 1;
-            break;
-        case 't':
-            tflag = 1;
-            break;
-        case 'u':
-            uflag = 1;
-            break;
-        case 'w':
-            if(whatif == 0)
-                whatif = newbuf();
-            else
-                insert(whatif, ' ');
-            if(argv[0][2])
-                bufcpy(whatif, &argv[0][2], strlen(&argv[0][2]));
-            else {
-                if(*++argv == 0)
-                    badusage();
-                bufcpy(whatif, &argv[0][0], strlen(&argv[0][0]));
-            }
-            break;
-        default:
-            badusage();
-        }
-    }
-    <<main profiling>>
-
-    if(aflag)
-        iflag = 1;
-    usage();
-    syminit();
-    initenv();
-    usage();
-
-    /*
-        assignment args become null strings
-    */
-    temp = 0;
-    for(i = 0; argv[i]; i++) if(utfrune(argv[i], '=')){
-        bufcpy(buf, argv[i], strlen(argv[i]));
-        insert(buf, ' ');
-        if(tfd < 0){
-            temp = maketmp();
-            if(temp == 0) {
-                perror("temp file");
-                Exit();
-            }
-            if((tfd = create(temp, ORDWR, 0600)) < 0){
-                perror(temp);
-                Exit();
-            }
-            Binit(&tb, tfd, OWRITE);
-        }
-        Bprint(&tb, "%s\n", argv[i]);
-        *argv[i] = 0;
-    }
-    if(tfd >= 0){
-        Bflush(&tb);
-        LSEEK(tfd, 0L, 0);
-        parse("command line args", tfd, 1);
-        remove(temp);
-    }
-
-    if (buf->current != buf->start) {
-        buf->current--;
-        insert(buf, 0);
-    }
-    symlook("MKFLAGS", S_VAR, (void *) stow(buf->start));
-    buf->current = buf->start;
-    for(i = 0; argv[i]; i++){
-        if(*argv[i] == 0) continue;
-        if(i)
-            insert(buf, ' ');
-        bufcpy(buf, argv[i], strlen(argv[i]));
-    }
-    insert(buf, 0);
-    symlook("MKARGS", S_VAR, (void *) stow(buf->start));
-    freebuf(buf);
-
-    if(f == files){
-        if(access(MKFILE, 4) == 0)
-            parse(MKFILE, open(MKFILE, 0), 0);
-    } else
-        for(ff = files; ff < f; ff++)
-            parse(*ff, open(*ff, 0), 0);
-
-    if(DEBUG(D_PARSE)){
-        dumpw("default targets", target1);
-        dumpr("rules", rules);
-        dumpr("metarules", metarules);
-        dumpv("variables");
-    }
-
-    if(whatif){
-        insert(whatif, 0);
-        timeinit(whatif->start);
-        freebuf(whatif);
-    }
-
-    execinit();
-    /* skip assignment args */
-    while(*argv && (**argv == 0))
-        argv++;
-
-    catchnotes();
-    if(*argv == 0){
-        if(target1)
-            for(w = target1; w; w = w->next)
-                mk(w->s);
-        else {
-            fprint(2, "mk: nothing to mk\n");
-            Exit();
-        }
-    } else {
-        if(sflag){
-            for(; *argv; argv++)
-                if(**argv)
-                    mk(*argv);
-        } else {
-            Word *head, *tail, *t;
-
-            /* fake a new rule with all the args as prereqs */
-            tail = 0;
-            t = 0;
-            for(; *argv; argv++)
-                if(**argv){
-                    if(tail == 0)
-                        tail = t = newword(*argv);
-                    else {
-                        t->next = newword(*argv);
-                        t = t->next;
-                    }
-                }
-            if(tail->next == 0)
-                mk(tail->s);
-            else {
-                head = newword("command line arguments");
-                addrules(head, tail, strdup(""), VIR, mkinline, 0);
-                mk(head->s);
-            }
-        }
-    }
-    if(uflag)
-        prusage();
-
-    exits(0);
-}
-@
+\section{What if, [[mk -w]]}
 
 
 \chapter{Extra commands}
@@ -3514,8 +3534,6 @@ main(int argc, char **argv)
 <<global aflag>>=
 int aflag = 0;
 @
-
-\section{What if, [[mk -w]]}
 
 \section{Touching, [[mk -t]]}
 
@@ -3533,8 +3551,7 @@ Rule *patrule;
 
 \section{Multiple targets}
 
-\section{Aggregates}
-% for archives
+\section{Aggregates, archives}
 
 \section{Missing intermediates}
 
@@ -3696,18 +3713,6 @@ dumpj(char *s, Job *j, int all)
 @
 
 
-\section{Explain mode, [[mk -e]]}
-
-<<global explain>>=
-char *explain = 0;
-@
-
-\section{Dry mode, [[mk -n]]}
-
-% just print recipe, do not execute them
-<<global nflag>>=
-int nflag = 0;
-@
 
 \chapter{Profiling}
 

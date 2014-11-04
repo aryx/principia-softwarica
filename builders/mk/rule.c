@@ -2,7 +2,9 @@
 #include	"mk.h"
 
 static Rule *lr, *lmr;
+
 static int rcmp(Rule *r, char *target, Word *tail);
+
 /*s: global nrules */
 static int nrules = 0;
 /*e: global nrules */

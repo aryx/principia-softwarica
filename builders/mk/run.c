@@ -34,7 +34,6 @@ static Process *pfree;
 static void sched(void);
 static void pnew(int, int);
 static void pdelete(Process *);
-
 int pidslot(int);
 
 /*s: function run */
@@ -296,7 +295,7 @@ killchildren(char *msg)
 {
     Process *p;
 
-    kflag = 1;	/* to make sure waitup doesn't exit */
+    kflag = true;	/* to make sure waitup doesn't exit */
     jobs = 0;	/* make sure no more get scheduled */
     for(p = phead; p; p = p->f)
         expunge(p->pid, msg);

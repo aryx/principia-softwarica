@@ -15,7 +15,6 @@ Malloc(int n)
     return(s);
 }
 /*e: function Malloc */
-
 /*s: function Realloc */
 void *
 Realloc(void *s, int n)

@@ -16,7 +16,6 @@ int	IWS = '\1';		/* inter-word separator in env - not used in plan 9 */
  *	of the routines extract strings observing rc's escape conventions
  */
 
-
 /*s: function squote */
 /*
  *	skip a token in single quotes.
@@ -167,6 +166,7 @@ copysingle(char *s, Bufblock *buf)
     return s;
 }
 /*e: function copysingle */
+
 /*s: function copyq */
 /*
  *	check for quoted strings.  backquotes are handled here; single quotes above.

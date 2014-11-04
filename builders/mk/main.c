@@ -77,10 +77,10 @@ main(int argc, char **argv)
             insert(buf, ' ');
             break;
         case 'i':
-            iflag = 1;
+            iflag = true;
             break;
         case 'k':
-            kflag = 1;
+            kflag = true;
             break;
         case 'n':
             nflag = 1;
@@ -121,7 +121,7 @@ main(int argc, char **argv)
     /*e: main profiling */
 
     if(aflag)
-        iflag = 1;
+        iflag = true;
     usage();
     syminit();
     initenv();
@@ -251,18 +251,4 @@ badusage(void)
     Exit();
 }
 /*e: function badusage */
-
-/*s: function regerror */
-//void
-//regerror(char *s)
-//{
-//    if(patrule)
-//        fprint(2, "mk: %s:%d: regular expression error; %s\n",
-//            patrule->file, patrule->line, s);
-//    else
-//        fprint(2, "mk: %s:%d: regular expression error; %s\n",
-//            infile, mkinline, s);
-//    Exit();
-//}
-/*e: function regerror */
 /*e: mk/main.c */

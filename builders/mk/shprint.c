@@ -27,24 +27,24 @@ shprint(char *s, Envy *env, Bufblock *buf)
 /*e: function shprint */
 
 /*s: function mygetenv */
-static char *
+static char*
 mygetenv(char *name, Envy *env)
 {
     if (!env)
-        return 0;
+        return nil;
     if (symlook(name, S_WESET, 0) == 0 && symlook(name, S_INTERNAL, 0) == 0)
-        return 0;
+        return nil;
         /* only resolve internal variables and variables we've set */
     for(; env->name; env++){
         if (strcmp(env->name, name) == 0)
             return wtos(env->values, ' ');
     }
-    return 0;
+    return nil;
 }
 /*e: function mygetenv */
 
 /*s: function vexpand */
-static char *
+static char*
 vexpand(char *w, Envy *env, Bufblock *buf)
 {
     char *s, carry, *p, *q;

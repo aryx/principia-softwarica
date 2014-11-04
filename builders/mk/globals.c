@@ -19,10 +19,10 @@ int nflag = 0;
 int tflag = 0;
 /*e: global tflag */
 /*s: global iflag */
-int iflag = 0;
+bool iflag = false;
 /*e: global iflag */
 /*s: global kflag */
-int kflag = 0;
+bool kflag = false;
 /*e: global kflag */
 /*s: global aflag */
 int aflag = 0;
