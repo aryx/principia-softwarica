@@ -25,7 +25,8 @@ graph(char *target)
     vacuous(node);
     ambiguous(node);
     attribute(node);
-    return(node);
+
+    return node;
 }
 /*e: function graph */
 
@@ -116,7 +117,7 @@ applyrules(char *target, char *cnt)
     }
     a->next = node->prereqs;
     node->prereqs = head.next;
-    return(node);
+    return node;
 }
 /*e: function applyrules */
 
@@ -146,7 +147,7 @@ vacuous(Node *node)
     int vac = !(node->flags&PROBABLE);
 
     if(node->flags&READY)
-        return(node->flags&VACUOUS);
+        return node->flags&VACUOUS;
     node->flags |= READY;
     for(a = node->prereqs; a; a = a->next)
         if(a->n && vacuous(a->n) && (a->r->attr&META))
@@ -163,7 +164,7 @@ vacuous(Node *node)
     togo(node);
     if(vac)
         node->flags |= VACUOUS;
-    return(vac);
+    return vac;
 }
 /*e: function vacuous */
 
@@ -177,10 +178,10 @@ newnode(char *name)
     symlook(name, S_NODE, (void *)node);
     node->name = name;
     node->time = timeof(name, 0);
-    node->prereqs = 0;
+    node->prereqs = nil;
     node->flags = node->time? PROBABLE : 0;
-    node->next = 0;
-    return(node);
+    node->next = nil;
+    return node;
 }
 /*e: constructor newnode */
 

@@ -11,8 +11,8 @@ newword(char *s)
 
     w = (Word *)Malloc(sizeof(Word));
     w->s = strdup(s);
-    w->next = 0;
-    return(w);
+    w->next = nil;
+    return w;
 }
 /*e: constructor newword */
 
@@ -22,10 +22,10 @@ stow(char *s)
 {
     Word *head, *w, *new;
 
-    w = head = 0;
+    w = head = nil;
     while(*s){
         new = nextword(&s);
-        if(new == 0)
+        if(new == nil)
             break;
         if (w)
             w->next = new;
@@ -37,7 +37,7 @@ stow(char *s)
     }
     if (!head)
         head = newword("");
-    return(head);
+    return head;
 }
 /*e: function stow */
 
@@ -58,7 +58,7 @@ wtos(Word *w, int sep)
     insert(buf, 0);
     cp = strdup(buf->start);
     freebuf(buf);
-    return(cp);
+    return cp;
 }
 /*e: function wtos */
 
@@ -114,7 +114,7 @@ nextword(char **s)
     cp = *s;
     b = newbuf();
 restart:
-    head = tail = 0;
+    head = tail = nil;
     while(*cp == ' ' || *cp == '\t')		/* leading white space */
         cp++;
     empty = 1;

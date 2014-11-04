@@ -16,7 +16,7 @@ static char *rbody(Biobuf*);
 
 /*s: function parse */
 void
-parse(char *f, int fd, int varoverride)
+parse(char *f, fdt fd, int varoverride)
 {
     int hline;
     char *body;
@@ -150,7 +150,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
 
     p = charin(line,":=<");
     if(p == 0)
-        return('?');
+        return '?';
     sep = *p;
     *p++ = 0;
     if(sep == '<' && *p == '|'){
@@ -240,7 +240,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
         Exit();
     }
     *t = stow(p);
-    return(sep);
+    return sep;
 }
 /*e: function rhead */
 

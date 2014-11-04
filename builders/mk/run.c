@@ -134,13 +134,13 @@ waitup(int echildok, int *retstatus)
             if(p->pid == *retstatus){
                 *retstatus = p->status;
                 pdelete(p);
-                return(-1);
+                return -1;
             }
 again:		/* rogue processes */
     pid = waitfor(buf);
     if(pid == -1){
         if(echildok > 0)
-            return(1);
+            return 1;
         else {
             fprint(2, "mk: (waitup %d) ", echildok);
             perror("mk wait");
@@ -151,7 +151,7 @@ again:		/* rogue processes */
         fprint(1, "waitup got pid=%d, status='%s'\n", pid, buf);
     if(retstatus && pid == *retstatus){
         *retstatus = buf[0]? 1:0;
-        return(-1);
+        return -1;
     }
     slot = pidslot(pid);
     if(slot < 0){
@@ -194,7 +194,7 @@ again:		/* rogue processes */
     }
     if(nrunning < nproclimit)
         sched();
-    return(0);
+    return 0;
 }
 /*e: function waitup */
 
@@ -245,10 +245,10 @@ pidslot(int pid)
     int i;
 
     for(i = 0; i < nevents; i++)
-        if(events[i].pid == pid) return(i);
+        if(events[i].pid == pid) return i;
     if(DEBUG(D_EXEC))
         fprint(2, "mk: wait returned unexpected process %d\n", pid);
-    return(-1);
+    return -1;
 }
 /*e: function pidslot */
 

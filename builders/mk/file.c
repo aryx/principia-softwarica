@@ -1,9 +1,8 @@
 /*s: mk/file.c */
 #include	"mk.h"
 
-/*s: function mtime */
 /* table-driven version in bootes dump of 12/31/96 */
-
+/*s: function mtime */
 ulong
 mtime(char *name)
 {

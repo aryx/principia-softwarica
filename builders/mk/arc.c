@@ -12,10 +12,10 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->r = r;
     a->stem = strdup(stem);
     rcopy(a->match, match, NREGEXP);
-    a->next = 0;
+    a->next = nil;
     a->flag = 0;
     a->prog = r->prog;
-    return(a);
+    return a;
 }
 /*e: constructor newarc */
 

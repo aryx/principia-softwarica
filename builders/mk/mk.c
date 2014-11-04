@@ -84,7 +84,7 @@ work(Node *node, Node *p, Arc *parc)
 
     /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
     if(node->flags&BEINGMADE)
-        return(did);
+        return did;
     if((node->flags&MADE) && (node->flags&PRETENDING) && p && outofdate(p, parc, 0)){
         if(explain)
             fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
@@ -99,7 +99,7 @@ work(Node *node, Node *p, Arc *parc)
         if(node->flags&PRETENDING){
             node->time = 0;
         }else
-            return(did);
+            return did;
     }
     /* consider no prerequisite case */
     if(node->prereqs == 0){
@@ -115,7 +115,7 @@ work(Node *node, Node *p, Arc *parc)
                 Exit();
         } else
             MADESET(node, MADE);
-        return(did);
+        return did;
     }
     /*
         now see if we are out of date or what
@@ -142,10 +142,10 @@ work(Node *node, Node *p, Arc *parc)
             }
         }
     if(ready == 0)	/* can't do anything now */
-        return(did);
+        return did;
     if(weoutofdate == 0){
         MADESET(node, MADE);
-        return(did);
+        return did;
     }
     /*
         can we pretend to be made?
@@ -157,7 +157,7 @@ work(Node *node, Node *p, Arc *parc)
         if(explain && ((node->flags&PRETENDING) == 0))
             fprint(1, "pretending %s has time %lud\n", node->name, node->time);
         node->flags |= PRETENDING;
-        return(did);
+        return did;
     }
     /*
         node is out of date and we REALLY do have to do something.
@@ -174,9 +174,9 @@ work(Node *node, Node *p, Arc *parc)
             ready = 0;
         }
     if(ready == 0)	/* try later unless nothing has happened for -k's sake */
-        return(did || work(node, p, parc));
+        return did || work(node, p, parc);
     did = dorecipe(node) || did;
-    return(did);
+    return did;
 }
 /*e: function work */
 
@@ -215,7 +215,7 @@ pcmp(char *prog, char *p, char *q)
     pid = pipecmd(buf, 0, 0);
     while(waitup(-3, &pid) >= 0)
         ;
-    return(pid? 2:1);
+    return (pid? 2:1);
 }
 /*e: function pcmp */
 
@@ -242,7 +242,7 @@ outofdate(Node *node, Arc *arc, int eval)
                 symlook(str, S_OUTOFDATE, (void *)ret);
         } else
             ret = sym->u.value;
-        return(ret-1);
+        return (ret-1);
     } else if(strchr(arc->n->name, '(') && arc->n->time == 0)  /* missing archive member */
         return 1;
     else

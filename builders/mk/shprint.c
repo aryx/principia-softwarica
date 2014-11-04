@@ -69,7 +69,7 @@ vexpand(char *w, Envy *env, Bufblock *buf)
         free(s);
     } else 		/* copy name intact*/
         bufcpy(buf, w, q-w);
-    return(q);
+    return q;
 }
 /*e: function vexpand */
 

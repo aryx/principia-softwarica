@@ -16,14 +16,14 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     Rule *r;
     Rule *rr;
     Symtab *sym;
-    int reuse;
+    bool reuse;
 
     r = 0;
-    reuse = 0;
-    if(sym = symlook(head, S_TARGET, 0)){
+    reuse = false;
+    if(sym = symlook(head, S_TARGET, nil)){
         for(r = sym->u.ptr; r; r = r->chain)
             if(rcmp(r, head, tail) == 0){
-                reuse = 1;
+                reuse = true;
                 break;
             }
     }
@@ -104,7 +104,7 @@ rcmp(Rule *r, char *target, Word *tail)
     for(w = r->tail; w && tail; w = w->next, tail = tail->next)
         if(strcmp(w->s, tail->s))
             return 1;
-    return(w || tail);
+    return (w || tail);
 }
 /*e: function rcmp */
 
@@ -116,7 +116,7 @@ rulecnt(void)
 
     s = Malloc(nrules);
     memset(s, 0, nrules);
-    return(s);
+    return s;
 }
 /*e: function rulecnt */
 /*e: mk/rule.c */

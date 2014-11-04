@@ -31,7 +31,7 @@ squote(char *cp)
         if(r == '\'') {
             n += chartorune(&r, cp+n);
             if(r != '\'')
-                return(cp);
+                return cp;
         }
         cp += n;
     }

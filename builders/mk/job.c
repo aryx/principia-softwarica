@@ -18,7 +18,7 @@ newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Wo
     j->at = atar;
     j->nproc = -1;
     j->next = 0;
-    return(j);
+    return j;
 }
 /*e: constructor newjob */
 

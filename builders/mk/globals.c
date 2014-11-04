@@ -5,7 +5,7 @@
 int debug;
 /*e: global debug */
 /*s: global rules */
-// list<ref_own<Rule>>
+// list<ref_own<Rule>> (next = Rule.next)
 Rule *rules;
 /*e: global rules */
 /*s: global metarules */
@@ -34,7 +34,7 @@ char *explain = 0;
 int nreps = 1;
 /*e: global nreps */
 /*s: global jobs */
-// list<ref_won<jobs>>
+// list<ref_won<jobs>> (next = Job.next)
 Job *jobs;
 /*e: global jobs */
 /*s: global bout */

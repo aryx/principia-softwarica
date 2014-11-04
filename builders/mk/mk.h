@@ -37,7 +37,7 @@ typedef struct Envy
 {
     char 		*name;
 
-    // list<ref_own<Word>>
+    // list<ref_own<string>>
     Word 		*values;
 } Envy;
 /*e: struct Envy */
@@ -49,22 +49,30 @@ typedef struct Rule
 {
     char 		*target;	/* one target */
     char 		*recipe;	/* do it ! */
+
+    //list<ref_own?<string>>
     Word 		*tail;		/* constituents of targets */
 
     int 		rule;		/* rule number */
     short 		line;		/* source line */
-    char 		*file;		/* source file */
+    char* 		file;		/* source file */
 
     // enum<rule_attr>
     short 		attr;		/* attributes */
 
+    // list<ref_own?<string>>?
     Word 		*alltargets;	/* all the targets */
+
     Reprog		*pat;		/* reg exp goo */
     char		*prog;		/* to use in out of date */
 
     // Extra
-    struct Rule	*chain;		/* hashed per target */
+    /*s: [[Rule]] extra fields */
+    // list<ref_own<Rule>> (head = rules)
     struct Rule	*next;
+    /*x: [[Rule]] extra fields */
+    struct Rule	*chain;		/* hashed per target */
+    /*e: [[Rule]] extra fields */
 } Rule;
 /*e: struct Rule */
 
@@ -112,7 +120,7 @@ typedef struct Arc
 
     // ref<node>, reverse of Node.prereq?
     struct Node	*n;
-
+    // ref<Rule>
     Rule		*r;
 
     char		*stem;
@@ -195,7 +203,9 @@ typedef struct Node
 typedef struct Job
 {
     Rule		*r;	/* master rule for job */
+    // list<ref_?<Node>> (next = Node.next?)
     Node		*n;	/* list of node targets */
+
     char		*stem;
     char		**match;
 
@@ -207,7 +217,9 @@ typedef struct Job
     int		nproc;	/* slot number */
 
     // Extra
+    /*s: [[Job]] extra fields */
     struct Job	*next;
+    /*e: [[Job]] extra fields */
 } Job;
 /*e: struct Job */
 
@@ -216,42 +228,60 @@ extern Job *jobs;
 /*s: struct Symtab */
 typedef struct Symtab
 {
+    // the key
     char		*name;
-
+    // enum<sxxx>, the ``namespace''
     short		space;
 
-    // generic part
+    // the value (generic part)
     union{
-        void		*ptr;
+        void*	ptr;
         uintptr	value;
     } u;
 
     // Extra
+    /*s: [[Symtab]] extra fields */
     struct Symtab	*next;
+    /*e: [[Symtab]] extra fields */
 } Symtab;
 /*e: struct Symtab */
 
-/*s: enum _anon_ */
-enum {
-    S_VAR,		/* variable -> value */
-    S_TARGET,	/* target -> rule */
-    S_TIME,		/* file -> time */
-
-    S_PID,		/* pid -> products */
-    S_NODE,		/* target name -> node */
-    S_AGG,		/* aggregate -> time */
-    S_BITCH,	/* bitched about aggregate not there */
-    S_NOEXPORT,	/* var -> noexport */
-    S_OVERRIDE,	/* can't override */
-    S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
-    S_MAKEFILE,	/* target -> node */
+/*s: enum sxxx */
+enum sxxx {
+    S_VAR,	/* variable -> value */
+    /*s: enum sxxx cases */
     S_MAKEVAR,	/* dumpable mk variable */
-    S_EXPORTED,	/* var -> current exported value */
-    S_BULKED,	/* we have bulked this dir */
-    S_WESET,	/* variable; we set in the mkfile */
+    /*x: enum sxxx cases */
+    S_PID,		/* pid -> products */
+    /*x: enum sxxx cases */
+    S_MAKEFILE,	/* target -> node */
+    /*x: enum sxxx cases */
+    S_TARGET,		/* target -> rule */
+    /*x: enum sxxx cases */
+    S_NODE,		/* target name -> node */
+    /*x: enum sxxx cases */
     S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
+    /*x: enum sxxx cases */
+    S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
+    /*x: enum sxxx cases */
+    S_NOEXPORT,	/* var -> noexport */
+    /*x: enum sxxx cases */
+    S_OVERRIDE,	/* can't override */
+    /*x: enum sxxx cases */
+    S_WESET,	/* variable; we set in the mkfile */
+    /*x: enum sxxx cases */
+    S_TIME,		/* file -> time */
+    /*x: enum sxxx cases */
+    S_EXPORTED,	/* var -> current exported value */
+    /*x: enum sxxx cases */
+    S_BULKED,	/* we have bulked this dir */
+    /*x: enum sxxx cases */
+    S_AGG,		/* aggregate -> time */
+    /*x: enum sxxx cases */
+    S_BITCH,	/* bitched about aggregate not there */
+    /*e: enum sxxx cases */
 };
-/*e: enum _anon_ */
+/*e: enum sxxx */
 
 extern	int	debug;
 extern	int	nflag, tflag, iflag, kflag, aflag;

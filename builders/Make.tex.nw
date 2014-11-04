@@ -14,9 +14,18 @@
 
 %thx to LP, changed for the better a few things:
 
-%thx to codemap/codegraph:
+%thx to codemap/codegraph/scheck:
+% - use cg to reduce backward deps, introduce globals.c, utils.c,
+%   (harder to understand non layered code)
+% - use scheck to remove deadcode, dead prototypes, useless export
+%   or mv as forward decl
+%   (harder to understand big interface files)
+% - TODO use cg to reduce number of globals by moving them closer to the
+%   relevant file (or even function), better cluster the code
+%   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, better understand make?:
+% - TODO how to debug issues in your own makefile
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.tex.nw skeleton
@@ -24,10 +33,14 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, dumper
+%    * TODO [[xxx]] other fields, [[xxx]] extra fields
 % - read Extra section, identify concepts, first TOC
-% - SEMI distribute parts of the file before
-% - TODO nullify, boolify, typeify,    scheckify
-% - TODO aspecify advanced features!
+% - SEMI distribute parts of the Extra section in the main file
+% - TODO understand main(), LP split main, improve TOC
+% - TODO understand main functions, LP split, cluster, improve TOC
+% - TODO LP split the structures, use datalog for flow to field info
+% - TODO nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
+% - TODO aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
 
@@ -51,8 +64,8 @@
 \fi
 \usepackage[pageref]{backref}
  \def\backref{{\footnotesize cited page(s)}~}
-\usepackage{cleveref} %\cref
-\usepackage{multirow}
+%\usepackage{cleveref} %\cref
+%\usepackage{multirow}
 \usepackage{booktabs} 
  \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
 \usepackage{graphicx}
@@ -89,7 +102,7 @@
 
 \title{
 {\Huge 
-Plan9 Build tool: mk
+Principia Softwarica: The Plan9 Build Tool [[mk]]
 }\\
 {version 0.1}
 }
@@ -136,15 +149,18 @@ a build tool.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
+% we gonna present mk.
+
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
-\item make (and its many variant, e.g. GNU make)
+\item Unix make
+\item GNU make
 \item cmake
 \item ant
 \item maven
 \end{itemize}
 
-% gyp, ninja, buck, ...
+% gyp, ninja, buck, qake, ...
 
 %https://en.wikipedia.org/wiki/List_of_build_automation_software
 
@@ -221,7 +237,7 @@ badusage(void)
 % actually could also show the mkfile of mk itself :)
 
 % running example
-% concepts: target, prerequiste, recipe
+% concepts: target, prerequistes, recipe
 
 % show also simple output of running mk on a toy project
 
@@ -249,50 +265,146 @@ badusage(void)
 
 % draw diagram showing relations to each other, what includes what
 
-<<global bout>>=
-Biobuf bout;
-@
 
+\section{[[Symtab]] and [[hash]]}
 
-\section{[[Rule]] and [[rules]]}
-
-% todo: aspectize split
-<<struct Rule>>=
-typedef struct Rule
+<<struct Symtab>>=
+typedef struct Symtab
 {
-    char 		*target;	/* one target */
-    char 		*recipe;	/* do it ! */
-    Word 		*tail;		/* constituents of targets */
+    // the key
+    char		*name;
+    // enum<sxxx>, the ``namespace''
+    short		space;
 
-    int 		rule;		/* rule number */
-    short 		line;		/* source line */
-    char 		*file;		/* source file */
-
-    // enum<rule_attr>
-    short 		attr;		/* attributes */
-
-    Word 		*alltargets;	/* all the targets */
-    Reprog		*pat;		/* reg exp goo */
-    char		*prog;		/* to use in out of date */
+    // the value (generic part)
+    union{
+        void*	ptr;
+        uintptr	value;
+    } u;
 
     // Extra
-    struct Rule	*chain;		/* hashed per target */
-    struct Rule	*next;
-} Rule;
+    <<[[Symtab]] extra fields>>
+} Symtab;
 @
 
 
-<<global rules>>=
-// list<ref_own<Rule>>
-Rule *rules;
+% the "world" data structure, could use a record instead of that
+% which would be better typed
+<<enum sxxx>>=
+enum sxxx {
+    S_VAR,	/* variable -> value */
+    <<enum sxxx cases>>
+};
 @
 
-% incremented by addrule()
-<<global nrules>>=
-static int nrules = 0;
+
+<<constant NHASH>>=
+#define	NHASH	4099
 @
+
+<<global hash>>=
+// hash<(string * enum<sxxx>), 'b> (next = Symtab.next in bucket)
+static Symtab *hash[NHASH];
+@
+
+<<[[Symtab]] extra fields>>=
+struct Symtab	*next;
+@
+
+
+<<function syminit>>=
+void
+syminit(void)
+{
+    Symtab **s, *ss;
+
+    for(s = hash; s < &hash[NHASH]; s++){
+        for(ss = *s; ss; ss = ss->next)
+            free((char *)ss);
+        *s = nil;
+    }
+}
+@
+
+<<constant HASHMUL>>=
+#define	HASHMUL	79L	/* this is a good value */
+@
+
+<<function symlook>>=
+Symtab*
+symlook(char *sym, int space, void *install)
+{
+    long h;
+    char *p;
+    Symtab *s;
+
+    //h = hash(sym, space)
+    for(p = sym, h = space; *p; h += *p++)
+        h *= HASHMUL;
+    if(h < 0)
+        h = ~h;
+    h %= NHASH;
+
+    for(s = hash[h]; s; s = s->next)
+        if((s->space == space) && (strcmp(s->name, sym) == 0))
+            return s;
+
+    if(install == nil)
+        return nil;
+
+    s = (Symtab *)Malloc(sizeof(Symtab));
+    s->space = space;
+    s->name = sym;
+    s->u.ptr = install;
+
+    s->next = hash[h];
+    hash[h] = s;
+
+    return s;
+}
+@
+
+<<function symtraverse>>=
+void
+symtraverse(int space, void (*fn)(Symtab*))
+{
+    Symtab **s, *ss;
+
+    for(s = hash; s < &hash[NHASH]; s++)
+        for(ss = *s; ss; ss = ss->next)
+            if(ss->space == space)
+                (*fn)(ss);
+}
+@
+
+<<function setvar>>=
+void
+setvar(char *name, void *value)
+{
+    symlook(name, S_VAR, value)->u.ptr = value;
+    symlook(name, S_MAKEVAR, (void*)"");
+}
+@
+
+<<enum sxxx cases>>=
+S_MAKEVAR,	/* dumpable mk variable */
+@
+
+
+<<enum sxxx cases>>=
+S_PID,		/* pid -> products */
+@
+% DEAD?
+<<enum sxxx cases>>=
+S_MAKEFILE,	/* target -> node */
+@
+%DEAD?
 
 \section{[[Word]]}
+
+% what is this for? it has to be Words otherwise
+% there is no much point in having a Word type that is
+% just a wrapper over char*
 
 % should be renamed words ...
 <<struct Word>>=
@@ -309,6 +421,95 @@ typedef struct Word
 % e.g. 'default'
 <<global target1>>=
 Word *target1;
+@
+
+
+<<constructor newword>>=
+Word*
+newword(char *s)
+{
+    Word *w;
+
+    w = (Word *)Malloc(sizeof(Word));
+    w->s = strdup(s);
+    w->next = nil;
+    return w;
+}
+@
+
+% it's actually delwords
+<<destructor delword>>=
+void
+delword(Word *w)
+{
+    Word *v;
+
+    while(v = w){
+        w = w->next;
+        if(v->s)
+            free(v->s);
+        free(v);
+    }
+}
+@
+
+
+\section{[[Rule]] and [[rules]]}
+
+% todo: aspectize split
+<<struct Rule>>=
+typedef struct Rule
+{
+    char 		*target;	/* one target */
+    char 		*recipe;	/* do it ! */
+
+    //list<ref_own?<string>>
+    Word 		*tail;		/* constituents of targets */
+
+    int 		rule;		/* rule number */
+    short 		line;		/* source line */
+    char* 		file;		/* source file */
+
+    // enum<rule_attr>
+    short 		attr;		/* attributes */
+
+    // list<ref_own?<string>>?
+    Word 		*alltargets;	/* all the targets */
+
+    Reprog		*pat;		/* reg exp goo */
+    char		*prog;		/* to use in out of date */
+
+    // Extra
+    <<[[Rule]] extra fields>>
+} Rule;
+@
+
+
+<<global rules>>=
+// list<ref_own<Rule>> (next = Rule.next)
+Rule *rules;
+@
+
+<<[[Rule]] extra fields>>=
+// list<ref_own<Rule>> (head = rules)
+struct Rule	*next;
+@
+
+% incremented by addrule()
+<<global nrules>>=
+static int nrules = 0;
+@
+
+
+% used in addrule()
+<<enum sxxx cases>>=
+S_TARGET,		/* target -> rule */
+@
+
+
+% ???? global corresponding? S_TARGET?
+<<[[Rule]] extra fields>>=
+struct Rule	*chain;		/* hashed per target */
 @
 
 
@@ -334,6 +535,28 @@ typedef struct Node
 } Node;
 @
 
+% dtor = ?
+<<constructor newnode>>=
+static Node *
+newnode(char *name)
+{
+    register Node *node;
+
+    node = (Node *)Malloc(sizeof(Node));
+    symlook(name, S_NODE, (void *)node);
+    node->name = name;
+    node->time = timeof(name, 0);
+    node->prereqs = nil;
+    node->flags = node->time? PROBABLE : 0;
+    node->next = nil;
+    return node;
+}
+@
+
+<<enum sxxx cases>>=
+S_NODE,		/* target name -> node */
+@
+
 
 
 <<constant NREGEXP>>=
@@ -348,7 +571,7 @@ typedef struct Arc
 
     // ref<node>, reverse of Node.prereq?
     struct Node	*n;
-
+    // ref<Rule>
     Rule		*r;
 
     char		*stem;
@@ -360,6 +583,26 @@ typedef struct Arc
     struct Arc	*next;
 } Arc;
 @
+
+% dtor = ?
+<<constructor newarc>>=
+Arc *
+newarc(Node *n, Rule *r, char *stem, Resub *match)
+{
+    Arc *a;
+
+    a = (Arc *)Malloc(sizeof(Arc));
+    a->n = n;
+    a->r = r;
+    a->stem = strdup(stem);
+    rcopy(a->match, match, NREGEXP);
+    a->next = nil;
+    a->flag = 0;
+    a->prog = r->prog;
+    return a;
+}
+@
+
 
 <<constant TOGO>>=
 /* Arc.flag */
@@ -438,14 +681,14 @@ typedef struct Envy
 {
     char 		*name;
 
-    // list<ref_own<Word>>
+    // list<ref_own<string>>
     Word 		*values;
 } Envy;
 @
 
 
 <<global envy>>=
-// list<ref_own<Envy>>
+// array<ref_own<Envy>> (array or list?)
 Envy	*envy;
 @
 
@@ -477,13 +720,32 @@ static char	*myenv[] =
 };
 @
 
+<<function initenv>>=
+void
+initenv(void)
+{
+    char **p;
+
+    for(p = myenv; *p; p++)
+        symlook(*p, S_INTERNAL, (void *)"");
+    readenv();				/* o.s. dependent */
+}
+@
+
+<<enum sxxx cases>>=
+S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
+@
+
+
 \section{[[Job]] and [[jobs]]}
 
 <<struct Job>>=
 typedef struct Job
 {
     Rule		*r;	/* master rule for job */
+    // list<ref_?<Node>> (next = Node.next?)
     Node		*n;	/* list of node targets */
+
     char		*stem;
     char		**match;
 
@@ -495,149 +757,27 @@ typedef struct Job
     int		nproc;	/* slot number */
 
     // Extra
-    struct Job	*next;
+    <<[[Job]] extra fields>>
 } Job;
 @
 
 
 <<global jobs>>=
-// list<ref_won<jobs>>
+// list<ref_won<jobs>> (next = Job.next)
 Job *jobs;
 @
 
-
-
-
-\section{[[Symtab]] and [[hash]]}
-
-<<struct Symtab>>=
-typedef struct Symtab
-{
-    char		*name;
-
-    short		space;
-
-    // generic part
-    union{
-        void		*ptr;
-        uintptr	value;
-    } u;
-
-    // Extra
-    struct Symtab	*next;
-} Symtab;
+<<[[Job]] extra fields>>=
+struct Job	*next;
 @
 
-
-% the "world" data structure, could use a record instead of that
-% which would be better typed
-<<enum _anon_>>=
-enum {
-    S_VAR,		/* variable -> value */
-    S_TARGET,	/* target -> rule */
-    S_TIME,		/* file -> time */
-
-    S_PID,		/* pid -> products */
-    S_NODE,		/* target name -> node */
-    S_AGG,		/* aggregate -> time */
-    S_BITCH,	/* bitched about aggregate not there */
-    S_NOEXPORT,	/* var -> noexport */
-    S_OVERRIDE,	/* can't override */
-    S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
-    S_MAKEFILE,	/* target -> node */
-    S_MAKEVAR,	/* dumpable mk variable */
-    S_EXPORTED,	/* var -> current exported value */
-    S_BULKED,	/* we have bulked this dir */
-    S_WESET,	/* variable; we set in the mkfile */
-    S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
-};
-@
-
-
-
-
-<<constant NHASH>>=
-#define	NHASH	4099
-@
-
-<<global hash>>=
-static Symtab *hash[NHASH];
-@
-
-
-<<constant HASHMUL>>=
-#define	HASHMUL	79L	/* this is a good value */
-@
-
-
-<<function syminit>>=
-void
-syminit(void)
-{
-    Symtab **s, *ss;
-
-    for(s = hash; s < &hash[NHASH]; s++){
-        for(ss = *s; ss; ss = ss->next)
-            free((char *)ss);
-        *s = 0;
-    }
-}
-@
-
-<<function symlook>>=
-Symtab *
-symlook(char *sym, int space, void *install)
-{
-    long h;
-    char *p;
-    Symtab *s;
-
-    for(p = sym, h = space; *p; h += *p++)
-        h *= HASHMUL;
-    if(h < 0)
-        h = ~h;
-    h %= NHASH;
-    for(s = hash[h]; s; s = s->next)
-        if((s->space == space) && (strcmp(s->name, sym) == 0))
-            return(s);
-    if(install == 0)
-        return(0);
-    s = (Symtab *)Malloc(sizeof(Symtab));
-    s->space = space;
-    s->name = sym;
-    s->u.ptr = install;
-    s->next = hash[h];
-    hash[h] = s;
-    return(s);
-}
-@
-
-<<function symtraverse>>=
-void
-symtraverse(int space, void (*fn)(Symtab*))
-{
-    Symtab **s, *ss;
-
-    for(s = hash; s < &hash[NHASH]; s++)
-        for(ss = *s; ss; ss = ss->next)
-            if(ss->space == space)
-                (*fn)(ss);
-}
-@
-
-
-<<function setvar>>=
-void
-setvar(char *name, void *value)
-{
-    symlook(name, S_VAR, value)->u.ptr = value;
-    symlook(name, S_MAKEVAR, (void*)"");
-}
-@
 
 
 \chapter{[[main()]]}
 
+<<global bout>>=
+Biobuf bout;
+@
 
 <<function main>>=
 void
@@ -936,7 +1076,7 @@ work(Node *node, Node *p, Arc *parc)
 
     /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
     if(node->flags&BEINGMADE)
-        return(did);
+        return did;
     if((node->flags&MADE) && (node->flags&PRETENDING) && p && outofdate(p, parc, 0)){
         if(explain)
             fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
@@ -951,7 +1091,7 @@ work(Node *node, Node *p, Arc *parc)
         if(node->flags&PRETENDING){
             node->time = 0;
         }else
-            return(did);
+            return did;
     }
     /* consider no prerequisite case */
     if(node->prereqs == 0){
@@ -967,7 +1107,7 @@ work(Node *node, Node *p, Arc *parc)
                 Exit();
         } else
             MADESET(node, MADE);
-        return(did);
+        return did;
     }
     /*
         now see if we are out of date or what
@@ -994,10 +1134,10 @@ work(Node *node, Node *p, Arc *parc)
             }
         }
     if(ready == 0)	/* can't do anything now */
-        return(did);
+        return did;
     if(weoutofdate == 0){
         MADESET(node, MADE);
-        return(did);
+        return did;
     }
     /*
         can we pretend to be made?
@@ -1009,7 +1149,7 @@ work(Node *node, Node *p, Arc *parc)
         if(explain && ((node->flags&PRETENDING) == 0))
             fprint(1, "pretending %s has time %lud\n", node->name, node->time);
         node->flags |= PRETENDING;
-        return(did);
+        return did;
     }
     /*
         node is out of date and we REALLY do have to do something.
@@ -1026,9 +1166,9 @@ work(Node *node, Node *p, Arc *parc)
             ready = 0;
         }
     if(ready == 0)	/* try later unless nothing has happened for -k's sake */
-        return(did || work(node, p, parc));
+        return did || work(node, p, parc);
     did = dorecipe(node) || did;
-    return(did);
+    return did;
 }
 @
 
@@ -1067,8 +1207,12 @@ pcmp(char *prog, char *p, char *q)
     pid = pipecmd(buf, 0, 0);
     while(waitup(-3, &pid) >= 0)
         ;
-    return(pid? 2:1);
+    return (pid? 2:1);
 }
+@
+
+<<enum sxxx cases>>=
+S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
 @
 
 <<function outofdate>>=
@@ -1094,7 +1238,7 @@ outofdate(Node *node, Arc *arc, int eval)
                 symlook(str, S_OUTOFDATE, (void *)ret);
         } else
             ret = sym->u.value;
-        return(ret-1);
+        return (ret-1);
     } else if(strchr(arc->n->name, '(') && arc->n->time == 0)  /* missing archive member */
         return 1;
     else
@@ -1107,8 +1251,9 @@ outofdate(Node *node, Arc *arc, int eval)
 }
 @
 
-\chapter{Rules}
 
+
+\chapter{Rules}
 
 \section{Simple rule}
 
@@ -1120,14 +1265,14 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     Rule *r;
     Rule *rr;
     Symtab *sym;
-    int reuse;
+    bool reuse;
 
     r = 0;
-    reuse = 0;
-    if(sym = symlook(head, S_TARGET, 0)){
+    reuse = false;
+    if(sym = symlook(head, S_TARGET, nil)){
         for(r = sym->u.ptr; r; r = r->chain)
             if(rcmp(r, head, tail) == 0){
-                reuse = 1;
+                reuse = true;
                 break;
             }
     }
@@ -1193,7 +1338,7 @@ rcmp(Rule *r, char *target, Word *tail)
     for(w = r->tail; w && tail; w = w->next, tail = tail->next)
         if(strcmp(w->s, tail->s))
             return 1;
-    return(w || tail);
+    return (w || tail);
 }
 @
 
@@ -1261,10 +1406,6 @@ Rule *metarules;
 \chapter{Parsing}
 % could be done later?
 
-<<function SYNERR>>=
-#define	SYNERR(l)	(fprint(2, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
-@
-
 <<global infile>>=
 char *infile;
 @
@@ -1273,11 +1414,28 @@ char *infile;
 int mkinline;
 @
 
+
+<<function SYNERR>>=
+#define	SYNERR(l)	(fprint(2, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
+@
+
+
 \section{Parsing a file}
+
+<<enum sxxx cases>>=
+S_NOEXPORT,	/* var -> noexport */
+@
+<<enum sxxx cases>>=
+S_OVERRIDE,	/* can't override */
+@
+<<enum sxxx cases>>=
+S_WESET,	/* variable; we set in the mkfile */
+@
+
 
 <<function parse>>=
 void
-parse(char *f, int fd, int varoverride)
+parse(char *f, fdt fd, int varoverride)
 {
     int hline;
     char *body;
@@ -1411,7 +1569,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
 
     p = charin(line,":=<");
     if(p == 0)
-        return('?');
+        return '?';
     sep = *p;
     *p++ = 0;
     if(sep == '<' && *p == '|'){
@@ -1501,7 +1659,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
         Exit();
     }
     *t = stow(p);
-    return(sep);
+    return sep;
 }
 @
 
@@ -1602,6 +1760,7 @@ ipop(void)
 
 \section{Parsing a line}
 
+% nice function name ...
 <<function assline>>=
 /*
  *	Assemble a line skipping blank lines, comments, and eliding
@@ -1740,34 +1899,6 @@ nextrune(Biobuf *bp, int elide)
 
 \section{Parsing a string}
 
-<<constructor newword>>=
-Word*
-newword(char *s)
-{
-    Word *w;
-
-    w = (Word *)Malloc(sizeof(Word));
-    w->s = strdup(s);
-    w->next = 0;
-    return(w);
-}
-@
-
-<<destructor delword>>=
-void
-delword(Word *w)
-{
-    Word *v;
-
-    while(v = w){
-        w = w->next;
-        if(v->s)
-            free(v->s);
-        free(v);
-    }
-}
-@
-
 <<function wdup>>=
 Word*
 wdup(Word *w)
@@ -1790,8 +1921,6 @@ wdup(Word *w)
 
 
 
-
-
 % string to word
 <<function stow>>=
 Word *
@@ -1799,10 +1928,10 @@ stow(char *s)
 {
     Word *head, *w, *new;
 
-    w = head = 0;
+    w = head = nil;
     while(*s){
         new = nextword(&s);
-        if(new == 0)
+        if(new == nil)
             break;
         if (w)
             w->next = new;
@@ -1814,7 +1943,7 @@ stow(char *s)
     }
     if (!head)
         head = newword("");
-    return(head);
+    return head;
 }
 @
 
@@ -1838,7 +1967,7 @@ wtos(Word *w, int sep)
     insert(buf, 0);
     cp = strdup(buf->start);
     freebuf(buf);
-    return(cp);
+    return cp;
 }
 @
 
@@ -1861,7 +1990,7 @@ nextword(char **s)
     cp = *s;
     b = newbuf();
 restart:
-    head = tail = 0;
+    head = tail = nil;
     while(*cp == ' ' || *cp == '\t')		/* leading white space */
         cp++;
     empty = 1;
@@ -2006,48 +2135,6 @@ subst(char *stem, char *template, char *dest, int dlen)
 
 \chapter{Dependency graph}
 
-% dtor = ?
-<<constructor newnode>>=
-static Node *
-newnode(char *name)
-{
-    register Node *node;
-
-    node = (Node *)Malloc(sizeof(Node));
-    symlook(name, S_NODE, (void *)node);
-    node->name = name;
-    node->time = timeof(name, 0);
-    node->prereqs = 0;
-    node->flags = node->time? PROBABLE : 0;
-    node->next = 0;
-    return(node);
-}
-@
-
-
-% dtor = ?
-<<constructor newarc>>=
-Arc *
-newarc(Node *n, Rule *r, char *stem, Resub *match)
-{
-    Arc *a;
-
-    a = (Arc *)Malloc(sizeof(Arc));
-    a->n = n;
-    a->r = r;
-    a->stem = strdup(stem);
-    rcopy(a->match, match, NREGEXP);
-    a->next = 0;
-    a->flag = 0;
-    a->prog = r->prog;
-    return(a);
-}
-@
-
-
-
-
-
 % constructor?
 <<function graph>>=
 Node *
@@ -2064,7 +2151,8 @@ graph(char *target)
     vacuous(node);
     ambiguous(node);
     attribute(node);
-    return(node);
+
+    return node;
 }
 @
 
@@ -2077,7 +2165,7 @@ rulecnt(void)
 
     s = Malloc(nrules);
     memset(s, 0, nrules);
-    return(s);
+    return s;
 }
 @
 
@@ -2190,7 +2278,7 @@ applyrules(char *target, char *cnt)
     }
     a->next = node->prereqs;
     node->prereqs = head.next;
-    return(node);
+    return node;
 }
 @
 
@@ -2220,7 +2308,7 @@ vacuous(Node *node)
     int vac = !(node->flags&PROBABLE);
 
     if(node->flags&READY)
-        return(node->flags&VACUOUS);
+        return node->flags&VACUOUS;
     node->flags |= READY;
     for(a = node->prereqs; a; a = a->next)
         if(a->n && vacuous(a->n) && (a->r->attr&META))
@@ -2237,7 +2325,7 @@ vacuous(Node *node)
     togo(node);
     if(vac)
         node->flags |= VACUOUS;
-    return(vac);
+    return vac;
 }
 @
 
@@ -2263,24 +2351,6 @@ cyclechk(Node *n)
 @
 
 \section{Ambiguous rule detection}
-
-<<function trace>>=
-static void
-trace(char *s, Arc *a)
-{
-    fprint(2, "\t%s", s);
-    while(a){
-        fprint(2, " <-(%s:%d)- %s", a->r->file, a->r->line,
-            a->n? a->n->name:"");
-        if(a->n){
-            for(a = a->n->prereqs; a; a = a->next)
-                if(*a->r->recipe) break;
-        } else
-            a = 0;
-    }
-    fprint(2, "\n");
-}
-@
 
 <<function ambiguous>>=
 static void
@@ -2324,18 +2394,38 @@ ambiguous(Node *n)
 }
 @
 
+<<function trace>>=
+static void
+trace(char *s, Arc *a)
+{
+    fprint(2, "\t%s", s);
+    while(a){
+        fprint(2, " <-(%s:%d)- %s", a->r->file, a->r->line,
+            a->n? a->n->name:"");
+        if(a->n){
+            for(a = a->n->prereqs; a; a = a->next)
+                if(*a->r->recipe) break;
+        } else
+            a = 0;
+    }
+    fprint(2, "\n");
+}
+@
+
+
 
 \chapter{Time}
 
-
 <<function mtime>>=
-/* table-driven version in bootes dump of 12/31/96 */
-
 ulong
 mtime(char *name)
 {
     return mkmtime(name, 1);
 }
+@
+
+<<enum sxxx cases>>=
+S_TIME,		/* file -> time */
 @
 
 <<function timeof>>=
@@ -2468,17 +2558,6 @@ static int nextv;
 @
 
 
-<<function initenv>>=
-void
-initenv(void)
-{
-    char **p;
-
-    for(p = myenv; *p; p++)
-        symlook(*p, S_INTERNAL, (void *)"");
-    readenv();				/* o.s. dependent */
-}
-@
 
 <<function envinsert>>=
 static void
@@ -2885,7 +2964,7 @@ squote(char *cp)
         if(r == '\'') {
             n += chartorune(&r, cp+n);
             if(r != '\'')
-                return(cp);
+                return cp;
         }
         cp += n;
     }
@@ -3091,7 +3170,7 @@ dorecipe(Node *node)
             else if(explain)
                 Bprint(&bout, "no touch of virtual '%s'\n", node->name);
         }
-        return(did);
+        return did;
     }
     /*
         build the node list
@@ -3131,7 +3210,7 @@ dorecipe(Node *node)
     }
     for(n = node; n; n = n->next)
         if((n->flags&READY) == 0)
-            return(did);
+            return did;
     /*
         gather the params for the job
     */
@@ -3156,7 +3235,7 @@ dorecipe(Node *node)
     }
 /*	print("lt=%s ln=%s lp=%s\n",wtos(head.next, ' '),wtos(ln.next, ' '),wtos(lp.next, ' '));/**/
     run(newjob(r, node, aa->stem, aa->match, lp.next, ln.next, head.next, ahead.next));
-    return(1);
+    return 1;
 }
 @
 
@@ -3197,7 +3276,7 @@ newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Wo
     j->at = atar;
     j->nproc = -1;
     j->next = 0;
-    return(j);
+    return j;
 }
 @
 
@@ -3333,13 +3412,13 @@ waitup(int echildok, int *retstatus)
             if(p->pid == *retstatus){
                 *retstatus = p->status;
                 pdelete(p);
-                return(-1);
+                return -1;
             }
 again:		/* rogue processes */
     pid = waitfor(buf);
     if(pid == -1){
         if(echildok > 0)
-            return(1);
+            return 1;
         else {
             fprint(2, "mk: (waitup %d) ", echildok);
             perror("mk wait");
@@ -3350,7 +3429,7 @@ again:		/* rogue processes */
         fprint(1, "waitup got pid=%d, status='%s'\n", pid, buf);
     if(retstatus && pid == *retstatus){
         *retstatus = buf[0]? 1:0;
-        return(-1);
+        return -1;
     }
     slot = pidslot(pid);
     if(slot < 0){
@@ -3393,7 +3472,7 @@ again:		/* rogue processes */
     }
     if(nrunning < nproclimit)
         sched();
-    return(0);
+    return 0;
 }
 @
 
@@ -3446,10 +3525,10 @@ pidslot(int pid)
     int i;
 
     for(i = 0; i < nevents; i++)
-        if(events[i].pid == pid) return(i);
+        if(events[i].pid == pid) return i;
     if(DEBUG(D_EXEC))
         fprint(2, "mk: wait returned unexpected process %d\n", pid);
-    return(-1);
+    return -1;
 }
 @
 
@@ -3785,7 +3864,7 @@ Malloc(int n)
         fprint(2, "mk: cannot alloc %d bytes\n", n);
         Exit();
     }
-    return(s);
+    return s;
 }
 @
 
@@ -3801,7 +3880,7 @@ Realloc(void *s, int n)
         fprint(2, "mk: cannot alloc %d bytes\n", n);
         Exit();
     }
-    return(s);
+    return s;
 }
 @
 

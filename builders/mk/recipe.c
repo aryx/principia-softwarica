@@ -43,7 +43,7 @@ dorecipe(Node *node)
             else if(explain)
                 Bprint(&bout, "no touch of virtual '%s'\n", node->name);
         }
-        return(did);
+        return did;
     }
     /*
         build the node list
@@ -83,7 +83,7 @@ dorecipe(Node *node)
     }
     for(n = node; n; n = n->next)
         if((n->flags&READY) == 0)
-            return(did);
+            return did;
     /*
         gather the params for the job
     */
@@ -108,7 +108,7 @@ dorecipe(Node *node)
     }
 /*	print("lt=%s ln=%s lp=%s\n",wtos(head.next, ' '),wtos(ln.next, ' '),wtos(lp.next, ' '));/**/
     run(newjob(r, node, aa->stem, aa->match, lp.next, ln.next, head.next, ahead.next));
-    return(1);
+    return 1;
 }
 /*e: function dorecipe */
 

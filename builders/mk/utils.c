@@ -12,7 +12,7 @@ Malloc(int n)
         fprint(2, "mk: cannot alloc %d bytes\n", n);
         Exit();
     }
-    return(s);
+    return s;
 }
 /*e: function Malloc */
 /*s: function Realloc */
@@ -27,7 +27,7 @@ Realloc(void *s, int n)
         fprint(2, "mk: cannot alloc %d bytes\n", n);
         Exit();
     }
-    return(s);
+    return s;
 }
 /*e: function Realloc */
 /*e: mk/utils.c */

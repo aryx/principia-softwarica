@@ -8,6 +8,7 @@
 #define	HASHMUL	79L	/* this is a good value */
 /*e: constant HASHMUL */
 /*s: global hash */
+// hash<(string * enum<sxxx>), 'b> (next = Symtab.next in bucket)
 static Symtab *hash[NHASH];
 /*e: global hash */
 
@@ -20,36 +21,42 @@ syminit(void)
     for(s = hash; s < &hash[NHASH]; s++){
         for(ss = *s; ss; ss = ss->next)
             free((char *)ss);
-        *s = 0;
+        *s = nil;
     }
 }
 /*e: function syminit */
 
 /*s: function symlook */
-Symtab *
+Symtab*
 symlook(char *sym, int space, void *install)
 {
     long h;
     char *p;
     Symtab *s;
 
+    //h = hash(sym, space)
     for(p = sym, h = space; *p; h += *p++)
         h *= HASHMUL;
     if(h < 0)
         h = ~h;
     h %= NHASH;
+
     for(s = hash[h]; s; s = s->next)
         if((s->space == space) && (strcmp(s->name, sym) == 0))
-            return(s);
-    if(install == 0)
-        return(0);
+            return s;
+
+    if(install == nil)
+        return nil;
+
     s = (Symtab *)Malloc(sizeof(Symtab));
     s->space = space;
     s->name = sym;
     s->u.ptr = install;
+
     s->next = hash[h];
     hash[h] = s;
-    return(s);
+
+    return s;
 }
 /*e: function symlook */
 
