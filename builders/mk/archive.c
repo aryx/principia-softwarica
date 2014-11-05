@@ -63,20 +63,20 @@ atouch(char *name)
     }
     if(symlook(name, S_TIME, 0)){
         /* hoon off and change it in situ */
-        LSEEK(fd, SARMAG, 0);
+        seek(fd, SARMAG, 0);
         while(read(fd, (char *)&h, sizeof(h)) == sizeof(h)){
             for(i = SARNAME-1; i > 0 && h.name[i] == ' '; i--)
                     ;
             h.name[i+1]=0;
             if(strcmp(member, h.name) == 0){
                 t = SARNAME-sizeof(h);	/* ughgghh */
-                LSEEK(fd, t, 1);
+                seek(fd, t, 1);
                 fprint(fd, "%-12ld", time(0));
                 break;
             }
             t = atol(h.size);
             if(t&01) t++;
-            LSEEK(fd, t, 1);
+            seek(fd, t, 1);
         }
     }
     close(fd);
@@ -122,7 +122,7 @@ atimes(char *ar)
         symlook(strdup(buf), S_TIME, (void*)t)->u.value = t;
         t = atol(h.size);
         if(t&01) t++;
-        LSEEK(fd, t, 1);
+        seek(fd, t, 1);
     }
     close(fd);
 }

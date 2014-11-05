@@ -100,9 +100,9 @@ work(Node *node, Node *p, Arc *parc)
         unpretend(node);
     }
     /*
-        have a look if we are pretending in case
-        someone has been unpretended out from underneath us
-    */
+     *   have a look if we are pretending in case
+     *   someone has been unpretended out from underneath us
+     */
     if(node->flags&MADE){
         if(node->flags&PRETENDING){
             node->time = 0;
@@ -184,7 +184,7 @@ work(Node *node, Node *p, Arc *parc)
 
             unpretend(a->n);
             did = work(a->n, node, a) || did;
-            ready = 0;
+            ready = false;
         }
 
     if(ready == false)/* try later unless nothing has happened for -k's sake */

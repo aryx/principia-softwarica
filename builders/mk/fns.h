@@ -3,6 +3,8 @@
 void*	Malloc(int);
 void*	Realloc(void*, int);
 void	Exit(void);
+char*	maketmp(void);
+void	delete(char*);
 
 // Constructors/destructors core data structures
 // Bufblock
@@ -16,8 +18,10 @@ void	rinsert(Bufblock *, Rune);
 // Word
 Word*	newword(char*);
 void	delword(Word*);
+Word*	wdup(Word*);
+char*	wtos(Word*, int);
 // Node
-// ???
+// Node* graph(char* target)
 // Arc
 Arc*	newarc(Node*, Rule*, char*, Resub*);
 // Rule
@@ -29,29 +33,27 @@ Job*	newjob(Rule*, Node*, char*, char**, Word*, Word*, Word*, Word*);
 // Dumpers
 void	dumpv(char*);
 void	dumpw(char*, Word*);
+void	dumpr(char*, Rule*);
 void	dumpn(char*, Node*);
 void	dumpa(char*, Arc*);
-void	dumpr(char*, Rule*);
 void	dumpj(char*, Job*, int);
 
 
 
 // Symbol table
 void	syminit(void);
-//void	symdel(char*, int);
 Symtab*	symlook(char*, int, void*);
 void	symtraverse(int, void(*)(Symtab*));
 void	symstat(void);
+//void	symdel(char*, int);
 
-// File managment
-void	touch(char*);
-
-// Time managment
+// File time managment
 ulong	timeof(char*, int);
 void	timeinit(char*);
 ulong	mkmtime(char*, bool);
 ulong	mtime(char*);
 int	chgtime(char*);
+void	touch(char*);
 
 // Archive managment
 ulong	atimeof(int,char*);
@@ -64,9 +66,9 @@ void	readenv(void);
 void	setvar(char*, void*);
 
 // Matching and subst
+int	match(char*, char*, char*);
 void	subst(char*, char*, char*, int);
 Word*	varsub(char**);
-int	match(char*, char*, char*);
 
 // Process managment
 int	execsh(char*, char*, Bufblock*, Envy*);
@@ -76,36 +78,34 @@ int	waitup(int, int*);
 int	pipecmd(char*, Envy*, int*);
 void	nproc(void);
 
+// Parsing
+int	assline(Biobuf *, Bufblock *);
+Word*	stow(char*);
+
 // Main functions
-Node*	graph(char*);
+void	mk(char*);
 void	parse(char*, int, int);
+Node*	graph(char*);
+int	outofdate(Node*, Arc*, int);
+int	dorecipe(Node*);
 void	run(Job*);
 void	prusage(void);
-void	usage(void);
-void	mk(char*);
 
 
 // MISC
-int	assline(Biobuf *, Bufblock *);
+void	usage(void);
 void	catchnotes(void);
 char* 	charin(char *, char *);
-void	delete(char*);
-int	dorecipe(Node*);
-int	escapetoken(Biobuf*, Bufblock*, int, int);
 void	execinit(void);
+int	escapetoken(Biobuf*, Bufblock*, int, int);
 char*	expandquote(char*, Rune, Bufblock*);
 void	expunge(int, char*);
 void	front(char*);
-char	*maketmp(void);
 int	nextrune(Biobuf*, int);
 void	nrep(void);
-int	outofdate(Node*, Arc*, int);
 void	rcopy(char**, Resub*, int);
 char*	rulecnt(void);
 char*	shname(char*);
 void	shprint(char*, Envy*, Bufblock*);
-Word*	stow(char*);
 void	update(int, Node*);
-Word*	wdup(Word*);
-char*	wtos(Word*, int);
 /*e: mk/fns.h */

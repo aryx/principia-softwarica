@@ -21,12 +21,12 @@
 % - use scheck to remove deadcode, dead prototypes, useless export
 %   or mv as forward decl
 %   (harder to understand big interface files)
-% - TODO use cg to reduce number of globals by moving them closer to the
+% - LESS use cg to reduce number of globals by moving them closer to the
 %   relevant file (or even function), better cluster the code
 %   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, better understand make?:
-% - TODO how to debug issues in your own makefile
+% - SEMI how to debug issues in your own makefile
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.tex.nw skeleton
@@ -34,14 +34,14 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, dumper
-%    * TODO [[xxx]] other fields, [[xxx]] extra fields
+%    * [[xxx]] other fields, [[xxx]] extra fields
 % - read Extra section, identify concepts, first TOC
 % - SEMI distribute parts of the Extra section in the main file
-% - TODO understand main(), LP split main, improve TOC
+% - understand main(), LP split main, improve TOC
 % - TODO understand main functions, LP split, cluster, improve TOC
-% - TODO LP split the structures, use datalog for flow to field info
-% - TODO nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
-% - TODO aspecify advanced features! remove useless features
+% - SEMI LP split the structures, use datalog for flow to field info
+% - SEMI nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
+% - SEMI aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
 
@@ -218,7 +218,7 @@ efficiently \co{dependencies} between files or programs.
 % or mk target
 
 <<constant MKFILE>>=
-#define		MKFILE		"mkfile"
+#define	MKFILE		"mkfile"
 @
 
 
@@ -245,9 +245,12 @@ badusage(void)
 % concepts: target, prerequistes, recipe
 
 % show also simple output of running mk on a toy project
+% maybe even include mk -e output?
 
-% differences with make? gnu make?
+% differences with make? gnu make? see mk.ps section 4
 %  well many mk extensions have become gnu make, e.g. %.c rules instead of .c
+%  (hmm still? mk introduced pattern metarules, but metarules may have been
+%   in research UNIX make)
 %  less uglyness with variables too, no $$i need, variables passed as is
 %  (like for rc, cleaner?)
 
@@ -291,9 +294,10 @@ badusage(void)
 
 % graphviz of files? or just of the types?
 
-% main() -> parse() (populate rules, metarules, target1, S_VAR)
-%        -> mk() -> graph()
-%                -> work()
+% main() -> parse(mkfile) (populate rules, metarules, target1, S_VAR, ...)
+%        -> mk(target1) -> graph()
+%                       -> work() -> outofdate()
+%                                 -> run()
 
 %###############################################################################
 
@@ -325,7 +329,7 @@ typedef struct Symtab
     // enum<sxxx>, the ``namespace''
     short		space;
 
-    // the value (generic part)
+    // the value (generic)
     union{
         void*	ptr;
         uintptr	value;
@@ -337,8 +341,8 @@ typedef struct Symtab
 @
 
 
-% the "world" data structure, could use a record instead of that
-% which would be better typed
+% the "world" data structure, but more for efficiency retrieval
+%less: could use a record instead of that which would be better typed
 <<enum sxxx>>=
 enum sxxx {
     S_VAR,	/* variable -> value */ // value is a list of words
@@ -362,7 +366,7 @@ static Symtab *hash[NHASH];
 struct Symtab	*next;
 @
 
-% main -> 
+% main -> <>
 <<function syminit>>=
 void
 syminit(void)
@@ -493,6 +497,7 @@ initenv(void)
 
 
 \section{[[Word]]s}
+% could put [[target1]] here too? but it's really not a Words ...
 
 % what is this for? it has to be Words otherwise
 % there is no much point in having a Word type that is
@@ -508,13 +513,6 @@ typedef struct Word
 } Word;
 @
 
-
-% e.g. 'default', 
-% should be a single word (but consistent to use Word)
-% should be initialized while parsing with the first rule added
-<<global target1>>=
-Word *target1;
-@
 
 % rename newword_list?
 <<constructor newword>>=
@@ -589,6 +587,7 @@ wtos(Word *w, int sep)
 @
 
 
+
 \section{[[Rule]], [[rules]] and [[metarules]]}
 
 % todo: aspectize split
@@ -636,7 +635,7 @@ Rule *metarules;
 <<function PERCENT>>=
 #define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
 @
-
+% &?????
 
 
 
@@ -650,6 +649,7 @@ S_TARGET,		/* target -> rule */
 <<[[Rule]] extra fields>>=
 struct Rule	*chain;		/* hashed per target */
 @
+
 
 
 %XXXX??
@@ -1058,7 +1058,7 @@ for(argv++; *argv && (**argv == '-'); argv++)
 }
 @
 
-
+%XXX?
 <<[[main()]] -xxx switch cases>>=
 case 'k':
     kflag = true;
@@ -1103,12 +1103,13 @@ for(i = 0; argv[i]; i++)
   }
 if(tfd >= 0){
     Bflush(&tb);
-    LSEEK(tfd, 0L, 0);
+    seek(tfd, 0L, 0);
     parse("command line args", tfd, true);
     remove(temp);
 }
 @
 % abuse parse(), pass true so will get varoverride to true
+% seek used to be LSEEK a macro expanding ultimately to seek
 
 \section{Setting [[MKFLAGS]], [[MKARGS]]}
 % used by? at least mkfile called recursively can expect those variables
@@ -1174,6 +1175,13 @@ bool sflag = false;
 case 's':
     sflag = true;
     break;
+@
+
+% e.g. 'default', 
+% should be a single word (but consistent to use Word)
+% should be initialized while parsing with the first rule added
+<<global target1>>=
+Word *target1;
 @
 
 
@@ -1749,7 +1757,7 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
     Word *w;
 
     assert(/*addrules args*/ head && body);
-        /* tuck away first non-meta rule as default target*/
+    /* tuck away first non-meta rule as default target*/
     if(target1 == nil && !(attr&REGEXP)){
         for(w = head; w; w = w->next)
             if(charin(w->s, "%&"))
@@ -4444,16 +4452,6 @@ Realloc(void *s, int n)
 }
 @
 
-<<function Exit>>=
-void
-Exit(void)
-{
-    while(waitpid() >= 0)
-        ;
-    exits("error");
-}
-@
-
 
 \section{Buffer managment}
 
@@ -4572,6 +4570,29 @@ rinsert(Bufblock *buf, Rune r)
         growbuf(buf);
     runetochar(buf->current, &r);
     buf->current += n;
+}
+@
+
+\section{Misc}
+
+<<function maketmp>>=
+char*
+maketmp(void)
+{
+    static char temp[] = "/tmp/mkargXXXXXX";
+
+    mktemp(temp);
+    return temp;
+}
+@
+
+<<function Exit>>=
+void
+Exit(void)
+{
+    while(waitpid() >= 0)
+        ;
+    exits("error");
 }
 @
 

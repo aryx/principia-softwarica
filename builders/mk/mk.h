@@ -248,7 +248,7 @@ typedef struct Symtab
     // enum<sxxx>, the ``namespace''
     short		space;
 
-    // the value (generic part)
+    // the value (generic)
     union{
         void*	ptr;
         uintptr	value;
@@ -338,10 +338,6 @@ extern	char 	*shflags;
 /*s: constant D_EXEC */
 #define		D_EXEC		0x04
 /*e: constant D_EXEC */
-
-/*s: function LSEEK */
-#define	LSEEK(f,o,p)	seek(f,o,p)
-/*e: function LSEEK */
 
 /*s: function PERCENT */
 #define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))

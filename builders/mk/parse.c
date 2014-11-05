@@ -125,7 +125,7 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
     Word *w;
 
     assert(/*addrules args*/ head && body);
-        /* tuck away first non-meta rule as default target*/
+    /* tuck away first non-meta rule as default target*/
     if(target1 == nil && !(attr&REGEXP)){
         for(w = head; w; w = w->next)
             if(charin(w->s, "%&"))

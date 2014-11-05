@@ -2,7 +2,7 @@
 #include	"mk.h"
 
 /*s: constant MKFILE */
-#define		MKFILE		"mkfile"
+#define	MKFILE		"mkfile"
 /*e: constant MKFILE */
 
 /*s: global version */
@@ -60,16 +60,8 @@ main(int argc, char **argv)
 
         switch(argv[0][1]) {
         /*s: [[main()]] -xxx switch cases */
-        case 'i':
-            iflag = true;
-            break;
-        /*x: [[main()]] -xxx switch cases */
         case 'k':
             kflag = true;
-            break;
-        /*x: [[main()]] -xxx switch cases */
-        case 'n':
-            nflag = true;
             break;
         /*x: [[main()]] -xxx switch cases */
         case 'f':
@@ -86,6 +78,10 @@ main(int argc, char **argv)
         /*x: [[main()]] -xxx switch cases */
         case 'e':
             explain = true;
+            break;
+        /*x: [[main()]] -xxx switch cases */
+        case 'n':
+            nflag = true;
             break;
         /*x: [[main()]] -xxx switch cases */
         case 'w':
@@ -106,12 +102,17 @@ main(int argc, char **argv)
             uflag = true;
             break;
         /*x: [[main()]] -xxx switch cases */
-        case 'a':
-            aflag = true;
+        case 'i':
+            iflag = true;
             break;
         /*x: [[main()]] -xxx switch cases */
         case 't':
             tflag = true;
+            break;
+        /*x: [[main()]] -xxx switch cases */
+        case 'a':
+            aflag = true;
+            iflag = true;
             break;
         /*x: [[main()]] -xxx switch cases */
         case 'd':
@@ -130,8 +131,6 @@ main(int argc, char **argv)
             badusage();
         }
     }
-    if(aflag)
-        iflag = true;
     /*e: [[main()]] argv processing for -xxx, modify flags, modify buf */
     /*s: [[main()]] profiling */
     #ifdef	PROF
@@ -173,7 +172,7 @@ main(int argc, char **argv)
       }
     if(tfd >= 0){
         Bflush(&tb);
-        LSEEK(tfd, 0L, 0);
+        seek(tfd, 0L, 0);
         parse("command line args", tfd, true);
         remove(temp);
     }
