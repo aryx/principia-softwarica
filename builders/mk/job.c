@@ -2,7 +2,7 @@
 #include	"mk.h"
 
 /*s: constructor newjob */
-Job *
+Job*
 newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
 {
     register Job *j;
@@ -17,7 +17,7 @@ newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Wo
     j->t = tar;
     j->at = atar;
     j->nproc = -1;
-    j->next = 0;
+    j->next = nil;
     return j;
 }
 /*e: constructor newjob */

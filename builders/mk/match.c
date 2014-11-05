@@ -2,7 +2,7 @@
 #include	"mk.h"
 
 /*s: function match */
-int
+bool
 match(char *name, char *template, char *stem)
 {
     Rune r;
@@ -14,20 +14,21 @@ match(char *name, char *template, char *stem)
             break;
         while (n--)
             if(*name++ != *template++)
-                return 0;
+                return false;
     }
     if(!PERCENT(*template))
-        return 0;
+        return false;
     n = strlen(name)-strlen(template+1);
     if (n < 0)
-        return 0;
+        return false;
     if (strcmp(template+1, name+n))
-        return 0;
+        return false;
+
     strncpy(stem, name, n);
-    stem[n] = 0;
+    stem[n] = '\0';
     if(*template == '&')
         return !charin(stem, "./");
-    return 1;
+    return true;
 }
 /*e: function match */
 

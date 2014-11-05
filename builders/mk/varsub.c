@@ -9,7 +9,7 @@ static	int		submatch(char*, Word*, Word*, int*, char**);
 static	Word		*varmatch(char *);
 
 /*s: function varsub */
-Word *
+Word*
 varsub(char **s)
 {
     Bufblock *b;
@@ -19,8 +19,8 @@ varsub(char **s)
         return expandvar(s);
 
     b = varname(s);
-    if(b == 0)
-        return 0;
+    if(b == nil)
+        return nil;
 
     w = varmatch(b->start);
     freebuf(b);
@@ -51,9 +51,9 @@ varname(char **s)
     }
     if (b->current == b->start){
         SYNERR(-1);
-        fprint(2, "missing variable name <%s>\n", *s);
+        fprint(STDERR, "missing variable name <%s>\n", *s);
         freebuf(b);
-        return 0;
+        return nil;
     }
     *s = cp;
     insert(b, 0);
@@ -68,14 +68,14 @@ varmatch(char *name)
     Word *w;
     Symtab *sym;
     
-    sym = symlook(name, S_VAR, 0);
+    sym = symlook(name, S_VAR, nil);
     if(sym){
             /* check for at least one non-NULL value */
         for (w = sym->u.ptr; w; w = w->next)
             if(w->s && *w->s)
                 return wdup(w);
     }
-    return 0;
+    return nil;
 }
 /*e: function varmatch */
 
@@ -91,10 +91,10 @@ expandvar(char **s)
     begin = *s;
     (*s)++;						/* skip the '{' */
     buf = varname(s);
-    if (buf == 0)
-        return 0;
+    if (buf == nil)
+        return nil;
     cp = *s;
-    if (*cp == '}') {				/* ${name} variant*/
+    if (*cp == '}') {				/* ${name} variant*/ //$
         (*s)++;					/* skip the '}' */
         w = varmatch(buf->start);
         freebuf(buf);
@@ -102,22 +102,22 @@ expandvar(char **s)
     }
     if (*cp != ':') {
         SYNERR(-1);
-        fprint(2, "bad variable name <%s>\n", buf->start);
+        fprint(STDERR, "bad variable name <%s>\n", buf->start);
         freebuf(buf);
-        return 0;
+        return nil;
     }
     cp++;
     end = charin(cp , "}");
-    if(end == 0){
+    if(end == nil){
         SYNERR(-1);
-        fprint(2, "missing '}': %s\n", begin);
+        fprint(STDERR, "missing '}': %s\n", begin);
         Exit();
     }
-    *end = 0;
+    *end = '\0';
     *s = end+1;
     
     sym = symlook(buf->start, S_VAR, 0);
-    if(sym == 0 || sym->u.value == 0)
+    if(sym == nil || sym->u.value == 0)
         w = newword(buf->start);
     else
         w = subsub(sym->u.ptr, cp, end);
@@ -138,9 +138,9 @@ extractpat(char *s, char **r, char *term, char *end)
     if(cp){
         *r = cp;
         if(cp == s)
-            return 0;
+            return nil;
         save = *cp;
-        *cp = 0;
+        *cp = '\0';
         w = stow(s);
         *cp = save;
     } else {
@@ -162,7 +162,7 @@ subsub(Word *v, char *s, char *end)
     char *cp, *enda;
 
     a = extractpat(s, &cp, "=%&", end);
-    b = c = d = 0;
+    b = c = d = nil;
     if(PERCENT(*cp))
         b = extractpat(cp+1, &cp, "=", end);
     if(*cp == '=')
@@ -172,7 +172,7 @@ subsub(Word *v, char *s, char *end)
     else if(*cp)
         d = stow(cp);
 
-    head = tail = 0;
+    head = tail = nil;
     buf = newbuf();
     for(; v; v = v->next){
         h = w = 0;
@@ -234,7 +234,7 @@ subsub(Word *v, char *s, char *end)
 /*e: function subsub */
 
 /*s: function submatch */
-static int
+static bool
 submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 {
     Word *w;
@@ -247,8 +247,8 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
         if(strncmp(s, w->s, n) == 0)
             break;
     }
-    if(a && w == 0)		/*  a == NULL matches everything*/
-        return 0;
+    if(a && w == nil)		/*  a == NULL matches everything*/
+        return false;
 
     *enda = s+n;		/* pointer to end a A part match */
     *nmid = strlen(s)-n;	/* size of remainder of source */
@@ -260,9 +260,9 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
             break;
         }
     }
-    if(b && w == 0)		/* b == NULL matches everything */
-        return 0;
-    return 1;
+    if(b && w == nil)		/* b == NULL matches everything */
+        return false;
+    return true;
 }
 /*e: function submatch */
 /*e: mk/varsub.c */

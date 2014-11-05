@@ -13,6 +13,7 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
+% - dead code (S_PID, S_MAKEFILE)
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -153,7 +154,7 @@ you fully understand how things work under the hood.
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
-\item Unix make
+\item UNIX make
 \item GNU make
 \item cmake
 \item ant
@@ -228,7 +229,7 @@ void
 badusage(void)
 {
 
-    fprint(2, "Usage: mk [-f file] [-n] [-a] [-e] [-t] [-k] [-i] [-d[egp]] [targets ...]\n");
+    fprint(STDERR, "Usage: mk [-f file] [-n] [-a] [-e] [-t] [-k] [-i] [-d[egp]] [targets ...]\n");
     Exit();
 }
 @
@@ -240,6 +241,11 @@ badusage(void)
 % concepts: target, prerequistes, recipe
 
 % show also simple output of running mk on a toy project
+
+% differences with make? gnu make?
+%  well many mk extensions have become gnu make, e.g. %.c rules instead of .c
+%  less uglyness with variables too, no $$i need, variables passed as is
+%  (like for rc, cleaner?)
 
 \section{Code organization}
 
@@ -296,7 +302,9 @@ enum sxxx {
     <<enum sxxx cases>>
 };
 @
-
+%old and dead:
+%S_PID,		/* pid -> products */
+%S_MAKEFILE,	/* target -> node */
 
 <<constant NHASH>>=
 #define	NHASH	4099
@@ -391,14 +399,52 @@ S_MAKEVAR,	/* dumpable mk variable */
 @
 
 
+
 <<enum sxxx cases>>=
-S_PID,		/* pid -> products */
+S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
 @
-% DEAD?
-<<enum sxxx cases>>=
-S_MAKEFILE,	/* target -> node */
+
+<<global myenv>>=
+static char	*myenv[] =
+{
+    "target",
+    "stem",
+    "prereq",
+
+    "pid",
+    "nproc",
+    "newprereq",
+    "alltarget",
+    "newmember",
+
+    "stem0",		/* must be in order from here */
+    "stem1",
+    "stem2",
+    "stem3",
+    "stem4",
+    "stem5",
+    "stem6",
+    "stem7",
+    "stem8",
+    "stem9",
+
+    0,
+};
 @
-%DEAD?
+
+<<function initenv>>=
+void
+initenv(void)
+{
+    char **p;
+
+    for(p = myenv; *p; p++)
+        symlook(*p, S_INTERNAL, (void *)"");
+    readenv();				/* o.s. dependent */
+}
+@
+
+
 
 \section{[[Word]]}
 
@@ -411,8 +457,6 @@ S_MAKEFILE,	/* target -> node */
 typedef struct Word
 {
     char 		*s;
-
-    // Extra
     struct Word 	*next;
 } Word;
 @
@@ -452,6 +496,76 @@ delword(Word *w)
     }
 }
 @
+
+<<function wdup>>=
+Word*
+wdup(Word *w)
+{
+    Word *v, *new, *base;
+
+    v = base = nil;
+    while(w){
+        new = newword(w->s);
+        if(v)
+            v->next = new;
+        else
+            base = new;
+        v = new;
+        w = w->next;
+    }
+    return base;
+}
+@
+
+
+\section{[[Envy]] and [[envy]]}
+
+% Not envy :) just environment variable stuff, rename?
+<<struct Envy>>=
+typedef struct Envy
+{
+    char 		*name;
+
+    // list<ref_own<string>>
+    Word 		*values;
+} Envy;
+@
+
+
+<<global envy>>=
+// array<ref_own<Envy>> (array or list?)
+Envy	*envy;
+@
+
+<<constant ENVQUANTA>>=
+#define ENVQUANTA 10
+@
+
+<<global nextv>>=
+// idx for next free entry in envy array
+static int nextv;
+@
+
+<<function envinsert>>=
+static void
+envinsert(char *name, Word *value)
+{
+    static int envsize;
+
+    if (nextv >= envsize) {
+        envsize += ENVQUANTA;
+        envy = (Envy *) Realloc((char *) envy, envsize*sizeof(Envy));
+    }
+    envy[nextv].name = name;
+    envy[nextv++].values = value;
+}
+@
+
+
+
+
+
+
 
 
 \section{[[Rule]] and [[rules]]}
@@ -523,16 +637,18 @@ typedef struct Node
 {
     char		*name;
     ulong		time;
-
     // enum<node_flag>
     ushort		flags;
 
-    // list<ref_own?<Arc>>
-    Arc		*prereqs;
+    <<[[Node]] other fields>>
 
     // Extra
-    struct Node	*next;		/* list for a rule */
+    <<[[Node]] extra fields>>
 } Node;
+@
+
+<<enum sxxx cases>>=
+S_NODE,		/* target name -> node */
 @
 
 % dtor = ?
@@ -545,44 +661,47 @@ newnode(char *name)
     node = (Node *)Malloc(sizeof(Node));
     symlook(name, S_NODE, (void *)node);
     node->name = name;
-    node->time = timeof(name, 0);
+    node->time = timeof(name, false);
+    node->flags = (node->time? PROBABLE : 0);
     node->prereqs = nil;
-    node->flags = node->time? PROBABLE : 0;
     node->next = nil;
     return node;
 }
 @
 
-<<enum sxxx cases>>=
-S_NODE,		/* target name -> node */
-@
 
 
-
-<<constant NREGEXP>>=
-#define		NREGEXP		10
-@
 
 <<struct Arc>>=
 typedef struct Arc
 {
-    //? enum<rule_flag>?
-    short		flag;
-
     // ref<node>, reverse of Node.prereq?
-    struct Node	*n;
+    struct Node *n;
     // ref<Rule>
-    Rule		*r;
+    Rule *r;
+    //? enum<rule_flag>?
+    short flag;
 
-    char		*stem;
-    char		*prog;
-
-    char		*match[NREGEXP];
+    <<[[Arc]] other fields>>
     
     //Extra
-    struct Arc	*next;
+    <<[[Arc]] extra fields>>
 } Arc;
 @
+
+<<[[Node]] other fields>>=
+// list<ref_own?<Arc>> (next = Arc.next)
+Arc		*prereqs;
+@
+<<[[Arc]] extra fields>>=
+// list<ref_own<arc> (head = Node.prereq)
+struct Arc	*next;
+@
+
+
+
+
+% node   arc   rule   relations?
 
 % dtor = ?
 <<constructor newarc>>=
@@ -601,6 +720,21 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->prog = r->prog;
     return a;
 }
+@
+
+
+
+
+
+
+<<constant NREGEXP>>=
+#define		NREGEXP		10
+@
+
+<<[[Arc]] other fields>>=
+char		*stem;
+char		*prog;
+char		*match[NREGEXP];
 @
 
 
@@ -673,76 +807,13 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 #define		NOMINUSE	0x1000
 @
 
-\section{[[Envy]] and [[envy]]}
-
-% Not envy, just environment variable stuff
-<<struct Envy>>=
-typedef struct Envy
-{
-    char 		*name;
-
-    // list<ref_own<string>>
-    Word 		*values;
-} Envy;
-@
-
-
-<<global envy>>=
-// array<ref_own<Envy>> (array or list?)
-Envy	*envy;
-@
-
-<<global myenv>>=
-static char	*myenv[] =
-{
-    "target",
-    "stem",
-    "prereq",
-
-    "pid",
-    "nproc",
-    "newprereq",
-    "alltarget",
-    "newmember",
-
-    "stem0",		/* must be in order from here */
-    "stem1",
-    "stem2",
-    "stem3",
-    "stem4",
-    "stem5",
-    "stem6",
-    "stem7",
-    "stem8",
-    "stem9",
-
-    0,
-};
-@
-
-<<function initenv>>=
-void
-initenv(void)
-{
-    char **p;
-
-    for(p = myenv; *p; p++)
-        symlook(*p, S_INTERNAL, (void *)"");
-    readenv();				/* o.s. dependent */
-}
-@
-
-<<enum sxxx cases>>=
-S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
-@
-
-
 \section{[[Job]] and [[jobs]]}
 
 <<struct Job>>=
 typedef struct Job
 {
     Rule		*r;	/* master rule for job */
+
     // list<ref_?<Node>> (next = Node.next?)
     Node		*n;	/* list of node targets */
 
@@ -760,6 +831,37 @@ typedef struct Job
     <<[[Job]] extra fields>>
 } Job;
 @
+
+
+<<constructor newjob>>=
+Job*
+newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
+{
+    register Job *j;
+
+    j = (Job *)Malloc(sizeof(Job));
+    j->r = r;
+    j->n = nlist;
+    j->stem = stem;
+    j->match = match;
+    j->p = pre;
+    j->np = npre;
+    j->t = tar;
+    j->at = atar;
+    j->nproc = -1;
+    j->next = nil;
+    return j;
+}
+@
+
+% ???? Job.n?
+<<[[Node]] extra fields>>=
+struct Node	*next;		/* list for a rule */
+@
+
+
+
+
 
 
 <<global jobs>>=
@@ -867,7 +969,7 @@ main(int argc, char **argv)
             badusage();
         }
     }
-    <<main profiling>>
+    <<[[main()]] profiling>>
 
     if(aflag)
         iflag = true;
@@ -952,7 +1054,7 @@ main(int argc, char **argv)
             for(w = target1; w; w = w->next)
                 mk(w->s);
         else {
-            fprint(2, "mk: nothing to mk\n");
+            fprint(STDERR, "mk: nothing to mk\n");
             Exit();
         }
     } else {
@@ -1097,9 +1199,9 @@ work(Node *node, Node *p, Arc *parc)
     if(node->prereqs == 0){
         if(node->time == 0){
             if(getwd(cwd, sizeof cwd))
-                fprint(2, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
+                fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
             else
-                fprint(2, "mk: don't know how to make '%s'\n", node->name);
+                fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
             if(kflag){
                 node->flags |= BEINGMADE;
                 runerrs++;
@@ -1180,7 +1282,7 @@ update(int fake, Node *node)
 
     MADESET(node, fake? BEINGMADE : MADE);
     if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
-        node->time = timeof(node->name, 1);
+        node->time = timeof(node->name, true);
         node->flags &= ~(CANPRETEND|PRETENDING);
         for(a = node->prereqs; a; a = a->next)
             if(a->prog)
@@ -1416,14 +1518,14 @@ int mkinline;
 
 
 <<function SYNERR>>=
-#define	SYNERR(l)	(fprint(2, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
+#define	SYNERR(l)	(fprint(STDERR, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
 @
 
 
 \section{Parsing a file}
 
 <<enum sxxx cases>>=
-S_NOEXPORT,	/* var -> noexport */
+S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
 @
 <<enum sxxx cases>>=
 S_OVERRIDE,	/* can't override */
@@ -1463,12 +1565,12 @@ parse(char *f, fdt fd, int varoverride)
             p = wtos(tail, ' ');
             if(*p == 0){
                 SYNERR(-1);
-                fprint(2, "missing include file name\n");
+                fprint(STDERR, "missing include file name\n");
                 Exit();
             }
             newfd = open(p, OREAD);
             if(newfd < 0){
-                fprint(2, "warning: skipping missing include file: ");
+                fprint(STDERR, "warning: skipping missing include file: ");
                 perror(p);
             } else
                 parse(p, newfd, 0);
@@ -1477,20 +1579,20 @@ parse(char *f, fdt fd, int varoverride)
             p = wtos(tail, ' ');
             if(*p == 0){
                 SYNERR(-1);
-                fprint(2, "missing include program name\n");
+                fprint(STDERR, "missing include program name\n");
                 Exit();
             }
             execinit();
             pid=pipecmd(p, envy, &newfd);
             if(newfd < 0){
-                fprint(2, "warning: skipping missing program file: ");
+                fprint(STDERR, "warning: skipping missing program file: ");
                 perror(p);
             } else
                 parse(p, newfd, 0);
             while(waitup(-3, &pid) >= 0)
                 ;
             if(pid != 0){
-                fprint(2, "bad include program status\n");
+                fprint(STDERR, "bad include program status\n");
                 Exit();
             }
             break;
@@ -1501,7 +1603,7 @@ parse(char *f, fdt fd, int varoverride)
         case '=':
             if(head->next){
                 SYNERR(-1);
-                fprint(2, "multiple vars on left side of assignment\n");
+                fprint(STDERR, "multiple vars on left side of assignment\n");
                 Exit();
             }
             if(symlook(head->s, S_OVERRIDE, 0)){
@@ -1525,7 +1627,7 @@ cp = wtos(tail, ' '); print("assign %s to %s\n", head->s, cp); free(cp);
             break;
         default:
             SYNERR(hline);
-            fprint(2, "expected one of :<=\n");
+            fprint(STDERR, "expected one of :<=\n");
             Exit();
             break;
         }
@@ -1587,7 +1689,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
                 {
                 default:
                     SYNERR(-1);
-                    fprint(2, "unknown attribute '%c'\n",*p);
+                    fprint(STDERR, "unknown attribute '%c'\n",*p);
                     Exit();
                 case 'U':
                     *attr = 1;
@@ -1608,7 +1710,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             {
             default:
                 SYNERR(-1);
-                fprint(2, "unknown attribute '%c'\n", p[-1]);
+                fprint(STDERR, "unknown attribute '%c'\n", p[-1]);
                 Exit();
             case 'D':
                 *attr |= DEL;
@@ -1648,14 +1750,14 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
         if (*p++ != ':') {
     eos:
             SYNERR(-1);
-            fprint(2, "missing trailing :\n");
+            fprint(STDERR, "missing trailing :\n");
             Exit();
         }
     }
     *h = w = stow(line);
     if(*w->s == 0 && sep != '<' && sep != '|') {
         SYNERR(mkinline-1);
-        fprint(2, "no var on left side of assignment/rule\n");
+        fprint(STDERR, "no var on left side of assignment/rule\n");
         Exit();
     }
     *t = stow(p);
@@ -1863,7 +1965,7 @@ bquote(Biobuf *bp, Bufblock *buf)
         rinsert(buf, c);
     }
     SYNERR(line);
-    fprint(2, "missing closing %c after `\n", term);
+    fprint(STDERR, "missing closing %c after `\n", term);
     return 0;
 }
 @
@@ -1898,27 +2000,6 @@ nextrune(Biobuf *bp, int elide)
 @
 
 \section{Parsing a string}
-
-<<function wdup>>=
-Word*
-wdup(Word *w)
-{
-    Word *v, *new, *base;
-
-    v = base = 0;
-    while(w){
-        new = newword(w->s);
-        if(v)
-            v->next = new;
-        else
-            base = new;
-        v = new;
-        w = w->next;
-    }
-    return base;
-}
-@
-
 
 
 % string to word
@@ -2008,11 +2089,11 @@ restart:
             empty = 0;
             cp = expandquote(cp, r, b);
             if(cp == 0){
-                fprint(2, "missing closing quote: %s\n", *s);
+                fprint(STDERR, "missing closing quote: %s\n", *s);
                 Exit();
             }
             break;
-        case '$':
+        case '$': //$
             w = varsub(&cp);
             if(w == 0){
                 if(empty)
@@ -2073,9 +2154,8 @@ out:
 
 \chapter{Matching}
 
-
 <<function match>>=
-int
+bool
 match(char *name, char *template, char *stem)
 {
     Rune r;
@@ -2087,20 +2167,21 @@ match(char *name, char *template, char *stem)
             break;
         while (n--)
             if(*name++ != *template++)
-                return 0;
+                return false;
     }
     if(!PERCENT(*template))
-        return 0;
+        return false;
     n = strlen(name)-strlen(template+1);
     if (n < 0)
-        return 0;
+        return false;
     if (strcmp(template+1, name+n))
-        return 0;
+        return false;
+
     strncpy(stem, name, n);
-    stem[n] = 0;
+    stem[n] = '\0';
     if(*template == '&')
         return !charin(stem, "./");
-    return 1;
+    return true;
 }
 @
 
@@ -2339,7 +2420,7 @@ cyclechk(Node *n)
     Arc *a;
 
     if((n->flags&CYCLE) && n->prereqs){
-        fprint(2, "mk: cycle in graph detected at target %s\n", n->name);
+        fprint(STDERR, "mk: cycle in graph detected at target %s\n", n->name);
         Exit();
     }
     n->flags |= CYCLE;
@@ -2357,16 +2438,15 @@ static void
 ambiguous(Node *n)
 {
     Arc *a;
-    Rule *r = 0;
-    Arc *la;
-    int bad = 0;
+    Rule *r = nil;
+    Arc *la = nil;
+    bool bad = false;
 
-    la = 0;
     for(a = n->prereqs; a; a = a->next){
         if(a->n)
             ambiguous(a->n);
         if(*a->r->recipe == 0) continue;
-        if(r == 0)
+        if(r == nil)
             r = a->r, la = a;
         else{
             if(r->recipe != a->r->recipe){
@@ -2380,8 +2460,8 @@ ambiguous(Node *n)
             }
             if(r->recipe != a->r->recipe){
                 if(bad == 0){
-                    fprint(2, "mk: ambiguous recipes for %s:\n", n->name);
-                    bad = 1;
+                    fprint(STDERR, "mk: ambiguous recipes for %s:\n", n->name);
+                    bad = true;
                     trace(n->name, la);
                 }
                 trace(n->name, a);
@@ -2398,9 +2478,9 @@ ambiguous(Node *n)
 static void
 trace(char *s, Arc *a)
 {
-    fprint(2, "\t%s", s);
+    fprint(STDERR, "\t%s", s);
     while(a){
-        fprint(2, " <-(%s:%d)- %s", a->r->file, a->r->line,
+        fprint(STDERR, " <-(%s:%d)- %s", a->r->file, a->r->line,
             a->n? a->n->name:"");
         if(a->n){
             for(a = a->n->prereqs; a; a = a->next)
@@ -2408,7 +2488,7 @@ trace(char *s, Arc *a)
         } else
             a = 0;
     }
-    fprint(2, "\n");
+    fprint(STDERR, "\n");
 }
 @
 
@@ -2416,71 +2496,8 @@ trace(char *s, Arc *a)
 
 \chapter{Time}
 
-<<function mtime>>=
-ulong
-mtime(char *name)
-{
-    return mkmtime(name, 1);
-}
-@
-
 <<enum sxxx cases>>=
 S_TIME,		/* file -> time */
-@
-
-<<function timeof>>=
-ulong
-timeof(char *name, int force)
-{
-    Symtab *sym;
-    ulong t;
-
-    if(utfrune(name, '('))
-        return atimeof(force, name);		/* archive */
-
-    if(force)
-        return mtime(name);
-
-    sym = symlook(name, S_TIME, 0);
-    if (sym)
-        return sym->u.value;		/* uggh */
-
-    t = mkmtime(name, 0);
-    if(t == 0)
-        return 0;
-
-    symlook(name, S_TIME, (void*)t);		/* install time in cache */
-    return t;
-}
-@
-
-<<function touch>>=
-void
-touch(char *name)
-{
-    Bprint(&bout, "touch(%s)\n", name);
-    if(nflag)
-        return;
-
-    if(utfrune(name, '('))
-        atouch(name);		/* archive */
-    else if(chgtime(name) < 0) {
-        perror(name);
-        Exit();
-    }
-}
-@
-
-<<function delete>>=
-void
-delete(char *name)
-{
-    if(utfrune(name, '(') == 0) {		/* file */
-        if(remove(name) < 0)
-            perror(name);
-    } else
-        fprint(2, "hoon off; mk can'tdelete archive members\n");
-}
 @
 
 <<function timeinit>>=
@@ -2517,6 +2534,179 @@ timeinit(char *s)
 @
 
 
+% timeof -> mtime -> mkmktime -> bulktime
+%                             -> dirstat
+
+<<function timeof>>=
+ulong
+timeof(char *name, bool force)
+{
+    Symtab *sym;
+    ulong t;
+
+    if(utfrune(name, '('))
+        return atimeof(force, name);		/* archive */
+
+    if(force)
+        return mtime(name);
+
+    sym = symlook(name, S_TIME, nil);
+    if (sym)
+        return sym->u.value;		/* uggh */
+
+    t = mkmtime(name, false);
+    if(t == 0)
+        return 0;
+
+    symlook(name, S_TIME, (void*)t);		/* install time in cache */
+    return t;
+}
+@
+
+
+<<function mtime>>=
+ulong
+mtime(char *name)
+{
+    return mkmtime(name, true);
+}
+@
+
+
+
+
+
+<<function mkmtime>>=
+ulong
+mkmtime(char *name, bool force)
+{
+    Dir *d;
+    char *s, *ss, carry;
+    ulong t;
+    Symtab *sym;
+    char buf[4096];
+
+    strecpy(buf, buf + sizeof buf - 1, name);
+    cleanname(buf);
+    name = buf;
+
+    s = utfrrune(name, '/');
+    if(s == name)
+        s++;
+    if(s){
+        ss = name;
+        carry = *s;
+        *s = '\0';
+    }else{
+        ss = nil;
+        carry = 0;
+    }
+    bulkmtime(ss);
+    if(carry)
+        *s = carry;
+
+    if(!force){
+        sym = symlook(name, S_TIME, 0);
+        if(sym)
+            return sym->u.value;
+        return 0;
+    }
+    if((d = dirstat(name)) == nil)
+        return 0;
+
+    t = d->mtime;
+    free(d);
+
+    return t;
+}
+@
+
+
+<<enum sxxx cases>>=
+S_BULKED,	/* we have bulked this dir */
+@
+
+<<function bulkmtime>>=
+void
+bulkmtime(char *dir)
+{
+    char buf[4096];
+    char *ss, *s, *sym;
+
+    if(dir){
+        sym = dir;
+        s = dir;
+        if(strcmp(dir, "/") == 0)
+            strecpy(buf, buf + sizeof buf - 1, dir);
+        else
+            snprint(buf, sizeof buf, "%s/", dir);
+    }else{
+        s = ".";
+        sym = "";
+        buf[0] = 0;
+    }
+    if(symlook(sym, S_BULKED, 0))
+        return;
+    ss = strdup(sym);
+    symlook(ss, S_BULKED, (void*)ss);
+    dirtime(s, buf);
+}
+@
+
+
+
+
+
+
+<<function touch>>=
+void
+touch(char *name)
+{
+    Bprint(&bout, "touch(%s)\n", name);
+    if(nflag)
+        return;
+
+    if(utfrune(name, '('))
+        atouch(name);		/* archive */
+    else
+     if(chgtime(name) < 0) {
+        perror(name);
+        Exit();
+    }
+}
+@
+
+<<function chgtime>>=
+int
+chgtime(char *name)
+{
+    Dir sbuf;
+
+    if(access(name, AEXIST) >= 0) {
+        nulldir(&sbuf);
+        sbuf.mtime = time((long *)0);
+        return dirwstat(name, &sbuf);
+    }
+    return close(create(name, OWRITE, 0666));
+}
+@
+
+
+
+<<function delete>>=
+void
+delete(char *name)
+{
+    if(utfrune(name, '(') == 0) {		/* file */
+        if(remove(name) < 0)
+            perror(name);
+    } else
+        fprint(STDERR, "hoon off; mk can'tdelete archive members\n");
+}
+@
+
+
+
 \chapter{Shell interaction}
 % the recipe
 
@@ -2547,32 +2737,6 @@ int	IWS = '\1';		/* inter-word separator in env - not used in plan 9 */
 % as opposed to make, no $(XX), no $$i, the string is passed
 % as is to shell! less escaping need!
 
-<<enum _anon_ (mk/env.c)>>=
-enum {
-    ENVQUANTA=10
-};
-@
-
-<<global nextv>>=
-static int nextv;
-@
-
-
-
-<<function envinsert>>=
-static void
-envinsert(char *name, Word *value)
-{
-    static int envsize;
-
-    if (nextv >= envsize) {
-        envsize += ENVQUANTA;
-        envy = (Envy *) Realloc((char *) envy, envsize*sizeof(Envy));
-    }
-    envy[nextv].name = name;
-    envy[nextv++].values = value;
-}
-@
 
 <<function envupd>>=
 static void
@@ -2588,7 +2752,7 @@ envupd(char *name, Word *value)
         }
     e->name = name;
     e->values = value;
-    envinsert(0,0);
+    envinsert(nil,nil); // ???
 }
 @
 
@@ -2607,18 +2771,19 @@ ecopy(Symtab *s)
 }
 @
 
+% main -> execinit()
 <<function execinit>>=
 void
 execinit(void)
 {
     char **p;
 
-    nextv = 0;
+    nextv = 0; // reset envy
     for(p = myenv; *p; p++)
         envinsert(*p, stow(""));
 
     symtraverse(S_VAR, ecopy);
-    envinsert(0, 0);
+    envinsert(nil, nil);
 }
 @
 
@@ -2681,7 +2846,7 @@ buildenv(Job *j, int slot)
 \section{Variables expansion}
 
 <<function varsub>>=
-Word *
+Word*
 varsub(char **s)
 {
     Bufblock *b;
@@ -2691,8 +2856,8 @@ varsub(char **s)
         return expandvar(s);
 
     b = varname(s);
-    if(b == 0)
-        return 0;
+    if(b == nil)
+        return nil;
 
     w = varmatch(b->start);
     freebuf(b);
@@ -2723,9 +2888,9 @@ varname(char **s)
     }
     if (b->current == b->start){
         SYNERR(-1);
-        fprint(2, "missing variable name <%s>\n", *s);
+        fprint(STDERR, "missing variable name <%s>\n", *s);
         freebuf(b);
-        return 0;
+        return nil;
     }
     *s = cp;
     insert(b, 0);
@@ -2745,14 +2910,14 @@ varmatch(char *name)
     Word *w;
     Symtab *sym;
     
-    sym = symlook(name, S_VAR, 0);
+    sym = symlook(name, S_VAR, nil);
     if(sym){
             /* check for at least one non-NULL value */
         for (w = sym->u.ptr; w; w = w->next)
             if(w->s && *w->s)
                 return wdup(w);
     }
-    return 0;
+    return nil;
 }
 @
 
@@ -2768,10 +2933,10 @@ expandvar(char **s)
     begin = *s;
     (*s)++;						/* skip the '{' */
     buf = varname(s);
-    if (buf == 0)
-        return 0;
+    if (buf == nil)
+        return nil;
     cp = *s;
-    if (*cp == '}') {				/* ${name} variant*/
+    if (*cp == '}') {				/* ${name} variant*/ //$
         (*s)++;					/* skip the '}' */
         w = varmatch(buf->start);
         freebuf(buf);
@@ -2779,22 +2944,22 @@ expandvar(char **s)
     }
     if (*cp != ':') {
         SYNERR(-1);
-        fprint(2, "bad variable name <%s>\n", buf->start);
+        fprint(STDERR, "bad variable name <%s>\n", buf->start);
         freebuf(buf);
-        return 0;
+        return nil;
     }
     cp++;
     end = charin(cp , "}");
-    if(end == 0){
+    if(end == nil){
         SYNERR(-1);
-        fprint(2, "missing '}': %s\n", begin);
+        fprint(STDERR, "missing '}': %s\n", begin);
         Exit();
     }
-    *end = 0;
+    *end = '\0';
     *s = end+1;
     
     sym = symlook(buf->start, S_VAR, 0);
-    if(sym == 0 || sym->u.value == 0)
+    if(sym == nil || sym->u.value == 0)
         w = newword(buf->start);
     else
         w = subsub(sym->u.ptr, cp, end);
@@ -2816,9 +2981,9 @@ extractpat(char *s, char **r, char *term, char *end)
     if(cp){
         *r = cp;
         if(cp == s)
-            return 0;
+            return nil;
         save = *cp;
-        *cp = 0;
+        *cp = '\0';
         w = stow(s);
         *cp = save;
     } else {
@@ -2840,7 +3005,7 @@ subsub(Word *v, char *s, char *end)
     char *cp, *enda;
 
     a = extractpat(s, &cp, "=%&", end);
-    b = c = d = 0;
+    b = c = d = nil;
     if(PERCENT(*cp))
         b = extractpat(cp+1, &cp, "=", end);
     if(*cp == '=')
@@ -2850,7 +3015,7 @@ subsub(Word *v, char *s, char *end)
     else if(*cp)
         d = stow(cp);
 
-    head = tail = 0;
+    head = tail = nil;
     buf = newbuf();
     for(; v; v = v->next){
         h = w = 0;
@@ -2912,7 +3077,7 @@ subsub(Word *v, char *s, char *end)
 @
 
 <<function submatch>>=
-static int
+static bool
 submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 {
     Word *w;
@@ -2925,8 +3090,8 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
         if(strncmp(s, w->s, n) == 0)
             break;
     }
-    if(a && w == 0)		/*  a == NULL matches everything*/
-        return 0;
+    if(a && w == nil)		/*  a == NULL matches everything*/
+        return false;
 
     *enda = s+n;		/* pointer to end a A part match */
     *nmid = strlen(s)-n;	/* size of remainder of source */
@@ -2938,9 +3103,9 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
             break;
         }
     }
-    if(b && w == 0)		/* b == NULL matches everything */
-        return 0;
-    return 1;
+    if(b && w == nil)		/* b == NULL matches everything */
+        return false;
+    return true;
 }
 @
 
@@ -2969,7 +3134,7 @@ squote(char *cp)
         cp += n;
     }
     SYNERR(-1);		/* should never occur */
-    fprint(2, "missing closing '\n");
+    fprint(STDERR, "missing closing '\n");
     return 0;
 }
 @
@@ -2979,7 +3144,7 @@ squote(char *cp)
  *	search a string for characters in a pattern set
  *	characters in quotes and variable generators are escaped
  */
-char *
+char*
 charin(char *cp, char *pat)
 {
     Rune r;
@@ -3013,7 +3178,7 @@ charin(char *cp, char *pat)
     }
     if(vargen){
         SYNERR(-1);
-        fprint(2, "missing closing } in pattern generator\n");
+        fprint(STDERR, "missing closing } in pattern generator\n");
     }
     return 0;
 }
@@ -3077,7 +3242,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, int preserve, int esc)
         }
         rinsert(buf, c);
     }
-    SYNERR(line); fprint(2, "missing closing %c\n", esc);
+    SYNERR(line); fprint(STDERR, "missing closing %c\n", esc);
     return 0;
 }
 @
@@ -3155,9 +3320,9 @@ dorecipe(Node *node)
     if(r == 0){
         if(!(node->flags&VIRTUAL) && !(node->flags&NORECIPE)){
             if(getwd(cwd, sizeof cwd))
-                fprint(2, "mk: no recipe to make '%s' in directory %s\n", node->name, cwd);
+                fprint(STDERR, "mk: no recipe to make '%s' in directory %s\n", node->name, cwd);
             else
-                fprint(2, "mk: no recipe to make '%s'\n", node->name);
+                fprint(STDERR, "mk: no recipe to make '%s'\n", node->name);
             Exit();
         }
         if(strchr(node->name, '(') && node->time == 0)
@@ -3259,29 +3424,6 @@ addw(Word *w, char *s)
 % can do stuff in //! make originally didn't apparently
 
 
-<<constructor newjob>>=
-Job *
-newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
-{
-    register Job *j;
-
-    j = (Job *)Malloc(sizeof(Job));
-    j->r = r;
-    j->n = nlist;
-    j->stem = stem;
-    j->match = match;
-    j->p = pre;
-    j->np = npre;
-    j->t = tar;
-    j->at = atar;
-    j->nproc = -1;
-    j->next = 0;
-    return j;
-}
-@
-
-
-
 <<struct RunEvent>>=
 typedef struct RunEvent
 {
@@ -3299,11 +3441,13 @@ typedef struct Process
 {
     int pid;
     int status;
+
     struct Process *b, *f;
 } Process;
 @
 
 <<global phead>>=
+// list<ref_own<Process>??
 static Process *phead;
 @
 
@@ -3323,7 +3467,7 @@ run(Job *j)
         jj->next = j;
     } else 
         jobs = j;
-    j->next = 0;
+    j->next = nil;
     /* this code also in waitup after parse redirect */
     if(nrunning < nproclimit)
         sched();
@@ -3343,7 +3487,7 @@ sched(void)
     Node *n;
     Envy *e;
 
-    if(jobs == 0){
+    if(jobs == nil){
         usage();
         return;
     }
@@ -3420,7 +3564,7 @@ again:		/* rogue processes */
         if(echildok > 0)
             return 1;
         else {
-            fprint(2, "mk: (waitup %d) ", echildok);
+            fprint(STDERR, "mk: (waitup %d) ", echildok);
             perror("mk wait");
             Exit();
         }
@@ -3434,7 +3578,7 @@ again:		/* rogue processes */
     slot = pidslot(pid);
     if(slot < 0){
         if(DEBUG(D_EXEC))
-            fprint(2, "mk: wait returned unexpected process %d\n", pid);
+            fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
         pnew(pid, buf[0]? 1:0);
         goto again;
     }
@@ -3447,16 +3591,16 @@ again:		/* rogue processes */
         bp = newbuf();
         shprint(j->r->recipe, e, bp);
         front(bp->start);
-        fprint(2, "mk: %s: exit status=%s", bp->start, buf);
+        fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
         freebuf(bp);
         for(n = j->n, done = 0; n; n = n->next)
             if(n->flags&DELETE){
                 if(done++ == 0)
-                    fprint(2, ", deleting");
-                fprint(2, " '%s'", n->name);
+                    fprint(STDERR, ", deleting");
+                fprint(STDERR, " '%s'", n->name);
                 delete(n->name);
             }
-        fprint(2, "\n");
+        fprint(STDERR, "\n");
         if(kflag){
             runerrs++;
             uarg = 1;
@@ -3527,7 +3671,7 @@ pidslot(int pid)
     for(i = 0; i < nevents; i++)
         if(events[i].pid == pid) return i;
     if(DEBUG(D_EXEC))
-        fprint(2, "mk: wait returned unexpected process %d\n", pid);
+        fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
     return -1;
 }
 @
@@ -3592,7 +3736,7 @@ killchildren(char *msg)
 \section{Explain mode, [[mk -e]]}
 
 <<global explain>>=
-char *explain = 0;
+char *explain = nil;
 @
 
 \section{Dry mode, [[mk -n]]}
@@ -3603,6 +3747,49 @@ int nflag = 0;
 @
 
 \section{What if, [[mk -w]]}
+
+
+\chapter{Profiling Support}
+
+\section{Utilization, [[mk -u]]}
+% utlilization
+
+<<global uflag>>=
+int uflag = 0;
+@
+
+<<global tslot>>=
+static ulong tslot[1000];
+@
+
+<<global tick>>=
+static ulong tick;
+@
+
+<<function usage>>=
+void
+usage(void)
+{
+    ulong t;
+
+    t = time(0);
+    if(tick)
+        tslot[nrunning] += t - tick;
+    tick = t;
+}
+@
+
+<<function prusage>>=
+void
+prusage(void)
+{
+    int i;
+
+    usage();
+    for(i = 0; i <= nevents; i++)
+        fprint(1, "%d: %lud\n", i, tslot[i]);
+}
+@
 
 
 \chapter{Extra commands}
@@ -3642,10 +3829,11 @@ Rule *patrule;
 \chapter{Debugging}
 
 \section{Dumping internals, [[mk -d]]}
-%mk -d[epg]
+%mk -d[epg] EXEC PARSE GRAPH
 
 % -d flag
 <<global debug>>=
+// bitset<enum<dxxx>>
 int debug;
 @
 
@@ -3653,17 +3841,17 @@ int debug;
 #define	DEBUG(x)	(debug&(x))
 @
 
+% enum<dxxx>
 <<constant D_PARSE>>=
 #define		D_PARSE		0x01
 @
-
 <<constant D_GRAPH>>=
 #define		D_GRAPH		0x02
 @
-
 <<constant D_EXEC>>=
 #define		D_EXEC		0x04
 @
+
 
 
 <<dumper dumpw>>=
@@ -3677,6 +3865,7 @@ dumpw(char *s, Word *w)
 }
 @
 
+
 <<dumper dumpv>>=
 void
 dumpv(char *s)
@@ -3685,27 +3874,6 @@ dumpv(char *s)
     symtraverse(S_VAR, print1);
 }
 @
-
-<<function symstat>>=
-void
-symstat(void)
-{
-    Symtab **s, *ss;
-    int n;
-    int l[1000];
-
-    memset((char *)l, 0, sizeof(l));
-    for(s = hash; s < &hash[NHASH]; s++){
-        for(ss = *s, n = 0; ss; ss = ss->next)
-            n++;
-        l[n]++;
-    }
-    for(n = 0; n < 1000; n++)
-        if(l[n]) Bprint(&bout, "%d of length %d\n", l[n], n);
-}
-@
-
-
 
 <<function print1>>=
 static void
@@ -3719,6 +3887,9 @@ print1(Symtab *s)
     Bprint(&bout, "\n");
 }
 @
+
+
+
 
 
 <<dumper dumpr>>=
@@ -3795,13 +3966,13 @@ dumpj(char *s, Job *j, int all)
 
 \chapter{Profiling}
 
-\section{Profiling mk}
+%\section{Profiling mk}
 
 <<global buf>>=
 short buf[10000];
 @
 
-<<main profiling>>=
+<<[[main()]] profiling>>=
 #ifdef	PROF
     {
         extern int etext();
@@ -3810,46 +3981,27 @@ short buf[10000];
 #endif
 @
 
-\section{Profiling the mkfile, [[mk -u]]}
-% utlilization
 
-<<global uflag>>=
-int uflag = 0;
-@
-
-<<global tslot>>=
-static ulong tslot[1000];
-@
-
-<<global tick>>=
-static ulong tick;
-@
-
-<<function usage>>=
+% dead function actually
+<<function symstat>>=
 void
-usage(void)
+symstat(void)
 {
-    ulong t;
+    Symtab **s, *ss;
+    int n;
+    int l[1000];
 
-    t = time(0);
-    if(tick)
-        tslot[nrunning] += t - tick;
-    tick = t;
+    memset((char *)l, 0, sizeof(l));
+    for(s = hash; s < &hash[NHASH]; s++){
+        for(ss = *s, n = 0; ss; ss = ss->next)
+            n++;
+        l[n]++;
+    }
+    for(n = 0; n < 1000; n++)
+        if(l[n]) 
+            Bprint(&bout, "%d of length %d\n", l[n], n);
 }
 @
-
-<<function prusage>>=
-void
-prusage(void)
-{
-    int i;
-
-    usage();
-    for(i = 0; i <= nevents; i++)
-        fprint(1, "%d: %lud\n", i, tslot[i]);
-}
-@
-
 
 \chapter{Error Managment}
 
@@ -3861,7 +4013,7 @@ Malloc(int n)
 
     s = malloc(n);
     if(!s) {
-        fprint(2, "mk: cannot alloc %d bytes\n", n);
+        fprint(STDERR, "mk: cannot alloc %d bytes\n", n);
         Exit();
     }
     return s;
@@ -3877,7 +4029,7 @@ Realloc(void *s, int n)
     else
         s = malloc(n);
     if(!s) {
-        fprint(2, "mk: cannot alloc %d bytes\n", n);
+        fprint(STDERR, "mk: cannot alloc %d bytes\n", n);
         Exit();
     }
     return s;

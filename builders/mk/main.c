@@ -111,14 +111,14 @@ main(int argc, char **argv)
             badusage();
         }
     }
-    /*s: main profiling */
+    /*s: [[main()]] profiling */
     #ifdef	PROF
         {
             extern int etext();
             monitor(main, etext, buf, sizeof buf, 300);
         }
     #endif
-    /*e: main profiling */
+    /*e: [[main()]] profiling */
 
     if(aflag)
         iflag = true;
@@ -203,7 +203,7 @@ main(int argc, char **argv)
             for(w = target1; w; w = w->next)
                 mk(w->s);
         else {
-            fprint(2, "mk: nothing to mk\n");
+            fprint(STDERR, "mk: nothing to mk\n");
             Exit();
         }
     } else {
@@ -247,7 +247,7 @@ void
 badusage(void)
 {
 
-    fprint(2, "Usage: mk [-f file] [-n] [-a] [-e] [-t] [-k] [-i] [-d[egp]] [targets ...]\n");
+    fprint(STDERR, "Usage: mk [-f file] [-n] [-a] [-e] [-t] [-k] [-i] [-d[egp]] [targets ...]\n");
     Exit();
 }
 /*e: function badusage */

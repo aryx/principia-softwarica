@@ -123,7 +123,7 @@ exportenv(Envy *e)
     
         f = create(nam, OWRITE, 0666L);
         if(f < 0) {
-            fprint(2, "can't create %s, f=%d\n", nam, f);
+            fprint(STDERR, "can't create %s, f=%d\n", nam, f);
             perror(nam);
             continue;
         }
@@ -306,7 +306,7 @@ notifyf(void *a, char *msg)
 
     USED(a);
     if(++nnote > 100){	/* until andrew fixes his program */
-        fprint(2, "mk: too many notes\n");
+        fprint(STDERR, "mk: too many notes\n");
         notify(0);
         abort();
     }
@@ -432,7 +432,7 @@ bulkmtime(char *dir)
 
 /*s: function mkmtime */
 ulong
-mkmtime(char *name, int force)
+mkmtime(char *name, bool force)
 {
     Dir *d;
     char *s, *ss, carry;
@@ -450,14 +450,15 @@ mkmtime(char *name, int force)
     if(s){
         ss = name;
         carry = *s;
-        *s = 0;
+        *s = '\0';
     }else{
-        ss = 0;
+        ss = nil;
         carry = 0;
     }
     bulkmtime(ss);
     if(carry)
         *s = carry;
+
     if(!force){
         sym = symlook(name, S_TIME, 0);
         if(sym)
@@ -466,8 +467,10 @@ mkmtime(char *name, int force)
     }
     if((d = dirstat(name)) == nil)
         return 0;
+
     t = d->mtime;
     free(d);
+
     return t;
 }
 /*e: function mkmtime */

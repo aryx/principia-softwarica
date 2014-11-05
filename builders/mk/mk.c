@@ -105,9 +105,9 @@ work(Node *node, Node *p, Arc *parc)
     if(node->prereqs == 0){
         if(node->time == 0){
             if(getwd(cwd, sizeof cwd))
-                fprint(2, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
+                fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
             else
-                fprint(2, "mk: don't know how to make '%s'\n", node->name);
+                fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
             if(kflag){
                 node->flags |= BEINGMADE;
                 runerrs++;
@@ -188,7 +188,7 @@ update(int fake, Node *node)
 
     MADESET(node, fake? BEINGMADE : MADE);
     if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
-        node->time = timeof(node->name, 1);
+        node->time = timeof(node->name, true);
         node->flags &= ~(CANPRETEND|PRETENDING);
         for(a = node->prereqs; a; a = a->next)
             if(a->prog)

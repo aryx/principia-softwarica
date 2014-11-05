@@ -68,7 +68,7 @@ wdup(Word *w)
 {
     Word *v, *new, *base;
 
-    v = base = 0;
+    v = base = nil;
     while(w){
         new = newword(w->s);
         if(v)
@@ -132,11 +132,11 @@ restart:
             empty = 0;
             cp = expandquote(cp, r, b);
             if(cp == 0){
-                fprint(2, "missing closing quote: %s\n", *s);
+                fprint(STDERR, "missing closing quote: %s\n", *s);
                 Exit();
             }
             break;
-        case '$':
+        case '$': //$
             w = varsub(&cp);
             if(w == 0){
                 if(empty)

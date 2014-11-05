@@ -177,9 +177,9 @@ newnode(char *name)
     node = (Node *)Malloc(sizeof(Node));
     symlook(name, S_NODE, (void *)node);
     node->name = name;
-    node->time = timeof(name, 0);
+    node->time = timeof(name, false);
+    node->flags = (node->time? PROBABLE : 0);
     node->prereqs = nil;
-    node->flags = node->time? PROBABLE : 0;
     node->next = nil;
     return node;
 }
@@ -205,9 +205,9 @@ dumpn(char *s, Node *n)
 static void
 trace(char *s, Arc *a)
 {
-    fprint(2, "\t%s", s);
+    fprint(STDERR, "\t%s", s);
     while(a){
-        fprint(2, " <-(%s:%d)- %s", a->r->file, a->r->line,
+        fprint(STDERR, " <-(%s:%d)- %s", a->r->file, a->r->line,
             a->n? a->n->name:"");
         if(a->n){
             for(a = a->n->prereqs; a; a = a->next)
@@ -215,7 +215,7 @@ trace(char *s, Arc *a)
         } else
             a = 0;
     }
-    fprint(2, "\n");
+    fprint(STDERR, "\n");
 }
 /*e: function trace */
 
@@ -226,7 +226,7 @@ cyclechk(Node *n)
     Arc *a;
 
     if((n->flags&CYCLE) && n->prereqs){
-        fprint(2, "mk: cycle in graph detected at target %s\n", n->name);
+        fprint(STDERR, "mk: cycle in graph detected at target %s\n", n->name);
         Exit();
     }
     n->flags |= CYCLE;
@@ -242,16 +242,15 @@ static void
 ambiguous(Node *n)
 {
     Arc *a;
-    Rule *r = 0;
-    Arc *la;
-    int bad = 0;
+    Rule *r = nil;
+    Arc *la = nil;
+    bool bad = false;
 
-    la = 0;
     for(a = n->prereqs; a; a = a->next){
         if(a->n)
             ambiguous(a->n);
         if(*a->r->recipe == 0) continue;
-        if(r == 0)
+        if(r == nil)
             r = a->r, la = a;
         else{
             if(r->recipe != a->r->recipe){
@@ -265,8 +264,8 @@ ambiguous(Node *n)
             }
             if(r->recipe != a->r->recipe){
                 if(bad == 0){
-                    fprint(2, "mk: ambiguous recipes for %s:\n", n->name);
-                    bad = 1;
+                    fprint(STDERR, "mk: ambiguous recipes for %s:\n", n->name);
+                    bad = true;
                     trace(n->name, la);
                 }
                 trace(n->name, a);

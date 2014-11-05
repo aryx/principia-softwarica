@@ -28,9 +28,9 @@ dorecipe(Node *node)
     if(r == 0){
         if(!(node->flags&VIRTUAL) && !(node->flags&NORECIPE)){
             if(getwd(cwd, sizeof cwd))
-                fprint(2, "mk: no recipe to make '%s' in directory %s\n", node->name, cwd);
+                fprint(STDERR, "mk: no recipe to make '%s' in directory %s\n", node->name, cwd);
             else
-                fprint(2, "mk: no recipe to make '%s'\n", node->name);
+                fprint(STDERR, "mk: no recipe to make '%s'\n", node->name);
             Exit();
         }
         if(strchr(node->name, '(') && node->time == 0)

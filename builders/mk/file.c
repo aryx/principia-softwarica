@@ -6,13 +6,13 @@
 ulong
 mtime(char *name)
 {
-    return mkmtime(name, 1);
+    return mkmtime(name, true);
 }
 /*e: function mtime */
 
 /*s: function timeof */
 ulong
-timeof(char *name, int force)
+timeof(char *name, bool force)
 {
     Symtab *sym;
     ulong t;
@@ -23,11 +23,11 @@ timeof(char *name, int force)
     if(force)
         return mtime(name);
 
-    sym = symlook(name, S_TIME, 0);
+    sym = symlook(name, S_TIME, nil);
     if (sym)
         return sym->u.value;		/* uggh */
 
-    t = mkmtime(name, 0);
+    t = mkmtime(name, false);
     if(t == 0)
         return 0;
 
@@ -46,7 +46,8 @@ touch(char *name)
 
     if(utfrune(name, '('))
         atouch(name);		/* archive */
-    else if(chgtime(name) < 0) {
+    else
+     if(chgtime(name) < 0) {
         perror(name);
         Exit();
     }
@@ -61,7 +62,7 @@ delete(char *name)
         if(remove(name) < 0)
             perror(name);
     } else
-        fprint(2, "hoon off; mk can'tdelete archive members\n");
+        fprint(STDERR, "hoon off; mk can'tdelete archive members\n");
 }
 /*e: function delete */
 

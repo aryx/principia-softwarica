@@ -9,7 +9,7 @@ Malloc(int n)
 
     s = malloc(n);
     if(!s) {
-        fprint(2, "mk: cannot alloc %d bytes\n", n);
+        fprint(STDERR, "mk: cannot alloc %d bytes\n", n);
         Exit();
     }
     return s;
@@ -24,7 +24,7 @@ Realloc(void *s, int n)
     else
         s = malloc(n);
     if(!s) {
-        fprint(2, "mk: cannot alloc %d bytes\n", n);
+        fprint(STDERR, "mk: cannot alloc %d bytes\n", n);
         Exit();
     }
     return s;

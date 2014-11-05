@@ -88,7 +88,8 @@ symstat(void)
         l[n]++;
     }
     for(n = 0; n < 1000; n++)
-        if(l[n]) Bprint(&bout, "%d of length %d\n", l[n], n);
+        if(l[n]) 
+            Bprint(&bout, "%d of length %d\n", l[n], n);
 }
 /*e: function symstat */
 /*e: mk/symtab.c */

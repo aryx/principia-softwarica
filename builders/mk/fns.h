@@ -49,7 +49,7 @@ void	touch(char*);
 // Time managment
 ulong	timeof(char*, int);
 void	timeinit(char*);
-ulong	mkmtime(char*, int);
+ulong	mkmtime(char*, bool);
 ulong	mtime(char*);
 int	chgtime(char*);
 

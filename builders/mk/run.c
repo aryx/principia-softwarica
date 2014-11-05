@@ -21,10 +21,12 @@ typedef struct Process
 {
     int pid;
     int status;
+
     struct Process *b, *f;
 } Process;
 /*e: struct Process */
 /*s: global phead */
+// list<ref_own<Process>??
 static Process *phead;
 /*e: global phead */
 /*s: global pfree */
@@ -48,7 +50,7 @@ run(Job *j)
         jj->next = j;
     } else 
         jobs = j;
-    j->next = 0;
+    j->next = nil;
     /* this code also in waitup after parse redirect */
     if(nrunning < nproclimit)
         sched();
@@ -66,7 +68,7 @@ sched(void)
     Node *n;
     Envy *e;
 
-    if(jobs == 0){
+    if(jobs == nil){
         usage();
         return;
     }
@@ -142,7 +144,7 @@ again:		/* rogue processes */
         if(echildok > 0)
             return 1;
         else {
-            fprint(2, "mk: (waitup %d) ", echildok);
+            fprint(STDERR, "mk: (waitup %d) ", echildok);
             perror("mk wait");
             Exit();
         }
@@ -156,7 +158,7 @@ again:		/* rogue processes */
     slot = pidslot(pid);
     if(slot < 0){
         if(DEBUG(D_EXEC))
-            fprint(2, "mk: wait returned unexpected process %d\n", pid);
+            fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
         pnew(pid, buf[0]? 1:0);
         goto again;
     }
@@ -169,16 +171,16 @@ again:		/* rogue processes */
         bp = newbuf();
         shprint(j->r->recipe, e, bp);
         front(bp->start);
-        fprint(2, "mk: %s: exit status=%s", bp->start, buf);
+        fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
         freebuf(bp);
         for(n = j->n, done = 0; n; n = n->next)
             if(n->flags&DELETE){
                 if(done++ == 0)
-                    fprint(2, ", deleting");
-                fprint(2, " '%s'", n->name);
+                    fprint(STDERR, ", deleting");
+                fprint(STDERR, " '%s'", n->name);
                 delete(n->name);
             }
-        fprint(2, "\n");
+        fprint(STDERR, "\n");
         if(kflag){
             runerrs++;
             uarg = 1;
@@ -247,7 +249,7 @@ pidslot(int pid)
     for(i = 0; i < nevents; i++)
         if(events[i].pid == pid) return i;
     if(DEBUG(D_EXEC))
-        fprint(2, "mk: wait returned unexpected process %d\n", pid);
+        fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
     return -1;
 }
 /*e: function pidslot */

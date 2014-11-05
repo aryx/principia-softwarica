@@ -2,6 +2,7 @@
 #include	"mk.h"
 
 /*s: global debug */
+// bitset<enum<dxxx>>
 int debug;
 /*e: global debug */
 /*s: global rules */
@@ -28,7 +29,7 @@ bool kflag = false;
 int aflag = 0;
 /*e: global aflag */
 /*s: global explain */
-char *explain = 0;
+char *explain = nil;
 /*e: global explain */
 /*s: global nreps */
 int nreps = 1;

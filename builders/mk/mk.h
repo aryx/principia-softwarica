@@ -22,8 +22,6 @@ typedef struct Bufblock
 typedef struct Word
 {
     char 		*s;
-
-    // Extra
     struct Word 	*next;
 } Word;
 /*e: struct Word */
@@ -115,21 +113,24 @@ extern Rule *rules, *metarules, *patrule;
 /*s: struct Arc */
 typedef struct Arc
 {
-    //? enum<rule_flag>?
-    short		flag;
-
     // ref<node>, reverse of Node.prereq?
-    struct Node	*n;
+    struct Node *n;
     // ref<Rule>
-    Rule		*r;
+    Rule *r;
+    //? enum<rule_flag>?
+    short flag;
 
+    /*s: [[Arc]] other fields */
     char		*stem;
     char		*prog;
-
     char		*match[NREGEXP];
+    /*e: [[Arc]] other fields */
     
     //Extra
+    /*s: [[Arc]] extra fields */
+    // list<ref_own<arc> (head = Node.prereq)
     struct Arc	*next;
+    /*e: [[Arc]] extra fields */
 } Arc;
 /*e: struct Arc */
 
@@ -143,15 +144,18 @@ typedef struct Node
 {
     char		*name;
     ulong		time;
-
     // enum<node_flag>
     ushort		flags;
 
-    // list<ref_own?<Arc>>
+    /*s: [[Node]] other fields */
+    // list<ref_own?<Arc>> (next = Arc.next)
     Arc		*prereqs;
+    /*e: [[Node]] other fields */
 
     // Extra
+    /*s: [[Node]] extra fields */
     struct Node	*next;		/* list for a rule */
+    /*e: [[Node]] extra fields */
 } Node;
 /*e: struct Node */
 
@@ -203,6 +207,7 @@ typedef struct Node
 typedef struct Job
 {
     Rule		*r;	/* master rule for job */
+
     // list<ref_?<Node>> (next = Node.next?)
     Node		*n;	/* list of node targets */
 
@@ -252,19 +257,15 @@ enum sxxx {
     /*s: enum sxxx cases */
     S_MAKEVAR,	/* dumpable mk variable */
     /*x: enum sxxx cases */
-    S_PID,		/* pid -> products */
-    /*x: enum sxxx cases */
-    S_MAKEFILE,	/* target -> node */
+    S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
     /*x: enum sxxx cases */
     S_TARGET,		/* target -> rule */
     /*x: enum sxxx cases */
     S_NODE,		/* target name -> node */
     /*x: enum sxxx cases */
-    S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
-    /*x: enum sxxx cases */
     S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
     /*x: enum sxxx cases */
-    S_NOEXPORT,	/* var -> noexport */
+    S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
     /*x: enum sxxx cases */
     S_OVERRIDE,	/* can't override */
     /*x: enum sxxx cases */
@@ -272,9 +273,9 @@ enum sxxx {
     /*x: enum sxxx cases */
     S_TIME,		/* file -> time */
     /*x: enum sxxx cases */
-    S_EXPORTED,	/* var -> current exported value */
-    /*x: enum sxxx cases */
     S_BULKED,	/* we have bulked this dir */
+    /*x: enum sxxx cases */
+    S_EXPORTED,	/* var -> current exported value */
     /*x: enum sxxx cases */
     S_AGG,		/* aggregate -> time */
     /*x: enum sxxx cases */
@@ -296,10 +297,10 @@ extern	char 	*shflags;
 //extern	int	IWS;
 
 /*s: function SYNERR */
-#define	SYNERR(l)	(fprint(2, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
+#define	SYNERR(l)	(fprint(STDERR, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
 /*e: function SYNERR */
 /*s: function RERR */
-//#define	RERR(r)		(fprint(2, "mk: %s:%d: rule error; ", (r)->file, (r)->line))
+//#define	RERR(r)		(fprint(STDERR, "mk: %s:%d: rule error; ", (r)->file, (r)->line))
 /*e: function RERR */
 /*s: constant NAMEBLOCK */
 #define	NAMEBLOCK	1000

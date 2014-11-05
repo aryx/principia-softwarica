@@ -55,7 +55,7 @@ void	touch(char*);
 // Time managment
 ulong	timeof(char*, int);
 void	timeinit(char*);
-ulong	mkmtime(char*, int);
+ulong	mkmtime(char*, bool);
 ulong	mtime(char*);
 int	chgtime(char*);
 
@@ -131,7 +131,7 @@ char*	wtos(Word*, int);
 
 
 <<function RERR>>=
-//#define	RERR(r)		(fprint(2, "mk: %s:%d: rule error; ", (r)->file, (r)->line))
+//#define	RERR(r)		(fprint(STDERR, "mk: %s:%d: rule error; ", (r)->file, (r)->line))
 @
 <<function SEP>>=
 //#define	SEP(c)		(((c)==' ')||((c)=='\t')||((c)=='\n'))
@@ -571,7 +571,7 @@ exportenv(Envy *e)
     
         f = create(nam, OWRITE, 0666L);
         if(f < 0) {
-            fprint(2, "can't create %s, f=%d\n", nam, f);
+            fprint(STDERR, "can't create %s, f=%d\n", nam, f);
             perror(nam);
             continue;
         }
@@ -745,7 +745,7 @@ notifyf(void *a, char *msg)
 
     USED(a);
     if(++nnote > 100){	/* until andrew fixes his program */
-        fprint(2, "mk: too many notes\n");
+        fprint(STDERR, "mk: too many notes\n");
         notify(0);
         abort();
     }
@@ -775,20 +775,6 @@ maketmp(void)
 }
 @
 
-<<function chgtime>>=
-int
-chgtime(char *name)
-{
-    Dir sbuf;
-
-    if(access(name, AEXIST) >= 0) {
-        nulldir(&sbuf);
-        sbuf.mtime = time((long *)0);
-        return dirwstat(name, &sbuf);
-    }
-    return close(create(name, OWRITE, 0666));
-}
-@
 
 <<function rcopy>>=
 void
@@ -842,78 +828,6 @@ dirtime(char *dir, char *path)
 }
 @
 
-<<enum sxxx cases>>=
-S_BULKED,	/* we have bulked this dir */
-@
-
-<<function bulkmtime>>=
-void
-bulkmtime(char *dir)
-{
-    char buf[4096];
-    char *ss, *s, *sym;
-
-    if(dir){
-        sym = dir;
-        s = dir;
-        if(strcmp(dir, "/") == 0)
-            strecpy(buf, buf + sizeof buf - 1, dir);
-        else
-            snprint(buf, sizeof buf, "%s/", dir);
-    }else{
-        s = ".";
-        sym = "";
-        buf[0] = 0;
-    }
-    if(symlook(sym, S_BULKED, 0))
-        return;
-    ss = strdup(sym);
-    symlook(ss, S_BULKED, (void*)ss);
-    dirtime(s, buf);
-}
-@
-
-<<function mkmtime>>=
-ulong
-mkmtime(char *name, int force)
-{
-    Dir *d;
-    char *s, *ss, carry;
-    ulong t;
-    Symtab *sym;
-    char buf[4096];
-
-    strecpy(buf, buf + sizeof buf - 1, name);
-    cleanname(buf);
-    name = buf;
-
-    s = utfrrune(name, '/');
-    if(s == name)
-        s++;
-    if(s){
-        ss = name;
-        carry = *s;
-        *s = 0;
-    }else{
-        ss = 0;
-        carry = 0;
-    }
-    bulkmtime(ss);
-    if(carry)
-        *s = carry;
-    if(!force){
-        sym = symlook(name, S_TIME, 0);
-        if(sym)
-            return sym->u.value;
-        return 0;
-    }
-    if((d = dirstat(name)) == nil)
-        return 0;
-    t = d->mtime;
-    free(d);
-    return t;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1137,7 +1051,7 @@ split(char *name, char **member)
         if(type(p))
             return p;
         free(p);
-        fprint(2, "mk: '%s' is not an archive\n", name);
+        fprint(STDERR, "mk: '%s' is not an archive\n", name);
     }
     return 0;
 }
@@ -1185,7 +1099,7 @@ static char *split(char*, char**);
 <<mk/env.c>>=
 #include	"mk.h"
 
-<<enum _anon_ (mk/env.c)>>
+<<constant ENVQUANTA>>
 
 <<global envy>>
 <<global nextv>>
@@ -1639,10 +1553,10 @@ static	Word		*varmatch(char *);
 %//regerror(char *s)
 %//{
 %//    if(patrule)
-%//        fprint(2, "mk: %s:%d: regular expression error; %s\n",
+%//        fprint(STDERR, "mk: %s:%d: regular expression error; %s\n",
 %//            patrule->file, patrule->line, s);
 %//    else
-%//        fprint(2, "mk: %s:%d: regular expression error; %s\n",
+%//        fprint(STDERR, "mk: %s:%d: regular expression error; %s\n",
 %//            infile, mkinline, s);
 %//    Exit();
 %//}

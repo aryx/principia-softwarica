@@ -36,7 +36,7 @@ squote(char *cp)
         cp += n;
     }
     SYNERR(-1);		/* should never occur */
-    fprint(2, "missing closing '\n");
+    fprint(STDERR, "missing closing '\n");
     return 0;
 }
 /*e: function squote */
@@ -46,7 +46,7 @@ squote(char *cp)
  *	search a string for characters in a pattern set
  *	characters in quotes and variable generators are escaped
  */
-char *
+char*
 charin(char *cp, char *pat)
 {
     Rune r;
@@ -80,7 +80,7 @@ charin(char *cp, char *pat)
     }
     if(vargen){
         SYNERR(-1);
-        fprint(2, "missing closing } in pattern generator\n");
+        fprint(STDERR, "missing closing } in pattern generator\n");
     }
     return 0;
 }
@@ -143,7 +143,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, int preserve, int esc)
         }
         rinsert(buf, c);
     }
-    SYNERR(line); fprint(2, "missing closing %c\n", esc);
+    SYNERR(line); fprint(STDERR, "missing closing %c\n", esc);
     return 0;
 }
 /*e: function escapetoken */

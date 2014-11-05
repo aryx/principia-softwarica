@@ -1,17 +1,16 @@
 /*s: mk/env.c */
 #include	"mk.h"
 
-/*s: enum _anon_ (mk/env.c) */
-enum {
-    ENVQUANTA=10
-};
-/*e: enum _anon_ (mk/env.c) */
+/*s: constant ENVQUANTA */
+#define ENVQUANTA 10
+/*e: constant ENVQUANTA */
 
 /*s: global envy */
 // array<ref_own<Envy>> (array or list?)
 Envy	*envy;
 /*e: global envy */
 /*s: global nextv */
+// idx for next free entry in envy array
 static int nextv;
 /*e: global nextv */
 
@@ -84,7 +83,7 @@ envupd(char *name, Word *value)
         }
     e->name = name;
     e->values = value;
-    envinsert(0,0);
+    envinsert(nil,nil); // ???
 }
 /*e: function envupd */
 
@@ -109,12 +108,12 @@ execinit(void)
 {
     char **p;
 
-    nextv = 0;
+    nextv = 0; // reset envy
     for(p = myenv; *p; p++)
         envinsert(*p, stow(""));
 
     symtraverse(S_VAR, ecopy);
-    envinsert(0, 0);
+    envinsert(nil, nil);
 }
 /*e: function execinit */
 

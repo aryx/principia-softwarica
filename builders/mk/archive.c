@@ -170,7 +170,7 @@ split(char *name, char **member)
         if(type(p))
             return p;
         free(p);
-        fprint(2, "mk: '%s' is not an archive\n", name);
+        fprint(STDERR, "mk: '%s' is not an archive\n", name);
     }
     return 0;
 }
