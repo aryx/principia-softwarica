@@ -253,6 +253,40 @@ badusage(void)
 
 \section{Code organization}
 
+%fns.h\
+%mk.h\
+
+%symtab.c\
+%globals.c\
+
+%utils.c\
+%plan9.c\
+
+%bufblock.c\
+%word.c\
+
+%parse.c\
+%lex.c\
+
+%rc.c\
+%var.c\
+%match.c\
+%env.c\
+%shprint.c\
+%job.c\
+%arc.c\
+%rule.c\
+%file.c\
+%run.c\
+%graph.c\
+%mk.c\
+%recipe.c\
+%varsub.c\
+
+%archive.c\
+
+%main.c\
+
 \section{Architecture overview}
 
 % graphviz of files? or just of the types?
@@ -555,56 +589,6 @@ wtos(Word *w, int sep)
 @
 
 
-\section{[[Envy]] and [[envy]]}
-
-% Not envy :) just environment variable stuff, rename?
-<<struct Envy>>=
-typedef struct Envy
-{
-    char 		*name;
-
-    // list<ref_own<string>>
-    Word 		*values;
-} Envy;
-@
-
-
-<<global envy>>=
-// array<ref_own<Envy>> (array or list?)
-Envy	*envy;
-@
-
-<<constant ENVQUANTA>>=
-#define ENVQUANTA 10
-@
-
-<<global nextv>>=
-// idx for next free entry in envy array
-static int nextv;
-@
-
-<<function envinsert>>=
-static void
-envinsert(char *name, Word *value)
-{
-    static int envsize;
-
-    if (nextv >= envsize) {
-        envsize += ENVQUANTA;
-        envy = (Envy *) Realloc((char *) envy, envsize*sizeof(Envy));
-    }
-    envy[nextv].name = name;
-    envy[nextv++].values = value;
-}
-@
-
-
-
-
-
-
-
-
 \section{[[Rule]], [[rules]] and [[metarules]]}
 
 % todo: aspectize split
@@ -873,6 +857,56 @@ char		*prog;
 #define		NOMINUSE	0x1000
 @
 
+\section{[[Envy]] and [[envy]]}
+
+% Not envy :) just environment variable stuff, rename?
+<<struct Envy>>=
+typedef struct Envy
+{
+    char 		*name;
+
+    // list<ref_own<string>>
+    Word 		*values;
+} Envy;
+@
+
+
+<<global envy>>=
+// array<ref_own<Envy>> (array or list?)
+Envy	*envy;
+@
+
+<<constant ENVQUANTA>>=
+#define ENVQUANTA 10
+@
+
+<<global nextv>>=
+// idx for next free entry in envy array
+static int nextv;
+@
+
+<<function envinsert>>=
+static void
+envinsert(char *name, Word *value)
+{
+    static int envsize;
+
+    if (nextv >= envsize) {
+        envsize += ENVQUANTA;
+        envy = (Envy *) Realloc((char *) envy, envsize*sizeof(Envy));
+    }
+    envy[nextv].name = name;
+    envy[nextv++].values = value;
+}
+@
+
+
+
+
+
+
+
+
 \section{[[Job]] and [[jobs]]}
 
 <<struct Job>>=
@@ -1022,26 +1056,15 @@ for(argv++; *argv && (**argv == '-'); argv++)
         badusage();
     }
 }
-if(aflag)
-    iflag = true;
 @
 
-<<[[main()]] -xxx switch cases>>=
-case 'i':
-    iflag = true;
-    break;
-@
 
 <<[[main()]] -xxx switch cases>>=
 case 'k':
     kflag = true;
     break;
 @
-<<[[main()]] -xxx switch cases>>=
-case 'n':
-    nflag = true;
-    break;
-@
+
 
 
 
@@ -1289,9 +1312,9 @@ work(Node *node, Node *p, Arc *parc)
         unpretend(node);
     }
     /*
-        have a look if we are pretending in case
-        someone has been unpretended out from underneath us
-    */
+     *   have a look if we are pretending in case
+     *   someone has been unpretended out from underneath us
+     */
     if(node->flags&MADE){
         if(node->flags&PRETENDING){
             node->time = 0;
@@ -1373,7 +1396,7 @@ work(Node *node, Node *p, Arc *parc)
 
             unpretend(a->n);
             did = work(a->n, node, a) || did;
-            ready = 0;
+            ready = false;
         }
 
     if(ready == false)/* try later unless nothing has happened for -k's sake */
@@ -2208,7 +2231,7 @@ out:
 
 
 
-\chapter{Dependency Graph}
+\chapter{Building the Dependency Graph}
 
 % for GC? to identify unused rules?
 <<[[Rule]] other fields>>=
@@ -2562,7 +2585,32 @@ trace(char *s, Arc *a)
 }
 @
 
+\section{Infinite rule detection}
 
+% n reps, to manage bad rules like %: %.c that can be executed multiple times
+<<global nreps>>=
+int nreps = 1;
+@
+
+% mk -> nrep
+<<function nrep>>=
+void
+nrep(void)
+{
+    Symtab *sym;
+    Word *w;
+
+    sym = symlook("NREP", S_VAR, nil);
+    if(sym){
+        w = sym->u.ptr;
+        if (w && w->s && *w->s)
+            nreps = atoi(w->s);
+    }
+    if(nreps < 1)
+        nreps = 1;
+    <<[[nrep()]] if DEBUG(D_GRAPH)>>
+}
+@
 
 \chapter{Time}
 
@@ -3872,7 +3920,7 @@ catchnotes()
 }
 @
 
-\chapter{Debugging Support}
+\chapter{Debugging and Profiling Support}
 
 \section{Explain mode, [[mk -e]]}
 
@@ -3894,9 +3942,17 @@ case 'e':
 bool nflag = false;
 @
 
+<<[[main()]] -xxx switch cases>>=
+case 'n':
+    nflag = true;
+    break;
+@
 
 
 \section{What if, [[mk -w]]}
+
+% what if I change a file, what needs to be done?
+% usually works with -n, mk -n -wprog.h
 
 <<[[main()]] locals>>=
 Bufblock *whatif = nil;
@@ -3926,10 +3982,11 @@ if(whatif){
 }
 @
 
-\chapter{Profiling Support}
+%\chapter{Profiling Support}
 
 \section{Utilization, [[mk -u]]}
-% utlilization
+
+% display time spent in different nrunnnig configuration
 
 <<global uflag>>=
 bool uflag = false;
@@ -3946,6 +4003,7 @@ case 'u':
 static ulong tslot[1000];
 @
 
+% could be made local static!
 <<global tick>>=
 static ulong tick;
 @
@@ -3982,34 +4040,9 @@ prusage(void)
 @
 
 
-\chapter{Extra commands}
-% see also Debugging section
-
-\section{Recompile everything, [[mk -a]]}
-
-<<global aflag>>=
-bool aflag = false;
-@
-
-<<[[main()]] -xxx switch cases>>=
-case 'a':
-    aflag = true;
-    break;
-@
-
-\section{Touching, [[mk -t]]}
-
-<<global tflag>>=
-bool tflag = false;
-@
-
-<<[[main()]] -xxx switch cases>>=
-case 't':
-    tflag = true;
-    break;
-@
-
 \chapter{Advanced Topics}
+
+% all those features are meh in my opinion
 
 \section{Pattern rules}
 
@@ -4044,8 +4077,57 @@ Word 		*alltargets;	/* all the targets */
 
 \section{Aggregates, archives}
 
-\section{Missing intermediates}
+\section{Missing intermediates optimization, [[mk -I]]}
+% mk -i suppress this behavior
+% pad: mk -I! new mode :) because I don't like the default mode!
 
+% it is there to optimize disk space, to allow to remove .o
+% the intermediate betweem the .out and the .c by pretending
+% they are there if we know no .c files has actually changed.
+% useful at a time where disk space was expensive, and so having
+% both the .o and the .a were seen as redundant waste.
+
+<<global iflag>>=
+bool iflag = false;
+@
+
+<<[[main()]] -xxx switch cases>>=
+case 'i':
+    iflag = true;
+    break;
+@
+
+\section{Touching mode optimization, [[mk -t]]}
+
+% when the user knows what he is doing
+
+<<global tflag>>=
+bool tflag = false;
+@
+
+<<[[main()]] -xxx switch cases>>=
+case 't':
+    tflag = true;
+    break;
+@
+
+\section{Recompile everything, [[mk -a]]}
+% bad place
+
+<<global aflag>>=
+bool aflag = false;
+@
+
+<<[[main()]] -xxx switch cases>>=
+case 'a':
+    aflag = true;
+    iflag = true;
+    break;
+@
+% iflag = true; used to be after the switch, but same
+
+\section{[[mkfile]] content through pipe}
+% |cmd  instead of <file
 
 \chapter{Conclusion}
 
