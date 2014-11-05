@@ -161,11 +161,10 @@ Here are other candidates that were considered but ultimately discarded:
 \item maven
 \end{itemize}
 
-% gyp, ninja, buck, qake, ...
-
+% gyp, ninja, buck, qake, ... huge list
 %https://en.wikipedia.org/wiki/List_of_build_automation_software
 
-%make advocacy :)
+%but make advocacy :)
 %http://bost.ocks.org/mike/make/
 %http://hadihariri.com/2014/04/21/build-make-no-more/
 
@@ -176,10 +175,10 @@ Here are other candidates that were considered but ultimately discarded:
 
 \section{Requirements}
 
-% mk.ps! 
-I assume you have read the [[mk.ps]] manual that introduces
-the concepts used in this document (e.g. what is a rule,
-a target, a recipe, etc).
+% mk.ps! and mk(1)
+I assume you have read the \f{mk.ps} paper that introduces
+the concepts used in this document (e.g. what is a \co{rule},
+a \co{target}, a \co{recipe}, etc) as well as [[mk]] man page.
 
 %(and mk_successor_make.pdf if interested specifically of diff with make)
 
@@ -322,7 +321,7 @@ badusage(void)
 \section{[[Symtab]] and [[hash]]}
 
 <<struct Symtab>>=
-typedef struct Symtab
+struct Symtab
 {
     // the key
     char		*name;
@@ -337,7 +336,7 @@ typedef struct Symtab
 
     // Extra
     <<[[Symtab]] extra fields>>
-} Symtab;
+};
 @
 
 
@@ -464,16 +463,7 @@ static char	*myenv[] =
     "alltarget",
     "newmember",
 
-    "stem0",		/* must be in order from here */
-    "stem1",
-    "stem2",
-    "stem3",
-    "stem4",
-    "stem5",
-    "stem6",
-    "stem7",
-    "stem8",
-    "stem9",
+    <<[[myenv]] other array elements>>
 
     0,
 };
@@ -506,11 +496,11 @@ initenv(void)
 
 % should be renamed words ...
 <<struct Word>>=
-typedef struct Word
+struct Word
 {
     char 		*s;
     struct Word 	*next;
-} Word;
+};
 @
 
 
@@ -592,7 +582,7 @@ wtos(Word *w, int sep)
 
 % todo: aspectize split
 <<struct Rule>>=
-typedef struct Rule
+struct Rule
 {
     char 		*target;	/* one target */
     //list<ref_own<string>>
@@ -609,12 +599,19 @@ typedef struct Rule
 
     // Extra
     <<[[Rule]] extra fields>>
-} Rule;
+};
 @
 % rename tail to prerequistes?
 % recipe can contain $, target and tail not, the variables are expanded
 % at parsing time for that I think.
 % can also be metarule, %.$O: %.c (but $O would have been expanded)
+
+% from man page:
+%  Variable substitution in a rule is done when
+%  the rule is read; variable substitution in the recipe is done
+%  when the recipe is executed.
+% why? probably because recipe/rc will do the subst itself, but for
+% the graph we need concrete values so fasted to do it eagerly when parsing
 
 <<global rules>>=
 // list<ref_own<Rule>> (next = Rule.next)
@@ -635,7 +632,9 @@ Rule *metarules;
 <<function PERCENT>>=
 #define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
 @
-% &?????
+% from man page:
+% '%' matches a maximal length string of any characters;
+% '&' matches a maximal length string of any characters except period or slash
 
 
 
@@ -651,10 +650,8 @@ struct Rule	*chain;		/* hashed per target */
 @
 
 
-
 %XXXX??
 <<[[Rule]] other fields>>=
-Reprog		*pat;		/* reg exp goo */
 char		*prog;		/* to use in out of date */
 @
 % prog??
@@ -667,21 +664,24 @@ char		*prog;		/* to use in out of date */
 % the actual graph of dependencies! nodes are target names usually filenames
 % arcs link nodes to other filenames with a rule attached to know what to do
 
+% it's really more a DAG than a graph, there should be no cycle
+% (see cycle check section)
+
 <<struct Node>>=
-typedef struct Node
+struct Node
 {
-    // usually a filename, or target like 'default'
+    // usually a filename, or target label like 'default'
     char*		name; 
     // last mtime of the file (or zero for non existing files)
     ulong		time;
-    // enum<node_flag>
+    // bitset<enum<node_flag>>
     ushort		flags;
 
     <<[[Node]] other fields>>
 
     // Extra
     <<[[Node]] extra fields>>
-} Node;
+};
 @
 
 <<enum sxxx cases>>=
@@ -714,7 +714,7 @@ Arc		*prereqs;
 
 
 <<struct Arc>>=
-typedef struct Arc
+struct Arc
 {
     // ref<Node>, dst node in the arc (src is the Node having the prereqs)
     struct Node *n;
@@ -727,7 +727,7 @@ typedef struct Arc
     
     //Extra
     <<[[Arc]] extra fields>>
-} Arc;
+};
 @
 
 
@@ -772,11 +772,10 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 
 
 
-
+%XXX?
 <<[[Arc]] other fields>>=
 char		*prog;
 @
-
 
 
 <<constant TOGO>>=
@@ -788,7 +787,7 @@ char		*prog;
 
 
 
-
+%XXXXXX
 % TODO Node.flags
 % TODO: use enum instead?
 <<constant VIRTUAL>>=
@@ -859,15 +858,18 @@ char		*prog;
 
 \section{[[Envy]] and [[envy]]}
 
+% variables, different occurences: in rule target, prerequistes,
+% or in recipe. Different handling depending on context.
+
 % Not envy :) just environment variable stuff, rename?
 <<struct Envy>>=
-typedef struct Envy
+struct Envy
 {
     char 		*name;
 
     // list<ref_own<string>>
     Word 		*values;
-} Envy;
+};
 @
 
 
@@ -910,7 +912,7 @@ envinsert(char *name, Word *value)
 \section{[[Job]] and [[jobs]]}
 
 <<struct Job>>=
-typedef struct Job
+struct Job
 {
     Word		*t;	/* targets */
     Rule		*r;	/* master rule for job */
@@ -930,7 +932,7 @@ typedef struct Job
 
     // Extra
     <<[[Job]] extra fields>>
-} Job;
+};
 @
 
 
@@ -976,16 +978,20 @@ struct Job	*next;
 
 
 
+
+
+
+
 \chapter{[[main()]]}
 
 <<global bout>>=
 Biobuf bout;
 @
 
-
 <<[[main()]] locals>>=
 Bufblock *buf = newbuf();
 @
+
 
 
 \ifallcode
@@ -1009,17 +1015,17 @@ main(int argc, char **argv)
     Binit(&bout, STDOUT, OWRITE);
 
     <<[[main()]] argv processing for -xxx, modify flags, modify buf>>
-    <<[[main()]] profiling>>
 
-    usage();
+    <<[[main()]] setup optional profiling>>
     syminit();
     initenv();
-    usage();
+
+    usage(); // useful?
 
     <<[[main()]] argv processing for xxx=>>
+
     <<[[main()]] set MKFLAGS variable>>
     <<[[main()]] set MKARGS variable>>
-    freebuf(buf);
 
     <<[[main()]] parsing mkfile, call parse()>>
 
@@ -1058,18 +1064,10 @@ for(argv++; *argv && (**argv == '-'); argv++)
 }
 @
 
-%XXX?
-<<[[main()]] -xxx switch cases>>=
-case 'k':
-    kflag = true;
-    break;
-@
-
-
-
-
 
 \section{[[mk xxx=yyy]] argument processing}
+
+% mk CC=6c default => override
 
 <<[[main()]] locals>>=
 char *temp;
@@ -1103,13 +1101,13 @@ for(i = 0; argv[i]; i++)
   }
 if(tfd >= 0){
     Bflush(&tb);
-    seek(tfd, 0L, 0);
-    parse("command line args", tfd, true);
+    seek(tfd, 0L, SEEK__START);
+    parse("<command line args>", tfd, true);
     remove(temp);
 }
 @
 % abuse parse(), pass true so will get varoverride to true
-% seek used to be LSEEK a macro expanding ultimately to seek
+%old: seek() used to be LSEEK() a macro expanding ultimately to seek
 
 \section{Setting [[MKFLAGS]], [[MKARGS]]}
 % used by? at least mkfile called recursively can expect those variables
@@ -1133,6 +1131,8 @@ for(i = 0; argv[i]; i++){
 }
 insert(buf, '\0');
 symlook("MKARGS", S_VAR, (void *) stow(buf->start));
+
+freebuf(buf);
 @
 
 
@@ -1140,17 +1140,8 @@ symlook("MKARGS", S_VAR, (void *) stow(buf->start));
 
 % mk -f
 <<[[main()]] locals>>=
-char *files[256], **f = files, **ff;
-@
-
-
-<<[[main()]] parsing mkfile, call parse()>>=
-if(f == files){
-    if(access(MKFILE, 4) == 0)
-        parse(MKFILE, open(MKFILE, 0), false);
-} else
-    for(ff = files; ff < f; ff++)
-        parse(*ff, open(*ff, 0), false);
+char *files[256], **f = files;
+char **ff;
 @
 
 <<[[main()]] -xxx switch cases>>=
@@ -1164,9 +1155,54 @@ case 'f':
 @
 
 
+<<[[main()]] parsing mkfile, call parse()>>=
+if(f == files){
+    if(access(MKFILE, 4) == 0)
+        parse(MKFILE, open(MKFILE, 0), false);
+} else
+    for(ff = files; ff < f; ff++)
+        parse(*ff, open(*ff, 0), false);
+@
+
+
+
 
 \section{Building the targets}
 
+<<[[main()]] building the targets, call mk()>>=
+if(*argv == nil){
+    <<[[main()]] when no target arguments>>
+} else {
+    <<[[main()]] if sequential mode and target arguments given>>
+    else {
+       <<[[main()]] parallel mode and target arguments given>>
+    }
+}
+@
+
+% e.g. 'default', 
+% should be a single word (but consistent to use Word)
+% should be initialized while parsing with the first rule added
+<<global target1>>=
+Word *target1;
+@
+
+<<[[main()]] when no target arguments>>=
+if(target1)
+    for(w = target1; w; w = w->next)
+        // The call!
+        mk(w->s);
+else {
+    fprint(STDERR, "mk: nothing to mk\n");
+    Exit();
+}
+@
+
+
+
+%\subsection{Sequential mode}
+
+% sequential not parallel command line arguments
 <<[[main()]] locals>>=
 bool sflag = false;
 @
@@ -1177,59 +1213,44 @@ case 's':
     break;
 @
 
-% e.g. 'default', 
-% should be a single word (but consistent to use Word)
-% should be initialized while parsing with the first rule added
-<<global target1>>=
-Word *target1;
-@
-
-
-<<[[main()]] building the targets, call mk()>>=
-if(*argv == nil){
-    if(target1)
-        for(w = target1; w; w = w->next)
-            // The call!
-            mk(w->s);
-    else {
-        fprint(STDERR, "mk: nothing to mk\n");
-        Exit();
-    }
-} else {
-    if(sflag){
-        for(; *argv; argv++)
-            if(**argv)
-                mk(*argv);
-    }
-    else {
-        Word *head, *tail, *t;
-
-        /* fake a new rule with all the args as prereqs */
-        tail = nil;
-        t = nil;
-        for(; *argv; argv++)
-            if(**argv){
-                if(tail == nil)
-                    tail = t = newword(*argv);
-                else {
-                    t->next = newword(*argv);
-                    t = t->next;
-                }
-            }
-        if(tail->next == nil)
-            mk(tail->s);
-        else {
-            head = newword("command line arguments");
-            addrules(head, tail, strdup(""), VIR, mkinline, 0);
-            mk(head->s);
-        }
-    }
+<<[[main()]] if sequential mode and target arguments given>>=
+if(sflag){
+    for(; *argv; argv++)
+        if(**argv)
+            mk(*argv);
 }
 @
 
+
+<<[[main()]] parallel mode and target arguments given>>=
+Word *head, *tail, *t;
+
+/* fake a new rule with all the args as prereqs */
+tail = nil;
+t = nil;
+for(; *argv; argv++)
+    if(**argv){
+        if(tail == nil)
+            tail = t = newword(*argv);
+        else {
+            t->next = newword(*argv);
+            t = t->next;
+        }
+    }
+if(tail->next == nil)
+    mk(tail->s);
+else {
+    head = newword("<command line arguments>");
+    addrules(head, tail, strdup(""), VIR, mkinline, 0);
+    mk(head->s);
+}
+@
+% could pass 0 instead of mkinline I think
+
+
 \chapter{[[mk()]]}
 
-% main -> MK -> graph() ; clrmade(); work()
+% main -> <> -> graph() ; clrmade(); work()
 <<function mk>>=
 void
 mk(char *target)
@@ -1278,6 +1299,7 @@ clrmade(Node *n)
     n->flags &= ~(CANPRETEND|PRETENDING);
     if(strchr(n->name, '(') ==0 || n->time)
         n->flags |= CANPRETEND;
+
     MADESET(n, NOTMADE);
     for(a = n->prereqs; a; a = a->next)
         if(a->n)
@@ -1914,18 +1936,18 @@ rbody(Biobuf *in)
 \section{Parsing included files}
 
 <<struct input>>=
-struct input
+struct Input
 {
     char *file;
     int line;
 
     // Extra
-    struct input *next;
+    struct Input *next;
 };
 @
 
 <<global inputs>>=
-static struct input *inputs = 0;
+static struct Input *inputs = 0;
 @
 
 % can process many files, because of the </sys/src/... 
@@ -1934,9 +1956,9 @@ static struct input *inputs = 0;
 void
 ipush(void)
 {
-    struct input *in, *me;
+    struct Input *in, *me;
 
-    me = (struct input *)Malloc(sizeof(*me));
+    me = (struct Input *)Malloc(sizeof(*me));
     me->file = infile;
     me->line = mkinline;
     me->next = 0;
@@ -1954,7 +1976,7 @@ ipush(void)
 void
 ipop(void)
 {
-    struct input *in, *me;
+    struct Input *in, *me;
 
     assert(/*pop input list*/ inputs != 0);
     if(inputs->next == 0){
@@ -4052,7 +4074,7 @@ prusage(void)
 
 % all those features are meh in my opinion
 
-\section{Pattern rules}
+\section{Regular expression pattern rules}
 
 <<global patrule>>=
 Rule *patrule;
@@ -4063,6 +4085,10 @@ Rule *patrule;
 #define		NREGEXP		10
 @
 
+<<[[Rule]] other fields>>=
+Reprog		*pat;		/* reg exp goo */
+@
+
 % instead of stem
 <<[[Arc]] other fields>>=
 char		*match[NREGEXP];
@@ -4071,6 +4097,19 @@ char		*match[NREGEXP];
 % instead of stem
 <<[[Job]] other fields>>=
 char		**match;
+@
+
+<<[[myenv]] other array elements>>=
+"stem0",		/* must be in order from here */
+"stem1",
+"stem2",
+"stem3",
+"stem4",
+"stem5",
+"stem6",
+"stem7",
+"stem8",
+"stem9",
 @
 
 \section{Multiple targets}
@@ -4094,6 +4133,10 @@ Word 		*alltargets;	/* all the targets */
 % they are there if we know no .c files has actually changed.
 % useful at a time where disk space was expensive, and so having
 % both the .o and the .a were seen as redundant waste.
+
+% from man page:
+%Nonexistent targets that have prerequisites
+%and are themselves prerequisites are treated specially.
 
 <<global iflag>>=
 bool iflag = false;
@@ -4376,13 +4419,14 @@ dumpj(char *s, Job *j, int all)
 short buf[10000];
 @
 
-<<[[main()]] profiling>>=
+<<[[main()]] setup optional profiling>>=
 #ifdef	PROF
     {
         extern int etext();
         monitor(main, etext, buf, sizeof buf, 300);
     }
 #endif
+usage();
 @
 
 
@@ -4411,6 +4455,17 @@ symstat(void)
 
 <<global runerrs>>=
 int runerrs;
+@
+
+<<global kflag>>=
+bool kflag = false;
+@
+
+% continue even if errors
+<<[[main()]] -xxx switch cases>>=
+case 'k':
+    kflag = true;
+    break;
 @
 
 
@@ -4456,7 +4511,7 @@ Realloc(void *s, int n)
 \section{Buffer managment}
 
 <<struct Bufblock>>=
-typedef struct Bufblock
+struct Bufblock
 {
     char 		*start;
     char 		*end;
@@ -4464,7 +4519,7 @@ typedef struct Bufblock
 
     // Extra
     struct Bufblock *next;
-} Bufblock;
+};
 @
 
 <<global freelist>>=

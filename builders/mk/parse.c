@@ -280,26 +280,26 @@ rbody(Biobuf *in)
 /*e: function rbody */
 
 /*s: struct input */
-struct input
+struct Input
 {
     char *file;
     int line;
 
     // Extra
-    struct input *next;
+    struct Input *next;
 };
 /*e: struct input */
 /*s: global inputs */
-static struct input *inputs = 0;
+static struct Input *inputs = 0;
 /*e: global inputs */
 
 /*s: function ipush */
 void
 ipush(void)
 {
-    struct input *in, *me;
+    struct Input *in, *me;
 
-    me = (struct input *)Malloc(sizeof(*me));
+    me = (struct Input *)Malloc(sizeof(*me));
     me->file = infile;
     me->line = mkinline;
     me->next = 0;
@@ -317,7 +317,7 @@ ipush(void)
 void
 ipop(void)
 {
-    struct input *in, *me;
+    struct Input *in, *me;
 
     assert(/*pop input list*/ inputs != 0);
     if(inputs->next == 0){

@@ -60,6 +60,7 @@ clrmade(Node *n)
     n->flags &= ~(CANPRETEND|PRETENDING);
     if(strchr(n->name, '(') ==0 || n->time)
         n->flags |= CANPRETEND;
+
     MADESET(n, NOTMADE);
     for(a = n->prereqs; a; a = a->next)
         if(a->n)

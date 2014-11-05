@@ -27,6 +27,7 @@ static char	*myenv[] =
     "alltarget",
     "newmember",
 
+    /*s: [[myenv]] other array elements */
     "stem0",		/* must be in order from here */
     "stem1",
     "stem2",
@@ -37,6 +38,7 @@ static char	*myenv[] =
     "stem7",
     "stem8",
     "stem9",
+    /*e: [[myenv]] other array elements */
 
     0,
 };

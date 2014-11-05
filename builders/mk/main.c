@@ -38,7 +38,8 @@ main(int argc, char **argv)
     fdt tfd = -1;
     Biobuf tb;
     /*x: [[main()]] locals */
-    char *files[256], **f = files, **ff;
+    char *files[256], **f = files;
+    char **ff;
     /*x: [[main()]] locals */
     bool sflag = false;
     /*x: [[main()]] locals */
@@ -60,10 +61,6 @@ main(int argc, char **argv)
 
         switch(argv[0][1]) {
         /*s: [[main()]] -xxx switch cases */
-        case 'k':
-            kflag = true;
-            break;
-        /*x: [[main()]] -xxx switch cases */
         case 'f':
             if(*++argv == nil)
                 badusage();
@@ -126,25 +123,30 @@ main(int argc, char **argv)
             else
                 debug = 0xFFFF; // D_PARSE | D_GRAPH | D_EXEC
             break;
+        /*x: [[main()]] -xxx switch cases */
+        case 'k':
+            kflag = true;
+            break;
         /*e: [[main()]] -xxx switch cases */
         default:
             badusage();
         }
     }
     /*e: [[main()]] argv processing for -xxx, modify flags, modify buf */
-    /*s: [[main()]] profiling */
+
+    /*s: [[main()]] setup optional profiling */
     #ifdef	PROF
         {
             extern int etext();
             monitor(main, etext, buf, sizeof buf, 300);
         }
     #endif
-    /*e: [[main()]] profiling */
-
     usage();
+    /*e: [[main()]] setup optional profiling */
     syminit();
     initenv();
-    usage();
+
+    usage(); // useful?
 
     /*s: [[main()]] argv processing for xxx= */
     /*
@@ -172,11 +174,12 @@ main(int argc, char **argv)
       }
     if(tfd >= 0){
         Bflush(&tb);
-        seek(tfd, 0L, 0);
-        parse("command line args", tfd, true);
+        seek(tfd, 0L, SEEK__START);
+        parse("<command line args>", tfd, true);
         remove(temp);
     }
     /*e: [[main()]] argv processing for xxx= */
+
     /*s: [[main()]] set MKFLAGS variable */
     if (buf->current != buf->start) {
         buf->current--;
@@ -195,8 +198,9 @@ main(int argc, char **argv)
     }
     insert(buf, '\0');
     symlook("MKARGS", S_VAR, (void *) stow(buf->start));
-    /*e: [[main()]] set MKARGS variable */
+
     freebuf(buf);
+    /*e: [[main()]] set MKARGS variable */
 
     /*s: [[main()]] parsing mkfile, call parse() */
     if(f == files){
@@ -233,6 +237,7 @@ main(int argc, char **argv)
 
     /*s: [[main()]] building the targets, call mk() */
     if(*argv == nil){
+        /*s: [[main()]] when no target arguments */
         if(target1)
             for(w = target1; w; w = w->next)
                 // The call!
@@ -241,34 +246,39 @@ main(int argc, char **argv)
             fprint(STDERR, "mk: nothing to mk\n");
             Exit();
         }
+        /*e: [[main()]] when no target arguments */
     } else {
+        /*s: [[main()]] if sequential mode and target arguments given */
         if(sflag){
             for(; *argv; argv++)
                 if(**argv)
                     mk(*argv);
         }
+        /*e: [[main()]] if sequential mode and target arguments given */
         else {
-            Word *head, *tail, *t;
+           /*s: [[main()]] parallel mode and target arguments given */
+           Word *head, *tail, *t;
 
-            /* fake a new rule with all the args as prereqs */
-            tail = nil;
-            t = nil;
-            for(; *argv; argv++)
-                if(**argv){
-                    if(tail == nil)
-                        tail = t = newword(*argv);
-                    else {
-                        t->next = newword(*argv);
-                        t = t->next;
-                    }
-                }
-            if(tail->next == nil)
-                mk(tail->s);
-            else {
-                head = newword("command line arguments");
-                addrules(head, tail, strdup(""), VIR, mkinline, 0);
-                mk(head->s);
-            }
+           /* fake a new rule with all the args as prereqs */
+           tail = nil;
+           t = nil;
+           for(; *argv; argv++)
+               if(**argv){
+                   if(tail == nil)
+                       tail = t = newword(*argv);
+                   else {
+                       t->next = newword(*argv);
+                       t = t->next;
+                   }
+               }
+           if(tail->next == nil)
+               mk(tail->s);
+           else {
+               head = newword("<command line arguments>");
+               addrules(head, tail, strdup(""), VIR, mkinline, 0);
+               mk(head->s);
+           }
+           /*e: [[main()]] parallel mode and target arguments given */
         }
     }
     /*e: [[main()]] building the targets, call mk() */

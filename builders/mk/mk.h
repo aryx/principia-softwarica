@@ -6,8 +6,17 @@
 
 extern Biobuf bout;
 
+typedef struct Symtab Symtab;
+typedef struct Word Word;
+typedef struct Rule Rule;
+typedef struct Node Node;
+typedef struct Arc Arc;
+typedef struct Envy Envy;
+typedef struct Job Job;
+typedef struct Bufblock Bufblock;
+
 /*s: struct Bufblock */
-typedef struct Bufblock
+struct Bufblock
 {
     char 		*start;
     char 		*end;
@@ -15,15 +24,15 @@ typedef struct Bufblock
 
     // Extra
     struct Bufblock *next;
-} Bufblock;
+};
 /*e: struct Bufblock */
 
 /*s: struct Word */
-typedef struct Word
+struct Word
 {
     char 		*s;
     struct Word 	*next;
-} Word;
+};
 /*e: struct Word */
 
 // used by main and parse.c
@@ -31,19 +40,19 @@ extern Word *target1;
 
 
 /*s: struct Envy */
-typedef struct Envy
+struct Envy
 {
     char 		*name;
 
     // list<ref_own<string>>
     Word 		*values;
-} Envy;
+};
 /*e: struct Envy */
 
 extern Envy *envy;
 
 /*s: struct Rule */
-typedef struct Rule
+struct Rule
 {
     char 		*target;	/* one target */
     //list<ref_own<string>>
@@ -57,10 +66,11 @@ typedef struct Rule
     short 		attr;		/* attributes */
 
     /*s: [[Rule]] other fields */
-    Reprog		*pat;		/* reg exp goo */
     char		*prog;		/* to use in out of date */
     /*x: [[Rule]] other fields */
     int 		rule;		/* rule number */
+    /*x: [[Rule]] other fields */
+    Reprog		*pat;		/* reg exp goo */
     /*x: [[Rule]] other fields */
     // list<ref_own?<string>>?
     Word 		*alltargets;	/* all the targets */
@@ -73,7 +83,7 @@ typedef struct Rule
     /*x: [[Rule]] extra fields */
     struct Rule	*chain;		/* hashed per target */
     /*e: [[Rule]] extra fields */
-} Rule;
+};
 /*e: struct Rule */
 
 extern Rule *rules, *metarules, *patrule;
@@ -113,7 +123,7 @@ extern Rule *rules, *metarules, *patrule;
 /*e: constant NREGEXP */
 
 /*s: struct Arc */
-typedef struct Arc
+struct Arc
 {
     // ref<Node>, dst node in the arc (src is the Node having the prereqs)
     struct Node *n;
@@ -136,7 +146,7 @@ typedef struct Arc
     // list<ref_own<arc> (head = Node.prereq)
     struct Arc	*next;
     /*e: [[Arc]] extra fields */
-} Arc;
+};
 /*e: struct Arc */
 
 /*s: constant TOGO */
@@ -145,13 +155,13 @@ typedef struct Arc
 /*e: constant TOGO */
 
 /*s: struct Node */
-typedef struct Node
+struct Node
 {
-    // usually a filename, or target like 'default'
+    // usually a filename, or target label like 'default'
     char*		name; 
     // last mtime of the file (or zero for non existing files)
     ulong		time;
-    // enum<node_flag>
+    // bitset<enum<node_flag>>
     ushort		flags;
 
     /*s: [[Node]] other fields */
@@ -163,7 +173,7 @@ typedef struct Node
     /*s: [[Node]] extra fields */
     struct Node	*next;		/* list for a rule */
     /*e: [[Node]] extra fields */
-} Node;
+};
 /*e: struct Node */
 
 /*s: constant VIRTUAL */
@@ -211,7 +221,7 @@ typedef struct Node
 /*e: constant NOMINUSE */
 
 /*s: struct Job */
-typedef struct Job
+struct Job
 {
     Word		*t;	/* targets */
     Rule		*r;	/* master rule for job */
@@ -235,13 +245,13 @@ typedef struct Job
     /*s: [[Job]] extra fields */
     struct Job	*next;
     /*e: [[Job]] extra fields */
-} Job;
+};
 /*e: struct Job */
 
 extern Job *jobs;
 
 /*s: struct Symtab */
-typedef struct Symtab
+struct Symtab
 {
     // the key
     char		*name;
@@ -258,7 +268,7 @@ typedef struct Symtab
     /*s: [[Symtab]] extra fields */
     struct Symtab	*next;
     /*e: [[Symtab]] extra fields */
-} Symtab;
+};
 /*e: struct Symtab */
 
 /*s: enum sxxx */
