@@ -22,7 +22,7 @@ assline(Biobuf *bp, Bufblock *buf)
             continue;
         case '\n':
             if (buf->current != buf->start) {
-                insert(buf, 0);
+                insert(buf, '\0');
                 return 1;
             }
             break;		/* skip empty lines */
@@ -49,7 +49,7 @@ assline(Biobuf *bp, Bufblock *buf)
             if (lastc == '\\')
                 break;		/* propagate escaped newlines??*/
             if (buf->current != buf->start) {
-                insert(buf, 0);
+                insert(buf, '\0');
                 return 1;
             }
             break;
@@ -59,7 +59,7 @@ assline(Biobuf *bp, Bufblock *buf)
         }
     }
 eof:
-    insert(buf, 0);
+    insert(buf, '\0');
     return *buf->start != 0;
 }
 /*e: function assline */
@@ -88,7 +88,7 @@ bquote(Biobuf *bp, Bufblock *buf)
     for(;c > 0; c = nextrune(bp, 0)){
         if(c == term){
             insert(buf, '\n');
-            insert(buf,0);
+            insert(buf, '\0');
             buf->current = buf->start+start;
             execinit();
             execsh(0, buf->current, buf, envy);

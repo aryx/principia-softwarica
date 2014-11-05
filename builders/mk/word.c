@@ -55,7 +55,7 @@ wtos(Word *w, int sep)
         if(w->next)
             insert(buf, sep);
     }
-    insert(buf, 0);
+    insert(buf, '\0');
     cp = strdup(buf->start);
     freebuf(buf);
     return cp;
@@ -146,7 +146,7 @@ restart:
             empty = 0;
             if(b->current != b->start){
                 bufcpy(b, w->s, strlen(w->s));
-                insert(b, 0);
+                insert(b, '\0');
                 free(w->s);
                 w->s = strdup(b->start);
                 b->current = b->start;
@@ -154,7 +154,7 @@ restart:
             if(head){
                 bufcpy(b, tail->s, strlen(tail->s));
                 bufcpy(b, w->s, strlen(w->s));
-                insert(b, 0);
+                insert(b, '\0');
                 free(tail->s);
                 tail->s = strdup(b->start);
                 tail->next = w->next;
@@ -179,11 +179,11 @@ out:
             cp = b->current;
             bufcpy(b, tail->s, strlen(tail->s));
             bufcpy(b, b->start, cp-b->start);
-            insert(b, 0);
+            insert(b, '\0');
             free(tail->s);
             tail->s = strdup(cp);
         } else {
-            insert(b, 0);
+            insert(b, '\0');
             head = newword(b->start);
         }
     }

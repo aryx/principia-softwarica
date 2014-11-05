@@ -125,11 +125,11 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
 
     assert(/*addrules args*/ head && body);
         /* tuck away first non-meta rule as default target*/
-    if(target1 == 0 && !(attr&REGEXP)){
+    if(target1 == nil && !(attr&REGEXP)){
         for(w = head; w; w = w->next)
             if(charin(w->s, "%&"))
                 break;
-        if(w == 0)
+        if(w == nil)
             target1 = wdup(head);
     }
     for(w = head; w; w = w->next)
@@ -271,7 +271,7 @@ rbody(Biobuf *in)
         if (r == '\n')
             mkinline++;
     }
-    insert(buf, 0);
+    insert(buf, '\0');
     p = strdup(buf->start);
     freebuf(buf);
     return p;

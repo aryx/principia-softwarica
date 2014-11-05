@@ -18,11 +18,15 @@ mk(char *target)
     nproc();		/* it can be updated dynamically */
     nrep();			/* it can be updated dynamically */
     runerrs = 0;
+
     node = graph(target);
+
+    /*s: [[main()]] if DEBUG(D_GRAPH) */
     if(DEBUG(D_GRAPH)){
         dumpn("new target\n", node);
         Bflush(&bout);
     }
+    /*e: [[main()]] if DEBUG(D_GRAPH) */
     clrmade(node);
     while(node->flags&NOTMADE){
         if(work(node, (Node *)0, (Arc *)0))

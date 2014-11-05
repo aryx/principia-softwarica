@@ -56,7 +56,7 @@ varname(char **s)
         return nil;
     }
     *s = cp;
-    insert(b, 0);
+    insert(b, '\0');
     return b;
 }
 /*e: function varname */
@@ -189,12 +189,12 @@ subsub(Word *v, char *s, char *end)
                 if(w){
                     bufcpy(buf, w->s, strlen(w->s));
                     bufcpy(buf, enda, nmid);
-                    insert(buf, 0);
+                    insert(buf, '\0');
                     free(w->s);
                     w->s = strdup(buf->start);
                 } else {
                     bufcpy(buf, enda, nmid);
-                    insert(buf, 0);
+                    insert(buf, '\0');
                     h = w = newword(buf->start);
                 }
                 buf->current = buf->start;
@@ -204,7 +204,7 @@ subsub(Word *v, char *s, char *end)
 
                     bufcpy(buf, w->s, strlen(w->s));
                     bufcpy(buf, d->s, strlen(d->s));
-                    insert(buf, 0);
+                    insert(buf, '\0');
                     free(w->s);
                     w->s = strdup(buf->start);
                     w->next = wdup(d->next);

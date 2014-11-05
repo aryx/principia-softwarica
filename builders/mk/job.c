@@ -32,7 +32,7 @@ dumpj(char *s, Job *j, int all)
             j, j->r, j->n, j->stem, j->nproc);
         Bprint(&bout, "\ttarget='%s' alltarget='%s' prereq='%s' nprereq='%s'\n",
             wtos(j->t, ' '), wtos(j->at, ' '), wtos(j->p, ' '), wtos(j->np, ' '));
-        j = all? j->next : 0;
+        j = all? j->next : nil;
     }
 }
 /*e: dumper dumpj */

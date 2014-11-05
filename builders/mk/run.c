@@ -12,9 +12,15 @@ typedef struct RunEvent
 /*s: global events */
 static RunEvent *events;
 /*e: global events */
+/*s: global nevents */
 static int nevents;
+/*e: global nevents */
+/*s: global nrunning */
 static int nrunning;
+/*e: global nrunning */
+/*s: global nproclimit */
 static int nproclimit;
+/*e: global nproclimit */
 
 /*s: struct Process */
 typedef struct Process
@@ -74,8 +80,10 @@ sched(void)
     }
     j = jobs;
     jobs = j->next;
+    /*s: [[sched()]] if DEBUG(D_EXEC) */
     if(DEBUG(D_EXEC))
-        fprint(1, "firing up job for target %s\n", wtos(j->t, ' '));
+        fprint(STDOUT, "firing up job for target %s\n", wtos(j->t, ' '));
+    /*e: [[sched()]] if DEBUG(D_EXEC) */
     slot = nextslot();
     events[slot].job = j;
     buf = newbuf();
@@ -96,8 +104,10 @@ sched(void)
             MADESET(n, MADE);
         }
     } else {
-        if(DEBUG(D_EXEC))
-            fprint(1, "recipe='%s'\n", j->r->recipe);	/**/
+       /*s: [[sched()]] if DEBUG(D_EXEC) print recipe */
+       if(DEBUG(D_EXEC))
+           fprint(1, "recipe='%s'\n", j->r->recipe);	/**/
+       /*e: [[sched()]] if DEBUG(D_EXEC) print recipe */
         Bflush(&bout);
         if(j->r->attr&NOMINUSE)
             flags = 0;
@@ -106,8 +116,10 @@ sched(void)
         events[slot].pid = execsh(flags, j->r->recipe, 0, e);
         usage();
         nrunning++;
-        if(DEBUG(D_EXEC))
-            fprint(1, "pid for target %s = %d\n", wtos(j->t, ' '), events[slot].pid);
+       /*s: [[sched()]] if DEBUG(D_EXEC) print pid */
+       if(DEBUG(D_EXEC))
+           fprint(1, "pid for target %s = %d\n", wtos(j->t, ' '), events[slot].pid);
+       /*e: [[sched()]] if DEBUG(D_EXEC) print pid */
     }
 }
 /*e: function sched */
@@ -149,16 +161,20 @@ again:		/* rogue processes */
             Exit();
         }
     }
+    /*s: [[waitup()]] if DEBUG(D_EXEC) print pid */
     if(DEBUG(D_EXEC))
         fprint(1, "waitup got pid=%d, status='%s'\n", pid, buf);
+    /*e: [[waitup()]] if DEBUG(D_EXEC) print pid */
     if(retstatus && pid == *retstatus){
         *retstatus = buf[0]? 1:0;
         return -1;
     }
     slot = pidslot(pid);
     if(slot < 0){
+       /*s: [[waitup()]] if DEBUG(D_EXEC) and slot < 0 */
         if(DEBUG(D_EXEC))
             fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
+       /*e: [[waitup()]] if DEBUG(D_EXEC) and slot < 0 */
         pnew(pid, buf[0]? 1:0);
         goto again;
     }
@@ -214,8 +230,10 @@ nproc(void)
     }
     if(nproclimit < 1)
         nproclimit = 1;
+    /*s: [[nproc()]] if DEBUG(D_EXEC) */
     if(DEBUG(D_EXEC))
         fprint(1, "nprocs = %d\n", nproclimit);
+    /*e: [[nproc()]] if DEBUG(D_EXEC) */
     if(nproclimit > nevents){
         if(nevents)
             events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
@@ -247,9 +265,12 @@ pidslot(int pid)
     int i;
 
     for(i = 0; i < nevents; i++)
-        if(events[i].pid == pid) return i;
+        if(events[i].pid == pid) 
+            return i;
+    /*s: [[pidslot()]] if DEBUG(D_EXEC) */
     if(DEBUG(D_EXEC))
         fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
+    /*e: [[pidslot()]] if DEBUG(D_EXEC) */
     return -1;
 }
 /*e: function pidslot */

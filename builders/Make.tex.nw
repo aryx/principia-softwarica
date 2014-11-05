@@ -208,6 +208,10 @@ efficiently \co{dependencies} between files or programs.
 % conciseness => DSL
 % efficiency => graph and //
 
+% rule, target: dependencies
+% metarules, variables => generic stuff
+% < so modularity and can factorize in different files
+
 \section{mk services}
 
 % interface is pretty simple, go in dir, type 'mk'
@@ -266,8 +270,9 @@ badusage(void)
 % Sym (a bit generic, could be in libc?)
 
 % core globals: (see mk.h externs)
-% bout, envy,    rules, metarules, patrule,    jobs
+% envy,    rules, metarules, patrule,    jobs
 % symbol hashtbl global
+% bout
 
 % draw diagram showing relations to each other, what includes what
 
@@ -298,7 +303,7 @@ typedef struct Symtab
 % which would be better typed
 <<enum sxxx>>=
 enum sxxx {
-    S_VAR,	/* variable -> value */
+    S_VAR,	/* variable -> value */ // value is a list of words
     <<enum sxxx cases>>
 };
 @
@@ -431,6 +436,8 @@ static char	*myenv[] =
     0,
 };
 @
+% $stem $prereq
+% (better than $@, $^ )
 
 <<function initenv>>=
 void
@@ -451,6 +458,7 @@ initenv(void)
 % what is this for? it has to be Words otherwise
 % there is no much point in having a Word type that is
 % just a wrapper over char*
+% HFILES=fns.h mk.h => list of 2 words
 
 % should be renamed words ...
 <<struct Word>>=
@@ -462,12 +470,12 @@ typedef struct Word
 @
 
 
-% e.g. 'default'
+% e.g. 'default', should be a single word actually no? why not char* then?
 <<global target1>>=
 Word *target1;
 @
 
-
+% rename newword_list?
 <<constructor newword>>=
 Word*
 newword(char *s)
@@ -568,36 +576,33 @@ envinsert(char *name, Word *value)
 
 
 
-\section{[[Rule]] and [[rules]]}
+\section{[[Rule]], [[rules]] and [[metarules]]}
 
 % todo: aspectize split
 <<struct Rule>>=
 typedef struct Rule
 {
     char 		*target;	/* one target */
+    //list<ref_own<string>>
+    Word 		*tail;		/* constituents of targets */
     char 		*recipe;	/* do it ! */
 
-    //list<ref_own?<string>>
-    Word 		*tail;		/* constituents of targets */
-
-    int 		rule;		/* rule number */
-    short 		line;		/* source line */
     char* 		file;		/* source file */
+    short 		line;		/* source line */
 
     // enum<rule_attr>
     short 		attr;		/* attributes */
 
-    // list<ref_own?<string>>?
-    Word 		*alltargets;	/* all the targets */
-
-    Reprog		*pat;		/* reg exp goo */
-    char		*prog;		/* to use in out of date */
+    <<[[Rule]] other fields>>
 
     // Extra
     <<[[Rule]] extra fields>>
 } Rule;
 @
-
+% rename tail to prerequistes?
+% recipe can contain $, target and tail not, the variables are expanded
+% at parsing time for that I think.
+% can also be metarule, %.$O: %.c (but $O would have been expanded)
 
 <<global rules>>=
 // list<ref_own<Rule>> (next = Rule.next)
@@ -609,10 +614,18 @@ Rule *rules;
 struct Rule	*next;
 @
 
-% incremented by addrule()
-<<global nrules>>=
-static int nrules = 0;
+
+<<global metarules>>=
+// list<ref_own<Rule>>
+Rule *metarules;
 @
+
+<<function PERCENT>>=
+#define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
+@
+
+
+
 
 
 % used in addrule()
@@ -621,21 +634,32 @@ S_TARGET,		/* target -> rule */
 @
 
 
-% ???? global corresponding? S_TARGET?
 <<[[Rule]] extra fields>>=
 struct Rule	*chain;		/* hashed per target */
 @
 
 
+%XXXX??
+<<[[Rule]] other fields>>=
+Reprog		*pat;		/* reg exp goo */
+char		*prog;		/* to use in out of date */
+@
+% prog??
+
+
 \section{[[Node]] and [[Arc]]}
 
-% Rule are general descriptions, patterns,
-% Node and Arc are concrete instantiation with existing files?
+% Rule and metarules are general static descriptions, patterns.
+% Node and Arc are concrete instantiation with existing files.
+% the actual graph of dependencies! nodes are target names usually filenames
+% arcs link nodes to other filenames with a rule attached to know what to do
 
 <<struct Node>>=
 typedef struct Node
 {
-    char		*name;
+    // usually a filename, or target like 'default'
+    char*		name; 
+    // last mtime of the file (or zero for non existing files)
     ulong		time;
     // enum<node_flag>
     ushort		flags;
@@ -670,14 +694,18 @@ newnode(char *name)
 @
 
 
+<<[[Node]] other fields>>=
+// list<ref_own<Arc>> (next = Arc.next)
+Arc		*prereqs;
+@
 
 
 <<struct Arc>>=
 typedef struct Arc
 {
-    // ref<node>, reverse of Node.prereq?
+    // ref<Node>, dst node in the arc (src is the Node having the prereqs)
     struct Node *n;
-    // ref<Rule>
+    // ref<Rule>, rule to generate the target node from the dependent node
     Rule *r;
     //? enum<rule_flag>?
     short flag;
@@ -689,10 +717,7 @@ typedef struct Arc
 } Arc;
 @
 
-<<[[Node]] other fields>>=
-// list<ref_own?<Arc>> (next = Arc.next)
-Arc		*prereqs;
-@
+
 <<[[Arc]] extra fields>>=
 // list<ref_own<arc> (head = Node.prereq)
 struct Arc	*next;
@@ -702,6 +727,15 @@ struct Arc	*next;
 
 
 % node   arc   rule   relations?
+
+% so knows how to run the rule, subst the % by the actual value
+% when the rule is a metarule
+<<[[Arc]] other fields>>=
+// what will replace the %
+char		*stem;
+@
+
+
 
 % dtor = ?
 <<constructor newarc>>=
@@ -726,14 +760,15 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 
 
 
+<<[[Arc]] other fields>>=
+char		*prog;
+@
 
 <<constant NREGEXP>>=
 #define		NREGEXP		10
 @
 
 <<[[Arc]] other fields>>=
-char		*stem;
-char		*prog;
 char		*match[NREGEXP];
 @
 
@@ -812,26 +847,30 @@ char		*match[NREGEXP];
 <<struct Job>>=
 typedef struct Job
 {
+    Word		*t;	/* targets */
     Rule		*r;	/* master rule for job */
 
     // list<ref_?<Node>> (next = Node.next?)
     Node		*n;	/* list of node targets */
 
     char		*stem;
-    char		**match;
 
     Word		*p;	/* prerequistes */
     Word		*np;	/* new prerequistes */
-    Word		*t;	/* targets */
     Word		*at;	/* all targets */
 
     int		nproc;	/* slot number */
+
+    <<[[Job]] other fields>>
 
     // Extra
     <<[[Job]] extra fields>>
 } Job;
 @
 
+<<[[Job]] other fields>>=
+char		**match;
+@
 
 <<constructor newjob>>=
 Job*
@@ -888,7 +927,7 @@ main(int argc, char **argv)
     Word *w;
     char *s, *temp;
     char *files[256], **f = files, **ff;
-    int sflag = 0;
+    bool sflag = false;
     int i;
     int tfd = -1;
     Biobuf tb;
@@ -900,26 +939,27 @@ main(int argc, char **argv)
      *  instead of sharing them
      */
 
-    Binit(&bout, 1, OWRITE);
+    Binit(&bout, STDOUT, OWRITE);
     buf = newbuf();
-    whatif = 0;
+    whatif = nil;
+
     USED(argc);
     for(argv++; *argv && (**argv == '-'); argv++)
     {
         bufcpy(buf, argv[0], strlen(argv[0]));
         insert(buf, ' ');
-        switch(argv[0][1])
-        {
+
+        switch(argv[0][1]) {
         case 'a':
-            aflag = 1;
+            aflag = true;
             break;
         case 'd':
             if(*(s = &argv[0][2]))
-                while(*s) switch(*s++)
-                {
-                case 'p':	debug |= D_PARSE; break;
-                case 'g':	debug |= D_GRAPH; break;
-                case 'e':	debug |= D_EXEC; break;
+                while(*s) 
+                 switch(*s++) {
+                 case 'p':	debug |= D_PARSE; break;
+                 case 'g':	debug |= D_GRAPH; break;
+                 case 'e':	debug |= D_EXEC; break;
                 }
             else
                 debug = 0xFFFF;
@@ -941,19 +981,19 @@ main(int argc, char **argv)
             kflag = true;
             break;
         case 'n':
-            nflag = 1;
+            nflag = true;
             break;
         case 's':
-            sflag = 1;
+            sflag = true;
             break;
         case 't':
-            tflag = 1;
+            tflag = true;
             break;
         case 'u':
-            uflag = 1;
+            uflag = true;
             break;
         case 'w':
-            if(whatif == 0)
+            if(whatif == nil)
                 whatif = newbuf();
             else
                 insert(whatif, ' ');
@@ -973,6 +1013,7 @@ main(int argc, char **argv)
 
     if(aflag)
         iflag = true;
+
     usage();
     syminit();
     initenv();
@@ -1009,7 +1050,7 @@ main(int argc, char **argv)
 
     if (buf->current != buf->start) {
         buf->current--;
-        insert(buf, 0);
+        insert(buf, '\0');
     }
     symlook("MKFLAGS", S_VAR, (void *) stow(buf->start));
     buf->current = buf->start;
@@ -1019,7 +1060,7 @@ main(int argc, char **argv)
             insert(buf, ' ');
         bufcpy(buf, argv[i], strlen(argv[i]));
     }
-    insert(buf, 0);
+    insert(buf, '\0');
     symlook("MKARGS", S_VAR, (void *) stow(buf->start));
     freebuf(buf);
 
@@ -1030,15 +1071,10 @@ main(int argc, char **argv)
         for(ff = files; ff < f; ff++)
             parse(*ff, open(*ff, 0), 0);
 
-    if(DEBUG(D_PARSE)){
-        dumpw("default targets", target1);
-        dumpr("rules", rules);
-        dumpr("metarules", metarules);
-        dumpv("variables");
-    }
+    <<[[main()]] if DEBUG(D_PARSE)>>
 
     if(whatif){
-        insert(whatif, 0);
+        insert(whatif, '\0');
         timeinit(whatif->start);
         freebuf(whatif);
     }
@@ -1066,8 +1102,8 @@ main(int argc, char **argv)
             Word *head, *tail, *t;
 
             /* fake a new rule with all the args as prereqs */
-            tail = 0;
-            t = 0;
+            tail = nil;
+            t = nil;
             for(; *argv; argv++)
                 if(**argv){
                     if(tail == 0)
@@ -1089,7 +1125,7 @@ main(int argc, char **argv)
     if(uflag)
         prusage();
 
-    exits(0);
+    exits(nil);
 }
 @
 
@@ -1109,11 +1145,10 @@ mk(char *target)
     nproc();		/* it can be updated dynamically */
     nrep();			/* it can be updated dynamically */
     runerrs = 0;
+
     node = graph(target);
-    if(DEBUG(D_GRAPH)){
-        dumpn("new target\n", node);
-        Bflush(&bout);
-    }
+
+    <<[[main()]] if DEBUG(D_GRAPH)>>
     clrmade(node);
     while(node->flags&NOTMADE){
         if(work(node, (Node *)0, (Arc *)0))
@@ -1449,14 +1484,6 @@ rcmp(Rule *r, char *target, Word *tail)
 
 \section{Metarule}
 
-<<global metarules>>=
-// list<ref_own<Rule>>
-Rule *metarules;
-@
-
-<<function PERCENT>>=
-#define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
-@
 
 % see matching later, or put matching here?
 
@@ -1646,11 +1673,11 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
 
     assert(/*addrules args*/ head && body);
         /* tuck away first non-meta rule as default target*/
-    if(target1 == 0 && !(attr&REGEXP)){
+    if(target1 == nil && !(attr&REGEXP)){
         for(w = head; w; w = w->next)
             if(charin(w->s, "%&"))
                 break;
-        if(w == 0)
+        if(w == nil)
             target1 = wdup(head);
     }
     for(w = head; w; w = w->next)
@@ -1792,7 +1819,7 @@ rbody(Biobuf *in)
         if (r == '\n')
             mkinline++;
     }
-    insert(buf, 0);
+    insert(buf, '\0');
     p = strdup(buf->start);
     freebuf(buf);
     return p;
@@ -1882,7 +1909,7 @@ assline(Biobuf *bp, Bufblock *buf)
             continue;
         case '\n':
             if (buf->current != buf->start) {
-                insert(buf, 0);
+                insert(buf, '\0');
                 return 1;
             }
             break;		/* skip empty lines */
@@ -1909,7 +1936,7 @@ assline(Biobuf *bp, Bufblock *buf)
             if (lastc == '\\')
                 break;		/* propagate escaped newlines??*/
             if (buf->current != buf->start) {
-                insert(buf, 0);
+                insert(buf, '\0');
                 return 1;
             }
             break;
@@ -1919,7 +1946,7 @@ assline(Biobuf *bp, Bufblock *buf)
         }
     }
 eof:
-    insert(buf, 0);
+    insert(buf, '\0');
     return *buf->start != 0;
 }
 @
@@ -1948,7 +1975,7 @@ bquote(Biobuf *bp, Bufblock *buf)
     for(;c > 0; c = nextrune(bp, 0)){
         if(c == term){
             insert(buf, '\n');
-            insert(buf,0);
+            insert(buf, '\0');
             buf->current = buf->start+start;
             execinit();
             execsh(0, buf->current, buf, envy);
@@ -2045,7 +2072,7 @@ wtos(Word *w, int sep)
         if(w->next)
             insert(buf, sep);
     }
-    insert(buf, 0);
+    insert(buf, '\0');
     cp = strdup(buf->start);
     freebuf(buf);
     return cp;
@@ -2103,7 +2130,7 @@ restart:
             empty = 0;
             if(b->current != b->start){
                 bufcpy(b, w->s, strlen(w->s));
-                insert(b, 0);
+                insert(b, '\0');
                 free(w->s);
                 w->s = strdup(b->start);
                 b->current = b->start;
@@ -2111,7 +2138,7 @@ restart:
             if(head){
                 bufcpy(b, tail->s, strlen(tail->s));
                 bufcpy(b, w->s, strlen(w->s));
-                insert(b, 0);
+                insert(b, '\0');
                 free(tail->s);
                 tail->s = strdup(b->start);
                 tail->next = w->next;
@@ -2136,11 +2163,11 @@ out:
             cp = b->current;
             bufcpy(b, tail->s, strlen(tail->s));
             bufcpy(b, b->start, cp-b->start);
-            insert(b, 0);
+            insert(b, '\0');
             free(tail->s);
             tail->s = strdup(cp);
         } else {
-            insert(b, 0);
+            insert(b, '\0');
             head = newword(b->start);
         }
     }
@@ -2215,6 +2242,17 @@ subst(char *stem, char *template, char *dest, int dlen)
 
 
 \chapter{Dependency graph}
+
+% for GC? to identify unused rules?
+<<[[Rule]] other fields>>=
+int 		rule;		/* rule number */
+@
+
+% incremented by addrule()
+<<global nrules>>=
+static int nrules = 0;
+@
+
 
 % constructor?
 <<function graph>>=
@@ -2893,7 +2931,7 @@ varname(char **s)
         return nil;
     }
     *s = cp;
-    insert(b, 0);
+    insert(b, '\0');
     return b;
 }
 @
@@ -3032,12 +3070,12 @@ subsub(Word *v, char *s, char *end)
                 if(w){
                     bufcpy(buf, w->s, strlen(w->s));
                     bufcpy(buf, enda, nmid);
-                    insert(buf, 0);
+                    insert(buf, '\0');
                     free(w->s);
                     w->s = strdup(buf->start);
                 } else {
                     bufcpy(buf, enda, nmid);
-                    insert(buf, 0);
+                    insert(buf, '\0');
                     h = w = newword(buf->start);
                 }
                 buf->current = buf->start;
@@ -3047,7 +3085,7 @@ subsub(Word *v, char *s, char *end)
 
                     bufcpy(buf, w->s, strlen(w->s));
                     bufcpy(buf, d->s, strlen(d->s));
-                    insert(buf, 0);
+                    insert(buf, '\0');
                     free(w->s);
                     w->s = strdup(buf->start);
                     w->next = wdup(d->next);
@@ -3359,7 +3397,7 @@ dorecipe(Node *node)
             if((s = symlook(buf, S_NODE, 0)) == 0)
                 continue;	/* not a node we are interested in */
             n = s->u.ptr;
-            if(aflag == 0 && n->time) {
+            if(aflag == false && n->time) {
                 for(a = n->prereqs; a; a = a->next)
                     if(a->n && outofdate(n, a, 0))
                         break;
@@ -3455,6 +3493,20 @@ static Process *phead;
 static Process *pfree;
 @
 
+<<global nproclimit>>=
+static int nproclimit;
+@
+
+<<global nevents>>=
+static int nevents;
+@
+
+
+<<global nrunning>>=
+static int nrunning;
+@
+
+
 <<function run>>=
 void
 run(Job *j)
@@ -3493,8 +3545,7 @@ sched(void)
     }
     j = jobs;
     jobs = j->next;
-    if(DEBUG(D_EXEC))
-        fprint(1, "firing up job for target %s\n", wtos(j->t, ' '));
+    <<[[sched()]] if DEBUG(D_EXEC)>>
     slot = nextslot();
     events[slot].job = j;
     buf = newbuf();
@@ -3515,8 +3566,7 @@ sched(void)
             MADESET(n, MADE);
         }
     } else {
-        if(DEBUG(D_EXEC))
-            fprint(1, "recipe='%s'\n", j->r->recipe);	/**/
+       <<[[sched()]] if DEBUG(D_EXEC) print recipe>>
         Bflush(&bout);
         if(j->r->attr&NOMINUSE)
             flags = 0;
@@ -3525,8 +3575,7 @@ sched(void)
         events[slot].pid = execsh(flags, j->r->recipe, 0, e);
         usage();
         nrunning++;
-        if(DEBUG(D_EXEC))
-            fprint(1, "pid for target %s = %d\n", wtos(j->t, ' '), events[slot].pid);
+       <<[[sched()]] if DEBUG(D_EXEC) print pid>>
     }
 }
 @
@@ -3569,16 +3618,14 @@ again:		/* rogue processes */
             Exit();
         }
     }
-    if(DEBUG(D_EXEC))
-        fprint(1, "waitup got pid=%d, status='%s'\n", pid, buf);
+    <<[[waitup()]] if DEBUG(D_EXEC) print pid>>
     if(retstatus && pid == *retstatus){
         *retstatus = buf[0]? 1:0;
         return -1;
     }
     slot = pidslot(pid);
     if(slot < 0){
-        if(DEBUG(D_EXEC))
-            fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
+       <<[[waitup()]] if DEBUG(D_EXEC) and slot < 0>>
         pnew(pid, buf[0]? 1:0);
         goto again;
     }
@@ -3636,8 +3683,7 @@ nproc(void)
     }
     if(nproclimit < 1)
         nproclimit = 1;
-    if(DEBUG(D_EXEC))
-        fprint(1, "nprocs = %d\n", nproclimit);
+    <<[[nproc()]] if DEBUG(D_EXEC)>>
     if(nproclimit > nevents){
         if(nevents)
             events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
@@ -3669,9 +3715,9 @@ pidslot(int pid)
     int i;
 
     for(i = 0; i < nevents; i++)
-        if(events[i].pid == pid) return i;
-    if(DEBUG(D_EXEC))
-        fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
+        if(events[i].pid == pid) 
+            return i;
+    <<[[pidslot()]] if DEBUG(D_EXEC)>>
     return -1;
 }
 @
@@ -3743,7 +3789,7 @@ char *explain = nil;
 
 % just print recipe, do not execute them
 <<global nflag>>=
-int nflag = 0;
+bool nflag = false;
 @
 
 \section{What if, [[mk -w]]}
@@ -3755,7 +3801,7 @@ int nflag = 0;
 % utlilization
 
 <<global uflag>>=
-int uflag = 0;
+bool uflag = false;
 @
 
 <<global tslot>>=
@@ -3798,13 +3844,13 @@ prusage(void)
 \section{Recompile everything, [[mk -a]]}
 
 <<global aflag>>=
-int aflag = 0;
+bool aflag = false;
 @
 
 \section{Touching, [[mk -t]]}
 
 <<global tflag>>=
-int tflag = 0;
+bool tflag = false;
 @
 
 \chapter{Advanced Topics}
@@ -3816,6 +3862,11 @@ Rule *patrule;
 @
 
 \section{Multiple targets}
+
+<<[[Rule]] other fields>>=
+// list<ref_own?<string>>?
+Word 		*alltargets;	/* all the targets */
+@
 
 \section{Aggregates, archives}
 
@@ -3829,6 +3880,7 @@ Rule *patrule;
 \chapter{Debugging}
 
 \section{Dumping internals, [[mk -d]]}
+
 %mk -d[epg] EXEC PARSE GRAPH
 
 % -d flag
@@ -3842,16 +3894,30 @@ int debug;
 @
 
 % enum<dxxx>
+
+% rules
 <<constant D_PARSE>>=
 #define		D_PARSE		0x01
 @
+% node and arcs
 <<constant D_GRAPH>>=
 #define		D_GRAPH		0x02
 @
+% jobs
 <<constant D_EXEC>>=
 #define		D_EXEC		0x04
 @
 
+\subsection{The rules}
+
+<<[[main()]] if DEBUG(D_PARSE)>>=
+if(DEBUG(D_PARSE)){
+    dumpw("default targets", target1);
+    dumpr("rules", rules);
+    dumpr("metarules", metarules);
+    dumpv("variables");
+}
+@
 
 
 <<dumper dumpw>>=
@@ -3865,6 +3931,23 @@ dumpw(char *s, Word *w)
 }
 @
 
+% todo: remove the pointer thing %p, not that useful I think
+% note that the variable expansion has been done for the target and prerequestes
+<<dumper dumpr>>=
+void
+dumpr(char *s, Rule *r)
+{
+    Bprint(&bout, "%s: start=%p\n", s, r);
+    for(; r; r = r->next){
+        Bprint(&bout, "\tRule %p: %s:%d attr=%x next=%p chain=%p alltarget='%s'",
+            r, r->file, r->line, r->attr, r->next, r->chain, wtos(r->alltargets, ' '));
+        if(r->prog)
+            Bprint(&bout, " prog='%s'", r->prog);
+        Bprint(&bout, "\n\ttarget=%s: %s\n", r->target, wtos(r->tail,' '));
+        Bprint(&bout, "\trecipe@%p='%s'\n", r->recipe, r->recipe);
+    }
+}
+@
 
 <<dumper dumpv>>=
 void
@@ -3892,24 +3975,16 @@ print1(Symtab *s)
 
 
 
-<<dumper dumpr>>=
-void
-dumpr(char *s, Rule *r)
-{
-    Bprint(&bout, "%s: start=%p\n", s, r);
-    for(; r; r = r->next){
-        Bprint(&bout, "\tRule %p: %s:%d attr=%x next=%p chain=%p alltarget='%s'",
-            r, r->file, r->line, r->attr, r->next, r->chain, wtos(r->alltargets, ' '));
-        if(r->prog)
-            Bprint(&bout, " prog='%s'", r->prog);
-        Bprint(&bout, "\n\ttarget=%s: %s\n", r->target, wtos(r->tail,' '));
-        Bprint(&bout, "\trecipe@%p='%s'\n", r->recipe, r->recipe);
-    }
+\subsection{The graph}
+
+% node = graph(target) from mk(target)
+<<[[main()]] if DEBUG(D_GRAPH)>>=
+if(DEBUG(D_GRAPH)){
+    dumpn("new target\n", node);
+    Bflush(&bout);
 }
 @
-
-
-
+% below the buf is here to compute indentation, depth of the graph in spaces
 
 <<dumper dumpn>>=
 void
@@ -3946,7 +4021,58 @@ dumpa(char *s, Arc *a)
 }
 @
 
+\ifallcode
+<<[[nrep()]] if DEBUG(D_GRAPH)>>=
+if(DEBUG(D_GRAPH))
+    Bprint(&bout, "nreps = %d\n", nreps);
+@
+\fi
 
+\subsection{The jobs}
+
+<<[[nproc()]] if DEBUG(D_EXEC)>>=
+if(DEBUG(D_EXEC))
+    fprint(1, "nprocs = %d\n", nproclimit);
+@
+
+
+
+<<[[sched()]] if DEBUG(D_EXEC)>>=
+if(DEBUG(D_EXEC))
+    fprint(STDOUT, "firing up job for target %s\n", wtos(j->t, ' '));
+@
+
+<<[[sched()]] if DEBUG(D_EXEC) print recipe>>=
+if(DEBUG(D_EXEC))
+    fprint(1, "recipe='%s'\n", j->r->recipe);	/**/
+@
+
+<<[[sched()]] if DEBUG(D_EXEC) print pid>>=
+if(DEBUG(D_EXEC))
+    fprint(1, "pid for target %s = %d\n", wtos(j->t, ' '), events[slot].pid);
+@
+
+
+<<[[waitup()]] if DEBUG(D_EXEC) print pid>>=
+if(DEBUG(D_EXEC))
+    fprint(1, "waitup got pid=%d, status='%s'\n", pid, buf);
+@
+
+
+<<[[waitup()]] if DEBUG(D_EXEC) and slot < 0>>=
+ if(DEBUG(D_EXEC))
+     fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
+@
+
+<<[[pidslot()]] if DEBUG(D_EXEC)>>=
+if(DEBUG(D_EXEC))
+    fprint(STDERR, "mk: wait returned unexpected process %d\n", pid);
+@
+
+
+
+
+% actually never used
 <<dumper dumpj>>=
 void
 dumpj(char *s, Job *j, int all)
@@ -3957,7 +4083,7 @@ dumpj(char *s, Job *j, int all)
             j, j->r, j->n, j->stem, j->nproc);
         Bprint(&bout, "\ttarget='%s' alltarget='%s' prereq='%s' nprereq='%s'\n",
             wtos(j->t, ' '), wtos(j->at, ' '), wtos(j->p, ' '), wtos(j->np, ' '));
-        j = all? j->next : 0;
+        j = all? j->next : nil;
     }
 }
 @

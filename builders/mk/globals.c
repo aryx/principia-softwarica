@@ -14,10 +14,10 @@ Rule *rules;
 Rule *metarules;
 /*e: global metarules */
 /*s: global nflag */
-int nflag = 0;
+bool nflag = false;
 /*e: global nflag */
 /*s: global tflag */
-int tflag = 0;
+bool tflag = false;
 /*e: global tflag */
 /*s: global iflag */
 bool iflag = false;
@@ -26,7 +26,7 @@ bool iflag = false;
 bool kflag = false;
 /*e: global kflag */
 /*s: global aflag */
-int aflag = 0;
+bool aflag = false;
 /*e: global aflag */
 /*s: global explain */
 char *explain = nil;

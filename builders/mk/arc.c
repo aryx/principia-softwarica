@@ -45,7 +45,7 @@ nrep(void)
     Symtab *sym;
     Word *w;
 
-    sym = symlook("NREP", S_VAR, 0);
+    sym = symlook("NREP", S_VAR, nil);
     if(sym){
         w = sym->u.ptr;
         if (w && w->s && *w->s)
@@ -53,8 +53,10 @@ nrep(void)
     }
     if(nreps < 1)
         nreps = 1;
+    /*s: [[nrep()]] if DEBUG(D_GRAPH) */
     if(DEBUG(D_GRAPH))
         Bprint(&bout, "nreps = %d\n", nreps);
+    /*e: [[nrep()]] if DEBUG(D_GRAPH) */
 }
 /*e: function nrep */
 /*e: mk/arc.c */

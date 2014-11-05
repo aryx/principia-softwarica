@@ -12,7 +12,7 @@ static char *version = "@(#)mk general release 4 (plan 9)";
 // see also globals.c
 
 /*s: global uflag */
-int uflag = 0;
+bool uflag = false;
 /*e: global uflag */
 
 void badusage(void);
@@ -30,7 +30,7 @@ main(int argc, char **argv)
     Word *w;
     char *s, *temp;
     char *files[256], **f = files, **ff;
-    int sflag = 0;
+    bool sflag = false;
     int i;
     int tfd = -1;
     Biobuf tb;
@@ -42,26 +42,27 @@ main(int argc, char **argv)
      *  instead of sharing them
      */
 
-    Binit(&bout, 1, OWRITE);
+    Binit(&bout, STDOUT, OWRITE);
     buf = newbuf();
-    whatif = 0;
+    whatif = nil;
+
     USED(argc);
     for(argv++; *argv && (**argv == '-'); argv++)
     {
         bufcpy(buf, argv[0], strlen(argv[0]));
         insert(buf, ' ');
-        switch(argv[0][1])
-        {
+
+        switch(argv[0][1]) {
         case 'a':
-            aflag = 1;
+            aflag = true;
             break;
         case 'd':
             if(*(s = &argv[0][2]))
-                while(*s) switch(*s++)
-                {
-                case 'p':	debug |= D_PARSE; break;
-                case 'g':	debug |= D_GRAPH; break;
-                case 'e':	debug |= D_EXEC; break;
+                while(*s) 
+                 switch(*s++) {
+                 case 'p':	debug |= D_PARSE; break;
+                 case 'g':	debug |= D_GRAPH; break;
+                 case 'e':	debug |= D_EXEC; break;
                 }
             else
                 debug = 0xFFFF;
@@ -83,19 +84,19 @@ main(int argc, char **argv)
             kflag = true;
             break;
         case 'n':
-            nflag = 1;
+            nflag = true;
             break;
         case 's':
-            sflag = 1;
+            sflag = true;
             break;
         case 't':
-            tflag = 1;
+            tflag = true;
             break;
         case 'u':
-            uflag = 1;
+            uflag = true;
             break;
         case 'w':
-            if(whatif == 0)
+            if(whatif == nil)
                 whatif = newbuf();
             else
                 insert(whatif, ' ');
@@ -122,6 +123,7 @@ main(int argc, char **argv)
 
     if(aflag)
         iflag = true;
+
     usage();
     syminit();
     initenv();
@@ -158,7 +160,7 @@ main(int argc, char **argv)
 
     if (buf->current != buf->start) {
         buf->current--;
-        insert(buf, 0);
+        insert(buf, '\0');
     }
     symlook("MKFLAGS", S_VAR, (void *) stow(buf->start));
     buf->current = buf->start;
@@ -168,7 +170,7 @@ main(int argc, char **argv)
             insert(buf, ' ');
         bufcpy(buf, argv[i], strlen(argv[i]));
     }
-    insert(buf, 0);
+    insert(buf, '\0');
     symlook("MKARGS", S_VAR, (void *) stow(buf->start));
     freebuf(buf);
 
@@ -179,15 +181,17 @@ main(int argc, char **argv)
         for(ff = files; ff < f; ff++)
             parse(*ff, open(*ff, 0), 0);
 
+    /*s: [[main()]] if DEBUG(D_PARSE) */
     if(DEBUG(D_PARSE)){
         dumpw("default targets", target1);
         dumpr("rules", rules);
         dumpr("metarules", metarules);
         dumpv("variables");
     }
+    /*e: [[main()]] if DEBUG(D_PARSE) */
 
     if(whatif){
-        insert(whatif, 0);
+        insert(whatif, '\0');
         timeinit(whatif->start);
         freebuf(whatif);
     }
@@ -215,8 +219,8 @@ main(int argc, char **argv)
             Word *head, *tail, *t;
 
             /* fake a new rule with all the args as prereqs */
-            tail = 0;
-            t = 0;
+            tail = nil;
+            t = nil;
             for(; *argv; argv++)
                 if(**argv){
                     if(tail == 0)
@@ -238,7 +242,7 @@ main(int argc, char **argv)
     if(uflag)
         prusage();
 
-    exits(0);
+    exits(nil);
 }
 /*e: function main */
 

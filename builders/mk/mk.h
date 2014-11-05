@@ -46,23 +46,25 @@ extern Envy *envy;
 typedef struct Rule
 {
     char 		*target;	/* one target */
+    //list<ref_own<string>>
+    Word 		*tail;		/* constituents of targets */
     char 		*recipe;	/* do it ! */
 
-    //list<ref_own?<string>>
-    Word 		*tail;		/* constituents of targets */
-
-    int 		rule;		/* rule number */
-    short 		line;		/* source line */
     char* 		file;		/* source file */
+    short 		line;		/* source line */
 
     // enum<rule_attr>
     short 		attr;		/* attributes */
 
-    // list<ref_own?<string>>?
-    Word 		*alltargets;	/* all the targets */
-
+    /*s: [[Rule]] other fields */
     Reprog		*pat;		/* reg exp goo */
     char		*prog;		/* to use in out of date */
+    /*x: [[Rule]] other fields */
+    int 		rule;		/* rule number */
+    /*x: [[Rule]] other fields */
+    // list<ref_own?<string>>?
+    Word 		*alltargets;	/* all the targets */
+    /*e: [[Rule]] other fields */
 
     // Extra
     /*s: [[Rule]] extra fields */
@@ -113,16 +115,19 @@ extern Rule *rules, *metarules, *patrule;
 /*s: struct Arc */
 typedef struct Arc
 {
-    // ref<node>, reverse of Node.prereq?
+    // ref<Node>, dst node in the arc (src is the Node having the prereqs)
     struct Node *n;
-    // ref<Rule>
+    // ref<Rule>, rule to generate the target node from the dependent node
     Rule *r;
     //? enum<rule_flag>?
     short flag;
 
     /*s: [[Arc]] other fields */
+    // what will replace the %
     char		*stem;
+    /*x: [[Arc]] other fields */
     char		*prog;
+    /*x: [[Arc]] other fields */
     char		*match[NREGEXP];
     /*e: [[Arc]] other fields */
     
@@ -142,13 +147,15 @@ typedef struct Arc
 /*s: struct Node */
 typedef struct Node
 {
-    char		*name;
+    // usually a filename, or target like 'default'
+    char*		name; 
+    // last mtime of the file (or zero for non existing files)
     ulong		time;
     // enum<node_flag>
     ushort		flags;
 
     /*s: [[Node]] other fields */
-    // list<ref_own?<Arc>> (next = Arc.next)
+    // list<ref_own<Arc>> (next = Arc.next)
     Arc		*prereqs;
     /*e: [[Node]] other fields */
 
@@ -206,20 +213,23 @@ typedef struct Node
 /*s: struct Job */
 typedef struct Job
 {
+    Word		*t;	/* targets */
     Rule		*r;	/* master rule for job */
 
     // list<ref_?<Node>> (next = Node.next?)
     Node		*n;	/* list of node targets */
 
     char		*stem;
-    char		**match;
 
     Word		*p;	/* prerequistes */
     Word		*np;	/* new prerequistes */
-    Word		*t;	/* targets */
     Word		*at;	/* all targets */
 
     int		nproc;	/* slot number */
+
+    /*s: [[Job]] other fields */
+    char		**match;
+    /*e: [[Job]] other fields */
 
     // Extra
     /*s: [[Job]] extra fields */
@@ -253,7 +263,7 @@ typedef struct Symtab
 
 /*s: enum sxxx */
 enum sxxx {
-    S_VAR,	/* variable -> value */
+    S_VAR,	/* variable -> value */ // value is a list of words
     /*s: enum sxxx cases */
     S_MAKEVAR,	/* dumpable mk variable */
     /*x: enum sxxx cases */
@@ -285,7 +295,7 @@ enum sxxx {
 /*e: enum sxxx */
 
 extern	int	debug;
-extern	int	nflag, tflag, iflag, kflag, aflag;
+extern	bool	nflag, tflag, iflag, kflag, aflag;
 extern	int	mkinline;
 extern	char	*infile;
 extern	int	nreps;
