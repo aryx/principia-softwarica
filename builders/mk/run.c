@@ -1,6 +1,8 @@
 /*s: mk/run.c */
 #include	"mk.h"
 
+int	nextslot(void);
+
 /*s: struct RunEvent */
 typedef struct RunEvent
 {
@@ -106,9 +108,9 @@ sched(void)
     } else {
        /*s: [[sched()]] if DEBUG(D_EXEC) print recipe */
        if(DEBUG(D_EXEC))
-           fprint(1, "recipe='%s'\n", j->r->recipe);	/**/
+           fprint(STDOUT, "recipe='%s'\n", j->r->recipe);	/**/
+       Bflush(&bout);
        /*e: [[sched()]] if DEBUG(D_EXEC) print recipe */
-        Bflush(&bout);
         if(j->r->attr&NOMINUSE)
             flags = 0;
         else
@@ -118,7 +120,7 @@ sched(void)
         nrunning++;
        /*s: [[sched()]] if DEBUG(D_EXEC) print pid */
        if(DEBUG(D_EXEC))
-           fprint(1, "pid for target %s = %d\n", wtos(j->t, ' '), events[slot].pid);
+           fprint(STDOUT, "pid for target %s = %d\n", wtos(j->t, ' '), events[slot].pid);
        /*e: [[sched()]] if DEBUG(D_EXEC) print pid */
     }
 }
@@ -163,7 +165,7 @@ again:		/* rogue processes */
     }
     /*s: [[waitup()]] if DEBUG(D_EXEC) print pid */
     if(DEBUG(D_EXEC))
-        fprint(1, "waitup got pid=%d, status='%s'\n", pid, buf);
+        fprint(STDOUT, "waitup got pid=%d, status='%s'\n", pid, buf);
     /*e: [[waitup()]] if DEBUG(D_EXEC) print pid */
     if(retstatus && pid == *retstatus){
         *retstatus = buf[0]? 1:0;
@@ -252,8 +254,9 @@ nextslot(void)
     int i;
 
     for(i = 0; i < nproclimit; i++)
-        if(events[i].pid <= 0) return i;
-    assert(/*out of slots!!*/ 0);
+        if(events[i].pid <= 0) 
+            return i;
+    assert(/*out of slots!!*/ false);
     return 0;	/* cyntax */
 }
 /*e: function nextslot */

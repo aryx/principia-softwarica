@@ -108,5 +108,4 @@ Word*	stow(char*);
 void	update(int, Node*);
 Word*	wdup(Word*);
 char*	wtos(Word*, int);
-//int	nextslot(void);
 /*e: mk/fns.h */

@@ -11,7 +11,7 @@ static void ambiguous(Node *);
 static void attribute(Node *);
 
 /*s: function graph */
-Node *
+Node*
 graph(char *target)
 {
     Node *node;

@@ -212,7 +212,7 @@ efficiently \co{dependencies} between files or programs.
 % metarules, variables => generic stuff
 % < so modularity and can factorize in different files
 
-\section{mk services}
+\section{[[mk]] services}
 
 % interface is pretty simple, go in dir, type 'mk'
 % or mk target
@@ -453,7 +453,7 @@ initenv(void)
 
 
 
-\section{[[Word]]}
+\section{[[Word]]s}
 
 % what is this for? it has to be Words otherwise
 % there is no much point in having a Word type that is
@@ -522,6 +522,28 @@ wdup(Word *w)
         w = w->next;
     }
     return base;
+}
+@
+
+% word to string
+<<function wtos>>=
+char *
+wtos(Word *w, int sep)
+{
+    Bufblock *buf;
+    char *cp;
+
+    buf = newbuf();
+    for(; w; w = w->next){
+        for(cp = w->s; *cp; cp++)
+            insert(buf, *cp);
+        if(w->next)
+            insert(buf, sep);
+    }
+    insert(buf, '\0');
+    cp = strdup(buf->start);
+    freebuf(buf);
+    return cp;
 }
 @
 
@@ -764,13 +786,6 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 char		*prog;
 @
 
-<<constant NREGEXP>>=
-#define		NREGEXP		10
-@
-
-<<[[Arc]] other fields>>=
-char		*match[NREGEXP];
-@
 
 
 <<constant TOGO>>=
@@ -868,9 +883,6 @@ typedef struct Job
 } Job;
 @
 
-<<[[Job]] other fields>>=
-char		**match;
-@
 
 <<constructor newjob>>=
 Job*
@@ -2057,27 +2069,6 @@ stow(char *s)
 
 
 
-% word to string
-<<function wtos>>=
-char *
-wtos(Word *w, int sep)
-{
-    Bufblock *buf;
-    char *cp;
-
-    buf = newbuf();
-    for(; w; w = w->next){
-        for(cp = w->s; *cp; cp++)
-            insert(buf, *cp);
-        if(w->next)
-            insert(buf, sep);
-    }
-    insert(buf, '\0');
-    cp = strdup(buf->start);
-    freebuf(buf);
-    return cp;
-}
-@
 
 
 
@@ -2179,68 +2170,6 @@ out:
 
 
 
-\chapter{Matching}
-
-<<function match>>=
-bool
-match(char *name, char *template, char *stem)
-{
-    Rune r;
-    int n;
-
-    while(*name && *template){
-        n = chartorune(&r, template);
-        if (PERCENT(r))
-            break;
-        while (n--)
-            if(*name++ != *template++)
-                return false;
-    }
-    if(!PERCENT(*template))
-        return false;
-    n = strlen(name)-strlen(template+1);
-    if (n < 0)
-        return false;
-    if (strcmp(template+1, name+n))
-        return false;
-
-    strncpy(stem, name, n);
-    stem[n] = '\0';
-    if(*template == '&')
-        return !charin(stem, "./");
-    return true;
-}
-@
-
-<<function subst>>=
-void
-subst(char *stem, char *template, char *dest, int dlen)
-{
-    Rune r;
-    char *s, *e;
-    int n;
-
-    e = dest+dlen-1;
-    while(*template){
-        n = chartorune(&r, template);
-        if (PERCENT(r)) {
-            template += n;
-            for (s = stem; *s; s++)
-                if(dest < e)
-                    *dest++ = *s;
-        } else
-            while (n--){
-                if(dest < e)
-                    *dest++ = *template;
-                template++;
-            }
-    }
-    *dest = 0;
-}
-@
-
-
-
 \chapter{Dependency graph}
 
 % for GC? to identify unused rules?
@@ -2256,7 +2185,7 @@ static int nrules = 0;
 
 % constructor?
 <<function graph>>=
-Node *
+Node*
 graph(char *target)
 {
     Node *node;
@@ -2527,6 +2456,68 @@ trace(char *s, Arc *a)
             a = 0;
     }
     fprint(STDERR, "\n");
+}
+@
+
+
+
+\chapter{Matching}
+
+<<function match>>=
+bool
+match(char *name, char *template, char *stem)
+{
+    Rune r;
+    int n;
+
+    while(*name && *template){
+        n = chartorune(&r, template);
+        if (PERCENT(r))
+            break;
+        while (n--)
+            if(*name++ != *template++)
+                return false;
+    }
+    if(!PERCENT(*template))
+        return false;
+    n = strlen(name)-strlen(template+1);
+    if (n < 0)
+        return false;
+    if (strcmp(template+1, name+n))
+        return false;
+
+    strncpy(stem, name, n);
+    stem[n] = '\0';
+    if(*template == '&')
+        return !charin(stem, "./");
+    return true;
+}
+@
+
+<<function subst>>=
+void
+subst(char *stem, char *template, char *dest, int dlen)
+{
+    Rune r;
+    char *s, *e;
+    int n;
+
+    e = dest+dlen-1;
+    while(*template){
+        n = chartorune(&r, template);
+        if (PERCENT(r)) {
+            template += n;
+            for (s = stem; *s; s++)
+                if(dest < e)
+                    *dest++ = *s;
+        } else
+            while (n--){
+                if(dest < e)
+                    *dest++ = *template;
+                template++;
+            }
+    }
+    *dest = 0;
 }
 @
 
@@ -3567,7 +3558,6 @@ sched(void)
         }
     } else {
        <<[[sched()]] if DEBUG(D_EXEC) print recipe>>
-        Bflush(&bout);
         if(j->r->attr&NOMINUSE)
             flags = 0;
         else
@@ -3702,8 +3692,9 @@ nextslot(void)
     int i;
 
     for(i = 0; i < nproclimit; i++)
-        if(events[i].pid <= 0) return i;
-    assert(/*out of slots!!*/ 0);
+        if(events[i].pid <= 0) 
+            return i;
+    assert(/*out of slots!!*/ false);
     return 0;	/* cyntax */
 }
 @
@@ -3861,7 +3852,26 @@ bool tflag = false;
 Rule *patrule;
 @
 
+
+
+<<constant NREGEXP>>=
+#define		NREGEXP		10
+@
+
+% instead of stem
+<<[[Arc]] other fields>>=
+char		*match[NREGEXP];
+@
+
+% instead of stem
+<<[[Job]] other fields>>=
+char		**match;
+@
+
 \section{Multiple targets}
+
+% a few places where use Word* targets
+% where in most cases it should really be simply char* target;
 
 <<[[Rule]] other fields>>=
 // list<ref_own?<string>>?
@@ -3879,7 +3889,7 @@ Word 		*alltargets;	/* all the targets */
 
 \chapter{Debugging}
 
-\section{Dumping internals, [[mk -d]]}
+%\section{Dumping internals, [[mk -d]]}
 
 %mk -d[epg] EXEC PARSE GRAPH
 
@@ -3908,7 +3918,7 @@ int debug;
 #define		D_EXEC		0x04
 @
 
-\subsection{The rules}
+\section{The rules, [[mk -dp]]}
 
 <<[[main()]] if DEBUG(D_PARSE)>>=
 if(DEBUG(D_PARSE)){
@@ -3975,7 +3985,7 @@ print1(Symtab *s)
 
 
 
-\subsection{The graph}
+\section{The graph, [[mk -dg]]}
 
 % node = graph(target) from mk(target)
 <<[[main()]] if DEBUG(D_GRAPH)>>=
@@ -4028,7 +4038,7 @@ if(DEBUG(D_GRAPH))
 @
 \fi
 
-\subsection{The jobs}
+\section{The jobs, [[mk -de]]}
 
 <<[[nproc()]] if DEBUG(D_EXEC)>>=
 if(DEBUG(D_EXEC))
@@ -4044,18 +4054,19 @@ if(DEBUG(D_EXEC))
 
 <<[[sched()]] if DEBUG(D_EXEC) print recipe>>=
 if(DEBUG(D_EXEC))
-    fprint(1, "recipe='%s'\n", j->r->recipe);	/**/
+    fprint(STDOUT, "recipe='%s'\n", j->r->recipe);	/**/
+Bflush(&bout);
 @
 
 <<[[sched()]] if DEBUG(D_EXEC) print pid>>=
 if(DEBUG(D_EXEC))
-    fprint(1, "pid for target %s = %d\n", wtos(j->t, ' '), events[slot].pid);
+    fprint(STDOUT, "pid for target %s = %d\n", wtos(j->t, ' '), events[slot].pid);
 @
 
 
 <<[[waitup()]] if DEBUG(D_EXEC) print pid>>=
 if(DEBUG(D_EXEC))
-    fprint(1, "waitup got pid=%d, status='%s'\n", pid, buf);
+    fprint(STDOUT, "waitup got pid=%d, status='%s'\n", pid, buf);
 @
 
 
