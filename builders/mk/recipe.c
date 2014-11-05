@@ -4,28 +4,30 @@
 void	addw(Word*, char*);
 
 /*s: function dorecipe */
-int
+bool
 dorecipe(Node *node)
 {
-    int did = 0;
+    bool did = false;
     char buf[BIGBLOCK], cwd[256];
     Arc *a, *aa;
     Node *n;
-    Rule *r = 0;
+    Rule *r = nil;
     Symtab *s;
     Word head, ahead, lp, ln, *w, *ww, *aw;
 
-    aa = 0;
+    aa = nil;
     /*
-        pick up the rule
-    */
+     *   pick up the rule
+     */
     for(a = node->prereqs; a; a = a->next)
-        if(*a->r->recipe)
-            r = (aa = a)->r;
+        if(*a->r->recipe) {
+            aa = a;
+            r = aa->r;
+        }
     /*
-        no recipe? go to buggery!
-    */
-    if(r == 0){
+     *   no recipe? go to buggery!
+     */
+    if(r == nil){
         if(!(node->flags&VIRTUAL) && !(node->flags&NORECIPE)){
             if(getwd(cwd, sizeof cwd))
                 fprint(STDERR, "mk: no recipe to make '%s' in directory %s\n", node->name, cwd);
@@ -45,9 +47,10 @@ dorecipe(Node *node)
         }
         return did;
     }
+
     /*
-        build the node list
-    */
+     *   build the node list
+     */
     node->next = 0;
     head.next = 0;
     ww = &head;
@@ -106,9 +109,9 @@ dorecipe(Node *node)
         }
         MADESET(n, BEINGMADE);
     }
-/*	print("lt=%s ln=%s lp=%s\n",wtos(head.next, ' '),wtos(ln.next, ' '),wtos(lp.next, ' '));/**/
+/*print("lt=%s ln=%s lp=%s\n",wtos(head.next, ' '),wtos(ln.next, ' '),wtos(lp.next, ' '));/**/
     run(newjob(r, node, aa->stem, aa->match, lp.next, ln.next, head.next, ahead.next));
-    return 1;
+    return true;
 }
 /*e: function dorecipe */
 

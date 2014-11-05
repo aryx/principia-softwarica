@@ -3,12 +3,14 @@
 
 int	nextslot(void);
 
+typedef struct RunEvent RunEvent;
+typedef struct Process Process;
+
 /*s: struct RunEvent */
-typedef struct RunEvent
-{
+struct RunEvent {
     int pid;
     Job *job;
-} RunEvent;
+};
 /*e: struct RunEvent */
 
 /*s: global events */
@@ -25,13 +27,12 @@ static int nproclimit;
 /*e: global nproclimit */
 
 /*s: struct Process */
-typedef struct Process
-{
+struct Process {
     int pid;
     int status;
 
-    struct Process *b, *f;
-} Process;
+    Process *b, *f;
+};
 /*e: struct Process */
 /*s: global phead */
 // list<ref_own<Process>??
@@ -225,7 +226,7 @@ nproc(void)
     Symtab *sym;
     Word *w;
 
-    if(sym = symlook("NPROC", S_VAR, 0)) {
+    if(sym = symlook("NPROC", S_VAR, nil)) {
         w = sym->u.ptr;
         if (w && w->s && w->s[0])
             nproclimit = atoi(w->s);
@@ -241,6 +242,7 @@ nproc(void)
             events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
         else
             events = (RunEvent *)Malloc(nproclimit*sizeof(RunEvent));
+
         while(nevents < nproclimit)
             events[nevents++].pid = 0;
     }

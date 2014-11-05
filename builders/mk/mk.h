@@ -192,7 +192,7 @@ typedef struct Node
 #define		MADE		0x0080
 /*e: constant MADE */
 /*s: function MADESET */
-#define		MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
+#define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
 /*e: function MADESET */
 /*s: constant PROBABLE */
 #define		PROBABLE	0x0100
@@ -299,7 +299,7 @@ extern	bool	nflag, tflag, iflag, kflag, aflag;
 extern	int	mkinline;
 extern	char	*infile;
 extern	int	nreps;
-extern	char	*explain;
+extern	bool explain;
 extern	char	*termchars;
 extern	char 	*shflags;
 //extern	char 	*shell;

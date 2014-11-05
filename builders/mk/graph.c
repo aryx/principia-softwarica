@@ -52,6 +52,7 @@ applyrules(char *target, char *cnt)
     head.next = 0;
     sym = symlook(target, S_TARGET, 0);
     memset((char*)rmatch, 0, sizeof(rmatch));
+
     for(r = sym? sym->u.ptr:0; r; r = r->chain){
         if(r->attr&META) continue;
         if(strcmp(target, r->target)) continue;

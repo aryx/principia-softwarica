@@ -13,14 +13,13 @@ void
 mk(char *target)
 {
     Node *node;
-    int did = 0;
+    bool did = false;
 
     nproc();		/* it can be updated dynamically */
-    nrep();			/* it can be updated dynamically */
+    nrep();		/* it can be updated dynamically */
     runerrs = 0;
 
     node = graph(target);
-
     /*s: [[main()]] if DEBUG(D_GRAPH) */
     if(DEBUG(D_GRAPH)){
         dumpn("new target\n", node);
@@ -28,9 +27,10 @@ mk(char *target)
     }
     /*e: [[main()]] if DEBUG(D_GRAPH) */
     clrmade(node);
+
     while(node->flags&NOTMADE){
-        if(work(node, (Node *)0, (Arc *)0))
-            did = 1;	/* found something to do */
+        if(work(node, (Node *)nil, (Arc *)nil))
+            did = true;	/* found something to do */
         else {
             if(waitup(1, (int *)0) > 0){
                 if(node->flags&(NOTMADE|BEINGMADE)){
@@ -44,8 +44,9 @@ mk(char *target)
         waitup(-1, (int *)0);
     while(jobs)
         waitup(-2, (int *)0);
+
     assert(/*target didnt get done*/ runerrs || (node->flags&MADE));
-    if(did == 0)
+    if(did == false)
         Bprint(&bout, "mk: '%s' is up to date\n", node->name);
 }
 /*e: function mk */
@@ -77,19 +78,22 @@ unpretend(Node *n)
 /*e: function unpretend */
 
 /*s: function work */
-int
+bool
 work(Node *node, Node *p, Arc *parc)
 {
-    Arc *a, *ra;
-    int weoutofdate;
-    int ready;
-    int did = 0;
+    bool did = false;
+    bool weoutofdate;
+    bool ready;
     char cwd[256];
+    Arc *a, *ra;
 
     /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
+
     if(node->flags&BEINGMADE)
         return did;
-    if((node->flags&MADE) && (node->flags&PRETENDING) && p && outofdate(p, parc, 0)){
+
+    if((node->flags&MADE) && (node->flags&PRETENDING) && p
+        && outofdate(p, parc, 0)){
         if(explain)
             fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
                 node->name, node->time, p->name, p->time);
@@ -105,13 +109,15 @@ work(Node *node, Node *p, Arc *parc)
         }else
             return did;
     }
+
     /* consider no prerequisite case */
-    if(node->prereqs == 0){
+    if(node->prereqs == nil){
         if(node->time == 0){
             if(getwd(cwd, sizeof cwd))
                 fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
             else
                 fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
+
             if(kflag){
                 node->flags |= BEINGMADE;
                 runerrs++;
@@ -121,40 +127,42 @@ work(Node *node, Node *p, Arc *parc)
             MADESET(node, MADE);
         return did;
     }
+
     /*
-        now see if we are out of date or what
-    */
-    ready = 1;
+     *   now see if we are out of date or what
+     */
+    ready = true;
     weoutofdate = aflag;
-    ra = 0;
+    ra = nil;
     for(a = node->prereqs; a; a = a->next)
         if(a->n){
             did = work(a->n, node, a) || did;
             if(a->n->flags&(NOTMADE|BEINGMADE))
-                ready = 0;
+                ready = false;
             if(outofdate(node, a, 0)){
-                weoutofdate = 1;
-                if((ra == 0) || (ra->n == 0)
-                        || (ra->n->time < a->n->time))
+                weoutofdate = true;
+                if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
                     ra = a;
             }
         } else {
             if(node->time == 0){
-                if(ra == 0)
+                weoutofdate = true;
+                if(ra == nil)
                     ra = a;
-                weoutofdate = 1;
             }
         }
-    if(ready == 0)	/* can't do anything now */
+    if(ready == false)	/* can't do anything now */
         return did;
-    if(weoutofdate == 0){
+
+    if(weoutofdate == false){
         MADESET(node, MADE);
         return did;
     }
     /*
-        can we pretend to be made?
-    */
-    if((iflag == false) && (node->time == 0) && (node->flags&(PRETENDING|CANPRETEND))
+     *   can we pretend to be made?
+     */
+    if((iflag == false) && (node->time == 0) 
+            && (node->flags&(PRETENDING|CANPRETEND))
             && p && ra->n && !outofdate(p, ra, 0)){
         node->flags &= ~CANPRETEND;
         MADESET(node, MADE);
@@ -164,21 +172,24 @@ work(Node *node, Node *p, Arc *parc)
         return did;
     }
     /*
-        node is out of date and we REALLY do have to do something.
-        quickly rescan for pretenders
-    */
+     *   node is out of date and we REALLY do have to do something.
+     *   quickly rescan for pretenders
+     */
     for(a = node->prereqs; a; a = a->next)
         if(a->n && (a->n->flags&PRETENDING)){
             if(explain)
                 Bprint(&bout, "unpretending %s because of %s because of %s\n",
-                a->n->name, node->name, ra->n? ra->n->name : "rule with no prerequisites");
+                a->n->name, node->name, 
+                ra->n? ra->n->name : "rule with no prerequisites");
 
             unpretend(a->n);
             did = work(a->n, node, a) || did;
             ready = 0;
         }
-    if(ready == 0)	/* try later unless nothing has happened for -k's sake */
+
+    if(ready == false)/* try later unless nothing has happened for -k's sake */
         return did || work(node, p, parc);
+
     did = dorecipe(node) || did;
     return did;
 }
@@ -224,7 +235,7 @@ pcmp(char *prog, char *p, char *q)
 /*e: function pcmp */
 
 /*s: function outofdate */
-int
+bool
 outofdate(Node *node, Arc *arc, int eval)
 {
     char buf[3*NAMEBLOCK], *str;
@@ -248,13 +259,13 @@ outofdate(Node *node, Arc *arc, int eval)
             ret = sym->u.value;
         return (ret-1);
     } else if(strchr(arc->n->name, '(') && arc->n->time == 0)  /* missing archive member */
-        return 1;
+        return true;
     else
         /*
          * Treat equal times as out-of-date.
          * It's a race, and the safer option is to do
          * extra building rather than not enough.
-       */
+         */
         return node->time <= arc->n->time;
 }
 /*e: function outofdate */

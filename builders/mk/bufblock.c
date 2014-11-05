@@ -23,8 +23,8 @@ newbuf(void)
         p->end = p->start+QUANTA;
     }
     p->current = p->start;
-    *p->start = 0;
-    p->next = 0;
+    *p->start = '\0';
+    p->next = nil;
     return p;
 }
 /*e: constructor newbuf */

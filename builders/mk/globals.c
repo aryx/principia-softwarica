@@ -29,7 +29,7 @@ bool kflag = false;
 bool aflag = false;
 /*e: global aflag */
 /*s: global explain */
-char *explain = nil;
+bool explain = false;
 /*e: global explain */
 /*s: global nreps */
 int nreps = 1;

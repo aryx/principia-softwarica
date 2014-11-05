@@ -27,25 +27,31 @@ short buf[10000];
 void
 main(int argc, char **argv)
 {
+    /*s: [[main()]] locals */
+    Bufblock *buf = newbuf();
+    /*x: [[main()]] locals */
     Word *w;
-    char *s, *temp;
-    char *files[256], **f = files, **ff;
-    bool sflag = false;
+    char *s;
     int i;
-    int tfd = -1;
+    /*x: [[main()]] locals */
+    char *temp;
+    fdt tfd = -1;
     Biobuf tb;
-    Bufblock *buf;
-    Bufblock *whatif;
+    /*x: [[main()]] locals */
+    char *files[256], **f = files, **ff;
+    /*x: [[main()]] locals */
+    bool sflag = false;
+    /*x: [[main()]] locals */
+    Bufblock *whatif = nil;
+    /*e: [[main()]] locals */
 
     /*
      *  start with a copy of the current environment variables
      *  instead of sharing them
      */
-
     Binit(&bout, STDOUT, OWRITE);
-    buf = newbuf();
-    whatif = nil;
 
+    /*s: [[main()]] argv processing for -xxx, modify flags, modify buf */
     USED(argc);
     for(argv++; *argv && (**argv == '-'); argv++)
     {
@@ -53,48 +59,35 @@ main(int argc, char **argv)
         insert(buf, ' ');
 
         switch(argv[0][1]) {
-        case 'a':
-            aflag = true;
+        /*s: [[main()]] -xxx switch cases */
+        case 'i':
+            iflag = true;
             break;
-        case 'd':
-            if(*(s = &argv[0][2]))
-                while(*s) 
-                 switch(*s++) {
-                 case 'p':	debug |= D_PARSE; break;
-                 case 'g':	debug |= D_GRAPH; break;
-                 case 'e':	debug |= D_EXEC; break;
-                }
-            else
-                debug = 0xFFFF;
+        /*x: [[main()]] -xxx switch cases */
+        case 'k':
+            kflag = true;
             break;
-        case 'e':
-            explain = &argv[0][2];
+        /*x: [[main()]] -xxx switch cases */
+        case 'n':
+            nflag = true;
             break;
+        /*x: [[main()]] -xxx switch cases */
         case 'f':
-            if(*++argv == 0)
+            if(*++argv == nil)
                 badusage();
             *f++ = *argv;
             bufcpy(buf, argv[0], strlen(argv[0]));
             insert(buf, ' ');
             break;
-        case 'i':
-            iflag = true;
-            break;
-        case 'k':
-            kflag = true;
-            break;
-        case 'n':
-            nflag = true;
-            break;
+        /*x: [[main()]] -xxx switch cases */
         case 's':
             sflag = true;
             break;
-        case 't':
-            tflag = true;
+        /*x: [[main()]] -xxx switch cases */
+        case 'e':
+            explain = true;
             break;
-        case 'u':
-            uflag = true;
-            break;
+        /*x: [[main()]] -xxx switch cases */
         case 'w':
             if(whatif == nil)
                 whatif = newbuf();
@@ -108,10 +101,38 @@ main(int argc, char **argv)
                 bufcpy(whatif, &argv[0][0], strlen(&argv[0][0]));
             }
             break;
+        /*x: [[main()]] -xxx switch cases */
+        case 'u':
+            uflag = true;
+            break;
+        /*x: [[main()]] -xxx switch cases */
+        case 'a':
+            aflag = true;
+            break;
+        /*x: [[main()]] -xxx switch cases */
+        case 't':
+            tflag = true;
+            break;
+        /*x: [[main()]] -xxx switch cases */
+        case 'd':
+            if(*(s = &argv[0][2]))
+                while(*s) 
+                 switch(*s++) {
+                 case 'p':	debug |= D_PARSE; break;
+                 case 'g':	debug |= D_GRAPH; break;
+                 case 'e':	debug |= D_EXEC; break;
+                }
+            else
+                debug = 0xFFFF; // D_PARSE | D_GRAPH | D_EXEC
+            break;
+        /*e: [[main()]] -xxx switch cases */
         default:
             badusage();
         }
     }
+    if(aflag)
+        iflag = true;
+    /*e: [[main()]] argv processing for -xxx, modify flags, modify buf */
     /*s: [[main()]] profiling */
     #ifdef	PROF
         {
@@ -121,24 +142,23 @@ main(int argc, char **argv)
     #endif
     /*e: [[main()]] profiling */
 
-    if(aflag)
-        iflag = true;
-
     usage();
     syminit();
     initenv();
     usage();
 
+    /*s: [[main()]] argv processing for xxx= */
     /*
-        assignment args become null strings
-    */
+     *   assignment args become null strings
+     */
     temp = 0;
-    for(i = 0; argv[i]; i++) if(utfrune(argv[i], '=')){
+    for(i = 0; argv[i]; i++) 
+      if(utfrune(argv[i], '=')){
         bufcpy(buf, argv[i], strlen(argv[i]));
         insert(buf, ' ');
         if(tfd < 0){
             temp = maketmp();
-            if(temp == 0) {
+            if(temp == nil) {
                 perror("temp file");
                 Exit();
             }
@@ -149,37 +169,44 @@ main(int argc, char **argv)
             Binit(&tb, tfd, OWRITE);
         }
         Bprint(&tb, "%s\n", argv[i]);
-        *argv[i] = 0;
-    }
+        *argv[i] = '\0';
+      }
     if(tfd >= 0){
         Bflush(&tb);
         LSEEK(tfd, 0L, 0);
-        parse("command line args", tfd, 1);
+        parse("command line args", tfd, true);
         remove(temp);
     }
-
+    /*e: [[main()]] argv processing for xxx= */
+    /*s: [[main()]] set MKFLAGS variable */
     if (buf->current != buf->start) {
         buf->current--;
         insert(buf, '\0');
     }
-    symlook("MKFLAGS", S_VAR, (void *) stow(buf->start));
+    symlook("MKFLAGS", S_VAR, (void*) stow(buf->start));
+    /*e: [[main()]] set MKFLAGS variable */
+    /*s: [[main()]] set MKARGS variable */
     buf->current = buf->start;
     for(i = 0; argv[i]; i++){
-        if(*argv[i] == 0) continue;
+        if(*argv[i] == '\0') 
+            continue;
         if(i)
             insert(buf, ' ');
         bufcpy(buf, argv[i], strlen(argv[i]));
     }
     insert(buf, '\0');
     symlook("MKARGS", S_VAR, (void *) stow(buf->start));
+    /*e: [[main()]] set MKARGS variable */
     freebuf(buf);
 
+    /*s: [[main()]] parsing mkfile, call parse() */
     if(f == files){
         if(access(MKFILE, 4) == 0)
-            parse(MKFILE, open(MKFILE, 0), 0);
+            parse(MKFILE, open(MKFILE, 0), false);
     } else
         for(ff = files; ff < f; ff++)
-            parse(*ff, open(*ff, 0), 0);
+            parse(*ff, open(*ff, 0), false);
+    /*e: [[main()]] parsing mkfile, call parse() */
 
     /*s: [[main()]] if DEBUG(D_PARSE) */
     if(DEBUG(D_PARSE)){
@@ -189,22 +216,27 @@ main(int argc, char **argv)
         dumpv("variables");
     }
     /*e: [[main()]] if DEBUG(D_PARSE) */
-
+    /*s: [[main()]] if whatif */
     if(whatif){
         insert(whatif, '\0');
         timeinit(whatif->start);
         freebuf(whatif);
     }
+    /*e: [[main()]] if whatif */
 
     execinit();
+
     /* skip assignment args */
-    while(*argv && (**argv == 0))
+    while(*argv && (**argv == '\0'))
         argv++;
 
     catchnotes();
-    if(*argv == 0){
+
+    /*s: [[main()]] building the targets, call mk() */
+    if(*argv == nil){
         if(target1)
             for(w = target1; w; w = w->next)
+                // The call!
                 mk(w->s);
         else {
             fprint(STDERR, "mk: nothing to mk\n");
@@ -215,7 +247,8 @@ main(int argc, char **argv)
             for(; *argv; argv++)
                 if(**argv)
                     mk(*argv);
-        } else {
+        }
+        else {
             Word *head, *tail, *t;
 
             /* fake a new rule with all the args as prereqs */
@@ -223,14 +256,14 @@ main(int argc, char **argv)
             t = nil;
             for(; *argv; argv++)
                 if(**argv){
-                    if(tail == 0)
+                    if(tail == nil)
                         tail = t = newword(*argv);
                     else {
                         t->next = newword(*argv);
                         t = t->next;
                     }
                 }
-            if(tail->next == 0)
+            if(tail->next == nil)
                 mk(tail->s);
             else {
                 head = newword("command line arguments");
@@ -239,9 +272,12 @@ main(int argc, char **argv)
             }
         }
     }
+    /*e: [[main()]] building the targets, call mk() */
+
+    /*s: [[main()]] print profiling stats if uflag */
     if(uflag)
         prusage();
-
+    /*e: [[main()]] print profiling stats if uflag */
     exits(nil);
 }
 /*e: function main */

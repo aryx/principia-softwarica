@@ -16,12 +16,13 @@ static char *rbody(Biobuf*);
 
 /*s: function parse */
 void
-parse(char *f, fdt fd, int varoverride)
+parse(char *f, fdt fd, bool varoverride)
 {
     int hline;
     char *body;
     Word *head, *tail;
-    int attr, set, pid;
+    int attr, pid;
+    bool set;
     char *prog, *p;
     int newfd;
     Biobuf in;
@@ -88,7 +89,7 @@ parse(char *f, fdt fd, int varoverride)
             if(symlook(head->s, S_OVERRIDE, 0)){
                 set = varoverride;
             } else {
-                set = 1;
+                set = true;
                 if(varoverride)
                     symlook(head->s, S_OVERRIDE, (void *)"");
             }
