@@ -88,35 +88,22 @@ struct Rule
 
 extern Rule *rules, *metarules, *patrule;
 
-/*s: constant META */
-/*	Rule.attr	*/
-#define		META		0x0001
-/*e: constant META */
-/*s: constant UNUSED */
-//@Scheck: dead indeed
-#define		UNUSED		0x0002
-/*e: constant UNUSED */
-/*s: constant UPD */
-#define		UPD		0x0004
-/*e: constant UPD */
-/*s: constant QUIET */
-#define		QUIET		0x0008
-/*e: constant QUIET */
-/*s: constant VIR */
-#define		VIR		0x0010
-/*e: constant VIR */
-/*s: constant REGEXP */
-#define		REGEXP		0x0020
-/*e: constant REGEXP */
-/*s: constant NOREC */
-#define		NOREC		0x0040
-/*e: constant NOREC */
-/*s: constant DEL */
-#define		DEL		0x0080
-/*e: constant DEL */
-/*s: constant NOVIRT */
-#define		NOVIRT		0x0100
-/*e: constant NOVIRT */
+/*s: enum rule_attr */
+enum rule_attr {
+    META   = 0x0001,
+    /*s: enum rule_attr cases */
+    //@Scheck: dead indeed
+    UNUSED = 0x0002,
+    UPD    = 0x0004,
+    QUIET  = 0x0008,
+    VIR    = 0x0010,
+    REGEXP = 0x0020,
+    NOREC  = 0x0040,
+    DEL    = 0x0080,
+    NOVIRT = 0x0100,
+    /*e: enum rule_attr cases */
+};
+/*e: enum rule_attr */
 
 /*s: constant NREGEXP */
 #define		NREGEXP		10
@@ -176,49 +163,28 @@ struct Node
 };
 /*e: struct Node */
 
-/*s: constant VIRTUAL */
-/* Node.flags */
-#define		VIRTUAL		0x0001
-/*e: constant VIRTUAL */
-/*s: constant CYCLE */
-#define		CYCLE		0x0002
-/*e: constant CYCLE */
-/*s: constant READY */
-#define		READY		0x0004
-/*e: constant READY */
-/*s: constant CANPRETEND */
-#define		CANPRETEND	0x0008
-/*e: constant CANPRETEND */
-/*s: constant PRETENDING */
-#define		PRETENDING	0x0010
-/*e: constant PRETENDING */
-/*s: constant NOTMADE */
-#define		NOTMADE		0x0020
-/*e: constant NOTMADE */
-/*s: constant BEINGMADE */
-#define		BEINGMADE	0x0040
-/*e: constant BEINGMADE */
-/*s: constant MADE */
-#define		MADE		0x0080
-/*e: constant MADE */
+/*s: enum node_flag */
+enum node_flag {
+    /*s: enum node_flag cases */
+    VIRTUAL    = 0x0001,
+    CYCLE      = 0x0002,
+    READY      = 0x0004,
+    CANPRETEND = 0x0008,
+    PRETENDING = 0x0010,
+    NOTMADE    = 0x0020,
+    BEINGMADE  = 0x0040,
+    MADE       = 0x0080,
+    PROBABLE   = 0x0100,
+    VACUOUS    = 0x0200,
+    NORECIPE   = 0x0400,
+    DELETE     = 0x0800,
+    NOMINUSE   = 0x1000,
+    /*e: enum node_flag cases */
+};
+/*e: enum node_flag */
 /*s: function MADESET */
 #define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
 /*e: function MADESET */
-/*s: constant PROBABLE */
-#define		PROBABLE	0x0100
-/*e: constant PROBABLE */
-/*s: constant VACUOUS */
-#define		VACUOUS		0x0200
-/*e: constant VACUOUS */
-/*s: constant NORECIPE */
-#define		NORECIPE	0x0400
-/*e: constant NORECIPE */
-/*s: constant DELETE */
-#define		DELETE		0x0800
-/*e: constant DELETE */
-/*s: constant NOMINUSE */
-#define		NOMINUSE	0x1000
-/*e: constant NOMINUSE */
 
 /*s: struct Job */
 struct Job
