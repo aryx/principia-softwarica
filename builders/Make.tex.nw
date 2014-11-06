@@ -687,6 +687,96 @@ char		*prog;		/* to use in out of date */
 % prog??
 
 
+
+
+
+
+% kind of ctor
+<<function addrule>>=
+void
+addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, char *prog)
+{
+    Rule *r;
+    Rule *rr;
+    Symtab *sym;
+    bool reuse;
+
+    r = 0;
+    reuse = false;
+    if(sym = symlook(head, S_TARGET, nil)){
+        for(r = sym->u.ptr; r; r = r->chain)
+            if(rcmp(r, head, tail) == 0){
+                reuse = true;
+                break;
+            }
+    }
+    if(r == 0)
+        r = (Rule *)Malloc(sizeof(Rule));
+    r->target = head;
+    r->tail = tail;
+    r->recipe = body;
+    r->line = hline;
+    r->file = infile;
+    r->attr = attr;
+    r->alltargets = ahead;
+    r->prog = prog;
+    r->rule = nrules++;
+
+    if(!reuse){
+        rr = symlook(head, S_TARGET, r)->u.ptr;
+        if(rr != r){
+            r->chain = rr->chain;
+            rr->chain = r;
+        } else
+            r->chain = 0;
+    }
+    if(!reuse)
+        r->next = 0;
+    if((attr&REGEXP) || charin(head, "%&")){
+        r->attr |= META;
+        if(reuse)
+            return;
+        if(attr&REGEXP){
+            patrule = r;
+            r->pat = regcomp(head);
+        }
+        if(metarules == 0)
+            metarules = lmr = r;
+        else {
+            lmr->next = r;
+            lmr = r;
+        }
+    } else {
+        if(reuse)
+            return;
+        r->pat = 0;
+        if(rules == 0)
+            rules = lr = r;
+        else {
+            lr->next = r;
+            lr = r;
+        }
+    }
+}
+@
+
+
+<<function rcmp>>=
+static int
+rcmp(Rule *r, char *target, Word *tail)
+{
+    Word *w;
+
+    if(strcmp(r->target, target))
+        return 1;
+    for(w = r->tail; w && tail; w = w->next, tail = tail->next)
+        if(strcmp(w->s, tail->s))
+            return 1;
+    return (w || tail);
+}
+@
+
+
 \section{[[Node]] and [[Arc]]}
 
 % Rule and metarules are general static descriptions, patterns.
@@ -735,6 +825,7 @@ newnode(char *name)
     return node;
 }
 @
+% owning name after call! => call strdup in caller
 
 
 <<[[Node]] other fields>>=
@@ -1228,6 +1319,9 @@ else {
 % could pass 0 instead of mkinline I think
 
 
+
+
+
 \chapter{[[mk()]]}
 
 % the core!
@@ -1238,11 +1332,10 @@ BEINGMADE  = 0x0040,
 MADE       = 0x0080,
 @
 % NOTMADE initially (see clrmade())
-% when set to BEINGMADE? when start recipe, but mk is // so it returns!
-% when can go back to node with BEINGMADE? when
-% 2 files with deps on same Node? DAG
-% then set to MADE when recipe done! (or time was already good,
-% no need update)
+% BEINGMADE? when start recipe, but mk can run in // so it returns!
+%   can can go back to node with BEINGMADE? when
+%   2 files with deps on same Node? DAG
+% MADE finally when recipe done! (or time was already good, no need update)
 
 
 % main -> <> -> graph() ; clrmade(); work()
@@ -1254,6 +1347,7 @@ mk(char *target)
     bool did = false;
 
     <<[[mk()]] initialisation>>
+
     node = graph(target);
     <<[[main()]] if DEBUG(D_GRAPH)>>
     clrmade(node);
@@ -1366,7 +1460,7 @@ work(Node *node,   Node *p, Arc *parc)
     return did;
 }
 @
-% can refactor in did ||= foo(); ? hmm maybe not, we actually want the
+% TODO: can refactor in did ||= foo(); ? hmm maybe not, we actually want the
 % side effect!
 % but maybe can refactor dir in a global!
 
@@ -1392,6 +1486,7 @@ for(a = node->prereqs; a; a = a->next)
         }
     }
 @
+% when can have no node attached to an arc?
 
 <<[[work()]] locals>>=
 char cwd[256];
@@ -1476,109 +1571,6 @@ pcmp(char *prog, char *p, char *q)
     return (pid? 2:1);
 }
 @
-
-
-
-\chapter{Rules}
-
-\section{Simple rule}
-
-% kind of ctor
-<<function addrule>>=
-void
-addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, char *prog)
-{
-    Rule *r;
-    Rule *rr;
-    Symtab *sym;
-    bool reuse;
-
-    r = 0;
-    reuse = false;
-    if(sym = symlook(head, S_TARGET, nil)){
-        for(r = sym->u.ptr; r; r = r->chain)
-            if(rcmp(r, head, tail) == 0){
-                reuse = true;
-                break;
-            }
-    }
-    if(r == 0)
-        r = (Rule *)Malloc(sizeof(Rule));
-    r->target = head;
-    r->tail = tail;
-    r->recipe = body;
-    r->line = hline;
-    r->file = infile;
-    r->attr = attr;
-    r->alltargets = ahead;
-    r->prog = prog;
-    r->rule = nrules++;
-
-    if(!reuse){
-        rr = symlook(head, S_TARGET, r)->u.ptr;
-        if(rr != r){
-            r->chain = rr->chain;
-            rr->chain = r;
-        } else
-            r->chain = 0;
-    }
-    if(!reuse)
-        r->next = 0;
-    if((attr&REGEXP) || charin(head, "%&")){
-        r->attr |= META;
-        if(reuse)
-            return;
-        if(attr&REGEXP){
-            patrule = r;
-            r->pat = regcomp(head);
-        }
-        if(metarules == 0)
-            metarules = lmr = r;
-        else {
-            lmr->next = r;
-            lmr = r;
-        }
-    } else {
-        if(reuse)
-            return;
-        r->pat = 0;
-        if(rules == 0)
-            rules = lr = r;
-        else {
-            lr->next = r;
-            lr = r;
-        }
-    }
-}
-@
-
-
-<<function rcmp>>=
-static int
-rcmp(Rule *r, char *target, Word *tail)
-{
-    Word *w;
-
-    if(strcmp(r->target, target))
-        return 1;
-    for(w = r->tail; w && tail; w = w->next, tail = tail->next)
-        if(strcmp(w->s, tail->s))
-            return 1;
-    return (w || tail);
-}
-@
-
-
-
-
-\section{Metarule}
-
-% see matching later, or put matching here?
-
-\section{Variables}
-
-
-\section{Rule attributes}
 
 
 
@@ -2278,29 +2270,30 @@ attribute(Node *n)
 \section{Finding the rules for a target}
 
 <<function applyrules>>=
-static Node *
+static Node*
 applyrules(char *target, char *cnt)
 {
     Symtab *sym;
     Node *node;
     Rule *r;
-    Arc head, *a = &head;
+    Arc head;
+    Arc *a = &head;
     Word *w;
     char stem[NAMEBLOCK], buf[NAMEBLOCK];
     Resub rmatch[NREGEXP];
 
-/*	print("applyrules(%lux='%s')\n", target, target);/**/
     sym = symlook(target, S_NODE, 0);
     if(sym)
         return sym->u.ptr;
+
     target = strdup(target);
     node = newnode(target);
-    head.n = 0;
-    head.next = 0;
+    head.n = nil;
+    head.next = nil;
     sym = symlook(target, S_TARGET, 0);
     memset((char*)rmatch, 0, sizeof(rmatch));
 
-    for(r = sym? sym->u.ptr:0; r; r = r->chain){
+    for(r = sym? sym->u.ptr : nil; r; r = r->chain){
         if(r->attr&META) continue;
         if(strcmp(target, r->target)) continue;
         if((!r->recipe || !*r->recipe) && (!r->tail || !r->tail->s || !*r->tail->s)) continue;	/* no effect; ignore */
@@ -2308,13 +2301,6 @@ applyrules(char *target, char *cnt)
         cnt[r->rule]++;
         node->flags |= PROBABLE;
 
-/*		if(r->attr&VIR)
- *			node->flags |= VIRTUAL;
- *		if(r->attr&NOREC)
- *			node->flags |= NORECIPE;
- *		if(r->attr&DEL)
- *			node->flags |= DELETE;
- */
         if(!r->tail || !r->tail->s || !*r->tail->s) {
             a->next = newarc((Node *)0, r, "", rmatch);
             a = a->next;
@@ -2342,13 +2328,6 @@ applyrules(char *target, char *cnt)
         if(cnt[r->rule] >= nreps) continue;
         cnt[r->rule]++;
 
-/*		if(r->attr&VIR)
- *			node->flags |= VIRTUAL;
- *		if(r->attr&NOREC)
- *			node->flags |= NORECIPE;
- *		if(r->attr&DEL)
- *			node->flags |= DELETE;
- */
         if(!r->tail || !r->tail->s || !*r->tail->s) {
             a->next = newarc((Node *)0, r, stem, rmatch);
             a = a->next;
@@ -2368,6 +2347,23 @@ applyrules(char *target, char *cnt)
     return node;
 }
 @
+%old: in comment in the original code!
+%/*	print("applyrules(%lux='%s')\n", target, target);/**/
+%/*		if(r->attr&VIR)
+% *			node->flags |= VIRTUAL;
+% *		if(r->attr&NOREC)
+% *			node->flags |= NORECIPE;
+% *		if(r->attr&DEL)
+% *			node->flags |= DELETE;
+% */
+%/*		if(r->attr&VIR)
+% *			node->flags |= VIRTUAL;
+% *		if(r->attr&NOREC)
+% *			node->flags |= NORECIPE;
+% *		if(r->attr&DEL)
+% *			node->flags |= DELETE;
+% */
+
 
 <<function togo>>=
 static void
@@ -4262,8 +4258,13 @@ case 'a':
     break;
 @
 % iflag = true; used to be after the switch, but same
+% when -a, means we want to build also the intermediate files when
+% they are not there
 
 \chapter{Conclusion}
+
+
+
 
 \appendix
 
@@ -4272,6 +4273,18 @@ case 'a':
 %\section{Dumping internals, [[mk -d]]}
 
 %mk -d[epg] EXEC PARSE GRAPH
+
+<<enum dxxx>>=
+enum dxxx {
+    // for rules
+    D_PARSE =		0x01,
+    // for node and arcs
+    D_GRAPH =		0x02,
+    // for jobs
+    D_EXEC  =		0x04,
+};
+@
+% used to be a set of #define
 
 % -d flag
 <<global debug>>=
@@ -4283,20 +4296,6 @@ int debug;
 #define	DEBUG(x)	(debug&(x))
 @
 
-% enum<dxxx>
-
-% rules
-<<constant D_PARSE>>=
-#define		D_PARSE		0x01
-@
-% node and arcs
-<<constant D_GRAPH>>=
-#define		D_GRAPH		0x02
-@
-% jobs
-<<constant D_EXEC>>=
-#define		D_EXEC		0x04
-@
 
 <<[[main()]] -xxx switch cases>>=
 case 'd':
@@ -4539,6 +4538,8 @@ symstat(void)
 <<global runerrs>>=
 int runerrs;
 @
+
+
 
 <<global kflag>>=
 bool kflag = false;

@@ -20,6 +20,7 @@ mk(char *target)
     nrep();		/* it can be updated dynamically */
     runerrs = 0;
     /*e: [[mk()]] initialisation */
+
     node = graph(target);
     /*s: [[main()]] if DEBUG(D_GRAPH) */
     if(DEBUG(D_GRAPH)){

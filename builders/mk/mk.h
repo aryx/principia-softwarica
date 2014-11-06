@@ -306,18 +306,19 @@ extern	char 	*shflags;
 #define WORDCHR(r)	((r) > ' ' && !utfrune("!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~", (r)))
 /*e: function WORDCHR */
 
+/*s: enum dxxx */
+enum dxxx {
+    // for rules
+    D_PARSE =		0x01,
+    // for node and arcs
+    D_GRAPH =		0x02,
+    // for jobs
+    D_EXEC  =		0x04,
+};
+/*e: enum dxxx */
 /*s: function DEBUG */
 #define	DEBUG(x)	(debug&(x))
 /*e: function DEBUG */
-/*s: constant D_PARSE */
-#define		D_PARSE		0x01
-/*e: constant D_PARSE */
-/*s: constant D_GRAPH */
-#define		D_GRAPH		0x02
-/*e: constant D_GRAPH */
-/*s: constant D_EXEC */
-#define		D_EXEC		0x04
-/*e: constant D_EXEC */
 
 /*s: function PERCENT */
 #define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))

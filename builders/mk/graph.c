@@ -31,29 +31,30 @@ graph(char *target)
 /*e: function graph */
 
 /*s: function applyrules */
-static Node *
+static Node*
 applyrules(char *target, char *cnt)
 {
     Symtab *sym;
     Node *node;
     Rule *r;
-    Arc head, *a = &head;
+    Arc head;
+    Arc *a = &head;
     Word *w;
     char stem[NAMEBLOCK], buf[NAMEBLOCK];
     Resub rmatch[NREGEXP];
 
-/*	print("applyrules(%lux='%s')\n", target, target);/**/
     sym = symlook(target, S_NODE, 0);
     if(sym)
         return sym->u.ptr;
+
     target = strdup(target);
     node = newnode(target);
-    head.n = 0;
-    head.next = 0;
+    head.n = nil;
+    head.next = nil;
     sym = symlook(target, S_TARGET, 0);
     memset((char*)rmatch, 0, sizeof(rmatch));
 
-    for(r = sym? sym->u.ptr:0; r; r = r->chain){
+    for(r = sym? sym->u.ptr : nil; r; r = r->chain){
         if(r->attr&META) continue;
         if(strcmp(target, r->target)) continue;
         if((!r->recipe || !*r->recipe) && (!r->tail || !r->tail->s || !*r->tail->s)) continue;	/* no effect; ignore */
@@ -61,13 +62,6 @@ applyrules(char *target, char *cnt)
         cnt[r->rule]++;
         node->flags |= PROBABLE;
 
-/*		if(r->attr&VIR)
- *			node->flags |= VIRTUAL;
- *		if(r->attr&NOREC)
- *			node->flags |= NORECIPE;
- *		if(r->attr&DEL)
- *			node->flags |= DELETE;
- */
         if(!r->tail || !r->tail->s || !*r->tail->s) {
             a->next = newarc((Node *)0, r, "", rmatch);
             a = a->next;
@@ -95,13 +89,6 @@ applyrules(char *target, char *cnt)
         if(cnt[r->rule] >= nreps) continue;
         cnt[r->rule]++;
 
-/*		if(r->attr&VIR)
- *			node->flags |= VIRTUAL;
- *		if(r->attr&NOREC)
- *			node->flags |= NORECIPE;
- *		if(r->attr&DEL)
- *			node->flags |= DELETE;
- */
         if(!r->tail || !r->tail->s || !*r->tail->s) {
             a->next = newarc((Node *)0, r, stem, rmatch);
             a = a->next;
