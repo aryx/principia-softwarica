@@ -1,14 +1,14 @@
 /*s: mk/run.c */
 #include	"mk.h"
 
+typedef struct RunEvent RunEvent;
+typedef struct Process Process;
+
 int	nextslot(void);
 int pidslot(int);
 static void sched(void);
 static void pnew(int, int);
 static void pdelete(Process *);
-
-typedef struct RunEvent RunEvent;
-typedef struct Process Process;
 
 /*s: struct RunEvent */
 struct RunEvent {
