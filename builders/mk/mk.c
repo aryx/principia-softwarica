@@ -118,8 +118,8 @@ work(Node *node,   Node *p, Arc *parc)
             return did;
     }
     /*e: [[work()]] possibly unpretending node */
-    /* consider no prerequisite case */
     /*s: [[work()]] no prerequisite special case */
+    /* consider no prerequisite case */
     if(node->prereqs == nil){
         if(node->time == 0){
             if(getwd(cwd, sizeof cwd))
@@ -219,7 +219,9 @@ update(bool fake, Node *node)
 
     if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
         node->time = timeof(node->name, true);
+        /*s: [[update()]] unpretend node */
         node->flags &= ~(CANPRETEND|PRETENDING);
+        /*e: [[update()]] unpretend node */
         for(a = node->prereqs; a; a = a->next)
             if(a->prog)
                 outofdate(node, a, 1);
