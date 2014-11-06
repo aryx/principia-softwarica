@@ -27,6 +27,7 @@
 
 %thx to this manual, better understand make?:
 % - SEMI how to debug issues in your own makefile
+% - SEMI mk is actually a job scheduler! with dependent tasks!
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.tex.nw skeleton
@@ -210,6 +211,12 @@ efficiently \co{dependencies} between files or programs.
 % rule, target: dependencies
 % metarules, variables => generic stuff
 % < so modularity and can factorize in different files
+
+% graph of deps, if modify a leaf then have to rebuild everything up!
+
+% mk is actually kind of a scheduler because can do things in //,
+% run recipe of independent jobs in //, and need to manage dependencies
+% between those jobs
 
 \section{[[mk]] services}
 
@@ -665,7 +672,6 @@ struct Rule	*chain;		/* hashed per target */
 //@Scheck: dead indeed
 UNUSED = 0x0002,
 UPD    = 0x0004,
-QUIET  = 0x0008,
 VIR    = 0x0010,
 REGEXP = 0x0020,
 NOREC  = 0x0040,
@@ -740,7 +746,7 @@ Arc		*prereqs;
 <<struct Arc>>=
 struct Arc
 {
-    // ref<Node>, dst node in the arc (src is the Node having the prereqs)
+    // option<ref<Node>>, the other node in the arc
     struct Node *n;
     // ref<Rule>, rule to generate the target node from the dependent node
     Rule *r;
@@ -753,7 +759,7 @@ struct Arc
     <<[[Arc]] extra fields>>
 };
 @
-
+% option Node? apparently some code is doing if(a->n) so ...
 
 <<[[Arc]] extra fields>>=
 // list<ref_own<arc> (head = Node.prereq)
@@ -820,20 +826,10 @@ enum node_flag {
 VIRTUAL    = 0x0001,
 CYCLE      = 0x0002,
 READY      = 0x0004,
-CANPRETEND = 0x0008,
-PRETENDING = 0x0010,
-NOTMADE    = 0x0020,
-BEINGMADE  = 0x0040,
-MADE       = 0x0080,
 PROBABLE   = 0x0100,
 VACUOUS    = 0x0200,
 NORECIPE   = 0x0400,
 DELETE     = 0x0800,
-NOMINUSE   = 0x1000,
-@
-
-<<function MADESET>>=
-#define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
 @
 
 
@@ -1234,6 +1230,21 @@ else {
 
 \chapter{[[mk()]]}
 
+% the core!
+
+<<enum node_flag cases>>=
+NOTMADE    = 0x0020,
+BEINGMADE  = 0x0040,
+MADE       = 0x0080,
+@
+% NOTMADE initially (see clrmade())
+% when set to BEINGMADE? when start recipe, but mk is // so it returns!
+% when can go back to node with BEINGMADE? when
+% 2 files with deps on same Node? DAG
+% then set to MADE when recipe done! (or time was already good,
+% no need update)
+
+
 % main -> <> -> graph() ; clrmade(); work()
 <<function mk>>=
 void
@@ -1242,10 +1253,7 @@ mk(char *target)
     Node *node;
     bool did = false;
 
-    nproc();		/* it can be updated dynamically */
-    nrep();		/* it can be updated dynamically */
-    runerrs = 0;
-
+    <<[[mk()]] initialisation>>
     node = graph(target);
     <<[[main()]] if DEBUG(D_GRAPH)>>
     clrmade(node);
@@ -1254,7 +1262,7 @@ mk(char *target)
         if(work(node, (Node *)nil, (Arc *)nil))
             did = true;	/* found something to do */
         else {
-            if(waitup(1, (int *)0) > 0){
+            if(waitup(1, (int *)nil) > 0){
                 if(node->flags&(NOTMADE|BEINGMADE)){
                     assert(/*must be run errors*/ runerrs);
                     break;	/* nothing more waiting */
@@ -1263,16 +1271,35 @@ mk(char *target)
         }
     }
     if(node->flags&BEINGMADE)
-        waitup(-1, (int *)0);
+        waitup(-1, (int *)nil);
+
     while(jobs)
-        waitup(-2, (int *)0);
+        waitup(-2, (int *)nil);
 
     assert(/*target didnt get done*/ runerrs || (node->flags&MADE));
     if(did == false)
         Bprint(&bout, "mk: '%s' is up to date\n", node->name);
 }
 @
+% subtle, important while loop! because of mk // so run some jobs
+% but then later another job might depend on the end of this one,
+% so have BEINGMADE flag and waitup
 
+% TODO? wanted to make did a global because was always threading it
+% everywhere and doing did = foo () || did;   
+% possible? change semantic?
+
+% waitup??
+
+<<[[mk()]] initialisation>>=
+nproc();	/* it can be updated dynamically */
+nrep();		/* it can be updated dynamically */
+runerrs = 0;
+@
+
+<<function MADESET>>=
+#define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
+@
 
 <<function clrmade>>=
 void
@@ -1280,10 +1307,7 @@ clrmade(Node *n)
 {
     Arc *a;
 
-    n->flags &= ~(CANPRETEND|PRETENDING);
-    if(strchr(n->name, '(') ==0 || n->time)
-        n->flags |= CANPRETEND;
-
+    <<[[clrmade()]] n->flags pretend adjustments>>
     MADESET(n, NOTMADE);
     for(a = n->prereqs; a; a = a->next)
         if(a->n)
@@ -1291,135 +1315,110 @@ clrmade(Node *n)
 }
 @
 
-<<function unpretend>>=
-static void
-unpretend(Node *n)
-{
-    MADESET(n, NOTMADE);
-    n->flags &= ~(CANPRETEND|PRETENDING);
-    n->time = 0;
-}
+<<[[work()]] locals>>=
+bool did = false;
 @
 
-% TODO LP split, complicated
-% main -> mk -> WORK -> outofdate(); dorecipe()
+<<[[work()]] locals>>=
+bool weoutofdate;
+bool ready;
+Arc *a;
+Arc *ra;
+@
+
+
+% main -> mk -> <> -> outofdate(); dorecipe()
+%    /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
+
+% have to do transitive closure of dependencies ... when
+% "making" node, look at is prerequistes, and check if they need
+% work too, because maybe a leaf was modified!
+
+% previous_node, previous arc, TODO rename parameters?
 <<function work>>=
 bool
-work(Node *node, Node *p, Arc *parc)
+work(Node *node,   Node *p, Arc *parc)
 {
-    bool did = false;
-    bool weoutofdate;
-    bool ready;
-    char cwd[256];
-    Arc *a, *ra;
-
-    /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
+    <<[[work()]] locals>>
 
     if(node->flags&BEINGMADE)
         return did;
 
-    if((node->flags&MADE) && (node->flags&PRETENDING) && p
-        && outofdate(p, parc, 0)){
-        if(explain)
-            fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
-                node->name, node->time, p->name, p->time);
-        unpretend(node);
-    }
-    /*
-     *   have a look if we are pretending in case
-     *   someone has been unpretended out from underneath us
-     */
-    if(node->flags&MADE){
-        if(node->flags&PRETENDING){
-            node->time = 0;
-        }else
-            return did;
-    }
-
+    <<[[work()]] possibly unpretending node>>
     /* consider no prerequisite case */
-    if(node->prereqs == nil){
-        if(node->time == 0){
-            if(getwd(cwd, sizeof cwd))
-                fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
-            else
-                fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
-
-            if(kflag){
-                node->flags |= BEINGMADE;
-                runerrs++;
-            } else
-                Exit();
-        } else
-            MADESET(node, MADE);
-        return did;
-    }
+    <<[[work()]] no prerequisite special case>>
 
     /*
      *   now see if we are out of date or what
      */
     ready = true;
     weoutofdate = aflag;
-    ra = nil;
-    for(a = node->prereqs; a; a = a->next)
-        if(a->n){
-            did = work(a->n, node, a) || did;
-            if(a->n->flags&(NOTMADE|BEINGMADE))
-                ready = false;
-            if(outofdate(node, a, 0)){
-                weoutofdate = true;
-                if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
-                    ra = a;
-            }
-        } else {
-            if(node->time == 0){
-                weoutofdate = true;
-                if(ra == nil)
-                    ra = a;
-            }
-        }
+    <<[[work()]] check if node out of date with prerequisites, recursively>>
+
     if(ready == false)	/* can't do anything now */
         return did;
-
     if(weoutofdate == false){
         MADESET(node, MADE);
         return did;
     }
-    /*
-     *   can we pretend to be made?
-     */
-    if((iflag == false) && (node->time == 0) 
-            && (node->flags&(PRETENDING|CANPRETEND))
-            && p && ra->n && !outofdate(p, ra, 0)){
-        node->flags &= ~CANPRETEND;
-        MADESET(node, MADE);
-        if(explain && ((node->flags&PRETENDING) == 0))
-            fprint(1, "pretending %s has time %lud\n", node->name, node->time);
-        node->flags |= PRETENDING;
-        return did;
-    }
-    /*
-     *   node is out of date and we REALLY do have to do something.
-     *   quickly rescan for pretenders
-     */
-    for(a = node->prereqs; a; a = a->next)
-        if(a->n && (a->n->flags&PRETENDING)){
-            if(explain)
-                Bprint(&bout, "unpretending %s because of %s because of %s\n",
-                a->n->name, node->name, 
-                ra->n? ra->n->name : "rule with no prerequisites");
-
-            unpretend(a->n);
-            did = work(a->n, node, a) || did;
-            ready = false;
-        }
-
-    if(ready == false)/* try later unless nothing has happened for -k's sake */
-        return did || work(node, p, parc);
+    <<[[work()]] possibly pretending node>>
 
     did = dorecipe(node) || did;
     return did;
 }
 @
+% can refactor in did ||= foo(); ? hmm maybe not, we actually want the
+% side effect!
+% but maybe can refactor dir in a global!
+
+
+<<[[work()]] check if node out of date with prerequisites, recursively>>=
+ra = nil;
+for(a = node->prereqs; a; a = a->next)
+    if(a->n){
+        // recursive call! go in depth
+        did = work(a->n, node, a) || did;
+        if(a->n->flags&(NOTMADE|BEINGMADE))
+            ready = false;
+        if(outofdate(node, a, 0)){
+            weoutofdate = true;
+            if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
+                ra = a;
+        }
+    } else {
+        if(node->time == 0){
+            weoutofdate = true;
+            if(ra == nil)
+                ra = a;
+        }
+    }
+@
+
+<<[[work()]] locals>>=
+char cwd[256];
+@
+
+<<[[work()]] no prerequisite special case>>=
+if(node->prereqs == nil){
+    if(node->time == 0){
+        if(getwd(cwd, sizeof cwd))
+            fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
+        else
+            fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
+
+        if(kflag){
+            node->flags |= BEINGMADE;
+            runerrs++;
+        } else
+            Exit();
+    } else
+        MADESET(node, MADE);
+    return did;
+}
+@
+
+
+
 
 
 <<enum sxxx cases>>=
@@ -2752,38 +2751,7 @@ bulkmtime(char *dir)
 
 
 
-<<function touch>>=
-void
-touch(char *name)
-{
-    Bprint(&bout, "touch(%s)\n", name);
-    if(nflag)
-        return;
 
-    if(utfrune(name, '('))
-        atouch(name);		/* archive */
-    else
-     if(chgtime(name) < 0) {
-        perror(name);
-        Exit();
-    }
-}
-@
-
-<<function chgtime>>=
-int
-chgtime(char *name)
-{
-    Dir sbuf;
-
-    if(access(name, AEXIST) >= 0) {
-        nulldir(&sbuf);
-        sbuf.mtime = time((long *)0);
-        return dirwstat(name, &sbuf);
-    }
-    return close(create(name, OWRITE, 0666));
-}
-@
 
 
 
@@ -3425,7 +3393,7 @@ dorecipe(Node *node)
         if(strchr(node->name, '(') && node->time == 0)
             MADESET(node, MADE);
         else
-            update(0, node);
+            update(false, node);
         if(tflag){
             if(!(node->flags&VIRTUAL))
                 touch(node->name);
@@ -3505,11 +3473,12 @@ dorecipe(Node *node)
 
 <<function update>>=
 void
-update(int fake, Node *node)
+update(bool fake, Node *node)
 {
     Arc *a;
 
     MADESET(node, fake? BEINGMADE : MADE);
+
     if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
         node->time = timeof(node->name, true);
         node->flags &= ~(CANPRETEND|PRETENDING);
@@ -3522,9 +3491,9 @@ update(int fake, Node *node)
             if(a->n && outofdate(node, a, 1))
                 node->time = a->n->time;
     }
-/*	print("----node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);/**/
 }
 @
+%/*	print("----node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);/**/
 
 
 <<function addw>>=
@@ -3543,9 +3512,45 @@ addw(Word *w, char *s)
 
 
 
-\chapter{Jobs}
+
+
+
+\chapter{Jobs Scheduling}
 % can do stuff in //! make originally didn't apparently
 
+\section{[[run()]]}
+<<global nrunning>>=
+static int nrunning;
+@
+
+<<global nproclimit>>=
+static int nproclimit;
+@
+
+
+% ... -> dorecipe() -> <> -> sched()
+<<function run>>=
+void
+run(Job *j)
+{
+    Job *jj;
+
+    // enqueue(j, jobs)
+    if(jobs){
+        for(jj = jobs; jj->next; jj = jj->next)
+            ;
+        jj->next = j;
+    } else 
+        jobs = j;
+    j->next = nil;
+
+    /* this code also in waitup after parse redirect */
+    if(nrunning < nproclimit)
+        sched();
+}
+@
+
+\section{Launching jobs}
 
 <<struct RunEvent>>=
 struct RunEvent {
@@ -3564,96 +3569,40 @@ static RunEvent *events;
 static int nevents;
 @
 
-<<struct Process>>=
-struct Process {
-    int pid;
-    int status;
-
-    Process *b, *f;
-};
-@
-
-<<global phead>>=
-// list<ref_own<Process>??
-static Process *phead;
-@
-
-<<global pfree>>=
-static Process *pfree;
-@
-
-
-
-
-<<global nrunning>>=
-static int nrunning;
-@
-
-
-<<function run>>=
-void
-run(Job *j)
-{
-    Job *jj;
-
-    if(jobs){
-        for(jj = jobs; jj->next; jj = jj->next)
-            ;
-        jj->next = j;
-    } else 
-        jobs = j;
-    j->next = nil;
-    /* this code also in waitup after parse redirect */
-    if(nrunning < nproclimit)
-        sched();
-}
-@
-
-\section{Scheduling}
 
 <<function sched>>=
 static void
 sched(void)
 {
-    char *flags;
     Job *j;
-    Bufblock *buf;
     int slot;
-    Node *n;
     Envy *e;
+
+    Bufblock *buf;
+    char *flags;
+    Node *n;
 
     if(jobs == nil){
         usage();
         return;
     }
+
+    // j = pop(jobs)
     j = jobs;
     jobs = j->next;
     <<[[sched()]] if DEBUG(D_EXEC)>>
+
     slot = nextslot();
     events[slot].job = j;
-    buf = newbuf();
+
     e = buildenv(j, slot);
-    shprint(j->r->recipe, e, buf);
-    if(!tflag && (nflag || !(j->r->attr&QUIET)))
-        Bwrite(&bout, buf->start, (long)strlen(buf->start));
-    freebuf(buf);
-    if(nflag||tflag){
-        for(n = j->n; n; n = n->next){
-            if(tflag){
-                if(!(n->flags&VIRTUAL))
-                    touch(n->name);
-                else if(explain)
-                    Bprint(&bout, "no touch of virtual '%s'\n", n->name);
-            }
-            n->time = time((long *)0);
-            MADESET(n, MADE);
-        }
-    } else {
+    <<[[sched()]] print recipe command on stdout>>
+
+    <<[[sched()]] if dry mode or touch mode>>
+    else {
        <<[[sched()]] if DEBUG(D_EXEC) print recipe>>
-        if(j->r->attr&NOMINUSE)
-            flags = 0;
-        else
-            flags = "-e";
+        flags = (j->r->attr&NOMINUSE)? nil : "-e";
+        // launching the job!
         events[slot].pid = execsh(flags, j->r->recipe, 0, e);
         usage();
         nrunning++;
@@ -3662,7 +3611,114 @@ sched(void)
 }
 @
 
+<<enum node_flag cases>>=
+NOMINUSE   = 0x1000,
+@
 
+
+<<enum rule_attr cases>>=
+QUIET  = 0x0008,
+@
+
+<<[[sched()]] print recipe command on stdout>>=
+buf = newbuf();
+shprint(j->r->recipe, e, buf);
+if(!tflag && (nflag || !(j->r->attr&QUIET)))
+    Bwrite(&bout, buf->start, (long)strlen(buf->start));
+freebuf(buf);
+@
+
+
+
+<<function nextslot>>=
+int
+nextslot(void)
+{
+    int i;
+
+    for(i = 0; i < nproclimit; i++)
+        if(events[i].pid <= 0) 
+            return i;
+    assert(/*out of slots!!*/ false);
+    return 0;	/* cyntax */
+}
+@
+
+
+
+\section{[[Process]]}
+
+<<struct Process>>=
+struct Process {
+    int pid;
+    int status;
+
+    // Extra
+    // double linked list, backward, forward
+    Process *b, *f;
+};
+@
+% again another example of redundant code ... should be factorized
+% in a container library
+
+<<global phead>>=
+// double_list<ref_own<Process> (next = Process.f)
+static Process *phead;
+@
+
+<<global pfree>>=
+// double_list<ref_own<Process> (next = Process.f)
+static Process *pfree;
+@
+
+% ctor
+<<function pnew>>=
+static void
+pnew(int pid, int status)
+{
+    Process *p;
+
+    if(pfree){
+        p = pfree;
+        pfree = p->f;
+    } else
+        p = (Process *)Malloc(sizeof(Process));
+
+    p->pid = pid;
+    p->status = status;
+
+    p->f = phead;
+    phead = p;
+    if(p->f)
+        p->f->b = p;
+    p->b = nil;
+}
+@
+
+% dtor
+<<function pdelete>>=
+static void
+pdelete(Process *p)
+{
+    if(p->f)
+        p->f->b = p->b;
+    if(p->b)
+        p->b->f = p->f;
+    else
+        phead = p->f;
+    p->f = pfree;
+    pfree = p;
+}
+@
+
+
+
+
+\section{Waiting children}
+
+
+% echildok -1, -2, -3?? just to help debug which one of the waitup?
+% then use __LINE__ no?
 <<function waitup>>=
 int
 waitup(int echildok, int *retstatus)
@@ -3752,9 +3808,6 @@ again:		/* rogue processes */
 \section{Parallel processing}
 % export NPROC=...
 
-<<global nproclimit>>=
-static int nproclimit;
-@
 
 <<function nproc>>=
 void
@@ -3783,19 +3836,6 @@ nproc(void)
 }
 @
 
-<<function nextslot>>=
-int
-nextslot(void)
-{
-    int i;
-
-    for(i = 0; i < nproclimit; i++)
-        if(events[i].pid <= 0) 
-            return i;
-    assert(/*out of slots!!*/ false);
-    return 0;	/* cyntax */
-}
-@
 
 <<function pidslot>>=
 int
@@ -3811,62 +3851,18 @@ pidslot(int pid)
 }
 @
 
-<<function pnew>>=
-static void
-pnew(int pid, int status)
-{
-    Process *p;
 
-    if(pfree){
-        p = pfree;
-        pfree = p->f;
-    } else
-        p = (Process *)Malloc(sizeof(Process));
-    p->pid = pid;
-    p->status = status;
-    p->f = phead;
-    phead = p;
-    if(p->f)
-        p->f->b = p;
-    p->b = 0;
-}
-@
 
-<<function pdelete>>=
-static void
-pdelete(Process *p)
-{
-    if(p->f)
-        p->f->b = p->b;
-    if(p->b)
-        p->b->f = p->f;
-    else
-        phead = p->f;
-    p->f = pfree;
-    pfree = p;
-}
-@
+\section{Signals/Notes managment}
 
-<<function killchildren>>=
+% main -> <>
+<<function catchnotes>>=
 void
-killchildren(char *msg)
+catchnotes()
 {
-    Process *p;
-
-    kflag = true;	/* to make sure waitup doesn't exit */
-    jobs = 0;	/* make sure no more get scheduled */
-    for(p = phead; p; p = p->f)
-        expunge(p->pid, msg);
-    while(waitup(1, (int *)0) == 0)
-        ;
-    Bprint(&bout, "mk: %s\n", msg);
-    Exit();
+    atnotify(notifyf, 1);
 }
 @
-
-
-\section{Subprocesses managment}
-
 
 <<function notifyf>>=
 int
@@ -3887,12 +3883,21 @@ notifyf(void *a, char *msg)
 }
 @
 
-% main ->
-<<function catchnotes>>=
+
+<<function killchildren>>=
 void
-catchnotes()
+killchildren(char *msg)
 {
-    atnotify(notifyf, 1);
+    Process *p;
+
+    kflag = true;	/* to make sure waitup doesn't exit */
+    jobs = nil;		/* make sure no more get scheduled */
+    for(p = phead; p; p = p->f)
+        expunge(p->pid, msg);
+    while(waitup(1, (int *)0) == 0)
+        ;
+    Bprint(&bout, "mk: %s\n", msg);
+    Exit();
 }
 @
 
@@ -3924,6 +3929,15 @@ case 'n':
     break;
 @
 
+<<[[sched()]] if dry mode or touch mode>>=
+if(nflag||tflag){
+    for(n = j->n; n; n = n->next){
+        <<[[sched()]] if touch mode>>
+        n->time = time((long *)nil);
+        MADESET(n, MADE);
+    }
+}
+@
 
 \section{What if, [[mk -w]]}
 
@@ -4098,6 +4112,82 @@ case 'i':
     break;
 @
 
+
+<<enum node_flag cases>>=
+CANPRETEND = 0x0008,
+PRETENDING = 0x0010,
+@
+
+
+<<[[clrmade()]] n->flags pretend adjustments>>=
+n->flags &= ~(CANPRETEND|PRETENDING);
+if(strchr(n->name, '(') ==0 || n->time)
+    n->flags |= CANPRETEND;
+@
+
+<<[[work()]] possibly unpretending node>>=
+if((node->flags&MADE) && (node->flags&PRETENDING) && p
+    && outofdate(p, parc, 0)){
+    if(explain)
+        fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
+            node->name, node->time, p->name, p->time);
+    unpretend(node);
+}
+/*
+ *   have a look if we are pretending in case
+ *   someone has been unpretended out from underneath us
+ */
+if(node->flags&MADE){
+    if(node->flags&PRETENDING){
+        node->time = 0;
+    }else
+        return did;
+}
+@
+
+<<function unpretend>>=
+static void
+unpretend(Node *n)
+{
+    MADESET(n, NOTMADE);
+    n->flags &= ~(CANPRETEND|PRETENDING);
+    n->time = 0;
+}
+@
+
+<<[[work()]] possibly pretending node>>=
+/*
+ *   can we pretend to be made?
+ */
+if((iflag == false) && (node->time == 0) 
+        && (node->flags&(PRETENDING|CANPRETEND))
+        && p && ra->n && !outofdate(p, ra, 0)){
+    node->flags &= ~CANPRETEND;
+    MADESET(node, MADE);
+    if(explain && ((node->flags&PRETENDING) == 0))
+        fprint(1, "pretending %s has time %lud\n", node->name, node->time);
+    node->flags |= PRETENDING;
+    return did;
+}
+/*
+ *   node is out of date and we REALLY do have to do something.
+ *   quickly rescan for pretenders
+ */
+for(a = node->prereqs; a; a = a->next)
+    if(a->n && (a->n->flags&PRETENDING)){
+        if(explain)
+            Bprint(&bout, "unpretending %s because of %s because of %s\n",
+            a->n->name, node->name, 
+            ra->n? ra->n->name : "rule with no prerequisites");
+
+        unpretend(a->n);
+        did = work(a->n, node, a) || did;
+        ready = false;
+    }
+if(ready == false)/* try later unless nothing has happened for -k's sake */
+    return did || work(node, p, parc);
+@
+
 \section{Touching mode optimization, [[mk -t]]}
 
 % when the user knows what he is doing
@@ -4110,6 +4200,48 @@ bool tflag = false;
 case 't':
     tflag = true;
     break;
+@
+
+<<[[sched()]] if touch mode>>=
+if(tflag){
+    if(!(n->flags&VIRTUAL))
+        touch(n->name);
+    else if(explain)
+        Bprint(&bout, "no touch of virtual '%s'\n", n->name);
+}
+@
+
+<<function touch>>=
+void
+touch(char *name)
+{
+    Bprint(&bout, "touch(%s)\n", name);
+    if(nflag)
+        return;
+
+    if(utfrune(name, '('))
+        atouch(name);		/* archive */
+    else
+     if(chgtime(name) < 0) {
+        perror(name);
+        Exit();
+    }
+}
+@
+
+<<function chgtime>>=
+int
+chgtime(char *name)
+{
+    Dir sbuf;
+
+    if(access(name, AEXIST) >= 0) {
+        nulldir(&sbuf);
+        sbuf.mtime = time((long *)nil);
+        return dirwstat(name, &sbuf);
+    }
+    return close(create(name, OWRITE, 0666));
+}
 @
 
 \section{Recompiling everything, [[mk -a]]}
@@ -4408,7 +4540,8 @@ int runerrs;
 bool kflag = false;
 @
 
-% continue even if errors
+% continue even if errors, not so useful in general, but
+% useful for killchildren when get a C-c
 <<[[main()]] -xxx switch cases>>=
 case 'k':
     kflag = true;

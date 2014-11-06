@@ -15,10 +15,11 @@ mk(char *target)
     Node *node;
     bool did = false;
 
-    nproc();		/* it can be updated dynamically */
+    /*s: [[mk()]] initialisation */
+    nproc();	/* it can be updated dynamically */
     nrep();		/* it can be updated dynamically */
     runerrs = 0;
-
+    /*e: [[mk()]] initialisation */
     node = graph(target);
     /*s: [[main()]] if DEBUG(D_GRAPH) */
     if(DEBUG(D_GRAPH)){
@@ -32,7 +33,7 @@ mk(char *target)
         if(work(node, (Node *)nil, (Arc *)nil))
             did = true;	/* found something to do */
         else {
-            if(waitup(1, (int *)0) > 0){
+            if(waitup(1, (int *)nil) > 0){
                 if(node->flags&(NOTMADE|BEINGMADE)){
                     assert(/*must be run errors*/ runerrs);
                     break;	/* nothing more waiting */
@@ -41,9 +42,10 @@ mk(char *target)
         }
     }
     if(node->flags&BEINGMADE)
-        waitup(-1, (int *)0);
+        waitup(-1, (int *)nil);
+
     while(jobs)
-        waitup(-2, (int *)0);
+        waitup(-2, (int *)nil);
 
     assert(/*target didnt get done*/ runerrs || (node->flags&MADE));
     if(did == false)
@@ -57,10 +59,11 @@ clrmade(Node *n)
 {
     Arc *a;
 
+    /*s: [[clrmade()]] n->flags pretend adjustments */
     n->flags &= ~(CANPRETEND|PRETENDING);
     if(strchr(n->name, '(') ==0 || n->time)
         n->flags |= CANPRETEND;
-
+    /*e: [[clrmade()]] n->flags pretend adjustments */
     MADESET(n, NOTMADE);
     for(a = n->prereqs; a; a = a->next)
         if(a->n)
@@ -80,19 +83,23 @@ unpretend(Node *n)
 
 /*s: function work */
 bool
-work(Node *node, Node *p, Arc *parc)
+work(Node *node,   Node *p, Arc *parc)
 {
+    /*s: [[work()]] locals */
     bool did = false;
+    /*x: [[work()]] locals */
     bool weoutofdate;
     bool ready;
+    Arc *a;
+    Arc *ra;
+    /*x: [[work()]] locals */
     char cwd[256];
-    Arc *a, *ra;
-
-    /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
+    /*e: [[work()]] locals */
 
     if(node->flags&BEINGMADE)
         return did;
 
+    /*s: [[work()]] possibly unpretending node */
     if((node->flags&MADE) && (node->flags&PRETENDING) && p
         && outofdate(p, parc, 0)){
         if(explain)
@@ -110,8 +117,9 @@ work(Node *node, Node *p, Arc *parc)
         }else
             return did;
     }
-
+    /*e: [[work()]] possibly unpretending node */
     /* consider no prerequisite case */
+    /*s: [[work()]] no prerequisite special case */
     if(node->prereqs == nil){
         if(node->time == 0){
             if(getwd(cwd, sizeof cwd))
@@ -128,15 +136,18 @@ work(Node *node, Node *p, Arc *parc)
             MADESET(node, MADE);
         return did;
     }
+    /*e: [[work()]] no prerequisite special case */
 
     /*
      *   now see if we are out of date or what
      */
     ready = true;
     weoutofdate = aflag;
+    /*s: [[work()]] check if node out of date with prerequisites, recursively */
     ra = nil;
     for(a = node->prereqs; a; a = a->next)
         if(a->n){
+            // recursive call! go in depth
             did = work(a->n, node, a) || did;
             if(a->n->flags&(NOTMADE|BEINGMADE))
                 ready = false;
@@ -152,13 +163,15 @@ work(Node *node, Node *p, Arc *parc)
                     ra = a;
             }
         }
+    /*e: [[work()]] check if node out of date with prerequisites, recursively */
+
     if(ready == false)	/* can't do anything now */
         return did;
-
     if(weoutofdate == false){
         MADESET(node, MADE);
         return did;
     }
+    /*s: [[work()]] possibly pretending node */
     /*
      *   can we pretend to be made?
      */
@@ -187,9 +200,9 @@ work(Node *node, Node *p, Arc *parc)
             did = work(a->n, node, a) || did;
             ready = false;
         }
-
     if(ready == false)/* try later unless nothing has happened for -k's sake */
         return did || work(node, p, parc);
+    /*e: [[work()]] possibly pretending node */
 
     did = dorecipe(node) || did;
     return did;
@@ -198,11 +211,12 @@ work(Node *node, Node *p, Arc *parc)
 
 /*s: function update */
 void
-update(int fake, Node *node)
+update(bool fake, Node *node)
 {
     Arc *a;
 
     MADESET(node, fake? BEINGMADE : MADE);
+
     if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
         node->time = timeof(node->name, true);
         node->flags &= ~(CANPRETEND|PRETENDING);
@@ -215,7 +229,6 @@ update(int fake, Node *node)
             if(a->n && outofdate(node, a, 1))
                 node->time = a->n->time;
     }
-/*	print("----node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);/**/
 }
 /*e: function update */
 

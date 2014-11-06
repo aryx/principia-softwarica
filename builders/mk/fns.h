@@ -107,5 +107,5 @@ void	rcopy(char**, Resub*, int);
 char*	rulecnt(void);
 char*	shname(char*);
 void	shprint(char*, Envy*, Bufblock*);
-void	update(int, Node*);
+void	update(bool, Node*);
 /*e: mk/fns.h */

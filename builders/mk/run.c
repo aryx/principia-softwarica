@@ -35,14 +35,17 @@ struct Process {
     int pid;
     int status;
 
+    // Extra
+    // double linked list, backward, forward
     Process *b, *f;
 };
 /*e: struct Process */
 /*s: global phead */
-// list<ref_own<Process>??
+// double_list<ref_own<Process> (next = Process.f)
 static Process *phead;
 /*e: global phead */
 /*s: global pfree */
+// double_list<ref_own<Process> (next = Process.f)
 static Process *pfree;
 /*e: global pfree */
 
@@ -52,6 +55,7 @@ run(Job *j)
 {
     Job *jj;
 
+    // enqueue(j, jobs)
     if(jobs){
         for(jj = jobs; jj->next; jj = jj->next)
             ;
@@ -59,6 +63,7 @@ run(Job *j)
     } else 
         jobs = j;
     j->next = nil;
+
     /* this code also in waitup after parse redirect */
     if(nrunning < nproclimit)
         sched();
@@ -69,52 +74,63 @@ run(Job *j)
 static void
 sched(void)
 {
-    char *flags;
     Job *j;
-    Bufblock *buf;
     int slot;
-    Node *n;
     Envy *e;
+
+    Bufblock *buf;
+    char *flags;
+    Node *n;
 
     if(jobs == nil){
         usage();
         return;
     }
+
+    // j = pop(jobs)
     j = jobs;
     jobs = j->next;
     /*s: [[sched()]] if DEBUG(D_EXEC) */
     if(DEBUG(D_EXEC))
         fprint(STDOUT, "firing up job for target %s\n", wtos(j->t, ' '));
     /*e: [[sched()]] if DEBUG(D_EXEC) */
+
     slot = nextslot();
     events[slot].job = j;
-    buf = newbuf();
+
     e = buildenv(j, slot);
+    /*s: [[sched()]] print recipe command on stdout */
+    buf = newbuf();
     shprint(j->r->recipe, e, buf);
     if(!tflag && (nflag || !(j->r->attr&QUIET)))
         Bwrite(&bout, buf->start, (long)strlen(buf->start));
     freebuf(buf);
+    /*e: [[sched()]] print recipe command on stdout */
+
+    /*s: [[sched()]] if dry mode or touch mode */
     if(nflag||tflag){
         for(n = j->n; n; n = n->next){
+            /*s: [[sched()]] if touch mode */
             if(tflag){
                 if(!(n->flags&VIRTUAL))
                     touch(n->name);
                 else if(explain)
                     Bprint(&bout, "no touch of virtual '%s'\n", n->name);
             }
-            n->time = time((long *)0);
+            /*e: [[sched()]] if touch mode */
+            n->time = time((long *)nil);
             MADESET(n, MADE);
         }
-    } else {
+    }
+    /*e: [[sched()]] if dry mode or touch mode */
+    else {
        /*s: [[sched()]] if DEBUG(D_EXEC) print recipe */
        if(DEBUG(D_EXEC))
            fprint(STDOUT, "recipe='%s'\n", j->r->recipe);	/**/
        Bflush(&bout);
        /*e: [[sched()]] if DEBUG(D_EXEC) print recipe */
-        if(j->r->attr&NOMINUSE)
-            flags = 0;
-        else
-            flags = "-e";
+        flags = (j->r->attr&NOMINUSE)? nil : "-e";
+        // launching the job!
         events[slot].pid = execsh(flags, j->r->recipe, 0, e);
         usage();
         nrunning++;
@@ -291,13 +307,15 @@ pnew(int pid, int status)
         pfree = p->f;
     } else
         p = (Process *)Malloc(sizeof(Process));
+
     p->pid = pid;
     p->status = status;
+
     p->f = phead;
     phead = p;
     if(p->f)
         p->f->b = p;
-    p->b = 0;
+    p->b = nil;
 }
 /*e: function pnew */
 
@@ -323,7 +341,7 @@ killchildren(char *msg)
     Process *p;
 
     kflag = true;	/* to make sure waitup doesn't exit */
-    jobs = 0;	/* make sure no more get scheduled */
+    jobs = nil;		/* make sure no more get scheduled */
     for(p = phead; p; p = p->f)
         expunge(p->pid, msg);
     while(waitup(1, (int *)0) == 0)

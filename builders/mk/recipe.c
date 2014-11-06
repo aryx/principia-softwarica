@@ -38,7 +38,7 @@ dorecipe(Node *node)
         if(strchr(node->name, '(') && node->time == 0)
             MADESET(node, MADE);
         else
-            update(0, node);
+            update(false, node);
         if(tflag){
             if(!(node->flags&VIRTUAL))
                 touch(node->name);

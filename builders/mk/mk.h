@@ -95,12 +95,13 @@ enum rule_attr {
     //@Scheck: dead indeed
     UNUSED = 0x0002,
     UPD    = 0x0004,
-    QUIET  = 0x0008,
     VIR    = 0x0010,
     REGEXP = 0x0020,
     NOREC  = 0x0040,
     DEL    = 0x0080,
     NOVIRT = 0x0100,
+    /*x: enum rule_attr cases */
+    QUIET  = 0x0008,
     /*e: enum rule_attr cases */
 };
 /*e: enum rule_attr */
@@ -112,7 +113,7 @@ enum rule_attr {
 /*s: struct Arc */
 struct Arc
 {
-    // ref<Node>, dst node in the arc (src is the Node having the prereqs)
+    // option<ref<Node>>, the other node in the arc
     struct Node *n;
     // ref<Rule>, rule to generate the target node from the dependent node
     Rule *r;
@@ -169,16 +170,19 @@ enum node_flag {
     VIRTUAL    = 0x0001,
     CYCLE      = 0x0002,
     READY      = 0x0004,
-    CANPRETEND = 0x0008,
-    PRETENDING = 0x0010,
-    NOTMADE    = 0x0020,
-    BEINGMADE  = 0x0040,
-    MADE       = 0x0080,
     PROBABLE   = 0x0100,
     VACUOUS    = 0x0200,
     NORECIPE   = 0x0400,
     DELETE     = 0x0800,
+    /*x: enum node_flag cases */
+    NOTMADE    = 0x0020,
+    BEINGMADE  = 0x0040,
+    MADE       = 0x0080,
+    /*x: enum node_flag cases */
     NOMINUSE   = 0x1000,
+    /*x: enum node_flag cases */
+    CANPRETEND = 0x0008,
+    PRETENDING = 0x0010,
     /*e: enum node_flag cases */
 };
 /*e: enum node_flag */
