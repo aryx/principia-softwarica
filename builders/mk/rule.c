@@ -1,13 +1,15 @@
 /*s: mk/rule.c */
 #include	"mk.h"
 
-static Rule *lr, *lmr;
-
-static int rcmp(Rule *r, char *target, Word *tail);
+static Rule *lr;
+static Rule *lmr;
 
 /*s: global nrules */
 static int nrules = 0;
 /*e: global nrules */
+
+static int rcmp(Rule *r, char *target, Word *tail);
+
 
 /*s: function addrule */
 void

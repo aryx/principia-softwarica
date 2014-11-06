@@ -2,6 +2,10 @@
 #include	"mk.h"
 
 int	nextslot(void);
+int pidslot(int);
+static void sched(void);
+static void pnew(int, int);
+static void pdelete(Process *);
 
 typedef struct RunEvent RunEvent;
 typedef struct Process Process;
@@ -41,11 +45,6 @@ static Process *phead;
 /*s: global pfree */
 static Process *pfree;
 /*e: global pfree */
-
-static void sched(void);
-static void pnew(int, int);
-static void pdelete(Process *);
-int pidslot(int);
 
 /*s: function run */
 void

@@ -1,9 +1,6 @@
 /*s: mk/parse.c */
 #include	"mk.h"
 
-void	ipop(void);
-void	ipush(void);
-
 /*s: global infile */
 char *infile;
 /*e: global infile */
@@ -11,8 +8,10 @@ char *infile;
 int mkinline;
 /*e: global mkinline */
 
-static int rhead(char *, Word **, Word **, int *, char **);
-static char *rbody(Biobuf*);
+void	ipop(void);
+void	ipush(void);
+static int   rhead(char *, Word **, Word **, int *, char **);
+static char* rbody(Biobuf*);
 
 /*s: function parse */
 void
