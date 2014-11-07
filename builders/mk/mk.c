@@ -12,45 +12,47 @@ int runerrs;
 void
 mk(char *target)
 {
-    Node *node;
+    Node *root;
     bool did = false;
 
     /*s: [[mk()]] initialisation */
-    nproc();	/* it can be updated dynamically */
-    nrep();		/* it can be updated dynamically */
     runerrs = 0;
+    /*x: [[mk()]] initialisation */
+    nrep();		/* it can be updated dynamically */
+    /*x: [[mk()]] initialisation */
+    nproc();	/* it can be updated dynamically */
     /*e: [[mk()]] initialisation */
 
-    node = graph(target);
+    root = graph(target);
     /*s: [[main()]] if DEBUG(D_GRAPH) */
     if(DEBUG(D_GRAPH)){
-        dumpn("new target\n", node);
+        dumpn("new target\n", root);
         Bflush(&bout);
     }
     /*e: [[main()]] if DEBUG(D_GRAPH) */
-    clrmade(node);
+    clrmade(root);
 
-    while(node->flags&NOTMADE){
-        if(work(node, (Node *)nil, (Arc *)nil))
+    while(root->flags&NOTMADE){
+        if(work(root, (Node *)nil, (Arc *)nil))
             did = true;	/* found something to do */
         else {
             if(waitup(1, (int *)nil) > 0){
-                if(node->flags&(NOTMADE|BEINGMADE)){
+                if(root->flags&(NOTMADE|BEINGMADE)){
                     assert(/*must be run errors*/ runerrs);
                     break;	/* nothing more waiting */
                 }
             }
         }
     }
-    if(node->flags&BEINGMADE)
+    if(root->flags&BEINGMADE)
         waitup(-1, (int *)nil);
 
     while(jobs)
         waitup(-2, (int *)nil);
 
-    assert(/*target didnt get done*/ runerrs || (node->flags&MADE));
+    assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
     if(did == false)
-        Bprint(&bout, "mk: '%s' is up to date\n", node->name);
+        Bprint(&bout, "mk: '%s' is up to date\n", root->name);
 }
 /*e: function mk */
 
@@ -119,10 +121,12 @@ work(Node *node,   Node *p, Arc *parc)
             return did;
     }
     /*e: [[work()]] possibly unpretending node */
-    /*s: [[work()]] no prerequisite special case */
+
+    /*s: [[work()]] no prerequisite, a leaf */
     /* consider no prerequisite case */
     if(node->prereqs == nil){
         if(node->time == 0){
+            /*s: [[work()]] print error when inexistent file without prerequisites */
             if(getwd(cwd, sizeof cwd))
                 fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
             else
@@ -133,12 +137,12 @@ work(Node *node,   Node *p, Arc *parc)
                 runerrs++;
             } else
                 Exit();
+            /*e: [[work()]] print error when inexistent file without prerequisites */
         } else
             MADESET(node, MADE);
         return did;
     }
-    /*e: [[work()]] no prerequisite special case */
-
+    /*e: [[work()]] no prerequisite, a leaf */
     /*
      *   now see if we are out of date or what
      */
@@ -150,6 +154,7 @@ work(Node *node,   Node *p, Arc *parc)
         if(a->n){
             // recursive call! go in depth
             did = work(a->n, node, a) || did;
+
             if(a->n->flags&(NOTMADE|BEINGMADE))
                 ready = false;
             if(outofdate(node, a, 0)){

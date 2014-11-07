@@ -158,7 +158,6 @@ waitup(int echildok, int *retstatus)
     int done;
     Node *n;
     Process *p;
-    extern int runerrs;
 
     /* first check against the proces slist */
     if(retstatus)

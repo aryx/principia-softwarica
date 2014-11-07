@@ -285,6 +285,7 @@ extern	char 	*shflags;
 //extern	char 	*shell;
 //extern	char 	*shellname;
 //extern	int	IWS;
+extern int runerrs;
 
 /*s: function SYNERR */
 #define	SYNERR(l)	(fprint(STDERR, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))

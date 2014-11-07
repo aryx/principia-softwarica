@@ -1326,6 +1326,11 @@ else {
 
 % the core!
 
+% main idea = build concrete graph, get root, set all nodes to NOTMADE.
+% Then ask to build root which will recurse. If leaf then node MADE (if exist).
+% Otherwise look at time if file > time of all children then MADE, 
+% otherwise run recipe job in parallel, return and wait it's MADE (so loop).
+
 <<enum node_flag cases>>=
 NOTMADE    = 0x0020,
 BEINGMADE  = 0x0040,
@@ -1337,57 +1342,58 @@ MADE       = 0x0080,
 %   2 files with deps on same Node? DAG
 % MADE finally when recipe done! (or time was already good, no need update)
 
+<<global runerrs>>=
+int runerrs;
+@
+
 
 % main -> <> -> graph() ; clrmade(); work()
 <<function mk>>=
 void
 mk(char *target)
 {
-    Node *node;
+    Node *root;
     bool did = false;
 
     <<[[mk()]] initialisation>>
 
-    node = graph(target);
+    root = graph(target);
     <<[[main()]] if DEBUG(D_GRAPH)>>
-    clrmade(node);
+    clrmade(root);
 
-    while(node->flags&NOTMADE){
-        if(work(node, (Node *)nil, (Arc *)nil))
+    while(root->flags&NOTMADE){
+        if(work(root, (Node *)nil, (Arc *)nil))
             did = true;	/* found something to do */
         else {
             if(waitup(1, (int *)nil) > 0){
-                if(node->flags&(NOTMADE|BEINGMADE)){
+                if(root->flags&(NOTMADE|BEINGMADE)){
                     assert(/*must be run errors*/ runerrs);
                     break;	/* nothing more waiting */
                 }
             }
         }
     }
-    if(node->flags&BEINGMADE)
+    if(root->flags&BEINGMADE)
         waitup(-1, (int *)nil);
 
     while(jobs)
         waitup(-2, (int *)nil);
 
-    assert(/*target didnt get done*/ runerrs || (node->flags&MADE));
+    assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
     if(did == false)
-        Bprint(&bout, "mk: '%s' is up to date\n", node->name);
+        Bprint(&bout, "mk: '%s' is up to date\n", root->name);
 }
 @
-% subtle, important while loop! because of mk // so run some jobs
+%old: was called node, but root is better.
+%note: subtle, important while loop! because of mk // so run some jobs
 % but then later another job might depend on the end of this one,
-% so have BEINGMADE flag and waitup
+% so have BEINGMADE flag and waitup??
 
 % TODO? wanted to make did a global because was always threading it
 % everywhere and doing did = foo () || did;   
 % possible? change semantic?
 
-% waitup??
-
 <<[[mk()]] initialisation>>=
-nproc();	/* it can be updated dynamically */
-nrep();		/* it can be updated dynamically */
 runerrs = 0;
 @
 
@@ -1417,6 +1423,7 @@ clrmade(Node *n)
 <<[[work()]] locals>>=
 bool did = false;
 @
+% move as a global!
 
 <<[[work()]] locals>>=
 bool weoutofdate;
@@ -1444,8 +1451,8 @@ work(Node *node,   Node *p, Arc *parc)
         return did;
 
     <<[[work()]] possibly unpretending node>>
-    <<[[work()]] no prerequisite special case>>
 
+    <<[[work()]] no prerequisite, a leaf>>
     /*
      *   now see if we are out of date or what
      */
@@ -1465,10 +1472,41 @@ work(Node *node,   Node *p, Arc *parc)
     return did;
 }
 @
-% TODO: can refactor in did ||= foo(); ? hmm maybe not, we actually want the
+% can refactor in did ||= foo(); ? hmm maybe not, we actually want the
 % side effect!
-% but maybe can refactor dir in a global!
 
+% can refactor dir in a global? dangerous ...
+
+
+
+% a leaf!
+<<[[work()]] no prerequisite, a leaf>>=
+/* consider no prerequisite case */
+if(node->prereqs == nil){
+    if(node->time == 0){
+        <<[[work()]] print error when inexistent file without prerequisites>>
+    } else
+        MADESET(node, MADE);
+    return did;
+}
+@
+
+<<[[work()]] locals>>=
+char cwd[256];
+@
+
+<<[[work()]] print error when inexistent file without prerequisites>>=
+if(getwd(cwd, sizeof cwd))
+    fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
+else
+    fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
+
+if(kflag){
+    node->flags |= BEINGMADE;
+    runerrs++;
+} else
+    Exit();
+@
 
 <<[[work()]] check if node out of date with prerequisites, recursively>>=
 ra = nil;
@@ -1476,6 +1514,7 @@ for(a = node->prereqs; a; a = a->next)
     if(a->n){
         // recursive call! go in depth
         did = work(a->n, node, a) || did;
+
         if(a->n->flags&(NOTMADE|BEINGMADE))
             ready = false;
         if(outofdate(node, a, 0)){
@@ -1493,29 +1532,6 @@ for(a = node->prereqs; a; a = a->next)
 @
 % when can have no node attached to an arc?
 
-<<[[work()]] locals>>=
-char cwd[256];
-@
-
-<<[[work()]] no prerequisite special case>>=
-/* consider no prerequisite case */
-if(node->prereqs == nil){
-    if(node->time == 0){
-        if(getwd(cwd, sizeof cwd))
-            fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
-        else
-            fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
-
-        if(kflag){
-            node->flags |= BEINGMADE;
-            runerrs++;
-        } else
-            Exit();
-    } else
-        MADESET(node, MADE);
-    return did;
-}
-@
 
 
 \section{[[outofdate()]]}
@@ -1619,7 +1635,7 @@ mtime(char *name)
     return mkmtime(name, true);
 }
 @
-
+%less: could be removed, refactor caller sites
 
 
 
@@ -2691,6 +2707,10 @@ trace(char *s, Arc *a)
 int nreps = 1;
 @
 
+<<[[mk()]] initialisation>>=
+nrep();		/* it can be updated dynamically */
+@
+
 % mk -> nrep
 <<function nrep>>=
 void
@@ -2934,7 +2954,6 @@ waitup(int echildok, int *retstatus)
     int done;
     Node *n;
     Process *p;
-    extern int runerrs;
 
     /* first check against the proces slist */
     if(retstatus)
@@ -3019,6 +3038,9 @@ delete(char *name)
 \section{Parallel processing}
 % export NPROC=...
 
+<<[[mk()]] initialisation>>=
+nproc();	/* it can be updated dynamically */
+@
 
 <<function nproc>>=
 void
@@ -4413,7 +4435,7 @@ print1(Symtab *s)
 % node = graph(target) from mk(target)
 <<[[main()]] if DEBUG(D_GRAPH)>>=
 if(DEBUG(D_GRAPH)){
-    dumpn("new target\n", node);
+    dumpn("new target\n", root);
     Bflush(&bout);
 }
 @
@@ -4563,11 +4585,7 @@ symstat(void)
 
 \chapter{Error Managment}
 
-<<global runerrs>>=
-int runerrs;
-@
-
-
+% see also runerrs
 
 <<global kflag>>=
 bool kflag = false;
