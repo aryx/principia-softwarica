@@ -639,6 +639,13 @@ struct Rule	*next;
 
 
 
+<<function PERCENT>>=
+#define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
+@
+% from man page:
+% '%' matches a maximal length string of any characters;
+% '&' matches a maximal length string of any characters except period or slash
+
 <<enum rule_attr>>=
 enum rule_attr {
     META   = 0x0001,
@@ -653,12 +660,6 @@ enum rule_attr {
 Rule *metarules;
 @
 
-<<function PERCENT>>=
-#define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
-@
-% from man page:
-% '%' matches a maximal length string of any characters;
-% '&' matches a maximal length string of any characters except period or slash
 
 
 
@@ -791,11 +792,6 @@ UNUSED = 0x0002,
 @
 
 
-%XXXX??
-<<[[Rule]] other fields>>=
-char		*prog;		/* to use in out of date */
-@
-% prog??
 
 
 \section{[[Node]] and [[Arc]]}
@@ -914,10 +910,6 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 
 
 
-%XXX?
-<<[[Arc]] other fields>>=
-char		*prog;
-@
 
 
 <<constant TOGO>>=
@@ -934,6 +926,7 @@ enum node_flag {
 @
 % used to be a set of #define
 
+%XXXXXXX?
 <<enum node_flag cases>>=
 VIRTUAL    = 0x0001,
 CYCLE      = 0x0002,
@@ -957,16 +950,16 @@ DELETE     = 0x0800,
 <<struct Envy>>=
 struct Envy
 {
+    // key
     char 		*name;
-
-    // list<ref_own<string>>
+    // value, list<ref_own<string>>
     Word 		*values;
 };
 @
 
 
 <<global envy>>=
-// array<ref_own<Envy>> (array or list?)
+// array<Envy>
 Envy	*envy;
 @
 
@@ -995,26 +988,20 @@ envinsert(char *name, Word *value)
 @
 
 
-
-
-
-
-
-
 \section{[[Job]] and [[jobs]]}
 
+% why so short field names suddenly?
 <<struct Job>>=
 struct Job
 {
     Word		*t;	/* targets */
+    Word		*p;	/* prerequistes */
     Rule		*r;	/* master rule for job */
-
     // list<ref_?<Node>> (next = Node.next?)
     Node		*n;	/* list of node targets */
 
     char		*stem;
 
-    Word		*p;	/* prerequistes */
     Word		*np;	/* new prerequistes */
     Word		*at;	/* all targets */
 
@@ -1070,10 +1057,6 @@ struct Job	*next;
 
 
 
-
-
-
-
 \chapter{[[main()]]}
 
 <<global bout>>=
@@ -1104,6 +1087,8 @@ main(int argc, char **argv)
      *  start with a copy of the current environment variables
      *  instead of sharing them
      */
+    //???
+
     Binit(&bout, STDOUT, OWRITE);
 
     <<[[main()]] argv processing for -xxx, modify flags, modify buf>>
@@ -1115,9 +1100,7 @@ main(int argc, char **argv)
     usage(); // useful?
 
     <<[[main()]] argv processing for xxx=yyy>>
-
-    <<[[main()]] set MKFLAGS variable>>
-    <<[[main()]] set MKARGS variable>>
+    <<[[main()]] set some variables>>
 
     <<[[main()]] parsing mkfile, call parse()>>
     <<[[main()]] if DEBUG(D_PARSE)>>
@@ -1200,32 +1183,6 @@ if(tfd >= 0){
 @
 % abuse parse(), pass true so will get varoverride to true
 %old: seek() used to be LSEEK() a macro expanding ultimately to seek
-
-\section{Setting [[MKFLAGS]], [[MKARGS]]}
-% used by? at least mkfile called recursively can expect those variables
-
-<<[[main()]] set MKFLAGS variable>>=
-if (buf->current != buf->start) {
-    buf->current--;
-    insert(buf, '\0');
-}
-symlook("MKFLAGS", S_VAR, (void*) stow(buf->start));
-@
-
-<<[[main()]] set MKARGS variable>>=
-buf->current = buf->start;
-for(i = 0; argv[i]; i++){
-    if(*argv[i] == '\0') 
-        continue;
-    if(i)
-        insert(buf, ' ');
-    bufcpy(buf, argv[i], strlen(argv[i]));
-}
-insert(buf, '\0');
-symlook("MKARGS", S_VAR, (void *) stow(buf->start));
-
-freebuf(buf);
-@
 
 
 \section{Parsing [[mkfile]], and [[mk -f]]}
@@ -1333,7 +1290,7 @@ if(tail->next == nil)
     mk(tail->s);
 else {
     head = newword("<command line arguments>");
-    addrules(head, tail, strdup(""), VIR, mkinline, 0);
+    addrules(head, tail, strdup(""), VIR, mkinline, nil);
     mk(head->s);
 }
 @
@@ -1351,6 +1308,8 @@ else {
 % Then ask to build root which will recurse. If leaf then node MADE (if exist).
 % Otherwise look at time if file > time of all children then MADE, 
 % otherwise run recipe job in parallel, return and wait it's MADE (so loop).
+
+% while(root not finished) { run wave of jobs and update graph }
 
 <<enum node_flag cases>>=
 NOTMADE    = 0x0020,
@@ -1394,7 +1353,7 @@ mk(char *target)
             }
         }
     }
-    if(root->flags&BEINGMADE)
+    if(root->flags&BEINGMADE) // because of a runerrs
         waitup(-1, (int *)nil);
 
     while(jobs)
@@ -1455,7 +1414,7 @@ Arc *ra;
 
 
 % main -> mk -> <> -> outofdate(); dorecipe()
-%    /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
+% /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
 
 % have to do transitive closure of dependencies ... when
 % "making" node, look at is prerequistes, and check if they need
@@ -1473,7 +1432,9 @@ work(Node *node,   Node *p, Arc *parc)
 
     <<[[work()]] possibly unpretending node>>
 
+    // Leaf case
     <<[[work()]] no prerequisite, a leaf>>
+    // Node case
     /*
      *   now see if we are out of date or what
      */
@@ -1496,8 +1457,7 @@ work(Node *node,   Node *p, Arc *parc)
 % can refactor in did ||= foo(); ? hmm maybe not, we actually want the
 % side effect!
 
-% can refactor dir in a global? dangerous ...
-
+% can refactor did in a global? dangerous ... but would clarify I think
 
 
 % a leaf!
@@ -1529,6 +1489,7 @@ if(kflag){
     Exit();
 @
 
+
 <<[[work()]] check if node out of date with prerequisites, recursively>>=
 ra = nil;
 for(a = node->prereqs; a; a = a->next)
@@ -1538,7 +1499,7 @@ for(a = node->prereqs; a; a = a->next)
 
         if(a->n->flags&(NOTMADE|BEINGMADE))
             ready = false;
-        if(outofdate(node, a, 0)){
+        if(outofdate(node, a, false)){
             weoutofdate = true;
             if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
                 ra = a;
@@ -1551,43 +1512,22 @@ for(a = node->prereqs; a; a = a->next)
         }
     }
 @
-% when can have no node attached to an arc?
+% when can have no node attached to an arc????
 
 
 
-\section{[[outofdate()]]}
-
-<<enum sxxx cases>>=
-S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
-@
+%\section{[[outofdate()]]}
 
 <<function outofdate>>=
 bool
-outofdate(Node *node, Arc *arc, int eval)
+outofdate(Node *node, Arc *arc, bool eval)
 {
-    char buf[3*NAMEBLOCK], *str;
-    Symtab *sym;
-    int ret;
+    <<[[outofdate()]] locals>>
 
-    str = 0;
-    if(arc->prog){
-        snprint(buf, sizeof buf, "%s%c%s", node->name, 0377,
-            arc->n->name);
-        sym = symlook(buf, S_OUTOFDATE, 0);
-        if(sym == 0 || eval){
-            if(sym == 0)
-                str = strdup(buf);
-            ret = pcmp(arc->prog, node->name, arc->n->name);
-            if(sym)
-                sym->u.value = ret;
-            else
-                symlook(str, S_OUTOFDATE, (void *)ret);
-        } else
-            ret = sym->u.value;
-        return (ret-1);
-    } else if(strchr(arc->n->name, '(') && arc->n->time == 0)  /* missing archive member */
-        return true;
-    else
+    <<[[outofdate()]] if arc->prog>>
+    else 
+     <<[[outofdate()]] of arc node is an archive member>>
+     else
         /*
          * Treat equal times as out-of-date.
          * It's a race, and the safer option is to do
@@ -1596,139 +1536,8 @@ outofdate(Node *node, Arc *arc, int eval)
         return node->time <= arc->n->time;
 }
 @
+% inexistent file has zero time (like very very old time)
 
-<<function pcmp>>=
-static int
-pcmp(char *prog, char *p, char *q)
-{
-    char buf[3*NAMEBLOCK];
-    int pid;
-
-    Bflush(&bout);
-    snprint(buf, sizeof buf, "%s '%s' '%s'\n", prog, p, q);
-    pid = pipecmd(buf, 0, 0);
-    while(waitup(-3, &pid) >= 0)
-        ;
-    return (pid? 2:1);
-}
-@
-
-\section{[[timeof()]]}
-
-<<enum sxxx cases>>=
-S_TIME,		/* file -> time */
-@
-
-% timeof -> mtime -> mkmktime -> bulktime
-%                             -> dirstat
-
-<<function timeof>>=
-ulong
-timeof(char *name, bool force)
-{
-    Symtab *sym;
-    ulong t;
-
-    if(utfrune(name, '('))
-        return atimeof(force, name);		/* archive */
-
-    if(force)
-        return mkmtime(name, true);
-
-    sym = symlook(name, S_TIME, nil);
-    if (sym)
-        return sym->u.value;		/* uggh */
-
-    t = mkmtime(name, false);
-    if(t == 0)
-        return 0;
-
-    symlook(name, S_TIME, (void*)t);		/* install time in cache */
-    return t;
-}
-@
-%old: ulong mtime(char *name) {  return mkmtime(name, true);}
-%but simpler to remove, refactor caller sites
-
-
-
-
-<<function mkmtime>>=
-ulong
-mkmtime(char *name, bool force)
-{
-    Dir *d;
-    char *s, *ss, carry;
-    ulong t;
-    Symtab *sym;
-    char buf[4096];
-
-    strecpy(buf, buf + sizeof buf - 1, name);
-    cleanname(buf);
-    name = buf;
-
-    s = utfrrune(name, '/');
-    if(s == name)
-        s++;
-    if(s){
-        ss = name;
-        carry = *s;
-        *s = '\0';
-    }else{
-        ss = nil;
-        carry = 0;
-    }
-    bulkmtime(ss);
-    if(carry)
-        *s = carry;
-
-    if(!force){
-        sym = symlook(name, S_TIME, 0);
-        if(sym)
-            return sym->u.value;
-        return 0;
-    }
-    if((d = dirstat(name)) == nil)
-        return 0;
-
-    t = d->mtime;
-    free(d);
-
-    return t;
-}
-@
-
-
-<<enum sxxx cases>>=
-S_BULKED,	/* we have bulked this dir */
-@
-
-<<function bulkmtime>>=
-void
-bulkmtime(char *dir)
-{
-    char buf[4096];
-    char *ss, *s, *sym;
-
-    if(dir){
-        sym = dir;
-        s = dir;
-        if(strcmp(dir, "/") == 0)
-            strecpy(buf, buf + sizeof buf - 1, dir);
-        else
-            snprint(buf, sizeof buf, "%s/", dir);
-    }else{
-        s = ".";
-        sym = "";
-        buf[0] = 0;
-    }
-    if(symlook(sym, S_BULKED, 0))
-        return;
-    ss = strdup(sym);
-    symlook(ss, S_BULKED, (void*)ss);
-    dirtime(s, buf);
-}
-@
 
 
 \chapter{Parsing Rules}
@@ -1907,7 +1716,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
         p++;
     }
     *attr = 0;
-    *prog = 0;
+    *prog = nil;
     if(sep == '='){
         pp = charin(p, termchars);	/* termchars is shell-dependent */
         if (pp && *pp == '=') {
@@ -1948,6 +1757,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             case 'N':
                 *attr |= NOREC;
                 break;
+
             case 'P':
                 pp = utfrune(p, ':');
                 if (pp == 0 || *pp == 0)
@@ -1957,6 +1767,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
                 *pp = ':';
                 p = pp;
                 break;
+
             case 'Q':
                 *attr |= QUIET;
                 break;
@@ -1969,6 +1780,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             case 'V':
                 *attr |= VIR;
                 break;
+
             default:
                 SYNERR(-1);
                 fprint(STDERR, "unknown attribute '%c'\n", p[-1]);
@@ -2745,6 +2557,124 @@ nrep(void)
 @
 
 
+
+\section{[[timeof()]]}
+% for the leaves!
+
+<<enum sxxx cases>>=
+S_TIME,		/* file -> time */
+@
+
+% newnode() -> <> -> mkmktime -> bulktime
+%                             -> dirstat
+
+<<function timeof>>=
+ulong
+timeof(char *name, bool force)
+{
+    Symtab *sym;
+    ulong t;
+
+    if(utfrune(name, '('))
+        return atimeof(force, name);		/* archive */
+
+    if(force)
+        return mkmtime(name, true);
+
+    sym = symlook(name, S_TIME, nil);
+    if (sym)
+        return sym->u.value;		/* uggh */
+
+    t = mkmtime(name, false);
+    if(t == 0)
+        return 0;
+
+    symlook(name, S_TIME, (void*)t);		/* install time in cache */
+    return t;
+}
+@
+%old: ulong mtime(char *name) {  return mkmtime(name, true);}
+%but simpler to remove, refactor caller sites
+
+
+
+
+<<function mkmtime>>=
+ulong
+mkmtime(char *name, bool force)
+{
+    Dir *d;
+    char *s, *ss, carry;
+    ulong t;
+    Symtab *sym;
+    char buf[4096];
+
+    strecpy(buf, buf + sizeof buf - 1, name);
+    cleanname(buf);
+    name = buf;
+
+    s = utfrrune(name, '/');
+    if(s == name)
+        s++;
+    if(s){
+        ss = name;
+        carry = *s;
+        *s = '\0';
+    }else{
+        ss = nil;
+        carry = 0;
+    }
+    bulkmtime(ss);
+    if(carry)
+        *s = carry;
+
+    if(!force){
+        sym = symlook(name, S_TIME, 0);
+        if(sym)
+            return sym->u.value;
+        return 0;
+    }
+    if((d = dirstat(name)) == nil)
+        return 0;
+
+    t = d->mtime;
+    free(d);
+
+    return t;
+}
+@
+
+
+<<enum sxxx cases>>=
+S_BULKED,	/* we have bulked this dir */
+@
+
+<<function bulkmtime>>=
+void
+bulkmtime(char *dir)
+{
+    char buf[4096];
+    char *ss, *s, *sym;
+
+    if(dir){
+        sym = dir;
+        s = dir;
+        if(strcmp(dir, "/") == 0)
+            strecpy(buf, buf + sizeof buf - 1, dir);
+        else
+            snprint(buf, sizeof buf, "%s/", dir);
+    }else{
+        s = ".";
+        sym = "";
+        buf[0] = 0;
+    }
+    if(symlook(sym, S_BULKED, 0))
+        return;
+    ss = strdup(sym);
+    symlook(ss, S_BULKED, (void*)ss);
+    dirtime(s, buf);
+}
+@
 
 
 \chapter{Jobs Scheduling}
@@ -3794,7 +3724,7 @@ dorecipe(Node *node)
             n = s->u.ptr;
             if(aflag == false && n->time) {
                 for(a = n->prereqs; a; a = a->next)
-                    if(a->n && outofdate(n, a, 0))
+                    if(a->n && outofdate(n, a, false))
                         break;
                 if(a == 0)
                     continue;
@@ -3817,7 +3747,7 @@ dorecipe(Node *node)
         for(a = n->prereqs; a; a = a->next){
             if(a->n){
                 addw(&lp, a->n->name);
-                if(outofdate(n, a, 0)){
+                if(outofdate(n, a, false)){
                     addw(&ln, a->n->name);
                     if(explain)
                         fprint(1, "%s(%ld) < %s(%ld)\n",
@@ -3851,11 +3781,11 @@ update(bool fake, Node *node)
         <<[[update()]] unpretend node>>
         for(a = node->prereqs; a; a = a->next)
             if(a->prog)
-                outofdate(node, a, 1);
+                outofdate(node, a, true);
     } else {
         node->time = 1;
         for(a = node->prereqs; a; a = a->next)
-            if(a->n && outofdate(node, a, 1))
+            if(a->n && outofdate(node, a, true))
                 node->time = a->n->time;
     }
 }
@@ -4053,7 +3983,7 @@ prusage(void)
 
 % all those features are meh in my opinion
 
-\section{Regular expression pattern rules}
+\section{Regular expression pattern rules, [[:R:]]}
 
 <<enum rule_attr cases>>=
 REGEXP = 0x0020,
@@ -4362,6 +4292,13 @@ split(char *name, char **member)
 @
 
 
+
+<<[[outofdate()]] of arc node is an archive member>>=
+if(strchr(arc->n->name, '(') && arc->n->time == 0)
+   /* missing archive member */
+   return true;
+@
+
 \section{Missing intermediates optimization, [[mk -I]]}
 % mk -i suppress this behavior
 % pad: mk -I! new mode :) because I don't like the default mode!
@@ -4401,7 +4338,7 @@ if(strchr(n->name, '(') ==0 || n->time)
 
 <<[[work()]] possibly unpretending node>>=
 if((node->flags&MADE) && (node->flags&PRETENDING) && p
-    && outofdate(p, parc, 0)){
+    && outofdate(p, parc, false)){
     if(explain)
         fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
             node->name, node->time, p->name, p->time);
@@ -4435,7 +4372,7 @@ unpretend(Node *n)
  */
 if((iflag == false) && (node->time == 0) 
         && (node->flags&(PRETENDING|CANPRETEND))
-        && p && ra->n && !outofdate(p, ra, 0)){
+        && p && ra->n && !outofdate(p, ra, false)){
     node->flags &= ~CANPRETEND;
     MADESET(node, MADE);
     if(explain && ((node->flags&PRETENDING) == 0))
@@ -4538,6 +4475,103 @@ case 'a':
 % iflag = true; used to be after the switch, but same
 % when -a, means we want to build also the intermediate files when
 % they are not there
+
+\section{Recursive [[mk]]}
+
+%\section{Setting [[MKFLAGS]], [[MKARGS]]}
+% used by? at least mkfile called recursively can expect those variables
+
+<<[[main()]] set some variables>>=
+<<[[main()]] set MKFLAGS variable>>
+<<[[main()]] set MKARGS variable>>
+@
+
+<<[[main()]] set MKFLAGS variable>>=
+if (buf->current != buf->start) {
+    buf->current--;
+    insert(buf, '\0');
+}
+symlook("MKFLAGS", S_VAR, (void*) stow(buf->start));
+@
+
+<<[[main()]] set MKARGS variable>>=
+buf->current = buf->start;
+for(i = 0; argv[i]; i++){
+    if(*argv[i] == '\0') 
+        continue;
+    if(i)
+        insert(buf, ' ');
+    bufcpy(buf, argv[i], strlen(argv[i]));
+}
+insert(buf, '\0');
+symlook("MKARGS", S_VAR, (void *) stow(buf->start));
+
+freebuf(buf);
+@
+
+\section{[[:P:]] ??}
+
+
+%XXXX??
+<<[[Rule]] other fields>>=
+char		*prog;		/* to use in out of date */
+@
+% prog??
+
+%XXX?
+<<[[Arc]] other fields>>=
+char		*prog;
+@
+
+
+<<enum sxxx cases>>=
+S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
+@
+% abuse string ...
+
+
+<<[[outofdate()]] locals>>=
+char buf[3*NAMEBLOCK];
+char *str = nil;
+Symtab *sym;
+int ret;
+@
+
+<<[[outofdate()]] if arc->prog>>=
+if(arc->prog){
+    snprint(buf, sizeof buf, "%s%c%s", node->name, 0377,
+        arc->n->name);
+    sym = symlook(buf, S_OUTOFDATE, 0);
+    if(sym == nil || eval){
+        if(sym == nil)
+            str = strdup(buf);
+        ret = pcmp(arc->prog, node->name, arc->n->name);
+        if(sym)
+            sym->u.value = ret;
+        else
+            symlook(str, S_OUTOFDATE, (void *)ret);
+    } else
+        ret = sym->u.value;
+    return (ret-1);
+}
+@
+
+<<function pcmp>>=
+static int
+pcmp(char *prog, char *p, char *q)
+{
+    char buf[3*NAMEBLOCK];
+    int pid;
+
+    Bflush(&bout);
+    snprint(buf, sizeof buf, "%s '%s' '%s'\n", prog, p, q);
+    pid = pipecmd(buf, 0, 0);
+    while(waitup(-3, &pid) >= 0)
+        ;
+    return (pid? 2:1);
+}
+@
+
 
 \chapter{Conclusion}
 

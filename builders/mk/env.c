@@ -6,7 +6,7 @@
 /*e: constant ENVQUANTA */
 
 /*s: global envy */
-// array<ref_own<Envy>> (array or list?)
+// array<Envy>
 Envy	*envy;
 /*e: global envy */
 /*s: global nextv */

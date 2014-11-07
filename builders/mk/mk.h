@@ -42,9 +42,9 @@ extern Word *target1;
 /*s: struct Envy */
 struct Envy
 {
+    // key
     char 		*name;
-
-    // list<ref_own<string>>
+    // value, list<ref_own<string>>
     Word 		*values;
 };
 /*e: struct Envy */
@@ -66,14 +66,14 @@ struct Rule
     short 		attr;		/* attributes */
 
     /*s: [[Rule]] other fields */
-    char		*prog;		/* to use in out of date */
-    /*x: [[Rule]] other fields */
     int 		rule;		/* rule number */
     /*x: [[Rule]] other fields */
     Reprog		*pat;		/* reg exp goo */
     /*x: [[Rule]] other fields */
     // list<ref_own?<string>>?
     Word 		*alltargets;	/* all the targets */
+    /*x: [[Rule]] other fields */
+    char		*prog;		/* to use in out of date */
     /*e: [[Rule]] other fields */
 
     // Extra
@@ -125,9 +125,9 @@ struct Arc
     // what will replace the %
     char		*stem;
     /*x: [[Arc]] other fields */
-    char		*prog;
-    /*x: [[Arc]] other fields */
     char		*match[NREGEXP];
+    /*x: [[Arc]] other fields */
+    char		*prog;
     /*e: [[Arc]] other fields */
     
     //Extra
@@ -195,14 +195,13 @@ enum node_flag {
 struct Job
 {
     Word		*t;	/* targets */
+    Word		*p;	/* prerequistes */
     Rule		*r;	/* master rule for job */
-
     // list<ref_?<Node>> (next = Node.next?)
     Node		*n;	/* list of node targets */
 
     char		*stem;
 
-    Word		*p;	/* prerequistes */
     Word		*np;	/* new prerequistes */
     Word		*at;	/* all targets */
 
@@ -254,21 +253,21 @@ enum sxxx {
     /*x: enum sxxx cases */
     S_NODE,		/* target name -> node */
     /*x: enum sxxx cases */
-    S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
-    /*x: enum sxxx cases */
-    S_TIME,		/* file -> time */
-    /*x: enum sxxx cases */
-    S_BULKED,	/* we have bulked this dir */
-    /*x: enum sxxx cases */
     S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
     /*x: enum sxxx cases */
     S_OVERRIDE,	/* can't override */
     /*x: enum sxxx cases */
     S_WESET,	/* variable; we set in the mkfile */
     /*x: enum sxxx cases */
+    S_TIME,		/* file -> time */
+    /*x: enum sxxx cases */
+    S_BULKED,	/* we have bulked this dir */
+    /*x: enum sxxx cases */
     S_AGG,		/* aggregate -> time */
     /*x: enum sxxx cases */
     S_BITCH,	/* bitched about aggregate not there */
+    /*x: enum sxxx cases */
+    S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
     /*x: enum sxxx cases */
     S_EXPORTED,	/* var -> current exported value */
     /*e: enum sxxx cases */

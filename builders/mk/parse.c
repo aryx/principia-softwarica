@@ -158,7 +158,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
         p++;
     }
     *attr = 0;
-    *prog = 0;
+    *prog = nil;
     if(sep == '='){
         pp = charin(p, termchars);	/* termchars is shell-dependent */
         if (pp && *pp == '=') {
@@ -199,6 +199,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             case 'N':
                 *attr |= NOREC;
                 break;
+
             case 'P':
                 pp = utfrune(p, ':');
                 if (pp == 0 || *pp == 0)
@@ -208,6 +209,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
                 *pp = ':';
                 p = pp;
                 break;
+
             case 'Q':
                 *attr |= QUIET;
                 break;
@@ -220,6 +222,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             case 'V':
                 *attr |= VIR;
                 break;
+
             default:
                 SYNERR(-1);
                 fprint(STDERR, "unknown attribute '%c'\n", p[-1]);

@@ -44,7 +44,7 @@ mk(char *target)
             }
         }
     }
-    if(root->flags&BEINGMADE)
+    if(root->flags&BEINGMADE) // because of a runerrs
         waitup(-1, (int *)nil);
 
     while(jobs)
@@ -104,7 +104,7 @@ work(Node *node,   Node *p, Arc *parc)
 
     /*s: [[work()]] possibly unpretending node */
     if((node->flags&MADE) && (node->flags&PRETENDING) && p
-        && outofdate(p, parc, 0)){
+        && outofdate(p, parc, false)){
         if(explain)
             fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
                 node->name, node->time, p->name, p->time);
@@ -122,6 +122,7 @@ work(Node *node,   Node *p, Arc *parc)
     }
     /*e: [[work()]] possibly unpretending node */
 
+    // Leaf case
     /*s: [[work()]] no prerequisite, a leaf */
     /* consider no prerequisite case */
     if(node->prereqs == nil){
@@ -143,6 +144,7 @@ work(Node *node,   Node *p, Arc *parc)
         return did;
     }
     /*e: [[work()]] no prerequisite, a leaf */
+    // Node case
     /*
      *   now see if we are out of date or what
      */
@@ -157,7 +159,7 @@ work(Node *node,   Node *p, Arc *parc)
 
             if(a->n->flags&(NOTMADE|BEINGMADE))
                 ready = false;
-            if(outofdate(node, a, 0)){
+            if(outofdate(node, a, false)){
                 weoutofdate = true;
                 if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
                     ra = a;
@@ -183,7 +185,7 @@ work(Node *node,   Node *p, Arc *parc)
      */
     if((iflag == false) && (node->time == 0) 
             && (node->flags&(PRETENDING|CANPRETEND))
-            && p && ra->n && !outofdate(p, ra, 0)){
+            && p && ra->n && !outofdate(p, ra, false)){
         node->flags &= ~CANPRETEND;
         MADESET(node, MADE);
         if(explain && ((node->flags&PRETENDING) == 0))
@@ -230,11 +232,11 @@ update(bool fake, Node *node)
         /*e: [[update()]] unpretend node */
         for(a = node->prereqs; a; a = a->next)
             if(a->prog)
-                outofdate(node, a, 1);
+                outofdate(node, a, true);
     } else {
         node->time = 1;
         for(a = node->prereqs; a; a = a->next)
-            if(a->n && outofdate(node, a, 1))
+            if(a->n && outofdate(node, a, true))
                 node->time = a->n->time;
     }
 }
@@ -258,19 +260,22 @@ pcmp(char *prog, char *p, char *q)
 
 /*s: function outofdate */
 bool
-outofdate(Node *node, Arc *arc, int eval)
+outofdate(Node *node, Arc *arc, bool eval)
 {
-    char buf[3*NAMEBLOCK], *str;
+    /*s: [[outofdate()]] locals */
+    char buf[3*NAMEBLOCK];
+    char *str = nil;
     Symtab *sym;
     int ret;
+    /*e: [[outofdate()]] locals */
 
-    str = 0;
+    /*s: [[outofdate()]] if arc->prog */
     if(arc->prog){
         snprint(buf, sizeof buf, "%s%c%s", node->name, 0377,
             arc->n->name);
         sym = symlook(buf, S_OUTOFDATE, 0);
-        if(sym == 0 || eval){
-            if(sym == 0)
+        if(sym == nil || eval){
+            if(sym == nil)
                 str = strdup(buf);
             ret = pcmp(arc->prog, node->name, arc->n->name);
             if(sym)
@@ -280,9 +285,15 @@ outofdate(Node *node, Arc *arc, int eval)
         } else
             ret = sym->u.value;
         return (ret-1);
-    } else if(strchr(arc->n->name, '(') && arc->n->time == 0)  /* missing archive member */
+    }
+    /*e: [[outofdate()]] if arc->prog */
+    else 
+     /*s: [[outofdate()]] of arc node is an archive member */
+     if(strchr(arc->n->name, '(') && arc->n->time == 0)
+        /* missing archive member */
         return true;
-    else
+     /*e: [[outofdate()]] of arc node is an archive member */
+     else
         /*
          * Treat equal times as out-of-date.
          * It's a race, and the safer option is to do

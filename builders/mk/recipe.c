@@ -72,7 +72,7 @@ dorecipe(Node *node)
             n = s->u.ptr;
             if(aflag == false && n->time) {
                 for(a = n->prereqs; a; a = a->next)
-                    if(a->n && outofdate(n, a, 0))
+                    if(a->n && outofdate(n, a, false))
                         break;
                 if(a == 0)
                     continue;
@@ -95,7 +95,7 @@ dorecipe(Node *node)
         for(a = n->prereqs; a; a = a->next){
             if(a->n){
                 addw(&lp, a->n->name);
-                if(outofdate(n, a, 0)){
+                if(outofdate(n, a, false)){
                     addw(&ln, a->n->name);
                     if(explain)
                         fprint(1, "%s(%ld) < %s(%ld)\n",

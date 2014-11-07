@@ -50,6 +50,8 @@ main(int argc, char **argv)
      *  start with a copy of the current environment variables
      *  instead of sharing them
      */
+    //???
+
     Binit(&bout, STDOUT, OWRITE);
 
     /*s: [[main()]] argv processing for -xxx, modify flags, modify buf */
@@ -179,7 +181,7 @@ main(int argc, char **argv)
         remove(temp);
     }
     /*e: [[main()]] argv processing for xxx=yyy */
-
+    /*s: [[main()]] set some variables */
     /*s: [[main()]] set MKFLAGS variable */
     if (buf->current != buf->start) {
         buf->current--;
@@ -201,6 +203,7 @@ main(int argc, char **argv)
 
     freebuf(buf);
     /*e: [[main()]] set MKARGS variable */
+    /*e: [[main()]] set some variables */
 
     /*s: [[main()]] parsing mkfile, call parse() */
     if(f == files){
@@ -275,7 +278,7 @@ main(int argc, char **argv)
                mk(tail->s);
            else {
                head = newword("<command line arguments>");
-               addrules(head, tail, strdup(""), VIR, mkinline, 0);
+               addrules(head, tail, strdup(""), VIR, mkinline, nil);
                mk(head->s);
            }
            /*e: [[main()]] parallel mode and target arguments given */
