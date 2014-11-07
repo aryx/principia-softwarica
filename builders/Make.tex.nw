@@ -1281,248 +1281,7 @@ else {
 
 
 
-\chapter{[[mk()]]}
-
-% the core!
-
-% main idea = build concrete graph, get root, set all nodes to NOTMADE.
-% Then ask to build root which will recurse. If leaf then node MADE (if exist).
-% Otherwise look at time if file > time of all children then MADE, 
-% otherwise run recipe job in parallel, return and wait it's MADE (so loop).
-
-% while(root not finished) { run wave of jobs and update graph }
-
-<<enum node_flag cases>>=
-NOTMADE    = 0x0020,
-BEINGMADE  = 0x0040,
-MADE       = 0x0080,
-@
-% NOTMADE initially (see clrmade())
-% BEINGMADE? when start recipe, but mk can run in // so it returns!
-%   can can go back to node with BEINGMADE? when
-%   2 files with deps on same Node? DAG
-% MADE finally when recipe done! (or time was already good, no need update)
-
-<<global runerrs>>=
-int runerrs;
-@
-
-
-% main -> <> -> graph() ; clrmade(); work()
-<<function mk>>=
-void
-mk(char *target)
-{
-    Node *root;
-    bool did = false;
-
-    <<[[mk()]] initialisation>>
-
-    root = graph(target);
-    <<[[main()]] if DEBUG(D_GRAPH)>>
-    clrmade(root);
-
-    while(root->flags&NOTMADE){
-        if(work(root, (Node *)nil, (Arc *)nil))
-            did = true;	/* found something to do */
-        else {
-            if(waitup(1, (int *)nil) > 0){
-                if(root->flags&(NOTMADE|BEINGMADE)){
-                    assert(/*must be run errors*/ runerrs);
-                    break;	/* nothing more waiting */
-                }
-            }
-        }
-    }
-    if(root->flags&BEINGMADE) // because of a runerrs
-        waitup(-1, (int *)nil);
-
-    while(jobs)
-        waitup(-2, (int *)nil);
-
-    assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
-    if(did == false)
-        Bprint(&bout, "mk: '%s' is up to date\n", root->name);
-}
-@
-%old: was called node, but root is better.
-%note: subtle, important while loop! because of mk // so run some jobs
-% but then later another job might depend on the end of this one,
-% so have BEINGMADE flag and waitup??
-
-% TODO? wanted to make did a global because was always threading it
-% everywhere and doing did = foo () || did;   
-% possible? change semantic?
-
-<<[[mk()]] initialisation>>=
-runerrs = 0;
-@
-
-
-\section{[[clrmade()]]}
-
-<<function MADESET>>=
-#define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
-@
-
-<<function clrmade>>=
-void
-clrmade(Node *n)
-{
-    Arc *a;
-
-    <<[[clrmade()]] n->flags pretend adjustments>>
-    MADESET(n, NOTMADE);
-    for(a = n->prereqs; a; a = a->next)
-        if(a->n)
-            clrmade(a->n);
-}
-@
-
-\section{[[work()]]}
-
-<<[[work()]] locals>>=
-bool did = false;
-@
-% move as a global!
-
-<<[[work()]] locals>>=
-bool weoutofdate;
-bool ready;
-Arc *a;
-Arc *ra;
-@
-
-
-% main -> mk -> <> -> outofdate(); dorecipe()
-% /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
-
-% have to do transitive closure of dependencies ... when
-% "making" node, look at is prerequistes, and check if they need
-% work too, because maybe a leaf was modified!
-
-% previous_node, previous arc, TODO rename parameters?
-<<function work>>=
-bool
-work(Node *node,   Node *p, Arc *parc)
-{
-    <<[[work()]] locals>>
-
-    if(node->flags&BEINGMADE)
-        return did;
-
-    <<[[work()]] possibly unpretending node>>
-
-    // Leaf case
-    <<[[work()]] no prerequisite, a leaf>>
-    // Node case
-    /*
-     *   now see if we are out of date or what
-     */
-    ready = true;
-    weoutofdate = aflag;
-    <<[[work()]] check if node out of date with prerequisites, recursively>>
-
-    if(ready == false)	/* can't do anything now */
-        return did;
-    if(weoutofdate == false){
-        MADESET(node, MADE);
-        return did;
-    }
-    <<[[work()]] possibly pretending node>>
-
-    did = dorecipe(node) || did;
-    return did;
-}
-@
-% can refactor in did ||= foo(); ? hmm maybe not, we actually want the
-% side effect!
-
-% can refactor did in a global? dangerous ... but would clarify I think
-
-
-% a leaf!
-<<[[work()]] no prerequisite, a leaf>>=
-/* consider no prerequisite case */
-if(node->prereqs == nil){
-    if(node->time == 0){
-        <<[[work()]] print error when inexistent file without prerequisites>>
-    } else
-        MADESET(node, MADE);
-    return did;
-}
-@
-
-<<[[work()]] locals>>=
-char cwd[256];
-@
-
-<<[[work()]] print error when inexistent file without prerequisites>>=
-if(getwd(cwd, sizeof cwd))
-    fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
-else
-    fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
-
-if(kflag){
-    node->flags |= BEINGMADE;
-    runerrs++;
-} else
-    Exit();
-@
-
-
-<<[[work()]] check if node out of date with prerequisites, recursively>>=
-ra = nil;
-for(a = node->prereqs; a; a = a->next)
-    if(a->n){
-        // recursive call! go in depth
-        did = work(a->n, node, a) || did;
-
-        if(a->n->flags&(NOTMADE|BEINGMADE))
-            ready = false;
-        if(outofdate(node, a, false)){
-            weoutofdate = true;
-            if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
-                ra = a;
-        }
-    } else {
-        if(node->time == 0){
-            weoutofdate = true;
-            if(ra == nil)
-                ra = a;
-        }
-    }
-@
-% when can happen have no node attached to an arc?
-% when fake arc, see applyrules
-
-
-
-%\section{[[outofdate()]]}
-
-<<function outofdate>>=
-bool
-outofdate(Node *node, Arc *arc, bool eval)
-{
-    <<[[outofdate()]] locals>>
-
-    <<[[outofdate()]] if arc->prog>>
-    else 
-     <<[[outofdate()]] of arc node is an archive member>>
-     else
-        /*
-         * Treat equal times as out-of-date.
-         * It's a race, and the safer option is to do
-         * extra building rather than not enough.
-         */
-        return node->time <= arc->n->time;
-}
-@
-% inexistent file has zero time (like very very old time)
-
-
-
-\chapter{Parsing Rules}
+\chapter{Parsing the Rules}
 % and Variables?
 % could be done later?
 
@@ -1539,8 +1298,7 @@ int mkinline;
 #define	SYNERR(l)	(fprint(STDERR, "mk: %s:%d: syntax error; ", infile, ((l)>=0)?(l):mkinline))
 @
 
-
-\section{Parsing a [[mkfile]]}
+\section{[[parse()]]}
 
 <<enum sxxx cases>>=
 S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
@@ -1656,6 +1414,9 @@ cp = wtos(tail, ' '); print("assign %s to %s\n", head->s, cp); free(cp);
     ipop();
 }
 @
+
+\section{Parsing a [[mkfile]]}
+
 
 <<function addrules>>=
 void
@@ -2767,6 +2528,249 @@ bulkmtime(char *dir)
     dirtime(s, buf);
 }
 @
+
+
+\chapter{Checking Out of Date Dependencies}
+% hmm could move later? after building the graph chapter?
+
+% the core!
+
+% main idea = build concrete graph, get root, set all nodes to NOTMADE.
+% Then ask to build root which will recurse. If leaf then node MADE (if exist).
+% Otherwise look at time if file > time of all children then MADE, 
+% otherwise run recipe job in parallel, return and wait it's MADE (so loop).
+
+% while(root not finished) { run wave of jobs and update graph }
+
+\section{[[mk()]]}
+<<enum node_flag cases>>=
+NOTMADE    = 0x0020,
+BEINGMADE  = 0x0040,
+MADE       = 0x0080,
+@
+% NOTMADE initially (see clrmade())
+% BEINGMADE? when start recipe, but mk can run in // so it returns!
+%   can can go back to node with BEINGMADE? when
+%   2 files with deps on same Node? DAG
+% MADE finally when recipe done! (or time was already good, no need update)
+
+<<global runerrs>>=
+int runerrs;
+@
+
+
+% main -> <> -> graph() ; clrmade(); work()
+<<function mk>>=
+void
+mk(char *target)
+{
+    Node *root;
+    bool did = false;
+
+    <<[[mk()]] initialisation>>
+
+    root = graph(target);
+    <<[[main()]] if DEBUG(D_GRAPH)>>
+    clrmade(root);
+
+    while(root->flags&NOTMADE){
+        if(work(root, (Node *)nil, (Arc *)nil))
+            did = true;	/* found something to do */
+        else {
+            if(waitup(1, (int *)nil) > 0){
+                if(root->flags&(NOTMADE|BEINGMADE)){
+                    assert(/*must be run errors*/ runerrs);
+                    break;	/* nothing more waiting */
+                }
+            }
+        }
+    }
+    if(root->flags&BEINGMADE) // because of a runerrs
+        waitup(-1, (int *)nil);
+
+    while(jobs)
+        waitup(-2, (int *)nil);
+
+    assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
+    if(did == false)
+        Bprint(&bout, "mk: '%s' is up to date\n", root->name);
+}
+@
+%old: was called node, but root is better.
+%note: subtle, important while loop! because of mk // so run some jobs
+% but then later another job might depend on the end of this one,
+% so have BEINGMADE flag and waitup??
+
+% TODO? wanted to make did a global because was always threading it
+% everywhere and doing did = foo () || did;   
+% possible? change semantic?
+
+<<[[mk()]] initialisation>>=
+runerrs = 0;
+@
+
+
+\section{[[clrmade()]]}
+
+<<function MADESET>>=
+#define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
+@
+
+<<function clrmade>>=
+void
+clrmade(Node *n)
+{
+    Arc *a;
+
+    <<[[clrmade()]] n->flags pretend adjustments>>
+    MADESET(n, NOTMADE);
+    for(a = n->prereqs; a; a = a->next)
+        if(a->n)
+            clrmade(a->n);
+}
+@
+
+\section{[[work()]]}
+
+<<[[work()]] locals>>=
+bool did = false;
+@
+% move as a global!
+
+<<[[work()]] locals>>=
+bool weoutofdate;
+bool ready;
+Arc *a;
+Arc *ra;
+@
+
+
+% main -> mk -> <> -> outofdate(); dorecipe()
+% /*print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);/**/
+
+% have to do transitive closure of dependencies ... when
+% "making" node, look at is prerequistes, and check if they need
+% work too, because maybe a leaf was modified!
+
+% previous_node, previous arc, TODO rename parameters?
+<<function work>>=
+bool
+work(Node *node,   Node *p, Arc *parc)
+{
+    <<[[work()]] locals>>
+
+    if(node->flags&BEINGMADE)
+        return did;
+
+    <<[[work()]] possibly unpretending node>>
+
+    // Leaf case
+    <<[[work()]] no prerequisite, a leaf>>
+    // Node case
+    /*
+     *   now see if we are out of date or what
+     */
+    ready = true;
+    weoutofdate = aflag;
+    <<[[work()]] check if node out of date with prerequisites, recursively>>
+
+    if(ready == false)	/* can't do anything now */
+        return did;
+    if(weoutofdate == false){
+        MADESET(node, MADE);
+        return did;
+    }
+    <<[[work()]] possibly pretending node>>
+
+    did = dorecipe(node) || did;
+    return did;
+}
+@
+% can refactor in did ||= foo(); ? hmm maybe not, we actually want the
+% side effect!
+
+% can refactor did in a global? dangerous ... but would clarify I think
+
+
+% a leaf!
+<<[[work()]] no prerequisite, a leaf>>=
+/* consider no prerequisite case */
+if(node->prereqs == nil){
+    if(node->time == 0){
+        <<[[work()]] print error when inexistent file without prerequisites>>
+    } else
+        MADESET(node, MADE);
+    return did;
+}
+@
+
+<<[[work()]] locals>>=
+char cwd[256];
+@
+
+<<[[work()]] print error when inexistent file without prerequisites>>=
+if(getwd(cwd, sizeof cwd))
+    fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
+else
+    fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
+
+if(kflag){
+    node->flags |= BEINGMADE;
+    runerrs++;
+} else
+    Exit();
+@
+
+
+<<[[work()]] check if node out of date with prerequisites, recursively>>=
+ra = nil;
+for(a = node->prereqs; a; a = a->next)
+    if(a->n){
+        // recursive call! go in depth
+        did = work(a->n, node, a) || did;
+
+        if(a->n->flags&(NOTMADE|BEINGMADE))
+            ready = false;
+        if(outofdate(node, a, false)){
+            weoutofdate = true;
+            if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
+                ra = a;
+        }
+    } else {
+        if(node->time == 0){
+            weoutofdate = true;
+            if(ra == nil)
+                ra = a;
+        }
+    }
+@
+% when can happen have no node attached to an arc?
+% when fake arc, see applyrules
+
+
+
+%\section{[[outofdate()]]}
+
+<<function outofdate>>=
+bool
+outofdate(Node *node, Arc *arc, bool eval)
+{
+    <<[[outofdate()]] locals>>
+
+    <<[[outofdate()]] if arc->prog>>
+    else 
+     <<[[outofdate()]] of arc node is an archive member>>
+     else
+        /*
+         * Treat equal times as out-of-date.
+         * It's a race, and the safer option is to do
+         * extra building rather than not enough.
+         */
+        return node->time <= arc->n->time;
+}
+@
+% inexistent file has zero time (like very very old time)
+
 
 
 \chapter{Jobs Scheduling}

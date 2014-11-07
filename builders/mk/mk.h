@@ -167,10 +167,6 @@ struct Node
 /*s: enum node_flag */
 enum node_flag {
     /*s: enum node_flag cases */
-    NOTMADE    = 0x0020,
-    BEINGMADE  = 0x0040,
-    MADE       = 0x0080,
-    /*x: enum node_flag cases */
     CYCLE      = 0x0002,
     /*x: enum node_flag cases */
     VACUOUS    = 0x0200,
@@ -182,6 +178,10 @@ enum node_flag {
     VIRTUAL    = 0x0001,
     NORECIPE   = 0x0400,
     DELETE     = 0x0800,
+    /*x: enum node_flag cases */
+    NOTMADE    = 0x0020,
+    BEINGMADE  = 0x0040,
+    MADE       = 0x0080,
     /*x: enum node_flag cases */
     NOMINUSE   = 0x1000,
     /*x: enum node_flag cases */

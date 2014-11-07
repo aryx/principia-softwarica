@@ -16,9 +16,9 @@ mk(char *target)
     bool did = false;
 
     /*s: [[mk()]] initialisation */
-    runerrs = 0;
-    /*x: [[mk()]] initialisation */
     nrep();		/* it can be updated dynamically */
+    /*x: [[mk()]] initialisation */
+    runerrs = 0;
     /*x: [[mk()]] initialisation */
     nproc();	/* it can be updated dynamically */
     /*e: [[mk()]] initialisation */
