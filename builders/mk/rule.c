@@ -1,8 +1,12 @@
 /*s: mk/rule.c */
 #include	"mk.h"
 
+/*s: global lr */
 static Rule *lr;
+/*e: global lr */
+/*s: global lmr */
 static Rule *lmr;
+/*e: global lmr */
 
 /*s: global nrules */
 static int nrules = 0;
@@ -20,7 +24,8 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     Symtab *sym;
     bool reuse;
 
-    r = 0;
+    r = nil;
+
     reuse = false;
     if(sym = symlook(head, S_TARGET, nil)){
         for(r = sym->u.ptr; r; r = r->chain)
@@ -29,7 +34,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
                 break;
             }
     }
-    if(r == 0)
+    if(r == nil)
         r = (Rule *)Malloc(sizeof(Rule));
     r->target = head;
     r->tail = tail;
@@ -37,29 +42,32 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     r->line = hline;
     r->file = infile;
     r->attr = attr;
+    r->rule = nrules++;
+
     r->alltargets = ahead;
     r->prog = prog;
-    r->rule = nrules++;
 
     if(!reuse){
         rr = symlook(head, S_TARGET, r)->u.ptr;
         if(rr != r){
             r->chain = rr->chain;
             rr->chain = r;
-        } else
-            r->chain = 0;
+        } else 
+            r->chain = nil;
+        r->next = nil;
     }
-    if(!reuse)
-        r->next = 0;
+
     if((attr&REGEXP) || charin(head, "%&")){
         r->attr |= META;
         if(reuse)
             return;
+        /*s: [[addrule()]] if REGEXP attribute */
         if(attr&REGEXP){
             patrule = r;
             r->pat = regcomp(head);
         }
-        if(metarules == 0)
+        /*e: [[addrule()]] if REGEXP attribute */
+        if(metarules == nil)
             metarules = lmr = r;
         else {
             lmr->next = r;
@@ -68,8 +76,9 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     } else {
         if(reuse)
             return;
-        r->pat = 0;
-        if(rules == 0)
+
+        r->pat = nil;
+        if(rules == nil)
             rules = lr = r;
         else {
             lr->next = r;
@@ -121,4 +130,18 @@ rulecnt(void)
     return s;
 }
 /*e: function rulecnt */
+
+/*s: function regerror */
+//@Scheck: not dead, called via regcomp() when have regexp syntax error
+void regerror(char *s)
+{
+    if(patrule)
+        fprint(STDERR, "mk: %s:%d: regular expression error; %s\n",
+            patrule->file, patrule->line, s);
+    else
+        fprint(STDERR, "mk: %s:%d: regular expression error; %s\n",
+            infile, mkinline, s);
+    Exit();
+}
+/*e: function regerror */
 /*e: mk/rule.c */

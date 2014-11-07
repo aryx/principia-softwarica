@@ -152,6 +152,9 @@ Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
 % we gonna present mk.
+% run in // (and actually design and features influenced by that I think,
+% e.g. multiple targets rule, or build graph at mk time once).
+% also well written, nice use of assert!
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
@@ -610,17 +613,19 @@ struct Rule
     <<[[Rule]] extra fields>>
 };
 @
-% rename tail to prerequistes?
+% rename tail to prerequistes? note that can have multiple rules
+% with the same head, in which case you add prerequistes.
 % recipe can contain $, target and tail not, the variables are expanded
-% at parsing time for that I think.
-% can also be metarule, %.$O: %.c (but $O would have been expanded)
-
+% at parsing time.
 % from man page:
 %  Variable substitution in a rule is done when
 %  the rule is read; variable substitution in the recipe is done
 %  when the recipe is executed.
 % why? probably because recipe/rc will do the subst itself, but for
 % the graph we need concrete values so fasted to do it eagerly when parsing
+
+% can also be metarule, %.$O: %.c (but $O would have been expanded)
+
 
 <<global rules>>=
 // list<ref_own<Rule>> (next = Rule.next)
@@ -640,6 +645,7 @@ enum rule_attr {
     <<enum rule_attr cases>>
 };
 @
+% META is for % metarule and also regexp rules :R:
 
 
 <<global metarules>>=
@@ -663,32 +669,23 @@ S_TARGET,		/* target -> rule */
 @
 
 
+% can have multiple rules with the same target
 <<[[Rule]] extra fields>>=
 struct Rule	*chain;		/* hashed per target */
 @
 
 
-<<enum rule_attr cases>>=
-//@Scheck: dead indeed
-UNUSED = 0x0002,
-UPD    = 0x0004,
-VIR    = 0x0010,
-REGEXP = 0x0020,
-NOREC  = 0x0040,
-DEL    = 0x0080,
-NOVIRT = 0x0100,
+
+
+% end of rules list, so can add at the end
+<<global lr>>=
+static Rule *lr;
 @
 
-
-%XXXX??
-<<[[Rule]] other fields>>=
-char		*prog;		/* to use in out of date */
+% end of metarules list, so can add at the end
+<<global lmr>>=
+static Rule *lmr;
 @
-% prog??
-
-
-
-
 
 
 % kind of ctor
@@ -701,7 +698,8 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     Symtab *sym;
     bool reuse;
 
-    r = 0;
+    r = nil;
+
     reuse = false;
     if(sym = symlook(head, S_TARGET, nil)){
         for(r = sym->u.ptr; r; r = r->chain)
@@ -710,7 +708,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
                 break;
             }
     }
-    if(r == 0)
+    if(r == nil)
         r = (Rule *)Malloc(sizeof(Rule));
     r->target = head;
     r->tail = tail;
@@ -718,29 +716,27 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     r->line = hline;
     r->file = infile;
     r->attr = attr;
+    r->rule = nrules++;
+
     r->alltargets = ahead;
     r->prog = prog;
-    r->rule = nrules++;
 
     if(!reuse){
         rr = symlook(head, S_TARGET, r)->u.ptr;
         if(rr != r){
             r->chain = rr->chain;
             rr->chain = r;
-        } else
-            r->chain = 0;
+        } else 
+            r->chain = nil;
+        r->next = nil;
     }
-    if(!reuse)
-        r->next = 0;
+
     if((attr&REGEXP) || charin(head, "%&")){
         r->attr |= META;
         if(reuse)
             return;
-        if(attr&REGEXP){
-            patrule = r;
-            r->pat = regcomp(head);
-        }
-        if(metarules == 0)
+        <<[[addrule()]] if REGEXP attribute>>
+        if(metarules == nil)
             metarules = lmr = r;
         else {
             lmr->next = r;
@@ -749,8 +745,9 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     } else {
         if(reuse)
             return;
-        r->pat = 0;
-        if(rules == 0)
+
+        r->pat = nil;
+        if(rules == nil)
             rules = lr = r;
         else {
             lr->next = r;
@@ -759,8 +756,10 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     }
 }
 @
+% could print when find an existing rule with same target/pre
+% and display a message?
 
-
+% rule compare, check if same target and same prerequistes
 <<function rcmp>>=
 static int
 rcmp(Rule *r, char *target, Word *tail)
@@ -775,6 +774,28 @@ rcmp(Rule *r, char *target, Word *tail)
     return (w || tail);
 }
 @
+
+
+
+
+
+%XXXXXXXXXXXXX
+<<enum rule_attr cases>>=
+UPD    = 0x0004,
+VIR    = 0x0010,
+NOREC  = 0x0040,
+DEL    = 0x0080,
+NOVIRT = 0x0100,
+//@Scheck: dead indeed
+UNUSED = 0x0002,
+@
+
+
+%XXXX??
+<<[[Rule]] other fields>>=
+char		*prog;		/* to use in out of date */
+@
+% prog??
 
 
 \section{[[Node]] and [[Arc]]}
@@ -1915,10 +1936,6 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             p += n;
             switch(r)
             {
-            default:
-                SYNERR(-1);
-                fprint(STDERR, "unknown attribute '%c'\n", p[-1]);
-                Exit();
             case 'D':
                 *attr |= DEL;
                 break;
@@ -1952,6 +1969,10 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             case 'V':
                 *attr |= VIR;
                 break;
+            default:
+                SYNERR(-1);
+                fprint(STDERR, "unknown attribute '%c'\n", p[-1]);
+                Exit();
             }
         }
         if (*p++ != ':') {
@@ -4034,8 +4055,40 @@ prusage(void)
 
 \section{Regular expression pattern rules}
 
+<<enum rule_attr cases>>=
+REGEXP = 0x0020,
+@
+
+<<[[Rule]] other fields>>=
+Reprog		*pat;		/* reg exp goo */
+@
+
+
+% this is for error managment, regcomp can probably trigger
+% the regerror callback! subtle!
 <<global patrule>>=
 Rule *patrule;
+@
+
+<<[[addrule()]] if REGEXP attribute>>=
+if(attr&REGEXP){
+    patrule = r;
+    r->pat = regcomp(head);
+}
+@
+
+<<function regerror>>=
+//@Scheck: not dead, called via regcomp() when have regexp syntax error
+void regerror(char *s)
+{
+    if(patrule)
+        fprint(STDERR, "mk: %s:%d: regular expression error; %s\n",
+            patrule->file, patrule->line, s);
+    else
+        fprint(STDERR, "mk: %s:%d: regular expression error; %s\n",
+            infile, mkinline, s);
+    Exit();
+}
 @
 
 
@@ -4043,9 +4096,6 @@ Rule *patrule;
 #define		NREGEXP		10
 @
 
-<<[[Rule]] other fields>>=
-Reprog		*pat;		/* reg exp goo */
-@
 
 % instead of stem
 <<[[Arc]] other fields>>=
@@ -4092,6 +4142,10 @@ for(i = 0; *p; i++, p++){
 // list<ref_own?<string>>?
 Word 		*alltargets;	/* all the targets */
 @
+% as in  gram.c gram.h: gram.y ...
+% (hmm but could be rewritten with 2 rules, it's just
+% that with mk the file would be possibly rebuilt two times!
+% because it could run the command in parallel!!!!
 
 \section{Dynamic [[mkfile]]}
 % mkfile content through pipe

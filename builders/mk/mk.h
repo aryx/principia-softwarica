@@ -92,16 +92,17 @@ extern Rule *rules, *metarules, *patrule;
 enum rule_attr {
     META   = 0x0001,
     /*s: enum rule_attr cases */
-    //@Scheck: dead indeed
-    UNUSED = 0x0002,
     UPD    = 0x0004,
     VIR    = 0x0010,
-    REGEXP = 0x0020,
     NOREC  = 0x0040,
     DEL    = 0x0080,
     NOVIRT = 0x0100,
+    //@Scheck: dead indeed
+    UNUSED = 0x0002,
     /*x: enum rule_attr cases */
     QUIET  = 0x0008,
+    /*x: enum rule_attr cases */
+    REGEXP = 0x0020,
     /*e: enum rule_attr cases */
 };
 /*e: enum rule_attr */

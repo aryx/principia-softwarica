@@ -187,10 +187,6 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             p += n;
             switch(r)
             {
-            default:
-                SYNERR(-1);
-                fprint(STDERR, "unknown attribute '%c'\n", p[-1]);
-                Exit();
             case 'D':
                 *attr |= DEL;
                 break;
@@ -224,6 +220,10 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             case 'V':
                 *attr |= VIR;
                 break;
+            default:
+                SYNERR(-1);
+                fprint(STDERR, "unknown attribute '%c'\n", p[-1]);
+                Exit();
             }
         }
         if (*p++ != ':') {
