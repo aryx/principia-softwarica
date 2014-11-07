@@ -253,6 +253,7 @@ badusage(void)
     Exit();
 }
 @
+% also have NPROC, NREP global variables
 
 \section{A simple [[mkfile]]}
 % actually could also show the mkfile of mk itself :)
@@ -402,6 +403,7 @@ syminit(void)
 #define	HASHMUL	79L	/* this is a good value */
 @
 
+% will create new entry if not there!
 <<function symlook>>=
 Symtab*
 symlook(char *sym, int space, void *install)
@@ -653,6 +655,8 @@ enum rule_attr {
 };
 @
 % META is for % metarule and also regexp rules :R:
+%//@Scheck: dead indeed
+%UNUSED = 0x0002,
 
 
 <<global metarules>>=
@@ -780,15 +784,13 @@ rcmp(Rule *r, char *target, Word *tail)
 
 
 
-%XXXXXXXXXXXXX
+%XXX
 <<enum rule_attr cases>>=
 UPD    = 0x0004,
 VIR    = 0x0010,
 NOREC  = 0x0040,
 DEL    = 0x0080,
 NOVIRT = 0x0100,
-//@Scheck: dead indeed
-UNUSED = 0x0002,
 @
 
 
@@ -827,7 +829,7 @@ struct Node
 S_NODE,		/* target name -> node */
 @
 
-% dtor = ?
+%ctor. dtor = ?
 <<constructor newnode>>=
 static Node*
 newnode(char *name)
@@ -858,7 +860,7 @@ struct Arc
 {
     // option<ref<Node>>, the other node in the arc
     struct Node *n;
-    // ref<Rule>, rule to generate the target node from the dependent node
+    // ref<Rule>, contain recipe to gen the target node from the dependent nodes
     Rule *r;
 
     <<[[Arc]] other fields>>
@@ -868,6 +870,7 @@ struct Arc
 };
 @
 % option Node? apparently some code is doing if(a->n) so ...
+% have some fake arc for leaves nodes (but why create an arc at all?)
 
 <<[[Arc]] extra fields>>=
 // list<ref_own<arc> (head = Node.prereq)
@@ -878,8 +881,7 @@ struct Arc	*next;
 
 % node   arc   rule   relations?
 
-% so knows how to run the rule, subst the % by the actual value
-% when the rule is a metarule
+% so can subst $stem by the actual value for the recipe to run
 <<[[Arc]] other fields>>=
 // what will replace the %
 char		*stem;
@@ -887,9 +889,9 @@ char		*stem;
 
 
 
-% dtor = ?
+% ctor.  dtor = ?
 <<constructor newarc>>=
-Arc *
+Arc*
 newarc(Node *n, Rule *r, char *stem, Resub *match)
 {
     Arc *a;
@@ -918,15 +920,6 @@ enum node_flag {
 };
 @
 % used to be a set of #define
-
-%XXXXXXX?
-<<enum node_flag cases>>=
-CYCLE      = 0x0002,
-READY      = 0x0004,
-VACUOUS    = 0x0200,
-@
-
-
 
 
 
@@ -993,7 +986,7 @@ struct Job
 
     char		*stem;
 
-    int		nproc;	/* slot number */
+    int		nproc;	/* slot number */ // or -1 if unassigned
 
     <<[[Job]] other fields>>
 
@@ -1003,7 +996,7 @@ struct Job
 @
 
 
-
+% ctor
 <<constructor newjob>>=
 Job*
 newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
@@ -2155,9 +2148,12 @@ out:
 %$
 
 
+\section{Variables expansion, part 1}
+% done at parsing time for the non recipe part (target and prerequisites).
 
 \chapter{Building the Dependency Graph}
 
+\section{[[graph()]] and [[applyrules()]]}
 
 % constructor?
 <<function graph>>=
@@ -2173,13 +2169,13 @@ graph(char *target)
 
     cyclechk(root);
 
-    node->flags |= PROBABLE;	/* make sure it doesn't get deleted */
+    root->flags |= PROBABLE;	/* make sure it doesn't get deleted */
     vacuous(root);
     ambiguous(root);
 
     attribute(root);
 
-    return node;
+    return root;
 }
 @
 %pad: node -> root, clearer I think
@@ -2319,7 +2315,7 @@ if(!r->tail || !r->tail->s || !*r->tail->s) {
 % stem is "" here
 % why need that? to at least have something propagate in attribute()?
 
-\section{Finding metarules and substituting stem}
+\section{Finding matching metarules and substituting the stem}
 
 <<[[applyrules]] locals>>=
 char buf[NAMEBLOCK];
@@ -2431,6 +2427,10 @@ subst(char *stem, char *template,   char *dest, int dlen)
 
 \section{Cycle detection}
 
+<<enum node_flag cases>>=
+CYCLE      = 0x0002,
+@
+
 <<function cyclechk>>=
 static void
 cyclechk(Node *n)
@@ -2449,11 +2449,54 @@ cyclechk(Node *n)
 }
 @
 
+\section{Infinite rule detection, [[$NREP]]}%$
+
+% n reps, to manage bad rules like %: %.c that can be executed multiple times
+<<global nreps>>=
+int nreps = 1;
+@
+
+<<[[mk()]] initialisation>>=
+nrep();		/* it can be updated dynamically */
+@
+
+% mk -> nrep
+<<function nrep>>=
+void
+nrep(void)
+{
+    Symtab *sym;
+    Word *w;
+
+    sym = symlook("NREP", S_VAR, nil);
+    if(sym){
+        w = sym->u.ptr;
+        if (w && w->s && *w->s)
+            nreps = atoi(w->s);
+    }
+    if(nreps < 1)
+        nreps = 1;
+    <<[[nrep()]] if DEBUG(D_GRAPH)>>
+}
+@
+
+
 \section{Vacuous rule detection}
+
+% def of vacuous? =~ stupid
+
+<<enum node_flag cases>>=
+VACUOUS    = 0x0200,
+@
 
 <<enum node_flag cases>>=
 PROBABLE   = 0x0100,
 @
+
+<<enum node_flag cases>>=
+READY      = 0x0004,
+@
+
 
 <<[[Arc]] other fields>>=
 // bool (TOGO)
@@ -2574,38 +2617,6 @@ trace(char *s, Arc *a)
     fprint(STDERR, "\n");
 }
 @
-
-\section{Infinite rule detection}
-
-% n reps, to manage bad rules like %: %.c that can be executed multiple times
-<<global nreps>>=
-int nreps = 1;
-@
-
-<<[[mk()]] initialisation>>=
-nrep();		/* it can be updated dynamically */
-@
-
-% mk -> nrep
-<<function nrep>>=
-void
-nrep(void)
-{
-    Symtab *sym;
-    Word *w;
-
-    sym = symlook("NREP", S_VAR, nil);
-    if(sym){
-        w = sym->u.ptr;
-        if (w && w->s && *w->s)
-            nreps = atoi(w->s);
-    }
-    if(nreps < 1)
-        nreps = 1;
-    <<[[nrep()]] if DEBUG(D_GRAPH)>>
-}
-@
-
 
 \section{Final touch}
 
@@ -3059,7 +3070,7 @@ delete(char *name)
 }
 @
 
-\section{Parallel processing}
+\section{Parallel processing, [[$NPROC]]}%$
 % export NPROC=...
 
 <<[[mk()]] initialisation>>=
@@ -3277,7 +3288,7 @@ buildenv(Job *j, int slot)
 @
 
 
-\section{Variables expansion}
+\section{Variables expansion, part 2}
 
 <<function varsub>>=
 Word*
@@ -4636,7 +4647,7 @@ freebuf(buf);
 \section{[[:P:]] ??}
 
 
-%XXXX??
+%XXX??
 <<[[Rule]] other fields>>=
 char		*prog;		/* to use in out of date */
 @
@@ -4994,7 +5005,7 @@ case 'k':
 % could be in error managment section
 
 <<function Malloc>>=
-void *
+void*
 Malloc(int n)
 {
     void *s;
@@ -5050,6 +5061,7 @@ static Bufblock *freelist;
 #define	QUANTA	4096
 @
 
+% ctor
 <<constructor newbuf>>=
 Bufblock *
 newbuf(void)
@@ -5071,6 +5083,7 @@ newbuf(void)
 }
 @
 
+% dtor
 <<destructor freebuf>>=
 void
 freebuf(Bufblock *p)

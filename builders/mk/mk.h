@@ -97,8 +97,6 @@ enum rule_attr {
     NOREC  = 0x0040,
     DEL    = 0x0080,
     NOVIRT = 0x0100,
-    //@Scheck: dead indeed
-    UNUSED = 0x0002,
     /*x: enum rule_attr cases */
     QUIET  = 0x0008,
     /*x: enum rule_attr cases */
@@ -116,7 +114,7 @@ struct Arc
 {
     // option<ref<Node>>, the other node in the arc
     struct Node *n;
-    // ref<Rule>, rule to generate the target node from the dependent node
+    // ref<Rule>, contain recipe to gen the target node from the dependent nodes
     Rule *r;
 
     /*s: [[Arc]] other fields */
@@ -169,15 +167,17 @@ struct Node
 /*s: enum node_flag */
 enum node_flag {
     /*s: enum node_flag cases */
-    CYCLE      = 0x0002,
-    READY      = 0x0004,
-    VACUOUS    = 0x0200,
-    /*x: enum node_flag cases */
     NOTMADE    = 0x0020,
     BEINGMADE  = 0x0040,
     MADE       = 0x0080,
     /*x: enum node_flag cases */
+    CYCLE      = 0x0002,
+    /*x: enum node_flag cases */
+    VACUOUS    = 0x0200,
+    /*x: enum node_flag cases */
     PROBABLE   = 0x0100,
+    /*x: enum node_flag cases */
+    READY      = 0x0004,
     /*x: enum node_flag cases */
     VIRTUAL    = 0x0001,
     NORECIPE   = 0x0400,
@@ -207,7 +207,7 @@ struct Job
 
     char		*stem;
 
-    int		nproc;	/* slot number */
+    int		nproc;	/* slot number */ // or -1 if unassigned
 
     /*s: [[Job]] other fields */
     char		**match;

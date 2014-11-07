@@ -2,7 +2,7 @@
 #include "mk.h"
 
 /*s: function Malloc */
-void *
+void*
 Malloc(int n)
 {
     void *s;

@@ -2,7 +2,7 @@
 #include	"mk.h"
 
 /*s: constructor newarc */
-Arc *
+Arc*
 newarc(Node *n, Rule *r, char *stem, Resub *match)
 {
     Arc *a;
