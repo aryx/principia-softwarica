@@ -146,6 +146,7 @@ enum
 };
 
 struct Dosdir{
+  // 8.3 limitation, hmmm
   uchar name[8];
   uchar ext[3];
   uchar attr;
