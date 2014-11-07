@@ -265,11 +265,11 @@ enum sxxx {
     /*x: enum sxxx cases */
     S_WESET,	/* variable; we set in the mkfile */
     /*x: enum sxxx cases */
-    S_EXPORTED,	/* var -> current exported value */
-    /*x: enum sxxx cases */
     S_AGG,		/* aggregate -> time */
     /*x: enum sxxx cases */
     S_BITCH,	/* bitched about aggregate not there */
+    /*x: enum sxxx cases */
+    S_EXPORTED,	/* var -> current exported value */
     /*e: enum sxxx cases */
 };
 /*e: enum sxxx */

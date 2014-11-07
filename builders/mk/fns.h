@@ -51,7 +51,6 @@ void	symstat(void);
 ulong	timeof(char*, int);
 void	timeinit(char*);
 ulong	mkmtime(char*, bool);
-ulong	mtime(char*);
 int	chgtime(char*);
 void	touch(char*);
 

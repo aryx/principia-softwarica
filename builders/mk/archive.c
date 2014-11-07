@@ -17,7 +17,7 @@ atimeof(int force, char *name)
     if(archive == 0)
         Exit();
 
-    t = mtime(archive);
+    t = mkmtime(archive, true);
     sym = symlook(archive, S_AGG, 0);
     if(sym){
         if(force || t > sym->u.value){

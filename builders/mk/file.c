@@ -2,13 +2,6 @@
 #include	"mk.h"
 
 /* table-driven version in bootes dump of 12/31/96 */
-/*s: function mtime */
-ulong
-mtime(char *name)
-{
-    return mkmtime(name, true);
-}
-/*e: function mtime */
 
 /*s: function timeof */
 ulong
@@ -21,7 +14,7 @@ timeof(char *name, bool force)
         return atimeof(force, name);		/* archive */
 
     if(force)
-        return mtime(name);
+        return mkmtime(name, true);
 
     sym = symlook(name, S_TIME, nil);
     if (sym)
