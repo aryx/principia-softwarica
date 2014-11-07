@@ -196,19 +196,22 @@ struct Job
 {
     Word		*t;	/* targets */
     Word		*p;	/* prerequistes */
-    Rule		*r;	/* master rule for job */
-    // list<ref_?<Node>> (next = Node.next?)
+
+    //list<ref<Node>> (next = Node.next??)
     Node		*n;	/* list of node targets */
+    //ref<Rule>
+    Rule		*r;	/* master rule for job */
 
     char		*stem;
-
-    Word		*np;	/* new prerequistes */
-    Word		*at;	/* all targets */
 
     int		nproc;	/* slot number */
 
     /*s: [[Job]] other fields */
     char		**match;
+    /*x: [[Job]] other fields */
+    Word		*at;	/* all targets */
+    /*x: [[Job]] other fields */
+    Word		*np;	/* new prerequistes */
     /*e: [[Job]] other fields */
 
     // Extra

@@ -25,9 +25,6 @@ static char	*myenv[] =
     "pid",
     "nproc",
     /*x: [[myenv]] other array elements */
-    "newprereq",
-    "alltarget",
-    /*x: [[myenv]] other array elements */
     "stem0",		/* must be in order from here */
     "stem1",
     "stem2",
@@ -38,6 +35,10 @@ static char	*myenv[] =
     "stem7",
     "stem8",
     "stem9",
+    /*x: [[myenv]] other array elements */
+    "alltarget",
+    /*x: [[myenv]] other array elements */
+    "newprereq",
     /*x: [[myenv]] other array elements */
     "newmember",
     /*e: [[myenv]] other array elements */
@@ -141,8 +142,11 @@ buildenv(Job *j, int slot)
     snprint(buf, sizeof buf, "%d", slot);
     envupd("nproc", newword(buf));
 
-    envupd("newprereq", wdup(j->np));
+    /*s: [[buildenv()]] envupd some variables */
     envupd("alltarget", wdup(j->at));
+    /*x: [[buildenv()]] envupd some variables */
+    envupd("newprereq", wdup(j->np));
+    /*e: [[buildenv()]] envupd some variables */
     
     /*s: [[buildenv()]] newmember variable setting */
     l = &v;
