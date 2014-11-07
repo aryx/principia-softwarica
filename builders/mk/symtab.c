@@ -8,7 +8,7 @@
 #define	HASHMUL	79L	/* this is a good value */
 /*e: constant HASHMUL */
 /*s: global hash */
-// hash<(string * enum<sxxx>), 'b> (next = Symtab.next in bucket)
+// hash<(string * enum<sxxx>), 'a> (next = Symtab.next in bucket)
 static Symtab *hash[NHASH];
 /*e: global hash */
 

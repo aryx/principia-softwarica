@@ -85,8 +85,10 @@ timeinit(char *s)
             s += n;
         } while(*s);
         c = *s;
-        *s = 0;
+        *s = '\0';
+
         symlook(strdup(cp), S_TIME, (void *)t)->u.value = t;
+
         if (c)
             *s++ = c;
         while(*s){

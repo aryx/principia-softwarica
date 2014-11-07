@@ -255,15 +255,15 @@ enum sxxx {
     /*x: enum sxxx cases */
     S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
     /*x: enum sxxx cases */
+    S_TIME,		/* file -> time */
+    /*x: enum sxxx cases */
+    S_BULKED,	/* we have bulked this dir */
+    /*x: enum sxxx cases */
     S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
     /*x: enum sxxx cases */
     S_OVERRIDE,	/* can't override */
     /*x: enum sxxx cases */
     S_WESET,	/* variable; we set in the mkfile */
-    /*x: enum sxxx cases */
-    S_TIME,		/* file -> time */
-    /*x: enum sxxx cases */
-    S_BULKED,	/* we have bulked this dir */
     /*x: enum sxxx cases */
     S_EXPORTED,	/* var -> current exported value */
     /*x: enum sxxx cases */

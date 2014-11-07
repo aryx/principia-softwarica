@@ -21,13 +21,13 @@ static char	*myenv[] =
     "stem",
     "prereq",
 
+    /*s: [[myenv]] other array elements */
     "pid",
     "nproc",
+    /*x: [[myenv]] other array elements */
     "newprereq",
     "alltarget",
-    "newmember",
-
-    /*s: [[myenv]] other array elements */
+    /*x: [[myenv]] other array elements */
     "stem0",		/* must be in order from here */
     "stem1",
     "stem2",
@@ -38,8 +38,9 @@ static char	*myenv[] =
     "stem7",
     "stem8",
     "stem9",
+    /*x: [[myenv]] other array elements */
+    "newmember",
     /*e: [[myenv]] other array elements */
-
     0,
 };
 /*e: global myenv */
@@ -130,16 +131,20 @@ buildenv(Job *j, int slot)
 
     envupd("target", wdup(j->t));
     if(j->r->attr&REGEXP)
-        envupd("stem",newword(""));
+        envupd("stem", newword(""));
     else
         envupd("stem", newword(j->stem));
     envupd("prereq", wdup(j->p));
+
     snprint(buf, sizeof buf, "%d", getpid());
     envupd("pid", newword(buf));
     snprint(buf, sizeof buf, "%d", slot);
     envupd("nproc", newword(buf));
+
     envupd("newprereq", wdup(j->np));
     envupd("alltarget", wdup(j->at));
+    
+    /*s: [[buildenv()]] newmember variable setting */
     l = &v;
     v = w = wdup(j->np);
     while(w){
@@ -160,7 +165,9 @@ buildenv(Job *j, int slot)
         w = *l;
     }
     envupd("newmember", v);
-        /* update stem0 -> stem9 */
+    /*e: [[buildenv()]] newmember variable setting */
+    /*s: [[buildenv()]] stemx variables setting */
+    /* update stem0 -> stem9 */
     for(p = myenv; *p; p++)
         if(strcmp(*p, "stem0") == 0)
             break;
@@ -170,6 +177,8 @@ buildenv(Job *j, int slot)
         else 
             envupd(*p, newword(""));
     }
+    /*e: [[buildenv()]] stemx variables setting */
+
     return envy;
 }
 /*e: function buildenv */

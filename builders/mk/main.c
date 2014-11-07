@@ -148,7 +148,7 @@ main(int argc, char **argv)
 
     usage(); // useful?
 
-    /*s: [[main()]] argv processing for xxx= */
+    /*s: [[main()]] argv processing for xxx=yyy */
     /*
      *   assignment args become null strings
      */
@@ -178,7 +178,7 @@ main(int argc, char **argv)
         parse("<command line args>", tfd, true);
         remove(temp);
     }
-    /*e: [[main()]] argv processing for xxx= */
+    /*e: [[main()]] argv processing for xxx=yyy */
 
     /*s: [[main()]] set MKFLAGS variable */
     if (buf->current != buf->start) {
@@ -210,7 +210,6 @@ main(int argc, char **argv)
         for(ff = files; ff < f; ff++)
             parse(*ff, open(*ff, 0), false);
     /*e: [[main()]] parsing mkfile, call parse() */
-
     /*s: [[main()]] if DEBUG(D_PARSE) */
     if(DEBUG(D_PARSE)){
         dumpw("default targets", target1);
@@ -219,13 +218,14 @@ main(int argc, char **argv)
         dumpv("variables");
     }
     /*e: [[main()]] if DEBUG(D_PARSE) */
-    /*s: [[main()]] if whatif */
+
+    /*s: [[main()]] whatif optional setup */
     if(whatif){
         insert(whatif, '\0');
         timeinit(whatif->start);
         freebuf(whatif);
     }
-    /*e: [[main()]] if whatif */
+    /*e: [[main()]] whatif optional setup */
 
     execinit();
 

@@ -169,6 +169,14 @@ Here are other candidates that were considered but ultimately discarded:
 %http://bost.ocks.org/mike/make/
 %http://hadihariri.com/2014/04/21/build-make-no-more/
 
+
+% differences with make? gnu make? see mk.ps section 4
+%  well many mk extensions have become gnu make, e.g. %.c rules instead of .c
+%  (hmm still? mk introduced pattern metarules, but metarules may have been
+%   in research UNIX make)
+%  less uglyness with variables too, no $$i need, variables passed as is
+%  (like for rc, cleaner?)
+
 \section{Getting started}
 
 % can get the one from kencc? or plan9port?
@@ -206,14 +214,12 @@ The goal of a build system is to describe concisely and maintain
 efficiently \co{dependencies} between files or programs.
 
 % conciseness => DSL
-% efficiency => graph and //
-
 % rule, target: dependencies
 % metarules, variables => generic stuff
 % < so modularity and can factorize in different files
 
+% efficiency => graph and //
 % graph of deps, if modify a leaf then have to rebuild everything up!
-
 % mk is actually kind of a scheduler because can do things in //,
 % run recipe of independent jobs in //, and need to manage dependencies
 % between those jobs
@@ -221,7 +227,8 @@ efficiently \co{dependencies} between files or programs.
 \section{[[mk]] services}
 
 % interface is pretty simple, go in dir, type 'mk'
-% or mk target
+% or 'mk target' (actually can give multiple targets, and can have
+% some xxx=yyy, and some -xxx)
 
 <<constant MKFILE>>=
 #define	MKFILE		"mkfile"
@@ -253,13 +260,6 @@ badusage(void)
 % show also simple output of running mk on a toy project
 % maybe even include mk -e output?
 
-% differences with make? gnu make? see mk.ps section 4
-%  well many mk extensions have become gnu make, e.g. %.c rules instead of .c
-%  (hmm still? mk introduced pattern metarules, but metarules may have been
-%   in research UNIX make)
-%  less uglyness with variables too, no $$i need, variables passed as is
-%  (like for rc, cleaner?)
-
 \section{Code organization}
 
 %fns.h: forward function declarations (prototypes)
@@ -272,7 +272,7 @@ badusage(void)
 %word.c: list of strings
 
 %globals.c: globals definitions
-%symtab.c: global hash table
+%symtab.c: global hash table, and cache
 
 %lex.c: parsing recipe
 %parse.c: parsing mkfile
@@ -290,11 +290,11 @@ badusage(void)
 %file.c: timeof(), touch(), delete()
 %run.c: job schedule, run(), sched(), profiling processors
 %mk.c: mk() and work(), building the graph and then the targets
-%recipe.c: dorecipe()
-%env.c: recipe environment
 %job.c: newjob(), dumper
+%shprint.c: print recipe before executing it
+%env.c: recipe environment
+%recipe.c: dorecipe()
 
-%shprint.c: ?
 
 %main.c: main() entry point!
 
@@ -305,19 +305,21 @@ badusage(void)
 % main() -> parse(mkfile) (populate rules, metarules, target1, S_VAR, ...)
 %        -> mk(target1) -> graph(target1)
 %                       -> work(node) -> outofdate(file)
-%                                     -> run(job)
+%                                     -> run(job) -> sched() -> execsh()
+%                                     
+%                       -> waitup()
 
 %###############################################################################
 
 \chapter{Core Data Structures}
 
 % core types: (see mk.h)
+% Bufblock, Word
+% Sym (a bit generic, could be in libc?)
 % Rule (mk -dp?), recipe? metarule, target, prerequiste (see mk.ps)
-% Word, Bufblock
 % Node, Arc (mk -dg)
 % Envy
 % Job, (mk -de)
-% Sym (a bit generic, could be in libc?)
 
 % core globals: (see mk.h externs)
 % envy,    rules, metarules, patrule,    jobs
@@ -349,7 +351,9 @@ struct Symtab
 @
 
 
-% the "world" data structure, but more for efficiency retrieval
+% the "world" data structure? hmm rules+metarules is more the world
+% here it's more an index over the rules, metarules, and some cache
+% (e.g. time of a file)
 %less: could use a record instead of that which would be better typed
 <<enum sxxx>>=
 enum sxxx {
@@ -357,6 +361,7 @@ enum sxxx {
     <<enum sxxx cases>>
 };
 @
+% use for fast access and also for memoization, operates as a cache
 %old and dead:
 %S_PID,		/* pid -> products */
 %S_MAKEFILE,	/* target -> node */
@@ -366,7 +371,7 @@ enum sxxx {
 @
 
 <<global hash>>=
-// hash<(string * enum<sxxx>), 'b> (next = Symtab.next in bucket)
+// hash<(string * enum<sxxx>), 'a> (next = Symtab.next in bucket)
 static Symtab *hash[NHASH];
 @
 
@@ -388,6 +393,7 @@ syminit(void)
     }
 }
 @
+% free necessary? should be nil no? syminit called at the start of main
 
 <<constant HASHMUL>>=
 #define	HASHMUL	79L	/* this is a good value */
@@ -466,19 +472,13 @@ static char	*myenv[] =
     "stem",
     "prereq",
 
-    "pid",
-    "nproc",
-    "newprereq",
-    "alltarget",
-    "newmember",
-
     <<[[myenv]] other array elements>>
-
     0,
 };
 @
 % $stem $prereq
 % (better than $@, $^ )
+
 
 % main ->
 <<function initenv>>=
@@ -1093,15 +1093,15 @@ main(int argc, char **argv)
 
     usage(); // useful?
 
-    <<[[main()]] argv processing for xxx=>>
+    <<[[main()]] argv processing for xxx=yyy>>
 
     <<[[main()]] set MKFLAGS variable>>
     <<[[main()]] set MKARGS variable>>
 
     <<[[main()]] parsing mkfile, call parse()>>
-
     <<[[main()]] if DEBUG(D_PARSE)>>
-    <<[[main()]] if whatif>>
+
+    <<[[main()]] whatif optional setup>>
 
     execinit();
 
@@ -1146,7 +1146,7 @@ fdt tfd = -1;
 Biobuf tb;
 @
 
-<<[[main()]] argv processing for xxx=>>=
+<<[[main()]] argv processing for xxx=yyy>>=
 /*
  *   assignment args become null strings
  */
@@ -1391,6 +1391,9 @@ nrep();		/* it can be updated dynamically */
 runerrs = 0;
 @
 
+
+\section{[[clrmade()]]}
+
 <<function MADESET>>=
 #define	MADESET(n,m)	n->flags = (n->flags&~(NOTMADE|BEINGMADE|MADE))|(m)
 @
@@ -1408,6 +1411,8 @@ clrmade(Node *n)
             clrmade(a->n);
 }
 @
+
+\section{[[work()]]}
 
 <<[[work()]] locals>>=
 bool did = false;
@@ -1513,8 +1518,7 @@ if(node->prereqs == nil){
 @
 
 
-
-
+\section{[[outofdate()]]}
 
 <<enum sxxx cases>>=
 S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
@@ -1572,6 +1576,130 @@ pcmp(char *prog, char *p, char *q)
 }
 @
 
+\section{[[timeof()]]}
+
+<<enum sxxx cases>>=
+S_TIME,		/* file -> time */
+@
+
+% timeof -> mtime -> mkmktime -> bulktime
+%                             -> dirstat
+
+<<function timeof>>=
+ulong
+timeof(char *name, bool force)
+{
+    Symtab *sym;
+    ulong t;
+
+    if(utfrune(name, '('))
+        return atimeof(force, name);		/* archive */
+
+    if(force)
+        return mtime(name);
+
+    sym = symlook(name, S_TIME, nil);
+    if (sym)
+        return sym->u.value;		/* uggh */
+
+    t = mkmtime(name, false);
+    if(t == 0)
+        return 0;
+
+    symlook(name, S_TIME, (void*)t);		/* install time in cache */
+    return t;
+}
+@
+
+
+<<function mtime>>=
+ulong
+mtime(char *name)
+{
+    return mkmtime(name, true);
+}
+@
+
+
+
+
+
+<<function mkmtime>>=
+ulong
+mkmtime(char *name, bool force)
+{
+    Dir *d;
+    char *s, *ss, carry;
+    ulong t;
+    Symtab *sym;
+    char buf[4096];
+
+    strecpy(buf, buf + sizeof buf - 1, name);
+    cleanname(buf);
+    name = buf;
+
+    s = utfrrune(name, '/');
+    if(s == name)
+        s++;
+    if(s){
+        ss = name;
+        carry = *s;
+        *s = '\0';
+    }else{
+        ss = nil;
+        carry = 0;
+    }
+    bulkmtime(ss);
+    if(carry)
+        *s = carry;
+
+    if(!force){
+        sym = symlook(name, S_TIME, 0);
+        if(sym)
+            return sym->u.value;
+        return 0;
+    }
+    if((d = dirstat(name)) == nil)
+        return 0;
+
+    t = d->mtime;
+    free(d);
+
+    return t;
+}
+@
+
+
+<<enum sxxx cases>>=
+S_BULKED,	/* we have bulked this dir */
+@
+
+<<function bulkmtime>>=
+void
+bulkmtime(char *dir)
+{
+    char buf[4096];
+    char *ss, *s, *sym;
+
+    if(dir){
+        sym = dir;
+        s = dir;
+        if(strcmp(dir, "/") == 0)
+            strecpy(buf, buf + sizeof buf - 1, dir);
+        else
+            snprint(buf, sizeof buf, "%s/", dir);
+    }else{
+        s = ".";
+        sym = "";
+        buf[0] = 0;
+    }
+    if(symlook(sym, S_BULKED, 0))
+        return;
+    ss = strdup(sym);
+    symlook(ss, S_BULKED, (void*)ss);
+    dirtime(s, buf);
+}
+@
 
 
 \chapter{Parsing Rules}
@@ -2583,173 +2711,298 @@ nrep(void)
 }
 @
 
-\chapter{Time}
 
-<<enum sxxx cases>>=
-S_TIME,		/* file -> time */
+
+
+\chapter{Jobs Scheduling}
+% can do stuff in //! make originally didn't apparently
+
+\section{[[run()]]}
+<<global nrunning>>=
+static int nrunning;
 @
 
-<<function timeinit>>=
-void
-timeinit(char *s)
-{
-    ulong t;
-    char *cp;
-    Rune r;
-    int c, n;
+<<global nproclimit>>=
+static int nproclimit;
+@
 
-    t = time(0);
-    while (*s) {
-        cp = s;
-        do{
-            n = chartorune(&r, s);
-            if (r == ' ' || r == ',' || r == '\n')
-                break;
-            s += n;
-        } while(*s);
-        c = *s;
-        *s = 0;
-        symlook(strdup(cp), S_TIME, (void *)t)->u.value = t;
-        if (c)
-            *s++ = c;
-        while(*s){
-            n = chartorune(&r, s);
-            if(r != ' ' && r != ',' && r != '\n')
-                break;
-            s += n;
+
+% ... -> dorecipe() -> <> -> sched()
+<<function run>>=
+void
+run(Job *j)
+{
+    Job *jj;
+
+    // enqueue(j, jobs)
+    if(jobs){
+        for(jj = jobs; jj->next; jj = jj->next)
+            ;
+        jj->next = j;
+    } else 
+        jobs = j;
+    j->next = nil;
+
+    /* this code also in waitup after parse redirect */
+    if(nrunning < nproclimit)
+        sched();
+}
+@
+
+\section{Launching jobs}
+
+<<struct RunEvent>>=
+struct RunEvent {
+    int pid;
+    Job *job;
+};
+@
+
+% should be array[nproclimit]
+<<global events>>=
+static RunEvent *events;
+@
+
+% should be equal to nproclimit
+<<global nevents>>=
+static int nevents;
+@
+
+
+<<function sched>>=
+static void
+sched(void)
+{
+    Job *j;
+    int slot;
+    Envy *e;
+
+    Bufblock *buf;
+    char *flags;
+    Node *n;
+
+    if(jobs == nil){
+        usage();
+        return;
+    }
+
+    // j = pop(jobs)
+    j = jobs;
+    jobs = j->next;
+    <<[[sched()]] if DEBUG(D_EXEC)>>
+
+    slot = nextslot();
+    events[slot].job = j;
+
+    e = buildenv(j, slot);
+    <<[[sched()]] print recipe command on stdout>>
+
+    <<[[sched()]] if dry mode or touch mode>>
+    else {
+       <<[[sched()]] if DEBUG(D_EXEC) print recipe>>
+        flags = (j->r->attr&NOMINUSE)? nil : "-e";
+        // launching the job!
+        events[slot].pid = execsh(flags, j->r->recipe, 0, e);
+        usage();
+        nrunning++;
+       <<[[sched()]] if DEBUG(D_EXEC) print pid>>
+    }
+}
+@
+
+<<enum node_flag cases>>=
+NOMINUSE   = 0x1000,
+@
+
+
+<<enum rule_attr cases>>=
+QUIET  = 0x0008,
+@
+
+<<[[sched()]] print recipe command on stdout>>=
+buf = newbuf();
+shprint(j->r->recipe, e, buf);
+if(!tflag && (nflag || !(j->r->attr&QUIET)))
+    Bwrite(&bout, buf->start, (long)strlen(buf->start));
+freebuf(buf);
+@
+
+
+
+<<function nextslot>>=
+int
+nextslot(void)
+{
+    int i;
+
+    for(i = 0; i < nproclimit; i++)
+        if(events[i].pid <= 0) 
+            return i;
+    assert(/*out of slots!!*/ false);
+    return 0;	/* cyntax */
+}
+@
+
+
+
+\section{[[Process]]}
+
+<<struct Process>>=
+struct Process {
+    int pid;
+    int status;
+
+    // Extra
+    // double linked list, backward, forward
+    Process *b, *f;
+};
+@
+% again another example of redundant code ... should be factorized
+% in a container library
+
+<<global phead>>=
+// double_list<ref_own<Process> (next = Process.f)
+static Process *phead;
+@
+
+<<global pfree>>=
+// double_list<ref_own<Process> (next = Process.f)
+static Process *pfree;
+@
+
+% ctor
+<<function pnew>>=
+static void
+pnew(int pid, int status)
+{
+    Process *p;
+
+    if(pfree){
+        p = pfree;
+        pfree = p->f;
+    } else
+        p = (Process *)Malloc(sizeof(Process));
+
+    p->pid = pid;
+    p->status = status;
+
+    p->f = phead;
+    phead = p;
+    if(p->f)
+        p->f->b = p;
+    p->b = nil;
+}
+@
+
+% dtor
+<<function pdelete>>=
+static void
+pdelete(Process *p)
+{
+    if(p->f)
+        p->f->b = p->b;
+    if(p->b)
+        p->b->f = p->f;
+    else
+        phead = p->f;
+    p->f = pfree;
+    pfree = p;
+}
+@
+
+
+
+
+\section{Waiting children}
+
+
+% echildok -1, -2, -3?? just to help debug which one of the waitup?
+% then use __LINE__ no?
+<<function waitup>>=
+int
+waitup(int echildok, int *retstatus)
+{
+    Envy *e;
+    int pid;
+    int slot;
+    Symtab *s;
+    Word *w;
+    Job *j;
+    char buf[ERRMAX];
+    Bufblock *bp;
+    int uarg = 0;
+    int done;
+    Node *n;
+    Process *p;
+    extern int runerrs;
+
+    /* first check against the proces slist */
+    if(retstatus)
+        for(p = phead; p; p = p->f)
+            if(p->pid == *retstatus){
+                *retstatus = p->status;
+                pdelete(p);
+                return -1;
+            }
+again:		/* rogue processes */
+    pid = waitfor(buf);
+    if(pid == -1){
+        if(echildok > 0)
+            return 1;
+        else {
+            fprint(STDERR, "mk: (waitup %d) ", echildok);
+            perror("mk wait");
+            Exit();
         }
     }
-}
-@
-
-
-% timeof -> mtime -> mkmktime -> bulktime
-%                             -> dirstat
-
-<<function timeof>>=
-ulong
-timeof(char *name, bool force)
-{
-    Symtab *sym;
-    ulong t;
-
-    if(utfrune(name, '('))
-        return atimeof(force, name);		/* archive */
-
-    if(force)
-        return mtime(name);
-
-    sym = symlook(name, S_TIME, nil);
-    if (sym)
-        return sym->u.value;		/* uggh */
-
-    t = mkmtime(name, false);
-    if(t == 0)
-        return 0;
-
-    symlook(name, S_TIME, (void*)t);		/* install time in cache */
-    return t;
-}
-@
-
-
-<<function mtime>>=
-ulong
-mtime(char *name)
-{
-    return mkmtime(name, true);
-}
-@
-
-
-
-
-
-<<function mkmtime>>=
-ulong
-mkmtime(char *name, bool force)
-{
-    Dir *d;
-    char *s, *ss, carry;
-    ulong t;
-    Symtab *sym;
-    char buf[4096];
-
-    strecpy(buf, buf + sizeof buf - 1, name);
-    cleanname(buf);
-    name = buf;
-
-    s = utfrrune(name, '/');
-    if(s == name)
-        s++;
-    if(s){
-        ss = name;
-        carry = *s;
-        *s = '\0';
-    }else{
-        ss = nil;
-        carry = 0;
+    <<[[waitup()]] if DEBUG(D_EXEC) print pid>>
+    if(retstatus && pid == *retstatus){
+        *retstatus = buf[0]? 1:0;
+        return -1;
     }
-    bulkmtime(ss);
-    if(carry)
-        *s = carry;
-
-    if(!force){
-        sym = symlook(name, S_TIME, 0);
-        if(sym)
-            return sym->u.value;
-        return 0;
+    slot = pidslot(pid);
+    if(slot < 0){
+       <<[[waitup()]] if DEBUG(D_EXEC) and slot < 0>>
+        pnew(pid, buf[0]? 1:0);
+        goto again;
     }
-    if((d = dirstat(name)) == nil)
-        return 0;
-
-    t = d->mtime;
-    free(d);
-
-    return t;
+    j = events[slot].job;
+    usage();
+    nrunning--;
+    events[slot].pid = -1;
+    if(buf[0]){
+        e = buildenv(j, slot);
+        bp = newbuf();
+        shprint(j->r->recipe, e, bp);
+        front(bp->start);
+        fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
+        freebuf(bp);
+        for(n = j->n, done = 0; n; n = n->next)
+            if(n->flags&DELETE){
+                if(done++ == 0)
+                    fprint(STDERR, ", deleting");
+                fprint(STDERR, " '%s'", n->name);
+                delete(n->name);
+            }
+        fprint(STDERR, "\n");
+        if(kflag){
+            runerrs++;
+            uarg = 1;
+        } else {
+            jobs = 0;
+            Exit();
+        }
+    }
+    for(w = j->t; w; w = w->next){
+        if((s = symlook(w->s, S_NODE, 0)) == 0)
+            continue;	/* not interested in this node */
+        update(uarg, s->u.ptr);
+    }
+    if(nrunning < nproclimit)
+        sched();
+    return 0;
 }
 @
-
-
-<<enum sxxx cases>>=
-S_BULKED,	/* we have bulked this dir */
-@
-
-<<function bulkmtime>>=
-void
-bulkmtime(char *dir)
-{
-    char buf[4096];
-    char *ss, *s, *sym;
-
-    if(dir){
-        sym = dir;
-        s = dir;
-        if(strcmp(dir, "/") == 0)
-            strecpy(buf, buf + sizeof buf - 1, dir);
-        else
-            snprint(buf, sizeof buf, "%s/", dir);
-    }else{
-        s = ".";
-        sym = "";
-        buf[0] = 0;
-    }
-    if(symlook(sym, S_BULKED, 0))
-        return;
-    ss = strdup(sym);
-    symlook(ss, S_BULKED, (void*)ss);
-    dirtime(s, buf);
-}
-@
-
-
-
-
-
-
-
-
-
 
 <<function delete>>=
 void
@@ -2763,7 +3016,101 @@ delete(char *name)
 }
 @
 
+\section{Parallel processing}
+% export NPROC=...
 
+
+<<function nproc>>=
+void
+nproc(void)
+{
+    Symtab *sym;
+    Word *w;
+
+    if(sym = symlook("NPROC", S_VAR, nil)) {
+        w = sym->u.ptr;
+        if (w && w->s && w->s[0])
+            nproclimit = atoi(w->s);
+    }
+    if(nproclimit < 1)
+        nproclimit = 1;
+    <<[[nproc()]] if DEBUG(D_EXEC)>>
+    if(nproclimit > nevents){
+        if(nevents)
+            events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
+        else
+            events = (RunEvent *)Malloc(nproclimit*sizeof(RunEvent));
+
+        while(nevents < nproclimit)
+            events[nevents++].pid = 0;
+    }
+}
+@
+
+
+<<function pidslot>>=
+int
+pidslot(int pid)
+{
+    int i;
+
+    for(i = 0; i < nevents; i++)
+        if(events[i].pid == pid) 
+            return i;
+    <<[[pidslot()]] if DEBUG(D_EXEC)>>
+    return -1;
+}
+@
+
+
+
+\section{Signals/Notes managment}
+
+% main -> <>
+<<function catchnotes>>=
+void
+catchnotes()
+{
+    atnotify(notifyf, 1);
+}
+@
+
+<<function notifyf>>=
+int
+notifyf(void *a, char *msg)
+{
+    static int nnote;
+
+    USED(a);
+    if(++nnote > 100){	/* until andrew fixes his program */
+        fprint(STDERR, "mk: too many notes\n");
+        notify(0);
+        abort();
+    }
+    if(strcmp(msg, "interrupt")!=0 && strcmp(msg, "hangup")!=0)
+        return 0;
+    killchildren(msg);
+    return -1;
+}
+@
+
+
+<<function killchildren>>=
+void
+killchildren(char *msg)
+{
+    Process *p;
+
+    kflag = true;	/* to make sure waitup doesn't exit */
+    jobs = nil;		/* make sure no more get scheduled */
+    for(p = phead; p; p = p->f)
+        expunge(p->pid, msg);
+    while(waitup(1, (int *)0) == 0)
+        ;
+    Bprint(&bout, "mk: %s\n", msg);
+    Exit();
+}
+@
 
 \chapter{Shell interaction}
 % the recipe
@@ -2845,6 +3192,19 @@ execinit(void)
 }
 @
 
+
+
+<<[[myenv]] other array elements>>=
+"pid",
+"nproc",
+@
+
+<<[[myenv]] other array elements>>=
+"newprereq",
+"alltarget",
+@
+
+
 <<function buildenv>>=
 Envy*
 buildenv(Job *j, int slot)
@@ -2856,46 +3216,22 @@ buildenv(Job *j, int slot)
 
     envupd("target", wdup(j->t));
     if(j->r->attr&REGEXP)
-        envupd("stem",newword(""));
+        envupd("stem", newword(""));
     else
         envupd("stem", newword(j->stem));
     envupd("prereq", wdup(j->p));
+
     snprint(buf, sizeof buf, "%d", getpid());
     envupd("pid", newword(buf));
     snprint(buf, sizeof buf, "%d", slot);
     envupd("nproc", newword(buf));
+
     envupd("newprereq", wdup(j->np));
     envupd("alltarget", wdup(j->at));
-    l = &v;
-    v = w = wdup(j->np);
-    while(w){
-        cp = strchr(w->s, '(');
-        if(cp){
-            qp = strchr(cp+1, ')');
-            if(qp){
-                *qp = 0;
-                strcpy(w->s, cp+1);
-                l = &w->next;
-                w = w->next;
-                continue;
-            }
-        }
-        *l = w->next;
-        free(w->s);
-        free(w);
-        w = *l;
-    }
-    envupd("newmember", v);
-        /* update stem0 -> stem9 */
-    for(p = myenv; *p; p++)
-        if(strcmp(*p, "stem0") == 0)
-            break;
-    for(i = 0; *p; i++, p++){
-        if((j->r->attr&REGEXP) && j->match[i])
-            envupd(*p, newword(j->match[i]));
-        else 
-            envupd(*p, newword(""));
-    }
+    
+    <<[[buildenv()]] newmember variable setting>>
+    <<[[buildenv()]] stemx variables setting>>
+
     return envy;
 }
 @
@@ -3511,392 +3847,6 @@ addw(Word *w, char *s)
 
 
 
-\chapter{Jobs Scheduling}
-% can do stuff in //! make originally didn't apparently
-
-\section{[[run()]]}
-<<global nrunning>>=
-static int nrunning;
-@
-
-<<global nproclimit>>=
-static int nproclimit;
-@
-
-
-% ... -> dorecipe() -> <> -> sched()
-<<function run>>=
-void
-run(Job *j)
-{
-    Job *jj;
-
-    // enqueue(j, jobs)
-    if(jobs){
-        for(jj = jobs; jj->next; jj = jj->next)
-            ;
-        jj->next = j;
-    } else 
-        jobs = j;
-    j->next = nil;
-
-    /* this code also in waitup after parse redirect */
-    if(nrunning < nproclimit)
-        sched();
-}
-@
-
-\section{Launching jobs}
-
-<<struct RunEvent>>=
-struct RunEvent {
-    int pid;
-    Job *job;
-};
-@
-
-% should be array[nproclimit]
-<<global events>>=
-static RunEvent *events;
-@
-
-% should be equal to nproclimit
-<<global nevents>>=
-static int nevents;
-@
-
-
-<<function sched>>=
-static void
-sched(void)
-{
-    Job *j;
-    int slot;
-    Envy *e;
-
-    Bufblock *buf;
-    char *flags;
-    Node *n;
-
-    if(jobs == nil){
-        usage();
-        return;
-    }
-
-    // j = pop(jobs)
-    j = jobs;
-    jobs = j->next;
-    <<[[sched()]] if DEBUG(D_EXEC)>>
-
-    slot = nextslot();
-    events[slot].job = j;
-
-    e = buildenv(j, slot);
-    <<[[sched()]] print recipe command on stdout>>
-
-    <<[[sched()]] if dry mode or touch mode>>
-    else {
-       <<[[sched()]] if DEBUG(D_EXEC) print recipe>>
-        flags = (j->r->attr&NOMINUSE)? nil : "-e";
-        // launching the job!
-        events[slot].pid = execsh(flags, j->r->recipe, 0, e);
-        usage();
-        nrunning++;
-       <<[[sched()]] if DEBUG(D_EXEC) print pid>>
-    }
-}
-@
-
-<<enum node_flag cases>>=
-NOMINUSE   = 0x1000,
-@
-
-
-<<enum rule_attr cases>>=
-QUIET  = 0x0008,
-@
-
-<<[[sched()]] print recipe command on stdout>>=
-buf = newbuf();
-shprint(j->r->recipe, e, buf);
-if(!tflag && (nflag || !(j->r->attr&QUIET)))
-    Bwrite(&bout, buf->start, (long)strlen(buf->start));
-freebuf(buf);
-@
-
-
-
-<<function nextslot>>=
-int
-nextslot(void)
-{
-    int i;
-
-    for(i = 0; i < nproclimit; i++)
-        if(events[i].pid <= 0) 
-            return i;
-    assert(/*out of slots!!*/ false);
-    return 0;	/* cyntax */
-}
-@
-
-
-
-\section{[[Process]]}
-
-<<struct Process>>=
-struct Process {
-    int pid;
-    int status;
-
-    // Extra
-    // double linked list, backward, forward
-    Process *b, *f;
-};
-@
-% again another example of redundant code ... should be factorized
-% in a container library
-
-<<global phead>>=
-// double_list<ref_own<Process> (next = Process.f)
-static Process *phead;
-@
-
-<<global pfree>>=
-// double_list<ref_own<Process> (next = Process.f)
-static Process *pfree;
-@
-
-% ctor
-<<function pnew>>=
-static void
-pnew(int pid, int status)
-{
-    Process *p;
-
-    if(pfree){
-        p = pfree;
-        pfree = p->f;
-    } else
-        p = (Process *)Malloc(sizeof(Process));
-
-    p->pid = pid;
-    p->status = status;
-
-    p->f = phead;
-    phead = p;
-    if(p->f)
-        p->f->b = p;
-    p->b = nil;
-}
-@
-
-% dtor
-<<function pdelete>>=
-static void
-pdelete(Process *p)
-{
-    if(p->f)
-        p->f->b = p->b;
-    if(p->b)
-        p->b->f = p->f;
-    else
-        phead = p->f;
-    p->f = pfree;
-    pfree = p;
-}
-@
-
-
-
-
-\section{Waiting children}
-
-
-% echildok -1, -2, -3?? just to help debug which one of the waitup?
-% then use __LINE__ no?
-<<function waitup>>=
-int
-waitup(int echildok, int *retstatus)
-{
-    Envy *e;
-    int pid;
-    int slot;
-    Symtab *s;
-    Word *w;
-    Job *j;
-    char buf[ERRMAX];
-    Bufblock *bp;
-    int uarg = 0;
-    int done;
-    Node *n;
-    Process *p;
-    extern int runerrs;
-
-    /* first check against the proces slist */
-    if(retstatus)
-        for(p = phead; p; p = p->f)
-            if(p->pid == *retstatus){
-                *retstatus = p->status;
-                pdelete(p);
-                return -1;
-            }
-again:		/* rogue processes */
-    pid = waitfor(buf);
-    if(pid == -1){
-        if(echildok > 0)
-            return 1;
-        else {
-            fprint(STDERR, "mk: (waitup %d) ", echildok);
-            perror("mk wait");
-            Exit();
-        }
-    }
-    <<[[waitup()]] if DEBUG(D_EXEC) print pid>>
-    if(retstatus && pid == *retstatus){
-        *retstatus = buf[0]? 1:0;
-        return -1;
-    }
-    slot = pidslot(pid);
-    if(slot < 0){
-       <<[[waitup()]] if DEBUG(D_EXEC) and slot < 0>>
-        pnew(pid, buf[0]? 1:0);
-        goto again;
-    }
-    j = events[slot].job;
-    usage();
-    nrunning--;
-    events[slot].pid = -1;
-    if(buf[0]){
-        e = buildenv(j, slot);
-        bp = newbuf();
-        shprint(j->r->recipe, e, bp);
-        front(bp->start);
-        fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
-        freebuf(bp);
-        for(n = j->n, done = 0; n; n = n->next)
-            if(n->flags&DELETE){
-                if(done++ == 0)
-                    fprint(STDERR, ", deleting");
-                fprint(STDERR, " '%s'", n->name);
-                delete(n->name);
-            }
-        fprint(STDERR, "\n");
-        if(kflag){
-            runerrs++;
-            uarg = 1;
-        } else {
-            jobs = 0;
-            Exit();
-        }
-    }
-    for(w = j->t; w; w = w->next){
-        if((s = symlook(w->s, S_NODE, 0)) == 0)
-            continue;	/* not interested in this node */
-        update(uarg, s->u.ptr);
-    }
-    if(nrunning < nproclimit)
-        sched();
-    return 0;
-}
-@
-
-\section{Parallel processing}
-% export NPROC=...
-
-
-<<function nproc>>=
-void
-nproc(void)
-{
-    Symtab *sym;
-    Word *w;
-
-    if(sym = symlook("NPROC", S_VAR, nil)) {
-        w = sym->u.ptr;
-        if (w && w->s && w->s[0])
-            nproclimit = atoi(w->s);
-    }
-    if(nproclimit < 1)
-        nproclimit = 1;
-    <<[[nproc()]] if DEBUG(D_EXEC)>>
-    if(nproclimit > nevents){
-        if(nevents)
-            events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
-        else
-            events = (RunEvent *)Malloc(nproclimit*sizeof(RunEvent));
-
-        while(nevents < nproclimit)
-            events[nevents++].pid = 0;
-    }
-}
-@
-
-
-<<function pidslot>>=
-int
-pidslot(int pid)
-{
-    int i;
-
-    for(i = 0; i < nevents; i++)
-        if(events[i].pid == pid) 
-            return i;
-    <<[[pidslot()]] if DEBUG(D_EXEC)>>
-    return -1;
-}
-@
-
-
-
-\section{Signals/Notes managment}
-
-% main -> <>
-<<function catchnotes>>=
-void
-catchnotes()
-{
-    atnotify(notifyf, 1);
-}
-@
-
-<<function notifyf>>=
-int
-notifyf(void *a, char *msg)
-{
-    static int nnote;
-
-    USED(a);
-    if(++nnote > 100){	/* until andrew fixes his program */
-        fprint(STDERR, "mk: too many notes\n");
-        notify(0);
-        abort();
-    }
-    if(strcmp(msg, "interrupt")!=0 && strcmp(msg, "hangup")!=0)
-        return 0;
-    killchildren(msg);
-    return -1;
-}
-@
-
-
-<<function killchildren>>=
-void
-killchildren(char *msg)
-{
-    Process *p;
-
-    kflag = true;	/* to make sure waitup doesn't exit */
-    jobs = nil;		/* make sure no more get scheduled */
-    for(p = phead; p; p = p->f)
-        expunge(p->pid, msg);
-    while(waitup(1, (int *)0) == 0)
-        ;
-    Bprint(&bout, "mk: %s\n", msg);
-    Exit();
-}
-@
-
 \chapter{Debugging and Profiling Support}
 
 \section{Explain mode, [[mk -e]]}
@@ -3960,13 +3910,51 @@ case 'w':
     break;
 @
 
-<<[[main()]] if whatif>>=
+<<[[main()]] whatif optional setup>>=
 if(whatif){
     insert(whatif, '\0');
     timeinit(whatif->start);
     freebuf(whatif);
 }
 @
+
+% fake time of file to be just modified now by modifying the time cache
+<<function timeinit>>=
+void
+timeinit(char *s)
+{
+    ulong t;
+    char *cp;
+    Rune r;
+    int c, n;
+
+    t = time(0);
+    while (*s) {
+        cp = s;
+        do{
+            n = chartorune(&r, s);
+            if (r == ' ' || r == ',' || r == '\n')
+                break;
+            s += n;
+        } while(*s);
+        c = *s;
+        *s = '\0';
+
+        symlook(strdup(cp), S_TIME, (void *)t)->u.value = t;
+
+        if (c)
+            *s++ = c;
+        while(*s){
+            n = chartorune(&r, s);
+            if(r != ' ' && r != ',' && r != '\n')
+                break;
+            s += n;
+        }
+    }
+}
+@
+
+
 
 %\chapter{Profiling Support}
 
@@ -4068,6 +4056,19 @@ char		**match;
 "stem9",
 @
 
+<<[[buildenv()]] stemx variables setting>>=
+/* update stem0 -> stem9 */
+for(p = myenv; *p; p++)
+    if(strcmp(*p, "stem0") == 0)
+        break;
+for(i = 0; *p; i++, p++){
+    if((j->r->attr&REGEXP) && j->match[i])
+        envupd(*p, newword(j->match[i]));
+    else 
+        envupd(*p, newword(""));
+}
+@
+
 \section{Multiple targets}
 
 % a few places where use Word* targets
@@ -4083,6 +4084,33 @@ Word 		*alltargets;	/* all the targets */
 % |cmd  instead of <file
 
 \section{Aggregates, archives}
+
+<<[[myenv]] other array elements>>=
+"newmember",
+@
+
+<<[[buildenv()]] newmember variable setting>>=
+l = &v;
+v = w = wdup(j->np);
+while(w){
+    cp = strchr(w->s, '(');
+    if(cp){
+        qp = strchr(cp+1, ')');
+        if(qp){
+            *qp = 0;
+            strcpy(w->s, cp+1);
+            l = &w->next;
+            w = w->next;
+            continue;
+        }
+    }
+    *l = w->next;
+    free(w->s);
+    free(w);
+    w = *l;
+}
+envupd("newmember", v);
+@
 
 \section{Missing intermediates optimization, [[mk -I]]}
 % mk -i suppress this behavior
