@@ -157,12 +157,15 @@ applyrules(char *target, char *cnt)
 static void
 togo(Node *node)
 {
-    Arc *la, *a;
+    Arc *a, *la;
 
     /* delete them now */
-    la = 0;
+    la = nil;
     for(a = node->prereqs; a; la = a, a = a->next)
         if(a->flag&TOGO){
+            fprint(STDERR, "mk: vacuous arc found %s->%s\n", 
+                     node->name, a->n->name);
+            //delete(a, node->prereqs)
             if(a == node->prereqs)
                 node->prereqs = a->next;
             else
@@ -172,20 +175,22 @@ togo(Node *node)
 /*e: function togo */
 
 /*s: function vacuous */
-static int
+static bool
 vacuous(Node *node)
 {
     Arc *la, *a;
-    int vac = !(node->flags&PROBABLE);
+    bool vac = !(node->flags&PROBABLE);
 
     if(node->flags&READY)
         return node->flags&VACUOUS;
     node->flags |= READY;
+
     for(a = node->prereqs; a; a = a->next)
         if(a->n && vacuous(a->n) && (a->r->attr&META))
             a->flag |= TOGO;
         else
-            vac = 0;
+            vac = false;
+
     /* if a rule generated arcs that DON'T go; no others from that rule go */
     for(a = node->prereqs; a; a = a->next)
         if((a->flag&TOGO) == 0)
@@ -194,8 +199,10 @@ vacuous(Node *node)
                     la->flag &= ~TOGO;
                 }
     togo(node);
-    if(vac)
+    if(vac) {
+        fprint(STDERR, "mk: vacuous node found %s\n", node->name);
         node->flags |= VACUOUS;
+    }
     return vac;
 }
 /*e: function vacuous */
@@ -213,6 +220,10 @@ newnode(char *name)
     node->flags = (node->time? PROBABLE : 0);
     node->prereqs = nil;
     node->next = nil;
+
+    if(DEBUG(D_TRACE)) 
+        print("newnode(%s), time = %d\n", name, node->time);
+
     return node;
 }
 /*e: constructor newnode */
@@ -295,7 +306,7 @@ ambiguous(Node *n)
                 }
             }
             if(r->recipe != a->r->recipe){
-                if(bad == 0){
+                if(bad == false){
                     fprint(STDERR, "mk: ambiguous recipes for %s:\n", n->name);
                     bad = true;
                     trace(n->name, la);
