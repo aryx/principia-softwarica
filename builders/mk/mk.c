@@ -99,6 +99,9 @@ work(Node *node,   Node *p, Arc *parc)
     char cwd[256];
     /*e: [[work()]] locals */
 
+    if(DEBUG(D_TRACE))
+        print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);
+
     if(node->flags&BEINGMADE)
         return did;
 
@@ -224,6 +227,8 @@ update(bool fake, Node *node)
     Arc *a;
 
     MADESET(node, fake? BEINGMADE : MADE);
+    if(DEBUG(D_TRACE))
+        print("update(): node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);
 
     if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
         node->time = timeof(node->name, true);

@@ -52,6 +52,9 @@ applyrules(char *target, char *cnt)
     Resub rmatch[NREGEXP];
     /*e: [[applyrules]] locals */
     
+    if(DEBUG(D_TRACE)) 
+        print("applyrules(%lux='%s')\n", target, target);
+
     sym = symlook(target, S_NODE, 0);
     if(sym)
         return sym->u.ptr;

@@ -126,7 +126,7 @@ sched(void)
     else {
        /*s: [[sched()]] if DEBUG(D_EXEC) print recipe */
        if(DEBUG(D_EXEC))
-           fprint(STDOUT, "recipe='%s'\n", j->r->recipe);	/**/
+           fprint(STDOUT, "recipe='%s'\n", j->r->recipe);
        Bflush(&bout);
        /*e: [[sched()]] if DEBUG(D_EXEC) print recipe */
         flags = (j->r->attr&NOMINUSE)? nil : "-e";

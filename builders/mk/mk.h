@@ -321,6 +321,8 @@ enum dxxx {
     D_GRAPH =		0x02,
     // for jobs
     D_EXEC  =		0x04,
+    // tracing some calls
+    D_TRACE  =           0x08,
 };
 /*e: enum dxxx */
 /*s: function DEBUG */
