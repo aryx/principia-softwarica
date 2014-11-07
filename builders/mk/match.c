@@ -26,15 +26,17 @@ match(char *name, char *template, char *stem)
 
     strncpy(stem, name, n);
     stem[n] = '\0';
+
     if(*template == '&')
         return !charin(stem, "./");
+
     return true;
 }
 /*e: function match */
 
 /*s: function subst */
 void
-subst(char *stem, char *template, char *dest, int dlen)
+subst(char *stem, char *template,   char *dest, int dlen)
 {
     Rune r;
     char *s, *e;
@@ -55,7 +57,7 @@ subst(char *stem, char *template, char *dest, int dlen)
                 template++;
             }
     }
-    *dest = 0;
+    *dest = '\0';
 }
 /*e: function subst */
 /*e: mk/match.c */

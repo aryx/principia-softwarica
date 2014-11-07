@@ -5,7 +5,7 @@
 void *
 Malloc(int n)
 {
-    register void *s;
+    void *s;
 
     s = malloc(n);
     if(!s) {

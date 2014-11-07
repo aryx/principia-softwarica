@@ -120,7 +120,7 @@ rcmp(Rule *r, char *target, Word *tail)
 /*e: function rcmp */
 
 /*s: function rulecnt */
-char *
+char*
 rulecnt(void)
 {
     char *s;

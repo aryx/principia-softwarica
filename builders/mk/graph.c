@@ -14,19 +14,22 @@ static void attribute(Node *);
 Node*
 graph(char *target)
 {
-    Node *node;
+    Node *root;
     char *cnt;
 
     cnt = rulecnt();
-    node = applyrules(target, cnt);
+    root = applyrules(target, cnt);
     free(cnt);
-    cyclechk(node);
-    node->flags |= PROBABLE;	/* make sure it doesn't get deleted */
-    vacuous(node);
-    ambiguous(node);
-    attribute(node);
 
-    return node;
+    cyclechk(root);
+
+    root->flags |= PROBABLE;	/* make sure it doesn't get deleted */
+    vacuous(root);
+    ambiguous(root);
+
+    attribute(root);
+
+    return root;
 }
 /*e: function graph */
 
@@ -34,15 +37,21 @@ graph(char *target)
 static Node*
 applyrules(char *target, char *cnt)
 {
+    /*s: [[applyrules]] locals */
     Symtab *sym;
     Node *node;
-    Rule *r;
     Arc head;
     Arc *a = &head;
+    /*x: [[applyrules]] locals */
+    Rule *r;
     Word *w;
-    char stem[NAMEBLOCK], buf[NAMEBLOCK];
+    /*x: [[applyrules]] locals */
+    char buf[NAMEBLOCK];
+    char stem[NAMEBLOCK];
+    /*x: [[applyrules]] locals */
     Resub rmatch[NREGEXP];
-
+    /*e: [[applyrules]] locals */
+    
     sym = symlook(target, S_NODE, 0);
     if(sym)
         return sym->u.ptr;
@@ -51,58 +60,90 @@ applyrules(char *target, char *cnt)
     node = newnode(target);
     head.n = nil;
     head.next = nil;
-    sym = symlook(target, S_TARGET, 0);
     memset((char*)rmatch, 0, sizeof(rmatch));
 
-    for(r = sym? sym->u.ptr : nil; r; r = r->chain){
+    // apply regular rules with target as a head
+    /*s: [[applyrules()]] apply regular rules */
+    sym = symlook(target, S_TARGET, 0);
+    for(r = (sym? sym->u.ptr : nil); r; r = r->chain){
+        /*s: [[applyrules()]] skip this rule and continue if some conditions */
         if(r->attr&META) continue;
-        if(strcmp(target, r->target)) continue;
-        if((!r->recipe || !*r->recipe) && (!r->tail || !r->tail->s || !*r->tail->s)) continue;	/* no effect; ignore */
+        if(strcmp(target, r->target)) continue; // how can happen??
+        if((!r->recipe || !*r->recipe)
+           && (!r->tail || !r->tail->s || !*r->tail->s)) 
+              continue;	/* no effect; ignore */
+        /*e: [[applyrules()]] skip this rule and continue if some conditions */
         if(cnt[r->rule] >= nreps) continue;
+
         cnt[r->rule]++;
         node->flags |= PROBABLE;
 
+        /*s: [[applyrules()]] if no prerequistes in rule r */
+        // no prerequistes, a leaf, still create fake arc
         if(!r->tail || !r->tail->s || !*r->tail->s) {
-            a->next = newarc((Node *)0, r, "", rmatch);
+            a->next = newarc((Node *)nil, r, "", rmatch);
             a = a->next;
-        } else
+        } 
+        /*e: [[applyrules()]] if no prerequistes in rule r */
+        else
             for(w = r->tail; w; w = w->next){
+                // recursive call!
                 a->next = newarc(applyrules(w->s, cnt), r, "", rmatch);
                 a = a->next;
         }
         cnt[r->rule]--;
         head.n = node;
     }
+    /*e: [[applyrules()]] apply regular rules */
+
+    // apply meta rules
+    /*s: [[applyrules()]] apply meta rules */
     for(r = metarules; r; r = r->next){
-        if((!r->recipe || !*r->recipe) && (!r->tail || !r->tail->s || !*r->tail->s)) continue;	/* no effect; ignore */
+        /*s: [[applyrules()]] skip this meta rule and continue if some conditions */
+        if((!r->recipe || !*r->recipe) 
+           && (!r->tail || !r->tail->s || !*r->tail->s)) 
+            continue;	/* no effect; ignore */
         if ((r->attr&NOVIRT) && a != &head && (a->r->attr&VIR))
             continue;
+        /*e: [[applyrules()]] skip this meta rule and continue if some conditions */
+        /*s: [[applyrules()]] if regexp rule then continue if some conditions */
         if(r->attr&REGEXP){
-            stem[0] = 0;
-            patrule = r;
+            stem[0] = '\0';
             memset((char*)rmatch, 0, sizeof(rmatch));
+            patrule = r;
             if(regexec(r->pat, node->name, rmatch, NREGEXP) == 0)
                 continue;
-        } else {
+        }
+        /*e: [[applyrules()]] if regexp rule then continue if some conditions */
+        else {
             if(!match(node->name, r->target, stem)) continue;
         }
         if(cnt[r->rule] >= nreps) continue;
+
         cnt[r->rule]++;
 
+        /*s: [[applyrules()]] if no prerequistes in meta rule r */
         if(!r->tail || !r->tail->s || !*r->tail->s) {
-            a->next = newarc((Node *)0, r, stem, rmatch);
+            a->next = newarc((Node *)nil, r, stem, rmatch);
             a = a->next;
-        } else
+        } 
+        /*e: [[applyrules()]] if no prerequistes in meta rule r */
+        else
             for(w = r->tail; w; w = w->next){
+                /*s: [[applyrules()]] if regexp rule, adjust buf and rmatch */
                 if(r->attr&REGEXP)
                     regsub(w->s, buf, sizeof(buf), rmatch, NREGEXP);
+                /*e: [[applyrules()]] if regexp rule, adjust buf and rmatch */
                 else
                     subst(stem, w->s, buf, sizeof(buf));
+                // recursive call!
                 a->next = newarc(applyrules(buf, cnt), r, stem, rmatch);
                 a = a->next;
             }
         cnt[r->rule]--;
     }
+    /*e: [[applyrules()]] apply meta rules */
+
     a->next = node->prereqs;
     node->prereqs = head.next;
     return node;
@@ -157,10 +198,10 @@ vacuous(Node *node)
 /*e: function vacuous */
 
 /*s: constructor newnode */
-static Node *
+static Node*
 newnode(char *name)
 {
-    register Node *node;
+    Node *node;
 
     node = (Node *)Malloc(sizeof(Node));
     symlook(name, S_NODE, (void *)node);
@@ -270,7 +311,7 @@ ambiguous(Node *n)
 static void
 attribute(Node *n)
 {
-    register Arc *a;
+    Arc *a;
 
     for(a = n->prereqs; a; a = a->next){
         if(a->r->attr&VIR)

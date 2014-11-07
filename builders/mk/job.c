@@ -5,7 +5,7 @@
 Job*
 newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
 {
-    register Job *j;
+    Job *j;
 
     j = (Job *)Malloc(sizeof(Job));
     j->r = r;

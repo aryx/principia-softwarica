@@ -666,7 +666,7 @@ Rule *metarules;
 
 % used in addrule()
 <<enum sxxx cases>>=
-S_TARGET,		/* target -> rule */
+S_TARGET,		/* target -> rule */ // actually rules
 @
 
 
@@ -820,6 +820,8 @@ struct Node
     <<[[Node]] extra fields>>
 };
 @
+% the flags is often an inline of the union of the flags of the
+% rules linking to the prerequistes nodes
 
 <<enum sxxx cases>>=
 S_NODE,		/* target name -> node */
@@ -827,10 +829,10 @@ S_NODE,		/* target name -> node */
 
 % dtor = ?
 <<constructor newnode>>=
-static Node *
+static Node*
 newnode(char *name)
 {
-    register Node *node;
+    Node *node;
 
     node = (Node *)Malloc(sizeof(Node));
     symlook(name, S_NODE, (void *)node);
@@ -858,8 +860,6 @@ struct Arc
     struct Node *n;
     // ref<Rule>, rule to generate the target node from the dependent node
     Rule *r;
-    //? enum<rule_flag>?
-    short flag;
 
     <<[[Arc]] other fields>>
     
@@ -873,7 +873,6 @@ struct Arc
 // list<ref_own<arc> (head = Node.prereq)
 struct Arc	*next;
 @
-
 
 
 
@@ -912,12 +911,6 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 
 
 
-<<constant TOGO>>=
-/* Arc.flag */
-#define		TOGO		1
-@
-
-
 
 <<enum node_flag>>=
 enum node_flag {
@@ -928,13 +921,9 @@ enum node_flag {
 
 %XXXXXXX?
 <<enum node_flag cases>>=
-VIRTUAL    = 0x0001,
 CYCLE      = 0x0002,
 READY      = 0x0004,
-PROBABLE   = 0x0100,
 VACUOUS    = 0x0200,
-NORECIPE   = 0x0400,
-DELETE     = 0x0800,
 @
 
 
@@ -1019,7 +1008,7 @@ struct Job
 Job*
 newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
 {
-    register Job *j;
+    Job *j;
 
     j = (Job *)Malloc(sizeof(Job));
     j->r = r;
@@ -1185,9 +1174,8 @@ if(tfd >= 0){
 %old: seek() used to be LSEEK() a macro expanding ultimately to seek
 
 
-\section{Parsing [[mkfile]], and [[mk -f]]}
+\section{Parsing [[mkfile]], and [[mk -f]]{\em file}}
 
-% mk -f
 <<[[main()]] locals>>=
 char *files[256], **f = files;
 char **ff;
@@ -1512,7 +1500,8 @@ for(a = node->prereqs; a; a = a->next)
         }
     }
 @
-% when can have no node attached to an arc????
+% when can happen have no node attached to an arc?
+% when fake arc, see applyrules
 
 
 
@@ -2169,6 +2158,33 @@ out:
 
 \chapter{Building the Dependency Graph}
 
+
+% constructor?
+<<function graph>>=
+Node*
+graph(char *target)
+{
+    Node *root;
+    char *cnt;
+
+    cnt = rulecnt();
+    root = applyrules(target, cnt);
+    free(cnt);
+
+    cyclechk(root);
+
+    node->flags |= PROBABLE;	/* make sure it doesn't get deleted */
+    vacuous(root);
+    ambiguous(root);
+
+    attribute(root);
+
+    return node;
+}
+@
+%pad: node -> root, clearer I think
+
+
 % for GC? to identify unused rules?
 <<[[Rule]] other fields>>=
 int 		rule;		/* rule number */
@@ -2179,31 +2195,9 @@ int 		rule;		/* rule number */
 static int nrules = 0;
 @
 
-
-% constructor?
-<<function graph>>=
-Node*
-graph(char *target)
-{
-    Node *node;
-    char *cnt;
-
-    cnt = rulecnt();
-    node = applyrules(target, cnt);
-    free(cnt);
-    cyclechk(node);
-    node->flags |= PROBABLE;	/* make sure it doesn't get deleted */
-    vacuous(node);
-    ambiguous(node);
-    attribute(node);
-
-    return node;
-}
-@
-
-% ???
+% statistic on how much a rule was fired? for infinite detection?
 <<function rulecnt>>=
-char *
+char*
 rulecnt(void)
 {
     char *s;
@@ -2215,42 +2209,23 @@ rulecnt(void)
 @
 
 
-<<function attribute>>=
-static void
-attribute(Node *n)
-{
-    register Arc *a;
 
-    for(a = n->prereqs; a; a = a->next){
-        if(a->r->attr&VIR)
-            n->flags |= VIRTUAL;
-        if(a->r->attr&NOREC)
-            n->flags |= NORECIPE;
-        if(a->r->attr&DEL)
-            n->flags |= DELETE;
-        if(a->n)
-            attribute(a->n);
-    }
-    if(n->flags&VIRTUAL)
-        n->time = 0;
-}
+
+
+<<[[applyrules]] locals>>=
+Symtab *sym;
+Node *node;
+Arc head;
+Arc *a = &head;
 @
 
-\section{Finding the rules for a target}
 
 <<function applyrules>>=
 static Node*
 applyrules(char *target, char *cnt)
 {
-    Symtab *sym;
-    Node *node;
-    Rule *r;
-    Arc head;
-    Arc *a = &head;
-    Word *w;
-    char stem[NAMEBLOCK], buf[NAMEBLOCK];
-    Resub rmatch[NREGEXP];
-
+    <<[[applyrules]] locals>>
+    
     sym = symlook(target, S_NODE, 0);
     if(sym)
         return sym->u.ptr;
@@ -2259,63 +2234,21 @@ applyrules(char *target, char *cnt)
     node = newnode(target);
     head.n = nil;
     head.next = nil;
-    sym = symlook(target, S_TARGET, 0);
     memset((char*)rmatch, 0, sizeof(rmatch));
 
-    for(r = sym? sym->u.ptr : nil; r; r = r->chain){
-        if(r->attr&META) continue;
-        if(strcmp(target, r->target)) continue;
-        if((!r->recipe || !*r->recipe) && (!r->tail || !r->tail->s || !*r->tail->s)) continue;	/* no effect; ignore */
-        if(cnt[r->rule] >= nreps) continue;
-        cnt[r->rule]++;
-        node->flags |= PROBABLE;
+    // apply regular rules with target as a head
+    <<[[applyrules()]] apply regular rules>>
 
-        if(!r->tail || !r->tail->s || !*r->tail->s) {
-            a->next = newarc((Node *)0, r, "", rmatch);
-            a = a->next;
-        } else
-            for(w = r->tail; w; w = w->next){
-                a->next = newarc(applyrules(w->s, cnt), r, "", rmatch);
-                a = a->next;
-        }
-        cnt[r->rule]--;
-        head.n = node;
-    }
-    for(r = metarules; r; r = r->next){
-        if((!r->recipe || !*r->recipe) && (!r->tail || !r->tail->s || !*r->tail->s)) continue;	/* no effect; ignore */
-        if ((r->attr&NOVIRT) && a != &head && (a->r->attr&VIR))
-            continue;
-        if(r->attr&REGEXP){
-            stem[0] = 0;
-            patrule = r;
-            memset((char*)rmatch, 0, sizeof(rmatch));
-            if(regexec(r->pat, node->name, rmatch, NREGEXP) == 0)
-                continue;
-        } else {
-            if(!match(node->name, r->target, stem)) continue;
-        }
-        if(cnt[r->rule] >= nreps) continue;
-        cnt[r->rule]++;
+    // apply meta rules
+    <<[[applyrules()]] apply meta rules>>
 
-        if(!r->tail || !r->tail->s || !*r->tail->s) {
-            a->next = newarc((Node *)0, r, stem, rmatch);
-            a = a->next;
-        } else
-            for(w = r->tail; w; w = w->next){
-                if(r->attr&REGEXP)
-                    regsub(w->s, buf, sizeof(buf), rmatch, NREGEXP);
-                else
-                    subst(stem, w->s, buf, sizeof(buf));
-                a->next = newarc(applyrules(buf, cnt), r, stem, rmatch);
-                a = a->next;
-            }
-        cnt[r->rule]--;
-    }
     a->next = node->prereqs;
     node->prereqs = head.next;
     return node;
 }
 @
+% node->prereqs should be nil no?
+
 %old: in comment in the original code!
 %/*	print("applyrules(%lux='%s')\n", target, target);/**/
 %/*		if(r->attr&VIR)
@@ -2334,23 +2267,205 @@ applyrules(char *target, char *cnt)
 % */
 
 
-<<function togo>>=
-static void
-togo(Node *node)
-{
-    Arc *la, *a;
+\section{Finding the rules for a target}
 
-    /* delete them now */
-    la = 0;
-    for(a = node->prereqs; a; la = a, a = a->next)
-        if(a->flag&TOGO){
-            if(a == node->prereqs)
-                node->prereqs = a->next;
-            else
-                la->next = a->next, a = la;
-        }
+% built index while parsing in hash
+
+<<[[applyrules]] locals>>=
+Rule *r;
+Word *w;
+@
+% rename w to prerequiste?
+
+<<[[applyrules()]] apply regular rules>>=
+sym = symlook(target, S_TARGET, 0);
+for(r = (sym? sym->u.ptr : nil); r; r = r->chain){
+    <<[[applyrules()]] skip this rule and continue if some conditions>>
+    if(cnt[r->rule] >= nreps) continue;
+
+    cnt[r->rule]++;
+    node->flags |= PROBABLE;
+
+    <<[[applyrules()]] if no prerequistes in rule r>>
+    else
+        for(w = r->tail; w; w = w->next){
+            // recursive call!
+            a->next = newarc(applyrules(w->s, cnt), r, "", rmatch);
+            a = a->next;
+    }
+    cnt[r->rule]--;
+    head.n = node;
 }
 @
+
+
+<<[[applyrules()]] skip this rule and continue if some conditions>>=
+if(r->attr&META) continue;
+if(strcmp(target, r->target)) continue; // how can happen??
+if((!r->recipe || !*r->recipe)
+   && (!r->tail || !r->tail->s || !*r->tail->s)) 
+      continue;	/* no effect; ignore */
+@
+%TODO safe to continue when no recipe? should still have an arc
+% so than can check if outofdate no?
+
+<<[[applyrules()]] if no prerequistes in rule r>>=
+// no prerequistes, a leaf, still create fake arc
+if(!r->tail || !r->tail->s || !*r->tail->s) {
+    a->next = newarc((Node *)nil, r, "", rmatch);
+    a = a->next;
+} 
+@
+% stem is "" here
+% why need that? to at least have something propagate in attribute()?
+
+\section{Finding metarules and substituting stem}
+
+<<[[applyrules]] locals>>=
+char buf[NAMEBLOCK];
+char stem[NAMEBLOCK];
+@
+
+
+<<[[applyrules()]] apply meta rules>>=
+for(r = metarules; r; r = r->next){
+    <<[[applyrules()]] skip this meta rule and continue if some conditions>>
+    <<[[applyrules()]] if regexp rule then continue if some conditions>>
+    else {
+        if(!match(node->name, r->target, stem)) continue;
+    }
+    if(cnt[r->rule] >= nreps) continue;
+
+    cnt[r->rule]++;
+
+    <<[[applyrules()]] if no prerequistes in meta rule r>>
+    else
+        for(w = r->tail; w; w = w->next){
+            <<[[applyrules()]] if regexp rule, adjust buf and rmatch>>
+            else
+                subst(stem, w->s, buf, sizeof(buf));
+            // recursive call!
+            a->next = newarc(applyrules(buf, cnt), r, stem, rmatch);
+            a = a->next;
+        }
+    cnt[r->rule]--;
+}
+@
+
+<<[[applyrules()]] skip this meta rule and continue if some conditions>>=
+if((!r->recipe || !*r->recipe) 
+   && (!r->tail || !r->tail->s || !*r->tail->s)) 
+    continue;	/* no effect; ignore */
+if ((r->attr&NOVIRT) && a != &head && (a->r->attr&VIR))
+    continue;
+@
+
+<<[[applyrules()]] if no prerequistes in meta rule r>>=
+if(!r->tail || !r->tail->s || !*r->tail->s) {
+    a->next = newarc((Node *)nil, r, stem, rmatch);
+    a = a->next;
+} 
+@
+
+<<function match>>=
+bool
+match(char *name, char *template, char *stem)
+{
+    Rune r;
+    int n;
+
+    while(*name && *template){
+        n = chartorune(&r, template);
+        if (PERCENT(r))
+            break;
+        while (n--)
+            if(*name++ != *template++)
+                return false;
+    }
+    if(!PERCENT(*template))
+        return false;
+    n = strlen(name)-strlen(template+1);
+    if (n < 0)
+        return false;
+    if (strcmp(template+1, name+n))
+        return false;
+
+    strncpy(stem, name, n);
+    stem[n] = '\0';
+
+    if(*template == '&')
+        return !charin(stem, "./");
+
+    return true;
+}
+@
+
+<<function subst>>=
+void
+subst(char *stem, char *template,   char *dest, int dlen)
+{
+    Rune r;
+    char *s, *e;
+    int n;
+
+    e = dest+dlen-1;
+    while(*template){
+        n = chartorune(&r, template);
+        if (PERCENT(r)) {
+            template += n;
+            for (s = stem; *s; s++)
+                if(dest < e)
+                    *dest++ = *s;
+        } else
+            while (n--){
+                if(dest < e)
+                    *dest++ = *template;
+                template++;
+            }
+    }
+    *dest = '\0';
+}
+@
+
+
+
+\section{Cycle detection}
+
+<<function cyclechk>>=
+static void
+cyclechk(Node *n)
+{
+    Arc *a;
+
+    if((n->flags&CYCLE) && n->prereqs){
+        fprint(STDERR, "mk: cycle in graph detected at target %s\n", n->name);
+        Exit();
+    }
+    n->flags |= CYCLE;
+    for(a = n->prereqs; a; a = a->next)
+        if(a->n)
+            cyclechk(a->n);
+    n->flags &= ~CYCLE;
+}
+@
+
+\section{Vacuous rule detection}
+
+<<enum node_flag cases>>=
+PROBABLE   = 0x0100,
+@
+
+<<[[Arc]] other fields>>=
+// bool (TOGO)
+short flag;
+@
+
+<<constant TOGO>>=
+/* Arc.flag */
+#define		TOGO		true
+@
+
+
 
 <<function vacuous>>=
 static int
@@ -2381,86 +2496,21 @@ vacuous(Node *node)
 }
 @
 
-
-\section{Finding metarules and substituting stem}
-
-<<function match>>=
-bool
-match(char *name, char *template, char *stem)
-{
-    Rune r;
-    int n;
-
-    while(*name && *template){
-        n = chartorune(&r, template);
-        if (PERCENT(r))
-            break;
-        while (n--)
-            if(*name++ != *template++)
-                return false;
-    }
-    if(!PERCENT(*template))
-        return false;
-    n = strlen(name)-strlen(template+1);
-    if (n < 0)
-        return false;
-    if (strcmp(template+1, name+n))
-        return false;
-
-    strncpy(stem, name, n);
-    stem[n] = '\0';
-    if(*template == '&')
-        return !charin(stem, "./");
-    return true;
-}
-@
-
-<<function subst>>=
-void
-subst(char *stem, char *template, char *dest, int dlen)
-{
-    Rune r;
-    char *s, *e;
-    int n;
-
-    e = dest+dlen-1;
-    while(*template){
-        n = chartorune(&r, template);
-        if (PERCENT(r)) {
-            template += n;
-            for (s = stem; *s; s++)
-                if(dest < e)
-                    *dest++ = *s;
-        } else
-            while (n--){
-                if(dest < e)
-                    *dest++ = *template;
-                template++;
-            }
-    }
-    *dest = 0;
-}
-@
-
-
-
-\section{Cycle detection}
-
-<<function cyclechk>>=
+<<function togo>>=
 static void
-cyclechk(Node *n)
+togo(Node *node)
 {
-    Arc *a;
+    Arc *la, *a;
 
-    if((n->flags&CYCLE) && n->prereqs){
-        fprint(STDERR, "mk: cycle in graph detected at target %s\n", n->name);
-        Exit();
-    }
-    n->flags |= CYCLE;
-    for(a = n->prereqs; a; a = a->next)
-        if(a->n)
-            cyclechk(a->n);
-    n->flags &= ~CYCLE;
+    /* delete them now */
+    la = 0;
+    for(a = node->prereqs; a; la = a, a = a->next)
+        if(a->flag&TOGO){
+            if(a == node->prereqs)
+                node->prereqs = a->next;
+            else
+                la->next = a->next, a = la;
+        }
 }
 @
 
@@ -2553,6 +2603,37 @@ nrep(void)
     if(nreps < 1)
         nreps = 1;
     <<[[nrep()]] if DEBUG(D_GRAPH)>>
+}
+@
+
+
+\section{Final touch}
+
+<<enum node_flag cases>>=
+VIRTUAL    = 0x0001,
+NORECIPE   = 0x0400,
+DELETE     = 0x0800,
+@
+
+% propagate from rule to node
+<<function attribute>>=
+static void
+attribute(Node *n)
+{
+    Arc *a;
+
+    for(a = n->prereqs; a; a = a->next){
+        if(a->r->attr&VIR)
+            n->flags |= VIRTUAL;
+        if(a->r->attr&NOREC)
+            n->flags |= NORECIPE;
+        if(a->r->attr&DEL)
+            n->flags |= DELETE;
+        if(a->n)
+            attribute(a->n);
+    }
+    if(n->flags&VIRTUAL)
+        n->time = 0;
 }
 @
 
@@ -4057,6 +4138,25 @@ for(i = 0; *p; i++, p++){
 }
 @
 
+<<[[applyrules]] locals>>=
+Resub rmatch[NREGEXP];
+@
+
+<<[[applyrules()]] if regexp rule then continue if some conditions>>=
+if(r->attr&REGEXP){
+    stem[0] = '\0';
+    memset((char*)rmatch, 0, sizeof(rmatch));
+    patrule = r;
+    if(regexec(r->pat, node->name, rmatch, NREGEXP) == 0)
+        continue;
+}
+@
+
+<<[[applyrules()]] if regexp rule, adjust buf and rmatch>>=
+if(r->attr&REGEXP)
+    regsub(w->s, buf, sizeof(buf), rmatch, NREGEXP);
+@
+
 \section{Multiple targets}
 
 % a few places where use Word* targets
@@ -4897,7 +4997,7 @@ case 'k':
 void *
 Malloc(int n)
 {
-    register void *s;
+    void *s;
 
     s = malloc(n);
     if(!s) {
@@ -4907,6 +5007,7 @@ Malloc(int n)
     return s;
 }
 @
+%old: used to have 'register void *s', but 8c does not use it I think
 
 <<function Realloc>>=
 void *

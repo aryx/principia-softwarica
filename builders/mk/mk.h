@@ -118,12 +118,13 @@ struct Arc
     struct Node *n;
     // ref<Rule>, rule to generate the target node from the dependent node
     Rule *r;
-    //? enum<rule_flag>?
-    short flag;
 
     /*s: [[Arc]] other fields */
     // what will replace the %
     char		*stem;
+    /*x: [[Arc]] other fields */
+    // bool (TOGO)
+    short flag;
     /*x: [[Arc]] other fields */
     char		*match[NREGEXP];
     /*x: [[Arc]] other fields */
@@ -140,7 +141,7 @@ struct Arc
 
 /*s: constant TOGO */
 /* Arc.flag */
-#define		TOGO		1
+#define		TOGO		true
 /*e: constant TOGO */
 
 /*s: struct Node */
@@ -168,17 +169,19 @@ struct Node
 /*s: enum node_flag */
 enum node_flag {
     /*s: enum node_flag cases */
-    VIRTUAL    = 0x0001,
     CYCLE      = 0x0002,
     READY      = 0x0004,
-    PROBABLE   = 0x0100,
     VACUOUS    = 0x0200,
-    NORECIPE   = 0x0400,
-    DELETE     = 0x0800,
     /*x: enum node_flag cases */
     NOTMADE    = 0x0020,
     BEINGMADE  = 0x0040,
     MADE       = 0x0080,
+    /*x: enum node_flag cases */
+    PROBABLE   = 0x0100,
+    /*x: enum node_flag cases */
+    VIRTUAL    = 0x0001,
+    NORECIPE   = 0x0400,
+    DELETE     = 0x0800,
     /*x: enum node_flag cases */
     NOMINUSE   = 0x1000,
     /*x: enum node_flag cases */
@@ -252,7 +255,7 @@ enum sxxx {
     /*x: enum sxxx cases */
     S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
     /*x: enum sxxx cases */
-    S_TARGET,		/* target -> rule */
+    S_TARGET,		/* target -> rule */ // actually rules
     /*x: enum sxxx cases */
     S_NODE,		/* target name -> node */
     /*x: enum sxxx cases */
