@@ -663,6 +663,8 @@ struct Qid {
 	uchar	type;
 };
 
+// TODO should be renamed DirEntry really
+// a similar structure is defined in the kernel!
 struct Dir {
 	/* system-modified data */
 	ushort	type;	/* server type */
@@ -693,7 +695,8 @@ struct IOchunk {
 
 extern	void	_exits(char*);
 
-// syscalls
+// syscalls or small helpers around syscalls
+// TODO separate them actually
 extern	void	abort(void);
 extern	int		access(char*, int);
 extern	long	alarm(ulong);
