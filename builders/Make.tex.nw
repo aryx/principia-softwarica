@@ -2194,6 +2194,75 @@ subst(char *stem, char *template,   char *dest, int dlen)
 
 
 
+\section{[[timeof()]]}
+% for the leaves!
+
+<<enum sxxx cases>>=
+S_TIME,		/* file -> time */
+@
+
+% newnode() -> <> -> mkmktime -> bulktime
+%                             -> dirstat (libc)
+
+% multiple levels of cache ... first in cache, 
+% then bulk so will get more hit cache.
+% force is here to say if want to bypass cache and redo
+% the actual read! for instance after the recipe is done
+% we want to update the time of the file and disable the cache!
+
+<<function timeof>>=
+ulong
+timeof(char *name, bool force)
+{
+    Symtab *sym;
+    ulong t;
+
+    <<[[timeof()]] if name archive member>>
+
+    if(force)
+        return mkmtime(name, true);
+
+    sym = symlook(name, S_TIME, nil);
+    if (sym)
+        return sym->u.value;		/* uggh */
+
+    t = mkmtime(name, false);
+    if(t == 0)
+        return 0;
+
+    symlook(name, S_TIME, (void*)t);		/* install time in cache */
+    return t;
+}
+@
+%old: ulong mtime(char *name) {  return mkmtime(name, true);}
+%but simpler to remove, refactor caller sites
+
+<<function mkmtime>>=
+ulong
+mkmtime(char *name, bool force)
+{
+    Dir *d;
+    char buf[4096];
+    ulong t;
+    <<[[mkmtime]] locals>>
+
+    strecpy(buf, buf + sizeof buf - 1, name);
+    cleanname(buf);
+    name = buf;
+
+    <<[[mkmtime()]] bulk dir optimisation>>
+
+    if((d = dirstat(name)) == nil)
+        return 0;
+
+    t = d->mtime;
+    free(d);
+
+    return t;
+}
+@
+
+
 \section{Cycle detection}
 
 <<enum node_flag cases>>=
@@ -2427,125 +2496,6 @@ attribute(Node *n)
 }
 @
 
-
-
-\section{[[timeof()]]}
-% for the leaves!
-
-<<enum sxxx cases>>=
-S_TIME,		/* file -> time */
-@
-
-% newnode() -> <> -> mkmktime -> bulktime
-%                             -> dirstat
-
-<<function timeof>>=
-ulong
-timeof(char *name, bool force)
-{
-    Symtab *sym;
-    ulong t;
-
-    if(utfrune(name, '('))
-        return atimeof(force, name);		/* archive */
-
-    if(force)
-        return mkmtime(name, true);
-
-    sym = symlook(name, S_TIME, nil);
-    if (sym)
-        return sym->u.value;		/* uggh */
-
-    t = mkmtime(name, false);
-    if(t == 0)
-        return 0;
-
-    symlook(name, S_TIME, (void*)t);		/* install time in cache */
-    return t;
-}
-@
-%old: ulong mtime(char *name) {  return mkmtime(name, true);}
-%but simpler to remove, refactor caller sites
-
-
-
-
-<<function mkmtime>>=
-ulong
-mkmtime(char *name, bool force)
-{
-    Dir *d;
-    char *s, *ss, carry;
-    ulong t;
-    Symtab *sym;
-    char buf[4096];
-
-    strecpy(buf, buf + sizeof buf - 1, name);
-    cleanname(buf);
-    name = buf;
-
-    s = utfrrune(name, '/');
-    if(s == name)
-        s++;
-    if(s){
-        ss = name;
-        carry = *s;
-        *s = '\0';
-    }else{
-        ss = nil;
-        carry = 0;
-    }
-    bulkmtime(ss);
-    if(carry)
-        *s = carry;
-
-    if(!force){
-        sym = symlook(name, S_TIME, 0);
-        if(sym)
-            return sym->u.value;
-        return 0;
-    }
-    if((d = dirstat(name)) == nil)
-        return 0;
-
-    t = d->mtime;
-    free(d);
-
-    return t;
-}
-@
-
-
-<<enum sxxx cases>>=
-S_BULKED,	/* we have bulked this dir */
-@
-
-<<function bulkmtime>>=
-void
-bulkmtime(char *dir)
-{
-    char buf[4096];
-    char *ss, *s, *sym;
-
-    if(dir){
-        sym = dir;
-        s = dir;
-        if(strcmp(dir, "/") == 0)
-            strecpy(buf, buf + sizeof buf - 1, dir);
-        else
-            snprint(buf, sizeof buf, "%s/", dir);
-    }else{
-        s = ".";
-        sym = "";
-        buf[0] = 0;
-    }
-    if(symlook(sym, S_BULKED, 0))
-        return;
-    ss = strdup(sym);
-    symlook(ss, S_BULKED, (void*)ss);
-    dirtime(s, buf);
-}
-@
 
 
 \chapter{Checking Out of Date Dependencies}
@@ -4279,6 +4229,11 @@ S_AGG,		/* aggregate -> time */
 @
 
 
+<<[[timeof()]] if name archive member>>=
+if(utfrune(name, '('))
+    return atimeof(force, name);		/* archive */
+@
+
 <<function atimeof>>=
 ulong
 atimeof(int force, char *name)
@@ -4734,6 +4689,109 @@ pcmp(char *prog, char *p, char *q)
     return (pid? 2:1);
 }
 @
+
+\section{Bulk time optimisation}
+
+<<[[mkmtime]] locals>>=
+//char *s, *ss;
+//char carry;
+//Symtab *sym;
+@
+
+<<[[mkmtime()]] bulk dir optimisation>>=
+USED(force);
+//TODO    s = utfrrune(name, '/');
+//TODO    if(s == name)
+//TODO        s++;
+//TODO    if(s){
+//TODO        ss = name;
+//TODO        carry = *s;
+//TODO        *s = '\0';
+//TODO    }else{
+//TODO        ss = nil;
+//TODO        carry = 0;
+//TODO    }
+//TODO    if(carry)
+//TODO        *s = carry;
+//TODO
+//TODO bulkmtime(ss);
+//TODO if(!force){
+//TODO     sym = symlook(name, S_TIME, 0);
+//TODO     if(sym)
+//TODO         return sym->u.value;
+//TODO     return 0;
+//TODO }
+@
+% subtle: this opti has subtle implications with weird filesystem like VFAT!!
+% With this optimisation mk will not be able to run correctly
+% in simple projects like tests/8c/! It's because the directory
+% contains HELLOC.C not helloc.c and so even if dirstat("helloc.c")
+% will work, once you read the directory you will create an
+% entry for HELLOC.C in S_TIME but not for helloc.c and then when asking
+% for helloc.c you will look in the cache and see nothing and so
+% return 0.
+
+<<enum sxxx cases>>=
+S_BULKED,	/* we have bulked this dir */
+@
+
+<<function bulkmtime>>=
+void
+bulkmtime(char *dir)
+{
+    char buf[4096];
+    char *ss, *s, *sym;
+
+    if(dir){
+        sym = dir;
+        s = dir;
+        if(strcmp(dir, "/") == 0)
+            strecpy(buf, buf + sizeof buf - 1, dir);
+        else
+            snprint(buf, sizeof buf, "%s/", dir);
+    }else{
+        s = ".";
+        sym = "";
+        buf[0] = 0;
+    }
+    if(symlook(sym, S_BULKED, 0))
+        return;
+    ss = strdup(sym);
+    symlook(ss, S_BULKED, (void*)ss);
+    dirtime(s, buf);
+}
+@
+
+<<function dirtime>>=
+void
+dirtime(char *dir, char *path)
+{
+    int i, fd, n;
+    ulong mtime;
+    Dir *d;
+    char buf[4096];
+
+    fd = open(dir, OREAD);
+    if(fd >= 0){
+        while((n = dirread(fd, &d)) > 0){
+            for(i=0; i<n; i++){
+                mtime = d[i].mtime;
+                /* defensive driving: this does happen */
+                if(mtime == 0)
+                    mtime = 1;
+                snprint(buf, sizeof buf, "%s%s", path,
+                    d[i].name);
+                if(symlook(buf, S_TIME, 0) == nil)
+                    symlook(strdup(buf), S_TIME,
+                        (void*)mtime)->u.value = mtime;
+            }
+            free(d);
+        }
+        close(fd);
+    }
+}
+@
+
 
 
 \chapter{Conclusion}

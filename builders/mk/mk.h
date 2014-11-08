@@ -267,13 +267,13 @@ enum sxxx {
     /*x: enum sxxx cases */
     S_TIME,		/* file -> time */
     /*x: enum sxxx cases */
-    S_BULKED,	/* we have bulked this dir */
-    /*x: enum sxxx cases */
     S_AGG,		/* aggregate -> time */
     /*x: enum sxxx cases */
     S_BITCH,	/* bitched about aggregate not there */
     /*x: enum sxxx cases */
     S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
+    /*x: enum sxxx cases */
+    S_BULKED,	/* we have bulked this dir */
     /*x: enum sxxx cases */
     S_EXPORTED,	/* var -> current exported value */
     /*e: enum sxxx cases */

@@ -435,36 +435,43 @@ ulong
 mkmtime(char *name, bool force)
 {
     Dir *d;
-    char *s, *ss, carry;
-    ulong t;
-    Symtab *sym;
     char buf[4096];
+    ulong t;
+    /*s: [[mkmtime]] locals */
+    //char *s, *ss;
+    //char carry;
+    //Symtab *sym;
+    /*e: [[mkmtime]] locals */
 
     strecpy(buf, buf + sizeof buf - 1, name);
     cleanname(buf);
     name = buf;
 
-    s = utfrrune(name, '/');
-    if(s == name)
-        s++;
-    if(s){
-        ss = name;
-        carry = *s;
-        *s = '\0';
-    }else{
-        ss = nil;
-        carry = 0;
-    }
-    bulkmtime(ss);
-    if(carry)
-        *s = carry;
+    /*s: [[mkmtime()]] bulk dir optimisation */
+    USED(force);
+    //TODO    s = utfrrune(name, '/');
+    //TODO    if(s == name)
+    //TODO        s++;
+    //TODO    if(s){
+    //TODO        ss = name;
+    //TODO        carry = *s;
+    //TODO        *s = '\0';
+    //TODO    }else{
+    //TODO        ss = nil;
+    //TODO        carry = 0;
+    //TODO    }
+    //TODO    if(carry)
+    //TODO        *s = carry;
+    //TODO
+    //TODO bulkmtime(ss);
+    //TODO if(!force){
+    //TODO     sym = symlook(name, S_TIME, 0);
+    //TODO     if(sym)
+    //TODO         return sym->u.value;
+    //TODO     return 0;
+    //TODO }
+    /*e: [[mkmtime()]] bulk dir optimisation */
 
-    if(!force){
-        sym = symlook(name, S_TIME, 0);
-        if(sym)
-            return sym->u.value;
-        return 0;
-    }
     if((d = dirstat(name)) == nil)
         return 0;
 

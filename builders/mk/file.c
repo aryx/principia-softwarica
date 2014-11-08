@@ -10,8 +10,10 @@ timeof(char *name, bool force)
     Symtab *sym;
     ulong t;
 
+    /*s: [[timeof()]] if name archive member */
     if(utfrune(name, '('))
         return atimeof(force, name);		/* archive */
+    /*e: [[timeof()]] if name archive member */
 
     if(force)
         return mkmtime(name, true);
