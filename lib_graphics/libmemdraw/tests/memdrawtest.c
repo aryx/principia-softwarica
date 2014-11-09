@@ -28,7 +28,9 @@ ulong rgbatopix(uchar, uchar, uchar, uchar);
 
 static char *dchan, *schan, *mchan;
 /*s: global drawdebug (lib_graphics/libmemdraw/tests/memdrawtest.c) */
-static int drawdebug=0;
+//old: used to have static in front, but at some point I got
+//some errors (I probably introduced some regressions in 8c of kencc)
+int drawdebug=0;
 /*e: global drawdebug (lib_graphics/libmemdraw/tests/memdrawtest.c) */
 /*s: global seed */
 static int	seed;
