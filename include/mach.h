@@ -3,7 +3,7 @@
  *	Architecture-dependent application data
  */
 #include "a.out.h"
-//TODO: include "elf.h" too?
+//TODO: include "elf.h" too? and macho.h?
 #pragma	src	"/sys/src/libmach"
 #pragma	lib	"libmach.a"
 

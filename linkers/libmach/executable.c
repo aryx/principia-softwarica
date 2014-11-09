@@ -40,7 +40,6 @@ static	uvlong	_round(uvlong, ulong);
 /*
  *	definition of per-executable file type structures
  */
-
 typedef struct Exectable{
     long	magic;			/* big-endian magic number of file */
     char	*name;			/* executable identifier */

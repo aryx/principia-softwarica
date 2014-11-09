@@ -87,6 +87,7 @@ execinit(void)
   // for 8c, 8a, 8l
   putenv("objtype", "386");
 
+  // should normally run /root/init, but prefer to simply run rc for now
   run("/bin/rc", nil);
 }
 
