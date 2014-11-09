@@ -19,8 +19,8 @@ struct machtab
 };
 /*e: struct machtab */
 
-extern	Mach		mmips, mi386, marm;
-extern	Machdata	mipsmach, i386mach, armmach;
+extern	Mach		mi386, marm;
+extern	Machdata	i386mach, armmach;
 
 /*s: global machines */
 /*
@@ -81,8 +81,8 @@ machbyname(char *name)
 
     if (!name) {
         asstype = AARM;
-        machdata = &mipsmach;
-        mach = &mmips;
+        machdata = &armmach;
+        mach = &marm;
         return 1;
     }
     for (mp = machines; mp->name; mp++){

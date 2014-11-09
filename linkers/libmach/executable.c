@@ -27,9 +27,11 @@ typedef struct {
 
 static	int	common(int, Fhdr*, ExecHdr*);
 static	int	commonllp64(int, Fhdr*, ExecHdr*);
+
 static	int	adotout(int, Fhdr*, ExecHdr*);
 static	int	elfdotout(int, Fhdr*, ExecHdr*);
 static	int	armdotout(int, Fhdr*, ExecHdr*);
+
 static	void	setsym(Fhdr*, long, long, long, vlong);
 static	void	setdata(Fhdr*, uvlong, long, vlong, long);
 static	void	settext(Fhdr*, uvlong, uvlong, long, vlong);
@@ -278,18 +280,6 @@ commonllp64(int, Fhdr *fp, ExecHdr *hp)
     return 1;
 }
 /*e: function commonllp64 */
-
-/*s: function mipsboot */
-/*e: function mipsboot */
-
-/*s: function mips4kboot */
-/*e: function mips4kboot */
-
-/*s: function sparcboot */
-/*e: function sparcboot */
-
-/*s: function nextboot */
-/*e: function nextboot */
 
 /*s: function elf64dotout */
 /*
