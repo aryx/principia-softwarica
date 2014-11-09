@@ -4,6 +4,7 @@ typedef	unsigned short	ushort;
 typedef	unsigned char	uchar;
 typedef	unsigned long	ulong;
 typedef	unsigned int	uint;
+
 typedef	signed char	schar;
 typedef	long long	vlong;
 typedef	unsigned long long uvlong;
@@ -15,7 +16,9 @@ typedef long	jmp_buf[2];
 #define	JMPBUFSP	0
 #define	JMPBUFPC	1
 #define	JMPBUFDPC	0
+
 typedef unsigned int	mpdigit;	/* for /sys/include/mp.h */
+
 typedef unsigned char u8int;
 typedef unsigned short u16int;
 typedef unsigned int	u32int;
