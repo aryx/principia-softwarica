@@ -10,106 +10,36 @@
 /*s: enum _anon_ (include/mach.h) */
 /*
  *	Supported architectures:
- *		mips,
- *		68020,
  *		i386,
- *		amd64,
- *		sparc,
- *		mips2 (R4000)
  *		arm
- *		powerpc,
- *		powerpc64
- *		arm64
  */
+/* machine types */
 enum
 {
-    MMIPS,			/* machine types */
-    MSPARC,
-    M68020,
     MI386,
-    MI960,			/* retired */
-    M3210,			/* retired */
-    MMIPS2,
-    NMIPS2,
-    M29000,			/* retired */
     MARM,
-    MPOWER,
-    MALPHA,			/* retired */
-    NMIPS,
-    MSPARC64,		/* retired */
-    MAMD64,
-    MPOWER64,
-    MARM64,
-                /* types of executables */
+
+//TODO another enum
+/* types of executables */
     FNONE = 0,		/* unidentified */
-    FMIPS,			/* v.out */
-    FMIPSB,			/* mips bootable */
-    FSPARC,			/* k.out */
-    FSPARCB,		/* Sparc bootable */
-    F68020,			/* 2.out */
-    F68020B,		/* 68020 bootable */
-    FNEXTB,			/* Next bootable */
     FI386,			/* 8.out */
     FI386B,			/* I386 bootable */
-    FI960,			/* retired */
-    FI960B,			/* retired */
-    F3210,			/* retired */
-    FMIPS2BE,		/* 4.out */
-    F29000,			/* retired */
     FARM,			/* 5.out */
     FARMB,			/* ARM bootable */
-    FPOWER,			/* q.out */
-    FPOWERB,		/* power pc bootable */
-    FMIPS2LE,		/* 0.out */
-    FALPHA,			/* retired */
-    FALPHAB,		/* retired DEC Alpha bootable */
-    FMIPSLE,		/* 3k little endian */
-    FSPARC64,		/* retired */
-    FAMD64,			/* 6.out */
-    FAMD64B,		/* 6.out bootable */
-    FPOWER64,		/* 9.out */
-    FPOWER64B,		/* 9.out bootable */
-    FARM64,			/* arm64 */
-    FARM64B,		/* arm64 bootable */
 
-    ANONE = 0,		/* dissembler types */
-    AMIPS,
-    AMIPSCO,		/* native mips */
-    ASPARC,
-    ASUNSPARC,		/* native sun */
-    A68020,
+/* dissembler types */
+    ANONE = 0,		
     AI386,
     AI8086,			/* oh god */
-    AI960,			/* retired */
-    A29000,			/* retired */
     AARM,
-    APOWER,
-    AALPHA,			/* retired */
-    ASPARC64,		/* retired */
-    AAMD64,
-    APOWER64,
-    AARM64,
-                /* object file types */
-    Obj68020 = 0,		/* .2 */
-    ObjSparc,		/* .k */
-    ObjMips,		/* .v */
-    Obj386,			/* .8 */
-    Obj960,			/* retired */
-    Obj3210,		/* retired */
-    ObjMips2,		/* .4 */
-    Obj29000,		/* retired */
+
+/* object file types */
+    Obj386 = 0,			/* .8 */
     ObjArm,			/* .5 */
-    ObjPower,		/* .q */
-    ObjMips2le,		/* .0 */
-    ObjAlpha,		/* retired */
-    ObjSparc64,		/* retired */
-    ObjAmd64,		/* .6 */
-    ObjSpim,		/* .0 */
-    ObjPower64,		/* .9 */
-    ObjArm64,		/* .4? */
     Maxobjtype,
 
-    CNONE  = 0,		/* symbol table classes */
+/* symbol table classes */
+    CNONE  = 0,	
     CAUTO,
     CPARAM,
     CSTAB,

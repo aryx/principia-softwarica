@@ -203,10 +203,6 @@ commonboot(Fhdr *fp)
         return;
 
     switch(fp->type) {				/* boot image */
-    case F68020:
-        fp->type = F68020B;
-        fp->name = "68020 plan 9 boot image";
-        break;
     case FI386:
         fp->type = FI386B;
         fp->txtaddr = (u32int)fp->entry;
@@ -219,30 +215,6 @@ commonboot(Fhdr *fp)
         fp->name = "ARM plan 9 boot image";
         fp->dataddr = _round(fp->txtaddr+fp->txtsz, mach->pgsize);
         return;
-    case FALPHA:
-        fp->type = FALPHAB;
-        fp->txtaddr = (u32int)fp->entry;
-        fp->name = "alpha plan 9 boot image";
-        fp->dataddr = fp->txtaddr+fp->txtsz;
-        break;
-    case FPOWER:
-        fp->type = FPOWERB;
-        fp->txtaddr = (u32int)fp->entry;
-        fp->name = "power plan 9 boot image";
-        fp->dataddr = fp->txtaddr+fp->txtsz;
-        break;
-    case FAMD64:
-        fp->type = FAMD64B;
-        fp->txtaddr = fp->entry;
-        fp->name = "amd64 plan 9 boot image";
-        fp->dataddr = _round(fp->txtaddr+fp->txtsz, 4096);
-        break;
-    case FPOWER64:
-        fp->type = FPOWER64B;
-        fp->txtaddr = fp->entry;
-        fp->name = "power64 plan 9 boot image";
-        fp->dataddr = fp->txtaddr+fp->txtsz;
-        break;
     default:
         return;
     }

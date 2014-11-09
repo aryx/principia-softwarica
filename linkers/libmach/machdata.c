@@ -21,7 +21,7 @@
 extern	Machdata	mipsmach;
 
 /*s: global asstype */
-int	asstype = AMIPS;		/* disassembler type */
+int	asstype = AARM;		/* disassembler type */
 /*e: global asstype */
 /*s: global machdata */
 Machdata *machdata;		/* machine-dependent functions */

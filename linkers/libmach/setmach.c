@@ -30,18 +30,6 @@ extern	Machdata	mipsmach, i386mach, armmach;
  */
 Machtab	machines[] =
 {
-    {	"mips",				/*plan 9 mips*/
-        FMIPS,
-        FMIPSB,
-        AMIPS,
-        &mmips,
-        &mipsmach, 	},
-    {	"mipsco",			/*native mips - must follow plan 9*/
-        FMIPS,
-        FMIPSB,
-        AMIPSCO,
-        &mmips,
-        &mipsmach,	},
     {	"386",				/*plan 9 386*/
         FI386,
         FI386B,
@@ -92,7 +80,7 @@ machbyname(char *name)
     Machtab *mp;
 
     if (!name) {
-        asstype = AMIPS;
+        asstype = AARM;
         machdata = &mipsmach;
         mach = &mmips;
         return 1;
