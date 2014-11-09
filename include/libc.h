@@ -8,8 +8,8 @@ enum _bool {
   true = 1
 };
 typedef uchar byte;
-typedef char* string;
-typedef char* filename;
+//typedef char* string; // conflict
+//typedef char* filename; // conflict in sam with function filename
 #define STDIN 0
 #define STDOUT 1
 #define STDERR 2

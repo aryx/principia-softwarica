@@ -66,10 +66,10 @@ typedef	int	BOOL;
 /*e: constant TB */
 
 /*s: constant STDIN */
-#define	STDIN	0
+//#define	STDIN	0
 /*e: constant STDIN */
 /*s: constant STDOUT */
-#define	STDOUT	1
+//#define	STDOUT	1
 /*e: constant STDOUT */
 
 /*s: constant TRUE */
