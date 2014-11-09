@@ -26,7 +26,7 @@ enum
 };
 /*e: enum _anon_ (linkers/libmach/obj.c) */
 
-int			/* in [$OS].c */
+int			/* in [$OS].c */ //$
   _is5(char*),
   _is8(char*),
   _read5(Biobuf*, Prog*),

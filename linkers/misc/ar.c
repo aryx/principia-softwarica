@@ -8,7 +8,6 @@
 #include <mach.h>
 #include <ar.h>
 
-/*s: struct Arsymref */
 /*
  *	The algorithm uses up to 3 temp files.  The "pivot member" is the
  *	archive member specified by and a, b, or i option.  The temp files are
@@ -19,6 +18,7 @@
  * 	temp files, in order, back into the archive.
  */
 
+/*s: struct Arsymref */
 typedef struct	Arsymref
 {
     char	*name;

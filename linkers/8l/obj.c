@@ -77,9 +77,6 @@ Prog*	brchain(Prog*);
 
 
 
-
-
-
 /*s: global noname (linkers/8l/obj.c) */
 char	*noname		= "<none>";
 /*e: global noname (linkers/8l/obj.c) */

@@ -38,13 +38,13 @@ enum {
     I860 = 7,		/* Intel i860 */
     MIPS = 8,		/* Mips R2000 */
     S370 = 9,		/* Amdhal	*/
-    MIPSR4K = 10,		/* Mips R4000 */
-    SPARC64 = 18,		/* Sun SPARC v9 */
+    MIPSR4K = 10,	/* Mips R4000 */
+    SPARC64 = 18,	/* Sun SPARC v9 */
     POWER = 20,		/* PowerPC */
-    POWER64 = 21,		/* PowerPC64 */
+    POWER64 = 21,	/* PowerPC64 */
     ARM = 40,		/* ARM */
     AMD64 = 62,		/* Amd64 */
-    ARM64 = 183,		/* ARM64 */
+    ARM64 = 183,	/* ARM64 */
 
     NO_VERSION = 0,		/* version, ident[VERSION] */
     CURRENT = 1,
@@ -97,26 +97,6 @@ struct Ehdr {
 /*e: struct Ehdr */
 typedef struct Ehdr Ehdr;
 
-/*s: struct E64hdr */
-struct E64hdr {
-    u8int	ident[16];	/* ident bytes */
-    u16int	type;		/* file type */
-    u16int	machine;	/* target machine */
-    u32int	version;	/* file version */
-    u64int	elfentry;	/* start address */
-    u64int	phoff;		/* phdr file offset */
-    u64int	shoff;		/* shdr file offset */
-    u32int	flags;		/* file flags */
-    u16int	ehsize;		/* sizeof ehdr */
-    u16int	phentsize;	/* sizeof phdr */
-    u16int	phnum;		/* number phdrs */
-    u16int	shentsize;	/* sizeof shdr */
-    u16int	shnum;		/* number shdrs */
-    u16int	shstrndx;	/* shdr string index */
-};
-/*e: struct E64hdr */
-typedef struct E64hdr E64hdr;
-
 /*s: struct Phdr */
 struct Phdr {
     int	type;		/* entry type */
@@ -130,20 +110,6 @@ struct Phdr {
 };
 /*e: struct Phdr */
 typedef struct Phdr Phdr;
-
-/*s: struct P64hdr */
-struct P64hdr {
-    u32int	type;		/* entry type */
-    u32int	flags;		/* entry flags */
-    u64int	offset;		/* file offset */
-    u64int	vaddr;		/* virtual address */
-    u64int	paddr;		/* physical address */
-    u64int	filesz;		/* file size */
-    u64int	memsz;		/* memory size */
-    u64int	align;		/* memory/file alignment */
-}; 
-/*e: struct P64hdr */
-typedef struct P64hdr P64hdr;
 
 /*s: struct Shdr */
 struct Shdr {
@@ -160,22 +126,6 @@ struct Shdr {
 };
 /*e: struct Shdr */
 typedef struct Shdr Shdr;
-
-/*s: struct S64hdr */
-struct S64hdr {
-    u32int	name;		/* section name */
-    u32int	type;		/* SHT_... */
-    u64int	flags;		/* SHF_... */
-    u64int	addr;		/* virtual address */
-    u64int	offset;		/* file offset */
-    u64int	size;		/* section size */
-    u32int	link;		/* misc info */
-    u32int	info;		/* misc info */
-    u64int	addralign;	/* memory alignment */
-    u64int	entsize;	/* entry size if table */
-};
-/*e: struct S64hdr */
-typedef struct S64hdr S64hdr;
 
 /*s: constant ELF_MAG */
 #define	ELF_MAG		((0x7f<<24) | ('E'<<16) | ('L'<<8) | 'F')

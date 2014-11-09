@@ -14,7 +14,7 @@ struct	Exec
     // virtual address in [UTZERO+sizeof(Exec)..UTZERO+sizeof(Exec)+text]
     long	entry;	 	/* entry point */ 
 
-    // used only by 68020, spsize set to 0 for 8l
+    // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
     long	spsz;		/* size of pc/sp offset table */
     // see a.out.h man page explaining how to compute the line of a PC
     long	pcsz;		/* size of pc/line number table */
@@ -36,9 +36,6 @@ typedef	struct	Exec	Exec;
 /*s: constant E_MAGIC */
 #define	E_MAGIC		_MAGIC(0, 20)		/* arm */
 /*e: constant E_MAGIC */
-/*s: constant S_MAGIC */
-#define	S_MAGIC		_MAGIC(HDR_MAGIC, 26)	/* amd64 */
-/*e: constant S_MAGIC */
 
 /*s: constant MIN_MAGIC */
 #define	MIN_MAGIC	8

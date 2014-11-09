@@ -173,7 +173,7 @@ i386frame(Map *map, uvlong addr, uvlong pc, uvlong sp, uvlong link)
 }
 /*e: function i386frame */
 
-    /* I386/486 - Disassembler and related functions */
+/* I386/486 - Disassembler and related functions */
 
 /*
  *  an instruction

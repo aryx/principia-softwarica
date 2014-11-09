@@ -10,11 +10,11 @@ typedef	struct machtab Machtab;
 /*s: struct machtab */
 struct machtab
 {
-    char		*name;			/* machine name */
-    short		type;			/* executable type */
-    short		boottype;		/* bootable type */
+    char	*name;			/* machine name */
+    short	type;			/* executable type */
+    short	boottype;		/* bootable type */
     int		asstype;		/* disassembler code */
-    Mach		*mach;			/* machine description */
+    Mach	*mach;			/* machine description */
     Machdata	*machdata;		/* machine functions */
 };
 /*e: struct machtab */
@@ -34,12 +34,6 @@ Machtab	machines[] =
         FI386,
         FI386B,
         AI386,
-        &mi386,
-        &i386mach,	},
-    {	"86",				/*8086 - a peach of a machine*/
-        FI386,
-        FI386B,
-        AI8086,
         &mi386,
         &i386mach,	},
     {	"arm",				/*ARM*/
