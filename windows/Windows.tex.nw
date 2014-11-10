@@ -24,7 +24,7 @@
 %   relevant file (or even function), better cluster the code
 %   (harder to understand non functional code using lots of globals)
 
-%thx to this manual, better understand svgalib?:
+%thx to this manual, better understand X11?:
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.tex.nw skeleton
@@ -42,7 +42,6 @@
 % - TODO aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
-
 
 %------------------------------------------------------------------------------
 % Packages
@@ -102,7 +101,7 @@
 
 \title{
 {\Huge 
-Principia Softwarica: The Plan9 Graphic System [[/dev/draw]]
+Principia Softwarica: Plan9 Windowing System [[rio]]
 }\\
 {version 0.1}
 }
@@ -145,18 +144,22 @@ Yoann Padioleau\\
 \section{Motivations}
 
 The goal of this book is to present in full details the source code of
-a real graphic system.
+a real windowing system.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
-\item mks
-\item svgalib
+\item Mini X
+\item Nano X (MicroWindows)
 \item X11
+\item Wayland
 \end{itemize}
 % nuttx has some graphic and windowing stack apparently too!
 
+%nice set of screenshots of past famous GUIs:
+%http://toastytech.com/guis/
+%http://toastytech.com/guis/guitimeline.html
 
 \section{Getting started}
 
@@ -174,145 +177,289 @@ License.
 
 \section{Acknowledgments}
 
-I would like to acknowledge of course Plan9's authors who wrote
-most of this book: Rob Pike, Ken Thompson, Dave Presotto, Phil
-Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 \chapter{Overview}
 
-\section{Graphic system principles}
+\section{Windowing system principles}
 
-\section{Graphic services}
-%maybe show code of toy app also?
-% show the different devices?
+% a demultiplexer essentially! toyapp run outside rio
+% but with rio can have "virtual" screen, virtual keyboard/mouse
 
-% note that can run 'colors' in console outside rio! it just
-% use /dev/draw, /dev/mouse, etc!
+\section{[[rio]] services}
+% the interface!  again the /dev/xxx ?
+% can run rio inside rio!
 
-\section{A toy graphical application}
-% e.g. colors
+\section{YYY file format}
 
-
+\section{ZZZ Toy example}
 
 \section{Code organization}
 
-% libdraw, libmemdraw, libmemlayer?
-%#include <draw.h>
-%#include <memdraw.h>
-%#include <memlayer.h>
-% lofs of files have similar name in libdraw/ and libmemdraw/
+% graphic system part! see Graphics.tex.nw
 
-% kernel part? user part?
-
-
-
-
+% rio, frame?
 
 \section{Architecture overview}
 
 % kernel driver vs libs vs apps vs rio
 
+% see 81/2.ps and rio.ps
+% see panel.pdf
 
-% part1: graphics (devvga)
-%  why imagmem? why imagmem and mainmem? why not use other allocator?
-%  see screen/user/notes.txt especially about the old way to get graphics on PC
+% part2: windows (rio)
+% part3: toolkit (libpanel)
 
+%http://tech.slashdot.org/story/14/06/19/1317227/x-window-system-turns-30-years-old?utm_source=slashdot&utm_medium=facebook
+%"A server lets clients access a shared resource. On a file server, it's
+%storage. On a web server, it's documents. On a compute server, it's
+%processing. On an X server, the shared resource is the display, and
+%clients are given access to it."
 
-\section{Initialization overview}
-
-\section{Trace of a simple drawing operation}
-% when do draw(), then where does it go? go in kernel?
-
+\section{Trace of a simple mouse click}
+% event! find right window, dispatch
 
 %###############################################################################
 
 \chapter{Core Data Structures}
 
-% see draw.h big categories
-% see the important globals init libdraw/init.c
+<<global font (windows/rio/dat.h)>>=
+Font		*font;
+@
 
-\chapter{Geometry}
+<<global mousectl>>=
+Mousectl	*mousectl;
+@
 
-\section{[[Point]]}
+<<global mouse>>=
+Mouse	*mouse;
+@
 
-\section{[[Rectangle]]}
+<<global keyboardctl>>=
+Keyboardctl	*keyboardctl;
+@
 
-\section{Line}
+<<global display (windows/rio/dat.h)>>=
+Display	*display;
+@
 
-\section{Polyline}
+<<global view>>=
+Image	*view;
+@
 
-\section{Arc}
+<<global wscreen>>=
+Screen	*wscreen;
+@
 
-\section{Spline}
+<<global boxcursor>>=
+Cursor	boxcursor;
+@
 
-\section{Ellipse}
+<<global crosscursor>>=
+Cursor	crosscursor;
+@
 
-\chapter{Colors}
-% test code showing use of colors?
+<<global sightcursor>>=
+Cursor	sightcursor;
+@
 
-\section{Rgb}
+<<global whitearrow>>=
+Cursor	whitearrow;
+@
 
-\section{Color map}
+<<global query>>=
+Cursor	query;
+@
 
-\section{Pixel depth}
+<<global corners (windows/rio/dat.h)>>=
+Cursor	*corners[9];
+@
 
-\section{Alpha}
+<<global background>>=
+Image	*background;
+@
 
-\chapter{Fonts}
-% test code showing use of font? display the core font?
+<<global lightgrey>>=
+Image	*lightgrey;
+@
 
-\section{Text}
-% and rune
+<<global red (windows/rio/dat.h)>>=
+Image	*red;
+@
 
-\section{Compressed form}
+<<global window>>=
+Window	**window;
+@
 
-\section{Font cache}
+<<global wkeyboard>>=
+Window	*wkeyboard;	/* window of simulated keyboard */
+@
 
-\chapter{Image}
+<<global nwindow>>=
+int		nwindow;
+@
 
-\section{Reading images}
+<<global snarffd>>=
+int		snarffd;
+@
 
-\section{Writing images}
+<<global input>>=
+Window	*input;
+@
 
-%topng </dev/screen >screen.png :) = Grab
+<<global all>>=
+QLock	all;			/* BUG */
+@
+
+<<global filsys>>=
+Filsys	*filsys;
+@
+
+<<global hidden>>=
+Window	*hidden[100];
+@
+
+<<global nhidden>>=
+int		nhidden;
+@
+
+<<global nsnarf>>=
+int		nsnarf;
+@
+
+<<global snarf>>=
+Rune*	snarf;
+@
+
+<<global scrolling>>=
+int		scrolling;
+@
+
+<<global maxtab>>=
+int		maxtab;
+@
+
+<<global winclosechan>>=
+Channel*	winclosechan;
+@
+
+<<global deletechan>>=
+Channel*	deletechan;
+@
+
+<<global startdir>>=
+char		*startdir;
+@
+
+<<global sweeping>>=
+int		sweeping;
+@
+
+<<global wctlfd>>=
+int		wctlfd;
+@
+
+<<global srvpipe>>=
+char		srvpipe[];
+@
+
+<<global srvwctl>>=
+char		srvwctl[];
+@
+
+<<global errorshouldabort>>=
+int		errorshouldabort;
+@
+
+<<global menuing>>=
+int		menuing;		/* menu action is pending; waiting for window to be indicated */
+@
+
+<<global snarfversion>>=
+int		snarfversion;	/* updated each time it is written */
+@
+
+<<global messagesize>>=
+int		messagesize;		/* negotiated in 9P version setup */
+@
+
+
+
+\chapter{[[main()]]}
+
 
 \chapter{Window, screen, display}
 
-\section{Window}
-%extern int	newwindow(char*);
-% but actually it returns an int that is probably similar to a fd
-% and rio itself match this id to a Window structure
+\chapter{The [[/dev/...]] Demultiplexer}
 
-\section{Screen}
+\chapter{The [[fsys]] Server}
 
-\section{Display}
+\chapter{The threads}
+% see rio presentation with architecture
 
-\section{Clipping}
+\section{Keyboard thread}
 
-\chapter{Input}
+\section{Mouse thread}
 
-\section{Keyboard}
+\section{Window threads}
 
-% show also kernel interface and refer to Kernel.tex.nw
 
-\section{Mouse}
+\chapter{[[Xfid]]}
 
-% show also kernel interface and refer to Kernel.tex.nw
+\chapter{[[Window]]}
 
-\section{Cursor}
+\chapter{[[Frame]]}
 
-\section{Events}
+\chapter{Changing Cursor}
+% put pictures instead of code :)
+% what is the code that takes the hexa data and draw?
 
-% have lots of dupes with events, menuhit.c vs emenuhit.c?
+\chapter{System Menus}
 
-\chapter{Output}
+\chapter{Xterm}
+% fake /dev/cons
 
-\section{The screen}
+\chapter{Widgets}
 
-\section{[[/dev/draw]]}
-% this time no refer to Kernel.tex.nw, we inline it here!
+\section{Frame}
+% have libframe/ but also a frame widge in libpanel
+
+\section{Scrolling}
+% have also a menu in libpanel, scrollbar
+
+\section{Menu}
+% have also a menu in libpanel, popup, pulldown
+
+\section{Libpanel}
+% different alloc, different event loop, 
+% and the Panel main data structure
+
+\section{Button}
+
+\section{Label}
+
+\section{Text entry}
+
+\section{Completion}
+
+\section{Slider}
+
+\section{List}
+
+\section{Pack}
+
+\section{Canvas}
+
+\section{Text view}
+
+\section{Rich text}
+
 
 \chapter{Advanced Topics}
+
+\section{Snarf}
+
+\section{Plumb}
+
 
 \chapter{Conclusion}
 
@@ -320,20 +467,16 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 \chapter{Debugging}
 
+\chapter{Profiling}
+
 \chapter{Error Managment}
-
-\chapter{VGA driver}
-
-\chapter{Mathematics}
-
-\section{Trigonometric functions}
 
 \chapter{Libc}
 
 \chapter{Extra Code}
 
 \ifallcode
-#include "Graphics_extra.tex.nw"
+#include "Windows_extra.tex.nw"
 \fi
 
 \chapter{Changelog}
@@ -372,3 +515,4 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %******************************************************************************
 
 \end{document}
+
