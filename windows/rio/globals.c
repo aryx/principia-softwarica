@@ -12,9 +12,9 @@
 #include "dat.h"
 #include "fns.h"
 
-/*s: global font (windows/rio/dat.h) */
+/*s: global font */
 Font		*font;
-/*e: global font (windows/rio/dat.h) */
+/*e: global font */
 /*s: global mousectl */
 Mousectl	*mousectl;
 /*e: global mousectl */
@@ -24,42 +24,24 @@ Mouse	*mouse;
 /*s: global keyboardctl */
 Keyboardctl	*keyboardctl;
 /*e: global keyboardctl */
-/*s: global display (windows/rio/dat.h) */
+/*s: global display */
 Display	*display;
-/*e: global display (windows/rio/dat.h) */
+/*e: global display */
 /*s: global view */
 Image	*view;
 /*e: global view */
 /*s: global wscreen */
 Screen	*wscreen;
 /*e: global wscreen */
-/*s: global boxcursor */
-Cursor	boxcursor;
-/*e: global boxcursor */
-/*s: global crosscursor */
-Cursor	crosscursor;
-/*e: global crosscursor */
-/*s: global sightcursor */
-Cursor	sightcursor;
-/*e: global sightcursor */
-/*s: global whitearrow */
-Cursor	whitearrow;
-/*e: global whitearrow */
-/*s: global query */
-Cursor	query;
-/*e: global query */
-/*s: global corners (windows/rio/dat.h) */
-Cursor	*corners[9];
-/*e: global corners (windows/rio/dat.h) */
 /*s: global background */
 Image	*background;
 /*e: global background */
 /*s: global lightgrey */
 Image	*lightgrey;
 /*e: global lightgrey */
-/*s: global red (windows/rio/dat.h) */
+/*s: global red */
 Image	*red;
-/*e: global red (windows/rio/dat.h) */
+/*e: global red */
 /*s: global window */
 Window	**window;
 /*e: global window */
@@ -99,9 +81,6 @@ int		scrolling;
 /*s: global maxtab */
 int		maxtab;
 /*e: global maxtab */
-/*s: global winclosechan */
-Channel*	winclosechan;
-/*e: global winclosechan */
 /*s: global deletechan */
 Channel*	deletechan;
 /*e: global deletechan */
@@ -114,23 +93,11 @@ int		sweeping;
 /*s: global wctlfd */
 int		wctlfd;
 /*e: global wctlfd */
-/*s: global srvpipe */
-char		srvpipe[];
-/*e: global srvpipe */
-/*s: global srvwctl */
-char		srvwctl[];
-/*e: global srvwctl */
-/*s: global errorshouldabort */
-int		errorshouldabort;
-/*e: global errorshouldabort */
 /*s: global menuing */
 int		menuing;		/* menu action is pending; waiting for window to be indicated */
 /*e: global menuing */
 /*s: global snarfversion */
 int		snarfversion;	/* updated each time it is written */
 /*e: global snarfversion */
-/*s: global messagesize */
-int		messagesize;		/* negotiated in 9P version setup */
-/*e: global messagesize */
 
 /*e: windows/rio/globals.c */
