@@ -101,7 +101,7 @@
 
 \title{
 {\Huge 
-Plan9 ARM Emulator
+Principia Softwarica: Plan9 ARM Simulator [[5i]]
 }\\
 {version 0.1}
 }
@@ -202,11 +202,12 @@ License.
 % memory access (load/store archi on ARM)
 % add/sub/mul in hardware! sometimes also div!
 % floating optional
-% interrupt for external device (avoid attente active
+% interrupt for external device (avoid attente active)
 
 % virtual memory hardware support (can be as simple as TLB
 % and interrupt) for memory isolation
-% debugging hardware support
+% debugging hardware support (by abusing virtual memory trap general
+% mechanism again)
 
 
 % recently: 
@@ -219,7 +220,7 @@ License.
 
 \section{[[5i]] services}
 
-% actually also provide a debugger interface a la 'db'
+% actually provides a debugger interface a la 'db'
 
 % so 5i 5.out, then at prompt type   ":c"
 % to continue (that is run the program)
@@ -289,7 +290,7 @@ enum ixxx
 <<struct Inst>>=
 struct Inst
 {
-    void 	(*func)(ulong);
+    void 	(*func)(ulong); // Instruction
     char*	name;
     // enum<ixxx>
     int	type;
@@ -490,6 +491,8 @@ struct Segment
     byte**	table;
 };
 @
+% for Text and Data the content is actually in the disk binary
+% hence fileoff fileend fields
 
 <<struct Memory>>=
 struct Memory
@@ -567,7 +570,7 @@ void main(int argc, char **argv)
     cmd();
 }
 @
-% better do initmap() here instead of doing it in initstk()
+%me: better do initmap() here instead of doing it in initstk()
 
 
 % stuff from mach.h:
@@ -583,6 +586,7 @@ void main(int argc, char **argv)
 \section{[[inithdr()]]}
 
 % from mach.h
+% could mv as a local in main() instead of this global?
 <<global fhdr>>=
 Fhdr	fhdr;
 @
@@ -620,6 +624,7 @@ inithdr(int fd)
 
 \section{[[initmap()]]}
 
+% LP aspectiz FP stuff
 <<enum _anon_ (machine/5i/arm.h)7>>=
 /* Plan9 Kernel constants */
 enum
@@ -649,6 +654,7 @@ enum
 int	datasize;
 @
 
+%uintptr?
 <<global textbase>>=
 ulong	textbase;
 @
@@ -656,6 +662,7 @@ ulong	textbase;
 
 
 % could pass fhdr as a parameter instead of using global
+% could use ROUNDUP()
 <<function initmap>>=
 void
 initmap()
@@ -994,7 +1001,7 @@ int count;
 @
 
 
-% main -> cmd() -> colon() -> run()  and call armclass()!!
+% main -> cmd() -> colon() -> <> -> armclass()!!
 <<function run>>=
 void
 run(void)
@@ -1927,8 +1934,9 @@ vaddr(ulong addr)
 struct Tlb
 {
     bool	on;			/* Being updated */
-    int	tlbsize;		/* Number of entries */
+    int		tlbsize;		/* Number of entries */
     ulong	tlbent[Nmaxtlb];	/* Virtual address tags */
+
     int	hit;			/* Number of successful tag matches */
     int	miss;			/* Number of failed tag matches */
 };		
@@ -2221,8 +2229,6 @@ memio(char *mb, ulong mem, int size, int dir)
 
     buf = mb;
     switch(dir) {
-    default:
-        fatal(0, "memio");
     case MemRead:
         while(size--)
             *mb++ = getmem_b(mem++);
@@ -2243,6 +2249,8 @@ memio(char *mb, ulong mem, int size, int dir)
         for(i = 0; i < size; i++)
             putmem_b(mem++, *mb++);
         break;
+    default:
+        fatal(0, "memio");
     }
     return buf;
 }
@@ -2328,19 +2336,19 @@ void	(*systab[])(void) =
     [RFORK]		sysrfork,
     [PIPE]		syspipe,
     [CREATE]		syscreate,
-    [FD2PATH]	sysfd2path,
+    [FD2PATH]		sysfd2path,
     [BRK]		sysbrk,
     [REMOVE]		sysremove,
     [NOTIFY]		sysnotify,
     [NOTED]		sysnoted,
-    [SEGATTACH]	syssegattach,
-    [SEGDETACH]	syssegdetach,
+    [SEGATTACH]		syssegattach,
+    [SEGDETACH]		syssegdetach,
     [SEGFREE]		syssegfree,
-    [SEGFLUSH]	syssegflush,
+    [SEGFLUSH]		syssegflush,
     [RENDEZVOUS]	sysrendezvous,
-    [UNMOUNT]	sysunmount,
+    [UNMOUNT]		sysunmount,
     [SEEK]		sysseek,
-    [FVERSION]	sysfversion,
+    [FVERSION]		sysfversion,
     [ERRSTR]		syserrstr,
     [STAT]		sysstat,
     [FSTAT]		sysfstat,
@@ -2527,6 +2535,7 @@ sysexits(void)
     if(sysdbg)
         itrace("exits(0x%lux)", str);
 
+    // single step to give opportunity to inspect before exit
     count = 1;
     if(str != 0) {
         memio(buf, str, sizeof buf, MemRead);
@@ -2861,6 +2870,26 @@ sysnotify(void)
 
 \section{Unsupported syscalls}
 
+<<function sysrfork>>=
+void
+sysrfork(void)
+{
+    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    exits(0);
+}
+@
+
+<<function sysexec>>=
+void
+sysexec(void)
+{
+    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+  exits(0);
+}
+@
+
+
+
 <<function sysawait>>=
 void
 sysawait(void)
@@ -2870,14 +2899,7 @@ sysawait(void)
 }
 @
 
-<<function sysrfork>>=
-void
-sysrfork(void)
-{
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-    exits(0);
-}
-@
+
 
 <<function syswstat>>=
 void
@@ -2896,6 +2918,8 @@ sysfwstat(void)
     exits(0);
 }
 @
+
+
 
 <<function sysnoted>>=
 void
@@ -2942,9 +2966,29 @@ syssegflush(void)
 }
 @
 
+<<function syssegbrk>>=
+void
+syssegbrk(void)
+{
+    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    exits(0);
+}
+@
+
+
 <<function sysrendezvous>>=
 void
 sysrendezvous(void)
+{
+    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    exits(0);
+}
+@
+
+
+<<function sysmount>>=
+void
+sysmount(void)
 {
     Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
@@ -2960,23 +3004,6 @@ sysunmount(void)
 }
 @
 
-<<function syssegbrk>>=
-void
-syssegbrk(void)
-{
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-    exits(0);
-}
-@
-
-<<function sysmount>>=
-void
-sysmount(void)
-{
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-    exits(0);
-}
-@
 
 <<function sysalarm>>=
 void
@@ -2984,15 +3011,6 @@ sysalarm(void)
 {
     Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
-}
-@
-
-<<function sysexec>>=
-void
-sysexec(void)
-{
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-  exits(0);
 }
 @
 
@@ -3168,7 +3186,7 @@ buildargv(char *str, char **args, int max)
 }
 @
 
-\section{[[\$]]}
+\section{[[$]]} %$
 
 <<function dollar>>=
 void
@@ -3274,7 +3292,7 @@ dollar(char *cp)
 @
 %$
 
-\section{[[\:]]}
+\section{[[:]]}
 
 \section{XXX}
 
@@ -3544,7 +3562,7 @@ setreg(char *addr, char *cp)
 
 
 
-\section{Dumper}
+\section{Dumpers}
 
 <<function dumpreg>>=
 void
@@ -4160,7 +4178,7 @@ static	char*	cond[16] =
 @
 
 
-\chapter{Profiling}
+%\chapter{Profiling}
 % the emulator itself, to optimize it!
 
 
@@ -4196,7 +4214,7 @@ emalloc(ulong size)
     void *a;
 
     a = malloc(size);
-    if(a == 0)
+    if(a == nil)
         fatal(0, "no memory");
 
     memset(a, 0, size);
@@ -4211,7 +4229,7 @@ erealloc(void *a, ulong oldsize, ulong size)
     void *n;
 
     n = malloc(size);
-    if(n == 0)
+    if(n == nil)
         fatal(0, "no memory");
     memset(n, 0, size);
     if(size > oldsize)

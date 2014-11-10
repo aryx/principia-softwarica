@@ -61,20 +61,21 @@ enum	as
  */ 
 	ABEQ,
 	ABNE,
-	ABCS,//?
+	ABCS,//? not in 5i/cond
 	ABHS,
-	ABCC,//?
+	ABCC,//? not in 5i/cond
 	ABLO,
 	ABMI,
 	ABPL,
-	ABVS,//?
-	ABVC,//?
+	ABVS,
+	ABVC,
 	ABHI,
 	ABLS,
 	ABGE,
 	ABLT,
 	ABGT,
 	ABLE,
+    // NO? see 5i/cond
     //AL? NV? see 5i/runcmp()
 
 	AMOVWD,

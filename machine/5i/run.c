@@ -269,9 +269,11 @@ run(void)
         }
 
         if(execute) {
+
             reg.ip->count++;
             // !!the dispatch!!
             (*reg.ip->func)(reg.ir);
+
         } else {
             if(trace)
                 itrace("%s%s	IGNORED",
