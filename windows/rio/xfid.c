@@ -13,6 +13,8 @@
 #include "dat.h"
 #include "fns.h"
 
+void		xfidctl(void*);
+
 /*s: constant MAXSNARF */
 #define	MAXSNARF	100*1024
 /*e: constant MAXSNARF */

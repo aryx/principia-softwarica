@@ -22,16 +22,19 @@
  * company at 1‑800‑543‑3002.
  */
 
+void	killprocs(void);
+int	shutdown(void*, char*);
+void	button3menu(void);
+void	button2menu(Window*);
+
 void		resize(void);
 void		move(void);
 void		delete(void);
 void		hide(void);
 void		unhide(int);
-void		newtile(int);
 Image	*sweep(void);
 Image	*bandsize(Window*);
 Image*	drag(Window*, Rectangle*);
-void		refresh(Rectangle);
 void		resized(void);
 
 void	mousethread(void*);
@@ -43,9 +46,6 @@ void	initcmd(void*);
 /*s: global exitchan */
 Channel	*exitchan;	/* chan(int) */
 /*e: global exitchan */
-/*s: global winclosechan (windows/rio/rio.c) */
-Channel	*winclosechan; /* chan(Window*); */
-/*e: global winclosechan (windows/rio/rio.c) */
 /*s: global viewr */
 Rectangle	viewr;
 /*e: global viewr */
@@ -132,9 +132,7 @@ char *rcargv[] = { "rc", "-i", nil };
 char *kbdargv[] = { "rc", "-c", nil, nil };
 /*e: global kbdargv */
 
-/*s: global errorshouldabort (windows/rio/rio.c) */
-int errorshouldabort = 0;
-/*e: global errorshouldabort (windows/rio/rio.c) */
+
 
 /*s: function derror */
 void
@@ -154,8 +152,8 @@ usage(void)
 /*e: function usage */
 
 /*s: function threadmain */
-void
-threadmain(int argc, char *argv[])
+//@Scheck: not dead, called by lib_thread?
+void threadmain(int argc, char *argv[])
 {
     char *initstr, *kbdin, *s;
     static void *arg[1];

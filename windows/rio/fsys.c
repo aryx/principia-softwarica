@@ -28,9 +28,6 @@ char	Ebadfcall[] = "bad fcall type";
 char	Eoffset[] = "illegal offset";
 /*e: global Eoffset */
 
-/*s: global messagesize (windows/rio/fsys.c) */
-int	messagesize = 8192+IOHDRSZ;	/* good start */
-/*e: global messagesize (windows/rio/fsys.c) */
 
 /*s: enum _anon_ (windows/rio/fsys.c) */
 enum{

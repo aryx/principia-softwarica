@@ -15,6 +15,25 @@
 #include "dat.h"
 #include "fns.h"
 
+
+void		wrefresh(Window*, Rectangle);
+void		wresize(Window*, Image*, int);
+void		wkeyctl(Window*, Rune);
+void		wsetcols(Window*);
+void		wrepaint(Window*);
+int		wbswidth(Window*, Rune);
+void		wmousectl(Window*);
+void		wdelete(Window*, uint, uint);
+void		wframescroll(Window*, int);
+void		wselect(Window*);
+int		wctlmesg(Window*, int, Rectangle, Image*);
+void		wborder(Window*, int);
+void		wclosewin(Window*);
+void		wdoubleclick(Window*, uint*, uint*);
+int		wclickmatch(Window*, int, int, int, uint*);
+void		wfill(Window*);
+
+
 /*s: enum _anon_ (windows/rio/wind.c) */
 enum
 {

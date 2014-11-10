@@ -37,7 +37,7 @@ Screen	*wscreen;
 Image	*background;
 /*e: global background */
 /*s: global lightgrey */
-Image	*lightgrey;
+//Image	*lightgrey;
 /*e: global lightgrey */
 /*s: global red */
 Image	*red;
@@ -99,5 +99,13 @@ int		menuing;		/* menu action is pending; waiting for window to be indicated */
 /*s: global snarfversion */
 int		snarfversion;	/* updated each time it is written */
 /*e: global snarfversion */
-
+/*s: global errorshouldabort */
+int errorshouldabort = 0;
+/*e: global errorshouldabort */
+/*s: global winclosechan */
+Channel	*winclosechan; /* chan(Window*); */
+/*e: global winclosechan */
+/*s: global messagesize */
+int	messagesize = 8192+IOHDRSZ;	/* good start */
+/*e: global messagesize */
 /*e: windows/rio/globals.c */

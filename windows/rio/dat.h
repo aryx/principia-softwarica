@@ -221,33 +221,19 @@ Window*	wtop(Point);
 void		wtopme(Window*);
 void		wbottomme(Window*);
 char*	wcontents(Window*, int*);
-int		wbswidth(Window*, Rune);
-int		wclickmatch(Window*, int, int, int, uint*);
 int		wclose(Window*);
-int		wctlmesg(Window*, int, Rectangle, Image*);
-int		wctlmesg(Window*, int, Rectangle, Image*);
+
 uint		wbacknl(Window*, uint, uint);
 uint		winsert(Window*, Rune*, int, uint);
 void		waddraw(Window*, Rune*, int);
-void		wborder(Window*, int);
-void		wclosewin(Window*);
 void		wcurrent(Window*);
 void		wcut(Window*);
-void		wdelete(Window*, uint, uint);
-void		wdoubleclick(Window*, uint*, uint*);
-void		wfill(Window*);
-void		wframescroll(Window*, int);
-void		wkeyctl(Window*, Rune);
-void		wmousectl(Window*);
 void		wmovemouse(Window*, Point);
 void		wpaste(Window*);
 void		wplumb(Window*);
-void		wrefresh(Window*, Rectangle);
-void		wrepaint(Window*);
-void		wresize(Window*, Image*, int);
+
 void		wscrdraw(Window*);
 void		wscroll(Window*, int);
-void		wselect(Window*);
 void		wsendctlmesg(Window*, int, Rectangle, Image*);
 void		wsetcursor(Window*, int);
 void		wsetname(Window*);
@@ -257,7 +243,6 @@ void		wsetselect(Window*, uint, uint);
 void		wshow(Window*, uint);
 void		wsnarf(Window*);
 void 		wscrsleep(Window*, uint);
-void		wsetcols(Window*);
 
 /*s: struct Dirtab */
 struct Dirtab
@@ -304,7 +289,6 @@ struct Xfid
 /*e: struct Xfid */
 
 Channel*	xfidinit(void);
-void		xfidctl(void*);
 void		xfidflush(Xfid*);
 void		xfidattach(Xfid*);
 void		xfidopen(Xfid*);
@@ -365,7 +349,7 @@ extern Cursor	whitearrow;
 extern Cursor	query;
 extern Cursor	*corners[9];
 extern Image	*background;
-extern Image	*lightgrey;
+//extern Image	*lightgrey;
 extern Image	*red;
 extern Window	**window;
 extern Window	*wkeyboard;	/* window of simulated keyboard */
@@ -385,8 +369,6 @@ extern Channel*	deletechan;
 extern char		*startdir;
 extern int		sweeping;
 extern int		wctlfd;
-extern char		srvpipe[];
-extern char		srvwctl[];
 extern int		errorshouldabort;
 extern int		menuing;
 extern int		snarfversion;	/* updated each time it is written */
