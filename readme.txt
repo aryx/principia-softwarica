@@ -30,26 +30,25 @@ We chose to present mostly programs from Plan 9 because they are
 small, elegant, open source, and portable.
 
 In many of those programs there are support for both the x86 and ARM
-architectures.
+architectures. We chose
 x86 because it's the most common desktop machine (and also it's not that
-bad according to torvalds: http://yarchive.net/comp/linux/x86.html).
-ARM because it is far simpler
-and elegant than x86 (RISC are usually better than CISC), ARM is as simple as
-MIPS and more alive as it is the most common mobile machine (it's in
-every phone and in the raspberry!).
+bad according to Linus: http://yarchive.net/comp/linux/x86.html).
+We chose ARM because it is far simpler
+and elegant than x86 (RISC are usually better than CISC); ARM is as simple as
+MIPS and it's alive as it is the most common mobile machine (it's in
+every phone and also in the raspberry PI!).
 
 related work:
- - GNU
- - STEPS
+ - GNU (Richard Stallman)
+ - STEPS (Alan Kay)
  - TECS
- - Minix
- - XINU
- - MMIX
+ - Minix (Andrew Tannenbaum)
+ - XINU (Douglas Comer)
+ - MMIX (Donald Knuth)
  - TempleOS
  - ...
 
-
-other series of software not covered:
+Here are other series of software not covered:
  - office: word processor, spreadsheet, pixel/vectorized drawing programs
    (Alto Bravo, appleII Visicalc)
  - communication: email, chat, forums, social network
