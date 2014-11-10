@@ -1,4 +1,63 @@
 /*s: windows/rio/fns.h */
+
+// Window stuff
+int		winborder(Window*, Point);
+void		winctl(void*);
+void		winshell(void*);
+Window*	wlookid(int);
+Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
+Window*	wpointto(Point);
+Window*	wtop(Point);
+void		wtopme(Window*);
+void		wbottomme(Window*);
+char*	wcontents(Window*, int*);
+int		wclose(Window*);
+
+uint		wbacknl(Window*, uint, uint);
+uint		winsert(Window*, Rune*, int, uint);
+void		waddraw(Window*, Rune*, int);
+void		wcurrent(Window*);
+void		wcut(Window*);
+void		wmovemouse(Window*, Point);
+void		wpaste(Window*);
+void		wplumb(Window*);
+
+void		wscrdraw(Window*);
+void		wscroll(Window*, int);
+void		wsendctlmesg(Window*, int, Rectangle, Image*);
+void		wsetcursor(Window*, int);
+void		wsetname(Window*);
+void		wsetorigin(Window*, uint, int);
+void		wsetpid(Window*, int, int);
+void		wsetselect(Window*, uint, uint);
+void		wshow(Window*, uint);
+void		wsnarf(Window*);
+void 		wscrsleep(Window*, uint);
+
+
+// XFid stuff
+Channel*	xfidinit(void);
+void		xfidflush(Xfid*);
+void		xfidattach(Xfid*);
+void		xfidopen(Xfid*);
+void		xfidclose(Xfid*);
+void		xfidread(Xfid*);
+void		xfidwrite(Xfid*);
+
+// Filsys stuff
+Filsys*	filsysinit(Channel*);
+int		filsysmount(Filsys*, int);
+Xfid*		filsysrespond(Filsys*, Xfid*, Fcall*, char*);
+void		filsyscancel(Xfid*);
+
+void		wctlproc(void*);
+void		wctlthread(void*);
+
+void		deletetimeoutproc(void*);
+
+
+
+// Misc stuff
 void	keyboardsend(char*, int);
 int	whide(Window*);
 int	wunhide(int);

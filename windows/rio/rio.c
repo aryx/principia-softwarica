@@ -50,7 +50,7 @@ Channel	*exitchan;	/* chan(int) */
 Rectangle	viewr;
 /*e: global viewr */
 /*s: global threadrforkflag */
-int		threadrforkflag = 0;	/* should be RFENVG but that hides rio from plumber */
+int threadrforkflag = 0;/* should be RFENVG but that hides rio from plumber */
 /*e: global threadrforkflag */
 /*s: global fontname */
 char		*fontname;
@@ -86,12 +86,12 @@ enum
 /*s: global menu2str */
 char		*menu2str[] = {
  [Cut]		"cut",
- [Paste]		"paste",
- [Snarf]		"snarf",
- [Plumb]		"plumb",
+ [Paste]	"paste",
+ [Snarf]	"snarf",
+ [Plumb]	"plumb",
  [Send]		"send",
- [Scroll]		"scroll",
-            nil
+ [Scroll]	"scroll",
+ nil
 };
 /*e: global menu2str */
 
@@ -111,10 +111,10 @@ char		*menu3str[100] = {
  [New]		"New",
  [Reshape]	"Resize",
  [Move]		"Move",
- [Delete]		"Delete",
+ [Delete]	"Delete",
  [Hide]		"Hide",
  [Exit]		"Exit",
-            nil
+ nil
 };
 /*e: global menu3str */
 

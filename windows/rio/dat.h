@@ -164,17 +164,18 @@ struct Window
     Ref;
     QLock;
     Frame;
+
     Image		*i;
     Mousectl		mc;
     Mouseinfo	mouse;
-    Channel		*ck;			/* chan(Rune[10]) */
+    Channel		*ck;		/* chan(Rune[10]) */
     Channel		*cctl;		/* chan(Wctlmesg)[20] */
     Channel		*conswrite;	/* chan(Conswritemesg) */
     Channel		*consread;	/* chan(Consreadmesg) */
     Channel		*mouseread;	/* chan(Mousereadmesg) */
-    Channel		*wctlread;		/* chan(Consreadmesg) */
-    uint			nr;			/* number of runes in window */
-    uint			maxr;		/* number of runes allocated in r */
+    Channel		*wctlread;	/* chan(Consreadmesg) */
+    uint			nr;	/* number of runes in window */
+    uint			maxr;	/* number of runes allocated in r */
     Rune			*r;
     uint			nraw;
     Rune			*raw;
@@ -205,44 +206,11 @@ struct Window
     uchar		wctlopen;
     uchar		deleted;
     uchar		mouseopen;
-    char			*label;
+    char		*label;
     int			pid;
-    char			*dir;
+    char		*dir;
 };
 /*e: struct Window */
-
-int		winborder(Window*, Point);
-void		winctl(void*);
-void		winshell(void*);
-Window*	wlookid(int);
-Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
-Window*	wpointto(Point);
-Window*	wtop(Point);
-void		wtopme(Window*);
-void		wbottomme(Window*);
-char*	wcontents(Window*, int*);
-int		wclose(Window*);
-
-uint		wbacknl(Window*, uint, uint);
-uint		winsert(Window*, Rune*, int, uint);
-void		waddraw(Window*, Rune*, int);
-void		wcurrent(Window*);
-void		wcut(Window*);
-void		wmovemouse(Window*, Point);
-void		wpaste(Window*);
-void		wplumb(Window*);
-
-void		wscrdraw(Window*);
-void		wscroll(Window*, int);
-void		wsendctlmesg(Window*, int, Rectangle, Image*);
-void		wsetcursor(Window*, int);
-void		wsetname(Window*);
-void		wsetorigin(Window*, uint, int);
-void		wsetpid(Window*, int, int);
-void		wsetselect(Window*, uint, uint);
-void		wshow(Window*, uint);
-void		wsnarf(Window*);
-void 		wscrsleep(Window*, uint);
 
 /*s: struct Dirtab */
 struct Dirtab
@@ -288,42 +256,23 @@ struct Xfid
 };
 /*e: struct Xfid */
 
-Channel*	xfidinit(void);
-void		xfidflush(Xfid*);
-void		xfidattach(Xfid*);
-void		xfidopen(Xfid*);
-void		xfidclose(Xfid*);
-void		xfidread(Xfid*);
-void		xfidwrite(Xfid*);
 
-/*s: enum _anon_ (windows/rio/dat.h)6 */
-enum
-{
-    Nhash	= 16,
-};
-/*e: enum _anon_ (windows/rio/dat.h)6 */
+/*s: constant Nhash */
+#define Nhash 16
+/*e: constant Nhash */
 
 /*s: struct Filsys */
 struct Filsys
 {
-        int		cfd;
-        int		sfd;
-        int		pid;
-        char		*user;
-        Channel	*cxfidalloc;	/* chan(Xfid*) */
-        Fid		*fids[Nhash];
+    int		cfd;
+    int		sfd;
+    int		pid;
+    char	*user;
+    Channel	*cxfidalloc;	/* chan(Xfid*) */
+    Fid		*fids[Nhash];
 };
 /*e: struct Filsys */
 
-Filsys*	filsysinit(Channel*);
-int		filsysmount(Filsys*, int);
-Xfid*		filsysrespond(Filsys*, Xfid*, Fcall*, char*);
-void		filsyscancel(Xfid*);
-
-void		wctlproc(void*);
-void		wctlthread(void*);
-
-void		deletetimeoutproc(void*);
 
 /*s: struct Timer */
 struct Timer
