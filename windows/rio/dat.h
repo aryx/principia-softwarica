@@ -1,29 +1,44 @@
 /*s: windows/rio/dat.h */
-/*s: enum _anon_ (windows/rio/dat.h) */
-enum
+/*s: enum qid */
+enum qid
 {
     Qdir,			/* /dev for this window */
+    /*s: enum qid cases */
     Qcons,
+    /*x: enum qid cases */
     Qconsctl,
-    Qcursor,
-    Qwdir,
-    Qwinid,
-    Qwinname,
-    Qkbdin,
-    Qlabel,
+    /*x: enum qid cases */
     Qmouse,
-    Qnew,
+    /*x: enum qid cases */
+    Qcursor,
+    /*x: enum qid cases */
+    Qwinid,
+    /*x: enum qid cases */
+    Qwinname,
+    /*x: enum qid cases */
+    Qlabel,
+    /*x: enum qid cases */
     Qscreen,
-    Qsnarf,
-    Qtext,
-    Qwctl,
+    /*x: enum qid cases */
     Qwindow,
+    /*x: enum qid cases */
+    Qtext,
+    /*x: enum qid cases */
+    Qkbdin,
+    /*x: enum qid cases */
+    Qwdir,
+    /*x: enum qid cases */
+    Qwctl,
+    /*x: enum qid cases */
     Qwsys,		/* directory of window directories */
+    /*x: enum qid cases */
     Qwsysdir,		/* window directory, child of wsys */
-
+    /*x: enum qid cases */
+    Qsnarf,
+    /*e: enum qid cases */
     QMAX,
 };
-/*e: enum _anon_ (windows/rio/dat.h) */
+/*e: enum qid */
 
 /*s: enum _anon_ (windows/rio/dat.h)2 */
 enum
@@ -41,7 +56,7 @@ typedef	struct	Consreadmesg Consreadmesg;
 typedef	struct	Conswritemesg Conswritemesg;
 typedef	struct	Stringpair Stringpair;
 typedef	struct	Dirtab Dirtab;
-typedef	struct	FidRio Fid;
+typedef	struct	Fid Fid;
 typedef	struct	Filsys Filsys;
 typedef	struct	Mouseinfo	Mouseinfo;
 typedef	struct	Mousereadmesg Mousereadmesg;
@@ -55,21 +70,13 @@ typedef	struct	Xfid Xfid;
 /*s: enum _anon_ (windows/rio/dat.h)3 */
 enum
 {
-    Selborder		= 4,		/* border of selected window */
+    Selborder		= 4,	/* border of selected window */
     Unselborder	= 1,		/* border of unselected window */
-    Scrollwid 		= 12,		/* width of scroll bar */
-    Scrollgap 		= 4,		/* gap right of scroll bar */
-    BIG			= 3,		/* factor by which window dimension can exceed screen */
+    Scrollwid 		= 12,	/* width of scroll bar */
+    Scrollgap 		= 4,	/* gap right of scroll bar */
+    BIG			= 3,	/* factor by which window dimension can exceed screen */
 };
 /*e: enum _anon_ (windows/rio/dat.h)3 */
-
-/*s: enum _anon_ (windows/rio/dat.h)4 */
-enum
-{
-    TRUE		= 1,
-    FALSE		= 0,
-};
-/*e: enum _anon_ (windows/rio/dat.h)4 */
 
 /*s: function QID */
 #define	QID(w,q)	((w<<8)|(q))
@@ -132,7 +139,7 @@ struct Mousereadmesg
 /*s: struct Stringpair */
 struct Stringpair	/* rune and nrune or byte and nbyte */
 {
-    void		*s;
+    void	*s;
     int		ns;
 };
 /*e: struct Stringpair */
@@ -166,14 +173,17 @@ struct Window
     Frame;
 
     Image		*i;
-    Mousectl		mc;
+
+    Mousectl	mc;
     Mouseinfo	mouse;
+
     Channel		*ck;		/* chan(Rune[10]) */
     Channel		*cctl;		/* chan(Wctlmesg)[20] */
     Channel		*conswrite;	/* chan(Conswritemesg) */
     Channel		*consread;	/* chan(Consreadmesg) */
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     Channel		*wctlread;	/* chan(Consreadmesg) */
+
     uint			nr;	/* number of runes in window */
     uint			maxr;	/* number of runes allocated in r */
     Rune			*r;
@@ -215,43 +225,50 @@ struct Window
 /*s: struct Dirtab */
 struct Dirtab
 {
-    char		*name;
+    char	*name;
     uchar	type;
-    uint		qid;
-    uint		perm;
+    uint	qid;
+    uint	perm;
 };
 /*e: struct Dirtab */
 
-/*s: struct FidRio */
-struct FidRio
+/*s: struct Fid */
+struct Fid
 {
     int		fid;
+
     int		busy;
     int		open;
     int		mode;
+
     Qid		qid;
+
     Window	*w;
     Dirtab	*dir;
     Fid		*next;
     int		nrpart;
     uchar	rpart[UTFmax];
 };
-/*e: struct FidRio */
+/*e: struct Fid */
 
 /*s: struct Xfid */
 struct Xfid
 {
         Ref;
-        Xfid		*next;
-        Xfid		*free;
+        Xfid	*next;
+        Xfid	*free;
         Fcall;
         Channel	*c;	/* chan(void(*)(Xfid*)) */
-        Fid		*f;
+
+        Fid	*f;
+
         uchar	*buf;
+
         Filsys	*fs;
+
         QLock	active;
-        int		flushing;	/* another Xfid is trying to flush us */
-        int		flushtag;	/* our tag, so flush can find us */
+        int	flushing;	/* another Xfid is trying to flush us */
+        int	flushtag;	/* our tag, so flush can find us */
         Channel	*flushc;	/* channel(int) to notify us we're being flushed */
 };
 /*e: struct Xfid */
@@ -266,8 +283,11 @@ struct Filsys
 {
     int		cfd;
     int		sfd;
+
     int		pid;
+
     char	*user;
+
     Channel	*cxfidalloc;	/* chan(Xfid*) */
     Fid		*fids[Nhash];
 };
@@ -284,11 +304,15 @@ struct Timer
 };
 /*e: struct Timer */
 
-extern Font		*font;
+// draw.h
+extern Display	*display;
+extern Font	*font;
+
+
 extern Mousectl	*mousectl;
 extern Mouse	*mouse;
 extern Keyboardctl	*keyboardctl;
-extern Display	*display;
+
 extern Image	*view;
 extern Screen	*wscreen;
 extern Cursor	boxcursor;
@@ -297,10 +321,13 @@ extern Cursor	sightcursor;
 extern Cursor	whitearrow;
 extern Cursor	query;
 extern Cursor	*corners[9];
+
 extern Image	*background;
 //extern Image	*lightgrey;
 extern Image	*red;
+
 extern Window	**window;
+
 extern Window	*wkeyboard;	/* window of simulated keyboard */
 extern int		nwindow;
 extern int		snarffd;
@@ -318,8 +345,8 @@ extern Channel*	deletechan;
 extern char		*startdir;
 extern int		sweeping;
 extern int		wctlfd;
-extern int		errorshouldabort;
-extern int		menuing;
+extern bool		errorshouldabort;
+extern bool		menuing;
 extern int		snarfversion;	/* updated each time it is written */
 extern int		messagesize; 		/* negotiated in 9P version setup */
 

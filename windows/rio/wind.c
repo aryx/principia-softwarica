@@ -16,22 +16,22 @@
 #include "fns.h"
 
 
-void		wrefresh(Window*, Rectangle);
-void		wresize(Window*, Image*, int);
-void		wkeyctl(Window*, Rune);
-void		wsetcols(Window*);
-void		wrepaint(Window*);
-int		wbswidth(Window*, Rune);
-void		wmousectl(Window*);
-void		wdelete(Window*, uint, uint);
-void		wframescroll(Window*, int);
-void		wselect(Window*);
-int		wctlmesg(Window*, int, Rectangle, Image*);
-void		wborder(Window*, int);
-void		wclosewin(Window*);
-void		wdoubleclick(Window*, uint*, uint*);
-int		wclickmatch(Window*, int, int, int, uint*);
-void		wfill(Window*);
+void	wrefresh(Window*, Rectangle);
+void	wresize(Window*, Image*, int);
+void	wkeyctl(Window*, Rune);
+void	wsetcols(Window*);
+void	wrepaint(Window*);
+int 	wbswidth(Window*, Rune);
+void	wmousectl(Window*);
+void	wdelete(Window*, uint, uint);
+void	wframescroll(Window*, int);
+void	wselect(Window*);
+int 	wctlmesg(Window*, int, Rectangle, Image*);
+void	wborder(Window*, int);
+void	wclosewin(Window*);
+void	wdoubleclick(Window*, uint*, uint*);
+int 	wclickmatch(Window*, int, int, int, uint*);
+void	wfill(Window*);
 
 
 /*s: enum _anon_ (windows/rio/wind.c) */
@@ -176,7 +176,7 @@ wresize(Window *w, Image *i, int move)
     if(move)
         frsetrects(w, r, w->i);
     else{
-        frclear(w, FALSE);
+        frclear(w, false);
         frinit(w, r, w->font, w->i, cols);
         wsetcols(w);
         w->maxtab = maxtab*stringwidth(w->font, "0");
@@ -188,7 +188,7 @@ wresize(Window *w, Image *i, int move)
     }
     wborder(w, Selborder);
     w->topped = ++topped;
-    w->resized = TRUE;
+    w->resized = true;
     w->mouse.counter++;
 }
 /*e: function wresize */
@@ -339,7 +339,7 @@ winctl(void *arg)
                     if(++w->mouse.wi == nelem(w->mouse.queue))
                         w->mouse.wi = 0;
                     if(w->mouse.wi == w->mouse.ri)
-                        w->mouse.qfull = TRUE;
+                        w->mouse.qfull = true;
                     mp->Mouse = w->mc;
                     mp->counter = w->mouse.counter;
                     lastb = w->mc.buttons;
@@ -351,7 +351,7 @@ winctl(void *arg)
             /* send a queued event or, if the queue is empty, the current state */
             /* if the queue has filled, we discard all the events it contained. */
             /* the intent is to discard frantic clicking by the user during long latencies. */
-            w->mouse.qfull = FALSE;
+            w->mouse.qfull = false;
             if(w->mouse.wi != w->mouse.ri) {
                 m = w->mouse.queue[w->mouse.ri];
                 if(++w->mouse.ri == nelem(w->mouse.queue))
@@ -575,10 +575,10 @@ namecomplete(Window *w)
     /* control-f: filename completion; works back to white space or / */
     if(w->q0<w->nr && w->r[w->q0]>' ')	/* must be at end of word */
         return nil;
-    nstr = windfilewidth(w, w->q0, TRUE);
+    nstr = windfilewidth(w, w->q0, true);
     str = runemalloc(nstr);
     runemove(str, w->r+(w->q0-nstr), nstr);
-    npath = windfilewidth(w, w->q0-nstr, FALSE);
+    npath = windfilewidth(w, w->q0-nstr, false);
     path = runemalloc(npath);
     runemove(path, w->r+(w->q0-nstr-npath), npath);
     rp = nil;
@@ -646,7 +646,7 @@ wkeyctl(Window *w, Rune r)
             n = 2*w->maxlines/3;
         case_Down:
             q0 = w->org+frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y+n*w->font->height));
-            wsetorigin(w, q0, TRUE);
+            wsetorigin(w, q0, true);
             return;
         case Kup:
             n = w->maxlines/3;
@@ -660,7 +660,7 @@ wkeyctl(Window *w, Rune r)
             n = 2*w->maxlines/3;
         case_Up:
             q0 = wbacknl(w, w->org, n);
-            wsetorigin(w, q0, TRUE);
+            wsetorigin(w, q0, true);
             return;
         case Kleft:
             if(w->q0 > 0){
@@ -805,7 +805,7 @@ wbswidth(Window *w, Rune c)
     stop = 0;
     if(q > w->qh)
         stop = w->qh;
-    skipping = TRUE;
+    skipping = true;
     while(q > stop){
         r = w->r[q-1];
         if(r == '\n'){		/* eat at most one more character */
@@ -816,7 +816,7 @@ wbswidth(Window *w, Rune c)
         if(c == 0x17){
             eq = isalnum(r);
             if(eq && skipping)	/* found one; stop skipping */
-                skipping = FALSE;
+                skipping = false;
             else if(!eq && !skipping)
                 break;
         }
@@ -1049,7 +1049,7 @@ wframescroll(Window *w, int dl)
         else
             wsetselect(w, selectq, w->org+w->p1);
     }
-    wsetorigin(w, q0, TRUE);
+    wsetorigin(w, q0, true);
 }
 /*e: function wframescroll */
 
@@ -1218,7 +1218,7 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         wclosewin(w);
         break;
     case Exited:
-        frclear(w, TRUE);
+        frclear(w, true);
         close(w->notefd);
         chanfree(w->mc.c);
         chanfree(w->ck);
@@ -1416,7 +1416,7 @@ wclosewin(Window *w)
     Rectangle r;
     int i;
 
-    w->deleted = TRUE;
+    w->deleted = true;
     if(w == input){
         input = nil;
         wsetcursor(w, 0);
@@ -1434,7 +1434,7 @@ wclosewin(Window *w)
         if(window[i] == w){
             --nwindow;
             memmove(window+i, window+i+1, (nwindow-i)*sizeof(Window*));
-            w->deleted = TRUE;
+            w->deleted = true;
             r = w->i->r;
             /* move it off-screen to hide it, in case client is slow in letting it go */
             //if(0) originwindow(w->i, r.min, view->r.max);
@@ -1660,9 +1660,9 @@ wshow(Window *w, uint q0)
         q = wbacknl(w, q0, nl);
         /* avoid going backwards if trying to go forwards - long lines! */
         if(!(q0>w->org && q<w->org))
-            wsetorigin(w, q, TRUE);
+            wsetorigin(w, q, true);
         while(q0 > w->org+w->nchars)
-            wsetorigin(w, w->org+1, FALSE);
+            wsetorigin(w, w->org+1, false);
     }
 }
 /*e: function wshow */
@@ -1847,7 +1847,7 @@ wfill(Window *w)
             }
         }
         frinsert(w, rp, rp+i, w->nchars);
-    }while(w->lastlinefull == FALSE);
+    }while(w->lastlinefull == false);
     free(rp);
 }
 /*e: function wfill */

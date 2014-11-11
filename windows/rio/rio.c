@@ -27,20 +27,20 @@ int	shutdown(void*, char*);
 void	button3menu(void);
 void	button2menu(Window*);
 
-void		resize(void);
-void		move(void);
-void		delete(void);
-void		hide(void);
-void		unhide(int);
+void	resize(void);
+void	move(void);
+void	delete(void);
+void	hide(void);
+void	unhide(int);
 Image	*sweep(void);
 Image	*bandsize(Window*);
 Image*	drag(Window*, Rectangle*);
-void		resized(void);
+void	resized(void);
 
 void	mousethread(void*);
 void	keyboardthread(void*);
-void winclosethread(void*);
-void deletethread(void*);
+void 	winclosethread(void*);
+void 	deletethread(void*);
 void	initcmd(void*);
 
 /*s: global exitchan */
@@ -152,34 +152,33 @@ usage(void)
 /*e: function usage */
 
 /*s: function threadmain */
-//@Scheck: not dead, called by lib_thread?
+//@Scheck: not dead, called by lib_thread probably
 void threadmain(int argc, char *argv[])
 {
-    char *initstr, *kbdin, *s;
-    static void *arg[1];
+    /*s: [[main()]] locals */
+    char *s;
     char buf[256];
+    /*x: [[main()]] locals */
+    char *initstr = nil;
+    /*x: [[main()]] locals */
+    char *kbdin = nil;
+    /*x: [[main()]] locals */
     Image *i;
     Rectangle r;
+    /*e: [[main()]] locals */
 
-    //PAD: let's keep the Exit option!
-    //PAD: if(strstr(argv[0], ".out") == nil){
-    //PAD: 	menu3str[Exit] = nil;
-    //PAD: 	Hidden--;
-    //PAD: }
-    initstr = nil;
-    kbdin = nil;
-    maxtab = 0;
     ARGBEGIN{
-    case 'f':
-        fontname = ARGF();
-        if(fontname == nil)
-            usage();
+    /*s: [[main()]] command line processing */
+    case 's':
+        scrolling = true;
         break;
+    /*x: [[main()]] command line processing */
     case 'i':
         initstr = ARGF();
         if(initstr == nil)
             usage();
         break;
+    /*x: [[main()]] command line processing */
     case 'k':
         if(kbdin != nil)
             usage();
@@ -187,82 +186,110 @@ void threadmain(int argc, char *argv[])
         if(kbdin == nil)
             usage();
         break;
-    case 's':
-        scrolling = TRUE;
+    /*x: [[main()]] command line processing */
+    case 'f':
+        fontname = ARGF();
+        if(fontname == nil)
+            usage();
         break;
+    /*e: [[main()]] command line processing */
     }ARGEND
 
+    /*s: [[main()]] set some globals */
     mainpid = getpid();
+    /*x: [[main()]] set some globals */
     if(getwd(buf, sizeof buf) == nil)
         startdir = estrdup(".");
     else
         startdir = estrdup(buf);
-    if(fontname == nil)
-        fontname = getenv("font");
-    if(fontname == nil)
-        fontname = "/lib/font/bit/lucm/unicode.9.font";
+    /*x: [[main()]] set some globals */
     s = getenv("tabstop");
     if(s != nil)
         maxtab = strtol(s, nil, 0);
     if(maxtab == 0)
         maxtab = 4;
     free(s);
+    /*x: [[main()]] set some globals */
+    if(fontname == nil)
+        fontname = getenv("font");
+    if(fontname == nil)
+        fontname = "/lib/font/bit/lucm/unicode.9.font";
+
     /* check font before barging ahead */
     if(access(fontname, 0) < 0){
         fprint(2, "rio: can't access %s: %r\n", fontname);
         exits("font open");
     }
     putenv("font", fontname);
-
+    /*e: [[main()]] set some globals */
+    /*s: [[main()]] set snarffd */
     snarffd = open("/dev/snarf", OREAD|OCEXEC);
+    /*e: [[main()]] set snarffd */
 
     if(geninitdraw(nil, derror, nil, "rio", nil, Refnone) < 0){
         fprint(2, "rio: can't open display: %r\n");
         exits("display open");
     }
-    iconinit();
+
     view = screen;
     viewr = view->r;
+
+    iconinit(); // allocate background and red images
+
+    /*s: [[main()]] mouse initialisation */
     mousectl = initmouse(nil, screen);
     if(mousectl == nil)
         error("can't find mouse");
     mouse = mousectl;
+    /*e: [[main()]] mouse initialisation */
+    /*s: [[main()]] keyboard initialisation */
     keyboardctl = initkeyboard(nil);
     if(keyboardctl == nil)
         error("can't find keyboard");
+    /*e: [[main()]] keyboard initialisation */
+
     wscreen = allocscreen(screen, background, 0);
     if(wscreen == nil)
         error("can't allocate screen");
+    
     draw(view, viewr, background, nil, ZP);
-    flushimage(display, 1);
+    flushimage(display, true);
 
+    /*s: [[main()]] communication channels creation */
     exitchan = chancreate(sizeof(int), 0);
     winclosechan = chancreate(sizeof(Window*), 0);
     deletechan = chancreate(sizeof(char*), 0);
-
+    /*e: [[main()]] communication channels creation */
+    /*s: [[main()]] threads creation */
     timerinit();
     threadcreate(keyboardthread, nil, STACK);
     threadcreate(mousethread, nil, STACK);
+
     threadcreate(winclosethread, nil, STACK);
     threadcreate(deletethread, nil, STACK);
+    /*e: [[main()]] threads creation */
+
     filsys = filsysinit(xfidinit());
 
     if(filsys == nil)
         fprint(2, "rio: can't create file system server: %r\n");
     else{
-        errorshouldabort = 1;	/* suicide if there's trouble after this */
+        errorshouldabort = true;/* suicide if there's trouble after this */
+        /*s: [[main()]] if initstr or kdbin */
         if(initstr)
             proccreate(initcmd, initstr, STACK);
+        /*x: [[main()]] if initstr or kdbin */
         if(kbdin){
             kbdargv[2] = kbdin;
             r = screen->r;
             r.max.x = r.min.x+300;
             r.max.y = r.min.y+80;
             i = allocwindow(wscreen, r, Refbackup, DWhite);
-            wkeyboard = new(i, FALSE, scrolling, 0, nil, "/bin/rc", kbdargv);
+            wkeyboard = new(i, false, scrolling, 0, nil, "/bin/rc", kbdargv);
             if(wkeyboard == nil)
                 error("can't create keyboard window");
         }
+        /*e: [[main()]] if initstr or kdbin */
         threadnotify(shutdown, 1);
         recv(exitchan, nil);
     }
@@ -548,9 +575,9 @@ mousethread(void*)
     static Alt alts[NALT+1];
 
     threadsetname("mousethread");
-    sending = FALSE;
-    scrolling = FALSE;
-    moving = FALSE;
+    sending = false;
+    scrolling = false;
+    moving = false;
 
     alts[MReshape].c = mousectl->resizec;
     alts[MReshape].v = nil;
@@ -589,23 +616,23 @@ mousethread(void*)
 
                 inside = ptinrect(mouse->xy, insetrect(winput->screenr, Selborder));
                 if(winput->mouseopen)
-                    scrolling = FALSE;
+                    scrolling = false;
                 else if(scrolling)
                     scrolling = mouse->buttons;
                 else
                     scrolling = mouse->buttons && ptinrect(xy, winput->scrollr);
                 /* topped will be zero or less if window has been bottomed */
-                if(sending == FALSE && !scrolling && winborder(winput, mouse->xy) && winput->topped>0){
-                    moving = TRUE;
+                if(sending == false && !scrolling && winborder(winput, mouse->xy) && winput->topped>0){
+                    moving = true;
                 }else if(inside && (scrolling || winput->mouseopen || (mouse->buttons&1)))
-                    sending = TRUE;
+                    sending = true;
             }else
-                sending = FALSE;
+                sending = false;
             if(sending){
             Sending:
                 if(mouse->buttons == 0){
                     cornercursor(winput, mouse->xy, 0);
-                    sending = FALSE;
+                    sending = false;
                 }else
                     wsetcursor(winput, 0);
                 tmp = mousectl->Mouse;
@@ -660,14 +687,14 @@ mousethread(void*)
                     goto Drain;
                 }
             }
-            moving = FALSE;
+            moving = false;
             break;
 
         Drain:
             do
                 readmouse(mousectl);
             while(mousectl->buttons);
-            moving = FALSE;
+            moving = false;
             goto Again;	/* recalculate mouse position, cursor */
         }
 }
@@ -738,7 +765,7 @@ button3menu(void)
     case -1:
         break;
     case New:
-        new(sweep(), FALSE, scrolling, 0, nil, "/bin/rc", nil);
+        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil);
         break;
     case Reshape:
         resize();
@@ -848,7 +875,7 @@ sweep(void)
     Point p0, p;
 
     i = nil;
-    menuing = TRUE;
+    menuing = true;
     riosetcursor(&crosscursor, 1);
     while(mouse->buttons == 0)
         readmouse(mousectl);
@@ -897,7 +924,7 @@ sweep(void)
 
  Return:
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
-    menuing = FALSE;
+    menuing = false;
     return i;
 }
 /*e: function sweep */
@@ -946,7 +973,7 @@ drag(Window *w, Rectangle *rp)
     Rectangle r;
 
     i = w->i;
-    menuing = TRUE;
+    menuing = true;
     om = mouse->xy;
     riosetcursor(&boxcursor, 1);
     dm = subpt(mouse->xy, w->screenr.min);
@@ -967,7 +994,7 @@ drag(Window *w, Rectangle *rp)
     drawborder(r, 0);
     cornercursor(w, mouse->xy, 1);
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
-    menuing = FALSE;
+    menuing = false;
     flushimage(display, 1);
     if(mouse->buttons!=0 || (ni=allocwindow(wscreen, r, Refbackup, DWhite))==nil){
         moveto(mousectl, om);
@@ -1105,7 +1132,7 @@ pointto(int wait)
 {
     Window *w;
 
-    menuing = TRUE;
+    menuing = true;
     riosetcursor(&sightcursor, 1);
     while(mouse->buttons == 0)
         readmouse(mousectl);
@@ -1126,7 +1153,7 @@ pointto(int wait)
     }
     cornercursor(input, mouse->xy, 0);
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
-    menuing = FALSE;
+    menuing = false;
     return w;
 }
 /*e: function pointto */
@@ -1137,7 +1164,7 @@ delete(void)
 {
     Window *w;
 
-    w = pointto(TRUE);
+    w = pointto(true);
     if(w)
         wsendctlmesg(w, Deleted, ZR, nil);
 }
@@ -1150,7 +1177,7 @@ resize(void)
     Window *w;
     Image *i;
 
-    w = pointto(TRUE);
+    w = pointto(true);
     if(w == nil)
         return;
     i = sweep();
@@ -1167,7 +1194,7 @@ move(void)
     Image *i;
     Rectangle r;
 
-    w = pointto(FALSE);
+    w = pointto(false);
     if(w == nil)
         return;
     i = drag(w, &r);
@@ -1222,7 +1249,7 @@ hide(void)
 {
     Window *w;
 
-    w = pointto(TRUE);
+    w = pointto(true);
     if(w == nil)
         return;
     whide(w);

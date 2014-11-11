@@ -13,6 +13,7 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
+% - removed deadcode (Qnew)
 
 %thx to codemap/codegraph/scheck:
 % - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -176,6 +177,9 @@ Here are other candidates that were considered but ultimately discarded:
 
 \section{Requirements}
 
+% rio.ps
+% rio(1) and rio(5)
+
 \section{About this document}
 #include "../docs/latex/About.tex.nw"
 
@@ -193,13 +197,12 @@ License.
 
 \section{Windowing system principles}
 
-% a demultiplexer essentially! toyapp run outside rio
+% a demultiplexer essentially! toy app run outside rio
 % but with rio can have "virtual" screen, virtual keyboard/mouse
+% also a window manager! mv/resize/close/hide/etc
 
 \section{[[rio]] services}
 % the interface!  again the /dev/xxx ?
-% can run rio inside rio!
-
 
 <<function usage>>=
 void
@@ -209,6 +212,41 @@ usage(void)
     exits("usage");
 }
 @
+
+%see rio(1) and rio(5)!
+
+%$wsys
+%$wctl
+
+%/mnt/wsys (unioned also in /dev)
+%cons, consctl
+%mouse %kbdin
+%screen window
+%text
+%cursor
+%label, winid, winname  wdir
+%snarf
+%wctl 
+%wsys/1/
+
+%/srv
+%rio.user.pid
+%riowctl.user.pid
+
+% mount #s/rio.user.pid /mnt/wsys 1
+% mount -b #s/rio.user.pid /dev
+
+
+% $rio
+
+% manual creation of window (not via menu)
+% (see rio(5)
+% mount $wsys /tmp 'new -r 0 0 128 64 -pid' $pid
+% echo hi > /tmp/cons
+% :)
+
+
+% can run rio inside rio!
 
 
 %\section{YYY file format}
@@ -223,6 +261,23 @@ usage(void)
 
 % rio, frame?
 
+%dat.h
+%fns.h
+
+%globals.c
+%data.c
+
+%util.c
+
+%time.c
+%scrl.c
+%wind.c
+%wctl.c
+%fsys.c
+%rio.c
+%xfid.c
+
+
 \section{Architecture overview}
 
 % kernel driver vs libs vs apps vs rio
@@ -230,14 +285,27 @@ usage(void)
 % see 81/2.ps and rio.ps
 % see panel.pdf
 
-% part2: windows (rio)
-% part3: toolkit (libpanel)
+% part1: windows (rio)
+% part2: toolkit (libpanel)
+
+
+% there are DS server side and client side
+% Window is server side info about client window. On the client
+% side this window is actually stored in a handle called screen.
+
+
+
+% show the different threads! mouse, keyboard, close, delete, and xfids
+
+
 
 %http://tech.slashdot.org/story/14/06/19/1317227/x-window-system-turns-30-years-old?utm_source=slashdot&utm_medium=facebook
 %"A server lets clients access a shared resource. On a file server, it's
 %storage. On a web server, it's documents. On a compute server, it's
 %processing. On an X server, the shared resource is the display, and
 %clients are given access to it."
+
+
 
 \section{Trace of a mouse click}
 % event! find right window, dispatch
@@ -246,27 +314,47 @@ usage(void)
 
 \chapter{Core Data Structures}
 
-\section{[[display]], [[view]], [[mouse]], etc}
+\section{[[display]], [[screen]], etc}
 
-<<global display>>=
-Display	*display;
-@
+%draw.h, set by initdraw
+%Display	*display;
+%Image          *screen; // should be renamed window! really TODO?
+% = point to the portion of the display for this window
+% but for rio it's really the whole screen (unless run recursively)
+
+% so windows are represented as Image pointer. Really a subclass
+% of Image with additional methods like originwindow().
+
+%Font		*font;
+
+
+%display = draw
+%screen = current image memory in current display
+%window = ? 
+
+
+
+\section{[[view]], [[mouse]], [[keyboardctl]], etc}
 
 <<global view>>=
 Image	*view;
 @
+% = screen global
 
-<<global wscreen>>=
-Screen	*wscreen;
+<<global viewr>>=
+Rectangle	viewr;
+@
+%view->r
+
+
+
+
+% keyboard.h
+<<global keyboardctl>>=
+Keyboardctl	*keyboardctl;
 @
 
-
-<<global font>>=
-Font		*font;
-@
-
-
-
+% mouse.h
 <<global mousectl>>=
 Mousectl	*mousectl;
 @
@@ -274,10 +362,10 @@ Mousectl	*mousectl;
 <<global mouse>>=
 Mouse	*mouse;
 @
+% = mousectl._anon_Mouse
 
-<<global keyboardctl>>=
-Keyboardctl	*keyboardctl;
-@
+
+
 
 
 
@@ -285,12 +373,21 @@ Keyboardctl	*keyboardctl;
 Image	*background;
 @
 
-<<global lightgrey>>=
-//Image	*lightgrey;
+<<global wscreen>>=
+Screen	*wscreen;
 @
+% = allocscreen(screen, background)
+
+
+
 
 <<global red>>=
 Image	*red;
+@
+% when moving around windows, the frame become red!
+
+<<global lightgrey>>=
+//Image	*lightgrey;
 @
 
 
@@ -299,6 +396,7 @@ Image	*red;
 
 \section{[[Window]] and [[window]]}
 
+% LP split ... hmm
 <<struct Window>>=
 struct Window
 {
@@ -307,14 +405,17 @@ struct Window
     Frame;
 
     Image		*i;
-    Mousectl		mc;
+
+    Mousectl	mc;
     Mouseinfo	mouse;
+
     Channel		*ck;		/* chan(Rune[10]) */
     Channel		*cctl;		/* chan(Wctlmesg)[20] */
     Channel		*conswrite;	/* chan(Conswritemesg) */
     Channel		*consread;	/* chan(Consreadmesg) */
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     Channel		*wctlread;	/* chan(Consreadmesg) */
+
     uint			nr;	/* number of runes in window */
     uint			maxr;	/* number of runes allocated in r */
     Rune			*r;
@@ -361,10 +462,8 @@ Window	**window;
 int		nwindow;
 @
 
-<<global wkeyboard>>=
-Window	*wkeyboard;	/* window of simulated keyboard */
-@
 
+% the current window? the one with the focus getting the keyboard events?
 <<global input>>=
 Window	*input;
 @
@@ -443,16 +542,20 @@ new(Image *i, int hideit, int scrollit, int pid, char *dir, char *cmd, char **ar
 }
 @
 
-\section{[[FidRio]]}
 
-<<struct FidRio>>=
-struct FidRio
+\section{[[FilSys]], [[Fid]], [[Xfid] and [[filsys]]}
+
+<<struct Fid>>=
+struct Fid
 {
     int		fid;
+
     int		busy;
     int		open;
     int		mode;
+
     Qid		qid;
+
     Window	*w;
     Dirtab	*dir;
     Fid		*next;
@@ -460,8 +563,6 @@ struct FidRio
     uchar	rpart[UTFmax];
 };
 @
-
-\section{[[FilSys]] and [[filsys]]}
 
 <<constant Nhash>>=
 #define Nhash 16
@@ -472,8 +573,11 @@ struct Filsys
 {
     int		cfd;
     int		sfd;
+
     int		pid;
+
     char	*user;
+
     Channel	*cxfidalloc;	/* chan(Xfid*) */
     Fid		*fids[Nhash];
 };
@@ -483,22 +587,26 @@ struct Filsys
 Filsys	*filsys;
 @
 
-\section{[[Xfid]]}
+%\section{[[Xfid]]}
 
 <<struct Xfid>>=
 struct Xfid
 {
         Ref;
-        Xfid		*next;
-        Xfid		*free;
+        Xfid	*next;
+        Xfid	*free;
         Fcall;
         Channel	*c;	/* chan(void(*)(Xfid*)) */
-        Fid		*f;
+
+        Fid	*f;
+
         uchar	*buf;
+
         Filsys	*fs;
+
         QLock	active;
-        int		flushing;	/* another Xfid is trying to flush us */
-        int		flushtag;	/* our tag, so flush can find us */
+        int	flushing;	/* another Xfid is trying to flush us */
+        int	flushtag;	/* our tag, so flush can find us */
         Channel	*flushc;	/* channel(int) to notify us we're being flushed */
 };
 @
@@ -569,149 +677,79 @@ QLock	all;			/* BUG */
 @
 
 
-<<global scrolling>>=
-int		scrolling;
-@
-
-<<global maxtab>>=
-int		maxtab;
-@
-
-<<global deletechan>>=
-Channel*	deletechan;
-@
-
-<<global startdir>>=
-char		*startdir;
-@
-
 <<global sweeping>>=
-int		sweeping;
+int	sweeping;
 @
 
 <<global wctlfd>>=
-int		wctlfd;
+int	wctlfd;
 @
 
 <<global menuing>>=
-int		menuing;		/* menu action is pending; waiting for window to be indicated */
+bool menuing;/* menu action is pending; waiting for window to be indicated */
 @
 
 
 \chapter{[[main()]]}
+% actually it's threadmain()
+
+\ifallcode
+<<[[main()]] locals>>=
+char *s;
+char buf[256];
+@
+\fi
+%dead? static void *arg[1];
+
+%    //PAD: let's keep the Exit option!
+%    //PAD: if(strstr(argv[0], ".out") == nil){
+%    //PAD: 	menu3str[Exit] = nil;
+%    //PAD: 	Hidden--;
+%    //PAD: }
 
 <<function threadmain>>=
-//@Scheck: not dead, called by lib_thread?
+//@Scheck: not dead, called by lib_thread probably
 void threadmain(int argc, char *argv[])
 {
-    char *initstr, *kbdin, *s;
-    static void *arg[1];
-    char buf[256];
-    Image *i;
-    Rectangle r;
+    <<[[main()]] locals>>
 
-    //PAD: let's keep the Exit option!
-    //PAD: if(strstr(argv[0], ".out") == nil){
-    //PAD: 	menu3str[Exit] = nil;
-    //PAD: 	Hidden--;
-    //PAD: }
-    initstr = nil;
-    kbdin = nil;
-    maxtab = 0;
     ARGBEGIN{
-    case 'f':
-        fontname = ARGF();
-        if(fontname == nil)
-            usage();
-        break;
-    case 'i':
-        initstr = ARGF();
-        if(initstr == nil)
-            usage();
-        break;
-    case 'k':
-        if(kbdin != nil)
-            usage();
-        kbdin = ARGF();
-        if(kbdin == nil)
-            usage();
-        break;
-    case 's':
-        scrolling = TRUE;
-        break;
+    <<[[main()]] command line processing>>
     }ARGEND
 
-    mainpid = getpid();
-    if(getwd(buf, sizeof buf) == nil)
-        startdir = estrdup(".");
-    else
-        startdir = estrdup(buf);
-    if(fontname == nil)
-        fontname = getenv("font");
-    if(fontname == nil)
-        fontname = "/lib/font/bit/lucm/unicode.9.font";
-    s = getenv("tabstop");
-    if(s != nil)
-        maxtab = strtol(s, nil, 0);
-    if(maxtab == 0)
-        maxtab = 4;
-    free(s);
-    /* check font before barging ahead */
-    if(access(fontname, 0) < 0){
-        fprint(2, "rio: can't access %s: %r\n", fontname);
-        exits("font open");
-    }
-    putenv("font", fontname);
-
-    snarffd = open("/dev/snarf", OREAD|OCEXEC);
+    <<[[main()]] set some globals>>
+    <<[[main()]] set snarffd>>
 
     if(geninitdraw(nil, derror, nil, "rio", nil, Refnone) < 0){
         fprint(2, "rio: can't open display: %r\n");
         exits("display open");
     }
-    iconinit();
+
     view = screen;
     viewr = view->r;
-    mousectl = initmouse(nil, screen);
-    if(mousectl == nil)
-        error("can't find mouse");
-    mouse = mousectl;
-    keyboardctl = initkeyboard(nil);
-    if(keyboardctl == nil)
-        error("can't find keyboard");
+
+    iconinit(); // allocate background and red images
+
+    <<[[main()]] mouse initialisation>>
+    <<[[main()]] keyboard initialisation>>
+
     wscreen = allocscreen(screen, background, 0);
     if(wscreen == nil)
         error("can't allocate screen");
+    
     draw(view, viewr, background, nil, ZP);
-    flushimage(display, 1);
+    flushimage(display, true);
 
-    exitchan = chancreate(sizeof(int), 0);
-    winclosechan = chancreate(sizeof(Window*), 0);
-    deletechan = chancreate(sizeof(char*), 0);
+    <<[[main()]] communication channels creation>>
+    <<[[main()]] threads creation>>
 
-    timerinit();
-    threadcreate(keyboardthread, nil, STACK);
-    threadcreate(mousethread, nil, STACK);
-    threadcreate(winclosethread, nil, STACK);
-    threadcreate(deletethread, nil, STACK);
     filsys = filsysinit(xfidinit());
 
     if(filsys == nil)
         fprint(2, "rio: can't create file system server: %r\n");
     else{
-        errorshouldabort = 1;	/* suicide if there's trouble after this */
-        if(initstr)
-            proccreate(initcmd, initstr, STACK);
-        if(kbdin){
-            kbdargv[2] = kbdin;
-            r = screen->r;
-            r.max.x = r.min.x+300;
-            r.max.y = r.min.y+80;
-            i = allocwindow(wscreen, r, Refbackup, DWhite);
-            wkeyboard = new(i, FALSE, scrolling, 0, nil, "/bin/rc", kbdargv);
-            if(wkeyboard == nil)
-                error("can't create keyboard window");
-        }
+        errorshouldabort = true;/* suicide if there's trouble after this */
+        <<[[main()]] if initstr or kdbin>>
         threadnotify(shutdown, 1);
         recv(exitchan, nil);
     }
@@ -720,28 +758,1197 @@ void threadmain(int argc, char *argv[])
 }
 @
 
-\chapter{Window, Screen, Display}
+% diff geninitdraw vs initdraw? defaults different for ref? Refnone?
+
+
+<<function iconinit>>=
+void
+iconinit(void)
+{
+    background = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0x777777FF);
+    red = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0xDD0000FF);
+}
+@
+% is it really a red?
+% why iconinit? icon??
+
+
+<<[[main()]] mouse initialisation>>=
+mousectl = initmouse(nil, screen);
+if(mousectl == nil)
+    error("can't find mouse");
+mouse = mousectl;
+@
+
+<<[[main()]] keyboard initialisation>>=
+keyboardctl = initkeyboard(nil);
+if(keyboardctl == nil)
+    error("can't find keyboard");
+@
+
+%<<[[main()]] wscreen initialisation>>=
+%@
+
+<<global exitchan>>=
+Channel	*exitchan;	/* chan(int) */
+@
+
+% rio = waiting for many different kind of "events"
+<<[[main()]] communication channels creation>>=
+exitchan = chancreate(sizeof(int), 0);
+winclosechan = chancreate(sizeof(Window*), 0);
+deletechan = chancreate(sizeof(char*), 0);
+@
+
+<<[[main()]] threads creation>>=
+timerinit();
+threadcreate(keyboardthread, nil, STACK);
+threadcreate(mousethread, nil, STACK);
+
+threadcreate(winclosethread, nil, STACK);
+threadcreate(deletethread, nil, STACK);
+@
+
+
+<<global cxfidalloc>>=
+static	Channel	*cxfidalloc;	/* chan(Xfid*) */
+@
+
+<<global cxfidfree>>=
+static	Channel	*cxfidfree;	/* chan(Xfid*) */
+@
+
+<<function xfidinit>>=
+Channel*
+xfidinit(void)
+{
+    cxfidalloc = chancreate(sizeof(Xfid*), 0);
+    cxfidfree = chancreate(sizeof(Xfid*), 0);
+    threadcreate(xfidallocthread, nil, STACK);
+    return cxfidalloc;
+}
+@
+
+
+
+
+
+% dead? written but never read
+<<global mainpid>>=
+int		mainpid;
+@
+
+<<[[main()]] set some globals>>=
+mainpid = getpid();
+@
+
+
+
+
+
+<<global startdir>>=
+char		*startdir;
+@
+
+<<[[main()]] set some globals>>=
+if(getwd(buf, sizeof buf) == nil)
+    startdir = estrdup(".");
+else
+    startdir = estrdup(buf);
+@
+
+
+
+
+
+<<global maxtab>>=
+int		maxtab = 0;
+@
+
+<<[[main()]] set some globals>>=
+s = getenv("tabstop");
+if(s != nil)
+    maxtab = strtol(s, nil, 0);
+if(maxtab == 0)
+    maxtab = 4;
+free(s);
+@
+
+
+
+\chapter{[[filsysinit()]]}
+
+<<function filsysinit>>=
+Filsys*
+filsysinit(Channel *cxfidalloc)
+{
+    int n, fd, pid, p0;
+    Filsys *fs;
+    Channel *c;
+    char buf[128];
+
+    fs = emalloc(sizeof(Filsys));
+    if(cexecpipe(&fs->cfd, &fs->sfd) < 0)
+        goto Rescue;
+
+    fmtinstall('F', fcallfmt);
+
+    clockfd = open("/dev/time", OREAD|OCEXEC);
+
+    fd = open("/dev/user", OREAD);
+    strcpy(buf, "Jean-Paul_Belmondo"); // lol
+    if(fd >= 0){
+        n = read(fd, buf, sizeof buf-1);
+        if(n > 0)
+            buf[n] = 0;
+        close(fd);
+    }
+    fs->user = estrdup(buf);
+
+    fs->cxfidalloc = cxfidalloc;
+    pid = getpid();
+
+    /*
+     * Create and post wctl pipe
+     */
+    if(cexecpipe(&p0, &wctlfd) < 0)
+        goto Rescue;
+    sprint(srvwctl, "/srv/riowctl.%s.%d", fs->user, pid);
+    post(srvwctl, "wctl", p0);
+    close(p0);
+
+    /*
+     * Start server processes
+     */
+    c = chancreate(sizeof(char*), 0);
+    if(c == nil)
+        error("wctl channel");
+    proccreate(wctlproc, c, 4096);
+    threadcreate(wctlthread, c, 4096);
+    proccreate(filsysproc, fs, 10000);
+
+    /*
+     * Post srv pipe
+     */
+    sprint(srvpipe, "/srv/rio.%s.%d", fs->user, pid);
+    post(srvpipe, "wsys", fs->cfd);
+
+    return fs;
+
+Rescue:
+    free(fs);
+    return nil;
+}
+@
+
+
+
+
+<<function wctlproc>>=
+void
+wctlproc(void *v)
+{
+    char *buf;
+    int n, eofs;
+    Channel *c;
+
+    threadsetname("WCTLPROC");
+    c = v;
+
+    eofs = 0;
+    for(;;){
+        buf = emalloc(messagesize);
+        n = read(wctlfd, buf, messagesize-1);	/* room for \0 */
+        if(n < 0)
+            break;
+        if(n == 0){
+            if(++eofs > 20)
+                break;
+            continue;
+        }
+        eofs = 0;
+
+        buf[n] = '\0';
+        sendp(c, buf);
+    }
+}
+@
+
+
+
+
+<<function wctlthread>>=
+void
+wctlthread(void *v)
+{
+    char *buf, *arg, *dir;
+    int cmd, id, pid, hideit, scrollit;
+    Rectangle rect;
+    char err[ERRMAX];
+    Channel *c;
+
+    c = v;
+
+    threadsetname("WCTLTHREAD");
+
+    for(;;){
+        buf = recvp(c);
+        cmd = parsewctl(&arg, ZR, &rect, &pid, &id, &hideit, &scrollit, &dir, buf, err);
+
+        switch(cmd){
+        case New:
+            wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
+        }
+        free(buf);
+    }
+}
+@
+
+
+
+
+
+<<function filsysproc>>=
+static
+void
+filsysproc(void *arg)
+{
+    int n;
+    Xfid *x;
+    Fid *f;
+    Fcall t;
+    uchar *buf;
+    Filsys *fs;
+
+    threadsetname("FILSYSPROC");
+    fs = arg;
+    fs->pid = getpid();
+    x = nil;
+    for(;;){
+        buf = emalloc(messagesize+UTFmax);	/* UTFmax for appending partial rune in xfidwrite */
+        n = read9pmsg(fs->sfd, buf, messagesize);
+        if(n <= 0){
+            yield();	/* if threadexitsall'ing, will not return */
+            fprint(2, "rio: %d: read9pmsg: %d %r\n", getpid(), n);
+            errorshouldabort = false;
+            error("eof or i/o error on server channel");
+        }
+        if(x == nil){
+            send(fs->cxfidalloc, nil);
+            recv(fs->cxfidalloc, &x);
+            x->fs = fs;
+        }
+        x->buf = buf;
+        if(convM2S(buf, n, x) != n)
+            error("convert error in convM2S");
+        if(DEBUG)
+            fprint(2, "rio:<-%F\n", &x->Fcall);
+        if(fcall[x->type] == nil)
+            x = filsysrespond(fs, x, &t, Ebadfcall);
+        else{
+            if(x->type==Tversion || x->type==Tauth)
+                f = nil;
+            else
+                f = newfid(fs, x->fid);
+            x->f = f;
+            x  = (*fcall[x->type])(fs, x, f);
+        }
+        firstmessage = 0;
+    }
+}
+@
 
 \chapter{[[/dev/...]] Demultiplexer}
 
-\chapter{[[/dev/wctl]] Server}
+\section{Overview}
 
-\chapter{[[fsys]] Server}
+<<enum qid>>=
+enum qid
+{
+    Qdir,			/* /dev for this window */
+    <<enum qid cases>>
+    QMAX,
+};
+@
+
+% window+dev -> qid
+<<function QID>>=
+#define	QID(w,q)	((w<<8)|(q))
+@
+% what about overflow? hop will not have too many windows then
+
+% qid -> window
+<<function WIN>>=
+#define	WIN(q)	((((ulong)(q).path)>>8) & 0xFFFFFF)
+@
+
+% qid -> dev
+<<function FILE>>=
+#define	FILE(q)	(((ulong)(q).path) & 0xFF)
+@
+
+
+<<struct Dirtab>>=
+struct Dirtab
+{
+    char	*name;
+    uchar	type;
+    uint	qid;
+    uint	perm;
+};
+@
+
+<<global dirtab>>=
+Dirtab dirtab[]=
+{
+    { ".",		QTDIR,	Qdir,		0500|DMDIR },
+    <<dirtab array elements>>
+    { nil, }
+};
+@
+
+
+<<global fcall>>=
+Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
+{
+    [Tattach]	= filsysattach,
+    [Twalk]	= filsyswalk,
+    [Topen]	= filsysopen,
+    [Tcreate]	= filsyscreate,
+    [Tread]	= filsysread,
+    [Twrite]	= filsyswrite,
+    [Tclunk]	= filsysclunk,
+    [Tremove]   = filsysremove,
+    [Tstat]	= filsysstat,
+    [Twstat]	= filsyswstat,
+    [Tflush]	= filsysflush,
+    [Tversion]	= filsysversion,
+    [Tauth]	= filsysauth,
+};
+@
+
+
+
+
+\section{[[/dev/cons]]}
+
+<<enum qid cases>>=
+Qcons,
+@
+
+<<dirtab array elements>>=
+{ "cons",		QTFILE,	Qcons,		0600 },
+@
+
+\section{[[/dev/consctl]]}
+
+<<enum qid cases>>=
+Qconsctl,
+@
+<<dirtab array elements>>=
+{ "consctl",	QTFILE,	Qconsctl,	0200 },
+@
+
+\section{[[/dev/mouse]]}
+
+<<enum qid cases>>=
+Qmouse,
+@
+<<dirtab array elements>>=
+{ "mouse",		QTFILE,	Qmouse,		0600 },
+@
+
+\section{[[/dev/cursor]]}
+
+<<enum qid cases>>=
+Qcursor,
+@
+<<dirtab array elements>>=
+{ "cursor",		QTFILE,	Qcursor,	0600 },
+@
+
+\chapter{[[/dev/...]] Windows Files}
+
+\section{[[/dev/winid]]}
+
+<<enum qid cases>>=
+Qwinid,
+@
+<<dirtab array elements>>=
+{ "winid",		QTFILE,	Qwinid,		0400 },
+@
+
+\section{[[/dev/winname]]}
+
+<<enum qid cases>>=
+Qwinname,
+@
+<<dirtab array elements>>=
+{ "winname",	QTFILE,	Qwinname,	0400 },
+@
+
+\section{[[/dev/label]]}
+
+<<enum qid cases>>=
+Qlabel,
+@
+<<dirtab array elements>>=
+{ "label",		QTFILE,	Qlabel,		0600 },
+@
+
+\section{[[/dev/screen]]}
+
+% but not /dev/draw!
+% this is not demultiplex, but instead
+% writing to /dev/screen write to /dev/draw at the right place
+
+<<enum qid cases>>=
+Qscreen,
+@
+<<dirtab array elements>>=
+{ "screen",		QTFILE,	Qscreen,	0400 },
+@
+
+
+\section{[[/dev/window]]}
+
+<<enum qid cases>>=
+Qwindow,
+@
+<<dirtab array elements>>=
+{ "window",		QTFILE,	Qwindow,	0400 },
+@
+
+\section{[[/dev/text]]}
+
+<<enum qid cases>>=
+Qtext,
+@
+<<dirtab array elements>>=
+{ "text",		QTFILE,	Qtext,		0400 },
+@
+
+\section{[[/dev/kdbin]]}
+
+<<enum qid cases>>=
+Qkbdin,
+@
+<<dirtab array elements>>=
+{ "kbdin",		QTFILE,	Qkbdin,		0200 },
+@
+
+\section{[[/dev/wdir]]}
+
+<<enum qid cases>>=
+Qwdir,
+@
+<<dirtab array elements>>=
+{ "wdir",		QTFILE,	Qwdir,		0600 },
+@
+
+\section{[[/dev/wctl]]}
+
+<<enum qid cases>>=
+Qwctl,
+@
+<<dirtab array elements>>=
+{ "wctl",		QTFILE,	Qwctl,		0600 },
+@
+
+<<enum _anon_ (windows/rio/dat.h)5>>=
+enum	/* control messages */
+{
+    Wakeup,
+    Reshaped,
+    Moved,
+    Refresh,
+    Movemouse,
+    Rawon,
+    Rawoff,
+    Holdon,
+    Holdoff,
+    Deleted,
+    Exited,
+};
+@
+
+
+<<struct Wctlmesg>>=
+struct Wctlmesg
+{
+    int		type;
+    Rectangle	r;
+    Image	*image;
+};
+@
+
+
+\section{[[/dev/wsys]]}
+
+<<enum qid cases>>=
+Qwsys,		/* directory of window directories */
+@
+<<dirtab array elements>>=
+{ "wsys",		QTDIR,	Qwsys,		0500|DMDIR },
+@
+
+
+<<enum qid cases>>=
+Qwsysdir,		/* window directory, child of wsys */
+@
+
 
 \chapter{Threads}
 % see rio presentation with architecture
 
 \section{Keyboard thread}
 
+<<function keyboardthread>>=
+void
+keyboardthread(void*)
+{
+    Rune buf[2][20], *rp;
+    int n, i;
+
+    threadsetname("keyboardthread");
+    n = 0;
+    for(;;){
+        rp = buf[n];
+        n = 1-n;
+        recv(keyboardctl->c, rp);
+        for(i=1; i<nelem(buf[0])-1; i++)
+            if(nbrecv(keyboardctl->c, rp+i) <= 0)
+                break;
+        rp[i] = L'\0';
+        if(input != nil)
+            sendp(input->ck, rp);
+    }
+}
+@
+
 \section{Mouse thread}
 
-\section{Window threads}
+<<function mousethread>>=
+void
+mousethread(void*)
+{
+    int sending, inside, scrolling, moving, band;
+    Window *oin, *w, *winput;
+    Image *i;
+    Rectangle r;
+    Point xy;
+    Mouse tmp;
+    static Alt alts[NALT+1];
 
-\chapter{Changing Cursor}
+    threadsetname("mousethread");
+    sending = false;
+    scrolling = false;
+    moving = false;
+
+    alts[MReshape].c = mousectl->resizec;
+    alts[MReshape].v = nil;
+    alts[MReshape].op = CHANRCV;
+    alts[MMouse].c = mousectl->c;
+    alts[MMouse].v = &mousectl->Mouse;
+    alts[MMouse].op = CHANRCV;
+    alts[NALT].op = CHANEND;
+
+    for(;;)
+        switch(alt(alts)){
+        case MReshape:
+            resized();
+            break;
+        case MMouse:
+            if(wkeyboard!=nil && (mouse->buttons & (1<<5))){
+                keyboardhide();
+                break;
+            }
+        Again:
+            winput = input;
+            /* override everything for the keyboard window */
+            if(wkeyboard!=nil && ptinrect(mouse->xy, wkeyboard->screenr)){
+                /* make sure it's on top; this call is free if it is */
+                wtopme(wkeyboard);
+                winput = wkeyboard;
+            }
+            if(winput!=nil && winput->i!=nil){
+                /* convert to logical coordinates */
+                xy.x = mouse->xy.x + (winput->i->r.min.x-winput->screenr.min.x);
+                xy.y = mouse->xy.y + (winput->i->r.min.y-winput->screenr.min.y);
+
+                /* the up and down scroll buttons are not subject to the usual rules */
+                if((mouse->buttons&(8|16)) && !winput->mouseopen)
+                    goto Sending;
+
+                inside = ptinrect(mouse->xy, insetrect(winput->screenr, Selborder));
+                if(winput->mouseopen)
+                    scrolling = false;
+                else if(scrolling)
+                    scrolling = mouse->buttons;
+                else
+                    scrolling = mouse->buttons && ptinrect(xy, winput->scrollr);
+                /* topped will be zero or less if window has been bottomed */
+                if(sending == false && !scrolling && winborder(winput, mouse->xy) && winput->topped>0){
+                    moving = true;
+                }else if(inside && (scrolling || winput->mouseopen || (mouse->buttons&1)))
+                    sending = true;
+            }else
+                sending = false;
+            if(sending){
+            Sending:
+                if(mouse->buttons == 0){
+                    cornercursor(winput, mouse->xy, 0);
+                    sending = false;
+                }else
+                    wsetcursor(winput, 0);
+                tmp = mousectl->Mouse;
+                tmp.xy = xy;
+                send(winput->mc.c, &tmp);
+                continue;
+            }
+            w = wpointto(mouse->xy);
+            /* change cursor if over anyone's border */
+            if(w != nil)
+                cornercursor(w, mouse->xy, 0);
+            else
+                riosetcursor(nil, 0);
+            if(moving && (mouse->buttons&7)){
+                oin = winput;
+                band = mouse->buttons & 3;
+                sweeping = 1;
+                if(band)
+                    i = bandsize(winput);
+                else
+                    i = drag(winput, &r);
+                sweeping = 0;
+                if(i != nil){
+                    if(winput == oin){
+                        if(band)
+                            wsendctlmesg(winput, Reshaped, i->r, i);
+                        else
+                            wsendctlmesg(winput, Moved, r, i);
+                        cornercursor(winput, mouse->xy, 1);
+                    }else
+                        freeimage(i);
+                }
+            }
+            if(w != nil)
+                cornercursor(w, mouse->xy, 0);
+            /* we're not sending the event, but if button is down maybe we should */
+            if(mouse->buttons){
+                /* w->topped will be zero or less if window has been bottomed */
+                if(w==nil || (w==winput && w->topped>0)){
+                    if(mouse->buttons & 1){
+                        ;
+                    }else if(mouse->buttons & 2){
+                        if(winput && !winput->mouseopen)
+                            button2menu(winput);
+                    }else if(mouse->buttons & 4)
+                        button3menu();
+                }else{
+                    /* if button 1 event in the window, top the window and wait for button up. */
+                    /* otherwise, top the window and pass the event on */
+                    if(wtop(mouse->xy) && (mouse->buttons!=1 || winborder(w, mouse->xy)))
+                        goto Again;
+                    goto Drain;
+                }
+            }
+            moving = false;
+            break;
+
+        Drain:
+            do
+                readmouse(mousectl);
+            while(mousectl->buttons);
+            moving = false;
+            goto Again;	/* recalculate mouse position, cursor */
+        }
+}
+@
+
+
+
+\section{Closing and delete threads}
+
+<<global winclosechan>>=
+Channel	*winclosechan; /* chan(Window*); */
+@
+
+<<function winclosethread>>=
+/* thread to allow fsysproc to synchronize window closing with main proc */
+void
+winclosethread(void*)
+{
+    Window *w;
+
+    threadsetname("winclosethread");
+    for(;;){
+        w = recvp(winclosechan);
+        wclose(w);
+    }
+}
+@
+
+
+<<global deletechan>>=
+Channel*	deletechan;
+@
+
+<<function deletethread>>=
+/* thread to make Deleted windows that the client still holds disappear offscreen after an interval */
+void
+deletethread(void*)
+{
+    char *s;
+    Image *i;
+
+    threadsetname("deletethread");
+    for(;;){
+        s = recvp(deletechan);
+        i = namedimage(display, s);
+        if(i != nil){
+            /* move it off-screen to hide it, since client is slow in letting it go */
+            originwindow(i, i->r.min, view->r.max);
+        }
+        freeimage(i);
+        free(s);
+    }
+}
+@
+
+
+\section{Xfid threads}
+
+
+<<function xfidallocthread>>=
+void
+xfidallocthread(void*)
+{
+    Xfid *x;
+    static Alt alts[N+1];
+
+    alts[Alloc].c = cxfidalloc;
+    alts[Alloc].v = nil;
+    alts[Alloc].op = CHANRCV;
+    alts[Free].c = cxfidfree;
+    alts[Free].v = &x;
+    alts[Free].op = CHANRCV;
+    alts[N].op = CHANEND;
+    for(;;){
+        switch(alt(alts)){
+        case Alloc:
+            x = xfidfree;
+            if(x)
+                xfidfree = x->free;
+            else{
+                x = emalloc(sizeof(Xfid));
+                x->c = chancreate(sizeof(void(*)(Xfid*)), 0);
+                x->flushc = chancreate(sizeof(int), 0);	/* notification only; no data */
+                x->flushtag = -1;
+                x->next = xfid;
+                xfid = x;
+                threadcreate(xfidctl, x, 16384);
+            }
+            if(x->ref != 0){
+                fprint(2, "%p incref %ld\n", x, x->ref);
+                error("incref");
+            }
+            if(x->flushtag != -1)
+                error("flushtag in allocate");
+            incref(x);
+            sendp(cxfidalloc, x);
+            break;
+        case Free:
+            if(x->ref != 0){
+                fprint(2, "%p decref %ld\n", x, x->ref);
+                error("decref");
+            }
+            if(x->flushtag != -1)
+                error("flushtag in free");
+            x->free = xfidfree;
+            xfidfree = x;
+            break;
+        }
+    }
+}
+@
+
+
+\chapter{Cursor}
 % put pictures instead of code :)
 % what is the code that takes the hexa data and draw?
 
+
+<<global crosscursor (windows/rio/data.c)>>=
+Cursor crosscursor = {
+    {-7, -7},
+    {0x03, 0xC0, 0x03, 0xC0, 0x03, 0xC0, 0x03, 0xC0,
+     0x03, 0xC0, 0x03, 0xC0, 0xFF, 0xFF, 0xFF, 0xFF,
+     0xFF, 0xFF, 0xFF, 0xFF, 0x03, 0xC0, 0x03, 0xC0,
+     0x03, 0xC0, 0x03, 0xC0, 0x03, 0xC0, 0x03, 0xC0, },
+    {0x00, 0x00, 0x01, 0x80, 0x01, 0x80, 0x01, 0x80,
+     0x01, 0x80, 0x01, 0x80, 0x01, 0x80, 0x7F, 0xFE,
+     0x7F, 0xFE, 0x01, 0x80, 0x01, 0x80, 0x01, 0x80,
+     0x01, 0x80, 0x01, 0x80, 0x01, 0x80, 0x00, 0x00, }
+};
+@
+
+<<global boxcursor (windows/rio/data.c)>>=
+Cursor boxcursor = {
+    {-7, -7},
+    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+     0xFF, 0xFF, 0xF8, 0x1F, 0xF8, 0x1F, 0xF8, 0x1F,
+     0xF8, 0x1F, 0xF8, 0x1F, 0xF8, 0x1F, 0xFF, 0xFF,
+     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, },
+    {0x00, 0x00, 0x7F, 0xFE, 0x7F, 0xFE, 0x7F, 0xFE,
+     0x70, 0x0E, 0x70, 0x0E, 0x70, 0x0E, 0x70, 0x0E,
+     0x70, 0x0E, 0x70, 0x0E, 0x70, 0x0E, 0x70, 0x0E,
+     0x7F, 0xFE, 0x7F, 0xFE, 0x7F, 0xFE, 0x00, 0x00, }
+};
+@
+
+<<global sightcursor (windows/rio/data.c)>>=
+Cursor sightcursor = {
+    {-7, -7},
+    {0x1F, 0xF8, 0x3F, 0xFC, 0x7F, 0xFE, 0xFB, 0xDF,
+     0xF3, 0xCF, 0xE3, 0xC7, 0xFF, 0xFF, 0xFF, 0xFF,
+     0xFF, 0xFF, 0xFF, 0xFF, 0xE3, 0xC7, 0xF3, 0xCF,
+     0x7B, 0xDF, 0x7F, 0xFE, 0x3F, 0xFC, 0x1F, 0xF8, },
+    {0x00, 0x00, 0x0F, 0xF0, 0x31, 0x8C, 0x21, 0x84,
+     0x41, 0x82, 0x41, 0x82, 0x41, 0x82, 0x7F, 0xFE,
+     0x7F, 0xFE, 0x41, 0x82, 0x41, 0x82, 0x41, 0x82,
+     0x21, 0x84, 0x31, 0x8C, 0x0F, 0xF0, 0x00, 0x00, }
+};
+@
+
+<<global whitearrow (windows/rio/data.c)>>=
+Cursor whitearrow = {
+    {0, 0},
+    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE, 0xFF, 0xFC, 
+     0xFF, 0xF0, 0xFF, 0xF0, 0xFF, 0xF8, 0xFF, 0xFC, 
+     0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFE, 0xFF, 0xFC, 
+     0xF3, 0xF8, 0xF1, 0xF0, 0xE0, 0xE0, 0xC0, 0x40, },
+    {0xFF, 0xFF, 0xFF, 0xFF, 0xC0, 0x06, 0xC0, 0x1C, 
+     0xC0, 0x30, 0xC0, 0x30, 0xC0, 0x38, 0xC0, 0x1C, 
+     0xC0, 0x0E, 0xC0, 0x07, 0xCE, 0x0E, 0xDF, 0x1C, 
+     0xD3, 0xB8, 0xF1, 0xF0, 0xE0, 0xE0, 0xC0, 0x40, }
+};
+@
+
+<<global query (windows/rio/data.c)>>=
+Cursor query = {
+    {-7,-7},
+    {0x0f, 0xf0, 0x1f, 0xf8, 0x3f, 0xfc, 0x7f, 0xfe, 
+     0x7c, 0x7e, 0x78, 0x7e, 0x00, 0xfc, 0x01, 0xf8, 
+     0x03, 0xf0, 0x07, 0xe0, 0x07, 0xc0, 0x07, 0xc0, 
+     0x07, 0xc0, 0x07, 0xc0, 0x07, 0xc0, 0x07, 0xc0, },
+    {0x00, 0x00, 0x0f, 0xf0, 0x1f, 0xf8, 0x3c, 0x3c, 
+     0x38, 0x1c, 0x00, 0x3c, 0x00, 0x78, 0x00, 0xf0, 
+     0x01, 0xe0, 0x03, 0xc0, 0x03, 0x80, 0x03, 0x80, 
+     0x00, 0x00, 0x03, 0x80, 0x03, 0x80, 0x00, 0x00, }
+};
+@
+
+<<global tl>>=
+Cursor tl = {
+    {-4, -4},
+    {0xfe, 0x00, 0x82, 0x00, 0x8c, 0x00, 0x87, 0xff, 
+     0xa0, 0x01, 0xb0, 0x01, 0xd0, 0x01, 0x11, 0xff, 
+     0x11, 0x00, 0x11, 0x00, 0x11, 0x00, 0x11, 0x00, 
+     0x11, 0x00, 0x11, 0x00, 0x11, 0x00, 0x1f, 0x00, },
+    {0x00, 0x00, 0x7c, 0x00, 0x70, 0x00, 0x78, 0x00, 
+     0x5f, 0xfe, 0x4f, 0xfe, 0x0f, 0xfe, 0x0e, 0x00, 
+     0x0e, 0x00, 0x0e, 0x00, 0x0e, 0x00, 0x0e, 0x00, 
+     0x0e, 0x00, 0x0e, 0x00, 0x0e, 0x00, 0x00, 0x00, }
+};
+@
+
+<<global t>>=
+static Cursor t = {
+    {-7, -8},
+    {0x00, 0x00, 0x00, 0x00, 0x03, 0x80, 0x06, 0xc0, 
+     0x1c, 0x70, 0x10, 0x10, 0x0c, 0x60, 0xfc, 0x7f, 
+     0x80, 0x01, 0x80, 0x01, 0x80, 0x01, 0xff, 0xff, 
+     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 
+     0x03, 0x80, 0x0f, 0xe0, 0x03, 0x80, 0x03, 0x80, 
+     0x7f, 0xfe, 0x7f, 0xfe, 0x7f, 0xfe, 0x00, 0x00, 
+     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, }
+};
+@
+
+<<global tr>>=
+Cursor tr = {
+    {-11, -4},
+    {0x00, 0x7f, 0x00, 0x41, 0x00, 0x31, 0xff, 0xe1, 
+     0x80, 0x05, 0x80, 0x0d, 0x80, 0x0b, 0xff, 0x88, 
+     0x00, 0x88, 0x0, 0x88, 0x00, 0x88, 0x00, 0x88, 
+     0x00, 0x88, 0x00, 0x88, 0x00, 0x88, 0x00, 0xf8, },
+    {0x00, 0x00, 0x00, 0x3e, 0x00, 0x0e, 0x00, 0x1e, 
+     0x7f, 0xfa, 0x7f, 0xf2, 0x7f, 0xf0, 0x00, 0x70, 
+     0x00, 0x70, 0x00, 0x70, 0x00, 0x70, 0x00, 0x70, 
+     0x00, 0x70, 0x00, 0x70, 0x00, 0x70, 0x00, 0x00, }
+};
+@
+
+<<global r>>=
+Cursor r = {
+    {-8, -7},
+    {0x07, 0xc0, 0x04, 0x40, 0x04, 0x40, 0x04, 0x58, 
+     0x04, 0x68, 0x04, 0x6c, 0x04, 0x06, 0x04, 0x02, 
+     0x04, 0x06, 0x04, 0x6c, 0x04, 0x68, 0x04, 0x58, 
+     0x04, 0x40, 0x04, 0x40, 0x04, 0x40, 0x07, 0xc0, },
+    {0x00, 0x00, 0x03, 0x80, 0x03, 0x80, 0x03, 0x80, 
+     0x03, 0x90, 0x03, 0x90, 0x03, 0xf8, 0x03, 0xfc, 
+     0x03, 0xf8, 0x03, 0x90, 0x03, 0x90, 0x03, 0x80, 
+     0x03, 0x80, 0x03, 0x80, 0x03, 0x80, 0x00, 0x00, }
+};
+@
+
+<<global br>>=
+Cursor br = {
+    {-11, -11},
+    {0x00, 0xf8, 0x00, 0x88, 0x00, 0x88, 0x00, 0x88, 
+     0x00, 0x88, 0x00, 0x88, 0x00, 0x88, 0x00, 0x88, 
+     0xff, 0x88, 0x80, 0x0b, 0x80, 0x0d, 0x80, 0x05, 
+     0xff, 0xe1, 0x00, 0x31, 0x00, 0x41, 0x00, 0x7f, },
+    {0x00, 0x00, 0x00, 0x70, 0x00, 0x70, 0x00, 0x70, 
+     0x0, 0x70, 0x00, 0x70, 0x00, 0x70, 0x00, 0x70, 
+     0x00, 0x70, 0x7f, 0xf0, 0x7f, 0xf2, 0x7f, 0xfa, 
+     0x00, 0x1e, 0x00, 0x0e, 0x00, 0x3e, 0x00, 0x00, }
+};
+@
+
+<<global b>>=
+Cursor b = {
+    {-7, -7},
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+     0xff, 0xff, 0x80, 0x01, 0x80, 0x01, 0x80, 0x01, 
+     0xfc, 0x7f, 0x0c, 0x60, 0x10, 0x10, 0x1c, 0x70, 
+     0x06, 0xc0, 0x03, 0x80, 0x00, 0x00, 0x00, 0x00, },
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+     0x00, 0x00, 0x7f, 0xfe, 0x7f, 0xfe, 0x7f, 0xfe, 
+     0x03, 0x80, 0x03, 0x80, 0x0f, 0xe0, 0x03, 0x80, 
+     0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, }
+};
+@
+
+<<global bl>>=
+Cursor bl = {
+    {-4, -11},
+    {0x1f, 0x00, 0x11, 0x00, 0x11, 0x00, 0x11, 0x00, 
+     0x11, 0x00, 0x11, 0x00, 0x11, 0x00, 0x11, 0x00, 
+     0x11, 0xff, 0xd0, 0x01, 0xb0, 0x01, 0xa0, 0x01, 
+     0x87, 0xff, 0x8c, 0x00, 0x82, 0x00, 0xfe, 0x00, },
+    {0x00, 0x00, 0x0e, 0x00, 0x0e, 0x00, 0x0e, 0x00, 
+     0x0e, 0x00, 0x0e, 0x00, 0x0e, 0x00, 0x0e, 0x00, 
+     0x0e, 0x00, 0x0f, 0xfe, 0x4f, 0xfe, 0x5f, 0xfe, 
+     0x78, 0x00, 0x70, 0x00, 0x7c, 0x00, 0x00, 0x0, }
+};
+@
+
+<<global l>>=
+Cursor l = {
+    {-7, -7},
+    {0x03, 0xe0, 0x02, 0x20, 0x02, 0x20, 0x1a, 0x20, 
+     0x16, 0x20, 0x36, 0x20, 0x60, 0x20, 0x40, 0x20, 
+     0x60, 0x20, 0x36, 0x20, 0x16, 0x20, 0x1a, 0x20, 
+     0x02, 0x20, 0x02, 0x20, 0x02, 0x20, 0x03, 0xe0, },
+    {0x00, 0x00, 0x01, 0xc0, 0x01, 0xc0, 0x01, 0xc0, 
+     0x09, 0xc0, 0x09, 0xc0, 0x1f, 0xc0, 0x3f, 0xc0, 
+     0x1f, 0xc0, 0x09, 0xc0, 0x09, 0xc0, 0x01, 0xc0, 
+     0x01, 0xc0, 0x01, 0xc0, 0x01, 0xc0, 0x00, 0x00, }
+};
+@
+
+<<global corners (windows/rio/data.c)>>=
+Cursor *corners[9] = {
+    &tl,	&t,	&tr,
+    &l,	nil,	&r,
+    &bl,	&b,	&br,
+};
+@
+
+
 \chapter{System Menus}
+
+\section{Right click menu}
+<<enum _anon_ (windows/rio/rio.c)>>=
+enum
+{
+    New,
+    Reshape,
+    Move,
+    Delete,
+    Hide,
+    Exit,
+};
+@
+
+
+<<global Hidden>>=
+int	Hidden = Exit+1;
+@
+
+<<global menu3str>>=
+char		*menu3str[100] = {
+ [New]		"New",
+ [Reshape]	"Resize",
+ [Move]		"Move",
+ [Delete]	"Delete",
+ [Hide]		"Hide",
+ [Exit]		"Exit",
+ nil
+};
+@
+
+<<global menu3>>=
+Menu menu3 =
+{
+    menu3str
+};
+@
+
+
+<<function button3menu>>=
+void
+button3menu(void)
+{
+    int i;
+
+    for(i=0; i<nhidden; i++)
+        menu3str[i+Hidden] = hidden[i]->label;
+    menu3str[i+Hidden] = nil;
+
+    sweeping = 1;
+    switch(i = menuhit(3, mousectl, &menu3, wscreen)){
+    case -1:
+        break;
+    case New:
+        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil);
+        break;
+    case Reshape:
+        resize();
+        break;
+    case Move:
+        move();
+        break;
+    case Delete:
+        delete();
+        break;
+    case Hide:
+        hide();
+        break;
+    case Exit:
+        if(Hidden > Exit){
+            send(exitchan, nil);
+            break;
+        }
+        /* else fall through */
+    default:
+        unhide(i);
+        break;
+    }
+    sweeping = 0;
+}
+@
+
+\section{Middle click menu}
+
+<<enum _anon_ (windows/rio/rio.c)2>>=
+enum
+{
+    Cut,
+    Paste,
+    Snarf,
+    Plumb,
+    Send,
+    Scroll,
+};
+@
+
+<<global menu2str>>=
+char		*menu2str[] = {
+ [Cut]		"cut",
+ [Paste]	"paste",
+ [Snarf]	"snarf",
+ [Plumb]	"plumb",
+ [Send]		"send",
+ [Scroll]	"scroll",
+ nil
+};
+@
+
+<<global menu2>>=
+Menu menu2 =
+{
+    menu2str
+};
+@
+
+
+<<function button2menu>>=
+void
+button2menu(Window *w)
+{
+    if(w->deleted)
+        return;
+    incref(w);
+    if(w->scrolling)
+        menu2str[Scroll] = "noscroll";
+    else
+        menu2str[Scroll] = "scroll";
+    switch(menuhit(2, mousectl, &menu2, wscreen)){
+    case Cut:
+        wsnarf(w);
+        wcut(w);
+        wscrdraw(w);
+        break;
+
+    case Snarf:
+        wsnarf(w);
+        break;
+
+    case Paste:
+        getsnarf();
+        wpaste(w);
+        wscrdraw(w);
+        break;
+
+    case Plumb:
+        wplumb(w);
+        break;
+
+    case Send:
+        getsnarf();
+        wsnarf(w);
+        if(nsnarf == 0)
+            break;
+        if(w->rawing){
+            waddraw(w, snarf, nsnarf);
+            if(snarf[nsnarf-1]!='\n' && snarf[nsnarf-1]!='\004')
+                          waddraw(w, L"\n", 1);
+        }else{
+            winsert(w, snarf, nsnarf, w->nr);
+            if(snarf[nsnarf-1]!='\n' && snarf[nsnarf-1]!='\004')
+                winsert(w, L"\n", 1, w->nr);
+        }
+        wsetselect(w, w->nr, w->nr);
+        wshow(w, w->nr);
+        break;
+
+    case Scroll:
+        if(w->scrolling ^= 1)
+            wshow(w, w->nr);
+        break;
+    }
+    wclose(w);
+    wsendctlmesg(w, Wakeup, ZR, nil);
+    flushimage(display, 1);
+}
+@
+
+
 
 \chapter{Window Terminal}
 % fake /dev/cons
@@ -785,11 +1992,27 @@ void threadmain(int argc, char *argv[])
 \chapter{Advanced Topics}
 
 \section{Snarf}
+%\subsection{[[/dev/snarf]]}
 
-<<global snarffd>>=
-int		snarffd;
+
+<<enum qid cases>>=
+Qsnarf,
 @
 
+<<dirtab array elements>>=
+{ "snarf",		QTFILE,	Qsnarf,		0600 },
+@
+
+
+
+
+<<global snarffd>>=
+fdt		snarffd;
+@
+
+<<[[main()]] set snarffd>>=
+snarffd = open("/dev/snarf", OREAD|OCEXEC);
+@
 
 <<global nsnarf>>=
 int		nsnarf;
@@ -861,6 +2084,130 @@ getsnarf(void)
 
 \section{Plumb}
 
+\section{Auto complete}
+
+\section{Scrolling, [[rio -s]]}
+
+<<global scrolling>>=
+bool		scrolling;
+@
+
+<<[[main()]] command line processing>>=
+case 's':
+    scrolling = true;
+    break;
+@
+
+<<enum _anon_ (windows/rio/dat.h)2>>=
+enum
+{
+    Kscrolloneup = KF|0x20,
+    Kscrollonedown = KF|0x21,
+};
+@
+
+\section{Initial command, [[rio -i]]}
+
+<<[[main()]] locals>>=
+char *initstr = nil;
+@
+
+<<[[main()]] command line processing>>=
+case 'i':
+    initstr = ARGF();
+    if(initstr == nil)
+        usage();
+    break;
+@
+
+<<[[main()]] if initstr or kdbin>>=
+if(initstr)
+    proccreate(initcmd, initstr, STACK);
+@
+
+<<function initcmd>>=
+void
+initcmd(void *arg)
+{
+    char *cmd;
+
+    cmd = arg;
+    rfork(RFENVG|RFFDG|RFNOTEG|RFNAMEG);
+    procexecl(nil, "/bin/rc", "rc", "-c", cmd, nil);
+    fprint(2, "rio: exec failed: %r\n");
+    exits("exec");
+}
+@
+
+\section{Fake keyboard input, [[rio -k]]}
+
+<<global wkeyboard>>=
+Window	*wkeyboard;	/* window of simulated keyboard */
+@
+
+<<[[main()]] locals>>=
+char *kbdin = nil;
+@
+
+<<[[main()]] command line processing>>=
+case 'k':
+    if(kbdin != nil)
+        usage();
+    kbdin = ARGF();
+    if(kbdin == nil)
+        usage();
+    break;
+@
+
+<<[[main()]] locals>>=
+Image *i;
+Rectangle r;
+@
+
+<<global kbdargv>>=
+char *kbdargv[] = { "rc", "-c", nil, nil };
+@
+
+<<[[main()]] if initstr or kdbin>>=
+if(kbdin){
+    kbdargv[2] = kbdin;
+    r = screen->r;
+    r.max.x = r.min.x+300;
+    r.max.y = r.min.y+80;
+    i = allocwindow(wscreen, r, Refbackup, DWhite);
+    wkeyboard = new(i, false, scrolling, 0, nil, "/bin/rc", kbdargv);
+    if(wkeyboard == nil)
+        error("can't create keyboard window");
+}
+@
+
+\section{Font, [[rio -f]]}
+
+<<global fontname>>=
+char		*fontname;
+@
+
+<<[[main()]] command line processing>>=
+case 'f':
+    fontname = ARGF();
+    if(fontname == nil)
+        usage();
+    break;
+@
+
+<<[[main()]] set some globals>>=
+if(fontname == nil)
+    fontname = getenv("font");
+if(fontname == nil)
+    fontname = "/lib/font/bit/lucm/unicode.9.font";
+
+/* check font before barging ahead */
+if(access(fontname, 0) < 0){
+    fprint(2, "rio: can't access %s: %r\n", fontname);
+    exits("font open");
+}
+putenv("font", fontname);
+@
 
 \chapter{Conclusion}
 
@@ -868,14 +2215,128 @@ getsnarf(void)
 
 \chapter{Debugging}
 
+% _drawdebug?
+
+% errorshouldabort could be here
+
 \chapter{Profiling}
 
 \chapter{Error Managment}
 
-<<global errorshouldabort>>=
-int errorshouldabort = 0;
+\section{Error codes}
+
+% fsys.c
+<<global Eperm>>=
+char Eperm[] = "permission denied";
 @
 
+<<global Eexist>>=
+char Eexist[] = "file does not exist";
+@
+
+<<global Enotdir>>=
+char Enotdir[] = "not a directory";
+@
+
+<<global Ebadfcall>>=
+char	Ebadfcall[] = "bad fcall type";
+@
+
+<<global Eoffset>>=
+char	Eoffset[] = "illegal offset";
+@
+
+
+% wctl.c
+<<global Ebadwr>>=
+char	Ebadwr[]		= "bad rectangle in wctl request";
+@
+
+<<global Ewalloc>>=
+char	Ewalloc[]		= "window allocation failed in wctl request";
+@
+
+
+% xfid.c
+
+<<global Einuse>>=
+char Einuse[] =		"file in use";
+@
+
+<<global Edeleted>>=
+char Edeleted[] =	"window deleted";
+@
+
+<<global Ebadreq>>=
+char Ebadreq[] =	"bad graphics request";
+@
+
+<<global Etooshort>>=
+char Etooshort[] =	"buffer too small";
+@
+
+<<global Ebadtile>>=
+char Ebadtile[] =	"unknown tile";
+@
+
+<<global Eshort>>=
+char Eshort[] =		"short i/o request";
+@
+
+<<global Elong>>=
+char Elong[] = 		"snarf buffer too long";
+@
+
+<<global Eunkid>>=
+char Eunkid[] = 	"unknown id in attach";
+@
+
+<<global Ebadrect>>=
+char Ebadrect[] = 	"bad rectangle in attach";
+@
+
+<<global Ewindow>>=
+char Ewindow[] = 	"cannot make window";
+@
+
+<<global Enowindow>>=
+char Enowindow[] = 	"window has no image";
+@
+
+<<global Ebadmouse>>=
+char Ebadmouse[] = 	"bad format on /dev/mouse";
+@
+
+<<global Ebadwrect>>=
+char Ebadwrect[] = 	"rectangle outside screen";
+@
+
+<<global Ebadoffset>>=
+char Ebadoffset[] = 	"window read not on scan line boundary";
+@
+
+\section{[[error()]], [[derror()]]}
+
+
+<<global errorshouldabort>>=
+bool errorshouldabort = false;
+@
+
+<<function error>>=
+void
+error(char *s)
+{
+    fprint(STDERR, "rio: %s: %r\n", s);
+    if(errorshouldabort)
+        abort();
+    threadexitsall("error");
+}
+@
+% abort? diff with exit? generate a fault so go in broken state so
+% can be debugged!
+
+
+% argument to geninitdraw()
 <<function derror>>=
 void
 derror(Display*, char *errorstr)
@@ -884,7 +2345,174 @@ derror(Display*, char *errorstr)
 }
 @
 
+
+
 \chapter{Libc}
+
+<<function min>>=
+int
+min(int a, int b)
+{
+    if(a < b)
+        return a;
+    return b;
+}
+@
+
+<<function max (windows/rio/util.c)>>=
+int
+max(int a, int b)
+{
+    if(a > b)
+        return a;
+    return b;
+}
+@
+
+
+
+<<function erealloc>>=
+void*
+erealloc(void *p, uint n)
+{
+    p = realloc(p, n);
+    if(p == nil)
+        error("realloc failed");
+    return p;
+}
+@
+
+<<function emalloc>>=
+void*
+emalloc(uint n)
+{
+    void *p;
+
+    p = malloc(n);
+    if(p == nil)
+        error("malloc failed");
+    memset(p, 0, n);
+    return p;
+}
+@
+
+<<function estrdup>>=
+char*
+estrdup(char *s)
+{
+    char *p;
+
+    p = malloc(strlen(s)+1);
+    if(p == nil)
+        error("strdup failed");
+    strcpy(p, s);
+    return p;
+}
+@
+
+
+
+
+<<function isalnum>>=
+//@Scheck: not dead, but conflict with the one in ctype.h
+int isalnum(Rune c)
+{
+    /*
+     * Hard to get absolutely right.  Use what we know about ASCII
+     * and assume anything above the Latin control characters is
+     * potentially an alphanumeric.
+     */
+    if(c <= ' ')
+        return false;
+    if(0x7F<=c && c<=0xA0)
+        return false;
+    if(utfrune("!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~", c))
+        return false;
+    return true;
+}
+@
+%$
+
+
+
+
+<<function cvttorunes>>=
+void
+cvttorunes(char *p, int n, Rune *r, int *nb, int *nr, int *nulls)
+{
+    uchar *q;
+    Rune *s;
+    int j, w;
+
+    /*
+     * Always guaranteed that n bytes may be interpreted
+     * without worrying about partial runes.  This may mean
+     * reading up to UTFmax-1 more bytes than n; the caller
+     * knows this.  If n is a firm limit, the caller should
+     * set p[n] = 0.
+     */
+    q = (uchar*)p;
+    s = r;
+    for(j=0; j<n; j+=w){
+        if(*q < Runeself){
+            w = 1;
+            *s = *q++;
+        }else{
+            w = chartorune(s, (char*)q);
+            q += w;
+        }
+        if(*s)
+            s++;
+        else if(nulls)
+                *nulls = true;
+    }
+    *nb = (char*)q-p;
+    *nr = s-r;
+}
+@
+
+
+
+
+<<function strrune>>=
+Rune*
+strrune(Rune *s, Rune c)
+{
+    Rune c1;
+
+    if(c == 0) {
+        while(*s++)
+            ;
+        return s-1;
+    }
+
+    while(c1 = *s++)
+        if(c1 == c)
+            return s-1;
+    return nil;
+}
+@
+
+<<function runetobyte>>=
+char*
+runetobyte(Rune *r, int n, int *ip)
+{
+    char *s;
+    int m;
+
+    s = emalloc(n*UTFmax+1);
+    m = snprint(s, n*UTFmax+1, "%.*S", n, r);
+    *ip = m;
+    return s;
+}
+@
+
+
+
+
+
+
+
 
 \chapter{Extra Code}
 

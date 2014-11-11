@@ -40,7 +40,7 @@ cvttorunes(char *p, int n, Rune *r, int *nb, int *nr, int *nulls)
         if(*s)
             s++;
         else if(nulls)
-                *nulls = TRUE;
+                *nulls = true;
     }
     *nb = (char*)q-p;
     *nr = s-r;
@@ -51,7 +51,7 @@ cvttorunes(char *p, int n, Rune *r, int *nb, int *nr, int *nulls)
 void
 error(char *s)
 {
-    fprint(2, "rio: %s: %r\n", s);
+    fprint(STDERR, "rio: %s: %r\n", s);
     if(errorshouldabort)
         abort();
     threadexitsall("error");
@@ -107,12 +107,12 @@ int isalnum(Rune c)
      * potentially an alphanumeric.
      */
     if(c <= ' ')
-        return FALSE;
+        return false;
     if(0x7F<=c && c<=0xA0)
-        return FALSE;
+        return false;
     if(utfrune("!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~", c))
-        return FALSE;
-    return TRUE;
+        return false;
+    return true;
 }
 /*e: function isalnum */
 

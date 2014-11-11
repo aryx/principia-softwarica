@@ -29,31 +29,45 @@ char	Eoffset[] = "illegal offset";
 /*e: global Eoffset */
 
 
-/*s: enum _anon_ (windows/rio/fsys.c) */
-enum{
-    DEBUG = 0
-};
-/*e: enum _anon_ (windows/rio/fsys.c) */
+/*s: constant DEBUG */
+#define DEBUG false
+/*e: constant DEBUG */
 
 /*s: global dirtab */
 Dirtab dirtab[]=
 {
-    { ".",			QTDIR,	Qdir,			0500|DMDIR },
+    { ".",		QTDIR,	Qdir,		0500|DMDIR },
+    /*s: dirtab array elements */
     { "cons",		QTFILE,	Qcons,		0600 },
-    { "cursor",		QTFILE,	Qcursor,		0600 },
-    { "consctl",	QTFILE,	Qconsctl,		0200 },
+    /*x: dirtab array elements */
+    { "consctl",	QTFILE,	Qconsctl,	0200 },
+    /*x: dirtab array elements */
+    { "mouse",		QTFILE,	Qmouse,		0600 },
+    /*x: dirtab array elements */
+    { "cursor",		QTFILE,	Qcursor,	0600 },
+    /*x: dirtab array elements */
     { "winid",		QTFILE,	Qwinid,		0400 },
+    /*x: dirtab array elements */
     { "winname",	QTFILE,	Qwinname,	0400 },
-    { "kbdin",		QTFILE,	Qkbdin,		0200 },
+    /*x: dirtab array elements */
     { "label",		QTFILE,	Qlabel,		0600 },
-    { "mouse",	QTFILE,	Qmouse,		0600 },
-    { "screen",		QTFILE,	Qscreen,		0400 },
-    { "snarf",		QTFILE,	Qsnarf,		0600 },
+    /*x: dirtab array elements */
+    { "screen",		QTFILE,	Qscreen,	0400 },
+    /*x: dirtab array elements */
+    { "window",		QTFILE,	Qwindow,	0400 },
+    /*x: dirtab array elements */
     { "text",		QTFILE,	Qtext,		0400 },
+    /*x: dirtab array elements */
+    { "kbdin",		QTFILE,	Qkbdin,		0200 },
+    /*x: dirtab array elements */
     { "wdir",		QTFILE,	Qwdir,		0600 },
+    /*x: dirtab array elements */
     { "wctl",		QTFILE,	Qwctl,		0600 },
-    { "window",	QTFILE,	Qwindow,		0400 },
+    /*x: dirtab array elements */
     { "wsys",		QTDIR,	Qwsys,		0500|DMDIR },
+    /*x: dirtab array elements */
+    { "snarf",		QTFILE,	Qsnarf,		0600 },
+    /*e: dirtab array elements */
     { nil, }
 };
 /*e: global dirtab */
@@ -95,9 +109,6 @@ static	Xfid*	filsyswstat(Filsys*, Xfid*, Fid*);
 /*s: global fcall */
 Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 {
-    [Tflush]	= filsysflush,
-    [Tversion]	= filsysversion,
-    [Tauth]	= filsysauth,
     [Tattach]	= filsysattach,
     [Twalk]	= filsyswalk,
     [Topen]	= filsysopen,
@@ -105,9 +116,12 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
     [Tread]	= filsysread,
     [Twrite]	= filsyswrite,
     [Tclunk]	= filsysclunk,
-    [Tremove]= filsysremove,
+    [Tremove]   = filsysremove,
     [Tstat]	= filsysstat,
     [Twstat]	= filsyswstat,
+    [Tflush]	= filsysflush,
+    [Tversion]	= filsysversion,
+    [Tauth]	= filsysauth,
 };
 /*e: global fcall */
 
@@ -160,10 +174,13 @@ filsysinit(Channel *cxfidalloc)
     fs = emalloc(sizeof(Filsys));
     if(cexecpipe(&fs->cfd, &fs->sfd) < 0)
         goto Rescue;
+
     fmtinstall('F', fcallfmt);
+
     clockfd = open("/dev/time", OREAD|OCEXEC);
+
     fd = open("/dev/user", OREAD);
-    strcpy(buf, "Jean-Paul_Belmondo");
+    strcpy(buf, "Jean-Paul_Belmondo"); // lol
     if(fd >= 0){
         n = read(fd, buf, sizeof buf-1);
         if(n > 0)
@@ -171,6 +188,7 @@ filsysinit(Channel *cxfidalloc)
         close(fd);
     }
     fs->user = estrdup(buf);
+
     fs->cxfidalloc = cxfidalloc;
     pid = getpid();
 
@@ -229,7 +247,7 @@ filsysproc(void *arg)
         if(n <= 0){
             yield();	/* if threadexitsall'ing, will not return */
             fprint(2, "rio: %d: read9pmsg: %d %r\n", getpid(), n);
-            errorshouldabort = 0;
+            errorshouldabort = false;
             error("eof or i/o error on server channel");
         }
         if(x == nil){
@@ -369,8 +387,8 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
 
     if(strcmp(x->uname, x->fs->user) != 0)
         return filsysrespond(x->fs, x, &t, Eperm);
-    f->busy = TRUE;
-    f->open = FALSE;
+    f->busy = true;
+    f->open = false;
     f->qid.path = Qdir;
     f->qid.type = QTDIR;
     f->qid.vers = 0;
@@ -416,8 +434,8 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
         nf = newfid(fs, x->newfid);
         if(nf->busy)
             return filsysrespond(fs, x, &t, "clone to busy fid");
-        nf->busy = TRUE;
-        nf->open = FALSE;
+        nf->busy = true;
+        nf->open = false;
         nf->dir = f->dir;
         nf->qid = f->qid;
         nf->w = f->w;
@@ -504,8 +522,8 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
         if(nf){
             if(nf->w)
                 sendp(winclosechan, nf->w);
-            nf->open = FALSE;
-            nf->busy = FALSE;
+            nf->open = false;
+            nf->busy = false;
         }
     }else if(t.nwqid == x->nwname){
         f->dir = dir;
@@ -597,6 +615,7 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
         return filsysrespond(fs, x, &t, "out of memory");
     n = 0;
     switch(FILE(f->qid)){
+    /*s: [[filsysread()]] cases */
     case Qdir:
     case Qwsysdir:
         d = dirtab;
@@ -633,6 +652,7 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
         }
         free(ids);
         break;
+    /*e: [[filsysread()]] cases */
     }
     t.data = (char*)b;
     t.count = n;
@@ -660,15 +680,15 @@ filsysclunk(Filsys *fs, Xfid *x, Fid *f)
     Fcall t;
 
     if(f->open){
-        f->busy = FALSE;
-        f->open = FALSE;
+        f->busy = false;
+        f->open = false;
         sendp(x->c, xfidclose);
         return nil;
     }
     if(f->w)
         sendp(winclosechan, f->w);
-    f->busy = FALSE;
-    f->open = FALSE;
+    f->busy = false;
+    f->open = false;
     return filsysrespond(fs, x, &t, nil);
 }
 /*e: function filsysclunk */
@@ -722,7 +742,7 @@ newfid(Filsys *fs, int fid)
     for(f=*fh; f; f=f->next)
         if(f->fid == fid)
             return f;
-        else if(ff==nil && f->busy==FALSE)
+        else if(ff==nil && f->busy==false)
             ff = f;
     if(ff){
         ff->fid = fid;

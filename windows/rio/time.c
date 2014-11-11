@@ -41,7 +41,7 @@ timerstop(Timer *t)
 void
 timercancel(Timer *t)
 {
-    t->cancel = TRUE;
+    t->cancel = true;
 }
 /*e: function timercancel */
 
@@ -134,7 +134,7 @@ timerstart(int dt)
     }
     t->next = nil;
     t->dt = dt;
-    t->cancel = FALSE;
+    t->cancel = false;
     sendp(ctimer, t);
     return t;
 }

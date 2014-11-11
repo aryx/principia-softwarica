@@ -48,7 +48,7 @@ static char *cmds[] = {
     [Move]	= "move",
     [Scroll]	= "scroll",
     [Noscroll]	= "noscroll",
-    [Set]		= "set",
+    [Set]	= "set",
     [Top]	= "top",
     [Bottom]	= "bottom",
     [Current]	= "current",
@@ -80,16 +80,16 @@ enum
 
 /*s: global params */
 static char *params[] = {
-    [Cd]	 			= "-cd",
+    [Cd] 			= "-cd",
     [Deltax]			= "-dx",
     [Deltay]			= "-dy",
     [Hidden]			= "-hide",
-    [Id]				= "-id",
+    [Id]			= "-id",
     [Maxx]			= "-maxx",
     [Maxy]			= "-maxy",
     [Minx]			= "-minx",
     [Miny]			= "-miny",
-    [PID]				= "-pid",
+    [PID]			= "-pid",
     [R]				= "-r",
     [Scrolling]			= "-scroll",
     [Noscrolling]		= "-noscroll",

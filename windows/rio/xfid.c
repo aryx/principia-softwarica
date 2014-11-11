@@ -185,7 +185,7 @@ xfidflush(Xfid *x)
     for(xf=xfid; xf; xf=xf->next)
         if(xf->flushtag == x->oldtag){
             xf->flushtag = -1;
-            xf->flushing = TRUE;
+            xf->flushing = true;
             incref(xf);	/* to hold data structures up at tail of synchronization */
             if(xf->ref == 1)
                 error("ref 1 in flush");
@@ -196,7 +196,7 @@ xfidflush(Xfid *x)
                 qlock(&xf->active);	/* wait for him to finish */
                 qunlock(&xf->active);
             }
-            xf->flushing = FALSE;
+            xf->flushing = false;
             if(decref(xf) == 0)
                 sendp(cxfidfree, xf);
             break;
@@ -221,7 +221,7 @@ xfidattach(Xfid *x)
     qlock(&all);
     w = nil;
     err = Eunkid;
-    newlymade = FALSE;
+    newlymade = false;
     hideit = 0;
 
     if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
@@ -253,7 +253,7 @@ xfidattach(Xfid *x)
                     pid = -1;	/* make sure we don't pop a shell! - UGH */
                 w = new(i, hideit, scrolling, pid, nil, nil, nil);
                 flushimage(display, 1);
-                newlymade = TRUE;
+                newlymade = true;
             }else
                 err = Ewindow;
         }
@@ -270,7 +270,7 @@ xfidattach(Xfid *x)
     x->f->w = w;
     if(w == nil){
         qunlock(&all);
-        x->f->busy = FALSE;
+        x->f->busy = false;
         filsysrespond(x->fs, x, &t, err);
         return;
     }
@@ -294,12 +294,13 @@ xfidopen(Xfid *x)
         return;
     }
     switch(FILE(x->f->qid)){
+    /*s: [[xfidopen()]] cases */
     case Qconsctl:
         if(w->ctlopen){
             filsysrespond(x->fs, x, &t, Einuse);
             return;
         }
-        w->ctlopen = TRUE;
+        w->ctlopen = true;
         break;
     case Qkbdin:
         if(w !=  wkeyboard){
@@ -320,8 +321,8 @@ xfidopen(Xfid *x)
          * up in a window that has been resized since the
          * dawn of time.  We choose the lesser evil.
          */
-        w->resized = FALSE;
-        w->mouseopen = TRUE;
+        w->resized = false;
+        w->mouseopen = true;
         break;
     case Qsnarf:
         if(x->mode==ORDWR || x->mode==OWRITE){
@@ -345,15 +346,16 @@ xfidopen(Xfid *x)
                 filsysrespond(x->fs, x, &t, Einuse);
                 return;
             }
-            w->wctlopen = TRUE;
+            w->wctlopen = true;
             w->wctlready = 1;
             wsendctlmesg(w, Wakeup, ZR, nil);
         }
-        break;
+    break;
+    /*e: [[xfidopen()]] cases */
     }
     t.qid = x->f->qid;
     t.iounit = messagesize-IOHDRSZ;
-    x->f->open = TRUE;
+    x->f->open = true;
     x->f->mode = x->mode;
     filsysrespond(x->fs, x, &t, nil);
 }
@@ -369,24 +371,25 @@ xfidclose(Xfid *x)
 
     w = x->f->w;
     switch(FILE(x->f->qid)){
+    /*s: [[xfidclose()]] cases */
     case Qconsctl:
         if(w->rawing){
-            w->rawing = FALSE;
+            w->rawing = false;
             wsendctlmesg(w, Rawoff, ZR, nil);
         }
         if(w->holding){
-            w->holding = FALSE;
+            w->holding = false;
             wsendctlmesg(w, Holdoff, ZR, nil);
         }
-        w->ctlopen = FALSE;
+        w->ctlopen = false;
         break;
     case Qcursor:
         w->cursorp = nil;
-        wsetcursor(w, FALSE);
+        wsetcursor(w, false);
         break;
     case Qmouse:
-        w->resized = FALSE;
-        w->mouseopen = FALSE;
+        w->resized = false;
+        w->mouseopen = false;
         if(w->i != nil)
             wsendctlmesg(w, Refresh, w->i->r, nil);
         break;
@@ -402,8 +405,9 @@ xfidclose(Xfid *x)
         break;
     case Qwctl:
         if(x->f->mode==OREAD || x->f->mode==ORDWR)
-            w->wctlopen = FALSE;
-        break;
+            w->wctlopen = false;
+    break;
+    /*e: [[xfidclose()]] cases */
     }
     wclose(w);
     filsysrespond(x->fs, x, &t, nil);
@@ -418,6 +422,7 @@ enum { CWdata, CWflush, NCW };
 void
 xfidwrite(Xfid *x)
 {
+    /*s: [[xfidwrite()]] locals */
     Fcall fc;
     int c, cnt, qid, nb, off, nr;
     char buf[256], *p;
@@ -427,7 +432,8 @@ xfidwrite(Xfid *x)
     Conswritemesg cwm;
     Stringpair pair;
     Alt alts[NCW+1];
-
+    /*e: [[xfidwrite()]] locals */
+    
     w = x->f->w;
     if(w->deleted){
         filsysrespond(x->fs, x, &fc, Edeleted);
@@ -437,7 +443,9 @@ xfidwrite(Xfid *x)
     cnt = x->count;
     off = x->offset;
     x->data[cnt] = 0;
+
     switch(qid){
+    /*s: [[xfidwrite()]] cases */
     case Qcons:
         nr = x->f->nrpart;
         if(nr > 0){
@@ -468,7 +476,7 @@ xfidwrite(Xfid *x)
         alts[CWflush].v = nil;
         alts[CWflush].op = CHANRCV;
         alts[NCW].op = CHANEND;
-    
+
         switch(alt(alts)){
         case CWdata:
             break;
@@ -503,13 +511,13 @@ xfidwrite(Xfid *x)
             break;
         }
         if(strncmp(x->data, "holdoff", 7)==0 && w->holding){
-            if(--w->holding == FALSE)
+            if(--w->holding == false)
                 wsendctlmesg(w, Holdoff, ZR, nil);
             break;
         }
         if(strncmp(x->data, "rawon", 5)==0){
             if(w->holding){
-                w->holding = FALSE;
+                w->holding = false;
                 wsendctlmesg(w, Holdoff, ZR, nil);
             }
             if(w->rawing++ == 0)
@@ -619,7 +627,9 @@ xfidwrite(Xfid *x)
         sprint(buf, "unknown qid in write");
         filsysrespond(x->fs, x, &fc, buf);
         return;
+    /*e: [[xfidwrite()]] cases */
     }
+
     fc.count = cnt;
     filsysrespond(x->fs, x, &fc, nil);
 }
@@ -659,6 +669,7 @@ enum { WCRdata, WCRflush, NWCR };
 void
 xfidread(Xfid *x)
 {
+    /*s: [[xfidread()]] locals */
     Fcall fc;
     int n, off, cnt, c;
     uint qid;
@@ -674,7 +685,8 @@ xfidread(Xfid *x)
     Consreadmesg cwrm;
     Stringpair pair;
     Alt alts[NCR+1];
-
+    /*e: [[xfidread()]] locals */
+    
     w = x->f->w;
     if(w->deleted){
         filsysrespond(x->fs, x, &fc, Edeleted);
@@ -683,7 +695,9 @@ xfidread(Xfid *x)
     qid = FILE(x->f->qid);
     off = x->offset;
     cnt = x->count;
+
     switch(qid){
+    /*s: [[xfidread()]] cases */
     case Qcons:
         x->flushtag = x->tag;
 
@@ -924,6 +938,7 @@ xfidread(Xfid *x)
         sprint(buf, "unknown qid in read");
         filsysrespond(x->fs, x, &fc, buf);
         break;
+    /*e: [[xfidread()]] cases */
     }
 }
 /*e: function xfidread */

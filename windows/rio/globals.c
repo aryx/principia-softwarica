@@ -1,20 +1,19 @@
 /*s: windows/rio/globals.c */
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
 #include <frame.h>
+
 #include <fcall.h>
 
 #include "dat.h"
 #include "fns.h"
 
-/*s: global font */
-Font		*font;
-/*e: global font */
 /*s: global mousectl */
 Mousectl	*mousectl;
 /*e: global mousectl */
@@ -24,9 +23,7 @@ Mouse	*mouse;
 /*s: global keyboardctl */
 Keyboardctl	*keyboardctl;
 /*e: global keyboardctl */
-/*s: global display */
-Display	*display;
-/*e: global display */
+
 /*s: global view */
 Image	*view;
 /*e: global view */
@@ -42,6 +39,7 @@ Image	*background;
 /*s: global red */
 Image	*red;
 /*e: global red */
+
 /*s: global window */
 Window	**window;
 /*e: global window */
@@ -51,8 +49,9 @@ Window	*wkeyboard;	/* window of simulated keyboard */
 /*s: global nwindow */
 int		nwindow;
 /*e: global nwindow */
+
 /*s: global snarffd */
-int		snarffd;
+fdt		snarffd;
 /*e: global snarffd */
 /*s: global input */
 Window	*input;
@@ -76,10 +75,10 @@ int		nsnarf;
 Rune*	snarf;
 /*e: global snarf */
 /*s: global scrolling */
-int		scrolling;
+bool		scrolling;
 /*e: global scrolling */
 /*s: global maxtab */
-int		maxtab;
+int		maxtab = 0;
 /*e: global maxtab */
 /*s: global deletechan */
 Channel*	deletechan;
@@ -88,19 +87,19 @@ Channel*	deletechan;
 char		*startdir;
 /*e: global startdir */
 /*s: global sweeping */
-int		sweeping;
+int	sweeping;
 /*e: global sweeping */
 /*s: global wctlfd */
-int		wctlfd;
+int	wctlfd;
 /*e: global wctlfd */
 /*s: global menuing */
-int		menuing;		/* menu action is pending; waiting for window to be indicated */
+bool menuing;/* menu action is pending; waiting for window to be indicated */
 /*e: global menuing */
 /*s: global snarfversion */
 int		snarfversion;	/* updated each time it is written */
 /*e: global snarfversion */
 /*s: global errorshouldabort */
-int errorshouldabort = 0;
+bool errorshouldabort = false;
 /*e: global errorshouldabort */
 /*s: global winclosechan */
 Channel	*winclosechan; /* chan(Window*); */
