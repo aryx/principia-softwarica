@@ -36,7 +36,6 @@ SRC_VIEWS= \
    rio/wind.c\
    rio/xfid.c\
    apps/lens.c\
-   apps/screenlock.c\
    apps/statusbar.c\
    apps/winwatch.c\
    libcomplete/complete.c\

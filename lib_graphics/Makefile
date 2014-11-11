@@ -120,6 +120,7 @@ SRC_VIEWS= \
    libmemlayer/unload.c\
    ../windows/apps/clock.c\
    ../windows/apps/colors.c\
+   ../windows/apps/screenlock.c\
    ../kernel/devices/screen/386/devvga.c\
    ../kernel/devices/screen/386/screen.c\
    ../kernel/devices/screen/386/screen.h\

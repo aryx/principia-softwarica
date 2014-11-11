@@ -300,7 +300,7 @@ newwin(char *win)
     if(srv == 0){
         mntsrv = rdenv("/mnt/term/env/wsys");
         if(mntsrv == 0){
-            fprint(2, "statusbar: can't find $wsys\n");
+            fprint(2, "statusbar: can't find $wsys\n"); //$
             return -1;
         }
         srv = malloc(strlen(mntsrv)+10);

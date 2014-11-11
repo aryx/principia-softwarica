@@ -71,7 +71,7 @@ static Rectangle	screenr;
 static uchar	*screenbuf;
 /*e: global screenbuf */
 
-void	magnify(void);
+void magnify(void);
 void makegrid(void);
 
 /*s: function drawit */
