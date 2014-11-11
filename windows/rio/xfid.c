@@ -224,6 +224,7 @@ xfidattach(Xfid *x)
     newlymade = false;
     hideit = 0;
 
+    //TODO delete
     if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
         n = x->aname+1;
         pid = strtoul(n, &n, 0);
@@ -302,12 +303,7 @@ xfidopen(Xfid *x)
         }
         w->ctlopen = true;
         break;
-    case Qkbdin:
-        if(w !=  wkeyboard){
-            filsysrespond(x->fs, x, &t, Eperm);
-            return;
-        }
-        break;
+    /*x: [[xfidopen()]] cases */
     case Qmouse:
         if(w->mouseopen){
             filsysrespond(x->fs, x, &t, Einuse);
@@ -324,14 +320,14 @@ xfidopen(Xfid *x)
         w->resized = false;
         w->mouseopen = true;
         break;
-    case Qsnarf:
-        if(x->mode==ORDWR || x->mode==OWRITE){
-            if(tsnarf)
-                free(tsnarf);	/* collision, but OK */
-            ntsnarf = 0;
-            tsnarf = malloc(1);
+    /*x: [[xfidopen()]] cases */
+    case Qkbdin:
+        if(w !=  wkeyboard){
+            filsysrespond(x->fs, x, &t, Eperm);
+            return;
         }
         break;
+    /*x: [[xfidopen()]] cases */
     case Qwctl:
         if(x->mode==OREAD || x->mode==ORDWR){
             /*
@@ -350,7 +346,16 @@ xfidopen(Xfid *x)
             w->wctlready = 1;
             wsendctlmesg(w, Wakeup, ZR, nil);
         }
-    break;
+        break;
+    /*x: [[xfidopen()]] cases */
+    case Qsnarf:
+        if(x->mode==ORDWR || x->mode==OWRITE){
+            if(tsnarf)
+                free(tsnarf);	/* collision, but OK */
+            ntsnarf = 0;
+            tsnarf = malloc(1);
+        }
+        break;
     /*e: [[xfidopen()]] cases */
     }
     t.qid = x->f->qid;
@@ -383,16 +388,24 @@ xfidclose(Xfid *x)
         }
         w->ctlopen = false;
         break;
-    case Qcursor:
-        w->cursorp = nil;
-        wsetcursor(w, false);
-        break;
+    /*x: [[xfidclose()]] cases */
     case Qmouse:
         w->resized = false;
         w->mouseopen = false;
         if(w->i != nil)
             wsendctlmesg(w, Refresh, w->i->r, nil);
         break;
+    /*x: [[xfidclose()]] cases */
+    case Qcursor:
+        w->cursorp = nil;
+        wsetcursor(w, false);
+        break;
+    /*x: [[xfidclose()]] cases */
+    case Qwctl:
+        if(x->f->mode==OREAD || x->f->mode==ORDWR)
+            w->wctlopen = false;
+    break;
+    /*x: [[xfidclose()]] cases */
     /* odd behavior but really ok: replace snarf buffer when /dev/snarf is closed */
     case Qsnarf:
         if(x->f->mode==ORDWR || x->f->mode==OWRITE){
@@ -403,10 +416,6 @@ xfidclose(Xfid *x)
             ntsnarf = 0;
         }
         break;
-    case Qwctl:
-        if(x->f->mode==OREAD || x->f->mode==ORDWR)
-            w->wctlopen = false;
-    break;
     /*e: [[xfidclose()]] cases */
     }
     wclose(w);
@@ -503,7 +512,7 @@ xfidwrite(Xfid *x)
         filsysrespond(x->fs, x, &fc, nil);
         qunlock(&x->active);
         return;
-
+    /*x: [[xfidwrite()]] cases */
     case Qconsctl:
         if(strncmp(x->data, "holdon", 6)==0){
             if(w->holding++ == 0)
@@ -531,30 +540,7 @@ xfidwrite(Xfid *x)
         }
         filsysrespond(x->fs, x, &fc, "unknown control message");
         return;
-
-    case Qcursor:
-        if(cnt < 2*4+2*2*16)
-            w->cursorp = nil;
-        else{
-            w->cursor.offset.x = BGLONG(x->data+0*4);
-            w->cursor.offset.y = BGLONG(x->data+1*4);
-            memmove(w->cursor.clr, x->data+2*4, 2*2*16);
-            w->cursorp = &w->cursor;
-        }
-        wsetcursor(w, !sweeping);
-        break;
-
-    case Qlabel:
-        if(off != 0){
-            filsysrespond(x->fs, x, &fc, "non-zero offset writing label");
-            return;
-        }
-        free(w->label);
-        w->label = emalloc(cnt+1);
-        memmove(w->label, x->data, cnt);
-        w->label[cnt] = 0;
-        break;
-
+    /*x: [[xfidwrite()]] cases */
     case Qmouse:
         if(w!=input || Dx(w->screenr)<=0)
             break;
@@ -572,19 +558,34 @@ xfidwrite(Xfid *x)
         if(w==input && wpointto(mouse->xy)==w)
             wsendctlmesg(w, Movemouse, Rpt(pt, pt), nil);
         break;
-
-    case Qsnarf:
-        /* always append only */
-        if(ntsnarf > MAXSNARF){	/* avoid thrashing when people cut huge text */
-            filsysrespond(x->fs, x, &fc, Elong);
+    /*x: [[xfidwrite()]] cases */
+    case Qcursor:
+        if(cnt < 2*4+2*2*16)
+            w->cursorp = nil;
+        else{
+            w->cursor.offset.x = BGLONG(x->data+0*4);
+            w->cursor.offset.y = BGLONG(x->data+1*4);
+            memmove(w->cursor.clr, x->data+2*4, 2*2*16);
+            w->cursorp = &w->cursor;
+        }
+        wsetcursor(w, !sweeping);
+        break;
+    /*x: [[xfidwrite()]] cases */
+    case Qlabel:
+        if(off != 0){
+            filsysrespond(x->fs, x, &fc, "non-zero offset writing label");
             return;
         }
-        tsnarf = erealloc(tsnarf, ntsnarf+cnt+1);	/* room for NUL */
-        memmove(tsnarf+ntsnarf, x->data, cnt);
-        ntsnarf += cnt;
-        snarfversion++;
+        free(w->label);
+        w->label = emalloc(cnt+1);
+        memmove(w->label, x->data, cnt);
+        w->label[cnt] = 0;
         break;
-
+    /*x: [[xfidwrite()]] cases */
+    case Qkbdin:
+        keyboardsend(x->data, cnt);
+        break;
+    /*x: [[xfidwrite()]] cases */
     case Qwdir:
         if(cnt == 0)
             break;
@@ -609,11 +610,7 @@ xfidwrite(Xfid *x)
             w->dir = cleanname(p);
         }
         break;
-
-    case Qkbdin:
-        keyboardsend(x->data, cnt);
-        break;
-
+    /*x: [[xfidwrite()]] cases */
     case Qwctl:
         if(writewctl(x, buf) < 0){
             filsysrespond(x->fs, x, &fc, buf);
@@ -621,13 +618,24 @@ xfidwrite(Xfid *x)
         }
         flushimage(display, 1);
         break;
-
+    /*x: [[xfidwrite()]] cases */
+    case Qsnarf:
+        /* always append only */
+        if(ntsnarf > MAXSNARF){	/* avoid thrashing when people cut huge text */
+            filsysrespond(x->fs, x, &fc, Elong);
+            return;
+        }
+        tsnarf = erealloc(tsnarf, ntsnarf+cnt+1);	/* room for NUL */
+        memmove(tsnarf+ntsnarf, x->data, cnt);
+        ntsnarf += cnt;
+        snarfversion++;
+        break;
+    /*e: [[xfidwrite()]] cases */
     default:
         fprint(2, buf, "unknown qid %d in write\n", qid);
         sprint(buf, "unknown qid in write");
         filsysrespond(x->fs, x, &fc, buf);
         return;
-    /*e: [[xfidwrite()]] cases */
     }
 
     fc.count = cnt;
@@ -670,10 +678,11 @@ void
 xfidread(Xfid *x)
 {
     /*s: [[xfidread()]] locals */
+    char buf[128];
     Fcall fc;
     int n, off, cnt, c;
     uint qid;
-    char buf[128], *t;
+    char *t;
     char cbuf[30];
     Window *w;
     Mouse ms;
@@ -740,18 +749,7 @@ xfidread(Xfid *x)
         free(t);
         qunlock(&x->active);
         break;
-
-    case Qlabel:
-        n = strlen(w->label);
-        if(off > n)
-            off = n;
-        if(off+cnt > n)
-            cnt = n-off;
-        fc.data = w->label+off;
-        fc.count = cnt;
-        filsysrespond(x->fs, x, &fc, nil);
-        break;
-
+    /*x: [[xfidread()]] cases */
     case Qmouse:
         x->flushtag = x->tag;
 
@@ -791,50 +789,16 @@ xfidread(Xfid *x)
         filsysrespond(x->fs, x, &fc, nil);
         qunlock(&x->active);
         break;
-
+    /*x: [[xfidread()]] cases */
     case Qcursor:
         filsysrespond(x->fs, x, &fc, "cursor read not implemented");
         break;
-
-    /* The algorithm for snarf and text is expensive but easy and rarely used */
-    case Qsnarf:
-        getsnarf();
-        if(nsnarf)
-            t = runetobyte(snarf, nsnarf, &n);
-        else {
-            t = nil;
-            n = 0;
-        }
-        goto Text;
-
-    case Qtext:
-        t = wcontents(w, &n);
-        goto Text;
-
-    Text:
-        if(off > n){
-            off = n;
-            cnt = 0;
-        }
-        if(off+cnt > n)
-            cnt = n-off;
-        fc.data = t+off;
-        fc.count = cnt;
-        filsysrespond(x->fs, x, &fc, nil);
-        free(t);
-        break;
-
-    case Qwdir:
-        t = estrdup(w->dir);
-        n = strlen(t);
-        goto Text;
-
+    /*x: [[xfidread()]] cases */
     case Qwinid:
         n = sprint(buf, "%11d ", w->id);
         t = estrdup(buf);
         goto Text;
-
-
+    /*x: [[xfidread()]] cases */
     case Qwinname:
         n = strlen(w->name);
         if(n == 0){
@@ -843,16 +807,18 @@ xfidread(Xfid *x)
         }
         t = estrdup(w->name);
         goto Text;
-
-    case Qwindow:
-        i = w->i;
-        if(i == nil || Dx(w->screenr)<=0){
-            filsysrespond(x->fs, x, &fc, Enowindow);
-            return;
-        }
-        r = w->screenr;
-        goto caseImage;
-
+    /*x: [[xfidread()]] cases */
+    case Qlabel:
+        n = strlen(w->label);
+        if(off > n)
+            off = n;
+        if(off+cnt > n)
+            cnt = n-off;
+        fc.data = w->label+off;
+        fc.count = cnt;
+        filsysrespond(x->fs, x, &fc, nil);
+        break;
+    /*x: [[xfidread()]] cases */
     case Qscreen:
         i = display->image;
         if(i == nil){
@@ -883,7 +849,38 @@ xfidread(Xfid *x)
         }
         free(t);
         return;
+    /*x: [[xfidread()]] cases */
+    case Qwindow:
+        i = w->i;
+        if(i == nil || Dx(w->screenr)<=0){
+            filsysrespond(x->fs, x, &fc, Enowindow);
+            return;
+        }
+        r = w->screenr;
+        goto caseImage;
+    /*x: [[xfidread()]] cases */
+    case Qtext:
+        t = wcontents(w, &n);
+        goto Text;
 
+    Text:
+        if(off > n){
+            off = n;
+            cnt = 0;
+        }
+        if(off+cnt > n)
+            cnt = n-off;
+        fc.data = t+off;
+        fc.count = cnt;
+        filsysrespond(x->fs, x, &fc, nil);
+        free(t);
+        break;
+    /*x: [[xfidread()]] cases */
+    case Qwdir:
+        t = estrdup(w->dir);
+        n = strlen(t);
+        goto Text;
+    /*x: [[xfidread()]] cases */
     case Qwctl:	/* read returns rectangle, hangs if not resized */
         if(cnt < 4*12){
             filsysrespond(x->fs, x, &fc, Etooshort);
@@ -932,14 +929,24 @@ xfidread(Xfid *x)
         free(t);
         qunlock(&x->active);
         break;
-
+    /*x: [[xfidread()]] cases */
+    /* The algorithm for snarf and text is expensive but easy and rarely used */
+    case Qsnarf:
+        getsnarf();
+        if(nsnarf)
+            t = runetobyte(snarf, nsnarf, &n);
+        else {
+            t = nil;
+            n = 0;
+        }
+        goto Text;
+    /*e: [[xfidread()]] cases */
     default:
-        fprint(2, "unknown qid %d in read\n", qid);
+        fprint(STDERR, "unknown qid %d in read\n", qid);
         sprint(buf, "unknown qid in read");
         filsysrespond(x->fs, x, &fc, buf);
         break;
-    /*e: [[xfidread()]] cases */
-    }
+        }
 }
 /*e: function xfidread */
 /*e: windows/rio/xfid.c */

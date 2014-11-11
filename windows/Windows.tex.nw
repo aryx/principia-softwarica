@@ -257,25 +257,23 @@ usage(void)
 
 \section{Code organization}
 
-% graphic system part! see Graphics.tex.nw
+% for the graphic system part see Graphics.tex.nw
 
-% rio, frame?
-
-%dat.h
-%fns.h
+%dat.h: data structure and global declarations
+%fns.h: prototypes
 
 %globals.c
-%data.c
+%data.c: cursors, images, resources
 
 %util.c
 
-%time.c
-%scrl.c
-%wind.c
-%wctl.c
-%fsys.c
-%rio.c
-%xfid.c
+%time.c: timer thread
+%scrl.c: scrolling
+%wind.c: windows manip
+%wctl.c: windows control
+%fsys.c: /dev/ server
+%xfid.c: /dev/ services
+%rio.c: main
 
 
 \section{Architecture overview}
@@ -289,14 +287,14 @@ usage(void)
 % part2: toolkit (libpanel)
 
 
-% there are DS server side and client side
+% there are DS server side and client side.
 % Window is server side info about client window. On the client
 % side this window is actually stored in a handle called screen.
 
 
-
 % show the different threads! mouse, keyboard, close, delete, and xfids
 
+% filsysxxx -> xfidxxx -> wxxx
 
 
 %http://tech.slashdot.org/story/14/06/19/1317227/x-window-system-turns-30-years-old?utm_source=slashdot&utm_medium=facebook
@@ -766,7 +764,7 @@ void
 iconinit(void)
 {
     background = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0x777777FF);
-    red = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0xDD0000FF);
+    red        = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0xDD0000FF);
 }
 @
 % is it really a red?
@@ -874,428 +872,6 @@ if(maxtab == 0)
 free(s);
 @
 
-
-
-\chapter{[[filsysinit()]]}
-
-<<function filsysinit>>=
-Filsys*
-filsysinit(Channel *cxfidalloc)
-{
-    int n, fd, pid, p0;
-    Filsys *fs;
-    Channel *c;
-    char buf[128];
-
-    fs = emalloc(sizeof(Filsys));
-    if(cexecpipe(&fs->cfd, &fs->sfd) < 0)
-        goto Rescue;
-
-    fmtinstall('F', fcallfmt);
-
-    clockfd = open("/dev/time", OREAD|OCEXEC);
-
-    fd = open("/dev/user", OREAD);
-    strcpy(buf, "Jean-Paul_Belmondo"); // lol
-    if(fd >= 0){
-        n = read(fd, buf, sizeof buf-1);
-        if(n > 0)
-            buf[n] = 0;
-        close(fd);
-    }
-    fs->user = estrdup(buf);
-
-    fs->cxfidalloc = cxfidalloc;
-    pid = getpid();
-
-    /*
-     * Create and post wctl pipe
-     */
-    if(cexecpipe(&p0, &wctlfd) < 0)
-        goto Rescue;
-    sprint(srvwctl, "/srv/riowctl.%s.%d", fs->user, pid);
-    post(srvwctl, "wctl", p0);
-    close(p0);
-
-    /*
-     * Start server processes
-     */
-    c = chancreate(sizeof(char*), 0);
-    if(c == nil)
-        error("wctl channel");
-    proccreate(wctlproc, c, 4096);
-    threadcreate(wctlthread, c, 4096);
-    proccreate(filsysproc, fs, 10000);
-
-    /*
-     * Post srv pipe
-     */
-    sprint(srvpipe, "/srv/rio.%s.%d", fs->user, pid);
-    post(srvpipe, "wsys", fs->cfd);
-
-    return fs;
-
-Rescue:
-    free(fs);
-    return nil;
-}
-@
-
-
-
-
-<<function wctlproc>>=
-void
-wctlproc(void *v)
-{
-    char *buf;
-    int n, eofs;
-    Channel *c;
-
-    threadsetname("WCTLPROC");
-    c = v;
-
-    eofs = 0;
-    for(;;){
-        buf = emalloc(messagesize);
-        n = read(wctlfd, buf, messagesize-1);	/* room for \0 */
-        if(n < 0)
-            break;
-        if(n == 0){
-            if(++eofs > 20)
-                break;
-            continue;
-        }
-        eofs = 0;
-
-        buf[n] = '\0';
-        sendp(c, buf);
-    }
-}
-@
-
-
-
-
-<<function wctlthread>>=
-void
-wctlthread(void *v)
-{
-    char *buf, *arg, *dir;
-    int cmd, id, pid, hideit, scrollit;
-    Rectangle rect;
-    char err[ERRMAX];
-    Channel *c;
-
-    c = v;
-
-    threadsetname("WCTLTHREAD");
-
-    for(;;){
-        buf = recvp(c);
-        cmd = parsewctl(&arg, ZR, &rect, &pid, &id, &hideit, &scrollit, &dir, buf, err);
-
-        switch(cmd){
-        case New:
-            wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
-        }
-        free(buf);
-    }
-}
-@
-
-
-
-
-
-<<function filsysproc>>=
-static
-void
-filsysproc(void *arg)
-{
-    int n;
-    Xfid *x;
-    Fid *f;
-    Fcall t;
-    uchar *buf;
-    Filsys *fs;
-
-    threadsetname("FILSYSPROC");
-    fs = arg;
-    fs->pid = getpid();
-    x = nil;
-    for(;;){
-        buf = emalloc(messagesize+UTFmax);	/* UTFmax for appending partial rune in xfidwrite */
-        n = read9pmsg(fs->sfd, buf, messagesize);
-        if(n <= 0){
-            yield();	/* if threadexitsall'ing, will not return */
-            fprint(2, "rio: %d: read9pmsg: %d %r\n", getpid(), n);
-            errorshouldabort = false;
-            error("eof or i/o error on server channel");
-        }
-        if(x == nil){
-            send(fs->cxfidalloc, nil);
-            recv(fs->cxfidalloc, &x);
-            x->fs = fs;
-        }
-        x->buf = buf;
-        if(convM2S(buf, n, x) != n)
-            error("convert error in convM2S");
-        if(DEBUG)
-            fprint(2, "rio:<-%F\n", &x->Fcall);
-        if(fcall[x->type] == nil)
-            x = filsysrespond(fs, x, &t, Ebadfcall);
-        else{
-            if(x->type==Tversion || x->type==Tauth)
-                f = nil;
-            else
-                f = newfid(fs, x->fid);
-            x->f = f;
-            x  = (*fcall[x->type])(fs, x, f);
-        }
-        firstmessage = 0;
-    }
-}
-@
-
-\chapter{[[/dev/...]] Demultiplexer}
-
-\section{Overview}
-
-<<enum qid>>=
-enum qid
-{
-    Qdir,			/* /dev for this window */
-    <<enum qid cases>>
-    QMAX,
-};
-@
-
-% window+dev -> qid
-<<function QID>>=
-#define	QID(w,q)	((w<<8)|(q))
-@
-% what about overflow? hop will not have too many windows then
-
-% qid -> window
-<<function WIN>>=
-#define	WIN(q)	((((ulong)(q).path)>>8) & 0xFFFFFF)
-@
-
-% qid -> dev
-<<function FILE>>=
-#define	FILE(q)	(((ulong)(q).path) & 0xFF)
-@
-
-
-<<struct Dirtab>>=
-struct Dirtab
-{
-    char	*name;
-    uchar	type;
-    uint	qid;
-    uint	perm;
-};
-@
-
-<<global dirtab>>=
-Dirtab dirtab[]=
-{
-    { ".",		QTDIR,	Qdir,		0500|DMDIR },
-    <<dirtab array elements>>
-    { nil, }
-};
-@
-
-
-<<global fcall>>=
-Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
-{
-    [Tattach]	= filsysattach,
-    [Twalk]	= filsyswalk,
-    [Topen]	= filsysopen,
-    [Tcreate]	= filsyscreate,
-    [Tread]	= filsysread,
-    [Twrite]	= filsyswrite,
-    [Tclunk]	= filsysclunk,
-    [Tremove]   = filsysremove,
-    [Tstat]	= filsysstat,
-    [Twstat]	= filsyswstat,
-    [Tflush]	= filsysflush,
-    [Tversion]	= filsysversion,
-    [Tauth]	= filsysauth,
-};
-@
-
-
-
-
-\section{[[/dev/cons]]}
-
-<<enum qid cases>>=
-Qcons,
-@
-
-<<dirtab array elements>>=
-{ "cons",		QTFILE,	Qcons,		0600 },
-@
-
-\section{[[/dev/consctl]]}
-
-<<enum qid cases>>=
-Qconsctl,
-@
-<<dirtab array elements>>=
-{ "consctl",	QTFILE,	Qconsctl,	0200 },
-@
-
-\section{[[/dev/mouse]]}
-
-<<enum qid cases>>=
-Qmouse,
-@
-<<dirtab array elements>>=
-{ "mouse",		QTFILE,	Qmouse,		0600 },
-@
-
-\section{[[/dev/cursor]]}
-
-<<enum qid cases>>=
-Qcursor,
-@
-<<dirtab array elements>>=
-{ "cursor",		QTFILE,	Qcursor,	0600 },
-@
-
-\chapter{[[/dev/...]] Windows Files}
-
-\section{[[/dev/winid]]}
-
-<<enum qid cases>>=
-Qwinid,
-@
-<<dirtab array elements>>=
-{ "winid",		QTFILE,	Qwinid,		0400 },
-@
-
-\section{[[/dev/winname]]}
-
-<<enum qid cases>>=
-Qwinname,
-@
-<<dirtab array elements>>=
-{ "winname",	QTFILE,	Qwinname,	0400 },
-@
-
-\section{[[/dev/label]]}
-
-<<enum qid cases>>=
-Qlabel,
-@
-<<dirtab array elements>>=
-{ "label",		QTFILE,	Qlabel,		0600 },
-@
-
-\section{[[/dev/screen]]}
-
-% but not /dev/draw!
-% this is not demultiplex, but instead
-% writing to /dev/screen write to /dev/draw at the right place
-
-<<enum qid cases>>=
-Qscreen,
-@
-<<dirtab array elements>>=
-{ "screen",		QTFILE,	Qscreen,	0400 },
-@
-
-
-\section{[[/dev/window]]}
-
-<<enum qid cases>>=
-Qwindow,
-@
-<<dirtab array elements>>=
-{ "window",		QTFILE,	Qwindow,	0400 },
-@
-
-\section{[[/dev/text]]}
-
-<<enum qid cases>>=
-Qtext,
-@
-<<dirtab array elements>>=
-{ "text",		QTFILE,	Qtext,		0400 },
-@
-
-\section{[[/dev/kdbin]]}
-
-<<enum qid cases>>=
-Qkbdin,
-@
-<<dirtab array elements>>=
-{ "kbdin",		QTFILE,	Qkbdin,		0200 },
-@
-
-\section{[[/dev/wdir]]}
-
-<<enum qid cases>>=
-Qwdir,
-@
-<<dirtab array elements>>=
-{ "wdir",		QTFILE,	Qwdir,		0600 },
-@
-
-\section{[[/dev/wctl]]}
-
-<<enum qid cases>>=
-Qwctl,
-@
-<<dirtab array elements>>=
-{ "wctl",		QTFILE,	Qwctl,		0600 },
-@
-
-<<enum _anon_ (windows/rio/dat.h)5>>=
-enum	/* control messages */
-{
-    Wakeup,
-    Reshaped,
-    Moved,
-    Refresh,
-    Movemouse,
-    Rawon,
-    Rawoff,
-    Holdon,
-    Holdoff,
-    Deleted,
-    Exited,
-};
-@
-
-
-<<struct Wctlmesg>>=
-struct Wctlmesg
-{
-    int		type;
-    Rectangle	r;
-    Image	*image;
-};
-@
-
-
-\section{[[/dev/wsys]]}
-
-<<enum qid cases>>=
-Qwsys,		/* directory of window directories */
-@
-<<dirtab array elements>>=
-{ "wsys",		QTDIR,	Qwsys,		0500|DMDIR },
-@
-
-
-<<enum qid cases>>=
-Qwsysdir,		/* window directory, child of wsys */
-@
 
 
 \chapter{Threads}
@@ -1574,6 +1150,188 @@ xfidallocthread(void*)
 @
 
 
+\chapter{System Menus}
+
+\section{Right click menu}
+<<enum _anon_ (windows/rio/rio.c)>>=
+enum
+{
+    New,
+    Reshape,
+    Move,
+    Delete,
+    Hide,
+    Exit,
+};
+@
+
+
+<<global Hidden>>=
+int	Hidden = Exit+1;
+@
+
+<<global menu3str>>=
+char		*menu3str[100] = {
+ [New]		"New",
+ [Reshape]	"Resize",
+ [Move]		"Move",
+ [Delete]	"Delete",
+ [Hide]		"Hide",
+ [Exit]		"Exit",
+ nil
+};
+@
+
+<<global menu3>>=
+Menu menu3 =
+{
+    menu3str
+};
+@
+
+
+<<function button3menu>>=
+void
+button3menu(void)
+{
+    int i;
+
+    for(i=0; i<nhidden; i++)
+        menu3str[i+Hidden] = hidden[i]->label;
+    menu3str[i+Hidden] = nil;
+
+    sweeping = 1;
+    switch(i = menuhit(3, mousectl, &menu3, wscreen)){
+    case -1:
+        break;
+    case New:
+        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil);
+        break;
+    case Reshape:
+        resize();
+        break;
+    case Move:
+        move();
+        break;
+    case Delete:
+        delete();
+        break;
+    case Hide:
+        hide();
+        break;
+    case Exit:
+        if(Hidden > Exit){
+            send(exitchan, nil);
+            break;
+        }
+        /* else fall through */
+    default:
+        unhide(i);
+        break;
+    }
+    sweeping = 0;
+}
+@
+
+\section{Middle click menu}
+
+<<enum _anon_ (windows/rio/rio.c)2>>=
+enum
+{
+    Cut,
+    Paste,
+    Snarf,
+    Plumb,
+    Send,
+    Scroll,
+};
+@
+
+<<global menu2str>>=
+char		*menu2str[] = {
+ [Cut]		"cut",
+ [Paste]	"paste",
+ [Snarf]	"snarf",
+ [Plumb]	"plumb",
+ [Send]		"send",
+ [Scroll]	"scroll",
+ nil
+};
+@
+
+<<global menu2>>=
+Menu menu2 =
+{
+    menu2str
+};
+@
+
+
+<<function button2menu>>=
+void
+button2menu(Window *w)
+{
+    if(w->deleted)
+        return;
+    incref(w);
+    if(w->scrolling)
+        menu2str[Scroll] = "noscroll";
+    else
+        menu2str[Scroll] = "scroll";
+    switch(menuhit(2, mousectl, &menu2, wscreen)){
+    case Cut:
+        wsnarf(w);
+        wcut(w);
+        wscrdraw(w);
+        break;
+
+    case Snarf:
+        wsnarf(w);
+        break;
+
+    case Paste:
+        getsnarf();
+        wpaste(w);
+        wscrdraw(w);
+        break;
+
+    case Plumb:
+        wplumb(w);
+        break;
+
+    case Send:
+        getsnarf();
+        wsnarf(w);
+        if(nsnarf == 0)
+            break;
+        if(w->rawing){
+            waddraw(w, snarf, nsnarf);
+            if(snarf[nsnarf-1]!='\n' && snarf[nsnarf-1]!='\004')
+                          waddraw(w, L"\n", 1);
+        }else{
+            winsert(w, snarf, nsnarf, w->nr);
+            if(snarf[nsnarf-1]!='\n' && snarf[nsnarf-1]!='\004')
+                winsert(w, L"\n", 1, w->nr);
+        }
+        wsetselect(w, w->nr, w->nr);
+        wshow(w, w->nr);
+        break;
+
+    case Scroll:
+        if(w->scrolling ^= 1)
+            wshow(w, w->nr);
+        break;
+    }
+    wclose(w);
+    wsendctlmesg(w, Wakeup, ZR, nil);
+    flushimage(display, 1);
+}
+@
+
+
+
+\chapter{Windows}
+
 \chapter{Cursor}
 % put pictures instead of code :)
 % what is the code that takes the hexa data and draw?
@@ -1770,188 +1528,958 @@ Cursor *corners[9] = {
 @
 
 
-\chapter{System Menus}
+\chapter{[[filsysinit()]]}
 
-\section{Right click menu}
-<<enum _anon_ (windows/rio/rio.c)>>=
-enum
+<<function filsysinit>>=
+Filsys*
+filsysinit(Channel *cxfidalloc)
 {
-    New,
-    Reshape,
-    Move,
-    Delete,
-    Hide,
-    Exit,
-};
-@
+    int n, fd, pid, p0;
+    Filsys *fs;
+    Channel *c;
+    char buf[128];
 
+    fs = emalloc(sizeof(Filsys));
+    if(cexecpipe(&fs->cfd, &fs->sfd) < 0)
+        goto Rescue;
 
-<<global Hidden>>=
-int	Hidden = Exit+1;
-@
+    fmtinstall('F', fcallfmt);
 
-<<global menu3str>>=
-char		*menu3str[100] = {
- [New]		"New",
- [Reshape]	"Resize",
- [Move]		"Move",
- [Delete]	"Delete",
- [Hide]		"Hide",
- [Exit]		"Exit",
- nil
-};
-@
+    clockfd = open("/dev/time", OREAD|OCEXEC);
 
-<<global menu3>>=
-Menu menu3 =
-{
-    menu3str
-};
-@
-
-
-<<function button3menu>>=
-void
-button3menu(void)
-{
-    int i;
-
-    for(i=0; i<nhidden; i++)
-        menu3str[i+Hidden] = hidden[i]->label;
-    menu3str[i+Hidden] = nil;
-
-    sweeping = 1;
-    switch(i = menuhit(3, mousectl, &menu3, wscreen)){
-    case -1:
-        break;
-    case New:
-        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil);
-        break;
-    case Reshape:
-        resize();
-        break;
-    case Move:
-        move();
-        break;
-    case Delete:
-        delete();
-        break;
-    case Hide:
-        hide();
-        break;
-    case Exit:
-        if(Hidden > Exit){
-            send(exitchan, nil);
-            break;
-        }
-        /* else fall through */
-    default:
-        unhide(i);
-        break;
+    fd = open("/dev/user", OREAD);
+    strcpy(buf, "Jean-Paul_Belmondo"); // lol
+    if(fd >= 0){
+        n = read(fd, buf, sizeof buf-1);
+        if(n > 0)
+            buf[n] = 0;
+        close(fd);
     }
-    sweeping = 0;
+    fs->user = estrdup(buf);
+
+    fs->cxfidalloc = cxfidalloc;
+    pid = getpid();
+
+    /*
+     * Create and post wctl pipe
+     */
+    if(cexecpipe(&p0, &wctlfd) < 0)
+        goto Rescue;
+    sprint(srvwctl, "/srv/riowctl.%s.%d", fs->user, pid);
+    post(srvwctl, "wctl", p0);
+    close(p0);
+
+    /*
+     * Start server processes
+     */
+    c = chancreate(sizeof(char*), 0);
+    if(c == nil)
+        error("wctl channel");
+    proccreate(wctlproc, c, 4096);
+    threadcreate(wctlthread, c, 4096);
+    proccreate(filsysproc, fs, 10000);
+
+    /*
+     * Post srv pipe
+     */
+    sprint(srvpipe, "/srv/rio.%s.%d", fs->user, pid);
+    post(srvpipe, "wsys", fs->cfd);
+
+    return fs;
+
+Rescue:
+    free(fs);
+    return nil;
 }
 @
 
-\section{Middle click menu}
-
-<<enum _anon_ (windows/rio/rio.c)2>>=
-enum
-{
-    Cut,
-    Paste,
-    Snarf,
-    Plumb,
-    Send,
-    Scroll,
-};
-@
-
-<<global menu2str>>=
-char		*menu2str[] = {
- [Cut]		"cut",
- [Paste]	"paste",
- [Snarf]	"snarf",
- [Plumb]	"plumb",
- [Send]		"send",
- [Scroll]	"scroll",
- nil
-};
-@
-
-<<global menu2>>=
-Menu menu2 =
-{
-    menu2str
-};
-@
 
 
-<<function button2menu>>=
+
+<<function wctlproc>>=
 void
-button2menu(Window *w)
+wctlproc(void *v)
 {
-    if(w->deleted)
+    char *buf;
+    int n, eofs;
+    Channel *c;
+
+    threadsetname("WCTLPROC");
+    c = v;
+
+    eofs = 0;
+    for(;;){
+        buf = emalloc(messagesize);
+        n = read(wctlfd, buf, messagesize-1);	/* room for \0 */
+        if(n < 0)
+            break;
+        if(n == 0){
+            if(++eofs > 20)
+                break;
+            continue;
+        }
+        eofs = 0;
+
+        buf[n] = '\0';
+        sendp(c, buf);
+    }
+}
+@
+
+
+
+
+<<function wctlthread>>=
+void
+wctlthread(void *v)
+{
+    char *buf, *arg, *dir;
+    int cmd, id, pid, hideit, scrollit;
+    Rectangle rect;
+    char err[ERRMAX];
+    Channel *c;
+
+    c = v;
+
+    threadsetname("WCTLTHREAD");
+
+    for(;;){
+        buf = recvp(c);
+        cmd = parsewctl(&arg, ZR, &rect, &pid, &id, &hideit, &scrollit, &dir, buf, err);
+
+        switch(cmd){
+        case New:
+            wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
+        }
+        free(buf);
+    }
+}
+@
+
+
+
+
+
+<<function filsysproc>>=
+static
+void
+filsysproc(void *arg)
+{
+    int n;
+    Xfid *x;
+    Fid *f;
+    Fcall t;
+    uchar *buf;
+    Filsys *fs;
+
+    threadsetname("FILSYSPROC");
+    fs = arg;
+    fs->pid = getpid();
+    x = nil;
+    for(;;){
+        buf = emalloc(messagesize+UTFmax);	/* UTFmax for appending partial rune in xfidwrite */
+        n = read9pmsg(fs->sfd, buf, messagesize);
+        if(n <= 0){
+            yield();	/* if threadexitsall'ing, will not return */
+            fprint(2, "rio: %d: read9pmsg: %d %r\n", getpid(), n);
+            errorshouldabort = false;
+            error("eof or i/o error on server channel");
+        }
+        if(x == nil){
+            send(fs->cxfidalloc, nil);
+            recv(fs->cxfidalloc, &x);
+            x->fs = fs;
+        }
+        x->buf = buf;
+        if(convM2S(buf, n, x) != n)
+            error("convert error in convM2S");
+        if(DEBUG)
+            fprint(2, "rio:<-%F\n", &x->Fcall);
+        if(fcall[x->type] == nil)
+            x = filsysrespond(fs, x, &t, Ebadfcall);
+        else{
+            if(x->type==Tversion || x->type==Tauth)
+                f = nil;
+            else
+                f = newfid(fs, x->fid);
+            x->f = f;
+            x  = (*fcall[x->type])(fs, x, f);
+        }
+        firstmessage = 0;
+    }
+}
+@
+
+\chapter{[[/dev/...]] Demultiplexer}
+
+\section{Overview}
+
+<<enum qid>>=
+enum qid
+{
+    Qdir,			/* /dev for this window */
+    <<enum qid cases>>
+    QMAX,
+};
+@
+
+% window+dev -> qid
+<<function QID>>=
+#define	QID(w,q)	((w<<8)|(q))
+@
+% what about overflow? hop will not have too many windows then
+
+% qid -> window
+<<function WIN>>=
+#define	WIN(q)	((((ulong)(q).path)>>8) & 0xFFFFFF)
+@
+
+% qid -> dev
+<<function FILE>>=
+#define	FILE(q)	(((ulong)(q).path) & 0xFF)
+@
+
+
+<<struct Dirtab>>=
+struct Dirtab
+{
+    char	*name;
+    uchar	type;
+    uint	qid;
+    uint	perm;
+};
+@
+
+<<global dirtab>>=
+Dirtab dirtab[]=
+{
+    { ".",		QTDIR,	Qdir,		0500|DMDIR },
+    <<dirtab array elements>>
+    { nil, }
+};
+@
+
+
+<<global fcall>>=
+Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
+{
+    [Tattach]	= filsysattach,
+    [Twalk]	= filsyswalk,
+    [Topen]	= filsysopen,
+    [Tcreate]	= filsyscreate,
+    [Tread]	= filsysread,
+    [Twrite]	= filsyswrite,
+    [Tclunk]	= filsysclunk,
+    [Tremove]   = filsysremove,
+    [Tstat]	= filsysstat,
+    [Twstat]	= filsyswstat,
+    [Tflush]	= filsysflush,
+    [Tversion]	= filsysversion,
+    [Tauth]	= filsysauth,
+};
+@
+
+
+
+
+\section{[[/dev/cons]]}
+
+<<enum qid cases>>=
+Qcons,
+@
+
+<<dirtab array elements>>=
+{ "cons",		QTFILE,	Qcons,		0600 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qcons:
+    x->flushtag = x->tag;
+
+    alts[CRdata].c = w->consread;
+    alts[CRdata].v = &crm;
+    alts[CRdata].op = CHANRCV;
+    alts[CRflush].c = x->flushc;
+    alts[CRflush].v = nil;
+    alts[CRflush].op = CHANRCV;
+    alts[NMR].op = CHANEND;
+
+    switch(alt(alts)){
+    case CRdata:
+        break;
+    case CRflush:
+        filsyscancel(x);
         return;
-    incref(w);
-    if(w->scrolling)
-        menu2str[Scroll] = "noscroll";
-    else
-        menu2str[Scroll] = "scroll";
-    switch(menuhit(2, mousectl, &menu2, wscreen)){
-    case Cut:
-        wsnarf(w);
-        wcut(w);
-        wscrdraw(w);
-        break;
-
-    case Snarf:
-        wsnarf(w);
-        break;
-
-    case Paste:
-        getsnarf();
-        wpaste(w);
-        wscrdraw(w);
-        break;
-
-    case Plumb:
-        wplumb(w);
-        break;
-
-    case Send:
-        getsnarf();
-        wsnarf(w);
-        if(nsnarf == 0)
-            break;
-        if(w->rawing){
-            waddraw(w, snarf, nsnarf);
-            if(snarf[nsnarf-1]!='\n' && snarf[nsnarf-1]!='\004')
-                          waddraw(w, L"\n", 1);
-        }else{
-            winsert(w, snarf, nsnarf, w->nr);
-            if(snarf[nsnarf-1]!='\n' && snarf[nsnarf-1]!='\004')
-                winsert(w, L"\n", 1, w->nr);
-        }
-        wsetselect(w, w->nr, w->nr);
-        wshow(w, w->nr);
-        break;
-
-    case Scroll:
-        if(w->scrolling ^= 1)
-            wshow(w, w->nr);
-        break;
     }
-    wclose(w);
-    wsendctlmesg(w, Wakeup, ZR, nil);
-    flushimage(display, 1);
-}
+
+    /* received data */
+    x->flushtag = -1;
+    c1 = crm.c1;
+    c2 = crm.c2;
+    t = malloc(cnt+UTFmax+1);	/* room to unpack partial rune plus */
+    pair.s = t;
+    pair.ns = cnt;
+    send(c1, &pair);
+    if(x->flushing){
+        recv(x->flushc, nil);	/* wake up flushing xfid */
+        recv(c2, nil);			/* wake up window and toss data */
+        free(t);
+        filsyscancel(x);
+        return;
+    }
+    qlock(&x->active);
+    recv(c2, &pair);
+    fc.data = pair.s;
+    fc.count = pair.ns;
+    filsysrespond(x->fs, x, &fc, nil);
+    free(t);
+    qunlock(&x->active);
+    break;
 @
 
+<<[[xfidwrite()]] cases>>=
+case Qcons:
+    nr = x->f->nrpart;
+    if(nr > 0){
+        memmove(x->data+nr, x->data, cnt);	/* there's room: see malloc in filsysproc */
+        memmove(x->data, x->f->rpart, nr);
+        cnt += nr;
+        x->f->nrpart = 0;
+    }
+    r = runemalloc(cnt);
+    cvttorunes(x->data, cnt-UTFmax, r, &nb, &nr, nil);
+    /* approach end of buffer */
+    while(fullrune(x->data+nb, cnt-nb)){
+        c = nb;
+        nb += chartorune(&r[nr], x->data+c);
+        if(r[nr])
+            nr++;
+    }
+    if(nb < cnt){
+        memmove(x->f->rpart, x->data+nb, cnt-nb);
+        x->f->nrpart = cnt-nb;
+    }
+    x->flushtag = x->tag;
+
+    alts[CWdata].c = w->conswrite;
+    alts[CWdata].v = &cwm;
+    alts[CWdata].op = CHANRCV;
+    alts[CWflush].c = x->flushc;
+    alts[CWflush].v = nil;
+    alts[CWflush].op = CHANRCV;
+    alts[NCW].op = CHANEND;
+
+    switch(alt(alts)){
+    case CWdata:
+        break;
+    case CWflush:
+        filsyscancel(x);
+        return;
+    }
+
+    /* received data */
+    x->flushtag = -1;
+    if(x->flushing){
+        recv(x->flushc, nil);	/* wake up flushing xfid */
+        pair.s = runemalloc(1);
+        pair.ns = 0;
+        send(cwm.cw, &pair);		/* wake up window with empty data */
+        filsyscancel(x);
+        return;
+    }
+    qlock(&x->active);
+    pair.s = r;
+    pair.ns = nr;
+    send(cwm.cw, &pair);
+    fc.count = x->count;
+    filsysrespond(x->fs, x, &fc, nil);
+    qunlock(&x->active);
+    return;
+@
+
+
+\section{[[/dev/consctl]]}
+
+<<enum qid cases>>=
+Qconsctl,
+@
+<<dirtab array elements>>=
+{ "consctl",	QTFILE,	Qconsctl,	0200 },
+@
+
+<<[[xfidopen()]] cases>>=
+case Qconsctl:
+    if(w->ctlopen){
+        filsysrespond(x->fs, x, &t, Einuse);
+        return;
+    }
+    w->ctlopen = true;
+    break;
+@
+
+<<[[xfidclose()]] cases>>=
+case Qconsctl:
+    if(w->rawing){
+        w->rawing = false;
+        wsendctlmesg(w, Rawoff, ZR, nil);
+    }
+    if(w->holding){
+        w->holding = false;
+        wsendctlmesg(w, Holdoff, ZR, nil);
+    }
+    w->ctlopen = false;
+    break;
+@
+
+<<[[xfidwrite()]] cases>>=
+case Qconsctl:
+    if(strncmp(x->data, "holdon", 6)==0){
+        if(w->holding++ == 0)
+            wsendctlmesg(w, Holdon, ZR, nil);
+        break;
+    }
+    if(strncmp(x->data, "holdoff", 7)==0 && w->holding){
+        if(--w->holding == false)
+            wsendctlmesg(w, Holdoff, ZR, nil);
+        break;
+    }
+    if(strncmp(x->data, "rawon", 5)==0){
+        if(w->holding){
+            w->holding = false;
+            wsendctlmesg(w, Holdoff, ZR, nil);
+        }
+        if(w->rawing++ == 0)
+            wsendctlmesg(w, Rawon, ZR, nil);
+        break;
+    }
+    if(strncmp(x->data, "rawoff", 6)==0 && w->rawing){
+        if(--w->rawing == 0)
+            wsendctlmesg(w, Rawoff, ZR, nil);
+        break;
+    }
+    filsysrespond(x->fs, x, &fc, "unknown control message");
+    return;
+@
+
+\section{[[/dev/mouse]]}
+
+<<enum qid cases>>=
+Qmouse,
+@
+<<dirtab array elements>>=
+{ "mouse",		QTFILE,	Qmouse,		0600 },
+@
+
+<<[[xfidopen()]] cases>>=
+case Qmouse:
+    if(w->mouseopen){
+        filsysrespond(x->fs, x, &t, Einuse);
+        return;
+    }
+    /*
+     * Reshaped: there's a race if the appl. opens the
+     * window, is resized, and then opens the mouse,
+     * but that's rare.  The alternative is to generate
+     * a resized event every time a new program starts
+     * up in a window that has been resized since the
+     * dawn of time.  We choose the lesser evil.
+     */
+    w->resized = false;
+    w->mouseopen = true;
+    break;
+@
+
+
+<<[[xfidclose()]] cases>>=
+case Qmouse:
+    w->resized = false;
+    w->mouseopen = false;
+    if(w->i != nil)
+        wsendctlmesg(w, Refresh, w->i->r, nil);
+    break;
+@
+
+
+<<[[xfidread()]] cases>>=
+case Qmouse:
+    x->flushtag = x->tag;
+
+    alts[MRdata].c = w->mouseread;
+    alts[MRdata].v = &mrm;
+    alts[MRdata].op = CHANRCV;
+    alts[MRflush].c = x->flushc;
+    alts[MRflush].v = nil;
+    alts[MRflush].op = CHANRCV;
+    alts[NMR].op = CHANEND;
+
+    switch(alt(alts)){
+    case MRdata:
+        break;
+    case MRflush:
+        filsyscancel(x);
+        return;
+    }
+
+    /* received data */
+    x->flushtag = -1;
+    if(x->flushing){
+        recv(x->flushc, nil);		/* wake up flushing xfid */
+        recv(mrm.cm, nil);			/* wake up window and toss data */
+        filsyscancel(x);
+        return;
+    }
+    qlock(&x->active);
+    recv(mrm.cm, &ms);
+    c = 'm';
+    if(w->resized)
+        c = 'r';
+    n = sprint(buf, "%c%11d %11d %11d %11ld ", c, ms.xy.x, ms.xy.y, ms.buttons, ms.msec);
+    w->resized = 0;
+    fc.data = buf;
+    fc.count = min(n, cnt);
+    filsysrespond(x->fs, x, &fc, nil);
+    qunlock(&x->active);
+    break;
+@
+
+
+<<[[xfidwrite()]] cases>>=
+case Qmouse:
+    if(w!=input || Dx(w->screenr)<=0)
+        break;
+    if(x->data[0] != 'm'){
+        filsysrespond(x->fs, x, &fc, Ebadmouse);
+        return;
+    }
+    p = nil;
+    pt.x = strtoul(x->data+1, &p, 0);
+    if(p == nil){
+        filsysrespond(x->fs, x, &fc, Eshort);
+        return;
+    }
+    pt.y = strtoul(p, nil, 0);
+    if(w==input && wpointto(mouse->xy)==w)
+        wsendctlmesg(w, Movemouse, Rpt(pt, pt), nil);
+    break;
+@
+
+\section{[[/dev/cursor]]}
+
+<<enum qid cases>>=
+Qcursor,
+@
+<<dirtab array elements>>=
+{ "cursor",		QTFILE,	Qcursor,	0600 },
+@
+
+<<[[xfidclose()]] cases>>=
+case Qcursor:
+    w->cursorp = nil;
+    wsetcursor(w, false);
+    break;
+@
+
+<<[[xfidread()]] cases>>=
+case Qcursor:
+    filsysrespond(x->fs, x, &fc, "cursor read not implemented");
+    break;
+@
+
+<<[[xfidwrite()]] cases>>=
+case Qcursor:
+    if(cnt < 2*4+2*2*16)
+        w->cursorp = nil;
+    else{
+        w->cursor.offset.x = BGLONG(x->data+0*4);
+        w->cursor.offset.y = BGLONG(x->data+1*4);
+        memmove(w->cursor.clr, x->data+2*4, 2*2*16);
+        w->cursorp = &w->cursor;
+    }
+    wsetcursor(w, !sweeping);
+    break;
+@
+
+\chapter{[[/dev/...]] Windows Files}
+
+\section{[[/dev/winid]]}
+
+<<enum qid cases>>=
+Qwinid,
+@
+<<dirtab array elements>>=
+{ "winid",		QTFILE,	Qwinid,		0400 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qwinid:
+    n = sprint(buf, "%11d ", w->id);
+    t = estrdup(buf);
+    goto Text;
+@
+
+\section{[[/dev/winname]]}
+
+<<enum qid cases>>=
+Qwinname,
+@
+<<dirtab array elements>>=
+{ "winname",	QTFILE,	Qwinname,	0400 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qwinname:
+    n = strlen(w->name);
+    if(n == 0){
+        filsysrespond(x->fs, x, &fc, "window has no name");
+        break;
+    }
+    t = estrdup(w->name);
+    goto Text;
+@
+
+\section{[[/dev/label]]}
+
+<<enum qid cases>>=
+Qlabel,
+@
+<<dirtab array elements>>=
+{ "label",		QTFILE,	Qlabel,		0600 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qlabel:
+    n = strlen(w->label);
+    if(off > n)
+        off = n;
+    if(off+cnt > n)
+        cnt = n-off;
+    fc.data = w->label+off;
+    fc.count = cnt;
+    filsysrespond(x->fs, x, &fc, nil);
+    break;
+@
+
+<<[[xfidwrite()]] cases>>=
+case Qlabel:
+    if(off != 0){
+        filsysrespond(x->fs, x, &fc, "non-zero offset writing label");
+        return;
+    }
+    free(w->label);
+    w->label = emalloc(cnt+1);
+    memmove(w->label, x->data, cnt);
+    w->label[cnt] = 0;
+    break;
+@
+
+\section{[[/dev/screen]]}
+
+% but not /dev/draw!
+% this is not demultiplex, but instead
+% writing to /dev/screen write to /dev/draw at the right place
+
+<<enum qid cases>>=
+Qscreen,
+@
+<<dirtab array elements>>=
+{ "screen",		QTFILE,	Qscreen,	0400 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qscreen:
+    i = display->image;
+    if(i == nil){
+        filsysrespond(x->fs, x, &fc, "no top-level screen");
+        break;
+    }
+    r = i->r;
+    /* fall through */
+
+caseImage:
+    if(off < 5*12){
+        n = sprint(buf, "%11s %11d %11d %11d %11d ",
+            chantostr(cbuf, screen->chan),
+            i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y);
+        t = estrdup(buf);
+        goto Text;
+    }
+    t = malloc(cnt);
+    fc.data = t;
+    n = readwindow(i, t, r, off, cnt);	/* careful; fc.count is unsigned */
+    if(n < 0){
+        buf[0] = 0;
+        errstr(buf, sizeof buf);
+        filsysrespond(x->fs, x, &fc, buf);
+    }else{
+        fc.count = n;
+        filsysrespond(x->fs, x, &fc, nil);
+    }
+    free(t);
+    return;
+@
+
+\section{[[/dev/window]]}
+
+<<enum qid cases>>=
+Qwindow,
+@
+<<dirtab array elements>>=
+{ "window",		QTFILE,	Qwindow,	0400 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qwindow:
+    i = w->i;
+    if(i == nil || Dx(w->screenr)<=0){
+        filsysrespond(x->fs, x, &fc, Enowindow);
+        return;
+    }
+    r = w->screenr;
+    goto caseImage;
+@
+
+\section{[[/dev/text]]}
+
+<<enum qid cases>>=
+Qtext,
+@
+<<dirtab array elements>>=
+{ "text",		QTFILE,	Qtext,		0400 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qtext:
+    t = wcontents(w, &n);
+    goto Text;
+
+Text:
+    if(off > n){
+        off = n;
+        cnt = 0;
+    }
+    if(off+cnt > n)
+        cnt = n-off;
+    fc.data = t+off;
+    fc.count = cnt;
+    filsysrespond(x->fs, x, &fc, nil);
+    free(t);
+    break;
+@
+
+\section{[[/dev/kdbin]]}
+
+<<enum qid cases>>=
+Qkbdin,
+@
+<<dirtab array elements>>=
+{ "kbdin",		QTFILE,	Qkbdin,		0200 },
+@
+
+<<[[xfidopen()]] cases>>=
+case Qkbdin:
+    if(w !=  wkeyboard){
+        filsysrespond(x->fs, x, &t, Eperm);
+        return;
+    }
+    break;
+@
+
+<<[[xfidwrite()]] cases>>=
+case Qkbdin:
+    keyboardsend(x->data, cnt);
+    break;
+@
+
+\section{[[/dev/wdir]]}
+
+<<enum qid cases>>=
+Qwdir,
+@
+<<dirtab array elements>>=
+{ "wdir",		QTFILE,	Qwdir,		0600 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qwdir:
+    t = estrdup(w->dir);
+    n = strlen(t);
+    goto Text;
+@
+
+<<[[xfidwrite()]] cases>>=
+case Qwdir:
+    if(cnt == 0)
+        break;
+    if(x->data[cnt-1] == '\n'){
+        if(cnt == 1)
+            break;
+        x->data[cnt-1] = '\0';
+    }
+    /* assume data comes in a single write */
+    /*
+      * Problem: programs like dossrv, ftp produce illegal UTF;
+      * we must cope by converting it first.
+      */
+    snprint(buf, sizeof buf, "%.*s", cnt, x->data);
+    if(buf[0] == '/'){
+        free(w->dir);
+        w->dir = estrdup(buf);
+    }else{
+        p = emalloc(strlen(w->dir) + 1 + strlen(buf) + 1);
+        sprint(p, "%s/%s", w->dir, buf);
+        free(w->dir);
+        w->dir = cleanname(p);
+    }
+    break;
+@
+
+\section{[[/dev/wctl]]}
+
+<<enum qid cases>>=
+Qwctl,
+@
+<<dirtab array elements>>=
+{ "wctl",		QTFILE,	Qwctl,		0600 },
+@
+
+<<[[xfidopen()]] cases>>=
+case Qwctl:
+    if(x->mode==OREAD || x->mode==ORDWR){
+        /*
+         * It would be much nicer to implement fan-out for wctl reads,
+         * so multiple people can see the resizings, but rio just isn't
+         * structured for that.  It's structured for /dev/cons, which gives
+         * alternate data to alternate readers.  So to keep things sane for
+         * wctl, we compromise and give an error if two people try to
+         * open it.  Apologies.
+         */
+        if(w->wctlopen){
+            filsysrespond(x->fs, x, &t, Einuse);
+            return;
+        }
+        w->wctlopen = true;
+        w->wctlready = 1;
+        wsendctlmesg(w, Wakeup, ZR, nil);
+    }
+    break;
+@
+
+<<[[xfidclose()]] cases>>=
+case Qwctl:
+    if(x->f->mode==OREAD || x->f->mode==ORDWR)
+        w->wctlopen = false;
+break;
+@
+
+<<[[xfidread()]] cases>>=
+case Qwctl:	/* read returns rectangle, hangs if not resized */
+    if(cnt < 4*12){
+        filsysrespond(x->fs, x, &fc, Etooshort);
+        break;
+    }
+    x->flushtag = x->tag;
+
+    alts[WCRdata].c = w->wctlread;
+    alts[WCRdata].v = &cwrm;
+    alts[WCRdata].op = CHANRCV;
+    alts[WCRflush].c = x->flushc;
+    alts[WCRflush].v = nil;
+    alts[WCRflush].op = CHANRCV;
+    alts[NMR].op = CHANEND;
+
+    switch(alt(alts)){
+    case WCRdata:
+        break;
+    case WCRflush:
+        filsyscancel(x);
+        return;
+    }
+
+    /* received data */
+    x->flushtag = -1;
+    c1 = cwrm.c1;
+    c2 = cwrm.c2;
+    t = malloc(cnt+1);	/* be sure to have room for NUL */
+    pair.s = t;
+    pair.ns = cnt+1;
+    send(c1, &pair);
+    if(x->flushing){
+        recv(x->flushc, nil);	/* wake up flushing xfid */
+        recv(c2, nil);			/* wake up window and toss data */
+        free(t);
+        filsyscancel(x);
+        return;
+    }
+    qlock(&x->active);
+    recv(c2, &pair);
+    fc.data = pair.s;
+    if(pair.ns > cnt)
+        pair.ns = cnt;
+    fc.count = pair.ns;
+    filsysrespond(x->fs, x, &fc, nil);
+    free(t);
+    qunlock(&x->active);
+    break;
+@
+
+<<[[xfidwrite()]] cases>>=
+case Qwctl:
+    if(writewctl(x, buf) < 0){
+        filsysrespond(x->fs, x, &fc, buf);
+        return;
+    }
+    flushimage(display, 1);
+    break;
+@
+
+
+<<enum _anon_ (windows/rio/dat.h)5>>=
+enum	/* control messages */
+{
+    Wakeup,
+    Reshaped,
+    Moved,
+    Refresh,
+    Movemouse,
+    Rawon,
+    Rawoff,
+    Holdon,
+    Holdoff,
+    Deleted,
+    Exited,
+};
+@
+
+
+<<struct Wctlmesg>>=
+struct Wctlmesg
+{
+    int		type;
+    Rectangle	r;
+    Image	*image;
+};
+@
+
+
+\section{[[/dev/wsys]]}
+
+<<enum qid cases>>=
+Qwsys,		/* directory of window directories */
+@
+<<dirtab array elements>>=
+{ "wsys",		QTDIR,	Qwsys,		0500|DMDIR },
+@
+
+
+<<enum qid cases>>=
+Qwsysdir,		/* window directory, child of wsys */
+@
 
 
 \chapter{Window Terminal}
 % fake /dev/cons
+
+% it's really easy thx to the fake /dev/cons and frame lib
 
 \chapter{Widgets}
 
@@ -2002,6 +2530,68 @@ Qsnarf,
 <<dirtab array elements>>=
 { "snarf",		QTFILE,	Qsnarf,		0600 },
 @
+
+<<[[xfidopen()]] cases>>=
+case Qsnarf:
+    if(x->mode==ORDWR || x->mode==OWRITE){
+        if(tsnarf)
+            free(tsnarf);	/* collision, but OK */
+        ntsnarf = 0;
+        tsnarf = malloc(1);
+    }
+    break;
+@
+
+<<[[xfidclose()]] cases>>=
+/* odd behavior but really ok: replace snarf buffer when /dev/snarf is closed */
+case Qsnarf:
+    if(x->f->mode==ORDWR || x->f->mode==OWRITE){
+        snarf = runerealloc(snarf, ntsnarf+1);
+        cvttorunes(tsnarf, ntsnarf, snarf, &nb, &nsnarf, &nulls);
+        free(tsnarf);
+        tsnarf = nil;
+        ntsnarf = 0;
+    }
+    break;
+@
+
+<<[[xfidread()]] cases>>=
+/* The algorithm for snarf and text is expensive but easy and rarely used */
+case Qsnarf:
+    getsnarf();
+    if(nsnarf)
+        t = runetobyte(snarf, nsnarf, &n);
+    else {
+        t = nil;
+        n = 0;
+    }
+    goto Text;
+@
+
+<<[[xfidwrite()]] cases>>=
+case Qsnarf:
+    /* always append only */
+    if(ntsnarf > MAXSNARF){	/* avoid thrashing when people cut huge text */
+        filsysrespond(x->fs, x, &fc, Elong);
+        return;
+    }
+    tsnarf = erealloc(tsnarf, ntsnarf+cnt+1);	/* room for NUL */
+    memmove(tsnarf+ntsnarf, x->data, cnt);
+    ntsnarf += cnt;
+    snarfversion++;
+    break;
+@
+
+
+<<global tsnarf>>=
+static	char	*tsnarf;
+@
+
+<<global ntsnarf>>=
+static	int	ntsnarf;
+@
+
+
 
 
 
