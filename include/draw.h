@@ -392,7 +392,7 @@ extern uchar*	bufimage(Display*, int);
 extern int	bytesperline(Rectangle, int);
 extern void	closedisplay(Display*);
 extern void	drawerror(Display*, char*);
-extern int	flushimage(Display*, int);
+extern int	flushimage(Display*, bool);
 extern int	freeimage(Image*);
 extern int	_freeimage1(Image*);
 extern int	geninitdraw(char*, void(*)(Display*, char*), char*, char*, char*, int);
@@ -559,11 +559,11 @@ extern	Rectangle	ZR;
  * Set up by initdraw()
  */
 extern	Display	*display;
-extern	Font		*font;
+extern	Font	*font;
 extern	Image	*screen;
 extern	Screen	*_screen;
-extern	int	_cursorfd;
-extern	int	_drawdebug;	/* set to 1 to see errors from flushimage */
+extern	int		_cursorfd;
+extern	bool	_drawdebug;	/* set to true to see errors from flushimage */
 extern	void	_setdrawop(Display*, Drawop);
 
 /*s: function BGSHORT */
