@@ -33,14 +33,12 @@ Screen	*wscreen;
 /*s: global background */
 Image	*background;
 /*e: global background */
-/*s: global lightgrey */
-//Image	*lightgrey;
-/*e: global lightgrey */
 /*s: global red */
 Image	*red;
 /*e: global red */
 
 /*s: global window */
+//array<option<ref_own<Window>>>
 Window	**window;
 /*e: global window */
 /*s: global wkeyboard */
@@ -54,6 +52,7 @@ int		nwindow;
 fdt		snarffd;
 /*e: global snarffd */
 /*s: global input */
+//option<ref<Window>>, the window with the focus! the window to send input to
 Window	*input;
 /*e: global input */
 /*s: global all */

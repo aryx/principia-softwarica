@@ -424,6 +424,7 @@ keyboardthread(void*)
             if(nbrecv(keyboardctl->c, rp+i) <= 0)
                 break;
         rp[i] = L'\0';
+
         if(input != nil)
             sendp(input->ck, rp);
     }
@@ -566,7 +567,7 @@ enum {
 void
 mousethread(void*)
 {
-    int sending, inside, scrolling, moving, band;
+    bool sending, inside, scrolling, moving, band;
     Window *oin, *w, *winput;
     Image *i;
     Rectangle r;
@@ -588,6 +589,7 @@ mousethread(void*)
     alts[NALT].op = CHANEND;
 
     for(;;)
+        // event loop
         switch(alt(alts)){
         case MReshape:
             resized();
@@ -1272,7 +1274,7 @@ unhide(int h)
 
 /*s: function new */
 Window*
-new(Image *i, int hideit, int scrollit, int pid, char *dir, char *cmd, char **argv)
+new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
 {
     Window *w;
     Mousectl *mc;
@@ -1281,28 +1283,37 @@ new(Image *i, int hideit, int scrollit, int pid, char *dir, char *cmd, char **ar
 
     if(i == nil)
         return nil;
+
     cm = chancreate(sizeof(Mouse), 0);
     ck = chancreate(sizeof(Rune*), 0);
     cctl = chancreate(sizeof(Wctlmesg), 4);
     cpid = chancreate(sizeof(int), 0);
     if(cm==nil || ck==nil || cctl==nil)
         error("new: channel alloc failed");
+
     mc = emalloc(sizeof(Mousectl));
     *mc = *mousectl;
     mc->image = i;
     mc->c = cm;
     w = wmk(i, mc, ck, cctl, scrollit);
     free(mc);	/* wmk copies *mc */
+
+    // growing array
     window = erealloc(window, ++nwindow*sizeof(Window*));
     window[nwindow-1] = w;
     if(hideit){
         hidden[nhidden++] = w;
         w->screenr = ZR;
     }
+
+    // a new thread! for this new window!
     threadcreate(winctl, w, 8192);
     if(!hideit)
         wcurrent(w);
-    flushimage(display, 1);
+
+    flushimage(display, true);
+
+    /*s: [[new()]] if pid == 0 */
     if(pid == 0){
         arg = emalloc(5*sizeof(void*));
         arg[0] = w;
@@ -1323,7 +1334,9 @@ new(Image *i, int hideit, int scrollit, int pid, char *dir, char *cmd, char **ar
         chanfree(cpid);
         return nil;
     }
-    wsetpid(w, pid, 1);
+    /*e: [[new()]] if pid == 0 */
+
+    wsetpid(w, pid, true);
     wsetname(w);
     if(dir)
         w->dir = estrdup(dir);

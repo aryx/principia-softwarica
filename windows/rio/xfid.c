@@ -106,6 +106,7 @@ xfidallocthread(void*)
     alts[Free].op = CHANRCV;
     alts[N].op = CHANEND;
     for(;;){
+        // event loop
         switch(alt(alts)){
         case Alloc:
             x = xfidfree;

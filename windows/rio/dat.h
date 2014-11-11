@@ -71,7 +71,7 @@ typedef	struct	Xfid Xfid;
 enum
 {
     Selborder		= 4,	/* border of selected window */
-    Unselborder	= 1,		/* border of unselected window */
+    Unselborder		= 1,	/* border of unselected window */
     Scrollwid 		= 12,	/* width of scroll bar */
     Scrollgap 		= 4,	/* gap right of scroll bar */
     BIG			= 3,	/* factor by which window dimension can exceed screen */
@@ -168,13 +168,20 @@ struct Mouseinfo
 /*s: struct Window */
 struct Window
 {
-    Ref;
-    QLock;
+    int		id;
     Frame;
 
+    /*
+     * Rio once used originwindow, so screenr could be different from i->r.
+     * Now they're always the same but the code doesn't assume so.
+    */
+    Rectangle	screenr; /* screen coordinates of window */
+
+    Mousectl	mc; // mc->c is the mouse event listening channel
+
+    /*s: [[Window]] other fields */
     Image		*i;
 
-    Mousectl	mc;
     Mouseinfo	mouse;
 
     Channel		*ck;		/* chan(Rune[10]) */
@@ -184,29 +191,23 @@ struct Window
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     Channel		*wctlread;	/* chan(Consreadmesg) */
 
-    uint			nr;	/* number of runes in window */
-    uint			maxr;	/* number of runes allocated in r */
-    Rune			*r;
-    uint			nraw;
-    Rune			*raw;
-    uint			org;
-    uint			q0;
-    uint			q1;
-    uint			qh;
-    int			id;
-    char			name[32];
-    uint			namecount;
-    Rectangle		scrollr;
-    /*
-     * Rio once used originwindow, so screenr could be different from i->r.
-     * Now they're always the same but the code doesn't assume so.
-    */
-    Rectangle		screenr;	/* screen coordinates of window */
-    int			resized;
-    int			wctlready;
-    Rectangle		lastsr;
-    int			topped;
-    int			notefd;
+    uint		nr;	/* number of runes in window */
+    uint		maxr;	/* number of runes allocated in r */
+    Rune		*r;
+    uint		nraw;
+    Rune		*raw;
+    uint		org;
+    uint		q0;
+    uint		q1;
+    uint		qh;
+    char		name[32];
+    uint		namecount;
+    Rectangle	scrollr;
+    int	 	resized;
+    int	 	wctlready;
+    Rectangle	lastsr;
+    int	 	topped;
+    int	 	notefd;
     uchar		scrolling;
     Cursor		cursor;
     Cursor		*cursorp;
@@ -217,8 +218,14 @@ struct Window
     uchar		deleted;
     uchar		mouseopen;
     char		*label;
-    int			pid;
+    int		pid;
     char		*dir;
+    /*e: [[Window]] other fields */
+
+    /*s: [[Window]] extra fields */
+    Ref;
+    QLock;
+    /*e: [[Window]] extra fields */
 };
 /*e: struct Window */
 

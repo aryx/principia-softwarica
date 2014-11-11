@@ -80,11 +80,12 @@ static	Image	*paleholdcol;
 
 /*s: function wmk */
 Window*
-wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
+wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 {
     Window *w;
     Rectangle r;
 
+    /*s: [[wmk()]] cols initialisation */
     if(cols[0] == nil){
         /* greys are multiples of 0x11111100+0xFF, 14* being palest */
         grey = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xEEEEEEFF);
@@ -100,7 +101,10 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
         lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreyblue);
         paleholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
     }
+    /*e: [[wmk()]] cols initialisation */
+
     w = emalloc(sizeof(Window));
+
     w->screenr = i->r;
     r = insetrect(i->r, Selborder+1);
     w->i = i;
@@ -108,15 +112,19 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
     w->ck = ck;
     w->cctl = cctl;
     w->cursorp = nil;
+
     w->conswrite = chancreate(sizeof(Conswritemesg), 0);
     w->consread =  chancreate(sizeof(Consreadmesg), 0);
     w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
     w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
+
     w->scrollr = r;
     w->scrollr.max.x = r.min.x+Scrollwid;
     w->lastsr = ZR;
     r.min.x += Scrollwid+Scrollgap;
+
     frinit(w, r, font, i, cols);
+
     w->maxtab = maxtab*stringwidth(font, "0");
     w->topped = ++topped;
     w->id = ++id;
@@ -125,6 +133,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
     w->dir = estrdup(startdir);
     w->label = estrdup("<unnamed>");
     r = insetrect(w->i->r, Selborder);
+
     draw(w->i, r, cols[BACK], nil, w->entire.min);
     wborder(w, Selborder);
     wscrdraw(w);
@@ -321,6 +330,7 @@ winctl(void *arg)
                 }
             }
         }
+        // event loop
         switch(alt(alts)){
         case WKey:
             for(i=0; kbdr[i]!=L'\0'; i++)
@@ -1448,7 +1458,7 @@ wclosewin(Window *w)
 
 /*s: function wsetpid */
 void
-wsetpid(Window *w, int pid, int dolabel)
+wsetpid(Window *w, int pid, bool dolabel)
 {
     char buf[128];
     int fd;

@@ -12,6 +12,7 @@ enum{
     BORD,
     TEXT,
     HTEXT,
+
     NCOL
 };
 /*e: enum _anon_ (include/frame.h) */
@@ -38,25 +39,25 @@ struct Frbox
 /*s: struct Frame */
 struct Frame
 {
-    Font		*font;		/* of chars in the frame */
-    Display		*display;	/* on which frame appears */
-    Image		*b;		/* on which frame appears */
-    Image		*cols[NCOL];	/* text and background colors */
+    Font	*font;		/* of chars in the frame */
+    Display	*display;	/* on which frame appears */
+    Image	*b;		/* on which frame appears */
+    Image	*cols[NCOL];	/* text and background colors */
     Rectangle	r;		/* in which text appears */
     Rectangle	entire;		/* of full frame */
     void			(*scroll)(Frame*, int);	/* scroll function provided by application */
-    Frbox		*box;
-    ulong		p0, p1;		/* selection */
-    ushort		nbox, nalloc;
-    ushort		maxtab;		/* max size of tab, in pixels */
-    ushort		nchars;		/* # runes in frame */
-    ushort		nlines;		/* # lines with text */
-    ushort		maxlines;	/* total # lines in frame */
-    ushort		lastlinefull;	/* last line fills frame */
-    ushort		modified;	/* changed since frselect() */
-    Image		*tick;	/* typing tick */
-    Image		*tickback;	/* saved image under tick */
-    int			ticked;	/* flag: is tick onscreen? */
+    Frbox	*box;
+    ulong	p0, p1;		/* selection */
+    ushort	nbox, nalloc;
+    ushort	maxtab;		/* max size of tab, in pixels */
+    ushort	nchars;		/* # runes in frame */
+    ushort	nlines;		/* # lines with text */
+    ushort	maxlines;	/* total # lines in frame */
+    ushort	lastlinefull;	/* last line fills frame */
+    ushort	modified;	/* changed since frselect() */
+    Image	*tick;	/* typing tick */
+    Image	*tickback;	/* saved image under tick */
+    int		ticked;	/* flag: is tick onscreen? */
 };
 /*e: struct Frame */
 

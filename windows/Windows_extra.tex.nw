@@ -193,7 +193,6 @@ int			eplumb(int, char*);
 <<global view>>
 <<global wscreen>>
 <<global background>>
-<<global lightgrey>>
 <<global red>>
 
 <<global window>>
@@ -228,16 +227,6 @@ int			eplumb(int, char*);
 #define	STACK	8192
 @
 
-<<enum _anon_ (windows/rio/dat.h)3>>=
-enum
-{
-    Selborder		= 4,	/* border of selected window */
-    Unselborder	= 1,		/* border of unselected window */
-    Scrollwid 		= 12,	/* width of scroll bar */
-    Scrollgap 		= 4,	/* gap right of scroll bar */
-    BIG			= 3,	/* factor by which window dimension can exceed screen */
-};
-@
 
 
 
@@ -3043,100 +3032,13 @@ enum
 static	int		topped;
 @
 
-<<global id>>=
-static	int		id;
-@
 
-<<global cols>>=
-static	Image	*cols[NCOL];
-@
 
-<<global grey>>=
-static	Image	*grey;
-@
-
-<<global darkgrey>>=
-static	Image	*darkgrey;
-@
 
 <<global lastcursor>>=
 static	Cursor	*lastcursor;
 @
 
-<<global titlecol>>=
-static	Image	*titlecol;
-@
-
-<<global lighttitlecol>>=
-static	Image	*lighttitlecol;
-@
-
-<<global holdcol>>=
-static	Image	*holdcol;
-@
-
-<<global lightholdcol>>=
-static	Image	*lightholdcol;
-@
-
-<<global paleholdcol>>=
-static	Image	*paleholdcol;
-@
-
-<<function wmk>>=
-Window*
-wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
-{
-    Window *w;
-    Rectangle r;
-
-    if(cols[0] == nil){
-        /* greys are multiples of 0x11111100+0xFF, 14* being palest */
-        grey = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xEEEEEEFF);
-        darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x666666FF);
-        cols[BACK] = display->white;
-        cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xCCCCCCFF);
-        cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x999999FF);
-        cols[TEXT] = display->black;
-        cols[HTEXT] = display->black;
-        titlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreygreen);
-        lighttitlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreygreen);
-        holdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedblue);
-        lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreyblue);
-        paleholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
-    }
-    w = emalloc(sizeof(Window));
-    w->screenr = i->r;
-    r = insetrect(i->r, Selborder+1);
-    w->i = i;
-    w->mc = *mc;
-    w->ck = ck;
-    w->cctl = cctl;
-    w->cursorp = nil;
-    w->conswrite = chancreate(sizeof(Conswritemesg), 0);
-    w->consread =  chancreate(sizeof(Consreadmesg), 0);
-    w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
-    w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
-    w->scrollr = r;
-    w->scrollr.max.x = r.min.x+Scrollwid;
-    w->lastsr = ZR;
-    r.min.x += Scrollwid+Scrollgap;
-    frinit(w, r, font, i, cols);
-    w->maxtab = maxtab*stringwidth(font, "0");
-    w->topped = ++topped;
-    w->id = ++id;
-    w->notefd = -1;
-    w->scrolling = scrolling;
-    w->dir = estrdup(startdir);
-    w->label = estrdup("<unnamed>");
-    r = insetrect(w->i->r, Selborder);
-    draw(w->i, r, cols[BACK], nil, w->entire.min);
-    wborder(w, Selborder);
-    wscrdraw(w);
-    incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
-    return w;
-}
-@
 
 <<function wsetname>>=
 void
@@ -3239,246 +3141,6 @@ wclose(Window *w)
 }
 @
 
-<<function winctl>>=
-void
-winctl(void *arg)
-{
-    Rune *rp, *bp, *tp, *up, *kbdr;
-    uint qh;
-    int nr, nb, c, wid, i, npart, initial, lastb;
-    char *s, *t, part[3];
-    Window *w;
-    Mousestate *mp, m;
-    enum { WKey, WMouse, WMouseread, WCtl, WCwrite, WCread, WWread, NWALT };
-    Alt alts[NWALT+1];
-    Mousereadmesg mrm;
-    Conswritemesg cwm;
-    Consreadmesg crm;
-    Consreadmesg cwrm;
-    Stringpair pair;
-    Wctlmesg wcm;
-    char buf[4*12+1];
-
-    w = arg;
-    snprint(buf, sizeof buf, "winctl-id%d", w->id);
-    threadsetname(buf);
-
-    mrm.cm = chancreate(sizeof(Mouse), 0);
-    cwm.cw = chancreate(sizeof(Stringpair), 0);
-    crm.c1 = chancreate(sizeof(Stringpair), 0);
-    crm.c2 = chancreate(sizeof(Stringpair), 0);
-    cwrm.c1 = chancreate(sizeof(Stringpair), 0);
-    cwrm.c2 = chancreate(sizeof(Stringpair), 0);
-    
-
-    alts[WKey].c = w->ck;
-    alts[WKey].v = &kbdr;
-    alts[WKey].op = CHANRCV;
-    alts[WMouse].c = w->mc.c;
-    alts[WMouse].v = &w->mc.Mouse;
-    alts[WMouse].op = CHANRCV;
-    alts[WMouseread].c = w->mouseread;
-    alts[WMouseread].v = &mrm;
-    alts[WMouseread].op = CHANSND;
-    alts[WCtl].c = w->cctl;
-    alts[WCtl].v = &wcm;
-    alts[WCtl].op = CHANRCV;
-    alts[WCwrite].c = w->conswrite;
-    alts[WCwrite].v = &cwm;
-    alts[WCwrite].op = CHANSND;
-    alts[WCread].c = w->consread;
-    alts[WCread].v = &crm;
-    alts[WCread].op = CHANSND;
-    alts[WWread].c = w->wctlread;
-    alts[WWread].v = &cwrm;
-    alts[WWread].op = CHANSND;
-    alts[NWALT].op = CHANEND;
-
-    npart = 0;
-    lastb = -1;
-    for(;;){
-        if(w->mouseopen && w->mouse.counter != w->mouse.lastcounter)
-            alts[WMouseread].op = CHANSND;
-        else
-            alts[WMouseread].op = CHANNOP;
-        if(!w->scrolling && !w->mouseopen && w->qh>w->org+w->nchars)
-            alts[WCwrite].op = CHANNOP;
-        else
-            alts[WCwrite].op = CHANSND;
-        if(w->deleted || !w->wctlready)
-            alts[WWread].op = CHANNOP;
-        else
-            alts[WWread].op = CHANSND;
-        /* this code depends on NL and EOT fitting in a single byte */
-        /* kind of expensive for each loop; worth precomputing? */
-        if(w->holding)
-            alts[WCread].op = CHANNOP;
-        else if(npart || (w->rawing && w->nraw>0))
-            alts[WCread].op = CHANSND;
-        else{
-            alts[WCread].op = CHANNOP;
-            for(i=w->qh; i<w->nr; i++){
-                c = w->r[i];
-                if(c=='\n' || c=='\004'){
-                    alts[WCread].op = CHANSND;
-                    break;
-                }
-            }
-        }
-        switch(alt(alts)){
-        case WKey:
-            for(i=0; kbdr[i]!=L'\0'; i++)
-                wkeyctl(w, kbdr[i]);
-//			wkeyctl(w, r);
-///			while(nbrecv(w->ck, &r))
-//				wkeyctl(w, r);
-            break;
-        case WMouse:
-            if(w->mouseopen) {
-                w->mouse.counter++;
-
-                /* queue click events */
-                if(!w->mouse.qfull && lastb != w->mc.buttons) {	/* add to ring */
-                    mp = &w->mouse.queue[w->mouse.wi];
-                    if(++w->mouse.wi == nelem(w->mouse.queue))
-                        w->mouse.wi = 0;
-                    if(w->mouse.wi == w->mouse.ri)
-                        w->mouse.qfull = true;
-                    mp->Mouse = w->mc;
-                    mp->counter = w->mouse.counter;
-                    lastb = w->mc.buttons;
-                }
-            } else
-                wmousectl(w);
-            break;
-        case WMouseread:
-            /* send a queued event or, if the queue is empty, the current state */
-            /* if the queue has filled, we discard all the events it contained. */
-            /* the intent is to discard frantic clicking by the user during long latencies. */
-            w->mouse.qfull = false;
-            if(w->mouse.wi != w->mouse.ri) {
-                m = w->mouse.queue[w->mouse.ri];
-                if(++w->mouse.ri == nelem(w->mouse.queue))
-                    w->mouse.ri = 0;
-            } else
-                m = (Mousestate){w->mc.Mouse, w->mouse.counter};
-
-            w->mouse.lastcounter = m.counter;
-            send(mrm.cm, &m.Mouse);
-            continue;
-        case WCtl:
-            if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
-                chanfree(crm.c1);
-                chanfree(crm.c2);
-                chanfree(mrm.cm);
-                chanfree(cwm.cw);
-                chanfree(cwrm.c1);
-                chanfree(cwrm.c2);
-                threadexits(nil);
-            }
-            continue;
-        case WCwrite:
-            recv(cwm.cw, &pair);
-            rp = pair.s;
-            nr = pair.ns;
-            bp = rp;
-            for(i=0; i<nr; i++)
-                if(*bp++ == '\b'){
-                    --bp;
-                    initial = 0;
-                    tp = runemalloc(nr);
-                    runemove(tp, rp, i);
-                    up = tp+i;
-                    for(; i<nr; i++){
-                        *up = *bp++;
-                        if(*up == '\b')
-                            if(up == tp)
-                                initial++;
-                            else
-                                --up;
-                        else
-                            up++;
-                    }
-                    if(initial){
-                        if(initial > w->qh)
-                            initial = w->qh;
-                        qh = w->qh-initial;
-                        wdelete(w, qh, qh+initial);
-                        w->qh = qh;
-                    }
-                    free(rp);
-                    rp = tp;
-                    nr = up-tp;
-                    rp[nr] = 0;
-                    break;
-                }
-            w->qh = winsert(w, rp, nr, w->qh)+nr;
-            if(w->scrolling || w->mouseopen)
-                wshow(w, w->qh);
-            wsetselect(w, w->q0, w->q1);
-            wscrdraw(w);
-            free(rp);
-            break;
-        case WCread:
-            recv(crm.c1, &pair);
-            t = pair.s;
-            nb = pair.ns;
-            i = npart;
-            npart = 0;
-            if(i)
-                memmove(t, part, i);
-            while(i<nb && (w->qh<w->nr || w->nraw>0)){
-                if(w->qh == w->nr){
-                    wid = runetochar(t+i, &w->raw[0]);
-                    w->nraw--;
-                    runemove(w->raw, w->raw+1, w->nraw);
-                }else
-                    wid = runetochar(t+i, &w->r[w->qh++]);
-                c = t[i];	/* knows break characters fit in a byte */
-                i += wid;
-                if(!w->rawing && (c == '\n' || c=='\004')){
-                    if(c == '\004')
-                        i--;
-                    break;
-                }
-            }
-            if(i==nb && w->qh<w->nr && w->r[w->qh]=='\004')
-                w->qh++;
-            if(i > nb){
-                npart = i-nb;
-                memmove(part, t+nb, npart);
-                i = nb;
-            }
-            pair.s = t;
-            pair.ns = i;
-            send(crm.c2, &pair);
-            continue;
-        case WWread:
-            w->wctlready = 0;
-            recv(cwrm.c1, &pair);
-            if(w->deleted || w->i==nil)
-                pair.ns = sprint(pair.s, "");
-            else{
-                s = "visible";
-                for(i=0; i<nhidden; i++)
-                    if(hidden[i] == w){
-                        s = "hidden";
-                        break;
-                    }
-                t = "notcurrent";
-                if(w == input)
-                    t = "current";
-                pair.ns = snprint(pair.s, pair.ns, "%11d %11d %11d %11d %s %s ",
-                    w->i->r.min.x, w->i->r.min.y, w->i->r.max.x, w->i->r.max.y, t, s);
-            }
-            send(cwrm.c2, &pair);
-            continue;
-        }
-        if(!w->deleted)
-            flushimage(display, 1);
-    }
-}
-@
 
 <<function waddraw>>=
 void
@@ -4454,7 +4116,7 @@ wclosewin(Window *w)
 
 <<function wsetpid>>=
 void
-wsetpid(Window *w, int pid, int dolabel)
+wsetpid(Window *w, int pid, bool dolabel)
 {
     char buf[128];
     int fd;
@@ -7417,28 +7079,6 @@ _frstrlen(Frame *f, int nb)
 
 \subsection*{[[windows/libframe/frinit.c]]}
 
-<<function frinit>>=
-void
-frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
-{
-    f->font = ft;
-    f->display = b->display;
-    f->maxtab = 8*stringwidth(ft, "0");
-    f->nbox = 0;
-    f->nalloc = 0;
-    f->nchars = 0;
-    f->nlines = 0;
-    f->p0 = 0;
-    f->p1 = 0;
-    f->box = 0;
-    f->lastlinefull = 0;
-    if(cols != 0)
-        memmove(f->cols, cols, sizeof f->cols);
-    frsetrects(f, r, b);
-    if(f->tick==nil && f->cols[BACK]!=0)
-        frinittick(f);
-}
-@
 
 <<function frinittick>>=
 void
