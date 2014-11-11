@@ -88,22 +88,25 @@ enum
 #define	FILE(q)	(((ulong)(q).path) & 0xFF)
 /*e: function FILE */
 
-/*s: enum _anon_ (windows/rio/dat.h)5 */
+/*s: enum wctlmesgkind */
 enum	/* control messages */
 {
     Wakeup,
-    Reshaped,
+    Reshaped, // Resized, Hide/Unhind
     Moved,
     Refresh,
     Movemouse,
+
     Rawon,
     Rawoff,
+
     Holdon,
     Holdoff,
+
     Deleted,
     Exited,
 };
-/*e: enum _anon_ (windows/rio/dat.h)5 */
+/*e: enum wctlmesgkind */
 
 /*s: struct Wctlmesg */
 struct Wctlmesg
@@ -169,8 +172,10 @@ struct Mouseinfo
 struct Window
 {
     int		id;
+    char	*label;
     Frame;
 
+    Image	*i;
     /*
      * Rio once used originwindow, so screenr could be different from i->r.
      * Now they're always the same but the code doesn't assume so.
@@ -178,19 +183,17 @@ struct Window
     Rectangle	screenr; /* screen coordinates of window */
 
     Mousectl	mc; // mc->c is the mouse event listening channel
+    Channel	*ck;		/* chan(Rune[10]) */
+    Channel	*cctl;		/* chan(Wctlmesg)[20] */
+
+    bool_byte	deleted;
 
     /*s: [[Window]] other fields */
-    Image		*i;
-
     Mouseinfo	mouse;
-
-    Channel		*ck;		/* chan(Rune[10]) */
-    Channel		*cctl;		/* chan(Wctlmesg)[20] */
     Channel		*conswrite;	/* chan(Conswritemesg) */
     Channel		*consread;	/* chan(Consreadmesg) */
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     Channel		*wctlread;	/* chan(Consreadmesg) */
-
     uint		nr;	/* number of runes in window */
     uint		maxr;	/* number of runes allocated in r */
     Rune		*r;
@@ -215,15 +218,14 @@ struct Window
     uchar		rawing;
     uchar		ctlopen;
     uchar		wctlopen;
-    uchar		deleted;
     uchar		mouseopen;
-    char		*label;
     int		pid;
     char		*dir;
     /*e: [[Window]] other fields */
 
     /*s: [[Window]] extra fields */
     Ref;
+    /*x: [[Window]] extra fields */
     QLock;
     /*e: [[Window]] extra fields */
 };
@@ -276,7 +278,7 @@ struct Xfid
         QLock	active;
         int	flushing;	/* another Xfid is trying to flush us */
         int	flushtag;	/* our tag, so flush can find us */
-        Channel	*flushc;	/* channel(int) to notify us we're being flushed */
+        Channel	*flushc;/* channel(int) to notify us we're being flushed */
 };
 /*e: struct Xfid */
 
@@ -355,6 +357,6 @@ extern int		wctlfd;
 extern bool		errorshouldabort;
 extern bool		menuing;
 extern int		snarfversion;	/* updated each time it is written */
-extern int		messagesize; 		/* negotiated in 9P version setup */
+extern int		messagesize;	/* negotiated in 9P version setup */
 
 /*e: windows/rio/dat.h */

@@ -166,7 +166,7 @@ wsetname(Window *w)
 
 /*s: function wresize */
 void
-wresize(Window *w, Image *i, int move)
+wresize(Window *w, Image *i, bool move)
 {
     Rectangle r, or;
 
@@ -234,6 +234,7 @@ wclose(Window *w)
     i = decref(w);
     if(i > 0)
         return 0;
+
     if(i < 0)
         error("negative ref count");
     if(!w->deleted)
@@ -243,6 +244,21 @@ wclose(Window *w)
 }
 /*e: function wclose */
 
+/*s: enum Wxxx */
+enum { 
+    WKey, 
+    WMouse, 
+    WMouseread, 
+
+    WCtl, //!!!
+
+    WCwrite, 
+    WCread, 
+    WWread, 
+
+    NWALT 
+};
+/*e: enum Wxxx */
 
 /*s: function winctl */
 void
@@ -254,7 +270,6 @@ winctl(void *arg)
     char *s, *t, part[3];
     Window *w;
     Mousestate *mp, m;
-    enum { WKey, WMouse, WMouseread, WCtl, WCwrite, WCread, WWread, NWALT };
     Alt alts[NWALT+1];
     Mousereadmesg mrm;
     Conswritemesg cwm;
@@ -330,6 +345,7 @@ winctl(void *arg)
                 }
             }
         }
+
         // event loop
         switch(alt(alts)){
         case WKey:
@@ -1168,11 +1184,69 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
     char buf[64];
 
     switch(m){
-    default:
-        error("unknown control message");
-        break;
+    /*s: [[wctlmesg()]] cases */
     case Wakeup:
         break;
+    /*x: [[wctlmesg()]] cases */
+    case Refresh:
+        if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
+            break;
+        if(!w->mouseopen)
+            wrefresh(w, r);
+        flushimage(display, 1);
+        break;
+    /*x: [[wctlmesg()]] cases */
+    case Movemouse:
+        if(sweeping || !ptinrect(r.min, w->i->r))
+            break;
+        wmovemouse(w, r.min);
+        break;
+    /*x: [[wctlmesg()]] cases */
+    case Rawon:
+        break;
+    case Rawoff:
+        if(w->deleted)
+            break;
+        while(w->nraw > 0){
+            wkeyctl(w, w->raw[0]);
+            --w->nraw;
+            runemove(w->raw, w->raw+1, w->nraw);
+        }
+        break;
+    /*x: [[wctlmesg()]] cases */
+    case Holdon:
+    case Holdoff:
+        if(w->deleted)
+            break;
+        wrepaint(w);
+        flushimage(display, 1);
+        break;
+    /*x: [[wctlmesg()]] cases */
+    case Deleted:
+        if(w->deleted)
+            break;
+        write(w->notefd, "hangup", 6);
+        proccreate(deletetimeoutproc, estrdup(w->name), 4096);
+        wclosewin(w);
+        break;
+    /*x: [[wctlmesg()]] cases */
+    case Exited:
+        frclear(w, true);
+        close(w->notefd);
+        chanfree(w->mc.c);
+        chanfree(w->ck);
+        chanfree(w->cctl);
+        chanfree(w->conswrite);
+        chanfree(w->consread);
+        chanfree(w->mouseread);
+        chanfree(w->wctlread);
+        free(w->raw);
+        free(w->r);
+        free(w->dir);
+        free(w->label);
+        free(w);
+        break;
+    /*x: [[wctlmesg()]] cases */
     case Moved:
     case Reshaped:
         if(w->deleted){
@@ -1191,59 +1265,12 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
             wcurrent(nil);
         flushimage(display, 1);
         break;
-    case Refresh:
-        if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
-            break;
-        if(!w->mouseopen)
-            wrefresh(w, r);
-        flushimage(display, 1);
-        break;
-    case Movemouse:
-        if(sweeping || !ptinrect(r.min, w->i->r))
-            break;
-        wmovemouse(w, r.min);
-    case Rawon:
-        break;
-    case Rawoff:
-        if(w->deleted)
-            break;
-        while(w->nraw > 0){
-            wkeyctl(w, w->raw[0]);
-            --w->nraw;
-            runemove(w->raw, w->raw+1, w->nraw);
-        }
-        break;
-    case Holdon:
-    case Holdoff:
-        if(w->deleted)
-            break;
-        wrepaint(w);
-        flushimage(display, 1);
-        break;
-    case Deleted:
-        if(w->deleted)
-            break;
-        write(w->notefd, "hangup", 6);
-        proccreate(deletetimeoutproc, estrdup(w->name), 4096);
-        wclosewin(w);
-        break;
-    case Exited:
-        frclear(w, true);
-        close(w->notefd);
-        chanfree(w->mc.c);
-        chanfree(w->ck);
-        chanfree(w->cctl);
-        chanfree(w->conswrite);
-        chanfree(w->consread);
-        chanfree(w->mouseread);
-        chanfree(w->wctlread);
-        free(w->raw);
-        free(w->r);
-        free(w->dir);
-        free(w->label);
-        free(w);
+    /*e: [[wctlmesg()]] cases */
+    default:
+        error("unknown control message");
         break;
     }
+
     return m;
 }
 /*e: function wctlmesg */
@@ -1427,12 +1454,14 @@ wclosewin(Window *w)
     int i;
 
     w->deleted = true;
+
     if(w == input){
         input = nil;
         wsetcursor(w, 0);
     }
     if(w == wkeyboard)
         wkeyboard = nil;
+
     for(i=0; i<nhidden; i++)
         if(hidden[i] == w){
             --nhidden;
@@ -1444,7 +1473,7 @@ wclosewin(Window *w)
         if(window[i] == w){
             --nwindow;
             memmove(window+i, window+i+1, (nwindow-i)*sizeof(Window*));
-            w->deleted = true;
+            w->deleted = true; // again??
             r = w->i->r;
             /* move it off-screen to hide it, in case client is slow in letting it go */
             //if(0) originwindow(w->i, r.min, view->r.max);
@@ -1493,7 +1522,9 @@ winshell(void *args)
     cmd = arg[2];
     argv = arg[3];
     dir = arg[4];
+
     rfork(RFNAMEG|RFFDG|RFENVG);
+
     if(filsysmount(filsys, w->id) < 0){
         fprint(2, "mount failed: %r\n");
         sendul(pidc, 0);

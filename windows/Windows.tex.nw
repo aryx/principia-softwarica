@@ -13,12 +13,12 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - removed deadcode (Qnew)
+% - removed deadcode (Qnew, threadrforkflag)
 
 %thx to codemap/codegraph/scheck:
-% - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
+% - use cg to reduce backward deps, introduce globals.c, utils.c,
 %   (harder to understand non layered code)
-% - TODO use scheck to remove deadcode, dead prototypes, useless export
+% - use scheck to remove deadcode, dead prototypes, useless export
 %   or mv as forward decl
 %   (harder to understand big interface files)
 % - TODO use cg to reduce number of globals by moving them closer to the
@@ -34,13 +34,13 @@
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, dumper
 %    * TODO [[xxx]] other fields, [[xxx]] extra fields
-% - TODO read Extra section, identify concepts, first TOC
-% - TODO distribute parts of the Extra section in the main file
-% - TODO understand main(), LP split main, improve TOC
-% - TODO understand main functions, LP split, cluster, improve TOC
-% - TODO LP split the structures, use datalog for flow to field info
-% - TODO nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
-% - TODO aspecify advanced features! remove useless features
+% - read Extra section, identify concepts, first TOC
+% - SEMI distribute parts of the Extra section in the main file
+% - understand main(), LP split main, improve TOC
+% - understand main functions, LP split, cluster, improve TOC
+% - SEMI LP split the structures, use datalog for flow to field info
+% - SEMI nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
+% - SEMI aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
 
@@ -151,9 +151,10 @@ you fully understand how things work under the hood.
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
+\item X11
+% the obvious choice
 \item Mini X
 \item Nano X (MicroWindows)
-\item X11
 \item Wayland
 \end{itemize}
 % nuttx has some graphic and windowing stack apparently too!
@@ -163,7 +164,8 @@ Here are other candidates that were considered but ultimately discarded:
 %http://toastytech.com/guis/guitimeline.html
 
 % history me: 
-%  - one terminal
+%  - tos, sega yeno, atari GEM, dos, windows 3.11
+%  - one Linux terminal
 %  - job control shell! (otherwise multi tasking OS but just one term so ...)
 %  - multi terminal Alt-Fx on Linux
 %  - screen or tux programs
@@ -178,7 +180,7 @@ Here are other candidates that were considered but ultimately discarded:
 \section{Requirements}
 
 % rio.ps
-% rio(1) and rio(5)
+% rio(1) and rio(5), also draw(2?)
 
 \section{About this document}
 #include "../docs/latex/About.tex.nw"
@@ -192,14 +194,16 @@ License.
 
 \section{Acknowledgments}
 
+%Rob pike obviously, rio's author (and its precursors 81/2, ...)
 
 \chapter{Overview}
 
 \section{Windowing system principles}
 
-% a demultiplexer essentially! toy app run outside rio
-% but with rio can have "virtual" screen, virtual keyboard/mouse
-% also a window manager! mv/resize/close/hide/etc
+% a screen demultiplexer essentially! toy app run outside rio
+% but with rio can have "virtual" screen.
+% can also have virtual keyboard/mouse
+% also a window manager! mv/resize/close/hide/etc menus, a visual shell!
 
 \section{[[rio]] services}
 % the interface!  again the /dev/xxx ?
@@ -213,7 +217,10 @@ usage(void)
 }
 @
 
-%see rio(1) and rio(5)!
+% once run have full screen, with right menu to start things.
+
+% also have fileserver to offer a virtual view for the apps running
+% inside the windows
 
 %$wsys
 %$wctl
@@ -238,7 +245,6 @@ usage(void)
 
 
 % $rio
-
 % manual creation of window (not via menu)
 % (see rio(5)
 % mount $wsys /tmp 'new -r 0 0 128 64 -pid' $pid
@@ -265,23 +271,27 @@ usage(void)
 %globals.c
 %data.c: cursors, images, resources
 
-%util.c
+%util.c: helpers
 
-%time.c: timer thread
-%scrl.c: scrolling
 %wind.c: windows manip
 %wctl.c: windows control
 %fsys.c: /dev/ server
 %xfid.c: /dev/ services
+%time.c: timer thread
+%scrl.c: scrolling
 %rio.c: main
 
 
 \section{Architecture overview}
 
-% kernel driver vs libs vs apps vs rio
+% kernel driver vs graphic libs vs rio vs graphical apps
+
+% /dev/draw (core one) vs /dev/draw (fake one to clients)
+% /dev/mouse, /dev/cons
+% /dev/cursor
 
 % see 81/2.ps and rio.ps
-% see panel.pdf
+% see also panel.pdf
 
 % part1: windows (rio)
 % part2: toolkit (libpanel)
@@ -289,28 +299,36 @@ usage(void)
 
 % there are DS server side and client side.
 % Window is server side info about client window. On the client
-% side this window is actually stored in a handle called screen.
+% side this window is actually stored in a handle called screen
+% (and also have different services in /dev/ like /dev/winname)
 
+% show the different threads! threadmain, mouse, keyboard, and windows threads!
+% (as well as close, delete, and xfids)
 
-% show the different threads! mouse, keyboard, close, delete, and xfids
+% actually also have different processes! winshell, timer, and the main rio one
 
 % each window is a thread! when keydown the keyboard thread is triggered
-% (it was waiting in the event loop in a recv()), and send the character
+% (it was waiting in the event loop in a recv() on /dev/cons probably in raw
+% mode), and send the character
 % to the input window channel, and the thread corresponding to this window
 % who should wait for many channels should be awaken by the thread scheduler
-% to process the keyboard input!
+% to process the keyboard input and act on it.
+
+% switch(alt(alts)) { event loop in many threads (mouse, winctl, etc)
+
+% menu3 -> xxx() -> wsendctlmesg(w, xxxd) -> send(w->cctl, xxxd) -> winctl thread awake -> wxxx()
+% or sometimes xxx() -> wxxx() directly like for whide() because reuse
+% an existing Wctlmsg (e.g. Reshaped)
+
 
 % filsysxxx -> xfidxxx -> wxxx
 
-
-% switch(alt(alts)) { event loop in many threads (mouse, winctl, etc)
 
 %http://tech.slashdot.org/story/14/06/19/1317227/x-window-system-turns-30-years-old?utm_source=slashdot&utm_medium=facebook
 %"A server lets clients access a shared resource. On a file server, it's
 %storage. On a web server, it's documents. On a compute server, it's
 %processing. On an X server, the shared resource is the display, and
 %clients are given access to it."
-
 
 
 \section{Trace of a mouse click}
@@ -320,10 +338,13 @@ usage(void)
 
 \chapter{Core Data Structures}
 
+% core DS of rio, the server side view!
+% core DS of client apps? similar actually but demultiplex from original one!
+
 \section{[[display]], [[screen]], etc}
 
-%draw.h, set by initdraw
-%Display	*display;
+%draw.h
+%Display	*display; // set by initdraw()
 %Image          *screen; // should be renamed window! really TODO?
 % = point to the portion of the display for this window
 % but for rio it's really the whole screen (unless run recursively)
@@ -333,12 +354,11 @@ usage(void)
 
 %Font		*font;
 
-
 %display = draw
 %screen = current image memory in current display
 %window = ? 
 
-
+% this is DS wrapper on top of /dev/draw
 
 \section{[[view]], [[mousectl]], [[keyboardctl]], etc}
 
@@ -359,11 +379,13 @@ Rectangle	viewr;
 <<global keyboardctl>>=
 Keyboardctl	*keyboardctl;
 @
+% wrapper over /dev/cons in raw mode probably
 
 % mouse.h
 <<global mousectl>>=
 Mousectl	*mousectl;
 @
+% wrapper over /dev/mouse
 
 <<global mouse>>=
 Mouse	*mouse;
@@ -383,6 +405,9 @@ Image	*background;
 Screen	*wscreen;
 @
 % = allocscreen(screen, background)
+% will get code like
+%    switch(i = menuhit(3, mousectl, &menu3, wscreen)){
+% so make sense? what is wscreen?
 
 
 
@@ -402,8 +427,10 @@ Image	*red;
 struct Window
 {
     int		id;
+    char	*label;
     Frame;
 
+    Image	*i;
     /*
      * Rio once used originwindow, so screenr could be different from i->r.
      * Now they're always the same but the code doesn't assume so.
@@ -411,6 +438,10 @@ struct Window
     Rectangle	screenr; /* screen coordinates of window */
 
     Mousectl	mc; // mc->c is the mouse event listening channel
+    Channel	*ck;		/* chan(Rune[10]) */
+    Channel	*cctl;		/* chan(Wctlmesg)[20] */
+
+    bool_byte	deleted;
 
     <<[[Window]] other fields>>
 
@@ -422,23 +453,24 @@ struct Window
 
 <<[[Window]] extra fields>>=
 Ref;
+@
+% when middle click on a window we want to keep it alive!
+% don't want someone else via /dev/... to delete it yet, otherwise
+% will get segfault if try to access some fields of this window!
+
+<<[[Window]] extra fields>>=
 QLock;
 @
-
+% need? threads are cooperatif so can have race??
+% have different process though
 
 %XXXXX
 <<[[Window]] other fields>>=
-Image		*i;
-
 Mouseinfo	mouse;
-
-Channel		*ck;		/* chan(Rune[10]) */
-Channel		*cctl;		/* chan(Wctlmesg)[20] */
 Channel		*conswrite;	/* chan(Conswritemesg) */
 Channel		*consread;	/* chan(Consreadmesg) */
 Channel		*mouseread;	/* chan(Mousereadmesg) */
 Channel		*wctlread;	/* chan(Consreadmesg) */
-
 uint		nr;	/* number of runes in window */
 uint		maxr;	/* number of runes allocated in r */
 Rune		*r;
@@ -463,13 +495,12 @@ uchar		holding;
 uchar		rawing;
 uchar		ctlopen;
 uchar		wctlopen;
-uchar		deleted;
 uchar		mouseopen;
-char		*label;
 int		pid;
 char		*dir;
 @
 
+% grown in wmk()
 <<global window>>=
 //array<option<ref_own<Window>>>
 Window	**window;
@@ -495,6 +526,7 @@ Window	*input;
 <<global hidden>>=
 Window	*hidden[100];
 @
+% hidden windows
 
 <<global nhidden>>=
 int		nhidden;
@@ -503,6 +535,9 @@ int		nhidden;
 
 
 %ctor!
+% cmd is usually /bin/rc
+%        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil); => pid is 0
+% when from the menu!
 <<function new>>=
 Window*
 new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
@@ -555,7 +590,11 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 }
 @
 
-%XXX ?
+<<global rcargv>>=
+char *rcargv[] = { "rc", "-i", nil };
+@
+
+%when new from the system menu
 <<[[new()]] if pid == 0>>=
 if(pid == 0){
     arg = emalloc(5*sizeof(void*));
@@ -640,73 +679,65 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 }
 @
 
-\section{[[FilSys]], [[Fid]], [[Xfid] and [[filsys]]}
-
-<<struct Fid>>=
-struct Fid
+% dtor?
+<<function wclose>>=
+int
+wclose(Window *w)
 {
-    int		fid;
+    int i;
 
-    int		busy;
-    int		open;
-    int		mode;
+    i = decref(w);
+    if(i > 0)
+        return 0;
 
-    Qid		qid;
-
-    Window	*w;
-    Dirtab	*dir;
-    Fid		*next;
-    int		nrpart;
-    uchar	rpart[UTFmax];
-};
+    if(i < 0)
+        error("negative ref count");
+    if(!w->deleted)
+        wclosewin(w);
+    wsendctlmesg(w, Exited, ZR, nil);
+    return 1;
+}
 @
 
-<<constant Nhash>>=
-#define Nhash 16
-@
-
-<<struct Filsys>>=
-struct Filsys
+<<function wclosewin>>=
+void
+wclosewin(Window *w)
 {
-    int		cfd;
-    int		sfd;
+    Rectangle r;
+    int i;
 
-    int		pid;
+    w->deleted = true;
 
-    char	*user;
+    if(w == input){
+        input = nil;
+        wsetcursor(w, 0);
+    }
+    if(w == wkeyboard)
+        wkeyboard = nil;
 
-    Channel	*cxfidalloc;	/* chan(Xfid*) */
-    Fid		*fids[Nhash];
-};
+    for(i=0; i<nhidden; i++)
+        if(hidden[i] == w){
+            --nhidden;
+            memmove(hidden+i, hidden+i+1, (nhidden-i)*sizeof(hidden[0]));
+            hidden[nhidden] = nil;
+            break;
+        }
+    for(i=0; i<nwindow; i++)
+        if(window[i] == w){
+            --nwindow;
+            memmove(window+i, window+i+1, (nwindow-i)*sizeof(Window*));
+            w->deleted = true; // again??
+            r = w->i->r;
+            /* move it off-screen to hide it, in case client is slow in letting it go */
+            //if(0) originwindow(w->i, r.min, view->r.max);
+            freeimage(w->i);
+            w->i = nil;
+            return;
+        }
+    error("unknown window in closewin");
+}
 @
 
-<<global filsys>>=
-Filsys	*filsys;
-@
-
-%\section{[[Xfid]]}
-
-<<struct Xfid>>=
-struct Xfid
-{
-        Ref;
-        Xfid	*next;
-        Xfid	*free;
-        Fcall;
-        Channel	*c;	/* chan(void(*)(Xfid*)) */
-
-        Fid	*f;
-
-        uchar	*buf;
-
-        Filsys	*fs;
-
-        QLock	active;
-        int	flushing;	/* another Xfid is trying to flush us */
-        int	flushtag;	/* our tag, so flush can find us */
-        Channel	*flushc;	/* channel(int) to notify us we're being flushed */
-};
-@
 
 \section{[[Frame]]}
 
@@ -723,25 +754,6 @@ enum{
 };
 @
 
-<<constant FRTICKW>>=
-#define	FRTICKW	3
-@
-
-<<struct Frbox>>=
-struct Frbox
-{
-    long		wid;		/* in pixels */
-    long		nrune;		/* <0 ==> negate and treat as break char */
-    union{
-        uchar	*ptr;
-        struct{
-            short	bc;	/* break char */
-            short	minwid;
-        };
-    };
-};
-@
-
 <<struct Frame>>=
 struct Frame
 {
@@ -749,10 +761,14 @@ struct Frame
     Display	*display;	/* on which frame appears */
     Image	*b;		/* on which frame appears */
     Image	*cols[NCOL];	/* text and background colors */
+
     Rectangle	r;		/* in which text appears */
     Rectangle	entire;		/* of full frame */
+
     void			(*scroll)(Frame*, int);	/* scroll function provided by application */
+
     Frbox	*box;
+
     ulong	p0, p1;		/* selection */
     ushort	nbox, nalloc;
     ushort	maxtab;		/* max size of tab, in pixels */
@@ -846,6 +862,124 @@ frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
 }
 @
 
+
+
+
+%XXX ?
+<<struct Frbox>>=
+struct Frbox
+{
+    long		wid;		/* in pixels */
+    long		nrune;		/* <0 ==> negate and treat as break char */
+    union{
+        uchar	*ptr;
+        struct{
+            short	bc;	/* break char */
+            short	minwid;
+        };
+    };
+};
+@
+
+\section{[[FilSys]], [[Fid]], [[Xfid]] and [[filsys]]}
+
+<<constant Nhash>>=
+#define Nhash 16
+@
+
+<<struct Filsys>>=
+struct Filsys
+{
+    int		cfd;
+    int		sfd;
+
+    int		pid;
+
+    char	*user;
+
+    Channel	*cxfidalloc;	/* chan(Xfid*) */
+    Fid		*fids[Nhash];
+};
+@
+
+<<global filsys>>=
+Filsys	*filsys;
+@
+
+
+<<struct Fid>>=
+struct Fid
+{
+    int		fid;
+
+    int		busy;
+    int		open;
+    int		mode;
+
+    Qid		qid;
+
+    Window	*w;
+    Dirtab	*dir;
+    Fid		*next;
+    int		nrpart;
+    uchar	rpart[UTFmax];
+};
+@
+
+
+% ctor
+<<function newfid>>=
+static
+Fid*
+newfid(Filsys *fs, int fid)
+{
+    Fid *f, *ff, **fh;
+
+    ff = nil;
+    fh = &fs->fids[fid&(Nhash-1)];
+    for(f=*fh; f; f=f->next)
+        if(f->fid == fid)
+            return f;
+        else if(ff==nil && f->busy==false)
+            ff = f;
+    if(ff){
+        ff->fid = fid;
+        return ff;
+    }
+    f = emalloc(sizeof *f);
+    f->fid = fid;
+    f->next = *fh;
+    *fh = f;
+    return f;
+}
+@
+
+
+
+%\section{[[Xfid]]}
+
+<<struct Xfid>>=
+struct Xfid
+{
+        Ref;
+        Xfid	*next;
+        Xfid	*free;
+        Fcall;
+        Channel	*c;	/* chan(void(*)(Xfid*)) */
+
+        Fid	*f;
+
+        uchar	*buf;
+
+        Filsys	*fs;
+
+        QLock	active;
+        int	flushing;	/* another Xfid is trying to flush us */
+        int	flushtag;	/* our tag, so flush can find us */
+        Channel	*flushc;/* channel(int) to notify us we're being flushed */
+};
+@
+
 \section{XXX}
 
 <<global all>>=
@@ -854,12 +988,9 @@ QLock	all;			/* BUG */
 
 
 <<global sweeping>>=
-int	sweeping;
+bool	sweeping;
 @
 
-<<global wctlfd>>=
-int	wctlfd;
-@
 
 <<global menuing>>=
 bool menuing;/* menu action is pending; waiting for window to be indicated */
@@ -976,6 +1107,10 @@ winclosechan = chancreate(sizeof(Window*), 0);
 deletechan = chancreate(sizeof(char*), 0);
 @
 
+<<constant STACK>>=
+#define	STACK	8192
+@
+
 <<[[main()]] threads creation>>=
 timerinit();
 threadcreate(keyboardthread, nil, STACK);
@@ -1055,7 +1190,46 @@ free(s);
 \chapter{Threads}
 % see rio presentation with architecture
 
+\section{Keyboard thread}
+
+% the channel is keyboardctl->c, see keyboard.h
+% it's initialized in main()
+
+<<function keyboardthread>>=
+void
+keyboardthread(void*)
+{
+    Rune buf[2][20], *rp;
+    int n, i;
+
+    threadsetname("keyboardthread");
+    n = 0;
+    for(;;){
+        rp = buf[n];
+        n = 1-n;
+        recv(keyboardctl->c, rp);
+        for(i=1; i<nelem(buf[0])-1; i++)
+            if(nbrecv(keyboardctl->c, rp+i) <= 0)
+                break;
+        rp[i] = L'\0';
+
+        if(input != nil)
+            sendp(input->ck, rp);
+    }
+}
+@
+
 \section{Mouse thread}
+
+<<enum Mxxx>>=
+enum {
+    MReshape,
+    MMouse,
+
+    NALT
+};
+@
+
 
 <<function mousethread>>=
 void
@@ -1145,12 +1319,12 @@ mousethread(void*)
             if(moving && (mouse->buttons&7)){
                 oin = winput;
                 band = mouse->buttons & 3;
-                sweeping = 1;
+                sweeping = true;
                 if(band)
                     i = bandsize(winput);
                 else
                     i = drag(winput, &r);
-                sweeping = 0;
+                sweeping = false;
                 if(i != nil){
                     if(winput == oin){
                         if(band)
@@ -1198,36 +1372,23 @@ mousethread(void*)
 
 
 
-\section{Keyboard thread}
-
-% the channel is keyboardctl->c, see keyboard.h
-% it's initialized in main()
-
-<<function keyboardthread>>=
-void
-keyboardthread(void*)
-{
-    Rune buf[2][20], *rp;
-    int n, i;
-
-    threadsetname("keyboardthread");
-    n = 0;
-    for(;;){
-        rp = buf[n];
-        n = 1-n;
-        recv(keyboardctl->c, rp);
-        for(i=1; i<nelem(buf[0])-1; i++)
-            if(nbrecv(keyboardctl->c, rp+i) <= 0)
-                break;
-        rp[i] = L'\0';
-
-        if(input != nil)
-            sendp(input->ck, rp);
-    }
-}
-@
-
 \section{Windows threads}
+
+<<enum Wxxx>>=
+enum { 
+    WKey, 
+    WMouse, 
+    WMouseread, 
+
+    WCtl, //!!!
+
+    WCwrite, 
+    WCread, 
+    WWread, 
+
+    NWALT 
+};
+@
 
 % right click -> button3menu() -> new() -> threadcreate(<>)
 <<function winctl>>=
@@ -1240,7 +1401,6 @@ winctl(void *arg)
     char *s, *t, part[3];
     Window *w;
     Mousestate *mp, m;
-    enum { WKey, WMouse, WMouseread, WCtl, WCwrite, WCread, WWread, NWALT };
     Alt alts[NWALT+1];
     Mousereadmesg mrm;
     Conswritemesg cwm;
@@ -1316,6 +1476,7 @@ winctl(void *arg)
                 }
             }
         }
+
         // event loop
         switch(alt(alts)){
         case WKey:
@@ -1473,6 +1634,102 @@ winctl(void *arg)
 @
 
 
+\section{Xfid threads}
+
+%TODO rename XFAlloc, XFFree, XNALT like for the other threads
+<<enum Xxxx>>=
+enum { 
+    Alloc, 
+    Free, 
+    N 
+};
+@
+
+<<global xfidfree>>=
+static	Xfid	*xfidfree;
+@
+
+<<global xfid>>=
+static	Xfid	*xfid;
+@
+
+<<function xfidallocthread>>=
+void
+xfidallocthread(void*)
+{
+    Xfid *x;
+    static Alt alts[N+1];
+
+    alts[Alloc].c = cxfidalloc;
+    alts[Alloc].v = nil;
+    alts[Alloc].op = CHANRCV;
+    alts[Free].c = cxfidfree;
+    alts[Free].v = &x;
+    alts[Free].op = CHANRCV;
+    alts[N].op = CHANEND;
+
+    for(;;){
+        // event loop
+        switch(alt(alts)){
+        case Alloc:
+            x = xfidfree;
+            if(x)
+                xfidfree = x->free;
+            else{
+                x = emalloc(sizeof(Xfid));
+                x->c = chancreate(sizeof(void(*)(Xfid*)), 0);
+                x->flushc = chancreate(sizeof(int), 0);	/* notification only; no data */
+                x->flushtag = -1;
+                x->next = xfid;
+                xfid = x;
+                threadcreate(xfidctl, x, 16384);
+            }
+            if(x->ref != 0){
+                fprint(2, "%p incref %ld\n", x, x->ref);
+                error("incref");
+            }
+            if(x->flushtag != -1)
+                error("flushtag in allocate");
+            incref(x);
+            sendp(cxfidalloc, x);
+            break;
+        case Free:
+            if(x->ref != 0){
+                fprint(2, "%p decref %ld\n", x, x->ref);
+                error("decref");
+            }
+            if(x->flushtag != -1)
+                error("flushtag in free");
+            x->free = xfidfree;
+            xfidfree = x;
+            break;
+        }
+    }
+}
+@
+
+
+
+<<function xfidctl>>=
+void
+xfidctl(void *arg)
+{
+    Xfid *x;
+    void (*f)(Xfid*);
+    char buf[64];
+
+    x = arg;
+    snprint(buf, sizeof buf, "xfid.%p", x);
+    threadsetname(buf);
+    for(;;){
+        f = recvp(x->c);
+        (*f)(x);
+        if(decref(x) == 0)
+            sendp(cxfidfree, x);
+    }
+}
+@
+
 \section{Closing and delete threads}
 
 <<global winclosechan>>=
@@ -1522,67 +1779,10 @@ deletethread(void*)
 @
 
 
-\section{Xfid threads}
-
-
-<<function xfidallocthread>>=
-void
-xfidallocthread(void*)
-{
-    Xfid *x;
-    static Alt alts[N+1];
-
-    alts[Alloc].c = cxfidalloc;
-    alts[Alloc].v = nil;
-    alts[Alloc].op = CHANRCV;
-    alts[Free].c = cxfidfree;
-    alts[Free].v = &x;
-    alts[Free].op = CHANRCV;
-    alts[N].op = CHANEND;
-    for(;;){
-        // event loop
-        switch(alt(alts)){
-        case Alloc:
-            x = xfidfree;
-            if(x)
-                xfidfree = x->free;
-            else{
-                x = emalloc(sizeof(Xfid));
-                x->c = chancreate(sizeof(void(*)(Xfid*)), 0);
-                x->flushc = chancreate(sizeof(int), 0);	/* notification only; no data */
-                x->flushtag = -1;
-                x->next = xfid;
-                xfid = x;
-                threadcreate(xfidctl, x, 16384);
-            }
-            if(x->ref != 0){
-                fprint(2, "%p incref %ld\n", x, x->ref);
-                error("incref");
-            }
-            if(x->flushtag != -1)
-                error("flushtag in allocate");
-            incref(x);
-            sendp(cxfidalloc, x);
-            break;
-        case Free:
-            if(x->ref != 0){
-                fprint(2, "%p decref %ld\n", x, x->ref);
-                error("decref");
-            }
-            if(x->flushtag != -1)
-                error("flushtag in free");
-            x->free = xfidfree;
-            xfidfree = x;
-            break;
-        }
-    }
-}
-@
-
-
 \chapter{System Menus}
 
 \section{Right click menu}
+
 <<enum _anon_ (windows/rio/rio.c)>>=
 enum
 {
@@ -1592,13 +1792,16 @@ enum
     Delete,
     Hide,
     Exit,
+
+    Hidden,
 };
 @
 
-
-<<global Hidden>>=
-int	Hidden = Exit+1;
-@
+%//PAD used to be a global
+%<<global Hidden>>=
+%int	Hidden = Exit+1;
+%@
+% ? when hide it's accessible in the right menu! hence the 100 below
 
 <<global menu3str>>=
 char		*menu3str[100] = {
@@ -1619,7 +1822,9 @@ Menu menu3 =
 };
 @
 
-
+% displaying a menu is drawing something! on top of what you
+% are currently! it's part of the drawing library!
+% mousethread -> event loop -> <>
 <<function button3menu>>=
 void
 button3menu(void)
@@ -1630,7 +1835,7 @@ button3menu(void)
         menu3str[i+Hidden] = hidden[i]->label;
     menu3str[i+Hidden] = nil;
 
-    sweeping = 1;
+    sweeping = true;
     switch(i = menuhit(3, mousectl, &menu3, wscreen)){
     case -1:
         break;
@@ -1650,18 +1855,20 @@ button3menu(void)
         hide();
         break;
     case Exit:
-        if(Hidden > Exit){
-            send(exitchan, nil);
-            break;
-        }
-        /* else fall through */
+        send(exitchan, nil);
+        break;
     default:
         unhide(i);
         break;
     }
-    sweeping = 0;
+    sweeping = false;
 }
 @
+%old:
+%        if(Hidden > Exit){
+%        }
+%        /* else fall through */
+% tricks when Exit was an optional menu item disabled sometimes
 
 \section{Middle click menu}
 
@@ -1696,7 +1903,8 @@ Menu menu2 =
 };
 @
 
-
+% active only on actual window, not like right menu
+% mousethread -> event loop -> <>
 <<function button2menu>>=
 void
 button2menu(Window *w)
@@ -1704,10 +1912,12 @@ button2menu(Window *w)
     if(w->deleted)
         return;
     incref(w);
+
     if(w->scrolling)
         menu2str[Scroll] = "noscroll";
     else
         menu2str[Scroll] = "scroll";
+
     switch(menuhit(2, mousectl, &menu2, wscreen)){
     case Cut:
         wsnarf(w);
@@ -1752,15 +1962,407 @@ button2menu(Window *w)
             wshow(w, w->nr);
         break;
     }
-    wclose(w);
+    wclose(w); // decref
     wsendctlmesg(w, Wakeup, ZR, nil);
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 @
 
 
 
+
 \chapter{Windows}
+
+\section{Overview}
+
+\section{[[Wctlmesg]]}
+
+<<enum wctlmesgkind>>=
+enum	/* control messages */
+{
+    Wakeup,
+    Reshaped, // Resized, Hide/Unhind
+    Moved,
+    Refresh,
+    Movemouse,
+
+    Rawon,
+    Rawoff,
+
+    Holdon,
+    Holdoff,
+
+    Deleted,
+    Exited,
+};
+@
+
+
+<<struct Wctlmesg>>=
+struct Wctlmesg
+{
+    int		type;
+    Rectangle	r;
+    Image	*image;
+};
+@
+
+
+<<function wsendctlmesg>>=
+void
+wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
+{
+    Wctlmesg wcm;
+
+    wcm.type = type;
+    wcm.r = r;
+    wcm.image = image;
+    send(w->cctl, &wcm);
+}
+@
+
+
+<<[[wctlmesg()]] cases>>=
+case Wakeup:
+    break;
+@
+
+<<[[wctlmesg()]] cases>>=
+case Refresh:
+    if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
+        break;
+    if(!w->mouseopen)
+        wrefresh(w, r);
+    flushimage(display, 1);
+    break;
+@
+
+<<[[wctlmesg()]] cases>>=
+case Movemouse:
+    if(sweeping || !ptinrect(r.min, w->i->r))
+        break;
+    wmovemouse(w, r.min);
+    break;
+@
+
+<<[[wctlmesg()]] cases>>=
+case Rawon:
+    break;
+case Rawoff:
+    if(w->deleted)
+        break;
+    while(w->nraw > 0){
+        wkeyctl(w, w->raw[0]);
+        --w->nraw;
+        runemove(w->raw, w->raw+1, w->nraw);
+    }
+    break;
+@
+
+<<[[wctlmesg()]] cases>>=
+case Holdon:
+case Holdoff:
+    if(w->deleted)
+        break;
+    wrepaint(w);
+    flushimage(display, 1);
+    break;
+@
+
+<<[[wctlmesg()]] cases>>=
+case Deleted:
+    if(w->deleted)
+        break;
+    write(w->notefd, "hangup", 6);
+    proccreate(deletetimeoutproc, estrdup(w->name), 4096);
+    wclosewin(w);
+    break;
+@
+
+
+
+% from winctl event loop!
+<<function wctlmesg>>=
+int
+wctlmesg(Window *w, int m, Rectangle r, Image *i)
+{
+    char buf[64];
+
+    switch(m){
+    <<[[wctlmesg()]] cases>>
+    default:
+        error("unknown control message");
+        break;
+    }
+
+    return m;
+}
+@
+
+\section{Window creation}
+
+% button3menu -> new() -> wmk ()
+
+%        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil);
+
+<<function sweep>>=
+Image*
+sweep(void)
+{
+    Image *i, *oi;
+    Rectangle r;
+    Point p0, p;
+
+    i = nil;
+    menuing = true;
+    riosetcursor(&crosscursor, 1);
+    while(mouse->buttons == 0)
+        readmouse(mousectl);
+    p0 = onscreen(mouse->xy);
+    p = p0;
+    r.min = p;
+    r.max = p;
+    oi = nil;
+    while(mouse->buttons == 4){
+        readmouse(mousectl);
+        if(mouse->buttons != 4 && mouse->buttons != 0)
+            break;
+        if(!eqpt(mouse->xy, p)){
+            p = onscreen(mouse->xy);
+            r = canonrect(Rpt(p0, p));
+            if(Dx(r)>5 && Dy(r)>5){
+                i = allocwindow(wscreen, r, Refnone, 0xEEEEEEFF); /* grey */
+                freeimage(oi);
+                if(i == nil)
+                    goto Rescue;
+                oi = i;
+                border(i, r, Selborder, red, ZP);
+                flushimage(display, 1);
+            }
+        }
+    }
+    if(mouse->buttons != 0)
+        goto Rescue;
+    if(i==nil || Dx(i->r)<100 || Dy(i->r)<3*font->height)
+        goto Rescue;
+    oi = i;
+    i = allocwindow(wscreen, oi->r, Refbackup, DWhite);
+    freeimage(oi);
+    if(i == nil)
+        goto Rescue;
+    border(i, r, Selborder, red, ZP);
+    cornercursor(input, mouse->xy, 1);
+    goto Return;
+
+ Rescue:
+    freeimage(i);
+    i = nil;
+    cornercursor(input, mouse->xy, 1);
+    while(mouse->buttons)
+        readmouse(mousectl);
+
+ Return:
+    moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
+    menuing = false;
+    return i;
+}
+@
+
+
+\section{Window deletion}
+
+% Exited vs Deleted?
+
+% button3menu -> wclose() -> wclosewin() ; wsendctlmsg(Exited)
+
+<<[[wctlmesg()]] cases>>=
+case Exited:
+    frclear(w, true);
+    close(w->notefd);
+    chanfree(w->mc.c);
+    chanfree(w->ck);
+    chanfree(w->cctl);
+    chanfree(w->conswrite);
+    chanfree(w->consread);
+    chanfree(w->mouseread);
+    chanfree(w->wctlread);
+    free(w->raw);
+    free(w->r);
+    free(w->dir);
+    free(w->label);
+    free(w);
+    break;
+@
+
+\section{Window resize}
+
+<<function resize>>=
+void
+resize(void)
+{
+    Window *w;
+    Image *i;
+
+    w = pointto(true);
+    if(w == nil)
+        return;
+    i = sweep();
+    if(i)
+        wsendctlmesg(w, Reshaped, i->r, i);
+}
+@
+
+<<[[wctlmesg()]] cases>>=
+case Moved:
+case Reshaped:
+    if(w->deleted){
+        freeimage(i);
+        break;
+    }
+    w->screenr = r;
+    strcpy(buf, w->name);
+    wresize(w, i, m==Moved);
+    w->wctlready = 1;
+    proccreate(deletetimeoutproc, estrdup(buf), 4096);
+    if(Dx(r) > 0){
+        if(w != input)
+            wcurrent(w);
+    }else if(w == input)
+        wcurrent(nil);
+    flushimage(display, 1);
+    break;
+@
+
+
+<<function wresize>>=
+void
+wresize(Window *w, Image *i, bool move)
+{
+    Rectangle r, or;
+
+    or = w->i->r;
+    if(move || (Dx(or)==Dx(i->r) && Dy(or)==Dy(i->r)))
+        draw(i, i->r, w->i, nil, w->i->r.min);
+    freeimage(w->i);
+    w->i = i;
+    wsetname(w);
+    w->mc.image = i;
+    r = insetrect(i->r, Selborder+1);
+    w->scrollr = r;
+    w->scrollr.max.x = r.min.x+Scrollwid;
+    w->lastsr = ZR;
+    r.min.x += Scrollwid+Scrollgap;
+    if(move)
+        frsetrects(w, r, w->i);
+    else{
+        frclear(w, false);
+        frinit(w, r, w->font, w->i, cols);
+        wsetcols(w);
+        w->maxtab = maxtab*stringwidth(w->font, "0");
+        r = insetrect(w->i->r, Selborder);
+        draw(w->i, r, cols[BACK], nil, w->entire.min);
+        wfill(w);
+        wsetselect(w, w->q0, w->q1);
+        wscrdraw(w);
+    }
+    wborder(w, Selborder);
+    w->topped = ++topped;
+    w->resized = true;
+    w->mouse.counter++;
+}
+@
+
+\section{Window move}
+
+<<function move>>=
+void
+move(void)
+{
+    Window *w;
+    Image *i;
+    Rectangle r;
+
+    w = pointto(false);
+    if(w == nil)
+        return;
+    i = drag(w, &r);
+    if(i)
+        wsendctlmesg(w, Moved, r, i);
+    cornercursor(input, mouse->xy, 1);
+}
+@
+
+\section{Window hiding}
+
+<<function hide>>=
+void
+hide(void)
+{
+    Window *w;
+
+    w = pointto(true);
+    if(w == nil)
+        return;
+    whide(w);
+}
+@
+
+
+<<function whide>>=
+int
+whide(Window *w)
+{
+    Image *i;
+    int j;
+
+    for(j=0; j<nhidden; j++)
+        if(hidden[j] == w)	/* already hidden */
+            return -1;
+    i = allocimage(display, w->screenr, w->i->chan, 0, DWhite);
+    if(i){
+        hidden[nhidden++] = w;
+        wsendctlmesg(w, Reshaped, ZR, i);
+        return 1;
+    }
+    return 0;
+}
+@
+
+%\section{Window unhiding}
+
+<<function unhide>>=
+void
+unhide(int h)
+{
+    Window *w;
+
+    h -= Hidden;
+    w = hidden[h];
+    if(w == nil)
+        return;
+    wunhide(h);
+}
+@
+
+<<function wunhide>>=
+int
+wunhide(int h)
+{
+    Image *i;
+    Window *w;
+
+    w = hidden[h];
+    i = allocwindow(wscreen, w->i->r, Refbackup, DWhite);
+    if(i){
+        --nhidden;
+        memmove(hidden+h, hidden+h+1, (nhidden-h)*sizeof(Window*));
+        wsendctlmesg(w, Reshaped, w->i->r, i);
+        return 1;
+    }
+    return 0;
+}
+@
+
 
 \chapter{Cursor}
 % put pictures instead of code :)
@@ -1958,7 +2560,42 @@ Cursor *corners[9] = {
 @
 
 
-\chapter{[[filsysinit()]]}
+\chapter{The Server}
+
+<<global fcall>>=
+Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
+{
+    [Tattach]	= filsysattach,
+    [Twalk]	= filsyswalk,
+    [Topen]	= filsysopen,
+    [Tcreate]	= filsyscreate,
+    [Tread]	= filsysread,
+    [Twrite]	= filsyswrite,
+    [Tclunk]	= filsysclunk,
+    [Tremove]   = filsysremove,
+    [Tstat]	= filsysstat,
+    [Twstat]	= filsyswstat,
+    [Tflush]	= filsysflush,
+    [Tversion]	= filsysversion,
+    [Tauth]	= filsysauth,
+};
+@
+
+
+\section{[[filsysinit()]]}
+
+<<global wctlfd>>=
+int	wctlfd;
+@
+
+<<global srvpipe (windows/rio/fsys.c)>>=
+char	srvpipe[64];
+@
+
+<<global srvwctl (windows/rio/fsys.c)>>=
+char	srvwctl[64];
+@
+
 
 <<function filsysinit>>=
 Filsys*
@@ -2024,6 +2661,51 @@ Rescue:
 @
 
 
+<<function post>>=
+void
+post(char *name, char *envname, int srvfd)
+{
+    int fd;
+    char buf[32];
+
+    fd = create(name, OWRITE|ORCLOSE|OCEXEC, 0600);
+    if(fd < 0)
+        error(name);
+    sprint(buf, "%d",srvfd);
+    if(write(fd, buf, strlen(buf)) != strlen(buf))
+        error("srv write");
+    putenv(envname, name);
+}
+@
+
+
+
+<<function cexecpipe>>=
+/*
+ * Build pipe with OCEXEC set on second fd.
+ * Can't put it on both because we want to post one in /srv.
+ */
+int
+cexecpipe(int *p0, int *p1)
+{
+    /* pipe the hard way to get close on exec */
+    if(bind("#|", "/mnt/temp", MREPL) < 0)
+        return -1;
+    *p0 = open("/mnt/temp/data", ORDWR);
+    *p1 = open("/mnt/temp/data1", ORDWR|OCEXEC);
+    unmount(nil, "/mnt/temp");
+    if(*p0<0 || *p1<0)
+        return -1;
+    return 0;
+}
+@
+
+
+
+
+<<global messagesize>>=
+int	messagesize = 8192+IOHDRSZ;	/* good start */
+@
 
 
 <<function wctlproc>>=
@@ -2135,10 +2817,720 @@ filsysproc(void *arg)
             x->f = f;
             x  = (*fcall[x->type])(fs, x, f);
         }
-        firstmessage = 0;
+        firstmessage = false;
     }
 }
 @
+
+
+
+\section{[[filsysxxx()]]}
+
+\subsection{Attach}
+
+<<function filsysattach>>=
+static
+Xfid*
+filsysattach(Filsys *, Xfid *x, Fid *f)
+{
+    Fcall t;
+
+    if(strcmp(x->uname, x->fs->user) != 0)
+        return filsysrespond(x->fs, x, &t, Eperm);
+    f->busy = true;
+    f->open = false;
+    f->qid.path = Qdir;
+    f->qid.type = QTDIR;
+    f->qid.vers = 0;
+    f->dir = dirtab;
+    f->nrpart = 0;
+    sendp(x->c, xfidattach);
+    return nil;
+}
+@
+
+
+\subsection{Walk}
+
+<<function filsyswalk>>=
+static
+Xfid*
+filsyswalk(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall t;
+    Fid *nf;
+    int i, id;
+    uchar type;
+    ulong path;
+    Dirtab *d, *dir;
+    Window *w;
+    char *err;
+    Qid qid;
+
+    if(f->open)
+        return filsysrespond(fs, x, &t, "walk of open file");
+    nf = nil;
+    if(x->fid  != x->newfid){
+        /* BUG: check exists */
+        nf = newfid(fs, x->newfid);
+        if(nf->busy)
+            return filsysrespond(fs, x, &t, "clone to busy fid");
+        nf->busy = true;
+        nf->open = false;
+        nf->dir = f->dir;
+        nf->qid = f->qid;
+        nf->w = f->w;
+        incref(f->w);
+        nf->nrpart = 0;	/* not open, so must be zero */
+        f = nf;	/* walk f */
+    }
+
+    t.nwqid = 0;
+    err = nil;
+
+    /* update f->qid, f->dir only if walk completes */
+    qid = f->qid;
+    dir = f->dir;
+
+    if(x->nwname > 0){
+        for(i=0; i<x->nwname; i++){
+            if((qid.type & QTDIR) == 0){
+                err = Enotdir;
+                break;
+            }
+            if(strcmp(x->wname[i], "..") == 0){
+                type = QTDIR;
+                path = Qdir;
+                dir = dirtab;
+                if(FILE(qid) == Qwsysdir)
+                    path = Qwsys;
+                id = 0;
+    Accept:
+                if(i == MAXWELEM){
+                    err = "name too long";
+                    break;
+                }
+                qid.type = type;
+                qid.vers = 0;
+                qid.path = QID(id, path);
+                t.wqid[t.nwqid++] = qid;
+                continue;
+            }
+
+            if(qid.path == Qwsys){
+                /* is it a numeric name? */
+                if(!numeric(x->wname[i]))
+                    break;
+                /* yes: it's a directory */
+                id = atoi(x->wname[i]);
+                qlock(&all);
+                w = wlookid(id);
+                if(w == nil){
+                    qunlock(&all);
+                    break;
+                }
+                path = Qwsysdir;
+                type = QTDIR;
+                qunlock(&all);
+                incref(w);
+                sendp(winclosechan, f->w);
+                f->w = w;
+                dir = dirtab;
+                goto Accept;
+            }
+        
+            if(snarffd>=0 && strcmp(x->wname[i], "snarf")==0)
+                break;	/* don't serve /dev/snarf if it's provided in the environment */
+            id = WIN(f->qid);
+            d = dirtab;
+            d++;	/* skip '.' */
+            for(; d->name; d++)
+                if(strcmp(x->wname[i], d->name) == 0){
+                    path = d->qid;
+                    type = d->type;
+                    dir = d;
+                    goto Accept;
+                }
+
+            break;	/* file not found */
+        }
+
+        if(i==0 && err==nil)
+            err = Eexist;
+    }
+
+    if(err!=nil || t.nwqid<x->nwname){
+        if(nf){
+            if(nf->w)
+                sendp(winclosechan, nf->w);
+            nf->open = false;
+            nf->busy = false;
+        }
+    }else if(t.nwqid == x->nwname){
+        f->dir = dir;
+        f->qid = qid;
+    }
+
+    return filsysrespond(fs, x, &t, err);
+}
+@
+
+<<function numeric>>=
+static
+int
+numeric(char *s)
+{
+    for(; *s!='\0'; s++)
+        if(*s<'0' || '9'<*s)
+            return 0;
+    return 1;
+}
+@
+
+
+\subsection{Open}
+
+<<function filsysopen>>=
+static
+Xfid*
+filsysopen(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall t;
+    int m;
+
+    /* can't truncate anything, so just disregard */
+    x->mode &= ~(OTRUNC|OCEXEC);
+    /* can't execute or remove anything */
+    if(x->mode==OEXEC || (x->mode&ORCLOSE))
+        goto Deny;
+    switch(x->mode){
+    default:
+        goto Deny;
+    case OREAD:
+        m = 0400;
+        break;
+    case OWRITE:
+        m = 0200;
+        break;
+    case ORDWR:
+        m = 0600;
+        break;
+    }
+    if(((f->dir->perm&~(DMDIR|DMAPPEND))&m) != m)
+        goto Deny;
+        
+    sendp(x->c, xfidopen);
+    return nil;
+
+    Deny:
+    return filsysrespond(fs, x, &t, Eperm);
+}
+@
+
+\subsection{Create}
+
+
+<<function filsyscreate>>=
+static
+Xfid*
+filsyscreate(Filsys *fs, Xfid *x, Fid*)
+{
+    Fcall t;
+
+    return filsysrespond(fs, x, &t, Eperm);
+}
+@
+
+\subsection{Read}
+
+
+<<function filsysread>>=
+static
+Xfid*
+filsysread(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall t;
+    uchar *b;
+    int i, n, o, e, len, j, k, *ids;
+    Dirtab *d, dt;
+    uint clock;
+    char buf[16];
+
+    if((f->qid.type & QTDIR) == 0){
+        sendp(x->c, xfidread);
+        return nil;
+    }
+    o = x->offset;
+    e = x->offset+x->count;
+    clock = getclock();
+    b = malloc(messagesize-IOHDRSZ);	/* avoid memset of emalloc */
+    if(b == nil)
+        return filsysrespond(fs, x, &t, "out of memory");
+    n = 0;
+    switch(FILE(f->qid)){
+    <<[[filsysread()]] cases>>
+    }
+    t.data = (char*)b;
+    t.count = n;
+    filsysrespond(fs, x, &t, nil);
+    free(b);
+    return x;
+}
+@
+
+\subsection{Write}
+
+<<function filsyswrite>>=
+static
+Xfid*
+filsyswrite(Filsys*, Xfid *x, Fid*)
+{
+    sendp(x->c, xfidwrite);
+    return nil;
+}
+@
+
+\subsection{Clunk}
+
+
+<<function filsysclunk>>=
+static
+Xfid*
+filsysclunk(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall t;
+
+    if(f->open){
+        f->busy = false;
+        f->open = false;
+        sendp(x->c, xfidclose);
+        return nil;
+    }
+    if(f->w)
+        sendp(winclosechan, f->w);
+    f->busy = false;
+    f->open = false;
+    return filsysrespond(fs, x, &t, nil);
+}
+@
+
+\subsection{Remove}
+
+<<function filsysremove>>=
+static
+Xfid*
+filsysremove(Filsys *fs, Xfid *x, Fid*)
+{
+    Fcall t;
+
+    return filsysrespond(fs, x, &t, Eperm);
+}
+@
+
+\subsection{Stats}
+
+<<function filsysstat>>=
+static
+Xfid*
+filsysstat(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall t;
+
+    t.stat = emalloc(messagesize-IOHDRSZ);
+    t.nstat = dostat(fs, WIN(x->f->qid), f->dir, t.stat, messagesize-IOHDRSZ, getclock());
+    x = filsysrespond(fs, x, &t, nil);
+    free(t.stat);
+    return x;
+}
+@
+
+<<function dostat>>=
+static
+int
+dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
+{
+    Dir d;
+
+    d.qid.path = QID(id, dir->qid);
+    if(dir->qid == Qsnarf)
+        d.qid.vers = snarfversion;
+    else
+        d.qid.vers = 0;
+    d.qid.type = dir->type;
+    d.mode = dir->perm;
+    d.length = 0;	/* would be nice to do better */
+    d.name = dir->name;
+    d.uid = fs->user;
+    d.gid = fs->user;
+    d.muid = fs->user;
+    d.atime = clock;
+    d.mtime = clock;
+    return convD2M(&d, buf, nbuf);
+}
+@
+
+
+
+
+<<function filsyswstat>>=
+static
+Xfid*
+filsyswstat(Filsys *fs, Xfid *x, Fid*)
+{
+    Fcall t;
+
+    return filsysrespond(fs, x, &t, Eperm);
+}
+@
+
+\subsection{Flush}
+
+<<function filsysflush>>=
+static
+Xfid*
+filsysflush(Filsys*, Xfid *x, Fid*)
+{
+    sendp(x->c, xfidflush);
+    return nil;
+}
+@
+
+
+\subsection{Misc}
+
+<<global firstmessage>>=
+bool	firstmessage = true;
+@
+
+<<function filsysversion>>=
+static
+Xfid*
+filsysversion(Filsys *fs, Xfid *x, Fid*)
+{
+    Fcall t;
+
+    if(!firstmessage)
+        return filsysrespond(x->fs, x, &t, "version request not first message");
+    if(x->msize < 256)
+        return filsysrespond(x->fs, x, &t, "version: message size too small");
+    messagesize = x->msize;
+    t.msize = messagesize;
+    if(strncmp(x->version, "9P2000", 6) != 0)
+        return filsysrespond(x->fs, x, &t, "unrecognized 9P version");
+    t.version = "9P2000";
+    return filsysrespond(fs, x, &t, nil);
+}
+@
+
+
+<<function filsysauth>>=
+static
+Xfid*
+filsysauth(Filsys *fs, Xfid *x, Fid*)
+{
+    Fcall t;
+
+        return filsysrespond(fs, x, &t, "rio: authentication not required");
+}
+@
+
+
+\subsection{Helpers}
+
+<<function filsysrespond>>=
+Xfid*
+filsysrespond(Filsys *fs, Xfid *x, Fcall *t, char *err)
+{
+    int n;
+
+    if(err){
+        t->type = Rerror;
+        t->ename = err;
+    }else
+        t->type = x->type+1;
+    t->fid = x->fid;
+    t->tag = x->tag;
+    if(x->buf == nil)
+        x->buf = malloc(messagesize);
+    n = convS2M(t, x->buf, messagesize);
+    if(n <= 0)
+        error("convert error in convS2M");
+    if(write(fs->sfd, x->buf, n) != n)
+        error("write error in respond");
+    if(DEBUG)
+        fprint(2, "rio:->%F\n", t);
+    free(x->buf);
+    x->buf = nil;
+    return x;
+}
+@
+
+
+<<function filsyscancel>>=
+void
+filsyscancel(Xfid *x)
+{
+    if(x->buf){
+        free(x->buf);
+        x->buf = nil;
+    }
+}
+@
+
+
+\section{[[xfidxxx()]]}
+
+\subsection{Attach}
+
+<<function xfidattach>>=
+void
+xfidattach(Xfid *x)
+{
+    Fcall t;
+    int id, hideit, scrollit;
+    Window *w;
+    char *err, *n, *dir, errbuf[ERRMAX];
+    int pid, newlymade;
+    Rectangle r;
+    Image *i;
+
+    t.qid = x->f->qid;
+    qlock(&all);
+    w = nil;
+    err = Eunkid;
+    newlymade = false;
+    hideit = 0;
+
+    //TODO delete
+    if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
+        n = x->aname+1;
+        pid = strtoul(n, &n, 0);
+        if(*n == ',')
+            n++;
+        r.min.x = strtoul(n, &n, 0);
+        if(*n == ',')
+            n++;
+        r.min.y = strtoul(n, &n, 0);
+        if(*n == ',')
+            n++;
+        r.max.x = strtoul(n, &n, 0);
+        if(*n == ',')
+            n++;
+        r.max.y = strtoul(n, &n, 0);
+  Allocate:
+        if(!goodrect(r))
+            err = Ebadrect;
+        else{
+            if(hideit)
+                i = allocimage(display, r, screen->chan, 0, DWhite);
+            else
+                i = allocwindow(wscreen, r, Refbackup, DWhite);
+            if(i){
+                border(i, r, Selborder, display->black, ZP);
+                if(pid == 0)
+                    pid = -1;	/* make sure we don't pop a shell! - UGH */
+                w = new(i, hideit, scrolling, pid, nil, nil, nil);
+                flushimage(display, 1);
+                newlymade = true;
+            }else
+                err = Ewindow;
+        }
+    }else if(strncmp(x->aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
+        pid = 0;
+        if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->aname, errbuf) < 0)
+            err = errbuf;
+        else
+            goto Allocate;
+    }else{
+        id = atoi(x->aname);
+        w = wlookid(id);
+    }
+    x->f->w = w;
+    if(w == nil){
+        qunlock(&all);
+        x->f->busy = false;
+        filsysrespond(x->fs, x, &t, err);
+        return;
+    }
+    if(!newlymade)	/* counteract dec() in winshell() */
+        incref(w);
+    qunlock(&all);
+    filsysrespond(x->fs, x, &t, nil);
+}
+@
+
+\subsection{Open}
+
+
+<<function xfidopen>>=
+void
+xfidopen(Xfid *x)
+{
+    Fcall t;
+    Window *w;
+
+    w = x->f->w;
+    if(w->deleted){
+        filsysrespond(x->fs, x, &t, Edeleted);
+        return;
+    }
+    switch(FILE(x->f->qid)){
+    <<[[xfidopen()]] cases>>
+    }
+    t.qid = x->f->qid;
+    t.iounit = messagesize-IOHDRSZ;
+    x->f->open = true;
+    x->f->mode = x->mode;
+    filsysrespond(x->fs, x, &t, nil);
+}
+@
+
+\subsection{Close}
+
+
+<<function xfidclose>>=
+void
+xfidclose(Xfid *x)
+{
+    Fcall t;
+    Window *w;
+    int nb, nulls;
+
+    w = x->f->w;
+    switch(FILE(x->f->qid)){
+    <<[[xfidclose()]] cases>>
+    }
+    wclose(w);
+    filsysrespond(x->fs, x, &t, nil);
+}
+@
+
+\subsection{Read}
+
+
+<<[[xfidread()]] locals>>=
+char buf[128];
+Fcall fc;
+int n, off, cnt, c;
+uint qid;
+char *t;
+char cbuf[30];
+Window *w;
+Mouse ms;
+Rectangle r;
+Image *i;
+Channel *c1, *c2;	/* chan (tuple(char*, int)) */
+Consreadmesg crm;
+Mousereadmesg mrm;
+Consreadmesg cwrm;
+Stringpair pair;
+Alt alts[NCR+1];
+@
+
+
+<<function xfidread>>=
+void
+xfidread(Xfid *x)
+{
+    <<[[xfidread()]] locals>>
+    
+    w = x->f->w;
+    if(w->deleted){
+        filsysrespond(x->fs, x, &fc, Edeleted);
+        return;
+    }
+    qid = FILE(x->f->qid);
+    off = x->offset;
+    cnt = x->count;
+
+    switch(qid){
+    <<[[xfidread()]] cases>>
+    default:
+        fprint(STDERR, "unknown qid %d in read\n", qid);
+        sprint(buf, "unknown qid in read");
+        filsysrespond(x->fs, x, &fc, buf);
+        break;
+        }
+}
+@
+
+\subsection{Write}
+
+<<[[xfidwrite()]] locals>>=
+Fcall fc;
+int c, cnt, qid, nb, off, nr;
+char buf[256], *p;
+Point pt;
+Window *w;
+Rune *r;
+Conswritemesg cwm;
+Stringpair pair;
+Alt alts[NCW+1];
+@
+
+
+<<function xfidwrite>>=
+void
+xfidwrite(Xfid *x)
+{
+    <<[[xfidwrite()]] locals>>
+    
+    w = x->f->w;
+    if(w->deleted){
+        filsysrespond(x->fs, x, &fc, Edeleted);
+        return;
+    }
+    qid = FILE(x->f->qid);
+    cnt = x->count;
+    off = x->offset;
+    x->data[cnt] = 0;
+
+    switch(qid){
+    <<[[xfidwrite()]] cases>>
+    default:
+        fprint(2, buf, "unknown qid %d in write\n", qid);
+        sprint(buf, "unknown qid in write");
+        filsysrespond(x->fs, x, &fc, buf);
+        return;
+    }
+
+    fc.count = cnt;
+    filsysrespond(x->fs, x, &fc, nil);
+}
+@
+
+\subsection{Flush}
+
+<<function xfidflush>>=
+void
+xfidflush(Xfid *x)
+{
+    Fcall t;
+    Xfid *xf;
+
+    for(xf=xfid; xf; xf=xf->next)
+        if(xf->flushtag == x->oldtag){
+            xf->flushtag = -1;
+            xf->flushing = true;
+            incref(xf);	/* to hold data structures up at tail of synchronization */
+            if(xf->ref == 1)
+                error("ref 1 in flush");
+            if(canqlock(&xf->active)){
+                qunlock(&xf->active);
+                sendul(xf->flushc, 0);
+            }else{
+                qlock(&xf->active);	/* wait for him to finish */
+                qunlock(&xf->active);
+            }
+            xf->flushing = false;
+            if(decref(xf) == 0)
+                sendp(cxfidfree, xf);
+            break;
+        }
+    filsysrespond(x->fs, x, &t, nil);
+}
+@
+
 
 \chapter{[[/dev/...]] Demultiplexer}
 
@@ -2190,27 +3582,6 @@ Dirtab dirtab[]=
 @
 
 
-<<global fcall>>=
-Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
-{
-    [Tattach]	= filsysattach,
-    [Twalk]	= filsyswalk,
-    [Topen]	= filsysopen,
-    [Tcreate]	= filsyscreate,
-    [Tread]	= filsysread,
-    [Twrite]	= filsyswrite,
-    [Tclunk]	= filsysclunk,
-    [Tremove]   = filsysremove,
-    [Tstat]	= filsysstat,
-    [Twstat]	= filsyswstat,
-    [Tflush]	= filsysflush,
-    [Tversion]	= filsysversion,
-    [Tauth]	= filsysauth,
-};
-@
-
-
-
 
 \section{[[/dev/cons]]}
 
@@ -2220,6 +3591,10 @@ Qcons,
 
 <<dirtab array elements>>=
 { "cons",		QTFILE,	Qcons,		0600 },
+@
+
+<<enum _anon_ (windows/rio/xfid.c)3>>=
+enum { CRdata, CRflush, NCR };
 @
 
 <<[[xfidread()]] cases>>=
@@ -2266,6 +3641,15 @@ case Qcons:
     qunlock(&x->active);
     break;
 @
+
+
+
+
+
+<<enum _anon_ (windows/rio/xfid.c)2>>=
+enum { CWdata, CWflush, NCW };
+@
+
 
 <<[[xfidwrite()]] cases>>=
 case Qcons:
@@ -2429,6 +3813,10 @@ case Qmouse:
     break;
 @
 
+
+<<enum _anon_ (windows/rio/xfid.c)4>>=
+enum { MRdata, MRflush, NMR };
+@
 
 <<[[xfidread()]] cases>>=
 case Qmouse:
@@ -2648,6 +4036,27 @@ caseImage:
     return;
 @
 
+<<function readwindow>>=
+int
+readwindow(Image *i, char *t, Rectangle r, int offset, int n)
+{
+    int ww, y;
+
+    offset -= 5*12;
+    ww = bytesperline(r, screen->depth);
+    r.min.y += offset/ww;
+    if(r.min.y >= r.max.y)
+        return 0;
+    y = r.min.y + n/ww;
+    if(y < r.max.y)
+        r.max.y = y;
+    if(r.max.y <= r.min.y)
+        return 0;
+    return unloadimage(i, r, (uchar*)t, n);
+}
+@
+
+
 \section{[[/dev/window]]}
 
 <<enum qid cases>>=
@@ -2718,6 +4127,25 @@ case Qkbdin:
 case Qkbdin:
     keyboardsend(x->data, cnt);
     break;
+@
+
+<<function keyboardsend>>=
+/*
+ * Used by /dev/kbdin
+ */
+void
+keyboardsend(char *s, int cnt)
+{
+    Rune *r;
+    int i, nb, nr;
+
+    r = runemalloc(cnt);
+    /* BUGlet: partial runes will be converted to error runes */
+    cvttorunes(s, cnt, r, &nb, &nr, nil);
+    for(i=0; i<nr; i++)
+        send(keyboardctl->c, &r[i]);
+    free(r);
+}
 @
 
 \section{[[/dev/wdir]]}
@@ -2801,6 +4229,11 @@ case Qwctl:
 break;
 @
 
+
+<<enum _anon_ (windows/rio/xfid.c)5>>=
+enum { WCRdata, WCRflush, NWCR };
+@
+
 <<[[xfidread()]] cases>>=
 case Qwctl:	/* read returns rectangle, hangs if not resized */
     if(cnt < 4*12){
@@ -2863,33 +4296,6 @@ case Qwctl:
 @
 
 
-<<enum _anon_ (windows/rio/dat.h)5>>=
-enum	/* control messages */
-{
-    Wakeup,
-    Reshaped,
-    Moved,
-    Refresh,
-    Movemouse,
-    Rawon,
-    Rawoff,
-    Holdon,
-    Holdoff,
-    Deleted,
-    Exited,
-};
-@
-
-
-<<struct Wctlmesg>>=
-struct Wctlmesg
-{
-    int		type;
-    Rectangle	r;
-    Image	*image;
-};
-@
-
 
 \section{[[/dev/wsys]]}
 
@@ -2901,15 +4307,844 @@ Qwsys,		/* directory of window directories */
 @
 
 
+
+<<function idcmp>>=
+static
+int
+idcmp(void *a, void *b)
+{
+    return *(int*)a - *(int*)b;
+}
+@
+
+<<[[filsysread()]] cases>>=
+case Qwsys:
+    qlock(&all);
+    ids = emalloc(nwindow*sizeof(int));
+    for(j=0; j<nwindow; j++)
+        ids[j] = window[j]->id;
+    qunlock(&all);
+    qsort(ids, nwindow, sizeof ids[0], idcmp);
+    dt.name = buf;
+    for(i=0, j=0; j<nwindow && i<e; i+=len){
+        k = ids[j];
+        sprint(dt.name, "%d", k);
+        dt.qid = QID(k, Qdir);
+        dt.type = QTDIR;
+        dt.perm = DMDIR|0700;
+        len = dostat(fs, k, &dt, b+n, x->count-n, clock);
+        if(len == 0)
+            break;
+        if(i >= o)
+            n += len;
+        j++;
+    }
+    free(ids);
+    break;
+@
+
+
+
+
 <<enum qid cases>>=
 Qwsysdir,		/* window directory, child of wsys */
+@
+
+
+<<[[filsysread()]] cases>>=
+case Qdir:
+case Qwsysdir:
+    d = dirtab;
+    d++;	/* first entry is '.' */
+    for(i=0; d->name!=nil && i<e; i+=len){
+        len = dostat(fs, WIN(x->f->qid), d, b+n, x->count-n, clock);
+        if(len <= BIT16SZ)
+            break;
+        if(i >= o)
+            n += len;
+        d++;
+    }
+    break;
+@
+
+
+\chapter{[[/dev/wctl]]}
+
+
+<<enum _anon_ (windows/rio/wctl.c)>>=
+/* >= Top are disallowed if mouse button is pressed */
+enum
+{
+    New,
+    Resize,
+    Move,
+    Scroll,
+    Noscroll,
+    Set,
+    Top,
+    Bottom,
+    Current,
+    Hide,
+    Unhide,
+    Delete,
+};
+@
+
+<<global cmds>>=
+static char *cmds[] = {
+    [New]	= "new",
+    [Resize]	= "resize",
+    [Move]	= "move",
+    [Scroll]	= "scroll",
+    [Noscroll]	= "noscroll",
+    [Set]	= "set",
+    [Top]	= "top",
+    [Bottom]	= "bottom",
+    [Current]	= "current",
+    [Hide]	= "hide",
+    [Unhide]	= "unhide",
+    [Delete]	= "delete",
+    nil
+};
+@
+
+<<enum _anon_ (windows/rio/wctl.c)2>>=
+enum
+{
+    Cd,
+    Deltax,
+    Deltay,
+    Hidden,
+    Id,
+    Maxx,
+    Maxy,
+    Minx,
+    Miny,
+    PID,
+    R,
+    Scrolling,
+    Noscrolling,
+};
+@
+
+<<global params>>=
+static char *params[] = {
+    [Cd] 			= "-cd",
+    [Deltax]			= "-dx",
+    [Deltay]			= "-dy",
+    [Hidden]			= "-hide",
+    [Id]			= "-id",
+    [Maxx]			= "-maxx",
+    [Maxy]			= "-maxy",
+    [Minx]			= "-minx",
+    [Miny]			= "-miny",
+    [PID]			= "-pid",
+    [R]				= "-r",
+    [Scrolling]			= "-scroll",
+    [Noscrolling]		= "-noscroll",
+    nil
+};
+@
+
+<<function goodrect>>=
+/*
+ * Check that newly created window will be of manageable size
+ */
+int
+goodrect(Rectangle r)
+{
+    if(!eqrect(canonrect(r), r))
+        return 0;
+    if(Dx(r)<100 || Dy(r)<3*font->height)
+        return 0;
+    /* must have some screen and border visible so we can move it out of the way */
+    if(Dx(r) >= Dx(screen->r) && Dy(r) >= Dy(screen->r))
+        return 0;
+    /* reasonable sizes only please */
+    if(Dx(r) > BIG*Dx(screen->r))
+        return 0;
+    if(Dy(r) > BIG*Dx(screen->r))
+        return 0;
+    return 1;
+}
+@
+
+<<function word>>=
+static
+int
+word(char **sp, char *tab[])
+{
+    char *s, *t;
+    int i;
+
+    s = *sp;
+    while(isspace(*s))
+        s++;
+    t = s;
+    while(*s!='\0' && !isspace(*s))
+        s++;
+    for(i=0; tab[i]!=nil; i++)
+        if(strncmp(tab[i], t, strlen(tab[i])) == 0){
+            *sp = s;
+            return i;
+    }
+    return -1;
+}
+@
+
+<<function set>>=
+int
+set(int sign, int neg, int abs, int pos)
+{
+    if(sign < 0)
+        return neg;
+    if(sign > 0)
+        return pos;
+    return abs;
+}
+@
+
+<<function newrect>>=
+Rectangle
+newrect(void)
+{
+    static int i = 0;
+    int minx, miny, dx, dy;
+
+    dx = min(600, Dx(screen->r) - 2*Borderwidth);
+    dy = min(400, Dy(screen->r) - 2*Borderwidth);
+    minx = 32 + 16*i;
+    miny = 32 + 16*i;
+    i++;
+    i %= 10;
+
+    return Rect(minx, miny, minx+dx, miny+dy);
+}
+@
+
+<<function shift>>=
+void
+shift(int *minp, int *maxp, int min, int max)
+{
+    if(*minp < min){
+        *maxp += min-*minp;
+        *minp = min;
+    }
+    if(*maxp > max){
+        *minp += max-*maxp;
+        *maxp = max;
+    }
+}
+@
+
+<<function rectonscreen>>=
+Rectangle
+rectonscreen(Rectangle r)
+{
+    shift(&r.min.x, &r.max.x, screen->r.min.x, screen->r.max.x);
+    shift(&r.min.y, &r.max.y, screen->r.min.y, screen->r.max.y);
+    return r;
+}
+@
+
+<<function riostrtol>>=
+/* permit square brackets, in the manner of %R */
+int
+riostrtol(char *s, char **t)
+{
+    int n;
+
+    while(*s!='\0' && (*s==' ' || *s=='\t' || *s=='['))
+        s++;
+    if(*s == '[')
+        s++;
+    n = strtol(s, t, 10);
+    if(*t != s)
+        while((*t)[0] == ']')
+            (*t)++;
+    return n;
+}
+@
+
+<<function parsewctl>>=
+int
+parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hiddenp, int *scrollingp, char **cdp, char *s, char *err)
+{
+    int cmd, param, xy, sign;
+    char *t;
+
+    *pidp = 0;
+    *hiddenp = 0;
+    *scrollingp = scrolling;
+    *cdp = nil;
+    cmd = word(&s, cmds);
+    if(cmd < 0){
+        strcpy(err, "unrecognized wctl command");
+        return -1;
+    }
+    if(cmd == New)
+        r = newrect();
+
+    strcpy(err, "missing or bad wctl parameter");
+    while((param = word(&s, params)) >= 0){
+        switch(param){	/* special cases */
+        case Hidden:
+            *hiddenp = 1;
+            continue;
+        case Scrolling:
+            *scrollingp = 1;
+            continue;
+        case Noscrolling:
+            *scrollingp = 0;
+            continue;
+        case R:
+            r.min.x = riostrtol(s, &t);
+            if(t == s)
+                return -1;
+            s = t;
+            r.min.y = riostrtol(s, &t);
+            if(t == s)
+                return -1;
+            s = t;
+            r.max.x = riostrtol(s, &t);
+            if(t == s)
+                return -1;
+            s = t;
+            r.max.y = riostrtol(s, &t);
+            if(t == s)
+                return -1;
+            s = t;
+            continue;
+        }
+        while(isspace(*s))
+            s++;
+        if(param == Cd){
+            *cdp = s;
+            while(*s && !isspace(*s))
+                s++;
+            if(*s != '\0')
+                *s++ = '\0';
+            continue;
+        }
+        sign = 0;
+        if(*s == '-'){
+            sign = -1;
+            s++;
+        }else if(*s == '+'){
+            sign = +1;
+            s++;
+        }
+        if(!isdigit(*s))
+            return -1;
+        xy = riostrtol(s, &s);
+        switch(param){
+        case -1:
+            strcpy(err, "unrecognized wctl parameter");
+            return -1;
+        case Minx:
+            r.min.x = set(sign, r.min.x-xy, xy, r.min.x+xy);
+            break;
+        case Miny:
+            r.min.y = set(sign, r.min.y-xy, xy, r.min.y+xy);
+            break;
+        case Maxx:
+            r.max.x = set(sign, r.max.x-xy, xy, r.max.x+xy);
+            break;
+        case Maxy:
+            r.max.y = set(sign, r.max.y-xy, xy, r.max.y+xy);
+            break;
+        case Deltax:
+            r.max.x = set(sign, r.max.x-xy, r.min.x+xy, r.max.x+xy);
+            break;
+        case Deltay:
+            r.max.y = set(sign, r.max.y-xy, r.min.y+xy, r.max.y+xy);
+            break;
+        case Id:
+            if(idp != nil)
+                *idp = xy;
+            break;
+        case PID:
+            if(pidp != nil)
+                *pidp = xy;
+            break;
+        }
+    }
+
+    *rp = rectonscreen(rectaddpt(r, screen->r.min));
+
+    while(isspace(*s))
+        s++;
+    if(cmd!=New && *s!='\0'){
+        strcpy(err, "extraneous text in wctl message");
+        return -1;
+    }
+
+    if(argp)
+        *argp = s;
+
+    return cmd;
+}
+@
+
+<<function wctlnew>>=
+int
+wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir, char *err)
+{
+    char **argv;
+    Image *i;
+
+    if(!goodrect(rect)){
+        strcpy(err, Ebadwr);
+        return -1;
+    }
+    argv = emalloc(4*sizeof(char*));
+    argv[0] = "rc";
+    argv[1] = "-c";
+    while(isspace(*arg))
+        arg++;
+    if(*arg == '\0'){
+        argv[1] = "-i";
+        argv[2] = nil;
+    }else{
+        argv[2] = arg;
+        argv[3] = nil;
+    }
+    if(hideit)
+        i = allocimage(display, rect, screen->chan, 0, DWhite);
+    else
+        i = allocwindow(wscreen, rect, Refbackup, DWhite);
+    if(i == nil){
+        strcpy(err, Ewalloc);
+        return -1;
+    }
+    border(i, rect, Selborder, red, ZP);
+
+    new(i, hideit, scrollit, pid, dir, "/bin/rc", argv);
+
+    free(argv);	/* when new() returns, argv and args have been copied */
+    return 1;
+}
+@
+
+<<function writewctl>>=
+int
+writewctl(Xfid *x, char *err)
+{
+    int cnt, cmd, j, id, hideit, scrollit, pid;
+    Image *i;
+    char *arg, *dir;
+    Rectangle rect;
+    Window *w;
+
+    w = x->f->w;
+    cnt = x->count;
+    x->data[cnt] = '\0';
+    id = 0;
+
+    rect = rectsubpt(w->screenr, screen->r.min);
+    cmd = parsewctl(&arg, rect, &rect, &pid, &id, &hideit, &scrollit, &dir, x->data, err);
+    if(cmd < 0)
+        return -1;
+
+    if(mouse->buttons!=0 && cmd>=Top){
+        strcpy(err, "action disallowed when mouse active");
+        return -1;
+    }
+
+    if(id != 0){
+        for(j=0; j<nwindow; j++)
+            if(window[j]->id == id)
+                break;
+        if(j == nwindow){
+            strcpy(err, "no such window id");
+            return -1;
+        }
+        w = window[j];
+        if(w->deleted || w->i==nil){
+            strcpy(err, "window deleted");
+            return -1;
+        }
+    }
+
+    switch(cmd){
+    case New:
+        return wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
+    case Set:
+        if(pid > 0)
+            wsetpid(w, pid, 0);
+        return 1;
+    case Move:
+        rect = Rect(rect.min.x, rect.min.y, rect.min.x+Dx(w->screenr), rect.min.y+Dy(w->screenr));
+        rect = rectonscreen(rect);
+        /* fall through */
+    case Resize:
+        if(!goodrect(rect)){
+            strcpy(err, Ebadwr);
+            return -1;
+        }
+        if(eqrect(rect, w->screenr))
+            return 1;
+        i = allocwindow(wscreen, rect, Refbackup, DWhite);
+        if(i == nil){
+            strcpy(err, Ewalloc);
+            return -1;
+        }
+        border(i, rect, Selborder, red, ZP);
+        wsendctlmesg(w, Reshaped, i->r, i);
+        return 1;
+    case Scroll:
+        w->scrolling = 1;
+        wshow(w, w->nr);
+        wsendctlmesg(w, Wakeup, ZR, nil);
+        return 1;
+    case Noscroll:
+        w->scrolling = 0;
+        wsendctlmesg(w, Wakeup, ZR, nil);
+        return 1;
+    case Top:
+        wtopme(w);
+        return 1;
+    case Bottom:
+        wbottomme(w);
+        return 1;
+    case Current:
+        wcurrent(w);
+        return 1;
+    case Hide:
+        switch(whide(w)){
+        case -1:
+            strcpy(err, "window already hidden");
+            return -1;
+        case 0:
+            strcpy(err, "hide failed");
+            return -1;
+        default:
+            break;
+        }
+        return 1;
+    case Unhide:
+        for(j=0; j<nhidden; j++)
+            if(hidden[j] == w)
+                break;
+        if(j == nhidden){
+            strcpy(err, "window not hidden");
+            return -1;
+        }
+        if(wunhide(j) == 0){
+            strcpy(err, "hide failed");
+            return -1;
+        }
+        return 1;
+    case Delete:
+        wsendctlmesg(w, Deleted, ZR, nil);
+        return 1;
+    }
+    strcpy(err, "invalid wctl message");
+    return -1;
+}
 @
 
 
 \chapter{Window Terminal}
 % fake /dev/cons
 
-% it's really easy thx to the fake /dev/cons and frame lib
+% it's relatively easy thx to the fake /dev/cons and frame lib
+
+
+
+<<function winshell>>=
+void
+winshell(void *args)
+{
+    Window *w;
+    Channel *pidc;
+    void **arg;
+    char *cmd, *dir;
+    char **argv;
+
+    arg = args;
+    w = arg[0];
+    pidc = arg[1];
+    cmd = arg[2];
+    argv = arg[3];
+    dir = arg[4];
+
+    rfork(RFNAMEG|RFFDG|RFENVG);
+
+    if(filsysmount(filsys, w->id) < 0){
+        fprint(2, "mount failed: %r\n");
+        sendul(pidc, 0);
+        threadexits("mount failed");
+    }
+    close(0);
+    if(open("/dev/cons", OREAD) < 0){
+        fprint(2, "can't open /dev/cons: %r\n");
+        sendul(pidc, 0);
+        threadexits("/dev/cons");
+    }
+    close(1);
+    if(open("/dev/cons", OWRITE) < 0){
+        fprint(2, "can't open /dev/cons: %r\n");
+        sendul(pidc, 0);
+        threadexits("open");	/* BUG? was terminate() */
+    }
+    if(wclose(w) == 0){	/* remove extra ref hanging from creation */
+        notify(nil);
+        dup(1, 2);
+        if(dir)
+            chdir(dir);
+        procexec(pidc, cmd, argv);
+        _exits("exec failed");
+    }
+}
+@
+
+
+<<function filsysmount>>=
+/*
+ * Called only from a different FD group
+ */
+int
+filsysmount(Filsys *fs, int id)
+{
+    char buf[32];
+
+    close(fs->sfd);	/* close server end so mount won't hang if exiting */
+    sprint(buf, "%d", id);
+    if(mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf) < 0){
+        fprint(2, "mount failed: %r\n");
+        return -1;
+    }
+    if(bind("/mnt/wsys", "/dev", MBEFORE) < 0){
+        fprint(2, "bind failed: %r\n");
+        return -1;
+    }
+    return 0;
+}
+@
+
+\chapter{Timer}
+
+
+<<global clockfd>>=
+int	clockfd;
+@
+
+<<function getclock>>=
+static
+uint
+getclock(void)
+{
+    char buf[32];
+
+    seek(clockfd, 0, 0);
+    read(clockfd, buf, sizeof buf);
+    return atoi(buf);
+}
+@
+
+
+
+
+
+
+
+
+
+
+
+<<struct Timer>>=
+struct Timer
+{
+    int		dt;
+    int		cancel;
+    Channel	*c;	/* chan(int) */
+    Timer	*next;
+};
+@
+
+<<function timerinit>>=
+void
+timerinit(void)
+{
+    ctimer = chancreate(sizeof(Timer*), 100);
+    proccreate(timerproc, nil, STACK);
+}
+@
+
+<<function timerproc>>=
+static
+void
+timerproc(void*)
+{
+    int i, nt, na, dt, del;
+    Timer **t, *x;
+    uint old, new;
+
+    rfork(RFFDG);
+    threadsetname("TIMERPROC");
+    t = nil;
+    na = 0;
+    nt = 0;
+    old = msec();
+    for(;;){
+        sleep(1);	/* will sleep minimum incr */
+        new = msec();
+        dt = new-old;
+        old = new;
+        if(dt < 0)	/* timer wrapped; go around, losing a tick */
+            continue;
+        for(i=0; i<nt; i++){
+            x = t[i];
+            x->dt -= dt;
+            del = 0;
+            if(x->cancel){
+                timerstop(x);
+                del = 1;
+            }else if(x->dt <= 0){
+                /*
+                 * avoid possible deadlock if client is
+                 * now sending on ctimer
+                 */
+                if(nbsendul(x->c, 0) > 0)
+                    del = 1;
+            }
+            if(del){
+                memmove(&t[i], &t[i+1], (nt-i-1)*sizeof t[0]);
+                --nt;
+                --i;
+            }
+        }
+        if(nt == 0){
+            x = recvp(ctimer);
+    gotit:
+            if(nt == na){
+                na += 10;
+                t = realloc(t, na*sizeof(Timer*));
+                if(t == nil)
+                    abort();
+            }
+            t[nt++] = x;
+            old = msec();
+        }
+        if(nbrecv(ctimer, &x) > 0)
+            goto gotit;
+    }
+}
+@
+
+
+
+
+
+
+<<global ctimer>>=
+static Channel*	ctimer;	/* chan(Timer*)[100] */
+@
+
+<<global timer>>=
+static Timer *timer;
+@
+
+<<function msec>>=
+static
+uint
+msec(void)
+{
+    return nsec()/1000000;
+}
+@
+
+<<function timerstop>>=
+void
+timerstop(Timer *t)
+{
+    t->next = timer;
+    timer = t;
+}
+@
+
+<<function timercancel>>=
+void
+timercancel(Timer *t)
+{
+    t->cancel = true;
+}
+@
+
+
+
+<<function timerstart>>=
+/*
+ * timeralloc() and timerfree() don't lock, so can only be
+ * called from the main proc.
+ */
+Timer*
+timerstart(int dt)
+{
+    Timer *t;
+
+    t = timer;
+    if(t)
+        timer = timer->next;
+    else{
+        t = emalloc(sizeof(Timer));
+        t->c = chancreate(sizeof(int), 0);
+    }
+    t->next = nil;
+    t->dt = dt;
+    t->cancel = false;
+    sendp(ctimer, t);
+    return t;
+}
+@
+
+\chapter{Signals, notes}
+
+<<global oknotes>>=
+char *oknotes[] =
+{
+    "delete",
+    "hangup",
+    "kill",
+    "exit",
+    nil
+};
+@
+
+
+% threadmain -> threadnotify(<>, 1);
+<<function shutdown>>=
+int
+shutdown(void *, char *msg)
+{
+    int i;
+    static Lock shutdownlk;
+    
+    killprocs();
+    for(i=0; oknotes[i]; i++)
+        if(strncmp(oknotes[i], msg, strlen(oknotes[i])) == 0){
+            lock(&shutdownlk);	/* only one can threadexitsall */
+            threadexitsall(msg);
+        }
+    fprint(2, "rio %d: abort: %s\n", getpid(), msg);
+    abort();
+    exits(msg);
+    return 0;
+}
+@
+
+<<function killprocs>>=
+void
+killprocs(void)
+{
+    int i;
+
+    for(i=0; i<nwindow; i++)
+        postnote(PNGROUP, window[i]->pid, "hangup");
+}
+@
+
 
 \chapter{Widgets}
 
@@ -2996,6 +5231,10 @@ case Qsnarf:
         n = 0;
     }
     goto Text;
+@
+
+<<constant MAXSNARF>>=
+#define	MAXSNARF	100*1024
 @
 
 <<[[xfidwrite()]] cases>>=
@@ -3104,7 +5343,53 @@ getsnarf(void)
 
 \section{Plumb}
 
+%/*
+% * Message format:
+% *	source application\n
+% *	destination port\n
+% *	working directory\n
+% *	type\n
+% *	attributes\n
+% *	nbytes\n
+% *	n bytes of data
+% */
+
+<<struct Plumbmsg>>=
+struct Plumbmsg
+{
+    char		*src;
+    char		*dst;
+    char		*wdir;
+    char		*type;
+    Plumbattr		*attr;
+    int			ndata;
+    char		*data;
+};
+@
+
+<<struct Plumbattr>>=
+struct Plumbattr
+{
+    char		*name;
+    char		*value;
+    Plumbattr		*next;
+};
+@
+
+
 \section{Auto complete}
+
+<<struct Completion>>=
+struct Completion{
+    uchar advance;	/* whether forward progress has been made */
+    uchar complete;	/* whether the completion now represents a file or directory */
+    char *string; /* the string to advance, suffixed " " or "/" for file or directory */
+    int nmatch;		/* number of files that matched */
+    int nfile;		/* number of files returned */
+    char **filename;	/* their names */
+};
+@
+
 
 \section{Scrolling, [[rio -s]]}
 
@@ -3125,6 +5410,194 @@ enum
     Kscrollonedown = KF|0x21,
 };
 @
+
+
+<<global scrtmp>>=
+static Image *scrtmp;
+@
+
+<<function scrtemps>>=
+static
+void
+scrtemps(void)
+{
+    int h;
+
+    if(scrtmp)
+        return;
+    h = BIG*Dy(screen->r);
+    scrtmp = allocimage(display, Rect(0, 0, 32, h), screen->chan, 0, DWhite);
+    if(scrtmp == nil)
+        error("scrtemps");
+}
+@
+
+<<function freescrtemps>>=
+void
+freescrtemps(void)
+{
+    freeimage(scrtmp);
+    scrtmp = nil;
+}
+@
+
+<<function scrpos>>=
+static
+Rectangle
+scrpos(Rectangle r, uint p0, uint p1, uint tot)
+{
+    Rectangle q;
+    int h;
+
+    q = r;
+    h = q.max.y-q.min.y;
+    if(tot == 0)
+        return q;
+    if(tot > 1024*1024){
+        tot>>=10;
+        p0>>=10;
+        p1>>=10;
+    }
+    if(p0 > 0)
+        q.min.y += h*p0/tot;
+    if(p1 < tot)
+        q.max.y -= h*(tot-p1)/tot;
+    if(q.max.y < q.min.y+2){
+        if(q.min.y+2 <= r.max.y)
+            q.max.y = q.min.y+2;
+        else
+            q.min.y = q.max.y-2;
+    }
+    return q;
+}
+@
+
+<<function wscrdraw>>=
+void
+wscrdraw(Window *w)
+{
+    Rectangle r, r1, r2;
+    Image *b;
+
+    scrtemps();
+    if(w->i == nil)
+        error("scrdraw");
+    r = w->scrollr;
+    b = scrtmp;
+    r1 = r;
+    r1.min.x = 0;
+    r1.max.x = Dx(r);
+    r2 = scrpos(r1, w->org, w->org+w->nchars, w->nr);
+    if(!eqrect(r2, w->lastsr)){
+        w->lastsr = r2;
+        /* move r1, r2 to (0,0) to avoid clipping */
+        r2 = rectsubpt(r2, r1.min);
+        r1 = rectsubpt(r1, r1.min);
+        draw(b, r1, w->cols[BORD], nil, ZP);
+        draw(b, r2, w->cols[BACK], nil, ZP);
+        r2.min.x = r2.max.x-1;
+        draw(b, r2, w->cols[BORD], nil, ZP);
+        draw(w->i, r, b, nil, Pt(0, r1.min.y));
+    }
+}
+@
+
+<<function wscrsleep>>=
+void
+wscrsleep(Window *w, uint dt)
+{
+    Timer	*timer;
+    int y, b;
+    static Alt alts[3];
+
+    timer = timerstart(dt);
+    y = w->mc.xy.y;
+    b = w->mc.buttons;
+    alts[0].c = timer->c;
+    alts[0].v = nil;
+    alts[0].op = CHANRCV;
+    alts[1].c = w->mc.c;
+    alts[1].v = &w->mc.Mouse;
+    alts[1].op = CHANRCV;
+    alts[2].op = CHANEND;
+    for(;;)
+        switch(alt(alts)){
+        case 0:
+            timerstop(timer);
+            return;
+        case 1:
+            if(abs(w->mc.xy.y-y)>2 || w->mc.buttons!=b){
+                timercancel(timer);
+                return;
+            }
+            break;
+        }
+}
+@
+
+<<function wscroll>>=
+void
+wscroll(Window *w, int but)
+{
+    uint p0, oldp0;
+    Rectangle s;
+    int x, y, my, h, first;
+
+    s = insetrect(w->scrollr, 1);
+    h = s.max.y-s.min.y;
+    x = (s.min.x+s.max.x)/2;
+    oldp0 = ~0;
+    first = true;
+    do{
+        flushimage(display, 1);
+        if(w->mc.xy.x<s.min.x || s.max.x<=w->mc.xy.x){
+            readmouse(&w->mc);
+        }else{
+            my = w->mc.xy.y;
+            if(my < s.min.y)
+                my = s.min.y;
+            if(my >= s.max.y)
+                my = s.max.y;
+            if(!eqpt(w->mc.xy, Pt(x, my))){
+                wmovemouse(w, Pt(x, my));
+                readmouse(&w->mc);		/* absorb event generated by moveto() */
+            }
+            if(but == 2){
+                y = my;
+                if(y > s.max.y-2)
+                    y = s.max.y-2;
+                if(w->nr > 1024*1024)
+                    p0 = ((w->nr>>10)*(y-s.min.y)/h)<<10;
+                else
+                    p0 = w->nr*(y-s.min.y)/h;
+                if(oldp0 != p0)
+                    wsetorigin(w, p0, false);
+                oldp0 = p0;
+                readmouse(&w->mc);
+                continue;
+            }
+            if(but == 1)
+                p0 = wbacknl(w, w->org, (my-s.min.y)/w->font->height);
+            else
+                p0 = w->org+frcharofpt(w, Pt(s.max.x, my));
+            if(oldp0 != p0)
+                wsetorigin(w, p0, true);
+            oldp0 = p0;
+            /* debounce */
+            if(first){
+                flushimage(display, 1);
+                sleep(200);
+                nbrecv(w->mc.c, &w->mc.Mouse);
+                first = false;
+            }
+            wscrsleep(w, 100);
+        }
+    }while(w->mc.buttons & (1<<(but-1)));
+    while(w->mc.buttons)
+        readmouse(&w->mc);
+}
+@
+
 
 \section{Initial command, [[rio -i]]}
 
@@ -3238,6 +5711,10 @@ putenv("font", fontname);
 % _drawdebug?
 
 % errorshouldabort could be here
+
+<<constant DEBUG>>=
+#define DEBUG false
+@
 
 \chapter{Profiling}
 
@@ -3454,6 +5931,18 @@ int isalnum(Rune c)
 %$
 
 
+
+<<function runemalloc>>=
+#define	runemalloc(n)		malloc((n)*sizeof(Rune))
+@
+
+<<function runerealloc>>=
+#define	runerealloc(a, n)	realloc(a, (n)*sizeof(Rune))
+@
+
+<<function runemove>>=
+#define	runemove(a, b, n)	memmove(a, b, (n)*sizeof(Rune))
+@
 
 
 <<function cvttorunes>>=

@@ -49,9 +49,6 @@ Channel	*exitchan;	/* chan(int) */
 /*s: global viewr */
 Rectangle	viewr;
 /*e: global viewr */
-/*s: global threadrforkflag */
-int threadrforkflag = 0;/* should be RFENVG but that hides rio from plumber */
-/*e: global threadrforkflag */
 /*s: global fontname */
 char		*fontname;
 /*e: global fontname */
@@ -68,6 +65,8 @@ enum
     Delete,
     Hide,
     Exit,
+
+    Hidden,
 };
 /*e: enum _anon_ (windows/rio/rio.c) */
 
@@ -101,10 +100,6 @@ Menu menu2 =
     menu2str
 };
 /*e: global menu2 */
-
-/*s: global Hidden */
-int	Hidden = Exit+1;
-/*e: global Hidden */
 
 /*s: global menu3str */
 char		*menu3str[100] = {
@@ -431,7 +426,6 @@ keyboardthread(void*)
 }
 /*e: function keyboardthread */
 
-//pad: Dead?
 /*s: function keyboardsend */
 /*
  * Used by /dev/kbdin
@@ -555,13 +549,14 @@ keyboardhide(void)
 }
 /*e: function keyboardhide */
 
-/*s: enum _anon_ (windows/rio/rio.c)3 */
+/*s: enum Mxxx */
 enum {
     MReshape,
     MMouse,
+
     NALT
 };
-/*e: enum _anon_ (windows/rio/rio.c)3 */
+/*e: enum Mxxx */
 
 /*s: function mousethread */
 void
@@ -651,12 +646,12 @@ mousethread(void*)
             if(moving && (mouse->buttons&7)){
                 oin = winput;
                 band = mouse->buttons & 3;
-                sweeping = 1;
+                sweeping = true;
                 if(band)
                     i = bandsize(winput);
                 else
                     i = drag(winput, &r);
-                sweeping = 0;
+                sweeping = false;
                 if(i != nil){
                     if(winput == oin){
                         if(band)
@@ -762,7 +757,7 @@ button3menu(void)
         menu3str[i+Hidden] = hidden[i]->label;
     menu3str[i+Hidden] = nil;
 
-    sweeping = 1;
+    sweeping = true;
     switch(i = menuhit(3, mousectl, &menu3, wscreen)){
     case -1:
         break;
@@ -782,16 +777,13 @@ button3menu(void)
         hide();
         break;
     case Exit:
-        if(Hidden > Exit){
-            send(exitchan, nil);
-            break;
-        }
-        /* else fall through */
+        send(exitchan, nil);
+        break;
     default:
         unhide(i);
         break;
     }
-    sweeping = 0;
+    sweeping = false;
 }
 /*e: function button3menu */
 
@@ -802,10 +794,12 @@ button2menu(Window *w)
     if(w->deleted)
         return;
     incref(w);
+
     if(w->scrolling)
         menu2str[Scroll] = "noscroll";
     else
         menu2str[Scroll] = "scroll";
+
     switch(menuhit(2, mousectl, &menu2, wscreen)){
     case Cut:
         wsnarf(w);
@@ -850,9 +844,9 @@ button2menu(Window *w)
             wshow(w, w->nr);
         break;
     }
-    wclose(w);
+    wclose(w); // decref
     wsendctlmesg(w, Wakeup, ZR, nil);
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 /*e: function button2menu */
 

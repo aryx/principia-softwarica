@@ -4,13 +4,13 @@
 int		winborder(Window*, Point);
 void		winctl(void*);
 void		winshell(void*);
-Window*	wlookid(int);
-Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
-Window*	wpointto(Point);
-Window*	wtop(Point);
+Window*		wlookid(int);
+Window*		wmk(Image*, Mousectl*, Channel*, Channel*, int);
+Window*		wpointto(Point);
+Window*		wtop(Point);
 void		wtopme(Window*);
 void		wbottomme(Window*);
-char*	wcontents(Window*, int*);
+char*		wcontents(Window*, int*);
 int		wclose(Window*);
 
 uint		wbacknl(Window*, uint, uint);

@@ -7,6 +7,7 @@
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
+
 #include <frame.h>
 
 #include <fcall.h>
@@ -86,7 +87,7 @@ Channel*	deletechan;
 char		*startdir;
 /*e: global startdir */
 /*s: global sweeping */
-int	sweeping;
+bool	sweeping;
 /*e: global sweeping */
 /*s: global wctlfd */
 int	wctlfd;

@@ -81,7 +81,7 @@ static int		dostat(Filsys*, int, Dirtab*, uchar*, int, uint);
 int	clockfd;
 /*e: global clockfd */
 /*s: global firstmessage */
-int	firstmessage = 1;
+bool	firstmessage = true;
 /*e: global firstmessage */
 
 /*s: global srvpipe (windows/rio/fsys.c) */
@@ -270,7 +270,7 @@ filsysproc(void *arg)
             x->f = f;
             x  = (*fcall[x->type])(fs, x, f);
         }
-        firstmessage = 0;
+        firstmessage = false;
     }
 }
 /*e: function filsysproc */
@@ -616,19 +616,6 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
     n = 0;
     switch(FILE(f->qid)){
     /*s: [[filsysread()]] cases */
-    case Qdir:
-    case Qwsysdir:
-        d = dirtab;
-        d++;	/* first entry is '.' */
-        for(i=0; d->name!=nil && i<e; i+=len){
-            len = dostat(fs, WIN(x->f->qid), d, b+n, x->count-n, clock);
-            if(len <= BIT16SZ)
-                break;
-            if(i >= o)
-                n += len;
-            d++;
-        }
-        break;
     case Qwsys:
         qlock(&all);
         ids = emalloc(nwindow*sizeof(int));
@@ -651,6 +638,20 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
             j++;
         }
         free(ids);
+        break;
+    /*x: [[filsysread()]] cases */
+    case Qdir:
+    case Qwsysdir:
+        d = dirtab;
+        d++;	/* first entry is '.' */
+        for(i=0; d->name!=nil && i<e; i+=len){
+            len = dostat(fs, WIN(x->f->qid), d, b+n, x->count-n, clock);
+            if(len <= BIT16SZ)
+                break;
+            if(i >= o)
+                n += len;
+            d++;
+        }
         break;
     /*e: [[filsysread()]] cases */
     }

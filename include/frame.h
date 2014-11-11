@@ -43,10 +43,14 @@ struct Frame
     Display	*display;	/* on which frame appears */
     Image	*b;		/* on which frame appears */
     Image	*cols[NCOL];	/* text and background colors */
+
     Rectangle	r;		/* in which text appears */
     Rectangle	entire;		/* of full frame */
+
     void			(*scroll)(Frame*, int);	/* scroll function provided by application */
+
     Frbox	*box;
+
     ulong	p0, p1;		/* selection */
     ushort	nbox, nalloc;
     ushort	maxtab;		/* max size of tab, in pixels */

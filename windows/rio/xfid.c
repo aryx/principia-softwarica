@@ -83,13 +83,13 @@ static	char	*tsnarf;
 static	int	ntsnarf;
 /*e: global ntsnarf */
 
-/*s: enum _anon_ (windows/rio/xfid.c) */
+/*s: enum Xxxx */
 enum { 
     Alloc, 
     Free, 
     N 
 };
-/*e: enum _anon_ (windows/rio/xfid.c) */
+/*e: enum Xxxx */
 
 /*s: function xfidallocthread */
 void
@@ -105,6 +105,7 @@ xfidallocthread(void*)
     alts[Free].v = &x;
     alts[Free].op = CHANRCV;
     alts[N].op = CHANEND;
+
     for(;;){
         // event loop
         switch(alt(alts)){
