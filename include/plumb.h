@@ -23,8 +23,8 @@ struct Plumbmsg
     char		*dst;
     char		*wdir;
     char		*type;
-    Plumbattr	*attr;
-    int		ndata;
+    Plumbattr		*attr;
+    int			ndata;
     char		*data;
 };
 /*e: struct Plumbmsg */
@@ -34,7 +34,7 @@ struct Plumbattr
 {
     char		*name;
     char		*value;
-    Plumbattr	*next;
+    Plumbattr		*next;
 };
 /*e: struct Plumbattr */
 
