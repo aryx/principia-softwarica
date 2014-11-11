@@ -23,7 +23,7 @@ struct	Fcall
 			char	*ename;		/* Rerror */
 		};
 		struct {
-			Qid	qid;		/* Rattach, Ropen, Rcreate */
+			Qid	qid;		     /* Rattach, Ropen, Rcreate */
 			u32int	iounit;		/* Ropen, Rcreate */
 		};
 		struct {
@@ -124,7 +124,7 @@ uint	convM2S(uchar*, uint, Fcall*);
 uint	convS2M(Fcall*, uchar*, uint);
 uint	sizeS2M(Fcall*);
 
-int	statcheck(uchar *abuf, uint nbuf);
+int		statcheck(uchar *abuf, uint nbuf);
 uint	convM2D(uchar*, uint, Dir*, char*);
 uint	convD2M(Dir*, uchar*, uint);
 uint	sizeD2M(Dir*);
