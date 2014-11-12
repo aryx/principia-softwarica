@@ -46,27 +46,27 @@ Dirtab dirtab[]=
     /*x: dirtab array elements */
     { "cursor",		QTFILE,	Qcursor,	0600 },
     /*x: dirtab array elements */
+    { "screen",		QTFILE,	Qscreen,	0400 },
+    /*x: dirtab array elements */
+    { "window",		QTFILE,	Qwindow,	0400 },
+    /*x: dirtab array elements */
     { "winid",		QTFILE,	Qwinid,		0400 },
     /*x: dirtab array elements */
     { "winname",	QTFILE,	Qwinname,	0400 },
     /*x: dirtab array elements */
     { "label",		QTFILE,	Qlabel,		0600 },
     /*x: dirtab array elements */
-    { "screen",		QTFILE,	Qscreen,	0400 },
-    /*x: dirtab array elements */
-    { "window",		QTFILE,	Qwindow,	0400 },
-    /*x: dirtab array elements */
     { "text",		QTFILE,	Qtext,		0400 },
-    /*x: dirtab array elements */
-    { "kbdin",		QTFILE,	Qkbdin,		0200 },
     /*x: dirtab array elements */
     { "wdir",		QTFILE,	Qwdir,		0600 },
     /*x: dirtab array elements */
-    { "wctl",		QTFILE,	Qwctl,		0600 },
-    /*x: dirtab array elements */
     { "wsys",		QTDIR,	Qwsys,		0500|DMDIR },
     /*x: dirtab array elements */
+    { "wctl",		QTFILE,	Qwctl,		0600 },
+    /*x: dirtab array elements */
     { "snarf",		QTFILE,	Qsnarf,		0600 },
+    /*x: dirtab array elements */
+    { "kbdin",		QTFILE,	Qkbdin,		0200 },
     /*e: dirtab array elements */
     { nil, }
 };
@@ -241,6 +241,7 @@ filsysproc(void *arg)
     fs = arg;
     fs->pid = getpid();
     x = nil;
+
     for(;;){
         buf = emalloc(messagesize+UTFmax);	/* UTFmax for appending partial rune in xfidwrite */
         n = read9pmsg(fs->sfd, buf, messagesize);
@@ -259,7 +260,7 @@ filsysproc(void *arg)
         if(convM2S(buf, n, x) != n)
             error("convert error in convM2S");
         if(DEBUG)
-            fprint(2, "rio:<-%F\n", &x->Fcall);
+            fprint(STDERR, "rio:<-%F\n", &x->Fcall);
         if(fcall[x->type] == nil)
             x = filsysrespond(fs, x, &t, Ebadfcall);
         else{
@@ -319,7 +320,7 @@ filsysrespond(Filsys *fs, Xfid *x, Fcall *t, char *err)
     if(write(fs->sfd, x->buf, n) != n)
         error("write error in respond");
     if(DEBUG)
-        fprint(2, "rio:->%F\n", t);
+        fprint(STDERR, "rio:->%F\n", t);
     free(x->buf);
     x->buf = nil;
     return x;
@@ -617,11 +618,13 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
     switch(FILE(f->qid)){
     /*s: [[filsysread()]] cases */
     case Qwsys:
+
         qlock(&all);
         ids = emalloc(nwindow*sizeof(int));
         for(j=0; j<nwindow; j++)
             ids[j] = window[j]->id;
         qunlock(&all);
+
         qsort(ids, nwindow, sizeof ids[0], idcmp);
         dt.name = buf;
         for(i=0, j=0; j<nwindow && i<e; i+=len){

@@ -104,7 +104,7 @@ void	frinittick(Frame*);
 void	frredraw(Frame*);
 
 /*s: function NRUNE */
-#define	NRUNE(b)	((b)->nrune<0? 1 : (b)->nrune)
+#define	NRUNE(b)	((b)->nrune<0 ? 1 : (b)->nrune)
 /*e: function NRUNE */
 /*s: function NBYTE */
 #define	NBYTE(b)	strlen((char*)(b)->ptr)

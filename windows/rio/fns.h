@@ -25,7 +25,7 @@ void		wplumb(Window*);
 void		wscrdraw(Window*);
 void		wscroll(Window*, int);
 void		wsendctlmesg(Window*, int, Rectangle, Image*);
-void		wsetcursor(Window*, int);
+void		wsetcursor(Window*, bool);
 void		wsetname(Window*);
 void		wsetorigin(Window*, uint, int);
 void		wsetpid(Window*, int, int);

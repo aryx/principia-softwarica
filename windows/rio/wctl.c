@@ -67,12 +67,15 @@ enum
     Deltay,
     Hidden,
     Id,
+
     Maxx,
     Maxy,
     Minx,
     Miny,
+
     PID,
     R,
+
     Scrolling,
     Noscrolling,
 };
@@ -238,6 +241,7 @@ parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hid
         r = newrect();
 
     strcpy(err, "missing or bad wctl parameter");
+
     while((param = word(&s, params)) >= 0){
         switch(param){	/* special cases */
         case Hidden:
@@ -289,10 +293,8 @@ parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hid
         if(!isdigit(*s))
             return -1;
         xy = riostrtol(s, &s);
+
         switch(param){
-        case -1:
-            strcpy(err, "unrecognized wctl parameter");
-            return -1;
         case Minx:
             r.min.x = set(sign, r.min.x-xy, xy, r.min.x+xy);
             break;
@@ -319,6 +321,9 @@ parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hid
             if(pidp != nil)
                 *pidp = xy;
             break;
+        case -1:
+            strcpy(err, "unrecognized wctl parameter");
+            return -1;
         }
     }
 

@@ -83,7 +83,7 @@ enum
 /*e: enum _anon_ (windows/rio/rio.c)2 */
 
 /*s: global menu2str */
-char		*menu2str[] = {
+char*		menu2str[] = {
  [Cut]		"cut",
  [Paste]	"paste",
  [Snarf]	"snarf",
@@ -102,7 +102,7 @@ Menu menu2 =
 /*e: global menu2 */
 
 /*s: global menu3str */
-char		*menu3str[100] = {
+char*		menu3str[100] = {
  [New]		"New",
  [Reshape]	"Resize",
  [Move]		"Move",
@@ -473,7 +473,7 @@ whichcorner(Window *w, Point p)
 
 /*s: function cornercursor */
 void
-cornercursor(Window *w, Point p, int force)
+cornercursor(Window *w, Point p, bool force)
 {
     if(w!=nil && winborder(w, p))
         riosetcursor(corners[whichcorner(w, p)], force);
@@ -563,7 +563,8 @@ void
 mousethread(void*)
 {
     bool sending, inside, scrolling, moving, band;
-    Window *oin, *w, *winput;
+    Window *oin, *w;
+    Window *winput;
     Image *i;
     Rectangle r;
     Point xy;
@@ -602,6 +603,7 @@ mousethread(void*)
                 wtopme(wkeyboard);
                 winput = wkeyboard;
             }
+
             if(winput!=nil && winput->i!=nil){
                 /* convert to logical coordinates */
                 xy.x = mouse->xy.x + (winput->i->r.min.x-winput->screenr.min.x);
@@ -614,24 +616,30 @@ mousethread(void*)
                 inside = ptinrect(mouse->xy, insetrect(winput->screenr, Selborder));
                 if(winput->mouseopen)
                     scrolling = false;
-                else if(scrolling)
+                else 
+                  if(scrolling)
                     scrolling = mouse->buttons;
-                else
+                  else
                     scrolling = mouse->buttons && ptinrect(xy, winput->scrollr);
+
                 /* topped will be zero or less if window has been bottomed */
-                if(sending == false && !scrolling && winborder(winput, mouse->xy) && winput->topped>0){
+                if(sending == false && !scrolling 
+                   && winborder(winput, mouse->xy) && winput->topped>0){
                     moving = true;
-                }else if(inside && (scrolling || winput->mouseopen || (mouse->buttons&1)))
+                }else 
+                   if(inside && 
+                      (scrolling || winput->mouseopen || (mouse->buttons&1)))
                     sending = true;
             }else
                 sending = false;
+
             if(sending){
             Sending:
                 if(mouse->buttons == 0){
                     cornercursor(winput, mouse->xy, 0);
                     sending = false;
                 }else
-                    wsetcursor(winput, 0);
+                    wsetcursor(winput, false);
                 tmp = mousectl->Mouse;
                 tmp.xy = xy;
                 send(winput->mc.c, &tmp);
@@ -643,6 +651,7 @@ mousethread(void*)
                 cornercursor(w, mouse->xy, 0);
             else
                 riosetcursor(nil, 0);
+
             if(moving && (mouse->buttons&7)){
                 oin = winput;
                 band = mouse->buttons & 3;
@@ -663,6 +672,7 @@ mousethread(void*)
                         freeimage(i);
                 }
             }
+
             if(w != nil)
                 cornercursor(w, mouse->xy, 0);
             /* we're not sending the event, but if button is down maybe we should */
@@ -753,35 +763,45 @@ button3menu(void)
 {
     int i;
 
+    /*s: [[button3menu()]] menu3str adjustments with hidden windows */
     for(i=0; i<nhidden; i++)
         menu3str[i+Hidden] = hidden[i]->label;
     menu3str[i+Hidden] = nil;
+    /*e: [[button3menu()]] menu3str adjustments with hidden windows */
 
     sweeping = true;
     switch(i = menuhit(3, mousectl, &menu3, wscreen)){
     case -1:
         break;
-    case New:
-        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil);
-        break;
-    case Reshape:
-        resize();
-        break;
-    case Move:
-        move();
-        break;
-    case Delete:
-        delete();
-        break;
-    case Hide:
-        hide();
-        break;
+    /*s: [[button3menu()]] cases */
     case Exit:
         send(exitchan, nil);
         break;
+    /*x: [[button3menu()]] cases */
+    case New:
+        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil);
+        break;
+    /*x: [[button3menu()]] cases */
+    case Delete:
+        delete();
+        break;
+    /*x: [[button3menu()]] cases */
+    case Reshape:
+        resize();
+        break;
+    /*x: [[button3menu()]] cases */
+    case Move:
+        move();
+        break;
+    /*x: [[button3menu()]] cases */
+    case Hide:
+        hide();
+        break;
+    /*x: [[button3menu()]] cases */
     default:
         unhide(i);
         break;
+    /*e: [[button3menu()]] cases */
     }
     sweeping = false;
 }
@@ -795,12 +815,15 @@ button2menu(Window *w)
         return;
     incref(w);
 
+    /*s: [[button2menu()]] menu2str adjustments for scrolling */
     if(w->scrolling)
         menu2str[Scroll] = "noscroll";
     else
         menu2str[Scroll] = "scroll";
+    /*e: [[button2menu()]] menu2str adjustments for scrolling */
 
     switch(menuhit(2, mousectl, &menu2, wscreen)){
+    /*s: [[button2menu()]] cases */
     case Cut:
         wsnarf(w);
         wcut(w);
@@ -815,10 +838,6 @@ button2menu(Window *w)
         getsnarf();
         wpaste(w);
         wscrdraw(w);
-        break;
-
-    case Plumb:
-        wplumb(w);
         break;
 
     case Send:
@@ -838,11 +857,16 @@ button2menu(Window *w)
         wsetselect(w, w->nr, w->nr);
         wshow(w, w->nr);
         break;
-
+    /*x: [[button2menu()]] cases */
+    case Plumb:
+        wplumb(w);
+        break;
+    /*x: [[button2menu()]] cases */
     case Scroll:
         if(w->scrolling ^= 1)
             wshow(w, w->nr);
         break;
+    /*e: [[button2menu()]] cases */
     }
     wclose(w); // decref
     wsendctlmesg(w, Wakeup, ZR, nil);
@@ -1106,7 +1130,7 @@ bandsize(Window *w)
     p = mouse->xy;
     drawborder(or, 0);
     flushimage(display, 1);
-    wsetcursor(w, 1);
+    wsetcursor(w, true);
     if(mouse->buttons!=0 || Dx(or)<100 || Dy(or)<3*font->height){
         while(mouse->buttons)
             readmouse(mousectl);
@@ -1124,7 +1148,7 @@ bandsize(Window *w)
 
 /*s: function pointto */
 Window*
-pointto(int wait)
+pointto(bool wait)
 {
     Window *w;
 

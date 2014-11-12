@@ -12,29 +12,29 @@ enum qid
     /*x: enum qid cases */
     Qcursor,
     /*x: enum qid cases */
+    Qscreen,
+    /*x: enum qid cases */
+    Qwindow,
+    /*x: enum qid cases */
     Qwinid,
     /*x: enum qid cases */
     Qwinname,
     /*x: enum qid cases */
     Qlabel,
     /*x: enum qid cases */
-    Qscreen,
-    /*x: enum qid cases */
-    Qwindow,
-    /*x: enum qid cases */
     Qtext,
     /*x: enum qid cases */
-    Qkbdin,
-    /*x: enum qid cases */
     Qwdir,
-    /*x: enum qid cases */
-    Qwctl,
     /*x: enum qid cases */
     Qwsys,		/* directory of window directories */
     /*x: enum qid cases */
     Qwsysdir,		/* window directory, child of wsys */
     /*x: enum qid cases */
+    Qwctl,
+    /*x: enum qid cases */
     Qsnarf,
+    /*x: enum qid cases */
+    Qkbdin,
     /*e: enum qid cases */
     QMAX,
 };
@@ -171,23 +171,65 @@ struct Mouseinfo
 /*s: struct Window */
 struct Window
 {
-    int		id;
-    char	*label;
-    Frame;
-
+    //--------------------------------------------------------------------
+    // Id
+    //--------------------------------------------------------------------
+    /*s: [[Window]] id fields */
+    int	id; // /dev/winid
+    char	name[32]; // /dev/winname
+    char	*label; // dev/label
+    /*e: [[Window]] id fields */
+    
+    //--------------------------------------------------------------------
+    // Screen
+    //--------------------------------------------------------------------
+    /*s: [[Window]] screen fields */
     Image	*i;
     /*
      * Rio once used originwindow, so screenr could be different from i->r.
      * Now they're always the same but the code doesn't assume so.
     */
     Rectangle	screenr; /* screen coordinates of window */
-
-    Mousectl	mc; // mc->c is the mouse event listening channel
+    Frame;
+    /*e: [[Window]] screen fields */
+    
+    //--------------------------------------------------------------------
+    // Mouse
+    //--------------------------------------------------------------------
+    /*s: [[Window]] mouse fields */
+    Mousectl	mc; // mc.c is the mouse event listening channel
+    Cursor		cursor;
+    Cursor		*cursorp;
+    /*e: [[Window]] mouse fields */
+    
+    //--------------------------------------------------------------------
+    // Keyboard
+    //--------------------------------------------------------------------
+    /*s: [[Window]] keyboard fields */
     Channel	*ck;		/* chan(Rune[10]) */
+    /*e: [[Window]] keyboard fields */
+    
+    //--------------------------------------------------------------------
+    // Control
+    //--------------------------------------------------------------------
+    /*s: [[Window]] control fields */
     Channel	*cctl;		/* chan(Wctlmesg)[20] */
+    /*e: [[Window]] control fields */
+    
+    //--------------------------------------------------------------------
+    // Config
+    //--------------------------------------------------------------------
+    /*s: [[Window]] config fields */
+    bool_byte	scrolling;
+    bool_byte	holding;
+    bool_byte	rawing;
 
     bool_byte	deleted;
+    /*e: [[Window]] config fields */
 
+    //--------------------------------------------------------------------
+    // Misc
+    //--------------------------------------------------------------------
     /*s: [[Window]] other fields */
     Mouseinfo	mouse;
     Channel		*conswrite;	/* chan(Conswritemesg) */
@@ -203,7 +245,6 @@ struct Window
     uint		q0;
     uint		q1;
     uint		qh;
-    char		name[32];
     uint		namecount;
     Rectangle	scrollr;
     int	 	resized;
@@ -211,18 +252,16 @@ struct Window
     Rectangle	lastsr;
     int	 	topped;
     int	 	notefd;
-    uchar		scrolling;
-    Cursor		cursor;
-    Cursor		*cursorp;
-    uchar		holding;
-    uchar		rawing;
-    uchar		ctlopen;
-    uchar		wctlopen;
-    uchar		mouseopen;
+    bool_byte	ctlopen;
+    bool_byte	wctlopen;
+    bool_byte	mouseopen;
     int		pid;
     char		*dir;
     /*e: [[Window]] other fields */
 
+    //--------------------------------------------------------------------
+    // Extra
+    //--------------------------------------------------------------------
     /*s: [[Window]] extra fields */
     Ref;
     /*x: [[Window]] extra fields */

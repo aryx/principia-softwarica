@@ -120,6 +120,7 @@ xfidallocthread(void*)
                 x->flushtag = -1;
                 x->next = xfid;
                 xfid = x;
+                // Xfid threads!
                 threadcreate(xfidctl, x, 16384);
             }
             if(x->ref != 0){
@@ -131,6 +132,7 @@ xfidallocthread(void*)
             incref(x);
             sendp(cxfidalloc, x);
             break;
+
         case Free:
             if(x->ref != 0){
                 fprint(2, "%p decref %ld\n", x, x->ref);
@@ -323,13 +325,6 @@ xfidopen(Xfid *x)
         w->mouseopen = true;
         break;
     /*x: [[xfidopen()]] cases */
-    case Qkbdin:
-        if(w !=  wkeyboard){
-            filsysrespond(x->fs, x, &t, Eperm);
-            return;
-        }
-        break;
-    /*x: [[xfidopen()]] cases */
     case Qwctl:
         if(x->mode==OREAD || x->mode==ORDWR){
             /*
@@ -356,6 +351,13 @@ xfidopen(Xfid *x)
                 free(tsnarf);	/* collision, but OK */
             ntsnarf = 0;
             tsnarf = malloc(1);
+        }
+        break;
+    /*x: [[xfidopen()]] cases */
+    case Qkbdin:
+        if(w !=  wkeyboard){
+            filsysrespond(x->fs, x, &t, Eperm);
+            return;
         }
         break;
     /*e: [[xfidopen()]] cases */
@@ -584,10 +586,6 @@ xfidwrite(Xfid *x)
         w->label[cnt] = 0;
         break;
     /*x: [[xfidwrite()]] cases */
-    case Qkbdin:
-        keyboardsend(x->data, cnt);
-        break;
-    /*x: [[xfidwrite()]] cases */
     case Qwdir:
         if(cnt == 0)
             break;
@@ -618,7 +616,7 @@ xfidwrite(Xfid *x)
             filsysrespond(x->fs, x, &fc, buf);
             return;
         }
-        flushimage(display, 1);
+        flushimage(display, true);
         break;
     /*x: [[xfidwrite()]] cases */
     case Qsnarf:
@@ -631,6 +629,10 @@ xfidwrite(Xfid *x)
         memmove(tsnarf+ntsnarf, x->data, cnt);
         ntsnarf += cnt;
         snarfversion++;
+        break;
+    /*x: [[xfidwrite()]] cases */
+    case Qkbdin:
+        keyboardsend(x->data, cnt);
         break;
     /*e: [[xfidwrite()]] cases */
     default:
@@ -796,31 +798,6 @@ xfidread(Xfid *x)
         filsysrespond(x->fs, x, &fc, "cursor read not implemented");
         break;
     /*x: [[xfidread()]] cases */
-    case Qwinid:
-        n = sprint(buf, "%11d ", w->id);
-        t = estrdup(buf);
-        goto Text;
-    /*x: [[xfidread()]] cases */
-    case Qwinname:
-        n = strlen(w->name);
-        if(n == 0){
-            filsysrespond(x->fs, x, &fc, "window has no name");
-            break;
-        }
-        t = estrdup(w->name);
-        goto Text;
-    /*x: [[xfidread()]] cases */
-    case Qlabel:
-        n = strlen(w->label);
-        if(off > n)
-            off = n;
-        if(off+cnt > n)
-            cnt = n-off;
-        fc.data = w->label+off;
-        fc.count = cnt;
-        filsysrespond(x->fs, x, &fc, nil);
-        break;
-    /*x: [[xfidread()]] cases */
     case Qscreen:
         i = display->image;
         if(i == nil){
@@ -860,6 +837,31 @@ xfidread(Xfid *x)
         }
         r = w->screenr;
         goto caseImage;
+    /*x: [[xfidread()]] cases */
+    case Qwinid:
+        n = sprint(buf, "%11d ", w->id);
+        t = estrdup(buf);
+        goto Text;
+    /*x: [[xfidread()]] cases */
+    case Qwinname:
+        n = strlen(w->name);
+        if(n == 0){
+            filsysrespond(x->fs, x, &fc, "window has no name");
+            break;
+        }
+        t = estrdup(w->name);
+        goto Text;
+    /*x: [[xfidread()]] cases */
+    case Qlabel:
+        n = strlen(w->label);
+        if(off > n)
+            off = n;
+        if(off+cnt > n)
+            cnt = n-off;
+        fc.data = w->label+off;
+        fc.count = cnt;
+        filsysrespond(x->fs, x, &fc, nil);
+        break;
     /*x: [[xfidread()]] cases */
     case Qtext:
         t = wcontents(w, &n);

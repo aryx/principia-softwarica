@@ -46,7 +46,7 @@ Window	**window;
 Window	*wkeyboard;	/* window of simulated keyboard */
 /*e: global wkeyboard */
 /*s: global nwindow */
-int		nwindow;
+int	nwindow;
 /*e: global nwindow */
 
 /*s: global snarffd */

@@ -47,7 +47,7 @@ enum
 static	int		topped;
 /*e: global topped */
 /*s: global id */
-static	int		id;
+static	int	id;
 /*e: global id */
 
 /*s: global cols */
@@ -264,21 +264,25 @@ enum {
 void
 winctl(void *arg)
 {
+    /*s: [[winctl()]] locals */
+    Window *w;
+    char buf[4*12+1];
+    Alt alts[NWALT+1];
+    Wctlmesg wcm;
+
     Rune *rp, *bp, *tp, *up, *kbdr;
     uint qh;
     int nr, nb, c, wid, i, npart, initial, lastb;
     char *s, *t, part[3];
-    Window *w;
     Mousestate *mp, m;
-    Alt alts[NWALT+1];
+
     Mousereadmesg mrm;
     Conswritemesg cwm;
     Consreadmesg crm;
     Consreadmesg cwrm;
     Stringpair pair;
-    Wctlmesg wcm;
-    char buf[4*12+1];
-
+    /*e: [[winctl()]] locals */
+    
     w = arg;
     snprint(buf, sizeof buf, "winctl-id%d", w->id);
     threadsetname(buf);
@@ -388,6 +392,7 @@ winctl(void *arg)
             w->mouse.lastcounter = m.counter;
             send(mrm.cm, &m.Mouse);
             continue;
+
         case WCtl:
             if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
                 chanfree(crm.c1);
@@ -399,6 +404,7 @@ winctl(void *arg)
                 threadexits(nil);
             }
             continue;
+
         case WCwrite:
             recv(cwm.cw, &pair);
             rp = pair.s;
@@ -441,6 +447,7 @@ winctl(void *arg)
             wscrdraw(w);
             free(rp);
             break;
+
         case WCread:
             recv(crm.c1, &pair);
             t = pair.s;
@@ -475,6 +482,7 @@ winctl(void *arg)
             pair.ns = i;
             send(crm.c2, &pair);
             continue;
+
         case WWread:
             w->wctlready = 0;
             recv(cwrm.c1, &pair);
@@ -496,8 +504,10 @@ winctl(void *arg)
             send(cwrm.c2, &pair);
             continue;
         }
+
+
         if(!w->deleted)
-            flushimage(display, 1);
+            flushimage(display, true);
     }
 }
 /*e: function winctl */
@@ -810,7 +820,7 @@ wrepaint(Window *w)
         frredraw(w);
     if(w == input){
         wborder(w, Selborder);
-        wsetcursor(w, 0);
+        wsetcursor(w, false);
     }else
         wborder(w, Unselborder);
 }
@@ -1257,13 +1267,15 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         strcpy(buf, w->name);
         wresize(w, i, m==Moved);
         w->wctlready = 1;
+
         proccreate(deletetimeoutproc, estrdup(buf), 4096);
+
         if(Dx(r) > 0){
             if(w != input)
                 wcurrent(w);
         }else if(w == input)
             wcurrent(nil);
-        flushimage(display, 1);
+        flushimage(display, true);
         break;
     /*e: [[wctlmesg()]] cases */
     default:
@@ -1345,7 +1357,7 @@ wcurrent(Window *w)
         wrepaint(oi);
     if(w !=nil){
         wrepaint(w);
-        wsetcursor(w, 0);
+        wsetcursor(w, false);
     }
     if(w != oi){
         if(oi){
@@ -1362,7 +1374,7 @@ wcurrent(Window *w)
 
 /*s: function wsetcursor */
 void
-wsetcursor(Window *w, int force)
+wsetcursor(Window *w, bool force)
 {
     Cursor *p;
 
@@ -1457,7 +1469,7 @@ wclosewin(Window *w)
 
     if(w == input){
         input = nil;
-        wsetcursor(w, 0);
+        wsetcursor(w, false);
     }
     if(w == wkeyboard)
         wkeyboard = nil;
