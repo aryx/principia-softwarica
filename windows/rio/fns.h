@@ -76,11 +76,11 @@ Timer*	timerstart(int);
 void	error(char*);
 void	iconinit(void);
 void	*erealloc(void*, uint);
-void *emalloc(uint);
-char *estrdup(char*);
+void 	*emalloc(uint);
+char 	*estrdup(char*);
 void	cvttorunes(char*, int, Rune*, int*, int*, int*);
 /* was (byte*,int)	runetobyte(Rune*, int); */
-char* runetobyte(Rune*, int, int*);
+char* 	runetobyte(Rune*, int, int*);
 void	putsnarf(void);
 void	getsnarf(void);
 void	timerinit(void);

@@ -401,5 +401,4 @@ extern bool		errorshouldabort;
 extern bool		menuing;
 extern int		snarfversion;	/* updated each time it is written */
 extern int		messagesize;	/* negotiated in 9P version setup */
-
 /*e: windows/rio/dat.h */

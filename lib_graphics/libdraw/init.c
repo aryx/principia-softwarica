@@ -13,7 +13,7 @@ Font	*font;
 Image	*screen;
 /*e: global screen */
 /*s: global _drawdebug */
-int	_drawdebug = 0;
+bool	_drawdebug = 0;
 /*e: global _drawdebug */
 
 /*s: global deffontname */

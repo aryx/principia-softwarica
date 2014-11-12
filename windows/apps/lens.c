@@ -83,7 +83,7 @@ drawit(void)
     magnify();
     r = insetrect(screen->r, Edge);
     draw(screen, r, tmp, nil, tmp->r.min);
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 /*e: function drawit */
 
@@ -101,13 +101,16 @@ main(int argc, char *argv[])
     int d;
 
     USED(argc, argv);
+
     if(initdraw(nil, nil, "lens") < 0){
         fprint(2, "lens: initdraw failed: %r\n");
         exits("initdraw");
     }
     einit(Emouse|Ekeyboard);
+
     red = allocimage(display, Rect(0, 0, 1, 1), CMAP8, 1, DRed);
     chequer = allocimage(display, Rect(0, 0, 2, 2), GREY1, 1, DBlack);
+
     draw(chequer, Rect(0, 0, 1, 1), display->white, nil, ZP);
     draw(chequer, Rect(1, 1, 2, 2), display->white, nil, ZP);
     lastp = divpt(addpt(screen->r.min, screen->r.max), 2);

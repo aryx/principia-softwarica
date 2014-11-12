@@ -48,34 +48,6 @@ SRC_VIEWS= \
    libframe/frselect.c\
    libframe/frstr.c\
    libframe/frutil.c\
-   libpanel/button.c\
-   libpanel/canvas.c\
-   libpanel/draw.c\
-   libpanel/edit.c\
-   libpanel/entry.c\
-   libpanel/event.c\
-   libpanel/frame.c\
-   libpanel/group.c\
-   libpanel/init.c\
-   libpanel/label.c\
-   libpanel/list.c\
-   libpanel/mem.c\
-   libpanel/message.c\
-   libpanel/pack.c\
-   libpanel/panel.h\
-   libpanel/pldefs.h\
-   libpanel/popup.c\
-   libpanel/print.c\
-   libpanel/pulldown.c\
-   libpanel/rtext.c\
-   libpanel/rtext.h\
-   libpanel/scroll.c\
-   libpanel/scrollbar.c\
-   libpanel/slider.c\
-   libpanel/snarf.c\
-   libpanel/textview.c\
-   libpanel/textwin.c\
-   libpanel/utf.c\
    libplumb/event.c\
    libplumb/mesg.c\
    libplumb/plumbsendtext.c\
