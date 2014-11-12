@@ -248,13 +248,13 @@ wclose(Window *w)
 enum { 
     WKey, 
     WMouse, 
-    WMouseread, 
+    WMouseread, // ??
 
     WCtl, //!!!
 
     WCwrite, 
     WCread, 
-    WWread, 
+    WWread, // ??
 
     NWALT 
 };
@@ -667,6 +667,7 @@ wkeyctl(Window *w, Rune r)
         return;
     if(w->deleted)
         return;
+
     /* navigation keys work only when mouse is not open */
     if(!w->mouseopen)
         switch(r){
@@ -750,6 +751,7 @@ wkeyctl(Window *w, Rune r)
         wsnarf(w);
         wcut(w);
     }
+
     switch(r){
     case 0x7F:		/* send interrupt */
         w->qh = w->nr;
@@ -1229,7 +1231,7 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         if(w->deleted)
             break;
         wrepaint(w);
-        flushimage(display, 1);
+        flushimage(display, true);
         break;
     /*x: [[wctlmesg()]] cases */
     case Deleted:
@@ -1412,9 +1414,9 @@ wtop(Point pt)
     if(w){
         if(w->topped == topped)
             return nil;
-        topwindow(w->i);
+        topwindow(w->i); // draw.h
         wcurrent(w);
-        flushimage(display, 1);
+        flushimage(display, true);
         w->topped = ++topped;
     }
     return w;

@@ -349,12 +349,23 @@ usage(void)
 \section{Trace of a mouse click}
 % event! find right window, dispatch
 
+% click => hardware interrupt => interrupt handler for mouse =>
+% write to /dev/mouse
+% rio process with many threads Await.
+% mouse thread listening on mousectl channel.
+% get data, get current window (shared memory 'input' global),
+% write to window mouse channel.
+% window thread listening on many channels (alts()), get awake
+% and call wmousectl()
+
 \section{Trace of a key press}
+
+% lots similar but wkeyctl()
 
 \section{Trace of a drawnig operation}
 
 % toy app does a draw operation, what happens?
-% it draws on /dev/draw? or there are some write on the
+% it draws on /dev/draw/n/data? or there are some write on the
 % demultiplexed /dev/screen or /dev/window?
 
 %###############################################################################
@@ -499,6 +510,8 @@ struct Window
 //array<option<ref_own<Window>>>
 Window	**window;
 @
+% TODO rename windows!!!
+% essence of windowing system right here!! manage many windows!!
 
 % next free window
 <<global nwindow>>=
@@ -573,7 +586,6 @@ Channel	*cctl;		/* chan(Wctlmesg)[20] */
 <<[[Window]] config fields>>=
 bool_byte	scrolling;
 bool_byte	holding;
-bool_byte	rawing;
 
 bool_byte	deleted;
 @
@@ -597,10 +609,8 @@ QLock;
 %XXXXX
 <<[[Window]] other fields>>=
 Mouseinfo	mouse;
-Channel		*conswrite;	/* chan(Conswritemesg) */
-Channel		*consread;	/* chan(Consreadmesg) */
-Channel		*mouseread;	/* chan(Mousereadmesg) */
-Channel		*wctlread;	/* chan(Consreadmesg) */
+@
+<<[[Window]] other fields>>=
 uint		nr;	/* number of runes in window */
 uint		maxr;	/* number of runes allocated in r */
 Rune		*r;
@@ -615,7 +625,6 @@ Rectangle	scrollr;
 int	 	resized;
 int	 	wctlready;
 Rectangle	lastsr;
-int	 	topped;
 int	 	notefd;
 bool_byte	ctlopen;
 bool_byte	wctlopen;
@@ -1349,6 +1358,10 @@ enum {
 bool	sweeping;
 @
 
+
+
+
+
 <<function mousethread>>=
 void
 mousethread(void*)
@@ -1501,6 +1514,8 @@ mousethread(void*)
 
 
 
+
+
 % from MReshape, how can get this event?
 <<function resized>>=
 void
@@ -1564,6 +1579,15 @@ cornercursor(Window *w, Point p, bool force)
         wsetcursor(w, force);
 }
 @
+
+<<function winborder>>=
+int
+winborder(Window *w, Point xy)
+{
+    return ptinrect(xy, w->screenr) && !ptinrect(xy, insetrect(w->screenr, Selborder));
+}
+@
+
 
 % cornercursor -> <>
 <<function whichcorner>>=
@@ -1647,6 +1671,22 @@ bandsize(Window *w)
 }
 @
 
+
+<<function wmovemouse>>=
+/*
+ * Convert back to physical coordinates
+ */
+void
+wmovemouse(Window *w, Point p)
+{
+    p.x += w->screenr.min.x-w->i->r.min.x;
+    p.y += w->screenr.min.y-w->i->r.min.y;
+    moveto(mousectl, p);
+}
+@
+
+
+
 % bandsize -> <>
 <<function whichrect>>=
 Rectangle
@@ -1721,23 +1761,90 @@ cornerpt(Rectangle r, Point p, int which)
 
 \section{Windows threads}
 
+% keyboard listening
+% mouse listening
+% cons listening
+% ctl listening
+
 <<enum Wxxx>>=
 enum { 
     WKey, 
     WMouse, 
-    WMouseread, 
+    WMouseread, // ??
 
     WCtl, //!!!
 
     WCwrite, 
     WCread, 
-    WWread, 
+    WWread, // ??
 
     NWALT 
 };
 @
 
-% ... -> new() ->
+
+<<[[Window]] other fields>>=
+Channel		*conswrite;	/* chan(Conswritemesg) */
+Channel		*consread;	/* chan(Consreadmesg) */
+Channel		*mouseread;	/* chan(Mousereadmesg) */
+Channel		*wctlread;	/* chan(Consreadmesg) */
+@
+
+<<struct Conswritemesg>>=
+struct Conswritemesg
+{
+    Channel	*cw;		/* chan(Stringpair) */
+};
+@
+
+<<struct Consreadmesg>>=
+struct Consreadmesg
+{
+    Channel	*c1;		/* chan(tuple(char*, int) == Stringpair) */
+    Channel	*c2;		/* chan(tuple(char*, int) == Stringpair) */
+};
+@
+
+<<struct Mousereadmesg>>=
+struct Mousereadmesg
+{
+    Channel	*cm;		/* chan(Mouse) */
+};
+@
+
+<<struct Stringpair>>=
+struct Stringpair	/* rune and nrune or byte and nbyte */
+{
+    void	*s;
+    int		ns;
+};
+@
+
+
+<<struct Mousestate>>=
+struct Mousestate
+{
+    Mouse;
+    ulong	counter;	/* serial no. of mouse event */
+};
+@
+
+
+<<struct Mouseinfo>>=
+struct Mouseinfo
+{
+    Mousestate	queue[16];
+    int	ri;	/* read index into queue */
+    int	wi;	/* write index */
+    ulong	counter;	/* serial no. of last mouse event we received */
+    ulong	lastcounter;	/* serial no. of last mouse event sent to client */
+    int	lastb;	/* last button state we received */
+    uchar	qfull;	/* filled the queue; no more recording until client comes back */	
+};	
+@
+
+
+
 <<[[winctl()]] locals>>=
 Window *w;
 char buf[4*12+1];
@@ -1757,7 +1864,7 @@ Consreadmesg cwrm;
 Stringpair pair;
 @
 
- threadcreate(<>)
+% ... -> new() -> threadcreate(<>)
 <<function winctl>>=
 void
 winctl(void *arg)
@@ -2140,10 +2247,154 @@ deletethread(void*)
 }
 @
 
+\chapter{Mouse}
 
-\chapter{Menus}
 
-\section{Right click menu}
+<<function wmousectl>>=
+void
+wmousectl(Window *w)
+{
+    int but;
+
+    if(w->mc.buttons == 1)
+        but = 1;
+    else if(w->mc.buttons == 2)
+        but = 2;
+    else if(w->mc.buttons == 4)
+        but = 3;
+    else{
+        if(w->mc.buttons == 8)
+            wkeyctl(w, Kscrolloneup);
+        if(w->mc.buttons == 16)
+            wkeyctl(w, Kscrollonedown);
+        return;
+    }
+
+    incref(w);		/* hold up window while we track */
+    if(w->deleted)
+        goto Return;
+    if(ptinrect(w->mc.xy, w->scrollr)){
+        if(but)
+            wscroll(w, but);
+        goto Return;
+    }
+    if(but == 1)
+        wselect(w);
+    /* else all is handled by main process */
+   Return:
+    wclose(w);
+}
+@
+
+
+
+<<global clickwin>>=
+static Window	*clickwin;
+@
+
+<<global clickmsec>>=
+static uint	clickmsec;
+@
+
+<<global selectwin>>=
+static Window	*selectwin;
+@
+
+<<global selectq>>=
+static uint	selectq;
+@
+
+
+
+<<function wselect>>=
+void
+wselect(Window *w)
+{
+    uint q0, q1;
+    int b, x, y, first;
+
+    first = 1;
+    selectwin = w;
+    /*
+     * Double-click immediately if it might make sense.
+     */
+    b = w->mc.buttons;
+    q0 = w->q0;
+    q1 = w->q1;
+    selectq = w->org+frcharofpt(w, w->mc.xy);
+    if(clickwin==w && w->mc.msec-clickmsec<500)
+    if(q0==q1 && selectq==w->q0){
+        wdoubleclick(w, &q0, &q1);
+        wsetselect(w, q0, q1);
+        flushimage(display, 1);
+        x = w->mc.xy.x;
+        y = w->mc.xy.y;
+        /* stay here until something interesting happens */
+        do
+            readmouse(&w->mc);
+        while(w->mc.buttons==b && abs(w->mc.xy.x-x)<3 && abs(w->mc.xy.y-y)<3);
+        w->mc.xy.x = x;	/* in case we're calling frselect */
+        w->mc.xy.y = y;
+        q0 = w->q0;	/* may have changed */
+        q1 = w->q1;
+        selectq = q0;
+    }
+    if(w->mc.buttons == b){
+        w->scroll = framescroll;
+        frselect(w, &w->mc);
+        /* horrible botch: while asleep, may have lost selection altogether */
+        if(selectq > w->nr)
+            selectq = w->org + w->p0;
+        w->Frame.scroll = nil;
+        if(selectq < w->org)
+            q0 = selectq;
+        else
+            q0 = w->org + w->p0;
+        if(selectq > w->org+w->nchars)
+            q1 = selectq;
+        else
+            q1 = w->org+w->p1;
+    }
+    if(q0 == q1){
+        if(q0==w->q0 && clickwin==w && w->mc.msec-clickmsec<500){
+            wdoubleclick(w, &q0, &q1);
+            clickwin = nil;
+        }else{
+            clickwin = w;
+            clickmsec = w->mc.msec;
+        }
+    }else
+        clickwin = nil;
+    wsetselect(w, q0, q1);
+    flushimage(display, 1);
+    while(w->mc.buttons){
+        w->mc.msec = 0;
+        b = w->mc.buttons;
+        if(b & 6){
+            if(b & 2){
+                wsnarf(w);
+                wcut(w);
+            }else{
+                if(first){
+                    first = 0;
+                    getsnarf();
+                }
+                wpaste(w);
+            }
+        }
+        wscrdraw(w);
+        flushimage(display, 1);
+        while(w->mc.buttons == b)
+            readmouse(&w->mc);
+        clickwin = nil;
+    }
+}
+@
+
+
+\section{Menus}
+
+\subsection{Right click menu}
 
 <<enum _anon_ (windows/rio/rio.c)>>=
 enum
@@ -2217,7 +2468,7 @@ case Exit:
     break;
 @
 
-\section{Middle click menu}
+\subsection{Middle click menu}
 
 <<enum _anon_ (windows/rio/rio.c)2>>=
 enum
@@ -2278,9 +2529,212 @@ button2menu(Window *w)
 
 
 
+\chapter{Keyboard}
+
+% winctl thread -> <>
+<<function wkeyctl>>=
+void
+wkeyctl(Window *w, Rune r)
+{
+    uint q0 ,q1;
+    int n, nb, nr;
+    Rune *rp;
+    int *notefd;
+
+    if(r == 0)
+        return;
+    if(w->deleted)
+        return;
+
+    /* navigation keys work only when mouse is not open */
+    if(!w->mouseopen)
+        switch(r){
+        case Kdown:
+            n = w->maxlines/3;
+            goto case_Down;
+        case Kscrollonedown:
+            n = mousescrollsize(w->maxlines);
+            if(n <= 0)
+                n = 1;
+            goto case_Down;
+        case Kpgdown:
+            n = 2*w->maxlines/3;
+        case_Down:
+            q0 = w->org+frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y+n*w->font->height));
+            wsetorigin(w, q0, true);
+            return;
+        case Kup:
+            n = w->maxlines/3;
+            goto case_Up;
+        case Kscrolloneup:
+            n = mousescrollsize(w->maxlines);
+            if(n <= 0)
+                n = 1;
+            goto case_Up;
+        case Kpgup:
+            n = 2*w->maxlines/3;
+        case_Up:
+            q0 = wbacknl(w, w->org, n);
+            wsetorigin(w, q0, true);
+            return;
+        case Kleft:
+            if(w->q0 > 0){
+                q0 = w->q0-1;
+                wsetselect(w, q0, q0);
+                wshow(w, q0);
+            }
+            return;
+        case Kright:
+            if(w->q1 < w->nr){
+                q1 = w->q1+1;
+                wsetselect(w, q1, q1);
+                wshow(w, q1);
+            }
+            return;
+        case Khome:
+            wshow(w, 0);
+            return;
+        case Kend:
+            wshow(w, w->nr);
+            return;
+        case 0x01:	/* ^A: beginning of line */
+            if(w->q0==0 || w->q0==w->qh || w->r[w->q0-1]=='\n')
+                return;
+            nb = wbswidth(w, 0x15 /* ^U */);
+            wsetselect(w, w->q0-nb, w->q0-nb);
+            wshow(w, w->q0);
+            return;
+        case 0x05:	/* ^E: end of line */
+            q0 = w->q0;
+            while(q0 < w->nr && w->r[q0]!='\n')
+                q0++;
+            wsetselect(w, q0, q0);
+            wshow(w, w->q0);
+            return;
+        }
+    if(w->rawing && (w->q0==w->nr || w->mouseopen)){
+        waddraw(w, &r, 1);
+        return;
+    }
+    if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */
+        if(w->holding)
+            --w->holding;
+        else
+            w->holding++;
+        wrepaint(w);
+        if(r == 0x1B)
+            return;
+    }
+    if(r != 0x7F){
+        wsnarf(w);
+        wcut(w);
+    }
+
+    switch(r){
+    case 0x7F:		/* send interrupt */
+        w->qh = w->nr;
+        wshow(w, w->qh);
+        notefd = emalloc(sizeof(int));
+        *notefd = w->notefd;
+        proccreate(interruptproc, notefd, 4096);
+        return;
+    case 0x06:	/* ^F: file name completion */
+    case Kins:		/* Insert: file name completion */
+        rp = namecomplete(w);
+        if(rp == nil)
+            return;
+        nr = runestrlen(rp);
+        q0 = w->q0;
+        q0 = winsert(w, rp, nr, q0);
+        wshow(w, q0+nr);
+        free(rp);
+        return;
+    case 0x08:	/* ^H: erase character */
+    case 0x15:	/* ^U: erase line */
+    case 0x17:	/* ^W: erase word */
+        if(w->q0==0 || w->q0==w->qh)
+            return;
+        nb = wbswidth(w, r);
+        q1 = w->q0;
+        q0 = q1-nb;
+        if(q0 < w->org){
+            q0 = w->org;
+            nb = q1-q0;
+        }
+        if(nb > 0){
+            wdelete(w, q0, q0+nb);
+            wsetselect(w, q0, q0);
+        }
+        return;
+    }
+    /* otherwise ordinary character; just insert */
+    q0 = w->q0;
+    q0 = winsert(w, &r, 1, q0);
+    wshow(w, q0+1);
+}
+@
+
+
+% wkeyctl -> proccreate(<>)
+<<function interruptproc>>=
+/*
+ * Need to do this in a separate proc because if process we're interrupting
+ * is dying and trying to print tombstone, kernel is blocked holding p->debug lock.
+ */
+void
+interruptproc(void *v)
+{
+    int *notefd;
+
+    notefd = v;
+    write(*notefd, "interrupt", 9);
+    free(notefd);
+}
+@
+
+<<function wbswidth>>=
+int
+wbswidth(Window *w, Rune c)
+{
+    uint q, eq, stop;
+    Rune r;
+    int skipping;
+
+    /* there is known to be at least one character to erase */
+    if(c == 0x08)	/* ^H: erase character */
+        return 1;
+    q = w->q0;
+    stop = 0;
+    if(q > w->qh)
+        stop = w->qh;
+    skipping = true;
+    while(q > stop){
+        r = w->r[q-1];
+        if(r == '\n'){		/* eat at most one more character */
+            if(q == w->q0)	/* eat the newline */
+                --q;
+            break; 
+        }
+        if(c == 0x17){
+            eq = isalnum(r);
+            if(eq && skipping)	/* found one; stop skipping */
+                skipping = false;
+            else if(!eq && !skipping)
+                break;
+        }
+        --q;
+    }
+    return w->q0-q;
+}
+@
+
+
 \chapter{Windows}
 
 \section{Overview}
+
+% many windows ops via menu, or via mouse on border of window,
+% or via filsys.
 
 \section{[[Wctlmesg]]}
 
@@ -2372,6 +2826,31 @@ case Refresh:
     break;
 @
 
+<<function wrefresh>>=
+void
+wrefresh(Window *w, Rectangle)
+{
+    /* BUG: rectangle is ignored */
+    if(w == input)
+        wborder(w, Selborder);
+    else
+        wborder(w, Unselborder);
+    if(w->mouseopen)
+        return;
+    draw(w->i, insetrect(w->i->r, Borderwidth), w->cols[BACK], nil, w->i->r.min);
+    w->ticked = 0;
+    if(w->p0 > 0)
+        frdrawsel(w, frptofchar(w, 0), 0, w->p0, 0);
+    if(w->p1 < w->nchars)
+        frdrawsel(w, frptofchar(w, w->p1), w->p1, w->nchars, 0);
+    frdrawsel(w, frptofchar(w, w->p0), w->p0, w->p1, 1);
+    w->lastsr = ZR;
+    wscrdraw(w);
+}
+@
+
+
+
 <<[[wctlmesg()]] cases>>=
 case Movemouse:
     if(sweeping || !ptinrect(r.min, w->i->r))
@@ -2400,7 +2879,7 @@ case Holdoff:
     if(w->deleted)
         break;
     wrepaint(w);
-    flushimage(display, 1);
+    flushimage(display, true);
     break;
 @
 
@@ -2409,6 +2888,7 @@ case Holdoff:
 
 
 \section{Window creation}
+% via menu, via filsys
 
 <<[[button3menu()]] cases>>=
 case New:
@@ -2499,6 +2979,179 @@ onscreen(Point p)
     return p;
 }
 @
+
+
+
+<<function wborder>>=
+void
+wborder(Window *w, int type)
+{
+    Image *col;
+
+    if(w->i == nil)
+        return;
+    if(w->holding){
+        if(type == Selborder)
+            col = holdcol;
+        else
+            col = paleholdcol;
+    }else{
+        if(type == Selborder)
+            col = titlecol;
+        else
+            col = lighttitlecol;
+    }
+
+    border(w->i, w->i->r, Selborder, col, ZP);
+}
+@
+
+
+
+<<function wsetpid>>=
+void
+wsetpid(Window *w, int pid, bool dolabel)
+{
+    char buf[128];
+    int fd;
+
+    w->pid = pid;
+    if(dolabel){
+        sprint(buf, "rc %d", pid);
+        free(w->label);
+        w->label = estrdup(buf);
+    }
+    sprint(buf, "/proc/%d/notepg", pid);
+    fd = open(buf, OWRITE|OCEXEC);
+    if(w->notefd > 0)
+        close(w->notefd);
+    w->notefd = fd;
+}
+@
+
+
+
+
+\section{Window focus}
+% via mouse
+
+
+<<global topped>>=
+static	int		topped;
+@
+
+<<[[Window]] other fields>>=
+int	 	topped;
+@
+
+
+% mousethread
+<<function wtop>>=
+Window*
+wtop(Point pt)
+{
+    Window *w;
+
+    w = wpointto(pt);
+    if(w){
+        if(w->topped == topped)
+            return nil;
+        topwindow(w->i); // draw.h
+        wcurrent(w);
+        flushimage(display, true);
+        w->topped = ++topped;
+    }
+    return w;
+}
+@
+
+<<function wpointto>>=
+Window*
+wpointto(Point pt)
+{
+    int i;
+    Window *v, *w;
+
+    w = nil;
+    for(i=0; i<nwindow; i++){
+        v = window[i];
+        if(ptinrect(pt, v->screenr))
+        if(!v->deleted)
+        if(w==nil || v->topped>w->topped)
+            w = v;
+    }
+    return w;
+}
+@
+
+% wtop | ... -> <>
+<<function wcurrent>>=
+void
+wcurrent(Window *w)
+{
+    Window *oi;
+
+    if(wkeyboard!=nil && w==wkeyboard)
+        return;
+    oi = input;
+    input = w;
+    if(oi!=w && oi!=nil)
+        wrepaint(oi);
+    if(w !=nil){
+        wrepaint(w);
+        wsetcursor(w, false);
+    }
+    if(w != oi){
+        if(oi){
+            oi->wctlready = 1;
+            wsendctlmesg(oi, Wakeup, ZR, nil);
+        }
+        if(w){
+            w->wctlready = 1;
+            wsendctlmesg(w, Wakeup, ZR, nil);
+        }
+    }
+}
+@
+
+
+% wcurrent | ... -> <>
+<<function wrepaint>>=
+void
+wrepaint(Window *w)
+{
+    wsetcols(w);
+    if(!w->mouseopen)
+        frredraw(w);
+    if(w == input){
+        wborder(w, Selborder);
+        wsetcursor(w, false);
+    }else
+        wborder(w, Unselborder);
+}
+@
+
+
+
+% wrepaint | ... -> <>
+<<function wsetcols>>=
+void
+wsetcols(Window *w)
+{
+    if(w->holding)
+        if(w == input)
+            w->cols[TEXT] = w->cols[HTEXT] = holdcol;
+        else
+            w->cols[TEXT] = w->cols[HTEXT] = lightholdcol;
+    else
+        if(w == input)
+            w->cols[TEXT] = w->cols[HTEXT] = display->black;
+        else
+            w->cols[TEXT] = w->cols[HTEXT] = darkgrey;
+}
+@
+
+
 
 
 \section{Window deletion}
@@ -2594,6 +3247,7 @@ case Exited:
 @
 
 \section{Window resize}
+% via menu, or via mouse on border directly
 
 <<[[button3menu()]] cases>>=
 case Reshape:
@@ -2701,7 +3355,30 @@ wresize(Window *w, Image *i, bool move)
 }
 @
 
+<<function wsetname>>=
+void
+wsetname(Window *w)
+{
+    int i, n;
+    char err[ERRMAX];
+    
+    n = sprint(w->name, "window.%d.%d", w->id, w->namecount++);
+    for(i='A'; i<='Z'; i++){
+        if(nameimage(w->i, w->name, 1) > 0)
+            return;
+        errstr(err, sizeof err);
+        if(strcmp(err, "image name in use") != 0)
+            break;
+        w->name[n] = i;
+        w->name[n+1] = 0;
+    }
+    w->name[0] = 0;
+    fprint(2, "rio: setname failed: %s\n", err);
+}
+@
+
 \section{Window move}
+% via menu
 
 <<[[button3menu()]] cases>>=
 case Move:
@@ -2817,6 +3494,7 @@ drawedge(Image **bp, Rectangle r)
 
 
 \section{Window hiding}
+% via menu
 
 <<[[button3menu()]] cases>>=
 case Hide:
@@ -3126,6 +3804,10 @@ wsetcursor(Window *w, bool force)
 }
 @
 
+<<global lastcursor>>=
+static	Cursor	*lastcursor;
+@
+
 <<function riosetcursor>>=
 void
 riosetcursor(Cursor *p, int force)
@@ -3136,6 +3818,503 @@ riosetcursor(Cursor *p, int force)
     lastcursor = p;
 }
 @
+
+
+\chapter{Window Terminal}
+% fake /dev/cons
+
+% it's relatively easy thx to the fake /dev/cons and frame lib
+
+
+\section{Terminal creation}
+
+<<function winshell>>=
+void
+winshell(void *args)
+{
+    Window *w;
+    Channel *pidc;
+    void **arg;
+    char *cmd, *dir;
+    char **argv;
+
+    arg = args;
+    w = arg[0];
+    pidc = arg[1];
+    cmd = arg[2];
+    argv = arg[3];
+    dir = arg[4];
+
+    rfork(RFNAMEG|RFFDG|RFENVG);
+
+    if(filsysmount(filsys, w->id) < 0){
+        fprint(2, "mount failed: %r\n");
+        sendul(pidc, 0);
+        threadexits("mount failed");
+    }
+    close(0);
+    if(open("/dev/cons", OREAD) < 0){
+        fprint(2, "can't open /dev/cons: %r\n");
+        sendul(pidc, 0);
+        threadexits("/dev/cons");
+    }
+    close(1);
+    if(open("/dev/cons", OWRITE) < 0){
+        fprint(2, "can't open /dev/cons: %r\n");
+        sendul(pidc, 0);
+        threadexits("open");	/* BUG? was terminate() */
+    }
+    if(wclose(w) == 0){	/* remove extra ref hanging from creation */
+        notify(nil);
+        dup(1, 2);
+        if(dir)
+            chdir(dir);
+        procexec(pidc, cmd, argv);
+        _exits("exec failed");
+    }
+}
+@
+
+
+<<function filsysmount>>=
+/*
+ * Called only from a different FD group
+ */
+int
+filsysmount(Filsys *fs, int id)
+{
+    char buf[32];
+
+    close(fs->sfd);	/* close server end so mount won't hang if exiting */
+    sprint(buf, "%d", id);
+    if(mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf) < 0){
+        fprint(2, "mount failed: %r\n");
+        return -1;
+    }
+    if(bind("/mnt/wsys", "/dev", MBEFORE) < 0){
+        fprint(2, "bind failed: %r\n");
+        return -1;
+    }
+    return 0;
+}
+@
+
+\section{Content rendering}
+
+<<function wshow>>=
+void
+wshow(Window *w, uint q0)
+{
+    int qe;
+    int nl;
+    uint q;
+
+    qe = w->org+w->nchars;
+    if(w->org<=q0 && (q0<qe || (q0==qe && qe==w->nr)))
+        wscrdraw(w);
+    else{
+        nl = 4*w->maxlines/5;
+        q = wbacknl(w, q0, nl);
+        /* avoid going backwards if trying to go forwards - long lines! */
+        if(!(q0>w->org && q<w->org))
+            wsetorigin(w, q, true);
+        while(q0 > w->org+w->nchars)
+            wsetorigin(w, w->org+1, false);
+    }
+}
+@
+
+<<function wsetorigin>>=
+void
+wsetorigin(Window *w, uint org, int exact)
+{
+    int i, a, fixup;
+    Rune *r;
+    uint n;
+
+    if(org>0 && !exact){
+        /* org is an estimate of the char posn; find a newline */
+        /* don't try harder than 256 chars */
+        for(i=0; i<256 && org<w->nr; i++){
+            if(w->r[org] == '\n'){
+                org++;
+                break;
+            }
+            org++;
+        }
+    }
+    a = org-w->org;
+    fixup = 0;
+    if(a>=0 && a<w->nchars){
+        frdelete(w, 0, a);
+        fixup = 1;	/* frdelete can leave end of last line in wrong selection mode; it doesn't know what follows */
+    }else if(a<0 && -a<w->nchars){
+        n = w->org - org;
+        r = runemalloc(n);
+        runemove(r, w->r+org, n);
+        frinsert(w, r, r+n, 0);
+        free(r);
+    }else
+        frdelete(w, 0, w->nchars);
+    w->org = org;
+    wfill(w);
+    wscrdraw(w);
+    wsetselect(w, w->q0, w->q1);
+    if(fixup && w->p1 > w->p0)
+        frdrawsel(w, frptofchar(w, w->p1-1), w->p1-1, w->p1, 1);
+}
+@
+
+<<function wfill>>=
+void
+wfill(Window *w)
+{
+    Rune *rp;
+    int i, n, m, nl;
+
+    if(w->lastlinefull)
+        return;
+    rp = malloc(messagesize);
+    do{
+        n = w->nr-(w->org+w->nchars);
+        if(n == 0)
+            break;
+        if(n > 2000)	/* educated guess at reasonable amount */
+            n = 2000;
+        runemove(rp, w->r+(w->org+w->nchars), n);
+        /*
+         * it's expensive to frinsert more than we need, so
+         * count newlines.
+         */
+        nl = w->maxlines-w->nlines;
+        m = 0;
+        for(i=0; i<n; ){
+            if(rp[i++] == '\n'){
+                m++;
+                if(m >= nl)
+                    break;
+            }
+        }
+        frinsert(w, rp, rp+i, w->nchars);
+    }while(w->lastlinefull == false);
+    free(rp);
+}
+@
+
+
+
+\section{Content modification}
+
+<<enum _anon_ (windows/rio/wind.c)>>=
+enum
+{
+    HiWater	= 640000,	/* max size of history */
+    LoWater	= 400000,	/* min size of history after max'ed */
+    MinWater	= 20000,	/* room to leave available when reallocating */
+};
+@
+
+<<function winsert>>=
+uint
+winsert(Window *w, Rune *r, int n, uint q0)
+{
+    uint m;
+
+    if(n == 0)
+        return q0;
+    if(w->nr+n>HiWater && q0>=w->org && q0>=w->qh){
+        m = min(HiWater-LoWater, min(w->org, w->qh));
+        w->org -= m;
+        w->qh -= m;
+        if(w->q0 > m)
+            w->q0 -= m;
+        else
+            w->q0 = 0;
+        if(w->q1 > m)
+            w->q1 -= m;
+        else
+            w->q1 = 0;
+        w->nr -= m;
+        runemove(w->r, w->r+m, w->nr);
+        q0 -= m;
+    }
+    if(w->nr+n > w->maxr){
+        /*
+         * Minimize realloc breakage:
+         *	Allocate at least MinWater
+         * 	Double allocation size each time
+         *	But don't go much above HiWater
+         */
+        m = max(min(2*(w->nr+n), HiWater), w->nr+n)+MinWater;
+        if(m > HiWater)
+            m = max(HiWater+MinWater, w->nr+n);
+        if(m > w->maxr){
+            w->r = runerealloc(w->r, m);
+            w->maxr = m;
+        }
+    }
+    runemove(w->r+q0+n, w->r+q0, w->nr-q0);
+    runemove(w->r+q0, r, n);
+    w->nr += n;
+    /* if output touches, advance selection, not qh; works best for keyboard and output */
+    if(q0 <= w->q1)
+        w->q1 += n;
+    if(q0 <= w->q0)
+        w->q0 += n;
+    if(q0 < w->qh)
+        w->qh += n;
+    if(q0 < w->org)
+        w->org += n;
+    else if(q0 <= w->org+w->nchars)
+        frinsert(w, r, r+n, q0-w->org);
+    return q0;
+}
+@
+
+
+\section{Word selection}
+
+<<global left1>>=
+static Rune left1[] =  { L'{', L'[', L'(', L'<', L'«', 0 };
+@
+
+<<global right1>>=
+static Rune right1[] = { L'}', L']', L')', L'>', L'»', 0 };
+@
+
+<<global left2>>=
+static Rune left2[] =  { L'\n', 0 };
+@
+
+<<global left3>>=
+static Rune left3[] =  { L'\'', L'"', L'`', 0 };
+@
+
+<<global left>>=
+Rune *left[] = {
+    left1,
+    left2,
+    left3,
+    nil
+};
+@
+
+<<global right>>=
+Rune *right[] = {
+    right1,
+    left2,
+    left3,
+    nil
+};
+@
+
+
+
+<<function wdoubleclick>>=
+void
+wdoubleclick(Window *w, uint *q0, uint *q1)
+{
+    int c, i;
+    Rune *r, *l, *p;
+    uint q;
+
+    for(i=0; left[i]!=nil; i++){
+        q = *q0;
+        l = left[i];
+        r = right[i];
+        /* try matching character to left, looking right */
+        if(q == 0)
+            c = '\n';
+        else
+            c = w->r[q-1];
+        p = strrune(l, c);
+        if(p != nil){
+            if(wclickmatch(w, c, r[p-l], 1, &q))
+                *q1 = q-(c!='\n');
+            return;
+        }
+        /* try matching character to right, looking left */
+        if(q == w->nr)
+            c = '\n';
+        else
+            c = w->r[q];
+        p = strrune(r, c);
+        if(p != nil){
+            if(wclickmatch(w, c, l[p-r], -1, &q)){
+                *q1 = *q0+(*q0<w->nr && c=='\n');
+                *q0 = q;
+                if(c!='\n' || q!=0 || w->r[0]=='\n')
+                    (*q0)++;
+            }
+            return;
+        }
+    }
+    /* try filling out word to right */
+    while(*q1<w->nr && isalnum(w->r[*q1]))
+        (*q1)++;
+    /* try filling out word to left */
+    while(*q0>0 && isalnum(w->r[*q0-1]))
+        (*q0)--;
+}
+@
+
+
+<<function wclickmatch>>=
+int
+wclickmatch(Window *w, int cl, int cr, int dir, uint *q)
+{
+    Rune c;
+    int nest;
+
+    nest = 1;
+    for(;;){
+        if(dir > 0){
+            if(*q == w->nr)
+                break;
+            c = w->r[*q];
+            (*q)++;
+        }else{
+            if(*q == 0)
+                break;
+            (*q)--;
+            c = w->r[*q];
+        }
+        if(c == cr){
+            if(--nest==0)
+                return 1;
+        }else if(c == cl)
+            nest++;
+    }
+    return cl=='\n' && nest==1;
+}
+@
+
+
+<<function wsetselect>>=
+void
+wsetselect(Window *w, uint q0, uint q1)
+{
+    int p0, p1;
+
+    /* w->p0 and w->p1 are always right; w->q0 and w->q1 may be off */
+    w->q0 = q0;
+    w->q1 = q1;
+    /* compute desired p0,p1 from q0,q1 */
+    p0 = q0-w->org;
+    p1 = q1-w->org;
+    if(p0 < 0)
+        p0 = 0;
+    if(p1 < 0)
+        p1 = 0;
+    if(p0 > w->nchars)
+        p0 = w->nchars;
+    if(p1 > w->nchars)
+        p1 = w->nchars;
+    if(p0==w->p0 && p1==w->p1)
+        return;
+    /* screen disagrees with desired selection */
+    if(w->p1<=p0 || p1<=w->p0 || p0==p1 || w->p1==w->p0){
+        /* no overlap or too easy to bother trying */
+        frdrawsel(w, frptofchar(w, w->p0), w->p0, w->p1, 0);
+        frdrawsel(w, frptofchar(w, p0), p0, p1, 1);
+        goto Return;
+    }
+    /* overlap; avoid unnecessary painting */
+    if(p0 < w->p0){
+        /* extend selection backwards */
+        frdrawsel(w, frptofchar(w, p0), p0, w->p0, 1);
+    }else if(p0 > w->p0){
+        /* trim first part of selection */
+        frdrawsel(w, frptofchar(w, w->p0), w->p0, p0, 0);
+    }
+    if(p1 > w->p1){
+        /* extend selection forwards */
+        frdrawsel(w, frptofchar(w, w->p1), w->p1, p1, 1);
+    }else if(p1 < w->p1){
+        /* trim last part of selection */
+        frdrawsel(w, frptofchar(w, p1), p1, w->p1, 0);
+    }
+
+    Return:
+    w->p0 = p0;
+    w->p1 = p1;
+}
+@
+
+
+
+\section{Cut, Copy, Paste}
+% put snarf stuff here
+
+\section{Scrolling}
+
+
+<<function framescroll>>=
+/*
+ * called from frame library
+ */
+void
+framescroll(Frame *f, int dl)
+{
+    if(f != &selectwin->Frame)
+        error("frameselect not right frame");
+    wframescroll(selectwin, dl);
+}
+@
+
+<<function wframescroll>>=
+void
+wframescroll(Window *w, int dl)
+{
+    uint q0;
+
+    if(dl == 0){
+        wscrsleep(w, 100);
+        return;
+    }
+    if(dl < 0){
+        q0 = wbacknl(w, w->org, -dl);
+        if(selectq > w->org+w->p0)
+            wsetselect(w, w->org+w->p0, selectq);
+        else
+            wsetselect(w, selectq, w->org+w->p0);
+    }else{
+        if(w->org+w->nchars == w->nr)
+            return;
+        q0 = w->org+frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y+dl*w->font->height));
+        if(selectq >= w->org+w->p1)
+            wsetselect(w, w->org+w->p1, selectq);
+        else
+            wsetselect(w, selectq, w->org+w->p1);
+    }
+    wsetorigin(w, q0, true);
+}
+@
+
+
+<<function wbacknl>>=
+uint
+wbacknl(Window *w, uint p, uint n)
+{
+    int i, j;
+
+    /* look for start of this line if n==0 */
+    if(n==0 && p>0 && w->r[p-1]!='\n')
+        n = 1;
+    i = n;
+    while(i-->0 && p>0){
+        --p;	/* it's at a newline now; back over it */
+        if(p == 0)
+            break;
+        /* at 128 chars, call it a line anyway */
+        for(j=128; --j>0 && p>0; p--)
+            if(w->r[p-1]=='\n')
+                break;
+    }
+    return p;
+}
+@
+
 
 
 \chapter{File Server}
@@ -3938,6 +5117,19 @@ xfidattach(Xfid *x)
         incref(w);
     qunlock(&all);
     filsysrespond(x->fs, x, &t, nil);
+}
+@
+
+<<function wlookid>>=
+Window*
+wlookid(int id)
+{
+    int i;
+
+    for(i=0; i<nwindow; i++)
+        if(window[i]->id == id)
+            return window[i];
+    return nil;
 }
 @
 
@@ -5413,83 +6605,31 @@ writewctl(Xfid *x, char *err)
 @
 
 
-\chapter{Window Terminal}
-% fake /dev/cons
 
-% it's relatively easy thx to the fake /dev/cons and frame lib
-
-
-
-<<function winshell>>=
+<<function wtopme>>=
 void
-winshell(void *args)
+wtopme(Window *w)
 {
-    Window *w;
-    Channel *pidc;
-    void **arg;
-    char *cmd, *dir;
-    char **argv;
-
-    arg = args;
-    w = arg[0];
-    pidc = arg[1];
-    cmd = arg[2];
-    argv = arg[3];
-    dir = arg[4];
-
-    rfork(RFNAMEG|RFFDG|RFENVG);
-
-    if(filsysmount(filsys, w->id) < 0){
-        fprint(2, "mount failed: %r\n");
-        sendul(pidc, 0);
-        threadexits("mount failed");
-    }
-    close(0);
-    if(open("/dev/cons", OREAD) < 0){
-        fprint(2, "can't open /dev/cons: %r\n");
-        sendul(pidc, 0);
-        threadexits("/dev/cons");
-    }
-    close(1);
-    if(open("/dev/cons", OWRITE) < 0){
-        fprint(2, "can't open /dev/cons: %r\n");
-        sendul(pidc, 0);
-        threadexits("open");	/* BUG? was terminate() */
-    }
-    if(wclose(w) == 0){	/* remove extra ref hanging from creation */
-        notify(nil);
-        dup(1, 2);
-        if(dir)
-            chdir(dir);
-        procexec(pidc, cmd, argv);
-        _exits("exec failed");
+    if(w!=nil && w->i!=nil && !w->deleted && w->topped!=topped){
+        topwindow(w->i);
+        flushimage(display, 1);
+        w->topped = ++ topped;
     }
 }
 @
 
-
-<<function filsysmount>>=
-/*
- * Called only from a different FD group
- */
-int
-filsysmount(Filsys *fs, int id)
+<<function wbottomme>>=
+void
+wbottomme(Window *w)
 {
-    char buf[32];
-
-    close(fs->sfd);	/* close server end so mount won't hang if exiting */
-    sprint(buf, "%d", id);
-    if(mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf) < 0){
-        fprint(2, "mount failed: %r\n");
-        return -1;
+    if(w!=nil && w->i!=nil && !w->deleted){
+        bottomwindow(w->i);
+        flushimage(display, 1);
+        w->topped = - ++topped;
     }
-    if(bind("/mnt/wsys", "/dev", MBEFORE) < 0){
-        fprint(2, "bind failed: %r\n");
-        return -1;
-    }
-    return 0;
 }
 @
+
 
 \chapter{Timer}
 
@@ -5826,6 +6966,45 @@ wcut(Window *w)
 }
 @
 
+
+<<function wdelete>>=
+void
+wdelete(Window *w, uint q0, uint q1)
+{
+    uint n, p0, p1;
+
+    n = q1-q0;
+    if(n == 0)
+        return;
+    runemove(w->r+q0, w->r+q1, w->nr-q1);
+    w->nr -= n;
+    if(q0 < w->q0)
+        w->q0 -= min(n, w->q0-q0);
+    if(q0 < w->q1)
+        w->q1 -= min(n, w->q1-q0);
+    if(q1 < w->qh)
+        w->qh -= n;
+    else if(q0 < w->qh)
+        w->qh = q0;
+    if(q1 <= w->org)
+        w->org -= n;
+    else if(q0 < w->org+w->nchars){
+        p1 = q1 - w->org;
+        if(p1 > w->nchars)
+            p1 = w->nchars;
+        if(q0 < w->org){
+            w->org = q0;
+            p0 = 0;
+        }else
+            p0 = q0 - w->org;
+        frdelete(w, p0, p1);
+        wfill(w);
+    }
+}
+@
+
+
+
 <<function wpaste>>=
 void
 wpaste(Window *w)
@@ -5845,6 +7024,7 @@ wpaste(Window *w)
     }
 }
 @
+
 
 
 
@@ -6104,6 +7284,126 @@ struct Completion{
     int nfile;		/* number of files returned */
     char **filename;	/* their names */
 };
+@
+
+% wkeyctl -> <>
+<<function namecomplete>>=
+Rune*
+namecomplete(Window *w)
+{
+    int nstr, npath;
+    Rune *rp, *path, *str;
+    Completion *c;
+    char *s, *dir, *root;
+
+    /* control-f: filename completion; works back to white space or / */
+    if(w->q0<w->nr && w->r[w->q0]>' ')	/* must be at end of word */
+        return nil;
+    nstr = windfilewidth(w, w->q0, true);
+    str = runemalloc(nstr);
+    runemove(str, w->r+(w->q0-nstr), nstr);
+    npath = windfilewidth(w, w->q0-nstr, false);
+    path = runemalloc(npath);
+    runemove(path, w->r+(w->q0-nstr-npath), npath);
+    rp = nil;
+
+    /* is path rooted? if not, we need to make it relative to window path */
+    if(npath>0 && path[0]=='/'){
+        dir = malloc(UTFmax*npath+1);
+        sprint(dir, "%.*S", npath, path);
+    }else{
+        if(strcmp(w->dir, "") == 0)
+            root = ".";
+        else
+            root = w->dir;
+        dir = malloc(strlen(root)+1+UTFmax*npath+1);
+        sprint(dir, "%s/%.*S", root, npath, path);
+    }
+    dir = cleanname(dir);
+
+    s = smprint("%.*S", nstr, str);
+    c = complete(dir, s);
+    free(s);
+    if(c == nil)
+        goto Return;
+
+    if(!c->advance)
+        showcandidates(w, c);
+
+    if(c->advance)
+        rp = runesmprint("%s", c->string);
+
+  Return:
+    freecompletion(c);
+    free(dir);
+    free(path);
+    free(str);
+    return rp;
+}
+@
+
+
+<<function showcandidates>>=
+void
+showcandidates(Window *w, Completion *c)
+{
+    int i;
+    Fmt f;
+    Rune *rp;
+    uint nr, qline, q0;
+    char *s;
+
+    runefmtstrinit(&f);
+    if (c->nmatch == 0)
+        s = "[no matches in ";
+    else
+        s = "[";
+    if(c->nfile > 32)
+        fmtprint(&f, "%s%d files]\n", s, c->nfile);
+    else{
+        fmtprint(&f, "%s", s);
+        for(i=0; i<c->nfile; i++){
+            if(i > 0)
+                fmtprint(&f, " ");
+            fmtprint(&f, "%s", c->filename[i]);
+        }
+        fmtprint(&f, "]\n");
+    }
+    /* place text at beginning of line before host point */
+    qline = w->qh;
+    while(qline>0 && w->r[qline-1] != '\n')
+        qline--;
+
+    rp = runefmtstrflush(&f);
+    nr = runestrlen(rp);
+
+    q0 = w->q0;
+    q0 += winsert(w, rp, runestrlen(rp), qline) - qline;
+    free(rp);
+    wsetselect(w, q0+nr, q0+nr);
+}
+@
+
+
+% showcandidates -> <>
+<<function windfilewidth>>=
+int
+windfilewidth(Window *w, uint q0, int oneelement)
+{
+    uint q;
+    Rune r;
+
+    q = q0;
+    while(q > 0){
+        r = w->r[q-1];
+        if(r<=' ')
+            break;
+        if(oneelement && r=='/')
+            break;
+        --q;
+    }
+    return q0-q;
+}
 @
 
 
@@ -6509,6 +7809,21 @@ if(access(fontname, 0) < 0){
 putenv("font", fontname);
 @
 
+\section{Raw mode}
+
+<<[[Window]] config fields>>=
+bool_byte	rawing;
+@
+
+<<function waddraw>>=
+void
+waddraw(Window *w, Rune *r, int nr)
+{
+    w->raw = runerealloc(w->raw, w->nraw+nr);
+    runemove(w->raw+w->nraw, r, nr);
+    w->nraw += nr;
+}
+@
 
 \chapter{Conclusion}
 

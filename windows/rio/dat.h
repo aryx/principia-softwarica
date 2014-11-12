@@ -222,9 +222,10 @@ struct Window
     /*s: [[Window]] config fields */
     bool_byte	scrolling;
     bool_byte	holding;
-    bool_byte	rawing;
 
     bool_byte	deleted;
+    /*x: [[Window]] config fields */
+    bool_byte	rawing;
     /*e: [[Window]] config fields */
 
     //--------------------------------------------------------------------
@@ -232,10 +233,7 @@ struct Window
     //--------------------------------------------------------------------
     /*s: [[Window]] other fields */
     Mouseinfo	mouse;
-    Channel		*conswrite;	/* chan(Conswritemesg) */
-    Channel		*consread;	/* chan(Consreadmesg) */
-    Channel		*mouseread;	/* chan(Mousereadmesg) */
-    Channel		*wctlread;	/* chan(Consreadmesg) */
+    /*x: [[Window]] other fields */
     uint		nr;	/* number of runes in window */
     uint		maxr;	/* number of runes allocated in r */
     Rune		*r;
@@ -250,13 +248,19 @@ struct Window
     int	 	resized;
     int	 	wctlready;
     Rectangle	lastsr;
-    int	 	topped;
     int	 	notefd;
     bool_byte	ctlopen;
     bool_byte	wctlopen;
     bool_byte	mouseopen;
     int		pid;
     char		*dir;
+    /*x: [[Window]] other fields */
+    Channel		*conswrite;	/* chan(Conswritemesg) */
+    Channel		*consread;	/* chan(Consreadmesg) */
+    Channel		*mouseread;	/* chan(Mousereadmesg) */
+    Channel		*wctlread;	/* chan(Consreadmesg) */
+    /*x: [[Window]] other fields */
+    int	 	topped;
     /*e: [[Window]] other fields */
 
     //--------------------------------------------------------------------
