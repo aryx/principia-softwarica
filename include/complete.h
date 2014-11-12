@@ -15,6 +15,6 @@ struct Completion{
 };
 /*e: struct Completion */
 
-Completion* complete(char *dir, char *s);
-void freecompletion(Completion*);
+Completion* 	complete(char *dir, char *s);
+void 		freecompletion(Completion*);
 /*e: include/complete.h */

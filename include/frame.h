@@ -72,7 +72,7 @@ void	frinsert(Frame*, Rune*, Rune*, ulong);
 void	frselect(Frame*, Mousectl*);
 void	frselectpaint(Frame*, Point, Point, Image*);
 void	frdrawsel(Frame*, Point, ulong, ulong, int);
-Point frdrawsel0(Frame*, Point, ulong, ulong, Image*, Image*);
+Point 	frdrawsel0(Frame*, Point, ulong, ulong, Image*, Image*);
 void	frinit(Frame*, Rectangle, Font*, Image*, Image**);
 void	frsetrects(Frame*, Rectangle, Image*);
 void	frclear(Frame*, int);
