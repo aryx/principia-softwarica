@@ -105,18 +105,22 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 
     w = emalloc(sizeof(Window));
 
+    w->i = i;
     w->screenr = i->r;
     r = insetrect(i->r, Selborder+1);
-    w->i = i;
+
+    /*s: [[wmk()]] channels creation */
     w->mc = *mc;
     w->ck = ck;
     w->cctl = cctl;
-    w->cursorp = nil;
-
+    /*x: [[wmk()]] channels creation */
     w->conswrite = chancreate(sizeof(Conswritemesg), 0);
     w->consread =  chancreate(sizeof(Consreadmesg), 0);
     w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
     w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
+    /*e: [[wmk()]] channels creation */
+
+    w->cursorp = nil;
 
     w->scrollr = r;
     w->scrollr.max.x = r.min.x+Scrollwid;
@@ -137,6 +141,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     draw(w->i, r, cols[BACK], nil, w->entire.min);
     wborder(w, Selborder);
     wscrdraw(w);
+
     incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
     return w;
 }
@@ -248,12 +253,14 @@ wclose(Window *w)
 enum { 
     WKey, 
     WMouse, 
+
     WMouseread, // ??
 
     WCtl, //!!!
 
-    WCwrite, 
+    WCwrite,
     WCread, 
+
     WWread, // ??
 
     NWALT 
@@ -266,73 +273,87 @@ winctl(void *arg)
 {
     /*s: [[winctl()]] locals */
     Window *w;
-    char buf[4*12+1];
     Alt alts[NWALT+1];
-    Wctlmesg wcm;
-
-    Rune *rp, *bp, *tp, *up, *kbdr;
+    /*x: [[winctl()]] locals */
+    char buf[4*12+1];
+    Rune *rp, *bp, *tp, *up;
     uint qh;
     int nr, nb, c, wid, i, npart, initial, lastb;
     char *s, *t, part[3];
+    /*x: [[winctl()]] locals */
+    Rune *kbdr;
+    /*x: [[winctl()]] locals */
     Mousestate *mp, m;
-
+    /*x: [[winctl()]] locals */
+    Wctlmesg wcm;
+    /*x: [[winctl()]] locals */
     Mousereadmesg mrm;
+    /*x: [[winctl()]] locals */
     Conswritemesg cwm;
     Consreadmesg crm;
-    Consreadmesg cwrm;
+    /*x: [[winctl()]] locals */
     Stringpair pair;
+    /*x: [[winctl()]] locals */
+    Consreadmesg cwrm;
     /*e: [[winctl()]] locals */
     
     w = arg;
     snprint(buf, sizeof buf, "winctl-id%d", w->id);
     threadsetname(buf);
 
+    /*s: [[winctl()]] channels creation */
     mrm.cm = chancreate(sizeof(Mouse), 0);
     cwm.cw = chancreate(sizeof(Stringpair), 0);
     crm.c1 = chancreate(sizeof(Stringpair), 0);
     crm.c2 = chancreate(sizeof(Stringpair), 0);
     cwrm.c1 = chancreate(sizeof(Stringpair), 0);
     cwrm.c2 = chancreate(sizeof(Stringpair), 0);
-    
+    /*e: [[winctl()]] channels creation */
 
+    /*s: [[winctl()]] alts setup */
     alts[WKey].c = w->ck;
     alts[WKey].v = &kbdr;
     alts[WKey].op = CHANRCV;
+    /*x: [[winctl()]] alts setup */
     alts[WMouse].c = w->mc.c;
     alts[WMouse].v = &w->mc.Mouse;
     alts[WMouse].op = CHANRCV;
-    alts[WMouseread].c = w->mouseread;
-    alts[WMouseread].v = &mrm;
-    alts[WMouseread].op = CHANSND;
+    /*x: [[winctl()]] alts setup */
     alts[WCtl].c = w->cctl;
     alts[WCtl].v = &wcm;
     alts[WCtl].op = CHANRCV;
+    /*x: [[winctl()]] alts setup */
+    alts[WMouseread].c = w->mouseread;
+    alts[WMouseread].v = &mrm;
+    alts[WMouseread].op = CHANSND;
+    /*x: [[winctl()]] alts setup */
     alts[WCwrite].c = w->conswrite;
     alts[WCwrite].v = &cwm;
     alts[WCwrite].op = CHANSND;
     alts[WCread].c = w->consread;
     alts[WCread].v = &crm;
     alts[WCread].op = CHANSND;
+    /*x: [[winctl()]] alts setup */
     alts[WWread].c = w->wctlread;
     alts[WWread].v = &cwrm;
     alts[WWread].op = CHANSND;
+    /*e: [[winctl()]] alts setup */
     alts[NWALT].op = CHANEND;
 
     npart = 0;
     lastb = -1;
     for(;;){
+        /*s: [[winctl()]] alts adjustments */
         if(w->mouseopen && w->mouse.counter != w->mouse.lastcounter)
             alts[WMouseread].op = CHANSND;
         else
             alts[WMouseread].op = CHANNOP;
+        /*x: [[winctl()]] alts adjustments */
         if(!w->scrolling && !w->mouseopen && w->qh>w->org+w->nchars)
             alts[WCwrite].op = CHANNOP;
         else
             alts[WCwrite].op = CHANSND;
-        if(w->deleted || !w->wctlready)
-            alts[WWread].op = CHANNOP;
-        else
-            alts[WWread].op = CHANSND;
+        /*x: [[winctl()]] alts adjustments */
         /* this code depends on NL and EOT fitting in a single byte */
         /* kind of expensive for each loop; worth precomputing? */
         if(w->holding)
@@ -349,17 +370,23 @@ winctl(void *arg)
                 }
             }
         }
+        /*x: [[winctl()]] alts adjustments */
+        if(w->deleted || !w->wctlready)
+            alts[WWread].op = CHANNOP;
+        else
+            alts[WWread].op = CHANSND;
+        /*e: [[winctl()]] alts adjustments */
 
         // event loop
         switch(alt(alts)){
+        /*s: [[winctl()]] event loop cases */
         case WKey:
             for(i=0; kbdr[i]!=L'\0'; i++)
                 wkeyctl(w, kbdr[i]);
-//			wkeyctl(w, r);
-///			while(nbrecv(w->ck, &r))
-//				wkeyctl(w, r);
             break;
+        /*x: [[winctl()]] event loop cases */
         case WMouse:
+            /*s: [[winctl()]] WMouse case if mouseopen */
             if(w->mouseopen) {
                 w->mouse.counter++;
 
@@ -374,9 +401,24 @@ winctl(void *arg)
                     mp->counter = w->mouse.counter;
                     lastb = w->mc.buttons;
                 }
-            } else
+            }
+            /*e: [[winctl()]] WMouse case if mouseopen */
+            else
                 wmousectl(w);
             break;
+        /*x: [[winctl()]] event loop cases */
+        case WCtl:
+            if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
+                chanfree(crm.c1);
+                chanfree(crm.c2);
+                chanfree(mrm.cm);
+                chanfree(cwm.cw);
+                chanfree(cwrm.c1);
+                chanfree(cwrm.c2);
+                threadexits(nil);
+            }
+            continue;
+        /*x: [[winctl()]] event loop cases */
         case WMouseread:
             /* send a queued event or, if the queue is empty, the current state */
             /* if the queue has filled, we discard all the events it contained. */
@@ -392,19 +434,7 @@ winctl(void *arg)
             w->mouse.lastcounter = m.counter;
             send(mrm.cm, &m.Mouse);
             continue;
-
-        case WCtl:
-            if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
-                chanfree(crm.c1);
-                chanfree(crm.c2);
-                chanfree(mrm.cm);
-                chanfree(cwm.cw);
-                chanfree(cwrm.c1);
-                chanfree(cwrm.c2);
-                threadexits(nil);
-            }
-            continue;
-
+        /*x: [[winctl()]] event loop cases */
         case WCwrite:
             recv(cwm.cw, &pair);
             rp = pair.s;
@@ -447,7 +477,7 @@ winctl(void *arg)
             wscrdraw(w);
             free(rp);
             break;
-
+        /*x: [[winctl()]] event loop cases */
         case WCread:
             recv(crm.c1, &pair);
             t = pair.s;
@@ -482,7 +512,7 @@ winctl(void *arg)
             pair.ns = i;
             send(crm.c2, &pair);
             continue;
-
+        /*x: [[winctl()]] event loop cases */
         case WWread:
             w->wctlready = 0;
             recv(cwrm.c1, &pair);
@@ -503,8 +533,8 @@ winctl(void *arg)
             }
             send(cwrm.c2, &pair);
             continue;
+        /*e: [[winctl()]] event loop cases */
         }
-
 
         if(!w->deleted)
             flushimage(display, true);
@@ -738,6 +768,7 @@ wkeyctl(Window *w, Rune r)
         waddraw(w, &r, 1);
         return;
     }
+
     if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */
         if(w->holding)
             --w->holding;

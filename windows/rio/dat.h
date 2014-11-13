@@ -111,6 +111,7 @@ enum	/* control messages */
 /*s: struct Wctlmesg */
 struct Wctlmesg
 {
+    // enum<wctlmesgkind>
     int		type;
     Rectangle	r;
     Image	*image;
@@ -198,6 +199,9 @@ struct Window
     //--------------------------------------------------------------------
     /*s: [[Window]] mouse fields */
     Mousectl	mc; // mc.c is the mouse event listening channel
+    /*x: [[Window]] mouse fields */
+    Mouseinfo	mouse;
+    /*x: [[Window]] mouse fields */
     Cursor		cursor;
     Cursor		*cursorp;
     /*e: [[Window]] mouse fields */
@@ -221,6 +225,7 @@ struct Window
     //--------------------------------------------------------------------
     /*s: [[Window]] config fields */
     bool_byte	scrolling;
+    /*x: [[Window]] config fields */
     bool_byte	holding;
     /*x: [[Window]] config fields */
     bool_byte	deleted;
@@ -229,17 +234,23 @@ struct Window
     /*e: [[Window]] config fields */
 
     //--------------------------------------------------------------------
-    // Text
+    // Textual Window
     //--------------------------------------------------------------------
-    /*s: [[Window]] text fields */
-    /*e: [[Window]] text fields */
+    /*s: [[Window]] textual window fields */
+    Rectangle	scrollr;
+    /*e: [[Window]] textual window fields */
+
+    //--------------------------------------------------------------------
+    // Graphical Window
+    //--------------------------------------------------------------------
+    /*s: [[Window]] graphical window fields */
+    bool_byte	mouseopen;
+    /*e: [[Window]] graphical window fields */
 
     //--------------------------------------------------------------------
     // Misc
     //--------------------------------------------------------------------
     /*s: [[Window]] other fields */
-    Mouseinfo	mouse;
-    /*x: [[Window]] other fields */
     uint		nr;	/* number of runes in window */
     uint		maxr;	/* number of runes allocated in r */
     Rune		*r;
@@ -250,20 +261,20 @@ struct Window
     uint		q1;
     uint		qh;
     uint		namecount;
-    Rectangle	scrollr;
     int	 	resized;
     int	 	wctlready;
     Rectangle	lastsr;
     int	 	notefd;
     bool_byte	ctlopen;
     bool_byte	wctlopen;
-    bool_byte	mouseopen;
     int		pid;
     char		*dir;
     /*x: [[Window]] other fields */
-    Channel		*conswrite;	/* chan(Conswritemesg) */
-    Channel		*consread;	/* chan(Consreadmesg) */
     Channel		*mouseread;	/* chan(Mousereadmesg) */
+    /*x: [[Window]] other fields */
+    Channel		*consread;	/* chan(Consreadmesg) */
+    Channel		*conswrite;	/* chan(Conswritemesg) */
+    /*x: [[Window]] other fields */
     Channel		*wctlread;	/* chan(Consreadmesg) */
     /*x: [[Window]] other fields */
     int	 	topped;

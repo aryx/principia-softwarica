@@ -415,13 +415,17 @@ keyboardthread(void*)
     for(;;){
         rp = buf[n];
         n = 1-n;
+
+        // Listen
         recv(keyboardctl->c, rp);
+
         for(i=1; i<nelem(buf[0])-1; i++)
             if(nbrecv(keyboardctl->c, rp+i) <= 0)
                 break;
         rp[i] = L'\0';
 
         if(input != nil)
+            // Dispatch, to current window thread!
             sendp(input->ck, rp);
     }
 }
@@ -552,9 +556,10 @@ keyboardhide(void)
 
 /*s: enum Mxxx */
 enum {
-    MReshape,
     MMouse,
-
+    /*s: enum Mxxx cases */
+    MReshape,
+    /*e: enum Mxxx cases */
     NALT
 };
 /*e: enum Mxxx */
@@ -563,58 +568,75 @@ enum {
 void
 mousethread(void*)
 {
-    bool sending, inside, scrolling, moving, band;
-    Window *oin, *w;
+    /*s: [[mousethread()]] locals */
+    static Alt alts[NALT+1];
+    /*x: [[mousethread()]] locals */
     Window *winput;
+    Point xy;
+    /*x: [[mousethread()]] locals */
+    bool sending = false;
+    /*x: [[mousethread()]] locals */
+    bool scrolling = false;
+    /*x: [[mousethread()]] locals */
+    Mouse tmp;
+    /*x: [[mousethread()]] locals */
+    bool moving = false;
+    /*x: [[mousethread()]] locals */
+    bool inside, band;
+    Window *oin, *w;
     Image *i;
     Rectangle r;
-    Point xy;
-    Mouse tmp;
-    static Alt alts[NALT+1];
+    /*e: [[mousethread()]] locals */
 
     threadsetname("mousethread");
-    sending = false;
-    scrolling = false;
-    moving = false;
 
-    alts[MReshape].c = mousectl->resizec;
-    alts[MReshape].v = nil;
-    alts[MReshape].op = CHANRCV;
+    /*s: [[mousethread()]] alts setup */
     alts[MMouse].c = mousectl->c;
     alts[MMouse].v = &mousectl->Mouse;
     alts[MMouse].op = CHANRCV;
+    /*x: [[mousethread()]] alts setup */
+    alts[MReshape].c = mousectl->resizec;
+    alts[MReshape].v = nil;
+    alts[MReshape].op = CHANRCV;
+    /*e: [[mousethread()]] alts setup */
     alts[NALT].op = CHANEND;
 
     for(;;)
         // event loop
         switch(alt(alts)){
-        case MReshape:
-            resized();
-            break;
+        /*s: [[mousethread()]] event loop cases */
         case MMouse:
+            /*s: [[mousethread()]] if wkeyboard and button 6 */
             if(wkeyboard!=nil && (mouse->buttons & (1<<5))){
                 keyboardhide();
                 break;
             }
+            /*e: [[mousethread()]] if wkeyboard and button 6 */
         Again:
             winput = input;
+            /*s: [[mousethread()]] if wkeyboard and ptinrect */
             /* override everything for the keyboard window */
             if(wkeyboard!=nil && ptinrect(mouse->xy, wkeyboard->screenr)){
                 /* make sure it's on top; this call is free if it is */
                 wtopme(wkeyboard);
                 winput = wkeyboard;
             }
+            /*e: [[mousethread()]] if wkeyboard and ptinrect */
 
             if(winput!=nil && winput->i!=nil){
                 /* convert to logical coordinates */
                 xy.x = mouse->xy.x + (winput->i->r.min.x-winput->screenr.min.x);
                 xy.y = mouse->xy.y + (winput->i->r.min.y-winput->screenr.min.y);
 
+                /*s: [[mousethread()]] goto Sending if scroll buttons */
                 /* the up and down scroll buttons are not subject to the usual rules */
                 if((mouse->buttons&(8|16)) && !winput->mouseopen)
                     goto Sending;
+                /*e: [[mousethread()]] goto Sending if scroll buttons */
 
                 inside = ptinrect(mouse->xy, insetrect(winput->screenr, Selborder));
+
+                /*s: [[mousethread()]] adjust scrolling */
                 if(winput->mouseopen)
                     scrolling = false;
                 else 
@@ -622,18 +644,25 @@ mousethread(void*)
                     scrolling = mouse->buttons;
                   else
                     scrolling = mouse->buttons && ptinrect(xy, winput->scrollr);
+                /*e: [[mousethread()]] adjust scrolling */
 
+                /*s: [[mousethread()]] set moving to true for some conditions */
                 /* topped will be zero or less if window has been bottomed */
                 if(sending == false && !scrolling 
-                   && winborder(winput, mouse->xy) && winput->topped>0){
+                   && winborder(winput, mouse->xy) && winput->topped > 0){
                     moving = true;
-                }else 
+                }
+                /*e: [[mousethread()]] set moving to true for some conditions */
+                else 
+                   /*s: [[mousethread()]] set sending to true for some conditions */
                    if(inside && 
                       (scrolling || winput->mouseopen || (mouse->buttons&1)))
-                    sending = true;
+                        sending = true;
+                   /*e: [[mousethread()]] set sending to true for some conditions */
             }else
                 sending = false;
 
+            /*s: [[mousethread()]] if sending */
             if(sending){
             Sending:
                 if(mouse->buttons == 0){
@@ -641,12 +670,17 @@ mousethread(void*)
                     sending = false;
                 }else
                     wsetcursor(winput, false);
+
                 tmp = mousectl->Mouse;
-                tmp.xy = xy;
+                tmp.xy = xy; // logical coordinates
+                // Dispatch, to current window thread!
                 send(winput->mc.c, &tmp);
                 continue;
             }
+            /*e: [[mousethread()]] if sending */
+            /*s: [[mousethread()]] if not sending */
             w = wpointto(mouse->xy);
+
             /* change cursor if over anyone's border */
             if(w != nil)
                 cornercursor(w, mouse->xy, 0);
@@ -676,6 +710,7 @@ mousethread(void*)
 
             if(w != nil)
                 cornercursor(w, mouse->xy, 0);
+
             /* we're not sending the event, but if button is down maybe we should */
             if(mouse->buttons){
                 /* w->topped will be zero or less if window has been bottomed */
@@ -690,20 +725,30 @@ mousethread(void*)
                 }else{
                     /* if button 1 event in the window, top the window and wait for button up. */
                     /* otherwise, top the window and pass the event on */
-                    if(wtop(mouse->xy) && (mouse->buttons!=1 || winborder(w, mouse->xy)))
+                    if(wtop(mouse->xy) 
+                       && (mouse->buttons!=1 || winborder(w, mouse->xy)))
+                        // input changed
                         goto Again;
                     goto Drain;
                 }
             }
             moving = false;
             break;
+            /*e: [[mousethread()]] if not sending */
 
+        /*s: [[mousethread()]] Drain label */
         Drain:
-            do
+            do {
                 readmouse(mousectl);
-            while(mousectl->buttons);
+            } while(mousectl->buttons);
             moving = false;
             goto Again;	/* recalculate mouse position, cursor */
+        /*e: [[mousethread()]] Drain label */
+        /*x: [[mousethread()]] event loop cases */
+        case MReshape:
+            resized();
+            break;
+        /*e: [[mousethread()]] event loop cases */
         }
 }
 /*e: function mousethread */
@@ -1297,24 +1342,32 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 {
     Window *w;
     Mousectl *mc;
-    Channel *cm, *ck, *cctl, *cpid;
+    Channel *cm, *ck, *cctl;
+    Channel *cpid;
     void **arg;
 
     if(i == nil)
         return nil;
 
+    /*s: [[new()]] channels creation */
     cm = chancreate(sizeof(Mouse), 0);
     ck = chancreate(sizeof(Rune*), 0);
     cctl = chancreate(sizeof(Wctlmesg), 4);
+    /*e: [[new()]] channels creation */
+
     cpid = chancreate(sizeof(int), 0);
     if(cm==nil || ck==nil || cctl==nil)
         error("new: channel alloc failed");
 
+    /*s: [[new()]] mc allocation */
     mc = emalloc(sizeof(Mousectl));
     *mc = *mousectl;
     mc->image = i;
     mc->c = cm;
+    /*e: [[new()]] mc allocation */
+
     w = wmk(i, mc, ck, cctl, scrollit);
+
     free(mc);	/* wmk copies *mc */
 
     // growing array
@@ -1359,6 +1412,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     wsetname(w);
     if(dir)
         w->dir = estrdup(dir);
+
     chanfree(cpid);
     return w;
 }

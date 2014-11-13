@@ -187,6 +187,7 @@ Here are other candidates that were considered but ultimately discarded:
 % draw(2?), draw(6?)
 % thread(2?) library! heavy use of channels and threads here
 % window(2) graphics(2)
+% mouse(3)
 
 \section{About this document}
 #include "../docs/latex/About.tex.nw"
@@ -233,6 +234,12 @@ usage(void)
 % the fileserver offer virtual views for the apps running
 % inside the windows
 
+% graphical vs textual windows?
+% mouseopen or not? this has influence on many things.
+% need to explain that early
+
+
+
 %env var:
 %$wsys
 %$wctl
@@ -267,6 +274,9 @@ usage(void)
 % note that can even run rio inside rio!
 
 
+
+
+
 %\section{YYY file format}
 %rio(5)?
 
@@ -297,6 +307,8 @@ usage(void)
 % for the graphic system part see Graphics.tex.nw
 
 % kernel driver vs graphic libs vs rio vs graphical apps
+
+% different levels! kernel, rio, window, client app
 
 % kernel manages the images, so Image* is really an handle ID
 % that can be passed in draw commands to /dev/draw and can be
@@ -493,9 +505,14 @@ struct Window
     <<[[Window]] config fields>>
 
     //--------------------------------------------------------------------
-    // Text
+    // Textual Window
     //--------------------------------------------------------------------
-    <<[[Window]] text fields>>
+    <<[[Window]] textual window fields>>
+
+    //--------------------------------------------------------------------
+    // Graphical Window
+    //--------------------------------------------------------------------
+    <<[[Window]] graphical window fields>>
 
     //--------------------------------------------------------------------
     // Misc
@@ -540,11 +557,6 @@ Window	*input;
 
 
 
-
-
-
-
-
 <<[[Window]] id fields>>=
 int	id;       // /dev/winid
 char	name[32]; // /dev/winname
@@ -572,32 +584,28 @@ Frame;
 % comment?? can simplify the code then?
 
 
-<<[[Window]] mouse fields>>=
-Mousectl	mc; // mc.c is the mouse event listening channel
-Cursor		cursor;
-Cursor		*cursorp;
+<<[[Window]] textual window fields>>=
+Rectangle	scrollr;
 @
+% scrollbar! in addition to frame!
 
 
-<<[[Window]] keyboard fields>>=
-Channel	*ck;		/* chan(Rune[10]) */
-@
-
-
-<<[[Window]] control fields>>=
-Channel	*cctl;		/* chan(Wctlmesg)[20] */
+<<[[Window]] graphical window fields>>=
+bool_byte	mouseopen;
 @
 
 
 
+
+% scroll mode, also a text field
 <<[[Window]] config fields>>=
 bool_byte	scrolling;
+@
+
+<<[[Window]] config fields>>=
 bool_byte	holding;
 @
-
-
-<<[[Window]] text fields>>=
-@
+% ??
 
 
 <<[[Window]] extra fields>>=
@@ -617,10 +625,6 @@ QLock;
 
 %XXXXX
 <<[[Window]] other fields>>=
-Mouseinfo	mouse;
-@
-
-<<[[Window]] other fields>>=
 uint		nr;	/* number of runes in window */
 uint		maxr;	/* number of runes allocated in r */
 Rune		*r;
@@ -631,14 +635,12 @@ uint		q0;
 uint		q1;
 uint		qh;
 uint		namecount;
-Rectangle	scrollr;
 int	 	resized;
 int	 	wctlready;
 Rectangle	lastsr;
 int	 	notefd;
 bool_byte	ctlopen;
 bool_byte	wctlopen;
-bool_byte	mouseopen;
 int		pid;
 char		*dir;
 @
@@ -1030,6 +1032,10 @@ cxfidalloc = chancreate(sizeof(Xfid*), 0);
 cxfidfree = chancreate(sizeof(Xfid*), 0);
 @
 
+
+% there are also lots of channel creation when create
+% windows
+
 \section{Threads creation}
 
 <<constant STACK>>=
@@ -1058,6 +1064,8 @@ xfidinit(void)
 @
 
 
+% also right menu and new create a new window and so a new thread!
+% also each open of a /dev/ file creates a thread?
 
 \section{Misc}
 
@@ -1105,7 +1113,7 @@ free(s);
 
 
 \chapter{Threads}
-% see rio presentation with architecture
+% reput diagram where see many threads in rio slides?
 
 \section{Keyboard thread}
 
@@ -1125,34 +1133,43 @@ keyboardthread(void*)
     for(;;){
         rp = buf[n];
         n = 1-n;
+
+        // Listen
         recv(keyboardctl->c, rp);
+
         for(i=1; i<nelem(buf[0])-1; i++)
             if(nbrecv(keyboardctl->c, rp+i) <= 0)
                 break;
         rp[i] = L'\0';
 
         if(input != nil)
+            // Dispatch, to current window thread!
             sendp(input->ck, rp);
     }
 }
 @
+% no alts(), just a single event, so just recv()
+
+% pretty simple, send key to the window (window ck channel and thread) 
+% with the focus
+
+% why use alternate buffer?
 
 \section{Mouse thread}
 
+
 <<enum Mxxx>>=
 enum {
-    MReshape,
     MMouse,
-
+    <<enum Mxxx cases>>
     NALT
 };
 @
 
-<<global sweeping>>=
-bool	sweeping;
+<<[[mousethread()]] locals>>=
+static Alt alts[NALT+1];
 @
-
-
+% why static? mousethread not called anyway no?
 
 
 
@@ -1160,205 +1177,224 @@ bool	sweeping;
 void
 mousethread(void*)
 {
-    bool sending, inside, scrolling, moving, band;
-    Window *oin, *w;
-    Window *winput;
-    Image *i;
-    Rectangle r;
-    Point xy;
-    Mouse tmp;
-    static Alt alts[NALT+1];
+    <<[[mousethread()]] locals>>
 
     threadsetname("mousethread");
-    sending = false;
-    scrolling = false;
-    moving = false;
 
-    alts[MReshape].c = mousectl->resizec;
-    alts[MReshape].v = nil;
-    alts[MReshape].op = CHANRCV;
-    alts[MMouse].c = mousectl->c;
-    alts[MMouse].v = &mousectl->Mouse;
-    alts[MMouse].op = CHANRCV;
+    <<[[mousethread()]] alts setup>>
     alts[NALT].op = CHANEND;
 
     for(;;)
         // event loop
         switch(alt(alts)){
-        case MReshape:
-            resized();
-            break;
-        case MMouse:
-            if(wkeyboard!=nil && (mouse->buttons & (1<<5))){
-                keyboardhide();
-                break;
-            }
-        Again:
-            winput = input;
-            /* override everything for the keyboard window */
-            if(wkeyboard!=nil && ptinrect(mouse->xy, wkeyboard->screenr)){
-                /* make sure it's on top; this call is free if it is */
-                wtopme(wkeyboard);
-                winput = wkeyboard;
-            }
-
-            if(winput!=nil && winput->i!=nil){
-                /* convert to logical coordinates */
-                xy.x = mouse->xy.x + (winput->i->r.min.x-winput->screenr.min.x);
-                xy.y = mouse->xy.y + (winput->i->r.min.y-winput->screenr.min.y);
-
-                /* the up and down scroll buttons are not subject to the usual rules */
-                if((mouse->buttons&(8|16)) && !winput->mouseopen)
-                    goto Sending;
-
-                inside = ptinrect(mouse->xy, insetrect(winput->screenr, Selborder));
-                if(winput->mouseopen)
-                    scrolling = false;
-                else 
-                  if(scrolling)
-                    scrolling = mouse->buttons;
-                  else
-                    scrolling = mouse->buttons && ptinrect(xy, winput->scrollr);
-
-                /* topped will be zero or less if window has been bottomed */
-                if(sending == false && !scrolling 
-                   && winborder(winput, mouse->xy) && winput->topped>0){
-                    moving = true;
-                }else 
-                   if(inside && 
-                      (scrolling || winput->mouseopen || (mouse->buttons&1)))
-                    sending = true;
-            }else
-                sending = false;
-
-            if(sending){
-            Sending:
-                if(mouse->buttons == 0){
-                    cornercursor(winput, mouse->xy, 0);
-                    sending = false;
-                }else
-                    wsetcursor(winput, false);
-                tmp = mousectl->Mouse;
-                tmp.xy = xy;
-                send(winput->mc.c, &tmp);
-                continue;
-            }
-            w = wpointto(mouse->xy);
-            /* change cursor if over anyone's border */
-            if(w != nil)
-                cornercursor(w, mouse->xy, 0);
-            else
-                riosetcursor(nil, 0);
-
-            if(moving && (mouse->buttons&7)){
-                oin = winput;
-                band = mouse->buttons & 3;
-                sweeping = true;
-                if(band)
-                    i = bandsize(winput);
-                else
-                    i = drag(winput, &r);
-                sweeping = false;
-                if(i != nil){
-                    if(winput == oin){
-                        if(band)
-                            wsendctlmesg(winput, Reshaped, i->r, i);
-                        else
-                            wsendctlmesg(winput, Moved, r, i);
-                        cornercursor(winput, mouse->xy, 1);
-                    }else
-                        freeimage(i);
-                }
-            }
-
-            if(w != nil)
-                cornercursor(w, mouse->xy, 0);
-            /* we're not sending the event, but if button is down maybe we should */
-            if(mouse->buttons){
-                /* w->topped will be zero or less if window has been bottomed */
-                if(w==nil || (w==winput && w->topped>0)){
-                    if(mouse->buttons & 1){
-                        ;
-                    }else if(mouse->buttons & 2){
-                        if(winput && !winput->mouseopen)
-                            button2menu(winput);
-                    }else if(mouse->buttons & 4)
-                        button3menu();
-                }else{
-                    /* if button 1 event in the window, top the window and wait for button up. */
-                    /* otherwise, top the window and pass the event on */
-                    if(wtop(mouse->xy) && (mouse->buttons!=1 || winborder(w, mouse->xy)))
-                        goto Again;
-                    goto Drain;
-                }
-            }
-            moving = false;
-            break;
-
-        Drain:
-            do
-                readmouse(mousectl);
-            while(mousectl->buttons);
-            moving = false;
-            goto Again;	/* recalculate mouse position, cursor */
+        <<[[mousethread()]] event loop cases>>
         }
 }
 @
 
+<<[[mousethread()]] alts setup>>=
+alts[MMouse].c = mousectl->c;
+alts[MMouse].v = &mousectl->Mouse;
+alts[MMouse].op = CHANRCV;
+@
 
 
+% different than keyboard, here doe not always dispatch to the
+% (possibly graphical) window.
+% The mouse action must be interpreted by rio itself as it may relate
+% to windows managment! mv, resize, etc.
+
+<<[[mousethread()]] locals>>=
+Window *winput;
+Point xy;
+@
+
+<<[[mousethread()]] locals>>=
+bool sending = false;
+@
+% application(client) vs system (rio) mouse event!
 
 
+<<[[mousethread()]] event loop cases>>=
+case MMouse:
+    <<[[mousethread()]] if wkeyboard and button 6>>
+Again:
+    winput = input;
+    <<[[mousethread()]] if wkeyboard and ptinrect>>
 
-% from MReshape, how can get this event?
-<<function resized>>=
-void
-resized(void)
-{
-    Image *im;
-    int i, j, ishidden;
-    Rectangle r;
-    Point o, n;
-    Window *w;
+    if(winput!=nil && winput->i!=nil){
+        /* convert to logical coordinates */
+        xy.x = mouse->xy.x + (winput->i->r.min.x-winput->screenr.min.x);
+        xy.y = mouse->xy.y + (winput->i->r.min.y-winput->screenr.min.y);
 
-    if(getwindow(display, Refnone) < 0)
-        error("failed to re-attach window");
-    freescrtemps();
-    view = screen;
-    freescreen(wscreen);
-    wscreen = allocscreen(screen, background, 0);
-    if(wscreen == nil)
-        error("can't re-allocate screen");
-    draw(view, view->r, background, nil, ZP);
-    o = subpt(viewr.max, viewr.min);
-    n = subpt(view->clipr.max, view->clipr.min);
-    for(i=0; i<nwindow; i++){
-        w = window[i];
-        if(w->deleted)
-            continue;
-        r = rectsubpt(w->i->r, viewr.min);
-        r.min.x = (r.min.x*n.x)/o.x;
-        r.min.y = (r.min.y*n.y)/o.y;
-        r.max.x = (r.max.x*n.x)/o.x;
-        r.max.y = (r.max.y*n.y)/o.y;
-        r = rectaddpt(r, screen->clipr.min);
-        ishidden = 0;
-        for(j=0; j<nhidden; j++)
-            if(w == hidden[j]){
-                ishidden = 1;
-                break;
-            }
-        if(ishidden){
-            im = allocimage(display, r, screen->chan, 0, DWhite);
-            r = ZR;
-        }else
-            im = allocwindow(wscreen, r, Refbackup, DWhite);
-        if(im)
-            wsendctlmesg(w, Reshaped, r, im);
-    }
-    viewr = screen->r;
-    flushimage(display, 1);
+        <<[[mousethread()]] goto Sending if scroll buttons>>
+
+        inside = ptinrect(mouse->xy, insetrect(winput->screenr, Selborder));
+
+        <<[[mousethread()]] adjust scrolling>>
+
+        <<[[mousethread()]] set moving to true for some conditions>>
+        else 
+           <<[[mousethread()]] set sending to true for some conditions>>
+    }else
+        sending = false;
+
+    <<[[mousethread()]] if sending>>
+    <<[[mousethread()]] if not sending>>
+
+<<[[mousethread()]] Drain label>>
+@
+
+\subsection{Application mouse events}
+
+<<[[mousethread()]] set sending to true for some conditions>>=
+if(inside && 
+   (scrolling || winput->mouseopen || (mouse->buttons&1)))
+     sending = true;
+@
+
+
+<<[[mousethread()]] locals>>=
+bool scrolling = false;
+@
+
+% window terminal have scrollbars
+<<[[mousethread()]] adjust scrolling>>=
+if(winput->mouseopen)
+    scrolling = false;
+else 
+  if(scrolling)
+    scrolling = mouse->buttons;
+  else
+    scrolling = mouse->buttons && ptinrect(xy, winput->scrollr);
+@
+
+<<[[mousethread()]] locals>>=
+Mouse tmp;
+@
+
+<<[[mousethread()]] if sending>>=
+if(sending){
+Sending:
+    if(mouse->buttons == 0){
+        cornercursor(winput, mouse->xy, 0);
+        sending = false;
+    }else
+        wsetcursor(winput, false);
+
+    tmp = mousectl->Mouse;
+    tmp.xy = xy; // logical coordinates
+    // Dispatch, to current window thread!
+    send(winput->mc.c, &tmp);
+    continue;
 }
+@
+
+<<[[mousethread()]] goto Sending if scroll buttons>>=
+/* the up and down scroll buttons are not subject to the usual rules */
+if((mouse->buttons&(8|16)) && !winput->mouseopen)
+    goto Sending;
+@
+
+\subsection{Windowing system mouse events}
+
+<<global sweeping>>=
+bool	sweeping;
+@
+
+
+<<[[mousethread()]] locals>>=
+bool moving = false;
+@
+
+<<[[mousethread()]] set moving to true for some conditions>>=
+/* topped will be zero or less if window has been bottomed */
+if(sending == false && !scrolling 
+   && winborder(winput, mouse->xy) && winput->topped > 0){
+    moving = true;
+}
+@
+
+\ifallcode
+<<[[mousethread()]] locals>>=
+bool inside, band;
+Window *oin, *w;
+Image *i;
+Rectangle r;
+@
+\fi
+
+
+
+
+
+
+<<[[mousethread()]] if not sending>>=
+w = wpointto(mouse->xy);
+
+/* change cursor if over anyone's border */
+if(w != nil)
+    cornercursor(w, mouse->xy, 0);
+else
+    riosetcursor(nil, 0);
+
+if(moving && (mouse->buttons&7)){
+    oin = winput;
+    band = mouse->buttons & 3;
+    sweeping = true;
+    if(band)
+        i = bandsize(winput);
+    else
+        i = drag(winput, &r);
+    sweeping = false;
+    if(i != nil){
+        if(winput == oin){
+            if(band)
+                wsendctlmesg(winput, Reshaped, i->r, i);
+            else
+                wsendctlmesg(winput, Moved, r, i);
+            cornercursor(winput, mouse->xy, 1);
+        }else
+            freeimage(i);
+    }
+}
+
+if(w != nil)
+    cornercursor(w, mouse->xy, 0);
+
+/* we're not sending the event, but if button is down maybe we should */
+if(mouse->buttons){
+    /* w->topped will be zero or less if window has been bottomed */
+    if(w==nil || (w==winput && w->topped>0)){
+        if(mouse->buttons & 1){
+            ;
+        }else if(mouse->buttons & 2){
+            if(winput && !winput->mouseopen)
+                button2menu(winput);
+        }else if(mouse->buttons & 4)
+            button3menu();
+    }else{
+        /* if button 1 event in the window, top the window and wait for button up. */
+        /* otherwise, top the window and pass the event on */
+        if(wtop(mouse->xy) 
+           && (mouse->buttons!=1 || winborder(w, mouse->xy)))
+            // input changed
+            goto Again;
+        goto Drain;
+    }
+}
+moving = false;
+break;
+@
+
+
+<<[[mousethread()]] Drain label>>=
+Drain:
+    do {
+        readmouse(mousectl);
+    } while(mousectl->buttons);
+    moving = false;
+    goto Again;	/* recalculate mouse position, cursor */
 @
 
 
@@ -1555,6 +1591,8 @@ cornerpt(Rectangle r, Point p, int which)
 
 \section{Windows threads}
 
+% listen to many events!
+
 % keyboard listening
 % mouse listening
 % cons listening
@@ -1564,12 +1602,14 @@ cornerpt(Rectangle r, Point p, int which)
 enum { 
     WKey, 
     WMouse, 
+
     WMouseread, // ??
 
     WCtl, //!!!
 
-    WCwrite, 
+    WCwrite,
     WCread, 
+
     WWread, // ??
 
     NWALT 
@@ -1577,52 +1617,148 @@ enum {
 @
 
 
-<<[[Window]] other fields>>=
-Channel		*conswrite;	/* chan(Conswritemesg) */
-Channel		*consread;	/* chan(Consreadmesg) */
-Channel		*mouseread;	/* chan(Mousereadmesg) */
-Channel		*wctlread;	/* chan(Consreadmesg) */
+<<[[winctl()]] locals>>=
+Window *w;
+Alt alts[NWALT+1];
 @
 
-<<struct Conswritemesg>>=
-struct Conswritemesg
+
+\ifallcode
+<<[[winctl()]] locals>>=
+char buf[4*12+1];
+Rune *rp, *bp, *tp, *up;
+uint qh;
+int nr, nb, c, wid, i, npart, initial, lastb;
+char *s, *t, part[3];
+@
+\fi
+
+
+
+% ... -> new() -> threadcreate(<>, w)
+<<function winctl>>=
+void
+winctl(void *arg)
 {
-    Channel	*cw;		/* chan(Stringpair) */
-};
+    <<[[winctl()]] locals>>
+    
+    w = arg;
+    snprint(buf, sizeof buf, "winctl-id%d", w->id);
+    threadsetname(buf);
+
+    <<[[winctl()]] channels creation>>
+
+    <<[[winctl()]] alts setup>>
+    alts[NWALT].op = CHANEND;
+
+    npart = 0;
+    lastb = -1;
+    for(;;){
+        <<[[winctl()]] alts adjustments>>
+
+        // event loop
+        switch(alt(alts)){
+        <<[[winctl()]] event loop cases>>
+        }
+
+        if(!w->deleted)
+            flushimage(display, true);
+    }
+}
 @
 
-<<struct Consreadmesg>>=
-struct Consreadmesg
-{
-    Channel	*c1;		/* chan(tuple(char*, int) == Stringpair) */
-    Channel	*c2;		/* chan(tuple(char*, int) == Stringpair) */
-};
-@
 
-<<struct Mousereadmesg>>=
-struct Mousereadmesg
-{
-    Channel	*cm;		/* chan(Mouse) */
-};
-@
 
-<<struct Stringpair>>=
-struct Stringpair	/* rune and nrune or byte and nbyte */
-{
-    void	*s;
-    int		ns;
-};
+
+
+
+% m = mouse, c = cons
+% r = read, w = write
+% m = message
+
+<<[[winctl()]] channels creation>>=
+mrm.cm = chancreate(sizeof(Mouse), 0);
+cwm.cw = chancreate(sizeof(Stringpair), 0);
+crm.c1 = chancreate(sizeof(Stringpair), 0);
+crm.c2 = chancreate(sizeof(Stringpair), 0);
+cwrm.c1 = chancreate(sizeof(Stringpair), 0);
+cwrm.c2 = chancreate(sizeof(Stringpair), 0);
 @
 
 
-<<struct Mousestate>>=
-struct Mousestate
-{
-    Mouse;
-    ulong	counter;	/* serial no. of mouse event */
-};
+
+
+
+\subsection{Key events listening}
+
+<<[[Window]] keyboard fields>>=
+Channel	*ck;		/* chan(Rune[10]) */
 @
 
+
+<<[[winctl()]] locals>>=
+Rune *kbdr;
+@
+
+<<[[winctl()]] alts setup>>=
+alts[WKey].c = w->ck;
+alts[WKey].v = &kbdr;
+alts[WKey].op = CHANRCV;
+@
+
+<<[[winctl()]] event loop cases>>=
+case WKey:
+    for(i=0; kbdr[i]!=L'\0'; i++)
+        wkeyctl(w, kbdr[i]);
+    break;
+@
+
+%old:
+%//		wkeyctl(w, r);
+%//		while(nbrecv(w->ck, &r))
+%//			wkeyctl(w, r);
+
+
+\subsection{Mouse events listening}
+
+<<[[Window]] mouse fields>>=
+Mousectl	mc; // mc.c is the mouse event listening channel
+@
+% note that not all mouse events arrive here, only the one
+% mousethread think they are destined for this window
+
+<<[[winctl()]] alts setup>>=
+alts[WMouse].c = w->mc.c;
+alts[WMouse].v = &w->mc.Mouse;
+alts[WMouse].op = CHANRCV;
+@
+
+
+
+
+% LP split mouseopen!
+<<[[winctl()]] event loop cases>>=
+case WMouse:
+    <<[[winctl()]] WMouse case if mouseopen>>
+    else
+        wmousectl(w);
+    break;
+@
+
+
+
+
+
+
+
+
+% mv in /dev/mouse reading maybe, when mouseopen mode!
+% (meating graphical app probably)
+
+
+<<[[Window]] mouse fields>>=
+Mouseinfo	mouse;
+@
 
 <<struct Mouseinfo>>=
 struct Mouseinfo
@@ -1637,262 +1773,345 @@ struct Mouseinfo
 };	
 @
 
-
-
-<<[[winctl()]] locals>>=
-Window *w;
-char buf[4*12+1];
-Alt alts[NWALT+1];
-Wctlmesg wcm;
-
-Rune *rp, *bp, *tp, *up, *kbdr;
-uint qh;
-int nr, nb, c, wid, i, npart, initial, lastb;
-char *s, *t, part[3];
-Mousestate *mp, m;
-
-Mousereadmesg mrm;
-Conswritemesg cwm;
-Consreadmesg crm;
-Consreadmesg cwrm;
-Stringpair pair;
+<<struct Mousestate>>=
+struct Mousestate
+{
+    Mouse;
+    ulong	counter;	/* serial no. of mouse event */
+};
 @
 
-% ... -> new() -> threadcreate(<>)
-<<function winctl>>=
-void
-winctl(void *arg)
-{
-    <<[[winctl()]] locals>>
-    
-    w = arg;
-    snprint(buf, sizeof buf, "winctl-id%d", w->id);
-    threadsetname(buf);
-
-    mrm.cm = chancreate(sizeof(Mouse), 0);
-    cwm.cw = chancreate(sizeof(Stringpair), 0);
-    crm.c1 = chancreate(sizeof(Stringpair), 0);
-    crm.c2 = chancreate(sizeof(Stringpair), 0);
-    cwrm.c1 = chancreate(sizeof(Stringpair), 0);
-    cwrm.c2 = chancreate(sizeof(Stringpair), 0);
-    
-
-    alts[WKey].c = w->ck;
-    alts[WKey].v = &kbdr;
-    alts[WKey].op = CHANRCV;
-    alts[WMouse].c = w->mc.c;
-    alts[WMouse].v = &w->mc.Mouse;
-    alts[WMouse].op = CHANRCV;
-    alts[WMouseread].c = w->mouseread;
-    alts[WMouseread].v = &mrm;
-    alts[WMouseread].op = CHANSND;
-    alts[WCtl].c = w->cctl;
-    alts[WCtl].v = &wcm;
-    alts[WCtl].op = CHANRCV;
-    alts[WCwrite].c = w->conswrite;
-    alts[WCwrite].v = &cwm;
-    alts[WCwrite].op = CHANSND;
-    alts[WCread].c = w->consread;
-    alts[WCread].v = &crm;
-    alts[WCread].op = CHANSND;
-    alts[WWread].c = w->wctlread;
-    alts[WWread].v = &cwrm;
-    alts[WWread].op = CHANSND;
-    alts[NWALT].op = CHANEND;
-
-    npart = 0;
-    lastb = -1;
-    for(;;){
-        if(w->mouseopen && w->mouse.counter != w->mouse.lastcounter)
-            alts[WMouseread].op = CHANSND;
-        else
-            alts[WMouseread].op = CHANNOP;
-        if(!w->scrolling && !w->mouseopen && w->qh>w->org+w->nchars)
-            alts[WCwrite].op = CHANNOP;
-        else
-            alts[WCwrite].op = CHANSND;
-        if(w->deleted || !w->wctlready)
-            alts[WWread].op = CHANNOP;
-        else
-            alts[WWread].op = CHANSND;
-        /* this code depends on NL and EOT fitting in a single byte */
-        /* kind of expensive for each loop; worth precomputing? */
-        if(w->holding)
-            alts[WCread].op = CHANNOP;
-        else if(npart || (w->rawing && w->nraw>0))
-            alts[WCread].op = CHANSND;
-        else{
-            alts[WCread].op = CHANNOP;
-            for(i=w->qh; i<w->nr; i++){
-                c = w->r[i];
-                if(c=='\n' || c=='\004'){
-                    alts[WCread].op = CHANSND;
-                    break;
-                }
-            }
-        }
-
-        // event loop
-        switch(alt(alts)){
-        case WKey:
-            for(i=0; kbdr[i]!=L'\0'; i++)
-                wkeyctl(w, kbdr[i]);
-//			wkeyctl(w, r);
-///			while(nbrecv(w->ck, &r))
-//				wkeyctl(w, r);
-            break;
-        case WMouse:
-            if(w->mouseopen) {
-                w->mouse.counter++;
-
-                /* queue click events */
-                if(!w->mouse.qfull && lastb != w->mc.buttons) {	/* add to ring */
-                    mp = &w->mouse.queue[w->mouse.wi];
-                    if(++w->mouse.wi == nelem(w->mouse.queue))
-                        w->mouse.wi = 0;
-                    if(w->mouse.wi == w->mouse.ri)
-                        w->mouse.qfull = true;
-                    mp->Mouse = w->mc;
-                    mp->counter = w->mouse.counter;
-                    lastb = w->mc.buttons;
-                }
-            } else
-                wmousectl(w);
-            break;
-        case WMouseread:
-            /* send a queued event or, if the queue is empty, the current state */
-            /* if the queue has filled, we discard all the events it contained. */
-            /* the intent is to discard frantic clicking by the user during long latencies. */
-            w->mouse.qfull = false;
-            if(w->mouse.wi != w->mouse.ri) {
-                m = w->mouse.queue[w->mouse.ri];
-                if(++w->mouse.ri == nelem(w->mouse.queue))
-                    w->mouse.ri = 0;
-            } else
-                m = (Mousestate){w->mc.Mouse, w->mouse.counter};
-
-            w->mouse.lastcounter = m.counter;
-            send(mrm.cm, &m.Mouse);
-            continue;
-
-        case WCtl:
-            if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
-                chanfree(crm.c1);
-                chanfree(crm.c2);
-                chanfree(mrm.cm);
-                chanfree(cwm.cw);
-                chanfree(cwrm.c1);
-                chanfree(cwrm.c2);
-                threadexits(nil);
-            }
-            continue;
-
-        case WCwrite:
-            recv(cwm.cw, &pair);
-            rp = pair.s;
-            nr = pair.ns;
-            bp = rp;
-            for(i=0; i<nr; i++)
-                if(*bp++ == '\b'){
-                    --bp;
-                    initial = 0;
-                    tp = runemalloc(nr);
-                    runemove(tp, rp, i);
-                    up = tp+i;
-                    for(; i<nr; i++){
-                        *up = *bp++;
-                        if(*up == '\b')
-                            if(up == tp)
-                                initial++;
-                            else
-                                --up;
-                        else
-                            up++;
-                    }
-                    if(initial){
-                        if(initial > w->qh)
-                            initial = w->qh;
-                        qh = w->qh-initial;
-                        wdelete(w, qh, qh+initial);
-                        w->qh = qh;
-                    }
-                    free(rp);
-                    rp = tp;
-                    nr = up-tp;
-                    rp[nr] = 0;
-                    break;
-                }
-            w->qh = winsert(w, rp, nr, w->qh)+nr;
-            if(w->scrolling || w->mouseopen)
-                wshow(w, w->qh);
-            wsetselect(w, w->q0, w->q1);
-            wscrdraw(w);
-            free(rp);
-            break;
-
-        case WCread:
-            recv(crm.c1, &pair);
-            t = pair.s;
-            nb = pair.ns;
-            i = npart;
-            npart = 0;
-            if(i)
-                memmove(t, part, i);
-            while(i<nb && (w->qh<w->nr || w->nraw>0)){
-                if(w->qh == w->nr){
-                    wid = runetochar(t+i, &w->raw[0]);
-                    w->nraw--;
-                    runemove(w->raw, w->raw+1, w->nraw);
-                }else
-                    wid = runetochar(t+i, &w->r[w->qh++]);
-                c = t[i];	/* knows break characters fit in a byte */
-                i += wid;
-                if(!w->rawing && (c == '\n' || c=='\004')){
-                    if(c == '\004')
-                        i--;
-                    break;
-                }
-            }
-            if(i==nb && w->qh<w->nr && w->r[w->qh]=='\004')
-                w->qh++;
-            if(i > nb){
-                npart = i-nb;
-                memmove(part, t+nb, npart);
-                i = nb;
-            }
-            pair.s = t;
-            pair.ns = i;
-            send(crm.c2, &pair);
-            continue;
-
-        case WWread:
-            w->wctlready = 0;
-            recv(cwrm.c1, &pair);
-            if(w->deleted || w->i==nil)
-                pair.ns = sprint(pair.s, "");
-            else{
-                s = "visible";
-                for(i=0; i<nhidden; i++)
-                    if(hidden[i] == w){
-                        s = "hidden";
-                        break;
-                    }
-                t = "notcurrent";
-                if(w == input)
-                    t = "current";
-                pair.ns = snprint(pair.s, pair.ns, "%11d %11d %11d %11d %s %s ",
-                    w->i->r.min.x, w->i->r.min.y, w->i->r.max.x, w->i->r.max.y, t, s);
-            }
-            send(cwrm.c2, &pair);
-            continue;
-        }
+<<[[winctl()]] locals>>=
+Mousestate *mp, m;
+@
 
 
-        if(!w->deleted)
-            flushimage(display, true);
+<<[[winctl()]] WMouse case if mouseopen>>=
+if(w->mouseopen) {
+    w->mouse.counter++;
+
+    /* queue click events */
+    if(!w->mouse.qfull && lastb != w->mc.buttons) {	/* add to ring */
+        mp = &w->mouse.queue[w->mouse.wi];
+        if(++w->mouse.wi == nelem(w->mouse.queue))
+            w->mouse.wi = 0;
+        if(w->mouse.wi == w->mouse.ri)
+            w->mouse.qfull = true;
+        mp->Mouse = w->mc;
+        mp->counter = w->mouse.counter;
+        lastb = w->mc.buttons;
     }
 }
 @
+
+
+
+\subsection{Control events listening}
+% e.g. resize, delete, hide, etc.
+
+<<[[Window]] control fields>>=
+Channel	*cctl;		/* chan(Wctlmesg)[20] */
+@
+
+<<[[winctl()]] locals>>=
+Wctlmesg wcm;
+@
+
+<<[[winctl()]] alts setup>>=
+alts[WCtl].c = w->cctl;
+alts[WCtl].v = &wcm;
+alts[WCtl].op = CHANRCV;
+@
+
+
+<<[[winctl()]] event loop cases>>=
+case WCtl:
+    if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
+        chanfree(crm.c1);
+        chanfree(crm.c2);
+        chanfree(mrm.cm);
+        chanfree(cwm.cw);
+        chanfree(cwrm.c1);
+        chanfree(cwrm.c2);
+        threadexits(nil);
+    }
+    continue;
+@
+
+
+
+
+\subsection{[[/dev/mouse  emitting}
+% not sure it's actually /dev/mouse
+
+<<[[Window]] other fields>>=
+Channel		*mouseread;	/* chan(Mousereadmesg) */
+@
+
+<<struct Mousereadmesg>>=
+struct Mousereadmesg
+{
+    Channel	*cm;		/* chan(Mouse) */
+};
+@
+
+
+<<[[winctl()]] locals>>=
+Mousereadmesg mrm;
+@
+
+<<[[winctl()]] alts setup>>=
+alts[WMouseread].c = w->mouseread;
+alts[WMouseread].v = &mrm;
+alts[WMouseread].op = CHANSND;
+@
+%CHANSND here!!
+
+<<[[winctl()]] alts adjustments>>=
+if(w->mouseopen && w->mouse.counter != w->mouse.lastcounter)
+    alts[WMouseread].op = CHANSND;
+else
+    alts[WMouseread].op = CHANNOP;
+@
+
+
+<<[[winctl()]] event loop cases>>=
+case WMouseread:
+    /* send a queued event or, if the queue is empty, the current state */
+    /* if the queue has filled, we discard all the events it contained. */
+    /* the intent is to discard frantic clicking by the user during long latencies. */
+    w->mouse.qfull = false;
+    if(w->mouse.wi != w->mouse.ri) {
+        m = w->mouse.queue[w->mouse.ri];
+        if(++w->mouse.ri == nelem(w->mouse.queue))
+            w->mouse.ri = 0;
+    } else
+        m = (Mousestate){w->mc.Mouse, w->mouse.counter};
+
+    w->mouse.lastcounter = m.counter;
+    send(mrm.cm, &m.Mouse);
+    continue;
+@
+
+
+
+\subsection{[[/dev/cons]] emitting}
+
+<<[[Window]] other fields>>=
+Channel		*consread;	/* chan(Consreadmesg) */
+Channel		*conswrite;	/* chan(Conswritemesg) */
+@
+
+<<struct Consreadmesg>>=
+struct Consreadmesg
+{
+    Channel	*c1;		/* chan(tuple(char*, int) == Stringpair) */
+    Channel	*c2;		/* chan(tuple(char*, int) == Stringpair) */
+};
+@
+% pass channel inside channel ... subtle
+
+<<struct Conswritemesg>>=
+struct Conswritemesg
+{
+    Channel	*cw;		/* chan(Stringpair) */
+};
+@
+
+<<struct Stringpair>>=
+struct Stringpair	/* rune and nrune or byte and nbyte */
+{
+    void	*s;
+    int		ns;
+};
+@
+
+
+
+<<[[winctl()]] locals>>=
+Conswritemesg cwm;
+Consreadmesg crm;
+@
+
+
+<<[[winctl()]] alts setup>>=
+alts[WCwrite].c = w->conswrite;
+alts[WCwrite].v = &cwm;
+alts[WCwrite].op = CHANSND;
+alts[WCread].c = w->consread;
+alts[WCread].v = &crm;
+alts[WCread].op = CHANSND;
+@
+% CHANSND!!
+
+<<[[winctl()]] alts adjustments>>=
+if(!w->scrolling && !w->mouseopen && w->qh>w->org+w->nchars)
+    alts[WCwrite].op = CHANNOP;
+else
+    alts[WCwrite].op = CHANSND;
+@
+
+
+
+<<[[winctl()]] alts adjustments>>=
+/* this code depends on NL and EOT fitting in a single byte */
+/* kind of expensive for each loop; worth precomputing? */
+if(w->holding)
+    alts[WCread].op = CHANNOP;
+else if(npart || (w->rawing && w->nraw>0))
+    alts[WCread].op = CHANSND;
+else{
+    alts[WCread].op = CHANNOP;
+    for(i=w->qh; i<w->nr; i++){
+        c = w->r[i];
+        if(c=='\n' || c=='\004'){
+            alts[WCread].op = CHANSND;
+            break;
+        }
+    }
+}
+@
+
+
+<<[[winctl()]] locals>>=
+Stringpair pair;
+@
+
+<<[[winctl()]] event loop cases>>=
+case WCwrite:
+    recv(cwm.cw, &pair);
+    rp = pair.s;
+    nr = pair.ns;
+    bp = rp;
+    for(i=0; i<nr; i++)
+        if(*bp++ == '\b'){
+            --bp;
+            initial = 0;
+            tp = runemalloc(nr);
+            runemove(tp, rp, i);
+            up = tp+i;
+            for(; i<nr; i++){
+                *up = *bp++;
+                if(*up == '\b')
+                    if(up == tp)
+                        initial++;
+                    else
+                        --up;
+                else
+                    up++;
+            }
+            if(initial){
+                if(initial > w->qh)
+                    initial = w->qh;
+                qh = w->qh-initial;
+                wdelete(w, qh, qh+initial);
+                w->qh = qh;
+            }
+            free(rp);
+            rp = tp;
+            nr = up-tp;
+            rp[nr] = 0;
+            break;
+        }
+    w->qh = winsert(w, rp, nr, w->qh)+nr;
+    if(w->scrolling || w->mouseopen)
+        wshow(w, w->qh);
+    wsetselect(w, w->q0, w->q1);
+    wscrdraw(w);
+    free(rp);
+    break;
+@
+
+<<[[winctl()]] event loop cases>>=
+case WCread:
+    recv(crm.c1, &pair);
+    t = pair.s;
+    nb = pair.ns;
+    i = npart;
+    npart = 0;
+    if(i)
+        memmove(t, part, i);
+    while(i<nb && (w->qh<w->nr || w->nraw>0)){
+        if(w->qh == w->nr){
+            wid = runetochar(t+i, &w->raw[0]);
+            w->nraw--;
+            runemove(w->raw, w->raw+1, w->nraw);
+        }else
+            wid = runetochar(t+i, &w->r[w->qh++]);
+        c = t[i];	/* knows break characters fit in a byte */
+        i += wid;
+        if(!w->rawing && (c == '\n' || c=='\004')){
+            if(c == '\004')
+                i--;
+            break;
+        }
+    }
+    if(i==nb && w->qh<w->nr && w->r[w->qh]=='\004')
+        w->qh++;
+    if(i > nb){
+        npart = i-nb;
+        memmove(part, t+nb, npart);
+        i = nb;
+    }
+    pair.s = t;
+    pair.ns = i;
+    send(crm.c2, &pair);
+    continue;
+@
+
+
+
+\subsection{[[/dev/wctl]] emitting}
+% when read by app it's the current statis of the window
+
+<<[[Window]] other fields>>=
+Channel		*wctlread;	/* chan(Consreadmesg) */
+@
+
+<<[[winctl()]] locals>>=
+Consreadmesg cwrm;
+@
+
+<<[[winctl()]] alts setup>>=
+alts[WWread].c = w->wctlread;
+alts[WWread].v = &cwrm;
+alts[WWread].op = CHANSND;
+@
+
+<<[[winctl()]] alts adjustments>>=
+if(w->deleted || !w->wctlready)
+    alts[WWread].op = CHANNOP;
+else
+    alts[WWread].op = CHANSND;
+@
+
+
+
+<<[[winctl()]] event loop cases>>=
+case WWread:
+    w->wctlready = 0;
+    recv(cwrm.c1, &pair);
+    if(w->deleted || w->i==nil)
+        pair.ns = sprint(pair.s, "");
+    else{
+        s = "visible";
+        for(i=0; i<nhidden; i++)
+            if(hidden[i] == w){
+                s = "hidden";
+                break;
+            }
+        t = "notcurrent";
+        if(w == input)
+            t = "current";
+        pair.ns = snprint(pair.s, pair.ns, "%11d %11d %11d %11d %s %s ",
+            w->i->r.min.x, w->i->r.min.y, w->i->r.max.x, w->i->r.max.y, t, s);
+    }
+    send(cwrm.c2, &pair);
+    continue;
+@
+
+
+
 
 
 \section{Xfid threads}
@@ -2401,6 +2620,7 @@ wkeyctl(Window *w, Rune r)
         waddraw(w, &r, 1);
         return;
     }
+
     if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */
         if(w->holding)
             --w->holding;
@@ -2518,8 +2738,9 @@ wbswidth(Window *w, Rune c)
 
 \section{Overview}
 
-% many windows ops via menu, or via mouse on border of window,
-% or via filsys.
+% many windows ops via menu that then trigger message send to
+% window thread via wsendctlmsg()
+% or via mouse on border of window, or via filsys.
 
 \section{[[Wctlmesg]]}
 
@@ -2547,6 +2768,7 @@ enum	/* control messages */
 <<struct Wctlmesg>>=
 struct Wctlmesg
 {
+    // enum<wctlmesgkind>
     int		type;
     Rectangle	r;
     Image	*image;
@@ -2683,7 +2905,6 @@ case New:
 
 
 
-
 %ctor!
 % cmd is usually /bin/rc
 %        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil); => pid is 0
@@ -2695,24 +2916,23 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 {
     Window *w;
     Mousectl *mc;
-    Channel *cm, *ck, *cctl, *cpid;
+    Channel *cm, *ck, *cctl;
+    Channel *cpid;
     void **arg;
 
     if(i == nil)
         return nil;
 
-    cm = chancreate(sizeof(Mouse), 0);
-    ck = chancreate(sizeof(Rune*), 0);
-    cctl = chancreate(sizeof(Wctlmesg), 4);
+    <<[[new()]] channels creation>>
+
     cpid = chancreate(sizeof(int), 0);
     if(cm==nil || ck==nil || cctl==nil)
         error("new: channel alloc failed");
 
-    mc = emalloc(sizeof(Mousectl));
-    *mc = *mousectl;
-    mc->image = i;
-    mc->c = cm;
+    <<[[new()]] mc allocation>>
+
     w = wmk(i, mc, ck, cctl, scrollit);
+
     free(mc);	/* wmk copies *mc */
 
     // growing array
@@ -2736,10 +2956,28 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     wsetname(w);
     if(dir)
         w->dir = estrdup(dir);
+
     chanfree(cpid);
     return w;
 }
 @
+
+
+<<[[new()]] channels creation>>=
+cm = chancreate(sizeof(Mouse), 0);
+ck = chancreate(sizeof(Rune*), 0);
+cctl = chancreate(sizeof(Wctlmesg), 4);
+@
+
+<<[[new()]] mc allocation>>=
+mc = emalloc(sizeof(Mousectl));
+*mc = *mousectl;
+mc->image = i;
+mc->c = cm;
+@
+
+
+
 
 <<global rcargv>>=
 char *rcargv[] = { "rc", "-i", nil };
@@ -2781,6 +3019,18 @@ enum
 };
 @
 
+<<[[wmk()]] channels creation>>=
+w->mc = *mc;
+w->ck = ck;
+w->cctl = cctl;
+@
+
+<<[[wmk()]] channels creation>>=
+w->conswrite = chancreate(sizeof(Conswritemesg), 0);
+w->consread =  chancreate(sizeof(Consreadmesg), 0);
+w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
+w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
+@
 
 <<function wmk>>=
 Window*
@@ -2793,18 +3043,13 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 
     w = emalloc(sizeof(Window));
 
+    w->i = i;
     w->screenr = i->r;
     r = insetrect(i->r, Selborder+1);
-    w->i = i;
-    w->mc = *mc;
-    w->ck = ck;
-    w->cctl = cctl;
-    w->cursorp = nil;
 
-    w->conswrite = chancreate(sizeof(Conswritemesg), 0);
-    w->consread =  chancreate(sizeof(Consreadmesg), 0);
-    w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
-    w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
+    <<[[wmk()]] channels creation>>
+
+    w->cursorp = nil;
 
     w->scrollr = r;
     w->scrollr.max.x = r.min.x+Scrollwid;
@@ -2825,6 +3070,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     draw(w->i, r, cols[BACK], nil, w->entire.min);
     wborder(w, Selborder);
     wscrdraw(w);
+
     incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
     return w;
 }
@@ -2975,6 +3221,7 @@ wsetpid(Window *w, int pid, bool dolabel)
 \section{Window focus}
 % via mouse
 
+% put code of mousethread related to window focus here!!
 
 <<global topped>>=
 static	int		topped;
@@ -3096,16 +3343,12 @@ wsetcols(Window *w)
 
 \section{Window deletion}
 
-<<[[Window]] config fields>>=
-bool_byte	deleted;
-@
-
-
 <<[[button3menu()]] cases>>=
 case Delete:
     delete();
     break;
 @
+
 
 <<function delete>>=
 void
@@ -3152,6 +3395,11 @@ pointto(bool wait)
 }
 @
 
+
+
+<<[[Window]] config fields>>=
+bool_byte	deleted;
+@
 
 
 <<[[wctlmesg()]] cases>>=
@@ -3505,16 +3753,6 @@ drawedge(Image **bp, Rectangle r)
 % via menu
 
 
-<<global hidden>>=
-Window	*hidden[100];
-@
-% hidden windows
-
-<<global nhidden>>=
-int		nhidden;
-@
-
-
 <<[[button3menu()]] cases>>=
 case Hide:
     hide();
@@ -3534,6 +3772,17 @@ hide(void)
     whide(w);
 }
 @
+
+
+<<global hidden>>=
+Window	*hidden[100];
+@
+% hidden windows
+
+<<global nhidden>>=
+int		nhidden;
+@
+
 
 
 <<function whide>>=
@@ -3608,6 +3857,12 @@ wunhide(int h)
 \chapter{Cursor}
 % put pictures instead of code :)
 % what is the code that takes the hexa data and draw?
+
+
+
+
+
+
 
 
 <<global crosscursor (windows/rio/data.c)>>=
@@ -3803,6 +4058,13 @@ Cursor *corners[9] = {
 
 
 
+<<[[Window]] mouse fields>>=
+Cursor		cursor;
+Cursor		*cursorp;
+@
+
+
+
 
 <<function wsetcursor>>=
 void
@@ -3841,11 +4103,31 @@ riosetcursor(Cursor *p, int force)
 
 \chapter{Graphical Windows}
 
+% does not care about /dev/cons, but care
+% about /dev/draw, /dev/mouse (and /dev/cons for key in raw mode)
+
+\section{Mouseopen mode}
+
+\section{Raw mode}
+
+<<[[Window]] config fields>>=
+bool_byte	rawing;
+@
+
+<<function waddraw>>=
+void
+waddraw(Window *w, Rune *r, int nr)
+{
+    w->raw = runerealloc(w->raw, w->nraw+nr);
+    runemove(w->raw+w->nraw, r, nr);
+    w->nraw += nr;
+}
+@
+
 \chapter{Textual Windows}
 % fake /dev/cons
 
 % it's relatively easy thx to the fake /dev/cons and frame lib
-
 
 \section{Terminal creation}
 
@@ -4269,6 +4551,213 @@ wsetselect(Window *w, uint q0, uint q1)
 % put snarf stuff here
 
 \section{Scrolling}
+
+<<enum _anon_ (windows/rio/dat.h)2>>=
+enum
+{
+    Kscrolloneup = KF|0x20,
+    Kscrollonedown = KF|0x21,
+};
+@
+
+
+
+<<global scrtmp>>=
+static Image *scrtmp;
+@
+
+<<function scrtemps>>=
+static
+void
+scrtemps(void)
+{
+    int h;
+
+    if(scrtmp)
+        return;
+    h = BIG*Dy(screen->r);
+    scrtmp = allocimage(display, Rect(0, 0, 32, h), screen->chan, 0, DWhite);
+    if(scrtmp == nil)
+        error("scrtemps");
+}
+@
+
+<<function freescrtemps>>=
+void
+freescrtemps(void)
+{
+    freeimage(scrtmp);
+    scrtmp = nil;
+}
+@
+
+<<function scrpos>>=
+static
+Rectangle
+scrpos(Rectangle r, uint p0, uint p1, uint tot)
+{
+    Rectangle q;
+    int h;
+
+    q = r;
+    h = q.max.y-q.min.y;
+    if(tot == 0)
+        return q;
+    if(tot > 1024*1024){
+        tot>>=10;
+        p0>>=10;
+        p1>>=10;
+    }
+    if(p0 > 0)
+        q.min.y += h*p0/tot;
+    if(p1 < tot)
+        q.max.y -= h*(tot-p1)/tot;
+    if(q.max.y < q.min.y+2){
+        if(q.min.y+2 <= r.max.y)
+            q.max.y = q.min.y+2;
+        else
+            q.min.y = q.max.y-2;
+    }
+    return q;
+}
+@
+
+<<function wscrdraw>>=
+void
+wscrdraw(Window *w)
+{
+    Rectangle r, r1, r2;
+    Image *b;
+
+    scrtemps();
+    if(w->i == nil)
+        error("scrdraw");
+    r = w->scrollr;
+    b = scrtmp;
+    r1 = r;
+    r1.min.x = 0;
+    r1.max.x = Dx(r);
+    r2 = scrpos(r1, w->org, w->org+w->nchars, w->nr);
+    if(!eqrect(r2, w->lastsr)){
+        w->lastsr = r2;
+        /* move r1, r2 to (0,0) to avoid clipping */
+        r2 = rectsubpt(r2, r1.min);
+        r1 = rectsubpt(r1, r1.min);
+        draw(b, r1, w->cols[BORD], nil, ZP);
+        draw(b, r2, w->cols[BACK], nil, ZP);
+        r2.min.x = r2.max.x-1;
+        draw(b, r2, w->cols[BORD], nil, ZP);
+        draw(w->i, r, b, nil, Pt(0, r1.min.y));
+    }
+}
+@
+
+<<function wscrsleep>>=
+void
+wscrsleep(Window *w, uint dt)
+{
+    Timer	*timer;
+    int y, b;
+    static Alt alts[3];
+
+    timer = timerstart(dt);
+    y = w->mc.xy.y;
+    b = w->mc.buttons;
+    alts[0].c = timer->c;
+    alts[0].v = nil;
+    alts[0].op = CHANRCV;
+    alts[1].c = w->mc.c;
+    alts[1].v = &w->mc.Mouse;
+    alts[1].op = CHANRCV;
+    alts[2].op = CHANEND;
+    for(;;)
+        switch(alt(alts)){
+        case 0:
+            timerstop(timer);
+            return;
+        case 1:
+            if(abs(w->mc.xy.y-y)>2 || w->mc.buttons!=b){
+                timercancel(timer);
+                return;
+            }
+            break;
+        }
+}
+@
+
+<<function wscroll>>=
+void
+wscroll(Window *w, int but)
+{
+    uint p0, oldp0;
+    Rectangle s;
+    int x, y, my, h, first;
+
+    s = insetrect(w->scrollr, 1);
+    h = s.max.y-s.min.y;
+    x = (s.min.x+s.max.x)/2;
+    oldp0 = ~0;
+    first = true;
+    do{
+        flushimage(display, 1);
+        if(w->mc.xy.x<s.min.x || s.max.x<=w->mc.xy.x){
+            readmouse(&w->mc);
+        }else{
+            my = w->mc.xy.y;
+            if(my < s.min.y)
+                my = s.min.y;
+            if(my >= s.max.y)
+                my = s.max.y;
+            if(!eqpt(w->mc.xy, Pt(x, my))){
+                wmovemouse(w, Pt(x, my));
+                readmouse(&w->mc);		/* absorb event generated by moveto() */
+            }
+            if(but == 2){
+                y = my;
+                if(y > s.max.y-2)
+                    y = s.max.y-2;
+                if(w->nr > 1024*1024)
+                    p0 = ((w->nr>>10)*(y-s.min.y)/h)<<10;
+                else
+                    p0 = w->nr*(y-s.min.y)/h;
+                if(oldp0 != p0)
+                    wsetorigin(w, p0, false);
+                oldp0 = p0;
+                readmouse(&w->mc);
+                continue;
+            }
+            if(but == 1)
+                p0 = wbacknl(w, w->org, (my-s.min.y)/w->font->height);
+            else
+                p0 = w->org+frcharofpt(w, Pt(s.max.x, my));
+            if(oldp0 != p0)
+                wsetorigin(w, p0, true);
+            oldp0 = p0;
+            /* debounce */
+            if(first){
+                flushimage(display, 1);
+                sleep(200);
+                nbrecv(w->mc.c, &w->mc.Mouse);
+                first = false;
+            }
+            wscrsleep(w, 100);
+        }
+    }while(w->mc.buttons & (1<<(but-1)));
+    while(w->mc.buttons)
+        readmouse(&w->mc);
+}
+@
+
+
+
+
+
+
+
+
+
+
+
 
 
 <<function framescroll>>=
@@ -6880,8 +7369,88 @@ killprocs(void)
 
 \section{Recursive [[rio]]}
 
-% actually it works without doing anything!
-% because use /dev/screen too!
+% actually it works without doing much thing!
+% because use /dev/xxx too!
+
+<<enum Mxxx cases>>=
+MReshape,
+@
+
+%mouse(3)
+%The mouse and cursor files are multiplexed by rio(1) to give the
+%illusion of a private mouse to each of its clients. The semantics are
+%otherwise the same except that notification of a window resize is
+%passed to the application using a mouse message beginning with r
+%rather than m; see rio(4) for details.
+
+% so normally MReshape does not happen! only when rio is run under rio!
+
+<<[[mousethread()]] alts setup>>=
+alts[MReshape].c = mousectl->resizec;
+alts[MReshape].v = nil;
+alts[MReshape].op = CHANRCV;
+@
+
+<<[[mousethread()]] event loop cases>>=
+case MReshape:
+    resized();
+    break;
+@
+
+
+% from MReshape, how can get this event? from resize of rio window itself?
+% so get that when run vgactl? or when run rio inside rio and resize
+% sub rio window?
+<<function resized>>=
+void
+resized(void)
+{
+    Image *im;
+    int i, j, ishidden;
+    Rectangle r;
+    Point o, n;
+    Window *w;
+
+    if(getwindow(display, Refnone) < 0)
+        error("failed to re-attach window");
+    freescrtemps();
+    view = screen;
+    freescreen(wscreen);
+    wscreen = allocscreen(screen, background, 0);
+    if(wscreen == nil)
+        error("can't re-allocate screen");
+    draw(view, view->r, background, nil, ZP);
+    o = subpt(viewr.max, viewr.min);
+    n = subpt(view->clipr.max, view->clipr.min);
+    for(i=0; i<nwindow; i++){
+        w = window[i];
+        if(w->deleted)
+            continue;
+        r = rectsubpt(w->i->r, viewr.min);
+        r.min.x = (r.min.x*n.x)/o.x;
+        r.min.y = (r.min.y*n.y)/o.y;
+        r.max.x = (r.max.x*n.x)/o.x;
+        r.max.y = (r.max.y*n.y)/o.y;
+        r = rectaddpt(r, screen->clipr.min);
+        ishidden = 0;
+        for(j=0; j<nhidden; j++)
+            if(w == hidden[j]){
+                ishidden = 1;
+                break;
+            }
+        if(ishidden){
+            im = allocimage(display, r, screen->chan, 0, DWhite);
+            r = ZR;
+        }else
+            im = allocwindow(wscreen, r, Refbackup, DWhite);
+        if(im)
+            wsendctlmesg(w, Reshaped, r, im);
+    }
+    viewr = screen->r;
+    flushimage(display, 1);
+}
+@
+
 
 \section{Snarf}
 %\subsection{[[/dev/snarf]]}
@@ -7393,7 +7962,7 @@ windfilewidth(Window *w, uint q0, int oneelement)
 @
 
 
-\section{Scrolling, [[rio -s]]}
+\section{Scrolling terminal behavior, [[rio -s]]}
 
 <<[[button2menu()]] menu2str adjustments for scrolling>>=
 if(w->scrolling)
@@ -7410,11 +7979,6 @@ case Scroll:
 @
 
 
-
-
-
-
-
 <<global scrolling>>=
 bool		scrolling;
 @
@@ -7425,200 +7989,7 @@ case 's':
     break;
 @
 
-<<enum _anon_ (windows/rio/dat.h)2>>=
-enum
-{
-    Kscrolloneup = KF|0x20,
-    Kscrollonedown = KF|0x21,
-};
-@
 
-
-<<global scrtmp>>=
-static Image *scrtmp;
-@
-
-<<function scrtemps>>=
-static
-void
-scrtemps(void)
-{
-    int h;
-
-    if(scrtmp)
-        return;
-    h = BIG*Dy(screen->r);
-    scrtmp = allocimage(display, Rect(0, 0, 32, h), screen->chan, 0, DWhite);
-    if(scrtmp == nil)
-        error("scrtemps");
-}
-@
-
-<<function freescrtemps>>=
-void
-freescrtemps(void)
-{
-    freeimage(scrtmp);
-    scrtmp = nil;
-}
-@
-
-<<function scrpos>>=
-static
-Rectangle
-scrpos(Rectangle r, uint p0, uint p1, uint tot)
-{
-    Rectangle q;
-    int h;
-
-    q = r;
-    h = q.max.y-q.min.y;
-    if(tot == 0)
-        return q;
-    if(tot > 1024*1024){
-        tot>>=10;
-        p0>>=10;
-        p1>>=10;
-    }
-    if(p0 > 0)
-        q.min.y += h*p0/tot;
-    if(p1 < tot)
-        q.max.y -= h*(tot-p1)/tot;
-    if(q.max.y < q.min.y+2){
-        if(q.min.y+2 <= r.max.y)
-            q.max.y = q.min.y+2;
-        else
-            q.min.y = q.max.y-2;
-    }
-    return q;
-}
-@
-
-<<function wscrdraw>>=
-void
-wscrdraw(Window *w)
-{
-    Rectangle r, r1, r2;
-    Image *b;
-
-    scrtemps();
-    if(w->i == nil)
-        error("scrdraw");
-    r = w->scrollr;
-    b = scrtmp;
-    r1 = r;
-    r1.min.x = 0;
-    r1.max.x = Dx(r);
-    r2 = scrpos(r1, w->org, w->org+w->nchars, w->nr);
-    if(!eqrect(r2, w->lastsr)){
-        w->lastsr = r2;
-        /* move r1, r2 to (0,0) to avoid clipping */
-        r2 = rectsubpt(r2, r1.min);
-        r1 = rectsubpt(r1, r1.min);
-        draw(b, r1, w->cols[BORD], nil, ZP);
-        draw(b, r2, w->cols[BACK], nil, ZP);
-        r2.min.x = r2.max.x-1;
-        draw(b, r2, w->cols[BORD], nil, ZP);
-        draw(w->i, r, b, nil, Pt(0, r1.min.y));
-    }
-}
-@
-
-<<function wscrsleep>>=
-void
-wscrsleep(Window *w, uint dt)
-{
-    Timer	*timer;
-    int y, b;
-    static Alt alts[3];
-
-    timer = timerstart(dt);
-    y = w->mc.xy.y;
-    b = w->mc.buttons;
-    alts[0].c = timer->c;
-    alts[0].v = nil;
-    alts[0].op = CHANRCV;
-    alts[1].c = w->mc.c;
-    alts[1].v = &w->mc.Mouse;
-    alts[1].op = CHANRCV;
-    alts[2].op = CHANEND;
-    for(;;)
-        switch(alt(alts)){
-        case 0:
-            timerstop(timer);
-            return;
-        case 1:
-            if(abs(w->mc.xy.y-y)>2 || w->mc.buttons!=b){
-                timercancel(timer);
-                return;
-            }
-            break;
-        }
-}
-@
-
-<<function wscroll>>=
-void
-wscroll(Window *w, int but)
-{
-    uint p0, oldp0;
-    Rectangle s;
-    int x, y, my, h, first;
-
-    s = insetrect(w->scrollr, 1);
-    h = s.max.y-s.min.y;
-    x = (s.min.x+s.max.x)/2;
-    oldp0 = ~0;
-    first = true;
-    do{
-        flushimage(display, 1);
-        if(w->mc.xy.x<s.min.x || s.max.x<=w->mc.xy.x){
-            readmouse(&w->mc);
-        }else{
-            my = w->mc.xy.y;
-            if(my < s.min.y)
-                my = s.min.y;
-            if(my >= s.max.y)
-                my = s.max.y;
-            if(!eqpt(w->mc.xy, Pt(x, my))){
-                wmovemouse(w, Pt(x, my));
-                readmouse(&w->mc);		/* absorb event generated by moveto() */
-            }
-            if(but == 2){
-                y = my;
-                if(y > s.max.y-2)
-                    y = s.max.y-2;
-                if(w->nr > 1024*1024)
-                    p0 = ((w->nr>>10)*(y-s.min.y)/h)<<10;
-                else
-                    p0 = w->nr*(y-s.min.y)/h;
-                if(oldp0 != p0)
-                    wsetorigin(w, p0, false);
-                oldp0 = p0;
-                readmouse(&w->mc);
-                continue;
-            }
-            if(but == 1)
-                p0 = wbacknl(w, w->org, (my-s.min.y)/w->font->height);
-            else
-                p0 = w->org+frcharofpt(w, Pt(s.max.x, my));
-            if(oldp0 != p0)
-                wsetorigin(w, p0, true);
-            oldp0 = p0;
-            /* debounce */
-            if(first){
-                flushimage(display, 1);
-                sleep(200);
-                nbrecv(w->mc.c, &w->mc.Mouse);
-                first = false;
-            }
-            wscrsleep(w, 100);
-        }
-    }while(w->mc.buttons & (1<<(but-1)));
-    while(w->mc.buttons)
-        readmouse(&w->mc);
-}
-@
 
 
 \section{Initial command, [[rio -i]]}
@@ -7655,10 +8026,10 @@ initcmd(void *arg)
 @
 
 \section{Fake keyboard input, [[rio -k]]}
+% what for? to help debug app? to automate testing?
 
-<<global wkeyboard>>=
-Window	*wkeyboard;	/* window of simulated keyboard */
-@
+
+\subsection{[[rio -k]]}
 
 <<[[main()]] locals>>=
 char *kbdin = nil;
@@ -7683,6 +8054,11 @@ Rectangle r;
 char *kbdargv[] = { "rc", "-c", nil, nil };
 @
 
+
+<<global wkeyboard>>=
+Window	*wkeyboard;	/* window of simulated keyboard */
+@
+
 <<[[main()]] if initstr or kdbin>>=
 if(kbdin){
     kbdargv[2] = kbdin;
@@ -7698,8 +8074,23 @@ if(kbdin){
 
 
 
+\subsection{[[wkeyboard]]}
 
+<<[[mousethread()]] if wkeyboard and button 6>>=
+if(wkeyboard!=nil && (mouse->buttons & (1<<5))){
+    keyboardhide();
+    break;
+}
+@
 
+<<[[mousethread()]] if wkeyboard and ptinrect>>=
+/* override everything for the keyboard window */
+if(wkeyboard!=nil && ptinrect(mouse->xy, wkeyboard->screenr)){
+    /* make sure it's on top; this call is free if it is */
+    wtopme(wkeyboard);
+    winput = wkeyboard;
+}
+@
 
 \subsection{[[/dev/kdbin]]}
 
@@ -7795,21 +8186,6 @@ if(access(fontname, 0) < 0){
 putenv("font", fontname);
 @
 
-\section{Raw mode}
-
-<<[[Window]] config fields>>=
-bool_byte	rawing;
-@
-
-<<function waddraw>>=
-void
-waddraw(Window *w, Rune *r, int nr)
-{
-    w->raw = runerealloc(w->raw, w->nraw+nr);
-    runemove(w->raw+w->nraw, r, nr);
-    w->nraw += nr;
-}
-@
 
 \chapter{Conclusion}
 
