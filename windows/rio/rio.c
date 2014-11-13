@@ -251,9 +251,9 @@ void threadmain(int argc, char *argv[])
     flushimage(display, true);
 
     /*s: [[main()]] communication channels creation */
-    exitchan = chancreate(sizeof(int), 0);
+    exitchan     = chancreate(sizeof(int), 0);
     winclosechan = chancreate(sizeof(Window*), 0);
-    deletechan = chancreate(sizeof(char*), 0);
+    deletechan   = chancreate(sizeof(char*), 0);
     /*e: [[main()]] communication channels creation */
     /*s: [[main()]] threads creation */
     timerinit();
@@ -286,6 +286,7 @@ void threadmain(int argc, char *argv[])
         }
         /*e: [[main()]] if initstr or kdbin */
         threadnotify(shutdown, 1);
+        // blocks until get exit event on exitchan
         recv(exitchan, nil);
     }
     killprocs();
@@ -1380,6 +1381,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 
     // a new thread! for this new window!
     threadcreate(winctl, w, 8192);
+
     if(!hideit)
         wcurrent(w);
 

@@ -303,9 +303,11 @@ winctl(void *arg)
 
     /*s: [[winctl()]] channels creation */
     mrm.cm = chancreate(sizeof(Mouse), 0);
+    /*x: [[winctl()]] channels creation */
     cwm.cw = chancreate(sizeof(Stringpair), 0);
     crm.c1 = chancreate(sizeof(Stringpair), 0);
     crm.c2 = chancreate(sizeof(Stringpair), 0);
+    /*x: [[winctl()]] channels creation */
     cwrm.c1 = chancreate(sizeof(Stringpair), 0);
     cwrm.c2 = chancreate(sizeof(Stringpair), 0);
     /*e: [[winctl()]] channels creation */

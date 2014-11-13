@@ -358,6 +358,7 @@ struct Filsys
     char	*user;
 
     Channel	*cxfidalloc;	/* chan(Xfid*) */
+    // ???
     Fid		*fids[Nhash];
 };
 /*e: struct Filsys */

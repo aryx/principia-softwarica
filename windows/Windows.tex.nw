@@ -150,10 +150,13 @@ a real windowing system.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
+% gonna present rio, successor of 8-1/2 and ?? all designed by Rob Pike,
+% for plan9. Small, elegant.
+
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
 \item X11
-% the obvious choice
+% the obvious choice, but really big
 \item Mini X
 \item Nano X (MicroWindows)
 \item Wayland
@@ -207,11 +210,11 @@ License.
 
 \section{Windowing system principles}
 
-% a screen demultiplexer essentially! toy app can run outside rio
+% a screen demultiplexer essentially! A toy app can run outside rio
 % but with rio can have "virtual" screen.
-% can also have virtual keyboard/mouse
-% then role of windowing system is a windows manager! 
-% mv/resize/close/hide/etc menus, dispatch the devoce, etc, a visual shell!
+% also have virtual keyboard/mouse.
+% The other role of windowing system is a windows manager! 
+% mv/resize/close/hide/etc menus, dispatch the device, etc, a visual shell!
 
 \section{[[rio]] services}
 
@@ -366,11 +369,13 @@ usage(void)
 % click => hardware interrupt => interrupt handler for mouse =>
 % write to /dev/mouse
 % rio process with many threads Await.
-% mouse thread listening on mousectl channel.
+% mouse thread listening on mousectl channel, probably a wrapper over
+% /dev/mouse listening.
 % get data, get current window (shared memory 'input' global),
 % write to window mouse channel.
 % window thread listening on many channels (alts()), get awake
-% and call wmousectl()
+% and call wmousectl(), pass around address of mouse structure
+% containing the info (shared memory).
 
 \section{Trace of a key press}
 
@@ -597,11 +602,12 @@ bool_byte	mouseopen;
 
 
 
-% scroll mode, also a text field
+% scroll mode, also a textual window field
 <<[[Window]] config fields>>=
 bool_byte	scrolling;
 @
 
+% also a textual window field?
 <<[[Window]] config fields>>=
 bool_byte	holding;
 @
@@ -808,6 +814,7 @@ struct Filsys
     char	*user;
 
     Channel	*cxfidalloc;	/* chan(Xfid*) */
+    // ???
     Fid		*fids[Nhash];
 };
 @
@@ -903,13 +910,8 @@ char *s;
 char buf[256];
 @
 \fi
-%dead? static void *arg[1];
+%old dead? static void *arg[1];
 
-%    //PAD: let's keep the Exit option!
-%    //PAD: if(strstr(argv[0], ".out") == nil){
-%    //PAD: 	menu3str[Exit] = nil;
-%    //PAD: 	Hidden--;
-%    //PAD: }
 
 <<function threadmain>>=
 //@Scheck: not dead, called by lib_thread probably
@@ -955,6 +957,7 @@ void threadmain(int argc, char *argv[])
         errorshouldabort = true;/* suicide if there's trouble after this */
         <<[[main()]] if initstr or kdbin>>
         threadnotify(shutdown, 1);
+        // blocks until get exit event on exitchan
         recv(exitchan, nil);
     }
     killprocs();
@@ -970,11 +973,10 @@ void threadmain(int argc, char *argv[])
 void
 iconinit(void)
 {
-    background = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0x177777FF);
+    background = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0x777777FF);
     red        = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0xDD0000FF);
 }
 @
-% is it really a red?
 % why iconinit? icon??
 
 \section{Mouse initialisation}
@@ -1003,6 +1005,8 @@ if(keyboardctl == nil)
 <<global exitchan>>=
 Channel	*exitchan;	/* chan(int) */
 @
+% It's more chan(void) no?
+
 <<global winclosechan>>=
 Channel	*winclosechan; /* chan(Window*); */
 @
@@ -1013,9 +1017,9 @@ Channel* deletechan;
 
 % rio = waiting for many different kind of "events"
 <<[[main()]] communication channels creation>>=
-exitchan = chancreate(sizeof(int), 0);
+exitchan     = chancreate(sizeof(int), 0);
 winclosechan = chancreate(sizeof(Window*), 0);
-deletechan = chancreate(sizeof(char*), 0);
+deletechan   = chancreate(sizeof(char*), 0);
 @
 
 
@@ -1171,6 +1175,7 @@ static Alt alts[NALT+1];
 @
 % why static? mousethread not called anyway no?
 
+% small rappel here on libthread maybe? alt =~ select.
 
 
 <<function mousethread>>=
@@ -1199,7 +1204,7 @@ alts[MMouse].op = CHANRCV;
 @
 
 
-% different than keyboard, here doe not always dispatch to the
+% different from keyboard, here does not always dispatch to the
 % (possibly graphical) window.
 % The mouse action must be interpreted by rio itself as it may relate
 % to windows managment! mv, resize, etc.
@@ -1245,6 +1250,10 @@ Again:
 <<[[mousethread()]] Drain label>>
 @
 
+% explain logical coordinates
+% FIGURE: with winput->screenr, i->r, screen->r, etc and how they
+% relate.
+
 \subsection{Application mouse events}
 
 <<[[mousethread()]] set sending to true for some conditions>>=
@@ -1289,6 +1298,9 @@ Sending:
     continue;
 }
 @
+% send until release button?
+
+
 
 <<[[mousethread()]] goto Sending if scroll buttons>>=
 /* the up and down scroll buttons are not subject to the usual rules */
@@ -1298,14 +1310,17 @@ if((mouse->buttons&(8|16)) && !winput->mouseopen)
 
 \subsection{Windowing system mouse events}
 
+% TODO LP split
+
 <<global sweeping>>=
 bool	sweeping;
 @
-
+% ???
 
 <<[[mousethread()]] locals>>=
 bool moving = false;
 @
+% ???
 
 <<[[mousethread()]] set moving to true for some conditions>>=
 /* topped will be zero or less if window has been bottomed */
@@ -1667,26 +1682,9 @@ winctl(void *arg)
 }
 @
 
-
-
-
-
-
 % m = mouse, c = cons
 % r = read, w = write
 % m = message
-
-<<[[winctl()]] channels creation>>=
-mrm.cm = chancreate(sizeof(Mouse), 0);
-cwm.cw = chancreate(sizeof(Stringpair), 0);
-crm.c1 = chancreate(sizeof(Stringpair), 0);
-crm.c2 = chancreate(sizeof(Stringpair), 0);
-cwrm.c1 = chancreate(sizeof(Stringpair), 0);
-cwrm.c2 = chancreate(sizeof(Stringpair), 0);
-@
-
-
-
 
 
 \subsection{Key events listening}
@@ -1706,6 +1704,10 @@ alts[WKey].v = &kbdr;
 alts[WKey].op = CHANRCV;
 @
 
+% see in keyboardthread
+%            sendp(input->ck, rp);
+
+
 <<[[winctl()]] event loop cases>>=
 case WKey:
     for(i=0; kbdr[i]!=L'\0'; i++)
@@ -1718,6 +1720,9 @@ case WKey:
 %//		while(nbrecv(w->ck, &r))
 %//			wkeyctl(w, r);
 
+
+% put wkeyctl() here and LP split it? to move lots of stuff
+% in textual window vs graphical window?
 
 \subsection{Mouse events listening}
 
@@ -1733,7 +1738,8 @@ alts[WMouse].v = &w->mc.Mouse;
 alts[WMouse].op = CHANRCV;
 @
 
-
+% see in mousethread for the application mouse event dispatch:
+%    send(winput->mc.c, &tmp);
 
 
 % LP split mouseopen!
@@ -1823,6 +1829,8 @@ alts[WCtl].v = &wcm;
 alts[WCtl].op = CHANRCV;
 @
 
+% many calls to wctlsendmesg() that write in w->cctl
+
 
 <<[[winctl()]] event loop cases>>=
 case WCtl:
@@ -1859,6 +1867,11 @@ struct Mousereadmesg
 <<[[winctl()]] locals>>=
 Mousereadmesg mrm;
 @
+
+<<[[winctl()]] channels creation>>=
+mrm.cm = chancreate(sizeof(Mouse), 0);
+@
+
 
 <<[[winctl()]] alts setup>>=
 alts[WMouseread].c = w->mouseread;
@@ -1931,6 +1944,12 @@ struct Stringpair	/* rune and nrune or byte and nbyte */
 <<[[winctl()]] locals>>=
 Conswritemesg cwm;
 Consreadmesg crm;
+@
+
+<<[[winctl()]] channels creation>>=
+cwm.cw = chancreate(sizeof(Stringpair), 0);
+crm.c1 = chancreate(sizeof(Stringpair), 0);
+crm.c2 = chancreate(sizeof(Stringpair), 0);
 @
 
 
@@ -2071,6 +2090,12 @@ Channel		*wctlread;	/* chan(Consreadmesg) */
 <<[[winctl()]] locals>>=
 Consreadmesg cwrm;
 @
+
+<<[[winctl()]] channels creation>>=
+cwrm.c1 = chancreate(sizeof(Stringpair), 0);
+cwrm.c2 = chancreate(sizeof(Stringpair), 0);
+@
+
 
 <<[[winctl()]] alts setup>>=
 alts[WWread].c = w->wctlread;
@@ -2431,6 +2456,13 @@ char*		menu3str[100] = {
  nil
 };
 @
+
+% was in main()
+%    //PAD: let's keep the Exit option!
+%    //PAD: if(strstr(argv[0], ".out") == nil){
+%    //PAD: 	menu3str[Exit] = nil;
+%    //PAD: 	Hidden--;
+%    //PAD: }
 
 <<global menu3>>=
 Menu menu3 =
@@ -2945,6 +2977,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 
     // a new thread! for this new window!
     threadcreate(winctl, w, 8192);
+
     if(!hideit)
         wcurrent(w);
 
