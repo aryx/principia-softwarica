@@ -152,8 +152,10 @@ xfidallocthread(void*)
 Channel*
 xfidinit(void)
 {
+    /*s: [[xfidinit()]] channels creation */
     cxfidalloc = chancreate(sizeof(Xfid*), 0);
     cxfidfree = chancreate(sizeof(Xfid*), 0);
+    /*e: [[xfidinit()]] channels creation */
     threadcreate(xfidallocthread, nil, STACK);
     return cxfidalloc;
 }

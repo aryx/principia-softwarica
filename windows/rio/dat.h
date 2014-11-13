@@ -175,9 +175,9 @@ struct Window
     // Id
     //--------------------------------------------------------------------
     /*s: [[Window]] id fields */
-    int	id; // /dev/winid
+    int	id;       // /dev/winid
     char	name[32]; // /dev/winname
-    char	*label; // dev/label
+    char	*label;   // /dev/label
     /*e: [[Window]] id fields */
     
     //--------------------------------------------------------------------
@@ -222,11 +222,17 @@ struct Window
     /*s: [[Window]] config fields */
     bool_byte	scrolling;
     bool_byte	holding;
-
+    /*x: [[Window]] config fields */
     bool_byte	deleted;
     /*x: [[Window]] config fields */
     bool_byte	rawing;
     /*e: [[Window]] config fields */
+
+    //--------------------------------------------------------------------
+    // Text
+    //--------------------------------------------------------------------
+    /*s: [[Window]] text fields */
+    /*e: [[Window]] text fields */
 
     //--------------------------------------------------------------------
     // Misc

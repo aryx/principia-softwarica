@@ -158,6 +158,7 @@ Here are other candidates that were considered but ultimately discarded:
 \item Nano X (MicroWindows)
 \item Wayland
 \end{itemize}
+%Qnx
 % nuttx has some graphic and windowing stack apparently too!
 
 %nice set of screenshots of past famous GUIs:
@@ -183,9 +184,9 @@ Here are other candidates that were considered but ultimately discarded:
 % rio.ps, 8.1/2.ps
 % rio(1) and rio(5)
 
-% also draw(2?), draw(6?)
-% also thread(2?) library! heavy use of channels and threads here
-% and window(2) graphics(2)
+% draw(2?), draw(6?)
+% thread(2?) library! heavy use of channels and threads here
+% window(2) graphics(2)
 
 \section{About this document}
 #include "../docs/latex/About.tex.nw"
@@ -199,19 +200,19 @@ License.
 
 \section{Acknowledgments}
 
-%Rob pike obviously, rio's author (and its precursors 81/2, ...)
+%Rob pike obviously, rio's author (and its precursors 8-1/2, ...)
 
 \chapter{Overview}
 
 \section{Windowing system principles}
 
-% a screen demultiplexer essentially! toy app run outside rio
+% a screen demultiplexer essentially! toy app can run outside rio
 % but with rio can have "virtual" screen.
 % can also have virtual keyboard/mouse
-% also a window manager! mv/resize/close/hide/etc menus, a visual shell!
+% then role of windowing system is a windows manager! 
+% mv/resize/close/hide/etc menus, dispatch the devoce, etc, a visual shell!
 
 \section{[[rio]] services}
-% the interface!  again the /dev/xxx ?
 
 <<function usage>>=
 void
@@ -222,27 +223,29 @@ usage(void)
 }
 @
 
-% once run have full screen, with right menu to start things (e.g. button3menu)
-% also have fileserver that can take command (e.g. wctlnew())
-
+% the interface! well rio interface is first its interface :)
+% once run, rio has full screen, with right menu to start things 
+% (e.g. button3menu)
 % TODO show figure, and annotate subtle things, like blue frame,
 % or light grey text when unfocused xterm, and menus
 
-% also have fileserver to offer a virtual view for the apps running
+% also have fileserver that can take command (e.g. wctlnew())
+% the fileserver offer virtual views for the apps running
 % inside the windows
 
+%env var:
 %$wsys
 %$wctl
 
 %/mnt/wsys (unioned also in /dev)
-%cons, consctl
-%mouse %kbdin
-%cursor
-%screen window
+%cons, consctl, %kbdin
+%mouse, cursor
+%screen window (actually those are read-only
 
-%text
 %label, winid, winname  wdir
+%text
 %snarf
+
 %wctl 
 %wsys/1/
 
@@ -253,16 +256,15 @@ usage(void)
 % mount #s/rio.user.pid /mnt/wsys 1
 % mount -b #s/rio.user.pid /dev
 
-
 % $rio
 % manual creation of window (not via menu)
-% (see rio(5)
+% see rio(5)
 % mount $wsys /tmp 'new -r 0 0 128 64 -pid' $pid
 % echo hi > /tmp/cons
 % :)
 
 
-% can run rio inside rio!
+% note that can even run rio inside rio!
 
 
 %\section{YYY file format}
@@ -272,8 +274,6 @@ usage(void)
 %??
 
 \section{Code organization}
-
-% for the graphic system part see Graphics.tex.nw
 
 %dat.h: data structure and global declarations
 %fns.h: prototypes
@@ -293,6 +293,8 @@ usage(void)
 
 
 \section{Architecture overview}
+
+% for the graphic system part see Graphics.tex.nw
 
 % kernel driver vs graphic libs vs rio vs graphical apps
 
@@ -379,21 +381,20 @@ usage(void)
 
 %draw.h
 %Display	*display; // set by initdraw()
+%display =~ /dev/draw handler?
 
 %Image          *screen; // should be renamed window! really TODO?
 % = point to the portion of the display for this window
 % but for rio it's really the whole screen (unless run recursively)
+%screen = current image memory in current display
+%confusing is that screen is of type Image*, whereas there is a Screen type too
 
 % so windows are represented as Image pointer. Really a subclass
 % of Image with additional methods like originwindow().
 
 %Font		*font;
 
-%display =~ /dev/draw handler?
-%screen = current image memory in current display
-%window = ? 
-
-% this is DS wrapper on top of /dev/draw
+% those are DS wrapper on top of /dev/draw
 
 %\section{[[view]], [[mousectl]], [[keyboardctl]], etc}
 
@@ -492,6 +493,11 @@ struct Window
     <<[[Window]] config fields>>
 
     //--------------------------------------------------------------------
+    // Text
+    //--------------------------------------------------------------------
+    <<[[Window]] text fields>>
+
+    //--------------------------------------------------------------------
     // Misc
     //--------------------------------------------------------------------
     <<[[Window]] other fields>>
@@ -507,7 +513,7 @@ struct Window
 
 % grown in wmk()
 <<global window>>=
-//array<option<ref_own<Window>>>
+//array<ref_own<Window>>
 Window	**window;
 @
 % TODO rename windows!!!
@@ -540,9 +546,9 @@ Window	*input;
 
 
 <<[[Window]] id fields>>=
-int	id; // /dev/winid
+int	id;       // /dev/winid
 char	name[32]; // /dev/winname
-char	*label; // dev/label
+char	*label;   // /dev/label
 @
 % name vs label? label can be arbitrary size and /dev/label is writable
 
@@ -563,6 +569,7 @@ Image	*i;
 Rectangle	screenr; /* screen coordinates of window */
 Frame;
 @
+% comment?? can simplify the code then?
 
 
 <<[[Window]] mouse fields>>=
@@ -586,8 +593,10 @@ Channel	*cctl;		/* chan(Wctlmesg)[20] */
 <<[[Window]] config fields>>=
 bool_byte	scrolling;
 bool_byte	holding;
+@
 
-bool_byte	deleted;
+
+<<[[Window]] text fields>>=
 @
 
 
@@ -610,6 +619,7 @@ QLock;
 <<[[Window]] other fields>>=
 Mouseinfo	mouse;
 @
+
 <<[[Window]] other fields>>=
 uint		nr;	/* number of runes in window */
 uint		maxr;	/* number of runes allocated in r */
@@ -635,236 +645,6 @@ char		*dir;
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<<global hidden>>=
-Window	*hidden[100];
-@
-% hidden windows
-
-<<global nhidden>>=
-int		nhidden;
-@
-
-
-
-%ctor!
-% cmd is usually /bin/rc
-%        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil); => pid is 0
-% when from the menu!
-% ((right click -> button3menu()) | wctlnew()) -> <>
-<<function new>>=
-Window*
-new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
-{
-    Window *w;
-    Mousectl *mc;
-    Channel *cm, *ck, *cctl, *cpid;
-    void **arg;
-
-    if(i == nil)
-        return nil;
-
-    cm = chancreate(sizeof(Mouse), 0);
-    ck = chancreate(sizeof(Rune*), 0);
-    cctl = chancreate(sizeof(Wctlmesg), 4);
-    cpid = chancreate(sizeof(int), 0);
-    if(cm==nil || ck==nil || cctl==nil)
-        error("new: channel alloc failed");
-
-    mc = emalloc(sizeof(Mousectl));
-    *mc = *mousectl;
-    mc->image = i;
-    mc->c = cm;
-    w = wmk(i, mc, ck, cctl, scrollit);
-    free(mc);	/* wmk copies *mc */
-
-    // growing array
-    window = erealloc(window, ++nwindow*sizeof(Window*));
-    window[nwindow-1] = w;
-    if(hideit){
-        hidden[nhidden++] = w;
-        w->screenr = ZR;
-    }
-
-    // a new thread! for this new window!
-    threadcreate(winctl, w, 8192);
-    if(!hideit)
-        wcurrent(w);
-
-    flushimage(display, true);
-
-    <<[[new()]] if pid == 0>>
-
-    wsetpid(w, pid, true);
-    wsetname(w);
-    if(dir)
-        w->dir = estrdup(dir);
-    chanfree(cpid);
-    return w;
-}
-@
-
-<<global rcargv>>=
-char *rcargv[] = { "rc", "-i", nil };
-@
-
-%when new from the system menu
-<<[[new()]] if pid == 0>>=
-if(pid == 0){
-    arg = emalloc(5*sizeof(void*));
-    arg[0] = w;
-    arg[1] = cpid;
-    arg[2] = cmd;
-    if(argv == nil)
-        arg[3] = rcargv;
-    else
-        arg[3] = argv;
-    arg[4] = dir;
-    proccreate(winshell, arg, 8192);
-    pid = recvul(cpid);
-    free(arg);
-}
-if(pid == 0){
-    /* window creation failed */
-    wsendctlmesg(w, Deleted, ZR, nil);
-    chanfree(cpid);
-    return nil;
-}
-@
-
-
-<<enum _anon_ (windows/rio/dat.h)3>>=
-enum
-{
-    Selborder		= 4,	/* border of selected window */
-    Unselborder		= 1,	/* border of unselected window */
-    Scrollwid 		= 12,	/* width of scroll bar */
-    Scrollgap 		= 4,	/* gap right of scroll bar */
-    BIG			= 3,	/* factor by which window dimension can exceed screen */
-};
-@
-
-
-<<function wmk>>=
-Window*
-wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
-{
-    Window *w;
-    Rectangle r;
-
-    <<[[wmk()]] cols initialisation>>
-
-    w = emalloc(sizeof(Window));
-
-    w->screenr = i->r;
-    r = insetrect(i->r, Selborder+1);
-    w->i = i;
-    w->mc = *mc;
-    w->ck = ck;
-    w->cctl = cctl;
-    w->cursorp = nil;
-
-    w->conswrite = chancreate(sizeof(Conswritemesg), 0);
-    w->consread =  chancreate(sizeof(Consreadmesg), 0);
-    w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
-    w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
-
-    w->scrollr = r;
-    w->scrollr.max.x = r.min.x+Scrollwid;
-    w->lastsr = ZR;
-    r.min.x += Scrollwid+Scrollgap;
-
-    frinit(w, r, font, i, cols);
-
-    w->maxtab = maxtab*stringwidth(font, "0");
-    w->topped = ++topped;
-    w->id = ++id;
-    w->notefd = -1;
-    w->scrolling = scrolling;
-    w->dir = estrdup(startdir);
-    w->label = estrdup("<unnamed>");
-    r = insetrect(w->i->r, Selborder);
-
-    draw(w->i, r, cols[BACK], nil, w->entire.min);
-    wborder(w, Selborder);
-    wscrdraw(w);
-    incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
-    return w;
-}
-@
-
-% dtor?
-<<function wclose>>=
-int
-wclose(Window *w)
-{
-    int i;
-
-    i = decref(w);
-    if(i > 0)
-        return 0;
-
-    if(i < 0)
-        error("negative ref count");
-    if(!w->deleted)
-        wclosewin(w);
-    wsendctlmesg(w, Exited, ZR, nil);
-    return 1;
-}
-@
-
-<<function wclosewin>>=
-void
-wclosewin(Window *w)
-{
-    Rectangle r;
-    int i;
-
-    w->deleted = true;
-
-    if(w == input){
-        input = nil;
-        wsetcursor(w, false);
-    }
-    if(w == wkeyboard)
-        wkeyboard = nil;
-
-    for(i=0; i<nhidden; i++)
-        if(hidden[i] == w){
-            --nhidden;
-            memmove(hidden+i, hidden+i+1, (nhidden-i)*sizeof(hidden[0]));
-            hidden[nhidden] = nil;
-            break;
-        }
-    for(i=0; i<nwindow; i++)
-        if(window[i] == w){
-            --nwindow;
-            memmove(window+i, window+i+1, (nwindow-i)*sizeof(Window*));
-            w->deleted = true; // again??
-            r = w->i->r;
-            /* move it off-screen to hide it, in case client is slow in letting it go */
-            //if(0) originwindow(w->i, r.min, view->r.max);
-            freeimage(w->i);
-            w->i = nil;
-            return;
-        }
-    error("unknown window in closewin");
-}
-@
 
 
 \section{[[Frame]]}
@@ -1188,7 +968,7 @@ void threadmain(int argc, char *argv[])
 void
 iconinit(void)
 {
-    background = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0x777777FF);
+    background = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0x177777FF);
     red        = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0xDD0000FF);
 }
 @
@@ -1221,12 +1001,33 @@ if(keyboardctl == nil)
 <<global exitchan>>=
 Channel	*exitchan;	/* chan(int) */
 @
+<<global winclosechan>>=
+Channel	*winclosechan; /* chan(Window*); */
+@
+<<global deletechan>>=
+Channel* deletechan;
+@
+
 
 % rio = waiting for many different kind of "events"
 <<[[main()]] communication channels creation>>=
 exitchan = chancreate(sizeof(int), 0);
 winclosechan = chancreate(sizeof(Window*), 0);
 deletechan = chancreate(sizeof(char*), 0);
+@
+
+
+<<global cxfidalloc>>=
+static	Channel	*cxfidalloc;	/* chan(Xfid*) */
+@
+
+<<global cxfidfree>>=
+static	Channel	*cxfidfree;	/* chan(Xfid*) */
+@
+
+<<[[xfidinit()]] channels creation>>=
+cxfidalloc = chancreate(sizeof(Xfid*), 0);
+cxfidfree = chancreate(sizeof(Xfid*), 0);
 @
 
 \section{Threads creation}
@@ -1245,20 +1046,12 @@ threadcreate(deletethread, nil, STACK);
 @
 
 
-<<global cxfidalloc>>=
-static	Channel	*cxfidalloc;	/* chan(Xfid*) */
-@
-
-<<global cxfidfree>>=
-static	Channel	*cxfidfree;	/* chan(Xfid*) */
-@
 
 <<function xfidinit>>=
 Channel*
 xfidinit(void)
 {
-    cxfidalloc = chancreate(sizeof(Xfid*), 0);
-    cxfidfree = chancreate(sizeof(Xfid*), 0);
+    <<[[xfidinit()]] channels creation>>
     threadcreate(xfidallocthread, nil, STACK);
     return cxfidalloc;
 }
@@ -1323,7 +1116,8 @@ free(s);
 void
 keyboardthread(void*)
 {
-    Rune buf[2][20], *rp;
+    Rune buf[2][20];
+    Rune *rp;
     int n, i;
 
     threadsetname("keyboardthread");
@@ -2201,10 +1995,6 @@ xfidctl(void *arg)
 
 \section{Closing and delete threads}
 
-<<global winclosechan>>=
-Channel	*winclosechan; /* chan(Window*); */
-@
-
 <<function winclosethread>>=
 /* thread to allow fsysproc to synchronize window closing with main proc */
 void
@@ -2218,11 +2008,6 @@ winclosethread(void*)
         wclose(w);
     }
 }
-@
-
-
-<<global deletechan>>=
-Channel*	deletechan;
 @
 
 <<function deletethread>>=
@@ -2897,6 +2682,161 @@ case New:
 @
 
 
+
+
+%ctor!
+% cmd is usually /bin/rc
+%        new(sweep(), false, scrolling, 0, nil, "/bin/rc", nil); => pid is 0
+% when from the menu!
+% ((right click -> button3menu()) | wctlnew()) -> <>
+<<function new>>=
+Window*
+new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
+{
+    Window *w;
+    Mousectl *mc;
+    Channel *cm, *ck, *cctl, *cpid;
+    void **arg;
+
+    if(i == nil)
+        return nil;
+
+    cm = chancreate(sizeof(Mouse), 0);
+    ck = chancreate(sizeof(Rune*), 0);
+    cctl = chancreate(sizeof(Wctlmesg), 4);
+    cpid = chancreate(sizeof(int), 0);
+    if(cm==nil || ck==nil || cctl==nil)
+        error("new: channel alloc failed");
+
+    mc = emalloc(sizeof(Mousectl));
+    *mc = *mousectl;
+    mc->image = i;
+    mc->c = cm;
+    w = wmk(i, mc, ck, cctl, scrollit);
+    free(mc);	/* wmk copies *mc */
+
+    // growing array
+    window = erealloc(window, ++nwindow*sizeof(Window*));
+    window[nwindow-1] = w;
+    if(hideit){
+        hidden[nhidden++] = w;
+        w->screenr = ZR;
+    }
+
+    // a new thread! for this new window!
+    threadcreate(winctl, w, 8192);
+    if(!hideit)
+        wcurrent(w);
+
+    flushimage(display, true);
+
+    <<[[new()]] if pid == 0>>
+
+    wsetpid(w, pid, true);
+    wsetname(w);
+    if(dir)
+        w->dir = estrdup(dir);
+    chanfree(cpid);
+    return w;
+}
+@
+
+<<global rcargv>>=
+char *rcargv[] = { "rc", "-i", nil };
+@
+
+%when new from the system menu
+<<[[new()]] if pid == 0>>=
+if(pid == 0){
+    arg = emalloc(5*sizeof(void*));
+    arg[0] = w;
+    arg[1] = cpid;
+    arg[2] = cmd;
+    if(argv == nil)
+        arg[3] = rcargv;
+    else
+        arg[3] = argv;
+    arg[4] = dir;
+    proccreate(winshell, arg, 8192);
+    pid = recvul(cpid);
+    free(arg);
+}
+if(pid == 0){
+    /* window creation failed */
+    wsendctlmesg(w, Deleted, ZR, nil);
+    chanfree(cpid);
+    return nil;
+}
+@
+
+
+<<enum _anon_ (windows/rio/dat.h)3>>=
+enum
+{
+    Selborder		= 4,	/* border of selected window */
+    Unselborder		= 1,	/* border of unselected window */
+    Scrollwid 		= 12,	/* width of scroll bar */
+    Scrollgap 		= 4,	/* gap right of scroll bar */
+    BIG			= 3,	/* factor by which window dimension can exceed screen */
+};
+@
+
+
+<<function wmk>>=
+Window*
+wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
+{
+    Window *w;
+    Rectangle r;
+
+    <<[[wmk()]] cols initialisation>>
+
+    w = emalloc(sizeof(Window));
+
+    w->screenr = i->r;
+    r = insetrect(i->r, Selborder+1);
+    w->i = i;
+    w->mc = *mc;
+    w->ck = ck;
+    w->cctl = cctl;
+    w->cursorp = nil;
+
+    w->conswrite = chancreate(sizeof(Conswritemesg), 0);
+    w->consread =  chancreate(sizeof(Consreadmesg), 0);
+    w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
+    w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
+
+    w->scrollr = r;
+    w->scrollr.max.x = r.min.x+Scrollwid;
+    w->lastsr = ZR;
+    r.min.x += Scrollwid+Scrollgap;
+
+    frinit(w, r, font, i, cols);
+
+    w->maxtab = maxtab*stringwidth(font, "0");
+    w->topped = ++topped;
+    w->id = ++id;
+    w->notefd = -1;
+    w->scrolling = scrolling;
+    w->dir = estrdup(startdir);
+    w->label = estrdup("<unnamed>");
+    r = insetrect(w->i->r, Selborder);
+
+    draw(w->i, r, cols[BACK], nil, w->entire.min);
+    wborder(w, Selborder);
+    wscrdraw(w);
+    incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
+    return w;
+}
+@
+
+
+
+
+
+
+
+
 <<global menuing>>=
 bool menuing;/* menu action is pending; waiting for window to be indicated */
 @
@@ -3156,6 +3096,11 @@ wsetcols(Window *w)
 
 \section{Window deletion}
 
+<<[[Window]] config fields>>=
+bool_byte	deleted;
+@
+
+
 <<[[button3menu()]] cases>>=
 case Delete:
     delete();
@@ -3225,7 +3170,7 @@ case Deleted:
 
 % Exited vs Deleted?
 
-% button3menu -> wclose() -> wclosewin() ; wsendctlmsg(Exited)
+%?? button3menu -> wclose???() -> wclosewin() ; wsendctlmsg(Exited)
 
 <<[[wctlmesg()]] cases>>=
 case Exited:
@@ -3245,6 +3190,69 @@ case Exited:
     free(w);
     break;
 @
+
+
+
+% dtor?
+<<function wclose>>=
+int
+wclose(Window *w)
+{
+    int i;
+
+    i = decref(w);
+    if(i > 0)
+        return 0;
+
+    if(i < 0)
+        error("negative ref count");
+    if(!w->deleted)
+        wclosewin(w);
+    wsendctlmesg(w, Exited, ZR, nil);
+    return 1;
+}
+@
+
+<<function wclosewin>>=
+void
+wclosewin(Window *w)
+{
+    Rectangle r;
+    int i;
+
+    w->deleted = true;
+
+    if(w == input){
+        input = nil;
+        wsetcursor(w, false);
+    }
+    if(w == wkeyboard)
+        wkeyboard = nil;
+
+    for(i=0; i<nhidden; i++)
+        if(hidden[i] == w){
+            --nhidden;
+            memmove(hidden+i, hidden+i+1, (nhidden-i)*sizeof(hidden[0]));
+            hidden[nhidden] = nil;
+            break;
+        }
+    for(i=0; i<nwindow; i++)
+        if(window[i] == w){
+            --nwindow;
+            memmove(window+i, window+i+1, (nwindow-i)*sizeof(Window*));
+            w->deleted = true; // again??
+            r = w->i->r;
+            /* move it off-screen to hide it, in case client is slow in letting it go */
+            //if(0) originwindow(w->i, r.min, view->r.max);
+            freeimage(w->i);
+            w->i = nil;
+            return;
+        }
+    error("unknown window in closewin");
+}
+@
+
+
 
 \section{Window resize}
 % via menu, or via mouse on border directly
@@ -3495,6 +3503,17 @@ drawedge(Image **bp, Rectangle r)
 
 \section{Window hiding}
 % via menu
+
+
+<<global hidden>>=
+Window	*hidden[100];
+@
+% hidden windows
+
+<<global nhidden>>=
+int		nhidden;
+@
+
 
 <<[[button3menu()]] cases>>=
 case Hide:
@@ -3830,6 +3849,7 @@ riosetcursor(Cursor *p, int force)
 
 \section{Terminal creation}
 
+% new(..., pid = 0, ...) -> proccreate(<>)
 <<function winshell>>=
 void
 winshell(void *args)

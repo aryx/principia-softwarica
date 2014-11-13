@@ -39,7 +39,7 @@ Image	*red;
 /*e: global red */
 
 /*s: global window */
-//array<option<ref_own<Window>>>
+//array<ref_own<Window>>
 Window	**window;
 /*e: global window */
 /*s: global wkeyboard */
@@ -81,7 +81,7 @@ bool		scrolling;
 int		maxtab = 0;
 /*e: global maxtab */
 /*s: global deletechan */
-Channel*	deletechan;
+Channel* deletechan;
 /*e: global deletechan */
 /*s: global startdir */
 char		*startdir;

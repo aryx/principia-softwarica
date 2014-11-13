@@ -406,7 +406,8 @@ killprocs(void)
 void
 keyboardthread(void*)
 {
-    Rune buf[2][20], *rp;
+    Rune buf[2][20];
+    Rune *rp;
     int n, i;
 
     threadsetname("keyboardthread");
