@@ -46,6 +46,7 @@ struct Alt {
 	Channel	*c;		/* channel */
 	void	*v;		/* pointer to value */
 	ChanOp	op;		/* operation */
+
 	char	*err;		/* did the op fail? */
 	/*
 	 * the next variables are used internally to alt
@@ -62,7 +63,7 @@ struct Ref {
 int	alt(Alt alts[]);
 int	chanclose(Channel*);
 int	chanclosing(Channel *c);
-Channel*chancreate(int elemsize, int bufsize);
+Channel* chancreate(int elemsize, int bufsize);
 int	chaninit(Channel *c, int elemsize, int elemcnt);
 void	chanfree(Channel *c);
 int	chanprint(Channel *, char *, ...);
