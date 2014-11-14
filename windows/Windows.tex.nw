@@ -1372,7 +1372,7 @@ wpointto(Point pt)
 
 
 
-
+% LP split and make more readable the action
 <<[[mousethread()]] if buttons>>=
 /* we're not sending the event, but if button is down maybe we should */
 if(mouse->buttons){
@@ -1652,7 +1652,6 @@ alts[WMouse].op = CHANRCV;
 %    send(winput->mc.c, &tmp);
 
 
-% LP split mouseopen!
 <<[[winctl()]] event loop cases>>=
 case WMouse:
     <<[[winctl()]] WMouse case if mouseopen>>
@@ -1660,66 +1659,6 @@ case WMouse:
         wmousectl(w);
     break;
 @
-
-
-
-
-
-
-
-
-% mv in /dev/mouse reading maybe, when mouseopen mode!
-% (meating graphical app probably)
-
-
-<<[[Window]] mouse fields>>=
-Mouseinfo	mouse;
-@
-
-<<struct Mouseinfo>>=
-struct Mouseinfo
-{
-    Mousestate	queue[16];
-    int	ri;	/* read index into queue */
-    int	wi;	/* write index */
-    ulong	counter;	/* serial no. of last mouse event we received */
-    ulong	lastcounter;	/* serial no. of last mouse event sent to client */
-    int	lastb;	/* last button state we received */
-    uchar	qfull;	/* filled the queue; no more recording until client comes back */	
-};	
-@
-
-<<struct Mousestate>>=
-struct Mousestate
-{
-    Mouse;
-    ulong	counter;	/* serial no. of mouse event */
-};
-@
-
-<<[[winctl()]] locals>>=
-Mousestate *mp, m;
-@
-
-
-<<[[winctl()]] WMouse case if mouseopen>>=
-if(w->mouseopen) {
-    w->mouse.counter++;
-
-    /* queue click events */
-    if(!w->mouse.qfull && lastb != w->mc.buttons) {	/* add to ring */
-        mp = &w->mouse.queue[w->mouse.wi];
-        if(++w->mouse.wi == nelem(w->mouse.queue))
-            w->mouse.wi = 0;
-        if(w->mouse.wi == w->mouse.ri)
-            w->mouse.qfull = true;
-        mp->Mouse = w->mc;
-        mp->counter = w->mouse.counter;
-        lastb = w->mc.buttons;
-    }
-}
-@
-
 
 
 \subsection{Control events listening}
@@ -2336,64 +2275,7 @@ button2menu(Window *w)
 % put pictures instead of code :)
 % what is the code that takes the hexa data and draw?
 
-
-% mousethread -> <>
-<<function cornercursor>>=
-void
-cornercursor(Window *w, Point p, bool force)
-{
-    if(w!=nil && winborder(w, p))
-        riosetcursor(corners[whichcorner(w, p)], force);
-    else
-        wsetcursor(w, force);
-}
-@
-
-
-<<function winborder>>=
-int
-winborder(Window *w, Point xy)
-{
-    return ptinrect(xy, w->screenr) && !ptinrect(xy, insetrect(w->screenr, Selborder));
-}
-@
-
-
-% cornercursor -> <>
-<<function whichcorner>>=
-int
-whichcorner(Window *w, Point p)
-{
-    int i, j;
-    
-    i = portion(p.x, w->screenr.min.x, w->screenr.max.x);
-    j = portion(p.y, w->screenr.min.y, w->screenr.max.y);
-    return 3*j+i;
-}
-@
-
-% whichcorner -> <>
-<<function portion>>=
-int
-portion(int x, int lo, int hi)
-{
-    x -= lo;
-    hi -= lo;
-    if(x < 20)
-        return 0;
-    if(x > hi-20)
-        return 2;
-    return 1;
-}
-@
-
-
-
-
-
-
-
-
+\section{Cursors graphics}
 
 <<global crosscursor (windows/rio/data.c)>>=
 Cursor crosscursor = {
@@ -2464,6 +2346,17 @@ Cursor query = {
      0x00, 0x00, 0x03, 0x80, 0x03, 0x80, 0x00, 0x00, }
 };
 @
+
+\section{Cursors borders graphics}
+
+<<global corners (windows/rio/data.c)>>=
+Cursor *corners[9] = {
+    &tl,	&t,	&tr,
+    &l,	nil,	&r,
+    &bl,	&b,	&br,
+};
+@
+
 
 <<global tl>>=
 Cursor tl = {
@@ -2577,13 +2470,81 @@ Cursor l = {
 };
 @
 
-<<global corners (windows/rio/data.c)>>=
-Cursor *corners[9] = {
-    &tl,	&t,	&tr,
-    &l,	nil,	&r,
-    &bl,	&b,	&br,
-};
+
+\section{Setting the cursor}
+
+% rio cursor, window managment, vs app cursor!
+
+<<global lastcursor>>=
+static	Cursor	*lastcursor;
 @
+
+<<function riosetcursor>>=
+void
+riosetcursor(Cursor *p, int force)
+{
+    if(!force && p==lastcursor)
+        return;
+    setcursor(mousectl, p);
+    lastcursor = p;
+}
+@
+
+
+
+
+% mousethread -> <>
+<<function cornercursor>>=
+void
+cornercursor(Window *w, Point p, bool force)
+{
+    if(w!=nil && winborder(w, p))
+        riosetcursor(corners[whichcorner(w, p)], force);
+    else
+        wsetcursor(w, force);
+}
+@
+
+
+<<function winborder>>=
+int
+winborder(Window *w, Point xy)
+{
+    return ptinrect(xy, w->screenr) && !ptinrect(xy, insetrect(w->screenr, Selborder));
+}
+@
+
+
+% cornercursor -> <>
+<<function whichcorner>>=
+int
+whichcorner(Window *w, Point p)
+{
+    int i, j;
+    
+    i = portion(p.x, w->screenr.min.x, w->screenr.max.x);
+    j = portion(p.y, w->screenr.min.y, w->screenr.max.y);
+    return 3*j+i;
+}
+@
+
+% whichcorner -> <>
+<<function portion>>=
+int
+portion(int x, int lo, int hi)
+{
+    x -= lo;
+    hi -= lo;
+    if(x < 20)
+        return 0;
+    if(x > hi-20)
+        return 2;
+    return 1;
+}
+@
+
+
+
 
 
 
@@ -2592,9 +2553,6 @@ Cursor *corners[9] = {
 Cursor		cursor;
 Cursor		*cursorp;
 @
-
-
-
 
 <<function wsetcursor>>=
 void
@@ -2615,20 +2573,9 @@ wsetcursor(Window *w, bool force)
 }
 @
 
-<<global lastcursor>>=
-static	Cursor	*lastcursor;
-@
 
-<<function riosetcursor>>=
-void
-riosetcursor(Cursor *p, int force)
-{
-    if(!force && p==lastcursor)
-        return;
-    setcursor(mousectl, p);
-    lastcursor = p;
-}
-@
+
+
 
 
 \chapter{Windows Managment}
@@ -2645,8 +2592,10 @@ riosetcursor(Cursor *p, int force)
 enum	/* control messages */
 {
     Wakeup,
+
     Reshaped, // Resized, Hide/Unhind
     Moved,
+
     Refresh,
     Movemouse,
 
@@ -2720,6 +2669,7 @@ case Wakeup:
     break;
 @
 
+
 <<[[wctlmesg()]] cases>>=
 case Refresh:
     if(w->deleted || Dx(w->screenr)<=0 || !rectclip(&r, w->i->r))
@@ -2763,29 +2713,6 @@ case Movemouse:
     break;
 @
 
-<<[[wctlmesg()]] cases>>=
-case Rawon:
-    break;
-case Rawoff:
-    if(w->deleted)
-        break;
-    while(w->nraw > 0){
-        wkeyctl(w, w->raw[0]);
-        --w->nraw;
-        runemove(w->raw, w->raw+1, w->nraw);
-    }
-    break;
-@
-
-<<[[wctlmesg()]] cases>>=
-case Holdon:
-case Holdoff:
-    if(w->deleted)
-        break;
-    wrepaint(w);
-    flushimage(display, true);
-    break;
-@
 
 
 
@@ -3144,15 +3071,14 @@ wtop(Point pt)
 @
 
 
-% wtop | ... -> <>
+% new | wtop | ... -> <>
 <<function wcurrent>>=
 void
 wcurrent(Window *w)
 {
     Window *oi;
 
-    if(wkeyboard!=nil && w==wkeyboard)
-        return;
+    <<[[wcurrent()]] if wkeyboard>>
     oi = input;
     input = w;
     if(oi!=w && oi!=nil)
@@ -3181,8 +3107,10 @@ void
 wrepaint(Window *w)
 {
     wsetcols(w);
+
     if(!w->mouseopen)
         frredraw(w);
+
     if(w == input){
         wborder(w, Selborder);
         wsetcursor(w, false);
@@ -3347,8 +3275,7 @@ wclosewin(Window *w)
         input = nil;
         wsetcursor(w, false);
     }
-    if(w == wkeyboard)
-        wkeyboard = nil;
+    <<[[wclosewin()]] if wkeyboard>>
 
     for(i=0; i<nhidden; i++)
         if(hidden[i] == w){
@@ -3904,8 +3831,77 @@ waddraw(Window *w, Rune *r, int nr)
 @
 
 
+<<[[wctlmesg()]] cases>>=
+case Rawon:
+    break;
+case Rawoff:
+    if(w->deleted)
+        break;
+    while(w->nraw > 0){
+        wkeyctl(w, w->raw[0]);
+        --w->nraw;
+        runemove(w->raw, w->raw+1, w->nraw);
+    }
+    break;
+@
+
+
 
 \section{Mouse events}
+
+
+% mv in /dev/mouse reading maybe, when mouseopen mode!
+% (meating graphical app probably)
+
+
+<<[[Window]] mouse fields>>=
+Mouseinfo	mouse;
+@
+
+<<struct Mouseinfo>>=
+struct Mouseinfo
+{
+    Mousestate	queue[16];
+    int	ri;	/* read index into queue */
+    int	wi;	/* write index */
+    ulong	counter;	/* serial no. of last mouse event we received */
+    ulong	lastcounter;	/* serial no. of last mouse event sent to client */
+    int	lastb;	/* last button state we received */
+    uchar	qfull;	/* filled the queue; no more recording until client comes back */	
+};	
+@
+
+<<struct Mousestate>>=
+struct Mousestate
+{
+    Mouse;
+    ulong	counter;	/* serial no. of mouse event */
+};
+@
+
+<<[[winctl()]] locals>>=
+Mousestate *mp, m;
+@
+
+
+<<[[winctl()]] WMouse case if mouseopen>>=
+if(w->mouseopen) {
+    w->mouse.counter++;
+
+    /* queue click events */
+    if(!w->mouse.qfull && lastb != w->mc.buttons) {	/* add to ring */
+        mp = &w->mouse.queue[w->mouse.wi];
+        if(++w->mouse.wi == nelem(w->mouse.queue))
+            w->mouse.wi = 0;
+        if(w->mouse.wi == w->mouse.ri)
+            w->mouse.qfull = true;
+        mp->Mouse = w->mc;
+        mp->counter = w->mouse.counter;
+        lastb = w->mc.buttons;
+    }
+}
+@
+
 
 
 \section{Keyboard events}
@@ -8175,7 +8171,6 @@ initcmd(void *arg)
 \section{Fake keyboard input, [[rio -k]]}
 % what for? to help debug app? to automate testing?
 
-
 \subsection{[[rio -k]]}
 
 <<[[main()]] locals>>=
@@ -8192,18 +8187,22 @@ case 'k':
     break;
 @
 
-<<[[main()]] locals>>=
-Image *i;
-Rectangle r;
+
+
+<<global wkeyboard>>=
+Window	*wkeyboard;	/* window of simulated keyboard */
 @
+
+
+
 
 <<global kbdargv>>=
 char *kbdargv[] = { "rc", "-c", nil, nil };
 @
 
-
-<<global wkeyboard>>=
-Window	*wkeyboard;	/* window of simulated keyboard */
+<<[[main()]] locals>>=
+Image *i;
+Rectangle r;
 @
 
 <<[[main()]] if initstr or kdbin>>=
@@ -8237,6 +8236,16 @@ if(wkeyboard!=nil && ptinrect(mouse->xy, wkeyboard->screenr)){
     wtopme(wkeyboard);
     winput = wkeyboard;
 }
+@
+
+<<[[wcurrent()]] if wkeyboard>>=
+if(wkeyboard!=nil && w==wkeyboard)
+    return;
+@
+
+<<[[wclosewin()]] if wkeyboard>>=
+if(w == wkeyboard)
+    wkeyboard = nil;
 @
 
 \subsection{[[/dev/kdbin]]}
@@ -8282,7 +8291,7 @@ keyboardsend(char *s, int cnt)
 }
 @
 
-\subsection{Keyboard hide XXX}
+\subsection{Keyboard hide}
 
 % button 6 ???
 
@@ -8334,7 +8343,7 @@ putenv("font", fontname);
 @
 
 
-\section{Holding}
+\section{Holding mode}
 
 % also a textual window field?
 <<[[Window]] config fields>>=
@@ -8354,6 +8363,17 @@ if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */
 }
 @
 % use = false and = true instead?
+
+<<[[wctlmesg()]] cases>>=
+case Holdon:
+case Holdoff:
+    if(w->deleted)
+        break;
+    wrepaint(w);
+    flushimage(display, true);
+    break;
+@
+
 
 \chapter{Conclusion}
 

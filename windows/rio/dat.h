@@ -92,8 +92,10 @@ enum
 enum	/* control messages */
 {
     Wakeup,
+
     Reshaped, // Resized, Hide/Unhind
     Moved,
+
     Refresh,
     Movemouse,
 
@@ -200,10 +202,10 @@ struct Window
     /*s: [[Window]] mouse fields */
     Mousectl	mc; // mc.c is the mouse event listening channel
     /*x: [[Window]] mouse fields */
-    Mouseinfo	mouse;
-    /*x: [[Window]] mouse fields */
     Cursor		cursor;
     Cursor		*cursorp;
+    /*x: [[Window]] mouse fields */
+    Mouseinfo	mouse;
     /*e: [[Window]] mouse fields */
     
     //--------------------------------------------------------------------

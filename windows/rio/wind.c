@@ -283,8 +283,6 @@ winctl(void *arg)
     /*x: [[winctl()]] locals */
     Rune *kbdr;
     /*x: [[winctl()]] locals */
-    Mousestate *mp, m;
-    /*x: [[winctl()]] locals */
     Wctlmesg wcm;
     /*x: [[winctl()]] locals */
     Mousereadmesg mrm;
@@ -295,6 +293,8 @@ winctl(void *arg)
     Stringpair pair;
     /*x: [[winctl()]] locals */
     Consreadmesg cwrm;
+    /*x: [[winctl()]] locals */
+    Mousestate *mp, m;
     /*e: [[winctl()]] locals */
     
     w = arg;
@@ -880,8 +880,10 @@ void
 wrepaint(Window *w)
 {
     wsetcols(w);
+
     if(!w->mouseopen)
         frredraw(w);
+
     if(w == input){
         wborder(w, Selborder);
         wsetcursor(w, false);
@@ -1276,26 +1278,6 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         wmovemouse(w, r.min);
         break;
     /*x: [[wctlmesg()]] cases */
-    case Rawon:
-        break;
-    case Rawoff:
-        if(w->deleted)
-            break;
-        while(w->nraw > 0){
-            wkeyctl(w, w->raw[0]);
-            --w->nraw;
-            runemove(w->raw, w->raw+1, w->nraw);
-        }
-        break;
-    /*x: [[wctlmesg()]] cases */
-    case Holdon:
-    case Holdoff:
-        if(w->deleted)
-            break;
-        wrepaint(w);
-        flushimage(display, true);
-        break;
-    /*x: [[wctlmesg()]] cases */
     case Deleted:
         if(w->deleted)
             break;
@@ -1339,6 +1321,26 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
                 wcurrent(w);
         }else if(w == input)
             wcurrent(nil);
+        flushimage(display, true);
+        break;
+    /*x: [[wctlmesg()]] cases */
+    case Rawon:
+        break;
+    case Rawoff:
+        if(w->deleted)
+            break;
+        while(w->nraw > 0){
+            wkeyctl(w, w->raw[0]);
+            --w->nraw;
+            runemove(w->raw, w->raw+1, w->nraw);
+        }
+        break;
+    /*x: [[wctlmesg()]] cases */
+    case Holdon:
+    case Holdoff:
+        if(w->deleted)
+            break;
+        wrepaint(w);
         flushimage(display, true);
         break;
     /*e: [[wctlmesg()]] cases */
@@ -1413,8 +1415,10 @@ wcurrent(Window *w)
 {
     Window *oi;
 
+    /*s: [[wcurrent()]] if wkeyboard */
     if(wkeyboard!=nil && w==wkeyboard)
         return;
+    /*e: [[wcurrent()]] if wkeyboard */
     oi = input;
     input = w;
     if(oi!=w && oi!=nil)
@@ -1535,8 +1539,10 @@ wclosewin(Window *w)
         input = nil;
         wsetcursor(w, false);
     }
+    /*s: [[wclosewin()]] if wkeyboard */
     if(w == wkeyboard)
         wkeyboard = nil;
+    /*e: [[wclosewin()]] if wkeyboard */
 
     for(i=0; i<nhidden; i++)
         if(hidden[i] == w){
