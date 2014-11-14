@@ -581,10 +581,12 @@ mousethread(void*)
     /*x: [[mousethread()]] locals */
     bool scrolling = false;
     /*x: [[mousethread()]] locals */
+    Window *w;
+    /*x: [[mousethread()]] locals */
     bool moving = false;
     /*x: [[mousethread()]] locals */
     bool inside, band;
-    Window *oin, *w;
+    Window *oin;
     Image *i;
     Rectangle r;
     /*e: [[mousethread()]] locals */
@@ -715,7 +717,7 @@ mousethread(void*)
             if(w != nil)
                 cornercursor(w, mouse->xy, 0);
 
-            /*s: [[mousethread()]] if buttons */
+            /*s: [[mousethread()]] if buttons and was not sending */
             /* we're not sending the event, but if button is down maybe we should */
             if(mouse->buttons){
                 /* w->topped will be zero or less if window has been bottomed */
@@ -724,21 +726,27 @@ mousethread(void*)
                         ;
                     }else if(mouse->buttons & 2){
                         if(winput && !winput->mouseopen)
+                            /*s: [[mousethread()]] middle click under certain conditions */
                             button2menu(winput);
+                            /*e: [[mousethread()]] middle click under certain conditions */
                     }else if(mouse->buttons & 4)
-                        button3menu();
+                            /*s: [[mousethread()]] right click under certain conditions */
+                            button3menu();
+                            /*e: [[mousethread()]] right click under certain conditions */
                 }else{
                     /* if button 1 event in the window, top the window and wait for button up. */
                     /* otherwise, top the window and pass the event on */
-                    if(wtop(mouse->xy) 
-                       && (mouse->buttons!=1 || winborder(w, mouse->xy)))
+                    /*s: [[mousethread()]] click on unfocused window, set w */
+                    w = wtop(mouse->xy);
+                    /*e: [[mousethread()]] click on unfocused window, set w */
+                    if(w&& (mouse->buttons!=1 || winborder(w, mouse->xy)))
                         // input changed
                         goto Again;
 
                     goto Drain;
                 }
             }
-            /*e: [[mousethread()]] if buttons */
+            /*e: [[mousethread()]] if buttons and was not sending */
             moving = false;
             break;
             /*e: [[mousethread()]] if not sending */

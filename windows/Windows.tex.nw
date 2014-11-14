@@ -232,6 +232,7 @@ usage(void)
 % (e.g. button3menu)
 % TODO show figure, and annotate subtle things, like blue frame,
 % or light grey text when unfocused xterm, and menus
+% winborder, scrollr, screenr
 
 % also have fileserver that can take command (e.g. wctlnew())
 % the fileserver offer virtual views for the apps running
@@ -1264,6 +1265,17 @@ Again:
 
 \subsection{Application mouse events}
 
+% when set sending to true? what are the conditions to relay mouse events?
+% when inside and scroll, left click, or opened mouse
+% if not opened then middle and right click are intercepted
+
+<<[[mousethread()]] set sending to true for some conditions>>=
+if(inside && 
+   (scrolling || winput->mouseopen || (mouse->buttons&1)))
+     sending = true;
+@
+
+
 <<[[mousethread()]] locals>>=
 Mouse tmp;
 @
@@ -1290,13 +1302,7 @@ Sending:
 
 
 
-% when set sending to true? what are the conditions to relay mouse events?
 
-<<[[mousethread()]] set sending to true for some conditions>>=
-if(inside && 
-   (scrolling || winput->mouseopen || (mouse->buttons&1)))
-     sending = true;
-@
 
 
 <<[[mousethread()]] locals>>=
@@ -1326,7 +1332,9 @@ if((mouse->buttons&(8|16)) && !winput->mouseopen)
 
 \subsection{Windowing system mouse events}
 
-
+<<[[mousethread()]] locals>>=
+Window *w;
+@
 
 % window manager related stuff
 <<[[mousethread()]] if not sending>>=
@@ -1343,7 +1351,7 @@ else
 if(w != nil)
     cornercursor(w, mouse->xy, 0);
 
-<<[[mousethread()]] if buttons>>
+<<[[mousethread()]] if buttons and was not sending>>
 moving = false;
 break;
 @
@@ -1371,9 +1379,8 @@ wpointto(Point pt)
 
 
 
-
 % LP split and make more readable the action
-<<[[mousethread()]] if buttons>>=
+<<[[mousethread()]] if buttons and was not sending>>=
 /* we're not sending the event, but if button is down maybe we should */
 if(mouse->buttons){
     /* w->topped will be zero or less if window has been bottomed */
@@ -1382,14 +1389,14 @@ if(mouse->buttons){
             ;
         }else if(mouse->buttons & 2){
             if(winput && !winput->mouseopen)
-                button2menu(winput);
+                <<[[mousethread()]] middle click under certain conditions>>
         }else if(mouse->buttons & 4)
-            button3menu();
+                <<[[mousethread()]] right click under certain conditions>>
     }else{
         /* if button 1 event in the window, top the window and wait for button up. */
         /* otherwise, top the window and pass the event on */
-        if(wtop(mouse->xy) 
-           && (mouse->buttons!=1 || winborder(w, mouse->xy)))
+        <<[[mousethread()]] click on unfocused window, set w>>
+        if(w&& (mouse->buttons!=1 || winborder(w, mouse->xy)))
             // input changed
             goto Again;
 
@@ -1404,57 +1411,6 @@ if(mouse->buttons){
 
 
 
-
-
-<<[[mousethread()]] locals>>=
-bool moving = false;
-@
-% ???
-% how?
-
-
-
-\ifallcode
-<<[[mousethread()]] locals>>=
-bool inside, band;
-Window *oin, *w;
-Image *i;
-Rectangle r;
-@
-\fi
-
-<<[[mousethread()]] if moving and buttons>>=
-if(moving && (mouse->buttons&7)){
-    oin = winput;
-    band = mouse->buttons & 3;
-    sweeping = true;
-    if(band)
-        i = bandsize(winput);
-    else
-        i = drag(winput, &r);
-    sweeping = false;
-    if(i != nil){
-        if(winput == oin){
-            if(band)
-                wsendctlmesg(winput, Reshaped, i->r, i);
-            else
-                wsendctlmesg(winput, Moved, r, i);
-            cornercursor(winput, mouse->xy, 1);
-        }else
-            freeimage(i);
-    }
-}
-@
-
-
-% when set moving to true??
-<<[[mousethread()]] set moving to true for some conditions>>=
-/* topped will be zero or less if window has been bottomed */
-if(sending == false && !scrolling 
-   && winborder(winput, mouse->xy) && winput->topped > 0){
-    moving = true;
-}
-@
 
 
 
@@ -1478,6 +1434,7 @@ Drain:
     moving = false;
     goto Again;	/* recalculate mouse position, cursor */
 @
+%??????????
 
 
 \section{Windows threads}
@@ -2125,152 +2082,6 @@ deletethread(void*)
 }
 @
 
-\chapter{Menus}
-
-
-\section{Right click system menu}
-
-<<enum _anon_ (windows/rio/rio.c)>>=
-enum
-{
-    New,
-    Reshape,
-    Move,
-    Delete,
-    Hide,
-    Exit,
-
-    Hidden,
-};
-@
-
-%//PAD used to be a global
-%<<global Hidden>>=
-%int	Hidden = Exit+1;
-%@
-% ? when hide it's accessible in the right menu! hence the 100 below
-
-<<global menu3str>>=
-char*		menu3str[100] = {
- [New]		"New",
- [Reshape]	"Resize",
- [Move]		"Move",
- [Delete]	"Delete",
- [Hide]		"Hide",
- [Exit]		"Exit",
- nil
-};
-@
-
-% was in main()
-%    //PAD: let's keep the Exit option!
-%    //PAD: if(strstr(argv[0], ".out") == nil){
-%    //PAD: 	menu3str[Exit] = nil;
-%    //PAD: 	Hidden--;
-%    //PAD: }
-
-<<global menu3>>=
-Menu menu3 =
-{
-    menu3str
-};
-@
-
-
-% displaying a menu is drawing something! on top of what you
-% are currently! it's part of the drawing library!
-% mousethread -> event loop -> <>
-<<function button3menu>>=
-void
-button3menu(void)
-{
-    int i;
-
-    <<[[button3menu()]] menu3str adjustments with hidden windows>>
-
-    sweeping = true;
-    switch(i = menuhit(3, mousectl, &menu3, wscreen)){
-    case -1:
-        break;
-    <<[[button3menu()]] cases>>
-    }
-    sweeping = false;
-}
-@
-%old:
-%        if(Hidden > Exit){
-%        }
-%        /* else fall through */
-% tricks when Exit was an optional menu item disabled sometimes
-
-<<[[button3menu()]] cases>>=
-case Exit:
-    send(exitchan, nil);
-    break;
-@
-
-\section{Middle click system menu}
-
-<<enum _anon_ (windows/rio/rio.c)2>>=
-enum
-{
-    Cut,
-    Paste,
-    Snarf,
-    Plumb,
-    Send,
-    Scroll,
-};
-@
-
-<<global menu2str>>=
-char*		menu2str[] = {
- [Cut]		"cut",
- [Paste]	"paste",
- [Snarf]	"snarf",
- [Plumb]	"plumb",
- [Send]		"send",
- [Scroll]	"scroll",
- nil
-};
-@
-
-<<global menu2>>=
-Menu menu2 =
-{
-    menu2str
-};
-@
-
-
-
-
-
-% active only on actual window, not like right menu
-% mousethread -> event loop -> <>(winput)
-<<function button2menu>>=
-void
-button2menu(Window *w)
-{
-    if(w->deleted)
-        return;
-    incref(w);
-
-    <<[[button2menu()]] menu2str adjustments for scrolling>>
-
-    switch(menuhit(2, mousectl, &menu2, wscreen)){
-    <<[[button2menu()]] cases>>
-    }
-    wclose(w); // decref
-    wsendctlmesg(w, Wakeup, ZR, nil);
-    flushimage(display, true);
-}
-@
-
-
-
-
-
 \chapter{Cursor}
 % put pictures instead of code :)
 % what is the code that takes the hexa data and draw?
@@ -2583,8 +2394,156 @@ wsetcursor(Window *w, bool force)
 \section{Overview}
 
 % many windows ops via menu that then trigger message send to
-% window thread via wsendctlmsg()
-% or via mouse on border of window, or via filsys.
+% window threads via wsendctlmsg(w->cctl)
+% or via mouse on border of window, 
+% or via filsys.
+
+\section{Right click system menu}
+
+<<[[mousethread()]] right click under certain conditions>>=
+button3menu();
+@
+
+
+% displaying a menu is drawing something! on top of what you
+% are currently! it's part of the drawing library!
+% mousethread -> event loop -> <>
+<<function button3menu>>=
+void
+button3menu(void)
+{
+    int i;
+
+    <<[[button3menu()]] menu3str adjustments with hidden windows>>
+
+    sweeping = true;
+    switch(i = menuhit(3, mousectl, &menu3, wscreen)){
+    case -1:
+        break;
+    <<[[button3menu()]] cases>>
+    }
+    sweeping = false;
+}
+@
+%old:
+%        if(Hidden > Exit){
+%        }
+%        /* else fall through */
+% tricks when Exit was an optional menu item disabled sometimes
+
+
+<<enum _anon_ (windows/rio/rio.c)>>=
+enum
+{
+    New,
+    Reshape,
+    Move,
+    Delete,
+    Hide,
+    Exit,
+
+    Hidden,
+};
+@
+
+%//PAD used to be a global
+%<<global Hidden>>=
+%int	Hidden = Exit+1;
+%@
+% ? when hide it's accessible in the right menu! hence the 100 below
+
+<<global menu3str>>=
+char*		menu3str[100] = {
+ [New]		"New",
+ [Reshape]	"Resize",
+ [Move]		"Move",
+ [Delete]	"Delete",
+ [Hide]		"Hide",
+ [Exit]		"Exit",
+ nil
+};
+@
+
+% was in main()
+%    //PAD: let's keep the Exit option!
+%    //PAD: if(strstr(argv[0], ".out") == nil){
+%    //PAD: 	menu3str[Exit] = nil;
+%    //PAD: 	Hidden--;
+%    //PAD: }
+
+<<global menu3>>=
+Menu menu3 =
+{
+    menu3str
+};
+@
+
+
+<<[[button3menu()]] cases>>=
+case Exit:
+    send(exitchan, nil);
+    break;
+@
+
+
+
+\section{Window borders click}
+
+<<[[mousethread()]] locals>>=
+bool moving = false;
+@
+% ???
+% how?
+
+% when set moving to true?? when on window border!
+<<[[mousethread()]] set moving to true for some conditions>>=
+/* topped will be zero or less if window has been bottomed */
+if(sending == false && !scrolling 
+   && winborder(winput, mouse->xy) && winput->topped > 0){
+    moving = true;
+}
+@
+
+% could put winborder() here
+
+
+
+\ifallcode
+<<[[mousethread()]] locals>>=
+bool inside, band;
+Window *oin;
+Image *i;
+Rectangle r;
+@
+\fi
+
+<<[[mousethread()]] if moving and buttons>>=
+if(moving && (mouse->buttons&7)){
+    oin = winput;
+    band = mouse->buttons & 3;
+    sweeping = true;
+    if(band)
+        i = bandsize(winput);
+    else
+        i = drag(winput, &r);
+    sweeping = false;
+    if(i != nil){
+        if(winput == oin){
+            if(band)
+                wsendctlmesg(winput, Reshaped, i->r, i);
+            else
+                wsendctlmesg(winput, Moved, r, i);
+            cornercursor(winput, mouse->xy, 1);
+        }else
+            freeimage(i);
+    }
+}
+@
+
+
+
+
+
 
 \section{[[Wctlmesg]]}
 
@@ -3047,6 +3006,10 @@ wsetpid(Window *w, int pid, bool dolabel)
 % via mouse
 
 % put code of mousethread related to window focus here!!
+
+<<[[mousethread()]] click on unfocused window, set w>>=
+w = wtop(mouse->xy);
+@
 
 
 
@@ -4088,7 +4051,74 @@ wfill(Window *w)
 }
 @
 
+\section{Middle click system menu}
+
+
+<<[[mousethread()]] middle click under certain conditions>>=
+button2menu(winput);
+@
+
+% active only on actual window, not like right menu
+% mousethread -> event loop -> <>(winput)
+<<function button2menu>>=
+void
+button2menu(Window *w)
+{
+    if(w->deleted)
+        return;
+    incref(w);
+
+    <<[[button2menu()]] menu2str adjustments for scrolling>>
+
+    switch(menuhit(2, mousectl, &menu2, wscreen)){
+    <<[[button2menu()]] cases>>
+    }
+    wclose(w); // decref
+    wsendctlmesg(w, Wakeup, ZR, nil);
+    flushimage(display, true);
+}
+@
+
+
+<<enum _anon_ (windows/rio/rio.c)2>>=
+enum
+{
+    Cut,
+    Paste,
+    Snarf,
+    Plumb,
+    Send,
+    Scroll,
+};
+@
+
+<<global menu2str>>=
+char*		menu2str[] = {
+ [Cut]		"cut",
+ [Paste]	"paste",
+ [Snarf]	"snarf",
+ [Plumb]	"plumb",
+ [Send]		"send",
+ [Scroll]	"scroll",
+ nil
+};
+@
+
+<<global menu2>>=
+Menu menu2 =
+{
+    menu2str
+};
+@
+
+
+
+
+
+
+
 \section{Mouse events}
+
 
 <<function wmousectl>>=
 void
@@ -7252,7 +7282,7 @@ wtopme(Window *w)
     if(w!=nil && w->i!=nil && !w->deleted && w->topped!=topped){
         topwindow(w->i);
         flushimage(display, 1);
-        w->topped = ++ topped;
+        w->topped = ++topped;
     }
 }
 @
