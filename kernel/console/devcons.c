@@ -955,6 +955,24 @@ consread(Chan *c, void *buf, long n, vlong off)
 
             return readstr((ulong)offset, buf, n, tmp);
     /*x: [[consread()]] cases */
+    case Qcputime:
+        k = offset;
+        if(k >= 5*NUMSIZE)
+            return 0;
+        if(k+n > 5*NUMSIZE)
+            n = 5*NUMSIZE - k;
+        /* easiest to format in a separate buffer and copy out */
+
+        for(i=0; i<5 && NUMSIZE*i<k+n; i++){
+            l = up->time[i];
+            if(i == TReal)
+                l = CPUS(0)->ticks - l;
+            l = TK2MS(l);
+            readnum(0, tmp+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
+        }
+        memmove(buf, tmp+k, n);
+        return n;
+    /*x: [[consread()]] cases */
         case Qrandom:
             return randomread(buf, n);
     /*x: [[consread()]] cases */
@@ -976,24 +994,6 @@ consread(Chan *c, void *buf, long n, vlong off)
     /*x: [[consread()]] cases */
         case Qkprint:
             return qread(kprintoq, buf, n);
-    /*x: [[consread()]] cases */
-    case Qcputime:
-        k = offset;
-        if(k >= 5*NUMSIZE)
-            return 0;
-        if(k+n > 5*NUMSIZE)
-            n = 5*NUMSIZE - k;
-        /* easiest to format in a separate buffer and copy out */
-
-        for(i=0; i<5 && NUMSIZE*i<k+n; i++){
-            l = up->time[i];
-            if(i == TReal)
-                l = CPUS(0)->ticks - l;
-            l = TK2MS(l);
-            readnum(0, tmp+NUMSIZE*i, NUMSIZE, l, NUMSIZE);
-        }
-        memmove(buf, tmp+k, n);
-        return n;
     /*e: [[consread()]] cases */
 
     case Qtime:

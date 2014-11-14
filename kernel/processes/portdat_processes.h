@@ -616,8 +616,6 @@ struct Proc
 // For debugger, strace
 //--------------------------------------------------------------------
     /*s: [[Proc]] debugger fields */
-    bool setargs;
-    /*x: [[Proc]] debugger fields */
     void  *dbgreg;  /* User registers for devproc */
     /*x: [[Proc]] debugger fields */
     // enum<procctl>
@@ -632,6 +630,8 @@ struct Proc
     char  *syscalltrace;  /* syscall trace */
     /*x: [[Proc]] debugger fields */
     bool trace;    /* process being traced? */
+    /*x: [[Proc]] debugger fields */
+    bool setargs;
     /*e: [[Proc]] debugger fields */
 //--------------------------------------------------------------------
 // Other

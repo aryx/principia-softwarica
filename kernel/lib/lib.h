@@ -19,11 +19,13 @@ enum _bool {
 typedef uchar byte;
 typedef ushort bool_ushort;
 
-typedef int retcode;
-enum _retcode {
-    OK0 = 0,
-    ERROR1 = 1,
-};
+typedef int errorcode0;
+typedef int errorcode1;
+typedef int errorcodeneg1;
+#define OK_0 0
+#define ERROR_1 1
+#define ERROR_0 0
+#define ERROR_NEG1 (-1)
 /*e: pad basic types */
 
 /*s: lib.h forward decl */

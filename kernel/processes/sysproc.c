@@ -292,13 +292,13 @@ sysexec(ulong* arg)
     /*x: [[sysexec()]] locals */
     Fgrp *f;
     /*x: [[sysexec()]] locals */
+    Tos *tos;
+    /*x: [[sysexec()]] locals */
         char line[sizeof(Exec)];
         char *progarg[sizeof(Exec)/2+1];
         char progelem[64];
 
         bool indir = false;
-    /*x: [[sysexec()]] locals */
-    Tos *tos;
     /*e: [[sysexec()]] locals */
 
     elem = nil;

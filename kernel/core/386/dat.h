@@ -94,7 +94,7 @@ typedef void* kern_addr3;
 
 // could be put in lib.h
 /*s: portdat.h macros */
-#define ROUND(s, sz)  (((s)+(sz-1))&~(sz-1))
+#define ROUND(s, sz)  (((s)+(sz-1)) & ~(sz-1))
 /*x: portdat.h macros */
 #define MIN(a, b) ((a) < (b)? (a): (b))
 #define HOWMANY(x, y) (((x)+((y)-1))/(y))
