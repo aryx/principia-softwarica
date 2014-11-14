@@ -674,6 +674,7 @@ mousethread(void*)
 
                 tmp = mousectl->Mouse;
                 tmp.xy = xy; // logical coordinates
+
                 // Dispatch, to current window thread!
                 send(winput->mc.c, &tmp);
                 continue;

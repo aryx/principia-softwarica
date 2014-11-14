@@ -719,6 +719,7 @@ wkeyctl(Window *w, Rune r)
         goto case_Down;
     case Kpgdown:
         n = 2*w->maxlines/3;
+        // Fallthrough
     case_Down:
         q0 = w->org+frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y+n*w->font->height));
         wsetorigin(w, q0, true);
@@ -734,6 +735,7 @@ wkeyctl(Window *w, Rune r)
         goto case_Up;
     case Kpgup:
         n = 2*w->maxlines/3;
+        // Fallthrough
     case_Up:
         q0 = wbacknl(w, w->org, n);
         wsetorigin(w, q0, true);
@@ -814,17 +816,7 @@ wkeyctl(Window *w, Rune r)
         *notefd = w->notefd;
         proccreate(interruptproc, notefd, 4096);
         return;
-    case 0x06:	/* ^F: file name completion */
-    case Kins:		/* Insert: file name completion */
-        rp = namecomplete(w);
-        if(rp == nil)
-            return;
-        nr = runestrlen(rp);
-        q0 = w->q0;
-        q0 = winsert(w, rp, nr, q0);
-        wshow(w, q0+nr);
-        free(rp);
-        return;
+    /*x: [[wkeyctl()]] special key cases and no special mode */
     case 0x08:	/* ^H: erase character */
     case 0x15:	/* ^U: erase line */
     case 0x17:	/* ^W: erase word */
@@ -841,6 +833,18 @@ wkeyctl(Window *w, Rune r)
             wdelete(w, q0, q0+nb);
             wsetselect(w, q0, q0);
         }
+        return;
+    /*x: [[wkeyctl()]] special key cases and no special mode */
+    case 0x06:	/* ^F: file name completion */
+    case Kins:		/* Insert: file name completion */
+        rp = namecomplete(w);
+        if(rp == nil)
+            return;
+        nr = runestrlen(rp);
+        q0 = w->q0;
+        q0 = winsert(w, rp, nr, q0);
+        wshow(w, q0+nr);
+        free(rp);
         return;
     /*e: [[wkeyctl()]] special key cases and no special mode */
     }
@@ -1395,8 +1399,8 @@ wpointto(Point pt)
     for(i=0; i<nwindow; i++){
         v = window[i];
         if(ptinrect(pt, v->screenr))
-        if(!v->deleted)
-        if(w==nil || v->topped>w->topped)
+         if(!v->deleted)
+          if(w==nil || v->topped>w->topped)
             w = v;
     }
     return w;

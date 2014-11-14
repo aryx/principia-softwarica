@@ -608,12 +608,18 @@ bool_byte	mouseopen;
 @
 
 
-
-% also a textual window field?
-<<[[Window]] config fields>>=
-bool_byte	holding;
+% 
+<<global topped>>=
+static	int		topped;
 @
-% ??
+
+<<[[Window]] other fields>>=
+int	 	topped;
+@
+% overlapping windows! see wpointto() to understand how determine focus
+
+
+
 
 
 <<[[Window]] extra fields>>=
@@ -1163,7 +1169,6 @@ keyboardthread(void*)
 
 \section{Mouse thread}
 
-
 <<enum Mxxx>>=
 enum {
     MMouse,
@@ -1274,6 +1279,7 @@ Sending:
 
     tmp = mousectl->Mouse;
     tmp.xy = xy; // logical coordinates
+
     // Dispatch, to current window thread!
     send(winput->mc.c, &tmp);
     continue;
@@ -1284,7 +1290,7 @@ Sending:
 
 
 
-
+% when set sending to true? what are the conditions to relay mouse events?
 
 <<[[mousethread()]] set sending to true for some conditions>>=
 if(inside && 
@@ -1322,15 +1328,6 @@ if((mouse->buttons&(8|16)) && !winput->mouseopen)
 
 
 
-<<[[mousethread()]] locals>>=
-bool moving = false;
-@
-% ???
-% how?
-
-
-
-
 % window manager related stuff
 <<[[mousethread()]] if not sending>>=
 w = wpointto(mouse->xy);
@@ -1350,6 +1347,28 @@ if(w != nil)
 moving = false;
 break;
 @
+
+
+<<function wpointto>>=
+Window*
+wpointto(Point pt)
+{
+    int i;
+    Window *v, *w;
+
+    w = nil;
+    for(i=0; i<nwindow; i++){
+        v = window[i];
+        if(ptinrect(pt, v->screenr))
+         if(!v->deleted)
+          if(w==nil || v->topped>w->topped)
+            w = v;
+    }
+    return w;
+}
+@
+
+
 
 
 
@@ -1387,20 +1406,13 @@ if(mouse->buttons){
 
 
 
-
-<<global sweeping>>=
-bool	sweeping;
+<<[[mousethread()]] locals>>=
+bool moving = false;
 @
-% ??? related to menu, and dragging. Diff with moving?
+% ???
+% how?
 
 
-<<[[mousethread()]] set moving to true for some conditions>>=
-/* topped will be zero or less if window has been bottomed */
-if(sending == false && !scrolling 
-   && winborder(winput, mouse->xy) && winput->topped > 0){
-    moving = true;
-}
-@
 
 \ifallcode
 <<[[mousethread()]] locals>>=
@@ -1410,8 +1422,6 @@ Image *i;
 Rectangle r;
 @
 \fi
-
-
 
 <<[[mousethread()]] if moving and buttons>>=
 if(moving && (mouse->buttons&7)){
@@ -1437,6 +1447,25 @@ if(moving && (mouse->buttons&7)){
 @
 
 
+% when set moving to true??
+<<[[mousethread()]] set moving to true for some conditions>>=
+/* topped will be zero or less if window has been bottomed */
+if(sending == false && !scrolling 
+   && winborder(winput, mouse->xy) && winput->topped > 0){
+    moving = true;
+}
+@
+
+
+
+
+<<global sweeping>>=
+bool	sweeping;
+@
+% ??? related to menu, and dragging. Diff with moving?
+
+
+
 
 
 
@@ -1449,196 +1478,6 @@ Drain:
     moving = false;
     goto Again;	/* recalculate mouse position, cursor */
 @
-
-
-
-
-
-
-
-
-
-
-<<function winborder>>=
-int
-winborder(Window *w, Point xy)
-{
-    return ptinrect(xy, w->screenr) && !ptinrect(xy, insetrect(w->screenr, Selborder));
-}
-@
-
-
-% cornercursor -> <>
-<<function whichcorner>>=
-int
-whichcorner(Window *w, Point p)
-{
-    int i, j;
-    
-    i = portion(p.x, w->screenr.min.x, w->screenr.max.x);
-    j = portion(p.y, w->screenr.min.y, w->screenr.max.y);
-    return 3*j+i;
-}
-@
-
-% whichcorner -> <>
-<<function portion>>=
-int
-portion(int x, int lo, int hi)
-{
-    x -= lo;
-    hi -= lo;
-    if(x < 20)
-        return 0;
-    if(x > hi-20)
-        return 2;
-    return 1;
-}
-@
-
-
-
-
-
-
-<<function bandsize>>=
-Image*
-bandsize(Window *w)
-{
-    Image *i;
-    Rectangle r, or;
-    Point p, startp;
-    int which, but;
-
-    p = mouse->xy;
-    but = mouse->buttons;
-    which = whichcorner(w, p);
-    p = cornerpt(w->screenr, p, which);
-    wmovemouse(w, p);
-    readmouse(mousectl);
-    r = whichrect(w->screenr, p, which);
-    drawborder(r, 1);
-    or = r;
-    startp = p;
-    
-    while(mouse->buttons == but){
-        p = onscreen(mouse->xy);
-        r = whichrect(w->screenr, p, which);
-        if(!eqrect(r, or) && goodrect(r)){
-            drawborder(r, 1);
-            flushimage(display, 1);
-            or = r;
-        }
-        readmouse(mousectl);
-    }
-    p = mouse->xy;
-    drawborder(or, 0);
-    flushimage(display, 1);
-    wsetcursor(w, true);
-    if(mouse->buttons!=0 || Dx(or)<100 || Dy(or)<3*font->height){
-        while(mouse->buttons)
-            readmouse(mousectl);
-        return nil;
-    }
-    if(abs(p.x-startp.x)+abs(p.y-startp.y) <= 1)
-        return nil;
-    i = allocwindow(wscreen, or, Refbackup, DWhite);
-    if(i == nil)
-        return nil;
-    border(i, r, Selborder, red, ZP);
-    return i;
-}
-@
-
-
-<<function wmovemouse>>=
-/*
- * Convert back to physical coordinates
- */
-void
-wmovemouse(Window *w, Point p)
-{
-    p.x += w->screenr.min.x-w->i->r.min.x;
-    p.y += w->screenr.min.y-w->i->r.min.y;
-    moveto(mousectl, p);
-}
-@
-
-
-
-% bandsize -> <>
-<<function whichrect>>=
-Rectangle
-whichrect(Rectangle r, Point p, int which)
-{
-    switch(which){
-    case 0:	/* top left */
-        r = Rect(p.x, p.y, r.max.x, r.max.y);
-        break;
-    case 2:	/* top right */
-        r = Rect(r.min.x, p.y, p.x, r.max.y);
-        break;
-    case 6:	/* bottom left */
-        r = Rect(p.x, r.min.y, r.max.x, p.y);
-        break;
-    case 8:	/* bottom right */
-        r = Rect(r.min.x, r.min.y, p.x, p.y);
-        break;
-    case 1:	/* top edge */
-        r = Rect(r.min.x, p.y, r.max.x, r.max.y);
-        break;
-    case 5:	/* right edge */
-        r = Rect(r.min.x, r.min.y, p.x, r.max.y);
-        break;
-    case 7:	/* bottom edge */
-        r = Rect(r.min.x, r.min.y, r.max.x, p.y);
-        break;
-    case 3:		/* left edge */
-        r = Rect(p.x, r.min.y, r.max.x, r.max.y);
-        break;
-    }
-    return canonrect(r);
-}
-@
-
-
-% bandsize -> <>
-<<function cornerpt>>=
-Point
-cornerpt(Rectangle r, Point p, int which)
-{
-    switch(which){
-    case 0:	/* top left */
-        p = Pt(r.min.x, r.min.y);
-        break;
-    case 2:	/* top right */
-        p = Pt(r.max.x,r.min.y);
-        break;
-    case 6:	/* bottom left */
-        p = Pt(r.min.x, r.max.y);
-        break;
-    case 8:	/* bottom right */
-        p = Pt(r.max.x, r.max.y);
-        break;
-    case 1:	/* top edge */
-        p = Pt(p.x,r.min.y);
-        break;
-    case 5:	/* right edge */
-        p = Pt(r.max.x, p.y);
-        break;
-    case 7:	/* bottom edge */
-        p = Pt(p.x, r.max.y);
-        break;
-    case 3:		/* left edge */
-        p = Pt(r.min.x, p.y);
-        break;
-    }
-    return p;
-}
-@
-
-
-
 
 
 \section{Windows threads}
@@ -2511,6 +2350,47 @@ cornercursor(Window *w, Point p, bool force)
 @
 
 
+<<function winborder>>=
+int
+winborder(Window *w, Point xy)
+{
+    return ptinrect(xy, w->screenr) && !ptinrect(xy, insetrect(w->screenr, Selborder));
+}
+@
+
+
+% cornercursor -> <>
+<<function whichcorner>>=
+int
+whichcorner(Window *w, Point p)
+{
+    int i, j;
+    
+    i = portion(p.x, w->screenr.min.x, w->screenr.max.x);
+    j = portion(p.y, w->screenr.min.y, w->screenr.max.y);
+    return 3*j+i;
+}
+@
+
+% whichcorner -> <>
+<<function portion>>=
+int
+portion(int x, int lo, int hi)
+{
+    x -= lo;
+    hi -= lo;
+    if(x < 20)
+        return 0;
+    if(x > hi-20)
+        return 2;
+    return 1;
+}
+@
+
+
+
+
+
 
 
 
@@ -3241,13 +3121,6 @@ wsetpid(Window *w, int pid, bool dolabel)
 
 % put code of mousethread related to window focus here!!
 
-<<global topped>>=
-static	int		topped;
-@
-
-<<[[Window]] other fields>>=
-int	 	topped;
-@
 
 
 % mousethread -> <>
@@ -3270,24 +3143,6 @@ wtop(Point pt)
 }
 @
 
-<<function wpointto>>=
-Window*
-wpointto(Point pt)
-{
-    int i;
-    Window *v, *w;
-
-    w = nil;
-    for(i=0; i<nwindow; i++){
-        v = window[i];
-        if(ptinrect(pt, v->screenr))
-        if(!v->deleted)
-        if(w==nil || v->topped>w->topped)
-            w = v;
-    }
-    return w;
-}
-@
 
 % wtop | ... -> <>
 <<function wcurrent>>=
@@ -3766,6 +3621,149 @@ wsetname(Window *w)
 }
 @
 
+
+
+
+
+
+
+% mousethread -> <>
+<<function bandsize>>=
+Image*
+bandsize(Window *w)
+{
+    Image *i;
+    Rectangle r, or;
+    Point p, startp;
+    int which, but;
+
+    p = mouse->xy;
+    but = mouse->buttons;
+    which = whichcorner(w, p);
+    p = cornerpt(w->screenr, p, which);
+    wmovemouse(w, p);
+    readmouse(mousectl);
+    r = whichrect(w->screenr, p, which);
+    drawborder(r, 1);
+    or = r;
+    startp = p;
+    
+    while(mouse->buttons == but){
+        p = onscreen(mouse->xy);
+        r = whichrect(w->screenr, p, which);
+        if(!eqrect(r, or) && goodrect(r)){
+            drawborder(r, 1);
+            flushimage(display, 1);
+            or = r;
+        }
+        readmouse(mousectl);
+    }
+    p = mouse->xy;
+    drawborder(or, 0);
+    flushimage(display, 1);
+    wsetcursor(w, true);
+    if(mouse->buttons!=0 || Dx(or)<100 || Dy(or)<3*font->height){
+        while(mouse->buttons)
+            readmouse(mousectl);
+        return nil;
+    }
+    if(abs(p.x-startp.x)+abs(p.y-startp.y) <= 1)
+        return nil;
+    i = allocwindow(wscreen, or, Refbackup, DWhite);
+    if(i == nil)
+        return nil;
+    border(i, r, Selborder, red, ZP);
+    return i;
+}
+@
+
+
+<<function wmovemouse>>=
+/*
+ * Convert back to physical coordinates
+ */
+void
+wmovemouse(Window *w, Point p)
+{
+    p.x += w->screenr.min.x-w->i->r.min.x;
+    p.y += w->screenr.min.y-w->i->r.min.y;
+    moveto(mousectl, p);
+}
+@
+
+% bandsize -> <>
+<<function whichrect>>=
+Rectangle
+whichrect(Rectangle r, Point p, int which)
+{
+    switch(which){
+    case 0:	/* top left */
+        r = Rect(p.x, p.y, r.max.x, r.max.y);
+        break;
+    case 2:	/* top right */
+        r = Rect(r.min.x, p.y, p.x, r.max.y);
+        break;
+    case 6:	/* bottom left */
+        r = Rect(p.x, r.min.y, r.max.x, p.y);
+        break;
+    case 8:	/* bottom right */
+        r = Rect(r.min.x, r.min.y, p.x, p.y);
+        break;
+    case 1:	/* top edge */
+        r = Rect(r.min.x, p.y, r.max.x, r.max.y);
+        break;
+    case 5:	/* right edge */
+        r = Rect(r.min.x, r.min.y, p.x, r.max.y);
+        break;
+    case 7:	/* bottom edge */
+        r = Rect(r.min.x, r.min.y, r.max.x, p.y);
+        break;
+    case 3:		/* left edge */
+        r = Rect(p.x, r.min.y, r.max.x, r.max.y);
+        break;
+    }
+    return canonrect(r);
+}
+@
+
+
+% bandsize -> <>
+<<function cornerpt>>=
+Point
+cornerpt(Rectangle r, Point p, int which)
+{
+    switch(which){
+    case 0:	/* top left */
+        p = Pt(r.min.x, r.min.y);
+        break;
+    case 2:	/* top right */
+        p = Pt(r.max.x,r.min.y);
+        break;
+    case 6:	/* bottom left */
+        p = Pt(r.min.x, r.max.y);
+        break;
+    case 8:	/* bottom right */
+        p = Pt(r.max.x, r.max.y);
+        break;
+    case 1:	/* top edge */
+        p = Pt(p.x,r.min.y);
+        break;
+    case 5:	/* right edge */
+        p = Pt(r.max.x, p.y);
+        break;
+    case 7:	/* bottom edge */
+        p = Pt(p.x, r.max.y);
+        break;
+    case 3:		/* left edge */
+        p = Pt(r.min.x, p.y);
+        break;
+    }
+    return p;
+}
+@
+
+
+
 \section{Window hiding}
 % via menu
 
@@ -4136,11 +4134,6 @@ wmousectl(Window *w)
 
 \subsection{Ordinary characters}
 
-<<[[wkeyctl()]] locals>>=
-uint q0;
-uint q1;
-int n, nb;
-@
 
 <<[[wkeyctl()]] ordinary character>>=
 q0 = w->q0;
@@ -4149,6 +4142,14 @@ wshow(w, q0+1);
 @
 
 \subsection{Navigation keys}
+
+\ifallcode
+<<[[wkeyctl()]] locals>>=
+uint q0;
+uint q1;
+int n, nb;
+@
+\fi
 
 <<[[wkeyctl()]] when mouse not opened and navigation keys>>=
 if(!w->mouseopen)
@@ -4163,6 +4164,7 @@ case Kscrollonedown:
     goto case_Down;
 case Kpgdown:
     n = 2*w->maxlines/3;
+    // Fallthrough
 case_Down:
     q0 = w->org+frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y+n*w->font->height));
     wsetorigin(w, q0, true);
@@ -4178,6 +4180,7 @@ case Kscrolloneup:
     goto case_Up;
 case Kpgup:
     n = 2*w->maxlines/3;
+    // Fallthrough
 case_Up:
     q0 = wbacknl(w, w->org, n);
     wsetorigin(w, q0, true);
@@ -4241,36 +4244,7 @@ case 0x7F:		/* send interrupt */
     *notefd = w->notefd;
     proccreate(interruptproc, notefd, 4096);
     return;
-case 0x06:	/* ^F: file name completion */
-case Kins:		/* Insert: file name completion */
-    rp = namecomplete(w);
-    if(rp == nil)
-        return;
-    nr = runestrlen(rp);
-    q0 = w->q0;
-    q0 = winsert(w, rp, nr, q0);
-    wshow(w, q0+nr);
-    free(rp);
-    return;
-case 0x08:	/* ^H: erase character */
-case 0x15:	/* ^U: erase line */
-case 0x17:	/* ^W: erase word */
-    if(w->q0==0 || w->q0==w->qh)
-        return;
-    nb = wbswidth(w, r);
-    q1 = w->q0;
-    q0 = q1-nb;
-    if(q0 < w->org){
-        q0 = w->org;
-        nb = q1-q0;
-    }
-    if(nb > 0){
-        wdelete(w, q0, q0+nb);
-        wsetselect(w, q0, q0);
-    }
-    return;
 @
-
 
 % wkeyctl -> proccreate(<>)
 <<function interruptproc>>=
@@ -4289,6 +4263,29 @@ interruptproc(void *v)
 }
 @
 
+
+
+
+
+<<[[wkeyctl()]] special key cases and no special mode>>=
+case 0x08:	/* ^H: erase character */
+case 0x15:	/* ^U: erase line */
+case 0x17:	/* ^W: erase word */
+    if(w->q0==0 || w->q0==w->qh)
+        return;
+    nb = wbswidth(w, r);
+    q1 = w->q0;
+    q0 = q1-nb;
+    if(q0 < w->org){
+        q0 = w->org;
+        nb = q1-q0;
+    }
+    if(nb > 0){
+        wdelete(w, q0, q0+nb);
+        wsetselect(w, q0, q0);
+    }
+    return;
+@
 
 
 <<function wbswidth>>=
@@ -4713,7 +4710,7 @@ wscroll(Window *w, int but)
                 if(y > s.max.y-2)
                     y = s.max.y-2;
                 if(w->nr > 1024*1024)
-                    p0 = ((w->nr>>10)*(y-s.min.y)/h)<<10;
+                    p0 = ((w->nr>>10)*(y-s.min.y)/h)<<10; // >>
                 else
                     p0 = w->nr*(y-s.min.y)/h;
                 if(oldp0 != p0)
@@ -4738,15 +4735,11 @@ wscroll(Window *w, int but)
             }
             wscrsleep(w, 100);
         }
-    }while(w->mc.buttons & (1<<(but-1)));
+    }while(w->mc.buttons & (1<<(but-1))); // >>
     while(w->mc.buttons)
         readmouse(&w->mc);
 }
 @
-% >> >>
-
-
-
 
 
 
@@ -7969,6 +7962,21 @@ struct Plumbattr
 
 \section{Auto complete}
 
+<<[[wkeyctl()]] special key cases and no special mode>>=
+case 0x06:	/* ^F: file name completion */
+case Kins:		/* Insert: file name completion */
+    rp = namecomplete(w);
+    if(rp == nil)
+        return;
+    nr = runestrlen(rp);
+    q0 = w->q0;
+    q0 = winsert(w, rp, nr, q0);
+    wshow(w, q0+nr);
+    free(rp);
+    return;
+@
+
+
 <<struct Completion>>=
 struct Completion{
     uchar advance;	/* whether forward progress has been made */
@@ -8327,6 +8335,12 @@ putenv("font", fontname);
 
 
 \section{Holding}
+
+% also a textual window field?
+<<[[Window]] config fields>>=
+bool_byte	holding;
+@
+% ??
 
 <<[[wkeyctl()]] if holding>>=
 if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */

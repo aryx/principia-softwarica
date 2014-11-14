@@ -167,7 +167,7 @@ wscroll(Window *w, int but)
                 if(y > s.max.y-2)
                     y = s.max.y-2;
                 if(w->nr > 1024*1024)
-                    p0 = ((w->nr>>10)*(y-s.min.y)/h)<<10;
+                    p0 = ((w->nr>>10)*(y-s.min.y)/h)<<10; // >>
                 else
                     p0 = w->nr*(y-s.min.y)/h;
                 if(oldp0 != p0)
@@ -192,7 +192,7 @@ wscroll(Window *w, int but)
             }
             wscrsleep(w, 100);
         }
-    }while(w->mc.buttons & (1<<(but-1)));
+    }while(w->mc.buttons & (1<<(but-1))); // >>
     while(w->mc.buttons)
         readmouse(&w->mc);
 }

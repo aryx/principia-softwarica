@@ -226,11 +226,11 @@ struct Window
     /*s: [[Window]] config fields */
     bool_byte	scrolling;
     /*x: [[Window]] config fields */
-    bool_byte	holding;
-    /*x: [[Window]] config fields */
     bool_byte	deleted;
     /*x: [[Window]] config fields */
     bool_byte	rawing;
+    /*x: [[Window]] config fields */
+    bool_byte	holding;
     /*e: [[Window]] config fields */
 
     //--------------------------------------------------------------------
@@ -251,6 +251,8 @@ struct Window
     // Misc
     //--------------------------------------------------------------------
     /*s: [[Window]] other fields */
+    int	 	topped;
+    /*x: [[Window]] other fields */
     uint		nr;	/* number of runes in window */
     uint		maxr;	/* number of runes allocated in r */
     Rune		*r;
@@ -276,8 +278,6 @@ struct Window
     Channel		*conswrite;	/* chan(Conswritemesg) */
     /*x: [[Window]] other fields */
     Channel		*wctlread;	/* chan(Consreadmesg) */
-    /*x: [[Window]] other fields */
-    int	 	topped;
     /*e: [[Window]] other fields */
 
     //--------------------------------------------------------------------
