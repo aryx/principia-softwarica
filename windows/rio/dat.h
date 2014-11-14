@@ -398,7 +398,7 @@ extern Image	*background;
 //extern Image	*lightgrey;
 extern Image	*red;
 
-extern Window	**window;
+extern Window	**windows;
 
 extern Window	*wkeyboard;	/* window of simulated keyboard */
 extern int		nwindow;

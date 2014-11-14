@@ -1399,7 +1399,7 @@ wpointto(Point pt)
 
     w = nil;
     for(i=0; i<nwindow; i++){
-        v = window[i];
+        v = windows[i];
         if(ptinrect(pt, v->screenr))
          if(!v->deleted)
           if(w==nil || v->topped>w->topped)
@@ -1520,8 +1520,8 @@ wlookid(int id)
     int i;
 
     for(i=0; i<nwindow; i++)
-        if(window[i]->id == id)
-            return window[i];
+        if(windows[i]->id == id)
+            return windows[i];
     return nil;
 }
 /*e: function wlookid */
@@ -1552,9 +1552,9 @@ wclosewin(Window *w)
             break;
         }
     for(i=0; i<nwindow; i++)
-        if(window[i] == w){
+        if(windows[i] == w){
             --nwindow;
-            memmove(window+i, window+i+1, (nwindow-i)*sizeof(Window*));
+            memmove(windows+i, windows+i+1, (nwindow-i)*sizeof(Window*));
             w->deleted = true; // again??
             r = w->i->r;
             /* move it off-screen to hide it, in case client is slow in letting it go */

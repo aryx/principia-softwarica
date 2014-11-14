@@ -622,7 +622,7 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
         qlock(&all);
         ids = emalloc(nwindow*sizeof(int));
         for(j=0; j<nwindow; j++)
-            ids[j] = window[j]->id;
+            ids[j] = windows[j]->id;
         qunlock(&all);
 
         qsort(ids, nwindow, sizeof ids[0], idcmp);

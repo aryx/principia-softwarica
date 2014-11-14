@@ -40,7 +40,7 @@ Image	*red;
 
 /*s: global window */
 //array<ref_own<Window>>
-Window	**window;
+Window	**windows;
 /*e: global window */
 /*s: global wkeyboard */
 Window	*wkeyboard;	/* window of simulated keyboard */

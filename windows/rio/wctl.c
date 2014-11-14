@@ -410,13 +410,13 @@ writewctl(Xfid *x, char *err)
 
     if(id != 0){
         for(j=0; j<nwindow; j++)
-            if(window[j]->id == id)
+            if(windows[j]->id == id)
                 break;
         if(j == nwindow){
             strcpy(err, "no such window id");
             return -1;
         }
-        w = window[j];
+        w = windows[j];
         if(w->deleted || w->i==nil){
             strcpy(err, "window deleted");
             return -1;

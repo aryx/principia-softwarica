@@ -399,7 +399,7 @@ killprocs(void)
     int i;
 
     for(i=0; i<nwindow; i++)
-        postnote(PNGROUP, window[i]->pid, "hangup");
+        postnote(PNGROUP, windows[i]->pid, "hangup");
 }
 /*e: function killprocs */
 
@@ -790,7 +790,7 @@ resized(void)
     o = subpt(viewr.max, viewr.min);
     n = subpt(view->clipr.max, view->clipr.min);
     for(i=0; i<nwindow; i++){
-        w = window[i];
+        w = windows[i];
         if(w->deleted)
             continue;
         r = rectsubpt(w->i->r, viewr.min);
@@ -1386,8 +1386,8 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     free(mc);	/* wmk copies *mc */
 
     // growing array
-    window = erealloc(window, ++nwindow*sizeof(Window*));
-    window[nwindow-1] = w;
+    windows = erealloc(windows, ++nwindow*sizeof(Window*));
+    windows[nwindow-1] = w;
     if(hideit){
         hidden[nhidden++] = w;
         w->screenr = ZR;
