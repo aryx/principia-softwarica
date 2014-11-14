@@ -39,10 +39,11 @@ struct Frbox
 /*s: struct Frame */
 struct Frame
 {
-    Font	*font;		/* of chars in the frame */
     Display	*display;	/* on which frame appears */
     Image	*b;		/* on which frame appears */
     Image	*cols[NCOL];	/* text and background colors */
+
+    Font	*font;		/* of chars in the frame */
 
     Rectangle	r;		/* in which text appears */
     Rectangle	entire;		/* of full frame */
@@ -59,6 +60,7 @@ struct Frame
     ushort	maxlines;	/* total # lines in frame */
     ushort	lastlinefull;	/* last line fills frame */
     ushort	modified;	/* changed since frselect() */
+
     Image	*tick;	/* typing tick */
     Image	*tickback;	/* saved image under tick */
     int		ticked;	/* flag: is tick onscreen? */

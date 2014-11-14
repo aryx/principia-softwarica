@@ -222,7 +222,7 @@ License.
 void
 usage(void)
 {
-    fprint(2, "usage: rio [-f font] [-i initcmd] [-k kbdcmd] [-s]\n");
+    fprint(STDERR, "usage: rio [-f font] [-i initcmd] [-k kbdcmd] [-s]\n");
     exits("usage");
 }
 @
@@ -385,7 +385,7 @@ usage(void)
 
 % lots similar but wkeyctl()
 
-\section{Trace of a drawnig operation}
+\section{Trace of a drawing operation}
 
 % toy app does a draw operation, what happens?
 % it draws on /dev/draw/n/data? or there are some write on the
@@ -560,6 +560,16 @@ Window	*input;
 
 
 
+<<global topped>>=
+static	int		topped;
+@
+
+<<[[Window]] other fields>>=
+int	 	topped;
+@
+% overlapping windows! see wpointto() to understand how determine focus
+
+
 
 
 
@@ -609,18 +619,6 @@ bool_byte	mouseopen;
 @
 
 
-% 
-<<global topped>>=
-static	int		topped;
-@
-
-<<[[Window]] other fields>>=
-int	 	topped;
-@
-% overlapping windows! see wpointto() to understand how determine focus
-
-
-
 
 
 <<[[Window]] extra fields>>=
@@ -638,54 +636,18 @@ QLock;
 
 
 
-%XXXXX
-<<[[Window]] other fields>>=
-uint		nr;	/* number of runes in window */
-uint		maxr;	/* number of runes allocated in r */
-Rune		*r;
-uint		nraw;
-Rune		*raw;
-uint		org;
-uint		q0;
-uint		q1;
-uint		qh;
-uint		namecount;
-int	 	resized;
-int	 	wctlready;
-Rectangle	lastsr;
-int	 	notefd;
-bool_byte	ctlopen;
-bool_byte	wctlopen;
-int		pid;
-char		*dir;
-@
-
-
-
 
 
 \section{[[Frame]]}
 
-% layers!
-<<enum _anon_ (include/frame.h)>>=
-enum{
-    BACK,
-    HIGH,
-    BORD,
-    TEXT,
-    HTEXT,
-
-    NCOL
-};
-@
-
 <<struct Frame>>=
 struct Frame
 {
-    Font	*font;		/* of chars in the frame */
     Display	*display;	/* on which frame appears */
     Image	*b;		/* on which frame appears */
     Image	*cols[NCOL];	/* text and background colors */
+
+    Font	*font;		/* of chars in the frame */
 
     Rectangle	r;		/* in which text appears */
     Rectangle	entire;		/* of full frame */
@@ -702,14 +664,28 @@ struct Frame
     ushort	maxlines;	/* total # lines in frame */
     ushort	lastlinefull;	/* last line fills frame */
     ushort	modified;	/* changed since frselect() */
+
     Image	*tick;	/* typing tick */
     Image	*tickback;	/* saved image under tick */
     int		ticked;	/* flag: is tick onscreen? */
 };
 @
+% the actual content is in the englobing data structure (e.g. Window)
 
+% layers!
+<<enum _anon_ (include/frame.h)>>=
+enum{
+    BACK,
+    HIGH,
+    BORD,
+    TEXT,
+    HTEXT,
 
-%images of the frame
+    NCOL
+};
+@
+
+%images/colors for the frame
 <<global cols>>=
 static	Image	*cols[NCOL];
 @
@@ -730,6 +706,7 @@ static	Image	*titlecol;
 <<global lighttitlecol>>=
 static	Image	*lighttitlecol;
 @
+
 
 <<global holdcol>>=
 static	Image	*holdcol;
@@ -815,15 +792,16 @@ struct Frbox
 <<struct Filsys>>=
 struct Filsys
 {
-    int		cfd;
-    int		sfd;
+    fdt		cfd;
+    fdt		sfd;
 
     int		pid;
 
     char	*user;
 
     Channel	*cxfidalloc;	/* chan(Xfid*) */
-    // ???
+
+    // hash<fid, Fid> (next in bucket = Fid.next?)
     Fid		*fids[Nhash];
 };
 @
@@ -831,6 +809,7 @@ struct Filsys
 <<global filsys>>=
 Filsys	*filsys;
 @
+% handler to /src/rio.user.pid, the pipe to the rio server listening pipe
 
 
 <<struct Fid>>=
@@ -845,10 +824,14 @@ struct Fid
     Qid		qid;
 
     Window	*w;
+
     Dirtab	*dir;
-    Fid		*next;
     int		nrpart;
     uchar	rpart[UTFmax];
+
+    // Extra
+    Fid		*next;
+
 };
 @
 
@@ -862,6 +845,7 @@ newfid(Filsys *fs, int fid)
     Fid *f, *ff, **fh;
 
     ff = nil;
+
     fh = &fs->fids[fid&(Nhash-1)];
     for(f=*fh; f; f=f->next)
         if(f->fid == fid)
@@ -872,6 +856,7 @@ newfid(Filsys *fs, int fid)
         ff->fid = fid;
         return ff;
     }
+
     f = emalloc(sizeof *f);
     f->fid = fid;
     f->next = *fh;
@@ -936,7 +921,7 @@ void threadmain(int argc, char *argv[])
     <<[[main()]] set snarffd>>
 
     if(geninitdraw(nil, derror, nil, "rio", nil, Refnone) < 0){
-        fprint(2, "rio: can't open display: %r\n");
+        fprint(STDERR, "rio: can't open display: %r\n");
         exits("display open");
     }
 
@@ -961,7 +946,7 @@ void threadmain(int argc, char *argv[])
     filsys = filsysinit(xfidinit());
 
     if(filsys == nil)
-        fprint(2, "rio: can't create file system server: %r\n");
+        fprint(STDERR, "rio: can't create file system server: %r\n");
     else{
         errorshouldabort = true;/* suicide if there's trouble after this */
         <<[[main()]] if initstr or kdbin>>
@@ -1476,7 +1461,8 @@ Alt alts[NWALT+1];
 char buf[4*12+1];
 Rune *rp, *bp, *tp, *up;
 uint qh;
-int nr, nb, c, wid, i, npart, initial, lastb;
+int nr, nb, c, wid, i, initial;
+int npart, lastb;
 char *s, *t, part[3];
 @
 \fi
@@ -1770,7 +1756,7 @@ alts[WCread].op = CHANSND;
 % CHANSND!!
 
 <<[[winctl()]] alts adjustments>>=
-if(!w->scrolling && !w->mouseopen && w->qh>w->org+w->nchars)
+if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->nchars)
     alts[WCwrite].op = CHANNOP;
 else
     alts[WCwrite].op = CHANSND;
@@ -1856,7 +1842,7 @@ case WCread:
     npart = 0;
     if(i)
         memmove(t, part, i);
-    while(i<nb && (w->qh<w->nr || w->nraw>0)){
+    while(i<nb && (w->qh < w->nr || w->nraw > 0)){
         if(w->qh == w->nr){
             wid = runetochar(t+i, &w->raw[0]);
             w->nraw--;
@@ -1871,7 +1857,7 @@ case WCread:
             break;
         }
     }
-    if(i==nb && w->qh<w->nr && w->r[w->qh]=='\004')
+    if(i==nb && w->qh < w->nr && w->r[w->qh]=='\004')
         w->qh++;
     if(i > nb){
         npart = i-nb;
@@ -1920,7 +1906,7 @@ else
 
 <<[[winctl()]] event loop cases>>=
 case WWread:
-    w->wctlready = 0;
+    w->wctlready = false;
     recv(cwrm.c1, &pair);
     if(w->deleted || w->i==nil)
         pair.ns = sprint(pair.s, "");
@@ -1997,7 +1983,7 @@ xfidallocthread(void*)
                 threadcreate(xfidctl, x, 16384);
             }
             if(x->ref != 0){
-                fprint(2, "%p incref %ld\n", x, x->ref);
+                fprint(STDERR, "%p incref %ld\n", x, x->ref);
                 error("incref");
             }
             if(x->flushtag != -1)
@@ -2008,7 +1994,7 @@ xfidallocthread(void*)
 
         case Free:
             if(x->ref != 0){
-                fprint(2, "%p decref %ld\n", x, x->ref);
+                fprint(STDERR, "%p decref %ld\n", x, x->ref);
                 error("decref");
             }
             if(x->flushtag != -1)
@@ -2978,6 +2964,11 @@ wborder(Window *w, int type)
 
 
 
+<<[[Window]] other fields>>=
+int		pid;
+int	 	notefd;
+@
+
 <<function wsetpid>>=
 void
 wsetpid(Window *w, int pid, bool dolabel)
@@ -3052,11 +3043,11 @@ wcurrent(Window *w)
     }
     if(w != oi){
         if(oi){
-            oi->wctlready = 1;
+            oi->wctlready = true;
             wsendctlmesg(oi, Wakeup, ZR, nil);
         }
         if(w){
-            w->wctlready = 1;
+            w->wctlready = true;
             wsendctlmesg(w, Wakeup, ZR, nil);
         }
     }
@@ -3422,7 +3413,7 @@ case Reshaped:
     w->screenr = r;
     strcpy(buf, w->name);
     wresize(w, i, m==Moved);
-    w->wctlready = 1;
+    w->wctlready = true;
 
     proccreate(deletetimeoutproc, estrdup(buf), 4096);
 
@@ -3450,6 +3441,9 @@ deletetimeoutproc(void *v)
 
 
 
+<<[[Window]] other fields>>=
+bool	 	resized;
+@
 
 <<function wresize>>=
 void
@@ -3489,6 +3483,10 @@ wresize(Window *w, Image *i, bool move)
 }
 @
 
+<<[[Window]] id fields>>=
+uint		namecount;
+@
+
 <<function wsetname>>=
 void
 wsetname(Window *w)
@@ -3507,7 +3505,7 @@ wsetname(Window *w)
         w->name[n+1] = 0;
     }
     w->name[0] = 0;
-    fprint(2, "rio: setname failed: %s\n", err);
+    fprint(STDERR, "rio: setname failed: %s\n", err);
 }
 @
 
@@ -3762,40 +3760,61 @@ wunhide(int h)
 \chapter{Graphical Windows}
 
 % does not care about /dev/cons, but care
-% about /dev/draw, /dev/mouse (and /dev/cons for key in raw mode)
+% about /dev/draw, /dev/mouse (and /dev/consctl for keyboard in raw mode)
 
 \section{Graphical window creation}
 
 % regular window that calls initdraw() => mouseopen set?
 
-\subsection{Mouseopen mode}
+\subsection{Mouse open mode}
+% direct access to mouse events, no interpretation like cut/copy/paste
+% menu
 
-\subsection{Raw mode}
+\subsection{Keyboard raw mode}
 
+% direct access to keyboard event, no interpretation of special navigation 
+% key, buffered input, etc (actually have navigation key if mouse not opened
+% even if raw mode)
+
+% could be also in Window graphical window section
 <<[[Window]] config fields>>=
 bool_byte	rawing;
 @
+% actually abused as an int in if(w->rawing++ == 0) as one can write
+% multiple rawon message on the consctl
+
+% could be also in Window keyboad section
+<<[[Window]] graphical window fields>>=
+// array<Rune>
+Rune		*raw;
+uint		nraw;
+@
+
+
 
 <<[[wkeyctl()]] if rawing>>=
-if(w->rawing && (w->q0==w->nr || w->mouseopen)){
+if(w->rawing && (w->q0 == w->nr || w->mouseopen)){
     waddraw(w, &r, 1);
     return;
 }
 @
+% faux ami, not a draw operation :) but w_add_raw
 
 <<function waddraw>>=
 void
 waddraw(Window *w, Rune *r, int nr)
 {
     w->raw = runerealloc(w->raw, w->nraw+nr);
-    runemove(w->raw+w->nraw, r, nr);
+    runemove(w->raw + w->nraw, r, nr);
     w->nraw += nr;
 }
 @
+% realloc at each key press??
 
 
 <<[[wctlmesg()]] cases>>=
 case Rawon:
+    // already setup w->rawing somewhere else?
     break;
 case Rawoff:
     if(w->deleted)
@@ -3869,6 +3888,8 @@ if(w->mouseopen) {
 
 \section{Keyboard events}
 
+% WCread in raw mode?
+
 
 \chapter{Textual Windows}
 % fake /dev/cons
@@ -3882,6 +3903,7 @@ if(w->mouseopen) {
 \section{Textual window creation}
 
 % new(..., pid = 0, ...) -> proccreate(<>)
+% by default new windows are in "textual mode"
 <<function winshell>>=
 void
 winshell(void *args)
@@ -3893,34 +3915,37 @@ winshell(void *args)
     char **argv;
 
     arg = args;
-    w = arg[0];
+
+    w    = arg[0];
     pidc = arg[1];
-    cmd = arg[2];
+    cmd  = arg[2];
     argv = arg[3];
-    dir = arg[4];
+    dir  = arg[4];
 
     rfork(RFNAMEG|RFFDG|RFENVG);
 
     if(filsysmount(filsys, w->id) < 0){
-        fprint(2, "mount failed: %r\n");
+        fprint(STDERR, "mount failed: %r\n");
         sendul(pidc, 0);
         threadexits("mount failed");
     }
-    close(0);
+    // reassign stdin/stdout to virtualized /dev/cons from filsysmount
+    close(STDIN);
     if(open("/dev/cons", OREAD) < 0){
-        fprint(2, "can't open /dev/cons: %r\n");
+        fprint(STDERR, "can't open /dev/cons: %r\n");
         sendul(pidc, 0);
         threadexits("/dev/cons");
     }
-    close(1);
+    close(STDOUT);
     if(open("/dev/cons", OWRITE) < 0){
-        fprint(2, "can't open /dev/cons: %r\n");
+        fprint(STDERR, "can't open /dev/cons: %r\n");
         sendul(pidc, 0);
         threadexits("open");	/* BUG? was terminate() */
     }
+
     if(wclose(w) == 0){	/* remove extra ref hanging from creation */
         notify(nil);
-        dup(1, 2);
+        dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)
             chdir(dir);
         procexec(pidc, cmd, argv);
@@ -3934,7 +3959,7 @@ winshell(void *args)
 /*
  * Called only from a different FD group
  */
-int
+errorcodeneg1
 filsysmount(Filsys *fs, int id)
 {
     char buf[32];
@@ -3942,18 +3967,20 @@ filsysmount(Filsys *fs, int id)
     close(fs->sfd);	/* close server end so mount won't hang if exiting */
     sprint(buf, "%d", id);
     if(mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf) < 0){
-        fprint(2, "mount failed: %r\n");
-        return -1;
+        fprint(STDERR, "mount failed: %r\n");
+        return ERROR_NEG1;
     }
     if(bind("/mnt/wsys", "/dev", MBEFORE) < 0){
-        fprint(2, "bind failed: %r\n");
-        return -1;
+        fprint(STDERR, "bind failed: %r\n");
+        return ERROR_NEG1;
     }
-    return 0;
+    return OK_0;
 }
 @
 
 \section{Content rendering}
+
+% nchars is in Frame!
 
 <<function wshow>>=
 void
@@ -3963,16 +3990,16 @@ wshow(Window *w, uint q0)
     int nl;
     uint q;
 
-    qe = w->org+w->nchars;
-    if(w->org<=q0 && (q0<qe || (q0==qe && qe==w->nr)))
+    qe = w->org + w->nchars;
+    if(w->org<=q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
         wscrdraw(w);
     else{
         nl = 4*w->maxlines/5;
         q = wbacknl(w, q0, nl);
         /* avoid going backwards if trying to go forwards - long lines! */
-        if(!(q0>w->org && q<w->org))
+        if(!(q0 > w->org && q < w->org))
             wsetorigin(w, q, true);
-        while(q0 > w->org+w->nchars)
+        while(q0 > w->org + w->nchars)
             wsetorigin(w, w->org+1, false);
     }
 }
@@ -4367,6 +4394,20 @@ enum
 };
 @
 
+<<[[Window]] textual window fields>>=
+// array<Rune>
+Rune		*r;
+uint		nr;	/* number of runes in window */
+uint		maxr;	/* number of runes allocated in r */
+@
+
+<<[[Window]] textual window fields>>=
+uint		org;
+uint		q0;
+uint		q1;
+uint		qh;
+@
+
 <<function winsert>>=
 uint
 winsert(Window *w, Rune *r, int n, uint q0)
@@ -4375,7 +4416,7 @@ winsert(Window *w, Rune *r, int n, uint q0)
 
     if(n == 0)
         return q0;
-    if(w->nr+n>HiWater && q0>=w->org && q0>=w->qh){
+    if(w->nr+n > HiWater && q0>=w->org && q0>=w->qh){
         m = min(HiWater-LoWater, min(w->org, w->qh));
         w->org -= m;
         w->qh -= m;
@@ -4846,6 +4887,11 @@ scrpos(Rectangle r, uint p0, uint p1, uint tot)
 }
 @
 
+
+<<[[Window]] other fields>>=
+Rectangle	lastsr;
+@
+
 <<function wscrdraw>>=
 void
 wscrdraw(Window *w)
@@ -5224,7 +5270,7 @@ filsysproc(void *arg)
         n = read9pmsg(fs->sfd, buf, messagesize);
         if(n <= 0){
             yield();	/* if threadexitsall'ing, will not return */
-            fprint(2, "rio: %d: read9pmsg: %d %r\n", getpid(), n);
+            fprint(STDERR, "rio: %d: read9pmsg: %d %r\n", getpid(), n);
             errorshouldabort = false;
             error("eof or i/o error on server channel");
         }
@@ -5932,7 +5978,7 @@ xfidwrite(Xfid *x)
     switch(qid){
     <<[[xfidwrite()]] cases>>
     default:
-        fprint(2, buf, "unknown qid %d in write\n", qid);
+        fprint(STDERR, buf, "unknown qid %d in write\n", qid);
         sprint(buf, "unknown qid in write");
         filsysrespond(x->fs, x, &fc, buf);
         return;
@@ -6162,6 +6208,12 @@ case Qcons:
 
 \section{[[/dev/consctl]]}
 
+<<[[Window]] other fields>>=
+bool_byte	ctlopen;
+@
+% exclusive access to /dev/consctl (why?)
+
+
 <<enum qid cases>>=
 Qconsctl,
 @
@@ -6300,7 +6352,7 @@ case Qmouse:
     if(w->resized)
         c = 'r';
     n = sprint(buf, "%c%11d %11d %11d %11ld ", c, ms.xy.x, ms.xy.y, ms.buttons, ms.msec);
-    w->resized = 0;
+    w->resized = false;
     fc.data = buf;
     fc.count = min(n, cnt);
     filsysrespond(x->fs, x, &fc, nil);
@@ -6573,6 +6625,10 @@ wcontents(Window *w, int *ip)
 
 \section{[[/dev/wdir]]}
 
+<<[[Window]] other fields>>=
+char		*dir;
+@
+
 <<enum qid cases>>=
 Qwdir,
 @
@@ -6692,6 +6748,12 @@ case Qwsysdir:
 
 \section{[[/dev/wctl]]}
 
+<<[[Window]] other fields>>=
+bool_byte	wctlopen;
+int	 	wctlready;
+@
+
+
 <<enum qid cases>>=
 Qwctl,
 @
@@ -6715,7 +6777,7 @@ case Qwctl:
             return;
         }
         w->wctlopen = true;
-        w->wctlready = 1;
+        w->wctlready = true;
         wsendctlmesg(w, Wakeup, ZR, nil);
     }
     break;
@@ -7508,7 +7570,7 @@ shutdown(void *, char *msg)
             lock(&shutdownlk);	/* only one can threadexitsall */
             threadexitsall(msg);
         }
-    fprint(2, "rio %d: abort: %s\n", getpid(), msg);
+    fprint(STDERR, "rio %d: abort: %s\n", getpid(), msg);
     abort();
     exits(msg);
     return 0;
@@ -8197,7 +8259,7 @@ initcmd(void *arg)
     cmd = arg;
     rfork(RFENVG|RFFDG|RFNOTEG|RFNAMEG);
     procexecl(nil, "/bin/rc", "rc", "-c", cmd, nil);
-    fprint(2, "rio: exec failed: %r\n");
+    fprint(STDERR, "rio: exec failed: %r\n");
     exits("exec");
 }
 @
@@ -8370,7 +8432,7 @@ if(fontname == nil)
 
 /* check font before barging ahead */
 if(access(fontname, 0) < 0){
-    fprint(2, "rio: can't access %s: %r\n", fontname);
+    fprint(STDERR, "rio: can't access %s: %r\n", fontname);
     exits("font open");
 }
 putenv("font", fontname);

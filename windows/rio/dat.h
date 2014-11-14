@@ -181,6 +181,8 @@ struct Window
     int	id;       // /dev/winid
     char	name[32]; // /dev/winname
     char	*label;   // /dev/label
+    /*x: [[Window]] id fields */
+    uint		namecount;
     /*e: [[Window]] id fields */
     
     //--------------------------------------------------------------------
@@ -240,6 +242,16 @@ struct Window
     //--------------------------------------------------------------------
     /*s: [[Window]] textual window fields */
     Rectangle	scrollr;
+    /*x: [[Window]] textual window fields */
+    // array<Rune>
+    Rune		*r;
+    uint		nr;	/* number of runes in window */
+    uint		maxr;	/* number of runes allocated in r */
+    /*x: [[Window]] textual window fields */
+    uint		org;
+    uint		q0;
+    uint		q1;
+    uint		qh;
     /*e: [[Window]] textual window fields */
 
     //--------------------------------------------------------------------
@@ -247,6 +259,10 @@ struct Window
     //--------------------------------------------------------------------
     /*s: [[Window]] graphical window fields */
     bool_byte	mouseopen;
+    /*x: [[Window]] graphical window fields */
+    // array<Rune>
+    Rune		*raw;
+    uint		nraw;
     /*e: [[Window]] graphical window fields */
 
     //--------------------------------------------------------------------
@@ -255,31 +271,26 @@ struct Window
     /*s: [[Window]] other fields */
     int	 	topped;
     /*x: [[Window]] other fields */
-    uint		nr;	/* number of runes in window */
-    uint		maxr;	/* number of runes allocated in r */
-    Rune		*r;
-    uint		nraw;
-    Rune		*raw;
-    uint		org;
-    uint		q0;
-    uint		q1;
-    uint		qh;
-    uint		namecount;
-    int	 	resized;
-    int	 	wctlready;
-    Rectangle	lastsr;
-    int	 	notefd;
-    bool_byte	ctlopen;
-    bool_byte	wctlopen;
-    int		pid;
-    char		*dir;
-    /*x: [[Window]] other fields */
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     /*x: [[Window]] other fields */
     Channel		*consread;	/* chan(Consreadmesg) */
     Channel		*conswrite;	/* chan(Conswritemesg) */
     /*x: [[Window]] other fields */
     Channel		*wctlread;	/* chan(Consreadmesg) */
+    /*x: [[Window]] other fields */
+    int		pid;
+    int	 	notefd;
+    /*x: [[Window]] other fields */
+    bool	 	resized;
+    /*x: [[Window]] other fields */
+    Rectangle	lastsr;
+    /*x: [[Window]] other fields */
+    bool_byte	ctlopen;
+    /*x: [[Window]] other fields */
+    char		*dir;
+    /*x: [[Window]] other fields */
+    bool_byte	wctlopen;
+    int	 	wctlready;
     /*e: [[Window]] other fields */
 
     //--------------------------------------------------------------------
@@ -315,10 +326,14 @@ struct Fid
     Qid		qid;
 
     Window	*w;
+
     Dirtab	*dir;
-    Fid		*next;
     int		nrpart;
     uchar	rpart[UTFmax];
+
+    // Extra
+    Fid		*next;
+
 };
 /*e: struct Fid */
 
@@ -352,15 +367,16 @@ struct Xfid
 /*s: struct Filsys */
 struct Filsys
 {
-    int		cfd;
-    int		sfd;
+    fdt		cfd;
+    fdt		sfd;
 
     int		pid;
 
     char	*user;
 
     Channel	*cxfidalloc;	/* chan(Xfid*) */
-    // ???
+
+    // hash<fid, Fid> (next in bucket = Fid.next?)
     Fid		*fids[Nhash];
 };
 /*e: struct Filsys */

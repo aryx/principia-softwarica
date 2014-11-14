@@ -165,7 +165,7 @@ wsetname(Window *w)
         w->name[n+1] = 0;
     }
     w->name[0] = 0;
-    fprint(2, "rio: setname failed: %s\n", err);
+    fprint(STDERR, "rio: setname failed: %s\n", err);
 }
 /*e: function wsetname */
 
@@ -278,7 +278,8 @@ winctl(void *arg)
     char buf[4*12+1];
     Rune *rp, *bp, *tp, *up;
     uint qh;
-    int nr, nb, c, wid, i, npart, initial, lastb;
+    int nr, nb, c, wid, i, initial;
+    int npart, lastb;
     char *s, *t, part[3];
     /*x: [[winctl()]] locals */
     Rune *kbdr;
@@ -351,7 +352,7 @@ winctl(void *arg)
         else
             alts[WMouseread].op = CHANNOP;
         /*x: [[winctl()]] alts adjustments */
-        if(!w->scrolling && !w->mouseopen && w->qh>w->org+w->nchars)
+        if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->nchars)
             alts[WCwrite].op = CHANNOP;
         else
             alts[WCwrite].op = CHANSND;
@@ -488,7 +489,7 @@ winctl(void *arg)
             npart = 0;
             if(i)
                 memmove(t, part, i);
-            while(i<nb && (w->qh<w->nr || w->nraw>0)){
+            while(i<nb && (w->qh < w->nr || w->nraw > 0)){
                 if(w->qh == w->nr){
                     wid = runetochar(t+i, &w->raw[0]);
                     w->nraw--;
@@ -503,7 +504,7 @@ winctl(void *arg)
                     break;
                 }
             }
-            if(i==nb && w->qh<w->nr && w->r[w->qh]=='\004')
+            if(i==nb && w->qh < w->nr && w->r[w->qh]=='\004')
                 w->qh++;
             if(i > nb){
                 npart = i-nb;
@@ -516,7 +517,7 @@ winctl(void *arg)
             continue;
         /*x: [[winctl()]] event loop cases */
         case WWread:
-            w->wctlready = 0;
+            w->wctlready = false;
             recv(cwrm.c1, &pair);
             if(w->deleted || w->i==nil)
                 pair.ns = sprint(pair.s, "");
@@ -549,7 +550,7 @@ void
 waddraw(Window *w, Rune *r, int nr)
 {
     w->raw = runerealloc(w->raw, w->nraw+nr);
-    runemove(w->raw+w->nraw, r, nr);
+    runemove(w->raw + w->nraw, r, nr);
     w->nraw += nr;
 }
 /*e: function waddraw */
@@ -784,7 +785,7 @@ wkeyctl(Window *w, Rune r)
     /*e: [[wkeyctl()]] when mouse not opened and navigation keys */
 
     /*s: [[wkeyctl()]] if rawing */
-    if(w->rawing && (w->q0==w->nr || w->mouseopen)){
+    if(w->rawing && (w->q0 == w->nr || w->mouseopen)){
         waddraw(w, &r, 1);
         return;
     }
@@ -1312,7 +1313,7 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         w->screenr = r;
         strcpy(buf, w->name);
         wresize(w, i, m==Moved);
-        w->wctlready = 1;
+        w->wctlready = true;
 
         proccreate(deletetimeoutproc, estrdup(buf), 4096);
 
@@ -1325,6 +1326,7 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         break;
     /*x: [[wctlmesg()]] cases */
     case Rawon:
+        // already setup w->rawing somewhere else?
         break;
     case Rawoff:
         if(w->deleted)
@@ -1429,11 +1431,11 @@ wcurrent(Window *w)
     }
     if(w != oi){
         if(oi){
-            oi->wctlready = 1;
+            oi->wctlready = true;
             wsendctlmesg(oi, Wakeup, ZR, nil);
         }
         if(w){
-            w->wctlready = 1;
+            w->wctlready = true;
             wsendctlmesg(w, Wakeup, ZR, nil);
         }
     }
@@ -1599,34 +1601,37 @@ winshell(void *args)
     char **argv;
 
     arg = args;
-    w = arg[0];
+
+    w    = arg[0];
     pidc = arg[1];
-    cmd = arg[2];
+    cmd  = arg[2];
     argv = arg[3];
-    dir = arg[4];
+    dir  = arg[4];
 
     rfork(RFNAMEG|RFFDG|RFENVG);
 
     if(filsysmount(filsys, w->id) < 0){
-        fprint(2, "mount failed: %r\n");
+        fprint(STDERR, "mount failed: %r\n");
         sendul(pidc, 0);
         threadexits("mount failed");
     }
-    close(0);
+    // reassign stdin/stdout to virtualized /dev/cons from filsysmount
+    close(STDIN);
     if(open("/dev/cons", OREAD) < 0){
-        fprint(2, "can't open /dev/cons: %r\n");
+        fprint(STDERR, "can't open /dev/cons: %r\n");
         sendul(pidc, 0);
         threadexits("/dev/cons");
     }
-    close(1);
+    close(STDOUT);
     if(open("/dev/cons", OWRITE) < 0){
-        fprint(2, "can't open /dev/cons: %r\n");
+        fprint(STDERR, "can't open /dev/cons: %r\n");
         sendul(pidc, 0);
         threadexits("open");	/* BUG? was terminate() */
     }
+
     if(wclose(w) == 0){	/* remove extra ref hanging from creation */
         notify(nil);
-        dup(1, 2);
+        dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)
             chdir(dir);
         procexec(pidc, cmd, argv);
@@ -1775,16 +1780,16 @@ wshow(Window *w, uint q0)
     int nl;
     uint q;
 
-    qe = w->org+w->nchars;
-    if(w->org<=q0 && (q0<qe || (q0==qe && qe==w->nr)))
+    qe = w->org + w->nchars;
+    if(w->org<=q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
         wscrdraw(w);
     else{
         nl = 4*w->maxlines/5;
         q = wbacknl(w, q0, nl);
         /* avoid going backwards if trying to go forwards - long lines! */
-        if(!(q0>w->org && q<w->org))
+        if(!(q0 > w->org && q < w->org))
             wsetorigin(w, q, true);
-        while(q0 > w->org+w->nchars)
+        while(q0 > w->org + w->nchars)
             wsetorigin(w, w->org+1, false);
     }
 }
@@ -1890,7 +1895,7 @@ winsert(Window *w, Rune *r, int n, uint q0)
 
     if(n == 0)
         return q0;
-    if(w->nr+n>HiWater && q0>=w->org && q0>=w->qh){
+    if(w->nr+n > HiWater && q0>=w->org && q0>=w->qh){
         m = min(HiWater-LoWater, min(w->org, w->qh));
         w->org -= m;
         w->qh -= m;

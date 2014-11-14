@@ -247,7 +247,7 @@ filsysproc(void *arg)
         n = read9pmsg(fs->sfd, buf, messagesize);
         if(n <= 0){
             yield();	/* if threadexitsall'ing, will not return */
-            fprint(2, "rio: %d: read9pmsg: %d %r\n", getpid(), n);
+            fprint(STDERR, "rio: %d: read9pmsg: %d %r\n", getpid(), n);
             errorshouldabort = false;
             error("eof or i/o error on server channel");
         }
@@ -280,7 +280,7 @@ filsysproc(void *arg)
 /*
  * Called only from a different FD group
  */
-int
+errorcodeneg1
 filsysmount(Filsys *fs, int id)
 {
     char buf[32];
@@ -288,14 +288,14 @@ filsysmount(Filsys *fs, int id)
     close(fs->sfd);	/* close server end so mount won't hang if exiting */
     sprint(buf, "%d", id);
     if(mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf) < 0){
-        fprint(2, "mount failed: %r\n");
-        return -1;
+        fprint(STDERR, "mount failed: %r\n");
+        return ERROR_NEG1;
     }
     if(bind("/mnt/wsys", "/dev", MBEFORE) < 0){
-        fprint(2, "bind failed: %r\n");
-        return -1;
+        fprint(STDERR, "bind failed: %r\n");
+        return ERROR_NEG1;
     }
-    return 0;
+    return OK_0;
 }
 /*e: function filsysmount */
 
@@ -742,6 +742,7 @@ newfid(Filsys *fs, int fid)
     Fid *f, *ff, **fh;
 
     ff = nil;
+
     fh = &fs->fids[fid&(Nhash-1)];
     for(f=*fh; f; f=f->next)
         if(f->fid == fid)
@@ -752,6 +753,7 @@ newfid(Filsys *fs, int fid)
         ff->fid = fid;
         return ff;
     }
+
     f = emalloc(sizeof *f);
     f->fid = fid;
     f->next = *fh;

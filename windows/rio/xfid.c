@@ -124,7 +124,7 @@ xfidallocthread(void*)
                 threadcreate(xfidctl, x, 16384);
             }
             if(x->ref != 0){
-                fprint(2, "%p incref %ld\n", x, x->ref);
+                fprint(STDERR, "%p incref %ld\n", x, x->ref);
                 error("incref");
             }
             if(x->flushtag != -1)
@@ -135,7 +135,7 @@ xfidallocthread(void*)
 
         case Free:
             if(x->ref != 0){
-                fprint(2, "%p decref %ld\n", x, x->ref);
+                fprint(STDERR, "%p decref %ld\n", x, x->ref);
                 error("decref");
             }
             if(x->flushtag != -1)
@@ -342,7 +342,7 @@ xfidopen(Xfid *x)
                 return;
             }
             w->wctlopen = true;
-            w->wctlready = 1;
+            w->wctlready = true;
             wsendctlmesg(w, Wakeup, ZR, nil);
         }
         break;
@@ -638,7 +638,7 @@ xfidwrite(Xfid *x)
         break;
     /*e: [[xfidwrite()]] cases */
     default:
-        fprint(2, buf, "unknown qid %d in write\n", qid);
+        fprint(STDERR, buf, "unknown qid %d in write\n", qid);
         sprint(buf, "unknown qid in write");
         filsysrespond(x->fs, x, &fc, buf);
         return;
@@ -789,7 +789,7 @@ xfidread(Xfid *x)
         if(w->resized)
             c = 'r';
         n = sprint(buf, "%c%11d %11d %11d %11ld ", c, ms.xy.x, ms.xy.y, ms.buttons, ms.msec);
-        w->resized = 0;
+        w->resized = false;
         fc.data = buf;
         fc.count = min(n, cnt);
         filsysrespond(x->fs, x, &fc, nil);
