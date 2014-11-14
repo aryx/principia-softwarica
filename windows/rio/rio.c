@@ -577,9 +577,9 @@ mousethread(void*)
     /*x: [[mousethread()]] locals */
     bool sending = false;
     /*x: [[mousethread()]] locals */
-    bool scrolling = false;
-    /*x: [[mousethread()]] locals */
     Mouse tmp;
+    /*x: [[mousethread()]] locals */
+    bool scrolling = false;
     /*x: [[mousethread()]] locals */
     bool moving = false;
     /*x: [[mousethread()]] locals */
@@ -688,6 +688,7 @@ mousethread(void*)
             else
                 riosetcursor(nil, 0);
 
+            /*s: [[mousethread()]] if moving and buttons */
             if(moving && (mouse->buttons&7)){
                 oin = winput;
                 band = mouse->buttons & 3;
@@ -708,10 +709,12 @@ mousethread(void*)
                         freeimage(i);
                 }
             }
+            /*e: [[mousethread()]] if moving and buttons */
 
             if(w != nil)
                 cornercursor(w, mouse->xy, 0);
 
+            /*s: [[mousethread()]] if buttons */
             /* we're not sending the event, but if button is down maybe we should */
             if(mouse->buttons){
                 /* w->topped will be zero or less if window has been bottomed */
@@ -730,9 +733,11 @@ mousethread(void*)
                        && (mouse->buttons!=1 || winborder(w, mouse->xy)))
                         // input changed
                         goto Again;
+
                     goto Drain;
                 }
             }
+            /*e: [[mousethread()]] if buttons */
             moving = false;
             break;
             /*e: [[mousethread()]] if not sending */
@@ -833,12 +838,12 @@ button3menu(void)
         delete();
         break;
     /*x: [[button3menu()]] cases */
-    case Reshape:
-        resize();
-        break;
-    /*x: [[button3menu()]] cases */
     case Move:
         move();
+        break;
+    /*x: [[button3menu()]] cases */
+    case Reshape:
+        resize();
         break;
     /*x: [[button3menu()]] cases */
     case Hide:

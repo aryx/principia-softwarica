@@ -690,10 +690,15 @@ namecomplete(Window *w)
 void
 wkeyctl(Window *w, Rune r)
 {
-    uint q0 ,q1;
-    int n, nb, nr;
+    /*s: [[wkeyctl()]] locals */
+    uint q0;
+    uint q1;
+    int n, nb;
+    /*x: [[wkeyctl()]] locals */
+    int nr;
     Rune *rp;
     int *notefd;
+    /*e: [[wkeyctl()]] locals */
 
     if(r == 0)
         return;
@@ -701,76 +706,88 @@ wkeyctl(Window *w, Rune r)
         return;
 
     /* navigation keys work only when mouse is not open */
+    /*s: [[wkeyctl()]] when mouse not opened and navigation keys */
     if(!w->mouseopen)
-        switch(r){
-        case Kdown:
-            n = w->maxlines/3;
-            goto case_Down;
-        case Kscrollonedown:
-            n = mousescrollsize(w->maxlines);
-            if(n <= 0)
-                n = 1;
-            goto case_Down;
-        case Kpgdown:
-            n = 2*w->maxlines/3;
-        case_Down:
-            q0 = w->org+frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y+n*w->font->height));
-            wsetorigin(w, q0, true);
-            return;
-        case Kup:
-            n = w->maxlines/3;
-            goto case_Up;
-        case Kscrolloneup:
-            n = mousescrollsize(w->maxlines);
-            if(n <= 0)
-                n = 1;
-            goto case_Up;
-        case Kpgup:
-            n = 2*w->maxlines/3;
-        case_Up:
-            q0 = wbacknl(w, w->org, n);
-            wsetorigin(w, q0, true);
-            return;
-        case Kleft:
-            if(w->q0 > 0){
-                q0 = w->q0-1;
-                wsetselect(w, q0, q0);
-                wshow(w, q0);
-            }
-            return;
-        case Kright:
-            if(w->q1 < w->nr){
-                q1 = w->q1+1;
-                wsetselect(w, q1, q1);
-                wshow(w, q1);
-            }
-            return;
-        case Khome:
-            wshow(w, 0);
-            return;
-        case Kend:
-            wshow(w, w->nr);
-            return;
-        case 0x01:	/* ^A: beginning of line */
-            if(w->q0==0 || w->q0==w->qh || w->r[w->q0-1]=='\n')
-                return;
-            nb = wbswidth(w, 0x15 /* ^U */);
-            wsetselect(w, w->q0-nb, w->q0-nb);
-            wshow(w, w->q0);
-            return;
-        case 0x05:	/* ^E: end of line */
-            q0 = w->q0;
-            while(q0 < w->nr && w->r[q0]!='\n')
-                q0++;
+    switch(r){
+    case Kdown:
+        n = w->maxlines/3;
+        goto case_Down;
+    case Kscrollonedown:
+        n = mousescrollsize(w->maxlines);
+        if(n <= 0)
+            n = 1;
+        goto case_Down;
+    case Kpgdown:
+        n = 2*w->maxlines/3;
+    case_Down:
+        q0 = w->org+frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y+n*w->font->height));
+        wsetorigin(w, q0, true);
+        return;
+
+    case Kup:
+        n = w->maxlines/3;
+        goto case_Up;
+    case Kscrolloneup:
+        n = mousescrollsize(w->maxlines);
+        if(n <= 0)
+            n = 1;
+        goto case_Up;
+    case Kpgup:
+        n = 2*w->maxlines/3;
+    case_Up:
+        q0 = wbacknl(w, w->org, n);
+        wsetorigin(w, q0, true);
+        return;
+
+    case Kleft:
+        if(w->q0 > 0){
+            q0 = w->q0-1;
             wsetselect(w, q0, q0);
-            wshow(w, w->q0);
-            return;
+            wshow(w, q0);
         }
+        return;
+    case Kright:
+        if(w->q1 < w->nr){
+            q1 = w->q1+1;
+            wsetselect(w, q1, q1);
+            wshow(w, q1);
+        }
+        return;
+
+    case Khome:
+        wshow(w, 0);
+        return;
+    case Kend:
+        wshow(w, w->nr);
+        return;
+
+    case 0x01:	/* ^A: beginning of line */
+        if(w->q0==0 || w->q0==w->qh || w->r[w->q0-1]=='\n')
+            return;
+        nb = wbswidth(w, 0x15 /* ^U */);
+        wsetselect(w, w->q0-nb, w->q0-nb);
+        wshow(w, w->q0);
+        return;
+    case 0x05:	/* ^E: end of line */
+        q0 = w->q0;
+        while(q0 < w->nr && w->r[q0]!='\n')
+            q0++;
+        wsetselect(w, q0, q0);
+        wshow(w, w->q0);
+        return;
+
+    default:
+        ; // no return! fallthrough
+    }
+    /*e: [[wkeyctl()]] when mouse not opened and navigation keys */
+
+    /*s: [[wkeyctl()]] if rawing */
     if(w->rawing && (w->q0==w->nr || w->mouseopen)){
         waddraw(w, &r, 1);
         return;
     }
-
+    /*e: [[wkeyctl()]] if rawing */
+    /*s: [[wkeyctl()]] if holding */
     if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */
         if(w->holding)
             --w->holding;
@@ -780,12 +797,16 @@ wkeyctl(Window *w, Rune r)
         if(r == 0x1B)
             return;
     }
+    /*e: [[wkeyctl()]] if holding */
+
+    // here when no navigation key, no rawing, no 0x1B holding
+
     if(r != 0x7F){
         wsnarf(w);
         wcut(w);
     }
-
     switch(r){
+    /*s: [[wkeyctl()]] special key cases and no special mode */
     case 0x7F:		/* send interrupt */
         w->qh = w->nr;
         wshow(w, w->qh);
@@ -821,11 +842,15 @@ wkeyctl(Window *w, Rune r)
             wsetselect(w, q0, q0);
         }
         return;
+    /*e: [[wkeyctl()]] special key cases and no special mode */
     }
+ 
     /* otherwise ordinary character; just insert */
+    /*s: [[wkeyctl()]] ordinary character */
     q0 = w->q0;
     q0 = winsert(w, &r, 1, q0);
     wshow(w, q0+1);
+    /*e: [[wkeyctl()]] ordinary character */
 }
 /*e: function wkeyctl */
 
