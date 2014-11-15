@@ -3,8 +3,6 @@
 #include <thread.h>
 #include "threadimpl.h"
 
-Pqueue _threadpq;
-
 static int
 nextID(void)
 {

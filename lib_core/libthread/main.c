@@ -4,16 +4,19 @@
 #include "threadimpl.h"
 
 typedef struct Mainarg Mainarg;
+
 struct Mainarg
 {
-	int	argc;
+	int		argc;
 	char	**argv;
 };
 
 int	mainstacksize;
 int	_threadnotefd;
 int	_threadpasserpid;
+
 static jmp_buf _mainjmp;
+
 static void mainlauncher(void*);
 extern void (*_sysfatal)(char*, va_list);
 extern void (*__assert)(char*);
@@ -203,22 +206,3 @@ _schedexecwait(void)
 	threadexits("procexec");
 }
 
-static Proc **procp;
-
-void
-_systhreadinit(void)
-{
-	procp = privalloc();
-}
-
-Proc*
-_threadgetproc(void)
-{
-	return *procp;
-}
-
-void
-_threadsetproc(Proc *p)
-{
-	*procp = p;
-}
