@@ -99,11 +99,13 @@ enum	/* control messages */
     Refresh,
     Movemouse,
 
+    /*s: enum wctlmesgkind cases */
     Rawon,
     Rawoff,
-
+    /*x: enum wctlmesgkind cases */
     Holdon,
     Holdoff,
+    /*e: enum wctlmesgkind cases */
 
     Deleted,
     Exited,
@@ -249,8 +251,11 @@ struct Window
     uint		maxr;	/* number of runes allocated in r */
     /*x: [[Window]] textual window fields */
     uint		org;
+    /*x: [[Window]] textual window fields */
+    // selection? start vs end?
     uint		q0;
     uint		q1;
+    /*x: [[Window]] textual window fields */
     uint		qh;
     /*e: [[Window]] textual window fields */
 
@@ -274,6 +279,7 @@ struct Window
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     /*x: [[Window]] other fields */
     Channel		*consread;	/* chan(Consreadmesg) */
+    /*x: [[Window]] other fields */
     Channel		*conswrite;	/* chan(Conswritemesg) */
     /*x: [[Window]] other fields */
     Channel		*wctlread;	/* chan(Consreadmesg) */

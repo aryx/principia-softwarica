@@ -384,14 +384,18 @@ xfidclose(Xfid *x)
     switch(FILE(x->f->qid)){
     /*s: [[xfidclose()]] cases */
     case Qconsctl:
+        /*s: [[xfidclose()]] Qconsctl case, if rawing */
         if(w->rawing){
             w->rawing = false;
             wsendctlmesg(w, Rawoff, ZR, nil);
         }
+        /*e: [[xfidclose()]] Qconsctl case, if rawing */
+        /*s: [[xfidclose()]] Qconsctl case, if holding */
         if(w->holding){
             w->holding = false;
             wsendctlmesg(w, Holdoff, ZR, nil);
         }
+        /*e: [[xfidclose()]] Qconsctl case, if holding */
         w->ctlopen = false;
         break;
     /*x: [[xfidclose()]] cases */
@@ -520,6 +524,24 @@ xfidwrite(Xfid *x)
         return;
     /*x: [[xfidwrite()]] cases */
     case Qconsctl:
+        /*s: [[xfidwrite()]] Qconsctl case */
+        if(strncmp(x->data, "rawon", 5)==0){
+            /*s: [[xfidwrite()]] Qconsctl case, if rawon message and holding mode */
+            if(w->holding){
+                w->holding = false;
+                wsendctlmesg(w, Holdoff, ZR, nil);
+            }
+            /*e: [[xfidwrite()]] Qconsctl case, if rawon message and holding mode */
+            if(w->rawing++ == 0)
+                wsendctlmesg(w, Rawon, ZR, nil);
+            break;
+        }
+        if(strncmp(x->data, "rawoff", 6)==0 && w->rawing){
+            if(--w->rawing == 0)
+                wsendctlmesg(w, Rawoff, ZR, nil);
+            break;
+        }
+        /*x: [[xfidwrite()]] Qconsctl case */
         if(strncmp(x->data, "holdon", 6)==0){
             if(w->holding++ == 0)
                 wsendctlmesg(w, Holdon, ZR, nil);
@@ -530,20 +552,7 @@ xfidwrite(Xfid *x)
                 wsendctlmesg(w, Holdoff, ZR, nil);
             break;
         }
-        if(strncmp(x->data, "rawon", 5)==0){
-            if(w->holding){
-                w->holding = false;
-                wsendctlmesg(w, Holdoff, ZR, nil);
-            }
-            if(w->rawing++ == 0)
-                wsendctlmesg(w, Rawon, ZR, nil);
-            break;
-        }
-        if(strncmp(x->data, "rawoff", 6)==0 && w->rawing){
-            if(--w->rawing == 0)
-                wsendctlmesg(w, Rawoff, ZR, nil);
-            break;
-        }
+        /*e: [[xfidwrite()]] Qconsctl case */
         filsysrespond(x->fs, x, &fc, "unknown control message");
         return;
     /*x: [[xfidwrite()]] cases */

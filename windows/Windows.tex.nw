@@ -708,18 +708,6 @@ static	Image	*lighttitlecol;
 @
 
 
-<<global holdcol>>=
-static	Image	*holdcol;
-@
-
-<<global lightholdcol>>=
-static	Image	*lightholdcol;
-@
-
-<<global paleholdcol>>=
-static	Image	*paleholdcol;
-@
-
 
 <<[[wmk()]] cols initialisation>>=
 if(cols[0] == nil){
@@ -1428,25 +1416,26 @@ Drain:
 
 % keyboard listening
 % mouse listening
-% cons listening
 % ctl listening
+% special device file listening (/dev/cons)
 
 <<enum Wxxx>>=
 enum { 
     WKey, 
     WMouse, 
-
-    WMouseread, // ??
-
-    WCtl, //!!!
-
-    WCwrite,
-    WCread, 
-
-    WWread, // ??
-
+    WCtl,
+    <<enum Wxxx cases>>
     NWALT 
 };
+@
+
+<<enum Wxxx cases>>=
+WMouseread, // ??
+
+WCwrite,
+WCread, 
+
+WWread, // ??
 @
 
 
@@ -1485,8 +1474,7 @@ winctl(void *arg)
     <<[[winctl()]] alts setup>>
     alts[NWALT].op = CHANEND;
 
-    npart = 0;
-    lastb = -1;
+    <<[[winctl()]] local initialisation>>
     for(;;){
         <<[[winctl()]] alts adjustments>>
 
@@ -1499,6 +1487,11 @@ winctl(void *arg)
             flushimage(display, true);
     }
 }
+@
+
+<<[[winctl()]] local initialisation>>=
+npart = 0;
+lastb = -1;
 @
 
 % m = mouse, c = cons
@@ -1543,7 +1536,7 @@ case WKey:
 
 
 
-% winctl thread -> <>
+% main -> threadcreate(winctl) -> <> (when key on ck channel)
 <<function wkeyctl>>=
 void
 wkeyctl(Window *w, Rune r)
@@ -1563,7 +1556,7 @@ wkeyctl(Window *w, Rune r)
 
     // here when no navigation key, no rawing, no 0x1B holding
 
-    if(r != 0x7F){
+    if(r != 0x7F){ // 0x7F = ??
         wsnarf(w);
         wcut(w);
     }
@@ -1599,7 +1592,7 @@ alts[WMouse].op = CHANRCV;
 case WMouse:
     <<[[winctl()]] WMouse case if mouseopen>>
     else
-        wmousectl(w);
+    <<[[winctl()]] WMouse case if not mouseopen>>
     break;
 @
 
@@ -1627,18 +1620,20 @@ alts[WCtl].op = CHANRCV;
 <<[[winctl()]] event loop cases>>=
 case WCtl:
     if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
-        chanfree(crm.c1);
-        chanfree(crm.c2);
-        chanfree(mrm.cm);
-        chanfree(cwm.cw);
-        chanfree(cwrm.c1);
-        chanfree(cwrm.c2);
+        <<[[winctl()]] Wctl case, free channels>>
         threadexits(nil);
     }
     continue;
 @
 
-
+<<[[winctl()]] Wctl case, free channels>>=
+chanfree(crm.c1);
+chanfree(crm.c2);
+chanfree(mrm.cm);
+chanfree(cwm.cw);
+chanfree(cwrm.c1);
+chanfree(cwrm.c2);
+@
 
 
 \subsection{[[/dev/mouse]]  emitting}
@@ -1702,9 +1697,13 @@ case WMouseread:
 
 \subsection{[[/dev/cons]] emitting}
 
+% when have key, it's send to app that listen on /dev/cons,
+% so we actually reemit here (what we have listened before on w->ck)
+% hence the CHNSND! we write in their STDIN, we act as a relay between
+% two entities, hence the two channels which is really kind of a pipe?
+
 <<[[Window]] other fields>>=
 Channel		*consread;	/* chan(Consreadmesg) */
-Channel		*conswrite;	/* chan(Conswritemesg) */
 @
 
 <<struct Consreadmesg>>=
@@ -1716,13 +1715,6 @@ struct Consreadmesg
 @
 % pass channel inside channel ... subtle
 
-<<struct Conswritemesg>>=
-struct Conswritemesg
-{
-    Channel	*cw;		/* chan(Stringpair) */
-};
-@
-
 <<struct Stringpair>>=
 struct Stringpair	/* rune and nrune or byte and nbyte */
 {
@@ -1730,6 +1722,27 @@ struct Stringpair	/* rune and nrune or byte and nbyte */
     int		ns;
 };
 @
+
+
+
+
+
+
+
+% when app write on /dev/cons, how does it work???
+% it's gonna go to xfidwrite?
+
+<<[[Window]] other fields>>=
+Channel		*conswrite;	/* chan(Conswritemesg) */
+@
+
+<<struct Conswritemesg>>=
+struct Conswritemesg
+{
+    Channel	*cw;		/* chan(Stringpair) */
+};
+@
+
 
 
 
@@ -1767,14 +1780,14 @@ else
 <<[[winctl()]] alts adjustments>>=
 /* this code depends on NL and EOT fitting in a single byte */
 /* kind of expensive for each loop; worth precomputing? */
-if(w->holding)
-    alts[WCread].op = CHANNOP;
+<<[[winctl()]] alts adjustments, if holding>>
 else if(npart || (w->rawing && w->nraw>0))
     alts[WCread].op = CHANSND;
 else{
     alts[WCread].op = CHANNOP;
     for(i=w->qh; i<w->nr; i++){
         c = w->r[i];
+        // buffering, until get a newline in which case we are ready to send
         if(c=='\n' || c=='\004'){
             alts[WCread].op = CHANSND;
             break;
@@ -2116,6 +2129,7 @@ Cursor sightcursor = {
 };
 @
 
+% for holding mode
 <<global whitearrow (windows/rio/data.c)>>=
 Cursor whitearrow = {
     {0, 0},
@@ -2361,8 +2375,7 @@ wsetcursor(Window *w, bool force)
         p = nil;
     else if(wpointto(mouse->xy) == w){
         p = w->cursorp;
-        if(p==nil && w->holding)
-            p = &whitearrow;
+        <<[[wsetcursor()]] if holding>>
     }else
         p = nil;
     if(!menuing)
@@ -2544,16 +2557,14 @@ enum	/* control messages */
     Refresh,
     Movemouse,
 
-    Rawon,
-    Rawoff,
-
-    Holdon,
-    Holdoff,
+    <<enum wctlmesgkind cases>>
 
     Deleted,
     Exited,
 };
 @
+
+% wrefresh vs wrepaint?
 
 
 <<struct Wctlmesg>>=
@@ -2946,12 +2957,8 @@ wborder(Window *w, int type)
 
     if(w->i == nil)
         return;
-    if(w->holding){
-        if(type == Selborder)
-            col = holdcol;
-        else
-            col = paleholdcol;
-    }else{
+    <<[[wborder()]] if holding>>
+    else{
         if(type == Selborder)
             col = titlecol;
         else
@@ -3080,11 +3087,7 @@ wrepaint(Window *w)
 void
 wsetcols(Window *w)
 {
-    if(w->holding)
-        if(w == input)
-            w->cols[TEXT] = w->cols[HTEXT] = holdcol;
-        else
-            w->cols[TEXT] = w->cols[HTEXT] = lightholdcol;
+    <<[[wsetcols()]] if holding>>
     else
         if(w == input)
             w->cols[TEXT] = w->cols[HTEXT] = display->black;
@@ -3783,6 +3786,36 @@ bool_byte	rawing;
 % actually abused as an int in if(w->rawing++ == 0) as one can write
 % multiple rawon message on the consctl
 
+
+<<[[xfidclose()]] Qconsctl case, if rawing>>=
+if(w->rawing){
+    w->rawing = false;
+    wsendctlmesg(w, Rawoff, ZR, nil);
+}
+@
+
+<<enum wctlmesgkind cases>>=
+Rawon,
+Rawoff,
+@
+
+
+<<[[xfidwrite()]] Qconsctl case>>=
+if(strncmp(x->data, "rawon", 5)==0){
+    <<[[xfidwrite()]] Qconsctl case, if rawon message and holding mode>>
+    if(w->rawing++ == 0)
+        wsendctlmesg(w, Rawon, ZR, nil);
+    break;
+}
+if(strncmp(x->data, "rawoff", 6)==0 && w->rawing){
+    if(--w->rawing == 0)
+        wsendctlmesg(w, Rawoff, ZR, nil);
+    break;
+}
+@
+
+
+
 % could be also in Window keyboad section
 <<[[Window]] graphical window fields>>=
 // array<Rune>
@@ -4154,6 +4187,9 @@ Menu menu2 =
 
 \section{Mouse events}
 
+<<[[winctl()]] WMouse case if not mouseopen>>=
+wmousectl(w);
+@
 
 <<function wmousectl>>=
 void
@@ -6244,44 +6280,15 @@ case Qconsctl:
 
 <<[[xfidclose()]] cases>>=
 case Qconsctl:
-    if(w->rawing){
-        w->rawing = false;
-        wsendctlmesg(w, Rawoff, ZR, nil);
-    }
-    if(w->holding){
-        w->holding = false;
-        wsendctlmesg(w, Holdoff, ZR, nil);
-    }
+    <<[[xfidclose()]] Qconsctl case, if rawing>>
+    <<[[xfidclose()]] Qconsctl case, if holding>>
     w->ctlopen = false;
     break;
 @
 
 <<[[xfidwrite()]] cases>>=
 case Qconsctl:
-    if(strncmp(x->data, "holdon", 6)==0){
-        if(w->holding++ == 0)
-            wsendctlmesg(w, Holdon, ZR, nil);
-        break;
-    }
-    if(strncmp(x->data, "holdoff", 7)==0 && w->holding){
-        if(--w->holding == false)
-            wsendctlmesg(w, Holdoff, ZR, nil);
-        break;
-    }
-    if(strncmp(x->data, "rawon", 5)==0){
-        if(w->holding){
-            w->holding = false;
-            wsendctlmesg(w, Holdoff, ZR, nil);
-        }
-        if(w->rawing++ == 0)
-            wsendctlmesg(w, Rawon, ZR, nil);
-        break;
-    }
-    if(strncmp(x->data, "rawoff", 6)==0 && w->rawing){
-        if(--w->rawing == 0)
-            wsendctlmesg(w, Rawoff, ZR, nil);
-        break;
-    }
+    <<[[xfidwrite()]] Qconsctl case>>
     filsysrespond(x->fs, x, &fc, "unknown control message");
     return;
 @
@@ -8452,11 +8459,101 @@ putenv("font", fontname);
 
 \section{Holding mode}
 
+% ??? why someone wants to write holdon? to stop key event to
+% go to app?
+
 % also a textual window field?
 <<[[Window]] config fields>>=
 bool_byte	holding;
 @
 % ??
+
+% main effect! no sending on /dev/cons
+
+<<[[winctl()]] alts adjustments, if holding>>=
+if(w->holding)
+    alts[WCread].op = CHANNOP;
+@
+
+
+
+% visual effect
+
+<<[[wsetcursor()]] if holding>>=
+if(p==nil && w->holding)
+    p = &whitearrow;
+@
+
+<<[[wborder()]] if holding>>=
+if(w->holding){
+    if(type == Selborder)
+        col = holdcol;
+    else
+        col = paleholdcol;
+}
+@
+
+
+<<[[wsetcols()]] if holding>>=
+if(w->holding)
+    if(w == input)
+        w->cols[TEXT] = w->cols[HTEXT] = holdcol;
+    else
+        w->cols[TEXT] = w->cols[HTEXT] = lightholdcol;
+@
+
+
+
+% for holding mode
+<<global holdcol>>=
+static	Image	*holdcol;
+@
+
+<<global paleholdcol>>=
+static	Image	*paleholdcol;
+@
+
+<<global lightholdcol>>=
+static	Image	*lightholdcol;
+@
+
+
+% how set it up (dev/consctl or special key)
+
+<<enum wctlmesgkind cases>>=
+Holdon,
+Holdoff,
+@
+
+<<[[xfidwrite()]] Qconsctl case>>=
+if(strncmp(x->data, "holdon", 6)==0){
+    if(w->holding++ == 0)
+        wsendctlmesg(w, Holdon, ZR, nil);
+    break;
+}
+if(strncmp(x->data, "holdoff", 7)==0 && w->holding){
+    if(--w->holding == false)
+        wsendctlmesg(w, Holdoff, ZR, nil);
+    break;
+}
+@
+
+<<[[xfidclose()]] Qconsctl case, if holding>>=
+if(w->holding){
+    w->holding = false;
+    wsendctlmesg(w, Holdoff, ZR, nil);
+}
+@
+
+<<[[xfidwrite()]] Qconsctl case, if rawon message and holding mode>>=
+if(w->holding){
+    w->holding = false;
+    wsendctlmesg(w, Holdoff, ZR, nil);
+}
+@
+
+
+
 
 <<[[wkeyctl()]] if holding>>=
 if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */
@@ -8471,6 +8568,7 @@ if(r==0x1B || (w->holding && r==0x7F)){	/* toggle hold */
 @
 % use = false and = true instead?
 
+% wrepaint because wsetborder will change certain colors now!
 <<[[wctlmesg()]] cases>>=
 case Holdon:
 case Holdoff:

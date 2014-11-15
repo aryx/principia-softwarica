@@ -253,16 +253,15 @@ wclose(Window *w)
 enum { 
     WKey, 
     WMouse, 
-
+    WCtl,
+    /*s: enum Wxxx cases */
     WMouseread, // ??
-
-    WCtl, //!!!
 
     WCwrite,
     WCread, 
 
     WWread, // ??
-
+    /*e: enum Wxxx cases */
     NWALT 
 };
 /*e: enum Wxxx */
@@ -343,8 +342,10 @@ winctl(void *arg)
     /*e: [[winctl()]] alts setup */
     alts[NWALT].op = CHANEND;
 
+    /*s: [[winctl()]] local initialisation */
     npart = 0;
     lastb = -1;
+    /*e: [[winctl()]] local initialisation */
     for(;;){
         /*s: [[winctl()]] alts adjustments */
         if(w->mouseopen && w->mouse.counter != w->mouse.lastcounter)
@@ -359,14 +360,17 @@ winctl(void *arg)
         /*x: [[winctl()]] alts adjustments */
         /* this code depends on NL and EOT fitting in a single byte */
         /* kind of expensive for each loop; worth precomputing? */
+        /*s: [[winctl()]] alts adjustments, if holding */
         if(w->holding)
             alts[WCread].op = CHANNOP;
+        /*e: [[winctl()]] alts adjustments, if holding */
         else if(npart || (w->rawing && w->nraw>0))
             alts[WCread].op = CHANSND;
         else{
             alts[WCread].op = CHANNOP;
             for(i=w->qh; i<w->nr; i++){
                 c = w->r[i];
+                // buffering, until get a newline in which case we are ready to send
                 if(c=='\n' || c=='\004'){
                     alts[WCread].op = CHANSND;
                     break;
@@ -407,17 +411,21 @@ winctl(void *arg)
             }
             /*e: [[winctl()]] WMouse case if mouseopen */
             else
-                wmousectl(w);
+            /*s: [[winctl()]] WMouse case if not mouseopen */
+            wmousectl(w);
+            /*e: [[winctl()]] WMouse case if not mouseopen */
             break;
         /*x: [[winctl()]] event loop cases */
         case WCtl:
             if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
+                /*s: [[winctl()]] Wctl case, free channels */
                 chanfree(crm.c1);
                 chanfree(crm.c2);
                 chanfree(mrm.cm);
                 chanfree(cwm.cw);
                 chanfree(cwrm.c1);
                 chanfree(cwrm.c2);
+                /*e: [[winctl()]] Wctl case, free channels */
                 threadexits(nil);
             }
             continue;
@@ -804,7 +812,7 @@ wkeyctl(Window *w, Rune r)
 
     // here when no navigation key, no rawing, no 0x1B holding
 
-    if(r != 0x7F){
+    if(r != 0x7F){ // 0x7F = ??
         wsnarf(w);
         wcut(w);
     }
@@ -863,11 +871,13 @@ wkeyctl(Window *w, Rune r)
 void
 wsetcols(Window *w)
 {
+    /*s: [[wsetcols()]] if holding */
     if(w->holding)
         if(w == input)
             w->cols[TEXT] = w->cols[HTEXT] = holdcol;
         else
             w->cols[TEXT] = w->cols[HTEXT] = lightholdcol;
+    /*e: [[wsetcols()]] if holding */
     else
         if(w == input)
             w->cols[TEXT] = w->cols[HTEXT] = display->black;
@@ -935,7 +945,7 @@ wsnarf(Window *w)
 {
     if(w->q1 == w->q0)
         return;
-    nsnarf = w->q1-w->q0;
+    nsnarf = w->q1 - w->q0;
     snarf = runerealloc(snarf, nsnarf);
     snarfversion++;	/* maybe modified by parent */
     runemove(snarf, w->r+w->q0, nsnarf);
@@ -1376,12 +1386,15 @@ wborder(Window *w, int type)
 
     if(w->i == nil)
         return;
+    /*s: [[wborder()]] if holding */
     if(w->holding){
         if(type == Selborder)
             col = holdcol;
         else
             col = paleholdcol;
-    }else{
+    }
+    /*e: [[wborder()]] if holding */
+    else{
         if(type == Selborder)
             col = titlecol;
         else
@@ -1452,8 +1465,10 @@ wsetcursor(Window *w, bool force)
         p = nil;
     else if(wpointto(mouse->xy) == w){
         p = w->cursorp;
+        /*s: [[wsetcursor()]] if holding */
         if(p==nil && w->holding)
             p = &whitearrow;
+        /*e: [[wsetcursor()]] if holding */
     }else
         p = nil;
     if(!menuing)
@@ -1615,6 +1630,7 @@ winshell(void *args)
         sendul(pidc, 0);
         threadexits("mount failed");
     }
+    /*s: [[winshell()]] reassign STDIN/STDOUT */
     // reassign stdin/stdout to virtualized /dev/cons from filsysmount
     close(STDIN);
     if(open("/dev/cons", OREAD) < 0){
@@ -1628,6 +1644,7 @@ winshell(void *args)
         sendul(pidc, 0);
         threadexits("open");	/* BUG? was terminate() */
     }
+    /*e: [[winshell()]] reassign STDIN/STDOUT */
 
     if(wclose(w) == 0){	/* remove extra ref hanging from creation */
         notify(nil);
