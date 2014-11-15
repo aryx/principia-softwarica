@@ -398,7 +398,7 @@ usage(void)
 % core DS of rio, the server side view!
 % core DS of client apps? similar actually but demultiplex from original one!
 
-\section{Device handlers, [[display]], [[screen]], etc}
+\section{Device handlers, [[display]], [[mousectl]], etc}
 
 %draw.h
 %Display	*display; // set by initdraw()
@@ -436,13 +436,13 @@ Rectangle	viewr;
 <<global keyboardctl>>=
 Keyboardctl	*keyboardctl;
 @
-% wrapper over /dev/cons in raw mode probably
+% wrapper over /dev/cons (in raw mode?), channel wrapper
 
 % mouse.h
 <<global mousectl>>=
 Mousectl	*mousectl;
 @
-% wrapper over /dev/mouse
+% wrapper over /dev/mouse, channel wrapper
 
 <<global mouse>>=
 Mouse	*mouse;
@@ -457,11 +457,12 @@ Mouse	*mouse;
 <<global background>>=
 Image	*background;
 @
+% allocimage in main()
 
 <<global wscreen>>=
 Screen	*wscreen;
 @
-% = allocscreen(screen, background)
+% wscreen = allocscreen(screen, background)
 % will get code like
 %    switch(i = menuhit(3, mousectl, &menu3, wscreen)){
 % so make sense? what is wscreen?
@@ -588,6 +589,7 @@ char	*label;   // /dev/label
 static	int	id;
 @
 
+% id is passed to filsysmount! so will be in /mnt/wsys/<id>/devs
 
 
 
@@ -719,8 +721,9 @@ if(cols[0] == nil){
     cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x999999FF);
     cols[TEXT] = display->black;
     cols[HTEXT] = display->black;
+
     titlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreygreen);
-    lighttitlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreygreen);
+    lighttitlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1,DPalegreygreen);
     holdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedblue);
     lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreyblue);
     paleholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
@@ -751,8 +754,6 @@ frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
         frinittick(f);
 }
 @
-
-
 
 
 %XXX ?
@@ -1384,18 +1385,10 @@ if(mouse->buttons){
 
 
 
-
-
-
-
 <<global sweeping>>=
 bool	sweeping;
 @
 % ??? related to menu, and dragging. Diff with moving?
-
-
-
-
 
 
 
@@ -3924,6 +3917,14 @@ if(w->mouseopen) {
 % WCread in raw mode?
 
 
+
+
+
+
+
+
+
+
 \chapter{Textual Windows}
 % fake /dev/cons
 
@@ -3935,8 +3936,13 @@ if(w->mouseopen) {
 
 \section{Textual window creation}
 
+% have already half of it, new, wmk, winctl thread creation,
+% and a few channels. Now need a fake /dev/cons, /dev/mouse, etc
+
 % new(..., pid = 0, ...) -> proccreate(<>)
 % by default new windows are in "textual mode"
+% the cmd is often "rc -i" (rc -i explicit interactive mode because
+%   rc expect #c/cons or /mnt/term/dev/cons)
 <<function winshell>>=
 void
 winshell(void *args)
@@ -3969,7 +3975,9 @@ winshell(void *args)
         dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)
             chdir(dir);
+
         procexec(pidc, cmd, argv);
+
         _exits("exec failed");
     }
 }
@@ -4016,6 +4024,30 @@ filsysmount(Filsys *fs, int id)
 @
 
 \section{Content rendering}
+
+
+<<[[Window]] textual window fields>>=
+// array<Rune>
+Rune		*r;
+uint		nr;	/* number of runes in window */
+uint		maxr;	/* number of runes allocated in r */
+@
+
+<<[[Window]] textual window fields>>=
+uint		org;
+@
+
+<<[[Window]] textual window fields>>=
+// selection? start vs end?
+uint		q0;
+uint		q1;
+@
+
+<<[[Window]] textual window fields>>=
+uint		qh;
+@
+
+
 
 % nchars is in Frame!
 
@@ -4119,8 +4151,14 @@ wfill(Window *w)
 }
 @
 
-\section{Middle click system menu}
 
+
+
+
+
+\section{Mouse events}
+
+\subsection{Middle click menu}
 
 <<[[mousethread()]] middle click under certain conditions>>=
 button2menu(winput);
@@ -4181,16 +4219,14 @@ Menu menu2 =
 
 
 
-
-
-
-
-\section{Mouse events}
+\subsection{Other clicks}
 
 <<[[winctl()]] WMouse case if not mouseopen>>=
 wmousectl(w);
 @
 
+% hmm can get middle click here? and right click?? but it should
+% have been intercepted before no?
 <<function wmousectl>>=
 void
 wmousectl(Window *w)
@@ -4214,13 +4250,11 @@ wmousectl(Window *w)
     incref(w);		/* hold up window while we track */
     if(w->deleted)
         goto Return;
-    if(ptinrect(w->mc.xy, w->scrollr)){
-        if(but)
-            wscroll(w, but);
-        goto Return;
-    }
+
+    <<[[wmousectl()]] if pt in scrollbar>>
     if(but == 1)
         wselect(w);
+
     /* else all is handled by main process */
    Return:
     wclose(w);
@@ -4421,8 +4455,6 @@ wbswidth(Window *w, Rune c)
 }
 @
 
-
-
 \section{Content modification}
 
 <<enum _anon_ (windows/rio/wind.c)>>=
@@ -4434,26 +4466,6 @@ enum
 };
 @
 
-<<[[Window]] textual window fields>>=
-// array<Rune>
-Rune		*r;
-uint		nr;	/* number of runes in window */
-uint		maxr;	/* number of runes allocated in r */
-@
-
-<<[[Window]] textual window fields>>=
-uint		org;
-@
-
-<<[[Window]] textual window fields>>=
-// selection? start vs end?
-uint		q0;
-uint		q1;
-@
-
-<<[[Window]] textual window fields>>=
-uint		qh;
-@
 
 <<function winsert>>=
 uint
@@ -4514,7 +4526,6 @@ winsert(Window *w, Rune *r, int n, uint q0)
 
 
 \section{Word selection}
-
 
 <<global clickwin>>=
 static Window	*clickwin;
@@ -4795,6 +4806,16 @@ wsetselect(Window *w, uint q0, uint q1)
 % put snarf stuff here
 
 \section{Scrolling}
+
+<<[[wmousectl()]] if pt in scrollbar>>=
+if(ptinrect(w->mc.xy, w->scrollr)){
+    if(but)
+        wscroll(w, but);
+    goto Return;
+}
+@
+
+% if ptinrect scrollr
 
 <<function wscroll>>=
 void

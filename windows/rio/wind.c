@@ -95,8 +95,9 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
         cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x999999FF);
         cols[TEXT] = display->black;
         cols[HTEXT] = display->black;
+
         titlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreygreen);
-        lighttitlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreygreen);
+        lighttitlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1,DPalegreygreen);
         holdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedblue);
         lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreyblue);
         paleholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
@@ -1061,13 +1062,17 @@ wmousectl(Window *w)
     incref(w);		/* hold up window while we track */
     if(w->deleted)
         goto Return;
+
+    /*s: [[wmousectl()]] if pt in scrollbar */
     if(ptinrect(w->mc.xy, w->scrollr)){
         if(but)
             wscroll(w, but);
         goto Return;
     }
+    /*e: [[wmousectl()]] if pt in scrollbar */
     if(but == 1)
         wselect(w);
+
     /* else all is handled by main process */
    Return:
     wclose(w);
@@ -1651,7 +1656,9 @@ winshell(void *args)
         dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)
             chdir(dir);
+
         procexec(pidc, cmd, argv);
+
         _exits("exec failed");
     }
 }
