@@ -1,3 +1,4 @@
+/*s: include/thread.h */
 #pragma src "/sys/src/libthread"
 #pragma lib "libthread.a"
 
@@ -7,6 +8,7 @@ typedef struct Alt	Alt;
 typedef struct Channel	Channel;
 typedef struct Ref	Ref;
 
+/*s: enum _anon_ */
 /*
  * Channel structure.  S is the size of the buffer.  For unbuffered channels
  * s is zero.  v is an array of s values.  If s is zero, v is unused.
@@ -14,51 +16,58 @@ typedef struct Ref	Ref;
  */
 
 enum {
-	Nqwds = 2,
-	Nqshift = 5,		/* log₂ # of bits in long */
-	Nqmask =  -1,
-	Nqbits = (1 << Nqshift) * 2,
+    Nqwds = 2,
+    Nqshift = 5,		/* log₂ # of bits in long */
+    Nqmask =  -1,
+    Nqbits = (1 << Nqshift) * 2,
 };
+/*e: enum _anon_ */
 
+/*s: struct Channel */
 struct Channel {
-	int	s;		/* Size of the channel (may be zero) */
-	uint	f;		/* Extraction point (insertion pt: (f+n) % s) */
-	uint	n;		/* Number of values in the channel */
-	int	e;		/* Element size */
-	int	freed;		/* Set when channel is being deleted */
-	volatile Alt **qentry;	/* Receivers/senders waiting (malloc) */
-	volatile int nentry;	/* # of entries malloc-ed */
-	volatile int closed;	/* channel is closed */
-	uchar	v[1];		/* Array of s values in the channel */
+    int	s;		/* Size of the channel (may be zero) */
+    uint	f;		/* Extraction point (insertion pt: (f+n) % s) */
+    uint	n;		/* Number of values in the channel */
+    int	e;		/* Element size */
+    int	freed;		/* Set when channel is being deleted */
+    volatile Alt **qentry;	/* Receivers/senders waiting (malloc) */
+    volatile int nentry;	/* # of entries malloc-ed */
+    volatile int closed;	/* channel is closed */
+    uchar	v[1];		/* Array of s values in the channel */
 };
+/*e: struct Channel */
 
 
 /* Channel operations for alt: */
 typedef enum {
-	CHANEND,
-	CHANSND,
-	CHANRCV,
-	CHANNOP,
-	CHANNOBLK,
+    CHANEND,
+    CHANSND,
+    CHANRCV,
+    CHANNOP,
+    CHANNOBLK,
 } ChanOp;
 
+/*s: struct Alt */
 struct Alt {
-	Channel	*c;		/* channel */
-	void	*v;		/* pointer to value */
-	ChanOp	op;		/* operation */
+    Channel	*c;		/* channel */
+    void	*v;		/* pointer to value */
+    ChanOp	op;		/* operation */
 
-	char	*err;		/* did the op fail? */
-	/*
-	 * the next variables are used internally to alt
-	 * they need not be initialized
-	 */
-	Channel	**tag;		/* pointer to rendez-vous tag */
-	int	entryno;	/* entry number */
+    char	*err;		/* did the op fail? */
+    /*
+     * the next variables are used internally to alt
+     * they need not be initialized
+     */
+    Channel	**tag;		/* pointer to rendez-vous tag */
+    int	entryno;	/* entry number */
 };
+/*e: struct Alt */
 
+/*s: struct Ref */
 struct Ref {
-	long	ref;
+    long	ref;
 };
+/*e: struct Ref */
 
 int	alt(Alt alts[]);
 int	chanclose(Channel*);
@@ -132,3 +141,4 @@ int	iosleep(Ioproc*, long);
 
 long	iocall(Ioproc*, long (*)(va_list*), ...);
 void	ioret(Ioproc*, int);
+/*e: include/thread.h */
