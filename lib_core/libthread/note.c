@@ -4,6 +4,8 @@
 #include <thread.h>
 #include "threadimpl.h"
 
+typedef struct Note Note;
+
 /*s: global _threadnopasser */
 int	_threadnopasser;
 /*e: global _threadnopasser */
@@ -14,7 +16,6 @@ int	_threadnopasser;
 /*s: constant ERRLEN */
 #define	ERRLEN	48
 /*e: constant ERRLEN */
-typedef struct Note Note;
 /*s: struct Note */
 struct Note
 {

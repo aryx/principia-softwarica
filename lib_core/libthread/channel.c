@@ -126,6 +126,7 @@ alt(Alt *alts)
     if(t->moribund || _threadexitsallstatus)
         yield();	/* won't return */
     s = _procsplhi();
+
     lock(&chanlock);
     t->alt = alts;
     t->chan = Chanalt;
@@ -311,15 +312,6 @@ chanclosing(Channel *c)
 /*e: function chanclosing */
 
 /*s: function runop */
-/*
- * superseded by chanclosing
-int
-chanisclosed(Channel *c)
-{
-    return chanisclosing(c) >= 0;
-}
- */
-
 static int
 runop(int op, Channel *c, void *v, int nb)
 {
@@ -338,6 +330,7 @@ runop(int op, Channel *c, void *v, int nb)
     a[1].op = CHANEND;
     if(nb)
         a[1].op = CHANNOBLK;
+
     switch(r=alt(a)){
     case -1:	/* interrupted */
         return -1;

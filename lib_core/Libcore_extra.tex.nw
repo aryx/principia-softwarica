@@ -2,57 +2,13 @@
 
 \subsection*{[[include/thread.h]]}
 
-<<enum _anon_>>=
-/*
- * Channel structure.  S is the size of the buffer.  For unbuffered channels
- * s is zero.  v is an array of s values.  If s is zero, v is unused.
- * f and n represent the state of the queue pointed to by v.
- */
-
-enum {
-    Nqwds = 2,
-    Nqshift = 5,		/* log₂ # of bits in long */
-    Nqmask =  -1,
-    Nqbits = (1 << Nqshift) * 2,
-};
-@
-
-<<struct Channel>>=
-struct Channel {
-    int	s;		/* Size of the channel (may be zero) */
-    uint	f;		/* Extraction point (insertion pt: (f+n) % s) */
-    uint	n;		/* Number of values in the channel */
-    int	e;		/* Element size */
-    int	freed;		/* Set when channel is being deleted */
-    volatile Alt **qentry;	/* Receivers/senders waiting (malloc) */
-    volatile int nentry;	/* # of entries malloc-ed */
-    volatile int closed;	/* channel is closed */
-    uchar	v[1];		/* Array of s values in the channel */
-};
-@
-
-<<struct Alt>>=
-struct Alt {
-    Channel	*c;		/* channel */
-    void	*v;		/* pointer to value */
-    ChanOp	op;		/* operation */
-
-    char	*err;		/* did the op fail? */
-    /*
-     * the next variables are used internally to alt
-     * they need not be initialized
-     */
-    Channel	**tag;		/* pointer to rendez-vous tag */
-    int	entryno;	/* entry number */
-};
-@
-
-<<struct Ref>>=
-struct Ref {
-    long	ref;
-};
-@
-
+%dead I think
+%enum {
+%    Nqwds = 2,
+%    Nqshift = 5,		/* log₂ # of bits in long */
+%    Nqmask =  -1,
+%    Nqbits = (1 << Nqshift) * 2,
+%};
 
 %-------------------------------------------------------------
 
@@ -65,374 +21,107 @@ struct Ref {
 typedef struct Alt	Alt;
 typedef struct Channel	Channel;
 typedef struct Ref	Ref;
-
-<<enum _anon_>>
+/* slave I/O processes */
+typedef struct Ioproc Ioproc;
+#pragma incomplete Ioproc
 
 <<struct Channel>>
 
-
 /* Channel operations for alt: */
-typedef enum {
-    CHANEND,
-    CHANSND,
-    CHANRCV,
-    CHANNOP,
-    CHANNOBLK,
-} ChanOp;
+<<enum chanop>>
+typedef enum chanop ChanOp;
 
 <<struct Alt>>
 
 <<struct Ref>>
 
-int	alt(Alt alts[]);
+long	decref(Ref *r);			/* returns 0 iff value is now zero */
+void	incref(Ref *r);
+
+Channel* chancreate(int elemsize, int bufsize);
 int	chanclose(Channel*);
 int	chanclosing(Channel *c);
-Channel* chancreate(int elemsize, int bufsize);
 int	chaninit(Channel *c, int elemsize, int elemcnt);
 void	chanfree(Channel *c);
 int	chanprint(Channel *, char *, ...);
-long	decref(Ref *r);			/* returns 0 iff value is now zero */
-void	incref(Ref *r);
-int	nbrecv(Channel *c, void *v);
-void*	nbrecvp(Channel *c);
-ulong	nbrecvul(Channel *c);
-int	nbsend(Channel *c, void *v);
-int	nbsendp(Channel *c, void *v);
-int	nbsendul(Channel *c, ulong v);
-void	needstack(int);
-int	proccreate(void (*f)(void *arg), void *arg, uint stacksize);
-int	procrfork(void (*f)(void *arg), void *arg, uint stacksize, int flag);
-void**	procdata(void);
-void	procexec(Channel *, char *, char *[]);
-void	procexecl(Channel *, char *, ...);
+
+// blocking API
 int	recv(Channel *c, void *v);
 void*	recvp(Channel *c);
 ulong	recvul(Channel *c);
 int	send(Channel *c, void *v);
 int	sendp(Channel *c, void *v);
 int	sendul(Channel *c, ulong v);
+
+// non blocking API
+int	nbrecv(Channel *c, void *v);
+void*	nbrecvp(Channel *c);
+ulong	nbrecvul(Channel *c);
+int	nbsend(Channel *c, void *v);
+int	nbsendp(Channel *c, void *v);
+int	nbsendul(Channel *c, ulong v);
+
+// select
+int	alt(Alt alts[]);
+
+// process
+int	proccreate(void (*f)(void *arg), void *arg, uint stacksize);
+int	procrfork(void (*f)(void *arg), void *arg, uint stacksize, int flag);
+void**	procdata(void);
+void	procexec(Channel *, char *, char *[]);
+void	procexecl(Channel *, char *, ...);
+
+// threads
 int	threadcreate(void (*f)(void *arg), void *arg, uint stacksize);
 void**	threaddata(void);
 void	threadexits(char *);
 void	threadexitsall(char *);
+void	threadmain(int argc, char *argv[]);
+int	threadid(void);
+
 int	threadgetgrp(void);	/* return thread group of current thread */
+int	threadsetgrp(int);		/* set thread group, return old */
 char*	threadgetname(void);
+void	threadsetname(char *fmt, ...);
 void	threadint(int);		/* interrupt thread */
 void	threadintgrp(int);	/* interrupt threads in grp */
 void	threadkill(int);	/* kill thread */
 void	threadkillgrp(int);	/* kill threads in group */
-void	threadmain(int argc, char *argv[]);
 void	threadnonotes(void);
 int	threadnotify(int (*f)(void*, char*), int in);
-int	threadid(void);
 int	threadpid(int);
-int	threadsetgrp(int);		/* set thread group, return old */
-void	threadsetname(char *fmt, ...);
 Channel*threadwaitchan(void);
+
+// Io proc
+Ioproc*	ioproc(void);
+void	closeioproc(Ioproc*);
+void	iointerrupt(Ioproc*);
+
+int	ioopen(Ioproc*, char*, int);
+int	ioclose(Ioproc*, int);
+long	ioread(Ioproc*, int, void*, long);
+long	ioreadn(Ioproc*, int, void*, long);
+long	iowrite(Ioproc*, int, void*, long);
+int	iosleep(Ioproc*, long);
+int	iodial(Ioproc*, char*, char*, char*, int*);
+
+long	iocall(Ioproc*, long (*)(va_list*), ...);
+void	ioret(Ioproc*, int);
+
+// misc
+void	needstack(int);
 int	tprivalloc(void);
 void	tprivfree(int);
 void	**tprivaddr(int);
 void	yield(void);
 
 extern	int	mainstacksize;
-
-/* slave I/O processes */
-typedef struct Ioproc Ioproc;
-
-#pragma incomplete Ioproc
-
-
-Ioproc*	ioproc(void);
-void	closeioproc(Ioproc*);
-void	iointerrupt(Ioproc*);
-
-int	ioclose(Ioproc*, int);
-int	iodial(Ioproc*, char*, char*, char*, int*);
-int	ioopen(Ioproc*, char*, int);
-long	ioread(Ioproc*, int, void*, long);
-long	ioreadn(Ioproc*, int, void*, long);
-long	iowrite(Ioproc*, int, void*, long);
-int	iosleep(Ioproc*, long);
-
-long	iocall(Ioproc*, long (*)(va_list*), ...);
-void	ioret(Ioproc*, int);
 @
 
 
 \section{[[lib_core/libthread/]]}
 
-\subsection*{[[lib_core/libthread/dial.c]]}
-
-<<enum _anon_ (lib_core/libthread/dial.c)>>=
-enum
-{
-    Maxstring	= 128,
-    Maxpath		= 256,
-};
-@
-
-<<struct DS>>=
-struct DS {
-    /* dist string */
-    char	buf[Maxstring];
-    char	*netdir;
-    char	*proto;
-    char	*rem;
-
-    /* other args */
-    char	*local;
-    char	*dir;
-    int	*cfdp;
-};
-@
-
-<<function _threaddial>>=
-/*
- *  the dialstring is of the form '[/net/]proto!dest'
- */
-int
-_threaddial(char *dest, char *local, char *dir, int *cfdp)
-{
-    DS ds;
-    int rv;
-    char err[ERRMAX], alterr[ERRMAX];
-
-    ds.local = local;
-    ds.dir = dir;
-    ds.cfdp = cfdp;
-
-    _dial_string_parse(dest, &ds);
-    if(ds.netdir)
-        return csdial(&ds);
-
-    ds.netdir = "/net";
-    rv = csdial(&ds);
-    if(rv >= 0)
-        return rv;
-    err[0] = '\0';
-    errstr(err, sizeof err);
-    if(strstr(err, "refused") != 0){
-        werrstr("%s", err);
-        return rv;
-    }
-    ds.netdir = "/net.alt";
-    rv = csdial(&ds);
-    if(rv >= 0)
-        return rv;
-
-    alterr[0] = 0;
-    errstr(alterr, sizeof alterr);
-    if(strstr(alterr, "translate") || strstr(alterr, "does not exist"))
-        werrstr("%s", err);
-    else
-        werrstr("%s", alterr);
-    return rv;
-}
-@
-
-<<function csdial>>=
-static int
-csdial(DS *ds)
-{
-    int n, fd, rv;
-    char *p, buf[Maxstring], clone[Maxpath], err[ERRMAX], besterr[ERRMAX];
-
-    /*
-     *  open connection server
-     */
-    snprint(buf, sizeof(buf), "%s/cs", ds->netdir);
-    fd = open(buf, ORDWR);
-    if(fd < 0){
-        /* no connection server, don't translate */
-        snprint(clone, sizeof(clone), "%s/%s/clone", ds->netdir, ds->proto);
-        return call(clone, ds->rem, ds);
-    }
-
-    /*
-     *  ask connection server to translate
-     */
-    snprint(buf, sizeof(buf), "%s!%s", ds->proto, ds->rem);
-    if(write(fd, buf, strlen(buf)) < 0){
-        close(fd);
-        return -1;
-    }
-
-    /*
-     *  loop through each address from the connection server till
-     *  we get one that works.
-     */
-    *besterr = 0;
-    rv = -1;
-    seek(fd, 0, 0);
-    while((n = read(fd, buf, sizeof(buf) - 1)) > 0){
-        buf[n] = 0;
-        p = strchr(buf, ' ');
-        if(p == 0)
-            continue;
-        *p++ = 0;
-        rv = call(buf, p, ds);
-        if(rv >= 0)
-            break;
-        err[0] = '\0';
-        errstr(err, sizeof err);
-        if(strstr(err, "does not exist") == 0)
-            strcpy(besterr, err);
-    }
-    close(fd);
-
-    if(rv < 0 && *besterr)
-        werrstr("%s", besterr);
-    else
-        werrstr("%s", err);
-    return rv;
-}
-@
-
-<<function call>>=
-static int
-call(char *clone, char *dest, DS *ds)
-{
-    int fd, cfd, n;
-    char cname[Maxpath], name[Maxpath], data[Maxpath], *p;
-
-    /* because cs is in a different name space, replace the mount point */
-    if(*clone == '/'){
-        p = strchr(clone+1, '/');
-        if(p == nil)
-            p = clone;
-        else 
-            p++;
-    } else
-        p = clone;
-    snprint(cname, sizeof cname, "%s/%s", ds->netdir, p);
-
-    cfd = open(cname, ORDWR);
-    if(cfd < 0)
-        return -1;
-
-    /* get directory name */
-    n = read(cfd, name, sizeof(name)-1);
-    if(n < 0){
-        close(cfd);
-        return -1;
-    }
-    name[n] = 0;
-    for(p = name; *p == ' '; p++)
-        ;
-    snprint(name, sizeof(name), "%ld", strtoul(p, 0, 0));
-    p = strrchr(cname, '/');
-    *p = 0;
-    if(ds->dir)
-        snprint(ds->dir, NETPATHLEN, "%s/%s", cname, name);
-    snprint(data, sizeof(data), "%s/%s/data", cname, name);
-
-    /* connect */
-    if(ds->local)
-        snprint(name, sizeof(name), "connect %s %s", dest, ds->local);
-    else
-        snprint(name, sizeof(name), "connect %s", dest);
-    if(write(cfd, name, strlen(name)) < 0){
-        close(cfd);
-        return -1;
-    }
-
-    /* open data connection */
-    fd = open(data, ORDWR);
-    if(fd < 0){
-        close(cfd);
-        return -1;
-    }
-    if(ds->cfdp)
-        *ds->cfdp = cfd;
-    else
-        close(cfd);
-    return fd;
-}
-@
-
-<<function _dial_string_parse>>=
-/*
- *  parse a dial string
- */
-static void
-_dial_string_parse(char *str, DS *ds)
-{
-    char *p, *p2;
-
-    strncpy(ds->buf, str, Maxstring);
-    ds->buf[Maxstring-1] = 0;
-
-    p = strchr(ds->buf, '!');
-    if(p == 0) {
-        ds->netdir = 0;
-        ds->proto = "net";
-        ds->rem = ds->buf;
-    } else {
-        if(*ds->buf != '/' && *ds->buf != '#'){
-            ds->netdir = 0;
-            ds->proto = ds->buf;
-        } else {
-            for(p2 = p; *p2 != '/'; p2--)
-                ;
-            *p2++ = 0;
-            ds->netdir = ds->buf;
-            ds->proto = p2;
-        }
-        *p = 0;
-        ds->rem = p + 1;
-    }
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<lib_core/libthread/dial.c>>=
-/*
- * old single-process version of dial that libthread can cope with
- */
-#include <u.h>
-#include <libc.h>
-
-typedef struct DS DS;
-
-static int	call(char*, char*, DS*);
-static int	csdial(DS*);
-static void	_dial_string_parse(char*, DS*);
-
-<<enum _anon_ (lib_core/libthread/dial.c)>>
-
-<<struct DS>>
-
-
-<<function _threaddial>>
-
-<<function csdial>>
-
-<<function call>>
-
-<<function _dial_string_parse>>
-@
-
-
 \subsection*{[[lib_core/libthread/ref.c]]}
-
-<<function incref>>=
-void
-incref(Ref *r)
-{
-    ainc(&r->ref);
-}
-@
-
-<<function decref>>=
-long
-decref(Ref *r)
-{
-    return adec(&r->ref);
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -450,156 +139,40 @@ decref(Ref *r)
 
 \subsection*{[[lib_core/libthread/threadimpl.h]]}
 
+
 <<enum _anon_ (lib_core/libthread/threadimpl.h)>>=
 enum
 {
-    RENDHASH = 13,
-    Printsize = 2048,
-    NPRIV = 8,
+<<constant RENDHASH>>
+<<constant Printsize>>
+<<constant NPRIV>>
 };
+@
+
+<<constant RENDHASH>>=
+RENDHASH = 13,
 @
 
 <<struct Rgrp>>=
 struct Rgrp
 {
-    Lock		lock;
+    Lock	lock;
     Thread	*hash[RENDHASH];
 };
 @
 
-<<struct Tqueue>>=
-struct Tqueue		/* Thread queue */
-{
-    int		asleep;
-    Thread	*head;
-    Thread	**tail;
-};
-@
 
-<<struct Thread>>=
-struct Thread
-{
-    Lock		lock;		/* protects thread data structure */
-    jmp_buf		sched;		/* for context switches */
-    int		id;		/* thread id */
-    int 		grp;		/* thread group */
-    int		moribund;	/* thread needs to die */
-    State		state;		/* run state */
-    State		nextstate;	/* next run state */
-    uchar		*stk;		/* top of stack (lowest address of stack) */
-    uint		stksize;	/* stack size */
-    Thread		*next;		/* next on ready queue */
-
-    Proc		*proc;		/* proc of this thread */
-    Thread		*nextt;		/* next on list of threads in this proc*/
-    int		ret;		/* return value for Exec, Fork */
-
-    char		*cmdname;	/* ptr to name of thread */
-
-    int		inrendez;
-    Thread		*rendhash;	/* Trgrp linked list */
-    void*		rendtag;	/* rendezvous tag */
-    void*		rendval;	/* rendezvous value */
-    int		rendbreak;	/* rendezvous has been taken */
-
-    Chanstate	chan;		/* which channel operation is current */
-    Alt		*alt;		/* pointer to current alt structure (debugging) */
-
-    void*	udata[NPRIV];	/* User per-thread data pointer */
-};
-@
 
 <<struct Execargs>>=
 struct Execargs
 {
-    char		*prog;
-    char		**args;
+    char	*prog;
+    char	**args;
     int		fd[2];
 };
 @
 
-<<struct Proc>>=
-struct Proc
-{
-    Lock		lock;
-    jmp_buf		sched;			/* for context switches */
-    int		pid;			/* process id */
-    int		splhi;			/* delay notes */
-    Thread		*thread;		/* running thread */
 
-    int		needexec;
-    Execargs	exec;			/* exec argument */
-    Proc		*newproc;		/* fork argument */
-    char		exitstr[ERRMAX];	/* exit status */
-
-    int		rforkflag;
-    int		nthreads;
-    Tqueue		threads;		/* All threads of this proc */
-    Tqueue		ready;			/* Runnable threads */
-    Lock		readylock;
-
-    char		printbuf[Printsize];
-    int		blocked;		/* In a rendezvous */
-    int		pending;		/* delayed note pending */
-    int		nonotes;		/*  delay notes */
-    uint		nextID;			/* ID of most recently created thread */
-    Proc		*next;			/* linked list of Procs */
-
-    void		*arg;			/* passed between shared and unshared stk */
-    char		str[ERRMAX];		/* used by threadexits to avoid malloc */
-
-    void*		wdata;			/* Lib(worker) per-proc data pointer */
-    void*		udata;			/* User per-proc data pointer */
-    char		threadint;		/* tag for threadexitsall() */
-};
-@
-
-<<struct Pqueue>>=
-struct Pqueue {		/* Proc queue */
-    Lock		lock;
-    Proc		*head;
-    Proc		**tail;
-};
-@
-
-<<struct Ioproc>>=
-struct Ioproc
-{
-    int tid;
-    Channel *c, *creply;
-    int inuse;
-    long (*op)(va_list*);
-    va_list arg;
-    long ret;
-    char err[ERRMAX];
-    Ioproc *next;
-};
-@
-
-<<constant DBGAPPL>>=
-#define DBGAPPL	(1 << 0)
-@
-
-<<constant DBGSCHED>>=
-#define DBGSCHED	(1 << 16)
-@
-
-<<constant DBGCHAN>>=
-#define DBGCHAN	(1 << 17)
-@
-
-<<constant DBGREND>>=
-#define DBGREND	(1 << 18)
-@
-
-<<constant DBGNOTE>>=
-/* #define DBGKILL	(1 << 19) */
-#define DBGNOTE	(1 << 20)
-@
-
-<<constant DBGEXEC>>=
-#define DBGEXEC	(1 << 21)
-@
 
 <<function ioproc_arg>>=
 #define ioproc_arg(io, type)	(va_arg((io)->arg, type))
@@ -607,6 +180,7 @@ struct Ioproc
 
 
 %-------------------------------------------------------------
+
 
 <<lib_core/libthread/threadimpl.h>>=
 /* 
@@ -631,28 +205,19 @@ struct Ioproc
  */
 
 typedef struct Pqueue	Pqueue;
-typedef struct Rgrp		Rgrp;
+typedef struct Rgrp	Rgrp;
 typedef struct Tqueue	Tqueue;
 typedef struct Thread	Thread;
 typedef struct Execargs	Execargs;
-typedef struct Proc		Proc;
+typedef struct Proc	Proc;
+
 
 /* must match list in sched.c */
-typedef enum
-{
-    Dead,
-    Running,
-    Ready,
-    Rendezvous,
-} State;
+<<enum state>>
+typedef enum state State;
     
-typedef enum
-{
-    Channone,
-    Chanalt,
-    Chansend,
-    Chanrecv,
-} Chanstate;
+<<enum chanstate>>
+typedef enum chanstate Chanstate;
 
 <<enum _anon_ (lib_core/libthread/threadimpl.h)>>
 
@@ -700,10 +265,10 @@ void**	_workerdata(void);
 void	_xinc(long*);
 long	_xdec(long*);
 
-extern int			_threaddebuglevel;
+extern int		_threaddebuglevel;
 extern char*		_threadexitsallstatus;
 extern Pqueue		_threadpq;
-extern Channel*	_threadwaitchan;
+extern Channel*		_threadwaitchan;
 extern Rgrp		_threadrgrp;
 
 <<constant DBGAPPL>>
@@ -719,7 +284,6 @@ extern Rgrp		_threadrgrp;
 
 \subsection*{[[lib_core/libthread/xincarm.c]]}
 
-
 %-------------------------------------------------------------
 
 <<lib_core/libthread/xincarm.c>>=
@@ -728,35 +292,6 @@ extern Rgrp		_threadrgrp;
 
 
 \subsection*{[[lib_core/libthread/xincport.h]]}
-
-<<global xincport_lock>>=
-static Lock xincport_lock;
-@
-
-<<function _xinc>>=
-void
-_xinc(long *p)
-{
-
-    lock(&xincport_lock);
-    (*p)++;
-    unlock(&xincport_lock);
-}
-@
-
-<<function _xdec>>=
-long
-_xdec(long *p)
-{
-    long r;
-
-    lock(&xincport_lock);
-    r = --(*p);
-    unlock(&xincport_lock);
-    return r;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -775,39 +310,6 @@ _xdec(long *p)
 
 \subsection*{[[lib_core/libthread/globals.c]]}
 
-<<global _threadpq>>=
-// used to be in create.c
-Pqueue _threadpq;
-@
-
-<<global procp>>=
-// used to be in main.c
-static Proc **procp;
-@
-
-<<function _systhreadinit>>=
-void
-_systhreadinit(void)
-{
-    procp = privalloc();
-}
-@
-
-<<function _threadgetproc>>=
-Proc*
-_threadgetproc(void)
-{
-    return *procp;
-}
-@
-
-<<function _threadsetproc>>=
-void
-_threadsetproc(Proc *p)
-{
-    *procp = p;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -832,59 +334,6 @@ _threadsetproc(Proc *p)
 
 \subsection*{[[lib_core/libthread/debug.c]]}
 
-<<global _threaddebuglevel>>=
-int _threaddebuglevel;
-@
-
-<<function _threaddebug>>=
-void
-_threaddebug(ulong flag, char *fmt, ...)
-{
-    char buf[128];
-    va_list arg;
-    Fmt f;
-    Proc *p;
-
-    if((_threaddebuglevel&flag) == 0)
-        return;
-
-    fmtfdinit(&f, 2, buf, sizeof buf);
-
-    p = _threadgetproc();
-    if(p==nil)
-        fmtprint(&f, "noproc ");
-    else if(p->thread)
-        fmtprint(&f, "%d.%d ", p->pid, p->thread->id);
-    else
-        fmtprint(&f, "%d._ ", p->pid);
-
-    va_start(arg, fmt);
-    fmtvprint(&f, fmt, arg);
-    va_end(arg);
-    fmtprint(&f, "\n");
-    fmtfdflush(&f);
-}
-@
-
-<<function _threadassert>>=
-void
-_threadassert(char *s)
-{
-    char buf[256];
-    int n;
-    Proc *p;
-
-    p = _threadgetproc();
-    if(p && p->thread)
-        n = sprint(buf, "%d.%d ", p->pid, p->thread->id);
-    else
-        n = 0;
-    snprint(buf+n, sizeof(buf)-n, "%s: assertion failed\n", s);
-    write(2, buf, strlen(buf));
-    abort();
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -904,42 +353,6 @@ _threadassert(char *s)
 
 \subsection*{[[lib_core/libthread/id.c]]}
 
-<<function threadid>>=
-int
-threadid(void)
-{
-    return _threadgetproc()->thread->id;
-}
-@
-
-<<function threadpid>>=
-int
-threadpid(int id)
-{
-    int pid;
-    Proc *p;
-    Thread *t;
-
-    if (id < 0)
-        return -1;
-    if (id == 0)
-        return _threadgetproc()->pid;
-    lock(&_threadpq.lock);
-    for (p = _threadpq.head; p; p = p->next){
-        lock(&p->lock);
-        for (t = p->threads.head; t; t = t->nextt)
-            if (t->id == id){
-                pid = p->pid;
-                unlock(&p->lock);
-                unlock(&_threadpq.lock);
-                return pid;
-            }
-        unlock(&p->lock);
-    }
-    unlock(&_threadpq.lock);
-    return -1;
-}
-@
 
 <<function threadsetgrp>>=
 int
@@ -962,6 +375,7 @@ threadgetgrp(void)
     return _threadgetproc()->thread->grp;
 }
 @
+
 
 <<function threadsetname>>=
 void
@@ -1026,11 +440,13 @@ procdata(void)
 }
 @
 
+
 <<global privlock>>=
 static Lock privlock;
 @
 
 <<global privmask>>=
+//array<bool> NPRIV at least
 static int privmask = 1;
 @
 
@@ -1212,46 +628,6 @@ threadwaitchan(void)
 
 
 \subsection*{[[lib_core/libthread/lib.c]]}
-
-<<global totalmalloc>>=
-static long totalmalloc;
-@
-
-<<function _threadmalloc>>=
-void*
-_threadmalloc(long size, int z)
-{
-    void *m;
-
-    m = malloc(size);
-    if (m == nil)
-        sysfatal("Malloc of size %ld failed: %r", size);
-    setmalloctag(m, getcallerpc(&size));
-    totalmalloc += size;
-    if (size > 100000000) {
-        fprint(2, "Malloc of size %ld, total %ld\n", size, totalmalloc);
-        abort();
-    }
-    if (z)
-        memset(m, 0, size);
-    return m;
-}
-@
-
-<<function _threadsysfatal>>=
-void
-_threadsysfatal(char *fmt, va_list arg)
-{
-    char buf[1024];	/* size doesn't matter; we're about to exit */
-
-    vseprint(buf, buf+sizeof(buf), fmt, arg);
-    if(argv0)
-        fprint(2, "%s: %s\n", argv0, buf);
-    else
-        fprint(2, "%s\n", buf);
-    threadexitsall(buf);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1451,11 +827,12 @@ _procsplx(int s)
 #include <thread.h>
 #include "threadimpl.h"
 
+typedef struct Note Note;
+
 <<global _threadnopasser>>
 
 <<constant NFN>>
 <<constant ERRLEN>>
-typedef struct Note Note;
 <<struct Note>>
 
 <<global notes>>
@@ -1641,6 +1018,7 @@ _threadinitstack(Thread *t, void (*f)(void*), void *arg)
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
+
 #include "threadimpl.h"
 
 <<function launcher386>>
@@ -1652,28 +1030,6 @@ _threadinitstack(Thread *t, void (*f)(void*), void *arg)
 
 \subsection*{[[lib_core/libthread/sched.c]]}
 
-<<global _psstate>>=
-static char *_psstate[] = {
-    "Moribund",
-    "Dead",
-    "Exec",
-    "Fork",
-    "Running",
-    "Ready",
-    "Rendezvous",
-};
-@
-
-<<function psstate>>=
-static char*
-psstate(int s)
-{
-    if(s < 0 || s >= nelem(_psstate))
-        return "unknown";
-    return _psstate[s];
-}
-@
-
 <<function _schedinit>>=
 void
 _schedinit(void *arg)
@@ -1684,14 +1040,20 @@ _schedinit(void *arg)
     p = arg;
     _threadsetproc(p);
     p->pid = _tos->pid; //getpid();
+
     while(setjmp(p->sched))
         ;
-    _threaddebug(DBGSCHED, "top of schedinit, _threadexitsallstatus=%p", _threadexitsallstatus);
+
+    _threaddebug(DBGSCHED, "top of schedinit, _threadexitsallstatus=%p", 
+                 _threadexitsallstatus);
     if(_threadexitsallstatus)
         exits(_threadexitsallstatus);
+
     lock(&p->lock);
-    if((t=p->thread) != nil){
+    t = p->thread;
+    if(t != nil){
         p->thread = nil;
+
         if(t->moribund){
             t->state = Dead;
             for(l=&p->threads.head; *l; l=&(*l)->nextt)
@@ -1730,6 +1092,7 @@ _schedinit(void *arg)
 }
 @
 
+% _sched() -> <>
 <<function needstack>>=
 void
 needstack(int n)
@@ -1759,7 +1122,8 @@ _sched(void)
 
 Resched:
     p = _threadgetproc();
-    if((t = p->thread) != nil){
+    t = p->thread;
+    if(t != nil){
         needstack(128);
         _threaddebug(DBGSCHED, "pausing, state=%s", psstate(t->state));
         if(setjmp(t->sched)==0)
@@ -1820,6 +1184,7 @@ _threadready(Thread *t)
 
     assert(t->state == Ready);
     _threaddebug(DBGSCHED, "readying %d.%d", t->proc->pid, t->id);
+
     q = &t->proc->ready;
     lock(&t->proc->readylock);
     t->next = nil;
@@ -1882,168 +1247,6 @@ static Thread	*runthread(Proc*);
 
 \subsection*{[[lib_core/libthread/create.c]]}
 
-<<function nextID>>=
-static int
-nextID(void)
-{
-    static Lock l;
-    static int id;
-    int i;
-
-    lock(&l);
-    i = ++id;
-    unlock(&l);
-    return i;
-}
-@
-
-<<function newthread>>=
-/*
- * Create and initialize a new Thread structure attached to a given proc.
- */
-static int
-newthread(Proc *p, void (*f)(void *arg), void *arg, uint stacksize, char *name, int grp)
-{
-    int id;
-    Thread *t;
-
-    if(stacksize < 32)
-        sysfatal("bad stacksize %d", stacksize);
-    t = _threadmalloc(sizeof(Thread), 1);
-    t->stksize = stacksize;
-    t->stk = _threadmalloc(stacksize, 0);
-    memset(t->stk, 0xFE, stacksize);
-    _threadinitstack(t, f, arg);
-    t->grp = grp;
-    if(name)
-        t->cmdname = strdup(name);
-    t->id = nextID();
-    id = t->id;
-    t->next = (Thread*)~0;
-    t->proc = p;
-    _threaddebug(DBGSCHED, "create thread %d.%d name %s", p->pid, t->id, name);
-    lock(&p->lock);
-    p->nthreads++;
-    if(p->threads.head == nil)
-        p->threads.head = t;
-    else
-        *p->threads.tail = t;
-    p->threads.tail = &t->nextt;
-    t->nextt = nil;
-    t->state = Ready;
-    _threadready(t);
-    unlock(&p->lock);
-    return id;
-}
-@
-
-<<function threadcreate>>=
-/* 
- * Create a new thread and schedule it to run.
- * The thread grp is inherited from the currently running thread.
- */
-int
-threadcreate(void (*f)(void *arg), void *arg, uint stacksize)
-{
-    return newthread(_threadgetproc(), f, arg, stacksize, nil, threadgetgrp());
-}
-@
-
-<<function _newproc>>=
-/*
- * Create and initialize a new Proc structure with a single Thread
- * running inside it.  Add the Proc to the global process list.
- */
-Proc*
-_newproc(void (*f)(void *arg), void *arg, uint stacksize, char *name, int grp, int rforkflag)
-{
-    Proc *p;
-
-    p = _threadmalloc(sizeof *p, 1);
-    p->pid = -1;
-    p->rforkflag = rforkflag;
-    newthread(p, f, arg, stacksize, name, grp);
-
-    lock(&_threadpq.lock);
-    if(_threadpq.head == nil)
-        _threadpq.head = p;
-    else
-        *_threadpq.tail = p;
-    _threadpq.tail = &p->next;
-    unlock(&_threadpq.lock);
-    return p;
-}
-@
-
-<<function procrfork>>=
-int
-procrfork(void (*f)(void *), void *arg, uint stacksize, int rforkflag)
-{
-    Proc *p;
-    int id;
-
-    p = _threadgetproc();
-    assert(p->newproc == nil);
-    p->newproc = _newproc(f, arg, stacksize, nil, p->thread->grp, rforkflag);
-    id = p->newproc->threads.head->id;
-    _sched();
-    return id;
-}
-@
-
-<<function proccreate>>=
-int
-proccreate(void (*f)(void*), void *arg, uint stacksize)
-{
-    return procrfork(f, arg, stacksize, 0);
-}
-@
-
-<<function _freeproc>>=
-void
-_freeproc(Proc *p)
-{
-    Thread *t, *nextt;
-
-    for(t = p->threads.head; t; t = nextt){
-        if(t->cmdname)
-            free(t->cmdname);
-        assert(t->stk != nil);
-        free(t->stk);
-        nextt = t->nextt;
-        free(t);
-    }
-    free(p);
-}
-@
-
-<<function _freethread>>=
-void
-_freethread(Thread *t)
-{
-    Proc *p;
-    Thread **l;
-
-    p = t->proc;
-    lock(&p->lock);
-    for(l=&p->threads.head; *l; l=&(*l)->nextt){
-        if(*l == t){
-            *l = t->nextt;
-            if(*l == nil)
-                p->threads.tail = l;
-            break;
-        }
-    }
-    unlock(&p->lock);
-    if (t->cmdname)
-        free(t->cmdname);
-    assert(t->stk != nil);
-    free(t->stk);
-    free(t);
-}
-@
-
-
 %-------------------------------------------------------------
 
 <<lib_core/libthread/create.c>>=
@@ -2073,94 +1276,13 @@ _freethread(Thread *t)
 
 \subsection*{[[lib_core/libthread/channel.c]]}
 
-<<enum _anon_ (lib_core/libthread/channel.c)>>=
-/* Value to indicate the channel is closed */
-enum {
-    CHANCLOSD = 0xc105ed,
-};
-@
-
 <<global errcl>>=
 static char errcl[] = "channel was closed";
 @
 
-<<global chanlock>>=
-static Lock chanlock;		/* central channel access lock */
-@
-
-<<constant Closed>>=
-#define Closed	((void*)CHANCLOSD)
-@
 
 <<constant Intred>>=
 #define Intred	((void*)~0)		/* interrupted */
-@
-
-<<function _chanfree>>=
-static void
-_chanfree(Channel *c)
-{
-    int i, inuse;
-
-    if(c->closed == 1)			/* chanclose is ongoing */
-        inuse = 1;
-    else{
-        inuse = 0;
-        for(i = 0; i < c->nentry; i++)	/* alt ongoing */
-            if(c->qentry[i])
-                inuse = 1;
-    }
-    if(inuse)
-        c->freed = 1;
-    else{
-        if(c->qentry)
-            free(c->qentry);
-        free(c);
-    }
-}
-@
-
-<<function chanfree>>=
-void
-chanfree(Channel *c)
-{
-    lock(&chanlock);
-    _chanfree(c);
-    unlock(&chanlock);
-}
-@
-
-<<function chaninit>>=
-int
-chaninit(Channel *c, int elemsize, int elemcnt)
-{
-    if(elemcnt < 0 || elemsize <= 0 || c == nil)
-        return -1;
-    c->f = 0;
-    c->n = 0;
-    c->closed = 0;
-    c->freed = 0;
-    c->e = elemsize;
-    c->s = elemcnt;
-    _threaddebug(DBGCHAN, "chaninit %p", c);
-    return 1;
-}
-@
-
-<<function chancreate>>=
-Channel*
-chancreate(int elemsize, int elemcnt)
-{
-    Channel *c;
-
-    if(elemcnt < 0 || elemsize <= 0)
-        return nil;
-    c = _threadmalloc(sizeof(Channel)+elemsize*elemcnt, 1);
-    c->e = elemsize;
-    c->s = elemcnt;
-    _threaddebug(DBGCHAN, "chancreate %p", c);
-    return c;
-}
 @
 
 <<function isopenfor>>=
@@ -2171,6 +1293,7 @@ isopenfor(Channel *c, int op)
 }
 @
 
+% !!!
 <<function alt>>=
 int
 alt(Alt *alts)
@@ -2192,6 +1315,7 @@ alt(Alt *alts)
     if(t->moribund || _threadexitsallstatus)
         yield();	/* won't return */
     s = _procsplhi();
+
     lock(&chanlock);
     t->alt = alts;
     t->chan = Chanalt;
@@ -2376,16 +1500,19 @@ chanclosing(Channel *c)
 }
 @
 
-<<function runop>>=
-/*
- * superseded by chanclosing
-int
-chanisclosed(Channel *c)
-{
-    return chanisclosing(c) >= 0;
-}
- */
+%/*
+% * superseded by chanclosing
+%int
+%chanisclosed(Channel *c)
+%{
+%    return chanisclosing(c) >= 0;
+%}
+% */
 
+
+
+
+<<function runop>>=
 static int
 runop(int op, Channel *c, void *v, int nb)
 {
@@ -2404,6 +1531,7 @@ runop(int op, Channel *c, void *v, int nb)
     a[1].op = CHANEND;
     if(nb)
         a[1].op = CHANNOBLK;
+
     switch(r=alt(a)){
     case -1:	/* interrupted */
         return -1;
@@ -2578,6 +1706,9 @@ emptyentry(Channel *c)
     return i;
 }
 @
+
+
+
 
 <<function enqueue>>=
 static void
@@ -2831,17 +1962,7 @@ static int altexec(Alt*, int);
 
 \subsection*{[[lib_core/libthread/main.c]]}
 
-<<struct Mainarg>>=
-struct Mainarg
-{
-    int		argc;
-    char	**argv;
-};
-@
 
-<<global mainstacksize>>=
-int	mainstacksize;
-@
 
 <<global _threadnotefd>>=
 int	_threadnotefd;
@@ -2851,57 +1972,7 @@ int	_threadnotefd;
 int	_threadpasserpid;
 @
 
-<<global _mainjmp>>=
-static jmp_buf _mainjmp;
-@
 
-<<global mainp>>=
-static Proc **mainp;
-@
-
-<<function main>>=
-void
-main(int argc, char **argv)
-{
-    Mainarg *a;
-    Proc *p;
-
-    rfork(RFREND);
-    mainp = &p;
-    if(setjmp(_mainjmp))
-        _schedinit(p);
-
-//_threaddebuglevel = (DBGSCHED|DBGCHAN|DBGREND)^~0;
-    _systhreadinit();
-    _qlockinit(_threadrendezvous);
-    _sysfatal = _threadsysfatal;
-    _dial = _threaddial;
-    __assert = _threadassert;
-    notify(_threadnote);
-    if(mainstacksize == 0)
-        mainstacksize = 8*1024;
-
-    a = _threadmalloc(sizeof *a, 1);
-    a->argc = argc;
-    a->argv = argv;
-
-    p = _newproc(mainlauncher, a, mainstacksize, "threadmain", 0, 0);
-    _schedinit(p);
-    abort();	/* not reached */
-}
-@
-
-<<function mainlauncher>>=
-static void
-mainlauncher(void *arg)
-{
-    Mainarg *a;
-
-    a = arg;
-    threadmain(a->argc, a->argv);
-    threadexits("threadmain");
-}
-@
 
 <<function skip>>=
 static char*
@@ -3057,7 +2128,6 @@ _schedexecwait(void)
 }
 @
 
-
 %-------------------------------------------------------------
 
 <<lib_core/libthread/main.c>>=
@@ -3206,7 +2276,6 @@ tinterrupt(Proc *p, Thread *t)
 }
 @
 
-
 %-------------------------------------------------------------
 
 <<lib_core/libthread/kill.c>>=
@@ -3287,21 +2356,6 @@ xioproc(void *a)
 }
 @
 
-<<function ioproc>>=
-Ioproc*
-ioproc(void)
-{
-    Ioproc *io;
-
-    io = mallocz(sizeof(*io), 1);
-    if(io == nil)
-        sysfatal("ioproc malloc: %r");
-    io->c = chancreate(sizeof(void*), 0);
-    io->creply = chancreate(sizeof(void*), 0);
-    io->tid = proccreate(xioproc, io, STACK);
-    return io;
-}
-@
 
 <<function closeioproc>>=
 void
@@ -3708,6 +2762,260 @@ iowrite(Ioproc *io, int fd, void *a, long n)
 @
 
 
+\subsection*{[[lib_core/libthread/dial.c]]}
+
+<<enum _anon_ (lib_core/libthread/dial.c)>>=
+enum
+{
+    Maxstring	= 128,
+    Maxpath		= 256,
+};
+@
+
+<<struct DS>>=
+struct DS {
+    /* dist string */
+    char	buf[Maxstring];
+    char	*netdir;
+    char	*proto;
+    char	*rem;
+
+    /* other args */
+    char	*local;
+    char	*dir;
+    int	*cfdp;
+};
+@
+
+<<function _threaddial>>=
+/*
+ *  the dialstring is of the form '[/net/]proto!dest'
+ */
+int
+_threaddial(char *dest, char *local, char *dir, int *cfdp)
+{
+    DS ds;
+    int rv;
+    char err[ERRMAX], alterr[ERRMAX];
+
+    ds.local = local;
+    ds.dir = dir;
+    ds.cfdp = cfdp;
+
+    _dial_string_parse(dest, &ds);
+    if(ds.netdir)
+        return csdial(&ds);
+
+    ds.netdir = "/net";
+    rv = csdial(&ds);
+    if(rv >= 0)
+        return rv;
+    err[0] = '\0';
+    errstr(err, sizeof err);
+    if(strstr(err, "refused") != 0){
+        werrstr("%s", err);
+        return rv;
+    }
+    ds.netdir = "/net.alt";
+    rv = csdial(&ds);
+    if(rv >= 0)
+        return rv;
+
+    alterr[0] = 0;
+    errstr(alterr, sizeof alterr);
+    if(strstr(alterr, "translate") || strstr(alterr, "does not exist"))
+        werrstr("%s", err);
+    else
+        werrstr("%s", alterr);
+    return rv;
+}
+@
+
+<<function csdial>>=
+static int
+csdial(DS *ds)
+{
+    int n, fd, rv;
+    char *p, buf[Maxstring], clone[Maxpath], err[ERRMAX], besterr[ERRMAX];
+
+    /*
+     *  open connection server
+     */
+    snprint(buf, sizeof(buf), "%s/cs", ds->netdir);
+    fd = open(buf, ORDWR);
+    if(fd < 0){
+        /* no connection server, don't translate */
+        snprint(clone, sizeof(clone), "%s/%s/clone", ds->netdir, ds->proto);
+        return call(clone, ds->rem, ds);
+    }
+
+    /*
+     *  ask connection server to translate
+     */
+    snprint(buf, sizeof(buf), "%s!%s", ds->proto, ds->rem);
+    if(write(fd, buf, strlen(buf)) < 0){
+        close(fd);
+        return -1;
+    }
+
+    /*
+     *  loop through each address from the connection server till
+     *  we get one that works.
+     */
+    *besterr = 0;
+    rv = -1;
+    seek(fd, 0, 0);
+    while((n = read(fd, buf, sizeof(buf) - 1)) > 0){
+        buf[n] = 0;
+        p = strchr(buf, ' ');
+        if(p == 0)
+            continue;
+        *p++ = 0;
+        rv = call(buf, p, ds);
+        if(rv >= 0)
+            break;
+        err[0] = '\0';
+        errstr(err, sizeof err);
+        if(strstr(err, "does not exist") == 0)
+            strcpy(besterr, err);
+    }
+    close(fd);
+
+    if(rv < 0 && *besterr)
+        werrstr("%s", besterr);
+    else
+        werrstr("%s", err);
+    return rv;
+}
+@
+
+<<function call>>=
+static int
+call(char *clone, char *dest, DS *ds)
+{
+    int fd, cfd, n;
+    char cname[Maxpath], name[Maxpath], data[Maxpath], *p;
+
+    /* because cs is in a different name space, replace the mount point */
+    if(*clone == '/'){
+        p = strchr(clone+1, '/');
+        if(p == nil)
+            p = clone;
+        else 
+            p++;
+    } else
+        p = clone;
+    snprint(cname, sizeof cname, "%s/%s", ds->netdir, p);
+
+    cfd = open(cname, ORDWR);
+    if(cfd < 0)
+        return -1;
+
+    /* get directory name */
+    n = read(cfd, name, sizeof(name)-1);
+    if(n < 0){
+        close(cfd);
+        return -1;
+    }
+    name[n] = 0;
+    for(p = name; *p == ' '; p++)
+        ;
+    snprint(name, sizeof(name), "%ld", strtoul(p, 0, 0));
+    p = strrchr(cname, '/');
+    *p = 0;
+    if(ds->dir)
+        snprint(ds->dir, NETPATHLEN, "%s/%s", cname, name);
+    snprint(data, sizeof(data), "%s/%s/data", cname, name);
+
+    /* connect */
+    if(ds->local)
+        snprint(name, sizeof(name), "connect %s %s", dest, ds->local);
+    else
+        snprint(name, sizeof(name), "connect %s", dest);
+    if(write(cfd, name, strlen(name)) < 0){
+        close(cfd);
+        return -1;
+    }
+
+    /* open data connection */
+    fd = open(data, ORDWR);
+    if(fd < 0){
+        close(cfd);
+        return -1;
+    }
+    if(ds->cfdp)
+        *ds->cfdp = cfd;
+    else
+        close(cfd);
+    return fd;
+}
+@
+
+<<function _dial_string_parse>>=
+/*
+ *  parse a dial string
+ */
+static void
+_dial_string_parse(char *str, DS *ds)
+{
+    char *p, *p2;
+
+    strncpy(ds->buf, str, Maxstring);
+    ds->buf[Maxstring-1] = 0;
+
+    p = strchr(ds->buf, '!');
+    if(p == 0) {
+        ds->netdir = 0;
+        ds->proto = "net";
+        ds->rem = ds->buf;
+    } else {
+        if(*ds->buf != '/' && *ds->buf != '#'){
+            ds->netdir = 0;
+            ds->proto = ds->buf;
+        } else {
+            for(p2 = p; *p2 != '/'; p2--)
+                ;
+            *p2++ = 0;
+            ds->netdir = ds->buf;
+            ds->proto = p2;
+        }
+        *p = 0;
+        ds->rem = p + 1;
+    }
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<lib_core/libthread/dial.c>>=
+/*
+ * old single-process version of dial that libthread can cope with
+ */
+#include <u.h>
+#include <libc.h>
+
+typedef struct DS DS;
+
+static int	call(char*, char*, DS*);
+static int	csdial(DS*);
+static void	_dial_string_parse(char*, DS*);
+
+<<enum _anon_ (lib_core/libthread/dial.c)>>
+
+<<struct DS>>
+
+
+<<function _threaddial>>
+
+<<function csdial>>
+
+<<function call>>
+
+<<function _dial_string_parse>>
+@
+
+
 \subsection*{[[lib_core/libthread/exec.c]]}
 
 <<constant PIPEMNT>>=
@@ -3807,5 +3115,3 @@ procexecl(Channel *pidc, char *f, ...)
 <<function procexecl>>
 
 @
-
-

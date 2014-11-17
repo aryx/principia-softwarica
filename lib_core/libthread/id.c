@@ -131,6 +131,7 @@ procdata(void)
 static Lock privlock;
 /*e: global privlock */
 /*s: global privmask */
+//array<bool> NPRIV at least
 static int privmask = 1;
 /*e: global privmask */
 

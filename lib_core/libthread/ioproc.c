@@ -62,7 +62,7 @@ ioproc(void)
 {
     Ioproc *io;
 
-    io = mallocz(sizeof(*io), 1);
+    io = mallocz(sizeof(Ioproc), 1);
     if(io == nil)
         sysfatal("ioproc malloc: %r");
     io->c = chancreate(sizeof(void*), 0);

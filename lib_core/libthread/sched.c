@@ -39,14 +39,20 @@ _schedinit(void *arg)
     p = arg;
     _threadsetproc(p);
     p->pid = _tos->pid; //getpid();
+
     while(setjmp(p->sched))
         ;
-    _threaddebug(DBGSCHED, "top of schedinit, _threadexitsallstatus=%p", _threadexitsallstatus);
+
+    _threaddebug(DBGSCHED, "top of schedinit, _threadexitsallstatus=%p", 
+                 _threadexitsallstatus);
     if(_threadexitsallstatus)
         exits(_threadexitsallstatus);
+
     lock(&p->lock);
-    if((t=p->thread) != nil){
+    t = p->thread;
+    if(t != nil){
         p->thread = nil;
+
         if(t->moribund){
             t->state = Dead;
             for(l=&p->threads.head; *l; l=&(*l)->nextt)
@@ -114,7 +120,8 @@ _sched(void)
 
 Resched:
     p = _threadgetproc();
-    if((t = p->thread) != nil){
+    t = p->thread;
+    if(t != nil){
         needstack(128);
         _threaddebug(DBGSCHED, "pausing, state=%s", psstate(t->state));
         if(setjmp(t->sched)==0)
@@ -175,6 +182,7 @@ _threadready(Thread *t)
 
     assert(t->state == Ready);
     _threaddebug(DBGSCHED, "readying %d.%d", t->proc->pid, t->id);
+
     q = &t->proc->ready;
     lock(&t->proc->readylock);
     t->next = nil;

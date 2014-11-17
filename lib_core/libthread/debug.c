@@ -5,6 +5,7 @@
 #include "threadimpl.h"
 
 /*s: global _threaddebuglevel */
+// biset<enum<dbgxxx>>
 int _threaddebuglevel;
 /*e: global _threaddebuglevel */
 

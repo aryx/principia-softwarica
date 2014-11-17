@@ -36,6 +36,7 @@ extern int (*_dial)(char*, char*, char*, int*);
 extern int _threaddial(char*, char*, char*, int*);
 
 /*s: global mainp */
+// ref<ref<Proc>
 static Proc **mainp;
 /*e: global mainp */
 
@@ -48,16 +49,20 @@ main(int argc, char **argv)
 
     rfork(RFREND);
     mainp = &p;
+
     if(setjmp(_mainjmp))
         _schedinit(p);
 
-//_threaddebuglevel = (DBGSCHED|DBGCHAN|DBGREND)^~0;
+    //_threaddebuglevel = (DBGSCHED|DBGCHAN|DBGREND)^~0;
     _systhreadinit();
     _qlockinit(_threadrendezvous);
+
     _sysfatal = _threadsysfatal;
-    _dial = _threaddial;
-    __assert = _threadassert;
+    _dial     = _threaddial;
+    __assert  = _threadassert;
+
     notify(_threadnote);
+
     if(mainstacksize == 0)
         mainstacksize = 8*1024;
 
@@ -67,6 +72,7 @@ main(int argc, char **argv)
 
     p = _newproc(mainlauncher, a, mainstacksize, "threadmain", 0, 0);
     _schedinit(p);
+
     abort();	/* not reached */
 }
 /*e: function main */
@@ -78,7 +84,9 @@ mainlauncher(void *arg)
     Mainarg *a;
 
     a = arg;
+    // user defined threadmain()!!
     threadmain(a->argc, a->argv);
+
     threadexits("threadmain");
 }
 /*e: function mainlauncher */

@@ -21,42 +21,55 @@
  */
 
 typedef struct Pqueue	Pqueue;
-typedef struct Rgrp		Rgrp;
+typedef struct Rgrp	Rgrp;
 typedef struct Tqueue	Tqueue;
 typedef struct Thread	Thread;
 typedef struct Execargs	Execargs;
-typedef struct Proc		Proc;
+typedef struct Proc	Proc;
+
 
 /* must match list in sched.c */
-typedef enum
+/*s: enum state */
+enum state
 {
     Dead,
     Running,
     Ready,
     Rendezvous,
-} State;
+};
+/*e: enum state */
+typedef enum state State;
     
-typedef enum
+/*s: enum chanstate */
+enum chanstate
 {
     Channone,
-    Chanalt,
     Chansend,
     Chanrecv,
-} Chanstate;
+    Chanalt,
+};
+/*e: enum chanstate */
+typedef enum chanstate Chanstate;
 
 /*s: enum _anon_ (lib_core/libthread/threadimpl.h) */
 enum
 {
-    RENDHASH = 13,
-    Printsize = 2048,
-    NPRIV = 8,
+/*s: constant RENDHASH */
+RENDHASH = 13,
+/*e: constant RENDHASH */
+/*s: constant Printsize */
+Printsize = 2048,
+/*e: constant Printsize */
+/*s: constant NPRIV */
+NPRIV = 8,
+/*e: constant NPRIV */
 };
 /*e: enum _anon_ (lib_core/libthread/threadimpl.h) */
 
 /*s: struct Rgrp */
 struct Rgrp
 {
-    Lock		lock;
+    Lock	lock;
     Thread	*hash[RENDHASH];
 };
 /*e: struct Rgrp */
@@ -64,50 +77,65 @@ struct Rgrp
 /*s: struct Tqueue */
 struct Tqueue		/* Thread queue */
 {
-    int		asleep;
     Thread	*head;
     Thread	**tail;
+
+    int		asleep;
 };
 /*e: struct Tqueue */
 
 /*s: struct Thread */
 struct Thread
 {
-    Lock		lock;		/* protects thread data structure */
-    jmp_buf		sched;		/* for context switches */
     int		id;		/* thread id */
-    int 		grp;		/* thread group */
-    int		moribund;	/* thread needs to die */
-    State		state;		/* run state */
-    State		nextstate;	/* next run state */
-    uchar		*stk;		/* top of stack (lowest address of stack) */
-    uint		stksize;	/* stack size */
-    Thread		*next;		/* next on ready queue */
+    char	*cmdname;	/* ptr to name of thread */
 
-    Proc		*proc;		/* proc of this thread */
-    Thread		*nextt;		/* next on list of threads in this proc*/
-    int		ret;		/* return value for Exec, Fork */
+    jmp_buf	sched;		/* for context switches */
 
-    char		*cmdname;	/* ptr to name of thread */
+    Proc	*proc;		/* proc of this thread */
 
-    int		inrendez;
-    Thread		*rendhash;	/* Trgrp linked list */
-    void*		rendtag;	/* rendezvous tag */
-    void*		rendval;	/* rendezvous value */
-    int		rendbreak;	/* rendezvous has been taken */
+    uint	stksize;	/* stack size */
+    uchar	*stk;		/* top of stack (lowest address of stack) */
+
+    State	state;		/* run state */
+    State	nextstate;	/* next run state */
 
     Chanstate	chan;		/* which channel operation is current */
     Alt		*alt;		/* pointer to current alt structure (debugging) */
 
+
+
+    int 	grp;		/* thread group */
+    int		moribund;	/* thread needs to die */
+
+    int		ret;		/* return value for Exec, Fork */
+
+
+    int		inrendez;
+    Thread	*rendhash;	/* Trgrp linked list */
+    void*	rendtag;	/* rendezvous tag */
+    void*	rendval;	/* rendezvous value */
+    int		rendbreak;	/* rendezvous has been taken */
+
+
     void*	udata[NPRIV];	/* User per-thread data pointer */
+
+    // Extra
+    Lock	lock;		/* protects thread data structure */
+
+    Thread	*next;		/* next on ready queue */
+
+    Thread	*nextt;		/* next on list of threads in this proc*/
+
+
 };
 /*e: struct Thread */
 
 /*s: struct Execargs */
 struct Execargs
 {
-    char		*prog;
-    char		**args;
+    char	*prog;
+    char	**args;
     int		fd[2];
 };
 /*e: struct Execargs */
@@ -115,44 +143,58 @@ struct Execargs
 /*s: struct Proc */
 struct Proc
 {
-    Lock		lock;
-    jmp_buf		sched;			/* for context switches */
     int		pid;			/* process id */
+
+    jmp_buf	sched;			/* for context switches */
+
+    Thread	*thread;		/* running thread */
+
+
+
+
     int		splhi;			/* delay notes */
-    Thread		*thread;		/* running thread */
 
     int		needexec;
     Execargs	exec;			/* exec argument */
-    Proc		*newproc;		/* fork argument */
-    char		exitstr[ERRMAX];	/* exit status */
+    Proc	*newproc;		/* fork argument */
+    char	exitstr[ERRMAX];	/* exit status */
 
     int		rforkflag;
-    int		nthreads;
-    Tqueue		threads;		/* All threads of this proc */
-    Tqueue		ready;			/* Runnable threads */
-    Lock		readylock;
 
-    char		printbuf[Printsize];
+    Tqueue	threads;		/* All threads of this proc */
+    int		nthreads;
+
+    Tqueue	ready;			/* Runnable threads */
+    Lock	readylock;
+
+    char	printbuf[Printsize];
     int		blocked;		/* In a rendezvous */
     int		pending;		/* delayed note pending */
-    int		nonotes;		/*  delay notes */
-    uint		nextID;			/* ID of most recently created thread */
-    Proc		*next;			/* linked list of Procs */
+    int		nonotes;		/* delay notes */
+    uint	nextID;			/* ID of most recently created thread */
 
-    void		*arg;			/* passed between shared and unshared stk */
-    char		str[ERRMAX];		/* used by threadexits to avoid malloc */
 
-    void*		wdata;			/* Lib(worker) per-proc data pointer */
-    void*		udata;			/* User per-proc data pointer */
-    char		threadint;		/* tag for threadexitsall() */
+    void	*arg;			/* passed between shared and unshared stk */
+    char	str[ERRMAX];		/* used by threadexits to avoid malloc */
+
+    void*	wdata;			/* Lib(worker) per-proc data pointer */
+    void*	udata;			/* User per-proc data pointer */
+    char	threadint;		/* tag for threadexitsall() */
+
+    // Extra
+    Proc	*next;			/* linked list of Procs */
+
+    Lock	lock;
 };
 /*e: struct Proc */
 
 /*s: struct Pqueue */
 struct Pqueue {		/* Proc queue */
-    Lock		lock;
     Proc		*head;
     Proc		**tail;
+
+    // Extra
+    Lock		lock;
 };
 /*e: struct Pqueue */
 
@@ -160,12 +202,18 @@ struct Pqueue {		/* Proc queue */
 struct Ioproc
 {
     int tid;
-    Channel *c, *creply;
+
+    Channel *c;
+    Channel *creply;
+
     int inuse;
+
     long (*op)(va_list*);
+
     va_list arg;
     long ret;
     char err[ERRMAX];
+
     Ioproc *next;
 };
 /*e: struct Ioproc */
@@ -200,10 +248,10 @@ void**	_workerdata(void);
 void	_xinc(long*);
 long	_xdec(long*);
 
-extern int			_threaddebuglevel;
+extern int		_threaddebuglevel;
 extern char*		_threadexitsallstatus;
 extern Pqueue		_threadpq;
-extern Channel*	_threadwaitchan;
+extern Channel*		_threadwaitchan;
 extern Rgrp		_threadrgrp;
 
 /*s: constant DBGAPPL */
@@ -219,7 +267,6 @@ extern Rgrp		_threadrgrp;
 #define DBGREND	(1 << 18)
 /*e: constant DBGREND */
 /*s: constant DBGNOTE */
-/* #define DBGKILL	(1 << 19) */
 #define DBGNOTE	(1 << 20)
 /*e: constant DBGNOTE */
 /*s: constant DBGEXEC */

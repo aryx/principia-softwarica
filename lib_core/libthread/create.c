@@ -32,10 +32,12 @@ newthread(Proc *p, void (*f)(void *arg), void *arg, uint stacksize, char *name, 
     if(stacksize < 32)
         sysfatal("bad stacksize %d", stacksize);
     t = _threadmalloc(sizeof(Thread), 1);
+
     t->stksize = stacksize;
     t->stk = _threadmalloc(stacksize, 0);
     memset(t->stk, 0xFE, stacksize);
     _threadinitstack(t, f, arg);
+
     t->grp = grp;
     if(name)
         t->cmdname = strdup(name);
@@ -44,6 +46,7 @@ newthread(Proc *p, void (*f)(void *arg), void *arg, uint stacksize, char *name, 
     t->next = (Thread*)~0;
     t->proc = p;
     _threaddebug(DBGSCHED, "create thread %d.%d name %s", p->pid, t->id, name);
+
     lock(&p->lock);
     p->nthreads++;
     if(p->threads.head == nil)
@@ -51,10 +54,12 @@ newthread(Proc *p, void (*f)(void *arg), void *arg, uint stacksize, char *name, 
     else
         *p->threads.tail = t;
     p->threads.tail = &t->nextt;
+
     t->nextt = nil;
     t->state = Ready;
     _threadready(t);
     unlock(&p->lock);
+
     return id;
 }
 /*e: function newthread */
@@ -93,6 +98,7 @@ _newproc(void (*f)(void *arg), void *arg, uint stacksize, char *name, int grp, i
         *_threadpq.tail = p;
     _threadpq.tail = &p->next;
     unlock(&_threadpq.lock);
+
     return p;
 }
 /*e: function _newproc */
