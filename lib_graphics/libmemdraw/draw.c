@@ -7,7 +7,7 @@
 
 extern Pool* imagmem;
 /*s: global drawdebug */
-int drawdebug;
+bool drawdebug;
 /*e: global drawdebug */
 /*s: global tablesbuilt */
 static int	tablesbuilt;

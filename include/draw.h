@@ -217,47 +217,67 @@ struct Screen
 /*s: struct Display */
 struct Display
 {
-    QLock		qlock;
+    char	*devdir; // /dev in general
+    char	*windir; // /dev in general
+
+    int		dirno; // /dev/draw/x
+
+    fdt		fd;    // /dev/draw/x/data
+    fdt		ctlfd; // /dev/draw/new
+    fdt		reffd; // /dev/draw/x/refresh
+
+    // ref_own<Image>
+    Image	*image;
+
+
+    byte	*buf;
+    int		bufsize;
+    byte	*bufp;
+
+    void	(*error)(Display*, char*);
+
+    Image	*white;
+    Image	*black;
+    Image	*opaque;
+    Image	*transparent;
+
+
+    QLock	qlock;
     int		locking;	/*program is using lockdisplay */
-    int		dirno;
-    int		fd;
-    int		reffd;
-    int		ctlfd;
+
     int		imageid;
     int		local;
-    void		(*error)(Display*, char*);
-    char		*devdir;
-    char		*windir;
-    char		oldlabel[64];
-    ulong		dataqid;
-    Image		*white;
-    Image		*black;
-    Image		*opaque;
-    Image		*transparent;
-    Image		*image;
-    uchar		*buf;
-    int		bufsize;
-    uchar		*bufp;
-    Font		*defaultfont;
-    Subfont		*defaultsubfont;
-    Image		*windows;
-    Image		*screenimage;
-    int		_isnewdisplay;
+    char	oldlabel[64];
+    ulong	dataqid;
+
+    Font	*defaultfont;
+    Subfont	*defaultsubfont;
+
+    Image	*windows;
+    Image	*screenimage;
+
+    bool	_isnewdisplay;
 };
 /*e: struct Display */
 
 /*s: struct Image */
 struct Image
 {
+    // ref<Display>, reverse of Display->image
     Display		*display;	/* display holding data */
-    int		id;		/* id of system-held Image */
+    int			id;		/* id of system-held Image */
+
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;		/* clipping region */
-    int		depth;		/* number of bits per pixel */
+    int			depth;		/* number of bits per pixel */
+
     ulong		chan;
-    int		repl;		/* flag: data replicates to tile clipr */
+    int			repl;		/* flag: data replicates to tile clipr */
+
+    /*s: [[Image]] other fields */
     Screen		*screen;	/* 0 if not a window */
     Image		*next;	/* next in list of windows */
+    /*e: [[Image]] other fields */
 };
 /*e: struct Image */
 
@@ -361,14 +381,17 @@ struct Font
 {
     char		*name;
     Display		*display;
+
     short		height;	/* max height of image, interline spacing */
     short		ascent;	/* top of image to baseline */
     short		width;	/* widest so far; used in caching only */	
+
     short		nsub;	/* number of subfonts */
     ulong		age;	/* increasing counter; used for LRU */
     int		maxdepth;	/* maximum depth of all loaded subfonts */
     int		ncache;	/* size of cache */
     int		nsubf;	/* size of subfont list */
+
     Cacheinfo	*cache;
     Cachesubf	*subf;
     Cachefont	**sub;	/* as read from file */

@@ -56,6 +56,7 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
     if(display == nil)
         return ERROR_NEG1;
 
+    /*s: [[geninitdraw()]] set up font */
     /*
      * Set up default font
      */
@@ -86,7 +87,7 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
     if(fontname == nil){
         snprint(buf, sizeof buf, "%d %d\n0 %d\t%s\n", df->height, df->ascent,
             df->n-1, deffontname);
-//BUG: Need something better for this	installsubfont("*default*", df);
+     //BUG: Need something better for this	installsubfont("*default*", df);
         font = buildfont(display, buf, deffontname);
         if(font == nil){
             fprint(2, "imageinit: can't open default font: %r\n");
@@ -100,7 +101,8 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
         }
     }
     display->defaultfont = font;
-
+    /*e: [[geninitdraw()]] set up font */
+    /*s: [[geninitdraw()]] write label */
     /*
      * Write label; ignore errors (we might not be running under rio)
      */
@@ -117,14 +119,16 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
             }
         }
     }
-
+    /*e: [[geninitdraw()]] write label */
+    /*s: [[geninitdraw()]] get window */
     snprint(buf, sizeof buf, "%s/winname", display->windir);
     if(gengetwindow(display, buf, &screen, &_screen, ref) < 0)
         goto Error;
+    /*e: [[geninitdraw()]] get window */
 
     atexit(drawshutdown);
 
-    return 1;
+    return OK_1;
 }
 /*e: function geninitdraw */
 
@@ -228,18 +232,32 @@ getwindow(Display *d, int ref)
 Display*
 initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 {
-    char buf[128], info[NINFO+1], *t, isnew;
-    int n, datafd, ctlfd, reffd;
+    /*s: [[initdisplay()]] locals */
     Display *disp;
-    Dir *dir;
     Image *image;
 
+    fdt ctlfd;
+    char info[NINFO+1];
+    fdt datafd;
+    fdt reffd;
+
+    char buf[128];
+    char *t;
+    bool isnew;
+    int n;
+    Dir *dir;
+    /*e: [[initdisplay()]] locals */
+
+    /*s: [[initdisplay()]] install dumpers */
     fmtinstall('P', Pfmt);
     fmtinstall('R', Rfmt);
-    if(dev == 0)
+    /*e: [[initdisplay()]] install dumpers */
+    /*s: [[initdisplay()]] check arguments validity */
+    if(dev == nil)
         dev = "/dev";
-    if(win == 0)
+    if(win == nil)
         win = "/dev";
+
     if(strlen(dev)>sizeof buf-25 || strlen(win)>sizeof buf-25){
         werrstr("initdisplay: directory name too long");
         return nil;
@@ -247,21 +265,27 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     t = strdup(win);
     if(t == nil)
         return nil;
+    /*e: [[initdisplay()]] check arguments validity */
 
     sprint(buf, "%s/draw/new", dev);
     ctlfd = open(buf, ORDWR|OCEXEC);
+
     if(ctlfd < 0){
         if(bind("#i", dev, MAFTER) < 0){
     Error1:
             free(t);
             werrstr("initdisplay: %s: %r", buf);
-            return 0;
+            return nil;
         }
+        // try again
         ctlfd = open(buf, ORDWR|OCEXEC);
     }
     if(ctlfd < 0)
         goto Error1;
-    if((n=read(ctlfd, info, sizeof info)) < 12){
+
+    n=read(ctlfd, info, sizeof info);
+
+    if(n < 12){
     Error2:
         close(ctlfd);
         goto Error1;
@@ -269,26 +293,34 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     if(n==NINFO+1)
         n = NINFO;
     info[n] = '\0';
-    isnew = 0;
+
+    isnew = false;
     if(n < NINFO)	/* this will do for now, we need something better here */
-        isnew = 1;
+        isnew = true;
+
     sprint(buf, "%s/draw/%d/data", dev, atoi(info+0*12));
     datafd = open(buf, ORDWR|OCEXEC);
+
     if(datafd < 0)
         goto Error2;
+
     sprint(buf, "%s/draw/%d/refresh", dev, atoi(info+0*12));
     reffd = open(buf, OREAD|OCEXEC);
+
     if(reffd < 0){
     Error3:
         close(datafd);
         goto Error2;
     }
+
     disp = mallocz(sizeof(Display), 1);
-    if(disp == 0){
+
+    if(disp == nil){
     Error4:
         close(reffd);
         goto Error3;
     }
+
     image = nil;
     if(0){
     Error5:
@@ -301,7 +333,7 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
         if(image == nil)
             goto Error5;
         image->display = disp;
-        image->id = 0;
+        image->id = 0; // info+1*12 but should always be 0
         image->chan = strtochan(info+2*12);
         image->depth = chantodepth(image->chan);
         image->repl = atoi(info+3*12);
@@ -316,6 +348,7 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     }
 
     disp->_isnewdisplay = isnew;
+
     disp->bufsize = iounit(datafd);
     if(disp->bufsize <= 0)
         disp->bufsize = 8000;
@@ -329,13 +362,14 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 
     disp->image = image;
     disp->dirno = atoi(info+0*12);
-    disp->fd = datafd;
+    disp->fd    = datafd;
     disp->ctlfd = ctlfd;
     disp->reffd = reffd;
     disp->bufp = disp->buf;
     disp->error = error;
     disp->windir = t;
     disp->devdir = strdup(dev);
+
     qlock(&disp->qlock);
     disp->white = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DWhite);
     disp->black = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DBlack);
@@ -347,6 +381,7 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     }
     disp->opaque = disp->white;
     disp->transparent = disp->black;
+
     dir = dirfstat(ctlfd);
     if(dir!=nil && dir->type=='i'){
         disp->local = 1;
