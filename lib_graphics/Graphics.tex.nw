@@ -319,7 +319,22 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 \section{Architecture overview}
 
-% kernel driver vs libs vs apps vs rio
+% kernel driver vs libs vs apps (vs rio)
+
+% Display
+%  Image (User side, id) MemImage (Kernel side, id -> full structure)
+%  Screen
+%   Window (Image)
+
+% some kind of RPC and protocol
+
+
+% graphics (devvga)
+%  why imagmem? why imagmem and mainmem? why not use other allocator?
+%  see screen/user/notes.txt especially about the old way to get graphics on PC
+
+
+
 
 % design goal was like X11 can be remote! can login on another
 % machine, execute program there that actually display on your screen.
@@ -331,15 +346,6 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 % (hmm actually with high speed network maybe we could)
 
 
-% graphics (devvga)
-%  why imagmem? why imagmem and mainmem? why not use other allocator?
-%  see screen/user/notes.txt especially about the old way to get graphics on PC
-
-
-% Display
-%  Image (User side) MemImage (Kernel side)
-%  Screen
-%   Window (Image)
 
 \section{Initialization overview}
 
@@ -375,9 +381,11 @@ struct Display
     // ref_own<Image>
     Image	*image;
 
-
+    // drawing operatings to write in /dev/draw/x/data until flush
+    // array<byte>
     byte	*buf;
     int		bufsize;
+    // index in Display.buf array
     byte	*bufp;
 
     void	(*error)(Display*, char*);
@@ -400,7 +408,7 @@ struct Display
     Subfont	*defaultsubfont;
 
     Image	*windows;
-    Image	*screenimage;
+    Image	*screenimage; // ???
 
     bool	_isnewdisplay;
 };
@@ -452,6 +460,72 @@ Image		*next;	/* next in list of windows */
 % not thread channel, image channel here
 % ulong in previous struct, but more complex format
 % actually
+
+<<enum _anon_ (include/draw.h)4>>=
+/*
+ * image channel descriptors 
+ */
+enum {
+    CRed = 0,
+    CGreen,
+    CBlue,
+
+    CGrey,
+    CAlpha,
+    CMap,
+    CIgnore,
+
+    NChan,
+};
+@
+
+<<function __DC>>=
+#define __DC(type, nbits)	((((type)&15)<<4)|((nbits)&15))
+@
+
+<<function CHAN1>>=
+#define CHAN1(a,b)	__DC(a,b)
+@
+
+<<function CHAN2>>=
+#define CHAN2(a,b,c,d)	(CHAN1((a),(b))<<8|__DC((c),(d)))
+@
+
+<<function CHAN3>>=
+#define CHAN3(a,b,c,d,e,f)	(CHAN2((a),(b),(c),(d))<<8|__DC((e),(f)))
+@
+
+<<function CHAN4>>=
+#define CHAN4(a,b,c,d,e,f,g,h)	(CHAN3((a),(b),(c),(d),(e),(f))<<8|__DC((g),(h)))
+@
+
+<<function NBITS>>=
+#define NBITS(c) ((c)&15)
+@
+
+<<function TYPE>>=
+#define TYPE(c) (((c)>>4)&15)
+@
+
+<<enum _anon_ (include/draw.h)5>>=
+enum {
+    GREY1	= CHAN1(CGrey, 1),
+    GREY2	= CHAN1(CGrey, 2),
+    GREY4	= CHAN1(CGrey, 4),
+    GREY8	= CHAN1(CGrey, 8),
+    CMAP8	= CHAN1(CMap, 8),
+    RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
+    RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
+    RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
+    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8),
+    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),	/* stupid VGAs */
+    XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
+    BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
+    ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
+    XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
+};
+@
+
 
 \section{[[Font]] and [[font]]}
 
@@ -773,7 +847,6 @@ display->defaultfont = font;
 
 \section{Label}
 
-
 <<[[geninitdraw()]] write label>>=
 /*
  * Write label; ignore errors (we might not be running under rio)
@@ -802,6 +875,31 @@ if(gengetwindow(display, buf, &screen, &_screen, ref) < 0)
 @
 
 \chapter{User/Kernel Bridge}
+
+% some kind of RPC and protocol
+% todo: lots of boilerplate code, would be better to use thrift in the end
+% lots of marshalling/unmarshalling boilerplate with BPLONG and so on.
+% file interface is nice but limited in the end. Or maybe can just
+% write a thrift like tool on top of the file interface that generates
+% most of the boilerplate at least.
+
+
+<<function BGSHORT>>=
+#define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
+@
+
+<<function BGLONG>>=
+#define	BGLONG(p)		((BGSHORT(p)<<0) | (BGSHORT(p+2)<<16))
+@
+
+<<function BPSHORT>>=
+#define	BPSHORT(p, v)		((p)[0]=(v), (p)[1]=((v)>>8))
+@
+
+<<function BPLONG>>=
+#define	BPLONG(p, v)		(BPSHORT(p, (v)), BPSHORT(p+2, (v)>>16))
+@
+
 
 \section{[[drawmesg()]]}
 
@@ -857,10 +955,111 @@ drawmesg(Client *client, void *av, int n)
 @
 
 
-
-
-
 \section{Image}
+
+<<function allocimage>>=
+Image*
+allocimage(Display *d, Rectangle r, ulong chan, int repl, ulong val)
+{
+    Image*	i;
+
+    i =  _allocimage(nil, d, r, chan, repl, val, 0, 0);
+    if (i)
+        setmalloctag(i, getcallerpc(&d));
+    return i;
+}
+@
+
+<<function _allocimage>>=
+Image*
+_allocimage(Image *ai, Display *d, Rectangle r, ulong chan, int repl, ulong val, int screenid, int refresh)
+{
+    uchar *a;
+    char *err;
+    Image *i;
+    Rectangle clipr;
+    int id;
+    int depth;
+
+    err = 0;
+    i = 0;
+
+    if(chan == 0){
+        werrstr("bad channel descriptor");
+        return nil;
+    }
+
+    depth = chantodepth(chan);
+    if(depth == 0){
+        err = "bad channel descriptor";
+    Error:
+        if(err)
+            werrstr("allocimage: %s", err);
+        else
+            werrstr("allocimage: %r");
+        free(i);
+        return 0;
+    }
+
+    /* flush pending data so we don't get error allocating the image */
+    flushimage(d, 0);
+    a = bufimage(d, 1+4+4+1+4+1+4*4+4*4+4);
+    if(a == 0)
+        goto Error;
+    d->imageid++;
+    id = d->imageid;
+
+    a[0] = 'b';
+    BPLONG(a+1, id);
+    BPLONG(a+5, screenid);
+    a[9] = refresh;
+    BPLONG(a+10, chan);
+    a[14] = repl;
+    BPLONG(a+15, r.min.x);
+    BPLONG(a+19, r.min.y);
+    BPLONG(a+23, r.max.x);
+    BPLONG(a+27, r.max.y);
+    if(repl)
+        /* huge but not infinite, so various offsets will leave it huge, not overflow */
+        clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
+    else
+        clipr = r;
+    BPLONG(a+31, clipr.min.x);
+    BPLONG(a+35, clipr.min.y);
+    BPLONG(a+39, clipr.max.x);
+    BPLONG(a+43, clipr.max.y);
+    BPLONG(a+47, val);
+
+    if(flushimage(d, 0) < 0)
+        goto Error;
+
+    if(ai)
+        i = ai;
+    else{
+        i = malloc(sizeof(Image));
+        if(i == nil){
+            a = bufimage(d, 1+4);
+            if(a){
+                a[0] = 'f';
+                BPLONG(a+1, id);
+                flushimage(d, 0);
+            }
+            goto Error;
+        }
+    }
+    i->display = d;
+    i->id = id;
+    i->depth = depth;
+    i->chan = chan;
+    i->r = r;
+    i->clipr = clipr;
+    i->repl = repl;
+    i->screen = 0;
+    i->next = 0;
+    return i;
+}
+@
+
 
 <<[[drawmesg()]] cases>>=
 /* new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4] */
@@ -941,6 +1140,58 @@ case 'b':
 
 
 
+
+<<function freeimage>>=
+int
+freeimage(Image *i)
+{
+    int ret;
+
+    ret = _freeimage1(i);
+    free(i);
+    return ret;
+}
+@
+
+<<function _freeimage1>>=
+int
+_freeimage1(Image *i)
+{
+    uchar *a;
+    Display *d;
+    Image *w;
+
+    if(i == 0 || i->display == 0)
+        return 0;
+    /* make sure no refresh events occur on this if we block in the write */
+    d = i->display;
+    /* flush pending data so we don't get error deleting the image */
+    flushimage(d, 0);
+    a = bufimage(d, 1+4);
+    if(a == 0)
+        return -1;
+    a[0] = 'f';
+    BPLONG(a+1, i->id);
+    if(i->screen){
+        w = d->windows;
+        if(w == i)
+            d->windows = i->next;
+        else
+            while(w){
+                if(w->next == i){
+                    w->next = i->next;
+                    break;
+                }
+                w = w->next;
+            }
+    }
+    if(flushimage(d, i->screen!=0) < 0)
+        return -1;
+
+    return 0;
+}
+@
+
 <<[[drawmesg()]] cases>>=
 /* free: 'f' id[4] */
 case 'f':
@@ -957,6 +1208,45 @@ case 'f':
 @
 
 \section{Flush}
+
+<<function flushimage>>=
+int
+flushimage(Display *d, int visible)
+{
+    if(d == nil)
+        return 0;
+    if(visible){
+        *d->bufp++ = 'v';	/* five bytes always reserved for this */
+        if(d->_isnewdisplay){
+            BPLONG(d->bufp, d->screenimage->id);
+            d->bufp += 4;
+        }
+    }
+    return doflush(d);
+}
+@
+
+<<function doflush>>=
+static
+int
+doflush(Display *d)
+{
+    int n, nn;
+
+    n = d->bufp-d->buf;
+    if(n <= 0)
+        return 1;
+
+    if((nn=write(d->fd, d->buf, n)) != n){
+        if(_drawdebug)
+            fprint(2, "flushimage fail: d=%p: n=%d nn=%d %r\n", d, n, nn); /**/
+        d->bufp = d->buf;	/* might as well; chance of continuing */
+        return -1;
+    }
+    d->bufp = d->buf;
+    return 1;
+}
+@
 
 <<[[drawmesg()]] cases>>=
 /* visible: 'v' */
@@ -1290,6 +1580,7 @@ case 'L':
     src = drawimage(client, a+33);
     drawpoint(&sp, a+37);
     op = drawclientop(client);
+
     memline(dst, p, q, e0, e1, j, src, sp, op);
     /* avoid memlinebbox if possible */
     if(dstid==0 || dst->layer!=nil){
@@ -1660,6 +1951,71 @@ struct RGB
 % test code showing use of font? display the core font?
 
 
+<<function fontresize>>=
+/* return whether resize succeeded && f->cache is unchanged */
+static int
+fontresize(Font *f, int wid, int ncache, int depth)
+{
+    Cacheinfo *i;
+    int ret;
+    Image *new;
+    uchar *b;
+    Display *d;
+
+    ret = 0;
+    if(depth <= 0)
+        depth = 1;
+    if(wid <= 0)
+        wid = 1;
+
+    d = f->display;
+    if(d == nil)
+        goto Nodisplay;
+
+    new = allocimage(d, Rect(0, 0, ncache*wid, f->height), CHAN1(CGrey, depth), 0, 0);
+    if(new == nil){
+        fprint(2, "font cache resize failed: %r\n");
+        abort();
+        goto Return;
+    }
+    flushimage(d, 0);	/* flush any pending errors */
+    b = bufimage(d, 1+4+4+1);
+    if(b == 0){
+        freeimage(new);
+        goto Return;
+    }
+    b[0] = 'i';
+    BPLONG(b+1, new->id);
+    BPLONG(b+5, ncache);
+    b[9] = f->ascent;
+    if(flushimage(d, 0) < 0){
+        fprint(2, "resize: init failed: %r\n");
+        freeimage(new);
+        goto Return;
+    }
+    freeimage(f->cacheimage);
+    f->cacheimage = new;
+    Nodisplay:
+    f->width = wid;
+    f->maxdepth = depth;
+    ret = 1;
+    if(f->ncache != ncache){
+        i = malloc(ncache*sizeof f->cache[0]);
+        if(i != nil){
+            ret = 0;
+            free(f->cache);
+            f->ncache = ncache;
+            f->cache = i;
+        }
+        /* else just wipe the cache clean and things will be ok */
+    }
+    Return:
+    memset(f->cache, 0, f->ncache*sizeof f->cache[0]);
+    return ret;
+}
+@
+
+
 <<[[drawmesg()]] cases>>=
 /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
 case 'i':
@@ -1688,6 +2044,160 @@ case 'i':
     continue;
 
 @
+
+
+
+<<function loadchar>>=
+/* return 1 if load succeeded, 0 if failed, -1 if must retry */
+int
+loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
+{
+    int i, oi, wid, top, bottom;
+    Rune pic;
+    Fontchar *fi;
+    Cachefont *cf;
+    Cachesubf *subf, *of;
+    uchar *b;
+
+    pic = r;
+    Again:
+    for(i=0; i<f->nsub; i++){
+        cf = f->sub[i];
+        if(cf->min<=pic && pic<=cf->max)
+            goto Found;
+    }
+    TryPJW:
+    if(pic != PJW){
+        pic = PJW;
+        goto Again;
+    }
+    return 0;
+
+    Found:
+    /*
+     * Choose exact or oldest
+     */
+    oi = 0;
+    subf = &f->subf[0];
+    for(i=0; i<f->nsubf; i++){
+        if(cf == subf->cf)
+            goto Found2;
+        if(subf->age < f->subf[oi].age)
+            oi = i;
+        subf++;
+    }
+    subf = &f->subf[oi];
+
+    if(subf->f){
+        if(f->age-subf->age>SUBFAGE || f->nsubf>MAXSUBF){
+    Toss:
+            /* ancient data; toss */
+            freesubfont(subf->f);
+            subf->cf = nil;
+            subf->f = nil;
+            subf->age = 0;
+        }else{				/* too recent; grow instead */
+            of = f->subf;
+            f->subf = malloc((f->nsubf+DSUBF)*sizeof *subf);
+            if(f->subf == nil){
+                f->subf = of;
+                goto Toss;
+            }
+            memmove(f->subf, of, (f->nsubf+DSUBF)*sizeof *subf);
+            memset(f->subf+f->nsubf, 0, DSUBF*sizeof *subf);
+            subf = &f->subf[f->nsubf];
+            f->nsubf += DSUBF;
+            free(of);
+        }
+    }
+    subf->age = 0;
+    subf->cf = nil;
+    subf->f = cf2subfont(cf, f);
+    if(subf->f == nil){
+        if(cf->subfontname == nil)
+            goto TryPJW;
+        *subfontname = cf->subfontname;
+        return -1;
+    }
+
+    subf->cf = cf;
+    if(subf->f->ascent > f->ascent && f->display){
+        /* should print something? this is a mistake in the font file */
+        /* must prevent c->top from going negative when loading cache */
+        Image *b;
+        int d, t;
+        d = subf->f->ascent - f->ascent;
+        b = subf->f->bits;
+        draw(b, b->r, b, nil, addpt(b->r.min, Pt(0, d)));
+        draw(b, Rect(b->r.min.x, b->r.max.y-d, b->r.max.x, b->r.max.y), f->display->black, nil, b->r.min);
+        for(i=0; i<subf->f->n; i++){
+            t = subf->f->info[i].top-d;
+            if(t < 0)
+                t = 0;
+            subf->f->info[i].top = t;
+            t = subf->f->info[i].bottom-d;
+            if(t < 0)
+                t = 0;
+            subf->f->info[i].bottom = t;
+        }
+        subf->f->ascent = f->ascent;
+    }
+
+    Found2:
+    subf->age = f->age;
+
+    /* possible overflow here, but works out okay */
+    pic += cf->offset;
+    pic -= cf->min;
+    if(pic >= subf->f->n)
+        goto TryPJW;
+    fi = &subf->f->info[pic];
+    if(fi->width == 0)
+        goto TryPJW;
+    wid = (fi+1)->x - fi->x;
+    if(f->width < wid || f->width == 0 || f->maxdepth < subf->f->bits->depth){
+        /*
+         * Flush, free, reload (easier than reformatting f->b)
+         */
+        if(noflush)
+            return -1;
+        if(f->width < wid)
+            f->width = wid;
+        if(f->maxdepth < subf->f->bits->depth)
+            f->maxdepth = subf->f->bits->depth;
+        i = fontresize(f, f->width, f->ncache, f->maxdepth);
+        if(i <= 0)
+            return i;
+        /* c is still valid as didn't reallocate f->cache */
+    }
+    c->value = r;
+    top = fi->top + (f->ascent-subf->f->ascent);
+    bottom = fi->bottom + (f->ascent-subf->f->ascent);
+    c->width = fi->width;
+    c->x = h*f->width;
+    c->left = fi->left;
+    if(f->display == nil)
+        return 1;
+    flushimage(f->display, 0);	/* flush any pending errors */
+    b = bufimage(f->display, 37);
+    if(b == 0)
+        return 0;
+    b[0] = 'l';
+    BPLONG(b+1, f->cacheimage->id);
+    BPLONG(b+5, subf->f->bits->id);
+    BPSHORT(b+9, c-f->cache);
+    BPLONG(b+11, c->x);
+    BPLONG(b+15, top);
+    BPLONG(b+19, c->x+((fi+1)->x-fi->x));
+    BPLONG(b+23, bottom);
+    BPLONG(b+27, fi->x);
+    BPLONG(b+31, fi->top);
+    b[35] = fi->left;
+    b[36] = fi->width;
+    return 1;
+}
+@
+
 
 <<[[drawmesg()]] cases>>=
 /* load character: 'l' fontid[4] srcid[4] index[2] R[4*4] P[2*4] left[1] width[1] */
@@ -1718,6 +2228,161 @@ case 'l':
     continue;
 
 @
+
+<<function string>>=
+Point
+string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s)
+{
+    return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, nil, ZP, SoverD);
+}
+@
+
+<<function stringop>>=
+Point
+stringop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Drawop op)
+{
+    return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, nil, ZP, op);
+}
+@
+
+<<function stringn>>=
+Point
+stringn(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len)
+{
+    return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, SoverD);
+}
+@
+
+<<function stringnop>>=
+Point
+stringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len, Drawop op)
+{
+    return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, op);
+}
+@
+
+<<function runestring>>=
+Point
+runestring(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r)
+{
+    return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, nil, ZP, SoverD);
+}
+@
+
+<<function runestringop>>=
+Point
+runestringop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, Drawop op)
+{
+    return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, nil, ZP, op);
+}
+@
+
+<<function runestringn>>=
+Point
+runestringn(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len)
+{
+    return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, nil, ZP, SoverD);
+}
+@
+
+<<function runestringnop>>=
+Point
+runestringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len, Drawop op)
+{
+    return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, nil, ZP, op);
+}
+@
+
+<<function _string>>=
+Point
+_string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, int len, Rectangle clipr, Image *bg, Point bgp, Drawop op)
+{
+    int m, n, wid, max;
+    ushort cbuf[Max], *c, *ec;
+    uchar *b;
+    char *subfontname;
+    char **sptr;
+    Rune **rptr;
+    Font *def;
+    Subfont *sf;
+
+    if(s == nil){
+        s = "";
+        sptr = nil;
+    }else
+        sptr = &s;
+    if(r == nil){
+        r = (Rune*) L"";
+        rptr = nil;
+    }else
+        rptr = &r;
+    sf = nil;
+    while((*s || *r) && len){
+        max = Max;
+        if(len < max)
+            max = len;
+        n = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname);
+        if(n > 0){
+            _setdrawop(dst->display, op);
+
+            m = 47+2*n;
+            if(bg)
+                m += 4+2*4;
+            b = bufimage(dst->display, m);
+            if(b == 0){
+                fprint(2, "string: %r\n");
+                break;
+            }
+            if(bg)
+                b[0] = 'x';
+            else
+                b[0] = 's';
+            BPLONG(b+1, dst->id);
+            BPLONG(b+5, src->id);
+            BPLONG(b+9, f->cacheimage->id);
+            BPLONG(b+13, pt.x);
+            BPLONG(b+17, pt.y+f->ascent);
+            BPLONG(b+21, clipr.min.x);
+            BPLONG(b+25, clipr.min.y);
+            BPLONG(b+29, clipr.max.x);
+            BPLONG(b+33, clipr.max.y);
+            BPLONG(b+37, sp.x);
+            BPLONG(b+41, sp.y);
+            BPSHORT(b+45, n);
+            b += 47;
+            if(bg){
+                BPLONG(b, bg->id);
+                BPLONG(b+4, bgp.x);
+                BPLONG(b+8, bgp.y);
+                b += 12;
+            }
+            ec = &cbuf[n];
+            for(c=cbuf; c<ec; c++, b+=2)
+                BPSHORT(b, *c);
+            pt.x += wid;
+            bgp.x += wid;
+            agefont(f);
+            len -= n;
+        }
+        if(subfontname){
+            freesubfont(sf);
+            if((sf=_getsubfont(f->display, subfontname)) == 0){
+                def = f->display ? f->display->defaultfont : nil;
+                if(def && f!=def)
+                    f = def;
+                else
+                    break;
+            }
+            /* 
+             * must not free sf until cachechars has found it in the cache
+             * and picked up its own reference.
+             */
+        }
+    }
+    return pt;
+}
+@
+
 
 <<[[drawmesg()]] cases>>=
 /* string: 's' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] ni*(index[2]) */
@@ -1798,16 +2463,72 @@ case 'x':
 
 \chapter{Composing}
 
-<<[[drawmesg()]] cases>>=
-/* set compositing operator for next draw operation: 'O' op */
-case 'O':
-    printmesg(fmt="b", a, 0);
-    m = 1+1;
-    if(n < m)
-        error(Eshortdraw);
-    client->op = a[1];
-    continue;
+<<function draw>>=
+void
+draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
+{
+    draw1(dst, &r, src, &p1, mask, &p1, SoverD);
+}
 @
+
+<<function drawop>>=
+void
+drawop(Image *dst, Rectangle r, Image *src, Image *mask, Point p1, Drawop op)
+{
+    draw1(dst, &r, src, &p1, mask, &p1, op);
+}
+@
+
+<<function gendraw>>=
+void
+gendraw(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1)
+{
+    draw1(dst, &r, src, &p0, mask, &p1, SoverD);
+}
+@
+
+<<function gendrawop>>=
+void
+gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, Drawop op)
+{
+    draw1(dst, &r, src, &p0, mask, &p1, op);
+}
+@
+
+
+<<function draw1>>=
+static void
+draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
+{
+    uchar *a;
+
+    _setdrawop(dst->display, op);
+
+    a = bufimage(dst->display, 1+4+4+4+4*4+2*4+2*4);
+    if(a == 0)
+        return;
+    if(src == nil)
+        src = dst->display->black;
+    if(mask == nil)
+        mask = dst->display->opaque;
+
+    a[0] = 'd';
+    BPLONG(a+1, dst->id);
+    BPLONG(a+5, src->id);
+    BPLONG(a+9, mask->id);
+    BPLONG(a+13, r->min.x);
+    BPLONG(a+17, r->min.y);
+    BPLONG(a+21, r->max.x);
+    BPLONG(a+25, r->max.y);
+    BPLONG(a+29, p0->x);
+    BPLONG(a+33, p0->y);
+    BPLONG(a+37, p1->x);
+    BPLONG(a+41, p1->y);
+}
+@
+
+
+
 
 
 <<[[drawmesg()]] cases>>=
@@ -1832,7 +2553,39 @@ case 'd':
 @
 
 
+
+<<function _setdrawop>>=
+void
+_setdrawop(Display *d, Drawop op)
+{
+    uchar *a;
+
+    if(op != SoverD){
+        a = bufimage(d, 1+1);
+        if(a == 0)
+            return;
+        a[0] = 'O';
+        a[1] = op;
+    }
+}
+@
+
+<<[[drawmesg()]] cases>>=
+/* set compositing operator for next draw operation: 'O' op */
+case 'O':
+    printmesg(fmt="b", a, 0);
+    m = 1+1;
+    if(n < m)
+        error(Eshortdraw);
+    client->op = a[1];
+    continue;
+@
+
+
+
+
 % dead? not even mentionned in the draw(5)
+% and nothing generate such a message
 <<[[drawmesg()]] cases>>=
 /* create image mask: 'm' newid[4] id[4] */
 case 'm':
@@ -1846,6 +2599,146 @@ case 'm':
 \chapter{Image}
 
 \section{Naming}
+
+<<function nameimage>>=
+int
+nameimage(Image *i, char *name, int in)
+{
+    uchar *a;
+    int n;
+
+    n = strlen(name);
+    a = bufimage(i->display, 1+4+1+1+n);
+    if(a == 0)
+        return 0;
+    a[0] = 'N';
+    BPLONG(a+1, i->id);
+    a[5] = in;
+    a[6] = n;
+    memmove(a+7, name, n);
+    if(flushimage(i->display, 0) < 0)
+        return 0;
+    return 1;
+}
+@
+
+
+<<[[drawmesg()]] cases>>=
+/* name an image: 'N' dstid[4] in[1] j[1] name[j] */
+case 'N':
+    printmesg(fmt="Lbz", a, 0);
+    m = 1+4+1+1;
+    if(n < m)
+        error(Eshortdraw);
+    c = a[5];
+    j = a[6];
+    if(j == 0)  /* give me a non-empty name please */
+        error(Eshortdraw);
+    m += j;
+    if(n < m)
+        error(Eshortdraw);
+    di = drawlookup(client, BGLONG(a+1), 0);
+    if(di == 0)
+        error(Enodrawimage);
+    if(di->name)
+        error(Enamed);
+    if(c)
+        drawaddname(client, di, j, (char*)a+7);
+    else{
+        dn = drawlookupname(j, (char*)a+7);
+        if(dn == nil)
+            error(Enoname);
+        if(dn->dimage != di)
+            error(Ewrongname);
+        drawdelname(dn);
+    }
+    continue;
+
+@
+
+
+
+
+
+<<function namedimage>>=
+Image*
+namedimage(Display *d, char *name)
+{
+    uchar *a;
+    char *err, buf[12*12+1];
+    Image *i;
+    int id, n;
+    ulong chan;
+
+    err = 0;
+    i = 0;
+
+    n = strlen(name);
+    if(n >= 256){
+        err = "name too long";
+    Error:
+        if(err)
+            werrstr("namedimage: %s", err);
+        else
+            werrstr("namedimage: %r");
+        if(i)
+            free(i);
+        return 0;
+    }
+    /* flush pending data so we don't get error allocating the image */
+    flushimage(d, 0);
+    a = bufimage(d, 1+4+1+n);
+    if(a == 0)
+        goto Error;
+    d->imageid++;
+    id = d->imageid;
+
+    a[0] = 'n';
+    BPLONG(a+1, id);
+    a[5] = n;
+    memmove(a+6, name, n);
+
+    if(flushimage(d, 0) < 0)
+        goto Error;
+
+    if(pread(d->ctlfd, buf, sizeof buf, 0) < 12*12)
+        goto Error;
+    buf[12*12] = '\0';
+
+    i = malloc(sizeof(Image));
+    if(i == nil){
+    Error1:
+        a = bufimage(d, 1+4);
+        if(a){
+            a[0] = 'f';
+            BPLONG(a+1, id);
+            flushimage(d, 0);
+        }
+        goto Error;
+    }
+    i->display = d;
+    i->id = id;
+    if((chan=strtochan(buf+2*12))==0){
+        werrstr("bad channel '%.12s' from devdraw", buf+2*12);
+        goto Error1;
+    }
+    i->chan = chan;
+    i->depth = chantodepth(chan);
+    i->repl = atoi(buf+3*12);
+    i->r.min.x = atoi(buf+4*12);
+    i->r.min.y = atoi(buf+5*12);
+    i->r.max.x = atoi(buf+6*12);
+    i->r.max.y = atoi(buf+7*12);
+    i->clipr.min.x = atoi(buf+8*12);
+    i->clipr.min.y = atoi(buf+9*12);
+    i->clipr.max.x = atoi(buf+10*12);
+    i->clipr.max.y = atoi(buf+11*12);
+    i->screen = 0;
+    i->next = 0;
+    return i;
+}
+@
+
 
 <<[[drawmesg()]] cases>>=
 /* attach to a named image: 'n' dstid[4] j[1] name[j] */
@@ -1881,40 +2774,29 @@ case 'n':
     continue;
 
 @
-<<[[drawmesg()]] cases>>=
-/* name an image: 'N' dstid[4] in[1] j[1] name[j] */
-case 'N':
-    printmesg(fmt="Lbz", a, 0);
-    m = 1+4+1+1;
-    if(n < m)
-        error(Eshortdraw);
-    c = a[5];
-    j = a[6];
-    if(j == 0)  /* give me a non-empty name please */
-        error(Eshortdraw);
-    m += j;
-    if(n < m)
-        error(Eshortdraw);
-    di = drawlookup(client, BGLONG(a+1), 0);
-    if(di == 0)
-        error(Enodrawimage);
-    if(di->name)
-        error(Enamed);
-    if(c)
-        drawaddname(client, di, j, (char*)a+7);
-    else{
-        dn = drawlookupname(j, (char*)a+7);
-        if(dn == nil)
-            error(Enoname);
-        if(dn->dimage != di)
-            error(Ewrongname);
-        drawdelname(dn);
-    }
-    continue;
 
-@
 
 \section{Clipping}
+
+<<function replclipr>>=
+void
+replclipr(Image *i, int repl, Rectangle clipr)
+{
+    uchar *b;
+
+    b = bufimage(i->display, 22);
+    b[0] = 'c';
+    BPLONG(b+1, i->id);
+    repl = repl!=0;
+    b[5] = repl;
+    BPLONG(b+6, clipr.min.x);
+    BPLONG(b+10, clipr.min.y);
+    BPLONG(b+14, clipr.max.x);
+    BPLONG(b+18, clipr.max.y);
+    i->repl = repl;
+    i->clipr = clipr;
+}
+@
 
 <<[[drawmesg()]] cases>>=
 /* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
@@ -1938,6 +2820,60 @@ case 'c':
 
 
 \section{Reading images}
+
+<<function unloadimage>>=
+int
+unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
+{
+    int bpl, n, ntot, dy;
+    uchar *a;
+    Display *d;
+
+    if(!rectinrect(r, i->r)){
+        werrstr("unloadimage: bad rectangle");
+        return -1;
+    }
+    bpl = bytesperline(r, i->depth);
+    if(ndata < bpl*Dy(r)){
+        werrstr("unloadimage: buffer too small");
+        return -1;
+    }
+
+    d = i->display;
+    flushimage(d, 0);	/* make sure subsequent flush is for us only */
+    ntot = 0;
+    while(r.min.y < r.max.y){
+        a = bufimage(d, 1+4+4*4);
+        if(a == 0){
+            werrstr("unloadimage: %r");
+            return -1;
+        }
+        dy = 8000/bpl;
+        if(dy <= 0){
+            werrstr("unloadimage: image too wide");
+            return -1;
+        }
+        if(dy > Dy(r))
+            dy = Dy(r);
+        a[0] = 'r';
+        BPLONG(a+1, i->id);
+        BPLONG(a+5, r.min.x);
+        BPLONG(a+9, r.min.y);
+        BPLONG(a+13, r.max.x);
+        BPLONG(a+17, r.min.y+dy);
+        if(flushimage(d, 0) < 0)
+            return -1;
+        n = read(d->fd, data+ntot, ndata-ntot);
+        if(n < 0)
+            return n;
+        ntot += n;
+        r.min.y += dy;
+    }
+    return ntot;
+}
+@
+
+
 
 <<[[drawmesg()]] cases>>=
 /* read: 'r' id[4] R[4*4] */
@@ -1978,16 +2914,67 @@ case 'r':
 struct Screen
 {
     Display	*display;	/* display holding data */
-    int	id;		/* id of system-held Screen */
+    int		id;			/* id of system-held Screen */
     Image	*image;		/* unused; for reference only */
     Image	*fill;		/* color to paint behind windows */
 };
 @
-
+%less: delete image field?
 
 <<global _screen>>=
 Screen	*_screen;
 @
+% called _screen because screen is already use (to actually an Image, hmm)
+
+
+<<global screenid>>=
+static int	screenid;
+@
+
+<<function allocscreen>>=
+Screen*
+allocscreen(Image *image, Image *fill, int public)
+{
+    uchar *a;
+    Screen *s;
+    int id, try;
+    Display *d;
+
+    d = image->display;
+    if(d != fill->display){
+        werrstr("allocscreen: image and fill on different displays");
+        return 0;
+    }
+    s = malloc(sizeof(Screen));
+    if(s == 0)
+        return 0;
+    SET(id);
+    for(try=0; try<25; try++){
+        /* loop until find a free id */
+        a = bufimage(d, 1+4+4+4+1);
+        if(a == 0){
+            free(s);
+            return 0;
+        }
+        id = ++screenid;
+        a[0] = 'A';
+        BPLONG(a+1, id);
+        BPLONG(a+5, image->id);
+        BPLONG(a+9, fill->id);
+        a[13] = public;
+        if(flushimage(d, 0) != -1)
+            break;
+    }
+    s->display = d;
+    s->id = id;
+    s->image = image;
+    assert(s->image && s->image->chan != 0);
+
+    s->fill = fill;
+    return s;
+}
+@
+
 
 
 <<[[drawmesg()]] cases>>=
@@ -2006,10 +2993,37 @@ case 'A':
     dsrc = drawlookup(client, BGLONG(a+9), 1);
     if(ddst==0 || dsrc==0)
         error(Enodrawimage);
+
     if(drawinstallscreen(client, 0, dstid, ddst, dsrc, a[13]) == 0)
         error(Edrawmem);
     continue;
 
+@
+
+<<function freescreen>>=
+int
+freescreen(Screen *s)
+{
+    uchar *a;
+    Display *d;
+
+    if(s == 0)
+        return 0;
+    d = s->display;
+    a = bufimage(d, 1+4);
+    if(a == 0)
+        return -1;
+    a[0] = 'F';
+    BPLONG(a+1, s->id);
+    /*
+     * flush(1) because screen is likely holding last reference to
+     * window, and want it to disappear visually.
+     */
+    if(flushimage(d, 1) < 0)
+        return -1;
+    free(s);
+    return 1;
+}
 @
 
 <<[[drawmesg()]] cases>>=
@@ -2023,6 +3037,36 @@ case 'F':
     drawuninstallscreen(client, cs);
     continue;
 
+@
+
+<<function publicscreen>>=
+Screen*
+publicscreen(Display *d, int id, ulong chan)
+{
+    uchar *a;
+    Screen *s;
+
+    s = malloc(sizeof(Screen));
+    if(s == 0)
+        return 0;
+    a = bufimage(d, 1+4+4);
+    if(a == 0){
+    Error:
+        free(s);
+        return 0;
+    }
+    a[0] = 'S';
+    BPLONG(a+1, id);
+    BPLONG(a+5, chan);
+    if(flushimage(d, 0) < 0)
+        goto Error;
+
+    s->display = d;
+    s->id = id;
+    s->image = 0;
+    s->fill = 0;
+    return s;
+}
 @
 
 
@@ -2048,7 +3092,69 @@ case 'S':
 @
 
 
+
+
+
+
+
+
+
+
+
+
+<<function allocwindow>>=
+Image*
+allocwindow(Screen *s, Rectangle r, int ref, ulong val)
+{
+    return _allocwindow(nil, s, r, ref, val);
+}
+@
+
+<<function _allocwindow>>=
+Image*
+_allocwindow(Image *i, Screen *s, Rectangle r, int ref, ulong val)
+{
+    Display *d;
+
+    d = s->display;
+    i = _allocimage(i, d, r, d->screenimage->chan, 0, val, s->id, ref);
+    if(i == 0)
+        return 0;
+    i->screen = s;
+    i->next = s->display->windows;
+    s->display->windows = i;
+    return i;
+}
+@
+
+
 \section{Origin}
+
+<<function originwindow>>=
+int
+originwindow(Image *w, Point log, Point scr)
+{
+    uchar *b;
+    Point delta;
+
+    flushimage(w->display, 0);
+    b = bufimage(w->display, 1+4+2*4+2*4);
+    if(b == nil)
+        return 0;
+    b[0] = 'o';
+    BPLONG(b+1, w->id);
+    BPLONG(b+5, log.x);
+    BPLONG(b+9, log.y);
+    BPLONG(b+13, scr.x);
+    BPLONG(b+17, scr.y);
+    if(flushimage(w->display, 1) < 0)
+        return -1;
+    delta = subpt(log, w->r.min);
+    w->r = rectaddpt(w->r, delta);
+    w->clipr = rectaddpt(w->clipr, delta);
+    return 1;
+}
+@
 
 <<[[drawmesg()]] cases>>=
 /* position window: 'o' id[4] r.min [2*4] screenr.min [2*4] */
@@ -2209,6 +3315,231 @@ case 't':
 @
 
 \section{Rectangle drawing}
+
+<<function cloadimage>>=
+int
+cloadimage(Image *i, Rectangle r, uchar *data, int ndata)
+{
+    int m, nb, miny, maxy, ncblock;
+    uchar *a;
+
+    if(!rectinrect(r, i->r)){
+        werrstr("cloadimage: bad rectangle");
+        return -1;
+    }
+
+    miny = r.min.y;
+    m = 0;
+    ncblock = _compblocksize(r, i->depth);
+    while(miny != r.max.y){
+        maxy = atoi((char*)data+0*12);
+        nb = atoi((char*)data+1*12);
+        if(maxy<=miny || r.max.y<maxy){
+            werrstr("creadimage: bad maxy %d", maxy);
+            return -1;
+        }
+        data += 2*12;
+        ndata -= 2*12;
+        m += 2*12;
+        if(nb<=0 || ncblock<nb || nb>ndata){
+            werrstr("creadimage: bad count %d", nb);
+            return -1;
+        }
+        a = bufimage(i->display, 21+nb);
+        if(a == nil)
+            return -1;
+        a[0] = 'Y';
+        BPLONG(a+1, i->id);
+        BPLONG(a+5, r.min.x);
+        BPLONG(a+9, miny);
+        BPLONG(a+13, r.max.x);
+        BPLONG(a+17, maxy);
+        memmove(a+21, data, nb);
+        miny = maxy;
+        data += nb;
+        ndata += nb;
+        m += nb;
+    }
+    return m;
+}
+@
+
+<<function creadimage>>=
+Image *
+creadimage(Display *d, int fd, int dolock)
+{
+    char hdr[5*12+1];
+    Rectangle r;
+    int m, nb, miny, maxy, new, ldepth, ncblock;
+    uchar *buf, *a;
+    Image *i;
+    ulong chan;
+
+    if(readn(fd, hdr, 5*12) != 5*12)
+        return nil;
+
+    /*
+     * distinguish new channel descriptor from old ldepth.
+     * channel descriptors have letters as well as numbers,
+     * while ldepths are a single digit formatted as %-11d.
+     */
+    new = 0;
+    for(m=0; m<10; m++){
+        if(hdr[m] != ' '){
+            new = 1;
+            break;
+        }
+    }
+    if(hdr[11] != ' '){
+        werrstr("creadimage: bad format");
+        return nil;
+    }
+    if(new){
+        hdr[11] = '\0';
+        if((chan = strtochan(hdr)) == 0){
+            werrstr("creadimage: bad channel string %s", hdr);
+            return nil;
+        }
+    }else{
+        ldepth = ((int)hdr[10])-'0';
+        if(ldepth<0 || ldepth>3){
+            werrstr("creadimage: bad ldepth %d", ldepth);
+            return nil;
+        }
+        chan = drawld2chan[ldepth];
+    }
+    r.min.x=atoi(hdr+1*12);
+    r.min.y=atoi(hdr+2*12);
+    r.max.x=atoi(hdr+3*12);
+    r.max.y=atoi(hdr+4*12);
+    if(r.min.x>r.max.x || r.min.y>r.max.y){
+        werrstr("creadimage: bad rectangle");
+        return nil;
+    }
+
+    if(d){
+        if(dolock)
+            lockdisplay(d);
+        i = allocimage(d, r, chan, 0, 0);
+        setmalloctag(i, getcallerpc(&d));
+        if(dolock)
+            unlockdisplay(d);
+        if(i == nil)
+            return nil;
+    }else{
+        i = mallocz(sizeof(Image), 1);
+        if(i == nil)
+            return nil;
+    }
+    ncblock = _compblocksize(r, chantodepth(chan));
+    buf = malloc(ncblock);
+    if(buf == nil)
+        goto Errout;
+    miny = r.min.y;
+    while(miny != r.max.y){
+        if(readn(fd, hdr, 2*12) != 2*12){
+        Errout:
+            if(dolock)
+                lockdisplay(d);
+        Erroutlock:
+            freeimage(i);
+            if(dolock)
+                unlockdisplay(d);
+            free(buf);
+            return nil;
+        }
+        maxy = atoi(hdr+0*12);
+        nb = atoi(hdr+1*12);
+        if(maxy<=miny || r.max.y<maxy){
+            werrstr("creadimage: bad maxy %d", maxy);
+            goto Errout;
+        }
+        if(nb<=0 || ncblock<nb){
+            werrstr("creadimage: bad count %d", nb);
+            goto Errout;
+        }
+        if(readn(fd, buf, nb)!=nb)
+            goto Errout;
+        if(d){
+            if(dolock)
+                lockdisplay(d);
+            a = bufimage(i->display, 21+nb);
+            if(a == nil)
+                goto Erroutlock;
+            a[0] = 'Y';
+            BPLONG(a+1, i->id);
+            BPLONG(a+5, r.min.x);
+            BPLONG(a+9, miny);
+            BPLONG(a+13, r.max.x);
+            BPLONG(a+17, maxy);
+            if(!new)	/* old image: flip the data bits */
+                _twiddlecompressed(buf, nb);
+            memmove(a+21, buf, nb);
+            if(dolock)
+                unlockdisplay(d);
+        }
+        miny = maxy;
+    }
+    free(buf);
+    return i;
+}
+@
+
+
+<<function loadimage>>=
+int
+loadimage(Image *i, Rectangle r, uchar *data, int ndata)
+{
+    long dy;
+    int n, bpl;
+    uchar *a;
+    int chunk;
+
+    chunk = i->display->bufsize - 64;
+
+    if(!rectinrect(r, i->r)){
+        werrstr("loadimage: bad rectangle");
+        return -1;
+    }
+    bpl = bytesperline(r, i->depth);
+    n = bpl*Dy(r);
+    if(n > ndata){
+        werrstr("loadimage: insufficient data");
+        return -1;
+    }
+    ndata = 0;
+    while(r.max.y > r.min.y){
+        dy = r.max.y - r.min.y;
+        if(dy*bpl > chunk)
+            dy = chunk/bpl;
+        if(dy <= 0){
+            werrstr("loadimage: image too wide for buffer");
+            return -1;
+        }
+        n = dy*bpl;
+        a = bufimage(i->display, 21+n);
+        if(a == nil){
+            werrstr("bufimage failed");
+            return -1;
+        }
+        a[0] = 'y';
+        BPLONG(a+1, i->id);
+        BPLONG(a+5, r.min.x);
+        BPLONG(a+9, r.min.y);
+        BPLONG(a+13, r.max.x);
+        BPLONG(a+17, r.min.y+dy);
+        memmove(a+21, data, n);
+        ndata += n;
+        data += n;
+        r.min.y += dy;
+    }
+    if(flushimage(i->display, 0) < 0)
+        return -1;
+    return ndata;
+}
+@
+
+
 
 <<[[drawmesg()]] cases>>=
 /* write: 'y' id[4] R[4*4] data[x*1] */
@@ -2719,16 +4050,6 @@ bool	_drawdebug = 0;
 bool drawdebug;
 @
 
-<<[[drawmesg()]] cases>>=
-/* toggle debugging: 'D' val[1] */
-case 'D':
-    printmesg(fmt="b", a, 0);
-    m = 1+1;
-    if(n < m)
-        error(Eshortdraw);
-    drawdebug = a[1];
-    continue;
-@
 
 
 <<global debuglockdisplay>>=
@@ -2751,6 +4072,16 @@ drawsetdebug(int v)
 }
 @
 
+<<[[drawmesg()]] cases>>=
+/* toggle debugging: 'D' val[1] */
+case 'D':
+    printmesg(fmt="b", a, 0);
+    m = 1+1;
+    if(n < m)
+        error(Eshortdraw);
+    drawdebug = a[1];
+    continue;
+@
 
 
 \chapter{Error Managment}

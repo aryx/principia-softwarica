@@ -1764,6 +1764,7 @@ drawmesg(Client *client, void *av, int n)
             src = drawimage(client, a+33);
             drawpoint(&sp, a+37);
             op = drawclientop(client);
+
             memline(dst, p, q, e0, e1, j, src, sp, op);
             /* avoid memlinebbox if possible */
             if(dstid==0 || dst->layer!=nil){
@@ -2013,15 +2014,6 @@ drawmesg(Client *client, void *av, int n)
             continue;
 
         /*x: [[drawmesg()]] cases */
-        /* set compositing operator for next draw operation: 'O' op */
-        case 'O':
-            printmesg(fmt="b", a, 0);
-            m = 1+1;
-            if(n < m)
-                error(Eshortdraw);
-            client->op = a[1];
-            continue;
-        /*x: [[drawmesg()]] cases */
         /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
         case 'd':
             printmesg(fmt="LLLRPP", a, 0);
@@ -2041,6 +2033,15 @@ drawmesg(Client *client, void *av, int n)
             continue;
 
         /*x: [[drawmesg()]] cases */
+        /* set compositing operator for next draw operation: 'O' op */
+        case 'O':
+            printmesg(fmt="b", a, 0);
+            m = 1+1;
+            if(n < m)
+                error(Eshortdraw);
+            client->op = a[1];
+            continue;
+        /*x: [[drawmesg()]] cases */
         /* create image mask: 'm' newid[4] id[4] */
         case 'm':
             printmesg("LL", a, 0);
@@ -2048,6 +2049,37 @@ drawmesg(Client *client, void *av, int n)
             if(n < m)
                 error(Eshortdraw);
             break;
+        /*x: [[drawmesg()]] cases */
+        /* name an image: 'N' dstid[4] in[1] j[1] name[j] */
+        case 'N':
+            printmesg(fmt="Lbz", a, 0);
+            m = 1+4+1+1;
+            if(n < m)
+                error(Eshortdraw);
+            c = a[5];
+            j = a[6];
+            if(j == 0)  /* give me a non-empty name please */
+                error(Eshortdraw);
+            m += j;
+            if(n < m)
+                error(Eshortdraw);
+            di = drawlookup(client, BGLONG(a+1), 0);
+            if(di == 0)
+                error(Enodrawimage);
+            if(di->name)
+                error(Enamed);
+            if(c)
+                drawaddname(client, di, j, (char*)a+7);
+            else{
+                dn = drawlookupname(j, (char*)a+7);
+                if(dn == nil)
+                    error(Enoname);
+                if(dn->dimage != di)
+                    error(Ewrongname);
+                drawdelname(dn);
+            }
+            continue;
+
         /*x: [[drawmesg()]] cases */
         /* attach to a named image: 'n' dstid[4] j[1] name[j] */
         case 'n':
@@ -2079,37 +2111,6 @@ drawmesg(Client *client, void *av, int n)
             memmove(di->name, a+6, j);
             di->name[j] = 0;
             client->infoid = dstid;
-            continue;
-
-        /*x: [[drawmesg()]] cases */
-        /* name an image: 'N' dstid[4] in[1] j[1] name[j] */
-        case 'N':
-            printmesg(fmt="Lbz", a, 0);
-            m = 1+4+1+1;
-            if(n < m)
-                error(Eshortdraw);
-            c = a[5];
-            j = a[6];
-            if(j == 0)  /* give me a non-empty name please */
-                error(Eshortdraw);
-            m += j;
-            if(n < m)
-                error(Eshortdraw);
-            di = drawlookup(client, BGLONG(a+1), 0);
-            if(di == 0)
-                error(Enodrawimage);
-            if(di->name)
-                error(Enamed);
-            if(c)
-                drawaddname(client, di, j, (char*)a+7);
-            else{
-                dn = drawlookupname(j, (char*)a+7);
-                if(dn == nil)
-                    error(Enoname);
-                if(dn->dimage != di)
-                    error(Ewrongname);
-                drawdelname(dn);
-            }
             continue;
 
         /*x: [[drawmesg()]] cases */
@@ -2171,6 +2172,7 @@ drawmesg(Client *client, void *av, int n)
             dsrc = drawlookup(client, BGLONG(a+9), 1);
             if(ddst==0 || dsrc==0)
                 error(Enodrawimage);
+
             if(drawinstallscreen(client, 0, dstid, ddst, dsrc, a[13]) == 0)
                 error(Edrawmem);
             continue;

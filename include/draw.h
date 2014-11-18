@@ -208,7 +208,7 @@ typedef void	(*Reffn)(Image*, Rectangle, void*);
 struct Screen
 {
     Display	*display;	/* display holding data */
-    int	id;		/* id of system-held Screen */
+    int		id;			/* id of system-held Screen */
     Image	*image;		/* unused; for reference only */
     Image	*fill;		/* color to paint behind windows */
 };
@@ -229,9 +229,11 @@ struct Display
     // ref_own<Image>
     Image	*image;
 
-
+    // drawing operatings to write in /dev/draw/x/data until flush
+    // array<byte>
     byte	*buf;
     int		bufsize;
+    // index in Display.buf array
     byte	*bufp;
 
     void	(*error)(Display*, char*);
@@ -254,7 +256,7 @@ struct Display
     Subfont	*defaultsubfont;
 
     Image	*windows;
-    Image	*screenimage;
+    Image	*screenimage; // ???
 
     bool	_isnewdisplay;
 };
