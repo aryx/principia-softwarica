@@ -1511,7 +1511,6 @@ writenbit(Param *p, uchar *w, Buffer src)
 //#undef DBG
 
 
-
 static Buffer
 readcmap(Param *p, uchar *buf, int y)
 {

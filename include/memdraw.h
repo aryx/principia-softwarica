@@ -32,7 +32,7 @@ struct Memdata
 
 /*s: enum _anon_ (include/memdraw.h) */
 enum {
-    Frepl		= 1<<0,	/* is replicated */
+    Frepl	= 1<<0,	/* is replicated */
     Fsimple	= 1<<1,	/* is 1x1 */
     Fgrey	= 1<<2,	/* is grey */
     Falpha	= 1<<3,	/* has explicit alpha */
@@ -193,7 +193,7 @@ void		memimagemove(void*, void*);
  * Kernel cruft
  */
 extern void	rdb(void);
-extern int		(*iprint)(char*, ...);
+extern int	(*iprint)(char*, ...);
 #pragma varargck argpos iprint 1
 extern int		drawdebug;
 

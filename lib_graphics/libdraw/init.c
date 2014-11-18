@@ -45,7 +45,7 @@ drawshutdown(void)
 /*e: function drawshutdown */
 
 /*s: function geninitdraw */
-int
+errorcodeneg1
 geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *label, char *windir, int ref)
 {
     int fd, n;
@@ -54,7 +54,7 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
 
     display = initdisplay(devdir, windir, error);
     if(display == nil)
-        return -1;
+        return ERROR_NEG1;
 
     /*
      * Set up default font
@@ -129,14 +129,14 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
 /*e: function geninitdraw */
 
 /*s: function initdraw */
-int
+errorcodeneg1
 initdraw(void(*error)(Display*, char*), char *fontname , char *label)
 {
     char *dev = "/dev";
 
     if(access("/dev/draw/new", AEXIST)<0 && bind("#i", "/dev", MAFTER)<0){
         fprint(2, "imageinit: can't bind /dev/draw: %r\n");
-        return -1;
+        return ERROR_NEG1;
     }
     return geninitdraw(dev, error, fontname, label, dev, Refnone);
 }

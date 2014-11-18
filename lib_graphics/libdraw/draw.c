@@ -34,6 +34,7 @@ draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, D
         src = dst->display->black;
     if(mask == nil)
         mask = dst->display->opaque;
+
     a[0] = 'd';
     BPLONG(a+1, dst->id);
     BPLONG(a+5, src->id);

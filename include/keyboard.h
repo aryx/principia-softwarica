@@ -10,7 +10,7 @@ struct	Keyboardctl
 {
     Channel	*c;	/* chan(Rune)[20] */
 
-    char		*file;
+    char	*file;
 
     int		consfd;		/* to cons file */
     int		ctlfd;		/* to ctl file */
@@ -21,7 +21,7 @@ struct	Keyboardctl
 
 
 extern	Keyboardctl*	initkeyboard(char*);
-extern	int			ctlkeyboard(Keyboardctl*, char*);
+extern	int		ctlkeyboard(Keyboardctl*, char*);
 extern	void		closekeyboard(Keyboardctl*);
 
 /*s: enum _anon_ (include/keyboard.h) */

@@ -9,7 +9,7 @@ typedef struct	Menu Menu;
 /*s: enum _anon_ (include/event.h) */
 enum
 {
-    Emouse		= 1,
+    Emouse	= 1,
     Ekeyboard	= 2,
 };
 /*e: enum _anon_ (include/event.h) */
@@ -25,7 +25,7 @@ enum
 /*s: struct Mouse */
 struct	Mouse
 {
-    int	buttons;	/* bit array: LMR=124 */
+    int		buttons;	/* bit array: LMR=124 */
     Point	xy;
     ulong	msec;
 };
@@ -34,9 +34,9 @@ struct	Mouse
 /*s: struct Event */
 struct	Event
 {
-    int	kbdc;
+    int		kbdc;
     Mouse	mouse;
-    int	n;		/* number of characters in message */
+    int		n;		/* number of characters in message */
     void	*v;		/* data unpacked by general event-handling function */
     uchar	data[EMAXMSG];	/* message from an arbitrary file descriptor */
 };

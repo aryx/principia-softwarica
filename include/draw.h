@@ -28,6 +28,7 @@ enum
 {
     DOpaque		= 0xFFFFFFFF,
     DTransparent	= 0x00000000,		/* only useful for allocimage, memfillcolor */
+
     DBlack		= 0x000000FF,
     DWhite		= 0xFFFFFFFF,
     DRed		= 0xFF0000FF,
@@ -36,6 +37,7 @@ enum
     DCyan		= 0x00FFFFFF,
     DMagenta		= 0xFF00FFFF,
     DYellow		= 0xFFFF00FF,
+
     DPaleyellow	= 0xFFFFAAFF,
     DDarkyellow	= 0xEEEE9EFF,
     DDarkgreen	= 0x448844FF,
@@ -43,18 +45,18 @@ enum
     DMedgreen	= 0x88CC88FF,
     DDarkblue	= 0x000055FF,
     DPalebluegreen= 0xAAFFFFFF,
-    DPaleblue		= 0x0000BBFF,
+    DPaleblue	= 0x0000BBFF,
     DBluegreen	= 0x008888FF,
     DGreygreen	= 0x55AAAAFF,
     DPalegreygreen	= 0x9EEEEEFF,
     DYellowgreen	= 0x99994CFF,
     DMedblue		= 0x000099FF,
-    DGreyblue	= 0x005DBBFF,
+    DGreyblue		= 0x005DBBFF,
     DPalegreyblue	= 0x4993DDFF,
-    DPurpleblue	= 0x8888CCFF,
+    DPurpleblue		= 0x8888CCFF,
 
     DNotacolor	= 0xFFFFFF00,
-    DNofill		= DNotacolor,
+    DNofill	= DNotacolor,
     
 };
 /*e: enum _anon_ */
@@ -86,8 +88,9 @@ enum
 {
     /* line ends */
     Endsquare	= 0,
-    Enddisc		= 1,
+    Enddisc	= 1,
     Endarrow	= 2,
+
     Endmask		= 0x1F
 };
 /*e: enum _anon_ (include/draw.h)3 */
@@ -127,10 +130,12 @@ enum {
     CRed = 0,
     CGreen,
     CBlue,
+
     CGrey,
     CAlpha,
     CMap,
     CIgnore,
+
     NChan,
 };
 /*e: enum _anon_ (include/draw.h)4 */
@@ -562,7 +567,7 @@ extern	Display	*display;
 extern	Font	*font;
 extern	Image	*screen;
 extern	Screen	*_screen;
-extern	int		_cursorfd;
+extern	int	_cursorfd;
 extern	bool	_drawdebug;	/* set to true to see errors from flushimage */
 extern	void	_setdrawop(Display*, Drawop);
 

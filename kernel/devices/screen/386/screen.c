@@ -23,8 +23,6 @@ extern void vgalinearpci(VGAscr*);
 
 //already in libdraw/arith.c
 /*s: global physgscreenr */
-//Point ZP = {0, 0};
-
 Rectangle physgscreenr;
 /*e: global physgscreenr */
 

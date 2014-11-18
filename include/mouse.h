@@ -29,7 +29,7 @@ struct Mousectl
     int		mfd;		/* to mouse file */
     int		cfd;		/* to cursor file */
 
-    int		pid;		/* of slave proc */
+    int		pid;	/* of slave proc */
     Image*	image;	/* of associated window/display */
 };
 /*e: struct Mousectl */
@@ -47,11 +47,11 @@ struct Menu
  * Mouse
  */
 extern Mousectl*	initmouse(char*, Image*);
-extern void			moveto(Mousectl*, Point);
-extern int			readmouse(Mousectl*);
-extern void			closemouse(Mousectl*);
-extern void			setcursor(Mousectl*, Cursor*);
-extern void			drawgetrect(Rectangle, int);
+extern void		moveto(Mousectl*, Point);
+extern int		readmouse(Mousectl*);
+extern void		closemouse(Mousectl*);
+extern void		setcursor(Mousectl*, Cursor*);
+extern void		drawgetrect(Rectangle, int);
 extern Rectangle	getrect(int, Mousectl*);
-extern int	 		menuhit(int, Mousectl*, Menu*, Screen*);
+extern int	 	menuhit(int, Mousectl*, Menu*, Screen*);
 /*e: include/mouse.h */

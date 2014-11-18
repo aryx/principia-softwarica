@@ -54,6 +54,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, int repl, ulong val,
         goto Error;
     d->imageid++;
     id = d->imageid;
+
     a[0] = 'b';
     BPLONG(a+1, id);
     BPLONG(a+5, screenid);
@@ -74,6 +75,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, int repl, ulong val,
     BPLONG(a+39, clipr.max.x);
     BPLONG(a+43, clipr.max.y);
     BPLONG(a+47, val);
+
     if(flushimage(d, 0) < 0)
         goto Error;
 
@@ -136,10 +138,12 @@ namedimage(Display *d, char *name)
         goto Error;
     d->imageid++;
     id = d->imageid;
+
     a[0] = 'n';
     BPLONG(a+1, id);
     a[5] = n;
     memmove(a+6, name, n);
+
     if(flushimage(d, 0) < 0)
         goto Error;
 
