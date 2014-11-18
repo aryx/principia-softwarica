@@ -24,7 +24,7 @@ closemouse(Mousectl *mc)
 
     postnote(PNPROC, mc->pid, "kill");
 
-    do; while(nbrecv(mc->c, &mc->Mouse) > 0);
+    do ; while(nbrecv(mc->c, &mc->Mouse) > 0);
 
     close(mc->mfd);
     close(mc->cfd);

@@ -20,14 +20,14 @@ struct Mousectl
 {
     Mouse;
 
-    Channel	*c;	/* chan(Mouse) */
+    Channel	*c;			/* chan(Mouse) */
     Channel	*resizec;	/* chan(int)[2] */
     /* buffered in case client is waiting for a mouse action before handling resize */
 
     char	*file;
 
-    int		mfd;		/* to mouse file */
-    int		cfd;		/* to cursor file */
+    fdt		mfd;		/* to mouse file */
+    fdt		cfd;		/* to cursor file */
 
     int		pid;	/* of slave proc */
     Image*	image;	/* of associated window/display */

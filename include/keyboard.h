@@ -12,8 +12,8 @@ struct	Keyboardctl
 
     char	*file;
 
-    int		consfd;		/* to cons file */
-    int		ctlfd;		/* to ctl file */
+    fdt		consfd;		/* to cons file */
+    fdt		ctlfd;		/* to ctl file */
 
     int		pid;		/* of slave proc */
 };

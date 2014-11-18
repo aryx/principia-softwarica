@@ -319,23 +319,23 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 \section{Architecture overview}
 
-% kernel driver vs libs vs apps (vs rio)
+% app, library, kernel draw server, vga driver
+% kernel vs libs vs apps (vs rio)
+
+% public API -> marshaller -> flush -> KERNEL -> unmarshaller -> algorithm
+% some kind of RPC and protocol
 
 % Display
 %  Image (User side, id) MemImage (Kernel side, id -> full structure)
 %  Screen
 %   Window (Image)
 
-% some kind of RPC and protocol
-
-
-% graphics (devvga)
+% devvga
 %  why imagmem? why imagmem and mainmem? why not use other allocator?
 %  see screen/user/notes.txt especially about the old way to get graphics on PC
 
 
-
-
+% about RPC vs framebuffer.
 % design goal was like X11 can be remote! can login on another
 % machine, execute program there that actually display on your screen.
 % for plan9 they just reuse 9p! network file system so /dev/draw
@@ -612,7 +612,7 @@ drawshutdown(void)
 @
 
 
-\section{Display}
+\section{[[initdisplay()]]}
 
 <<constant NINFO>>=
 #define	NINFO	12*12
@@ -873,6 +873,7 @@ snprint(buf, sizeof buf, "%s/winname", display->windir);
 if(gengetwindow(display, buf, &screen, &_screen, ref) < 0)
     goto Error;
 @
+% ???
 
 \chapter{User/Kernel Bridge}
 
@@ -900,6 +901,7 @@ if(gengetwindow(display, buf, &screen, &_screen, ref) < 0)
 #define	BPLONG(p, v)		(BPSHORT(p, (v)), BPSHORT(p+2, (v)>>16))
 @
 
+% could start by a simple example? like flush?
 
 \section{[[drawmesg()]]}
 
@@ -927,7 +929,7 @@ Refreshfn reffn;
 @
 
 
-% the big one!!
+% the big one!! this is in kernel!!
 <<function drawmesg>>=
 void
 drawmesg(Client *client, void *av, int n)
@@ -3316,6 +3318,8 @@ case 't':
 
 \section{Rectangle drawing}
 
+% mv? in Writing image section?
+
 <<function cloadimage>>=
 int
 cloadimage(Image *i, Rectangle r, uchar *data, int ndata)
@@ -3605,8 +3609,8 @@ struct	Keyboardctl
 
     char	*file;
 
-    int		consfd;		/* to cons file */
-    int		ctlfd;		/* to ctl file */
+    fdt		consfd;		/* to cons file */
+    fdt		ctlfd;		/* to ctl file */
 
     int		pid;		/* of slave proc */
 };
@@ -3698,13 +3702,6 @@ closekeyboard(Keyboardctl *kc)
         return;
 
     postnote(PNPROC, kc->pid, "kill");
-
-//#ifdef BUG
-//	/* Drain the channel */
-//	while(?kc->c)
-//		<-kc->c;
-//#endif
-
     close(kc->ctlfd);
     close(kc->consfd);
     free(kc->file);
@@ -3712,6 +3709,12 @@ closekeyboard(Keyboardctl *kc)
     free(kc);
 }
 @
+%//#ifdef BUG
+%//	/* Drain the channel */
+%//	while(?kc->c)
+%//		<-kc->c;
+%//#endif
+
 
 
 <<function ctlkeyboard>>=
@@ -3744,20 +3747,20 @@ struct Mousectl
 {
     Mouse;
 
-    Channel	*c;	/* chan(Mouse) */
+    Channel	*c;			/* chan(Mouse) */
     Channel	*resizec;	/* chan(int)[2] */
     /* buffered in case client is waiting for a mouse action before handling resize */
 
     char	*file;
 
-    int		mfd;		/* to mouse file */
-    int		cfd;		/* to cursor file */
+    fdt		mfd;		/* to mouse file */
+    fdt		cfd;		/* to cursor file */
 
     int		pid;	/* of slave proc */
     Image*	image;	/* of associated window/display */
 };
 @
-
+% why image? because cursor!! so need to draw on top of it!
 
 
 <<function initmouse>>=
@@ -3869,7 +3872,7 @@ closemouse(Mousectl *mc)
 
     postnote(PNPROC, mc->pid, "kill");
 
-    do; while(nbrecv(mc->c, &mc->Mouse) > 0);
+    do ; while(nbrecv(mc->c, &mc->Mouse) > 0);
 
     close(mc->mfd);
     close(mc->cfd);
@@ -3895,6 +3898,17 @@ readmouse(Mousectl *mc)
 @
 
 
+\section{Cursor}
+
+<<struct Cursor>>=
+struct	Cursor
+{
+    Point	offset;
+    uchar	clr[2*16];
+    uchar	set[2*16];
+};
+@
+
 <<function setcursor>>=
 void
 setcursor(Mousectl *mc, Cursor *c)
@@ -3913,28 +3927,9 @@ setcursor(Mousectl *mc, Cursor *c)
 @
 
 
-
 \section{Events}
 
 % have lots of dupes with events, menuhit.c vs emenuhit.c?
-
-\chapter{Output}
-
-\section{The screen}
-
-\section{[[/dev/draw]]}
-% this time no refer to Kernel.tex.nw, we inline it here!
-
-\section{Cursor}
-
-<<struct Cursor>>=
-struct	Cursor
-{
-    Point	offset;
-    uchar	clr[2*16];
-    uchar	set[2*16];
-};
-@
 
 \chapter{Widgets}
 

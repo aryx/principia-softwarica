@@ -14,13 +14,6 @@ closekeyboard(Keyboardctl *kc)
         return;
 
     postnote(PNPROC, kc->pid, "kill");
-
-//#ifdef BUG
-//	/* Drain the channel */
-//	while(?kc->c)
-//		<-kc->c;
-//#endif
-
     close(kc->ctlfd);
     close(kc->consfd);
     free(kc->file);
