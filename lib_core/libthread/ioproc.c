@@ -7,7 +7,9 @@
 /*s: enum _anon_ (lib_core/libthread/ioproc.c) */
 enum
 {
+    /*s: constant STACK */
     STACK = 8192,
+    /*e: constant STACK */
 };
 /*e: enum _anon_ (lib_core/libthread/ioproc.c) */
 

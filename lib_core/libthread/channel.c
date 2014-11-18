@@ -313,7 +313,7 @@ chanclosing(Channel *c)
 
 /*s: function runop */
 static int
-runop(int op, Channel *c, void *v, int nb)
+runop(int op, Channel *c, void *v, bool nb)
 {
     int r;
     Alt a[2];
