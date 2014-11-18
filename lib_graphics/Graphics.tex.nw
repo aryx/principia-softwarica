@@ -959,6 +959,8 @@ drawmesg(Client *client, void *av, int n)
 
 \section{Image}
 
+\subsection{API}
+
 <<function allocimage>>=
 Image*
 allocimage(Display *d, Rectangle r, ulong chan, int repl, ulong val)
@@ -971,6 +973,20 @@ allocimage(Display *d, Rectangle r, ulong chan, int repl, ulong val)
     return i;
 }
 @
+
+<<function freeimage>>=
+int
+freeimage(Image *i)
+{
+    int ret;
+
+    ret = _freeimage1(i);
+    free(i);
+    return ret;
+}
+@
+
+\subsection{Marshalling}
 
 <<function _allocimage>>=
 Image*
@@ -1063,6 +1079,47 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, int repl, ulong val,
 @
 
 
+<<function _freeimage1>>=
+int
+_freeimage1(Image *i)
+{
+    uchar *a;
+    Display *d;
+    Image *w;
+
+    if(i == 0 || i->display == 0)
+        return 0;
+    /* make sure no refresh events occur on this if we block in the write */
+    d = i->display;
+    /* flush pending data so we don't get error deleting the image */
+    flushimage(d, 0);
+    a = bufimage(d, 1+4);
+    if(a == 0)
+        return -1;
+    a[0] = 'f';
+    BPLONG(a+1, i->id);
+    if(i->screen){
+        w = d->windows;
+        if(w == i)
+            d->windows = i->next;
+        else
+            while(w){
+                if(w->next == i){
+                    w->next = i->next;
+                    break;
+                }
+                w = w->next;
+            }
+    }
+    if(flushimage(d, i->screen!=0) < 0)
+        return -1;
+
+    return 0;
+}
+@
+
+\subsection{Unmarshalling}
+
 <<[[drawmesg()]] cases>>=
 /* new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4] */
 case 'b':
@@ -1141,59 +1198,6 @@ case 'b':
 @
 
 
-
-
-<<function freeimage>>=
-int
-freeimage(Image *i)
-{
-    int ret;
-
-    ret = _freeimage1(i);
-    free(i);
-    return ret;
-}
-@
-
-<<function _freeimage1>>=
-int
-_freeimage1(Image *i)
-{
-    uchar *a;
-    Display *d;
-    Image *w;
-
-    if(i == 0 || i->display == 0)
-        return 0;
-    /* make sure no refresh events occur on this if we block in the write */
-    d = i->display;
-    /* flush pending data so we don't get error deleting the image */
-    flushimage(d, 0);
-    a = bufimage(d, 1+4);
-    if(a == 0)
-        return -1;
-    a[0] = 'f';
-    BPLONG(a+1, i->id);
-    if(i->screen){
-        w = d->windows;
-        if(w == i)
-            d->windows = i->next;
-        else
-            while(w){
-                if(w->next == i){
-                    w->next = i->next;
-                    break;
-                }
-                w = w->next;
-            }
-    }
-    if(flushimage(d, i->screen!=0) < 0)
-        return -1;
-
-    return 0;
-}
-@
-
 <<[[drawmesg()]] cases>>=
 /* free: 'f' id[4] */
 case 'f':
@@ -1209,7 +1213,11 @@ case 'f':
 
 @
 
+\subsection{Algorithm}
+
 \section{Flush}
+
+\subsection{API}
 
 <<function flushimage>>=
 int
@@ -1227,6 +1235,8 @@ flushimage(Display *d, int visible)
     return doflush(d);
 }
 @
+
+\subsection{Marshalling}
 
 <<function doflush>>=
 static
@@ -1250,6 +1260,8 @@ doflush(Display *d)
 }
 @
 
+\subsection{Unmarshalling}
+
 <<[[drawmesg()]] cases>>=
 /* visible: 'v' */
 case 'v':
@@ -1259,6 +1271,8 @@ case 'v':
     continue;
 
 @
+
+\subsection{Algorithm}
 
 \chapter{Geometry}
 
@@ -1526,6 +1540,8 @@ combinerect(Rectangle *r1, Rectangle r2)
 
 \section{Line}
 
+\subsection{API}
+
 <<function line>>=
 void
 line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src, Point sp)
@@ -1533,6 +1549,8 @@ line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src,
     lineop(dst, p0, p1, end0, end1, radius, src, sp, SoverD);
 }
 @
+
+\subsection{Marshalling}
 
 <<function lineop>>=
 void
@@ -1562,6 +1580,7 @@ lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *sr
 }
 @
 
+\subsection{Unmarshalling}
 
 <<[[drawmesg()]] cases>>=
 /* draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4] */
@@ -1595,7 +1614,11 @@ case 'L':
 @
 
 
+\subsection{Algorithm}
+
 \section{Polyline}
+
+\subsection{API}
 
 <<function poly>>=
 void
@@ -1629,6 +1652,7 @@ fillpolyop(Image *dst, Point *p, int np, int wind, Image *src, Point sp, Drawop 
 }
 @
 
+\subsection{Marshalling}
 
 <<function dopoly>>=
 static
@@ -1695,6 +1719,7 @@ addcoord(uchar *p, int oldx, int newx)
 }
 @
 
+\subsection{Unmarshalling}
 
 
 <<[[drawmesg()]] cases>>=
@@ -1777,7 +1802,11 @@ case 'P':
 
 @
 
+\subsection{Algorithm}
+
 \section{Ellipse}
+
+\subsection{API}
 
 <<function ellipse>>=
 void
@@ -1812,6 +1841,7 @@ fillellipseop(Image *dst, Point c, int a, int b, Image *src, Point sp, Drawop op
 @
 
 
+\subsection{Marshalling}
 
 <<function doellipse>>=
 static
@@ -1842,6 +1872,7 @@ doellipse(int cmd, Image *dst, Point *c, int xr, int yr, int thick, Image *src, 
 }
 @
 
+\subsection{Unmarshalling}
 
 
 <<[[drawmesg()]] cases>>=
@@ -1881,11 +1912,13 @@ case 'E':
     dstflush(dstid, dst, Rect(p.x-e0-j, p.y-e1-j, p.x+e0+j+1, p.y+e1+j+1));
 
     continue;
-
 @
+
+\subsection{Algorithm}
 
 \section{Arc}
 
+\subsection{API}
 
 <<function arc>>=
 void
@@ -1952,6 +1985,249 @@ struct RGB
 \chapter{Fonts}
 % test code showing use of font? display the core font?
 
+\section{Text}
+% and rune
+
+\subsection{API}
+
+<<function string>>=
+Point
+string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s)
+{
+    return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, nil, ZP, SoverD);
+}
+@
+
+<<function stringop>>=
+Point
+stringop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Drawop op)
+{
+    return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, nil, ZP, op);
+}
+@
+
+<<function stringn>>=
+Point
+stringn(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len)
+{
+    return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, SoverD);
+}
+@
+
+<<function stringnop>>=
+Point
+stringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len, Drawop op)
+{
+    return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, op);
+}
+@
+
+<<function runestring>>=
+Point
+runestring(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r)
+{
+    return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, nil, ZP, SoverD);
+}
+@
+
+<<function runestringop>>=
+Point
+runestringop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, Drawop op)
+{
+    return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, nil, ZP, op);
+}
+@
+
+<<function runestringn>>=
+Point
+runestringn(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len)
+{
+    return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, nil, ZP, SoverD);
+}
+@
+
+<<function runestringnop>>=
+Point
+runestringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len, Drawop op)
+{
+    return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, nil, ZP, op);
+}
+@
+
+
+\subsection{Marshalling}
+
+
+<<function _string>>=
+Point
+_string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, int len, Rectangle clipr, Image *bg, Point bgp, Drawop op)
+{
+    int m, n, wid, max;
+    ushort cbuf[Max], *c, *ec;
+    uchar *b;
+    char *subfontname;
+    char **sptr;
+    Rune **rptr;
+    Font *def;
+    Subfont *sf;
+
+    if(s == nil){
+        s = "";
+        sptr = nil;
+    }else
+        sptr = &s;
+    if(r == nil){
+        r = (Rune*) L"";
+        rptr = nil;
+    }else
+        rptr = &r;
+    sf = nil;
+    while((*s || *r) && len){
+        max = Max;
+        if(len < max)
+            max = len;
+        n = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname);
+        if(n > 0){
+            _setdrawop(dst->display, op);
+
+            m = 47+2*n;
+            if(bg)
+                m += 4+2*4;
+            b = bufimage(dst->display, m);
+            if(b == 0){
+                fprint(2, "string: %r\n");
+                break;
+            }
+            if(bg)
+                b[0] = 'x';
+            else
+                b[0] = 's';
+            BPLONG(b+1, dst->id);
+            BPLONG(b+5, src->id);
+            BPLONG(b+9, f->cacheimage->id);
+            BPLONG(b+13, pt.x);
+            BPLONG(b+17, pt.y+f->ascent);
+            BPLONG(b+21, clipr.min.x);
+            BPLONG(b+25, clipr.min.y);
+            BPLONG(b+29, clipr.max.x);
+            BPLONG(b+33, clipr.max.y);
+            BPLONG(b+37, sp.x);
+            BPLONG(b+41, sp.y);
+            BPSHORT(b+45, n);
+            b += 47;
+            if(bg){
+                BPLONG(b, bg->id);
+                BPLONG(b+4, bgp.x);
+                BPLONG(b+8, bgp.y);
+                b += 12;
+            }
+            ec = &cbuf[n];
+            for(c=cbuf; c<ec; c++, b+=2)
+                BPSHORT(b, *c);
+            pt.x += wid;
+            bgp.x += wid;
+            agefont(f);
+            len -= n;
+        }
+        if(subfontname){
+            freesubfont(sf);
+            if((sf=_getsubfont(f->display, subfontname)) == 0){
+                def = f->display ? f->display->defaultfont : nil;
+                if(def && f!=def)
+                    f = def;
+                else
+                    break;
+            }
+            /* 
+             * must not free sf until cachechars has found it in the cache
+             * and picked up its own reference.
+             */
+        }
+    }
+    return pt;
+}
+@
+
+
+\subsection{Unmarshalling}
+
+<<[[drawmesg()]] cases>>=
+/* string: 's' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] ni*(index[2]) */
+/* stringbg: 'x' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] bgid[4] bgpt[2*4] ni*(index[2]) */
+case 's':
+case 'x':
+    printmesg(fmt="LLLPRPs", a, 0);
+    m = 1+4+4+4+2*4+4*4+2*4+2;
+    if(*a == 'x')
+        m += 4+2*4;
+    if(n < m)
+        error(Eshortdraw);
+
+    dst = drawimage(client, a+1);
+    dstid = BGLONG(a+1);
+    src = drawimage(client, a+5);
+    font = drawlookup(client, BGLONG(a+9), 1);
+    if(font == 0)
+        error(Enodrawimage);
+    if(font->nfchar == 0)
+        error(Enotfont);
+    drawpoint(&p, a+13);
+    drawrectangle(&r, a+21);
+    drawpoint(&sp, a+37);
+    ni = BGSHORT(a+45);
+    u = a+m;
+    m += ni*2;
+    if(n < m)
+        error(Eshortdraw);
+    clipr = dst->clipr;
+    dst->clipr = r;
+    op = drawclientop(client);
+    bg = dst;
+    if(*a == 'x'){
+        /* paint background */
+        bg = drawimage(client, a+47);
+        drawpoint(&q, a+51);
+        r.min.x = p.x;
+        r.min.y = p.y-font->ascent;
+        r.max.x = p.x;
+        r.max.y = r.min.y+Dy(font->image->r);
+        j = ni;
+        while(--j >= 0){
+            ci = BGSHORT(u);
+            if(ci<0 || ci>=font->nfchar){
+                dst->clipr = clipr;
+                error(Eindex);
+            }
+            r.max.x += font->fchar[ci].width;
+            u += 2;
+        }
+        memdraw(dst, r, bg, q, memopaque, ZP, op);
+        u -= 2*ni;
+    }
+    q = p;
+    while(--ni >= 0){
+        ci = BGSHORT(u);
+        if(ci<0 || ci>=font->nfchar){
+            dst->clipr = clipr;
+            error(Eindex);
+        }
+        q = drawchar(dst, bg, q, src, &sp, font, ci, op);
+        u += 2;
+    }
+    dst->clipr = clipr;
+    p.y -= font->ascent;
+    dstflush(dstid, dst, Rect(p.x, p.y, q.x, p.y+Dy(font->image->r)));
+    continue;
+
+@
+
+\subsection{Algorithm}
+
+
+
+\section{Fonts}
+
+\subsection{API}
 
 <<function fontresize>>=
 /* return whether resize succeeded && f->cache is unchanged */
@@ -2016,38 +2292,6 @@ fontresize(Font *f, int wid, int ncache, int depth)
     return ret;
 }
 @
-
-
-<<[[drawmesg()]] cases>>=
-/* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
-case 'i':
-    printmesg(fmt="Llb", a, 1);
-    m = 1+4+4+1;
-    if(n < m)
-        error(Eshortdraw);
-    dstid = BGLONG(a+1);
-    if(dstid == 0)
-        error("cannot use display as font");
-    font = drawlookup(client, dstid, 1);
-    if(font == 0)
-        error(Enodrawimage);
-    if(font->image->layer)
-        error("cannot use window as font");
-    ni = BGLONG(a+5);
-    if(ni<=0 || ni>4096)
-        error("bad font size (4096 chars max)");
-    free(font->fchar);  /* should we complain if non-zero? */
-    font->fchar = malloc(ni*sizeof(FChar));
-    if(font->fchar == 0)
-        error("no memory for font");
-    memset(font->fchar, 0, ni*sizeof(FChar));
-    font->nfchar = ni;
-    font->ascent = a[9];
-    continue;
-
-@
-
-
 
 <<function loadchar>>=
 /* return 1 if load succeeded, 0 if failed, -1 if must retry */
@@ -2201,6 +2445,40 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
 @
 
 
+\subsection{Marshalling}
+
+\subsection{Unmarshalling}
+
+<<[[drawmesg()]] cases>>=
+/* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
+case 'i':
+    printmesg(fmt="Llb", a, 1);
+    m = 1+4+4+1;
+    if(n < m)
+        error(Eshortdraw);
+    dstid = BGLONG(a+1);
+    if(dstid == 0)
+        error("cannot use display as font");
+    font = drawlookup(client, dstid, 1);
+    if(font == 0)
+        error(Enodrawimage);
+    if(font->image->layer)
+        error("cannot use window as font");
+    ni = BGLONG(a+5);
+    if(ni<=0 || ni>4096)
+        error("bad font size (4096 chars max)");
+    free(font->fchar);  /* should we complain if non-zero? */
+    font->fchar = malloc(ni*sizeof(FChar));
+    if(font->fchar == 0)
+        error("no memory for font");
+    memset(font->fchar, 0, ni*sizeof(FChar));
+    font->nfchar = ni;
+    font->ascent = a[9];
+    continue;
+
+@
+
+
 <<[[drawmesg()]] cases>>=
 /* load character: 'l' fontid[4] srcid[4] index[2] R[4*4] P[2*4] left[1] width[1] */
 case 'l':
@@ -2231,239 +2509,18 @@ case 'l':
 
 @
 
-<<function string>>=
-Point
-string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s)
-{
-    return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, nil, ZP, SoverD);
-}
-@
+\subsection{Algorithm}
 
-<<function stringop>>=
-Point
-stringop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Drawop op)
-{
-    return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, nil, ZP, op);
-}
-@
-
-<<function stringn>>=
-Point
-stringn(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len)
-{
-    return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, SoverD);
-}
-@
-
-<<function stringnop>>=
-Point
-stringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len, Drawop op)
-{
-    return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, op);
-}
-@
-
-<<function runestring>>=
-Point
-runestring(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r)
-{
-    return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, nil, ZP, SoverD);
-}
-@
-
-<<function runestringop>>=
-Point
-runestringop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, Drawop op)
-{
-    return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, nil, ZP, op);
-}
-@
-
-<<function runestringn>>=
-Point
-runestringn(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len)
-{
-    return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, nil, ZP, SoverD);
-}
-@
-
-<<function runestringnop>>=
-Point
-runestringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len, Drawop op)
-{
-    return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, nil, ZP, op);
-}
-@
-
-<<function _string>>=
-Point
-_string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, int len, Rectangle clipr, Image *bg, Point bgp, Drawop op)
-{
-    int m, n, wid, max;
-    ushort cbuf[Max], *c, *ec;
-    uchar *b;
-    char *subfontname;
-    char **sptr;
-    Rune **rptr;
-    Font *def;
-    Subfont *sf;
-
-    if(s == nil){
-        s = "";
-        sptr = nil;
-    }else
-        sptr = &s;
-    if(r == nil){
-        r = (Rune*) L"";
-        rptr = nil;
-    }else
-        rptr = &r;
-    sf = nil;
-    while((*s || *r) && len){
-        max = Max;
-        if(len < max)
-            max = len;
-        n = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname);
-        if(n > 0){
-            _setdrawop(dst->display, op);
-
-            m = 47+2*n;
-            if(bg)
-                m += 4+2*4;
-            b = bufimage(dst->display, m);
-            if(b == 0){
-                fprint(2, "string: %r\n");
-                break;
-            }
-            if(bg)
-                b[0] = 'x';
-            else
-                b[0] = 's';
-            BPLONG(b+1, dst->id);
-            BPLONG(b+5, src->id);
-            BPLONG(b+9, f->cacheimage->id);
-            BPLONG(b+13, pt.x);
-            BPLONG(b+17, pt.y+f->ascent);
-            BPLONG(b+21, clipr.min.x);
-            BPLONG(b+25, clipr.min.y);
-            BPLONG(b+29, clipr.max.x);
-            BPLONG(b+33, clipr.max.y);
-            BPLONG(b+37, sp.x);
-            BPLONG(b+41, sp.y);
-            BPSHORT(b+45, n);
-            b += 47;
-            if(bg){
-                BPLONG(b, bg->id);
-                BPLONG(b+4, bgp.x);
-                BPLONG(b+8, bgp.y);
-                b += 12;
-            }
-            ec = &cbuf[n];
-            for(c=cbuf; c<ec; c++, b+=2)
-                BPSHORT(b, *c);
-            pt.x += wid;
-            bgp.x += wid;
-            agefont(f);
-            len -= n;
-        }
-        if(subfontname){
-            freesubfont(sf);
-            if((sf=_getsubfont(f->display, subfontname)) == 0){
-                def = f->display ? f->display->defaultfont : nil;
-                if(def && f!=def)
-                    f = def;
-                else
-                    break;
-            }
-            /* 
-             * must not free sf until cachechars has found it in the cache
-             * and picked up its own reference.
-             */
-        }
-    }
-    return pt;
-}
-@
-
-
-<<[[drawmesg()]] cases>>=
-/* string: 's' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] ni*(index[2]) */
-/* stringbg: 'x' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] bgid[4] bgpt[2*4] ni*(index[2]) */
-case 's':
-case 'x':
-    printmesg(fmt="LLLPRPs", a, 0);
-    m = 1+4+4+4+2*4+4*4+2*4+2;
-    if(*a == 'x')
-        m += 4+2*4;
-    if(n < m)
-        error(Eshortdraw);
-
-    dst = drawimage(client, a+1);
-    dstid = BGLONG(a+1);
-    src = drawimage(client, a+5);
-    font = drawlookup(client, BGLONG(a+9), 1);
-    if(font == 0)
-        error(Enodrawimage);
-    if(font->nfchar == 0)
-        error(Enotfont);
-    drawpoint(&p, a+13);
-    drawrectangle(&r, a+21);
-    drawpoint(&sp, a+37);
-    ni = BGSHORT(a+45);
-    u = a+m;
-    m += ni*2;
-    if(n < m)
-        error(Eshortdraw);
-    clipr = dst->clipr;
-    dst->clipr = r;
-    op = drawclientop(client);
-    bg = dst;
-    if(*a == 'x'){
-        /* paint background */
-        bg = drawimage(client, a+47);
-        drawpoint(&q, a+51);
-        r.min.x = p.x;
-        r.min.y = p.y-font->ascent;
-        r.max.x = p.x;
-        r.max.y = r.min.y+Dy(font->image->r);
-        j = ni;
-        while(--j >= 0){
-            ci = BGSHORT(u);
-            if(ci<0 || ci>=font->nfchar){
-                dst->clipr = clipr;
-                error(Eindex);
-            }
-            r.max.x += font->fchar[ci].width;
-            u += 2;
-        }
-        memdraw(dst, r, bg, q, memopaque, ZP, op);
-        u -= 2*ni;
-    }
-    q = p;
-    while(--ni >= 0){
-        ci = BGSHORT(u);
-        if(ci<0 || ci>=font->nfchar){
-            dst->clipr = clipr;
-            error(Eindex);
-        }
-        q = drawchar(dst, bg, q, src, &sp, font, ci, op);
-        u += 2;
-    }
-    dst->clipr = clipr;
-    p.y -= font->ascent;
-    dstflush(dstid, dst, Rect(p.x, p.y, q.x, p.y+Dy(font->image->r)));
-    continue;
-
-@
-
-\section{Text}
-% and rune
 
 \section{Compressed form}
 
 \section{Font cache}
 
 \chapter{Composing}
+
+\section{Drawing}
+
+\subsection{API}
 
 <<function draw>>=
 void
@@ -2498,6 +2555,8 @@ gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, 
 @
 
 
+\subsection{Marshalling}
+
 <<function draw1>>=
 static void
 draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
@@ -2530,7 +2589,24 @@ draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, D
 @
 
 
+<<function _setdrawop>>=
+void
+_setdrawop(Display *d, Drawop op)
+{
+    uchar *a;
 
+    if(op != SoverD){
+        a = bufimage(d, 1+1);
+        if(a == 0)
+            return;
+        a[0] = 'O';
+        a[1] = op;
+    }
+}
+@
+
+
+\subsection{Unmarshalling}
 
 
 <<[[drawmesg()]] cases>>=
@@ -2554,23 +2630,6 @@ case 'd':
 
 @
 
-
-
-<<function _setdrawop>>=
-void
-_setdrawop(Display *d, Drawop op)
-{
-    uchar *a;
-
-    if(op != SoverD){
-        a = bufimage(d, 1+1);
-        if(a == 0)
-            return;
-        a[0] = 'O';
-        a[1] = op;
-    }
-}
-@
 
 <<[[drawmesg()]] cases>>=
 /* set compositing operator for next draw operation: 'O' op */
@@ -2602,6 +2661,8 @@ case 'm':
 
 \section{Naming}
 
+\subsection{API}
+
 <<function nameimage>>=
 int
 nameimage(Image *i, char *name, int in)
@@ -2623,44 +2684,6 @@ nameimage(Image *i, char *name, int in)
     return 1;
 }
 @
-
-
-<<[[drawmesg()]] cases>>=
-/* name an image: 'N' dstid[4] in[1] j[1] name[j] */
-case 'N':
-    printmesg(fmt="Lbz", a, 0);
-    m = 1+4+1+1;
-    if(n < m)
-        error(Eshortdraw);
-    c = a[5];
-    j = a[6];
-    if(j == 0)  /* give me a non-empty name please */
-        error(Eshortdraw);
-    m += j;
-    if(n < m)
-        error(Eshortdraw);
-    di = drawlookup(client, BGLONG(a+1), 0);
-    if(di == 0)
-        error(Enodrawimage);
-    if(di->name)
-        error(Enamed);
-    if(c)
-        drawaddname(client, di, j, (char*)a+7);
-    else{
-        dn = drawlookupname(j, (char*)a+7);
-        if(dn == nil)
-            error(Enoname);
-        if(dn->dimage != di)
-            error(Ewrongname);
-        drawdelname(dn);
-    }
-    continue;
-
-@
-
-
-
-
 
 <<function namedimage>>=
 Image*
@@ -2742,6 +2765,45 @@ namedimage(Display *d, char *name)
 @
 
 
+\subsection{Marshalling}
+
+\subsection{Unmarshalling}
+
+<<[[drawmesg()]] cases>>=
+/* name an image: 'N' dstid[4] in[1] j[1] name[j] */
+case 'N':
+    printmesg(fmt="Lbz", a, 0);
+    m = 1+4+1+1;
+    if(n < m)
+        error(Eshortdraw);
+    c = a[5];
+    j = a[6];
+    if(j == 0)  /* give me a non-empty name please */
+        error(Eshortdraw);
+    m += j;
+    if(n < m)
+        error(Eshortdraw);
+    di = drawlookup(client, BGLONG(a+1), 0);
+    if(di == 0)
+        error(Enodrawimage);
+    if(di->name)
+        error(Enamed);
+    if(c)
+        drawaddname(client, di, j, (char*)a+7);
+    else{
+        dn = drawlookupname(j, (char*)a+7);
+        if(dn == nil)
+            error(Enoname);
+        if(dn->dimage != di)
+            error(Ewrongname);
+        drawdelname(dn);
+    }
+    continue;
+
+@
+
+
+
 <<[[drawmesg()]] cases>>=
 /* attach to a named image: 'n' dstid[4] j[1] name[j] */
 case 'n':
@@ -2777,8 +2839,15 @@ case 'n':
 
 @
 
+\subsection{Algorithm}
+
+
+
+
 
 \section{Clipping}
+
+\subsection{API}
 
 <<function replclipr>>=
 void
@@ -2800,6 +2869,10 @@ replclipr(Image *i, int repl, Rectangle clipr)
 }
 @
 
+\subsection{Marshalling}
+
+\subsection{Unmarshalling}
+
 <<[[drawmesg()]] cases>>=
 /* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
 case 'c':
@@ -2820,8 +2893,12 @@ case 'c':
 
 @
 
+\subsection{Algorithm}
+
 
 \section{Reading images}
+
+\subsection{API}
 
 <<function unloadimage>>=
 int
@@ -2876,6 +2953,9 @@ unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
 @
 
 
+\subsection{Marshalling}
+
+\subsection{Unmarshalling}
 
 <<[[drawmesg()]] cases>>=
 /* read: 'r' id[4] R[4*4] */
@@ -2903,6 +2983,8 @@ case 'r':
     continue;
 
 @
+
+\subsection{Algorithm}
 
 \section{Writing images}
 
@@ -2932,6 +3014,8 @@ Screen	*_screen;
 <<global screenid>>=
 static int	screenid;
 @
+
+\subsection{API}
 
 <<function allocscreen>>=
 Screen*
@@ -2977,31 +3061,6 @@ allocscreen(Image *image, Image *fill, int public)
 }
 @
 
-
-
-<<[[drawmesg()]] cases>>=
-/* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
-case 'A':
-    printmesg(fmt="LLLb", a, 1);
-    m = 1+4+4+4+1;
-    if(n < m)
-        error(Eshortdraw);
-    dstid = BGLONG(a+1);
-    if(dstid == 0)
-        error(Ebadarg);
-    if(drawlookupdscreen(dstid))
-        error(Escreenexists);
-    ddst = drawlookup(client, BGLONG(a+5), 1);
-    dsrc = drawlookup(client, BGLONG(a+9), 1);
-    if(ddst==0 || dsrc==0)
-        error(Enodrawimage);
-
-    if(drawinstallscreen(client, 0, dstid, ddst, dsrc, a[13]) == 0)
-        error(Edrawmem);
-    continue;
-
-@
-
 <<function freescreen>>=
 int
 freescreen(Screen *s)
@@ -3026,19 +3085,6 @@ freescreen(Screen *s)
     free(s);
     return 1;
 }
-@
-
-<<[[drawmesg()]] cases>>=
-/* free screen: 'F' id[4] */
-case 'F':
-    printmesg(fmt="L", a, 1);
-    m = 1+4;
-    if(n < m)
-        error(Eshortdraw);
-    drawlookupscreen(client, BGLONG(a+1), &cs);
-    drawuninstallscreen(client, cs);
-    continue;
-
 @
 
 <<function publicscreen>>=
@@ -3072,6 +3118,49 @@ publicscreen(Display *d, int id, ulong chan)
 @
 
 
+\subsection{Marshalling}
+
+\subsection{Unmarshalling}
+
+
+<<[[drawmesg()]] cases>>=
+/* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
+case 'A':
+    printmesg(fmt="LLLb", a, 1);
+    m = 1+4+4+4+1;
+    if(n < m)
+        error(Eshortdraw);
+    dstid = BGLONG(a+1);
+    if(dstid == 0)
+        error(Ebadarg);
+    if(drawlookupdscreen(dstid))
+        error(Escreenexists);
+    ddst = drawlookup(client, BGLONG(a+5), 1);
+    dsrc = drawlookup(client, BGLONG(a+9), 1);
+    if(ddst==0 || dsrc==0)
+        error(Enodrawimage);
+
+    if(drawinstallscreen(client, 0, dstid, ddst, dsrc, a[13]) == 0)
+        error(Edrawmem);
+    continue;
+
+@
+
+<<[[drawmesg()]] cases>>=
+/* free screen: 'F' id[4] */
+case 'F':
+    printmesg(fmt="L", a, 1);
+    m = 1+4;
+    if(n < m)
+        error(Eshortdraw);
+    drawlookupscreen(client, BGLONG(a+1), &cs);
+    drawuninstallscreen(client, cs);
+    continue;
+
+@
+
+
+
 <<[[drawmesg()]] cases>>=
 /* use public screen: 'S' id[4] chan[4] */
 case 'S':
@@ -3094,15 +3183,10 @@ case 'S':
 @
 
 
+\subsection{Algorithm}
 
 
-
-
-
-
-
-
-
+\section{Window}
 
 <<function allocwindow>>=
 Image*
@@ -3132,6 +3216,8 @@ _allocwindow(Image *i, Screen *s, Rectangle r, int ref, ulong val)
 
 \section{Origin}
 
+\subsection{API}
+
 <<function originwindow>>=
 int
 originwindow(Image *w, Point log, Point scr)
@@ -3158,6 +3244,10 @@ originwindow(Image *w, Point log, Point scr)
 }
 @
 
+\subsection{Marshalling}
+
+\subsection{Unmarshalling}
+
 <<[[drawmesg()]] cases>>=
 /* position window: 'o' id[4] r.min [2*4] screenr.min [2*4] */
 case 'o':
@@ -3183,6 +3273,8 @@ case 'o':
     continue;
 @
 
+\subsection{Algorithm}
+
 \section{Windows stack manipulation}
 %extern int	newwindow(char*);
 % but actually it returns an int that is probably similar to a fd
@@ -3190,6 +3282,8 @@ case 'o':
 
 % window managment! topwindow(), etc.
 
+
+\subsection{API}
 
 <<function bottomwindow>>=
 void
@@ -3226,6 +3320,8 @@ topnwindows(Image **w, int n)
     topbottom(w, n, 1);
 }
 @
+
+\subsection{Marshalling}
 
 
 <<function topbottom>>=
@@ -3270,6 +3366,7 @@ topbottom(Image **w, int n, int top)
 }
 @
 
+\subsection{Unmarshalling}
 
 
 <<[[drawmesg()]] cases>>=
@@ -3316,9 +3413,13 @@ case 't':
 
 @
 
+\subsection{Algorithm}
+
 \section{Rectangle drawing}
 
 % mv? in Writing image section?
+
+\subsection{API}
 
 <<function cloadimage>>=
 int
@@ -3543,7 +3644,9 @@ loadimage(Image *i, Rectangle r, uchar *data, int ndata)
 }
 @
 
+\subsection{marshalling}
 
+\subsection{Unmarshalling}
 
 <<[[drawmesg()]] cases>>=
 /* write: 'y' id[4] R[4*4] data[x*1] */
@@ -3567,6 +3670,8 @@ case 'Y':
     m += y;
     continue;
 @
+
+\subsection{Algorithm}
 
 
 \chapter{Input}

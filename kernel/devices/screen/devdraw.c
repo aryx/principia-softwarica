@@ -1889,62 +1889,6 @@ drawmesg(Client *client, void *av, int n)
             dstflush(dstid, dst, Rect(p.x-e0-j, p.y-e1-j, p.x+e0+j+1, p.y+e1+j+1));
 
             continue;
-
-        /*x: [[drawmesg()]] cases */
-        /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
-        case 'i':
-            printmesg(fmt="Llb", a, 1);
-            m = 1+4+4+1;
-            if(n < m)
-                error(Eshortdraw);
-            dstid = BGLONG(a+1);
-            if(dstid == 0)
-                error("cannot use display as font");
-            font = drawlookup(client, dstid, 1);
-            if(font == 0)
-                error(Enodrawimage);
-            if(font->image->layer)
-                error("cannot use window as font");
-            ni = BGLONG(a+5);
-            if(ni<=0 || ni>4096)
-                error("bad font size (4096 chars max)");
-            free(font->fchar);  /* should we complain if non-zero? */
-            font->fchar = malloc(ni*sizeof(FChar));
-            if(font->fchar == 0)
-                error("no memory for font");
-            memset(font->fchar, 0, ni*sizeof(FChar));
-            font->nfchar = ni;
-            font->ascent = a[9];
-            continue;
-
-        /*x: [[drawmesg()]] cases */
-        /* load character: 'l' fontid[4] srcid[4] index[2] R[4*4] P[2*4] left[1] width[1] */
-        case 'l':
-            printmesg(fmt="LLSRPbb", a, 0);
-            m = 1+4+4+2+4*4+2*4+1+1;
-            if(n < m)
-                error(Eshortdraw);
-            font = drawlookup(client, BGLONG(a+1), 1);
-            if(font == 0)
-                error(Enodrawimage);
-            if(font->nfchar == 0)
-                error(Enotfont);
-            src = drawimage(client, a+5);
-            ci = BGSHORT(a+9);
-            if(ci >= font->nfchar)
-                error(Eindex);
-            drawrectangle(&r, a+11);
-            drawpoint(&p, a+27);
-            memdraw(font->image, r, src, p, memopaque, p, S);
-            fc = &font->fchar[ci];
-            fc->minx = r.min.x;
-            fc->maxx = r.max.x;
-            fc->miny = r.min.y;
-            fc->maxy = r.max.y;
-            fc->left = a[35];
-            fc->width = a[36];
-            continue;
-
         /*x: [[drawmesg()]] cases */
         /* string: 's' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] ni*(index[2]) */
         /* stringbg: 'x' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] bgid[4] bgpt[2*4] ni*(index[2]) */
@@ -2011,6 +1955,61 @@ drawmesg(Client *client, void *av, int n)
             dst->clipr = clipr;
             p.y -= font->ascent;
             dstflush(dstid, dst, Rect(p.x, p.y, q.x, p.y+Dy(font->image->r)));
+            continue;
+
+        /*x: [[drawmesg()]] cases */
+        /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
+        case 'i':
+            printmesg(fmt="Llb", a, 1);
+            m = 1+4+4+1;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            if(dstid == 0)
+                error("cannot use display as font");
+            font = drawlookup(client, dstid, 1);
+            if(font == 0)
+                error(Enodrawimage);
+            if(font->image->layer)
+                error("cannot use window as font");
+            ni = BGLONG(a+5);
+            if(ni<=0 || ni>4096)
+                error("bad font size (4096 chars max)");
+            free(font->fchar);  /* should we complain if non-zero? */
+            font->fchar = malloc(ni*sizeof(FChar));
+            if(font->fchar == 0)
+                error("no memory for font");
+            memset(font->fchar, 0, ni*sizeof(FChar));
+            font->nfchar = ni;
+            font->ascent = a[9];
+            continue;
+
+        /*x: [[drawmesg()]] cases */
+        /* load character: 'l' fontid[4] srcid[4] index[2] R[4*4] P[2*4] left[1] width[1] */
+        case 'l':
+            printmesg(fmt="LLSRPbb", a, 0);
+            m = 1+4+4+2+4*4+2*4+1+1;
+            if(n < m)
+                error(Eshortdraw);
+            font = drawlookup(client, BGLONG(a+1), 1);
+            if(font == 0)
+                error(Enodrawimage);
+            if(font->nfchar == 0)
+                error(Enotfont);
+            src = drawimage(client, a+5);
+            ci = BGSHORT(a+9);
+            if(ci >= font->nfchar)
+                error(Eindex);
+            drawrectangle(&r, a+11);
+            drawpoint(&p, a+27);
+            memdraw(font->image, r, src, p, memopaque, p, S);
+            fc = &font->fchar[ci];
+            fc->minx = r.min.x;
+            fc->maxx = r.max.x;
+            fc->miny = r.min.y;
+            fc->maxy = r.max.y;
+            fc->left = a[35];
+            fc->width = a[36];
             continue;
 
         /*x: [[drawmesg()]] cases */
