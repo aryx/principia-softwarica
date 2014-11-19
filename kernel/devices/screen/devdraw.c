@@ -16,11 +16,14 @@
 enum
 {
     Qtopdir     = 0,
+
     Qnew,
+
     Qwinname,
     Q3rd,
     Q2nd,
     Qcolormap,
+
     Qctl,
     Qdata,
     Qrefresh,
@@ -99,6 +102,7 @@ struct Client
     int     slot;
     int     refreshme;
     int     infoid;
+
     int     op;
 };
 /*e: struct Client */
@@ -217,11 +221,11 @@ static  int     waste;
 static  DScreen*    dscreen;
 /*e: global dscreen */
 extern  void        flushmemscreen(Rectangle);
-    void        drawmesg(Client*, void*, int);
-    void        drawuninstall(Client*, int);
-    void        drawfreedimage(DImage*);
-    Client*     drawclientofpath(ulong);
-    DImage* allocdimage(Memimage*);
+void        drawmesg(Client*, void*, int);
+void        drawuninstall(Client*, int);
+void        drawfreedimage(DImage*);
+Client*     drawclientofpath(ulong);
+DImage* allocdimage(Memimage*);
 
 /*s: global Enodrawimage */
 static  char Enodrawimage[] =   "unknown id for draw image";
@@ -958,15 +962,6 @@ drawclientop(Client *cl)
 }
 /*e: function drawclientop */
 
-//int
-//drawhasclients(void)
-//{
-//  /*
-//   * if draw has ever been used, we can't resize the frame buffer,
-//   * even if all clients have exited (nclients is cumulative); it's too
-//   * hard to make work.
-//   */
-//  return sdraw.nclient != 0;
 /*s: function drawclientofpath */
 //}
 
@@ -985,7 +980,6 @@ drawclientofpath(ulong path)
     return cl;
 }
 /*e: function drawclientofpath */
-
 
 /*s: function drawclient */
 Client*
@@ -1224,7 +1218,7 @@ drawopen(Chan *c, int omode)
         cl = drawnewclient();
         if(cl == 0)
             error(Enodev);
-        c->qid.path = Qctl|((cl->slot+1)<<QSHIFT);
+        c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
     }
 
     switch(QID(c->qid)){
@@ -1746,6 +1740,36 @@ drawmesg(Client *client, void *av, int n)
             continue;
 
         /*x: [[drawmesg()]] cases */
+        /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
+        case 'd':
+            printmesg(fmt="LLLRPP", a, 0);
+            m = 1+4+4+4+4*4+2*4+2*4;
+            if(n < m)
+                error(Eshortdraw);
+            dst = drawimage(client, a+1);
+            dstid = BGLONG(a+1);
+            src = drawimage(client, a+5);
+            mask = drawimage(client, a+9);
+            drawrectangle(&r, a+13);
+            drawpoint(&p, a+29);
+            drawpoint(&q, a+37);
+            op = drawclientop(client);
+
+            memdraw(dst, r, src, p, mask, q, op); // the call!
+            dstflush(dstid, dst, r);
+
+            continue;
+
+        /*x: [[drawmesg()]] cases */
+        /* set compositing operator for next draw operation: 'O' op */
+        case 'O':
+            printmesg(fmt="b", a, 0);
+            m = 1+1;
+            if(n < m)
+                error(Eshortdraw);
+            client->op = a[1];
+            continue;
+        /*x: [[drawmesg()]] cases */
         /* draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4] */
         case 'L':
             printmesg(fmt="LPPlllLP", a, 0);
@@ -1765,7 +1789,8 @@ drawmesg(Client *client, void *av, int n)
             drawpoint(&sp, a+37);
             op = drawclientop(client);
 
-            memline(dst, p, q, e0, e1, j, src, sp, op);
+            memline(dst, p, q, e0, e1, j, src, sp, op); // The call
+
             /* avoid memlinebbox if possible */
             if(dstid==0 || dst->layer!=nil){
                 /* BUG: this is terribly inefficient: update maximal containing rect*/
@@ -2012,42 +2037,6 @@ drawmesg(Client *client, void *av, int n)
             fc->width = a[36];
             continue;
 
-        /*x: [[drawmesg()]] cases */
-        /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
-        case 'd':
-            printmesg(fmt="LLLRPP", a, 0);
-            m = 1+4+4+4+4*4+2*4+2*4;
-            if(n < m)
-                error(Eshortdraw);
-            dst = drawimage(client, a+1);
-            dstid = BGLONG(a+1);
-            src = drawimage(client, a+5);
-            mask = drawimage(client, a+9);
-            drawrectangle(&r, a+13);
-            drawpoint(&p, a+29);
-            drawpoint(&q, a+37);
-            op = drawclientop(client);
-            memdraw(dst, r, src, p, mask, q, op);
-            dstflush(dstid, dst, r);
-            continue;
-
-        /*x: [[drawmesg()]] cases */
-        /* set compositing operator for next draw operation: 'O' op */
-        case 'O':
-            printmesg(fmt="b", a, 0);
-            m = 1+1;
-            if(n < m)
-                error(Eshortdraw);
-            client->op = a[1];
-            continue;
-        /*x: [[drawmesg()]] cases */
-        /* create image mask: 'm' newid[4] id[4] */
-        case 'm':
-            printmesg("LL", a, 0);
-            m = 4+4;
-            if(n < m)
-                error(Eshortdraw);
-            break;
         /*x: [[drawmesg()]] cases */
         /* name an image: 'N' dstid[4] in[1] j[1] name[j] */
         case 'N':
@@ -2314,22 +2303,23 @@ drawmesg(Client *client, void *av, int n)
 Dev drawdevtab = {
     .dc       =    'i',
     .name     =    "draw",
+
+    .attach   =    drawattach,
+    .walk     =    drawwalk,
+    .open     =    drawopen,
+    .close    =    drawclose,
+    .read     =    drawread,
+    .write    =    drawwrite,
+    .stat     =    drawstat,
+    .wstat    =    devwstat,
                
     .reset    =    devreset,
     .init     =    devinit,
     .shutdown =    devshutdown,
-    .attach   =    drawattach,
-    .walk     =    drawwalk,
-    .stat     =    drawstat,
-    .open     =    drawopen,
     .create   =    devcreate,
-    .close    =    drawclose,
-    .read     =    drawread,
     .bread    =    devbread,
-    .write    =    drawwrite,
     .bwrite   =    devbwrite,
     .remove   =    devremove,
-    .wstat    =    devwstat,
 };
 /*e: global drawdevtab */
 

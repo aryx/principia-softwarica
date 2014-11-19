@@ -99,7 +99,8 @@ enum
 #define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
 /*e: function ARROW */
 
-typedef enum
+/*s: enum drawop */
+enum drawop
 {
     /* Porter-Duff compositing operators */
     Clear	= 0,
@@ -120,7 +121,9 @@ typedef enum
     DxorS	= DoutS|SoutD,	/* == SxorD */
 
     Ncomp = 12,
-} Drawop;
+};
+/*e: enum drawop */
+typedef enum drawop Drawop;
 
 /*s: enum _anon_ (include/draw.h)4 */
 /*
@@ -240,6 +243,7 @@ struct Display
 
     Image	*white;
     Image	*black;
+
     Image	*opaque;
     Image	*transparent;
 
@@ -409,38 +413,39 @@ struct Font
 /*e: function Dy */
 
 /*
- * One of a kind
- */
-extern int		mousescrollsize(int);
-
-/*
  * Image management
  */
-extern Image*	_allocimage(Image*, Display*, Rectangle, ulong, int, ulong, int, int);
-extern Image*	allocimage(Display*, Rectangle, ulong, int, ulong);
-extern uchar*	bufimage(Display*, int);
-extern int	bytesperline(Rectangle, int);
-extern void	closedisplay(Display*);
-extern void	drawerror(Display*, char*);
-extern int	flushimage(Display*, bool);
-extern int	freeimage(Image*);
-extern int	_freeimage1(Image*);
-extern int	geninitdraw(char*, void(*)(Display*, char*), char*, char*, char*, int);
 extern int	initdraw(void(*)(Display*, char*), char*, char*);
-extern int	newwindow(char*);
+extern int	geninitdraw(char*, void(*)(Display*, char*), char*, char*, char*, int);
 extern Display*	initdisplay(char*, char*, void(*)(Display*, char*));
-extern int	loadimage(Image*, Rectangle, uchar*, int);
-extern int	cloadimage(Image*, Rectangle, uchar*, int);
+extern void	closedisplay(Display*);
+
+extern uchar*	bufimage(Display*, int);
+extern int	flushimage(Display*, bool);
+
+extern Image*	allocimage(Display*, Rectangle, ulong, int, ulong);
+extern int	freeimage(Image*);
+extern Image* allocimagemix(Display*, ulong, ulong);
+
+// why not in Windows section?
+extern int	newwindow(char*);
 extern int	getwindow(Display*, int);
 extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
-extern Image* readimage(Display*, int, int);
-extern Image* creadimage(Display*, int, int);
+
+extern int	loadimage(Image*, Rectangle, uchar*, int);
 extern int	unloadimage(Image*, Rectangle, uchar*, int);
-extern int	wordsperline(Rectangle, int);
+extern Image* readimage(Display*, int, int);
 extern int	writeimage(int, Image*, int);
+
+extern int	cloadimage(Image*, Rectangle, uchar*, int);
+extern Image* creadimage(Display*, int, int);
+
 extern Image*	namedimage(Display*, char*);
 extern int	nameimage(Image*, char*, int);
-extern Image* allocimagemix(Display*, ulong, ulong);
+
+extern void	drawerror(Display*, char*);
+extern int	bytesperline(Rectangle, int);
+extern int	wordsperline(Rectangle, int);
 
 /*
  * Colors
@@ -453,15 +458,15 @@ extern	ulong	setalpha(ulong, uchar);
  * Windows
  */
 extern Screen*	allocscreen(Image*, Image*, int);
-extern Image*	_allocwindow(Image*, Screen*, Rectangle, int, ulong);
-extern Image*	allocwindow(Screen*, Rectangle, int, ulong);
-extern void	bottomnwindows(Image**, int);
-extern void	bottomwindow(Image*);
 extern int	freescreen(Screen*);
 extern Screen*	publicscreen(Display*, int, ulong);
+
+extern Image*	allocwindow(Screen*, Rectangle, int, ulong);
+extern int	originwindow(Image*, Point, Point);
+extern void	bottomnwindows(Image**, int);
+extern void	bottomwindow(Image*);
 extern void	topnwindows(Image**, int);
 extern void	topwindow(Image*);
-extern int	originwindow(Image*, Point, Point);
 
 /*
  * Geometry
@@ -484,12 +489,14 @@ extern int		rectinrect(Rectangle, Rectangle);
 extern void		combinerect(Rectangle*, Rectangle);
 extern int		rectclip(Rectangle*, Rectangle);
 extern int		ptinrect(Point, Rectangle);
+
 extern void		replclipr(Image*, int, Rectangle);
 extern int		drawreplxy(int, int, int);	/* used to be drawsetxy */
 extern Point	drawrepl(Rectangle, Point);
 extern int		rgb2cmap(int, int, int);
 extern int		cmap2rgb(int);
 extern int		cmap2rgba(int);
+
 extern void		icossin(int, int*, int*);
 extern void		icossin2(int, int, int*, int*);
 
@@ -500,12 +507,37 @@ extern void	draw(Image*, Rectangle, Image*, Image*, Point);
 extern void	drawop(Image*, Rectangle, Image*, Image*, Point, Drawop);
 extern void	gendraw(Image*, Rectangle, Image*, Point, Image*, Point);
 extern void	gendrawop(Image*, Rectangle, Image*, Point, Image*, Point, Drawop);
+
 extern void	line(Image*, Point, Point, int, int, int, Image*, Point);
 extern void	lineop(Image*, Point, Point, int, int, int, Image*, Point, Drawop);
+
 extern void	poly(Image*, Point*, int, int, int, int, Image*, Point);
 extern void	polyop(Image*, Point*, int, int, int, int, Image*, Point, Drawop);
 extern void	fillpoly(Image*, Point*, int, int, Image*, Point);
 extern void	fillpolyop(Image*, Point*, int, int, Image*, Point, Drawop);
+
+extern void	ellipse(Image*, Point, int, int, int, Image*, Point);
+extern void	ellipseop(Image*, Point, int, int, int, Image*, Point, Drawop);
+extern void	fillellipse(Image*, Point, int, int, Image*, Point);
+extern void	fillellipseop(Image*, Point, int, int, Image*, Point, Drawop);
+
+extern void	arc(Image*, Point, int, int, int, Image*, Point, int, int);
+extern void	arcop(Image*, Point, int, int, int, Image*, Point, int, int, Drawop);
+extern void	fillarc(Image*, Point, int, int, Image*, Point, int, int);
+extern void	fillarcop(Image*, Point, int, int, Image*, Point, int, int, Drawop);
+
+
+extern int		bezier(Image*, Point, Point, Point, Point, int, int, int, Image*, Point);
+extern int		bezierop(Image*, Point, Point, Point, Point, int, int, int, Image*, Point, Drawop);
+extern int		bezspline(Image*, Point*, int, int, int, int, Image*, Point);
+extern int		bezsplineop(Image*, Point*, int, int, int, int, Image*, Point, Drawop);
+extern int		bezsplinepts(Point*, int, Point**);
+extern int		fillbezier(Image*, Point, Point, Point, Point, int, Image*, Point);
+extern int		fillbezierop(Image*, Point, Point, Point, Point, int, Image*, Point, Drawop);
+extern int		fillbezspline(Image*, Point*, int, int, Image*, Point);
+extern int		fillbezsplineop(Image*, Point*, int, int, Image*, Point, Drawop);
+
+
 extern Point	string(Image*, Point, Image*, Point, Font*, char*);
 extern Point	stringop(Image*, Point, Image*, Point, Font*, char*, Drawop);
 extern Point	stringn(Image*, Point, Image*, Point, Font*, char*, int);
@@ -522,25 +554,10 @@ extern Point	runestringbg(Image*, Point, Image*, Point, Font*, Rune*, Image*, Po
 extern Point	runestringbgop(Image*, Point, Image*, Point, Font*, Rune*, Image*, Point, Drawop);
 extern Point	runestringnbg(Image*, Point, Image*, Point, Font*, Rune*, int, Image*, Point);
 extern Point	runestringnbgop(Image*, Point, Image*, Point, Font*, Rune*, int, Image*, Point, Drawop);
-extern Point	_string(Image*, Point, Image*, Point, Font*, char*, Rune*, int, Rectangle, Image*, Point, Drawop);
+
 extern Point	stringsubfont(Image*, Point, Image*, Subfont*, char*);
-extern int		bezier(Image*, Point, Point, Point, Point, int, int, int, Image*, Point);
-extern int		bezierop(Image*, Point, Point, Point, Point, int, int, int, Image*, Point, Drawop);
-extern int		bezspline(Image*, Point*, int, int, int, int, Image*, Point);
-extern int		bezsplineop(Image*, Point*, int, int, int, int, Image*, Point, Drawop);
-extern int		bezsplinepts(Point*, int, Point**);
-extern int		fillbezier(Image*, Point, Point, Point, Point, int, Image*, Point);
-extern int		fillbezierop(Image*, Point, Point, Point, Point, int, Image*, Point, Drawop);
-extern int		fillbezspline(Image*, Point*, int, int, Image*, Point);
-extern int		fillbezsplineop(Image*, Point*, int, int, Image*, Point, Drawop);
-extern void	ellipse(Image*, Point, int, int, int, Image*, Point);
-extern void	ellipseop(Image*, Point, int, int, int, Image*, Point, Drawop);
-extern void	fillellipse(Image*, Point, int, int, Image*, Point);
-extern void	fillellipseop(Image*, Point, int, int, Image*, Point, Drawop);
-extern void	arc(Image*, Point, int, int, int, Image*, Point, int, int);
-extern void	arcop(Image*, Point, int, int, int, Image*, Point, int, int, Drawop);
-extern void	fillarc(Image*, Point, int, int, Image*, Point, int, int);
-extern void	fillarcop(Image*, Point, int, int, Image*, Point, int, int, Drawop);
+
+
 extern void	border(Image*, Rectangle, int, Image*, Point);
 extern void	borderop(Image*, Rectangle, int, Image*, Point, Drawop);
 
@@ -578,6 +595,12 @@ extern void	unlockdisplay(Display*);
 extern int		drawlsetrefresh(ulong, int, void*, void*);
 
 /*
+ * One of a kind
+ */
+extern int		mousescrollsize(int);
+
+
+/*
  * Predefined 
  */
 extern	uchar	defontdata[];
@@ -595,6 +618,12 @@ extern	Screen	*_screen;
 extern	int	_cursorfd;
 extern	bool	_drawdebug;	/* set to true to see errors from flushimage */
 extern	void	_setdrawop(Display*, Drawop);
+
+// forward decl, could be move to individual files or in a drawimpl.h
+extern Image*	_allocimage(Image*, Display*, Rectangle, ulong, int, ulong, int, int);
+extern int	    _freeimage1(Image*);
+extern Image*	_allocwindow(Image*, Screen*, Rectangle, int, ulong);
+extern Point	_string(Image*, Point, Image*, Point, Font*, char*, Rune*, int, Rectangle, Image*, Point, Drawop);
 
 /*s: function BGSHORT */
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))

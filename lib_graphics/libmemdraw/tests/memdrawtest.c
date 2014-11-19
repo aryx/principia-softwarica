@@ -110,9 +110,8 @@ static ulong	*savedstbits;
 //
 //	write(1,buf,n);
 //	return 1;
-/*s: function main (lib_graphics/libmemdraw/tests/memdrawtest.c) */
 //}
-
+/*s: function main (lib_graphics/libmemdraw/tests/memdrawtest.c) */
 void
 main(int argc, char *argv[])
 {

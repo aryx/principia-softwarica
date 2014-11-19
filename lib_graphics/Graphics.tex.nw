@@ -159,10 +159,12 @@ Here are other candidates that were considered but ultimately discarded:
 \item mks
 \item svgalib
 \item cairo
+\item opengl
 \item X11
 \end{itemize}
 % nuttx has some graphic and windowing stack apparently too!
 
+%opengl and glut. the menuhit function is kinda related to glut.
 
 \section{Getting started}
 
@@ -217,104 +219,146 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 % kernel part? user part?
 
+%-------------------
 % libdraw/
+%-------------------
+
+%icossin.c: math
+%icossin2.c: math
+
+%arith.c: Point, Rectangle and helpers
+
+%init.c: display, screen, images
+
+%draw.c: draw rectangle
+ %border.c: draw border
+%line.c: draw line
+%poly.c: draw polylines
+%ellipse.c: draw ellipse
+%bezier.c: draw spline
+%string.c: draw text
+ %stringbg.c
+
 %alloc.c
-%allocimagemix.c
-%arith.c
-%bezier.c
-%border.c
-%buildfont.c
-%bytesperline.c
+%allocimagemix.c:
+
 %chan.c
+%rgb.c
+%readcolmap.c
+%writecolmap.c
+
+%readimage.c
+%writeimage.c
+%loadimage.c
+%unloadimage.c
 %cloadimage.c
-%computil.c
 %creadimage.c
-%debug.c
-%defont.c
-%draw.c
-%drawrepl.c
-%egetrect.c
-%ellipse.c
-%emenuhit.c
+
+%window.c
+%newwindow.c
+
+
+
 %event.c
+%mouse.c
+%keyboard.c
+
+%emenuhit.c
+%menuhit.c
+
+%debug.c
 %fmt.c
+
+
+%buildfont.c
+%defont.c
 %font.c
 %freesubfont.c
 %getdefont.c
-%getrect.c
 %getsubfont.c
-%icossin.c
-%icossin2.c
-%init.c
-%keyboard.c
-%line.c
-%loadimage.c
-%menuhit.c
 %mkfont.c
-%mouse.c
-%newwindow.c
-%openfont.c
-%poly.c
-%readcolmap.c
-%readimage.c
 %readsubfont.c
-%rectclip.c
-%replclipr.c
-%rgb.c
-%scroll.c
-%string.c
-%stringbg.c
 %stringsubfont.c
-%stringwidth.c
 %subfont.c
 %subfontcache.c
 %subfontname.c
-%unloadimage.c
-%window.c
-%writecolmap.c
-%writeimage.c
+%openfont.c
 %writesubfont.c
 
 
+%bytesperline.c
+%computil.c
+%drawrepl.c
+%egetrect.c
+%getrect.c
+%rectclip.c
+%replclipr.c
+%scroll.c
+%stringwidth.c
+
+
+%-------------------
 % libmemdraw/
-%alloc.c
-%arc.c
-%cload.c
-%cmap.c
-%cread.c
-%defont.c
+%-------------------
+
 %draw.c
-%ellipse.c
-%fillpoly.c
 %hwdraw.c
-%iprint.c
+
 %line.c
-%load.c
-%openmemsubfont.c
 %poly.c
-%read.c
-%replmul.c
+%fillpoly.c
+%ellipse.c
+%arc.c
 %string.c
-%subfont.c
+
+%alloc.c
+
+%cmap.c
+
+%load.c
 %unload.c
+
+%read.c
 %write.c
 
+%cload.c
+%cread.c
 
+
+%openmemsubfont.c
+%subfont.c
+%defont.c
+
+
+%replmul.c
+
+%iprint.c
+
+
+
+%-------------------
 % libmemlayer/
+%-------------------
 %draw.c
+
 %lalloc.c
 %layerop.c
 %ldelete.c
-%lhide.c
-%line.c
-%load.c
-%lorigin.c
 %lsetrefresh.c
+
+%line.c
+
+%lorigin.c
+%lhide.c
 %ltofront.c
 %ltorear.c
+
+%load.c
 %unload.c
 
+%-------------------
 % kernel/drivers/screen/
+%-------------------
 % ???
 
 \section{Architecture overview}
@@ -324,6 +368,10 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 % public API -> marshaller -> flush -> KERNEL -> unmarshaller -> algorithm
 % some kind of RPC and protocol
+
+
+% libdraw -> KERNEL -> devdraw -> libmemdraw | libmemlayer -> devvga -> clgd5446
+% that's a lot of entities
 
 % Display
 %  Image (User side, id) MemImage (Kernel side, id -> full structure)
@@ -364,7 +412,7 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 % draw.h big categories
 % the important globals init libdraw/init.c
 
-\section{[[Display]] and [[display]]}
+\section{[[Display]] and [[Client]]}
 
 <<struct Display>>=
 struct Display
@@ -392,6 +440,7 @@ struct Display
 
     Image	*white;
     Image	*black;
+
     Image	*opaque;
     Image	*transparent;
 
@@ -420,7 +469,35 @@ struct Display
 Display	*display;
 @
 
-\section{[[Image]] and [[screen]]}
+% usually have draw(dstimg, rectangle, srcimg, maskimg)
+% and srcimg can be just black, and maskimg can be just opaque
+% the abuse image for many things, because it's more general!
+% Black is an image! (1x1 pixels)
+
+
+<<struct Client>>=
+struct Client
+{
+    Ref     r;
+    DImage*     dimage[NHASH];
+    CScreen*    cscreen;
+    Refresh*    refresh;
+    Rendez      refrend;
+    uchar*      readdata;
+    int     nreaddata;
+    int     busy;
+    int     clientid;
+    int     slot;
+    int     refreshme;
+    int     infoid;
+
+    int     op;
+};
+@
+
+
+\section{[[Image]] and [[Memimage]]}
+% and screen
 
 <<struct Image>>=
 struct Image
@@ -443,6 +520,9 @@ struct Image
 %  see initdisplay()
 % system-held id!
 
+% need display pointer because when do draw operation we need
+% to write in img->display.buf! and then flushimage(img->display)!
+
 <<global screen>>=
 Image	*screen;
 @
@@ -453,6 +533,55 @@ Image	*screen;
 <<[[Image]] other fields>>=
 Screen		*screen;	/* 0 if not a window */
 Image		*next;	/* next in list of windows */
+@
+
+
+
+
+
+
+
+
+<<struct Memimage>>=
+struct Memimage
+{
+    Rectangle	r;		/* rectangle in data area, local coords */
+    Rectangle	clipr;		/* clipping region */
+    int		depth;	/* number of bits of storage per pixel */
+    int		nchan;	/* number of channels */
+    ulong	chan;	/* channel descriptions */
+    Memcmap	*cmap;
+
+    Memdata	*data;	/* pointer to data; shared by windows in this image */
+    int		zero;		/* data->bdata+zero==&byte containing (0,0) */
+    ulong	width;	/* width in words of a single scan line */
+    Memlayer	*layer;	/* nil if not a layer*/
+    ulong	flags;
+
+    int		shift[NChan];
+    int		mask[NChan];
+    int		nbits[NChan];
+};
+@
+
+
+<<struct Memdata>>=
+/*
+ * Memdata is allocated from main pool, but .data from the image pool.
+ * Memdata is allocated separately to permit patching its pointer after
+ * compaction when windows share the image data.
+ * The first word of data is a back pointer to the Memdata, to find
+ * The word to patch.
+ */
+
+struct Memdata
+{
+    ulong	*base;	/* allocated data pointer */
+    uchar	*bdata;	/* pointer to first byte of actual data; word-aligned */
+    int		ref;		/* number of Memimages using this data */
+    void*	imref;
+    int		allocd;	/* is this malloc'd? */
+};
 @
 
 \section{Image channel}
@@ -557,6 +686,53 @@ struct Font
 Font	*font;
 @
 
+\section{[[Drawop]] and [[Memdrawparam]]}
+<<enum drawop>>=
+enum drawop
+{
+    /* Porter-Duff compositing operators */
+    Clear	= 0,
+
+    SinD	= 8,
+    DinS	= 4,
+    SoutD	= 2,
+    DoutS	= 1,
+
+    S		= SinD|SoutD,
+    SoverD	= SinD|SoutD|DoutS,
+    SatopD	= SinD|DoutS,
+    SxorD	= SoutD|DoutS,
+
+    D		= DinS|DoutS,
+    DoverS	= DinS|DoutS|SoutD,
+    DatopS	= DinS|SoutD,
+    DxorS	= DoutS|SoutD,	/* == SxorD */
+
+    Ncomp = 12,
+};
+@
+
+
+<<struct Memdrawparam>>=
+struct	Memdrawparam
+{
+    Memimage *dst;
+    Rectangle	r;
+    Memimage *src;
+    Rectangle sr;
+    Memimage *mask;
+    Rectangle mr;
+    int op;
+
+    ulong state;
+    ulong mval;	/* if Simplemask, the mask pixel in mask format */
+    ulong mrgba;	/* mval in rgba */
+    ulong sval;	/* if Simplesrc, the source pixel in src format */
+    ulong srgba;	/* sval in rgba */
+    ulong sdval;	/* sval in dst format */
+};
+@
+
 \chapter{[[initdraw()]]}
 
 <<function initdraw>>=
@@ -638,6 +814,8 @@ Dir *dir;
 %less: could reorganize error managment like in Linux instead
 % have the errorx: followed, so less need 'goto previousone';
 
+% hmm it's actually a public function! but not much app tweaking
+% with it
 <<function initdisplay>>=
 Display*
 initdisplay(char *dev, char *win, void(*error)(Display*, char*))
@@ -796,6 +974,65 @@ if(t == nil)
     return nil;
 @
 
+
+
+
+
+
+<<function closedisplay>>=
+/*
+ * Call with d unlocked.
+ * Note that disp->defaultfont and defaultsubfont are not freed here.
+ */
+void
+closedisplay(Display *disp)
+{
+    _closedisplay(disp, 0);
+}
+@
+
+<<function _closedisplay>>=
+static void
+_closedisplay(Display *disp, int isshutdown)
+{
+    int fd;
+    char buf[128];
+
+    if(disp == nil)
+        return;
+    if(disp == display)
+        display = nil;
+    if(disp->oldlabel[0]){
+        snprint(buf, sizeof buf, "%s/label", disp->windir);
+        fd = open(buf, OWRITE);
+        if(fd >= 0){
+            write(fd, disp->oldlabel, strlen(disp->oldlabel));
+            close(fd);
+        }
+    }
+
+    /*
+     * if we're shutting down, don't free all the resources.
+     * if other procs are getting shot down by notes too,
+     * one might get shot down while holding the malloc lock.
+     * just let the kernel clean things up when we exit.
+     */
+    if(isshutdown)
+        return;
+
+    free(disp->devdir);
+    free(disp->windir);
+    freeimage(disp->white);
+    freeimage(disp->black);
+    close(disp->fd);
+    close(disp->ctlfd);
+    /* should cause refresh slave to shut down */
+    close(disp->reffd);
+    qunlock(&disp->qlock);
+    free(disp);
+}
+@
+
 \section{Fonts}
 
 <<[[geninitdraw()]] set up font>>=
@@ -884,6 +1121,66 @@ if(gengetwindow(display, buf, &screen, &_screen, ref) < 0)
 % write a thrift like tool on top of the file interface that generates
 % most of the boilerplate at least.
 
+\section{Draw device}
+
+% so bind #i
+
+<<global drawdevtab>>=
+Dev drawdevtab = {
+    .dc       =    'i',
+    .name     =    "draw",
+
+    .attach   =    drawattach,
+    .walk     =    drawwalk,
+    .open     =    drawopen,
+    .close    =    drawclose,
+    .read     =    drawread,
+    .write    =    drawwrite,
+    .stat     =    drawstat,
+    .wstat    =    devwstat,
+               
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .create   =    devcreate,
+    .bread    =    devbread,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+};
+@
+
+\subsection{[[/dev/draw/new]]}
+
+\subsection{[[/dev/draw/x/data]]}
+
+\section{Vga device}
+
+<<global vgadevtab>>=
+Dev vgadevtab = {
+    .dc       =    'v',
+    .name     =    "vga",
+               
+    .reset    =    vgareset,
+
+    .attach   =    vgaattach,
+    .walk     =    vgawalk,
+    .open     =    vgaopen,
+    .close    =    vgaclose,
+    .read     =    vgaread,
+    .write    =    vgawrite,
+    .stat     =    vgastat,
+    .wstat    =    devwstat,
+
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .create   =    devcreate,
+    .bread    =    devbread,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+};
+@
+
+\section{Protocol}
 
 <<function BGSHORT>>=
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
@@ -902,6 +1199,29 @@ if(gengetwindow(display, buf, &screen, &_screen, ref) < 0)
 @
 
 % could start by a simple example? like flush?
+
+
+% put buf fields here
+
+<<function bufimage>>=
+uchar*
+bufimage(Display *d, int n)
+{
+    uchar *p;
+
+    if(n<0 || n>d->bufsize){
+        werrstr("bad count in bufimage");
+        return 0;
+    }
+    if(d->bufp+n > d->buf+d->bufsize)
+        if(doflush(d) < 0)
+            return 0;
+    p = d->bufp;
+    d->bufp += n;
+    return p;
+}
+@
+
 
 \section{[[drawmesg()]]}
 
@@ -1285,6 +1605,7 @@ struct	Point
     int	y;
 };
 @
+% int! they are pixels!
 
 %ctor
 <<function Pt>>=
@@ -1367,7 +1688,9 @@ divpt(Point a, int b)
 @
 
 
-\section{[[Rectangle]]}
+\section{Rectangle}
+
+\subsection{[[Rectangle]]}
 
 <<struct Rectangle>>=
 struct Rectangle
@@ -1538,6 +1861,191 @@ combinerect(Rectangle *r1, Rectangle r2)
 
 
 
+\subsection{API}
+
+%TODO: show toy program and screenshot of the rectangle!
+
+
+<<function draw>>=
+void
+draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
+{
+    draw1(dst, &r, src, &p1, mask, &p1, SoverD);
+}
+@
+
+<<function border>>=
+void
+border(Image *im, Rectangle r, int i, Image *color, Point sp)
+{
+    if(i < 0){
+        r = insetrect(r, i);
+        sp = addpt(sp, Pt(i,i));
+        i = -i;
+    }
+    draw(im, Rect(r.min.x, r.min.y, r.max.x, r.min.y+i),
+        color, nil, sp);
+    draw(im, Rect(r.min.x, r.max.y-i, r.max.x, r.max.y),
+        color, nil, Pt(sp.x, sp.y+Dy(r)-i));
+    draw(im, Rect(r.min.x, r.min.y+i, r.min.x+i, r.max.y-i),
+        color, nil, Pt(sp.x, sp.y+i));
+    draw(im, Rect(r.max.x-i, r.min.y+i, r.max.x, r.max.y-i),
+        color, nil, Pt(sp.x+Dx(r)-i, sp.y+i));
+}
+@
+
+
+
+<<function drawop>>=
+void
+drawop(Image *dst, Rectangle r, Image *src, Image *mask, Point p1, Drawop op)
+{
+    draw1(dst, &r, src, &p1, mask, &p1, op);
+}
+@
+
+<<function gendraw>>=
+void
+gendraw(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1)
+{
+    draw1(dst, &r, src, &p0, mask, &p1, SoverD);
+}
+@
+
+<<function gendrawop>>=
+void
+gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, Drawop op)
+{
+    draw1(dst, &r, src, &p0, mask, &p1, op);
+}
+@
+
+
+
+
+
+
+\subsection{Marshalling}
+
+<<function draw1>>=
+static void
+draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
+{
+    byte *a;
+
+    _setdrawop(dst->display, op);
+
+    a = bufimage(dst->display, 1+4+4+4+4*4+2*4+2*4);
+    if(a == nil)
+        return;
+    if(src == nil)
+        src = dst->display->black;
+    if(mask == nil)
+        mask = dst->display->opaque;
+
+    a[0] = 'd';
+    BPLONG(a+1, dst->id);
+    BPLONG(a+5, src->id);
+    BPLONG(a+9, mask->id);
+    BPLONG(a+13, r->min.x);
+    BPLONG(a+17, r->min.y);
+    BPLONG(a+21, r->max.x);
+    BPLONG(a+25, r->max.y);
+    BPLONG(a+29, p0->x);
+    BPLONG(a+33, p0->y);
+    BPLONG(a+37, p1->x);
+    BPLONG(a+41, p1->y);
+}
+@
+
+
+<<function _setdrawop>>=
+void
+_setdrawop(Display *d, Drawop op)
+{
+    uchar *a;
+
+    if(op != SoverD){
+        a = bufimage(d, 1+1);
+        if(a == 0)
+            return;
+        a[0] = 'O';
+        a[1] = op;
+    }
+}
+@
+
+
+\subsection{Unmarshalling}
+
+
+<<[[drawmesg()]] cases>>=
+/* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
+case 'd':
+    printmesg(fmt="LLLRPP", a, 0);
+    m = 1+4+4+4+4*4+2*4+2*4;
+    if(n < m)
+        error(Eshortdraw);
+    dst = drawimage(client, a+1);
+    dstid = BGLONG(a+1);
+    src = drawimage(client, a+5);
+    mask = drawimage(client, a+9);
+    drawrectangle(&r, a+13);
+    drawpoint(&p, a+29);
+    drawpoint(&q, a+37);
+    op = drawclientop(client);
+
+    memdraw(dst, r, src, p, mask, q, op); // the call!
+    dstflush(dstid, dst, r);
+
+    continue;
+
+@
+
+
+<<function drawclientop>>=
+static int
+drawclientop(Client *cl)
+{
+    int op;
+
+    op = cl->op;
+    cl->op = SoverD;
+    return op;
+}
+@
+
+
+<<[[drawmesg()]] cases>>=
+/* set compositing operator for next draw operation: 'O' op */
+case 'O':
+    printmesg(fmt="b", a, 0);
+    m = 1+1;
+    if(n < m)
+        error(Eshortdraw);
+    client->op = a[1];
+    continue;
+@
+
+
+
+
+
+% dead? not even mentionned in the draw(5)
+% and nothing generate such a message
+%<<[[drawmesg()]] cases>>=
+%/* create image mask: 'm' newid[4] id[4] */
+%case 'm':
+%    printmesg("LL", a, 0);
+%    m = 4+4;
+%    if(n < m)
+%        error(Eshortdraw);
+%    break;
+%@
+
+
+\subsection{Algorithm}
+
 \section{Line}
 
 \subsection{API}
@@ -1602,7 +2110,8 @@ case 'L':
     drawpoint(&sp, a+37);
     op = drawclientop(client);
 
-    memline(dst, p, q, e0, e1, j, src, sp, op);
+    memline(dst, p, q, e0, e1, j, src, sp, op); // The call
+
     /* avoid memlinebbox if possible */
     if(dstid==0 || dst->layer!=nil){
         /* BUG: this is terribly inefficient: update maximal containing rect*/
@@ -1956,11 +2465,9 @@ fillarcop(Image *dst, Point c, int a, int b, Image *src, Point sp, int alpha, in
 }
 @
 
+%\section{Bezier} see advanced topics
 
-\section{Bezier}
-% spline
-
-%\section{Text}
+%\section{Text} see font section
 
 \chapter{Colors}
 % test code showing use of colors?
@@ -2051,6 +2558,73 @@ Point
 runestringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len, Drawop op)
 {
     return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, nil, ZP, op);
+}
+@
+
+
+
+
+<<function stringbg>>=
+Point
+stringbg(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Image *bg, Point bgp)
+{
+    return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, bg, bgp, SoverD);
+}
+@
+
+<<function stringbgop>>=
+Point
+stringbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Image *bg, Point bgp, int op)
+{
+    return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, bg, bgp, op);
+}
+@
+
+<<function stringnbg>>=
+Point
+stringnbg(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len, Image *bg, Point bgp)
+{
+    return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, bg, bgp, SoverD);
+}
+@
+
+<<function stringnbgop>>=
+Point
+stringnbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len, Image *bg, Point bgp, int op)
+{
+    return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, bg, bgp, op);
+}
+@
+
+<<function runestringbg>>=
+Point
+runestringbg(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, Image *bg, Point bgp)
+{
+    return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, bg, bgp, SoverD);
+}
+@
+
+<<function runestringbgop>>=
+Point
+runestringbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, Image *bg, Point bgp, int op)
+{
+    return _string(dst, pt, src, sp, f, nil, r, 1<<24, dst->clipr, bg, bgp, op);
+}
+@
+
+<<function runestringnbg>>=
+Point
+runestringnbg(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len, Image *bg, Point bgp)
+{
+    return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, bg, bgp, SoverD);
+}
+@
+
+<<function runestringnbgop>>=
+Point
+runestringnbgop(Image *dst, Point pt, Image *src, Point sp, Font *f, Rune *r, int len, Image *bg, Point bgp, int op)
+{
+    return _string(dst, pt, src, sp, f, nil, r, len, dst->clipr, bg, bgp, op);
 }
 @
 
@@ -2518,145 +3092,6 @@ case 'l':
 
 \chapter{Composing}
 
-\section{Drawing}
-
-\subsection{API}
-
-<<function draw>>=
-void
-draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
-{
-    draw1(dst, &r, src, &p1, mask, &p1, SoverD);
-}
-@
-
-<<function drawop>>=
-void
-drawop(Image *dst, Rectangle r, Image *src, Image *mask, Point p1, Drawop op)
-{
-    draw1(dst, &r, src, &p1, mask, &p1, op);
-}
-@
-
-<<function gendraw>>=
-void
-gendraw(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1)
-{
-    draw1(dst, &r, src, &p0, mask, &p1, SoverD);
-}
-@
-
-<<function gendrawop>>=
-void
-gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, Drawop op)
-{
-    draw1(dst, &r, src, &p0, mask, &p1, op);
-}
-@
-
-
-\subsection{Marshalling}
-
-<<function draw1>>=
-static void
-draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
-{
-    uchar *a;
-
-    _setdrawop(dst->display, op);
-
-    a = bufimage(dst->display, 1+4+4+4+4*4+2*4+2*4);
-    if(a == 0)
-        return;
-    if(src == nil)
-        src = dst->display->black;
-    if(mask == nil)
-        mask = dst->display->opaque;
-
-    a[0] = 'd';
-    BPLONG(a+1, dst->id);
-    BPLONG(a+5, src->id);
-    BPLONG(a+9, mask->id);
-    BPLONG(a+13, r->min.x);
-    BPLONG(a+17, r->min.y);
-    BPLONG(a+21, r->max.x);
-    BPLONG(a+25, r->max.y);
-    BPLONG(a+29, p0->x);
-    BPLONG(a+33, p0->y);
-    BPLONG(a+37, p1->x);
-    BPLONG(a+41, p1->y);
-}
-@
-
-
-<<function _setdrawop>>=
-void
-_setdrawop(Display *d, Drawop op)
-{
-    uchar *a;
-
-    if(op != SoverD){
-        a = bufimage(d, 1+1);
-        if(a == 0)
-            return;
-        a[0] = 'O';
-        a[1] = op;
-    }
-}
-@
-
-
-\subsection{Unmarshalling}
-
-
-<<[[drawmesg()]] cases>>=
-/* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
-case 'd':
-    printmesg(fmt="LLLRPP", a, 0);
-    m = 1+4+4+4+4*4+2*4+2*4;
-    if(n < m)
-        error(Eshortdraw);
-    dst = drawimage(client, a+1);
-    dstid = BGLONG(a+1);
-    src = drawimage(client, a+5);
-    mask = drawimage(client, a+9);
-    drawrectangle(&r, a+13);
-    drawpoint(&p, a+29);
-    drawpoint(&q, a+37);
-    op = drawclientop(client);
-    memdraw(dst, r, src, p, mask, q, op);
-    dstflush(dstid, dst, r);
-    continue;
-
-@
-
-
-<<[[drawmesg()]] cases>>=
-/* set compositing operator for next draw operation: 'O' op */
-case 'O':
-    printmesg(fmt="b", a, 0);
-    m = 1+1;
-    if(n < m)
-        error(Eshortdraw);
-    client->op = a[1];
-    continue;
-@
-
-
-
-
-% dead? not even mentionned in the draw(5)
-% and nothing generate such a message
-<<[[drawmesg()]] cases>>=
-/* create image mask: 'm' newid[4] id[4] */
-case 'm':
-    printmesg("LL", a, 0);
-    m = 4+4;
-    if(n < m)
-        error(Eshortdraw);
-    break;
-@
-
 \chapter{Image}
 
 \section{Naming}
@@ -2900,6 +3335,138 @@ case 'c':
 
 \subsection{API}
 
+<<function readimage>>=
+Image*
+readimage(Display *d, int fd, int dolock)
+{
+    char hdr[5*12+1];
+    int dy;
+    int new;
+    uint l, n;
+    int m, j, chunk;
+    int miny, maxy;
+    Rectangle r;
+    int ldepth;
+    ulong chan;
+    uchar *tmp;
+    Image *i;
+
+    if(readn(fd, hdr, 11) != 11)
+        return nil;
+    if(memcmp(hdr, "compressed\n", 11) == 0)
+        return creadimage(d, fd, dolock);
+    if(readn(fd, hdr+11, 5*12-11) != 5*12-11)
+        return nil;
+    if(d)
+        chunk = d->bufsize - 32;	/* a little room for header */
+    else
+        chunk = 8192;
+
+    /*
+     * distinguish new channel descriptor from old ldepth.
+     * channel descriptors have letters as well as numbers,
+     * while ldepths are a single digit formatted as %-11d.
+     */
+    new = 0;
+    for(m=0; m<10; m++){
+        if(hdr[m] != ' '){
+            new = 1;
+            break;
+        }
+    }
+    if(hdr[11] != ' '){
+        werrstr("readimage: bad format");
+        return nil;
+    }
+    if(new){
+        hdr[11] = '\0';
+        if((chan = strtochan(hdr)) == 0){
+            werrstr("readimage: bad channel string %s", hdr);
+            return nil;
+        }
+    }else{
+        ldepth = ((int)hdr[10])-'0';
+        if(ldepth<0 || ldepth>3){
+            werrstr("readimage: bad ldepth %d", ldepth);
+            return nil;
+        }
+        chan = drawld2chan[ldepth];
+    }
+
+    r.min.x = atoi(hdr+1*12);
+    r.min.y = atoi(hdr+2*12);
+    r.max.x = atoi(hdr+3*12);
+    r.max.y = atoi(hdr+4*12);
+    if(r.min.x>r.max.x || r.min.y>r.max.y){
+        werrstr("readimage: bad rectangle");
+        return nil;
+    }
+
+    miny = r.min.y;
+    maxy = r.max.y;
+
+    l = bytesperline(r, chantodepth(chan));
+    if(d){
+        if(dolock)
+            lockdisplay(d);
+        i = allocimage(d, r, chan, 0, -1);
+        if(dolock)
+            unlockdisplay(d);
+        if(i == nil)
+            return nil;
+    }else{
+        i = mallocz(sizeof(Image), 1);
+        if(i == nil)
+            return nil;
+    }
+
+    tmp = malloc(chunk);
+    if(tmp == nil)
+        goto Err;
+    while(maxy > miny){
+        dy = maxy - miny;
+        if(dy*l > chunk)
+            dy = chunk/l;
+        if(dy <= 0){
+            werrstr("readimage: image too wide for buffer");
+            goto Err;
+        }
+        n = dy*l;
+        m = readn(fd, tmp, n);
+        if(m != n){
+            werrstr("readimage: read count %d not %d: %r", m, n);
+   Err:
+            if(dolock)
+                lockdisplay(d);
+   Err1:
+    freeimage(i);
+            if(dolock)
+                unlockdisplay(d);
+            free(tmp);
+            return nil;
+        }
+        if(!new)	/* an old image: must flip all the bits */
+            for(j=0; j<chunk; j++)
+                tmp[j] ^= 0xFF;
+
+        if(d){
+            if(dolock)
+                lockdisplay(d);
+            if(loadimage(i, Rect(r.min.x, miny, r.max.x, miny+dy), tmp, chunk) <= 0)
+                goto Err1;
+            if(dolock)
+                unlockdisplay(d);
+        }
+        miny += dy;
+    }
+    free(tmp);
+    return i;
+}
+@
+
+
+
+
 <<function unloadimage>>=
 int
 unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
@@ -2990,9 +3557,188 @@ case 'r':
 
 %topng </dev/screen >screen.png :) = Grab
 
+
+
+<<function writeimage>>=
+int
+writeimage(int fd, Image *i, int dolock)
+{
+    uchar *outbuf, *outp, *eout;		/* encoded data, pointer, end */
+    uchar *loutp;				/* start of encoded line */
+    Hlist *hash;				/* heads of hash chains of past strings */
+    Hlist *chain, *hp;			/* hash chain members, pointer */
+    Hlist *cp;				/* next Hlist to fall out of window */
+    int h;					/* hash value */
+    uchar *line, *eline;			/* input line, end pointer */
+    uchar *data, *edata;			/* input buffer, end pointer */
+    ulong n;				/* length of input buffer */
+    ulong nb;				/* # of bytes returned by unloadimage */
+    int bpl;				/* input line length */
+    int offs, runlen;			/* offset, length of consumed data */
+    uchar dumpbuf[NDUMP];			/* dump accumulator */
+    int ndump;				/* length of dump accumulator */
+    int miny, dy;				/* y values while unloading input */
+    int chunk, ncblock;
+    Rectangle r;
+    uchar *p, *q, *s, *es, *t;
+    char hdr[11+5*12+1];
+    char cbuf[20];
+
+    chunk = i->display->bufsize - 32;	/* a little room for header */
+    r = i->r;
+    bpl = bytesperline(r, i->depth);
+    n = Dy(r)*bpl;
+    data = malloc(n);
+    ncblock = _compblocksize(r, i->depth);
+    outbuf = malloc(ncblock);
+    hash = malloc(NHASH*sizeof(Hlist));
+    chain = malloc(NMEM*sizeof(Hlist));
+    if(data == 0 || outbuf == 0 || hash == 0 || chain == 0){
+    ErrOut:
+        free(data);
+        free(outbuf);
+        free(hash);
+        free(chain);
+        return -1;
+    }
+    for(miny = r.min.y; miny != r.max.y; miny += dy){
+        dy = r.max.y-miny;
+        if(dy*bpl > chunk)
+            dy = chunk/bpl;
+        if(dolock)
+            lockdisplay(i->display);
+        nb = unloadimage(i, Rect(r.min.x, miny, r.max.x, miny+dy),
+            data+(miny-r.min.y)*bpl, dy*bpl);
+        if(dolock)
+            unlockdisplay(i->display);
+        if(nb != dy*bpl)
+            goto ErrOut;
+    }
+    sprint(hdr, "compressed\n%11s %11d %11d %11d %11d ",
+        chantostr(cbuf, i->chan), r.min.x, r.min.y, r.max.x, r.max.y);
+    if(write(fd, hdr, 11+5*12) != 11+5*12)
+        goto ErrOut;
+    edata = data+n;
+    eout = outbuf+ncblock;
+    line = data;
+    r.max.y = r.min.y;
+    while(line != edata){
+        memset(hash, 0, NHASH*sizeof(Hlist));
+        memset(chain, 0, NMEM*sizeof(Hlist));
+        cp = chain;
+        h = 0;
+        outp = outbuf;
+        for(n = 0; n != NMATCH; n++)
+            h = hupdate(h, line[n]);
+        loutp = outbuf;
+        while(line != edata){
+            ndump = 0;
+            eline = line+bpl;
+            for(p = line; p != eline; ){
+                if(eline-p < NRUN)
+                    es = eline;
+                else
+                    es = p+NRUN;
+                q = 0;
+                runlen = 0;
+                for(hp = hash[h].next; hp; hp = hp->next){
+                    s = p + runlen;
+                    if(s >= es)
+                        continue;
+                    t = hp->s + runlen;
+                    for(; s >= p; s--)
+                        if(*s != *t--)
+                            goto matchloop;
+                    t += runlen+2;
+                    s += runlen+2;
+                    for(; s < es; s++)
+                        if(*s != *t++)
+                            break;
+                    n = s-p;
+                    if(n > runlen){
+                        runlen = n;
+                        q = hp->s;
+                        if(n == NRUN)
+                            break;
+                    }
+            matchloop: ;
+                }
+                if(runlen < NMATCH){
+                    if(ndump == NDUMP){
+                        if(eout-outp < ndump+1)
+                            goto Bfull;
+                        *outp++ = ndump-1+128;
+                        memmove(outp, dumpbuf, ndump);
+                        outp += ndump;
+                        ndump = 0;
+                    }
+                    dumpbuf[ndump++] = *p;
+                    runlen = 1;
+                }
+                else{
+                    if(ndump != 0){
+                        if(eout-outp < ndump+1)
+                            goto Bfull;
+                        *outp++ = ndump-1+128;
+                        memmove(outp, dumpbuf, ndump);
+                        outp += ndump;
+                        ndump = 0;
+                    }
+                    offs = p-q-1;
+                    if(eout-outp < 2)
+                        goto Bfull;
+                    *outp++ = ((runlen-NMATCH)<<2) + (offs>>8);
+                    *outp++ = offs&255;
+                }
+                for(q = p+runlen; p != q; p++){
+                    if(cp->prev)
+                        cp->prev->next = 0;
+                    cp->next = hash[h].next;
+                    cp->prev = &hash[h];
+                    if(cp->next)
+                        cp->next->prev = cp;
+                    cp->prev->next = cp;
+                    cp->s = p;
+                    if(++cp == &chain[NMEM])
+                        cp = chain;
+                    if(edata-p > NMATCH)
+                        h = hupdate(h, p[NMATCH]);
+                }
+            }
+            if(ndump != 0){
+                if(eout-outp < ndump+1)
+                    goto Bfull;
+                *outp++ = ndump-1+128;
+                memmove(outp, dumpbuf, ndump);
+                outp += ndump;
+            }
+            line = eline;
+            loutp = outp;
+            r.max.y++;
+        }
+    Bfull:
+        if(loutp == outbuf)
+            goto ErrOut;
+        n = loutp-outbuf;
+        sprint(hdr, "%11d %11ld ", r.max.y, n);
+        write(fd, hdr, 2*12);
+        write(fd, outbuf, n);
+        r.min.y = r.max.y;
+    }
+    free(data);
+    free(outbuf);
+    free(hash);
+    free(chain);
+    return 0;
+}
+@
+
+
+
 \chapter{Windows}
 
-\section{[[Screen]] and [[_screen]]}
+\section{[[Screen]] and [[Memscreen]]}
+% and [[_screen]]
 
 <<struct Screen>>=
 struct Screen
@@ -3014,6 +3760,33 @@ Screen	*_screen;
 <<global screenid>>=
 static int	screenid;
 @
+
+
+<<struct Memscreen>>=
+struct Memscreen
+{
+    Memimage	*frontmost;	/* frontmost layer on screen */
+    Memimage	*rearmost;	/* rearmost layer on screen */
+    Memimage	*image;		/* upon which all layers are drawn */
+    Memimage	*fill;			/* if non-zero, picture to use when repainting */
+};
+@
+
+<<struct Memlayer>>=
+struct Memlayer
+{
+    Rectangle		screenr;	/* true position of layer on screen */
+    Point			delta;	/* add delta to go from image coords to screen */
+    Memscreen	*screen;	/* screen this layer belongs to */
+    Memimage	*front;	/* window in front of this one */
+    Memimage	*rear;	/* window behind this one*/
+    int		clear;	/* layer is fully visible */
+    Memimage	*save;	/* save area for obscured parts */
+    Refreshfn	refreshfn;		/* function to call to refresh obscured parts if save==nil */
+    void		*refreshptr;	/* argument to refreshfn */
+};
+@
+
 
 \subsection{API}
 
@@ -4036,6 +4809,36 @@ setcursor(Mousectl *mc, Cursor *c)
 
 % have lots of dupes with events, menuhit.c vs emenuhit.c?
 
+<<enum _anon_ (include/event.h)>>=
+enum
+{
+    Emouse	= 1,
+    Ekeyboard	= 2,
+};
+@
+
+% dupe
+<<struct Mouse>>=
+struct	Mouse
+{
+    int		buttons;	/* bit array: LMR=124 */
+    Point	xy;
+    ulong	msec;
+};
+@
+
+<<struct Event>>=
+struct	Event
+{
+    int		kbdc;
+    Mouse	mouse;
+    int		n;		/* number of characters in message */
+    void	*v;		/* data unpacked by general event-handling function */
+    uchar	data[EMAXMSG];	/* message from an arbitrary file descriptor */
+};
+@
+
+
 \chapter{Widgets}
 
 \section{Libpanel}
@@ -4074,6 +4877,292 @@ setcursor(Mousectl *mc, Cursor *c)
 \section{Rich text}
 
 \chapter{Advanced Topics}
+
+\section{Bezier}
+% spline
+
+% no kernel support I think, it just use the previous building blocks
+
+<<constant PINC>>=
+#define	PINC	32		/* realloc granularity */
+@
+
+<<struct Plist>>=
+struct Plist
+{
+    Point *p;
+    int np;			/* -1 if malloc/realloc failed */
+};
+@
+
+<<function appendpt>>=
+static void
+appendpt(Plist *l, Point p)
+{
+    if(l->np == -1)
+        return;
+    if(l->np == 0)
+        l->p = malloc(PINC*sizeof(Point));
+    else if(l->np%PINC == 0)
+        l->p = realloc(l->p, (l->np+PINC)*sizeof(Point));
+    if(l->p == 0){
+        l->np = -1;
+        return;
+    }
+    l->p[l->np++] = p;
+}
+@
+
+<<function normsq>>=
+static int
+normsq(Point p)
+{
+    return p.x*p.x+p.y*p.y;
+}
+@
+
+<<function psdist>>=
+static int
+psdist(Point p, Point a, Point b)
+{
+    int num, den;
+
+    p = subpt(p, a);
+    b = subpt(b, a);
+    num = p.x*b.x + p.y*b.y;
+    if(num <= 0)
+        return normsq(p);
+    den = normsq(b);
+    if(num >= den)
+        return normsq(subpt(b, p));
+    return normsq(subpt(divpt(mulpt(b, num), den), p));
+}
+@
+
+<<function bpts1>>=
+/*
+ * Convert cubic Bezier curve control points to polyline
+ * vertices.  Leaves the last vertex off, so you can continue
+ * with another curve.
+ */
+static void
+bpts1(Plist *l, Point p0, Point p1, Point p2, Point p3, int scale)
+{
+    Point p01, p12, p23, p012, p123, p0123;
+    Point tp0, tp1, tp2, tp3;
+    tp0=divpt(p0, scale);
+    tp1=divpt(p1, scale);
+    tp2=divpt(p2, scale);
+    tp3=divpt(p3, scale);
+    if(psdist(tp1, tp0, tp3)<=1 && psdist(tp2, tp0, tp3)<=1){
+        appendpt(l, tp0);
+        appendpt(l, tp1);
+        appendpt(l, tp2);
+    }
+    else{
+        /*
+         * if scale factor is getting too big for comfort,
+         * rescale now & concede the rounding error
+         */
+        if(scale>(1<<12)){
+            p0=tp0;
+            p1=tp1;
+            p2=tp2;
+            p3=tp3;
+            scale=1;
+        }
+        p01=addpt(p0, p1);
+        p12=addpt(p1, p2);
+        p23=addpt(p2, p3);
+        p012=addpt(p01, p12);
+        p123=addpt(p12, p23);
+        p0123=addpt(p012, p123);
+        bpts1(l, mulpt(p0, 8), mulpt(p01, 4), mulpt(p012, 2), p0123, scale*8);
+        bpts1(l, p0123, mulpt(p123, 2), mulpt(p23, 4), mulpt(p3, 8), scale*8);
+    }
+}
+@
+
+<<function bpts>>=
+static void
+bpts(Plist *l, Point p0, Point p1, Point p2, Point p3)
+{
+    bpts1(l, p0, p1, p2, p3, 1);
+}
+@
+
+<<function bezierpts>>=
+static void
+bezierpts(Plist *l, Point p0, Point p1, Point p2, Point p3)
+{
+    bpts(l, p0, p1, p2, p3);
+    appendpt(l, p3);
+}
+@
+
+<<function _bezsplinepts>>=
+static void
+_bezsplinepts(Plist *l, Point *pt, int npt)
+{
+    Point *p, *ep;
+    Point a, b, c, d;
+    int periodic;
+
+    if(npt<3)
+        return;
+    ep = &pt[npt-3];
+    periodic = eqpt(pt[0], ep[2]);
+    if(periodic){
+        a = divpt(addpt(ep[1], pt[0]), 2);
+        b = divpt(addpt(ep[1], mulpt(pt[0], 5)), 6);
+        c = divpt(addpt(mulpt(pt[0], 5), pt[1]), 6);
+        d = divpt(addpt(pt[0], pt[1]), 2);
+        bpts(l, a, b, c, d);
+    }
+    for(p=pt; p<=ep; p++){
+        if(p==pt && !periodic){
+            a = p[0];
+            b = divpt(addpt(p[0], mulpt(p[1], 2)), 3);
+        }
+        else{
+            a = divpt(addpt(p[0], p[1]), 2);
+            b = divpt(addpt(p[0], mulpt(p[1], 5)), 6);
+        }
+        if(p==ep && !periodic){
+            c = divpt(addpt(mulpt(p[1], 2), p[2]), 3);
+            d = p[2];
+        }
+        else{
+            c = divpt(addpt(mulpt(p[1], 5), p[2]), 6);
+            d = divpt(addpt(p[1], p[2]), 2);
+        }
+        bpts(l, a, b, c, d);
+    }
+    appendpt(l, d);
+}
+@
+
+<<function bezsplinepts>>=
+int
+bezsplinepts(Point *pt, int npt, Point **pp)
+{
+    Plist l;
+    l.np = 0;
+    l.p = nil;
+    _bezsplinepts(&l, pt, npt);
+    *pp  = l.p;
+    return l.np;
+}
+@
+
+<<function bezier>>=
+int
+bezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp)
+{
+    return bezierop(dst, p0, p1, p2, p3, end0, end1, radius, src, sp, SoverD);
+}
+@
+
+<<function bezierop>>=
+int
+bezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
+{
+    Plist l;
+
+    l.np = 0;
+    bezierpts(&l, p0, p1, p2, p3);
+    if(l.np == -1)
+        return 0;
+    if(l.np != 0){
+        polyop(dst, l.p, l.np, end0, end1, radius, src, addpt(subpt(sp, p0), l.p[0]), op);
+        free(l.p);
+    }
+    return 1;
+}
+@
+
+<<function bezspline>>=
+int
+bezspline(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp)
+{
+    return bezsplineop(dst, pt, npt, end0, end1, radius, src, sp, SoverD);
+}
+@
+
+<<function bezsplineop>>=
+int
+bezsplineop(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
+{
+    Plist l;
+
+    l.np = 0;
+    _bezsplinepts(&l, pt, npt);
+    if(l.np==-1)
+        return 0;
+    if(l.np != 0){
+        polyop(dst, l.p, l.np, end0, end1, radius, src, addpt(subpt(sp, pt[0]), l.p[0]), op);
+        free(l.p);
+    }
+    return 1;
+}
+@
+
+<<function fillbezier>>=
+int
+fillbezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp)
+{
+    return fillbezierop(dst, p0, p1, p2, p3, w, src, sp, SoverD);
+}
+@
+
+<<function fillbezierop>>=
+int
+fillbezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp, Drawop op)
+{
+    Plist l;
+
+    l.np = 0;
+    bezierpts(&l, p0, p1, p2, p3);
+    if(l.np == -1)
+        return 0;
+    if(l.np != 0){
+        fillpolyop(dst, l.p, l.np, w, src, addpt(subpt(sp, p0), l.p[0]), op);
+        free(l.p);
+    }
+    return 1;
+}
+@
+
+<<function fillbezspline>>=
+int
+fillbezspline(Image *dst, Point *pt, int npt, int w, Image *src, Point sp)
+{
+    return fillbezsplineop(dst, pt, npt, w, src, sp, SoverD);
+}
+@
+
+<<function fillbezsplineop>>=
+int
+fillbezsplineop(Image *dst, Point *pt, int npt, int w, Image *src, Point sp, Drawop op)
+{
+    Plist l;
+
+    l.np = 0;
+    _bezsplinepts(&l, pt, npt);
+    if(l.np == -1)
+        return 0;
+    if(l.np > 0){
+        fillpolyop(dst, l.p, l.np, w, src, addpt(subpt(sp, pt[0]), l.p[0]), op);
+        free(l.p);
+    }
+    return 1;
+}
+@
+
+
+
+\section{Menus}
+
 
 \chapter{Conclusion}
 
@@ -4185,6 +5274,23 @@ case 'D':
 
 
 \chapter{Error Managment}
+
+<<function drawerror>>=
+void
+drawerror(Display *d, char *s)
+{
+    char err[ERRMAX];
+
+    if(d && d->error)
+        d->error(d, s);
+    else{
+        errstr(err, sizeof err);
+        fprint(2, "draw: %s: %s\n", s, err);
+        exits(s);
+    }
+}
+@
+
 
 \chapter{VGA driver}
 

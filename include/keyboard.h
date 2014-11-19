@@ -19,7 +19,6 @@ struct	Keyboardctl
 };
 /*e: struct Keyboardctl */
 
-
 extern	Keyboardctl*	initkeyboard(char*);
 extern	int		ctlkeyboard(Keyboardctl*, char*);
 extern	void		closekeyboard(Keyboardctl*);

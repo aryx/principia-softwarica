@@ -25,10 +25,8 @@
 //
 //	write(1,buf,n);
 //	return 1;
-/*s: function main (lib_graphics/libmemdraw/tests/arctest.c) */
 //}
-
-
+/*s: function main (lib_graphics/libmemdraw/tests/arctest.c) */
 void
 main(int argc, char **argv)
 {

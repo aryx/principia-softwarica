@@ -149,18 +149,6 @@ vgaclose(Chan* c)
 }
 /*e: function vgaclose */
 
-//static void
-//checkport(int start, int end)
-//{
-//  /* standard vga regs are OK */
-//  if(start >= 0x2b0 && end <= 0x2df+1)
-//      return;
-//  if(start >= 0x3c0 && end <= 0x3da+1)
-//      return;
-//
-//  if(iounused(start, end))
-//      return;
-//  error(Eperm);
 /*s: function vgaread */
 //}
 
@@ -511,20 +499,22 @@ Dev vgadevtab = {
     .name     =    "vga",
                
     .reset    =    vgareset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
+
     .attach   =    vgaattach,
     .walk     =    vgawalk,
-    .stat     =    vgastat,
     .open     =    vgaopen,
-    .create   =    devcreate,
     .close    =    vgaclose,
     .read     =    vgaread,
-    .bread    =    devbread,
     .write    =    vgawrite,
+    .stat     =    vgastat,
+    .wstat    =    devwstat,
+
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .create   =    devcreate,
+    .bread    =    devbread,
     .bwrite   =    devbwrite,
     .remove   =    devremove,
-    .wstat    =    devwstat,
 };
 /*e: global vgadevtab */
 /*e: kernel/devices/screen/386/devvga.c */

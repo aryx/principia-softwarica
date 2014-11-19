@@ -23,12 +23,12 @@ _setdrawop(Display *d, Drawop op)
 static void
 draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
 {
-    uchar *a;
+    byte *a;
 
     _setdrawop(dst->display, op);
 
     a = bufimage(dst->display, 1+4+4+4+4*4+2*4+2*4);
-    if(a == 0)
+    if(a == nil)
         return;
     if(src == nil)
         src = dst->display->black;

@@ -140,6 +140,7 @@ extern void	freememimage(Memimage*);
 extern int		loadmemimage(Memimage*, Rectangle, uchar*, int);
 extern int		cloadmemimage(Memimage*, Rectangle, uchar*, int);
 extern int		unloadmemimage(Memimage*, Rectangle, uchar*, int);
+
 extern ulong*	wordaddr(Memimage*, Point);
 extern uchar*	byteaddr(Memimage*, Point);
 extern int		drawclip(Memimage*, Rectangle*, Memimage*, Point*, Memimage*, Point*, Rectangle*, Rectangle*);
@@ -149,22 +150,33 @@ extern int		memsetchan(Memimage*, ulong);
 /*
  * Graphics
  */
+extern void	memimageinit(void);
+
 extern void	memdraw(Memimage*, Rectangle, Memimage*, Point, Memimage*, Point, int);
+extern void	memimagedraw(Memimage*, Rectangle, Memimage*, Point, Memimage*, Point, int);
+
 extern void	memline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
+extern void	memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
+extern void	_memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, Rectangle, int);
+
+
 extern void	mempoly(Memimage*, Point*, int, int, int, int, Memimage*, Point, int);
 extern void	memfillpoly(Memimage*, Point*, int, int, Memimage*, Point, int);
 extern void	_memfillpolysc(Memimage*, Point*, int, int, Memimage*, Point, int, int, int, int);
-extern void	memimagedraw(Memimage*, Rectangle, Memimage*, Point, Memimage*, Point, int);
-extern int	hwdraw(Memdrawparam*);
-extern void	memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
-extern void	_memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, Rectangle, int);
-extern Point	memimagestring(Memimage*, Point, Memimage*, Point, Memsubfont*, char*);
+
+
 extern void	memellipse(Memimage*, Point, int, int, int, Memimage*, Point, int);
+
 extern void	memarc(Memimage*, Point, int, int, int, Memimage*, Point, int, int, int);
+
+extern Point	memimagestring(Memimage*, Point, Memimage*, Point, Memsubfont*, char*);
+
+extern int	hwdraw(Memdrawparam*);
+
+
 extern Rectangle	memlinebbox(Point, Point, int, int, int);
 extern int	memlineendsize(int);
 extern void	_memmkcmap(void);
-extern void	memimageinit(void);
 
 /*
  * Subfont management

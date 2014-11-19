@@ -88,7 +88,7 @@ screensize(int x, int y, int z, ulong chan)
         gscreendata.bdata = softscreen = p;
         if(scr->dev && scr->dev->page){
             scr->vaddr = KADDR(VGAMEM());
-            scr->apsize = 1<<16;
+            scr->apsize = 1<<16; // >>
         }
         scr->useflush = 1;
     }
