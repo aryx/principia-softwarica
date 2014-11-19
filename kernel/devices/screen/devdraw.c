@@ -90,20 +90,28 @@ struct KDraw
 /*s: struct Client */
 struct Client
 {
-    Ref     r;
+    int     clientid; // dirno?
+
     DImage*     dimage[NHASH];
+
+    int     op;
+
+    /*s: [[Client]] other fields */
     CScreen*    cscreen;
+
     Refresh*    refresh;
     Rendez      refrend;
+
     uchar*      readdata;
     int     nreaddata;
+
     int     busy;
-    int     clientid;
     int     slot;
     int     refreshme;
     int     infoid;
-
-    int     op;
+    /*e: [[Client]] other fields */
+    // Extra
+    Ref     r;
 };
 /*e: struct Client */
 
@@ -683,8 +691,8 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
     DImage *d;
 
     d = allocdimage(i);
-    if(d == 0)
-        return 0;
+    if(d == nil)
+        return nil;
     d->id = id;
     d->dscreen = dscreen;
     d->next = client->dimage[id&HASHMASK];
@@ -1612,9 +1620,8 @@ drawmesg(Client *client, void *av, int n)
     /*s: [[drawmesg()]] locals */
     byte *a;
     int m = 0;
-
     char *fmt = nil;
-
+    /*x: [[drawmesg()]] locals */
     int c, repl, y, dstid, scrnid, ni, ci, j, nw, e0, e1, op, ox, oy, oesize, esize, doflush;
     byte *u, refresh;
     ulong value, chan;
@@ -1660,6 +1667,7 @@ drawmesg(Client *client, void *av, int n)
             value = BGLONG(a+47);
             if(drawlookup(client, dstid, 0))
                 error(Eimageexists);
+
             if(scrnid){
                 dscrn = drawlookupscreen(client, scrnid, &cs);
                 scrn = dscrn->screen;
@@ -1704,14 +1712,17 @@ drawmesg(Client *client, void *av, int n)
                 }
                 continue;
             }
-            i = allocmemimage(r, chan);
-            if(i == 0)
+
+            i = allocmemimage(r, chan); // The call
+
+            if(i == nil)
                 error(Edrawmem);
             if(repl)
                 i->flags |= Frepl;
             i->clipr = clipr;
             if(!repl)
                 rectclip(&i->clipr, r);
+
             if(drawinstall(client, dstid, i, 0) == 0){
                 freememimage(i);
                 error(Edrawmem);
@@ -1726,9 +1737,11 @@ drawmesg(Client *client, void *av, int n)
             if(n < m)
                 error(Eshortdraw);
             ll = drawlookup(client, BGLONG(a+1), 0);
+
             if(ll && ll->dscreen && ll->dscreen->owner != client)
                 ll->dscreen->owner->refreshme = 1;
-            drawuninstall(client, BGLONG(a+1));
+
+            drawuninstall(client, BGLONG(a+1)); // The call
             continue;
 
         /*x: [[drawmesg()]] cases */
@@ -1756,8 +1769,8 @@ drawmesg(Client *client, void *av, int n)
             op = drawclientop(client);
 
             memdraw(dst, r, src, p, mask, q, op); // the call!
-            dstflush(dstid, dst, r);
 
+            dstflush(dstid, dst, r);
             continue;
 
         /*x: [[drawmesg()]] cases */
@@ -1828,9 +1841,9 @@ drawmesg(Client *client, void *av, int n)
             pp = malloc(ni*sizeof(Point));
             if(pp == nil)
                 error(Enomem);
-            doflush = 0;
+            doflush = false;
             if(dstid==0 || (dst->layer && dst->layer->screen->image->data == screenimage->data))
-                doflush = 1;    /* simplify test in loop */
+                doflush = true;    /* simplify test in loop */
             ox = oy = 0;
             esize = 0;
             u = a+m;
@@ -1869,10 +1882,11 @@ drawmesg(Client *client, void *av, int n)
             if(y == 1)
                 dstflush(dstid, dst, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
             op = drawclientop(client);
+
             if(*a == 'p')
-                mempoly(dst, pp, ni, e0, e1, j, src, sp, op);
+                mempoly(dst, pp, ni, e0, e1, j, src, sp, op); // The call
             else
-                memfillpoly(dst, pp, ni, e0, src, sp, op);
+                memfillpoly(dst, pp, ni, e0, src, sp, op); // The call
             free(pp);
             m = u-a;
             continue;
@@ -1908,9 +1922,10 @@ drawmesg(Client *client, void *av, int n)
             if(ox & (1<<31)){
                 if((ox & (1<<30)) == 0)
                     ox &= ~(1<<31);
-                memarc(dst, p, e0, e1, c, src, sp, ox, oy, op);
+                memarc(dst, p, e0, e1, c, src, sp, ox, oy, op); // The call
             }else
-                memellipse(dst, p, e0, e1, c, src, sp, op);
+                memellipse(dst, p, e0, e1, c, src, sp, op); // The call
+
             dstflush(dstid, dst, Rect(p.x-e0-j, p.y-e1-j, p.x+e0+j+1, p.y+e1+j+1));
 
             continue;
@@ -2136,6 +2151,7 @@ drawmesg(Client *client, void *av, int n)
             client->readdata = mallocz(c, 0);
             if(client->readdata == nil)
                 error("readimage malloc failed");
+
             client->nreaddata = memunload(i, r, client->readdata, c);
             if(client->nreaddata < 0){
                 free(client->readdata);
@@ -2144,6 +2160,27 @@ drawmesg(Client *client, void *av, int n)
             }
             continue;
 
+        /*x: [[drawmesg()]] cases */
+        /* write: 'y' id[4] R[4*4] data[x*1] */
+        /* write from compressed data: 'Y' id[4] R[4*4] data[x*1] */
+        case 'y':
+        case 'Y':
+            printmesg(fmt="LR", a, 0);
+        //  iprint("load %c\n", *a);
+            m = 1+4+4*4;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            dst = drawimage(client, a+1);
+            drawrectangle(&r, a+5);
+            if(!rectinrect(r, dst->r))
+                error(Ewriteoutside);
+            y = memload(dst, r, a+m, n-m, *a=='Y');
+            if(y < 0)
+                error("bad writeimage call");
+            dstflush(dstid, dst, r);
+            m += y;
+            continue;
         /*x: [[drawmesg()]] cases */
         /* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
         case 'A':
@@ -2161,7 +2198,7 @@ drawmesg(Client *client, void *av, int n)
             if(ddst==0 || dsrc==0)
                 error(Enodrawimage);
 
-            if(drawinstallscreen(client, 0, dstid, ddst, dsrc, a[13]) == 0)
+            if(drawinstallscreen(client, 0, dstid, ddst, dsrc, a[13]) == 0) // The call
                 error(Edrawmem);
             continue;
 
@@ -2173,7 +2210,7 @@ drawmesg(Client *client, void *av, int n)
             if(n < m)
                 error(Eshortdraw);
             drawlookupscreen(client, BGLONG(a+1), &cs);
-            drawuninstallscreen(client, cs);
+            drawuninstallscreen(client, cs); // The call
             continue;
 
         /*x: [[drawmesg()]] cases */
@@ -2191,7 +2228,8 @@ drawmesg(Client *client, void *av, int n)
                 error(Enodrawscreen);
             if(dscrn->screen->image->chan != BGLONG(a+5))
                 error("inconsistent chan");
-            if(drawinstallscreen(client, dscrn, 0, 0, 0, 0) == 0)
+
+            if(drawinstallscreen(client, dscrn, 0, 0, 0, 0) == 0) // The call
                 error(Edrawmem);
             continue;
 
@@ -2207,7 +2245,9 @@ drawmesg(Client *client, void *av, int n)
                 drawpoint(&p, a+5);
                 drawpoint(&q, a+13);
                 r = dst->layer->screenr;
-                ni = memlorigin(dst, p, q);
+
+                ni = memlorigin(dst, p, q); // The call
+
                 if(ni < 0)
                     error("image origin failed");
                 if(ni > 0){
@@ -2247,10 +2287,12 @@ drawmesg(Client *client, void *av, int n)
             for(j=1; j<nw; j++)
                 if(lp[j]->layer->screen != lp[0]->layer->screen)
                     error("images not on same screen");
+
             if(a[1])
-                memltofrontn(lp, nw);
+                memltofrontn(lp, nw); // The call
             else
-                memltorearn(lp, nw);
+                memltorearn(lp, nw); // The call
+
             if(lp[0]->layer->screen->image->data == screenimage->data)
                 for(j=0; j<nw; j++)
                     addflush(lp[j]->layer->screenr);
@@ -2260,27 +2302,6 @@ drawmesg(Client *client, void *av, int n)
             free(lp);
             continue;
 
-        /*x: [[drawmesg()]] cases */
-        /* write: 'y' id[4] R[4*4] data[x*1] */
-        /* write from compressed data: 'Y' id[4] R[4*4] data[x*1] */
-        case 'y':
-        case 'Y':
-            printmesg(fmt="LR", a, 0);
-        //  iprint("load %c\n", *a);
-            m = 1+4+4*4;
-            if(n < m)
-                error(Eshortdraw);
-            dstid = BGLONG(a+1);
-            dst = drawimage(client, a+1);
-            drawrectangle(&r, a+5);
-            if(!rectinrect(r, dst->r))
-                error(Ewriteoutside);
-            y = memload(dst, r, a+m, n-m, *a=='Y');
-            if(y < 0)
-                error("bad writeimage call");
-            dstflush(dstid, dst, r);
-            m += y;
-            continue;
         /*x: [[drawmesg()]] cases */
         /* toggle debugging: 'D' val[1] */
         case 'D':

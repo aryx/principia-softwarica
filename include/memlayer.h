@@ -52,6 +52,6 @@ int			memlsetrefresh(Memimage*, Refreshfn, void*);
 void			memlhide(Memimage*, Rectangle);
 void			memlexpose(Memimage*, Rectangle);
 void			_memlsetclear(Memscreen*);
-int			memlorigin(Memimage*, Point, Point);
+int				memlorigin(Memimage*, Point, Point);
 void			memlnorefresh(Memimage*, Rectangle, void*);
 /*e: include/memlayer.h */

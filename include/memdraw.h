@@ -19,14 +19,18 @@ typedef struct	Memdrawparam	Memdrawparam;
  * The first word of data is a back pointer to the Memdata, to find
  * The word to patch.
  */
-
 struct Memdata
 {
     ulong	*base;	/* allocated data pointer */
-    uchar	*bdata;	/* pointer to first byte of actual data; word-aligned */
+    // the pixels!
+    byte	*bdata;	/* pointer to first byte of actual data; word-aligned */
+
+    /*s: [[Memdata]] other fields */
     int		ref;		/* number of Memimages using this data */
+
     void*	imref;
     int		allocd;	/* is this malloc'd? */
+    /*e: [[Memdata]] other fields */
 };
 /*e: struct Memdata */
 
@@ -46,20 +50,27 @@ struct Memimage
 {
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle	clipr;		/* clipping region */
-    int		depth;	/* number of bits of storage per pixel */
-    int		nchan;	/* number of channels */
-    ulong	chan;	/* channel descriptions */
-    Memcmap	*cmap;
 
+    int		depth;	/* number of bits of storage per pixel */
+    ulong	chan;	/* channel descriptions */
+    int		nchan;	/* number of channels */
+
+    // finally, the raw pixels
     Memdata	*data;	/* pointer to data; shared by windows in this image */
+
+    /*s: [[MemImage]] other fields */
+    Memcmap	*cmap;
     int		zero;		/* data->bdata+zero==&byte containing (0,0) */
     ulong	width;	/* width in words of a single scan line */
-    Memlayer	*layer;	/* nil if not a layer*/
+
     ulong	flags;
 
     int		shift[NChan];
     int		mask[NChan];
     int		nbits[NChan];
+    /*x: [[MemImage]] other fields */
+    Memlayer	*layer;	/* nil if not a layer*/
+    /*e: [[MemImage]] other fields */
 };
 /*e: struct Memimage */
 
@@ -152,17 +163,17 @@ extern int		memsetchan(Memimage*, ulong);
  */
 extern void	memimageinit(void);
 
+// actually in memlayer
 extern void	memdraw(Memimage*, Rectangle, Memimage*, Point, Memimage*, Point, int);
 extern void	memimagedraw(Memimage*, Rectangle, Memimage*, Point, Memimage*, Point, int);
 
+// actually in memlayer/
 extern void	memline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
 extern void	memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
-extern void	_memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, Rectangle, int);
 
 
 extern void	mempoly(Memimage*, Point*, int, int, int, int, Memimage*, Point, int);
 extern void	memfillpoly(Memimage*, Point*, int, int, Memimage*, Point, int);
-extern void	_memfillpolysc(Memimage*, Point*, int, int, Memimage*, Point, int, int, int, int);
 
 
 extern void	memellipse(Memimage*, Point, int, int, int, Memimage*, Point, int);
@@ -195,6 +206,11 @@ extern	Memimage*	memblack;
 extern	Memimage*	memopaque;
 extern	Memimage*	memtransparent;
 extern	Memcmap	*memdefcmap;
+
+
+// Forward decl? or should be fixed?
+extern void	_memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, Rectangle, int);
+extern void	_memfillpolysc(Memimage*, Point*, int, int, Memimage*, Point, int, int, int, int);
 
 /*
  * Kernel interface

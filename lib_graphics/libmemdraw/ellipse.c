@@ -41,7 +41,6 @@ struct ParamEllipse {
  * denote residual error by e(x,y) = b^2*x^2 + a^2*y^2 - a^2*b^2
  * e(x,y) = 0 on ellipse, e(x,y) < 0 inside, e(x,y) > 0 outside
  */
-
 struct State {
     int	a;
     int	x;

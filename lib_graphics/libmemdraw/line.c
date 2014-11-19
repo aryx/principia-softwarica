@@ -45,7 +45,6 @@ lmax(int a, int b)
  * For speed, we check for clipping outside the loop and make the
  * test easy when possible.
  */
-
 static
 void
 horline1(Memimage *dst, Point p0, Point p1, int srcval, Rectangle clipr)

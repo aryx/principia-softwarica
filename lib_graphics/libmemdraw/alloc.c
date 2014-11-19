@@ -90,6 +90,7 @@ allocmemimage(Rectangle r, ulong chan)
         return nil;
 
     md->ref = 1;
+    // the big alloc!
     md->base = poolalloc(imagmem, sizeof(Memdata*)+(1+nw)*sizeof(ulong));
     if(md->base == nil){
         free(md);

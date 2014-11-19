@@ -122,9 +122,8 @@ static ulong imgtorgba(Memimage*, ulong);
 static ulong rgbatoimg(Memimage*, ulong);
 static ulong pixelbits(Memimage*, Point);
 
-/*s: function memimagedraw */
 //#define DBG if(0)
-
+/*s: function memimagedraw */
 void
 memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
 {

@@ -220,9 +220,6 @@ struct Screen
 /*s: struct Display */
 struct Display
 {
-    char	*devdir; // /dev in general
-    char	*windir; // /dev in general
-
     int		dirno; // /dev/draw/x
 
     fdt		fd;    // /dev/draw/x/data
@@ -247,22 +244,29 @@ struct Display
     Image	*opaque;
     Image	*transparent;
 
-
+    /*s: [[Display]] other fields */
     QLock	qlock;
     int		locking;	/*program is using lockdisplay */
-
-    int		imageid;
+    /*x: [[Display]] other fields */
     int		local;
     char	oldlabel[64];
     ulong	dataqid;
-
+    /*x: [[Display]] other fields */
+    bool	_isnewdisplay;
+    /*x: [[Display]] other fields */
+    char	*devdir; // /dev in general
+    char	*windir; // /dev in general
+    /*x: [[Display]] other fields */
+    int		imageid;
+    /*x: [[Display]] other fields */
     Font	*defaultfont;
     Subfont	*defaultsubfont;
-
+    /*x: [[Display]] other fields */
+    // list<ref<Window>> (next = Image.next)
     Image	*windows;
+    /*x: [[Display]] other fields */
     Image	*screenimage; // ???
-
-    bool	_isnewdisplay;
+    /*e: [[Display]] other fields */
 };
 /*e: struct Display */
 
@@ -275,15 +279,19 @@ struct Image
 
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;		/* clipping region */
-    int			depth;		/* number of bits per pixel */
 
+    int			depth;		/* number of bits per pixel */
     ulong		chan;
-    int			repl;		/* flag: data replicates to tile clipr */
 
     /*s: [[Image]] other fields */
+    int			repl;		/* flag: data replicates to tile clipr */
+    /*x: [[Image]] other fields */
     Screen		*screen;	/* 0 if not a window */
-    Image		*next;	/* next in list of windows */
     /*e: [[Image]] other fields */
+    // Extra
+    /*s: [[Image]] extra fields */
+    Image		*next;	/* next in list of windows */
+    /*e: [[Image]] extra fields */
 };
 /*e: struct Image */
 
@@ -297,18 +305,6 @@ struct RGB
 /*e: struct RGB */
 
 /*s: struct Fontchar */
-/*
- * Subfonts
- *
- * given char c, Subfont *f, Fontchar *i, and Point p, one says
- *	i = f->info+c;
- *	draw(b, Rect(p.x+i->left, p.y+i->top,
- *		p.x+i->left+((i+1)->x-i->x), p.y+i->bottom),
- *		color, f->bits, Pt(i->x, i->top));
- *	p.x += i->width;
- * to draw characters in the specified color (itself an Image) in Image b.
- */
-
 struct	Fontchar
 {
     int		x;		/* left edge of bits */
@@ -320,12 +316,24 @@ struct	Fontchar
 /*e: struct Fontchar */
 
 /*s: struct Subfont */
+/*
+ * Subfonts
+ *
+ * given char c, Subfont *f, Fontchar *i, and Point p, one says
+ *	i = f->info+c;
+ *	draw(b, Rect(p.x+i->left, p.y+i->top,
+ *		p.x+i->left+((i+1)->x-i->x), p.y+i->bottom),
+ *		color, f->bits, Pt(i->x, i->top));
+ *	p.x += i->width;
+ * to draw characters in the specified color (itself an Image) in Image b.
+ */
 struct	Subfont
 {
     char		*name;
     short		n;		/* number of chars in font */
     uchar		height;		/* height of image */
     char		ascent;		/* top of image to baseline */
+
     Fontchar 	*info;		/* n+1 character descriptors */
     Image		*bits;		/* of font */
     int		ref;

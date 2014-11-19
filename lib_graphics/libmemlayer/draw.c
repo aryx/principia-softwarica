@@ -76,7 +76,7 @@ if(drawdebug)	iprint("mask->layer != nil\n");
 
     Top:
     if(dst->layer==nil && src->layer==nil){
-        memimagedraw(dst, r, src, p0, mask, p1, op);
+        memimagedraw(dst, r, src, p0, mask, p1, op); // back to memdraw
         return;
     }
 

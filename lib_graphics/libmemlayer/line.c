@@ -43,6 +43,7 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
    Top:
     dl = dst->layer;
     if(dl == nil){
+        // back to memdraw/
         _memimageline(dst, p0, p1, end0, end1, radius, src, sp, clipr, op);
         return;
     }
@@ -118,6 +119,7 @@ llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
         p0 = ll->p0;
         p1 = ll->p1;
     }
+    // recurse
     _memline(dst, p0, p1, ll->end0, ll->end1, ll->radius, ll->src, ll->sp, clipr, ll->op);
 }
 /*e: function llineop */

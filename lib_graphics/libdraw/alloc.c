@@ -49,8 +49,9 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, int repl, ulong val,
 
     /* flush pending data so we don't get error allocating the image */
     flushimage(d, 0);
+
     a = bufimage(d, 1+4+4+1+4+1+4*4+4*4+4);
-    if(a == 0)
+    if(a == nil)
         goto Error;
     d->imageid++;
     id = d->imageid;
@@ -93,6 +94,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, int repl, ulong val,
             goto Error;
         }
     }
+
     i->display = d;
     i->id = id;
     i->depth = depth;
@@ -100,8 +102,8 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, int repl, ulong val,
     i->r = r;
     i->clipr = clipr;
     i->repl = repl;
-    i->screen = 0;
-    i->next = 0;
+    i->screen = nil;
+    i->next = nil;
     return i;
 }
 /*e: function _allocimage */
@@ -215,18 +217,23 @@ _freeimage1(Image *i)
     Display *d;
     Image *w;
 
-    if(i == 0 || i->display == 0)
+    if(i == nil || i->display == nil)
         return 0;
+
     /* make sure no refresh events occur on this if we block in the write */
     d = i->display;
     /* flush pending data so we don't get error deleting the image */
     flushimage(d, 0);
+
     a = bufimage(d, 1+4);
-    if(a == 0)
+    if(a == nil)
         return -1;
+
     a[0] = 'f';
     BPLONG(a+1, i->id);
+
     if(i->screen){
+        // remove_list(i, d->windows)
         w = d->windows;
         if(w == i)
             d->windows = i->next;
