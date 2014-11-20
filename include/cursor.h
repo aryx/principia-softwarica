@@ -1,6 +1,8 @@
 /*s: include/cursor.h */
 #pragma src "/sys/src/libdraw"
 
+typedef struct	Cursor Cursor;
+
 /*s: struct Cursor */
 struct	Cursor
 {

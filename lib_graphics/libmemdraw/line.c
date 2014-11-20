@@ -245,6 +245,17 @@ memlineendsize(int end)
 }
 /*e: function memlineendsize */
 
+/*s: function lmax */
+static
+int
+lmax(int a, int b)
+{
+    if(a > b)
+        return a;
+    return b;
+}
+/*e: function lmax */
+
 /*s: function memlinebbox */
 Rectangle
 memlinebbox(Point p0, Point p1, int end0, int end1, int radius)

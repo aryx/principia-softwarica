@@ -18,7 +18,9 @@
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+
+#include "../port/screen.h"
+#include "vga.h"
 
 /*s: enum _anon_ (kernel/devices/screen/386/vgavesa.c) */
 enum {

@@ -8,8 +8,9 @@ struct Cursorinfo {
 /* devmouse.c */
 extern void mousetrack(int, int, int, int);
 extern Point mousexy(void);
-
 extern void mouseaccelerate(int);
+
+// specific? maybe should not be in this interface file
 extern int m3mouseputc(Queue*, int);
 extern int m5mouseputc(Queue*, int);
 extern int mouseputc(Queue*, int);

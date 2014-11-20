@@ -7,6 +7,8 @@
 <<include/cursor.h>>=
 #pragma src "/sys/src/libdraw"
 
+typedef struct	Cursor Cursor;
+
 <<struct Cursor>>
 @
 
@@ -6878,16 +6880,6 @@ int		(*iprint)(char*, ...) = &memdraw_iprint;
 %}
 %@
 %
-%<<function lmax>>=
-%static
-%int
-%lmax(int a, int b)
-%{
-%    if(a > b)
-%        return a;
-%    return b;
-%}
-%@
 %
 %
 %% version not used
@@ -7152,6 +7144,8 @@ int		(*iprint)(char*, ...) = &memdraw_iprint;
 <<function addbbox>>
 
 <<function memlineendsize>>
+
+<<function lmax>>
 
 <<function memlinebbox>>
 @
@@ -9789,7 +9783,6 @@ memltorear(Memimage *i)
 \subsection*{[[lib_graphics/libmemlayer/unload.c]]}
 
 
-
 %-------------------------------------------------------------
 
 <<lib_graphics/libmemlayer/unload.c>>=
@@ -10522,6 +10515,44 @@ threadmain(int argc, char *argv[])
 
 
 \section{[[kernel/devices/screen/]]}
+
+\subsection*{[[kernel/devices/screen/screen.h]]}
+
+<<kernel/devices/screen/screen.h>>=
+// this used to contain the stuff now in vga.h but better to split, cleaner
+
+typedef struct Cursorinfo Cursorinfo;
+
+<<struct Cursorinfo>>
+
+/* devmouse.c */
+extern void 	mousetrack(int, int, int, int);
+extern Point 	mousexy(void);
+extern void 	mouseaccelerate(int);
+
+extern Cursorinfo 	cursor;
+extern Cursor 		arrow;
+
+/* mouse.c */
+extern void kmousectl(Cmdbuf*);
+//now in portfns_devices.h: extern void mouseresize(void);
+
+
+/* xxxscreen.c */
+extern void 	blankscreen(int);
+extern uchar* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
+extern void 	flushmemscreen(Rectangle);
+
+extern int  	cursoron(int);
+extern void 	cursoroff(int);
+extern void 	ksetcursor(Cursor*);
+
+// this used to be a macro, but then it was forbidding this file to be generic
+//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+
+bool ishwimage(Memimage*);
+
+@
 
 \subsection*{[[kernel/devices/screen/devdraw.c]]}
 
@@ -11929,15 +11960,16 @@ drawidletime(void)
 <<kernel/devices/screen/devdraw.c>>=
 #include    "u.h"
 #include    "../port/lib.h"
+#include    "../port/error.h"
 #include    "mem.h"
 #include    "dat.h"
 #include    "fns.h"
-#include    "../port/error.h"
 
 #include    <draw.h>
 #include    <memdraw.h>
 #include    <memlayer.h>
 #include    <cursor.h>
+
 #include    "screen.h"
 
 <<enum _anon_ (kernel/devices/screen/devdraw.c)>>
@@ -11991,12 +12023,13 @@ typedef struct DName DName;
 <<global flushrect>>
 <<global waste>>
 <<global dscreen>>
-extern  void        flushmemscreen(Rectangle);
+
+// forward decls
 void        drawmesg(Client*, void*, int);
 void        drawuninstall(Client*, int);
 void        drawfreedimage(DImage*);
 Client*     drawclientofpath(ulong);
-DImage* allocdimage(Memimage*);
+DImage* 	allocdimage(Memimage*);
 
 <<global Enodrawimage>>
 <<global Enodrawscreen>>
@@ -12633,7 +12666,9 @@ vgawrite(Chan* c, void* a, long n, vlong off)
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+
+#include "../port/screen.h"
+#include "vga.h"
 
 <<enum _anon_ (kernel/devices/screen/386/devvga.c)>>
 
@@ -12680,7 +12715,7 @@ vgawrite(Chan* c, void* a, long n, vlong off)
 %//  error(Eperm);
 
 
-\subsection*{[[kernel/devices/screen/386/screen.c]]}
+\subsection*{[[kernel/devices/screen/386/vgascreen.c]]}
 
 <<global physgscreenr>>=
 Rectangle physgscreenr;
@@ -13452,7 +13487,7 @@ VGAcur swcursor =
 
 %-------------------------------------------------------------
 
-<<kernel/devices/screen/386/screen.c>>=
+<<kernel/devices/screen/386/vgascreen.c>>=
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
@@ -13466,7 +13501,8 @@ VGAcur swcursor =
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+#include "../port/screen.h"
+#include "vga.h"
 
 //#define RGB2K(r,g,b)    ((156763*(r)+307758*(g)+59769*(b))>>19)
 
@@ -13488,6 +13524,17 @@ extern void vgalinearpci(VGAscr*);
 <<global didswcursorinit>>
 
 <<global softscreen>>
+
+
+
+bool
+ishwimage(Memimage* i)
+{
+  return 
+    (vgascreen[0].gscreendata && 
+     i->data->bdata == vgascreen[0].gscreendata->bdata);
+}
+
 
 <<function screensize>>
 
@@ -13562,7 +13609,7 @@ extern void vgalinearpci(VGAscr*);
 @
 
 
-\subsection*{[[kernel/devices/screen/386/screen.h]]}
+\subsection*{[[kernel/devices/screen/386/vga.h]]}
 
 <<struct Cursorinfo>>=
 struct Cursorinfo {
@@ -13686,24 +13733,13 @@ enum {
 @
 
 <<function ishwimage>>=
-#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
 @
 
 
 %-------------------------------------------------------------
 
-<<kernel/devices/screen/386/screen.h>>=
-typedef struct Cursor Cursor;
-typedef struct Cursorinfo Cursorinfo;
-<<struct Cursorinfo>>
-
-/* devmouse.c */
-extern void mousetrack(int, int, int, int);
-extern Point mousexy(void);
-extern void mouseaccelerate(int);
-
-extern Cursorinfo cursor;
-extern Cursor arrow;
+<<kernel/devices/screen/386/vga.h>>=
 
 <<enum _anon_ (kernel/devices/screen/386/screen.h)>>
 
@@ -13729,24 +13765,17 @@ extern VGAscr vgascreen[];
 
 <<enum _anon_ (kernel/devices/screen/386/screen.h)2>>
 
-/* mouse.c */
-extern void kmousectl(Cmdbuf*);
-//now in portfns_devices.h: extern void mouseresize(void);
 
 /* screen.c */
 extern int    hwaccel;  /* use hw acceleration; default on */
 extern int    hwblank;  /* use hw blanking; default on */
 extern int    panning;  /* use virtual screen panning; default off */
-extern void addvgaseg(char*, ulong, ulong);
-extern uchar* attachscreen(Rectangle*, ulong*, int*, int*, int*);
-extern void flushmemscreen(Rectangle);
-extern int  cursoron(int);
-extern void cursoroff(int);
-extern void ksetcursor(Cursor*);
+
+extern void 	addvgaseg(char*, ulong, ulong);
+
 extern int  screensize(int, int, int, ulong);
 extern int  screenaperture(int, int);
 extern Rectangle physgscreenr;  /* actual monitor size */
-extern void blankscreen(int);
 
 extern VGAcur swcursor;
 extern void swcursorinit(void);
@@ -14059,7 +14088,9 @@ addvgaseg(char *name, ulong pa, ulong size)
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+
+#include "../port/screen.h"
+#include "vga.h"
 
 <<global back2>>
 <<global conscol>>
@@ -14407,7 +14438,9 @@ VGAcur vgaclgd542xcur = {
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+
+#include "../port/screen.h"
+#include "vga.h"
 
 <<function clgd542xpageset>>
 
@@ -14693,7 +14726,9 @@ VGAdev vgavesadev = {
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+
+#include "../port/screen.h"
+#include "vga.h"
 
 <<enum _anon_ (kernel/devices/screen/386/vgavesa.c)>>
 
@@ -14835,7 +14870,9 @@ vgaxo(long port, uchar index, uchar data)
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+
+#include "../port/screen.h"
+#include "vga.h"
 
 <<global vgaxlock>>
 

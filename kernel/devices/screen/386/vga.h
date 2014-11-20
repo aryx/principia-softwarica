@@ -1,20 +1,4 @@
-/*s: kernel/devices/screen/386/screen.h */
-typedef struct Cursor Cursor;
-typedef struct Cursorinfo Cursorinfo;
-/*s: struct Cursorinfo */
-struct Cursorinfo {
-  Cursor;
-  Lock;
-};
-/*e: struct Cursorinfo */
-
-/* devmouse.c */
-extern void mousetrack(int, int, int, int);
-extern Point mousexy(void);
-extern void mouseaccelerate(int);
-
-extern Cursorinfo cursor;
-extern Cursor arrow;
+/*s: kernel/devices/screen/386/vga.h */
 
 /*s: enum _anon_ (kernel/devices/screen/386/screen.h) */
 /*
@@ -140,24 +124,17 @@ enum {
 };
 /*e: enum _anon_ (kernel/devices/screen/386/screen.h)2 */
 
-/* mouse.c */
-extern void kmousectl(Cmdbuf*);
-//now in portfns_devices.h: extern void mouseresize(void);
 
 /* screen.c */
 extern int    hwaccel;  /* use hw acceleration; default on */
 extern int    hwblank;  /* use hw blanking; default on */
 extern int    panning;  /* use virtual screen panning; default off */
-extern void addvgaseg(char*, ulong, ulong);
-extern uchar* attachscreen(Rectangle*, ulong*, int*, int*, int*);
-extern void flushmemscreen(Rectangle);
-extern int  cursoron(int);
-extern void cursoroff(int);
-extern void ksetcursor(Cursor*);
+
+extern void 	addvgaseg(char*, ulong, ulong);
+
 extern int  screensize(int, int, int, ulong);
 extern int  screenaperture(int, int);
 extern Rectangle physgscreenr;  /* actual monitor size */
-extern void blankscreen(int);
 
 extern VGAcur swcursor;
 extern void swcursorinit(void);
@@ -187,6 +164,6 @@ extern void vgablank(VGAscr*, int);
 extern Lock vgascreenlock;
 
 /*s: function ishwimage */
-#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
 /*e: function ishwimage */
-/*e: kernel/devices/screen/386/screen.h */
+/*e: kernel/devices/screen/386/vga.h */

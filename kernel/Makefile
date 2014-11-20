@@ -172,4 +172,4 @@ SRC_VIEWS= \
   syscalls/systab.c \
   syscalls/systab.h \
 
-
+# not here: network files, graphic files

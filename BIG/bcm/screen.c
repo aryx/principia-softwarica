@@ -17,6 +17,7 @@
 enum {
 	Tabstop		= 4,
 	Scroll		= 8,
+
 	Wid		= 1024,
 	Ht		= 768,
 	Depth		= 16,
@@ -57,6 +58,7 @@ static Memimage xgscreen =
 
 static Memimage *conscol;
 static Memimage *back;
+
 static Memsubfont *memdefont;
 
 static Lock screenlock;

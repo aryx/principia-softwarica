@@ -1,4 +1,4 @@
-/*s: kernel/devices/screen/386/screen.c */
+/*s: kernel/devices/screen/386/vgascreen.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
@@ -12,7 +12,8 @@
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+#include "../port/screen.h"
+#include "vga.h"
 
 //#define RGB2K(r,g,b)    ((156763*(r)+307758*(g)+59769*(b))>>19)
 
@@ -60,6 +61,17 @@ int didswcursorinit;
 /*s: global softscreen */
 static void *softscreen;
 /*e: global softscreen */
+
+
+
+bool
+ishwimage(Memimage* i)
+{
+  return 
+    (vgascreen[0].gscreendata && 
+     i->data->bdata == vgascreen[0].gscreendata->bdata);
+}
+
 
 /*s: function screensize */
 int
@@ -848,4 +860,4 @@ VGAcur swcursor =
 };
 /*e: global swcursor */
 
-/*e: kernel/devices/screen/386/screen.c */
+/*e: kernel/devices/screen/386/vgascreen.c */

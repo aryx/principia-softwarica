@@ -150,14 +150,17 @@ SRC_VIEWS= \
    ../windows/libpanel/textview.c\
    ../windows/libpanel/textwin.c\
    ../windows/libpanel/utf.c\
+   ../kernel/devices/screen/devdraw.c\
+   ../kernel/devices/screen/screen.h\
+   ../kernel/devices/screen/386/vga.h\
+   ../kernel/devices/screen/386/vgascreen.c\
    ../kernel/devices/screen/386/devvga.c\
-   ../kernel/devices/screen/386/screen.c\
-   ../kernel/devices/screen/386/screen.h\
    ../kernel/devices/screen/386/vga.c\
+   ../kernel/devices/screen/386/vgax.c\
    ../kernel/devices/screen/386/vgaclgd542x.c\
    ../kernel/devices/screen/386/vgavesa.c\
-   ../kernel/devices/screen/386/vgax.c\
-   ../kernel/devices/screen/devdraw.c\
+
+#   ../kernel/devices/screen/screen.h\
 
 #   ../lib_graphics/libmemdraw/hwdraw.c\
    ../kernel/devices/screen/386/cga.c\

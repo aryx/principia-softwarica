@@ -1,15 +1,16 @@
 /*s: kernel/devices/screen/devdraw.c */
 #include    "u.h"
 #include    "../port/lib.h"
+#include    "../port/error.h"
 #include    "mem.h"
 #include    "dat.h"
 #include    "fns.h"
-#include    "../port/error.h"
 
 #include    <draw.h>
 #include    <memdraw.h>
 #include    <memlayer.h>
 #include    <cursor.h>
+
 #include    "screen.h"
 
 /*s: enum _anon_ (kernel/devices/screen/devdraw.c) */
@@ -228,12 +229,13 @@ static  int     waste;
 /*s: global dscreen */
 static  DScreen*    dscreen;
 /*e: global dscreen */
-extern  void        flushmemscreen(Rectangle);
+
+// forward decls
 void        drawmesg(Client*, void*, int);
 void        drawuninstall(Client*, int);
 void        drawfreedimage(DImage*);
 Client*     drawclientofpath(ulong);
-DImage* allocdimage(Memimage*);
+DImage* 	allocdimage(Memimage*);
 
 /*s: global Enodrawimage */
 static  char Enodrawimage[] =   "unknown id for draw image";

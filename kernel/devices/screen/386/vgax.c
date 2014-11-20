@@ -11,7 +11,9 @@
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
-#include "screen.h"
+
+#include "../port/screen.h"
+#include "vga.h"
 
 /*s: global vgaxlock */
 static Lock vgaxlock;           /* access to index registers */
