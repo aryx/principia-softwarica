@@ -131,7 +131,7 @@ namedimage(Display *d, char *name)
             werrstr("namedimage: %r");
         if(i)
             free(i);
-        return 0;
+        return nil;
     }
     /* flush pending data so we don't get error allocating the image */
     flushimage(d, 0);

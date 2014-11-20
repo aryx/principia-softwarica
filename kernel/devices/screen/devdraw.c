@@ -760,7 +760,7 @@ drawdelname(DName *name)
 {
     int i;
 
-    i = name-sdraw.name;
+    i =  name - sdraw.name;
     memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
     sdraw.nname--;
 }
@@ -1745,11 +1745,99 @@ drawmesg(Client *client, void *av, int n)
             continue;
 
         /*x: [[drawmesg()]] cases */
+        /* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
+        case 'c':
+            printmesg(fmt="LbR", a, 0);
+            m = 1+4+1+4*4;
+            if(n < m)
+                error(Eshortdraw);
+            ddst = drawlookup(client, BGLONG(a+1), 1);
+            if(ddst == nil)
+                error(Enodrawimage);
+            if(ddst->name)
+                error("cannot change repl/clipr of shared image");
+            dst = ddst->image;
+            if(a[5])
+                dst->flags |= Frepl;
+
+            drawrectangle(&dst->clipr, a+6); // The call
+
+            continue;
+
+        /*x: [[drawmesg()]] cases */
         /* visible: 'v' */
         case 'v':
             printmesg(fmt="", a, 0);
             m = 1;
             drawflush();
+            continue;
+
+        /*x: [[drawmesg()]] cases */
+        /* name an image: 'N' dstid[4] in[1] j[1] name[j] */
+        case 'N':
+            printmesg(fmt="Lbz", a, 0);
+            m = 1+4+1+1;
+            if(n < m)
+                error(Eshortdraw);
+            c = a[5];
+            j = a[6];
+            if(j == 0)  /* give me a non-empty name please */
+                error(Eshortdraw);
+            m += j;
+            if(n < m)
+                error(Eshortdraw);
+            di = drawlookup(client, BGLONG(a+1), 0);
+            if(di == nil)
+                error(Enodrawimage);
+            if(di->name)
+                error(Enamed);
+
+            if(c)
+                drawaddname(client, di, j, (char*)a+7); // The call?
+            else{
+                dn = drawlookupname(j, (char*)a+7);
+                if(dn == nil)
+                    error(Enoname);
+                if(dn->dimage != di)
+                    error(Ewrongname);
+                drawdelname(dn);
+            }
+            continue;
+
+        /*x: [[drawmesg()]] cases */
+        /* attach to a named image: 'n' dstid[4] j[1] name[j] */
+        case 'n':
+            printmesg(fmt="Lz", a, 0);
+            m = 1+4+1;
+            if(n < m)
+                error(Eshortdraw);
+            j = a[5];
+            if(j == 0)  /* give me a non-empty name please */
+                error(Eshortdraw);
+            m += j;
+            if(n < m)
+                error(Eshortdraw);
+            dstid = BGLONG(a+1);
+            if(drawlookup(client, dstid, 0))
+                error(Eimageexists);
+
+            dn = drawlookupname(j, (char*)a+6); // The call?
+
+            if(dn == nil)
+                error(Enoname);
+            if(drawinstall(client, dstid, dn->dimage->image, 0) == 0)
+                error(Edrawmem);
+
+            di = drawlookup(client, dstid, 0);
+            if(di == nil)
+                error("draw: cannot happen");
+            di->vers = dn->vers;
+            di->name = smalloc(j+1);
+            di->fromname = dn->dimage;
+            di->fromname->ref++;
+            memmove(di->name, a+6, j);
+            di->name[j] = 0;
+            client->infoid = dstid;
             continue;
 
         /*x: [[drawmesg()]] cases */
@@ -2053,88 +2141,6 @@ drawmesg(Client *client, void *av, int n)
             continue;
 
         /*x: [[drawmesg()]] cases */
-        /* name an image: 'N' dstid[4] in[1] j[1] name[j] */
-        case 'N':
-            printmesg(fmt="Lbz", a, 0);
-            m = 1+4+1+1;
-            if(n < m)
-                error(Eshortdraw);
-            c = a[5];
-            j = a[6];
-            if(j == 0)  /* give me a non-empty name please */
-                error(Eshortdraw);
-            m += j;
-            if(n < m)
-                error(Eshortdraw);
-            di = drawlookup(client, BGLONG(a+1), 0);
-            if(di == 0)
-                error(Enodrawimage);
-            if(di->name)
-                error(Enamed);
-            if(c)
-                drawaddname(client, di, j, (char*)a+7);
-            else{
-                dn = drawlookupname(j, (char*)a+7);
-                if(dn == nil)
-                    error(Enoname);
-                if(dn->dimage != di)
-                    error(Ewrongname);
-                drawdelname(dn);
-            }
-            continue;
-
-        /*x: [[drawmesg()]] cases */
-        /* attach to a named image: 'n' dstid[4] j[1] name[j] */
-        case 'n':
-            printmesg(fmt="Lz", a, 0);
-            m = 1+4+1;
-            if(n < m)
-                error(Eshortdraw);
-            j = a[5];
-            if(j == 0)  /* give me a non-empty name please */
-                error(Eshortdraw);
-            m += j;
-            if(n < m)
-                error(Eshortdraw);
-            dstid = BGLONG(a+1);
-            if(drawlookup(client, dstid, 0))
-                error(Eimageexists);
-            dn = drawlookupname(j, (char*)a+6);
-            if(dn == nil)
-                error(Enoname);
-            if(drawinstall(client, dstid, dn->dimage->image, 0) == 0)
-                error(Edrawmem);
-            di = drawlookup(client, dstid, 0);
-            if(di == 0)
-                error("draw: cannot happen");
-            di->vers = dn->vers;
-            di->name = smalloc(j+1);
-            di->fromname = dn->dimage;
-            di->fromname->ref++;
-            memmove(di->name, a+6, j);
-            di->name[j] = 0;
-            client->infoid = dstid;
-            continue;
-
-        /*x: [[drawmesg()]] cases */
-        /* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
-        case 'c':
-            printmesg(fmt="LbR", a, 0);
-            m = 1+4+1+4*4;
-            if(n < m)
-                error(Eshortdraw);
-            ddst = drawlookup(client, BGLONG(a+1), 1);
-            if(ddst == nil)
-                error(Enodrawimage);
-            if(ddst->name)
-                error("cannot change repl/clipr of shared image");
-            dst = ddst->image;
-            if(a[5])
-                dst->flags |= Frepl;
-            drawrectangle(&dst->clipr, a+6);
-            continue;
-
-        /*x: [[drawmesg()]] cases */
         /* read: 'r' id[4] R[4*4] */
         case 'r':
             printmesg(fmt="LR", a, 0);
@@ -2147,12 +2153,14 @@ drawmesg(Client *client, void *av, int n)
                 error(Ereadoutside);
             c = bytesperline(r, i->depth);
             c *= Dy(r);
+
             free(client->readdata);
             client->readdata = mallocz(c, 0);
             if(client->readdata == nil)
                 error("readimage malloc failed");
 
-            client->nreaddata = memunload(i, r, client->readdata, c);
+            client->nreaddata = memunload(i, r, client->readdata, c); // The call
+
             if(client->nreaddata < 0){
                 free(client->readdata);
                 client->readdata = nil;
@@ -2175,7 +2183,9 @@ drawmesg(Client *client, void *av, int n)
             drawrectangle(&r, a+5);
             if(!rectinrect(r, dst->r))
                 error(Ewriteoutside);
-            y = memload(dst, r, a+m, n-m, *a=='Y');
+
+            y = memload(dst, r, a+m, n-m, *a=='Y'); // The call
+
             if(y < 0)
                 error("bad writeimage call");
             dstflush(dstid, dst, r);

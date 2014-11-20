@@ -54,26 +54,29 @@ struct Menu
 /*
  * Events
  */
-extern void	 einit(ulong);
-extern ulong	 estart(ulong, int, int);
-extern ulong	 estartfn(ulong, int, int, int (*fn)(int, Event*, uchar*, int));
-extern ulong	 etimer(ulong, int);
+extern void		einit(ulong);
+extern ulong	estart(ulong, int, int);
+extern ulong	estartfn(ulong, int, int, int (*fn)(int, Event*, uchar*, int));
 extern ulong	 event(Event*);
 extern ulong	 eread(ulong, Event*);
-extern Mouse	 emouse(void);
-extern int	 ekbd(void);
 extern int	 ecanread(ulong);
-extern int	 ecanmouse(void);
-extern int	 ecankbd(void);
+
+extern Mouse	emouse(void);
+extern int	 	ekbd(void);
+extern ulong	etimer(ulong, int);
+extern int	 	ecanmouse(void);
+extern int	 	ecankbd(void);
+
 //ugly!!!
 extern void	 eresized(int);	/* supplied by user */
-extern int	 emenuhit(int, Mouse*, Menu*);
-extern int	eatomouse(Mouse*, char*, int);
-extern Rectangle	getrect(int, Mouse*);
-extern void	 esetcursor(Cursor*);
-extern void	 emoveto(Point);
-extern Rectangle	egetrect(int, Mouse*);
+
+extern int	 	emenuhit(int, Mouse*, Menu*);
+extern void	 	esetcursor(Cursor*);
+extern void	 	emoveto(Point);
 extern void		edrawgetrect(Rectangle, int);
 extern int		ereadmouse(Mouse*);
 extern int		eatomouse(Mouse*, char*, int);
+
+extern Rectangle	getrect(int, Mouse*);
+extern Rectangle	egetrect(int, Mouse*);
 /*e: include/event.h */

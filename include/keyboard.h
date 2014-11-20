@@ -20,8 +20,8 @@ struct	Keyboardctl
 /*e: struct Keyboardctl */
 
 extern	Keyboardctl*	initkeyboard(char*);
-extern	int		ctlkeyboard(Keyboardctl*, char*);
-extern	void		closekeyboard(Keyboardctl*);
+extern	int				ctlkeyboard(Keyboardctl*, char*);
+extern	void			closekeyboard(Keyboardctl*);
 
 /*s: enum _anon_ (include/keyboard.h) */
 enum {

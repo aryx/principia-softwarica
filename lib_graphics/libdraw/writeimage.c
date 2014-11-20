@@ -78,6 +78,7 @@ writeimage(int fd, Image *i, int dolock)
         if(nb != dy*bpl)
             goto ErrOut;
     }
+
     sprint(hdr, "compressed\n%11s %11d %11d %11d %11d ",
         chantostr(cbuf, i->chan), r.min.x, r.min.y, r.max.x, r.max.y);
     if(write(fd, hdr, 11+5*12) != 11+5*12)

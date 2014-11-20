@@ -81,12 +81,12 @@ int	_ifmt(Fmt*);
 void
 memimageinit(void)
 {
-    static int didinit = 0;
+    static bool didinit = false;
 
     if(didinit)
         return;
 
-    didinit = 1;
+    didinit = true;
 
     if(strcmp(imagmem->name, "Image") == 0 || strcmp(imagmem->name, "image") == 0)
         imagmem->move = memimagemove;
@@ -2618,31 +2618,6 @@ if(0) if(drawdebug) iprint("chardraw? mf %lux md %d sf %lux dxs %d dys %d dd %d 
 
 
 /*s: function memfillcolor */
-/*
- * Fill entire byte with replicated (if necessary) copy of source pixel,
- * assuming destination ldepth is >= source ldepth.
- *
- * This code is just plain wrong for >8bpp.
- *
-ulong
-membyteval(Memimage *src)
-{
-    int i, val, bpp;
-    uchar uc;
-
-    unloadmemimage(src, src->r, &uc, 1);
-    bpp = src->depth;
-    uc <<= (src->r.min.x&(7/src->depth))*src->depth;
-    uc &= ~(0xFF>>bpp);
-    /* pixel value is now in high part of byte. repeat throughout byte 
-    val = uc;
-    for(i=bpp; i<8; i<<=1)
-        val |= val>>i;
-    return val;
-}
- * 
- */
-
 void
 memfillcolor(Memimage *i, ulong val)
 {

@@ -194,39 +194,6 @@ combinerect(Rectangle *r1, Rectangle r2)
 }
 /*e: function combinerect */
 
-/*s: global drawld2chan */
-ulong drawld2chan[] = {
-    GREY1,
-    GREY2,
-    GREY4,
-    CMAP8,
-};
-/*e: global drawld2chan */
-
-/*s: global log2 */
-/*
- * was used by libmemlayer/line.c; made static, instead of deleting it,
- * to avoid updating many binaries on sources.
- */
-static int log2[] = { -1, 0, 1, -1, 2, -1, -1, -1, 3, -1, -1, -1, -1, -1, -1, -1, 4, -1, -1, -1, -1, -1, -1, -1, 4 /* BUG */, -1, -1, -1, -1, -1, -1, -1, 5 };
-/*e: global log2 */
-
-/*s: function setalpha */
-ulong
-setalpha(ulong color, uchar alpha)
-{
-    int red, green, blue;
-
-    red = (color >> 3*8) & 0xFF;
-    green = (color >> 2*8) & 0xFF;
-    blue = (color >> 1*8) & 0xFF;
-    /* ignore incoming alpha */
-    red = (red * alpha)/255;
-    green = (green * alpha)/255;
-    blue = (blue * alpha)/255;
-    return (red<<3*8) | (green<<2*8) | (blue<<1*8) | (alpha<<0*8);
-}
-/*e: function setalpha */
 
 /*s: global ZP */
 Point	ZP;

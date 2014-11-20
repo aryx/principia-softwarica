@@ -47,11 +47,14 @@ struct Menu
  * Mouse
  */
 extern Mousectl*	initmouse(char*, Image*);
-extern void		moveto(Mousectl*, Point);
-extern int		readmouse(Mousectl*);
-extern void		closemouse(Mousectl*);
-extern void		setcursor(Mousectl*, Cursor*);
-extern void		drawgetrect(Rectangle, int);
+extern void			closemouse(Mousectl*);
+
+extern int			readmouse(Mousectl*);
+extern void			moveto(Mousectl*, Point);
+extern void			setcursor(Mousectl*, Cursor*);
+
+extern void			drawgetrect(Rectangle, int);
 extern Rectangle	getrect(int, Mousectl*);
-extern int	 	menuhit(int, Mousectl*, Menu*, Screen*);
+
+extern int	 		menuhit(int, Mousectl*, Menu*, Screen*);
 /*e: include/mouse.h */

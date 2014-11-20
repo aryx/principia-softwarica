@@ -25,6 +25,7 @@ readmemimage(int fd)
     }
     if(memcmp(hdr, "compressed\n", 11) == 0)
         return creadmemimage(fd);
+
     if(readn(fd, hdr+11, 5*12-11) != 5*12-11){
         werrstr("readimage: short header (2)");
         return nil;

@@ -27,6 +27,7 @@ SRC_VIEWS= \
    ../include/memdraw.h\
    ../include/memlayer.h\
    ../include/mouse.h\
+   libdraw/misc.c\
    libdraw/alloc.c\
    libdraw/allocimagemix.c\
    libdraw/arith.c\

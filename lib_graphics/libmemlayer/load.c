@@ -22,7 +22,7 @@ memload(Memimage *dst, Rectangle r, uchar *data, int n, int iscompressed)
     Top:
     dl = dst->layer;
     if(dl == nil)
-        return loadfn(dst, r, data, n);
+        return (*loadfn)(dst, r, data, n);
 
     /*
    * Convert to screen coordinates.

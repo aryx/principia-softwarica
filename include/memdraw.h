@@ -59,7 +59,6 @@ struct Memimage
     Memdata	*data;	/* pointer to data; shared by windows in this image */
 
     /*s: [[MemImage]] other fields */
-    Memcmap	*cmap;
     int		zero;		/* data->bdata+zero==&byte containing (0,0) */
     ulong	width;	/* width in words of a single scan line */
 
@@ -68,6 +67,8 @@ struct Memimage
     int		shift[NChan];
     int		mask[NChan];
     int		nbits[NChan];
+    /*x: [[MemImage]] other fields */
+    Memcmap	*cmap;
     /*x: [[MemImage]] other fields */
     Memlayer	*layer;	/* nil if not a layer*/
     /*e: [[MemImage]] other fields */
@@ -130,9 +131,9 @@ struct	Memdrawparam
     int op;
 
     ulong state;
-    ulong mval;	/* if Simplemask, the mask pixel in mask format */
+    ulong mval;		/* if Simplemask, the mask pixel in mask format */
     ulong mrgba;	/* mval in rgba */
-    ulong sval;	/* if Simplesrc, the source pixel in src format */
+    ulong sval;		/* if Simplesrc, the source pixel in src format */
     ulong srgba;	/* sval in rgba */
     ulong sdval;	/* sval in dst format */
 };
@@ -141,21 +142,22 @@ struct	Memdrawparam
 /*
  * Memimage management
  */
-
 extern Memimage*	allocmemimage(Rectangle, ulong);
 extern Memimage*	allocmemimaged(Rectangle, ulong, Memdata*);
+extern void			freememimage(Memimage*);
+
 extern Memimage*	readmemimage(int);
+extern int			writememimage(int, Memimage*);
+extern int			loadmemimage(Memimage*, Rectangle, uchar*, int);
+extern int			unloadmemimage(Memimage*, Rectangle, uchar*, int);
 extern Memimage*	creadmemimage(int);
-extern int	writememimage(int, Memimage*);
-extern void	freememimage(Memimage*);
-extern int		loadmemimage(Memimage*, Rectangle, uchar*, int);
-extern int		cloadmemimage(Memimage*, Rectangle, uchar*, int);
-extern int		unloadmemimage(Memimage*, Rectangle, uchar*, int);
+extern int			cloadmemimage(Memimage*, Rectangle, uchar*, int);
 
 extern ulong*	wordaddr(Memimage*, Point);
 extern uchar*	byteaddr(Memimage*, Point);
+
 extern int		drawclip(Memimage*, Rectangle*, Memimage*, Point*, Memimage*, Point*, Rectangle*, Rectangle*);
-extern void	memfillcolor(Memimage*, ulong);
+extern void		memfillcolor(Memimage*, ulong);
 extern int		memsetchan(Memimage*, ulong);
 
 /*
@@ -169,7 +171,6 @@ extern void	memimagedraw(Memimage*, Rectangle, Memimage*, Point, Memimage*, Poin
 
 // actually in memlayer/
 extern void	memline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
-extern void	memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
 
 
 extern void	mempoly(Memimage*, Point*, int, int, int, int, Memimage*, Point, int);
@@ -182,20 +183,21 @@ extern void	memarc(Memimage*, Point, int, int, int, Memimage*, Point, int, int, 
 
 extern Point	memimagestring(Memimage*, Point, Memimage*, Point, Memsubfont*, char*);
 
+// !!!
 extern int	hwdraw(Memdrawparam*);
 
 
 extern Rectangle	memlinebbox(Point, Point, int, int, int);
-extern int	memlineendsize(int);
-extern void	_memmkcmap(void);
+extern int			memlineendsize(int);
+extern void			_memmkcmap(void);
 
 /*
  * Subfont management
  */
 extern Memsubfont*	allocmemsubfont(char*, int, int, int, Fontchar*, Memimage*);
+extern void			freememsubfont(Memsubfont*);
 extern Memsubfont*	openmemsubfont(char*);
-extern void	freememsubfont(Memsubfont*);
-extern Point	memsubfontwidth(Memsubfont*, char*);
+extern Point		memsubfontwidth(Memsubfont*, char*);
 extern Memsubfont*	getmemdefont(void);
 
 /*
@@ -205,11 +207,15 @@ extern	Memimage*	memwhite;
 extern	Memimage*	memblack;
 extern	Memimage*	memopaque;
 extern	Memimage*	memtransparent;
+
 extern	Memcmap	*memdefcmap;
 
 
 // Forward decl? or should be fixed?
 extern void	_memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, Rectangle, int);
+//todo: remove this one and rename the previous one
+//extern void	memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
+
 extern void	_memfillpolysc(Memimage*, Point*, int, int, Memimage*, Point, int, int, int, int);
 
 /*
@@ -223,6 +229,7 @@ void		memimagemove(void*, void*);
 extern void	rdb(void);
 extern int	(*iprint)(char*, ...);
 #pragma varargck argpos iprint 1
+
 extern int		drawdebug;
 
 /*

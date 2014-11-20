@@ -13,6 +13,7 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
+% - deadcode (Displaybufsize, )
 
 %thx to codemap/codegraph/scheck:
 % - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -247,35 +248,40 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %string.c: draw text
  %stringbg.c
 
-%alloc.c
-%allocimagemix.c:
+%alloc.c: alloc images
+ %bytesperline.c: resolution -> malloc size 
+  %(actually used in memdraw/alloc.c, but also here by readimage.c/...)
+ %allocimagemix.c: ??
 
-%chan.c
-%rgb.c
+%chan.c: channel functions
+%rgb.c: rgb
 %readcolmap.c
 %writecolmap.c
 
-%readimage.c
-%writeimage.c
-%loadimage.c
-%unloadimage.c
-%cloadimage.c
-%creadimage.c
+%readimage.c:
+%loadimage.c:
+%writeimage.c:
+%unloadimage.c:
+%cloadimage.c: compressed load image
+%creadimage.c: compressed read image
+%computil.c: compression utilities
 
 %window.c
 %newwindow.c
 
 
 
-%event.c
 %mouse.c
 %keyboard.c
-
-%emenuhit.c
+%event.c
 %menuhit.c
+%getrect.c
+%emenuhit.c
+%egetrect.c
+%scroll.c
 
 %debug.c
-%fmt.c
+%fmt.c: dumper
 
 
 %font.c
@@ -295,14 +301,11 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %writesubfont.c
 
 
-%bytesperline.c
-%computil.c
+
 %drawrepl.c
-%egetrect.c
-%getrect.c
 %rectclip.c
 %replclipr.c
-%scroll.c
+
 %stringwidth.c
 
 
@@ -311,6 +314,7 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %-------------------
 
 %draw.c
+
 %hwdraw.c
 
 %line.c
@@ -320,18 +324,17 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %arc.c
 %string.c
 
-%alloc.c
+%alloc.c: memimage?
 
 %cmap.c
 
-%load.c
-%unload.c
+%load.c:
+%unload.c:
 
-%read.c
-%write.c
-
-%cload.c
-%cread.c
+%read.c:
+%write.c:
+%cload.c: compressed load
+%cread.c: compressed read
 
 
 %subfont.c
@@ -341,7 +344,7 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 %replmul.c
 
-%iprint.c
+%iprint.c: kernel cruft
 
 
 
@@ -372,6 +375,11 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 \section{Architecture overview}
 
+% complicated. Even just user side is complicated. So when
+% add kernel side, it can get tricky. Maybe easier to first
+% show archi on user side, the relation between the important
+% types (Display, Image, Rectangle, etc)
+
 % app, library, kernel draw server, vga driver
 % kernel vs libs vs apps (vs rio)
 
@@ -382,16 +390,22 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 % libdraw -> KERNEL -> devdraw -> libmemdraw | libmemlayer -> devvga -> clgd5446
 % that's a lot of entities
 
-% line, doline, memline , linescreen
+% xxx, doxxx, memxxx, memlxxx, drawxxx, screenxxx
 
-% Display
-%  Image (User side, id) MemImage (Kernel side, id -> full structure)
+% Display (User side, dirno) Client (Kernel side, vga structure) 
+%  Image (User side, id) MemImage (Kernel side, id -> full structure) DImage
+%   can draw on that (lines, rectangles, lines, ellipses, text, etc)
 %  Screen
 %   Window (Image)
 
 % devvga
 %  why imagmem? why imagmem and mainmem? why not use other allocator?
 %  see screen/user/notes.txt especially about the old way to get graphics on PC
+
+
+% read/load cload/cread
+% unload/write
+% ???
 
 
 % about RPC vs framebuffer.
@@ -598,8 +612,8 @@ struct Memimage
 };
 @
 
+
 <<[[MemImage]] other fields>>=
-Memcmap	*cmap;
 int		zero;		/* data->bdata+zero==&byte containing (0,0) */
 ulong	width;	/* width in words of a single scan line */
 
@@ -637,6 +651,47 @@ int		ref;		/* number of Memimages using this data */
 
 void*	imref;
 int		allocd;	/* is this malloc'd? */
+@
+
+
+
+
+
+<<function byteaddr>>=
+uchar*
+byteaddr(Memimage *i, Point p)
+{
+    uchar *a;
+
+    a = i->data->bdata+i->zero+sizeof(ulong)*p.y*i->width;
+
+    if(i->depth < 8){
+        /*
+         * We need to always round down,
+         * but C rounds toward zero.
+         */
+        int np;
+        np = 8/i->depth;
+        if(p.x < 0)
+            return a+(p.x-np+1)/np;
+        else
+            return a+p.x/np;
+    }
+    else
+        return a+p.x*(i->depth/8);
+}
+@
+
+% memfillcolor -> <>
+<<function wordaddr>>=
+/*
+ * Wordaddr is deprecated.
+ */
+ulong*
+wordaddr(Memimage *i, Point p)
+{
+    return (ulong*) ((uintptr)byteaddr(i, p) & ~(sizeof(ulong)-1));
+}
 @
 
 \section{Image channels}
@@ -732,6 +787,9 @@ chantodepth(ulong c)
 @
 
 
+
+
+
 \section{Colors}
 
 <<enum _anon_>>=
@@ -771,6 +829,108 @@ enum
     
 };
 @
+
+\section{Color map}
+
+% CMAP vs RGB????
+
+<<[[MemImage]] other fields>>=
+Memcmap	*cmap;
+@
+
+<<struct Memcmap>>=
+struct Memcmap
+{
+    uchar	cmap2rgb[3*256];
+    uchar	rgb2cmap[16*16*16];
+};
+@
+
+
+% dead? seems not very used, was in arith.c
+<<function setalpha>>=
+ulong
+setalpha(ulong color, uchar alpha)
+{
+    int red, green, blue;
+
+    red = (color >> 3*8) & 0xFF;
+    green = (color >> 2*8) & 0xFF;
+    blue = (color >> 1*8) & 0xFF;
+    /* ignore incoming alpha */
+    red = (red * alpha)/255;
+    green = (green * alpha)/255;
+    blue = (blue * alpha)/255;
+    return (red<<3*8) | (green<<2*8) | (blue<<1*8) | (alpha<<0*8);
+}
+@
+% >> >> >> >>
+
+
+
+% there is an optimized but less appealing version in comment below
+<<function rgb2cmap>>=
+int
+rgb2cmap(int cr, int cg, int cb)
+{
+    int i, r, g, b, sq;
+    ulong rgb;
+    int best, bestsq;
+
+    best = 0;
+    bestsq = 0x7FFFFFFF;
+    // find best candidate
+    for(i=0; i<256; i++){
+        rgb = cmap2rgb(i);
+        r = (rgb>>16) & 0xFF;
+        g = (rgb>>8) & 0xFF;
+        b = (rgb>>0) & 0xFF;
+        sq = (r-cr)*(r-cr)+(g-cg)*(g-cg)+(b-cb)*(b-cb);
+        if(sq < bestsq){
+            bestsq = sq;
+            best = i;
+        }
+    }
+    return best;
+}
+@
+
+<<function cmap2rgb>>=
+int
+cmap2rgb(int c)
+{
+    int j, num, den, r, g, b, v, rgb;
+
+    r = c>>6;
+    v = (c>>4)&3;
+    j = (c-v+r)&15;
+    g = j>>2;
+    b = j&3;
+    den=r;
+    if(g>den)
+        den=g;
+    if(b>den)
+        den=b;
+    if(den==0) {
+        v *= 17;
+        rgb = (v<<16)|(v<<8)|v;
+    }
+    else{
+        num=17*(4*den+v);
+        rgb = ((r*num/den)<<16)|((g*num/den)<<8)|(b*num/den);
+    }
+    return rgb;
+}
+@
+
+<<function cmap2rgba>>=
+int
+cmap2rgba(int c)
+{
+    return (cmap2rgb(c)<<8)|0xFF;
+}
+@
+% >> 
 
 \section{[[Font]] and [[Subfont]]}
 % and [[font]]
@@ -845,6 +1005,34 @@ struct	Fontchar
 };
 @
 
+
+
+
+<<struct Memsubfont>>=
+/*
+ * Subfonts
+ *
+ * given char c, Subfont *f, Fontchar *i, and Point p, one says
+ *	i = f->info+c;
+ *	draw(b, Rect(p.x+i->left, p.y+i->top,
+ *		p.x+i->left+((i+1)->x-i->x), p.y+i->bottom),
+ *		color, f->bits, Pt(i->x, i->top));
+ *	p.x += i->width;
+ * to draw characters in the specified color (itself a Memimage) in Memimage b.
+ */
+
+struct	Memsubfont
+{
+    char		*name;
+    short	n;		/* number of chars in font */
+    uchar	height;		/* height of bitmap */
+    char	ascent;		/* top of bitmap to baseline */
+    Fontchar *info;		/* n+1 character descriptors */
+    Memimage	*bits;		/* of font */
+};
+@
+
+
 \section{[[Drawop]] and [[Memdrawparam]]}
 <<enum drawop>>=
 enum drawop
@@ -872,6 +1060,21 @@ enum drawop
 @
 
 
+
+<<enum _anon_ (include/memdraw.h)2>>=
+/*
+ * Encapsulated parameters and information for sub-draw routines.
+ */
+enum {
+    Simplesrc=1<<0,
+    Simplemask=1<<1,
+    Replsrc=1<<2,
+    Replmask=1<<3,
+    Fullmask=1<<4,
+};
+@
+% >> >> >> >> >>
+
 <<struct Memdrawparam>>=
 struct	Memdrawparam
 {
@@ -884,9 +1087,9 @@ struct	Memdrawparam
     int op;
 
     ulong state;
-    ulong mval;	/* if Simplemask, the mask pixel in mask format */
+    ulong mval;		/* if Simplemask, the mask pixel in mask format */
     ulong mrgba;	/* mval in rgba */
-    ulong sval;	/* if Simplesrc, the source pixel in src format */
+    ulong sval;		/* if Simplesrc, the source pixel in src format */
     ulong srgba;	/* sval in rgba */
     ulong sdval;	/* sval in dst format */
 };
@@ -926,7 +1129,10 @@ Memlayer	*layer;	/* nil if not a layer*/
 % TODO Memlayer type here
 
 
-\chapter{[[initdraw()]]}
+
+\chapter{Initialisation}
+
+\section{[[initdraw()]]}
 
 <<function initdraw>>=
 errorcodeneg1
@@ -1149,10 +1355,6 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 @
 
 
-<<[[initdisplay()]] install dumpers>>=
-fmtinstall('P', Pfmt);
-fmtinstall('R', Rfmt);
-@
 
 <<[[initdisplay()]] check arguments validity>>=
 if(dev == nil)
@@ -1308,6 +1510,150 @@ if(gengetwindow(display, buf, &screen, &_screen, ref) < 0)
     goto Error;
 @
 % ???
+
+<<function gengetwindow>>=
+/*
+ * Attach, or possibly reattach, to window.
+ * If reattaching, maintain value of screen pointer.
+ */
+int
+gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
+{
+    int n, fd;
+    char buf[64+1];
+    Image *image;
+    Rectangle r;
+
+    fd = open(winname, OREAD);
+    if(fd<0 || (n=read(fd, buf, sizeof buf-1))<=0){
+        if((image=d->image) == nil){
+            fprint(2, "gengetwindow: %r\n");
+            *winp = nil;
+            d->screenimage = nil;
+            return -1;
+        }
+        strcpy(buf, "noborder");
+    }else{
+        close(fd);
+        buf[n] = '\0';
+        if(*winp != nil){
+            _freeimage1(*winp);
+            freeimage((*scrp)->image);
+            freescreen(*scrp);
+            *scrp = nil;
+        }
+        image = namedimage(d, buf);
+        if(image == 0){
+            fprint(2, "namedimage %s failed: %r\n", buf);
+            *winp = nil;
+            d->screenimage = nil;
+            return -1;
+        }
+        assert(image->chan != 0);
+    }
+
+    d->screenimage = image;
+    *scrp = allocscreen(image, d->white, 0);
+    if(*scrp == nil){
+        freeimage(d->screenimage);
+        *winp = nil;
+        d->screenimage = nil;
+        return -1;
+    }
+
+    r = image->r;
+    if(strncmp(buf, "noborder", 8) != 0)
+        r = insetrect(image->r, Borderwidth);
+    *winp = _allocwindow(*winp, *scrp, r, ref, DWhite);
+    if(*winp == nil){
+        freescreen(*scrp);
+        *scrp = nil;
+        freeimage(image);
+        d->screenimage = nil;
+        return -1;
+    }
+    d->screenimage = *winp;
+    assert((*winp)->chan != 0);
+    return 1;
+}
+@
+
+
+<<function getwindow>>=
+int
+getwindow(Display *d, int ref)
+{
+    char winname[128];
+
+    snprint(winname, sizeof winname, "%s/winname", d->windir);
+    return gengetwindow(d, winname, &screen, &_screen, ref);
+}
+@
+
+\section{[[memimageinit()]]}
+
+% ?? called by user?
+<<function memimageinit>>=
+void
+memimageinit(void)
+{
+    static bool didinit = false;
+
+    if(didinit)
+        return;
+
+    didinit = true;
+
+    if(strcmp(imagmem->name, "Image") == 0 || strcmp(imagmem->name, "image") == 0)
+        imagmem->move = memimagemove;
+
+    mktables();
+    _memmkcmap();
+
+    fmtinstall('R', Rfmt); 
+    fmtinstall('P', Pfmt);
+    fmtinstall('b', _ifmt);
+
+    memones = allocmemimage(Rect(0,0,1,1), GREY1);
+    memones->flags |= Frepl;
+    memones->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+    *byteaddr(memones, ZP) = ~0;
+
+    memzeros = allocmemimage(Rect(0,0,1,1), GREY1);
+    memzeros->flags |= Frepl;
+    memzeros->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+    *byteaddr(memzeros, ZP) = 0;
+
+    if(memones == nil || memzeros == nil)
+        assert(0 /*cannot initialize memimage library */);	/* RSC BUG */
+
+    memwhite = memones;
+    memblack = memzeros;
+    memopaque = memones;
+    memtransparent = memzeros;
+}
+@
+
+% kernel interface?
+% memimageinit(imag->move = <>)
+<<function memimagemove>>=
+void
+memimagemove(void *from, void *to)
+{
+    Memdata *md;
+
+    md = *(Memdata**)to;
+    if(md->base != from){
+        print("compacted data not right: #%p\n", md->base);
+        abort();
+    }
+    md->base = to;
+
+    /* if allocmemimage changes this must change too */
+    md->bdata = (uchar*)md->base+sizeof(Memdata*)+sizeof(ulong);
+}
+@
+
 
 \chapter{User/Kernel Bridge}
 
@@ -1497,7 +1843,21 @@ drawmesg(Client *client, void *av, int n)
 % quickly copy on main image (d->image)
 % the initial d->image is actually allocated for you
 
+
 \subsection{API}
+
+<<enum _anon_ (include/memdraw.h)>>=
+enum {
+    Frepl	= 1<<0,	/* is replicated */
+    Fsimple	= 1<<1,	/* is 1x1 */
+    Fgrey	= 1<<2,	/* is grey */
+    Falpha	= 1<<3,	/* has explicit alpha */
+    Fcmap	= 1<<4,	/* has cmap channel */
+    Fbytes	= 1<<5,	/* has only 8-bit channels */
+};
+@
+
+
 
 <<function allocimage>>=
 Image*
@@ -1523,6 +1883,49 @@ freeimage(Image *i)
     return ret;
 }
 @
+
+<<function allocimagemix>>=
+Image*
+allocimagemix(Display *d, ulong color1, ulong color3)
+{
+    Image *t, *b;
+    static Image *qmask;
+
+    if(qmask == nil)
+        qmask = allocimage(d, Rect(0,0,1,1), GREY8, 1, 0x3F3F3FFF);
+        
+    if(d->screenimage->depth <= 8){	/* create a 2×2 texture */
+        t = allocimage(d, Rect(0,0,1,1), d->screenimage->chan, 0, color1);
+        if(t == nil)
+            return nil;
+
+        b = allocimage(d, Rect(0,0,2,2), d->screenimage->chan, 1, color3);
+        if(b == nil){
+            freeimage(t);
+            return nil;
+        }
+
+        draw(b, Rect(0,0,1,1), t, nil, ZP);
+        freeimage(t);
+        return b;
+    }else{	/* use a solid color, blended using alpha */
+        t = allocimage(d, Rect(0,0,1,1), d->screenimage->chan, 1, color1);
+        if(t == nil)
+            return nil;
+
+        b = allocimage(d, Rect(0,0,1,1), d->screenimage->chan, 1, color3);
+        if(b == nil){
+            freeimage(t);
+            return nil;
+        }
+
+        draw(b, b->r, t, qmask, ZP);
+        freeimage(t);
+        return b;
+    }
+}
+@
+
 
 \subsection{Marshalling}
 
@@ -1665,6 +2068,17 @@ _freeimage1(Image *i)
 @
 
 \subsection{Unmarshalling}
+
+<<enum _anon_ (include/draw.h)2>>=
+enum
+{
+    /* refresh methods */
+    Refbackup	= 0,
+    Refnone		= 1,
+    Refmesg		= 2 // incomplete apparently
+};
+@
+
 
 <<[[drawmesg()]] cases>>=
 /* new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4] */
@@ -1821,6 +2235,44 @@ allocmemimage(Rectangle r, ulong chan)
 }
 @
 
+<<function wordsperline>>=
+int
+wordsperline(Rectangle r, int d)
+{
+    return unitsperline(r, d, 8*sizeof(ulong));
+}
+@
+
+<<function bytesperline>>=
+int
+bytesperline(Rectangle r, int d)
+{
+    return unitsperline(r, d, 8);
+}
+@
+
+<<function unitsperline>>=
+static
+int
+unitsperline(Rectangle r, int d, int bitsperunit)
+{
+    ulong l, t;
+
+    if(d <= 0 || d > 32)	/* being called wrong.  d is image depth. */
+        abort();
+
+    if(r.min.x >= 0){
+        l = (r.max.x*d+bitsperunit-1)/bitsperunit;
+        l -= (r.min.x*d)/bitsperunit;
+    }else{			/* make positive before divide */
+        t = (-r.min.x*d+bitsperunit-1)/bitsperunit;
+        l = t+(r.max.x*d+bitsperunit-1)/bitsperunit;
+    }
+    return l;
+}
+@
+
+
 %Memimage ctor
 <<function allocmemimaged>>=
 Memimage*
@@ -1866,6 +2318,54 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
     return i;
 }
 @
+
+<<function memsetchan>>=
+int
+memsetchan(Memimage *i, ulong chan)
+{
+    int d;
+    int t, j, k;
+    ulong cc;
+    int bytes;
+
+    if((d = chantodepth(chan)) == 0) {
+        werrstr("bad channel descriptor");
+        return -1;
+    }
+
+    i->depth = d;
+    i->chan = chan;
+    i->flags &= ~(Fgrey|Falpha|Fcmap|Fbytes);
+    bytes = 1;
+    for(cc=chan, j=0, k=0; cc; j+=NBITS(cc), cc>>=8, k++){
+        t=TYPE(cc);
+        if(t < 0 || t >= NChan){
+            werrstr("bad channel string");
+            return -1;
+        }
+        if(t == CGrey)
+            i->flags |= Fgrey;
+        if(t == CAlpha)
+            i->flags |= Falpha;
+        if(t == CMap && i->cmap == nil){
+            i->cmap = memdefcmap;
+            i->flags |= Fcmap;
+        }
+
+        i->shift[t] = j;
+        i->mask[t] = (1<<NBITS(cc))-1;
+        i->nbits[t] = NBITS(cc);
+        if(NBITS(cc) != 8)
+            bytes = 0;
+    }
+    i->nchan = k;
+    if(bytes)
+        i->flags |= Fbytes;
+    return 0;
+}
+@
+% >>
+
 
 
 <<function freememimage>>=
@@ -1997,6 +2497,82 @@ drawfreedimage(DImage *dimage)
     free(dimage);
 }
 @
+
+\section{Clipping}
+
+<<function rectclip>>=
+int
+rectclip(Rectangle *rp, Rectangle b)		/* first by reference, second by value */
+{
+    Rectangle *bp = &b;
+    /*
+     * Expand rectXrect() in line for speed
+     */
+    if((rp->min.x<bp->max.x && bp->min.x<rp->max.x &&
+        rp->min.y<bp->max.y && bp->min.y<rp->max.y)==0)
+        return 0;
+    /* They must overlap */
+    if(rp->min.x < bp->min.x)
+        rp->min.x = bp->min.x;
+    if(rp->min.y < bp->min.y)
+        rp->min.y = bp->min.y;
+    if(rp->max.x > bp->max.x)
+        rp->max.x = bp->max.x;
+    if(rp->max.y > bp->max.y)
+        rp->max.y = bp->max.y;
+    return 1;
+}
+@
+
+\subsection{API}
+
+<<function replclipr>>=
+void
+replclipr(Image *i, int repl, Rectangle clipr)
+{
+    uchar *b;
+
+    b = bufimage(i->display, 22);
+    b[0] = 'c';
+    BPLONG(b+1, i->id);
+    repl = repl!=0;
+    b[5] = repl;
+    BPLONG(b+6, clipr.min.x);
+    BPLONG(b+10, clipr.min.y);
+    BPLONG(b+14, clipr.max.x);
+    BPLONG(b+18, clipr.max.y);
+    i->repl = repl;
+    i->clipr = clipr;
+}
+@
+
+\subsection{Marshalling}
+
+\subsection{Unmarshalling}
+
+<<[[drawmesg()]] cases>>=
+/* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
+case 'c':
+    printmesg(fmt="LbR", a, 0);
+    m = 1+4+1+4*4;
+    if(n < m)
+        error(Eshortdraw);
+    ddst = drawlookup(client, BGLONG(a+1), 1);
+    if(ddst == nil)
+        error(Enodrawimage);
+    if(ddst->name)
+        error("cannot change repl/clipr of shared image");
+    dst = ddst->image;
+    if(a[5])
+        dst->flags |= Frepl;
+
+    drawrectangle(&dst->clipr, a+6); // The call
+
+    continue;
+
+@
+
+\subsection{Algorithm}
 
 
 \section{Flush}
@@ -2151,6 +2727,249 @@ flushmemscreen(Rectangle r)
 }
 @
 
+
+
+\section{Naming}
+
+\subsection{API}
+
+<<function nameimage>>=
+int
+nameimage(Image *i, char *name, int in)
+{
+    uchar *a;
+    int n;
+
+    n = strlen(name);
+    a = bufimage(i->display, 1+4+1+1+n);
+    if(a == 0)
+        return 0;
+    a[0] = 'N';
+    BPLONG(a+1, i->id);
+    a[5] = in;
+    a[6] = n;
+    memmove(a+7, name, n);
+    if(flushimage(i->display, 0) < 0)
+        return 0;
+    return 1;
+}
+@
+
+<<function namedimage>>=
+Image*
+namedimage(Display *d, char *name)
+{
+    uchar *a;
+    char *err, buf[12*12+1];
+    Image *i;
+    int id, n;
+    ulong chan;
+
+    err = 0;
+    i = 0;
+
+    n = strlen(name);
+    if(n >= 256){
+        err = "name too long";
+    Error:
+        if(err)
+            werrstr("namedimage: %s", err);
+        else
+            werrstr("namedimage: %r");
+        if(i)
+            free(i);
+        return nil;
+    }
+    /* flush pending data so we don't get error allocating the image */
+    flushimage(d, 0);
+    a = bufimage(d, 1+4+1+n);
+    if(a == 0)
+        goto Error;
+    d->imageid++;
+    id = d->imageid;
+
+    a[0] = 'n';
+    BPLONG(a+1, id);
+    a[5] = n;
+    memmove(a+6, name, n);
+
+    if(flushimage(d, 0) < 0)
+        goto Error;
+
+    if(pread(d->ctlfd, buf, sizeof buf, 0) < 12*12)
+        goto Error;
+    buf[12*12] = '\0';
+
+    i = malloc(sizeof(Image));
+    if(i == nil){
+    Error1:
+        a = bufimage(d, 1+4);
+        if(a){
+            a[0] = 'f';
+            BPLONG(a+1, id);
+            flushimage(d, 0);
+        }
+        goto Error;
+    }
+    i->display = d;
+    i->id = id;
+    if((chan=strtochan(buf+2*12))==0){
+        werrstr("bad channel '%.12s' from devdraw", buf+2*12);
+        goto Error1;
+    }
+    i->chan = chan;
+    i->depth = chantodepth(chan);
+    i->repl = atoi(buf+3*12);
+    i->r.min.x = atoi(buf+4*12);
+    i->r.min.y = atoi(buf+5*12);
+    i->r.max.x = atoi(buf+6*12);
+    i->r.max.y = atoi(buf+7*12);
+    i->clipr.min.x = atoi(buf+8*12);
+    i->clipr.min.y = atoi(buf+9*12);
+    i->clipr.max.x = atoi(buf+10*12);
+    i->clipr.max.y = atoi(buf+11*12);
+    i->screen = 0;
+    i->next = 0;
+    return i;
+}
+@
+
+
+\subsection{Marshalling}
+
+\subsection{Unmarshalling}
+
+<<[[drawmesg()]] cases>>=
+/* name an image: 'N' dstid[4] in[1] j[1] name[j] */
+case 'N':
+    printmesg(fmt="Lbz", a, 0);
+    m = 1+4+1+1;
+    if(n < m)
+        error(Eshortdraw);
+    c = a[5];
+    j = a[6];
+    if(j == 0)  /* give me a non-empty name please */
+        error(Eshortdraw);
+    m += j;
+    if(n < m)
+        error(Eshortdraw);
+    di = drawlookup(client, BGLONG(a+1), 0);
+    if(di == nil)
+        error(Enodrawimage);
+    if(di->name)
+        error(Enamed);
+
+    if(c)
+        drawaddname(client, di, j, (char*)a+7); // The call?
+    else{
+        dn = drawlookupname(j, (char*)a+7);
+        if(dn == nil)
+            error(Enoname);
+        if(dn->dimage != di)
+            error(Ewrongname);
+        drawdelname(dn);
+    }
+    continue;
+
+@
+
+
+
+<<[[drawmesg()]] cases>>=
+/* attach to a named image: 'n' dstid[4] j[1] name[j] */
+case 'n':
+    printmesg(fmt="Lz", a, 0);
+    m = 1+4+1;
+    if(n < m)
+        error(Eshortdraw);
+    j = a[5];
+    if(j == 0)  /* give me a non-empty name please */
+        error(Eshortdraw);
+    m += j;
+    if(n < m)
+        error(Eshortdraw);
+    dstid = BGLONG(a+1);
+    if(drawlookup(client, dstid, 0))
+        error(Eimageexists);
+
+    dn = drawlookupname(j, (char*)a+6); // The call?
+
+    if(dn == nil)
+        error(Enoname);
+    if(drawinstall(client, dstid, dn->dimage->image, 0) == 0)
+        error(Edrawmem);
+
+    di = drawlookup(client, dstid, 0);
+    if(di == nil)
+        error("draw: cannot happen");
+    di->vers = dn->vers;
+    di->name = smalloc(j+1);
+    di->fromname = dn->dimage;
+    di->fromname->ref++;
+    memmove(di->name, a+6, j);
+    di->name[j] = 0;
+    client->infoid = dstid;
+    continue;
+
+@
+
+\subsection{Algorithm}
+
+<<function drawaddname>>=
+void
+drawaddname(Client *client, DImage *di, int n, char *str)
+{
+    DName *name, *ename, *new, *t;
+
+    name = sdraw.name;
+    ename = &name[sdraw.nname];
+    for(; name<ename; name++)
+        if(drawcmp(name->name, str, n) == 0)
+            error(Enameused);
+    t = smalloc((sdraw.nname+1)*sizeof(DName));
+    memmove(t, sdraw.name, sdraw.nname*sizeof(DName));
+    free(sdraw.name);
+    sdraw.name = t;
+    new = &sdraw.name[sdraw.nname++];
+    new->name = smalloc(n+1);
+    memmove(new->name, str, n);
+    new->name[n] = 0;
+    new->dimage = di;
+    new->client = client;
+    new->vers = ++sdraw.vers;
+}
+@
+
+<<function drawlookupname>>=
+DName*
+drawlookupname(int n, char *str)
+{
+    DName *name, *ename;
+
+    name = sdraw.name;
+    ename = &name[sdraw.nname];
+    for(; name<ename; name++)
+        if(drawcmp(name->name, str, n) == 0)
+            return name;
+    return 0;
+}
+@
+
+<<function drawdelname>>=
+void
+drawdelname(DName *name)
+{
+    int i;
+
+    i =  name - sdraw.name;
+    memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
+    sdraw.nname--;
+}
+@
+
+
+
+
 \chapter{Geometry}
 
 \section{[[Point]]}
@@ -2191,17 +3010,6 @@ eqpt(Point p, Point q)
 Point	ZP;
 @
 
-%dumper
-<<function Pfmt>>=
-int
-Pfmt(Fmt *f)
-{
-    Point p;
-
-    p = va_arg(f->args, Point);
-    return fmtprint(f, "[%d %d]", p.x, p.y);
-}
-@
 
 
 <<function addpt>>=
@@ -2286,17 +3094,6 @@ Rpt(Point min, Point max)
 @
 
 
-%dumper
-<<function Rfmt>>=
-int
-Rfmt(Fmt *f)
-{
-    Rectangle r;
-
-    r = va_arg(f->args, Rectangle);
-    return fmtprint(f, "%P %P", r.min, r.max);
-}
-@
 
 
 <<function eqrect>>=
@@ -2313,6 +3110,15 @@ eqrect(Rectangle r, Rectangle s)
 Rectangle ZR;
 @
 
+
+
+<<function Dx>>=
+#define	Dx(r)	((r).max.x-(r).min.x)
+@
+
+<<function Dy>>=
+#define	Dy(r)	((r).max.y-(r).min.y)
+@
 
 
 
@@ -2987,6 +3793,24 @@ line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src,
 }
 @
 
+% maybe could be put in advanced topics?
+<<enum _anon_ (include/draw.h)3>>=
+enum
+{
+    /* line ends */
+    Endsquare	= 0,
+    Enddisc		= 1,
+    Endarrow	= 2,
+
+    Endmask		= 0x1F
+};
+@
+
+<<function ARROW>>=
+#define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
+@
+% see draw(2) for explanations
+
 \subsection{Marshalling}
 
 <<function lineop>>=
@@ -3188,10 +4012,12 @@ llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
 
 
 
-
+% was in draw.h, but probably could be moved in drawimpl.h
+<<constant ICOSSCALE>>=
+ICOSSCALE	= 1024,
+@
 
 % back to memdraw/
-
 <<function _memimageline>>=
 void
 _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memimage *src, Point sp, Rectangle clipr, int op)
@@ -3353,41 +4179,6 @@ membrush(int radius)
 @
 
 
-<<function arrowend>>=
-static
-void
-arrowend(Point tip, Point *pp, int end, int sin, int cos, int radius)
-{
-    int x1, x2, x3;
-
-    /* before rotation */
-    if(end == Endarrow){
-        x1 = Arrow1;
-        x2 = Arrow2;
-        x3 = Arrow3;
-    }else{
-        x1 = (end>>5) & 0x1FF;	/* distance along line from end of line to tip */
-        x2 = (end>>14) & 0x1FF;	/* distance along line from barb to tip */
-        x3 = (end>>23) & 0x1FF;	/* distance perpendicular from edge of line to barb */
-    }
-
-    /* comments follow track of right-facing arrowhead */
-    pp->x = tip.x+((2*radius+1)*sin/2-x1*cos);		/* upper side of shaft */
-    pp->y = tip.y-((2*radius+1)*cos/2+x1*sin);
-    pp++;
-    pp->x = tip.x+((2*radius+2*x3+1)*sin/2-x2*cos);		/* upper barb */
-    pp->y = tip.y-((2*radius+2*x3+1)*cos/2+x2*sin);
-    pp++;
-    pp->x = tip.x;
-    pp->y = tip.y;
-    pp++;
-    pp->x = tip.x+(-(2*radius+2*x3+1)*sin/2-x2*cos);	/* lower barb */
-    pp->y = tip.y-(-(2*radius+2*x3+1)*cos/2+x2*sin);
-    pp++;
-    pp->x = tip.x+(-(2*radius+1)*sin/2-x1*cos);		/* lower side of shaft */
-    pp->y = tip.y+((2*radius+1)*cos/2-x1*sin);
-}
-@
 
 
 <<function addbbox>>=
@@ -3442,6 +4233,56 @@ memlinebbox(Point p0, Point p1, int end0, int end1, int radius)
     addbbox(&r, r1.min);
     addbbox(&r, r1.max);
     return r;
+}
+@
+
+
+\subsection{Arrows}
+
+% advanced topics?
+<<enum _anon_ (lib_graphics/libmemdraw/line.c)>>=
+enum
+{
+    Arrow1 = 8,
+    Arrow2 = 10,
+    Arrow3 = 3,
+};
+@
+
+
+<<function arrowend>>=
+static
+void
+arrowend(Point tip, Point *pp, int end, int sin, int cos, int radius)
+{
+    int x1, x2, x3;
+
+    /* before rotation */
+    if(end == Endarrow){
+        x1 = Arrow1;
+        x2 = Arrow2;
+        x3 = Arrow3;
+    }else{
+        x1 = (end>>5) & 0x1FF;	/* distance along line from end of line to tip */
+        x2 = (end>>14) & 0x1FF;	/* distance along line from barb to tip */
+        x3 = (end>>23) & 0x1FF;	/* distance perpendicular from edge of line to barb */
+    }
+
+    /* comments follow track of right-facing arrowhead */
+    pp->x = tip.x+((2*radius+1)*sin/2-x1*cos);		/* upper side of shaft */
+    pp->y = tip.y-((2*radius+1)*cos/2+x1*sin);
+    pp++;
+    pp->x = tip.x+((2*radius+2*x3+1)*sin/2-x2*cos);		/* upper barb */
+    pp->y = tip.y-((2*radius+2*x3+1)*cos/2+x2*sin);
+    pp++;
+    pp->x = tip.x;
+    pp->y = tip.y;
+    pp++;
+    pp->x = tip.x+(-(2*radius+2*x3+1)*sin/2-x2*cos);	/* lower barb */
+    pp->y = tip.y-(-(2*radius+2*x3+1)*cos/2+x2*sin);
+    pp++;
+    pp->x = tip.x+(-(2*radius+1)*sin/2-x1*cos);		/* lower side of shaft */
+    pp->y = tip.y+((2*radius+1)*cos/2-x1*sin);
 }
 @
 
@@ -3634,6 +4475,21 @@ case 'P':
 @
 
 \subsection{Algorithm}
+
+<<struct Seg>>=
+struct Seg
+{
+    Point	p0;
+    Point	p1;
+    long	num;
+    long	den;
+    long	dz;
+    long	dzrem;
+    long	z;
+    long	zerr;
+    long	d;
+};
+@
 
 <<function mempoly>>=
 void
@@ -3998,6 +4854,193 @@ yscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
 @
 % >>
 
+<<function fillcolor>>=
+static void
+fillcolor(Memimage *dst, int left, int right, int y, Memimage *src, Point p)
+{
+    int srcval;
+
+    USED(src);
+    srcval = p.x;
+    p.x = left;
+    p.y = y;
+    memset(byteaddr(dst, p), srcval, right-left);
+}
+@
+
+<<function fillline>>=
+static void
+fillline(Memimage *dst, int left, int right, int y, Memimage *src, Point p, int op)
+{
+    Rectangle r;
+
+    r.min.x = left;
+    r.min.y = y;
+    r.max.x = right;
+    r.max.y = y+1;
+    p.x += left;
+    p.y += y;
+    memdraw(dst, r, src, p, memopaque, p, op);
+}
+@
+
+<<function fillpoint>>=
+static void
+fillpoint(Memimage *dst, int x, int y, Memimage *src, Point p, int op)
+{
+    Rectangle r;
+
+    r.min.x = x;
+    r.min.y = y;
+    r.max.x = x+1;
+    r.max.y = y+1;
+    p.x += x;
+    p.y += y;
+    memdraw(dst, r, src, p, memopaque, p, op);
+}
+@
+
+<<function mod>>=
+static long
+mod(long x, long y)
+{
+    long z;
+
+    z = x%y;
+    if((long)(((ulong)z)^((ulong)y)) > 0 || z == 0)
+        return z;
+    return z + y;
+}
+@
+
+<<function sdiv>>=
+static long
+sdiv(long x, long y)
+{
+    if((long)(((ulong)x)^((ulong)y)) >= 0 || x == 0)
+        return x/y;
+
+    return (x+((y>>30)|1))/y-1;
+}
+@
+
+<<function smuldivmod>>=
+static long
+smuldivmod(long x, long y, long z, long *mod)
+{
+    vlong vx;
+
+    if(x == 0 || y == 0){
+        *mod = 0;
+        return 0;
+    }
+    vx = x;
+    vx *= y;
+    *mod = vx % z;
+    if(*mod < 0)
+        *mod += z;	/* z is always >0 */
+    if((vx < 0) == (z < 0))
+        return vx/z;
+    return -((-vx)/z);
+}
+@
+
+
+<<function zsort>>=
+static void
+zsort(Seg **seg, Seg **ep)
+{
+    int done;
+    Seg **q, **p, *s;
+
+    if(ep-seg < 20) {
+        /* bubble sort by z - they should be almost sorted already */
+        q = ep;
+        do {
+            done = 1;
+            q--;
+            for(p = seg; p < q; p++) {
+                if(p[0]->z > p[1]->z) {
+                    s = p[0];
+                    p[0] = p[1];
+                    p[1] = s;
+                    done = 0;
+                }
+            }
+        } while(!done);
+    } else {
+        q = ep-1;
+        for(p = seg; p < q; p++) {
+            if(p[0]->z > p[1]->z) {
+                qsort(seg, ep-seg, sizeof(Seg*), zcompare);
+                break;
+            }
+        }
+    }
+}
+@
+
+<<function ycompare>>=
+static int
+ycompare(void *a, void *b)
+{
+    Seg **s0, **s1;
+    long y0, y1;
+
+    s0 = a;
+    s1 = b;
+    y0 = (*s0)->p0.y;
+    y1 = (*s1)->p0.y;
+
+    if(y0 < y1)
+        return -1;
+    if(y0 == y1)
+        return 0;
+    return 1;
+}
+@
+
+<<function xcompare>>=
+static int
+xcompare(void *a, void *b)
+{
+    Seg **s0, **s1;
+    long x0, x1;
+
+    s0 = a;
+    s1 = b;
+    x0 = (*s0)->p0.x;
+    x1 = (*s1)->p0.x;
+
+    if(x0 < x1)
+        return -1;
+    if(x0 == x1)
+        return 0;
+    return 1;
+}
+@
+
+<<function zcompare>>=
+static int
+zcompare(void *a, void *b)
+{
+    Seg **s0, **s1;
+    long z0, z1;
+
+    s0 = a;
+    s1 = b;
+    z0 = (*s0)->z;
+    z1 = (*s1)->z;
+
+    if(z0 < z1)
+        return -1;
+    if(z0 == z1)
+        return 0;
+    return 1;
+}
+@
+
+
 
 \section{Ellipse}
 
@@ -4113,6 +5156,18 @@ case 'E':
 
 
 \subsection{Algorithm}
+
+%/*
+% * ellipse(dst, c, a, b, t, src, sp)
+% *   draws an ellipse centered at c with semiaxes a,b>=0
+% *   and semithickness t>=0, or filled if t<0.  point sp
+% *   in src maps to c in dst
+% *
+% *   very thick skinny ellipses are brushed with circles (slow)
+% *   others are approximated by filling between 2 ellipses
+% *   criterion for very thick when b<a: t/b > 0.5*x/(1-x)
+% *   where x = b/a
+% */
 
 <<struct ParamEllipse>>=
 struct ParamEllipse {
@@ -4292,6 +5347,78 @@ erect(int x0, int y0, int x1, int y1, Param *p)
 @
 
 
+<<function step>>=
+/*
+ * return x coord of rightmost pixel on next scan line
+ */
+static
+int
+step(State *s)
+{
+    while(s->x < s->a) {
+        if(s->ee+s->b2x <= s->c1 ||	/* e(x+1,y-1/2) <= 0 */
+           s->ee+s->a2y <= s->c2) {	/* e(x+1/2,y) <= 0 (rare) */
+            s->dxe += s->d2xe;	  
+            s->ee += s->dxe;	  
+            s->b2x += s->b2;
+            s->x++;	  
+            continue;
+        }
+        s->dye += s->d2ye;	  
+        s->ee += s->dye;	  
+        s->a2y -= s->a2;
+        if(s->ee-s->a2y <= s->c2) {	/* e(x+1/2,y-1) <= 0 */
+            s->dxe += s->d2xe;	  
+            s->ee += s->dxe;	  
+            s->b2x += s->b2;
+            return s->x++;
+        }
+        break;
+    }
+    return s->x;	  
+}
+@
+
+
+
+<<function epoint>>=
+/*
+ * a brushed point similarly specified
+ */
+static
+void
+epoint(int x, int y, Param *p)
+{
+    Point p0;
+    Rectangle r;
+
+/*	print("P%d %d,%d\n", p->t, x, y);	/**/
+    p0 = Pt(p->c.x+x, p->c.y+y);
+    r = Rpt(addpt(p0, p->disc->r.min), addpt(p0, p->disc->r.max));
+    memdraw(p->dst, r, p->src, addpt(p->sp, r.min), p->disc, p->disc->r.min, p->op);
+}
+@
+
+<<function eline>>=
+/* 
+ * a brushed horizontal or vertical line similarly specified
+ */
+static
+void
+eline(int x0, int y0, int x1, int y1, Param *p)
+{
+/*	print("L%d %d,%d %d,%d\n", p->t, x0, y0, x1, y1); /**/
+    if(x1 > x0+1)
+        erect(x0+1, y0-p->t, x1-1, y1+p->t, p);
+    else if(y1 > y0+1)
+        erect(x0-p->t, y0+1, x1+p->t, y1-1, p);
+    epoint(x0, y0, p);
+    if(x1-x0 || y1-y0)
+        epoint(x1, y1, p);
+}
+@
+
+
 
 \section{Arc}
 
@@ -4338,6 +5465,37 @@ fillarcop(Image *dst, Point c, int a, int b, Image *src, Point sp, int alpha, in
 % >>
 
 \subsection{Algoritm}
+
+<<enum _anon_ (lib_graphics/libmemdraw/arc.c)>>=
+/*
+ * elarc(dst,c,a,b,t,src,sp,alpha,phi)
+ *   draws the part of an ellipse between rays at angles alpha and alpha+phi
+ *   measured counterclockwise from the positive x axis. other
+ *   arguments are as for ellipse(dst,c,a,b,t,src,sp)
+ */
+
+enum
+{
+    R, T, L, B	/* right, top, left, bottom */
+};
+@
+
+<<global corners>>=
+static
+Point corners[] = {
+    {1,1},
+    {-1,1},
+    {-1,-1},
+    {1,-1}
+};
+@
+
+<<global p00>>=
+static
+Point p00;
+@
+
+
 
 <<function memarc>>=
 /*
@@ -4457,6 +5615,8 @@ struct RGB
 
 \chapter{Fonts}
 % test code showing use of font? display the core font?
+
+
 
 \section{Text}
 % and rune
@@ -5056,248 +6216,90 @@ case 'l':
 
 \section{Font cache}
 
+<<enum _anon_ (include/draw.h)6>>=
+enum
+{
+    /* starting values */
+    LOG2NFCACHE =	6,
+    NFCACHE =	(1<<LOG2NFCACHE),	/* #chars cached */
+    NFLOOK =	5,			/* #chars to scan in cache */
+    NFSUBF =	2,			/* #subfonts to cache */
+    /* max value */
+    MAXFCACHE =	1024+NFLOOK,		/* upper limit */
+    MAXSUBF =	50,			/* generous upper limit */
+    /* deltas */
+    DSUBF = 	4,
+    /* expiry ages */
+    SUBFAGE	=	10000,
+    CACHEAGE =	10000
+};
+@
+
+
+<<struct Cachefont>>=
+struct Cachefont
+{
+    Rune		min;	/* lowest rune value to be taken from subfont */
+    Rune		max;	/* highest rune value+1 to be taken from subfont */
+    int		offset;	/* position in subfont of character at min */
+    char		*name;			/* stored in font */
+    char		*subfontname;		/* to access subfont */
+};
+@
+
+<<struct Cacheinfo>>=
+struct Cacheinfo
+{
+    ushort		x;		/* left edge of bits */
+    uchar		width;		/* width of baseline */
+    schar		left;		/* offset of baseline */
+    Rune		value;	/* value of character at this slot in cache */
+    ushort		age;
+};
+@
+
+<<struct Cachesubf>>=
+struct Cachesubf
+{
+    ulong		age;	/* for replacement */
+    Cachefont	*cf;	/* font info that owns us */
+    Subfont		*f;	/* attached subfont */
+};
+@
+
 \chapter{Composing}
 
-\chapter{Image}
+\chapter{Image IO}
+% advanced topics? not that important no?
 
-\section{Naming}
 
-\subsection{API}
-
-<<function nameimage>>=
-int
-nameimage(Image *i, char *name, int in)
-{
-    uchar *a;
-    int n;
-
-    n = strlen(name);
-    a = bufimage(i->display, 1+4+1+1+n);
-    if(a == 0)
-        return 0;
-    a[0] = 'N';
-    BPLONG(a+1, i->id);
-    a[5] = in;
-    a[6] = n;
-    memmove(a+7, name, n);
-    if(flushimage(i->display, 0) < 0)
-        return 0;
-    return 1;
-}
+<<constant NMEM>>=
+#define	NMEM	1024		/* window size */
 @
 
-<<function namedimage>>=
-Image*
-namedimage(Display *d, char *name)
-{
-    uchar *a;
-    char *err, buf[12*12+1];
-    Image *i;
-    int id, n;
-    ulong chan;
-
-    err = 0;
-    i = 0;
-
-    n = strlen(name);
-    if(n >= 256){
-        err = "name too long";
-    Error:
-        if(err)
-            werrstr("namedimage: %s", err);
-        else
-            werrstr("namedimage: %r");
-        if(i)
-            free(i);
-        return 0;
-    }
-    /* flush pending data so we don't get error allocating the image */
-    flushimage(d, 0);
-    a = bufimage(d, 1+4+1+n);
-    if(a == 0)
-        goto Error;
-    d->imageid++;
-    id = d->imageid;
-
-    a[0] = 'n';
-    BPLONG(a+1, id);
-    a[5] = n;
-    memmove(a+6, name, n);
-
-    if(flushimage(d, 0) < 0)
-        goto Error;
-
-    if(pread(d->ctlfd, buf, sizeof buf, 0) < 12*12)
-        goto Error;
-    buf[12*12] = '\0';
-
-    i = malloc(sizeof(Image));
-    if(i == nil){
-    Error1:
-        a = bufimage(d, 1+4);
-        if(a){
-            a[0] = 'f';
-            BPLONG(a+1, id);
-            flushimage(d, 0);
-        }
-        goto Error;
-    }
-    i->display = d;
-    i->id = id;
-    if((chan=strtochan(buf+2*12))==0){
-        werrstr("bad channel '%.12s' from devdraw", buf+2*12);
-        goto Error1;
-    }
-    i->chan = chan;
-    i->depth = chantodepth(chan);
-    i->repl = atoi(buf+3*12);
-    i->r.min.x = atoi(buf+4*12);
-    i->r.min.y = atoi(buf+5*12);
-    i->r.max.x = atoi(buf+6*12);
-    i->r.max.y = atoi(buf+7*12);
-    i->clipr.min.x = atoi(buf+8*12);
-    i->clipr.min.y = atoi(buf+9*12);
-    i->clipr.max.x = atoi(buf+10*12);
-    i->clipr.max.y = atoi(buf+11*12);
-    i->screen = 0;
-    i->next = 0;
-    return i;
-}
+<<constant NDUMP>>=
+#define	NDUMP	128		/* maximum length of dump */
 @
 
-
-\subsection{Marshalling}
-
-\subsection{Unmarshalling}
-
-<<[[drawmesg()]] cases>>=
-/* name an image: 'N' dstid[4] in[1] j[1] name[j] */
-case 'N':
-    printmesg(fmt="Lbz", a, 0);
-    m = 1+4+1+1;
-    if(n < m)
-        error(Eshortdraw);
-    c = a[5];
-    j = a[6];
-    if(j == 0)  /* give me a non-empty name please */
-        error(Eshortdraw);
-    m += j;
-    if(n < m)
-        error(Eshortdraw);
-    di = drawlookup(client, BGLONG(a+1), 0);
-    if(di == 0)
-        error(Enodrawimage);
-    if(di->name)
-        error(Enamed);
-    if(c)
-        drawaddname(client, di, j, (char*)a+7);
-    else{
-        dn = drawlookupname(j, (char*)a+7);
-        if(dn == nil)
-            error(Enoname);
-        if(dn->dimage != di)
-            error(Ewrongname);
-        drawdelname(dn);
-    }
-    continue;
-
+<<constant NCBLOCK>>=
+#define	NCBLOCK	6000		/* size of compressed blocks */
 @
 
-
-
-<<[[drawmesg()]] cases>>=
-/* attach to a named image: 'n' dstid[4] j[1] name[j] */
-case 'n':
-    printmesg(fmt="Lz", a, 0);
-    m = 1+4+1;
-    if(n < m)
-        error(Eshortdraw);
-    j = a[5];
-    if(j == 0)  /* give me a non-empty name please */
-        error(Eshortdraw);
-    m += j;
-    if(n < m)
-        error(Eshortdraw);
-    dstid = BGLONG(a+1);
-    if(drawlookup(client, dstid, 0))
-        error(Eimageexists);
-    dn = drawlookupname(j, (char*)a+6);
-    if(dn == nil)
-        error(Enoname);
-    if(drawinstall(client, dstid, dn->dimage->image, 0) == 0)
-        error(Edrawmem);
-    di = drawlookup(client, dstid, 0);
-    if(di == 0)
-        error("draw: cannot happen");
-    di->vers = dn->vers;
-    di->name = smalloc(j+1);
-    di->fromname = dn->dimage;
-    di->fromname->ref++;
-    memmove(di->name, a+6, j);
-    di->name[j] = 0;
-    client->infoid = dstid;
-    continue;
-
-@
-
-\subsection{Algorithm}
-
-
-
-\section{Clipping}
-
-\subsection{API}
-
-<<function replclipr>>=
-void
-replclipr(Image *i, int repl, Rectangle clipr)
-{
-    uchar *b;
-
-    b = bufimage(i->display, 22);
-    b[0] = 'c';
-    BPLONG(b+1, i->id);
-    repl = repl!=0;
-    b[5] = repl;
-    BPLONG(b+6, clipr.min.x);
-    BPLONG(b+10, clipr.min.y);
-    BPLONG(b+14, clipr.max.x);
-    BPLONG(b+18, clipr.max.y);
-    i->repl = repl;
-    i->clipr = clipr;
-}
-@
-
-\subsection{Marshalling}
-
-\subsection{Unmarshalling}
-
-<<[[drawmesg()]] cases>>=
-/* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
-case 'c':
-    printmesg(fmt="LbR", a, 0);
-    m = 1+4+1+4*4;
-    if(n < m)
-        error(Eshortdraw);
-    ddst = drawlookup(client, BGLONG(a+1), 1);
-    if(ddst == nil)
-        error(Enodrawimage);
-    if(ddst->name)
-        error("cannot change repl/clipr of shared image");
-    dst = ddst->image;
-    if(a[5])
-        dst->flags |= Frepl;
-    drawrectangle(&dst->clipr, a+6);
-    continue;
-
-@
-
-\subsection{Algorithm}
 
 
 \section{Reading images}
 
 \subsection{API}
+
+
+<<global drawld2chan>>=
+ulong drawld2chan[] = {
+    GREY1,
+    GREY2,
+    GREY4,
+    CMAP8,
+};
+@
 
 <<function readimage>>=
 Image*
@@ -5317,8 +6319,10 @@ readimage(Display *d, int fd, int dolock)
 
     if(readn(fd, hdr, 11) != 11)
         return nil;
+
     if(memcmp(hdr, "compressed\n", 11) == 0)
         return creadimage(d, fd, dolock);
+
     if(readn(fd, hdr+11, 5*12-11) != 5*12-11)
         return nil;
     if(d)
@@ -5430,7 +6434,6 @@ readimage(Display *d, int fd, int dolock)
 
 
 
-
 <<function unloadimage>>=
 int
 unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
@@ -5484,6 +6487,7 @@ unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
 @
 
 
+
 \subsection{Marshalling}
 
 \subsection{Unmarshalling}
@@ -5501,12 +6505,14 @@ case 'r':
         error(Ereadoutside);
     c = bytesperline(r, i->depth);
     c *= Dy(r);
+
     free(client->readdata);
     client->readdata = mallocz(c, 0);
     if(client->readdata == nil)
         error("readimage malloc failed");
 
-    client->nreaddata = memunload(i, r, client->readdata, c);
+    client->nreaddata = memunload(i, r, client->readdata, c); // The call
+
     if(client->nreaddata < 0){
         free(client->readdata);
         client->readdata = nil;
@@ -5518,9 +6524,106 @@ case 'r':
 
 \subsection{Algorithm}
 
+<<function memunload>>=
+int
+memunload(Memimage *src, Rectangle r, uchar *data, int n)
+{
+    Memimage *tmp;
+    Memlayer *dl;
+    Rectangle lr;
+    int dx;
+
+    Top:
+    dl = src->layer;
+    if(dl == nil)
+        return unloadmemimage(src, r, data, n);
+
+    /*
+   * Convert to screen coordinates.
+     */
+    lr = r;
+    r.min.x += dl->delta.x;
+    r.min.y += dl->delta.y;
+    r.max.x += dl->delta.x;
+    r.max.y += dl->delta.y;
+    dx = dl->delta.x&(7/src->depth);
+    if(dl->clear && dx==0){
+        src = dl->screen->image;
+        goto Top;
+    }
+
+    /*
+     * src is an obscured layer or data is unaligned
+     */
+    if(dl->save && dx==0){
+        if(dl->refreshfn != nil)
+            return -1;	/* can't unload window if it's not Refbackup */
+        if(n > 0)
+            memlhide(src, r);
+        n = unloadmemimage(dl->save, lr, data, n);
+        return n;
+    }
+    tmp = allocmemimage(lr, src->chan);
+    if(tmp == nil)
+        return -1;
+    memdraw(tmp, lr, src, lr.min, nil, lr.min, S);
+    n = unloadmemimage(tmp, lr, data, n);
+    freememimage(tmp);
+    return n;
+}
+@
+
+<<function unloadmemimage>>=
+int
+unloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
+{
+    int y, l;
+    uchar *q;
+
+    if(!rectinrect(r, i->r))
+        return -1;
+    l = bytesperline(r, i->depth);
+    if(ndata < l*Dy(r))
+        return -1;
+    ndata = l*Dy(r);
+    q = byteaddr(i, r.min);
+    for(y=r.min.y; y<r.max.y; y++){
+        memmove(data, q, l);
+        q += i->width*sizeof(ulong);
+        data += l;
+    }
+    return ndata;
+}
+@
+
 \section{Writing images}
 
 %topng </dev/screen >screen.png :) = Grab
+
+<<constant HSHIFT>>=
+#define	HSHIFT	3	/* HSHIFT==5 runs slightly faster, but hash table is 64x bigger */
+@
+
+<<constant NHASH>>=
+#define	NHASH	(1<<(HSHIFT*NMATCH))
+@
+
+<<constant HMASK>>=
+#define	HMASK	(NHASH-1)
+@
+
+<<function hupdate>>=
+#define	hupdate(h, c)	((((h)<<HSHIFT)^(c))&HMASK)
+@
+
+<<struct Hlist>>=
+struct Hlist{
+    uchar *s;
+    Hlist *next, *prev;
+};
+@
+
+% >> >>
 
 
 
@@ -5579,6 +6682,7 @@ writeimage(int fd, Image *i, int dolock)
         if(nb != dy*bpl)
             goto ErrOut;
     }
+
     sprint(hdr, "compressed\n%11s %11d %11d %11d %11d ",
         chantostr(cbuf, i->chan), r.min.x, r.min.y, r.max.x, r.max.y);
     if(write(fd, hdr, 11+5*12) != 11+5*12)
@@ -5698,13 +6802,237 @@ writeimage(int fd, Image *i, int dolock)
 }
 @
 
-
-\section{XXX}
-
-% mv? in Writing image section?
+\section{Loading images}
+% = readimage but from memory instead of file
 
 \subsection{API}
 
+<<function loadimage>>=
+int
+loadimage(Image *i, Rectangle r, uchar *data, int ndata)
+{
+    long dy;
+    int n, bpl;
+    uchar *a;
+    int chunk;
+
+    chunk = i->display->bufsize - 64;
+
+    if(!rectinrect(r, i->r)){
+        werrstr("loadimage: bad rectangle");
+        return -1;
+    }
+    bpl = bytesperline(r, i->depth);
+    n = bpl*Dy(r);
+    if(n > ndata){
+        werrstr("loadimage: insufficient data");
+        return -1;
+    }
+    ndata = 0;
+    while(r.max.y > r.min.y){
+        dy = r.max.y - r.min.y;
+        if(dy*bpl > chunk)
+            dy = chunk/bpl;
+        if(dy <= 0){
+            werrstr("loadimage: image too wide for buffer");
+            return -1;
+        }
+        n = dy*bpl;
+        a = bufimage(i->display, 21+n);
+        if(a == nil){
+            werrstr("bufimage failed");
+            return -1;
+        }
+        a[0] = 'y';
+        BPLONG(a+1, i->id);
+        BPLONG(a+5, r.min.x);
+        BPLONG(a+9, r.min.y);
+        BPLONG(a+13, r.max.x);
+        BPLONG(a+17, r.min.y+dy);
+        memmove(a+21, data, n);
+        ndata += n;
+        data += n;
+        r.min.y += dy;
+    }
+    if(flushimage(i->display, 0) < 0)
+        return -1;
+    return ndata;
+}
+@
+
+\subsection{marshalling}
+
+\subsection{Unmarshalling}
+
+<<[[drawmesg()]] cases>>=
+/* write: 'y' id[4] R[4*4] data[x*1] */
+/* write from compressed data: 'Y' id[4] R[4*4] data[x*1] */
+case 'y':
+case 'Y':
+    printmesg(fmt="LR", a, 0);
+//  iprint("load %c\n", *a);
+    m = 1+4+4*4;
+    if(n < m)
+        error(Eshortdraw);
+    dstid = BGLONG(a+1);
+    dst = drawimage(client, a+1);
+    drawrectangle(&r, a+5);
+    if(!rectinrect(r, dst->r))
+        error(Ewriteoutside);
+
+    y = memload(dst, r, a+m, n-m, *a=='Y'); // The call
+
+    if(y < 0)
+        error("bad writeimage call");
+    dstflush(dstid, dst, r);
+    m += y;
+    continue;
+@
+
+\subsection{Algorithm}
+
+<<function memload>>=
+int
+memload(Memimage *dst, Rectangle r, uchar *data, int n, int iscompressed)
+{
+    int (*loadfn)(Memimage*, Rectangle, uchar*, int);
+    Memimage *tmp;
+    Memlayer *dl;
+    Rectangle lr;
+    int dx;
+
+    loadfn = loadmemimage;
+    if(iscompressed)
+        loadfn = cloadmemimage;
+
+    Top:
+    dl = dst->layer;
+    if(dl == nil)
+        return (*loadfn)(dst, r, data, n);
+
+    /*
+   * Convert to screen coordinates.
+     */
+    lr = r;
+    r.min.x += dl->delta.x;
+    r.min.y += dl->delta.y;
+    r.max.x += dl->delta.x;
+    r.max.y += dl->delta.y;
+    dx = dl->delta.x&(7/dst->depth);
+    if(dl->clear && dx==0){
+        dst = dl->screen->image;
+        goto Top;
+    }
+
+    /*
+     * dst is an obscured layer or data is unaligned
+     */
+    if(dl->save && dx==0){
+        n = loadfn(dl->save, lr, data, n);
+        if(n > 0)
+            memlexpose(dst, r);
+        return n;
+    }
+    tmp = allocmemimage(lr, dst->chan);
+    if(tmp == nil)
+        return -1;
+    n = loadfn(tmp, lr, data, n);
+    memdraw(dst, lr, tmp, lr.min, nil, lr.min, S);
+    freememimage(tmp);
+    return n;
+}
+@
+
+
+<<function loadmemimage>>=
+int
+loadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
+{
+    int y, l, lpart, rpart, mx, m, mr;
+    uchar *q;
+
+    if(!rectinrect(r, i->r))
+        return -1;
+    l = bytesperline(r, i->depth);
+    if(ndata < l*Dy(r))
+        return -1;
+    ndata = l*Dy(r);
+    q = byteaddr(i, r.min);
+    mx = 7/i->depth;
+    lpart = (r.min.x & mx) * i->depth;
+    rpart = (r.max.x & mx) * i->depth;
+    m = 0xFF >> lpart;
+    /* may need to do bit insertion on edges */
+    if(l == 1){	/* all in one byte */
+        if(rpart)
+            m ^= 0xFF >> rpart;
+        for(y=r.min.y; y<r.max.y; y++){
+            *q ^= (*data^*q) & m;
+            q += i->width*sizeof(ulong);
+            data++;
+        }
+        return ndata;
+    }
+    if(lpart==0 && rpart==0){	/* easy case */
+        for(y=r.min.y; y<r.max.y; y++){
+            memmove(q, data, l);
+            q += i->width*sizeof(ulong);
+            data += l;
+        }
+        return ndata;
+    }
+    mr = 0xFF ^ (0xFF >> rpart);
+    if(lpart!=0 && rpart==0){
+        for(y=r.min.y; y<r.max.y; y++){
+            *q ^= (*data^*q) & m;
+            if(l > 1)
+                memmove(q+1, data+1, l-1);
+            q += i->width*sizeof(ulong);
+            data += l;
+        }
+        return ndata;
+    }
+    if(lpart==0 && rpart!=0){
+        for(y=r.min.y; y<r.max.y; y++){
+            if(l > 1)
+                memmove(q, data, l-1);
+            q[l-1] ^= (data[l-1]^q[l-1]) & mr;
+            q += i->width*sizeof(ulong);
+            data += l;
+        }
+        return ndata;
+    }
+    for(y=r.min.y; y<r.max.y; y++){
+        *q ^= (*data^*q) & m;
+        if(l > 2)
+            memmove(q+1, data+1, l-2);
+        q[l-1] ^= (data[l-1]^q[l-1]) & mr;
+        q += i->width*sizeof(ulong);
+        data += l;
+    }
+    return ndata;
+}
+@
+
+
+
+
+\section{Compressed images}
+
+\subsection{API}
+
+<<constant NMATCH>>=
+/*
+ * Compressed image file parameters and helper routines
+ */
+#define	NMATCH	3		/* shortest match possible */
+@
+
+<<constant NRUN>>=
+#define	NRUN	(NMATCH+31)	/* longest match possible */
+@
+
+% called???
 <<function cloadimage>>=
 int
 cloadimage(Image *i, Rectangle r, uchar *data, int ndata)
@@ -5753,6 +7081,7 @@ cloadimage(Image *i, Rectangle r, uchar *data, int ndata)
 }
 @
 
+% readimage -> <>
 <<function creadimage>>=
 Image *
 creadimage(Display *d, int fd, int dolock)
@@ -5875,92 +7204,244 @@ creadimage(Display *d, int fd, int dolock)
 @
 
 
-<<function loadimage>>=
-int
-loadimage(Image *i, Rectangle r, uchar *data, int ndata)
+<<function _twiddlecompressed>>=
+/*
+ * compressed data are seuences of byte codes.  
+ * if the first byte b has the 0x80 bit set, the next (b^0x80)+1 bytes
+ * are data.  otherwise, it's two bytes specifying a previous string to repeat.
+ */
+void
+_twiddlecompressed(uchar *buf, int n)
 {
-    long dy;
-    int n, bpl;
-    uchar *a;
-    int chunk;
+    uchar *ebuf;
+    int j, k, c;
 
-    chunk = i->display->bufsize - 64;
-
-    if(!rectinrect(r, i->r)){
-        werrstr("loadimage: bad rectangle");
-        return -1;
+    ebuf = buf+n;
+    while(buf < ebuf){
+        c = *buf++;
+        if(c >= 128){
+            k = c-128+1;
+            for(j=0; j<k; j++, buf++)
+                *buf ^= 0xFF;
+        }else
+            buf++;
     }
-    bpl = bytesperline(r, i->depth);
-    n = bpl*Dy(r);
-    if(n > ndata){
-        werrstr("loadimage: insufficient data");
-        return -1;
-    }
-    ndata = 0;
-    while(r.max.y > r.min.y){
-        dy = r.max.y - r.min.y;
-        if(dy*bpl > chunk)
-            dy = chunk/bpl;
-        if(dy <= 0){
-            werrstr("loadimage: image too wide for buffer");
-            return -1;
-        }
-        n = dy*bpl;
-        a = bufimage(i->display, 21+n);
-        if(a == nil){
-            werrstr("bufimage failed");
-            return -1;
-        }
-        a[0] = 'y';
-        BPLONG(a+1, i->id);
-        BPLONG(a+5, r.min.x);
-        BPLONG(a+9, r.min.y);
-        BPLONG(a+13, r.max.x);
-        BPLONG(a+17, r.min.y+dy);
-        memmove(a+21, data, n);
-        ndata += n;
-        data += n;
-        r.min.y += dy;
-    }
-    if(flushimage(i->display, 0) < 0)
-        return -1;
-    return ndata;
 }
 @
 
-\subsection{marshalling}
+<<function _compblocksize>>=
+int
+_compblocksize(Rectangle r, int depth)
+{
+    int bpl;
 
-\subsection{Unmarshalling}
-
-<<[[drawmesg()]] cases>>=
-/* write: 'y' id[4] R[4*4] data[x*1] */
-/* write from compressed data: 'Y' id[4] R[4*4] data[x*1] */
-case 'y':
-case 'Y':
-    printmesg(fmt="LR", a, 0);
-//  iprint("load %c\n", *a);
-    m = 1+4+4*4;
-    if(n < m)
-        error(Eshortdraw);
-    dstid = BGLONG(a+1);
-    dst = drawimage(client, a+1);
-    drawrectangle(&r, a+5);
-    if(!rectinrect(r, dst->r))
-        error(Ewriteoutside);
-    y = memload(dst, r, a+m, n-m, *a=='Y');
-    if(y < 0)
-        error("bad writeimage call");
-    dstflush(dstid, dst, r);
-    m += y;
-    continue;
+    bpl = bytesperline(r, depth);
+    bpl = 2*bpl;	/* add plenty extra for blocking, etc. */
+    if(bpl < NCBLOCK)
+        return NCBLOCK;
+    return bpl;
+}
 @
 
+
+
 \subsection{Algorithm}
+
+<<function cloadmemimage>>=
+int
+cloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
+{
+    int y, bpl, c, cnt, offs;
+    uchar mem[NMEM], *memp, *omemp, *emem, *linep, *elinep, *u, *eu;
+
+    if(!rectinrect(r, i->r))
+        return -1;
+    bpl = bytesperline(r, i->depth);
+    u = data;
+    eu = data+ndata;
+    memp = mem;
+    emem = mem+NMEM;
+    y = r.min.y;
+    linep = byteaddr(i, Pt(r.min.x, y));
+    elinep = linep+bpl;
+    for(;;){
+        if(linep == elinep){
+            if(++y == r.max.y)
+                break;
+            linep = byteaddr(i, Pt(r.min.x, y));
+            elinep = linep+bpl;
+        }
+        if(u == eu){	/* buffer too small */
+            return -1;
+        }
+        c = *u++;
+        if(c >= 128){
+            for(cnt=c-128+1; cnt!=0 ;--cnt){
+                if(u == eu){		/* buffer too small */
+                    return -1;
+                }
+                if(linep == elinep){	/* phase error */
+                    return -1;
+                }
+                *linep++ = *u;
+                *memp++ = *u++;
+                if(memp == emem)
+                    memp = mem;
+            }
+        }
+        else{
+            if(u == eu)	/* short buffer */
+                return -1;
+            offs = *u++ + ((c&3)<<8)+1;
+            if(memp-mem < offs)
+                omemp = memp+(NMEM-offs);
+            else
+                omemp = memp-offs;
+            for(cnt=(c>>2)+NMATCH; cnt!=0; --cnt){
+                if(linep == elinep)	/* phase error */
+                    return -1;
+                *linep++ = *omemp;
+                *memp++ = *omemp++;
+                if(omemp == emem)
+                    omemp = mem;
+                if(memp == emem)
+                    memp = mem;
+            }
+        }
+    }
+    return u-data;
+}
+@
+
+
+
+
+<<function creadmemimage>>=
+Memimage*
+creadmemimage(int fd)
+{
+    char hdr[5*12+1];
+    Rectangle r;
+    int m, nb, miny, maxy, new, ldepth, ncblock;
+    uchar *buf;
+    Memimage *i;
+    ulong chan;
+
+    if(readn(fd, hdr, 5*12) != 5*12){
+        werrstr("readmemimage: short header (2)");
+        return nil;
+    }
+
+    /*
+     * distinguish new channel descriptor from old ldepth.
+     * channel descriptors have letters as well as numbers,
+     * while ldepths are a single digit formatted as %-11d.
+     */
+    new = 0;
+    for(m=0; m<10; m++){
+        if(hdr[m] != ' '){
+            new = 1;
+            break;
+        }
+    }
+    if(hdr[11] != ' '){
+        werrstr("creadimage: bad format");
+        return nil;
+    }
+    if(new){
+        hdr[11] = '\0';
+        if((chan = strtochan(hdr)) == 0){
+            werrstr("creadimage: bad channel string %s", hdr);
+            return nil;
+        }
+    }else{
+        ldepth = ((int)hdr[10])-'0';
+        if(ldepth<0 || ldepth>3){
+            werrstr("creadimage: bad ldepth %d", ldepth);
+            return nil;
+        }
+        chan = drawld2chan[ldepth];
+    }
+    r.min.x=atoi(hdr+1*12);
+    r.min.y=atoi(hdr+2*12);
+    r.max.x=atoi(hdr+3*12);
+    r.max.y=atoi(hdr+4*12);
+    if(r.min.x>r.max.x || r.min.y>r.max.y){
+        werrstr("creadimage: bad rectangle");
+        return nil;
+    }
+
+    i = allocmemimage(r, chan);
+    if(i == nil)
+        return nil;
+    ncblock = _compblocksize(r, i->depth);
+    buf = malloc(ncblock);
+    if(buf == nil)
+        goto Errout;
+    miny = r.min.y;
+    while(miny != r.max.y){
+        if(readn(fd, hdr, 2*12) != 2*12){
+        Shortread:
+            werrstr("readmemimage: short read");
+        Errout:
+            freememimage(i);
+            free(buf);
+            return nil;
+        }
+        maxy = atoi(hdr+0*12);
+        nb = atoi(hdr+1*12);
+        if(maxy<=miny || r.max.y<maxy){
+            werrstr("readimage: bad maxy %d", maxy);
+            goto Errout;
+        }
+        if(nb<=0 || ncblock<nb){
+            werrstr("readimage: bad count %d", nb);
+            goto Errout;
+        }
+        if(readn(fd, buf, nb)!=nb)
+            goto Shortread;
+        if(!new)	/* old image: flip the data bits */
+            _twiddlecompressed(buf, nb);
+        cloadmemimage(i, Rect(r.min.x, miny, r.max.x, maxy), buf, nb);
+        miny = maxy;
+    }
+    free(buf);
+    return i;
+}
+@
+
+
 
 
 
 \chapter{Windows}
 % Layers
+
+% ??? 
+<<function newwindow>>=
+/* Connect us to new window, if possible */
+int
+newwindow(char *str)
+{
+    int fd;
+    char *wsys;
+    char buf[256];
+
+    wsys = getenv("wsys");
+    if(wsys == nil)
+        return -1;
+    fd = open(wsys, ORDWR);
+    free(wsys);
+    if(fd < 0)
+        return -1;
+    rfork(RFNAMEG);
+    if(str)
+        snprint(buf, sizeof buf, "new %s", str);
+    else
+        strcpy(buf, "new");
+    return mount(fd, -1, "/dev", MBEFORE, buf);
+}
+@
 
 \section{[[Screen]] and [[Memscreen]]}
 % and [[_screen]]
@@ -6290,6 +7771,8 @@ _allocwindow(Image *i, Screen *s, Rectangle r, int ref, ulong val)
     return i;
 }
 @
+
+
 
 
 \section{Window origin}
@@ -6961,6 +8444,319 @@ readmouse(Mousectl *mc)
 }
 @
 
+\subsection{[[getrect.c]]}
+
+<<constant W (lib_graphics/libdraw/getrect.c)>>=
+#define	W	Borderwidth
+@
+
+<<global tmp (lib_graphics/libdraw/getrect.c)>>=
+static Image *tmp[4];
+@
+
+<<global red (lib_graphics/libdraw/getrect.c)>>=
+static Image *red;
+@
+
+<<global sweep (lib_graphics/libdraw/getrect.c)>>=
+static Cursor sweep={
+    {-7, -7},
+    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0x07,
+     0xE0, 0x07, 0xE0, 0x07, 0xE3, 0xF7, 0xE3, 0xF7,
+     0xE3, 0xE7, 0xE3, 0xF7, 0xE3, 0xFF, 0xE3, 0x7F,
+     0xE0, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,},
+    {0x00, 0x00, 0x7F, 0xFE, 0x40, 0x02, 0x40, 0x02,
+     0x40, 0x02, 0x40, 0x02, 0x40, 0x02, 0x41, 0xE2,
+     0x41, 0xC2, 0x41, 0xE2, 0x41, 0x72, 0x40, 0x38,
+     0x40, 0x1C, 0x40, 0x0E, 0x7F, 0xE6, 0x00, 0x00,}
+};
+@
+
+<<function brects (lib_graphics/libdraw/getrect.c)>>=
+static
+void
+brects(Rectangle r, Rectangle rp[4])
+{
+    if(Dx(r) < 2*W)
+        r.max.x = r.min.x+2*W;
+    if(Dy(r) < 2*W)
+        r.max.y = r.min.y+2*W;
+    rp[0] = Rect(r.min.x, r.min.y, r.max.x, r.min.y+W);
+    rp[1] = Rect(r.min.x, r.max.y-W, r.max.x, r.max.y);
+    rp[2] = Rect(r.min.x, r.min.y+W, r.min.x+W, r.max.y-W);
+    rp[3] = Rect(r.max.x-W, r.min.y+W, r.max.x, r.max.y-W);
+}
+@
+
+<<function getrect>>=
+Rectangle
+getrect(int but, Mousectl *mc)
+{
+    Rectangle r, rc;
+
+    but = 1<<(but-1);
+    setcursor(mc, &sweep);
+    while(mc->buttons)
+        readmouse(mc);
+    while(!(mc->buttons & but)){
+        readmouse(mc);
+        if(mc->buttons & (7^but))
+            goto Return;
+    }
+    r.min = mc->xy;
+    r.max = mc->xy;
+    do{
+        rc = canonrect(r);
+        drawgetrect(rc, 1);
+        readmouse(mc);
+        drawgetrect(rc, 0);
+        r.max = mc->xy;
+    }while(mc->buttons == but);
+
+    Return:
+    setcursor(mc, nil);
+    if(mc->buttons & (7^but)){
+        rc.min.x = rc.max.x = 0;
+        rc.min.y = rc.max.y = 0;
+        while(mc->buttons)
+            readmouse(mc);
+    }
+    return rc;
+}
+@
+
+<<function freetmp (lib_graphics/libdraw/getrect.c)>>=
+static
+void
+freetmp(void)
+{
+    freeimage(tmp[0]);
+    freeimage(tmp[1]);
+    freeimage(tmp[2]);
+    freeimage(tmp[3]);
+    freeimage(red);
+    tmp[0] = tmp[1] = tmp[2] = tmp[3] = red = nil;
+}
+@
+
+<<function max>>=
+static
+int
+max(int a, int b)
+{
+    if(a > b)
+        return a;
+    return b;
+}
+@
+
+<<function drawgetrect>>=
+void
+drawgetrect(Rectangle rc, int up)
+{
+    int i;
+    Rectangle r, rects[4];
+
+    /*
+     * BUG: if for some reason we have two of these going on at once
+     * when we must grow the tmp buffers, we lose data.  Also if tmp
+     * is unallocated and we ask to restore the screen, it would be nice
+     * to complain, but we silently make a mess.
+     */
+    if(up && tmp[0]!=nil)
+        if(Dx(tmp[0]->r)<Dx(rc) || Dy(tmp[2]->r)<Dy(rc))
+            freetmp();
+    if(tmp[0] == 0){
+        r = Rect(0, 0, max(Dx(display->screenimage->r), Dx(rc)), W);
+        tmp[0] = allocimage(display, r, screen->chan, 0, -1);
+        tmp[1] = allocimage(display, r, screen->chan, 0, -1);
+        r = Rect(0, 0, W, max(Dy(display->screenimage->r), Dy(rc)));
+        tmp[2] = allocimage(display, r, screen->chan, 0, -1);
+        tmp[3] = allocimage(display, r, screen->chan, 0, -1);
+        red = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DRed);
+        if(tmp[0]==0 || tmp[1]==0 || tmp[2]==0 || tmp[3]==0 || red==0){
+            freetmp();
+            drawerror(display, "getrect: allocimage failed");
+        }
+    }
+    brects(rc, rects);
+    if(!up){
+        for(i=0; i<4; i++)
+            draw(screen, rects[i], tmp[i], nil, ZP);
+        return;
+    }
+    for(i=0; i<4; i++){
+        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), screen, nil, rects[i].min);
+        draw(screen, rects[i], red, nil, ZP);
+    }
+}
+@
+
+
+\subsection{[[egetrects.c]]}
+
+<<constant Borderwidth>>=
+Borderwidth =	4,
+@
+
+<<constant W>>=
+#define	W	Borderwidth
+@
+
+<<global tmp>>=
+static Image *tmp[4];
+@
+
+<<global red>>=
+static Image *red;
+@
+
+<<global sweep>>=
+static Cursor sweep={
+    {-7, -7},
+    {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0x07,
+     0xE0, 0x07, 0xE0, 0x07, 0xE3, 0xF7, 0xE3, 0xF7,
+     0xE3, 0xE7, 0xE3, 0xF7, 0xE3, 0xFF, 0xE3, 0x7F,
+     0xE0, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,},
+    {0x00, 0x00, 0x7F, 0xFE, 0x40, 0x02, 0x40, 0x02,
+     0x40, 0x02, 0x40, 0x02, 0x40, 0x02, 0x41, 0xE2,
+     0x41, 0xC2, 0x41, 0xE2, 0x41, 0x72, 0x40, 0x38,
+     0x40, 0x1C, 0x40, 0x0E, 0x7F, 0xE6, 0x00, 0x00,}
+};
+@
+
+% edrawgetrects -> <>
+<<function brects>>=
+static
+void
+brects(Rectangle r, Rectangle rp[4])
+{
+    if(Dx(r) < 2*W)
+        r.max.x = r.min.x+2*W;
+    if(Dy(r) < 2*W)
+        r.max.y = r.min.y+2*W;
+    rp[0] = Rect(r.min.x, r.min.y, r.max.x, r.min.y+W);
+    rp[1] = Rect(r.min.x, r.max.y-W, r.max.x, r.max.y);
+    rp[2] = Rect(r.min.x, r.min.y+W, r.min.x+W, r.max.y-W);
+    rp[3] = Rect(r.max.x-W, r.min.y+W, r.max.x, r.max.y-W);
+}
+@
+
+<<function egetrect>>=
+Rectangle
+egetrect(int but, Mouse *m)
+{
+    Rectangle r, rc;
+
+    but = 1<<(but-1);
+    esetcursor(&sweep);
+    while(m->buttons)
+        *m = emouse();
+    while(!(m->buttons & but)){
+        *m = emouse();
+        if(m->buttons & (7^but))
+            goto Return;
+    }
+    r.min = m->xy;
+    r.max = m->xy;
+    do{
+        rc = canonrect(r);
+        edrawgetrect(rc, 1);
+        *m = emouse();
+        edrawgetrect(rc, 0);
+        r.max = m->xy;
+    }while(m->buttons == but);
+
+    Return:
+    esetcursor(0);
+    if(m->buttons & (7^but)){
+        rc.min.x = rc.max.x = 0;
+        rc.min.y = rc.max.y = 0;
+        while(m->buttons)
+            *m = emouse();
+    }
+    return rc;
+}
+@
+
+<<function freetmp>>=
+static
+void
+freetmp(void)
+{
+    freeimage(tmp[0]);
+    freeimage(tmp[1]);
+    freeimage(tmp[2]);
+    freeimage(tmp[3]);
+    freeimage(red);
+    tmp[0] = tmp[1] = tmp[2] = tmp[3] = red = nil;
+}
+@
+
+<<function edrawgetrect>>=
+void
+edrawgetrect(Rectangle rc, int up)
+{
+    int i;
+    Rectangle r, rects[4];
+
+    if(up && tmp[0]!=nil)
+        if(Dx(tmp[0]->r)<Dx(rc) || Dy(tmp[2]->r)<Dy(rc))
+            freetmp();
+
+    if(tmp[0] == 0){
+        r = Rect(0, 0, Dx(screen->r), W);
+        tmp[0] = allocimage(display, r, screen->chan, 0, -1);
+        tmp[1] = allocimage(display, r, screen->chan, 0, -1);
+        r = Rect(0, 0, W, Dy(screen->r));
+        tmp[2] = allocimage(display, r, screen->chan, 0, -1);
+        tmp[3] = allocimage(display, r, screen->chan, 0, -1);
+        red = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DRed);
+        if(tmp[0]==0 || tmp[1]==0 || tmp[2]==0 || tmp[3]==0 || red==0)
+            drawerror(display, "getrect: allocimage failed");
+    }
+    brects(rc, rects);
+    if(!up){
+        for(i=0; i<4; i++)
+            draw(screen, rects[i], tmp[i], nil, ZP);
+        return;
+    }
+    for(i=0; i<4; i++){
+        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), screen, nil, rects[i].min);
+        draw(screen, rects[i], red, nil, ZP);
+    }
+}
+@
+
+\subsection{[[mousescrollsize()]]}
+<<function mousescrollsize>>=
+int
+mousescrollsize(int maxlines)
+{
+    static int lines, pcnt;
+    char *mss;
+
+    if(lines == 0 && pcnt == 0){
+        mss = getenv("mousescrollsize");
+        if(mss){
+            if(strchr(mss, '%') != nil)
+                pcnt = atof(mss);
+            else
+                lines = atoi(mss);
+            free(mss);
+        }
+        if(lines == 0 && pcnt == 0)
+            lines = 1;
+        if(pcnt>=100)
+            pcnt = 100;
+    }
+
+    if(lines)
+        return lines;
+    return pcnt * maxlines/100.0;	
+}
+@
+
 
 \section{Cursor}
 
@@ -6992,6 +8788,8 @@ setcursor(Mousectl *mc, Cursor *c)
 
 
 \section{Events}
+
+% TODO: advanced topics? and move also egetrect.c and emenuhits.c?
 
 % have lots of dupes with events, menuhit.c vs emenuhit.c?
 
@@ -7025,9 +8823,572 @@ struct	Event
 @
 
 
+% event.c
 
 
 
+<<enum _anon_ (include/event.h)2>>=
+enum
+{
+    MAXSLAVE = 32,
+    EMAXMSG = 128+8192,	/* size of 9p header+data */
+};
+@
+
+
+<<struct Slave>>=
+struct Slave
+{
+    int	pid;
+    Ebuf	*head;		/* queue of messages for this descriptor */
+    Ebuf	*tail;
+    int	(*fn)(int, Event*, uchar*, int);
+};
+@
+
+<<struct Ebuf>>=
+struct Ebuf
+{
+    Ebuf	*next;
+    int	n;		/* number of bytes in buf */
+    uchar	buf[EMAXMSG];
+};
+@
+
+<<global eslave>>=
+static	Slave	eslave[MAXSLAVE];
+@
+
+
+
+<<global Skeyboard>>=
+static	int	Skeyboard = -1;
+@
+
+<<global Smouse>>=
+static	int	Smouse = -1;
+@
+
+<<global Stimer>>=
+static	int	Stimer = -1;
+@
+
+
+
+<<global logfid>>=
+static	int	logfid;
+@
+
+<<global nslave>>=
+static	int	nslave;
+@
+
+<<global parentpid>>=
+static	int	parentpid;
+@
+
+<<global epipe>>=
+static	int	epipe[2];
+@
+
+<<global mousefd>>=
+static	int	mousefd;
+@
+
+<<global cursorfd>>=
+static	int	cursorfd;
+@
+
+<<function ebread>>=
+static
+Ebuf*
+ebread(Slave *s)
+{
+    Ebuf *eb;
+    Dir *d;
+    ulong l;
+
+    for(;;){
+        d = dirfstat(epipe[0]);
+        if(d == nil)
+            drawerror(display, "events: eread stat error");
+        l = d->length;
+        free(d);
+        if(s->head && l==0)
+            break;
+        extract();
+    }
+    eb = s->head;
+    s->head = s->head->next;
+    if(s->head == 0)
+        s->tail = 0;
+    return eb;
+}
+@
+
+<<function event>>=
+ulong
+event(Event *e)
+{
+    return eread(~0UL, e);
+}
+@
+
+<<function eread>>=
+ulong
+eread(ulong keys, Event *e)
+{
+    Ebuf *eb;
+    int i, id;
+
+    if(keys == 0)
+        return 0;
+    for(;;){
+        for(i=0; i<nslave; i++)
+            if((keys & (1<<i)) && eslave[i].head){
+                id = 1<<i;
+                if(i == Smouse)
+                    e->mouse = emouse();
+                else if(i == Skeyboard)
+                    e->kbdc = ekbd();
+                else if(i == Stimer)
+                    eslave[i].head = 0;
+                else{
+                    eb = ebread(&eslave[i]);
+                    e->n = eb->n;
+                    if(eslave[i].fn)
+                        id = (*eslave[i].fn)(id, e, eb->buf, eb->n);
+                    else
+                        memmove(e->data, eb->buf, eb->n);
+                    free(eb);
+                }
+                return id;
+            }
+        extract();
+    }
+}
+@
+% >> >>
+
+<<function ecanmouse>>=
+int
+ecanmouse(void)
+{
+    if(Smouse < 0)
+        drawerror(display, "events: mouse not initialized");
+    return ecanread(Emouse);
+}
+@
+
+<<function ecankbd>>=
+int
+ecankbd(void)
+{
+    if(Skeyboard < 0)
+        drawerror(display, "events: keyboard not initialzed");
+    return ecanread(Ekeyboard);
+}
+@
+
+<<function ecanread>>=
+int
+ecanread(ulong keys)
+{
+    Dir *d;
+    int i;
+    ulong l;
+
+    for(;;){
+        for(i=0; i<nslave; i++)
+            if((keys & (1<<i)) && eslave[i].head)
+                return 1;
+        d = dirfstat(epipe[0]);
+        if(d == nil)
+            drawerror(display, "events: ecanread stat error");
+        l = d->length;
+        free(d);
+        if(l == 0)
+            return 0;
+        extract();
+    }
+}
+@
+% >>
+
+<<function estartfn>>=
+ulong
+estartfn(ulong key, int fd, int n, int (*fn)(int, Event*, uchar*, int))
+{
+    char buf[EMAXMSG+1];
+    int i, r;
+
+    if(fd < 0)
+        drawerror(display, "events: bad file descriptor");
+    if(n <= 0 || n > EMAXMSG)
+        n = EMAXMSG;
+    i = eforkslave(key);
+    if(i < MAXSLAVE){
+        eslave[i].fn = fn;
+        return 1<<i;
+    }
+    buf[0] = i - MAXSLAVE;
+    while((r = read(fd, buf+1, n))>0)
+        if(write(epipe[1], buf, r+1)!=r+1)
+            break;
+    buf[0] = MAXSLAVE;
+    write(epipe[1], buf, 1);
+    _exits(0);
+    return 0;
+}
+@
+% >>
+
+<<function estart>>=
+ulong
+estart(ulong key, int fd, int n)
+{
+    return estartfn(key, fd, n, nil);
+}
+@
+
+<<function etimer>>=
+ulong
+etimer(ulong key, int n)
+{
+    char t[2];
+
+    if(Stimer != -1)
+        drawerror(display, "events: timer started twice");
+    Stimer = eforkslave(key);
+    if(Stimer < MAXSLAVE)
+        return 1<<Stimer;
+    if(n <= 0)
+        n = 1000;
+    t[0] = t[1] = Stimer - MAXSLAVE;
+    do
+        sleep(n);
+    while(write(epipe[1], t, 2) == 2);
+    t[0] = MAXSLAVE;
+    write(epipe[1], t, 1);
+    _exits(0);
+    return 0;
+}
+@
+% >> >> >> >> >>
+
+<<function ekeyslave>>=
+static void
+ekeyslave(int fd)
+{
+    Rune r;
+    char t[3], k[10];
+    int kr, kn, w;
+
+    if(eforkslave(Ekeyboard) < MAXSLAVE)
+        return;
+    kn = 0;
+    t[0] = Skeyboard;
+    for(;;){
+        while(!fullrune(k, kn)){
+            kr = read(fd, k+kn, sizeof k - kn);
+            if(kr <= 0)
+                goto breakout;
+            kn += kr;
+        }
+        w = chartorune(&r, k);
+        kn -= w;
+        memmove(k, &k[w], kn);
+        t[1] = r;
+        t[2] = r>>8;
+        if(write(epipe[1], t, 3) != 3)
+            break;
+    }
+breakout:;
+    t[0] = MAXSLAVE;
+    write(epipe[1], t, 1);
+    _exits(0);
+}
+@
+
+<<function einit>>=
+void
+einit(ulong keys)
+{
+    int ctl, fd;
+    char buf[256];
+
+    parentpid = getpid();
+    if(pipe(epipe) < 0)
+        drawerror(display, "events: einit pipe");
+    atexit(ekill);
+    atnotify(enote, 1);
+    snprint(buf, sizeof buf, "%s/mouse", display->devdir);
+    mousefd = open(buf, ORDWR|OCEXEC);
+    if(mousefd < 0)
+        drawerror(display, "einit: can't open mouse\n");
+    snprint(buf, sizeof buf, "%s/cursor", display->devdir);
+    cursorfd = open(buf, ORDWR|OCEXEC);
+    if(cursorfd < 0)
+        drawerror(display, "einit: can't open cursor\n");
+    if(keys&Ekeyboard){
+        snprint(buf, sizeof buf, "%s/cons", display->devdir);
+        fd = open(buf, OREAD);
+        if(fd < 0)
+            drawerror(display, "events: can't open console");
+        snprint(buf, sizeof buf, "%s/consctl", display->devdir);
+        ctl = open("/dev/consctl", OWRITE|OCEXEC);
+        if(ctl < 0)
+            drawerror(display, "events: can't open consctl");
+        write(ctl, "rawon", 5);
+        for(Skeyboard=0; Ekeyboard & ~(1<<Skeyboard); Skeyboard++)
+            ;
+        ekeyslave(fd);
+    }
+    if(keys&Emouse){
+        estart(Emouse, mousefd, 1+4*12);
+        for(Smouse=0; Emouse & ~(1<<Smouse); Smouse++)
+            ;
+    }
+}
+@
+
+<<function extract>>=
+static void
+extract(void)
+{
+    Slave *s;
+    Ebuf *eb;
+    int i, n;
+    uchar ebuf[EMAXMSG+1];
+
+    /* avoid generating a message if there's nothing to show. */
+    /* this test isn't perfect, though; could do flushimage(display, 0) then call extract */
+    /* also: make sure we don't interfere if we're multiprocessing the display */
+    if(display->locking){
+        /* if locking is being done by program, this means it can't depend on automatic flush in emouse() etc. */
+        if(canqlock(&display->qlock)){
+            if(display->bufp > display->buf)
+                flushimage(display, 1);
+            unlockdisplay(display);
+        }
+    }else
+        if(display->bufp > display->buf)
+            flushimage(display, 1);
+loop:
+    if((n=read(epipe[0], ebuf, EMAXMSG+1)) < 0
+    || ebuf[0] >= MAXSLAVE)
+        drawerror(display, "eof on event pipe");
+    if(n == 0)
+        goto loop;
+    i = ebuf[0];
+    if(i >= nslave || n <= 1)
+        drawerror(display, "events: protocol error: short read");
+    s = &eslave[i];
+    if(i == Stimer){
+        s->head = (Ebuf *)1;
+        return;
+    }
+    if(i == Skeyboard && n != 3)
+        drawerror(display, "events: protocol error: keyboard");
+    if(i == Smouse){
+        if(n < 1+1+2*12)
+            drawerror(display, "events: protocol error: mouse");
+        if(ebuf[1] == 'r')
+            eresized(1);
+        /* squash extraneous mouse events */
+        if((eb=s->tail) && memcmp(eb->buf+1+2*12, ebuf+1+1+2*12, 12)==0){
+            memmove(eb->buf, &ebuf[1], n - 1);
+            return;
+        }
+    }
+    /* try to save space by only allocating as much buffer as we need */
+    eb = malloc(sizeof(*eb) - sizeof(eb->buf) + n - 1);
+    if(eb == 0)
+        drawerror(display, "events: protocol error 4");
+    eb->n = n - 1;
+    memmove(eb->buf, &ebuf[1], n - 1);
+    eb->next = 0;
+    if(s->head)
+        s->tail = s->tail->next = eb;
+    else
+        s->head = s->tail = eb;
+}
+@
+
+<<function eforkslave>>=
+static int
+eforkslave(ulong key)
+{
+    int i, pid;
+
+    for(i=0; i<MAXSLAVE; i++)
+        if((key & ~(1<<i)) == 0 && eslave[i].pid == 0){
+            if(nslave <= i)
+                nslave = i + 1;
+            /*
+             * share the file descriptors so the last child
+             * out closes all connections to the window server.
+             */
+            switch(pid = rfork(RFPROC)){
+            case 0:
+                return MAXSLAVE+i;
+            case -1:
+                fprint(2, "events: fork error\n");
+                exits("fork");
+            }
+            eslave[i].pid = pid;
+            eslave[i].head = eslave[i].tail = 0;
+            return i;
+        }
+    drawerror(display, "events: bad slave assignment");
+    return 0;
+}
+@
+
+<<function enote>>=
+static int
+enote(void *v, char *s)
+{
+    char t[1];
+    int i, pid;
+
+    USED(v, s);
+    pid = getpid();
+    if(pid != parentpid){
+        for(i=0; i<nslave; i++){
+            if(pid == eslave[i].pid){
+                t[0] = MAXSLAVE;
+                write(epipe[1], t, 1);
+                break;
+            }
+        }
+        return 0;
+    }
+    close(epipe[0]);
+    epipe[0] = -1;
+    close(epipe[1]);
+    epipe[1] = -1;
+    for(i=0; i<nslave; i++){
+        if(pid == eslave[i].pid)
+            continue;	/* don't kill myself */
+        postnote(PNPROC, eslave[i].pid, "die");
+    }
+    return 0;
+}
+@
+
+<<function ekill>>=
+static void
+ekill(void)
+{
+    enote(0, 0);
+}
+@
+
+<<function emouse>>=
+Mouse
+emouse(void)
+{
+    Mouse m;
+    Ebuf *eb;
+    static int but[2];
+    int b;
+
+    if(Smouse < 0)
+        drawerror(display, "events: mouse not initialized");
+    eb = ebread(&eslave[Smouse]);
+    m.xy.x = atoi((char*)eb->buf+1+0*12);
+    m.xy.y = atoi((char*)eb->buf+1+1*12);
+    b = atoi((char*)eb->buf+1+2*12);
+    m.buttons = b;
+    m.msec = atoi((char*)eb->buf+1+3*12);
+    if (logfid)
+        fprint(logfid, "b: %d xy: %P\n", m.buttons, m.xy);
+    free(eb);
+    return m;
+}
+@
+
+<<function ekbd>>=
+int
+ekbd(void)
+{
+    Ebuf *eb;
+    int c;
+
+    if(Skeyboard < 0)
+        drawerror(display, "events: keyboard not initialzed");
+    eb = ebread(&eslave[Skeyboard]);
+    c = eb->buf[0] + (eb->buf[1]<<8);
+    free(eb);
+    return c;
+}
+@
+
+<<function emoveto>>=
+void
+emoveto(Point pt)
+{
+    char buf[2*12+2];
+    int n;
+
+    n = sprint(buf, "m%d %d", pt.x, pt.y);
+    write(mousefd, buf, n);
+}
+@
+
+<<function esetcursor>>=
+void
+esetcursor(Cursor *c)
+{
+    uchar curs[2*4+2*2*16];
+
+    if(c == 0)
+        write(cursorfd, curs, 0);
+    else{
+        BPLONG(curs+0*4, c->offset.x);
+        BPLONG(curs+1*4, c->offset.y);
+        memmove(curs+2*4, c->clr, 2*2*16);
+        write(cursorfd, curs, sizeof curs);
+    }
+}
+@
+
+<<function ereadmouse>>=
+int
+ereadmouse(Mouse *m)
+{
+    int n;
+    char buf[128];
+
+    do{
+        n = read(mousefd, buf, sizeof(buf));
+        if(n < 0)	/* probably interrupted */
+            return -1;
+        n = eatomouse(m, buf, n);
+    }while(n == 0);
+    return n;
+}
+@
+
+<<function eatomouse>>=
+int
+eatomouse(Mouse *m, char *buf, int n)
+{
+    if(n != 1+4*12){
+        werrstr("atomouse: bad count");
+        return -1;
+    }
+
+    if(buf[0] == 'r')
+        eresized(1);
+    m->xy.x = atoi(buf+1+0*12);
+    m->xy.y = atoi(buf+1+1*12);
+    m->buttons = atoi(buf+1+2*12);
+    m->msec = atoi(buf+1+3*12);
+    return n;
+}
+@
 
 
 
@@ -7373,6 +9734,641 @@ fillbezsplineop(Image *dst, Point *pt, int npt, int w, Image *src, Point sp, Dra
 
 \section{Menus}
 
+% dupe in mouse.h
+<<struct Menu>>=
+struct Menu
+{
+    char	**item;
+    char	*(*gen)(int);
+    int	lasthit;
+};
+@
+
+\ifallcode
+<<struct Menu (include/mouse.h)>>=
+struct Menu
+{
+    char	**item;
+    char	*(*gen)(int);
+    int	lasthit;
+};
+@
+\fi
+
+\subsection{[[menuhits.c]]}
+
+<<enum _anon_ (lib_graphics/libdraw/menuhit.c)>>=
+enum
+{
+    Margin = 4,		/* outside to text */
+    Border = 2,		/* outside to selection boxes */
+    Blackborder = 2,	/* width of outlining border */
+    Vspacing = 2,		/* extra spacing between lines of text */
+    Maxunscroll = 25,	/* maximum #entries before scrolling turns on */
+    Nscroll = 20,		/* number entries in scrolling part */
+    Scrollwid = 14,		/* width of scroll bar */
+    Gap = 4,			/* between text and scroll bar */
+};
+@
+
+<<global menutxt (lib_graphics/libdraw/menuhit.c)>>=
+static	Image	*menutxt;
+@
+
+<<global back (lib_graphics/libdraw/menuhit.c)>>=
+static	Image	*back;
+@
+
+<<global high (lib_graphics/libdraw/menuhit.c)>>=
+static	Image	*high;
+@
+
+<<global bord (lib_graphics/libdraw/menuhit.c)>>=
+static	Image	*bord;
+@
+
+<<global text (lib_graphics/libdraw/menuhit.c)>>=
+static	Image	*text;
+@
+
+<<global htext (lib_graphics/libdraw/menuhit.c)>>=
+static	Image	*htext;
+@
+
+<<function menucolors (lib_graphics/libdraw/menuhit.c)>>=
+static
+void
+menucolors(void)
+{
+    /* Main tone is greenish, with negative selection */
+    back = allocimagemix(display, DPalegreen, DWhite);
+    high = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DDarkgreen);	/* dark green */
+    bord = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DMedgreen);	/* not as dark green */
+    if(back==nil || high==nil || bord==nil)
+        goto Error;
+    text = display->black;
+    htext = back;
+    return;
+
+    Error:
+    freeimage(back);
+    freeimage(high);
+    freeimage(bord);
+    back = display->white;
+    high = display->black;
+    bord = display->black;
+    text = display->black;
+    htext = display->white;
+}
+@
+
+<<function menurect (lib_graphics/libdraw/menuhit.c)>>=
+/*
+ * r is a rectangle holding the text elements.
+ * return the rectangle, including its black edge, holding element i.
+ */
+static Rectangle
+menurect(Rectangle r, int i)
+{
+    if(i < 0)
+        return Rect(0, 0, 0, 0);
+    r.min.y += (font->height+Vspacing)*i;
+    r.max.y = r.min.y+font->height+Vspacing;
+    return insetrect(r, Border-Margin);
+}
+@
+
+<<function menusel (lib_graphics/libdraw/menuhit.c)>>=
+/*
+ * r is a rectangle holding the text elements.
+ * return the element number containing p.
+ */
+static int
+menusel(Rectangle r, Point p)
+{
+    r = insetrect(r, Margin);
+    if(!ptinrect(p, r))
+        return -1;
+    return (p.y-r.min.y)/(font->height+Vspacing);
+}
+@
+
+<<function paintitem (lib_graphics/libdraw/menuhit.c)>>=
+static
+void
+paintitem(Image *m, Menu *menu, Rectangle textr, int off, int i, int highlight, Image *save, Image *restore)
+{
+    char *item;
+    Rectangle r;
+    Point pt;
+
+    if(i < 0)
+        return;
+    r = menurect(textr, i);
+    if(restore){
+        draw(m, r, restore, nil, restore->r.min);
+        return;
+    }
+    if(save)
+        draw(save, save->r, m, nil, r.min);
+    item = menu->item? menu->item[i+off] : (*menu->gen)(i+off);
+    pt.x = (textr.min.x+textr.max.x-stringwidth(font, item))/2;
+    pt.y = textr.min.y+i*(font->height+Vspacing);
+    draw(m, r, highlight? high : back, nil, pt);
+    string(m, pt, highlight? htext : text, pt, font, item);
+}
+@
+
+<<function menuscan (lib_graphics/libdraw/menuhit.c)>>=
+/*
+ * menur is a rectangle holding all the highlightable text elements.
+ * track mouse while inside the box, return what's selected when button
+ * is raised, -1 as soon as it leaves box.
+ * invariant: nothing is highlighted on entry or exit.
+ */
+static int
+menuscan(Image *m, Menu *menu, int but, Mousectl *mc, Rectangle textr, int off, int lasti, Image *save)
+{
+    int i;
+
+    paintitem(m, menu, textr, off, lasti, 1, save, nil);
+    for(readmouse(mc); mc->buttons & (1<<(but-1)); readmouse(mc)){
+        i = menusel(textr, mc->xy);
+        if(i != -1 && i == lasti)
+            continue;
+        paintitem(m, menu, textr, off, lasti, 0, nil, save);
+        if(i == -1)
+            return i;
+        lasti = i;
+        paintitem(m, menu, textr, off, lasti, 1, save, nil);
+    }
+    return lasti;
+}
+@
+
+<<function menupaint (lib_graphics/libdraw/menuhit.c)>>=
+static void
+menupaint(Image *m, Menu *menu, Rectangle textr, int off, int nitemdrawn)
+{
+    int i;
+
+    draw(m, insetrect(textr, Border-Margin), back, nil, ZP);
+    for(i = 0; i<nitemdrawn; i++)
+        paintitem(m, menu, textr, off, i, 0, nil, nil);
+}
+@
+
+<<function menuscrollpaint (lib_graphics/libdraw/menuhit.c)>>=
+static void
+menuscrollpaint(Image *m, Rectangle scrollr, int off, int nitem, int nitemdrawn)
+{
+    Rectangle r;
+
+    draw(m, scrollr, back, nil, ZP);
+    r.min.x = scrollr.min.x;
+    r.max.x = scrollr.max.x;
+    r.min.y = scrollr.min.y + (Dy(scrollr)*off)/nitem;
+    r.max.y = scrollr.min.y + (Dy(scrollr)*(off+nitemdrawn))/nitem;
+    if(r.max.y < r.min.y+2)
+        r.max.y = r.min.y+2;
+    border(m, r, 1, bord, ZP);
+    if(menutxt == 0)
+        menutxt = allocimage(display, Rect(0, 0, 1, 1), screen->chan, 1, DDarkgreen);	/* border color; BUG? */
+    if(menutxt)
+        draw(m, insetrect(r, 1), menutxt, nil, ZP);
+}
+@
+
+<<function menuhit>>=
+int
+menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
+{
+    int i, nitem, nitemdrawn, maxwid, lasti, off, noff, wid, screenitem;
+    int scrolling;
+    Rectangle r, menur, sc, textr, scrollr;
+    Image *b, *save, *backup;
+    Point pt;
+    char *item;
+
+    if(back == nil)
+        menucolors();
+    sc = screen->clipr;
+    replclipr(screen, 0, screen->r);
+    maxwid = 0;
+    for(nitem = 0;
+        item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
+        nitem++){
+        i = stringwidth(font, item);
+        if(i > maxwid)
+            maxwid = i;
+    }
+    if(menu->lasthit<0 || menu->lasthit>=nitem)
+        menu->lasthit = 0;
+    screenitem = (Dy(screen->r)-10)/(font->height+Vspacing);
+    if(nitem>Maxunscroll || nitem>screenitem){
+        scrolling = 1;
+        nitemdrawn = Nscroll;
+        if(nitemdrawn > screenitem)
+            nitemdrawn = screenitem;
+        wid = maxwid + Gap + Scrollwid;
+        off = menu->lasthit - nitemdrawn/2;
+        if(off < 0)
+            off = 0;
+        if(off > nitem-nitemdrawn)
+            off = nitem-nitemdrawn;
+        lasti = menu->lasthit-off;
+    }else{
+        scrolling = 0;
+        nitemdrawn = nitem;
+        wid = maxwid;
+        off = 0;
+        lasti = menu->lasthit;
+    }
+    r = insetrect(Rect(0, 0, wid, nitemdrawn*(font->height+Vspacing)), -Margin);
+    r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
+    r = rectaddpt(r, mc->xy);
+    pt = ZP;
+    if(r.max.x>screen->r.max.x)
+        pt.x = screen->r.max.x-r.max.x;
+    if(r.max.y>screen->r.max.y)
+        pt.y = screen->r.max.y-r.max.y;
+    if(r.min.x<screen->r.min.x)
+        pt.x = screen->r.min.x-r.min.x;
+    if(r.min.y<screen->r.min.y)
+        pt.y = screen->r.min.y-r.min.y;
+    menur = rectaddpt(r, pt);
+    textr.max.x = menur.max.x-Margin;
+    textr.min.x = textr.max.x-maxwid;
+    textr.min.y = menur.min.y+Margin;
+    textr.max.y = textr.min.y + nitemdrawn*(font->height+Vspacing);
+    if(scrolling){
+        scrollr = insetrect(menur, Border);
+        scrollr.max.x = scrollr.min.x+Scrollwid;
+    }else
+        scrollr = Rect(0, 0, 0, 0);
+
+    if(scr){
+        b = allocwindow(scr, menur, Refbackup, DWhite);
+        if(b == nil)
+            b = screen;
+        backup = nil;
+    }else{
+        b = screen;
+        backup = allocimage(display, menur, screen->chan, 0, -1);
+        if(backup)
+            draw(backup, menur, screen, nil, menur.min);
+    }
+    draw(b, menur, back, nil, ZP);
+    border(b, menur, Blackborder, bord, ZP);
+    save = allocimage(display, menurect(textr, 0), screen->chan, 0, -1);
+    r = menurect(textr, lasti);
+    moveto(mc, divpt(addpt(r.min, r.max), 2));
+    menupaint(b, menu, textr, off, nitemdrawn);
+    if(scrolling)
+        menuscrollpaint(b, scrollr, off, nitem, nitemdrawn);
+    while(mc->buttons & (1<<(but-1))){
+        lasti = menuscan(b, menu, but, mc, textr, off, lasti, save);
+        if(lasti >= 0)
+            break;
+        while(!ptinrect(mc->xy, textr) && (mc->buttons & (1<<(but-1)))){
+            if(scrolling && ptinrect(mc->xy, scrollr)){
+                noff = ((mc->xy.y-scrollr.min.y)*nitem)/Dy(scrollr);
+                noff -= nitemdrawn/2;
+                if(noff < 0)
+                    noff = 0;
+                if(noff > nitem-nitemdrawn)
+                    noff = nitem-nitemdrawn;
+                if(noff != off){
+                    off = noff;
+                    menupaint(b, menu, textr, off, nitemdrawn);
+                    menuscrollpaint(b, scrollr, off, nitem, nitemdrawn);
+                }
+            }
+            readmouse(mc);
+        }
+    }
+    if(b != screen)
+        freeimage(b);
+    if(backup){
+        draw(screen, menur, backup, nil, menur.min);
+        freeimage(backup);
+    }
+    freeimage(save);
+    replclipr(screen, 0, sc);
+    flushimage(display, 1);
+    if(lasti >= 0){
+        menu->lasthit = lasti+off;
+        return menu->lasthit;
+    }
+    return -1;
+}
+@
+
+
+
+\subsection{[[emenuhits.c]]}
+
+<<enum _anon_ (lib_graphics/libdraw/emenuhit.c)>>=
+enum
+{
+    Margin = 4,		/* outside to text */
+    Border = 2,		/* outside to selection boxes */
+    Blackborder = 2,	/* width of outlining border */
+    Vspacing = 2,		/* extra spacing between lines of text */
+    Maxunscroll = 25,	/* maximum #entries before scrolling turns on */
+    Nscroll = 20,		/* number entries in scrolling part */
+    Scrollwid = 14,		/* width of scroll bar */
+    Gap = 4,			/* between text and scroll bar */
+};
+@
+
+<<global menutxt>>=
+static	Image	*menutxt;
+@
+
+<<global back>>=
+static	Image	*back;
+@
+
+<<global high>>=
+static	Image	*high;
+@
+
+<<global bord>>=
+static	Image	*bord;
+@
+
+<<global text>>=
+static	Image	*text;
+@
+
+<<global htext>>=
+static	Image	*htext;
+@
+
+<<function menucolors>>=
+static
+void
+menucolors(void)
+{
+    /* Main tone is greenish, with negative selection */
+    back = allocimagemix(display, DPalegreen, DWhite);
+    high = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkgreen);	/* dark green */
+    bord = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedgreen);	/* not as dark green */
+    if(back==nil || high==nil || bord==nil)
+        goto Error;
+    text = display->black;
+    htext = back;
+    return;
+
+    Error:
+    freeimage(back);
+    freeimage(high);
+    freeimage(bord);
+    back = display->white;
+    high = display->black;
+    bord = display->black;
+    text = display->black;
+    htext = display->white;
+}
+@
+
+<<function menurect>>=
+/*
+ * r is a rectangle holding the text elements.
+ * return the rectangle, including its black edge, holding element i.
+ */
+static Rectangle
+menurect(Rectangle r, int i)
+{
+    if(i < 0)
+        return Rect(0, 0, 0, 0);
+    r.min.y += (font->height+Vspacing)*i;
+    r.max.y = r.min.y+font->height+Vspacing;
+    return insetrect(r, Border-Margin);
+}
+@
+
+<<function menusel>>=
+/*
+ * r is a rectangle holding the text elements.
+ * return the element number containing p.
+ */
+static int
+menusel(Rectangle r, Point p)
+{
+    r = insetrect(r, Margin);
+    if(!ptinrect(p, r))
+        return -1;
+    return (p.y-r.min.y)/(font->height+Vspacing);
+}
+@
+
+<<function paintitem>>=
+static
+void
+paintitem(Menu *menu, Rectangle textr, int off, int i, int highlight, Image *save, Image *restore)
+{
+    char *item;
+    Rectangle r;
+    Point pt;
+
+    if(i < 0)
+        return;
+    r = menurect(textr, i);
+    if(restore){
+        draw(screen, r, restore, nil, restore->r.min);
+        return;
+    }
+    if(save)
+        draw(save, save->r, screen, nil, r.min);
+    item = menu->item? menu->item[i+off] : (*menu->gen)(i+off);
+    pt.x = (textr.min.x+textr.max.x-stringwidth(font, item))/2;
+    pt.y = textr.min.y+i*(font->height+Vspacing);
+    draw(screen, r, highlight? high : back, nil, pt);
+    string(screen, pt, highlight? htext : text, pt, font, item);
+}
+@
+
+<<function menuscan>>=
+/*
+ * menur is a rectangle holding all the highlightable text elements.
+ * track mouse while inside the box, return what's selected when button
+ * is raised, -1 as soon as it leaves box.
+ * invariant: nothing is highlighted on entry or exit.
+ */
+static int
+menuscan(Menu *menu, int but, Mouse *m, Rectangle textr, int off, int lasti, Image *save)
+{
+    int i;
+
+    paintitem(menu, textr, off, lasti, 1, save, nil);
+    flushimage(display, 1);	/* in case display->locking is set */
+    *m = emouse();
+    while(m->buttons & (1<<(but-1))){
+        flushimage(display, 1);	/* in case display->locking is set */
+        *m = emouse();
+        i = menusel(textr, m->xy);
+        if(i != -1 && i == lasti)
+            continue;
+        paintitem(menu, textr, off, lasti, 0, nil, save);
+        if(i == -1)
+            return i;
+        lasti = i;
+        paintitem(menu, textr, off, lasti, 1, save, nil);
+    }
+    return lasti;
+}
+@
+
+<<function menupaint>>=
+static void
+menupaint(Menu *menu, Rectangle textr, int off, int nitemdrawn)
+{
+    int i;
+
+    draw(screen, insetrect(textr, Border-Margin), back, nil, ZP);
+    for(i = 0; i<nitemdrawn; i++)
+        paintitem(menu, textr, off, i, 0, nil, nil);
+}
+@
+
+<<function menuscrollpaint>>=
+static void
+menuscrollpaint(Rectangle scrollr, int off, int nitem, int nitemdrawn)
+{
+    Rectangle r;
+
+    draw(screen, scrollr, back, nil, ZP);
+    r.min.x = scrollr.min.x;
+    r.max.x = scrollr.max.x;
+    r.min.y = scrollr.min.y + (Dy(scrollr)*off)/nitem;
+    r.max.y = scrollr.min.y + (Dy(scrollr)*(off+nitemdrawn))/nitem;
+    if(r.max.y < r.min.y+2)
+        r.max.y = r.min.y+2;
+    border(screen, r, 1, bord, ZP);
+    if(menutxt == 0)
+        menutxt = allocimage(display, Rect(0, 0, 1, 1), CMAP8, 1, DDarkgreen);
+    if(menutxt)
+        draw(screen, insetrect(r, 1), menutxt, nil, ZP);
+}
+@
+
+<<function emenuhit>>=
+int
+emenuhit(int but, Mouse *m, Menu *menu)
+{
+    int i, nitem, nitemdrawn, maxwid, lasti, off, noff, wid, screenitem;
+    int scrolling;
+    Rectangle r, menur, sc, textr, scrollr;
+    Image *b, *save;
+    Point pt;
+    char *item;
+
+    if(back == nil)
+        menucolors();
+    sc = screen->clipr;
+    replclipr(screen, 0, screen->r);
+    maxwid = 0;
+    for(nitem = 0;
+        item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
+        nitem++){
+        i = stringwidth(font, item);
+        if(i > maxwid)
+            maxwid = i;
+    }
+    if(menu->lasthit<0 || menu->lasthit>=nitem)
+        menu->lasthit = 0;
+    screenitem = (Dy(screen->r)-10)/(font->height+Vspacing);
+    if(nitem>Maxunscroll || nitem>screenitem){
+        scrolling = 1;
+        nitemdrawn = Nscroll;
+        if(nitemdrawn > screenitem)
+            nitemdrawn = screenitem;
+        wid = maxwid + Gap + Scrollwid;
+        off = menu->lasthit - nitemdrawn/2;
+        if(off < 0)
+            off = 0;
+        if(off > nitem-nitemdrawn)
+            off = nitem-nitemdrawn;
+        lasti = menu->lasthit-off;
+    }else{
+        scrolling = 0;
+        nitemdrawn = nitem;
+        wid = maxwid;
+        off = 0;
+        lasti = menu->lasthit;
+    }
+    r = insetrect(Rect(0, 0, wid, nitemdrawn*(font->height+Vspacing)), -Margin);
+    r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
+    r = rectaddpt(r, m->xy);
+    pt = ZP;
+    if(r.max.x>screen->r.max.x)
+        pt.x = screen->r.max.x-r.max.x;
+    if(r.max.y>screen->r.max.y)
+        pt.y = screen->r.max.y-r.max.y;
+    if(r.min.x<screen->r.min.x)
+        pt.x = screen->r.min.x-r.min.x;
+    if(r.min.y<screen->r.min.y)
+        pt.y = screen->r.min.y-r.min.y;
+    menur = rectaddpt(r, pt);
+    textr.max.x = menur.max.x-Margin;
+    textr.min.x = textr.max.x-maxwid;
+    textr.min.y = menur.min.y+Margin;
+    textr.max.y = textr.min.y + nitemdrawn*(font->height+Vspacing);
+    if(scrolling){
+        scrollr = insetrect(menur, Border);
+        scrollr.max.x = scrollr.min.x+Scrollwid;
+    }else
+        scrollr = Rect(0, 0, 0, 0);
+
+    b = allocimage(display, menur, screen->chan, 0, 0);
+    if(b == 0)
+        b = screen;
+    draw(b, menur, screen, nil, menur.min);
+    draw(screen, menur, back, nil, ZP);
+    border(screen, menur, Blackborder, bord, ZP);
+    save = allocimage(display, menurect(textr, 0), screen->chan, 0, -1);
+    r = menurect(textr, lasti);
+    emoveto(divpt(addpt(r.min, r.max), 2));
+    menupaint(menu, textr, off, nitemdrawn);
+    if(scrolling)
+        menuscrollpaint(scrollr, off, nitem, nitemdrawn);
+    while(m->buttons & (1<<(but-1))){
+        lasti = menuscan(menu, but, m, textr, off, lasti, save);
+        if(lasti >= 0)
+            break;
+        while(!ptinrect(m->xy, textr) && (m->buttons & (1<<(but-1)))){
+            if(scrolling && ptinrect(m->xy, scrollr)){
+                noff = ((m->xy.y-scrollr.min.y)*nitem)/Dy(scrollr);
+                noff -= nitemdrawn/2;
+                if(noff < 0)
+                    noff = 0;
+                if(noff > nitem-nitemdrawn)
+                    noff = nitem-nitemdrawn;
+                if(noff != off){
+                    off = noff;
+                    menupaint(menu, textr, off, nitemdrawn);
+                    menuscrollpaint(scrollr, off, nitem, nitemdrawn);
+                }
+            }
+            flushimage(display, 1);	/* in case display->locking is set */
+            *m = emouse();
+        }
+    }
+    draw(screen, menur, b, nil, menur.min);
+    if(b != screen)
+        freeimage(b);
+    freeimage(save);
+    replclipr(screen, 0, sc);
+    if(lasti >= 0){
+        menu->lasthit = lasti+off;
+        return menu->lasthit;
+    }
+    return -1;
+}
+@
+
 
 \chapter{Conclusion}
 
@@ -7481,6 +10477,118 @@ case 'D':
     drawdebug = a[1];
     continue;
 @
+
+
+\subsection{Dumpers}
+
+\subsubsection{Point and Rectangle}
+
+<<[[initdisplay()]] install dumpers>>=
+fmtinstall('P', Pfmt);
+fmtinstall('R', Rfmt);
+@
+
+%dumper
+<<function Pfmt>>=
+int
+Pfmt(Fmt *f)
+{
+    Point p;
+
+    p = va_arg(f->args, Point);
+    return fmtprint(f, "[%d %d]", p.x, p.y);
+}
+@
+
+%dumper
+<<function Rfmt>>=
+int
+Rfmt(Fmt *f)
+{
+    Rectangle r;
+
+    r = va_arg(f->args, Rectangle);
+    return fmtprint(f, "%P %P", r.min, r.max);
+}
+@
+
+\subsubsection{Channel}
+
+% maybe could put in dumper section?
+
+<<global channames>>=
+static char channames[] = "rgbkamx";
+@
+
+<<function chantostr>>=
+char*
+chantostr(char *buf, ulong cc)
+{
+    ulong c, rc;
+    char *p;
+
+    if(chantodepth(cc) == 0)
+        return nil;
+
+    /* reverse the channel descriptor so we can easily generate the string in the right order */
+    rc = 0;
+    for(c=cc; c; c>>=8){
+        rc <<= 8;
+        rc |= c&0xFF;
+    }
+
+    p = buf;
+    for(c=rc; c; c>>=8) {
+        *p++ = channames[TYPE(c)];
+        *p++ = '0'+NBITS(c);
+    }
+    *p = 0;
+
+    return buf;
+}
+@
+
+<<function isspace>>=
+/* avoid pulling in ctype when using with drawterm etc. */
+static int
+isspace(char c)
+{
+    return c==' ' || c== '\t' || c=='\r' || c=='\n';
+}
+@
+
+% used when reading the first image spec from the draw new connection
+<<function strtochan>>=
+ulong
+strtochan(char *s)
+{
+    char *p, *q;
+    ulong c;
+    int t, n, d;
+
+    c = 0;
+    d = 0;
+    p=s;
+    while(*p && isspace(*p))
+        p++;
+
+    while(*p && !isspace(*p)){
+        if((q = strchr(channames, p[0])) == nil) 
+            return 0;
+        t = q-channames;
+        if(p[1] < '0' || p[1] > '9')
+            return 0;
+        n = p[1]-'0';
+        d += n;
+        c = (c<<8) | __DC(t, n);
+        p += 2;
+    }
+    if(d==0 || (d>8 && d%8) || (d<8 && 8%d))
+        return 0;
+    return c;
+}
+@
+% >> 
 
 
 \chapter{Error Managment}

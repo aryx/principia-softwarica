@@ -6,7 +6,9 @@
 /*s: enum _anon_ (lib_graphics/libdraw/string.c) */
 enum
 {
-    Max = 100
+/*s: constant Max */
+Max = 100
+/*e: constant Max */
 };
 /*e: enum _anon_ (lib_graphics/libdraw/string.c) */
 

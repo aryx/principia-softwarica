@@ -2,6 +2,7 @@
 #pragma src "/sys/src/libdraw"
 #pragma lib "libdraw.a"
 
+// forward decls
 typedef struct	Cachefont Cachefont;
 typedef struct	Cacheinfo Cacheinfo;
 typedef struct	Cachesubf Cachesubf;
@@ -18,6 +19,7 @@ typedef struct	Subfont Subfont;
 
 #pragma incomplete Mouse
 
+// dumpers
 #pragma varargck	type	"R"	Rectangle
 #pragma varargck	type	"P"	Point
 extern	int	Rfmt(Fmt*);
@@ -64,9 +66,12 @@ enum
 /*s: enum _anon_ (include/draw.h) */
 enum
 {
-    Displaybufsize	= 8000,
+    /*s: constant ICOSSCALE */
     ICOSSCALE	= 1024,
+    /*e: constant ICOSSCALE */
+    /*s: constant Borderwidth */
     Borderwidth =	4,
+    /*e: constant Borderwidth */
 };
 /*e: enum _anon_ (include/draw.h) */
 
@@ -76,19 +81,16 @@ enum
     /* refresh methods */
     Refbackup	= 0,
     Refnone		= 1,
-    Refmesg		= 2
+    Refmesg		= 2 // incomplete apparently
 };
 /*e: enum _anon_ (include/draw.h)2 */
-/*s: constant NOREFRESH */
-#define	NOREFRESH	((void*)-1)
-/*e: constant NOREFRESH */
 
 /*s: enum _anon_ (include/draw.h)3 */
 enum
 {
     /* line ends */
     Endsquare	= 0,
-    Enddisc	= 1,
+    Enddisc		= 1,
     Endarrow	= 2,
 
     Endmask		= 0x1F
@@ -185,9 +187,10 @@ enum {
 };
 /*e: enum _anon_ (include/draw.h)5 */
 
+extern	int		chantodepth(ulong);
+
 extern	char*	chantostr(char*, ulong);
 extern	ulong	strtochan(char*);
-extern	int		chantodepth(ulong);
 
 /*s: struct Point */
 struct	Point
@@ -204,8 +207,6 @@ struct Rectangle
     Point	max;
 };
 /*e: struct Rectangle */
-
-typedef void	(*Reffn)(Image*, Rectangle, void*);
 
 /*s: struct Screen */
 struct Screen
@@ -426,34 +427,36 @@ struct Font
 extern int	initdraw(void(*)(Display*, char*), char*, char*);
 extern int	geninitdraw(char*, void(*)(Display*, char*), char*, char*, char*, int);
 extern Display*	initdisplay(char*, char*, void(*)(Display*, char*));
-extern void	closedisplay(Display*);
+extern void		closedisplay(Display*);
 
-extern uchar*	bufimage(Display*, int);
-extern int	flushimage(Display*, bool);
+extern int		flushimage(Display*, bool);
 
 extern Image*	allocimage(Display*, Rectangle, ulong, int, ulong);
-extern int	freeimage(Image*);
-extern Image* allocimagemix(Display*, ulong, ulong);
+extern int		freeimage(Image*);
+extern Image* 	allocimagemix(Display*, ulong, ulong);
+
+extern int		loadimage(Image*, Rectangle, uchar*, int);
+extern int		unloadimage(Image*, Rectangle, uchar*, int);
+extern Image* 	readimage(Display*, int, int);
+extern int		writeimage(int, Image*, int);
+
+// compressed variants
+extern int		cloadimage(Image*, Rectangle, uchar*, int);
+extern Image* 	creadimage(Display*, int, int);
+
+extern Image*	namedimage(Display*, char*);
+extern int		nameimage(Image*, char*, int);
+
+extern void	drawerror(Display*, char*);
+
+extern int	bytesperline(Rectangle, int);
+extern int	wordsperline(Rectangle, int);
 
 // why not in Windows section?
 extern int	newwindow(char*);
 extern int	getwindow(Display*, int);
 extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
 
-extern int	loadimage(Image*, Rectangle, uchar*, int);
-extern int	unloadimage(Image*, Rectangle, uchar*, int);
-extern Image* readimage(Display*, int, int);
-extern int	writeimage(int, Image*, int);
-
-extern int	cloadimage(Image*, Rectangle, uchar*, int);
-extern Image* creadimage(Display*, int, int);
-
-extern Image*	namedimage(Display*, char*);
-extern int	nameimage(Image*, char*, int);
-
-extern void	drawerror(Display*, char*);
-extern int	bytesperline(Rectangle, int);
-extern int	wordsperline(Rectangle, int);
 
 /*
  * Colors
@@ -466,7 +469,7 @@ extern	ulong	setalpha(ulong, uchar);
  * Windows
  */
 extern Screen*	allocscreen(Image*, Image*, int);
-extern int	freescreen(Screen*);
+extern int		freescreen(Screen*);
 extern Screen*	publicscreen(Display*, int, ulong);
 
 extern Image*	allocwindow(Screen*, Rectangle, int, ulong);
@@ -479,15 +482,16 @@ extern void	topwindow(Image*);
 /*
  * Geometry
  */
-extern Point		Pt(int, int);
+extern Point	Pt(int, int);
+extern Point	addpt(Point, Point);
+extern Point	subpt(Point, Point);
+extern Point	divpt(Point, int);
+extern Point	mulpt(Point, int);
+extern int		eqpt(Point, Point);
+
 extern Rectangle	Rect(int, int, int, int);
 extern Rectangle	Rpt(Point, Point);
-extern Point		addpt(Point, Point);
-extern Point		subpt(Point, Point);
-extern Point		divpt(Point, int);
-extern Point		mulpt(Point, int);
-extern int		eqpt(Point, Point);
-extern int		eqrect(Rectangle, Rectangle);
+extern int			eqrect(Rectangle, Rectangle);
 extern Rectangle	insetrect(Rectangle, int);
 extern Rectangle	rectaddpt(Rectangle, Point);
 extern Rectangle	rectsubpt(Rectangle, Point);
@@ -516,6 +520,9 @@ extern void	drawop(Image*, Rectangle, Image*, Image*, Point, Drawop);
 extern void	gendraw(Image*, Rectangle, Image*, Point, Image*, Point);
 extern void	gendrawop(Image*, Rectangle, Image*, Point, Image*, Point, Drawop);
 
+extern void	border(Image*, Rectangle, int, Image*, Point);
+extern void	borderop(Image*, Rectangle, int, Image*, Point, Drawop);
+
 extern void	line(Image*, Point, Point, int, int, int, Image*, Point);
 extern void	lineop(Image*, Point, Point, int, int, int, Image*, Point, Drawop);
 
@@ -534,16 +541,15 @@ extern void	arcop(Image*, Point, int, int, int, Image*, Point, int, int, Drawop)
 extern void	fillarc(Image*, Point, int, int, Image*, Point, int, int);
 extern void	fillarcop(Image*, Point, int, int, Image*, Point, int, int, Drawop);
 
-
-extern int		bezier(Image*, Point, Point, Point, Point, int, int, int, Image*, Point);
-extern int		bezierop(Image*, Point, Point, Point, Point, int, int, int, Image*, Point, Drawop);
-extern int		bezspline(Image*, Point*, int, int, int, int, Image*, Point);
-extern int		bezsplineop(Image*, Point*, int, int, int, int, Image*, Point, Drawop);
-extern int		bezsplinepts(Point*, int, Point**);
-extern int		fillbezier(Image*, Point, Point, Point, Point, int, Image*, Point);
-extern int		fillbezierop(Image*, Point, Point, Point, Point, int, Image*, Point, Drawop);
-extern int		fillbezspline(Image*, Point*, int, int, Image*, Point);
-extern int		fillbezsplineop(Image*, Point*, int, int, Image*, Point, Drawop);
+extern int	bezier(Image*, Point, Point, Point, Point, int, int, int, Image*, Point);
+extern int	bezierop(Image*, Point, Point, Point, Point, int, int, int, Image*, Point, Drawop);
+extern int	bezspline(Image*, Point*, int, int, int, int, Image*, Point);
+extern int	bezsplineop(Image*, Point*, int, int, int, int, Image*, Point, Drawop);
+extern int	bezsplinepts(Point*, int, Point**);
+extern int	fillbezier(Image*, Point, Point, Point, Point, int, Image*, Point);
+extern int	fillbezierop(Image*, Point, Point, Point, Point, int, Image*, Point, Drawop);
+extern int	fillbezspline(Image*, Point*, int, int, Image*, Point);
+extern int	fillbezsplineop(Image*, Point*, int, int, Image*, Point, Drawop);
 
 
 extern Point	string(Image*, Point, Image*, Point, Font*, char*);
@@ -563,44 +569,48 @@ extern Point	runestringbgop(Image*, Point, Image*, Point, Font*, Rune*, Image*, 
 extern Point	runestringnbg(Image*, Point, Image*, Point, Font*, Rune*, int, Image*, Point);
 extern Point	runestringnbgop(Image*, Point, Image*, Point, Font*, Rune*, int, Image*, Point, Drawop);
 
+
 extern Point	stringsubfont(Image*, Point, Image*, Subfont*, char*);
 
-
-extern void	border(Image*, Rectangle, int, Image*, Point);
-extern void	borderop(Image*, Rectangle, int, Image*, Point, Drawop);
 
 /*
  * Font management
  */
 extern Font*	openfont(Display*, char*);
+extern void		freefont(Font*);
+
 extern Font*	buildfont(Display*, char*, char*);
-extern void	freefont(Font*);
 extern Font*	mkfont(Subfont*, Rune);
-extern int	cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);
-extern void	agefont(Font*);
+
 extern Subfont*	allocsubfont(char*, int, int, int, Fontchar*, Image*);
 extern Subfont*	lookupsubfont(Display*, char*);
 extern void	installsubfont(char*, Subfont*);
-extern void	uninstallsubfont(Subfont*);
 extern void	freesubfont(Subfont*);
 extern Subfont*	readsubfont(Display*, char*, int, int);
 extern Subfont*	readsubfonti(Display*, char*, int, Image*, int);
 extern int	writesubfont(int, Subfont*);
-extern void	_unpackinfo(Fontchar*, uchar*, int);
-extern Point	stringsize(Font*, char*);
-extern int	stringwidth(Font*, char*);
-extern int	stringnwidth(Font*, char*, int);
-extern Point	runestringsize(Font*, Rune*);
-extern int	runestringwidth(Font*, Rune*);
-extern int	runestringnwidth(Font*, Rune*, int);
-extern Point	strsubfontwidth(Subfont*, char*);
-extern int	loadchar(Font*, Rune, Cacheinfo*, int, int, char**);
+extern void	uninstallsubfont(Subfont*);
 extern char*	subfontname(char*, char*, int);
 extern Subfont*	_getsubfont(Display*, char*);
+
+extern Point	stringsize(Font*, char*);
+extern int		stringwidth(Font*, char*);
+extern int		stringnwidth(Font*, char*, int);
+extern Point	runestringsize(Font*, Rune*);
+extern int		runestringwidth(Font*, Rune*);
+extern int		runestringnwidth(Font*, Rune*, int);
+
+extern int		cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);
+extern void		agefont(Font*);
+extern void		_unpackinfo(Fontchar*, uchar*, int);
+extern Point	strsubfontwidth(Subfont*, char*);
+extern int		loadchar(Font*, Rune, Cacheinfo*, int, int, char**);
 extern Subfont*	getdefont(Display*);
-extern void		lockdisplay(Display*);
-extern void	unlockdisplay(Display*);
 extern int		drawlsetrefresh(ulong, int, void*, void*);
+
+// seems related to font
+extern void		lockdisplay(Display*);
+extern void		unlockdisplay(Display*);
 
 /*
  * One of a kind
@@ -611,27 +621,32 @@ extern int		mousescrollsize(int);
 /*
  * Predefined 
  */
-extern	uchar	defontdata[];
-extern	int		sizeofdefont;
 extern	Point		ZP;
 extern	Rectangle	ZR;
+extern	uchar	defontdata[];
+extern	int		sizeofdefont;
 
 /*
  * Set up by initdraw()
  */
 extern	Display	*display;
-extern	Font	*font;
 extern	Image	*screen;
+extern	Font	*font;
+
 extern	Screen	*_screen;
-extern	int	_cursorfd;
+extern	int		_cursorfd;
 extern	bool	_drawdebug;	/* set to true to see errors from flushimage */
-extern	void	_setdrawop(Display*, Drawop);
 
 // forward decl, could be move to individual files or in a drawimpl.h
+// used also by window.c
 extern Image*	_allocimage(Image*, Display*, Rectangle, ulong, int, ulong, int, int);
 extern int	    _freeimage1(Image*);
 extern Image*	_allocwindow(Image*, Screen*, Rectangle, int, ulong);
 extern Point	_string(Image*, Point, Image*, Point, Font*, char*, Rune*, int, Rectangle, Image*, Point, Drawop);
+extern	void	_setdrawop(Display*, Drawop);
+
+// internals
+extern uchar*	bufimage(Display*, int);
 
 /*s: function BGSHORT */
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
@@ -668,7 +683,6 @@ extern	void	_twiddlecompressed(uchar*, int);
 extern	int	_compblocksize(Rectangle, int);
 
 /* XXX backwards helps; should go */
-// extern	int		log2[];	/* was used by libmemlayer/line.c */
 extern	ulong	drawld2chan[];
-extern	void		drawsetdebug(int);
+extern	void	drawsetdebug(int);
 /*e: include/draw.h */
