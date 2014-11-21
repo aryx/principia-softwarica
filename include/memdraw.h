@@ -34,7 +34,7 @@ struct Memdata
 };
 /*e: struct Memdata */
 
-/*s: enum _anon_ (include/memdraw.h) */
+/*s: enum fxxx */
 enum {
     Frepl	= 1<<0,	/* is replicated */
     Fsimple	= 1<<1,	/* is 1x1 */
@@ -43,13 +43,15 @@ enum {
     Fcmap	= 1<<4,	/* has cmap channel */
     Fbytes	= 1<<5,	/* has only 8-bit channels */
 };
-/*e: enum _anon_ (include/memdraw.h) */
+/*e: enum fxxx */
 
 /*s: struct Memimage */
 struct Memimage
 {
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle	clipr;		/* clipping region */
+    //bitset<enum<fxxx>
+    ulong	flags;
 
     int		depth;	/* number of bits of storage per pixel */
     ulong	chan;	/* channel descriptions */
@@ -61,8 +63,6 @@ struct Memimage
     /*s: [[MemImage]] other fields */
     int		zero;		/* data->bdata+zero==&byte containing (0,0) */
     ulong	width;	/* width in words of a single scan line */
-
-    ulong	flags;
 
     int		shift[NChan];
     int		mask[NChan];
@@ -98,11 +98,13 @@ struct Memcmap
 
 struct	Memsubfont
 {
-    char		*name;
+    char	*name;
     short	n;		/* number of chars in font */
     uchar	height;		/* height of bitmap */
     char	ascent;		/* top of bitmap to baseline */
+
     Fontchar *info;		/* n+1 character descriptors */
+
     Memimage	*bits;		/* of font */
 };
 /*e: struct Memsubfont */

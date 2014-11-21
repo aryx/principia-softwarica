@@ -151,7 +151,7 @@ byteaddr(Memimage *i, Point p)
 {
     uchar *a;
 
-    a = i->data->bdata+i->zero+sizeof(ulong)*p.y*i->width;
+    a = i->data->bdata + i->zero + sizeof(ulong) * p.y * i->width;
 
     if(i->depth < 8){
         /*

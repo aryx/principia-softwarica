@@ -102,13 +102,13 @@ struct Client
 
     Refresh*    refresh;
     Rendez      refrend;
+    int     refreshme;
 
-    uchar*      readdata;
+    byte*   readdata;
     int     nreaddata;
 
     int     busy;
     int     slot;
-    int     refreshme;
     int     infoid;
     /*e: [[Client]] other fields */
     // Extra

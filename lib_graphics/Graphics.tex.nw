@@ -208,7 +208,9 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 % colors
 % composition (porter-duff), alpha, clipping
 
-% see cairo intro?
+% very generic and powerful operations, draw! (like bitblt
+% before) 
+% see cairo intro? 
 
 % advanced: windows/layers, menus, mouse/keyboard
 
@@ -228,20 +230,19 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 \section{Code organization}
 
-% libdraw, libmemdraw, libmemlayer?
-%#include <draw.h>
-%#include <memdraw.h>
-%#include <memlayer.h>
- % lofs of files have similar name in libdraw/ and libmemdraw/
-% kernel part
+% user code usually just have to do
+% #include <draw.h>
+
+% libdraw/, libmemdraw/, libmemlayer/, kernel/devices/screen/
+% lofs of files have similar name in libdraw/ and libmemdraw/
 
 %-------------------
 % libdraw/
 %-------------------
-% libdraw is mostly for DS and API that then just
-% marshal and delegate the actual work to /dev/draw
+% libdraw is mostly for user DS and API that then just
+% marshalled and delegate the actual work to /dev/draw
 % normally apps must link just with libdraw.a (and not libmemdraw.a
-% or libmemlayer.a!)
+% or libmemlayer.a!) (there are some apps that use memlayer too though).
 
 % can actually divide libdraw in two, have a libcoredraw (or libgeometry)
 % so the kernel would not depend on libdraw
@@ -326,6 +327,8 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 % kernel/drivers/screen/
 %-------------------
 
+% libdraw mostly wrapper on /dev/draw, marshall data, special protocol
+
 % devdraw.c is the /dev/draw handler, especially drawmesg() dispatcher
 %  to libmemdraw operations and libmemlayer operations
 % should also have actual calls to screen.h implem,
@@ -336,24 +339,24 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 % vgascreen.c: implem of screen.h hardware specific ops needed by devdraw
 %  and memdraw
 % devvga.c: /dev/vga ctl files for vgascreen global parameters?
-% vgavesa.c:
-% vgaclgd542x.c:
+% vgavesa.c: vesa specifics?
+% vgaclgd542x.c: cirrus logic specifics
 
 %-------------------
 % libmemdraw/
 %-------------------
 % libmemdraw actually does the drawing stuff in memory
-% (and rely on the kernel devices to do the rest and transfer images from
-% memory to the actual screen).
+% (and rely on some kernel vga functions to do the rest and transfer
+%  images from memory to the actual screen).
 % it also rely on some code in libmemlayer.
 
 %draw.c: draw rectangle, actual memory code
 
-%hwdraw.c: ??
+%hwdraw.c: ?? bridge to screen.h interface functions? (implemented by vgascreen)
 
 %replmul.c: utilities?
 
-%line.c
+%line.c: bresenham?
 %poly.c
 %fillpoly.c
 %ellipse.c
@@ -456,12 +459,13 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 \section{Initialization overview}
 
+\section{Trace of a simple drawing operation}
+% when do draw(), then where does it go? go in kernel?
+
 %\section{Trace of a mouse click}
 
 %\section{Trace of a key press}
 
-\section{Trace of a simple drawing operation}
-% when do draw(), then where does it go? go in kernel?
 
 
 %###############################################################################
@@ -566,28 +570,48 @@ CScreen*    cscreen;
 
 Refresh*    refresh;
 Rendez      refrend;
+int     refreshme;
 
-uchar*      readdata;
+byte*   readdata;
 int     nreaddata;
 
 int     busy;
 int     slot;
-int     refreshme;
 int     infoid;
 @
 
 \section{[[Image]] and [[Memimage]]}
 % and screen
 
+% see technicolor.ps! image in plan9 draw are
+% specials.
+
+%less: hmm actually this is in memdraw.h so maybe
+% it can't be the repl flag in Image.
+<<enum fxxx>>=
+enum {
+    Frepl	= 1<<0,	/* is replicated */
+    Fsimple	= 1<<1,	/* is 1x1 */
+    Fgrey	= 1<<2,	/* is grey */
+    Falpha	= 1<<3,	/* has explicit alpha */
+    Fcmap	= 1<<4,	/* has cmap channel */
+    Fbytes	= 1<<5,	/* has only 8-bit channels */
+};
+@
+% >> >> >> >> >> >>
+
 <<struct Image>>=
 struct Image
 {
-    // ref<Display>, reverse of Display->image
+    // ref<Display>, reverse of Display->image? not necessaraly
     Display		*display;	/* display holding data */
     int			id;		/* id of system-held Image */
 
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;		/* clipping region */
+
+    // bitset<enum<fxxx>>    
+    int			repl;		/* flag: data replicates to tile clipr */
 
     int			depth;		/* number of bits per pixel */
     ulong		chan;
@@ -618,10 +642,8 @@ int		imageid;
 @
 % counter, incremented each allocimage
 
-<<[[Image]] other fields>>=
-int			repl;		/* flag: data replicates to tile clipr */
-@
 
+% for r, clipr, repl, see technicolor.ps!
 
 
 
@@ -634,6 +656,8 @@ struct Memimage
 {
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle	clipr;		/* clipping region */
+    //bitset<enum<fxxx>
+    ulong	flags;
 
     int		depth;	/* number of bits of storage per pixel */
     ulong	chan;	/* channel descriptions */
@@ -645,13 +669,12 @@ struct Memimage
     <<[[MemImage]] other fields>>
 };
 @
+% no repl here?
 
 
 <<[[MemImage]] other fields>>=
 int		zero;		/* data->bdata+zero==&byte containing (0,0) */
 ulong	width;	/* width in words of a single scan line */
-
-ulong	flags;
 
 int		shift[NChan];
 int		mask[NChan];
@@ -679,16 +702,9 @@ struct Memdata
 % this is kinda a framebuffer. But actually needs one
 % operation to transfer from this memory to the actual screen!
 % this is what vga driver does.
-
-<<[[Memdata]] other fields>>=
-int		ref;		/* number of Memimages using this data */
-
-void*	imref;
-int		allocd;	/* is this malloc'd? */
-@
-
-
-
+% the raw pixel data! but to know where to modify you need
+% to understand the format of the image, the #channels, depths
+% of channels, etc.
 
 
 <<function byteaddr>>=
@@ -697,7 +713,7 @@ byteaddr(Memimage *i, Point p)
 {
     uchar *a;
 
-    a = i->data->bdata+i->zero+sizeof(ulong)*p.y*i->width;
+    a = i->data->bdata + i->zero + sizeof(ulong) * p.y * i->width;
 
     if(i->depth < 8){
         /*
@@ -727,6 +743,19 @@ wordaddr(Memimage *i, Point p)
     return (ulong*) ((uintptr)byteaddr(i, p) & ~(sizeof(ulong)-1));
 }
 @
+
+
+%XXXXXXXXXX
+<<[[Memdata]] other fields>>=
+int		ref;		/* number of Memimages using this data */
+
+void*	imref;
+int		allocd;	/* is this malloc'd? */
+@
+
+
+
+
 
 \section{Image channels}
 
@@ -758,19 +787,29 @@ enum {
     GREY2	= CHAN1(CGrey, 2),
     GREY4	= CHAN1(CGrey, 4),
     GREY8	= CHAN1(CGrey, 8),
+
     CMAP8	= CHAN1(CMap, 8),
+
     RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
     RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
     RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
-    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8),
-    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),	/* stupid VGAs */
-    XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
     BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
+
+    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // classic one?
+    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
     ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
+
+    XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
     XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
 };
 @
-% need all of that?
+% need all of that? could maybe simplfy and support less
+% image format. That should remove quite some code, e.g. all those
+% alphacalcxxx
+% cairo has what? RGBA32 no?
+
+% what is True Color? mentionned in technicolor.ps. It's RGBA32?
+
 % argument of what? allocimage?
 
 
@@ -826,11 +865,19 @@ chantodepth(ulong c)
 
 \section{Colors}
 
+% actually Color are Image* in plan9 draw!
+% a Rect(0,0,1,1), with clipr = infinitty and repl = true
+% very general so less need draw_mask, or draw_color, instead
+% just have a generic draw function where you can pass
+% black as the src!
+
+% 32 bits! RGBA 8 bits for each channel, which is
+% why has FF as the last bit for almost all the elements below
 <<enum _anon_>>=
 enum
 {
-    DOpaque		= 0xFFFFFFFF,
-    DTransparent	= 0x00000000,		/* only useful for allocimage, memfillcolor */
+    DOpaque			= 0xFFFFFFFF,
+    DTransparent	= 0x00000000,/* only useful for allocimage, memfillcolor */
 
     DBlack		= 0x000000FF,
     DWhite		= 0xFFFFFFFF,
@@ -838,7 +885,7 @@ enum
     DGreen		= 0x00FF00FF,
     DBlue		= 0x0000FFFF,
     DCyan		= 0x00FFFFFF,
-    DMagenta		= 0xFF00FFFF,
+    DMagenta	= 0xFF00FFFF,
     DYellow		= 0xFFFF00FF,
 
     DPaleyellow	= 0xFFFFAAFF,
@@ -858,13 +905,15 @@ enum
     DPalegreyblue	= 0x4993DDFF,
     DPurpleblue		= 0x8888CCFF,
 
-    DNotacolor	= 0xFFFFFF00,
+    DNotacolor	= 0xFFFFFF00, // Alpha = 0
     DNofill	= DNotacolor,
     
 };
 @
 
 \section{Color map}
+% need color map if use RGBA32?
+% maybe could move in advanced topics?
 
 % CMAP vs RGB????
 
@@ -1057,17 +1106,23 @@ struct	Fontchar
 
 struct	Memsubfont
 {
-    char		*name;
+    char	*name;
     short	n;		/* number of chars in font */
     uchar	height;		/* height of bitmap */
     char	ascent;		/* top of bitmap to baseline */
+
     Fontchar *info;		/* n+1 character descriptors */
+
     Memimage	*bits;		/* of font */
 };
 @
 
 
-\section{[[Drawop]] and [[Memdrawparam]]}
+\section{Composition, [[Drawop]] and [[Memdrawparam]]}
+
+% take technicolor.ps example with nice racket like
+% slides where images are arguments of draw(), like slide 9
+
 <<enum drawop>>=
 enum drawop
 {
@@ -1109,6 +1164,7 @@ enum {
 @
 % >> >> >> >> >>
 
+% technicolor.ps! see draw()
 <<struct Memdrawparam>>=
 struct	Memdrawparam
 {
@@ -1464,7 +1520,70 @@ _closedisplay(Display *disp, int isshutdown)
 }
 @
 
-\section{Image}
+\section{[[memimageinit()]]}
+
+% ?? called by user? kernel?
+<<function memimageinit>>=
+void
+memimageinit(void)
+{
+    static bool didinit = false;
+    if(didinit)
+        return;
+    didinit = true;
+
+    if(  strcmp(imagmem->name, "Image") == 0 
+      || strcmp(imagmem->name, "image") == 0
+      )
+        imagmem->move = memimagemove;
+
+    mktables();
+    _memmkcmap();
+
+    fmtinstall('R', Rfmt); 
+    fmtinstall('P', Pfmt);
+    fmtinstall('b', _ifmt);
+
+    memzeros = allocmemimage(Rect(0,0,1,1), GREY1);
+    memzeros->flags |= Frepl;
+    memzeros->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+    *byteaddr(memzeros, ZP) = 0;
+
+    memones = allocmemimage(Rect(0,0,1,1), GREY1);
+    memones->flags |= Frepl;
+    memones->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+    *byteaddr(memones, ZP) = ~0;
+
+    if(memones == nil || memzeros == nil)
+        assert(0 /*cannot initialize memimage library */);	/* RSC BUG */
+
+    memwhite = memones;
+    memblack = memzeros;
+    memopaque = memones;
+    memtransparent = memzeros;
+}
+@
+
+% kernel interface?
+% memimageinit(imag->move = <>)
+<<function memimagemove>>=
+void
+memimagemove(void *from, void *to)
+{
+    Memdata *md;
+
+    md = *(Memdata**)to;
+    if(md->base != from){
+        print("compacted data not right: #%p\n", md->base);
+        abort();
+    }
+    md->base = to;
+
+    /* if allocmemimage changes this must change too */
+    md->bdata = (uchar*)md->base+sizeof(Memdata*)+sizeof(ulong);
+}
+@
+
 
 \section{Fonts}
 
@@ -1623,71 +1742,6 @@ getwindow(Display *d, int ref)
     return gengetwindow(d, winname, &screen, &_screen, ref);
 }
 @
-
-\section{[[memimageinit()]]}
-
-% ?? called by user?
-<<function memimageinit>>=
-void
-memimageinit(void)
-{
-    static bool didinit = false;
-
-    if(didinit)
-        return;
-
-    didinit = true;
-
-    if(strcmp(imagmem->name, "Image") == 0 || strcmp(imagmem->name, "image") == 0)
-        imagmem->move = memimagemove;
-
-    mktables();
-    _memmkcmap();
-
-    fmtinstall('R', Rfmt); 
-    fmtinstall('P', Pfmt);
-    fmtinstall('b', _ifmt);
-
-    memones = allocmemimage(Rect(0,0,1,1), GREY1);
-    memones->flags |= Frepl;
-    memones->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
-    *byteaddr(memones, ZP) = ~0;
-
-    memzeros = allocmemimage(Rect(0,0,1,1), GREY1);
-    memzeros->flags |= Frepl;
-    memzeros->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
-    *byteaddr(memzeros, ZP) = 0;
-
-    if(memones == nil || memzeros == nil)
-        assert(0 /*cannot initialize memimage library */);	/* RSC BUG */
-
-    memwhite = memones;
-    memblack = memzeros;
-    memopaque = memones;
-    memtransparent = memzeros;
-}
-@
-
-% kernel interface?
-% memimageinit(imag->move = <>)
-<<function memimagemove>>=
-void
-memimagemove(void *from, void *to)
-{
-    Memdata *md;
-
-    md = *(Memdata**)to;
-    if(md->base != from){
-        print("compacted data not right: #%p\n", md->base);
-        abort();
-    }
-    md->base = to;
-
-    /* if allocmemimage changes this must change too */
-    md->bdata = (uchar*)md->base+sizeof(Memdata*)+sizeof(ulong);
-}
-@
-
 
 \chapter{User/Kernel Bridge}
 
@@ -1880,16 +1934,6 @@ drawmesg(Client *client, void *av, int n)
 
 \subsection{API}
 
-<<enum _anon_ (include/memdraw.h)>>=
-enum {
-    Frepl	= 1<<0,	/* is replicated */
-    Fsimple	= 1<<1,	/* is 1x1 */
-    Fgrey	= 1<<2,	/* is grey */
-    Falpha	= 1<<3,	/* has explicit alpha */
-    Fcmap	= 1<<4,	/* has cmap channel */
-    Fbytes	= 1<<5,	/* has only 8-bit channels */
-};
-@
 
 
 

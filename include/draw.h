@@ -28,8 +28,8 @@ extern	int	Pfmt(Fmt*);
 /*s: enum _anon_ */
 enum
 {
-    DOpaque		= 0xFFFFFFFF,
-    DTransparent	= 0x00000000,		/* only useful for allocimage, memfillcolor */
+    DOpaque			= 0xFFFFFFFF,
+    DTransparent	= 0x00000000,/* only useful for allocimage, memfillcolor */
 
     DBlack		= 0x000000FF,
     DWhite		= 0xFFFFFFFF,
@@ -37,7 +37,7 @@ enum
     DGreen		= 0x00FF00FF,
     DBlue		= 0x0000FFFF,
     DCyan		= 0x00FFFFFF,
-    DMagenta		= 0xFF00FFFF,
+    DMagenta	= 0xFF00FFFF,
     DYellow		= 0xFFFF00FF,
 
     DPaleyellow	= 0xFFFFAAFF,
@@ -57,7 +57,7 @@ enum
     DPalegreyblue	= 0x4993DDFF,
     DPurpleblue		= 0x8888CCFF,
 
-    DNotacolor	= 0xFFFFFF00,
+    DNotacolor	= 0xFFFFFF00, // Alpha = 0
     DNofill	= DNotacolor,
     
 };
@@ -174,15 +174,19 @@ enum {
     GREY2	= CHAN1(CGrey, 2),
     GREY4	= CHAN1(CGrey, 4),
     GREY8	= CHAN1(CGrey, 8),
+
     CMAP8	= CHAN1(CMap, 8),
+
     RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
     RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
     RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
-    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8),
-    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),	/* stupid VGAs */
-    XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
     BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
+
+    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // classic one?
+    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
     ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
+
+    XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
     XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
 };
 /*e: enum _anon_ (include/draw.h)5 */
@@ -274,19 +278,20 @@ struct Display
 /*s: struct Image */
 struct Image
 {
-    // ref<Display>, reverse of Display->image
+    // ref<Display>, reverse of Display->image? not necessaraly
     Display		*display;	/* display holding data */
     int			id;		/* id of system-held Image */
 
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;		/* clipping region */
 
+    // bitset<enum<fxxx>>    
+    int			repl;		/* flag: data replicates to tile clipr */
+
     int			depth;		/* number of bits per pixel */
     ulong		chan;
 
     /*s: [[Image]] other fields */
-    int			repl;		/* flag: data replicates to tile clipr */
-    /*x: [[Image]] other fields */
     Screen		*screen;	/* 0 if not a window */
     /*e: [[Image]] other fields */
     // Extra

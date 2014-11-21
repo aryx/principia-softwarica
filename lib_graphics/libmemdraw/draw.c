@@ -82,13 +82,13 @@ void
 memimageinit(void)
 {
     static bool didinit = false;
-
     if(didinit)
         return;
-
     didinit = true;
 
-    if(strcmp(imagmem->name, "Image") == 0 || strcmp(imagmem->name, "image") == 0)
+    if(  strcmp(imagmem->name, "Image") == 0 
+      || strcmp(imagmem->name, "image") == 0
+      )
         imagmem->move = memimagemove;
 
     mktables();
@@ -98,15 +98,15 @@ memimageinit(void)
     fmtinstall('P', Pfmt);
     fmtinstall('b', _ifmt);
 
-    memones = allocmemimage(Rect(0,0,1,1), GREY1);
-    memones->flags |= Frepl;
-    memones->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
-    *byteaddr(memones, ZP) = ~0;
-
     memzeros = allocmemimage(Rect(0,0,1,1), GREY1);
     memzeros->flags |= Frepl;
     memzeros->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
     *byteaddr(memzeros, ZP) = 0;
+
+    memones = allocmemimage(Rect(0,0,1,1), GREY1);
+    memones->flags |= Frepl;
+    memones->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+    *byteaddr(memones, ZP) = ~0;
 
     if(memones == nil || memzeros == nil)
         assert(0 /*cannot initialize memimage library */);	/* RSC BUG */
