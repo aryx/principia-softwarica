@@ -13,10 +13,10 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - deadcode (Displaybufsize, )
+% - deadcode (Displaybufsize, ...)
 
 %thx to codemap/codegraph/scheck:
-% - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
+% - SEMI use cg to reduce backward deps, introduce globals.c, utils.c,
 %   (harder to understand non layered code)
 % - TODO use scheck to remove deadcode, dead prototypes, useless export
 %   or mv as forward decl
@@ -38,8 +38,8 @@
 % - SEMI distribute parts of the Extra section in the main file
 % - SEMI understand main(), LP split main, improve TOC
 % - TODO understand main functions, LP split, cluster, improve TOC
-% - TODO LP split the structures, use datalog for flow to field info
-% - TODO nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
+% - SEMI LP split the structures, use datalog for flow to field info
+% - SEMI nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
 % - TODO aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
@@ -152,8 +152,8 @@ you fully understand how things work under the hood.
 
 % gonna present the one in Plan9, mostly /dev/draw, but also
 % /dev/mouse, /dev/cons, etc.
-% It actually provides some forms of window managment, with backing
-% store, and even menu (but rio is more complete)
+% It actually provides some forms of windows managment, with backing
+% store, and even menus (but rio is more complete).
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
@@ -172,6 +172,13 @@ Here are other candidates that were considered but ultimately discarded:
 \section{Getting started}
 
 \section{Requirements}
+
+% draw(2?), draw(6?) graphics(2?)
+% font(?) image(?)
+% window(2) 
+% mouse(3)
+
+% see plan9-in-technicolor.ps
 
 \section{About this document}
 #include "../docs/latex/About.tex.nw"
@@ -206,6 +213,7 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 % advanced: windows/layers, menus, mouse/keyboard
 
 \section{[[/dev/draw]] services}
+
 %maybe show code of toy app also?
 % show the different devices?
 
@@ -224,14 +232,18 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %#include <draw.h>
 %#include <memdraw.h>
 %#include <memlayer.h>
-% lofs of files have similar name in libdraw/ and libmemdraw/
-
-% kernel part? user part?
+ % lofs of files have similar name in libdraw/ and libmemdraw/
+% kernel part
 
 %-------------------
 % libdraw/
 %-------------------
-% could actually divide libdraw in two, have a libcoredraw (or libgeometry)
+% libdraw is mostly for DS and API that then just
+% marshal and delegate the actual work to /dev/draw
+% normally apps must link just with libdraw.a (and not libmemdraw.a
+% or libmemlayer.a!)
+
+% can actually divide libdraw in two, have a libcoredraw (or libgeometry)
 % so the kernel would not depend on libdraw
 
 %arith.c: Point and Rectangle ctor and arithmetic (+-/*)
@@ -251,9 +263,9 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 %init.c: display, screen, images
 
-%draw.c: draw rectangle (easier draw horiz or vert)
+%draw.c: draw rectangle, or copy rectangles (easier draw horiz or vert)
  %border.c: draw border
-%line.c: draw line (bensemann algorithm)
+%line.c: draw line (bresenham algorithm?)
 %poly.c: draw polylines
 %ellipse.c: draw ellipse, and arcs
 %bezier.c: draw spline
@@ -270,16 +282,16 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %readcolmap.c
 %writecolmap.c
 
-%readimage.c:
-%loadimage.c:
-%writeimage.c:
-%unloadimage.c:
+%readimage.c: parse from file
+%loadimage.c: parse from memory
+%writeimage.c: write to file
+%unloadimage.c: write to memory
 %cloadimage.c: compressed load image
 %creadimage.c: compressed read image
 %computil.c: compression utilities
 
-%window.c
-%newwindow.c
+%window.c: image "layers" (hmm but actually not transparent right now)
+%newwindow.c:
 
 %mouse.c
 %keyboard.c
@@ -311,12 +323,35 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 
 %-------------------
-% libmemdraw/
+% kernel/drivers/screen/
 %-------------------
 
-%draw.c
+% devdraw.c is the /dev/draw handler, especially drawmesg() dispatcher
+%  to libmemdraw operations and libmemlayer operations
+% should also have actual calls to screen.h implem,
+% e.g. vgascreen.c!
 
-%hwdraw.c
+% pool.c?: imagmem! image data store! (in kernel :( X11 spirit )
+% devdraw.c: /dev/draw
+% vgascreen.c: implem of screen.h hardware specific ops needed by devdraw
+%  and memdraw
+% devvga.c: /dev/vga ctl files for vgascreen global parameters?
+% vgavesa.c:
+% vgaclgd542x.c:
+
+%-------------------
+% libmemdraw/
+%-------------------
+% libmemdraw actually does the drawing stuff in memory
+% (and rely on the kernel devices to do the rest and transfer images from
+% memory to the actual screen).
+% it also rely on some code in libmemlayer.
+
+%draw.c: draw rectangle, actual memory code
+
+%hwdraw.c: ??
+
+%replmul.c: utilities?
 
 %line.c
 %poly.c
@@ -329,11 +364,11 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 
 %cmap.c
 
+
+%read.c: read image?
+%write.c:
 %load.c:
 %unload.c:
-
-%read.c:
-%write.c:
 %cload.c: compressed load
 %cread.c: compressed read
 
@@ -343,8 +378,6 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %defont.c
 
 
-%replmul.c
-
 %iprint.c: kernel cruft
 
 
@@ -352,27 +385,27 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %-------------------
 % libmemlayer/
 %-------------------
+% libmemlayer is mostly to have "layers", layers of images
+% so one can more easily implement a windowing system with 
+% overlapping pictures (windows) that actually can get exposed back
+
 %draw.c: again, memdraw(), but should be in libmemdraw/
 %line.c: again! memline(), but should be only for horizontal/vert here no?
 
-%lalloc.c
+%lalloc.c: ??
 %layerop.c
 %ldelete.c
 %lsetrefresh.c
 
 
-%lorigin.c
-%lhide.c
-%ltofront.c
-%ltorear.c
+%lorigin.c: mv window
+%lhide.c: hide window
+%ltofront.c: back to top
+%ltorear.c: put to rear
 
-%load.c
-%unload.c
+%load.c: ??
+%unload.c: ??
 
-%-------------------
-% kernel/drivers/screen/
-%-------------------
-% ???
 
 \section{Architecture overview}
 
@@ -3230,6 +3263,7 @@ combinerect(Rectangle *r1, Rectangle r2)
 %TODO: show toy program and screenshot of the rectangle!
 
 
+% see plan9-in-technicolor.ps! bitblt and porter-diff compositing algebra
 <<function draw>>=
 void
 draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
@@ -3259,7 +3293,6 @@ border(Image *im, Rectangle r, int i, Image *color, Point sp)
 @
 
 
-
 <<function drawop>>=
 void
 drawop(Image *dst, Rectangle r, Image *src, Image *mask, Point p1, Drawop op)
@@ -3268,6 +3301,7 @@ drawop(Image *dst, Rectangle r, Image *src, Image *mask, Point p1, Drawop op)
 }
 @
 
+% actually this is the one mentionned in the technicolor.ps slides
 <<function gendraw>>=
 void
 gendraw(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1)
