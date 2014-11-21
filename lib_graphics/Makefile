@@ -155,8 +155,6 @@ SRC_VIEWS= \
    ../kernel/devices/screen/386/vga.h\
    ../kernel/devices/screen/386/vgascreen.c\
    ../kernel/devices/screen/386/devvga.c\
-   ../kernel/devices/screen/386/vga.c\
-   ../kernel/devices/screen/386/vgax.c\
    ../kernel/devices/screen/386/vgaclgd542x.c\
    ../kernel/devices/screen/386/vgavesa.c\
 
@@ -165,4 +163,8 @@ SRC_VIEWS= \
 #   ../lib_graphics/libmemdraw/hwdraw.c\
    ../kernel/devices/screen/386/cga.c\
 $   codegraph.h
+
+#not anymore, merged in vgascreen.c
+#   ../kernel/devices/screen/386/vga.c\
+#   ../kernel/devices/screen/386/vgax.c\
 

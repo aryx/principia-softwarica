@@ -1,4 +1,4 @@
-typedef struct Cursor Cursor;
+
 typedef struct Cursorinfo Cursorinfo;
 struct Cursorinfo {
 	Cursor;
@@ -19,16 +19,20 @@ extern Cursorinfo cursor;
 extern Cursor arrow;
 
 /* mouse.c */
+//kmousectl now
 extern void mousectl(Cmdbuf*);
+//I think I've moved it
 extern void mouseresize(void);
 
 /* screen.c */
 extern void	blankscreen(int);
 extern void	flushmemscreen(Rectangle);
 extern uchar*	attachscreen(Rectangle*, ulong*, int*, int*, int*);
+
+//ksetcursor now
+extern void	setcursor(Cursor*);
 extern int	cursoron(int);
 extern void	cursoroff(int);
-extern void	setcursor(Cursor*);
 
 /* devdraw.c */
 extern QLock	drawlock;

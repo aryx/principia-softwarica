@@ -12,8 +12,376 @@
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
+
 #include "../port/screen.h"
 #include "vga.h"
+
+//---------------------------------------------------------------------------
+// vgax.c
+//---------------------------------------------------------------------------
+
+/*s: global vgaxlock */
+static Lock vgaxlock;           /* access to index registers */
+/*e: global vgaxlock */
+
+/*s: function vgaxi */
+int
+vgaxi(long port, uchar index)
+{
+    uchar data;
+
+    ilock(&vgaxlock);
+    switch(port){
+
+    case Seqx:
+    case Crtx:
+    case Grx:
+        outb(port, index);
+        data = inb(port+1);
+        break;
+
+    case Attrx:
+        /*
+         * Allow processor access to the colour
+         * palette registers. Writes to Attrx must
+         * be preceded by a read from Status1 to
+         * initialise the register to point to the
+         * index register and not the data register.
+         * Processor access is allowed by turning
+         * off bit 0x20.
+         */
+        inb(Status1);
+        if(index < 0x10){
+            outb(Attrx, index);
+            data = inb(Attrx+1);
+            inb(Status1);
+            outb(Attrx, 0x20|index);
+        }
+        else{
+            outb(Attrx, 0x20|index);
+            data = inb(Attrx+1);
+        }
+        break;
+
+    default:
+        iunlock(&vgaxlock);
+        return -1;
+    }
+    iunlock(&vgaxlock);
+
+    return data & 0xFF;
+}
+/*e: function vgaxi */
+
+/*s: function vgaxo */
+int
+vgaxo(long port, uchar index, uchar data)
+{
+    ilock(&vgaxlock);
+    switch(port){
+
+    case Seqx:
+    case Crtx:
+    case Grx:
+        /*
+         * We could use an outport here, but some chips
+         * (e.g. 86C928) have trouble with that for some
+         * registers.
+         */
+        outb(port, index);
+        outb(port+1, data);
+        break;
+
+    case Attrx:
+        inb(Status1);
+        if(index < 0x10){
+            outb(Attrx, index);
+            outb(Attrx, data);
+            inb(Status1);
+            outb(Attrx, 0x20|index);
+        }
+        else{
+            outb(Attrx, 0x20|index);
+            outb(Attrx, data);
+        }
+        break;
+
+    default:
+        iunlock(&vgaxlock);
+        return -1;
+    }
+    iunlock(&vgaxlock);
+
+    return 0;
+}
+/*e: function vgaxo */
+
+//---------------------------------------------------------------------------
+// vga.c
+//---------------------------------------------------------------------------
+
+/*s: global back2 */
+static Memimage* back;
+/*e: global back2 */
+/*s: global conscol */
+static Memimage *conscol;
+/*e: global conscol */
+
+/*s: global curpos */
+static Point curpos;
+/*e: global curpos */
+/*s: global window bis */
+static Rectangle window;
+/*e: global window bis */
+/*s: global xp */
+static int *xp;
+/*e: global xp */
+/*s: global xbuf */
+static int xbuf[256];
+/*e: global xbuf */
+/*s: global vgascreenlock */
+Lock vgascreenlock;
+/*e: global vgascreenlock */
+/*s: function vgaimageinit */
+//int drawdebug;
+
+void
+vgaimageinit(ulong chan)
+{
+    if(back == nil){
+        back = allocmemimage(Rect(0,0,1,1), chan);  /* RSC BUG */
+        if(back == nil)
+            panic("back alloc");        /* RSC BUG */
+        back->flags |= Frepl;
+        back->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+        memfillcolor(back, DBlack);
+    }
+
+    if(conscol == nil){
+        conscol = allocmemimage(Rect(0,0,1,1), chan);   /* RSC BUG */
+        if(conscol == nil)
+            panic("conscol alloc"); /* RSC BUG */
+        conscol->flags |= Frepl;
+        conscol->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+        memfillcolor(conscol, DWhite);
+    }
+}
+/*e: function vgaimageinit */
+
+/*s: function vgascroll */
+static void
+vgascroll(VGAscr* scr)
+{
+    int h, o;
+    Point p;
+    Rectangle r;
+
+    h = scr->memdefont->height;
+    o = 8*h;
+    r = Rpt(window.min, Pt(window.max.x, window.max.y-o));
+    p = Pt(window.min.x, window.min.y+o);
+    memimagedraw(scr->gscreen, r, scr->gscreen, p, nil, p, S);
+    r = Rpt(Pt(window.min.x, window.max.y-o), window.max);
+    memimagedraw(scr->gscreen, r, back, ZP, nil, ZP, S);
+
+    curpos.y -= o;
+}
+/*e: function vgascroll */
+
+/*s: function vgascreenputc */
+static void
+vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
+{
+    Point p;
+    int h, w, pos;
+    Rectangle r;
+
+//  drawdebug = 1;
+    if(xp < xbuf || xp >= &xbuf[sizeof(xbuf)])
+        xp = xbuf;
+
+    h = scr->memdefont->height;
+    switch(buf[0]){
+
+    case '\n':
+        if(curpos.y+h >= window.max.y){
+            vgascroll(scr);
+            *flushr = window;
+        }
+        curpos.y += h;
+        vgascreenputc(scr, "\r", flushr);
+        break;
+
+    case '\r':
+        xp = xbuf;
+        curpos.x = window.min.x;
+        break;
+
+    case '\t':
+        p = memsubfontwidth(scr->memdefont, " ");
+        w = p.x;
+        if(curpos.x >= window.max.x-4*w)
+            vgascreenputc(scr, "\n", flushr);
+
+        pos = (curpos.x-window.min.x)/w;
+        pos = 4-(pos%4);
+        *xp++ = curpos.x;
+        r = Rect(curpos.x, curpos.y, curpos.x+pos*w, curpos.y + h);
+        memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
+        curpos.x += pos*w;
+        break;
+
+    case '\b':
+        if(xp <= xbuf)
+            break;
+        xp--;
+        r = Rect(*xp, curpos.y, curpos.x, curpos.y+h);
+        memimagedraw(scr->gscreen, r, back, back->r.min, nil, ZP, S);
+        combinerect(flushr, r);
+        curpos.x = *xp;
+        break;
+
+    case '\0':
+        break;
+
+    default:
+        p = memsubfontwidth(scr->memdefont, buf);
+        w = p.x;
+
+        if(curpos.x >= window.max.x-w)
+            vgascreenputc(scr, "\n", flushr);
+
+        *xp++ = curpos.x;
+        r = Rect(curpos.x, curpos.y, curpos.x+w, curpos.y+h);
+        memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
+        memimagestring(scr->gscreen, curpos, conscol, ZP, scr->memdefont, buf);
+        combinerect(flushr, r);
+        curpos.x += w;
+    }
+//  drawdebug = 0;
+}
+/*e: function vgascreenputc */
+
+/*s: function vgascreenputs */
+static void
+vgascreenputs(char* s, int n)
+{
+    int i, gotdraw;
+    Rune r;
+    char buf[4];
+    VGAscr *scr;
+    Rectangle flushr;
+
+    scr = &vgascreen[0];
+
+    if(!islo()){
+        /*
+         * Don't deadlock trying to
+         * print in an interrupt.
+         */
+        if(!canlock(&vgascreenlock))
+            return;
+    }
+    else
+        lock(&vgascreenlock);
+
+    /*
+     * Be nice to hold this, but not going to deadlock
+     * waiting for it.  Just try and see.
+     */
+    gotdraw = canqlock(&drawlock);
+
+    flushr = Rect(10000, 10000, -10000, -10000);
+
+    while(n > 0){
+        i = chartorune(&r, s);
+        if(i == 0){
+            s++;
+            --n;
+            continue;
+        }
+        memmove(buf, s, i);
+        buf[i] = 0;
+        n -= i;
+        s += i;
+        vgascreenputc(scr, buf, &flushr);
+    }
+    flushmemscreen(flushr);
+
+    if(gotdraw)
+        qunlock(&drawlock);
+    unlock(&vgascreenlock);
+}
+/*e: function vgascreenputs */
+
+/*s: function vgascreenwin */
+void
+vgascreenwin(VGAscr* scr)
+{
+    int h, w;
+
+    h = scr->memdefont->height;
+    w = scr->memdefont->info[' '].width;
+
+    window = insetrect(scr->gscreen->r, 48);
+    window.max.x = window.min.x+((window.max.x-window.min.x)/w)*w;
+    window.max.y = window.min.y+((window.max.y-window.min.y)/h)*h;
+    curpos = window.min;
+
+    screenputs = vgascreenputs;
+}
+/*e: function vgascreenwin */
+
+/*s: function vgablank */
+/*
+ * Supposedly this is the way to turn DPMS
+ * monitors off using just the VGA registers.
+ * Unfortunately, it seems to mess up the video mode
+ * on the cards I've tried.
+ */
+void
+vgablank(VGAscr*, int blank)
+{
+    uchar seq1, crtc17;
+
+    if(blank) {
+        seq1 = 0x00;
+        crtc17 = 0x80;
+    } else {
+        seq1 = 0x20;
+        crtc17 = 0x00;
+    }
+
+    outs(Seqx, 0x0100);         /* synchronous reset */
+    seq1 |= vgaxi(Seqx, 1) & ~0x20;
+    vgaxo(Seqx, 1, seq1);
+    crtc17 |= vgaxi(Crtx, 0x17) & ~0x80;
+    delay(10);
+    vgaxo(Crtx, 0x17, crtc17);
+    outs(Crtx, 0x0300);             /* end synchronous reset */
+}
+/*e: function vgablank */
+
+/*s: function addvgaseg */
+void
+addvgaseg(char *name, ulong pa, ulong size)
+{
+    Physseg seg;
+
+    memset(&seg, 0, sizeof seg);
+    seg.attr = SG_PHYSICAL;
+    seg.name = name;
+    seg.pa = pa;
+    seg.size = size;
+    addphysseg(&seg);
+}
+/*e: function addvgaseg */
+
+
+//---------------------------------------------------------------------------
+// vgascreen.c
+//---------------------------------------------------------------------------
+
 
 //#define RGB2K(r,g,b)    ((156763*(r)+307758*(g)+59769*(b))>>19)
 

@@ -12715,6 +12715,202 @@ vgawrite(Chan* c, void* a, long n, vlong off)
 %//  error(Eperm);
 
 
+\subsection*{[[kernel/devices/screen/386/vga.h]]}
+
+<<struct Cursorinfo>>=
+struct Cursorinfo {
+  Cursor;
+  Lock;
+};
+@
+
+<<enum _anon_ (kernel/devices/screen/386/screen.h)>>=
+/*
+ * Generic VGA registers.
+ */
+enum {
+  MiscW   = 0x03C2, /* Miscellaneous Output (W) */
+  MiscR   = 0x03CC, /* Miscellaneous Output (R) */
+  Status0   = 0x03C2, /* Input status 0 (R) */
+  Status1   = 0x03DA, /* Input Status 1 (R) */
+  FeatureR  = 0x03CA, /* Feature Control (R) */
+  FeatureW  = 0x03DA, /* Feature Control (W) */
+
+  Seqx    = 0x03C4, /* Sequencer Index, Data at Seqx+1 */
+  Crtx    = 0x03D4, /* CRT Controller Index, Data at Crtx+1 */
+  Grx   = 0x03CE, /* Graphics Controller Index, Data at Grx+1 */
+  Attrx   = 0x03C0, /* Attribute Controller Index and Data */
+
+  PaddrW    = 0x03C8, /* Palette Address Register, write */
+  Pdata   = 0x03C9, /* Palette Data Register */
+  Pixmask   = 0x03C6, /* Pixel Mask Register */
+  PaddrR    = 0x03C7, /* Palette Address Register, read */
+  Pstatus   = 0x03C7, /* DAC Status (RO) */
+
+  Pcolours  = 256,    /* Palette */
+  Pred    = 0,
+  Pgreen    = 1,
+  Pblue   = 2,
+
+  Pblack    = 0x00,
+  Pwhite    = 0xFF,
+};
+@
+
+<<function VGAMEM>>=
+#define VGAMEM()  0xA0000
+@
+
+<<function vgao>>=
+#define vgao(port, data)  outb(port, data)
+@
+
+<<struct VGAdev>>=
+struct VGAdev {
+  char* name;
+
+  void  (*enable)(VGAscr*);
+  void  (*disable)(VGAscr*);
+  void  (*page)(VGAscr*, int);
+  void  (*linear)(VGAscr*, int, int);
+  void  (*drawinit)(VGAscr*);
+  int   (*fill)(VGAscr*, Rectangle, ulong);
+  void  (*ovlctl)(VGAscr*, Chan*, void*, int);
+  int   (*ovlwrite)(VGAscr*, void*, int, vlong);
+  void  (*flush)(VGAscr*, Rectangle);
+};
+@
+
+<<struct VGAcur>>=
+struct VGAcur {
+  char* name;
+
+  void  (*enable)(VGAscr*);
+  void  (*disable)(VGAscr*);
+  void  (*load)(VGAscr*, Cursor*);
+  int   (*move)(VGAscr*, Point);
+
+  int doespanning;
+};
+@
+
+<<struct VGAscr>>=
+struct VGAscr {
+  Lock  devlock;
+  VGAdev* dev;
+  Pcidev* pci;
+
+  VGAcur* cur;
+  ulong storage;
+  Cursor;
+
+  int useflush;
+
+  ulong paddr;    /* frame buffer */
+  void* vaddr;
+  int   apsize;
+
+  ulong io;       /* device specific registers */
+  ulong *mmio;
+  
+  ulong colormap[Pcolours][3];
+  int palettedepth;
+
+  Memimage* gscreen;
+  Memdata* gscreendata;
+  Memsubfont* memdefont;
+
+  int (*fill)(VGAscr*, Rectangle, ulong);
+  int (*scroll)(VGAscr*, Rectangle, Rectangle);
+  void  (*blank)(VGAscr*, int);
+  ulong id; /* internal identifier for driver use */
+  int isblank;
+  int overlayinit;
+};
+@
+
+<<enum _anon_ (kernel/devices/screen/386/screen.h)2>>=
+enum {
+  Backgnd   = 0,  /* black */
+};
+@
+
+<<function ishwimage>>=
+//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+@
+
+
+%-------------------------------------------------------------
+
+<<kernel/devices/screen/386/vga.h>>=
+
+<<enum _anon_ (kernel/devices/screen/386/screen.h)>>
+
+<<function VGAMEM>>
+
+<<function vgao>>
+//#define vgai(port)    inb(port)
+extern int vgaxi(long, uchar);
+extern int vgaxo(long, uchar, uchar);
+
+// forward decl
+typedef struct VGAdev VGAdev;
+typedef struct VGAcur VGAcur;
+typedef struct VGAscr VGAscr;
+
+<<struct VGAdev>>
+
+<<struct VGAcur>>
+
+<<struct VGAscr>>
+
+//!!!
+extern VGAscr vgascreen[];
+extern Rectangle physgscreenr;  /* actual monitor size */
+
+<<enum _anon_ (kernel/devices/screen/386/screen.h)2>>
+
+
+/* screen.c */
+extern bool    hwaccel;  /* use hw acceleration; default on */
+extern bool    hwblank;  /* use hw blanking; default on */
+extern bool    panning;  /* use virtual screen panning; default off */
+
+extern void 	addvgaseg(char*, ulong, ulong);
+
+extern int  screensize(int, int, int, ulong);
+extern int  screenaperture(int, int);
+
+// software cursors
+extern VGAcur swcursor;
+extern void swcursorinit(void);
+//extern void swcursorhide(void);
+//extern void swcursoravoid(Rectangle);
+//extern void swcursorunhide(void);
+
+/* devdraw.c */
+extern void deletescreenimage(void);
+extern void resetscreenimage(void);
+extern int drawidletime(void);
+extern void drawblankscreen(int);
+extern ulong  blanktime;
+extern QLock  drawlock;
+//extern int drawhasclients(void);
+//extern void setscreenimageclipr(Rectangle);
+//extern void drawflush(void);
+
+/* vga.c */
+extern void vgascreenwin(VGAscr*);
+extern void vgaimageinit(ulong);
+extern void vgalinearpciid(VGAscr*, int, int);
+extern void vgalinearaddr(VGAscr*, ulong, int);
+extern void vgablank(VGAscr*, int);
+extern Lock vgascreenlock;
+
+<<function ishwimage>>
+@
+
+
 \subsection*{[[kernel/devices/screen/386/vgascreen.c]]}
 
 <<global physgscreenr>>=
@@ -13501,8 +13697,51 @@ VGAcur swcursor =
 #include <draw.h>
 #include <memdraw.h>
 #include <cursor.h>
+
 #include "../port/screen.h"
 #include "vga.h"
+
+//---------------------------------------------------------------------------
+// vgax.c
+//---------------------------------------------------------------------------
+
+<<global vgaxlock>>
+
+<<function vgaxi>>
+
+<<function vgaxo>>
+
+//---------------------------------------------------------------------------
+// vga.c
+//---------------------------------------------------------------------------
+
+<<global back2>>
+<<global conscol>>
+
+<<global curpos>>
+<<global window bis>>
+<<global xp>>
+<<global xbuf>>
+<<global vgascreenlock>>
+<<function vgaimageinit>>
+
+<<function vgascroll>>
+
+<<function vgascreenputc>>
+
+<<function vgascreenputs>>
+
+<<function vgascreenwin>>
+
+<<function vgablank>>
+
+<<function addvgaseg>>
+
+
+//---------------------------------------------------------------------------
+// vgascreen.c
+//---------------------------------------------------------------------------
+
 
 //#define RGB2K(r,g,b)    ((156763*(r)+307758*(g)+59769*(b))>>19)
 
@@ -13609,203 +13848,118 @@ ishwimage(Memimage* i)
 @
 
 
-\subsection*{[[kernel/devices/screen/386/vga.h]]}
-
-<<struct Cursorinfo>>=
-struct Cursorinfo {
-  Cursor;
-  Lock;
-};
+\subsection*{[[kernel/devices/screen/386/vgax.c]]}
+% actually code now in vgascreen.c
+<<global vgaxlock>>=
+static Lock vgaxlock;           /* access to index registers */
 @
 
-<<enum _anon_ (kernel/devices/screen/386/screen.h)>>=
-/*
- * Generic VGA registers.
- */
-enum {
-  MiscW   = 0x03C2, /* Miscellaneous Output (W) */
-  MiscR   = 0x03CC, /* Miscellaneous Output (R) */
-  Status0   = 0x03C2, /* Input status 0 (R) */
-  Status1   = 0x03DA, /* Input Status 1 (R) */
-  FeatureR  = 0x03CA, /* Feature Control (R) */
-  FeatureW  = 0x03DA, /* Feature Control (W) */
+<<function vgaxi>>=
+int
+vgaxi(long port, uchar index)
+{
+    uchar data;
 
-  Seqx    = 0x03C4, /* Sequencer Index, Data at Seqx+1 */
-  Crtx    = 0x03D4, /* CRT Controller Index, Data at Crtx+1 */
-  Grx   = 0x03CE, /* Graphics Controller Index, Data at Grx+1 */
-  Attrx   = 0x03C0, /* Attribute Controller Index and Data */
+    ilock(&vgaxlock);
+    switch(port){
 
-  PaddrW    = 0x03C8, /* Palette Address Register, write */
-  Pdata   = 0x03C9, /* Palette Data Register */
-  Pixmask   = 0x03C6, /* Pixel Mask Register */
-  PaddrR    = 0x03C7, /* Palette Address Register, read */
-  Pstatus   = 0x03C7, /* DAC Status (RO) */
+    case Seqx:
+    case Crtx:
+    case Grx:
+        outb(port, index);
+        data = inb(port+1);
+        break;
 
-  Pcolours  = 256,    /* Palette */
-  Pred    = 0,
-  Pgreen    = 1,
-  Pblue   = 2,
+    case Attrx:
+        /*
+         * Allow processor access to the colour
+         * palette registers. Writes to Attrx must
+         * be preceded by a read from Status1 to
+         * initialise the register to point to the
+         * index register and not the data register.
+         * Processor access is allowed by turning
+         * off bit 0x20.
+         */
+        inb(Status1);
+        if(index < 0x10){
+            outb(Attrx, index);
+            data = inb(Attrx+1);
+            inb(Status1);
+            outb(Attrx, 0x20|index);
+        }
+        else{
+            outb(Attrx, 0x20|index);
+            data = inb(Attrx+1);
+        }
+        break;
 
-  Pblack    = 0x00,
-  Pwhite    = 0xFF,
-};
+    default:
+        iunlock(&vgaxlock);
+        return -1;
+    }
+    iunlock(&vgaxlock);
+
+    return data & 0xFF;
+}
 @
 
-<<function VGAMEM>>=
-#define VGAMEM()  0xA0000
-@
+<<function vgaxo>>=
+int
+vgaxo(long port, uchar index, uchar data)
+{
+    ilock(&vgaxlock);
+    switch(port){
 
-<<function vgao>>=
-#define vgao(port, data)  outb(port, data)
-@
+    case Seqx:
+    case Crtx:
+    case Grx:
+        /*
+         * We could use an outport here, but some chips
+         * (e.g. 86C928) have trouble with that for some
+         * registers.
+         */
+        outb(port, index);
+        outb(port+1, data);
+        break;
 
-<<struct VGAdev>>=
-struct VGAdev {
-  char* name;
+    case Attrx:
+        inb(Status1);
+        if(index < 0x10){
+            outb(Attrx, index);
+            outb(Attrx, data);
+            inb(Status1);
+            outb(Attrx, 0x20|index);
+        }
+        else{
+            outb(Attrx, 0x20|index);
+            outb(Attrx, data);
+        }
+        break;
 
-  void  (*enable)(VGAscr*);
-  void  (*disable)(VGAscr*);
-  void  (*page)(VGAscr*, int);
-  void  (*linear)(VGAscr*, int, int);
-  void  (*drawinit)(VGAscr*);
-  int   (*fill)(VGAscr*, Rectangle, ulong);
-  void  (*ovlctl)(VGAscr*, Chan*, void*, int);
-  int   (*ovlwrite)(VGAscr*, void*, int, vlong);
-  void  (*flush)(VGAscr*, Rectangle);
-};
-@
+    default:
+        iunlock(&vgaxlock);
+        return -1;
+    }
+    iunlock(&vgaxlock);
 
-<<struct VGAcur>>=
-struct VGAcur {
-  char* name;
-
-  void  (*enable)(VGAscr*);
-  void  (*disable)(VGAscr*);
-  void  (*load)(VGAscr*, Cursor*);
-  int   (*move)(VGAscr*, Point);
-
-  int doespanning;
-};
-@
-
-<<struct VGAscr>>=
-struct VGAscr {
-  Lock  devlock;
-  VGAdev* dev;
-  Pcidev* pci;
-
-  VGAcur* cur;
-  ulong storage;
-  Cursor;
-
-  int useflush;
-
-  ulong paddr;    /* frame buffer */
-  void* vaddr;
-  int   apsize;
-
-  ulong io;       /* device specific registers */
-  ulong *mmio;
-  
-  ulong colormap[Pcolours][3];
-  int palettedepth;
-
-  Memimage* gscreen;
-  Memdata* gscreendata;
-  Memsubfont* memdefont;
-
-  int (*fill)(VGAscr*, Rectangle, ulong);
-  int (*scroll)(VGAscr*, Rectangle, Rectangle);
-  void  (*blank)(VGAscr*, int);
-  ulong id; /* internal identifier for driver use */
-  int isblank;
-  int overlayinit;
-};
-@
-
-<<enum _anon_ (kernel/devices/screen/386/screen.h)2>>=
-enum {
-  Backgnd   = 0,  /* black */
-};
-@
-
-<<function ishwimage>>=
-//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+    return 0;
+}
 @
 
 
-%-------------------------------------------------------------
-
-<<kernel/devices/screen/386/vga.h>>=
-
-<<enum _anon_ (kernel/devices/screen/386/screen.h)>>
-
-<<function VGAMEM>>
-
-<<function vgao>>
-//#define vgai(port)    inb(port)
-extern int vgaxi(long, uchar);
-extern int vgaxo(long, uchar, uchar);
-
-// forward decl
-typedef struct VGAdev VGAdev;
-typedef struct VGAcur VGAcur;
-typedef struct VGAscr VGAscr;
-
-<<struct VGAdev>>
-
-<<struct VGAcur>>
-
-<<struct VGAscr>>
-
-//!!!
-extern VGAscr vgascreen[];
-extern Rectangle physgscreenr;  /* actual monitor size */
-
-<<enum _anon_ (kernel/devices/screen/386/screen.h)2>>
 
 
-/* screen.c */
-extern bool    hwaccel;  /* use hw acceleration; default on */
-extern bool    hwblank;  /* use hw blanking; default on */
-extern bool    panning;  /* use virtual screen panning; default off */
 
-extern void 	addvgaseg(char*, ulong, ulong);
 
-extern int  screensize(int, int, int, ulong);
-extern int  screenaperture(int, int);
 
-// software cursors
-extern VGAcur swcursor;
-extern void swcursorinit(void);
-//extern void swcursorhide(void);
-//extern void swcursoravoid(Rectangle);
-//extern void swcursorunhide(void);
 
-/* devdraw.c */
-extern void deletescreenimage(void);
-extern void resetscreenimage(void);
-extern int drawidletime(void);
-extern void drawblankscreen(int);
-extern ulong  blanktime;
-extern QLock  drawlock;
-//extern int drawhasclients(void);
-//extern void setscreenimageclipr(Rectangle);
-//extern void drawflush(void);
 
-/* vga.c */
-extern void vgascreenwin(VGAscr*);
-extern void vgaimageinit(ulong);
-extern void vgalinearpciid(VGAscr*, int, int);
-extern void vgalinearaddr(VGAscr*, ulong, int);
-extern void vgablank(VGAscr*, int);
-extern Lock vgascreenlock;
 
-<<function ishwimage>>
-@
+
 
 
 \subsection*{[[kernel/devices/screen/386/vga.c]]}
+% actually code now in vgascreen.c
 
 <<global back2>>=
 static Memimage* back;
@@ -14071,47 +14225,6 @@ addvgaseg(char *name, ulong pa, ulong size)
 @
 
 
-%-------------------------------------------------------------
-
-<<kernel/devices/screen/386/vga.c>>=
-#include "u.h"
-#include "../port/lib.h"
-#include "mem.h"
-#include "dat.h"
-#include "fns.h"
-#include "io.h"
-#include "../port/error.h"
-
-#include <draw.h>
-#include <memdraw.h>
-#include <cursor.h>
-
-#include "../port/screen.h"
-#include "vga.h"
-
-<<global back2>>
-<<global conscol>>
-
-<<global curpos>>
-<<global window bis>>
-<<global xp>>
-<<global xbuf>>
-<<global vgascreenlock>>
-<<function vgaimageinit>>
-
-<<function vgascroll>>
-
-<<function vgascreenputc>>
-
-<<function vgascreenputs>>
-
-<<function vgascreenwin>>
-
-<<function vgablank>>
-
-<<function addvgaseg>>
-
-@
 
 %//void
 %//cornerstring(char *s)
@@ -14751,153 +14864,6 @@ VGAdev vgavesadev = {
 
 <<global vgavesadev>>
 @
-
-
-\subsection*{[[kernel/devices/screen/386/vgax.c]]}
-
-<<global vgaxlock>>=
-static Lock vgaxlock;           /* access to index registers */
-@
-
-<<function vgaxi>>=
-int
-vgaxi(long port, uchar index)
-{
-    uchar data;
-
-    ilock(&vgaxlock);
-    switch(port){
-
-    case Seqx:
-    case Crtx:
-    case Grx:
-        outb(port, index);
-        data = inb(port+1);
-        break;
-
-    case Attrx:
-        /*
-         * Allow processor access to the colour
-         * palette registers. Writes to Attrx must
-         * be preceded by a read from Status1 to
-         * initialise the register to point to the
-         * index register and not the data register.
-         * Processor access is allowed by turning
-         * off bit 0x20.
-         */
-        inb(Status1);
-        if(index < 0x10){
-            outb(Attrx, index);
-            data = inb(Attrx+1);
-            inb(Status1);
-            outb(Attrx, 0x20|index);
-        }
-        else{
-            outb(Attrx, 0x20|index);
-            data = inb(Attrx+1);
-        }
-        break;
-
-    default:
-        iunlock(&vgaxlock);
-        return -1;
-    }
-    iunlock(&vgaxlock);
-
-    return data & 0xFF;
-}
-@
-
-<<function vgaxo>>=
-int
-vgaxo(long port, uchar index, uchar data)
-{
-    ilock(&vgaxlock);
-    switch(port){
-
-    case Seqx:
-    case Crtx:
-    case Grx:
-        /*
-         * We could use an outport here, but some chips
-         * (e.g. 86C928) have trouble with that for some
-         * registers.
-         */
-        outb(port, index);
-        outb(port+1, data);
-        break;
-
-    case Attrx:
-        inb(Status1);
-        if(index < 0x10){
-            outb(Attrx, index);
-            outb(Attrx, data);
-            inb(Status1);
-            outb(Attrx, 0x20|index);
-        }
-        else{
-            outb(Attrx, 0x20|index);
-            outb(Attrx, data);
-        }
-        break;
-
-    default:
-        iunlock(&vgaxlock);
-        return -1;
-    }
-    iunlock(&vgaxlock);
-
-    return 0;
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<kernel/devices/screen/386/vgax.c>>=
-#include "u.h"
-#include "../port/lib.h"
-#include "mem.h"
-#include "dat.h"
-#include "fns.h"
-#include "../port/error.h"
-
-#include "io.h"
-
-#include <draw.h>
-#include <memdraw.h>
-#include <cursor.h>
-
-#include "../port/screen.h"
-#include "vga.h"
-
-<<global vgaxlock>>
-
-<<function vgaxi>>
-
-<<function vgaxo>>
-@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 \section{[[windows/libpanel/]]}
