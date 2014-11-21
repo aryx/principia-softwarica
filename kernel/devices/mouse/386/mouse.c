@@ -191,6 +191,7 @@ resetmouse(void)
     }
 }
 
+// for screen.h
 void
 kmousectl(Cmdbuf *cb)
 {

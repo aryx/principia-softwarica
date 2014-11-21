@@ -36,16 +36,15 @@ enum {
 /*s: function VGAMEM */
 #define VGAMEM()  0xA0000
 /*e: function VGAMEM */
+
 /*s: function vgao */
-//#define vgai(port)    inb(port)
 #define vgao(port, data)  outb(port, data)
 /*e: function vgao */
-
+//#define vgai(port)    inb(port)
 extern int vgaxi(long, uchar);
 extern int vgaxo(long, uchar, uchar);
 
-/*
- */
+// forward decl
 typedef struct VGAdev VGAdev;
 typedef struct VGAcur VGAcur;
 typedef struct VGAscr VGAscr;
@@ -59,10 +58,10 @@ struct VGAdev {
   void  (*page)(VGAscr*, int);
   void  (*linear)(VGAscr*, int, int);
   void  (*drawinit)(VGAscr*);
-  int (*fill)(VGAscr*, Rectangle, ulong);
+  int   (*fill)(VGAscr*, Rectangle, ulong);
   void  (*ovlctl)(VGAscr*, Chan*, void*, int);
-  int (*ovlwrite)(VGAscr*, void*, int, vlong);
-  void (*flush)(VGAscr*, Rectangle);
+  int   (*ovlwrite)(VGAscr*, void*, int, vlong);
+  void  (*flush)(VGAscr*, Rectangle);
 };
 /*e: struct VGAdev */
 
@@ -73,15 +72,13 @@ struct VGAcur {
   void  (*enable)(VGAscr*);
   void  (*disable)(VGAscr*);
   void  (*load)(VGAscr*, Cursor*);
-  int (*move)(VGAscr*, Point);
+  int   (*move)(VGAscr*, Point);
 
   int doespanning;
 };
 /*e: struct VGAcur */
 
 /*s: struct VGAscr */
-/*
- */
 struct VGAscr {
   Lock  devlock;
   VGAdev* dev;
@@ -116,7 +113,9 @@ struct VGAscr {
 };
 /*e: struct VGAscr */
 
+//!!!
 extern VGAscr vgascreen[];
+extern Rectangle physgscreenr;  /* actual monitor size */
 
 /*s: enum _anon_ (kernel/devices/screen/386/screen.h)2 */
 enum {
@@ -126,16 +125,16 @@ enum {
 
 
 /* screen.c */
-extern int    hwaccel;  /* use hw acceleration; default on */
-extern int    hwblank;  /* use hw blanking; default on */
-extern int    panning;  /* use virtual screen panning; default off */
+extern bool    hwaccel;  /* use hw acceleration; default on */
+extern bool    hwblank;  /* use hw blanking; default on */
+extern bool    panning;  /* use virtual screen panning; default off */
 
 extern void 	addvgaseg(char*, ulong, ulong);
 
 extern int  screensize(int, int, int, ulong);
 extern int  screenaperture(int, int);
-extern Rectangle physgscreenr;  /* actual monitor size */
 
+// software cursors
 extern VGAcur swcursor;
 extern void swcursorinit(void);
 //extern void swcursorhide(void);
@@ -145,22 +144,20 @@ extern void swcursorinit(void);
 /* devdraw.c */
 extern void deletescreenimage(void);
 extern void resetscreenimage(void);
+extern int drawidletime(void);
+extern void drawblankscreen(int);
 extern ulong  blanktime;
-//extern int    drawhasclients(void);
+extern QLock  drawlock;
+//extern int drawhasclients(void);
 //extern void setscreenimageclipr(Rectangle);
 //extern void drawflush(void);
-extern int drawidletime(void);
-extern QLock  drawlock;
 
 /* vga.c */
 extern void vgascreenwin(VGAscr*);
 extern void vgaimageinit(ulong);
 extern void vgalinearpciid(VGAscr*, int, int);
 extern void vgalinearaddr(VGAscr*, ulong, int);
-
-extern void drawblankscreen(int);
 extern void vgablank(VGAscr*, int);
-
 extern Lock vgascreenlock;
 
 /*s: function ishwimage */

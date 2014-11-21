@@ -71,8 +71,12 @@ static Cmdtab mousectlmsg[] =
     CMwildcard, "*",        0,
 };
 
-Mouseinfo   mouse;
+
+// for screen.h
 Cursorinfo  cursor;
+
+Mouseinfo   mouse;
+
 bool     mouseshifted;
 int     kbdbuttons;
 void        (*kbdmouse)(int);

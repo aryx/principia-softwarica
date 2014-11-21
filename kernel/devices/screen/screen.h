@@ -10,15 +10,14 @@ struct Cursorinfo {
 };
 /*e: struct Cursorinfo */
 
-/* devmouse.c */
-extern void 	mousetrack(int, int, int, int);
+/* devmouse.c */ // just enough Mouse getters/setters
 extern Point 	mousexy(void);
 extern void 	mouseaccelerate(int);
+extern void 	mousetrack(int, int, int, int);
 
 extern Cursorinfo 	cursor;
-extern Cursor 		arrow;
 
-/* mouse.c */
+/* xxxmouse.c */
 extern void kmousectl(Cmdbuf*);
 //now in portfns_devices.h: extern void mouseresize(void);
 
@@ -28,13 +27,14 @@ extern void 	blankscreen(int);
 extern uchar* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void 	flushmemscreen(Rectangle);
 
+extern Cursor 		arrow;
+
+extern void 	ksetcursor(Cursor*);
 extern int  	cursoron(int);
 extern void 	cursoroff(int);
-extern void 	ksetcursor(Cursor*);
 
 // this used to be a macro, but then it was forbidding this file to be generic
 //#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
-
-bool ishwimage(Memimage*);
+extern bool ishwimage(Memimage*);
 
 /*e: kernel/devices/screen/screen.h */
