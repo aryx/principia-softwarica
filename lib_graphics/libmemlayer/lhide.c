@@ -15,7 +15,6 @@
  * save area (hide) or screen (expose) based on what those structures tell them.
  * This means they must be called at the correct time during window shuffles.
  */
-
 static
 void
 lhideop(Memimage *src, Rectangle screenr, Rectangle clipr, void *etc, int insave)

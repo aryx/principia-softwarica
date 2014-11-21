@@ -1,11 +1,12 @@
 /*s: kernel/devices/screen/386/vgaclgd542x.c */
 #include "u.h"
 #include "../port/lib.h"
+#include "../port/error.h"
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
+
 #include "io.h"
-#include "../port/error.h"
 
 #include <draw.h>
 #include <memdraw.h>
@@ -278,23 +279,23 @@ clgd542xmove(VGAscr* scr, Point p)
 
 /*s: global vgaclgd542xdev */
 VGAdev vgaclgd542xdev = {
-    "clgd542x",
+    .name = "clgd542x",
 
-    0,
-    0,
-    clgd542xpage,
-    clgd542xlinear,
+    .enable = nil,
+    .disable = nil,
+    .page = clgd542xpage,
+    .linear = clgd542xlinear,
 };
 /*e: global vgaclgd542xdev */
 
 /*s: global vgaclgd542xcur */
 VGAcur vgaclgd542xcur = {
-    "clgd542xhwgc",
+    .name = "clgd542xhwgc",
 
-    clgd542xenable,
-    clgd542xdisable,
-    clgd542xload,
-    clgd542xmove,
+    .enable = clgd542xenable,
+    .disable = clgd542xdisable,
+    .load = clgd542xload,
+    .move = clgd542xmove,
 };
 /*e: global vgaclgd542xcur */
 /*e: kernel/devices/screen/386/vgaclgd542x.c */

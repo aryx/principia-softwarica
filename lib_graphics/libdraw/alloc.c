@@ -5,7 +5,7 @@
 
 /*s: function allocimage */
 Image*
-allocimage(Display *d, Rectangle r, ulong chan, int repl, ulong val)
+allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
 {
     Image*	i;
 
@@ -18,7 +18,7 @@ allocimage(Display *d, Rectangle r, ulong chan, int repl, ulong val)
 
 /*s: function _allocimage */
 Image*
-_allocimage(Image *ai, Display *d, Rectangle r, ulong chan, int repl, ulong val, int screenid, int refresh)
+_allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val, int screenid, int refresh)
 {
     uchar *a;
     char *err;

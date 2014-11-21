@@ -26,7 +26,7 @@ enum
     Qcolormap,
 
     Qctl,
-    Qdata,
+    Qdata, // all the operations, drawmesg()
     Qrefresh,
 };
 /*e: enum _anon_ (kernel/devices/screen/devdraw.c) */
@@ -47,8 +47,6 @@ enum
 #define CLIENTPATH(q)   ((((ulong)q)&0x7FFFFFF0)>>QSHIFT)
 /*e: function CLIENTPATH */
 /*s: constant NHASH bis */
-//#define CLIENT(q)   CLIENTPATH((q).path)
-
 #define NHASH       (1<<5)
 /*e: constant NHASH bis */
 /*s: constant HASHMASK */
@@ -204,7 +202,7 @@ struct DScreen
 static  KDraw        sdraw;
 /*e: global sdraw */
 /*s: global drawlock */
-    QLock   drawlock;
+QLock   drawlock;
 /*e: global drawlock */
 
 /*s: global screenimage */
@@ -973,8 +971,6 @@ drawclientop(Client *cl)
 /*e: function drawclientop */
 
 /*s: function drawclientofpath */
-//}
-
 Client*
 drawclientofpath(ulong path)
 {
@@ -1267,6 +1263,7 @@ drawopen(Chan *c, int omode)
         incref(&cl->r);
         break;
     }
+
     dunlock();
     poperror();
     c->mode = openmode(omode);

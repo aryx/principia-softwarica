@@ -42,10 +42,7 @@ static uchar modebuf[0x1000];
 /*s: function LONG */
 #define LONG(p) ((p)[0] | ((p)[1]<<8) | ((p)[2]<<16) | ((p)[3]<<24))
 /*e: function LONG */
-//#define PWORD(p, v) do{(p)[0] = (v); (p)[1] = (v)>>8;}while(0)
 /*s: function vbesetup */
-//#define PLONG(p, v) do{(p)[0] = (v); (p)[1] = (v)>>8; (p)[2] = (v)>>16; (p)[3] = (v)>>24;}while(0)
-
 static uchar*
 vbesetup(Ureg *u, int ax)
 {

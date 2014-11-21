@@ -22,14 +22,11 @@ static int	tablesbuilt;
  * for 0 ≤ x ≤ 255*255, (x*0x0101+0x100)>>16 is a perfect approximation.
  * for 0 ≤ x < (1<<16), x/255 = ((x+1)*0x0101)>>16 is a perfect approximation.
  * the last one is perfect for all up to 1<<16, avoids a multiply, but requires a rathole.
- */
+ */ // >> >>
 /*s: function DIV255 */
-/* #define DIV255(x) (((x)*257+256)>>16)  */
 #define DIV255(x) ((((x)+1)*257)>>16)
 /*e: function DIV255 */
 /*s: function MUL */
-/* #define DIV255(x) (tmp=(x)+1, (tmp+(tmp>>8))>>8) */
-
 #define MUL(x, y, t)	(t = (x)*(y)+128, (t+(t>>8))>>8)
 /*e: function MUL */
 /*s: constant MASK13 */
@@ -408,9 +405,11 @@ struct Buffer {
     uchar	*red;
     uchar	*grn;
     uchar	*blu;
+
     uchar	*alpha;
     uchar	*grey;
     ulong	*rgba;
+
     int	delta;	/* number of bytes to add to pointer to get next pixel to the right */
 
     /* used by boolcalc* for mask data */
@@ -1105,46 +1104,6 @@ alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
     return obdst;
 }
 /*e: function alphacalc11 */
-
-/*
-not used yet
-source and mask alpha 1
-static Buffer
-alphacalcS0(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
-{
-    Buffer obdst;
-    int i;
-
-    USED(op);
-    obdst = bdst;
-    if(bsrc.delta == bdst.delta){
-        memmove(bdst.rgba, bsrc.rgba, dx*bdst.delta);
-        return obdst;
-    }
-    for(i=0; i<dx; i++){
-        if(grey){
-            *bdst.grey = *bsrc.grey;
-            bsrc.grey += bsrc.delta;
-            bdst.grey += bdst.delta;
-        }else{
-            *bdst.red = *bsrc.red;
-            *bdst.grn = *bsrc.grn;
-            *bdst.blu = *bsrc.blu;
-            bsrc.red += bsrc.delta;
-            bsrc.blu += bsrc.delta;
-            bsrc.grn += bsrc.delta;
-            bdst.red += bdst.delta;
-            bdst.blu += bdst.delta;
-            bdst.grn += bdst.delta;
-        }
-        if(bdst.alpha != &ones){
-            *bdst.alpha = 255;
-            bdst.alpha += bdst.delta;
-        }
-    }
-    return obdst;
-}
-*/
 
 /*s: function alphacalcS */
 /* source alpha 1 */

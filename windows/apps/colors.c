@@ -97,13 +97,14 @@ main(int argc, char *argv[])
 {
     Point p;
     Mouse m;
-    int i, j, k, l, n, ramp, prev;
+    bool ramp;
+    int i, j, k, l, n, prev;
     char buf[100];
     char *fmt;
     Image *dark;
     ulong rgb;
 
-    ramp = 0;
+    ramp = false;
 
     fmt = "index %3d r %3lud g %3lud b %3lud 0x%.8luX        ";
     ARGBEGIN{
@@ -113,13 +114,13 @@ main(int argc, char *argv[])
         fmt = "index %2luX r %3luX g %3luX b %3luX 0x%.8luX       ";
         break;
     case 'r':
-        ramp = 1;
+        ramp = true;
         break;
     }ARGEND
 
     if(argc){
     Usage:
-        fprint(2, "Usage: %s [-rx]\n", argv0);
+        fprint(STDERR, "Usage: %s [-rx]\n", argv0);
         exits("usage");
     }
 
@@ -144,16 +145,19 @@ main(int argc, char *argv[])
             }else
                 color[i] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, (grey(i)<<8)+0xFF);
         }else
-            color[i] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, (cmap2rgb(i)<<8)+0xFF);
+            color[i] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, 
+                                   (cmap2rgb(i)<<8)+0xFF);
         if(color[i] == nil)
             sysfatal("can't allocate image: %r");
     }
+
     eresized(0);
+
     prev = -1;
     for(;;){
         m = emouse();
         switch(m.buttons){
-        case 1:
+        case 1: // left click
             while(m.buttons){
                 if(screen->depth > 8)
                     n = 256;
@@ -181,7 +185,7 @@ main(int argc, char *argv[])
             }
             break;
 
-        case 4:
+        case 4: // right click
             switch(emenuhit(3, &m, &menu)){
             case 0:
                 exits(0);

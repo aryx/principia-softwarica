@@ -57,10 +57,13 @@ struct VGAdev {
   void  (*disable)(VGAscr*);
   void  (*page)(VGAscr*, int);
   void  (*linear)(VGAscr*, int, int);
+ 
+  // optional
   void  (*drawinit)(VGAscr*);
   int   (*fill)(VGAscr*, Rectangle, ulong);
   void  (*ovlctl)(VGAscr*, Chan*, void*, int);
   int   (*ovlwrite)(VGAscr*, void*, int, vlong);
+
   void  (*flush)(VGAscr*, Rectangle);
 };
 /*e: struct VGAdev */
@@ -74,6 +77,7 @@ struct VGAcur {
   void  (*load)(VGAscr*, Cursor*);
   int   (*move)(VGAscr*, Point);
 
+  // optional
   int doespanning;
 };
 /*e: struct VGAcur */
@@ -162,5 +166,13 @@ extern Lock vgascreenlock;
 
 /*s: function ishwimage */
 //#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+/*x: function ishwimage */
+bool
+ishwimage(Memimage* i)
+{
+  return 
+    (vgascreen[0].gscreendata && 
+     i->data->bdata == vgascreen[0].gscreendata->bdata);
+}
 /*e: function ishwimage */
 /*e: kernel/devices/screen/386/vga.h */

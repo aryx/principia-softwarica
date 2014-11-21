@@ -43,20 +43,15 @@ void
 main(int argc, char **argv)
 {
     Memcmap *c;
-    int i, j, inferno;
+    int i, j;
 
-    inferno = 0;
     ARGBEGIN{
-    case 'i':
-        inferno = 1;
     }ARGEND
 
     memimageinit();
     c = mkcmap();
-    if(!inferno)
-        print("#include <u.h>\n#include <libc.h>\n");
-    else
-        print("#include \"lib9.h\"\n");
+
+    print("#include <u.h>\n#include <libc.h>\n");
     print("#include <draw.h>\n");
     print("#include <memdraw.h>\n\n");
     print("static Memcmap def = {\n");

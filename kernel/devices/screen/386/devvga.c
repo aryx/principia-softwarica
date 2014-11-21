@@ -152,8 +152,6 @@ vgaclose(Chan* c)
 /*e: function vgaclose */
 
 /*s: function vgaread */
-//}
-
 static long
 vgaread(Chan* c, void* a, long n, vlong off)
 {
@@ -235,8 +233,6 @@ vgaread(Chan* c, void* a, long n, vlong off)
 /*e: function vgaread */
 
 /*s: function vgactl */
-//static char Ebusy[] = "vga already configured";
-
 static void
 vgactl(Cmdbuf *cb)
 {

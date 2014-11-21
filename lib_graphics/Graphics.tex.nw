@@ -225,7 +225,7 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 % see draw(5?)
 
 \section{A toy graphical application}
-% e.g. colors
+% e.g. colors?
 
 
 \section{Code organization}
@@ -349,10 +349,10 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 % (and rely on some kernel vga functions to do the rest and transfer
 %  images from memory to the actual screen).
 % it also rely on some code in libmemlayer.
+% most apps should link only with libdraw. Only the kernel
+% (and test programs) link with libmemdraw.a normally.
 
 %draw.c: draw rectangle, actual memory code
-
-%hwdraw.c: ?? bridge to screen.h interface functions? (implemented by vgascreen)
 
 %replmul.c: utilities?
 
@@ -381,8 +381,12 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %defont.c
 
 
+%hwdraw.c: kernel cruft
 %iprint.c: kernel cruft
-
+% when people link with memdraw outside the kernel
+% then the linker will complain if no hwdraw() function,
+% but normally hwdraw() should be a bridge to screen.h interface 
+% functions? (implemented by vgascreen)
 
 
 %-------------------
@@ -395,9 +399,11 @@ Winterbottom, Russ Cox, and many other people from Bell Labs.
 %draw.c: again, memdraw(), but should be in libmemdraw/
 %line.c: again! memline(), but should be only for horizontal/vert here no?
 
-%lalloc.c: ??
 %layerop.c
+
+%lalloc.c: ??
 %ldelete.c
+
 %lsetrefresh.c
 
 
@@ -645,6 +651,8 @@ int		imageid;
 
 % for r, clipr, repl, see technicolor.ps!
 
+%/* huge but not infinite, so various offsets will leave it huge, not overflow */
+% clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
 
 
 
@@ -1585,6 +1593,64 @@ memimagemove(void *from, void *to)
 @
 
 
+
+<<global replbit>>=
+/*
+ * Conversion tables.
+ */
+static uchar replbit[1+8][256];		/* replbit[x][y] is the replication of the x-bit quantity y to 8-bit depth */
+@
+
+<<global conv18>>=
+static uchar conv18[256][8];		/* conv18[x][y] is the yth pixel in the depth-1 pixel x */
+@
+
+<<global conv28>>=
+static uchar conv28[256][4];		/* ... */
+@
+
+<<global conv48>>=
+static uchar conv48[256][2];
+@
+
+
+
+<<function mktables>>=
+static void
+mktables(void)
+{
+    int i, j, mask, sh, small;
+        
+    if(tablesbuilt)
+        return;
+
+    fmtinstall('R', Rfmt);
+    fmtinstall('P', Pfmt);
+    tablesbuilt = 1;
+
+    /* bit replication up to 8 bits */
+    for(i=0; i<256; i++){
+        for(j=0; j<=8; j++){	/* j <= 8 [sic] */
+            small = i & ((1<<j)-1);
+            replbit[j][i] = (small*replmul[j])>>8;
+        }
+    }
+
+    /* bit unpacking up to 8 bits, only powers of 2 */
+    for(i=0; i<256; i++){
+        for(j=0, sh=7, mask=1; j<8; j++, sh--)
+            conv18[i][j] = replbit[1][(i>>sh)&mask];
+
+        for(j=0, sh=6, mask=3; j<4; j++, sh-=2)
+            conv28[i][j] = replbit[2][(i>>sh)&mask];
+
+        for(j=0, sh=4, mask=15; j<2; j++, sh-=4)
+            conv48[i][j] = replbit[4][(i>>sh)&mask];
+    }
+}
+@
+
+
 \section{Fonts}
 
 <<[[geninitdraw()]] set up font>>=
@@ -1786,34 +1852,6 @@ Dev drawdevtab = {
 \subsection{[[/dev/draw/x/data]]}
 % and DImage?
 
-
-\section{Vga device}
-
-<<global vgadevtab>>=
-Dev vgadevtab = {
-    .dc       =    'v',
-    .name     =    "vga",
-               
-    .reset    =    vgareset,
-
-    .attach   =    vgaattach,
-    .walk     =    vgawalk,
-    .open     =    vgaopen,
-    .close    =    vgaclose,
-    .read     =    vgaread,
-    .write    =    vgawrite,
-    .stat     =    vgastat,
-    .wstat    =    devwstat,
-
-    .init     =    devinit,
-    .shutdown =    devshutdown,
-    .create   =    devcreate,
-    .bread    =    devbread,
-    .bwrite   =    devbwrite,
-    .remove   =    devremove,
-};
-@
-
 \section{Protocol}
 
 \subsection{API}
@@ -1921,25 +1959,50 @@ drawmesg(Client *client, void *av, int n)
 
 \subsection{Algorithm}
 
-\chapter{Display and Image}
+\section{Screen interface}
 
-%\section{Display}
+% screen.h
 
-\section{Image}
+\section{Vga device}
+
+<<global vgadevtab>>=
+Dev vgadevtab = {
+    .dc       =    'v',
+    .name     =    "vga",
+               
+    .reset    =    vgareset,
+
+    .attach   =    vgaattach,
+    .walk     =    vgawalk,
+    .open     =    vgaopen,
+    .close    =    vgaclose,
+    .read     =    vgaread,
+    .write    =    vgawrite,
+    .stat     =    vgastat,
+    .wstat    =    devwstat,
+
+    .init     =    devinit,
+    .shutdown =    devshutdown,
+    .create   =    devcreate,
+    .bread    =    devbread,
+    .bwrite   =    devbwrite,
+    .remove   =    devremove,
+};
+@
+
+\chapter{Image}
 
 % can have multiple image, draw there, and at some point
 % quickly copy on main image (d->image)
 % the initial d->image is actually allocated for you
 
+\section{Allocation}
 
 \subsection{API}
 
-
-
-
 <<function allocimage>>=
 Image*
-allocimage(Display *d, Rectangle r, ulong chan, int repl, ulong val)
+allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
 {
     Image*	i;
 
@@ -2010,7 +2073,7 @@ allocimagemix(Display *d, ulong color1, ulong color3)
 % ai usually nil
 <<function _allocimage>>=
 Image*
-_allocimage(Image *ai, Display *d, Rectangle r, ulong chan, int repl, ulong val, int screenid, int refresh)
+_allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val, int screenid, int refresh)
 {
     uchar *a;
     char *err;
@@ -2653,6 +2716,339 @@ case 'c':
 \subsection{Algorithm}
 
 
+<<function drawclip>>=
+/*
+ * Clip the destination rectangle further based on the properties of the 
+ * source and mask rectangles.  Once the destination rectangle is properly
+ * clipped, adjust the source and mask rectangles to be the same size.
+ * Then if source or mask is replicated, move its clipped rectangle
+ * so that its minimum point falls within the repl rectangle.
+ *
+ * Return zero if the final rectangle is null.
+ */
+int
+drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, Point *p1, Rectangle *sr, Rectangle *mr)
+{
+    Point rmin, delta;
+    int splitcoords;
+    Rectangle omr;
+
+    if(r->min.x>=r->max.x || r->min.y>=r->max.y)
+        return 0;
+    splitcoords = (p0->x!=p1->x) || (p0->y!=p1->y);
+    /* clip to destination */
+    rmin = r->min;
+    if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
+        return 0;
+    /* move mask point */
+    p1->x += r->min.x-rmin.x;
+    p1->y += r->min.y-rmin.y;
+    /* move source point */
+    p0->x += r->min.x-rmin.x;
+    p0->y += r->min.y-rmin.y;
+    /* map destination rectangle into source */
+    sr->min = *p0;
+    sr->max.x = p0->x+Dx(*r);
+    sr->max.y = p0->y+Dy(*r);
+    /* sr is r in source coordinates; clip to source */
+    if(!(src->flags&Frepl) && !rectclip(sr, src->r))
+        return 0;
+    if(!rectclip(sr, src->clipr))
+        return 0;
+    /* compute and clip rectangle in mask */
+    if(splitcoords){
+        /* move mask point with source */
+        p1->x += sr->min.x-p0->x;
+        p1->y += sr->min.y-p0->y;
+        mr->min = *p1;
+        mr->max.x = p1->x+Dx(*sr);
+        mr->max.y = p1->y+Dy(*sr);
+        omr = *mr;
+        /* mr is now rectangle in mask; clip it */
+        if(!(mask->flags&Frepl) && !rectclip(mr, mask->r))
+            return 0;
+        if(!rectclip(mr, mask->clipr))
+            return 0;
+        /* reflect any clips back to source */
+        sr->min.x += mr->min.x-omr.min.x;
+        sr->min.y += mr->min.y-omr.min.y;
+        sr->max.x += mr->max.x-omr.max.x;
+        sr->max.y += mr->max.y-omr.max.y;
+        *p1 = mr->min;
+    }else{
+        if(!(mask->flags&Frepl) && !rectclip(sr, mask->r))
+            return 0;
+        if(!rectclip(sr, mask->clipr))
+            return 0;
+        *p1 = sr->min;
+    }
+
+    /* move source clipping back to destination */
+    delta.x = r->min.x - p0->x;
+    delta.y = r->min.y - p0->y;
+    r->min.x = sr->min.x + delta.x;
+    r->min.y = sr->min.y + delta.y;
+    r->max.x = sr->max.x + delta.x;
+    r->max.y = sr->max.y + delta.y;
+
+    /* move source rectangle so sr->min is in src->r */
+    if(src->flags&Frepl) {
+        delta.x = drawreplxy(src->r.min.x, src->r.max.x, sr->min.x) - sr->min.x;
+        delta.y = drawreplxy(src->r.min.y, src->r.max.y, sr->min.y) - sr->min.y;
+        sr->min.x += delta.x;
+        sr->min.y += delta.y;
+        sr->max.x += delta.x;
+        sr->max.y += delta.y;
+    }
+    *p0 = sr->min;
+
+    /* move mask point so it is in mask->r */
+    *p1 = drawrepl(mask->r, *p1);
+    mr->min = *p1;
+    mr->max.x = p1->x+Dx(*sr);
+    mr->max.y = p1->y+Dy(*sr);
+
+    assert(Dx(*sr) == Dx(*mr) && Dx(*mr) == Dx(*r));
+    assert(Dy(*sr) == Dy(*mr) && Dy(*mr) == Dy(*r));
+    assert(ptinrect(*p0, src->r));
+    assert(ptinrect(*p1, mask->r));
+    assert(ptinrect(r->min, dst->r));
+
+    return 1;
+}
+@
+
+
+
+% drawrepl | drawclip -> <>
+<<function drawreplxy>>=
+int
+drawreplxy(int min, int max, int x)
+{
+    int sx;
+
+    sx = (x-min)%(max-min);
+    if(sx < 0)
+        sx += max-min;
+    return sx+min;
+}
+@
+
+% drawclip | drawmask -> <>
+<<function drawrepl>>=
+Point
+drawrepl(Rectangle r, Point p)
+{
+    p.x = drawreplxy(r.min.x, r.max.x, p.x);
+    p.y = drawreplxy(r.min.y, r.max.y, p.y);
+    return p;
+}
+@
+
+
+\section{Channels and alpha}
+
+%\subsection{Algorithm}
+
+<<function alphadraw>>=
+/*
+ * For each scan line, we expand the pixels from source, mask, and destination
+ * into byte-aligned red, green, blue, alpha, and grey channels.  If buffering is not
+ * needed and the channels were already byte-aligned (grey8, rgb24, rgba32, rgb32),
+ * the readers need not copy the data: they can simply return pointers to the data.
+ * If the destination image is grey and the source is not, it is converted using the NTSC
+ * formula.
+ *
+ * Once we have all the channels, we call either rgbcalc or greycalc, depending on 
+ * whether the destination image is color.  This is allowed to overwrite the dst buffer (perhaps
+ * the actual data, perhaps a copy) with its result.  It should only overwrite the dst buffer
+ * with the same format (i.e. red bytes with red bytes, etc.)  A new buffer is returned from
+ * the calculator, and that buffer is passed to a function to write it to the destination.
+ * If the buffer is already pointing at the destination, the writing function is a no-op.
+ */
+static int
+alphadraw(Memdrawparam *par)
+{
+    int isgrey, starty, endy, op;
+    int needbuf, dsty, srcy, masky;
+    int y, dir, dx, dy, ndrawbuf;
+    uchar *drawbuf;
+    Buffer bsrc, bdst, bmask;
+    Readfn *rdsrc, *rdmask, *rddst;
+    Calcfn *calc;
+    Writefn *wrdst;
+    Memimage *src, *mask, *dst;
+    Rectangle r, sr, mr;
+    Dbuf *z;
+
+    r = par->r;
+    dx = Dx(r);
+    dy = Dy(r);
+
+    z = allocdbuf();
+    if(z == nil)
+        return 0;
+
+    src = par->src;
+    mask = par->mask;	
+    dst = par->dst;
+    sr = par->sr;
+    mr = par->mr;
+    op = par->op;
+
+    isgrey = dst->flags&Fgrey;
+
+    /*
+     * Buffering when src and dst are the same bitmap is sufficient but not 
+     * necessary.  There are stronger conditions we could use.  We could
+     * check to see if the rectangles intersect, and if simply moving in the
+     * correct y direction can avoid the need to buffer.
+     */
+    needbuf = (src->data == dst->data);
+
+    ndrawbuf = 0;
+    getparam(&z->spar, src, sr, isgrey, needbuf, &ndrawbuf);
+    getparam(&z->dpar, dst, r, isgrey, needbuf, &ndrawbuf);
+    getparam(&z->mpar, mask, mr, 0, needbuf, &ndrawbuf);
+
+    dir = (needbuf && byteaddr(dst, r.min) > byteaddr(src, sr.min)) ? -1 : 1;
+    z->spar.dir = z->mpar.dir = z->dpar.dir = dir;
+
+    /*
+     * If the mask is purely boolean, we can convert from src to dst format
+     * when we read src, and then just copy it to dst where the mask tells us to.
+     * This requires a boolean (1-bit grey) mask and lack of a source alpha channel.
+     *
+     * The computation is accomplished by assigning the function pointers as follows:
+     *	rdsrc - read and convert source into dst format in a buffer
+     * 	rdmask - convert mask to bytes, set pointer to it
+     * 	rddst - fill with pointer to real dst data, but do no reads
+     *	calc - copy src onto dst when mask says to.
+     *	wrdst - do nothing
+     * This is slightly sleazy, since things aren't doing exactly what their names say,
+     * but it avoids a fair amount of code duplication to make this a case here
+     * rather than have a separate booldraw.
+     */
+//if(drawdebug) iprint("flag %lud mchan %lux=?%x dd %d\n", src->flags&Falpha, mask->chan, GREY1, dst->depth);
+    if(!(src->flags&Falpha) && mask->chan == GREY1 && dst->depth >= 8 && op == SoverD){
+//if(drawdebug) iprint("boolcopy...");
+        rdsrc = convfn(dst, &z->dpar, src, &z->spar, &ndrawbuf);
+        rddst = readptr;
+        rdmask = readfn(mask);
+        calc = boolcopyfn(dst, mask);
+        wrdst = nullwrite;
+    }else{
+        /* usual alphadraw parameter fetching */
+        rdsrc = readfn(src);
+        rddst = readfn(dst);
+        wrdst = writefn(dst);
+        calc = alphacalc[op];
+
+        /*
+         * If there is no alpha channel, we'll ask for a grey channel
+         * and pretend it is the alpha.
+         */
+        if(mask->flags&Falpha){
+            rdmask = readalphafn(mask);
+            z->mpar.alphaonly = 1;
+        }else{
+            z->mpar.greymaskcall = readfn(mask);
+            z->mpar.convgrey = 1;
+            rdmask = greymaskread;
+
+            /*
+             * Should really be above, but then boolcopyfns would have
+             * to deal with bit alignment, and I haven't written that.
+             *
+             * This is a common case for things like ellipse drawing.
+             * When there's no alpha involved and the mask is boolean,
+             * we can avoid all the division and multiplication.
+             */
+            if(mask->chan == GREY1 && !(src->flags&Falpha))
+                calc = boolcalc[op];
+            else if(op == SoverD && !(src->flags&Falpha))
+                calc = alphacalcS;
+        }
+    }
+
+    /*
+     * If the image has a small enough repl rectangle,
+     * we can just read each line once and cache them.
+     */
+    if(z->spar.replcache){
+        z->spar.replcall = rdsrc;
+        rdsrc = replread;
+    }
+    if(z->mpar.replcache){
+        z->mpar.replcall = rdmask;
+        rdmask = replread;
+    }
+
+    if(z->n < ndrawbuf){
+        free(z->p);
+        if((z->p = mallocz(ndrawbuf, 0)) == nil){
+            z->inuse = 0;
+            return 0;
+        }
+        z->n = ndrawbuf;
+    }
+    drawbuf = z->p;
+
+    /*
+     * Before we were saving only offsets from drawbuf in the parameter
+     * structures; now that drawbuf has been grown to accomodate us,
+     * we can fill in the pointers.
+     */
+    z->spar.bufbase = drawbuf+z->spar.bufoff;
+    z->mpar.bufbase = drawbuf+z->mpar.bufoff;
+    z->dpar.bufbase = drawbuf+z->dpar.bufoff;
+    z->spar.convbuf = drawbuf+z->spar.convbufoff;
+
+    if(dir == 1){
+        starty = 0;
+        endy = dy;
+    }else{
+        starty = dy-1;
+        endy = -1;
+    }
+
+    /*
+     * srcy, masky, and dsty are offsets from the top of their
+     * respective Rectangles.  they need to be contained within
+     * the rectangles, so clipy can keep them there without division.
+   */
+    srcy = (starty + sr.min.y - src->r.min.y)%Dy(src->r);
+    masky = (starty + mr.min.y - mask->r.min.y)%Dy(mask->r);
+    dsty = starty + r.min.y - dst->r.min.y;
+
+    assert(0 <= srcy && srcy < Dy(src->r));
+    assert(0 <= masky && masky < Dy(mask->r));
+    assert(0 <= dsty && dsty < Dy(dst->r));
+
+    for(y=starty; y!=endy; y+=dir, srcy+=dir, masky+=dir, dsty+=dir){
+        clipy(src, &srcy);
+        clipy(dst, &dsty);
+        clipy(mask, &masky);
+
+        bsrc = rdsrc(&z->spar, z->spar.bufbase, srcy);
+        //DBG print("[");
+        bmask = rdmask(&z->mpar, z->mpar.bufbase, masky);
+        //DBG print("]\n");
+        bdst = rddst(&z->dpar, z->dpar.bufbase, dsty);
+        //DBG		dumpbuf("src", bsrc, dx);
+        //DBG		dumpbuf("mask", bmask, dx);
+        //DBG		dumpbuf("dst", bdst, dx);
+        bdst = calc(bdst, bsrc, bmask, dx, isgrey, op);
+        wrdst(&z->dpar, z->dpar.bytermin+dsty*z->dpar.bwidth, bdst);
+    }
+
+    z->inuse = 0;
+    return 1;
+}
+@
+
+
+
 \section{Flush}
 
 \subsection{API}
@@ -2727,7 +3123,7 @@ drawflush(void)
 }
 @
 
-% 386/screen.c!
+% 386/vgascreen.c!
 <<function flushmemscreen>>=
 /*
  * It would be fair to say that this doesn't work for >8-bit screens.
@@ -2755,12 +3151,12 @@ flushmemscreen(Rectangle r)
     incs = scr->gscreen->width * BY2WD;
 
     switch(scr->gscreen->depth){
+    case 8:
+        len = Dx(r);
+        break;
     default:
         len = 0;
         panic("flushmemscreen: depth\n");
-        break;
-    case 8:
-        len = Dx(r);
         break;
     }
     if(len < 1)
@@ -3488,6 +3884,18 @@ case 'O':
 
 \subsection{Algorithm}
 
+<<struct Draw>>=
+struct Draw
+{
+    Point	deltas;
+    Point	deltam;
+    Memlayer		*dstlayer;
+    Memimage	*src;
+    Memimage	*mask;
+    int	op;
+};
+@
+
 % actually in memlayer/
 <<function memdraw>>=
 void
@@ -3817,6 +4225,58 @@ _memlayerop(
     }
 }
 @
+
+
+<<function RECUR>>=
+#define	RECUR(a,b,c,d)	_layerop(fn, i, Rect(a.x, b.y, c.x, d.y), clipr, etc, front->layer->rear);
+@
+
+<<function _layerop>>=
+static void
+_layerop(
+    void (*fn)(Memimage*, Rectangle, Rectangle, void*, int),
+    Memimage *i,
+    Rectangle r,
+    Rectangle clipr,
+    void *etc,
+    Memimage *front)
+{
+    Rectangle fr;
+
+    Top:
+    if(front == i){
+        /* no one is in front of this part of window; use the screen */
+        fn(i->layer->screen->image, r, clipr, etc, 0);
+        return;
+    }
+    fr = front->layer->screenr;
+    if(rectXrect(r, fr) == 0){
+        /* r doesn't touch this window; continue on next rearmost */
+        // assert(front && front->layer && front->layer->screen && front->layer->rear);
+        front = front->layer->rear;
+        goto Top;
+    }
+    if(fr.max.y < r.max.y){
+        RECUR(r.min, fr.max, r.max, r.max);
+        r.max.y = fr.max.y;
+    }
+    if(r.min.y < fr.min.y){
+        RECUR(r.min, r.min, r.max, fr.min);
+        r.min.y = fr.min.y;
+    }
+    if(fr.max.x < r.max.x){
+        RECUR(fr.max, r.min, r.max, r.max);
+        r.max.x = fr.max.x;
+    }
+    if(r.min.x < fr.min.x){
+        RECUR(r.min, r.min, fr.min, r.max);
+        r.min.x = fr.min.x;
+    }
+    /* r is covered by front, so put in save area */
+    (*fn)(i->layer->save, r, clipr, etc, 1);
+}
+@
+
 
 
 <<function ldrawop>>=
@@ -5133,6 +5593,19 @@ zcompare(void *a, void *b)
 
 
 \section{Ellipse}
+
+% libmemdraw/ellipse.c
+%/*
+% * ellipse(dst, c, a, b, t, src, sp)
+% *   draws an ellipse centered at c with semiaxes a,b>=0
+% *   and semithickness t>=0, or filled if t<0.  point sp
+% *   in src maps to c in dst
+% *
+% *   very thick skinny ellipses are brushed with circles (slow)
+% *   others are approximated by filling between 2 ellipses
+% *   criterion for very thick when b<a: t/b > 0.5*x/(1-x)
+% *   where x = b/a
+% */
 
 \subsection{API}
 
@@ -7863,7 +8336,112 @@ _allocwindow(Image *i, Screen *s, Rectangle r, int ref, ulong val)
 @
 
 
+\section{Window refresh}
 
+<<function memlsetrefresh>>=
+int
+memlsetrefresh(Memimage *i, Refreshfn fn, void *ptr)
+{
+    Memlayer *l;
+
+    l = i->layer;
+    if(l->refreshfn!=nil && fn!=nil){	/* just change functions */
+        l->refreshfn = fn;
+        l->refreshptr = ptr;
+        return 1;
+    }
+
+    if(l->refreshfn == nil){	/* is using backup image; just free it */
+        freememimage(l->save);
+        l->save = nil;
+        l->refreshfn = fn;
+        l->refreshptr = ptr;
+        return 1;
+    }
+
+    l->save = allocmemimage(i->r, i->chan);
+    if(l->save == nil)
+        return 0;
+    /* easiest way is just to update the entire save area */
+    l->refreshfn(i, i->r, l->refreshptr);
+    l->refreshfn = nil;
+    l->refreshptr = nil;
+    return 1;
+}
+@
+
+
+\section{Window hide/expose}
+
+% memlhide -> <>
+<<function lhideop>>=
+/*
+ * Hide puts that portion of screenr now on the screen into the window's save area.
+ * Expose puts that portion of screenr now in the save area onto the screen.
+ *
+ * Hide and Expose both require that the layer structures in the screen
+ * match the geometry they are being asked to update, that is, they update the
+ * save area (hide) or screen (expose) based on what those structures tell them.
+ * This means they must be called at the correct time during window shuffles.
+ */
+static
+void
+lhideop(Memimage *src, Rectangle screenr, Rectangle clipr, void *etc, int insave)
+{
+    Rectangle r;
+    Memlayer *l;
+
+    USED(clipr.min.x);
+    USED(insave);
+    l = etc;
+    if(src != l->save){	/* do nothing if src is already in save area */
+        r = rectsubpt(screenr, l->delta);
+        memdraw(l->save, r, src, screenr.min, nil, screenr.min, S);
+    }
+}
+@
+
+<<function memlhide>>=
+void
+memlhide(Memimage *i, Rectangle screenr)
+{
+    if(i->layer->save == nil)
+        return;
+    if(rectclip(&screenr, i->layer->screen->image->r) == 0)
+        return;
+    _memlayerop(lhideop, i, screenr, screenr, i->layer);
+}
+@
+
+<<function lexposeop>>=
+static
+void
+lexposeop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave)
+{
+    Memlayer *l;
+    Rectangle r;
+
+    USED(clipr.min.x);
+    if(insave)	/* if dst is save area, don't bother */
+        return;
+    l = etc;
+    r = rectsubpt(screenr, l->delta);
+    if(l->save)
+        memdraw(dst, screenr, l->save, r.min, nil, r.min, S);
+    else
+        l->refreshfn(dst, r, l->refreshptr);
+}
+@
+
+<<function memlexpose>>=
+void
+memlexpose(Memimage *i, Rectangle screenr)
+{
+    if(rectclip(&screenr, i->layer->screen->image->r) == 0)
+        return;
+    _memlayerop(lexposeop, i, screenr, screenr, i->layer);
+}
+@
 
 \section{Window origin}
 
@@ -8024,6 +8602,165 @@ memlorigin(Memimage *i, Point log, Point scr)
 }
 @
 
+<<function memlnorefresh>>=
+void
+memlnorefresh(Memimage *l, Rectangle r, void *v)
+{
+    USED(l);
+    USED(r.min.x);
+    USED(v);
+}
+@
+
+
+
+<<function memlalloc>>=
+Memimage*
+memlalloc(Memscreen *s, Rectangle screenr, Refreshfn refreshfn, void *refreshptr, ulong val)
+{
+    Memlayer *l;
+    Memimage *n;
+    static Memimage *paint;
+
+    if(paint == nil){
+        paint = allocmemimage(Rect(0,0,1,1), RGBA32);
+        if(paint == nil)
+            return nil;
+        paint->flags |= Frepl;
+        paint->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+    }
+
+    n = allocmemimaged(screenr, s->image->chan, s->image->data);
+    if(n == nil)
+        return nil;
+    l = malloc(sizeof(Memlayer));
+    if(l == nil){
+        free(n);
+        return nil;
+    }
+
+    l->screen = s;
+    if(refreshfn)
+        l->save = nil;
+    else{
+        l->save = allocmemimage(screenr, s->image->chan);
+        if(l->save == nil){
+            free(l);
+            free(n);
+            return nil;
+        }
+        /* allocmemimage doesn't initialize memory; this paints save area */
+        if(val != DNofill)
+            memfillcolor(l->save, val);
+    }
+    l->refreshfn = refreshfn;
+    l->refreshptr = nil;	/* don't set it until we're done */
+    l->screenr = screenr;
+    l->delta = Pt(0,0);
+
+    n->data->ref++;
+    n->zero = s->image->zero;
+    n->width = s->image->width;
+    n->layer = l;
+
+    /* start with new window behind all existing ones */
+    l->front = s->rearmost;
+    l->rear = nil;
+    if(s->rearmost)
+        s->rearmost->layer->rear = n;
+    s->rearmost = n;
+    if(s->frontmost == nil)
+        s->frontmost = n;
+    l->clear = 0;
+
+    /* now pull new window to front */
+    _memltofrontfill(n, val != DNofill);
+    l->refreshptr = refreshptr;
+
+    /*
+     * paint with requested color; previously exposed areas are already right
+     * if this window has backing store, but just painting the whole thing is simplest.
+     */
+    if(val != DNofill){
+        memsetchan(paint, n->chan);
+        memfillcolor(paint, val);
+        memdraw(n, n->r, paint, n->r.min, nil, n->r.min, S);
+    }
+    return n;
+}
+@
+
+
+
+<<function memldelete>>=
+void
+memldelete(Memimage *i)
+{
+    Memscreen *s;
+    Memlayer *l;
+
+    l = i->layer;
+    /* free backing store and disconnect refresh, to make pushback fast */
+    freememimage(l->save);
+    l->save = nil;
+    l->refreshptr = nil;
+    memltorear(i);
+
+    /* window is now the rearmost;  clean up screen structures and deallocate */
+    s = i->layer->screen;
+    if(s->fill){
+        i->clipr = i->r;
+        memdraw(i, i->r, s->fill, i->r.min, nil, i->r.min, S);
+    }
+    if(l->front){
+        l->front->layer->rear = nil;
+        s->rearmost = l->front;
+    }else{
+        s->frontmost = nil;
+        s->rearmost = nil;
+    }
+    free(l);
+    freememimage(i);
+}
+@
+
+<<function memlfree>>=
+/*
+ * Just free the data structures, don't do graphics
+ */
+void
+memlfree(Memimage *i)
+{
+    Memlayer *l;
+
+    l = i->layer;
+    freememimage(l->save);
+    free(l);
+    freememimage(i);
+}
+@
+
+<<function _memlsetclear>>=
+void
+_memlsetclear(Memscreen *s)
+{
+    Memimage *i, *j;
+    Memlayer *l;
+
+    for(i=s->rearmost; i; i=i->layer->front){
+        l = i->layer;
+        l->clear = rectinrect(l->screenr, l->screen->image->clipr);
+        if(l->clear)
+            for(j=l->front; j; j=j->layer->front)
+                if(rectXrect(l->screenr, j->layer->screenr)){
+                    l->clear = 0;
+                    break;
+                }
+    }
+}
+@
+
+
 \section{Windows stack manipulation}
 %extern int	newwindow(char*);
 % but actually it returns an int that is probably similar to a fd
@@ -8166,6 +8903,16 @@ case 't':
 
 \subsection{Algorithm}
 
+<<function memltofront>>=
+void
+memltofront(Memimage *i)
+{
+    _memltofront(i, nil, 1);
+    _memlsetclear(i->layer->screen);
+}
+@
+
+
 <<function memltofrontn>>=
 void
 memltofrontn(Memimage **ip, int n)
@@ -8186,6 +8933,64 @@ memltofrontn(Memimage **ip, int n)
 }
 @
 
+
+<<function _memltofront>>=
+/*
+ * Pull i towards top of screen, just behind front
+*/
+static
+void
+_memltofront(Memimage *i, Memimage *front, int fill)
+{
+    Memlayer *l;
+    Memscreen *s;
+    Memimage *f, *ff, *rr;
+    Rectangle x;
+    int overlap;
+
+    l = i->layer;
+    s = l->screen;
+    while(l->front != front){
+        f = l->front;
+        x = l->screenr;
+        overlap = rectclip(&x, f->layer->screenr);
+        if(overlap){
+            memlhide(f, x);
+            f->layer->clear = 0;
+        }
+        /* swap l and f in screen's list */
+        ff = f->layer->front;
+        rr = l->rear;
+        if(ff == nil)
+            s->frontmost = i;
+        else
+            ff->layer->rear = i;
+        if(rr == nil)
+            s->rearmost = f;
+        else
+            rr->layer->front = f;
+        l->front = ff;
+        l->rear = f;
+        f->layer->front = i;
+        f->layer->rear = rr;
+        if(overlap && fill)
+            memlexpose(i, x);
+    }
+}
+@
+
+<<function _memltofrontfill>>=
+void
+_memltofrontfill(Memimage *i, int fill)
+{
+    _memltofront(i, nil, fill);
+    _memlsetclear(i->layer->screen);
+}
+@
+
+
+
+
 <<function memltorearn>>=
 void
 memltorearn(Memimage **ip, int n)
@@ -8205,6 +9010,60 @@ memltorearn(Memimage **ip, int n)
     _memlsetclear(s);
 }
 @
+
+<<function memltorear>>=
+void
+memltorear(Memimage *i)
+{
+    _memltorear(i, nil);
+    _memlsetclear(i->layer->screen);
+}
+@
+
+
+
+<<function _memltorear>>=
+void
+_memltorear(Memimage *i, Memimage *rear)
+{
+    Memlayer *l;
+    Memscreen *s;
+    Memimage *f, *r, *rr;
+    Rectangle x;
+    int overlap;
+
+    l = i->layer;
+    s = l->screen;
+    while(l->rear != rear){
+        r = l->rear;
+        x = l->screenr;
+        overlap = rectclip(&x, r->layer->screenr);
+        if(overlap){
+            memlhide(i, x);
+            l->clear = 0;
+        }
+        /* swap l and r in screen's list */
+        rr = r->layer->rear;
+        f = l->front;
+        if(rr == nil)
+            s->rearmost = i;
+        else
+            rr->layer->front = i;
+        if(f == nil)
+            s->frontmost = r;
+        else
+            f->layer->rear = r;
+        l->rear = rr;
+        l->front = r;
+        r->layer->rear = i;
+        r->layer->front = f;
+        if(overlap)
+            memlexpose(r, x);
+    }
+}
+@
+
+
 
 \chapter{Input}
 
@@ -8373,6 +9232,7 @@ ctlkeyboard(Keyboardctl *kc, char *m)
 <<struct Mouse (include/mouse.h)>>=
 struct	Mouse
 {
+    // bitset<enum<click>>
     int	buttons;	/* bit array: LMR=124 */
     Point	xy;
     ulong	msec;

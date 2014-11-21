@@ -143,8 +143,6 @@ static int xbuf[256];
 Lock vgascreenlock;
 /*e: global vgascreenlock */
 /*s: function vgaimageinit */
-//int drawdebug;
-
 void
 vgaimageinit(ulong chan)
 {
@@ -430,8 +428,9 @@ int didswcursorinit;
 static void *softscreen;
 /*e: global softscreen */
 
-
-
+/*s: function ishwimage */
+//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+/*x: function ishwimage */
 bool
 ishwimage(Memimage* i)
 {
@@ -439,6 +438,7 @@ ishwimage(Memimage* i)
     (vgascreen[0].gscreendata && 
      i->data->bdata == vgascreen[0].gscreendata->bdata);
 }
+/*e: function ishwimage */
 
 
 /*s: function screensize */
@@ -589,12 +589,12 @@ flushmemscreen(Rectangle r)
     incs = scr->gscreen->width * BY2WD;
 
     switch(scr->gscreen->depth){
+    case 8:
+        len = Dx(r);
+        break;
     default:
         len = 0;
         panic("flushmemscreen: depth\n");
-        break;
-    case 8:
-        len = Dx(r);
         break;
     }
     if(len < 1)

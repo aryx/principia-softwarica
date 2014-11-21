@@ -27,6 +27,7 @@ void putpixel(Memimage *img, Point pt, ulong nv);
 ulong rgbatopix(uchar, uchar, uchar, uchar);
 
 static char *dchan, *schan, *mchan;
+
 /*s: global drawdebug (lib_graphics/libmemdraw/tests/memdrawtest.c) */
 //old: used to have static in front, but at some point I got
 //some errors (I probably introduced some regressions in 8c of kencc)
@@ -92,25 +93,6 @@ static uchar	*maskbits;
 static ulong	*savedstbits;
 /*e: global savedstbits */
 
-//void
-//rdb(void)
-//{
-//}
-//
-//int
-//iprint(char *fmt, ...)
-//{
-//	int n;	
-//	va_list va;
-//	char buf[1024];
-//
-//	va_start(va, fmt);
-//	n = vseprint(buf, buf+sizeof buf, fmt, va) - buf;
-//	va_end(va);
-//
-//	write(1,buf,n);
-//	return 1;
-//}
 /*s: function main (lib_graphics/libmemdraw/tests/memdrawtest.c) */
 void
 main(int argc, char *argv[])
