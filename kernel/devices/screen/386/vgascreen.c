@@ -429,8 +429,6 @@ static void *softscreen;
 /*e: global softscreen */
 
 /*s: function ishwimage */
-//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
-/*x: function ishwimage */
 bool
 ishwimage(Memimage* i)
 {

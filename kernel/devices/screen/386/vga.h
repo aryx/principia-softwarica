@@ -163,16 +163,4 @@ extern void vgalinearpciid(VGAscr*, int, int);
 extern void vgalinearaddr(VGAscr*, ulong, int);
 extern void vgablank(VGAscr*, int);
 extern Lock vgascreenlock;
-
-/*s: function ishwimage */
-//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
-/*x: function ishwimage */
-bool
-ishwimage(Memimage* i)
-{
-  return 
-    (vgascreen[0].gscreendata && 
-     i->data->bdata == vgascreen[0].gscreendata->bdata);
-}
-/*e: function ishwimage */
 /*e: kernel/devices/screen/386/vga.h */
