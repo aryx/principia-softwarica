@@ -9,14 +9,14 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Graphics.tex.nw
+TEXMAIN=Graphics.nw
 TEX=Graphics.tex
 
 # set of noweb (.nw) files
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=Graphics.tex.nw Graphics_extra.tex.nw
+SRC_ORIG=Graphics.nw Graphics_extra.nw
 
 # from list_graphics originally
 SRC_VIEWS= \
