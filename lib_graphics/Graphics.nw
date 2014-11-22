@@ -25,7 +25,11 @@
 %   relevant file (or even function), better cluster the code
 %   (harder to understand non functional code using lots of globals)
 
-%thx to this manual, better understand svgalib? tronscroll:) mode X? cairo? :
+%thx to this manual, better understand svgalib? tronscroll:) mode X? cairo?:
+%  - better understand channels, and the many image formats
+%  - better understand alpha
+%  - better understand bezier (could be useful for edge bunding visual)
+
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -93,7 +97,7 @@
 % used for forward decl, pragmas, func decl, extern decl, stats, #ifdef,
 % debugging macros
 
-\setcounter{tocdepth}{2}
+\setcounter{tocdepth}{1}
 
 %******************************************************************************
 % Title
@@ -714,6 +718,7 @@ struct Memimage
 };
 @
 % no repl here? yes, it's flags
+% depth is sum of bits per pixel for r/g/b, so for RGB16 it's ... 16
 
 
 <<struct Memdata>>=
@@ -831,22 +836,6 @@ Memimage *memopaque;
 
 
 
-% vgascreen.c, relation to Display->image? to screen? g? global screen?
-<<global gscreen>>=
-Memimage *gscreen;
-@
-
-<<global gscreendata>>=
-Memdata gscreendata;
-@
-% gscreen.data?
-
-<<global physgscreenr>>=
-Rectangle physgscreenr;
-@
-% gscreen->r
-
-
 
 \section{[[Drawop]] and [[Memdrawparam]]}
 % Composition
@@ -924,6 +913,25 @@ struct	Memdrawparam
 % DS for screen.h, it's just an interface (TODO but should have
 % clean interface structure with function pointers)
 
+% vgascreen.c, relation to Display->image? to screen? g? global screen?
+<<global gscreen>>=
+Memimage *gscreen;
+@
+% vs vgascreen[0].gscreen??
+
+<<global gscreendata>>=
+Memdata gscreendata;
+@
+% gscreen.data?
+
+<<global physgscreenr>>=
+Rectangle physgscreenr;
+@
+% gscreen->r
+
+
+
+
 <<struct VGAscr>>=
 struct VGAscr {
 
@@ -974,6 +982,7 @@ struct VGAscr {
 <<global vgascreen>>=
 VGAscr vgascreen[1];
 @
+% set by screensize()? and probably via vgactl
 
 <<function VGAMEM>>=
 #define VGAMEM()  0xA0000
@@ -2436,7 +2445,7 @@ case 'b':
         freememimage(i);
         error(Edrawmem);
     }
-    memfillcolor(i, value);
+    memfillcolor(i, value); // The call
     continue;
 @
 
@@ -2665,6 +2674,32 @@ freememimage(Memimage *i)
 }
 @
 
+
+<<function memfillcolor>>=
+void
+memfillcolor(Memimage *i, ulong val)
+{
+    ulong bits;
+    int d, y;
+
+    if(val == DNofill)
+        return;
+
+    bits = rgbatoimg(i, val);
+    switch(i->depth){
+    case 24:	/* 24-bit images suck */
+        for(y=i->r.min.y; y<i->r.max.y; y++)
+            memset24(byteaddr(i, Pt(i->r.min.x, y)), bits, Dx(i->r));
+        break;
+    default:	/* 1, 2, 4, 8, 16, 32 */
+        for(d=i->depth; d<32; d*=2)
+            bits = (bits << d) | bits;
+        memsetl(wordaddr(i, i->r.min), bits, i->width*Dy(i->r));
+        break;
+    }
+}
+@
+% >>
 
 \subsection{Client and Memimage connection}
 
@@ -3202,7 +3237,8 @@ alphadraw(Memdrawparam *par)
 
 \section{Drawing}
 
-% rectangle is fundamental ops.
+% rectangle is fundamental ops. area. copy/move/blend pixels from one
+% aera to another.
 % no need complex algo, horiz and vert lines map well to pixels.
 % draw()! no need complex shape algorithm, just
 % move all the words covering a rectangle
@@ -3408,7 +3444,7 @@ struct Draw
 
     int	op;
 
-    <<[[Draw]] other fields>>    
+    <<[[Draw]] other fields>>
 };
 @
 
@@ -8274,7 +8310,7 @@ Memlayer		*dstlayer;
 
 <<[[memdraw()]] when have layers>>=
 if(drawclip(dst, &r, src, &p0, mask, &p1, &srcr, &mr) == 0){
-rawdebug)	iprint("drawclip dstcr %R srccr %R maskcr %R\n", dst->clipr, src->clipr, mask->clipr);
+   if(drawdebug)	iprint("drawclip dstcr %R srccr %R maskcr %R\n", dst->clipr, src->clipr, mask->clipr);
     return;
 }
 
@@ -10022,6 +10058,8 @@ cursoron(bool dolock)
     return v;
 }
 @
+% mousexy() also part of screen.h interface, but should
+% be implemented by devmouse.c or mouse.c
 
 % screen.h interface, vgascreen.c
 <<function cursoroff>>=
@@ -10030,9 +10068,10 @@ cursoroff(int)
 {
 }
 @
-
+% empty? not even swcursorhide()?
 
 % screen.h interface, vgascreen.c
+% called from mouse.c?
 <<function ksetcursor>>=
 void
 ksetcursor(Cursor* curs)
@@ -10046,6 +10085,10 @@ ksetcursor(Cursor* curs)
     scr->cur->load(scr, curs);
 }
 @
+
+
+
+
 
 
 \subsection{VGA software cursor}
@@ -10064,7 +10107,7 @@ VGAcur swcursor =
 @
 
 <<global swenabled>>=
-int swenabled;  /* is the cursor supposed to be on the screen? */
+bool swenabled;  /* is the cursor supposed to be on the screen? */
 @
 
 
@@ -10099,6 +10142,10 @@ Point   swpt;   /* desired cursor location */
 <<global swvispt>>=
 Point   swvispt;    /* actual cursor location */
 @
+
+
+
+
 
 <<global swvers>>=
 int swvers; /* incremented each time cursor image changes */
@@ -10184,6 +10231,147 @@ swdisable(VGAscr*)
     }
 }
 @
+
+
+<<global swoffset>>=
+Point   swoffset;
+@
+
+<<function swmove>>=
+int
+swmove(VGAscr*, Point p)
+{
+    swpt = addpt(p, swoffset);
+    return 0;
+}
+@
+
+
+
+
+
+<<global swimg>>=
+Memimage*   swimg;  /* cursor image */
+@
+
+<<global swmask>>=
+Memimage*   swmask; /* cursor mask */
+@
+
+<<function swload>>=
+void
+swload(VGAscr*, Cursor *curs)
+{
+    uchar *ip, *mp;
+    int i, j, set, clr;
+
+    if(!swimg || !swmask || !swimg1 || !swmask1)
+        return;
+    /*
+     * Build cursor image and mask.
+     * Image is just the usual cursor image
+     * but mask is a transparent alpha mask.
+     * 
+     * The 16x16x8 memimages do not have
+     * padding at the end of their scan lines.
+     */
+    ip = byteaddr(swimg, ZP);
+    mp = byteaddr(swmask, ZP);
+    for(i=0; i<32; i++){
+        set = curs->set[i];
+        clr = curs->clr[i];
+        for(j=0x80; j; j>>=1){
+            *ip++ = set&j ? 0x00 : 0xFF;
+            *mp++ = (clr|set)&j ? 0xFF : 0x00;
+        }
+    }
+    swoffset = curs->offset;
+    swvers++;
+    memimagedraw(swimg1, swimg1->r, swimg, ZP, memopaque, ZP, S);
+    memimagedraw(swmask1, swmask1->r, swmask, ZP, memopaque, ZP, S);
+}
+@
+% use of swimg outside swload? so why not make a local?
+% why not directly modify swimg1? why the intermediate?
+
+
+
+
+
+
+<<function swcursorinit>>=
+void
+swcursorinit(void)
+{
+    static bool init, warned;
+    VGAscr *scr;
+
+    didswcursorinit = true;
+    if(!init){
+        init = true;
+        addclock0link(swcursorclock, 10);
+    }
+    scr = &vgascreen[0];
+
+    if(scr==nil || scr->gscreen==nil)
+        return;
+    if(scr->dev == nil || scr->dev->linear == nil){
+        if(!warned){
+            print("cannot use software cursor on non-linear vga screen\n");
+            warned = 1;
+        }
+        return;
+    }
+
+    if(swback){
+        freememimage(swback);
+        freememimage(swmask);
+        freememimage(swmask1);
+        freememimage(swimg);
+        freememimage(swimg1);
+    }
+
+    swback = allocmemimage(Rect(0,0,32,32), gscreen->chan);
+    swmask = allocmemimage(Rect(0,0,16,16), GREY8);
+    swmask1 = allocmemimage(Rect(0,0,16,16), GREY1);
+    swimg = allocmemimage(Rect(0,0,16,16), GREY8);
+    swimg1 = allocmemimage(Rect(0,0,16,16), GREY1);
+    if(swback==nil || swmask==nil || swmask1==nil || swimg==nil || swimg1 == nil){
+        print("software cursor: allocmemimage fails");
+        return;
+    }
+
+    memfillcolor(swmask, DOpaque);
+    memfillcolor(swmask1, DOpaque);
+    memfillcolor(swimg, DBlack);
+    memfillcolor(swimg1, DBlack);
+}
+@
+
+% swcursorinit -> addlock0link(<>), so called at each clock interrupt 
+<<function swcursorclock>>=
+void
+swcursorclock(void)
+{
+    int x;
+
+    if(!swenabled)
+        return;
+    if(swvisible && eqpt(swpt, swvispt) && swvers==swvisvers)
+        return;
+
+    x = splhi();
+    if(swenabled)
+     if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
+      if(canqlock(&drawlock)){
+        swcursorhide();
+        swcursordraw();
+        qunlock(&drawlock);
+    }
+    splx(x);
+}
+@
+% if !swvisible?????
 
 
 
@@ -12244,6 +12432,12 @@ struct VGAdev {
   void  (*flush)(VGAscr*, Rectangle);
 };
 @
+
+% linear? apparently can't use soft cursor with non-linear VGA, but
+% I don't know what it means ...
+
+\section{VGA text mode}
+
 
 \chapter{Mathematics}
 

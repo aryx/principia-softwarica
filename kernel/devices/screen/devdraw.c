@@ -1728,7 +1728,7 @@ drawmesg(Client *client, void *av, int n)
                 freememimage(i);
                 error(Edrawmem);
             }
-            memfillcolor(i, value);
+            memfillcolor(i, value); // The call
             continue;
         /*x: [[drawmesg()]] cases */
         /* free: 'f' id[4] */

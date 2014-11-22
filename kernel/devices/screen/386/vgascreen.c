@@ -1003,7 +1003,7 @@ vgalinearaddr(VGAscr *scr, ulong paddr, int size)
 bool swvisible;  /* is the cursor visible? */
 /*e: global swvisible */
 /*s: global swenabled */
-int swenabled;  /* is the cursor supposed to be on the screen? */
+bool swenabled;  /* is the cursor supposed to be on the screen? */
 /*e: global swenabled */
 /*s: global swback */
 Memimage*   swback; /* screen under cursor */
@@ -1178,8 +1178,8 @@ swcursorclock(void)
 
     x = splhi();
     if(swenabled)
-    if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
-    if(canqlock(&drawlock)){
+     if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
+      if(canqlock(&drawlock)){
         swcursorhide();
         swcursordraw();
         qunlock(&drawlock);
@@ -1192,18 +1192,18 @@ swcursorclock(void)
 void
 swcursorinit(void)
 {
-    static int init, warned;
+    static bool init, warned;
     VGAscr *scr;
 
     didswcursorinit = true;
     if(!init){
-        init = 1;
+        init = true;
         addclock0link(swcursorclock, 10);
     }
     scr = &vgascreen[0];
+
     if(scr==nil || scr->gscreen==nil)
         return;
-
     if(scr->dev == nil || scr->dev->linear == nil){
         if(!warned){
             print("cannot use software cursor on non-linear vga screen\n");
