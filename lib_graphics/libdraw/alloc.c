@@ -20,7 +20,7 @@ allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
 Image*
 _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val, int screenid, int refresh)
 {
-    uchar *a;
+    byte *a;
     char *err;
     Image *i;
     Rectangle clipr;
@@ -213,7 +213,7 @@ nameimage(Image *i, char *name, int in)
 int
 _freeimage1(Image *i)
 {
-    uchar *a;
+    byte *a;
     Display *d;
     Image *w;
 

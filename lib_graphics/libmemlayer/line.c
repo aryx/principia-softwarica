@@ -47,6 +47,7 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
         _memimageline(dst, p0, p1, end0, end1, radius, src, sp, clipr, op);
         return;
     }
+    /*s: [[_memline()]] when have layers */
     if(!srcclipped){
         d = subpt(sp, p0);
         if(rectclip(&clipr, rectsubpt(src->clipr, d)) == 0)
@@ -72,8 +73,8 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
 
     /* XXX */
     /* this is not the correct set of tests */
-//	if(log2[dst->depth] != log2[src->depth] || log2[dst->depth]!=3)
-//		return;
+    //	if(log2[dst->depth] != log2[src->depth] || log2[dst->depth]!=3)
+    //		return;
 
     /* can't use sutherland-cohen clipping because lines are wide */
     r = memlinebbox(p0, p1, end0, end1, radius);
@@ -94,6 +95,7 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
     ll.delta = dl->delta;
     ll.op = op;
     _memlayerop(llineop, dst, r, r, &ll);
+    /*e: [[_memline()]] when have layers */
 }
 /*e: function _memline */
 

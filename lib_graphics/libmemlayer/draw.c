@@ -10,10 +10,15 @@ struct Draw
 {
     Point	deltas;
     Point	deltam;
-    Memlayer		*dstlayer;
+
     Memimage	*src;
     Memimage	*mask;
+
     int	op;
+
+    /*s: [[Draw]] other fields */
+    Memlayer		*dstlayer;
+    /*e: [[Draw]] other fields */
 };
 /*e: struct Draw */
 
@@ -69,24 +74,26 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     if(mask == nil)
         mask = memopaque;
 
+    /*s: [[memdraw()]] if mask has layer */
     if(mask->layer){
-if(drawdebug)	iprint("mask->layer != nil\n");
+      if(drawdebug)	iprint("mask->layer != nil\n");
         return;	/* too hard, at least for now */
     }
+    /*e: [[memdraw()]] if mask has layer */
 
     Top:
     if(dst->layer==nil && src->layer==nil){
         memimagedraw(dst, r, src, p0, mask, p1, op); // back to memdraw
         return;
     }
-
+    /*s: [[memdraw()]] when have layers */
     if(drawclip(dst, &r, src, &p0, mask, &p1, &srcr, &mr) == 0){
-if(drawdebug)	iprint("drawclip dstcr %R srccr %R maskcr %R\n", dst->clipr, src->clipr, mask->clipr);
+       if(drawdebug)	iprint("drawclip dstcr %R srccr %R maskcr %R\n", dst->clipr, src->clipr, mask->clipr);
         return;
     }
 
     /*
-   * Convert to screen coordinates.
+     Convert to screen coordinates.
      */
     dl = dst->layer;
     if(dl != nil){
@@ -195,6 +202,7 @@ if(drawdebug)	iprint("drawclip dstcr %R srccr %R maskcr %R\n", dst->clipr, src->
     d.op = op;
     d.mask = mask;
     _memlayerop(ldrawop, dst, r, r, &d);
+    /*e: [[memdraw()]] when have layers */
 }
 /*e: function memdraw */
 /*e: lib_graphics/libmemlayer/draw.c */

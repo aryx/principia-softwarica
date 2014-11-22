@@ -58,6 +58,7 @@ struct Memimage
     int		nchan;	/* number of channels */
 
     // finally, the raw pixels
+    // ref_own<Memdata>
     Memdata	*data;	/* pointer to data; shared by windows in this image */
 
     /*s: [[MemImage]] other fields */

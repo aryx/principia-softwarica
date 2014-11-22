@@ -512,7 +512,7 @@ doflush(Display *d)
 
 /*s: function flushimage */
 int
-flushimage(Display *d, int visible)
+flushimage(Display *d, bool visible)
 {
     if(d == nil)
         return 0;
@@ -528,18 +528,18 @@ flushimage(Display *d, int visible)
 /*e: function flushimage */
 
 /*s: function bufimage */
-uchar*
+byte*
 bufimage(Display *d, int n)
 {
     uchar *p;
 
-    if(n<0 || n>d->bufsize){
+    if(n < 0 || n > d->bufsize){
         werrstr("bad count in bufimage");
-        return 0;
+        return nil;
     }
-    if(d->bufp+n > d->buf+d->bufsize)
+    if(d->bufp+n >  d->buf + d->bufsize)
         if(doflush(d) < 0)
-            return 0;
+            return nil;
     p = d->bufp;
     d->bufp += n;
     return p;

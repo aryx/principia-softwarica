@@ -406,13 +406,15 @@ VGAscr vgascreen[1];
 
 /*s: global arrow */
 Cursor  arrow = {
-    { -1, -1 },
-    { 0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C, 
+    .offset = { -1, -1 },
+    .clr = { 
+      0xFF, 0xFF, 0x80, 0x01, 0x80, 0x02, 0x80, 0x0C, 
       0x80, 0x10, 0x80, 0x10, 0x80, 0x08, 0x80, 0x04, 
       0x80, 0x02, 0x80, 0x01, 0x80, 0x02, 0x8C, 0x04, 
       0x92, 0x08, 0x91, 0x10, 0xA0, 0xA0, 0xC0, 0x40, 
     },
-    { 0x00, 0x00, 0x7F, 0xFE, 0x7F, 0xFC, 0x7F, 0xF0, 
+    .set = { 
+      0x00, 0x00, 0x7F, 0xFE, 0x7F, 0xFC, 0x7F, 0xF0, 
       0x7F, 0xE0, 0x7F, 0xE0, 0x7F, 0xF0, 0x7F, 0xF8, 
       0x7F, 0xFC, 0x7F, 0xFE, 0x7F, 0xFC, 0x73, 0xF8, 
       0x61, 0xF0, 0x60, 0xE0, 0x40, 0x40, 0x00, 0x00, 
@@ -421,7 +423,7 @@ Cursor  arrow = {
 /*e: global arrow */
 
 /*s: global didswcursorinit */
-int didswcursorinit;
+bool didswcursorinit;
 /*e: global didswcursorinit */
 
 /*s: global softscreen */
@@ -468,7 +470,7 @@ screensize(int x, int y, int z, ulong chan)
             scr->vaddr = KADDR(VGAMEM());
             scr->apsize = 1<<16; // >>
         }
-        scr->useflush = 1;
+        scr->useflush = true;
     }
     else{
         gscreendata.bdata = scr->vaddr;
@@ -481,6 +483,7 @@ screensize(int x, int y, int z, ulong chan)
     gscreen = allocmemimaged(Rect(0,0,x,y), chan, &gscreendata);
     if(gscreen == nil)
         error("no memory for vga memimage");
+
     vgaimageinit(chan);
 
     scr->palettedepth = 6;  /* default */
@@ -572,15 +575,17 @@ flushmemscreen(Rectangle r)
     int y, len, incs, off, page;
 
     scr = &vgascreen[0];
+
+    // call the device driver flush hook
     if(scr->dev && scr->dev->flush){
         scr->dev->flush(scr, r);
         return;
     }
-    if(scr->gscreen == nil || scr->useflush == 0)
+
+    if(scr->gscreen == nil || scr->useflush == false)
         return;
     if(scr->dev == nil || scr->dev->page == nil)
         return;
-
     if(rectclip(&r, scr->gscreen->r) == 0)
         return;
 
@@ -598,18 +603,22 @@ flushmemscreen(Rectangle r)
     if(len < 1)
         return;
 
-    off = r.min.y*scr->gscreen->width*BY2WD+(r.min.x*scr->gscreen->depth)/8;
+    off = r.min.y * scr->gscreen->width * BY2WD 
+           + (r.min.x * scr->gscreen->depth)/8;
     page = off/scr->apsize;
     off %= scr->apsize;
     disp = scr->vaddr;
     sdisp = disp+off;
     edisp = disp+scr->apsize;
 
-    off = r.min.y*scr->gscreen->width*BY2WD+(r.min.x*scr->gscreen->depth)/8;
+    off = r.min.y * scr->gscreen->width * BY2WD
+           + (r.min.x * scr->gscreen->depth)/8;
 
     sp = scr->gscreendata->bdata + off;
 
+    // call device driver again, for subpart
     scr->dev->page(scr, page);
+
     for(y = r.min.y; y < r.max.y; y++) {
         if(sdisp + incs < edisp) {
             memmove(sdisp, sp, len);
@@ -622,12 +631,15 @@ flushmemscreen(Rectangle r)
             if(off <= len){
                 if(off > 0)
                     memmove(sdisp, sp, off);
+
+                // call device driver again, for subpart
                 scr->dev->page(scr, page);
                 if(len - off > 0)
                     memmove(disp, sp+off, len - off);
             }
             else {
                 memmove(sdisp, sp, len);
+                // call device driver again, for subpart
                 scr->dev->page(scr, page);
             }
             sp += incs;
@@ -737,7 +749,9 @@ cursoron(bool dolock)
 
     if(dolock)
         lock(&cursor);
+
     v = scr->cur->move(scr, mousexy());
+
     if(dolock)
         unlock(&cursor);
 
@@ -767,7 +781,7 @@ ksetcursor(Cursor* curs)
 /*e: function ksetcursor */
 
 /*s: global hwaccel */
-int hwaccel = 1;
+int hwaccel = true;
 /*e: global hwaccel */
 /*s: global hwblank */
 int hwblank = 0;    /* turned on by drivers that are known good */
@@ -778,23 +792,24 @@ int panning = 0;
 
 /*s: function hwdraw */
 //@Scheck: not dead, actually this is overriding some def in libmemdraw!! ugly
-int hwdraw(Memdrawparam *par)
+bool hwdraw(Memdrawparam *par)
 {
     VGAscr *scr;
     Memimage *dst, *src, *mask;
     int m;
 
-    if(hwaccel == 0)
-        return 0;
+    if(hwaccel == false)
+        return false;
 
     scr = &vgascreen[0];
     if((dst=par->dst) == nil || dst->data == nil)
-        return 0;
+        return false;
     if((src=par->src) == nil || src->data == nil)
-        return 0;
+        return false;
     if((mask=par->mask) == nil || mask->data == nil)
-        return 0;
+        return false;
 
+    /*s: [[hwdraw()]] if software cursor */
     if(scr->cur == &swcursor){
         /*
          * always calling swcursorhide here doesn't cure
@@ -808,12 +823,13 @@ int hwdraw(Memdrawparam *par)
         if(mask->data->bdata == gscreendata.bdata)
             swcursoravoid(par->mr);
     }
+    /*e: [[hwdraw()]] if software cursor */
     
     if(dst->data->bdata != gscreendata.bdata)
-        return 0;
+        return false;
 
     if(scr->fill==nil && scr->scroll==nil)
-        return 0;
+        return false;
 
     /*
      * If we have an opaque mask and source is one opaque
@@ -840,7 +856,7 @@ int hwdraw(Memdrawparam *par)
     && (par->op&S) == S)
         return scr->scroll(scr, par->r, par->sr);
 
-    return 0;   
+    return false;   
 }
 /*e: function hwdraw */
 
@@ -979,11 +995,12 @@ vgalinearaddr(VGAscr *scr, ulong paddr, int size)
 /*e: function vgalinearaddr */
 
 
-/*s: global swvisible */
 /*
  * Software cursor. 
  */
-int swvisible;  /* is the cursor visible? */
+
+/*s: global swvisible */
+bool swvisible;  /* is the cursor visible? */
 /*e: global swvisible */
 /*s: global swenabled */
 int swenabled;  /* is the cursor supposed to be on the screen? */
@@ -1033,11 +1050,13 @@ int swvisvers;  /* the version on the screen */
 void
 swcursorhide(void)
 {
-    if(swvisible == 0)
+    if(swvisible == false)
         return;
     if(swback == nil)
         return;
-    swvisible = 0;
+
+    swvisible = false;
+    // restore what was under the cursor
     memimagedraw(gscreen, swrect, swback, ZP, memopaque, ZP, S);
     flushmemscreen(swrect);
 }
@@ -1058,18 +1077,21 @@ swcursordraw(void)
 {
     if(swvisible)
         return;
-    if(swenabled == 0)
+    if(swenabled == false)
         return;
     if(swback == nil || swimg1 == nil || swmask1 == nil)
         return;
     assert(!canqlock(&drawlock));
+
     swvispt = swpt;
     swvisvers = swvers;
+    // cursor is 16x16 picture
     swrect = rectaddpt(Rect(0,0,16,16), swvispt);
+    // save what is under the cursor
     memimagedraw(swback, swback->r, gscreen, swpt, memopaque, ZP, S);
     memimagedraw(gscreen, swrect, swimg1, ZP, swmask1, ZP, SoverD);
     flushmemscreen(swrect);
-    swvisible = 1;
+    swvisible = true;
 }
 /*e: function swcursordraw */
 
@@ -1080,7 +1102,7 @@ swcursordraw(void)
 void
 swenable(VGAscr*)
 {
-    swenabled = 1;
+    swenabled = true;
     if(canqlock(&drawlock)){
         swcursordraw();
         qunlock(&drawlock);
@@ -1092,7 +1114,7 @@ swenable(VGAscr*)
 void
 swdisable(VGAscr*)
 {
-    swenabled = 0;
+    swenabled = false;
     if(canqlock(&drawlock)){
         swcursorhide();
         qunlock(&drawlock);
@@ -1173,7 +1195,7 @@ swcursorinit(void)
     static int init, warned;
     VGAscr *scr;
 
-    didswcursorinit = 1;
+    didswcursorinit = true;
     if(!init){
         init = 1;
         addclock0link(swcursorclock, 10);
@@ -1218,11 +1240,12 @@ swcursorinit(void)
 /*s: global swcursor */
 VGAcur swcursor =
 {
-    "soft",
-    swenable,
-    swdisable,
-    swload,
-    swmove,
+    .name = "soft",
+
+    .enable = swenable,
+    .disable = swdisable,
+    .load = swload,
+    .move = swmove,
 };
 /*e: global swcursor */
 

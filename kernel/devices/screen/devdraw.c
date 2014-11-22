@@ -1667,6 +1667,7 @@ drawmesg(Client *client, void *av, int n)
             if(drawlookup(client, dstid, 0))
                 error(Eimageexists);
 
+            /*s: [[drawmesg()]] allocate image case, if screen id */
             if(scrnid){
                 dscrn = drawlookupscreen(client, scrnid, &cs);
                 scrn = dscrn->screen;
@@ -1711,6 +1712,7 @@ drawmesg(Client *client, void *av, int n)
                 }
                 continue;
             }
+            /*e: [[drawmesg()]] allocate image case, if screen id */
 
             i = allocmemimage(r, chan); // The call
 
@@ -1741,8 +1743,8 @@ drawmesg(Client *client, void *av, int n)
                 ll->dscreen->owner->refreshme = 1;
 
             drawuninstall(client, BGLONG(a+1)); // The call
-            continue;
 
+            continue;
         /*x: [[drawmesg()]] cases */
         /* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
         case 'c':
@@ -1763,6 +1765,36 @@ drawmesg(Client *client, void *av, int n)
 
             continue;
 
+        /*x: [[drawmesg()]] cases */
+        /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
+        case 'd':
+            printmesg(fmt="LLLRPP", a, 0);
+            m = 1+4+4+4+4*4+2*4+2*4;
+            if(n < m)
+                error(Eshortdraw);
+            dst = drawimage(client, a+1);
+            dstid = BGLONG(a+1);
+            src = drawimage(client, a+5);
+            mask = drawimage(client, a+9);
+            drawrectangle(&r, a+13);
+            drawpoint(&p, a+29);
+            drawpoint(&q, a+37);
+
+            op = drawclientop(client);
+            memdraw(dst, r, src, p, mask, q, op); // the call!
+
+            dstflush(dstid, dst, r);
+            continue;
+
+        /*x: [[drawmesg()]] cases */
+        /* set compositing operator for next draw operation: 'O' op */
+        case 'O':
+            printmesg(fmt="b", a, 0);
+            m = 1+1;
+            if(n < m)
+                error(Eshortdraw);
+            client->op = a[1];
+            continue;
         /*x: [[drawmesg()]] cases */
         /* visible: 'v' */
         case 'v':
@@ -1840,36 +1872,6 @@ drawmesg(Client *client, void *av, int n)
             continue;
 
         /*x: [[drawmesg()]] cases */
-        /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
-        case 'd':
-            printmesg(fmt="LLLRPP", a, 0);
-            m = 1+4+4+4+4*4+2*4+2*4;
-            if(n < m)
-                error(Eshortdraw);
-            dst = drawimage(client, a+1);
-            dstid = BGLONG(a+1);
-            src = drawimage(client, a+5);
-            mask = drawimage(client, a+9);
-            drawrectangle(&r, a+13);
-            drawpoint(&p, a+29);
-            drawpoint(&q, a+37);
-            op = drawclientop(client);
-
-            memdraw(dst, r, src, p, mask, q, op); // the call!
-
-            dstflush(dstid, dst, r);
-            continue;
-
-        /*x: [[drawmesg()]] cases */
-        /* set compositing operator for next draw operation: 'O' op */
-        case 'O':
-            printmesg(fmt="b", a, 0);
-            m = 1+1;
-            if(n < m)
-                error(Eshortdraw);
-            client->op = a[1];
-            continue;
-        /*x: [[drawmesg()]] cases */
         /* draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4] */
         case 'L':
             printmesg(fmt="LPPlllLP", a, 0);
@@ -1898,7 +1900,6 @@ drawmesg(Client *client, void *av, int n)
                 dstflush(dstid, dst, insetrect(r, -(1+1+j)));
             }
             continue;
-
         /*x: [[drawmesg()]] cases */
         /* filled polygon: 'P' dstid[4] n[2] wind[4] ignore[2*4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n] */
         /* polygon: 'p' dstid[4] n[2] end0[4] end1[4] radius[4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n] */

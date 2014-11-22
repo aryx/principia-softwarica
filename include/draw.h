@@ -231,15 +231,17 @@ struct Display
     fdt		ctlfd; // /dev/draw/new
     fdt		reffd; // /dev/draw/x/refresh
 
-    // ref_own<Image>
+    // ref_own<Image>, current image?
     Image	*image;
 
+    /*s: [[Display]] buf fields */
     // drawing operatings to write in /dev/draw/x/data until flush
     // array<byte>
     byte	*buf;
     int		bufsize;
     // index in Display.buf array
     byte	*bufp;
+    /*e: [[Display]] buf fields */
 
     void	(*error)(Display*, char*);
 

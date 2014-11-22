@@ -18,14 +18,14 @@ enum {
   Attrx   = 0x03C0, /* Attribute Controller Index and Data */
 
   PaddrW    = 0x03C8, /* Palette Address Register, write */
-  Pdata   = 0x03C9, /* Palette Data Register */
+  Pdata     = 0x03C9, /* Palette Data Register */
   Pixmask   = 0x03C6, /* Pixel Mask Register */
   PaddrR    = 0x03C7, /* Palette Address Register, read */
   Pstatus   = 0x03C7, /* DAC Status (RO) */
 
   Pcolours  = 256,    /* Palette */
   Pred    = 0,
-  Pgreen    = 1,
+  Pgreen  = 1,
   Pblue   = 2,
 
   Pblack    = 0x00,
@@ -84,36 +84,47 @@ struct VGAcur {
 
 /*s: struct VGAscr */
 struct VGAscr {
-  Lock  devlock;
-  VGAdev* dev;
-  Pcidev* pci;
-
-  VGAcur* cur;
-  ulong storage;
-  Cursor;
-
-  int useflush;
 
   ulong paddr;    /* frame buffer */
   void* vaddr;
   int   apsize;
 
-  ulong io;       /* device specific registers */
-  ulong *mmio;
-  
+  Memimage* gscreen;
+  // Vgascr.gscreen.data?
+  Memdata* gscreendata;
+
+  Memsubfont* memdefont;
+
+
+  Cursor;
+  // the cursor device methods (software cursor or hardware support)
+  VGAcur* cur;
+
   ulong colormap[Pcolours][3];
   int palettedepth;
 
-  Memimage* gscreen;
-  Memdata* gscreendata;
-  Memsubfont* memdefont;
+  // the vga device methods
+  VGAdev* dev;
 
+  Pcidev* pci;
+  ulong io;       /* device specific registers */
+  ulong *mmio;
+
+
+  ulong storage;
+  bool useflush;
+
+  // why here? why not in VGAdev?
   int (*fill)(VGAscr*, Rectangle, ulong);
   int (*scroll)(VGAscr*, Rectangle, Rectangle);
   void  (*blank)(VGAscr*, int);
+
   ulong id; /* internal identifier for driver use */
   int isblank;
   int overlayinit;
+
+  // Extra
+  Lock  devlock;
 };
 /*e: struct VGAscr */
 
@@ -138,13 +149,6 @@ extern void 	addvgaseg(char*, ulong, ulong);
 extern int  screensize(int, int, int, ulong);
 extern int  screenaperture(int, int);
 
-// software cursors
-extern VGAcur swcursor;
-extern void swcursorinit(void);
-//extern void swcursorhide(void);
-//extern void swcursoravoid(Rectangle);
-//extern void swcursorunhide(void);
-
 /* devdraw.c */
 extern void deletescreenimage(void);
 extern void resetscreenimage(void);
@@ -163,4 +167,11 @@ extern void vgalinearpciid(VGAscr*, int, int);
 extern void vgalinearaddr(VGAscr*, ulong, int);
 extern void vgablank(VGAscr*, int);
 extern Lock vgascreenlock;
+
+// software cursors
+extern VGAcur swcursor;
+extern void swcursorinit(void);
+//extern void swcursorhide(void);
+//extern void swcursoravoid(Rectangle);
+//extern void swcursorunhide(void);
 /*e: kernel/devices/screen/386/vga.h */
