@@ -40,7 +40,6 @@ Cursor	arrow = {
 Memimage *gscreen;
 
 static Memdata xgdata;
-
 static Memimage xgscreen =
 {
 	{ 0, 0, Wid, Ht },	/* r */
@@ -269,6 +268,15 @@ swcursorinit(void)
 	memfillcolor(swimg, DBlack);
 	memfillcolor(swimg1, DBlack);
 }
+
+
+
+
+
+/*
+ *
+ */
+
 
 int
 hwdraw(Memdrawparam *par)

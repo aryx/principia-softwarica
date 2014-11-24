@@ -828,9 +828,11 @@ bool hwdraw(Memdrawparam *par)
     if(dst->data->bdata != gscreendata.bdata)
         return false;
 
+
+
+
     if(scr->fill==nil && scr->scroll==nil)
         return false;
-
     /*
      * If we have an opaque mask and source is one opaque
      * pixel we can convert to the destination format and just

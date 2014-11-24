@@ -143,7 +143,7 @@ initmouse(char *file, Image *i)
 void
 setcursor(Mousectl *mc, Cursor *c)
 {
-    char curs[2*4+2*2*16];
+    char curs[2*4+2*2*16]; // sizeof Cursor
 
     if(c == nil)
         write(mc->cfd, curs, 0);

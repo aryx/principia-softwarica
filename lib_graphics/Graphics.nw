@@ -404,6 +404,8 @@ from Bell Labs.
 %defont.c
 
 
+%todo: could remove that no? who links with libmemdraw except 
+% test files? they can define then the hwdraw(), iprint() empty handler
 %hwdraw.c: kernel cruft
 %iprint.c: kernel cruft
 % when people link with memdraw outside the kernel
@@ -2472,7 +2474,7 @@ case 'f':
 
 \subsection{Algorithm}
 
-
+% allocimage -> _allocimage -> drawmesg -> <>
 %Memdata and then Memimage ctor
 % should be called once automatically when one creates a new connection no?
 <<function allocmemimage>>=
@@ -2563,7 +2565,7 @@ unitsperline(Rectangle r, int d, int bitsperunit)
 }
 @
 
-
+% allocmemimage -> <>
 %Memimage ctor (smaller malloc, just a wrapper over Memdata)
 <<function allocmemimaged>>=
 Memimage*
@@ -2602,6 +2604,7 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
     i->flags = 0;
     i->layer = nil;
     i->cmap = memdefcmap;
+
     if(memsetchan(i, chan) < 0){
         free(i);
         return nil;
@@ -2609,53 +2612,6 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
     return i;
 }
 @
-
-<<function memsetchan>>=
-int
-memsetchan(Memimage *i, ulong chan)
-{
-    int d;
-    int t, j, k;
-    ulong cc;
-    int bytes;
-
-    if((d = chantodepth(chan)) == 0) {
-        werrstr("bad channel descriptor");
-        return -1;
-    }
-
-    i->depth = d;
-    i->chan = chan;
-    i->flags &= ~(Fgrey|Falpha|Fcmap|Fbytes);
-    bytes = 1;
-    for(cc=chan, j=0, k=0; cc; j+=NBITS(cc), cc>>=8, k++){
-        t=TYPE(cc);
-        if(t < 0 || t >= NChan){
-            werrstr("bad channel string");
-            return -1;
-        }
-        if(t == CGrey)
-            i->flags |= Fgrey;
-        if(t == CAlpha)
-            i->flags |= Falpha;
-        if(t == CMap && i->cmap == nil){
-            i->cmap = memdefcmap;
-            i->flags |= Fcmap;
-        }
-
-        i->shift[t] = j;
-        i->mask[t] = (1<<NBITS(cc))-1;
-        i->nbits[t] = NBITS(cc);
-        if(NBITS(cc) != 8)
-            bytes = 0;
-    }
-    i->nchan = k;
-    if(bytes)
-        i->flags |= Fbytes;
-    return 0;
-}
-@
-% >>
 
 
 
@@ -3035,6 +2991,58 @@ drawrepl(Rectangle r, Point p)
 
 
 \section{Channels and alpha}
+
+
+% allocmemimage -> allocmemimaged -> <>
+%less: mv in Alloc section?
+<<function memsetchan>>=
+int
+memsetchan(Memimage *i, ulong chan)
+{
+    int d;
+    int t, j, k;
+    ulong cc;
+    int bytes;
+
+    if((d = chantodepth(chan)) == 0) {
+        werrstr("bad channel descriptor");
+        return -1;
+    }
+
+    i->depth = d;
+    i->chan = chan;
+    i->flags &= ~(Fgrey|Falpha|Fcmap|Fbytes);
+    bytes = 1;
+    for(cc=chan, j=0, k=0; cc; j+=NBITS(cc), cc>>=8, k++){
+        t=TYPE(cc);
+        if(t < 0 || t >= NChan){
+            werrstr("bad channel string");
+            return -1;
+        }
+        if(t == CGrey)
+            i->flags |= Fgrey;
+        if(t == CAlpha)
+            i->flags |= Falpha;
+        if(t == CMap && i->cmap == nil){
+            i->cmap = memdefcmap;
+            i->flags |= Fcmap;
+        }
+
+        i->shift[t] = j;
+        i->mask[t] = (1<<NBITS(cc))-1;
+        i->nbits[t] = NBITS(cc);
+        if(NBITS(cc) != 8)
+            bytes = 0;
+    }
+    i->nchan = k;
+    if(bytes)
+        i->flags |= Fbytes;
+    return 0;
+}
+@
+% >>
+
+
 
 %\subsection{Algorithm}
 
@@ -3631,9 +3639,11 @@ bool hwdraw(Memdrawparam *par)
     if(dst->data->bdata != gscreendata.bdata)
         return false;
 
+
+
+
     if(scr->fill==nil && scr->scroll==nil)
         return false;
-
     /*
      * If we have an opaque mask and source is one opaque
      * pixel we can convert to the destination format and just
@@ -3663,6 +3673,9 @@ bool hwdraw(Memdrawparam *par)
 }
 @
 
+% TODO: maybe assume simple screen device, like for raspberry,
+% and where it's actually a framebuffer where hwdraw does nothing
+% except the software cursor stuff.
 
 % TODO put scroll or fill method here?
 
@@ -9985,15 +9998,14 @@ Cursor  arrow = {
 % picture? format? 16x16 bitmap??
 
 
+%\subsection{Marshalling}
 
-
-
-
+% protocol, but very simple
 <<function setcursor>>=
 void
 setcursor(Mousectl *mc, Cursor *c)
 {
-    char curs[2*4+2*2*16];
+    char curs[2*4+2*2*16]; // sizeof Cursor
 
     if(c == nil)
         write(mc->cfd, curs, 0);
@@ -10005,6 +10017,9 @@ setcursor(Mousectl *mc, Cursor *c)
     }
 }
 @
+
+%\subsection{Unmarshalling}
+%? devmouse.c code? for /dev/cursor?
 
 \subsection{Hardware support hook}
 
@@ -10406,6 +10421,11 @@ swcursoravoid(Rectangle r)
 \subsection{VGA Hardware cursor}
 
 % ???????
+
+
+
+
+
 
 \section{Events}
 % TODO: advanced topics? and move also egetrect.c and emenuhits.c?
@@ -12125,7 +12145,7 @@ emenuhit(int but, Mouse *m, Menu *menu)
     return -1;
 }
 @
-
+% >> >>
 
 
 \chapter{Conclusion}
@@ -12420,6 +12440,7 @@ struct VGAdev {
 
   void  (*enable)(VGAscr*);
   void  (*disable)(VGAscr*);
+
   void  (*page)(VGAscr*, int);
   void  (*linear)(VGAscr*, int, int);
  

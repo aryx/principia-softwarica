@@ -60,6 +60,7 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
     i->flags = 0;
     i->layer = nil;
     i->cmap = memdefcmap;
+
     if(memsetchan(i, chan) < 0){
         free(i);
         return nil;

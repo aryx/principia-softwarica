@@ -55,6 +55,7 @@ struct VGAdev {
 
   void  (*enable)(VGAscr*);
   void  (*disable)(VGAscr*);
+
   void  (*page)(VGAscr*, int);
   void  (*linear)(VGAscr*, int, int);
  
