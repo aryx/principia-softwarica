@@ -264,7 +264,8 @@ vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
 static void
 vgascreenputs(char* s, int n)
 {
-    int i, gotdraw;
+    int i;
+    bool gotdraw;
     Rune r;
     char buf[4];
     VGAscr *scr;
@@ -455,6 +456,7 @@ screensize(int x, int y, int z, ulong chan)
     }
 
     memimageinit();
+
     scr = &vgascreen[0];
     oldsoft = softscreen;
 
@@ -484,7 +486,9 @@ screensize(int x, int y, int z, ulong chan)
     if(gscreen == nil)
         error("no memory for vga memimage");
 
+    /*s: [[screensize()]] setup globals for vga text mode */
     vgaimageinit(chan);
+    /*e: [[screensize()]] setup globals for vga text mode */
 
     scr->palettedepth = 6;  /* default */
     scr->gscreendata = &gscreendata;
@@ -492,6 +496,7 @@ screensize(int x, int y, int z, ulong chan)
     scr->gscreen = gscreen;
 
     physgscreenr = gscreen->r;
+
     unlock(&vgascreenlock);
     poperror();
     if(oldsoft)
@@ -784,7 +789,7 @@ ksetcursor(Cursor* curs)
 int hwaccel = true;
 /*e: global hwaccel */
 /*s: global hwblank */
-int hwblank = 0;    /* turned on by drivers that are known good */
+bool hwblank = false;    /* turned on by drivers that are known good */
 /*e: global hwblank */
 /*s: global panning */
 int panning = 0;
@@ -1250,5 +1255,4 @@ VGAcur swcursor =
     .move = swmove,
 };
 /*e: global swcursor */
-
 /*e: kernel/devices/screen/386/vgascreen.c */

@@ -111,18 +111,24 @@ struct VGAscr {
   ulong io;       /* device specific registers */
   ulong *mmio;
 
-
   ulong storage;
   bool useflush;
 
+  ulong id; /* internal identifier for driver use */
+
   // why here? why not in VGAdev?
+  /*s: [[VGAscr]] optional methods */
   int (*fill)(VGAscr*, Rectangle, ulong);
   int (*scroll)(VGAscr*, Rectangle, Rectangle);
+  /*x: [[VGAscr]] optional methods */
   void  (*blank)(VGAscr*, int);
+  /*e: [[VGAscr]] optional methods */
 
-  ulong id; /* internal identifier for driver use */
-  int isblank;
+  /*s: [[VGAscr]] other fields */
   int overlayinit;
+  /*x: [[VGAscr]] other fields */
+  int isblank;
+  /*e: [[VGAscr]] other fields */
 
   // Extra
   Lock  devlock;

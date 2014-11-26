@@ -80,9 +80,13 @@ struct KDraw
     DName*      name;
     int     vers;
     int     softscreen;
-    int     blanked;    /* screen turned off */
-    ulong       blanktime;  /* time of last operation */
     ulong       savemap[3*256];
+
+    /*s: [[KDraw]] other fields */
+    bool	blanked;    /* screen turned off */
+    /*x: [[KDraw]] other fields */
+    ulong   blanktime;  /* time of last operation */
+    /*e: [[KDraw]] other fields */
 };
 /*e: struct KDraw */
 
@@ -1377,7 +1381,7 @@ drawread(Chan *c, void *a, long n, vlong off)
         break;
 
     case Qcolormap:
-        drawactive(1);  /* to restore map from backup */
+        drawactive(true);  /* to restore map from backup */
         p = malloc(4*12*256+1);
         if(p == 0)
             error(Enomem);
@@ -1481,7 +1485,7 @@ drawwrite(Chan *c, void *a, long n, vlong)
         break;
 
     case Qcolormap:
-        drawactive(1);  /* to restore map from backup */
+        drawactive(true);  /* to restore map from backup */
         m = n;
         n = 0;
         while(m > 0){
@@ -2365,7 +2369,7 @@ drawcmap(void)
     int num, den;
     int i, j;
 
-    drawactive(1);  /* to restore map from backup */
+    drawactive(true);  /* to restore map from backup */
     for(r=0,i=0; r!=4; r++)
         for(v=0; v!=4; v++,i+=16){
         for(g=0,j=v-r; g!=4; g++)
@@ -2392,7 +2396,7 @@ drawcmap(void)
 
 /*s: function drawblankscreen */
 void
-drawblankscreen(int blank)
+drawblankscreen(bool blank)
 {
     int i, nc;
     ulong *p;
@@ -2413,12 +2417,12 @@ drawblankscreen(int blank)
      * when possible.  to help in cases when it is not possible,
      * we set the color map to be all black.
      */
-    if(blank == 0){ /* turn screen on */
+    if(blank == false){ /* turn screen on */
         for(i=0; i<nc; i++, p+=3)
             setcolor(i, p[0], p[1], p[2]);
-        blankscreen(0);
+        blankscreen(false);
     }else{  /* turn screen off */
-        blankscreen(1);
+        blankscreen(true);
         for(i=0; i<nc; i++, p+=3){
             getcolor(i, &p[0], &p[1], &p[2]);
             setcolor(i, 0, 0, 0);
@@ -2434,14 +2438,15 @@ drawblankscreen(int blank)
  * record activity on screen, changing blanking as appropriate
  */
 void
-drawactive(int active)
+drawactive(bool active)
 {
     if(active){
-        drawblankscreen(0);
+        drawblankscreen(false);
         sdraw.blanktime = CPUS(0)->ticks;
     }else{
-        if(blanktime && sdraw.blanktime && TK2SEC(CPUS(0)->ticks - sdraw.blanktime)/60 >= blanktime)
-            drawblankscreen(1);
+        if(blanktime && sdraw.blanktime 
+           && TK2SEC(CPUS(0)->ticks - sdraw.blanktime)/60 >= blanktime)
+            drawblankscreen(true);
     }
 }
 /*e: function drawactive */

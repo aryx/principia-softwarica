@@ -23,9 +23,9 @@ extern void kmousectl(Cmdbuf*);
 
 
 /* xxxscreen.c */
-extern void 	blankscreen(int);
-extern uchar* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void 	flushmemscreen(Rectangle);
+extern uchar* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
+extern void 	blankscreen(bool);
 
 extern Cursor 		arrow;
 

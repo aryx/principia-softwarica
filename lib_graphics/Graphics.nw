@@ -14,6 +14,7 @@
 
 %thx to LP, changed for the better a few things:
 % - deadcode (Displaybufsize, ...)
+% - screen.h cleaner interface
 
 %thx to codemap/codegraph/scheck:
 % - SEMI use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -26,9 +27,9 @@
 %   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, better understand svgalib? tronscroll:) mode X? cairo?:
-%  - better understand channels, and the many image formats
-%  - better understand alpha
-%  - better understand bezier (could be useful for edge bunding visual)
+%  - SEMI better understand channels, and the many image formats
+%  - TODO better understand alpha
+%  - TODO better understand bezier (could be useful for edge bunding visual)
 
 
 %history LP-ization:
@@ -919,7 +920,7 @@ struct	Memdrawparam
 <<global gscreen>>=
 Memimage *gscreen;
 @
-% vs vgascreen[0].gscreen??
+% = vgascreen[0].gscreen (see screensize())
 
 <<global gscreendata>>=
 Memdata gscreendata;
@@ -962,22 +963,28 @@ struct VGAscr {
   ulong io;       /* device specific registers */
   ulong *mmio;
 
-
   ulong storage;
   bool useflush;
 
-  // why here? why not in VGAdev?
-  int (*fill)(VGAscr*, Rectangle, ulong);
-  int (*scroll)(VGAscr*, Rectangle, Rectangle);
-  void  (*blank)(VGAscr*, int);
-
   ulong id; /* internal identifier for driver use */
-  int isblank;
-  int overlayinit;
+
+  // why here? why not in VGAdev?
+  <<[[VGAscr]] optional methods>>
+
+  <<[[VGAscr]] other fields>>
 
   // Extra
   Lock  devlock;
 };
+@
+
+<<[[VGAscr]] other fields>>=
+int overlayinit;
+@
+
+<<[[VGAscr]] optional methods>>=
+int (*fill)(VGAscr*, Rectangle, ulong);
+int (*scroll)(VGAscr*, Rectangle, Rectangle);
 @
 
 
@@ -985,11 +992,25 @@ struct VGAscr {
 VGAscr vgascreen[1];
 @
 % set by screensize()? and probably via vgactl
+% TODO refactor to just vgascreen? some vga driver have more than 1?
 
 <<function VGAMEM>>=
 #define VGAMEM()  0xA0000
 @
 % vgascreen[0].paddr?
+
+
+% !!!!!!!!!
+<<function ishwimage>>=
+bool
+ishwimage(Memimage* i)
+{
+  return 
+    (vgascreen[0].gscreendata && 
+     i->data->bdata == vgascreen[0].gscreendata->bdata);
+}
+@
+
 
 \section{Image channels}
 
@@ -1392,7 +1413,9 @@ Memlayer	*layer;	/* nil if not a layer*/
 
 \chapter{Initialisation}
 
-\section{[[initdraw()]]}
+\section{Client side}
+
+\subsection{[[initdraw()]]}
 
 <<function initdraw>>=
 errorcodeneg1
@@ -1447,7 +1470,7 @@ drawshutdown(void)
 @
 
 
-\section{[[initdisplay()]]}
+\subsection{[[initdisplay()]]}
 
 % get connection and first automatically allocated image in d->image
 
@@ -1635,6 +1658,7 @@ if(t == nil)
 
 
 
+\subsection{[[closedisplay()]]}
 
 <<function closedisplay>>=
 /*
@@ -1690,7 +1714,94 @@ _closedisplay(Display *disp, int isshutdown)
 }
 @
 
-\section{[[memimageinit()]]}
+\section{Kernel side}
+% also kinda server side
+
+\subsection{[[screensize()]]}
+
+<<global vgascreenlock>>=
+Lock vgascreenlock;
+@
+
+<<global softscreen>>=
+static void *softscreen;
+@
+%gscreendata.bdata?
+
+
+% ???aux/vga -> <>
+% vgascreen.c
+<<function screensize>>=
+int
+screensize(int x, int y, int z, ulong chan)
+{
+    VGAscr *scr;
+    void *oldsoft;
+
+    lock(&vgascreenlock);
+    if(waserror()){
+        unlock(&vgascreenlock);
+        nexterror();
+    }
+
+    memimageinit();
+
+    scr = &vgascreen[0];
+    oldsoft = softscreen;
+
+    if(scr->paddr == 0){
+        int width = (x*z)/BI2WD;
+        void *p;
+
+        p = xalloc(width*BY2WD*y);
+        if(p == nil)
+            error("no memory for vga soft screen");
+        gscreendata.bdata = softscreen = p;
+        if(scr->dev && scr->dev->page){
+            scr->vaddr = KADDR(VGAMEM());
+            scr->apsize = 1<<16; // >>
+        }
+        scr->useflush = true;
+    }
+    else{
+        gscreendata.bdata = scr->vaddr;
+        scr->useflush = scr->dev && scr->dev->flush;
+    }
+
+    scr->gscreen = nil;
+    if(gscreen)
+        freememimage(gscreen);
+    gscreen = allocmemimaged(Rect(0,0,x,y), chan, &gscreendata);
+    if(gscreen == nil)
+        error("no memory for vga memimage");
+
+    <<[[screensize()]] setup globals for vga text mode>>
+
+    scr->palettedepth = 6;  /* default */
+    scr->gscreendata = &gscreendata;
+    scr->memdefont = getmemdefont();
+    scr->gscreen = gscreen;
+
+    physgscreenr = gscreen->r;
+
+    unlock(&vgascreenlock);
+    poperror();
+    if(oldsoft)
+        xfree(oldsoft);
+
+    memimagedraw(gscreen, gscreen->r, memblack, ZP, nil, ZP, S);
+    flushmemscreen(gscreen->r);
+
+    if(didswcursorinit)
+        swcursorinit();
+    drawcmap();
+    return 0;
+}
+@
+% >>
+
+
+\subsection{[[memimageinit()]]}
 
 % screensize | main_test -> <>
 % when call to screensize in the kernel? when switch to graphic mode via vgactl?
@@ -1812,6 +1923,7 @@ mktables(void)
     }
 }
 @
+
 
 
 \section{Fonts}
@@ -10134,7 +10246,6 @@ bool swvisible;  /* is the cursor visible? */
 <<global swrect>>=
 Rectangle   swrect; /* screen rectangle in swback */
 @
-
 <<global swback>>=
 Memimage*   swback; /* screen under cursor */
 @
@@ -10313,6 +10424,9 @@ swload(VGAscr*, Cursor *curs)
 
 
 
+<<global didswcursorinit>>=
+bool didswcursorinit;
+@
 
 <<function swcursorinit>>=
 void
@@ -12147,6 +12261,183 @@ emenuhit(int but, Mouse *m, Menu *menu)
 @
 % >> >>
 
+\section{Blank screen}
+
+<<[[vgactl]] cases>>=
+case CMblank:
+    drawblankscreen(true);
+    return;
+@
+<<[[vgactl]] cases>>=
+case CMunblank:
+    drawblankscreen(false);
+    return;
+@
+
+<<[[KDraw]] other fields>>=
+bool	blanked;    /* screen turned off */
+@
+
+
+<<function drawblankscreen>>=
+void
+drawblankscreen(bool blank)
+{
+    int i, nc;
+    ulong *p;
+
+    if(blank == sdraw.blanked)
+        return;
+    if(!candlock())
+        return;
+    if(screenimage == nil){
+        dunlock();
+        return;
+    }
+    p = sdraw.savemap;
+    nc = screenimage->depth > 8 ? 256 : 1<<screenimage->depth;
+
+    /*
+     * blankscreen uses the hardware to blank the screen
+     * when possible.  to help in cases when it is not possible,
+     * we set the color map to be all black.
+     */
+    if(blank == false){ /* turn screen on */
+        for(i=0; i<nc; i++, p+=3)
+            setcolor(i, p[0], p[1], p[2]);
+        blankscreen(false);
+    }else{  /* turn screen off */
+        blankscreen(true);
+        for(i=0; i<nc; i++, p+=3){
+            getcolor(i, &p[0], &p[1], &p[2]);
+            setcolor(i, 0, 0, 0);
+        }
+    }
+    sdraw.blanked = blank;
+    dunlock();
+}
+@
+% >>
+
+
+
+<<global blanktime>>=
+ulong blanktime = 30;   /* in minutes; a half hour */
+@
+% used by drawactive()
+<<[[vgactl]] cases>>=
+case CMblanktime:
+    blanktime = strtoul(cb->f[1], 0, 0);
+    return;
+@
+
+<<[[KDraw]] other fields>>=
+ulong   blanktime;  /* time of last operation */
+@
+
+% seems always caleld with active = true (from draw read/write colormap)
+<<function drawactive>>=
+/*
+ * record activity on screen, changing blanking as appropriate
+ */
+void
+drawactive(bool active)
+{
+    if(active){
+        drawblankscreen(false);
+        sdraw.blanktime = CPUS(0)->ticks;
+    }else{
+        if(blanktime && sdraw.blanktime 
+           && TK2SEC(CPUS(0)->ticks - sdraw.blanktime)/60 >= blanktime)
+            drawblankscreen(true);
+    }
+}
+@
+
+% vgaread -> <>
+<<function drawidletime>>=
+int
+drawidletime(void)
+{
+    return TK2SEC(CPUS(0)->ticks - sdraw.blanktime)/60;
+}
+@
+
+\subsection{Hardware support}
+
+<<global hwblank>>=
+bool hwblank = false;    /* turned on by drivers that are known good */
+@
+
+<<[[vgactl]] cases>>=
+case CMhwblank:
+    if(strcmp(cb->f[1], "on") == 0)
+        hwblank = true;
+    else if(strcmp(cb->f[1], "off") == 0)
+        hwblank = false;
+    else
+        break;
+    return;
+@
+
+
+
+<<[[VGAscr]] optional methods>>=
+void  (*blank)(VGAscr*, int);
+@
+
+<<[[VGAscr]] other fields>>=
+int isblank;
+@
+% dead isblank? not set in drawblankscreen, probably bug no?
+
+<<function blankscreen bis>>=
+void
+blankscreen(int blank)
+{
+    VGAscr *scr;
+
+    scr = &vgascreen[0];
+    if(hwblank){
+        if(scr->blank)
+            scr->blank(scr, blank);
+        else
+            vgablank(scr, blank);
+    }
+}
+@
+
+% blankscreen -> <>
+<<function vgablank>>=
+/*
+ * Supposedly this is the way to turn DPMS
+ * monitors off using just the VGA registers.
+ * Unfortunately, it seems to mess up the video mode
+ * on the cards I've tried.
+ */
+void
+vgablank(VGAscr*, int blank)
+{
+    uchar seq1, crtc17;
+
+    if(blank) {
+        seq1 = 0x00;
+        crtc17 = 0x80;
+    } else {
+        seq1 = 0x20;
+        crtc17 = 0x00;
+    }
+
+    outs(Seqx, 0x0100);         /* synchronous reset */
+    seq1 |= vgaxi(Seqx, 1) & ~0x20;
+    vgaxo(Seqx, 1, seq1);
+    crtc17 |= vgaxi(Crtx, 0x17) & ~0x80;
+    delay(10);
+    vgaxo(Crtx, 0x17, crtc17);
+    outs(Crtx, 0x0300);             /* end synchronous reset */
+}
+@
+
 
 \chapter{Conclusion}
 
@@ -12427,6 +12718,107 @@ enum {
 #define vgao(port, data)  outb(port, data)
 @
 
+
+<<global vgaxlock>>=
+static Lock vgaxlock;           /* access to index registers */
+@
+
+<<function vgaxi>>=
+int
+vgaxi(long port, uchar index)
+{
+    uchar data;
+
+    ilock(&vgaxlock);
+    switch(port){
+
+    case Seqx:
+    case Crtx:
+    case Grx:
+        outb(port, index);
+        data = inb(port+1);
+        break;
+
+    case Attrx:
+        /*
+         * Allow processor access to the colour
+         * palette registers. Writes to Attrx must
+         * be preceded by a read from Status1 to
+         * initialise the register to point to the
+         * index register and not the data register.
+         * Processor access is allowed by turning
+         * off bit 0x20.
+         */
+        inb(Status1);
+        if(index < 0x10){
+            outb(Attrx, index);
+            data = inb(Attrx+1);
+            inb(Status1);
+            outb(Attrx, 0x20|index);
+        }
+        else{
+            outb(Attrx, 0x20|index);
+            data = inb(Attrx+1);
+        }
+        break;
+
+    default:
+        iunlock(&vgaxlock);
+        return -1;
+    }
+    iunlock(&vgaxlock);
+
+    return data & 0xFF;
+}
+@
+
+<<function vgaxo>>=
+int
+vgaxo(long port, uchar index, uchar data)
+{
+    ilock(&vgaxlock);
+    switch(port){
+
+    case Seqx:
+    case Crtx:
+    case Grx:
+        /*
+         * We could use an outport here, but some chips
+         * (e.g. 86C928) have trouble with that for some
+         * registers.
+         */
+        outb(port, index);
+        outb(port+1, data);
+        break;
+
+    case Attrx:
+        inb(Status1);
+        if(index < 0x10){
+            outb(Attrx, index);
+            outb(Attrx, data);
+            inb(Status1);
+            outb(Attrx, 0x20|index);
+        }
+        else{
+            outb(Attrx, 0x20|index);
+            outb(Attrx, data);
+        }
+        break;
+
+    default:
+        iunlock(&vgaxlock);
+        return -1;
+    }
+    iunlock(&vgaxlock);
+
+    return 0;
+}
+@
+
+
+
+
+
 <<enum _anon_ (kernel/devices/screen/386/screen.h)2>>=
 enum {
   Backgnd   = 0,  /* black */
@@ -12459,6 +12851,234 @@ struct VGAdev {
 
 \section{VGA text mode}
 
+%\subsection{[[vgaimageinit()]]}
+% mv in advanced topics vga text mode?
+
+<<global curpos>>=
+static Point curpos;
+@
+
+<<global window bis>>=
+static Rectangle window;
+@
+
+
+% ??? -> <>
+<<function vgascreenwin>>=
+void
+vgascreenwin(VGAscr* scr)
+{
+    int h, w;
+
+    h = scr->memdefont->height;
+    w = scr->memdefont->info[' '].width;
+
+    window = insetrect(scr->gscreen->r, 48);
+    window.max.x = window.min.x+((window.max.x-window.min.x)/w)*w;
+    window.max.y = window.min.y+((window.max.y-window.min.y)/h)*h;
+    curpos = window.min;
+
+    screenputs = vgascreenputs;
+}
+@
+
+% vgascreenputs -> screenputs = <> (and screenputs call for printing 
+%  keystroke on the screen)
+<<function vgascreenputs>>=
+static void
+vgascreenputs(char* s, int n)
+{
+    int i;
+    bool gotdraw;
+    Rune r;
+    char buf[4];
+    VGAscr *scr;
+    Rectangle flushr;
+
+    scr = &vgascreen[0];
+
+    if(!islo()){
+        /*
+         * Don't deadlock trying to
+         * print in an interrupt.
+         */
+        if(!canlock(&vgascreenlock))
+            return;
+    }
+    else
+        lock(&vgascreenlock);
+
+    /*
+     * Be nice to hold this, but not going to deadlock
+     * waiting for it.  Just try and see.
+     */
+    gotdraw = canqlock(&drawlock);
+
+    flushr = Rect(10000, 10000, -10000, -10000);
+
+    while(n > 0){
+        i = chartorune(&r, s);
+        if(i == 0){
+            s++;
+            --n;
+            continue;
+        }
+        memmove(buf, s, i);
+        buf[i] = 0;
+        n -= i;
+        s += i;
+        vgascreenputc(scr, buf, &flushr);
+    }
+    flushmemscreen(flushr);
+
+    if(gotdraw)
+        qunlock(&drawlock);
+    unlock(&vgascreenlock);
+}
+@
+
+
+<<global xbuf>>=
+static int xbuf[256];
+@
+<<global xp>>=
+static int *xp;
+@
+
+
+% vgascreenputs -> <>
+<<function vgascreenputc>>=
+static void
+vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
+{
+    Point p;
+    int h, w, pos;
+    Rectangle r;
+
+//  drawdebug = 1;
+    if(xp < xbuf || xp >= &xbuf[sizeof(xbuf)])
+        xp = xbuf;
+
+    h = scr->memdefont->height;
+    switch(buf[0]){
+
+    case '\n':
+        if(curpos.y+h >= window.max.y){
+            vgascroll(scr);
+            *flushr = window;
+        }
+        curpos.y += h;
+        vgascreenputc(scr, "\r", flushr);
+        break;
+
+    case '\r':
+        xp = xbuf;
+        curpos.x = window.min.x;
+        break;
+
+    case '\t':
+        p = memsubfontwidth(scr->memdefont, " ");
+        w = p.x;
+        if(curpos.x >= window.max.x-4*w)
+            vgascreenputc(scr, "\n", flushr);
+
+        pos = (curpos.x-window.min.x)/w;
+        pos = 4-(pos%4);
+        *xp++ = curpos.x;
+        r = Rect(curpos.x, curpos.y, curpos.x+pos*w, curpos.y + h);
+        memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
+        curpos.x += pos*w;
+        break;
+
+    case '\b':
+        if(xp <= xbuf)
+            break;
+        xp--;
+        r = Rect(*xp, curpos.y, curpos.x, curpos.y+h);
+        memimagedraw(scr->gscreen, r, back, back->r.min, nil, ZP, S);
+        combinerect(flushr, r);
+        curpos.x = *xp;
+        break;
+
+    case '\0':
+        break;
+
+    default:
+        p = memsubfontwidth(scr->memdefont, buf);
+        w = p.x;
+
+        if(curpos.x >= window.max.x-w)
+            vgascreenputc(scr, "\n", flushr);
+
+        *xp++ = curpos.x;
+        r = Rect(curpos.x, curpos.y, curpos.x+w, curpos.y+h);
+        memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
+        memimagestring(scr->gscreen, curpos, conscol, ZP, scr->memdefont, buf);
+        combinerect(flushr, r);
+        curpos.x += w;
+    }
+//  drawdebug = 0;
+}
+@
+
+
+% vgascreenputs -> vgascreenputc -> <>
+<<function vgascroll>>=
+static void
+vgascroll(VGAscr* scr)
+{
+    int h, o;
+    Point p;
+    Rectangle r;
+
+    h = scr->memdefont->height;
+    o = 8*h;
+    r = Rpt(window.min, Pt(window.max.x, window.max.y-o));
+    p = Pt(window.min.x, window.min.y+o);
+    memimagedraw(scr->gscreen, r, scr->gscreen, p, nil, p, S);
+    r = Rpt(Pt(window.min.x, window.max.y-o), window.max);
+    memimagedraw(scr->gscreen, r, back, ZP, nil, ZP, S);
+
+    curpos.y -= o;
+}
+@
+
+
+<<global back2>>=
+static Memimage* back;
+@
+
+<<global conscol>>=
+static Memimage *conscol;
+@
+
+<<[[screensize()]] setup globals for vga text mode>>=
+vgaimageinit(chan);
+@
+
+<<function vgaimageinit>>=
+void
+vgaimageinit(ulong chan)
+{
+    if(back == nil){
+        back = allocmemimage(Rect(0,0,1,1), chan);  /* RSC BUG */
+        if(back == nil)
+            panic("back alloc");        /* RSC BUG */
+        back->flags |= Frepl;
+        back->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+        memfillcolor(back, DBlack);
+    }
+
+    if(conscol == nil){
+        conscol = allocmemimage(Rect(0,0,1,1), chan);   /* RSC BUG */
+        if(conscol == nil)
+            panic("conscol alloc"); /* RSC BUG */
+        conscol->flags |= Frepl;
+        conscol->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
+        memfillcolor(conscol, DWhite);
+    }
+}
+@
 
 \chapter{Mathematics}
 

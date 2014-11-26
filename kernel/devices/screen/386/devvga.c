@@ -247,6 +247,28 @@ vgactl(Cmdbuf *cb)
     scr = &vgascreen[0];
     ct = lookupcmd(cb, vgactlmsg, nelem(vgactlmsg));
     switch(ct->index){
+    /*s: [[vgactl]] cases */
+    case CMblank:
+        drawblankscreen(true);
+        return;
+    /*x: [[vgactl]] cases */
+    case CMunblank:
+        drawblankscreen(false);
+        return;
+    /*x: [[vgactl]] cases */
+    case CMblanktime:
+        blanktime = strtoul(cb->f[1], 0, 0);
+        return;
+    /*x: [[vgactl]] cases */
+    case CMhwblank:
+        if(strcmp(cb->f[1], "on") == 0)
+            hwblank = true;
+        else if(strcmp(cb->f[1], "off") == 0)
+            hwblank = false;
+        else
+            break;
+        return;
+    /*x: [[vgactl]] cases */
     case CMhwgc:
         if(strcmp(cb->f[1], "off") == 0){
             lock(&cursor);
@@ -282,7 +304,7 @@ vgactl(Cmdbuf *cb)
             return;
         }
         break;
-
+    /*x: [[vgactl]] cases */
     case CMtype:
         for(i = 0; vgadev[i]; i++){
             if(strcmp(cb->f[1], vgadev[i]->name))
@@ -295,11 +317,11 @@ vgactl(Cmdbuf *cb)
             return;
         }
         break;
-
+    /*x: [[vgactl]] cases */
     case CMtextmode:
         screeninit();
         return;
-
+    /*x: [[vgactl]] cases */
     case CMsize:
         x = strtoul(cb->f[1], &p, 0);
         if(x == 0 || x > 10240)
@@ -330,7 +352,7 @@ vgactl(Cmdbuf *cb)
         resetscreenimage();
         cursoron(1);
         return;
-
+    /*x: [[vgactl]] cases */
     case CMactualsize:
         if(scr->gscreen == nil)
             error("set the screen size first");
@@ -351,7 +373,7 @@ vgactl(Cmdbuf *cb)
         physgscreenr = Rect(0,0,x,y);
         scr->gscreen->clipr = physgscreenr;
         return;
-    
+    /*x: [[vgactl]] cases */
     case CMpalettedepth:
         x = strtoul(cb->f[1], &p, 0);
         if(x != 8 && x != 6)
@@ -359,14 +381,14 @@ vgactl(Cmdbuf *cb)
 
         scr->palettedepth = x;
         return;
-
+    /*x: [[vgactl]] cases */
     case CMdrawinit:
         if(scr->gscreen == nil)
             error("drawinit: no gscreen");
         if(scr->dev && scr->dev->drawinit)
             scr->dev->drawinit(scr);
         return;
-    
+    /*x: [[vgactl]] cases */
     case CMlinear:
         if(cb->nf!=2 && cb->nf!=3)
             error(Ebadarg);
@@ -378,24 +400,7 @@ vgactl(Cmdbuf *cb)
         if(screenaperture(size, align) < 0)
             error("not enough free address space");
         return;
-/*  
-    case CMmemset:
-        memset((void*)strtoul(cb->f[1], 0, 0), atoi(cb->f[2]), atoi(cb->f[3]));
-        return;
-*/
-
-    case CMblank:
-        drawblankscreen(1);
-        return;
-    
-    case CMunblank:
-        drawblankscreen(0);
-        return;
-    
-    case CMblanktime:
-        blanktime = strtoul(cb->f[1], 0, 0);
-        return;
-
+    /*x: [[vgactl]] cases */
     case CMpanning:
         if(strcmp(cb->f[1], "on") == 0){
             if(scr == nil || scr->cur == nil)
@@ -411,7 +416,7 @@ vgactl(Cmdbuf *cb)
         }else
             break;
         return;
-
+    /*x: [[vgactl]] cases */
     case CMhwaccel:
         if(strcmp(cb->f[1], "on") == 0)
             hwaccel = 1;
@@ -420,15 +425,7 @@ vgactl(Cmdbuf *cb)
         else
             break;
         return;
-    
-    case CMhwblank:
-        if(strcmp(cb->f[1], "on") == 0)
-            hwblank = 1;
-        else if(strcmp(cb->f[1], "off") == 0)
-            hwblank = 0;
-        else
-            break;
-        return;
+    /*e: [[vgactl]] cases */
     }
 
     cmderror(cb, "bad VGA control message");
