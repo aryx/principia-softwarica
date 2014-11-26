@@ -20,8 +20,10 @@
 /*s: enum _anon_ (kernel/devices/screen/386/devvga.c) */
 enum {
     Qdir,
+
     Qvgabios,
     Qvgactl,
+
     Qvgaovl,
     Qvgaovlctl,
 };
@@ -408,11 +410,11 @@ vgactl(Cmdbuf *cb)
             if(!scr->cur->doespanning)
                 error("panning not supported");
             scr->gscreen->clipr = scr->gscreen->r;
-            panning = 1;
+            panning = true;
         }
         else if(strcmp(cb->f[1], "off") == 0){
             scr->gscreen->clipr = physgscreenr;
-            panning = 0;
+            panning = false;
         }else
             break;
         return;

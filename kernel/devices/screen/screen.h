@@ -26,6 +26,8 @@ extern void kmousectl(Cmdbuf*);
 extern void 	flushmemscreen(Rectangle);
 extern uchar* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void 	blankscreen(bool);
+extern void		getcolor(ulong, ulong*, ulong*, ulong*);
+extern int		setcolor(ulong, ulong, ulong, ulong);
 
 extern Cursor 		arrow;
 

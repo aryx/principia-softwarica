@@ -142,6 +142,7 @@ static int xbuf[256];
 /*s: global vgascreenlock */
 Lock vgascreenlock;
 /*e: global vgascreenlock */
+
 /*s: function vgaimageinit */
 void
 vgaimageinit(ulong chan)
@@ -549,7 +550,7 @@ screenaperture(int size, int align)
 /*e: function screenaperture */
 
 /*s: function attachscreen */
-uchar*
+byte*
 attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
 {
     VGAscr *scr;
@@ -792,7 +793,7 @@ int hwaccel = true;
 bool hwblank = false;    /* turned on by drivers that are known good */
 /*e: global hwblank */
 /*s: global panning */
-int panning = 0;
+bool panning = false;
 /*e: global panning */
 
 /*s: function hwdraw */

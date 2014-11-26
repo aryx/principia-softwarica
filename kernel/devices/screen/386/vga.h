@@ -1,6 +1,6 @@
 /*s: kernel/devices/screen/386/vga.h */
 
-/*s: enum _anon_ (kernel/devices/screen/386/screen.h) */
+/*s: enum vgaports */
 /*
  * Generic VGA registers.
  */
@@ -22,7 +22,9 @@ enum {
   Pixmask   = 0x03C6, /* Pixel Mask Register */
   PaddrR    = 0x03C7, /* Palette Address Register, read */
   Pstatus   = 0x03C7, /* DAC Status (RO) */
+/*e: enum vgaports */
 
+/*s: enum vgamisc */
   Pcolours  = 256,    /* Palette */
   Pred    = 0,
   Pgreen  = 1,
@@ -31,7 +33,7 @@ enum {
   Pblack    = 0x00,
   Pwhite    = 0xFF,
 };
-/*e: enum _anon_ (kernel/devices/screen/386/screen.h) */
+/*e: enum vgamisc */
 
 /*s: function VGAMEM */
 #define VGAMEM()  0xA0000

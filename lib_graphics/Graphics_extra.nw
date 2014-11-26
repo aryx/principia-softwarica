@@ -7478,29 +7478,30 @@ main(int argc, char **argv)
 #include <memdraw.h>
 #include <memlayer.h>
 
-//static int drawdebug = 0;
-//
-//void
-//rdb(void)
-//{
-//}
-//
-//int
-//iprint(char *fmt, ...)
-//{
-//	int n;	
-//	va_list va;
-//	char buf[1024];
-//
-//	va_start(va, fmt);
-//	n = vseprint(buf, buf+sizeof buf, fmt, va) - buf;
-//	va_end(va);
-//
-//	write(1,buf,n);
-//	return 1;
-//}
 <<function main (lib_graphics/libmemdraw/tests/arctest.c)>>
 @
+
+%//static int drawdebug = 0;
+%//
+%//void
+%//rdb(void)
+%//{
+%//}
+%//
+%//int
+%//iprint(char *fmt, ...)
+%//{
+%//	int n;	
+%//	va_list va;
+%//	char buf[1024];
+%//
+%//	va_start(va, fmt);
+%//	n = vseprint(buf, buf+sizeof buf, fmt, va) - buf;
+%//	va_end(va);
+%//
+%//	write(1,buf,n);
+%//	return 1;
+%//}
 
 
 \subsection*{[[lib_graphics/libmemdraw/tests/memdrawtest.c]]}
@@ -9669,9 +9670,6 @@ threadmain(int argc, char *argv[])
 
 %-----------------------------------------------------------------
 
-
-
-
 <<kernel/devices/screen/screen.h>>=
 // this used to contain the stuff now in vga.h but better to split, cleaner
 
@@ -9695,6 +9693,8 @@ extern void kmousectl(Cmdbuf*);
 extern void 	flushmemscreen(Rectangle);
 extern uchar* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void 	blankscreen(bool);
+extern void		getcolor(ulong, ulong*, ulong*, ulong*);
+extern int		setcolor(ulong, ulong, ulong, ulong);
 
 extern Cursor 		arrow;
 
@@ -9873,13 +9873,7 @@ static  KDraw        sdraw;
 
 
 
-<<global screenimage>>=
-static  Memimage    *screenimage;
-@
 
-<<global screendimage>>=
-static  DImage* screendimage;
-@
 
 <<global screenname>>=
 static  char    screenname[40];
@@ -10441,6 +10435,11 @@ drawclient(Chan *c)
 }
 @
 
+
+
+
+
+
 <<function drawimage>>=
 Memimage*
 drawimage(Client *client, uchar *a)
@@ -10522,66 +10521,7 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
 }
 @
 
-<<function makescreenimage>>=
-static DImage*
-makescreenimage(void)
-{
-    int width, depth;
-    ulong chan;
-    DImage *di;
-    Memdata *md;
-    Memimage *i;
-    Rectangle r;
 
-    md = malloc(sizeof *md);
-    if(md == nil)
-        return nil;
-    md->allocd = 1;
-    md->base = nil;
-    md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
-    if(md->bdata == nil){
-        free(md);
-        return nil;
-    }
-    md->ref = 1;
-    i = allocmemimaged(r, chan, md);
-    if(i == nil){
-        free(md);
-        return nil;
-    }
-    i->width = width;
-    i->clipr = r;
-
-    di = allocdimage(i);
-    if(di == nil){
-        freememimage(i);    /* frees md */
-        return nil;
-    }
-    if(!waserror()){
-        snprint(screenname, sizeof screenname, "noborder.screen.%d", ++screennameid);
-        drawaddname(nil, di, strlen(screenname), screenname);
-        poperror();
-    }
-    return di;
-}
-@
-
-<<function initscreenimage>>=
-static int
-initscreenimage(void)
-{
-    if(screenimage != nil)
-        return 1;
-
-    screendimage = makescreenimage();
-    if(screendimage == nil)
-        return 0;
-    screenimage = screendimage->image;
-// iprint("initscreenimage %p %p\n", screendimage, screenimage);
-    mouseresize();
-    return 1;
-}
-@
 
 <<function deletescreenimage>>=
 void
@@ -10625,19 +10565,6 @@ resetscreenimage(void)
 
 
 
-<<function drawattach>>=
-static Chan*
-drawattach(char *spec)
-{
-    dlock();
-    if(!initscreenimage()){
-        dunlock();
-        error("no frame buffer");
-    }
-    dunlock();
-    return devattach('i', spec);
-}
-@
 
 <<function drawwalk>>=
 static Walkqid*
@@ -11273,12 +11200,13 @@ DImage* 	allocdimage(Memimage*);
 \subsection*{[[kernel/devices/screen/386/vga.h]]}
 
 
-
 %-------------------------------------------------------------
 
 <<kernel/devices/screen/386/vga.h>>=
 
-<<enum _anon_ (kernel/devices/screen/386/screen.h)>>
+<<enum vgaports>>
+
+<<enum vgamisc>>
 
 <<function VGAMEM>>
 
@@ -11346,297 +11274,6 @@ extern void swcursorinit(void);
 \subsection*{[[kernel/devices/screen/386/vgascreen.c]]}
 
 
-<<function screenaperture>>=
-int
-screenaperture(int size, int align)
-{
-    VGAscr *scr;
-
-    scr = &vgascreen[0];
-
-    if(scr->paddr)  /* set up during enable */
-        return 0;
-
-    if(size == 0)
-        return 0;
-
-    if(scr->dev && scr->dev->linear){
-        scr->dev->linear(scr, size, align);
-        return 0;
-    }
-
-    /*
-     * Need to allocate some physical address space.
-     * The driver will tell the card to use it.
-     */
-    size = PGROUND(size);
-    scr->paddr = upaalloc(size, align);
-    if(scr->paddr == 0)
-        return -1;
-    scr->vaddr = vmap(scr->paddr, size);
-    if(scr->vaddr == nil)
-        return -1;
-    scr->apsize = size;
-
-    return 0;
-}
-@
-
-<<function attachscreen>>=
-uchar*
-attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
-{
-    VGAscr *scr;
-
-    scr = &vgascreen[0];
-    if(scr->gscreen == nil || scr->gscreendata == nil)
-        return nil;
-
-    *r = scr->gscreen->clipr;
-    *chan = scr->gscreen->chan;
-    *d = scr->gscreen->depth;
-    *width = scr->gscreen->width;
-    *softscreen = scr->useflush;
-
-    return scr->gscreendata->bdata;
-}
-@
-
-
-<<function getcolor>>=
-void
-getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
-{
-    VGAscr *scr;
-    ulong x;
-
-    scr = &vgascreen[0];
-    if(scr->gscreen == nil)
-        return;
-
-    switch(scr->gscreen->depth){
-    default:
-        x = 0x0F;
-        break;
-    case 8:
-        x = 0xFF;
-        break;
-    }
-    p &= x;
-
-    lock(&cursor);
-    *pr = scr->colormap[p][0];
-    *pg = scr->colormap[p][1];
-    *pb = scr->colormap[p][2];
-    unlock(&cursor);
-}
-@
-
-<<function setpalette>>=
-int
-setpalette(ulong p, ulong r, ulong g, ulong b)
-{
-    VGAscr *scr;
-    int d;
-
-    scr = &vgascreen[0];
-    d = scr->palettedepth;
-
-    lock(&cursor);
-    scr->colormap[p][0] = r;
-    scr->colormap[p][1] = g;
-    scr->colormap[p][2] = b;
-    vgao(PaddrW, p);
-    vgao(Pdata, r>>(32-d));
-    vgao(Pdata, g>>(32-d));
-    vgao(Pdata, b>>(32-d));
-    unlock(&cursor);
-
-    return ~0;
-}
-@
-
-<<function setcolor>>=
-/*
- * On some video cards (e.g. Mach64), the palette is used as the 
- * DAC registers for >8-bit modes.  We don't want to set them when the user
- * is trying to set a colormap and the card is in one of these modes.
- */
-int
-setcolor(ulong p, ulong r, ulong g, ulong b)
-{
-    VGAscr *scr;
-    int x;
-
-    scr = &vgascreen[0];
-    if(scr->gscreen == nil)
-        return 0;
-
-    switch(scr->gscreen->depth){
-    case 1:
-    case 2:
-    case 4:
-        x = 0x0F;
-        break;
-    case 8:
-        x = 0xFF;
-        break;
-    default:
-        return 0;
-    }
-    p &= x;
-
-    return setpalette(p, r, g, b);
-}
-@
-
-
-
-
-
-
-<<global panning>>=
-int panning = 0;
-@
-
-
-
-
-<<function vgalinearpciid>>=
-void
-vgalinearpciid(VGAscr *scr, int vid, int did)
-{
-    Pcidev *p;
-
-    p = nil;
-    while((p = pcimatch(p, vid, 0)) != nil){
-        if(p->ccrb != 3)    /* video card */
-            continue;
-        if(did != 0 && p->did != did)
-            continue;
-        break;
-    }
-    if(p == nil)
-        error("pci video card not found");
-
-    scr->pci = p;
-    vgalinearpci(scr);
-}
-@
-
-<<function vgalinearpci>>=
-void
-vgalinearpci(VGAscr *scr)
-{
-    ulong paddr;
-    int i, size, best;
-    Pcidev *p;
-    
-    p = scr->pci;
-    if(p == nil)
-        return;
-
-    /*
-     * Scan for largest memory region on card.
-     * Some S3 cards (e.g. Savage) have enormous
-     * mmio regions (but even larger frame buffers).
-     * Some 3dfx cards (e.g., Voodoo3) have mmio
-     * buffers the same size as the frame buffer,
-     * but only the frame buffer is marked as
-     * prefetchable (bar&8).  If a card doesn't fit
-     * into these heuristics, its driver will have to
-     * call vgalinearaddr directly.
-     */
-    best = -1;
-    for(i=0; i<nelem(p->mem); i++){
-        if(p->mem[i].bar&1) /* not memory */
-            continue;
-        if(p->mem[i].size < 640*480)    /* not big enough */
-            continue;
-        if(best==-1 
-        || p->mem[i].size > p->mem[best].size 
-        || (p->mem[i].size == p->mem[best].size 
-          && (p->mem[i].bar&8)
-          && !(p->mem[best].bar&8)))
-            best = i;
-    }
-    if(best >= 0){
-        paddr = p->mem[best].bar & ~0x0F;
-        size = p->mem[best].size;
-        vgalinearaddr(scr, paddr, size);
-        return;
-    }
-    error("no video memory found on pci card");
-}
-@
-
-<<function vgalinearaddr>>=
-void
-vgalinearaddr(VGAscr *scr, ulong paddr, int size)
-{
-    int x, nsize;
-    ulong npaddr;
-
-    /*
-     * new approach.  instead of trying to resize this
-     * later, let's assume that we can just allocate the
-     * entire window to start with.
-     */
-
-    if(scr->paddr == paddr && size <= scr->apsize)
-        return;
-
-    if(scr->paddr){
-        /*
-         * could call vunmap and vmap,
-         * but worried about dangling pointers in devdraw
-         */
-        error("cannot grow vga frame buffer");
-    }
-    
-    /* round to page boundary, just in case */
-    x = paddr&(BY2PG-1);
-    npaddr = paddr-x;
-    nsize = PGROUND(size+x);
-
-    /*
-     * Don't bother trying to map more than 4000x4000x32 = 64MB.
-     * We only have a 256MB window.
-     */
-    if(nsize > 64*MB)
-        nsize = 64*MB;
-    scr->vaddr = vmap(npaddr, nsize);
-    if(scr->vaddr == 0)
-        error("cannot allocate vga frame buffer");
-    scr->vaddr = (char*)scr->vaddr+x;
-    scr->paddr = paddr;
-    scr->apsize = nsize;
-    /* let mtrr harmlessly fail on old CPUs, e.g., P54C */
-    if(!waserror()){
-        //mtrr(npaddr, nsize, "wc"); disabled mtrr
-                error("mtrr disabled");
-        poperror();
-    }
-}
-@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 %-------------------------------------------------------------
 
 <<kernel/devices/screen/386/vgascreen.c>>=
@@ -11679,6 +11316,7 @@ vgalinearaddr(VGAscr *scr, ulong paddr, int size)
 <<global xp>>
 <<global xbuf>>
 <<global vgascreenlock>>
+
 <<function vgaimageinit>>
 
 <<function vgascroll>>
@@ -11809,23 +11447,6 @@ extern void vgalinearpci(VGAscr*);
 
 
 
-<<function addvgaseg>>=
-void
-addvgaseg(char *name, ulong pa, ulong size)
-{
-    Physseg seg;
-
-    memset(&seg, 0, sizeof seg);
-    seg.attr = SG_PHYSICAL;
-    seg.name = name;
-    seg.pa = pa;
-    seg.size = size;
-    addphysseg(&seg);
-}
-@
-
-
-
 %//void
 %//cornerstring(char *s)
 %//{
@@ -11849,481 +11470,6 @@ addvgaseg(char *name, ulong pa, ulong size)
 
 \subsection*{[[kernel/devices/screen/386/devvga.c]]}
 
-<<enum _anon_ (kernel/devices/screen/386/devvga.c)>>=
-enum {
-    Qdir,
-    Qvgabios,
-    Qvgactl,
-    Qvgaovl,
-    Qvgaovlctl,
-};
-@
-
-<<global vgadir>>=
-static Dirtab vgadir[] = {
-    ".",    { Qdir, 0, QTDIR },     0,  0550,
-    "vgabios",  { Qvgabios, 0 },    0x100000, 0440,
-    "vgactl",       { Qvgactl, 0 },     0,  0660,
-    "vgaovl",       { Qvgaovl, 0 },     0,  0660,
-    "vgaovlctl",    { Qvgaovlctl, 0 },  0,  0660,
-};
-@
-
-<<enum _anon_ (kernel/devices/screen/386/devvga.c)2>>=
-enum {
-    CMactualsize,
-    CMblank,
-    CMblanktime,
-    CMdrawinit,
-    CMhwaccel,
-    CMhwblank,
-    CMhwgc,
-    CMlinear,
-    CMpalettedepth,
-    CMpanning,
-    CMsize,
-    CMtextmode,
-    CMtype,
-    CMunblank,
-};
-@
-
-<<global vgactlmsg>>=
-static Cmdtab vgactlmsg[] = {
-    CMactualsize,   "actualsize",   2,
-    CMblank,    "blank",    1,
-    CMblanktime,    "blanktime",    2,
-    CMdrawinit, "drawinit", 1,
-    CMhwaccel,  "hwaccel",  2,
-    CMhwblank,  "hwblank",  2,
-    CMhwgc,     "hwgc",     2,
-    CMlinear,   "linear",   0,
-    CMpalettedepth, "palettedepth", 2,
-    CMpanning,  "panning",  2,
-    CMsize,     "size",     3,
-    CMtextmode, "textmode", 1,
-    CMtype,     "type",     2,
-    CMunblank,  "unblank",  1,
-};
-@
-
-<<function vgareset>>=
-static void
-vgareset(void)
-{
-    /* reserve the 'standard' vga registers */
-    if(ioalloc(0x2b0, 0x2df-0x2b0+1, 0, "vga") < 0)
-        panic("vga ports already allocated"); 
-    if(ioalloc(0x3c0, 0x3da-0x3c0+1, 0, "vga") < 0)
-        panic("vga ports already allocated"); 
-}
-@
-
-<<function vgaattach>>=
-static Chan*
-vgaattach(char* spec)
-{
-    if(*spec && strcmp(spec, "0"))
-        error(Eio);
-    return devattach('v', spec);
-}
-@
-
-<<function vgawalk>>=
-Walkqid*
-vgawalk(Chan* c, Chan *nc, char** name, int nname)
-{
-    return devwalk(c, nc, name, nname, vgadir, nelem(vgadir), devgen);
-}
-@
-
-<<function vgastat>>=
-static int
-vgastat(Chan* c, uchar* dp, int n)
-{
-    return devstat(c, dp, n, vgadir, nelem(vgadir), devgen);
-}
-@
-
-<<function vgaopen>>=
-static Chan*
-vgaopen(Chan* c, int omode)
-{
-    VGAscr *scr;
-    static char *openctl = "openctl\n";
-
-    scr = &vgascreen[0];
-    if ((ulong)c->qid.path == Qvgaovlctl) {
-        if (scr->dev && scr->dev->ovlctl)
-            scr->dev->ovlctl(scr, c, openctl, strlen(openctl));
-        else 
-            error(Enonexist);
-    }
-    return devopen(c, omode, vgadir, nelem(vgadir), devgen);
-}
-@
-
-<<function vgaclose>>=
-static void
-vgaclose(Chan* c)
-{
-    VGAscr *scr;
-    static char *closectl = "closectl\n";
-
-    scr = &vgascreen[0];
-    if((ulong)c->qid.path == Qvgaovlctl)
-        if(scr->dev && scr->dev->ovlctl){
-            if(waserror()){
-                print("ovlctl error: %s\n", up->errstr);
-                return;
-            }
-            scr->dev->ovlctl(scr, c, closectl, strlen(closectl));
-            poperror();
-        }
-}
-@
-
-<<function vgaread>>=
-static long
-vgaread(Chan* c, void* a, long n, vlong off)
-{
-    int len;
-    char *p, *s;
-    VGAscr *scr;
-    ulong offset = off;
-    char chbuf[30];
-
-    switch((ulong)c->qid.path){
-
-    case Qdir:
-        return devdirread(c, a, n, vgadir, nelem(vgadir), devgen);
-
-    case Qvgabios:
-        if(offset >= 0x100000)
-            return 0;
-        if(offset+n >= 0x100000)
-            n = 0x100000 - offset;
-        memmove(a, (uchar*)kaddr(0)+offset, n);
-        return n;
-
-    case Qvgactl:
-        scr = &vgascreen[0];
-
-        p = malloc(READSTR);
-        if(p == nil)
-            error(Enomem);
-        if(waserror()){
-            free(p);
-            nexterror();
-        }
-
-        len = 0;
-
-        if(scr->dev)
-            s = scr->dev->name;
-        else
-            s = "cga";
-        len += snprint(p+len, READSTR-len, "type %s\n", s);
-
-        if(scr->gscreen) {
-            len += snprint(p+len, READSTR-len, "size %dx%dx%d %s\n",
-                scr->gscreen->r.max.x, scr->gscreen->r.max.y,
-                scr->gscreen->depth, chantostr(chbuf, scr->gscreen->chan));
-
-            if(Dx(scr->gscreen->r) != Dx(physgscreenr) 
-            || Dy(scr->gscreen->r) != Dy(physgscreenr))
-                len += snprint(p+len, READSTR-len, "actualsize %dx%d\n",
-                    physgscreenr.max.x, physgscreenr.max.y);
-        }
-
-        len += snprint(p+len, READSTR-len, "blank time %lud idle %d state %s\n",
-            blanktime, drawidletime(), scr->isblank ? "off" : "on");
-        len += snprint(p+len, READSTR-len, "hwaccel %s\n", hwaccel ? "on" : "off");
-        len += snprint(p+len, READSTR-len, "hwblank %s\n", hwblank ? "on" : "off");
-        len += snprint(p+len, READSTR-len, "panning %s\n", panning ? "on" : "off");
-        len += snprint(p+len, READSTR-len, "addr p 0x%lux v 0x%p size 0x%ux\n", scr->paddr, scr->vaddr, scr->apsize);
-        USED(len);
-
-        n = readstr(offset, a, n, p);
-        poperror();
-        free(p);
-
-        return n;
-
-    case Qvgaovl:
-    case Qvgaovlctl:
-        error(Ebadusefd);
-        break;
-
-    default:
-        error(Egreg);
-        break;
-    }
-
-    return 0;
-}
-@
-
-%//static char Ebusy[] = "vga already configured";
-
-<<function vgactl>>=
-static void
-vgactl(Cmdbuf *cb)
-{
-    int align, i, size, x, y, z;
-    char *chanstr, *p;
-    ulong chan;
-    Cmdtab *ct;
-    VGAscr *scr;
-    extern VGAdev *vgadev[];
-    extern VGAcur *vgacur[];
-
-    scr = &vgascreen[0];
-    ct = lookupcmd(cb, vgactlmsg, nelem(vgactlmsg));
-    switch(ct->index){
-    <<[[vgactl]] cases>>
-    }
-
-    cmderror(cb, "bad VGA control message");
-}
-@
-
-
-<<[[vgactl]] cases>>=
-case CMhwgc:
-    if(strcmp(cb->f[1], "off") == 0){
-        lock(&cursor);
-        if(scr->cur){
-            if(scr->cur->disable)
-                scr->cur->disable(scr);
-            scr->cur = nil;
-        }
-        unlock(&cursor);
-        return;
-    }
-    if(strcmp(cb->f[1], "soft") == 0){
-        lock(&cursor);
-        swcursorinit();
-        if(scr->cur && scr->cur->disable)
-            scr->cur->disable(scr);
-        scr->cur = &swcursor;
-        if(scr->cur->enable)
-            scr->cur->enable(scr);
-        unlock(&cursor);
-        return;
-    }
-    for(i = 0; vgacur[i]; i++){
-        if(strcmp(cb->f[1], vgacur[i]->name))
-            continue;
-        lock(&cursor);
-        if(scr->cur && scr->cur->disable)
-            scr->cur->disable(scr);
-        scr->cur = vgacur[i];
-        if(scr->cur->enable)
-            scr->cur->enable(scr);
-        unlock(&cursor);
-        return;
-    }
-    break;
-@
-<<[[vgactl]] cases>>=
-case CMtype:
-    for(i = 0; vgadev[i]; i++){
-        if(strcmp(cb->f[1], vgadev[i]->name))
-            continue;
-        if(scr->dev && scr->dev->disable)
-            scr->dev->disable(scr);
-        scr->dev = vgadev[i];
-        if(scr->dev->enable)
-            scr->dev->enable(scr);
-        return;
-    }
-    break;
-@
-<<[[vgactl]] cases>>=
-case CMtextmode:
-    screeninit();
-    return;
-@
-<<[[vgactl]] cases>>=
-case CMsize:
-    x = strtoul(cb->f[1], &p, 0);
-    if(x == 0 || x > 10240)
-        error(Ebadarg);
-    if(*p)
-        p++;
-
-    y = strtoul(p, &p, 0);
-    if(y == 0 || y > 10240)
-        error(Ebadarg);
-    if(*p)
-        p++;
-
-    z = strtoul(p, &p, 0);
-
-    chanstr = cb->f[2];
-    if((chan = strtochan(chanstr)) == 0)
-        error("bad channel");
-
-    if(chantodepth(chan) != z)
-        error("depth, channel do not match");
-
-    cursoroff(1);
-    deletescreenimage();
-    if(screensize(x, y, z, chan))
-        error(Egreg);
-    vgascreenwin(scr);
-    resetscreenimage();
-    cursoron(1);
-    return;
-@
-<<[[vgactl]] cases>>=
-case CMactualsize:
-    if(scr->gscreen == nil)
-        error("set the screen size first");
-
-    x = strtoul(cb->f[1], &p, 0);
-    if(x == 0 || x > 2048)
-        error(Ebadarg);
-    if(*p)
-        p++;
-
-    y = strtoul(p, nil, 0);
-    if(y == 0 || y > 2048)
-        error(Ebadarg);
-
-    if(x > scr->gscreen->r.max.x || y > scr->gscreen->r.max.y)
-        error("physical screen bigger than virtual");
-
-    physgscreenr = Rect(0,0,x,y);
-    scr->gscreen->clipr = physgscreenr;
-    return;
-@
-<<[[vgactl]] cases>>=
-case CMpalettedepth:
-    x = strtoul(cb->f[1], &p, 0);
-    if(x != 8 && x != 6)
-        error(Ebadarg);
-
-    scr->palettedepth = x;
-    return;
-@
-<<[[vgactl]] cases>>=
-case CMdrawinit:
-    if(scr->gscreen == nil)
-        error("drawinit: no gscreen");
-    if(scr->dev && scr->dev->drawinit)
-        scr->dev->drawinit(scr);
-    return;
-@
-<<[[vgactl]] cases>>=
-case CMlinear:
-    if(cb->nf!=2 && cb->nf!=3)
-        error(Ebadarg);
-    size = strtoul(cb->f[1], 0, 0);
-    if(cb->nf == 2)
-        align = 0;
-    else
-        align = strtoul(cb->f[2], 0, 0);
-    if(screenaperture(size, align) < 0)
-        error("not enough free address space");
-    return;
-@
-
-%/*  
-%case CMmemset:
-%    memset((void*)strtoul(cb->f[1], 0, 0), atoi(cb->f[2]), atoi(cb->f[3]));
-%    return;
-%*/
-
-
-
-<<[[vgactl]] cases>>=
-case CMpanning:
-    if(strcmp(cb->f[1], "on") == 0){
-        if(scr == nil || scr->cur == nil)
-            error("set screen first");
-        if(!scr->cur->doespanning)
-            error("panning not supported");
-        scr->gscreen->clipr = scr->gscreen->r;
-        panning = 1;
-    }
-    else if(strcmp(cb->f[1], "off") == 0){
-        scr->gscreen->clipr = physgscreenr;
-        panning = 0;
-    }else
-        break;
-    return;
-@
-<<[[vgactl]] cases>>=
-case CMhwaccel:
-    if(strcmp(cb->f[1], "on") == 0)
-        hwaccel = 1;
-    else if(strcmp(cb->f[1], "off") == 0)
-        hwaccel = 0;
-    else
-        break;
-    return;
-@
-
-
-
-
-<<global Enooverlay>>=
-char Enooverlay[] = "No overlay support";
-@
-
-<<function vgawrite>>=
-static long
-vgawrite(Chan* c, void* a, long n, vlong off)
-{
-    ulong offset = off;
-    Cmdbuf *cb;
-    VGAscr *scr;
-
-    switch((ulong)c->qid.path){
-
-    case Qdir:
-        error(Eperm);
-
-    case Qvgactl:
-        if(offset || n >= READSTR)
-            error(Ebadarg);
-        cb = parsecmd(a, n);
-        if(waserror()){
-            free(cb);
-            nexterror();
-        }
-        vgactl(cb);
-        poperror();
-        free(cb);
-        return n;
-
-    case Qvgaovl:
-        scr = &vgascreen[0];
-        if (scr->dev == nil || scr->dev->ovlwrite == nil) {
-            error(Enooverlay);
-            break;
-        }
-        return scr->dev->ovlwrite(scr, a, n, off);
-
-    case Qvgaovlctl:
-        scr = &vgascreen[0];
-        if (scr->dev == nil || scr->dev->ovlctl == nil) {
-            error(Enooverlay);
-            break;
-        }
-        scr->dev->ovlctl(scr, c, a, n);
-        return n;
-
-    default:
-        error(Egreg);
-        break;
-    }
-
-    return 0;
-}
-@
 
 %-------------------------------------------------------------
 
@@ -12392,292 +11538,6 @@ vgawrite(Chan* c, void* a, long n, vlong off)
 
 
 \subsection*{[[kernel/devices/screen/386/vgaclgd542x.c]]}
-
-<<function clgd542xpageset>>=
-static int
-clgd542xpageset(VGAscr*, int page)
-{
-    uchar gr09;
-    int opage;
-    
-    if(vgaxi(Seqx, 0x07) & 0xF0)
-        page = 0;
-    gr09 = vgaxi(Grx, 0x09);
-    if(vgaxi(Grx, 0x0B) & 0x20){
-        vgaxo(Grx, 0x09, page<<2);
-        opage = gr09>>2;
-    }
-    else{
-        vgaxo(Grx, 0x09, page<<4);
-        opage = gr09>>4;
-    }
-
-    return opage;
-}
-@
-
-<<function clgd542xpage>>=
-static void
-clgd542xpage(VGAscr* scr, int page)
-{
-    lock(&scr->devlock);
-    clgd542xpageset(scr, page);
-    unlock(&scr->devlock);
-}
-@
-
-<<function clgd542xlinear>>=
-static void
-clgd542xlinear(VGAscr* scr, int, int)
-{
-    vgalinearpciid(scr, 0x1013, 0);
-}
-@
-
-<<function clgd542xdisable>>=
-static void
-clgd542xdisable(VGAscr*)
-{
-    uchar sr12;
-
-    sr12 = vgaxi(Seqx, 0x12);
-    vgaxo(Seqx, 0x12, sr12 & ~0x01);
-}
-@
-
-<<function clgd542xenable>>=
-static void
-clgd542xenable(VGAscr* scr)
-{
-    uchar sr12;
-    int mem, x;
- 
-    /*
-     * Disable the cursor.
-     */
-    sr12 = vgaxi(Seqx, 0x12);
-    vgaxo(Seqx, 0x12, sr12 & ~0x01);
-
-    /*
-     * Cursor colours.
-     * Can't call setcolor here as cursor is already locked.
-     */
-    vgaxo(Seqx, 0x12, sr12|0x02);
-    vgao(PaddrW, 0x00);
-    vgao(Pdata, Pwhite);
-    vgao(Pdata, Pwhite);
-    vgao(Pdata, Pwhite);
-    vgao(PaddrW, 0x0F);
-    vgao(Pdata, Pblack);
-    vgao(Pdata, Pblack);
-    vgao(Pdata, Pblack);
-    vgaxo(Seqx, 0x12, sr12);
-
-    mem = 0;
-    switch(vgaxi(Crtx, 0x27) & ~0x03){
-
-    case 0x88:              /* CL-GD5420 */
-    case 0x8C:              /* CL-GD5422 */
-    case 0x94:              /* CL-GD5424 */
-    case 0x80:              /* CL-GD5425 */
-    case 0x90:              /* CL-GD5426 */
-    case 0x98:              /* CL-GD5427 */
-    case 0x9C:              /* CL-GD5429 */
-        /*
-         * The BIOS leaves the memory size in Seq0A, bits 4 and 3.
-         * See Technical Reference Manual Appendix E1, Section 1.3.2.
-         *
-         * The storage area for the 64x64 cursors is the last 16Kb of
-         * display memory.
-         */
-        mem = (vgaxi(Seqx, 0x0A)>>3) & 0x03;
-        break;
-
-    case 0xA0:              /* CL-GD5430 */
-    case 0xA8:              /* CL-GD5434 */
-    case 0xAC:              /* CL-GD5436 */
-    case 0xB8:              /* CL-GD5446 */
-    case 0x30:              /* CL-GD7543 */
-        /*
-         * Attempt to intuit the memory size from the DRAM control
-         * register. Minimum is 512KB.
-         * If DRAM bank switching is on then there's double.
-         */
-        x = vgaxi(Seqx, 0x0F);
-        mem = (x>>3) & 0x03;
-        if(x & 0x80)
-            mem++;
-        break;
-
-    case 0xBC:              /* CL-GD5480 */
-        mem = 2;            /* 1024 = 256<<2 */
-        x = vgaxi(Seqx, 0x0F);
-        if((x & 0x18) == 0x18){
-            mem <<= 1;      /* 2048 = 256<<3 */
-            if(x & 0x80)
-                mem <<= 2;  /* 2048 = 256<<4 */
-        }
-        if(vgaxi(Seqx, 0x17) & 0x80)
-            mem <<= 1;
-        break;
-
-    default:                /* uh, ah dunno */
-        break;
-    }
-    scr->storage = ((256<<mem)-16)*1024;
-
-    /*
-     * Set the current cursor to index 0
-     * and turn the 64x64 cursor on.
-     */
-    vgaxo(Seqx, 0x13, 0);
-    vgaxo(Seqx, 0x12, sr12|0x05);
-}
-@
-% >> >> >> >> >> >> >>
-
-<<function clgd542xinitcursor>>=
-static void
-clgd542xinitcursor(VGAscr* scr, int xo, int yo, int index)
-{
-    uchar *p, seq07;
-    uint p0, p1;
-    int opage, x, y;
-
-    /*
-     * Is linear addressing turned on? This will determine
-     * how we access the cursor storage.
-     */
-    seq07 = vgaxi(Seqx, 0x07);
-    opage = 0;
-    p = scr->vaddr;
-    if(!(seq07 & 0xF0)){
-        lock(&scr->devlock);
-        opage = clgd542xpageset(scr, scr->storage>>16);
-        p += (scr->storage & 0xFFFF);
-    }
-    else
-        p += scr->storage;
-    p += index*1024;
-
-    for(y = yo; y < 16; y++){
-        p0 = scr->set[2*y];
-        p1 = scr->set[2*y+1];
-        if(xo){
-            p0 = (p0<<xo)|(p1>>(8-xo));
-            p1 <<= xo;
-        }
-        *p++ = p0;
-        *p++ = p1;
-
-        for(x = 16; x < 64; x += 8)
-            *p++ = 0x00;
-
-        p0 = scr->clr[2*y]|scr->set[2*y];
-        p1 = scr->clr[2*y+1]|scr->set[2*y+1];
-        if(xo){
-            p0 = (p0<<xo)|(p1>>(8-xo));
-            p1 <<= xo;
-        }
-        *p++ = p0;
-        *p++ = p1;
-
-        for(x = 16; x < 64; x += 8)
-            *p++ = 0x00;
-    }
-    while(y < 64+yo){
-        for(x = 0; x < 64; x += 8){
-            *p++ = 0x00;
-            *p++ = 0x00;
-        }
-        y++;
-    }
-
-    if(!(seq07 & 0xF0)){
-        clgd542xpageset(scr, opage);
-        unlock(&scr->devlock);
-    }
-}
-@
-
-<<function clgd542xload>>=
-static void
-clgd542xload(VGAscr* scr, Cursor* curs)
-{
-    uchar sr12;
-
-    /*
-     * Disable the cursor.
-     */
-    sr12 = vgaxi(Seqx, 0x12);
-    vgaxo(Seqx, 0x12, sr12 & ~0x01);
-
-    memmove(&scr->Cursor, curs, sizeof(Cursor));
-    clgd542xinitcursor(scr, 0, 0, 0);
-
-    /*
-     * Enable the cursor.
-     */
-    vgaxo(Seqx, 0x13, 0);
-    vgaxo(Seqx, 0x12, sr12|0x05);
-}
-@
-
-<<function clgd542xmove>>=
-static int
-clgd542xmove(VGAscr* scr, Point p)
-{
-    int index, x, xo, y, yo;
-
-    index = 0;
-    if((x = p.x+scr->offset.x) < 0){
-        xo = -x;
-        x = 0;
-    }
-    else
-        xo = 0;
-    if((y = p.y+scr->offset.y) < 0){
-        yo = -y;
-        y = 0;
-    }
-    else
-        yo = 0;
-
-    if(xo || yo){
-        clgd542xinitcursor(scr, xo, yo, 1);
-        index = 1;
-    }
-    vgaxo(Seqx, 0x13, index<<2);
-    
-    vgaxo(Seqx, 0x10|((x & 0x07)<<5), (x>>3) & 0xFF);
-    vgaxo(Seqx, 0x11|((y & 0x07)<<5), (y>>3) & 0xFF);
-
-    return 0;
-}
-@
-
-<<global vgaclgd542xdev>>=
-VGAdev vgaclgd542xdev = {
-    .name = "clgd542x",
-
-    .enable = nil,
-    .disable = nil,
-    .page = clgd542xpage,
-    .linear = clgd542xlinear,
-};
-@
-
-<<global vgaclgd542xcur>>=
-VGAcur vgaclgd542xcur = {
-    .name = "clgd542xhwgc",
-
-    .enable = clgd542xenable,
-    .disable = clgd542xdisable,
-    .load = clgd542xload,
-    .move = clgd542xmove,
-};
-@
-
 
 %-------------------------------------------------------------
 
@@ -12914,6 +11774,26 @@ vesalinear(VGAscr *scr, int, int)
 }
 @
 % >> >> >>
+
+% vesalinear -> <>
+% framebuffer for real? can do video games with that?
+% vga.c
+<<function addvgaseg>>=
+void
+addvgaseg(char *name, ulong pa, ulong size)
+{
+    Physseg seg;
+
+    memset(&seg, 0, sizeof seg);
+    seg.attr = SG_PHYSICAL;
+    seg.name = name;
+    seg.pa = pa;
+    seg.size = size;
+    addphysseg(&seg);
+}
+@
+
+
 
 <<function vesaflush>>=
 static void

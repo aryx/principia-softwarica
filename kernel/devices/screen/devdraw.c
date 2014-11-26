@@ -1095,7 +1095,7 @@ makescreenimage(void)
     Memimage *i;
     Rectangle r;
 
-    md = malloc(sizeof *md);
+    md = malloc(sizeof Memdata);
     if(md == nil)
         return nil;
     md->allocd = 1;
@@ -1129,19 +1129,19 @@ makescreenimage(void)
 /*e: function makescreenimage */
 
 /*s: function initscreenimage */
-static int
+static errorcode0
 initscreenimage(void)
 {
     if(screenimage != nil)
-        return 1;
+        return OK_1;
 
     screendimage = makescreenimage();
     if(screendimage == nil)
-        return 0;
+        return ERROR_0;
     screenimage = screendimage->image;
-// iprint("initscreenimage %p %p\n", screendimage, screenimage);
+    // iprint("initscreenimage %p %p\n", screendimage, screenimage);
     mouseresize();
-    return 1;
+    return OK_1;
 }
 /*e: function initscreenimage */
 

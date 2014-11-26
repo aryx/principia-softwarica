@@ -5,27 +5,6 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
-//static int drawdebug = 0;
-//
-//void
-//rdb(void)
-//{
-//}
-//
-//int
-//iprint(char *fmt, ...)
-//{
-//	int n;	
-//	va_list va;
-//	char buf[1024];
-//
-//	va_start(va, fmt);
-//	n = vseprint(buf, buf+sizeof buf, fmt, va) - buf;
-//	va_end(va);
-//
-//	write(1,buf,n);
-//	return 1;
-//}
 /*s: function main (lib_graphics/libmemdraw/tests/arctest.c) */
 void
 main(int argc, char **argv)
