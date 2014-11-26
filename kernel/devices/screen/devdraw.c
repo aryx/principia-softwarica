@@ -1095,7 +1095,7 @@ makescreenimage(void)
     Memimage *i;
     Rectangle r;
 
-    md = malloc(sizeof Memdata);
+    md = malloc(sizeof(Memdata));
     if(md == nil)
         return nil;
     md->allocd = 1;

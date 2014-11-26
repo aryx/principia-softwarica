@@ -23,8 +23,9 @@ typedef int errorcode0;
 typedef int errorcode1;
 typedef int errorcodeneg1;
 #define OK_0 0
-#define ERROR_1 1
+#define OK_1 1
 #define ERROR_0 0
+#define ERROR_1 1
 #define ERROR_NEG1 (-1)
 /*e: pad basic types */
 
