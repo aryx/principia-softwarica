@@ -62,8 +62,9 @@ static Memsubfont *memdefont;
 
 static Lock screenlock;
 
-static Point	curpos;
 static int	h, w;
+
+static Point	curpos;
 static Rectangle window;
 
 static void myscreenputs(char *s, int n);

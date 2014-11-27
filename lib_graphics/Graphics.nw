@@ -14,7 +14,7 @@
 
 %thx to LP, changed for the better a few things:
 % - deadcode (Displaybufsize, ...)
-% - screen.h cleaner interface
+% - screen.h cleaner interface, TODO merge globals (screenimage and gscreen)
 
 %thx to codemap/codegraph/scheck:
 % - SEMI use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -155,17 +155,21 @@ a real graphics system.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
-% gonna present the one in Plan9, mostly /dev/draw, but also
-% /dev/mouse, /dev/cons, etc.
+% we gonna present the one in Plan9, mostly /dev/draw, but also
+% partially /dev/mouse, /dev/cons, etc.
 % It actually provides some forms of windows managment, with backing
 % store, and even menus (but rio is more complete).
+% It can also be remote like X11! can draw through the network, and
+% so have graphical application running on one machine but displaying
+% result on your (powerful! like browser! and web app!)
 
 % screenshot?
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
 \item mks
-% the seminal one? but present in any system?
+% the seminal one? but present in any real system?
+% or was it bitblt and the blit machine?
 \item svgalib
 \item cairo
 \item opengl
@@ -219,15 +223,18 @@ from Bell Labs.
 
 \section{Graphics system principles}
 
-% screen made of pixels. Lots of them. Resolution.
-% not continuous! so if draw diagonal, then no that easy actually :)
-% bresenham algorithm
+% screen made of pixels. Lots of them. Resolution. Depth/encoding.
+% can be as simple as a framebuffer for software/hardware interface.
+% pixels, so not continuous! so if draw diagonal, then no that easy actually :)
+% => bresenham algorithm
 
-% horiz/vert lines, rectangle, line, poly, ellipse, arc, bezier, text (fonts)
+% horiz/vert lines, rectangle, arbitrary line, polyline, ellipse, arc, bezier,
+% and also text (fonts) which are special kind of pictures
 % colors, alpha, channels, color map
 % composition (porter-duff), clipping
 
-% very generic and powerful operations, draw()! (like bitblt before) 
+
+% very generic and powerful operations: draw()! (like bitblt before) 
 % see cairo intro? 
 
 % advanced: windows/layers, menus, mouse/keyboard
@@ -268,7 +275,6 @@ from Bell Labs.
 % marshalled and delegate the actual work to /dev/draw
 % normally apps must link just with libdraw.a (and not libmemdraw.a
 % or libmemlayer.a!) (there are some apps that use memlayer too though).
-
 % can actually divide libdraw in two, have a libcoredraw (or libgeometry)
 % so the kernel would not depend on libdraw
 
@@ -277,10 +283,10 @@ from Bell Labs.
 %icossin.c: math
 %icossin2.c: math
 
-%drawrepl.c:
-%rectclip.c:
-%replclipr.c:
-%misc.c:
+%drawrepl.c: utilities
+%rectclip.c: utilities
+%replclipr.c: utilities
+%misc.c: utilities
 %a few other utilities appear later: bytesperline.c, chan.c
 
 %debug.c
@@ -291,7 +297,7 @@ from Bell Labs.
 
 %draw.c: draw rectangle, or copy rectangles (easier draw horiz or vert)
  %border.c: draw border
-%line.c: draw line (bresenham algorithm?)
+%line.c: draw line (bresenham algorithm? not here, in libmemdraw/)
 %poly.c: draw polylines
 %ellipse.c: draw ellipse, and arcs
 %bezier.c: draw spline
@@ -305,8 +311,8 @@ from Bell Labs.
 
 %chan.c: channel functions
 %rgb.c: rgb
-%readcolmap.c
-%writecolmap.c
+%readcolmap.c:
+%writecolmap.c:
 
 %readimage.c: parse from file
 %loadimage.c: parse from memory
@@ -319,31 +325,31 @@ from Bell Labs.
 %window.c: image "layers" (hmm but actually not transparent right now)
 %newwindow.c:
 
-%mouse.c
-%keyboard.c
-%event.c
-%menuhit.c
-%getrect.c
-%emenuhit.c
-%egetrect.c
-%scroll.c
+%mouse.c:
+%keyboard.c:
+%event.c:
+%menuhit.c:
+%getrect.c:
+%emenuhit.c:
+%egetrect.c:
+%scroll.c:
 
 %defont.c: lucm/latin1.9, in uncompressed form
 
-%font.c
-%buildfont.c
-%mkfont.c
-%getdefont.c
-%openfont.c
+%font.c:
+%buildfont.c:
+%mkfont.c:
+%getdefont.c:
+%openfont.c:
 
-%subfont.c
-%getsubfont.c
-%freesubfont.c
-%stringsubfont.c
-%subfontcache.c
-%subfontname.c
-%readsubfont.c
-%writesubfont.c
+%subfont.c:
+%getsubfont.c:
+%freesubfont.c:
+%stringsubfont.c:
+%subfontcache.c:
+%subfontname.c:
+%readsubfont.c:
+%writesubfont.c:
 
 %stringwidth.c
 
@@ -364,7 +370,7 @@ from Bell Labs.
 % vgascreen.c: implem of screen.h hardware specific ops needed by devdraw
 %  and memdraw
 % devvga.c: /dev/vga ctl files for vgascreen global parameters?
-% vgavesa.c: vesa specifics?
+% vgavesa.c: vesa specifics? needed?
 % vgaclgd542x.c: cirrus logic specifics
 
 %-------------------
@@ -372,7 +378,7 @@ from Bell Labs.
 %-------------------
 % libmemdraw actually does the drawing stuff in memory
 % (and rely on some kernel vga functions to do the rest and transfer
-%  images from memory to the actual screen).
+%  images from memory to the actual screen (or nop if framebuffer))
 % it also rely on some code in libmemlayer.
 % most apps should link only with libdraw. Only the kernel
 % (and test programs) link with libmemdraw.a normally.
@@ -406,7 +412,7 @@ from Bell Labs.
 %defont.c
 
 
-%todo: could remove that no? who links with libmemdraw except 
+%todo: could remove files below? who links with libmemdraw except 
 % test files? they can define then the hwdraw(), iprint() empty handler
 %hwdraw.c: kernel cruft
 %iprint.c: kernel cruft
@@ -445,17 +451,28 @@ from Bell Labs.
 
 \section{Architecture overview}
 
-% complicated. Even just user side is complicated. So when
+% complicated archi. Even just user side is complicated. So when
 % add kernel side, it can get tricky. Maybe easier to first
 % show archi on user side, the relation between the important
-% types (Display, Image, Rectangle, etc)
+% types (Display, Image, Rectangle, etc).
+% maybe can also show the simplest interface, a framebuffer, and
+% how /dev/draw build on top of that? In theory could have
+% just a framebuffer and libmemdraw/ on top of it.
 
-% app, library, kernel draw server, vga driver
+% = framebuffer or vga =
+% = libmemdraw/ =
+
+% = libmemlayer/ =
+% = draw device =
+% = libdraw/ =
+% = app =
+
+
+% app, library, kernel draw server, kernel draw libs, vga driver
 % kernel vs libs vs apps (vs rio)
 
 % public API -> marshaller -> flush -> KERNEL -> unmarshaller -> algorithm
 % some kind of RPC and protocol
-
 
 % libdraw -> KERNEL -> devdraw -> libmemdraw | libmemlayer -> devvga -> clgd5446
 % that's a lot of entities
@@ -489,7 +506,13 @@ from Bell Labs.
 % ???
 
 % what is the minimum we ask from hardware? just a screen.h interface?
-% with a not too bad flushmemscreen?
+% with a not too bad flushmemscreen? if look at screen.c for raspberry,
+% most of screen.c is hardware independent (arrow picture, software cursor, 
+% gscreen, window, curpos). The only hardware dependent is fbinit to
+% initialize framebuffer. hwdraw() does nothing. flushmemscreen() does
+% nothing. They just need a gscreen->bdata to point to a framebuffer
+% and set the property of this memimage depending on the hardware
+% (width, depth, chan). That's it!
 
 
 % about RPC vs framebuffer.
@@ -507,7 +530,8 @@ from Bell Labs.
 \section{Initialization overview}
 
 \section{Trace of a simple drawing operation}
-% when do draw(), then where does it go? go in kernel?
+% when do draw(), then where does it go? go in kernel? yes ... :(
+% at least when call flush().
 
 %\section{Trace of a mouse click}
 
@@ -524,32 +548,23 @@ from Bell Labs.
 
 \section{[[Display]] and [[Client]]}
 
-% user side, can see it as a connection handler
+% user side, can see it as essentially a connection handler
 <<struct Display>>=
 struct Display
 {
-    int		dirno; // /dev/draw/x
-
-    fdt		fd;    // /dev/draw/x/data
-    fdt		ctlfd; // /dev/draw/new
-    fdt		reffd; // /dev/draw/x/refresh
-
     // ref_own<Image>, current image?
     Image	*image;
 
+    <<[[Display]] devdraw connection fields>>
+
+    <<[[Display]] basic images fields>>
+
     <<[[Display]] buf fields>>
-
-    void	(*error)(Display*, char*);
-
-    Image	*white;
-    Image	*black;
-
-    Image	*opaque;
-    Image	*transparent;
 
     <<[[Display]] other fields>>
 };
 @
+% rename image field to screen instead? is it the same than global screen?
 
 % usually have draw(dstimg, rectangle, srcimg, maskimg)
 % and srcimg can be just black, and maskimg can be just opaque
@@ -560,6 +575,32 @@ struct Display
 <<global display>>=
 Display	*display;
 @
+
+
+<<[[Display]] devdraw connection fields>>=
+int		dirno; // /dev/draw/x
+
+fdt		fd;    // /dev/draw/x/data
+fdt		ctlfd; // /dev/draw/new
+fdt		reffd; // /dev/draw/x/refresh
+@
+
+% just for debugging I think, have ctlfd and fd already
+<<[[Display]] devdraw connection fields>>=
+char	*devdir; // /dev in general
+char	*windir; // /dev in general
+@
+
+
+<<[[Display]] basic images fields>>=
+Image	*white;
+Image	*black;
+
+Image	*opaque;
+Image	*transparent;
+@
+
+
 
 
 
@@ -579,11 +620,6 @@ bool	_isnewdisplay;
 @
 
 
-% just for debugging I think, have ctlfd and fd already
-<<[[Display]] other fields>>=
-char	*devdir; // /dev in general
-char	*windir; // /dev in general
-@
 
 
 
@@ -634,7 +670,7 @@ int     infoid;
 <<struct Image>>=
 struct Image
 {
-    // ref<Display>, reverse of Display->image? not necessaraly
+    // ref<Display>
     Display		*display;	/* display holding data */
     int			id;		/* id of system-held Image */
 
@@ -656,6 +692,9 @@ struct Image
 %  see initdisplay() 
 % system-held id! usually 0 for the first image of /dev/draw/new
 
+% Image.display is of Display->image? not necessaraly I think, only
+% the main image (screen) is.
+
 % need display pointer because when do draw operation we need
 % to write in img->display.buf! and then flushimage(img->display)!
 % we need the connection handler!
@@ -666,7 +705,8 @@ Image	*screen;
 @
 % unfortunate ... should call it image really ... or even maybe
 % window
-
+% at the same time virtual screen principle, every app think it has
+% the whole screen for himself
 
 
 
@@ -745,14 +785,17 @@ struct Memdata
     <<[[Memdata]] other fields>>
 };
 @
-% this is kinda a framebuffer. But actually needs one
-% operation to transfer from this memory to the actual screen!
-% this is what vga driver does.
 % the raw pixel data! but to know where to modify you need
 % to understand the format of the image, the #channels, depths
 % of channels, etc.
-
-
+% this is kinda a framebuffer. But actually needs one
+% operation to transfer from this memory to the actual screen?
+% hmm flushmemscreen is responsible for that, but it can be a nope
+% when bdata is already pointing to the framebuffer.
+% the vga driver does a copy though probably.
+% but anyway bdata is not necessaraly for the framebuffer, it can
+% be any images the user works on.
+% see also ishwimage()
 
 
 <<function byteaddr>>=
@@ -914,11 +957,14 @@ struct	Memdrawparam
 @
 
 \section{[[VGAscr]]}
-% what matters is not so much VGA but the screen.h interface
-% but in this chapter we care about the data structures more than
-% the interface, so we care about vgascreen! there is no
+% [[screen.h]] instead?
+% what matters is not so much VGA but the screen.h interface.
+% But in this chapter we care about the data structures more than
+% the interface, so we care about vgascreen.c as there is no
 % DS for screen.h, it's just an interface (TODO but should have
-% clean interface structure with function pointers)
+% clean interface structure with function pointers, and maybe even
+% a gscreen in a screen.c!!)
+% or use bcm framebuffer instead? cleaner screen.c
 
 % vgascreen.c, relation to Display->image? to screen? g? global screen?
 <<global gscreen>>=
@@ -986,6 +1032,7 @@ struct VGAscr {
 int overlayinit;
 @
 
+%XXX move later
 <<[[VGAscr]] optional methods>>=
 int (*fill)(VGAscr*, Rectangle, ulong);
 int (*scroll)(VGAscr*, Rectangle, Rectangle);
@@ -1014,7 +1061,7 @@ ishwimage(Memimage* i)
      i->data->bdata == vgascreen[0].gscreendata->bdata);
 }
 @
-
+% could be just i == gscreen no?
 
 \section{Image channels}
 
@@ -1171,7 +1218,7 @@ enum
 @
 
 \section{Color map}
-% need color map if use RGBA32?
+% need color map if use RGBA32? hmm but VGA seems to be limited to depth 8
 % maybe could move in advanced topics?
 
 % CMAP vs RGB????
@@ -1362,7 +1409,6 @@ struct	Fontchar
  *	p.x += i->width;
  * to draw characters in the specified color (itself a Memimage) in Memimage b.
  */
-
 struct	Memsubfont
 {
     char	*name;
@@ -1396,7 +1442,7 @@ Image		*next;	/* next in list of windows */
 <<[[Display]] other fields>>=
 Image	*screenimage; // ???
 @
-% ????
+% ???? different from Display.image?
 
 
 
@@ -1405,7 +1451,9 @@ Image	*screenimage; // ???
 Screen		*screen;	/* 0 if not a window */
 @
 
-% Screen type described later
+% Screen type described later, but really should
+% rename it Layer or something, so more consistent
+% with Memlayer
 
 
 <<[[MemImage]] other fields>>=
@@ -1423,15 +1471,17 @@ Memlayer	*layer;	/* nil if not a layer*/
 \subsection{Mounting the draw device}
 % bind #i /dev
 
+% fuck, another set of globals ... rename gscreendimage?
 <<global screendimage>>=
 static  DImage* screendimage;
 @
 
-% put in core DS chapter?
+% put in core DS chapter? merge with screen.h gscreen no?
 <<global screenimage>>=
 static  Memimage    *screenimage;
 @
-% screendimage->image
+% screendimage->image (less: so could remove this semi global)
+% vs gscreen??
 
 <<function drawattach>>=
 static Chan*
@@ -1668,7 +1718,7 @@ memimageinit(void)
 @
 
 % kernel interface?
-% memimageinit(imag->move = <>)
+% memimageinit -> imag->move = <>
 <<function memimagemove>>=
 void
 memimagemove(void *from, void *to)
@@ -2242,8 +2292,8 @@ Dev drawdevtab = {
 };
 @
 
-% seen drawattach in previous section already
-% Need understand part of Kernel.nw
+% Seen drawattach() in previous section already.
+% Need understand part of Kernel.nw.
 
 \subsection{[[/dev/draw/new]]}
 % and Client?
@@ -2456,6 +2506,7 @@ freeimage(Image *i)
     return ret;
 }
 @
+%todo: why not _freeimage? be consistent at least
 
 <<function allocimagemix>>=
 Image*
@@ -2852,7 +2903,7 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
     return i;
 }
 @
-
+% memimaged? d?
 
 
 <<function freememimage>>=
@@ -3562,6 +3613,7 @@ gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, 
 
 \subsection{Marshalling}
 
+% why not _draw? be more consistent
 <<function draw1>>=
 static void
 draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
@@ -3843,6 +3895,8 @@ memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask
 
 
 \subsection{Hardware support hook}
+% but really optional, bcm/screen.c does nothing except
+% calling the software cursor save/restore.
 
 % vgascreen.c
 <<global hwaccel>>=
@@ -3867,6 +3921,7 @@ bool hwdraw(Memdrawparam *par)
         return false;
 
     scr = &vgascreen[0];
+
     if((dst=par->dst) == nil || dst->data == nil)
         return false;
     if((src=par->src) == nil || src->data == nil)
@@ -3943,25 +3998,28 @@ flushimage(Display *d, bool visible)
 
 \subsection{Marshalling}
 
+% why not _flushimage? because this one we actually write stuff!
+% we not just modify buffer. we send it to the device!
 <<function doflush>>=
 static
-int
+errorneg1
 doflush(Display *d)
 {
     int n, nn;
 
     n = d->bufp-d->buf;
     if(n <= 0)
-        return 1;
+        return OK_1;
 
-    if((nn=write(d->fd, d->buf, n)) != n){
+    nn=write(d->fd, d->buf, n);
+    if(nn != n){
         if(_drawdebug)
             fprint(2, "flushimage fail: d=%p: n=%d nn=%d %r\n", d, n, nn); /**/
         d->bufp = d->buf;	/* might as well; chance of continuing */
-        return -1;
+        return ERROR_NEG1;
     }
     d->bufp = d->buf;
-    return 1;
+    return OK_1;
 }
 @
 
@@ -3996,6 +4054,9 @@ drawflush(void)
 @
 
 \subsection{Hardware support hook}
+
+% on bcm/ this is a noop as write in the framebuffer are already
+% flushed ... it's a direct connection.
 
 % 386/vgascreen.c!
 % drawflush | many more functions (e.g. swcursorhide) -> <>
@@ -4325,7 +4386,6 @@ drawdelname(DName *name)
     sdraw.nname--;
 }
 @
-
 
 
 
@@ -5061,6 +5121,7 @@ fillpolyop(Image *dst, Point *p, int np, int wind, Image *src, Point sp, Drawop 
 
 \subsection{Marshalling}
 
+% why not _poly? more consistent
 <<function dopoly>>=
 static
 void
@@ -5830,6 +5891,7 @@ fillellipseop(Image *dst, Point c, int a, int b, Image *src, Point sp, Drawop op
 
 \subsection{Marshalling}
 
+% rename _ellipse?
 <<function doellipse>>=
 static
 void
@@ -9530,6 +9592,7 @@ topnwindows(Image **w, int n)
 \subsection{Marshalling}
 
 
+% _topbottom?
 <<function topbottom>>=
 static
 void
@@ -12481,22 +12544,22 @@ emenuhit(int but, Mouse *m, Menu *menu)
 
 \section{Graphics text mode}
 % when do aux/vga it switches to graphic mode, but we still want a console!
+% the kernel still needs a working (*screenputs)(...).
+
 
 % this used to be a subsection of VGA driver, 
 % but the code seems quite generic and almost independent of VGA
-% so I moved it here
-
+% so I moved it here.
 
 <<global curpos>>=
 static Point curpos;
 @
-
 <<global window bis>>=
 static Rectangle window;
 @
 
 
-% ??? -> <>
+% /dev/vgactl size write -> <>
 <<function vgascreenwin>>=
 void
 vgascreenwin(VGAscr* scr)
@@ -12514,6 +12577,7 @@ vgascreenwin(VGAscr* scr)
     screenputs = vgascreenputs;
 }
 @
+%todo: do like for raspberry, have greet message also in graphic mode?
 
 % vgascreenputs -> screenputs = <> (and screenputs call for printing 
 %  keystroke on the screen)
@@ -12967,11 +13031,11 @@ bool	_drawdebug = 0;
 <<global drawdebug>>=
 bool drawdebug;
 @
-
+% rename? memdrawdebug?
 
 
 <<global debuglockdisplay>>=
-int		debuglockdisplay = 0;
+bool		debuglockdisplay = false;
 @
 
 
@@ -13116,6 +13180,12 @@ strtochan(char *s)
 
 \chapter{Error Managment}
 
+% initdraw take an error parameter?
+
+<<[[Display]] other fields>>=
+void	(*error)(Display*, char*);
+@
+
 <<function drawerror>>=
 void
 drawerror(Display *d, char *s)
@@ -13126,7 +13196,7 @@ drawerror(Display *d, char *s)
         d->error(d, s);
     else{
         errstr(err, sizeof err);
-        fprint(2, "draw: %s: %s\n", s, err);
+        fprint(STDERR, "draw: %s: %s\n", s, err);
         exits(s);
     }
 }
@@ -13135,7 +13205,7 @@ drawerror(Display *d, char *s)
 
 \chapter{VGA driver}
 
-% see "adventure in graphic card" from BeOS people in src/vga/?
+% see "adventure in graphic card" from BeOS people in src/vga/? meh
 
 <<enum vgamisc>>=
   Pcolours  = 256,    /* Palette */
@@ -13602,11 +13672,8 @@ case CMtype:
     }
     break;
 @
-<<[[vgactl]] cases>>=
-case CMtextmode:
-    screeninit();
-    return;
-@
+
+
 <<[[vgactl]] cases>>=
 case CMsize:
     x = strtoul(cb->f[1], &p, 0);
@@ -13775,6 +13842,16 @@ case CMhwaccel:
         break;
     return;
 @
+
+
+<<[[vgactl]] cases>>=
+case CMtextmode:
+    screeninit();
+    return;
+@
+% screeninit() is in kernel.nw, and essentially does
+% screenputs = cgascreenputs;
+
 
 
 

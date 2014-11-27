@@ -24,7 +24,7 @@ Screen	*_screen;
 /*e: global _screen */
 
 /*s: global debuglockdisplay */
-int		debuglockdisplay = 0;
+bool		debuglockdisplay = false;
 /*e: global debuglockdisplay */
 
 static void _closedisplay(Display*, int);
@@ -482,7 +482,7 @@ drawerror(Display *d, char *s)
         d->error(d, s);
     else{
         errstr(err, sizeof err);
-        fprint(2, "draw: %s: %s\n", s, err);
+        fprint(STDERR, "draw: %s: %s\n", s, err);
         exits(s);
     }
 }
@@ -490,23 +490,24 @@ drawerror(Display *d, char *s)
 
 /*s: function doflush */
 static
-int
+errorneg1
 doflush(Display *d)
 {
     int n, nn;
 
     n = d->bufp-d->buf;
     if(n <= 0)
-        return 1;
+        return OK_1;
 
-    if((nn=write(d->fd, d->buf, n)) != n){
+    nn=write(d->fd, d->buf, n);
+    if(nn != n){
         if(_drawdebug)
             fprint(2, "flushimage fail: d=%p: n=%d nn=%d %r\n", d, n, nn); /**/
         d->bufp = d->buf;	/* might as well; chance of continuing */
-        return -1;
+        return ERROR_NEG1;
     }
     d->bufp = d->buf;
-    return 1;
+    return OK_1;
 }
 /*e: function doflush */
 

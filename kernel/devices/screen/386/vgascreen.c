@@ -808,6 +808,7 @@ bool hwdraw(Memdrawparam *par)
         return false;
 
     scr = &vgascreen[0];
+
     if((dst=par->dst) == nil || dst->data == nil)
         return false;
     if((src=par->src) == nil || src->data == nil)

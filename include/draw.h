@@ -225,14 +225,27 @@ struct Screen
 /*s: struct Display */
 struct Display
 {
+    // ref_own<Image>, current image?
+    Image	*image;
+
+    /*s: [[Display]] devdraw connection fields */
     int		dirno; // /dev/draw/x
 
     fdt		fd;    // /dev/draw/x/data
     fdt		ctlfd; // /dev/draw/new
     fdt		reffd; // /dev/draw/x/refresh
+    /*x: [[Display]] devdraw connection fields */
+    char	*devdir; // /dev in general
+    char	*windir; // /dev in general
+    /*e: [[Display]] devdraw connection fields */
 
-    // ref_own<Image>, current image?
-    Image	*image;
+    /*s: [[Display]] basic images fields */
+    Image	*white;
+    Image	*black;
+
+    Image	*opaque;
+    Image	*transparent;
+    /*e: [[Display]] basic images fields */
 
     /*s: [[Display]] buf fields */
     // drawing operatings to write in /dev/draw/x/data until flush
@@ -242,14 +255,6 @@ struct Display
     // index in Display.buf array
     byte	*bufp;
     /*e: [[Display]] buf fields */
-
-    void	(*error)(Display*, char*);
-
-    Image	*white;
-    Image	*black;
-
-    Image	*opaque;
-    Image	*transparent;
 
     /*s: [[Display]] other fields */
     QLock	qlock;
@@ -261,9 +266,6 @@ struct Display
     /*x: [[Display]] other fields */
     bool	_isnewdisplay;
     /*x: [[Display]] other fields */
-    char	*devdir; // /dev in general
-    char	*windir; // /dev in general
-    /*x: [[Display]] other fields */
     int		imageid;
     /*x: [[Display]] other fields */
     Font	*defaultfont;
@@ -273,6 +275,8 @@ struct Display
     Image	*windows;
     /*x: [[Display]] other fields */
     Image	*screenimage; // ???
+    /*x: [[Display]] other fields */
+    void	(*error)(Display*, char*);
     /*e: [[Display]] other fields */
 };
 /*e: struct Display */
@@ -280,7 +284,7 @@ struct Display
 /*s: struct Image */
 struct Image
 {
-    // ref<Display>, reverse of Display->image? not necessaraly
+    // ref<Display>
     Display		*display;	/* display holding data */
     int			id;		/* id of system-held Image */
 

@@ -96,7 +96,6 @@ struct Memcmap
  *	p.x += i->width;
  * to draw characters in the specified color (itself a Memimage) in Memimage b.
  */
-
 struct	Memsubfont
 {
     char	*name;

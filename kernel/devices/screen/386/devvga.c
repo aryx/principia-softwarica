@@ -320,10 +320,6 @@ vgactl(Cmdbuf *cb)
         }
         break;
     /*x: [[vgactl]] cases */
-    case CMtextmode:
-        screeninit();
-        return;
-    /*x: [[vgactl]] cases */
     case CMsize:
         x = strtoul(cb->f[1], &p, 0);
         if(x == 0 || x > 10240)
@@ -426,6 +422,10 @@ vgactl(Cmdbuf *cb)
             hwaccel = 0;
         else
             break;
+        return;
+    /*x: [[vgactl]] cases */
+    case CMtextmode:
+        screeninit();
         return;
     /*e: [[vgactl]] cases */
     }
