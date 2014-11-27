@@ -225,28 +225,19 @@ struct Screen
 /*s: struct Display */
 struct Display
 {
-    // ref_own<Image>, current image?
+    // ref_own<Image>
     Image	*image;
 
     /*s: [[Display]] devdraw connection fields */
     int		dirno; // /dev/draw/x
-
-    fdt		fd;    // /dev/draw/x/data
     fdt		ctlfd; // /dev/draw/new
-    fdt		reffd; // /dev/draw/x/refresh
+    fdt		fd;    // /dev/draw/x/data
     /*x: [[Display]] devdraw connection fields */
     char	*devdir; // /dev in general
     char	*windir; // /dev in general
+    /*x: [[Display]] devdraw connection fields */
+    fdt		reffd; // /dev/draw/x/refresh
     /*e: [[Display]] devdraw connection fields */
-
-    /*s: [[Display]] basic images fields */
-    Image	*white;
-    Image	*black;
-
-    Image	*opaque;
-    Image	*transparent;
-    /*e: [[Display]] basic images fields */
-
     /*s: [[Display]] buf fields */
     // drawing operatings to write in /dev/draw/x/data until flush
     // array<byte>
@@ -255,6 +246,13 @@ struct Display
     // index in Display.buf array
     byte	*bufp;
     /*e: [[Display]] buf fields */
+    /*s: [[Display]] basic images fields */
+    Image	*white;
+    Image	*black;
+
+    Image	*opaque;
+    Image	*transparent;
+    /*e: [[Display]] basic images fields */
 
     /*s: [[Display]] other fields */
     QLock	qlock;
@@ -289,13 +287,12 @@ struct Image
     int			id;		/* id of system-held Image */
 
     Rectangle	r;		/* rectangle in data area, local coords */
-    Rectangle 	clipr;		/* clipping region */
-
+    Rectangle 	clipr;	/* clipping region */
     // bitset<enum<fxxx>>    
     int			repl;		/* flag: data replicates to tile clipr */
 
-    int			depth;		/* number of bits per pixel */
     ulong		chan;
+    int			depth;		/* number of bits per pixel */
 
     /*s: [[Image]] other fields */
     Screen		*screen;	/* 0 if not a window */

@@ -120,16 +120,16 @@ struct VGAscr {
 
   // why here? why not in VGAdev?
   /*s: [[VGAscr]] optional methods */
+  void  (*blank)(VGAscr*, int);
+  /*x: [[VGAscr]] optional methods */
   int (*fill)(VGAscr*, Rectangle, ulong);
   int (*scroll)(VGAscr*, Rectangle, Rectangle);
-  /*x: [[VGAscr]] optional methods */
-  void  (*blank)(VGAscr*, int);
   /*e: [[VGAscr]] optional methods */
 
   /*s: [[VGAscr]] other fields */
-  int overlayinit;
-  /*x: [[VGAscr]] other fields */
   int isblank;
+  /*x: [[VGAscr]] other fields */
+  int overlayinit;
   /*e: [[VGAscr]] other fields */
 
   // Extra
@@ -139,7 +139,6 @@ struct VGAscr {
 
 //!!!
 extern VGAscr vgascreen[];
-extern Rectangle physgscreenr;  /* actual monitor size */
 
 /*s: enum _anon_ (kernel/devices/screen/386/screen.h)2 */
 enum {

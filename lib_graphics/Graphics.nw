@@ -460,6 +460,7 @@ from Bell Labs.
 % just a framebuffer and libmemdraw/ on top of it.
 
 % = framebuffer or vga =
+% = screen.h and gscreen Memimage =
 % = libmemdraw/ =
 
 % = libmemlayer/ =
@@ -552,14 +553,12 @@ from Bell Labs.
 <<struct Display>>=
 struct Display
 {
-    // ref_own<Image>, current image?
+    // ref_own<Image>
     Image	*image;
 
     <<[[Display]] devdraw connection fields>>
-
-    <<[[Display]] basic images fields>>
-
     <<[[Display]] buf fields>>
+    <<[[Display]] basic images fields>>
 
     <<[[Display]] other fields>>
 };
@@ -575,14 +574,13 @@ struct Display
 <<global display>>=
 Display	*display;
 @
+% set by initdraw()
 
 
 <<[[Display]] devdraw connection fields>>=
 int		dirno; // /dev/draw/x
-
-fdt		fd;    // /dev/draw/x/data
 fdt		ctlfd; // /dev/draw/new
-fdt		reffd; // /dev/draw/x/refresh
+fdt		fd;    // /dev/draw/x/data
 @
 
 % just for debugging I think, have ctlfd and fd already
@@ -631,7 +629,7 @@ struct Client
     int     clientid; // dirno?
 
     DImage*     dimage[NHASH];
-
+    // enum<drawop>?
     int     op;
 
     <<[[Client]] other fields>>
@@ -664,7 +662,7 @@ int     infoid;
 \section{[[Image]] and [[Memimage]]}
 % and screen global,  and DImage?
 
-% see technicolor.ps! image in plan9 draw are
+% see technicolor.ps! images in plan9 draw are
 % specials.
 
 <<struct Image>>=
@@ -675,13 +673,12 @@ struct Image
     int			id;		/* id of system-held Image */
 
     Rectangle	r;		/* rectangle in data area, local coords */
-    Rectangle 	clipr;		/* clipping region */
-
+    Rectangle 	clipr;	/* clipping region */
     // bitset<enum<fxxx>>    
     int			repl;		/* flag: data replicates to tile clipr */
 
-    int			depth;		/* number of bits per pixel */
     ulong		chan;
+    int			depth;		/* number of bits per pixel */
 
     <<[[Image]] other fields>>
     // Extra
@@ -691,6 +688,7 @@ struct Image
 % read from /dev/draw/new initially when open the connection
 %  see initdisplay() 
 % system-held id! usually 0 for the first image of /dev/draw/new
+% incremented then at each allocimage, thx to Display.imageid field
 
 % Image.display is of Display->image? not necessaraly I think, only
 % the main image (screen) is.
@@ -704,9 +702,10 @@ struct Image
 Image	*screen;
 @
 % unfortunate ... should call it image really ... or even maybe
-% window
-% at the same time virtual screen principle, every app think it has
-% the whole screen for himself
+% window?
+% At the same time with virtual screen principle, every app think it has
+% the whole screen for himself, so maybe it makes sense to call this
+% variable screen.
 
 
 
@@ -717,10 +716,8 @@ int		imageid;
 @
 % counter, incremented each allocimage
 
-
 % for r, clipr, repl, see technicolor.ps!
-
-%/* huge but not infinite, so various offsets will leave it huge, not overflow */
+%/* huge but not infinite, so various offsets will leave it huge, not overflow*/
 % clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
 
 
@@ -753,9 +750,9 @@ struct Memimage
     //bitset<enum<fxxx>
     ulong	flags;
 
-    int		depth;	/* number of bits of storage per pixel */
     ulong	chan;	/* channel descriptions */
     int		nchan;	/* number of channels */
+    int		depth;	/* number of bits of storage per pixel */
 
     // finally, the raw pixels
     // ref_own<Memdata>
@@ -865,7 +862,6 @@ int		allocd;	/* is this malloc'd? */
 <<global memones>>=
 static Memimage*	memones;
 @
-
 <<global memzeros>>=
 static Memimage*	memzeros;
 @
@@ -886,6 +882,37 @@ Memimage *memopaque;
 
 
 
+
+\section{[[gscreen]]}
+%[[screen.h]] interface
+% This used to be called the [[VGAscr]] section.
+% But what matters is not so much VGA but the screen.h interface.
+% We actually moved more stuff to a generic screen.c, to be closer
+% to the simplicity of bcm/screen.c. We don't want to expose ugly
+% VGA details when nowadays things are simpler like the framebuffer
+% interface of the raspberry.
+
+% screen.c, relation to Display->image? to screen? g? global screen?
+<<global gscreen>>=
+Memimage *gscreen;
+@
+% this used to be in vgascreen.c, but every archi was defining
+% such a gscreen, so makes sense to factorize in a screen.c
+% = vgascreen[0].gscreen (see screensize())
+
+<<global gscreendata>>=
+Memdata gscreendata;
+@
+% not a pointer, gscreen->data = &gscreendata.
+
+<<global physgscreenr>>=
+Rectangle physgscreenr;
+@
+% gscreen->r, could remove again then? too much globals
+
+
+% could put a generic ishwimage here! that just check if 
+% i->data->bdata == gscreen->data->bdata!
 
 \section{[[Drawop]] and [[Memdrawparam]]}
 % Composition
@@ -955,113 +982,6 @@ struct	Memdrawparam
     ulong sdval;	/* sval in dst format */
 };
 @
-
-\section{[[VGAscr]]}
-% [[screen.h]] instead?
-% what matters is not so much VGA but the screen.h interface.
-% But in this chapter we care about the data structures more than
-% the interface, so we care about vgascreen.c as there is no
-% DS for screen.h, it's just an interface (TODO but should have
-% clean interface structure with function pointers, and maybe even
-% a gscreen in a screen.c!!)
-% or use bcm framebuffer instead? cleaner screen.c
-
-% vgascreen.c, relation to Display->image? to screen? g? global screen?
-<<global gscreen>>=
-Memimage *gscreen;
-@
-% = vgascreen[0].gscreen (see screensize())
-
-<<global gscreendata>>=
-Memdata gscreendata;
-@
-% gscreen.data?
-
-<<global physgscreenr>>=
-Rectangle physgscreenr;
-@
-% gscreen->r
-
-
-
-
-<<struct VGAscr>>=
-struct VGAscr {
-
-  ulong paddr;    /* frame buffer */
-  void* vaddr;
-  int   apsize;
-
-  Memimage* gscreen;
-  // Vgascr.gscreen.data?
-  Memdata* gscreendata;
-
-  Memsubfont* memdefont;
-
-
-  Cursor;
-  // the cursor device methods (software cursor or hardware support)
-  VGAcur* cur;
-
-  ulong colormap[Pcolours][3];
-  int palettedepth;
-
-  // the vga device methods
-  VGAdev* dev;
-
-  Pcidev* pci;
-  ulong io;       /* device specific registers */
-  ulong *mmio;
-
-  ulong storage;
-  bool useflush;
-
-  ulong id; /* internal identifier for driver use */
-
-  // why here? why not in VGAdev?
-  <<[[VGAscr]] optional methods>>
-
-  <<[[VGAscr]] other fields>>
-
-  // Extra
-  Lock  devlock;
-};
-@
-
-<<[[VGAscr]] other fields>>=
-int overlayinit;
-@
-
-%XXX move later
-<<[[VGAscr]] optional methods>>=
-int (*fill)(VGAscr*, Rectangle, ulong);
-int (*scroll)(VGAscr*, Rectangle, Rectangle);
-@
-
-
-<<global vgascreen>>=
-VGAscr vgascreen[1];
-@
-% set by screensize()? and probably via vgactl
-% TODO refactor to just vgascreen? some vga driver have more than 1?
-
-<<function VGAMEM>>=
-#define VGAMEM()  0xA0000
-@
-% vgascreen[0].paddr?
-
-
-% !!!!!!!!!
-<<function ishwimage>>=
-bool
-ishwimage(Memimage* i)
-{
-  return 
-    (vgascreen[0].gscreendata && 
-     i->data->bdata == vgascreen[0].gscreendata->bdata);
-}
-@
-% could be just i == gscreen no?
 
 \section{Image channels}
 
@@ -12956,6 +12876,12 @@ vgablank(VGAscr*, int blank)
 }
 @
 
+\section{[[/dev/draw/x/refresh]]}
+
+<<[[Display]] devdraw connection fields>>=
+fdt		reffd; // /dev/draw/x/refresh
+@
+
 
 \chapter{Conclusion}
 
@@ -13204,6 +13130,88 @@ drawerror(Display *d, char *s)
 
 
 \chapter{VGA driver}
+
+<<struct VGAscr>>=
+struct VGAscr {
+
+  ulong paddr;    /* frame buffer */
+  void* vaddr;
+  int   apsize;
+
+  Memimage* gscreen;
+  // Vgascr.gscreen.data?
+  Memdata* gscreendata;
+
+  Memsubfont* memdefont;
+
+
+  Cursor;
+  // the cursor device methods (software cursor or hardware support)
+  VGAcur* cur;
+
+  ulong colormap[Pcolours][3];
+  int palettedepth;
+
+  // the vga device methods
+  VGAdev* dev;
+
+  Pcidev* pci;
+  ulong io;       /* device specific registers */
+  ulong *mmio;
+
+  ulong storage;
+  bool useflush;
+
+  ulong id; /* internal identifier for driver use */
+
+  // why here? why not in VGAdev?
+  <<[[VGAscr]] optional methods>>
+
+  <<[[VGAscr]] other fields>>
+
+  // Extra
+  Lock  devlock;
+};
+@
+
+<<[[VGAscr]] other fields>>=
+int overlayinit;
+@
+
+%XXX move later
+<<[[VGAscr]] optional methods>>=
+int (*fill)(VGAscr*, Rectangle, ulong);
+int (*scroll)(VGAscr*, Rectangle, Rectangle);
+@
+
+
+<<global vgascreen>>=
+VGAscr vgascreen[1];
+@
+% set by screensize()? and probably via vgactl
+% TODO refactor to just vgascreen? some vga driver have more than 1?
+
+<<function VGAMEM>>=
+#define VGAMEM()  0xA0000
+@
+% vgascreen[0].paddr?
+
+
+% !!!!!!!!!
+<<function ishwimage>>=
+bool
+ishwimage(Memimage* i)
+{
+  return 
+    (vgascreen[0].gscreendata && 
+     i->data->bdata == vgascreen[0].gscreendata->bdata);
+}
+@
+% could be just i == gscreen no?
+%//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
+
+
+
 
 % see "adventure in graphic card" from BeOS people in src/vga/? meh
 

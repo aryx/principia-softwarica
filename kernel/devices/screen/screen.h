@@ -5,15 +5,18 @@
 // forward decls
 typedef struct Cursorinfo Cursorinfo;
 
+// screen.c
+extern Memimage *gscreen;
+extern Memdata gscreendata;
+extern Rectangle physgscreenr;  /* actual monitor size */
+
 /* xxxscreen.c */
 extern void 	flushmemscreen(Rectangle);
 extern uchar* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void 	blankscreen(bool);
 extern void		getcolor(ulong, ulong*, ulong*, ulong*);
 extern int		setcolor(ulong, ulong, ulong, ulong);
-
 // this used to be a macro, but then it was forbidding this file to be generic
-//#define ishwimage(i)  (vgascreen[0].gscreendata && (i)->data->bdata == vgascreen[0].gscreendata->bdata)
 extern bool ishwimage(Memimage*);
 
 

@@ -391,16 +391,6 @@ extern void vgalinearpci(VGAscr*);
 
 
 //already in libdraw/arith.c
-/*s: global physgscreenr */
-Rectangle physgscreenr;
-/*e: global physgscreenr */
-
-/*s: global gscreendata */
-Memdata gscreendata;
-/*e: global gscreendata */
-/*s: global gscreen */
-Memimage *gscreen;
-/*e: global gscreen */
 
 /*s: global vgascreen */
 VGAscr vgascreen[1];

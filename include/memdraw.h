@@ -53,9 +53,9 @@ struct Memimage
     //bitset<enum<fxxx>
     ulong	flags;
 
-    int		depth;	/* number of bits of storage per pixel */
     ulong	chan;	/* channel descriptions */
     int		nchan;	/* number of channels */
+    int		depth;	/* number of bits of storage per pixel */
 
     // finally, the raw pixels
     // ref_own<Memdata>

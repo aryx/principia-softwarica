@@ -77,10 +77,10 @@ struct KDraw
     int     nclient;
     Client**    client;
     int     nname;
-    DName*      name;
+    DName*  name;
     int     vers;
     int     softscreen;
-    ulong       savemap[3*256];
+    ulong   savemap[3*256];
 
     /*s: [[KDraw]] other fields */
     bool	blanked;    /* screen turned off */
@@ -96,7 +96,7 @@ struct Client
     int     clientid; // dirno?
 
     DImage*     dimage[NHASH];
-
+    // enum<drawop>?
     int     op;
 
     /*s: [[Client]] other fields */
