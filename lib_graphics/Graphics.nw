@@ -494,8 +494,7 @@ from Bell Labs.
 
 % data structures archi:
 %  Display|Image|display -> Client|MemImage|screen 
-%    -> gscreen 
-%    -> vgascreen[0].gscreen.data.bdata? vs vgascreen[0].paddr?
+%    -> gscreen -> gscreendata.bdata and vgascreen.paddr?
 % interface archi:
 %  API -> marshall -> unmarshall 
 %   -> algorithm libmemdraw (and libmemlayer sometimes)
@@ -840,6 +839,49 @@ wordaddr(Memimage *i, Point p)
 
 
 
+
+
+
+
+
+%\section{[[gscreen]]}
+% just like have [[screen]], client side,
+% have also gscreendimage and gscreen kernel side
+%[[screen.h]] interface
+% This used to be called the [[VGAscr]] section.
+% But what matters is not so much VGA but the screen.h interface.
+% We actually moved more stuff to a generic screen.c, to be closer
+% to the simplicity of bcm/screen.c. We don't want to expose ugly
+% VGA details when nowadays things are simpler like the framebuffer
+% interface of the raspberry.
+
+% screen.c, relation to Display->image? to screen? g? global screen?
+<<global gscreen>>=
+Memimage *gscreen;
+@
+% this used to be in vgascreen.c, but every archi was defining
+% such a gscreen, so makes sense to factorize in a screen.c.
+% there also used to be a vgascreen[0].gscreen (see screensize()), but
+% this was redundant then with gscreen.
+
+<<global gscreendata>>=
+Memdata gscreendata;
+@
+% not a pointer, gscreen->data = &gscreendata.
+
+<<global physgscreenr>>=
+Rectangle physgscreenr;
+@
+% gscreen->r, could remove again then? too much globals
+
+
+% could put a generic ishwimage here! that just check if 
+% i->data->bdata == gscreen->data->bdata!
+
+
+
+
+
 %XXXXXXXXXXXXXXXXXXXXX
 <<[[MemImage]] other fields>>=
 int		zero;		/* data->bdata+zero==&byte containing (0,0) */
@@ -889,38 +931,6 @@ Memimage *memopaque;
 
 
 
-\section{[[gscreen]]}
-% merge with previous? just like have [[screen]], client side,
-% have also gscreendimage and gscreen kernel side
-%[[screen.h]] interface
-% This used to be called the [[VGAscr]] section.
-% But what matters is not so much VGA but the screen.h interface.
-% We actually moved more stuff to a generic screen.c, to be closer
-% to the simplicity of bcm/screen.c. We don't want to expose ugly
-% VGA details when nowadays things are simpler like the framebuffer
-% interface of the raspberry.
-
-% screen.c, relation to Display->image? to screen? g? global screen?
-<<global gscreen>>=
-Memimage *gscreen;
-@
-% this used to be in vgascreen.c, but every archi was defining
-% such a gscreen, so makes sense to factorize in a screen.c
-% = vgascreen[0].gscreen (see screensize())
-
-<<global gscreendata>>=
-Memdata gscreendata;
-@
-% not a pointer, gscreen->data = &gscreendata.
-
-<<global physgscreenr>>=
-Rectangle physgscreenr;
-@
-% gscreen->r, could remove again then? too much globals
-
-
-% could put a generic ishwimage here! that just check if 
-% i->data->bdata == gscreen->data->bdata!
 
 \section{[[Drawop]] and [[Memdrawparam]]}
 % Composition
@@ -1512,8 +1522,7 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
     return gscreendata.bdata;
 }
 @
-
-% who setup vgascreen[0]? 
+% who setup vgascreen? 
 
 \subsection{[[screensize()]]}
 % aux/vgactl ??
@@ -13164,15 +13173,17 @@ int (*scroll)(VGAscr*, Rectangle, Rectangle);
 <<global vgascreen>>=
 VGAscr vgascreen;
 @
-% set by screensize()? and probably via vgactl
+%set by screensize()? and probably via vgactl
 %old: this used to be vgascreen[1], but I refactored to just vgascreen.
 % I didn't find any vga driver having more than 1 VGAscr so not sure
-% why it was like that
+% why it was like that. Once this was done, it didn't make sense to
+% have the gscreen/gscreendata globals and vgascreen[0].gscreen
+% and vgascreen[0].gscreendata so I removed those fields.
 
 <<function VGAMEM>>=
 #define VGAMEM()  0xA0000
 @
-% vgascreen[0].paddr?
+% vgascreen.paddr?
 
 
 % !!!!!!!!!
