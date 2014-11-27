@@ -122,7 +122,7 @@ vgaopen(Chan* c, int omode)
     VGAscr *scr;
     static char *openctl = "openctl\n";
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     if ((ulong)c->qid.path == Qvgaovlctl) {
         if (scr->dev && scr->dev->ovlctl)
             scr->dev->ovlctl(scr, c, openctl, strlen(openctl));
@@ -140,7 +140,7 @@ vgaclose(Chan* c)
     VGAscr *scr;
     static char *closectl = "closectl\n";
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     if((ulong)c->qid.path == Qvgaovlctl)
         if(scr->dev && scr->dev->ovlctl){
             if(waserror()){
@@ -177,7 +177,7 @@ vgaread(Chan* c, void* a, long n, vlong off)
         return n;
 
     case Qvgactl:
-        scr = &vgascreen[0];
+        scr = &vgascreen;
 
         p = malloc(READSTR);
         if(p == nil)
@@ -246,7 +246,7 @@ vgactl(Cmdbuf *cb)
     extern VGAdev *vgadev[];
     extern VGAcur *vgacur[];
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     ct = lookupcmd(cb, vgactlmsg, nelem(vgactlmsg));
     switch(ct->index){
     /*s: [[vgactl]] cases */
@@ -465,7 +465,7 @@ vgawrite(Chan* c, void* a, long n, vlong off)
         return n;
 
     case Qvgaovl:
-        scr = &vgascreen[0];
+        scr = &vgascreen;
         if (scr->dev == nil || scr->dev->ovlwrite == nil) {
             error(Enooverlay);
             break;
@@ -473,7 +473,7 @@ vgawrite(Chan* c, void* a, long n, vlong off)
         return scr->dev->ovlwrite(scr, a, n, off);
 
     case Qvgaovlctl:
-        scr = &vgascreen[0];
+        scr = &vgascreen;
         if (scr->dev == nil || scr->dev->ovlctl == nil) {
             error(Enooverlay);
             break;

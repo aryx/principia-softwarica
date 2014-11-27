@@ -138,7 +138,7 @@ struct VGAscr {
 /*e: struct VGAscr */
 
 //!!!
-extern VGAscr vgascreen[];
+extern VGAscr vgascreen;
 
 /*s: enum _anon_ (kernel/devices/screen/386/screen.h)2 */
 enum {

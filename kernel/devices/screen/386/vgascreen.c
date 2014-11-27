@@ -272,7 +272,7 @@ vgascreenputs(char* s, int n)
     VGAscr *scr;
     Rectangle flushr;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
 
     if(!islo()){
         /*
@@ -393,7 +393,7 @@ extern void vgalinearpci(VGAscr*);
 //already in libdraw/arith.c
 
 /*s: global vgascreen */
-VGAscr vgascreen[1];
+VGAscr vgascreen;
 /*e: global vgascreen */
 
 /*s: global arrow */
@@ -427,8 +427,8 @@ bool
 ishwimage(Memimage* i)
 {
   return 
-    (vgascreen[0].gscreendata && 
-     i->data->bdata == vgascreen[0].gscreendata->bdata);
+    (vgascreen.gscreendata && 
+     i->data->bdata == vgascreen.gscreendata->bdata);
 }
 /*e: function ishwimage */
 
@@ -448,7 +448,7 @@ screensize(int x, int y, int z, ulong chan)
 
     memimageinit();
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     oldsoft = softscreen;
 
     if(scr->paddr == 0){
@@ -509,7 +509,7 @@ screenaperture(int size, int align)
 {
     VGAscr *scr;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
 
     if(scr->paddr)  /* set up during enable */
         return 0;
@@ -545,7 +545,7 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
 {
     VGAscr *scr;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     if(scr->gscreen == nil || scr->gscreendata == nil)
         return nil;
 
@@ -570,7 +570,7 @@ flushmemscreen(Rectangle r)
     uchar *sp, *disp, *sdisp, *edisp;
     int y, len, incs, off, page;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
 
     // call the device driver flush hook
     if(scr->dev && scr->dev->flush){
@@ -652,7 +652,7 @@ getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
     VGAscr *scr;
     ulong x;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     if(scr->gscreen == nil)
         return;
 
@@ -681,7 +681,7 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
     VGAscr *scr;
     int d;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     d = scr->palettedepth;
 
     lock(&cursor);
@@ -710,7 +710,7 @@ setcolor(ulong p, ulong r, ulong g, ulong b)
     VGAscr *scr;
     int x;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     if(scr->gscreen == nil)
         return 0;
 
@@ -739,7 +739,7 @@ cursoron(bool dolock)
     VGAscr *scr;
     int v;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     if(scr->cur == nil || scr->cur->move == nil)
         return 0;
 
@@ -768,7 +768,7 @@ ksetcursor(Cursor* curs)
 {
     VGAscr *scr;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     if(scr->cur == nil || scr->cur->load == nil)
         return;
 
@@ -797,7 +797,7 @@ bool hwdraw(Memdrawparam *par)
     if(hwaccel == false)
         return false;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
 
     if((dst=par->dst) == nil || dst->data == nil)
         return false;
@@ -865,7 +865,7 @@ blankscreen(int blank)
 {
     VGAscr *scr;
 
-    scr = &vgascreen[0];
+    scr = &vgascreen;
     if(hwblank){
         if(scr->blank)
             scr->blank(scr, blank);
@@ -1199,7 +1199,7 @@ swcursorinit(void)
         init = true;
         addclock0link(swcursorclock, 10);
     }
-    scr = &vgascreen[0];
+    scr = &vgascreen;
 
     if(scr==nil || scr->gscreen==nil)
         return;
