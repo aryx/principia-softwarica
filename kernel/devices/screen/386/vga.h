@@ -92,12 +92,7 @@ struct VGAscr {
   void* vaddr;
   int   apsize;
 
-  Memimage* gscreen;
-  // Vgascr.gscreen.data?
-  Memdata* gscreendata;
-
   Memsubfont* memdefont;
-
 
   Cursor;
   // the cursor device methods (software cursor or hardware support)

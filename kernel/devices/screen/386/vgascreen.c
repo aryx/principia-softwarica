@@ -179,9 +179,9 @@ vgascroll(VGAscr* scr)
     o = 8*h;
     r = Rpt(window.min, Pt(window.max.x, window.max.y-o));
     p = Pt(window.min.x, window.min.y+o);
-    memimagedraw(scr->gscreen, r, scr->gscreen, p, nil, p, S);
+    memimagedraw(gscreen, r, gscreen, p, nil, p, S);
     r = Rpt(Pt(window.min.x, window.max.y-o), window.max);
-    memimagedraw(scr->gscreen, r, back, ZP, nil, ZP, S);
+    memimagedraw(gscreen, r, back, ZP, nil, ZP, S);
 
     curpos.y -= o;
 }
@@ -226,7 +226,7 @@ vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
         pos = 4-(pos%4);
         *xp++ = curpos.x;
         r = Rect(curpos.x, curpos.y, curpos.x+pos*w, curpos.y + h);
-        memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
+        memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
         curpos.x += pos*w;
         break;
 
@@ -235,7 +235,7 @@ vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
             break;
         xp--;
         r = Rect(*xp, curpos.y, curpos.x, curpos.y+h);
-        memimagedraw(scr->gscreen, r, back, back->r.min, nil, ZP, S);
+        memimagedraw(gscreen, r, back, back->r.min, nil, ZP, S);
         combinerect(flushr, r);
         curpos.x = *xp;
         break;
@@ -252,8 +252,8 @@ vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
 
         *xp++ = curpos.x;
         r = Rect(curpos.x, curpos.y, curpos.x+w, curpos.y+h);
-        memimagedraw(scr->gscreen, r, back, back->r.min, nil, back->r.min, S);
-        memimagestring(scr->gscreen, curpos, conscol, ZP, scr->memdefont, buf);
+        memimagedraw(gscreen, r, back, back->r.min, nil, back->r.min, S);
+        memimagestring(gscreen, curpos, conscol, ZP, scr->memdefont, buf);
         combinerect(flushr, r);
         curpos.x += w;
     }
@@ -323,7 +323,7 @@ vgascreenwin(VGAscr* scr)
     h = scr->memdefont->height;
     w = scr->memdefont->info[' '].width;
 
-    window = insetrect(scr->gscreen->r, 48);
+    window = insetrect(gscreen->r, 48);
     window.max.x = window.min.x+((window.max.x-window.min.x)/w)*w;
     window.max.y = window.min.y+((window.max.y-window.min.y)/h)*h;
     curpos = window.min;
@@ -426,9 +426,7 @@ static void *softscreen;
 bool
 ishwimage(Memimage* i)
 {
-  return 
-    (vgascreen.gscreendata && 
-     i->data->bdata == vgascreen.gscreendata->bdata);
+  return (i->data->bdata == gscreendata.bdata);
 }
 /*e: function ishwimage */
 
@@ -470,7 +468,6 @@ screensize(int x, int y, int z, ulong chan)
         scr->useflush = scr->dev && scr->dev->flush;
     }
 
-    scr->gscreen = nil;
     if(gscreen)
         freememimage(gscreen);
     gscreen = allocmemimaged(Rect(0,0,x,y), chan, &gscreendata);
@@ -482,9 +479,7 @@ screensize(int x, int y, int z, ulong chan)
     /*e: [[screensize()]] setup globals for vga text mode */
 
     scr->palettedepth = 6;  /* default */
-    scr->gscreendata = &gscreendata;
     scr->memdefont = getmemdefont();
-    scr->gscreen = gscreen;
 
     physgscreenr = gscreen->r;
 
@@ -546,16 +541,16 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
     VGAscr *scr;
 
     scr = &vgascreen;
-    if(scr->gscreen == nil || scr->gscreendata == nil)
+    if(gscreen == nil || gscreendata.bdata == nil)
         return nil;
 
-    *r = scr->gscreen->clipr;
-    *chan = scr->gscreen->chan;
-    *d = scr->gscreen->depth;
-    *width = scr->gscreen->width;
+    *r = gscreen->clipr;
+    *chan = gscreen->chan;
+    *d = gscreen->depth;
+    *width = gscreen->width;
     *softscreen = scr->useflush;
 
-    return scr->gscreendata->bdata;
+    return gscreendata.bdata;
 }
 /*e: function attachscreen */
 
@@ -578,16 +573,16 @@ flushmemscreen(Rectangle r)
         return;
     }
 
-    if(scr->gscreen == nil || scr->useflush == false)
+    if(gscreen == nil || scr->useflush == false)
         return;
     if(scr->dev == nil || scr->dev->page == nil)
         return;
-    if(rectclip(&r, scr->gscreen->r) == 0)
+    if(rectclip(&r, gscreen->r) == 0)
         return;
 
-    incs = scr->gscreen->width * BY2WD;
+    incs = gscreen->width * BY2WD;
 
-    switch(scr->gscreen->depth){
+    switch(gscreen->depth){
     case 8:
         len = Dx(r);
         break;
@@ -599,18 +594,18 @@ flushmemscreen(Rectangle r)
     if(len < 1)
         return;
 
-    off = r.min.y * scr->gscreen->width * BY2WD 
-           + (r.min.x * scr->gscreen->depth)/8;
+    off = r.min.y * gscreen->width * BY2WD 
+           + (r.min.x * gscreen->depth)/8;
     page = off/scr->apsize;
     off %= scr->apsize;
     disp = scr->vaddr;
     sdisp = disp+off;
     edisp = disp+scr->apsize;
 
-    off = r.min.y * scr->gscreen->width * BY2WD
-           + (r.min.x * scr->gscreen->depth)/8;
+    off = r.min.y * gscreen->width * BY2WD
+           + (r.min.x * gscreen->depth)/8;
 
-    sp = scr->gscreendata->bdata + off;
+    sp = gscreendata.bdata + off;
 
     // call device driver again, for subpart
     scr->dev->page(scr, page);
@@ -653,10 +648,10 @@ getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
     ulong x;
 
     scr = &vgascreen;
-    if(scr->gscreen == nil)
+    if(gscreen == nil)
         return;
 
-    switch(scr->gscreen->depth){
+    switch(gscreen->depth){
     default:
         x = 0x0F;
         break;
@@ -711,10 +706,10 @@ setcolor(ulong p, ulong r, ulong g, ulong b)
     int x;
 
     scr = &vgascreen;
-    if(scr->gscreen == nil)
+    if(gscreen == nil)
         return 0;
 
-    switch(scr->gscreen->depth){
+    switch(gscreen->depth){
     case 1:
     case 2:
     case 4:
@@ -1201,7 +1196,7 @@ swcursorinit(void)
     }
     scr = &vgascreen;
 
-    if(scr==nil || scr->gscreen==nil)
+    if(scr==nil || gscreen==nil)
         return;
     if(scr->dev == nil || scr->dev->linear == nil){
         if(!warned){

@@ -195,13 +195,13 @@ vgaread(Chan* c, void* a, long n, vlong off)
             s = "cga";
         len += snprint(p+len, READSTR-len, "type %s\n", s);
 
-        if(scr->gscreen) {
+        if(gscreen) {
             len += snprint(p+len, READSTR-len, "size %dx%dx%d %s\n",
-                scr->gscreen->r.max.x, scr->gscreen->r.max.y,
-                scr->gscreen->depth, chantostr(chbuf, scr->gscreen->chan));
+                gscreen->r.max.x, gscreen->r.max.y,
+                gscreen->depth, chantostr(chbuf, gscreen->chan));
 
-            if(Dx(scr->gscreen->r) != Dx(physgscreenr) 
-            || Dy(scr->gscreen->r) != Dy(physgscreenr))
+            if(Dx(gscreen->r) != Dx(physgscreenr) 
+            || Dy(gscreen->r) != Dy(physgscreenr))
                 len += snprint(p+len, READSTR-len, "actualsize %dx%d\n",
                     physgscreenr.max.x, physgscreenr.max.y);
         }
@@ -352,7 +352,7 @@ vgactl(Cmdbuf *cb)
         return;
     /*x: [[vgactl]] cases */
     case CMactualsize:
-        if(scr->gscreen == nil)
+        if(gscreen == nil)
             error("set the screen size first");
 
         x = strtoul(cb->f[1], &p, 0);
@@ -365,11 +365,11 @@ vgactl(Cmdbuf *cb)
         if(y == 0 || y > 2048)
             error(Ebadarg);
 
-        if(x > scr->gscreen->r.max.x || y > scr->gscreen->r.max.y)
+        if(x > gscreen->r.max.x || y > gscreen->r.max.y)
             error("physical screen bigger than virtual");
 
         physgscreenr = Rect(0,0,x,y);
-        scr->gscreen->clipr = physgscreenr;
+        gscreen->clipr = physgscreenr;
         return;
     /*x: [[vgactl]] cases */
     case CMpalettedepth:
@@ -381,7 +381,7 @@ vgactl(Cmdbuf *cb)
         return;
     /*x: [[vgactl]] cases */
     case CMdrawinit:
-        if(scr->gscreen == nil)
+        if(gscreen == nil)
             error("drawinit: no gscreen");
         if(scr->dev && scr->dev->drawinit)
             scr->dev->drawinit(scr);
@@ -405,11 +405,11 @@ vgactl(Cmdbuf *cb)
                 error("set screen first");
             if(!scr->cur->doespanning)
                 error("panning not supported");
-            scr->gscreen->clipr = scr->gscreen->r;
+            gscreen->clipr = gscreen->r;
             panning = true;
         }
         else if(strcmp(cb->f[1], "off") == 0){
-            scr->gscreen->clipr = physgscreenr;
+            gscreen->clipr = physgscreenr;
             panning = false;
         }else
             break;

@@ -217,14 +217,14 @@ vesaflush(VGAscr *scr, Rectangle r)
 
     if(hardscreen == nil)
         return;
-    if(rectclip(&r, scr->gscreen->r) == 0)
+    if(rectclip(&r, gscreen->r) == 0)
         return;
-    sp = (ulong*)(scr->gscreendata->bdata + scr->gscreen->zero);
-    t = (r.max.x * scr->gscreen->depth + 2*BI2WD-1) / BI2WD;
-    w = (r.min.x * scr->gscreen->depth) / BI2WD;
+    sp = (ulong*)(gscreendata.bdata + gscreen->zero);
+    t = (r.max.x * gscreen->depth + 2*BI2WD-1) / BI2WD;
+    w = (r.min.x * gscreen->depth) / BI2WD;
     w = (t - w) * BY2WD;
-    wid = scr->gscreen->width;
-    off = r.min.y * wid + (r.min.x * scr->gscreen->depth) / BI2WD;
+    wid = gscreen->width;
+    off = r.min.y * wid + (r.min.x * gscreen->depth) / BI2WD;
 
     hp = hardscreen;
     hp += off;
