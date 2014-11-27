@@ -171,7 +171,7 @@ execfunc(var *func)
 /*e: function execfunc */
 
 /*s: function dochdir */
-errorcodeneg1
+errorneg1
 dochdir(char *word)
 {
     /* report to /dev/wdir if it exists and we're interactive */

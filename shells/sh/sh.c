@@ -414,7 +414,7 @@ redirect(Node *np)
 
 /*s: function setio */
 /* setio - ( < | > | >> ) word; fill in np->io[] */
-errorcode0
+error0
 setio(Node *np)
 {
     if(t == '<'){

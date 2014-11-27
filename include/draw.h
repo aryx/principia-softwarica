@@ -657,7 +657,7 @@ extern Point	_string(Image*, Point, Image*, Point, Font*, char*, Rune*, int, Rec
 extern	void	_setdrawop(Display*, Drawop);
 
 // internals
-extern uchar*	bufimage(Display*, int);
+extern byte*	bufimage(Display*, int);
 
 /*s: function BGSHORT */
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))

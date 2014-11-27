@@ -152,6 +152,7 @@ SRC_VIEWS= \
    ../windows/libpanel/utf.c\
    ../kernel/devices/screen/devdraw.c\
    ../kernel/devices/screen/screen.h\
+   ../kernel/devices/screen/screen.c\
    ../kernel/devices/screen/386/vga.h\
    ../kernel/devices/screen/386/vgascreen.c\
    ../kernel/devices/screen/386/devvga.c\

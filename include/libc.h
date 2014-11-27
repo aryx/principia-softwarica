@@ -21,9 +21,9 @@ typedef int fdt; // file descriptor type
 #define ERROR_1 1
 #define ERROR_NEG1 (-1)
 // later: unify all of that, be more consistent!
-typedef int errorcode0; // 0 is the error value
-typedef int errorcode1; // 1 is the error value
-typedef int errorcodeneg1; // -1 is the error value
+typedef int error0; // 0 is the error value
+typedef int error1; // 1 is the error value
+typedef int errorneg1; // -1 is the error value
 // end pad's stuff
 
 

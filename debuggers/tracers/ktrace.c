@@ -113,10 +113,7 @@ main(int argc, char *argv[])
     case I_MAGIC:	/* intel 386 */
         t = i386trace;
         break;
-    case V_MAGIC:	/* mips 3000 */
-    case M_MAGIC:	/* mips 4000 */
     case E_MAGIC:	/* arm 7-something */
-    case N_MAGIC:	/* mips 4000 LE */
         t = rtrace;
         break;
     default:

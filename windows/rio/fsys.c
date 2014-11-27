@@ -280,7 +280,7 @@ filsysproc(void *arg)
 /*
  * Called only from a different FD group
  */
-errorcodeneg1
+errorneg1
 filsysmount(Filsys *fs, int id)
 {
     char buf[32];

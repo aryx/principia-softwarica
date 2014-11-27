@@ -45,7 +45,7 @@ drawshutdown(void)
 /*e: function drawshutdown */
 
 /*s: function geninitdraw */
-errorcodeneg1
+errorneg1
 geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *label, char *windir, int ref)
 {
     int fd, n;
@@ -133,7 +133,7 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
 /*e: function geninitdraw */
 
 /*s: function initdraw */
-errorcodeneg1
+errorneg1
 initdraw(void(*error)(Display*, char*), char *fontname , char *label)
 {
     char *dev = "/dev";

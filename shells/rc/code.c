@@ -63,7 +63,7 @@ stuffdot(int a)
 
 /*s: function compile */
 //@Scheck: called from syn.y
-errorcode0 compile(tree *t)
+error0 compile(tree *t)
 {
     ncode = 100;
     codep = 0;
