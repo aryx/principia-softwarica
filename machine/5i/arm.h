@@ -65,8 +65,9 @@ enum
 struct Tlb
 {
     bool	on;			/* Being updated */
-    int	tlbsize;		/* Number of entries */
+    int		tlbsize;		/* Number of entries */
     ulong	tlbent[Nmaxtlb];	/* Virtual address tags */
+
     int	hit;			/* Number of successful tag matches */
     int	miss;			/* Number of failed tag matches */
 };		
@@ -88,7 +89,7 @@ struct Icache
 /*s: struct Inst */
 struct Inst
 {
-    void 	(*func)(ulong);
+    void 	(*func)(ulong); // Instruction
     char*	name;
     // enum<ixxx>
     int	type;

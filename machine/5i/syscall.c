@@ -214,6 +214,7 @@ sysexits(void)
     if(sysdbg)
         itrace("exits(0x%lux)", str);
 
+    // single step to give opportunity to inspect before exit
     count = 1;
     if(str != 0) {
         memio(buf, str, sizeof buf, MemRead);
@@ -709,19 +710,19 @@ void	(*systab[])(void) =
     [RFORK]		sysrfork,
     [PIPE]		syspipe,
     [CREATE]		syscreate,
-    [FD2PATH]	sysfd2path,
+    [FD2PATH]		sysfd2path,
     [BRK]		sysbrk,
     [REMOVE]		sysremove,
     [NOTIFY]		sysnotify,
     [NOTED]		sysnoted,
-    [SEGATTACH]	syssegattach,
-    [SEGDETACH]	syssegdetach,
+    [SEGATTACH]		syssegattach,
+    [SEGDETACH]		syssegdetach,
     [SEGFREE]		syssegfree,
-    [SEGFLUSH]	syssegflush,
+    [SEGFLUSH]		syssegflush,
     [RENDEZVOUS]	sysrendezvous,
-    [UNMOUNT]	sysunmount,
+    [UNMOUNT]		sysunmount,
     [SEEK]		sysseek,
-    [FVERSION]	sysfversion,
+    [FVERSION]		sysfversion,
     [ERRSTR]		syserrstr,
     [STAT]		sysstat,
     [FSTAT]		sysfstat,

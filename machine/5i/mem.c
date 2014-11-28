@@ -210,8 +210,6 @@ memio(char *mb, ulong mem, int size, int dir)
 
     buf = mb;
     switch(dir) {
-    default:
-        fatal(0, "memio");
     case MemRead:
         while(size--)
             *mb++ = getmem_b(mem++);
@@ -232,6 +230,8 @@ memio(char *mb, ulong mem, int size, int dir)
         for(i = 0; i < size; i++)
             putmem_b(mem++, *mb++);
         break;
+    default:
+        fatal(0, "memio");
     }
     return buf;
 }

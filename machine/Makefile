@@ -9,14 +9,14 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Machine.tex.nw
+TEXMAIN=Machine.nw
 TEX=Machine.tex
 
 # set of noweb (.nw) files
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=Machine.tex.nw Machine_extra.tex.nw
+SRC_ORIG=Machine.nw Machine_extra.nw
 
 SRC_VIEWS= \
  5i/arm.h\
