@@ -19,7 +19,7 @@ fatal(bool syserr, char *fmt, ...)
     s = "5i: %s\n";
     if(syserr)
         s = "5i: %s: %r\n";
-    fprint(2, s, buf);
+    fprint(STDERR, s, buf);
     exits(buf);
 }
 /*e: function fatal */

@@ -3,10 +3,7 @@
  * arm.h
  */
 
-/*s: typedef instruction */
-typedef ulong instruction;
-/*e: typedef instruction */
-
+// forward decls
 typedef	struct	Registers	Registers;
 typedef	struct	Segment		Segment;
 typedef	struct	Memory		Memory;
@@ -16,6 +13,10 @@ typedef	struct	Inst		Inst;
 typedef	struct	Icache		Icache;
 typedef	struct	Tlb		Tlb;
 typedef	struct	Breakpoint	Breakpoint;
+
+/*s: typedef instruction */
+typedef ulong instruction;
+/*e: typedef instruction */
 
 /*s: enum breakpoint_kind */
 enum breakpoint_kind
@@ -58,6 +59,7 @@ enum ixxx
 /*s: constant Nmaxtlb */
 #define Nmaxtlb 64
 /*e: constant Nmaxtlb */
+
 /*s: enum regxxx */
 enum
 {
@@ -137,14 +139,14 @@ struct Registers
 };
 /*e: struct Registers */
 
-/*s: enum _anon_ (machine/5i/arm.h)4 */
+/*s: enum memxxx */
 enum
 {
     MemRead,
     MemReadstring,
     MemWrite,
 };
-/*e: enum _anon_ (machine/5i/arm.h)4 */
+/*e: enum memxxx */
 
 /*s: enum compare_op */
 enum compare_op
@@ -196,8 +198,8 @@ struct Memory
 };
 /*e: struct Memory */
 
-//@Scheck: in libmach.a
-int		armclass(long);
+// used to be in libmach/, but I copy pasted it in run.c
+int		arm_class(instruction);
 
 void		Ssyscall(ulong);
 void		breakpoint(char*, char*);

@@ -244,10 +244,6 @@ dollar(char *cp)
     cp = nextc(cp);
 
     switch(*cp) {
-    default:
-        Bprint(bioout, "?\n");
-        break;
-
     case 'c':
         stktrace(*cp);
         break;
@@ -338,6 +334,10 @@ dollar(char *cp)
             iprofile();
             break;
         }
+    default:
+        Bprint(bioout, "?\n");
+        break;
+
     }
 }
 /*e: function dollar */

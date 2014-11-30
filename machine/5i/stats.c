@@ -3,6 +3,7 @@
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
+
 #include "arm.h"
 
 /*s: function Percent */
@@ -11,7 +12,6 @@
 
 typedef struct Prof Prof;
 
-extern	Inst	itab[];
 /*s: global tables */
 Inst *tables[] = { itab, 0 };
 /*e: global tables */

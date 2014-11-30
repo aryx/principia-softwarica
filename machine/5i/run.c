@@ -8,7 +8,7 @@
 
 #define XCAST(a) (uvlong)(ulong)a
 
-void		undef(ulong);
+void	undef(ulong);
 
 void	Idp0(ulong);
 void	Idp1(ulong);
@@ -250,7 +250,7 @@ run(void)
         reg.ar = reg.r[REGPC];
         reg.ir = ifetch(reg.ar);
 
-        reg.class = armclass(reg.ir);
+        reg.class = arm_class(reg.ir);
         reg.ip = &itab[reg.class];
 
         /*s: [[run()]] set reg.cond */
@@ -305,6 +305,169 @@ undef(instruction inst)
     longjmp(errjmp, 0);
 }
 /*e: function undef */
+
+/*s: function arm_class */
+int
+arm_class(instruction w)
+{
+ int op, done, cp;
+
+ op = (w >> 25) & 0x7;
+ switch(op) {
+ case 0:	/* data processing r,r,r */
+  if((w & 0x0ff00080) == 0x01200000) {
+   op = (w >> 4) & 0x7;
+   if(op == 7)
+    op = 124;	/* bkpt */
+   else if (op > 0 && op < 4)
+    op += 124;	/* bx, blx */
+   else
+    op = 92;	/* unk */
+   break;
+  }
+  op = ((w >> 4) & 0xf);
+  if(op == 0x9) {
+   op = 48+16;		/* mul, swp or *rex */
+   if((w & 0x0ff00fff) == 0x01900f9f) {
+    op = 93;	/* ldrex */
+    break;
+   }
+   if((w & 0x0ff00ff0) == 0x01800f90) {
+    op = 94;	/* strex */
+    break;
+   }
+   if(w & (1<<24)) {
+    op += 2;
+    if(w & (1<<22))
+     op++;	/* swpb */
+    break;
+   }
+   if(w & (1<<23)) {	/* mullu */
+    op = (48+24+4+4+2+2+4);
+    if(w & (1<<22))	/* mull */
+     op += 2;
+   }
+   if(w & (1<<21))
+    op++;		/* mla */
+   break;
+  }
+  if((op & 0x9) == 0x9)		/* ld/st byte/half s/u */
+  {
+   op = (48+16+4) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+   break;
+  }
+  op = (w >> 21) & 0xf;
+  if(w & (1<<4))
+   op += 32;
+  else
+  if((w & (31<<7)) || (w & (1<<5)))
+   op += 16;
+  break;
+ case 1:	/* data processing i,r,r */
+  op = (48) + ((w >> 21) & 0xf);
+  break;
+ case 2:	/* load/store byte/word i(r) */
+  if ((w & 0xffffff8f) == 0xf57ff00f) {	/* barriers, clrex */
+   done = 1;
+   switch ((w >> 4) & 7) {
+   case 1:
+    op = 95;	/* clrex */
+    break;
+   case 4:
+    op = 96;	/* dsb */
+    break;
+   case 5:
+    op = 97;	/* dmb */
+    break;
+   case 6:
+    op = 98;	/* isb */
+    break;
+   default:
+    done = 0;
+    break;
+   }
+   if (done)
+    break;
+  }
+  op = (48+24) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+  break;
+ case 3:	/* load/store byte/word (r)(r) */
+  op = (48+24+4) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+  break;
+ case 4:	/* block data transfer (r)(r) */
+  if ((w & 0xfe50ffff) == 0xf8100a00) {	/* v7 RFE */
+   op = 99;
+   break;
+  }
+  op = (48+24+4+4) + ((w >> 20) & 0x1);
+  break;
+ case 5:	/* branch / branch link */
+  op = (48+24+4+4+2) + ((w >> 24) & 0x1);
+  break;
+ case 7:	/* coprocessor crap */
+  cp = (w >> 8) & 0xF;
+  if(cp == 10 || cp == 11){	/* vfp */
+   if((w >> 4) & 0x1){
+    /* vfp register transfer */
+    switch((w >> 21) & 0x7){
+    case 0:
+     op = 118 + ((w >> 20) & 0x1);
+     break;
+    case 7:
+     op = 118+2 + ((w >> 20) & 0x1);
+     break;
+    default:
+     op = (48+24+4+4+2+2+4+4);
+     break;
+    }
+    break;
+   }
+   /* vfp data processing */
+   if(((w >> 23) & 0x1) == 0){
+    op = 100 + ((w >> 19) & 0x6) + ((w >> 6) & 0x1);
+    break;
+   }
+   switch(((w >> 19) & 0x6) + ((w >> 6) & 0x1)){
+   case 0:
+    op = 108;
+    break;
+   case 7:
+    if(((w >> 19) & 0x1) == 0){
+     if(((w >> 17) & 0x1) == 0)
+      op = 109 + ((w >> 16) & 0x4) +
+       ((w >> 15) & 0x2) +
+       ((w >> 7) & 0x1);
+     else if(((w >> 16) & 0x7) == 0x7)
+      op = 117;
+    }else
+     switch((w >> 16) & 0x7){
+     case 0:
+     case 4:
+     case 5:
+      op = 117;
+      break;
+     }
+    break;
+   }
+   if(op == 7)
+    op = (48+24+4+4+2+2+4+4);
+   break;
+  }
+  op = (48+24+4+4+2+2) + ((w >> 3) & 0x2) + ((w >> 20) & 0x1);
+  break;
+ case 6:	/* vfp load / store */
+  if(((w >> 21) &0x9) == 0x8){
+   op = 122 + ((w >> 20) & 0x1);
+   break;
+  }
+  /* fall through */
+ default:	  
+  op = (48+24+4+4+2+2+4+4);
+  break;
+ }
+ return op;
+}
+/*e: function arm_class */
 
 /*s: function shift */
 long
