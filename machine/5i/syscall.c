@@ -32,17 +32,17 @@ char*	sysctab[] =
     [EXEC]		"Exec",
     [EXITS]		"Exits",
     [FAUTH]		"Fauth",
-    [SEGBRK]		"Segbrk",
+    [SEGBRK]	"Segbrk",
     [MOUNT]		"Mount",
     [OPEN]		"Open",
     [SLEEP]		"Sleep",
     [RFORK]		"Rfork",
     [PIPE]		"Pipe",
-    [CREATE]		"Create",
-    [FD2PATH]		"Fd2path",
+    [CREATE]	"Create",
+    [FD2PATH]	"Fd2path",
     [BRK]		"Brk",
-    [REMOVE]		"Remove",
-    [NOTIFY]		"Notify",
+    [REMOVE]	"Remove",
+    [NOTIFY]	"Notify",
     [NOTED]		"Noted",
     [SEGATTACH]		"Segattach",
     [SEGDETACH]		"Segdetach",
@@ -51,14 +51,14 @@ char*	sysctab[] =
     [RENDEZVOUS]	"Rendezvous",
     [UNMOUNT]		"Unmount",
     [SEEK]		"Seek",
-    [FVERSION]		"Fversion",
-    [ERRSTR]		"Errstr",
+    [FVERSION]	"Fversion",
+    [ERRSTR]	"Errstr",
     [STAT]		"Stat",
     [FSTAT]		"Fstat",
     [WSTAT]		"Wstat",
-    [FWSTAT]		"Fwstat",
+    [FWSTAT]	"Fwstat",
     [PREAD]		"Pread",
-    [PWRITE]		"Pwrite",
+    [PWRITE]	"Pwrite",
     [AWAIT]		"Await",
 };
 /*e: global sysctab */
@@ -67,8 +67,11 @@ char*	sysctab[] =
 void
 sysnop(void)
 {
-    Bprint(bioout, "no system call %s\n", sysctab[reg.r[1]]);
-    exits(0);
+    Bprint(bioout, "nop system call %s\n", sysctab[reg.r[1]]);
+    /*s: [[sysnop]] strace */
+    if(sysdbg)
+        itrace("nop()");
+    /*e: [[sysnop]] strace */
 }
 /*e: function sysnop */
 
@@ -670,7 +673,7 @@ void
 sysexec(void)
 {
     Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-  exits(0);
+    exits(0);
 }
 /*e: function sysexec */
 
@@ -679,7 +682,7 @@ void
 sysfauth(void)
 {
     Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-  exits(0);
+    exits(0);
 }
 /*e: function sysfauth */
 /*s: function sysfversion */
@@ -687,7 +690,7 @@ void
 sysfversion(void)
 {
     Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
-  exits(0);
+    exits(0);
 }
 /*e: function sysfversion */
 
@@ -703,17 +706,17 @@ void	(*systab[])(void) =
     [EXEC]		sysexec,
     [EXITS]		sysexits,
     [FAUTH]		sysfauth,
-    [SEGBRK]		syssegbrk,
+    [SEGBRK]	syssegbrk,
     [MOUNT]		sysmount,
     [OPEN]		sysopen,
     [SLEEP]		syssleep,
     [RFORK]		sysrfork,
     [PIPE]		syspipe,
-    [CREATE]		syscreate,
-    [FD2PATH]		sysfd2path,
+    [CREATE]	syscreate,
+    [FD2PATH]	sysfd2path,
     [BRK]		sysbrk,
-    [REMOVE]		sysremove,
-    [NOTIFY]		sysnotify,
+    [REMOVE]	sysremove,
+    [NOTIFY]	sysnotify,
     [NOTED]		sysnoted,
     [SEGATTACH]		syssegattach,
     [SEGDETACH]		syssegdetach,
@@ -722,21 +725,21 @@ void	(*systab[])(void) =
     [RENDEZVOUS]	sysrendezvous,
     [UNMOUNT]		sysunmount,
     [SEEK]		sysseek,
-    [FVERSION]		sysfversion,
-    [ERRSTR]		syserrstr,
+    [FVERSION]	sysfversion,
+    [ERRSTR]	syserrstr,
     [STAT]		sysstat,
     [FSTAT]		sysfstat,
     [WSTAT]		syswstat,
-    [FWSTAT]		sysfwstat,
+    [FWSTAT]	sysfwstat,
     [PREAD]		syspread,
-    [PWRITE]		syspwrite,
+    [PWRITE]	syspwrite,
     [AWAIT]		sysawait,
 };
 /*e: global systab */
 
 /*s: function Ssyscall */
 void
-Ssyscall(ulong)
+Ssyscall(instruction)
 {
     int call;
 

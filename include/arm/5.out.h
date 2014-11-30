@@ -116,6 +116,7 @@ enum	as
 	AMOVHU,
 	AMOVW,
 	AMOVM,
+
 	ASWPBU,
 	ASWPW,
 

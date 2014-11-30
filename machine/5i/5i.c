@@ -12,7 +12,7 @@
 char*	file = "5.out";
 /*e: global file */
 /*s: global bxxx */
-Biobuf	bp, bi;
+Biobuf	bi, bp;
 /*e: global bxxx */
 /*s: global fhdr */
 Fhdr	fhdr;
@@ -31,8 +31,8 @@ void main(int argc, char **argv)
 
     bioout = &bp;
     bin = &bi;
-    Binit(bioout, 1, OWRITE);
-    Binit(bin, 0, OREAD);
+    Binit(bioout, STDOUT, OWRITE);
+    Binit(bin, STDIN, OREAD);
 
     tlb.on = true;
     tlb.tlbsize = 24;
@@ -60,7 +60,7 @@ void main(int argc, char **argv)
 void
 initmap()
 {
-    ulong t, d, b, bssend;
+    uintptr t, d, b, bssend;
     Segment *s;
 
     t = (fhdr.txtaddr+fhdr.txtsz+(BY2PG-1)) & ~(BY2PG-1);
@@ -77,7 +77,9 @@ initmap()
     s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
     textbase = s->base;
 
+    /*s: [[initmap()]] iprof allocation */
     iprof = emalloc(((s->end - s->base)/PROFGRAN)*sizeof(long));
+    /*e: [[initmap()]] iprof allocation */
 
     s = &memory.seg[Data];
     s->type = Data;
@@ -106,7 +108,7 @@ initmap()
 
 /*s: function inithdr */
 void
-inithdr(int fd)
+inithdr(fdt fd)
 {
     Symbol s;
 

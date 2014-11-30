@@ -15,7 +15,7 @@ Registers reg;
 Memory memory;
 /*e: global memory */
 /*s: global text */
-int text;
+fdt text;
 /*e: global text */
 /*s: global trace */
 bool trace;
@@ -41,13 +41,14 @@ int count;
 jmp_buf errjmp;
 /*e: global errjmp */
 /*s: global bplist */
+// list<Breakpoint> (next = Breakpoint.next)
 Breakpoint *bplist;
 /*e: global bplist */
 /*s: global atbpt */
-int atbpt;
+bool atbpt;
 /*e: global atbpt */
 /*s: global membpt */
-int membpt;
+bool membpt;
 /*e: global membpt */
 /*s: global cmdcount */
 int cmdcount;
@@ -56,7 +57,7 @@ int cmdcount;
 int nopcount;
 /*e: global nopcount */
 /*s: global dot */
-ulong dot;
+uintptr dot;
 /*e: global dot */
 /*s: global bioout */
 Biobuf *bioout;
@@ -75,6 +76,6 @@ Map *symmap;
 int	datasize;
 /*e: global datasize */
 /*s: global textbase */
-ulong	textbase;
+uintptr	textbase;
 /*e: global textbase */
 /*e: machine/5i/globals.c */

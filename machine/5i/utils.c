@@ -8,7 +8,7 @@
 
 /*s: function fatal */
 void
-fatal(int syserr, char *fmt, ...)
+fatal(bool syserr, char *fmt, ...)
 {
     char buf[ERRMAX], *s;
     va_list arg;

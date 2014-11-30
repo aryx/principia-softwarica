@@ -3,6 +3,10 @@
  * arm.h
  */
 
+/*s: typedef instruction */
+typedef ulong instruction;
+/*e: typedef instruction */
+
 typedef	struct	Registers	Registers;
 typedef	struct	Segment		Segment;
 typedef	struct	Memory		Memory;
@@ -13,8 +17,8 @@ typedef	struct	Icache		Icache;
 typedef	struct	Tlb		Tlb;
 typedef	struct	Breakpoint	Breakpoint;
 
-/*s: enum _anon_ */
-enum
+/*s: enum breakpoint_kind */
+enum breakpoint_kind
 {
     Instruction		= 1,
     Read		= 2,
@@ -22,7 +26,7 @@ enum
     Access		= Read|Write,
     Equal		= 4|8,
 };
-/*e: enum _anon_ */
+/*e: enum breakpoint_kind */
 
 /*s: struct Breakpoint */
 struct Breakpoint
@@ -30,10 +34,14 @@ struct Breakpoint
     //enum<breakpoint_kind>
     int		type;		/* Instruction/Read/Access/Write/Equal */
 
-    ulong	addr;		/* Place at address */
+    uintptr	addr;		/* Place at address */
     int		count;		/* To execute count times or value */
     int		done;		/* How many times passed through */
+
+    // Extra
+    /*s: [[Breakpoint]] extra fields */
     Breakpoint*	next;		/* Link to next one */
+    /*e: [[Breakpoint]] extra fields */
 };
 /*e: struct Breakpoint */
 
@@ -66,7 +74,7 @@ struct Tlb
 {
     bool	on;			/* Being updated */
     int		tlbsize;		/* Number of entries */
-    ulong	tlbent[Nmaxtlb];	/* Virtual address tags */
+    uintptr	tlbent[Nmaxtlb];	/* Virtual address tags */
 
     int	hit;			/* Number of successful tag matches */
     int	miss;			/* Number of failed tag matches */
@@ -89,15 +97,17 @@ struct Icache
 /*s: struct Inst */
 struct Inst
 {
-    void 	(*func)(ulong); // Instruction
+    void 	(*func)(instruction);
     char*	name;
     // enum<ixxx>
     int	type;
 
+    /*s: [[Inst]] profiling fields */
     // profiling info
     int	count;
     int	taken;
     int	useddelay;
+    /*e: [[Inst]] profiling fields */
 };
 /*e: struct Inst */
 
@@ -105,19 +115,25 @@ struct Inst
 struct Registers
 {
     long	r[16];
+    /*s: [[Registers]] other fields */
+    int	cbit; // carry bit?
+    int	cout;
+    /*x: [[Registers]] other fields */
+    uintptr		ar;    // reg.r[REGPC]
+    instruction	ir;    // ifetch(reg.ar)
 
-    ulong	ar;    // reg.r[REGPC]
-    ulong	ir;    // ifetch(reg.ar)
-    int		class; // armclass(reg.ir)
-    Inst*	ip;    // &itab[reg.class]
-
+    int			class; // arm_class(reg.ir)
+    Inst*		ip;    // &itab[reg.class]
+    /*x: [[Registers]] other fields */
+    // 4 bits, 16 possibilities
+    int	cond;
+    /*x: [[Registers]] other fields */
+    // enum<compare_op>
+    int	compare_op;
+    /*x: [[Registers]] other fields */
     long	cc1;
     long	cc2;
-
-    int	cond;
-    int	compare_op;
-    int	cbit;
-    int	cout;
+    /*e: [[Registers]] other fields */
 };
 /*e: struct Registers */
 
@@ -130,14 +146,14 @@ enum
 };
 /*e: enum _anon_ (machine/5i/arm.h)4 */
 
-/*s: enum _anon_ (machine/5i/arm.h)5 */
-enum
+/*s: enum compare_op */
+enum compare_op
 {
     CCcmp, 
     CCtst,
     CCteq,
 };
-/*e: enum _anon_ (machine/5i/arm.h)5 */
+/*e: enum compare_op */
 
 /*s: enum segment_kind */
 enum segment_kind
@@ -157,17 +173,18 @@ struct Segment
     // enum<segment_kind>
     short	type;
 
-    ulong	base;
-    ulong	end;
+    uintptr	base;
+    uintptr	end;
 
     ulong	fileoff;
     ulong	fileend;
 
-    // ??
+    byte**	table; // the data
+
+    /*s: [[Segment]] profiling fields */
     int	rss;
     int	refs;
-
-    byte**	table;
+    /*e: [[Segment]] profiling fields */
 };
 /*e: struct Segment */
 
@@ -253,19 +270,18 @@ enum
 {
     BY2PG		= 4096,
     BY2WD		= 4,
+
     UTZERO		= 0x1000,
     STACKTOP	= 0x80000000,
     STACKSIZE	= 0x10000,
 
     PROFGRAN	= 4,
+    /*s: constant Sbit */
     Sbit		= 1<<20,
+    /*e: constant Sbit */
+    /*s: constant SIGNBIT */
     SIGNBIT		= 0x80000000,
-
-    FP_U		= 3,
-    FP_L		= 1,
-    FP_G		= 2,
-    FP_E		= 0,
-    FP_CBIT		= 1<<23,
+    /*e: constant SIGNBIT */
 };
 /*e: enum _anon_ (machine/5i/arm.h)7 */
 /*e: machine/5i/arm.h */

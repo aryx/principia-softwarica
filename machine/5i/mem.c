@@ -9,8 +9,8 @@
 void*		vaddr(ulong);
 
 /*s: function ifetch */
-ulong
-ifetch(ulong addr)
+instruction
+ifetch(uintptr addr)
 {
     byte *va;
 
@@ -32,7 +32,7 @@ ifetch(ulong addr)
 
 /*s: function getmem_4 */
 ulong
-getmem_4(ulong addr)
+getmem_4(uintptr addr)
 {
     ulong val;
     int i;
@@ -46,7 +46,7 @@ getmem_4(ulong addr)
 
 /*s: function getmem_2 */
 ulong
-getmem_2(ulong addr)
+getmem_2(uintptr addr)
 {
     ulong val;
     int i;
@@ -60,7 +60,7 @@ getmem_2(ulong addr)
 
 /*s: function getmem_w */
 ulong
-getmem_w(ulong addr)
+getmem_w(uintptr addr)
 {
     byte *va;
     ulong w;
@@ -73,8 +73,10 @@ getmem_w(ulong addr)
         }
         return w;
     }
+    /*s: [[getmem_x()]] if membpt */
     if(membpt)
         brkchk(addr, Read);
+    /*e: [[getmem_x()]] if membpt */
 
     va = vaddr(addr);
     va += addr&(BY2PG-1);
@@ -85,7 +87,7 @@ getmem_w(ulong addr)
 
 /*s: function getmem_h */
 ushort
-getmem_h(ulong addr)
+getmem_h(uintptr addr)
 {
     byte *va;
     ulong w;
@@ -98,8 +100,10 @@ getmem_h(ulong addr)
         }
         return w;
     }
+    /*s: [[getmem_x()]] if membpt */
     if(membpt)
         brkchk(addr, Read);
+    /*e: [[getmem_x()]] if membpt */
 
     va = vaddr(addr);
     va += addr&(BY2PG-1);
@@ -110,12 +114,14 @@ getmem_h(ulong addr)
 
 /*s: function getmem_b */
 byte
-getmem_b(ulong addr)
+getmem_b(uintptr addr)
 {
     byte *va;
 
+    /*s: [[getmem_x()]] if membpt */
     if(membpt)
         brkchk(addr, Read);
+    /*e: [[getmem_x()]] if membpt */
 
     va = vaddr(addr);
     va += addr&(BY2PG-1);
@@ -125,7 +131,7 @@ getmem_b(ulong addr)
 
 /*s: function getmem_v */
 uvlong
-getmem_v(ulong addr)
+getmem_v(uintptr addr)
 {
     return ((uvlong)getmem_w(addr+4) << 32) | getmem_w(addr);
 }
@@ -133,7 +139,7 @@ getmem_v(ulong addr)
 
 /*s: function putmem_h */
 void
-putmem_h(ulong addr, ushort data)
+putmem_h(uintptr addr, ushort data)
 {
     byte *va;
 
@@ -147,14 +153,17 @@ putmem_h(ulong addr, ushort data)
 
     va[1] = data>>8;
     va[0] = data;
+
+    /*s: [[putmem_x()]] if membpt */
     if(membpt)
         brkchk(addr, Write);
+    /*e: [[putmem_x()]] if membpt */
 }
 /*e: function putmem_h */
 
 /*s: function putmem_w */
 void
-putmem_w(ulong addr, ulong data)
+putmem_w(uintptr addr, ulong data)
 {
     byte *va;
 
@@ -170,28 +179,34 @@ putmem_w(ulong addr, ulong data)
     va[2] = data>>16;
     va[1] = data>>8;
     va[0] = data;
+
+    /*s: [[putmem_x()]] if membpt */
     if(membpt)
         brkchk(addr, Write);
+    /*e: [[putmem_x()]] if membpt */
 }
 /*e: function putmem_w */
 
 /*s: function putmem_b */
 void
-putmem_b(ulong addr, byte data)
+putmem_b(uintptr addr, byte data)
 {
     byte *va;
 
     va = vaddr(addr);
     va += addr&(BY2PG-1);
     va[0] = data;
+
+    /*s: [[putmem_x()]] if membpt */
     if(membpt)
         brkchk(addr, Write);
+    /*e: [[putmem_x()]] if membpt */
 }
 /*e: function putmem_b */
 
 /*s: function putmem_v */
 void
-putmem_v(ulong addr, uvlong data)
+putmem_v(uintptr addr, uvlong data)
 {
     putmem_w(addr, data);	/* two stages, to catch brkchk */
     putmem_w(addr+4, data>>32);
@@ -239,7 +254,7 @@ memio(char *mb, ulong mem, int size, int dir)
 
 /*s: function dotlb */
 void
-dotlb(ulong vaddr)
+dotlb(uintptr vaddr)
 {
     ulong *l, *e;
 
@@ -258,8 +273,8 @@ dotlb(ulong vaddr)
 /*e: function dotlb */
 
 /*s: function vaddr */
-void *
-vaddr(ulong addr)
+void*
+vaddr(uintptr addr)
 {
     Segment *s, *es;
     int off, foff, l, n;

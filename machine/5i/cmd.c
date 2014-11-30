@@ -10,13 +10,6 @@
 
 ulong	expr(char*);
 
-/*s: global buf */
-char	buf[128];
-/*e: global buf */
-/*s: global lastcmd */
-char lastcmd[128];
-/*e: global lastcmd */
-
 /*s: global fmt */
 char	fmt = 'X';
 /*e: global fmt */
@@ -178,38 +171,42 @@ buildargv(char *str, char **args, int max)
 void
 colon(char *addr, char *cp)
 {
+    /*s: [[colon()]] locals */
+    char tbuf[512];
+    /*x: [[colon()]] locals */
     int argc;
     char *argv[100];
-    char tbuf[512];
+    /*e: [[colon()]] locals */
 
     cp = nextc(cp);
+
     switch(*cp) {
+    /*s: [[colon()]] command which return cases */
     case 'b':
         breakpoint(addr, cp+1);
         return;
-
+    /*x: [[colon()]] command which return cases */
     case 'd':
         delbpt(addr);
         return;
-
-    default:
-        Bprint(bioout, "?\n");
-        return;
-
+    /*e: [[colon()]] command which return cases */
     /* These fall through to print the stopped address */
+    /*s: [[colon()]] command cases */
+    case 'c':
+        count = 0;
+        atbpt = false;
+        run();
+        break;
+    /*x: [[colon()]] command cases */
     case 'r':
         reset();
         argc = buildargv(cp+1, argv, 100);
         initstk(argc, argv);
         count = 0;
-        atbpt = 0;
+        atbpt = false;
         run();
         break;
-    case 'c':
-        count = 0;
-        atbpt = 0;
-        run();
-        break;
+    /*x: [[colon()]] command cases */
     case 's':
         cp = nextc(cp+1);
         count = 0;
@@ -217,19 +214,24 @@ colon(char *addr, char *cp)
             count = strtoul(cp, 0, 0);
         if(count == 0)
             count = 1;
-        atbpt = 0;
+        atbpt = false;
         run();
         break;
+    /*e: [[colon()]] command cases */
+    default:
+        Bprint(bioout, "?\n");
+        return;
     }
 
     dot = reg.r[REGPC];
     Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
 
+    /*s: [[colon()]] print current instruction */
     symoff(tbuf, sizeof(tbuf), dot, CTEXT);
     Bprint(bioout, tbuf);
     if(fmt == 'z')
         printsource(dot);
-
+    /*e: [[colon()]] print current instruction */
     Bprint(bioout, "\n");
 }
 /*e: function colon */
@@ -286,9 +288,6 @@ dollar(char *cp)
     case 't':
         cp++;
         switch(*cp) {
-        default:
-            Bprint(bioout, ":t[0sic]\n");
-            break;
         case '\0':
             trace = true;
             break;
@@ -303,8 +302,13 @@ dollar(char *cp)
         case 'i':
             trace = true;
             break;
+        /*s: [[dollar()]] t cases */
         case 'c':
             calltree = true;
+            break;
+        /*e: [[dollar()]] t cases */
+        default:
+            Bprint(bioout, "$t[0sic]\n"); //$
             break;
         }
         break;
@@ -313,7 +317,7 @@ dollar(char *cp)
         cp++;
         switch(*cp) {
         default:
-            Bprint(bioout, "$i[itsa]\n");
+            Bprint(bioout, "$i[itsa]\n"); //$
             break;
         case 'i':
             isum();
@@ -623,18 +627,31 @@ setreg(char *addr, char *cp)
 void
 cmd(void)
 {
-    char *p, *a, *cp, *gotint;
-    char addr[128];
+    /*s: [[cmd()]] locals */
+    char *p;
+    /*x: [[cmd()]] locals */
     static char *cmdlet = ":$?/=>"; //$
+    /*x: [[cmd()]] locals */
+    char buf[128];
+    char addr[128];
+    /*x: [[cmd()]] locals */
+    char lastcmd[128];
+    /*x: [[cmd()]] locals */
+    char *a, *cp, *gotint;
     int n, i;
-
-    notify(catcher);
+    /*e: [[cmd()]] locals */
 
     dot = reg.r[REGPC];
+
+    /*s: [[cmd()]] initialisation */
+    notify(catcher);
+    /*x: [[cmd()]] initialisation */
     setjmp(errjmp);
+    /*e: [[cmd()]] initialisation */
 
     for(;;) {
         Bflush(bioout);
+        /*s: [[cmd()]] read and parse command and address from user input */
         p = buf;
         n = 0;
 
@@ -654,17 +671,17 @@ cmd(void)
             buf[n-1] = '\0';
             strcpy(lastcmd, buf);
         }
+
         p = buf;
         a = addr;
-
         for(;;) {
             p = nextc(p);
             if(*p == '\0' || strchr(cmdlet, *p))
                 break;
             *a++ = *p++;
         }
-
         *a = '\0';
+
         cmdcount = 1;
         cp = strchr(addr, ',');
         if(cp != nil) {
@@ -674,27 +691,33 @@ cmd(void)
                 cmdcount = strtoul(cp+1, &gotint, 0);
             *cp = '\0';
         }
+        /*e: [[cmd()]] read and parse command and address from user input */
 
         switch(*p) {
+        /*s: [[cmd()]] command cases */
         case ':':
             colon(addr, p+1);
             break;
-
+        /*x: [[cmd()]] command cases */
         case '$': //$
             dollar(p+1);
             break;
+        /*x: [[cmd()]] command cases */
         case '/':
         case '?':
             dot = expr(addr);
             for(i = 0; i < cmdcount; i++)
                 quesie(p+1);
             break;
+        /*x: [[cmd()]] command cases */
         case '=':
             eval(addr, p+1);
             break;
+        /*x: [[cmd()]] command cases */
         case '>':
             setreg(addr, p+1);
             break;
+        /*e: [[cmd()]] command cases */
         default:
             Bprint(bioout, "?\n");
             break;

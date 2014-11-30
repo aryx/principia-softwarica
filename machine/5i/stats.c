@@ -57,8 +57,6 @@ isum(void)
 
 
                 switch(i->type) {
-                default:
-                    fatal(0, "isum bad stype %d\n", i->type);
                 case Imem:
                     mems += i->count;
                     break;
@@ -73,6 +71,8 @@ isum(void)
                 case Isyscall:
                     syscall += i->count;
                     break;
+                default:
+                    fatal(0, "isum bad stype %d\n", i->type);
                 }
         
             }

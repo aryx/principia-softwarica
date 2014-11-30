@@ -61,6 +61,7 @@ breakpoint(char *addr, char *cp)
 
     cp = nextc(cp);
     type = Instruction;
+
     switch(*cp) {
     case 'r':
         membpt++;
@@ -124,13 +125,13 @@ brkchk(ulong addr, int type)
         if(b->addr == addr && (b->type&type)) {
             if(b->type == Equal && getmem_4(addr) == b->count) {
                 count = 1;
-                atbpt = 1;
+                atbpt = true;
                 return;
             }
             if(--b->done == 0) {
                 b->done = b->count;
                 count = 1;
-                atbpt = 1;
+                atbpt = true;
                 return;
             }
         }

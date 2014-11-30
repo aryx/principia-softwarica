@@ -8,7 +8,7 @@
 
 /*s: function updateicache */
 void
-updateicache(ulong addr)
+updateicache(uintptr addr)
 {
     USED(addr);
 }

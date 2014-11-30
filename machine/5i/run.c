@@ -121,17 +121,17 @@ Inst itab[] =
     { Idp3,		"BIC",	Iarith },	/* 62 */
     { Idp3,		"MVN",	Iarith },	/* 63 */
 
-
     { Imul,		"MUL",	Iarith },	/* 64 */
-    { Imula,		"MULA",	Iarith },	/* 65 */
-
+    { Imula,	"MULA",	Iarith },	/* 65 */
 
     { Iswap,		"SWPW",	Imem },		/* 66 */
     { Iswap,		"SWPBU",Imem },		/* 67 */
+
     { Imem2,		"MOV",	Imem },	/* 68 load/store h/sb */
     { Imem2,		"MOV",	Imem },	/* 69 */
     { Imem2,		"MOV",	Imem },	/* 70 */
     { Imem2,		"MOV",	Imem },	/* 71 */
+
     { Imem1,		"MOVW",	Imem },	/* 72 load/store w/ub i,r */
     { Imem1,		"MOVB",	Imem },	/* 73 */
     { Imem1,		"MOVW",	Imem },	/* 74 */
@@ -140,6 +140,7 @@ Inst itab[] =
     { Imem1,		"MOVB",	Imem },	/* 77 */
     { Imem1,		"MOVW",	Imem },	/* 78 */
     { Imem1,		"MOVB",	Imem },	/* 79 */
+
     { Ilsm,		"LDM",	Imem },	/* 80 block move r,r */
     { Ilsm,		"STM",	Imem },	/* 81 */
 
@@ -181,6 +182,7 @@ runcmp(void)
     case 0xb:	/* lt */	return (reg.cc1 < reg.cc2);
     case 0xc:	/* gt */	return (reg.cc1 > reg.cc2);
     case 0xd:	/* le */	return (reg.cc1 <= reg.cc2);
+
     case 0xe:	/* al */	return true;
     case 0xf:	/* nv */	return false;
     default:
@@ -197,6 +199,7 @@ bool
 runteq(void)
 {
     long res = reg.cc1 ^ reg.cc2;
+
     switch(reg.cond) {
     case 0x0:	/* eq */	return res == 0;
     case 0x1:	/* ne */	return res != 0;
@@ -218,6 +221,7 @@ bool
 runtst(void)
 {
     long res = reg.cc1 & reg.cc2;
+
     switch(reg.cond) {
     case 0x0:	/* eq */	return res == 0;
     case 0x1:	/* ne */	return res != 0;
@@ -241,17 +245,18 @@ run(void)
     bool execute;
 
     do {
-        if(trace)
-            Bflush(bioout);
+        if(trace) Bflush(bioout);
 
         reg.ar = reg.r[REGPC];
         reg.ir = ifetch(reg.ar);
 
         reg.class = armclass(reg.ir);
-
         reg.ip = &itab[reg.class];
-        reg.cond = (reg.ir>>28) & 0xf;
 
+        /*s: [[run()]] set reg.cond */
+        reg.cond = (reg.ir>>28) & 0xf;
+        /*e: [[run()]] set reg.cond */
+        /*s: [[run()]] switch reg.compare_op to set execute */
         switch(reg.compare_op) {
         case CCcmp:
             execute = runcmp(); // use reg.cond
@@ -267,30 +272,33 @@ run(void)
                 reg.compare_op);
             return;
         }
+        /*e: [[run()]] switch reg.compare_op to set execute */
 
         if(execute) {
-
+            /*s: [[run()]] profile current instruction class */
+            // profiling
             reg.ip->count++;
+            /*e: [[run()]] profile current instruction class */
             // !!the dispatch!!
             (*reg.ip->func)(reg.ir);
 
-        } else {
-            if(trace)
-                itrace("%s%s	IGNORED",
-                    reg.ip->name, cond[reg.cond]);
         }
+        else
+          if(trace) itrace("%s%s IGNORED",reg.ip->name, cond[reg.cond]);
 
-        reg.r[REGPC] += 4; // simple architecture with fixed-size instruction!
+        reg.r[REGPC] += 4; // simple archi with fixed-length instruction :)
 
+        /*s: [[run()]] check for breakpoints */
         if(bplist)
             brkchk(reg.r[REGPC], Instruction);
+        /*e: [[run()]] check for breakpoints */
     } while(--count);
 }
 /*e: function run */
 
 /*s: function undef */
 void
-undef(ulong inst)
+undef(instruction inst)
 {
     Bprint(bioout, "undefined instruction trap pc #%lux inst %.8lux class %d\n",
         reg.r[REGPC], inst, reg.class);
@@ -358,22 +366,25 @@ shift(long v, int st, int sc, int isreg)
 
 /*s: function dpex */
 void
-dpex(long inst, long o1, long o2, int rd)
+dpex(instruction inst, long o1, long o2, int rd)
 {
-    int cbit;
+    bool cbit;
 
-    cbit = 0;
+    cbit = false;
+
     switch((inst>>21) & 0xf) {
     case  0:	/* and */
         reg.r[rd] = o1 & o2;
-        cbit = 1;
+        cbit = true;
         break;
     case  1:	/* eor */
         reg.r[rd] = o1 ^ o2;
-        cbit = 1;
+        cbit = true;
         break;
+
     case  2:	/* sub */
         reg.r[rd] = o1 - o2;
+        // Fallthrough
     case 10:	/* cmp */
         if(inst & Sbit) {
             reg.cc1 = o1;
@@ -381,6 +392,7 @@ dpex(long inst, long o1, long o2, int rd)
             reg.compare_op = CCcmp;
         }
         return;
+
     case  3:	/* rsb */
         reg.r[rd] = o2 - o1;
         if(inst & Sbit) {
@@ -390,6 +402,7 @@ dpex(long inst, long o1, long o2, int rd)
         }
         return;
     case  4:	/* add */
+        /*s: [[dpex()]] if calltree, when add operation */
         if(calltree && rd == REGPC && o2 == 0) {
             Symbol s;
 
@@ -397,21 +410,24 @@ dpex(long inst, long o1, long o2, int rd)
             Bprint(bioout, "%8lux return to %lux %s r0=%lux\n",
                         reg.r[REGPC], o1 + o2, s.name, reg.r[REGRET]);
         }
+        /*e: [[dpex()]] if calltree, when add operation */
         reg.r[rd] = o1 + o2;
         if(inst & Sbit) {
             if((XCAST(o1) + XCAST(o2)) & (1LL << 32))
-                reg.cbit = 1;
+                reg.cbit = true;
             else
-                reg.cbit = 0;
+                reg.cbit = false;
             reg.cc1 = o2;
             reg.cc2 = -o1;
             reg.compare_op = CCcmp;
         }
         return;
+
     case  5:	/* adc */
     case  6:	/* sbc */
     case  7:	/* rsc */
         undef(inst);
+
     case  8:	/* tst */
         if(inst & Sbit) {
             reg.cc1 = o1;
@@ -420,36 +436,38 @@ dpex(long inst, long o1, long o2, int rd)
         }
         return;
     case  9:	/* teq */
-        if(inst & Sbit) {
+        if(inst & Sbit) { // not always true?
             reg.cc1 = o1;
             reg.cc2 = o2;
             reg.compare_op = CCteq;
         }
         return;
     case 11:	/* cmn */
-        if(inst & Sbit) {
+        if(inst & Sbit) { // not always true?
             reg.cc1 = o1;
             reg.cc2 = -o2;
             reg.compare_op = CCcmp;
         }
         return;
+
     case 12:	/* orr */
         reg.r[rd] = o1 | o2;
-        cbit = 1;
+        cbit = true;
         break;
     case 13:	/* mov */
         reg.r[rd] = o2;
-        cbit = 1;
+        cbit = true;
         break;
     case 14:	/* bic */
         reg.r[rd] = o1 & ~o2;
-        cbit = 1;
+        cbit = true;
         break;
     case 15:	/* mvn */
         reg.r[rd] = ~o2;
-        cbit = 1;
+        cbit = true;
         break;
     }
+
     if(inst & Sbit) {
         if(cbit)
             reg.cbit = reg.cout;
@@ -465,7 +483,7 @@ dpex(long inst, long o1, long o2, int rd)
  * data processing instruction R,R,R
  */
 void
-Idp0(ulong inst)
+Idp0(instruction inst)
 {
     int rn, rd, rm;
     long o1, o2;
@@ -473,6 +491,7 @@ Idp0(ulong inst)
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
     rm = inst & 0xf;
+
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
@@ -481,13 +500,18 @@ Idp0(ulong inst)
         o2 += 8;
 
     dpex(inst, o1, o2, rd);
+
+    /*s: [[Idp0()]] trace */
     if(trace)
         itrace("%s%s\tR%d,R%d,R%d =#%x",
             reg.ip->name, cond[reg.cond],
             rm, rn, rd,
             reg.r[rd]);
+    /*e: [[Idp0()]] trace */
+    /*s: [[Idpx()]] compensate REGPC */
     if(rd == REGPC)
         reg.r[rd] -= 4;
+    /*e: [[Idpx()]] compensate REGPC */
 }
 /*e: function Idp0 */
 
@@ -496,7 +520,7 @@ Idp0(ulong inst)
  * data processing instruction (R<>#),R,R
  */
 void
-Idp1(ulong inst)
+Idp1(instruction inst)
 {
     int rn, rd, rm, st, sc;
     long o1, o2;
@@ -506,6 +530,7 @@ Idp1(ulong inst)
     rm = inst & 0xf;
     st = (inst>>5) & 0x3;
     sc = (inst>>7) & 0x1f;
+
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
@@ -513,13 +538,19 @@ Idp1(ulong inst)
     if(rm == REGPC)
         o2 += 8;
     o2 = shift(o2, st, sc, 0);
+
     dpex(inst, o1, o2, rd);
+
+    /*s: [[Idp1()]] trace */
     if(trace)
         itrace("%s%s\tR%d%s%d,R%d,R%d =#%x",
             reg.ip->name, cond[reg.cond], rm, shtype[st], sc, rn, rd,
             reg.r[rd]);
+    /*e: [[Idp1()]] trace */
+    /*s: [[Idpx()]] compensate REGPC */
     if(rd == REGPC)
         reg.r[rd] -= 4;
+    /*e: [[Idpx()]] compensate REGPC */
 }
 /*e: function Idp1 */
 
@@ -528,7 +559,7 @@ Idp1(ulong inst)
  * data processing instruction (R<>R),R,R
  */
 void
-Idp2(ulong inst)
+Idp2(instruction inst)
 {
     int rn, rd, rm, rs, st;
     long o1, o2, o3;
@@ -538,6 +569,7 @@ Idp2(ulong inst)
     rm = inst & 0xf;
     st = (inst>>5) & 0x3;
     rs = (inst>>8) & 0xf;
+
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
@@ -548,13 +580,19 @@ Idp2(ulong inst)
     if(rs == REGPC)
         o3 += 8;
     o2 = shift(o2, st, o3, 1);
+
     dpex(inst, o1, o2, rd);
+
+    /*s: [[Idp2()]] trace */
     if(trace)
         itrace("%s%s\tR%d%sR%d=%d,R%d,R%d =#%x",
             reg.ip->name, cond[reg.cond], rm, shtype[st], rs, o3, rn, rd,
             reg.r[rd]);
+    /*e: [[Idp2()]] trace */
+    /*s: [[Idpx()]] compensate REGPC */
     if(rd == REGPC)
         reg.r[rd] -= 4;
+    /*e: [[Idpx()]] compensate REGPC */
 }
 /*e: function Idp2 */
 
@@ -563,7 +601,7 @@ Idp2(ulong inst)
  * data processing instruction #<>#,R,R
  */
 void
-Idp3(ulong inst)
+Idp3(instruction inst)
 {
     int rn, rd, sc;
     long o1, o2;
@@ -578,18 +616,23 @@ Idp3(ulong inst)
     o2 = (o2 >> sc) | (o2 << (32 - sc));
 
     dpex(inst, o1, o2, rd);
+
+    /*s: [[Idp3()]] trace */
     if(trace)
         itrace("%s%s\t#%x,R%d,R%d =#%x",
             reg.ip->name, cond[reg.cond], o2, rn, rd,
             reg.r[rd]);
+    /*e: [[Idp3()]] trace */
+    /*s: [[Idpx()]] compensate REGPC */
     if(rd == REGPC)
         reg.r[rd] -= 4;
+    /*e: [[Idpx()]] compensate REGPC */
 }
 /*e: function Idp3 */
 
 /*s: function Imul */
 void
-Imul(ulong inst)
+Imul(instruction inst)
 {
     int rs, rd, rm;
 
@@ -602,16 +645,18 @@ Imul(ulong inst)
 
     reg.r[rd] = reg.r[rm]*reg.r[rs];
 
+    /*s: [[Imul()]] trace */
     if(trace)
         itrace("%s%s\tR%d,R%d,R%d =#%x",
             reg.ip->name, cond[reg.cond], rs, rm, rd,
             reg.r[rd]);
+    /*e: [[Imul()]] trace */
 }
 /*e: function Imul */
 
 /*s: function Imull */
 void
-Imull(ulong inst)
+Imull(instruction inst)
 {
     vlong v;
     int rs, rd, rm, rn;
@@ -622,7 +667,8 @@ Imull(ulong inst)
     rm = inst & 0xf;
 
     if(rd == REGPC || rn == REGPC || rs == REGPC || rm == REGPC
-    || rd == rm || rn == rm || rd == rn)
+      || rd == rm || rn == rm || rd == rn
+      )
         undef(inst);
 
     if(inst & (1<<22)){
@@ -637,16 +683,18 @@ Imull(ulong inst)
     reg.r[rd] = v >> 32;
     reg.r[rn] = v;
 
+    /*s: [[Imull()]] trace */
     if(trace)
         itrace("%s%s\tR%d,R%d,(R%d,R%d) =#%llx",
             reg.ip->name, cond[reg.cond], rs, rm, rn, rd,
             v);
+    /*e: [[Imull()]] trace */
 }
 /*e: function Imull */
 
 /*s: function Imula */
 void
-Imula(ulong inst)
+Imula(instruction inst)
 {
     int rs, rd, rm, rn;
 
@@ -660,16 +708,18 @@ Imula(ulong inst)
 
     reg.r[rd] = reg.r[rm]*reg.r[rs] + reg.r[rn];
 
+    /*s: [[Imula()]] trace */
     if(trace)
         itrace("%s%s\tR%d,R%d,R%d,R%d =#%x",
             reg.ip->name, cond[reg.cond], rs, rm, rn, rd,
             reg.r[rd]);
+    /*e: [[Imula()]] trace */
 }
 /*e: function Imula */
 
 /*s: function Iswap */
 void
-Iswap(ulong inst)
+Iswap(instruction inst)
 {
     int rn, rd, rm;
     ulong address, value, bbit;
@@ -689,6 +739,7 @@ Iswap(ulong inst)
     }
     reg.r[rd] = value;
 
+    /*s: [[Iswap()]] trace */
     if(trace) {
         char *bw, *dotc;
 
@@ -702,6 +753,7 @@ Iswap(ulong inst)
             rn, rd,
             address, value);
     }
+    /*e: [[Iswap()]] trace */
 }
 /*e: function Iswap */
 
@@ -710,7 +762,7 @@ Iswap(ulong inst)
  * load/store word/byte
  */
 void
-Imem1(ulong inst)
+Imem1(instruction inst)
 {
     int rn, rd, off, rm, sc, st;
     ulong address, value, pbit, ubit, bbit, wbit, lbit, bit25;
@@ -767,6 +819,7 @@ Imem1(ulong inst)
     if(!(pbit && !wbit))
         reg.r[rn] += off;
 
+    /*s: [[Imem1()]] trace */
     if(trace) {
         char *bw, *dotp, *dotc;
 
@@ -802,6 +855,7 @@ Imem1(ulong inst)
                     address, value);
         }
     }
+    /*e: [[Imem1()]] trace */
 }
 /*e: function Imem1 */
 
@@ -810,7 +864,7 @@ Imem1(ulong inst)
  * load/store unsigned byte/half word
  */
 void
-Imem2(ulong inst)
+Imem2(instruction inst)
 {
     int rn, rd, off, rm;
     ulong address, value, pbit, ubit, hbit, sbit, wbit, lbit, bit22;
@@ -869,6 +923,7 @@ Imem2(ulong inst)
     if(!(pbit && !wbit))
         reg.r[rn] += off;
 
+    /*s: [[Imem2()]] trace */
     if(trace) {
         char *hb, *dotp, *dotc;
 
@@ -904,12 +959,13 @@ Imem2(ulong inst)
                     address, value);
         }
     }
+    /*e: [[Imem2()]] trace */
 }
 /*e: function Imem2 */
 
 /*s: function Ilsm */
 void
-Ilsm(ulong inst)
+Ilsm(instruction inst)
 {
     char pbit, ubit, sbit, wbit, lbit;
     int i, rn, reglist;
@@ -964,40 +1020,47 @@ Ilsm(ulong inst)
         reg.r[rn] = address;
     }
 
+    /*s: [[Ilsm()]] trace */
     if(trace) {
         itrace("%s.%c%c\tR%d=%lux%s, <%lux>",
             (lbit ? "LDM" : "STM"), (ubit ? 'I' : 'D'), (pbit ? 'B' : 'A'),
             rn, reg.r[rn], (wbit ? "!" : ""), reglist);
     }
+    /*e: [[Ilsm()]] trace */
 }
 /*e: function Ilsm */
 
 /*s: function Ib */
 void
-Ib(ulong inst)
+Ib(instruction inst)
 {
     long v;
 
-    v = inst & 0xffffff;
+    v = inst & 0xffffff; // 24 bits
     v = reg.r[REGPC] + 8 + ((v << 8) >> 6);
+    /*s: [[Ib()]] trace */
     if(trace)
         itrace("B%s\t#%lux", cond[reg.cond], v);
+    /*e: [[Ib()]] trace */
     reg.r[REGPC] = v - 4;
 }
 /*e: function Ib */
 
 /*s: function Ibl */
 void
-Ibl(ulong inst)
+Ibl(instruction inst)
 {
     long v;
     Symbol s;
 
     v = inst & 0xffffff;
     v = reg.r[REGPC] + 8 + ((v << 8) >> 6);
+    /*s: [[Ibl()]] trace */
     if(trace)
         itrace("BL%s\t#%lux", cond[reg.cond], v);
+    /*e: [[Ibl()]] trace */
 
+    /*s: [[Ibl()]] if calltree */
     if(calltree) {
         findsym(v, CTEXT, &s);
         Bprint(bioout, "%8lux %s(", reg.r[REGPC], s.name);
@@ -1006,6 +1069,7 @@ Ibl(ulong inst)
         printsource(reg.r[REGPC]);
         Bputc(bioout, '\n');
     }
+    /*e: [[Ibl()]] if calltree */
 
     reg.r[REGLINK] = reg.r[REGPC] + 4;
     reg.r[REGPC] = v - 4;
