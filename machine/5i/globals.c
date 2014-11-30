@@ -1,12 +1,15 @@
 /*s: machine/5i/globals.c */
+/*s: basic includes */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
+#include "arm.h"
+/*e: basic includes */
+
 #include <tos.h>
 
-#include "arm.h"
 
 /*s: global reg */
 Registers reg;

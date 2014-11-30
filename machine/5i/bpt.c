@@ -1,12 +1,14 @@
 /*s: machine/5i/bpt.c */
+/*s: basic includes */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
-#include <ctype.h>
-
 #include "arm.h"
+/*e: basic includes */
+
+#include <ctype.h>
 
 /*s: function dobplist */
 void

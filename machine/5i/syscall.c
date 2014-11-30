@@ -1,10 +1,12 @@
 /*s: machine/5i/syscall.c */
+/*s: basic includes */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
 #include "arm.h"
+/*e: basic includes */
 
 //#define	ODIRLEN	116	/* compatibility; used in _stat etc. */
 /*s: constant OERRLEN */

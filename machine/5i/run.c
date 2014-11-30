@@ -1,10 +1,12 @@
 /*s: machine/5i/run.c */
+/*s: basic includes */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
 #include "arm.h"
+/*e: basic includes */
 
 #define XCAST(a) (uvlong)(ulong)a
 

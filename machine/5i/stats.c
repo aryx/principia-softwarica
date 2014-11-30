@@ -1,10 +1,12 @@
 /*s: machine/5i/stats.c */
+/*s: basic includes */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
 #include "arm.h"
+/*e: basic includes */
 
 /*s: function Percent */
 #define Percent(num, max)	((max)?((num)*100)/(max):0)

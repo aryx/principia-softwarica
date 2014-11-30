@@ -1,10 +1,12 @@
 /*s: machine/5i/symbols.c */
+/*s: basic includes */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <mach.h>
 
 #include "arm.h"
+/*e: basic includes */
 
 /*s: constant STRINGSZ */
 #define	STRINGSZ	128
