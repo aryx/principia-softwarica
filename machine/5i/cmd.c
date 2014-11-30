@@ -10,8 +10,6 @@
 
 #include <ctype.h>
 
-ulong	expr(char*);
-
 /*s: global fmt */
 char	fmt = 'X';
 /*e: global fmt */
@@ -237,7 +235,6 @@ colon(char *addr, char *cp)
     Bprint(bioout, "\n");
 }
 /*e: function colon */
-
 
 /*s: function dollar */
 void

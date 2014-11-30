@@ -96,6 +96,7 @@ struct Icache
 };
 /*e: struct Icache */
 
+
 /*s: struct Inst */
 struct Inst
 {

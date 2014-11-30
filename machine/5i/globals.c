@@ -10,6 +10,8 @@
 
 #include <tos.h>
 
+//in run.c
+//Inst itab[];
 
 /*s: global reg */
 Registers reg;
@@ -29,8 +31,6 @@ bool sysdbg;
 /*s: global calltree */
 bool calltree;
 /*e: global calltree */
-//in run.c
-//Inst itab[];
 /*s: global icache */
 Icache icache;
 /*e: global icache */

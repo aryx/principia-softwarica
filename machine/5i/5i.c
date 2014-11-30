@@ -20,47 +20,9 @@ Biobuf	bi, bp;
 Fhdr	fhdr;
 /*e: global fhdr */
 
-void		inithdr(int);
-void		initmap(void);
-
-/*s: function main */
-//@Scheck: entry point!
-void main(int argc, char **argv)
-{
-
-    argc--;
-    argv++;
-
-    bioout = &bp;
-    bin = &bi;
-    Binit(bioout, STDOUT, OWRITE);
-    Binit(bin, STDIN, OREAD);
-
-    tlb.on = true;
-    tlb.tlbsize = 24;
-
-    if(argc)
-        file = argv[0];
-    argc--;
-    argv++;
-
-    text = open(file, OREAD);
-    if(text < 0)
-        fatal(1, "open text '%s'", file);
-
-    Bprint(bioout, "5i\n");
-
-    inithdr(text);
-    initmap();
-    initstk(argc, argv);
-
-    cmd();
-}
-/*e: function main */
-
 /*s: function initmap */
 void
-initmap()
+initmap(void)
 {
     uintptr t, d, b, bssend;
     Segment *s;
@@ -196,4 +158,39 @@ initstk(int argc, char *argv[])
 
 }
 /*e: function initstk */
+
+/*s: function main */
+//@Scheck: entry point!
+void main(int argc, char **argv)
+{
+
+    argc--;
+    argv++;
+
+    bioout = &bp;
+    bin = &bi;
+    Binit(bioout, STDOUT, OWRITE);
+    Binit(bin, STDIN, OREAD);
+
+    tlb.on = true;
+    tlb.tlbsize = 24;
+
+    if(argc)
+        file = argv[0];
+    argc--;
+    argv++;
+
+    text = open(file, OREAD);
+    if(text < 0)
+        fatal(1, "open text '%s'", file);
+
+    Bprint(bioout, "5i\n");
+
+    inithdr(text);
+    initmap();
+    initstk(argc, argv);
+
+    cmd();
+}
+/*e: function main */
 /*e: machine/5i/5i.c */

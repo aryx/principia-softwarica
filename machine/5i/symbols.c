@@ -12,8 +12,6 @@
 #define	STRINGSZ	128
 /*e: constant STRINGSZ */
 
-void		printlocals(Symbol*, ulong);
-
 /*s: function printsource */
 /*
  *	print the value of dot as file:line
@@ -64,6 +62,7 @@ printparams(Symbol *fn, ulong fp)
     Bprint(bioout, ") ");
 }
 /*e: function printparams */
+
 /*s: constant STARTSYM */
 #define STARTSYM	"_main"
 /*e: constant STARTSYM */

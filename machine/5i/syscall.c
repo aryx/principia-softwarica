@@ -253,7 +253,6 @@ sysopen(void)
 };
 /*e: function sysopen */
 
-
 /*s: function sysread */
 void
 sysread(vlong offset)
@@ -331,7 +330,6 @@ sysseek(void)
     putmem_v(retp, v);
 }
 /*e: function sysseek */
-
 
 /*s: function syssleep */
 void
