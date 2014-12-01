@@ -739,9 +739,10 @@ void	(*systab[])(void) =
 
 /*s: function Ssyscall */
 void
-Ssyscall(instruction)
+Ssyscall(instruction _unused)
 {
     int call;
+    USED(_unused);
 
     call = reg.r[REGARG];
     if(call < 0 || call >= nelem(systab) || systab[call] == nil) {
@@ -753,6 +754,7 @@ Ssyscall(instruction)
 
     if(trace)
         itrace("SWI\t%s", sysctab[call]);
+    // dispatch!
     (*systab[call])();
     Bflush(bioout);
 }

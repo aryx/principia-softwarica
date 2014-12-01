@@ -74,7 +74,6 @@ ulong *iprof;
 /*s: global symmap */
 Map *symmap;		
 /*e: global symmap */
-
 /*s: global datasize */
 int	datasize;
 /*e: global datasize */

@@ -55,6 +55,21 @@ static	char*	cond[16] =
 /*s: global itab */
 Inst itab[] =
 {
+  /*s: [[itab]] elements */
+  [85] =  { undef,		"undef" },
+  [86] =  { undef,		"undef" },
+  [87] =  { undef,		"undef" },
+  /*x: [[itab]] elements */
+  [92] =  { undef,		"undef"  },
+  /*x: [[itab]] elements */
+  [64] =  { Imul,	"MUL",	Iarith },
+  [65] =  { Imula,"MULA",	Iarith },	
+  /*x: [[itab]] elements */
+  [88] =  { Imull,		"MULLU",	Iarith },
+  [89] =  { Imull,		"MULALU",	Iarith },
+  [90] =  { Imull,		"MULL",		Iarith  },
+  [91] =  { Imull,		"MULAL",	Iarith  },
+  /*x: [[itab]] elements */
   //r,r,r
   [ 0] =  { Idp0,		"AND",	Iarith },	
   [ 1] =  { Idp0,		"EOR",	Iarith },	
@@ -72,7 +87,7 @@ Inst itab[] =
   [13] =  { Idp0,		"MOV",	Iarith },	
   [14] =  { Idp0,		"BIC",	Iarith },	
   [15] =  { Idp0,		"MVN",	Iarith },	
-
+  /*x: [[itab]] elements */
   [16] =  { Idp1,		"AND",	Iarith },	
   [17] =  { Idp1,		"EOR",	Iarith },	
   [18] =  { Idp1,		"SUB",	Iarith },	
@@ -89,7 +104,7 @@ Inst itab[] =
   [29] =  { Idp1,		"MOV",	Iarith },	
   [30] =  { Idp1,		"BIC",	Iarith },	
   [31] =  { Idp1,		"MVN",	Iarith },	
-
+  /*x: [[itab]] elements */
   [32] =  { Idp2,		"AND",	Iarith },	
   [33] =  { Idp2,		"EOR",	Iarith },	
   [34] =  { Idp2,		"SUB",	Iarith },	
@@ -106,7 +121,7 @@ Inst itab[] =
   [45] =  { Idp2,		"MOV",	Iarith },	
   [46] =  { Idp2,		"BIC",	Iarith },	
   [47] =  { Idp2,		"MVN",	Iarith },	
-
+  /*x: [[itab]] elements */
   //i,r,r
   [48] =  { Idp3,		"AND",	Iarith },	
   [49] =  { Idp3,		"EOR",	Iarith },	
@@ -124,52 +139,39 @@ Inst itab[] =
   [61] =  { Idp3,		"MOV",	Iarith },	
   [62] =  { Idp3,		"BIC",	Iarith },	
   [63] =  { Idp3,		"MVN",	Iarith },	
-
-  [64] =  { Imul,	"MUL",	Iarith },
-  [65] =  { Imula,	"MULA",	Iarith },	
-
+  /*x: [[itab]] elements */
   [66] =  { Iswap,		"SWPW",	Imem },
   [67] =  { Iswap,		"SWPBU",Imem },
-
-  // load/store h/sb
-  [68] =  { Imem2,		"MOV",	Imem },
-  [69] =  { Imem2,		"MOV",	Imem },
-  [70] =  { Imem2,		"MOV",	Imem },
-  [71] =  { Imem2,		"MOV",	Imem },
-
+  /*x: [[itab]] elements */
   // load/store w/ub i,r
   [72] =  { Imem1,		"MOVW",	Imem },
   [73] =  { Imem1,		"MOVB",	Imem },
   [74] =  { Imem1,		"MOVW",	Imem },
   [75] =  { Imem1,		"MOVB",	Imem },
+  /*x: [[itab]] elements */
   // load/store r,r
   [76] =  { Imem1,		"MOVW",	Imem },
   [77] =  { Imem1,		"MOVB",	Imem },
   [78] =  { Imem1,		"MOVW",	Imem },
   [79] =  { Imem1,		"MOVB",	Imem },
-
+  /*x: [[itab]] elements */
+  // load/store h/sb
+  [68] =  { Imem2,		"MOV",	Imem },
+  [69] =  { Imem2,		"MOV",	Imem },
+  [70] =  { Imem2,		"MOV",	Imem },
+  [71] =  { Imem2,		"MOV",	Imem },
+  /*x: [[itab]] elements */
   // block move r,r
   [80] =  { Ilsm,		"LDM",	Imem },
   [81] =  { Ilsm,		"STM",	Imem },
-
+  /*x: [[itab]] elements */
   // branch
-  [82] =  { Ib,		"B",	Ibranch },
+  [82] =  { Ib,	"B",	Ibranch },
   [83] =  { Ibl,	"BL",	Ibranch },
-
+  /*x: [[itab]] elements */
   // co processor
   [84] =  { Ssyscall,		"SWI",	Isyscall },
-
-  [85] =  { undef,		"undef" },
-  [86] =  { undef,		"undef" },
-  [87] =  { undef,		"undef" },
-
-  [88] =  { Imull,		"MULLU",	Iarith },
-  [89] =  { Imull,		"MULALU",	Iarith },
-  [90] =  { Imull,		"MULL",		Iarith  },
-  [91] =  { Imull,		"MULAL",	Iarith  },
-
-  [92] =  { undef,		"undef"  },
-
+  /*e: [[itab]] elements */
   { 0 }
 };
 /*e: global itab */
@@ -324,28 +326,12 @@ arm_class(instruction w)
 
  op = (w >> 25) & 0x7;
  switch(op) {
+ /*s: [[arm_class()]] op cases */
  case 0:	/* data processing r,r,r */
-  if((w & 0x0ff00080) == 0x01200000) {
-   op = (w >> 4) & 0x7;
-   if(op == 7)
-    op = 124;	/* bkpt */
-   else if (op > 0 && op < 4)
-    op += 124;	/* bx, blx */
-   else
-    op = 92;	/* unk */
-   break;
-  }
   op = ((w >> 4) & 0xf);
+
   if(op == 0x9) {
    op = 48+16;		/* mul, swp or *rex */
-   if((w & 0x0ff00fff) == 0x01900f9f) {
-    op = 93;	/* ldrex */
-    break;
-   }
-   if((w & 0x0ff00ff0) == 0x01800f90) {
-    op = 94;	/* strex */
-    break;
-   }
    if(w & (1<<24)) {
     op += 2;
     if(w & (1<<22))
@@ -361,118 +347,49 @@ arm_class(instruction w)
     op++;		/* mla */
    break;
   }
-  if((op & 0x9) == 0x9)		/* ld/st byte/half s/u */
-  {
+
+  if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
    op = (48+16+4) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
    break;
   }
+
   op = (w >> 21) & 0xf;
   if(w & (1<<4))
-   op += 32;
+    op += 32;
   else
-  if((w & (31<<7)) || (w & (1<<5)))
-   op += 16;
+   if((w & (31<<7)) || (w & (1<<5)))
+    op += 16;
   break;
+ /*x: [[arm_class()]] op cases */
  case 1:	/* data processing i,r,r */
   op = (48) + ((w >> 21) & 0xf);
   break;
+ /*x: [[arm_class()]] op cases */
  case 2:	/* load/store byte/word i(r) */
-  if ((w & 0xffffff8f) == 0xf57ff00f) {	/* barriers, clrex */
-   done = 1;
-   switch ((w >> 4) & 7) {
-   case 1:
-    op = 95;	/* clrex */
-    break;
-   case 4:
-    op = 96;	/* dsb */
-    break;
-   case 5:
-    op = 97;	/* dmb */
-    break;
-   case 6:
-    op = 98;	/* isb */
-    break;
-   default:
-    done = 0;
-    break;
-   }
-   if (done)
-    break;
-  }
-  op = (48+24) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+  op = (72) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
   break;
+ /*x: [[arm_class()]] op cases */
  case 3:	/* load/store byte/word (r)(r) */
   op = (48+24+4) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
   break;
+ /*x: [[arm_class()]] op cases */
  case 4:	/* block data transfer (r)(r) */
-  if ((w & 0xfe50ffff) == 0xf8100a00) {	/* v7 RFE */
-   op = 99;
-   break;
-  }
-  op = (48+24+4+4) + ((w >> 20) & 0x1);
+  op = (80) + ((w >> 20) & 0x1);
   break;
+ /*x: [[arm_class()]] op cases */
  case 5:	/* branch / branch link */
   op = (48+24+4+4+2) + ((w >> 24) & 0x1);
   break;
- case 7:	/* coprocessor crap */
-  cp = (w >> 8) & 0xF;
-  if(cp == 10 || cp == 11){	/* vfp */
-   if((w >> 4) & 0x1){
-    /* vfp register transfer */
-    switch((w >> 21) & 0x7){
-    case 0:
-     op = 118 + ((w >> 20) & 0x1);
-     break;
-    case 7:
-     op = 118+2 + ((w >> 20) & 0x1);
-     break;
-    default:
-     op = (48+24+4+4+2+2+4+4);
-     break;
-    }
-    break;
-   }
-   /* vfp data processing */
-   if(((w >> 23) & 0x1) == 0){
-    op = 100 + ((w >> 19) & 0x6) + ((w >> 6) & 0x1);
-    break;
-   }
-   switch(((w >> 19) & 0x6) + ((w >> 6) & 0x1)){
-   case 0:
-    op = 108;
-    break;
-   case 7:
-    if(((w >> 19) & 0x1) == 0){
-     if(((w >> 17) & 0x1) == 0)
-      op = 109 + ((w >> 16) & 0x4) +
-       ((w >> 15) & 0x2) +
-       ((w >> 7) & 0x1);
-     else if(((w >> 16) & 0x7) == 0x7)
-      op = 117;
-    }else
-     switch((w >> 16) & 0x7){
-     case 0:
-     case 4:
-     case 5:
-      op = 117;
-      break;
-     }
-    break;
-   }
-   if(op == 7)
-    op = (48+24+4+4+2+2+4+4);
-   break;
-  }
-  op = (48+24+4+4+2+2) + ((w >> 3) & 0x2) + ((w >> 20) & 0x1);
+ /*x: [[arm_class()]] op cases */
+ case 7:	/* coprocessor crap */ // and syscall
+  if((w >> 25) & 0x1)
+    op = 84;
+  else
+    op = 92; // coprocessor stuff not handled
   break;
- case 6:	/* vfp load / store */
-  if(((w >> 21) &0x9) == 0x8){
-   op = 122 + ((w >> 20) & 0x1);
-   break;
-  }
-  /* fall through */
+ /*e: [[arm_class()]] op cases */
  default:	  
-  op = (48+24+4+4+2+2+4+4);
+  op = 92;
   break;
  }
  return op;

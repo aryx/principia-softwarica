@@ -49,8 +49,8 @@ struct Breakpoint
 /*s: enum ixxx */
 enum ixxx
 {
-    Imem,
     Iarith,
+    Imem,
     Ibranch,
     Isyscall,
 };
