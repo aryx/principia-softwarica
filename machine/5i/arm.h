@@ -20,9 +20,11 @@ typedef ulong instruction;
 enum breakpoint_kind
 {
     Instruction		= 1,
+
     Read		= 2,
     Write		= 4,
     Access		= Read|Write,
+
     Equal		= 4|8,
 };
 /*e: enum breakpoint_kind */

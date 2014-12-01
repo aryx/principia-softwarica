@@ -217,12 +217,12 @@ putmem_v(uintptr addr, uvlong data)
 
 /*s: function memio */
 char *
-memio(char *mb, ulong mem, int size, int dir)
+memio(char *mb, uintptr mem, int size, int dir)
 {
     int i;
     char *buf, c;
 
-    if(mb == 0)
+    if(mb == nil)
         mb = emalloc(size);
 
     buf = mb;
