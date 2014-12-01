@@ -346,14 +346,6 @@ Inst itab[] =
 
 %ex: [64] =  { Imul,	"MUL",	Iarith },
 
-%todo: to delete
-<<[[itab]] elements>>=
-[85] =  { undef,		"undef" },
-[86] =  { undef,		"undef" },
-[87] =  { undef,		"undef" },
-@
-
-
 \section{[[Registers]] and [[reg]]}
 
 % 16 registers, R0 to R15, with some are special, e.g. PC = R15
@@ -879,17 +871,18 @@ enum class_kind {
     CARITH2 = 32, // r<>#, r, r
     CARITH3 = 48, // i,r,r
     CMUL    = 64,
-    CSWAP   = 66,  //70,
-    CMEM    = 68,  //72,
-    CBLOC   = 80,  //84,
-    CBRANCH = 82,  //86,
-    CSYSCALL = 84, // 88,
-    CUNDEF   = 92, //89
 
-    CMULTMP    = 88,
+    CSWAP   = 70,
+    CMEM    = 72,
+    CBLOC   = 84,
+
+    CBRANCH = 86,
+    CSYSCALL = 88,
+
+    CUNDEF   = 89
 };
 @
-
+% no DIV
 
 \section{[[run()]]}
 
@@ -1158,9 +1151,10 @@ case 0:	/* data processing r,r,r */
     else
      if((w & (31<<7)) || (w & (1<<5)))
       op += CARITH1;
-    // else op+=CARITH0 (= 0)
+    // else op += CARITH0
     break;
 @
+% 31 << 7 means take all the bits from 7 to 11, the shift#
 % >> >> >> >> >> >>
 
 
@@ -1171,9 +1165,9 @@ if(op == 0x9) {
     op = CMUL;
     <<[[arm_class()]] class 0, when op == 0x9, if 24 bit set>>
     if(w & (1<<23)) {	/* mullu */
-        op = CMULTMP;
+        op = CMUL+2;
         if(w & (1<<22))	/* mull */
-            op += 2;
+            op = CMUL+4;
     }
     if(w & (1<<21))
         op++;		/* mla */
@@ -1186,8 +1180,12 @@ if(op == 0x9) {
 %\subsection{Multiplication}
 
 <<[[itab]] elements>>=
-[CMUL+0] =  { Imul,	"MUL",	Iarith },
+[CMUL+0] =  { Imul,		"MUL",	Iarith },
 [CMUL+1] =  { Imula,	"MULA",	Iarith },	
+[CMUL+2] =  { Imull,	"MULLU",	Iarith },
+[CMUL+3] =  { Imull,	"MULALU",	Iarith },
+[CMUL+4] =  { Imull,	"MULL",		Iarith  },
+[CMUL+5] =  { Imull,	"MULAL",	Iarith  },
 @
 
 % pretty simple :)
@@ -1254,12 +1252,6 @@ if(trace)
 \fi
 
 
-<<[[itab]] elements>>=
-[CMULTMP+0] =  { Imull,		"MULLU",	Iarith },
-[CMULTMP+1] =  { Imull,		"MULALU",	Iarith },
-[CMULTMP+2] =  { Imull,		"MULL",		Iarith  },
-[CMULTMP+3] =  { Imull,		"MULAL",	Iarith  },
-@
 
 % less simple, signed long multiply?
 <<function Imull>>=
@@ -1823,7 +1815,6 @@ if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
 @
 
 
-
 <<[[itab]] elements>>=
 // load/store h/sb
 [CMEM+0] =  { Imem2,		"MOV",	Imem },
@@ -2216,14 +2207,13 @@ Ibl(instruction inst)
     v = inst & 0xffffff;
     v = reg.r[REGPC] + 8 + ((v << 8) >> 6);
     <<[[Ibl()]] trace>>
-
     <<[[Ibl()]] if calltree>>
-
     reg.r[REGLINK] = reg.r[REGPC] + 4;
     reg.r[REGPC] = v - 4;
 }
 @
-% Branch and Link, so kinda call
+% Branch and Link, so kinda call, just for leaves, no need stack
+% if want RET, just have to mov reglink, regpc
 
 <<[[Ibl()]] trace>>=
 if(trace)

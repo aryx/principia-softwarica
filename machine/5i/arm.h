@@ -64,14 +64,15 @@ enum class_kind {
     CARITH2 = 32, // r<>#, r, r
     CARITH3 = 48, // i,r,r
     CMUL    = 64,
-    CSWAP   = 66,  //70,
-    CMEM    = 68,  //72,
-    CBLOC   = 80,  //84,
-    CBRANCH = 82,  //86,
-    CSYSCALL = 84, // 88,
-    CUNDEF   = 92, //89
 
-    CMULTMP    = 88,
+    CSWAP   = 70,
+    CMEM    = 72,
+    CBLOC   = 84,
+
+    CBRANCH = 86,
+    CSYSCALL = 88,
+
+    CUNDEF   = 89
 };
 /*e: enum class_kind */
 

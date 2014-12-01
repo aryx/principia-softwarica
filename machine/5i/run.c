@@ -56,19 +56,14 @@ static	char*	cond[16] =
 Inst itab[] =
 {
   /*s: [[itab]] elements */
-  [85] =  { undef,		"undef" },
-  [86] =  { undef,		"undef" },
-  [87] =  { undef,		"undef" },
-  /*x: [[itab]] elements */
   [CUNDEF] =  { undef,		"undef"  },
   /*x: [[itab]] elements */
-  [CMUL+0] =  { Imul,	"MUL",	Iarith },
+  [CMUL+0] =  { Imul,		"MUL",	Iarith },
   [CMUL+1] =  { Imula,	"MULA",	Iarith },	
-  /*x: [[itab]] elements */
-  [CMULTMP+0] =  { Imull,		"MULLU",	Iarith },
-  [CMULTMP+1] =  { Imull,		"MULALU",	Iarith },
-  [CMULTMP+2] =  { Imull,		"MULL",		Iarith  },
-  [CMULTMP+3] =  { Imull,		"MULAL",	Iarith  },
+  [CMUL+2] =  { Imull,	"MULLU",	Iarith },
+  [CMUL+3] =  { Imull,	"MULALU",	Iarith },
+  [CMUL+4] =  { Imull,	"MULL",		Iarith  },
+  [CMUL+5] =  { Imull,	"MULAL",	Iarith  },
   /*x: [[itab]] elements */
   //r,r,r
   [CARITH0+ 0] =  { Idp0,		"AND",	Iarith },	
@@ -342,9 +337,9 @@ arm_class(instruction w)
             }
             /*e: [[arm_class()]] class 0, when op == 0x9, if 24 bit set */
             if(w & (1<<23)) {	/* mullu */
-                op = CMULTMP;
+                op = CMUL+2;
                 if(w & (1<<22))	/* mull */
-                    op += 2;
+                    op = CMUL+4;
             }
             if(w & (1<<21))
                 op++;		/* mla */
@@ -365,7 +360,7 @@ arm_class(instruction w)
         else
          if((w & (31<<7)) || (w & (1<<5)))
           op += CARITH1;
-        // else op+=CARITH0 (= 0)
+        // else op += CARITH0
         break;
     /*x: [[arm_class()]] op cases */
     case 1:	/* data processing i,r,r */
@@ -1163,7 +1158,6 @@ Ibl(instruction inst)
     if(trace)
         itrace("BL%s\t#%lux", cond[reg.cond], v);
     /*e: [[Ibl()]] trace */
-
     /*s: [[Ibl()]] if calltree */
     if(calltree) {
         findsym(v, CTEXT, &s);
@@ -1174,7 +1168,6 @@ Ibl(instruction inst)
         Bputc(bioout, '\n');
     }
     /*e: [[Ibl()]] if calltree */
-
     reg.r[REGLINK] = reg.r[REGPC] + 4;
     reg.r[REGPC] = v - 4;
 }
