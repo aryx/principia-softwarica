@@ -324,7 +324,7 @@ arm_class(instruction w)
     /*s: [[arm_class()]] op cases */
     case 0:	/* data processing r,r,r */
         op = ((w >> 4) & 0xf);
-        /*s: [[arm_class()]] class 0, if op == 0x9 */
+        /*s: [[arm_class()]] class 0, if op is 0x9 */
         /* mul, swp, mull */
         if(op == 0x9) {
             op = CMUL;
@@ -345,13 +345,13 @@ arm_class(instruction w)
                 op++;		/* mla */
             break;
         }
-        /*e: [[arm_class()]] class 0, if op == 0x9 */
-        /*s: [[arm_class()]] class 0, if op & 0x9 == 0x9 */
+        /*e: [[arm_class()]] class 0, if op is 0x9 */
+        /*s: [[arm_class()]] class 0, if op has 0x9 bits */
         if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
              op = CMEM + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
              break;
         }
-        /*e: [[arm_class()]] class 0, if op & 0x9 == 0x9 */
+        /*e: [[arm_class()]] class 0, if op has 0x9 bits */
    
         op = (w >> 21) & 0xf;
 
