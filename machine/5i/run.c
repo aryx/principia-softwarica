@@ -10,6 +10,7 @@
 
 #define XCAST(a) (uvlong)(ulong)a
 
+// forward decl
 void	undef(ulong);
 
 void	Idp0(ulong);
@@ -29,7 +30,7 @@ void	Ilsm(ulong inst);
 void	Ib(ulong);
 void	Ibl(ulong);
 
-void	Ssyscall(ulong);
+int arm_class(instruction w);
 
 //static	int	dummy;
 
