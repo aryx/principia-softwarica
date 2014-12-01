@@ -2577,57 +2577,6 @@ putmem_v(uintptr addr, uvlong data)
 
 
 
-\chapter{IO}
-
-<<enum memxxx>>=
-enum
-{
-    MemRead,
-    MemReadstring,
-    MemWrite,
-};
-@
-
-<<function memio>>=
-char *
-memio(char *mb, ulong mem, int size, int dir)
-{
-    int i;
-    char *buf, c;
-
-    if(mb == 0)
-        mb = emalloc(size);
-
-    buf = mb;
-    switch(dir) {
-    case MemRead:
-        while(size--)
-            *mb++ = getmem_b(mem++);
-        break;
-    case MemReadstring:
-        for(;;) {
-            if(size-- == 0) {
-                Bprint(bioout, "memio: user/kernel copy too long for arm\n");
-                longjmp(errjmp, 0);
-            }
-            c = getmem_b(mem++);
-            *mb++ = c;
-            if(c == '\0')
-                break;
-        }
-        break;
-    case MemWrite:
-        for(i = 0; i < size; i++)
-            putmem_b(mem++, *mb++);
-        break;
-    default:
-        fatal(0, "memio");
-    }
-    return buf;
-}
-@
-
-
 \chapter{Syscalls}
 
 <<constant OERRLEN>>=
@@ -2751,6 +2700,60 @@ Ssyscall(instruction _unused)
     // dispatch!
     (*systab[call])();
     Bflush(bioout);
+}
+@
+
+%\chapter{IO}
+\section{[[memio()]]}
+% to read/write array of bytes, with special handling for strings sometimes
+% not sure why the function is called IO, should be mem_array
+
+<<enum memxxx>>=
+enum
+{
+    MemRead,
+    MemReadstring,
+    MemWrite,
+};
+@
+
+% syserrstr | sysbind | sysfd2path | ... -> <>
+<<function memio>>=
+char *
+memio(char *mb, uintptr mem, int size, int dir)
+{
+    int i;
+    char *buf, c;
+
+    if(mb == nil)
+        mb = emalloc(size);
+
+    buf = mb;
+    switch(dir) {
+    case MemRead:
+        while(size--)
+            *mb++ = getmem_b(mem++);
+        break;
+    case MemReadstring:
+        for(;;) {
+            if(size-- == 0) {
+                Bprint(bioout, "memio: user/kernel copy too long for arm\n");
+                longjmp(errjmp, 0);
+            }
+            c = getmem_b(mem++);
+            *mb++ = c;
+            if(c == '\0')
+                break;
+        }
+        break;
+    case MemWrite:
+        for(i = 0; i < size; i++)
+            putmem_b(mem++, *mb++);
+        break;
+    default:
+        fatal(0, "memio");
+    }
+    return buf;
 }
 @
 
@@ -3410,6 +3413,8 @@ sysfversion(void)
     exits(0);
 }
 @
+
+
 
 
 \chapter{Debugger}
@@ -4323,9 +4328,11 @@ if(calltree) {
 enum breakpoint_kind
 {
     Instruction		= 1,
+
     Read		= 2,
     Write		= 4,
     Access		= Read|Write,
+
     Equal		= 4|8,
 };
 @
@@ -4502,14 +4509,14 @@ brkchk(ulong addr, int type)
 
 
 
-\section{Code breakpoint}
+\subsection{Code breakpoint}
 
 <<[[run()]] check for breakpoints>>=
 if(bplist)
     brkchk(reg.r[REGPC], Instruction);
 @
 
-\section{Memory breakpoint}
+\subsection{Memory breakpoint}
 
 <<global membpt>>=
 bool membpt;
