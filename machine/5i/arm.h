@@ -56,6 +56,25 @@ enum ixxx
 };
 /*e: enum ixxx */
 
+// added by pad
+/*s: enum class_kind */
+enum class_kind {
+    CARITH0 = 0,  // r,r,r
+    CARITH1 = 16, // r<>r, r, r
+    CARITH2 = 32, // r<>#, r, r
+    CARITH3 = 48, // i,r,r
+    CMUL    = 64,
+    CSWAP   = 66,  //70,
+    CMEM    = 68,  //72,
+    CBLOC   = 80,  //84,
+    CBRANCH = 82,  //86,
+    CSYSCALL = 84, // 88,
+    CUNDEF   = 92, //89
+
+    CMULTMP    = 88,
+};
+/*e: enum class_kind */
+
 /*s: constant Nmaxtlb */
 #define Nmaxtlb 64
 /*e: constant Nmaxtlb */
@@ -278,7 +297,9 @@ enum
     STACKTOP	= 0x80000000,
     STACKSIZE	= 0x10000,
 
+    /*s: constant PROFGRAN */
     PROFGRAN	= 4,
+    /*e: constant PROFGRAN */
     /*s: constant Sbit */
     Sbit		= 1<<20,
     /*e: constant Sbit */

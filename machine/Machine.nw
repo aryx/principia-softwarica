@@ -13,7 +13,8 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - 
+% - reorg itab, simplified armclass(), see more repetitions, more
+%   logical order, less undef "classes", introduced class_kind enum
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -246,8 +247,7 @@ License.
 % a few weird stuff:
 %  - conditional execution format to compensate for lack of branch
 %    prediction, see wikipedia euclid example
-
-%  - no CALL/RET? do via ADD PC ?
+%  - no CALL/RET? do via ADD PC ? or MOV PC?
 
 % lots of symetrics and repetitions, see instruction format section
 
@@ -344,6 +344,9 @@ Inst itab[] =
 };
 @
 
+%ex: [64] =  { Imul,	"MUL",	Iarith },
+
+%todo: to delete
 <<[[itab]] elements>>=
 [85] =  { undef,		"undef" },
 [86] =  { undef,		"undef" },
@@ -583,7 +586,7 @@ enum
     STACKTOP	= 0x80000000,
     STACKSIZE	= 0x10000,
 
-    PROFGRAN	= 4,
+    <<constant PROFGRAN>>
     <<constant Sbit>>
     <<constant SIGNBIT>>
 };
@@ -812,13 +815,14 @@ case 'c':
 
 \section{Instruction format}
 
-% refcard ARM, with color codes so can see repetitive patterns
+% see refcard ARM, with color codes so can see repetitive patterns.
 
-% 4 bytes fixed-length (simple)
+% 4 bytes fixed-length instructions (simple)
 % - 4bits COND for everything (pink), see conditional execution section below
-% - opcode but variable length, a bit complex (orange and yellow),
-%   can be called the "class"
-% - registers, or offsets (blue, green)
+% - 3bits for opcode "class", and then more bits, variable length, 
+%   a bit complex for more opcodes (orange and yellow), 
+% - 4 bits registers, 0, 1, 2, 3, 4 times (Rn, Rd, Rs, Rm), so up to 16 bits,
+%    or offsets (blue, green)
 % - special config bits here and there (purple)
 
 % ARM ISA has lots of symetries. lots of repetition.
@@ -834,8 +838,7 @@ case 'c':
 %     adhoc ifs
 
 
-% range:
-
+% old range:
 % ARITH0: 0-15   16
 % ARITH1: 17-31  16
 % ARITH2: 32-47  16
@@ -851,8 +854,42 @@ case 'c':
 % MULL:   88-91  4
 % UNDEF:  92     1
 
-% could remove intermediate UNDEF
-% could move MULL closer to MUL
+% but remove intermediate UNDEF
+% can move MULL closer to MUL
+
+% new range:
+% ARITH0: 0-15   16
+% ARITH1: 16-31  16
+% ARITH2: 32-47  16
+% ARITH3: 48-63  16
+% MUL:    64-65  2
+% MULL:   66-69  4
+% SWAP:   70-71  2
+% MEM2:   72-75  4
+% MEM1:   76-83  8
+% BLOC:   84-85  2
+% BRANCH: 86-87  2
+% SYSCALL:88     1
+% UNDEF:  89     1
+
+<<enum class_kind>>=
+enum class_kind {
+    CARITH0 = 0,  // r,r,r
+    CARITH1 = 16, // r<>r, r, r
+    CARITH2 = 32, // r<>#, r, r
+    CARITH3 = 48, // i,r,r
+    CMUL    = 64,
+    CSWAP   = 66,  //70,
+    CMEM    = 68,  //72,
+    CBLOC   = 80,  //84,
+    CBRANCH = 82,  //86,
+    CSYSCALL = 84, // 88,
+    CUNDEF   = 92, //89
+
+    CMULTMP    = 88,
+}
+@
+
 
 \section{[[run()]]}
 
@@ -1065,71 +1102,32 @@ runtst(void)
 \section{[[arm_class()]]}
 
 % mostly for operand style big categories (r/r/r, i/r/r, etc)
-
 % copy paste from libmach/5db.c, but simplified as don't need
 % to handle debugging instructions or anything not handled in itab > 92
 <<function arm_class>>=
 int
 arm_class(instruction w)
 {
- int op, done, cp;
-
- op = (w >> 25) & 0x7;
- switch(op) {
- <<[[arm_class()]] op cases>>
- default:	  
-  op = 92;
-  break;
- }
- return op;
+    int op, done, cp;
+   
+    op = (w >> 25) & 0x7;
+    switch(op) {
+    <<[[arm_class()]] op cases>>
+    default:	  
+        op = CUNDEF;
+        break;
+    }
+    return op;
 }
 @
 % (48+24+4+4+2+2+4+4)
 %case 6:	/* vfp load / store */ ; // go to default now
 
 <<[[itab]] elements>>=
-[92] =  { undef,		"undef"  },
+[CUNDEF] =  { undef,		"undef"  },
 @
 
 
-
-
-<<[[arm_class()]] op cases>>=
-case 0:	/* data processing r,r,r */
- op = ((w >> 4) & 0xf);
-
- if(op == 0x9) {
-  op = 48+16;		/* mul, swp or *rex */
-  if(w & (1<<24)) {
-   op += 2;
-   if(w & (1<<22))
-    op++;	/* swpb */
-   break;
-  }
-  if(w & (1<<23)) {	/* mullu */
-   op = (48+24+4+4+2+2+4);
-   if(w & (1<<22))	/* mull */
-    op += 2;
-  }
-  if(w & (1<<21))
-   op++;		/* mla */
-  break;
- }
-
- if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
-  op = (48+16+4) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
-  break;
- }
-
- op = (w >> 21) & 0xf;
- if(w & (1<<4))
-   op += 32;
- else
-  if((w & (31<<7)) || (w & (1<<5)))
-   op += 16;
- break;
-@
-% >> >> >> >> >> >>
 
 
 
@@ -1146,6 +1144,44 @@ case 0:	/* data processing r,r,r */
 % and then perform operation on registers, memory, or internal registers.
 
 \subsection{Arithmetic}
+
+<<[[arm_class()]] op cases>>=
+case 0:	/* data processing r,r,r */
+    op = ((w >> 4) & 0xf);
+    <<[[arm_class()]] class 0, if op == 0x9>>
+    <<[[arm_class()]] class 0, if op & 0x9 == 0x9>>
+   
+    op = (w >> 21) & 0xf;
+
+    if(w & (1<<4))
+      op += CARITH2;
+    else
+     if((w & (31<<7)) || (w & (1<<5)))
+      op += CARITH1;
+    // else op+=CARITH0 (= 0)
+    break;
+@
+% >> >> >> >> >> >>
+
+
+
+<<[[arm_class()]] class 0, if op == 0x9>>=
+/* mul, swp, mull */
+if(op == 0x9) {
+    op = CMUL;
+    <<[[arm_class()]] class 0, when op == 0x9, if 24 bit set>>
+    if(w & (1<<23)) {	/* mullu */
+        op = CMULTMP;
+        if(w & (1<<22))	/* mull */
+            op += 2;
+    }
+    if(w & (1<<21))
+        op++;		/* mla */
+    break;
+}
+@
+% >> >> >>
+
 
 %\subsection{Multiplication}
 
@@ -1313,6 +1349,7 @@ Idp0(instruction inst)
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
+
     o2 = reg.r[rm];
     if(rm == REGPC)
         o2 += 8;
@@ -1379,10 +1416,12 @@ Idp1(instruction inst)
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
+
     o2 = reg.r[rm];
     if(rm == REGPC)
         o2 += 8;
-    o2 = shift(o2, st, sc, 0);
+
+    o2 = shift(o2, st, sc, false);
 
     dpex(inst, o1, o2, rd);
 
@@ -1437,13 +1476,16 @@ Idp2(instruction inst)
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
+
     o2 = reg.r[rm];
     if(rm == REGPC)
         o2 += 8;
+
     o3 = reg.r[rs];
     if(rs == REGPC)
         o3 += 8;
-    o2 = shift(o2, st, o3, 1);
+
+    o2 = shift(o2, st, o3, true);
 
     dpex(inst, o1, o2, rd);
 
@@ -1465,9 +1507,10 @@ if(trace)
 
 <<[[arm_class()]] op cases>>=
 case 1:	/* data processing i,r,r */
- op = (48) + ((w >> 21) & 0xf);
+ op = CARITH3 + ((w >> 21) & 0xf);
  break;
 @
+%48
 
 <<[[itab]] elements>>=
 //i,r,r
@@ -1505,6 +1548,7 @@ Idp3(instruction inst)
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
+
     o2 = inst & 0xff;
     sc = (inst>>7) & 0x1e;
     o2 = (o2 >> sc) | (o2 << (32 - sc));
@@ -1644,9 +1688,10 @@ dpex(instruction inst, long o1, long o2, int rd)
 
 
 
+% shift(rm, op, rs or #, true if rs)
 <<function shift>>=
 long
-shift(long v, int st, int sc, int isreg)
+shift(long v, int st, int sc, bool isreg)
 {
     if(sc == 0) {
         switch(st) {
@@ -1710,6 +1755,16 @@ shift(long v, int st, int sc, int isreg)
 
 \subsection{Memory}
 
+<<[[arm_class()]] class 0, when op == 0x9, if 24 bit set>>=
+if(w & (1<<24)) {
+    op = CSWAP;
+    if(w & (1<<22))
+         op++;	/* swpb */
+    break;
+}
+@
+% >> >>
+
 <<[[itab]] elements>>=
 [66] =  { Iswap,		"SWPW",	Imem },
 [67] =  { Iswap,		"SWPBU",Imem },
@@ -1760,143 +1815,14 @@ if(trace) {
 \fi
 
 
-<<[[arm_class()]] op cases>>=
-case 2:	/* load/store byte/word i(r) */
- op = (72) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
- break;
-@
-%48+24
-
-
-<<[[itab]] elements>>=
-// load/store w/ub i,r
-[72] =  { Imem1,		"MOVW",	Imem },
-[73] =  { Imem1,		"MOVB",	Imem },
-[74] =  { Imem1,		"MOVW",	Imem },
-[75] =  { Imem1,		"MOVB",	Imem },
-@
-
-<<[[itab]] elements>>=
-// load/store r,r
-[76] =  { Imem1,		"MOVW",	Imem },
-[77] =  { Imem1,		"MOVB",	Imem },
-[78] =  { Imem1,		"MOVW",	Imem },
-[79] =  { Imem1,		"MOVB",	Imem },
-@
-
-<<function Imem1>>=
-/*
- * load/store word/byte
- */
-void
-Imem1(instruction inst)
-{
-    int rn, rd, off, rm, sc, st;
-    ulong address, value, pbit, ubit, bbit, wbit, lbit, bit25;
-
-    bit25 = inst & (1<<25);
-    pbit = inst & (1<<24);
-    ubit = inst & (1<<23);
-    bbit = inst & (1<<22);
-    wbit = inst & (1<<21);
-    lbit = inst & (1<<20);
-    rn = (inst>>16) & 0xf;
-    rd = (inst>>12) & 0xf;
-
-    SET(st);
-    SET(sc);
-    SET(rm);
-    if(bit25) {
-        rm = inst & 0xf;
-        st = (inst>>5) & 0x3;
-        sc = (inst>>7) & 0x1f;
-        off = reg.r[rm];
-        if(rm == REGPC)
-            off += 8;
-        off = shift(off, st, sc, 0);
-    } else {
-        off = inst & 0xfff;
-    }
-    if(!ubit)
-        off = -off;
-    if(rn == REGPC)
-        off += 8;
-
-    address = reg.r[rn];
-    if(pbit)
-        address += off;
-
-    if(lbit) {
-        if(bbit)
-            value = getmem_b(address);
-        else
-            value = getmem_w(address);
-        if(rd == REGPC)
-            value -= 4;
-        reg.r[rd] = value;
-    } else {
-        value = reg.r[rd];
-        if(rd == REGPC)
-            value -= 4;
-        if(bbit)
-            putmem_b(address, value);
-        else
-            putmem_w(address, value);
-    }
-    if(!(pbit && !wbit))
-        reg.r[rn] += off;
-
-    <<[[Imem1()]] trace>>
+<<[[arm_class()]] class 0, if op & 0x9 == 0x9>>=
+if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
+     op = CMEM + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+     break;
 }
 @
-% >> >> >>
-
-\ifallcode
-<<[[Imem1()]] trace>>=
-if(trace) {
-    char *bw, *dotp, *dotc;
-
-    bw = "W";
-    if(bbit)
-        bw = "BU";
-    dotp = "";
-    if(!pbit)
-        dotp = ".P";
-    dotc = cond[reg.cond];
-
-    if(lbit) {
-        if(!bit25)
-            itrace("MOV%s%s%s\t#%x(R%d),R%d #%lux=#%x",
-                bw, dotp, dotc,
-                off, rn, rd,
-                address, value);
-        else
-            itrace("MOV%s%s%s\t(R%d%s%d)(R%d),R%d  #%lux=#%x",
-                bw, dotp, dotc,
-                rm, shtype[st], sc, rn, rd,
-                address, value);
-    } else {
-        if(!bit25)
-            itrace("MOV%s%s%s\tR%d,#%x(R%d) #%lux=#%x",
-                bw, dotp, dotc,
-                rd, off, rn,
-                address, value);
-        else
-            itrace("MOV%s%s%s\tR%d,(R%d%s%d)(R%d) #%lux=#%x",
-                bw, dotp, dotc,
-                rd, rm, shtype[st], sc, rn,
-                address, value);
-    }
-}
-@
-\fi
 
 
-<<[[arm_class()]] op cases>>=
-case 3:	/* load/store byte/word (r)(r) */
- op = (48+24+4) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
- break;
-@
 
 <<[[itab]] elements>>=
 // load/store h/sb
@@ -2016,9 +1942,153 @@ if(trace) {
 \fi
 
 
+
+<<[[arm_class()]] op cases>>=
+case 2:	/* load/store byte/word i(r) */
+ op = CMEM+4 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+ break;
+@
+%48+24
+
+
+
+
+<<[[itab]] elements>>=
+// load/store w/ub i,r
+[72] =  { Imem1,		"MOVW",	Imem },
+[73] =  { Imem1,		"MOVB",	Imem },
+[74] =  { Imem1,		"MOVW",	Imem },
+[75] =  { Imem1,		"MOVB",	Imem },
+@
+
+<<[[arm_class()]] op cases>>=
+case 3:	/* load/store byte/word (r)(r) */
+ op = CMEM+8 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+ break;
+@
+%(48+24+4)
+
+<<[[itab]] elements>>=
+// load/store r,r
+[76] =  { Imem1,		"MOVW",	Imem },
+[77] =  { Imem1,		"MOVB",	Imem },
+[78] =  { Imem1,		"MOVW",	Imem },
+[79] =  { Imem1,		"MOVB",	Imem },
+@
+
+<<function Imem1>>=
+/*
+ * load/store word/byte
+ */
+void
+Imem1(instruction inst)
+{
+    int rn, rd, off, rm, sc, st;
+    ulong address, value, pbit, ubit, bbit, wbit, lbit, bit25;
+
+    bit25 = inst & (1<<25);
+    pbit = inst & (1<<24);
+    ubit = inst & (1<<23);
+    bbit = inst & (1<<22);
+    wbit = inst & (1<<21);
+    lbit = inst & (1<<20);
+    rn = (inst>>16) & 0xf;
+    rd = (inst>>12) & 0xf;
+
+    SET(st);
+    SET(sc);
+    SET(rm);
+    if(bit25) {
+        rm = inst & 0xf;
+        st = (inst>>5) & 0x3;
+        sc = (inst>>7) & 0x1f;
+        off = reg.r[rm];
+        if(rm == REGPC)
+            off += 8;
+        off = shift(off, st, sc, false);
+    } else {
+        off = inst & 0xfff;
+    }
+    if(!ubit)
+        off = -off;
+    if(rn == REGPC)
+        off += 8;
+
+    address = reg.r[rn];
+    if(pbit)
+        address += off;
+
+    if(lbit) {
+        if(bbit)
+            value = getmem_b(address);
+        else
+            value = getmem_w(address);
+        if(rd == REGPC)
+            value -= 4;
+        reg.r[rd] = value;
+    } else {
+        value = reg.r[rd];
+        if(rd == REGPC)
+            value -= 4;
+        if(bbit)
+            putmem_b(address, value);
+        else
+            putmem_w(address, value);
+    }
+    if(!(pbit && !wbit))
+        reg.r[rn] += off;
+
+    <<[[Imem1()]] trace>>
+}
+@
+% >> >> >>
+
+\ifallcode
+<<[[Imem1()]] trace>>=
+if(trace) {
+    char *bw, *dotp, *dotc;
+
+    bw = "W";
+    if(bbit)
+        bw = "BU";
+    dotp = "";
+    if(!pbit)
+        dotp = ".P";
+    dotc = cond[reg.cond];
+
+    if(lbit) {
+        if(!bit25)
+            itrace("MOV%s%s%s\t#%x(R%d),R%d #%lux=#%x",
+                bw, dotp, dotc,
+                off, rn, rd,
+                address, value);
+        else
+            itrace("MOV%s%s%s\t(R%d%s%d)(R%d),R%d  #%lux=#%x",
+                bw, dotp, dotc,
+                rm, shtype[st], sc, rn, rd,
+                address, value);
+    } else {
+        if(!bit25)
+            itrace("MOV%s%s%s\tR%d,#%x(R%d) #%lux=#%x",
+                bw, dotp, dotc,
+                rd, off, rn,
+                address, value);
+        else
+            itrace("MOV%s%s%s\tR%d,(R%d%s%d)(R%d) #%lux=#%x",
+                bw, dotp, dotc,
+                rd, rm, shtype[st], sc, rn,
+                address, value);
+    }
+}
+@
+\fi
+
+
+
+
 <<[[arm_class()]] op cases>>=
 case 4:	/* block data transfer (r)(r) */
- op = (80) + ((w >> 20) & 0x1);
+ op = CBLOC + ((w >> 20) & 0x1);
  break;
 @
 %48+24+4+4
@@ -2105,10 +2175,10 @@ if(trace) {
 
 <<[[arm_class()]] op cases>>=
 case 5:	/* branch / branch link */
- op = (48+24+4+4+2) + ((w >> 24) & 0x1);
+ op = CBRANCH + ((w >> 24) & 0x1);
  break;
 @
-
+%(48+24+4+4+2)
 
 <<[[itab]] elements>>=
 // branch
@@ -2166,19 +2236,17 @@ if(trace)
 <<[[arm_class()]] op cases>>=
 case 7:	/* coprocessor crap */ // and syscall
  if((w >> 25) & 0x1)
-   op = 84;
+   op = CSYSCALL;
  else
-   op = 92; // coprocessor stuff not handled
+   op = CUNDEF; // coprocessor stuff not handled
  break;
 @
 % op = (48+24+4+4+2+2) + ((w >> 3) & 0x2) + ((w >> 20) & 0x1);
 % should assert bit 25 is 1
 
-
-
 <<[[itab]] elements>>=
 // co processor
-[84] =  { Ssyscall,		"SWI",	Isyscall },
+[CSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
 @
 
 \chapter{Memory}
@@ -4489,6 +4557,10 @@ reg.ip->count++;
 
 <<global iprof>>=
 ulong *iprof;
+@
+
+<<constant PROFGRAN>>=
+PROFGRAN	= 4,
 @
 
 <<[[initmap()]] iprof allocation>>=

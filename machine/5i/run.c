@@ -60,7 +60,7 @@ Inst itab[] =
   [86] =  { undef,		"undef" },
   [87] =  { undef,		"undef" },
   /*x: [[itab]] elements */
-  [92] =  { undef,		"undef"  },
+  [CUNDEF] =  { undef,		"undef"  },
   /*x: [[itab]] elements */
   [64] =  { Imul,	"MUL",	Iarith },
   [65] =  { Imula,"MULA",	Iarith },	
@@ -143,6 +143,12 @@ Inst itab[] =
   [66] =  { Iswap,		"SWPW",	Imem },
   [67] =  { Iswap,		"SWPBU",Imem },
   /*x: [[itab]] elements */
+  // load/store h/sb
+  [68] =  { Imem2,		"MOV",	Imem },
+  [69] =  { Imem2,		"MOV",	Imem },
+  [70] =  { Imem2,		"MOV",	Imem },
+  [71] =  { Imem2,		"MOV",	Imem },
+  /*x: [[itab]] elements */
   // load/store w/ub i,r
   [72] =  { Imem1,		"MOVW",	Imem },
   [73] =  { Imem1,		"MOVB",	Imem },
@@ -155,12 +161,6 @@ Inst itab[] =
   [78] =  { Imem1,		"MOVW",	Imem },
   [79] =  { Imem1,		"MOVB",	Imem },
   /*x: [[itab]] elements */
-  // load/store h/sb
-  [68] =  { Imem2,		"MOV",	Imem },
-  [69] =  { Imem2,		"MOV",	Imem },
-  [70] =  { Imem2,		"MOV",	Imem },
-  [71] =  { Imem2,		"MOV",	Imem },
-  /*x: [[itab]] elements */
   // block move r,r
   [80] =  { Ilsm,		"LDM",	Imem },
   [81] =  { Ilsm,		"STM",	Imem },
@@ -170,7 +170,7 @@ Inst itab[] =
   [83] =  { Ibl,	"BL",	Ibranch },
   /*x: [[itab]] elements */
   // co processor
-  [84] =  { Ssyscall,		"SWI",	Isyscall },
+  [CSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
   /*e: [[itab]] elements */
   { 0 }
 };
@@ -322,83 +322,90 @@ undef(instruction inst)
 int
 arm_class(instruction w)
 {
- int op, done, cp;
+    int op;
+   
+    op = (w >> 25) & 0x7;
+    switch(op) {
+    /*s: [[arm_class()]] op cases */
+    case 0:	/* data processing r,r,r */
+        op = ((w >> 4) & 0xf);
+        /*s: [[arm_class()]] class 0, if op == 0x9 */
+        /* mul, swp, mull */
+        if(op == 0x9) {
+            op = CMUL;
+            /*s: [[arm_class()]] class 0, when op == 0x9, if 24 bit set */
+            if(w & (1<<24)) {
+                op = CSWAP;
+                if(w & (1<<22))
+                     op++;	/* swpb */
+                break;
+            }
+            /*e: [[arm_class()]] class 0, when op == 0x9, if 24 bit set */
+            if(w & (1<<23)) {	/* mullu */
+                op = CMULTMP;
+                if(w & (1<<22))	/* mull */
+                    op += 2;
+            }
+            if(w & (1<<21))
+                op++;		/* mla */
+            break;
+        }
+        /*e: [[arm_class()]] class 0, if op == 0x9 */
+        /*s: [[arm_class()]] class 0, if op & 0x9 == 0x9 */
+        if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
+             op = CMEM + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+             break;
+        }
+        /*e: [[arm_class()]] class 0, if op & 0x9 == 0x9 */
+   
+        op = (w >> 21) & 0xf;
 
- op = (w >> 25) & 0x7;
- switch(op) {
- /*s: [[arm_class()]] op cases */
- case 0:	/* data processing r,r,r */
-  op = ((w >> 4) & 0xf);
-
-  if(op == 0x9) {
-   op = 48+16;		/* mul, swp or *rex */
-   if(w & (1<<24)) {
-    op += 2;
-    if(w & (1<<22))
-     op++;	/* swpb */
-    break;
-   }
-   if(w & (1<<23)) {	/* mullu */
-    op = (48+24+4+4+2+2+4);
-    if(w & (1<<22))	/* mull */
-     op += 2;
-   }
-   if(w & (1<<21))
-    op++;		/* mla */
-   break;
-  }
-
-  if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
-   op = (48+16+4) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
-   break;
-  }
-
-  op = (w >> 21) & 0xf;
-  if(w & (1<<4))
-    op += 32;
-  else
-   if((w & (31<<7)) || (w & (1<<5)))
-    op += 16;
-  break;
- /*x: [[arm_class()]] op cases */
- case 1:	/* data processing i,r,r */
-  op = (48) + ((w >> 21) & 0xf);
-  break;
- /*x: [[arm_class()]] op cases */
- case 2:	/* load/store byte/word i(r) */
-  op = (72) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
-  break;
- /*x: [[arm_class()]] op cases */
- case 3:	/* load/store byte/word (r)(r) */
-  op = (48+24+4) + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
-  break;
- /*x: [[arm_class()]] op cases */
- case 4:	/* block data transfer (r)(r) */
-  op = (80) + ((w >> 20) & 0x1);
-  break;
- /*x: [[arm_class()]] op cases */
- case 5:	/* branch / branch link */
-  op = (48+24+4+4+2) + ((w >> 24) & 0x1);
-  break;
- /*x: [[arm_class()]] op cases */
- case 7:	/* coprocessor crap */ // and syscall
-  if((w >> 25) & 0x1)
-    op = 84;
-  else
-    op = 92; // coprocessor stuff not handled
-  break;
- /*e: [[arm_class()]] op cases */
- default:	  
-  op = 92;
-  break;
- }
- return op;
+        if(w & (1<<4))
+          op += CARITH2;
+        else
+         if((w & (31<<7)) || (w & (1<<5)))
+          op += CARITH1;
+        // else op+=CARITH0 (= 0)
+        break;
+    /*x: [[arm_class()]] op cases */
+    case 1:	/* data processing i,r,r */
+     op = CARITH3 + ((w >> 21) & 0xf);
+     break;
+    /*x: [[arm_class()]] op cases */
+    case 2:	/* load/store byte/word i(r) */
+     op = CMEM+4 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+     break;
+    /*x: [[arm_class()]] op cases */
+    case 3:	/* load/store byte/word (r)(r) */
+     op = CMEM+8 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+     break;
+    /*x: [[arm_class()]] op cases */
+    case 4:	/* block data transfer (r)(r) */
+     op = CBLOC + ((w >> 20) & 0x1);
+     break;
+    /*x: [[arm_class()]] op cases */
+    case 5:	/* branch / branch link */
+     op = CBRANCH + ((w >> 24) & 0x1);
+     break;
+    /*x: [[arm_class()]] op cases */
+    case 7:	/* coprocessor crap */ // and syscall
+     if((w >> 25) & 0x1)
+       op = CSYSCALL;
+     else
+       op = CUNDEF; // coprocessor stuff not handled
+     break;
+    /*e: [[arm_class()]] op cases */
+    default:	  
+        op = CUNDEF;
+        break;
+    }
+    return op;
 }
 /*e: function arm_class */
 
 /*s: function shift */
 long
-shift(long v, int st, int sc, int isreg)
+shift(long v, int st, int sc, bool isreg)
 {
     if(sc == 0) {
         switch(st) {
@@ -585,6 +592,7 @@ Idp0(instruction inst)
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
+
     o2 = reg.r[rm];
     if(rm == REGPC)
         o2 += 8;
@@ -624,10 +632,12 @@ Idp1(instruction inst)
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
+
     o2 = reg.r[rm];
     if(rm == REGPC)
         o2 += 8;
-    o2 = shift(o2, st, sc, 0);
+
+    o2 = shift(o2, st, sc, false);
 
     dpex(inst, o1, o2, rd);
 
@@ -663,13 +673,16 @@ Idp2(instruction inst)
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
+
     o2 = reg.r[rm];
     if(rm == REGPC)
         o2 += 8;
+
     o3 = reg.r[rs];
     if(rs == REGPC)
         o3 += 8;
-    o2 = shift(o2, st, o3, 1);
+
+    o2 = shift(o2, st, o3, true);
 
     dpex(inst, o1, o2, rd);
 
@@ -701,6 +714,7 @@ Idp3(instruction inst)
     o1 = reg.r[rn];
     if(rn == REGPC)
         o1 += 8;
+
     o2 = inst & 0xff;
     sc = (inst>>7) & 0x1e;
     o2 = (o2 >> sc) | (o2 << (32 - sc));
@@ -876,7 +890,7 @@ Imem1(instruction inst)
         off = reg.r[rm];
         if(rm == REGPC)
             off += 8;
-        off = shift(off, st, sc, 0);
+        off = shift(off, st, sc, false);
     } else {
         off = inst & 0xfff;
     }
