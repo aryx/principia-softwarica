@@ -64,9 +64,9 @@ typedef struct SDperm SDperm;
 typedef struct SDreq SDreq;
 typedef struct SDunit SDunit;
 
-/*s: dat_forward.h pragma */
+/*s: dat_forward.h pragma(x86) */
 #pragma incomplete BIOS32si
 #pragma incomplete Pcidev
 #pragma incomplete Ureg
-/*e: dat_forward.h pragma */
+/*e: dat_forward.h pragma(x86) */
 /*e: dat_forward.h */

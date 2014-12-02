@@ -138,13 +138,13 @@ rmemwrite(Chan*, void *a, long n, vlong off)
     return rmemrw(0, a, n, off);
 }
 
-/*s: function realmodelink */
+/*s: function realmodelink(x86) */
 void
 realmodelink(void)
 {
     addarchfile("realmode", 0660, rtrapread, rtrapwrite);
     addarchfile("realmodemem", 0660, rmemread, rmemwrite);
 }
-/*e: function realmodelink */
+/*e: function realmodelink(x86) */
 
 /*e: realmode.c */

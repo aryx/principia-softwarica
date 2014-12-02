@@ -8,11 +8,11 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: dma.c forward decl */
+/*s: dma.c forward decl(x86) */
 typedef struct DMAport  DMAport;
 typedef struct DMA  DMA;
 typedef struct DMAxfer  DMAxfer;
-/*e: dma.c forward decl */
+/*e: dma.c forward decl(x86) */
 
 /*
  *  state of a dma transfer

@@ -27,7 +27,7 @@
 // Entry point!! (after jump from l_multiboot.s)
 //*****************************************************************************
 
-/*s: function _setup_segmentation */
+/*s: function _setup_segmentation(x86) */
 TEXT _setup_segmentation(SB), $0
         CLI                     /* make sure interrupts are off */
 
@@ -53,13 +53,13 @@ TEXT _setup_segmentation(SB), $0
          BYTE   $0xEA
          LONG   $_setup_pagination-KZERO(SB)
          WORD   $(2<<3)
-/*e: function _setup_segmentation */
+/*e: function _setup_segmentation(x86) */
 
 //*****************************************************************************
 // Gdts Data
 //*****************************************************************************
 
-/*s: global tgdt */
+/*s: global tgdt(x86) */
 /*
  *  gdt to get us to 32-bit/segmented/unpaged mode
  */
@@ -76,9 +76,9 @@ TEXT tgdt(SB), $0
         /* exec segment descriptor for 4 gigabytes (PL 0) */
         LONG    $(0xFFFF)
         LONG    $(SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(0)|SEGEXEC|SEGR)
-/*e: global tgdt */
+/*e: global tgdt(x86) */
 
-/*s: global tgdtptr */
+/*s: global tgdtptr(x86) */
 /*
  *  pointer to initial gdt
  *  Note the -KZERO which puts the physical address in the gdtptr. 
@@ -87,7 +87,7 @@ TEXT tgdt(SB), $0
 TEXT tgdtptr(SB), $0
         WORD    $(3*8)
         LONG    $tgdt-KZERO(SB)
-/*e: global tgdtptr */
+/*e: global tgdtptr(x86) */
 
 // realmode stuff
 TEXT m0rgdtptr(SB), $0
@@ -106,7 +106,7 @@ TEXT m0idtptr(SB), $0
 // Assume protected 32 bit and GTD done
 //*****************************************************************************
 
-/*s: function _setup_pagination */
+/*s: function _setup_pagination(x86) */
 /*
  * In protected mode with paging turned off and segment registers setup
  * to linear map all memory.
@@ -174,9 +174,9 @@ _setpte:
         MOVL    $_setup_bss_stack(SB), AX       /* this is a virtual address */
         MOVL    DX, CR0                         /* turn on paging */
         JMP*    AX                              /* jump to the virtual nirvana */
-/*e: function _setup_pagination */
+/*e: function _setup_pagination(x86) */
 
-/*s: function _setup_bss_stack */
+/*s: function _setup_bss_stack(x86) */
 /*
  * Basic machine environment set, can clear BSS and create a stack.
  * The stack starts at the top of the page containing the Cpu structure.
@@ -205,7 +205,7 @@ _clearbss:
 
         ADDL    $(CPUSIZE-4), SP               /* initialise stack */
 
-/*s: end of _setup_bss_stack */
+/*s: end of _setup_bss_stack(x86) */
 /*
  * Need to do one final thing to ensure a clean machine environment,
  * clear the EFLAGS register, which can only be done once there is a stack.
@@ -215,8 +215,8 @@ _clearbss:
         POPFL
 
         CALL    main(SB)
-/*e: end of _setup_bss_stack */
-/*e: function _setup_bss_stack */
+/*e: end of _setup_bss_stack(x86) */
+/*e: function _setup_bss_stack(x86) */
 
         
 //*****************************************************************************

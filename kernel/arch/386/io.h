@@ -234,8 +234,8 @@ enum
 };
 
 
-/*s: io.h pragmas */
+/*s: io.h pragmas(x86) */
 #pragma varargck  type  "T" int
 #pragma varargck  type  "T" uint
-/*e: io.h pragmas */
+/*e: io.h pragmas(x86) */
 /*e: io.h */

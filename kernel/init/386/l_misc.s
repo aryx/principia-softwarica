@@ -5,7 +5,7 @@
  */
 #define HLT             BYTE $0xF4
 
-/*s: function idle */
+/*s: function idle(x86) */
 /*
  * Park a processor. Should never fall through a return from main to here,
  * should only be called by application processors when shutting down.
@@ -15,9 +15,9 @@ _idle:
         STI
         HLT
         JMP     _idle
-/*e: function idle */
+/*e: function idle(x86) */
 
-/*s: function halt */
+/*s: function halt(x86) */
 /*
  * Attempt at power saving. -rsc
  */
@@ -32,7 +32,7 @@ _nothingready:
         STI
         HLT
         RET
-/*e: function halt */
+/*e: function halt(x86) */
 
 /*
  * Basic timing loop to determine CPU frequency.

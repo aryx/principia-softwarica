@@ -30,7 +30,7 @@
  * dmasetup() may enforce maximum transfer sizes. 
  */
 
-/*s: devfloppy.c forward decl */
+/*s: devfloppy.c forward decl(x86) */
 static void floppyintr(Ureg*);
 static int floppyon(FDrive*);
 static void floppyoff(FDrive*);
@@ -50,10 +50,10 @@ static long floppyseek(FDrive*, long);
 static int  floppysense(void);
 static void floppywait(int);
 static long floppyxfer(FDrive*, int, void*, long, long);
-/*e: devfloppy.c forward decl */
+/*e: devfloppy.c forward decl(x86) */
 
 
-/*s: interrupt callback pcfloppyintr */
+/*s: interrupt callback pcfloppyintr(x86) */
 static void
 pcfloppyintr(Ureg *ur, void *a)
 {
@@ -61,7 +61,7 @@ pcfloppyintr(Ureg *ur, void *a)
 
     floppyintr(ur);
 }
-/*e: interrupt callback pcfloppyintr */
+/*e: interrupt callback pcfloppyintr(x86) */
 
 void
 floppysetup0(FController *fl)
@@ -126,10 +126,10 @@ enum {
     DMAchan=    2,  /* floppy dma channel */
 };
 
-/*s: devfloppy.c debugging macro */
+/*s: devfloppy.c debugging macro(x86) */
 #define DPRINT if(floppydebug)print
 int floppydebug = 0;
-/*e: devfloppy.c debugging macro */
+/*e: devfloppy.c debugging macro(x86) */
 
 /*
  *  types of drive (from PC equipment byte)
@@ -1141,7 +1141,7 @@ floppyintr(Ureg *)
     wakeup(&fl.r);
 }
 
-/*s: global floppydevtab */
+/*s: global floppydevtab(x86) */
 Dev floppydevtab = {
     .dc       =    'f',
     .name     =    "floppy",
@@ -1162,5 +1162,5 @@ Dev floppydevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
-/*e: global floppydevtab */
+/*e: global floppydevtab(x86) */
 /*e: devfloppy.c */

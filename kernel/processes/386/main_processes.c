@@ -8,34 +8,34 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: function procsetup */
+/*s: function procsetup(x86) */
 void
 procsetup(Proc* p)
 {
-  /*s: [[procsetup()]] fp setup */
+  /*s: [[procsetup()]] fp setup(x86) */
   /*
    *  set up floating point for a new process
    */
       p->fpstate = FPinit;
       fpoff();
-  /*e: [[procsetup()]] fp setup */
+  /*e: [[procsetup()]] fp setup(x86) */
 }
-/*e: function procsetup */
+/*e: function procsetup(x86) */
 
-/*s: function procsave */
+/*s: function procsave(x86) */
 /*
  *  Save the cpu dependent part of the process state.
  */
 void
 procsave(Proc *p)
 {
-    /*s: [[procsave()]] cycles adjustments */
+    /*s: [[procsave()]] cycles adjustments(x86) */
         uvlong t;
 
         cycles(&t);
         p->pcycles += t;
-    /*e: [[procsave()]] cycles adjustments */
-    /*s: [[procsave()]] fp adjustments */
+    /*e: [[procsave()]] cycles adjustments(x86) */
+    /*s: [[procsave()]] fp adjustments(x86) */
         if(p->fpstate == FPactive){
             if(p->state == Moribund)
                 fpclear();
@@ -52,7 +52,7 @@ procsave(Proc *p)
             }
             p->fpstate = FPinactive;
         }
-    /*e: [[procsave()]] fp adjustments */
+    /*e: [[procsave()]] fp adjustments(x86) */
     /*
      * While this processor is in the scheduler, the process could run
      * on another processor and exit, returning the page tables to
@@ -66,23 +66,23 @@ procsave(Proc *p)
      */
     mmuflushtlb(PADDR(cpu->pdproto));
 }
-/*e: function procsave */
+/*e: function procsave(x86) */
 
-/*s: function procrestore */
+/*s: function procrestore(x86) */
 void
 procrestore(Proc *p)
 {
     uvlong t;
     if(p->kp)
         return;
-    /*s: [[procrestore]] cycles adjustments */
+    /*s: [[procrestore]] cycles adjustments(x86) */
         cycles(&t);
         p->pcycles -= t;
-    /*e: [[procrestore]] cycles adjustments */
+    /*e: [[procrestore]] cycles adjustments(x86) */
 }
-/*e: function procrestore */
+/*e: function procrestore(x86) */
 
-/*s: function fpsavealloc */
+/*s: function fpsavealloc(x86) */
 void
 fpsavealloc(void)
 {
@@ -90,9 +90,9 @@ fpsavealloc(void)
     if (cpu->fpsavalign == nil)
         panic("cpu%d: can't allocate fpsavalign", cpu->cpuno);
 }
-/*e: function fpsavealloc */
+/*e: function fpsavealloc(x86) */
 
-/*s: function fpssesave */
+/*s: function fpssesave(x86) */
 /*
  * sse fp save and restore buffers have to be 16-byte (FPalign) aligned,
  * so we shuffle the data down as needed or make copies.
@@ -111,9 +111,9 @@ fpssesave(ArchFPsave *fps)
     if (fps->magic != 0x1234)
         print("fpssesave: magic corrupted\n");
 }
-/*e: function fpssesave */
+/*e: function fpssesave(x86) */
 
-/*s: function fpsserestore */
+/*s: function fpsserestore(x86) */
 void
 fpsserestore(ArchFPsave *fps)
 {
@@ -129,9 +129,9 @@ fpsserestore(ArchFPsave *fps)
     if (fps->magic != 0x4321)
         print("fpsserestore: magic corrupted\n");
 }
-/*e: function fpsserestore */
+/*e: function fpsserestore(x86) */
 
-/*s: function idlehands */
+/*s: function idlehands(x86) */
 // current configuration
 static bool idle_spin = false;
 static int idle_if_nproc = 0;
@@ -158,5 +158,5 @@ idlehands(void)
         (idle_if_nproc && conf.ncpu >= idle_if_nproc))
         halt();
 }
-/*e: function idlehands */
+/*e: function idlehands(x86) */
 /*e: main_processes.c */

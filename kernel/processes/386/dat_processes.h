@@ -1,18 +1,18 @@
 /*s: dat_processes.h */
 
-/*s: constant AOUT_MAGIC */
+/*s: constant AOUT_MAGIC(x86) */
 /*
  *  parameters for sysproc.c
  */
 // I_MAGIC is defined in include/a.out.h, I for INTEL?
 #define AOUT_MAGIC  (I_MAGIC)
-/*e: constant AOUT_MAGIC */
+/*e: constant AOUT_MAGIC(x86) */
 
 //*****************************************************************************
 // Proc extensions
 //*****************************************************************************
 
-/*s: union ArchFPSave */
+/*s: union ArchFPSave(x86) */
 /*
  * the FP regs must be stored here, not somewhere pointed to from here.
  * port code assumes this.
@@ -22,7 +22,7 @@ union ArchFPsave {
     FPstate;
     SFPssestate;
 };
-/*e: union ArchFPSave */
+/*e: union ArchFPSave(x86) */
 
 //*****************************************************************************
 // Interrupts
@@ -31,9 +31,9 @@ union ArchFPsave {
 // Used to be in io.h but more important than just a set of enums for IO
 // so put here.
 
-/*s: enum vector */
+/*s: enum vector(x86) */
 enum {
-    /*s: enum vector cases */
+    /*s: enum vector cases(x86) */
         VectorNMI = 2,    /* non-maskable interrupt */
         VectorBPT = 3,    /* breakpoint */
         VectorUD  = 6,    /* invalid opcode exception */
@@ -43,20 +43,20 @@ enum {
         VectorPF  = 14,   /* page fault */ //!!! page fault interrupt
         Vector15  = 15,   /* reserved */
         VectorCERR  = 16,   /* coprocessor error */
-    /*x: enum vector cases */
+    /*x: enum vector cases(x86) */
         VectorPIC = 32,   /* external i8259 interrupts */
-    /*x: enum vector cases */
+    /*x: enum vector cases(x86) */
         //!!! int 64, or int 0x40 = way to jump in plan9 OS !!!
         // VectorSYSCALL = 64, in mem.h because used by Assembly too
-    /*x: enum vector cases */
+    /*x: enum vector cases(x86) */
         VectorLAPIC = VectorPIC+16, /* local APIC interrupts */
         VectorAPIC  = 65,   /* external APIC interrupts */
         MaxVectorAPIC = 255,
-    /*e: enum vector cases */
+    /*e: enum vector cases(x86) */
 };
-/*e: enum vector */
+/*e: enum vector(x86) */
 
-/*s: enum irq */
+/*s: enum irq(x86) */
 enum {
     IrqCLOCK  = 0, // !!! clock interrupt
     IrqKBD    = 1,
@@ -82,10 +82,10 @@ enum {
 
     MaxIrqLAPIC = 31,
 };
-/*e: enum irq */
+/*e: enum irq(x86) */
   
 
-/*s: struct Vctl */
+/*s: struct Vctl(x86) */
 struct Vctl {
 
     bool isintr;     /* interrupt or fault/trap */
@@ -97,18 +97,18 @@ struct Vctl {
     char  name[KNAMELEN];   /* of driver */
     int tbdf; // /* type+bus+device+function */ ??
   
-    /*s: [[Vctl]] other fields */
+    /*s: [[Vctl]] other fields(x86) */
     // interrupt service routine
     int (*isr)(int);    /* get isr bit for this irq */
     int (*eoi)(int);    /* eoi */
-    /*e: [[Vctl]] other fields */
+    /*e: [[Vctl]] other fields(x86) */
     // extra
-    /*s: [[Vctl]] extra fields */
+    /*s: [[Vctl]] extra fields(x86) */
     // list<ref_own<Vctl> of vctl[vno], xalloc'ed (should not have that many so ok)
     Vctl* next;     /* handlers on this vector */
-    /*e: [[Vctl]] extra fields */
+    /*e: [[Vctl]] extra fields(x86) */
 };
-/*e: struct Vctl */
+/*e: struct Vctl(x86) */
 
 // array<list<Vctl>>, xalloc'ed
 //IMPORTANT: static Vctl *vctl[256]; (in trap.c)
@@ -120,7 +120,7 @@ struct Vctl {
 // Used only in 386/, so could be put in arch/ but used by the .c here.
 // Actually used only in i8253.c but important so put here.
 
-/*s: struct I8253 */
+/*s: struct I8253(x86) */
 struct I8253
 {
     ulong   period;     /* current clock period */
@@ -136,7 +136,7 @@ struct I8253
     // extra
     Lock;
 };
-/*e: struct I8253 */
+/*e: struct I8253(x86) */
 
 //IMPORTANT: I8253 i8253; (in i8253.c)
 //IMPORTANT: also is interrupt i8253clock() calling clock.c:timerintr()

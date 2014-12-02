@@ -27,7 +27,7 @@ struct PCICons PCICONS;
 
 int pcivga;
 
-/*s: pci.c forward decl */
+/*s: pci.c forward decl(x86) */
 void    pcicfgw16(Pcidev*, int, int);
 ulong   pcibarsize(Pcidev*, int);
 void    pcibussize(Pcidev*, ulong*, ulong*);
@@ -37,9 +37,9 @@ uchar   pciipin(Pcidev*, uchar);
 typedef struct Slot Slot;
 typedef struct Bridge Bridge;
 typedef struct Router Router;
-/*e: pci.c forward decl */
+/*e: pci.c forward decl(x86) */
 
-/*s: pci.c debugging macro */
+/*s: pci.c debugging macro(x86) */
 #define DBG if(0) pcilog
 
 int
@@ -58,7 +58,7 @@ pcilog(char *fmt, ...)
     return n;
 }
 
-/*e: pci.c debugging macro */
+/*e: pci.c debugging macro(x86) */
 
 
 enum
@@ -653,7 +653,7 @@ struct Bridge
     void    (*set)(Pcidev *, uchar, uchar);
 };
 
-/*s: global southbridges */
+/*s: global southbridges(x86) */
 static Bridge southbridges[] = {
     { 0x8086, 0x122e, pIIxget, pIIxset },   /* Intel 82371FB */
     { 0x8086, 0x1234, pIIxget, pIIxset },   /* Intel 82371MX */
@@ -703,7 +703,7 @@ static Bridge southbridges[] = {
     { 0x1002, 0x4377, nil, nil },       /* ATI Radeon Xpress 200M */
     { 0x1002, 0x4372, nil, nil },       /* ATI SB400 */
 };
-/*e: global southbridges */
+/*e: global southbridges(x86) */
 
 struct Slot {
     uchar   bus;        /* Pci bus number */

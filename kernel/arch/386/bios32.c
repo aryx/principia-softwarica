@@ -9,16 +9,16 @@
 /*e: kernel basic includes */
 #include "io.h"
 
-/*s: bios32.c debugging macro */
+/*s: bios32.c debugging macro(x86) */
 static int vflag = 0;
 //#define VFLAG(...)    if(vflag) print(__VA_ARGS__)
 #define VFLAG if(vflag) print
-/*e: bios32.c debugging macro */
+/*e: bios32.c debugging macro(x86) */
 
-/*s: bios32.c forward decl */
+/*s: bios32.c forward decl(x86) */
 typedef struct BIOS32sdh BIOS32sdh;
 typedef struct BIOS32si BIOS32si;
-/*e: bios32.c forward decl */
+/*e: bios32.c forward decl(x86) */
 
 struct BIOS32sdh {      /* BIOS32 Service Directory Header */
     u8int   signature[4];       /* "_32_" */

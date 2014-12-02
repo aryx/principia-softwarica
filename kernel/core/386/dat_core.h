@@ -4,7 +4,7 @@
 // Cpu extension
 //*****************************************************************************
 
-/*s: struct Tss */
+/*s: struct Tss(x86) */
 struct Tss {
     ulong link;     /* link (old TSS selector) */
     ulong esp0;     /* privilege level 0 stack pointer */
@@ -33,58 +33,58 @@ struct Tss {
     ulong ldt;      /* selector for task's LDT */
     ulong iomap;      /* I/O map base address + T-bit */
 };
-/*e: struct Tss */
+/*e: struct Tss(x86) */
 
-/*s: struct Segdesc */
+/*s: struct Segdesc(x86) */
 struct Segdesc
 {
     ulong d0; // ??
     ulong d1; // ??
 };
-/*e: struct Segdesc */
+/*e: struct Segdesc(x86) */
 
-/*s: struct ArchCpu */
+/*s: struct ArchCpu(x86) */
 struct ArchCpu {
-    /*s: [[Cpu]] [[Arch]] cpuid fields */
+    /*s: [[Cpu]] [[Arch]] cpuid fields(x86) */
     char  cpuidid[16];
     char* cpuidtype;
     int cpuidax;
     int cpuiddx;
-    /*e: [[Cpu]] [[Arch]] cpuid fields */
-    /*s: [[Cpu]] [[Arch]] other fields */
+    /*e: [[Cpu]] [[Arch]] cpuid fields(x86) */
+    /*s: [[Cpu]] [[Arch]] other fields(x86) */
     // array<Segdesc>
     Segdesc *gdt;     /* gdt for this processor */
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     kern_addr2   pdproto;      /* page directory base for this processor (va) */
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     Page* mmupdpool;
     int mmupdcnt;
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     Tss*  tss;      /* tss for this processor */
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     int havepge;
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     // for perfticks, tsc = time stamp counter
     bool havetsc;
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     int mmupdalloc;
     int mmupdfree;
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     int loopconst;
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     vlong mtrrcap;
     vlong mtrrdef;
     vlong mtrrfix[11];
     vlong mtrrvar[32];    /* 256 max. */
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     ArchFPsave *fpsavalign;
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     Lock  apictimerlock;
-    /*x: [[Cpu]] [[Arch]] other fields */
+    /*x: [[Cpu]] [[Arch]] other fields(x86) */
     uvlong tscticks;
-    /*e: [[Cpu]] [[Arch]] other fields */
+    /*e: [[Cpu]] [[Arch]] other fields(x86) */
 };
-/*e: struct ArchCpu */
+/*e: struct ArchCpu(x86) */
 
 //*****************************************************************************
 // Conf extension?

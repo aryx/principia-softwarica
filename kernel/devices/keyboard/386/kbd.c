@@ -13,9 +13,9 @@
 
 #include    "io.h"
 
-/*s: kbd.c forward decl */
+/*s: kbd.c forward decl(x86) */
 typedef struct Kbscan Kbscan;
-/*e: kbd.c forward decl */
+/*e: kbd.c forward decl(x86) */
 
 enum {
     Data=       0x60,       /* data port */
@@ -33,7 +33,7 @@ enum {
     Cmd=        0x64,       /* command port (write only) */
 };
 
-/*s: enum specialkey */
+/*s: enum specialkey(x86) */
 enum {
     Spec=       0xF800,     /* Unicode private space */
     KF=         0xF000,     /* function key (begin Unicode private space) */
@@ -68,9 +68,9 @@ enum {
 
     Nscan=  128,
 };
-/*e: enum specialkey */
+/*e: enum specialkey(x86) */
 
-/*s: enum kbscan */
+/*s: enum kbscan(x86) */
 /* kbscans indices */
 enum kbscan {
     Int=    0,          
@@ -78,11 +78,11 @@ enum kbscan {
 
     Nscans,
 };
-/*e: enum kbscan */
+/*e: enum kbscan(x86) */
 
 static char *initfailed = "i8042: kbdinit failed\n";
 
-/*s: global kbtab */
+/*s: global kbtab(x86) */
 Rune kbtab[Nscan] = 
 {
 [0x00]  No, 0x1b,   '1',    '2',    '3',    '4',    '5',    '6',
@@ -102,9 +102,9 @@ Rune kbtab[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, No, No, No, No, No, No, No,
 };
-/*e: global kbtab */
+/*e: global kbtab(x86) */
 
-/*s: global kbtabshift */
+/*s: global kbtabshift(x86) */
 Rune kbtabshift[Nscan] =
 {
 [0x00]  No, 0x1b,   '!',    '@',    '#',    '$',    '%',    '^',
@@ -124,9 +124,9 @@ Rune kbtabshift[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, No, No, No, No, No, No, No,
 };
-/*e: global kbtabshift */
+/*e: global kbtabshift(x86) */
 
-/*s: global kbtabesc1 */
+/*s: global kbtabesc1(x86) */
 Rune kbtabesc1[Nscan] =
 {
 [0x00]  No, No, No, No, No, No, No, No,
@@ -146,9 +146,9 @@ Rune kbtabesc1[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, No, No, No, No, No, No, No,
 };
-/*e: global kbtabesc1 */
+/*e: global kbtabesc1(x86) */
 
-/*s: global kbtabaltgr */
+/*s: global kbtabaltgr(x86) */
 Rune kbtabaltgr[Nscan] =
 {
 [0x00]  No, No, No, No, No, No, No, No,
@@ -168,14 +168,14 @@ Rune kbtabaltgr[Nscan] =
 [0x70]  No, No, No, No, No, No, No, No,
 [0x78]  No, No, No, No, No, No, No, No,
 };
-/*e: global kbtabaltgr */
+/*e: global kbtabaltgr(x86) */
 
 // see kbtab.c for the ctrl one, put in another file because
 // of issues with TeX with the special characters it contain
 // can't LPize it.
-/*s: global kbtabctrl decl */
+/*s: global kbtabctrl decl(x86) */
 extern Rune kbtabctrl[];
-/*e: global kbtabctrl decl */
+/*e: global kbtabctrl decl(x86) */
 
 enum
 {
@@ -188,24 +188,24 @@ enum
     Ckbdint=    (1<<0),     /* kbd interrupt enable */
 };
 
-/*s: global i8042lock */
+/*s: global i8042lock(x86) */
 static Lock i8042lock;
-/*e: global i8042lock */
-/*s: global nokbd */
+/*e: global i8042lock(x86) */
+/*s: global nokbd(x86) */
 static bool nokbd = true;           /* flag: no PS/2 keyboard */
-/*e: global nokbd */
+/*e: global nokbd(x86) */
 
 extern int mouseshifted;
 extern void (*kbdmouse)(int);
 
-/*s: global ccc */
+/*s: global ccc(x86) */
 static byte ccc;
-/*e: global ccc */
-/*s: hook auxputc */
+/*e: global ccc(x86) */
+/*s: hook auxputc(x86) */
 static void (*auxputc)(int, int);
-/*e: hook auxputc */
+/*e: hook auxputc(x86) */
 
-/*s: function outready */
+/*s: function outready(x86) */
 /*
  *  wait for output no longer busy
  */
@@ -221,9 +221,9 @@ outready(void)
     }
     return 0;
 }
-/*e: function outready */
+/*e: function outready(x86) */
 
-/*s: function inready */
+/*s: function inready(x86) */
 /*
  *  wait for input
  */
@@ -239,9 +239,9 @@ inready(void)
     }
     return 0;
 }
-/*e: function inready */
+/*e: function inready(x86) */
 
-/*s: function i8042reset */
+/*s: function i8042reset(x86) */
 /*
  *  ask 8042 to reset the machine
  */
@@ -275,9 +275,9 @@ i8042reset(void)
         delay(100);
     }
 }
-/*e: function i8042reset */
+/*e: function i8042reset(x86) */
 
-/*s: function i8042auxcmd */
+/*s: function i8042auxcmd(x86) */
 int
 i8042auxcmd(int cmd)
 {
@@ -315,9 +315,9 @@ i8042auxcmd(int cmd)
     }
     return 0;
 }
-/*e: function i8042auxcmd */
+/*e: function i8042auxcmd(x86) */
 
-/*s: struct Kbscan */
+/*s: struct Kbscan(x86) */
 struct Kbscan {
     bool ctl;
     bool shift;
@@ -325,29 +325,29 @@ struct Kbscan {
     bool alt;
     bool altgr;
     bool num;
-    /*s: [[Kbscan]] other fields */
+    /*s: [[Kbscan]] other fields(x86) */
     bool esc1;
     int esc2;
-    /*x: [[Kbscan]] other fields */
+    /*x: [[Kbscan]] other fields(x86) */
     int buttons;
-    /*x: [[Kbscan]] other fields */
+    /*x: [[Kbscan]] other fields(x86) */
     bool collecting;
     int nk;
     Rune    kc[5];
-    /*e: [[Kbscan]] other fields */
+    /*e: [[Kbscan]] other fields(x86) */
 };
-/*e: struct Kbscan */
+/*e: struct Kbscan(x86) */
 
-/*s: global kbscans */
+/*s: global kbscans(x86) */
 // hash<enum<kbscan>, Kbscan>
 Kbscan kbscans[Nscans]; /* kernel and external scan code state */
-/*e: global kbscans */
+/*e: global kbscans(x86) */
 
-/*s: kbd.c debugging macro */
+/*s: kbd.c debugging macro(x86) */
 bool kdebug;
-/*e: kbd.c debugging macro */
+/*e: kbd.c debugging macro(x86) */
 
-/*s: function setleds */
+/*s: function setleds(x86) */
 /*
  * set keyboard's leds for lock states (scroll, numeric, caps).
  *
@@ -385,9 +385,9 @@ setleds(Kbscan *kbscan)
     outready();
     iunlock(&i8042lock);
 }
-/*e: function setleds */
+/*e: function setleds(x86) */
 
-/*s: function kbdputsc */
+/*s: function kbdputsc(x86) */
 /*
  * Scan code processing
  */
@@ -405,12 +405,12 @@ kbdputsc(byte k, int external)
     else
         kbscan = &kbscans[Int];
 
-    /*s: [[kbdputsc()]] debugging */
+    /*s: [[kbdputsc()]] debugging(x86) */
     if(kdebug)
         print("sc %x (ms %d)\n", k, mouseshifted);
-    /*e: [[kbdputsc()]] debugging */
+    /*e: [[kbdputsc()]] debugging(x86) */
 
-    /*s: [[kbdputsc()]] esc key handling part1 and possible return */
+    /*s: [[kbdputsc()]] esc key handling part1 and possible return(x86) */
     /*
      *  e0's is the first of a 2 character sequence, e1 the first
      *  of a 3 character sequence (on the safari)
@@ -422,12 +422,12 @@ kbdputsc(byte k, int external)
         kbscan->esc2 = 2;
         return;
     }
-    /*e: [[kbdputsc()]] esc key handling part1 and possible return */
+    /*e: [[kbdputsc()]] esc key handling part1 and possible return(x86) */
 
     keyup = c & 0x80; // key released
     c &= 0x7f;
 
-    /*s: [[kbdputsc()]] ensures c is in boundary */
+    /*s: [[kbdputsc()]] ensures c is in boundary(x86) */
     if(c > sizeof kbtab){
         // how could reach that? kbtab has 0x80 elts and do c&=0x7f.
         c |= keyup;
@@ -435,9 +435,9 @@ kbdputsc(byte k, int external)
             print("unknown key %ux\n", c);
         return;
     }
-    /*e: [[kbdputsc()]] ensures c is in boundary */
+    /*e: [[kbdputsc()]] ensures c is in boundary(x86) */
 
-    /*s: [[kbdputsc()]] esc key handling part2 and possible return */
+    /*s: [[kbdputsc()]] esc key handling part2 and possible return(x86) */
     if(kbscan->esc1){
         c = kbtabesc1[c];
         kbscan->esc1 = false;
@@ -445,7 +445,7 @@ kbdputsc(byte k, int external)
         kbscan->esc2--;
         return;
     }
-    /*e: [[kbdputsc()]] esc key handling part2 and possible return */
+    /*e: [[kbdputsc()]] esc key handling part2 and possible return(x86) */
     else if(kbscan->shift)
         c = kbtabshift[c];
     else if(kbscan->altgr)
@@ -474,15 +474,15 @@ kbdputsc(byte k, int external)
             break;
         case Shift:
             kbscan->shift = false;
-            /*s: [[kbdputsc()]] reset mouseshift */
+            /*s: [[kbdputsc()]] reset mouseshift(x86) */
             mouseshifted = false;
-            /*e: [[kbdputsc()]] reset mouseshift */
-            /*s: [[kbdputsc()]] debugging up shift */
+            /*e: [[kbdputsc()]] reset mouseshift(x86) */
+            /*s: [[kbdputsc()]] debugging up shift(x86) */
             if(kdebug)
                 print("shiftclr\n");
-            /*e: [[kbdputsc()]] debugging up shift */
+            /*e: [[kbdputsc()]] debugging up shift(x86) */
             break;
-        /*s: [[kbdputsc()]] mouse keyup cases */
+        /*s: [[kbdputsc()]] mouse keyup cases(x86) */
         case Kmouse|1:
         case Kmouse|2:
         case Kmouse|3:
@@ -492,7 +492,7 @@ kbdputsc(byte k, int external)
             if(kbdmouse)
                 kbdmouse(kbscan->buttons);
             break;
-        /*e: [[kbdputsc()]] mouse keyup cases */
+        /*e: [[kbdputsc()]] mouse keyup cases(x86) */
         }
         return;
     }
@@ -501,12 +501,12 @@ kbdputsc(byte k, int external)
      *  normal character
      */
     if(!(c & (Spec|KF))){
-        /*s: [[kbdputsc()]] reboot if ctl-alt-del */
+        /*s: [[kbdputsc()]] reboot if ctl-alt-del(x86) */
                 if(kbscan->ctl)
                     if(kbscan->alt && c == Del) // Ctl-Alt-Del
                         exit(0);
-        /*e: [[kbdputsc()]] reboot if ctl-alt-del */
-        /*s: [[kbdputsc()]] if collecting */
+        /*e: [[kbdputsc()]] reboot if ctl-alt-del(x86) */
+        /*s: [[kbdputsc()]] if collecting(x86) */
         if(kbscan->collecting){
             int i;
             // pad's additional overflow checking, just to make sure
@@ -527,7 +527,7 @@ kbdputsc(byte k, int external)
             kbscan->nk = 0;
             kbscan->collecting = false;
         }
-        /*e: [[kbdputsc()]] if collecting */
+        /*e: [[kbdputsc()]] if collecting(x86) */
         else {
             kbdputc(c); //!! adding the character in kbd staging area
         }
@@ -538,7 +538,7 @@ kbdputsc(byte k, int external)
             break;
         case Alt:
             kbscan->alt = true;
-            /*s: [[kbdputsc()]] start collecting */
+            /*s: [[kbdputsc()]] start collecting(x86) */
             /*
              * VMware and Qemu use Ctl-Alt as the key combination
              * to make the VM give up keyboard and mouse focus.
@@ -553,20 +553,20 @@ kbdputsc(byte k, int external)
                 kbscan->collecting = true;
                 kbscan->nk = 0;
             }
-            /*e: [[kbdputsc()]] start collecting */
+            /*e: [[kbdputsc()]] start collecting(x86) */
             break;
         case Altgr:
             kbscan->altgr = true;
             break;
         case Shift:
             kbscan->shift = true;
-            /*s: [[kbdputsc()]] set mouseshift */
+            /*s: [[kbdputsc()]] set mouseshift(x86) */
             mouseshifted = true;
-            /*e: [[kbdputsc()]] set mouseshift */
-            /*s: [[kbdputsc()]] debugging down shift */
+            /*e: [[kbdputsc()]] set mouseshift(x86) */
+            /*s: [[kbdputsc()]] debugging down shift(x86) */
             if(kdebug)
                 print("shift\n");
-            /*e: [[kbdputsc()]] debugging down shift */
+            /*e: [[kbdputsc()]] debugging down shift(x86) */
             break;
         case Caps:
             kbscan->caps ^= true;
@@ -576,7 +576,7 @@ kbdputsc(byte k, int external)
             if(!external)
                 setleds(kbscan);
             break;
-        /*s: [[kbdputsc()]] mouse keydown cases */
+        /*s: [[kbdputsc()]] mouse keydown cases(x86) */
         case Kmouse|1:
         case Kmouse|2:
         case Kmouse|3:
@@ -586,8 +586,8 @@ kbdputsc(byte k, int external)
             if(kbdmouse)
                 kbdmouse(kbscan->buttons);
             break;
-        /*e: [[kbdputsc()]] mouse keydown cases */
-        /*s: [[kbdputsc()]] special keyboard debug keys cases */
+        /*e: [[kbdputsc()]] mouse keydown cases(x86) */
+        /*s: [[kbdputsc()]] special keyboard debug keys cases(x86) */
         case KF|11:
             print("kbd debug on, F12 turns it off\n");
             kdebug = true;
@@ -597,7 +597,7 @@ kbdputsc(byte k, int external)
             kdebug = false;
             kbdputc(c);
             break;
-        /*e: [[kbdputsc()]] special keyboard debug keys cases */
+        /*e: [[kbdputsc()]] special keyboard debug keys cases(x86) */
         // e.g. Left, Right or other special key
         default:
             kbdputc(c);
@@ -605,9 +605,9 @@ kbdputsc(byte k, int external)
         }
     }
 }
-/*e: function kbdputsc */
+/*e: function kbdputsc(x86) */
 
-/*s: interrupt callback i8042intr */
+/*s: interrupt callback i8042intr(x86) */
 /*
  *  keyboard interrupt
  */
@@ -632,7 +632,7 @@ i8042intr(Ureg*, void*)
     c = inb(Data);
     iunlock(&i8042lock);
 
-    /*s: [[i8042intr()]] aux port handling */
+    /*s: [[i8042intr()]] aux port handling(x86) */
         /*
          *  if it's the aux port...
          */
@@ -641,13 +641,13 @@ i8042intr(Ureg*, void*)
                 auxputc(c, kbscans[Int].shift);
             return;
         }
-    /*e: [[i8042intr()]] aux port handling */
+    /*e: [[i8042intr()]] aux port handling(x86) */
 
     kbdputsc(c, Int);
 }
-/*e: interrupt callback i8042intr */
+/*e: interrupt callback i8042intr(x86) */
 
-/*s: function i8042auxenable */
+/*s: function i8042auxenable(x86) */
 void
 i8042auxenable(void (*putc)(int, int))
 {
@@ -675,9 +675,9 @@ i8042auxenable(void (*putc)(int, int))
     intrenable(IrqAUX, i8042intr, 0, BUSUNKNOWN, "kbdaux");
     iunlock(&i8042lock);
 }
-/*e: function i8042auxenable */
+/*e: function i8042auxenable(x86) */
 
-/*s: function outbyte */
+/*s: function outbyte(x86) */
 static int
 outbyte(int port, int c)
 {
@@ -688,9 +688,9 @@ outbyte(int port, int c)
     }
     return 0;
 }
-/*e: function outbyte */
+/*e: function outbyte(x86) */
 
-/*s: function kbdinit */
+/*s: function kbdinit(x86) */
 void
 kbdinit(void)
 {
@@ -736,9 +736,9 @@ kbdinit(void)
         if(outbyte(Data, 0xf3) < 0 || outbyte(Data, 0) < 0)
             print("i8042: kbdinit set typematic rate failed\n");
 }
-/*e: function kbdinit */
+/*e: function kbdinit(x86) */
 
-/*s: function kbdenable */
+/*s: function kbdenable(x86) */
 void
 kbdenable(void)
 {
@@ -750,9 +750,9 @@ kbdenable(void)
     kbscans[Int].num = false;
     setleds(&kbscans[Int]);
 }
-/*e: function kbdenable */
+/*e: function kbdenable(x86) */
 
-/*s: function kbdputmap */
+/*s: function kbdputmap(x86) */
 void
 kbdputmap(ushort m, ushort scanc, Rune r)
 {
@@ -778,9 +778,9 @@ kbdputmap(ushort m, ushort scanc, Rune r)
         break;
     }
 }
-/*e: function kbdputmap */
+/*e: function kbdputmap(x86) */
 
-/*s: function kbdgetmap */
+/*s: function kbdgetmap(x86) */
 int
 kbdgetmap(uint offset, int *t, int *sc, Rune *r)
 {
@@ -808,5 +808,5 @@ kbdgetmap(uint offset, int *t, int *sc, Rune *r)
         return 1;
     }
 }
-/*e: function kbdgetmap */
+/*e: function kbdgetmap(x86) */
 /*e: kbd.c */

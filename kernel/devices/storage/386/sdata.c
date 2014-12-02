@@ -255,11 +255,11 @@ enum {                  /* bit masks for supported/enabled features */
     Mlogging    = 0x0020,
 };
 
-/*s: sdata.c forward decl */
+/*s: sdata.c forward decl(x86) */
 typedef struct Ctlr Ctlr;
 typedef struct Drive Drive;
 typedef struct Prd Prd;
-/*e: sdata.c forward decl */
+/*e: sdata.c forward decl(x86) */
 
 struct Prd {            /* Physical Region Descriptor */
     ulong   pa;         /* Physical Base Address */

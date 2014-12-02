@@ -1,9 +1,9 @@
 /*s: floppy.h */
-/*s: floppy.h forward decl */
+/*s: floppy.h forward decl(x86) */
 typedef struct FController FController;
 typedef struct FDrive FDrive;
 typedef struct FType FType;
-/*e: floppy.h forward decl */
+/*e: floppy.h forward decl(x86) */
 
 // why not inlined in devfloppy.c? used by other programs?
 

@@ -43,7 +43,7 @@
 /*e: kernel basic includes */
 #include    "io.h"
 
-/*s: macros xxxSEGM */
+/*s: macros xxxSEGM(x86) */
 /*
  * Simple segment descriptors with no translation.
  */
@@ -51,12 +51,12 @@
 #define EXECSEGM(p) { 0xFFFF, SEGG|SEGD|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
 #define TSSSEGM(b,p) { ((b)<<16)|sizeof(Tss),\
                    ((b)&0xFF000000)|(((b)>>16)&0xFF)|SEGTSS|SEGPL(p)|SEGP }
-/*s: macros other xxxSEGM */
+/*s: macros other xxxSEGM(x86) */
 #define EXEC16SEGM(p)   { 0xFFFF, SEGG|(0xF<<16)|SEGP|SEGPL(p)|SEGEXEC|SEGR }
-/*e: macros other xxxSEGM */
-/*e: macros xxxSEGM */
+/*e: macros other xxxSEGM(x86) */
+/*e: macros xxxSEGM(x86) */
 
-/*s: global gdt */
+/*s: global gdt(x86) */
 Segdesc gdt[NGDT] =
 {
 [NULLSEG]   { 0, 0},        /* null descriptor */
@@ -65,37 +65,37 @@ Segdesc gdt[NGDT] =
 [UDSEG]     DATASEGM(3),        /* user data/stack */
 [UESEG]     EXECSEGM(3),        /* user code */
 [TSSSEG]    TSSSEGM(0,0),       /* tss segment */
-/*s: [[gdt]] other elements */
+/*s: [[gdt]] other elements(x86) */
 [KESEG16]       EXEC16SEGM(0),  /* kernel code 16-bit */
-/*e: [[gdt]] other elements */
+/*e: [[gdt]] other elements(x86) */
 };
-/*e: global gdt */
+/*e: global gdt(x86) */
 
-/*s: mmu.c forward decl */
+/*s: mmu.c forward decl(x86) */
 static void taskswitch(ulong, ulong);
 static void memglobal(void);
 static int findhole(ulong *a, int n, int count);
 static ulong vmapalloc(ulong size);
 static void pdunmap(ulong*, ulong, int);
-/*e: mmu.c forward decl */
+/*e: mmu.c forward decl(x86) */
 
-/*s: global vpt and vpd */
-/*e: global vpt and vpd */
+/*s: global vpt and vpd(x86) */
+/*e: global vpt and vpd(x86) */
 
-/*s: function mmuinit0 */
+/*s: function mmuinit0(x86) */
 void
 mmuinit0(void)
 {
     // cpu->gdt should point to CPU0GDT, see cpu0init
     memmove(cpu->gdt, gdt, sizeof gdt); 
 }
-/*e: function mmuinit0 */
+/*e: function mmuinit0(x86) */
 
-/*s: global didmmuinit */
+/*s: global didmmuinit(x86) */
 static bool didmmuinit;
-/*e: global didmmuinit */
+/*e: global didmmuinit(x86) */
 
-/*s: function mmuinit */
+/*s: function mmuinit(x86) */
 void
 mmuinit(void)
 {
@@ -105,8 +105,8 @@ mmuinit(void)
     didmmuinit = true;
 
     memglobal();
-    /*s: [[mmuinit()]] vpt adjusments */
-    /*e: [[mmuinit()]] vpt adjusments */
+    /*s: [[mmuinit()]] vpt adjusments(x86) */
+    /*e: [[mmuinit()]] vpt adjusments(x86) */
     
     cpu->tss = malloc(sizeof(Tss));
     if(cpu->tss == nil)
@@ -157,9 +157,9 @@ mmuinit(void)
     taskswitch(PADDR(cpu->pdproto),  (ulong)cpu + BY2PG);
     ltr(TSSSEL);
 }
-/*e: function mmuinit */
+/*e: function mmuinit(x86) */
 
-/*s: function memglobal */
+/*s: function memglobal(x86) */
 /* 
  * On processors that support it, we set the PTEGLOBAL bit in
  * page table and page directory entries that map kernel memory.
@@ -200,9 +200,9 @@ memglobal(void)
         }
     }           
 }
-/*e: function memglobal */
+/*e: function memglobal(x86) */
 
-/*s: function flushmmu */
+/*s: function flushmmu(x86) */
 /*
  * Flush all the user-space and device-mapping mmu info
  * for this process, because something has been deleted.
@@ -218,9 +218,9 @@ flushmmu(void)
     mmuswitch(up);
     splx(s);
 }
-/*e: function flushmmu */
+/*e: function flushmmu(x86) */
 
-/*s: function flushpg */
+/*s: function flushpg(x86) */
 /*
  * Flush a single page mapping from the tlb.
  */
@@ -232,9 +232,9 @@ flushpg(virt_addr va)
     else
         putcr3(getcr3());
 }
-/*e: function flushpg */
+/*e: function flushpg(x86) */
 
-/*s: function mmupdalloc */
+/*s: function mmupdalloc(x86) */
 /*
  * Allocate a new page for a page directory.
  * We keep a small cache of pre-initialized
@@ -255,8 +255,8 @@ mmupdalloc(void)
         splhi();
         mmupd = tmpmap(page);
         memmove(mmupd, cpu->pdproto, BY2PG);
-        /*s: [[mmupdalloc()]] vpt adjustments */
-        /*e: [[mmupdalloc()]] vpt adjustments */
+        /*s: [[mmupdalloc()]] vpt adjustments(x86) */
+        /*e: [[mmupdalloc()]] vpt adjustments(x86) */
         tmpunmap(mmupd);
     }else{
         page = cpu->mmupdpool;
@@ -266,9 +266,9 @@ mmupdalloc(void)
     splx(s);
     return page;
 }
-/*e: function mmupdalloc */
+/*e: function mmupdalloc(x86) */
 
-/*s: function mmupdfree */
+/*s: function mmupdfree(x86) */
 static void
 mmupdfree(Proc *proc, Page *page)
 {
@@ -284,9 +284,9 @@ mmupdfree(Proc *proc, Page *page)
         cpu->mmupdcnt++;
     }
 }
-/*e: function mmupdfree */
+/*e: function mmupdfree(x86) */
 
-/*s: function mmuptefree */
+/*s: function mmuptefree(x86) */
 /*
  * A user-space memory segment has been deleted, or the
  * process is exiting.  Clear all the pde entries for user-space
@@ -316,9 +316,9 @@ mmuptefree(Proc* proc)
     proc->mmufree = proc->mmuused;
     proc->mmuused = nil;
 }
-/*e: function mmuptefree */
+/*e: function mmuptefree(x86) */
 
-/*s: function taskswitch */
+/*s: function taskswitch(x86) */
 static void
 taskswitch(phys_addr mmupd, ulong stack)
 {
@@ -333,9 +333,9 @@ taskswitch(phys_addr mmupd, ulong stack)
     tss->esp2 = stack;
     putcr3(mmupd);
 }
-/*e: function taskswitch */
+/*e: function taskswitch(x86) */
 
-/*s: function mmuswitch */
+/*s: function mmuswitch(x86) */
 void
 mmuswitch(Proc* proc)
 {
@@ -354,9 +354,9 @@ mmuswitch(Proc* proc)
     }else
         taskswitch(PADDR(cpu->pdproto), (ulong)(proc->kstack+KSTACK));
 }
-/*e: function mmuswitch */
+/*e: function mmuswitch(x86) */
 
-/*s: function mmurelease */
+/*s: function mmurelease(x86) */
 /*
  * Release any pages allocated for a page directory or page-tables
  * for this process:
@@ -380,8 +380,8 @@ mmurelease(Proc* proc)
     taskswitch(PADDR(cpu->pdproto), (ulong)cpu + BY2PG);
 
 
-    /*s: [[mmurelease()]] handle kmaptable */
-    /*e: [[mmurelease()]] handle kmaptable */
+    /*s: [[mmurelease()]] handle kmaptable(x86) */
+    /*e: [[mmurelease()]] handle kmaptable(x86) */
 
     if(proc->mmupd){
         mmuptefree(proc);
@@ -398,9 +398,9 @@ mmurelease(Proc* proc)
         wakeup(&palloc.freememr);
     proc->mmufree = nil;
 }
-/*e: function mmurelease */
+/*e: function mmurelease(x86) */
 
-/*s: function upallocmmupd */
+/*s: function upallocmmupd(x86) */
 /*
  * Allocate and install pd for the current process.
  */
@@ -433,9 +433,9 @@ upallocmmupd(void)
     putcr3(up->mmupd->pa); //!!!! bootstrap! putcr3 take a PA of course
     splx(s);
 }
-/*e: function upallocmmupd */
+/*e: function upallocmmupd(x86) */
 
-/*s: function putmmu */
+/*s: function putmmu(x86) */
 /*
  * Update the mmu in response to a user fault.  pa may have PTEWRITE set.
  */
@@ -449,7 +449,7 @@ putmmu(virt_addr va, ulong mmupte, Page*)
 
     if(up->mmupd == nil)
         upallocmmupd();
-    /*s: [[putmmu()]] adjustments */
+    /*s: [[putmmu()]] adjustments(x86) */
     // pad's code for simplified virtual memory, no VPT
     mmupd = KADDR(up->mmupd->pa);
     if(!(mmupd[PDX(va)]&PTEVALID)) {
@@ -477,11 +477,11 @@ putmmu(virt_addr va, ulong mmupte, Page*)
         flushpg(va);
     if(getcr3() != up->mmupd->pa)
          print("bad cr3 %#.8lux %#.8lux\n", getcr3(), up->mmupd->pa);
-    /*e: [[putmmu()]] adjustments */
+    /*e: [[putmmu()]] adjustments(x86) */
 }
-/*e: function putmmu */
+/*e: function putmmu(x86) */
 
-/*s: function checkmmu */
+/*s: function checkmmu(x86) */
 /*
  * Double-check the user MMU.
  * Error checking only.
@@ -491,18 +491,18 @@ checkmmu(virt_addr va, phys_addr pa)
 {
     if(up->mmupd == nil)
         return;
-    /*s: [[checkmmu()]] pd at pt check */
+    /*s: [[checkmmu()]] pd at pt check(x86) */
     //    if(!(vpd[PDX(va)]&PTEVALID) || !(vpt[VPTX(va)]&PTEVALID))
     //        return;
     //    if(PPN(vpt[VPTX(va)]) != pa)
     //        print("%ld %s: va=%#08lux pa=%#08lux pte=%#08lux\n",
     //            up->pid, up->text,
     //            va, pa, vpt[VPTX(va)]);
-    /*e: [[checkmmu()]] pd at pt check */
+    /*e: [[checkmmu()]] pd at pt check(x86) */
 }
-/*e: function checkmmu */
+/*e: function checkmmu(x86) */
 
-/*s: function mmuwalk */
+/*s: function mmuwalk(x86) */
 /*
  * Walk the page-table pointed to by pd and return a pointer
  * to the entry for virtual address va at the requested level.
@@ -548,7 +548,7 @@ mmuwalk(kern_addr2 pd, kern_addr va, int level, bool create)
         return &table[PTX(va)];
     }
 }
-/*e: function mmuwalk */
+/*e: function mmuwalk(x86) */
 
 /*
  * Device mappings are shared by all procs and processors and
@@ -557,11 +557,11 @@ mmuwalk(kern_addr2 pd, kern_addr va, int level, bool create)
  * paged in from there as necessary by vmapsync during faults.
  */
 
-/*s: global vmaplock */
+/*s: global vmaplock(x86) */
 static Lock vmaplock;
-/*e: global vmaplock */
+/*e: global vmaplock(x86) */
 
-/*s: function vmap */
+/*s: function vmap(x86) */
 /*
  * Add a device mapping to the vmap range.
  */
@@ -600,9 +600,9 @@ vmap(phys_addr pa, int size)
 //  print("  vmap %#.8lux %d => %#.8lux\n", pa+o, osize, va+o);
     return (void*)(va + o);
 }
-/*e: function vmap */
+/*e: function vmap(x86) */
 
-/*s: function findhole */
+/*s: function findhole(x86) */
 static int
 findhole(ulong *a, int n, int count)
 {
@@ -619,9 +619,9 @@ findhole(ulong *a, int n, int count)
     }
     return -1;
 }
-/*e: function findhole */
+/*e: function findhole(x86) */
 
-/*s: function vmapalloc */
+/*s: function vmapalloc(x86) */
 /*
  * Look for free space in the vmap.
  */
@@ -660,9 +660,9 @@ vmapalloc(ulong size)
      */
     return nilptr;
 }
-/*e: function vmapalloc */
+/*e: function vmapalloc(x86) */
 
-/*s: function vunmap */
+/*s: function vunmap(x86) */
 /*
  * Remove a device mapping from the vmap range.
  * Since pdunmap does not remove page tables, just entries,
@@ -724,9 +724,9 @@ vunmap(virt_addr3 v, int size)
                 ;
     }
 }
-/*e: function vunmap */
+/*e: function vunmap(x86) */
 
-/*s: function pdmap */
+/*s: function pdmap(x86) */
 /*
  * Add kernel mappings for pa -> va for a section of size bytes.
  */
@@ -770,9 +770,9 @@ pdmap(kern_addr2 mmupd, ulong pa, virt_addr va, int size)
     }
     return 0;
 }
-/*e: function pdmap */
+/*e: function pdmap(x86) */
 
-/*s: function pdunmap */
+/*s: function pdunmap(x86) */
 /*
  * Remove mappings.  Must already exist, for sanity.
  * Only used for kernel mappings, so okay to use KADDR.
@@ -805,9 +805,9 @@ pdunmap(kern_addr2 mmupd, virt_addr va, int size)
         va += BY2PG;
     }
 }
-/*e: function pdunmap */
+/*e: function pdunmap(x86) */
 
-/*s: function vmapsync */
+/*s: function vmapsync(x86) */
 /*
  * Handle a fault by bringing vmap up to date.
  * Only copy pd entries and they never go away,
@@ -832,7 +832,7 @@ vmapsync(virt_addr va)
         if(!(mmupt[PTX(va)]&PTEVALID))
             return 0;
     }
-    /*s: [[vmapsync()]] va set to entry */
+    /*s: [[vmapsync()]] va set to entry(x86) */
     // pad's code for simplified virtual memory, no VPT
     if(up == nil) {
         return 0;
@@ -842,13 +842,13 @@ vmapsync(virt_addr va)
         mmupd = KADDR(up->mmupd->pa);
         mmupd[PDX(va)] = pde;
     }
-    /*e: [[vmapsync()]] va set to entry */
+    /*e: [[vmapsync()]] va set to entry(x86) */
     /*
      * TLB doesn't cache negative results, so no flush needed.
      */
     return 1;
 }
-/*e: function vmapsync */
+/*e: function vmapsync(x86) */
 
 /*
  * KMap is used to map individual pages into virtual memory.
@@ -859,12 +859,12 @@ vmapsync(virt_addr va)
  * all processes without any coordination.
  */
 
-/*s: global kpt */
-/*e: global kpt */
-/*s: constant NKPT */
-/*e: constant NKPT */
+/*s: global kpt(x86) */
+/*e: global kpt(x86) */
+/*s: constant NKPT(x86) */
+/*e: constant NKPT(x86) */
 
-/*s: function kmap */
+/*s: function kmap(x86) */
 KMap*
 kmap(Page *p)
 {
@@ -875,9 +875,9 @@ kmap(Page *p)
     else
       panic("kmap: physical address too high");
 }
-/*e: function kmap */
+/*e: function kmap(x86) */
 
-/*s: function kunmap */
+/*s: function kunmap(x86) */
 void
 kunmap(KMap *k)
 {
@@ -889,14 +889,14 @@ kunmap(KMap *k)
         return;
     panic("kunmap: physical address too high");
 }
-/*e: function kunmap */
+/*e: function kunmap(x86) */
 
 /*
  * Temporary one-page mapping used to edit page directories.
  *
  */
 
-/*s: function tmpmap */
+/*s: function tmpmap(x86) */
 virt_addr3
 tmpmap(Page *p)
 {
@@ -907,9 +907,9 @@ tmpmap(Page *p)
     else
       panic("tmpmap: physical address too high");
 }
-/*e: function tmpmap */
+/*e: function tmpmap(x86) */
 
-/*s: function tmpunmap */
+/*s: function tmpunmap(x86) */
 void
 tmpunmap(virt_addr3 v)
 {
@@ -919,9 +919,9 @@ tmpunmap(virt_addr3 v)
         return;
     panic("tmpmap: physical address too high");
 }
-/*e: function tmpunmap */
+/*e: function tmpunmap(x86) */
 
-/*s: function kaddr */
+/*s: function kaddr(x86) */
 /*
  * These could go back to being macros once the kernel is debugged,
  * but the extra checking is nice to have.
@@ -933,9 +933,9 @@ kaddr(phys_addr pa)
         panic("kaddr: pa=%#.8lux", pa);
     return (kern_addr3)(pa+KZERO);
 }
-/*e: function kaddr */
+/*e: function kaddr(x86) */
 
-/*s: function paddr */
+/*s: function paddr(x86) */
 phys_addr
 paddr(kern_addr3 v)
 {
@@ -946,9 +946,9 @@ paddr(kern_addr3 v)
         panic("paddr: va=%#.8lux pc=%#p", va, getcallerpc(&v));
     return va-KZERO;
 }
-/*e: function paddr */
+/*e: function paddr(x86) */
 
-/*s: function countpagerefs */
+/*s: function countpagerefs(x86) */
 /*
  * More debugging.
  */
@@ -976,8 +976,8 @@ countpagerefs(ulong *ref, int print)
                 iprint("page %#.8lux is proc %d (pid %lud) pd but has other refs!\n",
                     p->mmupd->pa, i, p->pid);
         }
-        /*s: [[countpagerefs()]] handle kmaptable */
-        /*e: [[countpagerefs()]] handle kmaptable */
+        /*s: [[countpagerefs()]] handle kmaptable(x86) */
+        /*e: [[countpagerefs()]] handle kmaptable(x86) */
         for(pg=p->mmuused; pg; pg=pg->next){
             if(print){
                 if(ref[pagenumber(pg)])
@@ -1031,9 +1031,9 @@ countpagerefs(ulong *ref, int print)
                 i, CPUS(i)->mmupdalloc, CPUS(i)->mmupdfree);
     }
 }
-/*e: function countpagerefs */
+/*e: function countpagerefs(x86) */
 
-/*s: function cankaddr */
+/*s: function cankaddr(x86) */
 /*
  * Return the number of bytes that can be accessed via KADDR(pa).
  * If pa is not a valid argument to KADDR, return 0.
@@ -1045,6 +1045,6 @@ cankaddr(phys_addr pa)
         return 0;
     return MAXKPA - pa;
 }
-/*e: function cankaddr */
+/*e: function cankaddr(x86) */
 
 /*e: mmu.c */

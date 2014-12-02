@@ -12,7 +12,7 @@
 #include "../port/portfns_network.h"
 #include "../port/portfns_init.h"
 
-/*s: fns.h declarations */
+/*s: fns.h declarations(x86) */
 
 // used by $CONF.c and main.c
 void    bootlinks(void);
@@ -137,9 +137,9 @@ int ioalloc(int, int, int, char*);
 //int (*isaconfig)(char*, int, ISAConf*);
 void  kbdenable(void);
 void  kbdinit(void);
-/*s: function kmapinval */
+/*s: function kmapinval(x86) */
 #define kmapinval() nil
-/*e: function kmapinval */
+/*e: function kmapinval(x86) */
 //@Scheck: Assembly
 void  lgdt(ushort[3]);
 //@Scheck: Assembly
@@ -155,9 +155,9 @@ void  meminit(void);
 void  memorysummary(void);
 //@Scheck: Assembly
 void  mfence(void);
-/*s: function mmuflushtlb */
+/*s: function mmuflushtlb(x86) */
 #define mmuflushtlb(mmupd) putcr3(mmupd)
-/*e: function mmuflushtlb */
+/*e: function mmuflushtlb(x86) */
 void  mmuinit(void);
 ulong*  mmuwalk(ulong*, ulong, int, bool);
 //int mtrr(uvlong, uvlong, char *);
@@ -231,9 +231,9 @@ void  trapinit0(void);
 ulong upaalloc(int, int);
 //void  upafree(ulong, int);
 void  upareserve(ulong, int);
-/*s: function userureg */
+/*s: function userureg(x86) */
 #define userureg(ur) (((ur)->cs & 0xFFFF) == UESEL)
-/*e: function userureg */
+/*e: function userureg(x86) */
 //@Scheck: Assembly
 void  vectortable(void);
 void* vmap(ulong, int);
@@ -247,13 +247,13 @@ void  wrmsr(int, vlong);
 
 //int iounused(int start, int end); not used anymore in vga.c
 
-/*s: fns.h macros */
-/*s: function KADDR */
+/*s: fns.h macros(x86) */
+/*s: function KADDR(x86) */
 #define KADDR(pa)  kaddr(pa)
-/*e: function KADDR */
-/*s: function PADDR */
+/*e: function KADDR(x86) */
+/*s: function PADDR(x86) */
 #define PADDR(ka)  paddr((kern_addr3)(ka))
-/*e: function PADDR */
+/*e: function PADDR(x86) */
 
 // used in devaudio, maybe could remove it
 #define dcflush(a, b) nil
@@ -262,6 +262,6 @@ void  wrmsr(int, vlong);
 
 #define L16GET(p) (((p)[1]<<8)|(p)[0])
 #define L32GET(p) (((u32int)L16GET((p)+2)<<16)|L16GET(p))
-/*e: fns.h macros */
-/*e: fns.h declarations */
+/*e: fns.h macros(x86) */
+/*e: fns.h declarations(x86) */
 /*e: fns.h */

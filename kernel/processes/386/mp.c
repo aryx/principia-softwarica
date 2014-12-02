@@ -15,11 +15,11 @@
 
 #include <ureg.h>
 
-/*s: mp.c debugging macro */
+/*s: mp.c debugging macro(x86) */
 //#define dprint(...)   if(mpdebug) print(__VA_ARGS__); else USED(mpdebug)
 #define dprint if(mpdebug) print
 int mpdebug;
-/*e: mp.c debugging macro */
+/*e: mp.c debugging macro(x86) */
 
 /* from mpacpi.c */
 extern Apic *bootapic;

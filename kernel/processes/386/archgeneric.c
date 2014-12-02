@@ -17,15 +17,15 @@
  *  architecture specific stuff
  */
 
-/*s: function unimplemented */
+/*s: function unimplemented(x86) */
 static int
 unimplemented(int)
 {
     return 0;
 }
-/*e: function unimplemented */
+/*e: function unimplemented(x86) */
 
-/*s: function archreset */
+/*s: function archreset(x86) */
 static void
 archreset(void)
 {
@@ -49,43 +49,43 @@ archreset(void)
     for(;;)
         idle();
 }
-/*e: function archreset */
+/*e: function archreset(x86) */
 
-/*s: global archgeneric */
+/*s: global archgeneric(x86) */
 PCArch archgeneric = {
     .id=        "generic",
     .ident=     nil,
     .reset=     archreset,
 
     // interrupt: Intel i8259 controller
-    /*s: [[archgeneric]] interrupt methods */
+    /*s: [[archgeneric]] interrupt methods(x86) */
     .intrinit=  i8259init,
     .intrenable=    i8259enable,
     .intrvecno= i8259vecno,
     .intrdisable=   i8259disable,
     .intron=    i8259on,
     .introff=   i8259off,
-    /*e: [[archgeneric]] interrupt methods */
+    /*e: [[archgeneric]] interrupt methods(x86) */
     // clock: Intel i8253 controller
-    /*s: [[archgeneric]] time methods */
+    /*s: [[archgeneric]] time methods(x86) */
     .clockenable=   i8253enable,
     .fastclock= i8253read,
     .timerset=  i8253timerset,
-    /*e: [[archgeneric]] time methods */
+    /*e: [[archgeneric]] time methods(x86) */
     // power: none
-    /*s: [[archgeneric]] power methods */
+    /*s: [[archgeneric]] power methods(x86) */
         .serialpower=   unimplemented,
         .modempower=    unimplemented,
-    /*e: [[archgeneric]] power methods */
+    /*e: [[archgeneric]] power methods(x86) */
 };
-/*e: global archgeneric */
+/*e: global archgeneric(x86) */
 
-/*s: function archrevert */
+/*s: function archrevert(x86) */
 void
 archrevert(void)
 {
     arch = &archgeneric;
 }
-/*e: function archrevert */
+/*e: function archrevert(x86) */
 
 /*e: archgeneric.c */

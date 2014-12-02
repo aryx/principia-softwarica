@@ -4,26 +4,26 @@
 /*
  *  MMU stuff in proc
  */
-/*s: struct ArchProcMMU */
+/*s: struct ArchProcMMU(x86) */
 struct ArchProcMMU
 {
-  /*s: [[Proc]] [[Arch]] memory fields */
+  /*s: [[Proc]] [[Arch]] memory fields(x86) */
   Page* mmupd;     /* page directory base */
-  /*x: [[Proc]] [[Arch]] memory fields */
+  /*x: [[Proc]] [[Arch]] memory fields(x86) */
   // type? list<ref<?? > >
   Page* mmufree;    /* unused page table pages */
   Page* mmuused;    /* used page table pages */
-  /*e: [[Proc]] [[Arch]] memory fields */
+  /*e: [[Proc]] [[Arch]] memory fields(x86) */
 };
-/*e: struct ArchProcMMU */
+/*e: struct ArchProcMMU(x86) */
 
-/*s: struct KMap */
+/*s: struct KMap(x86) */
 /*
  * KMap the structure doesn't exist, but the functions do.
  */
 typedef struct KMap   KMap;
-/*e: struct KMap */
-/*s: macro VA */
+/*e: struct KMap(x86) */
+/*s: macro VA(x86) */
 #define VA(k)   ((virt_addr3)(k))
-/*e: macro VA */
+/*e: macro VA(x86) */
 /*e: dat_memory.h */

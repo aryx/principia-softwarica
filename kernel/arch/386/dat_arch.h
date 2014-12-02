@@ -7,7 +7,7 @@
 // All the ref<IOMap> here are references to IOMap in the array<IOMap> of 
 // Iomapalloc.maps (pool allocator)
 
-/*s: struct IOMap */
+/*s: struct IOMap(x86) */
 struct IOMap
 {
     char    tag[13];
@@ -20,9 +20,9 @@ struct IOMap
 
     bool    reserved;
 };
-/*e: struct IOMap */
+/*e: struct IOMap(x86) */
 
-/*s: struct Iomapalloc */
+/*s: struct Iomapalloc(x86) */
 struct Iomapalloc
 {
     // ??
@@ -37,7 +37,7 @@ struct Iomapalloc
     Lock;
     QLock   ql;     /* lock for reading map */
 };
-/*e: struct Iomapalloc */
+/*e: struct Iomapalloc(x86) */
 
 // array<IMap> alloced statically in maps
 extern struct Iomapalloc iomap;
@@ -49,7 +49,7 @@ extern struct Iomapalloc iomap;
 /*
  *  routines for things outside the PC model, like power management
  */
-/*s: struct PCArch */
+/*s: struct PCArch(x86) */
 struct PCArch
 {
   char* id;
@@ -59,27 +59,27 @@ struct PCArch
   void  (*resetothers)(void); /* put other cpus into reset */
 
   // interrupts
-  /*s: [[PCArch]] interrupt methods fields */
+  /*s: [[PCArch]] interrupt methods fields(x86) */
   void  (*intrinit)(void);
   int (*intrenable)(Vctl*);
   int (*intrvecno)(int);
   int (*intrdisable)(int);
   void  (*introff)(void);
   void  (*intron)(void);
-  /*e: [[PCArch]] interrupt methods fields */
+  /*e: [[PCArch]] interrupt methods fields(x86) */
   // clock, timer
-  /*s: [[PCArch]] time methods fields */
+  /*s: [[PCArch]] time methods fields(x86) */
   void  (*clockenable)(void);
   uvlong  (*fastclock)(uvlong*);
   void  (*timerset)(uvlong);
-  /*e: [[PCArch]] time methods fields */
+  /*e: [[PCArch]] time methods fields(x86) */
   // power
-  /*s: [[PCArch]] power methods fields */
+  /*s: [[PCArch]] power methods fields(x86) */
   int (*serialpower)(int);  /* 1 == on, 0 == off */
   int (*modempower)(int); /* 1 == on, 0 == off */
-  /*e: [[PCArch]] power methods fields */
+  /*e: [[PCArch]] power methods fields(x86) */
 };
-/*e: struct PCArch */
+/*e: struct PCArch(x86) */
 extern PCArch *arch;      /* PC architecture */
 extern PCArch archgeneric;
 
@@ -87,7 +87,7 @@ extern PCArch archgeneric;
 // Co processor
 //*****************************************************************************
 
-/*s: struct FPstate */
+/*s: struct FPstate(x86) */
 struct  FPstate     /* x87 fpu state */
 {
   ushort  control;
@@ -105,9 +105,9 @@ struct  FPstate     /* x87 fpu state */
   ushort  r5;
   uchar regs[80]; /* floating point registers */
 };
-/*e: struct FPstate */
+/*e: struct FPstate(x86) */
 
-/*s: struct FPssestate */
+/*s: struct FPssestate(x86) */
 struct  FPssestate    /* SSE fp state */
 {
   ushort  fcw;    /* control */
@@ -124,16 +124,16 @@ struct  FPssestate    /* SSE fp state */
   ulong mxcsr_mask; /* MXCSR mask register */
   uchar xregs[480]; /* extended registers */
 };
-/*e: struct FPssestate */
+/*e: struct FPssestate(x86) */
 
-/*s: struct  SFPssestate */
+/*s: struct  SFPssestate(x86) */
 struct  SFPssestate   /* SSE fp state with alignment slop */
 {
   FPssestate;
   uchar alignpad[FPalign]; /* slop to allow copying to aligned addr */
   ulong magic;    /* debugging: check for overrun */
 };
-/*e: struct  SFPssestate */
+/*e: struct  SFPssestate(x86) */
 
 //*****************************************************************************
 // Misc
@@ -161,14 +161,14 @@ enum {
 };
 extern Lock nvrtlock;
 
-/*s: struct X86type */
+/*s: struct X86type(x86) */
 struct X86type {
     int family;
     int model;
     int aalcycles;
     char*   name;
 };
-/*e: struct X86type */
+/*e: struct X86type(x86) */
 
 extern X86type *cputype;
 
@@ -176,14 +176,14 @@ extern X86type *cputype;
 /*
  *  hardware info about a device
  */
-/*s: struct Devport */
+/*s: struct Devport(x86) */
 struct Devport {
     ulong port; 
     int size;
 };
-/*e: struct Devport */
+/*e: struct Devport(x86) */
 
-/*s: struct DevConf */
+/*s: struct DevConf(x86) */
 struct DevConf
 {
     ulong intnum;     /* interrupt number */
@@ -191,5 +191,5 @@ struct DevConf
     int nports;     /* Number of ports */
     Devport *ports;     /* The ports themselves */
 };
-/*e: struct DevConf */
+/*e: struct DevConf(x86) */
 /*e: dat_arch.h */

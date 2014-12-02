@@ -18,32 +18,32 @@
 // Globals
 //*****************************************************************************
 
-/*s: global trapinited */
+/*s: global trapinited(x86) */
 static bool trapinited;
-/*e: global trapinited */
+/*e: global trapinited(x86) */
 
-/*s: global vctllock */
+/*s: global vctllock(x86) */
 static Lock vctllock;
-/*e: global vctllock */
-/*s: global vctl */
+/*e: global vctllock(x86) */
+/*s: global vctl(x86) */
 // array<list<ref_own<Vctl>>> (next = Vctl.next)
 static Vctl *vctl[256];
-/*e: global vctl */
+/*e: global vctl(x86) */
 
 enum
 {
-   /*s: constant Ntimevec */
+   /*s: constant Ntimevec(x86) */
        Ntimevec = 20       /* number of time buckets for each intr */
-   /*e: constant Ntimevec */
+   /*e: constant Ntimevec(x86) */
 };
-/*s: global intrtimes */
+/*s: global intrtimes(x86) */
 ulong intrtimes[256][Ntimevec];
-/*e: global intrtimes */
+/*e: global intrtimes(x86) */
 
 //*****************************************************************************
 // Forward decl
 //*****************************************************************************
-/*s: trap.c forward decl */
+/*s: trap.c forward decl(x86) */
 void    noted(Ureg*, ulong);
 int     notify(Ureg*);
 void        dumpregs(Ureg*);
@@ -55,13 +55,13 @@ static void unexpected(Ureg*, void*);
 static void _dumpstack(Ureg*);
 
 extern void checkpages(void);
-/*e: trap.c forward decl */
+/*e: trap.c forward decl(x86) */
 
 //*****************************************************************************
 // Interrupts enable/disable
 //*****************************************************************************
 
-/*s: function intrenable */
+/*s: function intrenable(x86) */
 void
 intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
 {
@@ -103,9 +103,9 @@ intrenable(int irq, void (*f)(Ureg*, void*), void* a, int tbdf, char *name)
     vctl[vno] = v;
     iunlock(&vctllock);
 }
-/*e: function intrenable */
+/*e: function intrenable(x86) */
 
-/*s: function intrdisable */
+/*s: function intrdisable(x86) */
 int
 intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
 {
@@ -137,13 +137,13 @@ intrdisable(int irq, void (*f)(Ureg *, void *), void *a, int tbdf, char *name)
     xfree(v);
     return 0;
 }
-/*e: function intrdisable */
+/*e: function intrdisable(x86) */
 
 //*****************************************************************************
 // Init
 //*****************************************************************************
 
-/*s: function irqallocread */
+/*s: function irqallocread(x86) */
 static long
 irqallocread(Chan*, void *vbuf, long n, vlong offset)
 {
@@ -182,9 +182,9 @@ irqallocread(Chan*, void *vbuf, long n, vlong offset)
     }
     return oldn - n;
 }
-/*e: function irqallocread */
+/*e: function irqallocread(x86) */
 
-/*s: function trapenable */
+/*s: function trapenable(x86) */
 void
 trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
 {
@@ -207,9 +207,9 @@ trapenable(int vno, void (*f)(Ureg*, void*), void* a, char *name)
     vctl[vno] = v;
     iunlock(&vctllock);
 }
-/*e: function trapenable */
+/*e: function trapenable(x86) */
 
-/*s: function nmienable */
+/*s: function nmienable(x86) */
 static void
 nmienable(void)
 {
@@ -225,9 +225,9 @@ nmienable(void)
     outb(0x61, 0x08|x);
     outb(0x61, x);
 }
-/*e: function nmienable */
+/*e: function nmienable(x86) */
 
-/*s: function trapinit0 */
+/*s: function trapinit0(x86) */
 /*
  * Minimal trap setup.  Just enough so that we can panic
  * on traps (bugs) during kernel initialization.
@@ -260,9 +260,9 @@ trapinit0(void)
         vaddr += 6;
     }
 }
-/*e: function trapinit0 */
+/*e: function trapinit0(x86) */
 
-/*s: function trapinit */
+/*s: function trapinit(x86) */
 void
 trapinit(void)
 {
@@ -280,13 +280,13 @@ trapinit(void)
     addarchfile("irqalloc", 0444, irqallocread, nil);
     trapinited = true;
 }
-/*e: function trapinit */
+/*e: function trapinit(x86) */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
-/*s: global excname */
+/*s: global excname(x86) */
 static char* excname[32] = {
     "divide error",
     "debug exception",
@@ -321,9 +321,9 @@ static char* excname[32] = {
     "30 (reserved)",
     "31 (reserved)",
 };
-/*e: global excname */
+/*e: global excname(x86) */
 
-/*s: function intrtime */
+/*s: function intrtime(x86) */
 /*
  *  keep histogram of interrupt service times
  */
@@ -346,14 +346,14 @@ intrtime(Cpu*, int vno)
         diff = Ntimevec-1;
     intrtimes[vno][diff]++;
 }
-/*e: function intrtime */
+/*e: function intrtime(x86) */
 
-/*s: function kexit */
+/*s: function kexit(x86) */
 /* go to user space */
 void
 kexit(Ureg*)
 {
-    /*s: [[kexit()]] tos adjustments */
+    /*s: [[kexit()]] tos adjustments(x86) */
         uvlong t;
         Tos *tos;
 
@@ -363,11 +363,11 @@ kexit(Ureg*)
         tos->kcycles += t - up->kentry;
         tos->pcycles = up->pcycles;
         tos->pid = up->pid;
-    /*e: [[kexit()]] tos adjustments */
+    /*e: [[kexit()]] tos adjustments(x86) */
 }
-/*e: function kexit */
+/*e: function kexit(x86) */
 
-/*s: function trap */
+/*s: function trap(x86) */
 /*
  *  All traps come here.  It is slower to have all traps call trap()
  *  rather than directly vectoring the handler. However, this avoids a
@@ -398,9 +398,9 @@ void trap(Ureg* ureg)
 
     if(user){
         up->dbgreg = ureg;
-        /*s: [[trap()]] adjust kentry when interrupt user */
+        /*s: [[trap()]] adjust kentry when interrupt user(x86) */
                 cycles(&up->kentry);
-        /*e: [[trap()]] adjust kentry when interrupt user */
+        /*e: [[trap()]] adjust kentry when interrupt user(x86) */
     }
     // else if !user, then that means we interrupted a syscall() which should
     // already have done those things, so no need for redundancy
@@ -467,7 +467,7 @@ void trap(Ureg* ureg)
 
         /* clear the interrupt */
         i8259isr(vno);
-        /*s: [[trap()]] debugging */
+        /*s: [[trap()]] debugging(x86) */
                 if(0)print("cpu%d: spurious interrupt %d, last %d\n",
                     cpu->cpuno, vno, cpu->lastintr);
                 if(0)if(conf.ncpu > 1){
@@ -482,7 +482,7 @@ void trap(Ureg* ureg)
                     }
                     print("\n");
                 }
-        /*e: [[trap()]] debugging */
+        /*e: [[trap()]] debugging(x86) */
         cpu->spuriousintr++;
         if(user)
             kexit(ureg);
@@ -508,13 +508,13 @@ void trap(Ureg* ureg)
     }
     splhi(); // possible spllo() done above
 
-    /*s: [[trap()]] if delaysched */
+    /*s: [[trap()]] if delaysched(x86) */
     /* delaysched set because we held a lock or because our quantum ended */
     if(up && up->delaysched && clockintr){
         sched();
         splhi();
     }
-    /*e: [[trap()]] if delaysched */
+    /*e: [[trap()]] if delaysched(x86) */
 
     if(user){
         if(up->procctl || up->nnote)
@@ -522,9 +522,9 @@ void trap(Ureg* ureg)
         kexit(ureg);
     }
 }
-/*e: function trap */
+/*e: function trap(x86) */
 
-/*s: function dumpregs2 */
+/*s: function dumpregs2(x86) */
 /*
  *  dump registers
  */
@@ -547,9 +547,9 @@ dumpregs2(Ureg* ureg)
         ureg->cs & 0xFFFF, ureg->ds & 0xFFFF, ureg->es & 0xFFFF,
         ureg->fs & 0xFFFF, ureg->gs & 0xFFFF);
 }
-/*e: function dumpregs2 */
+/*e: function dumpregs2(x86) */
 
-/*s: function dumpregs */
+/*s: function dumpregs(x86) */
 void
 dumpregs(Ureg* ureg)
 {
@@ -576,9 +576,9 @@ dumpregs(Ureg* ureg)
     }
     iprint("\n  ur %#p up %#p\n", ureg, up);
 }
-/*e: function dumpregs */
+/*e: function dumpregs(x86) */
 
-/*s: function callwithureg */
+/*s: function callwithureg(x86) */
 /*
  * Fill in enough of Ureg to get a stack trace, and call a function.
  * Used by debugging interface rdb.
@@ -591,9 +591,9 @@ callwithureg(void (*fn)(Ureg*))
     ureg.sp = (ulong)&fn;
     fn(&ureg);
 }
-/*e: function callwithureg */
+/*e: function callwithureg(x86) */
 
-/*s: function _dumpstack */
+/*s: function _dumpstack(x86) */
 static void
 _dumpstack(Ureg *ureg)
 {
@@ -657,17 +657,17 @@ _dumpstack(Ureg *ureg)
     if(i)
         iprint("\n");
 }
-/*e: function _dumpstack */
+/*e: function _dumpstack(x86) */
 
-/*s: function dumpstack */
+/*s: function dumpstack(x86) */
 void
 trap_dumpstack(void)
 {
     callwithureg(_dumpstack);
 }
-/*e: function dumpstack */
+/*e: function dumpstack(x86) */
 
-/*s: function debugbpt */
+/*s: function debugbpt(x86) */
 static void
 debugbpt(Ureg* ureg, void*)
 {
@@ -680,23 +680,23 @@ debugbpt(Ureg* ureg, void*)
     snprint(buf, sizeof buf, "sys: breakpoint");
     postnote(up, 1, buf, NDebug);
 }
-/*e: function debugbpt */
+/*e: function debugbpt(x86) */
 
-/*s: function doublefault */
+/*s: function doublefault(x86) */
 static void
 doublefault(Ureg*, void*)
 {
     panic("double fault");
 }
-/*e: function doublefault */
+/*e: function doublefault(x86) */
 
-/*s: function unexpected */
+/*s: function unexpected(x86) */
 static void
 unexpected(Ureg* ureg, void*)
 {
     print("unexpected trap %lud; ignoring\n", ureg->trap);
 }
-/*e: function unexpected */
+/*e: function unexpected(x86) */
 
 /*s: function fault386 */
 static void
@@ -751,7 +751,7 @@ fault386(Ureg* ureg, void*)
  */
 #include "../port/systab.h"
 
-/*s: function syscall */
+/*s: function syscall(x86) */
 /*
  *  Syscall is called directly from assembler without going through trap().
  */
@@ -768,9 +768,9 @@ void syscall(Ureg* ureg)
     if((ureg->cs & 0xFFFF) != UESEL)
         panic("syscall: cs 0x%4.4luX", ureg->cs);
 
-    /*s: [[syscall()]] adjust kentry */
+    /*s: [[syscall()]] adjust kentry(x86) */
         cycles(&up->kentry);
-    /*e: [[syscall()]] adjust kentry */
+    /*e: [[syscall()]] adjust kentry(x86) */
 
     cpu->syscall++;
     up->insyscall = true;
@@ -782,7 +782,7 @@ void syscall(Ureg* ureg)
     // syscall number!
     scallnr = ureg->ax;
 
-    /*s: [[syscall()]] Proc_tracesyscall if, syscall entry */
+    /*s: [[syscall()]] Proc_tracesyscall if, syscall entry(x86) */
         if(up->procctl == Proc_tracesyscall){
             /*
              * Redundant validaddr.  Do we care?
@@ -805,14 +805,14 @@ void syscall(Ureg* ureg)
             up->syscalltrace = nil;
             startns = todget(nil);
         }
-    /*e: [[syscall()]] Proc_tracesyscall if, syscall entry */
+    /*e: [[syscall()]] Proc_tracesyscall if, syscall entry(x86) */
 
-    /*s: [[syscall()]] fp adjustments if fork */
+    /*s: [[syscall()]] fp adjustments if fork(x86) */
         if(scallnr == RFORK && up->fpstate == FPactive){
             fpsave(&up->fpsave);
             up->fpstate = FPinactive;
         }
-    /*e: [[syscall()]] fp adjustments if fork */
+    /*e: [[syscall()]] fp adjustments if fork(x86) */
     spllo();
 
     up->nerrlab = 0;
@@ -862,7 +862,7 @@ void syscall(Ureg* ureg)
      */
     ureg->ax = ret;
 
-    /*s: [[syscall()]] Proc_tracesyscall if, syscall exit */
+    /*s: [[syscall()]] Proc_tracesyscall if, syscall exit(x86) */
         if(up->procctl == Proc_tracesyscall){
             stopns = todget(nil);
             up->procctl = Proc_stopme;
@@ -874,32 +874,32 @@ void syscall(Ureg* ureg)
                 free(up->syscalltrace);
             up->syscalltrace = nil;
         }
-    /*e: [[syscall()]] Proc_tracesyscall if, syscall exit */
+    /*e: [[syscall()]] Proc_tracesyscall if, syscall exit(x86) */
 
     up->insyscall = false;
     up->psstate = nil;
 
-    /*s: [[syscall()]] call noted() */
+    /*s: [[syscall()]] call noted()(x86) */
         if(scallnr == NOTED)
             noted(ureg, *(ulong*)(sp+BY2WD));
-    /*e: [[syscall()]] call noted() */
-    /*s: [[syscall()]] call notify() */
+    /*e: [[syscall()]] call noted()(x86) */
+    /*s: [[syscall()]] call notify()(x86) */
         if(scallnr!=RFORK && (up->procctl || up->nnote)){
             splhi();
             notify(ureg);
         }
-    /*e: [[syscall()]] call notify() */
+    /*e: [[syscall()]] call notify()(x86) */
 
-    /*s: [[syscall()]] if delaysched */
+    /*s: [[syscall()]] if delaysched(x86) */
     /* if we delayed sched because we held a lock, sched now */
     if(up->delaysched)
         sched();
-    /*e: [[syscall()]] if delaysched */
+    /*e: [[syscall()]] if delaysched(x86) */
     kexit(ureg);
 }
-/*e: function syscall */
+/*e: function syscall(x86) */
 
-/*s: function notify */
+/*s: function notify(x86) */
 /*
  *  Call user, if necessary, with note.
  *  Pass user the Ureg struct and the note on his stack.
@@ -916,13 +916,13 @@ notify(Ureg* ureg)
     if(up->nnote == 0)
         return 0;
 
-    /*s: [[notify()]] fp adjustments */
+    /*s: [[notify()]] fp adjustments(x86) */
         if(up->fpstate == FPactive){
             fpsave(&up->fpsave);
             up->fpstate = FPinactive;
         }
         up->fpstate |= FPillegal;
-    /*e: [[notify()]] fp adjustments */
+    /*e: [[notify()]] fp adjustments(x86) */
 
     s = spllo();
     qlock(&up->debug);
@@ -984,9 +984,9 @@ notify(Ureg* ureg)
     splx(s);
     return 1;
 }
-/*e: function notify */
+/*e: function notify(x86) */
 
-/*s: function noted */
+/*s: function noted(x86) */
 /*
  *   Return user to state before notify()
  */
@@ -1006,9 +1006,9 @@ noted(Ureg* ureg, ulong arg0)
 
     nureg = up->ureg;   /* pointer to user returned Ureg struct */
 
-    /*s: [[noted()]] fp adjustments */
+    /*s: [[noted()]] fp adjustments(x86) */
         up->fpstate &= ~FPillegal;
-    /*e: [[noted()]] fp adjustments */
+    /*e: [[noted()]] fp adjustments(x86) */
 
     /* sanity clause */
     oureg = (ulong)nureg;
@@ -1079,20 +1079,20 @@ noted(Ureg* ureg, ulong arg0)
         pexit(up->lastnote.msg, up->lastnote.flag!=NDebug);
     }
 }
-/*e: function noted */
+/*e: function noted(x86) */
 
-/*s: function execregs */
+/*s: function execregs(x86) */
 long
 execregs(ulong entry, ulong ssize, ulong nargs)
 {
     ulong *sp;
     Ureg *ureg;
 
-    /*s: [[execregs()]] fp adjustments */
+    /*s: [[execregs()]] fp adjustments(x86) */
         //procsetup(up), redundant?
         up->fpstate = FPinit;
         fpoff();
-    /*e: [[execregs()]] fp adjustments */
+    /*e: [[execregs()]] fp adjustments(x86) */
 
     sp = (ulong*)(USTKTOP - ssize);
     *--sp = nargs;
@@ -1101,14 +1101,14 @@ execregs(ulong entry, ulong ssize, ulong nargs)
     ureg->usp = (ulong)sp;
     ureg->pc = entry;
     return USTKTOP
-     /*s: [[execregs()]] return adjustments */
+     /*s: [[execregs()]] return adjustments(x86) */
            -sizeof(Tos)
-     /*e: [[execregs()]] return adjustments */
+     /*e: [[execregs()]] return adjustments(x86) */
      ;     /* address of kernel/user shared data */
 }
-/*e: function execregs */
+/*e: function execregs(x86) */
 
-/*s: function userpc */
+/*s: function userpc(x86) */
 /*
  *  return the userpc the last exception happened at
  */
@@ -1120,9 +1120,9 @@ userpc(void)
     ureg = (Ureg*)up->dbgreg;
     return ureg->pc;
 }
-/*e: function userpc */
+/*e: function userpc(x86) */
 
-/*s: function setregisters */
+/*s: function setregisters(x86) */
 /* This routine must save the values of registers the user is not permitted
  * to write from devproc and then restore the saved values before returning.
  */
@@ -1147,9 +1147,9 @@ setregisters(Ureg* ureg, char* pureg, char* uva, int n)
     ureg->flags = (ureg->flags & 0x00FF) | (flags & 0xFF00);
     ureg->ss = ss;
 }
-/*e: function setregisters */
+/*e: function setregisters(x86) */
 
-/*s: function linkproc */
+/*s: function linkproc(x86) */
 static void
 linkproc(void)
 {
@@ -1159,9 +1159,9 @@ linkproc(void)
     // to run forever??
     pexit("kproc dying", /*freemem*/false); 
 }
-/*e: function linkproc */
+/*e: function linkproc(x86) */
 
-/*s: function kprocchild */
+/*s: function kprocchild(x86) */
 void
 kprocchild(Proc* p, void (*func)(void*), void* arg)
 {
@@ -1176,9 +1176,9 @@ kprocchild(Proc* p, void (*func)(void*), void* arg)
     p->sched.pc = (ulong)linkproc;
     p->sched.sp = (ulong)p->kstack+KSTACK-BY2WD;
 }
-/*e: function kprocchild */
+/*e: function kprocchild(x86) */
 
-/*s: function forkchild */
+/*s: function forkchild(x86) */
 void
 forkchild(Proc *p, Ureg *ureg)
 {
@@ -1201,9 +1201,9 @@ forkchild(Proc *p, Ureg *ureg)
     p->psstate = nil;
     p->insyscall = false;
 }
-/*e: function forkchild */
+/*e: function forkchild(x86) */
 
-/*s: function setkernur */
+/*s: function setkernur(x86) */
 /* Give enough context in the ureg to produce a kernel stack for
  * a sleeping process
  */
@@ -1213,9 +1213,9 @@ setkernur(Ureg* ureg, Proc* p)
     ureg->pc = p->sched.pc;
     ureg->sp = p->sched.sp+4;
 }
-/*e: function setkernur */
+/*e: function setkernur(x86) */
 
-/*s: function dbgpc */
+/*s: function dbgpc(x86) */
 ulong
 dbgpc(Proc *p)
 {
@@ -1227,5 +1227,5 @@ dbgpc(Proc *p)
 
     return ureg->pc;
 }
-/*e: function dbgpc */
+/*e: function dbgpc(x86) */
 /*e: trap.c */

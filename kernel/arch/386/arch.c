@@ -11,14 +11,14 @@
 // or I get some type signature mismatch
 #include "io.h"
 
-/*s: global arch */
+/*s: global arch(x86) */
 PCArch* arch;
-/*e: global arch */
+/*e: global arch(x86) */
 
-/*s: hook fprestore and fpsave */
+/*s: hook fprestore and fpsave(x86) */
 void    (*fprestore)(ArchFPsave*);
 void    (*fpsave)(ArchFPsave*);
-/*e: hook fprestore and fpsave */
+/*e: hook fprestore and fpsave(x86) */
 
 int (*_pcmspecial)(char*, ISAConf*);
 //void (*_pcmspecialclose)(int); // useful if use pccard device driver
@@ -32,7 +32,7 @@ pcmspecial(char *idstr, ISAConf *isa)
     return (_pcmspecial != nil)? _pcmspecial(idstr, isa): -1;
 }
 
-/*s: function cpuidprint */
+/*s: function cpuidprint(x86) */
 void
 cpuidprint(void)
 {
@@ -48,9 +48,9 @@ cpuidprint(void)
         cpu->cpuidtype, cpu->cpuidax, cpu->cpuiddx);
     print(buf);
 }
-/*e: function cpuidprint */
+/*e: function cpuidprint(x86) */
 
-/*s: function cycles and default implementation */
+/*s: function cycles and default implementation(x86) */
 static void
 simplecycles(uvlong *x)
 {
@@ -58,9 +58,9 @@ simplecycles(uvlong *x)
 }
 
 void    (*cycles)(uvlong*) = simplecycles;
-/*e: function cycles and default implementation */
+/*e: function cycles and default implementation(x86) */
 
-/*s: function cmpswap and default implementation */
+/*s: function cmpswap and default implementation(x86) */
 /*
  * 386 has no compare-and-swap instruction.
  * Run it with interrupts turned off instead.
@@ -79,7 +79,7 @@ cmpswap386(long *addr, long old, long new)
 }
 
 int (*cmpswap)(long*, long, long) = cmpswap386;
-/*e: function cmpswap and default implementation */
+/*e: function cmpswap and default implementation(x86) */
 
 /*
  * On a uniprocessor, you'd think that coherence could be nop,
@@ -92,7 +92,7 @@ int (*cmpswap)(long*, long, long) = cmpswap386;
 //now in globals.c: void (*coherence)(void) = nop;
 
 
-/*s: function timerset */
+/*s: function timerset(x86) */
 // used to be static, but now shared between arch.c and devarch.c
 int doi8253set = 1;
 /*
@@ -104,17 +104,17 @@ timerset(Tval x)
     if(doi8253set)
         (*arch->timerset)(x);
 }
-/*e: function timerset */
+/*e: function timerset(x86) */
 
-/*s: function us */
+/*s: function us(x86) */
 ulong
 us(void)
 {
     return fastticks2us((*arch->fastclock)(nil));
 }
-/*e: function us */
+/*e: function us(x86) */
 
-/*s: function fastticks */
+/*s: function fastticks(x86) */
 /*
  *  return value and speed of timer set in arch->clockenable
  */
@@ -123,5 +123,5 @@ devarch_fastticks(uvlong *hz)
 {
     return (*arch->fastclock)(hz);
 }
-/*e: function fastticks */
+/*e: function fastticks(x86) */
 /*e: arch.c */

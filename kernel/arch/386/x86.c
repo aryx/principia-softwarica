@@ -9,9 +9,9 @@
 /*e: kernel basic includes */
 #include "io.h"
 
-/*s: global cputype */
+/*s: global cputype(x86) */
 X86type *cputype;
-/*e: global cputype */
+/*e: global cputype(x86) */
 
 //#define X86STEPPING(x)  ((x) & 0x0F)
 /* incorporates extended-model and -family bits */
@@ -154,7 +154,7 @@ static X86type x86sis[] =
 /*e: global x86sis */
 
 
-/*s: function cpuidentify */
+/*s: function cpuidentify(x86) */
 /*
  *  figure out:
  *  - cpu type
@@ -279,6 +279,6 @@ cpuidentify(void)
     cputype = t;
     return t->family;
 }
-/*e: function cpuidentify */
+/*e: function cpuidentify(x86) */
 
 /*e: x86.c */

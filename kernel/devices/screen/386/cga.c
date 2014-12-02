@@ -8,7 +8,7 @@
 #include "fns.h"
 /*e: kernel basic includes */
 
-/*s: cga.c enum color */
+/*s: cga.c enum color(x86) */
 enum color {
     Black,
     Blue,
@@ -25,9 +25,9 @@ enum color {
     Yellow = Bright|Brown,
     White = Bright|Grey,
 };
-/*e: cga.c enum color */
+/*e: cga.c enum color(x86) */
 
-/*s: cga.c enum misc */
+/*s: cga.c enum misc(x86) */
 enum {
     Width       = 80*2,
     Height      = 25,
@@ -40,38 +40,38 @@ enum {
     Postcodelen = 2,
     Postlen     = Poststrlen+Postcodelen,
 };
-/*e: cga.c enum misc */
+/*e: cga.c enum misc(x86) */
 
-/*s: constant CGASCREENBASE */
+/*s: constant CGASCREENBASE(x86) */
 #define CGASCREENBASE   ((byte*)KADDR(0xB8000))
-/*e: constant CGASCREENBASE */
+/*e: constant CGASCREENBASE(x86) */
 
-/*s: global cgapos */
+/*s: global cgapos(x86) */
 static int cgapos;
-/*e: global cgapos */
-/*s: global cgascreenlock */
+/*e: global cgapos(x86) */
+/*s: global cgascreenlock(x86) */
 static Lock cgascreenlock;
-/*e: global cgascreenlock */
+/*e: global cgascreenlock(x86) */
 
-/*s: function cgaregr */
+/*s: function cgaregr(x86) */
 static byte
 cgaregr(int index)
 {
     outb(0x3D4, index);
     return inb(0x3D4+1) & 0xFF;
 }
-/*e: function cgaregr */
+/*e: function cgaregr(x86) */
 
-/*s: function cgaregw */
+/*s: function cgaregw(x86) */
 static void
 cgaregw(int index, int data)
 {
     outb(0x3D4, index);
     outb(0x3D4+1, data);
 }
-/*e: function cgaregw */
+/*e: function cgaregw(x86) */
 
-/*s: function movecursor */
+/*s: function movecursor(x86) */
 static void
 movecursor(void)
 {
@@ -79,9 +79,9 @@ movecursor(void)
     cgaregw(0x0F, cgapos/2 & 0xFF);
     CGASCREENBASE[cgapos+1] = Attr;
 }
-/*e: function movecursor */
+/*e: function movecursor(x86) */
 
-/*s: function cgascreenputc */
+/*s: function cgascreenputc(x86) */
 static void
 cgascreenputc(char c)
 {
@@ -118,9 +118,9 @@ cgascreenputc(char c)
     }
     movecursor();
 }
-/*e: function cgascreenputc */
+/*e: function cgascreenputc(x86) */
 
-/*s: function cgascreenputs */
+/*s: function cgascreenputs(x86) */
 static void
 cgascreenputs(char* s, int n)
 {
@@ -140,9 +140,9 @@ cgascreenputs(char* s, int n)
 
     unlock(&cgascreenlock);
 }
-/*e: function cgascreenputs */
+/*e: function cgascreenputs(x86) */
 
-/*s: function cgapost */
+/*s: function cgapost(x86) */
 char hex[] = "0123456789ABCDEF";
 
 void
@@ -156,9 +156,9 @@ cgapost(int code)
     cga[Width*Height-Postcodelen*2+2] = hex[code & 0x0F];
     cga[Width*Height-Postcodelen*2+3] = Attr;
 }
-/*e: function cgapost */
+/*e: function cgapost(x86) */
 
-/*s: function screeninit */
+/*s: function screeninit(x86) */
 void
 screeninit(void)
 {
@@ -169,5 +169,5 @@ screeninit(void)
 
     screenputs = cgascreenputs;
 }
-/*e: function screeninit */
+/*e: function screeninit(x86) */
 /*e: cga.c */

@@ -25,14 +25,14 @@ enum {
     Nbcd=       6,
 };
 
-/*s: devrtc.c forward decl */
+/*s: devrtc.c forward decl(x86) */
 typedef struct Rtc  Rtc;
 
 static ulong rtc2sec(Rtc*);
 static void sec2rtc(ulong, Rtc*);
-/*e: devrtc.c forward decl */
+/*e: devrtc.c forward decl(x86) */
 
-/*s: struct Rtc */
+/*s: struct Rtc(x86) */
 struct Rtc
 {
     int sec;
@@ -42,7 +42,7 @@ struct Rtc
     int mon;
     int year;
 };
-/*e: struct Rtc */
+/*e: struct Rtc(x86) */
 
 
 enum{
@@ -306,7 +306,7 @@ rtcwrite(Chan* c, void* buf, long n, vlong off)
     return 0;
 }
 
-/*s: global rtcdevtab */
+/*s: global rtcdevtab(x86) */
 Dev rtcdevtab = {
     .dc       =    'r',
     .name     =    "rtc",
@@ -327,15 +327,15 @@ Dev rtcdevtab = {
     .remove   =    devremove,
     .wstat    =    devwstat,
 };
-/*e: global rtcdevtab */
+/*e: global rtcdevtab(x86) */
 
-/*s: constants SEC2XXX */
+/*s: constants SEC2XXX(x86) */
 #define SEC2MIN 60L
 #define SEC2HOUR (60L*SEC2MIN)
 #define SEC2DAY (24L*SEC2HOUR)
-/*e: constants SEC2XXX */
+/*e: constants SEC2XXX(x86) */
 
-/*s: globals dmsize ldmsize */
+/*s: globals dmsize ldmsize(x86) */
 /*
  *  days per month plus days/year
  */
@@ -347,9 +347,9 @@ static  int ldmsize[] =
 {
     366, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 };
-/*e: globals dmsize ldmsize */
+/*e: globals dmsize ldmsize(x86) */
 
-/*s: function yrsize */
+/*s: function yrsize(x86) */
 /*
  *  return the days/month for the given year
  */
@@ -361,9 +361,9 @@ yrsize(int y)
     else
         return dmsize;
 }
-/*e: function yrsize */
+/*e: function yrsize(x86) */
 
-/*s: function rtc2sec */
+/*s: function rtc2sec(x86) */
 /*
  *  compute seconds since Jan 1 1970
  */
@@ -398,9 +398,9 @@ rtc2sec(Rtc *rtc)
 
     return secs;
 }
-/*e: function rtc2sec */
+/*e: function rtc2sec(x86) */
 
-/*s: function sec2rtc */
+/*s: function sec2rtc(x86) */
 /*
  *  compute rtc from seconds since Jan 1 1970
  */
@@ -452,6 +452,6 @@ sec2rtc(ulong secs, Rtc *rtc)
 
     return;
 }
-/*e: function sec2rtc */
+/*e: function sec2rtc(x86) */
 
 /*e: devrtc.c */

@@ -23,8 +23,8 @@
 void bootargs(void*);
 
 // part of a trick to remove some backward dependencies
-/*s: main.c forward decl for backward deps */
-/*e: main.c forward decl for backward deps */
+/*s: main.c forward decl for backward deps(x86) */
+/*e: main.c forward decl for backward deps(x86) */
 
 // conf.c
 extern  Dev*  conf_devtab[];
@@ -71,7 +71,7 @@ int delaylink = 0;
 //@Scheck: Assembly
 extern phys_addr *multiboot;
 
-/*s: function options */
+/*s: function options(x86) */
 static void
 options(void)
 {
@@ -126,9 +126,9 @@ options(void)
                 nconf++;
         }
 }
-/*e: function options */
+/*e: function options(x86) */
 
-/*s: function writeconf */
+/*s: function writeconf(x86) */
 static void
 writeconf(void)
 {
@@ -157,13 +157,13 @@ writeconf(void)
         poperror();
         free(p);
 }
-/*e: function writeconf */
+/*e: function writeconf(x86) */
 
 //*****************************************************************************
 // Cpu init
 //*****************************************************************************
 
-/*s: function cpuinit */
+/*s: function cpuinit(x86) */
 void
 cpuinit(void)
 {
@@ -188,9 +188,9 @@ cpuinit(void)
      */
     cpu->loopconst = 100000;
 }
-/*e: function cpuinit */
+/*e: function cpuinit(x86) */
 
-/*s: function cpu0init */
+/*s: function cpu0init(x86) */
 void
 cpu0init(void)
 {
@@ -206,13 +206,13 @@ cpu0init(void)
     active.cpus = 1;
     active.exiting = false;
 }
-/*e: function cpu0init */
+/*e: function cpu0init(x86) */
 
 //*****************************************************************************
 // Conf init
 //*****************************************************************************
 
-/*s: function confinit */
+/*s: function confinit(x86) */
 // precondition: meminit() have initialized Conf.mem
 void
 confinit(void)
@@ -308,13 +308,13 @@ confinit(void)
         imagmem->maxsize = kmem;
     }
 }
-/*e: function confinit */
+/*e: function confinit(x86) */
 
 //*****************************************************************************
 // First process init
 //*****************************************************************************
 
-/*s: function init0 */
+/*s: function init0(x86) */
 // set by userinit to sched.pc
 void
 init0(void)
@@ -356,9 +356,9 @@ init0(void)
     cgapost(0x9);
     touser(sp);
 }
-/*e: function init0 */
+/*e: function init0(x86) */
 
-/*s: function pusharg */
+/*s: function pusharg(x86) */
 uchar *
 pusharg(char *p)
 {
@@ -369,10 +369,10 @@ pusharg(char *p)
         memmove(sp, p, n);
         return sp;
 }
-/*e: function pusharg */
+/*e: function pusharg(x86) */
 
 //TODO: get rid of as have simplified boot process, no plan9.ini
-/*s: function bootargs */
+/*s: function bootargs(x86) */
 void
 bootargs(void *base)
 {
@@ -411,9 +411,9 @@ bootargs(void *base)
         *lsp = 0;
         sp += (USTKTOP - BY2PG) - (ulong)base - sizeof(ulong);
 }
-/*e: function bootargs */
+/*e: function bootargs(x86) */
 
-/*s: function userinit */
+/*s: function userinit(x86) */
 void
 userinit(void)
 {
@@ -436,10 +436,10 @@ userinit(void)
     kstrdup(&p->text, "*init*");
     kstrdup(&p->user, eve);
 
-    /*s: [[userinit()]] fp setup */
+    /*s: [[userinit()]] fp setup(x86) */
         p->fpstate = FPinit;
         fpoff();
-    /*e: [[userinit()]] fp setup */
+    /*e: [[userinit()]] fp setup(x86) */
 
     /*
      * Kernel Stack
@@ -480,13 +480,13 @@ userinit(void)
 
     ready(p);
 }
-/*e: function userinit */
+/*e: function userinit(x86) */
 
 //*****************************************************************************
 // Math coprocessor
 //*****************************************************************************
 
-/*s: global mathmsg */
+/*s: global mathmsg(x86) */
 static char* mathmsg[] =
 {
         nil,    /* handled below */
@@ -496,9 +496,9 @@ static char* mathmsg[] =
         "numeric underflow",
         "precision loss",
 };
-/*e: global mathmsg */
+/*e: global mathmsg(x86) */
 
-/*s: function mathstate */
+/*s: function mathstate(x86) */
 static void
 mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
 {
@@ -521,9 +521,9 @@ mathstate(ulong *stsp, ulong *pcp, ulong *ctlp)
         if(ctlp)
                 *ctlp = ctl;
 }
-/*e: function mathstate */
+/*e: function mathstate(x86) */
 
-/*s: function mathnote */
+/*s: function mathnote(x86) */
 static void
 mathnote(void)
 {
@@ -557,9 +557,9 @@ mathnote(void)
                 msg, pc, status);
         postnote(up, 1, note, NDebug);
 }
-/*e: function mathnote */
+/*e: function mathnote(x86) */
 
-/*s: function matherror */
+/*s: function matherror(x86) */
 /*
  *  math coprocessor error
  */
@@ -588,9 +588,9 @@ matherror(Ureg *ur, void*)
                 panic("fp: status %#lux fppc=%#lux pc=%#lux", status, pc, ur->pc);
         }
 }
-/*e: function matherror */
+/*e: function matherror(x86) */
 
-/*s: function mathemu */
+/*s: function mathemu(x86) */
 /*
  *  math coprocessor emulation fault
  */
@@ -631,9 +631,9 @@ mathemu(Ureg *ureg, void*)
                 break;
         }
 }
-/*e: function mathemu */
+/*e: function mathemu(x86) */
 
-/*s: function mathover */
+/*s: function mathover(x86) */
 /*
  *  math coprocessor segment overrun
  */
@@ -642,9 +642,9 @@ mathover(Ureg*, void*)
 {
         pexit("math overrun", false);
 }
-/*e: function mathover */
+/*e: function mathover(x86) */
 
-/*s: function mathinit */
+/*s: function mathinit(x86) */
 void
 mathinit(void)
 {
@@ -654,13 +654,13 @@ mathinit(void)
         trapenable(VectorCNA, mathemu, 0, "mathemu");
         trapenable(VectorCSO, mathover, 0, "mathover");
 }
-/*e: function mathinit */
+/*e: function mathinit(x86) */
 
 //*****************************************************************************
 // Shutdown/reboot
 //*****************************************************************************
 
-/*s: function shutdown */
+/*s: function shutdown(x86) */
 static void
 shutdown(bool ispanic)
 {
@@ -705,18 +705,18 @@ shutdown(bool ispanic)
     }else
         delay(1000);
 }
-/*e: function shutdown */
+/*e: function shutdown(x86) */
 
-/*s: function exit */
+/*s: function exit(x86) */
 void
 main_exit(bool ispanic)
 {
         shutdown(ispanic);
         arch->reset();
 }
-/*e: function exit */
+/*e: function exit(x86) */
 
-/*s: function reboot */
+/*s: function reboot(x86) */
 void
 reboot(kern_addr3 entry, kern_addr3 code, ulong size)
 {
@@ -763,10 +763,10 @@ reboot(kern_addr3 entry, kern_addr3 code, ulong size)
 
     splhi();
 
-    /*s: [[reboot()]] reset serialoq */
+    /*s: [[reboot()]] reset serialoq(x86) */
     /* turn off buffered serial console */
     serialoq = nil;
-    /*e: [[reboot()]] reset serialoq */
+    /*e: [[reboot()]] reset serialoq(x86) */
 
     /* shutdown devices */
     chandevshutdown();
@@ -790,13 +790,13 @@ reboot(kern_addr3 entry, kern_addr3 code, ulong size)
     coherence();
     (*f)(PADDR(entry), PADDR(code), size);
 }
-/*e: function reboot */
+/*e: function reboot(x86) */
 
 //*****************************************************************************
 // Misc
 //*****************************************************************************
 
-/*s: function isaconfig */
+/*s: function isaconfig(x86) */
 int
 main_isaconfig(char *class, int ctlrno, ISAConf *isa)
 {
@@ -829,18 +829,18 @@ main_isaconfig(char *class, int ctlrno, ISAConf *isa)
         }
         return 1;
 }
-/*e: function isaconfig */
+/*e: function isaconfig(x86) */
 
 //*****************************************************************************
 // Main entry point!
 //*****************************************************************************
 
-/*s: function main */
+/*s: function main(x86) */
 //@Scheck: not dead, entry point :) jumped from assembly at _startpg() end
 void main(void)
 {
     // initial assignment made to avoid circular dependencies in codegraph
-    /*s: [[main()]] initial assignments for backward deps */
+    /*s: [[main()]] initial assignments for backward deps(x86) */
     iprint = devcons_iprint;
     hook_ioalloc = devarch_hook_ioalloc;
     devtab = conf_devtab;
@@ -853,7 +853,7 @@ void main(void)
      * Aux/vmware does this via the #P/archctl file.
      */
     coherence = nop;
-    /*e: [[main()]] initial assignments for backward deps */
+    /*e: [[main()]] initial assignments for backward deps(x86) */
 
     cgapost(0);
 
@@ -922,12 +922,12 @@ void main(void)
 
     // let's craft our first process (that will then exec("boot/boot"))
     userinit();
-    /*s: [[main()]] before schedinit() */
+    /*s: [[main()]] before schedinit()(x86) */
     active.main_reached_sched = true;
-    /*e: [[main()]] before schedinit() */
+    /*e: [[main()]] before schedinit()(x86) */
     cgapost(0x99); // done!
     schedinit();
     panic("should never reach this point");
 }
-/*e: function main */
+/*e: function main(x86) */
 /*e: main.c */
