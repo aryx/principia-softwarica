@@ -7,7 +7,6 @@
 // aa.h  is the generic part, the specific #include XXX/Y.out.h is done
 // in Ya/a.h, e.g.:
 //#include "386/8.out.h"
-//#include "mips/v.out.h"
 //#include "arm/5.out.h"
 #include <common.out.h>
 
@@ -20,7 +19,7 @@
 typedef	struct	Sym	Sym;
 typedef	struct	Ref	Ref;
 typedef struct  Io Io;
-typedef	struct	Hist	Hist;
+typedef	struct	Hist Hist;
 
 /*s: constant MAXALIGN */
 #define MAXALIGN 7
