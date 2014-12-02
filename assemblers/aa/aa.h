@@ -17,7 +17,6 @@
 // most of the content below was originally copy pasted in 8a/a.h, 5a/a.h, etc
 
 typedef	struct	Sym	Sym;
-typedef	struct	Ref	Ref;
 typedef struct  Io Io;
 typedef	struct	Hist Hist;
 
@@ -68,7 +67,7 @@ struct	Sym
     ushort	type;
 
     //enum<operand_kind> | enum<opcode_kind> | long (e.g. pc for LLAB)
-    long	value;
+    long	value; //vlong in va/
 
     /*s: [[Sym]] other fields */
     //option<string>, for '#define FOO xxx' expansion
@@ -130,7 +129,7 @@ struct Htab
 /*e: struct Htab */
 extern struct Htab h[NSYM];
 
-// Gen, Gen2?
+// Gen
 
 /*s: struct Hist */
 struct	Hist

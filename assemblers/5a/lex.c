@@ -1,6 +1,10 @@
 #include "a.h"
 #include "y.tab.h"
-#include <ctype.h>
+
+void	cinit(void);
+int		assemble(char*);
+void	cclean(void);
+void	outhist(void);
 
 void
 main(int argc, char *argv[])
@@ -44,11 +48,7 @@ main(int argc, char *argv[])
 		print("usage: %ca [-options] file.s\n", thechar);
 		errorexit();
 	}
-	if(argc > 1 && systemtype(Windows)){
-		print("can't assemble multiple files on windows\n");
-		errorexit();
-	}
-	if(argc > 1 && !systemtype(Windows)) {
+	if(argc > 1) {
 		nproc = 1;
 		if(p = getenv("NPROC"))
 			nproc = atol(p);	/* */
@@ -567,41 +567,41 @@ jackpot:
 	sf = 0;
 	s = g1->sym;
 	while(s != S) {
-		sf = s->sym;
+		sf = s->symidx;
 		if(sf < 0 || sf >= NSYM)
 			sf = 0;
 		t = g1->name;
 		if(h[sf].type == t)
 		if(h[sf].sym == s)
 			break;
-		zname(s->name, t, sym);
-		s->sym = sym;
-		h[sym].sym = s;
-		h[sym].type = t;
-		sf = sym;
-		sym++;
-		if(sym >= NSYM)
-			sym = 1;
+		zname(s->name, t, symcounter);
+		s->symidx = symcounter;
+		h[symcounter].sym = s;
+		h[symcounter].type = t;
+		sf = symcounter;
+		symcounter++;
+		if(symcounter >= NSYM)
+			symcounter = 1;
 		break;
 	}
 	st = 0;
 	s = g2->sym;
 	while(s != S) {
-		st = s->sym;
+		st = s->symidx;
 		if(st < 0 || st >= NSYM)
 			st = 0;
 		t = g2->name;
 		if(h[st].type == t)
 		if(h[st].sym == s)
 			break;
-		zname(s->name, t, sym);
-		s->sym = sym;
-		h[sym].sym = s;
-		h[sym].type = t;
-		st = sym;
-		sym++;
-		if(sym >= NSYM)
-			sym = 1;
+		zname(s->name, t, symcounter);
+		s->symidx = symcounter;
+		h[symcounter].sym = s;
+		h[symcounter].type = t;
+		st = symcounter;
+		symcounter++;
+		if(symcounter >= NSYM)
+			symcounter = 1;
 		if(st == sf)
 			goto jackpot;
 		break;
@@ -634,18 +634,8 @@ outhist(void)
 	for(h = hist; h != H; h = h->link) {
 		p = h->name;
 		op = 0;
-		/* on windows skip drive specifier in pathname */
-		if(systemtype(Windows) && p && p[1] == ':'){
-			p += 2;
-			c = *p;
-		}
 		if(p && p[0] != c && h->offset == 0 && pathname){
-			/* on windows skip drive specifier in pathname */
-			if(systemtype(Windows) && pathname[1] == ':') {
-				op = p;
-				p = pathname+2;
-				c = *p;
-			} else if(pathname[0] == c){
+            if(pathname[0] == c){
 				op = p;
 				p = pathname;
 			}
