@@ -2,8 +2,8 @@
 #include "../aa/aa.h"
 #include "386/8.out.h"
 
-typedef	struct	Gen	Gen;
-typedef	struct	Gen2 	Gen2;
+typedef	struct	Gen  Gen;
+typedef	struct	Gen2 Gen2;
 
 /*s: constant FPCHIP */
 #define	FPCHIP		true

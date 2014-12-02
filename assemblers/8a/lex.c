@@ -3,7 +3,7 @@
 #include "y.tab.h"
 
 void	cinit(void);
-int	assemble(char*);
+int		assemble(char*);
 void	cclean(void);
 void	outhist(void);
 
