@@ -14,14 +14,14 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Kernel.tex.nw
+TEXMAIN=Kernel.nw
 TEX=Kernel.tex
 
 # set of noweb (.nw) files
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=Kernel.tex.nw Kernel_extra.tex.nw
+SRC_ORIG=Kernel.nw Kernel_extra.nw
 
 SRC_VIEWS= \
   ../lib_core/libc/9syscall/sys.h\
