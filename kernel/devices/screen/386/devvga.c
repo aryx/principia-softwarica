@@ -29,7 +29,7 @@ enum {
 };
 /*e: enum _anon_ (kernel/devices/screen/386/devvga.c) */
 
-/*s: global vgadir */
+/*s: global vgadir(x86) */
 static Dirtab vgadir[] = {
     ".",    { Qdir, 0, QTDIR },     0,  0550,
     "vgabios",  { Qvgabios, 0 },    0x100000, 0440,
@@ -37,7 +37,7 @@ static Dirtab vgadir[] = {
     "vgaovl",       { Qvgaovl, 0 },     0,  0660,
     "vgaovlctl",    { Qvgaovlctl, 0 },  0,  0660,
 };
-/*e: global vgadir */
+/*e: global vgadir(x86) */
 
 /*s: enum _anon_ (kernel/devices/screen/386/devvga.c)2 */
 enum {
@@ -58,7 +58,7 @@ enum {
 };
 /*e: enum _anon_ (kernel/devices/screen/386/devvga.c)2 */
 
-/*s: global vgactlmsg */
+/*s: global vgactlmsg(x86) */
 static Cmdtab vgactlmsg[] = {
     CMactualsize,   "actualsize",   2,
     CMblank,    "blank",    1,
@@ -75,9 +75,9 @@ static Cmdtab vgactlmsg[] = {
     CMtype,     "type",     2,
     CMunblank,  "unblank",  1,
 };
-/*e: global vgactlmsg */
+/*e: global vgactlmsg(x86) */
 
-/*s: function vgareset */
+/*s: function vgareset(x86) */
 static void
 vgareset(void)
 {
@@ -87,9 +87,9 @@ vgareset(void)
     if(ioalloc(0x3c0, 0x3da-0x3c0+1, 0, "vga") < 0)
         panic("vga ports already allocated"); 
 }
-/*e: function vgareset */
+/*e: function vgareset(x86) */
 
-/*s: function vgaattach */
+/*s: function vgaattach(x86) */
 static Chan*
 vgaattach(char* spec)
 {
@@ -97,25 +97,25 @@ vgaattach(char* spec)
         error(Eio);
     return devattach('v', spec);
 }
-/*e: function vgaattach */
+/*e: function vgaattach(x86) */
 
-/*s: function vgawalk */
+/*s: function vgawalk(x86) */
 Walkqid*
 vgawalk(Chan* c, Chan *nc, char** name, int nname)
 {
     return devwalk(c, nc, name, nname, vgadir, nelem(vgadir), devgen);
 }
-/*e: function vgawalk */
+/*e: function vgawalk(x86) */
 
-/*s: function vgastat */
+/*s: function vgastat(x86) */
 static int
 vgastat(Chan* c, uchar* dp, int n)
 {
     return devstat(c, dp, n, vgadir, nelem(vgadir), devgen);
 }
-/*e: function vgastat */
+/*e: function vgastat(x86) */
 
-/*s: function vgaopen */
+/*s: function vgaopen(x86) */
 static Chan*
 vgaopen(Chan* c, int omode)
 {
@@ -131,9 +131,9 @@ vgaopen(Chan* c, int omode)
     }
     return devopen(c, omode, vgadir, nelem(vgadir), devgen);
 }
-/*e: function vgaopen */
+/*e: function vgaopen(x86) */
 
-/*s: function vgaclose */
+/*s: function vgaclose(x86) */
 static void
 vgaclose(Chan* c)
 {
@@ -151,9 +151,9 @@ vgaclose(Chan* c)
             poperror();
         }
 }
-/*e: function vgaclose */
+/*e: function vgaclose(x86) */
 
-/*s: function vgaread */
+/*s: function vgaread(x86) */
 static long
 vgaread(Chan* c, void* a, long n, vlong off)
 {
@@ -232,9 +232,9 @@ vgaread(Chan* c, void* a, long n, vlong off)
 
     return 0;
 }
-/*e: function vgaread */
+/*e: function vgaread(x86) */
 
-/*s: function vgactl */
+/*s: function vgactl(x86) */
 static void
 vgactl(Cmdbuf *cb)
 {
@@ -249,19 +249,19 @@ vgactl(Cmdbuf *cb)
     scr = &vgascreen;
     ct = lookupcmd(cb, vgactlmsg, nelem(vgactlmsg));
     switch(ct->index){
-    /*s: [[vgactl]] cases */
+    /*s: [[vgactl]] cases(x86) */
     case CMblank:
         drawblankscreen(true);
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMunblank:
         drawblankscreen(false);
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMblanktime:
         blanktime = strtoul(cb->f[1], 0, 0);
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMhwblank:
         if(strcmp(cb->f[1], "on") == 0)
             hwblank = true;
@@ -270,7 +270,7 @@ vgactl(Cmdbuf *cb)
         else
             break;
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMhwgc:
         if(strcmp(cb->f[1], "off") == 0){
             lock(&cursor);
@@ -306,7 +306,7 @@ vgactl(Cmdbuf *cb)
             return;
         }
         break;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMtype:
         for(i = 0; vgadev[i]; i++){
             if(strcmp(cb->f[1], vgadev[i]->name))
@@ -319,7 +319,7 @@ vgactl(Cmdbuf *cb)
             return;
         }
         break;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMsize:
         x = strtoul(cb->f[1], &p, 0);
         if(x == 0 || x > 10240)
@@ -350,7 +350,7 @@ vgactl(Cmdbuf *cb)
         resetscreenimage();
         cursoron(1);
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMactualsize:
         if(gscreen == nil)
             error("set the screen size first");
@@ -371,7 +371,7 @@ vgactl(Cmdbuf *cb)
         physgscreenr = Rect(0,0,x,y);
         gscreen->clipr = physgscreenr;
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMpalettedepth:
         x = strtoul(cb->f[1], &p, 0);
         if(x != 8 && x != 6)
@@ -379,14 +379,14 @@ vgactl(Cmdbuf *cb)
 
         scr->palettedepth = x;
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMdrawinit:
         if(gscreen == nil)
             error("drawinit: no gscreen");
         if(scr->dev && scr->dev->drawinit)
             scr->dev->drawinit(scr);
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMlinear:
         if(cb->nf!=2 && cb->nf!=3)
             error(Ebadarg);
@@ -398,7 +398,7 @@ vgactl(Cmdbuf *cb)
         if(screenaperture(size, align) < 0)
             error("not enough free address space");
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMpanning:
         if(strcmp(cb->f[1], "on") == 0){
             if(scr == nil || scr->cur == nil)
@@ -414,7 +414,7 @@ vgactl(Cmdbuf *cb)
         }else
             break;
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMhwaccel:
         if(strcmp(cb->f[1], "on") == 0)
             hwaccel = 1;
@@ -423,22 +423,22 @@ vgactl(Cmdbuf *cb)
         else
             break;
         return;
-    /*x: [[vgactl]] cases */
+    /*x: [[vgactl]] cases(x86) */
     case CMtextmode:
         screeninit();
         return;
-    /*e: [[vgactl]] cases */
+    /*e: [[vgactl]] cases(x86) */
     }
 
     cmderror(cb, "bad VGA control message");
 }
-/*e: function vgactl */
+/*e: function vgactl(x86) */
 
-/*s: global Enooverlay */
+/*s: global Enooverlay(x86) */
 char Enooverlay[] = "No overlay support";
-/*e: global Enooverlay */
+/*e: global Enooverlay(x86) */
 
-/*s: function vgawrite */
+/*s: function vgawrite(x86) */
 static long
 vgawrite(Chan* c, void* a, long n, vlong off)
 {
@@ -488,9 +488,9 @@ vgawrite(Chan* c, void* a, long n, vlong off)
 
     return 0;
 }
-/*e: function vgawrite */
+/*e: function vgawrite(x86) */
 
-/*s: global vgadevtab */
+/*s: global vgadevtab(x86) */
 Dev vgadevtab = {
     .dc       =    'v',
     .name     =    "vga",
@@ -513,5 +513,5 @@ Dev vgadevtab = {
     .bwrite   =    devbwrite,
     .remove   =    devremove,
 };
-/*e: global vgadevtab */
+/*e: global vgadevtab(x86) */
 /*e: kernel/devices/screen/386/devvga.c */

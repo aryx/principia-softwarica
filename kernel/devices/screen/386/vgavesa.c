@@ -28,21 +28,21 @@ enum {
 };
 /*e: enum _anon_ (kernel/devices/screen/386/vgavesa.c) */
 
-/*s: global hardscreen */
+/*s: global hardscreen(x86) */
 static void *hardscreen;
-/*e: global hardscreen */
-/*s: global modebuf */
+/*e: global hardscreen(x86) */
+/*s: global modebuf(x86) */
 static uchar modebuf[0x1000];
-/*e: global modebuf */
+/*e: global modebuf(x86) */
 
-/*s: function WORD */
+/*s: function WORD(x86) */
 // pad: seems similar to macros in fcall.h, factorize?
 #define WORD(p) ((p)[0] | ((p)[1]<<8))
-/*e: function WORD */
-/*s: function LONG */
+/*e: function WORD(x86) */
+/*s: function LONG(x86) */
 #define LONG(p) ((p)[0] | ((p)[1]<<8) | ((p)[2]<<16) | ((p)[3]<<24))
-/*e: function LONG */
-/*s: function vbesetup */
+/*e: function LONG(x86) */
+/*s: function vbesetup(x86) */
 static uchar*
 vbesetup(Ureg *u, int ax)
 {
@@ -56,9 +56,9 @@ vbesetup(Ureg *u, int ax)
     u->di = pa&0xFFFF;
     return modebuf;
 }
-/*e: function vbesetup */
+/*e: function vbesetup(x86) */
 
-/*s: function vbecall */
+/*s: function vbecall(x86) */
 static void
 vbecall(Ureg *u)
 {
@@ -91,9 +91,9 @@ vbecall(Ureg *u)
     poperror();
     cclose(cmem);
 }
-/*e: function vbecall */
+/*e: function vbecall(x86) */
 
-/*s: function vbecheck */
+/*s: function vbecheck(x86) */
 static void
 vbecheck(void)
 {
@@ -108,9 +108,9 @@ vbecheck(void)
     if(p[5] < 2)
         error("bad vesa version");
 }
-/*e: function vbecheck */
+/*e: function vbecheck(x86) */
 
-/*s: function vbegetmode */
+/*s: function vbegetmode(x86) */
 static int
 vbegetmode(void)
 {
@@ -120,9 +120,9 @@ vbegetmode(void)
     vbecall(&u);
     return u.bx;
 }
-/*e: function vbegetmode */
+/*e: function vbegetmode(x86) */
 
-/*s: function vbemodeinfo */
+/*s: function vbemodeinfo(x86) */
 static uchar*
 vbemodeinfo(int mode)
 {
@@ -134,9 +134,9 @@ vbemodeinfo(int mode)
     vbecall(&u);
     return p;
 }
-/*e: function vbemodeinfo */
+/*e: function vbemodeinfo(x86) */
 
-/*s: function vesalinear */
+/*s: function vesalinear(x86) */
 static void
 vesalinear(VGAscr *scr, int, int)
 {
@@ -206,9 +206,9 @@ vesalinear(VGAscr *scr, int, int)
         scr->paddr = scr->apsize = 0;
     }
 }
-/*e: function vesalinear */
+/*e: function vesalinear(x86) */
 
-/*s: function vesaflush */
+/*s: function vesaflush(x86) */
 static void
 vesaflush(VGAscr *scr, Rectangle r)
 {
@@ -236,9 +236,9 @@ vesaflush(VGAscr *scr, Rectangle r)
         sp += wid;
     }
 }
-/*e: function vesaflush */
+/*e: function vesaflush(x86) */
 
-/*s: global vgavesadev */
+/*s: global vgavesadev(x86) */
 VGAdev vgavesadev = {
     "vesa",
     0,
@@ -251,5 +251,5 @@ VGAdev vgavesadev = {
     0,
     vesaflush,
 };
-/*e: global vgavesadev */
+/*e: global vgavesadev(x86) */
 /*e: kernel/devices/screen/386/vgavesa.c */

@@ -1,6 +1,6 @@
 /*s: kernel/devices/screen/386/vga.h */
 
-/*s: enum vgaports */
+/*s: enum vgaports(x86) */
 /*
  * Generic VGA registers.
  */
@@ -22,9 +22,9 @@ enum {
   Pixmask   = 0x03C6, /* Pixel Mask Register */
   PaddrR    = 0x03C7, /* Palette Address Register, read */
   Pstatus   = 0x03C7, /* DAC Status (RO) */
-/*e: enum vgaports */
+/*e: enum vgaports(x86) */
 
-/*s: enum vgamisc */
+/*s: enum vgamisc(x86) */
   Pcolours  = 256,    /* Palette */
   Pred    = 0,
   Pgreen  = 1,
@@ -33,15 +33,15 @@ enum {
   Pblack    = 0x00,
   Pwhite    = 0xFF,
 };
-/*e: enum vgamisc */
+/*e: enum vgamisc(x86) */
 
-/*s: function VGAMEM */
+/*s: function VGAMEM(x86) */
 #define VGAMEM()  0xA0000
-/*e: function VGAMEM */
+/*e: function VGAMEM(x86) */
 
-/*s: function vgao */
+/*s: function vgao(x86) */
 #define vgao(port, data)  outb(port, data)
-/*e: function vgao */
+/*e: function vgao(x86) */
 //#define vgai(port)    inb(port)
 extern int vgaxi(long, uchar);
 extern int vgaxo(long, uchar, uchar);
@@ -51,7 +51,7 @@ typedef struct VGAdev VGAdev;
 typedef struct VGAcur VGAcur;
 typedef struct VGAscr VGAscr;
 
-/*s: struct VGAdev */
+/*s: struct VGAdev(x86) */
 struct VGAdev {
   char* name;
 
@@ -69,9 +69,9 @@ struct VGAdev {
 
   void  (*flush)(VGAscr*, Rectangle);
 };
-/*e: struct VGAdev */
+/*e: struct VGAdev(x86) */
 
-/*s: struct VGAcur */
+/*s: struct VGAcur(x86) */
 struct VGAcur {
   char* name;
 
@@ -83,9 +83,9 @@ struct VGAcur {
   // optional
   int doespanning;
 };
-/*e: struct VGAcur */
+/*e: struct VGAcur(x86) */
 
-/*s: struct VGAscr */
+/*s: struct VGAscr(x86) */
 struct VGAscr {
 
   ulong paddr;    /* frame buffer */
@@ -114,23 +114,23 @@ struct VGAscr {
   ulong id; /* internal identifier for driver use */
 
   // why here? why not in VGAdev?
-  /*s: [[VGAscr]] optional methods */
+  /*s: [[VGAscr]] optional methods(x86) */
   void  (*blank)(VGAscr*, int);
-  /*x: [[VGAscr]] optional methods */
+  /*x: [[VGAscr]] optional methods(x86) */
   int (*fill)(VGAscr*, Rectangle, ulong);
   int (*scroll)(VGAscr*, Rectangle, Rectangle);
-  /*e: [[VGAscr]] optional methods */
+  /*e: [[VGAscr]] optional methods(x86) */
 
-  /*s: [[VGAscr]] other fields */
+  /*s: [[VGAscr]] other fields(x86) */
   int isblank;
-  /*x: [[VGAscr]] other fields */
+  /*x: [[VGAscr]] other fields(x86) */
   int overlayinit;
-  /*e: [[VGAscr]] other fields */
+  /*e: [[VGAscr]] other fields(x86) */
 
   // Extra
   Lock  devlock;
 };
-/*e: struct VGAscr */
+/*e: struct VGAscr(x86) */
 
 //!!!
 extern VGAscr vgascreen;
