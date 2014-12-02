@@ -54,6 +54,7 @@ static	char*	cond[16] =
 /*e: global cond */
 
 /*s: global itab */
+//hash<enum<class_kind>, Inst>
 Inst itab[] =
 {
   /*s: [[itab]] elements */
@@ -329,14 +330,14 @@ arm_class(instruction w)
         /* mul, swp, mull */
         if(op == 0x9) {
             op = CMUL;
-            /*s: [[arm_class()]] class 0, when op == 0x9, if 24 bit set */
+            /*s: [[arm_class()]] class 0, when op == 0x9, if bit 24 set */
             if(w & (1<<24)) {
                 op = CSWAP;
                 if(w & (1<<22))
                      op++;	/* swpb */
                 break;
             }
-            /*e: [[arm_class()]] class 0, when op == 0x9, if 24 bit set */
+            /*e: [[arm_class()]] class 0, when op == 0x9, if bit 24 set */
             if(w & (1<<23)) {	/* mullu */
                 op = CMUL+2;
                 if(w & (1<<22))	/* mull */

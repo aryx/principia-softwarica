@@ -106,6 +106,7 @@ struct Tlb
 {
     bool	on;			/* Being updated */
     int		tlbsize;		/* Number of entries */
+    // all pointers in array are at page granularity
     uintptr	tlbent[Nmaxtlb];	/* Virtual address tags */
 
     int	hit;			/* Number of successful tag matches */
@@ -149,16 +150,13 @@ struct Registers
 {
     long	r[16];
     /*s: [[Registers]] other fields */
-    int	cbit; // carry bit?
-    int	cout;
-    /*x: [[Registers]] other fields */
     uintptr		ar;    // reg.r[REGPC]
     instruction	ir;    // ifetch(reg.ar)
-
+    //enum<class_kind>
     int			class; // arm_class(reg.ir)
     Inst*		ip;    // &itab[reg.class]
     /*x: [[Registers]] other fields */
-    // 4 bits, 16 possibilities
+    // actually only 4 bits (16 possibilities)
     int	cond;
     /*x: [[Registers]] other fields */
     // enum<compare_op>
@@ -166,6 +164,9 @@ struct Registers
     /*x: [[Registers]] other fields */
     long	cc1;
     long	cc2;
+    /*x: [[Registers]] other fields */
+    int	cbit; // carry bit?
+    int	cout;
     /*e: [[Registers]] other fields */
 };
 /*e: struct Registers */
@@ -213,6 +214,7 @@ struct Segment
     ulong	fileoff;
     ulong	fileend;
 
+    //array<option<array_4096<bytes>>> page table
     byte**	table; // the data
 
     /*s: [[Segment]] profiling fields */

@@ -25,8 +25,8 @@ ifetch(uintptr addr)
         updateicache(addr);
     iprof[(addr-textbase)/PROFGRAN]++;
 
-    va = vaddr(addr);
-    va += addr&(BY2PG-1);
+    va = vaddr(addr); // get page
+    va += addr&(BY2PG-1); // restore offset in page
 
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
 }
@@ -289,7 +289,7 @@ vaddr(uintptr addr)
     for(s = memory.seg; s < es; s++) {
         if(addr >= s->base && addr < s->end) {
             s->refs++;
-            off = (addr-s->base)/BY2PG;
+            off = (addr - s->base)/BY2PG;
             p = &s->table[off];
             if(*p)
                 return *p;
@@ -327,6 +327,7 @@ vaddr(uintptr addr)
             }
         }
     }
+    // reach here if didn't find any segment with relevant range
     Bprint(bioout, "User TLB miss vaddr 0x%.8lux\n", addr);
     longjmp(errjmp, 0);
     return nil;		/*to stop compiler whining*/
