@@ -1,19 +1,19 @@
 /*s: include/386/8.out.h */
 
-/*s: constant NSNAME */
+/*s: constant NSNAME(x86) */
 #define	NSNAME	8
-/*e: constant NSNAME */
-/*s: constant NOPROF */
+/*e: constant NSNAME(x86) */
+/*s: constant NOPROF(x86) */
 #define NOPROF	(1<<0)
-/*e: constant NOPROF */
-/*s: constant DUPOK */
+/*e: constant NOPROF(x86) */
+/*s: constant DUPOK(x86) */
 #define DUPOK	(1<<1)
-/*e: constant DUPOK */
-/*s: constant NOSPLIT */
+/*e: constant DUPOK(x86) */
+/*s: constant NOSPLIT(x86) */
 #define NOSPLIT	(1<<2)
-/*e: constant NOSPLIT */
+/*e: constant NOSPLIT(x86) */
 
-/*s: enum as */
+/*s: enum as(x86) */
 // coupling: with 8c/enam.c, 8l/obj.c#optab
 enum opcode_kind
 {
@@ -471,12 +471,12 @@ enum opcode_kind
     /* add new operations here. nowhere else. here. */
     ALAST
 };
-/*e: enum as */
+/*e: enum as(x86) */
 
-/*s: enum reg */
+/*s: enum reg(x86) */
 enum operand_kind
 {
-/*s: [[operand_kind]] register cases */
+/*s: [[operand_kind]] register cases(x86) */
     D_AL		= 0,
     D_CL,
     D_DL,
@@ -515,9 +515,9 @@ enum operand_kind
     D_CR		= 35, // D_CR0 .. D_CR7
     D_DR		= 43, // D_DR0 .. D_DR7
     D_TR		= 51, // D_TR0 .. D_TR7
-/*e: [[operand_kind]] register cases */
+/*e: [[operand_kind]] register cases(x86) */
     D_NONE		= 59,
-/*s: [[operand_kind]] non register cases */
+/*s: [[operand_kind]] non register cases(x86) */
     // for ACALL, AJMP (from PC)
     D_BRANCH	= 60, 
 
@@ -532,7 +532,7 @@ enum operand_kind
     D_SCONST	= 67,
 
     D_ADDR	= 68,
-/*x: [[operand_kind]] non register cases */
+/*x: [[operand_kind]] non register cases(x86) */
     D_FILE,
     D_FILE1, // used by linker only
 
@@ -541,11 +541,11 @@ enum operand_kind
     D_CONST2 = D_INDIR+D_INDIR,
 
     D_SIZE,	/* 8l internal */
-/*e: [[operand_kind]] non register cases */
+/*e: [[operand_kind]] non register cases(x86) */
 };
-/*e: enum reg */
+/*e: enum reg(x86) */
 
-/*s: enum misc2 */
+/*s: enum misc2(x86) */
 enum misc2 {
     T_TYPE		= 1<<0,
     T_INDEX		= 1<<1,
@@ -555,8 +555,8 @@ enum misc2 {
     T_SCONST	= 1<<5,
     T_OFFSET2	= 1<<6,
 };
-/*e: enum misc2 */
-/*s: enum misc3 */
+/*e: enum misc2(x86) */
+/*s: enum misc3(x86) */
 enum misc3 {
     REGARG		= -1,
     REGRET		= D_AX,
@@ -564,12 +564,12 @@ enum misc3 {
     REGSP		= D_SP,
     REGTMP		= D_DI,
 };
-/*e: enum misc3 */
+/*e: enum misc3(x86) */
 
-/*s: constant SYMDEF */
+/*s: constant SYMDEF(x86) */
 /*
  * this is the ranlib header
  */
 #define	SYMDEF	"__.SYMDEF"
-/*e: constant SYMDEF */
+/*e: constant SYMDEF(x86) */
 /*e: include/386/8.out.h */

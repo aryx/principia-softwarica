@@ -5,11 +5,11 @@
 typedef	struct	Gen  Gen;
 typedef	struct	Gen2 Gen2;
 
-/*s: constant FPCHIP */
+/*s: constant FPCHIP(x86) */
 #define	FPCHIP		true
-/*e: constant FPCHIP */
+/*e: constant FPCHIP(x86) */
 
-/*s: struct Gen */
+/*s: struct Gen(x86) */
 struct	Gen
 {
     // enum<operand_kind>
@@ -29,14 +29,14 @@ struct	Gen
 
     long	offset2;
 };
-/*e: struct Gen */
-/*s: struct Gen2 */
+/*e: struct Gen(x86) */
+/*s: struct Gen2(x86) */
 struct	Gen2
 {
     Gen	from;
     Gen	to;
 };
-/*e: struct Gen2 */
+/*e: struct Gen2(x86) */
 
 extern	char*	Dlist[30];
 extern	int	nDlist;

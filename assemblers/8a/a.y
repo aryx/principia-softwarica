@@ -2,7 +2,7 @@
 %{
 #include "a.h"
 %}
-/*s: union token */
+/*s: union token(x86) */
 %union  {
  //   enum<opcode_kind> (for LTYPE/...) 
  // | enum<operand_kind> (for LBREG/...) 
@@ -13,22 +13,22 @@
  char   sval[8];
  Sym    *sym;
 
- /*s: [[Token]] other fields */
+ /*s: [[Token]] other fields(x86) */
   Gen   gen;
- /*x: [[Token]] other fields */
+ /*x: [[Token]] other fields(x86) */
   Gen2  gen2;
- /*e: [[Token]] other fields */
+ /*e: [[Token]] other fields(x86) */
 }
-/*e: union token */
-/*s: priority and associativity declarations */
+/*e: union token(x86) */
+/*s: priority and associativity declarations(x86) */
 %left   '|'
 %left   '^'
 %left   '&'
 %left   '<' '>'
 %left   '+' '-'
 %left   '*' '/' '%'
-/*e: priority and associativity declarations */
-/*s: token declarations */
+/*e: priority and associativity declarations(x86) */
+/*s: token declarations(x86) */
 %token  <lval>  LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
 %token  <lval>  LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
 %token  <lval>  LFP LPC LSB LSP
@@ -38,38 +38,38 @@
 %token  <dval>  LFCONST
 %token  <sval>  LSCONST
 %token  <sym>   LNAME LLAB LVAR
-/*e: token declarations */
-/*s: type declarations */
+/*e: token declarations(x86) */
+/*s: type declarations(x86) */
 %type   <gen>   reg imm mem   omem nmem nam
-/*x: type declarations */
+/*x: type declarations(x86) */
 %type   <lval>  pointer
-/*x: type declarations */
+/*x: type declarations(x86) */
 %type   <gen>  rel
-/*x: type declarations */
+/*x: type declarations(x86) */
 %type   <lval>  offset
-/*x: type declarations */
+/*x: type declarations(x86) */
 %type   <gen>  rem rim rom 
-/*x: type declarations */
+/*x: type declarations(x86) */
 %type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
-/*x: type declarations */
+/*x: type declarations(x86) */
 %type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
-/*x: type declarations */
+/*x: type declarations(x86) */
 %type   <lval>  con expr
-/*e: type declarations */
+/*e: type declarations(x86) */
 
 %%
-/*s: grammar */
+/*s: grammar(x86) */
 prog:
   /* empty */
 | prog line
 
-/*s: line rule */
+/*s: line rule(x86) */
 line:
   inst ';'
-/*x: line rule */
+/*x: line rule(x86) */
 | ';'
 | error ';'
-/*x: line rule */
+/*x: line rule(x86) */
 | LNAME ':'
  {
   $1->type = LLAB;
@@ -83,8 +83,8 @@ line:
   $1->value = pc;
  }
  line
-/*e: line rule */
-/*s: inst rule */
+/*e: line rule(x86) */
+/*s: inst rule(x86) */
 inst:
   LTYPE0 nonnon   { outcode($1, &$2); }
 | LTYPE1 nonrem   { outcode($1, &$2); }
@@ -92,7 +92,7 @@ inst:
 | LTYPE3 rimrem   { outcode($1, &$2); }
 | LTYPE4 remrim   { outcode($1, &$2); }
 | LTYPER nonrel   { outcode($1, &$2); }
-/*x: inst rule */
+/*x: inst rule(x86) */
 | LTYPED spec1    { outcode($1, &$2); }
 | LTYPET spec2    { outcode($1, &$2); }
 | LTYPEC spec3    { outcode($1, &$2); }
@@ -101,7 +101,7 @@ inst:
 | LTYPEM spec6    { outcode($1, &$2); }
 | LTYPEI spec7    { outcode($1, &$2); }
 | LTYPEG spec8    { outcode($1, &$2); }
-/*x: inst rule */
+/*x: inst rule(x86) */
 | LNAME '=' expr
  {
   $1->type = LVAR;
@@ -113,8 +113,8 @@ inst:
    yyerror("redeclaration of %s", $1->name);
   $1->value = $3;
  }
-/*e: inst rule */
-/*s: special opcode operands rules */
+/*e: inst rule(x86) */
+/*s: special opcode operands rules(x86) */
 spec2:  /* TEXT */
  mem ',' imm
  {
@@ -127,7 +127,7 @@ spec2:  /* TEXT */
   $$.from.scale = $3;
   $$.to = $5;
  }
-/*x: special opcode operands rules */
+/*x: special opcode operands rules(x86) */
 spec1:  /* DATA */
  nam '/' con ',' imm
  {
@@ -135,7 +135,7 @@ spec1:  /* DATA */
   $$.from.scale = $3;
   $$.to = $5;
  }
-/*x: special opcode operands rules */
+/*x: special opcode operands rules(x86) */
 spec8:  /* GLOBL */
  mem ',' imm
  {
@@ -148,7 +148,7 @@ spec8:  /* GLOBL */
   $$.from.scale = $3;
   $$.to = $5;
  }
-/*x: special opcode operands rules */
+/*x: special opcode operands rules(x86) */
 spec3:  /* JMP/CALL */
  rom
  {
@@ -160,11 +160,11 @@ spec3:  /* JMP/CALL */
   $$.from = nullgen;
   $$.to = $2;
  }
-/*x: special opcode operands rules */
+/*x: special opcode operands rules(x86) */
 spec4:  /* NOP */
   nonnon
 | nonrem
-/*x: special opcode operands rules */
+/*x: special opcode operands rules(x86) */
 spec5:  /* SHL/SHR */
  rim ',' rem
  {
@@ -179,7 +179,7 @@ spec5:  /* SHL/SHR */
    yyerror("dp shift with lhs index");
   $$.from.index = $5;
  }
-/*x: special opcode operands rules */
+/*x: special opcode operands rules(x86) */
 spec6:  /* MOVW/MOVL */
  rim ',' rem
  {
@@ -194,7 +194,7 @@ spec6:  /* MOVW/MOVL */
    yyerror("dp move with lhs index");
   $$.to.index = $5;
  }
-/*x: special opcode operands rules */
+/*x: special opcode operands rules(x86) */
 spec7: /* IMUL */
  rim
  {
@@ -211,8 +211,8 @@ spec7: /* IMUL */
   $$.from = $1;
   $$.to = $3;
  }
-/*e: special opcode operands rules */
-/*s: operands rules */
+/*e: special opcode operands rules(x86) */
+/*s: operands rules(x86) */
 nonnon:
  /* empty */ { $$.from = nullgen; $$.to = nullgen; }
 | ','        { $$.from = nullgen; $$.to = nullgen; }
@@ -234,15 +234,15 @@ nonrem:
 nonrel:
  rel        { $$.from = nullgen; $$.to = $1; }
 | ',' rel   { $$.from = nullgen; $$.to = $2; }
-/*e: operands rules */
-/*s: operand rules */
+/*e: operands rules(x86) */
+/*s: operand rules(x86) */
 reg:
   LBREG { $$ = nullgen; $$.type = $1; }
 | LFREG { $$ = nullgen; $$.type = $1; }
 | LLREG { $$ = nullgen; $$.type = $1; }
 | LSREG { $$ = nullgen; $$.type = $1; }
 | LSP   { $$ = nullgen; $$.type = D_SP; }
-/*x: operand rules */
+/*x: operand rules(x86) */
 imm:
  '$' con
  {
@@ -285,11 +285,11 @@ imm:
   $$.type = D_FCONST;
   $$.dval = -$3;
  }
-/*x: operand rules */
+/*x: operand rules(x86) */
 mem:
   omem
 | nmem
-/*x: operand rules */
+/*x: operand rules(x86) */
 omem:
  con
  {
@@ -359,7 +359,7 @@ omem:
   $$.scale = $7;
   checkscale($$.scale);
  }
-/*x: operand rules */
+/*x: operand rules(x86) */
 nmem:
   nam
 | nam '(' LLREG '*' con ')'
@@ -369,7 +369,7 @@ nmem:
   $$.scale = $5;
   checkscale($$.scale);
  }
-/*x: operand rules */
+/*x: operand rules(x86) */
 nam:
   LNAME offset '(' pointer ')'
  {
@@ -385,12 +385,12 @@ nam:
   $$.sym = $1;
   $$.offset = $4;
  }
-/*x: operand rules */
+/*x: operand rules(x86) */
 pointer:
   LSB
 | LFP
 | LSP { $$ = D_AUTO; }
-/*x: operand rules */
+/*x: operand rules(x86) */
 rel:
  con '(' LPC ')'
  {
@@ -414,12 +414,12 @@ rel:
   $$.sym = $1;
   $$.offset = $2;
  }
-/*x: operand rules */
+/*x: operand rules(x86) */
 offset:
  /* empty */ { $$ = 0; }
 | '+' con    { $$ = $2; }
 | '-' con    { $$ = -$2; }
-/*x: operand rules */
+/*x: operand rules(x86) */
 rem:
   reg
 | mem
@@ -436,8 +436,8 @@ rom:
 
 | '*' reg  { $$ = $2; }
 | '*' omem { $$ = $2; }
-/*e: operand rules */
-/*s: constant expression rules */
+/*e: operand rules(x86) */
+/*s: constant expression rules(x86) */
 con:
   LCONST
 | LVAR         { $$ = $1->value; }
@@ -459,6 +459,6 @@ expr:
 | expr '^' expr     { $$ = $1 ^ $3; }
 | expr '|' expr     { $$ = $1 | $3; }
 
-/*e: constant expression rules */
-/*e: grammar */
+/*e: constant expression rules(x86) */
+/*e: grammar(x86) */
 /*e: 8a/a.y */
