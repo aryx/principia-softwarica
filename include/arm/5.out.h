@@ -14,7 +14,6 @@
 #define	REGMIN		2
 #define	REGMAX		8
 #define	REGEXT		10
-
 /* compiler allocates external registers R10 down */
 #define	REGTMP		11
 #define	REGSB		12
@@ -48,22 +47,22 @@ enum	as
 	ACMP,
 	ACMN,
 	AORR,
-    //AMOV
+    //AMOV, redundant with the other MOV operations
 	ABIC,
 	AMVN,
 
 	AB,
 	ABL,
-
 /* 
  * Do not reorder or fragment the conditional branch 
  * opcodes, or the predication code will break 
  */ 
+    // AB derivatives with condition code, see 5i/
 	ABEQ,
 	ABNE,
-	ABCS,//? not in 5i/cond
+	ABCS,//not in 5i/cond, seems equivalent to ABHS
 	ABHS,
-	ABCC,//? not in 5i/cond
+	ABCC,//not in 5i/cond, seems equivalent to ABLO
 	ABLO,
 	ABMI,
 	ABPL,
@@ -75,9 +74,9 @@ enum	as
 	ABLT,
 	ABGT,
 	ABLE,
-    // NO? see 5i/cond
-    //AL? NV? see 5i/runcmp()
+    //ABAL? (always) done via AB, ABNV (never) done via ANOP probably
 
+    // ??
 	AMOVWD,
 	AMOVWF,
 	AMOVDW,
@@ -87,6 +86,7 @@ enum	as
 	AMOVF,
 	AMOVD,
 
+    // floats?
 	ACMPF,
 	ACMPD,
 	AADDF,
@@ -97,12 +97,15 @@ enum	as
 	AMULD,
 	ADIVF,
 	ADIVD,
-//	ASQRTF,
-//	ASQRTD,
+//	ASQRTF, see below
+//	ASQRTD, see below
 
+    // pseudo instruction? just special kind of AMOV with shift bits?
 	ASRL,
 	ASRA,
 	ASLL,
+
+    // ARM has ADIV? AMOD?
 	AMULU,
 	ADIVU,
 	AMUL,
@@ -120,10 +123,11 @@ enum	as
 	ASWPBU,
 	ASWPW,
 
-	ANOP,
-	ARFE,
+	ANOP, // mv to beginning?
+
+	ARFE, // ?? return from exn?
 	ASWI, // syscall
-	AMULA,
+	AMULA, // mov with MUL?
 
     // pseudo
 	ADATA,
@@ -139,16 +143,16 @@ enum	as
 	ABCASE,
 	ACASE,
 
-	AEND,
+	AEND, // hmm not really, who uses that?
 
 	AMULL,
 	AMULAL,
 	AMULLU,
 	AMULALU,
 
-	ABX,
-	ABXRET,
-	ADWORD,
+	ABX, // ?
+	ABXRET, // ?
+	ADWORD, // ?
 
 	ASIGNAME,
 
@@ -180,6 +184,7 @@ enum	as
 /* type */
 #define	D_BRANCH	(D_NONE+1)
 #define	D_OREG		(D_NONE+2)
+
 #define	D_CONST		(D_NONE+7)
 #define	D_FCONST	(D_NONE+8)
 #define	D_SCONST	(D_NONE+9)
