@@ -146,15 +146,19 @@ Yoann Padioleau\\
 \section{Motivations}
 
 The goal of this book is to present in full details the source code of
-a simulator.
+an hardware simulator.
 % aka emulator
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
-% multiple purpose: in the end hardware is a kind of software, so softwarica
-% material (hardware is a kind of an interpreter).
-% understanding ISA is also useful for assembler/compiler/linker
+% and hardware is really the bottom of the hood :)
+% In the end hardware is a kind of software, so definitely softwarica
+% material (hardware is a kind of an interpreter). But infinite meta loop?
+% Understanding ISA is also useful for other parts of principia,
+% assembler/compiler/linker
 % (especially since in plan9 the architecture specific stuff is distributed
 % in those 3 things). Here is an executable spec of the machine!
+% it also helps a bit to understand kernel, its API and some of its
+% semantic (see syscall chapter, e.g. sysbrk() is nice).
 
 % present 5i, ARM simulator.
 % (why i? why not 5e? or 5s? i for interpreter?)
@@ -221,6 +225,8 @@ License.
 % debugging hardware support (by abusing virtual memory trap general
 %  mechanism again)
 
+% format and endianess: ??
+
 % recently: 
 % - vector computation (SIMD), graphics processing math
 % - security hardware support?
@@ -255,6 +261,7 @@ License.
 
 %ARM ISA format
 %see ARM wikipedia page!
+%endianess:
 
 % a few weird stuff:
 %  - conditional execution format to compensate for lack of branch
@@ -262,6 +269,10 @@ License.
 %  - no CALL/RET? do via B or BL (could also do ADD PC I think)
 
 % lots of symetries and repetitions, see instruction format section
+
+%\section{C}
+% refresher on bit manip?
+% w&1<<7, x& ~(BYPG-1), 31<<7, x>>25 & 0xf, etc
 
 \section{Code organization}
 
@@ -332,6 +343,43 @@ enum ixxx
 };
 @
 % big categories (for profiler)
+% I for Instruction?
+% vi/ has Iload Istore instead of Imem, and also Ireg and Ifloat
+
+% finer categories, bad name? opcode_class better? opcode_category?
+<<enum class_kind>>=
+enum class_kind {
+    // AND, EOR, ORR, BIC
+    // ADD, SUB, RSB, // ADC, SBC, RSC (unused by plan9 5a/5c/5l)
+    // TST, TEQ, CMP, CMN
+    // MOV, MVN
+    CARITH0 = 0,  // r,r,r
+    CARITH1 = 16, // r<>r, r, r
+    CARITH2 = 32, // r<>#, r, r
+    CARITH3 = 48, // i,r,r
+    // MUL, MULA, MULLU, MULALU, MULL, MULAL
+    CMUL    = 64,
+
+    // SWPW, SWPBU
+    CSWAP   = 70,
+    // MOV, MOVW, MOVB
+    CMEM    = 72,
+    // LDM, STM
+    CBLOC   = 84,
+
+    // B, BL
+    CBRANCH = 86,
+    // SWI
+    CSYSCALL = 88,
+
+    CUNDEF   = 89
+};
+@
+% no DIV
+
+% could be simpler to just put all the cases
+% instead of trying to factorize?
+% CAND_0, CAND_1, CAND_2, etc?
 
 % rename?
 <<struct Inst>>=
@@ -350,6 +398,7 @@ struct Inst
 % similarity with 5.out.h enum<opcode_kind>
 % TODO? LP split where keep only Imul?
 <<global itab>>=
+//hash<enum<class_kind>, Inst>
 Inst itab[] =
 {
   <<[[itab]] elements>>
@@ -357,7 +406,9 @@ Inst itab[] =
 };
 @
 
-%ex: [64] =  { Imul,	"MUL",	Iarith },
+%ex: 
+%  [64] =  { Imul,	"MUL",	Iarith },
+%  [CMUL] =  { Imul,	"MUL",	Iarith },
 
 \section{[[Registers]] and [[reg]]}
 
@@ -392,17 +443,6 @@ Registers reg;
 
 
 
-
-
-
-
-%XXX
-<<[[Registers]] other fields>>=
-int	cbit; // carry bit?
-int	cout;
-@
-
-
 \section{[[Segment]] and [[memory]]}
 
 % part OS emulation now, because when exec the kernel
@@ -431,6 +471,7 @@ struct Segment
     ulong	fileoff;
     ulong	fileend;
 
+    //array<option<array_4096<bytes>>> page table
     byte**	table; // the data
 
     <<[[Segment]] profiling fields>>
@@ -732,7 +773,7 @@ initstk(int argc, char *argv[])
 
 }
 @
-
+% putmem_xxx see later
 
 \section{[[cmd()]]}
 
@@ -740,6 +781,7 @@ initstk(int argc, char *argv[])
 <<global dot>>=
 uintptr dot;
 @
+% why dot? db legacy?
 
 <<[[cmd()]] locals>>=
 char *p;
@@ -877,35 +919,6 @@ case 'c':
 % SYSCALL:88     1
 % UNDEF:  89     1
 
-<<enum class_kind>>=
-enum class_kind {
-    // AND, EOR, ORR, BIC
-    // ADD, SUB, RSB, // ADC, SBC, RSC (unused by plan9 5a/5c/5l)
-    // TST, TEQ, CMP, CMN
-    // MOV, MVN
-    CARITH0 = 0,  // r,r,r
-    CARITH1 = 16, // r<>r, r, r
-    CARITH2 = 32, // r<>#, r, r
-    CARITH3 = 48, // i,r,r
-    // MUL, MULA, MULLU, MULALU, MULL, MULAL
-    CMUL    = 64,
-
-    // SWPW, SWPBU
-    CSWAP   = 70,
-    // MOV, MOVW, MOVB
-    CMEM    = 72,
-    // LDM, STM
-    CBLOC   = 84,
-
-    // B, BL
-    CBRANCH = 86,
-    // SWI
-    CSYSCALL = 88,
-
-    CUNDEF   = 89
-};
-@
-% no DIV
 
 \section{[[run()]]}
 
@@ -925,7 +938,7 @@ int count;
 <<[[Registers]] other fields>>=
 uintptr		ar;    // reg.r[REGPC]
 instruction	ir;    // ifetch(reg.ar)
-
+//enum<class_kind>
 int			class; // arm_class(reg.ir)
 Inst*		ip;    // &itab[reg.class]
 @
@@ -985,7 +998,7 @@ run(void)
 % trick to compensate for lack of branch prediction
 
 <<[[Registers]] other fields>>=
-// 4 bits, 16 possibilities
+// actually only 4 bits (16 possibilities)
 int	cond;
 @
 % rename opcode_cond?
@@ -1001,7 +1014,6 @@ int	compare_op;
 @
 % this is part of the processor runtime, it is modified by the execution 
 % set to zero originally? some instruction will set compare_op? CMP?
-
 
 <<enum compare_op>>=
 enum compare_op
@@ -1146,13 +1158,6 @@ arm_class(instruction w)
 
 
 
-
-
-
-
-
-
-
 \section{Instructions simulation}
 
 % always same pattern: extract components from opcode (e.g.
@@ -1186,7 +1191,7 @@ case 0:	/* data processing r,r,r */
 /* mul, swp, mull */
 if(op == 0x9) {
     op = CMUL;
-    <<[[arm_class()]] class 0, when op == 0x9, if 24 bit set>>
+    <<[[arm_class()]] class 0, when op == 0x9, if bit 24 set>>
     if(w & (1<<23)) {	/* mullu */
         op = CMUL+2;
         if(w & (1<<22))	/* mull */
@@ -1276,7 +1281,7 @@ if(trace)
 
 
 
-% less simple, signed long multiply?
+% less simple, signed long multiply? so need XCAST because signed?
 <<function Imull>>=
 void
 Imull(instruction inst)
@@ -1445,13 +1450,14 @@ Idp1(instruction inst)
 }
 @
 
+\ifallcode
 <<[[Idp1()]] trace>>=
 if(trace)
     itrace("%s%s\tR%d%s%d,R%d,R%d =#%x",
         reg.ip->name, cond[reg.cond], rm, shtype[st], sc, rn, rd,
         reg.r[rd]);
 @
-
+\fi
 
 <<[[itab]] elements>>=
 [CARITH2+ 0] =  { Idp2,		"AND",	Iarith },	
@@ -1701,6 +1707,11 @@ dpex(instruction inst, long o1, long o2, int rd)
 % >>
 
 
+<<[[Registers]] other fields>>=
+int	cbit; // carry bit?
+int	cout;
+@
+
 
 
 % shift(rm, op, rs or #, true if rs)
@@ -1770,7 +1781,7 @@ shift(long v, int st, int sc, bool isreg)
 
 \subsection{Memory}
 
-<<[[arm_class()]] class 0, when op == 0x9, if 24 bit set>>=
+<<[[arm_class()]] class 0, when op == 0x9, if bit 24 set>>=
 if(w & (1<<24)) {
     op = CSWAP;
     if(w & (1<<22))
@@ -2220,10 +2231,12 @@ Ib(instruction inst)
 % feature of ARM, so most branch will be like B.EQ and many of then
 % will be IGNORED.
 
+\ifallcode
 <<[[Ib()]] trace>>=
 if(trace)
     itrace("B%s\t#%lux", cond[reg.cond], v);
 @
+\fi
 
 <<function Ibl>>=
 void
@@ -2243,10 +2256,12 @@ Ibl(instruction inst)
 % Branch and Link, so kinda call, just for leaves, no need stack
 % if want RET, just have to mov reglink, regpc
 
+\ifallcode
 <<[[Ibl()]] trace>>=
 if(trace)
     itrace("BL%s\t#%lux", cond[reg.cond], v);
 @
+\fi
 
 \subsection{Syscall}
 % see chapter
@@ -2269,6 +2284,11 @@ case 7:	/* coprocessor crap */ // and syscall
 
 \chapter{Memory}
 
+% we proxy memory ourselves, so virtual mem address correspond
+% to process mem address got via malloc (see Segment.table).
+% so dotlb() is really just to gather profiling information.
+% the translation info is in Segment.table
+
 \section{[[vaddr()]] and the TLB}
 
 <<function vaddr>>=
@@ -2286,7 +2306,7 @@ vaddr(uintptr addr)
     for(s = memory.seg; s < es; s++) {
         if(addr >= s->base && addr < s->end) {
             s->refs++;
-            off = (addr-s->base)/BY2PG;
+            off = (addr - s->base)/BY2PG;
             p = &s->table[off];
             if(*p)
                 return *p;
@@ -2324,6 +2344,7 @@ vaddr(uintptr addr)
             }
         }
     }
+    // reach here if didn't find any segment with relevant range
     Bprint(bioout, "User TLB miss vaddr 0x%.8lux\n", addr);
     longjmp(errjmp, 0);
     return nil;		/*to stop compiler whining*/
@@ -2337,6 +2358,7 @@ struct Tlb
 {
     bool	on;			/* Being updated */
     int		tlbsize;		/* Number of entries */
+    // all pointers in array are at page granularity
     uintptr	tlbent[Nmaxtlb];	/* Virtual address tags */
 
     int	hit;			/* Number of successful tag matches */
@@ -2352,6 +2374,7 @@ struct Tlb
 Tlb tlb;
 @
 
+% just for stats
 <<function dotlb>>=
 void
 dotlb(uintptr vaddr)
@@ -2390,8 +2413,8 @@ ifetch(uintptr addr)
         updateicache(addr);
     iprof[(addr-textbase)/PROFGRAN]++;
 
-    va = vaddr(addr);
-    va += addr&(BY2PG-1);
+    va = vaddr(addr); // get page
+    va += addr&(BY2PG-1); // restore offset in page
 
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
 }
@@ -2416,6 +2439,7 @@ struct Icache
 Icache icache;
 @
 
+% no icache in ARM? vs vi/?
 <<function updateicache>>=
 void
 updateicache(uintptr addr)
@@ -2427,60 +2451,24 @@ updateicache(uintptr addr)
 
 \section{[[getmem_xxx()]]}
 
-<<function getmem_4>>=
-ulong
-getmem_4(uintptr addr)
-{
-    ulong val;
-    int i;
+% bytes
+% half-word
+% word
+% vlong
 
-    val = 0;
-    for(i = 0; i < 4; i++)
-        val = (val>>8) | (getmem_b(addr++)<<24);
-    return val;
-}
-@
-% >>
-
-<<function getmem_2>>=
-ulong
-getmem_2(uintptr addr)
-{
-    ulong val;
-    int i;
-
-    val = 0;
-    for(i = 0; i < 2; i++)
-        val = (val>>8) | (getmem_b(addr++)<<16);
-    return val;
-}
-@
-% >>
-
-<<function getmem_w>>=
-ulong
-getmem_w(uintptr addr)
+<<function getmem_b>>=
+byte
+getmem_b(uintptr addr)
 {
     byte *va;
-    ulong w;
 
-    if(addr&3) {
-        w = getmem_w(addr & ~3);
-        while(addr & 3) {
-            w = (w>>8) | (w<<24);
-            addr--;
-        }
-        return w;
-    }
     <<[[getmem_x()]] if membpt>>
 
     va = vaddr(addr);
     va += addr&(BY2PG-1);
-
-    return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
+    return va[0];
 }
 @
-% >> >> >> >>
 
 <<function getmem_h>>=
 ushort
@@ -2506,21 +2494,36 @@ getmem_h(uintptr addr)
 }
 @
 % >> >>
+% if 2 bytes, then could be at page frontier, so have to take care
+% but if 2 bytes aligned then safe
 
-
-<<function getmem_b>>=
-byte
-getmem_b(uintptr addr)
+<<function getmem_w>>=
+ulong
+getmem_w(uintptr addr)
 {
     byte *va;
+    ulong w;
 
+    if(addr&3) {
+        w = getmem_w(addr & ~3);
+        while(addr & 3) {
+            w = (w>>8) | (w<<24);
+            addr--;
+        }
+        return w;
+    }
     <<[[getmem_x()]] if membpt>>
 
     va = vaddr(addr);
     va += addr&(BY2PG-1);
-    return va[0];
+
+    return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
 }
 @
+% >> >> >> >>
+% similar, if 4 bytes aligned then simple
+
+
 
 <<function getmem_v>>=
 uvlong
@@ -2531,7 +2534,56 @@ getmem_v(uintptr addr)
 @
 % >>
 
+
+% ??? seems used only by debugger and format
+<<function getmem_2>>=
+ulong
+getmem_2(uintptr addr)
+{
+    ulong val;
+    int i;
+
+    val = 0;
+    for(i = 0; i < 2; i++)
+        val = (val>>8) | (getmem_b(addr++)<<16);
+    return val;
+}
+@
+% >>
+
+<<function getmem_4>>=
+ulong
+getmem_4(uintptr addr)
+{
+    ulong val;
+    int i;
+
+    val = 0;
+    for(i = 0; i < 4; i++)
+        val = (val>>8) | (getmem_b(addr++)<<24);
+    return val;
+}
+@
+% >>
+
+% see also memio() in Syscall chapter
+
 \section{[[putmem_xxx()]]}
+
+<<function putmem_b>>=
+void
+putmem_b(uintptr addr, byte data)
+{
+    byte *va;
+
+    va = vaddr(addr);
+    va += addr&(BY2PG-1);
+    va[0] = data;
+
+    <<[[putmem_x()]] if membpt>>
+}
+@
+
 
 <<function putmem_h>>=
 void
@@ -2578,19 +2630,6 @@ putmem_w(uintptr addr, ulong data)
 }
 @
 
-<<function putmem_b>>=
-void
-putmem_b(uintptr addr, byte data)
-{
-    byte *va;
-
-    va = vaddr(addr);
-    va += addr&(BY2PG-1);
-    va[0] = data;
-
-    <<[[putmem_x()]] if membpt>>
-}
-@
 
 <<function putmem_v>>=
 void
@@ -2606,18 +2645,6 @@ putmem_v(uintptr addr, uvlong data)
 
 
 \chapter{Syscalls}
-
-<<constant OERRLEN>>=
-#define	OERRLEN	64	/* compatibility; used in _stat etc. */
-@
-
-<<global errbuf>>=
-char 	errbuf[ERRMAX];
-@
-
-<<global nofunc>>=
-ulong	nofunc;
-@
 
 % #include "/sys/src/libc/9syscall/sys.h"
 
@@ -2708,6 +2735,7 @@ void	(*systab[])(void) =
 };
 @
 
+% itab[CSYSCALL].instr = <>
 <<function Ssyscall>>=
 void
 Ssyscall(instruction _unused)
@@ -2730,6 +2758,12 @@ Ssyscall(instruction _unused)
     Bflush(bioout);
 }
 @
+
+
+
+
+
+
 
 %\chapter{IO}
 \section{[[memio()]]}
@@ -2799,6 +2833,10 @@ sysnop(void)
 % used to have    exits(0);
 % but sysnop used to be sysr1 but I changed that to nop, and nop
 % should not exit
+
+<<global errbuf>>=
+char 	errbuf[ERRMAX];
+@
 
 <<function syserrstr>>=
 void
@@ -2930,6 +2968,10 @@ sysdup(void)
         errstr(errbuf, sizeof errbuf);
     reg.r[REGRET] = n;
 }
+@
+
+<<constant OERRLEN>>=
+#define	OERRLEN	64	/* compatibility; used in _stat etc. */
 @
 
 <<function sysexits>>=
@@ -3262,6 +3304,11 @@ sysremove(void)
         errstr(errbuf, sizeof errbuf);
     reg.r[REGRET] = n;
 }
+@
+
+% why global? could be local of sysnotify
+<<global nofunc>>=
+ulong	nofunc;
 @
 
 <<function sysnotify>>=
