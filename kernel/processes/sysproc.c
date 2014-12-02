@@ -929,8 +929,9 @@ sysrendezvous(ulong* arg)
             val = p->rendval;
             p->rendval = arg[1];
 
-            while(p->cpu != 0)
+            while(p->cpu != 0) // ????
                 ;
+
             ready(p);
             unlock(up->rgrp);
             return val;
