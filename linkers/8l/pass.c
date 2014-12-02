@@ -6,7 +6,7 @@ int	relinv(int);
 void	mkfwd(void);
 Prog*	brloop(Prog*);
 
-/*s: function dodata */
+/*s: function dodata(x86) */
 void
 dodata(void)
 {
@@ -102,9 +102,9 @@ dodata(void)
     xdefine("end", SBSS, bsssize + datsize);
     /* etext is defined in span.c */
 }
-/*e: function dodata */
+/*e: function dodata(x86) */
 
-/*s: function brchain */
+/*s: function brchain(x86) */
 Prog*
 brchain(Prog *p)
 {
@@ -117,9 +117,9 @@ brchain(Prog *p)
     }
     return P;
 }
-/*e: function brchain */
+/*e: function brchain(x86) */
 
-/*s: function follow */
+/*s: function follow(x86) */
 void
 follow(void)
 {
@@ -134,9 +134,9 @@ follow(void)
     lastp->link = P;
     firstp = firstp->link;
 }
-/*e: function follow */
+/*e: function follow(x86) */
 
-/*s: function xfol */
+/*s: function xfol(x86) */
 void
 xfol(Prog *p)
 {
@@ -248,9 +248,9 @@ loop:
     p = p->link;
     goto loop;
 }
-/*e: function xfol */
+/*e: function xfol(x86) */
 
-/*s: function relinv */
+/*s: function relinv(x86) */
 int
 relinv(int a)
 {
@@ -276,9 +276,9 @@ relinv(int a)
     diag("unknown relation: %s in %s", anames[a], TNAME);
     return a;
 }
-/*e: function relinv */
+/*e: function relinv(x86) */
 
-/*s: function doinit */
+/*s: function doinit(x86) */
 void
 doinit(void)
 {
@@ -300,9 +300,9 @@ doinit(void)
             p->to.offset += INITDAT;
     }
 }
-/*e: function doinit */
+/*e: function doinit(x86) */
 
-/*s: function patch */
+/*s: function patch(x86) */
 void
 patch(void)
 {
@@ -378,12 +378,12 @@ patch(void)
         }
     }
 }
-/*e: function patch */
+/*e: function patch(x86) */
 
-/*s: constant LOG */
+/*s: constant LOG(x86) */
 #define	LOG	5
-/*e: constant LOG */
-/*s: function mkfwd */
+/*e: constant LOG(x86) */
+/*s: function mkfwd(x86) */
 void
 mkfwd(void)
 {
@@ -416,9 +416,9 @@ mkfwd(void)
         }
     }
 }
-/*e: function mkfwd */
+/*e: function mkfwd(x86) */
 
-/*s: function brloop */
+/*s: function brloop(x86) */
 Prog*
 brloop(Prog *p)
 {
@@ -435,9 +435,9 @@ brloop(Prog *p)
     }
     return q;
 }
-/*e: function brloop */
+/*e: function brloop(x86) */
 
-/*s: function dostkoff */
+/*s: function dostkoff(x86) */
 void
 dostkoff(void)
 {
@@ -600,9 +600,9 @@ dostkoff(void)
         continue;
     }
 }
-/*e: function dostkoff */
+/*e: function dostkoff(x86) */
 
-/*s: function atolwhex */
+/*s: function atolwhex(x86) */
 long
 atolwhex(char *s)
 {
@@ -642,9 +642,9 @@ atolwhex(char *s)
         n = -n;
     return n;
 }
-/*e: function atolwhex */
+/*e: function atolwhex(x86) */
 
-/*s: function undef */
+/*s: function undef(x86) */
 void
 undef(void)
 {
@@ -656,9 +656,9 @@ undef(void)
             if(s->type == SXREF)
                 diag("%s: not defined", s->name);
 }
-/*e: function undef */
+/*e: function undef(x86) */
 
-/*s: function import */
+/*s: function import(x86) */
 void
 import(void)
 {
@@ -677,18 +677,18 @@ import(void)
                     s->sig = 0;
             }
 }
-/*e: function import */
+/*e: function import(x86) */
 
-/*s: function ckoff */
+/*s: function ckoff(x86) */
 void
 ckoff(Sym *s, long v)
 {
     if(v < 0 || v >= 1<<Roffset)
         diag("relocation offset %ld for %s out of range", v, s->name);
 }
-/*e: function ckoff */
+/*e: function ckoff(x86) */
 
-/*s: function newdata */
+/*s: function newdata(x86) */
 static Prog*
 newdata(Sym *s, int o, int w, int t)
 {
@@ -709,9 +709,9 @@ newdata(Sym *s, int o, int w, int t)
     p->to.type = D_CONST;
     return p;
 }
-/*e: function newdata */
+/*e: function newdata(x86) */
 
-/*s: function export */
+/*s: function export(x86) */
 void
 export(void)
 {
@@ -810,5 +810,5 @@ export(void)
     exports = ne;
     free(esyms);
 }
-/*e: function export */
+/*e: function export(x86) */
 /*e: linkers/8l/pass.c */

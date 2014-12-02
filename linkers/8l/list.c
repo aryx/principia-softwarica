@@ -7,7 +7,7 @@ int	Pconv(Fmt*);
 int	Rconv(Fmt*);
 int	Sconv(Fmt*);
 
-/*s: function listinit */
+/*s: function listinit(x86) */
 void
 listinit(void)
 {
@@ -18,13 +18,13 @@ listinit(void)
     fmtinstall('P', Pconv);
     fmtinstall('S', Sconv);
 }
-/*e: function listinit */
+/*e: function listinit(x86) */
 
-/*s: global bigP */
+/*s: global bigP(x86) */
 static	Prog	*bigP;
-/*e: global bigP */
+/*e: global bigP(x86) */
 
-/*s: function Pconv */
+/*s: function Pconv(x86) */
 // Prog -> string
 int
 Pconv(Fmt *fp)
@@ -59,9 +59,9 @@ Pconv(Fmt *fp)
     bigP = P;
     return fmtstrcpy(fp, str);
 }
-/*e: function Pconv */
+/*e: function Pconv(x86) */
 
-/*s: function Aconv */
+/*s: function Aconv(x86) */
 // enum<opcode> -> string
 int
 Aconv(Fmt *fp)
@@ -71,9 +71,9 @@ Aconv(Fmt *fp)
     i = va_arg(fp->args, int);
     return fmtstrcpy(fp, anames[i]);
 }
-/*e: function Aconv */
+/*e: function Aconv(x86) */
 
-/*s: function Dconv */
+/*s: function Dconv(x86) */
 // Adr -> string
 int
 Dconv(Fmt *fp)
@@ -86,7 +86,7 @@ Dconv(Fmt *fp)
     a = va_arg(fp->args, Adr*);
     i = a->type;
 
-    /*s: [[Dconv()]] if i >= D_INDIR */
+    /*s: [[Dconv()]] if i >= D_INDIR(x86) */
     if(i >= D_INDIR) {
         if(a->offset)
             snprint(str, sizeof(str), "%ld(%R)", a->offset, i-D_INDIR);
@@ -94,7 +94,7 @@ Dconv(Fmt *fp)
             snprint(str, sizeof(str), "(%R)", i-D_INDIR);
         goto brk;
     }
-    /*e: [[Dconv()]] if i >= D_INDIR */
+    /*e: [[Dconv()]] if i >= D_INDIR(x86) */
 
     switch(i) {
     case D_NONE:
@@ -161,9 +161,9 @@ brk:
 conv:
     return fmtstrcpy(fp, str);
 }
-/*e: function Dconv */
+/*e: function Dconv(x86) */
 
-/*s: global regstr */
+/*s: global regstr(x86) */
 // coupling with enum regs in 8.out.h
 char*	regstr[] =
 {
@@ -236,9 +236,9 @@ char*	regstr[] =
 
     "NONE",		/* [D_NONE] */
 };
-/*e: global regstr */
+/*e: global regstr(x86) */
 
-/*s: function Rconv */
+/*s: function Rconv(x86) */
 // enum<operand_kind(register-only)> -> string
 int
 Rconv(Fmt *fp)
@@ -254,9 +254,9 @@ Rconv(Fmt *fp)
 
     return fmtstrcpy(fp, str);
 }
-/*e: function Rconv */
+/*e: function Rconv(x86) */
 
-/*s: function Sconv */
+/*s: function Sconv(x86) */
 // ?? -> string
 int
 Sconv(Fmt *fp)
@@ -303,9 +303,9 @@ Sconv(Fmt *fp)
     *p = 0;
     return fmtstrcpy(fp, str);
 }
-/*e: function Sconv */
+/*e: function Sconv(x86) */
 
-/*s: function diag */
+/*s: function diag(x86) */
 void
 diag(char *fmt, ...)
 {
@@ -327,5 +327,5 @@ diag(char *fmt, ...)
         errorexit();
     }
 }
-/*e: function diag */
+/*e: function diag(x86) */
 /*e: linkers/8l/list.c */

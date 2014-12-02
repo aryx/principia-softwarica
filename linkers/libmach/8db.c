@@ -18,16 +18,16 @@ static	int	i386inst(Map*, uvlong, char, char*, int);
 static	int	i386das(Map*, uvlong, char*, int);
 static	int	i386instlen(Map*, uvlong);
 
-/*s: global STARTSYM */
+/*s: global STARTSYM(x86) */
 static	char	STARTSYM[] =	"_main";
-/*e: global STARTSYM */
-/*s: global PROFSYM */
+/*e: global STARTSYM(x86) */
+/*s: global PROFSYM(x86) */
 static	char	PROFSYM[] =	"_mainp";
-/*e: global PROFSYM */
-/*s: global FRAMENAME */
+/*e: global PROFSYM(x86) */
+/*s: global FRAMENAME(x86) */
 static	char	FRAMENAME[] =	".frame";
-/*e: global FRAMENAME */
-/*s: global excname */
+/*e: global FRAMENAME(x86) */
+/*s: global excname(x86) */
 static char *excname[] =
 {
 [0]	"divide error",
@@ -57,7 +57,7 @@ static char *excname[] =
 [38]	"hard disk",
 [64]	"system call",
 };
-/*e: global excname */
+/*e: global excname(x86) */
 
 /*s: global i386mach */
 Machdata i386mach =
@@ -179,7 +179,7 @@ i386frame(Map *map, uvlong addr, uvlong pc, uvlong sp, uvlong link)
  *  an instruction
  */
 typedef struct Instr Instr;
-/*s: struct Instr */
+/*s: struct Instr(x86) */
 struct	Instr
 {
     uchar	mem[1+1+1+1+2+1+1+4+4];		/* raw instruction */
@@ -208,10 +208,10 @@ struct	Instr
     char	*end;		/* end of output buffer */
     char	*err;		/* error message */
 };
-/*e: struct Instr */
+/*e: struct Instr(x86) */
 
     /* 386 register (ha!) set */
-/*s: enum _anon_ (linkers/libmach/8db.c) */
+/*s: enum _anon_ (linkers/libmach/8db.c)(x86) */
 enum{
     AX=0,
     CX,
@@ -232,17 +232,17 @@ enum{
     R14,
     R15
 };
-/*e: enum _anon_ (linkers/libmach/8db.c) */
+/*e: enum _anon_ (linkers/libmach/8db.c)(x86) */
 
     /* amd64 rex extension byte */
-/*s: enum _anon_ (linkers/libmach/8db.c)2 */
+/*s: enum _anon_ (linkers/libmach/8db.c)2(x86) */
 enum{
     REXW		= 1<<3,	/* =1, 64-bit operand size */
     REXR		= 1<<2,	/* extend modrm reg */
     REXX		= 1<<1,	/* extend sib index */
     REXB		= 1<<0	/* extend modrm r/m, sib base, or opcode reg */
 };
-/*e: enum _anon_ (linkers/libmach/8db.c)2 */
+/*e: enum _anon_ (linkers/libmach/8db.c)2(x86) */
     
     /* Operand Format codes */
 /*
@@ -265,15 +265,15 @@ enum{
 */
 
 typedef struct Optable Optable;
-/*s: struct Optable */
+/*s: struct Optable(x86) */
 struct Optable
 {
     char	operand[2];
     void	*proto;		/* actually either (char*) or (Optable*) */
 };
-/*e: struct Optable */
+/*e: struct Optable(x86) */
     /* Operand decoding codes */
-/*s: enum _anon_ (linkers/libmach/8db.c)3 */
+/*s: enum _anon_ (linkers/libmach/8db.c)3(x86) */
 enum {
     Ib = 1,			/* 8-bit immediate - (no sign extension)*/
     Ibs,			/* 8-bit immediate (sign extended) */
@@ -306,9 +306,9 @@ enum {
     OPOVER,			/* Operand size override */
     ADDOVER,		/* Address size override */
 };
-/*e: enum _anon_ (linkers/libmach/8db.c)3 */
+/*e: enum _anon_ (linkers/libmach/8db.c)3(x86) */
     
-/*s: global optab0F00 */
+/*s: global optab0F00(x86) */
 static Optable optab0F00[8]=
 {
 [0x00]	0,0,		"MOVW	LDT,%e",
@@ -318,9 +318,9 @@ static Optable optab0F00[8]=
 [0x04]	0,0,		"VERR	%e",
 [0x05]	0,0,		"VERW	%e",
 };
-/*e: global optab0F00 */
+/*e: global optab0F00(x86) */
 
-/*s: global optab0F01 */
+/*s: global optab0F01(x86) */
 static Optable optab0F01[8]=
 {
 [0x00]	0,0,		"MOVL	GDTR,%e",
@@ -331,18 +331,18 @@ static Optable optab0F01[8]=
 [0x06]	0,0,		"MOVW	%e,MSW",	/* word */
 [0x07]	0,0,		"INVLPG	%e",		/* or SWAPGS */
 };
-/*e: global optab0F01 */
+/*e: global optab0F01(x86) */
 
-/*s: global optab0F01F8 */
+/*s: global optab0F01F8(x86) */
 static Optable optab0F01F8[1]=
 {
 [0x00]	0,0,		"SWAPGS",
 };
-/*e: global optab0F01F8 */
+/*e: global optab0F01F8(x86) */
 
 /* 0F71 */
 /* 0F72 */
-/*s: global optab0FAE */
+/*s: global optab0FAE(x86) */
 /* 0F73 */
 
 static Optable optab0FAE[8]=
@@ -355,10 +355,10 @@ static Optable optab0FAE[8]=
 [0x06]	0,0,		"MFENCE",
 [0x07]	0,0,		"SFENCE",
 };
-/*e: global optab0FAE */
+/*e: global optab0FAE(x86) */
 
 /* 0F18 */
-/*s: global optab0FBA */
+/*s: global optab0FBA(x86) */
 /* 0F0D */
 
 static Optable optab0FBA[8]=
@@ -368,9 +368,9 @@ static Optable optab0FBA[8]=
 [0x06]	Ib,0,		"BTR%S	%i,%e",
 [0x07]	Ib,0,		"BTC%S	%i,%e",
 };
-/*e: global optab0FBA */
+/*e: global optab0FBA(x86) */
 
-/*s: global optab0F0F */
+/*s: global optab0F0F(x86) */
 static Optable optab0F0F[256]=
 {
 [0x0c]	0,0,		"PI2FW	%m,%M",
@@ -397,34 +397,34 @@ static Optable optab0F0F[256]=
 [0xb7]	0,0,		"PMULHRW	%m,%M",
 [0xbb]	0,0,		"PSWAPL	%m,%M",
 };
-/*e: global optab0F0F */
+/*e: global optab0F0F(x86) */
 
-/*s: global optab0FC7 */
+/*s: global optab0FC7(x86) */
 static Optable optab0FC7[8]=
 {
 [0x01]	0,0,		"CMPXCHG8B	%e",
 };
-/*e: global optab0FC7 */
+/*e: global optab0FC7(x86) */
 
-/*s: global optab660F71 */
+/*s: global optab660F71(x86) */
 static Optable optab660F71[8]=
 {
 [0x02]	Ib,0,		"PSRLW	%i,%X",
 [0x04]	Ib,0,		"PSRAW	%i,%X",
 [0x06]	Ib,0,		"PSLLW	%i,%X",
 };
-/*e: global optab660F71 */
+/*e: global optab660F71(x86) */
 
-/*s: global optab660F72 */
+/*s: global optab660F72(x86) */
 static Optable optab660F72[8]=
 {
 [0x02]	Ib,0,		"PSRLL	%i,%X",
 [0x04]	Ib,0,		"PSRAL	%i,%X",
 [0x06]	Ib,0,		"PSLLL	%i,%X",
 };
-/*e: global optab660F72 */
+/*e: global optab660F72(x86) */
 
-/*s: global optab660F73 */
+/*s: global optab660F73(x86) */
 static Optable optab660F73[8]=
 {
 [0x02]	Ib,0,		"PSRLQ	%i,%X",
@@ -432,9 +432,9 @@ static Optable optab660F73[8]=
 [0x06]	Ib,0,		"PSLLQ	%i,%X",
 [0x07]	Ib,0,		"PSLLO	%i,%X",
 };
-/*e: global optab660F73 */
+/*e: global optab660F73(x86) */
 
-/*s: global optab660F */
+/*s: global optab660F(x86) */
 static Optable optab660F[256]=
 {
 [0x2B]	RM,0,		"MOVNTPD	%x,%e",
@@ -463,9 +463,9 @@ static Optable optab660F[256]=
 [0xE7]	RM,0,		"MOVNTO	%X,%e",
 [0xF7]	RM,0,		"MASKMOVOU	%x,%X",
 };
-/*e: global optab660F */
+/*e: global optab660F(x86) */
 
-/*s: global optabF20F */
+/*s: global optabF20F(x86) */
 static Optable optabF20F[256]=
 {
 [0x10]	RM,0,		"MOVSD	%x,%X",
@@ -480,9 +480,9 @@ static Optable optabF20F[256]=
 [0xD6]	RM,0,		"MOVQOZX	%M,%X",
 [0xE6]	RM,0,		"CVTPD2PL	%x,%X",
 };
-/*e: global optabF20F */
+/*e: global optabF20F(x86) */
 
-/*s: global optabF30F */
+/*s: global optabF30F(x86) */
 static Optable optabF30F[256]=
 {
 [0x10]	RM,0,		"MOVSS	%x,%X",
@@ -499,9 +499,9 @@ static Optable optabF30F[256]=
 [0xD6]	RM,0,		"MOVQOZX	%m*,%X",
 [0xE6]	RM,0,		"CVTPL2PD	%x,%X",
 };
-/*e: global optabF30F */
+/*e: global optabF30F(x86) */
 
-/*s: global optab0F */
+/*s: global optab0F(x86) */
 static Optable optab0F[256]=
 {
 [0x00]	RMOP,0,		optab0F00,
@@ -709,9 +709,9 @@ static Optable optab0F[256]=
 [0xbf]	RM,0,		"MOVWSX	%e,%R",
 [0xc7]	RMOP,0,		optab0FC7,
 };
-/*e: global optab0F */
+/*e: global optab0F(x86) */
 
-/*s: global optab80 */
+/*s: global optab80(x86) */
 static Optable optab80[8]=
 {
 [0x00]	Ib,0,		"ADDB	%i,%e",
@@ -723,9 +723,9 @@ static Optable optab80[8]=
 [0x06]	Ib,0,		"XORB	%i,%e",
 [0x07]	Ib,0,		"CMPB	%e,%i",
 };
-/*e: global optab80 */
+/*e: global optab80(x86) */
 
-/*s: global optab81 */
+/*s: global optab81(x86) */
 static Optable optab81[8]=
 {
 [0x00]	Iwd,0,		"ADD%S	%i,%e",
@@ -737,9 +737,9 @@ static Optable optab81[8]=
 [0x06]	Iwd,0,		"XOR%S	%i,%e",
 [0x07]	Iwd,0,		"CMP%S	%e,%i",
 };
-/*e: global optab81 */
+/*e: global optab81(x86) */
 
-/*s: global optab83 */
+/*s: global optab83(x86) */
 static Optable optab83[8]=
 {
 [0x00]	Ibs,0,		"ADD%S	%i,%e",
@@ -751,9 +751,9 @@ static Optable optab83[8]=
 [0x06]	Ibs,0,		"XOR%S	%i,%e",
 [0x07]	Ibs,0,		"CMP%S	%e,%i",
 };
-/*e: global optab83 */
+/*e: global optab83(x86) */
 
-/*s: global optabC0 */
+/*s: global optabC0(x86) */
 static Optable optabC0[8] =
 {
 [0x00]	Ib,0,		"ROLB	%i,%e",
@@ -764,9 +764,9 @@ static Optable optabC0[8] =
 [0x05]	Ib,0,		"SHRB	%i,%e",
 [0x07]	Ib,0,		"SARB	%i,%e",
 };
-/*e: global optabC0 */
+/*e: global optabC0(x86) */
 
-/*s: global optabC1 */
+/*s: global optabC1(x86) */
 static Optable optabC1[8] =
 {
 [0x00]	Ib,0,		"ROL%S	%i,%e",
@@ -777,9 +777,9 @@ static Optable optabC1[8] =
 [0x05]	Ib,0,		"SHR%S	%i,%e",
 [0x07]	Ib,0,		"SAR%S	%i,%e",
 };
-/*e: global optabC1 */
+/*e: global optabC1(x86) */
 
-/*s: global optabD0 */
+/*s: global optabD0(x86) */
 static Optable optabD0[8] =
 {
 [0x00]	0,0,		"ROLB	%e",
@@ -790,9 +790,9 @@ static Optable optabD0[8] =
 [0x05]	0,0,		"SHRB	%e",
 [0x07]	0,0,		"SARB	%e",
 };
-/*e: global optabD0 */
+/*e: global optabD0(x86) */
 
-/*s: global optabD1 */
+/*s: global optabD1(x86) */
 static Optable optabD1[8] =
 {
 [0x00]	0,0,		"ROL%S	%e",
@@ -803,9 +803,9 @@ static Optable optabD1[8] =
 [0x05]	0,0,		"SHR%S	%e",
 [0x07]	0,0,		"SAR%S	%e",
 };
-/*e: global optabD1 */
+/*e: global optabD1(x86) */
 
-/*s: global optabD2 */
+/*s: global optabD2(x86) */
 static Optable optabD2[8] =
 {
 [0x00]	0,0,		"ROLB	CL,%e",
@@ -816,9 +816,9 @@ static Optable optabD2[8] =
 [0x05]	0,0,		"SHRB	CL,%e",
 [0x07]	0,0,		"SARB	CL,%e",
 };
-/*e: global optabD2 */
+/*e: global optabD2(x86) */
 
-/*s: global optabD3 */
+/*s: global optabD3(x86) */
 static Optable optabD3[8] =
 {
 [0x00]	0,0,		"ROL%S	CL,%e",
@@ -829,9 +829,9 @@ static Optable optabD3[8] =
 [0x05]	0,0,		"SHR%S	CL,%e",
 [0x07]	0,0,		"SAR%S	CL,%e",
 };
-/*e: global optabD3 */
+/*e: global optabD3(x86) */
 
-/*s: global optabD8 */
+/*s: global optabD8(x86) */
 static Optable optabD8[8+8] =
 {
 [0x00]	0,0,		"FADDF	%e,F0",
@@ -851,8 +851,8 @@ static Optable optabD8[8+8] =
 [0x0e]	0,0,		"FDIVD	%f,F0",
 [0x0f]	0,0,		"FDIVRD	%f,F0",
 };
-/*e: global optabD8 */
-/*s: global optabD9 */
+/*e: global optabD8(x86) */
+/*s: global optabD9(x86) */
 /*
  *	optabD9 and optabDB use the following encoding: 
  *	if (0 <= modrm <= 2) instruction = optabDx[modrm&0x07];
@@ -915,9 +915,9 @@ static Optable optabD9[64+8] =
 [0x46]	0,0,		"FSIN",
 [0x47]	0,0,		"FCOS",
 };
-/*e: global optabD9 */
+/*e: global optabD9(x86) */
 
-/*s: global optabDA */
+/*s: global optabDA(x86) */
 static Optable optabDA[8+8] =
 {
 [0x00]	0,0,		"FADDL	%e,F0",
@@ -930,9 +930,9 @@ static Optable optabDA[8+8] =
 [0x07]	0,0,		"FDIVRL	%e,F0",
 [0x0d]	R1,0,		"FUCOMPP",
 };
-/*e: global optabDA */
+/*e: global optabDA(x86) */
 
-/*s: global optabDB */
+/*s: global optabDB(x86) */
 static Optable optabDB[8+64] =
 {
 [0x00]	0,0,		"FMOVL	%e,F0",
@@ -943,9 +943,9 @@ static Optable optabDB[8+64] =
 [0x2a]	0,0,		"FCLEX",
 [0x2b]	0,0,		"FINIT",
 };
-/*e: global optabDB */
+/*e: global optabDB(x86) */
 
-/*s: global optabDC */
+/*s: global optabDC(x86) */
 static Optable optabDC[8+8] =
 {
 [0x00]	0,0,		"FADDD	%e,F0",
@@ -963,9 +963,9 @@ static Optable optabDC[8+8] =
 [0x0e]	0,0,		"FDIVRD	F0,%f",
 [0x0f]	0,0,		"FDIVD	F0,%f",
 };
-/*e: global optabDC */
+/*e: global optabDC(x86) */
 
-/*s: global optabDD */
+/*s: global optabDD(x86) */
 static Optable optabDD[8+8] =
 {
 [0x00]	0,0,		"FMOVD	%e,F0",
@@ -980,9 +980,9 @@ static Optable optabDD[8+8] =
 [0x0c]	0,0,		"FUCOMD	%f,F0",
 [0x0d]	0,0,		"FUCOMDP %f,F0",
 };
-/*e: global optabDD */
+/*e: global optabDD(x86) */
 
-/*s: global optabDE */
+/*s: global optabDE(x86) */
 static Optable optabDE[8+8] =
 {
 [0x00]	0,0,		"FADDW	%e,F0",
@@ -1001,9 +1001,9 @@ static Optable optabDE[8+8] =
 [0x0e]	0,0,		"FDIVRDP F0,%f",
 [0x0f]	0,0,		"FDIVDP	F0,%f",
 };
-/*e: global optabDE */
+/*e: global optabDE(x86) */
 
-/*s: global optabDF */
+/*s: global optabDF(x86) */
 static Optable optabDF[8+8] =
 {
 [0x00]	0,0,		"FMOVW	%e,F0",
@@ -1015,9 +1015,9 @@ static Optable optabDF[8+8] =
 [0x07]	0,0,		"FMOVLP	F0,%e",
 [0x0c]	R0,0,		"FSTSW	%OAX",
 };
-/*e: global optabDF */
+/*e: global optabDF(x86) */
 
-/*s: global optabF6 */
+/*s: global optabF6(x86) */
 static Optable optabF6[8] =
 {
 [0x00]	Ib,0,		"TESTB	%i,%e",
@@ -1028,9 +1028,9 @@ static Optable optabF6[8] =
 [0x06]	0,0,		"DIVB	AL,%e",
 [0x07]	0,0,		"IDIVB	AL,%e",
 };
-/*e: global optabF6 */
+/*e: global optabF6(x86) */
 
-/*s: global optabF7 */
+/*s: global optabF7(x86) */
 static Optable optabF7[8] =
 {
 [0x00]	Iwd,0,		"TEST%S	%i,%e",
@@ -1041,17 +1041,17 @@ static Optable optabF7[8] =
 [0x06]	0,0,		"DIV%S	%OAX,%e",
 [0x07]	0,0,		"IDIV%S	%OAX,%e",
 };
-/*e: global optabF7 */
+/*e: global optabF7(x86) */
 
-/*s: global optabFE */
+/*s: global optabFE(x86) */
 static Optable optabFE[8] =
 {
 [0x00]	0,0,		"INCB	%e",
 [0x01]	0,0,		"DECB	%e",
 };
-/*e: global optabFE */
+/*e: global optabFE(x86) */
 
-/*s: global optabFF */
+/*s: global optabFF(x86) */
 static Optable optabFF[8] =
 {
 [0x00]	0,0,		"INC%S	%e",
@@ -1062,9 +1062,9 @@ static Optable optabFF[8] =
 [0x05]	JUMP,0,		"JMPF*	%e",
 [0x06]	0,0,		"PUSHL	%e",
 };
-/*e: global optabFF */
+/*e: global optabFF(x86) */
 
-/*s: global optable */
+/*s: global optable(x86) */
 static Optable optable[256+1] =
 {
 [0x00]	RMB,0,		"ADDB	%r,%e",
@@ -1322,9 +1322,9 @@ static Optable optable[256+1] =
 [0xff]	RMOP,0,		optabFF,
 [0x100]	RM,0,		"MOVLQSX	%r,%e",
 };
-/*e: global optable */
+/*e: global optable(x86) */
 
-/*s: function igetc */
+/*s: function igetc(x86) */
 /*
  *  get a byte of the instruction
  */
@@ -1342,9 +1342,9 @@ igetc(Map *map, Instr *ip, uchar *c)
     ip->mem[ip->n++] = *c;
     return 1;
 }
-/*e: function igetc */
+/*e: function igetc(x86) */
 
-/*s: function igets */
+/*s: function igets(x86) */
 /*
  *  get two bytes of the instruction
  */
@@ -1363,9 +1363,9 @@ igets(Map *map, Instr *ip, ushort *sp)
     *sp = s;
     return 1;
 }
-/*e: function igets */
+/*e: function igets(x86) */
 
-/*s: function igetl */
+/*s: function igetl(x86) */
 /*
  *  get 4 bytes of the instruction
  */
@@ -1384,9 +1384,9 @@ igetl(Map *map, Instr *ip, ulong *lp)
     *lp = l;
     return 1;
 }
-/*e: function igetl */
+/*e: function igetl(x86) */
 
-/*s: function igetq */
+/*s: function igetq(x86) */
 /*
  *  get 8 bytes of the instruction
  */
@@ -1405,9 +1405,9 @@ igetq(Map *map, Instr *ip, vlong *qp)
     *qp = q;
     return 1;
 }
-/*e: function igetq */
+/*e: function igetq(x86) */
 
-/*s: function getdisp */
+/*s: function getdisp(x86) */
 static int
 getdisp(Map *map, Instr *ip, int mod, int rm, int code, int pcrel)
 {
@@ -1442,9 +1442,9 @@ getdisp(Map *map, Instr *ip, int mod, int rm, int code, int pcrel)
     }
     return 1;
 }
-/*e: function getdisp */
+/*e: function getdisp(x86) */
 
-/*s: function modrm */
+/*s: function modrm(x86) */
 static int
 modrm(Map *map, Instr *ip, uchar c)
 {
@@ -1501,9 +1501,9 @@ modrm(Map *map, Instr *ip, uchar c)
     }
     return getdisp(map, ip, mod, rm, 5, ip->amd64);
 }
-/*e: function modrm */
+/*e: function modrm(x86) */
 
-/*s: function mkinstr */
+/*s: function mkinstr(x86) */
 static Optable *
 mkinstr(Map *map, Instr *ip, uvlong pc)
 {
@@ -1812,11 +1812,11 @@ badop:
     }
     return op;
 }
-/*e: function mkinstr */
+/*e: function mkinstr(x86) */
 
 #pragma	varargck	argpos	bprint		2
 
-/*s: function bprint */
+/*s: function bprint(x86) */
 static void
 bprint(Instr *ip, char *fmt, ...)
 {
@@ -1826,9 +1826,9 @@ bprint(Instr *ip, char *fmt, ...)
     ip->curr = vseprint(ip->curr, ip->end, fmt, arg);
     va_end(arg);
 }
-/*e: function bprint */
+/*e: function bprint(x86) */
 
-/*s: function ANAME */
+/*s: function ANAME(x86) */
 /*
  *  if we want to call 16 bit regs AX,BX,CX,...
  *  and 32 bit regs EAX,EBX,ECX,... then
@@ -1837,12 +1837,12 @@ bprint(Instr *ip, char *fmt, ...)
  *  #define	ONAME(ip)	((ip)->osize == 'L' ? "E" : "")
  */
 #define	ANAME(ip)	""
-/*e: function ANAME */
-/*s: function ONAME */
+/*e: function ANAME(x86) */
+/*s: function ONAME(x86) */
 #define	ONAME(ip)	""
-/*e: function ONAME */
+/*e: function ONAME(x86) */
 
-/*s: global reg (linkers/libmach/8db.c) */
+/*s: global reg (linkers/libmach/8db.c)(x86) */
 static char *reg[] =  {
 [AX]	"AX",
 [CX]	"CX",
@@ -1863,20 +1863,20 @@ static char *reg[] =  {
 [R14]	"R14",
 [R15]	"R15",
 };
-/*e: global reg (linkers/libmach/8db.c) */
+/*e: global reg (linkers/libmach/8db.c)(x86) */
 
-/*s: global breg */
+/*s: global breg(x86) */
 static char *breg[] = { "AL", "CL", "DL", "BL", "AH", "CH", "DH", "BH" };
-/*e: global breg */
-/*s: global breg64 */
+/*e: global breg(x86) */
+/*s: global breg64(x86) */
 static char *breg64[] = { "AL", "CL", "DL", "BL", "SPB", "BPB", "SIB", "DIB",
     "R8B", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B" };
-/*e: global breg64 */
-/*s: global sreg */
+/*e: global breg64(x86) */
+/*s: global sreg(x86) */
 static char *sreg[] = { "ES", "CS", "SS", "DS", "FS", "GS" };
-/*e: global sreg */
+/*e: global sreg(x86) */
 
-/*s: function plocal */
+/*s: function plocal(x86) */
 static void
 plocal(Instr *ip)
 {
@@ -1905,9 +1905,9 @@ plocal(Instr *ip)
         offset = ip->disp;
     bprint(ip, "%lux%s", offset, reg);
 }
-/*e: function plocal */
+/*e: function plocal(x86) */
 
-/*s: function isjmp */
+/*s: function isjmp(x86) */
 static int
 isjmp(Instr *ip)
 {
@@ -1920,9 +1920,9 @@ isjmp(Instr *ip)
         return 0;
     }
 }
-/*e: function isjmp */
+/*e: function isjmp(x86) */
 
-/*s: function issymref */
+/*s: function issymref(x86) */
 /*
  * This is too smart for its own good, but it really is nice
  * to have accurate translations when debugging, and it
@@ -1968,9 +1968,9 @@ issymref(Instr *ip, Symbol *s, long w, long val)
     }
     return 0;
 }
-/*e: function issymref */
+/*e: function issymref(x86) */
 
-/*s: function immediate */
+/*s: function immediate(x86) */
 static void
 immediate(Instr *ip, vlong val)
 {
@@ -2005,9 +2005,9 @@ immediate(Instr *ip, vlong val)
     else
         bprint(ip, "%llux", val);
 }
-/*e: function immediate */
+/*e: function immediate(x86) */
 
-/*s: function pea */
+/*s: function pea(x86) */
 static void
 pea(Instr *ip)
 {
@@ -2037,9 +2037,9 @@ pea(Instr *ip)
     if (ip->index >= 0)
         bprint(ip,"(%s%s*%d)", ANAME(ip), reg[ip->rex&REXX? ip->index+8: ip->index], 1<<ip->ss);
 }
-/*e: function pea */
+/*e: function pea(x86) */
 
-/*s: function prinstr */
+/*s: function prinstr(x86) */
 static void
 prinstr(Instr *ip, char *fmt)
 {
@@ -2188,7 +2188,7 @@ prinstr(Instr *ip, char *fmt)
     }
     *ip->curr = 0;		/* there's always room for 1 byte */
 }
-/*e: function prinstr */
+/*e: function prinstr(x86) */
 
 /*s: function i386inst */
 static int

@@ -3,52 +3,52 @@
 #include	<ar.h>
 
 #ifndef	DEFAULT
-/*s: constant DEFAULT */
+/*s: constant DEFAULT(x86) */
 #define	DEFAULT	'9'
-/*e: constant DEFAULT */
+/*e: constant DEFAULT(x86) */
 #endif
 
-/*s: global histfrog */
+/*s: global histfrog(x86) */
 Sym*	histfrog[MAXHIST];
-/*e: global histfrog */
-/*s: global curauto */
+/*e: global histfrog(x86) */
+/*s: global curauto(x86) */
 Auto*	curauto;
-/*e: global curauto */
-/*s: global histfrogp */
+/*e: global curauto(x86) */
+/*s: global histfrogp(x86) */
 int	histfrogp;
-/*e: global histfrogp */
-/*s: global curhist */
+/*e: global histfrogp(x86) */
+/*s: global curhist(x86) */
 Auto*	curhist;
-/*e: global curhist */
-/*s: global etextp */
+/*e: global curhist(x86) */
+/*s: global etextp(x86) */
 // ref<Prog>, end of textp list
 Prog*	etextp = P;
-/*e: global etextp */
-/*s: global histgen */
+/*e: global etextp(x86) */
+/*s: global histgen(x86) */
 int	histgen = 0;
-/*e: global histgen */
-/*s: global library */
+/*e: global histgen(x86) */
+/*s: global library(x86) */
 char*	library[50];
-/*e: global library */
-/*s: global libraryobj */
+/*e: global library(x86) */
+/*s: global libraryobj(x86) */
 char*	libraryobj[50];
-/*e: global libraryobj */
-/*s: global libraryp */
+/*e: global libraryobj(x86) */
+/*s: global libraryp(x86) */
 int	libraryp;
-/*e: global libraryp */
-/*s: global xrefresolv */
+/*e: global libraryp(x86) */
+/*s: global xrefresolv(x86) */
 bool	xrefresolv;
-/*e: global xrefresolv */
-/*s: global version */
+/*e: global xrefresolv(x86) */
+/*s: global version(x86) */
 int	version = 0;
-/*e: global version */
-/*s: global literal */
+/*e: global version(x86) */
+/*s: global literal(x86) */
 char	literal[32];
-/*e: global literal */
-/*s: global doexp */
+/*e: global literal(x86) */
+/*s: global doexp(x86) */
 // do export table, -x
 bool	doexp;
-/*e: global doexp */
+/*e: global doexp(x86) */
 
 void	addlibpath(char*);
 char*	findlib(char*);
@@ -83,22 +83,22 @@ char	*noname		= "<none>";
 /*s: global symname (linkers/8l/obj.c) */
 char	symname[]	= SYMDEF;
 /*e: global symname (linkers/8l/obj.c) */
-/*s: global thechar */
+/*s: global thechar(x86) */
 char	thechar		= '8';
-/*e: global thechar */
-/*s: global thestring */
+/*e: global thechar(x86) */
+/*s: global thestring(x86) */
 char	*thestring 	= "386";
-/*e: global thestring */
+/*e: global thestring(x86) */
 
-/*s: global libdir */
+/*s: global libdir(x86) */
 char**	libdir;
-/*e: global libdir */
-/*s: global nlibdir */
+/*e: global libdir(x86) */
+/*s: global nlibdir(x86) */
 int	nlibdir	= 0;
-/*e: global nlibdir */
-/*s: global maxlibdir */
+/*e: global nlibdir(x86) */
+/*s: global maxlibdir(x86) */
 static	int	maxlibdir = 0;
-/*e: global maxlibdir */
+/*e: global maxlibdir(x86) */
 
 /*s: function usage (linkers/8l/obj.c) */
 void
@@ -109,7 +109,7 @@ usage(void)
 }
 /*e: function usage (linkers/8l/obj.c) */
 
-/*s: function isobjfile */
+/*s: function isobjfile(x86) */
 static int
 isobjfile(char *f)
 {
@@ -131,34 +131,34 @@ isobjfile(char *f)
     Bterm(b);
     return v;
 }
-/*e: function isobjfile */
+/*e: function isobjfile(x86) */
 
 /*s: function main (linkers/8l/obj.c) */
 void
 main(int argc, char *argv[])
 {
-    /*s: [[main()]] locals */
+    /*s: [[main()]] locals(x86) */
         int i, c;
         char name[LIBNAMELEN];
         char *a;
-    /*x: [[main()]] locals */
+    /*x: [[main()]] locals(x86) */
     bool load_libs = true;
-    /*x: [[main()]] locals */
+    /*x: [[main()]] locals(x86) */
     char *root;
-    /*e: [[main()]] locals */
+    /*e: [[main()]] locals(x86) */
 
-    /*s: [[main()]] debug initialization */
+    /*s: [[main()]] debug initialization(x86) */
     Binit(&bso, 1, OWRITE);
     listinit(); // fmtinstall()
     memset(debug, false, sizeof(debug));
-    /*e: [[main()]] debug initialization */
+    /*e: [[main()]] debug initialization(x86) */
 
     ARGBEGIN {
-    /*s: [[main()]] command line processing */
+    /*s: [[main()]] command line processing(x86) */
         case 'o': /* output to (next arg) */
             outfile = ARGF();
             break;
-    /*x: [[main()]] command line processing */
+    /*x: [[main()]] command line processing(x86) */
     case 'H':
         a = ARGF();
         if(a)
@@ -184,11 +184,11 @@ main(int argc, char *argv[])
         if(a)
             INITRND = atolwhex(a);
         break;
-    /*x: [[main()]] command line processing */
+    /*x: [[main()]] command line processing(x86) */
     case 'L':
         addlibpath(EARGF(usage()));
         break;
-    /*x: [[main()]] command line processing */
+    /*x: [[main()]] command line processing(x86) */
         case 'x':	/* produce export table */
             doexp = true;
             if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1])){
@@ -199,7 +199,7 @@ main(int argc, char *argv[])
                     readundefs(a, SEXPORT);
             }
             break;
-    /*x: [[main()]] command line processing */
+    /*x: [[main()]] command line processing(x86) */
     case 'u':	/* produce dynamically loadable module */
         dlm = true;
         // do not load standard libraries
@@ -208,26 +208,26 @@ main(int argc, char *argv[])
         if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
             readundefs(ARGF(), SIMPORT);
         break;
-    /*x: [[main()]] command line processing */
+    /*x: [[main()]] command line processing(x86) */
     case 'P':
         a = ARGF();
         if(a)
             INITTEXTP = atolwhex(a);
         break;
-    /*x: [[main()]] command line processing */
+    /*x: [[main()]] command line processing(x86) */
     default:
         c = ARGC();
         if(c >= 0 && c < sizeof(debug))
             debug[c] = true;
         break;
-    /*e: [[main()]] command line processing */
+    /*e: [[main()]] command line processing(x86) */
     } ARGEND
     USED(argc);
     if(*argv == nil)
         usage();
 
     /*s: [[main()]] addlibpath("/386/lib") or ccroot */
-    /*s: [[main()]] change root if ccroot */
+    /*s: [[main()]] change root if ccroot(x86) */
     root = getenv("ccroot");
 
     if(root != nil && *root != '\0') {
@@ -237,14 +237,14 @@ main(int argc, char *argv[])
         }
     }else
         root = "";
-    /*e: [[main()]] change root if ccroot */
+    /*e: [[main()]] change root if ccroot(x86) */
 
     // usually /386/lib/ as root = ""
     snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
     /*e: [[main()]] addlibpath("/386/lib") or ccroot */
 
-    /*s: [[main()]] adjust HEADTYPE if debug flags */
+    /*s: [[main()]] adjust HEADTYPE if debug flags(x86) */
     if(!debug['9'] && !debug['U'] && !debug['B'])
         debug[DEFAULT] = true;
 
@@ -256,9 +256,9 @@ main(int argc, char *argv[])
         if(debug['9'])
             HEADTYPE = 2;
     }
-    /*e: [[main()]] adjust HEADTYPE if debug flags */
+    /*e: [[main()]] adjust HEADTYPE if debug flags(x86) */
     switch(HEADTYPE) {
-    /*s: [[main()]] switch HEADTYPE cases */
+    /*s: [[main()]] switch HEADTYPE cases(x86) */
     case H_PLAN9:	/* plan 9 */
         HEADR = 32L;
         if(INITTEXT == -1)
@@ -268,7 +268,7 @@ main(int argc, char *argv[])
         if(INITRND == -1)
             INITRND = 4096;
         break;
-    /*x: [[main()]] switch HEADTYPE cases */
+    /*x: [[main()]] switch HEADTYPE cases(x86) */
     case H_GARBAGE:	/* this is garbage */
         HEADR = 20L+56L;
         if(INITTEXT == -1)
@@ -316,33 +316,33 @@ main(int argc, char *argv[])
         if(INITRND == -1)
             INITRND = 4096;
         break;
-    /*e: [[main()]] switch HEADTYPE cases */
+    /*e: [[main()]] switch HEADTYPE cases(x86) */
     default:
         diag("unknown -H option");
         errorexit();
 
     }
-    /*s: [[main()]] last INITXXX adjustments */
+    /*s: [[main()]] last INITXXX adjustments(x86) */
     if (INITTEXTP == -1)
         INITTEXTP = INITTEXT;
 
     if(INITDAT != 0 && INITRND != 0)
         print("warning: -D0x%lux is ignored because of -R0x%lux\n",
             INITDAT, INITRND);
-    /*e: [[main()]] last INITXXX adjustments */
+    /*e: [[main()]] last INITXXX adjustments(x86) */
 
     DBG("HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
 
-    /*s: [[main()]] sanity check optab */
+    /*s: [[main()]] sanity check optab(x86) */
     for(i=1; optab[i].as; i++)
         if(i != optab[i].as) {
             diag("phase error in optab: %d", i);
             errorexit();
         }
-    /*e: [[main()]] sanity check optab */
-    /*s: [[main()]] initialize globals */
-    /*s: [[main()]] set ycover */
+    /*e: [[main()]] sanity check optab(x86) */
+    /*s: [[main()]] initialize globals(x86) */
+    /*s: [[main()]] set ycover(x86) */
     for(i=0; i<Ymax; i++)
         ycover[i*Ymax + i] = 1;
 
@@ -381,8 +381,8 @@ main(int argc, char *argv[])
     ycover[Yrx*Ymax + Yml] = 1;
     ycover[Yrl*Ymax + Yml] = 1;
     ycover[Ym*Ymax + Yml] = 1;
-    /*e: [[main()]] set ycover */
-    /*s: [[main()]] set reg */
+    /*e: [[main()]] set ycover(x86) */
+    /*s: [[main()]] set reg(x86) */
     for(i=0; i<D_NONE; i++) {
         reg[i] = -1;
         if(i >= D_AL && i <= D_BH)
@@ -392,8 +392,8 @@ main(int argc, char *argv[])
         if(i >= D_F0 && i <= D_F0+7)
             reg[i] = (i-D_F0) & 7;
     }
-    /*e: [[main()]] set reg */
-    /*s: [[main()]] set zprg */
+    /*e: [[main()]] set reg(x86) */
+    /*s: [[main()]] set zprg(x86) */
     zprg.link = P;
     zprg.pcond = P;
     zprg.back = 2;
@@ -402,14 +402,14 @@ main(int argc, char *argv[])
     zprg.from.index = D_NONE;
     zprg.from.scale = 1;
     zprg.to = zprg.from;
-    /*e: [[main()]] set zprg */
+    /*e: [[main()]] set zprg(x86) */
     dtype = 4;
 
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
-    /*x: [[main()]] initialize globals */
+    /*x: [[main()]] initialize globals(x86) */
     load_libs = !debug['l'];
-    /*e: [[main()]] initialize globals */
+    /*e: [[main()]] initialize globals(x86) */
 
     nuxiinit();
 
@@ -420,26 +420,26 @@ main(int argc, char *argv[])
     }
 
     // ------ main functions  ------
-    /*s: [[main()]] cout is ready, LET'S GO */
+    /*s: [[main()]] cout is ready, LET'S GO(x86) */
     firstp = prg();
     lastp = firstp;
 
-    /*s: [[main()]] set INITENTRY */
+    /*s: [[main()]] set INITENTRY(x86) */
     if(INITENTRY == nil) {
         INITENTRY = "_main";
-        /*s: [[main()]] adjust INITENTRY if profiling */
+        /*s: [[main()]] adjust INITENTRY if profiling(x86) */
         if(debug['p'])
             INITENTRY = "_mainp";
-        /*e: [[main()]] adjust INITENTRY if profiling */
+        /*e: [[main()]] adjust INITENTRY if profiling(x86) */
         if(load_libs)
             lookup(INITENTRY, 0)->type = SXREF;
     } else {
-        /*s: [[main()]] if digit INITENTRY */
+        /*s: [[main()]] if digit INITENTRY(x86) */
         if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
            lookup(INITENTRY, 0)->type = SXREF;
-        /*e: [[main()]] if digit INITENTRY */
+        /*e: [[main()]] if digit INITENTRY(x86) */
     }
-    /*e: [[main()]] set INITENTRY */
+    /*e: [[main()]] set INITENTRY(x86) */
 
     while(*argv)
         objfile(*argv++);
@@ -451,7 +451,7 @@ main(int argc, char *argv[])
     if(firstp == P)
         errorexit();
 
-    /*s: [[main()]] if export table or dynamic module */
+    /*s: [[main()]] if export table or dynamic module(x86) */
     if(doexp || dlm){
         EXPTAB = "_exporttab";
         zerosig(EXPTAB);
@@ -459,7 +459,7 @@ main(int argc, char *argv[])
         zerosig("edata");
         zerosig("end");
 
-       /*s: [[main()]] if dynamic module */
+       /*s: [[main()]] if dynamic module(x86) */
        if(dlm){
            import();
            HEADTYPE = H_PLAN9;
@@ -467,23 +467,23 @@ main(int argc, char *argv[])
            INITRND = 8;
            INITENTRY = EXPTAB;
        }
-       /*e: [[main()]] if dynamic module */
+       /*e: [[main()]] if dynamic module(x86) */
 
         export();
     }
-    /*e: [[main()]] if export table or dynamic module */
+    /*e: [[main()]] if export table or dynamic module(x86) */
 
     patch();
     follow();
     dodata();
     dostkoff();
-    /*s: [[main()]] call doprofxxx() if profiling */
+    /*s: [[main()]] call doprofxxx() if profiling(x86) */
     if(debug['p'])
         if(debug['1'])
             doprof1();
         else
             doprof2();
-    /*e: [[main()]] call doprofxxx() if profiling */
+    /*e: [[main()]] call doprofxxx() if profiling(x86) */
     span();
     doinit();
 
@@ -492,9 +492,9 @@ main(int argc, char *argv[])
 
     // sanity check
     undef();
-    /*e: [[main()]] cout is ready, LET'S GO */
+    /*e: [[main()]] cout is ready, LET'S GO(x86) */
 
-    /*s: [[main()]] profile report */
+    /*s: [[main()]] profile report(x86) */
     if(debug['v']) {
         Bprint(&bso, "%5.2f cpu time\n", cputime());
         Bprint(&bso, "%ld symbols\n", nsymbol);
@@ -503,12 +503,12 @@ main(int argc, char *argv[])
         Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
         Bflush(&bso);
     }
-    /*e: [[main()]] profile report */
+    /*e: [[main()]] profile report(x86) */
     errorexit();
 }
 /*e: function main (linkers/8l/obj.c) */
 
-/*s: function addlibpath */
+/*s: function addlibpath(x86) */
 void
 addlibpath(char *arg)
 {
@@ -532,9 +532,9 @@ addlibpath(char *arg)
 
     libdir[nlibdir++] = strdup(arg);
 }
-/*e: function addlibpath */
+/*e: function addlibpath(x86) */
 
-/*s: function findlib */
+/*s: function findlib(x86) */
 char*
 findlib(char *file)
 {
@@ -548,9 +548,9 @@ findlib(char *file)
     }
     return nil;
 }
-/*e: function findlib */
+/*e: function findlib(x86) */
 
-/*s: function loadlib */
+/*s: function loadlib(x86) */
 void
 loadlib(void)
 {
@@ -570,16 +570,16 @@ loop:
                  if(s->type == SXREF)
                      goto loop;
 }
-/*e: function loadlib */
+/*e: function loadlib(x86) */
 
-/*s: function objfile */
+/*s: function objfile(x86) */
 void
 objfile(char *file)
 {
     fdt f;
     long l;
     char magbuf[SARMAG];
-    /*s: [[objfile()]] other locals */
+    /*s: [[objfile()]] other locals(x86) */
     long off, esym, cnt;
     bool work;
     Sym *s;
@@ -587,11 +587,11 @@ objfile(char *file)
     char name[LIBNAMELEN];
     struct ar_hdr arhdr;
     char *e, *start, *stop;
-    /*e: [[objfile()]] other locals */
+    /*e: [[objfile()]] other locals(x86) */
 
     DBG("%5.2f ldobj: %s\n", cputime(), file);
 
-    /*s: [[objfile()]] adjust file if -lxxx filename */
+    /*s: [[objfile()]] adjust file if -lxxx filename(x86) */
     if(file[0] == '-' && file[1] == 'l') {
         snprint(pname, sizeof(pname), "lib%s.a", file+2);
         e = findlib(pname);
@@ -602,7 +602,7 @@ objfile(char *file)
         snprint(name, sizeof(name), "%s/%s", e, pname);
         file = name;
     }
-    /*e: [[objfile()]] adjust file if -lxxx filename */
+    /*e: [[objfile()]] adjust file if -lxxx filename(x86) */
 
     f = open(file, 0);
     if(f < 0) {
@@ -625,7 +625,7 @@ objfile(char *file)
         return;
     }
 
-    /*s: [[objfile()]] when file is a library */
+    /*s: [[objfile()]] when file is a library(x86) */
         l = read(f, &arhdr, SAR_HDR);
         if(l != SAR_HDR) {
             diag("%s: short read on archive file symbol header", file);
@@ -695,11 +695,11 @@ objfile(char *file)
         diag("%s: bad or out of date archive", file);
     out:
         close(f);
-    /*e: [[objfile()]] when file is a library */
+    /*e: [[objfile()]] when file is a library(x86) */
 }
-/*e: function objfile */
+/*e: function objfile(x86) */
 
-/*s: function zaddr */
+/*s: function zaddr(x86) */
 int
 zaddr(byte *p, Adr *a, Sym *h[])
 {
@@ -779,9 +779,9 @@ zaddr(byte *p, Adr *a, Sym *h[])
     u->type = t;
     return c;
 }
-/*e: function zaddr */
+/*e: function zaddr(x86) */
 
-/*s: function addlib */
+/*s: function addlib(x86) */
 void
 addlib(char *obj)
 {
@@ -861,9 +861,9 @@ addlib(char *obj)
     libraryobj[libraryp] = p;
     libraryp++;
 }
-/*e: function addlib */
+/*e: function addlib(x86) */
 
-/*s: function addhist */
+/*s: function addhist(x86) */
 void
 addhist(long line, int type)
 {
@@ -889,9 +889,9 @@ addhist(long line, int type)
         j += 2;
     }
 }
-/*e: function addhist */
+/*e: function addhist(x86) */
 
-/*s: function histtoauto */
+/*s: function histtoauto(x86) */
 void
 histtoauto(void)
 {
@@ -903,9 +903,9 @@ histtoauto(void)
         curauto = l;
     }
 }
-/*e: function histtoauto */
+/*e: function histtoauto(x86) */
 
-/*s: function collapsefrog */
+/*s: function collapsefrog(x86) */
 void
 collapsefrog(Sym *s)
 {
@@ -943,9 +943,9 @@ collapsefrog(Sym *s)
 out:
     histfrog[histfrogp-1] = s;
 }
-/*e: function collapsefrog */
+/*e: function collapsefrog(x86) */
 
-/*s: function nopout */
+/*s: function nopout(x86) */
 void
 nopout(Prog *p)
 {
@@ -953,9 +953,9 @@ nopout(Prog *p)
     p->from.type = D_NONE;
     p->to.type = D_NONE;
 }
-/*e: function nopout */
+/*e: function nopout(x86) */
 
-/*s: function readsome */
+/*s: function readsome(x86) */
 byte*
 readsome(int f, byte *buf, byte *good, byte *stop, int max)
 {
@@ -972,52 +972,52 @@ readsome(int f, byte *buf, byte *good, byte *stop, int max)
         return 0;
     return stop + n;
 }
-/*e: function readsome */
+/*e: function readsome(x86) */
 
-/*s: function ldobj */
+/*s: function ldobj(x86) */
 void
 ldobj(fdt f, long c, char *pn)
 {
-    /*s: [[ldobj()]] locals */
+    /*s: [[ldobj()]] locals(x86) */
     // enum<as>, the opcode
     int o;
     Prog *p;
-    /*x: [[ldobj()]] locals */
+    /*x: [[ldobj()]] locals(x86) */
     Sym *h[NSYM];
     Sym *di;
     Sym *s;
     long ipc;
     bool skip;
-    /*x: [[ldobj()]] locals */
+    /*x: [[ldobj()]] locals(x86) */
     Prog *t;
     byte *stop;
     int v;
     ulong sig;
-    /*x: [[ldobj()]] locals */
+    /*x: [[ldobj()]] locals(x86) */
     byte *bloc;
     byte *bsize;
     int r;
-    /*x: [[ldobj()]] locals */
+    /*x: [[ldobj()]] locals(x86) */
     // array<string>, length used = files, extended every 16
     static char **filen;
     static int files = 0;
     char **nfilen;
-    /*e: [[ldobj()]] locals */
+    /*e: [[ldobj()]] locals(x86) */
 
-    /*s: [[ldobj()]] grow filen if not enough space */
+    /*s: [[ldobj()]] grow filen if not enough space(x86) */
     if((files&15) == 0){
         nfilen = malloc((files+16)*sizeof(char*));
         memmove(nfilen, filen, files*sizeof(char*));
         free(filen);
         filen = nfilen;
     }
-    /*e: [[ldobj()]] grow filen if not enough space */
+    /*e: [[ldobj()]] grow filen if not enough space(x86) */
     filen[files++] = strdup(pn);
 
-    /*s: [[ldobj()]] bloc and bsize init */
+    /*s: [[ldobj()]] bloc and bsize init(x86) */
     bsize = buf.xbuf;
     bloc = buf.xbuf;
-    /*e: [[ldobj()]] bloc and bsize init */
+    /*e: [[ldobj()]] bloc and bsize init(x86) */
 
     di = S;
 
@@ -1033,7 +1033,7 @@ loop:
     if(c <= 0)
         goto eof;
 
-    /*s: [[ldobj()]] read if needed in loop:, adjust block and bsize */
+    /*s: [[ldobj()]] read if needed in loop:, adjust block and bsize(x86) */
     r = bsize - bloc;
     if(r < 100 && r < c) {		/* enough for largest prog */
         bsize = readsome(f, buf.xbuf, bloc, bsize, c);
@@ -1042,12 +1042,12 @@ loop:
         bloc = buf.xbuf;
         goto loop;
     }
-    /*e: [[ldobj()]] read if needed in loop:, adjust block and bsize */
+    /*e: [[ldobj()]] read if needed in loop:, adjust block and bsize(x86) */
 
     // get the opcode
     o = bloc[0] | (bloc[1] << 8); // >>
 
-    /*s: [[ldobj()]] sanity check opcode in range */
+    /*s: [[ldobj()]] sanity check opcode in range(x86) */
     if(o <= AXXX || o >= ALAST) {
         if(o < 0)
             goto eof;
@@ -1055,9 +1055,9 @@ loop:
         print("	probably not a .8 file\n");
         errorexit();
     }
-    /*e: [[ldobj()]] sanity check opcode in range */
+    /*e: [[ldobj()]] sanity check opcode in range(x86) */
 
-    /*s: [[ldobj()]] if ANAME or ASIGNAME */
+    /*s: [[ldobj()]] if ANAME or ASIGNAME(x86) */
     if(o == ANAME || o == ASIGNAME) {
         sig = 0;
         if(o == ASIGNAME) {
@@ -1121,7 +1121,7 @@ loop:
         }
         goto loop;
     }
-    /*e: [[ldobj()]] if ANAME or ASIGNAME */
+    /*e: [[ldobj()]] if ANAME or ASIGNAME(x86) */
 
     //TODO: factorize
     while(nhunk < sizeof(Prog))
@@ -1145,7 +1145,7 @@ loop:
         print("%P\n", p);
 
     switch(p->as) {
-    /*s: [[ldobj()]] switch as cases */
+    /*s: [[ldobj()]] switch as cases(x86) */
     case ATEXT:
         if(curtext != P) {
             histtoauto();
@@ -1186,7 +1186,7 @@ loop:
         }
 
         break;
-    /*x: [[ldobj()]] switch as cases */
+    /*x: [[ldobj()]] switch as cases(x86) */
     case ADATA:
     data:
         //add_list(datap, edatap, p)
@@ -1197,7 +1197,7 @@ loop:
         edatap = p;
         p->link = P;
         break;
-    /*x: [[ldobj()]] switch as cases */
+    /*x: [[ldobj()]] switch as cases(x86) */
     case ADYNT:
         if(p->to.sym == S) {
             diag("DYNT without a sym\n%P", p);
@@ -1225,7 +1225,7 @@ loop:
         p->to.type = D_ADDR;
         p->to.index = D_EXTERN;
         goto data;
-    /*x: [[ldobj()]] switch as cases */
+    /*x: [[ldobj()]] switch as cases(x86) */
     case AINIT:
         if(p->from.sym == S) {
             diag("INIT without a sym\n%P", p);
@@ -1238,7 +1238,7 @@ loop:
         p->from.offset = di->value;
         p->from.sym->type = SDATA;
         goto data;
-    /*x: [[ldobj()]] switch as cases */
+    /*x: [[ldobj()]] switch as cases(x86) */
     case AGLOBL:
         s = p->from.sym;
         if(s->type == 0 || s->type == SXREF) {
@@ -1254,7 +1254,7 @@ loop:
         if(p->to.offset > s->value)
             s->value = p->to.offset;
         break;
-    /*x: [[ldobj()]] switch as cases */
+    /*x: [[ldobj()]] switch as cases(x86) */
     case AHISTORY:
         if(p->to.offset == -1) {
             addlib(pn);
@@ -1266,7 +1266,7 @@ loop:
             addhist(p->to.offset, D_FILE1);	/* 'Z' */
         histfrogp = 0;
         break;
-    /*x: [[ldobj()]] switch as cases */
+    /*x: [[ldobj()]] switch as cases(x86) */
     case AEND:
         histtoauto();
         if(curtext != P)
@@ -1276,12 +1276,12 @@ loop:
         if(c)
             goto newloop;
         return;
-    /*x: [[ldobj()]] switch as cases */
+    /*x: [[ldobj()]] switch as cases(x86) */
     case AGOK:
         diag("%s: GOK opcode in %s", pn, TNAME);
         pc++;
         break;
-    /*x: [[ldobj()]] switch as cases */
+    /*x: [[ldobj()]] switch as cases(x86) */
     case AFMOVF:
     case AFADDF:
     case AFSUBF:
@@ -1319,7 +1319,7 @@ loop:
             p->from.offset = 0;
         }
         goto casdef;
-    /*x: [[ldobj()]] switch as cases */
+    /*x: [[ldobj()]] switch as cases(x86) */
     case AFMOVD:
     case AFADDD:
     case AFSUBD:
@@ -1358,7 +1358,7 @@ loop:
             p->from.offset = 0;
         }
         goto casdef;
-    /*e: [[ldobj()]] switch as cases */
+    /*e: [[ldobj()]] switch as cases(x86) */
 
     default:
     casdef:
@@ -1379,9 +1379,9 @@ loop:
 eof:
     diag("truncated object file: %s", pn);
 }
-/*e: function ldobj */
+/*e: function ldobj(x86) */
 
-/*s: function appendp */
+/*s: function appendp(x86) */
 Prog*
 appendp(Prog *q)
 {
@@ -1393,9 +1393,9 @@ appendp(Prog *q)
     p->line = q->line;
     return p;
 }
-/*e: function appendp */
+/*e: function appendp(x86) */
 
-/*s: function doprof1 */
+/*s: function doprof1(x86) */
 void
 doprof1(void)
 {
@@ -1463,9 +1463,9 @@ doprof1(void)
     // 4 bytes counter for each functions
     s->value = n*4;
 }
-/*e: function doprof1 */
+/*e: function doprof1(x86) */
 
-/*s: function doprof2 */
+/*s: function doprof2(x86) */
 void
 doprof2(void)
 {
@@ -1475,21 +1475,21 @@ doprof2(void)
 
     DBG("%5.2f profile 2\n", cputime());
 
-    /*s: [[doprof2()]] if embedded tracing */
+    /*s: [[doprof2()]] if embedded tracing(x86) */
     if(debug['e']){
         s2 = lookup("_tracein", 0);
         s4 = lookup("_traceout", 0);
     }
-    /*e: [[doprof2()]] if embedded tracing */
+    /*e: [[doprof2()]] if embedded tracing(x86) */
     else{
         s2 = lookup("_profin", 0);
         s4 = lookup("_profout", 0);
     }
     if(s2->type != STEXT || s4->type != STEXT) {
-       /*s: [[doprof2()]] if embedded tracing diag() */
+       /*s: [[doprof2()]] if embedded tracing diag()(x86) */
        if(debug['e'])
            diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
-       /*e: [[doprof2()]] if embedded tracing diag() */
+       /*e: [[doprof2()]] if embedded tracing diag()(x86) */
         else
             diag("_profin/_profout not defined");
         return;
@@ -1516,7 +1516,7 @@ doprof2(void)
         if(p->as == ATEXT) {
             curtext = p;
 
-            /*s: [[doprof2()]] if NOPROF p */
+            /*s: [[doprof2()]] if NOPROF p(x86) */
             if(p->from.scale & NOPROF) {	/* dont profile */
                 for(;;) {
                     q = p->link;
@@ -1528,7 +1528,7 @@ doprof2(void)
                 }
                 continue;
             }
-            /*e: [[doprof2()]] if NOPROF p */
+            /*e: [[doprof2()]] if NOPROF p(x86) */
 
             /*
              * JMPL	profin
@@ -1538,7 +1538,7 @@ doprof2(void)
             q->pc = p->pc;
             q->link = p->link;
 
-            /*s: [[doprof2()]] if embedded tracing ATEXT instrumentation */
+            /*s: [[doprof2()]] if embedded tracing ATEXT instrumentation(x86) */
             if(debug['e']){		/* embedded tracing */
                 q2 = prg();
                 p->link = q2;
@@ -1552,7 +1552,7 @@ doprof2(void)
                 q2->to.sym = p->to.sym;
                 q2->pcond = q->link;
             }
-            /*e: [[doprof2()]] if embedded tracing ATEXT instrumentation */
+            /*e: [[doprof2()]] if embedded tracing ATEXT instrumentation(x86) */
              else
                 p->link = q;
             p = q;
@@ -1563,7 +1563,7 @@ doprof2(void)
             p->to.sym = s2;
 
         }else if(p->as == ARET) {
-            /*s: [[doprof2()]] if embedded tracing ARET instrumentation */
+            /*s: [[doprof2()]] if embedded tracing ARET instrumentation(x86) */
             /*
              * RET (default)
              */
@@ -1575,7 +1575,7 @@ doprof2(void)
                 p->link = q;
                 p = q;
             }
-            /*e: [[doprof2()]] if embedded tracing ARET instrumentation */
+            /*e: [[doprof2()]] if embedded tracing ARET instrumentation(x86) */
             /*
              * RET
              */
@@ -1602,9 +1602,9 @@ doprof2(void)
         }
     }
 }
-/*e: function doprof2 */
+/*e: function doprof2(x86) */
 
-/*s: function nuxiinit */
+/*s: function nuxiinit(x86) */
 void
 nuxiinit(void)
 {
@@ -1641,9 +1641,9 @@ nuxiinit(void)
     }
     Bflush(&bso);
 }
-/*e: function nuxiinit */
+/*e: function nuxiinit(x86) */
 
-/*s: function find1 */
+/*s: function find1(x86) */
 int
 find1(long l, int c)
 {
@@ -1656,9 +1656,9 @@ find1(long l, int c)
             return i;
     return 0;
 }
-/*e: function find1 */
+/*e: function find1(x86) */
 
-/*s: function find2 */
+/*s: function find2(x86) */
 //int
 //find2(long l, int c)
 //{
@@ -1674,9 +1674,9 @@ find1(long l, int c)
 //    }
 //    return 0;
 //}
-/*e: function find2 */
+/*e: function find2(x86) */
 
-/*s: function ieeedtof */
+/*s: function ieeedtof(x86) */
 long
 ieeedtof(Ieee *e)
 {
@@ -1702,9 +1702,9 @@ ieeedtof(Ieee *e)
     v |= e->h & 0x80000000L;
     return v;
 }
-/*e: function ieeedtof */
+/*e: function ieeedtof(x86) */
 
-/*s: function ieeedtod */
+/*s: function ieeedtod(x86) */
 double
 ieeedtod(Ieee *ieeep)
 {
@@ -1729,9 +1729,9 @@ ieeedtod(Ieee *ieeep)
     exp -= (1L<<10) - 2L;
     return ldexp(fr, exp);
 }
-/*e: function ieeedtod */
+/*e: function ieeedtod(x86) */
 
-/*s: function undefsym */
+/*s: function undefsym(x86) */
 void
 undefsym(Sym *s)
 {
@@ -1746,9 +1746,9 @@ undefsym(Sym *s)
     s->type = SUNDEF;
     imports++;
 }
-/*e: function undefsym */
+/*e: function undefsym(x86) */
 
-/*s: function zerosig */
+/*s: function zerosig(x86) */
 void
 zerosig(char *sp)
 {
@@ -1757,9 +1757,9 @@ zerosig(char *sp)
     s = lookup(sp, 0);
     s->sig = 0;
 }
-/*e: function zerosig */
+/*e: function zerosig(x86) */
 
-/*s: function readundefs */
+/*s: function readundefs(x86) */
 void
 readundefs(char *f, int t)
 {
@@ -1800,5 +1800,5 @@ readundefs(char *f, int t)
     }
     Bterm(b);
 }
-/*e: function readundefs */
+/*e: function readundefs(x86) */
 /*e: linkers/8l/obj.c */

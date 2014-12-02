@@ -1,17 +1,17 @@
 /*s: linkers/8l/asm.c */
 #include	"l.h"
 
-/*s: constant Dbufslop */
+/*s: constant Dbufslop(x86) */
 #define	Dbufslop	100
-/*e: constant Dbufslop */
+/*e: constant Dbufslop(x86) */
 
-/*s: global spsize */
+/*s: global spsize(x86) */
 long	spsize = 0;
-/*e: global spsize */
+/*e: global spsize(x86) */
 
 void	datblk(long, long);
 
-/*s: function entryvalue */
+/*s: function entryvalue(x86) */
 long
 entryvalue(void)
 {
@@ -20,10 +20,10 @@ entryvalue(void)
 
     a = INITENTRY;
 
-    /*s: [[entryvalue()]] if digit INITENTRY */
+    /*s: [[entryvalue()]] if digit INITENTRY(x86) */
     if(*a >= '0' && *a <= '9')
         return atolwhex(a);
-    /*e: [[entryvalue()]] if digit INITENTRY */
+    /*e: [[entryvalue()]] if digit INITENTRY(x86) */
 
     s = lookup(a, 0);
     // no _main found, maybe pure asm, start at beginning of TEXT section (va)
@@ -33,18 +33,18 @@ entryvalue(void)
     switch(s->type) {
     case STEXT:
         return s->value;
-    /*s: [[entryvalue()]] if dynamic module case */
+    /*s: [[entryvalue()]] if dynamic module case(x86) */
     case SDATA:
         if(dlm)
             return s->value+INITDAT;
-    /*e: [[entryvalue()]] if dynamic module case */
+    /*e: [[entryvalue()]] if dynamic module case(x86) */
     default:
         diag("entry not text: %s", s->name);
     }
 }
-/*e: function entryvalue */
+/*e: function entryvalue(x86) */
 
-/*s: function wputl */
+/*s: function wputl(x86) */
 /* these need to take long arguments to be compatible with elf.c */
 void
 wputl(long w)
@@ -52,18 +52,18 @@ wputl(long w)
     cput(w);
     cput(w>>8);
 }
-/*e: function wputl */
+/*e: function wputl(x86) */
 
-/*s: function wput */
+/*s: function wput(x86) */
 void
 wput(long w)
 {
     cput(w>>8);
     cput(w);
 }
-/*e: function wput */
+/*e: function wput(x86) */
 
-/*s: function lput */
+/*s: function lput(x86) */
 void
 lput(long l)
 {
@@ -72,9 +72,9 @@ lput(long l)
     cput(l>>8);
     cput(l);
 }
-/*e: function lput */
+/*e: function lput(x86) */
 
-/*s: function lputl */
+/*s: function lputl(x86) */
 void
 lputl(long l)
 {
@@ -83,27 +83,27 @@ lputl(long l)
     cput(l>>16);
     cput(l>>24);
 }
-/*e: function lputl */
+/*e: function lputl(x86) */
 
-/*s: function llput */
+/*s: function llput(x86) */
 void
 llput(vlong v)
 {
     lput(v>>32);
     lput(v);
 }
-/*e: function llput */
+/*e: function llput(x86) */
 
-/*s: function llputl */
+/*s: function llputl(x86) */
 void
 llputl(vlong v)
 {
     lputl(v);
     lputl(v>>32);
 }
-/*e: function llputl */
+/*e: function llputl(x86) */
 
-/*s: function strnput */
+/*s: function strnput(x86) */
 void
 strnput(char *s, int n)
 {
@@ -116,9 +116,9 @@ strnput(char *s, int n)
         n--;
     }
 }
-/*e: function strnput */
+/*e: function strnput(x86) */
 
-/*s: function asmb */
+/*s: function asmb(x86) */
 void
 asmb(void)
 {
@@ -160,14 +160,14 @@ asmb(void)
             Bprint(&bso, "\t%P\n", curp);
         }
 
-        /*s: [[asmb()]] if dynamic module, when iterate from firstp */
+        /*s: [[asmb()]] if dynamic module, when iterate from firstp(x86) */
         if(dlm) {
             if(p->as == ATEXT)
                 reloca = nil;
             else if(reloca != nil)
                 diag("reloc failure: %P", curp);
         }
-        /*e: [[asmb()]] if dynamic module, when iterate from firstp */
+        /*e: [[asmb()]] if dynamic module, when iterate from firstp(x86) */
 
         memmove(cbp, and, a);
         cbp += a;
@@ -182,7 +182,7 @@ asmb(void)
     case H_PLAN9:
         seek(cout, HEADR+textsize, SEEK__START);
         break;
-    /*s: [[asmb()]] switch HEADTYPE (to position after text) cases */
+    /*s: [[asmb()]] switch HEADTYPE (to position after text) cases(x86) */
     case H_GARBAGE:
         seek(cout, rnd(HEADR+textsize, 8192), 0);
         break;
@@ -197,21 +197,21 @@ asmb(void)
     case H_EXE:
         seek(cout, HEADR+rnd(textsize, INITRND), 0);
         break;
-    /*e: [[asmb()]] switch HEADTYPE (to position after text) cases */
+    /*e: [[asmb()]] switch HEADTYPE (to position after text) cases(x86) */
     default:
         diag("unknown header type %ld", HEADTYPE);
     }
 
     DBG("%5.2f datblk\n", cputime());
 
-    /*s: [[asmb()]] if dynamic module, before datblk() */
+    /*s: [[asmb()]] if dynamic module, before datblk()(x86) */
     if(dlm){
         char buf[8];
 
         write(cout, buf, INITDAT-textsize);
         textsize = INITDAT;
     }
-    /*e: [[asmb()]] if dynamic module, before datblk() */
+    /*e: [[asmb()]] if dynamic module, before datblk()(x86) */
 
     for(v = 0; v < datsize; v += sizeof(buf)-Dbufslop) {
         if(datsize-v > sizeof(buf)-Dbufslop)
@@ -234,7 +234,7 @@ asmb(void)
         case H_PLAN9:
             seek(cout, HEADR+textsize+datsize, 0);
             break;
-        /*s: [[asmb()]] switch HEADTYPE (for symbol table generation) cases */
+        /*s: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(x86) */
         case H_GARBAGE:
         case H_COFF:
             seek(cout, rnd(HEADR+textsize, INITRND)+datsize, 0);
@@ -247,7 +247,7 @@ asmb(void)
         case H_EXE:
             debug['s'] = 1;
             break;
-        /*e: [[asmb()]] switch HEADTYPE (for symbol table generation) cases */
+        /*e: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(x86) */
         default:
             seek(cout, rnd(HEADR+textsize, 8192)+datsize, 0);
             break;
@@ -260,19 +260,19 @@ asmb(void)
 
         asmlc();
 
-        /*s: [[asmb()]] if dynamic module, call asmdyn() */
+        /*s: [[asmb()]] if dynamic module, call asmdyn()(x86) */
         if(dlm)
             asmdyn();
-        /*e: [[asmb()]] if dynamic module, call asmdyn() */
+        /*e: [[asmb()]] if dynamic module, call asmdyn()(x86) */
         cflush();
     } else {
-        /*s: [[asmb()]] if dynamic module and no symbol table generation */
+        /*s: [[asmb()]] if dynamic module and no symbol table generation(x86) */
         if(dlm){
             seek(cout, HEADR+textsize+datsize, 0);
             asmdyn();
             cflush();
         }
-        /*e: [[asmb()]] if dynamic module and no symbol table generation */
+        /*e: [[asmb()]] if dynamic module and no symbol table generation(x86) */
     }
 
     // HEADER
@@ -285,10 +285,10 @@ asmb(void)
     // see Exec in a.out.h
     case H_PLAN9:	/* plan9 */
         magic = 4*11*11+7;
-        /*s: [[asmb()]] if dynamic module magic header adjustment */
+        /*s: [[asmb()]] if dynamic module magic header adjustment(x86) */
         if(dlm)
             magic |= 0x80000000;
-        /*e: [[asmb()]] if dynamic module magic header adjustment */
+        /*e: [[asmb()]] if dynamic module magic header adjustment(x86) */
         lput(magic);			/* magic */
         lput(textsize);			/* sizes */
         lput(datsize);
@@ -300,7 +300,7 @@ asmb(void)
         lput(spsize);			/* sp offsets */
         lput(lcsize);			/* line offsets */
         break;
-    /*s: [[asmb()]] switch HEADTYPE (for header generation) cases */
+    /*s: [[asmb()]] switch HEADTYPE (for header generation) cases(x86) */
     default:
     case H_GARBAGE:	/* garbage */
         lput(0x160L<<16);		/* magic and sections */
@@ -419,14 +419,14 @@ asmb(void)
     case H_ELF:
         elf32(I386, ELFDATA2LSB, 0, nil);
         break;
-    /*e: [[asmb()]] switch HEADTYPE (for header generation) cases */
+    /*e: [[asmb()]] switch HEADTYPE (for header generation) cases(x86) */
     }
 
     cflush();
 }
-/*e: function asmb */
+/*e: function asmb(x86) */
 
-/*s: function cflush */
+/*s: function cflush(x86) */
 void
 cflush(void)
 {
@@ -438,9 +438,9 @@ cflush(void)
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
 }
-/*e: function cflush */
+/*e: function cflush(x86) */
 
-/*s: function datblk */
+/*s: function datblk(x86) */
 void
 datblk(long s, long n)
 {
@@ -531,10 +531,10 @@ datblk(long s, long n)
                     fl += p->to.sym->value;
                     if(p->to.sym->type != STEXT && p->to.sym->type != SUNDEF)
                         fl += INITDAT;
-                    /*s: [[datblk()]] if dynamic module */
+                    /*s: [[datblk()]] if dynamic module(x86) */
                     if(dlm)
                         dynreloc(p->to.sym, l+s+INITDAT, 1);
-                    /*e: [[datblk()]] if dynamic module */
+                    /*e: [[datblk()]] if dynamic module(x86) */
                 }
             }
             cast = (char*)&fl;
@@ -584,9 +584,9 @@ datblk(long s, long n)
     }
     write(cout, buf.dbuf, n);
 }
-/*e: function datblk */
+/*e: function datblk(x86) */
 
-/*s: function rnd */
+/*s: function rnd(x86) */
 long
 rnd(long v, long r)
 {
@@ -601,5 +601,5 @@ rnd(long v, long r)
     v -= c;
     return v;
 }
-/*e: function rnd */
+/*e: function rnd(x86) */
 /*e: linkers/8l/asm.c */

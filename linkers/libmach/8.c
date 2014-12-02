@@ -8,32 +8,32 @@
 #include "/386/include/ureg.h"
 #include <mach.h>
 
-/*s: function REGOFF */
+/*s: function REGOFF(x86) */
 #define	REGOFF(x)	(ulong)(&((struct Ureg *) 0)->x)
-/*e: function REGOFF */
+/*e: function REGOFF(x86) */
 
-/*s: constant PC */
+/*s: constant PC(x86) */
 #define PC		REGOFF(pc)
-/*e: constant PC */
-/*s: constant SP */
+/*e: constant PC(x86) */
+/*s: constant SP(x86) */
 #define SP		REGOFF(sp)
-/*e: constant SP */
-/*s: constant AX */
+/*e: constant SP(x86) */
+/*s: constant AX(x86) */
 #define	AX		REGOFF(ax)
-/*e: constant AX */
+/*e: constant AX(x86) */
 
-/*s: constant REGSIZE */
+/*s: constant REGSIZE(x86) */
 #define	REGSIZE		sizeof(struct Ureg)
-/*e: constant REGSIZE */
-/*s: function FP_CTL */
+/*e: constant REGSIZE(x86) */
+/*s: function FP_CTL(x86) */
 #define FP_CTL(x)	(REGSIZE+4*(x))
-/*e: function FP_CTL */
-/*s: function FP_REG */
+/*e: function FP_CTL(x86) */
+/*s: function FP_REG(x86) */
 #define FP_REG(x)	(FP_CTL(7)+10*(x))
-/*e: function FP_REG */
-/*s: constant FPREGSIZE */
+/*e: function FP_REG(x86) */
+/*s: constant FPREGSIZE(x86) */
 #define	FPREGSIZE	(7*4+8*10)
-/*e: constant FPREGSIZE */
+/*e: constant FPREGSIZE(x86) */
 
 /*s: global i386reglist */
 Reglist i386reglist[] = {

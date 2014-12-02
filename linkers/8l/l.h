@@ -7,30 +7,30 @@
 #include	<386/8.out.h>
 #include	"elf.h"
 
-/*s: macro DBG */
+/*s: macro DBG(x86) */
 #define DBG if(debug['v']) mylog
-/*e: macro DBG */
+/*e: macro DBG(x86) */
 
-/*s: constant P */
+/*s: constant P(x86) */
 #define	P		((Prog*)nil)
-/*e: constant P */
-/*s: constant S */
+/*e: constant P(x86) */
+/*s: constant S(x86) */
 #define	S		((Sym*)nil)
-/*e: constant S */
-/*s: constant TNAME */
+/*e: constant S(x86) */
+/*s: constant TNAME(x86) */
 #define	TNAME		(curtext ? curtext->from.sym->name : noname)
-/*e: constant TNAME */
+/*e: constant TNAME(x86) */
 
-/*s: function cput */
+/*s: function cput(x86) */
 #define	cput(c)\
     { *cbp++ = c;\
     if(--cbc <= 0)\
         cflush(); }
-/*e: function cput */
+/*e: function cput(x86) */
 
-/*s: constant LIBNAMELEN */
+/*s: constant LIBNAMELEN(x86) */
 #define	LIBNAMELEN	300
-/*e: constant LIBNAMELEN */
+/*e: constant LIBNAMELEN(x86) */
 
 typedef	struct	Adr	Adr;
 typedef	struct	Prog	Prog;
@@ -38,7 +38,7 @@ typedef	struct	Sym	Sym;
 typedef	struct	Auto	Auto;
 typedef	struct	Optab	Optab;
 
-/*s: struct Adr */
+/*s: struct Adr(x86) */
 struct	Adr
 {
     //enum<operand_kind> (D_NONE by default)
@@ -64,29 +64,29 @@ struct	Adr
     // TODO: abused for NOPROF function attributes
     char	scale; // offset * scale give size of entity?
 };
-/*e: struct Adr */
+/*e: struct Adr(x86) */
 
-/*s: constant offset */
+/*s: constant offset(x86) */
 #define	offset	u0.u0offset
-/*e: constant offset */
-/*s: constant scon */
+/*e: constant offset(x86) */
+/*s: constant scon(x86) */
 #define	scon	u0.u0scon
-/*e: constant scon */
-/*s: constant cond */
+/*e: constant scon(x86) */
+/*s: constant cond(x86) */
 #define	cond	u0.u0cond
-/*e: constant cond */
-/*s: constant ieee */
+/*e: constant cond(x86) */
+/*s: constant ieee(x86) */
 #define	ieee	u0.u0ieee
-/*e: constant ieee */
+/*e: constant ieee(x86) */
 
-/*s: constant autom */
+/*s: constant autom(x86) */
 #define	autom	u1.u1autom
-/*e: constant autom */
-/*s: constant sym */
+/*e: constant autom(x86) */
+/*s: constant sym(x86) */
 #define	sym	u1.u1sym
-/*e: constant sym */
+/*e: constant sym(x86) */
 
-/*s: struct Prog */
+/*s: struct Prog(x86) */
 struct	Prog
 {
     //enum<opcode>
@@ -117,8 +117,8 @@ struct	Prog
     Prog*	pcond;	/* work on this */
 
 };
-/*e: struct Prog */
-/*s: struct Auto */
+/*e: struct Prog(x86) */
+/*s: struct Auto(x86) */
 struct	Auto
 {
     Sym*	asym;
@@ -129,8 +129,8 @@ struct	Auto
     // Extra
     Auto*	link;
 };
-/*e: struct Auto */
-/*s: struct Sym */
+/*e: struct Auto(x86) */
+/*s: struct Sym(x86) */
 struct	Sym
 {
     char	*name;
@@ -155,8 +155,8 @@ struct	Sym
     // hash<Sym.name * Sym.version, ref<Sym>> of hash
     Sym*	link;
 };
-/*e: struct Sym */
-/*s: struct Optab */
+/*e: struct Sym(x86) */
+/*s: struct Optab(x86) */
 struct	Optab
 {
     // enum<as> from 8.out.h
@@ -169,9 +169,9 @@ struct	Optab
     // the actual x86 machine code for instruction optab.as
     byte	op[10];
 };
-/*e: struct Optab */
+/*e: struct Optab(x86) */
 
-/*s: enum sxxx */
+/*s: enum sxxx(x86) */
 enum section
 {
     STEXT		= 1,
@@ -187,8 +187,8 @@ enum section
     SIMPORT,
     SEXPORT,
 };
-/*e: enum sxxx */
-/*s: enum yxxx */
+/*e: enum sxxx(x86) */
+/*s: enum yxxx(x86) */
 enum yxxx {
     Yxxx		= 0,
     Ynone,
@@ -222,8 +222,8 @@ enum yxxx {
 
     Ymax,
 };
-/*e: enum yxxx */
-/*s: enum zxxx */
+/*e: enum yxxx(x86) */
+/*s: enum zxxx(x86) */
 enum zxxx {
     Zxxx		= 0,
 
@@ -257,8 +257,8 @@ enum zxxx {
     Zmov,
     Zmax,
 };
-/*e: enum zxxx */
-/*s: enum pxxx */
+/*e: enum zxxx(x86) */
+/*s: enum pxxx(x86) */
 enum pxxx {
     Px		= 0,
     Pe		= 0x66,	/* operand escape */
@@ -266,36 +266,36 @@ enum pxxx {
     Pq		= 0xff,	/* both escape */
     Pb		= 0xfe,	/* byte operands */
 };
-/*e: enum pxxx */
-/*s: enum rxxx */
+/*e: enum pxxx(x86) */
+/*s: enum rxxx(x86) */
 enum rxxx {
     Roffset	= 22,		/* no. bits for offset in relocation address */
     Rindex	= 10,		/* no. bits for index in relocation address */
 };
-/*e: enum rxxx */
+/*e: enum rxxx(x86) */
 
-/*s: enum misc1 */
+/*s: enum misc1(x86) */
 enum misc1 {
-    /*s: constant NHASH 8l.h */
+    /*s: constant NHASH 8l.h(x86) */
     NHASH		= 10007,
-    /*e: constant NHASH 8l.h */
-    /*s: constant NHUNK */
+    /*e: constant NHASH 8l.h(x86) */
+    /*s: constant NHUNK(x86) */
     NHUNK		= 100000,
-    /*e: constant NHUNK */
+    /*e: constant NHUNK(x86) */
 
     MINSIZ		= 4,
-    /*s: constant STRINGSZ */
+    /*s: constant STRINGSZ(x86) */
     STRINGSZ	= 200,
-    /*e: constant STRINGSZ */
+    /*e: constant STRINGSZ(x86) */
     MINLC		= 1,
-    /*s: constant MAXIO */
+    /*s: constant MAXIO(x86) */
     MAXIO		= 8192,
-    /*e: constant MAXIO */
+    /*e: constant MAXIO(x86) */
     MAXHIST		= 20, /* limit of path elements for history symbols */
 };
-/*e: enum misc1 */
+/*e: enum misc1(x86) */
 
-/*s: enum headtype */
+/*s: enum headtype(x86) */
 /*
  *	-H0 -T0x40004C -D0x10000000	is garbage unix
  *	-H1 -T0xd0 -R4			is unix coff
@@ -312,9 +312,9 @@ enum headtype {
     H_EXE = 4,
     H_ELF = 5,
 };
-/*e: enum headtype */
+/*e: enum headtype(x86) */
 
-/*s: struct Buf */
+/*s: struct Buf(x86) */
 union Buf
 {
     struct
@@ -324,15 +324,15 @@ union Buf
     } u;
     char	dbuf[1];
 };
-/*e: struct Buf */
+/*e: struct Buf(x86) */
 extern union Buf buf;
 
-/*s: constant cbuf */
+/*s: constant cbuf(x86) */
 #define	cbuf	u.obuf
-/*e: constant cbuf */
-/*s: constant xbuf */
+/*e: constant cbuf(x86) */
+/*s: constant xbuf(x86) */
 #define	xbuf	u.ibuf
-/*e: constant xbuf */
+/*e: constant xbuf(x86) */
 
 #pragma	varargck	type	"A"	int
 #pragma	varargck	type	"A"	uint
@@ -400,9 +400,9 @@ bool allexport;
 extern	char*	EXPTAB;
 extern	Prog	undefp;
 
-/*s: constant UP */
+/*s: constant UP(x86) */
 #define	UP	(&undefp)
-/*e: constant UP */
+/*e: constant UP(x86) */
 
 extern	Optab	optab[];
 //@Scheck: defined in ../8c/enam.c

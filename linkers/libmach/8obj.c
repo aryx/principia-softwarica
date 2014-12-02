@@ -11,18 +11,18 @@
 #include "obj.h"
 
 typedef struct Addr	Addr;
-/*s: struct Addr */
+/*s: struct Addr(x86) */
 struct Addr
 {
     char	sym;
     char	flags;
 };
-/*e: struct Addr */
+/*e: struct Addr(x86) */
 static	Addr	addr(Biobuf*);
 static	char	type2char(int);
 static	void	skip(Biobuf*, int);
 
-/*s: function _is8 */
+/*s: function _is8(x86) */
 int
 _is8(char *t)
 {
@@ -34,9 +34,9 @@ _is8(char *t)
         && s[3] == 1				/* sym */
         && s[4] == '<';				/* name of file */
 }
-/*e: function _is8 */
+/*e: function _is8(x86) */
 
-/*s: function _read8 */
+/*s: function _read8(x86) */
 int
 _read8(Biobuf *bp, Prog* p)
 {
@@ -89,9 +89,9 @@ _read8(Biobuf *bp, Prog* p)
     p->sym = a.sym;
     return 1;
 }
-/*e: function _read8 */
+/*e: function _read8(x86) */
 
-/*s: function addr */
+/*s: function addr(x86) */
 static Addr
 addr(Biobuf *bp)
 {
@@ -126,9 +126,9 @@ addr(Biobuf *bp)
     }
     return a;
 }
-/*e: function addr */
+/*e: function addr(x86) */
 
-/*s: function type2char */
+/*s: function type2char(x86) */
 static char
 type2char(int t)
 {
@@ -140,14 +140,14 @@ type2char(int t)
     default:		return UNKNOWN;
     }
 }
-/*e: function type2char */
+/*e: function type2char(x86) */
 
-/*s: function skip (linkers/libmach/8obj.c) */
+/*s: function skip (linkers/libmach/8obj.c)(x86) */
 static void
 skip(Biobuf *bp, int n)
 {
     while (n-- > 0)
         Bgetc(bp);
 }
-/*e: function skip (linkers/libmach/8obj.c) */
+/*e: function skip (linkers/libmach/8obj.c)(x86) */
 /*e: linkers/libmach/8obj.c */

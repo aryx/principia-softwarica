@@ -1,7 +1,7 @@
 /*s: linkers/8l/span.c */
 #include	"l.h"
 
-/*s: function span */
+/*s: function span(x86) */
 void
 span(void)
 {
@@ -102,9 +102,9 @@ loop:
         p->from.sym->value = p->pc;
     textsize = c - INITTEXT;
 }
-/*e: function span */
+/*e: function span(x86) */
 
-/*s: function xdefine */
+/*s: function xdefine(x86) */
 void
 xdefine(char *p, int t, long v)
 {
@@ -118,9 +118,9 @@ xdefine(char *p, int t, long v)
     if(s->type == STEXT && s->value == 0)
         s->value = v;
 }
-/*e: function xdefine */
+/*e: function xdefine(x86) */
 
-/*s: function putsymb */
+/*s: function putsymb(x86) */
 void
 putsymb(char *s, int t, long v, int ver)
 {
@@ -166,9 +166,9 @@ putsymb(char *s, int t, long v, int ver)
             Bprint(&bso, "%c %.8lux %s\n", t, v, s);
     }
 }
-/*e: function putsymb */
+/*e: function putsymb(x86) */
 
-/*s: function asmsym */
+/*s: function asmsym(x86) */
 void
 asmsym(void)
 {
@@ -230,9 +230,9 @@ asmsym(void)
     if(debug['v'] || debug['n'])
         DBG("symsize = %lud\n", symsize);
 }
-/*e: function asmsym */
+/*e: function asmsym(x86) */
 
-/*s: function asmlc */
+/*s: function asmlc(x86) */
 void
 asmlc(void)
 {
@@ -312,9 +312,9 @@ asmlc(void)
         Bprint(&bso, "lcsize = %ld\n", lcsize);
     Bflush(&bso);
 }
-/*e: function asmlc */
+/*e: function asmlc(x86) */
 
-/*s: function prefixof */
+/*s: function prefixof(x86) */
 int
 prefixof(Adr *a)
 {
@@ -332,9 +332,9 @@ prefixof(Adr *a)
     }
     return 0;
 }
-/*e: function prefixof */
+/*e: function prefixof(x86) */
 
-/*s: function oclass */
+/*s: function oclass(x86) */
 int
 oclass(Adr *a)
 {
@@ -468,9 +468,9 @@ oclass(Adr *a)
     }
     return Yxxx;
 }
-/*e: function oclass */
+/*e: function oclass(x86) */
 
-/*s: function asmidx */
+/*s: function asmidx(x86) */
 void
 asmidx(Adr *a, int base)
 {
@@ -534,9 +534,9 @@ bad:
     *andptr++ = 0;
     return;
 }
-/*e: function asmidx */
+/*e: function asmidx(x86) */
 
-/*s: function put4 */
+/*s: function put4(x86) */
 static void
 put4(long v)
 {
@@ -550,9 +550,9 @@ put4(long v)
     andptr[3] = v>>24;
     andptr += 4;
 }
-/*e: function put4 */
+/*e: function put4(x86) */
 
-/*s: function vaddr */
+/*s: function vaddr(x86) */
 long
 vaddr(Adr *a)
 {
@@ -585,9 +585,9 @@ vaddr(Adr *a)
     }
     return v;
 }
-/*e: function vaddr */
+/*e: function vaddr(x86) */
 
-/*s: function asmand */
+/*s: function asmand(x86) */
 void
 asmand(Adr *a, int r)
 {
@@ -708,12 +708,12 @@ bad:
     diag("asmand: bad address %D", a);
     return;
 }
-/*e: function asmand */
+/*e: function asmand(x86) */
 
-/*s: constant E */
+/*s: constant E(x86) */
 #define	E	0xff
-/*e: constant E */
-/*s: global ymovtab */
+/*e: constant E(x86) */
+/*s: global ymovtab(x86) */
 uchar	ymovtab[] =
 {
 /* push */
@@ -817,9 +817,9 @@ uchar	ymovtab[] =
     AIMULL,	Yml,	Yrl,	7,	Pm,0xaf,0,0,
     0
 };
-/*e: global ymovtab */
+/*e: global ymovtab(x86) */
 
-/*s: function isax */
+/*s: function isax(x86) */
 int
 isax(Adr *a)
 {
@@ -835,9 +835,9 @@ isax(Adr *a)
         return 1;
     return 0;
 }
-/*e: function isax */
+/*e: function isax(x86) */
 
-/*s: function subreg */
+/*s: function subreg(x86) */
 void
 subreg(Prog *p, int from, int to)
 {
@@ -864,9 +864,9 @@ subreg(Prog *p, int from, int to)
     if(debug['Q'])
         print("%P\n", p);
 }
-/*e: function subreg */
+/*e: function subreg(x86) */
 
-/*s: function doasm */
+/*s: function doasm(x86) */
 void
 doasm(Prog *p)
 {
@@ -1284,9 +1284,9 @@ mfound:
         break;
     }
 }
-/*e: function doasm */
+/*e: function doasm(x86) */
 
-/*s: function asmins */
+/*s: function asmins(x86) */
 void
 asmins(Prog *p)
 {
@@ -1294,7 +1294,7 @@ asmins(Prog *p)
     andptr = and;
     doasm(p);
 }
-/*e: function asmins */
+/*e: function asmins(x86) */
 
 /*s: enum _anon_ (linkers/8l/span.c) */
 enum{
@@ -1305,13 +1305,13 @@ enum{
 };
 /*e: enum _anon_ (linkers/8l/span.c) */
 
-/*s: global modemap */
+/*s: global modemap(x86) */
 int modemap[4] = { 0, 1, -1, 2, };
-/*e: global modemap */
+/*e: global modemap(x86) */
 
 typedef struct Reloc Reloc;
 
-/*s: struct Reloc */
+/*s: struct Reloc(x86) */
 struct Reloc
 {
     int n;
@@ -1319,13 +1319,13 @@ struct Reloc
     byte *m;
     ulong *a;
 };
-/*e: struct Reloc */
+/*e: struct Reloc(x86) */
 
-/*s: global rels */
+/*s: global rels(x86) */
 Reloc rels;
-/*e: global rels */
+/*e: global rels(x86) */
 
-/*s: function grow */
+/*s: function grow(x86) */
 static void
 grow(Reloc *r)
 {
@@ -1344,9 +1344,9 @@ grow(Reloc *r)
     free(m);
     free(a);
 }
-/*e: function grow */
+/*e: function grow(x86) */
 
-/*s: function dynreloc */
+/*s: function dynreloc(x86) */
 void
 dynreloc(Sym *s, ulong v, int abs)
 {
@@ -1379,9 +1379,9 @@ dynreloc(Sym *s, ulong v, int abs)
     a[i] = v;
     r->n++;
 }
-/*e: function dynreloc */
+/*e: function dynreloc(x86) */
 
-/*s: function sput */
+/*s: function sput(x86) */
 static int
 sput(char *s)
 {
@@ -1393,9 +1393,9 @@ sput(char *s)
     cput(0);
     return s-p+1;
 }
-/*e: function sput */
+/*e: function sput(x86) */
 
-/*s: function asmdyn */
+/*s: function asmdyn(x86) */
 void
 asmdyn()
 {
@@ -1461,5 +1461,5 @@ asmdyn()
     DBG("import table entries = %d\n", imports);
     DBG("export table entries = %d\n", exports);
 }
-/*e: function asmdyn */
+/*e: function asmdyn(x86) */
 /*e: linkers/8l/span.c */

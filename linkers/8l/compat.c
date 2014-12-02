@@ -1,7 +1,7 @@
 /*s: linkers/8l/compat.c */
 #include	"l.h"
 
-/*s: function malloc */
+/*s: function malloc(x86) */
 /*
  * fake malloc
  */
@@ -21,25 +21,25 @@ malloc(ulong n)
     hunk += n;
     return p;
 }
-/*e: function malloc */
+/*e: function malloc(x86) */
 
-/*s: function free */
+/*s: function free(x86) */
 void
 free(void *p)
 {
     USED(p);
 }
-/*e: function free */
+/*e: function free(x86) */
 
-/*s: function setmalloctag */
+/*s: function setmalloctag(x86) */
 //@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
 void setmalloctag(void *v, ulong pc)
 {
     USED(v, pc);
 }
-/*e: function setmalloctag */
+/*e: function setmalloctag(x86) */
 
-/*s: function fileexists */
+/*s: function fileexists(x86) */
 int
 fileexists(char *s)
 {
@@ -48,5 +48,5 @@ fileexists(char *s)
     /* it's fine if stat result doesn't fit in dirbuf, since even then the file exists */
     return stat(s, dirbuf, sizeof(dirbuf)) >= 0;
 }
-/*e: function fileexists */
+/*e: function fileexists(x86) */
 /*e: linkers/8l/compat.c */
