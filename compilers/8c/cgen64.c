@@ -4,15 +4,15 @@
 long	lo64v(Node*);
 long	hi64v(Node*);
 
-/*s: function zeroregm */
+/*s: function zeroregm(x86) */
 void
 zeroregm(Node *n)
 {
     gins(AMOVL, nodconst(0), n);
 }
-/*e: function zeroregm */
+/*e: function zeroregm(x86) */
 
-/*s: function vaddr */
+/*s: function vaddr(x86) */
 /* do we need to load the address of a vlong? */
 int
 vaddr(Node *n, int a)
@@ -30,9 +30,9 @@ vaddr(Node *n, int a)
     }
     return 0;
 }
-/*e: function vaddr */
+/*e: function vaddr(x86) */
 
-/*s: function hi64v */
+/*s: function hi64v(x86) */
 long
 hi64v(Node *n)
 {
@@ -41,9 +41,9 @@ hi64v(Node *n)
     else
         return (long)((uvlong)n->vconst>>32) & ~0L;
 }
-/*e: function hi64v */
+/*e: function hi64v(x86) */
 
-/*s: function lo64v */
+/*s: function lo64v(x86) */
 long
 lo64v(Node *n)
 {
@@ -52,25 +52,25 @@ lo64v(Node *n)
     else
         return (long)(n->vconst) & ~0L;
 }
-/*e: function lo64v */
+/*e: function lo64v(x86) */
 
-/*s: function hi64 */
+/*s: function hi64(x86) */
 Node *
 hi64(Node *n)
 {
     return nodconst(hi64v(n));
 }
-/*e: function hi64 */
+/*e: function hi64(x86) */
 
-/*s: function lo64 */
+/*s: function lo64(x86) */
 Node *
 lo64(Node *n)
 {
     return nodconst(lo64v(n));
 }
-/*e: function lo64 */
+/*e: function lo64(x86) */
 
-/*s: function anonreg */
+/*s: function anonreg(x86) */
 static Node *
 anonreg(void)
 {
@@ -81,9 +81,9 @@ anonreg(void)
     n->type = types[TLONG];
     return n;
 }
-/*e: function anonreg */
+/*e: function anonreg(x86) */
 
-/*s: function regpair */
+/*s: function regpair(x86) */
 static Node *
 regpair(Node *n, Node *t)
 {
@@ -98,9 +98,9 @@ regpair(Node *n, Node *t)
         r->type = t->type;
     return r;
 }
-/*e: function regpair */
+/*e: function regpair(x86) */
 
-/*s: function evacaxdx */
+/*s: function evacaxdx(x86) */
 static void
 evacaxdx(Node *r)
 {
@@ -123,9 +123,9 @@ evacaxdx(Node *r)
         reg[D_DX]--;
     }
 }
-/*e: function evacaxdx */
+/*e: function evacaxdx(x86) */
 
-/*s: function instpair */
+/*s: function instpair(x86) */
 /* lazy instantiation of register pair */
 static int
 instpair(Node *n, Node *l)
@@ -145,9 +145,9 @@ instpair(Node *n, Node *l)
         regalloc(n->right, n->right, Z);
     return r;
 }
-/*e: function instpair */
+/*e: function instpair(x86) */
 
-/*s: function zapreg */
+/*s: function zapreg(x86) */
 static void
 zapreg(Node *n)
 {
@@ -157,18 +157,18 @@ zapreg(Node *n)
         n->reg = D_NONE;
     }
 }
-/*e: function zapreg */
+/*e: function zapreg(x86) */
 
-/*s: function freepair */
+/*s: function freepair(x86) */
 static void
 freepair(Node *n)
 {
     regfree(n->left);
     regfree(n->right);
 }
-/*e: function freepair */
+/*e: function freepair(x86) */
 
-/*s: function loadpair */
+/*s: function loadpair(x86) */
 /* n is not OREGPAIR, nn is */
 void
 loadpair(Node *n, Node *nn)
@@ -197,9 +197,9 @@ loadpair(Node *n, Node *nn)
     gins(AMOVL, n, nn->right);
     n->xoffset -= SZ_LONG;
 }
-/*e: function loadpair */
+/*e: function loadpair(x86) */
 
-/*s: function storepair */
+/*s: function storepair(x86) */
 /* n is OREGPAIR, nn is not */
 static void
 storepair(Node *n, Node *nn, int f)
@@ -219,7 +219,7 @@ storepair(Node *n, Node *nn, int f)
     if(f)
         freepair(n);
 }
-/*e: function storepair */
+/*e: function storepair(x86) */
 
 /*s: enum _anon_ (8c/cgen64.c) */
 enum
@@ -232,7 +232,7 @@ enum
 };
 /*e: enum _anon_ (8c/cgen64.c) */
 
-/*s: function whatof */
+/*s: function whatof(x86) */
 static int
 whatof(Node *n, int a)
 {
@@ -240,18 +240,18 @@ whatof(Node *n, int a)
         return WCONST;
     return !vaddr(n, a) ? WHARD : WADDR;
 }
-/*e: function whatof */
+/*e: function whatof(x86) */
 
-/*s: function reduxv */
+/*s: function reduxv(x86) */
 /* can upgrade an extern to addr for AND */
 static int
 reduxv(Node *n)
 {
     return lo64v(n) == 0 || hi64v(n) == 0;
 }
-/*e: function reduxv */
+/*e: function reduxv(x86) */
 
-/*s: function cond */
+/*s: function cond(x86) */
 bool
 cond(int op)
 {
@@ -275,9 +275,9 @@ cond(int op)
     }
     return false;
 }
-/*e: function cond */
+/*e: function cond(x86) */
 
-/*s: function vfunc */
+/*s: function vfunc(x86) */
 /*
  * for a func operand call it and then return
  * the safe node
@@ -296,9 +296,9 @@ vfunc(Node *n, Node *nn)
     sugen(n, t, 8);
     return t;
 }
-/*e: function vfunc */
+/*e: function vfunc(x86) */
 
-/*s: function getreg */
+/*s: function getreg(x86) */
 /* try to steal a reg */
 static int
 getreg(Node **np, Node *t, int r)
@@ -316,9 +316,9 @@ getreg(Node **np, Node *t, int r)
     }
     return 0;
 }
-/*e: function getreg */
+/*e: function getreg(x86) */
 
-/*s: function snarfreg */
+/*s: function snarfreg(x86) */
 static Node *
 snarfreg(Node *n, Node *t, int r, Node *d, Node *c)
 {
@@ -333,7 +333,7 @@ snarfreg(Node *n, Node *t, int r, Node *d, Node *c)
     }
     return Z;
 }
-/*e: function snarfreg */
+/*e: function snarfreg(x86) */
 
 /*s: enum _anon_ (8c/cgen64.c)2 */
 enum
@@ -456,7 +456,7 @@ enum
 };
 /*e: enum _anon_ (8c/cgen64.c)2 */
 
-/*s: global testi */
+/*s: global testi(x86) */
 /*
  * _testv:
  * 	CMPL	lo,$0
@@ -481,9 +481,9 @@ static uchar	testi[][VLEN] =
     {VT, V_p0, V_p1, VF, V_p2},
     {Vend},
 };
-/*e: global testi */
+/*e: global testi(x86) */
 
-/*s: global shll00 */
+/*s: global shll00(x86) */
 /* shift left general case */
 static uchar	shll00[][VLEN] =
 {
@@ -495,27 +495,27 @@ static uchar	shll00[][VLEN] =
     {Vins, AMOVL, O_l_lo, O_l_hi},
     {Vzero, O_l_lo, V_p0, Vend},
 };
-/*e: global shll00 */
+/*e: global shll00(x86) */
 
-/*s: global shllc0 */
+/*s: global shllc0(x86) */
 /* shift left rp, const < 32 */
 static uchar	shllc0[][VLEN] =
 {
     {Vinsl, ASHLL, O_r, O_l_rp},
     {Vshll, O_r, O_l_lo, Vend},
 };
-/*e: global shllc0 */
+/*e: global shllc0(x86) */
 
-/*s: global shllc1 */
+/*s: global shllc1(x86) */
 /* shift left rp, const == 32 */
 static uchar	shllc1[][VLEN] =
 {
     {Vins, AMOVL, O_l_lo, O_l_hi},
     {Vzero, O_l_lo, Vend},
 };
-/*e: global shllc1 */
+/*e: global shllc1(x86) */
 
-/*s: global shllc2 */
+/*s: global shllc2(x86) */
 /* shift left rp, const > 32 */
 static uchar	shllc2[][VLEN] =
 {
@@ -523,18 +523,18 @@ static uchar	shllc2[][VLEN] =
     {Vins, AMOVL, O_l_lo, O_l_hi},
     {Vzero, O_l_lo, Vend},
 };
-/*e: global shllc2 */
+/*e: global shllc2(x86) */
 
-/*s: global shllac3 */
+/*s: global shllac3(x86) */
 /* shift left addr, const == 32 */
 static uchar	shllac3[][VLEN] =
 {
     {Vins, AMOVL, O_l_lo, O_t_hi},
     {Vzero, O_t_lo, Vend},
 };
-/*e: global shllac3 */
+/*e: global shllac3(x86) */
 
-/*s: global shllac4 */
+/*s: global shllac4(x86) */
 /* shift left addr, const > 32 */
 static uchar	shllac4[][VLEN] =
 {
@@ -542,9 +542,9 @@ static uchar	shllac4[][VLEN] =
     {Vshll, O_r, O_t_hi},
     {Vzero, O_t_lo, Vend},
 };
-/*e: global shllac4 */
+/*e: global shllac4(x86) */
 
-/*s: global shll10 */
+/*s: global shll10(x86) */
 /* shift left of constant */
 static uchar	shll10[][VLEN] =
 {
@@ -558,9 +558,9 @@ static uchar	shll10[][VLEN] =
     {V_l_lo_t, Vins, ASHLL, O_r, O_t_hi},
     {Vzero, O_t_lo, V_p0, Vend},
 };
-/*e: global shll10 */
+/*e: global shll10(x86) */
 
-/*s: global shlltab */
+/*s: global shlltab(x86) */
 static uchar	(*shlltab[])[VLEN] =
 {
     shll00,
@@ -571,9 +571,9 @@ static uchar	(*shlltab[])[VLEN] =
     shllac4,
     shll10,
 };
-/*e: global shlltab */
+/*e: global shlltab(x86) */
 
-/*s: global shrl00 */
+/*s: global shrl00(x86) */
 /* shift right general case */
 static uchar	shrl00[][VLEN] =
 {
@@ -587,18 +587,18 @@ static uchar	shrl00[][VLEN] =
     {V_F1, Vins, ASARL, C31, O_l_hi},
     {V_p0, Vend},
 };
-/*e: global shrl00 */
+/*e: global shrl00(x86) */
 
-/*s: global shrlc0 */
+/*s: global shrlc0(x86) */
 /* shift right rp, const < 32 */
 static uchar	shrlc0[][VLEN] =
 {
     {Vinsr, ASHRL, O_r, O_l_rp},
     {Vins, O_a0, O_r, O_l_hi, Vend},
 };
-/*e: global shrlc0 */
+/*e: global shrlc0(x86) */
 
-/*s: global shrlc1 */
+/*s: global shrlc1(x86) */
 /* shift right rp, const == 32 */
 static uchar	shrlc1[][VLEN] =
 {
@@ -607,9 +607,9 @@ static uchar	shrlc1[][VLEN] =
     {V_F1, Vins, ASARL, C31, O_l_hi},
     {Vend},
 };
-/*e: global shrlc1 */
+/*e: global shrlc1(x86) */
 
-/*s: global shrlc2 */
+/*s: global shrlc2(x86) */
 /* shift right rp, const > 32 */
 static uchar	shrlc2[][VLEN] =
 {
@@ -619,9 +619,9 @@ static uchar	shrlc2[][VLEN] =
     {V_F1, Vins, ASARL, C31, O_l_hi},
     {Vend},
 };
-/*e: global shrlc2 */
+/*e: global shrlc2(x86) */
 
-/*s: global shrlac3 */
+/*s: global shrlac3(x86) */
 /* shift right addr, const == 32 */
 static uchar	shrlac3[][VLEN] =
 {
@@ -631,9 +631,9 @@ static uchar	shrlac3[][VLEN] =
     {V_F1, Vins, ASARL, C31, O_t_hi},
     {Vend},
 };
-/*e: global shrlac3 */
+/*e: global shrlac3(x86) */
 
-/*s: global shrlac4 */
+/*s: global shrlac4(x86) */
 /* shift right addr, const > 32 */
 static uchar	shrlac4[][VLEN] =
 {
@@ -644,9 +644,9 @@ static uchar	shrlac4[][VLEN] =
     {V_F1, Vins, ASARL, C31, O_t_hi},
     {Vend},
 };
-/*e: global shrlac4 */
+/*e: global shrlac4(x86) */
 
-/*s: global shrl10 */
+/*s: global shrl10(x86) */
 /* shift right of constant */
 static uchar	shrl10[][VLEN] =
 {
@@ -664,9 +664,9 @@ static uchar	shrl10[][VLEN] =
     {V_F1, Vins, ASARL, C31, O_t_hi},
     {Vend},
 };
-/*e: global shrl10 */
+/*e: global shrl10(x86) */
 
-/*s: global shrltab */
+/*s: global shrltab(x86) */
 static uchar	(*shrltab[])[VLEN] =
 {
     shrl00,
@@ -677,9 +677,9 @@ static uchar	(*shrltab[])[VLEN] =
     shrlac4,
     shrl10,
 };
-/*e: global shrltab */
+/*e: global shrltab(x86) */
 
-/*s: global asshllgen */
+/*s: global asshllgen(x86) */
 /* shift asop left general case */
 static uchar	asshllgen[][VLEN] =
 {
@@ -698,9 +698,9 @@ static uchar	asshllgen[][VLEN] =
     {Vins, AMOVL, O_r0, O_l_hi, V_p0},
     {V_f0, V_f1, Vend},
 };
-/*e: global asshllgen */
+/*e: global asshllgen(x86) */
 
-/*s: global asshllclo */
+/*s: global asshllclo(x86) */
 /* shift asop left, const < 32 */
 static uchar	asshllclo[][VLEN] =
 {
@@ -713,9 +713,9 @@ static uchar	asshllclo[][VLEN] =
     {Vins, AMOVL, O_r0, O_l_lo},
     {V_f0, V_f1, Vend},
 };
-/*e: global asshllclo */
+/*e: global asshllclo(x86) */
 
-/*s: global asshllc32 */
+/*s: global asshllc32(x86) */
 /* shift asop left, const == 32 */
 static uchar	asshllc32[][VLEN] =
 {
@@ -725,9 +725,9 @@ static uchar	asshllc32[][VLEN] =
     {Vins, AMOVL, O_r0, O_l_hi},
     {V_f0, Vend},
 };
-/*e: global asshllc32 */
+/*e: global asshllc32(x86) */
 
-/*s: global asshllchi */
+/*s: global asshllchi(x86) */
 /* shift asop left, const > 32 */
 static uchar	asshllchi[][VLEN] =
 {
@@ -738,9 +738,9 @@ static uchar	asshllchi[][VLEN] =
     {Vins, AMOVL, O_r0, O_l_hi},
     {V_f0, Vend},
 };
-/*e: global asshllchi */
+/*e: global asshllchi(x86) */
 
-/*s: global asdshllgen */
+/*s: global asdshllgen(x86) */
 /* shift asop dest left general case */
 static uchar	asdshllgen[][VLEN] =
 {
@@ -759,9 +759,9 @@ static uchar	asdshllgen[][VLEN] =
     {Vins, AMOVL, O_t_hi, O_l_hi, V_p0},
     {Vend},
 };
-/*e: global asdshllgen */
+/*e: global asdshllgen(x86) */
 
-/*s: global asdshllclo */
+/*s: global asdshllclo(x86) */
 /* shift asop dest left, const < 32 */
 static uchar	asdshllclo[][VLEN] =
 {
@@ -773,9 +773,9 @@ static uchar	asdshllclo[][VLEN] =
     {Vins, AMOVL, O_t_lo, O_l_lo},
     {Vend},
 };
-/*e: global asdshllclo */
+/*e: global asdshllclo(x86) */
 
-/*s: global asdshllc32 */
+/*s: global asdshllc32(x86) */
 /* shift asop dest left, const == 32 */
 static uchar	asdshllc32[][VLEN] =
 {
@@ -785,9 +785,9 @@ static uchar	asdshllc32[][VLEN] =
     {Vins, AMOVL, O_t_lo, O_l_lo},
     {Vend},
 };
-/*e: global asdshllc32 */
+/*e: global asdshllc32(x86) */
 
-/*s: global asdshllchi */
+/*s: global asdshllchi(x86) */
 /* shift asop dest, const > 32 */
 static uchar	asdshllchi[][VLEN] =
 {
@@ -798,9 +798,9 @@ static uchar	asdshllchi[][VLEN] =
     {Vins, AMOVL, O_t_hi, O_l_hi},
     {Vend},
 };
-/*e: global asdshllchi */
+/*e: global asdshllchi(x86) */
 
-/*s: global asshlltab */
+/*s: global asshlltab(x86) */
 static uchar	(*asshlltab[])[VLEN] =
 {
     asshllgen,
@@ -812,9 +812,9 @@ static uchar	(*asshlltab[])[VLEN] =
     asdshllc32,
     asdshllchi,
 };
-/*e: global asshlltab */
+/*e: global asshlltab(x86) */
 
-/*s: global asshrlgen */
+/*s: global asshrlgen(x86) */
 /* shift asop right general case */
 static uchar	asshrlgen[][VLEN] =
 {
@@ -835,9 +835,9 @@ static uchar	asshrlgen[][VLEN] =
     {V_F1, Vins, AMOVL, O_r0, O_l_hi},
     {V_p0, V_f0, V_f1, Vend},
 };
-/*e: global asshrlgen */
+/*e: global asshrlgen(x86) */
 
-/*s: global asshrlclo */
+/*s: global asshrlclo(x86) */
 /* shift asop right, const < 32 */
 static uchar	asshrlclo[][VLEN] =
 {
@@ -850,9 +850,9 @@ static uchar	asshrlclo[][VLEN] =
     {Vins, AMOVL, O_r1, O_l_hi},
     {V_f0, V_f1, Vend},
 };
-/*e: global asshrlclo */
+/*e: global asshrlclo(x86) */
 
-/*s: global asshrlc32 */
+/*s: global asshrlc32(x86) */
 /* shift asop right, const == 32 */
 static uchar	asshrlc32[][VLEN] =
 {
@@ -864,9 +864,9 @@ static uchar	asshrlc32[][VLEN] =
     {V_F1, Vins, AMOVL, O_r0, O_l_hi},
     {V_f0, Vend},
 };
-/*e: global asshrlc32 */
+/*e: global asshrlc32(x86) */
 
-/*s: global asshrlchi */
+/*s: global asshrlchi(x86) */
 /* shift asop right, const > 32 */
 static uchar	asshrlchi[][VLEN] =
 {
@@ -879,9 +879,9 @@ static uchar	asshrlchi[][VLEN] =
     {V_F1, Vins, AMOVL, O_r0, O_l_hi},
     {V_f0, Vend},
 };
-/*e: global asshrlchi */
+/*e: global asshrlchi(x86) */
 
-/*s: global asdshrlgen */
+/*s: global asdshrlgen(x86) */
 /* shift asop dest right general case */
 static uchar	asdshrlgen[][VLEN] =
 {
@@ -901,9 +901,9 @@ static uchar	asdshrlgen[][VLEN] =
     {Vins, AMOVL, O_t_hi, O_l_hi, V_p0},
     {Vend},
 };
-/*e: global asdshrlgen */
+/*e: global asdshrlgen(x86) */
 
-/*s: global asdshrlclo */
+/*s: global asdshrlclo(x86) */
 /* shift asop dest right, const < 32 */
 static uchar	asdshrlclo[][VLEN] =
 {
@@ -915,9 +915,9 @@ static uchar	asdshrlclo[][VLEN] =
     {Vins, AMOVL, O_t_hi, O_l_hi},
     {Vend},
 };
-/*e: global asdshrlclo */
+/*e: global asdshrlclo(x86) */
 
-/*s: global asdshrlc32 */
+/*s: global asdshrlc32(x86) */
 /* shift asop dest right, const == 32 */
 static uchar	asdshrlc32[][VLEN] =
 {
@@ -929,9 +929,9 @@ static uchar	asdshrlc32[][VLEN] =
     {Vins, AMOVL, O_t_hi, O_l_hi},
     {Vend},
 };
-/*e: global asdshrlc32 */
+/*e: global asdshrlc32(x86) */
 
-/*s: global asdshrlchi */
+/*s: global asdshrlchi(x86) */
 /* shift asop dest, const > 32 */
 static uchar	asdshrlchi[][VLEN] =
 {
@@ -946,9 +946,9 @@ static uchar	asdshrlchi[][VLEN] =
     {V_F1, Vins, AMOVL, O_t_hi, O_l_hi},
     {Vend},
 };
-/*e: global asdshrlchi */
+/*e: global asdshrlchi(x86) */
 
-/*s: global asshrltab */
+/*s: global asshrltab(x86) */
 static uchar	(*asshrltab[])[VLEN] =
 {
     asshrlgen,
@@ -960,25 +960,25 @@ static uchar	(*asshrltab[])[VLEN] =
     asdshrlc32,
     asdshrlchi,
 };
-/*e: global asshrltab */
+/*e: global asshrltab(x86) */
 
-/*s: global shrlargs */
+/*s: global shrlargs(x86) */
 static uchar	shrlargs[]	= { ASHRL, 1 };
-/*e: global shrlargs */
-/*s: global sarlargs */
+/*e: global shrlargs(x86) */
+/*s: global sarlargs(x86) */
 static uchar	sarlargs[]	= { ASARL, 0 };
-/*e: global sarlargs */
+/*e: global sarlargs(x86) */
 
-/*s: global incdec */
+/*s: global incdec(x86) */
 /* ++ -- */
 static uchar	incdec[][VLEN] =
 {
     {Vinsx, Bop0, C01, O_l_lo},
     {Vinsx, Bop1, C00, O_l_hi, Vend},
 };
-/*e: global incdec */
+/*e: global incdec(x86) */
 
-/*s: global incdecpre */
+/*s: global incdecpre(x86) */
 /* ++ -- *p */
 static uchar	incdecpre[][VLEN] =
 {
@@ -989,9 +989,9 @@ static uchar	incdecpre[][VLEN] =
     {Vins, AMOVL, O_t_lo, O_l_lo},
     {Vins, AMOVL, O_t_hi, O_l_hi, Vend},
 };
-/*e: global incdecpre */
+/*e: global incdecpre(x86) */
 
-/*s: global incdecpost */
+/*s: global incdecpost(x86) */
 /* *p ++ -- */
 static uchar	incdecpost[][VLEN] =
 {
@@ -1000,9 +1000,9 @@ static uchar	incdecpost[][VLEN] =
     {Vinsx, Bop0, C01, O_l_lo},
     {Vinsx, Bop1, C00, O_l_hi, Vend},
 };
-/*e: global incdecpost */
+/*e: global incdecpost(x86) */
 
-/*s: global binop00 */
+/*s: global binop00(x86) */
 /* binop rp, rp */
 static uchar	binop00[][VLEN] =
 {
@@ -1010,9 +1010,9 @@ static uchar	binop00[][VLEN] =
     {Vinsx, Bop1, O_r_hi, O_l_hi, Vend},
     {Vend},
 };
-/*e: global binop00 */
+/*e: global binop00(x86) */
 
-/*s: global binoptmp */
+/*s: global binoptmp(x86) */
 /* binop rp, addr */
 static uchar	binoptmp[][VLEN] =
 {
@@ -1022,9 +1022,9 @@ static uchar	binoptmp[][VLEN] =
     {Vinsx, Bop1, O_r0, O_l_hi},
     {V_f0, Vend},
 };
-/*e: global binoptmp */
+/*e: global binoptmp(x86) */
 
-/*s: global binop11 */
+/*s: global binop11(x86) */
 /* binop t = *a op *b */
 static uchar	binop11[][VLEN] =
 {
@@ -1033,9 +1033,9 @@ static uchar	binop11[][VLEN] =
     {Vins, AMOVL, O_l_hi, O_t_hi},
     {Vinsx, Bop1, O_r_hi, O_t_hi, Vend},
 };
-/*e: global binop11 */
+/*e: global binop11(x86) */
 
-/*s: global add0c */
+/*s: global add0c(x86) */
 /* binop t = rp +- c */
 static uchar	add0c[][VLEN] =
 {
@@ -1044,9 +1044,9 @@ static uchar	add0c[][VLEN] =
     {Vinsx, Bop1, O_r_hi, O_l_hi},
     {Vend},
 };
-/*e: global add0c */
+/*e: global add0c(x86) */
 
-/*s: global and0c */
+/*s: global and0c(x86) */
 /* binop t = rp & c */
 static uchar	and0c[][VLEN] =
 {
@@ -1056,9 +1056,9 @@ static uchar	and0c[][VLEN] =
     {V_r_hi_f, Vins, AMOVL, C00, O_l_hi},
     {Vend},
 };
-/*e: global and0c */
+/*e: global and0c(x86) */
 
-/*s: global or0c */
+/*s: global or0c(x86) */
 /* binop t = rp | c */
 static uchar	or0c[][VLEN] =
 {
@@ -1066,9 +1066,9 @@ static uchar	or0c[][VLEN] =
     {V_r_hi_t, Vinsx, Bop1, O_r_hi, O_l_hi},
     {Vend},
 };
-/*e: global or0c */
+/*e: global or0c(x86) */
 
-/*s: global sub10 */
+/*s: global sub10(x86) */
 /* binop t = c - rp */
 static uchar	sub10[][VLEN] =
 {
@@ -1078,9 +1078,9 @@ static uchar	sub10[][VLEN] =
     {Vinsx, Bop1, O_r_hi, O_r_lo},
     {Vspazz, V_f0, Vend},
 };
-/*e: global sub10 */
+/*e: global sub10(x86) */
 
-/*s: global addca */
+/*s: global addca(x86) */
 /* binop t = c + *b */
 static uchar	addca[][VLEN] =
 {
@@ -1091,9 +1091,9 @@ static uchar	addca[][VLEN] =
     {Vinsx, Bop1, O_l_hi, O_t_hi},
     {Vend},
 };
-/*e: global addca */
+/*e: global addca(x86) */
 
-/*s: global andca */
+/*s: global andca(x86) */
 /* binop t = c & *b */
 static uchar	andca[][VLEN] =
 {
@@ -1105,9 +1105,9 @@ static uchar	andca[][VLEN] =
     {V_l_hi_f, Vzero, O_t_hi},
     {Vend},
 };
-/*e: global andca */
+/*e: global andca(x86) */
 
-/*s: global orca */
+/*s: global orca(x86) */
 /* binop t = c | *b */
 static uchar	orca[][VLEN] =
 {
@@ -1117,9 +1117,9 @@ static uchar	orca[][VLEN] =
     {V_l_hi_t, Vinsx, Bop1, O_l_hi, O_t_hi},
     {Vend},
 };
-/*e: global orca */
+/*e: global orca(x86) */
 
-/*s: global subca */
+/*s: global subca(x86) */
 /* binop t = c - *b */
 static uchar	subca[][VLEN] =
 {
@@ -1129,9 +1129,9 @@ static uchar	subca[][VLEN] =
     {Vinsx, Bop1, O_r_hi, O_t_hi},
     {Vend},
 };
-/*e: global subca */
+/*e: global subca(x86) */
 
-/*s: global addac */
+/*s: global addac(x86) */
 /* binop t = *a +- c */
 static uchar	addac[][VLEN] =
 {
@@ -1142,9 +1142,9 @@ static uchar	addac[][VLEN] =
     {Vinsx, Bop1, O_r_hi, O_t_hi},
     {Vend},
 };
-/*e: global addac */
+/*e: global addac(x86) */
 
-/*s: global orac */
+/*s: global orac(x86) */
 /* binop t = *a | c */
 static uchar	orac[][VLEN] =
 {
@@ -1154,9 +1154,9 @@ static uchar	orac[][VLEN] =
     {V_r_hi_t, Vinsx, Bop1, O_r_hi, O_t_hi},
     {Vend},
 };
-/*e: global orac */
+/*e: global orac(x86) */
 
-/*s: global andac */
+/*s: global andac(x86) */
 /* binop t = *a & c */
 static uchar	andac[][VLEN] =
 {
@@ -1168,53 +1168,53 @@ static uchar	andac[][VLEN] =
     {V_r_hi_f, Vzero, O_t_hi},
     {Vend},
 };
-/*e: global andac */
+/*e: global andac(x86) */
 
-/*s: global ADDargs */
+/*s: global ADDargs(x86) */
 static uchar	ADDargs[]	= { AADDL, AADCL };
-/*e: global ADDargs */
-/*s: global ANDargs */
+/*e: global ADDargs(x86) */
+/*s: global ANDargs(x86) */
 static uchar	ANDargs[]	= { AANDL, AANDL };
-/*e: global ANDargs */
-/*s: global ORargs */
+/*e: global ANDargs(x86) */
+/*s: global ORargs(x86) */
 static uchar	ORargs[]	= { AORL, AORL };
-/*e: global ORargs */
-/*s: global SUBargs */
+/*e: global ORargs(x86) */
+/*s: global SUBargs(x86) */
 static uchar	SUBargs[]	= { ASUBL, ASBBL };
-/*e: global SUBargs */
-/*s: global XORargs */
+/*e: global SUBargs(x86) */
+/*s: global XORargs(x86) */
 static uchar	XORargs[]	= { AXORL, AXORL };
-/*e: global XORargs */
+/*e: global XORargs(x86) */
 
-/*s: global ADDtab */
+/*s: global ADDtab(x86) */
 static uchar	(*ADDtab[])[VLEN] =
 {
     add0c, addca, addac,
 };
-/*e: global ADDtab */
+/*e: global ADDtab(x86) */
 
-/*s: global ANDtab */
+/*s: global ANDtab(x86) */
 static uchar	(*ANDtab[])[VLEN] =
 {
     and0c, andca, andac,
 };
-/*e: global ANDtab */
+/*e: global ANDtab(x86) */
 
-/*s: global ORtab */
+/*s: global ORtab(x86) */
 static uchar	(*ORtab[])[VLEN] =
 {
     or0c, orca, orac,
 };
-/*e: global ORtab */
+/*e: global ORtab(x86) */
 
-/*s: global SUBtab */
+/*s: global SUBtab(x86) */
 static uchar	(*SUBtab[])[VLEN] =
 {
     add0c, subca, addac,
 };
-/*e: global SUBtab */
+/*e: global SUBtab(x86) */
 
-/*s: global mulc32 */
+/*s: global mulc32(x86) */
 /* mul of const32 */
 static uchar	mulc32[][VLEN] =
 {
@@ -1229,9 +1229,9 @@ static uchar	mulc32[][VLEN] =
     {Vins, AADDL, O_r0, O_l_hi},
     {V_f0, V_p0, Vend},
 };
-/*e: global mulc32 */
+/*e: global mulc32(x86) */
 
-/*s: global mulc64 */
+/*s: global mulc64(x86) */
 /* mul of const64 */
 static uchar	mulc64[][VLEN] =
 {
@@ -1250,9 +1250,9 @@ static uchar	mulc64[][VLEN] =
     {Vins, AADDL, O_r0, O_l_hi},
     {V_f0, V_p0, Vend},
 };
-/*e: global mulc64 */
+/*e: global mulc64(x86) */
 
-/*s: global mull */
+/*s: global mull(x86) */
 /* mul general */
 static uchar	mull[][VLEN] =
 {
@@ -1271,9 +1271,9 @@ static uchar	mull[][VLEN] =
     {Vins, AADDL, O_r0, O_l_hi},
     {V_f0, V_p0, Vend},
 };
-/*e: global mull */
+/*e: global mull(x86) */
 
-/*s: global castrp */
+/*s: global castrp(x86) */
 /* cast rp l to rp t */
 static uchar	castrp[][VLEN] =
 {
@@ -1283,9 +1283,9 @@ static uchar	castrp[][VLEN] =
     {VF, Vzero, O_t_hi},
     {Vend},
 };
-/*e: global castrp */
+/*e: global castrp(x86) */
 
-/*s: global castrpa */
+/*s: global castrpa(x86) */
 /* cast rp l to addr t */
 static uchar	castrpa[][VLEN] =
 {
@@ -1298,9 +1298,9 @@ static uchar	castrpa[][VLEN] =
     {VF, Vzero, O_t_hi},
     {Vend},
 };
-/*e: global castrpa */
+/*e: global castrpa(x86) */
 
-/*s: global netab0i */
+/*s: global netab0i(x86) */
 static uchar	netab0i[][VLEN] =
 {
     {Vop, ONE, O_l_lo, O_r_lo},
@@ -1311,9 +1311,9 @@ static uchar	netab0i[][VLEN] =
     {VT, V_p0, V_p1, VF, V_p2},
     {Vend},
 };
-/*e: global netab0i */
+/*e: global netab0i(x86) */
 
-/*s: global netabii */
+/*s: global netabii(x86) */
 static uchar	netabii[][VLEN] =
 {
     {V_a0, Vins, AMOVL, O_l_lo, O_r0},
@@ -1326,9 +1326,9 @@ static uchar	netabii[][VLEN] =
     {VT, V_p0, V_p1, VF, V_p2},
     {V_f0, Vend},
 };
-/*e: global netabii */
+/*e: global netabii(x86) */
 
-/*s: global cmptab0i */
+/*s: global cmptab0i(x86) */
 static uchar	cmptab0i[][VLEN] =
 {
     {Vopx, Bop0, O_l_hi, O_r_hi},
@@ -1342,9 +1342,9 @@ static uchar	cmptab0i[][VLEN] =
     {VF, V_p1, V_p3},
     {Vend},
 };
-/*e: global cmptab0i */
+/*e: global cmptab0i(x86) */
 
-/*s: global cmptabii */
+/*s: global cmptabii(x86) */
 static uchar	cmptabii[][VLEN] =
 {
     {V_a0, Vins, AMOVL, O_l_hi, O_r0},
@@ -1360,36 +1360,36 @@ static uchar	cmptabii[][VLEN] =
     {VF, V_p1, V_p3},
     {V_f0, Vend},
 };
-/*e: global cmptabii */
+/*e: global cmptabii(x86) */
 
-/*s: global NEtab */
+/*s: global NEtab(x86) */
 static uchar	(*NEtab[])[VLEN] =
 {
     netab0i, netabii,
 };
-/*e: global NEtab */
+/*e: global NEtab(x86) */
 
-/*s: global cmptab */
+/*s: global cmptab(x86) */
 static uchar	(*cmptab[])[VLEN] =
 {
     cmptab0i, cmptabii,
 };
-/*e: global cmptab */
+/*e: global cmptab(x86) */
 
-/*s: global GEargs */
+/*s: global GEargs(x86) */
 static uchar	GEargs[]	= { OGT, OHS };
-/*e: global GEargs */
-/*s: global GTargs */
+/*e: global GEargs(x86) */
+/*s: global GTargs(x86) */
 static uchar	GTargs[]	= { OGT, OHI };
-/*e: global GTargs */
-/*s: global HIargs */
+/*e: global GTargs(x86) */
+/*s: global HIargs(x86) */
 static uchar	HIargs[]	= { OHI, OHI };
-/*e: global HIargs */
-/*s: global HSargs */
+/*e: global HIargs(x86) */
+/*s: global HSargs(x86) */
 static uchar	HSargs[]	= { OHI, OHS };
-/*e: global HSargs */
+/*e: global HSargs(x86) */
 
-/*s: function biggen */
+/*s: function biggen(x86) */
 /* Big Generator */
 static void
 biggen(Node *l, Node *r, Node *t, int true, uchar code[][VLEN], uchar *a)
@@ -1763,17 +1763,17 @@ out:
     if(to)
         t->xoffset -= to;
 }
-/*e: function biggen */
+/*e: function biggen(x86) */
 
-/*s: function IMM */
+/*s: function IMM(x86) */
 #define	IMM(l, r)	((l) | ((r) << 1))
-/*e: function IMM */
+/*e: function IMM(x86) */
 
-/*s: function WW */
+/*s: function WW(x86) */
 #define	WW(l, r)	((l) | ((r) << 2))
-/*e: function WW */
+/*e: function WW(x86) */
 
-/*s: function cgen64 */
+/*s: function cgen64(x86) */
 int
 cgen64(Node *n, Node *nn)
 {
@@ -2820,9 +2820,9 @@ finished:
         storepair(d, nn, 1);
     return 1;
 }
-/*e: function cgen64 */
+/*e: function cgen64(x86) */
 
-/*s: function testv */
+/*s: function testv(x86) */
 void
 testv(Node *n, int true)
 {
@@ -2867,5 +2867,5 @@ testv(Node *n, int true)
         }
     }
 }
-/*e: function testv */
+/*e: function testv(x86) */
 /*e: 8c/cgen64.c */

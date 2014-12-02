@@ -3,7 +3,7 @@
 
 void	indx(Node*);
 
-/*s: function noretval */
+/*s: function noretval(x86) */
 void
 noretval(int n)
 {
@@ -20,9 +20,9 @@ noretval(int n)
     if(thisfn && thisfn->link && typefd[thisfn->link->etype])
         gins(AFLDZ, Z, Z);
 }
-/*e: function noretval */
+/*e: function noretval(x86) */
 
-/*s: function commute */
+/*s: function commute(x86) */
 /* welcome to commute */
 static void
 commute(Node *n)
@@ -36,9 +36,9 @@ commute(Node *n)
         n->right = l;
     }
 }
-/*e: function commute */
+/*e: function commute(x86) */
 
-/*s: function indexshift */
+/*s: function indexshift(x86) */
 void
 indexshift(Node *n)
 {
@@ -53,9 +53,9 @@ indexshift(Node *n)
             n->addable = 7;
     }
 }
-/*e: function indexshift */
+/*e: function indexshift(x86) */
 
-/*s: function xcom */
+/*s: function xcom(x86) */
 /*
  *	calculate addressability as follows
  *		NAME ==> 10/11		name+value(SB/SP)
@@ -411,9 +411,9 @@ brk:
         break;
     }
 }
-/*e: function xcom */
+/*e: function xcom(x86) */
 
-/*s: function indx */
+/*s: function indx(x86) */
 void
 indx(Node *n)
 {
@@ -451,5 +451,5 @@ indx(Node *n)
         prtree(idx.basetree, "base");
     }
 }
-/*e: function indx */
+/*e: function indx(x86) */
 /*e: 8c/sgen.c */

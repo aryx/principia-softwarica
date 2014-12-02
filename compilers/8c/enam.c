@@ -1,5 +1,5 @@
 /*s: 8c/enam.c */
-/*s: global anames */
+/*s: global anames(x86) */
 char*	anames[] =
 {
     "XXX",
@@ -384,5 +384,5 @@ char*	anames[] =
     "FCMOVUN",
     "LAST",
 };
-/*e: global anames */
+/*e: global anames(x86) */
 /*e: 8c/enam.c */

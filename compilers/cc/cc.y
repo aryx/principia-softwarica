@@ -3,7 +3,7 @@
 #include "cc.h"
 %}
 /*s: union yacc */
-%union {
+%union  {
     Sym*    sym;
     vlong   vval;
     double  dval;

@@ -8,7 +8,7 @@ int	Sconv(Fmt*);
 int	Rconv(Fmt*);
 int	Bconv(Fmt*);
 
-/*s: function listinit */
+/*s: function listinit(x86) */
 void
 listinit(void)
 {
@@ -20,9 +20,9 @@ listinit(void)
     fmtinstall('D', Dconv);
     fmtinstall('R', Rconv);
 }
-/*e: function listinit */
+/*e: function listinit(x86) */
 
-/*s: function Bconv */
+/*s: function Bconv(x86) */
 // Bits -> string
 int
 Bconv(Fmt *fp)
@@ -49,9 +49,9 @@ Bconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Bconv */
+/*e: function Bconv(x86) */
 
-/*s: function Pconv */
+/*s: function Pconv(x86) */
 // Prog -> string
 int
 Pconv(Fmt *fp)
@@ -71,9 +71,9 @@ Pconv(Fmt *fp)
             p->as, &p->from, &p->to);
     return fmtstrcpy(fp, str);
 }
-/*e: function Pconv */
+/*e: function Pconv(x86) */
 
-/*s: function Aconv */
+/*s: function Aconv(x86) */
 // enum<opcode_kind> -> string
 int
 Aconv(Fmt *fp)
@@ -83,9 +83,9 @@ Aconv(Fmt *fp)
     i = va_arg(fp->args, int);
     return fmtstrcpy(fp, anames[i]);
 }
-/*e: function Aconv */
+/*e: function Aconv(x86) */
 
-/*s: function Dconv */
+/*s: function Dconv(x86) */
 // Adr -> string
 int
 Dconv(Fmt *fp)
@@ -170,9 +170,9 @@ brk:
 conv:
     return fmtstrcpy(fp, str);
 }
-/*e: function Dconv */
+/*e: function Dconv(x86) */
 
-/*s: global regstr */
+/*s: global regstr(x86) */
 char*	regstr[] =
 {
     "AL",	/*[D_AL]*/	
@@ -244,9 +244,9 @@ char*	regstr[] =
 
     "NONE",	/*[D_NONE]*/
 };
-/*e: global regstr */
+/*e: global regstr(x86) */
 
-/*s: function Rconv */
+/*s: function Rconv(x86) */
 // enum<operand_kind(register-only)> -> string
 int
 Rconv(Fmt *fp)
@@ -262,9 +262,9 @@ Rconv(Fmt *fp)
 
     return fmtstrcpy(fp, str);
 }
-/*e: function Rconv */
+/*e: function Rconv(x86) */
 
-/*s: function Sconv */
+/*s: function Sconv(x86) */
 // ?? -> string
 int
 Sconv(Fmt *fp)
@@ -310,5 +310,5 @@ Sconv(Fmt *fp)
     *p = 0;
     return fmtstrcpy(fp, str);
 }
-/*e: function Sconv */
+/*e: function Sconv(x86) */
 /*e: 8c/list.c */

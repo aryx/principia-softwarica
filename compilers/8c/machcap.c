@@ -1,7 +1,7 @@
 /*s: 8c/machcap.c */
 #include "gc.h"
 
-/*s: function machcap */
+/*s: function machcap(x86) */
 bool
 machcap(Node *n)
 {
@@ -91,5 +91,5 @@ machcap(Node *n)
     }
     return false;
 }
-/*e: function machcap */
+/*e: function machcap(x86) */
 /*e: 8c/machcap.c */

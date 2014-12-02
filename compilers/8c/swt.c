@@ -1,7 +1,7 @@
 /*s: 8c/swt.c */
 #include "gc.h"
 
-/*s: function swit1 */
+/*s: function swit1(x86) */
 void
 swit1(C1 *q, int nc, long def, Node *n)
 {
@@ -37,9 +37,9 @@ swit1(C1 *q, int nc, long def, Node *n)
     patch(sp, pc);
     swit1(r+1, nc-i-1, def, n);
 }
-/*e: function swit1 */
+/*e: function swit1(x86) */
 
-/*s: function bitload */
+/*s: function bitload(x86) */
 void
 bitload(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
 {
@@ -78,9 +78,9 @@ bitload(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
                 gopcode(OASHR, types[TLONG], nodconst(sh), n1);
     }
 }
-/*e: function bitload */
+/*e: function bitload(x86) */
 
-/*s: function bitstore */
+/*s: function bitstore(x86) */
 void
 bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
 {
@@ -107,9 +107,9 @@ bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
     regfree(n2);
     regfree(n3);
 }
-/*e: function bitstore */
+/*e: function bitstore(x86) */
 
-/*s: function outstring */
+/*s: function outstring(x86) */
 long
 outstring(char *s, long n)
 {
@@ -134,9 +134,9 @@ outstring(char *s, long n)
     }
     return r;
 }
-/*e: function outstring */
+/*e: function outstring(x86) */
 
-/*s: function gextern */
+/*s: function gextern(x86) */
 void
 gextern(Sym *s, Node *a, long o, long w)
 {
@@ -162,20 +162,20 @@ gextern(Sym *s, Node *a, long o, long w)
         break;
     }
 }
-/*e: function gextern */
+/*e: function gextern(x86) */
 
 void	zname(Biobuf*, Sym*, int);
 void	zaddr(Biobuf*, Adr*, int);
 void	outhist(Biobuf*);
 
-/*s: struct Htab */
+/*s: struct Htab(x86) */
 struct Htab { 
   Sym *sym; 
   short type; 
 };
-/*e: struct Htab */
+/*e: struct Htab(x86) */
 
-/*s: function outcode */
+/*s: function outcode(x86) */
 void
 outcode(void)
 {
@@ -270,9 +270,9 @@ outcode(void)
     firstp = P;
     lastp = P;
 }
-/*e: function outcode */
+/*e: function outcode(x86) */
 
-/*s: function outhist */
+/*s: function outhist(x86) */
 void
 outhist(Biobuf *b)
 {
@@ -337,9 +337,9 @@ outhist(Biobuf *b)
         zaddr(b, &pg.to, 0);
     }
 }
-/*e: function outhist */
+/*e: function outhist(x86) */
 
-/*s: function zname */
+/*s: function zname(x86) */
 void
 zname(Biobuf *b, Sym *s, int t)
 {
@@ -369,9 +369,9 @@ zname(Biobuf *b, Sym *s, int t)
     }
     Bputc(b, 0);
 }
-/*e: function zname */
+/*e: function zname(x86) */
 
-/*s: function zaddr */
+/*s: function zaddr(x86) */
 void
 zaddr(Biobuf *b, Adr *a, int s)
 {
@@ -440,9 +440,9 @@ zaddr(Biobuf *b, Adr *a, int s)
     if(t & T_TYPE)
         Bputc(b, a->type);
 }
-/*e: function zaddr */
+/*e: function zaddr(x86) */
 
-/*s: function align */
+/*s: function align(x86) */
 long
 align(long i, Type *t, int op)
 {
@@ -508,9 +508,9 @@ align(long i, Type *t, int op)
         print("align %s %ld %T = %ld\n", bnames[op], i, t, o);
     return o;
 }
-/*e: function align */
+/*e: function align(x86) */
 
-/*s: function maxround */
+/*s: function maxround(x86) */
 long
 maxround(long max, long v)
 {
@@ -519,5 +519,5 @@ maxround(long max, long v)
         return v;
     return max;
 }
-/*e: function maxround */
+/*e: function maxround(x86) */
 /*e: 8c/swt.c */

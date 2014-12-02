@@ -9,7 +9,7 @@ void	regaalloc(Node*, Node*);
 void	naddr(Node*, Adr*);
 int	samaddr(Node*, Node*);
 
-/*s: function ginit */
+/*s: function ginit(x86) */
 void
 ginit(void)
 {
@@ -105,9 +105,9 @@ ginit(void)
             reg[i] = 0;
     }
 }
-/*e: function ginit */
+/*e: function ginit(x86) */
 
-/*s: function gclean */
+/*s: function gclean(x86) */
 void
 gclean(void)
 {
@@ -140,9 +140,9 @@ gclean(void)
     p->as = AEND;
     outcode(); // !!!!!!
 }
-/*e: function gclean */
+/*e: function gclean(x86) */
 
-/*s: function nextpc */
+/*s: function nextpc(x86) */
 void
 nextpc(void)
 {
@@ -160,9 +160,9 @@ nextpc(void)
     lastp->link = p;
     lastp = p;
 }
-/*e: function nextpc */
+/*e: function nextpc(x86) */
 
-/*s: function gargs */
+/*s: function gargs(x86) */
 void
 gargs(Node *n, Node *tn1, Node *tn2)
 {
@@ -180,9 +180,9 @@ gargs(Node *n, Node *tn1, Node *tn2)
 
     cursafe = regs;
 }
-/*e: function gargs */
+/*e: function gargs(x86) */
 
-/*s: function nareg */
+/*s: function nareg(x86) */
 int
 nareg(int notbp)
 {
@@ -196,9 +196,9 @@ nareg(int notbp)
         n--;
     return n;
 }
-/*e: function nareg */
+/*e: function nareg(x86) */
 
-/*s: function garg1 */
+/*s: function garg1(x86) */
 void
 garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
 {
@@ -257,27 +257,27 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
     gmove(tn1, tn2);
     regfree(tn1);
 }
-/*e: function garg1 */
+/*e: function garg1(x86) */
 
-/*s: function nodconst */
+/*s: function nodconst(x86) */
 Node*
 nodconst(long v)
 {
     constnode.vconst = v;
     return &constnode;
 }
-/*e: function nodconst */
+/*e: function nodconst(x86) */
 
-/*s: function nodfconst */
+/*s: function nodfconst(x86) */
 Node*
 nodfconst(double d)
 {
     fconstnode.fconst = d;
     return &fconstnode;
 }
-/*e: function nodfconst */
+/*e: function nodfconst(x86) */
 
-/*s: function isreg */
+/*s: function isreg(x86) */
 int
 isreg(Node *n, int r)
 {
@@ -287,9 +287,9 @@ isreg(Node *n, int r)
             return 1;
     return 0;
 }
-/*e: function isreg */
+/*e: function isreg(x86) */
 
-/*s: function nodreg */
+/*s: function nodreg(x86) */
 int
 nodreg(Node *n, Node *nn, int r)
 {
@@ -307,9 +307,9 @@ nodreg(Node *n, Node *nn, int r)
     }
     return 1;
 }
-/*e: function nodreg */
+/*e: function nodreg(x86) */
 
-/*s: function regret */
+/*s: function regret(x86) */
 void
 regret(Node *n, Node *nn)
 {
@@ -321,9 +321,9 @@ regret(Node *n, Node *nn)
     nodreg(n, nn, r);
     reg[r]++;
 }
-/*e: function regret */
+/*e: function regret(x86) */
 
-/*s: function regalloc */
+/*s: function regalloc(x86) */
 void
 regalloc(Node *n, Node *tn, Node *o)
 {
@@ -386,9 +386,9 @@ out:
     nodreg(n, tn, i);
 //print("+ %R %d\n", i, reg[i]);
 }
-/*e: function regalloc */
+/*e: function regalloc(x86) */
 
-/*s: function regialloc */
+/*s: function regialloc(x86) */
 void
 regialloc(Node *n, Node *tn, Node *o)
 {
@@ -398,9 +398,9 @@ regialloc(Node *n, Node *tn, Node *o)
     nod.type = types[TIND];
     regalloc(n, &nod, o);
 }
-/*e: function regialloc */
+/*e: function regialloc(x86) */
 
-/*s: function regfree */
+/*s: function regfree(x86) */
 void
 regfree(Node *n)
 {
@@ -426,9 +426,9 @@ regfree(Node *n)
 err:
     diag(n, "error in regfree: %R", i);
 }
-/*e: function regfree */
+/*e: function regfree(x86) */
 
-/*s: function regsalloc */
+/*s: function regsalloc(x86) */
 void
 regsalloc(Node *n, Node *nn)
 {
@@ -440,9 +440,9 @@ regsalloc(Node *n, Node *nn)
     n->etype = nn->type->etype;
     n->lineno = nn->lineno;
 }
-/*e: function regsalloc */
+/*e: function regsalloc(x86) */
 
-/*s: function regaalloc1 */
+/*s: function regaalloc1(x86) */
 void
 regaalloc1(Node *n, Node *nn)
 {
@@ -460,9 +460,9 @@ regaalloc1(Node *n, Node *nn)
     maxargsafe = maxround(maxargsafe, cursafe+curarg);
 */
 }
-/*e: function regaalloc1 */
+/*e: function regaalloc1(x86) */
 
-/*s: function regaalloc */
+/*s: function regaalloc(x86) */
 void
 regaalloc(Node *n, Node *nn)
 {
@@ -476,9 +476,9 @@ regaalloc(Node *n, Node *nn)
     curarg = align(curarg, nn->type, Aarg2);
     maxargsafe = maxround(maxargsafe, cursafe+curarg);
 }
-/*e: function regaalloc */
+/*e: function regaalloc(x86) */
 
-/*s: function regind */
+/*s: function regind(x86) */
 void
 regind(Node *n, Node *nn)
 {
@@ -490,9 +490,9 @@ regind(Node *n, Node *nn)
     n->op = OINDREG;
     n->type = nn->type;
 }
-/*e: function regind */
+/*e: function regind(x86) */
 
-/*s: function naddr */
+/*s: function naddr(x86) */
 void
 naddr(Node *n, Adr *a)
 {
@@ -622,13 +622,13 @@ naddr(Node *n, Adr *a)
 
     }
 }
-/*e: function naddr */
+/*e: function naddr(x86) */
 
-/*s: function CASE */
+/*s: function CASE(x86) */
 #define	CASE(a,b)	((a<<8)|(b<<0))
-/*e: function CASE */
+/*e: function CASE(x86) */
 
-/*s: function gmove */
+/*s: function gmove(x86) */
 void
 gmove(Node *f, Node *t)
 {
@@ -987,9 +987,9 @@ gmove(Node *f, Node *t)
         return;
     gins(a, f, t);
 }
-/*e: function gmove */
+/*e: function gmove(x86) */
 
-/*s: function doindex */
+/*s: function doindex(x86) */
 void
 doindex(Node *n)
 {
@@ -1023,9 +1023,9 @@ print("botch in doindex\n");
     regfree(&nod);
     constnode.vconst = v;
 }
-/*e: function doindex */
+/*e: function doindex(x86) */
 
-/*s: function gins */
+/*s: function gins(x86) */
 void
 gins(int a, Node *f, Node *t)
 {
@@ -1043,9 +1043,9 @@ gins(int a, Node *f, Node *t)
     if(debug['g'])
         print("%P\n", p);
 }
-/*e: function gins */
+/*e: function gins(x86) */
 
-/*s: function fgopcode */
+/*s: function fgopcode(x86) */
 void
 fgopcode(int o, Node *f, Node *t, int pop, int rev)
 {
@@ -1187,9 +1187,9 @@ fgopcode(int o, Node *f, Node *t, int pop, int rev)
         diag(Z, "bad in gopcode %O", o);
     gins(a, f, t);
 }
-/*e: function fgopcode */
+/*e: function fgopcode(x86) */
 
-/*s: function gopcode */
+/*s: function gopcode(x86) */
 void
 gopcode(int o, Type *ty, Node *f, Node *t)
 {
@@ -1371,9 +1371,9 @@ gopcode(int o, Type *ty, Node *f, Node *t)
         diag(Z, "bad in gopcode %O", o);
     gins(a, f, t);
 }
-/*e: function gopcode */
+/*e: function gopcode(x86) */
 
-/*s: function samaddr */
+/*s: function samaddr(x86) */
 int
 samaddr(Node *f, Node *t)
 {
@@ -1389,9 +1389,9 @@ samaddr(Node *f, Node *t)
     }
     return 0;
 }
-/*e: function samaddr */
+/*e: function samaddr(x86) */
 
-/*s: function gbranch */
+/*s: function gbranch(x86) */
 void
 gbranch(int o)
 {
@@ -1413,9 +1413,9 @@ gbranch(int o)
     }
     p->as = a;
 }
-/*e: function gbranch */
+/*e: function gbranch(x86) */
 
-/*s: function patch */
+/*s: function patch(x86) */
 void
 patch(Prog *op, long pc)
 {
@@ -1423,9 +1423,9 @@ patch(Prog *op, long pc)
     op->to.offset = pc;
     op->to.type = D_BRANCH;
 }
-/*e: function patch */
+/*e: function patch(x86) */
 
-/*s: function gpseudo */
+/*s: function gpseudo(x86) */
 void
 gpseudo(int a, Sym *s, Node *n)
 {
@@ -1441,9 +1441,9 @@ gpseudo(int a, Sym *s, Node *n)
     if(a == ADATA || a == AGLOBL)
         pc--;
 }
-/*e: function gpseudo */
+/*e: function gpseudo(x86) */
 
-/*s: function sconst */
+/*s: function sconst(x86) */
 int
 sconst(Node *n)
 {
@@ -1456,9 +1456,9 @@ sconst(Node *n)
     }
     return 0;
 }
-/*e: function sconst */
+/*e: function sconst(x86) */
 
-/*s: function exreg */
+/*s: function exreg(x86) */
 long
 exreg(Type *t)
 {
@@ -1474,9 +1474,9 @@ exreg(Type *t)
     }
     return 0;
 }
-/*e: function exreg */
+/*e: function exreg(x86) */
 
-/*s: global ewidth */
+/*s: global ewidth(x86) */
 schar	ewidth[NTYPE] =
 {
     -1,		/*[TXXX]*/	
@@ -1500,8 +1500,8 @@ schar	ewidth[NTYPE] =
     -1,		/*[TUNION]*/
     SZ_INT,		/*[TENUM]*/
 };
-/*e: global ewidth */
-/*s: global ncast */
+/*e: global ewidth(x86) */
+/*s: global ncast(x86) */
 long	ncast[NTYPE] =
 {
     0,				/*[TXXX]*/
@@ -1525,5 +1525,5 @@ long	ncast[NTYPE] =
     BUNION,				/*[TUNION]*/
     0,				/*[TENUM]*/
 };
-/*e: global ncast */
+/*e: global ncast(x86) */
 /*e: 8c/txt.c */

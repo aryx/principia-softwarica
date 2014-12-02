@@ -4,14 +4,14 @@
 typedef struct	Malg	Malg;
 typedef struct	Mparam	Mparam;
 
-/*s: struct Malg */
+/*s: struct Malg(x86) */
 struct	Malg
 {
     char	vals[10];
 };
-/*e: struct Malg */
+/*e: struct Malg(x86) */
 
-/*s: struct Mparam */
+/*s: struct Mparam(x86) */
 struct	Mparam
 {
     ulong	value;
@@ -21,16 +21,16 @@ struct	Mparam
     char	arg;
     char	off;
 };
-/*e: struct Mparam */
+/*e: struct Mparam(x86) */
 
-/*s: global multab */
+/*s: global multab(x86) */
 static	Mparam	multab[32];
-/*e: global multab */
-/*s: global mulptr */
+/*e: global multab(x86) */
+/*s: global mulptr(x86) */
 static	int	mulptr;
-/*e: global mulptr */
+/*e: global mulptr(x86) */
 
-/*s: global malgs */
+/*s: global malgs(x86) */
 static	Malg	malgs[]	=
 {
     {0, 100},
@@ -39,9 +39,9 @@ static	Malg	malgs[]	=
     {6, 10, 12, 18, 20, 24, 36, 40, 72, 100},
     {-8, -4, -2, 2, 4, 8, 100},
 };
-/*e: global malgs */
+/*e: global malgs(x86) */
 
-/*s: function lowbit */
+/*s: function lowbit(x86) */
 /*
  * return position of lowest 1
  */
@@ -62,9 +62,9 @@ lowbit(ulong v)
     }
     return s;
 }
-/*e: function lowbit */
+/*e: function lowbit(x86) */
 
-/*s: function genmuladd */
+/*s: function genmuladd(x86) */
 void
 genmuladd(Node *d, Node *s, int m, Node *a)
 {
@@ -79,9 +79,9 @@ genmuladd(Node *d, Node *s, int m, Node *a)
     xcom(&nod);
     gopcode(OADDR, d->type, &nod, d);
 }
-/*e: function genmuladd */
+/*e: function genmuladd(x86) */
 
-/*s: function mulparam */
+/*s: function mulparam(x86) */
 void
 mulparam(ulong m, Mparam *mp)
 {
@@ -202,9 +202,9 @@ mulparam(ulong m, Mparam *mp)
     else
         mp->alg = -1;
 }
-/*e: function mulparam */
+/*e: function mulparam(x86) */
 
-/*s: function m0 */
+/*s: function m0(x86) */
 int
 m0(int a)
 {
@@ -259,9 +259,9 @@ m0(int a)
     diag(Z, "bad m0");
     return 0;
 }
-/*e: function m0 */
+/*e: function m0(x86) */
 
-/*s: function m1 */
+/*s: function m1(x86) */
 int
 m1(int a)
 {
@@ -280,9 +280,9 @@ m1(int a)
     diag(Z, "bad m1");
     return 0;
 }
-/*e: function m1 */
+/*e: function m1(x86) */
 
-/*s: function m2 */
+/*s: function m2(x86) */
 int
 m2(int a)
 {
@@ -309,9 +309,9 @@ m2(int a)
     diag(Z, "bad m2");
     return 0;
 }
-/*e: function m2 */
+/*e: function m2(x86) */
 
-/*s: function shiftit */
+/*s: function shiftit(x86) */
 void
 shiftit(Type *t, Node *s, Node *d)
 {
@@ -328,9 +328,9 @@ shiftit(Type *t, Node *s, Node *d)
         gopcode(OASHL, t, s, d);
     }
 }
-/*e: function shiftit */
+/*e: function shiftit(x86) */
 
-/*s: function mulgen1 */
+/*s: function mulgen1(x86) */
 static int
 mulgen1(ulong v, Node *n)
 {
@@ -445,14 +445,14 @@ bad:
     diag(Z, "mulgen botch");
     return 1;
 }
-/*e: function mulgen1 */
+/*e: function mulgen1(x86) */
 
-/*s: function mulgen */
+/*s: function mulgen(x86) */
 void
 mulgen(Type *t, Node *r, Node *n)
 {
     if(!mulgen1(r->vconst, n))
         gopcode(OMUL, t, r, n);
 }
-/*e: function mulgen */
+/*e: function mulgen(x86) */
 /*e: 8c/mul.c */
