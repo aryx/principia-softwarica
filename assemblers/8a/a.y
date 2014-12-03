@@ -303,13 +303,13 @@ omem:
   $$.type = D_INDIR+$3;
   $$.offset = $1;
  }
-|   con '(' LSP ')'
+| con '(' LSP ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_SP;
   $$.offset = $1;
  }
-|   con '(' LLREG '*' con ')'
+| con '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+D_NONE;
@@ -318,7 +318,7 @@ omem:
   $$.scale = $5;
   checkscale($$.scale);
  }
-|   con '(' LLREG ')' '(' LLREG '*' con ')'
+| con '(' LLREG ')' '(' LLREG '*' con ')'
  {
   $$ = nullgen;
   $$.type = D_INDIR+$3;
