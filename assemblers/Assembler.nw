@@ -16,7 +16,7 @@
 %  - better organisation of the code, TOC better than the few existing
 %    files (that didn't have very good names)
 %  - removed deadcode (Ref, imm2, con2, NMACRO, CLAST, isreg, ...)
-%  - TODO rename types, clearer, Gen? Gen2? as? Adr and Prog?
+%  - TODO rename types, clearer, Gen? as Adr (and Gen2? as Prog?)
 
 %thx to codemap/codegraph/scheck:
 % - factorized code in aa/
@@ -149,12 +149,20 @@ an assembler.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
-% we gonna focus on plan9's assembler 5a because
+% we gonna focus on plan9's assembler, 5a, because
 % it's simple, short code, and consistent with the rest of my
 % endeavour :)
-% 5a simpler than 8a: ARM RISC simpler than x86 CISC. Moreover
+% we choose 5a, simpler than 8a: ARM RISC simpler than x86 CISC. Moreover
 % have full spec of processor in 5i/! so help to understand
 % the semantic of the asm instructions.
+
+%note: better to do manual with ARM for assembler/compiler/linker,
+%it's a far simpler archi, moreover we even have a spec for it, 5i,
+%so full circle.
+%Using x86 also make it more error prone when want to change things
+%because we would have also to change kencc (e.g. error prone to change
+%the order of asm instructions).
+
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
@@ -166,6 +174,8 @@ Here are other candidates that were considered but ultimately discarded:
 % hex2c
 
 %todo? there is also one in subc-2014
+
+
 
 \section{Getting started}
 
@@ -470,142 +480,57 @@ enum opcode
 };
 @
 % was called 'enum as'
-% actually not all are opcodes, ATEXT is actually a pseudo opcode
+% actually not all are opcodes, ATEXT is actually a pseudo opcode.
 % should be less than 256, as rely on sending ANAME as a byte in zname()
 
-%\section{[[Register]]}
+
 
 % ADT would be far better than this enum and separate Sym.
 % less: rename operand_part1, to show that need another part
 % to be a complete operand (which is Gen =~ Adr)
-<<enum reg(x86)>>=
-enum operand_kind
-{
-<<[[operand_kind]] register cases(x86)>>
-    D_NONE		= 59,
-<<[[operand_kind]] non register cases(x86)>>
-};
-@
-
 %/* type/name */ for GOK
 %/* type */ FOR BRANCH
 %/* name */ for D_EXTERN
+% how get the remaining info? e.g. for D_BRANCH to get the symbol or int 
+% you'll have too look in Gen.value
 <<enum dxxx(arm)>>=
 enum dxxx {
     D_GOK,
+
     D_NONE,
+    // for B, BL?
     D_BRANCH,
     D_OREG,
-    D_EXTERN,
-    D_STATIC,
-    D_AUTO,
-    D_PARAM,
+
+    // For ADATA?
+    D_EXTERN, // data/bss values (from SB)
+    D_STATIC, // data static variables (from SB)
+    D_AUTO, // stack values (from SP)
+    D_PARAM, // parameter (from FP)
+
     D_CONST,
     D_FCONST,
     D_SCONST,
+
     D_PSR,
     D_XXX,
     D_REG,
     D_FREG,
     D_XXX2,
     D_XXX3,
+
     D_FILE,
     D_OCONST,
-    D_FILE1,
+    D_FILE1, // used by linker only?
     D_SHIFT,
     D_FPCR,
     D_REGREG,
+
     D_ADDR,
 };
 @
-}
 
 
-
-
-
-
-
-
-%less: could have start at 1 here so could have D_NONE = 0
-<<[[operand_kind]] register cases(x86)>>=
-    D_AL		= 0,
-    D_CL,
-    D_DL,
-    D_BL,
-
-    D_AH		= 4,
-    D_CH,
-    D_DH,
-    D_BH,
-
-    D_AX		= 8,
-    D_CX,
-    D_DX,
-    D_BX,
-    D_SP,
-    D_BP,
-    D_SI,
-    D_DI,
-
-    D_F0		= 16,
-    D_F7		= D_F0 + 7,
-
-    D_CS		= 24,
-    D_SS,
-    D_DS,
-    D_ES,
-    D_FS,
-    D_GS,
-
-    D_GDTR,		/* global descriptor table register */
-    D_IDTR,		/* interrupt descriptor table register */
-    D_LDTR,		/* local descriptor table register */
-    D_MSW,		/* machine status word */
-    D_TASK,		/* task register */
-
-    D_CR		= 35, // D_CR0 .. D_CR7
-    D_DR		= 43, // D_DR0 .. D_DR7
-    D_TR		= 51, // D_TR0 .. D_TR7
-@
-
-% how get the remaining info? e.g. for D_BRANCH to get the symbol or int 
-% you'll have too look in Gen.value
-<<[[operand_kind]] non register cases(x86)>>=
-    // for ACALL, AJMP (from PC)
-    D_BRANCH	= 60, 
-
-    // For ADATA
-    D_EXTERN	= 61, // data/bss values (from SB)
-    D_STATIC	= 62, // data static variables (from SB)
-    D_AUTO	= 63, // stack values (from SP)
-    D_PARAM	= 64, // parameter (from FP)
-
-    D_CONST	= 65,
-    D_FCONST	= 66,
-    D_SCONST	= 67,
-
-    D_ADDR	= 68,
-@
-
-% ???
-<<[[operand_kind]] non register cases(x86)>>=
-    D_FILE,
-    D_FILE1, // used by linker only
-
-    D_INDIR,	/* additive */
-
-    D_CONST2 = D_INDIR+D_INDIR,
-
-    D_SIZE,	/* 8l internal */
-@
-
-
-%INDIR? faux ami avec previous D_FILE ... it's not about a directory 
-% it's INDIRECT, (AX) => =~ *AX, = deref
-%  D_INDIR + D_AX (D_INDIR only with register cases, hence safe D_CONST2)
-%  ugly ... we really need ADT and simple recursive types ...
-% see Dconv in Compiler.nw, seems only for D_INDIR of register
 
 % works with Gen (aka Adr) so it's really
 % type operand = 
@@ -617,18 +542,7 @@ enum dxxx {
 % see Dconv in Compiler.nw, seems only for D_INDIR of register
 
 
-
 % for 8c! conventions! (not used at all by 8a, but in 8.out.h for other tools)
-<<enum misc3(x86)>>=
-enum misc3 {
-    REGARG		= -1,
-    REGRET		= D_AX,
-    FREGRET		= D_F0,
-    REGSP		= D_SP,
-    REGTMP		= D_DI,
-};
-@
-
 <<enum regxxx(arm)>>=
 enum regxxx {
     REGRET =	0,
@@ -697,29 +611,12 @@ enum regxxx {
 
 % could use NSNAME here instead of char sval[8] ? and at a few other places?
 % from 8.out.h
-<<constant NSNAME(x86)>>=
-#define	NSNAME	8
-@
-
 <<constant NSNAME(arm)>>=
 #define	NSNAME		8
 @
 
 
 
-% LTYPE0 etc are defined in a.y, tokens with value 
-% instruction table conversion, string -> token
-<<struct Itab(x86)>>=
-struct Itab
-{
-    char	*name;
-
-    //enum<token_kind>
-    ushort	type;
-    //enum<opcode_kind> | enum<operand_kind>
-    ushort	value;
-};
-@
 
 % TODO: just put a subset with most relevant instr and registers
 % hmm ADT would be better than union and this
@@ -727,6 +624,8 @@ struct Itab
 %    // appropriately
 
 
+% LTYPE0 etc are defined in a.y, tokens with value 
+% instruction table conversion, string -> token
 <<struct Itab(arm)>>=
 struct Itab
 {
@@ -749,6 +648,7 @@ struct Itab itab[] =
     "PC",		LPC,	D_BRANCH,
 
     "R",		LR,	0,
+
     "R0",		LREG,	0,
     "R1",		LREG,	1,
     "R2",		LREG,	2,
@@ -882,13 +782,13 @@ struct Itab itab[] =
     "MOVW",		LTYPE3, AMOVW,
 
     "MOVD",		LTYPE3, AMOVD,
-    "MOVDF",		LTYPE3, AMOVDF,
+    "MOVDF",	LTYPE3, AMOVDF,
     "MOVDW",	LTYPE3, AMOVDW,
     "MOVF",		LTYPE3, AMOVF,
-    "MOVFD",		LTYPE3, AMOVFD,
-    "MOVFW",		LTYPE3, AMOVFW,
+    "MOVFD",	LTYPE3, AMOVFD,
+    "MOVFW",	LTYPE3, AMOVFW,
     "MOVWD",	LTYPE3, AMOVWD,
-    "MOVWF",		LTYPE3, AMOVWF,
+    "MOVWF",	LTYPE3, AMOVWF,
 
     "LDREX",		LTYPE3, ALDREX,
     "LDREXD",		LTYPE3, ALDREXD,
@@ -929,6 +829,7 @@ struct Itab itab[] =
     "BLT",		LTYPE5,	ABLT,
     "BGT",		LTYPE5,	ABGT,
     "BLE",		LTYPE5,	ABLE,
+
     "BCASE",	LTYPE5,	ABCASE,
 
     "SWI",		LTYPE6, ASWI,
@@ -1115,32 +1016,11 @@ slookup(char *s)
 %@
 
 
-\section{[[Gen]], [[Gen2]]}
+\section{[[Gen]]}
 
-% =~ Adr of Linker
+
+% =~ Adr of Linker ?
 % rename operand?
-<<struct Gen(x86)>>=
-struct	Gen
-{
-    // enum<operand_kind>
-    short	type;
-
-    long	offset; // generic value
-    double	dval;
-    char	sval[8];
-
-    //enum<operand_kind(register-only|D_NONE)>
-    short	index;
-
-    short	scale;
-
-    //??
-    Sym*	sym;
-
-    long	offset2;
-};
-@
-
 <<struct Gen(arm)>>=
 struct	Gen
 {
@@ -1151,11 +1031,9 @@ struct	Gen
     double	dval;
     char	sval[8];
 
-    Sym*	sym;
-
-    short	reg;
-
-    short	name;
+    Sym*	sym; // ??
+    short	reg; // ??
+    short	name; // ??
 };
 @
 
@@ -1175,37 +1053,12 @@ Gen	nullgen;
 % GLOBL boot_CONF_outlen+0(SB), $4
 % DATA boot_CONF_outlen+0(SB)/4, $67523
 
-<<function checkscale(x86)>>=
-void
-checkscale(int scale)
-{
 
-    switch(scale) {
-    case 1:
-    case 2:
-    case 4:
-    case 8:
-        return;
-    }
-    yyerror("scale must be 1248: %d", scale);
-}
-@
+% usually ADD, R1, R2, R3 
+% =~ Prog of Linker (but without opcode)?
+% how encoded the whole instruction? via multiple parameters to outcode?
+% define a structure?
 
-
-
-% usually MOVW AX, BX, 'from' AX, 'to' BX
-% =~ Prog of Linker (but without opcode)
-% rename operands?
-<<struct Gen2(x86)>>=
-struct	Gen2
-{
-    Gen	from;
-    Gen	to;
-};
-@
-
-% actually later do outcode(int a, Gen2 *x)
-% where both arguments are really like a Prog of Linker
 
 
 %section{[[pc]]} ?
@@ -1215,12 +1068,12 @@ struct	Gen2
 % default object suffix, to generate foo.8
 % hmm actually it's in aa/ so should be independent of 8a/
 <<global thechar>>=
-int	thechar = '8';
+int	thechar;
 @
 
 % to find archi specific core header files, /386/include/...
 <<global thestring>>=
-char*	thestring = "386";
+char*	thestring;
 @
 
 % -o
@@ -1230,132 +1083,44 @@ char*	outfile;
 
 
 
-<<function main (assemblers/8a/lex.c)>>=
-void
-main(int argc, char *argv[])
-{
-    <<[[main()]] locals(x86)>>
-    <<[[main()]] debug initialization(x86)>>
-
-    cinit();
-    outfile = nil;
-    include[ninclude++] = ".";
-
-    ARGBEGIN {
-    <<[[main()]] command line processing(x86)>>
-    } ARGEND
-
-    if(*argv == 0) {
-        print("usage: %ca [-options] file.s\n", thechar);
-        errorexit();
-    }
-
-    <<[[main()]] multiple files handling(x86)>>
-
-    if(assemble(argv[0]))
-        errorexit();
-    exits(0);
-}
-@
 
 <<function main(arm)>>=
 void
 main(int argc, char *argv[])
 {
-    char *p;
-    int nout, nproc, status, i, c;
+    <<[[main()]] locals>>
+    <<[[main()]] debug initialization>>
 
     thechar = '5';
     thestring = "arm";
-    memset(debug, 0, sizeof(debug));
 
     cinit();
     outfile = nil;
     include[ninclude++] = ".";
 
     ARGBEGIN {
-    default:
-        c = ARGC();
-        if(c >= 0 || c < sizeof(debug))
-            debug[c] = 1;
-        break;
-
-    case 'o':
-        outfile = ARGF();
-        break;
-
-    case 'D':
-        p = ARGF();
-        if(p)
-            Dlist[nDlist++] = p;
-        break;
-
-    case 'I':
-        p = ARGF();
-        setinclude(p);
-        break;
-    case 't':
-        thechar = 't';
-        thestring = "thumb";
-        break;
+    <<[[main()]] command line processing>>
     } ARGEND
 
     if(*argv == 0) {
         print("usage: %ca [-options] file.s\n", thechar);
         errorexit();
     }
-    if(argc > 1) {
-        nproc = 1;
-        if(p = getenv("NPROC"))
-            nproc = atol(p);	/* */
-        c = 0;
-        nout = 0;
-        for(;;) {
-            while(nout < nproc && argc > 0) {
-                i = fork();
-                if(i < 0) {
-                    i = mywait(&status);
-                    if(i < 0)
-                        errorexit();
-                    if(status)
-                        c++;
-                    nout--;
-                    continue;
-                }
-                if(i == 0) {
-                    print("%s:\n", *argv);
-                    if(assemble(*argv))
-                        errorexit();
-                    exits(0);
-                }
-                nout++;
-                argc--;
-                argv++;
-            }
-            i = mywait(&status);
-            if(i < 0) {
-                if(c)
-                    errorexit();
-                exits(0);
-            }
-            if(status)
-                c++;
-            nout--;
-        }
-    }
+
+    <<[[main()]] multiple files handling>>
+
     if(assemble(argv[0]))
         errorexit();
     exits(0);
 }
 @
+%    case 't':
+%        thechar = 't';
+%        thestring = "thumb";
+%        break;
 
 
-
-
-
-
-
-<<[[main()]] command line processing(x86)>>=
+<<[[main()]] command line processing>>=
 case 'o':
     outfile = ARGF();
     break;
@@ -1372,44 +1137,9 @@ case 'o':
 char*	pathname;
 @
 
+
+
 % could split, nullgen init, hash init (via lookup), pathname init
-<<function cinit(x86)>>=
-void
-cinit(void)
-{
-    Sym *s;
-    int i;
-
-    nullgen.sym = S;
-    nullgen.offset = 0;
-    if(FPCHIP)
-        nullgen.dval = 0;
-    for(i=0; i<sizeof(nullgen.sval); i++)
-        nullgen.sval[i] = '\0';
-    nullgen.type = D_NONE;
-    nullgen.index = D_NONE;
-    nullgen.scale = 0;
-
-    for(i=0; i<NHASH; i++)
-        hash[i] = S;
-    for(i=0; itab[i].name; i++) {
-        s = slookup(itab[i].name);
-        if(s->type != LNAME)
-            yyerror("double initialization %s", itab[i].name);
-        s->type = itab[i].type;
-        s->value = itab[i].value;
-    }
-
-    pathname = allocn(pathname, 0, 100);
-    if(getwd(pathname, 99) == nil) {
-        pathname = allocn(pathname, 100, 900);
-        if(getwd(pathname, 999) == nil)
-            strcpy(pathname, "/???");
-    }
-}
-@
-
-
 <<function cinit(arm)>>=
 void
 cinit(void)
@@ -1419,21 +1149,14 @@ cinit(void)
 
     nullgen.sym = S;
     nullgen.offset = 0;
-
     nullgen.type = D_NONE;
     nullgen.name = D_NONE;
     nullgen.reg = NREG;
-
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)
         nullgen.sval[i] = 0;
 
-    nerrors = 0;
-    iostack = I;
-    iofree = I;
-    peekc = IGN;
-    nhunk = 0;
     for(i=0; i<NHASH; i++)
         hash[i] = S;
     for(i=0; itab[i].name; i++) {
@@ -1450,8 +1173,9 @@ cinit(void)
     }
 }
 @
-
-
+% used to do more initialisation here, but instead move the init
+% at the def location
+% very similar to the x86 version, except the few change for nullgen fields
 
 
 
@@ -1475,7 +1199,7 @@ pathchar(void)
 }
 @
 
-<<[[assemble()]] locals(x86)>>=
+<<[[assemble()]] locals>>=
 char *p;
 fdt of; // outfile
 int i;
@@ -1486,19 +1210,19 @@ int i;
 Biobuf	obuf;
 @
 
-<<function assemble(x86)>>=
+<<function assemble>>=
 int
 assemble(char *file)
 {
-    <<[[assemble()]] locals(x86)>>
+    <<[[assemble()]] locals>>
 
-    <<[[assemble()]] set p to basename(file) and adjust include(x86)>>
+    <<[[assemble()]] set p to basename(file) and adjust include>>
 
     if(outfile == nil) {
-        <<[[assemble()]] set outfile to {basename(file)}.8(x86)>>
+        <<[[assemble()]] set outfile to {basename(file)}.8>>
     }
 
-    <<[[assemble()]] setinclude("/386/include") or INCLUDE>>
+    <<[[assemble()]] setinclude("/<arch>/include") or INCLUDE>>
 
     of = mycreat(outfile, 0664);
     if(of < 0) {
@@ -1510,7 +1234,7 @@ assemble(char *file)
     pass = 1;
 
     pinit(file);
-    <<[[assemble()]] init Dlist after pinit(x86)>>
+    <<[[assemble()]] init Dlist after pinit>>
     yyparse(); // calls outcode() but does nothing when pass == 1
 
     if(nerrors) {
@@ -1522,7 +1246,7 @@ assemble(char *file)
     outhist(); // header
 
     pinit(file);
-    <<[[assemble()]] init Dlist after pinit(x86)>>
+    <<[[assemble()]] init Dlist after pinit>>
     yyparse(); // calls outcode() that now does things
 
     cclean();
@@ -1530,82 +1254,16 @@ assemble(char *file)
 }
 @
 
-<<function assemble(arm)>>=
-int
-assemble(char *file)
-{
-    char ofile[100], incfile[20], *p;
-    int i, of;
-
-    strcpy(ofile, file);
-    p = utfrrune(ofile, pathchar());
-    if(p) {
-        include[0] = ofile;
-        *p++ = 0;
-    } else
-        p = ofile;
-    if(outfile == 0) {
-        outfile = p;
-        if(outfile){
-            p = utfrrune(outfile, '.');
-            if(p)
-                if(p[1] == 's' && p[2] == 0)
-                    p[0] = 0;
-            p = utfrune(outfile, 0);
-            p[0] = '.';
-            p[1] = thechar;
-            p[2] = 0;
-        } else
-            outfile = "/dev/null";
-    }
-    p = getenv("INCLUDE");
-    if(p) {
-        setinclude(p);
-    } else {
-        if(systemtype(Plan9)) {
-            sprint(incfile,"/%s/include", thestring);
-            setinclude(strdup(incfile));
-        }
-    }
-
-    of = mycreat(outfile, 0664);
-    if(of < 0) {
-        yyerror("%ca: cannot create %s", thechar, outfile);
-        errorexit();
-    }
-    Binit(&obuf, of, OWRITE);
-
-    pass = 1;
-    pinit(file);
-    for(i=0; i<nDlist; i++)
-        dodefine(Dlist[i]);
-    yyparse();
-    if(nerrors) {
-        cclean();
-        return nerrors;
-    }
-
-    pass = 2;
-    outhist();
-    pinit(file);
-    for(i=0; i<nDlist; i++)
-        dodefine(Dlist[i]);
-    yyparse();
-    cclean();
-    return nerrors;
-}
-@
 
 
 
 
 
-
-<<[[assemble()]] locals(x86)>>=
+<<[[assemble()]] locals>>=
 char ofile[100];
 @
 
-<<[[assemble()]] set p to basename(file) and adjust include(x86)>>=
+<<[[assemble()]] set p to basename(file) and adjust include>>=
 // p = basename(file)
 // include[0] = dirname(file); 
 strcpy(ofile, file);
@@ -1617,7 +1275,7 @@ if(p) {
     p = ofile;
 @
 
-<<[[assemble()]] set outfile to {basename(file)}.8(x86)>>=
+<<[[assemble()]] set outfile to {basename(file)}.8>>=
 // outfile =  p =~ s/.s/.8/;
 outfile = p;
 if(outfile){
@@ -1634,11 +1292,11 @@ if(outfile){
 @
 
 
-<<[[assemble()]] locals(x86)>>=
+<<[[assemble()]] locals>>=
 char incfile[20];
 @
 
-<<[[assemble()]] setinclude("/386/include") or INCLUDE>>=
+<<[[assemble()]] setinclude("/<arch>/include") or INCLUDE>>=
 p = getenv("INCLUDE");
 if(p) {
     setinclude(p);
@@ -1651,16 +1309,6 @@ if(p) {
 @
 
 
-<<function cclean(x86)>>=
-void
-cclean(void)
-{
-    Gen2 g2 = (Gen2) { nullgen, nullgen };
-
-    outcode(AEND, &g2);
-    Bflush(&obuf);
-}
-@
 
 <<function cclean(arm)>>=
 void
@@ -1903,19 +1551,19 @@ pop:
 
 % should use lex ... simpler, but maybe to avoid bootstrapping issues?
 
-<<[[yylex()]] locals(x86)>>=
+<<[[yylex()]] locals>>=
 int c1;
 @
 % for peek
 
 
 % called by? yyparse() in generated code from a.y
-<<function yylex(x86)>>=
+<<function yylex>>=
 long
 yylex(void)
 {
     int c;
-    <<[[yylex()]] locals(x86)>>
+    <<[[yylex()]] locals>>
 
     c = peekc;
     if(c != IGN) {
@@ -1945,7 +1593,7 @@ l1:
         goto tnum;
 
     switch(c) {
-    <<[[yylex()]] switch c cases(x86)>>
+    <<[[yylex()]] switch c cases>>
     default:
         return c;
     }
@@ -1959,267 +1607,10 @@ l1:
 
 
 
-<<function yylex(arm)>>=
-long
-yylex(void)
-{
-    int c, c1;
-    char *cp;
-    Sym *s;
-
-    c = peekc;
-    if(c != IGN) {
-        peekc = IGN;
-        goto l1;
-    }
-l0:
-    c = GETC();
-
-l1:
-    if(c == EOF) {
-        peekc = EOF;
-        return -1;
-    }
-    if(isspace(c)) {
-        if(c == '\n') {
-            lineno++;
-            return ';';
-        }
-        goto l0;
-    }
-    if(isalpha(c))
-        goto talph;
-    if(isdigit(c))
-        goto tnum;
-    switch(c)
-    {
-    case '\n':
-        lineno++;
-        return ';';
-
-    case '#':
-        domacro();
-        goto l0;
-
-    case '.':
-        c = GETC();
-        if(isalpha(c)) {
-            cp = symb;
-            *cp++ = '.';
-            goto aloop;
-        }
-        if(isdigit(c)) {
-            cp = symb;
-            *cp++ = '.';
-            goto casedot;
-        }
-        peekc = c;
-        return '.';
-
-    talph:
-    case '_':
-    case '@':
-        cp = symb;
-
-    aloop:
-        *cp++ = c;
-        c = GETC();
-        if(isalpha(c) || isdigit(c) || c == '_' || c == '$')
-            goto aloop;
-        *cp = 0;
-        peekc = c;
-        s = lookup();
-        if(s->macro) {
-            newio();
-            cp = ionext->b;
-            macexpand(s, cp);
-            pushio();
-            ionext->link = iostack;
-            iostack = ionext;
-            fi.p = cp;
-            fi.c = strlen(cp);
-            if(peekc != IGN) {
-                cp[fi.c++] = peekc;
-                cp[fi.c] = 0;
-                peekc = IGN;
-            }
-            goto l0;
-        }
-        if(s->type == 0)
-            s->type = LNAME;
-        if(s->type == LNAME ||
-           s->type == LVAR ||
-           s->type == LLAB) {
-            yylval.sym = s;
-            return s->type;
-        }
-        yylval.lval = s->value;
-        return s->type;
-
-    tnum:
-        cp = symb;
-        if(c != '0')
-            goto dc;
-        *cp++ = c;
-        c = GETC();
-        c1 = 3;
-        if(c == 'x' || c == 'X') {
-            c1 = 4;
-            c = GETC();
-        } else
-        if(c < '0' || c > '7')
-            goto dc;
-        yylval.lval = 0;
-        for(;;) {
-            if(c >= '0' && c <= '9') {
-                if(c > '7' && c1 == 3)
-                    break;
-                yylval.lval <<= c1;
-                yylval.lval += c - '0';
-                c = GETC();
-                continue;
-            }
-            if(c1 == 3)
-                break;
-            if(c >= 'A' && c <= 'F')
-                c += 'a' - 'A';
-            if(c >= 'a' && c <= 'f') {
-                yylval.lval <<= c1;
-                yylval.lval += c - 'a' + 10;
-                c = GETC();
-                continue;
-            }
-            break;
-        }
-        goto ncu;
-
-    dc:
-        for(;;) {
-            if(!isdigit(c))
-                break;
-            *cp++ = c;
-            c = GETC();
-        }
-        if(c == '.')
-            goto casedot;
-        if(c == 'e' || c == 'E')
-            goto casee;
-        *cp = 0;
-        if(sizeof(yylval.lval) == sizeof(vlong))
-            yylval.lval = strtoll(symb, nil, 10);
-        else
-            yylval.lval = strtol(symb, nil, 10);
-
-    ncu:
-        while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
-            c = GETC();
-        peekc = c;
-        return LCONST;
-
-    casedot:
-        for(;;) {
-            *cp++ = c;
-            c = GETC();
-            if(!isdigit(c))
-                break;
-        }
-        if(c == 'e' || c == 'E')
-            goto casee;
-        goto caseout;
-
-    casee:
-        *cp++ = 'e';
-        c = GETC();
-        if(c == '+' || c == '-') {
-            *cp++ = c;
-            c = GETC();
-        }
-        while(isdigit(c)) {
-            *cp++ = c;
-            c = GETC();
-        }
-
-    caseout:
-        *cp = 0;
-        peekc = c;
-        if(FPCHIP) {
-            yylval.dval = atof(symb);
-            return LFCONST;
-        }
-        yyerror("assembler cannot interpret fp constants");
-        yylval.lval = 1L;
-        return LCONST;
-
-    case '"':
-        memcpy(yylval.sval, nullgen.sval, sizeof(yylval.sval));
-        cp = yylval.sval;
-        c1 = 0;
-        for(;;) {
-            c = escchar('"');
-            if(c == EOF)
-                break;
-            if(c1 < sizeof(yylval.sval))
-                *cp++ = c;
-            c1++;
-        }
-        if(c1 > sizeof(yylval.sval))
-            yyerror("string constant too long");
-        return LSCONST;
-
-    case '\'':
-        c = escchar('\'');
-        if(c == EOF)
-            c = '\'';
-        if(escchar('\'') != EOF)
-            yyerror("missing '");
-        yylval.lval = c;
-        return LCONST;
-
-    case '/':
-        c1 = GETC();
-        if(c1 == '/') {
-            for(;;) {
-                c = GETC();
-                if(c == '\n')
-                    goto l1;
-                if(c == EOF) {
-                    yyerror("eof in comment");
-                    errorexit();
-                }
-            }
-        }
-        if(c1 == '*') {
-            for(;;) {
-                c = GETC();
-                while(c == '*') {
-                    c = GETC();
-                    if(c == '/')
-                        goto l0;
-                }
-                if(c == EOF) {
-                    yyerror("eof in comment");
-                    errorexit();
-                }
-                if(c == '\n')
-                    lineno++;
-            }
-        }
-        break;
-
-    default:
-        return c;
-    }
-    peekc = c1;
-    return c;
-}
-@
-%$
-
-
 
 \section{Newline}
 
-<<[[yylex()]] switch c cases(x86)>>=
+<<[[yylex()]] switch c cases>>=
 case '\n':
     lineno++;
     return ';';
@@ -2230,7 +1621,7 @@ case '\n':
 
 \section{Comments}
 
-<<[[yylex()]] switch c cases(x86)>>=
+<<[[yylex()]] switch c cases>>=
 case '/':
     c1 = GETC();
     if(c1 == '/') {
@@ -2267,13 +1658,13 @@ case '/':
 
 \section{Keywords and identifiers}
 
-<<[[yylex()]] locals(x86)>>=
+<<[[yylex()]] locals>>=
 char *cp;
 Sym *s;
 @
 
 
-<<[[yylex()]] switch c cases(x86)>>=
+<<[[yylex()]] switch c cases>>=
 case '_':
 case '@':
 // case 'a'..'z' 'A'..'Z':
@@ -2292,7 +1683,7 @@ aloop:
     *cp = '\0';
     s = lookup();
 
-    <<[[yylex()]] if macro symbol(x86)>>
+    <<[[yylex()]] if macro symbol>>
 
     if(s->type == 0)
         s->type = LNAME;
@@ -2309,7 +1700,7 @@ aloop:
 
 \section{Numbers}
 
-<<[[yylex()]] switch c cases(x86)>>=
+<<[[yylex()]] switch c cases>>=
 // case '0'..'9'
 tnum:
     cp = symb;
@@ -2412,7 +1803,7 @@ caseout:
 
 \subsection{Floats}
 
-<<[[yylex()]] switch c cases(x86)>>=
+<<[[yylex()]] switch c cases>>=
 case '.':
     c = GETC();
     if(isalpha(c)) {
@@ -2432,7 +1823,7 @@ case '.':
 
 \section{Characters}
 
-<<[[yylex()]] switch c cases(x86)>>=
+<<[[yylex()]] switch c cases>>=
 case '\'':
     c = escchar('\'');
     if(c == EOF)
@@ -2497,7 +1888,7 @@ loop:
 
 \section{Strings}
 
-<<[[yylex()]] switch c cases(x86)>>=
+<<[[yylex()]] switch c cases>>=
 case '"':
     memcpy(yylval.sval, nullgen.sval, sizeof(yylval.sval));
     cp = yylval.sval;
@@ -2679,7 +2070,7 @@ struct
 };
 @
 
-<<[[yylex()]] switch c cases(x86)>>=
+<<[[yylex()]] switch c cases>>=
 case '#':
     domacro();
     goto l0;
@@ -2738,12 +2129,12 @@ macend(void)
 
 \subsection{Include path}
 
-<<[[main()]] locals(x86)>>=
+<<[[main()]] locals>>=
 char *p;
 @
 
 % -I
-<<[[main()]] command line processing(x86)>>=
+<<[[main()]] command line processing>>=
 case 'I':
     p = ARGF();
     setinclude(p);
@@ -2966,7 +2357,7 @@ pushio(void)
 
 \subsection{[[-D]]}
 
-<<[[main()]] command line processing(x86)>>=
+<<[[main()]] command line processing>>=
 case 'D':
     p = ARGF();
     if(p)
@@ -2983,7 +2374,7 @@ char*	Dlist[30];
 int	nDlist;
 @
 
-<<[[assemble()]] init Dlist after pinit(x86)>>=
+<<[[assemble()]] init Dlist after pinit>>=
 for(i=0; i<nDlist; i++)
         dodefine(Dlist[i]);
 @
@@ -3240,7 +2631,7 @@ getsymdots(int *dots)
 
 \subsection{Macro Expansion}
 
-<<[[yylex()]] if macro symbol(x86)>>=
+<<[[yylex()]] if macro symbol>>=
 if(s->macro) {
     newio();
     cp = ionext->b;
@@ -5157,11 +4548,12 @@ char	symidx;
 
 \section{[[outcode()]]}
 
+
 % TODO LP split and transform while into if, easier flow
-// a = opcode
-<<function outcode(x86)>>=
+% a = opcode
+<<function outcode(arm)>>=
 void
-outcode(int a, Gen2 *g2)
+outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
 {
     // symbol from, index in h[]
     int sf;
@@ -5171,12 +4563,17 @@ outcode(int a, Gen2 *g2)
     int t;
     Sym *s;
 
+    /* hack to make B.NE etc. work: turn it into the corresponding conditional*/
+    if(a == AB){
+        a = bcode[scond&0xf];
+        scond = (scond & ~0xf) | Always;
+    }
+
     if(pass == 1)
         goto out;
-
 jackpot:
     sf = 0;
-    s = g2->from.sym;
+    s = g1->sym;
 
     while(s != S) {
         sf = s->symidx;
@@ -5184,13 +4581,11 @@ jackpot:
         if(sf < 0 || sf >= NSYM)
             sf = 0;
 
-        t = g2->from.type;
-        if(t == D_ADDR)
-            t = g2->from.index;
+        t = g1->name;
 
         if(h[sf].type == t)
-            if(h[sf].sym == s)
-                break;
+         if(h[sf].sym == s)
+            break;
 
         zname(s->name, t, symcounter);
         s->symidx = symcounter;
@@ -5204,7 +4599,7 @@ jackpot:
     }
 
     st = 0;
-    s = g2->to.sym;
+    s = g2->sym;
 
     while(s != S) {
         st = s->symidx;
@@ -5212,13 +4607,11 @@ jackpot:
         if(st < 0 || st >= NSYM)
             st = 0;
 
-        t = g2->to.type;
-        if(t == D_ADDR)
-            t = g2->to.index;
+        t = g2->name;
 
         if(h[st].type == t)
-            if(h[st].sym == s)
-                break;
+          if(h[st].sym == s)
+            break;
 
         zname(s->name, t, symcounter);
         s->symidx = symcounter;
@@ -5233,15 +4626,15 @@ jackpot:
             goto jackpot;
         break;
     }
-
     Bputc(&obuf, a);
-    Bputc(&obuf, a>>8);
+    Bputc(&obuf, scond);
+    Bputc(&obuf, reg);
     Bputc(&obuf, lineno);
     Bputc(&obuf, lineno>>8);
     Bputc(&obuf, lineno>>16);
     Bputc(&obuf, lineno>>24);
-    zaddr(&g2->from, sf);
-    zaddr(&g2->to, st);
+    zaddr(g1, sf);
+    zaddr(g2, st);
 
 out:
     if(a != AGLOBL && a != ADATA)
@@ -5271,186 +4664,10 @@ static int bcode[] =
 };
 @
 
-<<function outcode(arm)>>=
-void
-outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
-{
-    int sf, st, t;
-    Sym *s;
-
-    /* hack to make B.NE etc. work: turn it into the corresponding conditional */
-    if(a == AB){
-        a = bcode[scond&0xf];
-        scond = (scond & ~0xf) | Always;
-    }
-
-    if(pass == 1)
-        goto out;
-jackpot:
-    sf = 0;
-    s = g1->sym;
-    while(s != S) {
-        sf = s->symidx;
-        if(sf < 0 || sf >= NSYM)
-            sf = 0;
-        t = g1->name;
-        if(h[sf].type == t)
-        if(h[sf].sym == s)
-            break;
-        zname(s->name, t, symcounter);
-        s->symidx = symcounter;
-        h[symcounter].sym = s;
-        h[symcounter].type = t;
-        sf = symcounter;
-        symcounter++;
-        if(symcounter >= NSYM)
-            symcounter = 1;
-        break;
-    }
-    st = 0;
-    s = g2->sym;
-    while(s != S) {
-        st = s->symidx;
-        if(st < 0 || st >= NSYM)
-            st = 0;
-        t = g2->name;
-        if(h[st].type == t)
-        if(h[st].sym == s)
-            break;
-        zname(s->name, t, symcounter);
-        s->symidx = symcounter;
-        h[symcounter].sym = s;
-        h[symcounter].type = t;
-        st = symcounter;
-        symcounter++;
-        if(symcounter >= NSYM)
-            symcounter = 1;
-        if(st == sf)
-            goto jackpot;
-        break;
-    }
-    Bputc(&obuf, a);
-    Bputc(&obuf, scond);
-    Bputc(&obuf, reg);
-    Bputc(&obuf, lineno);
-    Bputc(&obuf, lineno>>8);
-    Bputc(&obuf, lineno>>16);
-    Bputc(&obuf, lineno>>24);
-    zaddr(g1, sf);
-    zaddr(g2, st);
-
-out:
-    if(a != AGLOBL && a != ADATA)
-        pc++;
-}
-@
 
 \section{[[zaddr()]]}
 
-% used also by 8c and 8l
-<<enum misc2(x86)>>=
-enum misc2 {
-    T_TYPE		= 1<<0,
-    T_INDEX		= 1<<1,
-    T_OFFSET	= 1<<2,
-    T_FCONST	= 1<<3,
-    T_SYM		= 1<<4,
-    T_SCONST	= 1<<5,
-    T_OFFSET2	= 1<<6,
-};
-@
-% >> >> >> >> >> >> >>
-%dead:    T_GOTYPE	= 1<<7,
-
-% s is index in h[] for symbol involved in the operand
-<<function zaddr(x86)>>=
-void
-zaddr(Gen *a, int s)
-{
-    // bitset<enum<misc2>>
-    int t;
-    long l;
-    int i;
-    char *n;
-    Ieee e;
-
-    t = 0;
-    if(a->index != D_NONE || a->scale != 0)
-        t |= T_INDEX;
-    if(a->offset != 0)
-        t |= T_OFFSET;
-    if(s != 0)
-        t |= T_SYM;
-
-    switch(a->type) {
-    case D_NONE:
-        break;
-    case D_FCONST:
-        t |= T_FCONST;
-        break;
-    case D_CONST2:
-        t |= T_OFFSET|T_OFFSET2;
-        break;
-    case D_SCONST:
-        t |= T_SCONST;
-        break;
-    default:
-        t |= T_TYPE;
-        break;
-    }
-
-    Bputc(&obuf, t);
-
-    if(t & T_INDEX) {	/* implies index, scale */
-        Bputc(&obuf, a->index);
-        Bputc(&obuf, a->scale);
-    }
-    if(t & T_OFFSET) {	/* implies offset */
-        l = a->offset;
-        Bputc(&obuf, l);
-        Bputc(&obuf, l>>8);
-        Bputc(&obuf, l>>16);
-        Bputc(&obuf, l>>24);
-    }
-    if(t & T_OFFSET2) {
-        l = a->offset2;
-        Bputc(&obuf, l);
-        Bputc(&obuf, l>>8);
-        Bputc(&obuf, l>>16);
-        Bputc(&obuf, l>>24);
-    }
-    if(t & T_SYM)		/* implies sym */
-        Bputc(&obuf, s);
-
-
-    if(t & T_FCONST) {
-        ieeedtod(&e, a->dval);
-        l = e.l;
-        Bputc(&obuf, l);
-        Bputc(&obuf, l>>8);
-        Bputc(&obuf, l>>16);
-        Bputc(&obuf, l>>24);
-        l = e.h;
-        Bputc(&obuf, l);
-        Bputc(&obuf, l>>8);
-        Bputc(&obuf, l>>16);
-        Bputc(&obuf, l>>24);
-        return;
-    }
-    if(t & T_SCONST) {
-        n = a->sval;
-        for(i=0; i<sizeof(nullgen.sval); i++) {
-            Bputc(&obuf, *n);
-            n++;
-        }
-        return;
-    }
-
-    if(t & T_TYPE)
-        Bputc(&obuf, a->type);
-}
-@
-
+% s is index in h[] for symbol involved in the operand?
 <<function zaddr(arm)>>=
 void
 zaddr(Gen *a, int s)
@@ -5516,24 +4733,6 @@ zaddr(Gen *a, int s)
 
 
 % for unresolved symbol names?
-<<function zname(x86)>>=
-void
-zname(char *n, int t, int s)
-{
-
-    Bputc(&obuf, ANAME);		/* as(2) */
-    Bputc(&obuf, ANAME>>8);
-    Bputc(&obuf, t);		/* type */
-    Bputc(&obuf, s);		/* sym */
-    while(*n) {
-        Bputc(&obuf, *n);
-        n++;
-    }
-    Bputc(&obuf, '\0');
-}
-@
-
-% for unresolved symbol names?
 <<function zname(arm)>>=
 void
 zname(char *n, int t, int s)
@@ -5558,74 +4757,6 @@ zname(char *n, int t, int s)
 
 % main() -> assemble() -> outhist() at begining of pass 2
 %out hist??
-<<function outhist(x86)>>=
-void
-outhist(void)
-{
-    Gen g;
-    Hist *h;
-    char *p, *q, *op, c;
-    int n;
-
-    g = nullgen;
-    c = pathchar();
-
-    for(h = hist; h != H; h = h->link) {
-        p = h->name;
-        op = nil;
-        // relative file?
-        if(p && p[0] != c && h->offset == 0 && pathname){
-            if(pathname[0] == c){
-                op = p;
-                p = pathname;
-            }
-        }
-        while(p) {
-            q = strchr(p, c);
-            if(q) {
-                n = q-p;
-                if(n == 0){
-                    n = 1;	/* leading "/" */
-                    *p = '/';	/* don't emit "\" on windows */
-                }
-                q++;
-            } else {
-                n = strlen(p);
-                q = nil;
-            }
-
-            if(n) {
-                Bputc(&obuf, ANAME);
-                Bputc(&obuf, ANAME>>8);
-                Bputc(&obuf, D_FILE);	/* type */
-                Bputc(&obuf, 1);	/* sym */
-                Bputc(&obuf, '<');
-                Bwrite(&obuf, p, n);
-                Bputc(&obuf, '\0');
-            }
-            p = q;
-            if(p == nil && op) {
-                p = op;
-                op = nil;
-            }
-        }
-
-        g.offset = h->offset;
-
-        Bputc(&obuf, AHISTORY);
-        Bputc(&obuf, AHISTORY>>8);
-
-        Bputc(&obuf, h->line);
-        Bputc(&obuf, h->line>>8);
-        Bputc(&obuf, h->line>>16);
-        Bputc(&obuf, h->line>>24);
-
-        zaddr(&nullgen, 0);
-        zaddr(&g, 0);
-    }
-}
-@
-
 
 <<function outhist(arm)>>=
 void
@@ -5741,9 +4872,6 @@ ieeedtod(Ieee *ieee, double native)
 }
 @
 
-<<constant FPCHIP(x86)>>=
-#define	FPCHIP		true
-@
 
 <<constant FPCHIP(arm)>>=
 #define	FPCHIP		true
@@ -5755,12 +4883,12 @@ ieeedtod(Ieee *ieee, double native)
 % why need that?
 
 
-<<[[main()]] locals(x86)>>=
+<<[[main()]] locals>>=
 int nout, nproc, status;
 int i, c;
 @
 
-<<[[main()]] multiple files handling(x86)>>=
+<<[[main()]] multiple files handling>>=
 if(argc > 1) {
     nproc = 1;
     if(p = getenv("NPROC"))
@@ -5822,11 +4950,11 @@ if(argc > 1) {
 bool	debug[256];
 @
 
-<<[[main()]] debug initialization(x86)>>=
+<<[[main()]] debug initialization>>=
 memset(debug, false, sizeof(debug));
 @
 
-<<[[main()]] command line processing(x86)>>=
+<<[[main()]] command line processing>>=
 default:
     c = ARGC();
     if(c >= 0 || c < sizeof(debug))

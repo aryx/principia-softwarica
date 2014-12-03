@@ -11,43 +11,46 @@ void	outhist(void);
 void
 main(int argc, char *argv[])
 {
-    /*s: [[main()]] locals(x86) */
+    /*s: [[main()]] locals */
     char *p;
-    /*x: [[main()]] locals(x86) */
+    /*x: [[main()]] locals */
     int nout, nproc, status;
     int i, c;
-    /*e: [[main()]] locals(x86) */
-    /*s: [[main()]] debug initialization(x86) */
+    /*e: [[main()]] locals */
+    /*s: [[main()]] debug initialization */
     memset(debug, false, sizeof(debug));
-    /*e: [[main()]] debug initialization(x86) */
+    /*e: [[main()]] debug initialization */
+
+    thechar = '8';
+    thestring = "386";
 
     cinit();
     outfile = nil;
     include[ninclude++] = ".";
 
     ARGBEGIN {
-    /*s: [[main()]] command line processing(x86) */
+    /*s: [[main()]] command line processing */
     case 'o':
         outfile = ARGF();
         break;
-    /*x: [[main()]] command line processing(x86) */
+    /*x: [[main()]] command line processing */
     case 'I':
         p = ARGF();
         setinclude(p);
         break;
-    /*x: [[main()]] command line processing(x86) */
+    /*x: [[main()]] command line processing */
     case 'D':
         p = ARGF();
         if(p)
             Dlist[nDlist++] = p;
         break;
-    /*x: [[main()]] command line processing(x86) */
+    /*x: [[main()]] command line processing */
     default:
         c = ARGC();
         if(c >= 0 || c < sizeof(debug))
             debug[c] = true;
         break;
-    /*e: [[main()]] command line processing(x86) */
+    /*e: [[main()]] command line processing */
     } ARGEND
 
     if(*argv == 0) {
@@ -55,7 +58,7 @@ main(int argc, char *argv[])
         errorexit();
     }
 
-    /*s: [[main()]] multiple files handling(x86) */
+    /*s: [[main()]] multiple files handling */
     if(argc > 1) {
         nproc = 1;
         if(p = getenv("NPROC"))
@@ -95,7 +98,7 @@ main(int argc, char *argv[])
             nout--;
         }
     }
-    /*e: [[main()]] multiple files handling(x86) */
+    /*e: [[main()]] multiple files handling */
 
     if(assemble(argv[0]))
         errorexit();
@@ -103,21 +106,21 @@ main(int argc, char *argv[])
 }
 /*e: function main (assemblers/8a/lex.c) */
 
-/*s: function assemble(x86) */
+/*s: function assemble */
 int
 assemble(char *file)
 {
-    /*s: [[assemble()]] locals(x86) */
+    /*s: [[assemble()]] locals */
     char *p;
     fdt of; // outfile
     int i;
-    /*x: [[assemble()]] locals(x86) */
+    /*x: [[assemble()]] locals */
     char ofile[100];
-    /*x: [[assemble()]] locals(x86) */
+    /*x: [[assemble()]] locals */
     char incfile[20];
-    /*e: [[assemble()]] locals(x86) */
+    /*e: [[assemble()]] locals */
 
-    /*s: [[assemble()]] set p to basename(file) and adjust include(x86) */
+    /*s: [[assemble()]] set p to basename(file) and adjust include */
     // p = basename(file)
     // include[0] = dirname(file); 
     strcpy(ofile, file);
@@ -127,10 +130,10 @@ assemble(char *file)
         *p++ = '\0';
     } else
         p = ofile;
-    /*e: [[assemble()]] set p to basename(file) and adjust include(x86) */
+    /*e: [[assemble()]] set p to basename(file) and adjust include */
 
     if(outfile == nil) {
-        /*s: [[assemble()]] set outfile to {basename(file)}.8(x86) */
+        /*s: [[assemble()]] set outfile to {basename(file)}.8 */
         // outfile =  p =~ s/.s/.8/;
         outfile = p;
         if(outfile){
@@ -144,10 +147,10 @@ assemble(char *file)
             p[2] = '\0';
         } else
             outfile = "/dev/null";
-        /*e: [[assemble()]] set outfile to {basename(file)}.8(x86) */
+        /*e: [[assemble()]] set outfile to {basename(file)}.8 */
     }
 
-    /*s: [[assemble()]] setinclude("/386/include") or INCLUDE */
+    /*s: [[assemble()]] setinclude("/<arch>/include") or INCLUDE */
     p = getenv("INCLUDE");
     if(p) {
         setinclude(p);
@@ -157,7 +160,7 @@ assemble(char *file)
             setinclude(strdup(incfile));
         }
     }
-    /*e: [[assemble()]] setinclude("/386/include") or INCLUDE */
+    /*e: [[assemble()]] setinclude("/<arch>/include") or INCLUDE */
 
     of = mycreat(outfile, 0664);
     if(of < 0) {
@@ -169,10 +172,10 @@ assemble(char *file)
     pass = 1;
 
     pinit(file);
-    /*s: [[assemble()]] init Dlist after pinit(x86) */
+    /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
-    /*e: [[assemble()]] init Dlist after pinit(x86) */
+    /*e: [[assemble()]] init Dlist after pinit */
     yyparse(); // calls outcode() but does nothing when pass == 1
 
     if(nerrors) {
@@ -184,16 +187,16 @@ assemble(char *file)
     outhist(); // header
 
     pinit(file);
-    /*s: [[assemble()]] init Dlist after pinit(x86) */
+    /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
-    /*e: [[assemble()]] init Dlist after pinit(x86) */
+    /*e: [[assemble()]] init Dlist after pinit */
     yyparse(); // calls outcode() that now does things
 
     cclean();
     return nerrors;
 }
-/*e: function assemble(x86) */
+/*e: function assemble */
 
 /*s: struct Itab(x86) */
 struct Itab
@@ -1036,17 +1039,17 @@ outhist(void)
 
 // used to be in ../cc/lexbody and factorized between assemblers by
 // using #include, but ugly, so I copy pasted the function for now
-/*s: function yylex(x86) */
+/*s: function yylex */
 long
 yylex(void)
 {
     int c;
-    /*s: [[yylex()]] locals(x86) */
+    /*s: [[yylex()]] locals */
     int c1;
-    /*x: [[yylex()]] locals(x86) */
+    /*x: [[yylex()]] locals */
     char *cp;
     Sym *s;
-    /*e: [[yylex()]] locals(x86) */
+    /*e: [[yylex()]] locals */
 
     c = peekc;
     if(c != IGN) {
@@ -1076,11 +1079,11 @@ l1:
         goto tnum;
 
     switch(c) {
-    /*s: [[yylex()]] switch c cases(x86) */
+    /*s: [[yylex()]] switch c cases */
     case '\n':
         lineno++;
         return ';';
-    /*x: [[yylex()]] switch c cases(x86) */
+    /*x: [[yylex()]] switch c cases */
     case '/':
         c1 = GETC();
         if(c1 == '/') {
@@ -1111,7 +1114,7 @@ l1:
             }
         }
         break;
-    /*x: [[yylex()]] switch c cases(x86) */
+    /*x: [[yylex()]] switch c cases */
     case '_':
     case '@':
     // case 'a'..'z' 'A'..'Z':
@@ -1130,7 +1133,7 @@ l1:
         *cp = '\0';
         s = lookup();
 
-        /*s: [[yylex()]] if macro symbol(x86) */
+        /*s: [[yylex()]] if macro symbol */
         if(s->macro) {
             newio();
             cp = ionext->b;
@@ -1149,7 +1152,7 @@ l1:
             }
             goto l0;
         }
-        /*e: [[yylex()]] if macro symbol(x86) */
+        /*e: [[yylex()]] if macro symbol */
 
         if(s->type == 0)
             s->type = LNAME;
@@ -1160,7 +1163,7 @@ l1:
             yylval.lval = s->value;
         }
         return s->type;
-    /*x: [[yylex()]] switch c cases(x86) */
+    /*x: [[yylex()]] switch c cases */
     // case '0'..'9'
     tnum:
         cp = symb;
@@ -1256,7 +1259,7 @@ l1:
         yyerror("assembler cannot interpret fp constants");
         yylval.lval = 1L;
         return LCONST;
-    /*x: [[yylex()]] switch c cases(x86) */
+    /*x: [[yylex()]] switch c cases */
     case '.':
         c = GETC();
         if(isalpha(c)) {
@@ -1271,7 +1274,7 @@ l1:
         }
         peekc = c;
         return '.';
-    /*x: [[yylex()]] switch c cases(x86) */
+    /*x: [[yylex()]] switch c cases */
     case '\'':
         c = escchar('\'');
         if(c == EOF)
@@ -1280,7 +1283,7 @@ l1:
             yyerror("missing '");
         yylval.lval = c;
         return LCONST;
-    /*x: [[yylex()]] switch c cases(x86) */
+    /*x: [[yylex()]] switch c cases */
     case '"':
         memcpy(yylval.sval, nullgen.sval, sizeof(yylval.sval));
         cp = yylval.sval;
@@ -1296,18 +1299,18 @@ l1:
         if(c1 > sizeof(yylval.sval))
             yyerror("string constant too long");
         return LSCONST;
-    /*x: [[yylex()]] switch c cases(x86) */
+    /*x: [[yylex()]] switch c cases */
     case '#':
         domacro();
         goto l0;
-    /*e: [[yylex()]] switch c cases(x86) */
+    /*e: [[yylex()]] switch c cases */
     default:
         return c;
     }
     peekc = c1;
     return c;
 }
-/*e: function yylex(x86) */
+/*e: function yylex */
 
 // #include "../cc/macbody"
 /*e: assemblers/8a/lex.c */

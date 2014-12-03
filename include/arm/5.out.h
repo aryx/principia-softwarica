@@ -216,28 +216,36 @@ enum opcode
 /*s: enum dxxx(arm) */
 enum dxxx {
     D_GOK,
+
     D_NONE,
+    // for B, BL?
     D_BRANCH,
     D_OREG,
-    D_EXTERN,
-    D_STATIC,
-    D_AUTO,
-    D_PARAM,
+
+    // For ADATA?
+    D_EXTERN, // data/bss values (from SB)
+    D_STATIC, // data static variables (from SB)
+    D_AUTO, // stack values (from SP)
+    D_PARAM, // parameter (from FP)
+
     D_CONST,
     D_FCONST,
     D_SCONST,
+
     D_PSR,
     D_XXX,
     D_REG,
     D_FREG,
     D_XXX2,
     D_XXX3,
+
     D_FILE,
     D_OCONST,
-    D_FILE1,
+    D_FILE1, // used by linker only?
     D_SHIFT,
     D_FPCR,
     D_REGREG,
+
     D_ADDR,
 };
 /*e: enum dxxx(arm) */

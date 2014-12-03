@@ -919,7 +919,7 @@ void	outhist(void);
 
 <<function main(arm)>>
 
-<<function assemble(arm)>>
+<<function assemble>>
 
 <<struct Itab(arm)>>
 
@@ -947,7 +947,7 @@ void	outhist(void);
 
 // used to be in ../cc/lexbody and factorized between assemblers by
 // using #include, but ugly, so I copy pasted the function for now
-<<function yylex(arm)>>
+<<function yylex>>
 
 // #include "../cc/macbody"
 @
@@ -959,8 +959,8 @@ void	outhist(void);
 
 % see my assembler in ml I wrote a long time ago! in xix-assembler/?
 
-% the many different addressing modes. 
-%Actually I think 8a allows
+% x86 has many many different addressing modes. 
+% Actually I think 8a allows even
 % more than what is allowed (optab handles the ugly restrictions
 % of Intel?)
 
@@ -1424,7 +1424,6 @@ enum opcode_kind
     ALAST
 };
 @
-
 % this is more than 256 (454), so when need to marshall the opcode
 % we need 2 bytes, hence code like this in outcode():
 %    Bputc(&obuf, a);
@@ -1432,6 +1431,129 @@ enum opcode_kind
 
 
 
+% for 8c! conventions! (not used at all by 8a, but in 8.out.h for other tools)
+<<enum misc3(x86)>>=
+enum misc3 {
+    REGARG		= -1,
+    REGRET		= D_AX,
+    FREGRET		= D_F0,
+    REGSP		= D_SP,
+    REGTMP		= D_DI,
+};
+@
+
+%\section{[[Register]]}
+
+% ADT would be far better than this enum and separate Sym.
+% less: rename operand_part1, to show that need another part
+% to be a complete operand (which is Gen =~ Adr)
+<<enum reg(x86)>>=
+enum operand_kind
+{
+<<[[operand_kind]] register cases(x86)>>
+    D_NONE		= 59,
+<<[[operand_kind]] non register cases(x86)>>
+};
+@
+
+%less: could have start at 1 here so could have D_NONE = 0
+<<[[operand_kind]] register cases(x86)>>=
+    D_AL		= 0,
+    D_CL,
+    D_DL,
+    D_BL,
+
+    D_AH		= 4,
+    D_CH,
+    D_DH,
+    D_BH,
+
+    D_AX		= 8,
+    D_CX,
+    D_DX,
+    D_BX,
+    D_SP,
+    D_BP,
+    D_SI,
+    D_DI,
+
+    D_F0		= 16,
+    D_F7		= D_F0 + 7,
+
+    D_CS		= 24,
+    D_SS,
+    D_DS,
+    D_ES,
+    D_FS,
+    D_GS,
+
+    D_GDTR,		/* global descriptor table register */
+    D_IDTR,		/* interrupt descriptor table register */
+    D_LDTR,		/* local descriptor table register */
+    D_MSW,		/* machine status word */
+    D_TASK,		/* task register */
+
+    D_CR		= 35, // D_CR0 .. D_CR7
+    D_DR		= 43, // D_DR0 .. D_DR7
+    D_TR		= 51, // D_TR0 .. D_TR7
+@
+
+
+% how get the remaining info? e.g. for D_BRANCH to get the symbol or int 
+% you'll have too look in Gen.value
+<<[[operand_kind]] non register cases(x86)>>=
+    // for ACALL, AJMP (from PC)
+    D_BRANCH	= 60, 
+
+    // For ADATA
+    D_EXTERN	= 61, // data/bss values (from SB)
+    D_STATIC	= 62, // data static variables (from SB)
+    D_AUTO	= 63, // stack values (from SP)
+    D_PARAM	= 64, // parameter (from FP)
+
+    D_CONST	= 65,
+    D_FCONST	= 66,
+    D_SCONST	= 67,
+
+    D_ADDR	= 68,
+@
+
+% ???
+<<[[operand_kind]] non register cases(x86)>>=
+    D_FILE,
+    D_FILE1, // used by linker only
+
+    D_INDIR,	/* additive */
+
+    D_CONST2 = D_INDIR+D_INDIR,
+
+    D_SIZE,	/* 8l internal */
+@
+
+%INDIR? faux ami avec previous D_FILE ... it's not about a directory 
+% it's INDIRECT, (AX) => =~ *AX, = deref
+%  D_INDIR + D_AX (D_INDIR only with register cases, hence safe D_CONST2)
+%  ugly ... we really need ADT and simple recursive types ...
+% see Dconv in Compiler.nw, seems only for D_INDIR of register
+
+
+<<constant NSNAME(x86)>>=
+#define	NSNAME	8
+@
+
+% LTYPE0 etc are defined in a.y, tokens with value 
+% instruction table conversion, string -> token
+<<struct Itab(x86)>>=
+struct Itab
+{
+    char	*name;
+
+    //enum<token_kind>
+    ushort	type;
+    //enum<opcode_kind> | enum<operand_kind>
+    ushort	value;
+};
+@
 
 <<global itab(x86)>>=
 struct Itab itab[] =
@@ -1922,6 +2044,435 @@ struct Itab itab[] =
 @
 
 
+
+% =~ Adr of Linker
+% rename operand?
+<<struct Gen(x86)>>=
+struct	Gen
+{
+    // enum<operand_kind>
+    short	type;
+
+    long	offset; // generic value
+    double	dval;
+    char	sval[8];
+
+    //enum<operand_kind(register-only|D_NONE)>
+    short	index;
+
+    short	scale;
+
+    //??
+    Sym*	sym;
+
+    long	offset2;
+};
+@
+
+
+<<function checkscale(x86)>>=
+void
+checkscale(int scale)
+{
+
+    switch(scale) {
+    case 1:
+    case 2:
+    case 4:
+    case 8:
+        return;
+    }
+    yyerror("scale must be 1248: %d", scale);
+}
+@
+
+% usually MOVW AX, BX, 'from' AX, 'to' BX
+% =~ Prog of Linker (but without opcode)
+% rename operands?
+<<struct Gen2(x86)>>=
+struct	Gen2
+{
+    Gen	from;
+    Gen	to;
+};
+@
+
+% actually later do outcode(int a, Gen2 *x)
+% where both arguments are really like a Prog of Linker
+
+
+<<function main (assemblers/8a/lex.c)>>=
+void
+main(int argc, char *argv[])
+{
+    <<[[main()]] locals>>
+    <<[[main()]] debug initialization>>
+
+    thechar = '8';
+    thestring = "386";
+
+    cinit();
+    outfile = nil;
+    include[ninclude++] = ".";
+
+    ARGBEGIN {
+    <<[[main()]] command line processing>>
+    } ARGEND
+
+    if(*argv == 0) {
+        print("usage: %ca [-options] file.s\n", thechar);
+        errorexit();
+    }
+
+    <<[[main()]] multiple files handling>>
+
+    if(assemble(argv[0]))
+        errorexit();
+    exits(0);
+}
+@
+
+
+% could split, nullgen init, hash init (via lookup), pathname init
+<<function cinit(x86)>>=
+void
+cinit(void)
+{
+    Sym *s;
+    int i;
+
+    nullgen.sym = S;
+    nullgen.offset = 0;
+    if(FPCHIP)
+        nullgen.dval = 0;
+    for(i=0; i<sizeof(nullgen.sval); i++)
+        nullgen.sval[i] = '\0';
+    nullgen.type = D_NONE;
+    nullgen.index = D_NONE;
+    nullgen.scale = 0;
+
+    for(i=0; i<NHASH; i++)
+        hash[i] = S;
+    for(i=0; itab[i].name; i++) {
+        s = slookup(itab[i].name);
+        if(s->type != LNAME)
+            yyerror("double initialization %s", itab[i].name);
+        s->type = itab[i].type;
+        s->value = itab[i].value;
+    }
+
+    pathname = allocn(pathname, 0, 100);
+    if(getwd(pathname, 99) == nil) {
+        pathname = allocn(pathname, 100, 900);
+        if(getwd(pathname, 999) == nil)
+            strcpy(pathname, "/???");
+    }
+}
+@
+
+
+<<function cclean(x86)>>=
+void
+cclean(void)
+{
+    Gen2 g2 = (Gen2) { nullgen, nullgen };
+
+    outcode(AEND, &g2);
+    Bflush(&obuf);
+}
+@
+
+
+% TODO LP split and transform while into if, easier flow
+%// a = opcode
+<<function outcode(x86)>>=
+void
+outcode(int a, Gen2 *g2)
+{
+    // symbol from, index in h[]
+    int sf;
+    // symbol to, index in h[]
+    int st;
+    // enum<operand_kind>
+    int t;
+    Sym *s;
+
+    if(pass == 1)
+        goto out;
+
+jackpot:
+    sf = 0;
+    s = g2->from.sym;
+
+    while(s != S) {
+        sf = s->symidx;
+
+        if(sf < 0 || sf >= NSYM)
+            sf = 0;
+
+        t = g2->from.type;
+        if(t == D_ADDR)
+            t = g2->from.index;
+
+        if(h[sf].type == t)
+            if(h[sf].sym == s)
+                break;
+
+        zname(s->name, t, symcounter);
+        s->symidx = symcounter;
+        h[symcounter].sym = s;
+        h[symcounter].type = t;
+        sf = symcounter;
+        symcounter++;
+        if(symcounter >= NSYM)
+            symcounter = 1;
+        break;
+    }
+
+    st = 0;
+    s = g2->to.sym;
+
+    while(s != S) {
+        st = s->symidx;
+
+        if(st < 0 || st >= NSYM)
+            st = 0;
+
+        t = g2->to.type;
+        if(t == D_ADDR)
+            t = g2->to.index;
+
+        if(h[st].type == t)
+            if(h[st].sym == s)
+                break;
+
+        zname(s->name, t, symcounter);
+        s->symidx = symcounter;
+        h[symcounter].sym = s;
+        h[symcounter].type = t;
+        st = symcounter;
+        symcounter++;
+        if(symcounter >= NSYM)
+            symcounter = 1;
+
+        if(st == sf)
+            goto jackpot;
+        break;
+    }
+
+    Bputc(&obuf, a);
+    Bputc(&obuf, a>>8);
+    Bputc(&obuf, lineno);
+    Bputc(&obuf, lineno>>8);
+    Bputc(&obuf, lineno>>16);
+    Bputc(&obuf, lineno>>24);
+    zaddr(&g2->from, sf);
+    zaddr(&g2->to, st);
+
+out:
+    if(a != AGLOBL && a != ADATA)
+        pc++;
+}
+@
+% quite similar to arm
+
+
+% used also by 8c and 8l
+<<enum misc2(x86)>>=
+enum misc2 {
+    T_TYPE		= 1<<0,
+    T_INDEX		= 1<<1,
+    T_OFFSET	= 1<<2,
+    T_FCONST	= 1<<3,
+    T_SYM		= 1<<4,
+    T_SCONST	= 1<<5,
+    T_OFFSET2	= 1<<6,
+};
+@
+% >> >> >> >> >> >> >>
+%dead:    T_GOTYPE	= 1<<7,
+
+% s is index in h[] for symbol involved in the operand
+<<function zaddr(x86)>>=
+void
+zaddr(Gen *a, int s)
+{
+    // bitset<enum<misc2>>
+    int t;
+    long l;
+    int i;
+    char *n;
+    Ieee e;
+
+    t = 0;
+    if(a->index != D_NONE || a->scale != 0)
+        t |= T_INDEX;
+    if(a->offset != 0)
+        t |= T_OFFSET;
+    if(s != 0)
+        t |= T_SYM;
+
+    switch(a->type) {
+    case D_NONE:
+        break;
+    case D_FCONST:
+        t |= T_FCONST;
+        break;
+    case D_CONST2:
+        t |= T_OFFSET|T_OFFSET2;
+        break;
+    case D_SCONST:
+        t |= T_SCONST;
+        break;
+    default:
+        t |= T_TYPE;
+        break;
+    }
+
+    Bputc(&obuf, t);
+
+    if(t & T_INDEX) {	/* implies index, scale */
+        Bputc(&obuf, a->index);
+        Bputc(&obuf, a->scale);
+    }
+    if(t & T_OFFSET) {	/* implies offset */
+        l = a->offset;
+        Bputc(&obuf, l);
+        Bputc(&obuf, l>>8);
+        Bputc(&obuf, l>>16);
+        Bputc(&obuf, l>>24);
+    }
+    if(t & T_OFFSET2) {
+        l = a->offset2;
+        Bputc(&obuf, l);
+        Bputc(&obuf, l>>8);
+        Bputc(&obuf, l>>16);
+        Bputc(&obuf, l>>24);
+    }
+    if(t & T_SYM)		/* implies sym */
+        Bputc(&obuf, s);
+
+
+    if(t & T_FCONST) {
+        ieeedtod(&e, a->dval);
+        l = e.l;
+        Bputc(&obuf, l);
+        Bputc(&obuf, l>>8);
+        Bputc(&obuf, l>>16);
+        Bputc(&obuf, l>>24);
+        l = e.h;
+        Bputc(&obuf, l);
+        Bputc(&obuf, l>>8);
+        Bputc(&obuf, l>>16);
+        Bputc(&obuf, l>>24);
+        return;
+    }
+    if(t & T_SCONST) {
+        n = a->sval;
+        for(i=0; i<sizeof(nullgen.sval); i++) {
+            Bputc(&obuf, *n);
+            n++;
+        }
+        return;
+    }
+
+    if(t & T_TYPE)
+        Bputc(&obuf, a->type);
+}
+@
+
+
+% for unresolved symbol names?
+<<function zname(x86)>>=
+void
+zname(char *n, int t, int s)
+{
+
+    Bputc(&obuf, ANAME);		/* as(2) */
+    Bputc(&obuf, ANAME>>8);
+    Bputc(&obuf, t);		/* type */
+    Bputc(&obuf, s);		/* sym */
+    while(*n) {
+        Bputc(&obuf, *n);
+        n++;
+    }
+    Bputc(&obuf, '\0');
+}
+@
+
+
+<<function outhist(x86)>>=
+void
+outhist(void)
+{
+    Gen g;
+    Hist *h;
+    char *p, *q, *op, c;
+    int n;
+
+    g = nullgen;
+    c = pathchar();
+
+    for(h = hist; h != H; h = h->link) {
+        p = h->name;
+        op = nil;
+        // relative file?
+        if(p && p[0] != c && h->offset == 0 && pathname){
+            if(pathname[0] == c){
+                op = p;
+                p = pathname;
+            }
+        }
+        while(p) {
+            q = strchr(p, c);
+            if(q) {
+                n = q-p;
+                if(n == 0){
+                    n = 1;	/* leading "/" */
+                    *p = '/';	/* don't emit "\" on windows */
+                }
+                q++;
+            } else {
+                n = strlen(p);
+                q = nil;
+            }
+
+            if(n) {
+                Bputc(&obuf, ANAME);
+                Bputc(&obuf, ANAME>>8);
+                Bputc(&obuf, D_FILE);	/* type */
+                Bputc(&obuf, 1);	/* sym */
+                Bputc(&obuf, '<');
+                Bwrite(&obuf, p, n);
+                Bputc(&obuf, '\0');
+            }
+            p = q;
+            if(p == nil && op) {
+                p = op;
+                op = nil;
+            }
+        }
+
+        g.offset = h->offset;
+
+        Bputc(&obuf, AHISTORY);
+        Bputc(&obuf, AHISTORY>>8);
+
+        Bputc(&obuf, h->line);
+        Bputc(&obuf, h->line>>8);
+        Bputc(&obuf, h->line>>16);
+        Bputc(&obuf, h->line>>24);
+
+        zaddr(&nullgen, 0);
+        zaddr(&g, 0);
+    }
+}
+@
+
+<<constant FPCHIP(x86)>>=
+#define	FPCHIP		true
+@
+
 \section{[[include/386/]]}
 
 \subsection*{[[include/386/8.out.h]]}
@@ -2064,7 +2615,7 @@ void	outhist(void);
 
 <<function main (assemblers/8a/lex.c)>>
 
-<<function assemble(x86)>>
+<<function assemble>>
 
 <<struct Itab(x86)>>
 <<global itab(x86)>>
@@ -2091,7 +2642,7 @@ void	outhist(void);
 
 // used to be in ../cc/lexbody and factorized between assemblers by
 // using #include, but ugly, so I copy pasted the function for now
-<<function yylex(x86)>>
+<<function yylex>>
 
 // #include "../cc/macbody"
 @

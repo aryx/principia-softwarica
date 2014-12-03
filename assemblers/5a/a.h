@@ -23,11 +23,9 @@ struct	Gen
     double	dval;
     char	sval[8];
 
-    Sym*	sym;
-
-    short	reg;
-
-    short	name;
+    Sym*	sym; // ??
+    short	reg; // ??
+    short	name; // ??
 };
 /*e: struct Gen(arm) */
 
