@@ -2,21 +2,33 @@
 %{
 #include "a.h"
 %}
-%union
-{
- Sym    *sym;
+/*s: union token(arm) */
+%union {
+ //   enum<opcode> (for LTYPE/...) 
+ // | enum<register> (for LREG/...)
+ // | enum<cond>  (for LCOND) 
+ // ...
+ // | long (for LCONST)
  long   lval;
+
  double dval;
  char   sval[8];
+ Sym    *sym;
+
+ /*s: [[Token]] other fields(arm) */
  Gen    gen;
+ /*e: [[Token]] other fields(arm) */
 }
+/*e: union token(arm) */
+/*s: priority and associativity declarations */
 %left   '|'
 %left   '^'
 %left   '&'
 %left   '<' '>'
 %left   '+' '-'
 %left   '*' '/' '%'
-
+/*e: priority and associativity declarations */
+/*s: token declarations(arm) */
 %token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5
 %token  <lval>  LTYPE6 LTYPE7 LTYPE8 LTYPE9 LTYPEA
 %token  <lval>  LTYPEB LTYPEC LTYPED LTYPEE LTYPEF
@@ -35,39 +47,51 @@
 %token  <dval>  LFCONST
 %token  <sval>  LSCONST
 %token  <sym>   LNAME LLAB LVAR
-
+/*e: token declarations(arm) */
+/*s: type declarations(arm) */
 %type   <lval>  cond
-
+/*x: type declarations(arm) */
 %type   <gen> imsr
+/*x: type declarations(arm) */
 %type   <gen> reg imm shift
+/*x: type declarations(arm) */
+%type   <lval>  sreg spreg 
+/*x: type declarations(arm) */
 %type   <lval>  rcon
+/*x: type declarations(arm) */
+%type   <gen>   gen 
+/*x: type declarations(arm) */
 %type   <gen>   name 
 %type   <lval>  pointer
+/*x: type declarations(arm) */
 %type   <gen>   rel
 %type   <lval>  offset
-%type   <gen>   gen 
+/*x: type declarations(arm) */
 %type   <gen>   ximm
+/*x: type declarations(arm) */
 %type   <lval>  con expr 
-
-%type   <lval>  sreg spreg creg
+/*x: type declarations(arm) */
+%type <gen> freg fcon frcon
+/*x: type declarations(arm) */
+%type   <lval>  creg
 %type   <gen>   ireg nireg ioreg oreg
 %type   <gen>   regreg
 %type   <lval>  oexpr 
 %type   <lval>  reglist
-
-%type <gen> freg fcon frcon
-
+/*e: type declarations(arm) */
 %%
-
+/*s: grammar(arm) */
 prog:
   /* empty */
 | prog line
 
+/*s: line rule(arm) */
 line:
   inst ';'
+/*x: line rule(arm) */
 | ';'
 | error ';'
-
+/*x: line rule(arm) */
 | LNAME ':'
  {
   $1->type = LLAB;
@@ -81,7 +105,7 @@ line:
   $1->value = pc;
  }
   line
-
+/*x: line rule(arm) */
 | LNAME '=' expr ';'
  {
   $1->type = LVAR;
@@ -93,7 +117,8 @@ line:
    yyerror("redeclaration of %s", $1->name);
   $1->value = $3;
  }
-
+/*e: line rule(arm) */
+/*s: inst rule(arm) */
 inst:
 /*
  * ADD
@@ -155,8 +180,8 @@ inst:
  * SWAP
  */
 | LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg comma { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond comma ireg ',' reg { outcode($1, $2, &$4, $6.reg, &$6); }
+| LTYPE9 cond reg ',' ireg comma   { outcode($1, $2, &$5, $3.reg, &$3); }
+| LTYPE9 cond comma ireg ',' reg   { outcode($1, $2, &$4, $6.reg, &$6); }
 /*
  * RET
  */
@@ -224,35 +249,19 @@ inst:
  * END
  */
 | LTYPEE comma { outcode($1, Always, &nullgen, NREG, &nullgen); }
-
-
-
+/*e: inst rule(arm) */
+/*s: cond rule(arm) */
 cond:
  /* empty */ { $$ = Always; }
 | cond LCOND { $$ = ($1 & ~C_SCOND) | $2; }
 | cond LS    { $$ = $1 | $2; }
-
-
-
+/*e: cond rule(arm) */
+/*s: operand rules(arm) */
 imsr:
   reg
 | imm
 | shift
-
-
-
-reg:
- spreg
- {
-  $$ = nullgen;
-  $$.type = D_REG;
-  $$.reg = $1;
- }
-
-spreg:
-  sreg
-| LSP { $$ = REGSP; }
-
+/*x: operand rules(arm) */
 sreg:
   LREG
 | LR '(' expr ')'
@@ -262,17 +271,26 @@ sreg:
   $$ = $3;
  }
 | LPC { $$ = REGPC; }
-
-
-
+/*x: operand rules(arm) */
+spreg:
+  sreg
+| LSP { $$ = REGSP; }
+/*x: operand rules(arm) */
+reg:
+ spreg
+ {
+  $$ = nullgen;
+  $$.type = D_REG;
+  $$.reg = $1;
+ }
+/*x: operand rules(arm) */
 imm: '$' con
  {
   $$ = nullgen;
   $$.type = D_CONST;
   $$.offset = $2;
  }
-
-
+/*x: operand rules(arm) */
 shift:
  spreg '<' '<' rcon
  {
@@ -298,31 +316,40 @@ shift:
   $$.type = D_SHIFT;
   $$.offset = $1 | $4 | (3 << 5);
  }
+/*x: operand rules(arm) */
+gen:
+  reg
+| ximm
+| shift
 
-rcon:
-  spreg
+| shift '(' spreg ')'
  {
-  if($$ < 0 || $$ >= 16)
-      print("register value out of range\n");
-  $$ = (($1&15) << 8) | (1 << 4);
+  $$ = $1;
+  $$.reg = $3;
  }
+
+| LPSR
+ {
+  $$ = nullgen;
+  $$.type = D_PSR;
+  $$.reg = $1;
+ }
+| LFCR
+ {
+  $$ = nullgen;
+  $$.type = D_FPCR;
+  $$.reg = $1;
+ }
+
 | con
  {
-  if($$ < 0 || $$ >= 32)
-      print("shift value out of range\n");
-  $$ = ($1&31) << 7;
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.offset = $1;
  }
-
-
-
-
-
-
-
-
-
-
-
+| oreg
+| freg
+/*x: operand rules(arm) */
 name:
  con '(' pointer ')'
  {
@@ -348,14 +375,7 @@ name:
   $$.sym = $1;
   $$.offset = $4;
  }
-
-pointer:
-  LSB
-| LSP
-| LFP
-
-
-
+/*x: operand rules(arm) */
 rel:
   con '(' LPC ')'
  {
@@ -379,48 +399,7 @@ rel:
   $$.sym = $1;
   $$.offset = $2;
  }
-
-
-offset:
- /* empty */ { $$ = 0; }
-| '+' con    { $$ = $2; }
-| '-' con    { $$ = -$2; }
-
-
-
-gen:
-  reg
-| ximm
-| shift
-| shift '(' spreg ')'
- {
-  $$ = $1;
-  $$.reg = $3;
- }
-
-| LPSR
- {
-  $$ = nullgen;
-  $$.type = D_PSR;
-  $$.reg = $1;
- }
-| LFCR
- {
-  $$ = nullgen;
-  $$.type = D_FPCR;
-  $$.reg = $1;
- }
-| con
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.offset = $1;
- }
-| oreg
-| freg
-
-
-
+/*x: operand rules(arm) */
 ximm:
   '$' con
  {
@@ -446,11 +425,7 @@ ximm:
   $$.type = D_OCONST;
  }
 | fcon
-
-
-
-
-
+/*x: operand rules(arm) */
 /* for MULL */
 regreg:
  '(' spreg ',' spreg ')'
@@ -460,17 +435,33 @@ regreg:
   $$.reg = $2;
   $$.offset = $4;
  }
-
-
-
-
-
-
-
-
-
-
-
+/*e: operand rules(arm) */
+/*s: helper rules(arm) */
+rcon:
+  spreg
+ {
+  if($$ < 0 || $$ >= 16)
+      print("register value out of range\n");
+  $$ = (($1&15) << 8) | (1 << 4);
+ }
+| con
+ {
+  if($$ < 0 || $$ >= 32)
+      print("shift value out of range\n");
+  $$ = ($1&31) << 7;
+ }
+/*x: helper rules(arm) */
+pointer:
+  LSB
+| LSP
+| LFP
+/*x: helper rules(arm) */
+offset:
+ /* empty */ { $$ = 0; }
+| '+' con    { $$ = $2; }
+| '-' con    { $$ = -$2; }
+/*e: helper rules(arm) */
+/*s: constant expression rules */
 con:
   LCONST
 | LVAR         { $$ = $1->value; }
@@ -478,7 +469,6 @@ con:
 | '+' con      { $$ = $2; }
 | '~' con      { $$ = ~$2; }
 | '(' expr ')' { $$ = $2; }
-
 
 expr:
   con
@@ -493,8 +483,21 @@ expr:
 | expr '^' expr     { $$ = $1 ^ $3; }
 | expr '|' expr     { $$ = $1 | $3; }
 
-
-
+/*e: constant expression rules */
+/*s: float rules */
+freg:
+  LFREG
+ {
+  $$ = nullgen;
+  $$.type = D_FREG;
+  $$.reg = $1;
+ }
+| LF '(' con ')'
+ {
+  $$ = nullgen;
+  $$.type = D_FREG;
+  $$.reg = $3;
+ }
 
 fcon:
  '$' LFCONST
@@ -513,23 +516,8 @@ fcon:
 frcon:
   freg
 | fcon
-
-freg:
-  LFREG
- {
-  $$ = nullgen;
-  $$.type = D_FREG;
-  $$.reg = $1;
- }
-| LF '(' con ')'
- {
-  $$ = nullgen;
-  $$.type = D_FREG;
-  $$.reg = $3;
- }
-
-
-
+/*e: float rules */
+/*s: opt rules */
 comma:
   /* empty */
 | ',' comma
@@ -538,11 +526,8 @@ comma:
 oexpr:
   /* empty */ { $$ = 0; }
 | ',' expr    { $$ = $2; }
-
-
-
-
-
+/*e: opt rules */
+/*s: misc rules */
 creg:
   LCREG
 | LC '(' expr ')'
@@ -604,5 +589,6 @@ oreg:
   $$.reg = $3;
  }
 | ioreg
-
+/*e: misc rules */
+/*e: grammar(arm) */
 /*e: 5a/a.y */

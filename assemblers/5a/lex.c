@@ -205,7 +205,7 @@ struct Itab
 
     //enum<token_kind> ???
     ushort	type;
-    //enum<opcode_kind> | enum<operand_kind> ??
+    //enum<opcode> | enum<operand_kind> ??
     ushort	value;
 };
 /*e: struct Itab(arm) */

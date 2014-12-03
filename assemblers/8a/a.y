@@ -3,7 +3,7 @@
 #include "a.h"
 %}
 /*s: union token(x86) */
-%union  {
+%union {
  //   enum<opcode_kind> (for LTYPE/...) 
  // | enum<operand_kind> (for LBREG/...) 
  // | long (for LCONST)
@@ -20,14 +20,14 @@
  /*e: [[Token]] other fields(x86) */
 }
 /*e: union token(x86) */
-/*s: priority and associativity declarations(x86) */
+/*s: priority and associativity declarations */
 %left   '|'
 %left   '^'
 %left   '&'
 %left   '<' '>'
 %left   '+' '-'
 %left   '*' '/' '%'
-/*e: priority and associativity declarations(x86) */
+/*e: priority and associativity declarations */
 /*s: token declarations(x86) */
 %token  <lval>  LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
 %token  <lval>  LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
@@ -50,13 +50,12 @@
 /*x: type declarations(x86) */
 %type   <gen>  rem rim rom 
 /*x: type declarations(x86) */
-%type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
-/*x: type declarations(x86) */
 %type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
 /*x: type declarations(x86) */
 %type   <lval>  con expr
+/*x: type declarations(x86) */
+%type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
 /*e: type declarations(x86) */
-
 %%
 /*s: grammar(x86) */
 prog:
@@ -437,7 +436,7 @@ rom:
 | '*' reg  { $$ = $2; }
 | '*' omem { $$ = $2; }
 /*e: operand rules(x86) */
-/*s: constant expression rules(x86) */
+/*s: constant expression rules */
 con:
   LCONST
 | LVAR         { $$ = $1->value; }
@@ -459,6 +458,6 @@ expr:
 | expr '^' expr     { $$ = $1 ^ $3; }
 | expr '|' expr     { $$ = $1 | $3; }
 
-/*e: constant expression rules(x86) */
+/*e: constant expression rules */
 /*e: grammar(x86) */
 /*e: 8a/a.y */

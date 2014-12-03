@@ -319,7 +319,6 @@ License.
 
 \chapter{Core Data Structures}
 
-
 \section{[[Opcode]] and [[Operand_kind]]}
 
 %TODO: reorder to have first a set of mostly useful instructions
@@ -339,7 +338,6 @@ License.
 %   ...
 
 <<enum as(arm)>>=
-/* compiler allocates external registers F7 down */
 // coupling: with 5c/enam.c
 enum opcode
 {
@@ -453,8 +451,7 @@ enum opcode
     AINIT,
     ABCASE,
     ACASE,
-
-    AEND, // hmm not really, who uses that?
+    AEND,
 
     AMULL,
     AMULAL,
@@ -495,19 +492,20 @@ enum opcode
 % how get the remaining info? e.g. for D_BRANCH to get the symbol or int 
 % you'll have too look in Gen.value
 <<enum dxxx(arm)>>=
-enum dxxx {
+enum operand_kind {
     D_GOK,
 
     D_NONE,
-    // for B, BL?
+
+    // for B, BL
     D_BRANCH,
     D_OREG,
 
     // For ADATA?
     D_EXTERN, // data/bss values (from SB)
     D_STATIC, // data static variables (from SB)
-    D_AUTO, // stack values (from SP)
-    D_PARAM, // parameter (from FP)
+    D_AUTO,   // stack values (from SP)
+    D_PARAM,  // parameter (from FP)
 
     D_CONST,
     D_FCONST,
@@ -530,8 +528,8 @@ enum dxxx {
     D_ADDR,
 };
 @
-
-
+% reorder!! D_REG, D_CONST, D_SHIFT (imsr)
+% O_REG = offset reg
 
 % works with Gen (aka Adr) so it's really
 % type operand = 
@@ -571,30 +569,41 @@ enum regxxx {
 
 \section{[[Token]] and [[itab]]}
 
+
+%typedef int token_kind; (union { char; enum token_kind })
+% see y.tab.h for token_kind enum (which are actually a set of #define
+% with also ascii char into it)
+
 % the first part is essentially for keywords
-<<token declarations(x86)>>=
-%token  <lval>  LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
-%token  <lval>  LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
-%token  <lval>  LFP LPC LSB LSP
-%token  <lval>  LBREG LLREG LSREG LFREG
+<<token declarations(arm)>>=
+%token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5
+%token  <lval>  LTYPE6 LTYPE7 LTYPE8 LTYPE9 LTYPEA
+%token  <lval>  LTYPEB LTYPEC LTYPED LTYPEE LTYPEF
+%token  <lval>  LTYPEG LTYPEH LTYPEI LTYPEJ LTYPEK
+%token  <lval>  LTYPEL LTYPEM LTYPEN 
+%token  <lval>  LTYPEBX
+%token  <lval>  LTYPEX 
+
+%token  <lval>  LSP LSB LFP LPC
+%token  <lval>  LR LREG LF LFREG LC LCREG 
+%token  <lval>  LPSR LFCR
+
+%token  <lval>  LCOND LS LAT
 
 %token  <lval>  LCONST 
 %token  <dval>  LFCONST
 %token  <sval>  LSCONST
 %token  <sym>   LNAME LLAB LVAR
 @
-%pad's bugfix? LSP was was LFCONST, does not make sense
-
-%typedef int token_kind; (union { char; enum token_kind })
-% see y.tab.h for token_kind enum (which are actually a set of #define
-% with also ascii char into it)
 
 
 
-<<union token(x86)>>=
-%union  {
- //   enum<opcode_kind> (for LTYPE/...) 
- // | enum<operand_kind> (for LBREG/...) 
+<<union token(arm)>>=
+%union {
+ //   enum<opcode> (for LTYPE/...) 
+ // | enum<register> (for LREG/...)
+ // | enum<cond>  (for LCOND) 
+ // ...
  // | long (for LCONST)
  long   lval;
 
@@ -602,13 +611,15 @@ enum regxxx {
  char   sval[8];
  Sym    *sym;
 
- <<[[Token]] other fields(x86)>>
+ <<[[Token]] other fields(arm)>>
 }
 @
 % sval[8]?? can't have string more than 8 bytes? hence the data2c
 % ugly list?
 % note: mutual ref with sym here where sym has itself a type that is 
 % the token_kind
+
+
 
 % could use NSNAME here instead of char sval[8] ? and at a few other places?
 % from 8.out.h
@@ -634,7 +645,7 @@ struct Itab
 
     //enum<token_kind> ???
     ushort	type;
-    //enum<opcode_kind> | enum<operand_kind> ??
+    //enum<opcode> | enum<operand_kind> ??
     ushort	value;
 };
 @
@@ -3134,102 +3145,75 @@ getnsn(void)
 
 \chapter{Parsing}
 
+\section{Overview}
+
+% assume understand yacc! if not read classic book on lex&yacc
+%  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
+
 <<5a/a.y>>=
 %{
 #include "a.h"
 %}
-%union
-{
- Sym    *sym;
- long   lval;
- double dval;
- char   sval[8];
- Gen    gen;
-}
-%left   '|'
-%left   '^'
-%left   '&'
-%left   '<' '>'
-%left   '+' '-'
-%left   '*' '/' '%'
-
-%token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5
-%token  <lval>  LTYPE6 LTYPE7 LTYPE8 LTYPE9 LTYPEA
-%token  <lval>  LTYPEB LTYPEC LTYPED LTYPEE LTYPEF
-%token  <lval>  LTYPEG LTYPEH LTYPEI LTYPEJ LTYPEK
-%token  <lval>  LTYPEL LTYPEM LTYPEN 
-%token  <lval>  LTYPEBX
-%token  <lval>  LTYPEX 
-
-%token  <lval>  LSP LSB LFP LPC
-%token  <lval>  LR LREG LF LFREG LC LCREG 
-%token  <lval>  LPSR LFCR
-
-%token  <lval>  LCOND LS LAT
-
-%token  <lval>  LCONST 
-%token  <dval>  LFCONST
-%token  <sval>  LSCONST
-%token  <sym>   LNAME LLAB LVAR
-
-%type   <lval>  cond
-
-%type   <gen> imsr
-%type   <gen> reg imm shift
-%type   <lval>  rcon
-%type   <gen>   name 
-%type   <lval>  pointer
-%type   <gen>   rel
-%type   <lval>  offset
-%type   <gen>   gen 
-%type   <gen>   ximm
-%type   <lval>  con expr 
-
-%type   <lval>  sreg spreg creg
-%type   <gen>   ireg nireg ioreg oreg
-%type   <gen>   regreg
-%type   <lval>  oexpr 
-%type   <lval>  reglist
-
-%type <gen> freg fcon frcon
-
+<<union token(arm)>>
+<<priority and associativity declarations>>
+<<token declarations(arm)>>
+<<type declarations(arm)>>
 %%
+<<grammar(arm)>>
+@
+%$
 
+
+% have seen token declaration in Core Data structures already.
+
+
+<<grammar(arm)>>=
 prog:
   /* empty */
 | prog line
 
+<<line rule(arm)>>
+<<inst rule(arm)>>
+<<cond rule(arm)>>
+<<operand rules(arm)>>
+<<helper rules(arm)>>
+<<constant expression rules>>
+<<float rules>>
+<<opt rules>>
+<<misc rules>>
+@
+
+% assembly file is made of lines containing instructions or labels.
+% instructions are mostly a single opcode with 0, 1, or 2 operands
+% where each operand can be a register, or constant, or address, etc.
+% and some combination (like register + constant offset)
+
+% there are some special opcode like TEXT which don't translate
+% in binary code but are useful for symbol resolving.
+
+
+<<line rule(arm)>>=
 line:
   inst ';'
+@
+
+
+% note that newline are translated in ';' by the lexer
+% so can either pack in one line with ';' or use newline
+% (haskell spirit :) )
+
+
+<<line rule(arm)>>=
 | ';'
 | error ';'
+@
+% error? yacc trick for synchronization? to got until next ; (that is newline)?
 
-| LNAME ':'
- {
-  $1->type = LLAB;
-  $1->value = pc;
- }
-  line
-| LLAB ':'
- {
-  if($1->value != pc)
-   yyerror("redeclaration of %s", $1->name);
-  $1->value = pc;
- }
-  line
+\section{Instructions}
 
-| LNAME '=' expr ';'
- {
-  $1->type = LVAR;
-  $1->value = $3;
- }
-| LVAR '=' expr ';'
- {
-  if($1->value != $3)
-   yyerror("redeclaration of %s", $1->name);
-  $1->value = $3;
- }
+% outcode =~ pc++
 
+<<inst rule(arm)>>=
 inst:
 /*
  * ADD
@@ -3291,8 +3275,8 @@ inst:
  * SWAP
  */
 | LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg comma { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond comma ireg ',' reg { outcode($1, $2, &$4, $6.reg, &$6); }
+| LTYPE9 cond reg ',' ireg comma   { outcode($1, $2, &$5, $3.reg, &$3); }
+| LTYPE9 cond comma ireg ',' reg   { outcode($1, $2, &$4, $6.reg, &$6); }
 /*
  * RET
  */
@@ -3360,35 +3344,59 @@ inst:
  * END
  */
 | LTYPEE comma { outcode($1, Always, &nullgen, NREG, &nullgen); }
+@
+%$
 
 
+\section{Conditional execution}
 
+<<type declarations(arm)>>=
+%type   <lval>  cond
+@
+
+<<cond rule(arm)>>=
 cond:
  /* empty */ { $$ = Always; }
 | cond LCOND { $$ = ($1 & ~C_SCOND) | $2; }
 | cond LS    { $$ = $1 | $2; }
+@
+
+\section{Operand}
+
+% this is the rest from the %union
+<<[[Token]] other fields(arm)>>=
+Gen    gen;
+@
 
 
+% reg = register
+% imm = immediate
+% shift = shifted register or constant
 
+% imsr = immediate or shift or register
+
+<<type declarations(arm)>>=
+%type   <gen> imsr
+@
+<<type declarations(arm)>>=
+%type   <gen> reg imm shift
+@
+
+<<operand rules(arm)>>=
 imsr:
   reg
 | imm
 | shift
+@
 
 
+\subsection{Registers}
 
-reg:
- spreg
- {
-  $$ = nullgen;
-  $$.type = D_REG;
-  $$.reg = $1;
- }
+<<type declarations(arm)>>=
+%type   <lval>  sreg spreg 
+@
 
-spreg:
-  sreg
-| LSP { $$ = REGSP; }
-
+<<operand rules(arm)>>=
 sreg:
   LREG
 | LR '(' expr ')'
@@ -3398,17 +3406,50 @@ sreg:
   $$ = $3;
  }
 | LPC { $$ = REGPC; }
+@
+
+<<operand rules(arm)>>=
+spreg:
+  sreg
+| LSP { $$ = REGSP; }
+@
+%$
+
+<<operand rules(arm)>>=
+reg:
+ spreg
+ {
+  $$ = nullgen;
+  $$.type = D_REG;
+  $$.reg = $1;
+ }
+@
+%$
 
 
 
+
+\subsection{Constants}
+
+% con = constant
+% prefix with $ (why? ambiguity with what?) to differentiate
+% with just con where it's a omem (see section below)
+
+<<operand rules(arm)>>=
 imm: '$' con
  {
   $$ = nullgen;
   $$.type = D_CONST;
   $$.offset = $2;
  }
+@
 
+% float constants are in another category
 
+\subsection{Shift registers}
+% register and constant in some sense
+
+<<operand rules(arm)>>=
 shift:
  spreg '<' '<' rcon
  {
@@ -3434,7 +3475,13 @@ shift:
   $$.type = D_SHIFT;
   $$.offset = $1 | $4 | (3 << 5);
  }
+@
 
+<<type declarations(arm)>>=
+%type   <lval>  rcon
+@
+
+<<helper rules(arm)>>=
 rcon:
   spreg
  {
@@ -3448,17 +3495,64 @@ rcon:
       print("shift value out of range\n");
   $$ = ($1&31) << 7;
  }
+@
 
 
+\subsection{Memory references}
+
+<<type declarations(arm)>>=
+%type   <gen>   gen 
+@
+% gen? general?
+
+<<operand rules(arm)>>=
+gen:
+  reg
+| ximm
+| shift
+
+| shift '(' spreg ')'
+ {
+  $$ = $1;
+  $$.reg = $3;
+ }
+
+| LPSR
+ {
+  $$ = nullgen;
+  $$.type = D_PSR;
+  $$.reg = $1;
+ }
+| LFCR
+ {
+  $$ = nullgen;
+  $$.type = D_FPCR;
+  $$.reg = $1;
+ }
+
+| con
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.offset = $1;
+ }
+| oreg
+| freg
+@
+%$
+
+% no $ in front of con here?
+
+\subsection{Named data references}
+% for data
+
+<<type declarations(arm)>>=
+%type   <gen>   name 
+%type   <lval>  pointer
+@
 
 
-
-
-
-
-
-
-
+<<operand rules(arm)>>=
 name:
  con '(' pointer ')'
  {
@@ -3484,14 +3578,28 @@ name:
   $$.sym = $1;
   $$.offset = $4;
  }
+@
+%$
+%        MOVL    count+8(FP), CX
+% the LNAME is really just symbol for debugging help?
 
+
+<<helper rules(arm)>>=
 pointer:
   LSB
 | LSP
 | LFP
+@
 
+\subsection{Named code references}
 
+<<type declarations(arm)>>=
+%type   <gen>   rel
+%type   <lval>  offset
+@
 
+% for code (rel = ? relocatable?)
+<<operand rules(arm)>>=
 rel:
   con '(' LPC ')'
  {
@@ -3515,48 +3623,25 @@ rel:
   $$.sym = $1;
   $$.offset = $2;
  }
+@
 
 
+
+<<helper rules(arm)>>=
 offset:
  /* empty */ { $$ = 0; }
 | '+' con    { $$ = $2; }
 | '-' con    { $$ = -$2; }
+@
 
 
+\subsection{Alternative forms}
 
-gen:
-  reg
-| ximm
-| shift
-| shift '(' spreg ')'
- {
-  $$ = $1;
-  $$.reg = $3;
- }
+<<type declarations(arm)>>=
+%type   <gen>   ximm
+@
 
-| LPSR
- {
-  $$ = nullgen;
-  $$.type = D_PSR;
-  $$.reg = $1;
- }
-| LFCR
- {
-  $$ = nullgen;
-  $$.type = D_FPCR;
-  $$.reg = $1;
- }
-| con
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.offset = $1;
- }
-| oreg
-| freg
-
-
-
+<<operand rules(arm)>>=
 ximm:
   '$' con
  {
@@ -3582,11 +3667,10 @@ ximm:
   $$.type = D_OCONST;
  }
 | fcon
+@
+%$
 
-
-
-
-
+<<operand rules(arm)>>=
 /* for MULL */
 regreg:
  '(' spreg ',' spreg ')'
@@ -3596,571 +3680,9 @@ regreg:
   $$.reg = $2;
   $$.offset = $4;
  }
-
-
-
-
-
-
-
-
-
-
-
-con:
-  LCONST
-| LVAR         { $$ = $1->value; }
-| '-' con      { $$ = -$2; }
-| '+' con      { $$ = $2; }
-| '~' con      { $$ = ~$2; }
-| '(' expr ')' { $$ = $2; }
-
-
-expr:
-  con
-| expr '+' expr     { $$ = $1 + $3; }
-| expr '-' expr     { $$ = $1 - $3; }
-| expr '*' expr     { $$ = $1 * $3; }
-| expr '/' expr     { $$ = $1 / $3; }
-| expr '%' expr     { $$ = $1 % $3; }
-| expr '<' '<' expr { $$ = $1 << $4; }
-| expr '>' '>' expr { $$ = $1 >> $4; }
-| expr '&' expr     { $$ = $1 & $3; }
-| expr '^' expr     { $$ = $1 ^ $3; }
-| expr '|' expr     { $$ = $1 | $3; }
-
-
-
-
-fcon:
- '$' LFCONST
- {
-  $$ = nullgen;
-  $$.type = D_FCONST;
-  $$.dval = $2;
- }
-| '$' '-' LFCONST
- {
-  $$ = nullgen;
-  $$.type = D_FCONST;
-  $$.dval = -$3;
- }
-
-frcon:
-  freg
-| fcon
-
-freg:
-  LFREG
- {
-  $$ = nullgen;
-  $$.type = D_FREG;
-  $$.reg = $1;
- }
-| LF '(' con ')'
- {
-  $$ = nullgen;
-  $$.type = D_FREG;
-  $$.reg = $3;
- }
-
-
-
-comma:
-  /* empty */
-| ',' comma
-
-/* for MCR */ 
-oexpr:
-  /* empty */ { $$ = 0; }
-| ',' expr    { $$ = $2; }
-
-
-
-
-
-creg:
-  LCREG
-| LC '(' expr ')'
- {
-  if($3 < 0 || $3 >= NREG)
-      print("register value out of range\n");
-  $$ = $3;
- }
-
-
-reglist:
-  spreg           { $$ = 1 << $1; }
-| spreg '-' spreg
- {
-  int i;
-  $$=0;
-  for(i=$1; i<=$3; i++)
-      $$ |= 1<<i;
-  for(i=$3; i<=$1; i++)
-      $$ |= 1<<i;
- }
-| spreg comma reglist { $$ = (1<<$1) | $3; }
-
-
-nireg:
-  ireg
-| name
- {
-  $$ = $1;
-  if($1.name != D_EXTERN && $1.name != D_STATIC) {
-  }
- }
-
-ireg:
- '(' spreg ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.reg = $2;
-  $$.offset = 0;
- }
-
-ioreg:
-  ireg
-| con '(' sreg ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.reg = $3;
-  $$.offset = $1;
- }
-
-oreg:
-  name
-| name '(' sreg ')'
- {
-  $$ = $1;
-  $$.type = D_OREG;
-  $$.reg = $3;
- }
-| ioreg
-
-@
-\section{Overview}
-
-% assume understand yacc! if not read classic book on lex&yacc
-%  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
-
-<<8a/a.y>>=
-%{
-#include "a.h"
-%}
-<<union token(x86)>>
-<<priority and associativity declarations(x86)>>
-<<token declarations(x86)>>
-<<type declarations(x86)>>
-
-%%
-<<grammar(x86)>>
-@
-
-% have seen token declaration in Core Data structures already.
-
-<<grammar(x86)>>=
-prog:
-  /* empty */
-| prog line
-
-<<line rule(x86)>>
-<<inst rule(x86)>>
-<<special opcode operands rules(x86)>>
-<<operands rules(x86)>>
-<<operand rules(x86)>>
-<<constant expression rules(x86)>>
-@
-
-% assembly file is made of lines containing instructions or labels.
-% instructions are mostly a single opcode with 0, 1, or 2 operands
-% where each operand can be a register, or constant, or address, etc.
-% and some combination (like register + constant offset)
-
-% there are some special opcode like TEXT which don't translate
-% in binary code but are useful for symbol resolving.
-
-<<line rule(x86)>>=
-line:
-  inst ';'
 @
 
 
-% note that newline are translated in ';' by the lexer
-% so can either pack in one line with ';' or use newline
-% (haskell spirit :) )
-
-<<line rule(x86)>>=
-| ';'
-| error ';'
-@
-% error? yacc trick for synchronization? to got until next ; (that is newline)?
-
-\section{Instructions}
-
-<<inst rule(x86)>>=
-inst:
-  LTYPE0 nonnon   { outcode($1, &$2); }
-| LTYPE1 nonrem   { outcode($1, &$2); }
-| LTYPE2 rimnon   { outcode($1, &$2); }
-| LTYPE3 rimrem   { outcode($1, &$2); }
-| LTYPE4 remrim   { outcode($1, &$2); }
-| LTYPER nonrel   { outcode($1, &$2); }
-@
-
-% give apercu of nonnon, rem, but just quick
-
-% outcode =~ pc++
-
-\section{Operand}
-
-% this is the rest from the %union
-<<[[Token]] other fields(x86)>>=
- Gen   gen;
-@
-
-<<type declarations(x86)>>=
-%type   <gen>   reg imm mem   omem nmem nam
-@
-
-% reg = register
-% imm = immediate
-% mem = memory (complex, omem | nmem)
-
-\subsection{Registers}
-
-<<operand rules(x86)>>=
-reg:
-  LBREG { $$ = nullgen; $$.type = $1; }
-| LFREG { $$ = nullgen; $$.type = $1; }
-| LLREG { $$ = nullgen; $$.type = $1; }
-| LSREG { $$ = nullgen; $$.type = $1; }
-| LSP   { $$ = nullgen; $$.type = D_SP; }
-@
-
-
-\subsection{Constants}
-
-% con = constant
-% prefix with $ (why? ambiguity with what?) to differentiate
-% with just con where it's a omem (see section below)
-
-<<operand rules(x86)>>=
-imm:
- '$' con
- {
-  $$ = nullgen;
-  $$.type = D_CONST;
-  $$.offset = $2;
- }
-| '$' nam
- {
-  $$ = $2;
-  $$.index = $2.type;
-  $$.type = D_ADDR;
-  /*
-  if($2.type == D_AUTO || $2.type == D_PARAM)
-   yyerror("constant cannot be automatic: %s",
-    $2.sym->name);
-   */
- }
-| '$' LSCONST
- {
-  $$ = nullgen;
-  $$.type = D_SCONST;
-  memcpy($$.sval, $2, sizeof($$.sval));
- }
-| '$' LFCONST
- {
-  $$ = nullgen;
-  $$.type = D_FCONST;
-  $$.dval = $2;
- }
-| '$' '(' LFCONST ')'
- {
-  $$ = nullgen;
-  $$.type = D_FCONST;
-  $$.dval = $3;
- }
-| '$' '-' LFCONST
- {
-  $$ = nullgen;
-  $$.type = D_FCONST;
-  $$.dval = -$3;
- }
-@
-
-% MOV $AX, ... ?? vs MOV AX, ... ?
-
-\subsection{Memory references}
-
-<<operand rules(x86)>>=
-mem:
-  omem
-| nmem
-@
-
-% omem = offset mem
-% nmem = named memory?
-
-<<operand rules(x86)>>=
-omem:
- con
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+D_NONE;
-  $$.offset = $1;
- }
-| con '(' LLREG ')'
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+$3;
-  $$.offset = $1;
- }
-| con '(' LSP ')'
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+D_SP;
-  $$.offset = $1;
- }
-| con '(' LLREG '*' con ')'
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+D_NONE;
-  $$.offset = $1;
-  $$.index = $3;
-  $$.scale = $5;
-  checkscale($$.scale);
- }
-| con '(' LLREG ')' '(' LLREG '*' con ')'
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+$3;
-  $$.offset = $1;
-  $$.index = $6;
-  $$.scale = $8;
-  checkscale($$.scale);
- }
-|   '(' LLREG ')'
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+$2;
- }
-|   '(' LSP ')'
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+D_SP;
- }
-|   con '(' LSREG ')'
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+$3;
-  $$.offset = $1;
- }
-|   '(' LLREG '*' con ')'
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+D_NONE;
-  $$.index = $2;
-  $$.scale = $4;
-  checkscale($$.scale);
- }
-|   '(' LLREG ')' '(' LLREG '*' con ')'
- {
-  $$ = nullgen;
-  $$.type = D_INDIR+$2;
-  $$.index = $5;
-  $$.scale = $7;
-  checkscale($$.scale);
- }
-@
-%$
-
-\subsection{Named memory references}
-
-% for data
-
-<<operand rules(x86)>>=
-nmem:
-  nam
-| nam '(' LLREG '*' con ')'
- {
-  $$ = $1;
-  $$.index = $3;
-  $$.scale = $5;
-  checkscale($$.scale);
- }
-@
-%$
-
-% MOV foo(SB) ( AX * 8 ) ? =~ foo[ax] where sizeof foo element = 8?
-
-%        MOVL    count+8(FP), CX
-% this is just symbol for debugging help?
-
-<<operand rules(x86)>>=
-nam:
-  LNAME offset '(' pointer ')'
- {
-  $$ = nullgen;
-  $$.type = $4;
-  $$.sym = $1;
-  $$.offset = $2;
- }
-| LNAME '<' '>' offset '(' LSB ')'
- {
-  $$ = nullgen;
-  $$.type = D_STATIC;
-  $$.sym = $1;
-  $$.offset = $4;
- }
-@
-%$
-
-<<type declarations(x86)>>=
-%type   <lval>  pointer
-@
-
-<<operand rules(x86)>>=
-pointer:
-  LSB
-| LFP
-| LSP { $$ = D_AUTO; }
-@
-
-
-<<type declarations(x86)>>=
-%type   <gen>  rel
-@
-
-% for code (rel = ? relocatable?)
-<<operand rules(x86)>>=
-rel:
- con '(' LPC ')'
- {
-  $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.offset = $1 + pc;
- }
-| LLAB offset
- {
-  $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.sym = $1;
-  $$.offset = $1->value + $2;
- }
-| LNAME offset
- {
-  $$ = nullgen;
-  if(pass == 2)
-   yyerror("undefined label: %s", $1->name);
-  $$.type = D_BRANCH;
-  $$.sym = $1;
-  $$.offset = $2;
- }
-@
-
-%JMP 4(PC)
-
-<<type declarations(x86)>>=
-%type   <lval>  offset
-@
-
-<<operand rules(x86)>>=
-offset:
- /* empty */ { $$ = 0; }
-| '+' con    { $$ = $2; }
-| '-' con    { $$ = -$2; }
-@
-
-% $
-
-
-\subsection{Alternative forms}
-
-<<type declarations(x86)>>=
-%type   <gen>  rem rim rom 
-@
-
-% rem = register or memory
-% rim = register or memory or immediate
-% rom?
-
-
-% imm2 dead? yacc does not detect?
-
-<<operand rules(x86)>>=
-rem:
-  reg
-| mem
-
-rim:
-  rem
-| imm
-
-rom:
-  reg
-| mem
-| imm
-| rel
-
-| '*' reg  { $$ = $2; }
-| '*' omem { $$ = $2; }
-@
-% was 
-%| omem
-%| nmem
-% but factorized with mem which also makes things clearer
-
-% use for the * version? seems equivalent to regular version no?
-
-\section{Operands}
-
-<<[[Token]] other fields(x86)>>=
- Gen2  gen2;
-@
-
-% I thought I could write code like
-% /* empty */ { (Gen2) { .from = nullgen; .to = nullgen; } }
-% but didn't work
-
-<<type declarations(x86)>>=
-%type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
-@
-
-% xxxyyy = first operand, second operand
-% nonnon = nothing first, nothing left
-
-
-<<operands rules(x86)>>=
-nonnon:
- /* empty */ { $$.from = nullgen; $$.to = nullgen; }
-| ','        { $$.from = nullgen; $$.to = nullgen; }
-
-rimrem:
- rim ',' rem { $$.from = $1; $$.to = $3; }
-
-remrim:
- rem ',' rim { $$.from = $1; $$.to = $3; }
-
-rimnon:
-  rim       { $$.from = $1; $$.to = nullgen; }
-| rim ','   { $$.from = $1; $$.to = nullgen; }
-
-nonrem:
- rem        { $$.from = nullgen; $$.to = $1; }
-| ',' rem   { $$.from = nullgen; $$.to = $2; }
-
-nonrel:
- rel        { $$.from = nullgen; $$.to = $1; }
-| ',' rel   { $$.from = nullgen; $$.to = $2; }
-@
-
-% each time put example of instructions and why it make sense?
-% for instance rimrem vs remrim, make sense?
 
 \section{Labels}
 
@@ -4170,200 +3692,70 @@ nonrel:
 long	pc;
 @
 
-<<line rule(x86)>>=
+<<line rule(arm)>>=
 | LNAME ':'
  {
   $1->type = LLAB;
   $1->value = pc;
  }
- line
+  line
 | LLAB ':'
  {
   if($1->value != pc)
    yyerror("redeclaration of %s", $1->name);
   $1->value = pc;
  }
- line
+  line
 @
 %$
 
 \section{Pseudo instructions}
+
 % some of those are not really opcodes, they are entities 
 % just at the asm level.
 
 %hmm but nop? SHL? MOV? here because pseudo asm
 % that get translated in store/load on some archi?
 
-<<inst rule(x86)>>=
-| LTYPED spec1    { outcode($1, &$2); }
-| LTYPET spec2    { outcode($1, &$2); }
-| LTYPEC spec3    { outcode($1, &$2); }
-| LTYPEN spec4    { outcode($1, &$2); }
-| LTYPES spec5    { outcode($1, &$2); }
-| LTYPEM spec6    { outcode($1, &$2); }
-| LTYPEI spec7    { outcode($1, &$2); }
-| LTYPEG spec8    { outcode($1, &$2); }
-@
-
-<<type declarations(x86)>>=
-%type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
-@
 
 \subsection{[[TEXT]]}
 
-<<special opcode operands rules(x86)>>=
-spec2:  /* TEXT */
- mem ',' imm
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-|   mem ',' con ',' imm
- {
-  $$.from = $1;
-  $$.from.scale = $3;
-  $$.to = $5;
- }
-@
-%$
 
 \subsection{[[DATA]]}
 
-%LTYPED
-<<special opcode operands rules(x86)>>=
-spec1:  /* DATA */
- nam '/' con ',' imm
- {
-  $$.from = $1;
-  $$.from.scale = $3;
-  $$.to = $5;
- }
-@
-%$
 
 
 \subsection{[[GLOBL]]}
 
-<<special opcode operands rules(x86)>>=
-spec8:  /* GLOBL */
- mem ',' imm
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-| mem ',' con ',' imm
- {
-  $$.from = $1;
-  $$.from.scale = $3;
-  $$.to = $5;
- }
-@
-%$
 
 \section{Special instructions}
 
 
 \subsection{[[JMP/CALL]]}
 
-<<special opcode operands rules(x86)>>=
-spec3:  /* JMP/CALL */
- rom
- {
-  $$.from = nullgen;
-  $$.to = $1;
- }
-| ',' rom
- {
-  $$.from = nullgen;
-  $$.to = $2;
- }
-@
 
 \subsection{[[NOP]]}
 
-<<special opcode operands rules(x86)>>=
-spec4:  /* NOP */
-  nonnon
-| nonrem
-@
-% NOP nonrem?
 
 \subsection{[[SHL/SHR]]}
 
-<<special opcode operands rules(x86)>>=
-spec5:  /* SHL/SHR */
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-| rim ',' rem ':' LLREG
- {
-  $$.from = $1;
-  $$.to = $3;
-  if($$.from.index != D_NONE)
-   yyerror("dp shift with lhs index");
-  $$.from.index = $5;
- }
-@
-%$
 
 \subsection{[[MOVW/MOVL]]}
 
 
-<<special opcode operands rules(x86)>>=
-spec6:  /* MOVW/MOVL */
- rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-|   rim ',' rem ':' LSREG
- {
-  $$.from = $1;
-  $$.to = $3;
-  if($$.to.index != D_NONE)
-   yyerror("dp move with lhs index");
-  $$.to.index = $5;
- }
-@
-%$
-
-%LSREG! mv with other segments (but used in plan9? except 
-% cs vs ds/es/fs/gs vs ss?
-
 \subsection{[[IMUL]]}
-
-<<special opcode operands rules(x86)>>=
-spec7: /* IMUL */
- rim
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ','
- {
-  $$.from = $1;
-  $$.to = nullgen;
- }
-| rim ',' rem
- {
-  $$.from = $1;
-  $$.to = $3;
- }
-@
-
 
 \section{Variables}
 % useful? cpp can do that too
 
-<<inst rule(x86)>>=
-| LNAME '=' expr
+
+<<line rule(arm)>>=
+| LNAME '=' expr ';'
  {
   $1->type = LVAR;
   $1->value = $3;
  }
-| LVAR '=' expr
+| LVAR '=' expr ';'
  {
   if($1->value != $3)
    yyerror("redeclaration of %s", $1->name);
@@ -4376,11 +3768,11 @@ spec7: /* IMUL */
 % it's not Fortran, we're making an assembler :)
 % so it's constant expressions here!
 
-<<type declarations(x86)>>=
-%type   <lval>  con expr
+<<type declarations(arm)>>=
+%type   <lval>  con expr 
 @
 
-<<priority and associativity declarations(x86)>>=
+<<priority and associativity declarations>>=
 %left   '|'
 %left   '^'
 %left   '&'
@@ -4390,7 +3782,7 @@ spec7: /* IMUL */
 @
 % lower in the file = higher priority, earlier = lower priority
 
-<<constant expression rules(x86)>>=
+<<constant expression rules>>=
 con:
   LCONST
 | LVAR         { $$ = $1->value; }
@@ -4419,6 +3811,19 @@ expr:
 \section{Optional commas}
 % the optional ',' why? because can ge generated by 8c -S that does
 % this? a bit ugly so maybe better to aspectize this
+
+
+<<opt rules>>=
+comma:
+  /* empty */
+| ',' comma
+
+/* for MCR */ 
+oexpr:
+  /* empty */ { $$ = 0; }
+| ',' expr    { $$ = $2; }
+@
+%$
 
 \fi
 
@@ -4811,6 +4216,47 @@ ieeedtod(Ieee *ieee, double native)
 @
 
 
+<<type declarations(arm)>>=
+%type <gen> freg fcon frcon
+@
+
+<<float rules>>=
+freg:
+  LFREG
+ {
+  $$ = nullgen;
+  $$.type = D_FREG;
+  $$.reg = $1;
+ }
+| LF '(' con ')'
+ {
+  $$ = nullgen;
+  $$.type = D_FREG;
+  $$.reg = $3;
+ }
+
+fcon:
+ '$' LFCONST
+ {
+  $$ = nullgen;
+  $$.type = D_FCONST;
+  $$.dval = $2;
+ }
+| '$' '-' LFCONST
+ {
+  $$ = nullgen;
+  $$.type = D_FCONST;
+  $$.dval = -$3;
+ }
+
+frcon:
+  freg
+| fcon
+@
+%$
+
+
+
 \section{Processing multiple files}
 
 % why need that?
@@ -4862,6 +4308,81 @@ if(argc > 1) {
     }
 }
 @
+
+\section{Special instructions}
+
+<<type declarations(arm)>>=
+%type   <lval>  creg
+%type   <gen>   ireg nireg ioreg oreg
+%type   <gen>   regreg
+%type   <lval>  oexpr 
+%type   <lval>  reglist
+@
+
+<<misc rules>>=
+creg:
+  LCREG
+| LC '(' expr ')'
+ {
+  if($3 < 0 || $3 >= NREG)
+      print("register value out of range\n");
+  $$ = $3;
+ }
+
+
+reglist:
+  spreg           { $$ = 1 << $1; }
+| spreg '-' spreg
+ {
+  int i;
+  $$=0;
+  for(i=$1; i<=$3; i++)
+      $$ |= 1<<i;
+  for(i=$3; i<=$1; i++)
+      $$ |= 1<<i;
+ }
+| spreg comma reglist { $$ = (1<<$1) | $3; }
+
+
+nireg:
+  ireg
+| name
+ {
+  $$ = $1;
+  if($1.name != D_EXTERN && $1.name != D_STATIC) {
+  }
+ }
+
+ireg:
+ '(' spreg ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.reg = $2;
+  $$.offset = 0;
+ }
+
+ioreg:
+  ireg
+| con '(' sreg ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.reg = $3;
+  $$.offset = $1;
+ }
+
+oreg:
+  name
+| name '(' sreg ')'
+ {
+  $$ = $1;
+  $$.type = D_OREG;
+  $$.reg = $3;
+ }
+| ioreg
+@
+
 
 \chapter{Conclusion}
 

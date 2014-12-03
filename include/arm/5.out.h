@@ -50,8 +50,9 @@ enum regxxx {
 /*e: constant FREGTMP(arm) */
 
 /* compiler allocates register variables F0 up */
-/*s: enum as(arm) */
 /* compiler allocates external registers F7 down */
+
+/*s: enum as(arm) */
 // coupling: with 5c/enam.c
 enum opcode
 {
@@ -165,8 +166,7 @@ enum opcode
     AINIT,
     ABCASE,
     ACASE,
-
-    AEND, // hmm not really, who uses that?
+    AEND,
 
     AMULL,
     AMULAL,
@@ -214,19 +214,20 @@ enum opcode
 /*e: constant C_UBIT(arm) */
 
 /*s: enum dxxx(arm) */
-enum dxxx {
+enum operand_kind {
     D_GOK,
 
     D_NONE,
-    // for B, BL?
+
+    // for B, BL
     D_BRANCH,
     D_OREG,
 
     // For ADATA?
     D_EXTERN, // data/bss values (from SB)
     D_STATIC, // data static variables (from SB)
-    D_AUTO, // stack values (from SP)
-    D_PARAM, // parameter (from FP)
+    D_AUTO,   // stack values (from SP)
+    D_PARAM,  // parameter (from FP)
 
     D_CONST,
     D_FCONST,

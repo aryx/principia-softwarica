@@ -120,6 +120,8 @@ typedef	struct	ieee	Ieee;
 <<constant FREGTMP(arm)>>
 
 /* compiler allocates register variables F0 up */
+/* compiler allocates external registers F7 down */
+
 <<enum as(arm)>>
 
 <<constant C_SCOND(arm)>>
@@ -1541,6 +1543,46 @@ enum operand_kind
 % see Dconv in Compiler.nw, seems only for D_INDIR of register
 
 
+
+
+
+
+% the first part is essentially for keywords
+<<token declarations(x86)>>=
+%token  <lval>  LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
+%token  <lval>  LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPES LTYPEM LTYPEI LTYPEG
+%token  <lval>  LFP LPC LSB LSP
+%token  <lval>  LBREG LLREG LSREG LFREG
+
+%token  <lval>  LCONST 
+%token  <dval>  LFCONST
+%token  <sval>  LSCONST
+%token  <sym>   LNAME LLAB LVAR
+@
+%pad's bugfix? LSP was was LFCONST, does not make sense
+
+
+<<union token(x86)>>=
+%union {
+ //   enum<opcode_kind> (for LTYPE/...) 
+ // | enum<operand_kind> (for LBREG/...) 
+ // | long (for LCONST)
+ long   lval;
+
+ double dval;
+ char   sval[8];
+ Sym    *sym;
+
+ <<[[Token]] other fields(x86)>>
+}
+@
+
+
+
+
+
+
+
 <<constant NSNAME(x86)>>=
 #define	NSNAME	8
 @
@@ -2185,6 +2227,591 @@ cclean(void)
     Bflush(&obuf);
 }
 @
+
+
+
+
+
+<<8a/a.y>>=
+%{
+#include "a.h"
+%}
+<<union token(x86)>>
+<<priority and associativity declarations>>
+<<token declarations(x86)>>
+<<type declarations(x86)>>
+%%
+<<grammar(x86)>>
+@
+
+
+<<grammar(x86)>>=
+prog:
+  /* empty */
+| prog line
+
+<<line rule(x86)>>
+<<inst rule(x86)>>
+<<special opcode operands rules(x86)>>
+<<operands rules(x86)>>
+<<operand rules(x86)>>
+<<constant expression rules>>
+@
+
+
+<<line rule(x86)>>=
+line:
+  inst ';'
+@
+
+<<line rule(x86)>>=
+| ';'
+| error ';'
+@
+
+
+<<inst rule(x86)>>=
+inst:
+  LTYPE0 nonnon   { outcode($1, &$2); }
+| LTYPE1 nonrem   { outcode($1, &$2); }
+| LTYPE2 rimnon   { outcode($1, &$2); }
+| LTYPE3 rimrem   { outcode($1, &$2); }
+| LTYPE4 remrim   { outcode($1, &$2); }
+| LTYPER nonrel   { outcode($1, &$2); }
+@
+
+% give apercu of nonnon, rem, but just quick
+
+
+<<[[Token]] other fields(x86)>>=
+ Gen   gen;
+@
+
+<<type declarations(x86)>>=
+%type   <gen>   reg imm mem   omem nmem nam
+@
+
+% reg = register
+% imm = immediate
+% mem = memory (complex, omem | nmem)
+
+
+
+<<operand rules(x86)>>=
+reg:
+  LBREG { $$ = nullgen; $$.type = $1; }
+| LFREG { $$ = nullgen; $$.type = $1; }
+| LLREG { $$ = nullgen; $$.type = $1; }
+| LSREG { $$ = nullgen; $$.type = $1; }
+| LSP   { $$ = nullgen; $$.type = D_SP; }
+@
+
+
+
+<<operand rules(x86)>>=
+imm:
+ '$' con
+ {
+  $$ = nullgen;
+  $$.type = D_CONST;
+  $$.offset = $2;
+ }
+| '$' nam
+ {
+  $$ = $2;
+  $$.index = $2.type;
+  $$.type = D_ADDR;
+  /*
+  if($2.type == D_AUTO || $2.type == D_PARAM)
+   yyerror("constant cannot be automatic: %s",
+    $2.sym->name);
+   */
+ }
+| '$' LSCONST
+ {
+  $$ = nullgen;
+  $$.type = D_SCONST;
+  memcpy($$.sval, $2, sizeof($$.sval));
+ }
+| '$' LFCONST
+ {
+  $$ = nullgen;
+  $$.type = D_FCONST;
+  $$.dval = $2;
+ }
+| '$' '(' LFCONST ')'
+ {
+  $$ = nullgen;
+  $$.type = D_FCONST;
+  $$.dval = $3;
+ }
+| '$' '-' LFCONST
+ {
+  $$ = nullgen;
+  $$.type = D_FCONST;
+  $$.dval = -$3;
+ }
+@
+
+% MOV $AX, ... ?? vs MOV AX, ... ?
+
+
+
+<<operand rules(x86)>>=
+mem:
+  omem
+| nmem
+@
+
+% omem = offset mem
+% nmem = named memory?
+
+<<operand rules(x86)>>=
+omem:
+ con
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_NONE;
+  $$.offset = $1;
+ }
+| con '(' LLREG ')'
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$3;
+  $$.offset = $1;
+ }
+| con '(' LSP ')'
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_SP;
+  $$.offset = $1;
+ }
+| con '(' LLREG '*' con ')'
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_NONE;
+  $$.offset = $1;
+  $$.index = $3;
+  $$.scale = $5;
+  checkscale($$.scale);
+ }
+| con '(' LLREG ')' '(' LLREG '*' con ')'
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$3;
+  $$.offset = $1;
+  $$.index = $6;
+  $$.scale = $8;
+  checkscale($$.scale);
+ }
+|   '(' LLREG ')'
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$2;
+ }
+|   '(' LSP ')'
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_SP;
+ }
+|   con '(' LSREG ')'
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$3;
+  $$.offset = $1;
+ }
+|   '(' LLREG '*' con ')'
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+D_NONE;
+  $$.index = $2;
+  $$.scale = $4;
+  checkscale($$.scale);
+ }
+|   '(' LLREG ')' '(' LLREG '*' con ')'
+ {
+  $$ = nullgen;
+  $$.type = D_INDIR+$2;
+  $$.index = $5;
+  $$.scale = $7;
+  checkscale($$.scale);
+ }
+@
+%$
+
+
+
+
+<<operand rules(x86)>>=
+nmem:
+  nam
+| nam '(' LLREG '*' con ')'
+ {
+  $$ = $1;
+  $$.index = $3;
+  $$.scale = $5;
+  checkscale($$.scale);
+ }
+@
+%$
+
+% MOV foo(SB) ( AX * 8 ) ? =~ foo[ax] where sizeof foo element = 8?
+
+
+%        MOVL    count+8(FP), CX
+% this is just symbol for debugging help?
+
+<<operand rules(x86)>>=
+nam:
+  LNAME offset '(' pointer ')'
+ {
+  $$ = nullgen;
+  $$.type = $4;
+  $$.sym = $1;
+  $$.offset = $2;
+ }
+| LNAME '<' '>' offset '(' LSB ')'
+ {
+  $$ = nullgen;
+  $$.type = D_STATIC;
+  $$.sym = $1;
+  $$.offset = $4;
+ }
+@
+%$
+
+<<type declarations(x86)>>=
+%type   <lval>  pointer
+@
+
+<<operand rules(x86)>>=
+pointer:
+  LSB
+| LFP
+| LSP { $$ = D_AUTO; }
+@
+
+<<type declarations(x86)>>=
+%type   <gen>  rel
+@
+
+
+% for code (rel = ? relocatable?)
+<<operand rules(x86)>>=
+rel:
+ con '(' LPC ')'
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.offset = $1 + pc;
+ }
+| LLAB offset
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $1->value + $2;
+ }
+| LNAME offset
+ {
+  $$ = nullgen;
+  if(pass == 2)
+   yyerror("undefined label: %s", $1->name);
+  $$.type = D_BRANCH;
+  $$.sym = $1;
+  $$.offset = $2;
+ }
+@
+
+%JMP 4(PC)
+
+<<type declarations(x86)>>=
+%type   <lval>  offset
+@
+
+<<operand rules(x86)>>=
+offset:
+ /* empty */ { $$ = 0; }
+| '+' con    { $$ = $2; }
+| '-' con    { $$ = -$2; }
+@
+
+% $
+
+
+
+<<type declarations(x86)>>=
+%type   <gen>  rem rim rom 
+@
+
+% rem = register or memory
+% rim = register or memory or immediate
+% rom?
+
+
+% imm2 dead? yacc does not detect?
+
+<<operand rules(x86)>>=
+rem:
+  reg
+| mem
+
+rim:
+  rem
+| imm
+
+rom:
+  reg
+| mem
+| imm
+| rel
+
+| '*' reg  { $$ = $2; }
+| '*' omem { $$ = $2; }
+@
+% was 
+%| omem
+%| nmem
+% but factorized with mem which also makes things clearer
+
+% use for the * version? seems equivalent to regular version no?
+
+
+
+<<line rule(x86)>>=
+| LNAME ':'
+ {
+  $1->type = LLAB;
+  $1->value = pc;
+ }
+ line
+| LLAB ':'
+ {
+  if($1->value != pc)
+   yyerror("redeclaration of %s", $1->name);
+  $1->value = pc;
+ }
+ line
+@
+%$
+
+<<inst rule(x86)>>=
+| LTYPED spec1    { outcode($1, &$2); }
+| LTYPET spec2    { outcode($1, &$2); }
+| LTYPEC spec3    { outcode($1, &$2); }
+| LTYPEN spec4    { outcode($1, &$2); }
+| LTYPES spec5    { outcode($1, &$2); }
+| LTYPEM spec6    { outcode($1, &$2); }
+| LTYPEI spec7    { outcode($1, &$2); }
+| LTYPEG spec8    { outcode($1, &$2); }
+@
+
+<<type declarations(x86)>>=
+%type   <gen2>  spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8
+@
+
+
+<<special opcode operands rules(x86)>>=
+spec2:  /* TEXT */
+ mem ',' imm
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+|   mem ',' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
+@
+%$
+
+%LTYPED
+<<special opcode operands rules(x86)>>=
+spec1:  /* DATA */
+ nam '/' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
+@
+%$
+
+
+<<special opcode operands rules(x86)>>=
+spec8:  /* GLOBL */
+ mem ',' imm
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+| mem ',' con ',' imm
+ {
+  $$.from = $1;
+  $$.from.scale = $3;
+  $$.to = $5;
+ }
+@
+%$
+
+
+
+<<special opcode operands rules(x86)>>=
+spec3:  /* JMP/CALL */
+ rom
+ {
+  $$.from = nullgen;
+  $$.to = $1;
+ }
+| ',' rom
+ {
+  $$.from = nullgen;
+  $$.to = $2;
+ }
+@
+
+
+<<special opcode operands rules(x86)>>=
+spec4:  /* NOP */
+  nonnon
+| nonrem
+@
+% NOP nonrem?
+
+<<special opcode operands rules(x86)>>=
+spec5:  /* SHL/SHR */
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+| rim ',' rem ':' LLREG
+ {
+  $$.from = $1;
+  $$.to = $3;
+  if($$.from.index != D_NONE)
+   yyerror("dp shift with lhs index");
+  $$.from.index = $5;
+ }
+@
+%$
+
+
+
+<<special opcode operands rules(x86)>>=
+spec6:  /* MOVW/MOVL */
+ rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+|   rim ',' rem ':' LSREG
+ {
+  $$.from = $1;
+  $$.to = $3;
+  if($$.to.index != D_NONE)
+   yyerror("dp move with lhs index");
+  $$.to.index = $5;
+ }
+@
+%$
+
+%LSREG! mv with other segments (but used in plan9? except 
+% cs vs ds/es/fs/gs vs ss?
+
+
+
+<<special opcode operands rules(x86)>>=
+spec7: /* IMUL */
+ rim
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
+| rim ','
+ {
+  $$.from = $1;
+  $$.to = nullgen;
+ }
+| rim ',' rem
+ {
+  $$.from = $1;
+  $$.to = $3;
+ }
+@
+
+
+
+
+<<inst rule(x86)>>=
+| LNAME '=' expr
+ {
+  $1->type = LVAR;
+  $1->value = $3;
+ }
+| LVAR '=' expr
+ {
+  if($1->value != $3)
+   yyerror("redeclaration of %s", $1->name);
+  $1->value = $3;
+ }
+@
+
+<<type declarations(x86)>>=
+%type   <lval>  con expr
+@
+
+
+
+
+%\section{Operands}
+
+<<[[Token]] other fields(x86)>>=
+ Gen2  gen2;
+@
+
+% I thought I could write code like
+% /* empty */ { (Gen2) { .from = nullgen; .to = nullgen; } }
+% but didn't work
+
+<<type declarations(x86)>>=
+%type   <gen2>  nonnon nonrel nonrem rimnon rimrem remrim
+@
+
+% xxxyyy = first operand, second operand
+% nonnon = nothing first, nothing left
+
+
+<<operands rules(x86)>>=
+nonnon:
+ /* empty */ { $$.from = nullgen; $$.to = nullgen; }
+| ','        { $$.from = nullgen; $$.to = nullgen; }
+
+rimrem:
+ rim ',' rem { $$.from = $1; $$.to = $3; }
+
+remrim:
+ rem ',' rim { $$.from = $1; $$.to = $3; }
+
+rimnon:
+  rim       { $$.from = $1; $$.to = nullgen; }
+| rim ','   { $$.from = $1; $$.to = nullgen; }
+
+nonrem:
+ rem        { $$.from = nullgen; $$.to = $1; }
+| ',' rem   { $$.from = nullgen; $$.to = $2; }
+
+nonrel:
+ rel        { $$.from = nullgen; $$.to = $1; }
+| ',' rel   { $$.from = nullgen; $$.to = $2; }
+@
+
+% each time put example of instructions and why it make sense?
+% for instance rimrem vs remrim, make sense?
+
+
 
 
 % TODO LP split and transform while into if, easier flow
