@@ -19,6 +19,7 @@ TEX=Assembler.tex
 SRC_ORIG=Assembler.nw Assembler_extra.nw
 
 SRC_VIEWS= \
+  ../include/arm/5.out.h\
   ../include/386/8.out.h\
   ../include/common.out.h\
   misc/data2s.c\
@@ -27,6 +28,10 @@ SRC_VIEWS= \
   aa/globals.c\
   aa/lexbody.c\
   aa/macbody.c\
+  5a/a.h\
+  5a/globals.c\
+  5a/lex.c\
+  5a/a.y\
   8a/a.h\
   8a/globals.c\
   8a/lex.c\

@@ -1,40 +1,48 @@
+/*s: assemblers/5a/a.h */
 #include "../aa/aa.h"
 #include "arm/5.out.h"
 
+//#define	NSYMB		8192
+
 typedef	struct	Gen	Gen;
 
+/*s: constant FPCHIP(arm) */
 #define	FPCHIP		true
-//#define	NSYMB		8192
+/*e: constant FPCHIP(arm) */
+/*s: constant NMACRO(arm) */
 #define	NMACRO		10
-//Sym.sym -> Sym.idx
+/*e: constant NMACRO(arm) */
 
+/*s: struct Gen(arm) */
 struct	Gen
 {
-	Sym*	sym;
-	long	offset;
-	short	type;
-	short	reg;
-	short	name;
-	double	dval;
-	char	sval[8];
+    Sym*	sym;
+    long	offset;
+    short	type;
+    short	reg;
+    short	name;
+    double	dval;
+    char	sval[8];
 };
+/*e: struct Gen(arm) */
 
+/*s: enum _anon_(arm) */
 enum
 {
-	CLAST,
-	CMACARG,
-	CMACRO,
-	CPREPROC,
+    CLAST,
+    CMACARG,
+    CMACRO,
+    CPREPROC,
 
-	Always	= 14,
+    Always	= 14,
 };
+/*e: enum _anon_(arm) */
 
 extern	char*	Dlist[30];
 extern	int	nDlist;
 extern	Gen	nullgen;
 extern	int	pass;
 extern	char*	pathname;
-//extern	int	sym; -> symcounter
 extern	char*	thestring;
 extern	Biobuf	obuf;
 
@@ -95,3 +103,4 @@ void	linehist(char*, int);
 void	gethunk(void);
 int	assemble(char*);
 
+/*e: assemblers/5a/a.h */
