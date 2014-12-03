@@ -746,7 +746,7 @@ checkscale(int scale)
 }
 /*e: function checkscale(x86) */
 
-/*s: function syminit(x86) */
+/*s: function syminit */
 void
 syminit(Sym *s)
 {
@@ -754,7 +754,7 @@ syminit(Sym *s)
     s->type = LNAME;
     s->value = 0;
 }
-/*e: function syminit(x86) */
+/*e: function syminit */
 
 /*s: function cclean(x86) */
 void

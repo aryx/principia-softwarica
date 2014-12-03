@@ -17,9 +17,11 @@ main(int argc, char *argv[])
     thechar = '5';
     thestring = "arm";
     memset(debug, 0, sizeof(debug));
+
     cinit();
-    outfile = 0;
+    outfile = nil;
     include[ninclude++] = ".";
+
     ARGBEGIN {
     default:
         c = ARGC();
@@ -46,6 +48,7 @@ main(int argc, char *argv[])
         thestring = "thumb";
         break;
     } ARGEND
+
     if(*argv == 0) {
         print("usage: %ca [-options] file.s\n", thechar);
         errorexit();
@@ -161,13 +164,20 @@ assemble(char *file)
 }
 /*e: function assemble(arm) */
 
-/*s: global itab(arm) */
-struct
+/*s: struct Itab(arm) */
+struct Itab
 {
     char	*name;
+
+    //enum<token_kind> ???
     ushort	type;
+    //enum<opcode_kind> | enum<operand_kind> ??
     ushort	value;
-} itab[] =
+};
+/*e: struct Itab(arm) */
+
+/*s: global itab(arm) */
+struct Itab itab[] =
 {
     "SP",		LSP,	D_AUTO,
     "SB",		LSB,	D_EXTERN,
@@ -321,20 +331,6 @@ struct
     "STREX",		LTYPE9, ASTREX,
     "STREXD",		LTYPE9, ASTREXD,
 
-/*
-    "ABSF",		LTYPEI, AABSF,
-    "ABSD",		LTYPEI, AABSD,
-    "NEGF",		LTYPEI, ANEGF,
-    "NEGD",		LTYPEI, ANEGD,
-    "SQTF",		LTYPEI,	ASQTF,
-    "SQTD",		LTYPEI,	ASQTD,
-    "RNDF",		LTYPEI,	ARNDF,
-    "RNDD",		LTYPEI,	ARNDD,
-    "URDF",		LTYPEI,	AURDF,
-    "URDD",		LTYPEI,	AURDD,
-    "NRMF",		LTYPEI,	ANRMF,
-    "NRMD",		LTYPEI,	ANRMD,
-*/
 
     "SQRTF",	LTYPEI, ASQRTF,
     "SQRTD",	LTYPEI, ASQRTD,
@@ -409,9 +405,11 @@ cinit(void)
 
     nullgen.sym = S;
     nullgen.offset = 0;
+
     nullgen.type = D_NONE;
     nullgen.name = D_NONE;
     nullgen.reg = NREG;
+
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)
@@ -439,7 +437,7 @@ cinit(void)
 }
 /*e: function cinit(arm) */
 
-/*s: function syminit(arm) */
+/*s: function syminit */
 void
 syminit(Sym *s)
 {
@@ -447,7 +445,7 @@ syminit(Sym *s)
     s->type = LNAME;
     s->value = 0;
 }
-/*e: function syminit(arm) */
+/*e: function syminit */
 
 /*s: function cclean(arm) */
 void
@@ -703,7 +701,6 @@ outhist(void)
 // used to be in ../cc/lexbody and factorized between assemblers by
 // using #include, but ugly, so I copy pasted the function for now
 /*s: function yylex(arm) */
-//
 long
 yylex(void)
 {

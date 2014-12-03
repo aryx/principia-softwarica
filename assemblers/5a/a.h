@@ -16,13 +16,18 @@ typedef	struct	Gen	Gen;
 /*s: struct Gen(arm) */
 struct	Gen
 {
-    Sym*	sym;
-    long	offset;
+    // enum<operand_kind>
     short	type;
-    short	reg;
-    short	name;
+
+    long	offset; // generic value
     double	dval;
     char	sval[8];
+
+    Sym*	sym;
+
+    short	reg;
+
+    short	name;
 };
 /*e: struct Gen(arm) */
 
