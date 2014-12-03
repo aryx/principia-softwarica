@@ -2,8 +2,6 @@
 #include "../aa/aa.h"
 #include "arm/5.out.h"
 
-//#define	NSYMB		8192
-
 typedef	struct	Gen	Gen;
 
 /*s: constant FPCHIP(arm) */
@@ -35,6 +33,7 @@ enum
     CPREPROC,
 
     Always	= 14,
+    //Never = 15
 };
 /*e: enum _anon_(arm) */
 

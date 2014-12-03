@@ -1,4 +1,5 @@
 /*s: include/arm/5.out.h */
+
 /*s: constant NSNAME(arm) */
 #define	NSNAME		8
 /*e: constant NSNAME(arm) */
@@ -24,7 +25,6 @@
 /*s: constant REGARG(arm) */
 #define	REGARG		0
 /*e: constant REGARG(arm) */
-
 /* compiler allocates R1 up as temps */
 /*s: constant REGMIN(arm) */
 /* compiler allocates register variables R2 up */
@@ -52,7 +52,6 @@
 /*s: constant REGPC(arm) */
 #define	REGPC		15
 /*e: constant REGPC(arm) */
-
 /*s: constant REGTMPT(arm) */
 #define	REGTMPT		7	/* used by the loader for thumb code */
 /*e: constant REGTMPT(arm) */
@@ -69,11 +68,12 @@
 /*s: constant FREGTMP(arm) */
 #define	FREGTMP		15
 /*e: constant FREGTMP(arm) */
+
 /* compiler allocates register variables F0 up */
 /*s: enum as(arm) */
 /* compiler allocates external registers F7 down */
-
-enum	as
+// coupling: with 5c/enam.c
+enum opcode
 {
     AXXX,
 
@@ -240,7 +240,6 @@ enum	as
 /*s: constant D_NONE(arm) */
 #define	D_NONE	1
 /*e: constant D_NONE(arm) */
-
 /*s: constant D_BRANCH(arm) */
 /* type */
 #define	D_BRANCH	(D_NONE+1)
@@ -248,7 +247,6 @@ enum	as
 /*s: constant D_OREG(arm) */
 #define	D_OREG		(D_NONE+2)
 /*e: constant D_OREG(arm) */
-
 /*s: constant D_CONST(arm) */
 #define	D_CONST		(D_NONE+7)
 /*e: constant D_CONST(arm) */
@@ -276,7 +274,6 @@ enum	as
 /*s: constant D_FILE1(arm) */
 #define	D_FILE1		(D_NONE+18)
 /*e: constant D_FILE1(arm) */
-
 /*s: constant D_SHIFT(arm) */
 #define	D_SHIFT		(D_NONE+19)
 /*e: constant D_SHIFT(arm) */
@@ -289,7 +286,6 @@ enum	as
 /*s: constant D_ADDR(arm) */
 #define	D_ADDR		(D_NONE+22)
 /*e: constant D_ADDR(arm) */
-
 /*s: constant D_EXTERN(arm) */
 /* name */
 #define	D_EXTERN	(D_NONE+3)

@@ -14,7 +14,7 @@
 /*e: constant NOSPLIT(x86) */
 
 /*s: enum as(x86) */
-// coupling: with 8c/enam.c, 8l/obj.c#optab
+// coupling: with 8c/enam.c (and 8l/obj.c#optab?)
 enum opcode_kind
 {
     AXXX,

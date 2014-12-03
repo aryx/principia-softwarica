@@ -16,7 +16,7 @@ TEX=Assembler.tex
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=Assembler.nw Assembler_extra.nw
+SRC_ORIG=Assembler.nw Assembler_extra.nw Assembler_x86.nw
 
 SRC_VIEWS= \
   ../include/arm/5.out.h\
