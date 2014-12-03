@@ -7,9 +7,11 @@ typedef	struct	Gen	Gen;
 /*s: constant FPCHIP(arm) */
 #define	FPCHIP		true
 /*e: constant FPCHIP(arm) */
-/*s: constant NMACRO(arm) */
-#define	NMACRO		10
-/*e: constant NMACRO(arm) */
+
+/*s: constant Always(arm) */
+#define    Always 14
+//Never = 15
+/*e: constant Always(arm) */
 
 /*s: struct Gen(arm) */
 struct	Gen
@@ -23,19 +25,6 @@ struct	Gen
     char	sval[8];
 };
 /*e: struct Gen(arm) */
-
-/*s: enum _anon_(arm) */
-enum
-{
-    CLAST,
-    CMACARG,
-    CMACRO,
-    CPREPROC,
-
-    Always	= 14,
-    //Never = 15
-};
-/*e: enum _anon_(arm) */
 
 extern	char*	Dlist[30];
 extern	int	nDlist;
@@ -83,7 +72,6 @@ void	syminit(Sym*);
 int	getnsc(void);
 void	cinit(void);
 void	cclean(void);
-int	isreg(Gen*);
 void	zname(char*, int, int);
 void	zaddr(Gen*, int);
 int	filbuf(void);

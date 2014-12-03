@@ -15,10 +15,6 @@
 #define DUPOK		(1<<1)
 /*e: constant DUPOK(arm) */
 
-/*s: constant ALLTHUMBS(arm) */
-#define	ALLTHUMBS	(1<<2)
-/*e: constant ALLTHUMBS(arm) */
-
 /*s: constant REGRET(arm) */
 #define	REGRET		0
 /*e: constant REGRET(arm) */

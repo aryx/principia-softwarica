@@ -449,16 +449,6 @@ syminit(Sym *s)
 }
 /*e: function syminit(arm) */
 
-/*s: function isreg(arm) */
-int
-isreg(Gen *g)
-{
-
-    USED(g);
-    return 1;
-}
-/*e: function isreg(arm) */
-
 /*s: function cclean(arm) */
 void
 cclean(void)
