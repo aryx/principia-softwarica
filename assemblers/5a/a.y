@@ -73,8 +73,9 @@
 /*x: type declarations(arm) */
 %type <gen> freg fcon frcon
 /*x: type declarations(arm) */
+%type   <gen> oreg ireg nireg ioreg 
+/*x: type declarations(arm) */
 %type   <lval>  creg
-%type   <gen>   ireg nireg ioreg oreg
 %type   <gen>   regreg
 %type   <lval>  oexpr 
 %type   <lval>  reglist
@@ -153,6 +154,11 @@ inst:
 | LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, NREG, &$5); }
 /*x: inst rule(arm) */
 /*
+ * CMP
+ */
+| LTYPE7 cond imsr ',' spreg comma { outcode($1, $2, &$3, $5, &nullgen); }
+/*x: inst rule(arm) */
+/*
  * B/BL
  */
 | LTYPE4 cond comma rel   { outcode($1, $2, &nullgen, NREG, &$4); }
@@ -172,11 +178,6 @@ inst:
  * SWI
  */
 | LTYPE6 cond comma gen { outcode($1, $2, &nullgen, NREG, &$4); }
-/*x: inst rule(arm) */
-/*
- * CMP
- */
-| LTYPE7 cond imsr ',' spreg comma { outcode($1, $2, &$3, $5, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * SWAP
@@ -337,11 +338,19 @@ shift:
   $$.offset = $1 | $4 | (3 << 5);
  }
 /*x: operand rules(arm) */
+/*s: gen rule */
 gen:
   reg
 | ximm
 | shift
-
+| con
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.offset = $1;
+ }
+| oreg
+/*x: gen rule */
 | shift '(' spreg ')'
  {
   $$ = $1;
@@ -360,15 +369,8 @@ gen:
   $$.type = D_FPCR;
   $$.reg = $1;
  }
-
-| con
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.offset = $1;
- }
-| oreg
 | freg
+/*e: gen rule */
 /*x: operand rules(arm) */
 name:
  con '(' pointer ')'
@@ -548,30 +550,16 @@ oexpr:
 | ',' expr    { $$ = $2; }
 /*e: opt rules */
 /*s: misc rules */
-creg:
-  LCREG
-| LC '(' expr ')'
+oreg:
+  name
+| name '(' sreg ')'
  {
-  if($3 < 0 || $3 >= NREG)
-      print("register value out of range\n");
-  $$ = $3;
+  $$ = $1;
+  $$.type = D_OREG;
+  $$.reg = $3;
  }
-
-
-reglist:
-  spreg           { $$ = 1 << $1; }
-| spreg '-' spreg
- {
-  int i;
-  $$=0;
-  for(i=$1; i<=$3; i++)
-      $$ |= 1<<i;
-  for(i=$3; i<=$1; i++)
-      $$ |= 1<<i;
- }
-| spreg comma reglist { $$ = (1<<$1) | $3; }
-
-
+| ioreg
+/*x: misc rules */
 nireg:
   ireg
 | name
@@ -599,16 +587,29 @@ ioreg:
   $$.reg = $3;
   $$.offset = $1;
  }
-
-oreg:
-  name
-| name '(' sreg ')'
+/*x: misc rules */
+creg:
+  LCREG
+| LC '(' expr ')'
  {
-  $$ = $1;
-  $$.type = D_OREG;
-  $$.reg = $3;
+  if($3 < 0 || $3 >= NREG)
+      print("register value out of range\n");
+  $$ = $3;
  }
-| ioreg
+
+
+reglist:
+  spreg           { $$ = 1 << $1; }
+| spreg '-' spreg
+ {
+  int i;
+  $$=0;
+  for(i=$1; i<=$3; i++)
+      $$ |= 1<<i;
+  for(i=$3; i<=$1; i++)
+      $$ |= 1<<i;
+ }
+| spreg comma reglist { $$ = (1<<$1) | $3; }
 /*e: misc rules */
 /*e: grammar(arm) */
 /*e: 5a/a.y */

@@ -498,7 +498,7 @@ zname(char *n, int t, int s)
         Bputc(&obuf, *n);
         n++;
     }
-    Bputc(&obuf, 0);
+    Bputc(&obuf, '\0');
 }
 /*e: function zname(arm) */
 
@@ -515,6 +515,7 @@ zaddr(Gen *a, int s)
     Bputc(&obuf, a->reg);
     Bputc(&obuf, s);
     Bputc(&obuf, a->name);
+
     switch(a->type) {
     default:
         print("unknown type %d\n", a->type);
@@ -662,6 +663,7 @@ jackpot:
             goto jackpot;
         break;
     }
+
     Bputc(&obuf, a);
     Bputc(&obuf, scond);
     Bputc(&obuf, reg);
@@ -717,7 +719,7 @@ outhist(void)
                 Bputc(&obuf, 1);	/* sym */
                 Bputc(&obuf, '<');
                 Bwrite(&obuf, p, n);
-                Bputc(&obuf, 0);
+                Bputc(&obuf, '\0');
             }
             p = q;
             if(p == 0 && op) {
