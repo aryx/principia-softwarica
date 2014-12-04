@@ -175,7 +175,7 @@ Here are other candidates that were considered but ultimately discarded:
 % code, the actual machine code is done in the linker. A bit unusual.
 
 % hex2c
-%todo? there is also one in subc-2014
+%less: there is also one in subc-2014
 
 
 \section{Getting started}
@@ -213,7 +213,7 @@ License.
 
 % usually 2 passes as can reference stuff coming later. pretty simple.
 
-% TODO: look at TECS section on assembler?
+% less: look at TECS section on assembler?
 
 \section{[[5a]] services}
 
@@ -332,7 +332,7 @@ License.
 
 \chapter{Core Data Structures}
 
-% first 3 sections are really AST, opcode, register, operand_kind, Gen.
+% first 3 sections are really about AST: opcode, register, operand_kind/Gen.
 
 \section{[[Opcode]]}
 
@@ -395,7 +395,7 @@ enum opcode
 
 % for 5c! conventions! (not used at all by 5a, but in 5.out.h for other tools)
 <<enum regxxx(arm)>>=
-enum registers {
+enum register {
     REGRET =	0,
     REGARG =	0,
     <<[[regxxx]] cases>>
@@ -405,9 +405,16 @@ enum registers {
     REGPC =		15,
 };
 @
+% hmm it's not really an enum as REGREG = REGARG, but still useful.
 %old:    /* used by the loader for thumb code */
 %    REGTMPT =		7,
 % no REGFP??
+
+<<constant NREG(arm)>>=
+#define	NREG		16
+@
+% used to represent NONE for the outcode reg parameter
+
 
 %XXXX
 <<[[regxxx]] cases>>=
@@ -421,6 +428,8 @@ REGEXT =	10,
 REGTMP =	11,
 @
 
+
+
 \section{[[Operand_kind]] and [[Gen]]}
 
 <<enum operand_kind(arm)>>=
@@ -432,25 +441,13 @@ enum operand_kind {
 % why D_ prefix? 
 %dead: D_GOK, D_ADDR (valid for x86 but unused for arm)/* type/name */ for GOK
 
+% see later D_REG, D_CONST, etc.
+
 % how get the remaining info? e.g. for D_BRANCH to get the symbol or int 
 % you'll have too look in Gen.value
 
 %note: I reorder again a lot things, which like for opcode has some impact
 % on 5l. Now D_REG, D_CONST, D_SHIFT (mimic imsr rule) are closer.
-%note: An ADT would be far better than this enum and separate Sym 
-% and Gen (=~ Adr). So it works with Gen so it's really
-% type operand = 
-%  | D_REG of register
-%  | D_CONST of int
-%  | Branch of offset (PC)
-%  | Extern of name * offset (SB) ?
-%less: maybe by playing with Literate Programming I can reproduce a kind of ADT?
-% e.g. by introducing LSREG, and then the part of the enum register related
-% to LSREG?
-% type instr = 
-%   ...
-% type reg = 
-%   ...
 
 
 % =~ Adr of Linker ?
@@ -474,6 +471,20 @@ struct	Gen
 Gen	nullgen;
 @
 
+%note: An ADT would be far better than this enum and separate Sym 
+% and Gen (=~ Adr). So it works with Gen so it's really
+% type operand = 
+%  | D_REG of register
+%  | D_CONST of int
+%  | Branch of offset (PC)
+%  | Extern of name * offset (SB) ?
+%less: maybe by playing with Literate Programming I can reproduce a kind of ADT?
+% e.g. by introducing LSREG, and then the part of the enum register related
+% to LSREG?
+% type instr = 
+%   ...
+% type reg = 
+%   ...
 
 
 %XXXXXXX
@@ -512,25 +523,23 @@ short	name;
 
 % the first part is essentially for keywords
 <<token declarations(arm)>>=
-%token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5
-%token  <lval>  LTYPE6 LTYPE7 LTYPE8 LTYPE9 LTYPEA
-%token  <lval>  LTYPEB LTYPEC LTYPED LTYPEE LTYPEF
-%token  <lval>  LTYPEG LTYPEH LTYPEI LTYPEJ LTYPEK
-%token  <lval>  LTYPEL LTYPEM LTYPEN 
+%token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5 LTYPE6 LTYPE7 LTYPE8 LTYPE9 
+%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPED LTYPEE LTYPEF LTYPEG LTYPEH LTYPEI
+%token  <lval>  LTYPEJ LTYPEK LTYPEL LTYPEM LTYPEN 
 %token  <lval>  LTYPEBX
-%token  <lval>  LTYPEX 
 
 %token  <lval>  LSP LSB LFP LPC
-%token  <lval>  LR LREG LF LFREG LC LCREG 
-%token  <lval>  LPSR LFCR
+%token  <lval>  LR LREG  LF LFREG  LC LCREG   LPSR LFCR
 
-%token  <lval>  LCOND LS LAT
+%token  <lval>  LCOND
+%token  <lval>  LS LAT
 
 %token  <lval>  LCONST 
 %token  <dval>  LFCONST
 %token  <sval>  LSCONST
 %token  <sym>   LNAME LLAB LVAR
 @
+%dead: LTYPEX 
 
 
 
@@ -543,9 +552,9 @@ short	name;
  // | long (for LCONST)
  long   lval;
 
- double dval;
- char   sval[8];
- Sym    *sym;
+ double dval;    // for LFCONST
+ char   sval[8]; // for LSCONST
+ Sym    *sym;    // for LNAME/...
 
  <<[[Token]] other fields(arm)>>
 }
@@ -566,8 +575,7 @@ short	name;
 
 
 
-% TODO: just put a subset with most relevant instr and registers
-% hmm ADT would be better than union and this
+% hmm ADT again would be better than union and this
 %    // could put D_NONE as a.y actually redo the job of setting Gen.value
 %    // appropriately
 %
@@ -598,9 +606,8 @@ struct Itab itab[] =
 \section{[[Sym]] and [[hash]]}
 
 % assembling is a lot about symbolic name processing!
+% (actually generic struct in aa/)
 
-% currently copy pasted in 5a/a.h and va/a.h so if reorder
-% may have to reorder there (or factorize code to avoid those pbs)
 <<struct Sym>>=
 struct	Sym
 {
@@ -720,11 +727,10 @@ slookup(char *s)
 @
 
 
-% old? dead?
+%dead:
 %<<[[Sym]] other fields>>=
 %Ref*	ref; // unused for 5a, matters?
 %@
-%
 %<<struct Ref>>=
 %// only for 8a actually, and actually not used so I removed it
 %struct	Ref
@@ -800,10 +806,6 @@ main(int argc, char *argv[])
     exits(0);
 }
 @
-%    case 't':
-%        thechar = 't';
-%        thestring = "thumb";
-%        break;
 
 
 <<[[main()]] command line processing>>=
@@ -2887,6 +2889,8 @@ line:
 \section{Instructions}
 
 % outcode =~ pc++
+% take 5 arguments, opcode, cond, op1, op2, op3.
+% op2 is always a register or nothing.
 
 % similar sections than in Machine.nw
 
@@ -3163,6 +3167,7 @@ ABL,
 | LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, NREG, &$4); }
 @
 
+% comma rel? useful?
 
 <<branching opcodes>>=
 /* 
@@ -3294,6 +3299,12 @@ cond:
 | cond LCOND  { $$ = ($1 & ~C_SCOND) | $2; }
 @
 
+<<constant C_SCOND(arm)>>=
+/* scond byte */
+#define	C_SCOND	((1<<4)-1)
+@
+
+
 <<[[itab]] elements>>=
 ".EQ",		LCOND,	0,
 ".NE",		LCOND,	1,
@@ -3313,6 +3324,11 @@ cond:
 ".LE",		LCOND,	13,
 ".AL",		LCOND,	Always,
 @
+%//Never = 15
+
+<<constant Always(arm)>>=
+#define    Always 14
+@
 
 
 \section{Special bits}
@@ -3329,15 +3345,30 @@ cond:
 ".P",		LS,	C_PBIT,
 @
 
+<<constant C_SBIT(arm)>>=
+#define	C_SBIT	(1<<4)
+@
+
+<<constant C_PBIT(arm)>>=
+#define	C_PBIT	(1<<5)
+@
+
+<<constant C_WBIT(arm)>>=
+#define	C_WBIT	(1<<6)
+@
+
+<<constant C_UBIT(arm)>>=
+#define	C_UBIT	(1<<7)	/* up bit */
+@
+
+
+% composite
 <<[[itab]] elements>>=
 ".PW",		LS,	C_WBIT|C_PBIT,
 ".WP",		LS,	C_WBIT|C_PBIT,
 @
 
-<<[[itab]] elements>>=
-".F",		LS,	C_FBIT,
-@
-
+% composite or alternate form
 <<[[itab]] elements>>=
 ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
 ".IAW",		LS,	C_WBIT|C_UBIT,
@@ -3349,6 +3380,16 @@ cond:
 ".DA",		LS,	0,
 @
 % some seems redundant like .DB and .P, .U and .IA, etc
+
+<<constant C_FBIT(arm)>>=
+#define	C_FBIT	(1<<7)	/* psr flags-only */
+@
+
+
+<<[[itab]] elements>>=
+".F",		LS,	C_FBIT,
+@
+
 
 \section{Operand}
 
@@ -4462,6 +4503,21 @@ ASQRTD,
 "F15",		LFREG,	15,
 @
 
+<<constant FREGRET(arm)>>=
+#define	FREGRET		0
+@
+<<constant FREGEXT(arm)>>=
+#define	FREGEXT		7
+@
+<<constant FREGTMP(arm)>>=
+#define	FREGTMP		15
+@
+
+% used by 5c/ in char	reg[NREG+NFREG];
+<<constant NFREG(arm)>>=
+#define	NFREG		8
+@
+% 8? looks like 16 above
 
 
 <<struct ieee>>=
@@ -4916,6 +4972,14 @@ if(argc > 1) {
     }
 }
 @
+
+%\section{Thumb code}
+% arg processing: (but then no more generic across 5a/ and 8a/)
+%
+%    case 't':
+%        thechar = 't';
+%        thestring = "thumb";
+%        break;
 
 \chapter{Conclusion}
 
