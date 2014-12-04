@@ -202,10 +202,9 @@ assemble(char *file)
 struct Itab
 {
     char	*name;
-
-    //enum<token_kind> ???
+    //enum<token_kind>
     ushort	type;
-    //enum<opcode> | enum<operand_kind> ??
+    //enum<opcode> | enum<operand_kind> | enum<name_kind> | enum<registers>
     ushort	value;
 };
 /*e: struct Itab(arm) */
@@ -305,6 +304,7 @@ struct Itab itab[] =
     ".S",		LS,	C_SBIT,
     ".W",		LS,	C_WBIT,
     ".P",		LS,	C_PBIT,
+    /*x: [[itab]] elements */
     ".PW",		LS,	C_WBIT|C_PBIT,
     ".WP",		LS,	C_WBIT|C_PBIT,
     /*x: [[itab]] elements */
@@ -395,15 +395,6 @@ struct Itab itab[] =
     "F14",		LFREG,	14,
     "F15",		LFREG,	15,
     /*x: [[itab]] elements */
-    "LDREX",		LTYPE3, ALDREX,
-    "LDREXD",		LTYPE3, ALDREXD,
-    "STREX",		LTYPE9, ASTREX,
-    "STREXD",		LTYPE9, ASTREXD,
-    /*x: [[itab]] elements */
-    "BX",		LTYPEBX,	ABX,
-    /*x: [[itab]] elements */
-    "BCASE",	LTYPE5,	ABCASE,
-    /*x: [[itab]] elements */
     "MOVM",		LTYPE8, AMOVM,
     /*x: [[itab]] elements */
     "RFE",		LTYPEA, ARFE,
@@ -433,10 +424,19 @@ struct Itab itab[] =
     "CPSR",		LPSR,	0,
     "SPSR",		LPSR,	1,
     /*x: [[itab]] elements */
+    "CASE",		LTYPED, ACASE,
+    /*x: [[itab]] elements */
+    "BCASE",	LTYPE5,	ABCASE,
+    /*x: [[itab]] elements */
+    "BX",		LTYPEBX,	ABX,
+    /*x: [[itab]] elements */
+    "LDREX",		LTYPE3, ALDREX,
+    "LDREXD",		LTYPE3, ALDREXD,
+    "STREX",		LTYPE9, ASTREX,
+    "STREXD",		LTYPE9, ASTREXD,
+    /*x: [[itab]] elements */
     "FPSR",		LFCR,	0,
     "FPCR",		LFCR,	1,
-    /*x: [[itab]] elements */
-    "CASE",		LTYPED, ACASE,
     /*e: [[itab]] elements */
     0
 };
@@ -452,7 +452,7 @@ cinit(void)
     nullgen.sym = S;
     nullgen.offset = 0;
     nullgen.type = D_NONE;
-    nullgen.name = D_NONE;
+    nullgen.name = N_NONE;
     nullgen.reg = NREG;
     if(FPCHIP)
         nullgen.dval = 0;
@@ -527,10 +527,6 @@ zaddr(Gen *a, int s)
     Bputc(&obuf, a->name);
 
     switch(a->type) {
-    default:
-        print("unknown type %d\n", a->type);
-        exits("arg");
-
     case D_NONE:
     case D_REG:
     case D_FREG:
@@ -572,6 +568,11 @@ zaddr(Gen *a, int s)
         Bputc(&obuf, e.h>>16);
         Bputc(&obuf, e.h>>24);
         break;
+
+    default:
+        print("unknown type %d\n", a->type);
+        exits("arg");
+
     }
 }
 /*e: function zaddr(arm) */

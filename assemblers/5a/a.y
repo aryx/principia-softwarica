@@ -4,9 +4,9 @@
 %}
 /*s: union token(arm) */
 %union {
- //   enum<opcode> (for LTYPE/...) 
+ //   enum<opcode>   (for LTYPE/...) 
  // | enum<register> (for LREG/...)
- // | enum<cond>  (for LCOND) 
+ // | enum<cond>     (for LCOND) 
  // ...
  // | long (for LCONST)
  long   lval;
@@ -61,6 +61,8 @@
 /*x: type declarations(arm) */
 %type   <gen>   gen 
 /*x: type declarations(arm) */
+%type   <gen> oreg ireg nireg ioreg 
+/*x: type declarations(arm) */
 %type   <gen>   name 
 %type   <lval>  pointer
 /*x: type declarations(arm) */
@@ -73,9 +75,8 @@
 /*x: type declarations(arm) */
 %type <gen> freg fcon frcon
 /*x: type declarations(arm) */
-%type   <gen> oreg ireg nireg ioreg 
-/*x: type declarations(arm) */
 %type   <lval>  creg
+/*x: type declarations(arm) */
 %type   <gen>   regreg
 %type   <lval>  oexpr 
 %type   <lval>  reglist
@@ -216,11 +217,6 @@ inst:
 | LTYPEL cond freg ',' freg comma { outcode($1, $2, &$3, $5.reg, &nullgen); }
 /*x: inst rule(arm) */
 /*
- * BX
- */
-| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
-/*x: inst rule(arm) */
-/*
  * MOVM
  */
 | LTYPE8 cond ioreg ',' '[' reglist ']'
@@ -269,11 +265,16 @@ inst:
  * CASE
  */
 | LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
+/*x: inst rule(arm) */
+/*
+ * BX
+ */
+| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
 /*e: inst rule(arm) */
 /*s: cond rule(arm) */
 cond:
- /* empty */ { $$ = Always; }
-| cond LCOND { $$ = ($1 & ~C_SCOND) | $2; }
+  /* empty */ { $$ = Always; }
+| cond LCOND  { $$ = ($1 & ~C_SCOND) | $2; }
 /*x: cond rule(arm) */
 | cond LS    { $$ = $1 | $2; }
 /*e: cond rule(arm) */
@@ -365,6 +366,7 @@ gen:
   $$.type = D_PSR;
   $$.reg = $1;
  }
+/*x: gen rule */
 | LFCR
  {
   $$ = nullgen;
@@ -581,24 +583,9 @@ ireg:
  }
 /*x: misc rules */
 nireg:
-  ireg
-| name
- {
-  $$ = $1;
-  if($1.name != D_EXTERN && $1.name != D_STATIC) {
-  }
- }
+  name
+| ireg
 /*x: misc rules */
-creg:
-  LCREG
-| LC '(' expr ')'
- {
-  if($3 < 0 || $3 >= NREG)
-      print("register value out of range\n");
-  $$ = $3;
- }
-
-
 reglist:
   spreg           { $$ = 1 << $1; }
 | spreg '-' spreg
@@ -611,6 +598,15 @@ reglist:
       $$ |= 1<<i;
  }
 | spreg comma reglist { $$ = (1<<$1) | $3; }
+/*x: misc rules */
+creg:
+  LCREG
+| LC '(' expr ')'
+ {
+  if($3 < 0 || $3 >= NREG)
+      print("register value out of range\n");
+  $$ = $3;
+ }
 /*e: misc rules */
 /*e: grammar(arm) */
 /*e: 5a/a.y */

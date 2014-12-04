@@ -4,10 +4,6 @@
 #define	NSNAME		8
 /*e: constant NSNAME(arm) */
 
-/*s: constant NREG(arm) */
-#define	NREG		16
-/*e: constant NREG(arm) */
-
 /*s: constant NOPROF(arm) */
 #define NOPROF		(1<<0)
 /*e: constant NOPROF(arm) */
@@ -16,25 +12,28 @@
 /*e: constant DUPOK(arm) */
 
 /*s: enum regxxx(arm) */
-enum regxxx {
+enum registers {
     REGRET =	0,
     REGARG =	0,
-
-   /* compiler allocates R1 up as temps */
-   /* compiler allocates register variables R2 up */
+    /*s: [[regxxx]] cases */
+    /* compiler allocates R1 up as temps */
+    /* compiler allocates register variables R2 up */
     REGMIN =	2,
     REGMAX =	8,
 
     REGEXT =	10,
-   /* compiler allocates external registers R10 down */
+    /* compiler allocates external registers R10 down */
     REGTMP =	11,
-
+    /*e: [[regxxx]] cases */
     REGSB =		12,
     REGSP =		13,
     REGLINK =	14,
     REGPC =		15,
 };
 /*e: enum regxxx(arm) */
+/*s: constant NREG(arm) */
+#define	NREG		16
+/*e: constant NREG(arm) */
 
 /*s: constant NFREG(arm) */
 #define	NFREG		8
@@ -48,7 +47,6 @@ enum regxxx {
 /*s: constant FREGTMP(arm) */
 #define	FREGTMP		15
 /*e: constant FREGTMP(arm) */
-
 /* compiler allocates register variables F0 up */
 /* compiler allocates external registers F7 down */
 
@@ -89,7 +87,7 @@ enum opcode
     AMULLU,
     AMULALU,
     /*x: mul/div/mod opcodes */
-    AMULA, // mov with MUL?
+    AMULA,
     /*e: mul/div/mod opcodes */
     /*s: comparison opcodes */
     ATST,
@@ -99,7 +97,6 @@ enum opcode
     ACMN,
     /*e: comparison opcodes */
     /*s: bitshift opcodes */
-    // pseudo instruction? just special kind of AMOV with shift bits?
     ASRL,
     ASRA,
     ASLL,
@@ -131,6 +128,8 @@ enum opcode
     ABGT,
     ABLE,
     //ABAL? (always) done via AB, ABNV (never) done via ANOP probably
+    /*x: branching opcodes */
+    ARET,
     /*e: branching opcodes */
 
     /*s: mov opcodes */
@@ -150,32 +149,11 @@ enum opcode
     ASWPBU,
     /*e: swap opcodes */
 
-    /*s: syscall opcodes */
+    /*s: interrupt opcodes */
     ASWI, // syscall
-    /*e: syscall opcodes */
+    /*e: interrupt opcodes */
 
-    /*s: pseudo opcodes */
-    ARET,
-    /*x: pseudo opcodes */
-    AGOK,
-    AHISTORY,
-    ANAME,
-    ADYNT,
-    AINIT,
-    ABCASE,
-    /*x: pseudo opcodes */
-    ATEXT,
-    AGLOBL,
-    /*x: pseudo opcodes */
-    ADATA,
-    AWORD,
-    /*x: pseudo opcodes */
-    AEND,
-    /*x: pseudo opcodes */
-    ACASE,
-    /*e: pseudo opcodes */
-
-    /*s: mov float opcodes */
+    /*s: float mov opcodes */
     // ??
     AMOVWD,
     AMOVWF,
@@ -185,8 +163,8 @@ enum opcode
     AMOVDF,
     AMOVF,
     AMOVD,
-    /*e: mov float opcodes */
-    /*s: arithmetic float opcodes */
+    /*e: float mov opcodes */
+    /*s: float arithmetic opcodes */
     // floats?
     ACMPF,
     ACMPD,
@@ -200,23 +178,93 @@ enum opcode
     ADIVD,
     ASQRTF,
     ASQRTD,
-    /*e: arithmetic float opcodes */
+    /*e: float arithmetic opcodes */
     /*s: misc opcodes */
     ARFE, // ?? return from exn?
+    /*x: misc opcodes */
     ABX, // ?
     ABXRET, // ?
     ADWORD, // ?
     ASIGNAME,
-    /* moved here to preserve values of older identifiers */
+    /*x: misc opcodes */
     ALDREX,
     ASTREX,
     ALDREXD,
     ASTREXD,
     /*e: misc opcodes */
 
+    /*s: pseudo opcodes */
+    AGOK,
+    ADYNT,
+    AINIT,
+    /*x: pseudo opcodes */
+    ATEXT,
+    AGLOBL,
+    /*x: pseudo opcodes */
+    ADATA,
+    AWORD,
+    /*x: pseudo opcodes */
+    AEND,
+    /*x: pseudo opcodes */
+    ANAME,
+    /*x: pseudo opcodes */
+    AHISTORY,
+    /*x: pseudo opcodes */
+    ACASE,
+    /*x: pseudo opcodes */
+    ABCASE,
+    /*e: pseudo opcodes */
+
     ALAST,
 };
 /*e: enum as(arm) */
+
+/*s: enum operand_kind(arm) */
+enum operand_kind {
+    D_NONE,
+    /*s: operand_kind cases */
+    D_REGREG,
+    /*x: operand_kind cases */
+    D_REG,
+    /*x: operand_kind cases */
+    D_CONST,
+    /*x: operand_kind cases */
+    D_SHIFT,
+    /*x: operand_kind cases */
+    D_OREG,
+    /*x: operand_kind cases */
+    D_BRANCH,
+    /*x: operand_kind cases */
+    D_SCONST,
+    /*x: operand_kind cases */
+    D_OCONST,
+    /*x: operand_kind cases */
+    D_FREG,
+    /*x: operand_kind cases */
+    D_FCONST,
+    /*x: operand_kind cases */
+    D_PSR,
+    /*x: operand_kind cases */
+    D_FPCR,
+    /*e: operand_kind cases */
+};
+/*e: enum operand_kind(arm) */
+
+/*s: enum name_kind(arm) */
+enum name_kind {
+   N_NONE,
+   /*s: name_kind cases */
+   D_EXTERN, // data/bss values (from SB)
+   D_STATIC, // data static variables (from SB)
+   D_AUTO,   // stack values (from SP)
+   D_PARAM,  // parameter (from FP)
+   /*x: name_kind cases */
+   D_FILE,
+   /*x: name_kind cases */
+   D_FILE1, // used by linker only?
+   /*e: name_kind cases */
+};
+/*e: enum name_kind(arm) */
 
 /*s: constant C_SCOND(arm) */
 /* scond byte */
@@ -237,44 +285,6 @@ enum opcode
 /*s: constant C_UBIT(arm) */
 #define	C_UBIT	(1<<7)	/* up bit */
 /*e: constant C_UBIT(arm) */
-
-/*s: enum dxxx(arm) */
-enum operand_kind {
-    D_GOK,
-
-    D_NONE,
-
-    D_REG,
-    D_CONST,
-    D_SHIFT,
-
-    // for B, BL
-    D_BRANCH,
-
-    // For ADATA?
-    D_EXTERN, // data/bss values (from SB)
-    D_STATIC, // data static variables (from SB)
-    D_AUTO,   // stack values (from SP)
-    D_PARAM,  // parameter (from FP)
-
-    D_FCONST,
-    D_SCONST,
-
-    D_OREG,
-    D_OCONST,
-
-    D_PSR,
-    D_FPCR,
-    D_FREG,
-    D_REGREG,
-
-    D_FILE,
-
-    D_FILE1, // used by linker only?
-    D_ADDR, // used by linker only?
-
-};
-/*e: enum dxxx(arm) */
 
 /*s: constant SYMDEF(arm) */
 /*

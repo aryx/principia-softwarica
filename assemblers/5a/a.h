@@ -22,13 +22,15 @@ struct	Gen
     long	offset; // generic value
     double	dval;
     char	sval[8];
+    /*s: [[Gen]] other fields */
+    // option<enum<register>> where None is done via NREG
+    short	reg; // ??
 
     // option<Sym>, for debubbing purpose?
     Sym*	sym;
-    // option<enum<register>> where None is done via NREG
-    short	reg; // ??
-    // option<??> None = D_NONE
+    // option<name_kind> None = N_NONE
     short	name;
+    /*e: [[Gen]] other fields */
 };
 /*e: struct Gen(arm) */
 
