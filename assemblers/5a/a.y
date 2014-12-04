@@ -122,16 +122,11 @@ line:
 /*s: inst rule(arm) */
 inst:
 /*
- * ADD/SUB/...
+ * AND/OR/ADD/SUB/...
  */
   LTYPE1 cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
 | LTYPE1 cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
 | LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, NREG, &$5); }
-/*x: inst rule(arm) */
-/*
- * MVN
- */
-| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, NREG, &$5); }
 /*x: inst rule(arm) */
 /*
  * MULL hi,lo,r1,r2
@@ -154,6 +149,11 @@ inst:
 | LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, NREG, &$5); }
 /*x: inst rule(arm) */
 /*
+ * MVN
+ */
+| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, NREG, &$5); }
+/*x: inst rule(arm) */
+/*
  * CMP
  */
 | LTYPE7 cond imsr ',' spreg comma { outcode($1, $2, &$3, $5, &nullgen); }
@@ -165,7 +165,7 @@ inst:
 | LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, NREG, &$4); }
 /*x: inst rule(arm) */
 /*
- * BEQ
+ * BEQ/...
  */
 | LTYPE5 comma rel { outcode($1, Always, &nullgen, NREG, &$3); }
 /*x: inst rule(arm) */
@@ -187,16 +187,6 @@ inst:
 | LTYPE9 cond comma ireg ',' reg   { outcode($1, $2, &$4, $6.reg, &$6); }
 /*x: inst rule(arm) */
 /*
- * CASE
- */
-| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
-/*x: inst rule(arm) */
-/*
- * WORD
- */
-| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
-/*x: inst rule(arm) */
-/*
  * TEXT/GLOBL
  */
 | LTYPEB name ',' imm         { outcode($1, Always, &$2, NREG, &$4); }
@@ -206,6 +196,11 @@ inst:
  * DATA
  */
 | LTYPEC name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
+/*x: inst rule(arm) */
+/*
+ * WORD
+ */
+| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
 /*x: inst rule(arm) */
 /*
  * END
@@ -269,6 +264,11 @@ inst:
    (1<<4);          /* must be set */ // opcode component
   outcode(AWORD, Always, &nullgen, NREG, &g);
  }
+/*x: inst rule(arm) */
+/*
+ * CASE
+ */
+| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
 /*e: inst rule(arm) */
 /*s: cond rule(arm) */
 cond:
@@ -356,7 +356,9 @@ gen:
   $$ = $1;
   $$.reg = $3;
  }
-
+/*x: gen rule */
+| freg
+/*x: gen rule */
 | LPSR
  {
   $$ = nullgen;
@@ -369,7 +371,6 @@ gen:
   $$.type = D_FPCR;
   $$.reg = $1;
  }
-| freg
 /*e: gen rule */
 /*x: operand rules(arm) */
 name:
@@ -560,24 +561,6 @@ oreg:
  }
 | ioreg
 /*x: misc rules */
-nireg:
-  ireg
-| name
- {
-  $$ = $1;
-  if($1.name != D_EXTERN && $1.name != D_STATIC) {
-  }
- }
-
-ireg:
- '(' spreg ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.reg = $2;
-  $$.offset = 0;
- }
-
 ioreg:
   ireg
 | con '(' sreg ')'
@@ -586,6 +569,24 @@ ioreg:
   $$.type = D_OREG;
   $$.reg = $3;
   $$.offset = $1;
+ }
+/*x: misc rules */
+ireg:
+ '(' spreg ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.reg = $2;
+  $$.offset = 0;
+ }
+/*x: misc rules */
+nireg:
+  ireg
+| name
+ {
+  $$ = $1;
+  if($1.name != D_EXTERN && $1.name != D_STATIC) {
+  }
  }
 /*x: misc rules */
 creg:

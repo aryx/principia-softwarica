@@ -1,4 +1,6 @@
 #include	"../cc/cc.h"
+
+#include	<common.out.h>
 #include	"arm/5.out.h"
 
 /*

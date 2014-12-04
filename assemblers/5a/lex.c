@@ -213,13 +213,112 @@ struct Itab
 /*s: global itab(arm) */
 struct Itab itab[] =
 {
-    "SP",		LSP,	D_AUTO,
-    "SB",		LSB,	D_EXTERN,
-    "FP",		LFP,	D_PARAM,
-    "PC",		LPC,	D_BRANCH,
-
-    "R",		LR,	0,
-
+    "NOP",		LTYPEI, ANOP,
+    /*s: [[itab]] elements */
+    "AND",		LTYPE1,	AAND,
+    "ORR",		LTYPE1,	AORR,
+    "EOR",		LTYPE1,	AEOR,
+    "ADD",		LTYPE1,	AADD,
+    "SUB",		LTYPE1,	ASUB,
+    /*x: [[itab]] elements */
+    "BIC",		LTYPE1,	ABIC,
+    "RSB",		LTYPE1,	ARSB,
+    "ADC",		LTYPE1,	AADC,
+    "SBC",		LTYPE1,	ASBC,
+    "RSC",		LTYPE1,	ARSC,
+    /*x: [[itab]] elements */
+    "SLL",		LTYPE1,	ASLL,
+    "SRL",		LTYPE1,	ASRL,
+    "SRA",		LTYPE1,	ASRA,
+    /*x: [[itab]] elements */
+    "MUL",		LTYPE1, AMUL,
+    "DIV",		LTYPE1,	ADIV,
+    "MOD",		LTYPE1,	AMOD,
+    /*x: [[itab]] elements */
+    "MULL",		LTYPEM, AMULL,
+    "MULAL",	LTYPEM, AMULAL,
+    "MULLU",	LTYPEM, AMULLU,
+    "MULALU",	LTYPEM, AMULALU,
+    /*x: [[itab]] elements */
+    "MULA",		LTYPEN, AMULA,
+    /*x: [[itab]] elements */
+    "MOVW",		LTYPE3, AMOVW,
+    "MOVB",		LTYPE3, AMOVB,
+    "MOVBU",	LTYPE3, AMOVBU,
+    "MOVH",		LTYPE3, AMOVH,
+    "MOVHU",	LTYPE3, AMOVHU,
+    /*x: [[itab]] elements */
+    "MVN",		LTYPE2, AMVN,	/* op2 ignored */
+    /*x: [[itab]] elements */
+    "CMP",		LTYPE7,	ACMP,
+    "TST",		LTYPE7,	ATST,
+    "TEQ",		LTYPE7,	ATEQ,
+    /*x: [[itab]] elements */
+    "CMN",		LTYPE7,	ACMN,
+    /*x: [[itab]] elements */
+    "B",		LTYPE4, AB,
+    "BL",		LTYPE4, ABL,
+    /*x: [[itab]] elements */
+    "BEQ",		LTYPE5,	ABEQ,
+    "BNE",		LTYPE5,	ABNE,
+    "BCS",		LTYPE5,	ABCS,
+    "BHS",		LTYPE5,	ABHS,
+    "BCC",		LTYPE5,	ABCC,
+    "BLO",		LTYPE5,	ABLO,
+    "BMI",		LTYPE5,	ABMI,
+    "BPL",		LTYPE5,	ABPL,
+    "BVS",		LTYPE5,	ABVS,
+    "BVC",		LTYPE5,	ABVC,
+    "BHI",		LTYPE5,	ABHI,
+    "BLS",		LTYPE5,	ABLS,
+    "BGE",		LTYPE5,	ABGE,
+    "BLT",		LTYPE5,	ABLT,
+    "BGT",		LTYPE5,	ABGT,
+    "BLE",		LTYPE5,	ABLE,
+    /*x: [[itab]] elements */
+    "RET",		LTYPEA, ARET,
+    /*x: [[itab]] elements */
+    "SWI",		LTYPE6, ASWI,
+    /*x: [[itab]] elements */
+    "SWPW",		LTYPE9, ASWPW,
+    "SWPBU",	LTYPE9, ASWPBU,
+    /*x: [[itab]] elements */
+    ".EQ",		LCOND,	0,
+    ".NE",		LCOND,	1,
+    ".CS",		LCOND,	2,
+    ".HS",		LCOND,	2,
+    ".CC",		LCOND,	3,
+    ".LO",		LCOND,	3,
+    ".MI",		LCOND,	4,
+    ".PL",		LCOND,	5,
+    ".VS",		LCOND,	6,
+    ".VC",		LCOND,	7,
+    ".HI",		LCOND,	8,
+    ".LS",		LCOND,	9,
+    ".GE",		LCOND,	10,
+    ".LT",		LCOND,	11,
+    ".GT",		LCOND,	12,
+    ".LE",		LCOND,	13,
+    ".AL",		LCOND,	Always,
+    /*x: [[itab]] elements */
+    ".U",		LS,	C_UBIT,
+    ".S",		LS,	C_SBIT,
+    ".W",		LS,	C_WBIT,
+    ".P",		LS,	C_PBIT,
+    ".PW",		LS,	C_WBIT|C_PBIT,
+    ".WP",		LS,	C_WBIT|C_PBIT,
+    /*x: [[itab]] elements */
+    ".F",		LS,	C_FBIT,
+    /*x: [[itab]] elements */
+    ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
+    ".IAW",		LS,	C_WBIT|C_UBIT,
+    ".DBW",		LS,	C_WBIT|C_PBIT,
+    ".DAW",		LS,	C_WBIT,
+    ".IB",		LS,	C_PBIT|C_UBIT,
+    ".IA",		LS,	C_UBIT,
+    ".DB",		LS,	C_PBIT,
+    ".DA",		LS,	0,
+    /*x: [[itab]] elements */
     "R0",		LREG,	0,
     "R1",		LREG,	1,
     "R2",		LREG,	2,
@@ -236,7 +335,47 @@ struct Itab itab[] =
     "R13",		LREG,	13,
     "R14",		LREG,	14,
     "R15",		LREG,	15,
-
+    /*x: [[itab]] elements */
+    "R",		LR,	0,
+    /*x: [[itab]] elements */
+    "SB",		LSB,	D_EXTERN,
+    "PC",		LPC,	D_BRANCH,
+    /*x: [[itab]] elements */
+    "@",		LAT,	0,
+    /*x: [[itab]] elements */
+    "SP",		LSP,	D_AUTO,
+    "FP",		LFP,	D_PARAM,
+    /*x: [[itab]] elements */
+    "TEXT",		LTYPEB, ATEXT,
+    "GLOBL",	LTYPEB, AGLOBL,
+    /*x: [[itab]] elements */
+    "DATA",		LTYPEC, ADATA,
+    "WORD",		LTYPEH, AWORD,
+    /*x: [[itab]] elements */
+    "END",		LTYPEE, AEND,
+    /*x: [[itab]] elements */
+    "MOVD",		LTYPE3, AMOVD,
+    "MOVDF",	LTYPE3, AMOVDF,
+    "MOVDW",	LTYPE3, AMOVDW,
+    "MOVF",		LTYPE3, AMOVF,
+    "MOVFD",	LTYPE3, AMOVFD,
+    "MOVFW",	LTYPE3, AMOVFW,
+    "MOVWD",	LTYPE3, AMOVWD,
+    "MOVWF",	LTYPE3, AMOVWF,
+    /*x: [[itab]] elements */
+    "SQRTF",	LTYPEI, ASQRTF,
+    "SQRTD",	LTYPEI, ASQRTD,
+    "CMPF",		LTYPEL, ACMPF,
+    "CMPD",		LTYPEL, ACMPD,
+    "ADDF",		LTYPEK,	AADDF,
+    "ADDD",		LTYPEK,	AADDD,
+    "SUBF",		LTYPEK,	ASUBF,
+    "SUBD",		LTYPEK,	ASUBD,
+    "MULF",		LTYPEK,	AMULF,
+    "MULD",		LTYPEK,	AMULD,
+    "DIVF",		LTYPEK,	ADIVF,
+    "DIVD",		LTYPEK,	ADIVD,
+    /*x: [[itab]] elements */
     "F",		LF,	0,
 
     "F0",		LFREG,	0,
@@ -255,7 +394,23 @@ struct Itab itab[] =
     "F13",		LFREG,	13,
     "F14",		LFREG,	14,
     "F15",		LFREG,	15,
-
+    /*x: [[itab]] elements */
+    "LDREX",		LTYPE3, ALDREX,
+    "LDREXD",		LTYPE3, ALDREXD,
+    "STREX",		LTYPE9, ASTREX,
+    "STREXD",		LTYPE9, ASTREXD,
+    /*x: [[itab]] elements */
+    "BX",		LTYPEBX,	ABX,
+    /*x: [[itab]] elements */
+    "BCASE",	LTYPE5,	ABCASE,
+    /*x: [[itab]] elements */
+    "MOVM",		LTYPE8, AMOVM,
+    /*x: [[itab]] elements */
+    "RFE",		LTYPEA, ARFE,
+    /*x: [[itab]] elements */
+    "MCR",		LTYPEJ, 0,
+    "MRC",		LTYPEJ, 1,
+    /*x: [[itab]] elements */
     "C",		LC,	0,
 
     "C0",		LCREG,	0,
@@ -274,160 +429,15 @@ struct Itab itab[] =
     "C13",		LCREG,	13,
     "C14",		LCREG,	14,
     "C15",		LCREG,	15,
-
+    /*x: [[itab]] elements */
     "CPSR",		LPSR,	0,
     "SPSR",		LPSR,	1,
-
+    /*x: [[itab]] elements */
     "FPSR",		LFCR,	0,
     "FPCR",		LFCR,	1,
-
-    ".EQ",		LCOND,	0,
-    ".NE",		LCOND,	1,
-    ".CS",		LCOND,	2,
-    ".HS",		LCOND,	2,
-    ".CC",		LCOND,	3,
-    ".LO",		LCOND,	3,
-    ".MI",		LCOND,	4,
-    ".PL",		LCOND,	5,
-    ".VS",		LCOND,	6,
-    ".VC",		LCOND,	7,
-    ".HI",		LCOND,	8,
-    ".LS",		LCOND,	9,
-    ".GE",		LCOND,	10,
-    ".LT",		LCOND,	11,
-    ".GT",		LCOND,	12,
-    ".LE",		LCOND,	13,
-    ".AL",		LCOND,	Always,
-
-    ".U",		LS,	C_UBIT,
-    ".S",		LS,	C_SBIT,
-    ".W",		LS,	C_WBIT,
-    ".P",		LS,	C_PBIT,
-    ".PW",		LS,	C_WBIT|C_PBIT,
-    ".WP",		LS,	C_WBIT|C_PBIT,
-
-    ".F",		LS,	C_FBIT,
-
-    ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
-    ".IAW",		LS,	C_WBIT|C_UBIT,
-    ".DBW",		LS,	C_WBIT|C_PBIT,
-    ".DAW",		LS,	C_WBIT,
-    ".IB",		LS,	C_PBIT|C_UBIT,
-    ".IA",		LS,	C_UBIT,
-    ".DB",		LS,	C_PBIT,
-    ".DA",		LS,	0,
-
-    "@",		LAT,	0,
-
-    "AND",		LTYPE1,	AAND,
-    "EOR",		LTYPE1,	AEOR,
-    "SUB",		LTYPE1,	ASUB,
-    "RSB",		LTYPE1,	ARSB,
-    "ADD",		LTYPE1,	AADD,
-    "ADC",		LTYPE1,	AADC,
-    "SBC",		LTYPE1,	ASBC,
-    "RSC",		LTYPE1,	ARSC,
-    "ORR",		LTYPE1,	AORR,
-    "BIC",		LTYPE1,	ABIC,
-
-    "SLL",		LTYPE1,	ASLL,
-    "SRL",		LTYPE1,	ASRL,
-    "SRA",		LTYPE1,	ASRA,
-
-    "MUL",		LTYPE1, AMUL,
-    "MULA",		LTYPEN, AMULA,
-    "DIV",		LTYPE1,	ADIV,
-    "MOD",		LTYPE1,	AMOD,
-
-    "MULL",		LTYPEM, AMULL,
-    "MULAL",	LTYPEM, AMULAL,
-    "MULLU",	LTYPEM, AMULLU,
-    "MULALU",	LTYPEM, AMULALU,
-
-    "MVN",		LTYPE2, AMVN,	/* op2 ignored */
-
-    "MOVB",		LTYPE3, AMOVB,
-    "MOVBU",	LTYPE3, AMOVBU,
-    "MOVH",		LTYPE3, AMOVH,
-    "MOVHU",	LTYPE3, AMOVHU,
-    "MOVW",		LTYPE3, AMOVW,
-
-    "MOVD",		LTYPE3, AMOVD,
-    "MOVDF",	LTYPE3, AMOVDF,
-    "MOVDW",	LTYPE3, AMOVDW,
-    "MOVF",		LTYPE3, AMOVF,
-    "MOVFD",	LTYPE3, AMOVFD,
-    "MOVFW",	LTYPE3, AMOVFW,
-    "MOVWD",	LTYPE3, AMOVWD,
-    "MOVWF",	LTYPE3, AMOVWF,
-
-    "LDREX",		LTYPE3, ALDREX,
-    "LDREXD",		LTYPE3, ALDREXD,
-    "STREX",		LTYPE9, ASTREX,
-    "STREXD",		LTYPE9, ASTREXD,
-
-
-    "SQRTF",	LTYPEI, ASQRTF,
-    "SQRTD",	LTYPEI, ASQRTD,
-    "CMPF",		LTYPEL, ACMPF,
-    "CMPD",		LTYPEL, ACMPD,
-    "ADDF",		LTYPEK,	AADDF,
-    "ADDD",		LTYPEK,	AADDD,
-    "SUBF",		LTYPEK,	ASUBF,
-    "SUBD",		LTYPEK,	ASUBD,
-    "MULF",		LTYPEK,	AMULF,
-    "MULD",		LTYPEK,	AMULD,
-    "DIVF",		LTYPEK,	ADIVF,
-    "DIVD",		LTYPEK,	ADIVD,
-
-    "B",		LTYPE4, AB,
-    "BL",		LTYPE4, ABL,
-    "BX",		LTYPEBX,	ABX,
-
-    "BEQ",		LTYPE5,	ABEQ,
-    "BNE",		LTYPE5,	ABNE,
-    "BCS",		LTYPE5,	ABCS,
-    "BHS",		LTYPE5,	ABHS,
-    "BCC",		LTYPE5,	ABCC,
-    "BLO",		LTYPE5,	ABLO,
-    "BMI",		LTYPE5,	ABMI,
-    "BPL",		LTYPE5,	ABPL,
-    "BVS",		LTYPE5,	ABVS,
-    "BVC",		LTYPE5,	ABVC,
-    "BHI",		LTYPE5,	ABHI,
-    "BLS",		LTYPE5,	ABLS,
-    "BGE",		LTYPE5,	ABGE,
-    "BLT",		LTYPE5,	ABLT,
-    "BGT",		LTYPE5,	ABGT,
-    "BLE",		LTYPE5,	ABLE,
-
-    "BCASE",	LTYPE5,	ABCASE,
-
-    "SWI",		LTYPE6, ASWI,
-
-    "CMP",		LTYPE7,	ACMP,
-    "TST",		LTYPE7,	ATST,
-    "TEQ",		LTYPE7,	ATEQ,
-    "CMN",		LTYPE7,	ACMN,
-
-    "MOVM",		LTYPE8, AMOVM,
-
-    "SWPBU",	LTYPE9, ASWPBU,
-    "SWPW",		LTYPE9, ASWPW,
-
-    "RET",		LTYPEA, ARET,
-    "RFE",		LTYPEA, ARFE,
-
-    "TEXT",		LTYPEB, ATEXT,
-    "GLOBL",	LTYPEB, AGLOBL,
-    "DATA",		LTYPEC, ADATA,
+    /*x: [[itab]] elements */
     "CASE",		LTYPED, ACASE,
-    "END",		LTYPEE, AEND,
-    "WORD",		LTYPEH, AWORD,
-    "NOP",		LTYPEI, ANOP,
-
-    "MCR",		LTYPEJ, 0,
-    "MRC",		LTYPEJ, 1,
+    /*e: [[itab]] elements */
     0
 };
 /*e: global itab(arm) */

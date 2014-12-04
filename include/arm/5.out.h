@@ -58,31 +58,61 @@ enum opcode
 {
     AXXX,
 
+    ANOP,
+    /*s: logic opcodes */
     AAND,
+    AORR,
     AEOR,
-    ASUB,
-    ARSB,
+    /*x: logic opcodes */
+    ABIC,
+    /*e: logic opcodes */
+    /*s: add/sub opcodes */
     AADD,
+    ASUB,
+    /*x: add/sub opcodes */
+    ARSB,
     AADC,
     ASBC,
     ARSC,
-
+    /*e: add/sub opcodes */
+    /*s: mul/div/mod opcodes */
+    AMUL,
+    ADIV,
+    AMOD,
+    /*x: mul/div/mod opcodes */
+    AMULU,
+    ADIVU,
+    AMODU,
+    /*x: mul/div/mod opcodes */
+    AMULL,
+    AMULAL,
+    AMULLU,
+    AMULALU,
+    /*x: mul/div/mod opcodes */
+    AMULA, // mov with MUL?
+    /*e: mul/div/mod opcodes */
+    /*s: comparison opcodes */
     ATST,
     ATEQ,
     ACMP,
+    /*x: comparison opcodes */
     ACMN,
+    /*e: comparison opcodes */
+    /*s: bitshift opcodes */
+    // pseudo instruction? just special kind of AMOV with shift bits?
+    ASRL,
+    ASRA,
+    ASLL,
+    /*e: bitshift opcodes */
 
-    AORR,
-    //AMOV, redundant with the other MOV operations
-    ABIC,
-    AMVN,
-
+    /*s: branching opcodes */
     AB,
     ABL,
-/* 
- * Do not reorder or fragment the conditional branch 
- * opcodes, or the predication code will break 
- */ 
+    /*x: branching opcodes */
+    /* 
+     * Do not reorder or fragment the conditional branch 
+     * opcodes, or the predication code will break 
+     */ 
     // AB derivatives with condition code, see 5i/
     ABEQ,
     ABNE,
@@ -101,7 +131,51 @@ enum opcode
     ABGT,
     ABLE,
     //ABAL? (always) done via AB, ABNV (never) done via ANOP probably
+    /*e: branching opcodes */
 
+    /*s: mov opcodes */
+    AMOVW,
+    /*x: mov opcodes */
+    AMOVB,
+    AMOVBU,
+    AMOVH,
+    AMOVHU,
+    /*x: mov opcodes */
+    AMVN,
+    /*x: mov opcodes */
+    AMOVM,
+    /*e: mov opcodes */
+    /*s: swap opcodes */
+    ASWPW,
+    ASWPBU,
+    /*e: swap opcodes */
+
+    /*s: syscall opcodes */
+    ASWI, // syscall
+    /*e: syscall opcodes */
+
+    /*s: pseudo opcodes */
+    ARET,
+    /*x: pseudo opcodes */
+    AGOK,
+    AHISTORY,
+    ANAME,
+    ADYNT,
+    AINIT,
+    ABCASE,
+    /*x: pseudo opcodes */
+    ATEXT,
+    AGLOBL,
+    /*x: pseudo opcodes */
+    ADATA,
+    AWORD,
+    /*x: pseudo opcodes */
+    AEND,
+    /*x: pseudo opcodes */
+    ACASE,
+    /*e: pseudo opcodes */
+
+    /*s: mov float opcodes */
     // ??
     AMOVWD,
     AMOVWF,
@@ -111,7 +185,8 @@ enum opcode
     AMOVDF,
     AMOVF,
     AMOVD,
-
+    /*e: mov float opcodes */
+    /*s: arithmetic float opcodes */
     // floats?
     ACMPF,
     ACMPD,
@@ -123,73 +198,21 @@ enum opcode
     AMULD,
     ADIVF,
     ADIVD,
-//	ASQRTF, see below
-//	ASQRTD, see below
-
-    // pseudo instruction? just special kind of AMOV with shift bits?
-    ASRL,
-    ASRA,
-    ASLL,
-
-    // ARM has ADIV? AMOD?
-    AMULU,
-    ADIVU,
-    AMUL,
-    ADIV,
-    AMOD,
-    AMODU,
-
-    AMOVB,
-    AMOVBU,
-    AMOVH,
-    AMOVHU,
-    AMOVW,
-    AMOVM,
-
-    ASWPBU,
-    ASWPW,
-
-    ANOP, // mv to beginning?
-
+    ASQRTF,
+    ASQRTD,
+    /*e: arithmetic float opcodes */
+    /*s: misc opcodes */
     ARFE, // ?? return from exn?
-    ASWI, // syscall
-    AMULA, // mov with MUL?
-
-    // pseudo
-    ADATA,
-    AGLOBL,
-    AGOK,
-    AHISTORY,
-    ANAME,
-    ARET,
-    ATEXT,
-    AWORD,
-    ADYNT,
-    AINIT,
-    ABCASE,
-    ACASE,
-    AEND,
-
-    AMULL,
-    AMULAL,
-    AMULLU,
-    AMULALU,
-
     ABX, // ?
     ABXRET, // ?
     ADWORD, // ?
-
     ASIGNAME,
-
     /* moved here to preserve values of older identifiers */
-    ASQRTF,
-    ASQRTD,
-
     ALDREX,
     ASTREX,
-    
     ALDREXD,
     ASTREXD,
+    /*e: misc opcodes */
 
     ALAST,
 };
@@ -221,9 +244,12 @@ enum operand_kind {
 
     D_NONE,
 
+    D_REG,
+    D_CONST,
+    D_SHIFT,
+
     // for B, BL
     D_BRANCH,
-    D_OREG,
 
     // For ADATA?
     D_EXTERN, // data/bss values (from SB)
@@ -231,25 +257,22 @@ enum operand_kind {
     D_AUTO,   // stack values (from SP)
     D_PARAM,  // parameter (from FP)
 
-    D_CONST,
     D_FCONST,
     D_SCONST,
 
-    D_PSR,
-    D_XXX,
-    D_REG,
-    D_FREG,
-    D_XXX2,
-    D_XXX3,
-
-    D_FILE,
+    D_OREG,
     D_OCONST,
-    D_FILE1, // used by linker only?
-    D_SHIFT,
+
+    D_PSR,
     D_FPCR,
+    D_FREG,
     D_REGREG,
 
-    D_ADDR,
+    D_FILE,
+
+    D_FILE1, // used by linker only?
+    D_ADDR, // used by linker only?
+
 };
 /*e: enum dxxx(arm) */
 

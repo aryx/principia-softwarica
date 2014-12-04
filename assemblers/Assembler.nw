@@ -306,9 +306,9 @@ License.
 % matching the ARM instruction set! asm.c is doing the real conversion
 % (why? because 5l does some inter-lib optimizations? a la llvm? nice design!)
 % it generates an "object", a kind of .o except it's really not a .o like
-% in Linux :)
+% in Linux :) It's a serialized/marshalled data structure (opcode+operands+...)
 
-% text -> grammar -> symbols -> codegen 
+% text -> grammar -> symbols -> codegen
 % does not really use an AST, abuse tokens and the grammar to
 % do some computations (the classic old way to do things)
 
@@ -321,170 +321,66 @@ License.
 
 \section{[[Opcode]] and [[Operand_kind]]}
 
-%TODO: reorder to have first a set of mostly useful instructions
-% e.g. MOV, MOVB, etc. Could maybe analyze *.s in plan9 and do some
-% stats? or use cg on the whole plan9 and see how much AXXX is used
-% hmmm but can reorder? the opcode generation rely on an order? or 
-% just 'ld' and 'as' need to agree with each other; the actual binary code
-% generation is done in the linker. Hmm but can have some issues
-% if want to play with what is cross-compiled!
-
-% TODO maybe by playing with Literate Programming I can reproduce a kind of ADT?
-% e.g. by introducing LSREG, and then the part of the enum register related
-% to LSREG?
-% type instr = 
-%   ...
-% type reg = 
-%   ...
-
+% arm/5.out.h
 <<enum as(arm)>>=
 // coupling: with 5c/enam.c
 enum opcode
 {
     AXXX,
 
-    AAND,
-    AEOR,
-    ASUB,
-    ARSB,
-    AADD,
-    AADC,
-    ASBC,
-    ARSC,
+    ANOP,
+    <<logic opcodes>>
+    <<add/sub opcodes>>
+    <<mul/div/mod opcodes>>
+    <<comparison opcodes>>
+    <<bitshift opcodes>>
 
-    ATST,
-    ATEQ,
-    ACMP,
-    ACMN,
+    <<branching opcodes>>
 
-    AORR,
-    //AMOV, redundant with the other MOV operations
-    ABIC,
-    AMVN,
+    <<mov opcodes>>
+    <<swap opcodes>>
 
-    AB,
-    ABL,
-/* 
- * Do not reorder or fragment the conditional branch 
- * opcodes, or the predication code will break 
- */ 
-    // AB derivatives with condition code, see 5i/
-    ABEQ,
-    ABNE,
-    ABCS,//not in 5i/cond, seems equivalent to ABHS
-    ABHS,
-    ABCC,//not in 5i/cond, seems equivalent to ABLO
-    ABLO,
-    ABMI,
-    ABPL,
-    ABVS,
-    ABVC,
-    ABHI,
-    ABLS,
-    ABGE,
-    ABLT,
-    ABGT,
-    ABLE,
-    //ABAL? (always) done via AB, ABNV (never) done via ANOP probably
+    <<syscall opcodes>>
 
-    // ??
-    AMOVWD,
-    AMOVWF,
-    AMOVDW,
-    AMOVFW,
-    AMOVFD,
-    AMOVDF,
-    AMOVF,
-    AMOVD,
+    <<pseudo opcodes>>
 
-    // floats?
-    ACMPF,
-    ACMPD,
-    AADDF,
-    AADDD,
-    ASUBF,
-    ASUBD,
-    AMULF,
-    AMULD,
-    ADIVF,
-    ADIVD,
-//	ASQRTF, see below
-//	ASQRTD, see below
-
-    // pseudo instruction? just special kind of AMOV with shift bits?
-    ASRL,
-    ASRA,
-    ASLL,
-
-    // ARM has ADIV? AMOD?
-    AMULU,
-    ADIVU,
-    AMUL,
-    ADIV,
-    AMOD,
-    AMODU,
-
-    AMOVB,
-    AMOVBU,
-    AMOVH,
-    AMOVHU,
-    AMOVW,
-    AMOVM,
-
-    ASWPBU,
-    ASWPW,
-
-    ANOP, // mv to beginning?
-
-    ARFE, // ?? return from exn?
-    ASWI, // syscall
-    AMULA, // mov with MUL?
-
-    // pseudo
-    ADATA,
-    AGLOBL,
-    AGOK,
-    AHISTORY,
-    ANAME,
-    ARET,
-    ATEXT,
-    AWORD,
-    ADYNT,
-    AINIT,
-    ABCASE,
-    ACASE,
-    AEND,
-
-    AMULL,
-    AMULAL,
-    AMULLU,
-    AMULALU,
-
-    ABX, // ?
-    ABXRET, // ?
-    ADWORD, // ?
-
-    ASIGNAME,
-
-    /* moved here to preserve values of older identifiers */
-    ASQRTF,
-    ASQRTD,
-
-    ALDREX,
-    ASTREX,
-    
-    ALDREXD,
-    ASTREXD,
+    <<mov float opcodes>>
+    <<arithmetic float opcodes>>
+    <<misc opcodes>>
 
     ALAST,
 };
 @
-% was called 'enum as'
-% actually not all are opcodes, ATEXT is actually a pseudo opcode.
-% should be less than 256, as rely on sending ANAME as a byte in zname()
+% Was called 'enum as' (the enum must contain less than 256 elements, 
+% as we rely on sending ANAME as a byte in zname()).
+% Not all are real opcodes. Some opcodes are not part of ARM, 
+% like RET, SLL, BEQ. Some are pseudo opcodes (asm directives)
+% like ATEXT. 
+
+
+% I reordered a lot the original opcodes. Note that it can be dangerous for
+% backward compatiblity to do so. Indeed
+% 'ld' and 'as' need to agree with each other; one can't use a library
+% compiled (or cross compiled) using a 5l relying on a certain order,
+% and link object files compiled by a 5a relying on another order.
+% So can have some subtle errors if want to play with what is cross-compiled!
+% So make sure to recompile your libc if you modify 5l or 5a or 5.out.h
+
+% Note that the actual binary code generation is done in the linker, so
+% the order of the opcode below does not have to match the opcode order
+% for the ARM. Actually I have reordered them to be more logical
+% e.g. AND, ORR, EOR are closer together.
+
+% less: Could analyze *.s in plan9 and do some
+% stats? or use cg on the whole plan9 and see how much AXXX is used
 
 
 
+
+
+
+
+% TODO LP distrib again
 % ADT would be far better than this enum and separate Sym.
 % less: rename operand_part1, to show that need another part
 % to be a complete operand (which is Gen =~ Adr)
@@ -499,9 +395,12 @@ enum operand_kind {
 
     D_NONE,
 
+    D_REG,
+    D_CONST,
+    D_SHIFT,
+
     // for B, BL
     D_BRANCH,
-    D_OREG,
 
     // For ADATA?
     D_EXTERN, // data/bss values (from SB)
@@ -509,38 +408,43 @@ enum operand_kind {
     D_AUTO,   // stack values (from SP)
     D_PARAM,  // parameter (from FP)
 
-    D_CONST,
     D_FCONST,
     D_SCONST,
 
-    D_PSR,
-    D_XXX,
-    D_REG,
-    D_FREG,
-    D_XXX2,
-    D_XXX3,
-
-    D_FILE,
+    D_OREG,
     D_OCONST,
-    D_FILE1, // used by linker only?
-    D_SHIFT,
+
+    D_PSR,
     D_FPCR,
+    D_FREG,
     D_REGREG,
 
-    D_ADDR,
+    D_FILE,
+
+    D_FILE1, // used by linker only?
+    D_ADDR, // used by linker only?
+
 };
 @
-% reorder!! D_REG, D_CONST, D_SHIFT (imsr)
+% I reorder a lot, closer D_REG, D_CONST, D_SHIFT (mimic imsr rule)
 % O_REG = offset reg
-
+%
 % works with Gen (aka Adr) so it's really
 % type operand = 
 %  | R of register
-%  | Indir of register
 %  | Branch of offset (PC)
 %  | Extern of name * offset (SB) ?
+%  | Indir of register
 %  | ...
 % see Dconv in Compiler.nw, seems only for D_INDIR of register
+
+% TODO maybe by playing with Literate Programming I can reproduce a kind of ADT?
+% e.g. by introducing LSREG, and then the part of the enum register related
+% to LSREG?
+% type instr = 
+%   ...
+% type reg = 
+%   ...
 
 
 % for 8c! conventions! (not used at all by 8a, but in 8.out.h for other tools)
@@ -564,7 +468,7 @@ enum regxxx {
     REGPC =		15,
 };
 @
-%    /* used by the loader for thumb code */
+%old:    /* used by the loader for thumb code */
 %    REGTMPT =		7,
 
 
@@ -656,239 +560,12 @@ struct Itab
 <<global itab(arm)>>=
 struct Itab itab[] =
 {
-    "SP",		LSP,	D_AUTO,
-    "SB",		LSB,	D_EXTERN,
-    "FP",		LFP,	D_PARAM,
-    "PC",		LPC,	D_BRANCH,
-
-    "R",		LR,	0,
-
-    "R0",		LREG,	0,
-    "R1",		LREG,	1,
-    "R2",		LREG,	2,
-    "R3",		LREG,	3,
-    "R4",		LREG,	4,
-    "R5",		LREG,	5,
-    "R6",		LREG,	6,
-    "R7",		LREG,	7,
-    "R8",		LREG,	8,
-    "R9",		LREG,	9,
-    "R10",		LREG,	10,
-    "R11",		LREG,	11,
-    "R12",		LREG,	12,
-    "R13",		LREG,	13,
-    "R14",		LREG,	14,
-    "R15",		LREG,	15,
-
-    "F",		LF,	0,
-
-    "F0",		LFREG,	0,
-    "F1",		LFREG,	1,
-    "F2",		LFREG,	2,
-    "F3",		LFREG,	3,
-    "F4",		LFREG,	4,
-    "F5",		LFREG,	5,
-    "F6",		LFREG,	6,
-    "F7",		LFREG,	7,
-    "F8",		LFREG,	8,
-    "F9",		LFREG,	9,
-    "F10",		LFREG,	10,
-    "F11",		LFREG,	11,
-    "F12",		LFREG,	12,
-    "F13",		LFREG,	13,
-    "F14",		LFREG,	14,
-    "F15",		LFREG,	15,
-
-    "C",		LC,	0,
-
-    "C0",		LCREG,	0,
-    "C1",		LCREG,	1,
-    "C2",		LCREG,	2,
-    "C3",		LCREG,	3,
-    "C4",		LCREG,	4,
-    "C5",		LCREG,	5,
-    "C6",		LCREG,	6,
-    "C7",		LCREG,	7,
-    "C8",		LCREG,	8,
-    "C9",		LCREG,	9,
-    "C10",		LCREG,	10,
-    "C11",		LCREG,	11,
-    "C12",		LCREG,	12,
-    "C13",		LCREG,	13,
-    "C14",		LCREG,	14,
-    "C15",		LCREG,	15,
-
-    "CPSR",		LPSR,	0,
-    "SPSR",		LPSR,	1,
-
-    "FPSR",		LFCR,	0,
-    "FPCR",		LFCR,	1,
-
-    ".EQ",		LCOND,	0,
-    ".NE",		LCOND,	1,
-    ".CS",		LCOND,	2,
-    ".HS",		LCOND,	2,
-    ".CC",		LCOND,	3,
-    ".LO",		LCOND,	3,
-    ".MI",		LCOND,	4,
-    ".PL",		LCOND,	5,
-    ".VS",		LCOND,	6,
-    ".VC",		LCOND,	7,
-    ".HI",		LCOND,	8,
-    ".LS",		LCOND,	9,
-    ".GE",		LCOND,	10,
-    ".LT",		LCOND,	11,
-    ".GT",		LCOND,	12,
-    ".LE",		LCOND,	13,
-    ".AL",		LCOND,	Always,
-
-    ".U",		LS,	C_UBIT,
-    ".S",		LS,	C_SBIT,
-    ".W",		LS,	C_WBIT,
-    ".P",		LS,	C_PBIT,
-    ".PW",		LS,	C_WBIT|C_PBIT,
-    ".WP",		LS,	C_WBIT|C_PBIT,
-
-    ".F",		LS,	C_FBIT,
-
-    ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
-    ".IAW",		LS,	C_WBIT|C_UBIT,
-    ".DBW",		LS,	C_WBIT|C_PBIT,
-    ".DAW",		LS,	C_WBIT,
-    ".IB",		LS,	C_PBIT|C_UBIT,
-    ".IA",		LS,	C_UBIT,
-    ".DB",		LS,	C_PBIT,
-    ".DA",		LS,	0,
-
-    "@",		LAT,	0,
-
-    "AND",		LTYPE1,	AAND,
-    "EOR",		LTYPE1,	AEOR,
-    "SUB",		LTYPE1,	ASUB,
-    "RSB",		LTYPE1,	ARSB,
-    "ADD",		LTYPE1,	AADD,
-    "ADC",		LTYPE1,	AADC,
-    "SBC",		LTYPE1,	ASBC,
-    "RSC",		LTYPE1,	ARSC,
-    "ORR",		LTYPE1,	AORR,
-    "BIC",		LTYPE1,	ABIC,
-
-    "SLL",		LTYPE1,	ASLL,
-    "SRL",		LTYPE1,	ASRL,
-    "SRA",		LTYPE1,	ASRA,
-
-    "MUL",		LTYPE1, AMUL,
-    "MULA",		LTYPEN, AMULA,
-    "DIV",		LTYPE1,	ADIV,
-    "MOD",		LTYPE1,	AMOD,
-
-    "MULL",		LTYPEM, AMULL,
-    "MULAL",	LTYPEM, AMULAL,
-    "MULLU",	LTYPEM, AMULLU,
-    "MULALU",	LTYPEM, AMULALU,
-
-    "MVN",		LTYPE2, AMVN,	/* op2 ignored */
-
-    "MOVB",		LTYPE3, AMOVB,
-    "MOVBU",	LTYPE3, AMOVBU,
-    "MOVH",		LTYPE3, AMOVH,
-    "MOVHU",	LTYPE3, AMOVHU,
-    "MOVW",		LTYPE3, AMOVW,
-
-    "MOVD",		LTYPE3, AMOVD,
-    "MOVDF",	LTYPE3, AMOVDF,
-    "MOVDW",	LTYPE3, AMOVDW,
-    "MOVF",		LTYPE3, AMOVF,
-    "MOVFD",	LTYPE3, AMOVFD,
-    "MOVFW",	LTYPE3, AMOVFW,
-    "MOVWD",	LTYPE3, AMOVWD,
-    "MOVWF",	LTYPE3, AMOVWF,
-
-    "LDREX",		LTYPE3, ALDREX,
-    "LDREXD",		LTYPE3, ALDREXD,
-    "STREX",		LTYPE9, ASTREX,
-    "STREXD",		LTYPE9, ASTREXD,
-
-
-    "SQRTF",	LTYPEI, ASQRTF,
-    "SQRTD",	LTYPEI, ASQRTD,
-    "CMPF",		LTYPEL, ACMPF,
-    "CMPD",		LTYPEL, ACMPD,
-    "ADDF",		LTYPEK,	AADDF,
-    "ADDD",		LTYPEK,	AADDD,
-    "SUBF",		LTYPEK,	ASUBF,
-    "SUBD",		LTYPEK,	ASUBD,
-    "MULF",		LTYPEK,	AMULF,
-    "MULD",		LTYPEK,	AMULD,
-    "DIVF",		LTYPEK,	ADIVF,
-    "DIVD",		LTYPEK,	ADIVD,
-
-    "B",		LTYPE4, AB,
-    "BL",		LTYPE4, ABL,
-    "BX",		LTYPEBX,	ABX,
-
-    "BEQ",		LTYPE5,	ABEQ,
-    "BNE",		LTYPE5,	ABNE,
-    "BCS",		LTYPE5,	ABCS,
-    "BHS",		LTYPE5,	ABHS,
-    "BCC",		LTYPE5,	ABCC,
-    "BLO",		LTYPE5,	ABLO,
-    "BMI",		LTYPE5,	ABMI,
-    "BPL",		LTYPE5,	ABPL,
-    "BVS",		LTYPE5,	ABVS,
-    "BVC",		LTYPE5,	ABVC,
-    "BHI",		LTYPE5,	ABHI,
-    "BLS",		LTYPE5,	ABLS,
-    "BGE",		LTYPE5,	ABGE,
-    "BLT",		LTYPE5,	ABLT,
-    "BGT",		LTYPE5,	ABGT,
-    "BLE",		LTYPE5,	ABLE,
-
-    "BCASE",	LTYPE5,	ABCASE,
-
-    "SWI",		LTYPE6, ASWI,
-
-    "CMP",		LTYPE7,	ACMP,
-    "TST",		LTYPE7,	ATST,
-    "TEQ",		LTYPE7,	ATEQ,
-    "CMN",		LTYPE7,	ACMN,
-
-    "MOVM",		LTYPE8, AMOVM,
-
-    "SWPBU",	LTYPE9, ASWPBU,
-    "SWPW",		LTYPE9, ASWPW,
-
-    "RET",		LTYPEA, ARET,
-    "RFE",		LTYPEA, ARFE,
-
-    "TEXT",		LTYPEB, ATEXT,
-    "GLOBL",	LTYPEB, AGLOBL,
-    "DATA",		LTYPEC, ADATA,
-    "CASE",		LTYPED, ACASE,
-    "END",		LTYPEE, AEND,
-    "WORD",		LTYPEH, AWORD,
     "NOP",		LTYPEI, ANOP,
-
-    "MCR",		LTYPEJ, 0,
-    "MRC",		LTYPEJ, 1,
+    <<[[itab]] elements>>
     0
 };
 @
 
-%/*
-%    "ABSF",		LTYPEI, AABSF,
-%    "ABSD",		LTYPEI, AABSD,
-%    "NEGF",		LTYPEI, ANEGF,
-%    "NEGD",		LTYPEI, ANEGD,
-%    "SQTF",		LTYPEI,	ASQTF,
-%    "SQTD",		LTYPEI,	ASQTD,
-%    "RNDF",		LTYPEI,	ARNDF,
-%    "RNDD",		LTYPEI,	ARNDD,
-%    "URDF",		LTYPEI,	AURDF,
-%    "URDD",		LTYPEI,	AURDD,
-%    "NRMF",		LTYPEI,	ANRMF,
-%    "NRMD",		LTYPEI,	ANRMD,
-%*/
 
 
 \section{[[Sym]] and [[hash]]}
@@ -3223,10 +2900,51 @@ line:
 
 \subsection{Arithmetic}
 
+<<logic opcodes>>=
+AAND,
+AORR,
+AEOR,
+@
+% not exactly the ARM order, I prefer to put closer AAND and AORR for
+% instance
+
+<<add/sub opcodes>>=
+AADD,
+ASUB,
+@
+
+<<[[itab]] elements>>=
+"AND",		LTYPE1,	AAND,
+"ORR",		LTYPE1,	AORR,
+"EOR",		LTYPE1,	AEOR,
+"ADD",		LTYPE1,	AADD,
+"SUB",		LTYPE1,	ASUB,
+@
+
+
+\ifallcode
+<<logic opcodes>>=
+ABIC,
+@
+<<add/sub opcodes>>=
+ARSB,
+AADC,
+ASBC,
+ARSC,
+@
+<<[[itab]] elements>>=
+"BIC",		LTYPE1,	ABIC,
+"RSB",		LTYPE1,	ARSB,
+"ADC",		LTYPE1,	AADC,
+"SBC",		LTYPE1,	ASBC,
+"RSC",		LTYPE1,	ARSC,
+@
+\fi
+
 <<inst rule(arm)>>=
 inst:
 /*
- * ADD/SUB/...
+ * AND/OR/ADD/SUB/...
  */
   LTYPE1 cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
 | LTYPE1 cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
@@ -3235,16 +2953,68 @@ inst:
 %$
 % arith operator of Machine.nw, but also SLL, SRL,   DIV, MOD, ...
 
-% MOV negative
-<<inst rule(arm)>>=
-/*
- * MVN
- */
-| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, NREG, &$5); }
-@
+
+
 
 % see also Comparison section, part of Arith opcode
 % in Machine.nw, as well as simple MOV
+
+
+
+<<bitshift opcodes>>=
+// pseudo instruction? just special kind of AMOV with shift bits?
+ASRL,
+ASRA,
+ASLL,
+@
+
+<<[[itab]] elements>>=
+"SLL",		LTYPE1,	ASLL,
+"SRL",		LTYPE1,	ASRL,
+"SRA",		LTYPE1,	ASRA,
+@
+
+
+<<mul/div/mod opcodes>>=
+AMUL,
+ADIV,
+AMOD,
+@
+% ARM has no ADIV or AMOD so fake-opcode
+
+<<[[itab]] elements>>=
+"MUL",		LTYPE1, AMUL,
+"DIV",		LTYPE1,	ADIV,
+"MOD",		LTYPE1,	AMOD,
+@
+
+<<mul/div/mod opcodes>>=
+AMULU,
+ADIVU,
+AMODU,
+@
+% has no reading syntax, generated just in 5c
+
+
+
+
+
+
+
+<<mul/div/mod opcodes>>=
+AMULL,
+AMULAL,
+AMULLU,
+AMULALU,
+@
+
+<<[[itab]] elements>>=
+"MULL",		LTYPEM, AMULL,
+"MULAL",	LTYPEM, AMULAL,
+"MULLU",	LTYPEM, AMULLU,
+"MULALU",	LTYPEM, AMULALU,
+@
+
 
 
 % MULL special instruction?
@@ -3255,6 +3025,15 @@ inst:
 | LTYPEM cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
 @
 %$
+
+
+<<mul/div/mod opcodes>>=
+AMULA, // mov with MUL?
+@
+
+<<[[itab]] elements>>=
+"MULA",		LTYPEN, AMULA,
+@
 
 % multiply and accumulate
 <<inst rule(arm)>>=
@@ -3273,6 +3052,27 @@ inst:
 
 \subsection{Memory}
 
+<<mov opcodes>>=
+AMOVW,
+@
+
+<<mov opcodes>>=
+AMOVB,
+AMOVBU,
+AMOVH,
+AMOVHU,
+@
+
+
+<<[[itab]] elements>>=
+"MOVW",		LTYPE3, AMOVW,
+"MOVB",		LTYPE3, AMOVB,
+"MOVBU",	LTYPE3, AMOVBU,
+"MOVH",		LTYPE3, AMOVH,
+"MOVHU",	LTYPE3, AMOVHU,
+@
+
+
 <<inst rule(arm)>>=
 /*
  * MOVW
@@ -3281,8 +3081,49 @@ inst:
 @
 % special instr? the real one accept any gen?
 
+
+<<mov opcodes>>=
+AMVN,
+@
+%//AMOV, redundant with the other MOV operations
+
+<<[[itab]] elements>>=
+"MVN",		LTYPE2, AMVN,	/* op2 ignored */
+@
+
+% MOV negative
+<<inst rule(arm)>>=
+/*
+ * MVN
+ */
+| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, NREG, &$5); }
+@
+
 \subsection{Comparison}
 % was actually part of arithmetic in Machine.nw
+
+<<comparison opcodes>>=
+ATST,
+ATEQ,
+ACMP,
+@
+
+
+<<[[itab]] elements>>=
+"CMP",		LTYPE7,	ACMP,
+"TST",		LTYPE7,	ATST,
+"TEQ",		LTYPE7,	ATEQ,
+@
+
+\ifallcode
+<<comparison opcodes>>=
+ACMN,
+@
+<<[[itab]] elements>>=
+"CMN",		LTYPE7,	ACMN,
+@
+\fi
+
 
 <<inst rule(arm)>>=
 /*
@@ -3294,6 +3135,17 @@ inst:
 
 \subsection{Branch}
 
+<<branching opcodes>>=
+AB,
+ABL,
+@
+
+<<[[itab]] elements>>=
+"B",		LTYPE4, AB,
+"BL",		LTYPE4, ABL,
+@
+
+
 <<inst rule(arm)>>=
 /*
  * B/BL
@@ -3302,15 +3154,72 @@ inst:
 | LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, NREG, &$4); }
 @
 
+
+<<branching opcodes>>=
+/* 
+ * Do not reorder or fragment the conditional branch 
+ * opcodes, or the predication code will break 
+ */ 
+// AB derivatives with condition code, see 5i/
+ABEQ,
+ABNE,
+ABCS,//not in 5i/cond, seems equivalent to ABHS
+ABHS,
+ABCC,//not in 5i/cond, seems equivalent to ABLO
+ABLO,
+ABMI,
+ABPL,
+ABVS,
+ABVC,
+ABHI,
+ABLS,
+ABGE,
+ABLT,
+ABGT,
+ABLE,
+//ABAL? (always) done via AB, ABNV (never) done via ANOP probably
+@
+
+<<[[itab]] elements>>=
+"BEQ",		LTYPE5,	ABEQ,
+"BNE",		LTYPE5,	ABNE,
+"BCS",		LTYPE5,	ABCS,
+"BHS",		LTYPE5,	ABHS,
+"BCC",		LTYPE5,	ABCC,
+"BLO",		LTYPE5,	ABLO,
+"BMI",		LTYPE5,	ABMI,
+"BPL",		LTYPE5,	ABPL,
+"BVS",		LTYPE5,	ABVS,
+"BVC",		LTYPE5,	ABVC,
+"BHI",		LTYPE5,	ABHI,
+"BLS",		LTYPE5,	ABLS,
+"BGE",		LTYPE5,	ABGE,
+"BLT",		LTYPE5,	ABLT,
+"BGT",		LTYPE5,	ABGT,
+"BLE",		LTYPE5,	ABLE,
+@
+
+
+
 <<inst rule(arm)>>=
 /*
- * BEQ
+ * BEQ/...
  */
 | LTYPE5 comma rel { outcode($1, Always, &nullgen, NREG, &$3); }
 @
 
 
-% actually no RET in ARM, so kinda special
+
+
+<<pseudo opcodes>>=
+ARET,
+@
+% actually no RET in ARM, so fake-opcode
+
+<<[[itab]] elements>>=
+"RET",		LTYPEA, ARET,
+@
+
 <<inst rule(arm)>>=
 /*
  * RET
@@ -3321,6 +3230,14 @@ inst:
 \subsection{Syscall}
 % software interrupt
 
+<<syscall opcodes>>=
+ASWI, // syscall
+@
+
+<<[[itab]] elements>>=
+"SWI",		LTYPE6, ASWI,
+@
+
 <<inst rule(arm)>>=
 /*
  * SWI
@@ -3329,8 +3246,18 @@ inst:
 @
 %$
 
+\subsection{Swap}
 %\subsection{Special}
-% put SWAP here?
+
+<<swap opcodes>>=
+ASWPW,
+ASWPBU,
+@
+
+<<[[itab]] elements>>=
+"SWPW",		LTYPE9, ASWPW,
+"SWPBU",	LTYPE9, ASWPBU,
+@
 
 <<inst rule(arm)>>=
 /*
@@ -3341,6 +3268,7 @@ inst:
 | LTYPE9 cond comma ireg ',' reg   { outcode($1, $2, &$4, $6.reg, &$6); }
 @
 %$
+
 
 
 
@@ -3356,11 +3284,55 @@ cond:
 | cond LCOND { $$ = ($1 & ~C_SCOND) | $2; }
 @
 
+<<[[itab]] elements>>=
+".EQ",		LCOND,	0,
+".NE",		LCOND,	1,
+".CS",		LCOND,	2,
+".HS",		LCOND,	2,
+".CC",		LCOND,	3,
+".LO",		LCOND,	3,
+".MI",		LCOND,	4,
+".PL",		LCOND,	5,
+".VS",		LCOND,	6,
+".VC",		LCOND,	7,
+".HI",		LCOND,	8,
+".LS",		LCOND,	9,
+".GE",		LCOND,	10,
+".LT",		LCOND,	11,
+".GT",		LCOND,	12,
+".LE",		LCOND,	13,
+".AL",		LCOND,	Always,
+@
+
+
 \section{Special bits}
 % sign? long? p bit, w bit, ???
 
 <<cond rule(arm)>>=
 | cond LS    { $$ = $1 | $2; }
+@
+
+<<[[itab]] elements>>=
+".U",		LS,	C_UBIT,
+".S",		LS,	C_SBIT,
+".W",		LS,	C_WBIT,
+".P",		LS,	C_PBIT,
+".PW",		LS,	C_WBIT|C_PBIT,
+".WP",		LS,	C_WBIT|C_PBIT,
+@
+
+<<[[itab]] elements>>=
+".F",		LS,	C_FBIT,
+@
+<<[[itab]] elements>>=
+".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
+".IAW",		LS,	C_WBIT|C_UBIT,
+".DBW",		LS,	C_WBIT|C_PBIT,
+".DAW",		LS,	C_WBIT,
+".IB",		LS,	C_PBIT|C_UBIT,
+".IA",		LS,	C_UBIT,
+".DB",		LS,	C_PBIT,
+".DA",		LS,	0,
 @
 
 \section{Operand}
@@ -3428,6 +3400,34 @@ reg:
 @
 %$
 
+<<[[itab]] elements>>=
+"R0",		LREG,	0,
+"R1",		LREG,	1,
+"R2",		LREG,	2,
+"R3",		LREG,	3,
+"R4",		LREG,	4,
+"R5",		LREG,	5,
+"R6",		LREG,	6,
+"R7",		LREG,	7,
+"R8",		LREG,	8,
+"R9",		LREG,	9,
+"R10",		LREG,	10,
+"R11",		LREG,	11,
+"R12",		LREG,	12,
+"R13",		LREG,	13,
+"R14",		LREG,	14,
+"R15",		LREG,	15,
+@
+
+<<[[itab]] elements>>=
+"R",		LR,	0,
+@
+
+<<[[itab]] elements>>=
+"SB",		LSB,	D_EXTERN,
+"PC",		LPC,	D_BRANCH,
+@
+
 
 
 
@@ -3479,6 +3479,11 @@ shift:
  }
 @
 
+<<[[itab]] elements>>=
+"@",		LAT,	0,
+@
+
+
 <<type declarations(arm)>>=
 %type   <lval>  rcon
 @
@@ -3527,6 +3532,7 @@ gen:
 | oreg
 @
 %$
+% no $ in front of con here?
 
 % a bit confusing that can have oreg, and also $ oreg
 % because MOV support powerful addressing modes? with multiple
@@ -3538,26 +3544,10 @@ gen:
   $$ = $1;
   $$.reg = $3;
  }
-
-| LPSR
- {
-  $$ = nullgen;
-  $$.type = D_PSR;
-  $$.reg = $1;
- }
-| LFCR
- {
-  $$ = nullgen;
-  $$.type = D_FPCR;
-  $$.reg = $1;
- }
-| freg
 @
-%$
-
-% no $ in front of con here?
 
 
+% oreg? offset reg?
 <<misc rules>>=
 oreg:
   name
@@ -3570,28 +3560,7 @@ oreg:
 | ioreg
 @
 
-
-% ireg? indirect reg?
-% oreg? offset reg?
 <<misc rules>>=
-nireg:
-  ireg
-| name
- {
-  $$ = $1;
-  if($1.name != D_EXTERN && $1.name != D_STATIC) {
-  }
- }
-
-ireg:
- '(' spreg ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.reg = $2;
-  $$.offset = 0;
- }
-
 ioreg:
   ireg
 | con '(' sreg ')'
@@ -3602,6 +3571,34 @@ ioreg:
   $$.offset = $1;
  }
 @
+
+
+% ireg? indirect reg?
+<<misc rules>>=
+ireg:
+ '(' spreg ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.reg = $2;
+  $$.offset = 0;
+ }
+@
+%$
+
+% for BL
+<<misc rules>>=
+nireg:
+  ireg
+| name
+ {
+  $$ = $1;
+  if($1.name != D_EXTERN && $1.name != D_STATIC) {
+  }
+ }
+@
+%$
+
 
 
 \subsection{Named data}
@@ -3651,6 +3648,12 @@ pointer:
 | LSP
 | LFP
 @
+
+<<[[itab]] elements>>=
+"SP",		LSP,	D_AUTO,
+"FP",		LFP,	D_PARAM,
+@
+
 
 \subsection{Named code}
 % relocatable!
@@ -3773,31 +3776,28 @@ long	pc;
 
 \section{Pseudo instructions}
 
-% some of those are not really opcodes, they are entities 
-% just at the asm level.
-
-%hmm but nop? SHL? MOV? here because pseudo asm
-% that get translated in store/load on some archi?
-
-%??
-<<inst rule(arm)>>=
-/*
- * CASE
- */
-| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
+<<pseudo opcodes>>=
+AGOK,
+AHISTORY,
+ANAME,
+ADYNT,
+AINIT,
+ABCASE,
 @
-
-
-<<inst rule(arm)>>=
-/*
- * WORD
- */
-| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
-@
-%$
+% no reading syntax, so used internally
 
 
 \subsection{[[TEXT/GLOBL]]}
+
+<<pseudo opcodes>>=
+ATEXT,
+AGLOBL,
+@
+
+<<[[itab]] elements>>=
+"TEXT",		LTYPEB, ATEXT,
+"GLOBL",	LTYPEB, AGLOBL,
+@
 
 <<inst rule(arm)>>=
 /*
@@ -3808,7 +3808,17 @@ long	pc;
 @
 %$
 
-\subsection{[[DATA]]}
+\subsection{[[DATA/WORD]]}
+
+<<pseudo opcodes>>=
+ADATA,
+AWORD,
+@
+
+<<[[itab]] elements>>=
+"DATA",		LTYPEC, ADATA,
+"WORD",		LTYPEH, AWORD,
+@
 
 <<inst rule(arm)>>=
 /*
@@ -3817,8 +3827,25 @@ long	pc;
 | LTYPEC name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
 @
 
+<<inst rule(arm)>>=
+/*
+ * WORD
+ */
+| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
+@
+%$
+
+
 
 \subsection{[[END]]}
+
+<<pseudo opcodes>>=
+AEND,
+@
+
+<<[[itab]] elements>>=
+"END",		LTYPEE, AEND,
+@
 
 <<inst rule(arm)>>=
 /*
@@ -4265,6 +4292,84 @@ outhist(void)
 
 \section{Float}
 
+<<mov float opcodes>>=
+// ??
+AMOVWD,
+AMOVWF,
+AMOVDW,
+AMOVFW,
+AMOVFD,
+AMOVDF,
+AMOVF,
+AMOVD,
+@
+
+<<[[itab]] elements>>=
+"MOVD",		LTYPE3, AMOVD,
+"MOVDF",	LTYPE3, AMOVDF,
+"MOVDW",	LTYPE3, AMOVDW,
+"MOVF",		LTYPE3, AMOVF,
+"MOVFD",	LTYPE3, AMOVFD,
+"MOVFW",	LTYPE3, AMOVFW,
+"MOVWD",	LTYPE3, AMOVWD,
+"MOVWF",	LTYPE3, AMOVWF,
+@
+
+<<[[itab]] elements>>=
+"SQRTF",	LTYPEI, ASQRTF,
+"SQRTD",	LTYPEI, ASQRTD,
+"CMPF",		LTYPEL, ACMPF,
+"CMPD",		LTYPEL, ACMPD,
+"ADDF",		LTYPEK,	AADDF,
+"ADDD",		LTYPEK,	AADDD,
+"SUBF",		LTYPEK,	ASUBF,
+"SUBD",		LTYPEK,	ASUBD,
+"MULF",		LTYPEK,	AMULF,
+"MULD",		LTYPEK,	AMULD,
+"DIVF",		LTYPEK,	ADIVF,
+"DIVD",		LTYPEK,	ADIVD,
+@
+
+<<arithmetic float opcodes>>=
+// floats?
+ACMPF,
+ACMPD,
+AADDF,
+AADDD,
+ASUBF,
+ASUBD,
+AMULF,
+AMULD,
+ADIVF,
+ADIVD,
+ASQRTF,
+ASQRTD,
+@
+
+
+<<[[itab]] elements>>=
+"F",		LF,	0,
+
+"F0",		LFREG,	0,
+"F1",		LFREG,	1,
+"F2",		LFREG,	2,
+"F3",		LFREG,	3,
+"F4",		LFREG,	4,
+"F5",		LFREG,	5,
+"F6",		LFREG,	6,
+"F7",		LFREG,	7,
+"F8",		LFREG,	8,
+"F9",		LFREG,	9,
+"F10",		LFREG,	10,
+"F11",		LFREG,	11,
+"F12",		LFREG,	12,
+"F13",		LFREG,	13,
+"F14",		LFREG,	14,
+"F15",		LFREG,	15,
+@
+
+
+
 <<struct ieee>>=
 struct	ieee
 {
@@ -4323,6 +4428,11 @@ ieeedtod(Ieee *ieee, double native)
 
 <<type declarations(arm)>>=
 %type <gen> freg fcon frcon
+@
+
+
+<<gen rule>>=
+| freg
 @
 
 
@@ -4417,6 +4527,117 @@ if(argc > 1) {
 
 \section{Misc instructions}
 
+<<misc opcodes>>=
+ARFE, // ?? return from exn?
+ABX, // ?
+ABXRET, // ?
+ADWORD, // ?
+ASIGNAME,
+/* moved here to preserve values of older identifiers */
+ALDREX,
+ASTREX,
+ALDREXD,
+ASTREXD,
+@
+
+
+
+<<[[itab]] elements>>=
+"LDREX",		LTYPE3, ALDREX,
+"LDREXD",		LTYPE3, ALDREXD,
+"STREX",		LTYPE9, ASTREX,
+"STREXD",		LTYPE9, ASTREXD,
+@
+
+<<[[itab]] elements>>=
+"BX",		LTYPEBX,	ABX,
+@
+
+<<[[itab]] elements>>=
+"BCASE",	LTYPE5,	ABCASE,
+@
+
+<<mov opcodes>>=
+AMOVM,
+@
+
+<<[[itab]] elements>>=
+"MOVM",		LTYPE8, AMOVM,
+@
+
+<<[[itab]] elements>>=
+"RFE",		LTYPEA, ARFE,
+@
+
+<<[[itab]] elements>>=
+"MCR",		LTYPEJ, 0,
+"MRC",		LTYPEJ, 1,
+@
+
+
+<<[[itab]] elements>>=
+"C",		LC,	0,
+
+"C0",		LCREG,	0,
+"C1",		LCREG,	1,
+"C2",		LCREG,	2,
+"C3",		LCREG,	3,
+"C4",		LCREG,	4,
+"C5",		LCREG,	5,
+"C6",		LCREG,	6,
+"C7",		LCREG,	7,
+"C8",		LCREG,	8,
+"C9",		LCREG,	9,
+"C10",		LCREG,	10,
+"C11",		LCREG,	11,
+"C12",		LCREG,	12,
+"C13",		LCREG,	13,
+"C14",		LCREG,	14,
+"C15",		LCREG,	15,
+@
+<<[[itab]] elements>>=
+"CPSR",		LPSR,	0,
+"SPSR",		LPSR,	1,
+@
+<<[[itab]] elements>>=
+"FPSR",		LFCR,	0,
+"FPCR",		LFCR,	1,
+@
+
+<<gen rule>>=
+| LPSR
+ {
+  $$ = nullgen;
+  $$.type = D_PSR;
+  $$.reg = $1;
+ }
+| LFCR
+ {
+  $$ = nullgen;
+  $$.type = D_FPCR;
+  $$.reg = $1;
+ }
+@
+%$
+
+%/*
+%    "ABSF",		LTYPEI, AABSF,
+%    "ABSD",		LTYPEI, AABSD,
+%    "NEGF",		LTYPEI, ANEGF,
+%    "NEGD",		LTYPEI, ANEGD,
+%    "SQTF",		LTYPEI,	ASQTF,
+%    "SQTD",		LTYPEI,	ASQTD,
+%    "RNDF",		LTYPEI,	ARNDF,
+%    "RNDD",		LTYPEI,	ARNDD,
+%    "URDF",		LTYPEI,	AURDF,
+%    "URDD",		LTYPEI,	AURDD,
+%    "NRMF",		LTYPEI,	ANRMF,
+%    "NRMD",		LTYPEI,	ANRMD,
+%*/
+
+
+
+
 <<type declarations(arm)>>=
 %type   <gen> oreg ireg nireg ioreg 
 @
@@ -4508,6 +4729,32 @@ reglist:
  }
 | spreg comma reglist { $$ = (1<<$1) | $3; }
 @
+
+
+
+
+<<pseudo opcodes>>=
+ACASE,
+@
+
+<<[[itab]] elements>>=
+"CASE",		LTYPED, ACASE,
+@
+
+% some of those are not really opcodes, they are entities 
+% just at the asm level.
+
+%hmm but nop? SHL? MOV? here because pseudo asm
+% that get translated in store/load on some archi?
+
+%??
+<<inst rule(arm)>>=
+/*
+ * CASE
+ */
+| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
+@
+%$
 
 
 

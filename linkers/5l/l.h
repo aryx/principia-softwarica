@@ -1,7 +1,9 @@
 #include	<u.h>
 #include	<libc.h>
 #include	<bio.h>
-#include	"arm/5.out.h"
+
+#include	<common.out.h>
+#include	<arm/5.out.h>
 #include	"../8l/elf.h"
 
 #define	LIBNAMELEN	300
