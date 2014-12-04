@@ -351,10 +351,12 @@ enum opcode
     AADC,
     ASBC,
     ARSC,
+
     ATST,
     ATEQ,
     ACMP,
     ACMN,
+
     AORR,
     //AMOV, redundant with the other MOV operations
     ABIC,
@@ -1043,9 +1045,12 @@ struct	Gen
     double	dval;
     char	sval[8];
 
-    Sym*	sym; // ??
+    // option<Sym>, for debubbing purpose?
+    Sym*	sym;
+    // option<enum<register>> where None is done via NREG
     short	reg; // ??
-    short	name; // ??
+    // option<??> None = D_NONE
+    short	name;
 };
 @
 
@@ -1149,7 +1154,7 @@ case 'o':
 char*	pathname;
 @
 
-
+\section{[[cinit()]]}
 
 % could split, nullgen init, hash init (via lookup), pathname init
 <<function cinit(arm)>>=
@@ -1190,6 +1195,7 @@ cinit(void)
 % very similar to the x86 version, except the few change for nullgen fields
 
 
+\section{[[assemble()]]}
 
 % there is 2 passes.
 % actually used outside assemble() in the grammar! and outcode().
@@ -3213,124 +3219,45 @@ line:
 
 % outcode =~ pc++
 
+% similar sections than in Machine.nw
+
+\subsection{Arithmetic}
+
 <<inst rule(arm)>>=
 inst:
 /*
- * ADD
+ * ADD/SUB/...
  */
   LTYPE1 cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
 | LTYPE1 cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
 | LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, NREG, &$5); }
+@
+%$
+% arith operator of Machine.nw, but also SLL, SRL, DIV, MOD, ...
+
+% MOV negative
+<<inst rule(arm)>>=
 /*
  * MVN
  */
 | LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, NREG, &$5); }
-/*
- * MOVW
- */
-| LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, NREG, &$5); }
-/*
- * B/BL
- */
-| LTYPE4 cond comma rel   { outcode($1, $2, &nullgen, NREG, &$4); }
-| LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, NREG, &$4); }
-/*
- * BX
- */
-| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
-/*
- * BEQ
- */
-| LTYPE5 comma rel { outcode($1, Always, &nullgen, NREG, &$3); }
-/*
- * SWI
- */
-| LTYPE6 cond comma gen { outcode($1, $2, &nullgen, NREG, &$4); }
-/*
- * CMP
- */
-| LTYPE7 cond imsr ',' spreg comma { outcode($1, $2, &$3, $5, &nullgen); }
-/*
- * MOVM
- */
-| LTYPE8 cond ioreg ',' '[' reglist ']'
- {
-  Gen g;
+@
 
-  g = nullgen;
-  g.type = D_CONST;
-  g.offset = $6;
-  outcode($1, $2, &$3, NREG, &g);
- }
-| LTYPE8 cond '[' reglist ']' ',' ioreg
- {
-  Gen g;
+% see also Comparison section, part of Arith opcode
+% in Machine.nw, as well as simple MOV
 
-  g = nullgen;
-  g.type = D_CONST;
-  g.offset = $4;
-  outcode($1, $2, &g, NREG, &$7);
- }
-/*
- * SWAP
- */
-| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg comma   { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond comma ireg ',' reg   { outcode($1, $2, &$4, $6.reg, &$6); }
-/*
- * RET
- */
-| LTYPEA cond comma { outcode($1, $2, &nullgen, NREG, &nullgen); }
-/*
- * TEXT/GLOBL
- */
-| LTYPEB name ',' imm         { outcode($1, Always, &$2, NREG, &$4); }
-| LTYPEB name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
-/*
- * DATA
- */
-| LTYPEC name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
-/*
- * CASE
- */
-| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
-/*
- * word
- */
-| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
-/*
- * floating-point coprocessor
- */
-| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, NREG, &$5); }
-| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, NREG, &$5); }
-| LTYPEK cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
-| LTYPEL cond freg ',' freg comma { outcode($1, $2, &$3, $5.reg, &nullgen); }
-/*
- * MCR MRC
- */
-| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
- {
-  Gen g;
 
-  g = nullgen;
-  g.type = D_CONST;
-  g.offset =
-   (0xe << 24) |    /* opcode */
-   ($1 << 20) |     /* MCR/MRC */
-   ($2 << 28) |     /* scond */
-   (($3 & 15) << 8) |   /* coprocessor number */
-   (($5 & 7) << 21) |   /* coprocessor operation */
-   (($7 & 15) << 12) |  /* arm register */
-   (($9 & 15) << 16) |  /* Crn */
-   (($11 & 15) << 0) |  /* Crm */
-   (($12 & 7) << 5) |   /* coprocessor information */
-   (1<<4);          /* must be set */ // opcode component
-  outcode(AWORD, Always, &nullgen, NREG, &g);
- }
+% MULL special instruction?
+<<inst rule(arm)>>=
 /*
  * MULL hi,lo,r1,r2
  */
 | LTYPEM cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
+@
+%$
+
+% multiply and accumulate
+<<inst rule(arm)>>=
 /*
  * MULA hi,lo,r1,r2
  */
@@ -3340,12 +3267,80 @@ inst:
   $7.offset = $9;
   outcode($1, $2, &$3, $5.reg, &$7);
  }
-/*
- * END
- */
-| LTYPEE comma { outcode($1, Always, &nullgen, NREG, &nullgen); }
 @
 %$
+
+
+\subsection{Memory}
+
+<<inst rule(arm)>>=
+/*
+ * MOVW
+ */
+| LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, NREG, &$5); }
+@
+% special instr? the real one accept any gen?
+
+\subsection{Branch}
+
+<<inst rule(arm)>>=
+/*
+ * B/BL
+ */
+| LTYPE4 cond comma rel   { outcode($1, $2, &nullgen, NREG, &$4); }
+| LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, NREG, &$4); }
+@
+
+<<inst rule(arm)>>=
+/*
+ * BEQ
+ */
+| LTYPE5 comma rel { outcode($1, Always, &nullgen, NREG, &$3); }
+@
+
+
+% actually no RET in ARM, so kinda special
+<<inst rule(arm)>>=
+/*
+ * RET
+ */
+| LTYPEA cond comma { outcode($1, $2, &nullgen, NREG, &nullgen); }
+@
+
+\subsection{Syscall}
+% software interrupt
+
+<<inst rule(arm)>>=
+/*
+ * SWI
+ */
+| LTYPE6 cond comma gen { outcode($1, $2, &nullgen, NREG, &$4); }
+@
+%$
+
+\subsection{Comparison}
+% was actually part of arithmetic in Machine.nw
+
+<<inst rule(arm)>>=
+/*
+ * CMP
+ */
+| LTYPE7 cond imsr ',' spreg comma { outcode($1, $2, &$3, $5, &nullgen); }
+@
+%$
+
+\subsection{Special}
+
+<<inst rule(arm)>>=
+/*
+ * SWAP
+ */
+| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
+| LTYPE9 cond reg ',' ireg comma   { outcode($1, $2, &$5, $3.reg, &$3); }
+| LTYPE9 cond comma ireg ',' reg   { outcode($1, $2, &$4, $6.reg, &$6); }
+@
+%$
+
 
 
 \section{Conditional execution}
@@ -3358,6 +3353,12 @@ inst:
 cond:
  /* empty */ { $$ = Always; }
 | cond LCOND { $$ = ($1 & ~C_SCOND) | $2; }
+@
+
+\section{Special bits}
+% sign? long? p bit, w bit, ???
+
+<<cond rule(arm)>>=
 | cond LS    { $$ = $1 | $2; }
 @
 
@@ -3543,7 +3544,7 @@ gen:
 
 % no $ in front of con here?
 
-\subsection{Named data references}
+\subsection{Name definitions}
 % for data
 
 <<type declarations(arm)>>=
@@ -3591,7 +3592,8 @@ pointer:
 | LFP
 @
 
-\subsection{Named code references}
+\subsection{Name references}
+% relocatable!
 
 <<type declarations(arm)>>=
 %type   <gen>   rel
@@ -3717,33 +3719,62 @@ long	pc;
 %hmm but nop? SHL? MOV? here because pseudo asm
 % that get translated in store/load on some archi?
 
+%??
+<<inst rule(arm)>>=
+/*
+ * CASE
+ */
+| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
+@
 
-\subsection{[[TEXT]]}
 
+<<inst rule(arm)>>=
+/*
+ * WORD
+ */
+| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
+@
+%$
+
+
+\subsection{[[TEXT/GLOBL]]}
+
+<<inst rule(arm)>>=
+/*
+ * TEXT/GLOBL
+ */
+| LTYPEB name ',' imm         { outcode($1, Always, &$2, NREG, &$4); }
+| LTYPEB name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
+@
+%$
 
 \subsection{[[DATA]]}
 
+<<inst rule(arm)>>=
+/*
+ * DATA
+ */
+| LTYPEC name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
+@
 
 
-\subsection{[[GLOBL]]}
+\subsection{[[END]]}
+
+<<inst rule(arm)>>=
+/*
+ * END
+ */
+| LTYPEE comma { outcode($1, Always, &nullgen, NREG, &nullgen); }
+@
+%$
 
 
-\section{Special instructions}
-
-
-\subsection{[[JMP/CALL]]}
-
-
-\subsection{[[NOP]]}
-
-
-\subsection{[[SHL/SHR]]}
-
-
-\subsection{[[MOVW/MOVL]]}
-
-
-\subsection{[[IMUL]]}
+%\section{Special instructions}
+%\subsection{[[JMP/CALL]]}
+%\subsection{[[NOP]]}
+%\subsection{[[SHL/SHR]]}
+%\subsection{[[MOVW/MOVL]]}
+%\subsection{[[IMUL]]}
 
 \section{Variables}
 % useful? cpp can do that too
@@ -3809,15 +3840,17 @@ expr:
 
 \ifallcode
 \section{Optional commas}
-% the optional ',' why? because can ge generated by 8c -S that does
-% this? a bit ugly so maybe better to aspectize this
-
+% the optional ',' why? because asm can ge generated by 5c -S that does
+% this. A bit ugly so maybe better to aspectize this.
 
 <<opt rules>>=
 comma:
   /* empty */
 | ',' comma
+@
 
+% other optional stuff
+<<opt rules>>=
 /* for MCR */ 
 oexpr:
   /* empty */ { $$ = 0; }
@@ -3833,6 +3866,8 @@ oexpr:
 
 
 \chapter{Output}
+
+%\chapter{Name resolution}
 
 \chapter{Object Generation}
 % it's actually not machine code generation ... 8l/optab.c does this
@@ -4178,7 +4213,6 @@ struct	ieee
 };
 @
 
-
 <<function ieeedtod>>=
 void
 ieeedtod(Ieee *ieee, double native)
@@ -4210,15 +4244,25 @@ ieeedtod(Ieee *ieee, double native)
 }
 @
 
-
 <<constant FPCHIP(arm)>>=
 #define	FPCHIP		true
 @
 
+<<inst rule(arm)>>=
+/*
+ * floating-point coprocessor
+ */
+| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPEK cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
+| LTYPEL cond freg ',' freg comma { outcode($1, $2, &$3, $5.reg, &nullgen); }
+@
+%$
 
 <<type declarations(arm)>>=
 %type <gen> freg fcon frcon
 @
+
 
 <<float rules>>=
 freg:
@@ -4309,7 +4353,7 @@ if(argc > 1) {
 }
 @
 
-\section{Special instructions}
+\section{System instructions}
 
 <<type declarations(arm)>>=
 %type   <lval>  creg
@@ -4317,6 +4361,62 @@ if(argc > 1) {
 %type   <gen>   regreg
 %type   <lval>  oexpr 
 %type   <lval>  reglist
+@
+
+<<inst rule(arm)>>=
+/*
+ * BX
+ */
+| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
+@
+
+<<inst rule(arm)>>=
+/*
+ * MOVM
+ */
+| LTYPE8 cond ioreg ',' '[' reglist ']'
+ {
+  Gen g;
+
+  g = nullgen;
+  g.type = D_CONST;
+  g.offset = $6;
+  outcode($1, $2, &$3, NREG, &g);
+ }
+| LTYPE8 cond '[' reglist ']' ',' ioreg
+ {
+  Gen g;
+
+  g = nullgen;
+  g.type = D_CONST;
+  g.offset = $4;
+  outcode($1, $2, &g, NREG, &$7);
+ }
+@
+
+<<inst rule(arm)>>=
+/*
+ * MCR MRC
+ */
+| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
+ {
+  Gen g;
+
+  g = nullgen;
+  g.type = D_CONST;
+  g.offset =
+   (0xe << 24) |    /* opcode */
+   ($1 << 20) |     /* MCR/MRC */
+   ($2 << 28) |     /* scond */
+   (($3 & 15) << 8) |   /* coprocessor number */
+   (($5 & 7) << 21) |   /* coprocessor operation */
+   (($7 & 15) << 12) |  /* arm register */
+   (($9 & 15) << 16) |  /* Crn */
+   (($11 & 15) << 0) |  /* Crm */
+   (($12 & 7) << 5) |   /* coprocessor information */
+   (1<<4);          /* must be set */ // opcode component
+  outcode(AWORD, Always, &nullgen, NREG, &g);
+ }
 @
 
 <<misc rules>>=

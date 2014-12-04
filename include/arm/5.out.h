@@ -66,10 +66,12 @@ enum opcode
     AADC,
     ASBC,
     ARSC,
+
     ATST,
     ATEQ,
     ACMP,
     ACMN,
+
     AORR,
     //AMOV, redundant with the other MOV operations
     ABIC,

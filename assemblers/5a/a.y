@@ -121,40 +121,109 @@ line:
 /*s: inst rule(arm) */
 inst:
 /*
- * ADD
+ * ADD/SUB/...
  */
   LTYPE1 cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
 | LTYPE1 cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
 | LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, NREG, &$5); }
+/*x: inst rule(arm) */
 /*
  * MVN
  */
 | LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, NREG, &$5); }
+/*x: inst rule(arm) */
+/*
+ * MULL hi,lo,r1,r2
+ */
+| LTYPEM cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
+/*x: inst rule(arm) */
+/*
+ * MULA hi,lo,r1,r2
+ */
+| LTYPEN cond reg ',' reg ',' reg ',' spreg 
+ {
+  $7.type = D_REGREG;
+  $7.offset = $9;
+  outcode($1, $2, &$3, $5.reg, &$7);
+ }
+/*x: inst rule(arm) */
 /*
  * MOVW
  */
 | LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, NREG, &$5); }
+/*x: inst rule(arm) */
 /*
  * B/BL
  */
 | LTYPE4 cond comma rel   { outcode($1, $2, &nullgen, NREG, &$4); }
 | LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, NREG, &$4); }
-/*
- * BX
- */
-| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
+/*x: inst rule(arm) */
 /*
  * BEQ
  */
 | LTYPE5 comma rel { outcode($1, Always, &nullgen, NREG, &$3); }
+/*x: inst rule(arm) */
+/*
+ * RET
+ */
+| LTYPEA cond comma { outcode($1, $2, &nullgen, NREG, &nullgen); }
+/*x: inst rule(arm) */
 /*
  * SWI
  */
 | LTYPE6 cond comma gen { outcode($1, $2, &nullgen, NREG, &$4); }
+/*x: inst rule(arm) */
 /*
  * CMP
  */
 | LTYPE7 cond imsr ',' spreg comma { outcode($1, $2, &$3, $5, &nullgen); }
+/*x: inst rule(arm) */
+/*
+ * SWAP
+ */
+| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
+| LTYPE9 cond reg ',' ireg comma   { outcode($1, $2, &$5, $3.reg, &$3); }
+| LTYPE9 cond comma ireg ',' reg   { outcode($1, $2, &$4, $6.reg, &$6); }
+/*x: inst rule(arm) */
+/*
+ * CASE
+ */
+| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
+/*x: inst rule(arm) */
+/*
+ * WORD
+ */
+| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
+/*x: inst rule(arm) */
+/*
+ * TEXT/GLOBL
+ */
+| LTYPEB name ',' imm         { outcode($1, Always, &$2, NREG, &$4); }
+| LTYPEB name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
+/*x: inst rule(arm) */
+/*
+ * DATA
+ */
+| LTYPEC name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
+/*x: inst rule(arm) */
+/*
+ * END
+ */
+| LTYPEE comma { outcode($1, Always, &nullgen, NREG, &nullgen); }
+/*x: inst rule(arm) */
+/*
+ * floating-point coprocessor
+ */
+| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPEK cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
+| LTYPEL cond freg ',' freg comma { outcode($1, $2, &$3, $5.reg, &nullgen); }
+/*x: inst rule(arm) */
+/*
+ * BX
+ */
+| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
+/*x: inst rule(arm) */
 /*
  * MOVM
  */
@@ -176,40 +245,7 @@ inst:
   g.offset = $4;
   outcode($1, $2, &g, NREG, &$7);
  }
-/*
- * SWAP
- */
-| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg comma   { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond comma ireg ',' reg   { outcode($1, $2, &$4, $6.reg, &$6); }
-/*
- * RET
- */
-| LTYPEA cond comma { outcode($1, $2, &nullgen, NREG, &nullgen); }
-/*
- * TEXT/GLOBL
- */
-| LTYPEB name ',' imm         { outcode($1, Always, &$2, NREG, &$4); }
-| LTYPEB name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
-/*
- * DATA
- */
-| LTYPEC name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
-/*
- * CASE
- */
-| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
-/*
- * word
- */
-| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
-/*
- * floating-point coprocessor
- */
-| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, NREG, &$5); }
-| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, NREG, &$5); }
-| LTYPEK cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
-| LTYPEL cond freg ',' freg comma { outcode($1, $2, &$3, $5.reg, &nullgen); }
+/*x: inst rule(arm) */
 /*
  * MCR MRC
  */
@@ -232,28 +268,12 @@ inst:
    (1<<4);          /* must be set */ // opcode component
   outcode(AWORD, Always, &nullgen, NREG, &g);
  }
-/*
- * MULL hi,lo,r1,r2
- */
-| LTYPEM cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
-/*
- * MULA hi,lo,r1,r2
- */
-| LTYPEN cond reg ',' reg ',' reg ',' spreg 
- {
-  $7.type = D_REGREG;
-  $7.offset = $9;
-  outcode($1, $2, &$3, $5.reg, &$7);
- }
-/*
- * END
- */
-| LTYPEE comma { outcode($1, Always, &nullgen, NREG, &nullgen); }
 /*e: inst rule(arm) */
 /*s: cond rule(arm) */
 cond:
  /* empty */ { $$ = Always; }
 | cond LCOND { $$ = ($1 & ~C_SCOND) | $2; }
+/*x: cond rule(arm) */
 | cond LS    { $$ = $1 | $2; }
 /*e: cond rule(arm) */
 /*s: operand rules(arm) */
@@ -521,7 +541,7 @@ frcon:
 comma:
   /* empty */
 | ',' comma
-
+/*x: opt rules */
 /* for MCR */ 
 oexpr:
   /* empty */ { $$ = 0; }

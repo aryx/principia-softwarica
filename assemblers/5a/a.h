@@ -23,9 +23,12 @@ struct	Gen
     double	dval;
     char	sval[8];
 
-    Sym*	sym; // ??
+    // option<Sym>, for debubbing purpose?
+    Sym*	sym;
+    // option<enum<register>> where None is done via NREG
     short	reg; // ??
-    short	name; // ??
+    // option<??> None = D_NONE
+    short	name;
 };
 /*e: struct Gen(arm) */
 
