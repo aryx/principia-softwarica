@@ -2,9 +2,9 @@
 
 /*s: enum regxxx(arm) */
 enum registr {
+    /*s: [[regxxx]] compiler conventions cases */
     REGRET =	0,
     REGARG =	0,
-    /*s: [[regxxx]] cases */
     /* compiler allocates R1 up as temps */
     /* compiler allocates register variables R2 up */
     REGMIN =	2,
@@ -13,7 +13,7 @@ enum registr {
     REGEXT =	10,
     /* compiler allocates external registers R10 down */
     REGTMP =	11,
-    /*e: [[regxxx]] cases */
+    /*e: [[regxxx]] compiler conventions cases */
     REGSB =		12,
     REGSP =		13,
     REGLINK =	14,
