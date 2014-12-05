@@ -254,7 +254,7 @@ Nconv(Fmt *fp)
 		sprint(str, "GOK-name(%d)", a->name);
 		break;
 
-	case D_NONE:
+	case N_NONE:
 		sprint(str, "%ld", a->offset);
 		break;
 

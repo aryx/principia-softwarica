@@ -62,9 +62,12 @@ int	dtype;
 int	armv4;
 int vfp;
 
-int	doexp, dlm;
-int	imports, nimports;
-int	exports, nexports;
+int	doexp;
+int dlm;
+int	imports;
+int nimports;
+int	exports;
+int nexports;
 char*	EXPTAB;
 Prog	undefp;
 
