@@ -1,16 +1,5 @@
 /*s: include/arm/5.out.h */
 
-/*s: constant NSNAME(arm) */
-#define	NSNAME		8
-/*e: constant NSNAME(arm) */
-
-/*s: constant NOPROF(arm) */
-#define NOPROF		(1<<0)
-/*e: constant NOPROF(arm) */
-/*s: constant DUPOK(arm) */
-#define DUPOK		(1<<1)
-/*e: constant DUPOK(arm) */
-
 /*s: enum regxxx(arm) */
 enum registr {
     REGRET =	0,
@@ -253,6 +242,17 @@ enum name_kind {
    /*e: name_kind cases */
 };
 /*e: enum name_kind(arm) */
+
+/*s: constant NSNAME(arm) */
+#define	NSNAME		8
+/*e: constant NSNAME(arm) */
+
+/*s: constant NOPROF(arm) */
+#define NOPROF		(1<<0)
+/*e: constant NOPROF(arm) */
+/*s: constant DUPOK(arm) */
+#define DUPOK		(1<<1)
+/*e: constant DUPOK(arm) */
 
 /*s: constant C_SCOND(arm) */
 /* scond byte */
