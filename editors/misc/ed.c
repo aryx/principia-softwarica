@@ -624,7 +624,7 @@ exfile(int om)
 }
 
 void
-error1(char *s)
+error_1(char *s)
 {
 	int c;
 
@@ -655,7 +655,7 @@ error1(char *s)
 void
 error(char *s)
 {
-	error1(s);
+	error_1(s);
 	longjmp(savej, 1);
 }
 
@@ -684,7 +684,7 @@ notifyf(void *a, char *s)
 			noted(NCONT);
 		putchr(L'\n');
 		lastc = '\n';
-		error1(Q);
+		error_1(Q);
 		notejmp(a, savej, 0);
 	}
 	if(strcmp(s, "hangup") == 0){
@@ -1090,7 +1090,7 @@ init(void)
 	oblock = -1;
 	ichanged = 0;
 	if((tfile = create(tfname, ORDWR, 0600)) < 0){
-		error1(T);
+		error_1(T);
 		exits(0);
 	}
 	dot = dol = zero;
