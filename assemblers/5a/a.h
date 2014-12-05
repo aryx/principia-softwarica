@@ -10,7 +10,6 @@ typedef	struct	Gen	Gen;
 
 /*s: constant Always(arm) */
 #define    Always 14
-//Never = 15
 /*e: constant Always(arm) */
 
 /*s: struct Gen(arm) */

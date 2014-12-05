@@ -12,7 +12,7 @@
 /*e: constant DUPOK(arm) */
 
 /*s: enum regxxx(arm) */
-enum registers {
+enum registr {
     REGRET =	0,
     REGARG =	0,
     /*s: [[regxxx]] cases */
@@ -211,7 +211,6 @@ enum opcode
     AHISTORY,
     /*x: pseudo opcodes */
     ACASE,
-    /*x: pseudo opcodes */
     ABCASE,
     /*e: pseudo opcodes */
 

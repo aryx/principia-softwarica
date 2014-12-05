@@ -11,9 +11,9 @@
  // | long (for LCONST)
  long   lval;
 
- double dval;
- char   sval[8];
- Sym    *sym;
+ double dval;    // for LFCONST
+ char   sval[8]; // for LSCONST
+ Sym    *sym;    // for LNAME/...
 
  /*s: [[Token]] other fields(arm) */
  Gen    gen;
@@ -29,19 +29,16 @@
 %left   '*' '/' '%'
 /*e: priority and associativity declarations */
 /*s: token declarations(arm) */
-%token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5
-%token  <lval>  LTYPE6 LTYPE7 LTYPE8 LTYPE9 LTYPEA
-%token  <lval>  LTYPEB LTYPEC LTYPED LTYPEE LTYPEF
-%token  <lval>  LTYPEG LTYPEH LTYPEI LTYPEJ LTYPEK
-%token  <lval>  LTYPEL LTYPEM LTYPEN 
+%token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5 LTYPE6 LTYPE7 LTYPE8 LTYPE9 
+%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPED LTYPEE LTYPEF LTYPEG LTYPEH LTYPEI
+%token  <lval>  LTYPEJ LTYPEK LTYPEL LTYPEM LTYPEN 
 %token  <lval>  LTYPEBX
-%token  <lval>  LTYPEX 
 
 %token  <lval>  LSP LSB LFP LPC
-%token  <lval>  LR LREG LF LFREG LC LCREG 
-%token  <lval>  LPSR LFCR
+%token  <lval>  LR LREG  LF LFREG  LC LCREG   LPSR LFCR
 
-%token  <lval>  LCOND LS LAT
+%token  <lval>  LCOND
+%token  <lval>  LS LAT
 
 %token  <lval>  LCONST 
 %token  <dval>  LFCONST
@@ -71,15 +68,17 @@
 /*x: type declarations(arm) */
 %type   <gen>   ximm
 /*x: type declarations(arm) */
+%type   <gen>   regreg
+/*x: type declarations(arm) */
 %type   <lval>  con expr 
+/*x: type declarations(arm) */
+%type   <lval>  oexpr 
 /*x: type declarations(arm) */
 %type <gen> freg fcon frcon
 /*x: type declarations(arm) */
-%type   <lval>  creg
-/*x: type declarations(arm) */
-%type   <gen>   regreg
-%type   <lval>  oexpr 
 %type   <lval>  reglist
+/*x: type declarations(arm) */
+%type   <lval>  creg
 /*e: type declarations(arm) */
 %%
 /*s: grammar(arm) */

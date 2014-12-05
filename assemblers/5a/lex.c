@@ -308,8 +308,6 @@ struct Itab itab[] =
     ".PW",		LS,	C_WBIT|C_PBIT,
     ".WP",		LS,	C_WBIT|C_PBIT,
     /*x: [[itab]] elements */
-    ".F",		LS,	C_FBIT,
-    /*x: [[itab]] elements */
     ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
     ".IAW",		LS,	C_WBIT|C_UBIT,
     ".DBW",		LS,	C_WBIT|C_PBIT,
@@ -318,6 +316,8 @@ struct Itab itab[] =
     ".IA",		LS,	C_UBIT,
     ".DB",		LS,	C_PBIT,
     ".DA",		LS,	0,
+    /*x: [[itab]] elements */
+    ".F",		LS,	C_FBIT,
     /*x: [[itab]] elements */
     "R0",		LREG,	0,
     "R1",		LREG,	1,
@@ -397,8 +397,6 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "MOVM",		LTYPE8, AMOVM,
     /*x: [[itab]] elements */
-    "RFE",		LTYPEA, ARFE,
-    /*x: [[itab]] elements */
     "MCR",		LTYPEJ, 0,
     "MRC",		LTYPEJ, 1,
     /*x: [[itab]] elements */
@@ -424,8 +422,9 @@ struct Itab itab[] =
     "CPSR",		LPSR,	0,
     "SPSR",		LPSR,	1,
     /*x: [[itab]] elements */
-    "CASE",		LTYPED, ACASE,
+    "RFE",		LTYPEA, ARFE,
     /*x: [[itab]] elements */
+    "CASE",		LTYPED, ACASE,
     "BCASE",	LTYPE5,	ABCASE,
     /*x: [[itab]] elements */
     "BX",		LTYPEBX,	ABX,
@@ -704,7 +703,7 @@ outhist(void)
     c = pathchar();
     for(h = hist; h != H; h = h->link) {
         p = h->name;
-        op = 0;
+        op = nil;
         if(p && p[0] != c && h->offset == 0 && pathname){
             if(pathname[0] == c){
                 op = p;
@@ -733,9 +732,9 @@ outhist(void)
                 Bputc(&obuf, '\0');
             }
             p = q;
-            if(p == 0 && op) {
+            if(p == nil && op) {
                 p = op;
-                op = 0;
+                op = nil;
             }
         }
         g.offset = h->offset;

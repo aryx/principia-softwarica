@@ -213,6 +213,9 @@ License.
 
 % usually 2 passes as can reference stuff coming later. pretty simple.
 
+% usually object code that is then processed by linker. So output
+% relocatable code, with symbol map for linker to know what to do.
+
 % less: look at TECS section on assembler?
 
 \section{[[5a]] services}
@@ -395,7 +398,7 @@ enum opcode
 
 % for 5c! conventions! (not used at all by 5a, but in 5.out.h for other tools)
 <<enum regxxx(arm)>>=
-enum register {
+enum registr {
     REGRET =	0,
     REGARG =	0,
     <<[[regxxx]] cases>>
@@ -741,6 +744,7 @@ slookup(char *s)
 
 
 \section{[[Name_kind]]}
+% Symbol table in object file
 
 <<enum name_kind(arm)>>=
 enum name_kind {
@@ -3854,6 +3858,11 @@ ximm:
 @
 %$
 
+
+<<type declarations(arm)>>=
+%type   <gen>   regreg
+@
+
 <<operand rules(arm)>>=
 /* for MULL */
 regreg:
@@ -4053,6 +4062,10 @@ comma:
 | ',' comma
 @
 
+<<type declarations(arm)>>=
+%type   <lval>  oexpr 
+@
+
 % other optional stuff
 <<opt rules>>=
 /* for MCR */ 
@@ -4069,18 +4082,106 @@ oexpr:
 % essentially generated code by yacc, that is calling yylex
 
 
-\chapter{Output}
-
+%\chapter{Output}
 %\chapter{Name resolution}
 
 \chapter{Object Generation}
 % it's actually not machine code generation ... 8l/optab.c does this
+% output relocatable code! so need output symbol table! 'U'
+
+\section{Object header, [[outhist()]]}
+
+% it looks like outhist generate some header information,
+% where is the spec of the format? ld uses that I guess no?
+
+% main() -> assemble() -> outhist() at begining of pass 2
+%out hist??
+
+<<pseudo opcodes>>=
+ANAME,
+@
+
+<<name_kind cases>>=
+D_FILE,
+@
+<<name_kind cases>>=
+D_FILE1, // used by linker only?
+@
+
+<<pseudo opcodes>>=
+AHISTORY,
+@
+
+
+<<function outhist(arm)>>=
+void
+outhist(void)
+{
+    Gen g;
+    Hist *h;
+    char *p, *q, *op, c;
+    int n;
+
+    g = nullgen;
+    c = pathchar();
+    for(h = hist; h != H; h = h->link) {
+        p = h->name;
+        op = nil;
+        if(p && p[0] != c && h->offset == 0 && pathname){
+            if(pathname[0] == c){
+                op = p;
+                p = pathname;
+            }
+        }
+        while(p) {
+            q = strchr(p, c);
+            if(q) {
+                n = q-p;
+                if(n == 0){
+                    n = 1;	/* leading "/" */
+                    *p = '/';	/* don't emit "\" on windows */
+                }
+                q++;
+            } else {
+                n = strlen(p);
+                q = 0;
+            }
+            if(n) {
+                Bputc(&obuf, ANAME);
+                Bputc(&obuf, D_FILE);	/* type */
+                Bputc(&obuf, 1);	/* sym */
+                Bputc(&obuf, '<');
+                Bwrite(&obuf, p, n);
+                Bputc(&obuf, '\0');
+            }
+            p = q;
+            if(p == nil && op) {
+                p = op;
+                op = nil;
+            }
+        }
+        g.offset = h->offset;
+
+        Bputc(&obuf, AHISTORY);
+        Bputc(&obuf, Always);
+        Bputc(&obuf, 0);
+        Bputc(&obuf, h->line);
+        Bputc(&obuf, h->line>>8);
+        Bputc(&obuf, h->line>>16);
+        Bputc(&obuf, h->line>>24);
+        zaddr(&nullgen, 0);
+        zaddr(&g, 0);
+    }
+}
+@
+
 
 \section{Symbol table, [[h]] and [[sym]]}
 
-% when an instruction involve a symbol
+% when an instruction involves a symbol
 % the generated code contain an int that is an index
-% in a symbol table!
+% in a symbol table! to be relocated by 5l later when
+% the actual symbol is found and has a concrete address.
 
 
 <<struct Htab>>=
@@ -4118,7 +4219,7 @@ char	symidx;
 @
 % was called 'sym', but really it's an index in h, and it's confusing
 % to have so many fields called sym already (as well as the global sym)
-
+% char enough??
 
 
 
@@ -4312,9 +4413,6 @@ zaddr(Gen *a, int s)
 @
 
 
-<<pseudo opcodes>>=
-ANAME,
-@
 
 
 % for unresolved symbol names?
@@ -4335,97 +4433,9 @@ zname(char *n, int t, int s)
 @
 
 
-\section{[[outhist()]]}
-
-% it looks like outhist generate some header information,
-% where is the spec of the format? ld uses that I guess no?
-
-% main() -> assemble() -> outhist() at begining of pass 2
-%out hist??
-
-<<name_kind cases>>=
-D_FILE,
-@
-<<name_kind cases>>=
-D_FILE1, // used by linker only?
-@
-
-<<pseudo opcodes>>=
-AHISTORY,
-@
-
-
-<<function outhist(arm)>>=
-void
-outhist(void)
-{
-    Gen g;
-    Hist *h;
-    char *p, *q, *op, c;
-    int n;
-
-    g = nullgen;
-    c = pathchar();
-    for(h = hist; h != H; h = h->link) {
-        p = h->name;
-        op = 0;
-        if(p && p[0] != c && h->offset == 0 && pathname){
-            if(pathname[0] == c){
-                op = p;
-                p = pathname;
-            }
-        }
-        while(p) {
-            q = strchr(p, c);
-            if(q) {
-                n = q-p;
-                if(n == 0){
-                    n = 1;	/* leading "/" */
-                    *p = '/';	/* don't emit "\" on windows */
-                }
-                q++;
-            } else {
-                n = strlen(p);
-                q = 0;
-            }
-            if(n) {
-                Bputc(&obuf, ANAME);
-                Bputc(&obuf, D_FILE);	/* type */
-                Bputc(&obuf, 1);	/* sym */
-                Bputc(&obuf, '<');
-                Bwrite(&obuf, p, n);
-                Bputc(&obuf, '\0');
-            }
-            p = q;
-            if(p == 0 && op) {
-                p = op;
-                op = 0;
-            }
-        }
-        g.offset = h->offset;
-
-        Bputc(&obuf, AHISTORY);
-        Bputc(&obuf, Always);
-        Bputc(&obuf, 0);
-        Bputc(&obuf, h->line);
-        Bputc(&obuf, h->line>>8);
-        Bputc(&obuf, h->line>>16);
-        Bputc(&obuf, h->line>>24);
-        zaddr(&nullgen, 0);
-        zaddr(&g, 0);
-    }
-}
-@
-
-
 \chapter{Advanced Topics}
 
-\section{[[#pragma lib]] and automagic linking}
-
-% this is very very nice! remove so much headache,
-% no need ocamlfind, no need pkg-config, so simple ...
-
-\section{Float}
+\section{Float instructions}
 
 <<float mov opcodes>>=
 // ??
@@ -4437,6 +4447,22 @@ AMOVFD,
 AMOVDF,
 AMOVF,
 AMOVD,
+@
+
+<<float arithmetic opcodes>>=
+// floats?
+ACMPF,
+ACMPD,
+AADDF,
+AADDD,
+ASUBF,
+ASUBD,
+AMULF,
+AMULD,
+ADIVF,
+ADIVD,
+ASQRTF,
+ASQRTD,
 @
 
 <<[[itab]] elements>>=
@@ -4465,21 +4491,22 @@ AMOVD,
 "DIVD",		LTYPEK,	ADIVD,
 @
 
-<<float arithmetic opcodes>>=
-// floats?
-ACMPF,
-ACMPD,
-AADDF,
-AADDD,
-ASUBF,
-ASUBD,
-AMULF,
-AMULD,
-ADIVF,
-ADIVD,
-ASQRTF,
-ASQRTD,
-@
+%/*
+%    "ABSF",		LTYPEI, AABSF,
+%    "ABSD",		LTYPEI, AABSD,
+%    "NEGF",		LTYPEI, ANEGF,
+%    "NEGD",		LTYPEI, ANEGD,
+%    "SQTF",		LTYPEI,	ASQTF,
+%    "SQTD",		LTYPEI,	ASQTD,
+%    "RNDF",		LTYPEI,	ARNDF,
+%    "RNDD",		LTYPEI,	ARNDD,
+%    "URDF",		LTYPEI,	AURDF,
+%    "URDD",		LTYPEI,	AURDD,
+%    "NRMF",		LTYPEI,	ANRMF,
+%    "NRMD",		LTYPEI,	ANRMD,
+%*/
+
+
 
 
 <<[[itab]] elements>>=
@@ -4520,50 +4547,6 @@ ASQRTD,
 % 8? looks like 16 above
 
 
-<<struct ieee>>=
-struct	ieee
-{
-    long	l;	/* contains ls-man	0xffffffff */
-    long	h;	/* contains sign	0x80000000
-                    exp		0x7ff00000
-                    ms-man	0x000fffff */
-};
-@
-
-<<function ieeedtod>>=
-void
-ieeedtod(Ieee *ieee, double native)
-{
-    double fr, ho, f;
-    int exp;
-
-    if(native < 0) {
-        ieeedtod(ieee, -native);
-        ieee->h |= 0x80000000L;
-        return;
-    }
-    if(native == 0) {
-        ieee->l = 0;
-        ieee->h = 0;
-        return;
-    }
-    fr = frexp(native, &exp);
-    f = 2097152L;		/* shouldnt use fp constants here */
-    fr = modf(fr*f, &ho);
-    ieee->h = ho;
-    ieee->h &= 0xfffffL;
-    ieee->h |= (exp+1022L) << 20;
-    f = 65536L;
-    fr = modf(fr*f, &ho);
-    ieee->l = ho;
-    ieee->l <<= 16;
-    ieee->l |= (long)(fr*f);
-}
-@
-
-<<constant FPCHIP(arm)>>=
-#define	FPCHIP		true
-@
 
 <<inst rule(arm)>>=
 /*
@@ -4628,7 +4611,57 @@ frcon:
 @
 %$
 
-\section{System instructions}
+
+
+
+
+<<struct ieee>>=
+struct	ieee
+{
+    long	l;	/* contains ls-man	0xffffffff */
+    long	h;	/* contains sign	0x80000000
+                    exp		0x7ff00000
+                    ms-man	0x000fffff */
+};
+@
+
+% ?? -> <>
+<<function ieeedtod>>=
+void
+ieeedtod(Ieee *ieee, double native)
+{
+    double fr, ho, f;
+    int exp;
+
+    if(native < 0) {
+        ieeedtod(ieee, -native);
+        ieee->h |= 0x80000000L;
+        return;
+    }
+    if(native == 0) {
+        ieee->l = 0;
+        ieee->h = 0;
+        return;
+    }
+    fr = frexp(native, &exp);
+    f = 2097152L;		/* shouldnt use fp constants here */
+    fr = modf(fr*f, &ho);
+    ieee->h = ho;
+    ieee->h &= 0xfffffL;
+    ieee->h |= (exp+1022L) << 20;
+    f = 65536L;
+    fr = modf(fr*f, &ho);
+    ieee->l = ho;
+    ieee->l <<= 16;
+    ieee->l |= (long)(fr*f);
+}
+@
+
+<<constant FPCHIP(arm)>>=
+#define	FPCHIP		true
+@
+
+\section{Multiple registers instructions}
 
 % move many?
 <<mov opcodes>>=
@@ -4666,6 +4699,10 @@ AMOVM,
 @
 
 
+<<type declarations(arm)>>=
+%type   <lval>  reglist
+@
+
 
 <<misc rules>>=
 reglist:
@@ -4683,25 +4720,13 @@ reglist:
 @
 %$
 
+\section{System instructions}
 
-
-<<misc opcodes>>=
-ARFE, // ?? return from exn?
-@
-
-<<[[itab]] elements>>=
-"RFE",		LTYPEA, ARFE,
-@
-
-
-
-
+% no Axxx opcode, binary generation directly in action via D_CONST
 <<[[itab]] elements>>=
 "MCR",		LTYPEJ, 0,
 "MRC",		LTYPEJ, 1,
 @
-
-
 
 <<inst rule(arm)>>=
 /*
@@ -4775,7 +4800,6 @@ creg:
 "SPSR",		LPSR,	1,
 @
 
-
 <<operand_kind cases>>=
 D_PSR,
 @
@@ -4791,14 +4815,30 @@ D_PSR,
 %$
 
 
-\section{Misc instructions}
 
-<<pseudo opcodes>>=
-ACASE,
+<<misc opcodes>>=
+ARFE, // ?? return from exn?
 @
 
 <<[[itab]] elements>>=
+"RFE",		LTYPEA, ARFE,
+@
+
+
+
+
+\section{Misc instructions}
+
+% only used by 5c, reading syntax but never used
+<<pseudo opcodes>>=
+ACASE,
+ABCASE,
+@
+% branch case
+
+<<[[itab]] elements>>=
 "CASE",		LTYPED, ACASE,
+"BCASE",	LTYPE5,	ABCASE,
 @
 
 % some of those are not really opcodes, they are entities 
@@ -4815,20 +4855,6 @@ ACASE,
 | LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
 @
 %$
-
-
-
-
-
-<<pseudo opcodes>>=
-ABCASE,
-@
-
-<<[[itab]] elements>>=
-"BCASE",	LTYPE5,	ABCASE,
-@
-% ??
-
 
 
 
@@ -4895,30 +4921,13 @@ D_FPCR,
 @
 %$
 
-%/*
-%    "ABSF",		LTYPEI, AABSF,
-%    "ABSD",		LTYPEI, AABSD,
-%    "NEGF",		LTYPEI, ANEGF,
-%    "NEGD",		LTYPEI, ANEGD,
-%    "SQTF",		LTYPEI,	ASQTF,
-%    "SQTD",		LTYPEI,	ASQTD,
-%    "RNDF",		LTYPEI,	ARNDF,
-%    "RNDD",		LTYPEI,	ARNDD,
-%    "URDF",		LTYPEI,	AURDF,
-%    "URDD",		LTYPEI,	AURDD,
-%    "NRMF",		LTYPEI,	ANRMF,
-%    "NRMD",		LTYPEI,	ANRMD,
-%*/
 
+\section{[[#pragma lib]] and automagic linking}
 
+% this is very very nice! remove so much headache,
+% no need ocamlfind, no need pkg-config, so simple ...
 
-
-<<type declarations(arm)>>=
-%type   <gen>   regreg
-%type   <lval>  oexpr 
-%type   <lval>  reglist
-@
-
+% but done in assembly?
 
 
 \section{Processing multiple files}
@@ -5013,7 +5022,7 @@ default:
     break;
 @
 
-\section{[[8a -m]], macro debugging}
+\section{[[5a -m]], macro debugging}
 % m for macro
 
 <<[[dodefine()]] debug>>=
@@ -5026,7 +5035,7 @@ if(debug['m'])
     print("#define %s %s\n", s->name, s->macro+1);
 @
 
-\section{[[8a -f]], line information debugging}
+\section{[[5a -f]], line information debugging}
 
 <<[[linehist()]] debug>>=
 if(debug['f'])
