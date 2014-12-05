@@ -25,10 +25,10 @@ typedef	uchar	Opcross[32][2][32];
 typedef	struct	Count	Count;
 
 /*s: constant P(arm) */
-#define	P		((Prog*)0)
+#define	P		((Prog*)nil)
 /*e: constant P(arm) */
 /*s: constant S(arm) */
-#define	S		((Sym*)0)
+#define	S		((Sym*)nil)
 /*e: constant S(arm) */
 /*s: constant TNAME(arm) */
 #define	TNAME		(curtext&&curtext->from.sym?curtext->from.sym->name:noname)

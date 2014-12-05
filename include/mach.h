@@ -22,6 +22,7 @@ enum
 //TODO another enum
 /* types of executables */
     FNONE = 0,		/* unidentified */
+
     FI386,			/* 8.out */
     FI386B,			/* I386 bootable */
     FARM,			/* 5.out */
@@ -29,6 +30,7 @@ enum
 
 /* dissembler types */
     ANONE = 0,		
+
     AI386,
     AI8086,			/* oh god */
     AARM,
@@ -36,6 +38,7 @@ enum
 /* object file types */
     Obj386 = 0,			/* .8 */
     ObjArm,			/* .5 */
+
     Maxobjtype,
 
 /* symbol table classes */

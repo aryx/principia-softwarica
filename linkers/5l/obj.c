@@ -32,17 +32,6 @@ static	int	maxlibdir = 0;
 /*e: global maxlibdir(arm) */
 
 /*s: function usage(arm) */
-/*
- *	-H0				no header
- *	-H1 -T0x10005000 -R4		is aif for risc os
- *	-H2 -T4128 -R4096		is plan9 format
- *	-H3 -T0xF0000020 -R4		is NetBSD format
- *	-H4				is IXP1200 (raw)
- *	-H5 -T0xC0008010 -R1024		is ipaq
- *	-H6 -R4096			no header with segments padded to pages
- *	-H7				is elf
- */
-
 void
 usage(void)
 {

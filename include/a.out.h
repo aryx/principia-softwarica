@@ -38,10 +38,10 @@ typedef	struct	Exec	Exec;
 /*e: constant E_MAGIC */
 
 /*s: constant MIN_MAGIC */
-#define	MIN_MAGIC	8
+#define	MIN_MAGIC	11
 /*e: constant MIN_MAGIC */
 /*s: constant MAX_MAGIC */
-#define	MAX_MAGIC	28			/* <= 90 */
+#define	MAX_MAGIC	20			/* <= 90 */
 /*e: constant MAX_MAGIC */
 
 /*s: constant DYN_MAGIC */
