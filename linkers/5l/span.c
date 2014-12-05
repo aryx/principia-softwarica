@@ -746,8 +746,8 @@ buildop(void)
 			break;
 		case AB:
 		case ABL:
-		case ABX:
-		case ABXRET:
+//		case ABX:
+//		case ABXRET:
 		case ASWI:
 		case AWORD:
 		case AMOVM:

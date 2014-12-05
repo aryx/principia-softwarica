@@ -78,16 +78,16 @@ enum opcode
     ADIV,
     AMOD,
     /*x: mul/div/mod opcodes */
-    AMULU,
-    ADIVU,
-    AMODU,
-    /*x: mul/div/mod opcodes */
     AMULL,
     AMULAL,
     AMULLU,
     AMULALU,
     /*x: mul/div/mod opcodes */
     AMULA,
+    /*x: mul/div/mod opcodes */
+    AMULU,
+    ADIVU,
+    AMODU,
     /*e: mul/div/mod opcodes */
     /*s: comparison opcodes */
     ATST,
@@ -154,7 +154,6 @@ enum opcode
     /*e: interrupt opcodes */
 
     /*s: float mov opcodes */
-    // ??
     AMOVWD,
     AMOVWF,
     AMOVDW,
@@ -165,7 +164,6 @@ enum opcode
     AMOVD,
     /*e: float mov opcodes */
     /*s: float arithmetic opcodes */
-    // floats?
     ACMPF,
     ACMPD,
     AADDF,
@@ -181,23 +179,9 @@ enum opcode
     /*e: float arithmetic opcodes */
     /*s: misc opcodes */
     ARFE, // ?? return from exn?
-    /*x: misc opcodes */
-    ABX, // ?
-    ABXRET, // ?
-    ADWORD, // ?
-    ASIGNAME,
-    /*x: misc opcodes */
-    ALDREX,
-    ASTREX,
-    ALDREXD,
-    ASTREXD,
     /*e: misc opcodes */
 
     /*s: pseudo opcodes */
-    AGOK,
-    ADYNT,
-    AINIT,
-    /*x: pseudo opcodes */
     ATEXT,
     AGLOBL,
     /*x: pseudo opcodes */
@@ -212,6 +196,13 @@ enum opcode
     /*x: pseudo opcodes */
     ACASE,
     ABCASE,
+    /*x: pseudo opcodes */
+    ASIGNAME,
+    /*x: pseudo opcodes */
+    AGOK,
+    /*x: pseudo opcodes */
+    ADYNT,
+    AINIT,
     /*e: pseudo opcodes */
 
     ALAST,
@@ -234,16 +225,14 @@ enum operand_kind {
     /*x: operand_kind cases */
     D_BRANCH,
     /*x: operand_kind cases */
+    D_PSR,
+    /*x: operand_kind cases */
     D_SCONST,
     /*x: operand_kind cases */
     D_OCONST,
     /*x: operand_kind cases */
     D_FREG,
-    /*x: operand_kind cases */
     D_FCONST,
-    /*x: operand_kind cases */
-    D_PSR,
-    /*x: operand_kind cases */
     D_FPCR,
     /*e: operand_kind cases */
 };

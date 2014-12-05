@@ -30,7 +30,7 @@
 /*e: priority and associativity declarations */
 /*s: token declarations(arm) */
 %token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5 LTYPE6 LTYPE7 LTYPE8 LTYPE9 
-%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPED LTYPEE LTYPEF LTYPEG LTYPEH LTYPEI
+%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPED LTYPEE LTYPEH LTYPEI
 %token  <lval>  LTYPEJ LTYPEK LTYPEL LTYPEM LTYPEN 
 %token  <lval>  LTYPEBX
 
@@ -43,6 +43,7 @@
 %token  <lval>  LCONST 
 %token  <dval>  LFCONST
 %token  <sval>  LSCONST
+
 %token  <sym>   LNAME LLAB LVAR
 /*e: token declarations(arm) */
 /*s: type declarations(arm) */
@@ -74,11 +75,11 @@
 /*x: type declarations(arm) */
 %type   <lval>  oexpr 
 /*x: type declarations(arm) */
+%type   <lval>  creg
+/*x: type declarations(arm) */
 %type <gen> freg fcon frcon
 /*x: type declarations(arm) */
 %type   <lval>  reglist
-/*x: type declarations(arm) */
-%type   <lval>  creg
 /*e: type declarations(arm) */
 %%
 /*s: grammar(arm) */
@@ -208,6 +209,29 @@ inst:
 | LTYPEE comma { outcode($1, Always, &nullgen, NREG, &nullgen); }
 /*x: inst rule(arm) */
 /*
+ * MCR MRC
+ */
+| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
+ {
+  Gen g;
+
+  g = nullgen;
+  g.type = D_CONST;
+  g.offset =
+   (0xe << 24) |    /* opcode */
+   ($1 << 20) |     /* MCR/MRC */
+   ($2 << 28) |     /* scond */
+   (($3 & 15) << 8) |   /* coprocessor number */
+   (($5 & 7) << 21) |   /* coprocessor operation */
+   (($7 & 15) << 12) |  /* arm register */
+   (($9 & 15) << 16) |  /* Crn */
+   (($11 & 15) << 0) |  /* Crm */
+   (($12 & 7) << 5) |   /* coprocessor information */
+   (1<<4);          /* must be set */ // opcode component
+  outcode(AWORD, Always, &nullgen, NREG, &g);
+ }
+/*x: inst rule(arm) */
+/*
  * floating-point coprocessor
  */
 | LTYPEI cond freg ',' freg { outcode($1, $2, &$3, NREG, &$5); }
@@ -236,39 +260,6 @@ inst:
   g.offset = $4;
   outcode($1, $2, &g, NREG, &$7);
  }
-/*x: inst rule(arm) */
-/*
- * MCR MRC
- */
-| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
- {
-  Gen g;
-
-  g = nullgen;
-  g.type = D_CONST;
-  g.offset =
-   (0xe << 24) |    /* opcode */
-   ($1 << 20) |     /* MCR/MRC */
-   ($2 << 28) |     /* scond */
-   (($3 & 15) << 8) |   /* coprocessor number */
-   (($5 & 7) << 21) |   /* coprocessor operation */
-   (($7 & 15) << 12) |  /* arm register */
-   (($9 & 15) << 16) |  /* Crn */
-   (($11 & 15) << 0) |  /* Crm */
-   (($12 & 7) << 5) |   /* coprocessor information */
-   (1<<4);          /* must be set */ // opcode component
-  outcode(AWORD, Always, &nullgen, NREG, &g);
- }
-/*x: inst rule(arm) */
-/*
- * CASE
- */
-| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
-/*x: inst rule(arm) */
-/*
- * BX
- */
-| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
 /*e: inst rule(arm) */
 /*s: cond rule(arm) */
 cond:
@@ -357,14 +348,14 @@ gen:
   $$.reg = $3;
  }
 /*x: gen rule */
-| freg
-/*x: gen rule */
 | LPSR
  {
   $$ = nullgen;
   $$.type = D_PSR;
   $$.reg = $1;
  }
+/*x: gen rule */
+| freg
 /*x: gen rule */
 | LFCR
  {
@@ -585,6 +576,15 @@ nireg:
   name
 | ireg
 /*x: misc rules */
+creg:
+  LCREG
+| LC '(' expr ')'
+ {
+  if($3 < 0 || $3 >= NREG)
+      print("register value out of range\n");
+  $$ = $3;
+ }
+/*x: misc rules */
 reglist:
   spreg           { $$ = 1 << $1; }
 | spreg '-' spreg
@@ -597,15 +597,6 @@ reglist:
       $$ |= 1<<i;
  }
 | spreg comma reglist { $$ = (1<<$1) | $3; }
-/*x: misc rules */
-creg:
-  LCREG
-| LC '(' expr ')'
- {
-  if($3 < 0 || $3 >= NREG)
-      print("register value out of range\n");
-  $$ = $3;
- }
 /*e: misc rules */
 /*e: grammar(arm) */
 /*e: 5a/a.y */

@@ -14,9 +14,11 @@
 %thx to LP, changed for the better a few things:
 %  - better organisation of the code, TOC better than the few existing
 %    files (that didn't have very good names)
-%  - removed deadcode (Ref, imm2, con2, NMACRO, CLAST, isreg, D_GOK,...)
+%  - removed deadcode (Ref, imm2, con2, NMACRO, CLAST, isreg, ...)
 %  - renamed some enums (as => opcode, _ => operand_kind)
-%  - reordered opcodes and operand kinds, and cleaned them
+%  - reordered opcodes and operand kinds, and cleaned them:
+%     * removed opcodes (ADWORD, ABX, ...)
+%     * removed operand kinds (D_GOK, D_ADDR, ...)
 %  - introduced name_kind, splitted from operand_kind, for ANAME
 %  - factorize more code between arm and x86 (abusing LP chunks)
 %  - TODO rename types, clearer, Gen? as Adr (and Gen2? as Prog?)
@@ -155,9 +157,10 @@ you fully understand how things work under the hood.
 % we gonna focus on plan9 assemblers because
 % they are simple, short code, and consistent with the rest of my
 % endeavour :)
-% we choose 5a, simpler than 8a: ARM RISC simpler than x86 CISC. Moreover
+% we choose 5a, simpler than 8a: ARM(v6) RISC simpler than x86 CISC. Moreover
 % we have the full executable spec of ARM in 5i/! so it helps to understand
 % the semantic of the ASM instructions.
+% ARM like in raspberry or many phones. Most popular archi.
 
 %note: better to do manual with ARM for assembler/compiler/linker. Simpler.
 % Using x86 also make it more error prone when want to change things
@@ -214,7 +217,8 @@ License.
 % usually 2 passes as can reference stuff coming later. pretty simple.
 
 % usually object code that is then processed by linker. So output
-% relocatable code, with symbol map for linker to know what to do.
+% relocatable code, with symbol table in object for linker to know what
+% to do and where to patch things.
 
 % less: look at TECS section on assembler?
 
@@ -225,7 +229,7 @@ License.
 % env: INCLUDE (for cpp, similar to -I), NPROC (when multi files?)
 
 
-% can also have some simple constant expression
+% can also have some simple constant expression.
 % can also have macros and includes!
 % (really convenient, can define new instructions thx to macro & bitshift as in:
 %  #define MCRR(coproc, op, rd, rn, crm) \
@@ -256,6 +260,7 @@ License.
 % e.g. the code of strchr, div, etc.
 
 \section{ARM}
+% ARMv6, like in Raspberry :)
 
 % opcode format, see 5i/
 % but actually it's more the job of 5l and optab to do that.
@@ -417,6 +422,7 @@ enum registr {
 #define	NREG		16
 @
 % used to represent NONE for the outcode reg parameter
+%less: #define R_NONE NREG ?
 
 
 %XXXX
@@ -519,7 +525,6 @@ short	name;
 
 \section{[[Token]] and [[itab]]}
 
-
 %typedef int token_kind; (union { char; enum token_kind })
 % see y.tab.h for token_kind enum (which are actually a set of #define
 % with also ascii char into it)
@@ -527,7 +532,7 @@ short	name;
 % the first part is essentially for keywords
 <<token declarations(arm)>>=
 %token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5 LTYPE6 LTYPE7 LTYPE8 LTYPE9 
-%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPED LTYPEE LTYPEF LTYPEG LTYPEH LTYPEI
+%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPED LTYPEE LTYPEH LTYPEI
 %token  <lval>  LTYPEJ LTYPEK LTYPEL LTYPEM LTYPEN 
 %token  <lval>  LTYPEBX
 
@@ -540,9 +545,10 @@ short	name;
 %token  <lval>  LCONST 
 %token  <dval>  LFCONST
 %token  <sval>  LSCONST
+
 %token  <sym>   LNAME LLAB LVAR
 @
-%dead: LTYPEX 
+%dead: LTYPEX LTYPEF LTYPEG
 
 
 
@@ -1820,7 +1826,7 @@ macend(void)
 
 \section{[[#include]] and [[-I]]}
 
-\subsection{Include path}
+\subsection{Include path, [[-I]]}
 
 <<[[main()]] locals>>=
 char *p;
@@ -2892,7 +2898,7 @@ line:
 
 \section{Instructions}
 
-% outcode =~ pc++
+% outcode() =~ pc++
 % take 5 arguments, opcode, cond, op1, op2, op3.
 % op2 is always a register or nothing.
 
@@ -2973,6 +2979,7 @@ ASRL,
 ASRA,
 ASLL,
 @
+% virtual/fake opcodes? transformed in something using shift?
 
 <<[[itab]] elements>>=
 "SLL",		LTYPE1,	ASLL,
@@ -2987,7 +2994,7 @@ AMUL,
 ADIV,
 AMOD,
 @
-% ARM has no ADIV or AMOD so virtual/fake-opcode
+% ARM has no ADIV or AMOD so virtual/fake-opcode again?
 
 <<[[itab]] elements>>=
 "MUL",		LTYPE1, AMUL,
@@ -2995,12 +3002,6 @@ AMOD,
 "MOD",		LTYPE1,	AMOD,
 @
 
-<<mul/div/mod opcodes>>=
-AMULU,
-ADIVU,
-AMODU,
-@
-% has no reading syntax, generated just in 5c
 
 
 
@@ -3097,6 +3098,8 @@ AMOVHU,
 % special instr? the real one accept any gen?
 
 
+\ifallcode
+% optional? not used a single time in arm/*.s, used a bit in 5c/
 <<mov opcodes>>=
 AMVN,
 @
@@ -3113,6 +3116,7 @@ AMVN,
  */
 | LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, NREG, &$5); }
 @
+\fi
 
 \subsection{Comparison}
 % was actually part of arithmetic in Machine.nw
@@ -3488,10 +3492,6 @@ reg:
 "R",		LR,	0,
 @
 
-<<[[itab]] elements>>=
-"SB",		LSB,	D_EXTERN,
-"PC",		LPC,	D_BRANCH,
-@
 
 
 
@@ -3612,14 +3612,14 @@ gen:
 @
 %$
 % no $ in front of con here?
-% todo: can remove this case? needed? implicit register?
+% todo:clean: can remove con case? needed? implicit register?
 %  how can be D_OREG when there are no registers involved? it's SB by default?
 
 % a bit confusing that can have oreg, and also $ oreg
 % because MOV support powerful addressing modes? with multiple
 % indirections?
 
-%less: delete?
+%less:clean: delete?
 <<gen rule>>=
 | shift '(' spreg ')'
  {
@@ -3745,9 +3745,12 @@ pointer:
 @
 
 <<[[itab]] elements>>=
+"SB",		LSB,	D_EXTERN,
 "SP",		LSP,	D_AUTO,
 "FP",		LFP,	D_PARAM,
 @
+
+
 
 % can do 
 %	BL	div<>(SB)  so it's SB but it's really a code reference
@@ -3772,12 +3775,16 @@ D_BRANCH,
 %/* type */ FOR BRANCH
 
 
+<<[[itab]] elements>>=
+"PC",		LPC,	D_BRANCH,
+@
+
 <<type declarations(arm)>>=
 %type   <gen>   rel
 %type   <lval>  offset
 @
 
-% for code (rel = ? relocatable?)
+% for code (rel = ? relocatable?), argument of B/BL
 <<operand rules(arm)>>=
 rel:
   con '(' LPC ')'
@@ -3812,6 +3819,32 @@ offset:
 | '-' con    { $$ = -$2; }
 @
 %$
+
+\subsection{Status register}
+
+% status register, works with MOV but normally it's a special
+% ARM load/store instructions: MSR and MRS (here emulated by a single MOV)
+% CPSR = ? SPSR = ?
+<<[[itab]] elements>>=
+"CPSR",		LPSR,	0,
+"SPSR",		LPSR,	1,
+@
+
+<<operand_kind cases>>=
+D_PSR,
+@
+
+<<gen rule>>=
+| LPSR
+ {
+  $$ = nullgen;
+  $$.type = D_PSR;
+  $$.reg = $1;
+ }
+@
+%$
+% Status register? move earlier? 
+
 
 \subsection{Alternative forms}
 
@@ -3857,7 +3890,7 @@ ximm:
 | fcon
 @
 %$
-
+%clean: can remove this extra $*$ ?
 
 <<type declarations(arm)>>=
 %type   <gen>   regreg
@@ -3903,15 +3936,6 @@ long	pc;
 %$
 
 \section{Pseudo instructions}
-
-<<pseudo opcodes>>=
-AGOK,
-ADYNT,
-AINIT,
-@
-% no reading syntax, so used internally
-% there was a D_GOK, but it was unused in 5a/5c/5l
-
 
 \subsection{[[TEXT/GLOBL]]}
 
@@ -4414,7 +4438,7 @@ zaddr(Gen *a, int s)
 
 
 
-
+% outcode -> <>
 % for unresolved symbol names?
 <<function zname(arm)>>=
 void
@@ -4435,10 +4459,102 @@ zname(char *n, int t, int s)
 
 \chapter{Advanced Topics}
 
+\section{System instructions}
+
+% no Axxx opcode, binary generation directly in action via D_CONST
+<<[[itab]] elements>>=
+"MCR",		LTYPEJ, 0,
+"MRC",		LTYPEJ, 1,
+@
+
+<<inst rule(arm)>>=
+/*
+ * MCR MRC
+ */
+| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
+ {
+  Gen g;
+
+  g = nullgen;
+  g.type = D_CONST;
+  g.offset =
+   (0xe << 24) |    /* opcode */
+   ($1 << 20) |     /* MCR/MRC */
+   ($2 << 28) |     /* scond */
+   (($3 & 15) << 8) |   /* coprocessor number */
+   (($5 & 7) << 21) |   /* coprocessor operation */
+   (($7 & 15) << 12) |  /* arm register */
+   (($9 & 15) << 16) |  /* Crn */
+   (($11 & 15) << 0) |  /* Crm */
+   (($12 & 7) << 5) |   /* coprocessor information */
+   (1<<4);          /* must be set */ // opcode component
+  outcode(AWORD, Always, &nullgen, NREG, &g);
+ }
+@
+
+
+<<type declarations(arm)>>=
+%type   <lval>  creg
+@
+
+<<misc rules>>=
+creg:
+  LCREG
+| LC '(' expr ')'
+ {
+  if($3 < 0 || $3 >= NREG)
+      print("register value out of range\n");
+  $$ = $3;
+ }
+@
+%$
+
+<<[[itab]] elements>>=
+"C",		LC,	0,
+
+"C0",		LCREG,	0,
+"C1",		LCREG,	1,
+"C2",		LCREG,	2,
+"C3",		LCREG,	3,
+"C4",		LCREG,	4,
+"C5",		LCREG,	5,
+"C6",		LCREG,	6,
+"C7",		LCREG,	7,
+"C8",		LCREG,	8,
+"C9",		LCREG,	9,
+"C10",		LCREG,	10,
+"C11",		LCREG,	11,
+"C12",		LCREG,	12,
+"C13",		LCREG,	13,
+"C14",		LCREG,	14,
+"C15",		LCREG,	15,
+@
+
+
+
+
+<<misc opcodes>>=
+ARFE, // ?? return from exn?
+@
+
+<<[[itab]] elements>>=
+"RFE",		LTYPEA, ARFE,
+@
+
+
+
+
+
+
+
+
+
+
+
+
 \section{Float instructions}
 
 <<float mov opcodes>>=
-// ??
 AMOVWD,
 AMOVWF,
 AMOVDW,
@@ -4450,7 +4566,6 @@ AMOVD,
 @
 
 <<float arithmetic opcodes>>=
-// floats?
 ACMPF,
 ACMPD,
 AADDF,
@@ -4530,6 +4645,13 @@ ASQRTD,
 "F15",		LFREG,	15,
 @
 
+
+<<[[itab]] elements>>=
+"FPSR",		LFCR,	0,
+"FPCR",		LFCR,	1,
+@
+
+
 <<constant FREGRET(arm)>>=
 #define	FREGRET		0
 @
@@ -4559,22 +4681,23 @@ ASQRTD,
 @
 %$
 
+
+<<operand_kind cases>>=
+D_FREG,
+D_FCONST,
+D_FPCR,
+@
+% FPCR is the float pending of D_PSR?
+
 <<type declarations(arm)>>=
 %type <gen> freg fcon frcon
 @
 
-
+% for MOV
 <<gen rule>>=
 | freg
 @
 
-<<operand_kind cases>>=
-D_FREG,
-@
-
-<<operand_kind cases>>=
-D_FCONST,
-@
 
 <<float rules>>=
 freg:
@@ -4612,6 +4735,16 @@ frcon:
 %$
 
 
+
+<<gen rule>>=
+| LFCR
+ {
+  $$ = nullgen;
+  $$.type = D_FPCR;
+  $$.reg = $1;
+ }
+@
+%$
 
 
 
@@ -4660,6 +4793,7 @@ ieeedtod(Ieee *ieee, double native)
 <<constant FPCHIP(arm)>>=
 #define	FPCHIP		true
 @
+% used only by a small if(FPCHIP) in cinit
 
 \section{Multiple registers instructions}
 
@@ -4720,206 +4854,105 @@ reglist:
 @
 %$
 
-\section{System instructions}
-
-% no Axxx opcode, binary generation directly in action via D_CONST
-<<[[itab]] elements>>=
-"MCR",		LTYPEJ, 0,
-"MRC",		LTYPEJ, 1,
-@
-
-<<inst rule(arm)>>=
-/*
- * MCR MRC
- */
-| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
- {
-  Gen g;
-
-  g = nullgen;
-  g.type = D_CONST;
-  g.offset =
-   (0xe << 24) |    /* opcode */
-   ($1 << 20) |     /* MCR/MRC */
-   ($2 << 28) |     /* scond */
-   (($3 & 15) << 8) |   /* coprocessor number */
-   (($5 & 7) << 21) |   /* coprocessor operation */
-   (($7 & 15) << 12) |  /* arm register */
-   (($9 & 15) << 16) |  /* Crn */
-   (($11 & 15) << 0) |  /* Crm */
-   (($12 & 7) << 5) |   /* coprocessor information */
-   (1<<4);          /* must be set */ // opcode component
-  outcode(AWORD, Always, &nullgen, NREG, &g);
- }
-@
-
-
-<<type declarations(arm)>>=
-%type   <lval>  creg
-@
-
-<<misc rules>>=
-creg:
-  LCREG
-| LC '(' expr ')'
- {
-  if($3 < 0 || $3 >= NREG)
-      print("register value out of range\n");
-  $$ = $3;
- }
-@
-%$
-
-<<[[itab]] elements>>=
-"C",		LC,	0,
-
-"C0",		LCREG,	0,
-"C1",		LCREG,	1,
-"C2",		LCREG,	2,
-"C3",		LCREG,	3,
-"C4",		LCREG,	4,
-"C5",		LCREG,	5,
-"C6",		LCREG,	6,
-"C7",		LCREG,	7,
-"C8",		LCREG,	8,
-"C9",		LCREG,	9,
-"C10",		LCREG,	10,
-"C11",		LCREG,	11,
-"C12",		LCREG,	12,
-"C13",		LCREG,	13,
-"C14",		LCREG,	14,
-"C15",		LCREG,	15,
-@
-
-
-
-% status register, works with MOV but normally it's a special
-% ARM instruction: MSR and MRS
-<<[[itab]] elements>>=
-"CPSR",		LPSR,	0,
-"SPSR",		LPSR,	1,
-@
-
-<<operand_kind cases>>=
-D_PSR,
-@
-
-<<gen rule>>=
-| LPSR
- {
-  $$ = nullgen;
-  $$.type = D_PSR;
-  $$.reg = $1;
- }
-@
-%$
-
-
-
-<<misc opcodes>>=
-ARFE, // ?? return from exn?
-@
-
-<<[[itab]] elements>>=
-"RFE",		LTYPEA, ARFE,
-@
-
-
-
-
 \section{Misc instructions}
 
-% only used by 5c, reading syntax but never used
+% seems dead
+%<<misc opcodes>>=
+%ABX, // ?
+%ABXRET, // ?
+%@
+%<<[[itab]] elements>>=
+%"BX",		LTYPEBX,	ABX,
+%@
+%<<inst rule(arm)>>=
+%/*
+% * BX
+% */
+%| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
+%@
+
+%dead: ADWORD, // ? no reading syntax
+
+% have reading syntax, but not transformed by 5l ... not handled,
+%<<misc opcodes>>=
+%ALDREX,
+%ASTREX,
+%ALDREXD,
+%ASTREXD,
+%@
+%% LDREX STREX CLREX are arm v7 new instruction according to 5db.c
+%% actually they are defined as macros in atom.s:
+%%#define	CLREX		WORD	$0xf57ff01f
+%%#define	LDREX(a,r)	WORD	$(0xe<<28|0x01900f9f | (a)<<16 | (r)<<12)
+%%/* `The order of operands is from left to right in dataflow order' - asm man */
+%%#define	STREX(v,a,r)	WORD	$(0xe<<28|0x01800f90 | (a)<<16 | (r)<<12 | (v)<<0)
+%
+%<<[[itab]] elements>>=
+%"LDREX",		LTYPE3, ALDREX,
+%"LDREXD",		LTYPE3, ALDREXD,
+%"STREX",		LTYPE9, ASTREX,
+%"STREXD",		LTYPE9, ASTREXD,
+%@
+
+\section{Compiler-only pseudo opcodes}
+
+% some of those are not really opcodes, they are entities 
+% just at the asm AST level produced internally by 5c.
+% they have no reading syntax.
+
+% related to NOP, SHL, MOV, pseudo asm
+% that get translated in store/load on some archi.
+
+
+% only used by 5c
 <<pseudo opcodes>>=
 ACASE,
 ABCASE,
 @
-% branch case
+% BCASE = branch case
 
-<<[[itab]] elements>>=
-"CASE",		LTYPED, ACASE,
-"BCASE",	LTYPE5,	ABCASE,
-@
-
-% some of those are not really opcodes, they are entities 
-% just at the asm level.
-
-%hmm but nop? SHL? MOV? here because pseudo asm
-% that get translated in store/load on some archi?
-
-%??
-<<inst rule(arm)>>=
-/*
- * CASE
- */
-| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
-@
+% actually they used to have a read syntax, but I didn't see any code
+% using them so I commented the code.
+%<<[[itab]] elements>>=
+%"CASE",		LTYPED, ACASE,
+%"BCASE",	LTYPE5,	ABCASE,
+%@
+%<<inst rule(arm)>>=
+%/*
+% * CASE
+% */
+%| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
+%@
 %$
 
 
+<<mul/div/mod opcodes>>=
+AMULU,
+ADIVU,
+AMODU,
+@
+% has no reading syntax, generated just in 5c
 
-<<misc opcodes>>=
-ABX, // ?
-ABXRET, // ?
-ADWORD, // ?
+<<pseudo opcodes>>=
 ASIGNAME,
 @
+% for signatures checking I think
 
-<<[[itab]] elements>>=
-"BX",		LTYPEBX,	ABX,
+
+\section{Linker-only pseudo opcodes}
+
+<<pseudo opcodes>>=
+AGOK,
 @
+% there was a D_GOK, but it was unused in 5a/5c/5l
+% GOK =? God only Knows? speciak mark?
+% actually used in both compiler and linker
 
-<<inst rule(arm)>>=
-/*
- * BX
- */
-| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
+<<pseudo opcodes>>=
+ADYNT,
+AINIT,
 @
-
-
-
-<<misc opcodes>>=
-ALDREX,
-ASTREX,
-ALDREXD,
-ASTREXD,
-@
-
-% LDREX STREX CLREX are arm v7 new instruction according to 5db.c
-%in atom.s:
-%#define	CLREX		WORD	$0xf57ff01f
-%#define	LDREX(a,r)	WORD	$(0xe<<28|0x01900f9f | (a)<<16 | (r)<<12)
-%/* `The order of operands is from left to right in dataflow order' - asm man */
-%#define	STREX(v,a,r)	WORD	$(0xe<<28|0x01800f90 | (a)<<16 | (r)<<12 | (v)<<0)
-
-<<[[itab]] elements>>=
-"LDREX",		LTYPE3, ALDREX,
-"LDREXD",		LTYPE3, ALDREXD,
-"STREX",		LTYPE9, ASTREX,
-"STREXD",		LTYPE9, ASTREXD,
-@
-
-
-
-
-<<operand_kind cases>>=
-D_FPCR,
-@
-
-<<[[itab]] elements>>=
-"FPSR",		LFCR,	0,
-"FPCR",		LFCR,	1,
-@
-
-<<gen rule>>=
-| LFCR
- {
-  $$ = nullgen;
-  $$.type = D_FPCR;
-  $$.reg = $1;
- }
-@
-%$
+% seems never assigned, maybe not used anymore?
 
 
 \section{[[#pragma lib]] and automagic linking}

@@ -338,13 +338,16 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "R",		LR,	0,
     /*x: [[itab]] elements */
-    "SB",		LSB,	D_EXTERN,
-    "PC",		LPC,	D_BRANCH,
-    /*x: [[itab]] elements */
     "@",		LAT,	0,
     /*x: [[itab]] elements */
+    "SB",		LSB,	D_EXTERN,
     "SP",		LSP,	D_AUTO,
     "FP",		LFP,	D_PARAM,
+    /*x: [[itab]] elements */
+    "PC",		LPC,	D_BRANCH,
+    /*x: [[itab]] elements */
+    "CPSR",		LPSR,	0,
+    "SPSR",		LPSR,	1,
     /*x: [[itab]] elements */
     "TEXT",		LTYPEB, ATEXT,
     "GLOBL",	LTYPEB, AGLOBL,
@@ -353,6 +356,30 @@ struct Itab itab[] =
     "WORD",		LTYPEH, AWORD,
     /*x: [[itab]] elements */
     "END",		LTYPEE, AEND,
+    /*x: [[itab]] elements */
+    "MCR",		LTYPEJ, 0,
+    "MRC",		LTYPEJ, 1,
+    /*x: [[itab]] elements */
+    "C",		LC,	0,
+
+    "C0",		LCREG,	0,
+    "C1",		LCREG,	1,
+    "C2",		LCREG,	2,
+    "C3",		LCREG,	3,
+    "C4",		LCREG,	4,
+    "C5",		LCREG,	5,
+    "C6",		LCREG,	6,
+    "C7",		LCREG,	7,
+    "C8",		LCREG,	8,
+    "C9",		LCREG,	9,
+    "C10",		LCREG,	10,
+    "C11",		LCREG,	11,
+    "C12",		LCREG,	12,
+    "C13",		LCREG,	13,
+    "C14",		LCREG,	14,
+    "C15",		LCREG,	15,
+    /*x: [[itab]] elements */
+    "RFE",		LTYPEA, ARFE,
     /*x: [[itab]] elements */
     "MOVD",		LTYPE3, AMOVD,
     "MOVDF",	LTYPE3, AMOVDF,
@@ -395,47 +422,10 @@ struct Itab itab[] =
     "F14",		LFREG,	14,
     "F15",		LFREG,	15,
     /*x: [[itab]] elements */
-    "MOVM",		LTYPE8, AMOVM,
-    /*x: [[itab]] elements */
-    "MCR",		LTYPEJ, 0,
-    "MRC",		LTYPEJ, 1,
-    /*x: [[itab]] elements */
-    "C",		LC,	0,
-
-    "C0",		LCREG,	0,
-    "C1",		LCREG,	1,
-    "C2",		LCREG,	2,
-    "C3",		LCREG,	3,
-    "C4",		LCREG,	4,
-    "C5",		LCREG,	5,
-    "C6",		LCREG,	6,
-    "C7",		LCREG,	7,
-    "C8",		LCREG,	8,
-    "C9",		LCREG,	9,
-    "C10",		LCREG,	10,
-    "C11",		LCREG,	11,
-    "C12",		LCREG,	12,
-    "C13",		LCREG,	13,
-    "C14",		LCREG,	14,
-    "C15",		LCREG,	15,
-    /*x: [[itab]] elements */
-    "CPSR",		LPSR,	0,
-    "SPSR",		LPSR,	1,
-    /*x: [[itab]] elements */
-    "RFE",		LTYPEA, ARFE,
-    /*x: [[itab]] elements */
-    "CASE",		LTYPED, ACASE,
-    "BCASE",	LTYPE5,	ABCASE,
-    /*x: [[itab]] elements */
-    "BX",		LTYPEBX,	ABX,
-    /*x: [[itab]] elements */
-    "LDREX",		LTYPE3, ALDREX,
-    "LDREXD",		LTYPE3, ALDREXD,
-    "STREX",		LTYPE9, ASTREX,
-    "STREXD",		LTYPE9, ASTREXD,
-    /*x: [[itab]] elements */
     "FPSR",		LFCR,	0,
     "FPCR",		LFCR,	1,
+    /*x: [[itab]] elements */
+    "MOVM",		LTYPE8, AMOVM,
     /*e: [[itab]] elements */
     0
 };
