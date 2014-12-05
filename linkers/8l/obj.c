@@ -1658,24 +1658,6 @@ find1(long l, int c)
 }
 /*e: function find1(x86) */
 
-/*s: function find2(x86) */
-//int
-//find2(long l, int c)
-//{
-//    short *p;
-//    int i;
-//
-//    p = (short*)&l;
-//    for(i=0; i<4; i+=2) {
-//        if(((*p >> 8) & 0xff) == c)
-//            return i;
-//        if((*p++ & 0xff) == c)
-//            return i+1;
-//    }
-//    return 0;
-//}
-/*e: function find2(x86) */
-
 /*s: function ieeedtof(x86) */
 long
 ieeedtof(Ieee *e)
