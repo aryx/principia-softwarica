@@ -7,9 +7,13 @@
 #include	<arm/5.out.h>
 #include	"../8l/elf.h"
 
-/*s: constant LIBNAMELEN(arm) */
+/*s: macro DBG */
+#define DBG if(debug['v']) mylog
+/*e: macro DBG */
+
+/*s: constant LIBNAMELEN */
 #define	LIBNAMELEN	300
-/*e: constant LIBNAMELEN(arm) */
+/*e: constant LIBNAMELEN */
 
 void	addlibpath(char*);
 int	fileexists(char*);
@@ -24,73 +28,94 @@ typedef	struct	Oprang	Oprang;
 typedef	uchar	Opcross[32][2][32];
 typedef	struct	Count	Count;
 
-/*s: constant P(arm) */
+/*s: constant P */
 #define	P		((Prog*)nil)
-/*e: constant P(arm) */
-/*s: constant S(arm) */
+/*e: constant P */
+/*s: constant S */
 #define	S		((Sym*)nil)
-/*e: constant S(arm) */
+/*e: constant S */
 /*s: constant TNAME(arm) */
-#define	TNAME		(curtext&&curtext->from.sym?curtext->from.sym->name:noname)
+#define	TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
 /*e: constant TNAME(arm) */
 
 /*s: struct Adr(arm) */
 struct	Adr
 {
+    //enum<operand_kind> (D_NONE by default)
+    char	type;
+
     union
     {
         long	u0offset;
         char*	u0sval;
         Ieee*	u0ieee;
     } u0;
+
     union
     {
         Auto*	u1autom;
         Sym*	u1sym;
     } u1;
-    char	type;
+
+    // ??
     char	reg;
     char	name;
     char	class;
 };
 /*e: struct Adr(arm) */
 
-/*s: constant offset(arm) */
+/*s: constant offset */
 #define	offset	u0.u0offset
-/*e: constant offset(arm) */
+/*e: constant offset */
 /*s: constant sval(arm) */
 #define	sval	u0.u0sval
 /*e: constant sval(arm) */
-/*s: constant ieee(arm) */
+/*s: constant ieee */
 #define	ieee	u0.u0ieee
-/*e: constant ieee(arm) */
+/*e: constant ieee */
 
-/*s: constant autom(arm) */
+/*s: constant autom */
 #define	autom	u1.u1autom
-/*e: constant autom(arm) */
-/*s: constant sym(arm) */
+/*e: constant autom */
+/*s: constant sym */
 #define	sym	u1.u1sym
-/*e: constant sym(arm) */
+/*e: constant sym */
 
 /*s: struct Prog(arm) */
 struct	Prog
 {
+    //enum<opcode>
+    byte	as;
+
+    // operands
     Adr	from;
     Adr	to;
+
+    // enum<register>?
+    byte	reg;
+    // enum<instr_cond>?
+    byte	scond;
+
     union
     {
         long	u0regused;
         Prog*	u0forwd;
     } u0;
-    Prog*	cond;
-    Prog*	link;
+
+    // [[Prog]] other fields
+
     long	pc;
     long	line;
-    uchar	mark;
-    uchar	optab;
-    uchar	as;
-    uchar	scond;
-    uchar	reg;
+    byte	mark;
+    byte	optab;
+
+    // [[Prog]] Extra fields
+
+    // list<ref<Prog>> from firstp/lastp, or datap/edatap
+    Prog*	link;
+
+    // list<ref<Prog>> from textp/etextp, to follow CALL xxx ???
+    Prog*	cond;
 };
 /*e: struct Prog(arm) */
 /*s: constant regused(arm) */
@@ -100,21 +125,32 @@ struct	Prog
 #define	forwd	u0.u0forwd
 /*e: constant forwd(arm) */
 
-/*s: struct Sym(arm) */
+/*s: struct Sym */
 struct	Sym
 {
     char	*name;
+    short	version; // for static names, each sym has a different version
+
+    //enum<section> ?
     short	type;
-    short	version;
+
+    // enum<section> too?
+    byte	subtype;
+
+    long	sig;
+    long	value; // e.g. pc for a TEXT procedure
+
+    // [[Sym]] other fields
     short	become;
     short	frame;
-    uchar	subtype;
     ushort	file;
-    long	value;
-    long	sig;
+
+    // Extra
+
+    // hash<Sym.name * Sym.version, ref<Sym>> of hash
     Sym*	link;
 };
-/*e: struct Sym(arm) */
+/*e: struct Sym */
 
 /*s: constant SIGNINTERN(arm) */
 #define SIGNINTERN	(1729*325*1729)
@@ -124,15 +160,20 @@ struct	Sym
 struct	Autom
 {
     Sym*	asym;
-    Auto*	link;
+
     long	aoffset;
     short	type;
+
+    // Extra
+    Auto*	link;
 };
 /*e: struct Autom(arm) */
 /*s: struct Optab(arm) */
 struct	Optab
 {
-    char	as;
+    // enum<as> from 5.out.h
+    byte	as;
+
     char	a1;
     char	a2;
     char	a3;
@@ -157,26 +198,32 @@ struct	Count
 };
 /*e: struct Count(arm) */
 
-/*s: enum _anon_(arm) */
-enum
+/*s: enum sxxx(arm) */
+enum sxxx
 {
     STEXT		= 1,
+
     SDATA,
     SBSS,
+
     SDATA1,
     SXREF,
-    SLEAF,
+    SLEAF, // arm
     SFILE,
     SCONST,
-    SSTRING,
+
+    SSTRING, // arm
     SUNDEF,
 
     SIMPORT,
     SEXPORT,
-
-    LFROM		= 1<<0,
+};
+/*e: enum sxxx(arm) */
+/*s: enum misc(arm) */
+enum misc {
+    LFROM	= 1<<0,
     LTO		= 1<<1,
-    LPOOL		= 1<<2,
+    LPOOL	= 1<<2,
     V4		= 1<<3,	/* arm v4 arch */
     VFP		= 1<<4,	/* arm vfpv3 floating point */
 
@@ -233,41 +280,71 @@ enum
     LEAF		= 1<<2,
 
     BIG		= (1<<12)-4,
+
+    /*s: constant STRINGSZ */
     STRINGSZ	= 200,
+    /*e: constant STRINGSZ */
+    /*s: constant NHASH linker */
     NHASH		= 10007,
+    /*e: constant NHASH linker */
+    /*s: constant NHUNK linker */
     NHUNK		= 100000,
+    /*e: constant NHUNK linker */
+
     MINSIZ		= 64,
     NENT		= 100,
+    /*s: constant MAXIO */
     MAXIO		= 8192,
+    /*e: constant MAXIO */
     MAXHIST		= 20,	/* limit of path elements for history symbols */
+};
+/*e: enum misc(arm) */
 
+/*s: enum rxxx */
+enum rxxx {
     Roffset	= 22,		/* no. bits for offset in relocation address */
     Rindex	= 10,		/* no. bits for index in relocation address */
 };
-/*e: enum _anon_(arm) */
+/*e: enum rxxx */
 
-/*s: struct Buf(arm) */
+/*s: enum headtype(arm) */
+/*
+ *	-H0				      no header
+ *	-H1 -T0x10005000 -R4  is aif for risc os
+ *	-H2 -T4128 -R4096	  is plan9 format
+ *	-H3 -T0xF0000020 -R4  is NetBSD format
+ *	-H4				      is IXP1200 (raw)
+ *	-H5 -T0xC0008010 -R1024 	is ipaq
+ *	-H6 -R4096			   no header with segments padded to pages
+ *	-H7				       is elf
+ */
+enum headtype {
+     H_PLAN9 = 2,
+};
+/*e: enum headtype(arm) */
+
+/*s: struct Buf */
 union Buf
 {
     struct
     {
-        uchar	obuf[MAXIO];			/* output buffer */
-        uchar	ibuf[MAXIO];			/* input buffer */
+        char	obuf[MAXIO];			/* output buffer */
+        byte	ibuf[MAXIO];			/* input buffer */
     } u;
     char	dbuf[1];
 };
-/*e: struct Buf(arm) */
+/*e: struct Buf */
 extern union Buf buf;
 
-/*s: constant cbuf(arm) */
+/*s: constant cbuf */
 #define	cbuf	u.obuf
-/*e: constant cbuf(arm) */
-/*s: constant xbuf(arm) */
+/*e: constant cbuf */
+/*s: constant xbuf */
 #define	xbuf	u.ibuf
-/*e: constant xbuf(arm) */
+/*e: constant xbuf */
 
 extern	long	HEADR;			/* length of header */
-extern	int	HEADTYPE;		/* type of header */
+extern	long	HEADTYPE;		/* type of header */
 extern	long	INITDAT;		/* data location */
 extern	long	INITRND;		/* data round above text location */
 extern	long	INITTEXT;		/* text location */
@@ -277,7 +354,7 @@ extern	long	autosize;
 extern	Biobuf	bso;
 extern	long	bsssize;
 extern	int	cbc;
-extern	uchar*	cbp;
+extern	char*	cbp;
 extern	int	cout;
 extern	Auto*	curauto;
 extern	Auto*	curhist;
@@ -285,7 +362,7 @@ extern	Prog*	curp;
 extern	Prog*	curtext;
 extern	Prog*	datap;
 extern	long	datsize;
-extern	char	debug[128];
+extern	bool	debug[128];
 extern	Prog*	etextp;
 extern	Prog*	firstp;
 extern	char	fnuxi4[4];
@@ -308,6 +385,7 @@ extern	long	lcsize;
 extern	char	literal[32];
 extern	int	nerrors;
 extern	long	nhunk;
+extern long	nsymbol;
 extern	long	instoffset;
 extern	Opcross	opcross[8];
 extern	Oprang	oprange[ALAST];
@@ -331,9 +409,9 @@ extern	int	exports, nexports;
 extern	char*	EXPTAB;
 extern	Prog	undefp;
 
-/*s: constant UP(arm) */
+/*s: constant UP */
 #define	UP	(&undefp)
-/*e: constant UP(arm) */
+/*e: constant UP */
 
 extern	char*	anames[];
 extern	Optab	optab[];
@@ -457,4 +535,7 @@ void	noops(void);
 long	immrot(ulong);
 long	immaddr(long);
 long	opbra(int, int);
+
+void mylog(char*, ...);
+
 /*e: linkers/5l/l.h */

@@ -24,6 +24,7 @@ prasm(Prog *p)
 /*e: function prasm(arm) */
 
 /*s: function Pconv(arm) */
+// Prog -> string
 int
 Pconv(Fmt *fp)
 {
@@ -34,7 +35,21 @@ Pconv(Fmt *fp)
     p = va_arg(fp->args, Prog*);
     curp = p;
     a = p->as;
+
     switch(a) {
+    case ASWPW:
+    case ASWPBU:
+        sprint(str, "(%ld)	%A%C	R%d,%D,%D",
+            p->line, a, p->scond, p->reg, &p->from, &p->to);
+        break;
+
+    case ADATA:
+    case AINIT:
+    case ADYNT:
+        sprint(str, "(%ld)	%A%C	%D/%d,%D",
+            p->line, a, p->scond, &p->from, p->reg, &p->to);
+        break;
+
     default:
         s = str;
         s += sprint(s, "(%ld)", p->line);
@@ -50,24 +65,13 @@ Pconv(Fmt *fp)
                 a, p->scond, &p->from, p->reg, &p->to);
         break;
 
-    case ASWPW:
-    case ASWPBU:
-        sprint(str, "(%ld)	%A%C	R%d,%D,%D",
-            p->line, a, p->scond, p->reg, &p->from, &p->to);
-        break;
-
-    case ADATA:
-    case AINIT:
-    case ADYNT:
-        sprint(str, "(%ld)	%A%C	%D/%d,%D",
-            p->line, a, p->scond, &p->from, p->reg, &p->to);
-        break;
     }
     return fmtstrcpy(fp, str);
 }
 /*e: function Pconv(arm) */
 
 /*s: function Aconv(arm) */
+// enum<opcode> -> string
 int
 Aconv(Fmt *fp)
 {
@@ -126,6 +130,7 @@ Cconv(Fmt *fp)
 /*e: function Cconv(arm) */
 
 /*s: function Dconv(arm) */
+// Adr -> string
 int
 Dconv(Fmt *fp)
 {
@@ -136,10 +141,6 @@ Dconv(Fmt *fp)
 
     a = va_arg(fp->args, Adr*);
     switch(a->type) {
-
-    default:
-        sprint(str, "GOK-type(%d)", a->type);
-        break;
 
     case D_NONE:
         str[0] = 0;
@@ -250,6 +251,11 @@ Dconv(Fmt *fp)
     case D_SCONST:
         sprint(str, "$\"%S\"", a->sval);
         break;
+
+    default:
+        sprint(str, "GOK-type(%d)", a->type);
+        break;
+
     }
     return fmtstrcpy(fp, str);
 }
@@ -265,11 +271,8 @@ Nconv(Fmt *fp)
 
     a = va_arg(fp->args, Adr*);
     s = a->sym;
-    switch(a->name) {
-    default:
-        sprint(str, "GOK-name(%d)", a->name);
-        break;
 
+    switch(a->name) {
     case N_NONE:
         sprint(str, "%ld", a->offset);
         break;
@@ -301,12 +304,17 @@ Nconv(Fmt *fp)
         else
             sprint(str, "%s+%ld(FP)", s->name, a->offset);
         break;
+    default:
+        sprint(str, "GOK-name(%d)", a->name);
+        break;
+
     }
     return fmtstrcpy(fp, str);
 }
 /*e: function Nconv(arm) */
 
 /*s: function Sconv(arm) */
+// ?? -> string
 int
 Sconv(Fmt *fp)
 {
@@ -349,11 +357,12 @@ Sconv(Fmt *fp)
 }
 /*e: function Sconv(arm) */
 
-/*s: function diag(arm) */
+/*s: function diag */
 void
 diag(char *fmt, ...)
 {
-    char buf[STRINGSZ], *tn;
+    char buf[STRINGSZ];
+    char *tn;
     va_list arg;
 
     tn = "??none??";
@@ -365,10 +374,10 @@ diag(char *fmt, ...)
     print("%s: %s\n", tn, buf);
 
     nerrors++;
-    if(nerrors > 10) {
+    if(nerrors > 20 && !debug['A']) {
         print("too many errors\n");
         errorexit();
     }
 }
-/*e: function diag(arm) */
+/*e: function diag */
 /*e: linkers/5l/list.c */

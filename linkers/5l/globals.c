@@ -1,137 +1,152 @@
 /*s: linkers/5l/globals.c */
 #include	"l.h"
 
-/*s: global buf(arm) */
+/*s: global buf */
 union Buf buf;
-/*e: global buf(arm) */
+/*e: global buf */
 
 
-/*s: global HEADR(arm) */
-long	HEADR;			/* length of header */
-/*e: global HEADR(arm) */
-/*s: global HEADTYPE(arm) */
-int	HEADTYPE;		/* type of header */
-/*e: global HEADTYPE(arm) */
-/*s: global INITDAT(arm) */
-long	INITDAT;		/* data location */
-/*e: global INITDAT(arm) */
-/*s: global INITRND(arm) */
-long	INITRND;		/* data round above text location */
-/*e: global INITRND(arm) */
-/*s: global INITTEXT(arm) */
-long	INITTEXT;		/* text location */
-/*e: global INITTEXT(arm) */
-/*s: global INITTEXTP(arm) */
-long	INITTEXTP;		/* text location (physical) */
-/*e: global INITTEXTP(arm) */
-/*s: global INITENTRY(arm) */
-char*	INITENTRY;		/* entry point */
-/*e: global INITENTRY(arm) */
+/*s: global HEADR */
+long	HEADR; 		/* length of header */
+/*e: global HEADR */
+/*s: global HEADTYPE */
+long	HEADTYPE = -1; /* type of header */
+/*e: global HEADTYPE */
+/*s: global INITDAT */
+long	INITDAT = -1; /* data location */
+/*e: global INITDAT */
+/*s: global INITRND */
+long	INITRND = -1; 		/* data round above text location */
+/*e: global INITRND */
+/*s: global INITTEXT */
+long	INITTEXT = -1; /* text location */
+/*e: global INITTEXT */
+/*s: global INITTEXTP */
+long	INITTEXTP = -1; /* text location (physical) */
+/*e: global INITTEXTP */
+/*s: global INITENTRY */
+char*	INITENTRY = nil;		/* entry point */
+/*e: global INITENTRY */
+
 /*s: global autosize(arm) */
 long	autosize;
 /*e: global autosize(arm) */
-/*s: global bso(arm) */
+/*s: global bso */
 Biobuf	bso;
-/*e: global bso(arm) */
-/*s: global bsssize(arm) */
+/*e: global bso */
+/*s: global bsssize */
 long	bsssize;
-/*e: global bsssize(arm) */
-/*s: global cbc(arm) */
+/*e: global bsssize */
+
+/*s: global cbc */
 int	cbc;
-/*e: global cbc(arm) */
-/*s: global cbp(arm) */
-uchar*	cbp;
-/*e: global cbp(arm) */
-/*s: global cout(arm) */
-int	cout;
-/*e: global cout(arm) */
-/*s: global curauto(arm) */
+/*e: global cbc */
+/*s: global cbp */
+char*	cbp;
+/*e: global cbp */
+
+/*s: global cout */
+fdt	cout = -1;
+/*e: global cout */
+/*s: global curauto */
 Auto*	curauto;
-/*e: global curauto(arm) */
-/*s: global curhist(arm) */
+/*e: global curauto */
+/*s: global curhist */
 Auto*	curhist;
-/*e: global curhist(arm) */
-/*s: global curp(arm) */
+/*e: global curhist */
+/*s: global curp */
 Prog*	curp;
-/*e: global curp(arm) */
-/*s: global curtext(arm) */
+/*e: global curp */
+/*s: global curtext */
 Prog*	curtext;
-/*e: global curtext(arm) */
-/*s: global datap(arm) */
-Prog*	datap;
-/*e: global datap(arm) */
-/*s: global datsize(arm) */
+/*e: global curtext */
+/*s: global datap */
+// list<ref<Prog>>, next = Prog.next
+Prog*	datap = P;
+/*e: global datap */
+/*s: global datsize */
 long	datsize;
-/*e: global datsize(arm) */
-/*s: global debug(arm) */
-char	debug[128];
-/*e: global debug(arm) */
-/*s: global etextp(arm) */
-Prog*	etextp;
-/*e: global etextp(arm) */
-/*s: global firstp(arm) */
+/*e: global datsize */
+/*s: global debug */
+bool	debug[128];
+/*e: global debug */
+/*s: global etextp */
+// ref<Prog>, end of textp list
+Prog*	etextp = P;
+/*e: global etextp */
+/*s: global firstp */
+// list<ref_own?<Prog>>, next = Prog.link
 Prog*	firstp;
-/*e: global firstp(arm) */
-/*s: global fnuxi4(arm) */
+/*e: global firstp */
+
+/*s: global fnuxi4 */
 char	fnuxi4[4];
-/*e: global fnuxi4(arm) */
-/*s: global fnuxi8(arm) */
+/*e: global fnuxi4 */
+/*s: global fnuxi8 */
 char	fnuxi8[8];
-/*e: global fnuxi8(arm) */
-/*s: global noname(arm) */
-char*	noname;
-/*e: global noname(arm) */
-/*s: global hash(arm) */
+/*e: global fnuxi8 */
+
+/*s: global hash linker */
+// hash<Sym.name * Sym.version, ref<Sym>> (next = Sym.link)
 Sym*	hash[NHASH];
-/*e: global hash(arm) */
-/*s: global histfrog(arm) */
+/*e: global hash linker */
+
+/*s: global histfrog */
 Sym*	histfrog[MAXHIST];
-/*e: global histfrog(arm) */
-/*s: global histfrogp(arm) */
+/*e: global histfrog */
+/*s: global histfrogp */
 int	histfrogp;
-/*e: global histfrogp(arm) */
-/*s: global histgen(arm) */
-int	histgen;
-/*e: global histgen(arm) */
-/*s: global library(arm) */
+/*e: global histfrogp */
+/*s: global histgen */
+int	histgen = 0;
+/*e: global histgen */
+
+/*s: global library */
 char*	library[50];
-/*e: global library(arm) */
-/*s: global libraryobj(arm) */
+/*e: global library */
+/*s: global libraryobj */
 char*	libraryobj[50];
-/*e: global libraryobj(arm) */
-/*s: global libraryp(arm) */
+/*e: global libraryobj */
+/*s: global libraryp */
 int	libraryp;
-/*e: global libraryp(arm) */
-/*s: global xrefresolv(arm) */
-int	xrefresolv;
-/*e: global xrefresolv(arm) */
-/*s: global hunk(arm) */
+/*e: global libraryp */
+
+/*s: global xrefresolv */
+bool	xrefresolv;
+/*e: global xrefresolv */
+/*s: global hunk */
 char*	hunk;
-/*e: global hunk(arm) */
-/*s: global inuxi1(arm) */
+/*e: global hunk */
+
+/*s: global inuxi1 */
 char	inuxi1[1];
-/*e: global inuxi1(arm) */
-/*s: global inuxi2(arm) */
+/*e: global inuxi1 */
+/*s: global inuxi2 */
 char	inuxi2[2];
-/*e: global inuxi2(arm) */
-/*s: global inuxi4(arm) */
+/*e: global inuxi2 */
+/*s: global inuxi4 */
 char	inuxi4[4];
-/*e: global inuxi4(arm) */
-/*s: global lastp(arm) */
+/*e: global inuxi4 */
+
+/*s: global lastp */
+// ref<Prog>, last elt of firstp list
 Prog*	lastp;
-/*e: global lastp(arm) */
-/*s: global lcsize(arm) */
+/*e: global lastp */
+/*s: global lcsize */
 long	lcsize;
-/*e: global lcsize(arm) */
+/*e: global lcsize */
 /*s: global literal(arm) */
 char	literal[32];
 /*e: global literal(arm) */
-/*s: global nerrors(arm) */
-int	nerrors;
-/*e: global nerrors(arm) */
-/*s: global nhunk(arm) */
+/*s: global nerrors */
+int	nerrors = 0;
+/*e: global nerrors */
+/*s: global nhunk */
 long	nhunk;
-/*e: global nhunk(arm) */
+/*e: global nhunk */
+/*s: global nsymbol linker */
+long	nsymbol;
+/*e: global nsymbol linker */
 /*s: global instoffset(arm) */
 long	instoffset;
 /*e: global instoffset(arm) */
@@ -141,36 +156,37 @@ Opcross	opcross[8];
 /*s: global oprange(arm) */
 Oprang	oprange[ALAST];
 /*e: global oprange(arm) */
-/*s: global outfile(arm) */
+/*s: global outfile */
 char*	outfile;
-/*e: global outfile(arm) */
-/*s: global pc(arm) */
-long	pc;
-/*e: global pc(arm) */
+/*e: global outfile */
+/*s: global pc */
+long	pc = 0;
+/*e: global pc */
 /*s: global repop(arm) */
 uchar	repop[ALAST];
 /*e: global repop(arm) */
-/*s: global symsize(arm) */
+/*s: global symsize */
 long	symsize;
-/*e: global symsize(arm) */
-/*s: global textp(arm) */
-Prog*	textp;
-/*e: global textp(arm) */
-/*s: global textsize(arm) */
+/*e: global symsize */
+/*s: global textp */
+// list<ref<Prog>>, next = Prog.cond
+Prog*	textp = P;
+/*e: global textp */
+/*s: global textsize */
 long	textsize;
-/*e: global textsize(arm) */
-/*s: global thunk(arm) */
+/*e: global textsize */
+/*s: global thunk */
 long	thunk;
-/*e: global thunk(arm) */
-/*s: global version(arm) */
-int	version;
-/*e: global version(arm) */
+/*e: global thunk */
+/*s: global version */
+int	version = 0;
+/*e: global version */
 /*s: global xcmp(arm) */
 char	xcmp[C_GOK+1][C_GOK+1];
 /*e: global xcmp(arm) */
-/*s: global zprg(arm) */
+/*s: global zprg */
 Prog	zprg;
-/*e: global zprg(arm) */
+/*e: global zprg */
 /*s: global dtype(arm) */
 int	dtype;
 /*e: global dtype(arm) */
@@ -181,37 +197,33 @@ int	armv4;
 int vfp;
 /*e: global vfp(arm) */
 
-/*s: global doexp(arm) */
-int	doexp;
-/*e: global doexp(arm) */
-/*s: global dlm(arm) */
-int dlm;
-/*e: global dlm(arm) */
-/*s: global imports(arm) */
-int	imports;
-/*e: global imports(arm) */
-/*s: global nimports(arm) */
-int nimports;
-/*e: global nimports(arm) */
-/*s: global exports(arm) */
-int	exports;
-/*e: global exports(arm) */
-/*s: global nexports(arm) */
-int nexports;
-/*e: global nexports(arm) */
-/*s: global EXPTAB(arm) */
-char*	EXPTAB;
-/*e: global EXPTAB(arm) */
-/*s: global undefp(arm) */
-Prog	undefp;
-/*e: global undefp(arm) */
+/*s: global doexp */
+// do export table, -x
+bool	doexp;
+/*e: global doexp */
+/*s: global dlm */
+bool dlm;
+/*e: global dlm */
 
-/*s: global anames (linkers/5l/globals.c)(arm) */
-char*	anames[];
-/*e: global anames (linkers/5l/globals.c)(arm) */
-/*s: global optab(arm) */
-Optab	optab[];
-/*e: global optab(arm) */
+/*s: global imports */
+int	imports;
+/*e: global imports */
+/*s: global nimports */
+int nimports;
+/*e: global nimports */
+/*s: global exports */
+int	exports;
+/*e: global exports */
+/*s: global nexports */
+int nexports;
+/*e: global nexports */
+/*s: global EXPTAB */
+char*	EXPTAB;
+/*e: global EXPTAB */
+/*s: global undefp */
+//@Scheck: not dead, used by UP
+Prog	undefp;
+/*e: global undefp */
 
 /*s: global blitrl(arm) */
 Prog*	blitrl;

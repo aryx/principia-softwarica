@@ -3,44 +3,44 @@
 #include	<ar.h>
 
 #ifndef	DEFAULT
-/*s: constant DEFAULT(arm) */
+/*s: constant DEFAULT */
 #define	DEFAULT	'9'
-/*e: constant DEFAULT(arm) */
+/*e: constant DEFAULT */
 #endif
 
-/*s: global noname (linkers/5l/obj.c)(arm) */
+/*s: global noname linker */
 char	*noname		= "<none>";
-/*e: global noname (linkers/5l/obj.c)(arm) */
-/*s: global symname(arm) */
+/*e: global noname linker */
+/*s: global symname linker */
 char	symname[]	= SYMDEF;
-/*e: global symname(arm) */
-/*s: global thechar(arm) */
-char	thechar		= '5';
-/*e: global thechar(arm) */
-/*s: global thestring(arm) */
-char	*thestring 	= "arm";
-/*e: global thestring(arm) */
+/*e: global symname linker */
+/*s: global thechar */
+char	thechar;
+/*e: global thechar */
+/*s: global thestring */
+char	*thestring;
+/*e: global thestring */
 
-/*s: global libdir(arm) */
+/*s: global libdir */
 char**	libdir;
-/*e: global libdir(arm) */
-/*s: global nlibdir(arm) */
+/*e: global libdir */
+/*s: global nlibdir */
 int	nlibdir	= 0;
-/*e: global nlibdir(arm) */
-/*s: global maxlibdir(arm) */
+/*e: global nlibdir */
+/*s: global maxlibdir */
 static	int	maxlibdir = 0;
-/*e: global maxlibdir(arm) */
+/*e: global maxlibdir */
 
-/*s: function usage(arm) */
+/*s: function usage, linker */
 void
 usage(void)
 {
     diag("usage: %s [-options] objects", argv0);
     errorexit();
 }
-/*e: function usage(arm) */
+/*e: function usage, linker */
 
-/*s: function isobjfile(arm) */
+/*s: function isobjfile */
 static int
 isobjfile(char *f)
 {
@@ -62,7 +62,7 @@ isobjfile(char *f)
     Bterm(b);
     return v;
 }
-/*e: function isobjfile(arm) */
+/*e: function isobjfile */
 
 /*s: function main(arm) */
 void
@@ -71,6 +71,9 @@ main(int argc, char *argv[])
     int c;
     char *a;
     char name[LIBNAMELEN];
+
+    thechar = '5';
+    thestring = "arm";   
 
     Binit(&bso, 1, OWRITE);
     cout = -1;
@@ -331,12 +334,13 @@ out:
 }
 /*e: function main(arm) */
 
-/*s: function addlibpath(arm) */
+/*s: function addlibpath */
 void
 addlibpath(char *arg)
 {
     char **p;
 
+    // growing array libdir
     if(nlibdir >= maxlibdir) {
         if(maxlibdir == 0)
             maxlibdir = 8;
@@ -351,11 +355,12 @@ addlibpath(char *arg)
         free(libdir);
         libdir = p;
     }
+
     libdir[nlibdir++] = strdup(arg);
 }
-/*e: function addlibpath(arm) */
+/*e: function addlibpath */
 
-/*s: function findlib(arm) */
+/*s: function findlib */
 char*
 findlib(char *file)
 {
@@ -369,9 +374,9 @@ findlib(char *file)
     }
     return nil;
 }
-/*e: function findlib(arm) */
+/*e: function findlib */
 
-/*s: function loadlib(arm) */
+/*s: function loadlib */
 void
 loadlib(void)
 {
@@ -380,33 +385,18 @@ loadlib(void)
     Sym *s;
 
 loop:
-    xrefresolv = 0;
+    xrefresolv = false;
     for(i=0; i<libraryp; i++) {
-        if(debug['v'])
-            Bprint(&bso, "%5.2f autolib: %s\n", cputime(), library[i]);
+        DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
     if(xrefresolv)
-    for(h=0; h<nelem(hash); h++)
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->type == SXREF)
-            goto loop;
+        for(h=0; h<nelem(hash); h++)
+             for(s = hash[h]; s != S; s = s->link)
+                 if(s->type == SXREF)
+                     goto loop;
 }
-/*e: function loadlib(arm) */
-
-/*s: function errorexit(arm) */
-void
-errorexit(void)
-{
-
-    if(nerrors) {
-        if(cout >= 0)
-            remove(outfile);
-        exits("error");
-    }
-    exits(0);
-}
-/*e: function errorexit(arm) */
+/*e: function loadlib */
 
 /*s: function objfile(arm) */
 void
@@ -632,7 +622,7 @@ zaddr(uchar *p, Adr *a, Sym *h[])
 }
 /*e: function zaddr(arm) */
 
-/*s: function addlib(arm) */
+/*s: function addlib */
 void
 addlib(char *obj)
 {
@@ -695,6 +685,7 @@ addlib(char *obj)
         }
     }
 
+
     for(i=0; i<libraryp; i++)
         if(strcmp(name, library[i]) == 0)
             return;
@@ -711,9 +702,9 @@ addlib(char *obj)
     libraryobj[libraryp] = p;
     libraryp++;
 }
-/*e: function addlib(arm) */
+/*e: function addlib */
 
-/*s: function addhist(arm) */
+/*s: function addhist */
 void
 addhist(long line, int type)
 {
@@ -739,9 +730,9 @@ addhist(long line, int type)
         j += 2;
     }
 }
-/*e: function addhist(arm) */
+/*e: function addhist */
 
-/*s: function histtoauto(arm) */
+/*s: function histtoauto */
 void
 histtoauto(void)
 {
@@ -753,9 +744,9 @@ histtoauto(void)
         curauto = l;
     }
 }
-/*e: function histtoauto(arm) */
+/*e: function histtoauto */
 
-/*s: function collapsefrog(arm) */
+/*s: function collapsefrog */
 void
 collapsefrog(Sym *s)
 {
@@ -793,9 +784,9 @@ collapsefrog(Sym *s)
 out:
     histfrog[histfrogp-1] = s;
 }
-/*e: function collapsefrog(arm) */
+/*e: function collapsefrog */
 
-/*s: function nopout(arm) */
+/*s: function nopout */
 void
 nopout(Prog *p)
 {
@@ -803,11 +794,11 @@ nopout(Prog *p)
     p->from.type = D_NONE;
     p->to.type = D_NONE;
 }
-/*e: function nopout(arm) */
+/*e: function nopout */
 
-/*s: function readsome(arm) */
-uchar*
-readsome(int f, uchar *buf, uchar *good, uchar *stop, int max)
+/*s: function readsome */
+byte*
+readsome(int f, byte *buf, byte *good, byte *stop, int max)
 {
     int n;
 
@@ -822,7 +813,7 @@ readsome(int f, uchar *buf, uchar *good, uchar *stop, int max)
         return 0;
     return stop + n;
 }
-/*e: function readsome(arm) */
+/*e: function readsome */
 
 /*s: function ldobj(arm) */
 void
@@ -1198,86 +1189,6 @@ eof:
 }
 /*e: function ldobj(arm) */
 
-/*s: function lookup(arm) */
-Sym*
-lookup(char *symb, int v)
-{
-    Sym *s;
-    char *p;
-    long h;
-    int c, l;
-
-    h = v;
-    for(p=symb; c = *p; p++)
-        h = h+h+h + c;
-    l = (p - symb) + 1;
-    h &= 0xffffff;
-    h %= NHASH;
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->version == v)
-        if(memcmp(s->name, symb, l) == 0)
-            return s;
-
-    while(nhunk < sizeof(Sym))
-        gethunk();
-    s = (Sym*)hunk;
-    nhunk -= sizeof(Sym);
-    hunk += sizeof(Sym);
-
-    s->name = malloc(l);
-    memmove(s->name, symb, l);
-
-    s->link = hash[h];
-    s->type = 0;
-    s->version = v;
-    s->value = 0;
-    s->sig = 0;
-    hash[h] = s;
-    return s;
-}
-/*e: function lookup(arm) */
-
-/*s: function prg(arm) */
-Prog*
-prg(void)
-{
-    Prog *p;
-
-    while(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
-    *p = zprg;
-    return p;
-}
-/*e: function prg(arm) */
-
-/*s: function gethunk(arm) */
-void
-gethunk(void)
-{
-    char *h;
-    long nh;
-
-    nh = NHUNK;
-    if(thunk >= 5L*NHUNK) {
-        nh = 5L*NHUNK;
-        if(thunk >= 25L*NHUNK)
-            nh = 25L*NHUNK;
-    }
-    h = mysbrk(nh);
-    if(h == (char*)-1) {
-        diag("out of memory");
-        errorexit();
-    }
-    hunk = h;
-    nhunk = nh;
-    thunk += nh;
-}
-/*e: function gethunk(arm) */
-
 /*s: function doprof1(arm) */
 void
 doprof1(void)
@@ -1567,7 +1478,7 @@ nuxiinit(void)
 }
 /*e: function nuxiinit(arm) */
 
-/*s: function find1(arm) */
+/*s: function find1 */
 int
 find1(long l, int c)
 {
@@ -1580,22 +1491,22 @@ find1(long l, int c)
             return i;
     return 0;
 }
-/*e: function find1(arm) */
+/*e: function find1 */
 
-/*s: function ieeedtof(arm) */
+/*s: function ieeedtof */
 long
-ieeedtof(Ieee *ieeep)
+ieeedtof(Ieee *e)
 {
     int exp;
     long v;
 
-    if(ieeep->h == 0)
+    if(e->h == 0)
         return 0;
-    exp = (ieeep->h>>20) & ((1L<<11)-1L);
+    exp = (e->h>>20) & ((1L<<11)-1L);
     exp -= (1L<<10) - 2L;
-    v = (ieeep->h & 0xfffffL) << 3;
-    v |= (ieeep->l >> 29) & 0x7L;
-    if((ieeep->l >> 28) & 1) {
+    v = (e->h & 0xfffffL) << 3;
+    v |= (e->l >> 29) & 0x7L;
+    if((e->l >> 28) & 1) {
         v++;
         if(v & 0x800000L) {
             v = (v & 0x7fffffL) >> 1;
@@ -1605,12 +1516,12 @@ ieeedtof(Ieee *ieeep)
     if(exp <= -126 || exp >= 130)
         diag("double fp to single fp overflow");
     v |= ((exp + 126) & 0xffL) << 23;
-    v |= ieeep->h & 0x80000000L;
+    v |= e->h & 0x80000000L;
     return v;
 }
-/*e: function ieeedtof(arm) */
+/*e: function ieeedtof */
 
-/*s: function ieeedtod(arm) */
+/*s: function ieeedtod */
 double
 ieeedtod(Ieee *ieeep)
 {
@@ -1635,9 +1546,9 @@ ieeedtod(Ieee *ieeep)
     exp -= (1L<<10) - 2L;
     return ldexp(fr, exp);
 }
-/*e: function ieeedtod(arm) */
+/*e: function ieeedtod */
 
-/*s: function undefsym(arm) */
+/*s: function undefsym */
 void
 undefsym(Sym *s)
 {
@@ -1652,9 +1563,9 @@ undefsym(Sym *s)
     s->type = SUNDEF;
     imports++;
 }
-/*e: function undefsym(arm) */
+/*e: function undefsym */
 
-/*s: function zerosig(arm) */
+/*s: function zerosig */
 void
 zerosig(char *sp)
 {
@@ -1663,9 +1574,9 @@ zerosig(char *sp)
     s = lookup(sp, 0);
     s->sig = 0;
 }
-/*e: function zerosig(arm) */
+/*e: function zerosig */
 
-/*s: function readundefs(arm) */
+/*s: function readundefs */
 void
 readundefs(char *f, int t)
 {
@@ -1694,7 +1605,7 @@ readundefs(char *f, int t)
             diag("%s: bad format", f);
             errorexit();
         }
-        for(i = 0; i < n; i++) {
+        for(i = 0; i < n; i++){
             s = lookup(fields[i], 0);
             s->type = SXREF;
             s->subtype = t;
@@ -1706,5 +1617,5 @@ readundefs(char *f, int t)
     }
     Bterm(b);
 }
-/*e: function readundefs(arm) */
+/*e: function readundefs */
 /*e: linkers/5l/obj.c */

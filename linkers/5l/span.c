@@ -872,59 +872,60 @@ enum{
 };
 /*e: enum _anon_ (linkers/5l/span.c)(arm) */
 
-/*s: global modemap(arm) */
+/*s: global modemap */
 int modemap[4] = { 0, 1, -1, 2, };
-/*e: global modemap(arm) */
+/*e: global modemap */
 
 typedef struct Reloc Reloc;
 
-/*s: struct Reloc(arm) */
+/*s: struct Reloc */
 struct Reloc
 {
     int n;
     int t;
-    uchar *m;
+    byte *m;
     ulong *a;
 };
-/*e: struct Reloc(arm) */
+/*e: struct Reloc */
 
-/*s: global rels(arm) */
+/*s: global rels */
 Reloc rels;
-/*e: global rels(arm) */
+/*e: global rels */
 
-/*s: function grow(arm) */
+/*s: function grow */
 static void
 grow(Reloc *r)
 {
     int t;
-    uchar *m, *nm;
+    byte *m, *nm;
     ulong *a, *na;
 
     t = r->t;
     r->t += 64;
     m = r->m;
     a = r->a;
-    r->m = nm = malloc(r->t*sizeof(uchar));
+    r->m = nm = malloc(r->t*sizeof(byte));
     r->a = na = malloc(r->t*sizeof(ulong));
-    memmove(nm, m, t*sizeof(uchar));
+    memmove(nm, m, t*sizeof(byte));
     memmove(na, a, t*sizeof(ulong));
     free(m);
     free(a);
 }
-/*e: function grow(arm) */
+/*e: function grow */
 
 /*s: function dynreloc(arm) */
 void
 dynreloc(Sym *s, long v, int abs)
 {
     int i, k, n;
-    uchar *m;
+    byte *m;
     ulong *a;
     Reloc *r;
 
     if(v&3)
         diag("bad relocation address");
     v >>= 2;
+
     if(s != S && s->type == SUNDEF)
         k = abs ? ABSU : RELU;
     else
@@ -965,7 +966,7 @@ sput(char *s)
 }
 /*e: function sput(arm) */
 
-/*s: function asmdyn(arm) */
+/*s: function asmdyn */
 void
 asmdyn()
 {
@@ -973,7 +974,7 @@ asmdyn()
     Sym *s;
     ulong la, ra, *a;
     vlong off;
-    uchar *m;
+    byte *m;
     Reloc *r;
 
     cflush();
@@ -989,7 +990,7 @@ asmdyn()
                 t += 4;
                 t += sput(s->name);
             }
-    
+
     la = 0;
     r = &rels;
     n = r->n;
@@ -1028,10 +1029,8 @@ asmdyn()
     seek(cout, off, 0);
     lput(t);
 
-    if(debug['v']){
-        Bprint(&bso, "import table entries = %d\n", imports);
-        Bprint(&bso, "export table entries = %d\n", exports);
-    }
+    DBG("import table entries = %d\n", imports);
+    DBG("export table entries = %d\n", exports);
 }
-/*e: function asmdyn(arm) */
+/*e: function asmdyn */
 /*e: linkers/5l/span.c */

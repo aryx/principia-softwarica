@@ -1,6 +1,10 @@
 /*s: linkers/5l/asm.c */
 #include	"l.h"
 
+/*s: constant Dbufslop */
+#define	Dbufslop	100
+/*e: constant Dbufslop */
+
 /*s: global OFFSET(arm) */
 long	OFFSET;
 /*e: global OFFSET(arm) */
@@ -17,18 +21,26 @@ entryvalue(void)
     Sym *s;
 
     a = INITENTRY;
+
+    /*s: [[entryvalue()]] if digit INITENTRY */
     if(*a >= '0' && *a <= '9')
         return atolwhex(a);
+    /*e: [[entryvalue()]] if digit INITENTRY */
+
     s = lookup(a, 0);
+
     if(s->type == 0)
         return INITTEXT;
+
     switch(s->type) {
     case STEXT:
     case SLEAF:
         break;
+    /*s: [[entryvalue()]] if dynamic module case */
     case SDATA:
         if(dlm)
             return s->value+INITDAT;
+    /*e: [[entryvalue()]] if dynamic module case */
     default:
         diag("entry not text: %s", s->name);
     }
@@ -317,25 +329,25 @@ lputl(long l)
 }
 /*e: function lputl(arm) */
 
-/*s: function llput(arm) */
+/*s: function llput */
 void
 llput(vlong v)
 {
     lput(v>>32);
     lput(v);
 }
-/*e: function llput(arm) */
+/*e: function llput */
 
-/*s: function llputl(arm) */
+/*s: function llputl */
 void
 llputl(vlong v)
 {
     lputl(v);
     lputl(v>>32);
 }
-/*e: function llputl(arm) */
+/*e: function llputl */
 
-/*s: function cflush(arm) */
+/*s: function cflush */
 void
 cflush(void)
 {
@@ -347,7 +359,7 @@ cflush(void)
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
 }
-/*e: function cflush(arm) */
+/*e: function cflush */
 
 /*s: function nopstat(arm) */
 void
@@ -430,7 +442,7 @@ asmsym(void)
 }
 /*e: function asmsym(arm) */
 
-/*s: function putsymb(arm) */
+/*s: function putsymb */
 void
 putsymb(char *s, int t, long v, int ver)
 {
@@ -476,12 +488,12 @@ putsymb(char *s, int t, long v, int ver)
             Bprint(&bso, "%c %.8lux %s\n", t, v, s);
     }
 }
-/*e: function putsymb(arm) */
+/*e: function putsymb */
 
 /*s: constant MINLC(arm) */
 #define	MINLC	4
 /*e: constant MINLC(arm) */
-/*s: function asmlc(arm) */
+/*s: function asmlc */
 void
 asmlc(void)
 {
@@ -561,7 +573,7 @@ asmlc(void)
         Bprint(&bso, "lcsize = %ld\n", lcsize);
     Bflush(&bso);
 }
-/*e: function asmlc(arm) */
+/*e: function asmlc */
 
 /*s: function datblk(arm) */
 void
@@ -573,7 +585,7 @@ datblk(long s, long n, int str)
     long a, l, fl, j, d;
     int i, c;
 
-    memset(buf.dbuf, 0, n+100);
+    memset(buf.dbuf, 0, n+Dbufslop);
     for(p = datap; p != P; p = p->link) {
         if(str != (p->from.sym->type == SSTRING))
             continue;

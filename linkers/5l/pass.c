@@ -111,7 +111,7 @@ dodata(void)
 }
 /*e: function dodata(arm) */
 
-/*s: function undef(arm) */
+/*s: function undef */
 void
 undef(void)
 {
@@ -119,11 +119,11 @@ undef(void)
     Sym *s;
 
     for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link)
-        if(s->type == SXREF)
-            diag("%s: not defined", s->name);
+        for(s = hash[i]; s != S; s = s->link)
+            if(s->type == SXREF)
+                diag("%s: not defined", s->name);
 }
-/*e: function undef(arm) */
+/*e: function undef */
 
 /*s: function brchain(arm) */
 Prog*
@@ -167,22 +167,22 @@ relinv(int a)
 }
 /*e: function relinv(arm) */
 
-/*s: function follow(arm) */
+/*s: function follow */
 void
 follow(void)
 {
-    if(debug['v'])
-        Bprint(&bso, "%5.2f follow\n", cputime());
-    Bflush(&bso);
+
+    DBG("%5.2f follow\n", cputime());
 
     firstp = prg();
     lastp = firstp;
+
     xfol(textp);
 
-    firstp = firstp->link;
     lastp->link = P;
+    firstp = firstp->link;
 }
-/*e: function follow(arm) */
+/*e: function follow */
 
 /*s: function xfol(arm) */
 void
@@ -364,15 +364,16 @@ patch(void)
 }
 /*e: function patch(arm) */
 
-/*s: constant LOG(arm) */
+/*s: constant LOG */
 #define	LOG	5
-/*e: constant LOG(arm) */
-/*s: function mkfwd(arm) */
+/*e: constant LOG */
+/*s: function mkfwd */
 void
 mkfwd(void)
 {
     Prog *p;
-    long dwn[LOG], cnt[LOG], i;
+    int i;
+    long dwn[LOG], cnt[LOG];
     Prog *lst[LOG];
 
     for(i=0; i<LOG; i++) {
@@ -399,7 +400,7 @@ mkfwd(void)
         }
     }
 }
-/*e: function mkfwd(arm) */
+/*e: function mkfwd */
 
 /*s: function brloop(arm) */
 Prog*
@@ -423,7 +424,7 @@ brloop(Prog *p)
 }
 /*e: function brloop(arm) */
 
-/*s: function atolwhex(arm) */
+/*s: function atolwhex */
 long
 atolwhex(char *s)
 {
@@ -463,9 +464,9 @@ atolwhex(char *s)
         n = -n;
     return n;
 }
-/*e: function atolwhex(arm) */
+/*e: function atolwhex */
 
-/*s: function rnd(arm) */
+/*s: function rnd */
 long
 rnd(long v, long r)
 {
@@ -480,7 +481,7 @@ rnd(long v, long r)
     v -= c;
     return v;
 }
-/*e: function rnd(arm) */
+/*e: function rnd */
 
 /*s: function import(arm) */
 void
@@ -498,14 +499,14 @@ import(void)
 }
 /*e: function import(arm) */
 
-/*s: function ckoff(arm) */
+/*s: function ckoff */
 void
 ckoff(Sym *s, long v)
 {
     if(v < 0 || v >= 1<<Roffset)
         diag("relocation offset %ld for %s out of range", v, s->name);
 }
-/*e: function ckoff(arm) */
+/*e: function ckoff */
 
 /*s: function newdata(arm) */
 static Prog*
