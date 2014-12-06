@@ -1,95 +1,102 @@
 /*s: linkers/8l/globals.c */
 #include	"l.h"
 
-/*s: global buf(x86) */
+/*s: global buf */
 union Buf buf;
-/*e: global buf(x86) */
+/*e: global buf */
 
-/*s: global HEADR(x86) */
-long	HEADR;
-/*e: global HEADR(x86) */
-/*s: global HEADTYPE(x86) */
-long	HEADTYPE = -1;
-/*e: global HEADTYPE(x86) */
-/*s: global INITDAT(x86) */
-long	INITDAT = -1;
-/*e: global INITDAT(x86) */
-/*s: global INITRND(x86) */
-long	INITRND = -1;
-/*e: global INITRND(x86) */
-/*s: global INITTEXT(x86) */
-long	INITTEXT = -1;
-/*e: global INITTEXT(x86) */
-/*s: global INITTEXTP(x86) */
-long	INITTEXTP = -1;
-/*e: global INITTEXTP(x86) */
-/*s: global INITENTRY(x86) */
+/*s: global HEADR */
+long	HEADR; 		/* length of header */
+/*e: global HEADR */
+/*s: global HEADTYPE */
+long	HEADTYPE = -1; /* type of header */
+/*e: global HEADTYPE */
+/*s: global INITDAT */
+long	INITDAT = -1; /* data location */
+/*e: global INITDAT */
+/*s: global INITRND */
+long	INITRND = -1; 		/* data round above text location */
+/*e: global INITRND */
+/*s: global INITTEXT */
+long	INITTEXT = -1; /* text location */
+/*e: global INITTEXT */
+/*s: global INITTEXTP */
+long	INITTEXTP = -1; /* text location (physical) */
+/*e: global INITTEXTP */
+/*s: global INITENTRY */
 char*	INITENTRY = nil;		/* entry point */
-/*e: global INITENTRY(x86) */
-/*s: global bso(x86) */
+/*e: global INITENTRY */
+
+/*s: global bso */
 Biobuf	bso;
-/*e: global bso(x86) */
-/*s: global bsssize(x86) */
+/*e: global bso */
+/*s: global bsssize */
 long	bsssize;
-/*e: global bsssize(x86) */
-/*s: global cbc(x86) */
+/*e: global bsssize */
+
+/*s: global cbc */
 int	cbc;
-/*e: global cbc(x86) */
-/*s: global cbp(x86) */
+/*e: global cbc */
+/*s: global cbp */
 char*	cbp;
-/*e: global cbp(x86) */
+/*e: global cbp */
+
 /*s: global pcstr(x86) */
 char*	pcstr = "%.6lux ";
 /*e: global pcstr(x86) */
-/*s: global cout(x86) */
+/*s: global cout */
 fdt	cout = -1;
-/*e: global cout(x86) */
-/*s: global curp(x86) */
+/*e: global cout */
+/*s: global curp */
 Prog*	curp;
-/*e: global curp(x86) */
-/*s: global curtext(x86) */
+/*e: global curp */
+/*s: global curtext */
 Prog*	curtext;
-/*e: global curtext(x86) */
-/*s: global datap(x86) */
+/*e: global curtext */
+/*s: global datap */
 // list<ref<Prog>>, next = Prog.next
 Prog*	datap = P;
-/*e: global datap(x86) */
+/*e: global datap */
 /*s: global edatap(x86) */
 // ref<Prog>>, end of datap list
 Prog*	edatap = P;
 /*e: global edatap(x86) */
-/*s: global datsize(x86) */
+/*s: global datsize */
 long	datsize;
-/*e: global datsize(x86) */
-/*s: global debug(x86) */
+/*e: global datsize */
+/*s: global debug */
 bool	debug[128];
-/*e: global debug(x86) */
-/*s: global firstp(x86) */
+/*e: global debug */
+/*s: global firstp */
 // list<ref_own?<Prog>>, next = Prog.link
 Prog*	firstp;
-/*e: global firstp(x86) */
-/*s: global fnuxi8(x86) */
-char	fnuxi8[8];
-/*e: global fnuxi8(x86) */
-/*s: global fnuxi4(x86) */
+/*e: global firstp */
+
+/*s: global fnuxi4 */
 char	fnuxi4[4];
-/*e: global fnuxi4(x86) */
-/*s: global hash (linkers/8l/globals.c) */
+/*e: global fnuxi4 */
+/*s: global fnuxi8 */
+char	fnuxi8[8];
+/*e: global fnuxi8 */
+
+/*s: global hash linker */
 // hash<Sym.name * Sym.version, ref<Sym>> (next = Sym.link)
 Sym*	hash[NHASH];
-/*e: global hash (linkers/8l/globals.c) */
-/*s: global hunk(x86) */
+/*e: global hash linker */
+/*s: global hunk */
 char*	hunk;
-/*e: global hunk(x86) */
-/*s: global inuxi1(x86) */
+/*e: global hunk */
+
+/*s: global inuxi1 */
 char	inuxi1[1];
-/*e: global inuxi1(x86) */
-/*s: global inuxi2(x86) */
+/*e: global inuxi1 */
+/*s: global inuxi2 */
 char	inuxi2[2];
-/*e: global inuxi2(x86) */
-/*s: global inuxi4(x86) */
+/*e: global inuxi2 */
+/*s: global inuxi4 */
 char	inuxi4[4];
-/*e: global inuxi4(x86) */
+/*e: global inuxi4 */
+
 /*s: global ycover(x86) */
 char	ycover[Ymax*Ymax];
 /*e: global ycover(x86) */
@@ -102,44 +109,46 @@ uchar	and[30];
 /*s: global reg(x86) */
 char	reg[D_NONE];
 /*e: global reg(x86) */
-/*s: global lastp(x86) */
+/*s: global lastp */
 // ref<Prog>, last elt of firstp list
 Prog*	lastp;
-/*e: global lastp(x86) */
-/*s: global lcsize(x86) */
+/*e: global lastp */
+/*s: global lcsize */
 long	lcsize;
-/*e: global lcsize(x86) */
-/*s: global nerrors(x86) */
+/*e: global lcsize */
+/*s: global nerrors */
 int	nerrors = 0;
-/*e: global nerrors(x86) */
-/*s: global nhunk(x86) */
+/*e: global nerrors */
+/*s: global nhunk */
 long	nhunk;
-/*e: global nhunk(x86) */
-/*s: global nsymbol(x86) */
+/*e: global nhunk */
+/*s: global nsymbol linker */
 long	nsymbol;
-/*e: global nsymbol(x86) */
-/*s: global outfile(x86) */
-char*	outfile = "8.out";
-/*e: global outfile(x86) */
-/*s: global pc(x86) */
+/*e: global nsymbol linker */
+/*s: global outfile */
+char*	outfile;
+/*e: global outfile */
+
+/*s: global pc */
 long	pc = 0;
-/*e: global pc(x86) */
-/*s: global symsize(x86) */
+/*e: global pc */
+
+/*s: global symsize */
 long	symsize;
-/*e: global symsize(x86) */
-/*s: global textp(x86) */
+/*e: global symsize */
+/*s: global textp */
 // list<ref<Prog>>, next = Prog.cond
 Prog*	textp = P;
-/*e: global textp(x86) */
-/*s: global textsize(x86) */
+/*e: global textp */
+/*s: global textsize */
 long	textsize;
-/*e: global textsize(x86) */
-/*s: global thunk(x86) */
+/*e: global textsize */
+/*s: global thunk */
 long	thunk;
-/*e: global thunk(x86) */
-/*s: global zprg(x86) */
+/*e: global thunk */
+/*s: global zprg */
 Prog	zprg;
-/*e: global zprg(x86) */
+/*e: global zprg */
 /*s: global dtype(x86) */
 int	dtype;
 /*e: global dtype(x86) */
@@ -147,25 +156,31 @@ int	dtype;
 /*s: global reloca(x86) */
 Adr*	reloca;
 /*e: global reloca(x86) */
-/*s: global dlm(x86) */
-bool dlm;
-/*e: global dlm(x86) */
-/*s: global nimports(x86) */
-int nimports;
-/*e: global nimports(x86) */
-/*s: global nexports(x86) */
-int nexports;
-/*e: global nexports(x86) */
 
+/*s: global dlm */
+bool dlm;
+/*e: global dlm */
+/*s: global nimports */
+int nimports;
+/*e: global nimports */
+/*s: global nexports */
+int nexports;
+/*e: global nexports */
+/*s: global imports */
 int	imports;
+/*e: global imports */
+/*s: global exports */
 int	exports;
+/*e: global exports */
+
 int	allexport;
-/*s: global EXPTAB(x86) */
+
+/*s: global EXPTAB */
 char*	EXPTAB;
-/*e: global EXPTAB(x86) */
-/*s: global undefp(x86) */
+/*e: global EXPTAB */
+/*s: global undefp */
 //@Scheck: not dead, used by UP
 Prog	undefp;
-/*e: global undefp(x86) */
+/*e: global undefp */
 
 /*e: linkers/8l/globals.c */

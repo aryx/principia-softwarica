@@ -3,52 +3,57 @@
 #include	<ar.h>
 
 #ifndef	DEFAULT
-/*s: constant DEFAULT(x86) */
+/*s: constant DEFAULT */
 #define	DEFAULT	'9'
-/*e: constant DEFAULT(x86) */
+/*e: constant DEFAULT */
 #endif
 
-/*s: global histfrog(x86) */
-Sym*	histfrog[MAXHIST];
-/*e: global histfrog(x86) */
-/*s: global curauto(x86) */
+/*s: global curauto */
 Auto*	curauto;
-/*e: global curauto(x86) */
-/*s: global histfrogp(x86) */
-int	histfrogp;
-/*e: global histfrogp(x86) */
-/*s: global curhist(x86) */
+/*e: global curauto */
+
+/*s: global curhist */
 Auto*	curhist;
-/*e: global curhist(x86) */
-/*s: global etextp(x86) */
+/*e: global curhist */
+/*s: global etextp */
 // ref<Prog>, end of textp list
 Prog*	etextp = P;
-/*e: global etextp(x86) */
-/*s: global histgen(x86) */
+/*e: global etextp */
+
+/*s: global histfrog */
+Sym*	histfrog[MAXHIST];
+/*e: global histfrog */
+/*s: global histfrogp */
+int	histfrogp;
+/*e: global histfrogp */
+/*s: global histgen */
 int	histgen = 0;
-/*e: global histgen(x86) */
-/*s: global library(x86) */
+/*e: global histgen */
+
+/*s: global library */
 char*	library[50];
-/*e: global library(x86) */
-/*s: global libraryobj(x86) */
+/*e: global library */
+/*s: global libraryobj */
 char*	libraryobj[50];
-/*e: global libraryobj(x86) */
-/*s: global libraryp(x86) */
+/*e: global libraryobj */
+/*s: global libraryp */
 int	libraryp;
-/*e: global libraryp(x86) */
-/*s: global xrefresolv(x86) */
+/*e: global libraryp */
+
+/*s: global xrefresolv */
 bool	xrefresolv;
-/*e: global xrefresolv(x86) */
-/*s: global version(x86) */
+/*e: global xrefresolv */
+
+/*s: global version */
 int	version = 0;
-/*e: global version(x86) */
+/*e: global version */
 /*s: global literal(x86) */
 char	literal[32];
 /*e: global literal(x86) */
-/*s: global doexp(x86) */
+/*s: global doexp */
 // do export table, -x
 bool	doexp;
-/*e: global doexp(x86) */
+/*e: global doexp */
 
 void	addlibpath(char*);
 char*	findlib(char*);
@@ -77,39 +82,39 @@ Prog*	brchain(Prog*);
 
 
 
-/*s: global noname (linkers/8l/obj.c) */
+/*s: global noname linker */
 char	*noname		= "<none>";
-/*e: global noname (linkers/8l/obj.c) */
-/*s: global symname (linkers/8l/obj.c) */
+/*e: global noname linker */
+/*s: global symname linker */
 char	symname[]	= SYMDEF;
-/*e: global symname (linkers/8l/obj.c) */
-/*s: global thechar(x86) */
-char	thechar		= '8';
-/*e: global thechar(x86) */
-/*s: global thestring(x86) */
-char	*thestring 	= "386";
-/*e: global thestring(x86) */
+/*e: global symname linker */
+/*s: global thechar */
+char	thechar;
+/*e: global thechar */
+/*s: global thestring */
+char	*thestring;
+/*e: global thestring */
 
-/*s: global libdir(x86) */
+/*s: global libdir */
 char**	libdir;
-/*e: global libdir(x86) */
-/*s: global nlibdir(x86) */
+/*e: global libdir */
+/*s: global nlibdir */
 int	nlibdir	= 0;
-/*e: global nlibdir(x86) */
-/*s: global maxlibdir(x86) */
+/*e: global nlibdir */
+/*s: global maxlibdir */
 static	int	maxlibdir = 0;
-/*e: global maxlibdir(x86) */
+/*e: global maxlibdir */
 
-/*s: function usage (linkers/8l/obj.c) */
+/*s: function usage, linker */
 void
 usage(void)
 {
     diag("usage: %s [-options] objects", argv0);
     errorexit();
 }
-/*e: function usage (linkers/8l/obj.c) */
+/*e: function usage, linker */
 
-/*s: function isobjfile(x86) */
+/*s: function isobjfile */
 static int
 isobjfile(char *f)
 {
@@ -131,7 +136,7 @@ isobjfile(char *f)
     Bterm(b);
     return v;
 }
-/*e: function isobjfile(x86) */
+/*e: function isobjfile */
 
 /*s: function main (linkers/8l/obj.c) */
 void
@@ -146,6 +151,9 @@ main(int argc, char *argv[])
     /*x: [[main()]] locals(x86) */
     char *root;
     /*e: [[main()]] locals(x86) */
+    thechar = '8';
+    thestring = "386";   
+    outfile = "8.out";
 
     /*s: [[main()]] debug initialization(x86) */
     Binit(&bso, 1, OWRITE);
@@ -508,7 +516,7 @@ main(int argc, char *argv[])
 }
 /*e: function main (linkers/8l/obj.c) */
 
-/*s: function addlibpath(x86) */
+/*s: function addlibpath */
 void
 addlibpath(char *arg)
 {
@@ -532,9 +540,9 @@ addlibpath(char *arg)
 
     libdir[nlibdir++] = strdup(arg);
 }
-/*e: function addlibpath(x86) */
+/*e: function addlibpath */
 
-/*s: function findlib(x86) */
+/*s: function findlib */
 char*
 findlib(char *file)
 {
@@ -548,9 +556,9 @@ findlib(char *file)
     }
     return nil;
 }
-/*e: function findlib(x86) */
+/*e: function findlib */
 
-/*s: function loadlib(x86) */
+/*s: function loadlib */
 void
 loadlib(void)
 {
@@ -570,7 +578,7 @@ loop:
                  if(s->type == SXREF)
                      goto loop;
 }
-/*e: function loadlib(x86) */
+/*e: function loadlib */
 
 /*s: function objfile(x86) */
 void
@@ -781,7 +789,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
 }
 /*e: function zaddr(x86) */
 
-/*s: function addlib(x86) */
+/*s: function addlib */
 void
 addlib(char *obj)
 {
@@ -861,9 +869,9 @@ addlib(char *obj)
     libraryobj[libraryp] = p;
     libraryp++;
 }
-/*e: function addlib(x86) */
+/*e: function addlib */
 
-/*s: function addhist(x86) */
+/*s: function addhist */
 void
 addhist(long line, int type)
 {
@@ -889,9 +897,9 @@ addhist(long line, int type)
         j += 2;
     }
 }
-/*e: function addhist(x86) */
+/*e: function addhist */
 
-/*s: function histtoauto(x86) */
+/*s: function histtoauto */
 void
 histtoauto(void)
 {
@@ -903,9 +911,9 @@ histtoauto(void)
         curauto = l;
     }
 }
-/*e: function histtoauto(x86) */
+/*e: function histtoauto */
 
-/*s: function collapsefrog(x86) */
+/*s: function collapsefrog */
 void
 collapsefrog(Sym *s)
 {
@@ -943,9 +951,9 @@ collapsefrog(Sym *s)
 out:
     histfrog[histfrogp-1] = s;
 }
-/*e: function collapsefrog(x86) */
+/*e: function collapsefrog */
 
-/*s: function nopout(x86) */
+/*s: function nopout */
 void
 nopout(Prog *p)
 {
@@ -953,9 +961,9 @@ nopout(Prog *p)
     p->from.type = D_NONE;
     p->to.type = D_NONE;
 }
-/*e: function nopout(x86) */
+/*e: function nopout */
 
-/*s: function readsome(x86) */
+/*s: function readsome */
 byte*
 readsome(int f, byte *buf, byte *good, byte *stop, int max)
 {
@@ -972,7 +980,7 @@ readsome(int f, byte *buf, byte *good, byte *stop, int max)
         return 0;
     return stop + n;
 }
-/*e: function readsome(x86) */
+/*e: function readsome */
 
 /*s: function ldobj(x86) */
 void
@@ -1643,7 +1651,7 @@ nuxiinit(void)
 }
 /*e: function nuxiinit(x86) */
 
-/*s: function find1(x86) */
+/*s: function find1 */
 int
 find1(long l, int c)
 {
@@ -1656,9 +1664,9 @@ find1(long l, int c)
             return i;
     return 0;
 }
-/*e: function find1(x86) */
+/*e: function find1 */
 
-/*s: function ieeedtof(x86) */
+/*s: function ieeedtof */
 long
 ieeedtof(Ieee *e)
 {
@@ -1684,9 +1692,9 @@ ieeedtof(Ieee *e)
     v |= e->h & 0x80000000L;
     return v;
 }
-/*e: function ieeedtof(x86) */
+/*e: function ieeedtof */
 
-/*s: function ieeedtod(x86) */
+/*s: function ieeedtod */
 double
 ieeedtod(Ieee *ieeep)
 {
@@ -1711,9 +1719,9 @@ ieeedtod(Ieee *ieeep)
     exp -= (1L<<10) - 2L;
     return ldexp(fr, exp);
 }
-/*e: function ieeedtod(x86) */
+/*e: function ieeedtod */
 
-/*s: function undefsym(x86) */
+/*s: function undefsym */
 void
 undefsym(Sym *s)
 {
@@ -1728,9 +1736,9 @@ undefsym(Sym *s)
     s->type = SUNDEF;
     imports++;
 }
-/*e: function undefsym(x86) */
+/*e: function undefsym */
 
-/*s: function zerosig(x86) */
+/*s: function zerosig */
 void
 zerosig(char *sp)
 {
@@ -1739,9 +1747,9 @@ zerosig(char *sp)
     s = lookup(sp, 0);
     s->sig = 0;
 }
-/*e: function zerosig(x86) */
+/*e: function zerosig */
 
-/*s: function readundefs(x86) */
+/*s: function readundefs */
 void
 readundefs(char *f, int t)
 {
@@ -1782,5 +1790,5 @@ readundefs(char *f, int t)
     }
     Bterm(b);
 }
-/*e: function readundefs(x86) */
+/*e: function readundefs */
 /*e: linkers/8l/obj.c */

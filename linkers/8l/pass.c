@@ -119,7 +119,7 @@ brchain(Prog *p)
 }
 /*e: function brchain(x86) */
 
-/*s: function follow(x86) */
+/*s: function follow */
 void
 follow(void)
 {
@@ -134,7 +134,7 @@ follow(void)
     lastp->link = P;
     firstp = firstp->link;
 }
-/*e: function follow(x86) */
+/*e: function follow */
 
 /*s: function xfol(x86) */
 void
@@ -380,10 +380,10 @@ patch(void)
 }
 /*e: function patch(x86) */
 
-/*s: constant LOG(x86) */
+/*s: constant LOG */
 #define	LOG	5
-/*e: constant LOG(x86) */
-/*s: function mkfwd(x86) */
+/*e: constant LOG */
+/*s: function mkfwd */
 void
 mkfwd(void)
 {
@@ -416,7 +416,7 @@ mkfwd(void)
         }
     }
 }
-/*e: function mkfwd(x86) */
+/*e: function mkfwd */
 
 /*s: function brloop(x86) */
 Prog*
@@ -602,7 +602,7 @@ dostkoff(void)
 }
 /*e: function dostkoff(x86) */
 
-/*s: function atolwhex(x86) */
+/*s: function atolwhex */
 long
 atolwhex(char *s)
 {
@@ -642,9 +642,9 @@ atolwhex(char *s)
         n = -n;
     return n;
 }
-/*e: function atolwhex(x86) */
+/*e: function atolwhex */
 
-/*s: function undef(x86) */
+/*s: function undef */
 void
 undef(void)
 {
@@ -656,7 +656,7 @@ undef(void)
             if(s->type == SXREF)
                 diag("%s: not defined", s->name);
 }
-/*e: function undef(x86) */
+/*e: function undef */
 
 /*s: function import(x86) */
 void
@@ -679,14 +679,14 @@ import(void)
 }
 /*e: function import(x86) */
 
-/*s: function ckoff(x86) */
+/*s: function ckoff */
 void
 ckoff(Sym *s, long v)
 {
     if(v < 0 || v >= 1<<Roffset)
         diag("relocation offset %ld for %s out of range", v, s->name);
 }
-/*e: function ckoff(x86) */
+/*e: function ckoff */
 
 /*s: function newdata(x86) */
 static Prog*

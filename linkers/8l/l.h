@@ -7,16 +7,17 @@
 #include	<386/8.out.h>
 #include	"elf.h"
 
-/*s: macro DBG(x86) */
+/*s: macro DBG */
 #define DBG if(debug['v']) mylog
-/*e: macro DBG(x86) */
+/*e: macro DBG */
 
-/*s: constant P(x86) */
+/*s: constant P */
 #define	P		((Prog*)nil)
-/*e: constant P(x86) */
-/*s: constant S(x86) */
+/*e: constant P */
+/*s: constant S */
 #define	S		((Sym*)nil)
-/*e: constant S(x86) */
+/*e: constant S */
+
 /*s: constant TNAME(x86) */
 #define	TNAME		(curtext ? curtext->from.sym->name : noname)
 /*e: constant TNAME(x86) */
@@ -28,9 +29,9 @@
         cflush(); }
 /*e: function cput(x86) */
 
-/*s: constant LIBNAMELEN(x86) */
+/*s: constant LIBNAMELEN */
 #define	LIBNAMELEN	300
-/*e: constant LIBNAMELEN(x86) */
+/*e: constant LIBNAMELEN */
 
 typedef	struct	Adr	Adr;
 typedef	struct	Prog	Prog;
@@ -66,25 +67,25 @@ struct	Adr
 };
 /*e: struct Adr(x86) */
 
-/*s: constant offset(x86) */
+/*s: constant offset */
 #define	offset	u0.u0offset
-/*e: constant offset(x86) */
+/*e: constant offset */
 /*s: constant scon(x86) */
 #define	scon	u0.u0scon
 /*e: constant scon(x86) */
 /*s: constant cond(x86) */
 #define	cond	u0.u0cond
 /*e: constant cond(x86) */
-/*s: constant ieee(x86) */
+/*s: constant ieee */
 #define	ieee	u0.u0ieee
-/*e: constant ieee(x86) */
+/*e: constant ieee */
 
-/*s: constant autom(x86) */
+/*s: constant autom */
 #define	autom	u1.u1autom
-/*e: constant autom(x86) */
-/*s: constant sym(x86) */
+/*e: constant autom */
+/*s: constant sym */
 #define	sym	u1.u1sym
-/*e: constant sym(x86) */
+/*e: constant sym */
 
 /*s: struct Prog(x86) */
 struct	Prog
@@ -130,7 +131,7 @@ struct	Auto
     Auto*	link;
 };
 /*e: struct Auto(x86) */
-/*s: struct Sym(x86) */
+/*s: struct Sym */
 struct	Sym
 {
     char	*name;
@@ -155,7 +156,7 @@ struct	Sym
     // hash<Sym.name * Sym.version, ref<Sym>> of hash
     Sym*	link;
 };
-/*e: struct Sym(x86) */
+/*e: struct Sym */
 /*s: struct Optab(x86) */
 struct	Optab
 {
@@ -267,30 +268,30 @@ enum pxxx {
     Pb		= 0xfe,	/* byte operands */
 };
 /*e: enum pxxx(x86) */
-/*s: enum rxxx(x86) */
+/*s: enum rxxx */
 enum rxxx {
     Roffset	= 22,		/* no. bits for offset in relocation address */
     Rindex	= 10,		/* no. bits for index in relocation address */
 };
-/*e: enum rxxx(x86) */
+/*e: enum rxxx */
 
 /*s: enum misc1(x86) */
 enum misc1 {
-    /*s: constant NHASH 8l.h(x86) */
+    /*s: constant NHASH linker */
     NHASH		= 10007,
-    /*e: constant NHASH 8l.h(x86) */
-    /*s: constant NHUNK(x86) */
+    /*e: constant NHASH linker */
+    /*s: constant NHUNK linker */
     NHUNK		= 100000,
-    /*e: constant NHUNK(x86) */
+    /*e: constant NHUNK linker */
 
     MINSIZ		= 4,
-    /*s: constant STRINGSZ(x86) */
+    /*s: constant STRINGSZ */
     STRINGSZ	= 200,
-    /*e: constant STRINGSZ(x86) */
+    /*e: constant STRINGSZ */
     MINLC		= 1,
-    /*s: constant MAXIO(x86) */
+    /*s: constant MAXIO */
     MAXIO		= 8192,
-    /*e: constant MAXIO(x86) */
+    /*e: constant MAXIO */
     MAXHIST		= 20, /* limit of path elements for history symbols */
 };
 /*e: enum misc1(x86) */
@@ -314,7 +315,7 @@ enum headtype {
 };
 /*e: enum headtype(x86) */
 
-/*s: struct Buf(x86) */
+/*s: struct Buf */
 union Buf
 {
     struct
@@ -324,15 +325,15 @@ union Buf
     } u;
     char	dbuf[1];
 };
-/*e: struct Buf(x86) */
+/*e: struct Buf */
 extern union Buf buf;
 
-/*s: constant cbuf(x86) */
+/*s: constant cbuf */
 #define	cbuf	u.obuf
-/*e: constant cbuf(x86) */
-/*s: constant xbuf(x86) */
+/*e: constant cbuf */
+/*s: constant xbuf */
 #define	xbuf	u.ibuf
-/*e: constant xbuf(x86) */
+/*e: constant xbuf */
 
 #pragma	varargck	type	"A"	int
 #pragma	varargck	type	"A"	uint
@@ -400,9 +401,9 @@ bool allexport;
 extern	char*	EXPTAB;
 extern	Prog	undefp;
 
-/*s: constant UP(x86) */
+/*s: constant UP */
 #define	UP	(&undefp)
-/*e: constant UP(x86) */
+/*e: constant UP */
 
 extern	Optab	optab[];
 //@Scheck: defined in ../8c/enam.c

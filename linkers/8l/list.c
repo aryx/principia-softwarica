@@ -305,7 +305,7 @@ Sconv(Fmt *fp)
 }
 /*e: function Sconv(x86) */
 
-/*s: function diag(x86) */
+/*s: function diag */
 void
 diag(char *fmt, ...)
 {
@@ -327,5 +327,5 @@ diag(char *fmt, ...)
         errorexit();
     }
 }
-/*e: function diag(x86) */
+/*e: function diag */
 /*e: linkers/8l/list.c */

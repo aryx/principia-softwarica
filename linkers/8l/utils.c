@@ -1,7 +1,7 @@
 /*s: linkers/8l/utils.c */
 #include "l.h"
 
-/*s: function log(x86) */
+/*s: function log */
 void mylog(char *fmt, ...) {
 
     va_list arg;
@@ -11,9 +11,9 @@ void mylog(char *fmt, ...) {
     va_end(arg);
     Bflush(&bso);
 }
-/*e: function log(x86) */
+/*e: function log */
 
-/*s: function errorexit(x86) */
+/*s: function errorexit */
 void
 errorexit(void)
 {
@@ -25,9 +25,9 @@ errorexit(void)
     }
     exits(0);
 }
-/*e: function errorexit(x86) */
+/*e: function errorexit */
 
-/*s: function gethunk(x86) */
+/*s: function gethunk */
 void
 gethunk(void)
 {
@@ -49,9 +49,9 @@ gethunk(void)
     nhunk = nh;
     thunk += nh;
 }
-/*e: function gethunk(x86) */
+/*e: function gethunk */
 
-/*s: function lookup(x86) */
+/*s: function lookup */
 Sym*
 lookup(char *symb, int v)
 {
@@ -94,9 +94,9 @@ lookup(char *symb, int v)
     nsymbol++;
     return s;
 }
-/*e: function lookup(x86) */
+/*e: function lookup */
 
-/*s: constructor prg(x86) */
+/*s: constructor prg */
 Prog*
 prg(void)
 {
@@ -113,9 +113,9 @@ prg(void)
     *p = zprg;
     return p;
 }
-/*e: constructor prg(x86) */
+/*e: constructor prg */
 
-/*s: function copyp(x86) */
+/*s: function copyp */
 Prog*
 copyp(Prog *q)
 {
@@ -125,7 +125,6 @@ copyp(Prog *q)
     *p = *q;
     return p;
 }
-/*e: function copyp(x86) */
-
+/*e: function copyp */
 
 /*e: linkers/8l/utils.c */

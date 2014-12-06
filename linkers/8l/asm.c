@@ -1,9 +1,9 @@
 /*s: linkers/8l/asm.c */
 #include	"l.h"
 
-/*s: constant Dbufslop(x86) */
+/*s: constant Dbufslop */
 #define	Dbufslop	100
-/*e: constant Dbufslop(x86) */
+/*e: constant Dbufslop */
 
 /*s: global spsize(x86) */
 long	spsize = 0;
@@ -20,10 +20,10 @@ entryvalue(void)
 
     a = INITENTRY;
 
-    /*s: [[entryvalue()]] if digit INITENTRY(x86) */
+    /*s: [[entryvalue()]] if digit INITENTRY */
     if(*a >= '0' && *a <= '9')
         return atolwhex(a);
-    /*e: [[entryvalue()]] if digit INITENTRY(x86) */
+    /*e: [[entryvalue()]] if digit INITENTRY */
 
     s = lookup(a, 0);
     // no _main found, maybe pure asm, start at beginning of TEXT section (va)
@@ -33,11 +33,11 @@ entryvalue(void)
     switch(s->type) {
     case STEXT:
         return s->value;
-    /*s: [[entryvalue()]] if dynamic module case(x86) */
+    /*s: [[entryvalue()]] if dynamic module case */
     case SDATA:
         if(dlm)
             return s->value+INITDAT;
-    /*e: [[entryvalue()]] if dynamic module case(x86) */
+    /*e: [[entryvalue()]] if dynamic module case */
     default:
         diag("entry not text: %s", s->name);
     }
@@ -85,23 +85,23 @@ lputl(long l)
 }
 /*e: function lputl(x86) */
 
-/*s: function llput(x86) */
+/*s: function llput */
 void
 llput(vlong v)
 {
     lput(v>>32);
     lput(v);
 }
-/*e: function llput(x86) */
+/*e: function llput */
 
-/*s: function llputl(x86) */
+/*s: function llputl */
 void
 llputl(vlong v)
 {
     lputl(v);
     lputl(v>>32);
 }
-/*e: function llputl(x86) */
+/*e: function llputl */
 
 /*s: function strnput(x86) */
 void
@@ -426,7 +426,7 @@ asmb(void)
 }
 /*e: function asmb(x86) */
 
-/*s: function cflush(x86) */
+/*s: function cflush */
 void
 cflush(void)
 {
@@ -438,7 +438,7 @@ cflush(void)
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
 }
-/*e: function cflush(x86) */
+/*e: function cflush */
 
 /*s: function datblk(x86) */
 void
@@ -586,7 +586,7 @@ datblk(long s, long n)
 }
 /*e: function datblk(x86) */
 
-/*s: function rnd(x86) */
+/*s: function rnd */
 long
 rnd(long v, long r)
 {
@@ -601,5 +601,5 @@ rnd(long v, long r)
     v -= c;
     return v;
 }
-/*e: function rnd(x86) */
+/*e: function rnd */
 /*e: linkers/8l/asm.c */

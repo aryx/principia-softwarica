@@ -120,7 +120,7 @@ xdefine(char *p, int t, long v)
 }
 /*e: function xdefine(x86) */
 
-/*s: function putsymb(x86) */
+/*s: function putsymb */
 void
 putsymb(char *s, int t, long v, int ver)
 {
@@ -166,7 +166,7 @@ putsymb(char *s, int t, long v, int ver)
             Bprint(&bso, "%c %.8lux %s\n", t, v, s);
     }
 }
-/*e: function putsymb(x86) */
+/*e: function putsymb */
 
 /*s: function asmsym(x86) */
 void
@@ -232,7 +232,7 @@ asmsym(void)
 }
 /*e: function asmsym(x86) */
 
-/*s: function asmlc(x86) */
+/*s: function asmlc */
 void
 asmlc(void)
 {
@@ -312,7 +312,7 @@ asmlc(void)
         Bprint(&bso, "lcsize = %ld\n", lcsize);
     Bflush(&bso);
 }
-/*e: function asmlc(x86) */
+/*e: function asmlc */
 
 /*s: function prefixof(x86) */
 int
@@ -1305,13 +1305,13 @@ enum{
 };
 /*e: enum _anon_ (linkers/8l/span.c) */
 
-/*s: global modemap(x86) */
+/*s: global modemap */
 int modemap[4] = { 0, 1, -1, 2, };
-/*e: global modemap(x86) */
+/*e: global modemap */
 
 typedef struct Reloc Reloc;
 
-/*s: struct Reloc(x86) */
+/*s: struct Reloc */
 struct Reloc
 {
     int n;
@@ -1319,13 +1319,13 @@ struct Reloc
     byte *m;
     ulong *a;
 };
-/*e: struct Reloc(x86) */
+/*e: struct Reloc */
 
-/*s: global rels(x86) */
+/*s: global rels */
 Reloc rels;
-/*e: global rels(x86) */
+/*e: global rels */
 
-/*s: function grow(x86) */
+/*s: function grow */
 static void
 grow(Reloc *r)
 {
@@ -1344,7 +1344,7 @@ grow(Reloc *r)
     free(m);
     free(a);
 }
-/*e: function grow(x86) */
+/*e: function grow */
 
 /*s: function dynreloc(x86) */
 void
@@ -1395,7 +1395,7 @@ sput(char *s)
 }
 /*e: function sput(x86) */
 
-/*s: function asmdyn(x86) */
+/*s: function asmdyn */
 void
 asmdyn()
 {
@@ -1461,5 +1461,5 @@ asmdyn()
     DBG("import table entries = %d\n", imports);
     DBG("export table entries = %d\n", exports);
 }
-/*e: function asmdyn(x86) */
+/*e: function asmdyn */
 /*e: linkers/8l/span.c */
