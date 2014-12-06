@@ -32,6 +32,7 @@ SRC_VIEWS= \
   5l/l.h\
   5l/globals.c\
   5l/optab.c\
+  5l/utils.c\
   5l/list.c\
   5l/compat.c\
   5l/pass.c\

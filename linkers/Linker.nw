@@ -13,6 +13,8 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
+% - introduced HEADTYPE instead of hardcoded ints
+% - introduced mylog and DBG, cleaned up all those myxxx wrappers
 
 %thx to codemap/codegraph:
 % - see subtle dependency to 8c/enam.c through anames
@@ -22,7 +24,7 @@
 % - TODO dynamic linking?
 
 %history LP-ization:
-% - skeleton, mostly copy paste of Kernel.nw skeleton
+% - skeleton, mostly copy paste of Template.nw skeleton
 % - put all content of files in the Extra section, via 'pfff -lpize'
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
@@ -32,7 +34,7 @@
 % - understand main functions, LP split, cluster, improve TOC
 % - TODO LP split the structures, use datalog for flow to field info
 % - TODO nullify, boolify, typeify,    scheckify
-% - TODO aspecify advanced features!
+% - aspecify advanced features!
 % - TODO add figures
 % - TODO add explanations
 
@@ -96,12 +98,13 @@
 
 \title{
 {\Huge 
-Principia Softwarica: The Plan9 Linker [[8l]]
+Principia Softwarica: The Plan9 Linker [[5l]]
 % and Loader?
 }\\
-x86 (32 bits) edition\\
+ARM (32 bits) edition\\
 {version 0.1}
 }
+% 8l, x86 (32 bits) edition
 
 \author{
 Yoann Padioleau\\
@@ -196,22 +199,13 @@ License.
 
 % what about dynamic linking? see Advanced topics chapter.
 
-\section{[[8l]] services}
+\section{[[5l]] services}
 
 % command line interface? -o
 
 % important -TText, see Kernel.nw
 
-<<function usage (linkers/8l/obj.c)>>=
-void
-usage(void)
-{
-    diag("usage: %s [-options] objects", argv0);
-    errorexit();
-}
-@
-
-<<function usage(arm)>>=
+<<function usage, linker>>=
 void
 usage(void)
 {
@@ -229,13 +223,13 @@ usage(void)
 % see tests/ with two .c calling each other
 
 \section{Input object format}
-% the input this time (as opposed to 8a where it's the output)
+% the input this time (as opposed to 5a where it's the output)
 
-% nm foo.8 => ? U? D? T?
+% nm foo.5 => ? U? D? T?
 
 % nm is actually using libmach, crachhdr, etc, generic API for object manip
 
-% put libmach/8obj.c?
+% put libmach/5obj.c?
 
 \section{Output executable format}
 % the output,
@@ -245,50 +239,32 @@ usage(void)
 % plan9 is essential a.out.h? 
 % but can actually generate different executable (well different headers)
 
-
-<<enum headtype(x86)>>=
+<<enum headtype(arm)>>=
 /*
- *	-H0 -T0x40004C -D0x10000000	is garbage unix
- *	-H1 -T0xd0 -R4			is unix coff
- *	-H2 -T4128 -R4096		is plan9 format
- *	-H3 -Tx -Rx			is MS-DOS .COM
- *	-H4 -Tx -Rx			is fake MS-DOS .EXE
- *	-H5 -T0x80100020 -R4096		is ELF
+ *	-H0				      no header
+ *	-H1 -T0x10005000 -R4  is aif for risc os
+ *	-H2 -T4128 -R4096	  is plan9 format
+ *	-H3 -T0xF0000020 -R4  is NetBSD format
+ *	-H4				      is IXP1200 (raw)
+ *	-H5 -T0xC0008010 -R1024 	is ipaq
+ *	-H6 -R4096			   no header with segments padded to pages
+ *	-H7				       is elf
  */
 enum headtype {
-    H_GARBAGE = 0,
-    H_COFF = 1,
-    H_PLAN9 = 2, // default
-    H_COM = 3,
-    H_EXE = 4,
-    H_ELF = 5,
+     H_PLAN9 = 2,
 };
 @
-% was not in the original code, but so much better than having
-% some switch() { case 3: ... }
 
 % see libmach to read back this executable!
 
-% so   .s -8a-> .o -8l-> .exe -libmach-> readable
-% (hmm libmach is also reading .o (.8)
-
-
-/*
- *	-H0				no header
- *	-H1 -T0x10005000 -R4		is aif for risc os
- *	-H2 -T4128 -R4096		is plan9 format
- *	-H3 -T0xF0000020 -R4		is NetBSD format
- *	-H4				is IXP1200 (raw)
- *	-H5 -T0xC0008010 -R1024		is ipaq
- *	-H6 -R4096			no header with segments padded to pages
- *	-H7				is elf
- */
+% so   .s -5a-> .o -5l-> .exe -libmach-> readable
+% (hmm libmach is also reading .o (.5)
 
 
 
 % include/a.out.h
-% used by strip, libmach, but not 8l, should be 32 bytes (0x20)
-% see asmb() that generate this far below
+% used by strip, libmach, but not 5l, should be 32 bytes (0x20)
+% see asmb() that generates this far below
 <<struct Exec>>=
 // a.out header format
 struct	Exec
@@ -319,15 +295,15 @@ struct	Exec
 
 \section{Architecture overview}
 
-% depends on 8.out.h all assembly instructions, registers, etc
-% depends on 8c/ for one file:
-%8c -FTVw -I/home/pad/plan9/include/386 -I/home/pad/plan9/include -. -I. ../8c/enam.c
+% depends on 5.out.h all assembly instructions, registers, etc
+% depends on 5c/ for one file:
+%5c -FTVw -I/home/pad/plan9/include/386 -I/home/pad/plan9/include -. -I. ../5c/enam.c
 
 % linker vs libmach, 
 % actually linker does not depend on libmach/! because it's writing 
 % specific stuff and libmach is mostly about generic reading interface 
 % to many specifics
-% (and not just 8l)
+% (and not just 5l)
 
 
 %###############################################################################
@@ -340,7 +316,7 @@ struct	Exec
 % so symbols are pretty central!
 
 % conflict with include/a.out.h
-<<struct Sym(x86)>>=
+<<struct Sym>>=
 struct	Sym
 {
     char	*name;
@@ -367,73 +343,45 @@ struct	Sym
 };
 @
 
-<<struct Sym(arm)>>=
-struct	Sym
-{
-    char	*name;
-    short	type;
-    short	version;
-    short	become;
-    short	frame;
-    uchar	subtype;
-    ushort	file;
-    long	value;
-    long	sig;
-    Sym*	link;
-};
-@
 
 
-<<constant S(x86)>>=
+<<constant S>>=
 #define	S		((Sym*)nil)
 @
 
-<<constant S(arm)>>=
-#define	S		((Sym*)nil)
-@
 
 
 % SSTACK? not in exec :) not sure it's section, it's more about
 %  type of symbol/entity, a const, file, data, procedure, etc
 % see asmsym()
-<<enum sxxx(x86)>>=
-enum section
+<<enum sxxx(arm)>>=
+enum sxxx
 {
     STEXT		= 1,
+
     SDATA,
     SBSS,
 
     SDATA1,
-    SXREF, // means not defined (yet)
+    SXREF,
+    SLEAF, // arm
     SFILE,
     SCONST,
+
+    SSTRING, // arm
     SUNDEF,
 
     SIMPORT,
     SEXPORT,
 };
 @
+% SLEAF? the special opti ARM has for leaf functions?
 
-<<enum _anon_(arm)>>=
-enum
-{
-    STEXT		= 1,
-    SDATA,
-    SBSS,
-    SDATA1,
-    SXREF,
-    SLEAF,
-    SFILE,
-    SCONST,
-    SSTRING,
-    SUNDEF,
-
-    SIMPORT,
-    SEXPORT,
-
-    LFROM		= 1<<0,
+<<enum misc(arm)>>=
+enum misc {
+    LFROM	= 1<<0,
     LTO		= 1<<1,
-    LPOOL		= 1<<2,
+    LPOOL	= 1<<2,
     V4		= 1<<3,	/* arm v4 arch */
     VFP		= 1<<4,	/* arm vfpv3 floating point */
 
@@ -490,43 +438,36 @@ enum
     LEAF		= 1<<2,
 
     BIG		= (1<<12)-4,
-    STRINGSZ	= 200,
-    NHASH		= 10007,
-    NHUNK		= 100000,
+
+    <<constant STRINGSZ>>
+    <<constant NHASH linker>>
+    <<constant NHUNK linker>>
+
     MINSIZ		= 64,
     NENT		= 100,
-    MAXIO		= 8192,
+    <<constant MAXIO>>
     MAXHIST		= 20,	/* limit of path elements for history symbols */
-
-    Roffset	= 22,		/* no. bits for offset in relocation address */
-    Rindex	= 10,		/* no. bits for index in relocation address */
 };
 @
 % >> >> >> >> >> >> >> >> >>
 
 
-<<constant NHASH 8l.h(x86)>>=
+<<constant NHASH linker>>=
 NHASH		= 10007,
 @
 
-<<global hash (linkers/8l/globals.c)>>=
+<<global hash linker>>=
 // hash<Sym.name * Sym.version, ref<Sym>> (next = Sym.link)
 Sym*	hash[NHASH];
 @
 
-<<global hash(arm)>>=
-Sym*	hash[NHASH];
-@
-
-
-
-<<global nsymbol(x86)>>=
+<<global nsymbol linker>>=
 long	nsymbol;
 @
 
 % v is for version, but really it's about handling static names
 % (we could have a typedef int version;? and VERSION0 = 0 so clearer to read?)
-<<function lookup(x86)>>=
+<<function lookup>>=
 Sym*
 lookup(char *symb, int v)
 {
@@ -571,113 +512,60 @@ lookup(char *symb, int v)
 }
 @
 
-<<function lookup(arm)>>=
-Sym*
-lookup(char *symb, int v)
-{
-    Sym *s;
-    char *p;
-    long h;
-    int c, l;
-
-    h = v;
-    for(p=symb; c = *p; p++)
-        h = h+h+h + c;
-    l = (p - symb) + 1;
-    h &= 0xffffff;
-    h %= NHASH;
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->version == v)
-        if(memcmp(s->name, symb, l) == 0)
-            return s;
-
-    while(nhunk < sizeof(Sym))
-        gethunk();
-    s = (Sym*)hunk;
-    nhunk -= sizeof(Sym);
-    hunk += sizeof(Sym);
-
-    s->name = malloc(l);
-    memmove(s->name, symb, l);
-
-    s->link = hash[h];
-    s->type = 0;
-    s->version = v;
-    s->value = 0;
-    s->sig = 0;
-    hash[h] = s;
-    return s;
-}
-@
 
 
 \section{[[Opcode]] and [[Operand_kind]]}
-% in 8.out.h: Opcode (enum opcode), Operand_kind (enum operand_kind)
+% in 5.out.h: Opcode (enum opcode), Operand_kind (enum operand_kind)
 % see Aconv, Rconv, Dconv
 
 % put major opcode here, AXXX, ALAST, etc
-% and also D_CS, ... and also D_EXTERN,
+% and also R1, ... and also D_EXTERN,
 
 \section{[[Prog]] and [[firstp]], [[textp]], [[datap]], [[curtext]], etc}
 
 % bad name .... I think Prog is really a Instruction ... From and To
 % are when do MOV AX, BX,    then AX is the from, BX the to
 
-<<struct Prog(x86)>>=
+
+<<struct Prog(arm)>>=
 struct	Prog
 {
     //enum<opcode>
-    short	as;
+    byte	as;
 
     // operands
     Adr	from;
     Adr	to;
 
-    // [[Prog]] other fields
-    // 2 by default in zprg, why?
-    byte	back;
+    // enum<register>?
+    byte	reg;
+    // enum<instr_cond>?
+    byte	scond;
 
-    Prog*	forwd;
+    union
+    {
+        long	u0regused;
+        Prog*	u0forwd;
+    } u0;
+
+    // [[Prog]] other fields
+
     long	pc;
     long	line;
-    char	width;		/* fake for DATA */
-    char	ft;		/* oclass cache */
-    char	tt;
-    byte	mark;	/* work on these */
+    byte	mark;
+    byte	optab;
 
     // [[Prog]] Extra fields
 
     // list<ref<Prog>> from firstp/lastp, or datap/edatap
     Prog*	link;
 
-    // list<ref<Prog>> from textp/etextp, to follow CALL xxx
-    Prog*	pcond;	/* work on this */
-
+    // list<ref<Prog>> from textp/etextp, to follow CALL xxx ???
+    Prog*	cond;
 };
 @
 % see Pconv, %P
 
-<<struct Prog(arm)>>=
-struct	Prog
-{
-    Adr	from;
-    Adr	to;
-    union
-    {
-        long	u0regused;
-        Prog*	u0forwd;
-    } u0;
-    Prog*	cond;
-    Prog*	link;
-    long	pc;
-    long	line;
-    uchar	mark;
-    uchar	optab;
-    uchar	as;
-    uchar	scond;
-    uchar	reg;
-};
-@
 
 <<constant regused(arm)>>=
 #define	regused	u0.u0regused
@@ -693,77 +581,46 @@ struct	Prog
 % good name? first_instr better? also again there is strong
 % coupling between firstp and lastp that should be encapsulated
 % in a specific structure (like for datap, edatap)
-<<global firstp(x86)>>=
+<<global firstp>>=
 // list<ref_own?<Prog>>, next = Prog.link
 Prog*	firstp;
 @
 
-<<global firstp(arm)>>=
-Prog*	firstp;
-@
 
-
-<<global lastp(x86)>>=
+<<global lastp>>=
 // ref<Prog>, last elt of firstp list
 Prog*	lastp;
 @
 
-<<global lastp(arm)>>=
-Prog*	lastp;
-@
 
 
-
-<<constant P(x86)>>=
+<<constant P>>=
 #define	P		((Prog*)nil)
 @
 
-<<constant P(arm)>>=
-#define	P		((Prog*)nil)
-@
 
 
 
 % list of procedures (ATEXT opcode), subset of firstp/lastp
-<<global textp(x86)>>=
+<<global textp>>=
 // list<ref<Prog>>, next = Prog.cond
 Prog*	textp = P;
 @
 
-<<global textp(arm)>>=
-Prog*	textp;
-@
 
-
-
-<<global etextp(x86)>>=
+<<global etextp>>=
 // ref<Prog>, end of textp list
 Prog*	etextp = P;
 @
 
-<<global etextp(arm)>>=
-Prog*	etextp;
-@
-
-
-
-
 % list of data (ADATA opcode)
-<<global datap(x86)>>=
+<<global datap>>=
 // list<ref<Prog>>, next = Prog.next
 Prog*	datap = P;
 @
 
-<<global datap(arm)>>=
-Prog*	datap;
-@
 
 
-% todo could use a queue data structure, so have fast access to end of list?
-<<global edatap(x86)>>=
-// ref<Prog>>, end of datap list
-Prog*	edatap = P;
-@
 
 
 
@@ -771,57 +628,33 @@ Prog*	edatap = P;
 % When iterate over all instrs, if the instr is a ATEXT then store it here.
 % It's probably for error message, to say in which procedure we currently are
 % most of the code related to curtext is if(p->as == ATEXT) curtext = p;
-<<global curtext(x86)>>=
-Prog*	curtext;
-@
-
-<<global curtext(arm)>>=
+<<global curtext>>=
 Prog*	curtext;
 @
 
 
 
-<<constant TNAME(x86)>>=
-#define	TNAME		(curtext ? curtext->from.sym->name : noname)
-@
 
 <<constant TNAME(arm)>>=
-#define	TNAME		(curtext&&curtext->from.sym?curtext->from.sym->name:noname)
+#define	TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
 @
 
-<<global noname (linkers/8l/obj.c)>>=
-char	*noname		= "<none>";
-@
-
-% DELETE
-<<global noname(arm)>>=
-char*	noname;
-@
-
-<<global noname (linkers/5l/obj.c)(arm)>>=
+<<global noname linker>>=
 char	*noname		= "<none>";
 @
 
 
-
-<<global undefp(x86)>>=
+<<global undefp>>=
 //@Scheck: not dead, used by UP
 Prog	undefp;
 @
 
-<<global undefp(arm)>>=
-Prog	undefp;
-@
 
 
-
-<<constant UP(x86)>>=
+<<constant UP>>=
 #define	UP	(&undefp)
 @
 
-<<constant UP(arm)>>=
-#define	UP	(&undefp)
-@
 
 
 \section{[[Adr]]}
@@ -832,54 +665,33 @@ Prog	undefp;
 
 % give a few examples? show man page where have all the addressing modes
 
-<<struct Adr(x86)>>=
-struct	Adr
-{
-    //enum<operand_kind> (D_NONE by default)
-    short	type;
-
-    union
-    {
-        long	u0offset;
-        char	u0scon[8];
-        Prog	*u0cond;	/* not used, but should be D_BRANCH */
-        Ieee	u0ieee;
-    } u0;
-
-    union
-    {
-        Auto*	u1autom;
-        Sym*	u1sym;
-    } u1;
-
-    //enum<operand_kind(register-only|D_NONE)>
-    byte	index;
-
-    // TODO: abused for NOPROF function attributes
-    char	scale; // offset * scale give size of entity?
-};
-@
 
 <<struct Adr(arm)>>=
 struct	Adr
 {
+    //enum<operand_kind> (D_NONE by default)
+    char	type;
+
     union
     {
         long	u0offset;
         char*	u0sval;
         Ieee*	u0ieee;
     } u0;
+
     union
     {
         Auto*	u1autom;
         Sym*	u1sym;
     } u1;
-    char	type;
+
+    // ??
     char	reg;
     char	name;
     char	class;
 };
 @
+%    // TODO: abused for NOPROF function attributes
 
 
 % the main thing the linker does, to relocate at the right place
@@ -887,68 +699,33 @@ struct	Adr
 % on FP(for D_PARAM), and on SP(for D_AUTO), 
 % or can be direct value (for D_CONST)
 %see DConv
-<<constant offset(x86)>>=
+<<constant offset>>=
 #define	offset	u0.u0offset
 @
-
-<<constant offset(arm)>>=
-#define	offset	u0.u0offset
-@
-
-
 
 <<constant sval(arm)>>=
 #define	sval	u0.u0sval
 @
 
-
-
 % TODO I thought could have unamed union that then alleviate the need
 % for those macros! (just need to adapt graph_code_c to find those fields)
 
-% ??
-<<constant scon(x86)>>=
-#define	scon	u0.u0scon
-@
-
-<<constant cond(x86)>>=
-#define	cond	u0.u0cond
-@
-
-<<constant ieee(x86)>>=
+<<constant ieee>>=
 #define	ieee	u0.u0ieee
 @
 
-<<constant ieee(arm)>>=
-#define	ieee	u0.u0ieee
-@
-
-
-<<constant autom(x86)>>=
+<<constant autom>>=
 #define	autom	u1.u1autom
 @
 
-<<constant autom(arm)>>=
-#define	autom	u1.u1autom
-@
-
-
-
-
-<<constant sym(x86)>>=
-#define	sym	u1.u1sym
-@
-
-<<constant sym(arm)>>=
+<<constant sym>>=
 #define	sym	u1.u1sym
 @
 
 
 
-
-% ???
-<<struct Auto(x86)>>=
-struct	Auto
+<<struct Autom(arm)>>=
+struct	Autom
 {
     Sym*	asym;
 
@@ -961,38 +738,15 @@ struct	Auto
 @
 
 
-<<struct Autom(arm)>>=
-struct	Autom
-{
-    Sym*	asym;
-    Auto*	link;
-    long	aoffset;
-    short	type;
-};
-@
-
-
 \section{[[Optab]] and [[optab]]}
 
-<<struct Optab(x86)>>=
-struct	Optab
-{
-    // enum<as> from 8.out.h
-    short	as;
-
-    byte*	ytab;
-
-    // enum<Pxxx>
-    byte	prefix;
-    // the actual x86 machine code for instruction optab.as
-    byte	op[10];
-};
-@
 
 <<struct Optab(arm)>>=
 struct	Optab
 {
-    char	as;
+    // enum<as> from 5.out.h
+    byte	as;
+
     char	a1;
     char	a2;
     char	a3;
@@ -1022,35 +776,21 @@ struct	Count
 
 \chapter{[[main()]]}
 
-% default object suffix, to generate 8.out
-<<global thechar(x86)>>=
-char	thechar		= '8';
+% default object suffix, to generate x.out
+<<global thechar>>=
+char	thechar;
 @
-
-<<global thechar(arm)>>=
-char	thechar		= '5';
-@
-
 
 % to find library files? /386/lib/...
-<<global thestring(x86)>>=
-char	*thestring 	= "386";
-@
-
-<<global thestring(arm)>>=
-char	*thestring 	= "arm";
+<<global thestring>>=
+char	*thestring;
 @
 
 
 % -o, 
-<<global outfile(x86)>>=
-char*	outfile = "8.out";
-@
-
-<<global outfile(arm)>>=
+<<global outfile>>=
 char*	outfile;
 @
-
 
 
 <<[[main()]] command line processing(x86)>>=
@@ -1060,13 +800,10 @@ char*	outfile;
 @
 
 % cout =~ create(outfile)
-<<global cout(x86)>>=
+<<global cout>>=
 fdt	cout = -1;
 @
 
-<<global cout(arm)>>=
-int	cout;
-@
 
 
 
@@ -1078,6 +815,9 @@ void
 main(int argc, char *argv[])
 {
     <<[[main()]] locals(x86)>>
+    thechar = '8';
+    thestring = "386";   
+    outfile = "8.out";
 
     <<[[main()]] debug initialization(x86)>>
 
@@ -1131,6 +871,9 @@ main(int argc, char *argv[])
     int c;
     char *a;
     char name[LIBNAMELEN];
+
+    thechar = '5';
+    thestring = "arm";   
 
     Binit(&bso, 1, OWRITE);
     cout = -1;
@@ -1396,55 +1139,36 @@ out:
 
 
 % -H executable format (header type)
-<<global HEADTYPE(x86)>>=
-long	HEADTYPE = -1;
+<<global HEADTYPE>>=
+long	HEADTYPE = -1; /* type of header */
 @
-
-<<global HEADTYPE(arm)>>=
-int	HEADTYPE;		/* type of header */
-@
-
+% was int in ARM and long in x86, but I don't think it matters
 
 
 % -T text segment start virtual address (important! e.g. for kernel 0x7c00)
-<<global INITTEXT(x86)>>=
-long	INITTEXT = -1;
-@
-
-<<global INITTEXT(arm)>>=
-long	INITTEXT;		/* text location */
+<<global INITTEXT>>=
+long	INITTEXT = -1; /* text location */
 @
 
 
 
 % -D data segment start
-<<global INITDAT(x86)>>=
-long	INITDAT = -1;
+<<global INITDAT>>=
+long	INITDAT = -1; /* data location */
 @
 
-<<global INITDAT(arm)>>=
-long	INITDAT;		/* data location */
-@
 
 
 % -E default _main (or _mainp when -p)
-<<global INITENTRY(x86)>>=
+<<global INITENTRY>>=
 char*	INITENTRY = nil;		/* entry point */
-@
-
-<<global INITENTRY(arm)>>=
-char*	INITENTRY;		/* entry point */
 @
 
 
 
 % -R text segment rounder at r multiple
-<<global INITRND(x86)>>=
-long	INITRND = -1;
-@
-
-<<global INITRND(arm)>>=
-long	INITRND;		/* data round above text location */
+<<global INITRND>>=
+long	INITRND = -1; 		/* data round above text location */
 @
 
 
@@ -1480,13 +1204,10 @@ case 'R':
 
 
 % size of Header, 32 for a.out (0x20)
-<<global HEADR(x86)>>=
-long	HEADR;
+<<global HEADR>>=
+long	HEADR; 		/* length of header */
 @
 
-<<global HEADR(arm)>>=
-long	HEADR;			/* length of header */
-@
 
 
 %32 = 0x20, hence this note in kernel mkfile:
@@ -1519,13 +1240,10 @@ if(INITDAT != 0 && INITRND != 0)
 
 \section{XXX}
 
-<<constant LIBNAMELEN(x86)>>=
+<<constant LIBNAMELEN>>=
 #define	LIBNAMELEN	300
 @
 
-<<constant LIBNAMELEN(arm)>>=
-#define	LIBNAMELEN	300
-@
 
 
 % used locals? move closer the the code that use it then
@@ -1554,7 +1272,7 @@ cbc = sizeof(buf.cbuf);
 
 % essentially a malloc(sizeof(Prog), 
 % see section on Buffer managment to better understand
-<<constructor prg(x86)>>=
+<<constructor prg>>=
 Prog*
 prg(void)
 {
@@ -1573,33 +1291,14 @@ prg(void)
 }
 @
 
-<<function prg(arm)>>=
-Prog*
-prg(void)
-{
-    Prog *p;
-
-    while(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
-    *p = zprg;
-    return p;
-}
-@
 
 
 
 % empty prg, to initialize new Prog
-<<global zprg(x86)>>=
+<<global zprg>>=
 Prog	zprg;
 @
 
-<<global zprg(arm)>>=
-Prog	zprg;
-@
 
 
 
@@ -1617,7 +1316,8 @@ zprg.to = zprg.from;
 @
 
 
-<<function copyp(x86)>>=
+% TODO unused for ARM?
+<<function copyp>>=
 Prog*
 copyp(Prog *q)
 {
@@ -1861,37 +1561,29 @@ out:
 % it loads the libraries mentioned in the .obj via the .h and #pragma magic!
 % see later section
 
-<<global library(x86)>>=
+<<global library>>=
 char*	library[50];
 @
 
-<<global library(arm)>>=
-char*	library[50];
-@
 
-<<global libraryp(x86)>>=
-int	libraryp;
-@
-<<global libraryp(arm)>>=
+<<global libraryp>>=
 int	libraryp;
 @
 
 
-<<global libraryobj(x86)>>=
+<<global libraryobj>>=
 char*	libraryobj[50];
 @
 
-<<global libraryobj(arm)>>=
-char*	libraryobj[50];
-@
 
 
 % ???
-<<global xrefresolv(x86)>>=
+<<global xrefresolv>>=
 bool	xrefresolv;
 @
 
-<<function loadlib(x86)>>=
+
+<<function loadlib>>=
 void
 loadlib(void)
 {
@@ -1913,28 +1605,6 @@ loop:
 }
 @
 
-<<function loadlib(arm)>>=
-void
-loadlib(void)
-{
-    int i;
-    long h;
-    Sym *s;
-
-loop:
-    xrefresolv = 0;
-    for(i=0; i<libraryp; i++) {
-        if(debug['v'])
-            Bprint(&bso, "%5.2f autolib: %s\n", cputime(), library[i]);
-        objfile(library[i]);
-    }
-    if(xrefresolv)
-    for(h=0; h<nelem(hash); h++)
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->type == SXREF)
-            goto loop;
-}
-@
 
 
 
@@ -2093,24 +1763,6 @@ patch(void)
 @
 
 
-<<function brloop(x86)>>=
-Prog*
-brloop(Prog *p)
-{
-    int c;
-    Prog *q;
-
-    c = 0;
-    for(q = p; q != P; q = q->pcond) {
-        if(q->as != AJMP)
-            break;
-        c++;
-        if(c >= 5000)
-            return P;
-    }
-    return q;
-}
-@
 
 <<function brloop(arm)>>=
 Prog*
@@ -2136,16 +1788,12 @@ brloop(Prog *p)
 
 
 
-<<constant LOG(x86)>>=
-#define	LOG	5
-@
-
-<<constant LOG(arm)>>=
+<<constant LOG>>=
 #define	LOG	5
 @
 
 
-<<function mkfwd(x86)>>=
+<<function mkfwd>>=
 void
 mkfwd(void)
 {
@@ -2180,45 +1828,10 @@ mkfwd(void)
 }
 @
 
-<<function mkfwd(arm)>>=
-void
-mkfwd(void)
-{
-    Prog *p;
-    long dwn[LOG], cnt[LOG], i;
-    Prog *lst[LOG];
-
-    for(i=0; i<LOG; i++) {
-        if(i == 0)
-            cnt[i] = 1; else
-            cnt[i] = LOG * cnt[i-1];
-        dwn[i] = 1;
-        lst[i] = P;
-    }
-    i = 0;
-    for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT)
-            curtext = p;
-        i--;
-        if(i < 0)
-            i = LOG-1;
-        p->forwd = P;
-        dwn[i]--;
-        if(dwn[i] <= 0) {
-            dwn[i] = cnt[i];
-            if(lst[i] != P)
-                lst[i]->forwd = p;
-            lst[i] = p;
-        }
-    }
-}
-@
-
-
 
 \section{[[follow()]]}
 
-<<function follow(x86)>>=
+<<function follow>>=
 void
 follow(void)
 {
@@ -2235,137 +1848,8 @@ follow(void)
 }
 @
 
-<<function follow(arm)>>=
-void
-follow(void)
-{
-    if(debug['v'])
-        Bprint(&bso, "%5.2f follow\n", cputime());
-    Bflush(&bso);
-
-    firstp = prg();
-    lastp = firstp;
-    xfol(textp);
-
-    firstp = firstp->link;
-    lastp->link = P;
-}
-@
 
 
-<<function xfol(x86)>>=
-void
-xfol(Prog *p)
-{
-    Prog *q;
-    int i;
-    enum as a;
-
-loop:
-    if(p == P)
-        return;
-    if(p->as == ATEXT)
-        curtext = p;
-    if(p->as == AJMP)
-    if((q = p->pcond) != P) {
-        p->mark = 1;
-        p = q;
-        if(p->mark == 0)
-            goto loop;
-    }
-    if(p->mark) {
-        /* copy up to 4 instructions to avoid branch */
-        for(i=0,q=p; i<4; i++,q=q->link) {
-            if(q == P)
-                break;
-            if(q == lastp)
-                break;
-            a = q->as;
-            if(a == ANOP) {
-                i--;
-                continue;
-            }
-            switch(a) {
-            case AJMP:
-            case ARET:
-            case AIRETL:
-
-            case APUSHL:
-            case APUSHFL:
-            case APUSHW:
-            case APUSHFW:
-            case APOPL:
-            case APOPFL:
-            case APOPW:
-            case APOPFW:
-                goto brk;
-            }
-            if(q->pcond == P || q->pcond->mark)
-                continue;
-            if(a == ACALL || a == ALOOP)
-                continue;
-            for(;;) {
-                if(p->as == ANOP) {
-                    p = p->link;
-                    continue;
-                }
-                q = copyp(p);
-                p = p->link;
-                q->mark = 1;
-                lastp->link = q;
-                lastp = q;
-                if(q->as != a || q->pcond == P || q->pcond->mark)
-                    continue;
-
-                q->as = relinv(q->as);
-                p = q->pcond;
-                q->pcond = q->link;
-                q->link = p;
-                xfol(q->link);
-                p = q->link;
-                if(p->mark)
-                    return;
-                goto loop;
-            }
-        } /* */
-    brk:;
-        q = prg();
-        q->as = AJMP;
-        q->line = p->line;
-        q->to.type = D_BRANCH;
-        q->to.offset = p->pc;
-        q->pcond = p;
-        p = q;
-    }
-    p->mark = 1;
-    lastp->link = p;
-    lastp = p;
-    a = p->as;
-    if(a == AJMP || a == ARET || a == AIRETL)
-        return;
-    if(p->pcond != P)
-    if(a != ACALL) {
-        q = brchain(p->link);
-        if(q != P && q->mark)
-        if(a != ALOOP) {
-            p->as = relinv(a);
-            p->link = p->pcond;
-            p->pcond = q;
-        }
-        xfol(p->link);
-        q = brchain(p->pcond);
-        if(q->mark) {
-            p->pcond = q;
-            return;
-        }
-        p = q;
-        goto loop;
-    }
-
-    p = p->link;
-    goto loop;
-}
-@
 
 <<function xfol(arm)>>=
 void
@@ -2475,33 +1959,6 @@ loop:
 
 
 
-<<function relinv(x86)>>=
-int
-relinv(int a)
-{
-
-    switch(a) {
-    case AJEQ:	return AJNE;
-    case AJNE:	return AJEQ;
-    case AJLE:	return AJGT;
-    case AJLS:	return AJHI;
-    case AJLT:	return AJGE;
-    case AJMI:	return AJPL;
-    case AJGE:	return AJLT;
-    case AJPL:	return AJMI;
-    case AJGT:	return AJLE;
-    case AJHI:	return AJLS;
-    case AJCS:	return AJCC;
-    case AJCC:	return AJCS;
-    case AJPS:	return AJPC;
-    case AJPC:	return AJPS;
-    case AJOS:	return AJOC;
-    case AJOC:	return AJOS;
-    }
-    diag("unknown relation: %s in %s", anames[a], TNAME);
-    return a;
-}
-@
 
 <<function relinv(arm)>>=
 int
@@ -2532,20 +1989,6 @@ relinv(int a)
 
 
 
-<<function brchain(x86)>>=
-Prog*
-brchain(Prog *p)
-{
-    int i;
-
-    for(i=0; i<20; i++) {
-        if(p == P || p->as != AJMP)
-            return p;
-        p = p->pcond;
-    }
-    return P;
-}
-@
 
 <<function brchain(arm)>>=
 Prog*
@@ -2565,13 +2008,10 @@ brchain(Prog *p)
 
 \section{Computing datsize, [[dodata()]]}
 
-<<global datsize(x86)>>=
+<<global datsize>>=
 long	datsize;
 @
 
-<<global datsize(arm)>>=
-long	datsize;
-@
 
 
 
@@ -2581,13 +2021,10 @@ long	autosize;
 
 
 
-<<global bsssize(x86)>>=
+<<global bsssize>>=
 long	bsssize;
 @
 
-<<global bsssize(arm)>>=
-long	bsssize;
-@
 
 
 <<function dodata(x86)>>=
@@ -2800,21 +2237,6 @@ dodata(void)
 
 
 
-<<function xdefine(x86)>>=
-void
-xdefine(char *p, int t, long v)
-{
-    Sym *s;
-
-    s = lookup(p, 0);
-    if(s->type == 0 || s->type == SXREF) {
-        s->type = t;
-        s->value = v;
-    }
-    if(s->type == STEXT && s->value == 0)
-        s->value = v;
-}
-@
 
 <<function xdefine(arm)>>=
 void
@@ -2831,189 +2253,9 @@ xdefine(char *p, int t, long v)
 @
 
 
-\section{[[dostkoff()]]}
-
-<<function dostkoff(x86)>>=
-void
-dostkoff(void)
-{
-    Prog *p, *q;
-    long autoffset, deltasp;
-    int a, f, curframe, curbecome, maxbecome;
-
-    curframe = 0;
-    curbecome = 0;
-    maxbecome = 0;
-    curtext = nil;
-
-    for(p = firstp; p != P; p = p->link) {
-
-        /* find out how much arg space is used in this TEXT */
-        if(p->to.type == (D_INDIR+D_SP))
-            if(p->to.offset > curframe)
-                curframe = p->to.offset;
-
-        switch(p->as) {
-        case ATEXT:
-            if(curtext && curtext->from.sym) {
-                curtext->from.sym->frame = curframe;
-                curtext->from.sym->become = curbecome;
-                if(curbecome > maxbecome)
-                    maxbecome = curbecome;
-            }
-            curframe = 0;
-            curbecome = 0;
-
-            curtext = p;
-            break;
-
-        case ARET:
-            /* special form of RET is BECOME */
-            if(p->from.type == D_CONST)
-                if(p->from.offset > curbecome)
-                    curbecome = p->from.offset;
-            break;
-        }
-    }
-    if(curtext && curtext->from.sym) {
-        curtext->from.sym->frame = curframe;
-        curtext->from.sym->become = curbecome;
-        if(curbecome > maxbecome)
-            maxbecome = curbecome;
-    }
-
-    if(debug['b'])
-        print("max become = %d\n", maxbecome);
-
-    xdefine("ALEFbecome", STEXT, maxbecome);
-
-    curtext = nil;
-
-    for(p = firstp; p != P; p = p->link) {
-        switch(p->as) {
-        case ATEXT:
-            curtext = p;
-            break;
-        case ACALL:
-            if(curtext != P && curtext->from.sym != S && curtext->to.offset >= 0) {
-                f = maxbecome - curtext->from.sym->frame;
-                if(f <= 0)
-                    break;
-                /* calling a become or calling a variable */
-                if(p->to.sym == S || p->to.sym->become) {
-                    curtext->to.offset += f;
-
-                    if(debug['b']) {
-                        curp = p;
-                        print("%D calling %D increase %d\n",
-                            &curtext->from, &p->to, f);
-                    }
-                }
-            }
-            break;
-        }
-    }
-
-    autoffset = 0;
-    deltasp = 0;
-    for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT) {
-            curtext = p;
-
-            autoffset = p->to.offset;
-            if(autoffset < 0)
-                autoffset = 0;
-            if(autoffset) {
-                p = appendp(p);
-                p->as = AADJSP;
-                p->from.type = D_CONST;
-                p->from.offset = autoffset;
-            }
-            deltasp = autoffset;
-        }
-        a = p->from.type;
-        if(a == D_AUTO)
-            p->from.offset += deltasp;
-        if(a == D_PARAM)
-            p->from.offset += deltasp + 4;
-        a = p->to.type;
-        if(a == D_AUTO)
-            p->to.offset += deltasp;
-        if(a == D_PARAM)
-            p->to.offset += deltasp + 4;
-
-        switch(p->as) {
-        default:
-            continue;
-        case APUSHL:
-        case APUSHFL:
-            deltasp += 4;
-            continue;
-        case APUSHW:
-        case APUSHFW:
-            deltasp += 2;
-            continue;
-        case APOPL:
-        case APOPFL:
-            deltasp -= 4;
-            continue;
-        case APOPW:
-        case APOPFW:
-            deltasp -= 2;
-            continue;
-        case ARET:
-            break;
-        }
-
-        if(autoffset != deltasp)
-            diag("unbalanced PUSH/POP");
-        if(p->from.type == D_CONST)
-            goto become;
-
-        if(autoffset) {
-            q = p;
-            p = appendp(p);
-            p->as = ARET;
-
-            q->as = AADJSP;
-            q->from.type = D_CONST;
-            q->from.offset = -autoffset;
-        }
-        continue;
-
-    become:
-        q = p;
-        p = appendp(p);
-        p->as = AJMP;
-        p->to = q->to;
-        p->pcond = q->pcond;
-
-        q->as = AADJSP;
-        q->from = zprg.from;
-        q->from.type = D_CONST;
-        q->from.offset = -autoffset;
-        q->to = zprg.to;
-        continue;
-    }
-}
-@
-
-<<function appendp(x86)>>=
-Prog*
-appendp(Prog *q)
-{
-    Prog *p;
-
-    p = prg();
-    p->link = q->link;
-    q->link = p;
-    p->line = q->line;
-    return p;
-}
-@
 
 \section{[[noops()]]}
-% arm only
+% arm only, or does it correspond to dostkoff of x86?
 
 <<function noops(arm)>>=
 void
@@ -3453,13 +2695,10 @@ noops(void)
 
 \section{Computing textsize, [[span()]]}
 
-<<global textsize(x86)>>=
+<<global textsize>>=
 long	textsize;
 @
 
-<<global textsize(arm)>>=
-long	textsize;
-@
 
 
 <<function span(x86)>>=
@@ -3707,6 +2946,7 @@ span(void)
 @
 
 
+% arm specific
 <<global pool(arm)>>=
 static struct {
     ulong	start;
@@ -4021,47 +3261,16 @@ addpool(Prog *p, Adr *a)
 @
 
 
-
-\section{[[doinit()]]}
-
-% use INITDAT and relocate from there
-<<function doinit(x86)>>=
-void
-doinit(void)
-{
-    Sym *s;
-    Prog *p;
-    int x;
-
-    for(p = datap; p != P; p = p->link) {
-        x = p->to.type;
-        if(x != D_EXTERN && x != D_STATIC)
-            continue;
-        s = p->to.sym;
-        if(s->type == 0 || s->type == SXREF)
-            diag("undefined %s initializer of %s",
-                s->name, p->from.sym->name);
-        p->to.offset += s->value;
-        p->to.type = D_CONST;
-        if(s->type == SDATA || s->type == SBSS)
-            p->to.offset += INITDAT;
-    }
-}
-@
-
 \section{Generating the executable, [[asmb()]]}
 % asmb? asm binary?
 
 % first function to actually use cout!
 
-<<global curp(arm)>>=
+<<global curp>>=
 Prog*	curp;
 @
 
 
-<<global curp(x86)>>=
-Prog*	curp;
-@
 
 
 
@@ -4458,46 +3667,7 @@ oplook(Prog *p)
 
 
 
-\ifallcode
-% dead on 8l, so does not really have to be a global
-<<global spsize(x86)>>=
-long	spsize = 0;
-@
-\fi
 
-\ifallcode
-<<global pcstr(x86)>>=
-char*	pcstr = "%.6lux ";
-@
-\fi
-
-
-
-<<function entryvalue(x86)>>=
-long
-entryvalue(void)
-{
-    char *a;
-    Sym *s;
-
-    a = INITENTRY;
-
-    <<[[entryvalue()]] if digit INITENTRY(x86)>>
-
-    s = lookup(a, 0);
-    // no _main found, maybe pure asm, start at beginning of TEXT section (va)
-    if(s->type == 0)
-        return INITTEXT;
-
-    switch(s->type) {
-    case STEXT:
-        return s->value;
-    <<[[entryvalue()]] if dynamic module case(x86)>>
-    default:
-        diag("entry not text: %s", s->name);
-    }
-}
-@
 
 <<function entryvalue(arm)>>=
 long
@@ -4507,18 +3677,19 @@ entryvalue(void)
     Sym *s;
 
     a = INITENTRY;
-    if(*a >= '0' && *a <= '9')
-        return atolwhex(a);
+
+    <<[[entryvalue()]] if digit INITENTRY>>
+
     s = lookup(a, 0);
+
     if(s->type == 0)
         return INITTEXT;
+
     switch(s->type) {
     case STEXT:
     case SLEAF:
         break;
-    case SDATA:
-        if(dlm)
-            return s->value+INITDAT;
+    <<[[entryvalue()]] if dynamic module case>>
     default:
         diag("entry not text: %s", s->name);
     }
@@ -4527,7 +3698,7 @@ entryvalue(void)
 @
 
 
-<<constant Dbufslop(x86)>>=
+<<constant Dbufslop>>=
 #define	Dbufslop	100
 @
 
@@ -4684,7 +3855,7 @@ datblk(long s, long n, int str)
     long a, l, fl, j, d;
     int i, c;
 
-    memset(buf.dbuf, 0, n+100);
+    memset(buf.dbuf, 0, n+Dbufslop);
     for(p = datap; p != P; p = p->link) {
         if(str != (p->from.sym->type == SSTRING))
             continue;
@@ -4796,7 +3967,7 @@ datblk(long s, long n, int str)
 
 
 
-<<function ckoff(x86)>>=
+<<function ckoff>>=
 void
 ckoff(Sym *s, long v)
 {
@@ -4807,51 +3978,6 @@ ckoff(Sym *s, long v)
 
 % >>
 
-<<function ckoff(arm)>>=
-void
-ckoff(Sym *s, long v)
-{
-    if(v < 0 || v >= 1<<Roffset)
-        diag("relocation offset %ld for %s out of range", v, s->name);
-}
-@
-
-
-
-
-
-\section{Checking for unresolved symbols, [[undef()]]}
-
-% rename check_if_still_undefined_symbols()?
-<<function undef(x86)>>=
-void
-undef(void)
-{
-    int i;
-    Sym *s;
-
-    for(i=0; i<NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->type == SXREF)
-                diag("%s: not defined", s->name);
-}
-@
-
-<<function undef(arm)>>=
-void
-undef(void)
-{
-    int i;
-    Sym *s;
-
-    for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link)
-        if(s->type == SXREF)
-            diag("%s: not defined", s->name);
-}
-@
-
-% >>
 
 
 
@@ -5876,6 +5002,7 @@ opbra(int a, int sc)
     return 0;
 }
 @
+% 
 
 <<function olr(arm)>>=
 long
@@ -5905,6 +5032,7 @@ olr(long v, int b, int r, int sc)
     return o;
 }
 @
+% >> >> >> >> >> >> >> >> >> >>
 
 <<function olhr(arm)>>=
 long
@@ -5932,6 +5060,7 @@ olhr(long v, int b, int r, int sc)
     return o;
 }
 @
+% >> >> >> >> >> >> >> >> >> >>
 
 <<function osr(arm)>>=
 long
@@ -5956,7 +5085,7 @@ oshr(int r, long v, int b, int sc)
     return o;
 }
 @
-
+% >>
 <<function osrr(arm)>>=
 long
 osrr(int r, int i, int b, int sc)
@@ -5965,6 +5094,7 @@ osrr(int r, int i, int b, int sc)
     return olr(i, b, r, sc) ^ ((1<<25) | (1<<20));
 }
 @
+% >> >>
 
 <<function oshrr(arm)>>=
 long
@@ -5973,6 +5103,7 @@ oshrr(int r, int i, int b, int sc)
     return olhr(i, b, r, sc) ^ ((1<<22) | (1<<20));
 }
 @
+% >> >>
 
 <<function olrr(arm)>>=
 long
@@ -5982,6 +5113,7 @@ olrr(int i, int b, int r, int sc)
     return olr(i, b, r, sc) ^ (1<<25);
 }
 @
+% >>
 
 <<function olhrr(arm)>>=
 long
@@ -5990,6 +5122,7 @@ olhrr(int i, int b, int r, int sc)
     return olhr(i, b, r, sc) ^ (1<<22);
 }
 @
+% >>
 
 <<function ovfpmem(arm)>>=
 long
@@ -6025,6 +5158,7 @@ ovfpmem(int a, int r, long v, int b, int sc, Prog *p)
     return o;
 }
 @
+% >> >> >> >> >> >> >> >> 
 
 <<function ofsr(arm)>>=
 long
@@ -6066,6 +5200,7 @@ ofsr(int a, int r, long v, int b, int sc, Prog *p)
     return o;
 }
 @
+% >> >> >> >> >> >> >> >> >> >> >>
 
 <<function omvl(arm)>>=
 long
@@ -6090,6 +5225,7 @@ omvl(Prog *p, Adr *a, int dr)
     return o1;
 }
 @
+% >> >> >>
 
 <<global chipfloats(arm)>>=
 static Ieee chipfloats[] = {
@@ -6124,6 +5260,29 @@ chipfloat(Ieee *e)
 
 
 
+\section{Checking for unresolved symbols, [[undef()]]}
+
+% rename check_if_still_undefined_symbols()?
+<<function undef>>=
+void
+undef(void)
+{
+    int i;
+    Sym *s;
+
+    for(i=0; i<NHASH; i++)
+        for(s = hash[i]; s != S; s = s->link)
+            if(s->type == SXREF)
+                diag("%s: not defined", s->name);
+}
+@
+
+% >>
+
+
+
+
+
 
 \chapter{Loading Objects}
 % was called parsing, but binary format so loading is more appropriate I think
@@ -6137,25 +5296,18 @@ chipfloat(Ieee *e)
 % car just about symbol table?
 
 % each ldobj will add to this pc
-<<global pc(x86)>>=
+<<global pc>>=
 long	pc = 0;
 @
 
-<<global pc(arm)>>=
-long	pc;
-@
 
 
 
 % This is for the D_STATIC; to handle conflicts with different files
 % defining the same static entity. This is bumped each time
 % a new object file is parsed, so it's safe.
-<<global version(x86)>>=
+<<global version>>=
 int	version = 0;
-@
-
-<<global version(arm)>>=
-int	version;
 @
 
 
@@ -6682,7 +5834,7 @@ if(o <= AXXX || o >= ALAST) {
 }
 @
  
-<<function nopout(x86)>>=
+<<function nopout>>=
 void
 nopout(Prog *p)
 {
@@ -6692,98 +5844,6 @@ nopout(Prog *p)
 }
 @
 
-<<function nopout(arm)>>=
-void
-nopout(Prog *p)
-{
-    p->as = ANOP;
-    p->from.type = D_NONE;
-    p->to.type = D_NONE;
-}
-@
-
-
-<<function zaddr(x86)>>=
-int
-zaddr(byte *p, Adr *a, Sym *h[])
-{
-    int c, t, i;
-    int l;
-    Sym *s;
-    Auto *u;
-
-    t = p[0];
-
-    c = 1;
-    if(t & T_INDEX) {
-        a->index = p[c];
-        a->scale = p[c+1];
-        c += 2;
-    } else {
-        a->index = D_NONE;
-        a->scale = 0;
-    }
-    a->offset = 0;
-    if(t & T_OFFSET) {
-        a->offset = p[c] | (p[c+1]<<8) | (p[c+2]<<16) | (p[c+3]<<24);
-        c += 4;
-        // >> >> >>
-    }
-    a->sym = S;
-    if(t & T_SYM) {
-        a->sym = h[p[c]];
-        c++;
-    }
-    a->type = D_NONE;
-    if(t & T_FCONST) {
-        a->ieee.l = p[c] | (p[c+1]<<8) | (p[c+2]<<16) | (p[c+3]<<24);
-        a->ieee.h = p[c+4] | (p[c+5]<<8) | (p[c+6]<<16) | (p[c+7]<<24);
-        // >> >> >> >> >> >>
-        c += 8;
-        a->type = D_FCONST;
-    } else
-    if(t & T_SCONST) {
-        for(i=0; i<NSNAME; i++)
-            a->scon[i] = p[c+i];
-        c += NSNAME;
-        a->type = D_SCONST;
-    }
-    if(t & T_TYPE) {
-        a->type = p[c];
-        c++;
-    }
-    s = a->sym;
-    if(s == S)
-        return c;
-
-    t = a->type;
-    if(t != D_AUTO && t != D_PARAM)
-        return c;
-    l = a->offset;
-    for(u=curauto; u; u=u->link) {
-        if(u->asym == s)
-        if(u->type == t) {
-            if(u->aoffset > l)
-                u->aoffset = l;
-            return c;
-        }
-    }
-
-    // factorize!
-    while(nhunk < sizeof(Auto))
-        gethunk();
-    u = (Auto*)hunk;
-    nhunk -= sizeof(Auto);
-    hunk += sizeof(Auto);
-
-    u->link = curauto;
-    curauto = u;
-    u->asym = s;
-    u->aoffset = l;
-    u->type = t;
-    return c;
-}
-@
 
 <<function zaddr(arm)>>=
 int
@@ -6900,11 +5960,7 @@ zaddr(uchar *p, Adr *a, Sym *h[])
 \section{[[ATEXT]]}
 
 
-<<global curauto(x86)>>=
-Auto*	curauto;
-@
-
-<<global curauto(arm)>>=
+<<global curauto>>=
 Auto*	curauto;
 @
 
@@ -7045,31 +6101,17 @@ case AGLOBL:
 
 \section{[[ANAME]], [[ASIGNAME]]}
 
-<<global histfrogp(x86)>>=
+<<global histfrogp>>=
 int	histfrogp;
 @
 
-<<global histfrogp(arm)>>=
-int	histfrogp;
-@
-
-
-<<global histfrog(x86)>>=
-Sym*	histfrog[MAXHIST];
-@
-
-<<global histfrog(arm)>>=
+<<global histfrog>>=
 Sym*	histfrog[MAXHIST];
 @
 
 
-
-<<global histgen(x86)>>=
+<<global histgen>>=
 int	histgen = 0;
-@
-
-<<global histgen(arm)>>=
-int	histgen;
 @
 
 
@@ -7159,47 +6201,7 @@ if(o == ANAME || o == ASIGNAME) {
 @
 % >> >> >>
 
-<<function collapsefrog(x86)>>=
-void
-collapsefrog(Sym *s)
-{
-    int i;
-
-    /*
-     * bad encoding of path components only allows
-     * MAXHIST components. if there is an overflow,
-     * first try to collapse xxx/..
-     */
-    for(i=1; i<histfrogp; i++)
-        if(strcmp(histfrog[i]->name+1, "..") == 0) {
-            memmove(histfrog+i-1, histfrog+i+1,
-                (histfrogp-i-1)*sizeof(histfrog[0]));
-            histfrogp--;
-            goto out;
-        }
-
-    /*
-     * next try to collapse .
-     */
-    for(i=0; i<histfrogp; i++)
-        if(strcmp(histfrog[i]->name+1, ".") == 0) {
-            memmove(histfrog+i, histfrog+i+1,
-                (histfrogp-i-1)*sizeof(histfrog[0]));
-            goto out;
-        }
-
-    /*
-     * last chance, just truncate from front
-     */
-    memmove(histfrog+0, histfrog+1,
-        (histfrogp-1)*sizeof(histfrog[0]));
-
-out:
-    histfrog[histfrogp-1] = s;
-}
-@
-
-<<function collapsefrog(arm)>>=
+<<function collapsefrog>>=
 void
 collapsefrog(Sym *s)
 {
@@ -7272,31 +6274,13 @@ case AEND:
 @
 
 
-<<global curhist(x86)>>=
-Auto*	curhist;
-@
-
-<<global curhist(arm)>>=
+<<global curhist>>=
 Auto*	curhist;
 @
 
 
 % also called by ATEXT
-<<function histtoauto(x86)>>=
-void
-histtoauto(void)
-{
-    Auto *l;
-
-    while(l = curhist) {
-        curhist = l->link;
-        l->link = curauto;
-        curauto = l;
-    }
-}
-@
-
-<<function histtoauto(arm)>>=
+<<function histtoauto>>=
 void
 histtoauto(void)
 {
@@ -7360,37 +6344,23 @@ if(root != nil && *root != '\0') {
 
 
 
-<<global libdir(x86)>>=
-char**	libdir;
-@
-
-<<global libdir(arm)>>=
+<<global libdir>>=
 char**	libdir;
 @
 
 
-<<global nlibdir(x86)>>=
+<<global nlibdir>>=
 int	nlibdir	= 0;
 @
 
-
-<<global nlibdir(arm)>>=
-int	nlibdir	= 0;
-@
-
-
-<<global maxlibdir(x86)>>=
-static	int	maxlibdir = 0;
-@
-
-<<global maxlibdir(arm)>>=
+<<global maxlibdir>>=
 static	int	maxlibdir = 0;
 @
 
 
 
 
-<<function addlibpath(x86)>>=
+<<function addlibpath>>=
 void
 addlibpath(char *arg)
 {
@@ -7415,31 +6385,6 @@ addlibpath(char *arg)
     libdir[nlibdir++] = strdup(arg);
 }
 @
-
-<<function addlibpath(arm)>>=
-void
-addlibpath(char *arg)
-{
-    char **p;
-
-    if(nlibdir >= maxlibdir) {
-        if(maxlibdir == 0)
-            maxlibdir = 8;
-        else
-            maxlibdir *= 2;
-        p = malloc(maxlibdir*sizeof(*p));
-        if(p == nil) {
-            diag("out of memory");
-            errorexit();
-        }
-        memmove(p, libdir, nlibdir*sizeof(*p));
-        free(libdir);
-        libdir = p;
-    }
-    libdir[nlibdir++] = strdup(arg);
-}
-@
-
 
 
 \section{[[ar]] format}
@@ -7496,7 +6441,7 @@ if(file[0] == '-' && file[1] == 'l') {
 }
 @
 
-<<function findlib(x86)>>=
+<<function findlib>>=
 char*
 findlib(char *file)
 {
@@ -7512,21 +6457,6 @@ findlib(char *file)
 }
 @
 
-<<function findlib(arm)>>=
-char*
-findlib(char *file)
-{
-    int i;
-    char name[LIBNAMELEN];
-
-    for(i = 0; i < nlibdir; i++) {
-        snprint(name, sizeof(name), "%s/%s", libdir[i], file);
-        if(fileexists(name))
-            return libdir[i];
-    }
-    return nil;
-}
-@
 
 
 
@@ -7540,11 +6470,7 @@ struct ar_hdr arhdr;
 char *e, *start, *stop;
 @
 
-<<global symname (linkers/8l/obj.c)>>=
-char	symname[]	= SYMDEF;
-@
-
-<<global symname(arm)>>=
+<<global symname linker>>=
 char	symname[]	= SYMDEF;
 @
 
@@ -7630,35 +6556,7 @@ out:
 % TODO LP split AHISTORY here
 
 
-<<function addhist(x86)>>=
-void
-addhist(long line, int type)
-{
-    Auto *u;
-    Sym *s;
-    int i, j, k;
-
-    u = malloc(sizeof(Auto));
-    s = malloc(sizeof(Sym));
-    s->name = malloc(2*(histfrogp+1) + 1);
-
-    u->asym = s;
-    u->type = type;
-    u->aoffset = line;
-    u->link = curhist;
-    curhist = u;
-
-    j = 1;
-    for(i=0; i<histfrogp; i++) {
-        k = histfrog[i]->value;
-        s->name[j+0] = k>>8;
-        s->name[j+1] = k;
-        j += 2;
-    }
-}
-@
-
-<<function addhist(arm)>>=
+<<function addhist>>=
 void
 addhist(long line, int type)
 {
@@ -7689,7 +6587,7 @@ addhist(long line, int type)
 
 
 
-<<function addlib(x86)>>=
+<<function addlib>>=
 void
 addlib(char *obj)
 {
@@ -7752,88 +6650,6 @@ addlib(char *obj)
         }
     }
 
-
-    for(i=0; i<libraryp; i++)
-        if(strcmp(name, library[i]) == 0)
-            return;
-    if(libraryp == nelem(library)){
-        diag("too many autolibs; skipping %s", name);
-        return;
-    }
-
-    p = malloc(strlen(name) + 1);
-    strcpy(p, name);
-    library[libraryp] = p;
-    p = malloc(strlen(obj) + 1);
-    strcpy(p, obj);
-    libraryobj[libraryp] = p;
-    libraryp++;
-}
-@
-
-
-<<function addlib(arm)>>=
-void
-addlib(char *obj)
-{
-    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN], *p, *name;
-    int i, search;
-
-    if(histfrogp <= 0)
-        return;
-
-    name = fn1;
-    search = 0;
-    if(histfrog[0]->name[1] == '/') {
-        sprint(name, "");
-        i = 1;
-    } else if(histfrog[0]->name[1] == '.') {
-        sprint(name, ".");
-        i = 0;
-    } else {
-        sprint(name, "");
-        i = 0;
-        search = 1;
-    }
-
-    for(; i<histfrogp; i++) {
-        snprint(comp, sizeof comp, histfrog[i]->name+1);
-        for(;;) {
-            p = strstr(comp, "$O");
-            if(p == 0)
-                break;
-            memmove(p+1, p+2, strlen(p+2)+1);
-            p[0] = thechar;
-        }
-        for(;;) {
-            p = strstr(comp, "$M");
-            if(p == 0)
-                break;
-            if(strlen(comp)+strlen(thestring)-2+1 >= sizeof comp) {
-                diag("library component too long");
-                return;
-            }
-            memmove(p+strlen(thestring), p+2, strlen(p+2)+1);
-            memmove(p, thestring, strlen(thestring));
-        }
-        if(strlen(fn1) + strlen(comp) + 3 >= sizeof(fn1)) {
-            diag("library component too long");
-            return;
-        }
-        if(i > 0 || !search)
-            strcat(fn1, "/");
-        strcat(fn1, comp);
-    }
-
-    cleanname(name);
-
-    if(search){
-        p = findlib(name);
-        if(p != nil){
-            snprint(fn2, sizeof(fn2), "%s/%s", p, name);
-            name = fn2;
-        }
-    }
 
     for(i=0; i<libraryp; i++)
         if(strcmp(name, library[i]) == 0)
@@ -7856,377 +6672,14 @@ addlib(char *obj)
 
 \chapter{Checking Signatures}
 
-\chapter{Machine Code Generation (x86)}
-% for x86
+\chapter{Machine Code Generation (ARM)}
 
-% done by 8l, not 8a, surprisingly!
+% done by 5l, not 5a, surprisingly!
 
 % why? because allows more optimisations? cross libs? as in llvm?
 % also more compact and simple object format? and more cross platform?
 
 \section{[[optab]]}
-<<enum pxxx(x86)>>=
-enum pxxx {
-    Px		= 0,
-    Pe		= 0x66,	/* operand escape */
-    Pm		= 0x0f,	/* 2byte opcode escape */
-    Pq		= 0xff,	/* both escape */
-    Pb		= 0xfe,	/* byte operands */
-};
-@
-
-<<global optab(arm)>>=
-Optab	optab[];
-@
-
-
-<<global optab(x86)>>=
-Optab optab[] =
-/*	as, ytab, andproto, opcode */
-{
-    { AXXX },
-    { AAAA,		ynone,	Px, 0x37 },
-    { AAAD,		ynone,	Px, 0xd5,0x0a },
-    { AAAM,		ynone,	Px, 0xd4,0x0a },
-    { AAAS,		ynone,	Px, 0x3f },
-    { AADCB,	yxorb,	Pb, 0x14,0x80,(02),0x10,0x10 },
-    { AADCL,	yxorl,	Px, 0x83,(02),0x15,0x81,(02),0x11,0x13 },
-    { AADCW,	yxorl,	Pe, 0x83,(02),0x15,0x81,(02),0x11,0x13 },
-    { AADDB,	yxorb,	Px, 0x04,0x80,(00),0x00,0x02 },
-    { AADDL,	yaddl,	Px, 0x83,(00),0x05,0x81,(00),0x01,0x03 },
-    { AADDW,	yaddl,	Pe, 0x83,(00),0x05,0x81,(00),0x01,0x03 },
-    { AADJSP },
-    { AANDB,	yxorb,	Pb, 0x24,0x80,(04),0x20,0x22 },
-    { AANDL,	yxorl,	Px, 0x83,(04),0x25,0x81,(04),0x21,0x23 },
-    { AANDW,	yxorl,	Pe, 0x83,(04),0x25,0x81,(04),0x21,0x23 },
-    { AARPL,	yrl_ml,	Px, 0x63 },
-    { ABOUNDL,	yrl_m,	Px, 0x62 },
-    { ABOUNDW,	yrl_m,	Pe, 0x62 },
-    { ABSFL,	yml_rl,	Pm, 0xbc },
-    { ABSFW,	yml_rl,	Pq, 0xbc },
-    { ABSRL,	yml_rl,	Pm, 0xbd },
-    { ABSRW,	yml_rl,	Pq, 0xbd },
-    { ABTL,		yml_rl,	Pm, 0xa3 },
-    { ABTW,		yml_rl,	Pq, 0xa3 },
-    { ABTCL,	yml_rl,	Pm, 0xbb },
-    { ABTCW,	yml_rl,	Pq, 0xbb },
-    { ABTRL,	yml_rl,	Pm, 0xb3 },
-    { ABTRW,	yml_rl,	Pq, 0xb3 },
-    { ABTSL,	yml_rl,	Pm, 0xab },
-    { ABTSW,	yml_rl,	Pq, 0xab },
-    { ABYTE,	ybyte,	Px, 1 },
-    { ACALL,	ycall,	Px, 0xff,(02),0xe8 },
-    { ACLC,		ynone,	Px, 0xf8 },
-    { ACLD,		ynone,	Px, 0xfc },
-    { ACLI,		ynone,	Px, 0xfa },
-    { ACLTS,	ynone,	Pm, 0x06 },
-    { ACMC,		ynone,	Px, 0xf5 },
-    { ACMPB,	ycmpb,	Pb, 0x3c,0x80,(07),0x38,0x3a },
-    { ACMPL,	ycmpl,	Px, 0x83,(07),0x3d,0x81,(07),0x39,0x3b },
-    { ACMPW,	ycmpl,	Pe, 0x83,(07),0x3d,0x81,(07),0x39,0x3b },
-    { ACMPSB,	ynone,	Pb, 0xa6 },
-    { ACMPSL,	ynone,	Px, 0xa7 },
-    { ACMPSW,	ynone,	Pe, 0xa7 },
-    { ADAA,		ynone,	Px, 0x27 },
-    { ADAS,		ynone,	Px, 0x2f },
-    { ADATA },
-    { ADECB,	yincb,	Pb, 0xfe,(01) },
-    { ADECL,	yincl,	Px, 0x48,0xff,(01) },
-    { ADECW,	yincl,	Pe, 0x48,0xff,(01) },
-    { ADIVB,	ydivb,	Pb, 0xf6,(06) },
-    { ADIVL,	ydivl,	Px, 0xf7,(06) },
-    { ADIVW,	ydivl,	Pe, 0xf7,(06) },
-    { AENTER },				/* botch */
-    { AGLOBL },
-    { AGOK },
-    { AHISTORY },
-    { AHLT,		ynone,	Px, 0xf4 },
-    { AIDIVB,	ydivb,	Pb, 0xf6,(07) },
-    { AIDIVL,	ydivl,	Px, 0xf7,(07) },
-    { AIDIVW,	ydivl,	Pe, 0xf7,(07) },
-    { AIMULB,	ydivb,	Pb, 0xf6,(05) },
-    { AIMULL,	yimul,	Px, 0xf7,(05),0x6b,0x69 },
-    { AIMULW,	yimul,	Pe, 0xf7,(05),0x6b,0x69 },
-    { AINB,		yin,	Pb, 0xe4,0xec },
-    { AINL,		yin,	Px, 0xe5,0xed },
-    { AINW,		yin,	Pe, 0xe5,0xed },
-    { AINCB,	yincb,	Pb, 0xfe,(00) },
-    { AINCL,	yincl,	Px, 0x40,0xff,(00) },
-    { AINCW,	yincl,	Pe, 0x40,0xff,(00) },
-    { AINSB,	ynone,	Pb, 0x6c },
-    { AINSL,	ynone,	Px, 0x6d },
-    { AINSW,	ynone,	Pe, 0x6d },
-    { AINT,		yint,	Px, 0xcd },
-    { AINTO,	ynone,	Px, 0xce },
-    { AIRETL,	ynone,	Px, 0xcf },
-    { AIRETW,	ynone,	Pe, 0xcf },
-    { AJCC,		yjcond,	Px, 0x73,0x83,(00) },
-    { AJCS,		yjcond,	Px, 0x72,0x82 },
-    { AJCXZ,	yloop,	Px, 0xe3 },
-    { AJEQ,		yjcond,	Px, 0x74,0x84 },
-    { AJGE,		yjcond,	Px, 0x7d,0x8d },
-    { AJGT,		yjcond,	Px, 0x7f,0x8f },
-    { AJHI,		yjcond,	Px, 0x77,0x87 },
-    { AJLE,		yjcond,	Px, 0x7e,0x8e },
-    { AJLS,		yjcond,	Px, 0x76,0x86 },
-    { AJLT,		yjcond,	Px, 0x7c,0x8c },
-    { AJMI,		yjcond,	Px, 0x78,0x88 },
-    { AJMP,		yjmp,	Px, 0xff,(04),0xeb,0xe9 },
-    { AJNE,		yjcond,	Px, 0x75,0x85 },
-    { AJOC,		yjcond,	Px, 0x71,0x81,(00) },
-    { AJOS,		yjcond,	Px, 0x70,0x80,(00) },
-    { AJPC,		yjcond,	Px, 0x7b,0x8b },
-    { AJPL,		yjcond,	Px, 0x79,0x89 },
-    { AJPS,		yjcond,	Px, 0x7a,0x8a },
-    { ALAHF,	ynone,	Px, 0x9f },
-    { ALARL,	yml_rl,	Pm, 0x02 },
-    { ALARW,	yml_rl,	Pq, 0x02 },
-    { ALEAL,	ym_rl,	Px, 0x8d },
-    { ALEAW,	ym_rl,	Pe, 0x8d },
-    { ALEAVEL,	ynone,	Px, 0xc9 },
-    { ALEAVEW,	ynone,	Pe, 0xc9 },
-    { ALOCK,	ynone,	Px, 0xf0 },
-    { ALODSB,	ynone,	Pb, 0xac },
-    { ALODSL,	ynone,	Px, 0xad },
-    { ALODSW,	ynone,	Pe, 0xad },
-    { ALONG,	ybyte,	Px, 4 },
-    { ALOOP,	yloop,	Px, 0xe2 },
-    { ALOOPEQ,	yloop,	Px, 0xe1 },
-    { ALOOPNE,	yloop,	Px, 0xe0 },
-    { ALSLL,	yml_rl,	Pm, 0x03  },
-    { ALSLW,	yml_rl,	Pq, 0x03  },
-    { AMOVB,	ymovb,	Pb, 0x88,0x8a,0xb0,0xc6,(00) },
-    { AMOVL,	ymovl,	Px, 0x89,0x8b,0x31,0x83,(04),0xb8,0xc7,(00) },
-    { AMOVW,	ymovl,	Pe, 0x89,0x8b,0x31,0x83,(04),0xb8,0xc7,(00) },
-    { AMOVBLSX,	ymb_rl,	Pm, 0xbe },
-    { AMOVBLZX,	ymb_rl,	Pm, 0xb6 },
-    { AMOVBWSX,	ymb_rl,	Pq, 0xbe },
-    { AMOVBWZX,	ymb_rl,	Pq, 0xb6 },
-    { AMOVWLSX,	yml_rl,	Pm, 0xbf },
-    { AMOVWLZX,	yml_rl,	Pm, 0xb7 },
-    { AMOVSB,	ynone,	Pb, 0xa4 },
-    { AMOVSL,	ynone,	Px, 0xa5 },
-    { AMOVSW,	ynone,	Pe, 0xa5 },
-    { AMULB,	ydivb,	Pb, 0xf6,(04) },
-    { AMULL,	ydivl,	Px, 0xf7,(04) },
-    { AMULW,	ydivl,	Pe, 0xf7,(04) },
-    { ANAME },
-    { ANEGB,	yscond,	Px, 0xf6,(03) },
-    { ANEGL,	yscond,	Px, 0xf7,(03) },
-    { ANEGW,	yscond,	Pe, 0xf7,(03) },
-    { ANOP,		ynop,	Px,0,0 },
-    { ANOTB,	yscond,	Px, 0xf6,(02) },
-    { ANOTL,	yscond,	Px, 0xf7,(02) },
-    { ANOTW,	yscond,	Pe, 0xf7,(02) },
-    { AORB,		yxorb,	Pb, 0x0c,0x80,(01),0x08,0x0a },
-    { AORL,		yxorl,	Px, 0x83,(01),0x0d,0x81,(01),0x09,0x0b },
-    { AORW,		yxorl,	Pe, 0x83,(01),0x0d,0x81,(01),0x09,0x0b },
-    { AOUTB,	yin,	Pb, 0xe6,0xee },
-    { AOUTL,	yin,	Px, 0xe7,0xef },
-    { AOUTW,	yin,	Pe, 0xe7,0xef },
-    { AOUTSB,	ynone,	Pb, 0x6e },
-    { AOUTSL,	ynone,	Px, 0x6f },
-    { AOUTSW,	ynone,	Pe, 0x6f },
-    { APOPAL,	ynone,	Px, 0x61 },
-    { APOPAW,	ynone,	Pe, 0x61 },
-    { APOPFL,	ynone,	Px, 0x9d },
-    { APOPFW,	ynone,	Pe, 0x9d },
-    { APOPL,	ypopl,	Px, 0x58,0x8f,(00) },
-    { APOPW,	ypopl,	Pe, 0x58,0x8f,(00) },
-    { APUSHAL,	ynone,	Px, 0x60 },
-    { APUSHAW,	ynone,	Pe, 0x60 },
-    { APUSHFL,	ynone,	Px, 0x9c },
-    { APUSHFW,	ynone,	Pe, 0x9c },
-    { APUSHL,	ypushl,	Px, 0x50,0xff,(06),0x6a,0x68 },
-    { APUSHW,	ypushl,	Pe, 0x50,0xff,(06),0x6a,0x68 },
-    { ARCLB,	yshb,	Pb, 0xd0,(02),0xc0,(02),0xd2,(02) },
-    { ARCLL,	yshl,	Px, 0xd1,(02),0xc1,(02),0xd3,(02),0xd3,(02) },
-    { ARCLW,	yshl,	Pe, 0xd1,(02),0xc1,(02),0xd3,(02),0xd3,(02) },
-    { ARCRB,	yshb,	Pb, 0xd0,(03),0xc0,(03),0xd2,(03) },
-    { ARCRL,	yshl,	Px, 0xd1,(03),0xc1,(03),0xd3,(03),0xd3,(03) },
-    { ARCRW,	yshl,	Pe, 0xd1,(03),0xc1,(03),0xd3,(03),0xd3,(03) },
-    { AREP,		ynone,	Px, 0xf3 },
-    { AREPN,	ynone,	Px, 0xf2 },
-    { ARET,		ynone,	Px, 0xc3 },
-    { AROLB,	yshb,	Pb, 0xd0,(00),0xc0,(00),0xd2,(00) },
-    { AROLL,	yshl,	Px, 0xd1,(00),0xc1,(00),0xd3,(00),0xd3,(00) },
-    { AROLW,	yshl,	Pe, 0xd1,(00),0xc1,(00),0xd3,(00),0xd3,(00) },
-    { ARORB,	yshb,	Pb, 0xd0,(01),0xc0,(01),0xd2,(01) },
-    { ARORL,	yshl,	Px, 0xd1,(01),0xc1,(01),0xd3,(01),0xd3,(01) },
-    { ARORW,	yshl,	Pe, 0xd1,(01),0xc1,(01),0xd3,(01),0xd3,(01) },
-    { ASAHF,	ynone,	Px, 0x9e },
-    { ASALB,	yshb,	Pb, 0xd0,(04),0xc0,(04),0xd2,(04) },
-    { ASALL,	yshl,	Px, 0xd1,(04),0xc1,(04),0xd3,(04),0xd3,(04) },
-    { ASALW,	yshl,	Pe, 0xd1,(04),0xc1,(04),0xd3,(04),0xd3,(04) },
-    { ASARB,	yshb,	Pb, 0xd0,(07),0xc0,(07),0xd2,(07) },
-    { ASARL,	yshl,	Px, 0xd1,(07),0xc1,(07),0xd3,(07),0xd3,(07) },
-    { ASARW,	yshl,	Pe, 0xd1,(07),0xc1,(07),0xd3,(07),0xd3,(07) },
-    { ASBBB,	yxorb,	Pb, 0x1c,0x80,(03),0x18,0x1a },
-    { ASBBL,	yxorl,	Px, 0x83,(03),0x1d,0x81,(03),0x19,0x1b },
-    { ASBBW,	yxorl,	Pe, 0x83,(03),0x1d,0x81,(03),0x19,0x1b },
-    { ASCASB,	ynone,	Pb, 0xae },
-    { ASCASL,	ynone,	Px, 0xaf },
-    { ASCASW,	ynone,	Pe, 0xaf },
-    { ASETCC,	yscond,	Pm, 0x93,(00) },
-    { ASETCS,	yscond,	Pm, 0x92,(00) },
-    { ASETEQ,	yscond,	Pm, 0x94,(00) },
-    { ASETGE,	yscond,	Pm, 0x9d,(00) },
-    { ASETGT,	yscond,	Pm, 0x9f,(00) },
-    { ASETHI,	yscond,	Pm, 0x97,(00) },
-    { ASETLE,	yscond,	Pm, 0x9e,(00) },
-    { ASETLS,	yscond,	Pm, 0x96,(00) },
-    { ASETLT,	yscond,	Pm, 0x9c,(00) },
-    { ASETMI,	yscond,	Pm, 0x98,(00) },
-    { ASETNE,	yscond,	Pm, 0x95,(00) },
-    { ASETOC,	yscond,	Pm, 0x91,(00) },
-    { ASETOS,	yscond,	Pm, 0x90,(00) },
-    { ASETPC,	yscond,	Pm, 0x96,(00) },
-    { ASETPL,	yscond,	Pm, 0x99,(00) },
-    { ASETPS,	yscond,	Pm, 0x9a,(00) },
-    { ACDQ,		ynone,	Px, 0x99 },
-    { ACWD,		ynone,	Pe, 0x99 },
-    { ASHLB,	yshb,	Pb, 0xd0,(04),0xc0,(04),0xd2,(04) },
-    { ASHLL,	yshl,	Px, 0xd1,(04),0xc1,(04),0xd3,(04),0xd3,(04) },
-    { ASHLW,	yshl,	Pe, 0xd1,(04),0xc1,(04),0xd3,(04),0xd3,(04) },
-    { ASHRB,	yshb,	Pb, 0xd0,(05),0xc0,(05),0xd2,(05) },
-    { ASHRL,	yshl,	Px, 0xd1,(05),0xc1,(05),0xd3,(05),0xd3,(05) },
-    { ASHRW,	yshl,	Pe, 0xd1,(05),0xc1,(05),0xd3,(05),0xd3,(05) },
-    { ASTC,		ynone,	Px, 0xf9 },
-    { ASTD,		ynone,	Px, 0xfd },
-    { ASTI,		ynone,	Px, 0xfb },
-    { ASTOSB,	ynone,	Pb, 0xaa },
-    { ASTOSL,	ynone,	Px, 0xab },
-    { ASTOSW,	ynone,	Pe, 0xab },
-    { ASUBB,	yxorb,	Pb, 0x2c,0x80,(05),0x28,0x2a },
-    { ASUBL,	yaddl,	Px, 0x83,(05),0x2d,0x81,(05),0x29,0x2b },
-    { ASUBW,	yaddl,	Pe, 0x83,(05),0x2d,0x81,(05),0x29,0x2b },
-    { ASYSCALL,	ynone,	Px, 0xcd,100 },
-    { ATESTB,	ytestb,	Pb, 0xa8,0xf6,(00),0x84,0x84 },
-    { ATESTL,	ytestl,	Px, 0xa9,0xf7,(00),0x85,0x85 },
-    { ATESTW,	ytestl,	Pe, 0xa9,0xf7,(00),0x85,0x85 },
-    { ATEXT,	ytext,	Px },
-    { AVERR,	ydivl,	Pm, 0x00,(04) },
-    { AVERW,	ydivl,	Pm, 0x00,(05) },
-    { AWAIT,	ynone,	Px, 0x9b },
-    { AWORD,	ybyte,	Px, 2 },
-    { AXCHGB,	yml_mb,	Pb, 0x86,0x86 },
-    { AXCHGL,	yml_ml,	Px, 0x87,0x87 },
-    { AXCHGW,	yml_ml,	Pe, 0x87,0x87 },
-    { AXLAT,	ynone,	Px, 0xd7 },
-    { AXORB,	yxorb,	Pb, 0x34,0x80,(06),0x30,0x32 },
-    { AXORL,	yxorl,	Px, 0x83,(06),0x35,0x81,(06),0x31,0x33 },
-    { AXORW,	yxorl,	Pe, 0x83,(06),0x35,0x81,(06),0x31,0x33 },
-
-    { AFMOVB,	yfmvx,	Px, 0xdf,(04) },
-    { AFMOVBP,	yfmvp,	Px, 0xdf,(06) },
-    { AFMOVD,	yfmvd,	Px, 0xdd,(00),0xdd,(02),0xd9,(00),0xdd,(02) },
-    { AFMOVDP,	yfmvdp,	Px, 0xdd,(03),0xdd,(03) },
-    { AFMOVF,	yfmvf,	Px, 0xd9,(00),0xd9,(02) },
-    { AFMOVFP,	yfmvp,	Px, 0xd9,(03) },
-    { AFMOVL,	yfmvf,	Px, 0xdb,(00),0xdb,(02) },
-    { AFMOVLP,	yfmvp,	Px, 0xdb,(03) },
-    { AFMOVV,	yfmvx,	Px, 0xdf,(05) },
-    { AFMOVVP,	yfmvp,	Px, 0xdf,(07) },
-    { AFMOVW,	yfmvf,	Px, 0xdf,(00),0xdf,(02) },
-    { AFMOVWP,	yfmvp,	Px, 0xdf,(03) },
-    { AFMOVX,	yfmvx,	Px, 0xdb,(05) },
-    { AFMOVXP,	yfmvp,	Px, 0xdb,(07) },
-
-    { AFCOMB },
-    { AFCOMBP },
-    { AFCOMD,	yfadd,	Px, 0xdc,(02),0xd8,(02),0xdc,(02) },	/* botch */
-    { AFCOMDP,	yfadd,	Px, 0xdc,(03),0xd8,(03),0xdc,(03) },	/* botch */
-    { AFCOMDPP,	ycompp,	Px, 0xde,(03) },
-    { AFCOMF,	yfmvx,	Px, 0xd8,(02) },
-    { AFCOMFP,	yfmvx,	Px, 0xd8,(03) },
-    { AFCOML,	yfmvx,	Px, 0xda,(02) },
-    { AFCOMLP,	yfmvx,	Px, 0xda,(03) },
-    { AFCOMW,	yfmvx,	Px, 0xde,(02) },
-    { AFCOMWP,	yfmvx,	Px, 0xde,(03) },
-
-    { AFUCOM,	ycompp,	Px, 0xdd,(04) },
-    { AFUCOMP,	ycompp, Px, 0xdd,(05) },
-    { AFUCOMPP,	ycompp,	Px, 0xda,(13) },
-
-    { AFADDDP,	yfaddp,	Px, 0xde,(00) },
-    { AFADDW,	yfmvx,	Px, 0xde,(00) },
-    { AFADDL,	yfmvx,	Px, 0xda,(00) },
-    { AFADDF,	yfmvx,	Px, 0xd8,(00) },
-    { AFADDD,	yfadd,	Px, 0xdc,(00),0xd8,(00),0xdc,(00) },
-
-    { AFMULDP,	yfaddp,	Px, 0xde,(01) },
-    { AFMULW,	yfmvx,	Px, 0xde,(01) },
-    { AFMULL,	yfmvx,	Px, 0xda,(01) },
-    { AFMULF,	yfmvx,	Px, 0xd8,(01) },
-    { AFMULD,	yfadd,	Px, 0xdc,(01),0xd8,(01),0xdc,(01) },
-
-    { AFSUBDP,	yfaddp,	Px, 0xde,(05) },
-    { AFSUBW,	yfmvx,	Px, 0xde,(04) },
-    { AFSUBL,	yfmvx,	Px, 0xda,(04) },
-    { AFSUBF,	yfmvx,	Px, 0xd8,(04) },
-    { AFSUBD,	yfadd,	Px, 0xdc,(04),0xd8,(04),0xdc,(05) },
-
-    { AFSUBRDP,	yfaddp,	Px, 0xde,(04) },
-    { AFSUBRW,	yfmvx,	Px, 0xde,(05) },
-    { AFSUBRL,	yfmvx,	Px, 0xda,(05) },
-    { AFSUBRF,	yfmvx,	Px, 0xd8,(05) },
-    { AFSUBRD,	yfadd,	Px, 0xdc,(05),0xd8,(05),0xdc,(04) },
-
-    { AFDIVDP,	yfaddp,	Px, 0xde,(07) },
-    { AFDIVW,	yfmvx,	Px, 0xde,(06) },
-    { AFDIVL,	yfmvx,	Px, 0xda,(06) },
-    { AFDIVF,	yfmvx,	Px, 0xd8,(06) },
-    { AFDIVD,	yfadd,	Px, 0xdc,(06),0xd8,(06),0xdc,(07) },
-
-    { AFDIVRDP,	yfaddp,	Px, 0xde,(06) },
-    { AFDIVRW,	yfmvx,	Px, 0xde,(07) },
-    { AFDIVRL,	yfmvx,	Px, 0xda,(07) },
-    { AFDIVRF,	yfmvx,	Px, 0xd8,(07) },
-    { AFDIVRD,	yfadd,	Px, 0xdc,(07),0xd8,(07),0xdc,(06) },
-
-    { AFXCHD,	yfxch,	Px, 0xd9,(01),0xd9,(01) },
-    { AFFREE },
-    { AFLDCW,	ystcw,	Px, 0xd9,(05),0xd9,(05) },
-    { AFLDENV,	ystcw,	Px, 0xd9,(04),0xd9,(04) },
-    { AFRSTOR,	ysvrs,	Px, 0xdd,(04),0xdd,(04) },
-    { AFSAVE,	ysvrs,	Px, 0xdd,(06),0xdd,(06) },
-    { AFSTCW,	ystcw,	Px, 0xd9,(07),0xd9,(07) },
-    { AFSTENV,	ystcw,	Px, 0xd9,(06),0xd9,(06) },
-    { AFSTSW,	ystsw,	Px, 0xdd,(07),0xdf,0xe0 },
-    { AF2XM1,	ynone,	Px, 0xd9, 0xf0 },
-    { AFABS,	ynone,	Px, 0xd9, 0xe1 },
-    { AFCHS,	ynone,	Px, 0xd9, 0xe0 },
-    { AFCLEX,	ynone,	Px, 0xdb, 0xe2 },
-    { AFCOS,	ynone,	Px, 0xd9, 0xff },
-    { AFDECSTP,	ynone,	Px, 0xd9, 0xf6 },
-    { AFINCSTP,	ynone,	Px, 0xd9, 0xf7 },
-    { AFINIT,	ynone,	Px, 0xdb, 0xe3 },
-    { AFLD1,	ynone,	Px, 0xd9, 0xe8 },
-    { AFLDL2E,	ynone,	Px, 0xd9, 0xea },
-    { AFLDL2T,	ynone,	Px, 0xd9, 0xe9 },
-    { AFLDLG2,	ynone,	Px, 0xd9, 0xec },
-    { AFLDLN2,	ynone,	Px, 0xd9, 0xed },
-    { AFLDPI,	ynone,	Px, 0xd9, 0xeb },
-    { AFLDZ,	ynone,	Px, 0xd9, 0xee },
-    { AFNOP,	ynone,	Px, 0xd9, 0xd0 },
-    { AFPATAN,	ynone,	Px, 0xd9, 0xf3 },
-    { AFPREM,	ynone,	Px, 0xd9, 0xf8 },
-    { AFPREM1,	ynone,	Px, 0xd9, 0xf5 },
-    { AFPTAN,	ynone,	Px, 0xd9, 0xf2 },
-    { AFRNDINT,	ynone,	Px, 0xd9, 0xfc },
-    { AFSCALE,	ynone,	Px, 0xd9, 0xfd },
-    { AFSIN,	ynone,	Px, 0xd9, 0xfe },
-    { AFSINCOS,	ynone,	Px, 0xd9, 0xfb },
-    { AFSQRT,	ynone,	Px, 0xd9, 0xfa },
-    { AFTST,	ynone,	Px, 0xd9, 0xe4 },
-    { AFXAM,	ynone,	Px, 0xd9, 0xe5 },
-    { AFXTRACT,	ynone,	Px, 0xd9, 0xf4 },
-    { AFYL2X,	ynone,	Px, 0xd9, 0xf1 },
-    { AFYL2XP1,	ynone,	Px, 0xd9, 0xf9 },
-    { AEND },
-    0
-};
-@
 
 
 <<global optab (linkers/5l/optab.c)(arm)>>=
@@ -8502,597 +6955,6 @@ for(i=1; optab[i].as; i++)
 @
 
 
-\section{[[Yxxx]]}
-
-<<enum yxxx(x86)>>=
-enum yxxx {
-    Yxxx		= 0,
-    Ynone,
-    Yi0,
-    Yi1,
-    Yi8,
-    Yi32,
-
-    Yiauto,
-
-    Yal,
-    Ycl,
-    Yax,
-    Ycx,
-    Yrb,
-    Yrl,
-    Yrf,
-    Yf0,
-    Yrx,
-    Ymb,
-    Yml,
-    Ym,
-    Ybr,
-    Ycol,
-
-    Ycs,	Yss,	Yds,	Yes,	Yfs,	Ygs,
-    Ygdtr,	Yidtr,	Yldtr,	Ymsw,	Ytask,
-    Ycr0,	Ycr1,	Ycr2,	Ycr3,	Ycr4,	Ycr5,	Ycr6,	Ycr7,
-    Ydr0,	Ydr1,	Ydr2,	Ydr3,	Ydr4,	Ydr5,	Ydr6,	Ydr7,
-    Ytr0,	Ytr1,	Ytr2,	Ytr3,	Ytr4,	Ytr5,	Ytr6,	Ytr7,
-
-    Ymax,
-};
-@
-
-\section{[[Zxxx]]}
-
-<<enum zxxx(x86)>>=
-enum zxxx {
-    Zxxx		= 0,
-
-    Zlit,
-    Z_rp,
-    Zbr,
-    Zcall,
-    Zib_,
-    Zib_rp,
-    Zibo_m,
-    Zil_,
-    Zil_rp,
-    Zilo_m,
-    Zjmp,
-    Zloop,
-    Zm_o,
-    Zm_r,
-    Zaut_r,
-    Zo_m,
-    Zpseudo,
-    Zr_m,
-    Zrp_,
-    Z_ib,
-    Z_il,
-    Zm_ibo,
-    Zm_ilo,
-    Zib_rr,
-    Zil_rr,
-    Zclr,
-    Zbyte,
-    Zmov,
-    Zmax,
-};
-@
-
-\section{[[yxxx]]}
-
-<<global ynone(x86)>>=
-byte	ynone[] =
-{
-    Ynone,	Ynone,	Zlit,	1,
-    0
-};
-@
-
-<<global ytext(x86)>>=
-byte	ytext[] =
-{
-    Ymb,	Yi32,	Zpseudo,1,
-    0
-};
-@
-
-<<global ynop(x86)>>=
-byte	ynop[] =
-{
-    Ynone,	Ynone,	Zpseudo,1,
-    Ynone,	Yml,	Zpseudo,1,
-    Ynone,	Yrf,	Zpseudo,1,
-    Yml,	Ynone,	Zpseudo,1,
-    Yrf,	Ynone,	Zpseudo,1,
-    0
-};
-@
-
-<<global yxorb(x86)>>=
-byte	yxorb[] =
-{
-    Yi32,	Yal,	Zib_,	1,
-    Yi32,	Ymb,	Zibo_m,	2,
-    Yrb,	Ymb,	Zr_m,	1,
-    Ymb,	Yrb,	Zm_r,	1,
-    0
-};
-@
-
-<<global yxorl(x86)>>=
-byte	yxorl[] =
-{
-    Yi8,	Yml,	Zibo_m,	2,
-    Yi32,	Yax,	Zil_,	1,
-    Yi32,	Yml,	Zilo_m,	2,
-    Yrl,	Yml,	Zr_m,	1,
-    Yml,	Yrl,	Zm_r,	1,
-    0
-};
-@
-
-<<global yaddl(x86)>>=
-byte	yaddl[] =
-{
-    Yi8,	Yml,	Zibo_m,	2,
-    Yi32,	Yax,	Zil_,	1,
-    Yi32,	Yml,	Zilo_m,	2,
-    Yrl,	Yml,	Zr_m,	1,
-    Yml,	Yrl,	Zm_r,	1,
-    0
-};
-@
-
-<<global yincb(x86)>>=
-byte	yincb[] =
-{
-    Ynone,	Ymb,	Zo_m,	2,
-    0
-};
-@
-
-<<global yincl(x86)>>=
-byte	yincl[] =
-{
-    Ynone,	Yrl,	Z_rp,	1,
-    Ynone,	Yml,	Zo_m,	2,
-    0
-};
-@
-
-<<global ycmpb(x86)>>=
-byte	ycmpb[] =
-{
-    Yal,	Yi32,	Z_ib,	1,
-    Ymb,	Yi32,	Zm_ibo,	2,
-    Ymb,	Yrb,	Zm_r,	1,
-    Yrb,	Ymb,	Zr_m,	1,
-    0
-};
-@
-
-<<global ycmpl(x86)>>=
-byte	ycmpl[] =
-{
-    Yml,	Yi8,	Zm_ibo,	2,
-    Yax,	Yi32,	Z_il,	1,
-    Yml,	Yi32,	Zm_ilo,	2,
-    Yml,	Yrl,	Zm_r,	1,
-    Yrl,	Yml,	Zr_m,	1,
-    0
-};
-@
-
-<<global yshb(x86)>>=
-byte	yshb[] =
-{
-    Yi1,	Ymb,	Zo_m,	2,
-    Yi32,	Ymb,	Zibo_m,	2,
-    Ycx,	Ymb,	Zo_m,	2,
-    0
-};
-@
-
-<<global yshl(x86)>>=
-byte	yshl[] =
-{
-    Yi1,	Yml,	Zo_m,	2,
-    Yi32,	Yml,	Zibo_m,	2,
-    Ycl,	Yml,	Zo_m,	2,
-    Ycx,	Yml,	Zo_m,	2,
-    0
-};
-@
-
-<<global ytestb(x86)>>=
-byte	ytestb[] =
-{
-    Yi32,	Yal,	Zib_,	1,
-    Yi32,	Ymb,	Zibo_m,	2,
-    Yrb,	Ymb,	Zr_m,	1,
-    Ymb,	Yrb,	Zm_r,	1,
-    0
-};
-@
-
-<<global ytestl(x86)>>=
-byte	ytestl[] =
-{
-    Yi32,	Yax,	Zil_,	1,
-    Yi32,	Yml,	Zilo_m,	2,
-    Yrl,	Yml,	Zr_m,	1,
-    Yml,	Yrl,	Zm_r,	1,
-    0
-};
-@
-
-<<global ymovb(x86)>>=
-byte	ymovb[] =
-{
-    Yrb,	Ymb,	Zr_m,	1,
-    Ymb,	Yrb,	Zm_r,	1,
-    Yi32,	Yrb,	Zib_rp,	1,
-    Yi32,	Ymb,	Zibo_m,	2,
-    0
-};
-@
-
-<<global ymovl(x86)>>=
-byte	ymovl[] =
-{
-    Yrl,	Yml,	Zr_m,	1,
-    Yml,	Yrl,	Zm_r,	1,
-    Yi0,	Yrl,	Zclr,	1+2,
-//	Yi0,	Yml,	Zibo_m,	2,	// shorter but slower AND $0,dst
-    Yi32,	Yrl,	Zil_rp,	1,
-    Yi32,	Yml,	Zilo_m,	2,
-    Yiauto,	Yrl,	Zaut_r,	2,
-    0
-};
-@
-%$
-
-<<global ym_rl(x86)>>=
-byte	ym_rl[] =
-{
-    Ym,	Yrl,	Zm_r,	1,
-    0
-};
-@
-
-<<global yrl_m(x86)>>=
-byte	yrl_m[] =
-{
-    Yrl,	Ym,	Zr_m,	1,
-    0
-};
-@
-
-<<global ymb_rl(x86)>>=
-byte	ymb_rl[] =
-{
-    Ymb,	Yrl,	Zm_r,	1,
-    0
-};
-@
-
-<<global yml_rl(x86)>>=
-byte	yml_rl[] =
-{
-    Yml,	Yrl,	Zm_r,	1,
-    0
-};
-@
-
-<<global yrl_ml(x86)>>=
-byte	yrl_ml[] =
-{
-    Yrl,	Yml,	Zr_m,	1,
-    0
-};
-@
-
-<<global yml_mb(x86)>>=
-byte	yml_mb[] =
-{
-    Yrb,	Ymb,	Zr_m,	1,
-    Ymb,	Yrb,	Zm_r,	1,
-    0
-};
-@
-
-<<global yml_ml(x86)>>=
-byte	yml_ml[] =
-{
-    Yrl,	Yml,	Zr_m,	1,
-    Yml,	Yrl,	Zm_r,	1,
-    0
-};
-@
-
-<<global ydivl(x86)>>=
-byte	ydivl[] =
-{
-    Yml,	Ynone,	Zm_o,	2,
-    0
-};
-@
-
-<<global ydivb(x86)>>=
-byte	ydivb[] =
-{
-    Ymb,	Ynone,	Zm_o,	2,
-    0
-};
-@
-
-<<global yimul(x86)>>=
-byte	yimul[] =
-{
-    Yml,	Ynone,	Zm_o,	2,
-    Yi8,	Yrl,	Zib_rr,	1,
-    Yi32,	Yrl,	Zil_rr,	1,
-    0
-};
-@
-
-<<global ybyte(x86)>>=
-byte	ybyte[] =
-{
-    Yi32,	Ynone,	Zbyte,	1,
-    0
-};
-@
-
-<<global yin(x86)>>=
-byte	yin[] =
-{
-    Yi32,	Ynone,	Zib_,	1,
-    Ynone,	Ynone,	Zlit,	1,
-    0
-};
-@
-
-<<global yint(x86)>>=
-byte	yint[] =
-{
-    Yi32,	Ynone,	Zib_,	1,
-    0
-};
-@
-
-<<global ypushl(x86)>>=
-byte	ypushl[] =
-{
-    Yrl,	Ynone,	Zrp_,	1,
-    Ym,	Ynone,	Zm_o,	2,
-    Yi8,	Ynone,	Zib_,	1,
-    Yi32,	Ynone,	Zil_,	1,
-    0
-};
-@
-
-<<global ypopl(x86)>>=
-byte	ypopl[] =
-{
-    Ynone,	Yrl,	Z_rp,	1,
-    Ynone,	Ym,	Zo_m,	2,
-    0
-};
-@
-
-<<global yscond(x86)>>=
-byte	yscond[] =
-{
-    Ynone,	Ymb,	Zo_m,	2,
-    0
-};
-@
-
-<<global yjcond(x86)>>=
-byte	yjcond[] =
-{
-    Ynone,	Ybr,	Zbr,	1,
-    0
-};
-@
-
-<<global yloop(x86)>>=
-byte	yloop[] =
-{
-    Ynone,	Ybr,	Zloop,	1,
-    0
-};
-@
-
-<<global ycall(x86)>>=
-byte	ycall[] =
-{
-    Ynone,	Yml,	Zo_m,	2,
-    Ynone,	Ybr,	Zcall,	1,
-    0
-};
-@
-
-<<global yjmp(x86)>>=
-byte	yjmp[] =
-{
-    Ynone,	Yml,	Zo_m,	2,
-    Ynone,	Ybr,	Zjmp,	1,
-    0
-};
-@
-
-<<global yfmvd(x86)>>=
-byte	yfmvd[] =
-{
-    Ym,	Yf0,	Zm_o,	2,
-    Yf0,	Ym,	Zo_m,	2,
-    Yrf,	Yf0,	Zm_o,	2,
-    Yf0,	Yrf,	Zo_m,	2,
-    0
-};
-@
-
-<<global yfmvdp(x86)>>=
-byte	yfmvdp[] =
-{
-    Yf0,	Ym,	Zo_m,	2,
-    Yf0,	Yrf,	Zo_m,	2,
-    0
-};
-@
-
-<<global yfmvf(x86)>>=
-byte	yfmvf[] =
-{
-    Ym,	Yf0,	Zm_o,	2,
-    Yf0,	Ym,	Zo_m,	2,
-    0
-};
-@
-
-<<global yfmvx(x86)>>=
-byte	yfmvx[] =
-{
-    Ym,	Yf0,	Zm_o,	2,
-    0
-};
-@
-
-<<global yfmvp(x86)>>=
-byte	yfmvp[] =
-{
-    Yf0,	Ym,	Zo_m,	2,
-    0
-};
-@
-
-<<global yfadd(x86)>>=
-byte	yfadd[] =
-{
-    Ym,	Yf0,	Zm_o,	2,
-    Yrf,	Yf0,	Zm_o,	2,
-    Yf0,	Yrf,	Zo_m,	2,
-    0
-};
-@
-
-<<global yfaddp(x86)>>=
-byte	yfaddp[] =
-{
-    Yf0,	Yrf,	Zo_m,	2,
-    0
-};
-@
-
-<<global yfxch(x86)>>=
-byte	yfxch[] =
-{
-    Yf0,	Yrf,	Zo_m,	2,
-    Yrf,	Yf0,	Zm_o,	2,
-    0
-};
-@
-
-<<global ycompp(x86)>>=
-byte	ycompp[] =
-{
-    Yf0,	Yrf,	Zo_m,	2,	/* botch is really f0,f1 */
-    0
-};
-@
-
-<<global ystsw(x86)>>=
-byte	ystsw[] =
-{
-    Ynone,	Ym,	Zo_m,	2,
-    Ynone,	Yax,	Zlit,	1,
-    0
-};
-@
-
-<<global ystcw(x86)>>=
-byte	ystcw[] =
-{
-    Ynone,	Ym,	Zo_m,	2,
-    Ym,	Ynone,	Zm_o,	2,
-    0
-};
-@
-
-<<global ysvrs(x86)>>=
-byte	ysvrs[] =
-{
-    Ynone,	Ym,	Zo_m,	2,
-    Ym,	Ynone,	Zm_o,	2,
-    0
-};
-@
-
-\section{[[ycover]]}
-
-<<global ycover(x86)>>=
-char	ycover[Ymax*Ymax];
-@
-
-<<[[main()]] set ycover(x86)>>=
-for(i=0; i<Ymax; i++)
-    ycover[i*Ymax + i] = 1;
-
-ycover[Yi0*Ymax + Yi8] = 1;
-ycover[Yi1*Ymax + Yi8] = 1;
-
-ycover[Yi0*Ymax + Yi32] = 1;
-ycover[Yi1*Ymax + Yi32] = 1;
-ycover[Yi8*Ymax + Yi32] = 1;
-
-ycover[Yal*Ymax + Yrb] = 1;
-ycover[Ycl*Ymax + Yrb] = 1;
-ycover[Yax*Ymax + Yrb] = 1;
-ycover[Ycx*Ymax + Yrb] = 1;
-ycover[Yrx*Ymax + Yrb] = 1;
-
-ycover[Yax*Ymax + Yrx] = 1;
-ycover[Ycx*Ymax + Yrx] = 1;
-
-ycover[Yax*Ymax + Yrl] = 1;
-ycover[Ycx*Ymax + Yrl] = 1;
-ycover[Yrx*Ymax + Yrl] = 1;
-
-ycover[Yf0*Ymax + Yrf] = 1;
-
-ycover[Yal*Ymax + Ymb] = 1;
-ycover[Ycl*Ymax + Ymb] = 1;
-ycover[Yax*Ymax + Ymb] = 1;
-ycover[Ycx*Ymax + Ymb] = 1;
-ycover[Yrx*Ymax + Ymb] = 1;
-ycover[Yrb*Ymax + Ymb] = 1;
-ycover[Ym*Ymax + Ymb] = 1;
-
-ycover[Yax*Ymax + Yml] = 1;
-ycover[Ycx*Ymax + Yml] = 1;
-ycover[Yrx*Ymax + Yml] = 1;
-ycover[Yrl*Ymax + Yml] = 1;
-ycover[Ym*Ymax + Yml] = 1;
-@
-
-\section{[[reg]]}
-<<global reg(x86)>>=
-char	reg[D_NONE];
-@
-
-<<[[main()]] set reg(x86)>>=
-for(i=0; i<D_NONE; i++) {
-    reg[i] = -1;
-    if(i >= D_AL && i <= D_BH)
-        reg[i] = (i-D_AL) & 7;
-    if(i >= D_AX && i <= D_DI)
-        reg[i] = (i-D_AX) & 7;
-    if(i >= D_F0 && i <= D_F0+7)
-        reg[i] = (i-D_F0) & 7;
-}
-@
 
 \chapter{Debugging Support}
 % Symbol Tables.
@@ -9100,81 +6962,13 @@ for(i=0; i<D_NONE; i++) {
 
 \section{Symbol table}
 
-<<global symsize(x86)>>=
-long	symsize;
-@
-
-<<global symsize(arm)>>=
+<<global symsize>>=
 long	symsize;
 @
 
 
 
-% asmb() -> asmsym()
-<<function asmsym(x86)>>=
-void
-asmsym(void)
-{
-    Prog *p;
-    Auto *a;
-    Sym *s;
-    int h;
-
-    s = lookup("etext", 0);
-    if(s->type == STEXT)
-        putsymb(s->name, 'T', s->value, s->version);
-
-    for(h=0; h<NHASH; h++)
-        for(s=hash[h]; s!=S; s=s->link)
-            switch(s->type) {
-            case SCONST:
-                putsymb(s->name, 'D', s->value, s->version);
-                continue;
-
-            case SDATA:
-                putsymb(s->name, 'D', s->value+INITDAT, s->version);
-                continue;
-
-            case SBSS:
-                putsymb(s->name, 'B', s->value+INITDAT, s->version);
-                continue;
-
-            case SFILE:
-                putsymb(s->name, 'f', s->value, s->version);
-                continue;
-            }
-
-    for(p=textp; p!=P; p=p->pcond) {
-        s = p->from.sym;
-        if(s->type != STEXT)
-            continue;
-
-        /* filenames first */
-        for(a=p->to.autom; a; a=a->link)
-            if(a->type == D_FILE)
-                putsymb(a->asym->name, 'z', a->aoffset, 0);
-            else
-            if(a->type == D_FILE1)
-                putsymb(a->asym->name, 'Z', a->aoffset, 0);
-
-        putsymb(s->name, 'T', s->value, s->version);
-
-        /* frame, auto and param after */
-        putsymb(".frame", 'm', p->to.offset+4, 0);
-
-        for(a=p->to.autom; a; a=a->link)
-            if(a->type == D_AUTO)
-                putsymb(a->asym->name, 'a', -a->aoffset, 0);
-            else
-            if(a->type == D_PARAM)
-                putsymb(a->asym->name, 'p', a->aoffset, 0);
-    }
-
-    if(debug['v'] || debug['n'])
-        DBG("symsize = %lud\n", symsize);
-}
-@
-
+% asmb -> <>
 <<function asmsym(arm)>>=
 void
 asmsym(void)
@@ -9248,7 +7042,7 @@ asmsym(void)
 
 
 
-<<function putsymb(x86)>>=
+<<function putsymb>>=
 void
 putsymb(char *s, int t, long v, int ver)
 {
@@ -9297,68 +7091,16 @@ putsymb(char *s, int t, long v, int ver)
 @
 %>>
 
-<<function putsymb(arm)>>=
-void
-putsymb(char *s, int t, long v, int ver)
-{
-    int i, f;
-
-    if(t == 'f')
-        s++;
-    lput(v);
-    if(ver)
-        t += 'a' - 'A';
-    cput(t+0x80);			/* 0x80 is variable length */
-
-    if(t == 'Z' || t == 'z') {
-        cput(s[0]);
-        for(i=1; s[i] != 0 || s[i+1] != 0; i += 2) {
-            cput(s[i]);
-            cput(s[i+1]);
-        }
-        cput(0);
-        cput(0);
-        i++;
-    }
-    else {
-        for(i=0; s[i]; i++)
-            cput(s[i]);
-        cput(0);
-    }
-    symsize += 4 + 1 + i + 1;
-
-    if(debug['n']) {
-        if(t == 'z' || t == 'Z') {
-            Bprint(&bso, "%c %.8lux ", t, v);
-            for(i=1; s[i] != 0 || s[i+1] != 0; i+=2) {
-                f = ((s[i]&0xff) << 8) | (s[i+1]&0xff);
-                Bprint(&bso, "/%x", f);
-            }
-            Bprint(&bso, "\n");
-            return;
-        }
-        if(ver)
-            Bprint(&bso, "%c %.8lux %s<%d>\n", t, v, s, ver);
-        else
-            Bprint(&bso, "%c %.8lux %s\n", t, v, s);
-    }
-}
-@
-% >> 
 
 \section{Line table}
 
 % lc? line count?
-<<global lcsize(x86)>>=
-long	lcsize;
-@
-
-<<global lcsize(arm)>>=
+<<global lcsize>>=
 long	lcsize;
 @
 
 
-<<function asmlc(x86)>>=
+<<function asmlc>>=
 void
 asmlc(void)
 {
@@ -9440,88 +7182,6 @@ asmlc(void)
 }
 @
 
-
-<<function asmlc(arm)>>=
-void
-asmlc(void)
-{
-    long oldpc, oldlc;
-    Prog *p;
-    long v, s;
-
-    oldpc = INITTEXT;
-    oldlc = 0;
-    for(p = firstp; p != P; p = p->link) {
-        if(p->line == oldlc || p->as == ATEXT || p->as == ANOP) {
-            if(p->as == ATEXT)
-                curtext = p;
-            if(debug['V'])
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
-            continue;
-        }
-        if(debug['V'])
-            Bprint(&bso, "\t\t%6ld", lcsize);
-        v = (p->pc - oldpc) / MINLC;
-        while(v) {
-            s = 127;
-            if(v < 127)
-                s = v;
-            cput(s+128);	/* 129-255 +pc */
-            if(debug['V'])
-                Bprint(&bso, " pc+%ld*%d(%ld)", s, MINLC, s+128);
-            v -= s;
-            lcsize++;
-        }
-        s = p->line - oldlc;
-        oldlc = p->line;
-        oldpc = p->pc + MINLC;
-        if(s > 64 || s < -64) {
-            cput(0);	/* 0 vv +lc */
-            cput(s>>24);
-            cput(s>>16);
-            cput(s>>8);
-            cput(s);
-            if(debug['V']) {
-                if(s > 0)
-                    Bprint(&bso, " lc+%ld(%d,%ld)\n",
-                        s, 0, s);
-                else
-                    Bprint(&bso, " lc%ld(%d,%ld)\n",
-                        s, 0, s);
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
-            }
-            lcsize += 5;
-            continue;
-        }
-        if(s > 0) {
-            cput(0+s);	/* 1-64 +lc */
-            if(debug['V']) {
-                Bprint(&bso, " lc+%ld(%ld)\n", s, 0+s);
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
-            }
-        } else {
-            cput(64-s);	/* 65-128 -lc */
-            if(debug['V']) {
-                Bprint(&bso, " lc%ld(%ld)\n", s, 64-s);
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
-            }
-        }
-        lcsize++;
-    }
-    while(lcsize & 1) {
-        s = 129;
-        cput(s);
-        lcsize++;
-    }
-    if(debug['v'] || debug['V'])
-        Bprint(&bso, "lcsize = %ld\n", lcsize);
-    Bflush(&bso);
-}
-@
 
 
 
@@ -9557,78 +7217,6 @@ if(debug['p'])
 
 % todo: who is using this information then? profreport of what?
 % git grep __mcount does not seem to return stuff, maybe obsolete code?
-
-<<function doprof1(x86)>>=
-void
-doprof1(void)
-{
-    Sym *s;
-    long n;
-    Prog *p, *q;
-
-    DBG("%5.2f profile 1\n", cputime());
-
-    s = lookup("__mcount", 0);
-    n = 1;
-    for(p = firstp->link; p != P; p = p->link) {
-        if(p->as == ATEXT) {
-            q = prg();
-            q->line = p->line;
-
-            q->link = datap;
-            datap = q;
-
-            //asm: DATA __mcount ??? array? why need to declare it here too?
-            q->as = ADATA;
-            q->from.type = D_EXTERN;
-            q->from.offset = n*4;
-            q->from.sym = s; // __mcount
-            q->from.scale = 4;  // NOSPLIT?
-            q->to = p->from;
-            q->to.type = D_CONST;
-
-            q = prg();
-            q->line = p->line;
-            q->pc = p->pc;
-
-            q->link = p->link;
-            p->link = q;
-            p = q;
-
-            //asm: ADDL 1, __mcount[n]?
-            p->as = AADDL;
-            p->from.type = D_CONST;
-            p->from.offset = 1;
-            p->to.type = D_EXTERN;
-            p->to.sym = s;
-            p->to.offset = n*4 + 4;
-
-            n += 2;
-            continue;
-        }
-    }
-
-    q = prg();
-    q->line = 0;
-
-    q->link = datap;
-    datap = q;
-
-    //asm: DATA __mcount ???
-    q->as = ADATA;
-    q->from.type = D_EXTERN;
-    q->from.sym = s;
-    q->from.scale = 4;  // NOSPLIT?
-    q->to.type = D_CONST;
-    q->to.offset = n;
-
-    s->type = SBSS;
-    // 4 bytes counter for each functions
-    s->value = n*4;
-}
-@
-
-
 
 <<function doprof1(arm)>>=
 void
@@ -10043,88 +7631,27 @@ if(debug['e']){		/* embedded tracing */
 
 %???
 
-<<global inuxi1(x86)>>=
+<<global inuxi1>>=
 char	inuxi1[1];
 @
 
-<<global inuxi2(x86)>>=
+<<global inuxi2>>=
 char	inuxi2[2];
 @
 
-<<global inuxi4(x86)>>=
-char	inuxi4[4];
-@
-
-
-<<global inuxi1(arm)>>=
-char	inuxi1[1];
-@
-
-<<global inuxi2(arm)>>=
-char	inuxi2[2];
-@
-
-<<global inuxi4(arm)>>=
+<<global inuxi4>>=
 char	inuxi4[4];
 @
 
 
 
-<<global fnuxi4(x86)>>=
+
+<<global fnuxi4>>=
 char	fnuxi4[4];
 @
 
-<<global fnuxi8(x86)>>=
+<<global fnuxi8>>=
 char	fnuxi8[8];
-@
-
-
-<<global fnuxi4(arm)>>=
-char	fnuxi4[4];
-@
-
-<<global fnuxi8(arm)>>=
-char	fnuxi8[8];
-@
-
-
-<<function nuxiinit(x86)>>=
-void
-nuxiinit(void)
-{
-    int i, c;
-
-    for(i=0; i<4; i++) {
-        c = find1(0x04030201L, i+1);
-        if(i < 2)
-            inuxi2[i] = c;
-        if(i < 1)
-            inuxi1[i] = c;
-        inuxi4[i] = c;
-        fnuxi4[i] = c;
-        fnuxi8[i] = c;
-        fnuxi8[i+4] = c+4;
-    }
-    if(debug['v']) {
-        Bprint(&bso, "inuxi = ");
-        for(i=0; i<1; i++)
-            Bprint(&bso, "%d", inuxi1[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<2; i++)
-            Bprint(&bso, "%d", inuxi2[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", inuxi4[i]);
-        Bprint(&bso, "\nfnuxi = ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", fnuxi4[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<8; i++)
-            Bprint(&bso, "%d", fnuxi8[i]);
-        Bprint(&bso, "\n");
-    }
-    Bflush(&bso);
-}
 @
 
 
@@ -10177,7 +7704,7 @@ nuxiinit(void)
 
 
 
-<<function find1(x86)>>=
+<<function find1>>=
 int
 find1(long l, int c)
 {
@@ -10191,41 +7718,6 @@ find1(long l, int c)
     return 0;
 }
 @
-
-<<function find1(arm)>>=
-int
-find1(long l, int c)
-{
-    char *p;
-    int i;
-
-    p = (char*)&l;
-    for(i=0; i<4; i++)
-        if(*p++ == c)
-            return i;
-    return 0;
-}
-@
-
-
-%<<function find2(x86)>>=
-%//int
-%//find2(long l, int c)
-%//{
-%//    short *p;
-%//    int i;
-%//
-%//    p = (short*)&l;
-%//    for(i=0; i<4; i+=2) {
-%//        if(((*p >> 8) & 0xff) == c)
-%//            return i;
-%//        if((*p++ & 0xff) == c)
-%//            return i+1;
-%//    }
-%//    return 0;
-%//}
-%@
-
 
 
 
@@ -10345,13 +7837,9 @@ main(int argc, char *argv[])
 
 % what this is for?
 
-<<global doexp(x86)>>=
+<<global doexp>>=
 // do export table, -x
 bool	doexp;
-@
-
-<<global doexp(arm)>>=
-int	doexp;
 @
 
 
@@ -10369,31 +7857,7 @@ int	doexp;
         break;
 @
 
-<<function isobjfile(x86)>>=
-static int
-isobjfile(char *f)
-{
-    int n, v;
-    Biobuf *b;
-    char buf1[5], buf2[SARMAG];
-
-    b = Bopen(f, OREAD);
-    if(b == nil)
-        return 0;
-    n = Bread(b, buf1, 5);
-    if(n == 5 && (buf1[2] == 1 && buf1[3] == '<' || buf1[3] == 1 && buf1[4] == '<'))
-        v = 1;	/* good enough for our purposes */
-    else{
-        Bseek(b, 0, 0);
-        n = Bread(b, buf2, SARMAG);
-        v = n == SARMAG && strncmp(buf2, ARMAG, SARMAG) == 0;
-    }
-    Bterm(b);
-    return v;
-}
-@
-
-<<function isobjfile(arm)>>=
+<<function isobjfile>>=
 static int
 isobjfile(char *f)
 {
@@ -10418,13 +7882,7 @@ isobjfile(char *f)
 @
 
 
-
-
-<<global EXPTAB(x86)>>=
-char*	EXPTAB;
-@
-
-<<global EXPTAB(arm)>>=
+<<global EXPTAB>>=
 char*	EXPTAB;
 @
 
@@ -10444,18 +7902,7 @@ if(doexp || dlm){
 }
 @
 
-<<function zerosig(x86)>>=
-void
-zerosig(char *sp)
-{
-    Sym *s;
-
-    s = lookup(sp, 0);
-    s->sig = 0;
-}
-@
-
-<<function zerosig(arm)>>=
+<<function zerosig>>=
 void
 zerosig(char *sp)
 {
@@ -10468,35 +7915,26 @@ zerosig(char *sp)
 
 
 
-<<global nimports(x86)>>=
+<<global nimports>>=
 int nimports;
 @
 
-<<global nexports(x86)>>=
+<<global nexports>>=
 int nexports;
 @
 
-<<global imports(arm)>>=
+<<global imports>>=
 int	imports;
 @
 
-<<global nimports(arm)>>=
-int nimports;
-@
-
-<<global exports(arm)>>=
+<<global exports>>=
 int	exports;
 @
 
-<<global nexports(arm)>>=
-int nexports;
-@
 
 
 
-
-
-<<function readundefs(x86)>>=
+<<function readundefs>>=
 void
 readundefs(char *f, int t)
 {
@@ -10540,152 +7978,7 @@ readundefs(char *f, int t)
 @
 
 
-<<function readundefs(arm)>>=
-void
-readundefs(char *f, int t)
-{
-    int i, n;
-    Sym *s;
-    Biobuf *b;
-    char *l, buf[256], *fields[64];
 
-    if(f == nil)
-        return;
-    b = Bopen(f, OREAD);
-    if(b == nil){
-        diag("could not open %s: %r", f);
-        errorexit();
-    }
-    while((l = Brdline(b, '\n')) != nil){
-        n = Blinelen(b);
-        if(n >= sizeof(buf)){
-            diag("%s: line too long", f);
-            errorexit();
-        }
-        memmove(buf, l, n);
-        buf[n-1] = '\0';
-        n = getfields(buf, fields, nelem(fields), 1, " \t\r\n");
-        if(n == nelem(fields)){
-            diag("%s: bad format", f);
-            errorexit();
-        }
-        for(i = 0; i < n; i++) {
-            s = lookup(fields[i], 0);
-            s->type = SXREF;
-            s->subtype = t;
-            if(t == SIMPORT)
-                nimports++;
-            else
-                nexports++;
-        }
-    }
-    Bterm(b);
-}
-@
-
-
-
-
-<<function export(x86)>>=
-void
-export(void)
-{
-    int i, j, n, off, nb, sv, ne;
-    Sym *s, *et, *str, **esyms;
-    Prog *p;
-    char buf[NSNAME], *t;
-
-    n = 0;
-    for(i = 0; i < NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->type != SXREF && s->type != SUNDEF && (nexports == 0 && s->sig != 0 || s->subtype == SEXPORT || allexport))
-                n++;
-    esyms = malloc(n*sizeof(Sym*));
-    ne = n;
-    n = 0;
-    for(i = 0; i < NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->type != SXREF && s->type != SUNDEF && (nexports == 0 && s->sig != 0 || s->subtype == SEXPORT || allexport))
-                esyms[n++] = s;
-    for(i = 0; i < ne-1; i++)
-        for(j = i+1; j < ne; j++)
-            if(strcmp(esyms[i]->name, esyms[j]->name) > 0){
-                s = esyms[i];
-                esyms[i] = esyms[j];
-                esyms[j] = s;
-            }
-
-    nb = 0;
-    off = 0;
-    et = lookup(EXPTAB, 0);
-    if(et->type != 0 && et->type != SXREF)
-        diag("%s already defined", EXPTAB);
-    et->type = SDATA;
-    str = lookup(".string", 0);
-    if(str->type == 0)
-        str->type = SDATA;
-    sv = str->value;
-    for(i = 0; i < ne; i++){
-        s = esyms[i];
-        if(debug['S'])
-            s->sig = 0;
-        /* Bprint(&bso, "EXPORT: %s sig=%lux t=%d\n", s->name, s->sig, s->type); */
-
-        /* signature */
-        p = newdata(et, off, sizeof(long), D_EXTERN);
-        off += sizeof(long);
-        p->to.offset = s->sig;
-
-        /* address */
-        p = newdata(et, off, sizeof(long), D_EXTERN);
-        off += sizeof(long);
-        p->to.type = D_ADDR;
-        p->to.index = D_EXTERN;
-        p->to.sym = s;
-
-        /* string */
-        t = s->name;
-        n = strlen(t)+1;
-        for(;;){
-            buf[nb++] = *t;
-            sv++;
-            if(nb >= NSNAME){
-                p = newdata(str, sv-NSNAME, NSNAME, D_STATIC);
-                p->to.type = D_SCONST;
-                memmove(p->to.scon, buf, NSNAME);
-                nb = 0;
-            }
-            if(*t++ == 0)
-                break;
-        }
-
-        /* name */
-        p = newdata(et, off, sizeof(long), D_EXTERN);
-        off += sizeof(long);
-        p->to.type = D_ADDR;
-        p->to.index = D_STATIC;
-        p->to.sym = str;
-        p->to.offset = sv-n;
-    }
-
-    if(nb > 0){
-        p = newdata(str, sv-nb, nb, D_STATIC);
-        p->to.type = D_SCONST;
-        memmove(p->to.scon, buf, nb);
-    }
-
-    for(i = 0; i < 3; i++){
-        newdata(et, off, sizeof(long), D_EXTERN);
-        off += sizeof(long);
-    }
-    et->value = off;
-    if(sv == 0)
-        sv = 1;
-    str->value = sv;
-    exports = ne;
-    free(esyms);
-}
-@
 
 <<function export(arm)>>=
 void
@@ -10788,28 +8081,6 @@ export(void)
 
 
 
-<<function newdata(x86)>>=
-static Prog*
-newdata(Sym *s, int o, int w, int t)
-{
-    Prog *p;
-
-    p = prg();
-    if(edatap == P)
-        datap = p;
-    else
-        edatap->link = p;
-    edatap = p;
-    p->as = ADATA;
-    p->width = w;
-    p->from.scale = w;
-    p->from.type = t;
-    p->from.sym = s;
-    p->from.offset = o;
-    p->to.type = D_CONST;
-    return p;
-}
-@
 
 <<function newdata(arm)>>=
 static Prog*
@@ -10837,12 +8108,8 @@ newdata(Sym *s, int o, int w, int t)
 \section{Dynamic loading}
 % been disabled? can not find man page for dynld anymore, nor dynld.h
 
-<<global dlm(x86)>>=
+<<global dlm>>=
 bool dlm;
-@
-
-<<global dlm(arm)>>=
-int dlm;
 @
 
 
@@ -10878,26 +8145,6 @@ if(dlm){
 
 
 
-<<function import(x86)>>=
-void
-import(void)
-{
-    int i;
-    Sym *s;
-
-    for(i = 0; i < NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->sig != 0 && s->type == SXREF && (nimports == 0 || s->subtype == SIMPORT)){
-                if(s->value != 0)
-                    diag("value != 0 on SXREF");
-                undefsym(s);
-                if(debug['X'])
-                    Bprint(&bso, "IMPORT: %s sig=%lux v=%ld\n", s->name, s->sig, s->value);
-                if(debug['S'])
-                    s->sig = 0;
-            }
-}
-@
 
 <<function import(arm)>>=
 void
@@ -10915,8 +8162,17 @@ import(void)
 }
 @
 
+%on x86 additiona check and features, integrate them?
+%                if(s->value != 0)
+%                    diag("value != 0 on SXREF");
+%                undefsym(s);
+%                if(debug['X'])
+%                    Bprint(&bso, "IMPORT: %s sig=%lux v=%ld\n", s->name, s->sig, s->value);
+%                if(debug['S'])
+%                    s->sig = 0;
 
-<<enum rxxx(x86)>>=
+
+<<enum rxxx>>=
 enum rxxx {
     Roffset	= 22,		/* no. bits for offset in relocation address */
     Rindex	= 10,		/* no. bits for index in relocation address */
@@ -10924,7 +8180,7 @@ enum rxxx {
 @
 
 % import -> undefsym
-<<function undefsym(x86)>>=
+<<function undefsym>>=
 void
 undefsym(Sym *s)
 {
@@ -10942,28 +8198,7 @@ undefsym(Sym *s)
 @
 %>> >>
 
-<<function undefsym(arm)>>=
-void
-undefsym(Sym *s)
-{
-    int n;
 
-    n = imports;
-    if(s->value != 0)
-        diag("value != 0 on SXREF");
-    if(n >= 1<<Rindex)
-        diag("import index %d out of range", n);
-    s->value = n<<Roffset;
-    s->type = SUNDEF;
-    imports++;
-}
-@
-% >> >>
-
-
-<<global reloca(x86)>>=
-Adr*	reloca;
-@
 
 <<[[asmb()]] if dynamic module, when iterate from firstp(x86)>>=
 if(dlm) {
@@ -10994,7 +8229,7 @@ if(dlm){
 @
 
 
-<<[[entryvalue()]] if dynamic module case(x86)>>=
+<<[[entryvalue()]] if dynamic module case>>=
 case SDATA:
     if(dlm)
         return s->value+INITDAT;
@@ -11004,16 +8239,7 @@ case SDATA:
 
 
 
-
-
-
-
-
-
-
-
-
-<<struct Reloc(x86)>>=
+<<struct Reloc>>=
 struct Reloc
 {
     int n;
@@ -11023,25 +8249,10 @@ struct Reloc
 };
 @
 
-<<struct Reloc(arm)>>=
-struct Reloc
-{
-    int n;
-    int t;
-    uchar *m;
-    ulong *a;
-};
-@
-
-
-
-<<global rels(x86)>>=
+<<global rels>>=
 Reloc rels;
 @
 
-<<global rels(arm)>>=
-Reloc rels;
-@
 
 
 <<[[asmb()]] if dynamic module, call asmdyn()(x86)>>=
@@ -11051,7 +8262,7 @@ if(dlm)
 
 % asmb() -> asmdyn()
 
-<<function asmdyn(x86)>>=
+<<function asmdyn>>=
 void
 asmdyn()
 {
@@ -11120,86 +8331,12 @@ asmdyn()
 @
 % >> >>
 
-<<function asmdyn(arm)>>=
-void
-asmdyn()
-{
-    int i, n, t, c;
-    Sym *s;
-    ulong la, ra, *a;
-    vlong off;
-    uchar *m;
-    Reloc *r;
-
-    cflush();
-    off = seek(cout, 0, 1);
-    lput(0);
-    t = 0;
-    lput(imports);
-    t += 4;
-    for(i = 0; i < NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->type == SUNDEF){
-                lput(s->sig);
-                t += 4;
-                t += sput(s->name);
-            }
-    
-    la = 0;
-    r = &rels;
-    n = r->n;
-    m = r->m;
-    a = r->a;
-    lput(n);
-    t += 4;
-    for(i = 0; i < n; i++){
-        ra = *a-la;
-        if(*a < la)
-            diag("bad relocation order");
-        if(ra < 256)
-            c = 0;
-        else if(ra < 65536)
-            c = 1;
-        else
-            c = 2;
-        cput((c<<6)|*m++);
-        t++;
-        if(c == 0){
-            cput(ra);
-            t++;
-        }
-        else if(c == 1){
-            wput(ra);
-            t += 2;
-        }
-        else{
-            lput(ra);
-            t += 4;
-        }
-        la = *a++;
-    }
-
-    cflush();
-    seek(cout, off, 0);
-    lput(t);
-
-    if(debug['v']){
-        Bprint(&bso, "import table entries = %d\n", imports);
-        Bprint(&bso, "export table entries = %d\n", exports);
-    }
-}
-@
-% >>
 
 
-
-<<global modemap(x86)>>=
+<<global modemap>>=
 int modemap[4] = { 0, 1, -1, 2, };
 @
 
-<<global modemap(arm)>>=
-int modemap[4] = { 0, 1, -1, 2, };
-@
 
 
 
@@ -11208,53 +8345,20 @@ if(dlm)
     dynreloc(p->to.sym, l+s+INITDAT, 1);
 @
 
-<<function dynreloc(x86)>>=
-void
-dynreloc(Sym *s, ulong v, int abs)
-{
-    int i, k, n;
-    byte *m;
-    ulong *a;
-    Reloc *r;
-
-    if(s->type == SUNDEF)
-        k = abs ? ABSU : RELU;
-    else
-        k = abs ? ABSD : RELD;
-    /* Bprint(&bso, "R %s a=%ld(%lx) %d\n", s->name, v, v, k); */
-    k = modemap[k];
-    r = &rels;
-    n = r->n;
-    if(n >= r->t)
-        grow(r);
-    m = r->m;
-    a = r->a;
-    for(i = n; i > 0; i--){
-        if(v < a[i-1]){	/* happens occasionally for data */
-            m[i] = m[i-1];
-            a[i] = a[i-1];
-        }
-        else
-            break;
-    }
-    m[i] = k;
-    a[i] = v;
-    r->n++;
-}
-@
 
 <<function dynreloc(arm)>>=
 void
 dynreloc(Sym *s, long v, int abs)
 {
     int i, k, n;
-    uchar *m;
+    byte *m;
     ulong *a;
     Reloc *r;
 
     if(v&3)
         diag("bad relocation address");
     v >>= 2;
+
     if(s != S && s->type == SUNDEF)
         k = abs ? ABSU : RELU;
     else
@@ -11280,9 +8384,9 @@ dynreloc(Sym *s, long v, int abs)
     r->n++;
 }
 @
+% the align 4 check at the beginning are ARM specific
 
-
-<<function grow(x86)>>=
+<<function grow>>=
 static void
 grow(Reloc *r)
 {
@@ -11303,33 +8407,12 @@ grow(Reloc *r)
 }
 @
 
-<<function grow(arm)>>=
-static void
-grow(Reloc *r)
-{
-    int t;
-    uchar *m, *nm;
-    ulong *a, *na;
-
-    t = r->t;
-    r->t += 64;
-    m = r->m;
-    a = r->a;
-    r->m = nm = malloc(r->t*sizeof(uchar));
-    r->a = na = malloc(r->t*sizeof(ulong));
-    memmove(nm, m, t*sizeof(uchar));
-    memmove(na, a, t*sizeof(ulong));
-    free(m);
-    free(a);
-}
-@
-
 
 \section{Float}
 
 % 8.out.h
 
-<<function ieeedtof(x86)>>=
+<<function ieeedtof>>=
 long
 ieeedtof(Ieee *e)
 {
@@ -11357,7 +8440,7 @@ ieeedtof(Ieee *e)
 }
 @
 
-<<function ieeedtod(x86)>>=
+<<function ieeedtod>>=
 double
 ieeedtod(Ieee *ieeep)
 {
@@ -11384,61 +8467,6 @@ ieeedtod(Ieee *ieeep)
 }
 @
 
-
-<<function ieeedtof(arm)>>=
-long
-ieeedtof(Ieee *ieeep)
-{
-    int exp;
-    long v;
-
-    if(ieeep->h == 0)
-        return 0;
-    exp = (ieeep->h>>20) & ((1L<<11)-1L);
-    exp -= (1L<<10) - 2L;
-    v = (ieeep->h & 0xfffffL) << 3;
-    v |= (ieeep->l >> 29) & 0x7L;
-    if((ieeep->l >> 28) & 1) {
-        v++;
-        if(v & 0x800000L) {
-            v = (v & 0x7fffffL) >> 1;
-            exp++;
-        }
-    }
-    if(exp <= -126 || exp >= 130)
-        diag("double fp to single fp overflow");
-    v |= ((exp + 126) & 0xffL) << 23;
-    v |= ieeep->h & 0x80000000L;
-    return v;
-}
-@
-
-<<function ieeedtod(arm)>>=
-double
-ieeedtod(Ieee *ieeep)
-{
-    Ieee e;
-    double fr;
-    int exp;
-
-    if(ieeep->h & (1L<<31)) {
-        e.h = ieeep->h & ~(1L<<31);
-        e.l = ieeep->l;
-        return -ieeedtod(&e);
-    }
-    if(ieeep->l == 0 && ieeep->h == 0)
-        return 0;
-    fr = ieeep->l & ((1L<<16)-1L);
-    fr /= 1L<<16;
-    fr += (ieeep->l>>16) & ((1L<<16)-1L);
-    fr /= 1L<<16;
-    fr += (ieeep->h & (1L<<20)-1L) | (1L<<20);
-    fr /= 1L<<21;
-    exp = (ieeep->h>>20) & ((1L<<11)-1L);
-    exp -= (1L<<10) - 2L;
-    return ldexp(fr, exp);
-}
-@
 
 
 
@@ -11482,6 +8510,7 @@ case AFCOMFP:
     }
     goto casdef;
 @
+%$
 
 <<[[ldobj()]] switch as cases(x86)>>=
 case AFMOVD:
@@ -11523,6 +8552,7 @@ case AFCOMDP:
     }
     goto casdef;
 @
+%$
 
 
 \section{Extra executable formats}
@@ -11735,13 +8765,10 @@ case H_ELF:
 \subsection{Elf}
 
 % start text physical address (elf only)
-<<global INITTEXTP(x86)>>=
-long	INITTEXTP = -1;
+<<global INITTEXTP>>=
+long	INITTEXTP = -1; /* text location (physical) */
 @
 
-<<global INITTEXTP(arm)>>=
-long	INITTEXTP;		/* text location (physical) */
-@
 
 
 
@@ -11778,10 +8805,11 @@ if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
 @
 % 0_9 initentry means something special?
 
-<<[[entryvalue()]] if digit INITENTRY(x86)>>=
+<<[[entryvalue()]] if digit INITENTRY>>=
 if(*a >= '0' && *a <= '9')
     return atolwhex(a);
 @
+
 
 
 \chapter{Conclusion}
@@ -11805,24 +8833,16 @@ if(*a >= '0' && *a <= '9')
 
 % hmm actually it's used not just for debugging but also for generic
 % options, e.g. for -l, -p, etc in addition to the main use which is -v
-<<global debug(x86)>>=
+<<global debug>>=
 bool	debug[128];
 @
 % why not 256 like in Assembler.nw?
-
-<<global debug(arm)>>=
-char	debug[128];
-@
 
 
 % -A, see diag()
 
 %bso? 
-<<global bso(x86)>>=
-Biobuf	bso;
-@
-
-<<global bso(arm)>>=
+<<global bso>>=
 Biobuf	bso;
 @
 
@@ -11846,18 +8866,15 @@ default:
 % dupe with Compiler.nw
 
 % why called listinit??
-<<function listinit(x86)>>=
-void
-listinit(void)
-{
 
-    fmtinstall('A', Aconv);
-    fmtinstall('R', Rconv);
-    fmtinstall('D', Dconv);
-    fmtinstall('P', Pconv);
-    fmtinstall('S', Sconv);
+<<function prasm(arm)>>=
+void
+prasm(Prog *p)
+{
+    print("%P\n", p);
 }
 @
+
 
 <<function listinit(arm)>>=
 void
@@ -11883,11 +8900,8 @@ Nconv(Fmt *fp)
 
     a = va_arg(fp->args, Adr*);
     s = a->sym;
-    switch(a->name) {
-    default:
-        sprint(str, "GOK-name(%d)", a->name);
-        break;
 
+    switch(a->name) {
     case N_NONE:
         sprint(str, "%ld", a->offset);
         break;
@@ -11919,6 +8933,10 @@ Nconv(Fmt *fp)
         else
             sprint(str, "%s+%ld(FP)", s->name, a->offset);
         break;
+    default:
+        sprint(str, "GOK-name(%d)", a->name);
+        break;
+
     }
     return fmtstrcpy(fp, str);
 }
@@ -11926,13 +8944,6 @@ Nconv(Fmt *fp)
 
 
 
-<<function prasm(arm)>>=
-void
-prasm(Prog *p)
-{
-    print("%P\n", p);
-}
-@
 
 <<global strcond(arm)>>=
 char*	strcond[16] =
@@ -11981,29 +8992,14 @@ Cconv(Fmt *fp)
 
 
 
-% defined in ../8c/enam.c, coupling with enum as in 8.out.h
+% defined in ../5c/enam.c, coupling with enum as in 5.out.h
 % extern	char*	anames[];
 
 
-% ??? also in globals.c? not already in enam.c?
-<<global anames (linkers/5l/globals.c)(arm)>>=
-char*	anames[];
-@
 
-
-<<function Aconv(x86)>>=
-// enum<opcode> -> string
-int
-Aconv(Fmt *fp)
-{
-    int i;
-
-    i = va_arg(fp->args, int);
-    return fmtstrcpy(fp, anames[i]);
-}
-@
 
 <<function Aconv(arm)>>=
+// enum<opcode> -> string
 int
 Aconv(Fmt *fp)
 {
@@ -12021,149 +9017,14 @@ Aconv(Fmt *fp)
 
 
 
-<<global regstr(x86)>>=
-// coupling with enum regs in 8.out.h
-char*	regstr[] =
-{
-    "AL",		/* [D_AL] */
-    "CL",
-    "DL",
-    "BL",
-    "AH",
-    "CH",
-    "DH",
-    "BH",
 
-    "AX",		/* [D_AX] */
-    "CX",
-    "DX",
-    "BX",
-    "SP",
-    "BP",
-    "SI",
-    "DI",
-
-    "F0",		/* [D_F0] */
-    "F1",
-    "F2",
-    "F3",
-    "F4",
-    "F5",
-    "F6",
-    "F7",
-
-    "CS",		/* [D_CS] */
-    "SS",
-    "DS",
-    "ES",
-    "FS",
-    "GS",
-
-    "GDTR",		/* [D_GDTR] */
-    "IDTR",		/* [D_IDTR] */
-    "LDTR",		/* [D_LDTR] */
-    "MSW",		/* [D_MSW] */
-    "TASK",		/* [D_TASK] */
-
-    "CR0",		/* [D_CR] */
-    "CR1",
-    "CR2",
-    "CR3",
-    "CR4",
-    "CR5",
-    "CR6",
-    "CR7",
-
-    "DR0",		/* [D_DR] */
-    "DR1",
-    "DR2",
-    "DR3",
-    "DR4",
-    "DR5",
-    "DR6",
-    "DR7",
-
-    "TR0",		/* [D_TR] */
-    "TR1",
-    "TR2",
-    "TR3",
-    "TR4",
-    "TR5",
-    "TR6",
-    "TR7",
-
-    "NONE",		/* [D_NONE] */
-};
-@
-% NONE part of it? this can happen? not more part of enum<operand>?
-
-<<function Rconv(x86)>>=
-// enum<operand_kind(register-only)> -> string
-int
-Rconv(Fmt *fp)
-{
-    char str[20];
-    int r;
-
-    r = va_arg(fp->args, int);
-    if(r >= D_AL && r <= D_NONE)
-        snprint(str, sizeof(str), "%s", regstr[r-D_AL]);
-    else
-        snprint(str, sizeof(str), "gok(%d)", r);
-
-    return fmtstrcpy(fp, str);
-}
-@
-%gok??
-
-
-% used by PConv and Dconv as Dconv need access to enclosing Prog for branch
-<<global bigP(x86)>>=
-static	Prog	*bigP;
-@
-
-<<constant STRINGSZ(x86)>>=
+<<constant STRINGSZ>>=
 STRINGSZ	= 200,
 @
 
-<<function Pconv(x86)>>=
-// Prog -> string
-int
-Pconv(Fmt *fp)
-{
-    char str[STRINGSZ];
-    Prog *p;
-
-    p = va_arg(fp->args, Prog*);
-    bigP = p;
-    switch(p->as) {
-    case ATEXT:
-        // when this happens?
-        if(p->from.scale) {
-            snprint(str, sizeof(str), "(%ld)	%A	%D,%d,%D",
-                p->line, p->as, &p->from, p->from.scale, &p->to);
-        } else {
-            snprint(str, sizeof(str), "(%ld)	%A	%D,%D",
-                p->line, p->as, &p->from, &p->to);
-        }
-        break;
-    case ADATA:
-    case AINIT:
-    case ADYNT:
-        snprint(str, sizeof(str), "(%ld)	%A	%D/%d,%D",
-            p->line, p->as, &p->from, p->from.scale, &p->to);
-        break;
-    default:
-        snprint(str, sizeof(str), "(%ld)	%A	%D,%D",
-            p->line, p->as, &p->from, &p->to);
-        break;
-    }
-    bigP = P;
-    return fmtstrcpy(fp, str);
-}
-@
 
 <<function Pconv(arm)>>=
+// Prog -> string
 int
 Pconv(Fmt *fp)
 {
@@ -12174,7 +9035,21 @@ Pconv(Fmt *fp)
     p = va_arg(fp->args, Prog*);
     curp = p;
     a = p->as;
+
     switch(a) {
+    case ASWPW:
+    case ASWPBU:
+        sprint(str, "(%ld)	%A%C	R%d,%D,%D",
+            p->line, a, p->scond, p->reg, &p->from, &p->to);
+        break;
+
+    case ADATA:
+    case AINIT:
+    case ADYNT:
+        sprint(str, "(%ld)	%A%C	%D/%d,%D",
+            p->line, a, p->scond, &p->from, p->reg, &p->to);
+        break;
+
     default:
         s = str;
         s += sprint(s, "(%ld)", p->line);
@@ -12190,18 +9065,6 @@ Pconv(Fmt *fp)
                 a, p->scond, &p->from, p->reg, &p->to);
         break;
 
-    case ASWPW:
-    case ASWPBU:
-        sprint(str, "(%ld)	%A%C	R%d,%D,%D",
-            p->line, a, p->scond, p->reg, &p->from, &p->to);
-        break;
-
-    case ADATA:
-    case AINIT:
-    case ADYNT:
-        sprint(str, "(%ld)	%A%C	%D/%d,%D",
-            p->line, a, p->scond, &p->from, p->reg, &p->to);
-        break;
     }
     return fmtstrcpy(fp, str);
 }
@@ -12210,92 +9073,9 @@ Pconv(Fmt *fp)
 
 
 
-
-<<function Dconv(x86)>>=
-// Adr -> string
-int
-Dconv(Fmt *fp)
-{
-    char str[STRINGSZ+40], s[20];
-    Adr *a;
-    //enum<operand_kind>
-    int i;
-
-    a = va_arg(fp->args, Adr*);
-    i = a->type;
-
-    <<[[Dconv()]] if i >= D_INDIR(x86)>>
-
-    switch(i) {
-    case D_NONE:
-        str[0] = '\0';
-        break;
-
-
-    case D_BRANCH:
-        if(bigP != P && bigP->pcond != P)
-            if(a->sym != S)
-                snprint(str, sizeof(str), "%lux+%s", bigP->pcond->pc,
-                    a->sym->name);
-            else
-                snprint(str, sizeof(str), "%lux", bigP->pcond->pc);
-        else
-            snprint(str, sizeof(str), "%ld(PC)", a->offset);
-        break;
-
-    case D_EXTERN:
-        snprint(str, sizeof(str), "%s+%ld(SB)", a->sym->name, a->offset);
-        break;
-    case D_STATIC:
-        snprint(str, sizeof(str), "%s<%d>+%ld(SB)", a->sym->name,
-            a->sym->version, a->offset);
-        break;
-    case D_AUTO:
-        snprint(str, sizeof(str), "%s+%ld(SP)", a->sym->name, a->offset);
-        break;
-    case D_PARAM:
-        if(a->sym)
-            snprint(str, sizeof(str), "%s+%ld(FP)", a->sym->name, a->offset);
-        else
-            snprint(str, sizeof(str), "%ld(FP)", a->offset);
-        break;
-
-    case D_CONST:
-        snprint(str, sizeof(str), "$%ld", a->offset);
-        break;
-    case D_FCONST:
-        snprint(str, sizeof(str), "$(%.8lux,%.8lux)", a->ieee.h, a->ieee.l);
-        break;
-    case D_SCONST:
-        snprint(str, sizeof(str), "$\"%S\"", a->scon);
-        break;
-
-    case D_ADDR:
-        a->type = a->index;
-        a->index = D_NONE;
-        snprint(str, sizeof(str), "$%D", a);
-        a->index = a->type;
-        a->type = D_ADDR;
-        goto conv;
-
-    default:
-        snprint(str, sizeof(str), "%R", i);
-        break;
-
-    }
-brk:
-    if(a->index != D_NONE) {
-        snprint(s, sizeof(s), "(%R*%d)", a->index, a->scale);
-        strcat(str, s);
-    }
-conv:
-    return fmtstrcpy(fp, str);
-}
-@
-% todo: could simplify flow, those brk: conv: and goto are ugly,
-% copy paste a bit and avoid complex flow instead
 
 <<function Dconv(arm)>>=
+// Adr -> string
 int
 Dconv(Fmt *fp)
 {
@@ -12306,10 +9086,6 @@ Dconv(Fmt *fp)
 
     a = va_arg(fp->args, Adr*);
     switch(a->type) {
-
-    default:
-        sprint(str, "GOK-type(%d)", a->type);
-        break;
 
     case D_NONE:
         str[0] = 0;
@@ -12420,6 +9196,11 @@ Dconv(Fmt *fp)
     case D_SCONST:
         sprint(str, "$\"%S\"", a->sval);
         break;
+
+    default:
+        sprint(str, "GOK-type(%d)", a->type);
+        break;
+
     }
     return fmtstrcpy(fp, str);
 }
@@ -12427,72 +9208,11 @@ Dconv(Fmt *fp)
 
 
 
-%???
-<<[[Dconv()]] if i >= D_INDIR(x86)>>=
-if(i >= D_INDIR) {
-    if(a->offset)
-        snprint(str, sizeof(str), "%ld(%R)", a->offset, i-D_INDIR);
-    else
-        snprint(str, sizeof(str), "(%R)", i-D_INDIR);
-    goto brk;
-}
-@
 
 
-%????  %S not used that much here, but used a lot in optable, for things
-% like MOV%S, means MOVL, MOVB, MOVW?
-% for D_SCONST ?? but what is D_SCONST?
-<<function Sconv(x86)>>=
-// ?? -> string
-int
-Sconv(Fmt *fp)
-{
-    int i, c;
-    char str[30], *p, *a;
-
-    a = va_arg(fp->args, char*);
-    p = str;
-    for(i=0; i<sizeof(double); i++) {
-        c = a[i] & 0xff;
-        if(c >= 'a' && c <= 'z' ||
-           c >= 'A' && c <= 'Z' ||
-           c >= '0' && c <= '9') {
-            *p++ = c;
-            continue;
-        }
-        *p++ = '\\';
-
-        switch(c) {
-        default:
-            if(c < 040 || c >= 0177)
-                break;	/* not portable */
-            p[-1] = c;
-            continue;
-        case 0:
-            *p++ = 'z';
-            continue;
-        case '\\':
-        case '"':
-            *p++ = c;
-            continue;
-        case '\n':
-            *p++ = 'n';
-            continue;
-        case '\t':
-            *p++ = 't';
-            continue;
-        }
-        *p++ = (c>>6) + '0';
-        *p++ = ((c>>3) & 7) + '0';
-        *p++ = (c & 7) + '0';
-    }
-    *p = 0;
-    return fmtstrcpy(fp, str);
-}
-@
-% what the fuck is this?
 
 <<function Sconv(arm)>>=
+// ?? -> string
 int
 Sconv(Fmt *fp)
 {
@@ -12536,9 +9256,7 @@ Sconv(Fmt *fp)
 @
 
 
-
-
-\section{[[8l -v]] and [[DBG()]]}
+\section{[[5l -v]] and [[DBG()]]}
 
 %used to have lots of code like:
 %if(debug['v']) {
@@ -12549,11 +9267,11 @@ Sconv(Fmt *fp)
 % (The Bflush was outside the if, but makes more sense like this I think)
 %but better to have a DBG macro for this
 
-<<macro DBG(x86)>>=
+<<macro DBG>>=
 #define DBG if(debug['v']) mylog
 @
 
-<<function log(x86)>>=
+<<function log>>=
 void mylog(char *fmt, ...) {
 
     va_list arg;
@@ -12565,17 +9283,13 @@ void mylog(char *fmt, ...) {
 }
 @
 
-\section{[[8l -a]]}
+\section{[[5l -a]]}
 % print object code in assembly language with addresses?
 
-\section{[[8l -9 -B -9]]}
+\section{[[5l -9 -B -9]]}
 % dead?
 
-<<constant DEFAULT(x86)>>=
-#define	DEFAULT	'9'
-@
-
-<<constant DEFAULT(arm)>>=
+<<constant DEFAULT>>=
 #define	DEFAULT	'9'
 @
 
@@ -12614,17 +9328,13 @@ if(debug['v']) {
 
 \chapter{Error Managment}
 
-<<global nerrors(x86)>>=
+<<global nerrors>>=
 int	nerrors = 0;
 @
 
-<<global nerrors(arm)>>=
-int	nerrors;
-@
 
 
-
-<<function errorexit(x86)>>=
+<<function errorexit>>=
 void
 errorexit(void)
 {
@@ -12638,23 +9348,10 @@ errorexit(void)
 }
 @
 
-<<function errorexit(arm)>>=
-void
-errorexit(void)
-{
-
-    if(nerrors) {
-        if(cout >= 0)
-            remove(outfile);
-        exits("error");
-    }
-    exits(0);
-}
-@
 
 
 % could use TNAME here too?
-<<function diag(x86)>>=
+<<function diag>>=
 void
 diag(char *fmt, ...)
 {
@@ -12677,29 +9374,7 @@ diag(char *fmt, ...)
     }
 }
 @
-
-<<function diag(arm)>>=
-void
-diag(char *fmt, ...)
-{
-    char buf[STRINGSZ], *tn;
-    va_list arg;
-
-    tn = "??none??";
-    if(curtext != P && curtext->from.sym != S)
-        tn = curtext->from.sym->name;
-    va_start(arg, fmt);
-    vseprint(buf, buf+sizeof(buf), fmt, arg);
-    va_end(arg);
-    print("%s: %s\n", tn, buf);
-
-    nerrors++;
-    if(nerrors > 10) {
-        print("too many errors\n");
-        errorexit();
-    }
-}
-@
+% ARM does not have the && !debug['A'], but probablt error no?
 
 
 \chapter{Libc}
@@ -12707,44 +9382,31 @@ diag(char *fmt, ...)
 \section{Memory managmnent}
 % same in Assembler
 
-<<global hunk(x86)>>=
-char*	hunk;
-@
-
-<<global hunk(arm)>>=
+<<global hunk>>=
 char*	hunk;
 @
 
 
 
-<<global nhunk(x86)>>=
+<<global nhunk>>=
 long	nhunk;
 @
 % = 0??
 
-<<global nhunk(arm)>>=
-long	nhunk;
-@
 
-
-<<global thunk(x86)>>=
-long	thunk;
-@
-
-<<global thunk(arm)>>=
+<<global thunk>>=
 long	thunk;
 @
 
 
-
-<<constant NHUNK(x86)>>=
+<<constant NHUNK linker>>=
 NHUNK		= 100000,
 @
 
 
 % not sure why don't use libc malloc and do low-level sbrk ...
 % to optimize things? as they do no free?
-<<function gethunk(x86)>>=
+<<function gethunk>>=
 void
 gethunk(void)
 {
@@ -12769,33 +9431,9 @@ gethunk(void)
 @
 
 
-<<function gethunk(arm)>>=
-void
-gethunk(void)
-{
-    char *h;
-    long nh;
-
-    nh = NHUNK;
-    if(thunk >= 5L*NHUNK) {
-        nh = 5L*NHUNK;
-        if(thunk >= 25L*NHUNK)
-            nh = 25L*NHUNK;
-    }
-    h = mysbrk(nh);
-    if(h == (char*)-1) {
-        diag("out of memory");
-        errorexit();
-    }
-    hunk = h;
-    nhunk = nh;
-    thunk += nh;
-}
-@
 
 
-
-<<function malloc(x86)>>=
+<<function malloc>>=
 /*
  * fake malloc
  */
@@ -12817,30 +9455,11 @@ malloc(ulong n)
 }
 @
 
-<<function malloc(arm)>>=
-/*
- * fake malloc
- */
-void*
-malloc(ulong n)
-{
-    void *p;
-
-    while(n & 7)
-        n++;
-    while(nhunk < n)
-        gethunk();
-    p = hunk;
-    nhunk -= n;
-    hunk += n;
-    return p;
-}
-@
 
 
 
 % no free ...  hmmm
-<<function free(x86)>>=
+<<function free>>=
 void
 free(void *p)
 {
@@ -12848,18 +9467,11 @@ free(void *p)
 }
 @
 
-<<function free(arm)>>=
-void
-free(void *p)
-{
-    USED(p);
-}
-@
 
 
 % not sure why but if redefine malloc and free then have to
 % redefine this func too, otherwise get a link error
-<<function setmalloctag(x86)>>=
+<<function setmalloctag>>=
 //@Scheck: looks dead, but because we redefine malloc/free we must also redefine that
 void setmalloctag(void *v, ulong pc)
 {
@@ -12867,45 +9479,10 @@ void setmalloctag(void *v, ulong pc)
 }
 @
 
-<<function setmalloctag(arm)>>=
-void
-setmalloctag(void *v, ulong pc)
-{
-    USED(v, pc);
-}
-@
-
-
-% DELETE
-<<function calloc(arm)>>=
-void*
-calloc(ulong m, ulong n)
-{
-    void *p;
-
-    n *= m;
-    p = malloc(n);
-    memset(p, 0, n);
-    return p;
-}
-@
-
-
-% DELETE
-<<function realloc(arm)>>=
-void*
-realloc(void *p, ulong n)
-{
-    fprint(2, "realloc(0x%p %ld) called\n", p, n);
-    abort();
-    return 0;
-}
-@
-
 
 \section{Buffer managmnent}
 
-<<function readsome(x86)>>=
+<<function readsome>>=
 byte*
 readsome(int f, byte *buf, byte *good, byte *stop, int max)
 {
@@ -12924,31 +9501,9 @@ readsome(int f, byte *buf, byte *good, byte *stop, int max)
 }
 @
 
-<<function readsome(arm)>>=
-uchar*
-readsome(int f, uchar *buf, uchar *good, uchar *stop, int max)
-{
-    int n;
-
-    n = stop - good;
-    memmove(buf, good, stop - good);
-    stop = buf + n;
-    n = MAXIO - n;
-    if(n > max)
-        n = max;
-    n = read(f, stop, n);
-    if(n <= 0)
-        return 0;
-    return stop + n;
-}
-@
 
 
-
-
-
-
-<<struct Buf(x86)>>=
+<<struct Buf>>=
 union Buf
 {
     struct
@@ -12960,82 +9515,38 @@ union Buf
 };
 @
 
-<<struct Buf(arm)>>=
-union Buf
-{
-    struct
-    {
-        uchar	obuf[MAXIO];			/* output buffer */
-        uchar	ibuf[MAXIO];			/* input buffer */
-    } u;
-    char	dbuf[1];
-};
-@
 
 
-
-<<global buf(x86)>>=
-union Buf buf;
-@
-
-<<global buf(arm)>>=
+<<global buf>>=
 union Buf buf;
 @
 
 
 
-<<constant MAXIO(x86)>>=
+<<constant MAXIO>>=
 MAXIO		= 8192,
 @
 
 
-
-
-<<constant cbuf(x86)>>=
+<<constant cbuf>>=
 #define	cbuf	u.obuf
 @
 
-<<constant xbuf(x86)>>=
+<<constant xbuf>>=
 #define	xbuf	u.ibuf
 @
 
 
-<<constant cbuf(arm)>>=
-#define	cbuf	u.obuf
-@
-
-<<constant xbuf(arm)>>=
-#define	xbuf	u.ibuf
-@
-
-
-
-
-<<global cbc(x86)>>=
-int	cbc;
-@
-
-<<global cbc(arm)>>=
+<<global cbc>>=
 int	cbc;
 @
 
 
-<<global cbp(x86)>>=
+<<global cbp>>=
 char*	cbp;
 @
 
-<<global cbp(arm)>>=
-uchar*	cbp;
-@
 
-
-
-<<function cput(x86)>>=
-#define	cput(c)\
-    { *cbp++ = c;\
-    if(--cbc <= 0)\
-        cflush(); }
-@
 
 <<function cput(arm)>>=
 void
@@ -13048,10 +9559,10 @@ cput(int c)
         cflush();
 }
 @
-
+% mostly similar to x86, x86 is using a macro though
 
 % in the end print in cout
-<<function cflush(x86)>>=
+<<function cflush>>=
 void
 cflush(void)
 {
@@ -13066,33 +9577,10 @@ cflush(void)
 @
 
 
-<<function cflush(arm)>>=
-void
-cflush(void)
-{
-    int n;
-
-    n = sizeof(buf.cbuf) - cbc;
-    if(n)
-        write(cout, buf.cbuf, n);
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
-}
-@
 
 
 % xxxl means left? little endian?
 
-
-<<function wputl(x86)>>=
-/* these need to take long arguments to be compatible with elf.c */
-void
-wputl(long w)
-{
-    cput(w);
-    cput(w>>8);
-}
-@
 
 <<function wputl(arm)>>=
 void
@@ -13107,16 +9595,8 @@ wputl(long l)
         cflush();
 }
 @
+% the x86 version seems more logical, normal?
 
-
-<<function wput(x86)>>=
-void
-wput(long w)
-{
-    cput(w>>8);
-    cput(w);
-}
-@
 
 <<function wput(arm)>>=
 void
@@ -13133,16 +9613,6 @@ wput(long l)
 @
 
 
-<<function lput(x86)>>=
-void
-lput(long l)
-{
-    cput(l>>24);
-    cput(l>>16);
-    cput(l>>8);
-    cput(l);
-}
-@
 
 <<function lput(arm)>>=
 void
@@ -13161,16 +9631,6 @@ lput(long l)
 @
 
 
-<<function lputl(x86)>>=
-void
-lputl(long l)
-{
-    cput(l);
-    cput(l>>8);
-    cput(l>>16);
-    cput(l>>24);
-}
-@
 
 <<function lputl(arm)>>=
 void
@@ -13189,16 +9649,7 @@ lputl(long l)
 @
 
 
-<<function llput(x86)>>=
-void
-llput(vlong v)
-{
-    lput(v>>32);
-    lput(v);
-}
-@
-
-<<function llput(arm)>>=
+<<function llput>>=
 void
 llput(vlong v)
 {
@@ -13208,16 +9659,7 @@ llput(vlong v)
 @
 
 
-<<function llputl(x86)>>=
-void
-llputl(vlong v)
-{
-    lputl(v);
-    lputl(v>>32);
-}
-@
-
-<<function llputl(arm)>>=
+<<function llputl>>=
 void
 llputl(vlong v)
 {
@@ -13228,20 +9670,6 @@ llputl(vlong v)
 
 
 
-<<function strnput(x86)>>=
-void
-strnput(char *s, int n)
-{
-    for(; *s && n > 0; s++){
-        cput(*s);
-        n--;
-    }
-    while(n > 0){
-        cput(0);
-        n--;
-    }
-}
-@
 
 <<function strnput(arm)>>=
 void
@@ -13255,35 +9683,15 @@ strnput(char *s, int n)
         cput(0);
 }
 @
+% the x86 version is sligtly different
 
 \section{File managment}
 
-<<function fileexists(x86)>>=
+<<function fileexists>>=
 int
 fileexists(char *s)
 {
     byte dirbuf[400];
-
-    /* it's fine if stat result doesn't fit in dirbuf, since even then the file exists */
-    return stat(s, dirbuf, sizeof(dirbuf)) >= 0;
-}
-@
-
-%DELETE
-<<function mysbrk(arm)>>=
-void*
-mysbrk(ulong size)
-{
-    return sbrk(size);
-}
-@
-
-
-<<function fileexists(arm)>>=
-int
-fileexists(char *s)
-{
-    uchar dirbuf[400];
 
     /* it's fine if stat result doesn't fit in dirbuf, since even then the file exists */
     return stat(s, dirbuf, sizeof(dirbuf)) >= 0;
@@ -13295,7 +9703,7 @@ fileexists(char *s)
 
 % could be put in libc, with the other atoxxx
 % atoxx? why a?
-<<function atolwhex(x86)>>=
+<<function atolwhex>>=
 long
 atolwhex(char *s)
 {
@@ -13337,68 +9745,10 @@ atolwhex(char *s)
 }
 @
 
-<<function atolwhex(arm)>>=
-long
-atolwhex(char *s)
-{
-    long n;
-    int f;
-
-    n = 0;
-    f = 0;
-    while(*s == ' ' || *s == '\t')
-        s++;
-    if(*s == '-' || *s == '+') {
-        if(*s++ == '-')
-            f = 1;
-        while(*s == ' ' || *s == '\t')
-            s++;
-    }
-    if(s[0]=='0' && s[1]){
-        if(s[1]=='x' || s[1]=='X'){
-            s += 2;
-            for(;;){
-                if(*s >= '0' && *s <= '9')
-                    n = n*16 + *s++ - '0';
-                else if(*s >= 'a' && *s <= 'f')
-                    n = n*16 + *s++ - 'a' + 10;
-                else if(*s >= 'A' && *s <= 'F')
-                    n = n*16 + *s++ - 'A' + 10;
-                else
-                    break;
-            }
-        } else
-            while(*s >= '0' && *s <= '7')
-                n = n*8 + *s++ - '0';
-    } else
-        while(*s >= '0' && *s <= '9')
-            n = n*10 + *s++ - '0';
-    if(f)
-        n = -n;
-    return n;
-}
-@
 
 \section{Mathematic functions}
 
-<<function rnd(x86)>>=
-long
-rnd(long v, long r)
-{
-    long c;
-
-    if(r <= 0)
-        return v;
-    v += r - 1;
-    c = v % r;
-    if(c < 0)
-        c += r;
-    v -= c;
-    return v;
-}
-@
-
-<<function rnd(arm)>>=
+<<function rnd>>=
 long
 rnd(long v, long r)
 {
