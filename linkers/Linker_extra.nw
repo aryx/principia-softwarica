@@ -13598,7 +13598,7 @@ zprg.to = zprg.from;
 @
 
 <<[[main()]] locals(x86)>>=
-bool load_libs = true;
+bool load_libs;
 @
 
 % -l means no automagic stdlibs
@@ -13727,6 +13727,439 @@ if(HEADTYPE == -1) {
         HEADTYPE = 2;
 }
 @
+
+<<function ldobj(x86)>>=
+void
+ldobj(fdt f, long c, char *pn)
+{
+    <<[[ldobj()]] locals(x86)>>
+
+    <<[[ldobj()]] grow filen if not enough space>>
+    filen[files++] = strdup(pn);
+
+    <<[[ldobj()]] bloc and bsize init>>
+
+    di = S;
+
+// can come from AEND
+newloop:
+    version++;
+    memset(h, 0, sizeof(h));
+    histfrogp = 0;
+    ipc = pc;
+    skip = false;
+
+loop:
+    if(c <= 0)
+        goto eof;
+
+    <<[[ldobj()]] read if needed in loop:, adjust block and bsize>>
+
+    // get the opcode
+    o = bloc[0] | (bloc[1] << 8); // >>
+
+    <<[[ldobj()]] sanity check opcode in range(x86)>>
+
+    <<[[ldobj()]] if ANAME or ASIGNAME(x86)>>
+
+    //TODO: factorize
+    while(nhunk < sizeof(Prog))
+        gethunk();
+    p = (Prog*)hunk;
+    nhunk -= sizeof(Prog);
+    hunk += sizeof(Prog);
+
+    p->as = o;
+    p->line = bloc[2] | (bloc[3] << 8) | (bloc[4] << 16) | (bloc[5] << 24);
+    p->back = 2;
+    // >> >> >>
+
+    r = zaddr(bloc+6, &p->from, h) + 6;
+    r += zaddr(bloc+r, &p->to, h);
+
+    bloc += r;
+    c -= r;
+
+    if(debug['W'])
+        print("%P\n", p);
+
+    switch(p->as) {
+    <<[[ldobj()]] switch as cases(x86)>>
+
+    default:
+    casdef:
+        if(skip)
+            nopout(p);
+
+        if(p->to.type == D_BRANCH)
+            p->to.offset += ipc;
+
+        lastp->link = p;
+        lastp = p;
+
+        p->pc = pc;
+        pc++;
+    }
+    goto loop;
+
+eof:
+    diag("truncated object file: %s", pn);
+}
+@
+
+% >> >> >> >>
+
+<<[[ldobj()]] locals(x86)>>=
+// enum<as>, the opcode
+int o;
+Prog *p;
+@
+
+
+% ???
+<<[[ldobj()]] locals(x86)>>=
+Sym *h[NSYM];
+Sym *di;
+Sym *s;
+long ipc;
+bool skip;
+@
+
+%???
+<<[[ldobj()]] locals(x86)>>=
+Prog *t;
+byte *stop;
+int v;
+ulong sig;
+@
+
+<<[[ldobj()]] locals(x86)>>=
+byte *bloc;
+byte *bsize;
+int r;
+@
+% and parameter 'int c'
+
+<<[[ldobj()]] sanity check opcode in range(x86)>>=
+if(o <= AXXX || o >= ALAST) {
+    if(o < 0)
+        goto eof;
+    diag("%s: opcode out of range %d", pn, o);
+    print("	probably not a .8 file\n");
+    errorexit();
+}
+@
+
+<<[[ldobj()]] locals(x86)>>=
+// array<string>, length used = files, extended every 16
+static char **filen;
+static int files = 0;
+char **nfilen;
+@
+
+<<[[ldobj()]] if ANAME or ASIGNAME(x86)>>=
+if(o == ANAME || o == ASIGNAME) {
+    sig = 0;
+    if(o == ASIGNAME) {
+        sig = bloc[2] | (bloc[3]<<8) | (bloc[4]<<16) | (bloc[5]<<24);
+        // >> >> >>
+        bloc += 4;
+        c -= 4;
+    }
+    stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
+    if(stop == nil){
+        bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+        if(bsize == 0)
+            goto eof;
+        bloc = buf.xbuf;
+        stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
+        if(stop == nil){
+            fprint(2, "%s: name too long\n", pn);
+            errorexit();
+        }
+    }
+
+    v = bloc[2];	/* type */
+    o = bloc[3];	/* sym */
+    bloc += 4;
+    c -= 4;
+
+    r = 0;
+    if(v == D_STATIC)
+        r = version;
+    s = lookup((char*)bloc, r);
+
+    c -= &stop[1] - bloc;
+    bloc = stop + 1;
+
+    if(debug['S'] && r == 0)
+        sig = 1729;
+    if(sig != 0){
+        if(s->sig != 0 && s->sig != sig)
+            diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", s->sig, filen[s->file], sig, pn, s->name);
+        s->sig = sig;
+        s->file = files-1;
+    }
+
+    if(debug['W'])
+        print("	ANAME	%s\n", s->name);
+
+    h[o] = s;
+    if((v == D_EXTERN || v == D_STATIC) && s->type == 0)
+        s->type = SXREF;
+    if(v == D_FILE) {
+        if(s->type != SFILE) {
+            histgen++;
+            s->type = SFILE;
+            s->value = histgen;
+        }
+        if(histfrogp < MAXHIST) {
+            histfrog[histfrogp] = s;
+            histfrogp++;
+        } else
+            collapsefrog(s);
+    }
+    goto loop;
+}
+@
+% >> >> >>
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case ATEXT:
+    if(curtext != P) {
+        histtoauto();
+        curtext->to.autom = curauto;
+        curauto = 0;
+    }
+    skip = false;
+    curtext = p;
+    s = p->from.sym;
+    if(s == S) {
+        diag("%s: no TEXT symbol: %P", pn, p);
+        errorexit();
+    }
+    if(s->type != 0 && s->type != SXREF) {
+        if(p->from.scale & DUPOK) {
+            skip = true;
+            goto casdef;
+        }
+        diag("%s: redefinition: %s\n%P", pn, s->name, p);
+    }
+    s->type = STEXT;
+    s->value = pc;
+
+    //add_list(firstp, lastp, p)
+    lastp->link = p;
+    lastp = p;
+
+    p->pc = pc;
+    pc++;
+
+    //add_list(textp, etextp, p)
+    if(textp == P) {
+        textp = p;
+        etextp = p;
+    } else {
+        etextp->pcond = p;
+        etextp = p;
+    }
+
+    break;
+@
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case ADATA:
+data:
+    //add_list(datap, edatap, p)
+    if(edatap == P)
+        datap = p;
+    else
+        edatap->link = p;
+    edatap = p;
+    p->link = P;
+    break;
+@
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case ADYNT:
+    if(p->to.sym == S) {
+        diag("DYNT without a sym\n%P", p);
+        break;
+    }
+    di = p->to.sym;
+    p->from.scale = 4; // NOSPLIT?
+    if(di->type == SXREF) {
+        if(debug['z'])
+            Bprint(&bso, "%P set to %d\n", p, dtype);
+        di->type = SCONST;
+        di->value = dtype;
+        dtype += 4;
+    }
+    if(p->from.sym == S)
+        break;
+
+    p->from.offset = di->value;
+    p->from.sym->type = SDATA;
+    if(curtext == P) {
+        diag("DYNT not in text: %P", p);
+        break;
+    }
+    p->to.sym = curtext->from.sym;
+    p->to.type = D_ADDR;
+    p->to.index = D_EXTERN;
+    goto data;
+@
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case AINIT:
+    if(p->from.sym == S) {
+        diag("INIT without a sym\n%P", p);
+        break;
+    }
+    if(di == S) {
+        diag("INIT without previous DYNT\n%P", p);
+        break;
+    }
+    p->from.offset = di->value;
+    p->from.sym->type = SDATA;
+    goto data;
+@
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case AGLOBL:
+    s = p->from.sym;
+    if(s->type == 0 || s->type == SXREF) {
+        s->type = SBSS;
+        s->value = 0;
+    }
+    if(s->type != SBSS) {
+        diag("%s: redefinition: %s in %s",
+            pn, s->name, TNAME);
+        s->type = SBSS;
+        s->value = 0;
+    }
+    if(p->to.offset > s->value)
+        s->value = p->to.offset;
+    break;
+@
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case AHISTORY:
+    if(p->to.offset == -1) {
+        addlib(pn);
+        histfrogp = 0;
+        goto loop;
+    }
+    addhist(p->line, D_FILE);		/* 'z' */
+    if(p->to.offset)
+        addhist(p->to.offset, D_FILE1);	/* 'Z' */
+    histfrogp = 0;
+    break;
+@
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case AEND:
+    histtoauto();
+    if(curtext != P)
+        curtext->to.autom = curauto;
+    curauto = 0;
+    curtext = P;
+    if(c)
+        goto newloop;
+    return;
+@
+
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case AGOK:
+    diag("%s: GOK opcode in %s", pn, TNAME);
+    pc++;
+    break;
+@
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case AFMOVF:
+case AFADDF:
+case AFSUBF:
+case AFSUBRF:
+case AFMULF:
+case AFDIVF:
+case AFDIVRF:
+case AFCOMF:
+case AFCOMFP:
+    if(skip)
+        goto casdef;
+    if(p->from.type == D_FCONST) {
+        /* size sb 9 max */
+        sprint(literal, "$%lux", ieeedtof(&p->from.ieee));
+        s = lookup(literal, 0);
+        if(s->type == 0) {
+            s->type = SBSS;
+            s->value = 4;
+            t = prg();
+            t->as = ADATA;
+            t->line = p->line;
+            t->from.type = D_EXTERN;
+            t->from.sym = s;
+            t->from.scale = 4;  // NOSPLIT?
+            t->to = p->from;
+            if(edatap == P)
+                datap = t;
+            else
+                edatap->link = t;
+            edatap = t;
+            t->link = P;
+        }
+        p->from.type = D_EXTERN;
+        p->from.sym = s;
+        p->from.offset = 0;
+    }
+    goto casdef;
+@
+%$
+
+<<[[ldobj()]] switch as cases(x86)>>=
+case AFMOVD:
+case AFADDD:
+case AFSUBD:
+case AFSUBRD:
+case AFMULD:
+case AFDIVD:
+case AFDIVRD:
+case AFCOMD:
+case AFCOMDP:
+    if(skip)
+        goto casdef;
+    if(p->from.type == D_FCONST) {
+        /* size sb 18 max */
+        sprint(literal, "$%lux.%lux",
+            p->from.ieee.l, p->from.ieee.h);
+        s = lookup(literal, 0);
+        if(s->type == 0) {
+            s->type = SBSS;
+            s->value = 8;
+            t = prg();
+            t->as = ADATA;
+            t->line = p->line;
+            t->from.type = D_EXTERN;
+            t->from.sym = s;
+            t->from.scale = 8;
+            t->to = p->from;
+            if(edatap == P)
+                datap = t;
+            else
+                edatap->link = t;
+            edatap = t;
+            t->link = P;
+        }
+        p->from.type = D_EXTERN;
+        p->from.sym = s;
+        p->from.offset = 0;
+    }
+    goto casdef;
+@
+%$
+
 
 \section{[[linkers/8l/]]}
 

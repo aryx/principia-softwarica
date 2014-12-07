@@ -906,33 +906,55 @@ readsome(int f, byte *buf, byte *good, byte *stop, int max)
 
 /*s: function ldobj(arm) */
 void
-ldobj(int f, long c, char *pn)
+ldobj(fdt f, long c, char *pn)
 {
+    /*s: [[ldobj()]] locals(arm) */
+    // enum<as>, the opcode
+    int o;
+    Prog *p;
+    /*x: [[ldobj()]] locals(arm) */
+    Sym *h[NSYM];
+    Sym *di;
+    Sym *s;
     long ipc;
-    Prog *p, *t;
-    uchar *bloc, *bsize, *stop;
-    Sym *h[NSYM], *s, *di;
-    int v, o, r, skip;
+    bool skip;
+    /*x: [[ldobj()]] locals(arm) */
+    Prog *t;
+    byte *stop;
+    int v;
     ulong sig;
-    static int files;
+    /*x: [[ldobj()]] locals(arm) */
+    byte *bloc;
+    byte *bsize;
+    int r;
+    /*x: [[ldobj()]] locals(arm) */
+    // array<string>, length used = files, extended every 16
     static char **filen;
+    static int files = 0;
     char **nfilen;
+    /*e: [[ldobj()]] locals(arm) */
 
+    /*s: [[ldobj()]] grow filen if not enough space */
     if((files&15) == 0){
         nfilen = malloc((files+16)*sizeof(char*));
         memmove(nfilen, filen, files*sizeof(char*));
         free(filen);
         filen = nfilen;
     }
+    /*e: [[ldobj()]] grow filen if not enough space */
     filen[files++] = strdup(pn);
 
+    /*s: [[ldobj()]] bloc and bsize init */
     bsize = buf.xbuf;
     bloc = buf.xbuf;
+    /*e: [[ldobj()]] bloc and bsize init */
+
     di = S;
 
+// can come from AEND
 newloop:
-    memset(h, 0, sizeof(h));
     version++;
+    memset(h, 0, sizeof(h));
     histfrogp = 0;
     ipc = pc;
     skip = 0;
@@ -940,6 +962,8 @@ newloop:
 loop:
     if(c <= 0)
         goto eof;
+
+    /*s: [[ldobj()]] read if needed in loop:, adjust block and bsize */
     r = bsize - bloc;
     if(r < 100 && r < c) {		/* enough for largest prog */
         bsize = readsome(f, buf.xbuf, bloc, bsize, c);
@@ -948,12 +972,19 @@ loop:
         bloc = buf.xbuf;
         goto loop;
     }
+    /*e: [[ldobj()]] read if needed in loop:, adjust block and bsize */
+
     o = bloc[0];		/* as */
+
+    /*s: [[ldobj()]] sanity check opcode in range(arm) */
     if(o <= AXXX || o >= ALAST) {
         diag("%s: line %ld: opcode out of range %d", pn, pc-ipc, o);
         print("	probably not a .5 file\n");
         errorexit();
     }
+    /*e: [[ldobj()]] sanity check opcode in range(arm) */
+
+    /*s: [[ldobj()]] if ANAME or ASIGNAME(arm) */
     if(o == ANAME || o == ASIGNAME) {
         sig = 0;
         if(o == ASIGNAME){
@@ -1011,13 +1042,16 @@ loop:
         }
         goto loop;
     }
+    /*e: [[ldobj()]] if ANAME or ASIGNAME(arm) */
 
+    //TODO: factorize
     if(nhunk < sizeof(Prog))
         gethunk();
     p = (Prog*)hunk;
     nhunk -= sizeof(Prog);
     hunk += sizeof(Prog);
 
+    // reading the object binary file
     p->as = o;
     p->scond = bloc[1];
     p->reg = bloc[2];
@@ -1025,6 +1059,7 @@ loop:
 
     r = zaddr(bloc+7, &p->from, h) + 7;
     r += zaddr(bloc+r, &p->to, h);
+
     bloc += r;
     c -= r;
 
@@ -1038,106 +1073,7 @@ loop:
         print("%P\n", p);
 
     switch(o) {
-    case AHISTORY:
-        if(p->to.offset == -1) {
-            addlib(pn);
-            histfrogp = 0;
-            goto loop;
-        }
-        addhist(p->line, D_FILE);		/* 'z' */
-        if(p->to.offset)
-            addhist(p->to.offset, D_FILE1);	/* 'Z' */
-        histfrogp = 0;
-        goto loop;
-
-    case AEND:
-        histtoauto();
-        if(curtext != P)
-            curtext->to.autom = curauto;
-        curauto = 0;
-        curtext = P;
-        if(c)
-            goto newloop;
-        return;
-
-    case AGLOBL:
-        s = p->from.sym;
-        if(s == S) {
-            diag("GLOBL must have a name\n%P", p);
-            errorexit();
-        }
-        if(s->type == 0 || s->type == SXREF) {
-            s->type = SBSS;
-            s->value = 0;
-        }
-        if(s->type != SBSS) {
-            diag("redefinition: %s\n%P", s->name, p);
-            s->type = SBSS;
-            s->value = 0;
-        }
-        if(p->to.offset > s->value)
-            s->value = p->to.offset;
-        break;
-
-    case ADYNT:
-        if(p->to.sym == S) {
-            diag("DYNT without a sym\n%P", p);
-            break;
-        }
-        di = p->to.sym;
-        p->reg = 4;
-        if(di->type == SXREF) {
-            if(debug['z'])
-                Bprint(&bso, "%P set to %d\n", p, dtype);
-            di->type = SCONST;
-            di->value = dtype;
-            dtype += 4;
-        }
-        if(p->from.sym == S)
-            break;
-
-        p->from.offset = di->value;
-        p->from.sym->type = SDATA;
-        if(curtext == P) {
-            diag("DYNT not in text: %P", p);
-            break;
-        }
-        p->to.sym = curtext->from.sym;
-        p->to.type = D_CONST;
-        p->link = datap;
-        datap = p;
-        break;
-
-    case AINIT:
-        if(p->from.sym == S) {
-            diag("INIT without a sym\n%P", p);
-            break;
-        }
-        if(di == S) {
-            diag("INIT without previous DYNT\n%P", p);
-            break;
-        }
-        p->from.offset = di->value;
-        p->from.sym->type = SDATA;
-        p->link = datap;
-        datap = p;
-        break;
-    
-    case ADATA:
-        if(p->from.sym == S) {
-            diag("DATA without a sym\n%P", p);
-            break;
-        }
-        p->link = datap;
-        datap = p;
-        break;
-
-    case AGOK:
-        diag("unknown opcode\n%P", p);
-        p->pc = pc;
-        pc++;
-        break;
-
+    /*s: [[ldobj()]] switch opcode cases(arm) */
     case ATEXT:
         if(curtext != P) {
             histtoauto();
@@ -1175,7 +1111,107 @@ loop:
         etextp->cond = p;
         etextp = p;
         break;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case ADATA:
+        if(p->from.sym == S) {
+            diag("DATA without a sym\n%P", p);
+            break;
+        }
+        p->link = datap;
+        datap = p;
+        break;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case ADYNT:
+        if(p->to.sym == S) {
+            diag("DYNT without a sym\n%P", p);
+            break;
+        }
+        di = p->to.sym;
+        p->reg = 4;
+        if(di->type == SXREF) {
+            if(debug['z'])
+                Bprint(&bso, "%P set to %d\n", p, dtype);
+            di->type = SCONST;
+            di->value = dtype;
+            dtype += 4;
+        }
+        if(p->from.sym == S)
+            break;
 
+        p->from.offset = di->value;
+        p->from.sym->type = SDATA;
+        if(curtext == P) {
+            diag("DYNT not in text: %P", p);
+            break;
+        }
+        p->to.sym = curtext->from.sym;
+        p->to.type = D_CONST;
+        p->link = datap;
+        datap = p;
+        break;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AINIT:
+        if(p->from.sym == S) {
+            diag("INIT without a sym\n%P", p);
+            break;
+        }
+        if(di == S) {
+            diag("INIT without previous DYNT\n%P", p);
+            break;
+        }
+        p->from.offset = di->value;
+        p->from.sym->type = SDATA;
+        p->link = datap;
+        datap = p;
+        break;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AGLOBL:
+        s = p->from.sym;
+        if(s == S) {
+            diag("GLOBL must have a name\n%P", p);
+            errorexit();
+        }
+        if(s->type == 0 || s->type == SXREF) {
+            s->type = SBSS;
+            s->value = 0;
+        }
+        if(s->type != SBSS) {
+            diag("redefinition: %s\n%P", s->name, p);
+            s->type = SBSS;
+            s->value = 0;
+        }
+        if(p->to.offset > s->value)
+            s->value = p->to.offset;
+        break;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AHISTORY:
+        if(p->to.offset == -1) {
+            addlib(pn);
+            histfrogp = 0;
+            goto loop;
+        }
+        addhist(p->line, D_FILE);		/* 'z' */
+        if(p->to.offset)
+            addhist(p->to.offset, D_FILE1);	/* 'Z' */
+        histfrogp = 0;
+        goto loop;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AEND:
+        histtoauto();
+        if(curtext != P)
+            curtext->to.autom = curauto;
+        curauto = 0;
+        curtext = P;
+        if(c)
+            goto newloop;
+        return;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AGOK:
+        diag("unknown opcode\n%P", p);
+        p->pc = pc;
+        pc++;
+        break;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
     case ASUB:
         if(p->from.type == D_CONST)
         if(p->from.name == D_NONE)
@@ -1184,7 +1220,7 @@ loop:
             p->as = AADD;
         }
         goto casedef;
-
+    /*x: [[ldobj()]] switch opcode cases(arm) */
     case AADD:
         if(p->from.type == D_CONST)
         if(p->from.name == D_NONE)
@@ -1193,7 +1229,7 @@ loop:
             p->as = ASUB;
         }
         goto casedef;
-
+    /*x: [[ldobj()]] switch opcode cases(arm) */
     case AMOVDF:
         if(!vfp || p->from.type != D_FCONST)
             goto casedef;
@@ -1257,7 +1293,7 @@ loop:
             p->from.offset = 0;
         }
         goto casedef;
-
+    /*e: [[ldobj()]] switch opcode cases(arm) */
     default:
     casedef:
         if(skip)
@@ -1265,8 +1301,10 @@ loop:
 
         if(p->to.type == D_BRANCH)
             p->to.offset += ipc;
+
         lastp->link = p;
         lastp = p;
+
         p->pc = pc;
         pc++;
         break;

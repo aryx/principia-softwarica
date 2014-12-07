@@ -147,7 +147,7 @@ main(int argc, char *argv[])
         char name[LIBNAMELEN];
         char *a;
     /*x: [[main()]] locals(x86) */
-    bool load_libs = true;
+    bool load_libs;
     /*x: [[main()]] locals(x86) */
     char *root;
     /*e: [[main()]] locals(x86) */
@@ -1014,20 +1014,20 @@ ldobj(fdt f, long c, char *pn)
     char **nfilen;
     /*e: [[ldobj()]] locals(x86) */
 
-    /*s: [[ldobj()]] grow filen if not enough space(x86) */
+    /*s: [[ldobj()]] grow filen if not enough space */
     if((files&15) == 0){
         nfilen = malloc((files+16)*sizeof(char*));
         memmove(nfilen, filen, files*sizeof(char*));
         free(filen);
         filen = nfilen;
     }
-    /*e: [[ldobj()]] grow filen if not enough space(x86) */
+    /*e: [[ldobj()]] grow filen if not enough space */
     filen[files++] = strdup(pn);
 
-    /*s: [[ldobj()]] bloc and bsize init(x86) */
+    /*s: [[ldobj()]] bloc and bsize init */
     bsize = buf.xbuf;
     bloc = buf.xbuf;
-    /*e: [[ldobj()]] bloc and bsize init(x86) */
+    /*e: [[ldobj()]] bloc and bsize init */
 
     di = S;
 
@@ -1043,7 +1043,7 @@ loop:
     if(c <= 0)
         goto eof;
 
-    /*s: [[ldobj()]] read if needed in loop:, adjust block and bsize(x86) */
+    /*s: [[ldobj()]] read if needed in loop:, adjust block and bsize */
     r = bsize - bloc;
     if(r < 100 && r < c) {		/* enough for largest prog */
         bsize = readsome(f, buf.xbuf, bloc, bsize, c);
@@ -1052,7 +1052,7 @@ loop:
         bloc = buf.xbuf;
         goto loop;
     }
-    /*e: [[ldobj()]] read if needed in loop:, adjust block and bsize(x86) */
+    /*e: [[ldobj()]] read if needed in loop:, adjust block and bsize */
 
     // get the opcode
     o = bloc[0] | (bloc[1] << 8); // >>
