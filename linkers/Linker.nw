@@ -567,7 +567,8 @@ struct	Prog
 };
 @
 % see Pconv, %P
-
+%less: could rename cond to pcond and AB to AJMP and could factorize
+% more code with x86
 
 <<constant regused(arm)>>=
 #define	regused	u0.u0regused
@@ -6570,113 +6571,6 @@ doprof1(void)
 % (_tracin() is defined by you)
 
 % todo: why s2 and s4? why not sin, sout? and pin, pout?
-<<function doprof2(x86)>>=
-void
-doprof2(void)
-{
-    Sym *s2, *s4;
-    Prog *p, *q, *q2;
-    Prog *ps2, *ps4;
-
-    DBG("%5.2f profile 2\n", cputime());
-
-    <<[[doprof2()]] if embedded tracing(x86)>>
-    else{
-        s2 = lookup("_profin", 0);
-        s4 = lookup("_profout", 0);
-    }
-    if(s2->type != STEXT || s4->type != STEXT) {
-       <<[[doprof2()]] if embedded tracing diag()(x86)>>
-        else
-            diag("_profin/_profout not defined");
-        return;
-    }
-
-    // finding ps2, ps4 = instruction (Prog) of s2 and s4
-    ps2 = P;
-    ps4 = P;
-    for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT) {
-            if(p->from.sym == s2) {
-                // do not profile the profling function itself ...
-                p->from.scale = NOPROF;
-                ps2 = p;
-            }
-            if(p->from.sym == s4) {
-                p->from.scale = NOPROF;
-                ps4 = p;
-            }
-        }
-    }
-
-    for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT) {
-            curtext = p;
-
-            <<[[doprof2()]] if NOPROF p(x86)>>
-
-            /*
-             * JMPL	profin
-             */
-            q = prg();
-            q->line = p->line;
-            q->pc = p->pc;
-            q->link = p->link;
-
-            <<[[doprof2()]] if embedded tracing ATEXT instrumentation(x86)>>
-             else
-                p->link = q;
-            p = q;
-            //asm: CALL _profin
-            p->as = ACALL;
-            p->to.type = D_BRANCH;
-            p->pcond = ps2;
-            p->to.sym = s2;
-
-        }else if(p->as == ARET) {
-            <<[[doprof2()]] if embedded tracing ARET instrumentation(x86)>>
-            /*
-             * RET
-             */
-            q = prg();
-            q->as = ARET;
-            q->from = p->from;
-            q->to = p->to;
-            q->link = p->link;
-
-            p->link = q;
-
-            /*
-             * JAL	profout
-             */
-            //asm: CALL _profout
-            p->as = ACALL;
-            p->from = zprg.from;
-            p->to = zprg.to;
-            p->to.type = D_BRANCH;
-            p->pcond = ps4;
-            p->to.sym = s4;
-
-            p = q;
-        }
-    }
-}
-@
-
-<<[[doprof2()]] if NOPROF p(x86)>>=
-if(p->from.scale & NOPROF) {	/* dont profile */
-    for(;;) {
-        q = p->link;
-        if(q == P)
-            break;
-        if(q->as == ATEXT)
-            break;
-        p = q;
-    }
-    continue;
-}
-@
-
 
 
 <<global brcond(arm)>>=
@@ -6688,25 +6582,24 @@ void
 doprof2(void)
 {
     Sym *s2, *s4;
-    Prog *p, *q, *q2, *ps2, *ps4;
+    Prog *p, *q, *q2;
+    Prog *ps2, *ps4;
 
     DBG("%5.2f profile 2\n", cputime());
 
-    if(debug['e']){
-        s2 = lookup("_tracein", 0);
-        s4 = lookup("_traceout", 0);
-    }else{
+    <<[[doprof2()]] if embedded tracing>>
+    else{
         s2 = lookup("_profin", 0);
         s4 = lookup("_profout", 0);
     }
     if(s2->type != STEXT || s4->type != STEXT) {
-        if(debug['e'])
-            diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
+       <<[[doprof2()]] if embedded tracing diag()>>
         else
             diag("_profin/_profout not defined");
         return;
     }
 
+    // finding ps2, ps4 = instruction (Prog) of s2 and s4
     ps2 = P;
     ps4 = P;
     for(p = firstp; p != P; p = p->link) {
@@ -6723,17 +6616,8 @@ doprof2(void)
     }
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
-            if(p->reg & NOPROF) {
-                for(;;) {
-                    q = p->link;
-                    if(q == P)
-                        break;
-                    if(q->as == ATEXT)
-                        break;
-                    p = q;
-                }
-                continue;
-            }
+
+            <<[[doprof2()]] if NOPROF p(arm)>>
 
             /*
              * BL	profin
@@ -6742,19 +6626,9 @@ doprof2(void)
             q->line = p->line;
             q->pc = p->pc;
             q->link = p->link;
-            if(debug['e']){		/* embedded tracing */
-                q2 = prg();
-                p->link = q2;
-                q2->link = q;
 
-                q2->line = p->line;
-                q2->pc = p->pc;
-
-                q2->as = AB;
-                q2->to.type = D_BRANCH;
-                q2->to.sym = p->to.sym;
-                q2->cond = q->link;
-            }else
+            <<[[doprof2()]] if embedded tracing ATEXT instrumentation(arm)>>
+            else
                 p->link = q;
             p = q;
             p->as = ABL;
@@ -6765,18 +6639,7 @@ doprof2(void)
             continue;
         }
         if(p->as == ARET) {
-            /*
-             * RET (default)
-             */
-            if(debug['e']){		/* embedded tracing */
-                q = prg();
-                q->line = p->line;
-                q->pc = p->pc;
-                q->link = p->link;
-                p->link = q;
-                p = q;
-            }
-
+            <<[[doprof2()]] if embedded tracing ARET instrumentation>>
             /*
              * RET
              */
@@ -6830,23 +6693,26 @@ doprof2(void)
 }
 @
 
+
+
 \section{[[_tracin()]]}
 
 % -p -e, -e for embedded tracing
 
-<<[[doprof2()]] if embedded tracing(x86)>>=
+<<[[doprof2()]] if embedded tracing>>=
 if(debug['e']){
     s2 = lookup("_tracein", 0);
     s4 = lookup("_traceout", 0);
 }
 @
 
-<<[[doprof2()]] if embedded tracing diag()(x86)>>=
+<<[[doprof2()]] if embedded tracing diag()>>=
 if(debug['e'])
     diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
 @
 
-<<[[doprof2()]] if embedded tracing ATEXT instrumentation(x86)>>=
+
+<<[[doprof2()]] if embedded tracing ATEXT instrumentation(arm)>>=
 if(debug['e']){		/* embedded tracing */
     q2 = prg();
     p->link = q2;
@@ -6855,14 +6721,14 @@ if(debug['e']){		/* embedded tracing */
     q2->line = p->line;
     q2->pc = p->pc;
 
-    q2->as = AJMP;
+    q2->as = AB;
     q2->to.type = D_BRANCH;
     q2->to.sym = p->to.sym;
-    q2->pcond = q->link;
+    q2->cond = q->link;
 }
 @
 
-<<[[doprof2()]] if embedded tracing ARET instrumentation(x86)>>=
+<<[[doprof2()]] if embedded tracing ARET instrumentation>>=
 /*
  * RET (default)
  */
@@ -6879,6 +6745,21 @@ if(debug['e']){		/* embedded tracing */
 \section{[[NOPROF]] attribute}
 
 % from Assembler_extra.nw
+
+<<[[doprof2()]] if NOPROF p(arm)>>=
+if(p->reg & NOPROF) {
+    for(;;) {
+        q = p->link;
+        if(q == P)
+            break;
+        if(q->as == ATEXT)
+            break;
+        p = q;
+    }
+    continue;
+}
+@
+
 
 \chapter{Nuxiinit ???}
 

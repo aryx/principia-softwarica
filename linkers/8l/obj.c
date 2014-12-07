@@ -1484,21 +1484,21 @@ doprof2(void)
 
     DBG("%5.2f profile 2\n", cputime());
 
-    /*s: [[doprof2()]] if embedded tracing(x86) */
+    /*s: [[doprof2()]] if embedded tracing */
     if(debug['e']){
         s2 = lookup("_tracein", 0);
         s4 = lookup("_traceout", 0);
     }
-    /*e: [[doprof2()]] if embedded tracing(x86) */
+    /*e: [[doprof2()]] if embedded tracing */
     else{
         s2 = lookup("_profin", 0);
         s4 = lookup("_profout", 0);
     }
     if(s2->type != STEXT || s4->type != STEXT) {
-       /*s: [[doprof2()]] if embedded tracing diag()(x86) */
+       /*s: [[doprof2()]] if embedded tracing diag() */
        if(debug['e'])
            diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
-       /*e: [[doprof2()]] if embedded tracing diag()(x86) */
+       /*e: [[doprof2()]] if embedded tracing diag() */
         else
             diag("_profin/_profout not defined");
         return;
@@ -1572,7 +1572,7 @@ doprof2(void)
             p->to.sym = s2;
 
         }else if(p->as == ARET) {
-            /*s: [[doprof2()]] if embedded tracing ARET instrumentation(x86) */
+            /*s: [[doprof2()]] if embedded tracing ARET instrumentation */
             /*
              * RET (default)
              */
@@ -1584,7 +1584,7 @@ doprof2(void)
                 p->link = q;
                 p = q;
             }
-            /*e: [[doprof2()]] if embedded tracing ARET instrumentation(x86) */
+            /*e: [[doprof2()]] if embedded tracing ARET instrumentation */
             /*
              * RET
              */

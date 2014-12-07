@@ -1300,25 +1300,32 @@ void
 doprof2(void)
 {
     Sym *s2, *s4;
-    Prog *p, *q, *q2, *ps2, *ps4;
+    Prog *p, *q, *q2;
+    Prog *ps2, *ps4;
 
     DBG("%5.2f profile 2\n", cputime());
 
+    /*s: [[doprof2()]] if embedded tracing */
     if(debug['e']){
         s2 = lookup("_tracein", 0);
         s4 = lookup("_traceout", 0);
-    }else{
+    }
+    /*e: [[doprof2()]] if embedded tracing */
+    else{
         s2 = lookup("_profin", 0);
         s4 = lookup("_profout", 0);
     }
     if(s2->type != STEXT || s4->type != STEXT) {
-        if(debug['e'])
-            diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
+       /*s: [[doprof2()]] if embedded tracing diag() */
+       if(debug['e'])
+           diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
+       /*e: [[doprof2()]] if embedded tracing diag() */
         else
             diag("_profin/_profout not defined");
         return;
     }
 
+    // finding ps2, ps4 = instruction (Prog) of s2 and s4
     ps2 = P;
     ps4 = P;
     for(p = firstp; p != P; p = p->link) {
@@ -1335,6 +1342,8 @@ doprof2(void)
     }
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
+
+            /*s: [[doprof2()]] if NOPROF p(arm) */
             if(p->reg & NOPROF) {
                 for(;;) {
                     q = p->link;
@@ -1346,6 +1355,7 @@ doprof2(void)
                 }
                 continue;
             }
+            /*e: [[doprof2()]] if NOPROF p(arm) */
 
             /*
              * BL	profin
@@ -1354,6 +1364,8 @@ doprof2(void)
             q->line = p->line;
             q->pc = p->pc;
             q->link = p->link;
+
+            /*s: [[doprof2()]] if embedded tracing ATEXT instrumentation(arm) */
             if(debug['e']){		/* embedded tracing */
                 q2 = prg();
                 p->link = q2;
@@ -1366,7 +1378,9 @@ doprof2(void)
                 q2->to.type = D_BRANCH;
                 q2->to.sym = p->to.sym;
                 q2->cond = q->link;
-            }else
+            }
+            /*e: [[doprof2()]] if embedded tracing ATEXT instrumentation(arm) */
+            else
                 p->link = q;
             p = q;
             p->as = ABL;
@@ -1377,6 +1391,7 @@ doprof2(void)
             continue;
         }
         if(p->as == ARET) {
+            /*s: [[doprof2()]] if embedded tracing ARET instrumentation */
             /*
              * RET (default)
              */
@@ -1388,7 +1403,7 @@ doprof2(void)
                 p->link = q;
                 p = q;
             }
-
+            /*e: [[doprof2()]] if embedded tracing ARET instrumentation */
             /*
              * RET
              */
