@@ -30,9 +30,7 @@ noops(void)
      * expand BECOME pseudo
      */
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f noops\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f noops\n", cputime());
 
     curframe = 0;
     curbecome = 0;
@@ -171,10 +169,7 @@ noops(void)
             }
 
             if(!autosize && !(curtext->mark & LEAF)) {
-                if(debug['v'])
-                    Bprint(&bso, "save suppressed in: %s\n",
-                        curtext->from.sym->name);
-                Bflush(&bso);
+                DBG("save suppressed in: %s\n", curtext->from.sym->name);
                 curtext->mark |= LEAF;
             }
 

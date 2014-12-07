@@ -580,14 +580,14 @@ loop:
 }
 /*e: function loadlib */
 
-/*s: function objfile(x86) */
+/*s: function objfile */
 void
 objfile(char *file)
 {
     fdt f;
     long l;
     char magbuf[SARMAG];
-    /*s: [[objfile()]] other locals(x86) */
+    /*s: [[objfile()]] other locals */
     long off, esym, cnt;
     bool work;
     Sym *s;
@@ -595,11 +595,11 @@ objfile(char *file)
     char name[LIBNAMELEN];
     struct ar_hdr arhdr;
     char *e, *start, *stop;
-    /*e: [[objfile()]] other locals(x86) */
+    /*e: [[objfile()]] other locals */
 
     DBG("%5.2f ldobj: %s\n", cputime(), file);
 
-    /*s: [[objfile()]] adjust file if -lxxx filename(x86) */
+    /*s: [[objfile()]] adjust file if -lxxx filename */
     if(file[0] == '-' && file[1] == 'l') {
         snprint(pname, sizeof(pname), "lib%s.a", file+2);
         e = findlib(pname);
@@ -610,7 +610,7 @@ objfile(char *file)
         snprint(name, sizeof(name), "%s/%s", e, pname);
         file = name;
     }
-    /*e: [[objfile()]] adjust file if -lxxx filename(x86) */
+    /*e: [[objfile()]] adjust file if -lxxx filename */
 
     f = open(file, 0);
     if(f < 0) {
@@ -633,7 +633,8 @@ objfile(char *file)
         return;
     }
 
-    /*s: [[objfile()]] when file is a library(x86) */
+    /*s: [[objfile()]] when file is a library */
+        DBG("%5.2f ldlib: %s\n", cputime(), file);
         l = read(f, &arhdr, SAR_HDR);
         if(l != SAR_HDR) {
             diag("%s: short read on archive file symbol header", file);
@@ -703,9 +704,9 @@ objfile(char *file)
         diag("%s: bad or out of date archive", file);
     out:
         close(f);
-    /*e: [[objfile()]] when file is a library(x86) */
+    /*e: [[objfile()]] when file is a library */
 }
-/*e: function objfile(x86) */
+/*e: function objfile */
 
 /*s: function zaddr(x86) */
 int

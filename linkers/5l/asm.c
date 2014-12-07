@@ -56,9 +56,7 @@ asmb(void)
     long t, etext;
     Optab *o;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f asm\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f asm\n", cputime());
     OFFSET = HEADR;
     seek(cout, OFFSET, 0);
     pc = INITTEXT;
@@ -126,9 +124,7 @@ asmb(void)
     symsize = 0;
     lcsize = 0;
     if(!debug['s']) {
-        if(debug['v'])
-            Bprint(&bso, "%5.2f sym\n", cputime());
-        Bflush(&bso);
+        DBG("%5.2f sym\n", cputime());
         switch(HEADTYPE) {
         case 0:
         case 1:
@@ -150,9 +146,7 @@ asmb(void)
         }
         if(!debug['s'])
             asmsym();
-        if(debug['v'])
-            Bprint(&bso, "%5.2f pc\n", cputime());
-        Bflush(&bso);
+        DBG("%5.2f pc\n", cputime());
         if(!debug['s'])
             asmlc();
         if(dlm)
@@ -165,9 +159,7 @@ asmb(void)
         cflush();
     }
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f header\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f header\n", cputime());
     OFFSET = 0;
     seek(cout, OFFSET, 0);
     switch(HEADTYPE) {

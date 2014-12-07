@@ -21,9 +21,7 @@ span(void)
     int m, bflag, i;
     long c, otxt, v;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f span\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f span\n", cputime());
 
     bflag = 0;
     c = INITTEXT;
@@ -73,8 +71,7 @@ span(void)
      * around jmps to fix. this is rare.
      */
     while(bflag) {
-        if(debug['v'])
-            Bprint(&bso, "%5.2f span1\n", cputime());
+        DBG("%5.2f span1\n", cputime());
         bflag = 0;
         c = INITTEXT;
         for(p = firstp; p != P; p = p->link) {
@@ -145,9 +142,7 @@ span(void)
     }
     if(INITRND)
         INITDAT = rnd(c, INITRND);
-    if(debug['v'])
-        Bprint(&bso, "tsize = %lux\n", textsize);
-    Bflush(&bso);
+    DBG("tsize = %lux\n", textsize);
 }
 /*e: function span(arm) */
 

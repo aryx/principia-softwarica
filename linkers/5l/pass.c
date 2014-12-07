@@ -10,9 +10,7 @@ dodata(void)
     Prog *p;
     long orig, v;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f dodata\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f dodata\n", cputime());
     for(p = datap; p != P; p = p->link) {
         s = p->from.sym;
         if(p->as == ADYNT || p->as == AINIT)
@@ -299,9 +297,7 @@ patch(void)
     Sym *s;
     int a;
 
-    if(debug['v'])
-        Bprint(&bso, "%5.2f patch\n", cputime());
-    Bflush(&bso);
+    DBG("%5.2f patch\n", cputime());
     mkfwd();
     s = lookup("exit", 0);
     vexit = s->value;
