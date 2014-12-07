@@ -242,18 +242,20 @@ usage(void)
 <<enum headtype(arm)>>=
 /*
  *	-H0				      no header
- *	-H1 -T0x10005000 -R4  is aif for risc os
  *	-H2 -T4128 -R4096	  is plan9 format
- *	-H3 -T0xF0000020 -R4  is NetBSD format
- *	-H4				      is IXP1200 (raw)
- *	-H5 -T0xC0008010 -R1024 	is ipaq
- *	-H6 -R4096			   no header with segments padded to pages
- *	-H7				       is elf
+ *	-H7				      is elf
  */
 enum headtype {
+     H_NOTHING = 0,
      H_PLAN9 = 2,
+     H_ELF = 7,
 };
 @
+% *	-H1 -T0x10005000 -R4  is aif for risc os
+% *	-H3 -T0xF0000020 -R4  is NetBSD format
+% *	-H4				      is IXP1200 (raw)
+% *	-H5 -T0xC0008010 -R1024 	is ipaq
+% *	-H6 -R4096			   no header with segments padded to pages
 
 % see libmach to read back this executable!
 
@@ -2870,78 +2872,75 @@ Prog*	curp;
 
 
 
-
-<<function asmb(x86)>>=
+<<function asmb(arm)>>=
 void
 asmb(void)
 {
     Prog *p;
-    long v, magic;
-    int a;
-    byte *op1;
+    long t, etext;
+    Optab *o;
 
-    DBG("%5.2f asmb\n", cputime());
+    DBG("%5.2f asm\n", cputime());
 
     // TEXT SECTION
 
-    seek(cout, HEADR, SEEK__START);
+    OFFSET = HEADR;
+    seek(cout, OFFSET, SEEK__START);
     pc = INITTEXT;
-    curp = firstp;
 
     for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT)
+        if(p->as == ATEXT) {
             curtext = p;
+            autosize = p->to.offset + 4;
+        }
         if(p->pc != pc) {
+            diag("phase error %lux sb %lux", p->pc, pc);
             if(!debug['a'])
-                print("%P\n", curp);
-            diag("phase error %lux sb %lux in %s", p->pc, pc, TNAME);
+                prasm(curp);
             pc = p->pc;
         }
         curp = p;
 
-        // generate instruction!
-        asmins(p);
+        // generate instruction! ?
+        o = oplook(p);	/* could probably avoid this call */
+        asmout(p, o);
 
-        if(cbc < sizeof(and))
-            cflush();
-        a = (andptr - and);
-
-        if(debug['a']) {
-            Bprint(&bso, pcstr, pc);
-            for(op1 = and; op1 < andptr; op1++)
-                Bprint(&bso, "%.2ux", *op1 & 0xff);
-            Bprint(&bso, "\t%P\n", curp);
-        }
-
-        <<[[asmb()]] if dynamic module, when iterate from firstp(x86)>>
-
-        memmove(cbp, and, a);
-        cbp += a;
-        pc += a;
-        cbc -= a;
+        pc += o->size;
     }
+
+    if(debug['a'])
+        Bprint(&bso, "\n");
+    Bflush(&bso);
+
     cflush();
+
+    /* output strings in text segment */
+    etext = INITTEXT + textsize;
+    for(t = pc; t < etext; t += sizeof(buf)-100) {
+        if(etext-t > sizeof(buf)-100)
+            datblk(t, sizeof(buf)-100, 1);
+        else
+            datblk(t, etext-t, 1);
+    }
 
     // DATA SECTION
 
+    curtext = P;
     switch(HEADTYPE) {
     case H_PLAN9:
-        seek(cout, HEADR+textsize, SEEK__START);
+        OFFSET = HEADR+textsize;
+        seek(cout, OFFSET, SEEK__START);
         break;
-    <<[[asmb()]] switch HEADTYPE (to position after text) cases(x86)>>
-    default:
-        diag("unknown header type %ld", HEADTYPE);
+    <<[[asmb()]] switch HEADTYPE (to position after text) cases(arm)>>
     }
 
-    DBG("%5.2f datblk\n", cputime());
+    <<[[asmb()]] if dynamic module, before datblk()>>
 
-    <<[[asmb()]] if dynamic module, before datblk()(x86)>>
-
-    for(v = 0; v < datsize; v += sizeof(buf)-Dbufslop) {
-        if(datsize-v > sizeof(buf)-Dbufslop)
-            datblk(v, sizeof(buf)-Dbufslop);
+    for(t = 0; t < datsize; t += sizeof(buf)-100) {
+        if(datsize-t > sizeof(buf)-100)
+            datblk(t, sizeof(buf)-100, 0);
         else
-            datblk(v, datsize-v);
+            datblk(t, datsize-t, 0);
     }
 
     // SYMBOL TABLE
@@ -2956,207 +2955,36 @@ asmb(void)
 
         switch(HEADTYPE) {
         case H_PLAN9:
-            seek(cout, HEADR+textsize+datsize, 0);
+            OFFSET = HEADR+textsize+datsize;
+            seek(cout, OFFSET, 0);
             break;
-        <<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(x86)>>
-        default:
-            seek(cout, rnd(HEADR+textsize, 8192)+datsize, 0);
-            break;
+        <<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>
         }
 
         asmsym();
-
-        DBG("%5.2f sp\n", cputime());
         DBG("%5.2f pc\n", cputime());
 
         asmlc();
+        <<[[asmb()]] if dynamic module, call asmdyn()>>
 
-        <<[[asmb()]] if dynamic module, call asmdyn()(x86)>>
         cflush();
-    } else {
-        <<[[asmb()]] if dynamic module and no symbol table generation(x86)>>
+    }
+    else {
+        <<[[asmb()]] if dynamic module and no symbol table generation>>
     }
 
     // HEADER
 
-    DBG("%5.2f headr\n", cputime());
+    DBG("%5.2f header\n", cputime());
 
-    seek(cout, 0L, SEEK__START);
+    OFFSET = 0;
+    seek(cout, OFFSET, SEEK__START);
 
     switch(HEADTYPE) {
     // see Exec in a.out.h
-    case H_PLAN9:	/* plan9 */
-        magic = 4*11*11+7;
-        <<[[asmb()]] if dynamic module magic header adjustment(x86)>>
-        lput(magic);			/* magic */
-        lput(textsize);			/* sizes */
-        lput(datsize);
-        lput(bsssize);
-        lput(symsize);			/* nsyms */
 
-        lput(entryvalue());		/* va of entry */
-
-        lput(spsize);			/* sp offsets */
-        lput(lcsize);			/* line offsets */
-        break;
-    <<[[asmb()]] switch HEADTYPE (for header generation) cases(x86)>>
-    }
-
-    cflush();
-}
-@
-
-<<function asmb(arm)>>=
-void
-asmb(void)
-{
-    Prog *p;
-    long t, etext;
-    Optab *o;
-
-    DBG("%5.2f asm\n", cputime());
-    OFFSET = HEADR;
-    seek(cout, OFFSET, 0);
-    pc = INITTEXT;
-    for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT) {
-            curtext = p;
-            autosize = p->to.offset + 4;
-        }
-        if(p->pc != pc) {
-            diag("phase error %lux sb %lux",
-                p->pc, pc);
-            if(!debug['a'])
-                prasm(curp);
-            pc = p->pc;
-        }
-        curp = p;
-        o = oplook(p);	/* could probably avoid this call */
-        asmout(p, o);
-        pc += o->size;
-    }
-
-    if(debug['a'])
-        Bprint(&bso, "\n");
-    Bflush(&bso);
-    cflush();
-
-    /* output strings in text segment */
-    etext = INITTEXT + textsize;
-    for(t = pc; t < etext; t += sizeof(buf)-100) {
-        if(etext-t > sizeof(buf)-100)
-            datblk(t, sizeof(buf)-100, 1);
-        else
-            datblk(t, etext-t, 1);
-    }
-
-    curtext = P;
-    switch(HEADTYPE) {
-    case 0:
-    case 1:
-    case 2:
-    case 5:
-    case 7:
-        OFFSET = HEADR+textsize;
-        seek(cout, OFFSET, 0);
-        break;
-    case 3:
-    case 6:	/* no header, padded segments */
-        OFFSET = rnd(HEADR+textsize, 4096);
-        seek(cout, OFFSET, 0);
-        break;
-    }
-    if(dlm){
-        char buf[8];
-
-        write(cout, buf, INITDAT-textsize);
-        textsize = INITDAT;
-    }
-    for(t = 0; t < datsize; t += sizeof(buf)-100) {
-        if(datsize-t > sizeof(buf)-100)
-            datblk(t, sizeof(buf)-100, 0);
-        else
-            datblk(t, datsize-t, 0);
-    }
-
-    symsize = 0;
-    lcsize = 0;
-    if(!debug['s']) {
-        DBG("%5.2f sym\n", cputime());
-        switch(HEADTYPE) {
-        case 0:
-        case 1:
-        case 4:
-        case 5:
-            debug['s'] = 1;
-            break;
-        case 2:
-            OFFSET = HEADR+textsize+datsize;
-            seek(cout, OFFSET, 0);
-            break;
-        case 3:
-        case 6:	/* no header, padded segments */
-            OFFSET += rnd(datsize, 4096);
-            seek(cout, OFFSET, 0);
-            break;
-        case 7:
-            break;
-        }
-        if(!debug['s'])
-            asmsym();
-        DBG("%5.2f pc\n", cputime());
-        if(!debug['s'])
-            asmlc();
-        if(dlm)
-            asmdyn();
-        cflush();
-    }
-    else if(dlm){
-        seek(cout, HEADR+textsize+datsize, 0);
-        asmdyn();
-        cflush();
-    }
-
-    DBG("%5.2f header\n", cputime());
-    OFFSET = 0;
-    seek(cout, OFFSET, 0);
-    switch(HEADTYPE) {
-    case 0:	/* no header */
-    case 6:	/* no header, padded segments */
-        break;
-    case 1:	/* aif for risc os */
-        lputl(0xe1a00000);		/* NOP - decompress code */
-        lputl(0xe1a00000);		/* NOP - relocation code */
-        lputl(0xeb000000 + 12);		/* BL - zero init code */
-        lputl(0xeb000000 +
-            (entryvalue()
-             - INITTEXT
-             + HEADR
-             - 12
-             - 8) / 4);		/* BL - entry code */
-
-        lputl(0xef000011);		/* SWI - exit code */
-        lputl(textsize+HEADR);		/* text size */
-        lputl(datsize);			/* data size */
-        lputl(0);			/* sym size */
-
-        lputl(bsssize);			/* bss size */
-        lputl(0);			/* sym type */
-        lputl(INITTEXT-HEADR);		/* text addr */
-        lputl(0);			/* workspace - ignored */
-
-        lputl(32);			/* addr mode / data addr flag */
-        lputl(0);			/* data addr */
-        for(t=0; t<2; t++)
-            lputl(0);		/* reserved */
-
-        for(t=0; t<15; t++)
-            lputl(0xe1a00000);	/* NOP - zero init code */
-        lputl(0xe1a0f00e);		/* B (R14) - zero init return */
-        break;
-    case 2:	/* plan 9 */
-        if(dlm)
-            lput(0x80000000|0x647);	/* magic */
+    case H_PLAN9:
+        <<[[asmb()]] if dynamic module magic header adjustment(arm)>>
         else
             lput(0x647);			/* magic */
         lput(textsize);			/* sizes */
@@ -3167,29 +2995,10 @@ asmb(void)
         lput(0L);
         lput(lcsize);
         break;
-    case 3:	/* boot for NetBSD */
-        lput((143<<16)|0413);		/* magic */
-        lputl(rnd(HEADR+textsize, 4096));
-        lputl(rnd(datsize, 4096));
-        lputl(bsssize);
-        lputl(symsize);			/* nsyms */
-        lputl(entryvalue());		/* va of entry */
-        lputl(0L);
-        lputl(0L);
-        break;
-    case 4: /* boot for IXP1200 */
-        break;
-    case 5: /* boot for ipaq */
-        lputl(0xe3300000);		/* nop */
-        lputl(0xe3300000);		/* nop */
-        lputl(0xe3300000);		/* nop */
-        lputl(0xe3300000);		/* nop */
-        break;
-    case 7:	/* elf */
-        debug['S'] = 1;			/* symbol table */
-        elf32(ARM, ELFDATA2LSB, 0, nil);
-        break;
+
+    <<[[asmb()]] switch HEADTYPE (for header generation) cases(arm)>>
     }
+
     cflush();
 }
 @
@@ -7569,10 +7378,11 @@ case 'u':	/* produce dynamically loadable module */
     break;
 @
 
-<<[[asmb()]] if dynamic module magic header adjustment(x86)>>=
+<<[[asmb()]] if dynamic module magic header adjustment(arm)>>=
 if(dlm)
-    magic |= 0x80000000;
+    lput(0x80000000|0x647);	/* magic */
 @
+
 
 
 <<[[main()]] if dynamic module(x86)>>=
@@ -7655,7 +7465,7 @@ if(dlm) {
 
 
 % ???
-<<[[asmb()]] if dynamic module, before datblk()(x86)>>=
+<<[[asmb()]] if dynamic module, before datblk()>>=
 if(dlm){
     char buf[8];
 
@@ -7664,7 +7474,7 @@ if(dlm){
 }
 @
 
-<<[[asmb()]] if dynamic module and no symbol table generation(x86)>>=
+<<[[asmb()]] if dynamic module and no symbol table generation>>=
 if(dlm){
     seek(cout, HEADR+textsize+datsize, 0);
     asmdyn();
@@ -7699,7 +7509,7 @@ Reloc rels;
 
 
 
-<<[[asmb()]] if dynamic module, call asmdyn()(x86)>>=
+<<[[asmb()]] if dynamic module, call asmdyn()>>=
 if(dlm)
     asmdyn();
 @
@@ -8001,207 +7811,91 @@ case AFCOMDP:
 
 \section{Extra executable formats}
 
-<<[[main()]] switch HEADTYPE cases(x86)>>=
-case H_GARBAGE:	/* this is garbage */
-    HEADR = 20L+56L;
-    if(INITTEXT == -1)
-        INITTEXT = 0x40004CL;
-    if(INITDAT == -1)
-        INITDAT = 0x10000000L;
-    if(INITRND == -1)
-        INITRND = 0;
+<<[[asmb()]] switch HEADTYPE (to position after text) cases(arm)>>=
+case 0:
+case 1:
+case 5:
+case 7:
+    OFFSET = HEADR+textsize;
+    seek(cout, OFFSET, 0);
     break;
-case H_COFF:	/* is unix coff */
-    HEADR = 0xd0L;
-    if(INITTEXT == -1)
-        INITTEXT = 0xd0;
-    if(INITDAT == -1)
-        INITDAT = 0x400000;
-    if(INITRND == -1)
-        INITRND = 0;
-    break;
-case H_COM:	/* MS-DOS .COM */
-    HEADR = 0;
-    if(INITTEXT == -1)
-        INITTEXT = 0x0100;
-    if(INITDAT == -1)
-        INITDAT = 0;
-    if(INITRND == -1)
-        INITRND = 4;
-    break;
-case H_EXE:	/* fake MS-DOS .EXE */
-    HEADR = 0x200;
-    if(INITTEXT == -1)
-        INITTEXT = 0x0100;
-    if(INITDAT == -1)
-        INITDAT = 0;
-    if(INITRND == -1)
-        INITRND = 4;
-    HEADR += (INITTEXT & 0xFFFF);
-    DBG("HEADR = 0x%ld\n", HEADR);
-    break;
-case H_ELF:	/* elf executable */
-    HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
-    if(INITTEXT == -1)
-        INITTEXT = 0x80100020L;
-    if(INITDAT == -1)
-        INITDAT = 0;
-    if(INITRND == -1)
-        INITRND = 4096;
+case 3:
+case 6:	/* no header, padded segments */
+    OFFSET = rnd(HEADR+textsize, 4096);
+    seek(cout, OFFSET, 0);
     break;
 @
-
-
-<<[[asmb()]] switch HEADTYPE (to position after text) cases(x86)>>=
-case H_GARBAGE:
-    seek(cout, rnd(HEADR+textsize, 8192), 0);
-    break;
-case H_COFF:
-    textsize = rnd(HEADR+textsize, 4096)-HEADR;
-    seek(cout, textsize+HEADR, 0);
-    break;
-case H_ELF: // like H_PLAN9
-    seek(cout, HEADR+textsize, 0);
-    break;
-case H_COM:
-case H_EXE:
-    seek(cout, HEADR+rnd(textsize, INITRND), 0);
-    break;
-@
-
-<<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(x86)>>=
-case H_GARBAGE:
-case H_COFF:
-    seek(cout, rnd(HEADR+textsize, INITRND)+datsize, 0);
-    break;
-//case H_PLAN9:
-case H_ELF:
-    seek(cout, HEADR+textsize+datsize, 0);
-    break;
-case H_COM:
-case H_EXE:
+<<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>=
+case 0:
+case 1:
+case 4:
+case 5:
     debug['s'] = 1;
     break;
+case 3:
+case 6:	/* no header, padded segments */
+    OFFSET += rnd(datsize, 4096);
+    seek(cout, OFFSET, 0);
+    break;
+case 7:
+    break;
 @
 
-<<[[asmb()]] switch HEADTYPE (for header generation) cases(x86)>>=
-default:
-case H_GARBAGE:	/* garbage */
-    lput(0x160L<<16);		/* magic and sections */
-    lput(0L);			/* time and date */
-    lput(rnd(HEADR+textsize, 4096)+datsize);
-    lput(symsize);			/* nsyms */
-    lput((0x38L<<16)|7L);		/* size of optional hdr and flags */
-    lput((0413<<16)|0437L);		/* magic and version */
-    lput(rnd(HEADR+textsize, 4096));/* sizes */
-    lput(datsize);
-    lput(bsssize);
-    lput(entryvalue());		/* va of entry */
-    lput(INITTEXT-HEADR);		/* va of base of text */
-    lput(INITDAT);			/* va of base of data */
-    lput(INITDAT+datsize);		/* va of base of bss */
-    lput(~0L);			/* gp reg mask */
-    lput(0L);
-    lput(0L);
-    lput(0L);
-    lput(0L);
-    lput(~0L);			/* gp value ?? */
+<<[[asmb()]] switch HEADTYPE (for header generation) cases(arm)>>=
+case 0:	/* no header */
+case 6:	/* no header, padded segments */
     break;
-case H_COFF:	/* unix coff */
-    /*
-     * file header
-     */
-    lputl(0x0004014c);		/* 4 sections, magic */
-    lputl(0);			/* unix time stamp */
-    lputl(0);			/* symbol table */
-    lputl(0);			/* nsyms */
-    lputl(0x0003001c);		/* flags, sizeof a.out header */
-    /*
-     * a.out header
-     */
-    lputl(0x10b);			/* magic, version stamp */
-    lputl(rnd(textsize, INITRND));	/* text sizes */
-    lputl(datsize);			/* data sizes */
-    lputl(bsssize);			/* bss sizes */
-    lput(entryvalue());		/* va of entry */
-    lputl(INITTEXT);		/* text start */
-    lputl(INITDAT);			/* data start */
-    /*
-     * text section header
-     */
-    strnput(".text", 8);
-    lputl(HEADR);			/* pa */
-    lputl(HEADR);			/* va */
-    lputl(textsize);		/* text size */
-    lputl(HEADR);			/* file offset */
-    lputl(0);			/* relocation */
-    lputl(0);			/* line numbers */
-    lputl(0);			/* relocation, line numbers */
-    lputl(0x20);			/* flags text only */
-    /*
-     * data section header
-     */
-    strnput(".data", 8);
-    lputl(INITDAT);			/* pa */
-    lputl(INITDAT);			/* va */
+case 1:	/* aif for risc os */
+    lputl(0xe1a00000);		/* NOP - decompress code */
+    lputl(0xe1a00000);		/* NOP - relocation code */
+    lputl(0xeb000000 + 12);		/* BL - zero init code */
+    lputl(0xeb000000 +
+        (entryvalue()
+         - INITTEXT
+         + HEADR
+         - 12
+         - 8) / 4);		/* BL - entry code */
+
+    lputl(0xef000011);		/* SWI - exit code */
+    lputl(textsize+HEADR);		/* text size */
     lputl(datsize);			/* data size */
-    lputl(HEADR+textsize);		/* file offset */
-    lputl(0);			/* relocation */
-    lputl(0);			/* line numbers */
-    lputl(0);			/* relocation, line numbers */
-    lputl(0x40);			/* flags data only */
-    /*
-     * bss section header
-     */
-    strnput(".bss", 8);
-    lputl(INITDAT+datsize);		/* pa */
-    lputl(INITDAT+datsize);		/* va */
+    lputl(0);			/* sym size */
+
     lputl(bsssize);			/* bss size */
-    lputl(0);			/* file offset */
-    lputl(0);			/* relocation */
-    lputl(0);			/* line numbers */
-    lputl(0);			/* relocation, line numbers */
-    lputl(0x80);			/* flags bss only */
-    /*
-     * comment section header
-     */
-    strnput(".comment", 8);
-    lputl(0);			/* pa */
-    lputl(0);			/* va */
-    lputl(symsize+lcsize);		/* comment size */
-    lputl(HEADR+textsize+datsize);	/* file offset */
-    lputl(HEADR+textsize+datsize);	/* offset of syms */
-    lputl(HEADR+textsize+datsize+symsize);/* offset of line numbers */
-    lputl(0);			/* relocation, line numbers */
-    lputl(0x200);			/* flags comment only */
+    lputl(0);			/* sym type */
+    lputl(INITTEXT-HEADR);		/* text addr */
+    lputl(0);			/* workspace - ignored */
+
+    lputl(32);			/* addr mode / data addr flag */
+    lputl(0);			/* data addr */
+    for(t=0; t<2; t++)
+        lputl(0);		/* reserved */
+
+    for(t=0; t<15; t++)
+        lputl(0xe1a00000);	/* NOP - zero init code */
+    lputl(0xe1a0f00e);		/* B (R14) - zero init return */
     break;
-case H_COM:
-    /* MS-DOS .COM */
+case 3:	/* boot for NetBSD */
+    lput((143<<16)|0413);		/* magic */
+    lputl(rnd(HEADR+textsize, 4096));
+    lputl(rnd(datsize, 4096));
+    lputl(bsssize);
+    lputl(symsize);			/* nsyms */
+    lputl(entryvalue());		/* va of entry */
+    lputl(0L);
+    lputl(0L);
     break;
-case H_EXE:
-    /* fake MS-DOS .EXE */
-    v = rnd(HEADR+textsize, INITRND)+datsize;
-    wputl(0x5A4D);			/* 'MZ' */
-    wputl(v % 512);			/* bytes in last page */
-    wputl(rnd(v, 512)/512);		/* total number of pages */
-    wputl(0x0000);			/* number of reloc items */
-    v = rnd(HEADR-(INITTEXT & 0xFFFF), 16);
-    wputl(v/16);			/* size of header */
-    wputl(0x0000);			/* minimum allocation */
-    wputl(0xFFFF);			/* maximum allocation */
-    wputl(0x0000);			/* initial ss value */
-    wputl(0x0100);			/* initial sp value */
-    wputl(0x0000);			/* complemented checksum */
-    v = entryvalue();
-    wputl(v);			/* initial ip value (!) */
-    wputl(0x0000);			/* initial cs value */
-    wputl(0x0000);
-    wputl(0x0000);
-    wputl(0x003E);			/* reloc table offset */
-    wputl(0x0000);			/* overlay number */
+case 4: /* boot for IXP1200 */
     break;
-case H_ELF:
-    elf32(I386, ELFDATA2LSB, 0, nil);
+case 5: /* boot for ipaq */
+    lputl(0xe3300000);		/* nop */
+    lputl(0xe3300000);		/* nop */
+    lputl(0xe3300000);		/* nop */
+    lputl(0xe3300000);		/* nop */
+    break;
+case 7:	/* elf */
+    debug['S'] = 1;			/* symbol table */
+    elf32(ARM, ELFDATA2LSB, 0, nil);
     break;
 @
 

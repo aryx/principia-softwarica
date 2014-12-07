@@ -57,30 +57,37 @@ asmb(void)
     Optab *o;
 
     DBG("%5.2f asm\n", cputime());
+
+    // TEXT SECTION
+
     OFFSET = HEADR;
-    seek(cout, OFFSET, 0);
+    seek(cout, OFFSET, SEEK__START);
     pc = INITTEXT;
+
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
             curtext = p;
             autosize = p->to.offset + 4;
         }
         if(p->pc != pc) {
-            diag("phase error %lux sb %lux",
-                p->pc, pc);
+            diag("phase error %lux sb %lux", p->pc, pc);
             if(!debug['a'])
                 prasm(curp);
             pc = p->pc;
         }
         curp = p;
+
+        // generate instruction! ?
         o = oplook(p);	/* could probably avoid this call */
         asmout(p, o);
+
         pc += o->size;
     }
 
     if(debug['a'])
         Bprint(&bso, "\n");
     Bflush(&bso);
+
     cflush();
 
     /* output strings in text segment */
@@ -92,11 +99,17 @@ asmb(void)
             datblk(t, etext-t, 1);
     }
 
+    // DATA SECTION
+
     curtext = P;
     switch(HEADTYPE) {
+    case H_PLAN9:
+        OFFSET = HEADR+textsize;
+        seek(cout, OFFSET, SEEK__START);
+        break;
+    /*s: [[asmb()]] switch HEADTYPE (to position after text) cases(arm) */
     case 0:
     case 1:
-    case 2:
     case 5:
     case 7:
         OFFSET = HEADR+textsize;
@@ -107,13 +120,18 @@ asmb(void)
         OFFSET = rnd(HEADR+textsize, 4096);
         seek(cout, OFFSET, 0);
         break;
+    /*e: [[asmb()]] switch HEADTYPE (to position after text) cases(arm) */
     }
+
+    /*s: [[asmb()]] if dynamic module, before datblk() */
     if(dlm){
         char buf[8];
 
         write(cout, buf, INITDAT-textsize);
         textsize = INITDAT;
     }
+    /*e: [[asmb()]] if dynamic module, before datblk() */
+
     for(t = 0; t < datsize; t += sizeof(buf)-100) {
         if(datsize-t > sizeof(buf)-100)
             datblk(t, sizeof(buf)-100, 0);
@@ -121,20 +139,27 @@ asmb(void)
             datblk(t, datsize-t, 0);
     }
 
+    // SYMBOL TABLE
+
+    // modified by asmsym()
     symsize = 0;
+    // modified by asmlc()
     lcsize = 0;
+
     if(!debug['s']) {
         DBG("%5.2f sym\n", cputime());
+
         switch(HEADTYPE) {
+        case H_PLAN9:
+            OFFSET = HEADR+textsize+datsize;
+            seek(cout, OFFSET, 0);
+            break;
+        /*s: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
         case 0:
         case 1:
         case 4:
         case 5:
             debug['s'] = 1;
-            break;
-        case 2:
-            OFFSET = HEADR+textsize+datsize;
-            seek(cout, OFFSET, 0);
             break;
         case 3:
         case 6:	/* no header, padded segments */
@@ -143,26 +168,57 @@ asmb(void)
             break;
         case 7:
             break;
+        /*e: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
         }
-        if(!debug['s'])
-            asmsym();
+
+        asmsym();
         DBG("%5.2f pc\n", cputime());
-        if(!debug['s'])
-            asmlc();
+
+        asmlc();
+        /*s: [[asmb()]] if dynamic module, call asmdyn() */
         if(dlm)
             asmdyn();
+        /*e: [[asmb()]] if dynamic module, call asmdyn() */
+
         cflush();
     }
-    else if(dlm){
-        seek(cout, HEADR+textsize+datsize, 0);
-        asmdyn();
-        cflush();
+    else {
+        /*s: [[asmb()]] if dynamic module and no symbol table generation */
+        if(dlm){
+            seek(cout, HEADR+textsize+datsize, 0);
+            asmdyn();
+            cflush();
+        }
+        /*e: [[asmb()]] if dynamic module and no symbol table generation */
     }
 
+    // HEADER
+
     DBG("%5.2f header\n", cputime());
+
     OFFSET = 0;
-    seek(cout, OFFSET, 0);
+    seek(cout, OFFSET, SEEK__START);
+
     switch(HEADTYPE) {
+    // see Exec in a.out.h
+
+    case H_PLAN9:
+        /*s: [[asmb()]] if dynamic module magic header adjustment(arm) */
+        if(dlm)
+            lput(0x80000000|0x647);	/* magic */
+        /*e: [[asmb()]] if dynamic module magic header adjustment(arm) */
+        else
+            lput(0x647);			/* magic */
+        lput(textsize);			/* sizes */
+        lput(datsize);
+        lput(bsssize);
+        lput(symsize);			/* nsyms */
+        lput(entryvalue());		/* va of entry */
+        lput(0L);
+        lput(lcsize);
+        break;
+
+    /*s: [[asmb()]] switch HEADTYPE (for header generation) cases(arm) */
     case 0:	/* no header */
     case 6:	/* no header, padded segments */
         break;
@@ -196,19 +252,6 @@ asmb(void)
             lputl(0xe1a00000);	/* NOP - zero init code */
         lputl(0xe1a0f00e);		/* B (R14) - zero init return */
         break;
-    case 2:	/* plan 9 */
-        if(dlm)
-            lput(0x80000000|0x647);	/* magic */
-        else
-            lput(0x647);			/* magic */
-        lput(textsize);			/* sizes */
-        lput(datsize);
-        lput(bsssize);
-        lput(symsize);			/* nsyms */
-        lput(entryvalue());		/* va of entry */
-        lput(0L);
-        lput(lcsize);
-        break;
     case 3:	/* boot for NetBSD */
         lput((143<<16)|0413);		/* magic */
         lputl(rnd(HEADR+textsize, 4096));
@@ -231,7 +274,9 @@ asmb(void)
         debug['S'] = 1;			/* symbol table */
         elf32(ARM, ELFDATA2LSB, 0, nil);
         break;
+    /*e: [[asmb()]] switch HEADTYPE (for header generation) cases(arm) */
     }
+
     cflush();
 }
 /*e: function asmb(arm) */

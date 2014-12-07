@@ -204,14 +204,14 @@ asmb(void)
 
     DBG("%5.2f datblk\n", cputime());
 
-    /*s: [[asmb()]] if dynamic module, before datblk()(x86) */
+    /*s: [[asmb()]] if dynamic module, before datblk() */
     if(dlm){
         char buf[8];
 
         write(cout, buf, INITDAT-textsize);
         textsize = INITDAT;
     }
-    /*e: [[asmb()]] if dynamic module, before datblk()(x86) */
+    /*e: [[asmb()]] if dynamic module, before datblk() */
 
     for(v = 0; v < datsize; v += sizeof(buf)-Dbufslop) {
         if(datsize-v > sizeof(buf)-Dbufslop)
@@ -260,19 +260,19 @@ asmb(void)
 
         asmlc();
 
-        /*s: [[asmb()]] if dynamic module, call asmdyn()(x86) */
+        /*s: [[asmb()]] if dynamic module, call asmdyn() */
         if(dlm)
             asmdyn();
-        /*e: [[asmb()]] if dynamic module, call asmdyn()(x86) */
+        /*e: [[asmb()]] if dynamic module, call asmdyn() */
         cflush();
     } else {
-        /*s: [[asmb()]] if dynamic module and no symbol table generation(x86) */
+        /*s: [[asmb()]] if dynamic module and no symbol table generation */
         if(dlm){
             seek(cout, HEADR+textsize+datsize, 0);
             asmdyn();
             cflush();
         }
-        /*e: [[asmb()]] if dynamic module and no symbol table generation(x86) */
+        /*e: [[asmb()]] if dynamic module and no symbol table generation */
     }
 
     // HEADER
