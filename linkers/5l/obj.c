@@ -68,19 +68,29 @@ isobjfile(char *f)
 void
 main(int argc, char *argv[])
 {
+    /*s: [[main()]] locals(arm) */
     int c;
-    char *a;
     char name[LIBNAMELEN];
+    char *a;
+    /*x: [[main()]] locals(arm) */
+    bool load_libs;
+    /*x: [[main()]] locals(arm) */
+    char *root;
+    /*e: [[main()]] locals(arm) */
 
     thechar = '5';
     thestring = "arm";   
+    outfile = "5.out";
 
+    /*s: [[main()]] debug initialization(arm) */
     Binit(&bso, 1, OWRITE);
-    cout = -1;
-    listinit();
+    listinit(); // fmtinstall()
+    /*e: [[main()]] debug initialization(arm) */
+
     outfile = 0;
     nerrors = 0;
     curtext = P;
+
     HEADTYPE = -1;
     INITTEXT = -1;
     INITTEXTP = -1;
@@ -88,77 +98,95 @@ main(int argc, char *argv[])
     INITRND = -1;
     INITENTRY = 0;
 
+
     ARGBEGIN {
-    default:
-        c = ARGC();
-        if(c >= 0 && c < sizeof(debug))
-            debug[c]++;
-        break;
+    /*s: [[main()]] command line processing(arm) */
     case 'o':
         outfile = ARGF();
         break;
-    case 'E':
-        a = ARGF();
-        if(a)
-            INITENTRY = a;
-        break;
+    /*x: [[main()]] command line processing(arm) */
+        case 'H':
+            a = ARGF();
+            if(a)
+                HEADTYPE = atolwhex(a);
+            /* do something about setting INITTEXT */
+            break;
+        case 'T':
+            a = ARGF();
+            if(a)
+                INITTEXT = atolwhex(a);
+            break;
+        case 'D':
+            a = ARGF();
+            if(a)
+                INITDAT = atolwhex(a);
+            break;
+        case 'E':
+            a = ARGF();
+            if(a)
+                INITENTRY = a;
+            break;
+        case 'R':
+            a = ARGF();
+            if(a)
+                INITRND = atolwhex(a);
+            break;
+    /*x: [[main()]] command line processing(arm) */
     case 'L':
         addlibpath(EARGF(usage()));
         break;
-    case 'T':
-        a = ARGF();
-        if(a)
-            INITTEXT = atolwhex(a);
+    /*x: [[main()]] command line processing(arm) */
+    case 'x':	/* produce export table */
+        doexp = true;
+        if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
+            readundefs(ARGF(), SEXPORT);
         break;
+    /*x: [[main()]] command line processing(arm) */
+    case 'u':	/* produce dynamically loadable module */
+        dlm = true;
+        if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
+            readundefs(ARGF(), SIMPORT);
+        break;
+    /*x: [[main()]] command line processing(arm) */
     case 'P':
         a = ARGF();
         if(a)
             INITTEXTP = atolwhex(a);
         break;
-    case 'D':
-        a = ARGF();
-        if(a)
-            INITDAT = atolwhex(a);
+    /*x: [[main()]] command line processing(arm) */
+    default:
+        c = ARGC();
+        if(c >= 0 && c < sizeof(debug))
+            debug[c]++;
         break;
-    case 'R':
-        a = ARGF();
-        if(a)
-            INITRND = atolwhex(a);
-        break;
-    case 'H':
-        a = ARGF();
-        if(a)
-            HEADTYPE = atolwhex(a);
-        /* do something about setting INITTEXT */
-        break;
-    case 'x':	/* produce export table */
-        doexp = 1;
-        if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
-            readundefs(ARGF(), SEXPORT);
-        break;
-    case 'u':	/* produce dynamically loadable module */
-        dlm = 1;
-        if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
-            readundefs(ARGF(), SIMPORT);
-        break;
+    /*e: [[main()]] command line processing(arm) */
     } ARGEND
-
     USED(argc);
-
-    if(*argv == 0)
+    if(*argv == nil)
         usage();
-    if(!debug['9'] && !debug['U'] && !debug['B'])
-        debug[DEFAULT] = 1;
-    a = getenv("ccroot");
-    if(a != nil && *a != '\0') {
-        if(!fileexists(a)) {
-            diag("nonexistent $ccroot: %s", a);
+
+    /*s: [[main()]] addlibpath("/xxx/lib") or ccroot */
+    /*s: [[main()]] change root if ccroot */
+    root = getenv("ccroot");
+
+    if(root != nil && *root != '\0') {
+        if(!fileexists(root)) {
+            diag("nonexistent $ccroot: %s", root);
             errorexit();
         }
     }else
-        a = "";
-    snprint(name, sizeof(name), "%s/%s/lib", a, thestring);
+        root = "";
+    /*e: [[main()]] change root if ccroot */
+
+    // usually /386/lib/ as root = ""
+    snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
+    /*e: [[main()]] addlibpath("/xxx/lib") or ccroot */
+
+    /*s: [[main()]] adjust HEADTYPE if debug flags(arm) */
+    if(!debug['9'] && !debug['U'] && !debug['B'])
+        debug[DEFAULT] = true;
+
     if(HEADTYPE == -1) {
         if(debug['U'])
             HEADTYPE = 0;
@@ -167,10 +195,19 @@ main(int argc, char *argv[])
         if(debug['9'])
             HEADTYPE = 2;
     }
+    /*e: [[main()]] adjust HEADTYPE if debug flags(arm) */
     switch(HEADTYPE) {
-    default:
-        diag("unknown -H option");
-        errorexit();
+    /*s: [[main()]] switch HEADTYPE cases(arm) */
+        case H_PLAN9:
+            HEADR = 32L;
+            if(INITTEXT == -1)
+                INITTEXT = 4096+32;
+            if(INITDAT == -1)
+                INITDAT = 0;
+            if(INITRND == -1)
+                INITRND = 4096;
+            break;
+    /*x: [[main()]] switch HEADTYPE cases(arm) */
     case 0:	/* no header */
     case 6:	/* no header, padded segments */
         HEADR = 0L;
@@ -189,15 +226,6 @@ main(int argc, char *argv[])
             INITDAT = 0;
         if(INITRND == -1)
             INITRND = 4;
-        break;
-    case 2:	/* plan 9 */
-        HEADR = 32L;
-        if(INITTEXT == -1)
-            INITTEXT = 4128;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4096;
         break;
     case 3:	/* boot for NetBSD */
         HEADR = 32L;
@@ -235,15 +263,25 @@ main(int argc, char *argv[])
         if(INITRND == -1)
             INITRND = 4;
         break;
+    /*e: [[main()]] switch HEADTYPE cases(arm) */
+    default:
+        diag("unknown -H option");
+        errorexit();
     }
+
+    /*s: [[main()]] last INITXXX adjustments */
     if (INITTEXTP == -1)
         INITTEXTP = INITTEXT;
+
     if(INITDAT != 0 && INITRND != 0)
         print("warning: -D0x%lux is ignored because of -R0x%lux\n",
             INITDAT, INITRND);
+    /*e: [[main()]] last INITXXX adjustments */
+
     DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
 
+    /*s: [[main()]] set zprg(arm) */
     zprg.as = AGOK;
     zprg.scond = 14;
     zprg.reg = NREG;
@@ -251,14 +289,20 @@ main(int argc, char *argv[])
     zprg.from.type = D_NONE;
     zprg.from.reg = NREG;
     zprg.to = zprg.from;
-    buildop();
+    /*e: [[main()]] set zprg(arm) */
+
+    /*s: [[main()]] initialize globals(arm) */
     histgen = 0;
     textp = P;
     datap = P;
     pc = 0;
     dtype = 4;
-    if(outfile == 0)
-        outfile = "5.out";
+    /*x: [[main()]] initialize globals(arm) */
+    load_libs = !debug['l'];
+    /*e: [[main()]] initialize globals(arm) */
+
+    buildop();
+
     cout = create(outfile, 1, 0775);
     if(cout < 0) {
         diag("cannot create %s: %r", outfile);
@@ -266,69 +310,100 @@ main(int argc, char *argv[])
     }
     nuxiinit();
 
+    // ------ main functions  ------
     version = 0;
+
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
+
+    /*s: [[main()]] cout is ready, LET'S GO(arm) */
     firstp = prg();
     lastp = firstp;
 
-    if(INITENTRY == 0) {
+    /*s: [[main()]] set INITENTRY */
+    if(INITENTRY == nil) {
         INITENTRY = "_main";
+        /*s: [[main()]] adjust INITENTRY if profiling */
         if(debug['p'])
             INITENTRY = "_mainp";
-        if(!debug['l'])
+        /*e: [[main()]] adjust INITENTRY if profiling */
+        if(load_libs)
             lookup(INITENTRY, 0)->type = SXREF;
-    } else if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
-        lookup(INITENTRY, 0)->type = SXREF;
+    } else {
+        /*s: [[main()]] if digit INITENTRY */
+        if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
+           lookup(INITENTRY, 0)->type = SXREF;
+        /*e: [[main()]] if digit INITENTRY */
+    }
+    /*e: [[main()]] set INITENTRY */
 
     while(*argv)
         objfile(*argv++);
-    if(!debug['l'])
+
+    if(load_libs)
         loadlib();
+
     firstp = firstp->link;
     if(firstp == P)
         goto out;
+
+    /*s: [[main()]] if export table or dynamic module(arm) */
     if(doexp || dlm){
         EXPTAB = "_exporttab";
         zerosig(EXPTAB);
         zerosig("etext");
         zerosig("edata");
         zerosig("end");
+
+        /*s: [[main()]] if dynamic module(arm) */
         if(dlm){
             initdiv();
             import();
-            HEADTYPE = 2;
+            HEADTYPE = H_PLAN9;
             INITTEXT = INITDAT = 0;
             INITRND = 8;
             INITENTRY = EXPTAB;
         }
+        /*e: [[main()]] if dynamic module(arm) */
         else
             divsig();
+
         export();
     }
+    /*e: [[main()]] if export table or dynamic module(arm) */
+
     patch();
+    /*s: [[main()]] call doprofxxx() if profiling */
     if(debug['p'])
         if(debug['1'])
             doprof1();
         else
             doprof2();
+    /*e: [[main()]] call doprofxxx() if profiling */
     dodata();
     follow();
     if(firstp == P)
         goto out;
     noops();
     span();
+
+    // write to cout, finally
     asmb();
+    // sanity check
     undef();
+    /*e: [[main()]] cout is ready, LET'S GO(arm) */
 
 out:
+    /*s: [[main()]] profile report */
     if(debug['v']) {
         Bprint(&bso, "%5.2f cpu time\n", cputime());
+        Bprint(&bso, "%ld symbols\n", nsymbol);
         Bprint(&bso, "%ld memory used\n", thunk);
         Bprint(&bso, "%d sizeof adr\n", sizeof(Adr));
         Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
+        Bflush(&bso);
     }
-    Bflush(&bso);
+    /*e: [[main()]] profile report */
     errorexit();
 }
 /*e: function main(arm) */

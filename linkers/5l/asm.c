@@ -698,8 +698,10 @@ datblk(long s, long n, int str)
                 case SBSS:
                     d += p->to.sym->value + INITDAT;
                 }
+                /*s: [[datblk()]] if dynamic module(arm) */
                 if(dlm)
                     dynreloc(v, a+INITDAT, 1);
+                /*e: [[datblk()]] if dynamic module(arm) */
             }
             cast = (char*)&d;
             switch(c) {

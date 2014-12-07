@@ -151,6 +151,7 @@ main(int argc, char *argv[])
     /*x: [[main()]] locals(x86) */
     char *root;
     /*e: [[main()]] locals(x86) */
+
     thechar = '8';
     thestring = "386";   
     outfile = "8.out";
@@ -197,16 +198,16 @@ main(int argc, char *argv[])
         addlibpath(EARGF(usage()));
         break;
     /*x: [[main()]] command line processing(x86) */
-        case 'x':	/* produce export table */
-            doexp = true;
-            if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1])){
-                a = ARGF();
-                if(strcmp(a, "*") == 0)
-                    allexport = true;
-                else
-                    readundefs(a, SEXPORT);
-            }
-            break;
+    case 'x':	/* produce export table */
+        doexp = true;
+        if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1])){
+            a = ARGF();
+            if(strcmp(a, "*") == 0)
+                allexport = true;
+            else
+                readundefs(a, SEXPORT);
+        }
+        break;
     /*x: [[main()]] command line processing(x86) */
     case 'u':	/* produce dynamically loadable module */
         dlm = true;
@@ -234,8 +235,8 @@ main(int argc, char *argv[])
     if(*argv == nil)
         usage();
 
-    /*s: [[main()]] addlibpath("/386/lib") or ccroot */
-    /*s: [[main()]] change root if ccroot(x86) */
+    /*s: [[main()]] addlibpath("/xxx/lib") or ccroot */
+    /*s: [[main()]] change root if ccroot */
     root = getenv("ccroot");
 
     if(root != nil && *root != '\0') {
@@ -245,12 +246,12 @@ main(int argc, char *argv[])
         }
     }else
         root = "";
-    /*e: [[main()]] change root if ccroot(x86) */
+    /*e: [[main()]] change root if ccroot */
 
     // usually /386/lib/ as root = ""
     snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
-    /*e: [[main()]] addlibpath("/386/lib") or ccroot */
+    /*e: [[main()]] addlibpath("/xxx/lib") or ccroot */
 
     /*s: [[main()]] adjust HEADTYPE if debug flags(x86) */
     if(!debug['9'] && !debug['U'] && !debug['B'])
@@ -267,16 +268,6 @@ main(int argc, char *argv[])
     /*e: [[main()]] adjust HEADTYPE if debug flags(x86) */
     switch(HEADTYPE) {
     /*s: [[main()]] switch HEADTYPE cases(x86) */
-    case H_PLAN9:	/* plan 9 */
-        HEADR = 32L;
-        if(INITTEXT == -1)
-            INITTEXT = 4096+32;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4096;
-        break;
-    /*x: [[main()]] switch HEADTYPE cases(x86) */
     case H_GARBAGE:	/* this is garbage */
         HEADR = 20L+56L;
         if(INITTEXT == -1)
@@ -324,20 +315,30 @@ main(int argc, char *argv[])
         if(INITRND == -1)
             INITRND = 4096;
         break;
+    /*x: [[main()]] switch HEADTYPE cases(x86) */
+    case H_PLAN9:	/* plan 9 */
+        HEADR = 32L;
+        if(INITTEXT == -1)
+            INITTEXT = 4096+32;
+        if(INITDAT == -1)
+            INITDAT = 0;
+        if(INITRND == -1)
+            INITRND = 4096;
+        break;
     /*e: [[main()]] switch HEADTYPE cases(x86) */
     default:
         diag("unknown -H option");
         errorexit();
 
     }
-    /*s: [[main()]] last INITXXX adjustments(x86) */
+    /*s: [[main()]] last INITXXX adjustments */
     if (INITTEXTP == -1)
         INITTEXTP = INITTEXT;
 
     if(INITDAT != 0 && INITRND != 0)
         print("warning: -D0x%lux is ignored because of -R0x%lux\n",
             INITDAT, INITRND);
-    /*e: [[main()]] last INITXXX adjustments(x86) */
+    /*e: [[main()]] last INITXXX adjustments */
 
     DBG("HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
@@ -432,22 +433,22 @@ main(int argc, char *argv[])
     firstp = prg();
     lastp = firstp;
 
-    /*s: [[main()]] set INITENTRY(x86) */
+    /*s: [[main()]] set INITENTRY */
     if(INITENTRY == nil) {
         INITENTRY = "_main";
-        /*s: [[main()]] adjust INITENTRY if profiling(x86) */
+        /*s: [[main()]] adjust INITENTRY if profiling */
         if(debug['p'])
             INITENTRY = "_mainp";
-        /*e: [[main()]] adjust INITENTRY if profiling(x86) */
+        /*e: [[main()]] adjust INITENTRY if profiling */
         if(load_libs)
             lookup(INITENTRY, 0)->type = SXREF;
     } else {
-        /*s: [[main()]] if digit INITENTRY(x86) */
+        /*s: [[main()]] if digit INITENTRY */
         if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
            lookup(INITENTRY, 0)->type = SXREF;
-        /*e: [[main()]] if digit INITENTRY(x86) */
+        /*e: [[main()]] if digit INITENTRY */
     }
-    /*e: [[main()]] set INITENTRY(x86) */
+    /*e: [[main()]] set INITENTRY */
 
     while(*argv)
         objfile(*argv++);
@@ -485,13 +486,13 @@ main(int argc, char *argv[])
     follow();
     dodata();
     dostkoff();
-    /*s: [[main()]] call doprofxxx() if profiling(x86) */
+    /*s: [[main()]] call doprofxxx() if profiling */
     if(debug['p'])
         if(debug['1'])
             doprof1();
         else
             doprof2();
-    /*e: [[main()]] call doprofxxx() if profiling(x86) */
+    /*e: [[main()]] call doprofxxx() if profiling */
     span();
     doinit();
 
@@ -502,7 +503,7 @@ main(int argc, char *argv[])
     undef();
     /*e: [[main()]] cout is ready, LET'S GO(x86) */
 
-    /*s: [[main()]] profile report(x86) */
+    /*s: [[main()]] profile report */
     if(debug['v']) {
         Bprint(&bso, "%5.2f cpu time\n", cputime());
         Bprint(&bso, "%ld symbols\n", nsymbol);
@@ -511,7 +512,7 @@ main(int argc, char *argv[])
         Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
         Bflush(&bso);
     }
-    /*e: [[main()]] profile report(x86) */
+    /*e: [[main()]] profile report */
     errorexit();
 }
 /*e: function main (linkers/8l/obj.c) */

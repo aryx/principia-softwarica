@@ -13431,6 +13431,303 @@ if(debug['e']){		/* embedded tracing */
 }
 @
 
+
+<<[[main()]] cout is ready, LET'S GO(x86)>>=
+firstp = prg();
+lastp = firstp;
+
+<<[[main()]] set INITENTRY>>
+
+while(*argv)
+    objfile(*argv++);
+
+if(load_libs)
+    loadlib();
+
+firstp = firstp->link;
+if(firstp == P)
+    errorexit();
+
+<<[[main()]] if export table or dynamic module(x86)>>
+
+patch();
+follow();
+dodata();
+dostkoff();
+<<[[main()]] call doprofxxx() if profiling>>
+span();
+doinit();
+
+// write to cout, finally
+asmb();
+
+// sanity check
+undef();
+@
+
+
+<<[[main()]] command line processing(x86)>>=
+    case 'o': /* output to (next arg) */
+        outfile = ARGF();
+        break;
+@
+
+
+<<function main (linkers/8l/obj.c)>>=
+void
+main(int argc, char *argv[])
+{
+    <<[[main()]] locals(x86)>>
+
+    thechar = '8';
+    thestring = "386";   
+    outfile = "8.out";
+
+    <<[[main()]] debug initialization(x86)>>
+
+    ARGBEGIN {
+    <<[[main()]] command line processing(x86)>>
+    } ARGEND
+    USED(argc);
+    if(*argv == nil)
+        usage();
+
+    <<[[main()]] addlibpath("/xxx/lib") or ccroot>>
+
+    <<[[main()]] adjust HEADTYPE if debug flags(x86)>>
+    switch(HEADTYPE) {
+    <<[[main()]] switch HEADTYPE cases(x86)>>
+    default:
+        diag("unknown -H option");
+        errorexit();
+
+    }
+    <<[[main()]] last INITXXX adjustments>>
+
+    DBG("HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
+            HEADTYPE, INITTEXT, INITDAT, INITRND);
+
+    <<[[main()]] sanity check optab(x86)>>
+    <<[[main()]] initialize globals(x86)>>
+
+    nuxiinit();
+
+    cout = create(outfile, 1, 0775);
+    if(cout < 0) {
+        diag("cannot create %s: %r", outfile);
+        errorexit();
+    }
+
+    // ------ main functions  ------
+    <<[[main()]] cout is ready, LET'S GO(x86)>>
+
+    <<[[main()]] profile report>>
+    errorexit();
+}
+@
+%$ 
+
+
+<<[[main()]] command line processing(x86)>>=
+case 'H':
+    a = ARGF();
+    if(a)
+        HEADTYPE = atolwhex(a);
+    break;
+case 'T':
+    a = ARGF();
+    if(a)
+        INITTEXT = atolwhex(a);
+    break;
+case 'D':
+    a = ARGF();
+    if(a)
+        INITDAT = atolwhex(a);
+    break;
+case 'E':
+    a = ARGF();
+    if(a)
+        INITENTRY = a;
+    break;
+case 'R':
+    a = ARGF();
+    if(a)
+        INITRND = atolwhex(a);
+    break;
+@
+
+
+<<[[main()]] switch HEADTYPE cases(x86)>>=
+case H_PLAN9:	/* plan 9 */
+    HEADR = 32L;
+    if(INITTEXT == -1)
+        INITTEXT = 4096+32;
+    if(INITDAT == -1)
+        INITDAT = 0;
+    if(INITRND == -1)
+        INITRND = 4096;
+    break;
+@
+
+% used locals? move closer the the code that use it then
+<<[[main()]] locals(x86)>>=
+    int i, c;
+    char name[LIBNAMELEN];
+    char *a;
+@
+
+<<[[main()]] initialize globals(x86)>>=
+<<[[main()]] set ycover(x86)>>
+<<[[main()]] set reg(x86)>>
+<<[[main()]] set zprg(x86)>>
+dtype = 4;
+
+cbp = buf.cbuf;
+cbc = sizeof(buf.cbuf);
+@
+
+<<[[main()]] set zprg(x86)>>=
+zprg.link = P;
+zprg.pcond = P;
+zprg.back = 2;
+zprg.as = AGOK;
+zprg.from.type = D_NONE;
+zprg.from.index = D_NONE;
+zprg.from.scale = 1;
+zprg.to = zprg.from;
+@
+
+<<[[main()]] locals(x86)>>=
+bool load_libs = true;
+@
+
+% -l means no automagic stdlibs
+<<[[main()]] initialize globals(x86)>>=
+load_libs = !debug['l'];
+@
+
+
+<<[[main()]] command line processing(x86)>>=
+case 'L':
+    addlibpath(EARGF(usage()));
+    break;
+@
+
+% was called a
+<<[[main()]] locals(x86)>>=
+char *root;
+@
+
+% starts at 1 because of AXXX (but why need AXXX?)
+<<[[main()]] sanity check optab(x86)>>=
+for(i=1; optab[i].as; i++)
+    if(i != optab[i].as) {
+        diag("phase error in optab: %d", i);
+        errorexit();
+    }
+@
+
+<<[[main()]] command line processing(x86)>>=
+case 'x':	/* produce export table */
+    doexp = true;
+    if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1])){
+        a = ARGF();
+        if(strcmp(a, "*") == 0)
+            allexport = true;
+        else
+            readundefs(a, SEXPORT);
+    }
+    break;
+@
+
+<<[[main()]] if dynamic module(x86)>>=
+if(dlm){
+    import();
+    HEADTYPE = H_PLAN9;
+    INITTEXT = INITDAT = 0;
+    INITRND = 8;
+    INITENTRY = EXPTAB;
+}
+@
+
+<<[[main()]] if export table or dynamic module(x86)>>=
+if(doexp || dlm){
+    EXPTAB = "_exporttab";
+    zerosig(EXPTAB);
+    zerosig("etext");
+    zerosig("edata");
+    zerosig("end");
+
+   <<[[main()]] if dynamic module(x86)>>
+
+    export();
+}
+@
+
+<<[[main()]] command line processing(x86)>>=
+case 'u':	/* produce dynamically loadable module */
+    dlm = true;
+    // do not load standard libraries
+    debug['l'] = true;
+
+    if(argv[1] != nil && argv[1][0] != '-' && !isobjfile(argv[1]))
+        readundefs(ARGF(), SIMPORT);
+    break;
+@
+
+
+<<[[asmb()]] if dynamic module, when iterate from firstp(x86)>>=
+if(dlm) {
+    if(p->as == ATEXT)
+        reloca = nil;
+    else if(reloca != nil)
+        diag("reloc failure: %P", curp);
+}
+@
+
+<<[[datblk()]] if dynamic module(x86)>>=
+if(dlm)
+    dynreloc(p->to.sym, l+s+INITDAT, 1);
+@
+
+
+<<[[main()]] command line processing(x86)>>=
+case 'P':
+    a = ARGF();
+    if(a)
+        INITTEXTP = atolwhex(a);
+    break;
+@
+
+<<[[main()]] debug initialization(x86)>>=
+Binit(&bso, 1, OWRITE);
+listinit(); // fmtinstall()
+memset(debug, false, sizeof(debug));
+@
+
+<<[[main()]] command line processing(x86)>>=
+default:
+    c = ARGC();
+    if(c >= 0 && c < sizeof(debug))
+        debug[c] = true;
+    break;
+@
+
+% obsolete?
+<<[[main()]] adjust HEADTYPE if debug flags(x86)>>=
+if(!debug['9'] && !debug['U'] && !debug['B'])
+    debug[DEFAULT] = true;
+
+if(HEADTYPE == -1) {
+    if(debug['U'])
+        HEADTYPE = 1;
+    if(debug['B'])
+        HEADTYPE = 2;
+    if(debug['9'])
+        HEADTYPE = 2;
+}
+@
+
 \section{[[linkers/8l/]]}
 
 \subsection*{[[linkers/8l/elf.h]]}
