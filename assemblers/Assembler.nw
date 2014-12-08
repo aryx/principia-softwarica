@@ -328,7 +328,7 @@ License.
 %5a/globals.c: just nullgen (because Gen ARM specific so not in aa/)
 %5a/lex.c: the lexer and also main()
 
-\section{Architecture overview}
+\section{Software architecture}
 
 % main -> assemble -> yyparse -> yylex
 %                             -> outcode (increments pc and in pass2 output!)
@@ -482,6 +482,7 @@ enum operand_kind {
 %dead: D_GOK, D_ADDR (valid for x86 but unused for arm)/* type/name */ for GOK
 %note: I reordered again a lot things, which like for opcode has some impact
 % on 5l. Now D_REG, D_CONST, D_SHIFT are closer (to mimic imsr rule).
+%See Dconv in Linker for dumper (which can help to undertand things too)
 
 
 %note: An ADT would be far better than this enum and separate Sym 
@@ -3651,8 +3652,10 @@ rcon:
 @
 
 
-\subsection{Memory references}
+\subsection{Memory (de)references, pointers}
+% was "Memory references"
 % arguments to MOVW
+% Pointers? or Memory dereference actually? or both :)
 
 % O_REG = offset reg?
 <<operand_kind cases>>=
@@ -3667,9 +3670,23 @@ D_OREG,
 @
 % gen? general?
 
+
+
+\ifallcode
 <<operand rules(arm)>>=
 <<gen rule>>
 @
+
+<<misc rules>>=
+<<oreg rule>>
+@
+
+<<operand rules(arm)>>=
+<<ximm rule>>
+@
+\fi
+
+
 
 
 <<gen rule>>=
@@ -3678,62 +3695,41 @@ gen:
 | ximm
 | shift
 @
-% so close to imsr, except ximm instead of imm, extended immediate
+% so close to imsr
+
+% close except ximm instead of imm (extended immediate)
+<<type declarations(arm)>>=
+%type   <gen>   ximm
+@
+
+% this is used for MOV of course, because of gen, but also
+% for DATA, WORD
+<<ximm rule>>=
+ximm:
+  '$' con
+ {
+  $$ = nullgen;
+  $$.type = D_CONST;
+  $$.offset = $2;
+ }
+@
+% see later the extension, MOV allows more forms of constants
+% (e.g. string constants, float constants)
+
 
 <<gen rule>>=
 | oreg
 @
 
-% a bit confusing that can have oreg, and also $ oreg
-% because MOV support powerful addressing modes? with multiple
-% indirections?
-
-
-<<gen rule>>=
-| con
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.offset = $1;
- }
-@
-%$
-% no $ in front of con here?
-% todo:clean: can remove con case? needed? implicit register?
-%  how can be D_OREG when there are no registers involved? it's SB by default?
-
-%less:clean: delete?
-<<gen rule>>=
-| shift '(' spreg ')'
- {
-  $$ = $1;
-  $$.reg = $3;
- }
-@
-
-
 <<type declarations(arm)>>=
-%type   <gen> oreg ireg nireg ioreg 
+%type   <gen> oreg ioreg ireg nireg 
 @
 
-
-
-% oreg? offset reg? but not really offset, it's a name
-%less: delete the name ( sgreg ) ? used?
-<<misc rules>>=
+% oreg? offset reg? 
+<<oreg rule>>=
 oreg:
-  name
-| name '(' sreg ')'
- {
-  $$ = $1;
-  $$.type = D_OREG;
-  $$.reg = $3;
- }
-| ioreg
+  ioreg
 @
-% sreg, so can't use FP here, nor LSB, so only name refering to PC?
-% no cos name allow name refering to LSB or FP or SP.
-% but what is then name '(' sreg ')' ?? double ()() ???
 
 % indirect or offset reg
 <<misc rules>>=
@@ -3762,7 +3758,17 @@ ireg:
 @
 %$
 
-% for BL
+
+
+% oreg? name is offset reg? but not really offset, it's a name. 
+% Actually a name is really a constant offset to a base like LSB!!
+<<oreg rule>>=
+| name
+@
+
+
+
+% for BL, in addition to rel, can also have nireg
 <<misc rules>>=
 nireg:
   name
@@ -3779,15 +3785,59 @@ nireg:
 
 
 
+
+
+%XXXXXXXXXX
+<<gen rule>>=
+| con
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.offset = $1;
+ }
+@
+%$
+% no $ in front of con here?
+% todo:clean: can remove con case? needed? implicit register?
+%  how can be D_OREG when there are no registers involved? it's SB by default?
+
+
+%XXXXXXXXXX
+%less:clean: delete?
+<<gen rule>>=
+| shift '(' spreg ')'
+ {
+  $$ = $1;
+  $$.reg = $3;
+ }
+@
+
+
+%XXXXXXXXXX
+<<oreg rule>>=
+| name '(' sreg ')'
+ {
+  $$ = $1;
+  $$.type = D_OREG;
+  $$.reg = $3;
+ }
+@
+% XXXX remove name '(' sreg ')'?
+% sreg, so can't use FP here, nor LSB, so only name refering to PC?
+% no cos name allow name refering to LSB or FP or SP.
+% but what is then name '(' sreg ')' ?? double ()() ???
+
+
+
 \subsection{Named memory}
-% for data, and actually also for code, just not labels
+% (different from labels, which are just for code refs)
 
 <<type declarations(arm)>>=
 %type   <gen>   name 
 %type   <lval>  pointer
 @
 
-
+% well first entry is not really a name ...
 <<operand rules(arm)>>=
 name:
  con '(' pointer ')'
@@ -3816,11 +3866,22 @@ name:
  }
 @
 %$
-%        MOVL    count+8(FP), CX
-% the LNAME is really just symbol for debugging help?
+% for TEXT foo(SB), ... or GLOBL. Definitions of names.
+% and also for references to names, like MOV count(SB), R1
+% (to get address of count?)
 % no LLAB here!
 
+% abused also in definitions of parameter, as in
+% MOVL    count+8(FP), CX
+% the LNAME here is really just a symbol for debugging help
 
+
+% the con (pointer) of 'name:' is not ambiguous with the con (sreg)
+% of 'oreg:'? no because pointer != sreg (well even if R12 is actually
+% LSB ...)
+
+% hmmm bad name? pointer_basis? but it's true we do '(' pointer ')'
+% where we really dereference the pointer (and then add an offset)
 <<helper rules(arm)>>=
 pointer:
   LSB
@@ -3938,32 +3999,14 @@ D_PSR,
 
 \subsection{Alternative forms}
 
-<<type declarations(arm)>>=
-%type   <gen>   ximm
-@
 
 <<operand_kind cases>>=
 D_SCONST,
 @
 % string constant
 
-<<operand_kind cases>>=
-D_OCONST,
-@
-% ??
-
-<<operand rules(arm)>>=
-<<ximm rule>>
-@
 
 <<ximm rule>>=
-ximm:
-  '$' con
- {
-  $$ = nullgen;
-  $$.type = D_CONST;
-  $$.offset = $2;
- }
 | '$' LSCONST
  {
   $$ = nullgen;
@@ -3971,6 +4014,15 @@ ximm:
   memcpy($$.sval, $2, sizeof($$.sval));
  }
 @
+% string constant
+
+
+%XXXXXXXXXXXX
+
+<<operand_kind cases>>=
+D_OCONST,
+@
+% ?? can deleter maybe
 
 <<ximm rule>>=
 | '$' oreg
@@ -3986,6 +4038,13 @@ ximm:
 @
 %$
 %clean: can remove this extra $*$ ?
+
+% a bit confusing that can have gen -> oreg, and also gen -> ximm -> $ oreg
+% because MOV support powerful addressing modes? with multiple
+% indirections?
+
+
+
 
 <<type declarations(arm)>>=
 %type   <gen>   regreg
@@ -4030,6 +4089,10 @@ long	pc;
   line
 @
 %$
+
+% note that labels are different from ATEXT! they are local
+% to the file, and so lead to local jmps. no need to relocate
+% those names.
 
 \section{Pseudo instructions}
 
@@ -4084,15 +4147,17 @@ AWORD,
 | LTYPEC name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
 @
 
+% DATA boot_CONF_outlen+0(SB)/4, $67523
+% hmm abuse reg for this constant, ugly
+
 <<inst rule(arm)>>=
 /*
  * WORD
  */
 | LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
 @
-%$
+% kind of anonymous DATA
 
-% DATA boot_CONF_outlen+0(SB)/4, $67523
 
 
 \subsection{[[END]]}
@@ -5208,9 +5273,6 @@ if(argc > 1) {
 %        break;
 
 \chapter{Conclusion}
-
-
-
 
 
 
