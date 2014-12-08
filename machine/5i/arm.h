@@ -59,10 +59,10 @@ enum ixxx
 // added by pad
 /*s: enum class_kind */
 enum class_kind {
-    // AND, EOR, ORR, BIC
-    // ADD, SUB, RSB, // ADC, SBC, RSC (unused by plan9 5a/5c/5l)
-    // TST, TEQ, CMP, CMN
-    // MOV, MVN
+    // AND, ORR, EOR,    BIC
+    // ADD, SUB,   RSB, ADC, SBC, RSC
+    // TST, TEQ, CMP,    CMN
+    // MOV,    MVN
     CARITH0 = 0,  // r,r,r
     CARITH1 = 16, // r<>r, r, r
     CARITH2 = 32, // r<>#, r, r

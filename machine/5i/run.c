@@ -462,39 +462,26 @@ shift(long v, int st, int sc, bool isreg)
 void
 dpex(instruction inst, long o1, long o2, int rd)
 {
-    bool cbit;
-
-    cbit = false;
+    bool cbit = false;
 
     switch((inst>>21) & 0xf) {
     case  0:	/* and */
         reg.r[rd] = o1 & o2;
         cbit = true;
         break;
+    case 12:	/* orr */
+        reg.r[rd] = o1 | o2;
+        cbit = true;
+        break;
     case  1:	/* eor */
         reg.r[rd] = o1 ^ o2;
         cbit = true;
         break;
+    case 14:	/* bic */
+        reg.r[rd] = o1 & ~o2;
+        cbit = true;
+        break;
 
-    case  2:	/* sub */
-        reg.r[rd] = o1 - o2;
-        // Fallthrough
-    case 10:	/* cmp */
-        if(inst & Sbit) {
-            reg.cc1 = o1;
-            reg.cc2 = o2;
-            reg.compare_op = CCcmp;
-        }
-        return;
-
-    case  3:	/* rsb */
-        reg.r[rd] = o2 - o1;
-        if(inst & Sbit) {
-            reg.cc1 = o2;
-            reg.cc2 = o1;
-            reg.compare_op = CCcmp;
-        }
-        return;
     case  4:	/* add */
         /*s: [[dpex()]] if calltree, when add operation */
         if(calltree && rd == REGPC && o2 == 0) {
@@ -513,6 +500,18 @@ dpex(instruction inst, long o1, long o2, int rd)
                 reg.cbit = false;
             reg.cc1 = o2;
             reg.cc2 = -o1;
+            reg.compare_op = CCcmp;
+        }
+        return;
+
+
+    case  2:	/* sub */
+        reg.r[rd] = o1 - o2;
+        // Fallthrough
+    case 10:	/* cmp */
+        if(inst & Sbit) {
+            reg.cc1 = o1;
+            reg.cc2 = o2;
             reg.compare_op = CCcmp;
         }
         return;
@@ -544,16 +543,16 @@ dpex(instruction inst, long o1, long o2, int rd)
         }
         return;
 
-    case 12:	/* orr */
-        reg.r[rd] = o1 | o2;
-        cbit = true;
-        break;
+    case  3:	/* rsb */
+        reg.r[rd] = o2 - o1;
+        if(inst & Sbit) {
+            reg.cc1 = o2;
+            reg.cc2 = o1;
+            reg.compare_op = CCcmp;
+        }
+        return;
     case 13:	/* mov */
         reg.r[rd] = o2;
-        cbit = true;
-        break;
-    case 14:	/* bic */
-        reg.r[rd] = o1 & ~o2;
         cbit = true;
         break;
     case 15:	/* mvn */
