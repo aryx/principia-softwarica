@@ -6,8 +6,7 @@
 %******************************************************************************
 \newif\iffinal
 \newif\ifverbose
-\finaltrue\verbosefalse
-% see also other newif in Macros.tex
+\finaltrue\verbosefalse % see also other newif in Macros.tex
 
 %------------------------------------------------------------------------------
 %history: 
@@ -125,6 +124,7 @@ Principia Softwarica: The Plan9 Kernel [[9]]
 x86 (32 bits) edition\\
 {version 0.1}
 }
+% hopefully one day an even cleaner ARM (32 bits) raspberry edition!
 
 \author{
 Yoann Padioleau\\
@@ -227,6 +227,11 @@ bigger than Plan9 equivalent core.
 % other: hurd?
 % other: nuttx, ils ont meme une graphic stack, widget, window manager
 
+% some disadvantages of 9: more general but also probably less
+% efficient, no buffer cache really, graphic stack in the kernel,
+% hardcoded split for kernel mem vs images mem and user mem,
+% other stuff?
+
 \section{Getting started}
 
 To get started you first need to get the source of the plan9
@@ -249,6 +254,7 @@ system with all its libraries and utilities.
 
 Finally you can test this compiled kernel and utilities using
 QEMU.
+% or a real PC.
 
 As a bonus step you can also now compile Plan9 under Plan9 itself!
 
@@ -308,14 +314,14 @@ those hardware resources for the benefit of user programs:
 \item a virtual CPU, so that each process thinks it has all the CPU 
 for itself (via preemptive scheduling)
 \item a virtual memory, so that each process thinks it has all memory
-for itself
+for itself (via hardware virtual memory features such as paging)
 \item a virtual screen, so that each process thinks it has all the screen
 for itself (via the windowing system)
 \item the file abstraction, so a process can read and store data
-on a disk, network, floppy, etc
+whether it's on a disk, network, floppy, etc
 % continous even though spreaded on concrete disk (like mm)
 \item the directory abstraction, so a process can organize data
-on a disk, network, floppy, etc
+whether it's on a disk, network, floppy, etc
 % also continous, even though spread over network and devices
 %\item a virtual storage (filesystem)
 %\item a virtual network (NFS)
@@ -367,8 +373,8 @@ provides to the user programs.
 @ 
 
 % use an enum instead in sys.h? but then the script that generates
-%  the .s in libc/ will be more complicated and the syscall numbers
-% are access from assembly so need to use #define
+%  the .s in libc/ will be a bit more complicated and the syscall numbers
+% are accessed from assembly so need to use #define
 
 
 <<sys.h process syscalls>>=
@@ -378,8 +384,9 @@ provides to the user programs.
 #define	AWAIT		4
 @
 
-% alternative to fork? just exec, but then fork allow easily to have
+% alternative to fork? just exec? but then fork allows easily to have
 % pipe or things that adjust the environment before executing other programs.
+% cells are using fork so it must be a good API :)
 
 <<sys.h memory syscalls>>=
 #define	BRK		5
@@ -397,7 +404,7 @@ provides to the user programs.
 #define	PWRITE		9
 #define	SEEK		10
 @
-% pread/pwrite? what is the p for?
+% pread/pwrite? what is the p for? page read? page write?
 
 <<sys.h directory syscalls>>=
 #define	CREATE	        11
@@ -410,8 +417,8 @@ provides to the user programs.
 #define	FWSTAT		18
 @
 % why so many stat, ugly a bit. each time variant where take name
-% of file descriptor (the f stands for fd)
-% could remove?
+% or file descriptor (the f stands for fd)
+% could remove maybe.
 
 <<sys.h namespace syscalls>>=
 #define	BIND		19
@@ -427,7 +434,7 @@ provides to the user programs.
 % clean xterm, that means you need to have programs that provides
 % a fake /dev/cons so need easy fileservers and namespace. Union dir
 % then is natural too, goes with having flexible namespace.
-% alternative would be if /dev/cons
+% ??alternative would be if /dev/cons??
 
 <<sys.h time syscalls>>=
 #define	SLEEP		22
@@ -437,10 +444,10 @@ provides to the user programs.
 % SLEEP is also for sleep/wakeup and synchronization?
 
 <<sys.h ipc syscalls>>=
+#define	PIPE		26
+
 #define	NOTIFY		24
 #define	NOTED		25
-
-#define	PIPE		26
 
 #define	SEGATTACH	27
 #define	SEGDETACH	28
@@ -448,6 +455,7 @@ provides to the user programs.
 #define	SEGFLUSH	30
 #define	SEGBRK		31
 @
+% pipe! one of unix greatest invention!
 
 % user level concurrency of course, the kernel itself uses
 % lots of concurrency mechanisms (often mimiced also in userland)
@@ -461,11 +469,13 @@ provides to the user programs.
 <<sys.h special file syscalls>>=
 #define	DUP		    36
 @
+% meh
 
 <<sys.h security syscalls>>=
 #define	FVERSION	37
 #define	FAUTH		38
 @
+%??
 
 % no SELECT? how does listen to multiple devices at the same time?
 % how alts() in lib_thread can work?
@@ -477,8 +487,22 @@ provides to the user programs.
 % amazing that can do everything with only those 38 syscalls!
 % (hmm actually we cheat because we have generic API for file that are
 %  then abused by file server to provide more services, e.g. for graphics)
-% API via int 64 (actually the API is also
-% the filesystem layout and fileservers)
+% API access via int 64 (but again the API is also
+% the filesystem layout and different fileservers)
+
+% missing stuff in plan9:
+% - shared library (help save some memory, but complicated)
+%   but: http://www.kix.in/2008/06/19/an-alternative-to-shared-libraries/ ??
+%   (also it's not a 9 issue, it's more a plan9 issue, the kernel does not
+%    have to know about dynamic linking I think. no?)
+% - select syscall
+
+% missing stuff in 9 kernel compared to Linux:
+% - buffer cache (but because distributed nature, can have cache, but in fileserver)
+% - reuse kernel memory?
+
+% see also uriel plan9 slide 9, things plan9 does not have
+
 
 %TODO
 %things plan9 make so much easier to implement/understand:
@@ -498,16 +522,6 @@ provides to the user programs.
 %this idea.
 % also once have 9p then have X11 for free as /dev/draw can be on the network
 
-% missing stuff in plan9:
-% - shared library (help save some memory, but complicated)
-%   but: http://www.kix.in/2008/06/19/an-alternative-to-shared-libraries/ ??
-% - select syscall
-% missing stuff in 9 kernel compared to Linux:
-% - buffer cache (but because distributed nature, can have cache, but in fileserver)
-% - reuse kernel memory?
-
-
-% see also uriel plan9 slide 9, things plan9 does not have
 
 \section{The [[x86]] machine}
 %http://g.oswego.edu/dl/jmm/cookbook.html references many architecture spec
@@ -547,6 +561,7 @@ struct Ureg
  ulong	ss;		/* old stack segment */
 };
 @
+% complicated ... ARM simpler.
 
 % intro segmentation and pagination? or ref to vm chapter?
 
