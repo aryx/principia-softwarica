@@ -124,7 +124,7 @@ assemble(char *file)
     // p = basename(file)
     // include[0] = dirname(file); 
     strcpy(ofile, file);
-    p = utfrrune(ofile, pathchar());
+    p = utfrrune(ofile, '/');
     if(p) {
         include[0] = ofile;
         *p++ = '\0';
@@ -133,8 +133,8 @@ assemble(char *file)
     /*e: [[assemble()]] set p to basename(file) and adjust include */
 
     if(outfile == nil) {
-        /*s: [[assemble()]] set outfile to {basename(file)}.8 */
-        // outfile =  p =~ s/.s/.8/;
+        /*s: [[assemble()]] set outfile to {basename(file)}.{thechar} */
+        // outfile =  p =~ s/.s/.5/;
         outfile = p;
         if(outfile){
             p = utfrrune(outfile, '.');
@@ -147,10 +147,10 @@ assemble(char *file)
             p[2] = '\0';
         } else
             outfile = "/dev/null";
-        /*e: [[assemble()]] set outfile to {basename(file)}.8 */
+        /*e: [[assemble()]] set outfile to {basename(file)}.{thechar} */
     }
 
-    /*s: [[assemble()]] setinclude("/<arch>/include") or INCLUDE */
+    /*s: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
     p = getenv("INCLUDE");
     if(p) {
         setinclude(p);
@@ -160,7 +160,7 @@ assemble(char *file)
             setinclude(strdup(incfile));
         }
     }
-    /*e: [[assemble()]] setinclude("/<arch>/include") or INCLUDE */
+    /*e: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
 
     of = mycreat(outfile, 0664);
     if(of < 0) {
@@ -202,6 +202,7 @@ assemble(char *file)
 struct Itab
 {
     char	*name;
+
     //enum<token_kind>
     ushort	type;
     //enum<opcode> | enum<operand_kind> | enum<name_kind> | enum<registers>
@@ -210,6 +211,7 @@ struct Itab
 /*e: struct Itab(arm) */
 
 /*s: global itab(arm) */
+// hashtbl<string, (token_kind * opcode|register|...)>
 struct Itab itab[] =
 {
     "NOP",		LTYPEI, ANOP,
@@ -217,6 +219,7 @@ struct Itab itab[] =
     "AND",		LTYPE1,	AAND,
     "ORR",		LTYPE1,	AORR,
     "EOR",		LTYPE1,	AEOR,
+    /*x: [[itab]] elements */
     "ADD",		LTYPE1,	AADD,
     "SUB",		LTYPE1,	ASUB,
     /*x: [[itab]] elements */
@@ -438,9 +441,9 @@ cinit(void)
     Sym *s;
     int i;
 
-    nullgen.sym = S;
-    nullgen.offset = 0;
     nullgen.type = D_NONE;
+    nullgen.offset = 0;
+    nullgen.sym = S;
     nullgen.name = N_NONE;
     nullgen.reg = NREG;
     if(FPCHIP)
@@ -510,25 +513,27 @@ zaddr(Gen *a, int s)
     char *n;
     Ieee e;
 
+    // Operand format, the operand kind first!
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
+    // idx in symbol table?
     Bputc(&obuf, s);
+    // idx in symbol table?
     Bputc(&obuf, a->name);
 
     switch(a->type) {
+    /*s: [[zaddr()]] cases */
     case D_NONE:
     case D_REG:
-    case D_FREG:
     case D_PSR:
-    case D_FPCR:
         break;
 
     case D_REGREG:
         Bputc(&obuf, a->offset);
         break;
 
-    case D_OREG:
     case D_CONST:
+    case D_OREG:
     case D_BRANCH:
     case D_SHIFT:
         l = a->offset;
@@ -545,7 +550,11 @@ zaddr(Gen *a, int s)
             n++;
         }
         break;
-
+    /*x: [[zaddr()]] cases */
+    case D_FREG:
+    case D_FPCR:
+        break;
+    /*x: [[zaddr()]] cases */
     case D_FCONST:
         ieeedtod(&e, a->dval);
         Bputc(&obuf, e.l);
@@ -557,7 +566,7 @@ zaddr(Gen *a, int s)
         Bputc(&obuf, e.h>>16);
         Bputc(&obuf, e.h>>24);
         break;
-
+    /*e: [[zaddr()]] cases */
     default:
         print("unknown type %d\n", a->type);
         exits("arg");
@@ -596,18 +605,21 @@ outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
     int sf;
     // symbol to, index in h[]
     int st;
-    // enum<operand_kind>
+    // enum<name_kind>???
     int t;
     Sym *s;
 
+    /*s: [[outcode()]] adjust a and scond when a is AB */
     /* hack to make B.NE etc. work: turn it into the corresponding conditional*/
     if(a == AB){
         a = bcode[scond&0xf];
         scond = (scond & ~0xf) | Always;
     }
+    /*e: [[outcode()]] adjust a and scond when a is AB */
 
     if(pass == 1)
         goto out;
+
 jackpot:
     sf = 0;
     s = g1->sym;
@@ -620,6 +632,7 @@ jackpot:
 
         t = g1->name;
 
+        // already generated an ANAME for this symbol reference
         if(h[sf].type == t)
          if(h[sf].sym == s)
             break;
@@ -631,7 +644,7 @@ jackpot:
         sf = symcounter;
         symcounter++;
         if(symcounter >= NSYM)
-            symcounter = 1;
+            symcounter = 1; // ???????? bug?
         break;
     }
 
@@ -664,6 +677,7 @@ jackpot:
         break;
     }
 
+    // Instruction serialized format: opcode, cond, optional reg, line, operands
     Bputc(&obuf, a);
     Bputc(&obuf, scond);
     Bputc(&obuf, reg);
@@ -686,27 +700,26 @@ outhist(void)
 {
     Gen g;
     Hist *h;
-    char *p, *q, *op, c;
+    char *p, *q, *op;
     int n;
 
     g = nullgen;
-    c = pathchar();
     for(h = hist; h != H; h = h->link) {
         p = h->name;
         op = nil;
-        if(p && p[0] != c && h->offset == 0 && pathname){
-            if(pathname[0] == c){
+        if(p && p[0] != '/' && h->offset == 0 && pathname){
+            if(pathname[0] == '/'){
                 op = p;
                 p = pathname;
             }
         }
         while(p) {
-            q = strchr(p, c);
+            q = strchr(p, '/');
             if(q) {
                 n = q-p;
                 if(n == 0){
                     n = 1;	/* leading "/" */
-                    *p = '/';	/* don't emit "\" on windows */
+                    *p = '/';
                 }
                 q++;
             } else {
@@ -731,7 +744,7 @@ outhist(void)
 
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, Always);
-        Bputc(&obuf, 0);
+        Bputc(&obuf, 0); // reg
         Bputc(&obuf, h->line);
         Bputc(&obuf, h->line>>8);
         Bputc(&obuf, h->line>>16);
@@ -826,7 +839,7 @@ l1:
     /*x: [[yylex()]] switch c cases */
     case '_':
     case '@':
-    // case 'a'..'z' 'A'..'Z':
+    // case 'a'..'z' 'A'..'Z': (isalpha())
     talph:
         cp = symb;
 
@@ -873,7 +886,7 @@ l1:
         }
         return s->type;
     /*x: [[yylex()]] switch c cases */
-    // case '0'..'9'
+    // case '0'..'9': (isdigit())
     tnum:
         cp = symb;
         if(c != '0')

@@ -4,7 +4,7 @@
 %}
 /*s: union token(arm) */
 %union {
- //   enum<opcode>   (for LTYPE/...) 
+ //   enum<opcode>   (for LTYPEx/...) 
  // | enum<register> (for LREG/...)
  // | enum<cond>     (for LCOND) 
  // ...
@@ -29,21 +29,22 @@
 %left   '*' '/' '%'
 /*e: priority and associativity declarations */
 /*s: token declarations(arm) */
+/* opcodes */
 %token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5 LTYPE6 LTYPE7 LTYPE8 LTYPE9 
-%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPED LTYPEE LTYPEH LTYPEI
+%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPEE LTYPEH LTYPEI
 %token  <lval>  LTYPEJ LTYPEK LTYPEL LTYPEM LTYPEN 
-%token  <lval>  LTYPEBX
-
+/* registers */
 %token  <lval>  LSP LSB LFP LPC
-%token  <lval>  LR LREG  LF LFREG  LC LCREG   LPSR LFCR
-
+%token  <lval>  LR LREG
+%token  <lval>  LF LFREG  LC LCREG   LPSR LFCR
+/* bits */
 %token  <lval>  LCOND
 %token  <lval>  LS LAT
-
+/* constants */
 %token  <lval>  LCONST 
 %token  <dval>  LFCONST
 %token  <sval>  LSCONST
-
+/* names */
 %token  <sym>   LNAME LLAB LVAR
 /*e: token declarations(arm) */
 /*s: type declarations(arm) */
@@ -274,6 +275,14 @@ imsr:
 | imm
 | shift
 /*x: operand rules(arm) */
+reg:
+ spreg
+ {
+  $$ = nullgen;
+  $$.type = D_REG;
+  $$.reg = $1;
+ }
+/*x: operand rules(arm) */
 sreg:
   LREG
 | LR '(' expr ')'
@@ -287,14 +296,6 @@ sreg:
 spreg:
   sreg
 | LSP { $$ = REGSP; }
-/*x: operand rules(arm) */
-reg:
- spreg
- {
-  $$ = nullgen;
-  $$.type = D_REG;
-  $$.reg = $1;
- }
 /*x: operand rules(arm) */
 imm: '$' con
  {
@@ -334,13 +335,15 @@ gen:
   reg
 | ximm
 | shift
+/*x: gen rule */
+| oreg
+/*x: gen rule */
 | con
  {
   $$ = nullgen;
   $$.type = D_OREG;
   $$.offset = $1;
  }
-| oreg
 /*x: gen rule */
 | shift '(' spreg ')'
  {
@@ -415,6 +418,7 @@ rel:
   $$.offset = $2;
  }
 /*x: operand rules(arm) */
+/*s: ximm rule */
 ximm:
   '$' con
  {
@@ -428,7 +432,7 @@ ximm:
   $$.type = D_SCONST;
   memcpy($$.sval, $2, sizeof($$.sval));
  }
-
+/*x: ximm rule */
 | '$' oreg
  {
   $$ = $2;
@@ -439,7 +443,9 @@ ximm:
   $$ = $4;
   $$.type = D_OCONST;
  }
+/*x: ximm rule */
 | fcon
+/*e: ximm rule */
 /*x: operand rules(arm) */
 /* for MULL */
 regreg:
@@ -455,7 +461,7 @@ regreg:
 rcon:
   spreg
  {
-  if($$ < 0 || $$ >= 16)
+  if($$ < 0 || $$ >= NREG)
       print("register value out of range\n");
   $$ = (($1&15) << 8) | (1 << 4);
  }

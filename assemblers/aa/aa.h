@@ -58,16 +58,15 @@ typedef	struct	Hist Hist;
 /*s: struct Sym */
 struct	Sym
 {
-    // for user labels (bar:), variables (VAR)
-    // but also used for opcodes (AMOVB) and register (D_AL) keywords 
-    // (see itab)
+    // for user labels (bar:), variables (VAR=xxx)
+    // but also used for opcodes (AMOV) registers (LR1) and keywords (see itab)
     char	*name;
 
     //enum<token_kind> (e.g. LNAME, LLAB, LBREG, etc)
     ushort	type;
 
     //enum<operand_kind> | enum<opcode> | long (e.g. pc for LLAB)
-    long	value; //vlong in va/
+    long	value; 
 
     /*s: [[Sym]] other fields */
     //option<string>, for '#define FOO xxx' expansion
@@ -144,7 +143,7 @@ struct	Hist
 };
 /*e: struct Hist */
 /*s: constant H */
-#define	H	((Hist*)0)
+#define	H	((Hist*)nil)
 /*e: constant H */
 
 

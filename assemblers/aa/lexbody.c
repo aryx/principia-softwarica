@@ -537,6 +537,7 @@ loop:
     case 'b':	return '\b';
     case 'r':	return '\r';
     case 'f':	return '\f';
+
     case 'a':	return 0x07;
     case 'v':	return 0x0b;
     case 'z':	return 0x00;

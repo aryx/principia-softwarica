@@ -124,7 +124,7 @@ assemble(char *file)
     // p = basename(file)
     // include[0] = dirname(file); 
     strcpy(ofile, file);
-    p = utfrrune(ofile, pathchar());
+    p = utfrrune(ofile, '/');
     if(p) {
         include[0] = ofile;
         *p++ = '\0';
@@ -133,8 +133,8 @@ assemble(char *file)
     /*e: [[assemble()]] set p to basename(file) and adjust include */
 
     if(outfile == nil) {
-        /*s: [[assemble()]] set outfile to {basename(file)}.8 */
-        // outfile =  p =~ s/.s/.8/;
+        /*s: [[assemble()]] set outfile to {basename(file)}.{thechar} */
+        // outfile =  p =~ s/.s/.5/;
         outfile = p;
         if(outfile){
             p = utfrrune(outfile, '.');
@@ -147,10 +147,10 @@ assemble(char *file)
             p[2] = '\0';
         } else
             outfile = "/dev/null";
-        /*e: [[assemble()]] set outfile to {basename(file)}.8 */
+        /*e: [[assemble()]] set outfile to {basename(file)}.{thechar} */
     }
 
-    /*s: [[assemble()]] setinclude("/<arch>/include") or INCLUDE */
+    /*s: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
     p = getenv("INCLUDE");
     if(p) {
         setinclude(p);
@@ -160,7 +160,7 @@ assemble(char *file)
             setinclude(strdup(incfile));
         }
     }
-    /*e: [[assemble()]] setinclude("/<arch>/include") or INCLUDE */
+    /*e: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
 
     of = mycreat(outfile, 0664);
     if(of < 0) {
@@ -1117,7 +1117,7 @@ l1:
     /*x: [[yylex()]] switch c cases */
     case '_':
     case '@':
-    // case 'a'..'z' 'A'..'Z':
+    // case 'a'..'z' 'A'..'Z': (isalpha())
     talph:
         cp = symb;
 
@@ -1164,7 +1164,7 @@ l1:
         }
         return s->type;
     /*x: [[yylex()]] switch c cases */
-    // case '0'..'9'
+    // case '0'..'9': (isdigit())
     tnum:
         cp = symb;
         if(c != '0')
