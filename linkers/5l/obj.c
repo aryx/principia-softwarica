@@ -69,13 +69,13 @@ void
 main(int argc, char *argv[])
 {
     /*s: [[main()]] locals(arm) */
-    int c;
-    char name[LIBNAMELEN];
-    char *a;
-    /*x: [[main()]] locals(arm) */
     bool load_libs;
     /*x: [[main()]] locals(arm) */
     char *root;
+    /*x: [[main()]] locals(arm) */
+    int c;
+    char name[LIBNAMELEN];
+    char *a;
     /*e: [[main()]] locals(arm) */
 
     thechar = '5';
@@ -86,18 +86,6 @@ main(int argc, char *argv[])
     Binit(&bso, 1, OWRITE);
     listinit(); // fmtinstall()
     /*e: [[main()]] debug initialization(arm) */
-
-    outfile = 0;
-    nerrors = 0;
-    curtext = P;
-
-    HEADTYPE = -1;
-    INITTEXT = -1;
-    INITTEXTP = -1;
-    INITDAT = -1;
-    INITRND = -1;
-    INITENTRY = 0;
-
 
     ARGBEGIN {
     /*s: [[main()]] command line processing(arm) */
@@ -165,7 +153,7 @@ main(int argc, char *argv[])
     if(*argv == nil)
         usage();
 
-    /*s: [[main()]] addlibpath("/xxx/lib") or ccroot */
+    /*s: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
     /*s: [[main()]] change root if ccroot */
     root = getenv("ccroot");
 
@@ -181,7 +169,7 @@ main(int argc, char *argv[])
     // usually /386/lib/ as root = ""
     snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
-    /*e: [[main()]] addlibpath("/xxx/lib") or ccroot */
+    /*e: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
 
     /*s: [[main()]] adjust HEADTYPE if debug flags(arm) */
     if(!debug['9'] && !debug['U'] && !debug['B'])
@@ -270,12 +258,12 @@ main(int argc, char *argv[])
     }
 
     /*s: [[main()]] last INITXXX adjustments */
-    if (INITTEXTP == -1)
-        INITTEXTP = INITTEXT;
-
     if(INITDAT != 0 && INITRND != 0)
         print("warning: -D0x%lux is ignored because of -R0x%lux\n",
             INITDAT, INITRND);
+    /*x: [[main()]] last INITXXX adjustments */
+    if (INITTEXTP == -1)
+        INITTEXTP = INITTEXT;
     /*e: [[main()]] last INITXXX adjustments */
 
     DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
@@ -283,18 +271,15 @@ main(int argc, char *argv[])
 
     /*s: [[main()]] set zprg(arm) */
     zprg.as = AGOK;
-    zprg.scond = 14;
-    zprg.reg = NREG;
-    zprg.from.name = D_NONE;
+    zprg.scond = COND_ALWAYS; 
+    zprg.reg = R_NONE;
     zprg.from.type = D_NONE;
-    zprg.from.reg = NREG;
+    zprg.from.name = N_NONE;
+    zprg.from.reg = R_NONE;
     zprg.to = zprg.from;
     /*e: [[main()]] set zprg(arm) */
 
     /*s: [[main()]] initialize globals(arm) */
-    histgen = 0;
-    textp = P;
-    datap = P;
     pc = 0;
     dtype = 4;
     /*x: [[main()]] initialize globals(arm) */
@@ -308,6 +293,7 @@ main(int argc, char *argv[])
         diag("cannot create %s: %r", outfile);
         errorexit();
     }
+
     nuxiinit();
 
     // ------ main functions  ------
@@ -384,6 +370,7 @@ main(int argc, char *argv[])
     follow();
     if(firstp == P)
         goto out;
+
     noops();
     span();
 
@@ -1099,17 +1086,24 @@ loop:
         }
         s->type = STEXT;
         s->value = pc;
+
+        //add_list(firstp, lastp, p)
         lastp->link = p;
         lastp = p;
+
         p->pc = pc;
         pc++;
+
+        //add_list(textp, etextp, p)
         if(textp == P) {
             textp = p;
             etextp = p;
             goto loop;
         }
+
         etextp->cond = p;
         etextp = p;
+
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ADATA:
@@ -1117,8 +1111,10 @@ loop:
             diag("DATA without a sym\n%P", p);
             break;
         }
+        //add_list(datap, edatap, p)
         p->link = datap;
         datap = p;
+
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ADYNT:

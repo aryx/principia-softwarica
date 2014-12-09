@@ -23,6 +23,7 @@ enum registr {
 /*s: constant NREG(arm) */
 #define	NREG		16
 /*e: constant NREG(arm) */
+#define R_NONE 16
 
 /*s: constant NFREG(arm) */
 #define	NFREG		8
@@ -273,6 +274,8 @@ enum name_kind {
 /*s: constant C_UBIT(arm) */
 #define	C_UBIT	(1<<7)	/* up bit */
 /*e: constant C_UBIT(arm) */
+
+#define COND_ALWAYS 14
 
 /*s: constant SYMDEF(arm) */
 /*

@@ -235,7 +235,7 @@ main(int argc, char *argv[])
     if(*argv == nil)
         usage();
 
-    /*s: [[main()]] addlibpath("/xxx/lib") or ccroot */
+    /*s: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
     /*s: [[main()]] change root if ccroot */
     root = getenv("ccroot");
 
@@ -251,7 +251,7 @@ main(int argc, char *argv[])
     // usually /386/lib/ as root = ""
     snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
-    /*e: [[main()]] addlibpath("/xxx/lib") or ccroot */
+    /*e: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
 
     /*s: [[main()]] adjust HEADTYPE if debug flags(x86) */
     if(!debug['9'] && !debug['U'] && !debug['B'])
@@ -332,12 +332,12 @@ main(int argc, char *argv[])
 
     }
     /*s: [[main()]] last INITXXX adjustments */
-    if (INITTEXTP == -1)
-        INITTEXTP = INITTEXT;
-
     if(INITDAT != 0 && INITRND != 0)
         print("warning: -D0x%lux is ignored because of -R0x%lux\n",
             INITDAT, INITRND);
+    /*x: [[main()]] last INITXXX adjustments */
+    if (INITTEXTP == -1)
+        INITTEXTP = INITTEXT;
     /*e: [[main()]] last INITXXX adjustments */
 
     DBG("HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",

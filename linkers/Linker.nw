@@ -5,8 +5,7 @@
 %******************************************************************************
 \newif\iffinal
 \newif\ifverbose
-\finaltrue\verbosefalse
-% see also other newif in Macros.tex
+\finaltrue\verbosefalse % see also other newif in Macros.tex
 
 %------------------------------------------------------------------------------
 %history: 
@@ -148,7 +147,7 @@ a linker.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
-% gonna present plan9 linker, small, clean.
+% gonna present plan9 linker: small, clean.
 % gonna present 5l just like we presented 5a and 5c. ARM simpler
 % than x86.
 
@@ -162,8 +161,8 @@ Here are other candidates that were considered but ultimately discarded:
 %http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
 
 % plan9 approach to linking is a bit different. The linker actually
-% genereate the machine code. The object format is not the ISA.
-% Simpler that way. Also allow inter-lib linking-time optimisations!
+% generate also the machine code. The object format is not the ISA.
+% Simpler that way. This also allows inter-lib linking-time optimisations!
 % Also there is no dynamic linking by default. Simpler approach
 % again.
 
@@ -188,13 +187,14 @@ License.
 
 \section{Linker principles}
 
-% and loader? why the use the term loader instead of linker?
+% and loader? why the term loader instead of linker?
 % maybe because load the objects and libs and then link them
 % (but first it "loads" them)
 
-% principle: link together object files. Resolve external symbols.
-% compute textsize, datasize, etc and adjust addresses.
-% (actually for plan9 the linker is also generating the
+% principle: link together object files. Resolve external symbols references.
+% Also compute textsize, datasize, etc and adjust addresses.
+
+% For plan9 the linker is also generating the
 % ISA binary code (what was usually done by the assembler)).
 
 % what about dynamic linking? see Advanced topics chapter.
@@ -213,7 +213,8 @@ usage(void)
     errorexit();
 }
 @
-
+% also can give libraries, which are really a file encapsulating
+% a set of objects (like tar). Archive.
 
 % env: $ccroot
 
@@ -223,11 +224,12 @@ usage(void)
 % see tests/ with two .c calling each other
 
 \section{Input object format}
-% the input this time (as opposed to 5a where it's the output)
+% the object is the input this time (as opposed to 5a where it's the output)
 
 % nm foo.5 => ? U? D? T?
 
-% nm is actually using libmach, crachhdr, etc, generic API for object manip
+% nm is actually using libmach, crachhdr, etc, generic API for object 
+% manipulation.
 
 % put libmach/5obj.c?
 
@@ -239,6 +241,7 @@ usage(void)
 % plan9 is essential a.out.h? 
 % but can actually generate different executable (well different headers)
 
+%l.h
 <<enum headtype(arm)>>=
 /*
  *	-H0				      no header
@@ -283,12 +286,14 @@ struct	Exec
     // virtual address in [UTZERO+sizeof(Exec)..UTZERO+sizeof(Exec)+text]
     long	entry;	 	/* entry point */ 
 
-    // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
-    long	spsz;		/* size of pc/sp offset table */
+    long	_unused;
     // see a.out.h man page explaining how to compute the line of a PC
     long	pcsz;		/* size of pc/line number table */
 };
 @
+% _unused was actually:
+%    // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
+%    long	spsz;		/* size of pc/sp offset table */
 
 
 % entry: it's actually usually not main but _main (or _mainp) that does
@@ -296,13 +301,26 @@ struct	Exec
 
 \section{Code organization}
 
+%5l/l.h: data structures and prototypes (like a dat.h and fns.h)
+
+%5l/globals.c: globals
+%5l/utils.c:
+%5l/compat.c:
+%5l/list.c: dumpers
+
+%5l/optab.c:
+%5l/pass.c:
+%5l/asm.c:
+%5l/span.c:
+%5l/noop.c:
+%5l/obj.c: main()
+
 \section{Architecture overview}
 
-% depends on 5.out.h all assembly instructions, registers, etc
-% depends on 5c/ for one file:
-%5c -FTVw -I/home/pad/plan9/include/386 -I/home/pad/plan9/include -. -I. ../5c/enam.c
+% depends on 5.out.h for all assembly instructions/opcodes, registers, etc
+% (used to depend on 5c/ for one file ../5c/enam.c but now done via symlink)
 
-% linker vs libmach, 
+%linker vs libmach:
 % actually linker does not depend on libmach/! because it's writing 
 % specific stuff and libmach is mostly about generic reading interface 
 % to many specifics
@@ -315,7 +333,7 @@ struct	Exec
 
 \section{[[Sym]] and [[hash]]}
 
-% linker is all about resolving undefined symbols, and link to the right place
+% linker is all about resolving undefined symbols, and link to the right place,
 % so symbols are pretty central!
 
 % conflict with include/a.out.h
@@ -332,31 +350,102 @@ struct	Sym
     byte	subtype;
 
     long	sig;
+
     long	value; // e.g. pc for a TEXT procedure
 
-    // [[Sym]] other fields
-    short	become;
-    short	frame;
-    ushort	file;
-
+    <<[[Sym]] other fields>>
     // Extra
+    <<[[Sym]] extra fields>>
 
-    // hash<Sym.name * Sym.version, ref<Sym>> of hash
-    Sym*	link;
 };
 @
-
-
 
 <<constant S>>=
 #define	S		((Sym*)nil)
 @
 
 
+<<constant NHASH linker>>=
+NHASH		= 10007,
+@
 
-% SSTACK? not in exec :) not sure it's section, it's more about
+<<global hash linker>>=
+// hash<Sym.name * Sym.version, ref<Sym>> (next = Sym.link)
+Sym*	hash[NHASH];
+@
+
+<<[[Sym]] extra fields>>=
+// hash<Sym.name * Sym.version, ref<Sym>> of hash
+Sym*	link;
+@
+
+
+
+
+% v is for version, but really it's about handling static names
+% (we could have a typedef int version;? and VERSION0 = 0 so clearer to read?)
+<<function lookup>>=
+Sym*
+lookup(char *symb, int v)
+{
+    Sym *s;
+    char *p;
+    long h;
+    int l, c;
+
+    // h = hash(symb, v)
+    h = v;
+    for(p=symb; *p; p++) {
+        c = *p;
+        h = h+h+h + c;
+    }
+    l = (p - symb) + 1;
+    h &= 0xffffff;
+    h %= NHASH;
+    
+    // s = lookup(h, hash)
+    for(s = hash[h]; s != S; s = s->link)
+        if(s->version == v)
+            if(memcmp(s->name, symb, l) == 0)
+                return s;
+
+
+    // s =~ malloc(sizeof(Sym)), TODO factorize this code
+    while(nhunk < sizeof(Sym))
+        gethunk();
+    s = (Sym*)hunk;
+    nhunk -= sizeof(Sym);
+    hunk += sizeof(Sym);
+
+    s->name = malloc(l + 1); // +1 again?
+    memmove(s->name, symb, l);
+
+    s->link = hash[h];
+    s->type = 0;
+    s->version = v;
+    s->value = 0;
+    s->sig = 0;
+    hash[h] = s;
+    nsymbol++;
+    return s;
+}
+@
+
+<<global nsymbol linker>>=
+long	nsymbol;
+@
+% statistics
+
+
+
+
+
+
+%XXXXXXXXX
+% not sure it's section, it's more about
 %  type of symbol/entity, a const, file, data, procedure, etc
 % see asmsym()
+% less: have a SNONE = 0? and in lookup above use it?
 <<enum sxxx(arm)>>=
 enum sxxx
 {
@@ -379,7 +468,18 @@ enum sxxx
 };
 @
 % SLEAF? the special opti ARM has for leaf functions?
+% SSTACK? no! not in exec :) 
 
+%XXXXXXXXX
+<<[[Sym]] other fields>>=
+short	become;
+short	frame;
+ushort	file;
+@
+
+
+
+%TODO LP split
 <<enum misc(arm)>>=
 enum misc {
     LFROM	= 1<<0,
@@ -454,69 +554,6 @@ enum misc {
 @
 % >> >> >> >> >> >> >> >> >>
 
-
-<<constant NHASH linker>>=
-NHASH		= 10007,
-@
-
-<<global hash linker>>=
-// hash<Sym.name * Sym.version, ref<Sym>> (next = Sym.link)
-Sym*	hash[NHASH];
-@
-
-<<global nsymbol linker>>=
-long	nsymbol;
-@
-
-% v is for version, but really it's about handling static names
-% (we could have a typedef int version;? and VERSION0 = 0 so clearer to read?)
-<<function lookup>>=
-Sym*
-lookup(char *symb, int v)
-{
-    Sym *s;
-    char *p;
-    long h;
-    int l, c;
-
-    // h = hash(symb, v)
-    h = v;
-    for(p=symb; c = *p; p++)
-        h = h+h+h + c;
-    l = (p - symb) + 1;
-    h &= 0xffffff;
-    h %= NHASH;
-    
-    // s = lookup(h, hash)
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->version == v)
-            if(memcmp(s->name, symb, l) == 0)
-                return s;
-
-
-    // s =~ malloc(sizeof(Sym)), TODO factorize this code
-    while(nhunk < sizeof(Sym))
-        gethunk();
-    s = (Sym*)hunk;
-    nhunk -= sizeof(Sym);
-    hunk += sizeof(Sym);
-
-    s->name = malloc(l + 1); // +1 again?
-    memmove(s->name, symb, l);
-
-    s->link = hash[h];
-    s->type = 0;
-    s->version = v;
-    s->value = 0;
-    s->sig = 0;
-    hash[h] = s;
-    nsymbol++;
-    return s;
-}
-@
-
-
-
 \section{[[Opcode]] and [[Operand_kind]]}
 % in 5.out.h: Opcode (enum opcode), Operand_kind (enum operand_kind)
 % see Aconv, Rconv, Dconv
@@ -526,9 +563,8 @@ lookup(char *symb, int v)
 
 \section{[[Prog]] and [[firstp]], [[textp]], [[datap]], [[curtext]], etc}
 
-% bad name .... I think Prog is really a Instruction ... From and To
+% bad name .... I think Prog is really an Instruction ... From and To
 % are when do MOV AX, BX,    then AX is the from, BX the to
-
 
 <<struct Prog(arm)>>=
 struct	Prog
@@ -558,23 +594,24 @@ struct	Prog
     byte	mark;
     byte	optab;
 
-    // [[Prog]] Extra fields
+    // Extra
+    <<[[Prog]] extra fields>>
 
-    // list<ref<Prog>> from firstp/lastp, or datap/edatap
-    Prog*	link;
 
-    // list<ref<Prog>> from textp/etextp, to follow CALL xxx ???
-    Prog*	cond;
 };
 @
 % see Pconv, %P
 %less: could rename cond to pcond and AB to AJMP and could factorize
 % more code with x86
 
+% note that pseudo-opcode like ATEXT also have operands, so
+% from can be abused to store the name of the procedure
+
+
+% why not using anonymous union? so don't need those aliases ...
 <<constant regused(arm)>>=
 #define	regused	u0.u0regused
 @
-
 <<constant forwd(arm)>>=
 #define	forwd	u0.u0forwd
 @
@@ -590,6 +627,16 @@ struct	Prog
 Prog*	firstp;
 @
 
+<<constant P>>=
+#define	P		((Prog*)nil)
+@
+
+
+<<[[Prog]] extra fields>>=
+// list<ref<Prog>> from firstp/lastp, or datap/edatap
+Prog*	link;
+@
+
 
 <<global lastp>>=
 // ref<Prog>, last elt of firstp list
@@ -598,9 +645,6 @@ Prog*	lastp;
 
 
 
-<<constant P>>=
-#define	P		((Prog*)nil)
-@
 
 
 
@@ -611,18 +655,26 @@ Prog*	lastp;
 Prog*	textp = P;
 @
 
+<<[[Prog]] extra fields>>=
+// list<ref<Prog>> from textp/etextp, to follow CALL xxx ???
+Prog*	cond;
+@
+
+
 
 <<global etextp>>=
 // ref<Prog>, end of textp list
 Prog*	etextp = P;
 @
 
+
+
 % list of data (ADATA opcode)
 <<global datap>>=
 // list<ref<Prog>>, next = Prog.next
 Prog*	datap = P;
 @
-
+% no edatap
 
 
 
@@ -630,13 +682,11 @@ Prog*	datap = P;
 
 
 % When iterate over all instrs, if the instr is a ATEXT then store it here.
-% It's probably for error message, to say in which procedure we currently are
+% It's probably for error message, to say in which procedure we currently are.
 % most of the code related to curtext is if(p->as == ATEXT) curtext = p;
 <<global curtext>>=
-Prog*	curtext;
+Prog*	curtext = P;
 @
-
-
 
 
 <<constant TNAME(arm)>>=
@@ -654,14 +704,16 @@ Prog	undefp;
 @
 
 
-
 <<constant UP>>=
 #define	UP	(&undefp)
 @
 
 
 
+
+
 \section{[[Adr]]}
+
 
 % operand of instruction, e.g. in MOV AX, BX,  then AX is a form of Adr
 % (would be better if had ADT so can have better Instruction type instead
@@ -669,12 +721,13 @@ Prog	undefp;
 
 % give a few examples? show man page where have all the addressing modes
 
+% ATEXT arguments are also Adr (abuse)
 
 <<struct Adr(arm)>>=
 struct	Adr
 {
     //enum<operand_kind> (D_NONE by default)
-    char	type;
+    byte	type;
 
     union
     {
@@ -696,16 +749,17 @@ struct	Adr
 };
 @
 %    // TODO: abused for NOPROF function attributes
+%see DConv
 
 
-% the main thing the linker does, to relocate at the right place
+% the main thing the linker does: to relocate at the right place.
 % offset can be based on PC (for D_BRANCH), SB(for D_STATIC, D_EXTERN),
 % on FP(for D_PARAM), and on SP(for D_AUTO), 
 % or can be direct value (for D_CONST)
-%see DConv
 <<constant offset>>=
 #define	offset	u0.u0offset
 @
+% again could use anonymous union?
 
 <<constant sval(arm)>>=
 #define	sval	u0.u0sval
@@ -718,6 +772,7 @@ struct	Adr
 #define	ieee	u0.u0ieee
 @
 
+
 <<constant autom>>=
 #define	autom	u1.u1autom
 @
@@ -727,7 +782,7 @@ struct	Adr
 @
 
 
-
+% ???
 <<struct Autom(arm)>>=
 struct	Autom
 {
@@ -761,6 +816,19 @@ struct	Optab
 };
 @
 
+% ex of entries:
+%Optab	optab[] =
+%{
+%    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
+%    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
+%    { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
+%    { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
+%    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
+%    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+
+
+
+% ???
 <<struct Oprang(arm)>>=
 struct	Oprang
 {
@@ -769,6 +837,7 @@ struct	Oprang
 };
 @
 
+%???
 <<struct Count(arm)>>=
 struct	Count
 {
@@ -785,7 +854,7 @@ struct	Count
 char	thechar;
 @
 
-% to find library files? /386/lib/...
+% to find library files? /arch/lib/...
 <<global thestring>>=
 char	*thestring;
 @
@@ -795,7 +864,6 @@ char	*thestring;
 <<global outfile>>=
 char*	outfile;
 @
-
 
 <<[[main()]] command line processing(arm)>>=
 case 'o':
@@ -810,22 +878,6 @@ fdt	cout = -1;
 
 
 
-
-
-
-
-
-
-
-
-<<[[main()]] initialize globals(arm)>>=
-histgen = 0;
-textp = P;
-datap = P;
-pc = 0;
-dtype = 4;
-@
-
 <<function main(arm)>>=
 void
 main(int argc, char *argv[])
@@ -838,18 +890,6 @@ main(int argc, char *argv[])
 
     <<[[main()]] debug initialization(arm)>>
 
-    outfile = 0;
-    nerrors = 0;
-    curtext = P;
-
-    HEADTYPE = -1;
-    INITTEXT = -1;
-    INITTEXTP = -1;
-    INITDAT = -1;
-    INITRND = -1;
-    INITENTRY = 0;
-
-
     ARGBEGIN {
     <<[[main()]] command line processing(arm)>>
     } ARGEND
@@ -857,7 +897,7 @@ main(int argc, char *argv[])
     if(*argv == nil)
         usage();
 
-    <<[[main()]] addlibpath("/xxx/lib") or ccroot>>
+    <<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>
 
     <<[[main()]] adjust HEADTYPE if debug flags(arm)>>
     switch(HEADTYPE) {
@@ -883,6 +923,7 @@ main(int argc, char *argv[])
         diag("cannot create %s: %r", outfile);
         errorexit();
     }
+
     nuxiinit();
 
     // ------ main functions  ------
@@ -916,13 +957,10 @@ long	INITTEXT = -1; /* text location */
 @
 
 
-
 % -D data segment start
 <<global INITDAT>>=
 long	INITDAT = -1; /* data location */
 @
-
-
 
 % -E default _main (or _mainp when -p)
 <<global INITENTRY>>=
@@ -993,11 +1031,9 @@ long	HEADR; 		/* length of header */
         break;
 @
 
+
 % less important I think
 <<[[main()]] last INITXXX adjustments>>=
-if (INITTEXTP == -1)
-    INITTEXTP = INITTEXT;
-
 if(INITDAT != 0 && INITRND != 0)
     print("warning: -D0x%lux is ignored because of -R0x%lux\n",
         INITDAT, INITRND);
@@ -1005,102 +1041,20 @@ if(INITDAT != 0 && INITRND != 0)
 
 
 
-\section{XXX}
-
-<<constant LIBNAMELEN>>=
-#define	LIBNAMELEN	300
+%XXXX
+<<[[main()]] initialize globals(arm)>>=
+pc = 0;
+dtype = 4;
 @
 
-
-% used locals? move closer the the code that use it then
-<<[[main()]] locals(arm)>>=
-int c;
-char name[LIBNAMELEN];
-char *a;
-@
-% *a still needed now that renamed to root?
 
 
 \chapter{Main functions}
 
 
-% essentially a malloc(sizeof(Prog), 
-% see section on Buffer managment to better understand
-<<constructor prg>>=
-Prog*
-prg(void)
-{
-    Prog *p;
-
-    //todo: factorize with similar code in lookup but for Sym, 
-    // =~ malloc(sizeof(Procg))
-    while(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
-    *p = zprg;
-    return p;
-}
-@
-
-
-
-
-% empty prg, to initialize new Prog
-<<global zprg>>=
-Prog	zprg;
-@
-
-
-
-
-%GOK? God Only Knows? to be used as a special mark, there is diag()
-% in ldobj() about AGOK
-
-<<[[main()]] set zprg(arm)>>=
-zprg.as = AGOK;
-zprg.scond = 14;
-zprg.reg = NREG;
-zprg.from.name = D_NONE;
-zprg.from.type = D_NONE;
-zprg.from.reg = NREG;
-zprg.to = zprg.from;
-@
-
-
-% TODO unused for ARM?
-<<function copyp>>=
-Prog*
-copyp(Prog *q)
-{
-    Prog *p;
-
-    p = prg();
-    *p = *q;
-    return p;
-}
-@
-
-
-% added by me (but maybe was in x86 originally)
-<<[[main()]] locals(arm)>>=
-bool load_libs;
-@
-
-% -l means no automagic stdlibs
-<<[[main()]] initialize globals(arm)>>=
-load_libs = !debug['l'];
-@
-
 % TODO: all those functions that take no args are ugly, they use too much
 % globals, e.g. firstp, lastp, I should really rewrite the code
 % to be more functional.
-
-
-
-
 
 <<[[main()]] cout is ready, LET'S GO(arm)>>=
 firstp = prg();
@@ -1126,6 +1080,7 @@ dodata();
 follow();
 if(firstp == P)
     goto out;
+
 noops();
 span();
 
@@ -1133,6 +1088,64 @@ span();
 asmb();
 // sanity check
 undef();
+@
+
+
+
+
+
+
+
+% essentially a malloc(sizeof(Prog), 
+% see section on Buffer managment to better understand
+<<constructor prg>>=
+Prog*
+prg(void)
+{
+    Prog *p;
+
+    //todo: factorize with similar code in lookup but for Sym, 
+    // =~ malloc(sizeof(Procg))
+    while(nhunk < sizeof(Prog))
+        gethunk();
+    p = (Prog*)hunk;
+    nhunk -= sizeof(Prog);
+    hunk += sizeof(Prog);
+
+    *p = zprg;
+    return p;
+}
+@
+
+% empty prg, to initialize new Prog
+<<global zprg>>=
+Prog	zprg;
+@
+
+%GOK? God Only Knows? to be used as a special mark, there is diag()
+% in ldobj() about AGOK
+
+<<[[main()]] set zprg(arm)>>=
+zprg.as = AGOK;
+zprg.scond = COND_ALWAYS; 
+zprg.reg = R_NONE;
+zprg.from.type = D_NONE;
+zprg.from.name = N_NONE;
+zprg.from.reg = R_NONE;
+zprg.to = zprg.from;
+@
+
+
+
+
+% added by me (but maybe was in x86 originally)
+<<[[main()]] locals(arm)>>=
+bool load_libs;
+@
+
+% -l means no automagic stdlibs
+<<[[main()]] initialize globals(arm)>>=
+load_libs = !debug['l'];
 @
 
 
@@ -4616,7 +4629,6 @@ Auto*	curauto;
 
 
 
-
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case ATEXT:
     if(curtext != P) {
@@ -4643,17 +4655,24 @@ case ATEXT:
     }
     s->type = STEXT;
     s->value = pc;
+
+    //add_list(firstp, lastp, p)
     lastp->link = p;
     lastp = p;
+
     p->pc = pc;
     pc++;
+
+    //add_list(textp, etextp, p)
     if(textp == P) {
         textp = p;
         etextp = p;
         goto loop;
     }
+
     etextp->cond = p;
     etextp = p;
+
     break;
 @
 %$
@@ -4668,8 +4687,10 @@ case ADATA:
         diag("DATA without a sym\n%P", p);
         break;
     }
+    //add_list(datap, edatap, p)
     p->link = datap;
     datap = p;
+
     break;
 @
 
@@ -4963,6 +4984,8 @@ case AGOK:
     pc++;
     break;
 @
+%x86:     diag("%s: GOK opcode in %s", pn, TNAME);
+
 
 \section{[[AADD/ASUB]]}
 % arm only
@@ -5006,7 +5029,20 @@ case 'L':
 char *root;
 @
 
-<<[[main()]] addlibpath("/xxx/lib") or ccroot>>=
+<<constant LIBNAMELEN>>=
+#define	LIBNAMELEN	300
+@
+
+% used locals? move closer the the code that use it then
+<<[[main()]] locals(arm)>>=
+int c;
+char name[LIBNAMELEN];
+char *a;
+@
+% *a still needed now that renamed to root?
+
+
+<<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>=
 <<[[main()]] change root if ccroot>>
 
 // usually /386/lib/ as root = ""
@@ -7253,6 +7289,11 @@ case 7:	/* elf */
 long	INITTEXTP = -1; /* text location (physical) */
 @
 
+<<[[main()]] last INITXXX adjustments>>=
+if (INITTEXTP == -1)
+    INITTEXTP = INITTEXT;
+@
+
 
 <<[[main()]] command line processing(arm)>>=
 case 'P':
@@ -7261,6 +7302,7 @@ case 'P':
         INITTEXTP = atolwhex(a);
     break;
 @
+% seems dead?
 
 <<enum _anon_ (linkers/8l/elf.h)>>=
 enum {

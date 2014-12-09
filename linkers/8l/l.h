@@ -144,17 +144,20 @@ struct	Sym
     byte	subtype;
 
     long	sig;
+
     long	value; // e.g. pc for a TEXT procedure
 
-    // [[Sym]] other fields
+    /*s: [[Sym]] other fields */
     short	become;
     short	frame;
     ushort	file;
-
+    /*e: [[Sym]] other fields */
     // Extra
-
+    /*s: [[Sym]] extra fields */
     // hash<Sym.name * Sym.version, ref<Sym>> of hash
     Sym*	link;
+    /*e: [[Sym]] extra fields */
+
 };
 /*e: struct Sym */
 /*s: struct Optab(x86) */

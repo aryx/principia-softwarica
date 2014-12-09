@@ -62,8 +62,10 @@ lookup(char *symb, int v)
 
     // h = hash(symb, v)
     h = v;
-    for(p=symb; c = *p; p++)
+    for(p=symb; *p; p++) {
+        c = *p;
         h = h+h+h + c;
+    }
     l = (p - symb) + 1;
     h &= 0xffffff;
     h %= NHASH;

@@ -58,7 +58,7 @@ Auto*	curhist;
 Prog*	curp;
 /*e: global curp */
 /*s: global curtext */
-Prog*	curtext;
+Prog*	curtext = P;
 /*e: global curtext */
 /*s: global datap */
 // list<ref<Prog>>, next = Prog.next

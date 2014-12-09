@@ -42,7 +42,7 @@ typedef	struct	Count	Count;
 struct	Adr
 {
     //enum<operand_kind> (D_NONE by default)
-    char	type;
+    byte	type;
 
     union
     {
@@ -109,13 +109,16 @@ struct	Prog
     byte	mark;
     byte	optab;
 
-    // [[Prog]] Extra fields
-
+    // Extra
+    /*s: [[Prog]] extra fields */
     // list<ref<Prog>> from firstp/lastp, or datap/edatap
     Prog*	link;
-
+    /*x: [[Prog]] extra fields */
     // list<ref<Prog>> from textp/etextp, to follow CALL xxx ???
     Prog*	cond;
+    /*e: [[Prog]] extra fields */
+
+
 };
 /*e: struct Prog(arm) */
 /*s: constant regused(arm) */
@@ -138,17 +141,20 @@ struct	Sym
     byte	subtype;
 
     long	sig;
+
     long	value; // e.g. pc for a TEXT procedure
 
-    // [[Sym]] other fields
+    /*s: [[Sym]] other fields */
     short	become;
     short	frame;
     ushort	file;
-
+    /*e: [[Sym]] other fields */
     // Extra
-
+    /*s: [[Sym]] extra fields */
     // hash<Sym.name * Sym.version, ref<Sym>> of hash
     Sym*	link;
+    /*e: [[Sym]] extra fields */
+
 };
 /*e: struct Sym */
 
